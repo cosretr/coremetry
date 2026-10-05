@@ -11,7 +11,8 @@ package auth
 //   - PermissionService / PermissionKeyMatches: uç (internal/api/
 //     auth_permissions.go) anahtarı HİÇ görmez; karşılaştırma burada,
 //     iki tarafın SHA-256 özeti üzerinden crypto/subtle ile (uzunluk da
-//     sızmaz).
+//     sızmaz). v0.10.1111: anahtarsız kip (AllowNoKey — başlık hiç
+//     denetlenmez) + IP/CIDR izin listesi (oidc_permission_net.go).
 //   - PermissionsForRole: Coremetry rolü → claim değeri. Roller Coremetry'de
 //     yönetilmeye devam eder; servis yalnız RAPORLAR.
 //   - claimRole (Exchange'ten): roleFromClaim VARSAYILAN KAPALI — kapalıyken
@@ -37,6 +38,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"log"
+	"net/netip"
 	"strings"
 	"unicode"
 
@@ -60,10 +62,16 @@ type PermissionServiceConfig struct {
 	// karşılığı olmayan kullanıcıya bildirilen rol (operatör kararı
 	// 2026-10-05: "herkesin viewer rolünde login olabilmesi gerekir").
 	DefaultRole string
+	// v0.10.1111 — AllowNoKey: başlık HİÇ denetlenmez. AllowedCIDRs boş = IP
+	// kısıtı yok; TrustedProxies: XFF'in okunacağı doğrudan eşler
+	// (oidc_permission_net.go).
+	AllowNoKey     bool
+	AllowedCIDRs   []netip.Prefix
+	TrustedProxies []netip.Prefix
 }
 
-// Usable — servis açık VE anahtar kayıtlı (değilse uç 404).
-func (c PermissionServiceConfig) Usable() bool { return c.Enabled && c.KeySet }
+// Usable — servis açık VE (anahtar kayıtlı YA DA anahtarsız kip); değilse uç 404.
+func (c PermissionServiceConfig) Usable() bool { return c.Enabled && (c.KeySet || c.AllowNoKey) }
 
 func (o *OIDCService) effective() OIDCSettings {
 	if o == nil {
@@ -76,8 +84,12 @@ func (o *OIDCService) effective() OIDCSettings {
 // canlı istemcisinden BAĞIMSIZ: IdP keşfi düşse de servis cevap verir.
 func (o *OIDCService) PermissionService() PermissionServiceConfig {
 	s := o.effective()
+	cidrs, okC := parsePrefixes(s.PermissionServiceAllowedCIDRs)
+	proxies, okP := parsePrefixes(s.PermissionServiceTrustedProxies)
 	return PermissionServiceConfig{
-		Enabled:    s.PermissionServiceEnabled,
+		// Ayrıştırılamayan liste (doğrulamadan geçmiş blobda olamaz) → servis
+		// KAPALI: atlanan bir giriş izin listesini boşaltıp ucu açmasın.
+		Enabled:    s.PermissionServiceEnabled && okC && okP,
 		KeySet:     s.PermissionServiceKey != "",
 		TTLSeconds: s.PermissionTTLSeconds,
 		DefaultRole: func() string {
@@ -86,6 +98,9 @@ func (o *OIDCService) PermissionService() PermissionServiceConfig {
 			}
 			return RoleViewer
 		}(),
+		AllowNoKey:     s.PermissionServiceAllowNoKey,
+		AllowedCIDRs:   cidrs,
+		TrustedProxies: proxies,
 	}
 }
 

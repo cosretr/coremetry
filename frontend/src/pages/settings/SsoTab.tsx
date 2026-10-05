@@ -1,13 +1,13 @@
 import { useState, type FormEvent } from 'react';
 import { Spinner } from '@/components/Spinner';
-import { Button, Field, KeyValue, KeyValueRow, SelectField } from '@/components/ui';
+import { Button, Field, KeyValue, KeyValueRow, SelectField, TextareaField } from '@/components/ui';
 import { useAuth } from '@/components/AuthProvider';
 import { api } from '@/lib/api';
 import type { OidcSettingsSnapshot, OidcTestResult } from '@/lib/types';
 import { useSettingsLoad, SettingsLoadError, ConfigStatusBanner, FlashBox, humanize } from './shared';
 import {
-  OIDC_ROLES, PERMISSION_ENDPOINT, PERMISSION_HEADER, formToInput, oidcStatus, publicOidcSnapshot,
-  snapshotToForm, type OidcForm,
+  OIDC_ROLES, PERMISSION_ENDPOINT, PERMISSION_HEADER, PERMISSION_MAX_CIDRS, formToInput, oidcStatus,
+  permissionNetWarnings, publicOidcSnapshot, snapshotToForm, type OidcForm,
 } from './oidcForm';
 import { SsoPresets } from './SsoPresets';
 
@@ -27,6 +27,10 @@ import { SsoPresets } from './SsoPresets';
 // (kayıtlı işareti, boş = koru). "Rolü token'daki claim'den al" varsayılan
 // KAPALI (operatör kararı 2026-10-05): kapalıyken giriş rolü bugünkü gibi
 // varsayılan rol (viewer) + Kullanıcılar sayfası.
+//
+// v0.10.1111 (operatör: "Anahtarsız olmaz mı") — "Anahtarsız kabul et"
+// (başlık hiç denetlenmez) + IP izin listesi + güvenilen vekiller. Anahtarsız
+// ve izin listesi boşsa görünür uyarı satırı (engel değil).
 //
 // Admin olmayan: ayar ucu admin-only (IdP adresi / client id hassas); form
 // yine BOŞ çizilmez — public /api/auth/config'ten SSO'nun açık olup
@@ -197,6 +201,7 @@ function PermissionServiceSection({ form, snap, patch, adminOnly }: {
   adminOnly: string | undefined;
 }) {
   const role = form.defaultRole || 'viewer';
+  const warnings = permissionNetWarnings(form);
   return (
     <section className="sso-perm" aria-label="Yetki servisi (merkezi login)">
       <h3 className="sso-subtitle">Yetki servisi (merkezi login)</h3>
@@ -212,14 +217,26 @@ function PermissionServiceSection({ form, snap, patch, adminOnly }: {
           onChange={e => patch({ permissionServiceEnabled: e.target.checked })} />
         <span>Yetki servisini aç</span>
       </label>
+      <label className="sso-check sso-check--tight">
+        <input type="checkbox" checked={form.permissionServiceAllowNoKey}
+          onChange={e => patch({ permissionServiceAllowNoKey: e.target.checked })} />
+        <span>Anahtarsız kabul et</span>
+      </label>
+      <p className="sso-note sso-perm__explain">
+        Başlık hiç denetlenmez — uç ağdan erişen herkese açık olur; IP izin listesi kullanın.
+      </p>
       <div className="sso-row">
         <Field type="password" autoComplete="new-password" value={form.permissionServiceKey}
           label={<>Paylaşılan anahtar{snap.permissionServiceKeySet && <span style={{ color: 'var(--text3)' }}> · kayıtlı</span>}</>}
           onChange={e => patch({ permissionServiceKey: e.target.value })}
           placeholder={adminOnly ?? (snap.permissionServiceKeySet
             ? '(kayıtlı değeri korumak için boş bırakın)'
-            : 'en az 16 karakter, ör. openssl rand -hex 32')}
-          hint="Merkezi login bu değeri başlıkta gönderir. Saklanır, geri gösterilmez." />
+            : form.permissionServiceAllowNoKey
+              ? '(isteğe bağlı — anahtarsız kabul açık)'
+              : 'en az 16 karakter, ör. openssl rand -hex 32')}
+          hint={form.permissionServiceAllowNoKey
+            ? 'Anahtarsız kabul açıkken kullanılmaz (isteğe bağlı). Saklanır, geri gösterilmez.'
+            : 'Merkezi login bu değeri başlıkta gönderir. Saklanır, geri gösterilmez.'} />
         <Field type="number" min={60} max={3600} step={1} value={form.permissionTTLSeconds}
           label="Önbellek süresi (ttlSeconds)"
           onChange={e => patch({ permissionTTLSeconds: e.target.value })}
@@ -231,6 +248,21 @@ function PermissionServiceSection({ form, snap, patch, adminOnly }: {
           placeholder="permissions"
           hint="Token'da yetkilerin bulunduğu claim; varsayılan permissions." />
       </div>
+      <div className="sso-row">
+        <TextareaField label="IP izin listesi (CIDR)" rows={3} value={form.permissionServiceAllowedCIDRs}
+          autoComplete="off" spellCheck={false}
+          onChange={e => patch({ permissionServiceAllowedCIDRs: e.target.value })}
+          placeholder={adminOnly ?? '203.0.113.0/24\n2001:db8::/32'}
+          hint={`Satır başına bir IP ya da CIDR (en çok ${PERMISSION_MAX_CIDRS}); boş = IP kısıtı yok. Listede olmayan çağırana 403.`} />
+        <TextareaField label="Güvenilen vekiller (ingress)" rows={3} value={form.permissionServiceTrustedProxies}
+          autoComplete="off" spellCheck={false}
+          onChange={e => patch({ permissionServiceTrustedProxies: e.target.value })}
+          placeholder={adminOnly ?? '10.0.0.0/8'}
+          hint="X-Forwarded-For yalnız bu adreslerden gelen istekte okunur; boşsa doğrudan bağlanan adres kullanılır." />
+      </div>
+      {warnings.map(w => (
+        <p key={w} className="sso-perm__warn" role="status">⚠ {w}</p>
+      ))}
       <label className="sso-check sso-check--tight">
         <input type="checkbox" checked={form.roleFromClaim}
           onChange={e => patch({ roleFromClaim: e.target.checked })} />
@@ -247,7 +279,7 @@ function PermissionServiceSection({ form, snap, patch, adminOnly }: {
       </p>
       <KeyValue>
         <KeyValueRow k="Uç" v={`POST ${PERMISSION_ENDPOINT}`} mono />
-        <KeyValueRow k="Başlık" v={PERMISSION_HEADER} mono />
+        <KeyValueRow k="Başlık" v={form.permissionServiceAllowNoKey ? `${PERMISSION_HEADER} (denetlenmiyor)` : PERMISSION_HEADER} mono />
       </KeyValue>
     </section>
   );

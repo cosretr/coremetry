@@ -1686,6 +1686,11 @@ export interface OidcSettingsSnapshot {
   permissionTTLSeconds: number;
   permissionsClaim: string;
   roleFromClaim: boolean;
+  // v0.10.1111 — anahtarsız kip (başlık hiç denetlenmez) + IP/CIDR izin
+  // listesi + XFF'in okunacağı güvenilen vekiller. Secret değil.
+  permissionServiceAllowNoKey: boolean;
+  permissionServiceAllowedCIDRs: string[];
+  permissionServiceTrustedProxies: string[];
   source: OidcSettingsSource;
   active: boolean;
   lastError?: string;
@@ -1705,6 +1710,9 @@ export interface OidcSettingsInput {
   permissionTTLSeconds: number;
   permissionsClaim: string;
   roleFromClaim: boolean;
+  permissionServiceAllowNoKey: boolean;
+  permissionServiceAllowedCIDRs: string[];
+  permissionServiceTrustedProxies: string[];
 }
 export interface OidcDiscovery {
   issuer: string;

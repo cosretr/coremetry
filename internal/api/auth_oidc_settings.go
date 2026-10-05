@@ -13,6 +13,8 @@ package api
 // (permissionService*, permissionsClaim, roleFromClaim; uç
 // auth_permissions.go). Anahtar clientSecret gibi: GET'te yok
 // (permissionServiceKeySet), boş PUT kayıtlıyı korur, audit'e girmez.
+// v0.10.1111 — permissionServiceAllowNoKey / AllowedCIDRs / TrustedProxies
+// (secret değil: GET'te ve audit'te aynen).
 //	POST /api/settings/oidc/test   admin — yalnız keşif (≤10 s); hiçbir şey yazmaz
 //
 // ÜÇÜ DE ADMIN ve yalnız OTURUM kullanıcısı: API token'ı (UserID
@@ -131,6 +133,10 @@ func (s *Server) putOIDCSettings(w http.ResponseWriter, r *http.Request) {
 		"permissionServiceEnabled": snap.PermissionServiceEnabled, "permissionTTLSeconds": snap.PermissionTTLSeconds,
 		"permissionsClaim": snap.PermissionsClaim, "roleFromClaim": snap.RoleFromClaim,
 		"permissionServiceKeyChanged": permKeyChanged,
+		// v0.10.1111 — anahtarsız kip + ağ sınırı (secret değil).
+		"permissionServiceAllowNoKey":     snap.PermissionServiceAllowNoKey,
+		"permissionServiceAllowedCIDRs":   snap.PermissionServiceAllowedCIDRs,
+		"permissionServiceTrustedProxies": snap.PermissionServiceTrustedProxies,
 	})
 	s.audit(r, "settings.oidc.update", "settings", "oidc", string(details))
 	writeJSON(w, snap)

@@ -1932,6 +1932,36 @@ Upsert); iki admin aynı anda claim'le düşürülürse ikisi de geçebilir — 
 (3) Yetki servisi anahtarı, `clientSecret` gibi, `auth_oidc` blobuyla birlikte yapılandırma dışa aktarımına/yedeğe
 girer.
 
+## 2026-10-05 — Yetki servisi: anahtar isteğe bağlı, IP/CIDR izin listesi (v0.10.1111)
+
+**Operatör (2026-10-05): "Anahtarsız olmaz mı"** — müşterinin merkezi login'i yetki servisine özel bir başlık
+(`X-Coremetry-Auth-Key`) gönderemiyor; v0.10.1110'daki zorunlu anahtar entegrasyonu engelliyordu. **Karar:**
+`auth_oidc` blobuna `permissionServiceAllowNoKey` (varsayılan KAPALI). Açıkken başlık **hiç denetlenmez** —
+kayıtlı bir anahtar olsa bile (anlam belirsizliği yok: "anahtar varsa yine iste" kipi YOK); kapalıyken bugünkü
+davranış (anahtar zorunlu, anahtar yoksa `404`). Doğrulama: servis açık + anahtarsız kip kapalı + anahtar yok →
+400 (bugünkü gibi); anahtarsız kip + anahtar yok geçerli; girilen anahtar yine ≥16/yer tutucu kurallarından
+geçer. **Risk:** anahtarsız uç, ona ağdan erişebilen herkese bir kullanıcının Coremetry rolünü bildirir (e-posta /
+kullanıcı adı / sicil tahminiyle rol keşfi); uç yalnız RAPORLAR — rol değiştirmez, oturum açmaz, ve bildirdiği
+yetkiyi token'a ancak merkezi login gömer. **Azaltım:** `permissionServiceAllowedCIDRs` (≤32 IPv4/IPv6 CIDR ya da
+tek IP, `net/netip`; kanonik biçimde saklanır; boş = kısıt yok); doluysa listede olmayan çağıran `403` gövdesiz,
+anahtar ve gövde denetiminden ÖNCE. Sıra: `404` → `403` → `401` (anahtarsız kipte atlanır) → `400` → eşleme;
+sayaç etiketi `ip_denied`. Settings > SSO: "Anahtarsız kabul et" + tek satır uyarı ("uç ağdan erişen herkese açık
+olur; IP izin listesi kullanın"); anahtarsız ve liste boşken görünür uyarı satırı (engel değil — operatör ağ
+katmanında, ör. NetworkPolicy ile, daraltmış olabilir). **Çağıranın IP'si — `clientIP(r)` KULLANILMADI:** o
+yardımcı `X-Forwarded-For`'un ilk girişine koşulsuz güvenir; audit/iz için yeterli ama erişim kararı için sahte
+başlıkla aşılır (çağıran XFF'i yazar; başlığı sonuna EKLEYEN ingress'lerde — ör. OpenShift router varsayılanı — ilk
+giriş çağıranındır; doğrudan pod erişiminde tamamı). Repo'da genel bir güvenilen-vekil mekanizması yok
+(`auth.trusted_header.trusted_proxies` yalnız trusted-header giriş kipine bağlı, config.yaml/Helm'de); bu yüzden aynı blobda
+üçüncü alan `permissionServiceTrustedProxies` (≤32 CIDR): doğrudan eş bu listede DEĞİLSE çağıran `RemoteAddr`'dır
+ve XFF hiç okunmaz; listedeyse XFF sağdan sola yürünür, ilk güvenilmeyen adres çağırandır ("rightmost untrusted");
+ayrıştırılamayan giriş → red. Liste boşken XFF okunmaz — ingress arkasında izin listesi ingress adresini görür;
+Settings bunu da uyarır, belge (`docs/SSO-PERMISSION-SERVICE.md`) ingress CIDR'ını yazmayı söyler. **Dayanıklılık:**
+depodaki blobda bozuk CIDR → SSO düşmez, yalnız servis kapanır (N4 kalıbı; ağ alanları da sıfırlanır); her
+ihtimale karşı ayrıştırılamayan liste çalışma anında servisi kapatır (atlanan giriş listeyi boşaltıp ucu açmasın).
+Ağ alanları secret değil: GET'te ve audit'te (`settings.oidc.update`) aynen. **Bilinen, bırakılan:** (1) anahtarsız
+kipte kayıtlı eski anahtar silinmez (kullanılmaz; boş PUT kayıtlıyı korur kuralı aynen). (2) Anahtarsız + izin
+listesi boş kayıt engellenmez — yalnız uyarı.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

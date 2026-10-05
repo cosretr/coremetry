@@ -15,8 +15,10 @@ package api
 //	200    {"subject":<registrationNumber AYNEN>,"permissions":["COREMETRY_…"],"ttlSeconds":N}
 //	204    gövdesiz — YALNIZ devre dışı bırakılmış hesap
 //	400    gövde bozuk / registrationNumber yok
-//	401    X-Coremetry-Auth-Key yok ya da yanlış (gövdesiz — ayrıntı yok)
-//	404    servis kapalı ya da anahtar tanımlı değil (uç "yok" görünür)
+//	401    X-Coremetry-Auth-Key yok ya da yanlış (gövdesiz — ayrıntı yok);
+//	       anahtarsız kipte hiç dönmez
+//	403    çağıranın IP'si izin listesinde değil (gövdesiz; v0.10.1111)
+//	404    servis kapalı ya da anahtar tanımlı değil ve anahtarsız kip kapalı
 //
 // Müşteri subject ≠ registrationNumber ise cevabı yok sayar; 200/204 dışı her
 // durum "cevap yok" → token claim'siz basılır. Başarı/başarısızlık yalnız HTTP
@@ -27,8 +29,15 @@ package api
 // callback ile aynı yer). SINIR: X-Coremetry-Auth-Key başlığı, kayıtlı
 // anahtarla auth.OIDCService.PermissionKeyMatches'te SHA-256 özetleri
 // üzerinden crypto/subtle ile karşılaştırılır — uç anahtarı hiç tutmaz,
-// loglamaz, yankılamaz. Sıra: 404 (kapalı) → 401 (anahtar) → 400 (gövde) —
-// kimliksiz çağıran gövde doğrulamasından bilgi alamasın.
+// loglamaz, yankılamaz. Sıra: 404 (kapalı) → 403 (IP izin listesi) → 401
+// (anahtar; anahtarsız kipte atlanır) → 400 (gövde) — kimliksiz çağıran
+// gövde doğrulamasından bilgi alamasın.
+//
+// v0.10.1111 (operatör: "Anahtarsız olmaz mı" — müşterinin merkezi login'i
+// özel başlık gönderemiyor): permissionServiceAllowNoKey açıkken başlık HİÇ
+// denetlenmez; sınır IP/CIDR izin listesi (permissionServiceAllowedCIDRs, boş
+// = kısıt yok). Çağıranın IP'si RemoteAddr; X-Forwarded-For yalnız doğrudan
+// eş permissionServiceTrustedProxies'teyse, sağdan ilk güvenilmeyen giriş.
 //
 // HIZ SINIRI: /api/auth/login'in sınırlayıcısı YOK (repo'da login limiter
 // bulunmuyor); bu uç da eklemedi. Gerekçe: yanlış anahtar hiçbir depo
@@ -116,7 +125,7 @@ var (
 )
 
 // countPermissionResult — result ∈ {ok, default_role, disabled_user,
-// unauthorized, service_off, bad_request, error}; kardinalite sabit. Sayaç ilk çağrıda kurulur
+// unauthorized, ip_denied, service_off, bad_request, error}; kardinalite sabit. Sayaç ilk çağrıda kurulur
 // (selfobs.Init'ten SONRA — paket init'inde kurulsa noop meter'a bağlanırdı).
 func countPermissionResult(ctx context.Context, result string) {
 	permCounterOnce.Do(func() {
@@ -143,7 +152,17 @@ func (s *Server) authPermissions(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
-	if !s.oidc.PermissionKeyMatches(r.Header.Get(PermissionAuthHeader)) {
+	// v0.10.1111 — ağ sınırı anahtardan ve gövdeden ÖNCE. Çağıranın IP'si
+	// clientIP(r) DEĞİL (o XFF'in ilk girişine koşulsuz güvenir): XFF yalnız
+	// doğrudan eş güvenilen vekilse okunur (auth/oidc_permission_net.go).
+	if ok, ip := cfg.CallerAllowed(r.RemoteAddr, r.Header.Values("X-Forwarded-For")); !ok {
+		countPermissionResult(r.Context(), "ip_denied")
+		slog.Debug("[auth-permissions] call", "result", "ip_denied", "ip", ip)
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+	// Anahtarsız kip: başlık HİÇ denetlenmez (kayıtlı anahtar olsa da).
+	if !cfg.AllowNoKey && !s.oidc.PermissionKeyMatches(r.Header.Get(PermissionAuthHeader)) {
 		countPermissionResult(r.Context(), "unauthorized")
 		slog.Debug("[auth-permissions] call", "result", "unauthorized")
 		w.WriteHeader(http.StatusUnauthorized)

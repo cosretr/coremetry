@@ -1,7 +1,8 @@
 // oidcForm.test — v0.10.1067 (OIDC Settings'ten yönetilir) saf yardımcılar.
 import { describe, it, expect } from 'vitest';
 import {
-  formToInput, oidcStatus, parsePermissionTTL, publicOidcSnapshot, snapshotToForm, splitList,
+  PERMISSION_MAX_CIDRS, formToInput, oidcStatus, parseCidrList, parsePermissionTTL, permissionNetWarnings,
+  publicOidcSnapshot, snapshotToForm, splitList,
 } from './oidcForm';
 import type { OidcSettingsSnapshot } from '@/lib/types';
 
@@ -12,6 +13,7 @@ const snap: OidcSettingsSnapshot = {
   allowedDomains: ['example.test', 'corp.example.test'], source: 'settings', active: true,
   permissionServiceEnabled: false, permissionServiceKeySet: false, permissionTTLSeconds: 300,
   permissionsClaim: 'permissions', roleFromClaim: false,
+  permissionServiceAllowNoKey: false, permissionServiceAllowedCIDRs: [], permissionServiceTrustedProxies: [],
 };
 
 describe('oidcForm', () => {
@@ -76,5 +78,55 @@ describe('oidcForm — yetki servisi', () => {
     const p = publicOidcSnapshot({ local: { enabled: true }, oidc: { enabled: true, displayName: 'SSO' } });
     expect(p.roleFromClaim).toBe(false);
     expect(p.permissionServiceKeySet).toBe(false);
+  });
+});
+
+// v0.10.1111 — anahtarsız kip + IP/CIDR izin listesi (operatör: "Anahtarsız olmaz mı").
+describe('oidcForm — anahtarsız kip ve IP izin listesi', () => {
+  it('parseCidrList: satır / virgül / noktalı virgül / boşluk ayracı, boşsuz ve tekrarsız', () => {
+    expect(parseCidrList('203.0.113.0/24\n2001:db8::/32, 198.51.100.7;  203.0.113.0/24\n\n')).toEqual(
+      ['203.0.113.0/24', '2001:db8::/32', '198.51.100.7']);
+    expect(parseCidrList('  \n ')).toEqual([]);
+  });
+
+  it('snapshot → form satır başına bir giriş; form → gövde dizi', () => {
+    const f = snapshotToForm({ ...snap, permissionServiceAllowNoKey: true,
+      permissionServiceAllowedCIDRs: ['203.0.113.0/24', '198.51.100.7'], permissionServiceTrustedProxies: ['10.0.0.0/8'] });
+    expect(f.permissionServiceAllowNoKey).toBe(true);
+    expect(f.permissionServiceAllowedCIDRs).toBe('203.0.113.0/24\n198.51.100.7');
+    expect(f.permissionServiceTrustedProxies).toBe('10.0.0.0/8');
+    const inp = formToInput({ ...f, permissionServiceAllowedCIDRs: '203.0.113.0/24, 2001:db8::/32' });
+    expect(inp.permissionServiceAllowNoKey).toBe(true);
+    expect(inp.permissionServiceAllowedCIDRs).toEqual(['203.0.113.0/24', '2001:db8::/32']);
+    expect(inp.permissionServiceTrustedProxies).toEqual(['10.0.0.0/8']);
+    // Anahtarsız kipte boş anahtar yine gövdeye girmez.
+    expect('permissionServiceKey' in inp).toBe(false);
+  });
+
+  it('uyarı: anahtarsız + izin listesi boş → görünür satır; liste doluysa yok', () => {
+    const f = snapshotToForm(snap);
+    expect(permissionNetWarnings(f)).toEqual([]);
+    const open = permissionNetWarnings({ ...f, permissionServiceAllowNoKey: true });
+    expect(open).toHaveLength(1);
+    expect(open[0]).toContain('herkese açık');
+    expect(permissionNetWarnings({ ...f, permissionServiceAllowNoKey: true,
+      permissionServiceAllowedCIDRs: '203.0.113.0/24', permissionServiceTrustedProxies: '10.0.0.0/8' })).toEqual([]);
+  });
+
+  it('uyarı: izin listesi dolu, vekil boş → XFF okunmaz notu; 32 üstü → reddedilir notu', () => {
+    const f = { ...snapshotToForm(snap), permissionServiceAllowedCIDRs: '203.0.113.0/24' };
+    const w = permissionNetWarnings(f);
+    expect(w).toHaveLength(1);
+    expect(w[0]).toContain('X-Forwarded-For okunmaz');
+    const many = Array.from({ length: PERMISSION_MAX_CIDRS + 1 }, (_, i) => `10.0.${i}.0/24`).join('\n');
+    expect(permissionNetWarnings({ ...f, permissionServiceAllowedCIDRs: many, permissionServiceTrustedProxies: '10.1.0.0/16' })
+      .some(x => x.includes('en çok 32'))).toBe(true);
+  });
+
+  it('publicOidcSnapshot: anahtarsız kapalı, listeler boş', () => {
+    const p = publicOidcSnapshot({ local: { enabled: true }, oidc: { enabled: false } });
+    expect(p.permissionServiceAllowNoKey).toBe(false);
+    expect(p.permissionServiceAllowedCIDRs).toEqual([]);
+    expect(p.permissionServiceTrustedProxies).toEqual([]);
   });
 });

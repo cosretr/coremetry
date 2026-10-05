@@ -45,6 +45,7 @@ const stored: OidcSettingsSnapshot = {
   allowedDomains: ['example.test'], source: 'settings', active: true,
   permissionServiceEnabled: false, permissionServiceKeySet: false, permissionTTLSeconds: 300,
   permissionsClaim: 'permissions', roleFromClaim: false,
+  permissionServiceAllowNoKey: false, permissionServiceAllowedCIDRs: [], permissionServiceTrustedProxies: [],
 };
 
 let host: HTMLDivElement | null = null;
@@ -186,6 +187,49 @@ describe('SSOTab — admin', () => {
     expect(body.permissionServiceEnabled).toBe(true);
     expect(body.roleFromClaim).toBe(false);
     expect(body.permissionTTLSeconds).toBe(300);
+  });
+
+  // v0.10.1111 — anahtarsız kip + IP izin listesi (operatör: "Anahtarsız olmaz mı").
+  it('anahtarsız kabul: tek satırlık uyarı her zaman, liste boşken görünür uyarı satırı', async () => {
+    h.get.mockResolvedValue({ ...stored, permissionServiceEnabled: true, permissionServiceAllowNoKey: true });
+    const el = await mount();
+    const sec = el.querySelector('.sso-perm')!;
+    const cb = Array.from(sec.querySelectorAll('label')).find(l => l.textContent?.includes('Anahtarsız kabul et'))!
+      .querySelector('input') as HTMLInputElement;
+    expect(cb.checked).toBe(true);
+    expect(sec.textContent).toContain('uç ağdan erişen herkese açık olur; IP izin listesi kullanın');
+    expect(input(el, 'Paylaşılan anahtar').placeholder).toContain('isteğe bağlı');
+    expect(sec.textContent).toContain('X-Coremetry-Auth-Key (denetlenmiyor)');
+    const warn = sec.querySelectorAll('.sso-perm__warn');
+    expect(warn).toHaveLength(1);
+    expect(warn[0].textContent).toContain('IP izin listesi boş');
+  });
+
+  it('IP izin listesi doluyken uyarı yok; kutu satır başına bir giriş, Kaydet dizi gönderir', async () => {
+    h.get.mockResolvedValue({ ...stored, permissionServiceEnabled: true, permissionServiceAllowNoKey: true,
+      permissionServiceAllowedCIDRs: ['203.0.113.0/24', '2001:db8::/32'], permissionServiceTrustedProxies: ['10.0.0.0/8'] });
+    h.put.mockResolvedValue(stored);
+    const el = await mount();
+    const ta = input(el, 'IP izin listesi') as unknown as HTMLTextAreaElement;
+    expect(ta.tagName).toBe('TEXTAREA');
+    expect(ta.value).toBe('203.0.113.0/24\n2001:db8::/32');
+    expect(el.querySelectorAll('.sso-perm__warn')).toHaveLength(0);
+    await act(async () => {
+      el.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    });
+    const body = h.put.mock.calls[0][0];
+    expect(body.permissionServiceAllowNoKey).toBe(true);
+    expect(body.permissionServiceAllowedCIDRs).toEqual(['203.0.113.0/24', '2001:db8::/32']);
+    expect(body.permissionServiceTrustedProxies).toEqual(['10.0.0.0/8']);
+    expect('permissionServiceKey' in body).toBe(false);
+  });
+
+  it('anahtar kipi (varsayılan): uyarı satırı yok, başlık denetlenir', async () => {
+    h.get.mockResolvedValue({ ...stored, permissionServiceEnabled: true, permissionServiceKeySet: true });
+    const el = await mount();
+    const sec = el.querySelector('.sso-perm')!;
+    expect(sec.querySelectorAll('.sso-perm__warn')).toHaveLength(0);
+    expect(sec.textContent).not.toContain('(denetlenmiyor)');
   });
 
   it('okuma hatası formu çizmez (boş form kaydedilemez)', async () => {

@@ -66,6 +66,8 @@ const (
 	permissionKeyMinLen    = 16
 	permissionKeyMaxLen    = 256
 	permissionClaimMax     = 64
+	// v0.10.1111 — IP/CIDR izin listesi + güvenilen vekiller (oidc_permission_net.go).
+	PermissionMaxCIDRs = 32
 )
 
 var oidcDefaultScopes = []string{"openid", "email", "profile"}
@@ -98,15 +100,23 @@ type OIDCSettings struct {
 	PermissionTTLSeconds     int    `json:"permissionTTLSeconds"`
 	PermissionsClaim         string `json:"permissionsClaim"`
 	RoleFromClaim            bool   `json:"roleFromClaim"`
+	// v0.10.1111 — operatör kararı "Anahtarsız olmaz mı": AllowNoKey açıkken
+	// X-Coremetry-Auth-Key HİÇ denetlenmez (kayıtlı anahtar olsa da). Ağ
+	// sınırı AllowedCIDRs (boş = IP kısıtı yok); X-Forwarded-For yalnız
+	// doğrudan eş TrustedProxies'teyse okunur (oidc_permission_net.go).
+	PermissionServiceAllowNoKey     bool     `json:"permissionServiceAllowNoKey"`
+	PermissionServiceAllowedCIDRs   []string `json:"permissionServiceAllowedCIDRs"`
+	PermissionServiceTrustedProxies []string `json:"permissionServiceTrustedProxies"`
 }
 
 // String / GoString — %v, %+v, %#v ile kazara loglansa bile secret basılmasın.
 func (s OIDCSettings) String() string {
-	return fmt.Sprintf("{enabled:%v issuer:%q clientId:%q secretSet:%v redirect:%q scopes:%v display:%q role:%q domains:%v permSvc:%v permKeySet:%v permTTL:%d claim:%q roleFromClaim:%v}",
+	return fmt.Sprintf("{enabled:%v issuer:%q clientId:%q secretSet:%v redirect:%q scopes:%v display:%q role:%q domains:%v permSvc:%v permKeySet:%v permTTL:%d claim:%q roleFromClaim:%v permNoKey:%v permCIDRs:%v permProxies:%v}",
 		s.Enabled, s.IssuerURL, s.ClientID, s.ClientSecret != "", s.RedirectURL,
 		s.Scopes, s.DisplayName, s.DefaultRole, s.AllowedDomains,
 		s.PermissionServiceEnabled, s.PermissionServiceKey != "", s.PermissionTTLSeconds,
-		s.PermissionsClaim, s.RoleFromClaim)
+		s.PermissionsClaim, s.RoleFromClaim,
+		s.PermissionServiceAllowNoKey, s.PermissionServiceAllowedCIDRs, s.PermissionServiceTrustedProxies)
 }
 
 func (s OIDCSettings) GoString() string { return "auth.OIDCSettings" + s.String() }
@@ -129,6 +139,10 @@ type oidcStored struct {
 	PermissionTTLSeconds     int    `json:"permissionTTLSeconds,omitempty"`
 	PermissionsClaim         string `json:"permissionsClaim,omitempty"`
 	RoleFromClaim            bool   `json:"roleFromClaim,omitempty"`
+	// v0.10.1111
+	PermissionServiceAllowNoKey     bool     `json:"permissionServiceAllowNoKey,omitempty"`
+	PermissionServiceAllowedCIDRs   []string `json:"permissionServiceAllowedCIDRs,omitempty"`
+	PermissionServiceTrustedProxies []string `json:"permissionServiceTrustedProxies,omitempty"`
 }
 
 func (s OIDCSettings) stored() oidcStored   { return oidcStored(s) }
@@ -152,6 +166,10 @@ type OIDCSnapshot struct {
 	PermissionTTLSeconds     int    `json:"permissionTTLSeconds"`
 	PermissionsClaim         string `json:"permissionsClaim"`
 	RoleFromClaim            bool   `json:"roleFromClaim"`
+	// v0.10.1111 — anahtarsız kip + ağ sınırı (secret değil, aynen döner).
+	PermissionServiceAllowNoKey     bool     `json:"permissionServiceAllowNoKey"`
+	PermissionServiceAllowedCIDRs   []string `json:"permissionServiceAllowedCIDRs"`
+	PermissionServiceTrustedProxies []string `json:"permissionServiceTrustedProxies"`
 	// Source — etkin yapılandırmanın kaynağı: settings (blob) | config (config.yaml).
 	Source string `json:"source"`
 	// Active — bu pod'da canlı istemci var mı (giriş düğmesi). İstenen
@@ -270,6 +288,8 @@ func NormalizeOIDCSettings(in OIDCSettings, publicURL string) OIDCSettings {
 	if s.PermissionsClaim == "" {
 		s.PermissionsClaim = PermissionClaimDefault
 	}
+	s.PermissionServiceAllowedCIDRs = normalizeCIDRList(s.PermissionServiceAllowedCIDRs)
+	s.PermissionServiceTrustedProxies = normalizeCIDRList(s.PermissionServiceTrustedProxies)
 	return s
 }
 
@@ -415,12 +435,19 @@ func validPermissionsClaim(c string) bool {
 
 // validatePermissionSettings — yetki servisi alanları (normalize edilmiş
 // girdi). Anahtar: dolu ise ≥16, ≤256, yazdırılabilir ASCII, yer tutucu
-// değil (secret_strength.go weakSecretMarkers); servis açıksa zorunlu.
-// Hata metni anahtarı TAŞIMAZ. SAF.
+// değil (secret_strength.go weakSecretMarkers); servis açıksa zorunlu —
+// v0.10.1111: AllowNoKey açıkken değil. CIDR listeleri ≤32, her giriş
+// geçerli IPv4/IPv6 CIDR ya da tek IP. Hata metni anahtarı TAŞIMAZ. SAF.
 func validatePermissionSettings(s OIDCSettings) error {
 	k := s.PermissionServiceKey
-	if s.PermissionServiceEnabled && k == "" {
-		return &OIDCSettingsError{"permissionServiceKey", "Yetki servisi açıkken paylaşılan anahtar gerekli"}
+	if s.PermissionServiceEnabled && !s.PermissionServiceAllowNoKey && k == "" {
+		return &OIDCSettingsError{"permissionServiceKey", "Yetki servisi açıkken paylaşılan anahtar gerekli (ya da \"Anahtarsız kabul et\")"}
+	}
+	if err := validateCIDRList("permissionServiceAllowedCIDRs", "IP izin listesi", s.PermissionServiceAllowedCIDRs); err != nil {
+		return err
+	}
+	if err := validateCIDRList("permissionServiceTrustedProxies", "Güvenilen vekil listesi", s.PermissionServiceTrustedProxies); err != nil {
+		return err
 	}
 	if k != "" {
 		if len(k) < permissionKeyMinLen {
@@ -460,6 +487,9 @@ func validatePermissionSettings(s OIDCSettings) error {
 func disablePermissionService(s OIDCSettings) OIDCSettings {
 	s.PermissionServiceEnabled = false
 	s.PermissionServiceKey = ""
+	s.PermissionServiceAllowNoKey = false
+	s.PermissionServiceAllowedCIDRs = nil
+	s.PermissionServiceTrustedProxies = nil
 	s.RoleFromClaim = false
 	s.PermissionsClaim = PermissionClaimDefault
 	s.PermissionTTLSeconds = PermissionTTLDefault
@@ -691,7 +721,8 @@ func (o *OIDCService) TestDiscovery(ctx context.Context, in OIDCSettings) (*OIDC
 func (o *OIDCService) Snapshot() OIDCSnapshot {
 	if o == nil {
 		return OIDCSnapshot{Source: OIDCSourceConfig, Scopes: []string{}, AllowedDomains: []string{},
-			PermissionTTLSeconds: PermissionTTLDefault, PermissionsClaim: PermissionClaimDefault}
+			PermissionTTLSeconds: PermissionTTLDefault, PermissionsClaim: PermissionClaimDefault,
+			PermissionServiceAllowedCIDRs: []string{}, PermissionServiceTrustedProxies: []string{}}
 	}
 	o.mu.Lock()
 	defer o.mu.Unlock()
@@ -705,23 +736,26 @@ func (o *OIDCService) snapshotLocked() OIDCSnapshot {
 		src = OIDCSourceConfig
 	}
 	return OIDCSnapshot{
-		Enabled:                  s.Enabled,
-		IssuerURL:                s.IssuerURL,
-		ClientID:                 s.ClientID,
-		ClientSecretStored:       s.ClientSecret != "",
-		RedirectURL:              s.RedirectURL,
-		DefaultRedirectURL:       DefaultOIDCRedirectURL(o.publicURL),
-		Scopes:                   append([]string{}, s.Scopes...),
-		DisplayName:              s.DisplayName,
-		DefaultRole:              s.DefaultRole,
-		AllowedDomains:           append([]string{}, s.AllowedDomains...),
-		PermissionServiceEnabled: s.PermissionServiceEnabled,
-		PermissionServiceKeySet:  s.PermissionServiceKey != "",
-		PermissionTTLSeconds:     s.PermissionTTLSeconds,
-		PermissionsClaim:         s.PermissionsClaim,
-		RoleFromClaim:            s.RoleFromClaim,
-		Source:                   src,
-		Active:                   o.live.Load() != nil,
-		LastError:                o.st.lastErr,
+		Enabled:                         s.Enabled,
+		IssuerURL:                       s.IssuerURL,
+		ClientID:                        s.ClientID,
+		ClientSecretStored:              s.ClientSecret != "",
+		RedirectURL:                     s.RedirectURL,
+		DefaultRedirectURL:              DefaultOIDCRedirectURL(o.publicURL),
+		Scopes:                          append([]string{}, s.Scopes...),
+		DisplayName:                     s.DisplayName,
+		DefaultRole:                     s.DefaultRole,
+		AllowedDomains:                  append([]string{}, s.AllowedDomains...),
+		PermissionServiceEnabled:        s.PermissionServiceEnabled,
+		PermissionServiceKeySet:         s.PermissionServiceKey != "",
+		PermissionTTLSeconds:            s.PermissionTTLSeconds,
+		PermissionsClaim:                s.PermissionsClaim,
+		RoleFromClaim:                   s.RoleFromClaim,
+		PermissionServiceAllowNoKey:     s.PermissionServiceAllowNoKey,
+		PermissionServiceAllowedCIDRs:   append([]string{}, s.PermissionServiceAllowedCIDRs...),
+		PermissionServiceTrustedProxies: append([]string{}, s.PermissionServiceTrustedProxies...),
+		Source:                          src,
+		Active:                          o.live.Load() != nil,
+		LastError:                       o.st.lastErr,
 	}
 }

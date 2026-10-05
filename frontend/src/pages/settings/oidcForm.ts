@@ -23,12 +23,47 @@ export interface OidcForm {
   permissionTTLSeconds: string;
   permissionsClaim: string;
   roleFromClaim: boolean;
+  // v0.10.1111 — anahtarsız kip + IP/CIDR izin listesi + güvenilen vekiller
+  // (metin kutuları: satır başına bir giriş ya da virgül ayraçlı).
+  permissionServiceAllowNoKey: boolean;
+  permissionServiceAllowedCIDRs: string;
+  permissionServiceTrustedProxies: string;
 }
 
 /** Yetki servisi ucunun sabitleri (sunucu: internal/api/auth_permissions.go). */
 export const PERMISSION_ENDPOINT = '/api/auth/permissions';
 export const PERMISSION_HEADER = 'X-Coremetry-Auth-Key';
 export const PERMISSION_TTL_DEFAULT = 300;
+/** Liste başına en çok giriş (sunucu: auth.PermissionMaxCIDRs). */
+export const PERMISSION_MAX_CIDRS = 32;
+
+/**
+ * CIDR kutusu → dizi: satır / virgül / noktalı virgül / boşluk ayraçlı, boşlar
+ * ve tekrarlar atılır. Doğrulama + kanonikleştirme sunucuda (net/netip).
+ */
+export function parseCidrList(v: string): string[] {
+  return splitList(v);
+}
+
+/**
+ * Yetki servisi ağ ayarının uyarı satırları (engel değil — sunucu yine kaydeder).
+ * Anahtarsız + boş izin listesi = uç ona ağdan erişebilen herkese açık.
+ */
+export function permissionNetWarnings(f: OidcForm): string[] {
+  const cidrs = parseCidrList(f.permissionServiceAllowedCIDRs);
+  const proxies = parseCidrList(f.permissionServiceTrustedProxies);
+  const out: string[] = [];
+  if (f.permissionServiceAllowNoKey && cidrs.length === 0) {
+    out.push('Anahtarsız kabul açık ve IP izin listesi boş: uç, ona ağdan erişebilen herkese açık.');
+  }
+  if (cidrs.length > 0 && proxies.length === 0) {
+    out.push('Güvenilen vekil listesi boş: X-Forwarded-For okunmaz — Coremetry bir ingress arkasındaysa çağıran, ingress\'in IP\'si olarak görünür.');
+  }
+  if (cidrs.length > PERMISSION_MAX_CIDRS || proxies.length > PERMISSION_MAX_CIDRS) {
+    out.push(`Liste başına en çok ${PERMISSION_MAX_CIDRS} giriş — kayıt reddedilir.`);
+  }
+  return out;
+}
 
 /** TTL kutusu → sayı; boş/geçersiz → varsayılan, [60, 3600] kıskacı (sunucuyla aynı). */
 export function parsePermissionTTL(v: string): number {
@@ -65,6 +100,9 @@ export function snapshotToForm(s: OidcSettingsSnapshot): OidcForm {
     permissionTTLSeconds: String(s.permissionTTLSeconds || PERMISSION_TTL_DEFAULT),
     permissionsClaim: s.permissionsClaim || 'permissions',
     roleFromClaim: !!s.roleFromClaim,
+    permissionServiceAllowNoKey: !!s.permissionServiceAllowNoKey,
+    permissionServiceAllowedCIDRs: (s.permissionServiceAllowedCIDRs ?? []).join('\n'),
+    permissionServiceTrustedProxies: (s.permissionServiceTrustedProxies ?? []).join('\n'),
   };
 }
 
@@ -86,6 +124,9 @@ export function formToInput(f: OidcForm): OidcSettingsInput {
     permissionTTLSeconds: parsePermissionTTL(f.permissionTTLSeconds),
     permissionsClaim: f.permissionsClaim.trim() || 'permissions',
     roleFromClaim: f.roleFromClaim,
+    permissionServiceAllowNoKey: f.permissionServiceAllowNoKey,
+    permissionServiceAllowedCIDRs: parseCidrList(f.permissionServiceAllowedCIDRs),
+    permissionServiceTrustedProxies: parseCidrList(f.permissionServiceTrustedProxies),
   };
 }
 
@@ -111,6 +152,9 @@ export function publicOidcSnapshot(c: AuthConfigResponse): OidcSettingsSnapshot 
     permissionTTLSeconds: PERMISSION_TTL_DEFAULT,
     permissionsClaim: 'permissions',
     roleFromClaim: false,
+    permissionServiceAllowNoKey: false,
+    permissionServiceAllowedCIDRs: [],
+    permissionServiceTrustedProxies: [],
     source: 'config',
     active: on,
   };
