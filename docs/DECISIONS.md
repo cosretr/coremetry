@@ -1815,6 +1815,14 @@ kova ≤120, ≤7 gün, 60 s önbellek, yalnız aktifte 60 s yoklama) + "Correla
 olayın alanları (olay detayıyla aynı sorgu anahtarı), olay yeni bölüme geçtiyse Problem'in kendi penceresi
 (`promotedPatternChartEvent`). Okunurken / hata / desen dışı türde bölüm çizilmez.
 
+## 2026-10-05 — Menüde "Exceptions" → "Exceptions/Errors" (v0.10.1107)
+
+**Operatör:** "Exceptions sayfa ismi de menüde Exceptions/Errors olarak gözüksün. Çok uzun olacaksa sadece Errors
+olsun." Oracle hata tablosu grupları (v0.10.1092) ve HTTP hata grupları da bu sayfada; ad yalnız exception demiyor.
+**Karar:** yalnız kenar çubuğu etiketi (`nav.problems`, iki dil) "Exceptions/Errors" — 17 karakter, menüdeki
+"Deployment/Rollouts" (19) zaten sığıyor, kısaltmaya gerek yok. Rota (`/problems`), URL'ler, sayfa içi metinler,
+komut paleti anahtarları değişmedi.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

@@ -36,7 +36,7 @@ const EN: Catalog = {
   'nav.inbox':       'Problems',
   'nav.shift':       'Shift summary',
   'nav.incidents':   'Incidents',
-  'nav.problems':    'Exceptions',
+  'nav.problems':    'Exceptions/Errors', // v0.10.1107 (operatör) — Oracle hata grupları da burada; menüde iki ad
   'nav.anomalies':   'Anomalies',
   'nav.rollouts':    'Deployment/Rollouts', // v0.10.201 — Deployment Report → Rollouts; v0.10.984 (Rollouts v2 P2.3) — brief adı
   'nav.analysis':    'Analysis',
@@ -191,7 +191,7 @@ const TR: Catalog = {
   'nav.inbox':       'Sorunlar',
   'nav.shift':       'Vardiya özeti',
   'nav.incidents':   'Olaylar',
-  'nav.problems':    'Exception grupları',
+  'nav.problems':    'Exceptions/Errors', // v0.10.1107 (operatör: "menüde Exceptions/Errors olarak gözüksün")
   'nav.anomalies':   'Anomaliler',
   'nav.rollouts':    'Deployment/Rollout’lar', // v0.10.984 (Rollouts v2 P2.3)
   'nav.analysis':    'Sistem Analizi',
