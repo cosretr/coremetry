@@ -1823,6 +1823,22 @@ olsun." Oracle hata tablosu grupları (v0.10.1092) ve HTTP hata grupları da bu 
 "Deployment/Rollouts" (19) zaten sığıyor, kısaltmaya gerek yok. Rota (`/problems`), URL'ler, sayfa içi metinler,
 komut paleti anahtarları değişmedi.
 
+## 2026-10-05 — Oracle hata grupları kullanıcıya "Teknik hata" olarak görünür (etiket ayarlanabilir) (v0.10.1108)
+
+**Operatör:** "Oracleden gelen problemlerde exceptionsta Oracle yazıyor onun yerine başka bir şey yazsa. Teknik
+Hata gibi mesela". **Karar:** `ora:` hata tablosu gruplarının (v0.10.1092) GÖRÜNEN adı ayar oldu: branding
+blobuna `oracleGroupLabel` (Settings › Branding › "Oracle hata grubu etiketi"); boş = **"Teknik hata"**. Sunucu
+kırpar ve 40 rune'a keser (`chstore.NormalizeBranding`, yazışta ve okuyuşta); api.go büyümedi. **Uygulandığı
+yerler:** Exceptions satır rozeti + soluk satır (`<etiket> · <kaynak> · N servis`) + ipucu, çip ("<etiket> N" /
+"<etiket> hariç"), ProblemDetail rozeti, detay kartı başlığı ("<etiket> grubu") ve okuma hatası, AI paneli bağlam
+satırı; sunucuda öncelik gerekçesi ("<etiket> patlaması", "yeni <etiket> grubu", "sürekli akış (<etiket>)") —
+`chstore` atomiği, `GetBranding`/`PutBranding` ve 30 sn triyaj yenilemesi yayınlar (satır başına CH okuması yok;
+başka podun kaydı ≤30 sn). FE saf yardımcılar etiketi PARAMETRE alır (`useBranding().oracleGroupLabel`).
+**Bilerek Oracle kalan:** title/ipucu açıklamaları ("Oracle hata tablosu satırlarından oluşan grup"), çipin
+aria-label'ı, detay kartı alt satırı ve Settings yolu dipnotu, trace-yok ipucu; Inbox `source` alanı "Oracle"
+(exception satırında çizilmiyor, arama anahtarı); kod adları, `?oracle=`, `ora:` parmak izi; AI istemleri
+(model Oracle olduğunu bilmeli). Bildirim e-postası zaten "Oracle" taşımıyordu.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

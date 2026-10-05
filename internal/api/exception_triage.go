@@ -62,6 +62,10 @@ func setExceptionTriage(c chstore.ExceptionTriageConfig) {
 // — boot'u bir ayar okumasına bağlamıyoruz.
 func (s *Server) LoadExceptionTriage(ctx context.Context) {
 	setExceptionTriage(s.store.GetExceptionTriage(ctx))
+	// v0.10.1108 — Oracle grubu etiketi (branding oracleGroupLabel) aynı tikte
+	// hidrate: GetBranding başarılı okumada chstore atomiğini yayınlar; öncelik
+	// gerekçesi satır başına oradan okur. Çok-pod: başka podun PUT'u ≤30 sn.
+	_, _ = s.store.GetBranding(ctx)
 }
 
 // StartExceptionTriageRefresh — çok-pod yakınsaması. Pod A'daki PUT

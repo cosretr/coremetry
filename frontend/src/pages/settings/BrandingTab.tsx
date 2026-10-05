@@ -1,8 +1,8 @@
 import { useEffect, useState, type FormEvent, type ChangeEvent } from 'react';
 import { Spinner } from '@/components/Spinner';
-import { Button, useConfirm } from '@/components/ui';
+import { Button, useConfirm, Field as LabeledInput } from '@/components/ui';
 import { api } from '@/lib/api';
-import { DEFAULT_BRANDING, invalidateBranding, type BrandingSettings } from '@/lib/branding';
+import { DEFAULT_BRANDING, ORACLE_GROUP_LABEL_MAX, invalidateBranding, type BrandingSettings } from '@/lib/branding';
 import { Field, Row, SettingsLoadError, useSettingsLoad } from './shared';
 
 // BrandingTab — white-label / customisation form. Admin paints the
@@ -152,6 +152,17 @@ export function BrandingTab() {
             Applies to every operator hitting this Coremetry instance.
           </div>
         </Field>
+
+        {/* v0.10.1108 (operatör: "exceptionsta Oracle yazıyor onun yerine … Teknik
+            Hata gibi") — `ora:` gruplarının görünen adı; boş = "Teknik hata".
+            Sunucu kırpar + 40 rune'a keser; maxLength aynı tavan. */}
+        <div style={{ marginBottom: 12 }}>
+          <LabeledInput label="Oracle hata grubu etiketi"
+            value={b.oracleGroupLabel ?? ''} onChange={e => set('oracleGroupLabel', e.target.value)}
+            placeholder={DEFAULT_BRANDING.oracleGroupLabel} maxLength={ORACLE_GROUP_LABEL_MAX}
+            style={{ width: '100%' }}
+            hint='Exceptions/Problems satırlarında, rozetinde, çipinde ve AI satırında "Oracle" kelimesinin yerine görünür.' />
+        </div>
 
         <Field label="Primary color (CSS — e.g. #4f46e5, rgb(79,70,229))">
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>

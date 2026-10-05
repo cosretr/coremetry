@@ -59,6 +59,7 @@ import { Badge } from '@/components/ui/Badge';
 // v0.10.1092 — Oracle hata tablosu grubu (`ora:`): stack yerine Oracle kırılımı.
 import { OracleGroupPanel } from './OracleGroupPanel';
 import { isOracleGroup, isSyntheticOracleService } from './oracleGroup';
+import { useBranding } from '@/lib/branding'; // v0.10.1108 — Oracle grubu görünen adı
 // v0.10.1032 — triyaj eylemleri tam sayfaya taşındı (çekmece atlanınca
 // "Gerçek problem / Problem değil" ve Assign… kaybolmasın).
 import { ProblemVerdictActions } from '@/components/ProblemVerdictActions';
@@ -298,6 +299,7 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
   const [state, setState] = useState<ExceptionGroupState>(group.state);
   const [copied, setCopied] = useState(false);
   const ora = isOracleGroup(group); // v0.10.1092
+  const oraLabel = useBranding().oracleGroupLabel; // v0.10.1108 — rozet "Teknik hata" (title Oracle'ı açıklar)
   // v0.9.414 — Explain'in deterministik kanıt trace'leri: örnek-trace
   // satırları kutulanır (Explain trace'in waterfall kutulaması gibi).
   const [evTraces, setEvTraces] = useState<string[]>([]);
@@ -501,7 +503,7 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
           Problems
         </Button>
         <TriageStatusBadge s={state} label={STATE_LABEL[state]} />
-        {ora && <Badge tone="info" title="Oracle hata tablosu satırlarından oluşan grup (kaynak · hata kodu · operasyon)">Oracle</Badge>}
+        {ora && <Badge tone="info" title="Oracle hata tablosu satırlarından oluşan grup (kaynak · hata kodu · operasyon)">{oraLabel}</Badge>}
         <span className="badge b-gray">{group.occurrences.toLocaleString()} occurrences</span>
         <span className="spacer" />
         <ShareButton copiedLabel="Copied" />

@@ -62,7 +62,7 @@ describe('AI paneli: Oracle hata grubu (v0.10.1100)', () => {
     await act(async () => { await Promise.resolve(); });
 
     expect(oracle).toHaveBeenCalledWith(ORA);
-    expect(ctxLine()?.textContent).toBe('Oracle · core-errlog · APP_ERR_042 · OP_TRANSFER');
+    expect(ctxLine()?.textContent).toBe('Teknik hata · core-errlog · APP_ERR_042 · OP_TRANSFER');
     expect(chip()).toBeUndefined();
     expect(explain).toHaveBeenCalledTimes(1);
     expect(explain.mock.calls[0][0]).toBe(ORA);
@@ -75,7 +75,7 @@ describe('AI paneli: Oracle hata grubu (v0.10.1100)', () => {
     vi.spyOn(api, 'exceptionGroupOracle').mockRejectedValue(new Error('404'));
     vi.spyOn(api, 'copilotExplainException').mockResolvedValue({ explanation: 'ok', exchangeId: 'x1' });
     await mount(<CopilotExplain kind="exception" id={ORA} auto />);
-    expect(ctxLine()?.textContent).toBe('Oracle hata grubu');
+    expect(ctxLine()?.textContent).toBe('Teknik hata grubu');
     expect(chip()).toBeUndefined();
   });
 

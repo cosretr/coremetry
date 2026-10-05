@@ -11,6 +11,10 @@
 //     `oracle` parametresi GÖNDERMEZ (Oracle grupları dahil), çip seçilince
 //     `oracle=only` gider;
 //   • span grubu satırı değişmedi (rozet yok, mesaj mono).
+// v0.10.1108 (operatör: "exceptionsta Oracle yazıyor onun yerine … Teknik Hata
+// gibi") — rozet / soluk satır / çip görünen adı branding'den: varsayılan
+// "Teknik hata", özel etiket aynen; "Oracle" kelimesi görünen metinde yok
+// (title'lar Oracle'ı açıklar; aria-label ve ?oracle= değişmedi).
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -18,6 +22,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ConfirmProvider } from '@/components/ui/ConfirmDialog';
 import type { ExceptionGroup } from '@/lib/types';
+import { invalidateBranding } from '@/lib/branding';
 
 const m = vi.hoisted(() => {
   window.matchMedia = ((q: string) => ({
@@ -104,17 +109,18 @@ describe('Exceptions — Oracle grubu satırı', () => {
     expect(rows.length).toBe(3);
     const [r1, r2, r3] = rows;
     expect(r1.querySelector('.triage-title')?.textContent).toContain('APP_ERR_001 · OP_TRANSFER');
-    expect(Array.from(r1.querySelectorAll('.badge')).some(b => b.textContent === 'Oracle')).toBe(true);
-    expect(r1.querySelector('.triage-sub')?.textContent).toBe('Oracle · app-err · 2 servis');
+    expect(Array.from(r1.querySelectorAll('.badge')).some(b => b.textContent === 'Teknik hata')).toBe(true);
+    expect(Array.from(r1.querySelectorAll('.badge')).some(b => b.textContent === 'Oracle')).toBe(false);
+    expect(r1.querySelector('.triage-sub')?.textContent).toBe('Teknik hata · app-err · 2 servis');
     expect(r1.querySelector('.triage-sub')?.classList.contains('mono')).toBe(false);
     expect(Array.from(r1.querySelectorAll('a')).some(a => a.textContent === 'svc-payments')).toBe(true);
     expect(r1.textContent).toContain('+1 servis');
     // Sentetik servis: link yok, soluk ad.
     expect(Array.from(r2.querySelectorAll('a')).some(a => a.textContent === 'oracle:app-err')).toBe(false);
     expect(r2.textContent).toContain('oracle:app-err');
-    expect(r2.querySelector('.triage-sub')?.textContent).toBe('Oracle · app-err · servis bilinmiyor');
+    expect(r2.querySelector('.triage-sub')?.textContent).toBe('Teknik hata · app-err · servis bilinmiyor');
     // Span grubu değişmedi.
-    expect(Array.from(r3.querySelectorAll('.badge')).some(b => b.textContent === 'Oracle')).toBe(false);
+    expect(Array.from(r3.querySelectorAll('.badge')).some(b => b.textContent === 'Teknik hata')).toBe(false);
     expect(r3.querySelector('.triage-title')?.textContent).toContain('java.net.SocketTimeoutException');
     expect(r3.querySelector('.triage-sub.mono')?.textContent).toBe('Read timed out');
   });
@@ -125,10 +131,31 @@ describe('Exceptions — Oracle grubu satırı', () => {
     expect(m.params[0]?.oracle).toBeUndefined();
     const group = el.querySelector('[role="radiogroup"][aria-label="Oracle hata grupları"]');
     expect(group).not.toBeNull();
-    const only = Array.from(group!.querySelectorAll('[role="radio"]')).find(b => b.textContent?.startsWith('Oracle 2'));
+    const radios = Array.from(group!.querySelectorAll('[role="radio"]'));
+    const only = radios.find(b => b.textContent?.startsWith('Teknik hata 2'));
     expect(only).toBeTruthy();
+    expect(radios.some(b => b.textContent === 'Teknik hata hariç')).toBe(true);
+    expect(radios.some(b => b.textContent?.includes('Oracle'))).toBe(false);
     await act(async () => { (only as HTMLElement).click(); });
     await settle();
     expect(m.params[m.params.length - 1]?.oracle).toBe('only');
+  });
+
+  it('özel branding etiketi rozet, soluk satır ve çipte', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ oracleGroupLabel: 'DB hatası' }), { status: 200 })));
+    try {
+      await invalidateBranding();
+      m.items = [oracleGroup('ora:aaaaaaaaaaaaaaaa', 'svc-payments', 2)];
+      const el = await mount();
+      const r1 = el.querySelector('tbody tr')!;
+      expect(Array.from(r1.querySelectorAll('.badge')).some(b => b.textContent === 'DB hatası')).toBe(true);
+      expect(r1.querySelector('.triage-sub')?.textContent).toBe('DB hatası · app-err · 2 servis');
+      const group = el.querySelector('[role="radiogroup"][aria-label="Oracle hata grupları"]')!;
+      expect(Array.from(group.querySelectorAll('[role="radio"]')).some(b => b.textContent === 'DB hatası hariç')).toBe(true);
+    } finally {
+      vi.stubGlobal('fetch', vi.fn(async () => new Response('null', { status: 200 })));
+      await invalidateBranding();
+      vi.unstubAllGlobals();
+    }
   });
 });

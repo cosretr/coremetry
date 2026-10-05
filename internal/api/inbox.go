@@ -2153,7 +2153,8 @@ func exceptionPriority(g chstore.ExceptionGroup) (string, string) {
 		// dakikalar sayılır — akan grup "durdu" okunmasın). /inbox, Exceptions ve
 		// bildirimci aynı yoldan.
 		st, _ := oracleGroupStats(g)
-		return oraclePriorityAt(g, currentExceptionTriage(), time.Now().Add(-st.Lag), st.LastHour, st.PrevHour)
+		// v0.10.1108 — gerekçedeki ad branding etiketi (chstore atomik, CH okuması yok).
+		return oraclePriorityAt(g, currentExceptionTriage(), time.Now().Add(-st.Lag), st.LastHour, st.PrevHour, chstore.CurrentOracleGroupLabel())
 	}
 	return exceptionPriorityAt(g, currentExceptionTriage(), time.Now())
 }

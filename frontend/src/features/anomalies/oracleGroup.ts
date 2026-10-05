@@ -6,8 +6,14 @@
 // kodu, service = baskın servis (trace → servis çözümü) yoksa `oracle:<kaynak>`.
 // Satır biçimi Exceptions'ınkiyle AYNI (TriageTitleCell, v0.10.1084):
 //   kalın başlık  "<kod> · <operasyon>"
-//   soluk satır   "Oracle · <kaynak> · N servis"
+//   soluk satır   "<etiket> · <kaynak> · N servis"
 // Saf yardımcılar burada; bileşenler (AnomaliesPage, ProblemDetail) yalnız çizer.
+//
+// v0.10.1108 (operatör: "exceptionsta Oracle yazıyor onun yerine … Teknik Hata
+// gibi") — kullanıcıya görünen ad `label` PARAMETRESİ (gizli global yok):
+// bileşen `useBranding().oracleGroupLabel` verir (varsayılan "Teknik hata",
+// Settings › Branding). Kod adları, `?oracle=` ve `ora:` parmak izi değişmez;
+// AI istemleri Oracle bilmeye devam eder (yalnız görünen metin).
 import type { ExceptionGroup, OracleGroupInfo } from '@/lib/types';
 
 export const ORACLE_GROUP_PREFIX = 'ora:';
@@ -37,11 +43,11 @@ export function oracleSourceName(g: Pick<ExceptionGroup, 'service' | 'oracle'>):
   return '?';
 }
 
-/** Soluk satır: "Oracle · <kaynak> · N servis" (servis bilinmiyorsa "servis bilinmiyor"). */
-export function oracleRowDetail(g: Pick<ExceptionGroup, 'service' | 'oracle'>): string {
+/** Soluk satır: "<etiket> · <kaynak> · N servis" (servis bilinmiyorsa "servis bilinmiyor"). */
+export function oracleRowDetail(g: Pick<ExceptionGroup, 'service' | 'oracle'>, label: string): string {
   const n = g.oracle?.serviceCount ?? 0;
   const svc = n > 0 ? `${n} servis` : 'servis bilinmiyor';
-  return `Oracle · ${oracleSourceName(g)} · ${svc}`;
+  return `${label} · ${oracleSourceName(g)} · ${svc}`;
 }
 
 /** Kanal kırılımı kısa metni ("MOB %60 · WEB %40"), en çok n kanal. */
@@ -55,8 +61,8 @@ export function oracleChannelsText(info: Pick<OracleGroupInfo, 'channels'> | und
 }
 
 /** Satır başlığının title metni: kırılım + gecikme notu. */
-export function oracleRowTooltip(g: Pick<ExceptionGroup, 'type' | 'message' | 'service' | 'oracle'>): string {
-  const lines = [oracleRowTitle(g), oracleRowDetail(g)];
+export function oracleRowTooltip(g: Pick<ExceptionGroup, 'type' | 'message' | 'service' | 'oracle'>, label: string): string {
+  const lines = [oracleRowTitle(g), oracleRowDetail(g, label)];
   const ch = oracleChannelsText(g.oracle, 6);
   if (ch) lines.push(`Kanal: ${ch}`);
   const svcs = (g.oracle?.services ?? []).map(s => s.name);
@@ -67,13 +73,18 @@ export function oracleRowTooltip(g: Pick<ExceptionGroup, 'type' | 'message' | 's
 }
 
 /**
- * AI paneli başlık satırı (v0.10.1100): "Oracle · <kaynak> · <kod> · <operasyon>".
+ * AI paneli başlık satırı (v0.10.1100): "<etiket> · <kaynak> · <kod> · <operasyon>".
  * Oracle grubunda stack yok — panel "Kodu da incele" yerine bu bağlamı gösterir.
- * Bilgi henüz yoksa (yükleniyor / 404) yalnız "Oracle hata grubu".
+ * Bilgi henüz yoksa (yükleniyor / 404) yalnız "<etiket> grubu" (v0.10.1108).
  */
-export function oracleExplainLine(info: Pick<OracleGroupInfo, 'sourceName' | 'code' | 'operation'> | null | undefined): string {
+export function oracleExplainLine(info: Pick<OracleGroupInfo, 'sourceName' | 'code' | 'operation'> | null | undefined, label: string): string {
   const parts = [info?.sourceName, info?.code, info?.operation].map(s => (s ?? '').trim()).filter(Boolean);
-  return parts.length ? ['Oracle', ...parts].join(' · ') : 'Oracle hata grubu';
+  return parts.length ? [label, ...parts].join(' · ') : `${label} grubu`;
+}
+
+/** Exceptions çipinin görünen etiketleri (v0.10.1108): "<etiket> N" / "<etiket> hariç". */
+export function oracleFacetLabels(label: string, count: number, fmt: (n: number) => string): { only: string; exclude: string } {
+  return { only: count >= 0 ? `${label} ${fmt(count)}` : label, exclude: `${label} hariç` };
 }
 
 /** Exceptions "Oracle" çipi — URL ?oracle= değeri. Yok = Oracle grupları DAHİL. */

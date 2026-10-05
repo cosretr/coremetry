@@ -1,12 +1,19 @@
 // oracleGroup.test — v0.10.1092 (operatör: "Oracle hataları Exceptions gibi
 // görünsün"). Satır metinleri (başlık "<kod> · <operasyon>", soluk satır
-// "Oracle · <kaynak> · N servis"), sentetik servis, kanal kırılımı, çip URL'i.
+// "<etiket> · <kaynak> · N servis"), sentetik servis, kanal kırılımı, çip URL'i.
+// v0.10.1108 (operatör: "exceptionsta Oracle yazıyor onun yerine … Teknik Hata
+// gibi") — görünen ad parametre: varsayılan "Teknik hata", özel etiket aynen;
+// branding erişimcisi kırpar, 40 karaktere keser, boşu varsayılana düşürür.
 import { describe, it, expect } from 'vitest';
 import type { ExceptionGroup } from '@/lib/types';
 import {
   isOracleGroup, isSyntheticOracleService, oracleRowTitle, oracleRowDetail, oracleSourceName,
   oracleChannelsText, oracleRowTooltip, parseOracleFacet, oracleFacetParam, oracleExplainLine,
+  oracleFacetLabels,
 } from './oracleGroup';
+import { DEFAULT_BRANDING, oracleGroupLabelOf, resolveBranding } from '@/lib/branding';
+
+const L = DEFAULT_BRANDING.oracleGroupLabel; // "Teknik hata"
 
 const g = (over: Partial<ExceptionGroup> = {}): ExceptionGroup => ({
   fingerprint: 'ora:42c30d3ac1ddbf2c', type: 'APP_ERR_001', message: 'OP_TRANSFER', service: 'svc-payments',
@@ -29,9 +36,10 @@ describe('oracleGroup', () => {
   it('satır başlığı ve soluk satır', () => {
     expect(oracleRowTitle(g())).toBe('APP_ERR_001 · OP_TRANSFER');
     expect(oracleRowTitle(g({ message: ' ' }))).toBe('APP_ERR_001');
-    expect(oracleRowDetail(g())).toBe('Oracle · app-err · 2 servis');
+    expect(oracleRowDetail(g(), L)).toBe('Teknik hata · app-err · 2 servis');
     // Bilgi yoksa (deep-link GET) kaynak sentetik servisten, servis bilinmiyor.
-    expect(oracleRowDetail(g({ oracle: undefined, service: 'oracle:app-err' }))).toBe('Oracle · app-err · servis bilinmiyor');
+    expect(oracleRowDetail(g({ oracle: undefined, service: 'oracle:app-err' }), L)).toBe('Teknik hata · app-err · servis bilinmiyor');
+    expect(oracleRowDetail(g(), 'DB hatası')).toBe('DB hatası · app-err · 2 servis');
     expect(oracleSourceName(g({ oracle: undefined, service: 'svc-x' }))).toBe('?');
   });
 
@@ -44,7 +52,9 @@ describe('oracleGroup', () => {
   it('kanal kırılımı yüzde + taşma', () => {
     expect(oracleChannelsText(g().oracle)).toBe('MOB %60 · WEB %30 · ATM %6 · +1');
     expect(oracleChannelsText(undefined)).toBe('');
-    expect(oracleRowTooltip(g())).toContain('Servisler: svc-payments, svc-cards');
+    expect(oracleRowTooltip(g(), L)).toContain('Servisler: svc-payments, svc-cards');
+    expect(oracleRowTooltip(g(), 'DB hatası')).toContain('DB hatası · app-err · 2 servis');
+    expect(oracleRowTooltip(g(), L).split('\n')[1]).toBe('Teknik hata · app-err · 2 servis');
   });
 
   it('Oracle çipi URL değeri: yok = dahil', () => {
@@ -58,9 +68,27 @@ describe('oracleGroup', () => {
 
   // v0.10.1100 — AI paneli başlık satırı (kod çipi yerine).
   it('AI paneli Oracle bağlam satırı', () => {
-    expect(oracleExplainLine(g().oracle)).toBe('Oracle · app-err · APP_ERR_001 · OP_TRANSFER');
-    expect(oracleExplainLine({ sourceName: ' ', code: 'APP_ERR_001', operation: '' })).toBe('Oracle · APP_ERR_001');
-    expect(oracleExplainLine(undefined)).toBe('Oracle hata grubu');
-    expect(oracleExplainLine(null)).toBe('Oracle hata grubu');
+    expect(oracleExplainLine(g().oracle, L)).toBe('Teknik hata · app-err · APP_ERR_001 · OP_TRANSFER');
+    expect(oracleExplainLine({ sourceName: ' ', code: 'APP_ERR_001', operation: '' }, L)).toBe('Teknik hata · APP_ERR_001');
+    expect(oracleExplainLine(undefined, L)).toBe('Teknik hata grubu');
+    expect(oracleExplainLine(null, 'DB hatası')).toBe('DB hatası grubu');
+    expect(oracleExplainLine(g().oracle, 'DB hatası')).toBe('DB hatası · app-err · APP_ERR_001 · OP_TRANSFER');
+  });
+
+  // v0.10.1108 — çip etiketleri + branding erişimcisi.
+  it('çip etiketleri görünen adı taşır', () => {
+    const fmt = (n: number) => String(n);
+    expect(oracleFacetLabels(L, 2, fmt)).toEqual({ only: 'Teknik hata 2', exclude: 'Teknik hata hariç' });
+    expect(oracleFacetLabels('DB hatası', -1, fmt)).toEqual({ only: 'DB hatası', exclude: 'DB hatası hariç' });
+  });
+
+  it('branding etiketi: varsayılan, kırpma, 40 karakter tavanı', () => {
+    expect(L).toBe('Teknik hata');
+    expect(oracleGroupLabelOf(undefined)).toBe('Teknik hata');
+    expect(oracleGroupLabelOf({ oracleGroupLabel: '   ' })).toBe('Teknik hata');
+    expect(oracleGroupLabelOf({ oracleGroupLabel: '  DB hatası ' })).toBe('DB hatası');
+    expect(oracleGroupLabelOf({ oracleGroupLabel: 'ş'.repeat(45) })).toBe('ş'.repeat(40));
+    expect(resolveBranding(null).oracleGroupLabel).toBe('Teknik hata');
+    expect(resolveBranding({ oracleGroupLabel: 'DB hatası' }).oracleGroupLabel).toBe('DB hatası');
   });
 });

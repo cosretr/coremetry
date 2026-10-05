@@ -5,7 +5,8 @@ package api
 // P1"). Pinler: Oracle grubu span merdiveninin yapışkan hacim P1'inden ve
 // regressed "açıldıktan sonra ≥N" P1'inden MUAF; P1 yalnız son 1 sa patlaması
 // (≥ eşik ve ≥ 3× önceki saat) ya da yeni grup + son 1 sa ≥ eşik; P2 son 1 sa
-// ≥ 100 ve taze/regressed; gerisi P3 "sürekli akış (Oracle)". Sarmalayıcı
+// ≥ 100 ve taze/regressed; gerisi P3 "sürekli akış (<etiket>)" (v0.10.1108:
+// etiket branding oracleGroupLabel, varsayılan "Teknik hata"). Sarmalayıcı
 // enjekte edilen istatistiği ve gecikmeyi kullanır; span grubu aynen.
 
 import (
@@ -32,22 +33,22 @@ func TestOraclePriorityAt(t *testing.T) {
 		last, prev uint64
 		want, why  string
 	}{
-		{"patlama: 9000 vs 2000 (≥3×, ≥eşik)", mk("new", 900000, old, 0), 9000, 2000, "P1", "Oracle patlaması"},
+		{"patlama: 9000 vs 2000 (≥3×, ≥eşik)", mk("new", 900000, old, 0), 9000, 2000, "P1", "Teknik hata patlaması"},
 		{"durgun büyük akış: 9000 vs 8000 → P2 (ömür toplamı 900K yapışkan P1 YAPMAZ)", mk("new", 900000, old, 0), 9000, 8000, "P2", "son 1 sa"},
-		{"önceki saat yoksa (0) ve ≥eşik → patlama", mk("new", 6000, old, 0), 6000, 0, "P1", "Oracle patlaması"},
-		{"yeni grup + son 1 sa ≥ eşik (önceki saat de büyük)", mk("new", 12000, 90*time.Minute, 0), 6000, 6000, "P1", "yeni Oracle grubu"},
+		{"önceki saat yoksa (0) ve ≥eşik → patlama", mk("new", 6000, old, 0), 6000, 0, "P1", "Teknik hata patlaması"},
+		{"yeni grup + son 1 sa ≥ eşik (önceki saat de büyük)", mk("new", 12000, 90*time.Minute, 0), 6000, 6000, "P1", "yeni Teknik hata grubu"},
 		{"yeni grup ama son 1 sa < eşik → P2", mk("new", 1200, 30*time.Minute, 0), 1200, 0, "P2", "son 1 sa"},
 		{"regressed, ömür 900K, yeniden açılıştan beri çok → P1 DEĞİL (muaf)", func() chstore.ExceptionGroup {
 			g := mk("regressed", 900000, old, 0)
 			g.OccurrencesAtResolve = 100
 			return g
 		}(), 300, 280, "P2", "regressed"},
-		{"bayat (son görülme > 4 sa) + az → P3", mk("new", 50000, old, 6*time.Hour), 0, 0, "P3", "sürekli akış (Oracle)"},
-		{"taze ama son 1 sa < 100 → P3", mk("acknowledged", 40000, old, 0), 60, 70, "P3", "sürekli akış (Oracle)"},
+		{"bayat (son görülme > 4 sa) + az → P3", mk("new", 50000, old, 6*time.Hour), 0, 0, "P3", "sürekli akış (Teknik hata)"},
+		{"taze ama son 1 sa < 100 → P3", mk("acknowledged", 40000, old, 0), 60, 70, "P3", "sürekli akış (Teknik hata)"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got, reason := oraclePriorityAt(c.g, cfg, now, c.last, c.prev)
+			got, reason := oraclePriorityAt(c.g, cfg, now, c.last, c.prev, chstore.DefaultOracleGroupLabel)
 			if got != c.want || !strings.Contains(reason, c.why) {
 				t.Fatalf("öncelik %s (%q), beklenen %s (%q)", got, reason, c.want, c.why)
 			}
@@ -56,8 +57,12 @@ func TestOraclePriorityAt(t *testing.T) {
 	// Vida: eşik 1000'e inerse 2000 vs 500 patlama P1.
 	low := cfg
 	low.OracleP1MinOccurrences = 1000
-	if got, _ := oraclePriorityAt(mk("new", 90000, old, 0), low, now, 2000, 500); got != "P1" {
+	if got, _ := oraclePriorityAt(mk("new", 90000, old, 0), low, now, 2000, 500, chstore.DefaultOracleGroupLabel); got != "P1" {
 		t.Fatalf("vida: %s", got)
+	}
+	// v0.10.1108 — gerekçedeki ad branding etiketinden; "Oracle" kelimesi yok.
+	if _, reason := oraclePriorityAt(mk("new", 900000, old, 0), cfg, now, 9000, 2000, "DB hatası"); !strings.HasPrefix(reason, "DB hatası patlaması") || strings.Contains(reason, "Oracle") {
+		t.Fatalf("özel etiket: %q", reason)
 	}
 }
 
@@ -75,7 +80,7 @@ func TestExceptionPriorityWrapperOracle(t *testing.T) {
 	}
 	// İstatistik yok → saatlik 0 → P3 (span merdivenine düşmez: 900K yapışkan P1 yok).
 	oracleStatsFn.Store(nil)
-	if p, reason := exceptionPriority(ora); p != "P3" || !strings.Contains(reason, "sürekli akış (Oracle)") {
+	if p, reason := exceptionPriority(ora); p != "P3" || !strings.Contains(reason, "sürekli akış (Teknik hata)") {
 		t.Fatalf("istatistiksiz: %s %q", p, reason)
 	}
 	span := ora

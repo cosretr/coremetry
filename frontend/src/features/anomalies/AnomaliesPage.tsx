@@ -44,8 +44,9 @@ import { SegmentedControl } from '@/components/ui/SegmentedControl';
 // v0.10.1092 — Oracle hata tablosu grupları (`ora:`) bu listede, aynı satır biçimiyle.
 import {
   isOracleGroup, isSyntheticOracleService, oracleRowTitle, oracleRowDetail, oracleRowTooltip,
-  parseOracleFacet, oracleFacetParam, type OracleFacet,
+  parseOracleFacet, oracleFacetParam, oracleFacetLabels, type OracleFacet,
 } from './oracleGroup';
+import { useBranding } from '@/lib/branding'; // v0.10.1108 — Oracle grubu görünen adı
 
 // v0.10.751 — sekmeler tek kaynaktan (tabs.ts): Inbox = ignored hariç her
 // durum; eski `?tab=open` adresi ayrıştırıcıda inbox'a çevrilir.
@@ -176,6 +177,9 @@ export default function ProblemsPage() {
   const sreTeam   = searchParams.get('sre')   || '';
   // v0.10.1092 — "Oracle" çipi (?oracle=only|exclude); yok = Oracle grupları DAHİL.
   const oracleFacet = parseOracleFacet(searchParams.get('oracle'));
+  // v0.10.1108 — kullanıcıya görünen ad (rozet / soluk satır / çip): branding
+  // oracleGroupLabel, varsayılan "Teknik hata". title'lar Oracle'ı açıklamaya devam eder.
+  const oraLabel = useBranding().oracleGroupLabel;
   const setOracleFacet = (v: OracleFacet) => setSearchParams(prev => {
     const p = new URLSearchParams(prev);
     if (v === 'all') p.delete('oracle'); else p.set('oracle', v);
@@ -564,8 +568,8 @@ export default function ProblemsPage() {
               title="Oracle hata tablosu satırlarından oluşan gruplar (kod × operasyon)"
               options={[
                 { value: 'all', label: 'Tümü', title: 'Span exception\'ları + Oracle grupları (varsayılan)' },
-                { value: 'only', label: <>Oracle{oracleCount >= 0 ? ` ${fmtNum(oracleCount)}` : ''}</>, title: 'Yalnız Oracle hata tablosu grupları' },
-                { value: 'exclude', label: 'Oracle hariç', title: 'Oracle gruplarını gizle' },
+                { value: 'only', label: oracleFacetLabels(oraLabel, oracleCount, fmtNum).only, title: 'Yalnız Oracle hata tablosu grupları' },
+                { value: 'exclude', label: oracleFacetLabels(oraLabel, oracleCount, fmtNum).exclude, title: 'Oracle gruplarını gizle' },
               ]} />
           )}
           <span style={{ color: 'var(--text3)', fontSize: 12, marginLeft: 'auto' }}>
@@ -672,7 +676,7 @@ export default function ProblemsPage() {
                             {ora && (
                               <Badge tone="info" style={{ fontSize: 9, padding: '0 5px' }}
                                 title="Oracle hata tablosu satırlarından oluşan grup (kaynak · hata kodu · operasyon)">
-                                Oracle
+                                {oraLabel}
                               </Badge>
                             )}
                             {/* First observed within the last hour — the
@@ -686,8 +690,8 @@ export default function ProblemsPage() {
                               </span>
                             )}
                           </>}
-                          detail={ora ? oracleRowDetail(g) : (g.message || '—')}
-                          detailTitle={ora ? oracleRowTooltip(g) : g.message}
+                          detail={ora ? oracleRowDetail(g, oraLabel) : (g.message || '—')}
+                          detailTitle={ora ? oracleRowTooltip(g, oraLabel) : g.message}
                           detailMono={!ora}
                           ai={g.aiSummary ? stripMarkdown(g.aiSummary) : undefined} />
                         </Link>

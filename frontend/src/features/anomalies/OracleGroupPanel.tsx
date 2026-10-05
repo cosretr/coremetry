@@ -18,6 +18,7 @@ import { traceHref } from '@/lib/traceHref';
 import type { ExceptionGroup, ExceptionSample } from '@/lib/types';
 import { oracleChannelsText, isSyntheticOracleService, oracleSourceName } from './oracleGroup';
 import { sampleTraceLinkable } from './sampleTrace'; // v0.10.1104
+import { useBranding } from '@/lib/branding'; // v0.10.1108
 import { TraceMissingId } from './ExceptionSampleRow';
 
 export function OracleGroupPanel({ group, samples }: { group: ExceptionGroup; samples: ExceptionSample[] }) {
@@ -27,6 +28,9 @@ export function OracleGroupPanel({ group, samples }: { group: ExceptionGroup; sa
     staleTime: 30_000,
   });
   const info = q.data ?? group.oracle;
+  // v0.10.1108 — başlık + hata metni görünen adla ("Teknik hata grubu"); alt
+  // satır ve dipnot kaynağı açıklar (Oracle hata tablosu / Settings yolu).
+  const label = useBranding().oracleGroupLabel;
   const win = { fromNs: group.firstSeen, toNs: group.lastSeen };
   // v0.10.1104 — ayrık id (aynı trace birden çok Oracle satırı taşır; React
   // anahtarı çakışıyordu) ve Coremetry'de BULUNANLAR önce (kararlı sıralama):
@@ -40,12 +44,12 @@ export function OracleGroupPanel({ group, samples }: { group: ExceptionGroup; sa
   return (
     <div className="card" style={{ minWidth: 0 }}>
       <div className="ov-card-h">
-        <h3>Oracle hata grubu</h3>
+        <h3>{label} grubu</h3>
         <span className="ov-sub">stack yok — Oracle hata tablosu satırları (kod × operasyon)</span>
       </div>
       <div className="ov-card-b">
         {q.isError && !info ? (
-          <QueryErrorInline text={`Oracle kırılımı okunamadı${q.error instanceof Error ? ` — ${q.error.message}` : ''}`}
+          <QueryErrorInline text={`${label} kırılımı okunamadı${q.error instanceof Error ? ` — ${q.error.message}` : ''}`}
             onRetry={() => q.refetch()} />
         ) : (
           <KeyValue>

@@ -71,10 +71,13 @@ func oracleGroupStats(g chstore.ExceptionGroup) (oracle.GroupStats, bool) {
 //	P1  son 1 sa ≥ oracleP1MinOccurrences VE ≥ 3 × önceki 1 sa (patlama)
 //	P1  grup YENİ (ilk görülme P1 penceresinde) VE son 1 sa ≥ eşik
 //	P2  son 1 sa ≥ 100 VE (taze — son görülme P1 penceresinde — ya da regressed)
-//	P3  "sürekli akış (Oracle)"
+//	P3  "sürekli akış (<etiket>)"
 //
 // now: kapanmış dakika gecikmesi kadar geriye çekilmiş "şimdi" (çağıran).
-func oraclePriorityAt(g chstore.ExceptionGroup, cfg chstore.ExceptionTriageConfig, now time.Time, lastHour, prevHour uint64) (string, string) {
+// label: v0.10.1108 — grubun kullanıcıya görünen adı (branding
+// oracleGroupLabel, varsayılan "Teknik hata"; operatör: "Oracle yazıyor onun
+// yerine … Teknik Hata"). Gerekçe metni Exceptions/Inbox P rozetinin ipucu.
+func oraclePriorityAt(g chstore.ExceptionGroup, cfg chstore.ExceptionTriageConfig, now time.Time, lastHour, prevHour uint64, label string) (string, string) {
 	cfg = chstore.NormalizeExceptionTriage(cfg)
 	thr := uint64(cfg.OracleP1MinOccurrences)
 	win := cfg.P1Window()
@@ -82,10 +85,10 @@ func oraclePriorityAt(g chstore.ExceptionGroup, cfg chstore.ExceptionTriageConfi
 	isNew := time.Duration(now.UnixNano()-g.FirstSeen) <= win
 	last, prev := fmtThousands(lastHour), fmtThousands(prevHour)
 	if lastHour >= thr && lastHour >= oracleBurstFactor*prevHour {
-		return "P1", fmt.Sprintf("Oracle patlaması: son 1 sa %s (önceki 1 sa %s; eşik %s, ≥%d×)", last, prev, fmtThousands(thr), oracleBurstFactor)
+		return "P1", fmt.Sprintf("%s patlaması: son 1 sa %s (önceki 1 sa %s; eşik %s, ≥%d×)", label, last, prev, fmtThousands(thr), oracleBurstFactor)
 	}
 	if isNew && lastHour >= thr {
-		return "P1", fmt.Sprintf("yeni Oracle grubu: son 1 sa %s (eşik %s)", last, fmtThousands(thr))
+		return "P1", fmt.Sprintf("yeni %s grubu: son 1 sa %s (eşik %s)", label, last, fmtThousands(thr))
 	}
 	if lastHour >= oracleP2MinLastHour && (fresh || exceptionIsRegressed(g.State)) {
 		if exceptionIsRegressed(g.State) {
@@ -93,7 +96,7 @@ func oraclePriorityAt(g chstore.ExceptionGroup, cfg chstore.ExceptionTriageConfi
 		}
 		return "P2", fmt.Sprintf("son 1 sa %s (önceki 1 sa %s)", last, prev)
 	}
-	return "P3", fmt.Sprintf("sürekli akış (Oracle) · son 1 sa %s", last)
+	return "P3", fmt.Sprintf("sürekli akış (%s) · son 1 sa %s", label, last)
 }
 
 // normalizeOracleFacet — SAF: yalnız "only" / "exclude"; gerisi "" (ikisi de).

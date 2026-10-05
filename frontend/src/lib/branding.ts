@@ -18,6 +18,25 @@ export interface BrandingSettings {
   // uses for sidebar labels, login strings, common buttons,
   // page titles, empty/error states.
   language?: 'en' | 'tr';
+  // v0.10.1108 (operatör: "exceptionsta Oracle yazıyor onun yerine … Teknik
+  // Hata gibi") — `ora:` hata tablosu gruplarının kullanıcıya görünen adı
+  // (Exceptions/Problems satır rozeti + soluk satır, çip, AI satırı). Boş =
+  // "Teknik hata". Sunucu kırpar + 40 rune'a keser (chstore.NormalizeBranding).
+  oracleGroupLabel?: string;
+}
+
+/** v0.10.1108 — chstore.DefaultOracleGroupLabel / OracleGroupLabelMaxRunes ile aynı. */
+export const DEFAULT_ORACLE_GROUP_LABEL = 'Teknik hata';
+export const ORACLE_GROUP_LABEL_MAX = 40;
+
+/**
+ * v0.10.1108 — SAF erişimci: branding'den Oracle hata grubu etiketi (kırpılmış,
+ * ≤40 karakter, boş → "Teknik hata"). Bileşenler `useBranding().oracleGroupLabel`
+ * okur (zaten çözülmüş); bu, ham blob için.
+ */
+export function oracleGroupLabelOf(b: Pick<BrandingSettings, 'oracleGroupLabel'> | null | undefined): string {
+  const l = Array.from((b?.oracleGroupLabel ?? '').trim()).slice(0, ORACLE_GROUP_LABEL_MAX).join('').trim();
+  return l || DEFAULT_ORACLE_GROUP_LABEL;
 }
 
 export const DEFAULT_BRANDING: Required<BrandingSettings> = {
@@ -31,6 +50,7 @@ export const DEFAULT_BRANDING: Required<BrandingSettings> = {
   logoDataUri:       '',
   primaryColor:      '',
   language:          'en',
+  oracleGroupLabel:  DEFAULT_ORACLE_GROUP_LABEL,
 };
 
 // Resolve fills empty fields with defaults so consumers never
@@ -51,6 +71,7 @@ export function resolveBranding(b: BrandingSettings | null | undefined): Require
   if (b.logoDataUri)       r.logoDataUri = b.logoDataUri;
   if (b.primaryColor)      r.primaryColor = b.primaryColor;
   if (b.language === 'tr' || b.language === 'en') r.language = b.language;
+  r.oracleGroupLabel = oracleGroupLabelOf(b);
   return r;
 }
 
