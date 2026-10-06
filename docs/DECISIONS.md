@@ -2052,6 +2052,14 @@ açıklaması zaten ödüyor; TTL şimdi eklenmedi — büyürse ilk çare `last
 **Copilot'a eklenmedi (bilinçli):** tık yolu `copilotExplainProblem` api.go'da (büyüyemez), arka plan yolu
 `renderEvidence` güven-kapılı ve golden pinli; yalnız birine eklemek iki Explain yüzeyini ayrıştırırdı — ayrı iş.
 
+## 2026-10-06 — Bağımlılık: source-map-js 1.2.2 (npm audit yüksek uyarı) (v0.10.1114)
+
+1112'nin CI'ında `npm audit` yeni yayımlanan GHSA-68fv-2mgg-jv7q (source-map-js <1.2.2, indeksli source-map
+bölümüyle event-loop DoS) yüzünden kırmızı. Paket transitif ve yalnız geliştirme/test zincirinde (jsdom → css-tree;
+vite/postcss); üretim paketine girmez. **Karar:** `npm audit fix --package-lock-only` — yalnız lockfile, 1.2.1 → 1.2.2;
+`package.json` değişmedi. tsc / vite build / vitest yeşil. Kalan 6 orta önem uyarısı kapının dışında (yüksek+kritik
+zorunlu).
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"
