@@ -2060,6 +2060,46 @@ vite/postcss); üretim paketine girmez. **Karar:** `npm audit fix --package-lock
 `package.json` değişmedi. tsc / vite build / vitest yeşil. Kalan 6 orta önem uyarısı kapının dışında (yüksek+kritik
 zorunlu).
 
+## 2026-10-06 — Operations › Normalized satırından Traces'e: op_group süzgeci (boş liste düzeltmesi) (v0.10.1115)
+
+**Kök neden:** Service › Operations, Normalized kipte satırlar operasyon ŞEKİLLERİ — `spans.op_group`, ingest'te
+`templater.NormalizeOperation` üretir (`GET /users/:id`). Satır (ve satır altı panelin "View traces" / Explore
+bağlantıları) /traces'i `name = <şekil>` çipiyle açıyordu: kesin ad eşitliği, hiçbir gerçek span adı
+(`GET /users/8421`) şekle eşit değil → boş liste, boş histogram şeridi. `op_group` bir süzgeç anahtarı da değildi
+(çıplak anahtar dizi aramasına düşüp yine boş dönerdi). **Karar:** yeni süzgeç anahtarı `op_group` — spans süzgeç
+derleyicisinde (`filterexpr_opgroup.go`, `db_stmt_hash` emsali v0.10.1093) kolona çözülür: yalnız `=`, `!=`, `IN`,
+`NOT IN` (şekil bir kimlik; LIKE / regex / aralık / EXISTS sınırda 400 — kolon olsun olmasın), değer `?` ile
+bağlanır. **Kolon yoksa** (dış Distributed `spans`, `cluster_name` boş — boot probu `hasOpGroupCol` + self-heal) anahtar
+`name` anahtarıyla birebir aynı derlenir (aynı op, aynı değerler: `name = ?` / `name IN (…)`), 400 yok; süreç başına
+bir kez INFO loglanır. Gerekçe: o kurulumda op_group değerinin tek üreticisi Normalized tablosudur ve tablo orada ham
+span adlarını taşır (v0.8.186 düşüşü; Explore/dashboard `groupBy=op_group` da `name`e düşer) — doğru kolon `name`,
+bugün çalışan "satır → `name = <değer>`" tıklaması kırılmaz. Elle yazılmış bir şekil orada boş liste verir: daha
+dar, asla daha geniş; kolon anılmaz (code 47 → 500 değil). MATERIALIZED ifade fallback'i yok: şekil Go'da üretilir.
+**FE:** `opTraceFilters` Normalized kipte tek çip `op_group = <şekil>` üretir (Raw kip değişmedi: `name =`, bölünmüş
+fiilde `http.route` çipleri); /traces çipi "operation shape · = · <şekil>" okunur, title / düzenleme ham `op_group`,
+✕ ile kalkar; anahtar yalnız /traces sorgu kutusunun önerisine eklenir (`extraKeys`), ortak `SUGGESTED_KEYS`'e değil
+(o liste aggregate "group by attribute" ve sütunları da besler, orada op_group çözülmez). Değer önerisi yok — şekil
+Operations'tan pivotlanır ya da yazılır.
+
+**Okuma yolları:** hepsi aynı derleyiciden geçer. Liste ham WHERE'i (`buildGetTracesWhere`, servis + `op_group = ?`);
+arama + çipte trace düzeyi HAVING (`countIf(op_group = ?) > 0`); Errors şeridinin iki basamaklı / span kipi
+(`traceErrBothWhere`, v0.10.1082/1101) listeyle bayt bayt aynı. `trace_summary_5m`'de op_group yok → çip MV hızlı
+yolunu kapatır (`tracesMVEligible`, sayım planı da ham) ve span düzeyi çip sayılır (satır onarımı, kök sorusu
+daraltılmamış kaynaktan) — diğer nitelik çipleriyle aynı. Hacim şeridi (metric-batch): op-MV kapısı ve dar rollup
+op_group'u boyut olarak tanımaz, spanmetrics kademe çözücüsünde de yok → ham spans (zaman sınırı + LIMIT +
+max_execution_time); şerit kapsamı "spans" (op_group adla aynı sınıf, giriş span'ine ait değil — v0.10.730), kind
+kısıtı yok. `operation_group_summary_5m` şerit kaynağı yapılmadı (batch yüzeyinde okuyucusu yok; yeni yol açmak
+yerine mevcut ham yol). Yan kazanç: Explore `groupBy=op_group` satırından kaynağa iniş ve dashboard TopN
+`groupBy op_group` + "traces" bağlantısı da artık eşleşir (ikisi zaten `op_group =` çipi üretiyordu).
+
+**Değişmeyenler:** Raw kip pivotları, metric_points süzgeç yolu (orada kolon yok), Normalized'da gizli kapsamlı grafik
+simgesi (`?op=`, v0.8.422). **Bırakılan:** /endpoints "Group by shape" (okuma anında `op_sig` regex'i, `http_route`
+üzerinde) satırının ve endpoint detayının Traces / Explore pivotu `http.route = <şekil>` taşır — rotası ham id içeren
+kurulumda aynı boş liste. Doğru düzeltme `endpointRoutePred`'in `opSigWrap(http_route) = ?` yüklemini taşıyan ayrı
+bir süzgeç anahtarı (desen argümanları bağlı; v0.8.356 clickhouse-go parametre tuzağı ayrıca doğrulanmalı) — kuyruk
+adayı. Kolonsuz kurulumda Normalized kipin ham ada düştüğünü FE'ye söyleyen bir sinyal yok (çip yine "operation shape"
+der, sunucu `name` olarak eşler).
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

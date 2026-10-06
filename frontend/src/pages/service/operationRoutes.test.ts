@@ -203,4 +203,17 @@ describe('opTraceFilters', () => {
   it('fiil olmayan ad (rota yok, artık değil): yalnız ad', () => {
     expect(opTraceFilters({ name: 'SELECT shop.orders' }, false)).toEqual([{ k: 'name', op: '=', v: ['SELECT shop.orders'] }]);
   });
+  // v0.10.1115 — Normalized kipte satır adı bir op_group ŞEKLİ; `name = <şekil>`
+  // hiçbir span adına eşit değildi (boş Traces listesi). Tek çip op_group.
+  it('Normalized: yalnız op_group = <şekil> (ad / rota çipi yok)', () => {
+    const f = opTraceFilters({ name: 'GET /orders/:id' }, false, true);
+    expect(f).toEqual([{ k: 'op_group', op: '=', v: ['GET /orders/:id'] }]);
+    expect(encodeFilters(f)).toBe('[{"k":"op_group","op":"=","v":["GET /orders/:id"]}]');
+    // Rota / artık bayrağı taşınsa bile şekil tek kimlik.
+    expect(opTraceFilters({ name: 'GET /orders/:id', route: '/orders/:id' }, true, true))
+      .toEqual([{ k: 'op_group', op: '=', v: ['GET /orders/:id'] }]);
+  });
+  it('Raw (normalized=false açıkça): bugünkü ad çipi', () => {
+    expect(opTraceFilters({ name: 'GET /orders/8421' }, false, false)).toEqual([{ k: 'name', op: '=', v: ['GET /orders/8421'] }]);
+  });
 });

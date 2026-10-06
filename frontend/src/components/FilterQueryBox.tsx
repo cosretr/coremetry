@@ -26,7 +26,7 @@ import { timeRangeToNs } from '@/lib/utils';
 import type { FilterExpr, FilterOp } from '@/lib/types';
 import {
   FILTER_OPS, OP_NEEDS_VALUE, OP_SHORT, opFromShorthand, parseInlineFilter, splitListValues,
-  chipValueLabel, chipDisplay, filterKey, upsertFilter, pushRecent, parseRecent, rankKeys,
+  chipValueLabel, chipDisplay, filterKey, upsertFilter, pushRecent, parseRecent, rankKeys, withExtraKeys,
 } from '@/lib/filterQuery';
 
 type Step = 'key' | 'op' | 'value';
@@ -60,6 +60,9 @@ export interface FilterQueryBoxProps {
    *  metricName/metricService sözleşmesiyle aynı. */
   metricName?: string;
   metricService?: string;
+  /** v0.10.1115 — span attribute'u olmayan, sunucunun tanıdığı sentetik
+   *  anahtarlar (op_group); span kipinde öneri listesinin sonuna eklenir. */
+  extraKeys?: readonly string[];
 }
 
 function fmtCount(n: number): string {
@@ -74,7 +77,7 @@ function loadRecent(key?: string): FilterExpr[] {
   try { return parseRecent(localStorage.getItem(key)); } catch { return []; }
 }
 
-export function FilterQueryBox({ value, onChange, suggestedValues, quick = [], recentKey, keyOptions, placeholder, metricName, metricService }: FilterQueryBoxProps) {
+export function FilterQueryBox({ value, onChange, suggestedValues, quick = [], recentKey, keyOptions, placeholder, metricName, metricService, extraKeys }: FilterQueryBoxProps) {
   const metricMode = !!metricName?.trim();
   const [metricKeys, setMetricKeys] = useState<string[]>([]);
   useEffect(() => {
@@ -97,7 +100,10 @@ export function FilterQueryBox({ value, onChange, suggestedValues, quick = [], r
   const rangeNs = useMemo(() => timeRangeToNs(range), [range]);
   const attrWindow = useMemo(() => attrKeyWindowParams(range), [range]);
   const { keys: spanKeys, observed } = useAttributeKeys(value, attrWindow, !keyOptions && !metricMode);
-  const allKeys = keyOptions ?? (metricMode ? metricKeys : spanKeys);
+  const allKeys = useMemo(
+    () => keyOptions ?? (metricMode ? metricKeys : withExtraKeys(spanKeys, extraKeys)),
+    [keyOptions, metricMode, metricKeys, spanKeys, extraKeys],
+  );
   const hints = useMemo(() => {
     const m: Record<string, number> = {};
     for (const o of observed) m[o.key] = o.count;

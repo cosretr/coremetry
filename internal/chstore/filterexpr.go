@@ -711,6 +711,11 @@ func (f FilterExpr) Validate() error {
 	if f.Key == StmtHashFilterKey {
 		return validateStmtHash(op, f.Values)
 	}
+	// v0.10.1115 — operasyon şekli: yalnız eşitlik/küme (kolonsuz kurulumda
+	// `name`e düşer, yine aynı kısıt — filterexpr_opgroup.go).
+	if f.Key == OpGroupFilterKey {
+		return validateOpGroup(op, f.Values)
+	}
 	return nil
 }
 

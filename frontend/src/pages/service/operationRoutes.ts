@@ -19,6 +19,7 @@ import type {
   FilterExpr, OperationRoutesFor, OperationRoutesResponse, OperationRoutesResult, OperationRow, OperationSummary,
 } from '@/lib/types';
 import { isBareHTTPMethod } from '@/lib/opDisplayName';
+import { OP_GROUP_FILTER_KEY } from '@/lib/filterQuery';
 
 /**
  * routeRowsForBundle — v0.10.1023 (inceleme R1/R2): bundle'ın ham satırlarına
@@ -116,8 +117,17 @@ export function expandBareVerbRows(
  * `http.route = <rota>`; bölünmeden gelen artık satırda `http.route NOT
  * EXISTS` (filtre DSL'i `NOT (http_route != '')` derler — yalnız rotasız
  * span'ler). Bölünmemiş ham satır yalnız ad çipini taşır (bugünkü davranış).
+ *
+ * v0.10.1115 — Normalized kip: satırın `name` alanı span adı DEĞİL, op_group
+ * ŞEKLİDİR ("GET /users/:id"). `name = <şekil>` hiçbir gerçek span adına eşit
+ * olmadığından /traces boş liste (ve boş şerit) açıyordu. Bu kipte tek çip
+ * `op_group = <şekil>` (sunucu kolona çözer, chstore filterexpr_opgroup.go);
+ * Normalized'da rota bölmesi yok (routeRowsForBundle), rota çipi de yok.
  */
-export function opTraceFilters(op: Pick<OperationSummary, 'name' | 'route'>, splitResidual: boolean): FilterExpr[] {
+export function opTraceFilters(
+  op: Pick<OperationSummary, 'name' | 'route'>, splitResidual: boolean, normalized = false,
+): FilterExpr[] {
+  if (normalized) return [{ k: OP_GROUP_FILTER_KEY, op: '=', v: [op.name] }];
   const f: FilterExpr[] = [{ k: 'name', op: '=', v: [op.name] }];
   const route = op.route ?? '';
   if (route) f.push({ k: 'http.route', op: '=', v: [route] });

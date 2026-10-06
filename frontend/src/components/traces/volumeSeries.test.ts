@@ -170,6 +170,14 @@ describe('stripScope', () => {
     // service.name (servis kimliği) etkilenmedi.
     expect(isEntrySpanKey('service.name')).toBe(true);
   });
+  // v0.10.1115 — op_group (Operations › Normalized pivotu) span ADININ şekli:
+  // adla aynı sınıf, giriş span'ine ait değil → kind kısıtı yok, şerit
+  // eşleşen span'leri sayar (Operations satırının saydığı küme).
+  it('op_group giriş anahtarı DEĞİL — şerit eşleşen span\'leri sayar', () => {
+    expect(isEntrySpanKey('op_group')).toBe(false);
+    expect(stripScope([{ k: 'op_group' }], '')).toBe('spans');
+    expect(stripRootOnly(stripScope([{ k: 'op_group' }], ''), true)).toBe(false);
+  });
   // v0.10.1006 (operator-reported, prod: function_code çipinde tablo dolu,
   // şerit boş) — iş kimliklerini giriş span'i taşımıyor (prod'da yalnız
   // log-yayın MQ span'leri); giriş kapsamı kind kısıtını AND'leyip grafiği

@@ -29,6 +29,7 @@ import { Spinner } from '@/components/Spinner';
 import { OperationPicker } from '@/components/OperationPicker';
 import { ServicePicker } from '@/components/ServicePicker';
 import { FilterQueryBox } from '@/components/FilterQueryBox';
+import { TRACES_EXTRA_FILTER_KEYS } from '@/lib/filterQuery'; // v0.10.1115 — op_group anahtar önerisi
 import { FilterGroupBuilder } from '@/components/FilterGroupBuilder';
 import { Button } from '@/components/ui/Button';
 import { IconButton, SegmentedControl } from '@/components/ui'; // v0.10.676 — satır-içi kiosk düğmesi; v0.10.914 SegmentedControl
@@ -1525,7 +1526,7 @@ function TracesPageInner() {
                tek satır sorgu kutusu; FilterBuilder Explore/Logs'ta kalır. */
             <FilterQueryBox value={advFilters} onChange={setAdvFilters}
               suggestedValues={FILTER_SUGGESTED_VALUES} quick={TRACES_QUICK_FILTERS}
-              recentKey="traces-recent-filters" />
+              recentKey="traces-recent-filters" extraKeys={TRACES_EXTRA_FILTER_KEYS} />
           ) : (
             <FilterGroupBuilder value={advGroup ?? { join: 'AND', filters: [] }}
               onChange={setAdvGroup}

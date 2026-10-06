@@ -113,6 +113,33 @@ export function stmtShortId(hash: string): string {
   return hash.slice(0, 8);
 }
 
+// v0.10.1115 — operasyon ŞEKLİ süzgeci (Service › Operations, Normalized kip →
+// /traces). Değer spans.op_group'un kendisi ("GET /users/:id"); `name = <şekil>`
+// hiçbir gerçek span adına eşit olmadığı için liste boş açılıyordu. Sunucu
+// anahtarı kolona çözer (chstore filterexpr_opgroup.go: yalnız = ≠ IN NOT IN;
+// op_group kolonu olmayan kurulumda `name`e düşer — orada Normalized tablo ham
+// adları gösterir). Çipte anahtar insan diliyle "operation shape";
+// title / düzenleme ham `op_group`u taşır.
+export const OP_GROUP_FILTER_KEY = 'op_group';
+
+/**
+ * TRACES_EXTRA_FILTER_KEYS — v0.10.1115: span attribute'u OLMAYAN ama /traces
+ * süzgecinde geçerli sentetik anahtarlar; anahtar önerisinin sonuna eklenir
+ * (FilterQueryBox `extraKeys`). Ortak SUGGESTED_KEYS'e girmez: o liste
+ * aggregate "group by attribute" ve sütun önerilerini de besler, orada
+ * op_group çözülmez. Değer önerisi yok (attribute-values onu dizi aramasıyla
+ * arar, boş döner) — operatör şekli yazar ya da Operations'tan pivotlar.
+ */
+export const TRACES_EXTRA_FILTER_KEYS: readonly string[] = [OP_GROUP_FILTER_KEY];
+
+/** withExtraKeys — gözlenen/statik anahtarların sonuna eksik ekleri koyar. SAF. */
+export function withExtraKeys(keys: string[], extra: readonly string[] | undefined): string[] {
+  if (!extra?.length) return keys;
+  const seen = new Set(keys);
+  const add = extra.filter(k => !seen.has(k));
+  return add.length ? [...keys, ...add] : keys;
+}
+
 export interface ChipDisplay {
   key: string;
   /** '' = op parçası çizilmez. */
@@ -128,6 +155,9 @@ export function chipDisplay(f: FilterExpr): ChipDisplay {
       op: f.op === '=' ? '' : OP_SHORT[f.op],
       value: f.v.map(v => `#${stmtShortId(v)}`).join(', '),
     };
+  }
+  if (f.k === OP_GROUP_FILTER_KEY) {
+    return { key: 'operation shape', op: OP_SHORT[f.op], value: chipValueLabel(f) };
   }
   return { key: f.k, op: OP_SHORT[f.op], value: chipValueLabel(f) };
 }

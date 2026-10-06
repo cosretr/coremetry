@@ -8,6 +8,7 @@ import {
   opFromShorthand, parseInlineFilter, splitListValues, chipValueLabel, upsertFilter,
   pushRecent, parseRecent, rankKeys, OP_SHORT, FILTER_OPS,
   chipDisplay, stmtShortId, STMT_HASH_FILTER_KEY,
+  OP_GROUP_FILTER_KEY, TRACES_EXTRA_FILTER_KEYS, withExtraKeys,
 } from './filterQuery';
 
 describe('opFromShorthand', () => {
@@ -61,6 +62,23 @@ describe('chip / upsert / recent / rank', () => {
       .toBe('#11111111, #22222222');
     expect(chipDisplay({ k: 'http.route', op: '=', v: ['/x'] })).toEqual({ key: 'http.route', op: '=', value: '/x' });
     expect(stmtShortId('12345678901234567890')).toBe('12345678');
+  });
+  // v0.10.1115 — operasyon şekli çipi (Operations › Normalized → /traces):
+  // anahtar insan diliyle, op ve değer olduğu gibi; düzenleme metni ham.
+  it('chipDisplay: op_group → "operation shape", op/değer aynen', () => {
+    const f = { k: OP_GROUP_FILTER_KEY, op: '=' as const, v: ['GET /orders/:id'] };
+    expect(chipDisplay(f)).toEqual({ key: 'operation shape', op: '=', value: 'GET /orders/:id' });
+    expect(chipValueLabel(f)).toBe('GET /orders/:id');
+    expect(chipDisplay({ k: OP_GROUP_FILTER_KEY, op: 'NOT IN', v: ['GET /a/:id', 'POST /a'] }))
+      .toEqual({ key: 'operation shape', op: 'NOT IN', value: 'GET /a/:id, POST /a' });
+  });
+  it('withExtraKeys: eksik ekleri sona koyar, kopya yok, boş ek → aynı dizi', () => {
+    expect(TRACES_EXTRA_FILTER_KEYS).toContain('op_group');
+    const keys = ['http.route', 'name'];
+    expect(withExtraKeys(keys, TRACES_EXTRA_FILTER_KEYS)).toEqual(['http.route', 'name', 'op_group']);
+    expect(withExtraKeys(['op_group', 'name'], TRACES_EXTRA_FILTER_KEYS)).toEqual(['op_group', 'name']);
+    expect(withExtraKeys(keys, undefined)).toBe(keys);
+    expect(rankKeys(withExtraKeys(keys, TRACES_EXTRA_FILTER_KEYS), 'op_')).toEqual(['op_group']);
   });
   it('upsertFilter aynı k+op günceller', () => {
     const out = upsertFilter([{ k: 'a', op: '=', v: ['1'] }], { k: 'a', op: '=', v: ['2'] });

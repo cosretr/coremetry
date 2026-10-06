@@ -4411,6 +4411,10 @@ func (s *Store) migrate(ctx context.Context) error {
 			}
 		}
 	}
+	// v0.10.1115 — /traces `op_group` süzgeci kolonu yalnız probe (+ self-heal)
+	// doğrularsa anar; yoksa `name` kolonuna düşer — Normalized tablo o
+	// kurulumda ham adları gösterir (filterexpr_opgroup.go).
+	opGroupColReady.Store(s.hasOpGroupCol)
 
 	// Defensive recovery (v0.8.186): when op_group is genuinely absent, DROP
 	// operation_group_summary_5m if it lingers from a prior boot. The MV's

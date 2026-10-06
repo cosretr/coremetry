@@ -191,8 +191,10 @@ export function OperationsTable({ service, rows, range, preset, onWiden, normali
   // yanında `http.route = /metrics` (artık satırda `http.route NOT EXISTS`)
   // taşır, yoksa Traces o fiilin TÜM rotalarını listelerdi. Ham satırda çip
   // listesi bugünküyle aynı (yalnız ad).
+  // v0.10.1115 — Normalized kipte satır bir op_group ŞEKLİ: çip `op_group =`
+  // (`name = <şekil>` hiçbir span adına eşit değildi → boş liste).
   const opHref = (op: OperationRow) =>
-    `/traces?service=${encodeURIComponent(service)}&filters=${encodeURIComponent(encodeFilters(opTraceFilters(op, !!op.splitResidual)))}&range=${encodeURIComponent(encodeRange(range))}&view=list&rootOnly=false`; // v0.8.488 — kesin isim filtresi (search değil)
+    `/traces?service=${encodeURIComponent(service)}&filters=${encodeURIComponent(encodeFilters(opTraceFilters(op, !!op.splitResidual, normalized)))}&range=${encodeURIComponent(encodeRange(range))}&view=list&rootOnly=false`; // v0.8.488 — kesin isim filtresi (search değil)
 
   // v0.8.416 (Tempo-parity T4) — row → the operation-scoped Details
   // view (?op=, v0.8.414/415): RED triple with the percentile band +
@@ -498,7 +500,9 @@ export function OperationsTable({ service, rows, range, preset, onWiden, normali
                       onClick={e => e.stopPropagation()}
                       onAuxClick={e => e.stopPropagation()}
                       style={{ fontWeight: 500 }}
-                      title={op.route
+                      title={normalized
+                        ? `Open in Traces — operation shape (op_group) = ${op.name}`
+                        : op.route
                         ? `Open in Traces — name = ${op.name}, http.route = ${op.route}`
                         : op.splitResidual
                           ? `Open in Traces — name = ${op.name} spans without http.route`
@@ -612,6 +616,7 @@ export function OperationsTable({ service, rows, range, preset, onWiden, normali
                         service={service}
                         op={freshOpRow ?? opDetail}
                         opIsStale={!freshOpRow}
+                        normalized={normalized}
                         focus={opFocus}
                         onClose={() => setOpDetail(null)}
                         range={range}
@@ -652,11 +657,14 @@ export function OperationsTable({ service, rows, range, preset, onWiden, normali
 // reading affordance everywhere they see a sparkline.
 function OperationMetricPanel({
   focus,
-  service, op, opIsStale, onClose, range, onZoom, onZoomReset,
+  service, op, opIsStale, normalized = false, onClose, range, onZoom, onZoomReset,
 }: {
   focus: OpMetricKey;
   service: string;
   op: OperationRow | null;
+  // v0.10.1115 — Normalized kip: op.name bir op_group şekli; Traces/Explore
+  // bağlantıları `op_group =` çipini taşır (opTraceFilters).
+  normalized?: boolean;
   // v0.9.206 review-fix — true = op, MEVCUT range'in sonuçlarında
   // bulunamayan bayat click-time satırı. Kimlik/başlık ondan çizilir
   // ama time-series ondan ÜRETİLMEZ: seri memo'su eski pencere
@@ -708,7 +716,8 @@ function OperationMetricPanel({
   // Artık KESİN isim filtresi (name = "<op>") gider — yalnız bu
   // operasyonu içeren trace'ler.
   // v0.10.1023 — bölünmüş çıplak fiil satırında rota çipi de gider (opTraceFilters).
-  const opFilters = opTraceFilters(op, !!op.splitResidual);
+  // v0.10.1115 — Normalized kipte `op_group = <şekil>`.
+  const opFilters = opTraceFilters(op, !!op.splitResidual, normalized);
   const opLabel = opDisplayName(op.name, op.route);
   const tracesHref =
     `/traces?service=${encodeURIComponent(service)}` +
