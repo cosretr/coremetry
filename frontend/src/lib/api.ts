@@ -1336,6 +1336,9 @@ export const api = {
   // v0.10.1106 — terfi Problem'inin kaynak olay özeti (desen sayısı grafiği), 30 s cache.
   problemSourceEvent: (id: string, signal?: AbortSignal) =>
     get<import('./types').ProblemSourceEventResponse>(`/api/problems/${encodeURIComponent(id)}/source-event`, signal),
+  // v0.10.1113 — başlangıçta doğan log şablonları (kök neden kanıtı), 60 s cache.
+  problemLogTemplates: (id: string, signal?: AbortSignal) =>
+    get<import('./types').ProblemLogTemplatesResponse>(`/api/problems/${encodeURIComponent(id)}/log-templates`, signal),
   // v0.10.561 — sohbet arşivi saklama süresi (admin).
   aiChatRetention: () => get<import('./types').AIChatRetention>(`/api/ai/chat-retention`),
   putAIChatRetention: (c: import('./types').AIChatRetention) =>

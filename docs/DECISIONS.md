@@ -2006,6 +2006,52 @@ loopback/metadata denetimi o kurulumda vekile kalır; kurum çıkışı vekil ge
 DEĞİŞTİRİLMEDİ. **Kapsam dışı:** config.yaml/Helm kaynaklı OIDC'ye bu alanlar eklenmedi (o yolda sistem havuzu
 `SSL_CERT_FILE` / imaj CA paketiyle genişletilir); istemci sertifikası (mTLS) yok.
 
+## 2026-10-06 — Problem detayında başlangıçta doğan log şablonları (kök neden kanıtı) (v0.10.1113)
+
+**Operatör onaylı kuyruk maddesi ("Log şablonu kök neden bağlantısı").** `log_template_new` dedektörü v0.10.1061'den
+beri varsayılan KAPALI (tek başına problem olarak gürültülü), ama templater puller'ı `log_templates` defterini
+anahtardan bağımsız yazmayı sürdürüyor. **Karar:** defter alarm kaynağı olarak değil, başka bir Problem'in KANITI
+olarak okunur — Problem detayında "Başlangıçta doğan log şablonları", her türde (hata oranı anomalisi, svc-slowdown,
+db-health, exception, incident üyesi…): "bu başladığı anda yeni bir hata mesajı belirdi". Dedektör KAPALI kalır;
+yeniden açmayı önerme.
+
+**Pencere ve küme:** first_seen ∈ [başlangıç − 10 dk, başlangıç + 5 dk) — geri bakış uzun (kök neden belirtiden önce
+loglanır), ileri bakış puller'ın 5 dk örnekleme adımı. Servisler ≤ 5: özne (yalnız kind=service) + kalıcı hipotezin
+çağrı-grafiği adayları RCA sırasıyla (Kind'ı boş olmayan HER aday hariç — `node`: ad bir node, `rollout`: ad bir
+`rollout:<cluster>/<ns>/<workload>@<rev>` öznesi). db / dış özne ve hipotez yoksa okuma yok, boş liste.
+
+**"Yeni" = dedektörün kararı, çatal YOK** (`anomaly/log_template_evidence.go`): `candidateTemplatesFilter` (+ pencere
+üst sınırı + `hasAny(services)`), `newTemplateCandidatesMin`, `knownTemplatesFilter` ("now" = pencere sonu, 7 gün
+ufku), `usableKnownTemplatesMin`, `filterNewTemplateFamilies` (bilinen şablonun Drain-varyantı düşer, aynı aileden
+yalnız en erken doğan). **Tek fark sayı tabanı:** puller Drain'i her tik sıfırlar ve satırın `total_count` /
+`services` alanlarını o tikin örneğiyle EZER — dedektör için "şu an ≥ 3" doğru soru, ama geçmiş bir problemin kanıtı
+şablon seyrekleşince sonradan kaybolurdu. Kanıtta aday tabanı ≥ 1 (aile süzgeci + ≤ 5 tavan küçük tutar), bilinen
+kümede taban YOK (daha geniş bilinen küme yalnız daha çok varyantı gizler — güvenli yön). Paylaşılan işlevlerin
+varsayılanı (dedektörün 3'ü) değişmedi; taban parametreyle geçer. **Bilinen sınır:** `services` da son tiki yansıtır —
+sonradan yalnız başka bir serviste görülen şablon eski bir problemin bölümünden düşebilir (hasAny artık eşleşmez).
+Bilinen okuması düşerse fail-closed (hata döner, önbelleğe yazılmaz) — dedektörün yönü. Sıra:
+başlangıca yakınlık, sonra sayı; ≤ 5 satır. Şablon dedektörün 160 bayt kesimi; arama metni KESİLMEMİŞ şablondan
+`logstore.PatternSearchQuery` (Şablonlar sekmesinin "Ara" sözleşmesi), satırın "Logları aç" pivotu servis + bu metin.
+
+**Yüzey: ayrı uç** `GET /api/problems/{id}/log-templates` (`api/problem_log_templates.go`, defter kaydı), /rootcause
+demetine alan DEĞİL: RootCausePanel dış seri Problem'inde çizilmiyor ve demet soğukta onlarca saniye (v0.9.1082
+ölçümü) — iki ucuz okumanın cevabı onu beklemesin. `serveCached` 60 s; anahtar başlangıç ns + özne + SIRALI küme
+FNV. Pencere `now`'a değil Problem'in SABİT başlangıcına bağlı, dakikaya yuvarlanmadı: yuvarlamak aynı servisleri
+paylaşan iki Problem'e birbirinin "N sn önce"sini ve sırasını (≤ 59 sn) sunardı.
+
+**Sınırlar:** istek başına bir problem + bir hipotez nokta okuması, en çok iki `ListLogTemplates` (FINAL + LIMIT ≤ 500 +
+max_execution_time 5; aday yoksa bir). FE yalnız detay açıkken tek istek; yoklama yalnız açık Problem'de
+başlangıçtan sonraki 15 dk boyunca 60 s (defter dolarken), sonra yok; hook `retry: 0`. Boş / ilk okuma hatası →
+bölüm hiç çizilmez (boş kart yok); düşen bir arka plan tazelemesi eldeki satırları silmez. Sayı `total_count` = son
+templater örnekleminin satırı ("örnek" etiketiyle), gerçek log sayısı değil. **Bilinen maliyet:** `log_templates`
+`ORDER BY id`, partition ve TTL YOK — iki okuma da tablonun tam FINAL taraması, yalnız LIMIT + 5 sn
+max_execution_time ile sınırlı; tablo her yeni şablon kimliğiyle (v0.10.1030 yeniden kümelemesi tik başına yeni kimlik
+doğurabilir) sınırsız büyür ve prod boyutu ölçülmedi. Aynı tarama şeklini Şablonlar sekmesi, derin kanıt ve desen
+açıklaması zaten ödüyor; TTL şimdi eklenmedi — büyürse ilk çare `last_seen` TTL'i (kuyruk adayı).
+
+**Copilot'a eklenmedi (bilinçli):** tık yolu `copilotExplainProblem` api.go'da (büyüyemez), arka plan yolu
+`renderEvidence` güven-kapılı ve golden pinli; yalnız birine eklemek iki Explain yüzeyini ayrıştırırdı — ayrı iş.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

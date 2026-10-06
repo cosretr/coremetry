@@ -6186,6 +6186,32 @@ export type PromotedSourceEvent = Pick<AnomalyEvent,
 export interface ProblemSourceEventResponse {
   sourceEvent?: PromotedSourceEvent;
 }
+// ProblemLogTemplateEvidence — GET /api/problems/{id}/log-templates (v0.10.1113;
+// Go: anomaly.LogTemplateEvidence). Problemin başlangıcı çevresinde (−10 dk …
+// +5 dk) özne servisinde ya da RCA şüphelilerinde DOĞAN, gerçekten yeni aileye
+// ait (dedektörün aile süzgeci) Drain şablonu. template dedektörle aynı kesimde
+// (160 bayt + "…"); query KESİLMEMİŞ şablondan /logs arama metni (Şablonlar
+// sekmesiyle aynı türetici); offsetSec = firstSeen − başlangıç (negatif = önce).
+export interface ProblemLogTemplateEvidence {
+  templateId: string;
+  template: string;
+  service: string;
+  firstSeen: number; // unix ns
+  lastSeen: number;  // unix ns
+  totalCount: number;
+  offsetSec: number;
+  query: string;
+  sample?: string;
+}
+// Go: api.problemLogTemplatesResponse. services = bakılan küme (özne önce, ≤5;
+// boş = okuma yok); templates ≤5, başlangıca en yakın önce.
+export interface ProblemLogTemplatesResponse {
+  services: string[];
+  startedAt: number;
+  fromNs: number;
+  toNs: number;
+  templates: ProblemLogTemplateEvidence[];
+}
 // LogPatternSeries — GET /api/anomalies/log-pattern-series (v0.10.1060; Go:
 // api.logPatternSeriesResponse). Log deseni anomalisinin zaman içindeki
 // eşleşme sayısı, dedektörün kendi yüklemiyle. from/to kovaya hizalı unix ns

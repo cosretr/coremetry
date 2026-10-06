@@ -172,6 +172,15 @@ func candidateTemplatesFilter(sinceNs int64) chstore.ListLogTemplatesFilter {
 // v0.9.47 ile AYNI: pencerede doğmuş ve TotalCount >= 3. v0.10.1030'dan beri
 // ikisi de SQL'de; burası emniyet kemeri.
 func newTemplateCandidates(tmpls []chstore.LogTemplate, sinceNs int64) []chstore.LogTemplate {
+	return newTemplateCandidatesMin(tmpls, sinceNs, newTemplateMinCount)
+}
+
+// newTemplateCandidatesMin — v0.10.1113: sayı tabanı parametreli çekirdek.
+// Dedektör newTemplateCandidates üzerinden 3 ile çağırır (davranış aynı);
+// kök neden kanıtı (log_template_evidence.go) 1 ile — puller total_count'u
+// her tikte o tikin örnek sayısıyla EZER, geçmiş bir problemin kanıtı
+// sonradan 3'ün altına düşüp kaybolmasın.
+func newTemplateCandidatesMin(tmpls []chstore.LogTemplate, sinceNs int64, minCount uint64) []chstore.LogTemplate {
 	out := make([]chstore.LogTemplate, 0, len(tmpls))
 	for _, t := range tmpls {
 		// Filter to templates whose first_seen is in the window —
@@ -184,7 +193,7 @@ func newTemplateCandidates(tmpls []chstore.LogTemplate, sinceNs int64) []chstore
 		// anlık blip'tir (operatör isteği; new_error/new-pattern'ın
 		// 3 tabanıyla simetrik). Gerçek yeni hata hattı dakikalar
 		// içinde 3'ü geçer ve bir sonraki turda yakalanır.
-		if t.TotalCount < newTemplateMinCount {
+		if t.TotalCount < minCount {
 			continue
 		}
 		out = append(out, t)
@@ -196,9 +205,16 @@ func newTemplateCandidates(tmpls []chstore.LogTemplate, sinceNs int64) []chstore
 // first_seen < sinceNs ve total_count >= 3'ün Go aynası): sınırdaki ya da
 // blip bir satır, depo ne döndürürse döndürsün bilinen SAYILMAZ.
 func usableKnownTemplates(known []chstore.LogTemplate, sinceNs int64) []chstore.LogTemplate {
+	return usableKnownTemplatesMin(known, sinceNs, newTemplateMinCount)
+}
+
+// usableKnownTemplatesMin — v0.10.1113: sayı tabanı parametreli çekirdek
+// (dedektör 3; kök neden kanıtı 0 = taban yok: daha geniş bilinen küme yalnız
+// DAHA ÇOK varyantı gizler — güvenli yön).
+func usableKnownTemplatesMin(known []chstore.LogTemplate, sinceNs int64, minCount uint64) []chstore.LogTemplate {
 	out := make([]chstore.LogTemplate, 0, len(known))
 	for _, k := range known {
-		if k.FirstSeen >= sinceNs || k.TotalCount < newTemplateMinCount {
+		if k.FirstSeen >= sinceNs || k.TotalCount < minCount {
 			continue
 		}
 		out = append(out, k)

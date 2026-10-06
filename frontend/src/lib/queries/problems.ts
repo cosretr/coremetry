@@ -183,6 +183,37 @@ export function useProblemSourceEvent(id: string, enabled: boolean) {
   });
 }
 
+// v0.10.1113 — "Başlangıçta doğan log şablonları": yalnız Problem detayı
+// açıkken (mount = aç), staleTime = sunucu TTL (60 s). Yoklama YALNIZ pencere
+// dolarken: puller defteri 5 dk'da bir yazar, başlangıçtan sonraki 5 dk'da
+// doğan şablon ancak bir sonraki tikte görünür — açık Problem'de başlangıçtan
+// sonraki 15 dk boyunca 60 s, sonra pencere kapanmış ve defter tamam (yoklama
+// yok). Çözülmüş Problem'de hiç yoklama yok. placeholderData: undefined —
+// başka Problem'in şablonları bu sayfada görünmesin. retry: 0 — iki okuma da
+// log_templates'in tam FINAL taraması (ORDER BY id, max_execution_time 5 s);
+// zaman aşımında yeniden deneme fırtınası yerine bölüm gizli kalır, bir
+// sonraki şans yoklama turu / yeniden açılış.
+export const PROBLEM_LOG_TEMPLATES_POLL_MS = 60_000;
+export const PROBLEM_LOG_TEMPLATES_FILL_MS = 15 * 60_000;
+
+export function problemLogTemplatesInterval(startedAtNs: number, open: boolean, nowMs: number): number | false {
+  if (!open || !Number.isFinite(startedAtNs) || startedAtNs <= 0) return false;
+  return nowMs - startedAtNs / 1e6 < PROBLEM_LOG_TEMPLATES_FILL_MS ? PROBLEM_LOG_TEMPLATES_POLL_MS : false;
+}
+
+export function useProblemLogTemplates(id: string, opts: { startedAt: number; open: boolean }) {
+  const { startedAt, open } = opts;
+  return useQuery({
+    queryKey: keys.problems.logTemplates(id),
+    queryFn: ({ signal }) => api.problemLogTemplates(id, signal),
+    enabled: !!id,
+    staleTime: PROBLEM_LOG_TEMPLATES_POLL_MS,
+    refetchInterval: () => problemLogTemplatesInterval(startedAt, open, Date.now()),
+    placeholderData: undefined,
+    retry: 0,
+  });
+}
+
 // v0.10.707 — etkilenen varlıklar; yalnız çekmece/detay açıkken (enabled),
 // staleTime = sunucu TTL (60 s).
 export function useProblemAffected(id: string, enabled = true) {

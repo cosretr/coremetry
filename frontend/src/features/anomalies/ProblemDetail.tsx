@@ -52,6 +52,7 @@ import { Sect, SignalLink, DeployBox, DetailSummary } from './detailSections'; /
 import { alertProblemSummary, problemWhenLine } from './detailSummary'; // v0.10.1032; problemWhenLine v0.10.1054
 import { AlertMetricChartSection } from './AlertMetricChartSection'; // v0.10.1064
 import { PromotedLogPatternCount, PromotedPatternLogsLink } from './PromotedPatternSection'; // v0.10.1106
+import { ProblemNewLogTemplates } from './ProblemNewLogTemplates'; // v0.10.1113
 import { alertSeriesArgs, hasAlertMetricChart, isProblemLive } from './alertMetricSeries'; // v0.10.1064
 import { dbHealthPivots } from './dbHealthPivots'; // v0.10.1073
 import { isSvcSlowdownRule, svcSlowdownPivots } from './svcSlowdownPivots'; // v0.10.1091
@@ -1009,6 +1010,11 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
                 label={<><IconSparkles /> <span>Runbook AI</span></>} />
             </div>
           </Sect>
+
+          {/* v0.10.1113 — kök neden kanıtı: başlangıç çevresinde (−10 dk … +5 dk)
+              özne / RCA şüphelisi servislerde doğan YENİ log şablonları. Her
+              Problem türünde tek istek; boşsa bölüm hiç çizilmez. */}
+          <ProblemNewLogTemplates problem={problem} window={probWindow} />
 
           {/* v0.10.1032 (inceleme) — kapalı gelir: özet cümlesi değeri ve
               eşiği zaten söylüyor; açınca öncelik gerekçesiyle aynı blok. */}
