@@ -15,6 +15,10 @@ package api
 // (permissionServiceKeySet), boş PUT kayıtlıyı korur, audit'e girmez.
 // v0.10.1111 — permissionServiceAllowNoKey / AllowedCIDRs / TrustedProxies
 // (secret değil: GET'te ve audit'te aynen).
+// v0.10.1112 — tlsCACertPEM / tlsInsecureSkipVerify (IdP TLS güveni,
+// auth/oidc_tls.go): secret değil, GET'te aynen; audit'e eski→yeni girer
+// (CA için PEM değil özet: CN + SHA-256 parmak izi + bitiş). Test ucu formun
+// KAYDEDİLMEMİŞ TLS ayarını kullanır.
 //	POST /api/settings/oidc/test   admin — yalnız keşif (≤10 s); hiçbir şey yazmaz
 //
 // ÜÇÜ DE ADMIN ve yalnız OTURUM kullanıcısı: API token'ı (UserID
@@ -71,8 +75,9 @@ func oidcSessionOnly(h http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// oidcSettingsBodyMax — gövde tavanı; form birkaç yüz bayt.
-const oidcSettingsBodyMax = 64 << 10
+// oidcSettingsBodyMax — gövde tavanı. Form birkaç yüz bayt + v0.10.1112 özel
+// CA alanı (≤64 KB, JSON kaçışıyla biraz büyür) — tavan CA tavanının iki katı.
+const oidcSettingsBodyMax = 2 * auth.OIDCCACertPEMMax
 
 // oidcSettingsInput — PUT/test gövdesi. auth.OIDCSettings.ClientSecret
 // `json:"-"` olduğu için secret buradaki DIŞ alandan çözülür.
@@ -110,7 +115,9 @@ func (s *Server) putOIDCSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	secretChanged := strings.TrimSpace(in.ClientSecret) != ""
 	permKeyChanged := strings.TrimSpace(in.PermissionServiceKey) != ""
-	snap, err := s.oidc.SaveSettings(r.Context(), in)
+	// v0.10.1112 — TLS alanlarının eski→yeni audit'i; prev kayıtla AYNI kilit
+	// altında alınır (güvenlik incelemesi N5).
+	prev, snap, err := s.oidc.SaveSettingsWithPrev(r.Context(), in)
 	if err != nil {
 		var verr *auth.OIDCSettingsError
 		var derr *auth.OIDCDiscoveryError
@@ -137,6 +144,12 @@ func (s *Server) putOIDCSettings(w http.ResponseWriter, r *http.Request) {
 		"permissionServiceAllowNoKey":     snap.PermissionServiceAllowNoKey,
 		"permissionServiceAllowedCIDRs":   snap.PermissionServiceAllowedCIDRs,
 		"permissionServiceTrustedProxies": snap.PermissionServiceTrustedProxies,
+		// v0.10.1112 — IdP TLS güveni, eski→yeni. CA'nın kendisi değil özeti.
+		"tlsCACert": map[string]any{
+			"old": auth.OIDCCACertSummary(prev.TLSCACertPEM), "new": auth.OIDCCACertSummary(snap.TLSCACertPEM),
+			"changed": prev.TLSCACertPEM != snap.TLSCACertPEM,
+		},
+		"tlsInsecureSkipVerify": map[string]any{"old": prev.TLSInsecureSkipVerify, "new": snap.TLSInsecureSkipVerify},
 	})
 	s.audit(r, "settings.oidc.update", "settings", "oidc", string(details))
 	writeJSON(w, snap)
@@ -153,7 +166,10 @@ func (s *Server) testOIDCSettings(w http.ResponseWriter, r *http.Request) {
 	if len(issuer) > 512 {
 		issuer = issuer[:512]
 	}
-	details, _ := json.Marshal(map[string]any{"issuerUrl": issuer, "ok": err == nil})
+	// v0.10.1112 (güvenlik incelemesi N3) — hangi TLS güveniyle yoklandı:
+	// skip-verify bayrağı + özel CA var mı (PEM değil).
+	details, _ := json.Marshal(map[string]any{"issuerUrl": issuer, "ok": err == nil,
+		"tlsInsecureSkipVerify": in.TLSInsecureSkipVerify, "customCA": strings.TrimSpace(in.TLSCACertPEM) != ""})
 	s.audit(r, "settings.oidc.test", "settings", "oidc", string(details))
 	if err != nil {
 		writeJSON(w, map[string]any{"ok": false, "error": err.Error()})

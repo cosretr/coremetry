@@ -1,8 +1,8 @@
 // oidcForm.test — v0.10.1067 (OIDC Settings'ten yönetilir) saf yardımcılar.
 import { describe, it, expect } from 'vitest';
 import {
-  PERMISSION_MAX_CIDRS, formToInput, oidcStatus, parseCidrList, parsePermissionTTL, permissionNetWarnings,
-  publicOidcSnapshot, snapshotToForm, splitList,
+  OIDC_CA_PEM_MAX, PERMISSION_MAX_CIDRS, TLS_SKIP_VERIFY_WARNING, caPemInfo, formToInput, oidcStatus, parseCidrList,
+  parsePermissionTTL, permissionNetWarnings, publicOidcSnapshot, snapshotToForm, splitList,
 } from './oidcForm';
 import type { OidcSettingsSnapshot } from '@/lib/types';
 
@@ -14,6 +14,7 @@ const snap: OidcSettingsSnapshot = {
   permissionServiceEnabled: false, permissionServiceKeySet: false, permissionTTLSeconds: 300,
   permissionsClaim: 'permissions', roleFromClaim: false,
   permissionServiceAllowNoKey: false, permissionServiceAllowedCIDRs: [], permissionServiceTrustedProxies: [],
+  tlsCACertPEM: '', tlsInsecureSkipVerify: false,
 };
 
 describe('oidcForm', () => {
@@ -128,5 +129,48 @@ describe('oidcForm — anahtarsız kip ve IP izin listesi', () => {
     expect(p.permissionServiceAllowNoKey).toBe(false);
     expect(p.permissionServiceAllowedCIDRs).toEqual([]);
     expect(p.permissionServiceTrustedProxies).toEqual([]);
+  });
+});
+
+// v0.10.1112 — IdP TLS güveni (operatör: "oidc bağlantısının tls kontrolünü
+// kapatma seçeneği de olsun sertifikaya takılıyor.").
+describe('oidcForm — IdP TLS alanları', () => {
+  const PEM = '-----BEGIN CERTIFICATE-----\nMIIBfake\n-----END CERTIFICATE-----';
+
+  it('snapshot → form → gövde gidiş-dönüşü; PEM kırpılır, CA secret değil (aynen gelir)', () => {
+    const f = snapshotToForm({ ...snap, tlsCACertPEM: PEM, tlsInsecureSkipVerify: true });
+    expect(f.tlsCACertPEM).toBe(PEM);
+    expect(f.tlsInsecureSkipVerify).toBe(true);
+    const inp = formToInput({ ...f, tlsCACertPEM: `\n  ${PEM}\n\n` });
+    expect(inp.tlsCACertPEM).toBe(PEM);
+    expect(inp.tlsInsecureSkipVerify).toBe(true);
+    const off = formToInput(snapshotToForm(snap));
+    expect(off.tlsCACertPEM).toBe('');
+    expect(off.tlsInsecureSkipVerify).toBe(false);
+  });
+
+  it('eski sunucu alanı göndermezse varsayılan: CA boş, doğrulama AÇIK', () => {
+    const legacy: Partial<OidcSettingsSnapshot> = { ...snap };
+    delete legacy.tlsCACertPEM;
+    delete legacy.tlsInsecureSkipVerify;
+    const f = snapshotToForm(legacy as OidcSettingsSnapshot);
+    expect(f.tlsCACertPEM).toBe('');
+    expect(f.tlsInsecureSkipVerify).toBe(false);
+  });
+
+  it('caPemInfo: boş / tek / çoklu / özel anahtar / çöp / 64 KB üstü', () => {
+    expect(caPemInfo('  ')).toEqual({ certs: 0 });
+    expect(caPemInfo(PEM)).toEqual({ certs: 1 });
+    expect(caPemInfo(`# yorum\r\n${PEM}\r\n${PEM}`)).toEqual({ certs: 2 });
+    expect(caPemInfo(`${PEM}\n-----BEGIN EC PRIVATE KEY-----\nAA\n-----END EC PRIVATE KEY-----`).error).toContain('Özel anahtar');
+    expect(caPemInfo('merhaba').error).toContain('bulunamadı');
+    expect(caPemInfo(PEM + 'x'.repeat(OIDC_CA_PEM_MAX)).error).toContain('64 KB');
+  });
+
+  it('uyarı metni sabit; viewer görünümü TLS alanlarını boş/kapalı çizer', () => {
+    expect(TLS_SKIP_VERIFY_WARNING).toBe('Ortadaki-adam saldırısına açık; mümkünse CA sertifikası ekleyin.');
+    const p = publicOidcSnapshot({ local: { enabled: true }, oidc: { enabled: true, displayName: 'SSO' } });
+    expect(p.tlsCACertPEM).toBe('');
+    expect(p.tlsInsecureSkipVerify).toBe(false);
   });
 });

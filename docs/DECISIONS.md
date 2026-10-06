@@ -1962,6 +1962,50 @@ Ağ alanları secret değil: GET'te ve audit'te (`settings.oidc.update`) aynen. 
 kipte kayıtlı eski anahtar silinmez (kullanılmaz; boş PUT kayıtlıyı korur kuralı aynen). (2) Anahtarsız + izin
 listesi boş kayıt engellenmez — yalnız uyarı.
 
+## 2026-10-06 — OIDC: özel CA sertifikası ve TLS doğrulamasını kapatma seçeneği (v0.10.1112)
+
+**Operatör (2026-10-06): "oidc bağlantısının tls kontrolünü kapatma seçeneği de olsun sertifikaya takılıyor."** —
+müşterinin IdP'si kurum içi bir CA ile imzalı; Coremetry'nin keşif / JWKS / token çağrıları sistem kök
+sertifikalarıyla doğrulanamıyor, SSO hiç kurulamıyor. **Karar:** `auth_oidc` blobuna iki alan, ikisi de Settings >
+SSO'da Issuer'ın hemen altında. (1) **`tlsCACertPEM` (tercih edilen):** bir ya da birden çok PEM `CERTIFICATE`
+bloğu, **sistem havuzuna eklenir** (yerine geçmez — kamuya açık bir IdP'ye geçişte de çalışır). Doğrulama: ≤64 KB,
+`x509` ile ≥1 sertifika; bloklar arası yorum satırları (CA paketleri) yok sayılır; özel anahtar bloğu (bozuk kodlu
+olsa da) açık bir hatayla, başka blok türü ve çözülemeyen sertifika 400 — güvenlik incelemesi F1: SSO **kapalıyken
+de** (yoksa `enabled:false` gövdesiyle bir özel anahtar bloba yazılıp GET'te yankılanırdı; yalnız ağ/keşif
+denetimi kapalıyken atlanır; yüklemede de aynı). **Kanonik saklama (N2):** blob ve GET YALNIZ çözülen
+sertifikaları taşır (`pem.EncodeToMemory` ile yeniden kodlanmış) — bloklar arası her metin düşer: yorumlar ve
+`pem.Decode`'un atladığı, "PRIVATE KEY-----" dize denetimini de aşan zırhlı bir PGP özel anahtar bloğu; Settings
+kayıttan sonra kanonik biçimi gösterir. Secret değil (açık sertifika): GET'te döner. (2) **`tlsInsecureSkipVerify` (son çare, varsayılan kapalı):** sertifika doğrulaması hiç yapılmaz;
+UI kırmızı uyarı satırı gösterir ("Ortadaki-adam saldırısına açık; mümkünse CA sertifikası ekleyin."), sunucu
+ayar yüklemesi başına (PUT + blob değişimi; 30 s yenilemenin değişmeyen tiklerinde değil) bir kez WARN loglar.
+**Neden CA tercih:** skip-verify'da ağ yolundaki herhangi biri IdP'yi taklit edip keşif belgesini / JWKS'i
+değiştirebilir — kendi imzaladığı id_token kabul edilir, yani her kullanıcı (yönetici dahil) taklit edilebilir;
+özel CA güveni yalnız o kurumun CA'sına genişletir, doğrulama sürer. **Zorunlu kalan:** https kuralı (skip-verify
+düz http'ye izin VERMEZ — http yalnız config.yaml `allow_insecure_issuer`) ve dial koruması (loopback /
+link-local / metadata / eşlemeli adres reddi, DNS'e sabitleme) TLS ayarından bağımsız `oidcNetPolicy`'de.
+**Tek taşıma kurucusu:** `newOIDCHTTPClient(policy, tls)` (`internal/auth/oidc.go`; TLS `oidc_tls.go`
+`oidcTLSConfig`) keşif, JWKS (go-oidc RemoteKeySet sağlayıcı bağlamındaki istemciyi kullanır), token değişimi +
+id_token doğrulaması, v0.10.1110 access token doğrulaması (aynı JWKS), userinfo (sağlayıcının istemcisi) ve
+"Bağlantıyı test et" için tek istemci; `oidc_tls_test.go` hem kaynak taramasıyla (başka `http.Client` /
+`DefaultClient` / `TLSClientConfig` / go-oidc ağ yardımcısı yok; her `ClientContext` ve `discoverOIDC` kurucunun
+istemcisini taşır) hem davranışla (kurum içi CA ile imzalı `httptest` IdP: varsayılan düşer, CA ile ve skip-verify
+ile keşif + kayıt + giriş geçer, skip-verify'da http ve loopback yine red) çivili. **Test ucu** formun
+KAYDEDİLMEMİŞ TLS alanlarıyla koşar (kaydetmeden sınama). **Önbellekli keşif:** issuer aynı ama TLS ayarı
+değiştiyse önbellek kullanılmaz — yeni güven kayıttan önce gerçek bir el sıkışmayla sınanır (yoksa bağlanamayan
+bir TLS ayarı "kaydedildi" der, giriş token ucunda düşerdi); bedeli: IdP kesintisinde TLS alanı değiştirilemez
+(diğer alanlar ağsız kaydedilmeye devam eder). **Dayanıklılık:** depodaki blobda çözülemeyen CA SSO'yu sessizce
+DÜŞÜRMEZ — N4 kalıbı: yapılandırma özel CA'sız uygulanır, `lastError` yazılır (CA'sız IdP'ye bağlanılamıyorsa
+`lastError` iki nedeni de taşır). **Audit:** `settings.oidc.update` eski→yeni — skip-verify bayrağı; CA için PEM
+değil özet (CN · SHA-256 parmak izinin ilk 8 baytı · bitiş tarihi, en çok 10 + "+N sertifika daha") ve `changed`;
+"eski" kayıtla AYNI kilit (`applyMu`) altında alınır (`SaveSettingsWithPrev`, inceleme N5 — eşzamanlı PUT'lar
+çifti karıştırmaz). `settings.oidc.test` satırı yoklamanın TLS güvenini de taşır: `tlsInsecureSkipVerify` +
+`customCA` (var/yok, PEM değil; N3). Gövde tavanı 64 KB → 128 KB (CA alanı). **Bilinen, bırakılan (N4, bu
+sürümden önce de vardı):** taşıma `http.DefaultTransport`'tan klonlandığı için `HTTPS_PROXY`/`HTTP_PROXY` ortam
+değişkeni tanımlıysa bağlantı vekile gider ve dial koruması yalnız vekil adresini denetler — hedef IdP adresinin
+loopback/metadata denetimi o kurulumda vekile kalır; kurum çıkışı vekil gerektirebileceği için davranış
+DEĞİŞTİRİLMEDİ. **Kapsam dışı:** config.yaml/Helm kaynaklı OIDC'ye bu alanlar eklenmedi (o yolda sistem havuzu
+`SSL_CERT_FILE` / imaj CA paketiyle genişletilir); istemci sertifikası (mTLS) yok.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

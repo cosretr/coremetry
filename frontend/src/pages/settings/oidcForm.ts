@@ -28,6 +28,9 @@ export interface OidcForm {
   permissionServiceAllowNoKey: boolean;
   permissionServiceAllowedCIDRs: string;
   permissionServiceTrustedProxies: string;
+  // v0.10.1112 — IdP TLS güveni (kurum içi CA PEM / doğrulamayı kapat).
+  tlsCACertPEM: string;
+  tlsInsecureSkipVerify: boolean;
 }
 
 /** Yetki servisi ucunun sabitleri (sunucu: internal/api/auth_permissions.go). */
@@ -63,6 +66,30 @@ export function permissionNetWarnings(f: OidcForm): string[] {
     out.push(`Liste başına en çok ${PERMISSION_MAX_CIDRS} giriş — kayıt reddedilir.`);
   }
   return out;
+}
+
+/** Özel CA alanının tavanı (sunucu: auth.OIDCCACertPEMMax). */
+export const OIDC_CA_PEM_MAX = 64 * 1024;
+
+/** "TLS doğrulamasını kapat" açıkken görünen uyarı satırı (v0.10.1112). */
+export const TLS_SKIP_VERIFY_WARNING = 'Ortadaki-adam saldırısına açık; mümkünse CA sertifikası ekleyin.';
+
+/**
+ * CA kutusunun anlık özeti — yalnız ipucu/erken uyarı; asıl doğrulama
+ * sunucuda (x509, yalnız CERTIFICATE blokları). Boş = özel CA yok.
+ */
+export function caPemInfo(v: string): { certs: number; error?: string } {
+  const t = v.replace(/\r\n/g, '\n').trim();
+  if (!t) return { certs: 0 };
+  if (t.includes('PRIVATE KEY-----')) {
+    return { certs: 0, error: 'Özel anahtar yapıştırmayın — yalnız CA sertifikası (BEGIN CERTIFICATE).' };
+  }
+  if (new TextEncoder().encode(t).length > OIDC_CA_PEM_MAX) {
+    return { certs: 0, error: 'En çok 64 KB — kayıt reddedilir.' };
+  }
+  const certs = (t.match(/-----BEGIN CERTIFICATE-----/g) ?? []).length;
+  if (certs === 0) return { certs: 0, error: 'PEM sertifikası bulunamadı (-----BEGIN CERTIFICATE----- …).' };
+  return { certs };
 }
 
 /** TTL kutusu → sayı; boş/geçersiz → varsayılan, [60, 3600] kıskacı (sunucuyla aynı). */
@@ -103,6 +130,8 @@ export function snapshotToForm(s: OidcSettingsSnapshot): OidcForm {
     permissionServiceAllowNoKey: !!s.permissionServiceAllowNoKey,
     permissionServiceAllowedCIDRs: (s.permissionServiceAllowedCIDRs ?? []).join('\n'),
     permissionServiceTrustedProxies: (s.permissionServiceTrustedProxies ?? []).join('\n'),
+    tlsCACertPEM: s.tlsCACertPEM ?? '',
+    tlsInsecureSkipVerify: !!s.tlsInsecureSkipVerify,
   };
 }
 
@@ -127,6 +156,8 @@ export function formToInput(f: OidcForm): OidcSettingsInput {
     permissionServiceAllowNoKey: f.permissionServiceAllowNoKey,
     permissionServiceAllowedCIDRs: parseCidrList(f.permissionServiceAllowedCIDRs),
     permissionServiceTrustedProxies: parseCidrList(f.permissionServiceTrustedProxies),
+    tlsCACertPEM: f.tlsCACertPEM.trim(),
+    tlsInsecureSkipVerify: f.tlsInsecureSkipVerify,
   };
 }
 
@@ -155,6 +186,8 @@ export function publicOidcSnapshot(c: AuthConfigResponse): OidcSettingsSnapshot 
     permissionServiceAllowNoKey: false,
     permissionServiceAllowedCIDRs: [],
     permissionServiceTrustedProxies: [],
+    tlsCACertPEM: '',
+    tlsInsecureSkipVerify: false,
     source: 'config',
     active: on,
   };

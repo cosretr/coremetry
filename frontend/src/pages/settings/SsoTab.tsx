@@ -6,8 +6,8 @@ import { api } from '@/lib/api';
 import type { OidcSettingsSnapshot, OidcTestResult } from '@/lib/types';
 import { useSettingsLoad, SettingsLoadError, ConfigStatusBanner, FlashBox, humanize } from './shared';
 import {
-  OIDC_ROLES, PERMISSION_ENDPOINT, PERMISSION_HEADER, PERMISSION_MAX_CIDRS, formToInput, oidcStatus,
-  permissionNetWarnings, publicOidcSnapshot, snapshotToForm, type OidcForm,
+  OIDC_ROLES, PERMISSION_ENDPOINT, PERMISSION_HEADER, PERMISSION_MAX_CIDRS, TLS_SKIP_VERIFY_WARNING, caPemInfo,
+  formToInput, oidcStatus, permissionNetWarnings, publicOidcSnapshot, snapshotToForm, type OidcForm,
 } from './oidcForm';
 import { SsoPresets } from './SsoPresets';
 
@@ -31,6 +31,9 @@ import { SsoPresets } from './SsoPresets';
 // v0.10.1111 (operatör: "Anahtarsız olmaz mı") — "Anahtarsız kabul et"
 // (başlık hiç denetlenmez) + IP izin listesi + güvenilen vekiller. Anahtarsız
 // ve izin listesi boşsa görünür uyarı satırı (engel değil).
+//
+// v0.10.1112 — Issuer altında IdP TLS güveni: özel CA (PEM) + "TLS sertifika
+// doğrulamasını kapat (önerilmez)" ve açıkken kırmızı uyarı satırı.
 //
 // Admin olmayan: ayar ucu admin-only (IdP adresi / client id hassas); form
 // yine BOŞ çizilmez — public /api/auth/config'ten SSO'nun açık olup
@@ -131,6 +134,8 @@ function SSOTabBody({ isAdmin }: { isAdmin: boolean }) {
               placeholder={adminOnly ?? 'coremetry'} />
           </div>
 
+          <OidcTlsFields form={form} patch={patch} adminOnly={adminOnly} />
+
           <div className="sso-row">
             <Field type="password" autoComplete="new-password" value={form.clientSecret}
               label={<>Client secret{snap.clientSecretStored && <span style={{ color: 'var(--text3)' }}> · kayıtlı</span>}</>}
@@ -188,6 +193,40 @@ function SSOTabBody({ isAdmin }: { isAdmin: boolean }) {
       </form>
 
       <SsoPresets />
+    </div>
+  );
+}
+
+// IdP TLS güveni — v0.10.1112 (operatör: "oidc bağlantısının tls kontrolünü
+// kapatma seçeneği de olsun sertifikaya takılıyor."). Issuer'ın hemen altında:
+// kurum içi CA ile imzalı IdP için önce CA (tercih — sistem köklerine eklenir),
+// son çare doğrulamayı kapat. https kuralı ve iç-ağ (loopback/metadata)
+// koruması iki durumda da sürer. "Bağlantıyı test et" bu alanların
+// KAYDEDİLMEMİŞ hâliyle koşar (formToInput).
+function OidcTlsFields({ form, patch, adminOnly }: {
+  form: OidcForm;
+  patch: (p: Partial<OidcForm>) => void;
+  adminOnly: string | undefined;
+}) {
+  const ca = caPemInfo(form.tlsCACertPEM);
+  return (
+    <div className="sso-tls">
+      <div className="sso-row">
+        <TextareaField label="Özel CA sertifikası (PEM)" rows={4} value={form.tlsCACertPEM}
+          className="sso-tls__pem" autoComplete="off" spellCheck={false}
+          onChange={e => patch({ tlsCACertPEM: e.target.value })}
+          placeholder={adminOnly ?? '-----BEGIN CERTIFICATE-----\n…\n-----END CERTIFICATE-----'}
+          error={ca.error}
+          hint={`Kurum içi CA ile imzalı IdP için; birden çok sertifika eklenebilir.${ca.certs > 0 ? ` (${ca.certs} sertifika)` : ''}`} />
+      </div>
+      <label className="sso-check sso-check--tight">
+        <input type="checkbox" checked={form.tlsInsecureSkipVerify}
+          onChange={e => patch({ tlsInsecureSkipVerify: e.target.checked })} />
+        <span>TLS sertifika doğrulamasını kapat (önerilmez)</span>
+      </label>
+      {form.tlsInsecureSkipVerify && (
+        <p className="sso-tls__warn" role="alert">⚠ {TLS_SKIP_VERIFY_WARNING}</p>
+      )}
     </div>
   );
 }

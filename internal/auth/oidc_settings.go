@@ -29,6 +29,9 @@ package auth
 // koşmaz). enabled:true kayıt, keşif BAŞARILI olmadan yazılmaz.
 //
 // Yerel kullanıcı/parola girişi bu katmandan bağımsız, her zaman açık.
+//
+// v0.10.1112 — IdP TLS güveni (tlsCACertPEM / tlsInsecureSkipVerify) aynı
+// blobda; kurallar ve tek taşıma kurucusu oidc_tls.go'da.
 
 import (
 	"bytes"
@@ -107,16 +110,22 @@ type OIDCSettings struct {
 	PermissionServiceAllowNoKey     bool     `json:"permissionServiceAllowNoKey"`
 	PermissionServiceAllowedCIDRs   []string `json:"permissionServiceAllowedCIDRs"`
 	PermissionServiceTrustedProxies []string `json:"permissionServiceTrustedProxies"`
+	// v0.10.1112 — IdP TLS güveni (oidc_tls.go). Secret DEĞİL (açık
+	// sertifika): GET'te aynen döner. Skip-verify https kuralını ve dial
+	// korumasını GEVŞETMEZ.
+	TLSCACertPEM          string `json:"tlsCACertPEM"`
+	TLSInsecureSkipVerify bool   `json:"tlsInsecureSkipVerify"`
 }
 
 // String / GoString — %v, %+v, %#v ile kazara loglansa bile secret basılmasın.
 func (s OIDCSettings) String() string {
-	return fmt.Sprintf("{enabled:%v issuer:%q clientId:%q secretSet:%v redirect:%q scopes:%v display:%q role:%q domains:%v permSvc:%v permKeySet:%v permTTL:%d claim:%q roleFromClaim:%v permNoKey:%v permCIDRs:%v permProxies:%v}",
+	return fmt.Sprintf("{enabled:%v issuer:%q clientId:%q secretSet:%v redirect:%q scopes:%v display:%q role:%q domains:%v permSvc:%v permKeySet:%v permTTL:%d claim:%q roleFromClaim:%v permNoKey:%v permCIDRs:%v permProxies:%v tlsCABytes:%d tlsSkipVerify:%v}",
 		s.Enabled, s.IssuerURL, s.ClientID, s.ClientSecret != "", s.RedirectURL,
 		s.Scopes, s.DisplayName, s.DefaultRole, s.AllowedDomains,
 		s.PermissionServiceEnabled, s.PermissionServiceKey != "", s.PermissionTTLSeconds,
 		s.PermissionsClaim, s.RoleFromClaim,
-		s.PermissionServiceAllowNoKey, s.PermissionServiceAllowedCIDRs, s.PermissionServiceTrustedProxies)
+		s.PermissionServiceAllowNoKey, s.PermissionServiceAllowedCIDRs, s.PermissionServiceTrustedProxies,
+		len(s.TLSCACertPEM), s.TLSInsecureSkipVerify)
 }
 
 func (s OIDCSettings) GoString() string { return "auth.OIDCSettings" + s.String() }
@@ -143,6 +152,9 @@ type oidcStored struct {
 	PermissionServiceAllowNoKey     bool     `json:"permissionServiceAllowNoKey,omitempty"`
 	PermissionServiceAllowedCIDRs   []string `json:"permissionServiceAllowedCIDRs,omitempty"`
 	PermissionServiceTrustedProxies []string `json:"permissionServiceTrustedProxies,omitempty"`
+	// v0.10.1112
+	TLSCACertPEM          string `json:"tlsCACertPEM,omitempty"`
+	TLSInsecureSkipVerify bool   `json:"tlsInsecureSkipVerify,omitempty"`
 }
 
 func (s OIDCSettings) stored() oidcStored   { return oidcStored(s) }
@@ -170,6 +182,9 @@ type OIDCSnapshot struct {
 	PermissionServiceAllowNoKey     bool     `json:"permissionServiceAllowNoKey"`
 	PermissionServiceAllowedCIDRs   []string `json:"permissionServiceAllowedCIDRs"`
 	PermissionServiceTrustedProxies []string `json:"permissionServiceTrustedProxies"`
+	// v0.10.1112 — IdP TLS güveni (secret değil, aynen döner).
+	TLSCACertPEM          string `json:"tlsCACertPEM"`
+	TLSInsecureSkipVerify bool   `json:"tlsInsecureSkipVerify"`
 	// Source — etkin yapılandırmanın kaynağı: settings (blob) | config (config.yaml).
 	Source string `json:"source"`
 	// Active — bu pod'da canlı istemci var mı (giriş düğmesi). İstenen
@@ -290,6 +305,7 @@ func NormalizeOIDCSettings(in OIDCSettings, publicURL string) OIDCSettings {
 	}
 	s.PermissionServiceAllowedCIDRs = normalizeCIDRList(s.PermissionServiceAllowedCIDRs)
 	s.PermissionServiceTrustedProxies = normalizeCIDRList(s.PermissionServiceTrustedProxies)
+	s.TLSCACertPEM = normalizePEM(s.TLSCACertPEM)
 	return s
 }
 
@@ -302,13 +318,20 @@ func isASCII(s string) bool {
 	return true
 }
 
-// ValidateOIDCSettings — SSO alanları yalnız Enabled iken; kapatma her
-// zaman geçer. v0.10.1110: yetki servisi alanları SSO'dan BAĞIMSIZ her
-// zaman denetlenir (servis SSO kapalıyken de açık olabilir; geçersiz
-// anahtarla açılamaz). allowInsecure = config.yaml allow_insecure_issuer
-// (http issuer). SAF.
+// ValidateOIDCSettings — SSO alanları yalnız Enabled iken; kapatma her zaman
+// geçer. v0.10.1110: yetki servisi alanları SSO'dan BAĞIMSIZ her zaman
+// denetlenir (servis SSO kapalıyken de açık olabilir; geçersiz anahtarla
+// açılamaz). v0.10.1112: özel CA da her zaman (F1). allowInsecure =
+// config.yaml allow_insecure_issuer (http issuer). SAF.
 func ValidateOIDCSettings(s OIDCSettings, allowInsecure bool) error {
 	if err := validatePermissionSettings(s); err != nil {
+		return err
+	}
+	// v0.10.1112 (güvenlik incelemesi F1) — özel CA SSO kapalıyken de
+	// denetlenir: tavan + özel anahtar reddi + x509 çözümü. Yoksa
+	// enabled:false gövdesiyle bir özel anahtar bloba yazılır ve GET'te
+	// yankılanırdı. Ağ/keşif denetimi kapalıyken yine koşmaz.
+	if err := validateOIDCCACert(s.TLSCACertPEM); err != nil {
 		return err
 	}
 	if !s.Enabled {
@@ -520,9 +543,13 @@ func (o *OIDCService) state() oidcState {
 	return o.st
 }
 
-// cachedDiscovery — canlı istemcinin keşfi, issuer aynıysa (ağsız yeniden kurulum).
-func (o *OIDCService) cachedDiscovery(issuer string) *OIDCDiscovery {
-	if c := o.live.Load(); c != nil && c.cfg.IssuerURL == issuer {
+// cachedDiscovery — canlı istemcinin keşfi, issuer aynıysa (ağsız yeniden
+// kurulum). v0.10.1112: TLS ayarı (özel CA / skip-verify) değiştiyse önbellek
+// KULLANILMAZ — yeni güven ayarı kayıttan önce gerçek bir el sıkışmayla
+// sınanır (yoksa IdP'ye bağlanamayan bir TLS ayarı "kaydedildi" der, giriş
+// token ucunda düşerdi).
+func (o *OIDCService) cachedDiscovery(issuer string, t oidcTLSOptions) *OIDCDiscovery {
+	if c := o.live.Load(); c != nil && c.cfg.IssuerURL == issuer && c.tls == t {
 		return c.disc
 	}
 	return nil
@@ -573,22 +600,38 @@ func (o *OIDCService) LoadPersisted(ctx context.Context) error {
 	// v0.10.1110 (güvenlik incelemesi N4): yetki servisi alanları geçersizse
 	// SSO DÜŞMEZ — yalnız servis kapanır (log + lastError). Geçersiz blob
 	// elle yazılmış ya da içe aktarılmış olabilir; PUT yolu zaten 400 verir.
-	permErr := validatePermissionSettings(s)
-	if permErr != nil {
+	var warns []string
+	if permErr := validatePermissionSettings(s); permErr != nil {
 		s = disablePermissionService(s)
+		warns = append(warns, "yetki servisi ayarı geçersiz — servis kapatıldı: "+permErr.Error())
+	}
+	// v0.10.1112 — aynı kalıp: çözülemeyen özel CA SSO'yu sessizce DÜŞÜRMEZ;
+	// yapılandırma özel CA'sız (sistem kökleriyle) uygulanır, lastError yazılır.
+	// SSO kapalıyken de (F1: geçersiz CA etkin ayarda/GET'te kalmasın);
+	// geçerliyse kanonik biçim (N2: bloklar arası metin düşer).
+	if ca, caErr := canonicalOIDCCACert(s.TLSCACertPEM); caErr != nil {
+		s.TLSCACertPEM = ""
+		warns = append(warns, "özel CA sertifikası geçersiz — yok sayıldı: "+caErr.Error())
+	} else {
+		s.TLSCACertPEM = ca
 	}
 	if err := ValidateOIDCSettings(s, o.uiPolicy.allowInsecure); err != nil {
 		return o.badBlob(raw, fmt.Errorf("oidc blobu geçersiz: %w", err))
 	}
+	if !bytes.Equal(raw, st.lastRaw) { // ayar yüklemesi başına bir kez (yeniden denemede değil)
+		warnInsecureOIDCTLS(s, log.Printf)
+	}
 	applyErr := o.apply(ctx, s, OIDCSourceSettings, raw)
-	if permErr != nil {
-		msg := "yetki servisi ayarı geçersiz — servis kapatıldı: " + permErr.Error()
+	if len(warns) > 0 {
+		msg := strings.Join(warns, " · ")
 		log.Printf("[auth] %s", msg)
+		o.mu.Lock()
 		if applyErr == nil {
-			o.mu.Lock()
 			o.st.lastErr = msg
-			o.mu.Unlock()
+		} else {
+			o.st.lastErr = msg + " · " + o.st.lastErr
 		}
+		o.mu.Unlock()
 	}
 	return applyErr
 }
@@ -619,7 +662,8 @@ func (o *OIDCService) apply(ctx context.Context, s OIDCSettings, source string, 
 	var err error
 	if s.Enabled {
 		dctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), oidcHTTPTimeout)
-		cli, err = buildOIDCClient(dctx, s.toConfig(), o.policyFor(source), o.cachedDiscovery(s.IssuerURL))
+		t := s.tlsOptions()
+		cli, err = buildOIDCClient(dctx, s.toConfig(), o.policyFor(source), t, o.cachedDiscovery(s.IssuerURL, t))
 		cancel()
 	}
 	o.mu.Lock()
@@ -645,11 +689,28 @@ func (o *OIDCService) apply(ctx context.Context, s OIDCSettings, source string, 
 // aynıysa önbellekli keşif — IdP kesintisinde alan adı daraltılabilsin);
 // enabled:false her zaman yazılır. Başarıda canlı istemci aynı anda takaslanır.
 func (o *OIDCService) SaveSettings(ctx context.Context, in OIDCSettings) (OIDCSnapshot, error) {
+	_, next, err := o.SaveSettingsWithPrev(ctx, in)
+	return next, err
+}
+
+// SaveSettingsWithPrev — SaveSettings + kayıttan HEMEN ÖNCEKİ snapshot, ikisi
+// de applyMu altında (güvenlik incelemesi N5: audit'in eski→yeni çifti
+// eşzamanlı bir PUT'la karışmasın). Hata durumunda prev de boş döner.
+func (o *OIDCService) SaveSettingsWithPrev(ctx context.Context, in OIDCSettings) (prevSnap, next OIDCSnapshot, err error) {
 	if o == nil || o.store == nil {
-		return OIDCSnapshot{}, errors.New("oidc ayar deposu yok")
+		return OIDCSnapshot{}, OIDCSnapshot{}, errors.New("oidc ayar deposu yok")
 	}
 	o.applyMu.Lock()
 	defer o.applyMu.Unlock()
+	prevSnap = o.Snapshot() // mu'yu kısa tutar; applyMu başka bir kaydı dışarıda tutar
+	if next, err = o.saveLocked(ctx, in); err != nil {
+		return OIDCSnapshot{}, OIDCSnapshot{}, err
+	}
+	return prevSnap, next, nil
+}
+
+// saveLocked — SaveSettings gövdesi; çağıran applyMu'yu tutar.
+func (o *OIDCService) saveLocked(ctx context.Context, in OIDCSettings) (OIDCSnapshot, error) {
 	prev := NormalizeOIDCSettings(o.state().eff, o.publicURL)
 	s := NormalizeOIDCSettings(in, o.publicURL)
 	// v0.10.1110 — yetki servisi anahtarı kimliğe bağlı değil: boş girdi
@@ -669,9 +730,16 @@ func (o *OIDCService) SaveSettings(ctx context.Context, in OIDCSettings) (OIDCSn
 	if err := ValidateOIDCSettings(s, o.uiPolicy.allowInsecure); err != nil {
 		return OIDCSnapshot{}, err
 	}
+	// N2 — yalnız çözülen sertifikalar saklanır (doğrulamadan geçti; hata olamaz).
+	ca, err := canonicalOIDCCACert(s.TLSCACertPEM)
+	if err != nil {
+		return OIDCSnapshot{}, err
+	}
+	s.TLSCACertPEM = ca
 	var cli *oidcClient
 	if s.Enabled {
-		c, err := buildOIDCClient(ctx, s.toConfig(), o.uiPolicy, o.cachedDiscovery(s.IssuerURL))
+		t := s.tlsOptions()
+		c, err := buildOIDCClient(ctx, s.toConfig(), o.uiPolicy, t, o.cachedDiscovery(s.IssuerURL, t))
 		if err != nil {
 			return OIDCSnapshot{}, &OIDCDiscoveryError{Err: err}
 		}
@@ -684,6 +752,7 @@ func (o *OIDCService) SaveSettings(ctx context.Context, in OIDCSettings) (OIDCSn
 	if err := o.store.PutSetting(ctx, OIDCSettingsKey, raw); err != nil {
 		return OIDCSnapshot{}, err
 	}
+	warnInsecureOIDCTLS(s, log.Printf)
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	o.live.Store(cli)
@@ -693,13 +762,18 @@ func (o *OIDCService) SaveSettings(ctx context.Context, in OIDCSettings) (OIDCSn
 
 // TestDiscovery — "Bağlantıyı test et": issuer doğrulaması + keşif (Settings
 // ağ sınırıyla); hiçbir şey yazmaz, canlı istemciye dokunmaz. Keşif secret
-// kullanmaz.
+// kullanmaz. v0.10.1112: formun KAYDEDİLMEMİŞ TLS ayarıyla (özel CA /
+// skip-verify) — operatör kaydetmeden sınar.
 func (o *OIDCService) TestDiscovery(ctx context.Context, in OIDCSettings) (*OIDCDiscovery, error) {
 	s := NormalizeOIDCSettings(in, "")
 	if err := ValidateOIDCIssuer(s.IssuerURL, o.uiPolicy.allowInsecure); err != nil {
 		return nil, err
 	}
-	d, err := discoverOIDC(ctx, newOIDCHTTPClient(o.uiPolicy), s.IssuerURL, o.uiPolicy)
+	cli, err := newOIDCHTTPClient(o.uiPolicy, s.tlsOptions()) // CA çözülemezse OIDCSettingsError
+	if err != nil {
+		return nil, err
+	}
+	d, err := discoverOIDC(ctx, cli, s.IssuerURL, o.uiPolicy)
 	if err != nil {
 		return nil, err
 	}
@@ -754,6 +828,8 @@ func (o *OIDCService) snapshotLocked() OIDCSnapshot {
 		PermissionServiceAllowNoKey:     s.PermissionServiceAllowNoKey,
 		PermissionServiceAllowedCIDRs:   append([]string{}, s.PermissionServiceAllowedCIDRs...),
 		PermissionServiceTrustedProxies: append([]string{}, s.PermissionServiceTrustedProxies...),
+		TLSCACertPEM:                    s.TLSCACertPEM,
+		TLSInsecureSkipVerify:           s.TLSInsecureSkipVerify,
 		Source:                          src,
 		Active:                          o.live.Load() != nil,
 		LastError:                       o.st.lastErr,

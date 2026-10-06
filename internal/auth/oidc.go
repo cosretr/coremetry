@@ -51,8 +51,9 @@ type OIDCService struct {
 // bütün olarak yapılır: yarım güncellenmiş istemci görülmez.
 type oidcClient struct {
 	cfg      config.OIDCConfig
-	disc     *OIDCDiscovery // aynı issuer'la yeniden kurulumda ağsız kullanılır
-	httpCli  *http.Client   // keşif + JWKS + token değişimi — hepsi sınırlı
+	disc     *OIDCDiscovery // aynı issuer + aynı TLS ayarıyla yeniden kurulumda ağsız kullanılır
+	tls      oidcTLSOptions // v0.10.1112 — özel CA / skip-verify (oidc_tls.go)
+	httpCli  *http.Client   // keşif + JWKS + token değişimi — hepsi sınırlı (newOIDCHTTPClient)
 	provider *oidc.Provider
 	verifier *oidc.IDTokenVerifier
 	// atVerifier — v0.10.1110: JWT access token (permissions claim). AYNI
@@ -257,6 +258,8 @@ func domainOf(email string) string {
 //   - ≤10 s, ≤3 yönlendirme (her biri aynı kurallar), cevap gövdesi ≤1 MiB;
 //   - hata metninde gövde, durum kodu ya da ayrıntı YOK (tek genel cümle).
 // config.yaml kaynaklı OIDC bu sınırın DIŞINDA (operatör yazdı; eski davranış).
+// v0.10.1112 — TLS güveni (özel CA / skip-verify) oidc_tls.go'da; şema ve dial
+// kuralları ondan BAĞIMSIZ: skip-verify ne http'ye ne engelli adrese izin verir.
 // go-oidc'nin NewProvider'ı kullanılmıyor: 200 dışı cevapta gövdenin tamamını
 // hataya koyuyor. Sağlayıcı oidc.ProviderConfig'ten ağsız kurulur.
 
@@ -283,7 +286,7 @@ var configPolicy = oidcNetPolicy{unrestricted: true}
 var errOIDCDialBlocked = errors.New("oidc: hedef adres engelli")
 
 // oidcTestTLSConfig — YALNIZ test dikişi (httptest TLS sertifikasına güven);
-// üretimde nil, sistem kök sertifikaları.
+// üretimde nil, sistem kök sertifikaları (+ Settings'teki özel CA, oidc_tls.go).
 var oidcTestTLSConfig *tls.Config
 
 // oidcTestDialTarget — YALNIZ test dikişi: denetimden SONRA gerçek dial
@@ -390,13 +393,19 @@ func (l limitedBodyRT) RoundTrip(r *http.Request) (*http.Response, error) {
 	return resp, err
 }
 
-// newOIDCHTTPClient — keşif + JWKS + token istemcisi.
-func newOIDCHTTPClient(p oidcNetPolicy) *http.Client {
+// newOIDCHTTPClient — keşif + JWKS + token (+ userinfo, access token JWKS,
+// Settings testi) için TEK istemci kurucusu. v0.10.1112: TLS güveni t'den
+// (özel CA sistem havuzuna eklenir / skip-verify); dial koruması ve
+// yönlendirme şema denetimi p'den — ikisi birbirini gevşetmez. Başka bir
+// OIDC HTTP istemcisi kurulmaz (çivi: oidc_tls_test.go kaynak taraması).
+func newOIDCHTTPClient(p oidcNetPolicy, t oidcTLSOptions) (*http.Client, error) {
+	tlsCfg, err := oidcTLSConfig(t)
+	if err != nil {
+		return nil, err
+	}
 	tr := http.DefaultTransport.(*http.Transport).Clone()
 	tr.DialContext = guardedDial(p, &net.Dialer{Timeout: oidcHTTPTimeout})
-	if oidcTestTLSConfig != nil {
-		tr.TLSClientConfig = oidcTestTLSConfig
-	}
+	tr.TLSClientConfig = tlsCfg
 	return &http.Client{
 		Timeout:   oidcHTTPTimeout,
 		Transport: limitedBodyRT{base: tr},
@@ -406,7 +415,7 @@ func newOIDCHTTPClient(p oidcNetPolicy) *http.Client {
 			}
 			return p.checkURL(req.URL)
 		},
-	}
+	}, nil
 }
 
 // OIDCDiscovery — keşif belgesinden DIŞARI verilen alanlar (ham gövde değil).
@@ -546,8 +555,8 @@ func discoverOIDC(ctx context.Context, cli *http.Client, issuer string, p oidcNe
 // buildOIDCClient — keşif (ya da aynı issuer'ın önbellekli keşfi, ağsız) +
 // doğrulayıcı + oauth2 config. Eksik zorunlu alan ağa çıkmadan reddedilir.
 // JWKS ilk doğrulamada, token değişimi girişte — ikisi de aynı sınırlı
-// istemciyle.
-func buildOIDCClient(ctx context.Context, cfg config.OIDCConfig, p oidcNetPolicy, cached *OIDCDiscovery) (*oidcClient, error) {
+// istemciyle (TLS güveni t, v0.10.1112).
+func buildOIDCClient(ctx context.Context, cfg config.OIDCConfig, p oidcNetPolicy, t oidcTLSOptions, cached *OIDCDiscovery) (*oidcClient, error) {
 	missing := []string{}
 	if cfg.IssuerURL == "" {
 		missing = append(missing, "issuer_url")
@@ -564,7 +573,10 @@ func buildOIDCClient(ctx context.Context, cfg config.OIDCConfig, p oidcNetPolicy
 	if len(missing) > 0 {
 		return nil, &oidcMissingError{fields: missing}
 	}
-	httpCli := newOIDCHTTPClient(p)
+	httpCli, err := newOIDCHTTPClient(p, t)
+	if err != nil {
+		return nil, err
+	}
 	d := cached
 	if d != nil && d.Issuer == cfg.IssuerURL {
 		// Önbellekli keşif başka bir politikayla alınmış olabilir: uç
@@ -573,7 +585,6 @@ func buildOIDCClient(ctx context.Context, cfg config.OIDCConfig, p oidcNetPolicy
 			return nil, err
 		}
 	} else {
-		var err error
 		if d, err = discoverOIDC(ctx, httpCli, cfg.IssuerURL, p); err != nil {
 			return nil, err
 		}
@@ -590,6 +601,7 @@ func buildOIDCClient(ctx context.Context, cfg config.OIDCConfig, p oidcNetPolicy
 	return &oidcClient{
 		cfg:        cfg,
 		disc:       d,
+		tls:        t,
 		httpCli:    httpCli,
 		provider:   prov,
 		verifier:   prov.Verifier(&oidc.Config{ClientID: cfg.ClientID}),

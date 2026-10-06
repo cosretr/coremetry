@@ -112,6 +112,16 @@ type fakeIdP struct {
 
 func newFakeIdPOpt(t *testing.T, useTLS bool) *fakeIdP {
 	t.Helper()
+	if useTLS {
+		return newFakeIdPServe(t, httptest.NewTLSServer)
+	}
+	return newFakeIdPServe(t, httptest.NewServer)
+}
+
+// newFakeIdPServe — sunucuyu çağıran başlatır (v0.10.1112: özel sertifikalı
+// TLS IdP, oidc_tls_test.go).
+func newFakeIdPServe(t *testing.T, start func(http.Handler) *httptest.Server) *fakeIdP {
+	t.Helper()
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatal(err)
@@ -193,11 +203,7 @@ func newFakeIdPOpt(t *testing.T, useTLS bool) *fakeIdP {
 			http.NotFound(w, r)
 		}
 	})
-	if useTLS {
-		f.Server = httptest.NewTLSServer(h)
-	} else {
-		f.Server = httptest.NewServer(h)
-	}
+	f.Server = start(h)
 	t.Cleanup(f.Close)
 	return f
 }

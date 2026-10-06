@@ -1691,6 +1691,10 @@ export interface OidcSettingsSnapshot {
   permissionServiceAllowNoKey: boolean;
   permissionServiceAllowedCIDRs: string[];
   permissionServiceTrustedProxies: string[];
+  // v0.10.1112 — IdP TLS güveni: kurum içi CA (PEM, sistem havuzuna eklenir)
+  // ve son çare doğrulamayı kapat. Secret değil (açık sertifika), aynen döner.
+  tlsCACertPEM: string;
+  tlsInsecureSkipVerify: boolean;
   source: OidcSettingsSource;
   active: boolean;
   lastError?: string;
@@ -1713,6 +1717,8 @@ export interface OidcSettingsInput {
   permissionServiceAllowNoKey: boolean;
   permissionServiceAllowedCIDRs: string[];
   permissionServiceTrustedProxies: string[];
+  tlsCACertPEM: string;
+  tlsInsecureSkipVerify: boolean;
 }
 export interface OidcDiscovery {
   issuer: string;

@@ -1,4 +1,4 @@
-# SSO — merkezi login yetki servisi (v0.10.1110; anahtarsız kip + IP izin listesi v0.10.1111)
+# SSO — merkezi login yetki servisi (v0.10.1110; anahtarsız kip + IP izin listesi v0.10.1111; IdP TLS v0.10.1112)
 
 Merkezi OIDC login'i, kullanıcı oturumu başına **bir kez** (token yenilemede
 değil) Coremetry'ye "bu kullanıcının bu uygulamada hangi yetkileri var" diye
@@ -149,6 +149,35 @@ curl -sS -X POST https://coremetry.example.test/api/auth/permissions \
 Depodaki ayar (ör. içe aktarılmış bir yedek) geçersiz yetki servisi alanları
 taşıyorsa SSO girişi çalışmaya devam eder; yalnız yetki servisi kapanır ve
 Settings > SSO'da "Son hata" olarak görünür.
+
+## TLS — kurum içi CA ile imzalı kimlik sağlayıcı (v0.10.1112)
+
+IdP'nin sertifikası kurum içi bir CA ile imzalıysa Coremetry'nin keşif / JWKS /
+token çağrıları sertifika doğrulamasında düşer ("Bağlantıyı test et" →
+"kimlik sağlayıcıya ulaşılamadı"). Settings > SSO'da Issuer'ın altında iki seçenek:
+
+- **Özel CA sertifikası (PEM) — önerilen.** Kurum CA'sının (gerekirse ara CA'ların)
+  `-----BEGIN CERTIFICATE-----` bloklarını yapıştırın; birden çok sertifika
+  eklenebilir, en çok 64 KB. Sertifikalar sistem kök sertifikalarına **eklenir**.
+  Özel anahtar yapıştırmayın — kayıt (SSO kapalıyken de) reddedilir. Yalnız
+  sertifika blokları saklanır; aradaki yorum satırları kayıtta düşer. CA'yı
+  IdP'nin zincirinden almak için:
+
+  ```bash
+  openssl s_client -connect idp.example.test:443 -showcerts </dev/null
+  ```
+
+- **TLS sertifika doğrulamasını kapat — son çare.** Sertifika hiç doğrulanmaz;
+  ağ yolundaki biri IdP'yi taklit edip kendi imzaladığı token'la herhangi bir
+  kullanıcı olarak giriş yapabilir. Açıkken Settings kırmızı uyarı gösterir ve
+  sunucu her ayar yüklemesinde bir WARN satırı loglar.
+
+Her iki durumda da **https zorunlu** kalır (doğrulamayı kapatmak düz `http`'ye
+izin vermez) ve IdP adresleri yine loopback / link-local / bulut metadata
+adresine gidemez. "Bağlantıyı test et" formdaki **kaydedilmemiş** değerlerle
+çalışır — önce test edip sonra kaydedin. Değişiklik audit'e eski→yeni olarak
+girer (`settings.oidc.update`; CA için PEM değil, CN + SHA-256 parmak izi).
+Depodaki CA çözülemiyorsa SSO özel CA olmadan uygulanır ve "Son hata"da görünür.
 
 ## Gözlem
 

@@ -1671,6 +1671,10 @@ tbody td.dt-state.dt-state--loading, [data-density] tbody td.dt-state.dt-state--
 .sso-check--tight { margin-bottom: var(--sp-3); }
 .sso-perm__explain { margin-bottom: var(--sp-5); }
 .sso-perm__warn { color: var(--warn); font-size: var(--fs-sm); margin-bottom: var(--sp-4); }
+/* v0.10.1112 — IdP TLS güveni (özel CA PEM + doğrulamayı kapat) */
+.sso-tls { margin-bottom: var(--sp-5); }
+.sso-tls__pem { font-family: var(--font-mono); font-size: var(--fs-xs); }
+.sso-tls__warn { color: var(--err); font-size: var(--fs-sm); margin-bottom: var(--sp-4); }
 .sso-actions { display: flex; gap: var(--sp-4); justify-content: flex-end; margin-top: var(--sp-6); }
 .sso-result { margin-top: var(--sp-5); padding: var(--sp-5) var(--sp-6); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg1); font-size: var(--fs-sm); }
 .sso-result__head { font-weight: 600; margin-bottom: var(--sp-3); }

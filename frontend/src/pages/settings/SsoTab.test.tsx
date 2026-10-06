@@ -46,6 +46,7 @@ const stored: OidcSettingsSnapshot = {
   permissionServiceEnabled: false, permissionServiceKeySet: false, permissionTTLSeconds: 300,
   permissionsClaim: 'permissions', roleFromClaim: false,
   permissionServiceAllowNoKey: false, permissionServiceAllowedCIDRs: [], permissionServiceTrustedProxies: [],
+  tlsCACertPEM: '', tlsInsecureSkipVerify: false,
 };
 
 let host: HTMLDivElement | null = null;
