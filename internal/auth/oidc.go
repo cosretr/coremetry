@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -61,6 +62,9 @@ type oidcClient struct {
 	// IdP'de client id değil, kaynak sunucu).
 	atVerifier *oidc.IDTokenVerifier
 	oauth      oauth2.Config
+	// trustUnverifiedEmail — v0.10.1120 (oidc_email_trust.go): ayardaki
+	// bayrak; ETKİSİ ayrıca izinli alan adı listesinin doluluğuna bağlı.
+	trustUnverifiedEmail bool
 }
 
 func (o *OIDCService) client() *oidcClient {
@@ -112,6 +116,10 @@ type OIDCClaims struct {
 	// ClaimRoleSource "access_token" | "id_token" | "".
 	ClaimRole       string `json:"-"`
 	ClaimRoleSource string `json:"-"`
+	// ViaTrust — v0.10.1120: giriş YALNIZ trustUnverifiedEmail sayesinde
+	// kabul edildi (email_verified=false). Callback bu girişle yerel/LDAP ya
+	// da admin hesabını BAĞLAMAZ (api auth_permissions.go oidcLoginUser).
+	ViaTrust bool `json:"-"`
 }
 
 // OIDCLoginError — giriş akışı hatası. v0.10.1067: token ucu (oauth2
@@ -172,20 +180,19 @@ func (o *OIDCService) Exchange(ctx context.Context, code, codeVerifier, expected
 	if err := idTok.Claims(&raw); err != nil {
 		return nil, loginErr("claims_decode", err)
 	}
-	verified, present := parseEmailVerified(raw.EmailVerified)
 	// v0.10.1067 güvenlik sıkılaştırması: claim VARSA ve false ise giriş yok
 	// (doğrulanmamış e-posta başkasının hesabına bağlanamasın). Claim
-	// yoksa (bazı IdP'ler hiç göndermiyor) eski davranış.
-	if present && !verified {
-		return nil, loginErr("email_unverified", nil)
+	// yoksa (bazı IdP'ler hiç göndermiyor) eski davranış. v0.10.1120:
+	// trustUnverifiedEmail + DOLU izinli alan adı listesiyle false kabul
+	// edilir (oidc_email_trust.go — saf karar decideOIDCEmail).
+	dec := decideOIDCEmail(raw.EmailVerified, raw.Email, c.cfg.AllowedDomains, c.trustUnverifiedEmail)
+	if dec.Class != "" {
+		return nil, loginErr(dec.Class, nil)
 	}
-	cl := &OIDCClaims{Email: raw.Email, EmailVerified: verified, Subject: idTok.Subject, Nonce: idTok.Nonce}
-	if cl.Email == "" {
-		return nil, loginErr("email_missing", nil)
+	if dec.ViaTrust {
+		logTrustedUnverifiedLogin(raw.Email, time.Now(), log.Printf)
 	}
-	if !c.allowEmail(cl.Email) {
-		return nil, loginErr("email_domain_denied", nil)
-	}
+	cl := &OIDCClaims{Email: raw.Email, EmailVerified: dec.Verified, ViaTrust: dec.ViaTrust, Subject: idTok.Subject, Nonce: idTok.Nonce}
 	// v0.10.1110 — token claim'inden rol (oidc_permissions.go). Burada
 	// yalnız ÇÖZÜLÜR; depoya yazım callback'te (api auth_permissions.go
 	// oidcLoginUser — yalnız düşürür).
@@ -218,19 +225,7 @@ func (o *OIDCService) AllowEmail(email string) bool {
 }
 
 func (c *oidcClient) allowEmail(email string) bool {
-	if len(c.cfg.AllowedDomains) == 0 {
-		return true
-	}
-	dom := domainOf(email)
-	if dom == "" {
-		return false
-	}
-	for _, d := range c.cfg.AllowedDomains {
-		if strings.EqualFold(strings.TrimSpace(d), dom) {
-			return true
-		}
-	}
-	return false
+	return emailDomainAllowed(c.cfg.AllowedDomains, email)
 }
 
 func domainOf(email string) string {

@@ -3,11 +3,13 @@ import { Spinner } from '@/components/Spinner';
 import { Button, Field, KeyValue, KeyValueRow, SelectField, TextareaField } from '@/components/ui';
 import { useAuth } from '@/components/AuthProvider';
 import { api } from '@/lib/api';
+import { useT } from '@/lib/i18n';
 import type { OidcSettingsSnapshot, OidcTestResult } from '@/lib/types';
 import { useSettingsLoad, SettingsLoadError, ConfigStatusBanner, FlashBox, humanize } from './shared';
 import {
   OIDC_ROLES, PERMISSION_ENDPOINT, PERMISSION_HEADER, PERMISSION_MAX_CIDRS, TLS_SKIP_VERIFY_WARNING, caPemInfo,
-  formToInput, oidcStatus, permissionNetWarnings, publicOidcSnapshot, snapshotToForm, type OidcForm,
+  formToInput, oidcStatus, permissionNetWarnings, publicOidcSnapshot, snapshotToForm, trustUnverifiedEmailAllowed,
+  type OidcForm,
 } from './oidcForm';
 import { SsoPresets } from './SsoPresets';
 
@@ -34,6 +36,9 @@ import { SsoPresets } from './SsoPresets';
 //
 // v0.10.1112 — Issuer altında IdP TLS güveni: özel CA (PEM) + "TLS sertifika
 // doğrulamasını kapat (önerilmez)" ve açıkken kırmızı uyarı satırı.
+//
+// v0.10.1120 — TLS altında "Doğrulanmamış e-postaya güven (önerilmez)":
+// izinli alan adları boşken pasif; açıklama i18n (sso.trustEmail.*).
 //
 // Admin olmayan: ayar ucu admin-only (IdP adresi / client id hassas); form
 // yine BOŞ çizilmez — public /api/auth/config'ten SSO'nun açık olup
@@ -135,6 +140,7 @@ function SSOTabBody({ isAdmin }: { isAdmin: boolean }) {
           </div>
 
           <OidcTlsFields form={form} patch={patch} adminOnly={adminOnly} />
+          <OidcTrustEmailField form={form} patch={patch} />
 
           <div className="sso-row">
             <Field type="password" autoComplete="new-password" value={form.clientSecret}
@@ -227,6 +233,31 @@ function OidcTlsFields({ form, patch, adminOnly }: {
       {form.tlsInsecureSkipVerify && (
         <p className="sso-tls__warn" role="alert">⚠ {TLS_SKIP_VERIFY_WARNING}</p>
       )}
+    </div>
+  );
+}
+
+// Doğrulanmamış e-postaya güven — v0.10.1120 (prod: "[oidc] callback failed:
+// class=email_unverified"; AD/LDAP federasyonlu kurumsal IdP
+// email_verified=false gönderiyor). TLS kutusunun altında; izinli alan adları
+// boşken pasif + ipucu (sunucu 400 döner, gövdeye zaten false gider —
+// formToInput). Kırmızı açıklama hep görünür: karar vermeden ÖNCE okunmalı.
+function OidcTrustEmailField({ form, patch }: {
+  form: OidcForm;
+  patch: (p: Partial<OidcForm>) => void;
+}) {
+  const t = useT();
+  const allowed = trustUnverifiedEmailAllowed(form);
+  const on = allowed && form.trustUnverifiedEmail;
+  return (
+    <div className="sso-trust">
+      <label className={`sso-check sso-check--tight${allowed ? '' : ' is-disabled'}`}>
+        <input type="checkbox" checked={on} disabled={!allowed}
+          onChange={e => patch({ trustUnverifiedEmail: e.target.checked })} />
+        <span>{t('sso.trustEmail.label')}</span>
+      </label>
+      {!allowed && <p className="sso-trust__hint">{t('sso.trustEmail.needsDomains')}</p>}
+      <p className="sso-tls__warn" role={on ? 'alert' : undefined}>⚠ {t('sso.trustEmail.warning')}</p>
     </div>
   );
 }

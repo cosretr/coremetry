@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   OIDC_CA_PEM_MAX, PERMISSION_MAX_CIDRS, TLS_SKIP_VERIFY_WARNING, caPemInfo, formToInput, oidcStatus, parseCidrList,
-  parsePermissionTTL, permissionNetWarnings, publicOidcSnapshot, snapshotToForm, splitList,
+  parsePermissionTTL, permissionNetWarnings, publicOidcSnapshot, snapshotToForm, splitList, trustUnverifiedEmailAllowed,
 } from './oidcForm';
 import type { OidcSettingsSnapshot } from '@/lib/types';
 
@@ -14,7 +14,7 @@ const snap: OidcSettingsSnapshot = {
   permissionServiceEnabled: false, permissionServiceKeySet: false, permissionTTLSeconds: 300,
   permissionsClaim: 'permissions', roleFromClaim: false,
   permissionServiceAllowNoKey: false, permissionServiceAllowedCIDRs: [], permissionServiceTrustedProxies: [],
-  tlsCACertPEM: '', tlsInsecureSkipVerify: false,
+  tlsCACertPEM: '', tlsInsecureSkipVerify: false, trustUnverifiedEmail: false,
 };
 
 describe('oidcForm', () => {
@@ -172,5 +172,34 @@ describe('oidcForm — IdP TLS alanları', () => {
     const p = publicOidcSnapshot({ local: { enabled: true }, oidc: { enabled: true, displayName: 'SSO' } });
     expect(p.tlsCACertPEM).toBe('');
     expect(p.tlsInsecureSkipVerify).toBe(false);
+  });
+});
+
+// v0.10.1120 — doğrulanmamış e-postaya güven (prod: "[oidc] callback failed:
+// class=email_unverified"). Bayrak YALNIZ izinli alan adı listesi doluyken gider.
+describe('oidcForm — trustUnverifiedEmail', () => {
+  it('snapshot → form → gövde; alan adı varken bayrak aynen gider', () => {
+    const f = snapshotToForm({ ...snap, allowedDomains: ['example.test'], trustUnverifiedEmail: true });
+    expect(f.trustUnverifiedEmail).toBe(true);
+    expect(trustUnverifiedEmailAllowed(f)).toBe(true);
+    expect(formToInput(f).trustUnverifiedEmail).toBe(true);
+  });
+
+  it('izinli alan adı listesi boş/boşluksa gövdeye false gider', () => {
+    const f = snapshotToForm({ ...snap, allowedDomains: ['example.test'], trustUnverifiedEmail: true });
+    expect(trustUnverifiedEmailAllowed({ allowedDomains: '@example.test' })).toBe(true);
+    for (const v of ['', '  ', ' , ;', '@', '@ , @']) {
+      const g = { ...f, allowedDomains: v };
+      expect(trustUnverifiedEmailAllowed(g)).toBe(false);
+      expect(formToInput(g).trustUnverifiedEmail).toBe(false);
+    }
+  });
+
+  it('eski sunucu alanı göndermezse kapalı; viewer görünümü kapalı', () => {
+    const legacy: Partial<OidcSettingsSnapshot> = { ...snap };
+    delete legacy.trustUnverifiedEmail;
+    expect(snapshotToForm(legacy as OidcSettingsSnapshot).trustUnverifiedEmail).toBe(false);
+    const p = publicOidcSnapshot({ local: { enabled: true }, oidc: { enabled: true, displayName: 'SSO' } });
+    expect(p.trustUnverifiedEmail).toBe(false);
   });
 });

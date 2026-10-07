@@ -178,6 +178,11 @@ const EN: Catalog = {
 
   // v0.10.1119 — kök-neden paneli: ayrı bubbleUp isteği düştü (≠ "ayrışma yok").
   'rootCause.bubbleUnavailable': 'Attribute comparison unavailable — the span scan failed or timed out. This does not mean no dimension stood out.',
+
+  // v0.10.1120 — Settings > SSO: trust unverified email (email_verified=false).
+  'sso.trustEmail.label':        'Trust unverified email (not recommended)',
+  'sso.trustEmail.warning':      'Logins with email_verified=false are accepted, but only from the allowed domains. Risk: account takeover through an email collision — use only if the corporate IdP does not let users set or change their own email (no self-registration, no email editing, no social/brokered IdPs) and allowed domains are set. Admin and local/LDAP accounts are never linked this way. Preferred fix is on the IdP side (Keycloak "Trust Email").',
+  'sso.trustEmail.needsDomains': 'Set allowed domains first — unverified email cannot be trusted while the list is empty.',
 };
 
 const TR: Catalog = {
@@ -330,6 +335,10 @@ const TR: Catalog = {
   'ai.ctx.saved':     'Konuşmayla kaydedilen bağlam — canlı sayfa farklı olabilir.',
 
   'rootCause.bubbleUnavailable': 'Attribute kıyası okunamadı — span taraması düştü ya da zaman aşımına uğradı. Bu, "ayrışan boyut yok" demek değildir.',
+
+  'sso.trustEmail.label':        'Doğrulanmamış e-postaya güven (önerilmez)',
+  'sso.trustEmail.warning':      'email_verified=false olan girişler yalnız izinli alan adlarından kabul edilir. Risk: e-posta çarpışmasıyla hesap ele geçirme — yalnız kullanıcının e-postasını kendisinin belirleyemediği/değiştiremediği kurumsal IdP\'de (self-registration, e-posta düzenleme, sosyal/brokered IdP yok) ve izinli alan adları tanımlıyken kullanın. Admin ve yerel/LDAP hesaplar bu yolla bağlanmaz. Tercih edilen düzeltme IdP tarafında (Keycloak "Trust Email").',
+  'sso.trustEmail.needsDomains': 'Önce izinli alan adlarını girin — liste boşken doğrulanmamış e-postaya güvenilemez.',
 };
 
 const CATALOGS: Record<Lang, Catalog> = { en: EN, tr: TR };

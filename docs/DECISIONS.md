@@ -2286,6 +2286,45 @@ pencereleri kendi hesap anlarından türer (`end = now`) — saniyeler mertebesi
 kendi penceresini gösterir. Ön-ısıtma (lider işçide açık problemler için) bilinçli olarak eklenmedi: bubbleUp'ı
 her açık problem için periyodik koşturmak tık-yolundan bağımsız ham spans yükü demek.
 
+## 2026-10-07 — OIDC: doğrulanmamış e-postaya güven seçeneği (trustUnverifiedEmail) (v0.10.1120)
+
+**Operatör (prod, 2026-10-07): SSO girişi `[oidc] callback failed: class=email_unverified` ile düşüyor.**
+Kurumsal IdP (AD/LDAP federasyonlu Keycloak) e-postayı doğrulamadan `email_verified=false` gönderiyor; v0.10.1067
+sıkılaştırması (claim VARSA ve false ise giriş yok) bu kurulumda herkesi dışarıda bırakıyor. **Tercih edilen
+düzeltme IdP tarafında:** Keycloak "Trust Email" — User federation → LDAP → Advanced settings → Trust Email (+ Sync
+all users), dış IdP için Identity providers → Trust Email. IdP yöneticilerinden bu istenecek; Coremetry tarafına
+yine de **açık-seçim** bir anahtar eklendi. **Karar:** `auth_oidc` blobuna `trustUnverifiedEmail` (varsayılan
+kapalı), Settings > SSO'da TLS kutusunun altında "Doğrulanmamış e-postaya güven (önerilmez)". **Anlam:** açık VE
+izinli alan adı listesi DOLUYKEN `email_verified=false` kabul edilir; alan adı kontrolü aynen uygulanır (doğrulanmamış
+e-posta yalnız kurumun alan adlarıyla girebilir — e-postasını kendisi yazabilen bir dış hesap başka alan adıyla
+gelemez). Claim true ya da hiç yoksa davranış değişmedi. **Neden alan adı şartı:** liste boşken anahtar, IdP'deki
+herhangi bir hesabın e-postasını doğrulamadan herhangi bir Coremetry kullanıcısının adresine bağlanmasına izin
+verirdi (v0.10.1067'nin kapattığı açık). Bu yüzden iki katmanlı savunma: (1) PUT 400 — "İzinli alan adları boşken
+doğrulanmamış e-postaya güvenilemez" (TR/EN) — yalnız SSO açıkken; kapatma anahtarı mutlak kalır (`enabled:false`
+her zaman kaydedilir, çift o hâliyle yazılabilir), ama bu çiftle SSO'yu yeniden açan kayıt 400 alır; (2) blob
+elle yazılmışsa yüklemede bayrak KAPALI sayılır, SSO düşmez, `lastError` yazılır (TLS CA / N4 kalıbı) ve
+`Exchange`'teki saf karar (`decideOIDCEmail`, `internal/auth/oidc_email_trust.go`) listeyi ayrıca denetler.
+**Log:** yalnız bu anahtar sayesinde kabul edilen giriş `[auth] WARNING: OIDC email_verified=false accepted
+(trustUnverifiedEmail) domain=<alan adı>` bırakır — tam e-posta DEĞİL; alan adı başına saatte en çok bir satır
+(anahtarlar izinli listeden, kardinalite sınırlı). Anahtar açıkken her ayar yüklemesinde (PUT + blob değişimi) bir
+kez WARN (TLS skip-verify emsali). **Audit:** `settings.oidc.update` eski→yeni `trustUnverifiedEmail`
+(`SaveSettingsWithPrev`, aynı kilit). **UI:** izinli alan adları boşken kutu pasif + ipucu; liste silinirse gövdeye
+false gider (`formToInput`); kırmızı açıklama hep görünür (karar vermeden önce okunmalı); metinler i18n
+(`sso.trustEmail.*`, TR/EN). **Ön koşul ve risk (güvenlik incelemesi):** anahtar yalnız IdP kullanıcının
+e-postasını kendisinin belirleyemediği/değiştiremediği kurulumda güvenlidir (self-registration yok, e-posta düzenleme
+yok, sosyal/brokered IdP yok); aksi hâlde risk **e-posta çarpışmasıyla hesap ele geçirme**. Bu yüzden: (a)
+`OIDCClaims.ViaTrust` (yalnız anahtar sayesinde kabul — `EmailVerified` yeniden kullanılmadı) taşıyan giriş
+`oidcLoginUser`'da (`internal/api/auth_permissions.go`) `AuthProvider != "oidc"` (yerel/LDAP, boş = local) ya da
+admin hesaba **bağlanmaz** → `email_unverified_privileged`, giriş sayfasında "Bu hesap doğrulanmamış e-posta ile
+SSO'dan açılamaz; parola/LDAP ile girin veya IdP'de Trust Email açılsın" (TR/EN), loga yalnız kullanıcı id'si; yeni
+kullanıcı varsayılan rolle açılır, mevcut oidc viewer/editor girer; (b) YALNIZ `ViaTrust` girişte ASCII dışı
+karakterli e-posta `email_invalid` (EqualFold / ToLower Unicode katlaması — ör. KELVIN SIGN → "k" — alan adı ya da
+hesap çarpışması üretmesin; izinli alan adları zaten ASCII/punycode). Doğrulanmış ya da claim'siz giriş birebir
+eskisi gibi (Türkçe karakterli e-posta mümkün — operatör kararı). Bu iki ek davranış rol mantığını ve yetki servisini değiştirmez.
+**Değişmeyen:** yetki servisi (`/api/auth/permissions`), rol mantığı, doğrulanmış girişte kullanıcı eşleme, TLS
+kuralları. **Kapsam dışı:** config.yaml/Helm kaynaklı OIDC'ye alan eklenmedi (Settings'e özgü; config kaynağında eski
+sıkı davranış).
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

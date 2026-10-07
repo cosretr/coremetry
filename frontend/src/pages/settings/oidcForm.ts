@@ -31,6 +31,8 @@ export interface OidcForm {
   // v0.10.1112 — IdP TLS güveni (kurum içi CA PEM / doğrulamayı kapat).
   tlsCACertPEM: string;
   tlsInsecureSkipVerify: boolean;
+  // v0.10.1120 — doğrulanmamış e-postaya güven (yalnız izinli alan adlarıyla).
+  trustUnverifiedEmail: boolean;
 }
 
 /** Yetki servisi ucunun sabitleri (sunucu: internal/api/auth_permissions.go). */
@@ -73,6 +75,16 @@ export const OIDC_CA_PEM_MAX = 64 * 1024;
 
 /** "TLS doğrulamasını kapat" açıkken görünen uyarı satırı (v0.10.1112). */
 export const TLS_SKIP_VERIFY_WARNING = 'Ortadaki-adam saldırısına açık; mümkünse CA sertifikası ekleyin.';
+
+/**
+ * v0.10.1120 — "Doğrulanmamış e-postaya güven" yalnız izinli alan adı listesi
+ * doluyken seçilebilir ve gönderilir (sunucu boş listeyle 400 döner, çalışma
+ * anında da kapalı sayar). Liste boşaltılırsa bayrak gövdeye false gider.
+ */
+export function trustUnverifiedEmailAllowed(f: Pick<OidcForm, 'allowedDomains'>): boolean {
+  // Sunucu (NormalizeOIDCSettings) baştaki "@"'ı atar; yalnız "@" girişi boş sayılır.
+  return splitList(f.allowedDomains).some(d => d.replace(/^@/, '').trim() !== '');
+}
 
 /**
  * CA kutusunun anlık özeti — yalnız ipucu/erken uyarı; asıl doğrulama
@@ -132,6 +144,7 @@ export function snapshotToForm(s: OidcSettingsSnapshot): OidcForm {
     permissionServiceTrustedProxies: (s.permissionServiceTrustedProxies ?? []).join('\n'),
     tlsCACertPEM: s.tlsCACertPEM ?? '',
     tlsInsecureSkipVerify: !!s.tlsInsecureSkipVerify,
+    trustUnverifiedEmail: !!s.trustUnverifiedEmail,
   };
 }
 
@@ -158,6 +171,7 @@ export function formToInput(f: OidcForm): OidcSettingsInput {
     permissionServiceTrustedProxies: parseCidrList(f.permissionServiceTrustedProxies),
     tlsCACertPEM: f.tlsCACertPEM.trim(),
     tlsInsecureSkipVerify: f.tlsInsecureSkipVerify,
+    trustUnverifiedEmail: f.trustUnverifiedEmail && trustUnverifiedEmailAllowed(f),
   };
 }
 
@@ -188,6 +202,7 @@ export function publicOidcSnapshot(c: AuthConfigResponse): OidcSettingsSnapshot 
     permissionServiceTrustedProxies: [],
     tlsCACertPEM: '',
     tlsInsecureSkipVerify: false,
+    trustUnverifiedEmail: false,
     source: 'config',
     active: on,
   };

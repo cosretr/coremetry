@@ -1704,6 +1704,9 @@ export interface OidcSettingsSnapshot {
   // ve son çare doğrulamayı kapat. Secret değil (açık sertifika), aynen döner.
   tlsCACertPEM: string;
   tlsInsecureSkipVerify: boolean;
+  // v0.10.1120 — email_verified=false'u kabul et; YALNIZ izinli alan adı
+  // listesi doluyken geçerli (sunucu boş listeyle 400 döner).
+  trustUnverifiedEmail: boolean;
   source: OidcSettingsSource;
   active: boolean;
   lastError?: string;
@@ -1728,6 +1731,7 @@ export interface OidcSettingsInput {
   permissionServiceTrustedProxies: string[];
   tlsCACertPEM: string;
   tlsInsecureSkipVerify: boolean;
+  trustUnverifiedEmail: boolean;
 }
 export interface OidcDiscovery {
   issuer: string;

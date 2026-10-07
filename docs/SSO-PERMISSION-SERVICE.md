@@ -1,4 +1,4 @@
-# SSO — merkezi login yetki servisi (v0.10.1110; anahtarsız kip + IP izin listesi v0.10.1111; IdP TLS v0.10.1112)
+# SSO — merkezi login yetki servisi (v0.10.1110; anahtarsız kip + IP izin listesi v0.10.1111; IdP TLS v0.10.1112; doğrulanmamış e-posta v0.10.1120)
 
 Merkezi OIDC login'i, kullanıcı oturumu başına **bir kez** (token yenilemede
 değil) Coremetry'ye "bu kullanıcının bu uygulamada hangi yetkileri var" diye
@@ -178,6 +178,51 @@ adresine gidemez. "Bağlantıyı test et" formdaki **kaydedilmemiş** değerlerl
 çalışır — önce test edip sonra kaydedin. Değişiklik audit'e eski→yeni olarak
 girer (`settings.oidc.update`; CA için PEM değil, CN + SHA-256 parmak izi).
 Depodaki CA çözülemiyorsa SSO özel CA olmadan uygulanır ve "Son hata"da görünür.
+
+## Doğrulanmamış e-posta — `email_verified=false` (v0.10.1120)
+
+Coremetry, id_token'da `email_verified` claim'i **varsa ve false ise** girişi
+reddeder (`[oidc] callback failed: class=email_unverified`) — doğrulanmamış bir
+e-posta başka bir kullanıcının hesabına bağlanamasın diye. Claim hiç yoksa ya da
+true ise giriş normal sürer. AD/LDAP federasyonlu kurumsal IdP'ler e-postayı
+çoğu zaman doğrulamadan `false` gönderir.
+
+**Önerilen düzeltme IdP tarafında (Keycloak "Trust Email"):**
+
+- LDAP/AD federasyonu: *User federation → (LDAP sağlayıcısı) → Advanced settings
+  → Trust Email* açın, ardından *Sync all users* ile mevcut kullanıcıları
+  yeniden eşitleyin.
+- Dış kimlik sağlayıcı (brokering): *Identity providers → (sağlayıcı) → Trust
+  Email* açın.
+
+**Coremetry tarafı (önerilmez, açık-seçim):** Settings > SSO'da TLS kutusunun
+altındaki "Doğrulanmamış e-postaya güven (önerilmez)" (`trustUnverifiedEmail`,
+varsayılan kapalı). Yalnız **izinli alan adları** doluyken seçilebilir ve
+etkilidir: `email_verified=false` olan giriş kabul edilir ama e-postanın alan
+adı listede olmalıdır (alan adı kontrolü aynen sürer). SSO açıkken liste boşsa
+kayıt 400 döner ("İzinli alan adları boşken doğrulanmamış e-postaya
+güvenilemez"); SSO'yu kapatan kayıt her zaman geçer. Depodaki blob elle böyle
+yazılmışsa anahtar kapalı sayılır ve "Son hata"da görünür.
+
+**Ön koşul ve risk.** Anahtarı yalnız IdP kullanıcının e-postasını **kendisinin
+belirleyemediği ve değiştiremediği** bir kurulumda açın: self-registration yok,
+hesap konsolunda/profilde e-posta düzenleme yok, sosyal ya da brokered
+(dış) IdP yok. Aksi hâlde biri e-postasını bir başkasınınkiyle aynı yapıp o
+hesaba girebilir (**e-posta çarpışmasıyla hesap ele geçirme**). Bu riski
+sınırlamak için anahtar sayesinde gelen giriş **admin hesabına ve yerel/LDAP
+hesaplara bağlanmaz** — giriş sayfası "Bu hesap doğrulanmamış e-posta ile
+SSO'dan açılamaz; parola/LDAP ile girin veya IdP'de Trust Email açılsın" der,
+loga yalnız kullanıcı id'si düşer (`class=email_unverified_privileged`). Yeni
+kullanıcı varsayılan rolle açılır; mevcut oidc viewer/editor normal girer.
+Bu anahtar sayesinde gelen girişte ASCII dışı karakter içeren e-posta
+`email_invalid` ile reddedilir (Unicode katlamasıyla alan adı/hesap çarpışması
+olmasın); doğrulanmış ya da claim'siz girişte Türkçe karakterli e-posta eskisi
+gibi kabul edilir.
+Yalnız bu anahtar sayesinde kabul edilen girişler loga alan adı başına saatte
+bir `[auth] WARNING: OIDC email_verified=false accepted (trustUnverifiedEmail)
+domain=example.test` satırı bırakır (tam e-posta loglanmaz); anahtar açıkken her
+ayar yüklemesinde bir WARN daha düşer. Değişiklik audit'e eski→yeni girer
+(`settings.oidc.update`). IdP tarafı düzeltildiğinde anahtarı kapatın.
 
 ## Gözlem
 

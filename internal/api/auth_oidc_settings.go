@@ -19,6 +19,8 @@ package api
 // auth/oidc_tls.go): secret değil, GET'te aynen; audit'e eski→yeni girer
 // (CA için PEM değil özet: CN + SHA-256 parmak izi + bitiş). Test ucu formun
 // KAYDEDİLMEMİŞ TLS ayarını kullanır.
+// v0.10.1120 — trustUnverifiedEmail (auth/oidc_email_trust.go): secret
+// değil, GET'te aynen; audit'e eski→yeni; izinli alan adı listesi boşken 400.
 //	POST /api/settings/oidc/test   admin — yalnız keşif (≤10 s); hiçbir şey yazmaz
 //
 // ÜÇÜ DE ADMIN ve yalnız OTURUM kullanıcısı: API token'ı (UserID
@@ -150,6 +152,8 @@ func (s *Server) putOIDCSettings(w http.ResponseWriter, r *http.Request) {
 			"changed": prev.TLSCACertPEM != snap.TLSCACertPEM,
 		},
 		"tlsInsecureSkipVerify": map[string]any{"old": prev.TLSInsecureSkipVerify, "new": snap.TLSInsecureSkipVerify},
+		// v0.10.1120 — doğrulanmamış e-postaya güven, eski→yeni.
+		"trustUnverifiedEmail": map[string]any{"old": prev.TrustUnverifiedEmail, "new": snap.TrustUnverifiedEmail},
 	})
 	s.audit(r, "settings.oidc.update", "settings", "oidc", string(details))
 	writeJSON(w, snap)

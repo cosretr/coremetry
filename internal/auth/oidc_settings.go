@@ -32,6 +32,9 @@ package auth
 //
 // v0.10.1112 — IdP TLS güveni (tlsCACertPEM / tlsInsecureSkipVerify) aynı
 // blobda; kurallar ve tek taşıma kurucusu oidc_tls.go'da.
+//
+// v0.10.1120 — trustUnverifiedEmail (email_verified=false'u izinli alan
+// adlarıyla kabul) aynı blobda; kurallar oidc_email_trust.go'da.
 
 import (
 	"bytes"
@@ -115,17 +118,20 @@ type OIDCSettings struct {
 	// korumasını GEVŞETMEZ.
 	TLSCACertPEM          string `json:"tlsCACertPEM"`
 	TLSInsecureSkipVerify bool   `json:"tlsInsecureSkipVerify"`
+	// v0.10.1120 — email_verified=false'u kabul et (oidc_email_trust.go).
+	// YALNIZ izinli alan adı listesi doluyken geçerli; boşken PUT 400.
+	TrustUnverifiedEmail bool `json:"trustUnverifiedEmail"`
 }
 
 // String / GoString — %v, %+v, %#v ile kazara loglansa bile secret basılmasın.
 func (s OIDCSettings) String() string {
-	return fmt.Sprintf("{enabled:%v issuer:%q clientId:%q secretSet:%v redirect:%q scopes:%v display:%q role:%q domains:%v permSvc:%v permKeySet:%v permTTL:%d claim:%q roleFromClaim:%v permNoKey:%v permCIDRs:%v permProxies:%v tlsCABytes:%d tlsSkipVerify:%v}",
+	return fmt.Sprintf("{enabled:%v issuer:%q clientId:%q secretSet:%v redirect:%q scopes:%v display:%q role:%q domains:%v permSvc:%v permKeySet:%v permTTL:%d claim:%q roleFromClaim:%v permNoKey:%v permCIDRs:%v permProxies:%v tlsCABytes:%d tlsSkipVerify:%v trustUnverifiedEmail:%v}",
 		s.Enabled, s.IssuerURL, s.ClientID, s.ClientSecret != "", s.RedirectURL,
 		s.Scopes, s.DisplayName, s.DefaultRole, s.AllowedDomains,
 		s.PermissionServiceEnabled, s.PermissionServiceKey != "", s.PermissionTTLSeconds,
 		s.PermissionsClaim, s.RoleFromClaim,
 		s.PermissionServiceAllowNoKey, s.PermissionServiceAllowedCIDRs, s.PermissionServiceTrustedProxies,
-		len(s.TLSCACertPEM), s.TLSInsecureSkipVerify)
+		len(s.TLSCACertPEM), s.TLSInsecureSkipVerify, s.TrustUnverifiedEmail)
 }
 
 func (s OIDCSettings) GoString() string { return "auth.OIDCSettings" + s.String() }
@@ -155,6 +161,8 @@ type oidcStored struct {
 	// v0.10.1112
 	TLSCACertPEM          string `json:"tlsCACertPEM,omitempty"`
 	TLSInsecureSkipVerify bool   `json:"tlsInsecureSkipVerify,omitempty"`
+	// v0.10.1120
+	TrustUnverifiedEmail bool `json:"trustUnverifiedEmail,omitempty"`
 }
 
 func (s OIDCSettings) stored() oidcStored   { return oidcStored(s) }
@@ -185,6 +193,8 @@ type OIDCSnapshot struct {
 	// v0.10.1112 — IdP TLS güveni (secret değil, aynen döner).
 	TLSCACertPEM          string `json:"tlsCACertPEM"`
 	TLSInsecureSkipVerify bool   `json:"tlsInsecureSkipVerify"`
+	// v0.10.1120 — doğrulanmamış e-postaya güven (secret değil).
+	TrustUnverifiedEmail bool `json:"trustUnverifiedEmail"`
 	// Source — etkin yapılandırmanın kaynağı: settings (blob) | config (config.yaml).
 	Source string `json:"source"`
 	// Active — bu pod'da canlı istemci var mı (giriş düğmesi). İstenen
@@ -336,6 +346,13 @@ func ValidateOIDCSettings(s OIDCSettings, allowInsecure bool) error {
 	}
 	if !s.Enabled {
 		return nil
+	}
+	// v0.10.1120 — doğrulanmamış e-postaya güven YALNIZ dolu izinli alan adı
+	// listesiyle. Kapatma anahtarı mutlak: SSO kapalıyken denetlenmez (kayıt
+	// her zaman geçer); yeniden açan kayıt bu çiftle 400 alır. Yükleme yolu
+	// bunu çağırmadan önce bayrağı düşürür (LoadPersisted) — SSO düşmez.
+	if s.TrustUnverifiedEmail && !trustUnverifiedEffective(true, s.AllowedDomains) {
+		return &OIDCSettingsError{"trustUnverifiedEmail", trustUnverifiedEmailMsg}
 	}
 	if err := ValidateOIDCIssuer(s.IssuerURL, allowInsecure); err != nil {
 		return err
@@ -615,11 +632,19 @@ func (o *OIDCService) LoadPersisted(ctx context.Context) error {
 	} else {
 		s.TLSCACertPEM = ca
 	}
+	// v0.10.1120 — aynı kalıp (derinlemesine savunma): elle yazılmış blobda
+	// izinli alan adı listesi boşken trustUnverifiedEmail SSO'yu düşürmez,
+	// KAPALI sayılır (Exchange'deki karar da listeyi ayrıca denetler).
+	if s.TrustUnverifiedEmail && !trustUnverifiedEffective(true, s.AllowedDomains) {
+		s.TrustUnverifiedEmail = false
+		warns = append(warns, "trustUnverifiedEmail yok sayıldı — "+trustUnverifiedEmailMsg)
+	}
 	if err := ValidateOIDCSettings(s, o.uiPolicy.allowInsecure); err != nil {
 		return o.badBlob(raw, fmt.Errorf("oidc blobu geçersiz: %w", err))
 	}
 	if !bytes.Equal(raw, st.lastRaw) { // ayar yüklemesi başına bir kez (yeniden denemede değil)
 		warnInsecureOIDCTLS(s, log.Printf)
+		warnTrustUnverifiedEmail(s, log.Printf)
 	}
 	applyErr := o.apply(ctx, s, OIDCSourceSettings, raw)
 	if len(warns) > 0 {
@@ -665,6 +690,9 @@ func (o *OIDCService) apply(ctx context.Context, s OIDCSettings, source string, 
 		t := s.tlsOptions()
 		cli, err = buildOIDCClient(dctx, s.toConfig(), o.policyFor(source), t, o.cachedDiscovery(s.IssuerURL, t))
 		cancel()
+		if cli != nil {
+			cli.trustUnverifiedEmail = s.TrustUnverifiedEmail
+		}
 	}
 	o.mu.Lock()
 	defer o.mu.Unlock()
@@ -743,6 +771,7 @@ func (o *OIDCService) saveLocked(ctx context.Context, in OIDCSettings) (OIDCSnap
 		if err != nil {
 			return OIDCSnapshot{}, &OIDCDiscoveryError{Err: err}
 		}
+		c.trustUnverifiedEmail = s.TrustUnverifiedEmail
 		cli = c
 	}
 	raw, err := json.Marshal(s.stored())
@@ -753,6 +782,7 @@ func (o *OIDCService) saveLocked(ctx context.Context, in OIDCSettings) (OIDCSnap
 		return OIDCSnapshot{}, err
 	}
 	warnInsecureOIDCTLS(s, log.Printf)
+	warnTrustUnverifiedEmail(s, log.Printf)
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	o.live.Store(cli)
@@ -830,6 +860,7 @@ func (o *OIDCService) snapshotLocked() OIDCSnapshot {
 		PermissionServiceTrustedProxies: append([]string{}, s.PermissionServiceTrustedProxies...),
 		TLSCACertPEM:                    s.TLSCACertPEM,
 		TLSInsecureSkipVerify:           s.TLSInsecureSkipVerify,
+		TrustUnverifiedEmail:            s.TrustUnverifiedEmail,
 		Source:                          src,
 		Active:                          o.live.Load() != nil,
 		LastError:                       o.st.lastErr,

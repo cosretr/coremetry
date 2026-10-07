@@ -281,6 +281,32 @@ var oidcUserStoreFor = func(s *Server) oidcUserStore { return s.store }
 // oidcFail(err.Error()) ile basar).
 var errOIDCAccountDisabled = errors.New("hesap devre dışı — yöneticinize başvurun")
 
+// v0.10.1120 (güvenlik incelemesi) — trustUnverifiedEmail ile gelen giriş
+// (claims.ViaTrust, email_verified=false) yerel/LDAP ya da admin hesabına
+// BAĞLANMAZ: IdP e-postayı doğrulamadığı için e-posta çarpışması hesap ele
+// geçirmeye dönüşebilir. Yeni kullanıcı (varsayılan rol) ve mevcut oidc
+// viewer/editor etkilenmez. Loga yalnız kullanıcı id'si (e-posta değil).
+const oidcClassEmailUnverifiedPrivileged = "email_unverified_privileged"
+
+// oidcLoginPageError — giriş sayfasında AYNEN görünen cümle (büyük harfle
+// başlayan kullanıcı metni; errors.New'ün Go hata dizgisi kuralına girmez).
+type oidcLoginPageError struct{ Class, Msg string }
+
+func (e *oidcLoginPageError) Error() string { return e.Msg }
+
+var errOIDCEmailUnverifiedPrivileged error = &oidcLoginPageError{
+	Class: oidcClassEmailUnverifiedPrivileged,
+	Msg: "Bu hesap doğrulanmamış e-posta ile SSO'dan açılamaz; parola/LDAP ile girin veya IdP'de Trust Email açılsın " +
+		"(this account cannot be opened via SSO with an unverified email; sign in with password/LDAP or ask for Trust Email on the IdP)",
+}
+
+// oidcTrustLinkAllowed — doğrulanmamış (yalnız güven anahtarıyla kabul) bir
+// SSO girişi bu kayıtlı kullanıcıya bağlanabilir mi: yalnız oidc kaynaklı ve
+// admin olmayan hesap. Boş AuthProvider depoda "local" sayılır. SAF.
+func oidcTrustLinkAllowed(u chstore.User) bool {
+	return u.AuthProvider == "oidc" && u.Role != auth.RoleAdmin
+}
+
 // oidcLoginUser — api.go oidcCallback'in kullanıcı okuması (eski
 // s.store.GetUserByEmail çağrısının yerine, AYNI satır; api.go büyümez).
 //
@@ -307,6 +333,10 @@ func (s *Server) oidcLoginUser(r *http.Request, email string, claims *auth.OIDCC
 	if u.Disabled {
 		log.Printf("[oidc] login refused: user id=%s is disabled", u.ID)
 		return nil, errOIDCAccountDisabled
+	}
+	if claims != nil && claims.ViaTrust && !oidcTrustLinkAllowed(*u) {
+		log.Printf("[oidc] login refused: class=%s user id=%s", oidcClassEmailUnverifiedPrivileged, u.ID)
+		return nil, errOIDCEmailUnverifiedPrivileged
 	}
 	if claims != nil && claims.ClaimRole != "" {
 		nu, err := s.syncClaimRole(r, st, *u, claims.ClaimRole)
