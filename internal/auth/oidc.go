@@ -46,6 +46,9 @@ type OIDCService struct {
 	store     OIDCSettingsStore
 	uiPolicy  oidcNetPolicy // Settings kaynağı + test ucu
 	st        oidcState     // mu altında
+	// dir — v0.10.1121: AD/LDAP dizini (kullanıcı adı → e-posta;
+	// oidc_email_resolve.go). nil = dizin yok.
+	dir atomic.Pointer[oidcDirBox]
 }
 
 // oidcClient — bir yapılandırmanın keşfedilmiş, değişmez hâli. Takas
@@ -65,6 +68,12 @@ type oidcClient struct {
 	// trustUnverifiedEmail — v0.10.1120 (oidc_email_trust.go): ayardaki
 	// bayrak; ETKİSİ ayrıca izinli alan adı listesinin doluluğuna bağlı.
 	trustUnverifiedEmail bool
+	// v0.10.1121 (oidc_email_resolve.go) — e-posta yoksa kullanıcı adıyla
+	// eşleştirme + kullanılacak claim adı.
+	usernameFallback bool
+	usernameClaim    string
+	// usernameAllowAdmin — F2: kullanıcı adıyla eşleşme admin hesabını açabilir mi.
+	usernameAllowAdmin bool
 }
 
 func (o *OIDCService) client() *oidcClient {
@@ -120,6 +129,20 @@ type OIDCClaims struct {
 	// kabul edildi (email_verified=false). Callback bu girişle yerel/LDAP ya
 	// da admin hesabını BAĞLAMAZ (api auth_permissions.go oidcLoginUser).
 	ViaTrust bool `json:"-"`
+	// v0.10.1121 (oidc_email_resolve.go) — e-postanın nereden geldiği:
+	// id_token | userinfo | ldap | ldap_username. ldap_username'de Email BOŞ,
+	// Username (küçük harf) dolu: callback kullanıcıyı users.ldap_username
+	// ile bulur (api auth_oidc_email_resolve.go); bulamazsa email_missing.
+	EmailSource string `json:"-"`
+	Username    string `json:"-"`
+	// ViaUsername — güvenlik incelemesi F2: kimlik kullanıcı adıyla kuruldu
+	// (EmailSource ldap | ldap_username). Callback bu girişle admin hesabını
+	// YALNIZ usernameFallbackAllowAdmin açıkken açar.
+	ViaUsername bool `json:"-"`
+	// ResolutionTried / ClaimNames — başarısızlık logu için (DEĞER yok,
+	// yalnız adım ve claim ADLARI).
+	ResolutionTried []string `json:"-"`
+	ClaimNames      []string `json:"-"`
 }
 
 // OIDCLoginError — giriş akışı hatası. v0.10.1067: token ucu (oauth2
@@ -185,6 +208,18 @@ func (o *OIDCService) Exchange(ctx context.Context, code, codeVerifier, expected
 	// yoksa (bazı IdP'ler hiç göndermiyor) eski davranış. v0.10.1120:
 	// trustUnverifiedEmail + DOLU izinli alan adı listesiyle false kabul
 	// edilir (oidc_email_trust.go — saf karar decideOIDCEmail).
+	//
+	// v0.10.1121 — id_token'da e-posta YOKSA çözüm zinciri (UserInfo →
+	// usernameFallback açıksa dizin / ldap_username; oidc_email_resolve.go).
+	// E-posta VARSA davranış aynen.
+	if raw.Email == "" {
+		cl, err := o.resolveMissingEmail(ctx, c, tok, idTok)
+		if err != nil {
+			return nil, err
+		}
+		cl.ClaimRole, cl.ClaimRoleSource = o.claimRole(ctx, c, tok.AccessToken, idTok)
+		return cl, nil
+	}
 	dec := decideOIDCEmail(raw.EmailVerified, raw.Email, c.cfg.AllowedDomains, c.trustUnverifiedEmail)
 	if dec.Class != "" {
 		return nil, loginErr(dec.Class, nil)
@@ -192,7 +227,8 @@ func (o *OIDCService) Exchange(ctx context.Context, code, codeVerifier, expected
 	if dec.ViaTrust {
 		logTrustedUnverifiedLogin(raw.Email, time.Now(), log.Printf)
 	}
-	cl := &OIDCClaims{Email: raw.Email, EmailVerified: dec.Verified, ViaTrust: dec.ViaTrust, Subject: idTok.Subject, Nonce: idTok.Nonce}
+	cl := &OIDCClaims{Email: raw.Email, EmailVerified: dec.Verified, ViaTrust: dec.ViaTrust,
+		EmailSource: OIDCEmailSourceIDToken, Subject: idTok.Subject, Nonce: idTok.Nonce}
 	// v0.10.1110 — token claim'inden rol (oidc_permissions.go). Burada
 	// yalnız ÇÖZÜLÜR; depoya yazım callback'te (api auth_permissions.go
 	// oidcLoginUser — yalnız düşürür).

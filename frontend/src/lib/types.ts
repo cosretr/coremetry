@@ -1707,6 +1707,13 @@ export interface OidcSettingsSnapshot {
   // v0.10.1120 — email_verified=false'u kabul et; YALNIZ izinli alan adı
   // listesi doluyken geçerli (sunucu boş listeyle 400 döner).
   trustUnverifiedEmail: boolean;
+  // v0.10.1121 — id_token/UserInfo'da e-posta yoksa kullanıcı adıyla eşleştir
+  // (AD/LDAP dizini → e-posta; yoksa users.ldap_username). Varsayılan kapalı.
+  usernameFallback: boolean;
+  usernameClaim: string;
+  // Kullanıcı adıyla eşleşen giriş admin hesabını açabilir mi (ayrı açık-seçim,
+  // varsayılan kapalı; usernameFallback kapalıyken sunucu false yapar).
+  usernameFallbackAllowAdmin: boolean;
   source: OidcSettingsSource;
   active: boolean;
   lastError?: string;
@@ -1732,6 +1739,9 @@ export interface OidcSettingsInput {
   tlsCACertPEM: string;
   tlsInsecureSkipVerify: boolean;
   trustUnverifiedEmail: boolean;
+  usernameFallback: boolean;
+  usernameClaim: string;
+  usernameFallbackAllowAdmin: boolean;
 }
 export interface OidcDiscovery {
   issuer: string;

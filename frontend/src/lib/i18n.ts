@@ -183,6 +183,16 @@ const EN: Catalog = {
   'sso.trustEmail.label':        'Trust unverified email (not recommended)',
   'sso.trustEmail.warning':      'Logins with email_verified=false are accepted, but only from the allowed domains. Risk: account takeover through an email collision — use only if the corporate IdP does not let users set or change their own email (no self-registration, no email editing, no social/brokered IdPs) and allowed domains are set. Admin and local/LDAP accounts are never linked this way. Preferred fix is on the IdP side (Keycloak "Trust Email").',
   'sso.trustEmail.needsDomains': 'Set allowed domains first — unverified email cannot be trusted while the list is empty.',
+
+  // v0.10.1121 — Settings > SSO: match by username when the IdP sends no email.
+  'sso.usernameFallback.label':   'Match by username when email is missing (AD/LDAP)',
+  'sso.usernameFallback.on':      'On: if neither the id_token nor UserInfo carries an email, the username claim from the verified id_token is looked up in AD/LDAP (exact match) and the directory email is used; without LDAP (or no email in the directory) the user is matched to an existing Coremetry user by LDAP username. No new user is created without an email. Allowed domains still apply.',
+  'sso.usernameFallback.off':     'Off (default): if neither the id_token nor UserInfo carries an email, the login is rejected (email_missing). UserInfo is always tried. Preferred fix on the IdP: Keycloak LDAP federation mapper mail → email, and the email client scope as Default with "Add to ID token".',
+  'sso.usernameFallback.risk':    'Use only if users cannot change this claim on the IdP (LDAP federation read-only, username editing off). Unsafe with brokered (external/social) IdPs, self-registration or an editable username — anyone who can pick the username can open that account. Admin accounts are not opened this way unless explicitly allowed below.',
+  'sso.usernameAdmin.label':      'Also allow admin accounts via username matching (not recommended)',
+  'sso.usernameAdmin.warning':    'An admin account becomes reachable by whoever controls this username on the IdP. Leave off; admins can sign in with password/LDAP.',
+  'sso.usernameClaim.label':      'Username claim',
+  'sso.usernameClaim.hint':       'Only this claim is read (default preferred_username = AD sAMAccountName). Letters, digits and _ - . : ; profile/email claims are not allowed.',
 };
 
 const TR: Catalog = {
@@ -339,6 +349,15 @@ const TR: Catalog = {
   'sso.trustEmail.label':        'Doğrulanmamış e-postaya güven (önerilmez)',
   'sso.trustEmail.warning':      'email_verified=false olan girişler yalnız izinli alan adlarından kabul edilir. Risk: e-posta çarpışmasıyla hesap ele geçirme — yalnız kullanıcının e-postasını kendisinin belirleyemediği/değiştiremediği kurumsal IdP\'de (self-registration, e-posta düzenleme, sosyal/brokered IdP yok) ve izinli alan adları tanımlıyken kullanın. Admin ve yerel/LDAP hesaplar bu yolla bağlanmaz. Tercih edilen düzeltme IdP tarafında (Keycloak "Trust Email").',
   'sso.trustEmail.needsDomains': 'Önce izinli alan adlarını girin — liste boşken doğrulanmamış e-postaya güvenilemez.',
+
+  'sso.usernameFallback.label':   'E-posta yoksa kullanıcı adıyla eşleştir (AD/LDAP)',
+  'sso.usernameFallback.on':      'Açık: id_token ve UserInfo e-posta taşımıyorsa doğrulanmış id_token\'daki kullanıcı adı claim\'i AD/LDAP\'ta (tam eşleşme) aranır ve dizindeki e-posta kullanılır; LDAP yoksa (ya da dizinde e-posta yoksa) kullanıcı LDAP kullanıcı adıyla mevcut Coremetry kullanıcısına eşlenir. E-postasız yeni kullanıcı açılmaz. İzinli alan adları yine uygulanır.',
+  'sso.usernameFallback.off':     'Kapalı (varsayılan): id_token ve UserInfo e-posta taşımıyorsa giriş reddedilir (email_missing). UserInfo her zaman denenir. Tercih edilen düzeltme IdP\'de: Keycloak LDAP federasyonunda mail → email eşleyicisi ve email client scope\'u Default + "Add to ID token".',
+  'sso.usernameFallback.risk':    'Yalnız kullanıcı bu claim\'i IdP\'de değiştiremiyorsa kullanın (LDAP federasyonu salt-okunur, kullanıcı adı düzenleme kapalı). Brokered (dış/sosyal) IdP, self-registration ya da düzenlenebilir kullanıcı adı varsa GÜVENSİZ — kullanıcı adını seçebilen o hesabı açar. Admin hesapları aşağıda ayrıca izin verilmedikçe bu yolla açılmaz.',
+  'sso.usernameAdmin.label':      'Kullanıcı adı eşleştirmesiyle admin hesaplarını da aç (önerilmez)',
+  'sso.usernameAdmin.warning':    'Admin hesabına IdP\'de bu kullanıcı adını denetleyen kişi erişir. Kapalı bırakın; adminler parola/LDAP ile girebilir.',
+  'sso.usernameClaim.label':      'Kullanıcı adı claim\'i',
+  'sso.usernameClaim.hint':       'Yalnız bu claim okunur (varsayılan preferred_username = AD sAMAccountName). Harf, rakam ve _ - . : ; profil/e-posta claim\'leri seçilemez.',
 };
 
 const CATALOGS: Record<Lang, Catalog> = { en: EN, tr: TR };

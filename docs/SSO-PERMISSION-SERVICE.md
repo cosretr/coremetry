@@ -1,4 +1,4 @@
-# SSO — merkezi login yetki servisi (v0.10.1110; anahtarsız kip + IP izin listesi v0.10.1111; IdP TLS v0.10.1112; doğrulanmamış e-posta v0.10.1120)
+# SSO — merkezi login yetki servisi (v0.10.1110; anahtarsız kip + IP izin listesi v0.10.1111; IdP TLS v0.10.1112; doğrulanmamış e-posta v0.10.1120; e-posta çözüm zinciri v0.10.1121)
 
 Merkezi OIDC login'i, kullanıcı oturumu başına **bir kez** (token yenilemede
 değil) Coremetry'ye "bu kullanıcının bu uygulamada hangi yetkileri var" diye
@@ -223,6 +223,79 @@ bir `[auth] WARNING: OIDC email_verified=false accepted (trustUnverifiedEmail)
 domain=example.test` satırı bırakır (tam e-posta loglanmaz); anahtar açıkken her
 ayar yüklemesinde bir WARN daha düşer. Değişiklik audit'e eski→yeni girer
 (`settings.oidc.update`). IdP tarafı düzeltildiğinde anahtarı kapatın.
+
+## E-posta yok — `email_missing`: çözüm zinciri (v0.10.1121)
+
+Bazı kurumsal IdP'ler (LDAP federasyonlu Keycloak) id_token'a `email` koymaz;
+`preferred_username` ise AD sAMAccountName'idir (sicil, ör. `n0000001`).
+Coremetry bu durumda girişi `[oidc] callback failed: class=email_missing` ile
+reddediyordu.
+
+**Önerilen düzeltme IdP tarafında (Keycloak):**
+
+- *User federation → (LDAP sağlayıcısı) → Mappers*: `mail` LDAP özniteliğini
+  `email` kullanıcı özniteliğine eşleyen bir *user-attribute-ldap-mapper*
+  olmalı (varsayılan "email" mapper'ı; yoksa ekleyin), ardından *Sync all users*.
+- *Clients → (coremetry) → Client scopes*: `email` scope'u **Default** olarak
+  bağlı olsun; *Client scopes → email → Mappers → email* içinde **Add to ID
+  token** açık olsun. Kapsamlarda (`scopes`) `email` bulunmalı.
+- Gerekirse doğrulama: "Doğrulanmamış e-posta" bölümündeki *Trust Email*.
+
+**Coremetry tarafı — çözüm zinciri.** id_token'da e-posta YOKSA şu sıra
+denenir, ilk isabette durulur:
+
+1. id_token `email` (e-posta varsa davranış birebir eskisi gibi).
+2. **UserInfo** `email` — her zaman denenir (keşif belgesinde
+   `userinfo_endpoint` varsa); IdP'ye aynı sınırlı istemci ve TLS ayarıyla
+   (özel CA / skip-verify) gidilir, ≤5 sn. UserInfo'nun `sub`'ı id_token'ınkiyle
+   aynı değilse giriş **reddedilir** (`userinfo_sub_mismatch`). UserInfo'daki
+   `email_verified` id_token'daki gibi değerlendirilir (güven anahtarı + izinli
+   alan adları); UserInfo `email_verified` göndermiyorsa id_token'daki değer
+   kullanılır.
+3. **"E-posta yoksa kullanıcı adıyla eşleştir (AD/LDAP)"** (`usernameFallback`,
+   varsayılan **kapalı**) açıksa: *Kullanıcı adı claim'i* (`usernameClaim`,
+   varsayılan `preferred_username`; yalnız bu claim okunur) doğrulanmış
+   id_token'dan (yoksa sub'ı eşleşmiş UserInfo'dan) alınır:
+   - **LDAP yapılandırılmışsa** servis hesabıyla dizinde TEK öznitelikte tam
+     eşleşme: `sAMAccountName` (devre dışı AD hesapları hariç) ya da ayarlı
+     benzersiz kullanıcı özniteliği (ör. OpenLDAP `uid`); `mail`,
+     `userPrincipalName`, `cn`, `displayName` gibi öznitelikler anahtar olamaz.
+     Kaçışlı filtre, en çok 2 kayıt, ≤5 sn. Birden çok kayıt ⇒ red
+     (`username_ambiguous`), dizin hatası ⇒ red (`directory_lookup_failed`;
+     loga kategori başına dakikada bir `[oidc] directory lookup failed:
+     category=bind|timeout|search|ambiguous|other`). Dizinde kayıt **yoksa**
+     ⇒ `email_missing` (Coremetry'deki eski bir `ldap_username` satırına
+     düşülmez).
+     Kaydın e-postası (LDAP girişinin kullandığı e-posta özniteliği, boşsa
+     `mail`) **doğrulanmış** sayılır — dizin yetkili kaynaktır; LDAP girişiyle
+     aynı kullanıcı satırına düşer. İzinli alan adları uygulanır.
+   - **LDAP yoksa ya da dizin kaydında e-posta yoksa** kullanıcı, Coremetry'deki
+     **mevcut, devre dışı olmayan** kullanıcıya LDAP kullanıcı adıyla
+     (`ldap_username`, büyük-küçük harf duyarsız) eşlenir; iki kullanıcı
+     eşleşirse red (`username_ambiguous`); kayıtlı e-postasına izinli alan
+     adları uygulanır.
+     E-postasız **yeni kullanıcı açılmaz** — eşleşme yoksa `email_missing`.
+
+Kullanıcı adı yoluyla gelen giriş güven anahtarı (`trustUnverifiedEmail`)
+sayılmaz; kimlik, IdP'nin imzaladığı id_token'daki kullanıcı adıdır — yerel /
+LDAP / oidc viewer-editor hesaplar bu yoldan açılır. **Admin hesabı açılmaz**
+(giriş sayfası "Yönetici hesabı SSO'da kullanıcı adı eşleştirmesiyle
+açılamaz…", `class=username_admin_refused`); yalnız ayrı açık-seçim "Kullanıcı
+adı eşleştirmesiyle admin hesaplarını da aç (önerilmez)"
+(`usernameFallbackAllowAdmin`, varsayılan kapalı, yalnız eşleştirme açıkken)
+bunu değiştirir. **Ön koşul:** kullanıcı bu claim'i IdP'de değiştirememeli
+(LDAP federasyonu salt-okunur, "Edit username" kapalı). Brokered (dış/sosyal)
+IdP, self-registration ya da düzenlenebilir kullanıcı adı varsa bu seçenek
+**güvensizdir** — kullanıcı adını seçebilen, o hesabı açar. Kullanıcı adı `@`
+içeremez. Claim adı yalnız harf/rakam ve `_ - . :` (≤64); profil/e-posta/protokol
+claim'leri (`email`, `name`, `nickname`, `aud` …) seçilemez (400). Kullanıcı
+adı değeri yalnız yazdırılabilir ASCII kabul edilir.
+
+**Log.** Başarı: `[oidc] email resolved via userinfo|ldap|ldap_username user
+id=<id>` (e-posta yok). Başarısızlık: `[oidc] email resolution failed:
+class=email_missing tried=id_token,userinfo,… claims=<claim adları>` — yalnız
+claim ADLARI, değerler asla. Anahtarlar ve claim adındaki değişiklik audit'e
+eski→yeni girer (`settings.oidc.update`).
 
 ## Gözlem
 

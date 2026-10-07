@@ -33,6 +33,10 @@ export interface OidcForm {
   tlsInsecureSkipVerify: boolean;
   // v0.10.1120 — doğrulanmamış e-postaya güven (yalnız izinli alan adlarıyla).
   trustUnverifiedEmail: boolean;
+  // v0.10.1121 — e-posta yoksa kullanıcı adıyla eşleştir (AD/LDAP).
+  usernameFallback: boolean;
+  usernameClaim: string;
+  usernameFallbackAllowAdmin: boolean;
 }
 
 /** Yetki servisi ucunun sabitleri (sunucu: internal/api/auth_permissions.go). */
@@ -111,6 +115,9 @@ export function parsePermissionTTL(v: string): number {
   return Math.min(3600, Math.max(60, n));
 }
 
+/** Kullanıcı adı claim'inin varsayılanı (sunucu: auth.UsernameClaimDefault). */
+export const USERNAME_CLAIM_DEFAULT = 'preferred_username';
+
 export const OIDC_ROLES = ['viewer', 'editor', 'admin'] as const;
 
 /** Virgül / boşluk / satır sonu ayraçlı listeyi böler; boşları ve tekrarları atar. */
@@ -145,6 +152,9 @@ export function snapshotToForm(s: OidcSettingsSnapshot): OidcForm {
     tlsCACertPEM: s.tlsCACertPEM ?? '',
     tlsInsecureSkipVerify: !!s.tlsInsecureSkipVerify,
     trustUnverifiedEmail: !!s.trustUnverifiedEmail,
+    usernameFallback: !!s.usernameFallback,
+    usernameClaim: s.usernameClaim || USERNAME_CLAIM_DEFAULT,
+    usernameFallbackAllowAdmin: !!s.usernameFallbackAllowAdmin,
   };
 }
 
@@ -172,6 +182,10 @@ export function formToInput(f: OidcForm): OidcSettingsInput {
     tlsCACertPEM: f.tlsCACertPEM.trim(),
     tlsInsecureSkipVerify: f.tlsInsecureSkipVerify,
     trustUnverifiedEmail: f.trustUnverifiedEmail && trustUnverifiedEmailAllowed(f),
+    usernameFallback: f.usernameFallback,
+    usernameClaim: f.usernameClaim.trim() || USERNAME_CLAIM_DEFAULT,
+    // Admin açık-seçimi yalnız eşleştirme açıkken gönderilir (sunucu da düşürür).
+    usernameFallbackAllowAdmin: f.usernameFallback && f.usernameFallbackAllowAdmin,
   };
 }
 
@@ -203,6 +217,9 @@ export function publicOidcSnapshot(c: AuthConfigResponse): OidcSettingsSnapshot 
     tlsCACertPEM: '',
     tlsInsecureSkipVerify: false,
     trustUnverifiedEmail: false,
+    usernameFallback: false,
+    usernameClaim: USERNAME_CLAIM_DEFAULT,
+    usernameFallbackAllowAdmin: false,
     source: 'config',
     active: on,
   };

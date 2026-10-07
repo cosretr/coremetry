@@ -47,6 +47,7 @@ const stored: OidcSettingsSnapshot = {
   permissionsClaim: 'permissions', roleFromClaim: false,
   permissionServiceAllowNoKey: false, permissionServiceAllowedCIDRs: [], permissionServiceTrustedProxies: [],
   tlsCACertPEM: '', tlsInsecureSkipVerify: false, trustUnverifiedEmail: false,
+  usernameFallback: false, usernameClaim: 'preferred_username', usernameFallbackAllowAdmin: false,
 };
 
 let host: HTMLDivElement | null = null;

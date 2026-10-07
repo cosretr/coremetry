@@ -1015,6 +1015,9 @@ func main() {
 
 	// ── LDAP / AD enterprise auth (optional) ─────────────────────────────────
 	ldapSvc := ldap.New()
+	// v0.10.1121 — OIDC e-posta çözüm zinciri: kullanıcı adı → dizin e-postası
+	// (auth/oidc_email_resolve.go; yalnız usernameFallback açıkken).
+	oidcSvc.SetDirectory(ldapSvc)
 	if err := ldapSvc.LoadPersisted(ctx, store); err != nil {
 		log.Printf("[ldap] load persisted config: %v", err)
 	}

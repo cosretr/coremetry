@@ -2325,6 +2325,64 @@ eskisi gibi (Türkçe karakterli e-posta mümkün — operatör kararı). Bu iki
 kuralları. **Kapsam dışı:** config.yaml/Helm kaynaklı OIDC'ye alan eklenmedi (Settings'e özgü; config kaynağında eski
 sıkı davranış).
 
+## 2026-10-07 — OIDC: e-posta çözüm zinciri — UserInfo + kullanıcı adıyla AD/LDAP eşleştirme (v0.10.1121)
+
+**Operatör (prod, 2026-10-07): SSO girişi HERKES için `[oidc] callback failed: class=email_missing` ile düşüyor.**
+Kurumsal IdP (LDAP federasyonlu Keycloak) id_token'a `email` koymuyor; `preferred_username` AD sAMAccountName'i
+(sicil, ör. `n0000001`) taşıyor. Aynı kullanıcılar Coremetry LDAP girişiyle sorunsuz giriyor (dizin kaydında
+`sAMAccountName=N0000001`, `mail=first.last@corp.example.test`; LDAP girişi kullanıcıyı bu e-postayla açıp
+`ldap_username`'i yazıyor). **Tercih edilen düzeltme IdP tarafında:** Keycloak → User federation → LDAP → Mappers:
+`mail` LDAP özniteliği → `email` kullanıcı özniteliği (user-attribute-ldap-mapper); Client scopes → `email` scope'u
+istemciye **Default** olarak bağlı ve `email` mapper'ında "Add to ID token" açık. **Karar (Coremetry tarafı):**
+id_token'da e-posta YOKSA callback bir **çözüm zinciri** koşar, ilk isabette durur
+(`internal/auth/oidc_email_resolve.go`): (1) id_token `email` — davranış birebir aynı; (2) **UserInfo** `email` —
+her zaman denenir (keşifte userinfo ucu varsa), aynı sınırlı HTTP istemcisi ve TLS ayarı (`newOIDCHTTPClient`,
+ClientContext), ≤5 sn; UserInfo `sub` ≠ id_token `sub` ⇒ **red** (`userinfo_sub_mismatch`, OIDC Core §5.3.2);
+`email_verified` UserInfo'dan — UserInfo göndermiyorsa id_token'daki değer taşınır; kapı id_token'la aynı
+(`decideOIDCEmail`: güven anahtarı + izinli alan adı); uç hatası yumuşak (sonraki adım); (3) **kullanıcı adıyla eşleştir** — yalnız yeni `usernameFallback` anahtarı açıkken
+(varsayılan KAPALI): yapılandırılan claim (`usernameClaim`, varsayılan `preferred_username`; YALNIZ o claim okunur,
+başka ad tahmin edilmez) imzası/issuer'ı/nonce'u doğrulanmış id_token'dan, yoksa sub'ı eşleşmiş UserInfo'dan.
+(3a) LDAP yapılandırılmışsa servis hesabıyla **tek öznitelikte tam eşleşme** (`internal/ldap/oidc_lookup.go`:
+`(&(objectClass=person)(sAMAccountName=…)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))` ya da ayarlı benzersiz
+`userAttribute` — `mail`/`userPrincipalName`/`cn`/`displayName` gibi e-posta biçimli ya da benzersiz olmayan
+öznitelik anahtar olamaz, sAMAccountName'e düşülür; AD devre dışı koşulu yalnız sAMAccountName aramasında, çünkü
+şemasında `userAccountControl` olmayan dizinde filtre hiçbir kaydı döndürmezdi; kaçışlı filtre, sizeLimit 2, ≤5 sn);
+iki kayıt ⇒ red (`username_ambiguous`), dizin hatası ⇒ red (`directory_lookup_failed`) + kategori başına dakikada
+bir `[oidc] directory lookup failed: category=bind|timeout|search|ambiguous|other` (kullanıcı adı / hata metni yok).
+Dizinde kayıt YOKSA ⇒ `email_missing` — dizin açıkken `users` tablosundaki bayat bir `ldap_username` satırına
+düşülmez (dizinden silinmiş hesap girmesin).
+E-posta LDAP girişinin kullandığı öznitelikten (`emailAttribute`, boşsa `mail`) — aynı kullanıcı satırına düşsün diye.
+Dizinden gelen e-posta **doğrulanmış** sayılır (dizin yetkili kaynak) — `ViaTrust` DEĞİL; izinli alan adı listesi
+uygulanır. (3b) LDAP yoksa ya da dizin kaydında e-posta yoksa: callback MEVCUT kullanıcıyı `users.ldap_username` ile
+bulur — adanmış okuma `GetActiveUsersByLdapUsername` (büyük-küçük harf duyarsız, devre dışı satırlar yok sayılır,
+`LIMIT 2` + `max_execution_time`; iki satır ⇒ `username_ambiguous`, keyfî ilk satır seçilmez); kayıtlı e-postaya
+izinli alan adı listesi uygulanır; e-postasız **yeni kullanıcı açılmaz**. 3a/3b'de kimlik kullanıcı adıyla kurulur
+(`OIDCClaims.ViaUsername`) — güven anahtarı değil: yerel / LDAP / oidc viewer-editor hesap açılır, **admin hesap
+açılmaz** (`username_admin_refused`, giriş sayfasında TR/EN metin) — yalnız ayrı açık-seçim
+`usernameFallbackAllowAdmin` (varsayılan kapalı, yalnız eşleştirme açıkken seçilebilir/geçerli, audit'li, UI'da
+kırmızı uyarı) bunu açar. Kullanıcı adı `@` içeremez (UPN/e-posta biçimi kullanıcı adı sayılmaz). Hiçbiri isabet etmezse sınıf
+`email_missing` (değişmedi) + tek log satırı `[oidc] email resolution failed: class=… tried=id_token,userinfo,…
+claims=<claim ADLARI>` — değer asla. Başarıda tek satır `[oidc] email resolved via userinfo|ldap|ldap_username user
+id=<id>` (e-posta yok). **Davranış farkı:** id_token'da e-posta yokken `email_verified=false` artık `email_unverified`
+değil zincire gider (e-postasız `email_verified` anlamsız); anahtar kapalı ve UserInfo e-posta vermiyorsa sonuç eskisi
+gibi `email_missing`. **Güvenlik:** claim adı güvenli karakter kümesi (harf/rakam `_ - . :`, ≤64) ve kullanıcının
+düzenleyebildiği profil / e-posta / protokol claim'leri (`email`, `name`, `nickname`, `aud`, `nonce`…) seçilemez;
+kullanıcı adı değeri yalnız yazdırılabilir ASCII ≤256 (Unicode katlamasıyla — KELVIN SIGN → "k" — başka hesaba
+çarpışmasın). **Ön koşul:** kullanıcı bu claim'i IdP'de değiştirememeli (LDAP federasyonu salt-okunur, "Edit
+username" kapalı); brokered (dış/sosyal) IdP, self-registration ya da düzenlenebilir kullanıcı adı varsa bu adım
+GÜVENSİZ — UI'da uyarı. **Güvenlik incelemesi (SHIP-WITH-FIXES) düzeltmeleri:** F1 tek öznitelik + `@` reddi + AD
+devre dışı hesap dışlama; F2 admin bağlama varsayılan kapalı; F3 dizin açıkken kayıt yoksa bayat satıra düşmeme;
+F4 adanmış LIMIT 2 / disabled-dışı okuma; F5 `email_verified` taşıma; F6 kategorili, seyreltilmiş dizin hata logu. **Ayar/audit:** `auth_oidc` blobunda `usernameFallback` + `usernameClaim` + `usernameFallbackAllowAdmin`; PUT'ta
+geçersiz claim 400 (SSO kapalıyken de — blob'a çöp yazılmasın), elle yazılmış blobda SSO düşmez, eşleştirme kapanır
+ve `lastError` yazılır; `settings.oidc.update` audit'i eski→yeni (`SaveSettingsWithPrev`). **UI:** Settings > SSO'da
+güven kutusunun altında "E-posta yoksa kullanıcı adıyla eşleştir (AD/LDAP)" + claim kutusu (kapalıyken pasif);
+açıklama duruma göre değişir — kapalıyken `email_missing` + IdP düzeltmesi, açıkken zincirin tamamı (i18n
+`sso.usernameFallback.*`, TR/EN). **Yerleşim:** `api.go` büyümedi (auto-provision log satırı
+`auth_oidc_email_resolve.go`'daki yardımcıya döndü); dizin `main.go`'da `oidcSvc.SetDirectory(ldapSvc)`.
+**Değişmeyen:** id_token e-postalı giriş, `trustUnverifiedEmail` kuralları (ViaTrust bağlama yasağı), yetki
+servisi, rol mantığı, TLS kuralları. **Kapsam dışı:** UserInfo için ayrı anahtar yok (yalnız e-posta yokken,
+eskiden kesin red olan yolda çalışır); config.yaml/Helm kaynağına alan eklenmedi.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

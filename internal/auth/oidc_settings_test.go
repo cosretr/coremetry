@@ -108,6 +108,10 @@ type fakeIdP struct {
 	// (accessKey nil → IdP anahtarı; doluysa JWKS'te OLMAYAN anahtar).
 	accessClaims map[string]any
 	accessKey    *rsa.PrivateKey
+	// v0.10.1121 — UserInfo ucu: nil → 404; dolu → JSON cevap (Bearer "at" ya
+	// da imzalı access token istenir). userinfoHits çağrı sayısı.
+	userinfo     map[string]any
+	userinfoHits atomic.Int32
 }
 
 func newFakeIdPOpt(t *testing.T, useTLS bool) *fakeIdP {
@@ -132,6 +136,7 @@ func newFakeIdPServe(t *testing.T, start func(http.Handler) *httptest.Server) *f
 		status, issuer, redirect, huge, tokSt, jwksSt := f.status, f.issuer, f.redirect, f.big, f.tokenStatus, f.jwksStatus
 		extra := f.claims
 		atClaims, atKey := f.accessClaims, f.accessKey
+		ui := f.userinfo
 		f.mu.Unlock()
 		switch r.URL.Path {
 		case "/.well-known/openid-configuration":
@@ -189,6 +194,14 @@ func newFakeIdPServe(t *testing.T, start func(http.Handler) *httptest.Server) *f
 				"access_token": at, "token_type": "Bearer", "expires_in": 300,
 				"id_token": signTestJWT(t, f.key, claims),
 			})
+		case "/userinfo":
+			f.userinfoHits.Add(1)
+			if ui == nil || !strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") {
+				http.NotFound(w, r)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(ui)
 		case "/jwks":
 			if jwksSt != 0 {
 				w.WriteHeader(jwksSt)

@@ -9,7 +9,7 @@ import { useSettingsLoad, SettingsLoadError, ConfigStatusBanner, FlashBox, human
 import {
   OIDC_ROLES, PERMISSION_ENDPOINT, PERMISSION_HEADER, PERMISSION_MAX_CIDRS, TLS_SKIP_VERIFY_WARNING, caPemInfo,
   formToInput, oidcStatus, permissionNetWarnings, publicOidcSnapshot, snapshotToForm, trustUnverifiedEmailAllowed,
-  type OidcForm,
+  USERNAME_CLAIM_DEFAULT, type OidcForm,
 } from './oidcForm';
 import { SsoPresets } from './SsoPresets';
 
@@ -141,6 +141,7 @@ function SSOTabBody({ isAdmin }: { isAdmin: boolean }) {
 
           <OidcTlsFields form={form} patch={patch} adminOnly={adminOnly} />
           <OidcTrustEmailField form={form} patch={patch} />
+          <OidcUsernameFallbackField form={form} patch={patch} />
 
           <div className="sso-row">
             <Field type="password" autoComplete="new-password" value={form.clientSecret}
@@ -258,6 +259,45 @@ function OidcTrustEmailField({ form, patch }: {
       </label>
       {!allowed && <p className="sso-trust__hint">{t('sso.trustEmail.needsDomains')}</p>}
       <p className="sso-tls__warn" role={on ? 'alert' : undefined}>⚠ {t('sso.trustEmail.warning')}</p>
+    </div>
+  );
+}
+
+// Kullanıcı adıyla eşleştirme — v0.10.1121 (prod: "[oidc] callback failed:
+// class=email_missing"; id_token'da email yok, preferred_username = AD sicili).
+// Kutunun altındaki açıklama DURUMA göre değişir: kapalıyken ne olacağı
+// (email_missing + IdP'de tercih edilen düzeltme), açıkken zincirin tamamı —
+// operatör hangi yolun etkin olduğunu formda görür.
+function OidcUsernameFallbackField({ form, patch }: {
+  form: OidcForm;
+  patch: (p: Partial<OidcForm>) => void;
+}) {
+  const t = useT();
+  const on = form.usernameFallback;
+  return (
+    <div className="sso-trust">
+      <label className="sso-check sso-check--tight">
+        <input type="checkbox" checked={on}
+          onChange={e => patch({ usernameFallback: e.target.checked })} />
+        <span>{t('sso.usernameFallback.label')}</span>
+      </label>
+      <p className="sso-note" role="status">{t(on ? 'sso.usernameFallback.on' : 'sso.usernameFallback.off')}</p>
+      {on && <p className="sso-tls__warn">⚠ {t('sso.usernameFallback.risk')}</p>}
+      <label className={`sso-check sso-check--tight${on ? '' : ' is-disabled'}`}>
+        <input type="checkbox" checked={on && form.usernameFallbackAllowAdmin} disabled={!on}
+          onChange={e => patch({ usernameFallbackAllowAdmin: e.target.checked })} />
+        <span>{t('sso.usernameAdmin.label')}</span>
+      </label>
+      {on && form.usernameFallbackAllowAdmin && (
+        <p className="sso-tls__warn" role="alert">⚠ {t('sso.usernameAdmin.warning')}</p>
+      )}
+      <div className="sso-row">
+        <Field label={t('sso.usernameClaim.label')} value={form.usernameClaim} autoComplete="off" maxLength={64}
+          spellCheck={false} disabled={!on}
+          onChange={e => patch({ usernameClaim: e.target.value })}
+          placeholder={USERNAME_CLAIM_DEFAULT}
+          hint={t('sso.usernameClaim.hint')} />
+      </div>
     </div>
   );
 }

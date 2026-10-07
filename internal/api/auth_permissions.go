@@ -323,7 +323,14 @@ func oidcTrustLinkAllowed(u chstore.User) bool {
 // yazımı başarısız olursa giriş kayıtlı rolle sürer (log).
 func (s *Server) oidcLoginUser(r *http.Request, email string, claims *auth.OIDCClaims) (*chstore.User, error) {
 	st := oidcUserStoreFor(s)
-	u, err := st.GetUserByEmailAnyState(r.Context(), email)
+	var u *chstore.User
+	var err error
+	if claims != nil && claims.EmailSource == auth.OIDCEmailSourceLdapUsername {
+		// v0.10.1121 — e-posta yok, kullanıcı adıyla eşleşme (auth_oidc_email_resolve.go).
+		u, err = s.oidcUserByLdapUsername(r, claims)
+	} else {
+		u, err = st.GetUserByEmailAnyState(r.Context(), email)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -338,6 +345,13 @@ func (s *Server) oidcLoginUser(r *http.Request, email string, claims *auth.OIDCC
 		log.Printf("[oidc] login refused: class=%s user id=%s", oidcClassEmailUnverifiedPrivileged, u.ID)
 		return nil, errOIDCEmailUnverifiedPrivileged
 	}
+	// v0.10.1121 (güvenlik incelemesi F2) — kullanıcı adıyla kurulan kimlik
+	// admin hesabını yalnız usernameFallbackAllowAdmin ile açar.
+	if claims != nil && claims.ViaUsername && !oidcUsernameLinkAllowed(*u, s.oidc.UsernameFallbackAllowAdmin()) {
+		log.Printf("[oidc] login refused: class=%s user id=%s", oidcClassUsernameAdminRefused, u.ID)
+		return nil, errOIDCUsernameAdminRefused
+	}
+	logOIDCEmailResolved(claims, u.ID)
 	if claims != nil && claims.ClaimRole != "" {
 		nu, err := s.syncClaimRole(r, st, *u, claims.ClaimRole)
 		if err != nil {

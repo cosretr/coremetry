@@ -43,7 +43,8 @@ const snap = (p: Partial<OidcSettingsSnapshot> = {}): OidcSettingsSnapshot => ({
   permissionServiceEnabled: false, permissionServiceKeySet: false, permissionTTLSeconds: 300,
   permissionsClaim: 'permissions', roleFromClaim: false, permissionServiceAllowNoKey: false,
   permissionServiceAllowedCIDRs: [], permissionServiceTrustedProxies: [],
-  tlsCACertPEM: '', tlsInsecureSkipVerify: false, trustUnverifiedEmail: false, source: 'settings', active: true, ...p,
+  tlsCACertPEM: '', tlsInsecureSkipVerify: false, trustUnverifiedEmail: false,
+  usernameFallback: false, usernameClaim: 'preferred_username', usernameFallbackAllowAdmin: false, source: 'settings', active: true, ...p,
 });
 
 let host: HTMLDivElement | null = null;

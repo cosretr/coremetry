@@ -35,6 +35,9 @@ package auth
 //
 // v0.10.1120 — trustUnverifiedEmail (email_verified=false'u izinli alan
 // adlarıyla kabul) aynı blobda; kurallar oidc_email_trust.go'da.
+//
+// v0.10.1121 — usernameFallback / usernameClaim (e-posta yoksa kullanıcı
+// adıyla eşleştir) aynı blobda; kurallar oidc_email_resolve.go'da.
 
 import (
 	"bytes"
@@ -121,17 +124,27 @@ type OIDCSettings struct {
 	// v0.10.1120 — email_verified=false'u kabul et (oidc_email_trust.go).
 	// YALNIZ izinli alan adı listesi doluyken geçerli; boşken PUT 400.
 	TrustUnverifiedEmail bool `json:"trustUnverifiedEmail"`
+	// v0.10.1121 — id_token/UserInfo'da e-posta yoksa kullanıcı adıyla eşleştir
+	// (AD/LDAP dizini → e-posta; yoksa users.ldap_username). Varsayılan KAPALI;
+	// UsernameClaim varsayılan preferred_username (oidc_email_resolve.go).
+	UsernameFallback bool   `json:"usernameFallback"`
+	UsernameClaim    string `json:"usernameClaim"`
+	// UsernameFallbackAllowAdmin — güvenlik incelemesi F2: kullanıcı adıyla
+	// eşleşen giriş admin hesabını YALNIZ bu ayrı açık-seçimle açar (varsayılan
+	// kapalı; usernameFallback kapalıyken anlamsız → normalize false yapar).
+	UsernameFallbackAllowAdmin bool `json:"usernameFallbackAllowAdmin"`
 }
 
 // String / GoString — %v, %+v, %#v ile kazara loglansa bile secret basılmasın.
 func (s OIDCSettings) String() string {
-	return fmt.Sprintf("{enabled:%v issuer:%q clientId:%q secretSet:%v redirect:%q scopes:%v display:%q role:%q domains:%v permSvc:%v permKeySet:%v permTTL:%d claim:%q roleFromClaim:%v permNoKey:%v permCIDRs:%v permProxies:%v tlsCABytes:%d tlsSkipVerify:%v trustUnverifiedEmail:%v}",
+	return fmt.Sprintf("{enabled:%v issuer:%q clientId:%q secretSet:%v redirect:%q scopes:%v display:%q role:%q domains:%v permSvc:%v permKeySet:%v permTTL:%d claim:%q roleFromClaim:%v permNoKey:%v permCIDRs:%v permProxies:%v tlsCABytes:%d tlsSkipVerify:%v trustUnverifiedEmail:%v usernameFallback:%v usernameClaim:%q usernameAllowAdmin:%v}",
 		s.Enabled, s.IssuerURL, s.ClientID, s.ClientSecret != "", s.RedirectURL,
 		s.Scopes, s.DisplayName, s.DefaultRole, s.AllowedDomains,
 		s.PermissionServiceEnabled, s.PermissionServiceKey != "", s.PermissionTTLSeconds,
 		s.PermissionsClaim, s.RoleFromClaim,
 		s.PermissionServiceAllowNoKey, s.PermissionServiceAllowedCIDRs, s.PermissionServiceTrustedProxies,
-		len(s.TLSCACertPEM), s.TLSInsecureSkipVerify, s.TrustUnverifiedEmail)
+		len(s.TLSCACertPEM), s.TLSInsecureSkipVerify, s.TrustUnverifiedEmail,
+		s.UsernameFallback, s.UsernameClaim, s.UsernameFallbackAllowAdmin)
 }
 
 func (s OIDCSettings) GoString() string { return "auth.OIDCSettings" + s.String() }
@@ -163,6 +176,10 @@ type oidcStored struct {
 	TLSInsecureSkipVerify bool   `json:"tlsInsecureSkipVerify,omitempty"`
 	// v0.10.1120
 	TrustUnverifiedEmail bool `json:"trustUnverifiedEmail,omitempty"`
+	// v0.10.1121
+	UsernameFallback           bool   `json:"usernameFallback,omitempty"`
+	UsernameClaim              string `json:"usernameClaim,omitempty"`
+	UsernameFallbackAllowAdmin bool   `json:"usernameFallbackAllowAdmin,omitempty"`
 }
 
 func (s OIDCSettings) stored() oidcStored   { return oidcStored(s) }
@@ -195,6 +212,10 @@ type OIDCSnapshot struct {
 	TLSInsecureSkipVerify bool   `json:"tlsInsecureSkipVerify"`
 	// v0.10.1120 — doğrulanmamış e-postaya güven (secret değil).
 	TrustUnverifiedEmail bool `json:"trustUnverifiedEmail"`
+	// v0.10.1121 — kullanıcı adıyla eşleştirme (secret değil).
+	UsernameFallback           bool   `json:"usernameFallback"`
+	UsernameClaim              string `json:"usernameClaim"`
+	UsernameFallbackAllowAdmin bool   `json:"usernameFallbackAllowAdmin"`
 	// Source — etkin yapılandırmanın kaynağı: settings (blob) | config (config.yaml).
 	Source string `json:"source"`
 	// Active — bu pod'da canlı istemci var mı (giriş düğmesi). İstenen
@@ -316,6 +337,12 @@ func NormalizeOIDCSettings(in OIDCSettings, publicURL string) OIDCSettings {
 	s.PermissionServiceAllowedCIDRs = normalizeCIDRList(s.PermissionServiceAllowedCIDRs)
 	s.PermissionServiceTrustedProxies = normalizeCIDRList(s.PermissionServiceTrustedProxies)
 	s.TLSCACertPEM = normalizePEM(s.TLSCACertPEM)
+	s.UsernameClaim = strings.TrimSpace(s.UsernameClaim)
+	if s.UsernameClaim == "" {
+		s.UsernameClaim = UsernameClaimDefault
+	}
+	// F2 — admin açık-seçimi yalnız eşleştirme açıkken anlamlı.
+	s.UsernameFallbackAllowAdmin = s.UsernameFallbackAllowAdmin && s.UsernameFallback
 	return s
 }
 
@@ -342,6 +369,10 @@ func ValidateOIDCSettings(s OIDCSettings, allowInsecure bool) error {
 	// enabled:false gövdesiyle bir özel anahtar bloba yazılır ve GET'te
 	// yankılanırdı. Ağ/keşif denetimi kapalıyken yine koşmaz.
 	if err := validateOIDCCACert(s.TLSCACertPEM); err != nil {
+		return err
+	}
+	// v0.10.1121 — kullanıcı adı claim'i her zaman (blob'a çöp yazılmasın).
+	if err := validateUsernameClaim(s.UsernameClaim); err != nil {
 		return err
 	}
 	if !s.Enabled {
@@ -639,6 +670,12 @@ func (o *OIDCService) LoadPersisted(ctx context.Context) error {
 		s.TrustUnverifiedEmail = false
 		warns = append(warns, "trustUnverifiedEmail yok sayıldı — "+trustUnverifiedEmailMsg)
 	}
+	// v0.10.1121 — aynı kalıp: geçersiz kullanıcı adı claim'i SSO'yu düşürmez;
+	// eşleştirme kapanır, claim varsayılana döner.
+	if err := validateUsernameClaim(s.UsernameClaim); err != nil {
+		s.UsernameFallback, s.UsernameClaim, s.UsernameFallbackAllowAdmin = false, UsernameClaimDefault, false
+		warns = append(warns, "usernameClaim geçersiz — kullanıcı adıyla eşleştirme kapatıldı: "+err.Error())
+	}
 	if err := ValidateOIDCSettings(s, o.uiPolicy.allowInsecure); err != nil {
 		return o.badBlob(raw, fmt.Errorf("oidc blobu geçersiz: %w", err))
 	}
@@ -691,7 +728,7 @@ func (o *OIDCService) apply(ctx context.Context, s OIDCSettings, source string, 
 		cli, err = buildOIDCClient(dctx, s.toConfig(), o.policyFor(source), t, o.cachedDiscovery(s.IssuerURL, t))
 		cancel()
 		if cli != nil {
-			cli.trustUnverifiedEmail = s.TrustUnverifiedEmail
+			cli.applyEmailOptions(s)
 		}
 	}
 	o.mu.Lock()
@@ -771,7 +808,7 @@ func (o *OIDCService) saveLocked(ctx context.Context, in OIDCSettings) (OIDCSnap
 		if err != nil {
 			return OIDCSnapshot{}, &OIDCDiscoveryError{Err: err}
 		}
-		c.trustUnverifiedEmail = s.TrustUnverifiedEmail
+		c.applyEmailOptions(s)
 		cli = c
 	}
 	raw, err := json.Marshal(s.stored())
@@ -826,7 +863,8 @@ func (o *OIDCService) Snapshot() OIDCSnapshot {
 	if o == nil {
 		return OIDCSnapshot{Source: OIDCSourceConfig, Scopes: []string{}, AllowedDomains: []string{},
 			PermissionTTLSeconds: PermissionTTLDefault, PermissionsClaim: PermissionClaimDefault,
-			PermissionServiceAllowedCIDRs: []string{}, PermissionServiceTrustedProxies: []string{}}
+			PermissionServiceAllowedCIDRs: []string{}, PermissionServiceTrustedProxies: []string{},
+			UsernameClaim: UsernameClaimDefault}
 	}
 	o.mu.Lock()
 	defer o.mu.Unlock()
@@ -861,6 +899,9 @@ func (o *OIDCService) snapshotLocked() OIDCSnapshot {
 		TLSCACertPEM:                    s.TLSCACertPEM,
 		TLSInsecureSkipVerify:           s.TLSInsecureSkipVerify,
 		TrustUnverifiedEmail:            s.TrustUnverifiedEmail,
+		UsernameFallback:                s.UsernameFallback,
+		UsernameClaim:                   s.UsernameClaim,
+		UsernameFallbackAllowAdmin:      s.UsernameFallbackAllowAdmin,
 		Source:                          src,
 		Active:                          o.live.Load() != nil,
 		LastError:                       o.st.lastErr,

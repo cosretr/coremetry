@@ -6397,7 +6397,7 @@ func (s *Server) oidcCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if user == nil {
-		role := s.oidc.DefaultRole()
+		role := oidcProvisionRole(s.oidc.DefaultRole(), claims, s.oidc.UsernameFallbackAllowAdmin())
 		if !auth.IsValidRole(role) { // v0.10.1067 — editor de geçerli (Settings > SSO)
 			role = auth.RoleViewer
 		}
@@ -6413,7 +6413,7 @@ func (s *Server) oidcCallback(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.meUsers.clear() // v0.8.519 — /api/auth/me cache'i
-		log.Printf("[oidc] auto-provisioned user %q (role=%s)", email, role)
+		logOIDCProvisioned(user, claims)
 	}
 
 	tok, exp, err := s.auth.Issue(user.ID, user.Email, user.Role)
