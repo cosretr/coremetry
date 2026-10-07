@@ -902,7 +902,11 @@ export default function EndpointsPage() {
                             butonu") — `.sec` → `.accent`, v0.9.1372'de
                             detay sayfalarının pivotlarına yapılanın
                             aynısı. */}
-                        <Link to={tracesLink(r, range, env, cluster)} className="accent"
+                        {/* v0.10.1117 — kimlik çipi satırın kuruluşundan:
+                            şekil satırı `http.route_shape`, RPC satırı
+                            `name` (RPC + şekil `name_shape`); eskiden hep
+                            `http.route = <path>` (şekilde / RPC'de boş liste). */}
+                        <Link to={tracesLink({ service: r.service, path: r.path, sig: bySignature, entry }, range, env, cluster)} className="accent"
                               style={{ fontSize: 11, padding: '2px 8px' }}>
                           Traces →
                         </Link>
@@ -911,8 +915,11 @@ export default function EndpointsPage() {
                             yavaş hatalı (✖) trace kısayolları KALDIRILDI; satırın tek
                             açılış hedefi Traces (tablo standardı S5). Exemplar kimlikleri
                             API'de duruyor; endpoint detay sayfası onları göstermeye devam eder. */}
-                        {/* v0.10.705 — bu route için eşik alarmı (editör/admin). */}
-                        {canEditRules && entry === 'http' && (
+                        {/* v0.10.705 — bu route için eşik alarmı (editör/admin).
+                            v0.10.1117 — şekil satırında YOK (detay sayfasının
+                            `!refObj.sig` kuralı): kural `http_route = <şekil>`
+                            eşler, ham id taşıyan route'ta hiç tetiklenmezdi. */}
+                        {canEditRules && entry === 'http' && !bySignature && (
                           <IconButton size="sm" icon={<span aria-hidden="true">⚠</span>} aria-label="Bu route için alarm kuralı"
                             // v0.10.926 — Tooltip; ata <tr> title'ı sızmaz (boş title).
                             tooltip="Bu route için eşik alarmı: p95/p99/hata oranı/hız eşiği geçince Problem"

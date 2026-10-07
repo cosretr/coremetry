@@ -122,6 +122,19 @@ export function stmtShortId(hash: string): string {
 // title / düzenleme ham `op_group`u taşır.
 export const OP_GROUP_FILTER_KEY = 'op_group';
 
+// v0.10.1117 — /endpoints "Group by shape" pivotu. Şekil satırı (ör.
+// `/users/:id`) /traces'i `http.route = <şekil>` ile açıyordu; span'ler ham id
+// taşıdığında (`/users/8421`) hiçbir satır şekle eşit değil → boş liste. Sunucu
+// anahtarı endpoints sayfasının GRUPLADIĞI ifadeye derler (chstore
+// filterexpr_routeshape.go: opSigWrap(http_route), desenler + değer bağlı;
+// yalnız = ≠ IN NOT IN). Çipte "route shape"; title / düzenleme ham anahtar.
+export const ROUTE_SHAPE_FILTER_KEY = 'http.route_shape';
+// RPC & Messaging sekmesinin şekil satırı span ADININ şekli
+// (opSigWrap(name)) — aynı derleyici. Öneri listesine girmez: elle yazılan ad
+// şekli için ingest-zamanı `op_group` ("operation shape") var; bu anahtar
+// satırın OKUMA anındaki şekliyle birebir eşleşen pivot içindir.
+export const NAME_SHAPE_FILTER_KEY = 'name_shape';
+
 /**
  * TRACES_EXTRA_FILTER_KEYS — v0.10.1115: span attribute'u OLMAYAN ama /traces
  * süzgecinde geçerli sentetik anahtarlar; anahtar önerisinin sonuna eklenir
@@ -130,7 +143,8 @@ export const OP_GROUP_FILTER_KEY = 'op_group';
  * op_group çözülmez. Değer önerisi yok (attribute-values onu dizi aramasıyla
  * arar, boş döner) — operatör şekli yazar ya da Operations'tan pivotlar.
  */
-export const TRACES_EXTRA_FILTER_KEYS: readonly string[] = [OP_GROUP_FILTER_KEY];
+// v0.10.1117 — http.route_shape (/endpoints şekil pivotu) aynı mekanizmayla.
+export const TRACES_EXTRA_FILTER_KEYS: readonly string[] = [OP_GROUP_FILTER_KEY, ROUTE_SHAPE_FILTER_KEY];
 
 /** withExtraKeys — gözlenen/statik anahtarların sonuna eksik ekleri koyar. SAF. */
 export function withExtraKeys(keys: string[], extra: readonly string[] | undefined): string[] {
@@ -158,6 +172,13 @@ export function chipDisplay(f: FilterExpr): ChipDisplay {
   }
   if (f.k === OP_GROUP_FILTER_KEY) {
     return { key: 'operation shape', op: OP_SHORT[f.op], value: chipValueLabel(f) };
+  }
+  // v0.10.1117 — /endpoints şekil pivotları.
+  if (f.k === ROUTE_SHAPE_FILTER_KEY) {
+    return { key: 'route shape', op: OP_SHORT[f.op], value: chipValueLabel(f) };
+  }
+  if (f.k === NAME_SHAPE_FILTER_KEY) {
+    return { key: 'name shape', op: OP_SHORT[f.op], value: chipValueLabel(f) };
   }
   return { key: f.k, op: OP_SHORT[f.op], value: chipValueLabel(f) };
 }

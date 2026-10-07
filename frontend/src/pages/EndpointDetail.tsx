@@ -220,10 +220,12 @@ export default function EndpointDetailPage() {
                 <option value="metric">Kaynak: metrik</option>
               </select>
             )}
+            {/* v0.10.1117 — şekil (sig) ve RPC (entry) kimliği pivota taşınır:
+                `http.route_shape` / `name` / `name_shape` (endpoints/links.ts). */}
             <Link className="accent" style={{ fontSize: 12, padding: '3px 10px' }}
-              to={tracesLink(refObj, range, env, cluster)}>Traces →</Link>
+              to={tracesLink({ ...refObj, entry }, range, env, cluster)}>Traces →</Link>
             <Link className="accent" style={{ fontSize: 12, padding: '3px 10px' }}
-              to={exploreLink(refObj, range, 'p99', env, cluster)}
+              to={exploreLink({ ...refObj, entry }, range, 'p99', env, cluster)}
               title="Open this route's p99 in Explore — charted from the metric rollups, where you can add dimensions or compare against another query.">
               Explore →
             </Link>

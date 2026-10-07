@@ -100,4 +100,30 @@ func TestOpSigWrapBindSafety(t *testing.T) {
 	if args[0] != OpSigReUUID || args[1] != OpSigReHex || args[2] != OpSigReNum {
 		t.Fatalf("opSigArgs order changed — must stay UUID, hex, num: %v", args)
 	}
+	// v0.10.1117 — the /traces shape filter keys (http.route_shape,
+	// name_shape; filterexpr_routeshape.go) carry the same opSigWrap text —
+	// ':id' literals included — into every /traces read. Every op they
+	// accept must stay brace-free with placeholders == args; the real
+	// driver round-trip lives in ch_bind_roundtrip_test.go.
+	for _, key := range []string{RouteShapeFilterKey, NameShapeFilterKey} {
+		for _, f := range []FilterExpr{
+			{Key: key, Op: "=", Values: []string{"/orders/:id"}},
+			{Key: key, Op: "!=", Values: []string{"/orders/{id}"}},
+			{Key: key, Op: "IN", Values: []string{"/a/:id", "/b/{x}:y"}},
+			{Key: key, Op: "NOT IN", Values: []string{"/a/:id"}},
+		} {
+			for _, alias := range []string{"", "c"} {
+				fsql, fargs, err := f.SQLAliased(alias)
+				if err != nil {
+					t.Fatalf("%s %s: %v", key, f.Op, err)
+				}
+				if strings.ContainsAny(fsql, "{}") {
+					t.Fatalf("%s %s: braces in SQL text (v0.8.356 trap): %q", key, f.Op, fsql)
+				}
+				if n := strings.Count(fsql, "?"); n != len(fargs) {
+					t.Fatalf("%s %s: %d placeholders vs %d args", key, f.Op, n, len(fargs))
+				}
+			}
+		}
+	}
 }

@@ -101,8 +101,9 @@ func stmtHashFilterSQL(alias, op string, vs []string, colReady bool) (string, []
 	}
 }
 
-// spansSQL — spans yollarının ortak girişi: ifade kimliği ve operasyon şekli
-// (v0.10.1115, filterexpr_opgroup.go) anahtarları burada ayrılır, gerisi
+// spansSQL — spans yollarının ortak girişi: ifade kimliği, operasyon şekli
+// (v0.10.1115, filterexpr_opgroup.go) ve /endpoints rota/ad şekli
+// (v0.10.1117, filterexpr_routeshape.go) anahtarları burada ayrılır, gerisi
 // genel derleyiciye.
 func (f FilterExpr) spansSQL(alias string, promoted map[string]string) (string, []any, error) {
 	if f.Key == StmtHashFilterKey {
@@ -110,6 +111,9 @@ func (f FilterExpr) spansSQL(alias string, promoted map[string]string) (string, 
 	}
 	if f.Key == OpGroupFilterKey {
 		return opGroupFilterSQL(alias, normOp(f.Op), f.Values, opGroupColReady.Load())
+	}
+	if isShapeFilterKey(f.Key) {
+		return shapeFilterSQL(f.Key, alias, normOp(f.Op), f.Values)
 	}
 	return f.sql(alias, wellKnown, wellKnownResource, promoted, AttrIndexAvailable())
 }

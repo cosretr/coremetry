@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { TimeRange } from '@/lib/types';
-import { tracesLink, exploreLink } from '@/pages/endpoints/links';
+import { tracesLink, exploreLink, endpointIdentityFilter } from '@/pages/endpoints/links';
 
 // v0.9.307 (brief N6b) — a pivot must carry the SCOPE it was launched
 // from.
@@ -132,5 +132,53 @@ describe('iki pivot aynı satırdan aynı evrene gider', () => {
       expect(decodeURIComponent(f)).toContain('http.route');
       expect(decodeURIComponent(f)).toContain(path);
     }
+  });
+});
+
+// v0.10.1117 — boş liste düzeltmesi. "Group by shape" satırı bir ŞEKİLDİR
+// (`/users/:id`, sunucuda opSigWrap(http_route)); `http.route = <şekil>` ham id
+// taşıyan span'lerde (`/users/8421`) hiçbir satırla eşleşmiyordu. RPC &
+// Messaging sekmesinde yol sütunu span ADI ve http_route tanım gereği '';
+// `http.route = <ad>` HER ZAMAN boştu. Kimlik çipi artık satırın kuruluşundan.
+const chips = (href: string) =>
+  JSON.parse(new URL(href, 'http://x').searchParams.get('filters') ?? '[]') as Array<{ k: string; op: string; v: string[] }>;
+
+describe('endpoint kimlik çipi — şekil ve RPC (v0.10.1117)', () => {
+  it('HTTP ham satır: http.route = <rota> (değişmedi)', () => {
+    expect(endpointIdentityFilter({ service: 'svc-orders', path: '/users/8421' }))
+      .toEqual({ k: 'http.route', op: '=', v: ['/users/8421'] });
+    expect(endpointIdentityFilter({ service: 'svc-orders', path: '/users/8421', sig: false, entry: 'http' }))
+      .toEqual({ k: 'http.route', op: '=', v: ['/users/8421'] });
+  });
+
+  it('HTTP şekil satırı: Traces çipi http.route_shape = <şekil>, http.route YOK', () => {
+    const href = tracesLink({ service: 'svc-orders', path: '/users/:id', sig: true }, range, 'uat');
+    expect(chips(href)).toEqual([{ k: 'http.route_shape', op: '=', v: ['/users/:id'] }]);
+    const p = new URL(href, 'http://x').searchParams;
+    expect(p.get('service')).toBe('svc-orders');
+    expect(p.get('rootOnly')).toBe('false');
+    expect(p.get('env')).toBe('uat');
+  });
+
+  it('HTTP şekil: Explore çipleri service.name + http.route_shape', () => {
+    expect(chips(exploreLink({ service: 'svc-orders', path: '/users/:id', sig: true }, range, 'p99'))).toEqual([
+      { k: 'service.name', op: '=', v: ['svc-orders'] },
+      { k: 'http.route_shape', op: '=', v: ['/users/:id'] },
+    ]);
+  });
+
+  it('RPC satırı: Traces çipi name = <span adı> (+ servis), http.route YOK', () => {
+    const href = tracesLink({ service: 'svc-orders', path: 'orders.v1.Orders/Get', entry: 'rpc' }, range);
+    expect(chips(href)).toEqual([{ k: 'name', op: '=', v: ['orders.v1.Orders/Get'] }]);
+    expect(new URL(href, 'http://x').searchParams.get('service')).toBe('svc-orders');
+    expect(chips(exploreLink({ service: 'svc-orders', path: 'orders.v1.Orders/Get', entry: 'rpc' }, range, 'p99'))).toEqual([
+      { k: 'service.name', op: '=', v: ['svc-orders'] },
+      { k: 'name', op: '=', v: ['orders.v1.Orders/Get'] },
+    ]);
+  });
+
+  it('RPC şekil satırı: name_shape = <şekil> (ad şekli, sunucuda opSigWrap(name))', () => {
+    const href = tracesLink({ service: 'svc-orders', path: 'process order/:id', sig: true, entry: 'rpc' }, range);
+    expect(chips(href)).toEqual([{ k: 'name_shape', op: '=', v: ['process order/:id'] }]);
   });
 });

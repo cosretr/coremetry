@@ -11407,7 +11407,7 @@ func parseFiltersAndDSL(jsonFilters, dsl string) ([]chstore.FilterExpr, error) {
 	if err != nil {
 		return nil, err
 	}
-	return append(out, parsed...), nil
+	return appendValidatedDSL(out, parsed) // v0.10.1117 — DSL yaprakları da sınırda doğrulanır (dsl_validate.go)
 }
 
 // parseFilterGroup decodes the JSON-encoded `filterGroup` query parameter —

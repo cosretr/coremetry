@@ -2131,6 +2131,48 @@ susup dönen şablon yeniden doğar (yapışkan first_seen satırı bulamaz) —
 boşalabilir. Çok pod aynı anda boot ederse ALTER birden çok gidebilir (idempotent, ek MATERIALIZE mutasyonu).
 **Değişmeyen:** okuma sorguları, puller, purge sınıflaması (`log_templates` korunan listede).
 
+## 2026-10-07 — /endpoints → Traces: rota şekli süzgeci ve RPC linki (boş liste düzeltmesi) (v0.10.1117)
+
+**Kök neden (1115'in bıraktığı iki kardeş):** (1) /endpoints "Group by shape" satırı bir ŞEKİLDİR — okuma anında
+`opSigWrap(http_route)` (`/users/8421` → `/users/:id`); satırın ve endpoint detay sayfasının Traces / Explore pivotu
+`http.route = <şekil>` taşıyordu: kesin kolon eşitliği, span'ler ham id taşıdığında boş liste ve boş şerit. (2) RPC &
+Messaging sekmesinde satır kimliği span ADI ve `http_route` tanım gereği `''`; aynı pivot `http.route = <ad>` gönderdiği
+için liste HER ZAMAN boştu. **Karar:** yeni süzgeç anahtarları `http.route_shape` → `opSigWrap(http_route)` ve
+`name_shape` → `opSigWrap(name)` (RPC sekmesi + şekil; aynı derleyici, `filterexpr_routeshape.go`). İfade endpoints
+sayfasının gruplamada kullandığının ve detay çekmecesinin `endpointRoutePred` yükleminin KENDİSİ (bayt bayt aynı,
+testli) — op_group'un ingest-zamanı `NormalizeOperation`'ı değil (base64url / ünsüz-yalnız kimlikleri opSig katlamaz,
+eşleşme kayardı). Yalnız `=`, `!=`, `IN`, `NOT IN`; diğerleri sınırda 400. Kolon fallback'i yok: `http_route` ve `name`
+spans'in CREATE TABLE kolonları, `http.route` / `name` anahtarları bugün de koşulsuz onlara derlenir.
+
+**v0.8.356 parametre tuzağı:** clickhouse-go ham sorgu metni bir satırda `{…:…}` içerirse sunucu tarafı parametre
+kipine geçer ve konumsal argümanlar düşer. opSigWrap metninde `':id'` sabitleri durur; desenler (süslü parantezli
+regex'ler) ve kullanıcı değeri (`/users/{id}` dahil) `?` ile BAĞLANIR, metne girmez — yeni metin üretilmez, mevcut
+opSigWrap + opSigArgs yeniden kullanılır. Kanıt: `ch_bind_roundtrip_test.go` gerçek sürücüyü (HTTP protokolü + sahte
+RoundTripper, el sıkışmaya Native blok) Store metotlarıyla koşturur — liste, arama+çip HAVING, Errors şeridi, hacim
+şeridi; harness kontrolü v0.8.356 öncesi satır içi metnin `ErrUnsupportedQueryParameter` ile düştüğünü doğrular.
+`TestOpSigWrapBindSafety` şekil anahtarlarının her op'unu kapsayacak şekilde genişletildi.
+
+**Okuma yolları:** 1115 ile aynı — liste ham WHERE, arama+çip HAVING, Errors şeridi liste paritesi, herhangi bir çip
+`trace_summary_5m` hızlı yolunu kapatır, hacim şeridi op-MV / dar rollup / spanmetrics kademesi şekli tanımadığı için
+ham spans. Şerit kapsamı: `http.route_shape` `http.route` gibi giriş kapsamı (kind kısıtı); `name_shape` `name` sınıfı
+(spans). **FE:** `endpoints/links.ts` `endpointIdentityFilter` — HTTP ham `http.route`, HTTP şekil `http.route_shape`,
+RPC `name`, RPC şekil `name_shape`; liste satırı, detay Traces ve Explore aynı üreticiden. Çip "route shape" / "name
+shape", ✕ ile kalkar; `http.route_shape` /traces öneri listesine `extraKeys` ile girer (SUGGESTED_KEYS'e değil);
+`name_shape` yalnız pivot (elle yazılan ad şekli için `op_group` var). Ek: liste sayfasında şekil kipinde ⚠ route
+alarmı gizlendi (detay sayfasının `!sig` kuralı) — kural `http_route = <şekil>` eşler, hiç tetiklenmezdi.
+
+**Bırakılan:** endpoint detay sayfasının kendi bölümleri (`/api/endpoints/detail`, callers, where-the-time-goes)
+`entry` parametresi almıyor ve `endpointRoutePred` ile `http_route` eşler — RPC satırının detay bölümleri bu yüzden
+boş kalır (Traces/Explore pivotları düzeldi; bölümler ayrı iş). Bilinen artık: cluster/env süzgeçli ham yol
+(`getEndpointsRaw`) `opSigWrap(coalesce(http_route, attr http.route, url.path, http.target, ''))` ile gruplar; satır
+yalnız alt katmanlardan (http_route boşken url.path / http.target) geliyorsa `http.route_shape` (kolon üzerinde)
+eşleşmez — aynı sınır bugün ham kipte `http.route` için de geçerli (detay çekmecesi de yalnız `http_route` eşler).
+
+**Sınır doğrulaması (inceleme ek):** `parseFiltersAndDSL` `dsl=` yapraklarını `ValidateFilters`'tan geçirmeden
+ekliyordu; op kısıtlı anahtarda (`dsl=http.route_shape ~ x`, op_group, db_stmt_hash) derleme hatası ApplyFilters'ta
+loglanıp atlanıyor, sorgu SÜZGEÇSİZ koşuyordu. Artık `errBadRequest` → 400 (`dsl_validate.go`; api.go büyümedi).
+Dashboards bundle'ı hatayı slot gövdesine yazar (JSON `filters` ile aynı sözleşme).
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

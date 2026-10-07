@@ -716,6 +716,11 @@ func (f FilterExpr) Validate() error {
 	if f.Key == OpGroupFilterKey {
 		return validateOpGroup(op, f.Values)
 	}
+	// v0.10.1117 — /endpoints şekil pivotu (http.route_shape / name_shape):
+	// yalnız eşitlik/küme (filterexpr_routeshape.go).
+	if isShapeFilterKey(f.Key) {
+		return validateShapeFilter(f.Key, op, f.Values)
+	}
 	return nil
 }
 

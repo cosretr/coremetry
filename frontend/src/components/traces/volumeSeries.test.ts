@@ -178,6 +178,17 @@ describe('stripScope', () => {
     expect(stripScope([{ k: 'op_group' }], '')).toBe('spans');
     expect(stripRootOnly(stripScope([{ k: 'op_group' }], ''), true)).toBe(false);
   });
+  // v0.10.1117 — /endpoints şekil pivotu: http.route_shape, http.route ile AYNI
+  // sınıf (giriş span'inin rotası; satır inbound span'lerden kuruldu) →
+  // şerit giriş kapsamında kalır. name_shape (RPC sekmesi) `name` sınıfı
+  // (v0.10.730): kind kısıtı yok, eşleşen span'leri sayar.
+  it('http.route_shape giriş anahtarı (http.route gibi); name_shape değil', () => {
+    expect(isEntrySpanKey('http.route_shape')).toBe(isEntrySpanKey('http.route'));
+    expect(stripScope([{ k: 'service.name' }, { k: 'http.route_shape' }], '')).toBe('entry');
+    expect(isEntrySpanKey('name_shape')).toBe(false);
+    expect(stripScope([{ k: 'name_shape' }], '')).toBe('spans');
+    expect(stripRootOnly(stripScope([{ k: 'name_shape' }], ''), true)).toBe(false);
+  });
   // v0.10.1006 (operator-reported, prod: function_code çipinde tablo dolu,
   // şerit boş) — iş kimliklerini giriş span'i taşımıyor (prod'da yalnız
   // log-yayın MQ span'leri); giriş kapsamı kind kısıtını AND'leyip grafiği

@@ -9,6 +9,7 @@ import {
   pushRecent, parseRecent, rankKeys, OP_SHORT, FILTER_OPS,
   chipDisplay, stmtShortId, STMT_HASH_FILTER_KEY,
   OP_GROUP_FILTER_KEY, TRACES_EXTRA_FILTER_KEYS, withExtraKeys,
+  ROUTE_SHAPE_FILTER_KEY, NAME_SHAPE_FILTER_KEY,
 } from './filterQuery';
 
 describe('opFromShorthand', () => {
@@ -75,10 +76,30 @@ describe('chip / upsert / recent / rank', () => {
   it('withExtraKeys: eksik ekleri sona koyar, kopya yok, boş ek → aynı dizi', () => {
     expect(TRACES_EXTRA_FILTER_KEYS).toContain('op_group');
     const keys = ['http.route', 'name'];
-    expect(withExtraKeys(keys, TRACES_EXTRA_FILTER_KEYS)).toEqual(['http.route', 'name', 'op_group']);
-    expect(withExtraKeys(['op_group', 'name'], TRACES_EXTRA_FILTER_KEYS)).toEqual(['op_group', 'name']);
+    expect(withExtraKeys(keys, TRACES_EXTRA_FILTER_KEYS)).toEqual(['http.route', 'name', 'op_group', 'http.route_shape']);
+    expect(withExtraKeys(['op_group', 'http.route_shape', 'name'], TRACES_EXTRA_FILTER_KEYS))
+      .toEqual(['op_group', 'http.route_shape', 'name']);
     expect(withExtraKeys(keys, undefined)).toBe(keys);
     expect(rankKeys(withExtraKeys(keys, TRACES_EXTRA_FILTER_KEYS), 'op_')).toEqual(['op_group']);
+  });
+  // v0.10.1117 — /endpoints "Group by shape" pivotu: şekil çipi insan diliyle,
+  // op/değer aynen; ham anahtar yalnız title/düzenlemede.
+  it('chipDisplay: http.route_shape → "route shape", name_shape → "name shape"', () => {
+    const f = { k: ROUTE_SHAPE_FILTER_KEY, op: '=' as const, v: ['/users/:id'] };
+    expect(ROUTE_SHAPE_FILTER_KEY).toBe('http.route_shape');
+    expect(chipDisplay(f)).toEqual({ key: 'route shape', op: '=', value: '/users/:id' });
+    expect(chipValueLabel(f)).toBe('/users/:id');
+    expect(chipDisplay({ k: ROUTE_SHAPE_FILTER_KEY, op: 'NOT IN', v: ['/a/:id', '/b'] }))
+      .toEqual({ key: 'route shape', op: 'NOT IN', value: '/a/:id, /b' });
+    expect(chipDisplay({ k: NAME_SHAPE_FILTER_KEY, op: '=', v: ['Process order :id'] }))
+      .toEqual({ key: 'name shape', op: '=', value: 'Process order :id' });
+    // Ham http.route çipi değişmedi.
+    expect(chipDisplay({ k: 'http.route', op: '=', v: ['/users/:id'] }).key).toBe('http.route');
+  });
+  it('TRACES_EXTRA_FILTER_KEYS: http.route_shape önerilir, name_shape pivota özel', () => {
+    expect(TRACES_EXTRA_FILTER_KEYS).toContain(ROUTE_SHAPE_FILTER_KEY);
+    expect(TRACES_EXTRA_FILTER_KEYS).not.toContain(NAME_SHAPE_FILTER_KEY);
+    expect(rankKeys(withExtraKeys(['http.route'], TRACES_EXTRA_FILTER_KEYS), 'route_sh')).toEqual(['http.route_shape']);
   });
   it('upsertFilter aynı k+op günceller', () => {
     const out = upsertFilter([{ k: 'a', op: '=', v: ['1'] }], { k: 'a', op: '=', v: ['2'] });

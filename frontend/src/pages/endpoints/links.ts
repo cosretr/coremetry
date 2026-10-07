@@ -1,5 +1,6 @@
 import { encodeRange, encodeFilters, buildQuery } from '@/lib/urlState';
-import type { TimeRange } from '@/lib/types';
+import type { FilterExpr, TimeRange } from '@/lib/types';
+import { NAME_SHAPE_FILTER_KEY, ROUTE_SHAPE_FILTER_KEY } from '@/lib/filterQuery';
 
 // links.ts — the /endpoints family's outbound pivots (v0.9.839).
 //
@@ -9,10 +10,42 @@ import type { TimeRange } from '@/lib/types';
 // them is how two pivots off the same row drift into asking different
 // questions. One module, one definition.
 //
-// The parameters take only the IDENTITY ({service, path}) — never a
-// whole EndpointRow. The detail page must build these links from a deep
-// link that has no row behind it, and a signature that demanded a row
-// would force a fabricated one.
+// The parameters take only the IDENTITY ({service, path} + optional
+// sig/entry) — never a whole EndpointRow. The detail page must build these
+// links from a deep link that has no row behind it, and a signature that
+// demanded a row would force a fabricated one.
+
+/**
+ * EndpointPivotRef — v0.10.1117: satır kimliği + satırın NASIL kurulduğu.
+ * `sig` = satır "Group by shape" şekli (/users/:id); `entry: 'rpc'` = RPC &
+ * Messaging sekmesi (yol sütunu span ADI, http_route tanım gereği boş).
+ * İkisi de yoksa bugünkü HTTP ham rota kimliği.
+ */
+export interface EndpointPivotRef {
+  service: string;
+  path: string;
+  sig?: boolean;
+  entry?: 'http' | 'rpc';
+}
+
+/**
+ * endpointIdentityFilter — v0.10.1117 (boş liste düzeltmesi): satırın kimliği,
+ * /endpoints'in o satırı GRUPLADIĞI ifadeyle eşleşen TEK çip. SAF.
+ *
+ *   HTTP ham   → `http.route = <rota>`        (değişmedi)
+ *   HTTP şekil → `http.route_shape = <şekil>` (sunucu: opSigWrap(http_route))
+ *   RPC ham    → `name = <span adı>`          (http_route RPC'de '' — eski
+ *                `http.route = <ad>` HER ZAMAN boş dönüyordu)
+ *   RPC şekil  → `name_shape = <şekil>`       (sunucu: opSigWrap(name))
+ *
+ * Şekil `http.route = /users/:id` olarak gidince span'ler ham id taşıdığında
+ * hiçbir satır eşleşmiyordu (v0.10.1115'in Operations › Normalized ikizi).
+ */
+export function endpointIdentityFilter(r: EndpointPivotRef): FilterExpr {
+  const rpc = r.entry === 'rpc';
+  if (r.sig) return { k: rpc ? NAME_SHAPE_FILTER_KEY : ROUTE_SHAPE_FILTER_KEY, op: '=', v: [r.path] };
+  return { k: rpc ? 'name' : 'http.route', op: '=', v: [r.path] };
+}
 
 /**
  * tracesLink — /traces filtered to this endpoint.
@@ -49,9 +82,10 @@ import type { TimeRange } from '@/lib/types';
  *     (yapısal http.route filtresi) aynen.
  */
 export function tracesLink(
-  r: { service: string; path: string }, range: TimeRange, env?: string, cluster?: string,
+  r: EndpointPivotRef, range: TimeRange, env?: string, cluster?: string,
 ): string {
-  const filters = encodeFilters([{ k: 'http.route', op: '=', v: [r.path] }]);
+  // v0.10.1117 — kimlik çipi satırın kuruluşuna göre (endpointIdentityFilter).
+  const filters = encodeFilters([endpointIdentityFilter(r)]);
   return `/traces?${buildQuery([
     ['service', r.service],
     ['filters', filters],
@@ -73,12 +107,14 @@ export function tracesLink(
  * invented, and seedFromLegacyParams decodes it unchanged.
  */
 export function exploreLink(
-  r: { service: string; path: string }, range: TimeRange, agg: string,
+  r: EndpointPivotRef, range: TimeRange, agg: string,
   env?: string, cluster?: string,
 ): string {
+  // v0.10.1117 — şekil çipi rollup boyutu değil: Explore o hâlde ham spans
+  // yolundan cevaplar (TIER_DIM_KEYS dışı); ham rota / ad yine kademelerden.
   const filters = encodeFilters([
     { k: 'service.name', op: '=', v: [r.service] },
-    { k: 'http.route', op: '=', v: [r.path] },
+    endpointIdentityFilter(r),
   ]);
   return `/explore?${buildQuery([
     ['range', encodeRange(range)],

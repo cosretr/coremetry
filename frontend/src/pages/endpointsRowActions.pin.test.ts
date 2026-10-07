@@ -13,7 +13,8 @@ describe('Endpoints satır eylemleri', () => {
     expect(src).not.toMatch(/r\.errorTraceId\s*&&/);
   });
   it('Traces bağlantısı ve alarm kuralı düğmesi duruyor', () => {
-    expect(src).toContain('<Link to={tracesLink(r, range, env, cluster)} className="accent"');
+    // v0.10.1117 — kimlik çipi satırın kuruluşundan (şekil / RPC), endpoints/links.ts.
+    expect(src).toContain('<Link to={tracesLink({ service: r.service, path: r.path, sig: bySignature, entry }, range, env, cluster)} className="accent"');
     expect(src).toContain('aria-label="Bu route için alarm kuralı"');
   });
 });
