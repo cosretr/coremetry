@@ -402,7 +402,9 @@ func TestOpLatencyReadsPublishedSettings(t *testing.T) {
 		"active, overflow = batchLatCapKeys(keys)",
 		"active, droppedBytes = opLatCapExemptBytes(active)",
 		"planOpLatBatch(sens, uint64(curBuckets), active, readErr)",
-		"opLatencyQuery(slotStarts, baseStart, alignedNow, plan, sustainExempt)",
+		// v0.10.1118 — okuma chstore.OpP99Pivot'tan, AYNI spec (eski metin
+		// opLatencyQuery = OpP99PivotQuery(opLatencySpec(...)) geri dönüşte).
+		"store.OpP99Pivot(ctx, chstore.OpPivotScopeOpLatency,\n\t\topLatencySpec(slotStarts, baseStart, alignedNow, plan, sustainExempt))",
 		"classifyOpLatency(buckets, dwell, plan.gate)",
 	} {
 		if !strings.Contains(body, want) {
@@ -415,7 +417,7 @@ func TestOpLatencyReadsPublishedSettings(t *testing.T) {
 		t.Fatalf("opLatActiveAge = %v, 15 dk bekleniyordu", opLatActiveAge)
 	}
 	if strings.Count(body, "ListActiveAnomalyKeys(") != 1 ||
-		strings.Index(body, "ListActiveAnomalyKeys(") > strings.Index(body, "conn.Query(ctx, q, args...)") {
+		strings.Index(body, "ListActiveAnomalyKeys(") > strings.Index(body, "store.OpP99Pivot(") {
 		t.Fatal("aktif-olay okuması tek değil ya da tespit sorgusundan sonra")
 	}
 	if strings.Contains(body, "GetAnomalySensitivity(") || strings.Contains(body, "GetSetting(") {

@@ -2173,6 +2173,63 @@ ekliyordu; op kısıtlı anahtarda (`dsl=http.route_shape ~ x`, op_group, db_stm
 loglanıp atlanıyor, sorgu SÜZGEÇSİZ koşuyordu. Artık `errBadRequest` → 400 (`dsl_validate.go`; api.go büyümedi).
 Dashboards bundle'ı hatayı slot gövdesine yazar (JSON `filters` ile aynı sözleşme).
 
+## 2026-10-07 — Op-latency / servis yavaşlama: 24 sa taban önbelleği, tur başına yalnız güncel kovalar (v0.10.1118)
+
+**Ölçüm (operatör prod `system.query_log`, son 1 sa):** en pahalı sorgu `operation_summary_5m` operasyon pivotu
+(`chstore.OpP99PivotQuery`) — n=13/sa, ort. 1692 ms, en çok 2524 ms, ort. okuma ≈ 974 MiB; kardeş biçim (yaygın
+yavaşlama, p95'li) n=3/sa, 774 ms, 977 MiB; toplam ≈ 16 GB/sa. Her tur ~24 sa'lik tDigest durumlarını YALNIZ taban
+(slot 0) için yeniden birleştiriyordu; taban turlar arasında neredeyse kıpırdamaz.
+
+**Karar:** iki tüketici (`trace_op_latency` dedektörü ve `svc-slowdown` operasyon kolu) okumayı `Store.OpP99Pivot`'tan
+yapar. (1) **Taban önbelleği** (`op_p99_cache.go`): çift başına base_p99 + base_p95 (aynı tDigest birleşimi), base_calls,
+base_buckets; TEK sınırlı sorgu (`OpBaselineQuery`: zaman aralıklı WHERE, `HAVING base_calls ≥ MinCalls`, LIMIT 500 000,
+`max_execution_time = 60`), pencere `[E − 24 sa, E)`. Liderin belleğinde; ilk cari kova − E ≥ 1 sa olunca ARKA PLANDA
+tazelenir (kendi 70 s bağlamı — svc-slowdown'un 10 s bütçesine ve recorder turuna binmez), anahtar başına tek uçuş.
+**İki kapsam TEK tabanı paylaşır** (saatte bir 24 sa okuması, iki değil): anahtar yalnız tabanın değerini değiştirenler —
+pencere uzunluğu + çağrı tabanı (vida farklıysa iki giriş). svc-slowdown'un batch dışlaması tabanda uygulanmaz: servis
+bazlı satır süzgeci bir çiftin taban değerini değiştirmez, tur sorgusunun iç WHERE'inde kalır → dışlanan çiftin tabanına
+hiç bakılmaz (canlı motor testi: batch çiftleri tabanda varken eskiyle aynı satırlar). Kapsamların ilk cari kovaları ~1
+kova farklı (op_latency sürdürme penceresi başı, svc-slowdown tek cari kova): E = son 15 dk'da görülmüş kapsamların ilk
+cari kovalarının EN ERKENİ — ikisi de zamanla yalnız ilerler, E hiçbirinin cari kovasını tabana sokmaz; yeni / büyümüş
+(dwell) kapsam E'den önce başlarsa "ahead" → o tur eski yol + tazeleme.
+(2) **Tur sorgusu** (`OpP99CurrentQuery`): yalnız `[SlotStarts[dwell−1], AlignedNow)`, aynı kova numarası ve tDigest
+birleşimi; tabandan bağımsız tabanlar HAVING'de (cur_calls, cur_p99, cur_p95, önceki kovaların çağrı + mutlak p99'u, aktif
+çift muaf); batch kalıbı `toUInt8(<BatchServiceSQL>) AS is_batch` — eski HAVING'in AYNI SQL yüklemi; LIMIT 50 000.
+(3) **SAF birleşim** `JoinOpP99Pivot`: eski HAVING'in tabana bağlı koşulları (base_calls, base > 0, her kovada
+cur ≥ kat × taban çarpım biçimiyle, aktif muafiyeti, CurP95MinMs, batch yük kapısı + muaf çiftler), ORDER BY oran DESC,
+LIMIT 200 — birebir. Eşit oranların sırası SQL'de tanımsızdı; artık (servis, operasyon) artan, kararlı.
+
+**Eşdeğerlik:** `op_p99_cached_test.go` — eski SQL'in metinden yazılmış Go referansı ile yeni yol (tur HAVING'li ve
+HAVING'siz) dwell 1/2/3, histerezis, batch + muaf, BaseP95, CurP95MinMs, sınır eşitlikleri, NaN, eşitlik + LIMIT kesimi ve
+400 rastgele vakada aynı satırlar; `clickhouse local` testinde gerçek üç sorgu metni aynı fikstürde aynı satırları
+döndürür. Ön şart: tabanlardan en az biri > 0 (cari verisi olmayan çift eski HAVING'den geçemez) — değilse eski yol.
+
+**Okuma beklentisi: ~2–7× az (≈ 2.3–7 GB/sa, parça yerleşimine bağlı) — kesin sayıyı YALNIZ prod `query_log` verir**
+(`read_bytes` + `op_pivot_reads_total{path}`). Mantıksal pencere 24 sa + dwell × 5 dk (290 / 289 kova) yerine dwell
+kovası (2 / 1), artı paylaşılan tabanın saatte bir 24 sa okuması (≈ 1 GB). Ama ORDER BY `(service_name, name,
+time_bucket)` — zaman ÜÇÜNCÜ kolon, birincil indeks son 10 dk'yı daraltamaz; budama yalnız gün bölümü + parça başına
+time_bucket minmax'ı ile: okunan = cari pencereyle kesişen parçalar (taze küçük parçalar + şimdiye dek birleşmiş büyük
+bir parça varsa onun TAMAMI; en kötü durumda bugünkü bölümün çoğu). Yetmezse kuyruk adayı: time_bucket önde projeksiyon.
+
+**Davranış değişiklikleri (bilinçli):**
+- **Taban gecikmesi:** önbellek penceresi gerçeğin ≤ 1 sa (+ tazeleme süresi) gerisinde; aradaki dilim ne tabana ne cari
+  kovalara girer. Pencere sonu hiçbir zaman bir kapsamın ilk cari kovasından sonra değil: olay kendi tabanını eskisinden
+  fazla seyreltemez.
+- **Son bir saatte ilk kez görülen operasyonun tabanı yok → alarm üretemez** (eski yolda o saatte ≥ 30 çağrısı varsa
+  tabanı olurdu); bir sonraki tazelemede (≤ 1 sa) tabana girer.
+- **Uzun olayda taban olayı ~1 sa GEÇ emer:** 24 sa pencere olay kovalarını eskisinden ≤ 1 sa sonra içermeye başlar —
+  uzun yavaşlamada sinyal en çok ~1 sa daha uzun sürer.
+
+**Geri dönüş:** iyi taban yok (ilk tur, lider değişimi) / taban LIMIT'e dayandı / taban > 6 sa bayat / ileride / tur
+sorgusu LIMIT'e dayandı → o tur ESKİ tek geçiş (tespit durmaz). **Bekleme:** tazeleme hatası → son iyi taban korunur,
+yeniden deneme 15 dk sonra (iyi taban yokken her tur eski yol + 24 sa tazeleme = eskinin ~2 katı okuma olurdu, CH
+zorlanırken daha kötü); LIMIT'e dayanan taban → 6 sa yeniden deneme yok (log + `op_baseline_refresh_duration_seconds{
+result="capped"}` + `op_pivot_reads_total{reason="capped"}`). Tur sorgusu hatası çağırana döner (zorlanan CH'ye ikinci
+ağır sorgu yok). **Bilinen boşluk:** liderliği kaybeden pod önbelleği belleğinde tutar (`LeaderHolder`'da kayıp kancası
+yok); yeniden lider olursa 2 sa'ten uzun kullanılmamış giriş sıfırlanır, daha kısa aradaki taban 6 sa bayatlık sınırında
+zaten geçerli. Öz-gözlem: `op_pivot_reads_total{scope,path,reason}`, `op_baseline_refresh_duration_seconds{scope,result}`,
+`op_baseline_rows`, `op_baseline_age_seconds` (gecikme).
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

@@ -398,8 +398,10 @@ func TestOpLatencyDwellAgreesOnClickHouse(t *testing.T) {
 		if ln == "" {
 			continue
 		}
-		var b opLatencyBucket
-		dest := opLatencyScanDest(&b, 2, true)
+		// v0.10.1118 — üretimin tarayıcısı: chstore.OpP99PivotScanDest +
+		// opLatencyBucketOf (eski opLatencyScanDest'in yerine, aynı kolon sırası).
+		var pr chstore.OpP99Row
+		dest := chstore.OpP99PivotScanDest(&pr, opLatencySpec(slots, base, aligned, plan, sustainExempt))
 		cols := strings.Split(ln, "\t")
 		if len(cols) != len(dest) {
 			t.Fatalf("kolon sayısı %d, tarayıcı %d: %q", len(cols), len(dest), ln)
@@ -417,7 +419,7 @@ func TestOpLatencyDwellAgreesOnClickHouse(t *testing.T) {
 				t.Fatalf("kolon %d %q: %v", i, cols[i], err)
 			}
 		}
-		b.Active = activeSet[opLatPair{Service: b.Service, Operation: b.Operation}]
+		b := opLatencyBucketOf(pr, activeSet[opLatPair{Service: pr.Service, Operation: pr.Operation}])
 		rows = append(rows, b)
 		sqlSet[b.Service+"/"+b.Operation] = true
 	}
@@ -468,7 +470,7 @@ func TestOpLatencyDwellWiring(t *testing.T) {
 	gate := idx("if !sens.OpLatencyOn() {")
 	dwell := idx("dwell := sens.OpLatencyDwell()")
 	win := idx("opLatencyWindows(time.Now(), window, dwell)")
-	scan := idx(`opLatencyScanDest(&b, dwell, plan.cond != "")`)
+	scan := idx("store.OpP99Pivot(ctx, chstore.OpPivotScopeOpLatency,")
 	cls := idx("classifyOpLatency(buckets, dwell, plan.gate)")
 	if gate < 0 || dwell < 0 || win < 0 || scan < 0 || cls < 0 || !(gate < dwell && dwell < win && win < scan && scan < cls) {
 		t.Fatalf("kablo bozuk (kapı %d, dwell %d, pencere %d, tarama %d, sınıflama %d)", gate, dwell, win, scan, cls)
@@ -478,8 +480,8 @@ func TestOpLatencyDwellWiring(t *testing.T) {
 	for _, want := range []string{
 		"if dwell > 1 {\n\t\tsvcCond, svcArgs = \"\", nil\n\t}",
 		"sustainExempt := opLatSustainExempt(dwell, active, readErr)",
-		"opLatencyQuery(slotStarts, baseStart, alignedNow, plan, sustainExempt)",
-		"b.Active = activeSet[opLatPair{Service: b.Service, Operation: b.Operation}]",
+		"opLatencySpec(slotStarts, baseStart, alignedNow, plan, sustainExempt))",
+		"opLatencyBucketOf(r, activeSet[opLatPair{Service: r.Service, Operation: r.Operation}])",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("DetectOpLatencyAnomalies %q taşımıyor", want)
@@ -488,8 +490,10 @@ func TestOpLatencyDwellWiring(t *testing.T) {
 	if strings.Count(body, "ListActiveAnomalyKeys(") != 1 {
 		t.Fatal("aktif-olay okuması tek değil")
 	}
-	if strings.Count(body, "conn.Query(ctx, q, args...)") != 1 {
-		t.Fatal("tespit sorgusu tek değil — kova başına ek sorgu mu açıldı?")
+	// v0.10.1118 — tespit okuması tek pivot çağrısı (taban önbelleği + cari
+	// kovalar ya da eski tek geçiş, chstore'da); dedektörde ham MV sorgusu yok.
+	if strings.Count(body, "store.OpP99Pivot(") != 1 || strings.Contains(body, "operation_summary_5m") {
+		t.Fatal("tespit okuması tek değil — kova başına ek sorgu mu açıldı?")
 	}
 }
 

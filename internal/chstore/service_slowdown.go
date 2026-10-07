@@ -15,6 +15,9 @@ package chstore
 //     PAY tabanı cur_p95 ≥ MinP99Ms/2 (CurP95MinMs — tek yavaş trace'in iç içe
 //     span'leri üç operasyonun p99'unu birden şişirebilir, p95'ini değil).
 //     Batch servisler iç WHERE'de düşer — LIMIT onlara harcanmasın. Satır az.
+//     v0.10.1118: OpP99Pivot — 24 sa taban liderin belleğinde (saatte bir
+//     tazelenir), kova başına yalnız cari kova okunur; önbellek yoksa / tavanda
+//     eski tek geçiş (op_p99_cache.go).
 //  2. Servis özeti — service_summary_5m, servis başına cari kova çağrısı +
 //     p99, önceki SAATİN çağrısı (trafik çöküşü kolunun tabanı) ve 24 sa p99
 //     tabanı; HAVING yalnız (a) operasyon kolunun aday servisleri + açık
@@ -80,11 +83,13 @@ type SvcSlowServiceRow struct {
 	BaseP95Ms float64 // önceki 24 sa servis p95'i — taban (0 = ölçü yok)
 }
 
-// ServiceSlowdownOpsQuery — SAF: operasyon pivotu (golden test). cur = cari
+// ServiceSlowdownOpsSpec — SAF: operasyon pivotunun girdileri. cur = cari
 // (tamamlanmış) kovanın başı; taban [cur − 24 sa, cur), cari [cur, cur + 5 dk).
-func ServiceSlowdownOpsQuery(cur time.Time, cfg ServiceSlowdownConfig, sens AnomalySensitivityConfig) (string, []any) {
+// v0.10.1118: okuma OpP99Pivot'tan (taban önbelleği + yalnız cari kova; önbellek
+// yoksa bu spec'in eski tek geçişi — ServiceSlowdownOpsQuery).
+func ServiceSlowdownOpsSpec(cur time.Time, cfg ServiceSlowdownConfig, sens AnomalySensitivityConfig) OpP99PivotSpec {
 	cond, bargs := sens.BatchServiceSQL("service_name")
-	return OpP99PivotQuery(OpP99PivotSpec{
+	return OpP99PivotSpec{
 		SlotStarts:  []time.Time{cur},
 		BaseStart:   cur.Add(-svcSlowBaseLookback),
 		AlignedNow:  cur.Add(SvcSlowdownBucket),
@@ -94,7 +99,13 @@ func ServiceSlowdownOpsQuery(cur time.Time, cfg ServiceSlowdownConfig, sens Anom
 		CurP95MinMs: SvcSlowP95Floor(cfg),
 		BaseP95:     true,
 		TimeoutSec:  int(SvcSlowReadTimeout / time.Second),
-	})
+	}
+}
+
+// ServiceSlowdownOpsQuery — SAF: operasyon pivotunun eski tek geçişi (golden
+// test; önbellek yokken / tavanda OpP99Pivot'un geri dönüşü).
+func ServiceSlowdownOpsQuery(cur time.Time, cfg ServiceSlowdownConfig, sens AnomalySensitivityConfig) (string, []any) {
+	return OpP99PivotQuery(ServiceSlowdownOpsSpec(cur, cfg, sens))
 }
 
 // SvcSlowP95Floor — yavaş pay tabanı: cari kova p95'i ≥ MinP99Ms / 2 (vars.
@@ -105,27 +116,29 @@ func SvcSlowP95Floor(cfg ServiceSlowdownConfig) float64 {
 }
 
 // ServiceSlowdownOps — operasyon pivotu; truncated = satır tavanına dayandı
-// (eksik küme: görünmeyen servis "temiz" sayılmaz).
+// (eksik küme: görünmeyen servis "temiz" sayılmaz). v0.10.1118: OpP99Pivot —
+// 24 sa taban önbellekten, tur başına yalnız cari kova okunur (satırlar eski
+// tek geçişle birebir; taban ≤ 1 sa gecikmeli — op_p99_cached.go).
 func (s *Store) ServiceSlowdownOps(ctx context.Context, cur time.Time, cfg ServiceSlowdownConfig, sens AnomalySensitivityConfig) ([]SvcSlowOpRow, bool, error) {
-	q, args := ServiceSlowdownOpsQuery(cur, cfg, sens)
-	rows, err := s.telemetryReadConn().Query(ctx, q, args...)
+	rows, err := s.OpP99Pivot(ctx, OpPivotScopeSvcSlowdown, ServiceSlowdownOpsSpec(cur, cfg, sens))
 	if err != nil {
 		return nil, false, err
 	}
-	defer rows.Close()
-	out := []SvcSlowOpRow{}
-	for rows.Next() {
-		var r SvcSlowOpRow
-		if err := rows.Scan(&r.Service, &r.Operation, &r.CurP99Ms, &r.BaseP95Ms, &r.CurCalls, &r.BaseCalls, &r.CurP95Ms); err != nil {
-			return nil, false, err
-		}
-		r.CurP99Ms, r.BaseP95Ms, r.CurP95Ms = finiteOrZero(r.CurP99Ms), finiteOrZero(r.BaseP95Ms), finiteOrZero(r.CurP95Ms)
-		out = append(out, r)
+	return svcSlowOpRowsOf(rows), len(rows) >= OpP99PivotLimit, nil
+}
+
+// svcSlowOpRowsOf — SAF: pivot satırları → kural satırları (NaN/Inf → 0, eski
+// tarayıcıyla aynı).
+func svcSlowOpRowsOf(rows []OpP99Row) []SvcSlowOpRow {
+	out := make([]SvcSlowOpRow, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, SvcSlowOpRow{
+			Service: r.Service, Operation: r.Operation,
+			CurP99Ms: finiteOrZero(r.CurP99Ms), BaseP95Ms: finiteOrZero(r.BaseMs), CurP95Ms: finiteOrZero(r.CurP95Ms),
+			CurCalls: r.CurCalls, BaseCalls: r.BaseCalls,
+		})
 	}
-	if err := rows.Err(); err != nil {
-		return nil, false, err
-	}
-	return out, len(out) >= OpP99PivotLimit, nil
+	return out
 }
 
 // serviceSlowdownServicesSQL — SAF metin. Bind sırası: cur (cari çağrı), saat

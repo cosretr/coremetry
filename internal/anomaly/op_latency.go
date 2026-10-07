@@ -80,10 +80,8 @@ type opLatencyBucket struct {
 }
 
 // opLatencySlot — sürdürme penceresinin tek bir önceki kovası (v0.10.1085).
-type opLatencySlot struct {
-	P99Ms float64
-	Calls uint64
-}
+// v0.10.1118 — pivot satırının kova tipinin takma adı (alanlar aynı).
+type opLatencySlot = chstore.OpP99Slot
 
 // opLatPair — (servis, operasyon) çifti: trace_op_latency olayının kimliği
 // (FingerprintAnomaly(kind, operasyon, servis)). v0.10.1091 — pivot chstore'a
@@ -288,8 +286,19 @@ func opLatencySustained(r opLatencyBucket, dwell int) bool {
 //
 // plan dolu → batch yük kapısı (v0.10.1046) aynı geçişte, HAVING'de: Go'da
 // elenseler LIMIT'i doldurup gerçek sıçramaları dışarıda bırakırlardı.
+//
+// v0.10.1118 — tespit okuması chstore.OpP99Pivot'tan (24 sa taban önbelleği +
+// yalnız cari kovalar, satırlar bu metnin döndüreceklerle birebir); bu metin
+// önbellek yokken / tavanda geri dönüş olarak koşar. Girdiler opLatencySpec'te.
 func opLatencyQuery(slotStarts []time.Time, baseStart, alignedNow time.Time, plan opLatBatchPlan, active []opLatPair) (string, []any) {
-	return chstore.OpP99PivotQuery(chstore.OpP99PivotSpec{
+	return chstore.OpP99PivotQuery(opLatencySpec(slotStarts, baseStart, alignedNow, plan, active))
+}
+
+// opLatencySpec — SAF (v0.10.1118): pivotun girdileri — trace_op_latency
+// tabanları, batch planı, aktif çiftler (opLatencyQuery ile OpP99Pivot AYNI
+// spec'ten).
+func opLatencySpec(slotStarts []time.Time, baseStart, alignedNow time.Time, plan opLatBatchPlan, active []opLatPair) chstore.OpP99PivotSpec {
+	return chstore.OpP99PivotSpec{
 		SlotStarts: slotStarts, BaseStart: baseStart, AlignedNow: alignedNow,
 		Floors: chstore.OpP99Floors{MinCalls: opLatencyMinCalls, Ratio: opLatencyMinRatio, MinP99Ms: opLatencyMinP99Ms},
 		Batch: chstore.OpP99BatchGate{
@@ -297,7 +306,7 @@ func opLatencyQuery(slotStarts []time.Time, baseStart, alignedNow time.Time, pla
 			SurgeFactor: batchLoadSurgeFactor, CurBuckets: plan.gate.curBuckets,
 		},
 		Active: active,
-	})
+	}
 }
 
 // opLatSustainExempt — SAF (v0.10.1085): sürdürmeden muaf AKTİF çiftler,
@@ -319,23 +328,16 @@ func opLatSustainExempt(dwell int, active []chstore.ActiveAnomalyKey, readErr er
 	return out
 }
 
-// opLatencyScanDest — v0.10.1085: satırın Scan hedefleri, opLatencyQuery'nin
-// kolon sırasıyla (6 temel kolon, önceki kovalar p99_<i> / calls_<i>, batch
-// kolunda base_buckets). Tek yerde ki sorgu ile tarayıcı ayrışmasın
-// (clickhouse local testi aynı yardımcıyla ayrıştırır).
-func opLatencyScanDest(b *opLatencyBucket, dwell int, batch bool) []any {
-	dest := []any{&b.Service, &b.Operation, &b.CurP99Ms, &b.BaseP99Ms, &b.CurCalls, &b.BaseCalls}
-	if dwell < 1 {
-		dwell = 1
+// opLatencyBucketOf — SAF (v0.10.1118): pivot satırı → sınıflayıcı girdisi
+// (eski opLatencyScanDest'in kolon eşlemesi: base = base_p99, önceki kovalar,
+// batch kolunda base_buckets). active = çiftin olayı aktif (sürdürme muafiyeti).
+func opLatencyBucketOf(r chstore.OpP99Row, active bool) opLatencyBucket {
+	return opLatencyBucket{
+		Service: r.Service, Operation: r.Operation,
+		CurP99Ms: r.CurP99Ms, BaseP99Ms: r.BaseMs,
+		CurCalls: r.CurCalls, BaseCalls: r.BaseCalls, BaseBuckets: r.BaseBuckets,
+		Earlier: r.Earlier, Active: active,
 	}
-	b.Earlier = make([]opLatencySlot, dwell-1)
-	for i := range b.Earlier {
-		dest = append(dest, &b.Earlier[i].P99Ms, &b.Earlier[i].Calls)
-	}
-	if batch {
-		dest = append(dest, &b.BaseBuckets)
-	}
-	return dest
 }
 
 // opLatencyWindows — SAF (v0.10.1085): tespitin zaman sınırları. Kova =
@@ -432,27 +434,22 @@ func DetectOpLatencyAnomalies(ctx context.Context, store *chstore.Store, window 
 	}
 	plan := planOpLatBatch(sens, uint64(curBuckets), active, readErr)
 	sustainExempt := opLatSustainExempt(dwell, active, readErr)
-	q, args := opLatencyQuery(slotStarts, baseStart, alignedNow, plan, sustainExempt)
 	activeSet := make(map[opLatPair]bool, len(sustainExempt))
 	for _, p := range sustainExempt {
 		activeSet[p] = true
 	}
-	rows, err := conn.Query(ctx, q, args...)
+	// v0.10.1118 — tek pivot okuması: 24 sa taban liderin belleğinden (saatte
+	// bir arka planda tazelenir), tur başına yalnız sürdürme kovaları okunur;
+	// önbellek yoksa / tavanda opLatencyQuery'nin eski tek geçişi. Satırlar
+	// birebir (taban ≤ 1 sa gecikmeli — chstore/op_p99_cached.go).
+	prows, err := store.OpP99Pivot(ctx, chstore.OpPivotScopeOpLatency,
+		opLatencySpec(slotStarts, baseStart, alignedNow, plan, sustainExempt))
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	buckets := []opLatencyBucket{}
-	for rows.Next() {
-		var b opLatencyBucket
-		if err := rows.Scan(opLatencyScanDest(&b, dwell, plan.cond != "")...); err != nil {
-			return nil, err
-		}
-		b.Active = activeSet[opLatPair{Service: b.Service, Operation: b.Operation}]
-		buckets = append(buckets, b)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
+	buckets := make([]opLatencyBucket, 0, len(prows))
+	for _, r := range prows {
+		buckets = append(buckets, opLatencyBucketOf(r, activeSet[opLatPair{Service: r.Service, Operation: r.Operation}]))
 	}
 
 	out := classifyOpLatency(buckets, dwell, plan.gate)

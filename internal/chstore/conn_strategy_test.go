@@ -285,6 +285,10 @@ func TestTelemetryReadConnCallSurface(t *testing.T) {
 		// operation_summary_5m + service_summary_5m. Problem satırları evaluator
 		// → problem.go'da, ana bağlantıda kalır.
 		"service_slowdown.go": true,
+		// v0.10.1118 — SAF telemetri: operasyon pivotunun üç okuması (eski tek
+		// geçiş, cari kovalar, 24 sa taban önbelleği tazelemesi), tek FROM'ları
+		// operation_summary_5m. State okumaz/yazmaz; önbellek süreç belleğinde.
+		"op_p99_cache.go": true,
 		// v0.10.1023 — SAF telemetri: tek FROM'u spanmetrics_1m (Operations çıplak fiil → rota kırılımı); ops MV okumasıyla aynı havuz.
 		"operation_routes.go": true,
 		// v0.10.712 — SAF telemetri: trace_summary_5m kök kapsaması (admin teşhisi).

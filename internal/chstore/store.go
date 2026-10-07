@@ -45,6 +45,10 @@ type Store struct {
 	// mvCoverage (v0.10.124) — trace_summary_5m gün başına boşluk haritası,
 	// 60 sn önbellek (trace_mv_coverage.go).
 	mvCoverage traceMVCoverage
+	// opPivot (v0.10.1118) — operasyon p99 pivotunun 24 sa taban önbelleği
+	// (op_p99_cache.go); yalnız dedektörleri koşturan süreçte dolar. Sıfır
+	// değeri hazır (Store{} kuran testler: boş önbellek → eski tek geçiş).
+	opPivot opPivotCache
 	// chOpts (v0.9.1191) — New()'daki bağlantı seçenekleri fabrikası.
 	// Her çağrı TAZE bir Options üretir (Settings map'i sürücüde kalıyor;
 	// paylaşmak iki havuzu birbirine bağlardı). Tek tüketici uzun-işlem
