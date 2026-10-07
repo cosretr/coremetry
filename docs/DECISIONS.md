@@ -2230,6 +2230,62 @@ yok); yeniden lider olursa 2 sa'ten uzun kullanılmamış giriş sıfırlanır, 
 zaten geçerli. Öz-gözlem: `op_pivot_reads_total{scope,path,reason}`, `op_baseline_refresh_duration_seconds{scope,result}`,
 `op_baseline_rows`, `op_baseline_age_seconds` (gecikme).
 
+## 2026-10-07 — Kök-neden paneli soğuk açılış: çekirdek + bubbleUp aşamalı çizim (v0.10.1119)
+
+**Operatör (prod):** Problem kök-neden paneli (`/api/problems/{id}/rootcause`) ilk açılışta / önbellek ıskasında
+30–45 sn boş bekliyor, sıcakta hızlı. **Kök neden:** demet TEK yanıt ve yanıt en yavaş alt-okumayı bekliyordu.
+Fan-out'taki okumaların hepsi MV ya da nokta okuması (deploy `service_version_5m`, korelasyon
+`service_summary_5m`, topoloji `topology_edges_5m`, blast radius `service_callers_5m`, hipotez FINAL;
+exemplar servis+zaman önekli top-1) — tek istisna BubbleUp (`chstore/bubbleup.go`): 1 saate (gecikme ailesinde
+önceki eş-boy baseline ile 2 saate) kadar ham `spans` üzerinde ÜÇ ardışık aşama — totals (25 sn tavan) →
+`arrayJoin(attr_keys)` anahtar keşfi (25 sn tavan) → 30'a dek anahtar başı `attr_keys/attr_values` taraması, 6'lı
+dalgalar (15 sn tavan; v0.9.1082 ölçümü anahtar başı medyan 1,3 sn). Üstüne deploy zenginleştirmesi fan-out'tan
+ÖNCE ardışık koşuyordu. İkinci sınıf: SWR arka plan tazelemesinin 20 sn'lik context'i (`cache.go` `refreshKey`)
+~40 sn'lik demeti her seferinde kesiyor, bubbleUp'sız/exemplar'sız KISMİ demeti taze diye önbelleğe yazıyordu;
+180 sn sonra yine sert ıska.
+
+**Karar:** (1) Demet iki uca bölündü (`api/rootcause_progressive.go`, defter kaydı; api.go büyümedi):
+`/rootcause/core` = tam demetin bubbleUp HARİÇ aynı fan-out'u, `/rootcause/bubbleup` = tam demetteki aynı
+`ServiceBubbleUp` çağrısı (aynı pencere işlevi, aynı aile), anomali şeridi için `/api/anomalies/{id}/rootcause/core`.
+Panel ikisini AYNI ANDA ister, çekirdeği gelir gelmez çizer; bubbleUp bölümü yerinde "yükleniyor" satırıyla bekler,
+manşet bubbleUp'a bağlıysa (deploy / sıcak rollout yok) "inceleniyor" der — önce "localized" deyip fikir
+değiştirmez. Şerit ve dış kanıt paneli bubbleUp çizmediği için yalnız core okur. Tam `/rootcause` API sözleşmesi
+olarak aynen durur. (2) Deploy zenginleştirmesi fan-out'un içine alındı (paralel). (3) BubbleUp'ta totals ile
+anahtar keşfi aynı anda koşar (keşif totals'a bağımlı değil; boş taraf / totals hatasında keşif iptal edilip
+beklenir) — bir ham tarama aşaması duvardan düşer; SQL metinleri bayt bayt aynı, 6'lı tavan aynı. (4) Kök-neden
+hesapları istek iptalinden koparıldı (`context.WithoutCancel` + bütçe: core 30 sn, tam 90 sn, bubbleup 85 sn):
+çekmeceyi kapatan singleflight lideri paylaşılan hesabı öldürmez, SWR tazelemesi kısmi demet yazmaz. Core bütçesi
+aşılırsa WARN log (`logRootCauseBudget`). (4b) **Kopuk işe tavan** (`api/rootcause_bubble_gate.go`, inceleme
+düzeltmesi): kök-neden yollarındaki `ServiceBubbleUp` taramaları (bubbleup ucu, tam demet, ikisinin SWR
+tazelemesi) pod başına süreç geneli `rootCauseBubbleSlots = 3` yuvayı paylaşır. Yuva ÖZGÜN context yaşarken
+beklenir (≤ 8 sn); bekleyen iptal edilirse tarama hiç başlamaz, sonuç önbelleğe girmez; kopma yalnız yuva
+alındıktan sonra. Bekleme dolarsa bubbleup ucu hata döner (önbelleğe yazılmaz); tam demet eski davranışla
+bubbleUp'sız döner ama gövde `uncacheable()` ile işaretlenir (`cache.go`: L1/L2'ye yazılmaz, `X-Cache:
+MISS-NOSTORE`, SWR bayat girdiyi bununla ezmez). Bekleme / ret / iptal sayaçları + log satırı. (5) bubbleup
+ucunda HATA önbelleğe yazılmaz (sonraki açılış yeniden dener). İstemci zaman aşımı 95 sn (85 sn bütçe + 8 sn
+yuva beklemesi altında kalır; varsayılan 60 sn uzun taramayı keserdi). İstek düşerse bölüm "Attribute kıyası
+okunamadı" der (TR/EN, `rootCause.bubbleUnavailable`) — "ayrışma yok" ile karışmaz; manşet "Comparing…"de
+takılmaz, bubbleUp'sız tam demetin manşetine döner, "ilişkili sinyal yok" boş hâli iddia edilmez. Önbellek
+60 sn, anahtar tam demetin kimlik anahtarı + parça öneki (saat bileşeni yok, v0.9.1082). Eşdeğerlik testleri:
+`rootcause_progressive_test.go` (core + bubbleup = tam demet alan alan, core bubbleUp koşmaz, hata önbelleğe
+girmez, singleflight tek hesap, iptal edilen istemcinin hesabı önbelleğe girer), `bubbleup_parallel_test.go`
+(ardışık referansa karşı sonuç + hata sırası, örtüşme, iptal + bekleme, eşzamanlılık tavanı),
+`RootCausePanel.progressive.test.tsx`.
+
+**Beklenen etki:** ilk anlamlı içerik (manşet hariç tüm bölümler: deploy, blast radius, korelasyon, exemplar,
+rollout'lar, hipotez izi) soğukta MV okumalarının süresi kadar — tipik ≤ 1–3 sn (exemplar ham top-1 dahil);
+bubbleUp bölümü kendi süresinde gelir, bir tam tarama aşaması kadar (≈ birkaç sn) kısalmış olarak. Şerit
+genişletmesi ve dış kanıt paneli artık hiç ham bubbleUp taraması tetiklemez.
+
+**Artık risk:** bubbleUp'ın kendisi hâlâ ham spans (anahtar başı sorgu kararı v0.9.1082'den duruyor) — yoğun
+serviste bölüm onlarca saniye sürebilir; panel o sürede kullanılabilir ama manşet deploy/rollout yoksa bekler.
+Hata önbelleğe girmediği için CH kalıcı zaman aşımında her açılış bir tarama dener (pod başına singleflight ile
+tek, toplamda 3 yuva ile sınırlı). Yoğun anda (≥ 4 farklı problem aynı anda soğuk) dördüncü panel 8 sn sonra
+"okunamadı" görür; tavan pod başına olduğundan N api pod'u ≤ 3N eşzamanlı tarama demek. Totals ∥ keşif bubbleUp başına anlık eşzamanlı CH sorgusunu 1 artırır. Açık problemde core ve bubbleup
+pencereleri kendi hesap anlarından türer (`end = now`) — saniyeler mertebesinde ayrışabilir; bölüm alt başlığı
+kendi penceresini gösterir. Ön-ısıtma (lider işçide açık problemler için) bilinçli olarak eklenmedi: bubbleUp'ı
+her açık problem için periyodik koşturmak tık-yolundan bağımsız ham spans yükü demek.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

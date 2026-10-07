@@ -31,7 +31,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
     ...mod,
     api: {
       ...(mod.api as Record<string, unknown>),
-      problemRootCause: async () => (m.deep ? { hypothesis: { deep: m.deep } } : {}),
+      problemRootCauseCore: async () => (m.deep ? { hypothesis: { deep: m.deep } } : {}),
       metricQueryFull: async () => ({ series: [] }),
     },
   };

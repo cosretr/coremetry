@@ -66,7 +66,7 @@ beforeEach(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   // Fan-out ASLA çözülmüyor: gövdenin açık olup olmadığını spinner'dan
   // okuyoruz ve testin hiçbir iddiası ağ cevabına bağlı değil.
-  vi.spyOn(api, 'problemRootCause').mockImplementation(() => new Promise(() => {}));
+  vi.spyOn(api, 'problemRootCauseCore').mockImplementation(() => new Promise(() => {}));
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
@@ -92,7 +92,7 @@ describe('RootCauseRibbon — insight kartıyla birleşik şerit', () => {
     expect(text()).toContain('Root cause');
     expect(text()).toContain('payment-db');
     expect(text()).toContain('72%');
-    expect(api.problemRootCause).not.toHaveBeenCalled();
+    expect(api.problemRootCauseCore).not.toHaveBeenCalled();
     expect(bodyOpen()).toBe(false);
   });
 
@@ -114,7 +114,7 @@ describe('RootCauseRibbon — insight kartıyla birleşik şerit', () => {
     await click(button('Root cause')!);
     expect(cardOpen()).toBe(false);
     expect(bodyOpen()).toBe(true);
-    expect(api.problemRootCause).toHaveBeenCalledTimes(1);
+    expect(api.problemRootCauseCore).toHaveBeenCalledTimes(1);
   });
 
   it('kart, ZATEN AÇIK bir gövdeyi bastırır ve kapanınca gövde GERİ gelir', async () => {
@@ -129,7 +129,7 @@ describe('RootCauseRibbon — insight kartıyla birleşik şerit', () => {
     // Operatörün bıraktığı hâl korunuyor: kart açmak şeridi KALICI
     // olarak kapatmaz, ve ikinci bir fan-out fetch'i de yok.
     expect(bodyOpen()).toBe(true);
-    expect(api.problemRootCause).toHaveBeenCalledTimes(1);
+    expect(api.problemRootCauseCore).toHaveBeenCalledTimes(1);
   });
 
   it('suppressed YOKKEN davranış eskisi gibi: aç/kapa tek çipte', async () => {

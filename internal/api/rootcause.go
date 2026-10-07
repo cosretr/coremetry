@@ -90,7 +90,7 @@ func (s *Server) rootCauseTopo(ctx context.Context, service string, at, end time
 		return nil, false
 	}
 	from := at.Add(-time.Duration(baselineSec) * time.Second)
-	es, err := s.store.GetServiceGraphTopN(ctx, service, 0, from, end, rootCauseTopoEdgeCap)
+	es, err := rootCauseStoreOf(s).GetServiceGraphTopN(ctx, service, 0, from, end, rootCauseTopoEdgeCap)
 	if err != nil {
 		return nil, false
 	}
@@ -143,13 +143,76 @@ func exemplarKindForAnomaly(kind string) chstore.ExemplarKind {
 	}
 }
 
+// rootCauseStore — kök-neden demetinin okumaları (*chstore.Store karşılar).
+// v0.10.1119: handler testleri sahte depoyla koşsun diye dikiş
+// (problemLogTemplatesStoreOf emsali) — tam demet / çekirdek / bubbleUp
+// uçlarının eşdeğerliği ancak böyle CH'siz sınanabiliyor.
+type rootCauseStore interface {
+	GetProblem(ctx context.Context, id string) (*chstore.Problem, error)
+	GetAnomalyEvent(ctx context.Context, id string, activeAge time.Duration) (*chstore.AnomalyEvent, error)
+	EnrichProblemsWithDeploys(ctx context.Context, problems []chstore.Problem, lookback time.Duration) []chstore.Problem
+	EnrichAnomaliesWithDeploys(ctx context.Context, events []chstore.AnomalyEvent, lookback time.Duration) []chstore.AnomalyEvent
+	GetCorrelatedChangesMVTop(ctx context.Context, at time.Time, windowSec, baselineSec, top int) ([]chstore.ChangedService, error)
+	GetServiceGraphTopN(ctx context.Context, service string, since time.Duration, from, to time.Time, topN int) ([]chstore.ServiceEdge, error)
+	GetServiceBlastRadius(ctx context.Context, service string, from, to time.Time) (chstore.BlastRadius, error)
+	FindExemplar(ctx context.Context, req chstore.ExemplarReq) (*chstore.Exemplar, error)
+	GetHypothesis(ctx context.Context, anchorKind, anchorID string) (*chstore.RootCauseHypothesis, error)
+	ServiceBubbleUp(ctx context.Context, service string, errorSubset bool, started, end time.Time) (*chstore.BubbleUpResult, error)
+}
+
+var rootCauseStoreOf = func(s *Server) rootCauseStore { return s.store }
+
+// Hesap bütçeleri (v0.10.1119). Kök-neden hesapları isteğin context'inden
+// KOPARILIR (rootCauseComputeCtx): singleflight lideri olan istemci
+// çekmeceyi kapatınca paylaşılan hesap ölmesin ve sonucu önbelleğe yazılsın;
+// SWR arka plan tazelemesinin 20 sn'lik tavanı da (cache.go refreshKey)
+// ~40 sn'lik demeti her seferinde keserek bubbleUp'sız/exemplar'sız KISMİ
+// bir demeti taze diye önbelleğe yazıyordu. Her CH sorgusu zaten kendi
+// max_execution_time'ını taşır; bütçe yalnız toplam duvar tavanı.
+const (
+	rootCauseFullBudget   = 90 * time.Second
+	rootCauseCoreBudget   = 30 * time.Second
+	rootCauseBubbleBudget = 85 * time.Second // + yuva beklemesi (8 sn) < istemci 95 sn
+)
+
+// rootCauseComputeCtx — istek iptalinden kopuk, değerleri (sorgu etiketi)
+// koruyan, bütçeli context.
+func rootCauseComputeCtx(ctx context.Context, budget time.Duration) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(ctx), budget)
+}
+
+// problemRootCauseWindow — problemin analiz penceresi (SAF): açık problemde
+// end = now, çözülmüşte resolved_at; [10 dk, 1 sa] zarfına sıkıştırılır.
+func problemRootCauseWindow(p *chstore.Problem, now time.Time) (time.Time, time.Time) {
+	started := time.Unix(0, p.StartedAt)
+	end := now
+	if p.ResolvedAt != nil {
+		end = time.Unix(0, *p.ResolvedAt)
+	}
+	// Bound the analysis window: ≥10m of context so a just-fired problem has
+	// something to compare, ≤1h so the bubbleup/exemplar span scans stay cheap
+	// no matter how long it has been open.
+	return boundAnalysisWindow(started, end)
+}
+
+// anomalyRootCauseWindow — anomali olayının analiz penceresi (SAF):
+// [StartedAt, LastSeen], aynı zarf. LastSeen can equal or (on a clock skew)
+// precede StartedAt for a just-recorded event; boundAnalysisWindow floors the
+// span to 10m from the start, so the window is always well-formed.
+func anomalyRootCauseWindow(ev *chstore.AnomalyEvent) (time.Time, time.Time) {
+	return boundAnalysisWindow(time.Unix(0, ev.StartedAt), time.Unix(0, ev.LastSeen))
+}
+
 // getProblemRootCause assembles the root-cause bundle for one problem. Read-only,
 // open like /api/problems. Fans out to the existing correlation/blast/bubbleup/
 // exemplar reads in PARALLEL (the goroutines write disjoint fields of `out`, so
 // no shared-word race); each sub-read SOFT-FAILS to a nil/empty field rather
 // than failing the whole bundle — a partial root-cause view still helps triage.
-// Cached 60s keyed on problem id + the window-end minute (so an open problem's
-// view refreshes minute-to-minute while concurrent triage clicks share the trip).
+//
+// v0.10.1119 — UI artık bu TAM demeti değil, iki parçasını okur
+// (rootcause_progressive.go: /rootcause/core hızlı MV okumaları, ayrı
+// /rootcause/bubbleup ham-spans kıyası); bu uç API sözleşmesi olarak AYNEN
+// durur (çıktı bayt bayt aynı, eşdeğerlik testi rootcause_progressive_test.go).
 func (s *Server) getProblemRootCause(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if id == "" {
@@ -158,7 +221,7 @@ func (s *Server) getProblemRootCause(w http.ResponseWriter, r *http.Request) {
 	}
 	// Load outside the cache so a missing problem is a clean 404 (not a cached
 	// empty bundle). The problems table is small + FINAL — cheap.
-	p, err := s.store.GetProblem(r.Context(), id)
+	p, err := rootCauseStoreOf(s).GetProblem(r.Context(), id)
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -177,118 +240,145 @@ func (s *Server) getProblemRootCause(w http.ResponseWriter, r *http.Request) {
 	// arka plan tazelemesi donmuş bir end kullanmasın.
 	key := rootcauseCacheKey(id, p.StartedAt, p.ResolvedAt)
 	s.serveCached(w, r, key, 60*time.Second, func(ctx context.Context) (any, error) {
-		started := time.Unix(0, p.StartedAt)
-		end := time.Now()
-		if p.ResolvedAt != nil {
-			end = time.Unix(0, *p.ResolvedAt)
+		// Yuva (rootcause_bubble_gate.go) ÖZGÜN ctx üzerinde beklenir; hesap kopuk.
+		dctx, cancel := rootCauseComputeCtx(ctx, rootCauseFullBudget)
+		defer cancel()
+		out, bubbleSkipped := s.problemRootCauseBundle(dctx, ctx, p, true)
+		logRootCauseBudget(dctx, "tam demet", "problem "+p.ID, rootCauseFullBudget)
+		if bubbleSkipped {
+			// Eski davranış: bubbleUp'sız demet döner — ama taze diye saklanmaz.
+			return uncacheable(out), nil
 		}
-		// Bound the analysis window: ≥10m of context so a just-fired problem has
-		// something to compare, ≤1h so the bubbleup/exemplar span scans stay cheap
-		// no matter how long it has been open.
-		started, end = boundAnalysisWindow(started, end)
-		windowSec := int(end.Sub(started).Seconds())
-		out := RootCause{
-			ProblemID: p.ID, Service: p.Service, Metric: p.Metric,
-			StartedAt:    p.StartedAt,
-			FromNs:       started.UnixNano(),
-			ToNs:         end.UnixNano(),
-			Correlations: []chstore.ChangedService{},
-		}
-		// Recent deploy — reuse the same enrichment the /problems list uses.
-		// v0.10.1054 — kuralın bastırdığı deploy (prior) wg.Wait'ten sonra
-		// hipotezle birlikte değerlendirilir (RestoreMeasuredDeploy).
-		var prior *chstore.RecentDeploy
-		if enr := s.store.EnrichProblemsWithDeploys(ctx, []chstore.Problem{*p}, 30*time.Minute); len(enr) == 1 {
+		return out, nil
+	})
+}
+
+// problemRootCauseBundle — problem demetinin fan-out'u. withBubble=false
+// çekirdek demettir (/rootcause/core): bubbleUp okuması HİÇ koşmaz, diğer
+// her alan tam demetle aynı okumadan gelir.
+//
+// waitCtx: bubbleUp yuvasının beklendiği ÖZGÜN context (ctx kopuk hesap
+// context'i). bubbleSkipped = yuva alınamadı (dolu / bekleyen iptal) ve
+// bubbleUp okunmadı — çağıran gövdeyi önbelleğe yazmamalı.
+func (s *Server) problemRootCauseBundle(ctx, waitCtx context.Context, p *chstore.Problem, withBubble bool) (out RootCause, bubbleSkipped bool) {
+	st := rootCauseStoreOf(s)
+	started, end := problemRootCauseWindow(p, time.Now())
+	windowSec := int(end.Sub(started).Seconds())
+	out = RootCause{
+		ProblemID: p.ID, Service: p.Service, Metric: p.Metric,
+		StartedAt:    p.StartedAt,
+		FromNs:       started.UnixNano(),
+		ToNs:         end.UnixNano(),
+		Correlations: []chstore.ChangedService{},
+	}
+	var wg sync.WaitGroup
+	// Recent deploy — reuse the same enrichment the /problems list uses.
+	// v0.10.1054 — kuralın bastırdığı deploy (prior) wg.Wait'ten sonra
+	// hipotezle birlikte değerlendirilir (RestoreMeasuredDeploy).
+	// v0.10.1119 — fan-out'un İÇİNDE: eskiden diğer okumalardan ÖNCE
+	// ardışık koşuyordu (PromotedAnomalySources + deploy okuması, ham
+	// yola düşerse 10 sn'ye dek); diğer okumalardan bağımsız, yalnız
+	// out.RecentDeploy'a yazar.
+	var prior *chstore.RecentDeploy
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if enr := st.EnrichProblemsWithDeploys(ctx, []chstore.Problem{*p}, 30*time.Minute); len(enr) == 1 {
 			out.RecentDeploy = enr[0].RecentDeploy
 			prior = enr[0].PriorDeploy
 		}
-
-		var wg sync.WaitGroup
-		// (a) Correlations — services moving together around the problem start.
+	}()
+	// (a) Correlations — services moving together around the problem start.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		// cs != nil ŞART: nil atamak handler'ın başta koyduğu `[]`
+		// zarfını EZER ve JSON `"correlations": null` çıkar; panel
+		// `.correlations.filter` derken çöker (v0.9.836, bubbleUp
+		// ile aynı sınıf).
+		// v0.9.1062 (Faz 2.1) — MV sürümü: pencereler ≥5dk, aggregate
+		// sabit (invariant #3); ham spans taraması tık-yolundan kalktı.
+		// v0.10.1063 — işaretleme havuzu (50) üzerinden; gösterim tavanı
+		// (20) kenar+yön işaretlemesinden SONRA uygulanır (aynı sorgu).
+		if cs, e := st.GetCorrelatedChangesMVTop(ctx, started, windowSec, windowSec*4, chstore.ChangedServicesMarkPool); e == nil && cs != nil {
+			out.Correlations = cs
+		}
+	}()
+	// (a2) v0.10.1063 — öznenin topoloji komşuluğu (rootCauseTopo).
+	// Servissiz problemde (watcher) okuma yok, topoKnown=false.
+	var topoEdges []chstore.ServiceEdge
+	topoKnown := false
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		topoEdges, topoKnown = s.rootCauseTopo(ctx, p.Service, started, end, windowSec*4)
+	}()
+	// (b) Blast radius — who calls this service + how many are cascading.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		// v0.9.1047 (Faz 0.1) — problemin GERÇEK penceresi geçer;
+		// süre geçmek çözülmüş problemde son N dakikayı okutuyordu.
+		if br, e := st.GetServiceBlastRadius(ctx, p.Service, started, end); e == nil {
+			out.BlastRadius = &br
+		}
+	}()
+	// (c) Exemplar — one representative bad trace for the metric.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if ex, e := st.FindExemplar(ctx, chstore.ExemplarReq{
+			Service: p.Service, From: started, To: end,
+			Kind: exemplarKindForMetric(p.Metric),
+		}); e == nil {
+			out.Exemplar = ex
+		}
+	}()
+	// (e) Hipotez — kalıcı satırdan tek FINAL okuma (v0.9.1066).
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if h, e := st.GetHypothesis(ctx, "problem", p.ID); e == nil && h != nil {
+			out.Hypothesis = h
+		}
+	}()
+	// (d) Dimension bubble-up. HATA problemlerinde aynı-pencere
+	// alt-küme kıyası (selection = hatalı span'ler — eski davranış
+	// bayt-bayt). v0.9.1063 (Faz 2.2 / K3): GECİKME/diğer ailelerde
+	// artık ZAMAN-KAYDIRMALI kıyas koşar — baseline ÖNCEKİ eş-boy
+	// pencere, selection incident penceresi, filtre iki tarafta aynı
+	// (yalnız servis): "hangi attribute değeri önceki pencereye göre
+	// patladı". v0.10.992 — kıyas chstore.ServiceBubbleUp'ta (CoSRE
+	// kök-neden demetiyle ORTAK), davranış aynı. v0.10.1119 — çekirdek
+	// demette (withBubble=false) koşmaz; ayrı uç aynı çağrıyı yapar.
+	if withBubble {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			// cs != nil ŞART: nil atamak handler'ın başta koyduğu `[]`
-			// zarfını EZER ve JSON `"correlations": null` çıkar; panel
-			// `.correlations.filter` derken çöker (v0.9.836, bubbleUp
-			// ile aynı sınıf).
-			// v0.9.1062 (Faz 2.1) — MV sürümü: pencereler ≥5dk, aggregate
-			// sabit (invariant #3); ham spans taraması tık-yolundan kalktı.
-			// v0.10.1063 — işaretleme havuzu (50) üzerinden; gösterim tavanı
-			// (20) kenar+yön işaretlemesinden SONRA uygulanır (aynı sorgu).
-			if cs, e := s.store.GetCorrelatedChangesMVTop(ctx, started, windowSec, windowSec*4, chstore.ChangedServicesMarkPool); e == nil && cs != nil {
-				out.Correlations = cs
+			release, err := acquireRootCauseBubbleSlot(waitCtx)
+			if err != nil {
+				bubbleSkipped = true
+				return
 			}
-		}()
-		// (a2) v0.10.1063 — öznenin topoloji komşuluğu (rootCauseTopo).
-		// Servissiz problemde (watcher) okuma yok, topoKnown=false.
-		var topoEdges []chstore.ServiceEdge
-		topoKnown := false
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			topoEdges, topoKnown = s.rootCauseTopo(ctx, p.Service, started, end, windowSec*4)
-		}()
-		// (b) Blast radius — who calls this service + how many are cascading.
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			// v0.9.1047 (Faz 0.1) — problemin GERÇEK penceresi geçer;
-			// süre geçmek çözülmüş problemde son N dakikayı okutuyordu.
-			if br, e := s.store.GetServiceBlastRadius(ctx, p.Service, started, end); e == nil {
-				out.BlastRadius = &br
-			}
-		}()
-		// (c) Exemplar — one representative bad trace for the metric.
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			if ex, e := s.store.FindExemplar(ctx, chstore.ExemplarReq{
-				Service: p.Service, From: started, To: end,
-				Kind: exemplarKindForMetric(p.Metric),
-			}); e == nil {
-				out.Exemplar = ex
-			}
-		}()
-		// (e) Hipotez — kalıcı satırdan tek FINAL okuma (v0.9.1066).
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			if h, e := s.store.GetHypothesis(ctx, "problem", p.ID); e == nil && h != nil {
-				out.Hypothesis = h
-			}
-		}()
-		// (d) Dimension bubble-up. HATA problemlerinde aynı-pencere
-		// alt-küme kıyası (selection = hatalı span'ler — eski davranış
-		// bayt-bayt). v0.9.1063 (Faz 2.2 / K3): GECİKME/diğer ailelerde
-		// artık ZAMAN-KAYDIRMALI kıyas koşar — baseline ÖNCEKİ eş-boy
-		// pencere, selection incident penceresi, filtre iki tarafta aynı
-		// (yalnız servis): "hangi attribute değeri önceki pencereye göre
-		// patladı". "Slow temiz FilterExpr alt-kümesi değil" engeli buydu;
-		// kıyası alt-kümeyle değil pencereyle kurunca ortadan kalkıyor.
-		// v0.10.992 — kıyas serviceBubbleUp'ta (copilot_bubbleup.go; CoSRE
-		// kök-neden demetiyle ORTAK), davranış aynı.
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			if bu, e := s.serviceBubbleUp(ctx, p.Service, exemplarKindForMetric(p.Metric) == chstore.ExemplarError, started, end); e == nil {
+			defer release()
+			if bu, e := st.ServiceBubbleUp(ctx, p.Service, exemplarKindForMetric(p.Metric) == chstore.ExemplarError, started, end); e == nil {
 				out.BubbleUp = bu
 			}
 		}()
-		wg.Wait()
-		// v0.10.1063 — yön + kenar: iyileşen ya da bağlantısız servis
-		// "olası neden" manşetine çıkamaz (satır listede kalır).
-		out.Correlations = chstore.MarkCorrelationCauses(out.Correlations, p.Service, topoEdges, topoKnown)
-		if len(out.Correlations) > chstore.ChangedServicesTop {
-			out.Correlations = out.Correlations[:chstore.ChangedServicesTop]
-		}
-		out.TopologyKnown = topoKnown
-		// v0.10.1054 — kural deploy'u bastırdıysa ve kök-neden işçisi ölçülen
-		// gerilemeyle adayı geri aldıysa (hipotezin RecentDeploy'u dolu) o
-		// deploy yeniden "olası neden". Bastırma yoksa çıktı bayt bayt aynı.
-		out.RecentDeploy, _ = chstore.RestoreMeasuredDeploy(out.RecentDeploy, prior, out.Hypothesis)
-		return out, nil
-	})
+	}
+	wg.Wait()
+	// v0.10.1063 — yön + kenar: iyileşen ya da bağlantısız servis
+	// "olası neden" manşetine çıkamaz (satır listede kalır).
+	out.Correlations = chstore.MarkCorrelationCauses(out.Correlations, p.Service, topoEdges, topoKnown)
+	if len(out.Correlations) > chstore.ChangedServicesTop {
+		out.Correlations = out.Correlations[:chstore.ChangedServicesTop]
+	}
+	out.TopologyKnown = topoKnown
+	// v0.10.1054 — kural deploy'u bastırdıysa ve kök-neden işçisi ölçülen
+	// gerilemeyle adayı geri aldıysa (hipotezin RecentDeploy'u dolu) o
+	// deploy yeniden "olası neden". Bastırma yoksa çıktı bayt bayt aynı.
+	out.RecentDeploy, _ = chstore.RestoreMeasuredDeploy(out.RecentDeploy, prior, out.Hypothesis)
+	return out, bubbleSkipped
 }
 
 // getAnomalyRootCause assembles the same root-cause bundle as
@@ -299,9 +389,7 @@ func (s *Server) getProblemRootCause(w http.ResponseWriter, r *http.Request) {
 // via boundAnalysisWindow. Read-only, open like /api/anomalies and
 // getProblemRootCause (no write, no audit). Same parallel soft-fail
 // fan-out — each sub-read degrades to a nil/empty field rather than
-// failing the bundle. Cached 60s keyed on the event id + the window-end
-// minute so an active anomaly's view refreshes minute-to-minute while
-// concurrent triage clicks share the trip.
+// failing the bundle.
 func (s *Server) getAnomalyRootCause(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if id == "" {
@@ -311,7 +399,7 @@ func (s *Server) getAnomalyRootCause(w http.ResponseWriter, r *http.Request) {
 	// Load outside the cache so a missing event is a clean 404 (not a cached
 	// empty bundle). anomaly_events is a small ReplacingMergeTree read with
 	// FINAL — cheap, no time-bound needed (id is the PK).
-	ev, err := s.store.GetAnomalyEvent(r.Context(), id, 0)
+	ev, err := rootCauseStoreOf(s).GetAnomalyEvent(r.Context(), id, 0)
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -329,130 +417,150 @@ func (s *Server) getAnomalyRootCause(w http.ResponseWriter, r *http.Request) {
 	// görsün); okuma düşerse yakalanan satır kullanılır.
 	key := fmt.Sprintf("anomaly-rootcause:%s:%d", id, ev.StartedAt)
 	s.serveCached(w, r, key, 60*time.Second, func(ctx context.Context) (any, error) {
-		if fresh, e := s.store.GetAnomalyEvent(ctx, id, 0); e == nil && fresh != nil {
-			ev = fresh
+		dctx, cancel := rootCauseComputeCtx(ctx, rootCauseFullBudget)
+		defer cancel()
+		out, bubbleSkipped := s.anomalyRootCauseBundle(dctx, ctx, id, ev, true)
+		logRootCauseBudget(dctx, "tam demet", "anomaly "+id, rootCauseFullBudget)
+		if bubbleSkipped {
+			return uncacheable(out), nil
 		}
-		started := time.Unix(0, ev.StartedAt)
-		end := time.Unix(0, ev.LastSeen)
-		// LastSeen can equal or (on a clock skew) precede StartedAt for a
-		// just-recorded event; boundAnalysisWindow floors the span to 10m from
-		// the start, so the window is always well-formed [started, started+≥10m].
-		started, end = boundAnalysisWindow(started, end)
-		windowSec := int(end.Sub(started).Seconds())
-		exKind := exemplarKindForAnomaly(ev.Kind)
-		out := AnomalyRootCause{
-			RootCause: RootCause{
-				ProblemID:    "", // anomaly-anchored — no parent Problem
-				Service:      ev.Service,
-				Metric:       ev.Kind, // shared-render label: the anomaly kind
-				StartedAt:    ev.StartedAt,
-				FromNs:       started.UnixNano(),
-				ToNs:         end.UnixNano(),
-				Correlations: []chstore.ChangedService{},
-			},
-			AnomalyID:   ev.ID,
-			AnomalyKind: ev.Kind,
-			Pattern:     ev.Pattern,
-		}
-		// Recent deploy — reuse the SAME enrichment the /anomalies list uses.
-		// v0.10.1054 — bastırılan deploy (prior) wg.Wait'ten sonra hipotezle.
-		var prior *chstore.RecentDeploy
-		if enr := s.store.EnrichAnomaliesWithDeploys(ctx, []chstore.AnomalyEvent{*ev}, 30*time.Minute); len(enr) == 1 {
+		return out, nil
+	})
+}
+
+// anomalyRootCauseBundle — anomali demetinin fan-out'u; withBubble=false
+// çekirdek demet. `captured` handler'ın 404 kapısında okuduğu satır: taze
+// okuma düşerse o kullanılır (yakalanan değişken EZİLMEZ — eşzamanlı SWR
+// tazelemeleri aynı satırı paylaşır).
+func (s *Server) anomalyRootCauseBundle(ctx, waitCtx context.Context, id string, captured *chstore.AnomalyEvent, withBubble bool) (out AnomalyRootCause, bubbleSkipped bool) {
+	st := rootCauseStoreOf(s)
+	ev := captured
+	if fresh, e := st.GetAnomalyEvent(ctx, id, 0); e == nil && fresh != nil {
+		ev = fresh
+	}
+	started, end := anomalyRootCauseWindow(ev)
+	windowSec := int(end.Sub(started).Seconds())
+	exKind := exemplarKindForAnomaly(ev.Kind)
+	out = AnomalyRootCause{
+		RootCause: RootCause{
+			ProblemID:    "", // anomaly-anchored — no parent Problem
+			Service:      ev.Service,
+			Metric:       ev.Kind, // shared-render label: the anomaly kind
+			StartedAt:    ev.StartedAt,
+			FromNs:       started.UnixNano(),
+			ToNs:         end.UnixNano(),
+			Correlations: []chstore.ChangedService{},
+		},
+		AnomalyID:   ev.ID,
+		AnomalyKind: ev.Kind,
+		Pattern:     ev.Pattern,
+	}
+	var wg sync.WaitGroup
+	// Recent deploy — reuse the SAME enrichment the /anomalies list uses.
+	// v0.10.1054 — bastırılan deploy (prior) wg.Wait'ten sonra hipotezle.
+	// v0.10.1119 — fan-out'un İÇİNDE (problem ucuyla aynı gerekçe).
+	var prior *chstore.RecentDeploy
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if enr := st.EnrichAnomaliesWithDeploys(ctx, []chstore.AnomalyEvent{*ev}, 30*time.Minute); len(enr) == 1 {
 			out.RecentDeploy = enr[0].RecentDeploy
 			prior = enr[0].PriorDeploy
 		}
-
-		var wg sync.WaitGroup
-		// (a) Correlations — services moving together around the anomaly start.
+	}()
+	// (a) Correlations — services moving together around the anomaly start.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		// cs != nil ŞART: nil atamak handler'ın başta koyduğu `[]`
+		// zarfını EZER ve JSON `"correlations": null` çıkar; panel
+		// `.correlations.filter` derken çöker (v0.9.836, bubbleUp
+		// ile aynı sınıf).
+		// v0.9.1062 (Faz 2.1) — MV sürümü: pencereler ≥5dk, aggregate
+		// sabit (invariant #3); ham spans taraması tık-yolundan kalktı.
+		// v0.10.1090 — problem ucunun ikizi: 50'lik havuz işaretlenir,
+		// 20 tavanı SONRA (aynı sorgu).
+		if cs, e := st.GetCorrelatedChangesMVTop(ctx, started, windowSec, windowSec*4, chstore.ChangedServicesMarkPool); e == nil && cs != nil {
+			out.Correlations = cs
+		}
+	}()
+	// (a2) v0.10.1090 — öznenin topoloji komşuluğu (problem ucuyla aynı).
+	var topoEdges []chstore.ServiceEdge
+	topoKnown := false
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		topoEdges, topoKnown = s.rootCauseTopo(ctx, ev.Service, started, end, windowSec*4)
+	}()
+	// (b) Blast radius — who calls this service + how many are cascading.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		// v0.9.1047 (Faz 0.1) — olayın gerçek penceresi geçer.
+		if br, e := st.GetServiceBlastRadius(ctx, ev.Service, started, end); e == nil {
+			out.BlastRadius = &br
+		}
+	}()
+	// (c) Exemplar — one representative bad trace. A trace_op event already
+	// carries the precise representative trace id (recorder sets
+	// Sample = SampleTraceID); prefer it directly — it's THE trace that
+	// drove the anomaly, no scan. Fall back to FindExemplar (scoped to the
+	// op for trace_op via Pattern) when the sample is empty / for log kinds.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if ev.Kind == "trace_op" && strings.TrimSpace(ev.Sample) != "" {
+			out.Exemplar = &chstore.Exemplar{TraceID: ev.Sample, Service: ev.Service, Name: ev.Pattern}
+			return
+		}
+		op := ""
+		if ev.Kind == "trace_op" {
+			op = ev.Pattern // scope the exemplar to the anomalous operation
+		}
+		if ex, e := st.FindExemplar(ctx, chstore.ExemplarReq{
+			Service: ev.Service, Operation: op, From: started, To: end, Kind: exKind,
+		}); e == nil {
+			out.Exemplar = ex
+		}
+	}()
+	// (e) Hipotez — anomali anchor'ının kalıcı satırı (v0.9.1066).
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if h, e := st.GetHypothesis(ctx, "anomaly", ev.ID); e == nil && h != nil {
+			out.Hypothesis = h
+		}
+	}()
+	// (d) Dimension bubble-up. trace_op anomalilerinde aynı-pencere
+	// hata alt-kümesi (eski davranış bayt-bayt). v0.9.1063 (Faz 2.2):
+	// log anomalileri de artık kapsamda — zaman-kaydırmalı kıyas.
+	// v0.10.1119 — çekirdek demette koşmaz.
+	if withBubble {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			// cs != nil ŞART: nil atamak handler'ın başta koyduğu `[]`
-			// zarfını EZER ve JSON `"correlations": null` çıkar; panel
-			// `.correlations.filter` derken çöker (v0.9.836, bubbleUp
-			// ile aynı sınıf).
-			// v0.9.1062 (Faz 2.1) — MV sürümü: pencereler ≥5dk, aggregate
-			// sabit (invariant #3); ham spans taraması tık-yolundan kalktı.
-			// v0.10.1090 — problem ucunun ikizi: 50'lik havuz işaretlenir,
-			// 20 tavanı SONRA (aynı sorgu). Eskiden işaretleme yoktu; şerit
-			// "Ranked candidates" artık yalnız causeEligible çizdiği için
-			// anomali demeti de yön+kenar taşımalı.
-			if cs, e := s.store.GetCorrelatedChangesMVTop(ctx, started, windowSec, windowSec*4, chstore.ChangedServicesMarkPool); e == nil && cs != nil {
-				out.Correlations = cs
-			}
-		}()
-		// (a2) v0.10.1090 — öznenin topoloji komşuluğu (problem ucuyla aynı).
-		var topoEdges []chstore.ServiceEdge
-		topoKnown := false
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			topoEdges, topoKnown = s.rootCauseTopo(ctx, ev.Service, started, end, windowSec*4)
-		}()
-		// (b) Blast radius — who calls this service + how many are cascading.
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			// v0.9.1047 (Faz 0.1) — olayın gerçek penceresi geçer.
-			if br, e := s.store.GetServiceBlastRadius(ctx, ev.Service, started, end); e == nil {
-				out.BlastRadius = &br
-			}
-		}()
-		// (c) Exemplar — one representative bad trace. A trace_op event already
-		// carries the precise representative trace id (recorder sets
-		// Sample = SampleTraceID); prefer it directly — it's THE trace that
-		// drove the anomaly, no scan. Fall back to FindExemplar (scoped to the
-		// op for trace_op via Pattern) when the sample is empty / for log kinds.
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			if ev.Kind == "trace_op" && strings.TrimSpace(ev.Sample) != "" {
-				out.Exemplar = &chstore.Exemplar{TraceID: ev.Sample, Service: ev.Service, Name: ev.Pattern}
+			release, err := acquireRootCauseBubbleSlot(waitCtx)
+			if err != nil {
+				bubbleSkipped = true
 				return
 			}
-			op := ""
-			if ev.Kind == "trace_op" {
-				op = ev.Pattern // scope the exemplar to the anomalous operation
-			}
-			if ex, e := s.store.FindExemplar(ctx, chstore.ExemplarReq{
-				Service: ev.Service, Operation: op, From: started, To: end, Kind: exKind,
-			}); e == nil {
-				out.Exemplar = ex
-			}
-		}()
-		// (e) Hipotez — anomali anchor'ının kalıcı satırı (v0.9.1066).
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			if h, e := s.store.GetHypothesis(ctx, "anomaly", ev.ID); e == nil && h != nil {
-				out.Hypothesis = h
-			}
-		}()
-		// (d) Dimension bubble-up. trace_op anomalilerinde aynı-pencere
-		// hata alt-kümesi (eski davranış bayt-bayt). v0.9.1063 (Faz 2.2):
-		// log anomalileri de artık kapsamda — zaman-kaydırmalı kıyas
-		// (baseline önceki eş-boy pencere) span-status alt-kümesi
-		// istemez; "bu pencerede hangi attribute patladı" sorusuna
-		// log-anchor'da da cevap var.
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			if bu, e := s.serviceBubbleUp(ctx, ev.Service, exKind == chstore.ExemplarError, started, end); e == nil { // v0.10.992 — ortak kıyas
+			defer release()
+			if bu, e := st.ServiceBubbleUp(ctx, ev.Service, exKind == chstore.ExemplarError, started, end); e == nil { // v0.10.992 — ortak kıyas
 				out.BubbleUp = bu
 			}
 		}()
-		wg.Wait()
-		// v0.10.1090 — yön + kenar işaretlemesi problem ucuyla AYNI.
-		out.Correlations = chstore.MarkCorrelationCauses(out.Correlations, ev.Service, topoEdges, topoKnown)
-		if len(out.Correlations) > chstore.ChangedServicesTop {
-			out.Correlations = out.Correlations[:chstore.ChangedServicesTop]
-		}
-		out.TopologyKnown = topoKnown
-		// v0.10.1054 — problem ucuyla AYNI kural (v0.10.1049'dan kalan boşluk):
-		// ölçülen gerilemede bastırılan deploy yeniden "olası neden".
-		out.RecentDeploy, _ = chstore.RestoreMeasuredDeploy(out.RecentDeploy, prior, out.Hypothesis)
-		return out, nil
-	})
+	}
+	wg.Wait()
+	// v0.10.1090 — yön + kenar işaretlemesi problem ucuyla AYNI.
+	out.Correlations = chstore.MarkCorrelationCauses(out.Correlations, ev.Service, topoEdges, topoKnown)
+	if len(out.Correlations) > chstore.ChangedServicesTop {
+		out.Correlations = out.Correlations[:chstore.ChangedServicesTop]
+	}
+	out.TopologyKnown = topoKnown
+	// v0.10.1054 — problem ucuyla AYNI kural (v0.10.1049'dan kalan boşluk):
+	// ölçülen gerilemede bastırılan deploy yeniden "olası neden".
+	out.RecentDeploy, _ = chstore.RestoreMeasuredDeploy(out.RecentDeploy, prior, out.Hypothesis)
+	return out, bubbleSkipped
 }
 
 // buildRootCausePrompt renders a persisted RootCauseHypothesis into the

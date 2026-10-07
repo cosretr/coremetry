@@ -18,7 +18,10 @@ import type { BlastRadiusCaller, RootCause } from '@/lib/types';
 
 const rcHolder = vi.hoisted(() => ({ value: null as unknown }));
 vi.mock('@/lib/api', () => ({
-  api: { problemRootCause: () => Promise.resolve(rcHolder.value) },
+  api: {
+    problemRootCauseCore: () => Promise.resolve(rcHolder.value),
+    problemRootCauseBubbleUp: () => Promise.resolve(null),
+  },
 }));
 
 import { RootCausePanel } from './RootCausePanel';

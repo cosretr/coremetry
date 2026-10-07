@@ -1721,6 +1721,21 @@ export const api = {
   // summary (AnomalyEvent.rootCause), so there's NO fetch on mount.
   anomalyRootCause: (id: string) =>
     get<import('./types').AnomalyRootCause>(`/api/anomalies/${encodeURIComponent(id)}/rootcause`),
+  // v0.10.1119 — aşamalı kök-neden (soğuk açılış 30–45 sn → çekirdek ~sn).
+  // core = tam demetin bubbleUp HARİÇ aynısı (MV / nokta okumaları, hızlı);
+  // bubbleup = tek ham-spans kıyası, ayrı istek. Panel ikisini AYNI ANDA
+  // ister, çekirdeği gelir gelmez çizer. Şerit + dış kanıt paneli bubbleUp
+  // çizmediği için yalnız core okur.
+  problemRootCauseCore: (id: string) =>
+    get<import('./types').RootCause>(`/api/problems/${encodeURIComponent(id)}/rootcause/core`),
+  // timeoutMs 95 s: sunucu bütçesi 90 s (+ yuva beklemesi isteğin içinde) —
+  // 60 s'lik varsayılan uzun taramayı istemcide keser, sunucu yine bitirip
+  // önbelleğe yazar ama panel "okunamadı" derdi.
+  problemRootCauseBubbleUp: (id: string) =>
+    request<import('./types').RootCauseBubbleUp>(
+      `/api/problems/${encodeURIComponent(id)}/rootcause/bubbleup`, { timeoutMs: 95_000 }),
+  anomalyRootCauseCore: (id: string) =>
+    get<import('./types').AnomalyRootCause>(`/api/anomalies/${encodeURIComponent(id)}/rootcause/core`),
   // Optional Copilot PROSE narration on top of the deterministic ranking (rc
   // #4). The ✨ Explain button in the expanded ribbon fetches this LAZILY on
   // click — never on mount/expand (Copilot calls cost). Backend reads the

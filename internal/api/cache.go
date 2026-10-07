@@ -280,9 +280,16 @@ func (s *Server) cachedJSON(ctx context.Context, key string, ttl time.Duration, 
 	}
 
 	// ── Miss path with singleflight dedupe ────────────────────
-	body, err := s.computeBody(ctx, key, fn)
+	body, noStore, err := s.computeBodyStore(ctx, key, fn)
 	if err != nil {
 		return nil, "", err
+	}
+	if noStore {
+		// v0.10.1119 — fn gövdeyi uncacheable() ile işaretledi (ör. kök-neden
+		// demeti bubbleUp yuvası alamadı): istemciye gider, hiçbir katmana
+		// yazılmaz — kısmi sonuç 60 sn taze diye saklanmaz.
+		s.stats.record("MISS-NOSTORE", key)
+		return body, "MISS-NOSTORE", nil
 	}
 	// v0.8.350 (HA 🟡5) — the response must not wait on Redis. L1 is
 	// set synchronously (in-process, same-node burst coalescing needs
@@ -355,15 +362,19 @@ func (s *Server) refreshKey(key string, ttl time.Duration, fn func(ctx context.C
 	// upstream query. fn() used to close over the (already
 	// cancelled) request context, so every background refresh
 	// aborted with context.Canceled.
-	body, err := s.computeBody(ctx, key, fn)
+	body, noStore, err := s.computeBodyStore(ctx, key, fn)
 	if err != nil {
 		log.Printf("[cache] refresh %s: %v", key, err)
+		return
+	}
+	if noStore {
+		// v0.10.1119 — kısmi (uncacheable) sonuç bayat girdiyi EZMEZ.
 		return
 	}
 	s.storeCached(ctx, key, body, ttl)
 }
 
-// computeBody — singleflight altındaki TEK hesaplama noktası (v0.10.146):
+// computeBodyStore — singleflight altındaki TEK hesaplama noktası (v0.10.146):
 // fn → NaN/Inf temizliği → json.Marshal, hepsi sf.Do'nun İÇİNDE; slot'u
 // paylaşan her bekleyen aynı DEĞİŞMEZ bayt dilimini alır.
 //
@@ -381,20 +392,47 @@ func (s *Server) refreshKey(key string, ttl time.Duration, fn func(ctx context.C
 // v0.5.303 — scrub NaN/Inf floats anywhere in the result tree before
 // json.Marshal. Defence-in-depth for the "encoding/json: unsupported
 // value NaN" 500s; complements the per-Scan safeF guards from v0.5.301.
-func (s *Server) computeBody(ctx context.Context, key string, fn func(ctx context.Context) (any, error)) ([]byte, error) {
+//
+// v0.10.1119 — computeBodyStore adını aldı: ek dönüş değeri fn'in
+// uncacheable() işareti (aşağıda).
+// noStoreResult — v0.10.1119: fn'in "bu gövdeyi önbelleğe YAZMA" işareti
+// (uncacheable). Gövde istemciye ve singleflight bekleyenlerine gider; L1/L2'ye
+// yazılmaz, SWR tazelemesi bayat girdiyi bununla ezmez. Kullanım: kök-neden
+// demeti bubbleUp yuvası alamadığında kısmi sonuç (rootcause_bubble_gate.go).
+type noStoreResult struct{ v any }
+
+// uncacheable — fn dönüşünü önbelleğe yazılmayacak diye işaretler.
+func uncacheable(v any) any { return noStoreResult{v: v} }
+
+// computedBody — singleflight yuvasının paylaşılan değeri.
+type computedBody struct {
+	body    []byte
+	noStore bool
+}
+
+// computeBodyStore — gövde + uncacheable işareti (v0.10.1119).
+func (s *Server) computeBodyStore(ctx context.Context, key string, fn func(ctx context.Context) (any, error)) ([]byte, bool, error) {
 	v, err, _ := s.sf.Do(key, func() (any, error) {
 		val, err := fn(ctx)
 		if err != nil {
 			return nil, err
 		}
+		noStore := false
+		if ns, ok := val.(noStoreResult); ok {
+			val, noStore = ns.v, true
+		}
 		sanitizeFloats(val)
-		return json.Marshal(val)
+		b, err := json.Marshal(val)
+		if err != nil {
+			return nil, err
+		}
+		return computedBody{body: b, noStore: noStore}, nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	body, _ := v.([]byte)
-	return body, nil
+	cb, _ := v.(computedBody)
+	return cb.body, cb.noStore, nil
 }
 
 // invalidateCacheChannel is the Redis pub/sub channel that

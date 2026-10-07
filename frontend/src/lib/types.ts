@@ -1116,6 +1116,15 @@ export interface AnomalyRootCause extends RootCause {
   pattern: string;       // log pattern name OR operation name (trace_op)
 }
 
+// RootCauseBubbleUp — v0.10.1119: /api/problems/{id}/rootcause/bubbleup gövdesi
+// (Go RootCauseBubbleUp). Demetin tek ham-spans adımı ayrı uçta; panel
+// /rootcause/core'u (bubbleUp'sız RootCause) hemen çizer, bunu gelince ekler.
+export interface RootCauseBubbleUp {
+  fromNs: number;
+  toNs: number;
+  bubbleUp?: BubbleUpResult;
+}
+
 // ── Root-cause hypothesis (rc #2/#3) ────────────────────────────────────────
 // The PERSISTED, pre-computed root-cause ranking the worker synthesizes per
 // anchor and the /anomalies + /problems lists join as a compact summary.

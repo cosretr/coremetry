@@ -4,7 +4,7 @@ import { Spinner, Empty } from './Spinner';
 import { IconFlame } from './icons';
 import { api } from '@/lib/api';
 import { fmtFixed, fmtDurShort } from '@/lib/utils';
-import type { RootCause, BubbleUpValue, RolloutEvidence, ChangedService } from '@/lib/types';
+import type { RootCause, RootCauseBubbleUp, BubbleUpValue, RolloutEvidence, ChangedService } from '@/lib/types';
 import { rolloutEvidenceHref, shortRevision, statusTone as rolloutStatusTone } from '@/lib/rolloutRow';
 import { Badge } from '@/components/ui/Badge';
 import { DataTableState } from '@/components/ui/DataTable';
@@ -14,6 +14,8 @@ import { tsLong } from '@/lib/utils';
 import { serviceHref } from '@/lib/serviceHref';
 import { traceHref } from '@/lib/traceHref';
 import { coMovingCause, localizedNote } from '@/lib/rootCauseCandidates';
+import { withBubbleUp, headlineNeedsBubble } from '@/lib/rootCauseProgressive';
+import { useT } from '@/lib/i18n';
 
 // RootCausePanel — the single "what changed / likely cause" surface for a
 // Problem (v0.7.52, backend bundle shipped v0.7.51). Fetches
@@ -37,34 +39,57 @@ export function RootCausePanel({ problemId, service, window: win, onLoaded }: {
   // alır (aynı /rootcause yanıtı; ikinci istek yok).
   onLoaded?: (rc: RootCause | null) => void;
 }) {
+  // v0.10.1119 — AŞAMALI ÇİZİM (operatör: soğuk açılış 30–45 sn). Tam demet
+  // en yavaş alt-okumayı (BubbleUp: ham spans) bekliyordu; artık çekirdek
+  // (/rootcause/core — MV + nokta okumaları) ve bubbleUp (/rootcause/bubbleup)
+  // AYNI ANDA istenir, çekirdek gelir gelmez çizilir. İkisi birleşince ekran
+  // tam demetin çizdiğiyle aynıdır (lib/rootCauseProgressive.ts).
   const [rc, setRc] = useState<RootCause | null | undefined>(undefined);
+  // undefined = bubbleUp hâlâ hesaplanıyor; null = yok ya da okunamadı
+  // (tam demette düşen alt-okuma da alanı boş bırakırdı — aynı çizim).
+  const [bu, setBu] = useState<RootCauseBubbleUp | null | undefined>(undefined);
+  // İstek DÜŞTÜ (500 / zaman aşımı / ağ) — "ayrışma yok"tan ayrı söylenir.
+  // Manşet bu durumda bubbleUp'sız tam demetin manşetine döner (bu = null).
+  const [buFailed, setBuFailed] = useState(false);
+  const t = useT();
   useEffect(() => {
     setRc(undefined);
+    setBu(undefined);
+    setBuFailed(false);
     let cancelled = false;
-    api.problemRootCause(problemId)
+    api.problemRootCauseCore(problemId)
       .then(r => { if (cancelled) return; setRc(r ?? null); onLoaded?.(r ?? null); })
       .catch(() => { if (cancelled) return; setRc(null); onLoaded?.(null); });
+    api.problemRootCauseBubbleUp(problemId)
+      .then(r => { if (!cancelled) setBu(r ?? null); })
+      .catch(() => { if (!cancelled) { setBu(null); setBuFailed(true); } });
     return () => { cancelled = true; };
     // onLoaded kimliği her render değişebilir; yalnız problemId tetikler.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [problemId]);
 
-  if (rc === undefined) return <Spinner />;
+  if (rc === undefined) return <Spinner label="Loading root-cause signals…" />;
   if (rc === null) {
     return <div style={{ fontSize: 12, color: 'var(--err)' }}>
       Root-cause analysis failed to load. Check the server log.
     </div>;
   }
 
-  const bubble = topBubble(rc);
-  const blast = rc.blastRadius && rc.blastRadius.totalCallers > 0 ? rc.blastRadius : null;
+  const bubblePending = bu === undefined;
+  const full = withBubbleUp(rc, bu);
+  const bubble = topBubble(full);
+  const blast = full.blastRadius && full.blastRadius.totalCallers > 0 ? full.blastRadius : null;
   // v0.9.836 — `?? []`: correlations da null gelebiliyordu (rootcause.go
   // goroutine'i nil dönüşle `[]` zarfını eziyordu). Aynı çökme sınıfı,
   // farklı metot ('filter').
-  const corr = (rc.correlations ?? []).filter(c => c.service !== service);
-  const rollouts: RolloutEvidence[] = rc.hypothesis?.deep?.rollouts ?? [];
-  const headline = likelyCause(rc, service, bubble, rollouts);
-  const nothing = !rc.recentDeploy && !bubble && !blast && corr.length === 0 && !rc.exemplar && rollouts.length === 0;
+  const corr = (full.correlations ?? []).filter(c => c.service !== service);
+  const rollouts: RolloutEvidence[] = full.hypothesis?.deep?.rollouts ?? [];
+  // Manşet bubbleUp'a bağlıysa (deploy / sıcak rollout yok) o gelene dek
+  // "inceleniyor" der — önce "localized" deyip sonra fikir değiştirmez.
+  const headlinePending = bubblePending && headlineNeedsBubble(full, rollouts);
+  const headline = likelyCause(full, service, bubble, rollouts);
+  // buFailed: bubbleUp bilinmiyor — "ilişkili sinyal yok" boş hâli iddia edilmez.
+  const nothing = !bubblePending && !buFailed && !full.recentDeploy && !bubble && !blast && corr.length === 0 && !full.exemplar && rollouts.length === 0;
 
   if (nothing) {
     return (
@@ -78,6 +103,19 @@ export function RootCausePanel({ problemId, service, window: win, onLoaded }: {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {/* 1. Likely-cause headline — the one-line synthesis. */}
+      {headlinePending ? (
+        <div style={{
+          padding: '10px 12px', borderRadius: 6,
+          background: 'var(--bg2)', border: '1px solid var(--border)',
+        }}>
+          <div style={{
+            fontSize: 10.5, fontWeight: 700, letterSpacing: 0.4,
+            textTransform: 'uppercase', color: 'var(--text3)', marginBottom: 3,
+          }}>Likely cause</div>
+          <Spinner label="Comparing span attributes in the window…"
+                   hint="the other signals below are already loaded" />
+        </div>
+      ) : (
       <div style={{
         padding: '10px 12px', borderRadius: 6,
         background: headline.bg, border: `1px solid ${headline.border}`,
@@ -89,11 +127,25 @@ export function RootCausePanel({ problemId, service, window: win, onLoaded }: {
         }}>Likely cause</div>
         {headline.text}
       </div>
+      )}
 
-      {/* 2. Smoking-gun dimension (bubble-up). */}
+      {/* 2. Smoking-gun dimension (bubble-up). v0.10.1119 — ayrı istekle
+          gelir; beklerken bölüm yerinde bir yükleniyor satırı durur. */}
+      {bubblePending && (
+        <Section title="Where errors concentrate" subtitle="scanning spans in the analysis window">
+          <Spinner label="Comparing attribute values…" />
+        </Section>
+      )}
+      {buFailed && (
+        <Section title="Where errors concentrate">
+          <div style={{ fontSize: 12, color: 'var(--text3)' }} data-bubble-unavailable>
+            {t('rootCause.bubbleUnavailable')}
+          </div>
+        </Section>
+      )}
       {bubble && (
         <Section title="Where errors concentrate"
-                 subtitle={`top attribute over the error spans (${rootWindow(rc)})`}>
+                 subtitle={`top attribute over the error spans (${rootWindow(bu ?? rc)})`}>
           <div style={{ fontSize: 12, marginBottom: 6 }}>
             <code>{bubble.key}</code>
           </div>
@@ -447,7 +499,7 @@ export function topBubble(rc: RootCause): { key: string; values: BubbleUpValue[]
 }
 
 // rootWindow — human window length for sub-headers ("over 18m").
-function rootWindow(rc: RootCause): string {
+function rootWindow(rc: { fromNs: number; toNs: number }): string {
   return `over ${fmtDurShort((rc.toNs - rc.fromNs) / 1e9)}`;
 }
 

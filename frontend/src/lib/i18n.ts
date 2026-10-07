@@ -175,6 +175,9 @@ const EN: Catalog = {
   'ai.ctx.clusterNs': 'Cluster / namespace',
   'ai.ctx.window':    'Window',
   'ai.ctx.saved':     'Saved with the conversation — the live page may differ.',
+
+  // v0.10.1119 — kök-neden paneli: ayrı bubbleUp isteği düştü (≠ "ayrışma yok").
+  'rootCause.bubbleUnavailable': 'Attribute comparison unavailable — the span scan failed or timed out. This does not mean no dimension stood out.',
 };
 
 const TR: Catalog = {
@@ -325,6 +328,8 @@ const TR: Catalog = {
   'ai.ctx.clusterNs': 'Cluster / namespace',
   'ai.ctx.window':    'Pencere',
   'ai.ctx.saved':     'Konuşmayla kaydedilen bağlam — canlı sayfa farklı olabilir.',
+
+  'rootCause.bubbleUnavailable': 'Attribute kıyası okunamadı — span taraması düştü ya da zaman aşımına uğradı. Bu, "ayrışan boyut yok" demek değildir.',
 };
 
 const CATALOGS: Record<Lang, Catalog> = { en: EN, tr: TR };

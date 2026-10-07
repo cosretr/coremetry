@@ -75,7 +75,8 @@ func TestRootCauseRestoresMeasuredRecurringDeploy(t *testing.T) {
 		t.Fatal(err)
 	}
 	src := string(b)
-	for _, fn := range []string{"func (s *Server) getProblemRootCause(", "func (s *Server) getAnomalyRootCause("} {
+	// v0.10.1119 — fan-out handler'dan demet kurucularına taşındı (çekirdek uç da kullanır).
+	for _, fn := range []string{"func (s *Server) problemRootCauseBundle(", "func (s *Server) anomalyRootCauseBundle("} {
 		i := strings.Index(src, fn)
 		if i < 0 {
 			t.Fatalf("%s bulunamadı", fn)

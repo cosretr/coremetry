@@ -122,7 +122,6 @@ func (s *Store) BubbleUp(
 
 	// Step 1 — totals (one query for both sides). Avoids two
 	// round-trips and the racy window edge.
-	var selTotal, baseTotal uint64
 	totalsSQL := fmt.Sprintf(`
 		SELECT
 		  countIf(%s) AS sel_total,
@@ -132,19 +131,6 @@ func (s *Store) BubbleUp(
 		SETTINGS max_execution_time = 25`,
 		selPred, basePred, wcOuter.sql())
 	totalsArgs := append(append(append([]any{}, selPredArgs...), basePredArgs...), wcOuter.args...)
-	if err := s.conn.QueryRow(ctx, totalsSQL, totalsArgs...).Scan(&selTotal, &baseTotal); err != nil {
-		return nil, fmt.Errorf("bubbleup totals: %w", err)
-	}
-	if selTotal == 0 || baseTotal == 0 {
-		// Attributes NON-NIL: nil dilim JSON'a `null` çıkar ve panel
-		// `.attributes.length` derken çöker (v0.9.836). "Hiç açıklayıcı
-		// attribute yok" DÜRÜST şekli boş dizidir, null değil.
-		return &BubbleUpResult{
-			SelectionTotal: int64(selTotal),
-			BaselineTotal:  int64(baseTotal),
-			Attributes:     []BubbleUpAttribute{},
-		}, nil
-	}
 
 	// Step 2 — top attribute keys observed on the selection
 	// side. Caps at 30 keys so the GROUP BY at step 3 stays
@@ -163,18 +149,113 @@ func (s *Store) BubbleUp(
 		ORDER BY c DESC
 		LIMIT 30
 		SETTINGS max_execution_time = 25`, wcSel.sql())
-	keysRows, err := s.conn.Query(ctx, keysSQL, wcSel.args...)
+
+	// v0.10.1119 — adımlar bubbleUpOps'a bağlanır; orkestrasyon (totals ∥
+	// anahtar keşfi, sınırlı paralel anahtar başı okuma) runBubbleUp'ta ve
+	// sahte ops ile ardışık referansa karşı eşdeğerlik testli
+	// (bubbleup_parallel_test.go). SQL metinleri bayt bayt aynı.
+	return runBubbleUp(ctx, bubbleUpOps{
+		totals: func(ctx context.Context) (uint64, uint64, error) {
+			var selTotal, baseTotal uint64
+			err := s.conn.QueryRow(ctx, totalsSQL, totalsArgs...).Scan(&selTotal, &baseTotal)
+			return selTotal, baseTotal, err
+		},
+		keys: func(ctx context.Context) ([]string, error) {
+			keysRows, err := s.conn.Query(ctx, keysSQL, wcSel.args...)
+			if err != nil {
+				return nil, fmt.Errorf("bubbleup keys: %w", err)
+			}
+			defer keysRows.Close()
+			var keys []string
+			for keysRows.Next() {
+				var k string
+				var c uint64
+				if err := keysRows.Scan(&k, &c); err != nil {
+					return nil, err
+				}
+				keys = append(keys, k)
+			}
+			return keys, nil
+		},
+		perKey: func(ctx context.Context, key string, selTotal, baseTotal uint64) (BubbleUpAttribute, error) {
+			return s.bubbleUpKey(ctx, key, keyQueryInputs{
+				selPred: selPred, basePred: basePred,
+				selPredArgs: selPredArgs, basePredArgs: basePredArgs,
+				wcOuter: wcOuter, selTotal: selTotal, baseTotal: baseTotal,
+			})
+		},
+	})
+}
+
+// bubbleUpOps — BubbleUp'ın üç CH adımı (v0.10.1119). Üretimde
+// Store.BubbleUp kurar; testte sahte işlevler (CH bağlantısı olmadan
+// orkestrasyonun eşdeğerliği koşulabilsin diye).
+//
+//   - totals: iki tarafın span sayısı (tek sorgu).
+//   - keys: seçim tarafında en sık 30 anahtar, sayıya göre azalan, HAM
+//     (yüksek kardinalite süzgeci runBubbleUp'ta).
+//   - perKey: tek anahtarın değer dağılımı.
+type bubbleUpOps struct {
+	totals func(ctx context.Context) (selTotal, baseTotal uint64, err error)
+	keys   func(ctx context.Context) ([]string, error)
+	perKey func(ctx context.Context, key string, selTotal, baseTotal uint64) (BubbleUpAttribute, error)
+}
+
+// bubbleUpKeyConcurrency — anahtar başı okumaların eşzamanlılık tavanı
+// (v0.9.1082 kararı: 6 — sorgu-başına bellek sınırı korunur, CH'nin kendi
+// eşzamanlılık tavanının altında kalır).
+const bubbleUpKeyConcurrency = 6
+
+// runBubbleUp — BubbleUp orkestrasyonu (v0.10.1119, /rootcause soğuk yol).
+//
+// Eskiden üç ARDIŞIK ham-spans aşaması vardı: totals → anahtar keşfi →
+// anahtar başı dalgalar. Anahtar keşfi totals'a BAĞIMLI DEĞİL (yalnız
+// seçim penceresi + filtreler), yani ikisi artık AYNI ANDA koşar: soğuk
+// yolda bir tam tarama aşaması (≤ 25 sn tavanlı) duvardan düşer. Sonuç ve
+// hata sırası ardışık sürümle AYNI:
+//
+//   - totals hatası → "bubbleup totals: …" (anahtar keşfi iptal edilir,
+//     sonucu/hatası yok sayılır — eskiden hiç koşmazdı);
+//   - taraflardan biri boş → boş Attributes'li erken dönüş (keşif iptal);
+//   - keşif hatası → aynı hata (totals başarılıysa; eski sıra);
+//   - geri kalan bayt bayt eski davranış (süzgeç, sınırlı paralel, sıra).
+//
+// Keşif goroutine'i her dönüş yolunda BEKLENİR (sızıntı yok; rows kapanır).
+func runBubbleUp(ctx context.Context, ops bubbleUpOps) (*BubbleUpResult, error) {
+	keysCtx, cancelKeys := context.WithCancel(ctx)
+	defer cancelKeys()
+	var rawKeys []string
+	var keysErr error
+	keysDone := make(chan struct{})
+	go func() {
+		defer close(keysDone)
+		rawKeys, keysErr = ops.keys(keysCtx)
+	}()
+
+	selTotal, baseTotal, err := ops.totals(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("bubbleup keys: %w", err)
+		cancelKeys()
+		<-keysDone
+		return nil, fmt.Errorf("bubbleup totals: %w", err)
+	}
+	if selTotal == 0 || baseTotal == 0 {
+		cancelKeys()
+		<-keysDone
+		// Attributes NON-NIL: nil dilim JSON'a `null` çıkar ve panel
+		// `.attributes.length` derken çöker (v0.9.836). "Hiç açıklayıcı
+		// attribute yok" DÜRÜST şekli boş dizidir, null değil.
+		return &BubbleUpResult{
+			SelectionTotal: int64(selTotal),
+			BaselineTotal:  int64(baseTotal),
+			Attributes:     []BubbleUpAttribute{},
+		}, nil
+	}
+	<-keysDone
+	if keysErr != nil {
+		return nil, keysErr
 	}
 	var keys []string
-	for keysRows.Next() {
-		var k string
-		var c uint64
-		if err := keysRows.Scan(&k, &c); err != nil {
-			keysRows.Close()
-			return nil, err
-		}
+	for _, k := range rawKeys {
 		// Skip very-high-cardinality keys (trace_id, request_id,
 		// etc.) — every value would be unique, no clustering
 		// signal. Heuristic: skip if the key contains
@@ -185,7 +266,6 @@ func (s *Store) BubbleUp(
 		}
 		keys = append(keys, k)
 	}
-	keysRows.Close()
 	if len(keys) == 0 {
 		// Aynı sözleşme: boş dizi, null değil (v0.9.836).
 		return &BubbleUpResult{
@@ -218,18 +298,14 @@ func (s *Store) BubbleUp(
 	perKey := make([]BubbleUpAttribute, len(keys))
 	perKeyErr := make([]error, len(keys))
 	var wg sync.WaitGroup
-	sem := make(chan struct{}, 6)
+	sem := make(chan struct{}, bubbleUpKeyConcurrency)
 	for ki, key := range keys {
 		wg.Add(1)
 		go func(ki int, key string) {
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			perKey[ki], perKeyErr[ki] = s.bubbleUpKey(ctx, key, keyQueryInputs{
-				selPred: selPred, basePred: basePred,
-				selPredArgs: selPredArgs, basePredArgs: basePredArgs,
-				wcOuter: wcOuter, selTotal: selTotal, baseTotal: baseTotal,
-			})
+			perKey[ki], perKeyErr[ki] = ops.perKey(ctx, key, selTotal, baseTotal)
 		}(ki, key)
 	}
 	wg.Wait()

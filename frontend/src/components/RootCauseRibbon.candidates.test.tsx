@@ -33,7 +33,7 @@ let host: HTMLDivElement | null = null;
 let root: Root | null = null;
 
 async function mount(rc: RootCause): Promise<string> {
-  vi.spyOn(api, 'problemRootCause').mockResolvedValue(rc);
+  vi.spyOn(api, 'problemRootCauseCore').mockResolvedValue(rc);
   vi.spyOn(api, 'rootCauseVerdictPersisted').mockResolvedValue({ found: false });
   host = document.createElement('div');
   document.body.appendChild(host);

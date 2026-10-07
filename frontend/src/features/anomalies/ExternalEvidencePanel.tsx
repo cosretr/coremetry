@@ -68,8 +68,9 @@ export function ExternalEvidencePanel({ problem, window: win }: {
   // boşa. Türü kural önekinden tanı, isteği hiç atma, dürüst açıklama çiz.
   const summary = externalSummaryKind(problem.ruleId);
   const rc = useQuery({
-    queryKey: ['problem-rootcause', problem.id],
-    queryFn: () => api.problemRootCause(problem.id),
+    // v0.10.1119 — yalnız hypothesis okunur: çekirdek uç (bubbleUp taraması yok).
+    queryKey: ['problem-rootcause-core', problem.id],
+    queryFn: () => api.problemRootCauseCore(problem.id),
     staleTime: 30_000,
     enabled: !summary,
   });

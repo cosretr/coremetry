@@ -67,7 +67,8 @@ export function RootCauseRibbon({
 
   const fetchOnce = () => {
     if (rc !== undefined) return;
-    const p = anchor === 'anomaly' ? api.anomalyRootCause(id) : api.problemRootCause(id);
+    // v0.10.1119 — şerit bubbleUp çizmez: çekirdek uç (ham-spans taraması yok).
+    const p = anchor === 'anomaly' ? api.anomalyRootCauseCore(id) : api.problemRootCauseCore(id);
     p.then(r => setRc(r ?? null)).catch(() => setRc(null));
   };
   useEffect(() => {

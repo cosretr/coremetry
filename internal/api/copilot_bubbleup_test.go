@@ -187,7 +187,8 @@ func TestBubbleUpSingleChokePoint(t *testing.T) {
 			t.Errorf("ServiceBubbleUp %q taşımalı", w)
 		}
 	}
-	if n := strings.Count(read("rootcause.go"), "s.serviceBubbleUp(ctx, "); n != 2 {
-		t.Errorf("rootcause.go iki fan-out'ta serviceBubbleUp çağırmalı: %d", n)
+	// v0.10.1119 — fan-out dikişten (rootCauseStore) okur: aynı chstore.ServiceBubbleUp.
+	if n := strings.Count(read("rootcause.go"), "st.ServiceBubbleUp(ctx, "); n != 2 {
+		t.Errorf("rootcause.go iki fan-out'ta ServiceBubbleUp çağırmalı: %d", n)
 	}
 }
