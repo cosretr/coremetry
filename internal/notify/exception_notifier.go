@@ -246,18 +246,54 @@ func exceptionChannelKey(g chstore.ExceptionGroup, state, prio string, gnow time
 // last_seen DESC LIMIT 300 penceresini canlı span gruplarıyla paylaşınca
 // büyük filoda pencerenin dışında kalabiliyorlardı. Oracle geçişleri son
 // görülmeyle sınırlı (exOracleScanLookback) — FINAL tüm tabloyu taramasın;
-// span geçişlerinin şekli değişmedi.
+// span geçişleri v0.10.1116'ten beri exSpanScanLookback ile sınırlı.
 var exceptionChannelPasses = []struct{ state, oracle string }{
 	{chstore.ExStateNew, "exclude"}, {chstore.ExStateRegressed, "exclude"},
 	{chstore.ExStateNew, "only"}, {chstore.ExStateRegressed, "only"},
 }
 
+// ── v0.10.1116 — span geçişlerine zaman sınırı ─────────────────────────
+//
+// Span geçişleri (oracle "exclude") `exception_groups FINAL … ORDER BY
+// last_seen DESC LIMIT 300` okumasını alt sınırsız yapıyordu. Sınır KANITLA
+// güvenli: span grubunun kapısı gecikmesizdir (GroupNotifyGate span grubunda
+// (true, 0) döner → gnow = now) ve isChannelCandidate HEM new HEM regressed
+// için `0 ≤ now − last_seen ≤ exChannelActiveWin` (10 dk) ister; new ayrıca
+// first_seen ≤ 15 dk. exceptionChannelKey ve claimRegressed aynı kapının
+// arkasında — regressed dalında da tazelik ŞART. Yani her aday
+// last_seen ≥ now − 10 dk taşır; sınır max(15 dk, 10 dk) + 2 sa pay =
+// now − 2 sa 15 dk. Pay, ileride span grubuna gecikme veren bir kapıyı
+// (≤ 2 sa) da kapsar. LIMIT eşdeğerliği: sıralama last_seen DESC olduğu
+// için sınırın üstündeki satırlar sıralı listenin ÖNEKİDİR → sınırlı
+// sorgunun ilk 300'ü = sınırsız sorgunun ilk 300'ünün sınır üstü kısmı;
+// düşen her satır zaten aday olamazdı.
+//
+// DÜRÜST ETKİ: okuma IO'su KÜÇÜLMEZ. Tablo ORDER BY fingerprint, partition
+// ve skip index yok; FINAL'de anahtar dışı kolon koşulu birleştirmeden SONRA
+// uygulanır. clickhouse local ölçümü (200k grup): sınırlı/sınırsız ikisi de
+// 26 mark / 250.552 satır okudu; minmax(last_seen) + use_skip_indexes_if_final
+// = 1 ile de AYNI — fingerprint (hash) sıralı granüllerde her granül taze bir
+// grup içerir, minmax hiçbirini eleyemez. Ayrıca exact-mode'suz (CH 24.8)
+// use_skip_indexes_if_final RMT'de yanlış sonuç verebilir: yazıcılar
+// oku-değiştir-yaz yapar, last_seen sürümler arasında geri gidebilir. Bu
+// yüzden indeks EKLENMEDİ. Küçülen: FINAL sonrası satır kümesi (sıralama,
+// LIMIT, aktarım, Go tarafında satır çözme) — tablo büyüdükçe 300'lük dolu
+// cevap yerine yalnız son 2 sa 15 dk'da aktif gruplar.
+const (
+	exSpanScanMargin   = 2 * time.Hour
+	exSpanScanLookback = max(exChannelNewMaxAge, exChannelActiveWin) + exSpanScanMargin
+)
+
 // exceptionChannelFilter — SAF: geçişin liste süzgeci. Oracle geçişi
-// `last_seen ≥ now − (10 dk tazelik + 30 dk en çok gecikme)`.
+// `last_seen ≥ now − (10 dk tazelik + 30 dk en çok gecikme)`; span geçişi
+// (v0.10.1116) `last_seen ≥ now − exSpanScanLookback`.
 func exceptionChannelFilter(state, oracle string, now time.Time) chstore.ExceptionGroupFilter {
 	f := chstore.ExceptionGroupFilter{State: state, Limit: 300, MinOccurrences: exChannelMinOccur, Oracle: oracle}
-	if oracle == "only" {
+	switch oracle {
+	case "only":
 		f.ActiveFromNs = now.Add(-exOracleScanLookback).UnixNano()
+	case "exclude":
+		f.ActiveFromNs = now.Add(-exSpanScanLookback).UnixNano()
 	}
 	return f
 }

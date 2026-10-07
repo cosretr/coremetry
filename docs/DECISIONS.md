@@ -2100,6 +2100,37 @@ bir süzgeç anahtarı (desen argümanları bağlı; v0.8.356 clickhouse-go para
 adayı. Kolonsuz kurulumda Normalized kipin ham ada düştüğünü FE'ye söyleyen bir sinyal yok (çip yine "operation shape"
 der, sunucu `name` olarak eşler).
 
+## 2026-10-07 — log_templates: 30 gün TTL (tablo sınırsız büyüyordu) (v0.10.1116)
+
+**Sorun:** `log_templates` `ReplacingMergeTree(version) ORDER BY id`, partition ve TTL YOK. v0.10.1030'dan beri
+biliniyor: puller Drain'i her tik örneklemden yeniden kurduğu için şablon kimlikleri kayar, her tik yeni satır
+gelir. Okuyucuların hepsi (`log_template_new` dedektörü — varsayılan kapalı ama defter yazılıyor; v0.10.1113 Problem
+kanıtı; /logs Şablonlar sekmesi) tam FINAL taraması yapıyor, sınır yalnız LIMIT + max_execution_time. 1113 bunu
+"ilk çare `last_seen` TTL'i" diye kuyruğa almıştı.
+
+**Karar:** `TTL toDateTime(last_seen) + INTERVAL 30 DAY` (`chstore/log_templates_ttl.go`). `last_seen` DateTime64(9) →
+`toDateTime` (CH 24.8 code 450); `toDate` yok (partition yok, hizalama kazancı yok). 30 gün: dedektörün bilinen-şablon
+ufku 7 gün, 1113 kanıtı problem başlangıcı çevresini ister. Hâlâ görülen şablonun last_seen'i her tik tazelenir —
+yalnız 30 gün HİÇ örneklenmemiş şablon düşer. Ayar değil sabit: `retention.*` yalnız sinyal tablolarını listeler,
+state tabloları DDL'de sabit TTL taşır. `ttl_only_drop_parts` UYGULANAMAZ (partition yok); satırlar TTL merge'lerinde
+silinir (`merge_with_ttl_timeout`, CH varsayılanı 4 sa gecikme).
+**Yeni kurulum:** CREATE TTL'i taşır. **Mevcut kurulum:** tek seferlik `ALTER TABLE log_templates MODIFY TTL …
+SETTINGS materialize_ttl_after_modify = 1, alter_sync = 0`, `system_settings[log_templates_ttl_v1]` işaretiyle.
+New()'in sonunda, DDL ertelemesi kapandıktan SONRA ayrı goroutine'de koşar — migrate() içinde küme kipinde execDDL
+ifadeyi erteleyip nil döndüğü için işaret ALTER uygulanmadan yazılırdı. Tablo zaten TTL taşıyorsa (`engine_full`'da
+TTL cümlesi; operatörün başka TTL'i de ezilmez) yalnız işaret; tablo yoksa işaretsiz bekler; hata → işaret yok,
+sonraki boot. Küme: state tablosu → adaptDDL yalnız `ON CLUSTER` ekler (`_local` / Distributed yok); code 159
+"kuyruğa alındı" başarı sayılır. Materialize = 1 bilinçli (retention.go'nun tersi): tek seferlik, arka planda, küçük
+state tablosu; 0 ile birikim yalnız eski part'lar bir gün birleşince düşerdi (clickhouse local'de ölçüldü: 0 →
+6000/6000 satır kalır, 1 → süresi dolan yarı düşer).
+
+**Beklenen etki:** tablo 30 günlük şablon kayması kadar sınırlanır; tam FINAL taramaları aynı şekilde ama bu sınırlı
+tabloda. Prod boyutu ölçülmedi — kazanç birikimin büyüklüğü kadar, rakam iddia edilmiyor. **Anlam değişikliği:** 30 gün
+susup dönen şablon yeniden doğar (yapışkan first_seen satırı bulamaz) — dedektör zaten 7 gün susanı bilinen saymıyordu;
+1113 kanıtında dönüş anı "doğum" görünür. 30 günden eski bir problemin kanıtı, o şablonlar o günden beri görülmediyse
+boşalabilir. Çok pod aynı anda boot ederse ALTER birden çok gidebilir (idempotent, ek MATERIALIZE mutasyonu).
+**Değişmeyen:** okuma sorguları, puller, purge sınıflaması (`log_templates` korunan listede).
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

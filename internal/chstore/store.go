@@ -1000,6 +1000,10 @@ func New(cfg config.CHConfig, ret config.RetentionConfig) (*Store, error) {
 	if deferred := s.finishDeferredDDL(); len(deferred) > 0 {
 		go s.runDeferredDDL(deferred)
 	}
+	// v0.10.1116 — log_templates TTL'inin tek seferlik göçü. Erteleme
+	// kapandıktan SONRA (execDDL artık senkron: işaret ancak ALTER döndükten
+	// sonra yazılır), ayrı goroutine'de — boot beklemez. log_templates_ttl.go.
+	go s.applyLogTemplatesTTLOnce()
 	return s, nil
 }
 
@@ -3401,6 +3405,10 @@ func canonicalTables(sd, ld, md int) []string {
 		// upsert path reads + preserves the earliest value)
 		// so the "new template since X" signal stays meaningful
 		// across restarts.
+		//
+		// v0.10.1116 — TTL 30 gün, last_seen'e bağlı (log_templates_ttl.go:
+		// gerekçe, ifade, mevcut kurulumların tek seferlik ALTER'ı). Partition
+		// YOK → ttl_only_drop_parts uygulanamaz; satırlar TTL merge'lerinde düşer.
 		`CREATE TABLE IF NOT EXISTS log_templates (
 			id             String,
 			template       String,
@@ -3412,7 +3420,8 @@ func canonicalTables(sd, ld, md int) []string {
 			sample         String,
 			version        UInt64 DEFAULT toUnixTimestamp64Nano(now64(9))
 		) ENGINE = ReplacingMergeTree(version)
-		ORDER BY id`,
+		ORDER BY id
+		TTL ` + logTemplatesTTLExpr,
 
 		// v0.5.476 — operator events. Manual time markers
 		// ("deploy v1.2.3", "feature flag X rollout", "incident

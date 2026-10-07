@@ -259,7 +259,8 @@ func TestExceptionChannelPassesSplitOracle(t *testing.T) {
 		if f.State != p.state || f.Limit != 300 || f.MinOccurrences != exChannelMinOccur || f.Oracle != p.oracle {
 			t.Errorf("süzgeç: %+v", f)
 		}
-		want := int64(0)
+		// v0.10.1116 — span geçişi de sınırlı (2 sa 15 dk); Oracle değişmedi.
+		want := now.Add(-(2*time.Hour + 15*time.Minute)).UnixNano()
 		if p.oracle == "only" {
 			want = now.Add(-40 * time.Minute).UnixNano()
 		}
