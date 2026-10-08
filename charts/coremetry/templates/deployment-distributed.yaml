@@ -211,6 +211,13 @@ spec:
             {{- end }}
             {{- /* v0.10.958 — Rollouts v2 P1.6: ek env'ler chart env'lerinden
                    SONRA, yalnız extras'lı rollerde (monolitik şablonla aynı). */}}
+            {{- /* v0.10.1132 — grafanaMcp.autoRegister tohumu yalnız api + worker
+                   (MCP istemcisini kullanan roller); ingest/agent'a gitmez. */}}
+            {{- if has $role.name (list "api" "worker") }}
+            {{- with (include "coremetry.grafanaMcp.seedEnv" $) }}
+            {{- . | nindent 12 }}
+            {{- end }}
+            {{- end }}
             {{- if $role.extras }}
             {{- with $.Values.extraEnv }}
             {{- toYaml . | nindent 12 }}

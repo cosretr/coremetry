@@ -1,0 +1,60 @@
+# docker-compose.grafana-mcp.yml — v0.10.1132 (optional overlay)
+#
+# Grafana's official MCP server (github.com/grafana/mcp-grafana) next to
+# Coremetry, mirroring the Helm chart's `grafanaMcp.*` block. CoSRE uses it
+# through Coremetry's external MCP client (Settings → MCP sunucuları,
+# transport "http").
+#
+# Bring up (works on top of the base file, with or without the distributed
+# overlay):
+#   export GRAFANA_MCP_TOKEN=<glsa_...>     # Grafana service account, Viewer role
+#   docker compose -f docker-compose.yml -f docker-compose.grafana-mcp.yml \
+#     --profile grafana up -d
+#
+# Register in Coremetry (Settings → MCP sunucuları):
+#   name: grafana   transport: http   url: http://mcp-grafana:8000/mcp
+#   allow-list (read-only), e.g.:
+#     search_dashboards, get_dashboard_summary, get_dashboard_panel_queries,
+#     list_datasources, query_prometheus, list_prometheus_*, query_loki_logs,
+#     list_loki_*, alerting_rules_read, list_incidents, get_incident
+#
+# …or let Coremetry seed that entry once at startup (never overwrites an
+# existing "grafana" entry, never re-adds a deleted one). Add this line to the
+# `coremetry` service's environment (`coremetry-api` + `coremetry-worker` in the
+# distributed overlay):
+#   COREMETRY_MCP_SEED_JSON: '[{"name":"grafana","url":"http://mcp-grafana:8000/mcp","allowTools":["search_dashboards","get_dashboard_summary","list_datasources","query_prometheus","list_prometheus_*","query_loki_logs","list_loki_*","alerting_rules_read"]}]'
+#
+# Note: while any external MCP server is configured, CoSRE hides the
+# search_wiki / read_wiki_page tools; the wiki still answers via its own tier.
+services:
+  mcp-grafana:
+    image: grafana/mcp-grafana:2.0.1      # Docker Hub tag (git tag v2.0.1)
+    container_name: coremetry-mcp-grafana
+    # The image's ENTRYPOINT pins "--transport sse"; override it whole.
+    entrypoint: ["/app/mcp-grafana"]
+    command:
+      - "--transport=streamable-http"
+      - "--address=0.0.0.0:8000"
+      # Upstream rejects unknown Host headers (DNS-rebinding guard); allow the
+      # compose service name Coremetry dials.
+      - "--allowed-hosts=mcp-grafana,mcp-grafana:8000,localhost:8000,127.0.0.1:8000"
+      - "--disable-write"
+      - "--usage-stats=disabled"
+      # Self-signed Grafana:
+      # - "--tls-skip-verify"
+    environment:
+      GRAFANA_URL: "${GRAFANA_MCP_URL:-http://grafana:3000}"
+      GRAFANA_SERVICE_ACCOUNT_TOKEN: "${GRAFANA_MCP_TOKEN:?set GRAFANA_MCP_TOKEN to a Viewer service-account token}"
+      # Optional caller auth — then put the same value in the Coremetry entry's token field:
+      # MCP_GRAFANA_SERVER_TOKEN: "${GRAFANA_MCP_CALLER_TOKEN}"
+    # No host port: only Coremetry (same compose network) should reach it.
+    # Uncomment for local debugging only:
+    # ports:
+    #   - "127.0.0.1:8000:8000"
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: ["ALL"]
+    restart: unless-stopped

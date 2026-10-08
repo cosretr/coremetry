@@ -194,6 +194,11 @@ spec:
             {{- /* v0.10.958 — Rollouts v2 P1.6: operatörün ek env'leri chart'ın
                    env'lerinden SONRA (tokenRef `env:NAME` teslimi; ayrıntı ve
                    yasak adlar values.yaml extraEnv bloğunda). Boşsa render yok. */}}
+            {{- /* v0.10.1132 — grafanaMcp.autoRegister: açılışta "grafana" MCP
+                   kaydı tohumu (internal/mcpclient/seed.go). Kapalıysa boş. */}}
+            {{- with (include "coremetry.grafanaMcp.seedEnv" .) }}
+            {{- . | nindent 12 }}
+            {{- end }}
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

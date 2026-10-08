@@ -160,6 +160,76 @@ hataların bir kısmını ancak apply'da, bir kısmını HİÇ yakalamaz:
 İki deployment şablonu mod bloğunun başında çağırır; çıktısı boştur, varsayılan
 değerlerle manifest değişmez.
 */}}
+{{/*
+v0.10.1132 — Grafana MCP (grafana-mcp.yaml) yardımcıları.
+*/}}
+{{- define "coremetry.grafanaMcp.fullname" -}}
+{{- printf "%s-grafana-mcp" (include "coremetry.fullname" .) | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
+{{- define "coremetry.grafanaMcp.tokenSecretName" -}}
+{{- if .Values.grafanaMcp.existingSecret -}}
+{{- .Values.grafanaMcp.existingSecret -}}
+{{- else -}}
+{{- include "coremetry.grafanaMcp.fullname" . -}}
+{{- end -}}
+{{- end -}}
+
+{{/* Ayarlar → MCP sunucuları'na girilecek kümeiçi URL. */}}
+{{- define "coremetry.grafanaMcp.url" -}}
+{{- printf "http://%s.%s.svc:%d/mcp" (include "coremetry.grafanaMcp.fullname" .) .Release.Namespace (int .Values.grafanaMcp.port) -}}
+{{- end -}}
+
+{{/*
+coremetry.grafanaMcp.seedEnv — autoRegister açıkken Coremetry pod'larına
+(monolitik / api / worker) eklenen env öğeleri; değilse boş. Token JSON'a
+GİRMEZ: tohum "tokenEnv" ile COREMETRY_MCP_SEED_ önekli bir env'i işaret
+eder, o env Secret'tan gelir (internal/mcpclient/seed.go).
+*/}}
+{{- define "coremetry.grafanaMcp.seedEnv" -}}
+{{- $g := .Values.grafanaMcp -}}
+{{- if and $g.enabled $g.autoRegister -}}
+{{- $entry := dict "name" "grafana" "transport" "http" "url" (include "coremetry.grafanaMcp.url" .) "enabled" true -}}
+{{- if $g.allowTools -}}{{- $_ := set $entry "allowTools" $g.allowTools -}}{{- end -}}
+{{- if $g.callerAuth.existingSecret -}}{{- $_ := set $entry "tokenEnv" "COREMETRY_MCP_SEED_GRAFANA_TOKEN" -}}{{- end -}}
+- name: COREMETRY_MCP_SEED_JSON
+  value: {{ toJson (list $entry) | quote }}
+{{- if $g.callerAuth.existingSecret }}
+- name: COREMETRY_MCP_SEED_GRAFANA_TOKEN
+  valueFrom:
+    secretKeyRef:
+      name: {{ $g.callerAuth.existingSecret }}
+      key: {{ $g.callerAuth.existingSecretKey | default "token" }}
+{{- end }}
+{{- end -}}
+{{- end -}}
+
+{{/* Render-anı koruması: eksik/çelişkili Grafana MCP değerleri apply'a kalmasın. */}}
+{{- define "coremetry.grafanaMcp.validate" -}}
+{{- $g := .Values.grafanaMcp -}}
+{{- if not $g.grafanaUrl -}}
+{{- fail "coremetry: grafanaMcp.enabled=true requires grafanaMcp.grafanaUrl" -}}
+{{- end -}}
+{{- if and $g.existingSecret $g.serviceAccountToken -}}
+{{- fail "coremetry: set only one of grafanaMcp.existingSecret / grafanaMcp.serviceAccountToken" -}}
+{{- end -}}
+{{- $envAuth := false -}}
+{{- range $e := ($g.extraEnv | default list) -}}
+{{- if has (toString $e.name) (list "GRAFANA_SERVICE_ACCOUNT_TOKEN" "GRAFANA_SERVICE_ACCOUNT_TOKEN_FILE" "GRAFANA_API_KEY" "GRAFANA_USERNAME") -}}{{- $envAuth = true -}}{{- end -}}
+{{- end -}}
+{{- if not (or $g.existingSecret $g.serviceAccountToken $envAuth) -}}
+{{- fail "coremetry: grafanaMcp needs a Grafana token — set grafanaMcp.existingSecret (preferred) or grafanaMcp.serviceAccountToken" -}}
+{{- end -}}
+{{- if ne (toString $g.transport) "streamable-http" -}}
+{{- fail (printf "coremetry: grafanaMcp.transport must be streamable-http (Coremetry's MCP client speaks streamable HTTP only), got %q" (toString $g.transport)) -}}
+{{- end -}}
+{{- range $e := (.Values.extraEnv | default list) -}}
+{{- if and $g.autoRegister (hasPrefix "COREMETRY_MCP_SEED_" (toString $e.name)) -}}
+{{- fail (printf "coremetry: extraEnv must not set %s while grafanaMcp.autoRegister=true — the chart manages it" (toString $e.name)) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
 {{- define "coremetry.validateExtras" -}}
 {{- range $key := list "extraEnv" "envFrom" "extraVolumes" "extraVolumeMounts" -}}
 {{- $v := index $.Values $key -}}

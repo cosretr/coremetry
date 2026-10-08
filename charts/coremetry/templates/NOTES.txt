@@ -106,3 +106,39 @@ Coremetry has been installed.
     (recommended: ClientIP) or front-load with a cookie-based ingress.
     {{- end }}
 {{- end }}
+
+{{- if .Values.grafanaMcp.enabled }}
+{{- $g := .Values.grafanaMcp }}
+
+ℹ Grafana MCP server is deployed ({{ include "coremetry.grafanaMcp.fullname" . }}, {{ $g.image.repository }}:{{ $g.image.tag }}).
+  Grafana: {{ $g.grafanaUrl }}{{ if $g.disableWrite }}  (read-only: --disable-write){{ end }}
+  In-cluster MCP URL — paste into Settings → MCP sunucuları, transport "http":
+      {{ include "coremetry.grafanaMcp.url" . }}
+{{- if $g.autoRegister }}
+  autoRegister=true: Coremetry adds an entry named "grafana" with this URL at
+  startup — only if no entry with that name exists and it was never seeded
+  before; later edits or a deletion in Settings are never overwritten.
+{{- else }}
+  Add it by hand: name "grafana", transport "http", the URL above
+  {{- if $g.callerAuth.existingSecret }}, token = the value in Secret {{ $g.callerAuth.existingSecret }} (callerAuth){{ end }}.
+{{- end }}
+  Recommended:
+    - Grafana token = a SERVICE ACCOUNT with the Viewer role (never Editor/Admin).
+    - Restrict CoSRE to read-only tools with the entry's allow-list
+      {{- if $g.autoRegister }} (seeded automatically){{ end }}:
+        {{ join ", " $g.allowTools }}
+  Note: while any external MCP server is configured, CoSRE hides the
+  search_wiki / read_wiki_page tools; the wiki still answers via its own tier.
+{{- if not $g.networkPolicy.enabled }}
+
+⚠ grafanaMcp.networkPolicy.enabled=false{{ if not $g.callerAuth.existingSecret }} and callerAuth is off{{ end }}: any pod
+  in the cluster can call the Grafana MCP endpoint with the service-account
+  token's rights. Keep the NetworkPolicy on unless your CNI ignores it.
+{{- end }}
+{{- if not $g.disableWrite }}
+
+⚠ grafanaMcp.disableWrite=false: write tools (update_dashboard,
+  create_incident, alerting_*_write, …) are registered. Prefer a Viewer
+  token and an allow-list of read-only tools.
+{{- end }}
+{{- end }}

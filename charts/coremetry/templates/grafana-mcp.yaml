@@ -1,0 +1,233 @@
+{{/*
+  v0.10.1132 — Grafana'nın resmi MCP sunucusu (github.com/grafana/mcp-grafana).
+  CoSRE onu Coremetry'nin DIŞ MCP istemcisiyle (Ayarlar → MCP sunucuları,
+  taşıma "http" = streamable HTTP) kullanır. Varsayılan kapalı
+  (grafanaMcp.enabled). Bileşenler: Deployment (1 replika), ClusterIP
+  Service, isteğe bağlı token Secret'ı, NetworkPolicy (ingress YALNIZ bu
+  sürümün Coremetry pod'larından).
+
+  Neden 1 replika: streamable HTTP oturumu (Mcp-Session-Id) pod-yerel; MCP
+  istemcisi kopan oturumu yeniden kurar ama iki pod arasında gidip gelmek
+  her turda el sıkışma demek. Sunucu durumsuz bir vekil olduğundan HA
+  ihtiyacı düşük; pod düşerse CoSRE dış araçsız (yerli araçlarla) sürer.
+*/}}
+{{- if .Values.grafanaMcp.enabled -}}
+{{- include "coremetry.grafanaMcp.validate" . -}}
+{{- $g := .Values.grafanaMcp -}}
+{{- $name := include "coremetry.grafanaMcp.fullname" . -}}
+{{- $port := int $g.port -}}
+{{- $ns := .Release.Namespace -}}
+{{- /* Upstream ana dinleyicide Host başlığını allowlist'le doğrular
+       (varsayılan yalnız localhost:<port> → kümeiçi istek 403). Service'in
+       çözülebilir bütün adları, port'lu ve port'suz. */ -}}
+{{- $hosts := list -}}
+{{- range $h := list $name (printf "%s.%s" $name $ns) (printf "%s.%s.svc" $name $ns) (printf "%s.%s.svc.cluster.local" $name $ns) -}}
+{{- $hosts = append $hosts $h -}}
+{{- $hosts = append $hosts (printf "%s:%d" $h $port) -}}
+{{- end -}}
+{{- $hosts = concat $hosts ($g.extraAllowedHosts | default list) -}}
+{{- if and $g.serviceAccountToken (not $g.existingSecret) }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "coremetry.labels" . | nindent 4 }}
+    app.kubernetes.io/component: grafana-mcp
+type: Opaque
+data:
+  token: {{ $g.serviceAccountToken | b64enc | quote }}
+---
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "coremetry.labels" . | nindent 4 }}
+    app.kubernetes.io/component: grafana-mcp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "coremetry.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: grafana-mcp
+  template:
+    metadata:
+      labels:
+        {{- include "coremetry.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: grafana-mcp
+      {{- if and $g.serviceAccountToken (not $g.existingSecret) }}
+      annotations:
+        checksum/secret: {{ $g.serviceAccountToken | sha256sum }}
+      {{- end }}
+    spec:
+      # Kubernetes API'sine ihtiyacı yok — SA token'ı bağlanmaz.
+      automountServiceAccountToken: false
+      {{- include "coremetry.imagePullSecrets" (dict "imageRoot" $g.image "global" .Values.global) | nindent 6 }}
+      {{- with $g.podSecurityContext }}
+      securityContext: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: mcp-grafana
+          image: {{ include "coremetry.image" (dict "imageRoot" $g.image "global" .Values.global "defaultTag" "2.0.1") | quote }}
+          imagePullPolicy: {{ $g.image.pullPolicy | default "IfNotPresent" }}
+          {{- /* openshift=true: UID'yi SCC atar (restricted-v2). false: imajın
+                 USER'ı sayısal olmadığından ("mcp-grafana") kubelet
+                 runAsNonRoot'u doğrulayamaz — imajın kendi UID/GID'si (1000,
+                 upstream Dockerfile `useradd -u 1000`) açıkça verilir. */}}
+          {{- $sc := deepCopy ($g.securityContext | default dict) }}
+          {{- if not $g.openshift }}
+          {{- $_ := set $sc "runAsUser" 1000 }}
+          {{- $_ := set $sc "runAsGroup" 1000 }}
+          {{- end }}
+          {{- with $sc }}
+          securityContext: {{ toYaml . | nindent 12 }}
+          {{- end }}
+          # İmajın ENTRYPOINT'i "--transport sse" sabitler; komut açıkça
+          # verilir ki taşıma/adres yalnız buradaki argümanlardan gelsin.
+          command: ["/app/mcp-grafana"]
+          args:
+            - "--transport={{ $g.transport }}"
+            - "--address=0.0.0.0:{{ $port }}"
+            - "--allowed-hosts={{ join "," $hosts }}"
+            {{- if $g.disableWrite }}
+            - "--disable-write"
+            {{- end }}
+            {{- if $g.tlsSkipVerify }}
+            - "--tls-skip-verify"
+            {{- end }}
+            {{- if $g.usageStats }}
+            - "--usage-stats={{ $g.usageStats }}"
+            {{- end }}
+            {{- range $g.extraArgs }}
+            - {{ . | quote }}
+            {{- end }}
+          ports:
+            - name: mcp
+              containerPort: {{ $port }}
+              protocol: TCP
+          env:
+            - name: GRAFANA_URL
+              value: {{ $g.grafanaUrl | quote }}
+            {{- if or $g.existingSecret $g.serviceAccountToken }}
+            - name: GRAFANA_SERVICE_ACCOUNT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "coremetry.grafanaMcp.tokenSecretName" . }}
+                  key: {{ if $g.existingSecret }}{{ $g.existingSecretKey | default "token" }}{{ else }}token{{ end }}
+            {{- end }}
+            {{- if $g.callerAuth.existingSecret }}
+            # Çağıran doğrulaması: istekler "Authorization: Bearer <token>"
+            # taşımazsa 401 (upstream --server-auth-token'ın env karşılığı;
+            # env tercih edilir ki sır süreç argümanlarında görünmesin).
+            - name: MCP_GRAFANA_SERVER_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $g.callerAuth.existingSecret }}
+                  key: {{ $g.callerAuth.existingSecretKey | default "token" }}
+            {{- end }}
+            {{- with $g.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          # TCP yoklaması: /healthz ana dinleyicide Host doğrulamasına takılır
+          # (kubelet Host'u pod IP'si gönderir); TCP buna bağlı değil.
+          readinessProbe:
+            tcpSocket:
+              port: mcp
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: mcp
+            initialDelaySeconds: 10
+            periodSeconds: 20
+            failureThreshold: 3
+          {{- with $g.resources }}
+          resources: {{ toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            {{- with $g.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        # readOnlyRootFilesystem açık kalır; yazılabilir tek yol /tmp.
+        - name: tmp
+          emptyDir: {}
+        {{- with $g.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with $g.nodeSelector }}
+      nodeSelector: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $g.tolerations }}
+      tolerations: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $g.affinity }}
+      affinity: {{ toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "coremetry.labels" . | nindent 4 }}
+    app.kubernetes.io/component: grafana-mcp
+spec:
+  # Yalnız kümeiçi: ucun çağıran doğrulaması opsiyonel, dışarı açılmaz.
+  type: ClusterIP
+  {{- /* MCP oturumu pod-yerel — chart'ın MCP/SSE Service'leriyle aynı affinity
+         (skill §4); tek replikada zararsız, ileride ölçeklenirse doğru. */}}
+  {{- if and .Values.service.sessionAffinity (ne .Values.service.sessionAffinity "None") }}
+  sessionAffinity: {{ .Values.service.sessionAffinity }}
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: {{ .Values.service.sessionAffinityTimeoutSeconds | default 10800 }}
+  {{- end }}
+  selector:
+    {{- include "coremetry.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: grafana-mcp
+  ports:
+    - name: mcp
+      port: {{ $port }}
+      targetPort: mcp
+      protocol: TCP
+{{- if $g.networkPolicy.enabled }}
+---
+# Ingress YALNIZ bu sürümün Coremetry pod'larından (monolitik `coremetry`,
+# distributed `coremetry-api` / `coremetry-worker`) — dış MCP çağrısını
+# yapan copilot bu pod'larda koşar. Egress kısıtlanmaz (Grafana + DNS).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "coremetry.labels" . | nindent 4 }}
+    app.kubernetes.io/component: grafana-mcp
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "coremetry.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: grafana-mcp
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "coremetry.selectorLabels" . | nindent 14 }}
+            matchExpressions:
+              - key: app.kubernetes.io/component
+                operator: In
+                values: ["coremetry", "coremetry-api", "coremetry-worker"]
+        {{- with $g.networkPolicy.extraFrom }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      ports:
+        - port: {{ $port }}
+          protocol: TCP
+{{- end }}
+{{- end }}

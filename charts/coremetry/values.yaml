@@ -638,6 +638,134 @@ goDemo:
   # CLI flags, wired automatically; this is for anything else you need).
   extraEnv: []
 
+# ── Grafana MCP sunucusu (v0.10.1132) ───────────────────────────────────────
+#
+# Grafana'nın resmi MCP sunucusunu (github.com/grafana/mcp-grafana) Coremetry'nin
+# yanına kurar; CoSRE onu mevcut DIŞ MCP istemcisiyle (Ayarlar → MCP sunucuları,
+# taşıma "http" = streamable HTTP) kullanır. Varsayılan KAPALI.
+#
+# Kurulumdan sonra NOTES.txt kümeiçi URL'yi basar:
+#   http://<fullname>-grafana-mcp.<namespace>.svc:8000/mcp
+# Bunu Ayarlar → MCP sunucuları'na elle gir ya da autoRegister: true ile
+# Coremetry'nin açılışta "grafana" adlı kaydı kendisi eklemesini sağla.
+#
+# Güvenlik (README "Grafana MCP"):
+#   - Grafana'da Viewer rollü bir SERVİS HESABI aç, token'ını Secret'a koy
+#     (existingSecret tercih edilir).
+#   - disableWrite: true → --disable-write (oluştur/güncelle/sil araçları hiç
+#     kaydolmaz). Viewer token + --disable-write = iki bağımsız kilit.
+#   - MCP ucunun Grafana'ya karşı kendi kimliği servis hesabıdır; ÇAĞIRANI
+#     doğrulamaz (callerAuth açılmadıkça). networkPolicy.enabled: true ingress'i
+#     yalnız Coremetry pod'larına (monolitik / api / worker) açar.
+#   - CoSRE tarafında allowTools ile salt-okur bir araç listesi uygula.
+#
+# Hava boşluklu kurulum: imajı iç registry'ye aynala —
+#   <global.imageRegistry>/grafana/mcp-grafana:<tag>
+grafanaMcp:
+  enabled: false
+  image:
+    registry: ""                     # boş = docker.io; global.imageRegistry her zaman kazanır
+    repository: grafana/mcp-grafana
+    # Upstream git etiketi "v2.0.1", Docker Hub etiketi "2.0.1" (v'siz). Floating
+    # "latest" DEĞİL: aracın kataloğu sürümden sürüme değişir, allow-list'in
+    # ve NOTES'taki önerinin anlamı sabit kalsın.
+    tag: "2.0.1"
+    pullPolicy: IfNotPresent
+    pullSecrets: []
+  # Grafana'nın kök URL'si (enabled iken ZORUNLU), ör.
+  # "https://grafana.example.test" ya da kümeiçi "http://grafana.monitoring.svc:3000".
+  grafanaUrl: ""
+  # Servis hesabı token'ı. Tercih: kendi Secret'ın —
+  #   kubectl create secret generic grafana-mcp-token -n <ns> \
+  #     --from-literal=token=<glsa_...>
+  existingSecret: ""
+  existingSecretKey: "token"
+  # Alternatif: chart bir Secret üretir (<fullname>-grafana-mcp, anahtar
+  # "token"). Değer values'ta/Helm geçmişinde durur — yalnız --set ile, prod'da
+  # existingSecret. İkisi birden verilirse render hata verir. NOTES ASLA basmaz.
+  serviceAccountToken: ""
+  # true → --disable-write: yazma araçları (update_dashboard, create_incident,
+  # alerting_*_write, …) hiç kaydolmaz.
+  disableWrite: true
+  # true → --tls-skip-verify (self-signed Grafana). Güvensiz; mümkünse bunun
+  # yerine CA'yı extraVolumes ile bağla + extraArgs: ["--tls-ca-file=/path/ca.crt"].
+  tlsSkipVerify: false
+  # Coremetry'nin istemcisi yalnız streamable HTTP konuşur; başka değer
+  # render hatası verir.
+  transport: streamable-http
+  port: 8000
+  # Anonim kullanım istatistiği (--usage-stats): enabled | disabled | log.
+  # Banka/hava boşluklu kurulumlar için varsayılan disabled.
+  usageStats: disabled
+  # Upstream ana dinleyicide Host başlığını doğrular (DNS rebinding koruması;
+  # varsayılan yalnız localhost → kümeiçi istek 403 alır). Chart Service'in
+  # kısa/ns/svc/svc.cluster.local adlarını (port'lu + port'suz) kendisi ekler;
+  # Service'e başka adla (ör. bir ingress) gelinecekse buraya ekle.
+  extraAllowedHosts: []
+  # Çağıran doğrulaması (upstream --server-auth-token, env
+  # MCP_GRAFANA_SERVER_TOKEN). Açılırsa Coremetry'deki kayıtta aynı değer
+  # "token" (Bearer) olarak girilmeli; autoRegister bunu Secret'tan kendisi
+  # taşır. NetworkPolicy'ye ek, derinlemesine savunma.
+  callerAuth:
+    existingSecret: ""
+    existingSecretKey: "token"
+  # Coremetry açılışta (monolitik / api / worker pod'ları) Ayarlar → MCP
+  # sunucuları'na "grafana" adlı kaydı ekler — YALNIZ o adla kayıt yoksa ve
+  # daha önce hiç tohumlanmadıysa. Operatörün düzenlemesi/silmesi asla ezilmez
+  # (env COREMETRY_MCP_SEED_JSON; audit aktörü "system").
+  autoRegister: false
+  # Kayıtla birlikte tohumlanan ve NOTES'ta önerilen salt-okur araç listesi
+  # (Coremetry allow-list'i; sondaki * önek eşleşmesi). Boş = tüm araçlar.
+  allowTools:
+    - search_dashboards
+    - get_dashboard_summary
+    - get_dashboard_panel_queries
+    - get_dashboard_property
+    - list_datasources
+    - get_datasource
+    - query_prometheus
+    - query_prometheus_histogram
+    - list_prometheus_*
+    - query_loki_logs
+    - query_loki_stats
+    - query_loki_patterns
+    - list_loki_*
+    - alerting_rules_read
+    - alerting_silences_read
+    - list_incidents
+    - get_incident
+    - get_annotations
+    - generate_deeplink
+  extraArgs: []                      # ör. ["--disable-oncall", "--log-level=debug"]
+  extraEnv: []                       # ek env (liste, Kubernetes EnvVar biçimi)
+  extraVolumes: []                   # ör. Grafana CA'sı için bir Secret hacmi
+  extraVolumeMounts: []
+  resources:
+    requests: { cpu: 50m, memory: 64Mi }
+    limits:   { cpu: 500m, memory: 256Mi }
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  # OpenShift restricted-v2: true (varsayılan) → UID sabitlenmez, SCC proje
+  # aralığından atar. Vanilla k8s'te false yap: imajın USER'ı sayısal değil
+  # ("mcp-grafana"), runAsNonRoot doğrulanamaz ve pod CreateContainerConfigError
+  # verir — false iken chart imajın kendi UID/GID'sini (1000) container
+  # securityContext'ine ekler.
+  openshift: true
+  podSecurityContext: {}
+  securityContext:
+    runAsNonRoot: true
+    readOnlyRootFilesystem: true
+    allowPrivilegeEscalation: false
+    capabilities: { drop: ["ALL"] }
+    seccompProfile:
+      type: RuntimeDefault
+  networkPolicy:
+    enabled: true
+    # Ek izinli kaynaklar (NetworkPolicyPeer listesi), ör. bir namespace'teki
+    # başka bir MCP istemcisi. Varsayılan: yalnız bu sürümün Coremetry pod'ları.
+    extraFrom: []
+
 serviceAccount:
   create: true
   annotations: {}

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"embed"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -1370,6 +1371,26 @@ func main() {
 		log.Printf("[mcpclient] load persisted config: %v", err)
 	}
 	cfgRefresh.Add("mcpclient", func(ctx context.Context) error { return mcpCliSvc.LoadPersisted(ctx, store) })
+	// v0.10.1132 — COREMETRY_MCP_SEED_JSON (Helm grafanaMcp.autoRegister): ad
+	// başına ömür boyu bir kez tohum; operatörün kaydı/silmesi ezilmez
+	// (internal/mcpclient/seed.go). Aktör "system" — istek yok.
+	if raw := os.Getenv(mcpclient.SeedEnv); raw != "" {
+		added, err := mcpCliSvc.ApplySeed(ctx, store, raw, os.Getenv)
+		if err != nil {
+			log.Printf("[mcpclient] seed: %v", err)
+		}
+		if len(added) > 0 {
+			log.Printf("[mcpclient] seed: added %v", added)
+			details, _ := json.Marshal(map[string]any{"added": added, "source": mcpclient.SeedEnv})
+			if err := store.AppendAudit(ctx, chstore.AuditEntry{
+				Time: time.Now().UnixNano(), ActorID: "system", ActorEmail: "system", ActorRole: "system",
+				Action: "settings.mcp_servers.seed", TargetKind: "settings", TargetID: "mcp_client_servers",
+				Details: string(details),
+			}); err != nil {
+				log.Printf("[mcpclient] seed audit: %v", err)
+			}
+		}
+	}
 	go cfgRefresh.Start(chstore.WithQueryTag(ctx, "worker:settings-refresh")) // v0.10.259 — kayıtlar tamam, tek döngü
 	if tempoSvc.Configured() {
 		t := tempoSvc.Snapshot()

@@ -2792,6 +2792,43 @@ matrisinde sayım == liste; kapsam WHERE'i ve argüman sırası. `chstore/env_me
 kaynak satırları eklendi. `api/inbox_env_scope_test.go`: liste daraltması, sayım kapsamının env'i taşıması, kaynak
 pini (tek çözücü). `lib/queries/inboxCount.test.tsx`: env değişince rozet yeniden çekilir.
 
+## 2026-10-09 — Helm: Grafana MCP sunucusu + açılışta MCP kaydı tohumu (v0.10.1132)
+
+**İstek:** CoSRE, Grafana'yı (dashboard, Prometheus, Loki, alarm kuralları, incident) mevcut dış MCP
+istemcisiyle kullanabilsin; operatör Grafana'nın resmi MCP sunucusunu (`grafana/mcp-grafana`) chart'tan
+kurabilsin. **Karar:** `grafanaMcp.*` bloğu (varsayılan kapalı) + `templates/grafana-mcp.yaml`: tek replikalı
+Deployment, ClusterIP Service, isteğe bağlı token Secret'ı ve NetworkPolicy. Ingress yalnız bu sürümün
+Coremetry pod'larından gelir (`coremetry` / `coremetry-api` / `coremetry-worker`). İmaj `2.0.1` sabit
+(Docker Hub etiketi v'siz), `global.imageRegistry` ile aynalanır. Varsayılan `--disable-write`,
+`--usage-stats=disabled` (banka/hava boşluğu). Grafana kimliği Viewer servis hesabı token'ıdır,
+`existingSecret` tercih edilir. **Upstream'den doğrulanan iki tuzak:** (1) mcp-grafana ana dinleyicide
+`Host` başlığını allowlist'le doğrular; varsayılan yalnız localhost'tur ve kümeiçi çağrı 403 alır. Bu
+yüzden chart Service'in kısa/ns/svc/svc.cluster.local adlarını port'lu ve port'suz `--allowed-hosts`'a
+yazar, yoklamalar da TCP'dir. (2) İmajın `USER`'ı sayısal değil (`mcp-grafana`), vanilla k8s'te
+`runAsNonRoot` doğrulanamaz. `grafanaMcp.openshift: true` (varsayılan) UID'yi SCC'ye bırakır; `false`
+imajın UID/GID'sini (1000) ekler. Bu chart'ın OpenShift-öncelikli varsayılan geleneğine uyar. Upstream
+artık çağıran doğrulaması da veriyor (`MCP_GRAFANA_SERVER_TOKEN`), `callerAuth.existingSecret` ile
+NetworkPolicy'ye ek savunma olarak bağlandı.
+
+**autoRegister:** `COREMETRY_MCP_SEED_JSON` env'i (`internal/mcpclient/seed.go`) monolitik/api/worker
+pod'larına gider. Tohum her ad için ömür boyu yalnız bir kez uygulanır. Uygulanan adlar `system_settings`
+`mcp_client_seeded` işaretinde tutulur: o adla kayıt varsa hiçbir alanına dokunulmaz, operatör silerse
+kayıt geri gelmez, liste 8'de doluysa işaretlenmeden atlanır. Yalnız `http` taşıması tohumlanır, çünkü
+env'den gelen stdio tohumu açılışta keyfî komut çalıştırmak olurdu. Token JSON'a girmez: `tokenEnv` adı
+`COREMETRY_MCP_SEED_` önekini taşımak zorunda. Böylece tohum `COREMETRY_JWT_SECRET` gibi bir sırrı Bearer
+başlığıyla keyfî URL'ye taşıyamaz. Audit `settings.mcp_servers.seed`, aktör `system`. Çok-pod: tüm pod'lar
+aynı girdiden aynı blob'u üretir (idempotent), bu yüzden lider kilidi gerekmedi. `api.go` değişmedi;
+`maxMCPServers` artık `mcpclient.MaxServers`.
+
+**Bilinen davranış:** dış MCP sunucusu yapılandırılınca CoSRE `search_wiki` / `read_wiki_page`'i gizler
+(v0.10.1122); wiki kendi kademesinden cevap vermeyi sürdürür. README "Grafana MCP" bunu ve önerilen salt-okur
+allow-list'i belgeler. Compose için `docker-compose.grafana-mcp.yml` örneği eklendi.
+
+**Test:** `mcpclient/seed_test.go`: ayrıştırma (dizi/sarmal, varsayılanlar, tokenEnv önek kısıtı, stdio
+reddi, tekrar), plan (taze kurulum, operatör kaydı korunur, silinen geri gelmez, dolu liste), üç açılış
+boyunca idempotentlik. `helm template` iki token kipi × openshift açık/kapalı × NetworkPolicy açık/kapalı ×
+monolitik/distributed.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

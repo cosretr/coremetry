@@ -37,8 +37,9 @@ func (s *Server) registerMCPClientRoutes(mux *http.ServeMux) {
 
 // maxMCPServers — liste tavanı. Her sunucu sohbet kataloğuna tool
 // enjekte eder ve küçük yerel modelin katalog diyeti (v0.9.1230) sınırlı;
-// sekiz sunucu bile cömert.
-const maxMCPServers = 8
+// sekiz sunucu bile cömert. v0.10.1132 — env tohumu (mcpclient/seed.go) aynı
+// tavanı kullanır; tek kaynak mcpclient.MaxServers.
+const maxMCPServers = mcpclient.MaxServers
 
 // mcpServerInput — PUT/test gövdesindeki tek sunucu.
 type mcpServerInput struct {
