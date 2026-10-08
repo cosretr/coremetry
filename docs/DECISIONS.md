@@ -2715,6 +2715,30 @@ admin olmayana ASLA — şekil testi pinler. api.go büyümesin diye `copilotCon
 **Bırakılan:** sunucu tarafı başlangıç çipleri (`copilot_starters.go`) dokunulmadı — ipucu istemci tarafında,
 LLM'siz. Sohbetin geri kalan TR sabit metinleri i18n'e taşınmadı (kapsam dışı).
 
+## 2026-10-09 — Wiki senkronu: içeriksiz klasör ve çok büyük sayfa hata değil "atlandı" (v0.10.1129)
+
+**Bildirim (operatör):** durum kartı "12044 sayfa … — 3 hata" diye kırmızıydı. İki hata kod wiki'sindeki (git
+klasöründen yayımlanan) `.md`'siz klasörlerdi: ağaçta görünüyorlar ama sayfa GET'i 404 ve ham ADO JSON gövdesi
+hata metnine giriyordu. Üçüncüsü 2 MiB okuma tavanını aşan bir sayfaydı: `LimitReader` gövdeyi kesiyor, kesik JSON
+"beklenmeyen yanıt (sayfa değil)" oluyordu. **Karar:** ikisi de HATA değil, ayrı sayılan "atlandı".
+(1) Ağaçtaki her düğüm istenir; 404 → `devops.ErrWikiPageNotFound` (ham gövdesiz). `gitItemPath`'e bakıp
+(".md" yok → klasör) ÖN-ATLAMA bilerek YOK: alanın biçimi sunucu sürümüne / wiki türüne göre değişebilir ve
+yanlış sezgi tüm sayfaları atlayıp indeksi budardı; bedel klasör başına tek istek. Senkron 404'ü `skippedEmpty`
+sayar; sayfa GÖRÜLMEDİ sayılır, önceden indekslendiyse normal budanır — 404 "kaynakta şu an yok" demektir.
+**Korkuluk:** bir wiki'nin ağacı ≥10 düğüm ve GET'lerin yarısından fazlası 404 ise o wiki o geçişte BUDANMAZ;
+tek hata yazılır ("çok sayıda 404 — budama atlandı"). (2) `wikiDo` artık `limit+1` okur; aşan gövde `truncated` işaretlenir ve
+`GetWikiPage` `devops.ErrWikiPageTooLarge` döner. Tavan 2 → 4 MiB (≤4 işçi → ≤16 MiB anlık gövde, bellek
+sınırlı). Senkron bunu `skippedLarge` sayar ve sayfayı GÖRÜLDÜ sayar: önceden indekslenmiş içerik korunur, mezar
+taşı yok. (3) Durum blobu `skippedEmpty` / `skippedLarge` + tavanlı (≤20) `skipped[] {page, reason}` taşır;
+`errors` ve `lastOk` bunlardan etkilenmez. Kart: hatalar kırmızı kalır; atlananlar nötr gri, açılır satır
+"Atlanan: 2 içeriksiz klasör, 1 çok büyük sayfa" (≤5 ad + "… N sayfa daha"). (4) `read_wiki_page` / `ReadPage`:
+404 → "bulunamadı" yolu (nil, nil — mevcut ipucu); çok büyük → `wiki.ErrPageTooLarge` ve MCP'de `tooLarge:true` +
+anlaşılır not (ham JSON yok). Canlı aramada okunamayan sayfa zaten sessizce düşer. **Yerleşim:** `api.go`
+büyümedi; değişiklik `internal/devops/wiki.go`, `internal/wiki/{sync,config,search}.go`,
+`internal/mcptools/wiki_tools.go`, `WikiKnowledgeSection.tsx` + `wikiKnowledge.ts`. **Testler:** sahte ADO'da kod
+wiki'si klasör düğümü + 404 dönen ara düğüm (ikisi de 404 → atlandı) + çoğunluk-404 korkuluğu + tavanı aşan sayfa → 0 hata, sayaçlar doğru; önceden
+indekslenmiş dev sayfa korunur; 404 olan budanır; kart gri/kırmızı ayrımı.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

@@ -30,6 +30,9 @@ type fakePage struct {
 type fakeWiki struct {
 	id, name, project, repo string
 	pages                   map[string]*fakePage // sayfa yolu → sayfa
+	// folders — v0.10.1129: kod wiki'si klasör düğümleri (ağaçta görünür,
+	// gitItemPath ".md"'siz klasör yolu; GET 404 — yine de istenir).
+	folders map[string]bool
 }
 
 type fakeDevOps struct {
@@ -187,7 +190,14 @@ func (f *fakeDevOps) handler(t *testing.T) http.Handler {
 			}
 			pg, ok := wk.pages[path]
 			if !ok {
-				http.NotFound(w, r)
+				if f.pageGets == nil {
+					f.pageGets = map[string]int{}
+				}
+				f.pageGets["404:"+wk.id+path]++
+				// ADO biçimi: JSON gövdeli 404 (ham gövde hata metnine girmemeli).
+				w.Header().Set("Content-Type", "application/json; charset=utf-8")
+				w.WriteHeader(http.StatusNotFound)
+				_, _ = w.Write([]byte(`{"$id":"1","message":"Wiki page '` + path + `' could not be found. Ensure that the path of the page is correct and the page exists.","typeKey":"WikiPageNotFoundException"}`))
 				return
 			}
 			if inm := strings.Trim(r.Header.Get("If-None-Match"), `"`); inm != "" && inm == pg.etag {
@@ -247,6 +257,9 @@ func buildTree(wk *fakeWiki) map[string]any {
 	for p := range wk.pages {
 		paths = append(paths, p)
 	}
+	for p := range wk.folders {
+		paths = append(paths, p)
+	}
 	sort.Strings(paths)
 	for _, p := range paths {
 		cur := root
@@ -275,6 +288,10 @@ func buildTree(wk *fakeWiki) map[string]any {
 		m := map[string]any{"path": n.path, "subPages": subs}
 		if n.path != "/" {
 			m["gitItemPath"] = gitPathOf(n.path)
+			if wk.folders[n.path] {
+				m["gitItemPath"] = n.path // kod wiki'si klasörü: ".md" yok
+				m["isParentPage"] = true
+			}
 		}
 		return m
 	}

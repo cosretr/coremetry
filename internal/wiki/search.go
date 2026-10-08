@@ -125,6 +125,10 @@ var ErrNoTerms = errors.New("sorgu en az bir aranabilir terim içermeli")
 // ErrOutOfScope — istenen proje/wiki izin listesinde değil.
 var ErrOutOfScope = errors.New("bu wiki Coremetry'nin wiki ayarında kapsam dışı")
 
+// ErrPageTooLarge — sayfa okuma tavanını aşıyor (v0.10.1129; devops'un
+// sentinel'i — çağıranlar devops'u içe aktarmadan sınıflandırsın).
+var ErrPageTooLarge = devops.ErrWikiPageTooLarge
+
 // indexStale — SAF: yerel indeks boş ya da bayat mı.
 func indexStale(st Status, cfg Config, now time.Time) bool {
 	if st.IndexedPages == 0 || st.LastFinishedAt == 0 {
@@ -719,6 +723,14 @@ func (s *Service) ReadPage(ctx context.Context, project, wiki, path string) (*Pa
 				return nil, ErrOutOfScope
 			}
 			rec, _, err := s.fetchPage(rctx, api, project, w.ID, w.Name, path, !liveMode)
+			// v0.10.1129 — 404 = sayfa yok (içeriksiz klasör): "bulunamadı"
+			// yoluna düşer; çok büyük sayfa ham gövdesiz kendi hatasıyla.
+			if errors.Is(err, devops.ErrWikiPageNotFound) {
+				return nil, nil
+			}
+			if errors.Is(err, ErrPageTooLarge) {
+				return nil, err
+			}
 			if err != nil {
 				return nil, fmt.Errorf("sayfa okunamadı: %w", err)
 			}

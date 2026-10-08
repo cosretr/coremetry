@@ -12,7 +12,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { ConfirmProvider } from '@/components/ui/ConfirmDialog';
-import type { WikiConfig, WikiConfigView, WikiPagesPage, WikiSyncStatus, WikiTestSearchResult } from '@/lib/types';
+import type { WikiConfig, WikiConfigView, WikiPagesPage, WikiSkippedPage, WikiSyncStatus, WikiTestSearchResult } from '@/lib/types';
 
 const h = vi.hoisted(() => ({
   get: vi.fn<() => Promise<WikiConfigView>>(),
@@ -36,7 +36,7 @@ vi.mock('@/lib/api', () => ({
 }));
 
 import { WikiKnowledgeSection } from './WikiKnowledgeSection';
-import { parseList, wikiBody, wikiStatusSummary, syncPending, searchLabel, effectiveMode, pagesEmptyText, liveOutcomeText } from './wikiKnowledge';
+import { parseList, wikiBody, wikiStatusSummary, syncPending, searchLabel, effectiveMode, pagesEmptyText, liveOutcomeText, skippedSummary } from './wikiKnowledge';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -119,6 +119,14 @@ describe('wikiKnowledge helpers', () => {
     expect(syncPending({ ...STATUS, requestedAt: STATUS.lastStartedAt! + 1 })).toBe(true);
     expect(syncPending(STATUS)).toBe(false);
   });
+  it('atlananlar hata sayılmaz: nötr özet, ton değişmez (v0.10.1129)', () => {
+    expect(skippedSummary(STATUS)).toBe('');
+    const st: WikiSyncStatus = { ...STATUS, errors: [], lastOk: true, skippedEmpty: 2, skippedLarge: 1 };
+    expect(skippedSummary(st)).toBe('Atlanan: 2 içeriksiz klasör, 1 çok büyük sayfa');
+    const s = wikiStatusSummary(st);
+    expect(s.tone).toBe('ok');
+    expect(s.text).not.toContain('hata');
+  });
 });
 
 describe('WikiKnowledgeSection', () => {
@@ -132,6 +140,30 @@ describe('WikiKnowledgeSection', () => {
     expect(card.textContent).toContain('sunucuda yok');
     const ta = el.querySelectorAll('textarea');
     expect((ta[0] as HTMLTextAreaElement).value).toBe('Platform');
+  });
+
+  it('atlanan sayfalar gri açılır listede, hatalar kırmızı ayrı listede (v0.10.1129)', async () => {
+    const skipped: WikiSkippedPage[] = Array.from({ length: 7 }, (_, i) => ({ page: `ChatBot/MobileSearch/scripts/klasör ${i}`, reason: 'empty' as const }));
+    skipped.push({ page: 'Platform/Platform.wiki/Test Datası', reason: 'large' as const });
+    const el = await mount({ ...VIEW, status: { ...STATUS, skippedEmpty: 7, skippedLarge: 1, skipped } });
+    const card = el.querySelector('[data-testid="wiki-status"]')!;
+    const box = card.querySelector('[data-testid="wiki-skipped"]') as HTMLDetailsElement;
+    expect(box).not.toBeNull();
+    expect(box.querySelector('summary')!.textContent).toBe('Atlanan: 7 içeriksiz klasör, 1 çok büyük sayfa');
+    expect(box.style.color).toBe('var(--text3)');
+    expect(box.querySelectorAll('li')).toHaveLength(6); // ≤5 ad + "… daha"
+    expect(box.textContent).toContain('… 3 sayfa daha');
+    expect(box.textContent).not.toContain('http 500');
+    const errList = card.querySelector('ul[style*="--err"]')!;
+    expect(errList.textContent).toContain('http 500');
+    expect(errList.textContent).not.toContain('klasör');
+    // Özet satırı hata sayısını atlananlarla şişirmez.
+    expect(card.textContent).toContain('1 hata');
+  });
+
+  it('atlanan yoksa gri satır çizilmez', async () => {
+    const el = await mount(VIEW);
+    expect(el.querySelector('[data-testid="wiki-skipped"]')).toBeNull();
   });
 
   it('bağlantı yoksa uyarı gösterir ve senkron düğmesi kapalı', async () => {

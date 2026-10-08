@@ -201,6 +201,45 @@ type Status struct {
 	// ReindexRetry — yazılamayan sayfalar (tavanlı, deneme sayılı; reindex.go).
 	ReindexScanned bool           `json:"reindexScanned,omitempty"`
 	ReindexRetry   []ReindexRetry `json:"reindexRetry,omitempty"`
+	// v0.10.1129 — atlanan (HATA DEĞİL) sayfalar: SkippedEmpty içeriksiz
+	// klasör (kod wiki'si .md'siz klasör ya da ağaçta görünüp 404 dönen
+	// düğüm), SkippedLarge okuma tavanını aşan sayfa. Skipped tavanlı
+	// (statusSkippedMax) örnek liste; içerik ASLA, yalnız konum.
+	SkippedEmpty int           `json:"skippedEmpty,omitempty"`
+	SkippedLarge int           `json:"skippedLarge,omitempty"`
+	Skipped      []SkippedPage `json:"skipped,omitempty"`
+}
+
+// Atlama nedenleri (SkippedPage.Reason).
+const (
+	SkipEmpty = "empty" // içeriksiz klasör / 404
+	SkipLarge = "large" // okuma tavanını aşan sayfa
+)
+
+// SkippedPage — atlanan tek sayfanın künyesi.
+type SkippedPage struct {
+	Page   string `json:"page"`   // "Proje/Wiki/yol"
+	Reason string `json:"reason"` // SkipEmpty | SkipLarge
+}
+
+const statusSkippedMax = 20
+
+// addSkip — atlanan sayfayı sayar; örnek liste tavanlı.
+func (st *Status) addSkip(page, reason string) {
+	switch reason {
+	case SkipLarge:
+		st.SkippedLarge++
+	default:
+		reason = SkipEmpty
+		st.SkippedEmpty++
+	}
+	if len(st.Skipped) >= statusSkippedMax {
+		return
+	}
+	if r := []rune(page); len(r) > 300 {
+		page = string(r[:300]) + "…"
+	}
+	st.Skipped = append(st.Skipped, SkippedPage{Page: page, Reason: reason})
 }
 
 // SearchStatusKey — son canlı arama sonucunun paylaşılan blobu (v0.10.1124).

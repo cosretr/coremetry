@@ -202,6 +202,11 @@ func readWikiPageTool(d Deps) mcp.Tool {
 			if errors.Is(err, wiki.ErrOutOfScope) {
 				return nil, fmt.Errorf("%s/%s wiki kapsamında değil", a.Project, a.Wiki)
 			}
+			if errors.Is(err, wiki.ErrPageTooLarge) {
+				// v0.10.1129 — ham JSON değil, anlaşılır not.
+				return map[string]any{"source": sourcestate.Result("wiki", "devops", sourcestate.Outcome{}), "found": false,
+					"tooLarge": true, "hint": err.Error() + " — içeriği uydurma; kullanıcıya sayfayı Azure DevOps'ta açmasını söyle."}, nil
+			}
 			if err != nil {
 				if sourcestate.IsCancelled(err) {
 					return nil, err

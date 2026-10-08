@@ -281,8 +281,8 @@ func (s *Service) finish(ctx context.Context, st Status, start time.Time) Status
 	}
 	st.Search = s.searchStateNow()
 	s.saveStatus(ctx, st)
-	log.Printf("[wiki-sync] projects=%d wikis=%d pages=%d fetched=%d unchanged=%d deleted=%d errors=%d truncated=%v dur=%dms",
-		st.Projects, st.Wikis, st.Pages, st.Fetched, st.Unchanged, st.Deleted, len(st.Errors), st.Truncated, st.DurationMs)
+	log.Printf("[wiki-sync] projects=%d wikis=%d pages=%d fetched=%d unchanged=%d deleted=%d skipped_empty=%d skipped_large=%d errors=%d truncated=%v dur=%dms",
+		st.Projects, st.Wikis, st.Pages, st.Fetched, st.Unchanged, st.Deleted, st.SkippedEmpty, st.SkippedLarge, len(st.Errors), st.Truncated, st.DurationMs)
 	return st
 }
 
@@ -384,6 +384,8 @@ func (s *Service) syncPass(ctx context.Context, cfg Config, api API, st *Status)
 			}
 		}
 
+		// notFound — bu wiki'de 404 dönen sayfa GET'i (budama korkuluğu).
+		notFound := 0
 		jobs := make(chan pageJob)
 		var wg sync.WaitGroup
 		for i := 0; i < syncWorkers; i++ {
@@ -397,8 +399,19 @@ func (s *Service) syncPass(ctx context.Context, cfg Config, api API, st *Status)
 					}
 					res, err := s.syncPage(ctx, api, limiter, emb, j, existing)
 					mu.Lock()
-					seen[j.wiki.ID+"\x00"+j.ref.Path] = true
+					// v0.10.1129 — 404 (ağaçta görünen içeriksiz klasör) HATA
+					// değil "atlandı"; sayfa gerçekten yok → görülmedi sayılır
+					// ve (önceden indekslendiyse) normal budanır. Tavanı aşan
+					// sayfa da atlanır ama GÖRÜLDÜ sayılır: eski içerik korunur.
+					if !errors.Is(err, devops.ErrWikiPageNotFound) {
+						seen[j.wiki.ID+"\x00"+j.ref.Path] = true
+					}
 					switch {
+					case errors.Is(err, devops.ErrWikiPageNotFound):
+						notFound++
+						st.addSkip(pageLabel(j.wiki, j.ref.Path), SkipEmpty)
+					case errors.Is(err, devops.ErrWikiPageTooLarge):
+						st.addSkip(pageLabel(j.wiki, j.ref.Path), SkipLarge)
 					case err != nil:
 						st.addErr(fmt.Sprintf("%s/%s%s: %v", j.wiki.Project, j.wiki.Name, j.ref.Path, err))
 					case res == pageUnchanged:
@@ -443,7 +456,12 @@ func (s *Service) syncPass(ctx context.Context, cfg Config, api API, st *Status)
 		}
 		// Budama: ağaç tam alındıysa bu wiki'de görülmeyen sayfalar silinir.
 		// Sayfa hatası budamayı ENGELLEMEZ (hata görülen sayfadadır, görülmeyende değil).
-		if !truncated {
+		// v0.10.1129 korkuluk: ağacın yarısından fazlası 404 dönüyorsa (sunucu
+		// yolu farklı kodluyor olabilir) 404'ler "görülmedi" sayıldığından tüm
+		// wiki budanırdı — bu geçişte budama atlanır, tek hata yazılır.
+		if !truncated && tooMany404(notFound, len(refs)) {
+			st.addErr(fmt.Sprintf("%s/%s: çok sayıda 404 — budama atlandı (%d/%d sayfa)", w.Project, w.Name, notFound, len(refs)))
+		} else if !truncated {
 			for k, m := range existing {
 				if m.WikiID == w.ID && !seen[k] {
 					if err := s.store.DeleteWikiPage(ctx, m); err == nil {
@@ -466,6 +484,20 @@ func (s *Service) syncPass(ctx context.Context, cfg Config, api API, st *Status)
 			}
 		}
 	}
+}
+
+// many404Min — 404 korkuluğunun devreye girdiği en küçük ağaç.
+const many404Min = 10
+
+// tooMany404 — SAF: wiki'nin sayfa GET'lerinin yarısından fazlası 404 mü
+// (en az many404Min düğüm)?
+func tooMany404(notFound, nodes int) bool {
+	return nodes >= many404Min && notFound*2 > nodes
+}
+
+// pageLabel — durum satırındaki sayfa künyesi: "Proje/Wiki/yol".
+func pageLabel(w devops.WikiInfo, path string) string {
+	return w.Project + "/" + w.Name + path
 }
 
 type pageResult int

@@ -73,6 +73,22 @@ export function wikiStatusSummary(st: WikiSyncStatus | undefined, mode: WikiMode
   return { text: parts.join(' — '), tone: errs ? (st.lastOk ? 'warn' : 'err') : st.truncated ? 'warn' : 'ok' };
 }
 
+/**
+ * v0.10.1129 — atlanan sayfaların nötr özeti ("Atlanan: 2 içeriksiz klasör,
+ * 1 çok büyük sayfa"); hiç yoksa ''. Hata sayısına ve tona KARIŞMAZ.
+ */
+export function skippedSummary(st: WikiSyncStatus | undefined): string {
+  const parts: string[] = [];
+  if (st?.skippedEmpty) parts.push(`${st.skippedEmpty} içeriksiz klasör`);
+  if (st?.skippedLarge) parts.push(`${st.skippedLarge} çok büyük sayfa`);
+  return parts.length ? `Atlanan: ${parts.join(', ')}` : '';
+}
+
+/** Atlanan sayfa satırı: ad + neden. */
+export function skippedReasonText(reason: string): string {
+  return reason === 'large' ? 'çok büyük, atlandı' : 'içeriksiz klasör';
+}
+
 /** Manuel istek bekliyor mu (lider henüz almadı). */
 export function syncPending(st: WikiSyncStatus | undefined): boolean {
   return !!st && !!st.requestedAt && st.requestedAt > (st.lastStartedAt ?? 0);

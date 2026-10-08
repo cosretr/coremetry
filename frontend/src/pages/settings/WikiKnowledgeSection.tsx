@@ -5,7 +5,7 @@ import { api } from '@/lib/api';
 import { tsLong } from '@/lib/utils';
 import type { WikiConfigView, WikiMode, WikiSyncStatus } from '@/lib/types';
 import { Field2, FlashBox, Row } from './shared';
-import { effectiveMode, listText, searchLabel, syncPending, WIKI_MODES, wikiBody, wikiStatusSummary } from './wikiKnowledge';
+import { effectiveMode, listText, searchLabel, skippedReasonText, skippedSummary, syncPending, WIKI_MODES, wikiBody, wikiStatusSummary } from './wikiKnowledge';
 import { WikiPagesTable } from './WikiPagesTable';
 import { WikiTestSearch } from './WikiTestSearch';
 
@@ -111,6 +111,9 @@ export function WikiKnowledgeSection({ canEdit = true }: { canEdit?: boolean }) 
   };
 
   const summary = wikiStatusSummary(status, savedMode);
+  const skipped = savedMode !== 'live' ? skippedSummary(status) : '';
+  const skippedList = status?.skipped ?? [];
+  const skippedTotal = (status?.skippedEmpty ?? 0) + (status?.skippedLarge ?? 0);
   const modeHelp = WIKI_MODES.find(m => m.value === mode)?.help ?? '';
   // Ayar hâli NÖTR (settingsPalette.pin, v0.10.929): yalnız sapma renklenir.
   const toneColor = summary.tone === 'err' ? 'var(--err)' : summary.tone === 'warn' ? 'var(--warn)' : 'var(--text2)';
@@ -216,6 +219,18 @@ export function WikiKnowledgeSection({ canEdit = true }: { canEdit?: boolean }) 
         <div style={{ color: 'var(--text3)', marginTop: 2 }}>{searchLabel(status?.search, status?.searchLast, savedMode)}</div>
         {!!view.modeWarning && (
           <div data-testid="wiki-mode-warning" style={{ color: 'var(--warn)', marginTop: 2 }}>{view.modeWarning}</div>
+        )}
+        {/* v0.10.1129 — atlanan sayfalar hata DEĞİL: nötr gri satır + açılır liste (≤5). */}
+        {!!skipped && (
+          <details data-testid="wiki-skipped" style={{ color: 'var(--text3)', marginTop: 4 }}>
+            <summary style={{ cursor: 'pointer' }}>{skipped}</summary>
+            <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
+              {skippedList.slice(0, 5).map((s, i) => (
+                <li key={i} style={{ wordBreak: 'break-word' }}>{s.page} — {skippedReasonText(s.reason)}</li>
+              ))}
+              {skippedTotal > Math.min(5, skippedList.length) && <li>… {skippedTotal - Math.min(5, skippedList.length)} sayfa daha</li>}
+            </ul>
+          </details>
         )}
         {!!status?.errors?.length && (
           <ul style={{ margin: '6px 0 0', paddingLeft: 18, color: 'var(--err)' }}>

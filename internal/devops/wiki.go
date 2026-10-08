@@ -43,7 +43,10 @@ const (
 	// ctx üzerinden de uygulanır ki iptal anında kesilsin).
 	wikiReqTimeout = 20 * time.Second
 	// WikiPageBodyCap — tek sayfa yanıtı (içerik dahil) okuma tavanı.
-	WikiPageBodyCap = 2 << 20
+	// v0.10.1129: 2 → 4 MiB (senkron ≤4 işçi → ≤16 MiB anlık gövde). Tavanı
+	// aşan yanıt artık kesik JSON'la "beklenmeyen yanıt" değil, açıkça
+	// ErrWikiPageTooLarge döner.
+	WikiPageBodyCap = 4 << 20
 	// wikiTreeBodyCap — sayfa ağacı / git öğe listesi okuma tavanı.
 	wikiTreeBodyCap = 16 << 20
 	// wikiListBodyCap — proje / wiki listesi ve arama yanıtı tavanı.
@@ -59,6 +62,15 @@ var ErrWikiSearchUnavailable = errors.New("wiki search unavailable on this serve
 
 // ErrWikiNotModified — koşullu GET'te sayfa değişmemiş (304).
 var ErrWikiNotModified = errors.New("wiki page not modified")
+
+// ErrWikiPageNotFound — sayfa GET'i 404 (v0.10.1129). Kod wiki'sinde (git
+// klasöründen yayımlanan) .md'siz klasörler sayfa ağacında görünür ama
+// içerikleri yoktur; ham ADO gövdesi metne girmez.
+var ErrWikiPageNotFound = errors.New("wiki sayfası bulunamadı (içeriksiz klasör ya da silinmiş sayfa)")
+
+// ErrWikiPageTooLarge — sayfa yanıtı WikiPageBodyCap'i aşıyor (v0.10.1129);
+// kesik gövde ayrıştırılmaz.
+var ErrWikiPageTooLarge = fmt.Errorf("wiki sayfası çok büyük (>%d MB) — tarayıcıda açın", WikiPageBodyCap>>20)
 
 // WikiInfo — bir wiki'nin kullandığımız yarısı.
 type WikiInfo struct {
@@ -143,6 +155,8 @@ type wikiResp struct {
 	status int
 	header http.Header
 	body   []byte
+	// truncated — gövde limit'i aştı (limit+1 bayt okundu); body kırpık.
+	truncated bool
 }
 
 // wikiDo — kimlikli tek istek. 401/403 Wiki (Read) kapsamını adlandırır;
@@ -175,8 +189,12 @@ func wikiDo(ctx context.Context, cli *http.Client, cfg Settings, method, rawURL 
 		return wikiResp{}, errors.New(sanitize(err.Error(), cfg))
 	}
 	defer resp.Body.Close()
-	raw, readErr := io.ReadAll(io.LimitReader(resp.Body, limit))
+	// limit+1 okunur ki tavanı TAM dolduran gövde ile aşan ayırt edilsin.
+	raw, readErr := io.ReadAll(io.LimitReader(resp.Body, limit+1))
 	out := wikiResp{status: resp.StatusCode, header: resp.Header, body: raw}
+	if int64(len(raw)) > limit {
+		out.body, out.truncated = raw[:limit], true
+	}
 	switch {
 	case resp.StatusCode == http.StatusNotModified:
 		return out, ErrWikiNotModified
@@ -386,7 +404,8 @@ func flattenWikiTree(body []byte, limit int) ([]WikiPageRef, bool, error) {
 }
 
 // GetWikiPage — tek sayfanın Markdown içeriği + ETag. ifNoneMatch doluysa
-// koşullu istek; 304 → ErrWikiNotModified.
+// koşullu istek; 304 → ErrWikiNotModified, 404 → ErrWikiPageNotFound,
+// tavanı aşan gövde → ErrWikiPageTooLarge (v0.10.1129; ikisi de ham gövdesiz).
 func (s *Service) GetWikiPage(ctx context.Context, project, wikiID, path, ifNoneMatch string) (WikiPage, error) {
 	cfg, cli, err := s.wikiCfg()
 	if err != nil {
@@ -394,7 +413,13 @@ func (s *Service) GetWikiPage(ctx context.Context, project, wikiID, path, ifNone
 	}
 	resp, err := s.wikiGetJSON(ctx, cfg, cli, pagesURL(cfg, project, wikiID, path, "includeContent=true&"), ifNoneMatch, WikiPageBodyCap)
 	if err != nil {
+		if resp.status == http.StatusNotFound {
+			return WikiPage{}, ErrWikiPageNotFound
+		}
 		return WikiPage{}, err
+	}
+	if resp.truncated {
+		return WikiPage{}, ErrWikiPageTooLarge
 	}
 	var n wikiPageNode
 	if err := json.Unmarshal(resp.body, &n); err != nil {

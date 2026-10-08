@@ -7418,6 +7418,16 @@ export interface WikiSyncStatus {
   search?: 'unknown' | 'available' | 'unavailable';
   searchLast?: WikiSearchLast;
   running: boolean;
+  /** v0.10.1129 — atlanan (hata DEĞİL): içeriksiz klasör / çok büyük sayfa; liste ≤20. */
+  skippedEmpty?: number;
+  skippedLarge?: number;
+  skipped?: WikiSkippedPage[];
+}
+
+/** v0.10.1129 — senkronda atlanan tek sayfa ("Proje/Wiki/yol"). */
+export interface WikiSkippedPage {
+  page: string;
+  reason: 'empty' | 'large';
 }
 
 export interface WikiConfigView {
