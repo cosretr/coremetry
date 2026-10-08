@@ -2693,6 +2693,28 @@ operatör "Kaynak 2"yi görür.
 sözcükleri de kırpar ("handler" → "hand") — iki taraf aynı biçimi ürettiği ve tam yazım önde olduğu için zararı
 kapsamla sınırlı. TAMAMI BÜYÜK HARF Türkçe başlıklar ("SUNUCU LİSTESİ") köklenmez (tanımlayıcı koruması bedeli).
 
+## 2026-10-08 — CoSRE karşılaması: "neler yapabilirim" ipucu + wiki çipi (v0.10.1128)
+
+**Sorun (operatör):** boş CoSRE sohbeti (çekmece ve /cosre) "Merhaba / P1 durumu / Sana nasıl yardımcı
+olabilirim?" + hazır soru çiplerinden ibaretti; kullanıcı asistanın wiki'de arayabildiğini, bir servisin ya da hata
+veren bir operasyonun adını yazınca incelediğini ve ilgili sayfaya yönlendirdiğini bilmiyordu.
+
+**Karar:** "Sana nasıl yardımcı olabilirim?"in altında 3–4 kompakt satır (`ai/CosreCapabilities.tsx`, lucide
+ikonlu, tema token'ları, dar ekranda satır kırılır): wiki (yalnız açıksa) · servis trace/hata/gecikme (@ ile
+tamamla) · hata veren teknik operasyon · nereye bakmalı/yönlendirme. Her satır composer'ı ÖRNEK soruyla DOLDURUR,
+GÖNDERMEZ (v0.10.702 `prefillEndpoint` deseni `prefill(text, caret)`e genelleşti; örnekte `|` imleç yeri — ad
+operatörden). Wiki açıkken hazır çiplere "📚 Wikide ara: …" eklenir ("wikide " doldurur + odaklar). Yalnız boş
+sohbette; kapatma düğmesi yok (ilk soruyla zaten kaybolur). Metinler i18n (EN/TR, `cosre.cap.*`).
+
+**Wiki sinyali:** yeni istek YOK — sohbetin zaten çektiği `/api/copilot/config` yanıtına `wiki: boolean` eklendi
+(omitempty; false iken şekil bayt bayt eski). Kapı sohbetin wiki kademesiyle aynı üçlü (`chatWikiAvailable`):
+copilot aktif + wiki bilgisi açık/DevOps bağlı + oturum kullanıcısı (API token'ı değil). Proje/wiki adı, mod, adres
+admin olmayana ASLA — şekil testi pinler. api.go büyümesin diye `copilotConfig` handler'ı + dar yanıt tipleri
+`internal/api/copilot_config.go`ye taşındı (api.go 11576 → 11521, taban indirildi).
+
+**Bırakılan:** sunucu tarafı başlangıç çipleri (`copilot_starters.go`) dokunulmadı — ipucu istemci tarafında,
+LLM'siz. Sohbetin geri kalan TR sabit metinleri i18n'e taşınmadı (kapsam dışı).
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

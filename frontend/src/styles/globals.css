@@ -3189,6 +3189,15 @@ th.sticky-left:has(.tip), td.sticky-left:has(.tip),
    çekmecenin dibinde; aşağı açılsa ekran dışına taşardı). */
 .chat-composer-field { position: relative; flex: 1; display: flex; min-width: 0; }
 .chat-complete { top: auto; bottom: calc(100% + 4px); right: 0; max-width: none; }
+/* v0.10.1128 — boş CoSRE sohbetinin "neler yapabilirim" satırları: kompakt,
+   sola hizalı, dar ekranda satır kırılır (nowrap yok). */
+.cosre-cap { display: flex; flex-direction: column; gap: 2px; margin: 0 0 10px; }
+button.cosre-cap__row {
+  width: 100%; justify-content: flex-start; text-align: left;
+  white-space: normal; line-height: 1.35; color: var(--text2);
+}
+button.cosre-cap__row > .row { align-items: flex-start; min-width: 0; }
+.cosre-cap__icon { flex: none; margin-top: 2px; color: var(--accent); }
 .cb-row-empty {
   color: var(--text3);
   font-size: 11px;

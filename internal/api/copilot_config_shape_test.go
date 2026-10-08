@@ -80,3 +80,39 @@ func TestCopilotConfigOmitsEmptyModel(t *testing.T) {
 		t.Fatalf("kapalı kurulum yanıtı = %s, want {\"enabled\":false}", raw)
 	}
 }
+
+// v0.10.1128 — `wiki` bayrağı: CoSRE karşılamasındaki "wiki'de arayabilirim"
+// ipucu. Yalnız boolean; false iken alan YOK (eski şekil bayt bayt), true
+// iken yanında hiçbir wiki yapılandırma ayrıntısı (proje/mod/adres) yok.
+func TestCopilotConfigWikiFlagShape(t *testing.T) {
+	raw, _ := json.Marshal(copilotConfigResponse{Enabled: true})
+	if string(raw) != `{"enabled":true}` {
+		t.Fatalf("wiki=false iken şekil değişti: %s", raw)
+	}
+	raw, _ = json.Marshal(copilotConfigResponse{Enabled: true, Wiki: true})
+	if string(raw) != `{"enabled":true,"wiki":true}` {
+		t.Fatalf("wiki=true yanıtı = %s, want yalnız boolean", raw)
+	}
+}
+
+func TestChatWikiAvailable(t *testing.T) {
+	user := &auth.Claims{UserID: "u-1", Email: "dev@example.test", Role: "viewer"}
+	token := &auth.Claims{UserID: "token:ci", Role: "viewer"}
+	cases := []struct {
+		name           string
+		active, wikiOn bool
+		c              *auth.Claims
+		want           bool
+	}{
+		{"hepsi açık, oturum kullanıcısı", true, true, user, true},
+		{"copilot kapalı", false, true, user, false},
+		{"wiki kapalı", true, false, user, false},
+		{"API token'ı", true, true, token, false},
+		{"kimliksiz", true, true, nil, false},
+	}
+	for _, tc := range cases {
+		if got := chatWikiAvailable(tc.active, tc.wikiOn, tc.c); got != tc.want {
+			t.Errorf("%s: got %v want %v", tc.name, got, tc.want)
+		}
+	}
+}

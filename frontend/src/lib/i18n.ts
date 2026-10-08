@@ -176,6 +176,21 @@ const EN: Catalog = {
   'ai.ctx.window':    'Window',
   'ai.ctx.saved':     'Saved with the conversation — the live page may differ.',
 
+  // v0.10.1128 — empty CoSRE chat: "what I can do" hint (drawer + /cosre).
+  // `|` in a prompt marks where the caret lands (the user types the name).
+  'cosre.cap.aria':             'What CoSRE can do',
+  'cosre.cap.tryHint':          'Fills the box with an example — edit it, then send',
+  'cosre.cap.wiki':             'I can search the company wiki — e.g. “wiki: how do I refresh the cache”',
+  'cosre.cap.wiki.prompt':      'wiki: how do I refresh the cache',
+  'cosre.cap.service':          'I can look at a service’s traces, errors and latency — type the service name (@ completes it)',
+  'cosre.cap.service.prompt':   '@| traces, errors and latency in the last hour?',
+  'cosre.cap.operation':        'I can dig into failing technical operations — type the operation name',
+  'cosre.cap.operation.prompt': 'Why is the | operation failing?',
+  'cosre.cap.navigate':         'I can tell you where to look and take you to the right page',
+  'cosre.cap.navigate.prompt':  'Where should I look to investigate |?',
+  'cosre.chip.wiki':            'Search the wiki: …',
+  'cosre.chip.wiki.prompt':     'wiki: ',
+
   // v0.10.1119 — kök-neden paneli: ayrı bubbleUp isteği düştü (≠ "ayrışma yok").
   'rootCause.bubbleUnavailable': 'Attribute comparison unavailable — the span scan failed or timed out. This does not mean no dimension stood out.',
 
@@ -343,6 +358,19 @@ const TR: Catalog = {
   'ai.ctx.clusterNs': 'Cluster / namespace',
   'ai.ctx.window':    'Pencere',
   'ai.ctx.saved':     'Konuşmayla kaydedilen bağlam — canlı sayfa farklı olabilir.',
+
+  'cosre.cap.aria':             'CoSRE neler yapabilir',
+  'cosre.cap.tryHint':          'Kutuya örnek bir soru yazar — düzenleyip gönder',
+  'cosre.cap.wiki':             'Kurum wiki’sinde arayabilirim — ör. “wikide cache refresh nasıl yapılır”',
+  'cosre.cap.wiki.prompt':      'wikide cache refresh nasıl yapılır',
+  'cosre.cap.service':          'Bir servisin trace’lerine, hatalarına, gecikmesine bakabilirim — servis adını yaz (@ ile tamamla)',
+  'cosre.cap.service.prompt':   '@| servisinin son 1 saatteki trace\'leri, hataları ve gecikmesi?',
+  'cosre.cap.operation':        'Hata veren teknik operasyonları inceleyebilirim — operasyon adını yaz',
+  'cosre.cap.operation.prompt': '| operasyonu neden hata veriyor?',
+  'cosre.cap.navigate':         'Nereye bakman gerektiğini söyleyip ilgili sayfaya yönlendirebilirim',
+  'cosre.cap.navigate.prompt':  '| sorununu incelemek için nereye bakmalıyım?',
+  'cosre.chip.wiki':            'Wikide ara: …',
+  'cosre.chip.wiki.prompt':     'wikide ',
 
   'rootCause.bubbleUnavailable': 'Attribute kıyası okunamadı — span taraması düştü ya da zaman aşımına uğradı. Bu, "ayrışan boyut yok" demek değildir.',
 

@@ -19,6 +19,9 @@ export interface CopilotConfig {
   /** v0.10.183 — >1 profil varsa sohbet seçicisi için (sırsız: id/label/model) */
   profiles?: { id: string; label?: string; model?: string }[];
   defaultProfile?: string;
+  /** v0.10.1128 — sohbet bu kullanıcıya wiki'den cevap verebilir mi (yalnız
+   *  boolean; karşılamadaki "wiki'de arayabilirim" ipucu). Yoksa false. */
+  wiki?: boolean;
 }
 
 const OFF: CopilotConfig = { enabled: false };
@@ -30,7 +33,7 @@ function load(): Promise<CopilotConfig> {
   if (cached !== null) return Promise.resolve(cached);
   if (!inflight) {
     inflight = api.copilotConfig()
-      .then(c => { cached = { enabled: !!c.enabled, model: c.model }; return cached; })
+      .then(c => { cached = { enabled: !!c.enabled, model: c.model, wiki: !!c.wiki }; return cached; })
       .catch(() => { cached = OFF; return OFF; })
       .finally(() => { inflight = null; });
   }

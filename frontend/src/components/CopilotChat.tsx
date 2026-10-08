@@ -38,6 +38,8 @@ import { traceContextFromPage, useTraceAiContext } from '@/lib/traceAiContext'; 
 import { TraceContextStrip } from './ai/TraceContextStrip'; // v0.10.944
 import { ChatLinkNewTabContext } from './ai/chatLinkTarget'; // v0.10.1125 — /cosre
 import { ThemeToggle } from './ThemeToggle';
+import { CosreCapabilities } from './ai/CosreCapabilities'; // v0.10.1128
+import { useT } from '@/lib/i18n';
 
 // CopilotChat (v0.6.53, v0.9.163 interaktif) — global in-app AI assistant.
 // Sağ-alt animasyonlu sparkline logo (operatör seçimi B) bir drawer açar;
@@ -394,17 +396,23 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
   const dataStarters = useCopilotStarters(drawerOpen && enabled === true && turns.length === 0);
   // v0.10.702 — şablon çipi: composer'ı doldurur, GÖNDERMEZ; imleç başta,
   // operatör yolu yazar ("/api/x hatalı trace'lerini getir" → endpoint_traces).
-  const prefillEndpoint = () => {
-    const tpl = " hatalı trace'lerini getir";
-    setInput(tpl);
-    setCaret(0);
+  // v0.10.1128 — genelleştirildi: yetenek satırları ve wiki çipi de aynı
+  // "doldur + imleci koy + odakla, GÖNDERME" yolunu kullanır.
+  const prefill = (text: string, at: number) => {
+    setInput(text);
+    setCaret(at);
     requestAnimationFrame(() => {
       const el = textareaRef.current;
       if (!el) return;
       el.focus();
-      el.setSelectionRange(0, 0);
+      el.setSelectionRange(at, at);
     });
   };
+  const prefillEndpoint = () => prefill(" hatalı trace'lerini getir", 0);
+  // v0.10.1128 — wiki ipucu/çipi yalnız sohbet bu kullanıcıya wiki'den cevap
+  // verebiliyorsa (/api/copilot/config `wiki`; yeni istek yok).
+  const wikiOn = cfg?.wiki === true;
+  const tr = useT();
 
   // Explain→chat köprüsü (v0.9.165): satır-içi explain panelleri (çekmece
   // OLMAYAN yüzeyler, örn. AnomalyDetailDrawer) bir global event atar; chat
@@ -644,7 +652,10 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
                     kaldırılmıştı (v0.9.562).
                     Cevap SONRASI follow-up çipleri KALDI: onlar bir menü
                     değil, o cevaba bağlı sıradaki adım. */}
-                <div style={{ marginBottom: 10 }}>Sana nasıl yardımcı olabilirim?</div>
+                <div style={{ marginBottom: 6 }}>Sana nasıl yardımcı olabilirim?</div>
+                {/* v0.10.1128 (operatör) — "neler yapabilirim" ipucu: yalnız
+                    boş sohbette; tıklama örnek soruyu composer'a DOLDURUR. */}
+                <CosreCapabilities wiki={wikiOn} onPrefill={prefill} />
                 {/* v0.9.652 — başlangıç çipleri (operatör isteği). Gerekçe
                     ve v0.9.579 ile ilişkisi STARTERS tanımında. */}
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -675,6 +686,12 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
                   <Chip pill onClick={prefillEndpoint} title="Yolu yaz: /api/... hatalı trace'lerini getir">
                     ⌨ …/yol hatalı trace'leri
                   </Chip>
+                  {/* v0.10.1128 — wiki şablon çipi: "wikide " doldurur + odaklar. */}
+                  {wikiOn && (
+                    <Chip pill data-chip="wiki" onClick={() => { const v = tr('cosre.chip.wiki.prompt'); prefill(v, v.length); }}>
+                      📚 {tr('cosre.chip.wiki')}
+                    </Chip>
+                  )}
                 </div>
               </div>
             )}

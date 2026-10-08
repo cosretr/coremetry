@@ -121,6 +121,16 @@ describe('/cosre bağımsız sohbet sayfası', () => {
     expect(document.title).toBe('CoSRE');
   });
 
+  it('v0.10.1128 — boş sohbette "neler yapabilirim" ipucu (wiki bayrağıyla wiki satırı + çipi)', async () => {
+    vi.spyOn(api, 'me').mockResolvedValue({ id: 'u1', email: 'op@example.test', role: 'viewer' } as never);
+    vi.spyOn(api, 'copilotConfig').mockResolvedValue({ enabled: true, model: 'model-x', wiki: true } as never);
+    await renderAt('/cosre');
+    await tick();
+    const caps = Array.from(document.querySelectorAll<HTMLButtonElement>('.cosre-page__body button[data-cap]'));
+    expect(caps.map(b => b.dataset.cap)).toEqual(['wiki', 'service', 'operation', 'navigate']);
+    expect(document.querySelector('.cosre-page__body [data-chip="wiki"]')).not.toBeNull();
+  });
+
   it('custom-rol kısıtlı kullanıcı /cosre\'de kalır (ilk izinli sayfaya ışınlanmaz)', async () => {
     vi.spyOn(api, 'me').mockResolvedValue({ id: 'u2', email: 'r@example.test', role: 'viewer', customRolePages: ['/services'] } as never);
     await renderAt('/cosre');
