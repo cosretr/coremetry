@@ -155,41 +155,42 @@ func wikiDominantPage(h []wiki.Hit) bool {
 // ilk blok o sayfanın ≤wikiDominantRunes metni, ardından BAŞKA sayfalardan
 // en çok bir parça (karşılaştırma için); değilse parça başına ragWikiContext.
 // Sayfa ADI verilmez (systemRAGChat ile aynı kural).
-func buildWikiContext(h []wiki.Hit, pageText string, start int) string {
+//
+// v0.10.1127 (inceleme F6): blok numarası [n] parça sırası değil, kaynağın
+// çip numarası ("Kaynak n" — num, dedupeChatSources ile aynı anahtar/sıra);
+// aynı sayfanın parçaları aynı numarayı taşır.
+func buildWikiContext(h []wiki.Hit, pageText string, num sourceNumbers) string {
 	var b strings.Builder
-	n := start
 	if pt := strings.TrimSpace(wikiDataCloseRe.ReplaceAllString(pageText, "")); pt != "" && len(h) > 0 {
 		if r := []rune(pt); len(r) > wikiDominantRunes {
 			pt = string(r[:wikiDominantRunes]) + "…"
 		}
-		fmt.Fprintf(&b, "[%d] wiki (sayfanın tamamı / ilk %d karakter)\n%s\n\n", n, wikiDominantRunes, fenceWikiData(pt))
-		n++
+		fmt.Fprintf(&b, "[%d] wiki (sayfanın tamamı / ilk %d karakter)\n%s\n\n", num.of(wikiHitSource(h[0])), wikiDominantRunes, fenceWikiData(pt))
 		top := h[0].PageKey()
 		for _, x := range h[1:] {
 			if x.PageKey() != top {
-				b.WriteString(ragWikiContext(n, x))
+				b.WriteString(ragWikiContext(num.of(wikiHitSource(x)), x))
 				break
 			}
 		}
 		return b.String()
 	}
 	for _, x := range h {
-		b.WriteString(ragWikiContext(n, x))
-		n++
+		b.WriteString(ragWikiContext(num.of(wikiHitSource(x)), x))
 	}
 	return b.String()
 }
 
 // wikiContextFor — isabetlerin bağlamı; baskın sayfa varsa tam metnini okur
 // (yerel indeks ya da canlı önbellek; hata → parça bağlamı).
-func (s *Server) wikiContextFor(ctx context.Context, w *wiki.Service, h []wiki.Hit, start int) string {
+func (s *Server) wikiContextFor(ctx context.Context, w *wiki.Service, h []wiki.Hit, num sourceNumbers) string {
 	page := ""
 	if w != nil && wikiDominantPage(h) {
 		if rec, err := w.ReadPage(ctx, h[0].Project, h[0].WikiID, h[0].Path); err == nil && rec != nil {
 			page = rec.Content
 		}
 	}
-	return buildWikiContext(h, page, start)
+	return buildWikiContext(h, page, num)
 }
 
 // wikiNotFoundText — SAF: wiki'de bulunamadı cevabı (neden + canlı not).
@@ -267,25 +268,21 @@ func (s *Server) wikiChatAnswer(ctx context.Context, emit func(string, any), msg
 // wikiNarratedAnswer — wiki isabetlerinden araçsız TEK anlatım çağrısı ve
 // cevap yükü (açık wiki kademesi ve netleştirme kurtarması ortak; v0.10.1126).
 func (s *Server) wikiNarratedAnswer(ctx context.Context, w *wiki.Service, question string, hits []wiki.Hit) (map[string]any, error) {
-	user := "SORU: " + question + "\n\nBAĞLAM:\n" + s.wikiContextFor(ctx, w, hits, 1)
+	sources := make([]chatSource, 0, len(hits))
+	for _, h := range hits {
+		sources = append(sources, wikiHitSource(h))
+	}
+	user := "SORU: " + question + "\n\nBAĞLAM:\n" + s.wikiContextFor(ctx, w, hits, numberSources(sources))
 	raw, err := wikiNarrateFn(s, ctx, copilot.SystemPromptWikiChat(), user)
 	if err != nil {
 		return nil, err
 	}
-	type src struct {
-		Doc   string  `json:"doc"`
-		Ref   string  `json:"ref,omitempty"`
-		Chunk uint32  `json:"chunk"`
-		Score float64 `json:"score"`
-	}
-	sources := make([]src, 0, len(hits))
-	for _, h := range hits {
-		sources = append(sources, src{Doc: "Wiki · " + h.Title, Ref: h.URL, Chunk: h.Idx + 1, Score: h.Score})
-	}
 	return map[string]any{
 		"text":       strings.TrimSpace(raw),
 		"exchangeId": copilot.MetaFromContext(ctx).ExchangeID,
-		"sources":    sources,
-		"links":      ragWikiLinks(hits),
+		// v0.10.1127: sayfa başına tek çip ("Kaynak 1", "Kaynak 2" …) —
+		// aynı sayfanın parçaları özdeş "Kaynak §1" çipleri üretiyordu.
+		"sources": dedupeChatSources(sources),
+		"links":   ragWikiLinks(hits),
 	}, nil
 }

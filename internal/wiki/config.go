@@ -190,6 +190,17 @@ type Status struct {
 	Search string `json:"search,omitempty"`
 	// SearchLast — son canlı aramanın tanısı (paylaşılan blob; yazılmaz).
 	SearchLast *SearchStatus `json:"searchLast,omitempty"`
+	// TokenizerVersion — v0.10.1127: indeksin hangi jetonlayıcı sürümüyle
+	// kurulduğu (tokenizerVersion'dan küçükse senkron saklı içerikten yeniden
+	// jetonlar — reindex.go). ReindexCursor yarıda kalan işin imleci;
+	// Reindexed bu geçişte yeniden jetonlanan sayfa.
+	TokenizerVersion int    `json:"tokenizerVersion,omitempty"`
+	ReindexCursor    string `json:"reindexCursor,omitempty"`
+	Reindexed        int    `json:"reindexed,omitempty"`
+	// ReindexScanned — tarama bitti, yalnız yeniden denemeler bekliyor;
+	// ReindexRetry — yazılamayan sayfalar (tavanlı, deneme sayılı; reindex.go).
+	ReindexScanned bool           `json:"reindexScanned,omitempty"`
+	ReindexRetry   []ReindexRetry `json:"reindexRetry,omitempty"`
 }
 
 // SearchStatusKey — son canlı arama sonucunun paylaşılan blobu (v0.10.1124).

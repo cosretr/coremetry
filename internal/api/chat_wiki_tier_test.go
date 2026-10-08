@@ -120,7 +120,7 @@ func (m *fakeWikiStore) DeleteWikiPage(context.Context, wiki.PageMeta) error { r
 func (m *fakeWikiStore) WikiTermStats(_ context.Context, terms []string, _ string) (wiki.Stats, error) {
 	return wiki.Stats{DF: make([]uint64, len(terms))}, nil // boş indeks
 }
-func (m *fakeWikiStore) WikiCandidates(context.Context, []string, string, int) ([]wiki.Candidate, error) {
+func (m *fakeWikiStore) WikiCandidates(context.Context, wiki.CandidateQuery, string, int) ([]wiki.Candidate, error) {
 	return nil, nil
 }
 func (m *fakeWikiStore) WikiSemantic(context.Context, []float32, string, int) ([]wiki.SemHit, error) {
@@ -138,6 +138,12 @@ func (m *fakeWikiStore) GetWikiPage(_ context.Context, project, ref, path string
 	return nil, nil
 }
 func (m *fakeWikiStore) WikiCounts(context.Context) (uint64, uint64, error) { return 0, 0, nil }
+func (m *fakeWikiStore) UpsertWikiChunks(context.Context, wiki.PageRecord, []wiki.ChunkRecord, uint32) error {
+	return nil
+}
+func (m *fakeWikiStore) WikiPageChunks(context.Context, string, string) ([]wiki.ChunkRecord, error) {
+	return nil, nil
+}
 
 const runbookText = "# Yeniden başlatma\n## Adımlar\nkubectl rollout restart deploy/svc-orders -n orders komutunu çalıştırın; ardından ERR-1042 oranını izleyin."
 
@@ -354,7 +360,7 @@ func TestBuildWikiContextShapes(t *testing.T) {
 		t.Error("0.9 ≥ 1.35×0.5 → baskın")
 	}
 	page := strings.Repeat("ş", wikiDominantRunes+500)
-	got := buildWikiContext(h, page, 1)
+	got := buildWikiContext(h, page, numberSources(nil))
 	if !strings.Contains(got, "[1] wiki (sayfanın tamamı") || !strings.Contains(got, "[2] wiki — Diğer") || strings.Contains(got, "Gizli") {
 		t.Errorf("baskın sayfa bloğu + bir karşılaştırma parçası: %q", got[:120])
 	}
@@ -365,7 +371,8 @@ func TestBuildWikiContextShapes(t *testing.T) {
 	if wikiDominantPage(h) {
 		t.Error("yakın skorlar baskın değil")
 	}
-	if got := buildWikiContext(h, "", 3); !strings.HasPrefix(got, "[3] wiki — Adımlar") || !strings.Contains(got, "[4] wiki — Diğer") {
+	// Önde iki doküman kaynağı (RAG): wiki blokları 3 ve 4 numarayı alır.
+	if got := buildWikiContext(h, "", numberSources([]chatSource{{Doc: "a.pdf"}, {Doc: "b.pdf"}})); !strings.HasPrefix(got, "[3] wiki — Adımlar") || !strings.Contains(got, "[4] wiki — Diğer") {
 		t.Errorf("parça bağlamı: %q", got)
 	}
 }

@@ -358,13 +358,17 @@ func (s *Server) ragChatAnswer(ctx context.Context, emit func(string, any), msgs
 	}
 
 	var b strings.Builder
-	type src struct {
-		Doc   string  `json:"doc"`
-		Ref   string  `json:"ref,omitempty"`
-		Chunk uint32  `json:"chunk"`
-		Score float64 `json:"score"`
+	// v0.10.1127 (inceleme F6): kaynak listesi ÖNCE kurulur; bağlam blok
+	// numarası [n] = çipin "Kaynak n"i (sourceNumbers — dedupeChatSources ile
+	// aynı anahtar ve sıra; aynı doküman/sayfanın parçaları aynı numara).
+	sources := make([]chatSource, 0, len(hits)+len(wikiHits))
+	for _, h := range hits {
+		sources = append(sources, chatSource{Doc: h.DocName, Ref: h.SourceRef, Chunk: h.ChunkIdx + 1, Score: h.Score})
 	}
-	sources := make([]src, 0, len(hits))
+	for _, h := range wikiHits {
+		sources = append(sources, wikiHitSource(h))
+	}
+	num := numberSources(sources)
 	for i, h := range hits {
 		// v0.9.515 (operatör): doküman ADI modele VERİLMİYOR. Verildiğinde
 		// model "kanal_kodlari dosyasına göre…" diye anlatıyordu — dosya adı
@@ -372,16 +376,12 @@ func (s *Server) ragChatAnswer(ctx context.Context, emit func(string, any), msgs
 		// gerekirse "kaynak 2" diye atıf yapabilsin. Provenance kaybolmuyor:
 		// sources dizisi doküman adını taşımaya devam ediyor, arayüz onu
 		// ipucu (title) olarak gösteriyor.
-		fmt.Fprintf(&b, "[%d] §%d\n%s\n\n", i+1, h.ChunkIdx+1, h.Content)
-		sources = append(sources, src{Doc: h.DocName, Ref: h.SourceRef, Chunk: h.ChunkIdx + 1, Score: h.Score})
+		fmt.Fprintf(&b, "[%d] §%d\n%s\n\n", num.of(sources[i]), h.ChunkIdx+1, h.Content)
 	}
 	// v0.10.1124 — okuma derinliği: baskın wiki sayfası varsa ~6000 karaktere
 	// dek tam metni (chat_wiki_tier.go wikiContextFor).
 	if len(wikiHits) > 0 {
-		b.WriteString(s.wikiContextFor(ctx, wikiKB(), wikiHits, len(hits)+1))
-	}
-	for _, h := range wikiHits {
-		sources = append(sources, src{Doc: "Wiki · " + h.Title, Ref: h.URL, Chunk: h.Idx + 1, Score: h.Score})
+		b.WriteString(s.wikiContextFor(ctx, wikiKB(), wikiHits, num))
 	}
 
 	user := "SORU: " + question + "\n\nBAĞLAM:\n" + b.String()
@@ -417,7 +417,7 @@ func (s *Server) ragChatAnswer(ctx context.Context, emit func(string, any), msgs
 	emit("answer", map[string]any{
 		"text":       strings.TrimSpace(raw),
 		"exchangeId": copilot.MetaFromContext(ctx).ExchangeID,
-		"sources":    sources,
+		"sources":    dedupeChatSources(sources), // v0.10.1127: hedef başına tek çip
 		"links":      links,
 	})
 	return true, true

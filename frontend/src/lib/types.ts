@@ -6988,6 +6988,10 @@ export interface RagSource {
   ref?: string;
   chunk: number;
   score: number;
+  /** v0.10.1127 — sunucunun hedef başına tekilleştirdiği çip etiketi ("Kaynak 1"); eski cevaplarda yok. */
+  label?: string;
+  /** v0.10.1127 — birleşen parçaların bölüm numaraları (ipucu "§1, §3"). */
+  sections?: number[];
 }
 
 // ChatAnswerLink (v0.9.419) — guided cevabın altındaki derin-link çipi;

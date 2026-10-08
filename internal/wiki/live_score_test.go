@@ -33,7 +33,7 @@ func TestQueryTermsQuestionStopwords(t *testing.T) {
 func TestLiveSearchQueries(t *testing.T) {
 	cases := []struct{ in, and, or string }{
 		{"svc-orders nasıl restart edilir?", "svc-orders restart", "svc-orders OR restart"},
-		{"Ödeme servisini nasıl yeniden başlatırım", "Ödeme servisini yeniden başlatırım", "Ödeme OR servisini OR yeniden OR başlatırım"},
+		{"Ödeme servisini nasıl yeniden başlatırım", "Ödeme servisini yeniden başlatırım", "Ödeme OR servisini OR servi OR servis OR yeniden OR başlatırım"}, // v0.10.1127: kök seçenekleri ("-sı" belirsizliği iki yorum; "yeni" kısa → yok)
 		{"ledger-oncall", "ledger-oncall", ""},
 		{"nasıl ne nedir", "", ""},
 		{`NOT (kafka) AND "tls":x*`, "not kafka tls", "not OR kafka OR tls"},
@@ -81,10 +81,12 @@ func TestScoreLivePageTurkishSuffixPassesFloor(t *testing.T) {
 			t.Fatalf("%s: ilk canlı isabet tabanın üstünde olmalı: %+v", mode, hits)
 		}
 	}
-	// Sıra söner: üçüncü isabet ilkten düşük ama yine taban civarı.
+	// Sıra söner: üçüncü isabet ilkten yüksek olamaz, yine taban civarı.
+	// v0.10.1127: Türkçe kök eşleşmesiyle lexical skor sıra tabanını geçebilir
+	// (o zaman iki sıra da aynı lexical skoru taşır) — sönüm yalnız taban.
 	h0 := scoreLivePage(rec, chunks, terms, Stats{}, 0, "and", "")
 	h2 := scoreLivePage(rec, chunks, terms, Stats{}, 2, "and", "")
-	if !(h2[0].Score < h0[0].Score) || h2[0].Score < 0.5 {
+	if h2[0].Score > h0[0].Score || h2[0].Score < 0.5 {
 		t.Errorf("sıra sönümü: r0=%.3f r2=%.3f", h0[0].Score, h2[0].Score)
 	}
 	// Kanıtsız sayfa (ne kök eşleşmesi ne ADO vurgusu) yükseltilmez.

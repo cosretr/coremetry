@@ -119,17 +119,147 @@ func idf(n, df uint64) float64 {
 	return math.Log(1 + (N-float64(df)+0.5)/(float64(df)+0.5))
 }
 
+// stemOnlyWeight — v0.10.1127: terim yalnız ek biçimiyle (kök / çıplak kök)
+// eşleştiğinde kapsama ve BM25 katkısının çarpanı; yüzey (tam yazım)
+// eşleşmesi 1. Tam yazım hafifçe önde kalır, kök eşleşmesi kapsamayı
+// tabanın altına düşürmez.
+const stemOnlyWeight = 0.85
+
+// expandedTermsMax — depoya giden genişletilmiş jeton tavanı (sorgu şekli
+// sınırlı: queryTermsMax × formsMax'tan küçük). Önce TÜM yüzeyler, sonra ek
+// biçimler sığdıkça.
+const expandedTermsMax = 36
+
+// termExpansion — sorgu terimlerinin jeton genişlemesi.
+type termExpansion struct {
+	tokens []string // tekrarsız; depoya giden sıra (TF/HTF/DF bu sırada)
+	groups [][]int  // terim başına tokens indeksleri; groups[i][0] yüzey
+}
+
+// expandTerms — SAF: her terim → Forms (yüzey + kök biçimleri), tekrarsız,
+// tavanlı. Yüzeyler her zaman sığar (len(terms) ≤ queryTermsMax).
+func expandTerms(terms []string) termExpansion {
+	var e termExpansion
+	at := map[string]int{}
+	add := func(tok string) int {
+		if i, ok := at[tok]; ok {
+			return i
+		}
+		at[tok] = len(e.tokens)
+		e.tokens = append(e.tokens, tok)
+		return at[tok]
+	}
+	e.groups = make([][]int, len(terms))
+	forms := make([][]string, len(terms))
+	for i, t := range terms {
+		forms[i] = Forms(t)
+		e.groups[i] = []int{add(t)}
+	}
+	for i := range terms {
+		for _, f := range forms[i][1:] {
+			if _, ok := at[f]; !ok && len(e.tokens) >= expandedTermsMax {
+				continue
+			}
+			e.groups[i] = append(e.groups[i], add(f))
+		}
+	}
+	return e
+}
+
+// ExpandTerms — SAF: sorgu terimlerinin depoya giden jeton listesi
+// (WikiTermStats / WikiCandidates bu sırayla sayar; RankLexical aynı
+// genişlemeyle gruplar).
+func ExpandTerms(terms []string) []string { return expandTerms(terms).tokens }
+
+// CandidateSurfaceBoost — aday önceliğinde terimin YÜZEY biçimi (tam yazım /
+// tanımlayıcı) parçada geçiyorsa terim ağırlığına eklenen pay.
+const CandidateSurfaceBoost = 0.1
+
+// CandidateQuery — v0.10.1127 (inceleme F3): aday sorgusunun girdisi.
+//
+// Adaylar LIMIT'ten ÖNCE terim kapsamasına göre sıralanır; eskiden "eşleşen
+// FARKLI jeton sayısı"ydı. Kök biçimleriyle bu bozuldu: "sunucusu" geçen her
+// parça 3-4 biçim (sunucusu, sunucu, sunuc …) eşlerken nadir tanımlayıcıyı
+// (WSBXAKFP01) taşıyan parça 1 eşler — yaygın kök 300'lük tavanı doldurup
+// tanımlayıcıyı dışarıda bırakırdı. Öncelik artık ÖZGÜN terim başına:
+//
+//	öncelik = Σ_i w_i·[biçimlerinden biri var] + CandidateSurfaceBoost·w_i·[yüzey var]
+//
+// w_i terimin idf'i (WikiTermStats'tan, RankLexical ile aynı formül). CH
+// sorgusu (chstore wikiCandidatesSQL) ve bellek-içi ikiz AYNI ifadeyi
+// uygular: CandidatePriority bu ifadenin saf tanımıdır.
+type CandidateQuery struct {
+	Tokens  []string   // ExpandTerms sırası — TF/HTF bu sırada sayılır
+	Groups  [][]string // özgün terim başına biçimler; Groups[i][0] yüzey
+	Weights []float64  // terim başına idf
+}
+
+// NewCandidateQuery — SAF: terimler + (genişlemiş jeton sıralı) istatistik → aday sorgusu.
+func NewCandidateQuery(terms []string, st Stats) CandidateQuery {
+	ex := expandTerms(terms)
+	q := CandidateQuery{Tokens: ex.tokens, Groups: make([][]string, len(terms)), Weights: make([]float64, len(terms))}
+	for i, g := range ex.groups {
+		var df uint64
+		forms := make([]string, 0, len(g))
+		for _, k := range g {
+			forms = append(forms, ex.tokens[k])
+			if k < len(st.DF) && st.DF[k] > df {
+				df = st.DF[k]
+			}
+		}
+		q.Groups[i] = forms
+		// Bağlı parametre: kısa ondalık (CH ile Go aynı sırayı görsün).
+		q.Weights[i] = math.Round(idf(st.N, df)*1e4) / 1e4
+	}
+	return q
+}
+
+// CandidatePriority — SAF: parçanın aday önceliği (CH ORDER BY ifadesinin ikizi).
+func CandidatePriority(tokens []string, q CandidateQuery) float64 {
+	set := make(map[string]struct{}, len(tokens))
+	for _, t := range tokens {
+		set[t] = struct{}{}
+	}
+	var p float64
+	for i, g := range q.Groups {
+		if len(g) == 0 || i >= len(q.Weights) {
+			continue
+		}
+		w := q.Weights[i]
+		for _, f := range g {
+			if _, ok := set[f]; ok {
+				p += w
+				break
+			}
+		}
+		if _, ok := set[g[0]]; ok {
+			p += CandidateSurfaceBoost * w
+		}
+	}
+	return p
+}
+
 // RankLexical — adayları skorlar ve azalan sıralar; sıfır kapsamlılar düşer.
+//
+// v0.10.1127: terms ÖZGÜN sorgu terimleridir; cands[i].TF/HTF ve st.DF
+// ExpandTerms(terms) sırasındadır. Terim, biçimlerinden HERHANGİ biri
+// parçada geçiyorsa eşleşmiş sayılır — kapsama özgün terim başına
+// (genişlemiş jeton başına değil); tf = biçimler arası en büyük; idf =
+// biçimler arası en büyük df'ten (kavramın frekansı). Yalnız ek biçimiyle
+// eşleşme stemOnlyWeight ile çarpılır.
 func RankLexical(cands []Candidate, st Stats, terms []string) []Hit {
 	if len(terms) == 0 || len(cands) == 0 {
 		return nil
 	}
+	ex := expandTerms(terms)
 	idfs := make([]float64, len(terms))
 	var idfSum float64
-	for i := range terms {
+	for i, g := range ex.groups {
 		var df uint64
-		if i < len(st.DF) {
-			df = st.DF[i]
+		for _, k := range g {
+			if k < len(st.DF) && st.DF[k] > df {
+				df = st.DF[k]
+			}
 		}
 		idfs[i] = idf(st.N, df)
 		idfSum += idfs[i]
@@ -137,6 +267,12 @@ func RankLexical(cands []Candidate, st Stats, terms []string) []Hit {
 	avg := st.AvgDL
 	if avg <= 0 {
 		avg = 1
+	}
+	at := func(xs []uint32, k int) float64 {
+		if k < len(xs) {
+			return float64(xs[k])
+		}
+		return 0
 	}
 	type scored struct {
 		c       Candidate
@@ -147,20 +283,22 @@ func RankLexical(cands []Candidate, st Stats, terms []string) []Hit {
 	for _, c := range cands {
 		var bm, matched float64
 		dl := float64(c.DL)
-		for i := range terms {
+		for i, g := range ex.groups {
 			var tf, htf float64
-			if i < len(c.TF) {
-				tf = float64(c.TF[i])
-			}
-			if i < len(c.HTF) {
-				htf = float64(c.HTF[i])
+			for _, k := range g {
+				tf = math.Max(tf, at(c.TF, k))
+				htf = math.Max(htf, at(c.HTF, k))
 			}
 			if tf == 0 && htf == 0 {
 				continue
 			}
-			matched += idfs[i]
+			w := 1.0
+			if at(c.TF, g[0]) == 0 && at(c.HTF, g[0]) == 0 {
+				w = stemOnlyWeight
+			}
+			matched += w * idfs[i]
 			f := tf + headWeight*math.Min(htf, 2)
-			bm += idfs[i] * (f * (bm25K1 + 1)) / (f + bm25K1*(1-bm25B+bm25B*dl/avg))
+			bm += w * idfs[i] * (f * (bm25K1 + 1)) / (f + bm25K1*(1-bm25B+bm25B*dl/avg))
 		}
 		if matched == 0 {
 			continue

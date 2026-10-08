@@ -94,15 +94,17 @@ func candidate(path, title, heading, text string, terms []string) Candidate {
 	if len(c) == 0 {
 		return Candidate{}
 	}
-	return candidateFromChunk(PageRecord{WikiID: "w", Path: path, Title: title}, c[0], terms)
+	return candidateFromChunk(PageRecord{WikiID: "w", Path: path, Title: title}, c[0], ExpandTerms(terms))
 }
 
+// statsOf — terms ÖZGÜN terimler; DF genişlemiş jeton sırasında (v0.10.1127).
 func statsOf(cands []Candidate, terms []string) Stats {
-	st := Stats{N: uint64(len(cands)), DF: make([]uint64, len(terms))}
+	toks := ExpandTerms(terms)
+	st := Stats{N: uint64(len(cands)), DF: make([]uint64, len(toks))}
 	var dl float64
 	for _, c := range cands {
 		dl += float64(c.DL)
-		for i := range terms {
+		for i := range toks {
 			if c.TF[i] > 0 {
 				st.DF[i]++
 			}

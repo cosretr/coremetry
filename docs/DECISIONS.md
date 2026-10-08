@@ -2639,6 +2639,60 @@ olaylar bayt bayt aynı (testte pinli). **Bırakılan:** kademe-öncesi sonda ya
 görür (ask_service / find_entity adayları); katalog indeksi taraması (entity scan) gerektiren netleştirme o sorularda
 eklenmez — kurtarma yolu ise hepsini kapsar. Niyet sınıflandırıcısının ask_service'i de aynı sarmaldan geçer.
 
+## 2026-10-08 — Wiki araması: Türkçe ek duyarlı eşleşme + saklı içerikten yeniden jetonlama (v0.10.1127)
+
+**Bağlam (operatör, prod, ~12k sayfa):** "sbox sunucuları neler" ilgisiz sayfalar getirdi, anlatım "bulunamadı"
+dedi; "Sbox Sunucu Listesi" doğru sayfayı buldu. Kök neden: jetonlar katlanmış TAM sözcük; "sunucuları"
+(`sunuculari`) hiçbir zaman "sunucu" ile eşleşmiyordu, "neler" de terim sayılıp kapsama paydasını şişiriyordu.
+
+**Karar:** sözlüksüz hafif Türkçe kök bulucu (`internal/wiki/stem.go`, SAF): katlanmış a-z jetondan çekim ekleri
+en uzundan başlayarak tekrar tekrar soyulur, her ekin ses koşulu (ünlü / ünsüz / sert ünsüz sonrası) ve en kısa kök
+(4; çoğulda 3) denetlenir. Tek ünlü ekler (-ı/-a) ve soru eki -mı soyulmaz ("sunucu"/"kafka"/"sistemi" kökünü
+kemirirdi); yerine eşleşme biçimi olarak "çıplak kök" (son ünlü düşmüş) üretilir. "-sı" belirsizliği ("servisi" =
+servis+i mi, servi+si mi?) iki yorumla da biçim olur. Yapım eki -lık/-lik korunur. Teknik terim (rakam/ayraç), ≤4
+harf, özgün metinde TAMAMI BÜYÜK HARF sözcük ve bileşik tanımlayıcı parçası köklenmez; kesme işaretli ek (`IP'ler`)
+ayrı jeton değil.
+
+İndeks her konum için yüzey + kök biçimlerini (en çok 4, konum başına tekrarsız → terim frekansı korunur) aynı
+`tokens` / `head_tokens` dizisine yazar — yeni kolon / şema YOK, bloom indeksi aynen. Sorgu terimi aynı biçimlere
+genişler (`ExpandTerms`, tavan 36 jeton → CH sorgu şekli sınırlı). Skor özgün terim başına: biçimlerden biri geçiyorsa
+eşleşmiş, tf = biçimler arası en büyük, idf = biçimler arası en büyük df'ten; yalnız kökle eşleşme ×0.85 (tam yazım
+hafifçe önde). Liste/soru kalıpları stopword ("neler", "hangileri", "listele", "adları"); kökü stopword olan çekimli
+biçim de ("bilgileri"). "listesi" BİLİNÇLİ içerik sözcüğü. Canlı ADO OR sorgusu ≥5 harfli kökleri seçenek olarak
+taşır (AND sorgusu aynen; kısa kök "yeni" gibi aşırı genişletmez).
+
+**Aday sırası (inceleme F3):** CH aday sorgusu LIMIT 300'den önce "eşleşen FARKLI jeton sayısı"yla sıralıyordu; kök
+biçimleriyle yaygın kök ("sunucusu" → 3-4 biçim) nadir tanımlayıcıyı (WSBXAKFP01, 1 biçim) tavanın dışına itiyordu.
+Artık özgün terim başına idf ağırlıklı kapsama: `Σ w_i·hasAny(tokens, biçimler_i) + 0.1·w_i·has(tokens, yüzey_i)`
+(w_i WikiTermStats'tan, bağlı parametre; ≤12 grup). Saf ikizi `wiki.CandidatePriority` — bellek-içi test deposu aynı
+sırayı uygular; ifade `clickhouse local` ile doğrulandı.
+
+**Yeniden jetonlama:** `tokenizerVersion` (şimdi 2) `wiki_sync_status` blobunda; farklıysa senkron, ADO'ya gitmeden
+`wiki_pages.content`'ten parçaları yeniden kurar (geçiş başına 5000 sayfa, imleç blobda, 4 işçi, iptal/mod değişimi
+durdurur; iş sürerken SyncDue en az 2 dk arayla art arda geçiş ister). Yazılamayan sayfa atlanmaz (inceleme F1):
+yeniden deneme listesi (≤200 girdi, sayfa başına ≤3 deneme) blobda; sürüm ancak tarama bitmiş ve liste boş ya da
+kalanlar tükenmişken kaydedilir, tükenenler durum hatası. Embedding yeniden hesaplanmaz: `WikiPageChunks` saklı
+vektörü okur, metni + başlığı aynı parçaya taşır; parça sayısı aynıysa `wiki_pages` satırı yazılmaz
+(`UpsertWikiChunks`). Canlı mod zaten yeni jetonlayıcıyla parçalar.
+
+**Yuvarlanan dağıtım (inceleme F2):** sürüm geçişinde eski pod'lar sorguyu yalnız yüzey biçimiyle, yeni pod'lar
+genişletilmiş biçimlerle sorar. Yeni jetonlu indekste eski pod sorusu eskisi kadar bulur (yüzey jetonları duruyor);
+eski jetonlu indekste yeni pod sorusu yalnız yüzey eşleşmesiyle bulur (kök kazancı yeniden jetonlama bitince gelir).
+Risk: yeniden jetonlama bittikten SONRA lider hâlâ eski sürümde koşan bir pod'a geçerse o pod'un yazdığı (değişen)
+sayfalar kök biçimsiz kalır — sürüm damgası zaten 2 olduğu için yeniden jetonlanmaz; o sayfa bir sonraki içerik
+değişiminde düzelir. Dağıtım hızlı tamamlanırsa pencere küçük; gerekirse "İndeksi temizle" + senkron tam kurar.
+
+**Yan düzeltme — kaynak çipleri:** RAG/wiki cevabı kaynakları PARÇA başına listeliyor, çip yalnız "Kaynak §N"
+gösteriyordu → bir cevapta birden çok özdeş "Kaynak §1". Artık hedef (bağlantı, yoksa doküman) başına tek çip,
+"Kaynak 1/2/…" etiketi, birleşen bölümler `sections`'ta (ipucu "§1, §3") — sunucu `dedupeChatSources` + FE
+`sourceChips` (arşivden gelen etiketsiz liste de). Modelin bağlam blok numarası `[n]` artık parça sırası değil,
+aynı anahtarla verilen çip numarası (inceleme F6: `sourceNumbers`, RAG doküman + wiki blokları): model "[2]" derse
+operatör "Kaynak 2"yi görür.
+
+**Bedeller / bırakılan:** indeks jeton dizisi büyür (biçim başına ek jeton); sözlüksüz kök bulucu bazı İngilizce
+sözcükleri de kırpar ("handler" → "hand") — iki taraf aynı biçimi ürettiği ve tam yazım önde olduğu için zararı
+kapsamla sınırlı. TAMAMI BÜYÜK HARF Türkçe başlıklar ("SUNUCU LİSTESİ") köklenmez (tanımlayıcı koruması bedeli).
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

@@ -20,6 +20,7 @@ import { Chip } from '@/components/ui/Chip';
 import { summarizeSteps, parseToolError, previewFirstLine, visibleRows, isDeadlineError, fmtMs, VISIBLE_ROWS, sourceStates, stateUnknown, stepRunning, toolErrorLabel } from './toolSteps';
 import { StateBadges } from './StateBadges'; // v0.10.948 — paylaşılan durum rozetleri
 import { chatLinkTargetProps, useChatLinkNewTab } from './chatLinkTarget'; // v0.10.1125 — /cosre yeni sekme
+import { sourceChips } from './sourceChips'; // v0.10.1127 — hedef başına tek kaynak çipi
 
 // ChatBubble — bir sohbet turunun ÇİZİMİ. v0.9.479'da CopilotChat.tsx'ten
 // buraya taşındı: AI çekmecesi içindeki sohbet (AIDrawer) aynı balonu
@@ -625,16 +626,18 @@ export function ChatBubble({ turn, onRetry }: { turn: ChatTurn; onRetry?: () => 
           kaybolmadan gürültü kalktı. */}
       {!isUser && !!turn.sources?.length && !turn.pending && !turn.error && (
         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
-          {turn.sources.map((src, i) => src.ref ? (
-            <a key={i} href={src.ref} target="_blank" rel="noopener"
+          {/* v0.10.1127 — hedef başına tek çip ("Kaynak 1", "Kaynak 2"); parça
+              başına özdeş "Kaynak §1" çipleri yığılıyordu (sourceChips.ts). */}
+          {sourceChips(turn.sources).map((c) => c.href ? (
+            <a key={c.key} href={c.href} target="_blank" rel="noopener"
               className="badge b-info" style={{ textDecoration: 'none', fontSize: 10 }}
-              title={`${src.doc} §${src.chunk} · benzerlik ${(src.score * 100).toFixed(0)}%`}>
-              📄 Kaynak §{src.chunk}
+              title={c.title}>
+              📄 {c.label}
             </a>
           ) : (
-            <span key={i} className="badge b-info" style={{ fontSize: 10 }}
-              title={`${src.doc} §${src.chunk} · benzerlik ${(src.score * 100).toFixed(0)}%`}>
-              📄 Kaynak §{src.chunk}
+            <span key={c.key} className="badge b-info" style={{ fontSize: 10 }}
+              title={c.title}>
+              📄 {c.label}
             </span>
           ))}
         </div>

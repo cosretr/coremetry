@@ -26,9 +26,10 @@ import (
 // (`DELETE WHERE deleted = 1`): o vakte dek RMT birleşmeleri eski canlı
 // sürümü çoktan eritmiş olur; canlı satırların TTL'i YOK.
 //
-// ARAMA: jetonlar Go'da üretilir (wiki.Tokens — Türkçe katlama + teknik
-// bileşikler: "svc-orders", "err-1042"), `tokens Array(String)` kolonuna
-// yazılır. Aday sorgusu `hasAny(tokens, terimler)` ile süzer (bloom_filter
+// ARAMA: jetonlar Go'da üretilir (wiki.IndexTokens — Türkçe katlama + teknik
+// bileşikler: "svc-orders", "err-1042" + v0.10.1127 Türkçe kök biçimleri:
+// "sunucuları" → "sunucu"), `tokens Array(String)` kolonuna yazılır; sorgu
+// terimleri aynı biçimlere genişler (wiki.ExpandTerms). Aday sorgusu `hasAny(tokens, terimler)` ile süzer (bloom_filter
 // atlama indeksi), terim başına frekansı `countEqual` ile SAYAR; BM25 skoru Go'da
 // (wiki.RankLexical — saf, tablo-testli). Her okuma WHERE + LIMIT +
 // max_execution_time taşır.
@@ -96,6 +97,16 @@ const (
 		WHERE deleted = 0 AND project = ? AND (wiki_name = ? OR wiki_id = ?) AND path = ?
 		LIMIT 1
 		SETTINGS max_execution_time = 5`
+
+	// wikiPageChunksSQL — v0.10.1127: sayfanın saklı parçaları (yeniden
+	// jetonlamada embedding taşımak için; jeton dizileri okunmaz). Sıralama
+	// anahtarının öneki — tek sayfanın granülleri.
+	wikiPageChunksSQL = `SELECT chunk_idx, heading, text, embedding
+		FROM wiki_chunks FINAL
+		WHERE deleted = 0 AND wiki_id = ? AND path = ?
+		ORDER BY chunk_idx
+		LIMIT 10000
+		SETTINGS max_execution_time = 10`
 )
 
 // wikiProjectClause — opsiyonel proje süzgeci (bağlı argüman).
@@ -126,9 +137,13 @@ func wikiStatsSQL(nTerms int, project string) (string, []any) {
 }
 
 // wikiCandidatesSQL — SAF: hasAny süzgeçli adaylar + terim başına frekans.
-// LIMIT'ten ÖNCE eşleşen farklı terim sayısına göre sıralanır: sık bir terim
-// yüzlerce parçada geçse bile tüm terimleri taşıyan parça tavanın dışında
-// kalmaz (deterministik kuyruk: wiki_id, path, chunk_idx).
+// LIMIT'ten ÖNCE terim kapsamasına göre sıralanır (v0.10.1127, inceleme F3):
+// özgün terim başına idf ağırlıklı "biçimlerinden biri var" + yüzey (tam
+// yazım) için küçük pay — wiki.CandidatePriority'nin ikizi. Eski "eşleşen
+// FARKLI jeton sayısı" kök biçimleriyle yaygın kökü (sunucusu → sunucu,
+// sunuc …) nadir tanımlayıcının (WSBXAKFP01) önüne geçirip 300'lük tavanın
+// dışına itiyordu. Deterministik kuyruk: wiki_id, path, chunk_idx. Grup
+// sayısı ≤ 12, jeton ≤ 36: ifade sınırlı.
 //
 // FINAL + atlama indeksi: CH 25.x+ varsayılanı use_skip_indexes_if_final=1 +
 // use_skip_indexes_if_final_exact_mode=1 (doğru sonuç) — indeks orada kullanılır.
@@ -136,12 +151,20 @@ func wikiStatsSQL(nTerms int, project string) (string, []any) {
 // (mezar taşı) satırını taşımayan granülü atlayıp silinmiş sayfayı geri
 // getirebilirdi. Bu yüzden ayar SORGUDA verilmez: eski sürümde FINAL tablo
 // taraması (küçük state tablosu, 5 sn tavanlı), yeni sürümde indeksli ve doğru.
-func wikiCandidatesSQL(nTerms int, project string) (string, []any) {
-	tf := make([]string, nTerms)
-	htf := make([]string, nTerms)
+func wikiCandidatesSQL(nTokens, nGroups int, project string) (string, []any) {
+	tf := make([]string, nTokens)
+	htf := make([]string, nTokens)
 	for i := range tf {
 		tf[i] = "countEqual(tokens, ?)"
 		htf[i] = "countEqual(head_tokens, ?)"
+	}
+	prio := make([]string, nGroups)
+	for i := range prio {
+		prio[i] = "? * hasAny(tokens, ?) + ? * has(tokens, ?)"
+	}
+	order := "0"
+	if nGroups > 0 {
+		order = "(" + strings.Join(prio, " + ") + ")"
 	}
 	pc, pargs := wikiProjectClause(project)
 	q := `SELECT project, wiki_id, wiki_name, path, title, url, heading, chunk_idx, text,
@@ -150,10 +173,33 @@ func wikiCandidatesSQL(nTerms int, project string) (string, []any) {
 		       length(tokens) AS dl
 		FROM wiki_chunks FINAL
 		WHERE deleted = 0 AND hasAny(tokens, ?)` + pc + `
-		ORDER BY length(arrayIntersect(tokens, ?)) DESC, wiki_id, path, chunk_idx
+		ORDER BY ` + order + ` DESC, wiki_id, path, chunk_idx
 		LIMIT ?
 		SETTINGS max_execution_time = 5`
 	return q, pargs
+}
+
+// wikiCandidateArgs — SAF: wikiCandidatesSQL'in bağlı argümanları (sıra:
+// tf jetonları, htf jetonları, hasAny dizisi, proje, öncelik grupları, limit).
+func wikiCandidateArgs(cq wiki.CandidateQuery, pargs []any, limit int) []any {
+	args := make([]any, 0, 2*len(cq.Tokens)+4*len(cq.Groups)+3)
+	for _, t := range cq.Tokens {
+		args = append(args, t)
+	}
+	for _, t := range cq.Tokens {
+		args = append(args, t)
+	}
+	args = append(args, cq.Tokens)
+	args = append(args, pargs...)
+	for i, g := range cq.Groups {
+		w := 0.0
+		if i < len(cq.Weights) {
+			w = cq.Weights[i]
+		}
+		args = append(args, w, g, wiki.CandidateSurfaceBoost*w, g[0])
+	}
+	args = append(args, limit)
+	return args
 }
 
 // wikiSemanticSQL — SAF: kosinüs top-k (embedding'li parçalar).
@@ -213,6 +259,21 @@ func (s *Store) UpsertWikiPage(ctx context.Context, p wiki.PageRecord, chunks []
 	if err := pb.Send(); err != nil {
 		return err
 	}
+	return s.writeWikiChunks(ictx, p, chunks, oldChunks, at, version)
+}
+
+// UpsertWikiChunks — v0.10.1127: yalnız parçalar + kuyruk mezar taşları
+// (yeniden jetonlama; parça sayısı aynıyken wiki_pages satırı yazılmaz).
+func (s *Store) UpsertWikiChunks(ctx context.Context, p wiki.PageRecord, chunks []wiki.ChunkRecord, oldChunks uint32) error {
+	at := p.UpdatedAt
+	if at.IsZero() {
+		at = time.Now()
+	}
+	return s.writeWikiChunks(asyncInsertCtx(ctx), p, chunks, oldChunks, at, uint64(time.Now().UnixNano()))
+}
+
+// writeWikiChunks — parça satırları + (kısalan sayfada) kuyruk mezar taşları, tek version.
+func (s *Store) writeWikiChunks(ictx context.Context, p wiki.PageRecord, chunks []wiki.ChunkRecord, oldChunks uint32, at time.Time, version uint64) error {
 	cb, err := s.conn.PrepareBatch(ictx, wikiChunkInsert)
 	if err != nil {
 		return err
@@ -287,26 +348,22 @@ func (s *Store) WikiTermStats(ctx context.Context, terms []string, project strin
 	return st, nil
 }
 
-// WikiCandidates — terimlerden en az birini taşıyan parçalar (tavanlı).
-func (s *Store) WikiCandidates(ctx context.Context, terms []string, project string, limit int) ([]wiki.Candidate, error) {
-	if len(terms) == 0 {
+// WikiCandidates — terimlerden en az birini taşıyan parçalar (tavanlı,
+// terim kapsamasına göre öncelikli).
+func (s *Store) WikiCandidates(ctx context.Context, cq wiki.CandidateQuery, project string, limit int) ([]wiki.Candidate, error) {
+	if len(cq.Tokens) == 0 {
 		return nil, nil
+	}
+	for _, g := range cq.Groups {
+		if len(g) == 0 {
+			return nil, fmt.Errorf("wiki candidates: boş terim grubu")
+		}
 	}
 	if limit <= 0 || limit > 1000 {
 		limit = 300
 	}
-	q, pargs := wikiCandidatesSQL(len(terms), project)
-	args := make([]any, 0, 2*len(terms)+3)
-	for _, t := range terms {
-		args = append(args, t)
-	}
-	for _, t := range terms {
-		args = append(args, t)
-	}
-	args = append(args, terms)
-	args = append(args, pargs...)
-	args = append(args, terms) // ORDER BY: eşleşen FARKLI terim sayısı (LIMIT'ten önce)
-	args = append(args, limit)
+	q, pargs := wikiCandidatesSQL(len(cq.Tokens), len(cq.Groups), project)
+	args := wikiCandidateArgs(cq, pargs, limit)
 	rows, err := s.conn.Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
@@ -352,6 +409,24 @@ func (s *Store) WikiSemantic(ctx context.Context, emb []float32, project string,
 			return nil, err
 		}
 		out = append(out, h)
+	}
+	return out, rows.Err()
+}
+
+// WikiPageChunks — sayfanın saklı parçaları (idx, başlık, metin, embedding).
+func (s *Store) WikiPageChunks(ctx context.Context, wikiID, path string) ([]wiki.ChunkRecord, error) {
+	rows, err := s.conn.Query(ctx, wikiPageChunksSQL, wikiID, path)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []wiki.ChunkRecord
+	for rows.Next() {
+		var c wiki.ChunkRecord
+		if err := rows.Scan(&c.Idx, &c.Heading, &c.Text, &c.Embedding); err != nil {
+			return nil, err
+		}
+		out = append(out, c)
 	}
 	return out, rows.Err()
 }

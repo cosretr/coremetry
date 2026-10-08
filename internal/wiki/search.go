@@ -190,12 +190,12 @@ func (s *Service) SearchWith(ctx context.Context, query, project string, o Searc
 		live, d := s.liveSearch(ctx, query, project, terms, Stats{}, cfg, false)
 		hits = applyLive(&res, nil, live, d)
 	} else {
-		st, err := s.store.WikiTermStats(ctx, terms, project)
+		st, err := s.store.WikiTermStats(ctx, ExpandTerms(terms), project)
 		if err != nil {
 			return res, err
 		}
 		if st.N > 0 {
-			cands, err := s.store.WikiCandidates(ctx, terms, project, candidateLimit)
+			cands, err := s.store.WikiCandidates(ctx, NewCandidateQuery(terms, st), project, candidateLimit)
 			if err != nil {
 				return res, err
 			}
@@ -482,14 +482,15 @@ func scoreLivePage(rec PageRecord, chunks []ChunkRecord, terms []string, st Stat
 	if len(chunks) == 0 || len(terms) == 0 {
 		return nil
 	}
+	toks := ExpandTerms(terms) // st.DF ve aday frekansları bu sırada (v0.10.1127)
 	cands := make([]Candidate, 0, len(chunks))
 	for _, c := range chunks {
-		cands = append(cands, candidateFromChunk(rec, c, terms))
+		cands = append(cands, candidateFromChunk(rec, c, toks))
 	}
 	lst := st
 	if lst.N == 0 {
 		// Yerel indeks boş: korpus = bu sayfanın parçaları (en az 1 belge).
-		lst = Stats{N: uint64(len(cands)), AvgDL: avgDL(cands), DF: make([]uint64, len(terms))}
+		lst = Stats{N: uint64(len(cands)), AvgDL: avgDL(cands), DF: make([]uint64, len(toks))}
 	}
 	lex := map[string]Hit{}
 	for _, h := range RankLexical(cands, lst, terms) {

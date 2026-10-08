@@ -88,11 +88,17 @@ type Store interface {
 	SettingsStore
 	WikiPageIndex(ctx context.Context) ([]PageMeta, error)
 	UpsertWikiPage(ctx context.Context, p PageRecord, chunks []ChunkRecord, oldChunks uint32) error
+	// UpsertWikiChunks — yalnız parçalar (+ kuyruk mezar taşları); sayfa
+	// satırı yazılmaz (yeniden jetonlama, parça sayısı değişmediyse).
+	UpsertWikiChunks(ctx context.Context, p PageRecord, chunks []ChunkRecord, oldChunks uint32) error
 	DeleteWikiPage(ctx context.Context, m PageMeta) error
 	WikiTermStats(ctx context.Context, terms []string, project string) (Stats, error)
-	WikiCandidates(ctx context.Context, terms []string, project string, limit int) ([]Candidate, error)
+	WikiCandidates(ctx context.Context, q CandidateQuery, project string, limit int) ([]Candidate, error)
 	WikiSemantic(ctx context.Context, emb []float32, project string, k int) ([]SemHit, error)
 	GetWikiPage(ctx context.Context, project, wiki, path string) (*PageRecord, error)
+	// WikiPageChunks — sayfanın saklı parçaları (idx, başlık, metin,
+	// embedding; jetonsuz) — yeniden jetonlamada embedding taşımak için.
+	WikiPageChunks(ctx context.Context, wikiID, path string) ([]ChunkRecord, error)
 	WikiCounts(ctx context.Context) (pages, chunks uint64, err error)
 }
 
@@ -103,6 +109,8 @@ func ContentHash(s string) string {
 }
 
 // BuildChunks — sayfa → parça kayıtları (jetonlar dahil, embedding'siz). SAF.
+// v0.10.1127: jetonlar IndexTokens (yüzey + Türkçe kök biçimleri); anlamı
+// değişirse tokenizerVersion artırılır (reindex.go saklı içerikten yeniden kurar).
 func BuildChunks(title, content string) []ChunkRecord {
 	parts := ChunkMarkdown(content)
 	out := make([]ChunkRecord, 0, len(parts))
@@ -111,10 +119,12 @@ func BuildChunks(title, content string) []ChunkRecord {
 		if c.Heading != "" {
 			head += HeadingSep + c.Heading
 		}
-		ht := Tokens(head)
+		ht := IndexTokens(head)
+		toks := make([]string, 0, len(ht)+len(c.Text)/4)
+		toks = append(toks, ht...)
 		out = append(out, ChunkRecord{
 			Idx: uint32(i), Heading: c.Heading, Text: c.Text,
-			Tokens:     append(ht, Tokens(c.Text)...),
+			Tokens:     append(toks, IndexTokens(c.Text)...),
 			HeadTokens: ht,
 		})
 	}
@@ -190,6 +200,11 @@ func SyncDue(cfg Config, st Status, now time.Time) bool {
 	if st.LastStartedAt == 0 {
 		return true
 	}
+	// v0.10.1127 — yarım kalan yeniden jetonlama art arda geçişlerle biter
+	// (en az reindexPassGap arayla; 12k sayfa ~3 geçiş).
+	if reindexPending(st) && now.Sub(time.UnixMilli(st.LastStartedAt)) >= reindexPassGap {
+		return true
+	}
 	return now.Sub(time.UnixMilli(st.LastStartedAt)) >= cfg.Interval()
 }
 
@@ -220,8 +235,14 @@ func (s *Service) Sync(ctx context.Context) (Status, error) {
 	prev := s.Status(ctx, true)
 	start := s.now()
 	st := Status{LastStartedAt: start.UnixMilli(), RequestedAt: prev.RequestedAt, RequestedBy: prev.RequestedBy,
-		IndexedPages: prev.IndexedPages, IndexedChunks: prev.IndexedChunks, Search: s.searchStateNow()}
+		IndexedPages: prev.IndexedPages, IndexedChunks: prev.IndexedChunks, Search: s.searchStateNow(),
+		TokenizerVersion: prev.TokenizerVersion, ReindexCursor: prev.ReindexCursor,
+		ReindexScanned: prev.ReindexScanned, ReindexRetry: prev.ReindexRetry}
 	s.saveStatus(ctx, mergeRunning(prev, st))
+
+	// v0.10.1127 — jetonlayıcı sürümü değiştiyse saklı içerikten yeniden
+	// jetonla (ADO çağrısı yok; bağlantı kopuk olsa da koşar).
+	s.reindexPass(ctx, &st)
 
 	api := s.apiOrNil()
 	if api == nil || !api.Configured() {

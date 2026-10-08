@@ -72,7 +72,7 @@ func (s *Service) Diagnose(ctx context.Context, query string, limit int) (Diagno
 			return d, err
 		}
 		local, d.Stale = res.Hits, res.Stale
-		st, _ = s.store.WikiTermStats(ctx, d.Terms, "")
+		st, _ = s.store.WikiTermStats(ctx, ExpandTerms(d.Terms), "") // v0.10.1127 (F4): DF genişlemiş jeton sırasında
 	}
 	d.Local = diagHits(local, d.Terms)
 	var live []Hit

@@ -303,6 +303,14 @@ type memStore struct {
 	chunks   map[string][]ChunkRecord
 	upserts  int
 	deletes  int
+	// chunkReads — WikiPageChunks çağrı sayısı (yeniden jetonlama testi).
+	chunkReads int
+	// candidateCalls — WikiCandidates çağrı sayısı.
+	candidateCalls int
+	// chunkWrites — UpsertWikiChunks (sayfa satırsız) yazım sayısı.
+	chunkWrites int
+	// failWrite — yazım hatası enjeksiyonu (kilit TUTULURKEN çağrılır).
+	failWrite func(p PageRecord) error
 }
 
 func newMemStore() *memStore {
@@ -336,10 +344,28 @@ func (m *memStore) WikiPageIndex(context.Context) ([]PageMeta, error) {
 func (m *memStore) UpsertWikiPage(_ context.Context, p PageRecord, chunks []ChunkRecord, _ uint32) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.failWrite != nil {
+		if err := m.failWrite(p); err != nil {
+			return err
+		}
+	}
 	p.Chunks = uint32(len(chunks))
 	m.pages[p.WikiID+"\x00"+p.Path] = p
 	m.chunks[p.WikiID+"\x00"+p.Path] = chunks
 	m.upserts++
+	return nil
+}
+
+func (m *memStore) UpsertWikiChunks(_ context.Context, p PageRecord, chunks []ChunkRecord, _ uint32) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.failWrite != nil {
+		if err := m.failWrite(p); err != nil {
+			return err
+		}
+	}
+	m.chunks[p.WikiID+"\x00"+p.Path] = chunks
+	m.chunkWrites++
 	return nil
 }
 
@@ -401,13 +427,20 @@ func (m *memStore) WikiTermStats(_ context.Context, terms []string, project stri
 	return st, nil
 }
 
-func (m *memStore) WikiCandidates(_ context.Context, terms []string, project string, limit int) ([]Candidate, error) {
+// WikiCandidates — CH ikizi: hasAny süzgeci, LIMIT'ten ÖNCE CandidatePriority
+// azalan + (wiki_id, path, chunk_idx) — chstore wikiCandidatesSQL ile aynı sıra.
+func (m *memStore) WikiCandidates(_ context.Context, q CandidateQuery, project string, limit int) ([]Candidate, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	var out []Candidate
+	m.candidateCalls++
+	type row struct {
+		c    memChunk
+		prio float64
+	}
+	var rows []row
 	for _, c := range m.all(project) {
 		any := false
-		for _, t := range terms {
+		for _, t := range q.Tokens {
 			if has(c.Tokens, t) {
 				any = true
 			}
@@ -415,10 +448,27 @@ func (m *memStore) WikiCandidates(_ context.Context, terms []string, project str
 		if !any {
 			continue
 		}
-		out = append(out, candidateFromChunk(c.PageRecord, c.ChunkRecord, terms))
-		if len(out) >= limit {
-			break
+		rows = append(rows, row{c: c, prio: CandidatePriority(c.Tokens, q)})
+	}
+	sort.SliceStable(rows, func(i, j int) bool {
+		a, b := rows[i], rows[j]
+		if a.prio != b.prio {
+			return a.prio > b.prio
 		}
+		if a.c.WikiID != b.c.WikiID {
+			return a.c.WikiID < b.c.WikiID
+		}
+		if a.c.Path != b.c.Path {
+			return a.c.Path < b.c.Path
+		}
+		return a.c.Idx < b.c.Idx
+	})
+	if len(rows) > limit {
+		rows = rows[:limit]
+	}
+	out := make([]Candidate, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, candidateFromChunk(r.c.PageRecord, r.c.ChunkRecord, q.Tokens))
 	}
 	return out, nil
 }
@@ -455,6 +505,17 @@ func (m *memStore) GetWikiPage(_ context.Context, project, wikiRef, path string)
 		}
 	}
 	return nil, nil
+}
+
+func (m *memStore) WikiPageChunks(_ context.Context, wikiID, path string) ([]ChunkRecord, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.chunkReads++
+	var out []ChunkRecord
+	for _, c := range m.chunks[wikiID+"\x00"+path] {
+		out = append(out, ChunkRecord{Idx: c.Idx, Heading: c.Heading, Text: c.Text, Embedding: c.Embedding})
+	}
+	return out, nil
 }
 
 func (m *memStore) WikiCounts(context.Context) (uint64, uint64, error) {

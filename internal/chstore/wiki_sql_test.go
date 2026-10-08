@@ -7,6 +7,8 @@ package chstore
 import (
 	"strings"
 	"testing"
+
+	"github.com/cilcenk/coremetry/internal/wiki"
 )
 
 func assertBounded(t *testing.T, name, q string) {
@@ -22,6 +24,11 @@ func TestWikiSQLShapesBounded(t *testing.T) {
 	assertBounded(t, "index", wikiPageIndexSQL)
 	assertBounded(t, "counts", wikiCountsSQL)
 	assertBounded(t, "page", wikiGetPageSQL)
+	// v0.10.1127 — yeniden jetonlamanın parça okuması: tek sayfa, jetonsuz.
+	assertBounded(t, "page-chunks", wikiPageChunksSQL)
+	if !strings.Contains(wikiPageChunksSQL, "wiki_id = ? AND path = ?") || strings.Contains(wikiPageChunksSQL, "tokens") {
+		t.Errorf("page-chunks şekli: %s", wikiPageChunksSQL)
+	}
 
 	q, args := wikiStatsSQL(3, "")
 	assertBounded(t, "stats", q)
@@ -33,7 +40,7 @@ func TestWikiSQLShapesBounded(t *testing.T) {
 		t.Errorf("proje süzgeci bağlı argüman olmalı: %s %v", q, args)
 	}
 
-	q, args = wikiCandidatesSQL(2, "Payments")
+	q, args = wikiCandidatesSQL(2, 1, "Payments")
 	assertBounded(t, "candidates", q)
 	for _, want := range []string{"hasAny(tokens, ?)", "countEqual(tokens, ?), countEqual(tokens, ?)",
 		"countEqual(head_tokens, ?), countEqual(head_tokens, ?)", "length(tokens) AS dl", "LIMIT ?"} {
@@ -41,12 +48,28 @@ func TestWikiSQLShapesBounded(t *testing.T) {
 			t.Errorf("candidates: %q eksik:\n%s", want, q)
 		}
 	}
-	ord := strings.Index(q, "ORDER BY length(arrayIntersect(tokens, ?)) DESC")
+	// v0.10.1127 (F3): öncelik özgün terim başına idf ağırlıklı kapsama.
+	ord := strings.Index(q, "ORDER BY (? * hasAny(tokens, ?) + ? * has(tokens, ?)) DESC")
 	if ord < 0 || ord > strings.Index(q, "LIMIT ?") || ord < strings.Index(q, "project = ?") {
-		t.Errorf("adaylar LIMIT'ten ÖNCE eşleşen terim sayısına göre sıralanmalı:\n%s", q)
+		t.Errorf("adaylar LIMIT'ten ÖNCE terim kapsamasına göre sıralanmalı:\n%s", q)
+	}
+	if strings.Contains(q, "arrayIntersect") {
+		t.Errorf("farklı-jeton sayısı sıralaması kalmamalı (kök biçimleri tanımlayıcıyı iter):\n%s", q)
 	}
 	if len(args) != 1 || strings.Index(q, "project = ?") > strings.Index(q, "LIMIT ?") {
-		t.Errorf("argüman sırası (terimler, terimler, dizi, proje, limit): %s", q)
+		t.Errorf("argüman sırası (terimler, terimler, dizi, proje, öncelik, limit): %s", q)
+	}
+	q12, _ := wikiCandidatesSQL(36, 12, "")
+	if strings.Count(q12, "?") != 36*2+1+12*4+1 {
+		t.Errorf("tavanlı şekil: %d yer tutucu", strings.Count(q12, "?"))
+	}
+	// Argümanlar yer tutucularla birebir (proje süzgeçli).
+	cq := wiki.CandidateQuery{Tokens: []string{"wsbxakfp01", "sunucusu", "sunucu"},
+		Groups: [][]string{{"wsbxakfp01"}, {"sunucusu", "sunucu"}}, Weights: []float64{2.5, 0.3}}
+	q, pargs := wikiCandidatesSQL(len(cq.Tokens), len(cq.Groups), "Platform")
+	all := wikiCandidateArgs(cq, pargs, 300)
+	if strings.Count(q, "?") != len(all) || all[len(all)-1] != 300 || all[7] != "Platform" || all[8] != 2.5 {
+		t.Errorf("argüman/yer tutucu uyuşmazlığı: %d ? / %d arg: %v", strings.Count(q, "?"), len(all), all)
 	}
 
 	q, _ = wikiSemanticSQL("")
@@ -76,7 +99,7 @@ func TestWikiDDLShape(t *testing.T) {
 			t.Errorf("%s: mezar taşı TTL'i (30 gün, yalnız deleted=1) eksik", name)
 		}
 	}
-	if q, _ := wikiCandidatesSQL(1, ""); strings.Contains(q, "use_skip_indexes_if_final") {
+	if q, _ := wikiCandidatesSQL(1, 1, ""); strings.Contains(q, "use_skip_indexes_if_final") {
 		t.Error("use_skip_indexes_if_final sorguda zorlanmamalı (24.x'te exact_mode yok — silinen sayfa geri gelebilir)")
 	}
 	if !strings.Contains(wikiPagesDDL, "ORDER BY (wiki_id, path)") {

@@ -124,6 +124,39 @@ yalnız admin rolüne seçilir).
   araçsız cevap yolundan gelir.
 - Arama Türkçe karakterden bağımsızdır (`şifre` = `sifre`) ve teknik
   tanımlayıcıları tam eşler (`svc-orders`, `ERR-1042`).
+- **Türkçe ek duyarlılığı** (v0.10.1127): hafif bir kök bulucu çekim
+  eklerini soyar — `sunucuları` / `sunucularında` / `sunucusu` → `sunucu`,
+  `listesi` → `liste`, `servisleri` → `servis`, `ortamdaki` → `ortam`. İndeks
+  her sözcüğü hem yazıldığı biçimiyle hem kök biçimleriyle tutar; sorgu
+  terimi de aynı biçimlere genişler. Kapsama **sorudaki terim başına**
+  sayılır (biçimlerden biri geçiyorsa terim eşleşmiş), tam yazım eşleşmesi
+  kök eşleşmesinden hafifçe önde. Köklenmeyenler: rakam ya da ayraç taşıyan
+  (`svc-orders`, `WSBXAKFP01`, `err-1042`), ≤4 harfli (`api`, `prod`),
+  özgün metinde TAMAMI BÜYÜK HARF yazılmış sözcükler ve yapım eki `-lık/-lik`
+  (`güvenlik` ≠ `güven`). Kesme işaretli ek (`IP'ler`, `WSBXAKFP01'de`) ayrı
+  terim sayılmaz. Liste/soru kalıpları (`neler`, `hangileri`, `listele`,
+  `adları`, `isimleri`…) terim değildir; `listesi` içerik sözcüğüdür (sayfa
+  başlıklarında geçer) ve terim kalır. Canlı aramanın OR sorgusu kökleri de
+  seçenek olarak taşır (`sunucuları OR sunucu`; yalnız ≥5 harfli kökler).
+- **Yeniden jetonlama** (v0.10.1127): jetonlayıcı sürümü değişince
+  (`wiki_sync_status.tokenizerVersion`) bir sonraki senkron, parçaları
+  **saklı sayfa içeriğinden** (`wiki_pages`) yeniden kurar — Azure DevOps'a
+  hiç gidilmez, bağlantı kopuk olsa bile koşar. Geçiş başına en çok 5000
+  sayfa; yarıda kalırsa imleç (`reindexCursor`) sonraki geçişte sürer
+  (iş bitene dek en az 2 dk arayla art arda geçiş). Yazılamayan sayfa
+  yeniden deneme listesine girer (`reindexRetry`, ≤200, sayfa başına ≤3
+  deneme); sürüm ancak liste boşalınca ya da kalanların hakkı bitince
+  kaydedilir, hakkı biten sayfa durum kartında hata olarak görünür. Parça
+  metni değişmediği için embedding'ler yeniden hesaplanmaz (saklı vektör
+  taşınır). Canlı modda (CH yok) sayfalar zaten yeni jetonlayıcıyla
+  parçalanır. Kök biçimleri yüzünden indeksteki jeton dizisi büyür.
+- **Aday sırası**: yerel aramada aday parçalar (en çok 300) terim
+  kapsamasına göre seçilir — nadir terim (ör. `WSBXAKFP01`) ağır basar,
+  yaygın bir kök ("sunucu") nadir tanımlayıcıyı aday listesinin dışına
+  itmez.
+- **Kaynak çipleri**: cevabın altında sayfa/doküman başına TEK çip
+  ("Kaynak 1", "Kaynak 2" …); sayfa adı ve bölüm numaraları ipucunda.
+  Modelin cevapta andığı `[n]` aynı numaradır.
 
 ## Sorun giderme
 
