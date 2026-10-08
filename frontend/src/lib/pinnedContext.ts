@@ -11,7 +11,7 @@
 import type { PageContext } from './types';
 import { timeRangeToNs } from './utils';
 
-const NO_PIN: ReadonlySet<string> = new Set(['login', 'settings', 'admin', 'users', 'profile', 'ai', 'system', 'status', 'public-status', 'public-trace', 'dashboards', 'unknown']);
+const NO_PIN: ReadonlySet<string> = new Set(['login', 'settings', 'admin', 'users', 'profile', 'ai', 'system', 'status', 'public-status', 'public-trace', 'dashboards', 'cosre', 'unknown']);
 
 /** Sabitlenebilir mi: bağlamsız sayfa değil ve en az bir boyut taşıyor. */
 export function hasPinnableContext(ctx: PageContext | null | undefined): boolean {

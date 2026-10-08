@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { mergeOpenHref } from '@/lib/openHref'; // v0.10.460
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useCopilotStarters } from '@/lib/queries/copilot'; // v0.10.702
 import { api } from '@/lib/api';
 import { pageContext } from '@/lib/pageContext';
@@ -36,6 +36,8 @@ import { greetHello, greetStatus } from './ai/greeting';
 import type { AiConversation, AiConversationSummary } from '@/lib/types';
 import { traceContextFromPage, useTraceAiContext } from '@/lib/traceAiContext'; // v0.10.944
 import { TraceContextStrip } from './ai/TraceContextStrip'; // v0.10.944
+import { ChatLinkNewTabContext } from './ai/chatLinkTarget'; // v0.10.1125 — /cosre
+import { ThemeToggle } from './ThemeToggle';
 
 // CopilotChat (v0.6.53, v0.9.163 interaktif) — global in-app AI assistant.
 // Sağ-alt animasyonlu sparkline logo (operatör seçimi B) bir drawer açar;
@@ -108,7 +110,16 @@ function AiMark({ size = 26 }: { size?: number }) {
 // çizilmez/pollanmaz; yalnız `?ai=` öznesiyle açılan çekmece kalır. Kiosk
 // (kromsuz, salt-okunur pencere) çekmeceyi sayfa-yerel mount eder; kabuğun
 // kiosk dalı hâlâ hiçbir krom bileşeni çizmez (appShellKiosk pinleri).
-export function CopilotChat({ launcher = true }: { launcher?: boolean } = {}) {
+//
+// v0.10.1125 (/cosre) — `variant="page"`: AYNI sohbet (aynı state, aynı
+// başlık eylemleri, aynı gövde) çekmece yerine tam sayfa kabukta çizilir.
+// Çatal yok: başlık ve gövde tek yerde kurulur, yalnız sarmalayıcı değişir.
+// Sayfa kipinde pencere hep "açık" (geçmiş/karşılama/?chat= senkronu açık
+// çekmece gibi işler), FAB çizilmez, iç linkler yeni sekmede açılır
+// (chatLinkTarget) ve sunucunun `open` önerisi sohbeti terk ettirmez.
+export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' }: { launcher?: boolean; variant?: 'drawer' | 'page' } = {}) {
+  const isPage = variant === 'page';
+  const launcher = launcherProp && !isPage;
   // v0.10.483 — config TEK kaynaktan (useCopilotConfig: modül cache'i, AIDrawer
   // ile aynı); eskiden CopilotChat kendi effect'iyle ikinci bir istek atıyordu.
   const cfg = useCopilotConfig(true);
@@ -119,7 +130,8 @@ export function CopilotChat({ launcher = true }: { launcher?: boolean } = {}) {
   // v0.10.461 — başlık meta şeridindeki model çipi (AIDrawer ile aynı anatomi).
   const model = cfg?.model ?? ''; // v0.10.483 — config tek kaynaktan (useCopilotConfig)
   const [profile, setProfile] = useState('');
-  const [open, setOpen] = useState(false);
+  const [openState, setOpen] = useState(false);
+  const open = isPage || openState; // v0.10.1125 — sayfa kipinde hep açık
   // v0.10.483 — ✨ Explain öznesi (`?ai=`): varsa çekmece AÇIK ve açıklama
   // kipinde (AIDrawerBody); genel sohbet kipi öznesizken. Tek kabuk.
   const [subject, setSubject] = useAiSubject();
@@ -269,6 +281,10 @@ export function CopilotChat({ launcher = true }: { launcher?: boolean } = {}) {
       onOpen: href => {
         const to = mergeOpenHref(href, window.location.pathname, window.location.search); // v0.10.434 (D7b); v0.10.460 aynı sayfa
         if (!to) return;
+        // v0.10.1125 — /cosre'de başka sayfaya OTOMATİK gezinme yok: sohbet
+        // penceresi terk edilmesin; hedef zaten cevabın link çiplerinde (yeni
+        // sekme). Aynı sayfa (ör. ?ai= açıklama kipi) yine uygulanır.
+        if (isPage && to.split('?')[0] !== window.location.pathname) return;
         // v0.10.483 — hedef ?ai= ise AYNI çekmece açıklama kipine geçer
         // (özne URL'den okunur); kapatmaya gerek yok, ikinci çekmece yok.
         navigate(to, { replace: true });
@@ -406,7 +422,24 @@ export function CopilotChat({ launcher = true }: { launcher?: boolean } = {}) {
     return () => window.removeEventListener('coremetry:ai-ask', h);
   }, [send]);
 
-  if (!enabled) return null;
+  if (!enabled) {
+    if (!isPage) return null;
+    // v0.10.1125 — /cosre: çekmecenin "kapalıyken hiç çizme" kararı sayfada
+    // boş ekran olurdu (ev kuralı: boş panel yok). Bilinmiyorken yükleniyor,
+    // kapalıyken açıklama + uygulamaya dönüş.
+    return (
+      <div className="cosre-page">
+        <div className="cosre-page__state">
+          {enabled === null ? <Spinner label="CoSRE yükleniyor…" /> : (
+            <Empty icon="✨" title="CoSRE bu kurulumda kapalı">
+              AI yapılandırılmamış ya da devre dışı — yönetici Ayarlar'dan etkinleştirebilir.{' '}
+              <Link to="/">Coremetry'yi aç</Link>
+            </Empty>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   const submit = (text: string) => { setInput(''); pinBottom(); void send(text); };
   const acceptCompletion = (name: string) => {
@@ -425,67 +458,9 @@ export function CopilotChat({ launcher = true }: { launcher?: boolean } = {}) {
   };
 
 
-  return (
-    <>
-      {/* Launcher — markalı animasyonlu sparkline (varyant B). Yuvarlak FAB
-          kendi anatomisi; shared <Button> atomu uygulanmaz (U1 batch-2 kararı).
-          v0.10.924 — buton bütünlüğü Faz 2: kabuk glif-only IconButton (bare;
-          aria-label sözleşmesi + odak halkası). 48px yuvarlak gradyan anatomisi
-          atomda bir rung değil, satır-içi kalır; `bare` zemin boyamaz. */}
-      {launcher && !drawerOpen && <TraceExplainNudge />}{/* v0.10.432 (D8) — FAB'ın üstündeki baloncuk */}
-      {launcher && !drawerOpen && (
-        // v0.10.926 — title kalır: ipucu kutusu FAB'ın KARDEŞİ olarak
-        // `--z-tooltip` (30) ile çizilir, FAB ise `--z-fab` (80). Sağ kenardaki
-        // çekmeceler (60/61), span paneli (40) ve üstteki nudge baloncuğu (80)
-        // açıkken ipucu onların ALTINDA kalıp görünmez; yerel title üstte.
-        <IconButton variant="bare"
-          className={criticalOpen > 0 ? 'cm-ai-fab is-alert' : 'cm-ai-fab'}
-          onClick={() => setOpen(true)}
-          title={criticalOpen > 0 ? `CoSRE — ${criticalOpen} açık kritik problem` : "CoSRE'ye sor"}
-          aria-label={criticalOpen > 0 ? `CoSRE, ${criticalOpen} açık kritik problem` : 'CoSRE'}
-          style={{
-            position: 'fixed', right: 18, bottom: 18, zIndex: 'var(--z-fab)',
-            width: 48, height: 48, borderRadius: 24,
-            background: 'linear-gradient(135deg, var(--accent-soft), var(--bg1))',
-            border: '1px solid var(--accent2)',
-            display: 'grid', placeItems: 'center',
-            cursor: 'pointer', boxShadow: '0 2px 14px rgba(0,0,0,0.3)',
-          }}
-          icon={<>
-            <AiMark size={26} />
-            {criticalOpen > 0 && (
-              <span aria-hidden="true" style={{
-                position: 'absolute', top: -3, right: -3,
-                minWidth: 18, height: 18, padding: '0 5px', boxSizing: 'border-box',
-                borderRadius: 9, background: 'var(--err-solid)', color: 'var(--on-accent)',
-                fontSize: 10, fontWeight: 700, lineHeight: '14px',
-                display: 'grid', placeItems: 'center',
-                border: '2px solid var(--bg1)',
-              }}>{criticalOpen > 9 ? '9+' : criticalOpen}</span>
-            )}
-          </>} />
-      )}
-
-      {/* v0.9.654 (operatör: "CoSRE drawer gibi çıksa … Chat'ten devam et
-          özelliği drawerdı") — sohbet artık PAYLAŞILAN Drawer primitifini
-          kullanıyor: Explain çekmecesiyle (AIDrawer) aynı kenar, aynı
-          genişlik, aynı Esc/✕ davranışı. Öncesi kendi sağ-alt yüzen
-          paneliydi ve iki AI yüzeyi iki ayrı kabuk gibi duruyordu.
-
-          backdrop=false BİLİNÇLİ: operatör sohbet açıkken tabloyu
-          kaydırıyor, başka bir trace açıyor, sonra sorusunu yazıyor.
-          Overlay bunu imkânsız kılardı — sohbet bir özneyi İNCELEMİYOR,
-          ona EŞLİK ediyor. Explain'in modal davranışı DEĞİŞMEDİ.
-
-          Genişlet kipi korundu: geniş sohbet için 620 → içerik alanı. */}
-      {drawerOpen && (
-        <Drawer
-          onClose={closeDrawer}
-          backdrop={false}
-          width={expanded ? 1100 : AI_DRAWER_WIDTH}
-          bodyStyle={{ display: 'flex', flexDirection: 'column', padding: 0 }}
-          header={
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+  // v0.10.1125 — başlık + gövde TEK yerde; çekmece ve /cosre sayfası aynı düğümleri sarar.
+  const headerNode = (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0, flexWrap: isPage ? 'wrap' : undefined }}>
               {/* v0.9.1253 (operatör: "CoSRE yazısı biraz daha belirgin,
                   büyük font olabilir") — 13→16 + 700 + hafif harf aralığı;
                   marka adı çekmece başlığında artık ilk bakışta okunur.
@@ -539,15 +514,25 @@ export function CopilotChat({ launcher = true }: { launcher?: boolean } = {}) {
               <Button variant="ghost" size="sm" onClick={() => setShowHistory(h => !h)}
                 aria-expanded={showHistory}
                 title="Konuşma geçmişi">🕘 Geçmiş</Button>
-              <Button variant="ghost" size="sm" onClick={() => setExpanded(e => !e)}
-                title={expanded ? 'Daralt' : 'Genişlet'}>
-                {expanded ? '⊟' : '⤢'}</Button>
+              {!isPage && (
+                <Button variant="ghost" size="sm" onClick={() => setExpanded(e => !e)}
+                  title={expanded ? 'Daralt' : 'Genişlet'}>
+                  {expanded ? '⊟' : '⤢'}</Button>
+              )}
               {!subject && turns.length > 0 && (
                 <Button variant="secondary" size="sm" onClick={clearAll}
                   title="Konuşmayı temizle ve yeni konuşma başlat">Temizle</Button>
               )}
+              {/* v0.10.1125 — /cosre kromsuz: uygulamaya dönüş linki + tema düğmesi
+                  (sidebar'daki ThemeToggle burada yok). Genişlet anlamsız: sayfa zaten tam boy. */}
+              {isPage && (
+                <Link to="/" className="cosre-page__home" title="Coremetry uygulamasını aç">Coremetry'yi aç</Link>
+              )}
+              {isPage && <ThemeToggle />}
             </div>
-          }>
+  );
+
+  const bodyNode = (<>
 
           {/* v0.10.944 (CoSRE Faz A) — "Bağlam" şeridi: başlık satırının hemen
               altında, trace öznesinde. Başlığın TEK SATIR kararı (v0.10.483)
@@ -770,6 +755,84 @@ export function CopilotChat({ launcher = true }: { launcher?: boolean } = {}) {
             )}
           </form>
           </>)}
+  </>);
+
+  if (isPage) {
+    return (
+      <ChatLinkNewTabContext.Provider value>
+        <div className="cosre-page">
+          <header className="cosre-page__head">
+            {headerNode}
+          </header>
+          <main className="cosre-page__body">
+            {bodyNode}
+          </main>
+        </div>
+      </ChatLinkNewTabContext.Provider>
+    );
+  }
+
+  return (
+    <>
+      {/* Launcher — markalı animasyonlu sparkline (varyant B). Yuvarlak FAB
+          kendi anatomisi; shared <Button> atomu uygulanmaz (U1 batch-2 kararı).
+          v0.10.924 — buton bütünlüğü Faz 2: kabuk glif-only IconButton (bare;
+          aria-label sözleşmesi + odak halkası). 48px yuvarlak gradyan anatomisi
+          atomda bir rung değil, satır-içi kalır; `bare` zemin boyamaz. */}
+      {launcher && !drawerOpen && <TraceExplainNudge />}{/* v0.10.432 (D8) — FAB'ın üstündeki baloncuk */}
+      {launcher && !drawerOpen && (
+        // v0.10.926 — title kalır: ipucu kutusu FAB'ın KARDEŞİ olarak
+        // `--z-tooltip` (30) ile çizilir, FAB ise `--z-fab` (80). Sağ kenardaki
+        // çekmeceler (60/61), span paneli (40) ve üstteki nudge baloncuğu (80)
+        // açıkken ipucu onların ALTINDA kalıp görünmez; yerel title üstte.
+        <IconButton variant="bare"
+          className={criticalOpen > 0 ? 'cm-ai-fab is-alert' : 'cm-ai-fab'}
+          onClick={() => setOpen(true)}
+          title={criticalOpen > 0 ? `CoSRE — ${criticalOpen} açık kritik problem` : "CoSRE'ye sor"}
+          aria-label={criticalOpen > 0 ? `CoSRE, ${criticalOpen} açık kritik problem` : 'CoSRE'}
+          style={{
+            position: 'fixed', right: 18, bottom: 18, zIndex: 'var(--z-fab)',
+            width: 48, height: 48, borderRadius: 24,
+            background: 'linear-gradient(135deg, var(--accent-soft), var(--bg1))',
+            border: '1px solid var(--accent2)',
+            display: 'grid', placeItems: 'center',
+            cursor: 'pointer', boxShadow: '0 2px 14px rgba(0,0,0,0.3)',
+          }}
+          icon={<>
+            <AiMark size={26} />
+            {criticalOpen > 0 && (
+              <span aria-hidden="true" style={{
+                position: 'absolute', top: -3, right: -3,
+                minWidth: 18, height: 18, padding: '0 5px', boxSizing: 'border-box',
+                borderRadius: 9, background: 'var(--err-solid)', color: 'var(--on-accent)',
+                fontSize: 10, fontWeight: 700, lineHeight: '14px',
+                display: 'grid', placeItems: 'center',
+                border: '2px solid var(--bg1)',
+              }}>{criticalOpen > 9 ? '9+' : criticalOpen}</span>
+            )}
+          </>} />
+      )}
+
+      {/* v0.9.654 (operatör: "CoSRE drawer gibi çıksa … Chat'ten devam et
+          özelliği drawerdı") — sohbet artık PAYLAŞILAN Drawer primitifini
+          kullanıyor: Explain çekmecesiyle (AIDrawer) aynı kenar, aynı
+          genişlik, aynı Esc/✕ davranışı. Öncesi kendi sağ-alt yüzen
+          paneliydi ve iki AI yüzeyi iki ayrı kabuk gibi duruyordu.
+
+          backdrop=false BİLİNÇLİ: operatör sohbet açıkken tabloyu
+          kaydırıyor, başka bir trace açıyor, sonra sorusunu yazıyor.
+          Overlay bunu imkânsız kılardı — sohbet bir özneyi İNCELEMİYOR,
+          ona EŞLİK ediyor. Explain'in modal davranışı DEĞİŞMEDİ.
+
+          Genişlet kipi korundu: geniş sohbet için 620 → içerik alanı. */}
+      {drawerOpen && (
+        <Drawer
+          onClose={closeDrawer}
+          backdrop={false}
+          width={expanded ? 1100 : AI_DRAWER_WIDTH}
+          bodyStyle={{ display: 'flex', flexDirection: 'column', padding: 0 }}
+          header={headerNode}>
+          {bodyNode}
         </Drawer>
       )}
     </>

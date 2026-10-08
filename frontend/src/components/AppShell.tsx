@@ -12,6 +12,7 @@ import { SessionEndedCard } from './SessionEndedCard';
 import { useEventStream } from '@/lib/queries';
 import { isPublicPath } from '@/lib/auth-paths';
 import { isKioskBare } from '@/lib/kioskMode';
+import { isCosrePage } from '@/lib/cosrePage';
 import { useBranding } from '@/lib/branding';
 import { PageLoader } from './Spinner';
 import { ErrorBoundary } from './ErrorBoundary';
@@ -21,7 +22,10 @@ import { ErrorBoundary } from './ErrorBoundary';
 // must stay reachable so the operator can change their password +
 // log out + reach the public surface; / (Home) and /public/trace
 // are likewise infrastructure rather than nav surfaces.
-const ALWAYS_ALLOWED = new Set(['/', '/login', '/profile', '/public-status', '/public/trace']);
+// v0.10.1125 — /cosre: CoSRE çekmecesi custom-rol dahil HER kimlikli sayfada
+// mount ediliyor (sayfa ızgarasında bir girişi yok, API tarafı requireCopilot);
+// bağımsız sohbet sayfası aynı RBAC'ı taşır, ilk izinli sayfaya ışınlanmaz.
+const ALWAYS_ALLOWED = new Set(['/', '/login', '/profile', '/public-status', '/public/trace', '/cosre']);
 
 // isPathAllowed mirrors the Sidebar's isActive() logic — a custom-
 // role page `/traces` allows any `/trace*` URL (trace detail,
@@ -83,6 +87,10 @@ export function AppShell() {
   // 5 s + inbox 30 s poll'ları), CopilotChat, kısayollar, Toaster mount
   // edilmez. Dashboard'un ?kiosk=1'i (v0.9.779, salt CSS) buraya GİRMEZ.
   const kioskBare = isKioskBare(pathname, search);
+  // v0.10.1125 — /cosre: kimlikli, kromsuz sohbet sayfası (lib/cosrePage.ts).
+  // Kiosk gibi krom/akış bileşeni mount edilmez; farkı 401'de: normal /login
+  // akışı + derin bağlantı dönüşü (oturum kartı yok).
+  const cosreBare = isCosrePage(pathname);
   // Subscribe so a saved branding update (from Settings) flows
   // through document.title + --accent immediately. Return value
   // unused here — applyBranding() inside the hook is the
@@ -94,7 +102,7 @@ export function AppShell() {
   // problem.open / problem.resolve / anomaly.* events and
   // invalidates the matching React Query caches so live state
   // changes show up in <1s. Closes on logout / unmount.
-  useEventStream(!!user && !isPublic && !kioskBare);
+  useEventStream(!!user && !isPublic && !kioskBare && !cosreBare);
 
   // v0.8.525 — 'g <x>' navigation shortcuts consolidated into the
   // single GlobalShortcuts registry (mounted below). This inline block
@@ -166,6 +174,19 @@ export function AppShell() {
       <div id="app" className="kiosk-bare">
         <div id="main">
           {sessionEnded && <SessionEndedCard onRelogin={relogin} />}
+          <ErrorBoundary key={pathname}>
+            <Outlet />
+          </ErrorBoundary>
+        </div>
+      </div>
+    );
+  }
+  if (cosreBare) {
+    // v0.10.1125 — /cosre kabuğu: yalnız sayfa (tam boy CoSRE sohbeti). Sidebar,
+    // duyuru, ⌘K, kısayollar, FAB'lı CopilotChat, Toaster YOK (cosrePage.test pinler).
+    return (
+      <div id="app" className="cosre-bare">
+        <div id="main">
           <ErrorBoundary key={pathname}>
             <Outlet />
           </ErrorBoundary>

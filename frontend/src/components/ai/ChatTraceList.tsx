@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { traceHref } from '@/lib/traceHref';
 import { tsShort } from '@/lib/utils';
 import type { ChatTraceListPayload } from '@/lib/types';
+import { chatLinkTargetProps, useChatLinkNewTab } from './chatLinkTarget'; // v0.10.1125 — /cosre yeni sekme
 
 // ChatTraceList — v0.10.688 (endpoint_traces.go trace_list bloğu; D6 "trace
 // listesi cevabı"): LLM anlatımı yok, deterministik tablo. Satır = trace
@@ -9,6 +10,7 @@ import type { ChatTraceListPayload } from '@/lib/types';
 // (deepLink sunucudan). Markdown tablo dili (.cm-md-table) — ikinci tablo
 // görünümü olmasın.
 export function ChatTraceList({ tl }: { tl: ChatTraceListPayload }) {
+  const linkProps = chatLinkTargetProps(useChatLinkNewTab());
   if (tl.traces.length === 0) return null;
   return (
     <div className="cm-trace-list">
@@ -21,7 +23,7 @@ export function ChatTraceList({ tl }: { tl: ChatTraceListPayload }) {
             <tr key={t.traceId}>
               <td className="mono">{tsShort(t.startTime)}</td>
               <td>{t.serviceName}</td>
-              <td><Link to={traceHref(t.traceId)} title={t.traceId}>{t.rootName || t.traceId}</Link></td>
+              <td><Link to={traceHref(t.traceId)} title={t.traceId} {...linkProps}>{t.rootName || t.traceId}</Link></td>
               {/* v0.10.973 — tablo standardı T4: sayı arayüz fontunda (`td.num.mono` zaten inherit basıyordu; görünüm aynı). */}
               <td className="num">{t.durationMs >= 1000 ? (t.durationMs / 1000).toFixed(2) + ' s' : t.durationMs.toFixed(0) + ' ms'}</td>
               <td className="num">{t.spanCount}</td>
@@ -32,7 +34,7 @@ export function ChatTraceList({ tl }: { tl: ChatTraceListPayload }) {
         </tbody>
       </table>
       <div className="cm-trace-list__more">
-        <Link to={tl.deepLink}>Daha fazla → Traces</Link>
+        <Link to={tl.deepLink} {...linkProps}>Daha fazla → Traces</Link>
         {tl.truncated && <span className="cell-hint"> · ilk {tl.traces.length} satır</span>}
       </div>
     </div>

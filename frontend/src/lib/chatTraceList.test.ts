@@ -29,6 +29,7 @@ describe('BAĞLANMA', () => {
   });
   it('satır linki üreticiden, daha fazla deepLink', () => {
     expect(list).toContain('traceHref(t.traceId)');
-    expect(list).toContain('<Link to={tl.deepLink}>Daha fazla → Traces</Link>');
+    // v0.10.1125 — /cosre'de yeni sekme nitelikleri (chatLinkTarget) yayılır.
+    expect(list).toContain('<Link to={tl.deepLink} {...linkProps}>Daha fazla → Traces</Link>');
   });
 });

@@ -8,18 +8,20 @@ import { serviceHref } from '@/lib/serviceHref';
 import { fmtNum } from '@/lib/utils';
 import { evidenceDeltaClass, evidenceHasHypothesis, fmtEvidenceTime, fmtRangeTR, redRows } from '@/lib/chatEvidence';
 import type { ChatEvidence } from '@/lib/types';
+import { chatLinkTargetProps, useChatLinkNewTab } from './chatLinkTarget'; // v0.10.1125 — /cosre yeni sekme
 
 export function EvidenceCard({ ev }: { ev: ChatEvidence }) {
   const rows = redRows(ev.red);
   const hasHyp = evidenceHasHypothesis(ev);
   const suspect = ev.problems.find(p => p.topSuspect)?.topSuspect;
+  const linkProps = chatLinkTargetProps(useChatLinkNewTab());
   return (
     <section className="ev-card" aria-label={`Kanıt · ${ev.service}`}>
       <div className="ev-head">Kanıt · <span className="mono">{ev.service}</span> · {fmtRangeTR(ev.rangeS)}</div>
       <div className={hasHyp ? 'ev-verdict' : 'ev-verdict ev-verdict--none'}>
         <span aria-hidden>{hasHyp ? '●' : '○'}</span>{' '}
         {ev.verdict}
-        {suspect && <> · <Link to={serviceHref(suspect)} className="ev-link">{suspect} ↗</Link></>}
+        {suspect && <> · <Link to={serviceHref(suspect)} className="ev-link" {...linkProps}>{suspect} ↗</Link></>}
       </div>
       {rows.length > 0 && (
         <table className="ev-table" aria-label="RED şimdi / taban">
@@ -66,7 +68,7 @@ export function EvidenceCard({ ev }: { ev: ChatEvidence }) {
         <div className="ev-foot">
           Açık problemler: {ev.problems.length}
           {ev.problems.slice(0, 3).map(p => (
-            <Link key={p.id} to={`/problems?problem=${encodeURIComponent(p.id)}`} className="ev-link" title={p.ruleName}>
+            <Link key={p.id} to={`/problems?problem=${encodeURIComponent(p.id)}`} className="ev-link" title={p.ruleName} {...linkProps}>
               [{p.ruleName || p.id}]
             </Link>
           ))}

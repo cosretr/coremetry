@@ -2564,6 +2564,39 @@ gövde anahtar sözcükleri dokümana + kod aramasının v0.10.98 deneyimine day
 öneki) — yalnız canlı isabetin KANIT kontrolü. Zayıf işaretli telemetri sorusu ("how do I see errors for
 svc-orders"), wiki'de o servisin runbook'u varsa OR sorgusuyla tabanı geçip wiki'den cevaplanabilir.
 
+## 2026-10-08 — /cosre: bağımsız, kromsuz CoSRE sohbet sayfası (v0.10.1125)
+
+**İstek (operatör):** CoSRE sohbeti `<host>/cosre` adresinde tek başına açılabilsin — sidebar / uygulama kabuğu
+olmadan yalnız sohbet; yer imine eklenip ayrı pencerede tutulabilsin.
+
+**Karar:** Yeni sohbet bileşeni YOK. `CopilotChat` `variant="page"` aldı: başlık (CoSRE + model çipi + profil seçici +
+Geçmiş + Temizle) ve gövde (geçmiş bölümü, ✨ Explain kipi, mesajlar, follow-up çipleri, composer) tek yerde
+`headerNode` / `bodyNode` olarak kurulur; çekmece `<Drawer>` ile, sayfa `.cosre-page` ile sarar — çatal yok, iki yüzey
+aynı state'i ve aynı eylemleri taşır. Sayfa kipinde pencere hep "açık" sayılır (geçmiş listesi, karşılama, `?chat=`
+URL senkronu açık çekmece gibi çalışır), FAB / nudge / kritik-problem poll'u yok, Genişlet düğmesi yok; yerine
+"Coremetry'yi aç" (`/`) linki ve `ThemeToggle`. Sekme başlığı "CoSRE" (markalama başlığından sonra yeniden yazılır,
+çıkışta marka başlığı döner); favicon aynı `/favicon.svg`.
+
+**Kabuk:** `lib/cosrePage.ts` `isCosrePage` → AppShell'de ayrı kromsuz dal (`.cosre-bare`): Sidebar, duyuru, ⌘K,
+kısayollar, FAB'lı CopilotChat, Toaster mount edilmez, `/api/events` aboneliği kapalı (pencere başına bir akış bütçesi;
+sohbet kendi istek akışını kullanır). Kiosk-çıplak daldan (`/trace?kiosk=1`) bilinçli AYRI: kiosk 401'de satır-içi
+"oturum bitti" kartı çizer, /cosre ise normal korumalı rota gibi `/login`'e düşer. PUBLIC_PATHS'e eklenmedi — giriş
+ister; derin bağlantı dönüşü (`postLoginRedirect` + v0.10.1123 OIDC `?next=`) /cosre'yi kabul eder (iki süzgeç de
+test edildi). RBAC: çekmece custom-rol dahil her kimlikli sayfada mount olduğu için (sayfa ızgarasında girişi yok, API
+`requireCopilot`) `/cosre` `ALWAYS_ALLOWED`'a girdi — kısıtlı rol ilk izinli sayfaya ışınlanmaz. Copilot kapalıysa
+çekmece hiç çizilmiyordu; sayfada bu boş ekran olurdu, o yüzden yükleniyor / "CoSRE bu kurulumda kapalı" + dönüş linki.
+
+**Linkler:** /cosre'de uygulama kabuğu yok; cevaptaki iç linkler aynı sekmede gezseydi operatör sohbetten koparırdı.
+`components/ai/chatLinkTarget.ts` bağlamı (yalnız sayfa kipi sağlar) → ChatBubble iç link çipleri, EvidenceCard,
+ChatTraceList ve mdLite trace-id linkleri `target=_blank rel=noopener` (href aynı-köken yol kalır; mdLite dizesi ve
+"innerHTML tek yer" pini değişmedi — nitelik commit sonrası MdInline'ın kendi `<a data-nav>`larına yazılır). Dış linkler
+zaten yeni sekmedeydi. Sunucunun `open` önerisi (cevap sonrası otomatik gezinme) sayfa kipinde yalnız aynı sayfa
+hedefinde uygulanır; başka sayfaya otomatik gidilmez (hedef zaten link çipinde). Çekmece davranışı değişmedi.
+
+**Sunucu:** değişiklik yok — `spaHandler` uzantısız her yolu index.html'e düşürüyor, yol listesi yok.
+`cosre_spa_test.go` /cosre (sorgulu, sonda `/`) yedeğini ve OIDC `?next=/cosre` süzgecini çiviler. `api.go` büyümedi.
+`pageContext` `/cosre` → `cosre` (bağlamsız, sabitlenemez: filo geneli sorular).
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

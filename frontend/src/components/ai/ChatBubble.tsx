@@ -1,4 +1,4 @@
-import { Fragment, useState, type ReactNode } from 'react';
+import { Fragment, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { chatErrorText } from './chatErrorText';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AIFeedbackButtons } from './AIFeedbackButtons';
@@ -19,6 +19,7 @@ import { DisclosureButton } from '@/components/ui/DisclosureButton';
 import { Chip } from '@/components/ui/Chip';
 import { summarizeSteps, parseToolError, previewFirstLine, visibleRows, isDeadlineError, fmtMs, VISIBLE_ROWS, sourceStates, stateUnknown, stepRunning, toolErrorLabel } from './toolSteps';
 import { StateBadges } from './StateBadges'; // v0.10.948 — paylaşılan durum rozetleri
+import { chatLinkTargetProps, useChatLinkNewTab } from './chatLinkTarget'; // v0.10.1125 — /cosre yeni sekme
 
 // ChatBubble — bir sohbet turunun ÇİZİMİ. v0.9.479'da CopilotChat.tsx'ten
 // buraya taşındı: AI çekmecesi içindeki sohbet (AIDrawer) aynı balonu
@@ -53,8 +54,22 @@ export function mdLite(raw: string): string {
 // liste maddeleri eklenince altı olacaktı. Yeni yüzey açmak yerine
 // mevcut disiplin tek bileşende toplandı: bundan sonra "chat HTML'i
 // nereden basıyor" sorusunun tek cevabı var, ve kapı testi bunu sayıyor.
+//
+// v0.10.1125 (/cosre) — kromsuz sohbet sayfasında mdLite'ın trace id
+// linkleri YENİ SEKMEDE açılır. Dize üreticisi (mdLite) saf ve tek kalır;
+// nitelik commit sonrası yalnız bu basım noktasının kendi <a data-nav>'larına
+// yazılır (href aynı-köken /trace?id=… yolu, değişmez).
 function MdInline({ text }: { text: string }) {
-  return <span dangerouslySetInnerHTML={{ __html: mdLite(text) }} />;
+  const newTab = useChatLinkNewTab();
+  const ref = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    if (!newTab || !ref.current) return;
+    ref.current.querySelectorAll('a[data-nav]').forEach(a => {
+      a.setAttribute('target', '_blank');
+      a.setAttribute('rel', 'noopener');
+    });
+  }, [newTab, text]);
+  return <span ref={ref} dangerouslySetInnerHTML={{ __html: mdLite(text) }} />;
 }
 
 // CodeBlock (v0.9.1148) — ``` fence'inin çizimi. Gövde React ÇOCUĞU
@@ -491,9 +506,12 @@ export function ChatBubble({ turn, onRetry }: { turn: ChatTurn; onRetry?: () => 
   // yalnız DÜZ sol tık yakalanır. Eskiden her tıkta preventDefault vardı:
   // Ctrl/⌘-tık yeni sekme yerine AYNI sekmede gidiyordu. Değiştiricili tık ve
   // orta tık tarayıcıya kalır (href zaten gerçek /trace?id=… yolu).
+  // v0.10.1125 — /cosre'de (yeni sekme kipi) yakalanmaz: <a target=_blank> tarayıcıya kalır.
+  const newTab = useChatLinkNewTab();
+  const linkProps = chatLinkTargetProps(newTab);
   const onBodyClick = (e: React.MouseEvent) => {
     const a = (e.target as HTMLElement).closest?.('a[data-nav]');
-    if (a && isPlainLeftClick(e)) {
+    if (a && !newTab && isPlainLeftClick(e)) {
       e.preventDefault();
       navigate(a.getAttribute('href') ?? '/');
     }
@@ -638,7 +656,7 @@ export function ChatBubble({ turn, onRetry }: { turn: ChatTurn; onRetry?: () => 
                 🔗 {l.label}
               </a>
             ) : (
-              <Link key={i} to={l.href} className="ai-link" title={l.href}>
+              <Link key={i} to={l.href} className="ai-link" title={l.href} {...linkProps}>
                 ↗ {l.label}
               </Link>
             )

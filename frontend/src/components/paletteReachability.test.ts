@@ -52,6 +52,7 @@ const INTENTIONALLY_UNLISTED: Record<string, string> = {
   '/exceptions': 'detay — /problems Exceptions sekmesinden açılır',
   '/incident': 'detay — /incidents listesinden açılır',
   '/login': 'çerçeve — oturum açma',
+  '/cosre': 'çerçeve — bağımsız CoSRE sohbet penceresi, yer imi/doğrudan adresle açılır (uygulama içinde aynı sohbet her sayfada çekmece; v0.10.1125)',
   '/pod': 'detay — /clusters ya da servis Pods sekmesinden açılır',
   '/profile': 'çerçeve — kullanıcı menüsünden açılır',
   '/public/trace': 'çerçeve — kimliksiz paylaşım linki',

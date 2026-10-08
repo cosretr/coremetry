@@ -14,7 +14,8 @@ const auth = readFileSync(resolve(__dirname, 'AuthProvider.tsx'), 'utf8');
 
 describe('AppShell kiosk-çıplak dalı (v0.10.673)', () => {
   it('SSE aboneliği kioskBare ile kapalı', () => {
-    expect(shell).toContain('useEventStream(!!user && !isPublic && !kioskBare)');
+    // v0.10.1125 — /cosre kromsuz dalı da akışı kapatır.
+    expect(shell).toContain('useEventStream(!!user && !isPublic && !kioskBare && !cosreBare)');
   });
 
   it('dal krom ve akış bileşeni çizmez; Outlet + oturum kartı çizer', () => {

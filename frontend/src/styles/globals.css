@@ -4248,6 +4248,29 @@ thead th:hover .th-remove, .th-remove:focus-visible { opacity: 1; }
    #app/#main kimlikleri kalır ki sayfa düzeni (flex, overflow) aynen işlesin.
    .session-ended: oturum bitince donmuş görünümün ÜSTÜNDE kart (overlay). */
 .kiosk-bare #main { padding: 0; }
+
+/* v0.10.1125 — /cosre bağımsız CoSRE sayfası (lib/cosrePage.ts, pages/CoSRE.tsx).
+   Kabuk kromsuz (.cosre-bare); sayfa tam boy sütun: başlık şeridi + kaydırılan
+   mesajlar + composer. İçerik ortada okunur genişlikte, kenarlarda 16px boşluk
+   (telefonda da). Mesaj listesi kendi içinde kayar, composer altta sabit kalır. */
+.cosre-bare #main { padding: 0; overflow: hidden; }
+.cosre-page {
+  display: flex; flex-direction: column; flex: 1; min-height: 0;
+  background: var(--bg);
+}
+.cosre-page__head {
+  display: flex; align-items: center;
+  padding: var(--sp-4) 16px;
+  border-bottom: 1px solid var(--divider); background: var(--bg1);
+}
+.cosre-page__body {
+  display: flex; flex-direction: column; flex: 1; min-height: 0;
+  width: 100%; max-width: 960px; margin: 0 auto;
+  /* yatay 16px boşluğu gövdenin kendi dolgusu verir (mesajlar/composer --sp-7 = 16px) */
+  box-sizing: border-box;
+}
+.cosre-page__state { flex: 1; display: grid; place-items: center; padding: 16px; }
+.cosre-page__home { font-size: 12px; white-space: nowrap; }
 .session-ended {
   position: fixed; inset: 0; z-index: var(--z-modal);
   display: flex; align-items: center; justify-content: center;

@@ -10,7 +10,9 @@ const cc = readFileSync(resolve(__dirname, 'CopilotChat.tsx'), 'utf8');
 
 describe('CopilotChat launcher kipi (v0.10.732)', () => {
   it('prop varsayılanı true; FAB ve nudge launcher\'a bağlı; poll launcher kapalıyken atılmaz', () => {
-    expect(cc).toContain('export function CopilotChat({ launcher = true }: { launcher?: boolean } = {})');
+    // v0.10.1125 — /cosre `variant="page"` FAB'ı da kapatır (launcher = prop && !isPage).
+    expect(cc).toContain("export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' }");
+    expect(cc).toContain('const launcher = launcherProp && !isPage;');
     expect(cc).toContain('{launcher && !drawerOpen && <TraceExplainNudge />}');
     expect(cc).toContain('{launcher && !drawerOpen && (');
     expect(cc).toContain("useOpenCriticalCount({ enabled: enabled === true && launcher })");
