@@ -45,8 +45,10 @@ afterEach(() => {
   m.envs.length = 0;
 });
 
+let qcRef: QueryClient | null = null;
 async function mount(env?: string) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  qcRef = qc;
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
@@ -72,6 +74,30 @@ describe('useInboxCount — rozet sunucunun count alanını aynen gösterir', ()
     await mount('uat');
     expect(seen?.triage).toBe(1234);
     expect(m.envs).toEqual(['uat']);
+  });
+
+  // v0.10.1131 (operatör-bildirimli: env seçiliyken rozet ≠ liste) — rozetin
+  // sorgu anahtarı env'i taşır; env değişince YENİDEN istek atılır ve rozet
+  // yeni env'in sayısını gösterir (önceki env'in sayısı asılı kalmaz).
+  it('env değişince rozet yeniden çekilir ve yeni env sayısını gösterir', async () => {
+    const byEnv: Record<string, unknown> = {
+      uat: { count: 7, exceptions: 1, httpErrors: 0 },
+      prod: { count: 2, exceptions: 0, httpErrors: 0 },
+    };
+    m.body = byEnv.uat;
+    await mount('uat');
+    expect(seen?.triage).toBe(7);
+    m.body = byEnv.prod;
+    await act(async () => {
+      root!.render(
+        <QueryClientProvider client={qcRef!}><Probe env="prod" /></QueryClientProvider>,
+      );
+    });
+    for (let i = 0; i < 20 && seen?.triage !== 2; i++) {
+      await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+    }
+    expect(m.envs).toEqual(['uat', 'prod']);
+    expect(seen?.triage).toBe(2);
   });
 
   it('boş gövde sıfır rozet', async () => {

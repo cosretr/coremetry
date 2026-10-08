@@ -2761,6 +2761,37 @@ kullanılmaz. Uygulamanın geri kalanının dil seçimi etkilenmez.
 doldurulan örnekler Türkçe, İngilizce metin yok; `tCosre` saf testi. `pages/CoSRE.test.tsx` — /cosre (UI dili
 varsayılan EN) ipuçları ve wiki çipi Türkçe.
 
+## 2026-10-09 — Problems: ortam seçiliyken dış kaynak sayıları listeyle aynı (v0.10.1131)
+
+**Operatör:** env seçiliyken Problems sayısı listeyle tutmuyor; fark dış kaynak (Oracle / Influx, `kind=external`)
+problemlerinde. **Kök neden:** `/inbox` derlemesi (`api/inbox.go` `inboxView`) env'i birleştirilmiş satırlar üstünde
+Go'da uyguluyor (`chstore.EnvScopeKeepsRow`): çözülmemiş `ext:<kaynak>/…` öznesi hiçbir env'in üyesi değil, satır
+gizli. Şerit çipi ("Dış kaynak (N)", "Veritabanı (N)") ve problem türü kapalıyken "Problems N" çipi ise
+`CountProblemsBySubject`'ten geliyor ve bu sayıma yalnız takım kümesi geçiyordu, env hiç inmiyordu. Sonuç: env
+seçiliyken çip, listenin göstermediği dış kaynak problemlerini sayıyordu. Kenar çubuğu rozeti (`count`, v0.10.1086'dan
+beri varsayılan görünümün `total`ı) aynı derlemeden okunduğu için zaten listeyle aynıydı. Env üyeleri yine de iki
+ayrı yerde çözülüyordu (`inboxView` ve `computeInboxCountFor`).
+
+**Karar:** (1) Env kapsamı tek çözücüden gelir (`api/inbox_env_scope.go` `resolveInboxEnvMembers`). Liste
+daraltması (`inboxEnvScopeItems`), çip sayımı ve rozet aynı üye kümesini kullanır. (2) Sayım kapsamı tek yapıda:
+`chstore.ProblemCountScope{Exclude, Team, Env}` (`problem_count_scope.go`). Env ekseni listenin SQL ikizi
+`envScopeConjunct` ile yazılır. Go ⇔ SQL eşitliğini `TestEnvScopeSQLAndGoAgree` kanıtlıyor, dış kaynak satırları da
+artık bu testin içinde. İkinci bir env kuralı yazılmadı. (3) Semantik değişmedi ve artık açıkça yazılı: problemlerin
+kendi env boyutu yok. Dış kaynak problemi gerçek bir servise çözüldüyse (`Kind=service`) o servisin env üyeliğiyle
+eşleşir. Çözülmemiş `ext:` öznesinin env'i yok; liste, çip ve rozette yalnız env seçili değilken görünür. Global
+(servissiz) ve db öznesi satırlar eskisi gibi her env'de görünür. Problems sayfasındaki env çipinin tooltip'i bunu
+söylüyor. (4) Rozetin istemci sorgu anahtarı (`keys.inbox.count(env)`) env'i zaten taşıyordu. Env değişince yeniden
+çekildiği artık testle sabitlendi.
+
+**Değişmeyen:** takım ekseninin sayım yazımı (servissiz satır kaçışı; takım süzgecinde belgeli hafif şişkinlik),
+Exceptions rozeti (`CountExceptionGroups` katı `service IN`), CH okumaları (`problems FINAL` sayımı
+`max_execution_time = 5`, yeni sorgu yok).
+
+**Test:** `chstore/problem_count_scope_test.go`: env seçili/değil × iç/dış kaynak × env'i çözülebilir/çözülemez
+matrisinde sayım == liste; kapsam WHERE'i ve argüman sırası. `chstore/env_members_test.go`: SQL ⇔ Go eşitliğine dış
+kaynak satırları eklendi. `api/inbox_env_scope_test.go`: liste daraltması, sayım kapsamının env'i taşıması, kaynak
+pini (tek çözücü). `lib/queries/inboxCount.test.tsx`: env değişince rozet yeniden çekilir.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

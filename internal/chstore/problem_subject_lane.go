@@ -158,23 +158,32 @@ func problemServicesConjunct(n int, allowDB, hasKindCol bool) string {
 // grubun HİÇ SATIR ÜRETMEMESİ — harita önceden iki anahtarla tohumlanır,
 // yoksa "db yok" ile "db ölçülemedi" ayırt edilemez (2026-08-23 dersi).
 //
-// exclude/envServices şekli CountProblemsNotInStatuses ile AYNI ve
+// Kapsam şekli CountProblemsNotInStatuses ile AYNI ve
 // bilerek: iki sayı aynı evreni saymalı, yoksa çip ile liste ıraksar.
 // Env kaçış kapıları (global satır + v0.9.1358'den beri db öznesi)
 // envScopeConjunct'tan gelir — üç yüzey de aynı dizeyi üretir.
-func (s *Store) CountProblemsBySubject(ctx context.Context, exclude []string, envServices []string) (map[string]uint64, error) {
+//
+// v0.10.1131 — kapsam ProblemCountScope: env ekseni de sayıma iner (liste
+// EnvScopeKeepsRow ile aynı). Önceden yalnız takım kümesi geçiyordu ve env
+// seçiliyken dış kaynak çipi listenin göstermediği satırları sayıyordu.
+func (s *Store) CountProblemsBySubject(ctx context.Context, sc ProblemCountScope) (map[string]uint64, error) {
 	out := map[string]uint64{ProblemKindService: 0, ProblemKindDB: 0, ProblemKindExternal: 0}
 
 	// v0.9.1358 — WHERE gövdesi rozetle ORTAK (problemCountWhere). Bu sayı
 	// GROUP BY kind ile db kovasını dolduruyor: env kaçış kapısı burada
 	// eksik kalsaydı çip "Veritabanı (0)" yazarken şerit satır gösterirdi.
-	whereSQL, args := s.problemCountWhere(exclude, envServices)
+	whereSQL, args := s.problemCountScopeWhere(sc)
 
 	if !s.hasProblemKindCol {
 		// Kolon henüz yok: hepsi servis öznesi. Tek COUNT yeter ve db
 		// bucket'ı 0 KALIR — "ölçmedim" değil, "yok".
-		n, err := s.CountProblemsNotInStatuses(ctx, exclude, envServices)
-		if err != nil {
+		row := s.conn.QueryRow(ctx, `
+			SELECT count()
+			FROM problems FINAL
+			WHERE `+whereSQL+`
+			SETTINGS max_execution_time = 5`, args...)
+		var n uint64
+		if err := row.Scan(&n); err != nil {
 			return out, err
 		}
 		out[ProblemKindService] = n

@@ -252,6 +252,10 @@ func TestEnvScopeSQLAndGoAgree(t *testing.T) {
 		{"oracle-rac", ""},
 		{"db:oracle@corebank-scan.prod", ProblemKindDB},
 		{"db:oracle@x", ProblemKindService},
+		// v0.10.1131 — dış kaynak özneleri: çözülmemiş `ext:` env'e
+		// atfedilemez (env seçiliyken gizli), çözülmüş olan servis gibi.
+		{"ext:oracle-src/OP_ORDERS", ProblemKindExternal},
+		{"payments", ProblemKindExternal},
 	}
 	for _, hasKindCol := range []bool{true, false} {
 		for _, members := range memberSets {

@@ -951,7 +951,7 @@ export default function InboxPage() {
           {/* v0.10.922 (sade palet adım 1) — bilgi çipi üst veri: nötr. */}
           {env && (
             <span className="badge b-gray" style={{ cursor: 'help' }}
-              title={`Showing items on services seen in "${env}" during the last hour (global environment picker). Triage rows carry no environment of their own — a row on a multi-env service still shows, and service-less (global) alerts always show.`}>
+              title={`Showing items on services seen in "${env}" during the last hour (global environment picker). Triage rows carry no environment of their own — a row on a multi-env service still shows, and service-less (global) alerts always show. External-source problems (Oracle / Influx) follow the service they were mapped to; those with no mapped service have no environment and show only when no environment is selected — the lane and sidebar counts use the same rule.`}>
               env: {env} — service-scoped
             </span>
           )}

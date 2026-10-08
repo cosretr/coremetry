@@ -396,6 +396,8 @@ func (s *Server) inboxView(q url.Values) (string, func(ctx context.Context) (any
 		// field treats an empty slice as "no constraint" (v0.8.310), so
 		// passing it through would return an UNFILTERED page.
 		teamIsEmpty := teamServices != nil && len(teamServices) == 0
+		// v0.10.1131 — env üyeleri: liste daraltması VE çip sayımı aynı küme.
+		envMembers := s.resolveInboxEnvMembers(ctx, env)
 		// v0.9.354 — the kind facet gates WHICH sources are fetched at all.
 		// Selecting just "Exceptions" used to fetch + enrich up to 2000
 		// problems (four CH round-trips) and then throw every one of them
@@ -473,8 +475,11 @@ func (s *Server) inboxView(q url.Values) (string, func(ctx context.Context) (any
 		// yani orada TAM; servis şeridinde bu sayı gösterilmiyor.
 		subjectCounts := map[string]uint64{}
 		if statusFilter != "ignored" && !teamIsEmpty {
+			// v0.10.1131 — env de sayıma iner (inbox_env_scope.go): liste
+			// env'i Go'da uyguluyor, sayım uygulamıyordu → env seçiliyken
+			// dış kaynak çipi listenin gizlediği satırları sayıyordu.
 			if m, err := s.store.CountProblemsBySubject(ctx,
-				pickExcludedStatuses(statusFilter), teamServices); err == nil {
+				inboxProblemCountScope(statusFilter, teamServices, envMembers)); err == nil {
 				subjectCounts = m
 			}
 		}
@@ -796,15 +801,9 @@ func (s *Server) inboxView(q url.Values) (string, func(ctx context.Context) (any
 		// transient CH blip must never hide a firing P1.
 		// chstore.EnvScopeKeepsRow pins the row semantics (empty-service
 		// AND db-subject rows always survive — v0.9.1358).
-		if env != "" {
-			if members, err := s.store.EnvMemberServices(ctx, env); err == nil {
-				memberSet := make(map[string]bool, len(members))
-				for _, m := range members {
-					memberSet[m] = true
-				}
-				items = envFilterInboxItems(items, memberSet)
-			}
-		}
+		// v0.10.1131 — üyeler derlemenin başında BİR KEZ çözülür; aynı küme
+		// şerit/tür çiplerinin COUNT'una da iner (inbox_env_scope.go).
+		items = inboxEnvScopeItems(items, envMembers)
 
 		// Team enrichment — reuses the catalog read hoisted to the top of
 		// the closure (v0.9.353); this used to be a second identical query.
@@ -1760,15 +1759,7 @@ func (s *Server) computeInboxCount(ctx context.Context) (any, error) {
 // /problems (Exceptions) sayfasının ailesidir, öncelik süzgeci yok.
 func (s *Server) computeInboxCountFor(ctx context.Context, env string) (any, error) {
 	// nil = no env constraint. Non-nil (possibly empty) = constrain.
-	var envServices []string
-	if env != "" {
-		if members, err := s.store.EnvMemberServices(ctx, env); err == nil {
-			envServices = members
-			if envServices == nil {
-				envServices = []string{} // resolved, but empty — keep it non-nil
-			}
-		}
-	}
+	envServices := s.resolveInboxEnvMembers(ctx, env) // v0.10.1131 — listeyle tek çözüm
 	var (
 		view       inboxBadgeView
 		exN, httpN int64
