@@ -54,7 +54,12 @@ oturum kullanıcısına (cmk_ token'ına DEĞİL — token'ın rolü ne olursa
 olsun) ve DevOps bağlıyken sunulur; bu sunucuya kayıtlı değildir
 (`chatOnlyTools`, set/get/clear_context gibi). v0.10.1050'de tek MinRole
 istisnasıydı (editor); v0.10.1052'te viewer'lara da açıldı — kayıt
-defterindeki tool'ların tamamı viewer tabanında.
+defterindeki tool'ların tamamı viewer tabanında. v0.10.1122'de kayıt
+defteri 64 oldu, dış MCP yüzeyi yine DEĞİŞMEDİ: `search_wiki` ve
+`read_wiki_page` (kurumun Azure DevOps wiki'lerinden indekslenmiş runbook /
+nasıl yapılır sayfaları) aynı sözleşmeyle yalnız uygulama içi sohbette,
+oturum kullanıcısına ve wiki bilgisi açık + DevOps bağlıyken sunulur
+(`chatOnlyTools`) — wiki içeriği MCP üzerinden dışarı çıkmaz.
 
 ### "Benim servislerim" MCP'de YOK (bilinçli)
 

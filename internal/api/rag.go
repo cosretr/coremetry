@@ -311,14 +311,19 @@ func ragDocID(name string) string {
 // kapalı / doküman yok / soru dokümanlarla ilgisiz (skor tabanı) —
 // akış aynen devam eder.
 func (s *Server) ragChatAnswer(ctx context.Context, emit func(string, any), msgs []copilot.ChatMessage, ctxService string) (handled, ok bool) {
-	if s.rag == nil {
+	// v0.10.1122 — wiki dayanağı RAG kapalıyken de çalışır (chat_wiki.go).
+	ragOn := s.rag != nil
+	if !ragOn && wikiKB() == nil {
 		return false, false
 	}
 	question := lastUserText(msgs)
 	if strings.TrimSpace(question) == "" {
 		return false, false
 	}
-	topK := s.rag.EffectiveTopK()
+	topK := 5
+	if ragOn {
+		topK = s.rag.EffectiveTopK()
+	}
 
 	// Retrieval: bge-m3 yapılandırılmışsa SEMANTİK (cosine, floor'lu); değilse
 	// veya boşsa BM25 KÖPRÜSÜ (keyword, v0.9.161) — doküman grounding
@@ -326,7 +331,7 @@ func (s *Server) ragChatAnswer(ctx context.Context, emit func(string, any), msgs
 	// uygulanmaz; TopKRagChunksByContent zaten ≥1 terim eşleşenleri döner =
 	// alaka kapısı, alakasız soru 0 hit → chat serbest-tool döngüsüne düşer).
 	var hits []chstore.RagHit
-	if s.rag.Ready() {
+	if ragOn && s.rag.Ready() {
 		if qEmb, err := s.rag.Embed(ctx, []string{question}); err == nil && len(qEmb) == 1 {
 			if h, e := s.store.TopKRagChunks(ctx, qEmb[0], topK); e == nil &&
 				len(h) > 0 && h[0].Score >= ragScoreFloor {
@@ -336,7 +341,7 @@ func (s *Server) ragChatAnswer(ctx context.Context, emit func(string, any), msgs
 			log.Printf("[rag] soru embed: %v — keyword'e düşülüyor", err)
 		}
 	}
-	if len(hits) == 0 {
+	if ragOn && len(hits) == 0 {
 		// Keyword floor (v0.9.162 review): en iyi hit terimlerin ≥yarısını
 		// whole-token içermiyorsa alaka zayıf → grounding yapma, serbest
 		// döngüye bırak (tesadüfi tek-terim eşleşmesi chat'i kaçırmasın).
@@ -345,7 +350,10 @@ func (s *Server) ragChatAnswer(ctx context.Context, emit func(string, any), msgs
 			hits = h
 		}
 	}
-	if len(hits) == 0 {
+	// v0.10.1122 — kurum wiki'si: doküman parçalarının ARDINA (yalnız oturum
+	// kullanıcısı, kendi tabanıyla; chat_wiki.go ragWikiHits).
+	wikiHits := s.ragWikiHits(ctx, question)
+	if len(hits) == 0 && len(wikiHits) == 0 {
 		return false, false
 	}
 
@@ -366,6 +374,10 @@ func (s *Server) ragChatAnswer(ctx context.Context, emit func(string, any), msgs
 		// ipucu (title) olarak gösteriyor.
 		fmt.Fprintf(&b, "[%d] §%d\n%s\n\n", i+1, h.ChunkIdx+1, h.Content)
 		sources = append(sources, src{Doc: h.DocName, Ref: h.SourceRef, Chunk: h.ChunkIdx + 1, Score: h.Score})
+	}
+	for i, h := range wikiHits {
+		b.WriteString(ragWikiContext(len(hits)+i+1, h))
+		sources = append(sources, src{Doc: "Wiki · " + h.Title, Ref: h.URL, Chunk: h.Idx + 1, Score: h.Score})
 	}
 
 	user := "SORU: " + question + "\n\nBAĞLAM:\n" + b.String()
@@ -392,13 +404,17 @@ func (s *Server) ragChatAnswer(ctx context.Context, emit func(string, any), msgs
 	if ragDeclined(raw) {
 		return false, false
 	}
+	// v0.10.1122 — wiki sayfalarının çipleri (tıklanır kaynak) önce, sonra
+	// request-ID köprüleri; href'e göre tekil.
+	// v0.9.1140 — dört cevap kademesinin dördü de köprüyü çağırır
+	// (kaynak-pin testi kilitler). v0.10.1122 — wiki çipleri ÖNE eklenir;
+	// request-ID çipleri kendi tavanıyla AYNEN kalır (wiki yoksa bayt bayt eski).
+	links := ragAnswerLinks(ragWikiLinks(wikiHits), s.answerRequestIDLinks(ctx, raw, ctxService))
 	emit("answer", map[string]any{
 		"text":       strings.TrimSpace(raw),
 		"exchangeId": copilot.MetaFromContext(ctx).ExchangeID,
 		"sources":    sources,
-		// v0.9.1140 — dört cevap kademesinin dördü de köprüyü çağırır
-		// (kaynak-pin testi kilitler).
-		"links": s.answerRequestIDLinks(ctx, raw, ctxService),
+		"links":      links,
 	})
 	return true, true
 }

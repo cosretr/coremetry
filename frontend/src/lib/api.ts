@@ -2298,6 +2298,16 @@ export const api = {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, text }),
     }),
+  // v0.10.1122 — Azure DevOps wiki bilgisi: ayar + durum + "Şimdi senkronize et"
+  // (admin; lider pod ≤15 sn içinde koşar).
+  getWikiConfig: () => get<import('./types').WikiConfigView>('/api/wiki/config'),
+  putWikiConfig: (c: import('./types').WikiConfig) =>
+    request<import('./types').WikiConfigView>('/api/wiki/config', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(c),
+    }),
+  getWikiStatus: () => get<import('./types').WikiSyncStatus>('/api/wiki/status'),
+  syncWiki: () =>
+    request<{ queued: boolean; status: import('./types').WikiSyncStatus }>('/api/wiki/sync', { method: 'POST' }),
   syncRagSources: () =>
     request<{ sources: number; pages: number; indexed: number; skipped: number; pruned: number; errors?: string[] }>(
       '/api/rag/sync', { method: 'POST' }),

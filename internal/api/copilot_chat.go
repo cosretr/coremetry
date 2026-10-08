@@ -385,6 +385,34 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 	// kullanıcısına (API token'ı değil); bağımsız döngüde dış MCP araçlarının
 	// yanında sunulmaz (chat_source_code.go). Katalog/spec/prompt bundan kurulur.
 	tools = sourceCodeToolsFor(tools, isTraceFollowUp, c)
+	// v0.10.88 (dilim ③) — DIŞ MCP tool'ları yerli kataloğun yanına. Aynı
+	// toolsForRole süzgeci, aynı spec şekli; döngü dış/yerli ayrımını görmez.
+	// Katalog Registry'nin 5 dk TTL'li önbelleğinden gelir; sunucu erişilemezse
+	// boş düşer ve sohbet YERLİ tool'larla aynen sürer (soft-fail).
+	// v0.10.1122 — katalog wiki kararından ÖNCE kurulur: dış araç varsa wiki
+	// araçları bu turda sunulmaz (wikiToolsFor).
+	// v0.10.948 — trace takibi YALNIZ yerli salt-okur katalog: dış MCP tool'ları (yazma yetkisi Coremetry'de denetlenmez, chat_mcp_bridge.go) çekmeceye sızmaz — DECISIONS v0.10.86-89 "guided/drawer/RAG'a sızmaz" + Faz B gereksinim 7.
+	var extTools []mcp.Tool
+	if !isTraceFollowUp && s.mcpClient != nil && s.mcpClient.Configured() {
+		ext := externalChatTools(
+			s.mcpClient.Registry().Tools(ctx),
+			s.mcpClient.ToolRules,
+			s.mcpClient.Registry().Call,
+			func(server, tool string, args json.RawMessage) {
+				// Her dış çağrı iz bırakır: modelin konuştuğu dış uç,
+				// operatörün "bunu kim/ne çağırdı" sorusunun konusu.
+				s.audit(r, "mcp.call", "mcp_server", server, mcpCallAuditDetails(tool, args))
+			})
+		extTools = toolsForRole(ext, role)
+	}
+	// v0.10.1122 — search_wiki / read_wiki_page YALNIZ oturum kullanıcısına (API
+	// token'ı değil) ve YALNIZ dış MCP aracı olmayan turda (onaysız döngüde wiki
+	// metni dış araç argümanına taşınamasın; wiki o zaman yalnız RAG kademesinden).
+	// Wiki kapalıysa Deps.Wiki nil → zaten yoklar (chat_wiki.go).
+	// Tur arası taşıma da kapansın: dış MCP YAPILANDIRILMIŞSA (katalog bu tur
+	// boş düşse bile) wiki araçları sunulmaz.
+	extConfigured := !isTraceFollowUp && s.mcpClient != nil && s.mcpClient.Configured()
+	tools = wikiToolsFor(tools, c, extConfigured || len(extTools) > 0)
 	byName := make(map[string]mcp.ToolHandler, len(tools))
 	specs := make([]copilot.ToolSpec, 0, len(tools))
 	// v0.9.1230 (AI perf) — katalog DİYETİ: spec'e t.Description değil
@@ -408,31 +436,15 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 			Name: t.Name, Description: t.ChatDescription(), InputSchema: t.InputSchema,
 		})
 	}
-	// v0.10.88 (dilim ③) — DIŞ MCP tool'ları yerli kataloğun yanına.
-	// Aynı toolsForRole süzgeci, aynı spec şekli; döngü dış/yerli
-	// ayrımını görmez — bütçe (clampToolResultForModel) ve hata
-	// (ToolErrorJSON) yolları değişmeden işler. Katalog Registry'nin
-	// 5 dk TTL'li önbelleğinden gelir; sunucu erişilemezse katalog boş
-	// düşer ve sohbet YERLİ tool'larla aynen sürer (soft-fail).
+	// Dış MCP araçları (yukarıda kuruldu) yerli kataloğun ardına; bütçe
+	// (clampToolResultForModel) ve hata (ToolErrorJSON) yolları değişmeden işler.
 	extNames := map[string]bool{} // v0.10.425 — ai.tool köken etiketi (native | external)
-	// v0.10.948 — trace takibi YALNIZ yerli salt-okur katalog: dış MCP tool'ları (yazma yetkisi Coremetry'de denetlenmez, chat_mcp_bridge.go) çekmeceye sızmaz — DECISIONS v0.10.86-89 "guided/drawer/RAG'a sızmaz" + Faz B gereksinim 7.
-	if !isTraceFollowUp && s.mcpClient != nil && s.mcpClient.Configured() {
-		ext := externalChatTools(
-			s.mcpClient.Registry().Tools(ctx),
-			s.mcpClient.ToolRules,
-			s.mcpClient.Registry().Call,
-			func(server, tool string, args json.RawMessage) {
-				// Her dış çağrı iz bırakır: modelin konuştuğu dış uç,
-				// operatörün "bunu kim/ne çağırdı" sorusunun konusu.
-				s.audit(r, "mcp.call", "mcp_server", server, mcpCallAuditDetails(tool, args))
-			})
-		for _, t := range toolsForRole(ext, role) {
-			extNames[t.Name] = true
-			byName[t.Name] = t.Handler
-			specs = append(specs, copilot.ToolSpec{
-				Name: t.Name, Description: t.ChatDescription(), InputSchema: t.InputSchema,
-			})
-		}
+	for _, t := range extTools {  // v0.10.1122 — katalog wiki kararından ÖNCE kuruldu (yukarıda)
+		extNames[t.Name] = true
+		byName[t.Name] = t.Handler
+		specs = append(specs, copilot.ToolSpec{
+			Name: t.Name, Description: t.ChatDescription(), InputSchema: t.InputSchema,
+		})
 	}
 
 	// CoSRE Faz-2 — render_chart server-side emission: the model PICKS
@@ -568,6 +580,7 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 		chatContextPreambleTR(cst.ctx) + // v0.10.478 — aktif sohbet bağlamı (Ek A ACTIVE_CONTEXT)
 		traceFollowUpPromptTR(traceFU, req.Context.Explain) + // v0.10.948 — boşsa ""
 		chatSourceCodePromptTR(tools) + // v0.10.1050 — read_source_code sunulmuyorsa ""
+		chatWikiPromptTR(tools) + // v0.10.1122 — wiki araçları sunulmuyorsa ""
 		withAddressee(addressee, copilot.SystemPromptChat())
 	if isTraceFollowUp {
 		// v0.10.948 — sayı denetiminin tohumu: açıklamasız AKTİF BAĞLAM + ekran ve
@@ -811,6 +824,17 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 					if act, ok := actionForLink(l, pagePath); ok {
 						emit("block", blockSeq.Next(blocks.TypeAction, act)) // v0.10.542
 					}
+				}
+			}
+			// v0.10.1122 — wiki sonuçlarının sayfa url'leri cevap çipi olur
+			// (tıklanır kaynak; yalnız http(s), en iyi iki sayfa).
+			if !tr.IsError {
+				for _, l := range wikiToolLinks(tc.Name, tr.Content) {
+					if _, set := stepEv["href"]; !set {
+						stepEv["href"] = l.Href
+					}
+					loopLinks = mergeToolLinks(loopLinks, l)
+					emit("block", blockSeq.Next(blocks.TypeLink, l))
 				}
 			}
 			emit("step-result", stepEv)

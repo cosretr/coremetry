@@ -2250,6 +2250,10 @@ func canonicalTables(sd, ld, md int) []string {
 		// tabloda, ReplacingMergeTree(version) ile senkron diff'i
 		// bedava. saved_views istisnasının savunması rag.go başında.
 		ragChunksDDL,
+		// v0.10.1122 — Azure DevOps wiki bilgi deposu (sayfa + parça); DDL ve
+		// mezar-taşı sözleşmesi wiki.go'da.
+		wikiPagesDDL,
+		wikiChunksDDL,
 		// API token'ları (v0.8.444) — harici agent platformları (GenAI
 		// Studio) için iptal edilebilir servis kimlikleri; DDL api_tokens.go'da.
 		apiTokensDDL,

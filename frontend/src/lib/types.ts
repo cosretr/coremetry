@@ -7367,6 +7367,48 @@ export interface APIToken {
   revoked: boolean;
 }
 
+// v0.10.1122 — Azure DevOps wiki bilgisi (Ayarlar → Bilgi (RAG) → Azure DevOps Wiki).
+// Kimlik bilgisi YOK: bağlantı Kod entegrasyonu'ndaki DevOps ayarından gelir.
+export interface WikiConfig {
+  enabled: boolean;
+  projects?: string[];
+  wikis?: string[];
+  intervalMin?: number;
+  maxPages?: number;
+  disableLiveSearch?: boolean;
+}
+
+export interface WikiSyncStatus {
+  lastStartedAt?: number;  // unix ms
+  lastFinishedAt?: number; // unix ms
+  lastOk: boolean;
+  durationMs?: number;
+  projects: number;
+  wikis: number;
+  pages: number;
+  fetched: number;
+  unchanged: number;
+  deleted: number;
+  truncated?: boolean;
+  embedded?: boolean;
+  indexedPages: number;
+  indexedChunks: number;
+  errors?: string[];
+  requestedAt?: number;
+  requestedBy?: string;
+  search?: 'unknown' | 'available' | 'unavailable';
+  running: boolean;
+}
+
+export interface WikiConfigView {
+  available: boolean;
+  config?: WikiConfig;
+  devopsConfigured?: boolean;
+  embedding?: boolean;
+  status?: WikiSyncStatus;
+  defaults?: { intervalMin: number; minIntervalMin: number; maxPages: number };
+}
+
 export interface RagConfigView {
   endpoint: string;
   model: string;

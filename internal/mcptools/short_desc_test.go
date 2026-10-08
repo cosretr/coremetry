@@ -61,7 +61,9 @@ const shortCatalogMaxBytes = 9100
 // bedeli burada açıkça sayılır: read_source_code 271 B → tavan 300 B.
 // v0.10.1053 — özne-nötr metin (trace ya da exception takibi; model kapsam
 // dışı bir servise çağrı harcamasın) 321 B → tavan 330 B.
-const shortCatalogConditionalMaxBytes = 330
+// v0.10.1122 — + search_wiki (~180 B) + read_wiki_page (~140 B) → 622 B, tavan 650 B
+// (yalnız wiki bilgisi açık + DevOps bağlı kurulumda ödenir).
+const shortCatalogConditionalMaxBytes = 650
 
 // TAMLIK — her tool'un kompakt metni olmalı. Yeni bir tool kompakt
 // açıklamasız gemiye giremez (mcp.Tool.ChatDescription() tam metne

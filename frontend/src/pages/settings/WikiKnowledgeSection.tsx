@@ -1,0 +1,185 @@
+import { useCallback, useEffect, useState } from 'react';
+import { Spinner } from '@/components/Spinner';
+import { Button } from '@/components/ui';
+import { api } from '@/lib/api';
+import { tsLong } from '@/lib/utils';
+import type { WikiConfigView, WikiSyncStatus } from '@/lib/types';
+import { Field2, FlashBox, Row } from './shared';
+import { listText, searchLabel, syncPending, wikiBody, wikiStatusSummary } from './wikiKnowledge';
+
+// WikiKnowledgeSection — v0.10.1122 ("karma"): Bilgi (RAG) sekmesinin
+// "Azure DevOps Wiki" bölümü. CoSRE sohbeti kurumun on-prem Azure DevOps
+// wiki'lerinden kaynak atıflı cevap verir. Kimlik bilgisi BURADA YOK: bağlantı
+// (sunucu URL'i + PAT + TLS) Ayarlar → Kod entegrasyonu'ndaki DevOps ayarından
+// gelir; PAT'in Wiki (Read) kapsamı olmalı. Senkron lider pod'da koşar;
+// "Şimdi senkronize et" isteği ≤15 sn içinde alınır. Durum kartı yalnız
+// senkron sürerken / istek beklerken 10 sn'de bir yenilenir (sekme gizliyken durur).
+
+const POLL_MS = 10_000;
+
+export function WikiKnowledgeSection({ canEdit = true }: { canEdit?: boolean }) {
+  const [view, setView] = useState<WikiConfigView | null | undefined>(undefined);
+  const [enabled, setEnabled] = useState(false);
+  const [projects, setProjects] = useState('');
+  const [wikis, setWikis] = useState('');
+  const [interval, setIntervalText] = useState('');
+  const [maxPages, setMaxPages] = useState('');
+  const [liveSearch, setLiveSearch] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+
+  const apply = useCallback((v: WikiConfigView) => {
+    setView(v);
+    const c = v.config;
+    setEnabled(!!c?.enabled);
+    setProjects(listText(c?.projects));
+    setWikis(listText(c?.wikis));
+    setIntervalText(c?.intervalMin ? String(c.intervalMin) : '');
+    setMaxPages(c?.maxPages ? String(c.maxPages) : '');
+    setLiveSearch(!c?.disableLiveSearch);
+  }, []);
+
+  useEffect(() => {
+    api.getWikiConfig().then(apply).catch(() => setView(null));
+  }, [apply]);
+
+  const status = view?.status;
+  const active = !!status && (status.running || syncPending(status));
+  useEffect(() => {
+    if (!active) return;
+    const id = window.setInterval(() => {
+      if (document.hidden) return;
+      api.getWikiStatus()
+        .then((st: WikiSyncStatus) => setView(v => (v ? { ...v, status: st } : v)))
+        .catch(() => { /* bir sonraki tikte yeniden denenir */ });
+    }, POLL_MS);
+    return () => window.clearInterval(id);
+  }, [active]);
+
+  if (view === undefined) return <Spinner />;
+  if (view === null) return <FlashBox kind="err">Wiki ayarları yüklenemedi.</FlashBox>;
+  if (!view.available) return null;
+
+  const save = async () => {
+    setBusy(true); setMsg(null);
+    try {
+      const next = await api.putWikiConfig(wikiBody(enabled, projects, wikis, interval, maxPages, liveSearch));
+      apply(next);
+      setMsg({ kind: 'ok', text: 'Kaydedildi.' });
+    } catch (e) {
+      setMsg({ kind: 'err', text: e instanceof Error ? e.message : String(e) });
+    } finally { setBusy(false); }
+  };
+
+  const syncNow = async () => {
+    setBusy(true); setMsg(null);
+    try {
+      const r = await api.syncWiki();
+      setView(v => (v ? { ...v, status: r.status } : v));
+      setMsg({ kind: 'ok', text: 'Senkron istendi — lider pod 15 sn içinde başlatır.' });
+    } catch (e) {
+      setMsg({ kind: 'err', text: e instanceof Error ? e.message : String(e) });
+    } finally { setBusy(false); }
+  };
+
+  const summary = wikiStatusSummary(status);
+  // Ayar hâli NÖTR (settingsPalette.pin, v0.10.929): yalnız sapma renklenir.
+  const toneColor = summary.tone === 'err' ? 'var(--err)' : summary.tone === 'warn' ? 'var(--warn)' : 'var(--text2)';
+  const defInterval = view.defaults?.intervalMin ?? 60;
+  const minInterval = view.defaults?.minIntervalMin ?? 15;
+  const defPages = view.defaults?.maxPages ?? 5000;
+
+  return (
+    <section aria-label="Azure DevOps Wiki" style={{ marginTop: 16 }}>
+      <h3 style={{ fontSize: 13, fontWeight: 600, margin: '0 0 6px' }}>
+        Azure DevOps Wiki
+        {!view.config?.enabled
+          ? <span className="badge b-gray" style={{ marginLeft: 8 }}>kapalı</span>
+          : view.embedding
+            ? <span className="badge b-gray" style={{ marginLeft: 8 }}>aktif · hibrit</span>
+            : <span className="badge b-gray" style={{ marginLeft: 8 }}>aktif · keyword</span>}
+      </h3>
+      <p style={{ fontSize: 12, color: 'var(--text2)', margin: '0 0 8px' }}>
+        Kurumun on-prem Azure DevOps wiki'leri Coremetry içine indekslenir; CoSRE runbook,
+        nasıl yapılır, mimari ve sahiplik sorularını bu sayfalardan <b>kaynak bağlantılı</b> cevaplar.
+        Bağlantı ve PAT <b>Kod entegrasyonu</b> ayarından gelir (PAT kapsamı: <code>Wiki (Read)</code>;
+        canlı arama için Search uzantısı opsiyonel). Wiki içeriği Coremetry dışına çıkmaz.
+      </p>
+      {!view.devopsConfigured && (
+        <FlashBox kind="err">Azure DevOps bağlantısı yapılandırılmamış — önce Ayarlar → Kod entegrasyonu.</FlashBox>
+      )}
+
+      <Row>
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, marginTop: 8 }}>
+          <input type="checkbox" checked={enabled} disabled={!canEdit}
+                 onChange={e => setEnabled(e.target.checked)} />
+          Wiki bilgisi aktif
+        </label>
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, marginTop: 8 }}>
+          <input type="checkbox" checked={liveSearch} disabled={!canEdit}
+                 onChange={e => setLiveSearch(e.target.checked)} />
+          Yerel sonuç zayıfsa Azure DevOps Search'e sor
+        </label>
+      </Row>
+      <Row>
+        <Field2 label="Projeler (izin listesi)" hint="satır başına bir proje; boş = PAT'in gördüğü tümü">
+          <textarea value={projects} rows={3} disabled={!canEdit} spellCheck={false}
+                    onChange={e => setProjects(e.target.value)} style={{ width: 260 }} />
+        </Field2>
+        <Field2 label="Wiki'ler (izin listesi)" hint="WikiAdı ya da Proje/WikiAdı; boş = tümü">
+          <textarea value={wikis} rows={3} disabled={!canEdit} spellCheck={false}
+                    onChange={e => setWikis(e.target.value)} style={{ width: 260 }} />
+        </Field2>
+      </Row>
+      <Row>
+        <Field2 label="Senkron aralığı (dk)" small hint={`boş = ${defInterval}; en az ${minInterval}`}>
+          <input type="number" min={minInterval} value={interval} disabled={!canEdit}
+                 placeholder={String(defInterval)} onChange={e => setIntervalText(e.target.value)} style={{ width: '100%' }} />
+        </Field2>
+        <Field2 label="Sayfa tavanı" small hint={`boş = ${defPages}`}>
+          <input type="number" min={1} value={maxPages} disabled={!canEdit}
+                 placeholder={String(defPages)} onChange={e => setMaxPages(e.target.value)} style={{ width: '100%' }} />
+        </Field2>
+      </Row>
+      {canEdit && (
+        <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
+          <Button variant="primary" size="sm" type="button" loading={busy} onClick={() => { void save(); }}>
+            Kaydet
+          </Button>
+          <Button variant="secondary" size="sm" type="button"
+            disabled={busy || !view.config?.enabled || !view.devopsConfigured || syncPending(status)}
+            title="Lider pod'a senkron isteği gönder (değişmeyen sayfalar yeniden okunmaz)"
+            onClick={() => { void syncNow(); }}>
+            ⟳ Şimdi senkronize et
+          </Button>
+        </div>
+      )}
+
+      <div data-testid="wiki-status" style={{
+        marginTop: 10, padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12,
+      }}>
+        <div style={{ color: toneColor, fontWeight: 600 }}>{summary.text}</div>
+        {!!status?.lastFinishedAt && (
+          <div style={{ color: 'var(--text3)', marginTop: 2 }}>
+            Son senkron: {tsLong(status.lastFinishedAt * 1e6)}
+            {status.durationMs ? ` · ${(status.durationMs / 1000).toFixed(1)} sn` : ''}
+            {` · ${status.projects} proje · ${status.wikis} wiki`}
+          </div>
+        )}
+        {syncPending(status) && (
+          <div style={{ color: 'var(--text3)', marginTop: 2 }}>
+            Senkron istendi{status?.requestedBy ? ` (${status.requestedBy})` : ''} — lider pod bekleniyor…
+          </div>
+        )}
+        <div style={{ color: 'var(--text3)', marginTop: 2 }}>{searchLabel(status?.search)}</div>
+        {!!status?.errors?.length && (
+          <ul style={{ margin: '6px 0 0', paddingLeft: 18, color: 'var(--err)' }}>
+            {status.errors.slice(0, 5).map((e, i) => <li key={i} style={{ wordBreak: 'break-word' }}>{e}</li>)}
+            {status.errors.length > 5 && <li>… {status.errors.length - 5} hata daha</li>}
+          </ul>
+        )}
+      </div>
+      {msg && <FlashBox kind={msg.kind}>{msg.text}</FlashBox>}
+    </section>
+  );
+}

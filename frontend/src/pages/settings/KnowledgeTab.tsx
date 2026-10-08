@@ -9,6 +9,7 @@ import {
   type ColumnDef, type DataTableStateProps,
 } from '@/components/ui/DataTable';
 import type { RagDocument } from '@/lib/types';
+import { WikiKnowledgeSection } from './WikiKnowledgeSection';
 
 // v0.9.871 (tutarlılık denetimi BT17) — RAG doküman kataloğu paylaşılan
 // primitife geçti. Katalog yüzlere büyüyebilir ve bugün sıralanamıyordu.
@@ -289,6 +290,10 @@ export function KnowledgeTab() {
           </Button>
         </div>
       </div>
+
+      {/* v0.10.1122 — Azure DevOps wiki bilgisi (DevOps bağlantısıyla; genel
+          URL tarayıcısının yanında, ondan bağımsız). */}
+      <WikiKnowledgeSection />
 
       <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <h3 style={{ fontSize: 13, fontWeight: 600, margin: 0 }}>Dokümanlar</h3>

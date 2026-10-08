@@ -283,8 +283,10 @@ func TestAllShippedToolsAreViewerLevel(t *testing.T) {
 	// MCP'de kayıtlı değil), yalnız panel trace takibinde, oturum kullanıcısına ve
 	// DevOps bağlıyken. v0.10.1050'de MinRole editor'dü (tek istisna); v0.10.1052
 	// (operatör: "Kod okuma aracı viewer'lara da açılsın") "" — istisna YOK.
-	if len(tools) != 62 { // v0.10.944 — 57 → 60: list_log_fields / list_metric_labels / compare_periods (CoSRE araştırma asistanı; üçü de viewer, REST eşleri /api/logs/fields, /api/metrics label okumaları ve servis RED kıyası kapısız)
-		t.Errorf("katalog %d tool (62 bekleniyordu) — yeni tool'un REST eşinin kapısını (auth.RequireRole/"+
+	// v0.10.1122 — 62 → 64: search_wiki / read_wiki_page — REST eşi yok; sohbet-yalnız (dış MCP'de kayıtlı
+	// değil), oturum kullanıcısına ve wiki bilgisi açık + DevOps bağlıyken; MinRole "" (viewer).
+	if len(tools) != 64 { // v0.10.944 — 57 → 60: list_log_fields / list_metric_labels / compare_periods (CoSRE araştırma asistanı; üçü de viewer, REST eşleri /api/logs/fields, /api/metrics label okumaları ve servis RED kıyası kapısız)
+		t.Errorf("katalog %d tool (64 bekleniyordu) — yeni tool'un REST eşinin kapısını (auth.RequireRole/"+
 			"RequireAnyRole) kontrol et, MinRole'ü ona eşitle, sonra bu sayıyı güncelle", len(tools))
 	}
 	for _, tool := range tools {

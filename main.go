@@ -1349,6 +1349,13 @@ func main() {
 		log.Printf("[devops] load persisted config: %v", err)
 	}
 	cfgRefresh.Add("devops", func(ctx context.Context) error { return devopsSvc.LoadPersisted(ctx, store) })
+	// v0.10.1122 — Azure DevOps wiki bilgisi (aynı DevOps bağlantısı; yeni
+	// kimlik yok). Ayar blobu + 30 sn yenileme (cfgRefresh.Start'tan ÖNCE).
+	wikiSvc := api.NewWikiService(store, devopsSvc, ragSvc)
+	if err := wikiSvc.LoadPersisted(ctx, store); err != nil {
+		log.Printf("[wiki] load persisted config: %v", err)
+	}
+	cfgRefresh.Add("wiki", func(ctx context.Context) error { return wikiSvc.LoadPersisted(ctx, store) })
 	// v0.10.115 — uygulama DB şema kataloğu (salt-okunur anlık görüntü;
 	// SQLCODE'lu Explain'lerde kolon tanımı kanıtı). devops deseni; blob
 	// MB olabildiğinden yenileme 5 dk.
@@ -1559,6 +1566,13 @@ func main() {
 	srv.SetVMetrics(vmSvc)
 	srv.SetOracle(oracleSvc) // v0.10.580 — Oracle kaynakları (her rol)
 	srv.SetDevOps(devopsSvc)
+	// v0.10.1122 — wiki bilgisi: servis yukarıda kuruldu (sohbet okuması her
+	// api pod'unda). Senkron lider-kapılı ve yalnız api/worker rolünde — ingest
+	// pod'u lider yarışına girmez.
+	api.SetWiki(wikiSvc)
+	if mode.api || mode.worker {
+		go srv.StartWikiSync(ctx, lockImpl)
+	}
 	srv.SetMCPClient(mcpCliSvc)
 	// v0.6.4 — Model Context Protocol server. Wired on api/all
 	// modes only — worker / ingest pods don't take operator

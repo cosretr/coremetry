@@ -2383,6 +2383,91 @@ açıklama duruma göre değişir — kapalıyken `email_missing` + IdP düzeltm
 servisi, rol mantığı, TLS kuralları. **Kapsam dışı:** UserInfo için ayrı anahtar yok (yalnız e-posta yokken,
 eskiden kesin red olan yolda çalışır); config.yaml/Helm kaynağına alan eklenmedi.
 
+## 2026-10-08 — CoSRE kurum wiki'sinden cevaplar: Azure DevOps wiki senkronu + search_wiki / read_wiki_page (v0.10.1122)
+
+**İstek ("karma", operatör onaylı tasarım):** CoSRE sohbeti şirketin on-prem Azure DevOps wiki'lerindeki
+runbook / nasıl yapılır / mimari / sahiplik sayfalarından kaynak bağlantılı cevap versin; gerekirse Azure
+DevOps Search'ü de kullansın. Genel URL tarayıcısı (v0.8.442) HTML kazıyordu, wiki API'sinin yapısını
+(sayfa ağacı, Markdown, sürüm) bilmiyordu ve PAT'i kaynak başına ayrıca istiyordu.
+
+**Karar:**
+- **Bağlantı:** YENİ kimlik yok — Kod entegrasyonu'ndaki `devops_connection` (URL + koleksiyon + PAT + TLS)
+  aynen kullanılır (`internal/devops/wiki.go`). api-version: kodun geri kalanının aday sırası (tespit edilen,
+  6.0, 4.1); eski sunucu "preview" isterse aynı sürüm `-preview.1` ekiyle bir kez daha, çalışan sürüm
+  süreçte hatırlanır. 401/403 "Wiki: Read" kapsamını adlandırır; JSON yerine HTML oturum açma sayfası hata.
+  PAT hiçbir hata metnine girmez (sanitize), sayfa içeriği hiçbir log satırına yazılmaz.
+- **Senkron (`internal/wiki/sync.go`):** projeler → wiki'ler (izin listeleri; boş = PAT'in gördüğü hepsi) →
+  sayfa ağacı (`recursionLevel=full`, toplam tavan varsayılan 5000) → değişim tespiti → yalnız DEĞİŞEN
+  sayfa okunur. Tespit iki basamaklı: wiki deposunun git öğe listesi (wiki başına TEK istek, blob objectId)
+  ya da o alınamazsa sayfa başına koşullu GET (If-None-Match → 304). Silme mezar taşıyla; bir wiki ancak
+  ağacı hatasız ve tavansız alındıysa budanır, kapsamdan çıkan wiki ancak listeleme hiç hata vermediyse —
+  geçici bir 500 indeksi boşaltmaz. LİDER pod'da (Redis `coremetry:lock:wiki-sync`; yalnız api/worker rolü,
+  ingest pod'u yarışa girmez), ≤4 eşzamanlı, ≤8 istek/sn, istek başına 20 sn, gövde tavanları (sayfa 2 MB,
+  ağaç 16 MB). Geçiş liderlik süresince koşar: kilit kaybedilirse türetilmiş ctx iptal edilir ve geçiş yarıda
+  durur (durum yine yazılır). Aralık varsayılan 60 dk, en az 15. "Şimdi senkronize et" (yalnız oturum açmış
+  admin — admin rollü API token'ı da reddedilir; audit `wiki.sync`) istek pod'unda koşmaz: durum blobuna damga
+  yazar, lider ≤15 sn içinde alır — iki pod aynı anda SENKRON GEÇİŞİ koşmaz. Senkrondan bağımsız tekil
+  yazımlar ise her api pod'undan olabilir: canlı aramanın bulduğu ya da read_wiki_page'in yerelde bulamayıp
+  API'den okuduğu sayfa o pod'da indekse upsert edilir. İkisi de ReplacingMergeTree(version) üzerinde aynı
+  anahtara son-yazan-kazanır yazımıdır; en kötü hâl, bir sonraki senkronun hash/sürüm farkıyla düzelttiği
+  kısa ömürlü bir eski sürümdür. Durum `system_settings[wiki_sync_status]`'ta (hangi pod'a düşülse aynı
+  kart), ayar `system_settings[wiki_knowledge]`'da.
+- **Depo:** iki state tablosu `wiki_pages` / `wiki_chunks`, `ReplacingMergeTree(version)` + FINAL, mutasyonsuz
+  (`deleted=1` mezar taşı satırı; ALTER DELETE yok). Mezar taşları `TTL … + INTERVAL 30 DAY DELETE WHERE
+  deleted = 1` ile düşer (canlı satırların TTL'i yok; 30 günde RMT birleşmeleri eski sürümü çoktan eritmiştir).
+  saved_views'a gitmiyor — rag_chunks'ın aynı savunması (içerik + dizi kolonları). Purge'dan korunur
+  (`configPreserveTables`).
+- **Parçalama:** Markdown başlık sınırları (kod çiti içi `#` başlık değil), başlık YOLU parçaya bağlam;
+  uzun bölüm rag.ChunkText'ten (tek bölücü); `[[_TOC_]]` makroları ve HTML yorumları soyulur.
+- **Arama:** jetonlar Go'da — Türkçe-duyarlı katlama (İ/I/ı→i, ş→s, ğ→g, ü→u, ö→o, ç→c; Türkçe küçültme
+  "INFO"yu bozardı) + teknik bileşikler ayrı jeton (`svc-orders`, `err-1042`, `orders.v2`; CH hasToken bunları
+  ayraçtan bölerdi). CH `tokens Array(String)` + bloom_filter atlama indeksi; aday sorgusu `hasAny`, LIMIT'ten
+  ÖNCE eşleşen farklı terim sayısına göre sıralı (`ORDER BY length(arrayIntersect(tokens, terimler)) DESC`,
+  tavan 300 — sık bir terim tüm terimleri taşıyan parçayı tavanın dışına itemez), terim frekansı `countEqual`.
+  FINAL altında atlama indeksi: CH 25.x+ varsayılanı (`use_skip_indexes_if_final=1` +
+  `use_skip_indexes_if_final_exact_mode=1`) doğru sonuçla kullanır; 24.x'te varsayılan kapalı ve exact_mode yok
+  — orada 1'e zorlamak mezar taşını taşımayan granülü atlayıp silinmiş sayfayı geri getirebilirdi, bu yüzden
+  sorguda ayar VERİLMEZ (24.x'te küçük state tablosunun 5 sn tavanlı taraması). Skor Go'da: kapsama (eşleşen idf / toplam idf) × (0.6 + 0.4 × BM25/max) — mutlak eşik
+  kapsamaya, sıralama BM25'e dayanır. Embedding (RAG ayarındaki uç) varsa parçalar embed edilir ve skor
+  0.6·lexical + 0.4·kosinüs harmanlanır; YOKSA her şey lexical çalışır.
+- **Canlı yedek:** Azure DevOps Search (`wikisearchresults`, POST) yerel sonuç zayıf/boş ya da indeks boş/bayat
+  olduğunda; uç bir kez tespit edilir (404 / sürüm aralığı dışı → 6 saat "unavailable"), sonuç sayfa yoluna
+  çevrilir, içerik API'den okunup yerel depoya yazılır. Her türlü geçici hata (401/403/5xx/zaman aşımı) 15 dk
+  geri çekilme alır — kırık bir uç her soruya 8 sn eklemez. RAG kademesinde YALNIZ indeks boş/bayatken (her
+  serbest sorunun önüne canlı arama gecikmesi eklenmesin); araç yolunda zayıf sonuçta da.
+- **Sohbet:** (1) RAG kademesi wiki parçalarını doküman parçalarının ardına ekler (kendi tabanı 0.5; sayfa adı
+  modele verilmez — v0.9.515 kuralı; cevapta sayfa çipleri "Wiki · başlık" tıklanır kaynak). Bu kademede wiki
+  araması YALNIZ lexical: soru ikinci kez embed edilmez ve FINAL kosinüs tam taraması koşmaz (hibrit sıralama
+  search_wiki aracında). Wiki çipleri request-ID çiplerinin ÖNÜNE eklenir, request-ID listesi kendi tavanıyla
+  aynen kalır; wiki kapalıyken çip listesi bayt bayt eskisi. Prod varsayılanı
+  `on_no_loop` olduğu için serbest döngü çoğu kurulumda koşmaz — wiki'nin varsayılan yolu bu kademe.
+  (2) Serbest döngüye `search_wiki(query, project?, limit≤10)` ve `read_wiki_page(project, wiki, path, offset?)`
+  — read_source_code'un aynası: SOHBET-YALNIZ (dış MCP'de kayıtlı değil), KOŞULLU (wiki açık + DevOps bağlı),
+  YALNIZ oturum kullanıcısına (cmk_ token'ı rolden bağımsız dışarıda; RAG kademesindeki wiki yarısı da aynı
+  kapıda), viewer tabanı. Sayfa 40 KB'ta kesilir ve ~4800 karakterlik pencerelerle (offset) okunur — sohbetin
+  tek sonuç bütçesi 6000 rune. Sonuçtaki sayfa url'leri cevap çiplerine dönüşür; prompt eki modele url'yi
+  "Kaynak:" diye yazdırır.
+
+**Exfil kapısı (read_source_code'dan fark):** wiki araçları bağımsız sohbette de sunulur (özelliğin amacı bu);
+read_source_code yalnız panel takibinde. AMA bağımsız döngüde dış MCP araçları olabilir ve onay adımı yok —
+ekilmiş bir log satırı modeli wiki metnini bir dış aracın argümanına koymaya yönlendirebilirdi. Bu yüzden dış
+MCP kataloğu wiki kararından ÖNCE kurulur ve turda TEK bir dış araç bile varsa `search_wiki` / `read_wiki_page`
+o turda SUNULMAZ (`wikiToolsFor(tools, c, hasExternal)`; kaynak pini `TestWikiGateWiredIntoChat`). O kurulumda
+wiki bilgisi yalnız RAG kademesinden gelir — araçsız tek anlatım çağrısı, dış araç yok. Dış MCP
+yapılandırılmamış kurulumda araçlar sunulur. Tur arası taşımayı da kapatmak için kapı katalog o tur boş düşse
+bile dış MCP YAPILANDIRILMIŞSA kapalıdır; istemci iptali (sekme kapandı) canlı aramayı 15 dk kapatmaz.
+
+**Değişmeyenler:** genel URL tarayıcısı ve rag_chunks, RAG kademesinin sırası (guided > drawer > RAG > niyet >
+döngü), embedding'siz kurulumun davranışı, dış MCP yüzeyi (kayıt defteri 62 → 64, tools/list aynı), api.go.
+**Erişim:** oturum açmış her Coremetry kullanıcısı (viewer dahil) kapsamdaki TÜM wiki'leri sohbet üzerinden
+okuyabilir — Azure DevOps'taki sayfa izinleri kullanıcı başına uygulanmaz (okuma PAT'in kimliğiyle). Bu yüzden
+operatör dokümanı izin listesi tanımlamayı öneriyor. API token'ları (cmk_) ve dış MCP istemcileri wiki
+içeriğini göremez.
+**Sınırlar:** TFVC tabanlı eski wiki desteklenmez (Git wiki'leri); sayfa ekleri (resim/PDF) indekslenmez;
+Türkçe ek çekimi (sipariş/siparişler) kök indirgenmez — embedding yoksa tam sözcük gerekir; `wikisearchresults`
+yanıt şekli yalnız belgelere göre yazıldı, operatörün sunucusunda doğrulanmalı.
+Operatör dokümanı: [docs/WIKI-KNOWLEDGE.md](WIKI-KNOWLEDGE.md).
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

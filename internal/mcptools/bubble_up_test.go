@@ -156,8 +156,9 @@ func TestBubbleUpIsExternalOnly(t *testing.T) {
 			absent++
 		}
 	}
-	if absent != 1 {
-		t.Fatalf("Deps{} ile sunulmayan koşullu araç sayısı %d (beklenen 1: read_source_code)", absent)
+	// v0.10.1122 — + search_wiki / read_wiki_page (Deps.Wiki nil → sunulmaz).
+	if absent != 3 {
+		t.Fatalf("Deps{} ile sunulmayan koşullu araç sayısı %d (beklenen 3: read_source_code, search_wiki, read_wiki_page)", absent)
 	}
 	if len(chat) != len(all)-len(externalOnlyTools)-absent {
 		t.Fatalf("sohbet kataloğu %d, tam katalog %d, dış-yalnız %d, koşullu-yok %d", len(chat), len(all), len(externalOnlyTools), absent)

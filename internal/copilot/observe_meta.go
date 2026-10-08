@@ -60,6 +60,7 @@ var promptVersionRegistry = map[string]string{
 	"systemChatRoundCap":         systemChatRoundCap,
 	"systemChatRoundCapAddendum": systemChatRoundCapAddendum, // v0.10.806
 	"sourceCodeChatAddendum":     sourceCodeChatAddendum,     // v0.10.1050 — read_source_code sunulunca
+	"wikiChatAddendum":           wikiChatAddendum,           // v0.10.1122 — search_wiki / read_wiki_page sunulunca
 	"systemChatAgentLoop":        systemChatAgentLoop,        // v0.10.482
 	"systemIntentClassify":       systemIntentClassify,
 	"IntentNoInstructionLine":    IntentNoInstructionLine,

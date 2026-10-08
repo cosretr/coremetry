@@ -133,6 +133,10 @@ var configPreserveTables = []string{
 	//   rag_chunks  — operatörün YÜKLEDİĞİ dokümanlar; telemetri değil,
 	//                 yeniden doğmaz, kaybı geri alınamaz
 	"api_tokens", "ldap_groups", "rag_chunks",
+	// v0.10.1122 — wiki bilgi deposu: telemetri değil, operatörün wiki'sinden
+	// senkronlanan içerik; purge onu silerse sohbet bir sonraki senkrona dek
+	// (≥15 dk) wiki'siz kalır.
+	"wiki_pages", "wiki_chunks",
 }
 
 // PurgeTelemetry empties every observability-DATA table (telemetryPurgeTables),

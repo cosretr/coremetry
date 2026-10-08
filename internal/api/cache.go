@@ -549,6 +549,13 @@ func (s *Server) reloadConfigOnSignal(ctx context.Context, svc string) {
 				log.Printf("[cache] config-reload oidc: %v", err)
 			}
 		}
+	// v0.10.1122 — wiki bilgisi ayarı (wiki.go PUT).
+	case "wiki":
+		if w := wikiKB(); w != nil && s.store != nil {
+			if err := w.LoadPersisted(ctx, s.store); err != nil {
+				log.Printf("[cache] config-reload wiki: %v", err)
+			}
+		}
 	case "ldap":
 		if s.ldap != nil {
 			if err := s.ldap.LoadPersisted(ctx, s.store); err != nil {
