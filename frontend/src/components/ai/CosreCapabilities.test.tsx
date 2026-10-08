@@ -2,10 +2,13 @@
 //
 // v0.10.1128 (operatör) — boş CoSRE sohbetinin "neler yapabilirim" ipucu:
 //   (1) saf: wiki satırı yalnız `wiki` bayrağıyla ve en başta; `|` imleç işareti;
-//   (2) EN/TR kataloglarında her anahtar var, metinler dile göre;
+//   (2) EN/TR kataloglarında her anahtar var, metinler dile göre (EN gelecekteki
+//       sohbet-geneli i18n için katalogda durur);
 //   (3) çekmecede: ipucu boş sohbette görünür; wiki kapalıyken wiki satırı ve
 //       wiki çipi YOK, açıkken VAR; satıra tıklamak composer'ı doldurur ama
-//       GÖNDERMEZ (copilotChat çağrılmaz); wiki çipi "wikide " doldurur.
+//       GÖNDERMEZ (copilotChat çağrılmaz); wiki çipi "wikide " doldurur;
+//   (4) prod hatası (v0.10.1130): sohbet yüzeyi Türkçe-öncelikli — UI dili EN
+//       iken de ipuçları, title'ı, wiki çipi ve doldurulan örnekler TÜRKÇE.
 //   /cosre sayfası aynı bileşeni çizer — pages/CoSRE.test.tsx.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
@@ -27,7 +30,7 @@ import { AuthProvider } from '@/components/AuthProvider';
 import { ConfirmProvider } from '@/components/ui/ConfirmDialog';
 import { CopilotChat } from '@/components/CopilotChat';
 import { __resetCopilotEnabledCache } from './useCopilotEnabled';
-import { capabilityItems, splitCaret } from './capabilityHints';
+import { capabilityItems, splitCaret, tCosre, COSRE_LANG } from './capabilityHints';
 
 let host: HTMLDivElement;
 let root: Root;
@@ -87,6 +90,14 @@ describe('capabilityHints — saf', () => {
     expect(t('cosre.cap.service', 'tr')).toContain('servis adını yaz');
     expect(t('cosre.cap.service', 'en')).toContain('service name');
     expect(t('cosre.chip.wiki.prompt', 'tr')).toBe('wikide ');
+  });
+
+  it('tCosre: UI dilinden bağımsız, karşılamanın dili (TR)', () => {
+    expect(COSRE_LANG).toBe('tr');
+    setUserLang('en');
+    expect(tCosre('cosre.cap.wiki')).toBe(t('cosre.cap.wiki', 'tr'));
+    expect(tCosre('cosre.cap.tryHint')).toBe('Kutuya örnek bir soru yazar — düzenleyip gönder');
+    expect(tCosre('cosre.chip.wiki.prompt')).toBe('wikide ');
   });
 });
 
@@ -152,14 +163,32 @@ describe('CopilotChat çekmecesi — yetenek ipucu', () => {
     expect(rows().length).toBe(4);
   });
 
-  it('EN: satırlar İngilizce', async () => {
+  it('UI dili EN: ipuçları, title, wiki çipi ve örnekler yine TÜRKÇE (karşılamayla aynı dil)', async () => {
     vi.spyOn(api, 'copilotConfig').mockResolvedValue({ enabled: true, model: 'm', wiki: true });
+    const send = vi.spyOn(api, 'copilotChat').mockResolvedValue(undefined as never);
     setUserLang('en');
     await openDrawer();
-    expect(document.body.textContent).toContain('I can search the company wiki');
-    expect(document.body.textContent).toContain('type the operation name');
+    const text = document.body.textContent ?? '';
+    expect(text).toContain('Sana nasıl yardımcı olabilirim?');
+    expect(text).toContain('Kurum wiki’sinde arayabilirim');
+    expect(text).toContain('Hata veren teknik operasyonları inceleyebilirim');
+    expect(text).not.toContain('I can search the company wiki');
+    expect(text).not.toContain('type the operation name');
+    for (const b of rows()) expect(b.title).toBe('Kutuya örnek bir soru yazar — düzenleyip gönder');
+    expect(document.body.querySelector('[role="list"].cosre-cap')?.getAttribute('aria-label')).toBe('CoSRE neler yapabilir');
+
+    await act(async () => { rows().find(b => b.dataset.cap === 'wiki')!.click(); });
+    expect(textarea()?.value).toBe('wikide cache refresh nasıl yapılır');
+    await act(async () => { rows().find(b => b.dataset.cap === 'operation')!.click(); });
+    expect(textarea()?.value).toBe(' operasyonu neden hata veriyor?');
+    await act(async () => { rows().find(b => b.dataset.cap === 'navigate')!.click(); });
+    expect(textarea()?.value).toBe(' sorununu incelemek için nereye bakmalıyım?');
+
     const chip = document.body.querySelector<HTMLButtonElement>('[data-chip="wiki"]');
+    expect(chip?.textContent).toContain('Wikide ara');
+    expect(chip?.textContent).not.toContain('Search the wiki');
     await act(async () => { chip!.click(); });
-    expect(textarea()?.value).toBe('wiki: ');
+    expect(textarea()?.value).toBe('wikide ');
+    expect(send).not.toHaveBeenCalled();
   });
 });

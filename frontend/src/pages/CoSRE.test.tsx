@@ -129,6 +129,16 @@ describe('/cosre bağımsız sohbet sayfası', () => {
     const caps = Array.from(document.querySelectorAll<HTMLButtonElement>('.cosre-page__body button[data-cap]'));
     expect(caps.map(b => b.dataset.cap)).toEqual(['wiki', 'service', 'operation', 'navigate']);
     expect(document.querySelector('.cosre-page__body [data-chip="wiki"]')).not.toBeNull();
+    // Prod hatası (v0.10.1130): UI dili burada EN (kullanıcı seçimi yok, marka
+    // isteği ağa çıkmaz → İngilizce varsayılan) ama ipuçları karşılamayla aynı
+    // dilde, TÜRKÇE çizilir — karışık dilli karşılama yok.
+    const body = document.querySelector('.cosre-page__body')!.textContent ?? '';
+    expect(body).toContain('Sana nasıl yardımcı olabilirim?');
+    expect(body).toContain('Kurum wiki’sinde arayabilirim');
+    expect(body).toContain('Wikide ara');
+    expect(body).not.toContain('I can search the company wiki');
+    expect(body).not.toContain('Search the wiki');
+    expect(caps[0].title).toBe('Kutuya örnek bir soru yazar — düzenleyip gönder');
   });
 
   it('custom-rol kısıtlı kullanıcı /cosre\'de kalır (ilk izinli sayfaya ışınlanmaz)', async () => {

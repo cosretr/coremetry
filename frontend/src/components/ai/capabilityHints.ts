@@ -7,6 +7,24 @@
 // (/api/copilot/config `wiki` bayrağı; sunucudaki kapı chatWikiAvailable).
 // Örnek metinler i18n kataloğunda; `|` imlecin konacağı yeri işaretler
 // (servis/operasyon adını operatör yazar — prefillEndpoint ile aynı desen).
+//
+// Dil (prod hatası, v0.10.1130): CoSRE sohbet yüzeyi TÜRKÇE-öncelikli — karşılama
+// ("Merhaba", "Sana nasıl yardımcı olabilirim?"), başlangıç çipleri, şablon
+// çipi CopilotChat'te sabit Türkçe. İpuçları useT ile UI dilinde (varsayılan
+// EN) çizilince karşılama karışık dilli görünüyordu. Bu yüzden ipucu satırları,
+// ipucu title'ı ve wiki çipi UI dilinden BAĞIMSIZ, sohbetin diliyle (tCosre)
+// çözülür. EN metinler katalogda durur — sohbet-geneli i18n gelince
+// COSRE_LANG yerine useT'ye geçilir; o güne kadar burada KULLANILMAZ.
+
+import { t, type Lang } from '@/lib/i18n';
+
+/** CoSRE sohbet yüzeyinin dili — karşılama metinleriyle aynı (sabit Türkçe). */
+export const COSRE_LANG: Lang = 'tr';
+
+/** Sohbetin diliyle (UI dilinden bağımsız) katalog araması. */
+export function tCosre(key: string): string {
+  return t(key, COSRE_LANG);
+}
 
 export type CapabilityKind = 'wiki' | 'service' | 'operation' | 'navigate';
 

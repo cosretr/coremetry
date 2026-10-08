@@ -39,7 +39,7 @@ import { TraceContextStrip } from './ai/TraceContextStrip'; // v0.10.944
 import { ChatLinkNewTabContext } from './ai/chatLinkTarget'; // v0.10.1125 — /cosre
 import { ThemeToggle } from './ThemeToggle';
 import { CosreCapabilities } from './ai/CosreCapabilities'; // v0.10.1128
-import { useT } from '@/lib/i18n';
+import { tCosre } from './ai/capabilityHints';
 
 // CopilotChat (v0.6.53, v0.9.163 interaktif) — global in-app AI assistant.
 // Sağ-alt animasyonlu sparkline logo (operatör seçimi B) bir drawer açar;
@@ -412,7 +412,6 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
   // v0.10.1128 — wiki ipucu/çipi yalnız sohbet bu kullanıcıya wiki'den cevap
   // verebiliyorsa (/api/copilot/config `wiki`; yeni istek yok).
   const wikiOn = cfg?.wiki === true;
-  const tr = useT();
 
   // Explain→chat köprüsü (v0.9.165): satır-içi explain panelleri (çekmece
   // OLMAYAN yüzeyler, örn. AnomalyDetailDrawer) bir global event atar; chat
@@ -686,10 +685,11 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
                   <Chip pill onClick={prefillEndpoint} title="Yolu yaz: /api/... hatalı trace'lerini getir">
                     ⌨ …/yol hatalı trace'leri
                   </Chip>
-                  {/* v0.10.1128 — wiki şablon çipi: "wikide " doldurur + odaklar. */}
+                  {/* v0.10.1128 — wiki şablon çipi: "wikide " doldurur + odaklar.
+                      Dil: karşılamayla aynı (tCosre, sabit TR) — UI dili değil. */}
                   {wikiOn && (
-                    <Chip pill data-chip="wiki" onClick={() => { const v = tr('cosre.chip.wiki.prompt'); prefill(v, v.length); }}>
-                      📚 {tr('cosre.chip.wiki')}
+                    <Chip pill data-chip="wiki" onClick={() => { const v = tCosre('cosre.chip.wiki.prompt'); prefill(v, v.length); }}>
+                      📚 {tCosre('cosre.chip.wiki')}
                     </Chip>
                   )}
                 </div>

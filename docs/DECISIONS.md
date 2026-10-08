@@ -2739,6 +2739,28 @@ büyümedi; değişiklik `internal/devops/wiki.go`, `internal/wiki/{sync,config,
 wiki'si klasör düğümü + 404 dönen ara düğüm (ikisi de 404 → atlandı) + çoğunluk-404 korkuluğu + tavanı aşan sayfa → 0 hata, sayaçlar doğru; önceden
 indekslenmiş dev sayfa korunur; 404 olan budanır; kart gri/kırmızı ayrımı.
 
+## 2026-10-09 — CoSRE yetenek ipuçları sohbetin dilinde: sabit Türkçe, UI dilinden bağımsız (v0.10.1130)
+
+**Hata (prod):** v0.10.1128'in boş-sohbet "neler yapabilirim" ipuçları (`CosreCapabilities`), title'ı
+("Fills the box with an example…") ve wiki şablon çipi ("Search the wiki: …") `useT` ile UI dilinde
+çiziliyordu. UI dili marka/kullanıcı Türkçe seçmedikçe İngilizce; CoSRE sohbetinin geri kalanı (karşılama
+"Merhaba", "Sana nasıl yardımcı olabilirim?", başlangıç çipleri, yol şablon çipi) ise `CopilotChat`'te sabit
+Türkçe. Sonuç: operatör karışık dilli bir karşılama görüyordu.
+
+**Karar:** CoSRE sohbet yüzeyi Türkçe-öncelikli; ipuçları karşılamayla AYNI dilde çizilir.
+`capabilityHints.ts`'e `COSRE_LANG = 'tr'` + `tCosre(key)` (= `t(key, COSRE_LANG)`, sabit-dil katalog
+araması) eklendi; `CosreCapabilities` (satırlar, title, aria-label, composer'a dolan örnekler) ve
+`CopilotChat`'teki wiki çipi (etiket + "wikide " doldurma) `useT` yerine bunu kullanır. Doldurulan örnekler
+de Türkçe ("wikide cache refresh nasıl yapılır", "… operasyonu neden hata veriyor?" …).
+
+**Değişmeyen:** `cosre.cap.*` / `cosre.chip.wiki*` EN metinleri katalogda KALIR — sohbet-geneli i18n
+geldiğinde (karşılama + çipler dahil hepsi birlikte) `tCosre` → `useT`'ye geçilir; o güne kadar burada
+kullanılmaz. Uygulamanın geri kalanının dil seçimi etkilenmez.
+
+**Test:** `CosreCapabilities.test.tsx` — UI dili EN iken çekmecede satırlar, title, aria-label, wiki çipi ve
+doldurulan örnekler Türkçe, İngilizce metin yok; `tCosre` saf testi. `pages/CoSRE.test.tsx` — /cosre (UI dili
+varsayılan EN) ipuçları ve wiki çipi Türkçe.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"
