@@ -6345,6 +6345,7 @@ func (s *Server) oidcStart(w http.ResponseWriter, r *http.Request) {
 	} {
 		http.SetCookie(w, c)
 	}
+	setOIDCNextCookie(w, r) // v0.10.1123 — ?next= derin bağlantı (oidc_next.go)
 	http.Redirect(w, r, s.oidc.AuthURL(state, nonce, challenge), http.StatusFound)
 }
 
@@ -6353,6 +6354,7 @@ func (s *Server) oidcCallback(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "oidc not configured", http.StatusNotFound)
 		return
 	}
+	clearOIDCCookies(w) // v0.10.1123 — her çıkışta (başarı + hata); istekteki değerler okunabilir kalır
 	q := r.URL.Query()
 	if errParam := q.Get("error"); errParam != "" {
 		s.oidcFail(w, r, errParam+": "+q.Get("error_description"))
@@ -6365,13 +6367,11 @@ func (s *Server) oidcCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Pull and immediately clear the in-flight cookies.
+	// Pull the in-flight cookies. Clearing happened at the top so every exit
+	// (IdP error, missing params, mismatch, success) drops them, next included.
 	stateWant, _ := r.Cookie(oidcStateCookie)
 	nonce, _ := r.Cookie(oidcNonceCookie)
 	verifier, _ := r.Cookie(oidcVerifierCookie)
-	for _, name := range []string{oidcStateCookie, oidcNonceCookie, oidcVerifierCookie} {
-		http.SetCookie(w, &http.Cookie{Name: name, Value: "", Path: "/", MaxAge: -1, HttpOnly: true})
-	}
 	if stateWant == nil || stateWant.Value != stateGot {
 		s.oidcFail(w, r, "state mismatch — possible CSRF or stale tab")
 		return
@@ -6434,7 +6434,7 @@ func (s *Server) oidcCallback(w http.ResponseWriter, r *http.Request) {
 		Expires:  exp,
 		MaxAge:   int(s.auth.TTL().Seconds()),
 	})
-	http.Redirect(w, r, "/", http.StatusFound)
+	http.Redirect(w, r, oidcNextTarget(r), http.StatusFound) // v0.10.1123 — süzülmüş ?next= yoksa "/"
 }
 
 // oidcFail renders the failure on the login page so the user gets a hint

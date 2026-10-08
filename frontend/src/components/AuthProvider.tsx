@@ -3,7 +3,9 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { api, setUnauthorizedHandler, type AuthUser } from '@/lib/api';
 import { isPublicPath, normalizePath } from '@/lib/auth-paths';
 import { isKioskBare } from '@/lib/kioskMode';
-import { savePostLoginRedirect, consumePostLoginRedirect } from '@/lib/postLoginRedirect';
+import {
+  savePostLoginRedirect, consumePostLoginRedirect, peekPostLoginRedirect, firstAuthedRenderAction,
+} from '@/lib/postLoginRedirect';
 
 interface AuthState {
   user: AuthUser | null;
@@ -36,6 +38,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [sessionEnded, setSessionEnded] = useState(false);
   const userRef = useRef<AuthUser | null>(null);
   useEffect(() => { userRef.current = user; }, [user]);
+  // v0.10.1123 — has the first authed render handled the pending deep link?
+  const firstAuthedDoneRef = useRef(false);
 
   // 401 from any api call drops the local user and pushes to /login.
   // The handler is registered once for the whole app.
@@ -81,14 +85,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       savePostLoginRedirect((pathname ?? '') + (search ?? '') + (hash ?? ''));
       navigate('/login');
     }
-    // Authed on /login (fresh local login) or on the default landing
-    // ('/', where the OIDC callback drops us): restore the captured
-    // deep link when one exists; plain logins keep going to '/'.
-    if (user && path === '/login') {
+    // Authed on /login (fresh local login): restore the captured deep
+    // link when one exists; plain logins keep going to '/'.
+    // v0.10.1123 — the OIDC callback now lands on the deep link itself
+    // (server-side ?next=). Only the FIRST authed render decides what to
+    // do with a pending entry (firstAuthedRenderAction): clear it when we
+    // are on it or anywhere but '/', restore it on '/' (fallback). A
+    // later visit to '/' never jumps to a stale link. Reset on sign-out.
+    if (!user) {
+      firstAuthedDoneRef.current = false;
+    } else if (path === '/login') {
+      firstAuthedDoneRef.current = true;
       navigate(consumePostLoginRedirect() ?? '/');
-    } else if (user && path === '/') {
-      const target = consumePostLoginRedirect();
-      if (target) navigate(target);
+    } else if (!firstAuthedDoneRef.current) {
+      firstAuthedDoneRef.current = true;
+      const act = firstAuthedRenderAction(
+        peekPostLoginRedirect(), path, (pathname ?? '') + (search ?? '') + (hash ?? ''));
+      if (act.kind !== 'none') consumePostLoginRedirect();
+      if (act.kind === 'navigate') navigate(act.to);
     }
   }, [loading, user, pathname, search, hash, navigate]);
 

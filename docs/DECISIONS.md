@@ -2468,6 +2468,36 @@ Türkçe ek çekimi (sipariş/siparişler) kök indirgenmez — embedding yoksa 
 yanıt şekli yalnız belgelere göre yazıldı, operatörün sunucusunda doğrulanmalı.
 Operatör dokümanı: [docs/WIKI-KNOWLEDGE.md](WIKI-KNOWLEDGE.md).
 
+## 2026-10-08 — OIDC girişi sonrası derin bağlantıya sunucu tarafı dönüş (`?next=`) (v0.10.1123)
+
+**Sorun:** OIDC callback başarıda her zaman `/`'e yönlendiriyordu; derin bağlantı (v0.8.367) yalnız
+`sessionStorage`'da tutulup `/`'te tüketiliyordu. sessionStorage sekme kapsamlı: IdP akışı başka sekmede/pencerede
+bitince (MFA uygulaması atlaması, tarayıcı geri yüklemesi) kayıt kayboluyor, ayrıca `/` görünür biçimde yanıp
+sönüyordu.
+
+**Karar:** dönüş yolu sunucuda taşınır. Login SSO düğmesi kayıtlı derin bağlantıyı TÜKETMEDEN okur
+(`peekPostLoginRedirect`) ve `/api/auth/oidc/start?next=<encode>` çağırır (yoksa `next` yok). `oidcStart` değeri
+süzer ve diğer OIDC çerezleriyle aynı nitelik/TTL'de (HttpOnly, Lax, Path `/api/auth/oidc/`, 10 dk) HttpOnly
+`coremetry_oidc_next` çerezine base64url olarak yazar (net/http çerez değerinden `;` `"` boşluk düşürür); `next`
+yok/geçersizse yarım kalmış önceki bir girişten kalan çerez silinir (bayat hedefe dönülmez). `oidcCallback` başarıda çerezdeki yolu YENİDEN süzüp oraya, yoksa `/`'e gider; uçuştaki
+dört çerez callback'in en başında silinir, yani başarı ve tüm hata çıkışlarında. Yardımcılar `internal/api/oidc_next.go`
+— api.go büyümedi (satırlar yerinde değişti).
+
+**Açık yönlendirme sınırı:** `sanitizeOIDCNext` (Go) ile `sanitizeRedirect` (FE) aynı kuralları uygular: tek `/` ile
+başlar (`//` değil), ters bölü yok, şema/host yok, kontrol karakteri (CR/LF dahil) yok, `.`/`..` segmenti yok (ham ya
+da `%2e` — `/x/../api/foo` blok listesini atlamasın); yol kısmının yüzde-çözülmüş hâli de aynı denetimden geçer
+(`/%2F%2Fevil`, `/%61pi/x`) ve `/login`, `/public`, `/api` altında olamaz. Sorgu dizgesi çözülmez (meşru `%5C` taşıyan
+süzgeç bağlantıları bozulmasın). 2048 sınırı sunucuda ve FE'de yalnız `oidcStartHref`'te: sessionStorage yedeği her
+uzunluğu tutar, daha uzun bağlantı `next`'siz gider ve `/` yedeğiyle döner. İki tarafta tablo testleri.
+
+**Yan düzeltme:** callback eskiden çerezleri `Path: "/"` ile siliyordu; çerezler `/api/auth/oidc/` yolunda
+set edildiği için tarayıcı onları silmiyordu (yalnız 10 dk TTL kurtarıyordu). Silme artık aynı yolla.
+
+**FE yedeği:** sessionStorage kaydı kalır; kararı yalnız İLK kimlikli render verir (`firstAuthedRenderAction`, saf):
+kayıt mevcut konumla (path + query + hash) eşitse silinir (sunucu zaten oraya indirdi); `/`'teysek geri yüklenir
+(çerez süresi doldu, uzun bağlantı, eski sekme); başka bir sayfadaysak silinir — sonraki bir `/` ziyareti bayat
+bağlantıya atlamaz. Çıkışta (user null) karar yeniden kurulur. **Bırakılan:** yerel (parola) girişi zaten SPA içi, değişmedi; LDAP aynı.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

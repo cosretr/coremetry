@@ -6,6 +6,7 @@ import { Wordmark } from '@/components/Wordmark';
 import { Button } from '@/components/ui/Button';
 import { api, type AuthConfigResponse } from '@/lib/api';
 import { useBranding } from '@/lib/branding';
+import { oidcStartHref } from '@/lib/postLoginRedirect';
 import { useT } from '@/lib/i18n';
 
 export default function LoginPage() {
@@ -205,7 +206,7 @@ export default function LoginPage() {
         {oidcEnabled && (
           <>
             <Button variant="secondary" size="lg"
-              onClick={() => { window.location.href = '/api/auth/oidc/start'; }}
+              onClick={() => { window.location.href = oidcStartHref(); }}
               style={{ width: '100%', marginBottom: 14, justifyContent: 'center' }}>
               ⚿ {t('login.signInWith')} {oidcLabel}
             </Button>
