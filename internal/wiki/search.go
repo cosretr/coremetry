@@ -53,6 +53,9 @@ const (
 	liveRead = 3
 	// liveBudget — canlı yedeğin toplam süre tavanı (sohbetin önünde durur).
 	liveBudget = 8 * time.Second
+	// LiveBudget — liveBudget'ın dışa açık kopyası (v0.10.1126: sohbetin
+	// netleştirme kurtarması aynı tavanla sınırlanır).
+	LiveBudget = liveBudget
 	// searchRecheck — "unavailable" kararının yeniden denenme aralığı.
 	searchRecheck = 6 * time.Hour
 	// searchErrBackoff — geçici hata (401/403/5xx/zaman aşımı) sonrası
@@ -265,11 +268,17 @@ func mergeHits(local, live []Hit) []Hit {
 	out := append([]Hit(nil), local...)
 	for i, h := range out {
 		by[h.Key()] = i
+		if !h.Live {
+			out[i].LocalScore = h.Score
+		}
 	}
 	for _, h := range live {
 		if i, ok := by[h.Key()]; ok {
 			if h.Score > out[i].Score {
 				out[i].Score = h.Score
+			}
+			if h.Coverage > out[i].Coverage {
+				out[i].Coverage = h.Coverage
 			}
 			out[i].Live = true
 			continue
@@ -321,14 +330,19 @@ func (s *Service) setSearchState(v string) {
 
 // recordSearch — son arama sonucunu paylaşılan blob'a yazar (durum
 // değiştiyse ya da searchPersistEvery geçtiyse; iptalden ayrılmış kısa bağlam).
-func (s *Service) recordSearch(ctx context.Context, state string, info devops.WikiSearchInfo, mode string) {
+//
+// v0.10.1126 — force (yöneticinin "Aramayı test et"i) kısma kuralını ATLAR:
+// imza yalnız BU pod'un son yazdığıyla kıyaslanıyordu, yani başka bir pod
+// arada farklı sonuç yazdıysa bu pod'un aynı imzalı başarısı 10 dk boyunca
+// blobu güncellemiyordu; açık test her zaman paylaşılan durumu tazeler.
+func (s *Service) recordSearch(ctx context.Context, state string, info devops.WikiSearchInfo, mode string, force bool) {
 	now := s.now()
 	ss := SearchStatus{State: state, At: now.UnixMilli(), Class: info.Class, HTTPStatus: info.HTTPStatus,
 		APIVersion: info.APIVersion, Hits: info.Hits, Mode: mode}
 	sig := state + "|" + info.Class + "|" + strconv.Itoa(info.HTTPStatus) + "|" + info.APIVersion
 	s.searchMu.Lock()
 	s.searchCache = &ss
-	due := sig != s.searchSavedSig || now.Sub(s.searchSaved) >= searchPersistEvery
+	due := force || sig != s.searchSavedSig || now.Sub(s.searchSaved) >= searchPersistEvery
 	if due {
 		s.searchSaved, s.searchSavedSig = now, sig
 	}
@@ -387,7 +401,7 @@ func (s *Service) liveSearch(ctx context.Context, query, project string, terms [
 	d.Info = info
 	if errors.Is(err, devops.ErrWikiSearchUnavailable) {
 		s.setSearchState(SearchUnavailable)
-		s.recordSearch(ctx, SearchUnavailable, info, d.QueryMode)
+		s.recordSearch(ctx, SearchUnavailable, info, d.QueryMode, force)
 		d.Unavailable, d.Note = true, unavailableNote(cfg)
 		return nil, d
 	}
@@ -396,7 +410,7 @@ func (s *Service) liveSearch(ctx context.Context, query, project string, terms [
 		d.Note = NoteLiveSearchFailed
 		// İstemci iptali (sekme kapandı) herkes için geri çekilme sebebi değil.
 		if ctx.Err() == nil {
-			s.recordSearch(ctx, "error", info, d.QueryMode)
+			s.recordSearch(ctx, "error", info, d.QueryMode, force)
 			// Sürümle ilgisiz 400 bu SORGUYA özgüdür (sözdizimi, süzgeç): uç
 			// sağlam, diğer sorular etkilenmesin — genel geri çekilme YOK.
 			if info.Class != devops.WikiSearchBadRequest {
@@ -407,7 +421,7 @@ func (s *Service) liveSearch(ctx context.Context, query, project string, terms [
 		return nil, d
 	}
 	s.setSearchState(SearchAvailable)
-	s.recordSearch(ctx, SearchAvailable, info, d.QueryMode)
+	s.recordSearch(ctx, SearchAvailable, info, d.QueryMode, force)
 	d.Results = len(res)
 	picks := make([]devops.WikiSearchHit, 0, liveRead)
 	for _, r := range res {
@@ -516,6 +530,7 @@ func scoreLivePage(rec PageRecord, chunks []ChunkRecord, terms []string, st Stat
 			continue
 		}
 		h.Live = true
+		h.Coverage = covs[i]
 		out = append(out, h)
 	}
 	sortHits(out)

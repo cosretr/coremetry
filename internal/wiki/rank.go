@@ -86,6 +86,27 @@ type Hit struct {
 	Lexical  float64 `json:"lexical"`
 	Semantic float64 `json:"semantic,omitempty"`
 	Live     bool    `json:"live,omitempty"`
+	// Coverage — canlı isabette sorgu terimlerinin parçadaki KÖK kapsamı
+	// (stemCoverage, 0..1; v0.10.1126). Canlı sıra skoru tek başına kanıt
+	// değil (AND sorgusunun ilk sonucu kapsamdan bağımsız liveTopScore alır):
+	// zayıf işaretli sohbet kademeleri bunu ayrıca ister. Yerel isabette 0.
+	Coverage float64 `json:"-"`
+	// LocalScore — canlıyla birleşen yerel isabetin YEREL skoru (mergeHits;
+	// birleşmeyen yerel isabette Score zaten yereldir, Live=false).
+	LocalScore float64 `json:"-"`
+}
+
+// EvidencedAt — v0.10.1126: isabet floor'u KANITLA mı geçiyor: yerel skor
+// ≥ floor, ya da canlı isabet skor ≥ floor VE kök kapsamı ≥ floor. Canlı
+// sıra skoru tek başına yetmez.
+func (h Hit) EvidencedAt(floor float64) bool {
+	switch {
+	case !h.Live:
+		return h.Score >= floor
+	case h.LocalScore >= floor:
+		return true
+	}
+	return h.Score >= floor && h.Coverage >= floor
 }
 
 // idf — BM25+ biçimi (her zaman >0). df=0 (korpusta hiç yok) terim en

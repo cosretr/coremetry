@@ -60,8 +60,8 @@ const (
 var (
 	wikiStrongCues = []string{"wiki", "runbook", "playbook", "prosedur", "procedure", "kilavuz", "howto", "how-to", "dokumantasyon"}
 	wikiWeakCues   = []string{"dokuman", "docs"}
-	wikiCuePhrases = []string{"how to", "how do i", "how do we"}
-	// wikiNasilVerbs — "nasıl" + yap- fiili ("nasıl yapılır/yaparız/yaparım…").
+	// wikiNasilVerbs — "nasıl" + yap- fiili ("nasıl yapılır/yaparız/yaparım…");
+	// v0.10.1126'ten beri sonek kuralının (wikiNasilVerb) açık listesi.
 	wikiNasilVerbs = []string{"yapilir", "yapilacak", "yapariz", "yaparim", "yapabilirim", "yapabiliriz", "yapmali", "yapmaliyim"}
 )
 
@@ -72,7 +72,7 @@ func wikiQuestionCue(q string) (strong, weak bool) {
 	words := strings.FieldsFunc(f, func(r rune) bool {
 		return !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '-'
 	})
-	for i, w := range words {
+	for _, w := range words {
 		for _, c := range wikiStrongCues {
 			if strings.HasPrefix(w, c) {
 				strong = true
@@ -85,19 +85,11 @@ func wikiQuestionCue(q string) (strong, weak bool) {
 				}
 			}
 		}
-		if w == "nasil" && i+1 < len(words) {
-			for _, v := range wikiNasilVerbs {
-				if words[i+1] == v {
-					weak = true
-				}
-			}
-		}
 	}
-	norm := " " + strings.Join(words, " ") + " "
-	for _, p := range wikiCuePhrases {
-		if strings.Contains(norm, " "+p+" ") {
-			weak = true
-		}
+	// v0.10.1126 — geniş nasıl-yapılır / bilgi işareti (chat_wiki_howto.go);
+	// "how to/how do i/how do we" ve "nasıl" + yap- fiili onun alt kümesi.
+	if wikiHowToCue(words) {
+		weak = true
 	}
 	if strong {
 		weak = false
@@ -234,13 +226,18 @@ func (s *Server) wikiChatAnswer(ctx context.Context, emit func(string, any), msg
 	if !strong && !weak {
 		return false, false
 	}
+	if !strong && s.wikiWeakCueVetoed(ctx, question) {
+		// v0.10.1126 inceleme — servis adı + telemetri sinyali: guided'ın sorusu.
+		return false, false
+	}
 	res, err := w.SearchWith(ctx, question, "", wiki.SearchOptions{Limit: 6, PerPage: 3, Live: wiki.LiveOnWeak})
 	noTerms := errors.Is(err, wiki.ErrNoTerms)
 	if err != nil && !noTerms && ctx.Err() != nil {
 		return false, false
 	}
 	hits := wikiTierSelect(res.Hits)
-	if !strong && (len(hits) == 0 || hits[0].Score < ragWikiFloor) {
+	if !strong && (len(hits) == 0 || !hits[0].EvidencedAt(ragWikiFloor)) {
+		// v0.10.1126 — canlı isabette sıra skoru yetmez, kök kapsamı da ≥ taban.
 		// Zayıf işaret + iyi isabet yok → kademe SESSİZ: hiçbir olay basılmaz,
 		// akış guided/RAG'a bayt bayt eski hâliyle sürer.
 		return false, false
@@ -252,11 +249,28 @@ func (s *Server) wikiChatAnswer(ctx context.Context, emit func(string, any), msg
 			"sources": []any{}, "links": []guidedAnswerLink{}})
 		return true, true
 	}
-	user := "SORU: " + question + "\n\nBAĞLAM:\n" + s.wikiContextFor(ctx, w, hits, 1)
-	raw, err := wikiNarrateFn(s, ctx, copilot.SystemPromptWikiChat(), user)
+	ans, err := s.wikiNarratedAnswer(ctx, w, question, hits)
 	if err != nil {
 		emit("error", map[string]string{"error": err.Error()})
 		return true, false
+	}
+	// v0.10.1126 — soru guided'da "hangisini kastettin?"e de oturuyorsa
+	// (router'ın kendi kararı, chat_disambig_rescue.go) adaylar kaybolmaz:
+	// cevabın altına "Telemetri için:" + çipler.
+	if text, chips, links, ok := s.guidedDisambigProbe(ctx, question); ok {
+		withTelemetryChips(ans, text, chips, links)
+	}
+	emit("answer", ans)
+	return true, true
+}
+
+// wikiNarratedAnswer — wiki isabetlerinden araçsız TEK anlatım çağrısı ve
+// cevap yükü (açık wiki kademesi ve netleştirme kurtarması ortak; v0.10.1126).
+func (s *Server) wikiNarratedAnswer(ctx context.Context, w *wiki.Service, question string, hits []wiki.Hit) (map[string]any, error) {
+	user := "SORU: " + question + "\n\nBAĞLAM:\n" + s.wikiContextFor(ctx, w, hits, 1)
+	raw, err := wikiNarrateFn(s, ctx, copilot.SystemPromptWikiChat(), user)
+	if err != nil {
+		return nil, err
 	}
 	type src struct {
 		Doc   string  `json:"doc"`
@@ -268,11 +282,10 @@ func (s *Server) wikiChatAnswer(ctx context.Context, emit func(string, any), msg
 	for _, h := range hits {
 		sources = append(sources, src{Doc: "Wiki · " + h.Title, Ref: h.URL, Chunk: h.Idx + 1, Score: h.Score})
 	}
-	emit("answer", map[string]any{
+	return map[string]any{
 		"text":       strings.TrimSpace(raw),
-		"exchangeId": exID,
+		"exchangeId": copilot.MetaFromContext(ctx).ExchangeID,
 		"sources":    sources,
 		"links":      ragWikiLinks(hits),
-	})
-	return true, true
+	}, nil
 }

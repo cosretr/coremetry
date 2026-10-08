@@ -1836,6 +1836,9 @@ func (s *Server) runGuidedRoute(ctx context.Context, emit func(string, any), rou
 		return false, false
 	}
 	if route.DirectAnswer != "" { // netleştirme: girdi çıktıyı tam belirliyor
+		if route.Intent == guidedAskService && disambigAskRescuable(route.AskIntent) {
+			markDisambiguation(ctx) // v0.10.1126 — wiki kurtarması (chat_disambig_rescue.go)
+		}
 		emit("answer", map[string]any{"text": route.DirectAnswer, "suggestions": guidedSuggestions(route)})
 		return true, true
 	}

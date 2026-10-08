@@ -225,7 +225,7 @@ export function WikiKnowledgeSection({ canEdit = true }: { canEdit?: boolean }) 
         )}
       </div>
       {msg && <FlashBox kind={msg.kind}>{msg.text}</FlashBox>}
-      {canEdit && !!view.config?.enabled && <WikiTestSearch />}
+      {canEdit && !!view.config?.enabled && <WikiTestSearch onStatus={st => setView(v => (v ? { ...v, status: st } : v))} />}
       {!!view.config?.enabled && <WikiPagesTable status={status} mode={savedMode} />}
     </section>
   );

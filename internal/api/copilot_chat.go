@@ -311,6 +311,10 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 		emit("done", map[string]bool{"ok": wok})
 		return
 	}
+	// v0.10.1126 — netleştirme kurtarması: guided/niyet yolu YALNIZ "hangisini
+	// kastettin?" ile bitecekse ve wiki bu çağırana açıksa önce wiki denenir
+	// (chat_disambig_rescue.go). Kapı kapalıyken ctx/emit aynen döner.
+	ctx, emit = s.armDisambigRescue(ctx, emit, req.Messages, wikiTC)
 
 	if handled, gok := s.copilotChatGuided(ctx, emit, req.Messages, req.Context.Service, req.Context.Operation, req.Context.Explain, req.Context.RangeS, req.Context.Trace, req.Context.Env, anchorTo, req.Context.TzOffsetMin, req.Context.Tz); handled {
 		cspan.tier("guided", gok)

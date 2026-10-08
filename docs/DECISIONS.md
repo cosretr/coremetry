@@ -2597,6 +2597,48 @@ hedefinde uygulanır; başka sayfaya otomatik gidilmez (hedef zaten link çipind
 `cosre_spa_test.go` /cosre (sorgulu, sonda `/`) yedeğini ve OIDC `?next=/cosre` süzgecini çiviler. `api.go` büyümedi.
 `pageContext` `/cosre` → `cosre` (bağlamsız, sabitlenemez: filo geneli sorular).
 
+## 2026-10-08 — CoSRE: nasıl-yapılır soruları wiki'ye, netleştirme yerine wiki kurtarması (v0.10.1126)
+
+**Sorun (operatör, prod):** "BSA cache refresh nasıl girilir", "Config cache refresh nasıl girilir?" ve "Coremetry
+adresleri" wiki'ye hiç uğramadı. v0.10.1124'ün zayıf işareti yalnız "nasıl" + yap- fiilini tanıyordu; guided "nasıl"ı
+sağlık sinyali (`hasHealthSignal`) saydı, "BSA"yı servis öneki olarak `serviceCandidates`'a verdi ve router
+`guidedAskService` döndü (`copilot_guided.go` ~1161) → `guidedAskServiceEvidence` `askServiceAnswerTR` ile
+DirectAnswer kurdu → `runGuidedRoute` "Hangi servisi kastettin? Adaylar: …" + sağlık çipleriyle bitirdi. "Coremetry
+adresleri" aynı sınıf (find_entity / entity scan aday çipleri). Ayrıca "Aramayı test et" başarılı canlı arama
+gösterirken durum kartı "henüz denenmedi"de kaldı.
+
+**Karar:** (1) Zayıf işaret genişler (`chat_wiki_howto.go`, katlanmış metin): "nasıl"dan sonraki ≤3 sözcükte
+EDİLGEN/kişisiz fiil (ünsüz gövde + -ıl/-il/-ul/-ül + -ır/-ir/-ur/-ür: girilir, açılır, yapılır; ünlü gövde + -n +
+-ır/-ir: eklenir, tanımlanır, yenilenir) ya da 1. kişi yeterlik/gereklilik (-abilirim, -malı/-meli, yaparım);
+"ne yapmalı", "adımları", "adres(ler)i", "kim sorumlu", "sahibi kim"; İngilizce "how do/can/to/should", "steps to",
+"who owns". Telemetri ele geçirilmesin (inceleme): çıplak "nasıl" işaret değil; geçişsiz durum fiilleri (gelir,
+yükselir, düşer, düzelir, görünür, artar, azalır, değişir, çalışır) dışarıda; "nerede/nereden/erişim/where is"
+işaret değil ("hata nerede", "svc-orders erişim hatası"); soru telemetri sinyali (`hasGuidedSignal`) ya da sahiplik
+kalıbı (find_entity kartı) taşıyor VE servis adı çözülüyorsa zayıf işaret hiç uygulanmaz (`wikiWeakCueVetoed`, ad
+listesi yalnız sinyal varken okunur). İşaret ZAYIF kalır: kademe yalnız en iyi isabet KANITLA ≥ `ragWikiFloor`
+(0.5) ise cevaplar — yerel skor ≥ 0.5 ya da canlı isabetin kök kapsamı (`stemCoverage`, yeni `wiki.Hit.Coverage`)
+≥ 0.5 (`Hit.EvidencedAt`); AND sorgusunun ilk sonucu kapsamdan bağımsız yüksek sıra skoru aldığından sıra tek
+başına kanıt değil. Güçlü işaret aynen. (2) Netleştirme kurtarması
+(`chat_disambig_rescue.go`): netleştirmeyi üreten kod `markDisambiguation(ctx)` der (ask_service DirectAnswer —
+AskIntent kök-neden/sağlık/pencere-kıyası DEĞİLSE, find_entity aday cevabı, namespace/entity-scan aday tabloları) —
+dize eşleştirme yok. Soru telemetri sinyali (sağlık/hata/yavaşlık/neden/kıyas/problem/mutlak pencere) taşıyorsa
+kurtarma hiç kurulmaz; isabet aynı kanıt kuralıyla geçer. `armDisambigRescue`'nun sardığı
+emit işaretli "answer"ı yakalar; wiki LiveOnWeak + `wiki.LiveBudget` ile aranır, iyi isabet → kademeyle AYNI anlatım
+(`wikiNarratedAnswer`) + altında "**Telemetri için:**" ve özgün netleştirme metni/çipleri/linkleri. İsabet yok →
+özgün olay değişmeden. Kademe bir soruyu wiki'den cevaplarken router'ın aynı soruya netleştirme rotası verip
+vermediğine bakar (`guidedDisambigProbe` — router'ın kendisi, rota çalıştırılmaz) ve aynı bloğu ekler; BSA sorusu
+böylece hem wiki cevabını hem aday çiplerini taşır. (3) Arama durumu: test yanıtı tazelenmiş paylaşılan durumu
+(`status`) taşır, kart onu çizer (durum yalnız sayfa açılışında okunuyordu); `recordSearch` force'ta (yönetici testi)
+kısma kuralını atlar — imza yalnız bu pod'un son yazdığıyla kıyaslandığından araya başka pod'un "error"ı girince aynı
+imzalı başarı 10 dk blobu güncellemiyordu.
+
+**Gecikme:** canlı arama yalnız (1) ya da (2)'ye takılan soruda, alışveriş başına en çok bir kez; soru wiki işareti
+taşıyorsa kademe zaten aradığından kurtarma aramaz. Geri çekilme/unavailable önbelleği aynen (`liveSearch`).
+**Kapı değişmedi:** API token'ı, panel/çekmece/trace/servis bağlamı ya da wiki kapalı → ctx ve emit aynen döner,
+olaylar bayt bayt aynı (testte pinli). **Bırakılan:** kademe-öncesi sonda yalnız router düzeyindeki netleştirmeyi
+görür (ask_service / find_entity adayları); katalog indeksi taraması (entity scan) gerektiren netleştirme o sorularda
+eklenmez — kurtarma yolu ise hepsini kapsar. Niyet sınıflandırıcısının ask_service'i de aynı sarmaldan geçer.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

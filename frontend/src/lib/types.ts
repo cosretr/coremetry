@@ -7465,6 +7465,8 @@ export interface WikiTestSearchResult {
   final: WikiTestHit[];
   floors: { rag: number; wikiTier: number };
   verdict: string;
+  /** v0.10.1126 — testten sonra tazelenmiş paylaşılan durum (wiki_search_status dahil). */
+  status?: WikiSyncStatus;
 }
 
 /** v0.10.1124 — GET /api/wiki/pages satırı; preview yalnız yöneticiye. */

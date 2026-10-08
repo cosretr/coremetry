@@ -351,6 +351,7 @@ func (s *Server) guidedNamespaceServicesAnswer(ctx context.Context, emit func(st
 		return true, true
 	case len(names) > 1:
 		emitGuidedStepResult(emit, n, "resolve_entity", fmt.Sprintf("%d aday", len(nss)), nil)
+		markDisambiguation(ctx) // v0.10.1126 — wiki kurtarması (chat_disambig_rescue.go)
 		emit("answer", map[string]any{"text": renderEntityCandidates(q, nss), "suggestions": entityCandidateChips(nss)})
 		return true, true
 	}
@@ -410,6 +411,7 @@ func (s *Server) guidedEntityScanAnswer(ctx context.Context, emit func(string, a
 	if allNS && len(nsNames) == 1 {
 		return s.guidedNamespaceServicesAnswer(ctx, emit, guidedRoute{Intent: guidedNamespaceServices, FindQuery: cands[0].Name, Env: route.Env}, from, to, rangeS)
 	}
+	markDisambiguation(ctx) // v0.10.1126 — wiki kurtarması (chat_disambig_rescue.go)
 	emit("answer", map[string]any{"text": renderEntityCandidates(q, cands), "suggestions": entityCandidateChips(cands)})
 	return true, true
 }

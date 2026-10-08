@@ -210,6 +210,34 @@ describe('WikiKnowledgeSection', () => {
     expect(box.textContent).toContain('Restart svc-orders');
   });
 
+  // v0.10.1126 — operatör: test "5 sonuç · api-version 7.0" dedi ama kart
+  // "henüz denenmedi"de kaldı (durum yalnız açılışta okunuyordu).
+  it('Aramayı test et sonrası durum kartı paylaşılan arama durumunu çizer', async () => {
+    const res: WikiTestSearchResult = {
+      mode: 'live', terms: ['cache', 'refresh'], liveQueries: ['cache refresh'], stale: false, local: [],
+      live: { attempted: true, queryMode: 'and', info: { class: 'ok', httpStatus: 200, apiVersion: '7.0', hits: 5, tried: 1 },
+        results: 5, read: 3, hits: 3 },
+      final: [], floors: { rag: 0.5, wikiTier: 0.3 }, verdict: 'x',
+      status: { ...STATUS, search: 'available', searchLast: { state: 'available', at: 1_760_000_100_000, hits: 5, apiVersion: '7.0' } },
+    };
+    h.test.mockResolvedValue(res);
+    const el = await mount({ ...VIEW, status: { ...STATUS, search: 'unknown' } });
+    expect(el.querySelector('[data-testid="wiki-status"]')!.textContent).toContain('henüz denenmedi');
+    const box = el.querySelector('[data-testid="wiki-test-search"]') as HTMLElement;
+    const input = box.querySelector('input') as HTMLInputElement;
+    await act(async () => {
+      const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+      set.call(input, 'cache refresh');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => { button(box, 'Aramayı test et').click(); });
+    await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+    const card = el.querySelector('[data-testid="wiki-status"]')!.textContent!;
+    expect(card).not.toContain('henüz denenmedi');
+    expect(card).toContain('son deneme: 5 sonuç');
+    expect(card).toContain('api-version 7.0');
+  });
+
   it('indeksteki sayfalar: bağlantılı başlık, sunucu sayfalama, yönetici önizlemesi', async () => {
     h.pages.mockResolvedValue({
       rows: [{ project: 'Platform', wiki: 'Platform.wiki', wikiId: 'w1', path: '/Runbooks/Restart svc-orders', title: 'Restart svc-orders',

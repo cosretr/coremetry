@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui';
 import { api } from '@/lib/api';
-import type { WikiTestHit, WikiTestSearchResult } from '@/lib/types';
+import type { WikiSyncStatus, WikiTestHit, WikiTestSearchResult } from '@/lib/types';
 import { FlashBox } from './shared';
 import { liveOutcomeText } from './wikiKnowledge';
 
@@ -36,7 +36,8 @@ function HitList({ title, hits }: { title: string; hits: WikiTestHit[] }) {
   );
 }
 
-export function WikiTestSearch() {
+/** onStatus — v0.10.1126: test sonrası tazelenmiş paylaşılan durum (kart "henüz denenmedi"de kalmasın). */
+export function WikiTestSearch({ onStatus }: { onStatus?: (st: WikiSyncStatus) => void } = {}) {
   const [q, setQ] = useState('');
   const [busy, setBusy] = useState(false);
   const [res, setRes] = useState<WikiTestSearchResult | null>(null);
@@ -46,7 +47,9 @@ export function WikiTestSearch() {
     if (!q.trim()) return;
     setBusy(true); setErr(null);
     try {
-      setRes(await api.testWikiSearch(q.trim()));
+      const r = await api.testWikiSearch(q.trim());
+      setRes(r);
+      if (r.status) onStatus?.(r.status);
     } catch (e) {
       setRes(null);
       setErr(e instanceof Error ? e.message : String(e));

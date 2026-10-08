@@ -472,6 +472,7 @@ func (s *Server) guidedFindEntityAnswer(ctx context.Context, emit func(string, a
 		answer(text, route)
 		return true, true
 	case len(route.ServiceOptions) > 0:
+		markDisambiguation(ctx) // v0.10.1126 — wiki kurtarması (chat_disambig_rescue.go)
 		answer(renderFindEntityAsk(route.FindQuery, route.ServiceOptions), route)
 		return true, true
 	case route.Service == "":

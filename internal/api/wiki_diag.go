@@ -152,6 +152,10 @@ func (s *Server) postWikiTestSearch(w http.ResponseWriter, r *http.Request) {
 		"local": wikiTestHits(d.Local), "live": d.Live, "final": wikiTestHits(d.Final),
 		"floors":  map[string]float64{"rag": ragWikiFloor, "wikiTier": wikiTierFloor},
 		"verdict": wikiTestVerdict(d),
+		// v0.10.1126 — kart "henüz denenmedi"de kalıyordu: durum yalnız sayfa
+		// açılışında okunuyordu. Test, paylaşılan durumu (wiki_search_status)
+		// tazeleyip okuyarak döner; kart bunu doğrudan çizer.
+		"status": wikiStatusOf(ws.Status(ctx, true)),
 	})
 }
 
