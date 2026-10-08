@@ -181,8 +181,8 @@ func (r *rateLimiter) wait(ctx context.Context) error {
 
 // SyncDue — SAF: lider döngüsü bu tikte senkron başlatmalı mı.
 func SyncDue(cfg Config, st Status, now time.Time) bool {
-	if !cfg.Enabled {
-		return false
+	if !cfg.Enabled || cfg.EffectiveMode() == ModeLive {
+		return false // canlı mod: senkron yok (v0.10.1124)
 	}
 	if st.RequestedAt > st.LastStartedAt {
 		return true
@@ -307,6 +307,20 @@ func (s *Service) syncPass(ctx context.Context, cfg Config, api API, st *Status)
 	}
 	st.Wikis = len(wikis)
 
+	// İnceleme F4: mod geçiş sürerken canlıya alınırsa (ya da özellik
+	// kapatılırsa) geçiş sayfa döngüsünde durur ve BUDAMA yapmaz.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	stopped := false
+	stop := func() bool {
+		if !stopped && s.syncStopRequested() {
+			stopped = true
+			cancel()
+		}
+		return stopped
+	}
+	const stopMsg = "senkron durduruldu: mod canlıya alındı ya da wiki bilgisi kapatıldı"
+
 	limiter := newRateLimiter(s.rps)
 	emb := s.embedderOrNil()
 	budget := cfg.PageCap()
@@ -316,6 +330,10 @@ func (s *Service) syncPass(ctx context.Context, cfg Config, api API, st *Status)
 
 	for _, w := range wikis {
 		seenWiki[w.ID] = true
+		if stop() {
+			st.addErr(stopMsg)
+			return
+		}
 		if ctx.Err() != nil {
 			st.addErr("iptal edildi")
 			return
@@ -352,6 +370,10 @@ func (s *Service) syncPass(ctx context.Context, cfg Config, api API, st *Status)
 			go func() {
 				defer wg.Done()
 				for j := range jobs {
+					if s.syncStopRequested() {
+						cancel()
+						continue
+					}
 					res, err := s.syncPage(ctx, api, limiter, emb, j, existing)
 					mu.Lock()
 					seen[j.wiki.ID+"\x00"+j.ref.Path] = true
@@ -377,6 +399,9 @@ func (s *Service) syncPass(ctx context.Context, cfg Config, api API, st *Status)
 					ver = "obj:" + id
 				}
 			}
+			if stop() {
+				break
+			}
 			select {
 			case jobs <- pageJob{wiki: w, ref: ref, ver: ver}:
 			case <-ctx.Done():
@@ -387,6 +412,10 @@ func (s *Service) syncPass(ctx context.Context, cfg Config, api API, st *Status)
 		}
 		close(jobs)
 		wg.Wait()
+		if stop() {
+			st.addErr(stopMsg)
+			return
+		}
 		if ctx.Err() != nil {
 			st.addErr("iptal edildi")
 			return

@@ -24,6 +24,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/cilcenk/coremetry/internal/auth"
@@ -149,7 +150,18 @@ func ragWikiContext(n int, h wiki.Hit) string {
 	if h.Heading != "" {
 		head = " — " + h.Heading
 	}
-	return fmt.Sprintf("[%d] wiki%s\n%s\n\n", n, head, strings.TrimSpace(text))
+	return fmt.Sprintf("[%d] wiki%s\n%s\n\n", n, head, fenceWikiData(text))
+}
+
+// wikiDataCloseRe — içerideki kapanış etiketi (büyük/küçük harf, boşluklu
+// yazımlar dahil) — çit dışına taşma girişimi.
+var wikiDataCloseRe = regexp.MustCompile(`(?i)<\s*/?\s*wiki_data\s*>`)
+
+// fenceWikiData — SAF (v0.10.1124): wiki metni <wiki_data>…</wiki_data>
+// çitinde verilir; içerideki açılış/kapanış etiketleri silinir ki sayfa
+// metni çitten "çıkıp" talimat gibi görünemesin.
+func fenceWikiData(text string) string {
+	return "<wiki_data>\n" + strings.TrimSpace(wikiDataCloseRe.ReplaceAllString(text, "")) + "\n</wiki_data>"
 }
 
 // ragWikiLinks — SAF: kullanılan wiki sayfalarının çipleri (sayfa başına bir).

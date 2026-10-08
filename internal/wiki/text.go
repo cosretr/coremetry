@@ -149,7 +149,9 @@ func keepWord(w string) bool {
 }
 
 // stopwords — katlanmış biçimde (Fold sonrası). Soru kalıpları ve bağlaçlar;
-// teknik terimler ASLA buraya girmez.
+// teknik terimler ASLA buraya girmez. v0.10.1124: soru ekleri / soru
+// fiilleri / "wiki'de anlatılıyor" gibi meta sözcükler genişletildi — her biri
+// kapsama paydasını şişirip gerçek isabeti tabanın altına itiyordu.
 var stopwords = map[string]bool{
 	// TR
 	"ve": true, "ile": true, "icin": true, "bir": true, "bu": true, "su": true, "o": true,
@@ -160,14 +162,80 @@ var stopwords = map[string]bool{
 	"yapilir": true, "yapariz": true, "yapmali": true, "yapmaliyim": true, "lazim": true, "gerek": true,
 	"nelerdir": true, "anlat": true, "acikla": true, "goster": true, "bana": true, "bize": true,
 	"wiki": true, "wikide": true, "wikideki": true, "sayfa": true, "sayfasi": true, "sayfada": true,
+	"midir": true, "mudur": true, "misin": true, "musun": true, "miyim": true, "miyiz": true,
+	"neler": true, "kac": true, "kimdir": true, "neresi": true, "nereye": true, "hangisi": true,
+	"olur": true, "olmali": true, "oluyor": true, "zaman": true, "acaba": true, "lutfen": true,
+	"hakkinda": true, "ilgili": true, "bilgi": true, "bilgisi": true, "mevcut": true,
+	"edilir": true, "ederim": true, "edilmeli": true, "yapabilirim": true, "yapilmali": true, "yapilmasi": true,
+	"wikiye": true, "wikiden": true, "wikidir": true, "dokuman": true, "dokumanda": true, "dokumantasyon": true,
+	"dokumantasyonda": true, "anlatiliyor": true, "anlatilir": true, "anlatilmis": true, "yaziyor": true,
+	"geciyor": true, "bul": true, "soyle": true, "soyler": true, "bahset": true,
 	// EN
 	"the": true, "and": true, "for": true, "with": true, "how": true, "what": true, "is": true,
 	"why": true, "which": true, "does": true, "do": true, "this": true, "that": true, "are": true,
 	"to": true, "of": true, "in": true, "on": true, "an": true, "or": true, "can": true, "we": true,
+	"be": true, "where": true, "when": true, "who": true, "my": true, "our": true, "should": true,
+	"about": true, "from": true, "it": true, "as": true, "at": true, "by": true, "there": true,
+	"any": true, "you": true, "me": true, "please": true, "tell": true, "explain": true, "show": true,
+	"did": true, "was": true, "were": true, "will": true, "would": true, "could": true,
+	"docs": true, "documentation": true, "page": true,
 }
 
 // queryTermsMax — sorgu başına terim tavanı (CH sorgusundaki dizi boyu).
 const queryTermsMax = 12
+
+// liveWordsMax — canlı arama sorgusundaki sözcük tavanı.
+const liveWordsMax = 8
+
+// LiveSearchQueries — SAF (v0.10.1124): Azure DevOps Search'e gidecek iki
+// sorgu metni. Kök neden: canlı yedek operatörün SORU CÜMLESİNİ olduğu gibi
+// gönderiyordu; ADO Search çok terimli sorguyu varsayılan AND ile birleştirir,
+// "nasıl", "ederim", "nedir" gibi soru sözcükleri sayfalarda geçmediği için
+// tipik bir Türkçe soru SIFIR sonuç döndürüyordu.
+//
+//   - and: stopword'süz ÖZGÜN yazımlı sözcükler (katlanmaz — sunucunun kendi
+//     çözümleyicisi "şifre"yi "sifre"den ayırabilir), boşlukla (AND).
+//   - or:  aynı sözcükler " OR " ile; AND boş dönerse denenir (Türkçe ek
+//     uyuşmazlığı: "servisini" geçen soru "servis" geçen sayfayı AND ile
+//     kaçırır). Tek sözcükte "" (ikinci istek gereksiz).
+//
+// ADO sorgu sözdizimi kaçışı: tırnak/parantez/joker zaten bölücü; büyük
+// harfli AND/OR/NOT/NEAR operatör sayılmasın diye küçük harfe çevrilir; ":"
+// alan süzgeci sayılmasın diye bölücüdür.
+func LiveSearchQueries(q string) (and, or string) {
+	words := strings.FieldsFunc(q, func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '-' && r != '_' && r != '.' && r != '/'
+	})
+	seen := map[string]bool{}
+	var out []string
+	for _, w := range words {
+		w = strings.Trim(w, "-_./")
+		if w == "" {
+			continue
+		}
+		f := Fold(w)
+		if stopwords[f] || seen[f] || !keepWord(f) {
+			continue
+		}
+		seen[f] = true
+		switch strings.ToUpper(w) {
+		case "AND", "OR", "NOT", "NEAR":
+			w = strings.ToLower(w)
+		}
+		out = append(out, w)
+		if len(out) >= liveWordsMax {
+			break
+		}
+	}
+	if len(out) == 0 {
+		return "", ""
+	}
+	and = strings.Join(out, " ")
+	if len(out) > 1 {
+		or = strings.Join(out, " OR ")
+	}
+	return and, or
+}
 
 // QueryTerms — sorgunun arama terimleri: Tokens, stopword'süz, tekrarsız,
 // en çok queryTermsMax. Bileşikler ÖNCE gelir (tavana takılınca kaybolan

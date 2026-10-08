@@ -61,7 +61,8 @@ func TestTokensEdgeCases(t *testing.T) {
 
 func TestQueryTermsDropsStopwordsCompoundFirst(t *testing.T) {
 	got := QueryTerms("svc-orders nasıl restart edilir? Şifre ve svc-orders")
-	want := []string{"svc-orders", "svc", "orders", "restart", "edilir", "sifre"}
+	// v0.10.1124: "edilir" artık soru fiili (stopword) — kapsamı sulandırıyordu.
+	want := []string{"svc-orders", "svc", "orders", "restart", "sifre"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("QueryTerms = %q, want %q", got, want)
 	}

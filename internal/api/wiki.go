@@ -96,17 +96,35 @@ func (s *Server) wikiConfigView(ctx context.Context) map[string]any {
 		return map[string]any{"available": false}
 	}
 	cfg := w.Config()
+	st := w.Status(ctx, false)
 	return map[string]any{
 		"available":        true,
 		"config":           cfg,
+		"mode":             cfg.EffectiveMode(),
+		"modeWarning":      wikiModeWarning(cfg.EffectiveMode(), st.Search),
 		"devopsConfigured": s.devops != nil && s.devops.Configured(),
 		"embedding":        s.rag != nil && s.rag.Ready(),
-		"status":           wikiStatusOf(w.Status(ctx, false)),
+		"status":           wikiStatusOf(st),
 		"defaults": map[string]int{
 			"intervalMin": wiki.DefaultIntervalMin, "minIntervalMin": wiki.MinIntervalMin,
 			"maxPages": wiki.DefaultMaxPages,
 		},
 	}
+}
+
+// wikiModeWarning — SAF (v0.10.1124): canlı mod Search uzantısı ister; uç
+// yoksa ya da henüz doğrulanmadıysa kayıtta ve kartta uyarı.
+func wikiModeWarning(mode, search string) string {
+	if mode != wiki.ModeLive {
+		return ""
+	}
+	switch search {
+	case wiki.SearchUnavailable:
+		return wiki.NoteSearchUnavailableLive + " — canlı mod bu sunucuda çalışmaz."
+	case wiki.SearchAvailable:
+		return ""
+	}
+	return "Azure DevOps Search henüz doğrulanmadı — canlı mod Search uzantısı ister; \"Aramayı test et\" ile doğrulayın."
 }
 
 func (s *Server) getWikiConfig(w http.ResponseWriter, r *http.Request) {
@@ -133,6 +151,7 @@ func (s *Server) putWikiConfig(w http.ResponseWriter, r *http.Request) {
 	details, _ := json.Marshal(map[string]any{
 		"enabled": cfg.Enabled, "projects": len(cfg.Projects), "wikis": len(cfg.Wikis),
 		"intervalMin": cfg.IntervalMin, "maxPages": cfg.MaxPages, "disableLiveSearch": cfg.DisableLiveSearch,
+		"mode": cfg.EffectiveMode(),
 	})
 	s.audit(r, "settings.wiki.update", "settings", wiki.SettingsKey, string(details))
 	writeJSON(w, s.wikiConfigView(r.Context()))
@@ -159,6 +178,10 @@ func (s *Server) postWikiSync(w http.ResponseWriter, r *http.Request) {
 	}
 	if s.devops == nil || !s.devops.Configured() {
 		http.Error(w, "Azure DevOps bağlantısı yapılandırılmamış (Ayarlar → Kod entegrasyonu)", http.StatusConflict)
+		return
+	}
+	if ws.Config().EffectiveMode() == wiki.ModeLive {
+		http.Error(w, "canlı modda senkron yok — mod Karma ya da Yalnız senkron olmalı", http.StatusConflict)
 		return
 	}
 	by := ""

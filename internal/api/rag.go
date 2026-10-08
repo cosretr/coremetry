@@ -375,8 +375,12 @@ func (s *Server) ragChatAnswer(ctx context.Context, emit func(string, any), msgs
 		fmt.Fprintf(&b, "[%d] §%d\n%s\n\n", i+1, h.ChunkIdx+1, h.Content)
 		sources = append(sources, src{Doc: h.DocName, Ref: h.SourceRef, Chunk: h.ChunkIdx + 1, Score: h.Score})
 	}
-	for i, h := range wikiHits {
-		b.WriteString(ragWikiContext(len(hits)+i+1, h))
+	// v0.10.1124 — okuma derinliği: baskın wiki sayfası varsa ~6000 karaktere
+	// dek tam metni (chat_wiki_tier.go wikiContextFor).
+	if len(wikiHits) > 0 {
+		b.WriteString(s.wikiContextFor(ctx, wikiKB(), wikiHits, len(hits)+1))
+	}
+	for _, h := range wikiHits {
 		sources = append(sources, src{Doc: "Wiki · " + h.Title, Ref: h.URL, Chunk: h.Idx + 1, Score: h.Score})
 	}
 

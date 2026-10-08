@@ -469,29 +469,87 @@ func parseItemVersions(body []byte, mappedPath string) (map[string]string, error
 	return out, nil
 }
 
-// wikiSearchVersions — arama ucunun sürüm sırası. 7.0 on-prem'de kod
-// aramasında doğrulanmış (codesearch.go v0.10.98); eski sunucular
-// önizleme sürümleri ister.
-var wikiSearchVersions = []string{"7.0", "6.0-preview.1", "5.1-preview.1", "5.0-preview.1"}
+// wikiSearchVersions — arama ucunun sürüm sırası (v0.10.1124 genişletildi).
+// 7.0 on-prem'de kod aramasında doğrulanmış (codesearch.go v0.10.98); wiki
+// araması 7.0 öncesi sunucularda yalnız ÖNİZLEME sürümüyle konuşur:
+// Azure DevOps Server 2020 → 6.0-preview.1, 2019.1 → 5.1-preview.1,
+// 2019 → 5.0-preview.1, TFS 2018 (Update 2+) → 4.1-preview.1. Sunucu bir
+// sürüm için "önizleme eki gerekli" derse aynı sürüm "-preview.1" ile bir kez
+// daha denenir (wikiPreviewRetry). Çalışan sürüm hatırlanır (wikiSearchVer).
+var wikiSearchVersions = []string{"7.0", "6.0-preview.1", "5.1-preview.1", "5.0-preview.1", "4.1-preview.1"}
 
+// wikiSearchBody — Fetch Wiki Search Results gövdesi (on-prem ve bulut aynı).
+// includeFacets AÇIKÇA false: facet hesabı gereksiz maliyet.
 type wikiSearchBody struct {
-	SearchText string              `json:"searchText"`
-	Skip       int                 `json:"$skip"`
-	Top        int                 `json:"$top"`
-	Filters    map[string][]string `json:"filters,omitempty"`
+	SearchText    string              `json:"searchText"`
+	Skip          int                 `json:"$skip"`
+	Top           int                 `json:"$top"`
+	Filters       map[string][]string `json:"filters,omitempty"`
+	IncludeFacets bool                `json:"includeFacets"`
 }
 
-// SearchWiki — Azure DevOps Search ile wiki araması. Uç yoksa (404) ya da
-// sunucu sürüm aralığı dışında kalırsa ErrWikiSearchUnavailable; diğer
-// hatalar geçicidir.
-func (s *Service) SearchWiki(ctx context.Context, text, project string, top int) ([]WikiSearchHit, error) {
+// Arama sonucu sınıfları (WikiSearchInfo.Class) — operatör tanısı.
+const (
+	WikiSearchOK          = "ok"
+	WikiSearchUnavailable = "unavailable" // 404 ya da tüm sürümler sürüm-reddi
+	WikiSearchBadRequest  = "bad_request" // sürümle İLGİSİZ 400 (geçici sayılır)
+	WikiSearchAuth        = "auth"        // 401/403
+	WikiSearchHTTP        = "http"        // diğer HTTP hatası (5xx, …)
+	WikiSearchNetwork     = "network"     // bağlantı / zaman aşımı / JSON olmayan gövde
+	WikiSearchParse       = "parse"       // 2xx ama beklenmeyen şekil
+)
+
+// WikiSearchInfo — tek arama çağrısının tanısı (içerik YOK, PAT YOK).
+type WikiSearchInfo struct {
+	Class      string `json:"class"`
+	HTTPStatus int    `json:"httpStatus,omitempty"`
+	APIVersion string `json:"apiVersion,omitempty"`
+	Hits       int    `json:"hits"`
+	Tried      int    `json:"tried"` // denenen sürüm sayısı
+}
+
+// wikiSearchVersionReject — SAF: 400 gövdesi bir SÜRÜM reddi mi? Yalnız
+// bu durumda sonraki sürüme geçilir; sürümle ilgisiz 400 (geçersiz süzgeç,
+// sorgu sözdizimi) "uç yok" demek değildir ve 6 saatlik "unavailable"
+// kilidine sebep olmamalı (v0.10.1124).
+func wikiSearchVersionReject(status int, body []byte) bool {
+	if status != http.StatusBadRequest {
+		return false
+	}
+	b := strings.ToLower(string(body))
+	for _, k := range []string{"api-version", "apiversion", "out of range", "preview", "vssversion",
+		"requested version", "version of the resource", "version range", "unsupported version"} {
+		if strings.Contains(b, k) {
+			return true
+		}
+	}
+	return false
+}
+
+// wikiSearchCandidates — çalıştığı bilinen sürüm başa.
+func (s *Service) wikiSearchCandidates() []string {
+	s.mu.RLock()
+	known := s.wikiSearchVer
+	s.mu.RUnlock()
+	return wikiVersionOrder(known, wikiSearchVersions)
+}
+
+// SearchWiki — Azure DevOps Search ile wiki araması. Uç KOLEKSİYON
+// adresindedir ({koll}/_apis/search/wikisearchresults; on-prem'de ayrı bir
+// almsearch ana makinesi yok — kod aramasıyla aynı). Uç yoksa (404) ya da
+// TÜM sürümler sürüm-reddi verirse ErrWikiSearchUnavailable; diğer hatalar
+// (sürümle ilgisiz 400 dahil) geçicidir. Tanı info'da döner.
+func (s *Service) SearchWiki(ctx context.Context, text, project string, top int) ([]WikiSearchHit, WikiSearchInfo, error) {
+	var info WikiSearchInfo
 	text = strings.TrimSpace(text)
 	if text == "" {
-		return nil, nil
+		info.Class = WikiSearchOK
+		return nil, info, nil
 	}
 	cfg, cli, err := s.wikiCfg()
 	if err != nil {
-		return nil, err
+		info.Class = WikiSearchNetwork
+		return nil, info, err
 	}
 	if top <= 0 || top > 25 {
 		top = 10
@@ -502,33 +560,69 @@ func (s *Service) SearchWiki(ctx context.Context, text, project string, top int)
 	}
 	raw, _ := json.Marshal(body)
 	u := collectionURL(cfg) + "/_apis/search/wikisearchresults?api-version="
-	for _, ver := range wikiSearchVersions {
-		resp, err := wikiDo(ctx, cli, cfg, http.MethodPost, u+ver, raw, "", wikiListBodyCap)
-		if err == nil {
-			return parseWikiSearch(resp.body)
+	for _, v := range s.wikiSearchCandidates() {
+		vers := []string{v}
+		if !strings.Contains(v, "-preview") {
+			vers = append(vers, v+"-preview.1")
 		}
-		if ctx.Err() != nil {
-			return nil, err
-		}
-		switch resp.status {
-		case http.StatusNotFound:
-			return nil, ErrWikiSearchUnavailable
-		case http.StatusBadRequest:
-			continue // sürüm aralığı / önizleme — sonraki sürüm
-		default:
-			return nil, err
+		for j, ver := range vers {
+			info.Tried++
+			info.APIVersion = ver
+			resp, err := wikiDo(ctx, cli, cfg, http.MethodPost, u+ver, raw, "", wikiListBodyCap)
+			info.HTTPStatus = resp.status
+			if err == nil {
+				hits, perr := parseWikiSearch(resp.body)
+				if perr != nil {
+					info.Class = WikiSearchParse
+					return nil, info, perr
+				}
+				s.mu.Lock()
+				s.wikiSearchVer = ver
+				s.mu.Unlock()
+				info.Class, info.Hits = WikiSearchOK, len(hits)
+				return hits, info, nil
+			}
+			if ctx.Err() != nil || resp.status == 0 {
+				info.Class = WikiSearchNetwork
+				return nil, info, err
+			}
+			switch {
+			case resp.status == http.StatusNotFound:
+				info.Class = WikiSearchUnavailable
+				return nil, info, ErrWikiSearchUnavailable
+			case resp.status == http.StatusUnauthorized || resp.status == http.StatusForbidden:
+				info.Class = WikiSearchAuth
+				return nil, info, err
+			case resp.status != http.StatusBadRequest:
+				info.Class = WikiSearchHTTP
+				return nil, info, err
+			case !wikiSearchVersionReject(resp.status, resp.body):
+				info.Class = WikiSearchBadRequest
+				return nil, info, err
+			}
+			// Sürüm reddi: önizleme eki isteniyorsa aynı sürümün ekli hâli,
+			// değilse sonraki sürüm.
+			if j == 0 && len(vers) > 1 && wikiPreviewRetry(resp.status, resp.body) {
+				continue
+			}
+			break
 		}
 	}
-	// Tüm sürümler 400 — bu sunucu wiki aramasını konuşmuyor.
-	return nil, ErrWikiSearchUnavailable
+	// Tüm sürümler sürüm-reddi — bu sunucu wiki aramasını konuşmuyor.
+	info.Class = WikiSearchUnavailable
+	return nil, info, ErrWikiSearchUnavailable
 }
 
-// parseWikiSearch — SAF: arama yanıtı → sayfa yolu.
+// parseWikiSearch — SAF: arama yanıtı → sayfa yolu. Yanıt şekli on-prem ve
+// bulutta aynı: results[].{fileName, path, project.name, wiki.{id,name,
+// mappedPath}, hits[].{fieldReferenceName, highlights[]}}. path yoksa
+// fileName'e düşülür (eski sunucular); içerik vurgusu başlık vurgusundan önce.
 func parseWikiSearch(body []byte) ([]WikiSearchHit, error) {
 	var sr struct {
 		Results []struct {
-			Path string `json:"path"`
-			Wiki struct {
+			FileName string `json:"fileName"`
+			Path     string `json:"path"`
+			Wiki     struct {
 				ID         string `json:"id"`
 				Name       string `json:"name"`
 				MappedPath string `json:"mappedPath"`
@@ -537,6 +631,7 @@ func parseWikiSearch(body []byte) ([]WikiSearchHit, error) {
 				Name string `json:"name"`
 			} `json:"project"`
 			Hits []struct {
+				Field      string   `json:"fieldReferenceName"`
 				Highlights []string `json:"highlights"`
 			} `json:"hits"`
 		} `json:"results"`
@@ -546,14 +641,23 @@ func parseWikiSearch(body []byte) ([]WikiSearchHit, error) {
 	}
 	out := make([]WikiSearchHit, 0, len(sr.Results))
 	for _, r := range sr.Results {
-		p := WikiPagePathFromGitPath(r.Path, r.Wiki.MappedPath)
+		gp := r.Path
+		if strings.TrimSpace(gp) == "" && strings.TrimSpace(r.FileName) != "" {
+			gp = "/" + strings.TrimLeft(r.FileName, "/")
+		}
+		p := WikiPagePathFromGitPath(gp, r.Wiki.MappedPath)
 		if p == "" || r.Wiki.ID == "" {
 			continue
 		}
 		h := WikiSearchHit{Project: r.Project.Name, WikiID: r.Wiki.ID, WikiName: r.Wiki.Name, Path: p}
 		for _, hit := range r.Hits {
-			if len(hit.Highlights) > 0 {
+			if len(hit.Highlights) == 0 {
+				continue
+			}
+			if h.Snippet == "" || strings.EqualFold(hit.Field, "content") {
 				h.Snippet = stripHighlightTags(hit.Highlights[0])
+			}
+			if strings.EqualFold(hit.Field, "content") {
 				break
 			}
 		}

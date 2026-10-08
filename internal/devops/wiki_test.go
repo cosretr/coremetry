@@ -176,7 +176,7 @@ func TestSearchWikiPresentAbsentAndVersions(t *testing.T) {
 			"hits":    []map[string]any{{"highlights": []string{"restart <highlighthit>svc-orders</highlighthit>"}}},
 		}}})
 	})
-	hits, err := present.SearchWiki(context.Background(), "svc-orders", "Platform", 5)
+	hits, _, err := present.SearchWiki(context.Background(), "svc-orders", "Platform", 5)
 	if err != nil || len(hits) != 1 || hits[0].Path != "/Runbooks/Restart svc-orders" || hits[0].Snippet != "restart svc-orders" {
 		t.Fatalf("arama: %+v %v", hits, err)
 	}
@@ -185,7 +185,7 @@ func TestSearchWikiPresentAbsentAndVersions(t *testing.T) {
 	}
 
 	absent := wikiTestService(t, func(w http.ResponseWriter, r *http.Request) { http.NotFound(w, r) })
-	if _, err := absent.SearchWiki(context.Background(), "x", "", 5); !errors.Is(err, ErrWikiSearchUnavailable) {
+	if _, _, err := absent.SearchWiki(context.Background(), "x", "", 5); !errors.Is(err, ErrWikiSearchUnavailable) {
 		t.Fatalf("404 → unavailable: %v", err)
 	}
 	var tried []string
@@ -193,14 +193,14 @@ func TestSearchWikiPresentAbsentAndVersions(t *testing.T) {
 		tried = append(tried, r.URL.Query().Get("api-version"))
 		http.Error(w, "out of range", http.StatusBadRequest)
 	})
-	if _, err := outOfRange.SearchWiki(context.Background(), "x", "", 5); !errors.Is(err, ErrWikiSearchUnavailable) {
+	if _, _, err := outOfRange.SearchWiki(context.Background(), "x", "", 5); !errors.Is(err, ErrWikiSearchUnavailable) {
 		t.Fatalf("tüm sürümler 400 → unavailable: %v", err)
 	}
 	if len(tried) != len(wikiSearchVersions) {
 		t.Errorf("her sürüm bir kez denenmeli: %v", tried)
 	}
 	transient := wikiTestService(t, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusBadGateway) })
-	if _, err := transient.SearchWiki(context.Background(), "x", "", 5); err == nil || errors.Is(err, ErrWikiSearchUnavailable) {
+	if _, _, err := transient.SearchWiki(context.Background(), "x", "", 5); err == nil || errors.Is(err, ErrWikiSearchUnavailable) {
 		t.Fatalf("502 geçici hatadır, unavailable değil: %v", err)
 	}
 }

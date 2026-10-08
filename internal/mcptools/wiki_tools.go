@@ -134,7 +134,10 @@ func searchWikiTool(d Deps) mcp.Tool {
 				})
 			}
 			backend := "local"
-			if res.Live {
+			switch {
+			case res.LiveOnly: // v0.10.1124 canlı mod: yerel indeks yok
+				backend = "devops-search"
+			case res.Live:
 				backend = "local+devops-search"
 			}
 			st := sourcestate.Result("wiki", backend, sourcestate.Outcome{Returned: len(rows), Limit: limit})

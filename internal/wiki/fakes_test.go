@@ -40,9 +40,12 @@ type fakeDevOps struct {
 	pageGets      map[string]int
 	condHits      int // 304 sayısı
 	searchCalls   int
+	searchTexts   []string
 	requests      int
 	htmlSignIn    bool
 	treeFailsWiki string
+	// onPageGet — içerikli sayfa okumasında çağrılır (kilit TUTULURKEN).
+	onPageGet func(n int)
 }
 
 func gitPathOf(p string) string {
@@ -103,19 +106,51 @@ func (f *fakeDevOps) handler(t *testing.T) http.Handler {
 				w.WriteHeader(http.StatusBadGateway)
 				return
 			}
-			if f.search != "present" {
+			if f.search != "present" && f.search != "badreq" {
 				http.NotFound(w, r)
+				return
+			}
+			if f.search == "badreq" {
+				// Sürümle İLGİSİZ 400 (ör. geçersiz süzgeç) — uç VAR.
+				var bb struct {
+					SearchText string `json:"searchText"`
+				}
+				_ = json.NewDecoder(r.Body).Decode(&bb)
+				f.searchTexts = append(f.searchTexts, bb.SearchText)
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = w.Write([]byte(`{"message":"The filter Project is invalid."}`))
 				return
 			}
 			var body struct {
 				SearchText string `json:"searchText"`
 			}
 			_ = json.NewDecoder(r.Body).Decode(&body)
-			needle := Fold(body.SearchText)
+			f.searchTexts = append(f.searchTexts, body.SearchText)
+			// ADO anlamı: boşlukla ayrılmış terimler AND, " OR " ile ayrılmışlar OR.
+			isOr := strings.Contains(body.SearchText, " OR ")
+			var needles []string
+			if isOr {
+				needles = strings.Split(body.SearchText, " OR ")
+			} else {
+				needles = strings.Fields(body.SearchText)
+			}
+			match := func(text string) bool {
+				n := 0
+				for _, nd := range needles {
+					if strings.Contains(Fold(text), Fold(nd)) {
+						n++
+					}
+				}
+				if isOr {
+					return n > 0
+				}
+				return n == len(needles)
+			}
 			var res []map[string]any
 			for _, wk := range f.wikis {
 				for path, pg := range wk.pages {
-					if strings.Contains(Fold(pg.content), needle) || strings.Contains(Fold(path), needle) {
+					if match(pg.content + " " + path) {
 						res = append(res, map[string]any{
 							"path":    gitPathOf(path),
 							"wiki":    map[string]string{"id": wk.id, "name": wk.name, "mappedPath": "/"},
@@ -164,6 +199,13 @@ func (f *fakeDevOps) handler(t *testing.T) http.Handler {
 				f.pageGets = map[string]int{}
 			}
 			f.pageGets[wk.id+path]++
+			if f.onPageGet != nil {
+				n := 0
+				for _, c := range f.pageGets {
+					n += c
+				}
+				f.onPageGet(n)
+			}
 			w.Header().Set("ETag", `"`+pg.etag+`"`)
 			writeJSONT(w, map[string]any{"path": path, "gitItemPath": gitPathOf(path), "content": pg.content,
 				"remoteUrl": "https://devops.example.test/DefaultCollection/" + url.PathEscape(wk.project) + "/_wiki/wikis/" + url.PathEscape(wk.name) + "?pagePath=" + url.QueryEscape(path)})

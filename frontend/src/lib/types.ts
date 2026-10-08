@@ -7376,6 +7376,21 @@ export interface WikiConfig {
   intervalMin?: number;
   maxPages?: number;
   disableLiveSearch?: boolean;
+  /** v0.10.1124 — hybrid (varsayılan) | live (senkron yok) | sync (yalnız yerel). */
+  mode?: WikiMode;
+}
+
+export type WikiMode = 'hybrid' | 'live' | 'sync';
+
+/** v0.10.1124 — son canlı aramanın paylaşılan özeti (hangi pod aradıysa). */
+export interface WikiSearchLast {
+  state: 'available' | 'unavailable' | 'error';
+  at: number; // unix ms
+  class?: string;
+  httpStatus?: number;
+  apiVersion?: string;
+  hits: number;
+  mode?: 'and' | 'or';
 }
 
 export interface WikiSyncStatus {
@@ -7397,6 +7412,7 @@ export interface WikiSyncStatus {
   requestedAt?: number;
   requestedBy?: string;
   search?: 'unknown' | 'available' | 'unavailable';
+  searchLast?: WikiSearchLast;
   running: boolean;
 }
 
@@ -7407,6 +7423,70 @@ export interface WikiConfigView {
   embedding?: boolean;
   status?: WikiSyncStatus;
   defaults?: { intervalMin: number; minIntervalMin: number; maxPages: number };
+  /** v0.10.1124 — yürürlükteki mod + canlı mod uyarısı (Search yok / doğrulanmadı). */
+  mode?: WikiMode;
+  modeWarning?: string;
+}
+
+/** v0.10.1124 — POST /api/wiki/test-search isabeti (içerik yok, ≤160 rune kesit). */
+export interface WikiTestHit {
+  project: string;
+  wiki: string;
+  path: string;
+  title: string;
+  url?: string;
+  score: number;
+  live?: boolean;
+  snippet?: string;
+  passesRag: boolean;
+  passesWikiTier: boolean;
+}
+
+export interface WikiTestSearchResult {
+  mode: WikiMode;
+  terms: string[];
+  liveQueries: string[] | null;
+  stale: boolean;
+  local: WikiTestHit[];
+  live: {
+    attempted: boolean;
+    skipped?: string;
+    query?: string;
+    queryMode?: 'and' | 'or';
+    info: { class: string; httpStatus?: number; apiVersion?: string; hits: number; tried: number };
+    results: number;
+    read: number;
+    hits: number;
+    unavailable?: boolean;
+    note?: string;
+    /** Hata ayrıntısı (yalnız tanıda; sohbet genel not görür). */
+    error?: string;
+  };
+  final: WikiTestHit[];
+  floors: { rag: number; wikiTier: number };
+  verdict: string;
+}
+
+/** v0.10.1124 — GET /api/wiki/pages satırı; preview yalnız yöneticiye. */
+export interface WikiPageRow {
+  project: string;
+  wiki: string;
+  wikiId: string;
+  path: string;
+  title: string;
+  url: string;
+  chunks: number;
+  updatedAt: string; // RFC3339
+  preview?: string;
+}
+
+export interface WikiPagesPage {
+  rows: WikiPageRow[];
+  total: number;
+  offset: number;
+  limit: number;
+  preview: boolean;
+  mode?: WikiMode;
 }
 
 export interface RagConfigView {

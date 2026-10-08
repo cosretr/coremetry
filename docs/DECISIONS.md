@@ -2498,6 +2498,72 @@ kayıt mevcut konumla (path + query + hash) eşitse silinir (sunucu zaten oraya 
 (çerez süresi doldu, uzun bağlantı, eski sekme); başka bir sayfadaysak silinir — sonraki bir `/` ziyareti bayat
 bağlantıya atlamaz. Çıkışta (user null) karar yeniden kurulur. **Bırakılan:** yerel (parola) girişi zaten SPA içi, değişmedi; LDAP aynı.
 
+## 2026-10-08 — Wiki bilgisi: senkronsuz canlı arama, açık wiki kademesi, mod ayarı ve tanı (v0.10.1124)
+
+**Operatör bildirimleri (prod, on-prem Azure DevOps Server):** "Wiki içeriğini search etmiyor eğer senkron
+değilse" (durum kartı "Azure DevOps Search: henüz denenmedi"), "CoSRE wiki içeriğini LLM ile yorumlayamıyor",
+"wiki içeriğini sayfada göremiyorum", "senkron şart mı, senkronsuz arayarak cevap versin".
+
+**Kök nedenler (kanıtlı):**
+1. *Canlı sorgu soru cümlesiydi* — `wiki/search.go liveSearch` `api.SearchWiki(lctx, query, …)` ile operatörün ham
+   sorusunu gönderiyordu. ADO Search çok terimli sorguyu varsayılan **AND** ile birleştirir; "nasıl", "ederim",
+   "nedir" hiçbir sayfada geçmediği için tipik Türkçe soru SIFIR sonuç döndü. Düzeltme: `LiveSearchQueries` —
+   stopword'süz özgün yazımlı sözcükler, önce AND, boşsa ` OR `.
+2. *Canlı isabet tam-jeton lexical skorla puanlanıyordu* — sentetik korpus istatistiğiyle `RankLexical`; ADO'nun
+   kök/ek-duyarlı bulduğu sayfa ("servisini" ↔ "servis") kapsamı düşük kalıp `ragWikiFloor` (0.5) altında düştü,
+   hiç eşleşmeyen parça tamamen elendi. Düzeltme: `scoreLivePage` — ADO sırasından taban skor (0.66 × 0.88^sıra;
+   OR'da × (0.8 + 0.2·kök-kapsamı)), yalnız KANITLI parçaya (terim kökü geçiyor ya da ADO vurgusu var); kanıtsız
+   sayfa yükseltilmez. Yerel skor tam-jetonlu kalır. Stopword listesi soru ekleri/fiilleri ve "wiki'de anlatılıyor"
+   meta sözcükleriyle genişledi (teknik jeton listeye girmez).
+3. *Durum kartı pod-yerel bellekti* — `searchState` bellekte, senkron lideri aramayı hiç denemediği için blobu
+   hep "unknown" yazıyordu; `Status()` blob doluyken yerel durumu hiç okumuyordu. Düzeltme: son canlı aramanın
+   içerik-siz özeti ayrı `wiki_search_status` blobunda (durum değişince ya da 10 dk'da bir yazılır), kart onu okur.
+   Ayrı blob, çünkü senkron blobunu lider bütün olarak yazar (yarış).
+4. *Sürümle ilgisiz 400 = 6 saat "unavailable"* — her 400 sonraki sürüme geçiyordu, hepsi 400 → kapalı. Düzeltme:
+   yalnız gövdesi sürüm reddi olan 400 (`api-version`, `out of range`, `preview`, `VssVersion…`) sürüm atlatır;
+   diğer 400 `bad_request` — sorguya özgü, GENEL geri çekilme kurmaz (inceleme F3); AND reddedildiyse bir kez OR. Sürüm sırası 4.1-preview.1'e dek genişledi, önizleme eki
+   isteyen sürüm `-preview.1` ile tekrar denenir, çalışan sürüm hatırlanır; gövde `includeFacets:false` + `$skip`;
+   yanıtta `fileName` yedeği ve içerik vurgusu önceliği. Uç on-prem'de koleksiyon adresi (almsearch yok) — testle pinli.
+5. *Wiki içeriği sohbette modele çoğu zaman ulaşmıyordu* — kademe sırası guided > drawer > RAG > niyet > döngü:
+   servis adı taşıyan "X runbook'u nedir" guided'a düşüyor; RAG wiki yarısı LiveOnStale + 0.5 tabanla çoğu soruyu
+   eliyor; prod niyet modu `on_no_loop` serbest döngüyü (search_wiki/read_wiki_page) hiç koşturmuyor; dış MCP
+   yapılandırılmışsa araçlar zaten düşüyor.
+
+**Kararlar:**
+- **Açık wiki kademesi** (`api/chat_wiki_tier.go`) guided'dan ÖNCE, yalnız bağlamsız pencerede (Explain/Subject/
+  Trace/Page.TraceID/Service doluysa HİÇ girmez — inceleme F1) ve soru wiki'yi işaret ederse. Güçlü işaret yalnız açık
+  sözcük (wiki/runbook/playbook/prosedür/procedure/kılavuz/howto/dokümantasyon); zayıf işaret ("how to", "how do
+  I/we", "nasıl yapılır/yaparım…", doküman, docs) telemetri sorularında da geçtiği için yalnız en iyi isabet
+  ≥ ragWikiFloor (0.5) ise cevaplar, değilse kademe SESSİZ düşer (inceleme F2). Wiki metni `<wiki_data>` çitinde
+  (içerideki etiketler silinir), RAG kademesinde de.
+  Canlı yedek `LiveOnWeak`, taban 0.3, baskın sayfa (ikinciyi 1.35× geçen) varsa ~6000 karakter tam metin, değilse
+  ≤4×1500 parça; araçsız TEK anlatım (`SystemPromptWikiChat`: özetle/yorumla, link listeleme). Bulunamazsa güçlü
+  işarette açık "Wikide bulunamadı" (telemetriye kaçmaz). Canlı arama hatasında sohbet genel not görür, ayrıntı
+  yalnız tanıda. İşaretsiz
+  soru bayt bayt eski yolda. Yalnız oturum kullanıcısı. RAG kademesinin wiki yarısı da aynı okuma derinliğini kullanır.
+- **Mod ayarı** `wiki_knowledge.mode`: `hybrid` (varsayılan, eski davranış) | `live` | `sync`. `live`: senkron
+  döngüsü koşmaz (`SyncDue` false, manuel senkron 409), yerel indeks okunmaz, en iyi ≤3 sayfa eşzamanlı okunur,
+  süreç-içi LRU (10 dk, 64 sayfa, 16 MB; yol normalize anahtar) — **içerik yazılmaz** (yalnız durum blobları);
+  geçiş sürerken mod canlıya alınırsa senkron sayfa döngüsünde durur ve budamaz; eski indeks temizlenene dek kalır,
+  `POST /api/wiki/purge` ("İndeksi temizle": oturumlu admin, onaylı, audit `wiki.purge`, iki tabloda `ALTER … DELETE`
+  — nadir yönetici eylemi, senkron yolu mutasyonsuz kalır) siler (inceleme F4); işaretsiz serbest soru (LiveOnStale) canlı
+  modda wiki'ye gitmez (her soruya 1–3 sn eklenmesin). `sync`: canlı arama yok. Eski `disableLiveSearch` mod
+  boşken `sync` sayılır (kayıtlı bloblar için okuma; UI artık modu yazar). Canlı modda Search yoksa kart, kayıt
+  uyarısı (`modeWarning`), tanı ve sohbet "Azure DevOps Search bu sunucuda yok; senkron modunu kullanın" der.
+- **Tanı uçları** (`api/wiki_diag.go`, registerRoutesExtra): `POST /api/wiki/test-search` (oturumlu admin, audit
+  `wiki.test_search` — sorgu metni değil uzunluk + sayılar; geri çekilmeyi atlar; ≤160 rune kesit, içerik yok) ve
+  `GET /api/wiki/pages` (oturum kullanıcısı; ilk 1000 karakter önizleme yalnız admin rolüne SQL'de seçilir;
+  FINAL + deleted=0 + LIMIT/OFFSET ≤100 + max_execution_time; URL yalnız http(s)).
+
+**Değişmeyenler:** wiki araçları dış MCP aracı olan turda sunulmaz; API token'ları wiki'ye erişemez; istek tavanları
+(8 sn canlı bütçe, 20 sn istek, gövde tavanları), 15 dk geri çekilme ve 6 sa "unavailable" yeniden denemesi; içerik
+ve PAT hiçbir log/audit satırına girmez.
+
+**Bilinen sınırlar / şüpheler:** sahte ADO sunucusu gerçek on-prem sürümleriyle canlı doğrulanmadı (sürüm-reddi
+gövde anahtar sözcükleri dokümana + kod aramasının v0.10.98 deneyimine dayanıyor). Kök eşleşmesi kaba (5 harf
+öneki) — yalnız canlı isabetin KANIT kontrolü. Zayıf işaretli telemetri sorusu ("how do I see errors for
+svc-orders"), wiki'de o servisin runbook'u varsa OR sorgusuyla tabanı geçip wiki'den cevaplanabilir.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

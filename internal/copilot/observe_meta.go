@@ -56,6 +56,7 @@ var promptVersionRegistry = map[string]string{
 	"systemGuidedChat":           systemGuidedChat,
 	"systemDrawerChat":           systemDrawerChat,
 	"systemRAGChat":              systemRAGChat,
+	"systemWikiChat":             systemWikiChat, // v0.10.1124
 	"systemChat":                 systemChat,
 	"systemChatRoundCap":         systemChatRoundCap,
 	"systemChatRoundCapAddendum": systemChatRoundCapAddendum, // v0.10.806

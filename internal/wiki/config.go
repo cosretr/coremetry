@@ -40,12 +40,46 @@ type Config struct {
 	IntervalMin int `json:"intervalMin,omitempty"`
 	// MaxPages — senkron başına sayfa tavanı; 0 → 5000.
 	MaxPages int `json:"maxPages,omitempty"`
-	// DisableLiveSearch — Azure DevOps Search canlı yedeğini kapatır.
+	// DisableLiveSearch — Azure DevOps Search canlı yedeğini kapatır (mod
+	// alanı boşken "sync" ile eşdeğer; Mode doluysa Mode kazanır).
 	DisableLiveSearch bool `json:"disableLiveSearch,omitempty"`
+	// Mode — v0.10.1124: hybrid (varsayılan: senkron + gerekirse canlı yedek)
+	// | live (senkron YOK; her wiki erişimi Azure DevOps Search + API okuması,
+	// sayfalar yalnız bellek önbelleğinde, CH'ye yazılmaz) | sync (yalnız
+	// yerel indeks, canlı arama yok).
+	Mode string `json:"mode,omitempty"`
 }
+
+// Mod değerleri.
+const (
+	ModeHybrid = "hybrid"
+	ModeLive   = "live"
+	ModeSync   = "sync"
+)
+
+// EffectiveMode — yürürlükteki mod (boş/bilinmeyen → hybrid; eski
+// DisableLiveSearch bayrağı mod boşken sync demek).
+func (c Config) EffectiveMode() string {
+	switch c.Mode {
+	case ModeLive, ModeSync, ModeHybrid:
+		return c.Mode
+	}
+	if c.DisableLiveSearch {
+		return ModeSync
+	}
+	return ModeHybrid
+}
+
+// LiveSearchAllowed — canlı arama bu modda kullanılabilir mi.
+func (c Config) LiveSearchAllowed() bool { return c.EffectiveMode() != ModeSync }
 
 // Normalize — SAF: listeleri kırpar/tekilleştirir, sayıları aralığa oturtur.
 func (c Config) Normalize() Config {
+	switch c.Mode = strings.ToLower(strings.TrimSpace(c.Mode)); c.Mode {
+	case ModeHybrid, ModeLive, ModeSync, "":
+	default:
+		c.Mode = ""
+	}
 	c.Projects = cleanList(c.Projects)
 	c.Wikis = cleanList(c.Wikis)
 	switch {
@@ -150,7 +184,26 @@ type Status struct {
 	RequestedAt    int64    `json:"requestedAt,omitempty"` // "Şimdi senkronize et" damgası
 	RequestedBy    string   `json:"requestedBy,omitempty"`
 	// Search — canlı arama (Azure DevOps Search) durumu: unknown | available | unavailable.
+	// v0.10.1124: okumada paylaşılan wiki_search_status blobundan (hangi pod
+	// aradıysa) doldurulur; senkron lideri aramayı hiç denemediği için kendi
+	// bellek-içi "unknown"u kartı sonsuza dek "henüz denenmedi"de tutuyordu.
 	Search string `json:"search,omitempty"`
+	// SearchLast — son canlı aramanın tanısı (paylaşılan blob; yazılmaz).
+	SearchLast *SearchStatus `json:"searchLast,omitempty"`
+}
+
+// SearchStatusKey — son canlı arama sonucunun paylaşılan blobu (v0.10.1124).
+const SearchStatusKey = "wiki_search_status"
+
+// SearchStatus — son canlı aramanın içerik-SİZ özeti (hangi pod olursa).
+type SearchStatus struct {
+	State      string `json:"state"` // available | unavailable | error
+	At         int64  `json:"at"`    // unix ms
+	Class      string `json:"class,omitempty"`
+	HTTPStatus int    `json:"httpStatus,omitempty"`
+	APIVersion string `json:"apiVersion,omitempty"`
+	Hits       int    `json:"hits"`
+	Mode       string `json:"mode,omitempty"` // and | or
 }
 
 const statusErrorsMax = 20
@@ -181,7 +234,7 @@ type API interface {
 	WikiPageTree(ctx context.Context, project, wikiID string, limit int) ([]devops.WikiPageRef, bool, error)
 	WikiItemVersions(ctx context.Context, w devops.WikiInfo) (map[string]string, error)
 	GetWikiPage(ctx context.Context, project, wikiID, path, ifNoneMatch string) (devops.WikiPage, error)
-	SearchWiki(ctx context.Context, text, project string, top int) ([]devops.WikiSearchHit, error)
+	SearchWiki(ctx context.Context, text, project string, top int) ([]devops.WikiSearchHit, devops.WikiSearchInfo, error)
 	WikiPageWebURL(project, wikiName, path, remoteURL string) string
 }
 
@@ -209,6 +262,14 @@ type Service struct {
 	searchChecked time.Time
 	// searchBackoffUntil — geçici hata sonrası canlı arama bu ana dek denenmez.
 	searchBackoffUntil time.Time
+	// searchSaved / searchSavedSig — paylaşılan arama blobunun son yazımı
+	// (yazma kısıtı: durum değişince ya da searchPersistEvery'de bir).
+	searchSaved    time.Time
+	searchSavedSig string
+	searchCache    *SearchStatus
+
+	// live — canlı mod sayfa önbelleği (bellek-içi, CH'ye yazılmaz).
+	live *liveCache
 
 	// now — test dikişi.
 	now func() time.Time
@@ -223,7 +284,7 @@ type Service struct {
 // New — store zorunlu; api/embed sağlayıcıları canlı bağımlılığı her çağrıda
 // okur (Ayarlar'dan açılıp kapanan bağlantı bir sonraki turda görünür).
 func New(store Store, api func() API, embed func() Embedder) *Service {
-	return &Service{store: store, api: api, embed: embed, searchState: SearchUnknown, now: time.Now}
+	return &Service{store: store, api: api, embed: embed, searchState: SearchUnknown, now: time.Now, live: newLiveCache()}
 }
 
 // Arama durumu değerleri.
@@ -313,7 +374,9 @@ func (s *Service) Status(ctx context.Context, fresh bool) Status {
 	s.statusMu.Lock()
 	defer s.statusMu.Unlock()
 	if !fresh && !s.statusLoaded.IsZero() && s.now().Sub(s.statusLoaded) < statusTTL {
-		return s.statusCache
+		st := s.statusCache
+		st.Search, st.SearchLast = s.mergedSearchState(st.Search)
+		return st
 	}
 	if raw, err := s.store.GetSetting(ctx, StatusKey); err == nil && len(raw) > 0 {
 		var st Status
@@ -321,16 +384,50 @@ func (s *Service) Status(ctx context.Context, fresh bool) Status {
 			s.statusCache = st
 		}
 	}
+	if raw, err := s.store.GetSetting(ctx, SearchStatusKey); err == nil && len(raw) > 0 {
+		var ss SearchStatus
+		if json.Unmarshal(raw, &ss) == nil && ss.State != "" {
+			s.searchMu.Lock()
+			s.searchCache = &ss
+			s.searchMu.Unlock()
+		}
+	}
 	s.statusLoaded = s.now()
 	st := s.statusCache
-	if st.Search == "" {
-		st.Search = s.searchStateNow()
-	}
+	st.Search, st.SearchLast = s.mergedSearchState(st.Search)
 	return st
+}
+
+// mergedSearchState — kartın arama durumu: paylaşılan blob (son arama,
+// hangi pod) > bu pod'un bilinen durumu > senkron blobundaki eski değer.
+func (s *Service) mergedSearchState(fromSync string) (string, *SearchStatus) {
+	s.searchMu.Lock()
+	sc := s.searchCache
+	local := s.searchState
+	s.searchMu.Unlock()
+	if sc != nil {
+		cp := *sc
+		st := cp.State
+		if st == "error" {
+			st = SearchUnknown
+			if local == SearchAvailable || local == SearchUnavailable {
+				st = local
+			}
+		}
+		return st, &cp
+	}
+	if local == SearchAvailable || local == SearchUnavailable {
+		return local, nil
+	}
+	if fromSync == "" {
+		fromSync = SearchUnknown
+	}
+	return fromSync, nil
 }
 
 // saveStatus — durumu yazar (önbelleği de günceller).
 func (s *Service) saveStatus(ctx context.Context, st Status) {
+	st.SearchLast = nil // ayrı blobun (SearchStatusKey) kopyası senkron blobuna yazılmaz
 	if raw, err := json.Marshal(st); err == nil {
 		_ = s.store.PutSetting(ctx, StatusKey, raw)
 	}
@@ -354,4 +451,20 @@ func (s *Service) Running() bool {
 	s.runMu.Lock()
 	defer s.runMu.Unlock()
 	return s.running
+}
+
+// MarkPurged — v0.10.1124 "İndeksi temizle" sonrası durum: indeks sayıları
+// sıfır, son senkron damgası korunur (kart "0 sayfa" gösterir).
+func (s *Service) MarkPurged(ctx context.Context) Status {
+	st := s.Status(ctx, true)
+	st.IndexedPages, st.IndexedChunks = 0, 0
+	s.saveStatus(ctx, st)
+	return s.Status(ctx, false)
+}
+
+// syncStopRequested — senkron sürerken mod canlıya alındı ya da özellik
+// kapatıldıysa geçiş durmalı (inceleme F4).
+func (s *Service) syncStopRequested() bool {
+	c := s.Config()
+	return !c.Enabled || c.EffectiveMode() == ModeLive
 }

@@ -72,6 +72,7 @@ func promptRegistry() map[string]promptClass {
 		"RCAVerdict":      classTurkishNative,
 		"ServiceAnalysis": classTurkishNative, // JSON çıktı, Türkçe talimat
 		"RAGChat":         classTurkishNative, // kademe 3 — doküman yolu
+		"WikiChat":        classTurkishNative, // v0.10.1124 — açık wiki sorusu kademesi
 		// v0.9.1232 — kademe 4 (serbest tool döngüsü) classDirective'ten
 		// buraya taşındı: metin artık Türkçe yazılmış. ChatRoundCap aynı
 		// döngünün tur-tavanı hâli; sicile girmesiyle copilot_chat.go'daki
@@ -112,6 +113,7 @@ func promptTexts() map[string]string {
 		"ChatRoundCap": SystemPromptChatRoundCap(), "ChatAgentLoop": SystemPromptChatAgentLoop(),
 		"RCAVerdict": SystemPromptRCAVerdict(), "ServiceAnalysis": SystemPromptServiceAnalysis(),
 		"RAGChat": SystemPromptRAGChat(), "ShiftSummary": SystemPromptShiftSummary(),
+		"WikiChat":   SystemPromptWikiChat(),
 		"AlertNoise": SystemPromptAlertNoise(), "LogPatterns": SystemPromptLogPatterns(),
 		"Postmortem": SystemPromptPostmortem(), "RunbookUpdate": SystemPromptRunbookUpdate(),
 		"NLToQuery": SystemPromptNLToQuery(), "CHQueryOptimize": SystemPromptCHQueryOptimize(),

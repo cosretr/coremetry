@@ -2308,6 +2308,16 @@ export const api = {
   getWikiStatus: () => get<import('./types').WikiSyncStatus>('/api/wiki/status'),
   syncWiki: () =>
     request<{ queued: boolean; status: import('./types').WikiSyncStatus }>('/api/wiki/sync', { method: 'POST' }),
+  // v0.10.1124 — "Aramayı test et" (yönetici) + indeksteki sayfalar (sunucu-sayfalı).
+  testWikiSearch: (query: string) =>
+    request<import('./types').WikiTestSearchResult>('/api/wiki/test-search', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query }),
+    }),
+  purgeWikiIndex: () =>
+    request<{ purged: boolean; status: import('./types').WikiSyncStatus }>('/api/wiki/purge', { method: 'POST' }),
+  getWikiPages: (q: string, offset: number, limit: number) =>
+    get<import('./types').WikiPagesPage>(
+      `/api/wiki/pages?q=${encodeURIComponent(q)}&offset=${offset}&limit=${limit}`),
   syncRagSources: () =>
     request<{ sources: number; pages: number; indexed: number; skipped: number; pruned: number; errors?: string[] }>(
       '/api/rag/sync', { method: 'POST' }),

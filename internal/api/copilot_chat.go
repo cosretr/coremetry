@@ -297,6 +297,21 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	// v0.10.1124 — AÇIK wiki sorusu ("runbook'u nedir", "wikide nasıl
+	// anlatılıyor") guided'dan ÖNCE: servis adı taşıyan wiki sorusu telemetri
+	// anlatımına kaçıyordu (chat_wiki_tier.go). İşaretsiz soru bayt bayt eski.
+	// İnceleme F1: panel/çekmece/exception/trace bağlamında kademe kapalı.
+	wikiTC := wikiTierContext{Explain: req.Context.Explain, Subject: req.Context.Subject,
+		Trace: req.Context.Trace, Service: req.Context.Service}
+	if req.Context.Page != nil {
+		wikiTC.PageTraceID = req.Context.Page.TraceID
+	}
+	if handled, wok := s.wikiChatAnswer(ctx, emit, req.Messages, wikiTC); handled {
+		cspan.tier("wiki", wok)
+		emit("done", map[string]bool{"ok": wok})
+		return
+	}
+
 	if handled, gok := s.copilotChatGuided(ctx, emit, req.Messages, req.Context.Service, req.Context.Operation, req.Context.Explain, req.Context.RangeS, req.Context.Trace, req.Context.Env, anchorTo, req.Context.TzOffsetMin, req.Context.Tz); handled {
 		cspan.tier("guided", gok)
 		emit("done", map[string]bool{"ok": gok})

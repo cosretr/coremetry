@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Spinner } from '@/components/Spinner';
-import { Button } from '@/components/ui';
+import { Button, SegmentedControl, useConfirm } from '@/components/ui';
 import { api } from '@/lib/api';
 import { tsLong } from '@/lib/utils';
-import type { WikiConfigView, WikiSyncStatus } from '@/lib/types';
+import type { WikiConfigView, WikiMode, WikiSyncStatus } from '@/lib/types';
 import { Field2, FlashBox, Row } from './shared';
-import { listText, searchLabel, syncPending, wikiBody, wikiStatusSummary } from './wikiKnowledge';
+import { effectiveMode, listText, searchLabel, syncPending, WIKI_MODES, wikiBody, wikiStatusSummary } from './wikiKnowledge';
+import { WikiPagesTable } from './WikiPagesTable';
+import { WikiTestSearch } from './WikiTestSearch';
 
 // WikiKnowledgeSection — v0.10.1122 ("karma"): Bilgi (RAG) sekmesinin
 // "Azure DevOps Wiki" bölümü. CoSRE sohbeti kurumun on-prem Azure DevOps
@@ -14,6 +16,8 @@ import { listText, searchLabel, syncPending, wikiBody, wikiStatusSummary } from 
 // gelir; PAT'in Wiki (Read) kapsamı olmalı. Senkron lider pod'da koşar;
 // "Şimdi senkronize et" isteği ≤15 sn içinde alınır. Durum kartı yalnız
 // senkron sürerken / istek beklerken 10 sn'de bir yenilenir (sekme gizliyken durur).
+// v0.10.1124: mod seçimi (Karma / Yalnız canlı arama / Yalnız senkron),
+// "Aramayı test et" tanısı (yönetici) ve indeksteki sayfalar listesi.
 
 const POLL_MS = 10_000;
 
@@ -24,9 +28,10 @@ export function WikiKnowledgeSection({ canEdit = true }: { canEdit?: boolean }) 
   const [wikis, setWikis] = useState('');
   const [interval, setIntervalText] = useState('');
   const [maxPages, setMaxPages] = useState('');
-  const [liveSearch, setLiveSearch] = useState(true);
+  const [mode, setMode] = useState<WikiMode>('hybrid');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  const confirm = useConfirm();
 
   const apply = useCallback((v: WikiConfigView) => {
     setView(v);
@@ -36,7 +41,7 @@ export function WikiKnowledgeSection({ canEdit = true }: { canEdit?: boolean }) 
     setWikis(listText(c?.wikis));
     setIntervalText(c?.intervalMin ? String(c.intervalMin) : '');
     setMaxPages(c?.maxPages ? String(c.maxPages) : '');
-    setLiveSearch(!c?.disableLiveSearch);
+    setMode(effectiveMode(c));
   }, []);
 
   useEffect(() => {
@@ -63,9 +68,12 @@ export function WikiKnowledgeSection({ canEdit = true }: { canEdit?: boolean }) 
   const save = async () => {
     setBusy(true); setMsg(null);
     try {
-      const next = await api.putWikiConfig(wikiBody(enabled, projects, wikis, interval, maxPages, liveSearch));
+      const next = await api.putWikiConfig(wikiBody(enabled, projects, wikis, interval, maxPages, mode));
       apply(next);
-      setMsg({ kind: 'ok', text: 'Kaydedildi.' });
+      // v0.10.1124 — canlı mod Search uzantısı ister: sunucu uyarısı kayıtta gösterilir.
+      setMsg(next.modeWarning
+        ? { kind: 'err', text: `Kaydedildi — uyarı: ${next.modeWarning}` }
+        : { kind: 'ok', text: 'Kaydedildi.' });
     } catch (e) {
       setMsg({ kind: 'err', text: e instanceof Error ? e.message : String(e) });
     } finally { setBusy(false); }
@@ -82,7 +90,28 @@ export function WikiKnowledgeSection({ canEdit = true }: { canEdit?: boolean }) 
     } finally { setBusy(false); }
   };
 
-  const summary = wikiStatusSummary(status);
+  const savedMode = view.mode ?? effectiveMode(view.config);
+  // v0.10.1124 (inceleme F4) — "İndeksi temizle": canlı moda geçen operatör
+  // eski indeksi siler (yönetici, onaylı, audit'li; senkron sürerken 409).
+  const purge = async () => {
+    const ok = await confirm({
+      title: 'Wiki indeksi temizlensin mi?',
+      body: <>İndeksteki <b>{status?.indexedPages ?? 0} sayfa</b> ve tüm parçaları Coremetry'den silinir. Karma / senkron modunda bir sonraki senkron indeksi baştan kurar.</>,
+      confirmLabel: 'Temizle', danger: true,
+    });
+    if (!ok) return;
+    setBusy(true); setMsg(null);
+    try {
+      const r = await api.purgeWikiIndex();
+      setView(v => (v ? { ...v, status: r.status } : v));
+      setMsg({ kind: 'ok', text: 'İndeks temizlendi.' });
+    } catch (e) {
+      setMsg({ kind: 'err', text: e instanceof Error ? e.message : String(e) });
+    } finally { setBusy(false); }
+  };
+
+  const summary = wikiStatusSummary(status, savedMode);
+  const modeHelp = WIKI_MODES.find(m => m.value === mode)?.help ?? '';
   // Ayar hâli NÖTR (settingsPalette.pin, v0.10.929): yalnız sapma renklenir.
   const toneColor = summary.tone === 'err' ? 'var(--err)' : summary.tone === 'warn' ? 'var(--warn)' : 'var(--text2)';
   const defInterval = view.defaults?.intervalMin ?? 60;
@@ -115,12 +144,14 @@ export function WikiKnowledgeSection({ canEdit = true }: { canEdit?: boolean }) 
                  onChange={e => setEnabled(e.target.checked)} />
           Wiki bilgisi aktif
         </label>
-        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, marginTop: 8 }}>
-          <input type="checkbox" checked={liveSearch} disabled={!canEdit}
-                 onChange={e => setLiveSearch(e.target.checked)} />
-          Yerel sonuç zayıfsa Azure DevOps Search'e sor
-        </label>
       </Row>
+      <div style={{ marginTop: 8 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Mod</div>
+        <SegmentedControl<WikiMode> aria-label="Wiki modu" value={mode} activation="manual"
+          onChange={v => { if (canEdit) setMode(v); }}
+          options={WIKI_MODES.map(m => ({ value: m.value, label: m.label, disabled: !canEdit }))} />
+        <p data-testid="wiki-mode-help" style={{ fontSize: 12, color: 'var(--text2)', margin: '4px 0 0' }}>{modeHelp}</p>
+      </div>
       <Row>
         <Field2 label="Projeler (izin listesi)" hint="satır başına bir proje; boş = PAT'in gördüğü tümü">
           <textarea value={projects} rows={3} disabled={!canEdit} spellCheck={false}
@@ -147,19 +178,30 @@ export function WikiKnowledgeSection({ canEdit = true }: { canEdit?: boolean }) 
             Kaydet
           </Button>
           <Button variant="secondary" size="sm" type="button"
-            disabled={busy || !view.config?.enabled || !view.devopsConfigured || syncPending(status)}
+            disabled={busy || !view.config?.enabled || !view.devopsConfigured || syncPending(status) || savedMode === 'live'}
             title="Lider pod'a senkron isteği gönder (değişmeyen sayfalar yeniden okunmaz)"
             onClick={() => { void syncNow(); }}>
             ⟳ Şimdi senkronize et
           </Button>
+          <Button variant="danger" size="sm" type="button" disabled={busy || !status?.indexedPages}
+            title="İndeksteki tüm wiki sayfalarını ve parçalarını sil"
+            onClick={() => { void purge(); }}>
+            İndeksi temizle
+          </Button>
         </div>
+      )}
+      {savedMode === 'live' && !!status?.indexedPages && (
+        <p data-testid="wiki-live-leftover" style={{ fontSize: 12, color: 'var(--text2)', margin: '6px 0 0' }}>
+          Canlı modda yeni içerik yazılmaz, ama daha önce indekslenen {status.indexedPages} sayfa siz
+          temizleyene dek Coremetry'de kalır ("İndeksi temizle").
+        </p>
       )}
 
       <div data-testid="wiki-status" style={{
         marginTop: 10, padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12,
       }}>
         <div style={{ color: toneColor, fontWeight: 600 }}>{summary.text}</div>
-        {!!status?.lastFinishedAt && (
+        {savedMode !== 'live' && !!status?.lastFinishedAt && (
           <div style={{ color: 'var(--text3)', marginTop: 2 }}>
             Son senkron: {tsLong(status.lastFinishedAt * 1e6)}
             {status.durationMs ? ` · ${(status.durationMs / 1000).toFixed(1)} sn` : ''}
@@ -171,7 +213,10 @@ export function WikiKnowledgeSection({ canEdit = true }: { canEdit?: boolean }) 
             Senkron istendi{status?.requestedBy ? ` (${status.requestedBy})` : ''} — lider pod bekleniyor…
           </div>
         )}
-        <div style={{ color: 'var(--text3)', marginTop: 2 }}>{searchLabel(status?.search)}</div>
+        <div style={{ color: 'var(--text3)', marginTop: 2 }}>{searchLabel(status?.search, status?.searchLast, savedMode)}</div>
+        {!!view.modeWarning && (
+          <div data-testid="wiki-mode-warning" style={{ color: 'var(--warn)', marginTop: 2 }}>{view.modeWarning}</div>
+        )}
         {!!status?.errors?.length && (
           <ul style={{ margin: '6px 0 0', paddingLeft: 18, color: 'var(--err)' }}>
             {status.errors.slice(0, 5).map((e, i) => <li key={i} style={{ wordBreak: 'break-word' }}>{e}</li>)}
@@ -180,6 +225,8 @@ export function WikiKnowledgeSection({ canEdit = true }: { canEdit?: boolean }) 
         )}
       </div>
       {msg && <FlashBox kind={msg.kind}>{msg.text}</FlashBox>}
+      {canEdit && !!view.config?.enabled && <WikiTestSearch />}
+      {!!view.config?.enabled && <WikiPagesTable status={status} mode={savedMode} />}
     </section>
   );
 }

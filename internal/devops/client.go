@@ -295,6 +295,9 @@ type Service struct {
 	// wikiVer — v0.10.1122: wiki uçlarında çalıştığı görülen api-version
 	// (önizleme ekiyle olabilir; wiki.go). Yalnız süreç içi.
 	wikiVer string
+	// wikiSearchVer — v0.10.1124: wiki ARAMA ucunda çalıştığı görülen
+	// api-version (arama ucunun sürüm aralığı wiki uçlarından ayrı).
+	wikiSearchVer string
 
 	// code — repo-tree cache for the source-window fetcher
 	// (v0.9.830). Its own mutex: a recursive listing takes seconds
@@ -418,6 +421,7 @@ func (s *Service) Configure(cfg Settings) {
 	if prev.BaseURL != cfg.BaseURL || prev.Collection != cfg.Collection || prev.Flavor != cfg.Flavor {
 		s.detFlavor, s.detVersion = "", ""
 		s.wikiVer = ""
+		s.wikiSearchVer = ""
 	}
 }
 
