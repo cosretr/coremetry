@@ -2931,6 +2931,80 @@ o sürüm `go 1.26` istiyor. Karar: go.mod `go 1.26.0`; CI/CodeQL/Release `go-ve
 govulncheck v1.7.0 → v1.8.0 (go >= 1.26). Kod değişikliği yok; x/sync, x/sys, x/text bağımlılık
 olarak yükseldi. On-prem derleme ortamı golang:1.25 imajını aynalıyorsa 1.26 imajı da aynalanmalı.
 
+## 2026-10-09 — CoSRE wiki: çok kaynaklı okuma, modelden bütçe ve iki aşamalı sayfa seçimi (v0.10.1136)
+
+**Operatör:** wiki cevapları tek sayfaya ya da birkaç çıplak parçaya sıkışıyor; prosedür ve tablolar
+ortadan kesiliyor, birden çok sayfaya dağılan bilgi birleşmiyor. **Kök neden:** bağlam ya baskın sayfanın
+ilk ~6000 karakteri (cevap sayfanın sonundaysa hiç görünmüyordu) ya da ≤4 parça × 1500 karakterdi; RAG
+yarısı ≤3 parça × 1500. Komşu adımlar ve aynı bölümün devamı modele hiç ulaşmıyordu. Bütçe sabitti ve
+modelin bağlam penceresinden habersizdi.
+
+**Karar:**
+
+- **Sayfa düzeyinde çok kaynak.** Tabanı geçen isabetler sayfa başına gruplanır ve sayfa düzeyinde
+  tekilleşir. En iyi sayfanın 0,5 katının altındaki sayfa düşer. Skor sırasıyla en çok 5 sayfa okunur.
+- **Genişletme.** Her sayfada isabet parçası, komşuları (önceki/sonraki) ve aynı başlık bölümünün geri
+  kalanı (alt başlıklar dahil) öncelik sırasıyla bütçeye sığdığı kadar alınır. Parçalar belge sırasında
+  ve tekrarsız birleşir, atlanan aralık `…` ile gösterilir. Baskın sayfada ve model-seçimli sayfalarda
+  sayfanın geri kalanı da girer, sığıyorsa tamamı. Parçalar `wiki.Service.PageChunks` ile okunur. Karma
+  ve senkron modda bu sohbete özel `WikiPageChunkTexts` sorgusudur: tek sayfa, embedding ve jeton
+  okunmaz, WHERE + LIMIT 2000 + max_execution_time 5. `FINAL` kalır, çünkü ReplacingMergeTree'nin
+  birleşmemiş eski sürümleri ve mezar taşları ancak onunla doğru elenir. Canlı modda bellek önbelleği ya
+  da API okunur, CH'ye yazılmaz. Kapsam her yolda denetlenir; wiki adı bilinmiyorsa saklı parça okunmaz,
+  `ReadPage` kaydın kendi adıyla denetler.
+- **Bütçe modelden, pencere her zaman kazanır.** Bütçe = (pencere − completion − 1500 jeton ek yük) ×
+  3,0 karakter/jeton. Completion, o yüzeyin çözülen profilindeki max token'dır (varsayılan 4096).
+  Pencere `modelcaps.ContextWindow` ile bulunur; bu tutucu bir tablodur ve yalnız adı açıkça uzun bağlam
+  söyleyen modeller büyük pencere alır, küçük ya da belirsiz varyantlar 8192 sayılır. Pencere biliniyorsa
+  otomatik bütçe en çok 24000'dir, elle değer de pencereyle kapaklanır (`min(elle, pencere tavanı)`).
+  Pencere bilinmiyorsa otomatik bütçe 16000'dir, ama 8192 pencere varsayımıyla kapaklıdır; 4096
+  completion'da bu 7788 karakter eder. Bilinmeyen modelde elle değer kapaklanmaz, çünkü operatör modelini
+  bilir; bu bilinçli bir karardır. Bütçe çıktının tamamını kapsar: `[n]` işareti, "Sayfa:" satırı,
+  "## bölüm" ve `…` satırları ile 600 rune'luk sayfa tabanı dahil. Blok sığmazsa metin payı küçültülüp
+  parça sınırından yeniden kurulur; yine sığmazsa sondaki sayfa düşer ve çipe de girmez. Sayfalara skorla
+  orantılı dağıtılır; en iyi sayfa en büyük payı alır. Sayfa başı tavan %45, baskın sayfada %70, tek
+  sayfada %100. Kullanılmayan pay sonraki sayfaya akar. RAG yarısı bütçenin %50'sini kullanır ve en çok 3
+  sayfa okur. Takip (a) blok ek yükünü düştükten sonra tek sayfada bütçenin tamamını, iki sayfada 65/35
+  alır.
+- **Ayar.** Ayarlar → Bilgi (RAG) → Azure DevOps Wiki altında iki alan var. "Wiki bağlam boyutu
+  (karakter)" boşsa otomatiktir, değilse [4000, 48000] olmalı; aralık dışı değer 400 döner. Model
+  penceresi biliniyorsa bu değer pencereyle kapaklanır. "İki aşamalı
+  okuma (sayfa seçimi)" varsayılan açıktır. İkisi de `wiki_knowledge` blobunda tutulur ve
+  `settings.wiki.update` audit'ine girer.
+- **İki aşamalı okuma.** Aramadan sonra en çok 10 aday sayfanın başlığı, bölüm yolu ve ~200 karakterlik
+  çitli kesiti, soru ve önceki turla birlikte modele verilir. Model `{"pages":[…]}` JSON'u ile 1–5 sayfa
+  seçer (niyet sınıflandırıcısının JSON deseni, `wiki-select` yüzeyi). Yalnız seçilen sayfalar tam okunur
+  ve sayfa başına daha büyük pay alır (`min(0.8, 1.6/n)`). Görünür adım
+  `wiki_select · N aday → seçilen: A, B` biçimindedir. Çağrı en çok 8 sn sürer (istemci zaman aşımı daha
+  kısaysa o). Hata, zaman aşımı, geçersiz ya da boş çıktıda skor tabanlı seçime düşülür; liste dışı
+  numaralar yok sayılır. Tek aday sayfa varsa çağrı hiç yapılmaz. Seçim açık wiki kademesinde ve takibin
+  bağlamlı aramasında (b) çalışır. RAG yarısı ve netleştirme kurtarması tek geçişli kalır.
+- **Prompt.** Her kaynak `[n] Wiki · <temiz başlık>` işaretiyle ve `<wiki_data>` çitinde gelir; n,
+  "Kaynak n" çipinin numarasıdır (sayfa başına tek numara, `sourceNumbers`). Çit dışındaki başlıktan
+  `[]#*`, backtick, `<>` ve satır sonları atılır. Sayfa başlığı çitin ilk satırıdır ("Sayfa: …"), bölüm
+  başlıkları gövdede yer alır; yani başlık da veridir. Seçim çağrısında çit dışında yalnız aday numarası
+  `[i]` durur; başlık ve bölüm yolu çitin içindedir. `systemWikiChat` ve `systemWikiFollowUp`
+  şunları ister: kaynakları birleştir, her bilgiyi [n] ile atfet, çelişkiyi iki numarayla göster, wiki
+  dışı çıkarımı ayrı bir "Wiki'de yok, tahmin:" satırında ver. Kaynakta olmayan link, host ya da komut
+  uydurulmaz. RAG kademesi wiki isabeti varken `systemRAGChatWiki` kullanır. Bu prompt doküman gövdesinin
+  üstüne kurulur ve gövdenin "asla tahmin etme" ile "doküman adı verilmez" kurallarını yalnız wiki
+  kaynakları için açıkça istisna eder; doküman parçaları için bu kurallar aynen geçerlidir. Wiki yokken
+  `systemRAGChat` bayt bayt eskidir. `systemWikiSelect` yeni JSON prompt'udur.
+- **Çipler.** Okunan bütün sayfalar `[n]` sırasıyla "Kaynak n" ve "Wiki · başlık" olarak görünür. Takip
+  (b)'de de bağlantılar [n] sırasındadır; önceki sayfanın bağlantısı (bağlam çıpası, v0.10.1134) artık
+  sondadır.
+
+**Değişmeyen:** API token'ı, panel/çekmece bağlamı, telemetri sinyali ve kapalı wiki kapıları aynıdır.
+Wiki kapalıyken bu yolların hiçbiri koşmaz ve RAG prompt'u bayt bayt eskidir. `api.go` büyümedi.
+
+**Test:** `chat_wiki_multi_test.go` sentetik P1…P7 sayfalarıyla çalışır. Senaryolar: 5 sayfa seçimi
+(mutlak ve göreli taban, sayfa tekilliği); komşu ve bölüm genişletmesinin belge sırasında, tekrarsız
+olması; bütçe (modelden otomatik, elle değer, kelepçeler, dağıtım, kademe payı); canlı mod (önbellek, CH
+yazımı yok); bağlamın [n] = çip sırasında olması; iki aşamalı seçim (kullanım; geçersiz, boş, liste dışı
+ve zaman aşımında düşüş; tek adayda ve ayar kapalıyken çağrı yok); ayar doğrulaması ve audit. Ayrıca
+`modelcaps` pencere tablosu, prompt pinleri (`prompt_wiki_multisource_test.go`, dil ve enjeksiyon
+sicilleri) ve FE alanı (`WikiKnowledgeSection.test.tsx`) test edilir.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

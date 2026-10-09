@@ -64,8 +64,9 @@ func TestContextNumbersMatchSourceChips(t *testing.T) {
 		src = append(src, wikiHitSource(x))
 	}
 	chips := dedupeChatSources(src)
-	ctx := buildWikiContext(h, "", numberSources(src))
-	for _, want := range []string{"[2] wiki — Sunucular", "[3] wiki — Kurulum", "[2] wiki — IP"} {
+	// v0.10.1136: sayfa başına TEK blok ("[n] Wiki · başlık"), aynı sayfanın parçaları o blokta.
+	ctx, _ := buildWikiMultiContext(wikiGroupPages(h, 0, wikiMaxPages), nil, wikiBudgetDefault, false, numberSources(src))
+	for _, want := range []string{"[2] Wiki · Sbox\n<wiki_data>\nSayfa: Sbox\n## Sunucular\nt1", "## IP\nt3", "[3] Wiki · Redis\n<wiki_data>\nSayfa: Redis\n## Kurulum\nt2"} {
 		if !strings.Contains(ctx, want) {
 			t.Errorf("bağlam numarası çiple aynı olmalı: %q eksik\n%s", want, ctx)
 		}

@@ -43,6 +43,15 @@ func wikiHitSource(h wiki.Hit) chatSource {
 	return chatSource{Doc: "Wiki · " + h.Title, Ref: h.URL, Chunk: h.Idx + 1, Score: h.Score}
 }
 
+// wikiHitSources — SAF: isabetlerin kaynak kayıtları (sıra korunur).
+func wikiHitSources(h []wiki.Hit) []chatSource {
+	out := make([]chatSource, 0, len(h))
+	for _, x := range h {
+		out = append(out, wikiHitSource(x))
+	}
+	return out
+}
+
 // sourceNumbers — v0.10.1127 (inceleme F6): bağlam bloklarının [n] numarası
 // = çipin "Kaynak n" numarası. Numaralar dedupeChatSources ile AYNI sırada
 // (ilk görülme) ve AYNI anahtarla (sourceKey) verilir; model "[2]" diye atıf

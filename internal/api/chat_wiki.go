@@ -23,7 +23,6 @@ package api
 
 import (
 	"context"
-	"fmt"
 	"regexp"
 	"strings"
 
@@ -97,10 +96,13 @@ const (
 	// köprüsünün ragKeywordFloor'uyla aynı ruh: tesadüfi tek terim eşleşmesi
 	// telemetri sorusunu wiki'ye kaçırmasın.
 	ragWikiFloor = 0.5
-	// ragWikiMaxChunks — bağlama giren en çok wiki parçası; sayfa başına 2.
-	ragWikiMaxChunks = 3
-	// ragWikiChunkRunes — bağlamdaki parça başına tavan.
-	ragWikiChunkRunes = 1500
+	// ragWikiMaxPages — v0.10.1136: bağlama giren en çok wiki SAYFASI (eski
+	// ≤3 çıplak parça × 1500 yerine sayfa başına genişletilmiş bölümler,
+	// bütçenin wikiRAGShare'i; chat_wiki_multi.go ragWikiContextFor).
+	ragWikiMaxPages = 3
+	// ragWikiSearchLimit / ragWikiPerPage — arama: ≤3 sayfaya yetecek isabet.
+	ragWikiSearchLimit = 6
+	ragWikiPerPage     = 2
 )
 
 // ragWikiHits — RAG kademesinin wiki yarısı. Yalnız oturum kullanıcısına;
@@ -113,44 +115,21 @@ func (s *Server) ragWikiHits(ctx context.Context, question string) []wiki.Hit {
 	if w == nil || !w.Enabled() || !sourceCodeCallerAllowed(auth.FromContext(ctx)) {
 		return nil
 	}
-	res, err := w.SearchWith(ctx, question, "", wiki.SearchOptions{Limit: ragWikiMaxChunks, PerPage: 2, Live: wiki.LiveOnStale, NoSemantic: true})
+	res, err := w.SearchWith(ctx, question, "", wiki.SearchOptions{Limit: ragWikiSearchLimit, PerPage: ragWikiPerPage, Live: wiki.LiveOnStale, NoSemantic: true})
 	if err != nil {
 		return nil
 	}
 	return ragWikiSelect(res.Hits)
 }
 
-// ragWikiSelect — SAF: taban altındaysa hiç; değilse tavanlı ilk N.
+// ragWikiSelect — SAF: en iyi skor taban altındaysa hiç; değilse taban/2
+// üstündeki isabetler, en çok ragWikiMaxPages farklı sayfadan (sayfa sırası).
 func ragWikiSelect(h []wiki.Hit) []wiki.Hit {
 	if len(h) == 0 || h[0].Score < ragWikiFloor {
 		return nil
 	}
-	out := make([]wiki.Hit, 0, ragWikiMaxChunks)
-	for _, x := range h {
-		if x.Score < ragWikiFloor/2 { // uzak kuyruk bağlamı kirletmesin
-			break
-		}
-		out = append(out, x)
-		if len(out) >= ragWikiMaxChunks {
-			break
-		}
-	}
-	return out
-}
-
-// ragWikiContext — SAF: wiki parçasının bağlam bloğu. Sayfa ADI modele
-// verilmez (systemRAGChat'in "dosya adı anma" kuralı, v0.9.515) — başlık
-// yolu bilgi taşır, kaynağı arayüz çiplerle gösterir.
-func ragWikiContext(n int, h wiki.Hit) string {
-	text := h.Text
-	if r := []rune(text); len(r) > ragWikiChunkRunes {
-		text = string(r[:ragWikiChunkRunes]) + "…"
-	}
-	head := ""
-	if h.Heading != "" {
-		head = " — " + h.Heading
-	}
-	return fmt.Sprintf("[%d] wiki%s\n%s\n\n", n, head, fenceWikiData(text))
+	// ragWikiFloor/2: uzak kuyruk bağlamı kirletmesin.
+	return wikiPagesHits(wikiGroupPages(h, ragWikiFloor/2, ragWikiMaxPages))
 }
 
 // wikiDataCloseRe — içerideki kapanış etiketi (büyük/küçük harf, boşluklu

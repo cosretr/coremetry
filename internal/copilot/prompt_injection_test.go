@@ -53,6 +53,8 @@ func chatTiers() map[string]string {
 		"RAGChat":      SystemPromptRAGChat(),
 		"WikiChat":     SystemPromptWikiChat(),
 		"WikiFollowUp": SystemPromptWikiFollowUp(),
+		"WikiSelect":   SystemPromptWikiSelect(),  // v0.10.1136 — seçim çağrısı çitli kesit görür
+		"RAGChatWiki":  SystemPromptRAGChatWiki(), // v0.10.1136
 		"Chat":         SystemPromptChat(),
 		"ChatRoundCap": SystemPromptChatRoundCap(),
 	}

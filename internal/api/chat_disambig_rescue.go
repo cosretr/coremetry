@@ -113,7 +113,7 @@ func (r *disambigRescue) rescue(orig map[string]any) bool {
 		return false // alışveriş başına en çok bir arama
 	}
 	sctx, cancel := context.WithTimeout(r.ctx, wiki.LiveBudget)
-	res, err := r.w.SearchWith(sctx, r.question, "", wiki.SearchOptions{Limit: 6, PerPage: 3, Live: wiki.LiveOnWeak})
+	res, err := r.w.SearchWith(sctx, r.question, "", wiki.SearchOptions{Limit: wikiTierSearchLimit, PerPage: wikiTierPerPage, Live: wiki.LiveOnWeak})
 	cancel()
 	if err != nil {
 		return false
@@ -123,7 +123,9 @@ func (r *disambigRescue) rescue(orig map[string]any) bool {
 		return false
 	}
 	r.emit("step", map[string]string{"label": "kurum wiki'si"})
-	ans, err := r.s.wikiNarratedAnswer(r.ctx, r.w, r.question, r.prior, hits)
+	// v0.10.1136 — çok-kaynaklı okuma, iki aşamalı seçim YOK (selectEmit nil):
+	// kurtarma zaten netleştirme cevabının önünde bir ek arama.
+	ans, used, err := r.s.wikiNarratedAnswer(r.ctx, r.w, r.question, r.prior, hits, nil)
 	if err != nil {
 		return false // anlatım başarısız → özgün netleştirme aynen
 	}
@@ -132,7 +134,7 @@ func (r *disambigRescue) rescue(orig map[string]any) bool {
 	links, _ := orig["links"].([]guidedAnswerLink)
 	withTelemetryChips(ans, text, chips, links)
 	if t, _ := ans["text"].(string); !wikiDeclined(t) {
-		r.s.rememberWikiAnswer(r.ctx, t, wikiPageRefs(hits))
+		r.s.rememberWikiAnswer(r.ctx, t, wikiPageRefs(used))
 	}
 	r.emit("answer", ans)
 	return true

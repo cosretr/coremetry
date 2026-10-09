@@ -39,6 +39,27 @@ export function wikiBody(enabled: boolean, projects: string, wikis: string, inte
   };
 }
 
+/** v0.10.1136 — wiki bağlam boyutu sınırları (sunucu wiki.Min/MaxContextChars ile aynı). */
+export const WIKI_CONTEXT_MIN = 4000;
+export const WIKI_CONTEXT_MAX = 48000;
+
+/**
+ * v0.10.1136 — "Wiki bağlam boyutu (karakter)" kutusunun doğrulaması: boş =
+ * otomatik (geçerli); değilse tamsayı ve [min, max]. Hata metni ya da ''.
+ */
+export function contextCharsError(text: string, min = WIKI_CONTEXT_MIN, max = WIKI_CONTEXT_MAX): string {
+  const t = text.trim();
+  if (!t) return '';
+  const n = Number(t);
+  if (!Number.isInteger(n) || n < min || n > max) return `Boş (otomatik) ya da ${min}–${max} arası bir tamsayı olmalı.`;
+  return '';
+}
+
+/** v0.10.1136 — okuma ayarlarının PUT alanları (boş bağlam = 0 = otomatik). */
+export function wikiReadingFields(contextChars: string, pageSelect: boolean): Pick<WikiConfig, 'contextChars' | 'disablePageSelect'> {
+  return { contextChars: numOrZero(contextChars), disablePageSelect: !pageSelect };
+}
+
 /** v0.10.1124 — yürürlükteki mod (yapılandırmadan; eski bayrak = sync). */
 export function effectiveMode(c: WikiConfig | undefined): WikiMode {
   if (c?.mode === 'live' || c?.mode === 'sync' || c?.mode === 'hybrid') return c.mode;

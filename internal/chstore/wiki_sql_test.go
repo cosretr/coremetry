@@ -26,6 +26,13 @@ func TestWikiSQLShapesBounded(t *testing.T) {
 	assertBounded(t, "page", wikiGetPageSQL)
 	// v0.10.1127 — yeniden jetonlamanın parça okuması: tek sayfa, jetonsuz.
 	assertBounded(t, "page-chunks", wikiPageChunksSQL)
+	// v0.10.1136 — sohbet okuması: tek sayfa, embedding/jeton YOK, FINAL (RMT + mezar taşı).
+	assertBounded(t, "page-chunk-texts", wikiPageChunkTextsSQL)
+	if !strings.Contains(wikiPageChunkTextsSQL, "wiki_id = ? AND path = ?") || !strings.Contains(wikiPageChunkTextsSQL, "FINAL") ||
+		!strings.Contains(wikiPageChunkTextsSQL, "deleted = 0") || strings.Contains(wikiPageChunkTextsSQL, "embedding") ||
+		strings.Contains(wikiPageChunkTextsSQL, "tokens") {
+		t.Errorf("page-chunk-texts şekli: %s", wikiPageChunkTextsSQL)
+	}
 	if !strings.Contains(wikiPageChunksSQL, "wiki_id = ? AND path = ?") || strings.Contains(wikiPageChunksSQL, "tokens") {
 		t.Errorf("page-chunks şekli: %s", wikiPageChunksSQL)
 	}

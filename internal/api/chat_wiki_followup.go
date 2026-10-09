@@ -58,8 +58,8 @@ const (
 	wikiFollowUpMaxWords = 8
 	// wikiFollowUpPages — yeniden okunan en çok önceki sayfa.
 	wikiFollowUpPages = 2
-	// wikiFollowUpSecondRunes — ikinci sayfanın bağlam tavanı (ilki wikiDominantRunes).
-	wikiFollowUpSecondRunes = 3000
+	// wikiFollowUpFirstShare — v0.10.1136: iki sayfa yeniden okunursa ilkinin bütçe payı.
+	wikiFollowUpFirstShare = 0.65
 	// wikiPriorUserRunes / wikiPriorAssistantRunes — önceki turun prompt tavanları.
 	wikiPriorUserRunes      = 400
 	wikiPriorAssistantRunes = 1200
@@ -432,17 +432,45 @@ func wikiRecLinks(recs []*wiki.PageRecord) []guidedAnswerLink {
 	return ragWikiLinks(h)
 }
 
+// wikiFollowUpLimits — SAF (v0.10.1136): yeniden okunan sayfaların bütçe
+// payları — tek sayfa bütçenin tamamı; iki sayfada ilki wikiFollowUpFirstShare,
+// ikincisi kalanı.
+func wikiFollowUpLimits(n, budget int) []int {
+	if n <= 0 {
+		return nil
+	}
+	if n == 1 {
+		return []int{budget}
+	}
+	first := int(float64(budget) * wikiFollowUpFirstShare)
+	out := []int{first}
+	rest := (budget - first) / (n - 1)
+	for i := 1; i < n; i++ {
+		out = append(out, rest)
+	}
+	return out
+}
+
 // buildWikiFollowUpUser — SAF: sayfa-okuma anlatımının kullanıcı bloğu.
-func buildWikiFollowUpUser(prior, question string, recs []*wiki.PageRecord, num sourceNumbers) string {
+// v0.10.1136: sayfa başlığıyla numaralı kaynak ("[n] Wiki · başlık"),
+// tavanlar modelin penceresinden türeyen bütçeden (wikiFollowUpLimits).
+func buildWikiFollowUpUser(prior, question string, recs []*wiki.PageRecord, num sourceNumbers, budget int) string {
 	var b strings.Builder
 	b.WriteString(prior)
 	b.WriteString("TAKİP SORUSU: " + question + "\n\nSAYFA:\n")
+	// Bütçe blokların TAMAMINI kapsar: işaret ve "Sayfa:" satırının payı düşülür.
+	overhead := 0
+	for _, rec := range recs {
+		overhead += runeLen(wikiSourceBlock(0, rec.Title, "")) + 40
+	}
+	limits := wikiFollowUpLimits(len(recs), max(budget-overhead, wikiMinUsefulRunes))
 	for i, rec := range recs {
-		limit := wikiDominantRunes
-		if i > 0 {
-			limit = wikiFollowUpSecondRunes
+		block := wikiSourceBlock(num.of(wikiRecSource(rec)), rec.Title, clipRunes(strings.TrimSpace(rec.Content), limits[i]))
+		// "[n] Wiki · başlık" işaretine "(önceki cevabın kaynağı)" eki (çit dışı, sabit metin).
+		if j := strings.IndexByte(block, '\n'); j > 0 {
+			block = block[:j] + " (önceki cevabın kaynağı)" + block[j:]
 		}
-		fmt.Fprintf(&b, "[%d] wiki (önceki cevabın kaynağı)\n%s\n\n", num.of(wikiRecSource(rec)), fenceWikiData(clipRunes(strings.TrimSpace(rec.Content), limit)))
+		b.WriteString(block)
 	}
 	return b.String()
 }
@@ -501,7 +529,7 @@ func (s *Server) wikiFollowUpAnswer(ctx context.Context, emit func(string, any),
 		for _, r := range recs {
 			sources = append(sources, wikiRecSource(r))
 		}
-		user := buildWikiFollowUpUser(prior, question, recs, numberSources(sources))
+		user := buildWikiFollowUpUser(prior, question, recs, numberSources(sources), s.wikiBudget(ctx, w, "wiki-chat"))
 		raw, err := wikiNarrateFn(s, ctx, copilot.SystemPromptWikiFollowUp(), user)
 		if err != nil {
 			if ctx.Err() != nil {
@@ -531,7 +559,7 @@ func (s *Server) wikiFollowUpAnswer(ctx context.Context, emit func(string, any),
 	q := wikiContextQuery(question, prevUser, titles)
 	var hits []wiki.Hit
 	for _, project := range []string{pages[0].Project, ""} {
-		res, err := w.SearchWith(ctx, q, project, wiki.SearchOptions{Limit: 6, PerPage: 3, Live: wiki.LiveOnWeak})
+		res, err := w.SearchWith(ctx, q, project, wiki.SearchOptions{Limit: wikiTierSearchLimit, PerPage: wikiTierPerPage, Live: wiki.LiveOnWeak})
 		if err != nil && ctx.Err() != nil {
 			return false, false
 		}
@@ -549,7 +577,7 @@ func (s *Server) wikiFollowUpAnswer(ctx context.Context, emit func(string, any),
 		return false, false // (c) bugünkü akış
 	}
 	emit("step", map[string]string{"label": "kurum wiki'si"})
-	ans, err := s.wikiNarratedAnswer(ctx, w, question, prior, hits)
+	ans, used, err := s.wikiNarratedAnswer(ctx, w, question, prior, hits, emit) // v0.10.1136: iki aşamalı seçim (b)
 	if err != nil {
 		if ctx.Err() != nil {
 			emit("error", map[string]string{"error": err.Error()})
@@ -560,11 +588,11 @@ func (s *Server) wikiFollowUpAnswer(ctx context.Context, emit func(string, any),
 	if text, _ := ans["text"].(string); wikiDeclined(text) {
 		return false, false
 	}
-	// Önceki sayfanın çipi ilk (operatörün bağlam çıpası), sonra yeni sayfalar.
+	// v0.10.1136: yeni sayfalar önce ([n] / "Kaynak n" sırası), önceki sayfanın çipi (bağlam çıpası) sonda.
 	links, _ := ans["links"].([]guidedAnswerLink)
-	ans["links"] = dedupLinksByHref(append(wikiRecLinks(recs), links...))
+	ans["links"] = dedupLinksByHref(append(append([]guidedAnswerLink(nil), links...), wikiRecLinks(recs)...))
 	text, _ := ans["text"].(string)
-	s.rememberWikiAnswer(ctx, text, wikiPageRefs(hits))
+	s.rememberWikiAnswer(ctx, text, wikiPageRefs(used))
 	emit("answer", ans)
 	return true, true
 }

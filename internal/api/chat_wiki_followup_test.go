@@ -188,8 +188,8 @@ func TestWikiFollowUpNotInPageFallsToContextualSearch(t *testing.T) {
 	}
 	a := answerOf(t, *ev)
 	links, _ := a["links"].([]guidedAnswerLink)
-	if len(links) < 2 || links[0].Href != fuURL(api, fuPageA) || links[1].Href != fuURL(api, fuPageD) {
-		t.Errorf("çipler: önce A (bağlam çıpası), sonra D: %+v", links)
+	if n := len(links); n < 2 || links[0].Href != fuURL(api, fuPageD) || links[n-1].Href != fuURL(api, fuPageA) {
+		t.Errorf("çipler: önce D ([n] sırası), A (bağlam çıpası) sonda: %+v", links)
 	}
 }
 

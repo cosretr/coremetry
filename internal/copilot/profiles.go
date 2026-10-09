@@ -411,6 +411,24 @@ func (s *Service) ModelFor(ctx context.Context) string {
 	return m
 }
 
+// MaxTokensFor — v0.10.1136: çağrının ÇÖZÜLEN profilinde yürürlükteki
+// completion bütçesi (callSnapshot'ın AYNI kuralı: profil > küresel >
+// defaultMaxTokens). Wiki bağlam bütçesi pencereden bunu düşer.
+func (s *Service) MaxTokensFor(ctx context.Context) int {
+	if s == nil {
+		return defaultMaxTokens
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if p := s.resolveProfileLocked(ctx).cfg; p.MaxTokens > 0 {
+		return p.MaxTokens
+	}
+	return s.tuneMaxTokensLocked()
+}
+
+// DefaultMaxTokens — küresel varsayılan completion bütçesi (AI yokken de).
+func DefaultMaxTokens() int { return defaultMaxTokens }
+
 // activeFor — çağrının ÇÖZÜLEN profili kimlik taşıyor mu (anahtar ya da
 // openai + base URL); ana anahtar ayrı. Active()'in profil-farkında hâli:
 // varsayılan anahtarsızken bile anahtarlı profil çalışır (#1).

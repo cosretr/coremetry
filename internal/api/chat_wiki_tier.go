@@ -16,7 +16,7 @@ package api
 // Sonuç: wiki içeriğini modele veren tek yol (RAG) çoğu soruda ya hiç
 // ulaşılmıyor ya da tabanda eleniyordu. Bu kademe guided'dan ÖNCE koşar ama
 // YALNIZ soru açıkça wiki'yi işaret ediyorsa (wikiQuestionCue): canlı yedek
-// LiveOnWeak, sayfa metni modele verilir (baskın sayfada ~6000 karaktere dek)
+// LiveOnWeak, sayfa metni modele verilir (v0.10.1136: 3–5 sayfanın genişletilmiş bölümleri, chat_wiki_multi.go)
 // ve model özetler/yorumlar. Bulunamazsa açıkça "Wikide bulunamadı" — sessizce
 // telemetri cevabına düşmez. Telemetri sorusu (işaretsiz) bayt bayt eski yolda.
 //
@@ -27,7 +27,6 @@ package api
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"unicode"
 
@@ -41,10 +40,10 @@ const (
 	// (operatör wiki'yi açıkça sordu; RAG'ın 0.5'i telemetri sorusunu korur,
 	// burada o risk yok — yine de tek tesadüfi eşleşmeyi eler).
 	wikiTierFloor = 0.3
-	// wikiTierMaxChunks — bağlama giren en çok parça (baskın sayfa yoksa).
-	wikiTierMaxChunks = 4
-	// wikiDominantRunes — baskın sayfanın bağlama giren metin tavanı.
-	wikiDominantRunes = 6000
+	// wikiTierSearchLimit / wikiTierPerPage — kademenin araması: ≤10 aday
+	// sayfaya yetecek isabet (iki aşamalı seçim; chat_wiki_select.go).
+	wikiTierSearchLimit = 30
+	wikiTierPerPage     = 3
 	// wikiDominance — en iyi sayfa skoru ikinciyi bu katla geçiyorsa baskın.
 	wikiDominance = 1.35
 )
@@ -124,19 +123,11 @@ var wikiNarrateFn = func(s *Server, ctx context.Context, system, user string) (s
 	return s.copilotStreamSurface(ctx, "wiki-chat", system, user, func(string) {})
 }
 
-// wikiTierSelect — SAF: tabanı geçen ilk N parça.
+// wikiTierSelect — SAF: tabanı geçen isabetler, en çok wikiSelectMaxCandidates
+// farklı sayfadan (v0.10.1136: aday kümesi; hangi sayfaların okunacağına
+// wikiPlanPages karar verir — model seçimi ya da skor tabanlı ≤5 sayfa).
 func wikiTierSelect(h []wiki.Hit) []wiki.Hit {
-	out := make([]wiki.Hit, 0, wikiTierMaxChunks)
-	for _, x := range h {
-		if x.Score < wikiTierFloor {
-			break
-		}
-		out = append(out, x)
-		if len(out) >= wikiTierMaxChunks {
-			break
-		}
-	}
-	return out
+	return wikiPagesHits(wikiGroupPages(h, wikiTierFloor, wikiSelectMaxCandidates))
 }
 
 // wikiDominantPage — SAF: en iyi sayfa baskın mı (tek sayfa ya da skoru
@@ -153,48 +144,6 @@ func wikiDominantPage(h []wiki.Hit) bool {
 		}
 	}
 	return true
-}
-
-// buildWikiContext — SAF: bağlam blokları. pageText doluysa (baskın sayfa)
-// ilk blok o sayfanın ≤wikiDominantRunes metni, ardından BAŞKA sayfalardan
-// en çok bir parça (karşılaştırma için); değilse parça başına ragWikiContext.
-// Sayfa ADI verilmez (systemRAGChat ile aynı kural).
-//
-// v0.10.1127 (inceleme F6): blok numarası [n] parça sırası değil, kaynağın
-// çip numarası ("Kaynak n" — num, dedupeChatSources ile aynı anahtar/sıra);
-// aynı sayfanın parçaları aynı numarayı taşır.
-func buildWikiContext(h []wiki.Hit, pageText string, num sourceNumbers) string {
-	var b strings.Builder
-	if pt := strings.TrimSpace(wikiDataCloseRe.ReplaceAllString(pageText, "")); pt != "" && len(h) > 0 {
-		if r := []rune(pt); len(r) > wikiDominantRunes {
-			pt = string(r[:wikiDominantRunes]) + "…"
-		}
-		fmt.Fprintf(&b, "[%d] wiki (sayfanın tamamı / ilk %d karakter)\n%s\n\n", num.of(wikiHitSource(h[0])), wikiDominantRunes, fenceWikiData(pt))
-		top := h[0].PageKey()
-		for _, x := range h[1:] {
-			if x.PageKey() != top {
-				b.WriteString(ragWikiContext(num.of(wikiHitSource(x)), x))
-				break
-			}
-		}
-		return b.String()
-	}
-	for _, x := range h {
-		b.WriteString(ragWikiContext(num.of(wikiHitSource(x)), x))
-	}
-	return b.String()
-}
-
-// wikiContextFor — isabetlerin bağlamı; baskın sayfa varsa tam metnini okur
-// (yerel indeks ya da canlı önbellek; hata → parça bağlamı).
-func (s *Server) wikiContextFor(ctx context.Context, w *wiki.Service, h []wiki.Hit, num sourceNumbers) string {
-	page := ""
-	if w != nil && wikiDominantPage(h) {
-		if rec, err := w.ReadPage(ctx, h[0].Project, h[0].WikiID, h[0].Path); err == nil && rec != nil {
-			page = rec.Content
-		}
-	}
-	return buildWikiContext(h, page, num)
 }
 
 // wikiNotFoundText — SAF: wiki'de bulunamadı cevabı (neden + canlı not).
@@ -241,7 +190,7 @@ func (s *Server) wikiChatAnswer(ctx context.Context, emit func(string, any), msg
 		// v0.10.1126 inceleme — servis adı + telemetri sinyali: guided'ın sorusu.
 		return false, false
 	}
-	res, err := w.SearchWith(ctx, question, "", wiki.SearchOptions{Limit: 6, PerPage: 3, Live: wiki.LiveOnWeak})
+	res, err := w.SearchWith(ctx, question, "", wiki.SearchOptions{Limit: wikiTierSearchLimit, PerPage: wikiTierPerPage, Live: wiki.LiveOnWeak})
 	noTerms := errors.Is(err, wiki.ErrNoTerms)
 	if err != nil && !noTerms && ctx.Err() != nil {
 		return false, false
@@ -260,7 +209,7 @@ func (s *Server) wikiChatAnswer(ctx context.Context, emit func(string, any), msg
 			"sources": []any{}, "links": []guidedAnswerLink{}})
 		return true, true
 	}
-	ans, err := s.wikiNarratedAnswer(ctx, w, question, wikiPriorTurns(msgs), hits)
+	ans, used, err := s.wikiNarratedAnswer(ctx, w, question, wikiPriorTurns(msgs), hits, emit)
 	if err != nil {
 		emit("error", map[string]string{"error": err.Error()})
 		return true, false
@@ -272,32 +221,41 @@ func (s *Server) wikiChatAnswer(ctx context.Context, emit func(string, any), msg
 		withTelemetryChips(ans, text, chips, links)
 	}
 	if text, _ := ans["text"].(string); !wikiDeclined(text) {
-		s.rememberWikiAnswer(ctx, text, wikiPageRefs(hits))
+		s.rememberWikiAnswer(ctx, text, wikiPageRefs(used))
 	}
 	emit("answer", ans)
 	return true, true
 }
 
 // wikiNarratedAnswer — wiki isabetlerinden araçsız TEK anlatım çağrısı ve
-// cevap yükü (açık wiki kademesi ve netleştirme kurtarması ortak; v0.10.1126).
-// v0.10.1134: prior — son soru/cevap çifti (wikiPriorTurns; boşsa prompt
-// bayt bayt eski) ki "bu", "o pipeline" gibi atıflar çözülsün.
-func (s *Server) wikiNarratedAnswer(ctx context.Context, w *wiki.Service, question, prior string, hits []wiki.Hit) (map[string]any, error) {
-	sources := make([]chatSource, 0, len(hits))
-	for _, h := range hits {
-		sources = append(sources, wikiHitSource(h))
-	}
-	user := prior + "SORU: " + question + "\n\nBAĞLAM:\n" + s.wikiContextFor(ctx, w, hits, numberSources(sources))
+// cevap yükü (açık wiki kademesi, takip (b) ve netleştirme kurtarması ortak;
+// v0.10.1126). v0.10.1134: prior — son soru/cevap çifti (wikiPriorTurns;
+// boşsa prompt bayt bayt eski) ki "bu", "o pipeline" gibi atıflar çözülsün.
+//
+// v0.10.1136 — çok-kaynaklı okuma: sayfa planı (selectEmit != nil ise iki
+// aşamalı seçim, değilse/başarısızsa skor tabanlı ≤5 sayfa), sayfa başına
+// genişletilmiş bölümler, modelin penceresinden türeyen bütçe. Dönen used:
+// GERÇEKTEN okunan sayfaların isabetleri (çipler ve hafıza bunlardan).
+func (s *Server) wikiNarratedAnswer(ctx context.Context, w *wiki.Service, question, prior string, hits []wiki.Hit, selectEmit func(string, any)) (map[string]any, []wiki.Hit, error) {
+	pages, selected := s.wikiPlanPages(ctx, w, hits, question, prior, selectEmit)
+	budget := s.wikiBudget(ctx, w, "wiki-chat")
+	wctx, in := s.wikiReadContext(ctx, w, pages, budget, selected, numberSources(wikiHitSources(wikiPagesHits(pages))))
+	// Bütçeye sığmayan (sondaki) sayfalar düştü: çipler yalnız bağlama girenler
+	// (önek → numaralar değişmez).
+	used := wikiPagesHits(in)
+	sources := wikiHitSources(used)
+	user := prior + "SORU: " + question + "\n\nBAĞLAM:\n" + wctx
 	raw, err := wikiNarrateFn(s, ctx, copilot.SystemPromptWikiChat(), user)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	return map[string]any{
 		"text":       strings.TrimSpace(raw),
 		"exchangeId": copilot.MetaFromContext(ctx).ExchangeID,
 		// v0.10.1127: sayfa başına tek çip ("Kaynak 1", "Kaynak 2" …) —
 		// aynı sayfanın parçaları özdeş "Kaynak §1" çipleri üretiyordu.
+		// v0.10.1136: sıra = bağlamdaki [n] sırası = okunan sayfa sırası.
 		"sources": dedupeChatSources(sources),
-		"links":   ragWikiLinks(hits),
-	}, nil
+		"links":   ragWikiLinks(used),
+	}, used, nil
 }

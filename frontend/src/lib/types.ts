@@ -7382,6 +7382,10 @@ export interface WikiConfig {
   disableLiveSearch?: boolean;
   /** v0.10.1124 — hybrid (varsayılan) | live (senkron yok) | sync (yalnız yerel). */
   mode?: WikiMode;
+  /** v0.10.1136 — sohbetin wiki bağlam bütçesi (karakter); 0/yok = otomatik (modelden). [4000, 48000]. */
+  contextChars?: number;
+  /** v0.10.1136 — iki aşamalı okuma (sayfa seçimi) KAPALI; yok/false = açık. */
+  disablePageSelect?: boolean;
 }
 
 export type WikiMode = 'hybrid' | 'live' | 'sync';
@@ -7436,7 +7440,11 @@ export interface WikiConfigView {
   devopsConfigured?: boolean;
   embedding?: boolean;
   status?: WikiSyncStatus;
-  defaults?: { intervalMin: number; minIntervalMin: number; maxPages: number };
+  defaults?: {
+    intervalMin: number; minIntervalMin: number; maxPages: number;
+    /** v0.10.1136 — wiki bağlam boyutu aralığı + şu anki otomatik değer (karakter). */
+    contextCharsMin?: number; contextCharsMax?: number; contextCharsAuto?: number;
+  };
   /** v0.10.1124 — yürürlükteki mod + canlı mod uyarısı (Search yok / doğrulanmadı). */
   mode?: WikiMode;
   modeWarning?: string;

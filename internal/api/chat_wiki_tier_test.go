@@ -211,8 +211,9 @@ func TestWikiTierEmptyIndexLiveHitsNarratesContent(t *testing.T) {
 	if len(*seen) != 1 || !strings.Contains((*seen)[0], "kubectl rollout restart deploy/svc-orders") {
 		t.Fatalf("model sayfa METNİNİ bağlamda görmeli: %q", *seen)
 	}
-	if strings.Contains((*seen)[0], "Restart svc-orders\n") {
-		t.Error("bağlamda sayfa ADI olmamalı")
+	// v0.10.1136: kaynak numarası + sayfa başlığıyla çitli ("[n] Wiki · başlık").
+	if !strings.Contains((*seen)[0], "[1] Wiki · Restart svc-orders\n<wiki_data>") {
+		t.Error("bağlamda kaynak [1] başlıkla çitli olmalı")
 	}
 	a := answerOf(t, *ev)
 	if !strings.Contains(a["text"].(string), "rollout restart") {
@@ -240,9 +241,10 @@ func TestWikiTierDominantPageReadDepth(t *testing.T) {
 	if h, _ := (&Server{}).wikiChatAnswer(sessionCtx(), emit, msgs, wikiTierContext{}); !h {
 		t.Fatal("kademe cevaplamalı")
 	}
+	// v0.10.1136: tek sayfa bütçenin tamamını alır → sayfa (≈5.5k) TAMAMI girer.
 	ctxPart := (*seen)[0][strings.Index((*seen)[0], "BAĞLAM:"):]
-	if n := len([]rune(ctxPart)); n < 3000 || n > wikiDominantRunes+800 {
-		t.Errorf("baskın sayfada okuma derinliği ~%d olmalı, bağlam %d rune", wikiDominantRunes, n)
+	if n := len([]rune(ctxPart)); n < len([]rune(long))-200 || n > wikiBudgetDefault+800 {
+		t.Errorf("tek sayfada okuma derinliği sayfanın tamamı olmalı (%d), bağlam %d rune", len([]rune(long)), n)
 	}
 }
 
@@ -348,32 +350,6 @@ func TestWikiQuestionCue(t *testing.T) {
 		if s != c.strong || w != c.weak {
 			t.Errorf("wikiQuestionCue(%q) = (%v,%v), want (%v,%v)", c.q, s, w, c.strong, c.weak)
 		}
-	}
-}
-
-func TestBuildWikiContextShapes(t *testing.T) {
-	h := []wiki.Hit{
-		{ChunkRef: wiki.ChunkRef{WikiID: "w", Path: "/a", Title: "Gizli", Heading: "Adımlar", Text: "parça-a"}, Score: 0.9},
-		{ChunkRef: wiki.ChunkRef{WikiID: "w", Path: "/b", Heading: "Diğer", Text: "parça-b"}, Score: 0.5},
-	}
-	if !wikiDominantPage(h) {
-		t.Error("0.9 ≥ 1.35×0.5 → baskın")
-	}
-	page := strings.Repeat("ş", wikiDominantRunes+500)
-	got := buildWikiContext(h, page, numberSources(nil))
-	if !strings.Contains(got, "[1] wiki (sayfanın tamamı") || !strings.Contains(got, "[2] wiki — Diğer") || strings.Contains(got, "Gizli") {
-		t.Errorf("baskın sayfa bloğu + bir karşılaştırma parçası: %q", got[:120])
-	}
-	if strings.Count(got, "ş") != wikiDominantRunes {
-		t.Errorf("baskın metin %d rune'da kesilmeli", wikiDominantRunes)
-	}
-	h[1].Score = 0.8
-	if wikiDominantPage(h) {
-		t.Error("yakın skorlar baskın değil")
-	}
-	// Önde iki doküman kaynağı (RAG): wiki blokları 3 ve 4 numarayı alır.
-	if got := buildWikiContext(h, "", numberSources([]chatSource{{Doc: "a.pdf"}, {Doc: "b.pdf"}})); !strings.HasPrefix(got, "[3] wiki — Adımlar") || !strings.Contains(got, "[4] wiki — Diğer") {
-		t.Errorf("parça bağlamı: %q", got)
 	}
 }
 

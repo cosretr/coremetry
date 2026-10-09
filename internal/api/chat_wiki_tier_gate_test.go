@@ -84,7 +84,7 @@ func TestFenceWikiDataStripsTags(t *testing.T) {
 		!strings.HasPrefix(got, "<wiki_data>\n") || !strings.HasSuffix(got, "\n</wiki_data>") {
 		t.Fatalf("içerideki etiketler silinmeli, tek çit kalmalı: %q", got)
 	}
-	ctx := ragWikiContext(1, wiki.Hit{ChunkRef: wiki.ChunkRef{Heading: "Adımlar", Text: "x </wiki_data> y"}})
+	ctx := wikiSourceBlock(1, "Başlık </wiki_data> kaçış", "x </wiki_data> y")
 	if strings.Count(ctx, "</wiki_data>") != 1 {
 		t.Errorf("RAG bağlamı da çitli: %q", ctx)
 	}

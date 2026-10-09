@@ -34,6 +34,9 @@ import (
 
 var wikiSvcPtr atomic.Pointer[wiki.Service]
 
+// v0.10.1136 — sohbetin parça okuması embedding'siz SQL'den (derleme güvencesi).
+var _ wiki.ChunkTextReader = (*chstore.Store)(nil)
+
 // SetWiki — main.go boot'ta bir kez (nil = özellik yok).
 func SetWiki(w *wiki.Service) { wikiSvcPtr.Store(w) }
 
@@ -108,6 +111,10 @@ func (s *Server) wikiConfigView(ctx context.Context) map[string]any {
 		"defaults": map[string]int{
 			"intervalMin": wiki.DefaultIntervalMin, "minIntervalMin": wiki.MinIntervalMin,
 			"maxPages": wiki.DefaultMaxPages,
+			// v0.10.1136 — wiki bağlam boyutu: aralık + şu anki otomatik değer
+			// (modelin penceresinden; bilinmiyorsa 16000).
+			"contextCharsMin": wiki.MinContextChars, "contextCharsMax": wiki.MaxContextChars,
+			"contextCharsAuto": s.wikiBudget(ctx, nil, "wiki-chat"),
 		},
 	}
 }
@@ -133,7 +140,7 @@ func (s *Server) getWikiConfig(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) putWikiConfig(w http.ResponseWriter, r *http.Request) {
 	ws := wikiKB()
-	if ws == nil || s.store == nil {
+	if ws == nil {
 		http.Error(w, "wiki bilgisi bu kurulumda yok", http.StatusServiceUnavailable)
 		return
 	}
@@ -142,19 +149,36 @@ func (s *Server) putWikiConfig(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid body", http.StatusBadRequest)
 		return
 	}
+	// v0.10.1136 — wiki bağlam boyutu: boş (otomatik) ya da [4000, 48000];
+	// sessiz kelepçe yerine 400 (Normalize yine kelepçeler).
+	if err := body.Validate(); err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if s.store == nil {
+		http.Error(w, "wiki bilgisi bu kurulumda yok", http.StatusServiceUnavailable)
+		return
+	}
 	if err := ws.SavePersisted(r.Context(), s.store, body); err != nil {
 		writeErr(w, err)
 		return
 	}
 	s.publishConfigReload(r.Context(), "wiki")
-	cfg := ws.Config()
+	s.audit(r, "settings.wiki.update", "settings", wiki.SettingsKey, wikiAuditDetails(ws.Config()))
+	writeJSON(w, s.wikiConfigView(r.Context()))
+}
+
+// wikiAuditDetails — SAF: settings.wiki.update audit ayrıntısı (sır yok;
+// listeler yalnız sayı). v0.10.1136: bağlam boyutu (0 = otomatik) ve iki
+// aşamalı okuma bayrağı.
+func wikiAuditDetails(cfg wiki.Config) string {
 	details, _ := json.Marshal(map[string]any{
 		"enabled": cfg.Enabled, "projects": len(cfg.Projects), "wikis": len(cfg.Wikis),
 		"intervalMin": cfg.IntervalMin, "maxPages": cfg.MaxPages, "disableLiveSearch": cfg.DisableLiveSearch,
-		"mode": cfg.EffectiveMode(),
+		"mode":         cfg.EffectiveMode(),
+		"contextChars": cfg.ContextChars, "pageSelect": !cfg.DisablePageSelect,
 	})
-	s.audit(r, "settings.wiki.update", "settings", wiki.SettingsKey, string(details))
-	writeJSON(w, s.wikiConfigView(r.Context()))
+	return string(details)
 }
 
 func (s *Server) getWikiStatus(w http.ResponseWriter, r *http.Request) {

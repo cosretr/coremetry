@@ -378,10 +378,15 @@ func (s *Server) ragChatAnswer(ctx context.Context, emit func(string, any), msgs
 		// ipucu (title) olarak gösteriyor.
 		fmt.Fprintf(&b, "[%d] §%d\n%s\n\n", num.of(sources[i]), h.ChunkIdx+1, h.Content)
 	}
-	// v0.10.1124 — okuma derinliği: baskın wiki sayfası varsa ~6000 karaktere
-	// dek tam metni (chat_wiki_tier.go wikiContextFor).
+	// v0.10.1124 — okuma derinliği; v0.10.1136: ≤3 sayfanın genişletilmiş
+	// bölümleri, bütçenin wikiRAGShare'i (chat_wiki_multi.go ragWikiContextFor).
 	if len(wikiHits) > 0 {
-		b.WriteString(s.wikiContextFor(ctx, wikiKB(), wikiHits, num))
+		wtext, used := s.ragWikiContextFor(ctx, wikiHits, num)
+		b.WriteString(wtext)
+		// Bütçeye sığmayan (sondaki) wiki sayfaları çipe de girmez (önek →
+		// numaralar değişmez).
+		sources = sources[:len(sources)-len(wikiHits)+len(used)]
+		wikiHits = used
 	}
 
 	user := "SORU: " + question + "\n\nBAĞLAM:\n" + b.String()
@@ -398,7 +403,13 @@ func (s *Server) ragChatAnswer(ctx context.Context, emit func(string, any), msgs
 	// ARKA ARKAYA İKİ CEVAP görür. Bedel: doküman cevapları tek seferde
 	// beliriyor (kısa metinler, fark küçük). Kazanç: cevaplanamayan soru
 	// artık ölü bir cümleyle bitmiyor.
-	raw, exErr := s.copilotStreamSurface(ctx, "rag-chat", copilot.SystemPromptRAGChat(), user, func(string) {})
+	// v0.10.1136 — wiki isabeti varken wiki eki (atıf [n], çelişki, "Wiki'de
+	// yok, tahmin:"); yokken prompt bayt bayt eski.
+	ragSystem := copilot.SystemPromptRAGChat()
+	if len(wikiHits) > 0 {
+		ragSystem = copilot.SystemPromptRAGChatWiki()
+	}
+	raw, exErr := s.copilotStreamSurface(ctx, "rag-chat", ragSystem, user, func(string) {})
 	if exErr != nil {
 		emit("error", map[string]string{"error": exErr.Error()})
 		return true, false

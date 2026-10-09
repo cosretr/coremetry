@@ -3,6 +3,7 @@ package wiki
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -27,6 +28,11 @@ const (
 	MaxIntervalMin     = 7 * 24 * 60
 	DefaultMaxPages    = 5000
 	MaxMaxPages        = 50000
+
+	// MinContextChars / MaxContextChars — v0.10.1136: sohbetin wiki bağlam
+	// bütçesi elle ayarı (karakter); 0 = otomatik (modelin penceresinden).
+	MinContextChars = 4000
+	MaxContextChars = 48000
 )
 
 // Config — operatörün ayarı.
@@ -48,6 +54,23 @@ type Config struct {
 	// sayfalar yalnız bellek önbelleğinde, CH'ye yazılmaz) | sync (yalnız
 	// yerel indeks, canlı arama yok).
 	Mode string `json:"mode,omitempty"`
+	// ContextChars — v0.10.1136: sohbet cevabına giren wiki bağlamının toplam
+	// bütçesi (karakter). 0 = otomatik (aktif modelin bağlam penceresinden;
+	// bilinmiyorsa 16000). Aralık [MinContextChars, MaxContextChars].
+	ContextChars int `json:"contextChars,omitempty"`
+	// DisablePageSelect — v0.10.1136: iki aşamalı okuma (model önce aday
+	// sayfaların başlık/kesitlerinden okunacakları seçer) KAPALI. Varsayılan
+	// açık (alanın sıfır değeri) — bir ek LLM çağrısı, ~1-3 sn.
+	DisablePageSelect bool `json:"disablePageSelect,omitempty"`
+}
+
+// Validate — v0.10.1136: yönetici PUT'unun aralık denetimi (Normalize yine
+// kelepçeler; bu, sessiz kelepçe yerine 400 için).
+func (c Config) Validate() error {
+	if c.ContextChars < 0 || (c.ContextChars > 0 && (c.ContextChars < MinContextChars || c.ContextChars > MaxContextChars)) {
+		return fmt.Errorf("wiki bağlam boyutu boş (otomatik) ya da %d–%d karakter olmalı", MinContextChars, MaxContextChars)
+	}
+	return nil
 }
 
 // Mod değerleri.
@@ -89,6 +112,14 @@ func (c Config) Normalize() Config {
 		c.IntervalMin = MinIntervalMin
 	case c.IntervalMin > MaxIntervalMin:
 		c.IntervalMin = MaxIntervalMin
+	}
+	switch {
+	case c.ContextChars <= 0:
+		c.ContextChars = 0
+	case c.ContextChars < MinContextChars:
+		c.ContextChars = MinContextChars
+	case c.ContextChars > MaxContextChars:
+		c.ContextChars = MaxContextChars
 	}
 	switch {
 	case c.MaxPages <= 0:

@@ -58,6 +58,9 @@ var promptVersionRegistry = map[string]string{
 	"systemRAGChat":              systemRAGChat,
 	"systemWikiChat":             systemWikiChat,        // v0.10.1124
 	"systemWikiFollowUp":         systemWikiFollowUp,    // v0.10.1134 — wiki takip sorusu
+	"ragChatCore":                ragChatCore,           // v0.10.1136 — RAG gövdesi (wiki eki bunun üstüne)
+	"systemRAGChatWiki":          systemRAGChatWiki,     // v0.10.1136 — RAG + wiki atıf eki
+	"systemWikiSelect":           systemWikiSelect,      // v0.10.1136 — iki aşamalı okuma: sayfa seçimi
 	"WikiNotInPageSentinel":      WikiNotInPageSentinel, // v0.10.1134 — takip "sayfada yok" işareti
 	"systemChat":                 systemChat,
 	"systemChatRoundCap":         systemChatRoundCap,

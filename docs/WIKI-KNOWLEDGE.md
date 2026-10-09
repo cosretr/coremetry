@@ -30,6 +30,8 @@ Wiki içeriği Coremetry'nin ClickHouse'una indekslenir ve dışarı çıkmaz.
 | Senkron aralığı (dk) | 60 | En az 15 |
 | Sayfa tavanı | 5000 | Tavana takılırsa budama yapılmaz, kart uyarır |
 | Mod | Karma | Aşağıdaki "Modlar" tablosu |
+| Wiki bağlam boyutu (karakter) | boş = otomatik | Sohbet cevabına giren wiki metninin toplamı; 4000–48000; model penceresi biliniyorsa onunla kapaklanır. Otomatik: modelin penceresinden (aşağıda "Çok kaynaklı okuma") |
+| İki aşamalı okuma (sayfa seçimi) | açık | Model önce aday sayfaların başlık/kesitlerinden okunacakları seçer; bir ek AI çağrısı (~1–3 sn) |
 
 "Şimdi senkronize et" (yalnız admin, audit'li) isteği lider pod'a iletir;
 senkron hangi pod'da koşarsa koşsun durum kartı aynı bilgiyi gösterir.
@@ -87,12 +89,43 @@ yalnız admin rolüne seçilir).
   ("how to", "how do I/we", "nasıl yapılır/yaparım…", `doküman`, `docs`):
   yalnız en iyi isabet ≥ 0.5 ise cevaplar, değilse soru normal akışa
   (guided/RAG) aynen gider. Wiki metni modele `<wiki_data>` çitinde verilir:
-  yerel indeks + gerekirse canlı arama, bulunan sayfa metni modele verilir
-  (tek sayfa baskınsa ~6000 karaktere dek) ve model **özetler / yorumlar**;
+  yerel indeks + gerekirse canlı arama, bulunan sayfaların metni modele
+  verilir (aşağıda "Çok kaynaklı okuma") ve model **özetler / yorumlar**;
   cevabın altında **Wiki · sayfa başlığı** bağlantıları çıkar. Bulunamazsa
   canlı arama hatasında sohbet yalnız genel not görür ("Azure DevOps araması
   şu an yanıt vermedi"); ayrıntı "Aramayı test et"te.
-- **Sohbet — diğer sorular**: RAG kademesi wiki parçalarını da dayanak
+- **Çok kaynaklı okuma** (v0.10.1136): tabanı geçen isabetler sayfa başına
+  gruplanır; en iyi sayfanın yarısından düşük skorlu sayfa düşer, en çok 5
+  sayfa okunur. Her sayfadan isabet parçası, komşuları ve aynı başlık
+  bölümünün geri kalanı (alt başlıklar dahil) belge sırasında ve tekrarsız
+  alınır; atlanan aralık `…` ile işaretlenir. Baskın sayfanın (ve seçilen
+  sayfaların) sığdığı kadarı, mümkünse tamamı girer. Bütçe şöyle
+  hesaplanır: (model penceresi − completion max token − ~1500 jeton) × 3
+  karakter. Otomatik bütçe en çok 24000'dir; Ayarlar'daki değer de model
+  penceresi biliniyorsa onunla kapaklanır (pencere her zaman kazanır). Model
+  tanınmıyorsa otomatik bütçe 16000'dir ama 8k pencere varsayımıyla
+  kapaklıdır: 4096 completion'da 7788 karakter. Bu durumda Ayarlar'daki
+  değer kapaklanmaz, büyük pencereli bir model kullanıyorsanız değeri elle
+  girin. Bütçe işaret, başlık ve `…` satırları dahil bağlamın tamamını
+  kapsar; sığmayan son sayfa düşer ve çipe de girmez. Pay sayfalara skorla
+  orantılı dağılır, en iyi sayfa en büyük payı alır. RAG kademesinin wiki
+  yarısı bütçenin yarısını ve en çok 3 sayfayı kullanır. Her kaynak modele
+  `[n] Wiki · <başlık>` işareti ve `<wiki_data>` çitiyle gider. Çitin ilk
+  satırı "Sayfa: <başlık>"tır, bölüm başlıkları da çitin içindedir.
+  Karma/senkron modda parçalar embedding'siz, sınırlı bir sorguyla okunur.
+  Model her bilgiyi
+  `[n]` ile atfeder (n = "Kaynak n" çipi), çelişkiyi iki numarayla gösterir
+  ve wiki'de olmayan çıkarımı ayrı bir "Wiki'de yok, tahmin:" satırında
+  verir. Kaynakta olmayan link, host ya da komut uydurulmaz.
+- **İki aşamalı okuma** (v0.10.1136, varsayılan açık): en çok 10 aday
+  sayfanın başlığı, bölüm yolu ve ~200 karakterlik çitli kesiti modele
+  verilir; model okunacak 1–5 sayfayı JSON ile seçer. Panelde
+  `wiki_select · N aday → seçilen: A, B` adımı görünür. Seçim en çok 8 sn
+  sürer; hata, zaman aşımı ya da geçersiz çıktıda skor sırası kullanılır.
+  Tek aday sayfa varsa seçim yapılmaz. Açık wiki sorusunda ve takip
+  sorusunun bağlamlı aramasında çalışır; RAG kademesinin wiki yarısında
+  çalışmaz.
+- **Sohbet — diğer sorular**: RAG kademesi wiki sayfalarını da dayanak
   yapar (taban 0.5; canlı arama yalnız indeks boş/bayatsa). Serbest sohbet
   döngüsünde model `search_wiki` / `read_wiki_page` araçlarını kullanır.
 - **Canlı arama sorgusu**: soru cümlesi değil, soru sözcükleri (nasıl,

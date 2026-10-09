@@ -89,9 +89,9 @@ func TestRagWikiSelectAndContext(t *testing.T) {
 	if ragWikiSelect([]wiki.Hit{{Score: ragWikiFloor - 0.01}}) != nil {
 		t.Error("taban altı en iyi skor → wiki dayanağı yok (telemetri sorusu kaçırılmaz)")
 	}
-	ctx := ragWikiContext(3, h[0])
-	if !strings.HasPrefix(ctx, "[3] wiki — Adımlar") || strings.Contains(ctx, "Gizli Başlık") {
-		t.Errorf("bağlamda sayfa ADI olmamalı, başlık yolu olmalı: %q", ctx)
+	ctx, _ := buildWikiMultiContext(wikiGroupPages(got, 0, ragWikiMaxPages), nil, wikiBudgetDefault/2, false, numberSources([]chatSource{{Doc: "a.pdf"}, {Doc: "b.pdf"}}))
+	if !strings.HasPrefix(ctx, "[3] Wiki · Gizli Başlık\n<wiki_data>\nSayfa: Gizli Başlık\n## Adımlar\nsvc-orders restart") || strings.Count(ctx, "<wiki_data>") != 1 {
+		t.Errorf("v0.10.1136: kaynak [n] + sayfa başlığıyla, sayfa başına tek çit: %q", ctx)
 	}
 	links := ragWikiLinks(h)
 	if len(links) != 2 {

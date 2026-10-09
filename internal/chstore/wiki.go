@@ -107,6 +107,19 @@ const (
 		ORDER BY chunk_idx
 		LIMIT 10000
 		SETTINGS max_execution_time = 10`
+
+	// wikiPageChunkTextsSQL — v0.10.1136: sohbetin çok-kaynaklı okuması için
+	// tek sayfanın parça METİNLERİ (embedding ve jeton dizisi OKUNMAZ). FINAL
+	// kalır: ReplacingMergeTree'de birleşmemiş eski sürümler ve mezar taşları
+	// (deleted=1) ancak FINAL ile doğru elenir — onsuz aynı idx'in eski metni
+	// ya da silinmiş kuyruk parçası bağlama girerdi. Sıralama anahtarının
+	// öneki (wiki_id, path) — tek sayfanın granülleri.
+	wikiPageChunkTextsSQL = `SELECT chunk_idx, heading, text
+		FROM wiki_chunks FINAL
+		WHERE deleted = 0 AND wiki_id = ? AND path = ?
+		ORDER BY chunk_idx
+		LIMIT 2000
+		SETTINGS max_execution_time = 5`
 )
 
 // wikiProjectClause — opsiyonel proje süzgeci (bağlı argüman).
@@ -424,6 +437,25 @@ func (s *Store) WikiPageChunks(ctx context.Context, wikiID, path string) ([]wiki
 	for rows.Next() {
 		var c wiki.ChunkRecord
 		if err := rows.Scan(&c.Idx, &c.Heading, &c.Text, &c.Embedding); err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
+// WikiPageChunkTexts — v0.10.1136: sayfanın parça metinleri (idx sırası,
+// embedding'siz; sohbet okuması — wiki.Service.PageChunks).
+func (s *Store) WikiPageChunkTexts(ctx context.Context, wikiID, path string) ([]wiki.ChunkRecord, error) {
+	rows, err := s.conn.Query(ctx, wikiPageChunkTextsSQL, wikiID, path)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []wiki.ChunkRecord
+	for rows.Next() {
+		var c wiki.ChunkRecord
+		if err := rows.Scan(&c.Idx, &c.Heading, &c.Text); err != nil {
 			return nil, err
 		}
 		out = append(out, c)

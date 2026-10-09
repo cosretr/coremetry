@@ -36,7 +36,7 @@ vi.mock('@/lib/api', () => ({
 }));
 
 import { WikiKnowledgeSection } from './WikiKnowledgeSection';
-import { parseList, wikiBody, wikiStatusSummary, syncPending, searchLabel, effectiveMode, pagesEmptyText, liveOutcomeText, skippedSummary } from './wikiKnowledge';
+import { parseList, wikiBody, wikiStatusSummary, syncPending, searchLabel, effectiveMode, pagesEmptyText, liveOutcomeText, skippedSummary, contextCharsError, wikiReadingFields } from './wikiKnowledge';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -77,6 +77,13 @@ afterEach(() => {
   h.test.mockReset(); h.pages.mockReset(); h.purge.mockReset();
 });
 
+/** React-denetimli input'a değer yazar (yerel setter + input olayı). */
+function setInputValue(input: HTMLInputElement, value: string) {
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!;
+  setter.call(input, value);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
 function button(el: HTMLElement, text: string): HTMLButtonElement {
   const b = Array.from(el.querySelectorAll('button')).find(x => x.textContent?.includes(text));
   expect(b, `${text} düğmesi yok`).toBeTruthy();
@@ -92,6 +99,17 @@ describe('wikiKnowledge helpers', () => {
       enabled: true, projects: [], wikis: ['A'], intervalMin: 0, maxPages: 0, mode: 'sync',
     });
     expect(wikiBody(false, 'P', '', '20', '100', 'live').disableLiveSearch).toBeUndefined();
+  });
+  it('v0.10.1136 — bağlam boyutu doğrulaması ve okuma alanları', () => {
+    expect(contextCharsError('')).toBe('');
+    expect(contextCharsError(' 4000 ')).toBe('');
+    expect(contextCharsError('48000')).toBe('');
+    expect(contextCharsError('3999')).toContain('4000–48000');
+    expect(contextCharsError('48001')).not.toBe('');
+    expect(contextCharsError('12.5')).not.toBe('');
+    expect(contextCharsError('abc')).not.toBe('');
+    expect(wikiReadingFields('', true)).toEqual({ contextChars: 0, disablePageSelect: false });
+    expect(wikiReadingFields('16000', false)).toEqual({ contextChars: 16000, disablePageSelect: true });
   });
   it('effectiveMode: eski bayrak = sync, boş = hybrid', () => {
     expect(effectiveMode(undefined)).toBe('hybrid');
@@ -183,6 +201,40 @@ describe('WikiKnowledgeSection', () => {
     expect(body.projects).toEqual(['Platform']);
     expect(body.intervalMin).toBe(30);
     expect(el.textContent).toContain('Kaydedildi');
+  });
+
+  it('v0.10.1136 — bağlam boyutu + iki aşamalı okuma PUT gövdesine girer; aralık dışı kaydedilmez', async () => {
+    h.put.mockImplementation(async c => ({ ...VIEW, config: c }));
+    const el = await mount({ ...VIEW, defaults: { ...VIEW.defaults!, contextCharsMin: 4000, contextCharsMax: 48000, contextCharsAuto: 24000 } });
+    const input = el.querySelector<HTMLInputElement>('[data-testid="wiki-context-chars"]')!;
+    const toggle = el.querySelector<HTMLInputElement>('[data-testid="wiki-page-select"]')!;
+    expect(input.value).toBe('');
+    expect(el.textContent).toContain('şu an 24000');
+    expect(toggle.checked).toBe(true);
+    // Aralık dışı → hata, PUT yok.
+    await act(async () => { setInputValue(input, '1000'); });
+    expect(el.querySelector('[data-testid="wiki-context-chars-error"]')).toBeTruthy();
+    await act(async () => { button(el, 'Kaydet').click(); });
+    expect(h.put).not.toHaveBeenCalled();
+    // Geçerli değer + seçim kapalı → gövdede.
+    await act(async () => { setInputValue(input, '12000'); });
+    await act(async () => { toggle.click(); });
+    await act(async () => { button(el, 'Kaydet').click(); });
+    await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+    expect(h.put).toHaveBeenCalledTimes(1);
+    expect(h.put.mock.calls[0][0]).toMatchObject({ contextChars: 12000, disablePageSelect: true, intervalMin: 30 });
+  });
+
+  it('v0.10.1136 — kayıtlı okuma ayarları forma yüklenir; boş bağlam = otomatik (0)', async () => {
+    h.put.mockImplementation(async c => ({ ...VIEW, config: c }));
+    const el = await mount({ ...VIEW, config: { ...VIEW.config!, contextChars: 20000, disablePageSelect: true } });
+    const input = el.querySelector<HTMLInputElement>('[data-testid="wiki-context-chars"]')!;
+    expect(input.value).toBe('20000');
+    expect(el.querySelector<HTMLInputElement>('[data-testid="wiki-page-select"]')!.checked).toBe(false);
+    await act(async () => { setInputValue(input, ''); });
+    await act(async () => { button(el, 'Kaydet').click(); });
+    await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+    expect(h.put.mock.calls[0][0]).toMatchObject({ contextChars: 0, disablePageSelect: true });
   });
 
   it('Şimdi senkronize et POST eder ve isteği gösterir', async () => {

@@ -5,7 +5,10 @@ import { api } from '@/lib/api';
 import { tsLong } from '@/lib/utils';
 import type { WikiConfigView, WikiMode, WikiSyncStatus } from '@/lib/types';
 import { Field2, FlashBox, Row } from './shared';
-import { effectiveMode, listText, searchLabel, skippedReasonText, skippedSummary, syncPending, WIKI_MODES, wikiBody, wikiStatusSummary } from './wikiKnowledge';
+import {
+  contextCharsError, effectiveMode, listText, searchLabel, skippedReasonText, skippedSummary, syncPending,
+  WIKI_CONTEXT_MAX, WIKI_CONTEXT_MIN, WIKI_MODES, wikiBody, wikiReadingFields, wikiStatusSummary,
+} from './wikiKnowledge';
 import { WikiPagesTable } from './WikiPagesTable';
 import { WikiTestSearch } from './WikiTestSearch';
 
@@ -29,6 +32,10 @@ export function WikiKnowledgeSection({ canEdit = true }: { canEdit?: boolean }) 
   const [interval, setIntervalText] = useState('');
   const [maxPages, setMaxPages] = useState('');
   const [mode, setMode] = useState<WikiMode>('hybrid');
+  // v0.10.1136 — sohbetin wiki okuma ayarları: bağlam boyutu (boş = otomatik)
+  // ve iki aşamalı okuma (sayfa seçimi; varsayılan açık).
+  const [contextChars, setContextChars] = useState('');
+  const [pageSelect, setPageSelect] = useState(true);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   const confirm = useConfirm();
@@ -42,6 +49,8 @@ export function WikiKnowledgeSection({ canEdit = true }: { canEdit?: boolean }) 
     setIntervalText(c?.intervalMin ? String(c.intervalMin) : '');
     setMaxPages(c?.maxPages ? String(c.maxPages) : '');
     setMode(effectiveMode(c));
+    setContextChars(c?.contextChars ? String(c.contextChars) : '');
+    setPageSelect(!c?.disablePageSelect);
   }, []);
 
   useEffect(() => {
@@ -65,10 +74,18 @@ export function WikiKnowledgeSection({ canEdit = true }: { canEdit?: boolean }) 
   if (view === null) return <FlashBox kind="err">Wiki ayarları yüklenemedi.</FlashBox>;
   if (!view.available) return null;
 
+  const ctxMin = view.defaults?.contextCharsMin ?? WIKI_CONTEXT_MIN;
+  const ctxMax = view.defaults?.contextCharsMax ?? WIKI_CONTEXT_MAX;
+  const ctxErr = contextCharsError(contextChars, ctxMin, ctxMax);
+
   const save = async () => {
+    if (ctxErr) { setMsg({ kind: 'err', text: `Wiki bağlam boyutu: ${ctxErr}` }); return; }
     setBusy(true); setMsg(null);
     try {
-      const next = await api.putWikiConfig(wikiBody(enabled, projects, wikis, interval, maxPages, mode));
+      const next = await api.putWikiConfig({
+        ...wikiBody(enabled, projects, wikis, interval, maxPages, mode),
+        ...wikiReadingFields(contextChars, pageSelect),
+      });
       apply(next);
       // v0.10.1124 — canlı mod Search uzantısı ister: sunucu uyarısı kayıtta gösterilir.
       setMsg(next.modeWarning
@@ -174,6 +191,22 @@ export function WikiKnowledgeSection({ canEdit = true }: { canEdit?: boolean }) 
           <input type="number" min={1} value={maxPages} disabled={!canEdit}
                  placeholder={String(defPages)} onChange={e => setMaxPages(e.target.value)} style={{ width: '100%' }} />
         </Field2>
+        <Field2 label="Wiki bağlam boyutu (karakter)" small
+          hint={`boş = otomatik (modelden; şu an ${view.defaults?.contextCharsAuto ?? '—'}); ${ctxMin}–${ctxMax}; model penceresi biliniyorsa onunla kapaklanır`}>
+          <input type="number" min={ctxMin} max={ctxMax} step={1000} value={contextChars} disabled={!canEdit}
+                 data-testid="wiki-context-chars" aria-invalid={!!ctxErr}
+                 placeholder="otomatik" onChange={e => setContextChars(e.target.value)} style={{ width: '100%' }} />
+        </Field2>
+      </Row>
+      {!!ctxErr && <p data-testid="wiki-context-chars-error" style={{ fontSize: 12, color: 'var(--err)', margin: '4px 0 0' }}>{ctxErr}</p>}
+      <Row>
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, marginTop: 8 }}
+               title="Model önce aday sayfaların başlık ve kısa kesitlerinden okunacak 1–5 sayfayı seçer, sonra yalnız onları tam okur. Bir ek AI çağrısı (~1–3 sn); başarısızsa skor sırası kullanılır.">
+          <input type="checkbox" checked={pageSelect} disabled={!canEdit} data-testid="wiki-page-select"
+                 onChange={e => setPageSelect(e.target.checked)} />
+          İki aşamalı okuma (sayfa seçimi)
+          <span style={{ fontSize: 12, color: 'var(--text3)' }}>— bir ek AI çağrısı, ~1–3 sn</span>
+        </label>
       </Row>
       {canEdit && (
         <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
