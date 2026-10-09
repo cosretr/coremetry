@@ -109,13 +109,25 @@ describe('chatLinks — güvenlik kararı', () => {
   it.each(['javascript:alert(1)', 'JaVaScRiPt:alert(1)', 'data:text/html,x', 'vbscript:x', '//evil.example.test/x', 'file:///etc/passwd', ' /a b'])(
     '%s → blocked', u => expect(classifyLink(u, policy)).toBe('blocked'));
   // v0.10.1137 inceleme — performans: 20 KB başıboş `*` / `~~` / `_` doğrusal kalır.
-  it('20 KB başıboş işaret < 30 ms', () => {
-    const junk = ('*a ~~b _c ' ).repeat(2000).slice(0, 20_000);
-    parseInline(junk); // ısınma (JIT)
-    const t0 = performance.now();
-    parseInline(junk);
-    parseInline('*x '.repeat(7000));
-    expect(performance.now() - t0).toBeLessThan(30);
+  // v0.10.1144 — duvar saati eşiği (30 ms) CI koşucusunda 41 ms ölçüp kırmızı
+  // verdi. Ölçeklenme oranı makineden bağımsız: doğrusal tarama 10× girdi için
+  // ~10× sürer, eski O(n²) ~100×. Mutlak tavan yalnız felaket emniyeti.
+  it('20 KB başıboş işaret doğrusal ölçeklenir', () => {
+    const mk = (n: number) => ('*a ~~b _c ').repeat(Math.ceil(n / 10)).slice(0, n);
+    const small = mk(2_000), big = mk(20_000);
+    const time = (s: string) => {
+      let best = Infinity;
+      for (let i = 0; i < 5; i++) {
+        const t0 = performance.now();
+        parseInline(s);
+        best = Math.min(best, performance.now() - t0);
+      }
+      return best;
+    };
+    time(small); time(big); // ısınma (JIT)
+    const ts = Math.max(time(small), 0.05), tb = time(big);
+    expect(tb / ts).toBeLessThan(40);
+    expect(tb).toBeLessThan(500);
   });
   it('iç içe vurgu derinliği tavanı', () => {
     expect(() => parseInline('**'.repeat(5000) + 'x' + '**'.repeat(5000))).not.toThrow();

@@ -3265,6 +3265,13 @@ ayıklama, çapa, kapı tablosu, cache refresh → wiki + çip, kapı geçmezse 
 aramaz, kapılar, sıfır-eşleşme ipucu, çiplerin rotaya dönüşü, kaynak pinleri),
 `internal/wiki/rank_probe_test.go`.
 
+## 2026-10-09 — chatInline başarım testi makineden bağımsız (v0.10.1144)
+
+1141'in CI'ı `chatInline.test.ts` "20 KB başıboş işaret < 30 ms" testinde kırmızıya düştü: GitHub
+koşucusu 41 ms ölçtü (yerelde ~10 ms). Duvar saati eşiği makineye bağlı olduğu için test oran
+ölçüsüne çevrildi: 10× girdi için süre oranı < 40 (doğrusal tarama ~10×, eski O(n²) ~100×),
+en iyi 5 koşu; mutlak tavan yalnız felaket emniyeti (500 ms). Ürün kodu değişmedi.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"
