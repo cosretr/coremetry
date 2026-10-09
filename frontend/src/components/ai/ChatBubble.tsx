@@ -740,8 +740,18 @@ function SourceList({ chips }: { chips: readonly SourceChip[] }) {
   );
 }
 
+/** v0.10.1138 — son cevabın sürüm geçişi ("önceki cevap (1/2)"). */
+export interface ChatBubbleVersions { index: number; total: number; onSelect: (i: number) => void }
+
 interface ChatBubbleProps {
   turn: ChatTurn; onRetry?: () => void;
+  /** v0.10.1138 — "↻ Yeniden üret" (yalnız SON asistan cevabında). */
+  onRegenerate?: () => void;
+  /** v0.10.1138 — akış sürerken yeniden üret / düzenle kapalı. */
+  busy?: boolean;
+  versions?: ChatBubbleVersions;
+  /** v0.10.1138 — son kullanıcı mesajını düzenle → kırp + yeniden koş. */
+  onEdit?: (text: string) => void;
   /** test dikişi — "Nasıl cevapladım" açılırını tıklamadan açık çizer (statik render). */
   stepsOpen?: boolean;
 }
@@ -779,7 +789,7 @@ export const ChatBubble = memo(function ChatBubble(props: ChatBubbleProps) {
   return <BubbleBoundary turn={props.turn}><ChatBubbleView {...props} /></BubbleBoundary>;
 });
 
-function ChatBubbleView({ turn, onRetry, stepsOpen }: ChatBubbleProps) {
+function ChatBubbleView({ turn, onRetry, stepsOpen, onRegenerate, busy, versions, onEdit }: ChatBubbleProps) {
   const effLinks = mergeBlockLinks(turn.links, turn.blocks); // v0.10.541 — link blokları çiplere katılır
   const isUser = turn.role === 'user';
   const navigate = useNavigate();
@@ -826,13 +836,9 @@ function ChatBubbleView({ turn, onRetry, stepsOpen }: ChatBubbleProps) {
 
   if (isUser) {
     // Operatörün mesajı: sağa yaslı kompakt hap; ham metin (pre-wrap).
-    return (
-      <div className="cm-msg cm-msg--user">
-        <div className="cm-msg-user">
-          {turn.error ? <ChatErrorLine error={turn.error} isUser /> : turn.text}
-        </div>
-      </div>
-    );
+    // v0.10.1138 — son mesajda ✎ (üstüne gelince / dokunmatikte hep): satır-içi
+    // düzenleyici; "Gönder" sonrasını kırpar ve yeniden koşar.
+    return <UserBubble turn={turn} onEdit={onEdit} busy={busy} />;
   }
 
   return (
@@ -928,7 +934,25 @@ function ChatBubbleView({ turn, onRetry, stepsOpen }: ChatBubbleProps) {
           </Button>
           {/* v0.10.537 — paylaşılan atom: 👎'de yorum kutusu (arşivden gelen
               turn exchangeId taşımaz → atom hiç çizilmez, chatPersist sözleşmesi). */}
-          {!!turn.exchangeId && <AIFeedbackButtons exchangeId={turn.exchangeId} />}
+          {!!turn.exchangeId && <AIFeedbackButtons exchangeId={turn.exchangeId} key={turn.exchangeId} />}
+          {/* v0.10.1138 — yeniden üret: yalnız son cevapta, akarken kapalı. */}
+          {onRegenerate && (
+            <Button variant="ghost" size="sm" onClick={onRegenerate} disabled={busy}
+              title="Aynı soruyu yeniden sor; bu cevap 'önceki cevap' olarak saklanır" aria-label="Cevabı yeniden üret">
+              ↻ Yeniden üret
+            </Button>
+          )}
+          {versions && versions.total > 1 && (
+            <span className="cm-msg-versions" role="group" aria-label="Cevap sürümleri">
+              <Button variant="ghost" size="sm" disabled={versions.index === 0 || busy}
+                onClick={() => versions.onSelect(versions.index - 1)} aria-label="Önceki cevap">‹</Button>
+              <span style={{ fontSize: 11, color: 'var(--text3)' }}>
+                {versions.index < versions.total - 1 ? 'önceki cevap' : 'cevap'} ({versions.index + 1}/{versions.total})
+              </span>
+              <Button variant="ghost" size="sm" disabled={versions.index === versions.total - 1 || busy}
+                onClick={() => versions.onSelect(versions.index + 1)} aria-label="Sonraki cevap">›</Button>
+            </span>
+          )}
         </div>
       )}
     </div>
@@ -936,6 +960,43 @@ function ChatBubbleView({ turn, onRetry, stepsOpen }: ChatBubbleProps) {
   );
 }
 
+
+// UserBubble — v0.10.1138: kullanıcı mesajı + (son mesajda) satır-içi düzenleyici.
+function UserBubble({ turn, onEdit, busy }: { turn: ChatTurn; onEdit?: (text: string) => void; busy?: boolean }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(turn.text ?? '');
+  if (editing && onEdit) {
+    const submit = () => { const v = draft.trim(); if (!v || busy) return; setEditing(false); onEdit(v); };
+    return (
+      <div className="cm-msg cm-msg--user">
+        <form className="cm-msg-edit" style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%', maxWidth: 560 }}
+          onSubmit={e => { e.preventDefault(); submit(); }}>
+          <textarea value={draft} onChange={e => setDraft(e.target.value)} rows={3} aria-label="Mesajı düzenle" autoFocus
+            onKeyDown={e => {
+              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); }
+            }} />
+          <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+            <Button variant="secondary" size="sm" type="button" onClick={() => { setEditing(false); setDraft(turn.text ?? ''); }}>Vazgeç</Button>
+            <Button variant="primary" size="sm" type="submit" disabled={!draft.trim() || busy}>Gönder</Button>
+          </div>
+        </form>
+      </div>
+    );
+  }
+  return (
+    <div className="cm-msg cm-msg--user">
+      <div className="cm-msg-user">
+        {turn.error ? <ChatErrorLine error={turn.error} isUser /> : turn.text}
+      </div>
+      {onEdit && !turn.error && (
+        <div className="cm-msg-actions cm-msg-actions--user" role="toolbar" aria-label="Mesaj eylemleri">
+          <Button variant="ghost" size="sm" disabled={busy} onClick={() => { setDraft(turn.text ?? ''); setEditing(true); }}
+            title="Mesajı düzenle — sonrası silinir ve yeniden sorulur" aria-label="Mesajı düzenle">✎ Düzenle</Button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /**
  * ChatErrorLine — v0.10.22 — HAM SAĞLAYICI METNİ DEĞİL. Operatör

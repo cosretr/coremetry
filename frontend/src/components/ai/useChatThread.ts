@@ -7,6 +7,9 @@ import { capPageContext } from '@/lib/traceAiContext';
 import { isAbortError, settleStoppedTurn, settleTruncatedTurn } from './chatAbort';
 import { failedQuestion, dropFailedTail } from './chatRetry';
 import { prevWikiRefs } from './chatWikiRefs';
+import { parseChatInput, type ParsedChatInput } from './chatScope';
+import { ChatRequestError } from '@/lib/api';
+import { lastUserIndex, regenerateBase } from './chatRegenerate';
 import {
   PERSIST_DEBOUNCE_MS, hasCompletedExchange, persistMessages, restoreTurns,
 } from './chatPersist';
@@ -94,6 +97,22 @@ export interface ChatThreadOpts {
   // yeniden açılınca şerit bunu gösterir. Boşsa sunucu satırdaki mevcut
   // görüntüyü KORUR (ai_conversations.go) — gönderilmemesi silmek değildir.
   persistContext?: PageContext;
+  /**
+   * v0.10.1138 — sunucu açık profil seçimini reddetti (400 profile_unknown /
+   * 403 profile_forbidden). Kabuk seçimi varsayılana döndürür; tur hatası
+   * "yeniden dene" ile varsayılan modelle tekrar gönderilir.
+   */
+  onProfileRejected?: (profile: string, code: string) => void;
+}
+
+/** v0.10.1138 — send'in isteğe bağlı ikinci argümanı. */
+export interface ChatSendOpts {
+  /** composer tamamlamasından SEÇİLEN servis adları (anma kapsamı, chatScope.ts). */
+  chosen?: readonly string[];
+  /** hazır çözülmüş kapsam/komut (yeniden üret: AYNI kapsam). */
+  parsed?: ParsedChatInput;
+  /** yeni cevabın taşıyacağı önceki cevaplar (yeniden üret). */
+  alternatives?: ChatTurn[];
 }
 
 export function useChatThread(opts: ChatThreadOpts = {}) {
@@ -111,8 +130,8 @@ export function useChatThread(opts: ChatThreadOpts = {}) {
   // v0.10.664 — akarken gelen soru: mevcut akış durdurulur, soru kuyruğa
   // alınır, finally gönderir ("durdur ve gönder"; operatörün yeni sorusu
   // her zaman kazanır). sendRef: finally içinden güncel send'e ulaşmak için.
-  const queuedRef = useRef<string | null>(null);
-  const sendRef = useRef<(text: string) => Promise<void>>(async () => {});
+  const queuedRef = useRef<{ q: string; so?: ChatSendOpts } | null>(null);
+  const sendRef = useRef<(text: string, so?: ChatSendOpts) => Promise<void>>(async () => {});
   // Kalıcılık (v0.9.1139). conversationId state OLARAK da tutuluyor ki
   // kabuk "kayıtlı thread" bilgisini çizebilsin; yazım yolu ref'i okur
   // (bayat closure yok).
@@ -139,11 +158,11 @@ export function useChatThread(opts: ChatThreadOpts = {}) {
   // 600 ms'lik kaydı siliyordu → önceki konuşmanın SON alışverişi hiç
   // yazılmıyordu. Artık geçişte bekleyen kayıt İPTAL değil, hemen yazılır.
   const genRef = useRef(0);
-  const saveNow = useCallback(() => {
+  const saveNow = useCallback((): Promise<string | null> => {
     const snapshot = turnsRef.current;
-    if (!hasCompletedExchange(snapshot)) return;
+    if (!hasCompletedExchange(snapshot)) return Promise.resolve(convIdRef.current);
     const gen = genRef.current;
-    void api.saveAiConversation({
+    return api.saveAiConversation({
       id: convIdRef.current ?? undefined,
       title: optsRef.current.title || undefined,
       subject: optsRef.current.subject || undefined,
@@ -151,31 +170,46 @@ export function useChatThread(opts: ChatThreadOpts = {}) {
       messages: persistMessages(snapshot),
     }).then(c => {
       // Arada başka konuşmaya geçildiyse (adopt/clear) yeni kimlik korunur.
-      if (gen !== genRef.current) return;
+      if (gen !== genRef.current) return c.id;
       // Kimliği SUNUCU basar. Aynı thread'e yazmaya devam etmek için
       // yanıttan devralıyoruz — silinmiş bir thread'e yazım sunucuda
       // YENİ kimlikle açılır ve o kimlik de buradan devralınır.
       convIdRef.current = c.id;
       setConversationId(c.id);
-    }).catch(() => { /* sessiz — sonraki tur yeniden dener */ });
+      return c.id;
+    }).catch(() => convIdRef.current /* sessiz — sonraki tur yeniden dener */);
   }, []);
+
+  // v0.10.1138 — "Tam sayfada aç": bekleyen (debounce) kayıt hemen yazılır ve
+  // konuşma kimliği döner; tamamlanmış alışveriş yoksa mevcut kimlik (ya da null).
+  const flushSave = useCallback((): Promise<string | null> => {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    if (!optsRef.current.persist) return Promise.resolve(convIdRef.current);
+    return saveNow();
+  }, [saveNow]);
 
   const schedulePersist = useCallback(() => {
     if (!optsRef.current.persist) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(() => { saveTimerRef.current = null; saveNow(); }, PERSIST_DEBOUNCE_MS);
+    saveTimerRef.current = setTimeout(() => { saveTimerRef.current = null; void saveNow(); }, PERSIST_DEBOUNCE_MS);
   }, [saveNow]);
 
-  const send = useCallback(async (text: string) => {
+  const send = useCallback(async (text: string, so?: ChatSendOpts) => {
     const q = text.trim();
     if (!q) return;
     if (busyRef.current) {
       // v0.10.664 — sessizce düşürme YOK: durdur ve kuyruğa al.
-      queuedRef.current = q;
+      queuedRef.current = { q, so };
       abortRef.current?.abort();
       return;
     }
     const o = optsRef.current;
+    // v0.10.1138 — @-anmalar / komut → yapısal kapsam. Yoksa ikisi de undefined
+    // ve istek gövdesi bayt bayt eski (chatScope.ts).
+    const parsed = so?.parsed ?? parseChatInput(q, so?.chosen ?? []);
     // v0.10.1134 — önceki cevabın wiki sayfaları (geçmiş yalnız {role,text}).
     const wikiRefs = prevWikiRefs(turnsRef.current);
     const history: ChatMessage[] = [
@@ -199,8 +233,8 @@ export function useChatThread(opts: ChatThreadOpts = {}) {
     ];
     setTurns(prev => [
       ...prev,
-      { role: 'user', text: q },
-      { role: 'assistant', text: '', steps: [], pending: true },
+      { role: 'user', text: q, ...(parsed.scope ? { scope: parsed.scope } : {}), ...(parsed.command ? { command: parsed.command } : {}) },
+      { role: 'assistant', text: '', steps: [], pending: true, ...(so?.alternatives?.length ? { alternatives: so.alternatives } : {}) },
     ]);
     busyRef.current = true;
     setBusy(true);
@@ -257,7 +291,8 @@ export function useChatThread(opts: ChatThreadOpts = {}) {
         o.toMs || undefined, o.profile || undefined, // v0.10.183 — model profili
         convIdRef.current || undefined, // v0.10.478 — konuşma kimliği (sunucu bağlam state'i)
         o.page || undefined, o.pinnedPage || undefined, // v0.10.539 — sayfa bağlamı + pin
-        wikiRefs.length > 0 ? wikiRefs : undefined); // v0.10.1134 — wiki takip sorusu
+        wikiRefs.length > 0 ? wikiRefs : undefined, // v0.10.1134 — wiki takip sorusu
+        parsed.scope, parsed.command); // v0.10.1138 — yapısal @-kapsam + /komut
       // v0.10.648 — terminal olaysız EOF: tur asılı kalmasın (chatAbort.ts).
       patchLast(settleTruncatedTurn);
     } catch (err) {
@@ -267,6 +302,16 @@ export function useChatThread(opts: ChatThreadOpts = {}) {
       // kusur üretir. Akan metin KORUNUYOR (chatAbort.ts).
       if (isAbortError(err)) {
         patchLast(settleStoppedTurn);
+      } else if (err instanceof ChatRequestError && o.profile && (err.code === 'profile_forbidden' || err.code === 'profile_unknown')) {
+        // v0.10.1138 — seçili profil reddedildi: kabuk seçimi varsayılana
+        // döndürür; "Yeniden dene" aynı soruyu varsayılan modelle gönderir.
+        o.onProfileRejected?.(o.profile, err.code);
+        patchLast(t => ({
+          ...t, pending: false,
+          error: err.code === 'profile_forbidden'
+            ? 'Seçili model bu rol için kapalı — varsayılan modele dönüldü. "Yeniden dene" ile tekrar sor.'
+            : 'Seçili model profili artık yok — varsayılan modele dönüldü. "Yeniden dene" ile tekrar sor.',
+        }));
       } else {
         patchLast(t => ({ ...t, error: err instanceof Error ? err.message : String(err), pending: false }));
       }
@@ -282,7 +327,7 @@ export function useChatThread(opts: ChatThreadOpts = {}) {
       const next = queuedRef.current;
       if (next) {
         queuedRef.current = null;
-        void sendRef.current(next);
+        void sendRef.current(next.q, next.so);
       }
     }
   }, [schedulePersist]);
@@ -323,7 +368,7 @@ export function useChatThread(opts: ChatThreadOpts = {}) {
     if (saveTimerRef.current) {
       clearTimeout(saveTimerRef.current);
       saveTimerRef.current = null;
-      saveNow();
+      void saveNow();
     }
     genRef.current++;
     const restored = restoreTurns(c.messages);
@@ -365,5 +410,37 @@ export function useChatThread(opts: ChatThreadOpts = {}) {
     abortRef.current?.abort();
   }, []);
 
-  return { turns, busy, send, retry, stop, clear, load, adopt, conversationId, last, showFollowups };
+  // v0.10.1138 — "↻ Yeniden üret": SON asistan cevabı aynı kullanıcı turuyla
+  // (aynı geçmiş, aynı kapsam/komut) yeniden istenir ve yerine geçer; eski
+  // cevap `alternatives`te kalır ("önceki cevap (1/2)"). Yeni istek yeni
+  // exchangeId alır — geri bildirim her cevabın kendi kimliğine yazılır.
+  // Akarken çalışmaz. Kalıcı arşiv send'in finally'sindeki kayıtla görünen
+  // cevabı yazar (upsert tam transkripti değiştirir).
+  const regenerate = useCallback(() => {
+    if (busyRef.current) return;
+    const r = regenerateBase(turnsRef.current);
+    if (!r) return;
+    turnsRef.current = r.base;
+    setTurns(r.base);
+    void send(r.question, { parsed: r.parsed, alternatives: r.alternatives });
+  }, [send]);
+
+  // v0.10.1138 — son kullanıcı mesajını düzenle: o mesaj ve SONRASI düşer,
+  // düzenlenmiş metin aynı yoldan yeniden gönderilir. Arşiv bir sonraki
+  // kayıtta kırpılmış + yeniden koşulmuş transkripti yazar (upsert tam
+  // mesaj listesini DEĞİŞTİRİR, eklemez — ai_conversations.go).
+  const editLast = useCallback((text: string, chosen?: readonly string[]): boolean => {
+    const q = text.trim();
+    if (!q || busyRef.current) return false;
+    const ts = turnsRef.current;
+    const i = lastUserIndex(ts);
+    if (i < 0) return false;
+    const base = ts.slice(0, i);
+    turnsRef.current = base;
+    setTurns(base);
+    void send(q, { chosen: [...(ts[i].scope?.services ?? []), ...(chosen ?? [])] });
+    return true;
+  }, [send]);
+
+  return { turns, busy, send, retry, regenerate, editLast, stop, clear, load, adopt, flushSave, conversationId, last, showFollowups };
 }

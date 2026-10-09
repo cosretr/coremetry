@@ -53,6 +53,9 @@ type aiProfileView struct {
 	TimeoutS    int      `json:"timeoutS,omitempty"`
 	Thinking    string   `json:"thinking,omitempty"` // v0.10.534 (modelcaps): "" | off | on
 	Default     bool     `json:"default,omitempty"`
+	// v0.10.1138 — sohbet seçicisinin kısa açıklaması + rol allowlist'i (boş = herkes).
+	Description string   `json:"description,omitempty"`
+	Roles       []string `json:"roles,omitempty"`
 }
 
 func aiProfileViews(profiles []copilot.ModelProfile, defaultID string) []aiProfileView {
@@ -62,6 +65,7 @@ func aiProfileViews(profiles []copilot.ModelProfile, defaultID string) []aiProfi
 			ID: p.ID, Label: p.Label, Provider: p.Provider, BaseURL: p.BaseURL, Model: p.Model, SkipTLS: p.SkipTLS,
 			HasKey: p.APIKey != "", MaxTokens: p.MaxTokens, Temperature: p.Temperature, TimeoutS: p.TimeoutS,
 			Thinking: p.Thinking, Default: p.ID == defaultID,
+			Description: p.Description, Roles: p.Roles,
 		})
 	}
 	return out
@@ -112,7 +116,9 @@ func (s *Server) putAIProfile(w http.ResponseWriter, r *http.Request) {
 		MaxTokens   int      `json:"maxTokens"`
 		Temperature *float64 `json:"temperature"`
 		TimeoutS    int      `json:"timeoutS"`
-		Thinking    string   `json:"thinking"` // v0.10.534
+		Thinking    string   `json:"thinking"`    // v0.10.534
+		Description string   `json:"description"` // v0.10.1138 — seçicideki kısa açıklama
+		Roles       []string `json:"roles"`       // v0.10.1138 — boş = herkes
 	}
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "geçersiz JSON: "+err.Error())
@@ -122,7 +128,9 @@ func (s *Server) putAIProfile(w http.ResponseWriter, r *http.Request) {
 		ID: id, Label: strings.TrimSpace(in.Label), Provider: strings.TrimSpace(in.Provider), BaseURL: strings.TrimSpace(in.BaseURL),
 		APIKey: in.APIKey, Model: strings.TrimSpace(in.Model), SkipTLS: in.SkipTLS,
 		MaxTokens: in.MaxTokens, Temperature: in.Temperature, TimeoutS: in.TimeoutS,
-		Thinking: strings.TrimSpace(in.Thinking),
+		Thinking:    strings.TrimSpace(in.Thinking),
+		Description: strings.TrimSpace(in.Description),
+		Roles:       normalizeProfileRoles(in.Roles),
 	}
 	if err := copilot.ValidateProfile(p); err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
@@ -134,8 +142,34 @@ func (s *Server) putAIProfile(w http.ResponseWriter, r *http.Request) {
 	}
 	s.publishConfigReload(r.Context(), "ai")
 	s.audit(r, "settings.ai.profile.upsert", "settings", id,
-		fmt.Sprintf("provider=%s model=%s baseUrl=%s hasKey=%v", p.Provider, p.Model, p.BaseURL, in.APIKey != ""))
+		fmt.Sprintf("provider=%s model=%s baseUrl=%s hasKey=%v roles=%s", p.Provider, p.Model, p.BaseURL, in.APIKey != "", profileRolesAudit(p.Roles)))
 	writeJSON(w, s.aiProfilesPayload())
+}
+
+// normalizeProfileRoles — v0.10.1138, SAF: kırp + küçük harf + boşları at;
+// sıra korunur (geçersiz/tekrarı ValidateProfile reddeder). Üç rolün üçü de
+// seçiliyse liste boşalır — "herkes" tek biçimde saklanır.
+func normalizeProfileRoles(in []string) []string {
+	var out []string
+	set := map[string]bool{}
+	for _, r := range in {
+		if r = strings.ToLower(strings.TrimSpace(r)); r != "" {
+			out = append(out, r)
+			set[r] = true
+		}
+	}
+	if len(out) == 3 && set[auth.RoleAdmin] && set[auth.RoleEditor] && set[auth.RoleViewer] {
+		return nil
+	}
+	return out
+}
+
+// profileRolesAudit — audit satırı için: boş liste "all".
+func profileRolesAudit(roles []string) string {
+	if len(roles) == 0 {
+		return "all"
+	}
+	return strings.Join(roles, ",")
 }
 
 func (s *Server) deleteAIProfile(w http.ResponseWriter, r *http.Request) {

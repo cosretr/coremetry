@@ -47,7 +47,7 @@ describe('BAĞLANMA', () => {
     const sendBody = hook.slice(hook.indexOf('const send = useCallback('), hook.indexOf('const retry = useCallback('));
     expect(sendBody).not.toMatch(/^\s*if \(!q \|\| busyRef\.current\) return;/m);
     expect(sendBody).toMatch(/^\s*if \(busyRef\.current\) \{/m);
-    expect(sendBody).toContain('queuedRef.current = q;');
+    expect(sendBody).toContain('queuedRef.current = { q, so };'); // v0.10.1138 — kapsamıyla kuyruğa
     // send'in finally'si (dosyada başka finally blokları da var) — copilotChat çağrısından sonraki ilk.
     const fin = hook.indexOf('} finally {', hook.indexOf('await api.copilotChat('));
     expect(hook.slice(fin, fin + 900)).toContain('queuedRef.current');

@@ -7,9 +7,9 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Button, ButtonGroup, Badge, Modal, SelectField, useConfirm } from '@/components/ui';
 import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
 import { api } from '@/lib/api';
-import type { AIModelProfile, AIModelProfileInput, AIProfilesPayload, AIProvider, AIProfileTestResult, AIThinking } from '@/lib/types';
+import type { AIModelProfile, AIModelProfileInput, AIProfilesPayload, AIProvider, AIProfileTestResult, AIThinking, Role } from '@/lib/types';
 import { Field2, FlashBox, Row } from './shared';
-import { slugifyProfileId, PROFILE_ID_RE, tuningSummary, endpointLabel, profileUsable } from './aiProfiles';
+import { slugifyProfileId, PROFILE_ID_RE, tuningSummary, endpointLabel, profileUsable, PROFILE_ROLES, rolesSummary, toggleRole } from './aiProfiles';
 
 // v0.10.942 (tablo standardı dilim 3) — 11px ikincil hücreler `tone: muted`
 // (S3); eylemler `kind: 'actions'`. 340 = eski `trailing` 330 + ButtonGroup'un
@@ -25,12 +25,13 @@ const COLS: ColumnDef<AIModelProfile>[] = [
   { id: 'actions',  label: 'Eylemler',  kind: 'actions', width: 340, minWidth: 340 },
 ];
 
-type Draft = { id: string; label: string; provider: AIProvider; baseUrl: string; apiKey: string; model: string; skipTls: boolean; maxTokens: string; temperature: string; timeoutS: string; thinking: AIThinking };
-const emptyDraft = (): Draft => ({ id: '', label: '', provider: 'openai', baseUrl: '', apiKey: '', model: '', skipTls: false, maxTokens: '', temperature: '', timeoutS: '', thinking: '' });
+type Draft = { id: string; label: string; provider: AIProvider; baseUrl: string; apiKey: string; model: string; skipTls: boolean; maxTokens: string; temperature: string; timeoutS: string; thinking: AIThinking; description: string; roles: Role[] };
+const emptyDraft = (): Draft => ({ id: '', label: '', provider: 'openai', baseUrl: '', apiKey: '', model: '', skipTls: false, maxTokens: '', temperature: '', timeoutS: '', thinking: '', description: '', roles: [] });
 const draftOf = (p: AIModelProfile): Draft => ({
   id: p.id, label: p.label ?? '', provider: p.provider, baseUrl: p.baseUrl ?? '', apiKey: '', model: p.model ?? '', skipTls: !!p.skipTls,
   maxTokens: p.maxTokens ? String(p.maxTokens) : '', temperature: p.temperature === undefined || p.temperature === null ? '' : String(p.temperature), timeoutS: p.timeoutS ? String(p.timeoutS) : '',
   thinking: p.thinking ?? '',
+  description: p.description ?? '', roles: p.roles ?? [], // v0.10.1138
 });
 
 export function AiProfilesPanel({ payload, onChange }: { payload: AIProfilesPayload; onChange: (p: AIProfilesPayload) => void }) {
@@ -63,6 +64,8 @@ export function AiProfilesPanel({ payload, onChange }: { payload: AIProfilesPayl
       temperature: draft.temperature === '' ? undefined : Number(draft.temperature),
       timeoutS: draft.timeoutS ? Number(draft.timeoutS) : undefined,
       thinking: draft.thinking || undefined,
+      description: draft.description.trim() || undefined, // v0.10.1138 — sohbet seçicisindeki kısa açıklama
+      roles: draft.roles, // v0.10.1138 — boş = herkes (sunucu üçü de seçiliyse boşa indirir)
     };
     await run(() => api.putAIProfile(id, body), isNew ? `Profil eklendi: ${id}` : `Profil güncellendi: ${id}`);
     setDraft(null);
@@ -101,6 +104,8 @@ export function AiProfilesPanel({ payload, onChange }: { payload: AIProfilesPayl
                     {/* v0.10.179 — rozet kendi satırında: ellipsis rozeti yutuyordu (178 canlı görüntüsü) */}
                     <div className="field-hint mono" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                       {p.label ? p.id : null}{p.default && <Badge>varsayılan</Badge>}
+                      {/* v0.10.1138 — rol allowlist'i: yalnız kısıtlıysa görünür */}
+                      {!!p.roles?.length && <span className="badge b-gray" title="Sohbette bu profili açıkça seçebilen roller">{rolesSummary(p.roles)}</span>}
                     </div>
                   </DataTableCell>
                   <DataTableCell dt={dt} col="provider" row={p}><span className="badge b-gray">{p.provider}</span></DataTableCell>
@@ -155,6 +160,18 @@ export function AiProfilesPanel({ payload, onChange }: { payload: AIProfilesPayl
             </SelectField>
             {draft.provider === 'openai' && <Field2 label="Base URL" hint="Örn. http://vllm:8000/v1 — her profil kendi endpoint'ine gider"><input value={draft.baseUrl} onChange={e => setDraft({ ...draft, baseUrl: e.target.value })} placeholder="http://vllm:8000/v1" /></Field2>}
             <Field2 label="Model"><input value={draft.model} onChange={e => setDraft({ ...draft, model: e.target.value })} placeholder="gemma4-31b" /></Field2>
+            {/* v0.10.1138 — sohbet "model ▾" menüsünde ad + model + bu kısa açıklama görünür */}
+            <Field2 label="Kısa açıklama" hint="Sohbetin model menüsünde görünür (≤120 karakter), ör. «Hızlı, kısa cevaplar»"><input value={draft.description} maxLength={120} onChange={e => setDraft({ ...draft, description: e.target.value })} placeholder="Derin analiz, yavaş" /></Field2>
+            <fieldset style={{ border: 0, padding: 0, margin: '0 0 12px' }}>
+              <legend className="field-hint" style={{ marginBottom: 4 }}>Sohbette seçebilen roller — hiçbiri işaretli değilse herkes</legend>
+              <div style={{ display: 'flex', gap: 12 }}>
+                {PROFILE_ROLES.map(r => (
+                  <label key={r} style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12 }}>
+                    <input type="checkbox" checked={draft.roles.includes(r)} onChange={() => setDraft({ ...draft, roles: toggleRole(draft.roles, r) })} /> {r}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
             <Field2 label="API anahtarı" hint={isNew ? 'Yerel endpoint için boş bırakılabilir' : 'Boş = mevcut anahtar korunur'}><input type="password" autoComplete="new-password" value={draft.apiKey} onChange={e => setDraft({ ...draft, apiKey: e.target.value })} /></Field2>
             {draft.provider === 'openai' && <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12, marginBottom: 12 }}><input type="checkbox" checked={draft.skipTls} onChange={e => setDraft({ ...draft, skipTls: e.target.checked })} /> TLS doğrulamasını atla (öz-imzalı yerel uç)</label>}
             <Row>

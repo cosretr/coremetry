@@ -103,6 +103,8 @@ func (s *Server) registerAIRoutes(mux *http.ServeMux) {
 	// v0.6.53 — in-app agentic chatbot. SSE stream; any authenticated
 	// user (the telemetry tools it calls are all read-only).
 	mux.HandleFunc("POST   /api/copilot/chat", s.requireCopilot(s.copilotChat))
+	// v0.10.1138 — composer `@team:` tamamlaması (chat_scope_names.go).
+	mux.HandleFunc("GET    /api/copilot/scope-names", s.requireCopilot(s.copilotScopeNames))
 	// v0.8.75 — autonomous agentic root-cause analysis (same loop + tools,
 	// kicked off on a subject service/problem rather than user-driven).
 	mux.HandleFunc("POST   /api/copilot/analyze-service", s.requireCopilot(s.copilotAnalyzeService))

@@ -1717,6 +1717,9 @@ func (s *Server) runGuidedRoute(ctx context.Context, emit func(string, any), rou
 		to = time.Now()
 	}
 	from := to.Add(-time.Duration(rangeS) * time.Second)
+	// v0.10.1138 — yapısal kapsam (chat_scope.go): verilen boyutta netleştirme
+	// sorulmaz, env/takım/servis süzgeci rotaya yazılır. Kapsamsız ctx → aynen.
+	route = applyChatScopeRoute(chatScopeFromCtx(ctx), route)
 
 	// v0.10.434 (D7b) — open_page: overview özne ister; yoksa "hangisini
 	// kastettin?" (çip: "X sayfasını aç"). Deterministik cevap, LLM yok.

@@ -3056,6 +3056,51 @@ prompt'larına eklendi: tek satırlık özet, prosedür için liste, karşılaş
 `wikiDeclined` önek, `ragDeclined` içerik eşleşmesi kullanıyor. Guided ve çekmece prompt'ları değişmedi.
 Giriş kutusu için zengin metin düzenleyicisi kapsam dışı; kuyruğa alındı.
 
+## 2026-10-09 — CoSRE sohbeti: model seçici, yeniden üret/düzenle, @ ve / kapsamı, tam sayfaya geçiş (v0.10.1138)
+
+**Operatör onaylı dört iyileştirme.** Ortak bileşen `CopilotChat` (çekmece + /cosre), `useChatThread`,
+sunucuda `copilot_chat.go`. api.go büyümedi: yeni uç `chat_scope_names.go`, kapsam `chat_scope.go`,
+profil kapısı `chat_profile_gate.go`.
+
+**Karar 1, model seçici (hata + özellik):** Profiller sunucuda vardı ama `useCopilotEnabled` önbelleği
+yalnız enabled/model/wiki tutuyordu; `profiles`/`defaultProfile` düşüyor, seçici hiç çizilmiyordu
+(kök neden). Önbellek artık bütün yanıtı taşır (`normalizeCopilotConfig`). Başlıktaki model rozeti
+`ModelPicker`'dır: >1 izinli profilde "model ▾" menüsü (ad + model + kısa açıklama), tekte tıklanamaz
+rozet. Seçim kullanıcı başına localStorage'da (try/catch, bellek yedeği) ve mevcut `context.profile`
+alanıyla gider. Profile `description` (≤120) ve isteğe bağlı `roles` allowlist'i eklendi (admin AI
+ayarlarından düzenler, audit satırı `roles=` taşır); boş = herkes. `/api/copilot/config` yalnız çağıranın
+rolüne açık profilleri listeler. Sunucu açık seçimi doğrular: bilinmeyen 400 `profile_unknown`, rolüne
+kapalı 403 `profile_forbidden` (SSE'den önce); eskiden bilinmeyen kimlik sessizce varsayılana düşüyordu.
+İstemci iki kodda seçimi varsayılana döndürür. Allowlist yalnız AÇIK seçimi kısıtlar; seçimsiz istek
+varsayılan profil / yüzey eşlemesiyle koşar.
+
+**Karar 2, yeniden üret ve düzenle:** "↻ Yeniden üret" yalnız son tamamlanmış cevapta, akarken kapalı:
+aynı soru, aynı geçmiş, aynı kapsam/komut yeniden gider ve cevap yerine geçer; önceki cevaplar
+`alternatives`te (en çok 5) "önceki cevap (1/2)" geçişiyle durur. Her istek yeni exchangeId alır,
+👍/👎 her cevabın kendi kimliğine yazılır (çift sayım yok). Son kullanıcı mesajında ✎: satır-içi
+düzenleyici, "Gönder" sonrasını kırpar ve yeniden koşar. Arşiv ucu (`ai_conversations.go`) tam
+transkripti upsert ediyor (ekleme değil), yani kırpılmış transkript aynı kimlikle yazılır; ek uç yok.
+
+**Karar 3, @ ve / kapsamı:** Metin yazıldığı gibi gider, yanına yapısal `context.scope`
+(`services/trace/problem/env/team/wiki`) ve `context.command` (`wiki|trace|rca|logs|help`) konur.
+`@ad` yalnız tamamlamadan seçildiyse ya da servis biçimindeyse (tireli) kapsam olur: yapıştırılan
+stack trace'teki `@Override` kapsam değildir. Komut yalnız mesaj başında ve bilinen adsa (`/api/x` değil).
+Sunucu kapsamı router sezgilerinden ÖNCE uygular: `/help` ve bilinmeyen komut LLM'siz liste; `/wiki` ve
+`@wiki` telemetri yönlendirmesini atlar (LiveOnWeak; wiki kapalı / API token'ı açık mesaj); `@trace:` →
+trace_by_id (Explain çekirdeği); `@problem:` → problemin servisi + penceresinde kök neden; `/trace`,
+`/rca`, `/logs` mevcut kılavuz rotalara iner. Servis/env/takım canlı kataloglarla (router'ın AYNI 60 s
+listeleri) doğrulanır; bilinmeyen değer LLM'siz "şunu mu kastettin?" + çip. Geçerli kapsam ctx'e konur,
+`runGuidedRoute` her rotaya uygular: kapsam verilen boyutta "Hangi servisi kastettin?" sorulmaz. Kapsam
+erişimi genişletmez: yalnız sorguyu daraltır, bundle'lar kendi yetki/limit yolunu kullanır. Kapsamsız,
+komutsuz serbest metin bayt bayt eski yoldadır (testle pinli). `@team:` tamamlaması için
+`GET /api/copilot/scope-names?kind=team&q=` eklendi (sunucu araması, ≤20); env mevcut
+`/api/environments?q=` aramasını kullanır.
+
+**Karar 4, tam sayfaya geçiş:** Uygulama içi çekmece başlığında "Tam sayfada aç ↗" gerçek bir link
+(`/cosre?chat=<id>`): Ctrl/Cmd/orta tık yeni sekme açar. Düz tıkta bekleyen kayıt hemen yazılır (kimliği
+sunucu basar), çekmece kapanır, aynı sekmede gezilir; boş konuşmada yalnız `/cosre`. Akarken kapalı,
+çünkü gezinme akışı keserdi. /cosre'deki "Coremetry'yi aç" aynen kaldı.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

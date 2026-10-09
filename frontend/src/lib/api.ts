@@ -377,6 +377,15 @@ export class CanceledError extends Error {
   constructor() { super('request canceled'); this.name = 'CanceledError'; }
 }
 
+/** v0.10.1138 — sohbet isteği SSE açılmadan reddedildi (HTTP durum + sunucu
+ *  kodu). Profil kapısı: 400 `profile_unknown`, 403 `profile_forbidden`. */
+export class ChatRequestError extends Error {
+  constructor(message: string, readonly status: number, readonly code?: string) {
+    super(message);
+    this.name = 'ChatRequestError';
+  }
+}
+
 /** Bir hatanın "çağıran iptal etti" olup olmadığını söyler. */
 export function isCanceled(e: unknown): boolean {
   return e instanceof CanceledError || (e as Error)?.name === 'CanceledError';
@@ -2252,7 +2261,10 @@ export const api = {
   // copilot.ActiveModel) ve uç kimlik ister, yani anonim /public/*
   // yüzeyleri bu alanı hiç göremez. baseUrl/apiKey burada YOK ve
   // olmayacak — o yüzey admin'e özel getAISettings.
-  copilotConfig:         () => get<{ enabled: boolean; model?: string; wiki?: boolean; profiles?: { id: string; label?: string; model?: string }[]; defaultProfile?: string }>(`/api/copilot/config`),
+  copilotConfig:         () => get<{ enabled: boolean; model?: string; wiki?: boolean; profiles?: import('./types').CopilotProfileOption[]; defaultProfile?: string }>(`/api/copilot/config`),
+  // v0.10.1138 — composer `@team:` tamamlaması (sunucu araması, ≤20).
+  copilotScopeNames:     (kind: 'team', q: string) =>
+    get<{ names: string[] }>(`/api/copilot/scope-names?kind=${kind}&q=${encodeURIComponent(q)}`),
   // v0.10.702 — boş sohbetin veri çipleri (takımın en kötü servisi + yolu).
   copilotStarters:       (rangeS?: number, signal?: AbortSignal) =>
     get<CopilotStartersResponse>(`/api/copilot/starters${qs({ range_s: rangeS })}`, signal),
@@ -2403,6 +2415,10 @@ export const api = {
     // v0.10.1134 — önceki asistan turunun wiki kaynak href'leri (takip sorusu
     // önceki sayfayı yeniden okur; components/ai/chatWikiRefs.ts).
     contextWikiRefs?: string[],
+    // v0.10.1138 — composer'ın yapısal @-kapsamı ve /komutu (chat_scope.go).
+    // Yokken gövde bayt bayt eski.
+    contextScope?: import('./types').ChatScope,
+    contextCommand?: import('./types').ChatCommand,
   ): Promise<void> => {
     // v0.10.437 (D6) — tarayıcı saat dilimi: mutlak tarih/saat soruları
     // ("08/08/2026 04-08 arası") operatörün yerel saatinde yorumlanır.
@@ -2410,7 +2426,7 @@ export const api = {
     // v0.10.745 — çift lib/browserTz'den; Explain/insight uçlarıyla aynı kaynak.
     const { tz, tzOffsetMin } = browserTz();
     const context =
-      contextService || contextOperation || contextExplain || contextSubject || contextRangeS || contextTrace || contextEnv || contextToMs || contextProfile || contextConversation || contextPage || contextPinnedPage || (contextWikiRefs && contextWikiRefs.length > 0) || tzOffsetMin !== 0 || tz
+      contextService || contextOperation || contextExplain || contextSubject || contextRangeS || contextTrace || contextEnv || contextToMs || contextProfile || contextConversation || contextPage || contextPinnedPage || (contextWikiRefs && contextWikiRefs.length > 0) || contextScope || contextCommand || tzOffsetMin !== 0 || tz
         ? {
             ...(tzOffsetMin !== 0 ? { tzOffsetMin } : {}),
             ...(tz ? { tz } : {}),
@@ -2427,6 +2443,8 @@ export const api = {
             ...(contextPage ? { page: contextPage } : {}),
             ...(contextPinnedPage ? { pinnedPage: contextPinnedPage } : {}),
             ...(contextWikiRefs && contextWikiRefs.length > 0 ? { wikiRefs: contextWikiRefs } : {}),
+            ...(contextScope ? { scope: contextScope } : {}),
+            ...(contextCommand ? { command: contextCommand } : {}),
           }
         : undefined;
     const r = await fetch(API_BASE + '/api/copilot/chat', {
@@ -2437,7 +2455,11 @@ export const api = {
       signal,
     });
     if (!r.ok || !r.body) {
-      throw new Error(`chat failed: ${r.status}`);
+      // v0.10.1138 — profil kapısı (400 profile_unknown / 403 profile_forbidden)
+      // gövdede `code` taşır; useChatThread seçimi varsayılana döndürür.
+      let code: string | undefined;
+      try { code = ((await r.json()) as { code?: string } | null)?.code; } catch { /* gövde JSON değil */ }
+      throw new ChatRequestError(`chat failed: ${r.status}`, r.status, code);
     }
     // v0.9.1127 — çerçeve ayrıştırma lib/sse.ts'e taşındı; akan ✨ Explain
     // AYNI okuyucuyu kullanıyor. Davranış birebir (tampon + boş-satır

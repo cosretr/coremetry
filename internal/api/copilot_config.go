@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/cilcenk/coremetry/internal/auth"
+	"github.com/cilcenk/coremetry/internal/copilot"
 )
 
 // v0.10.1128 — /api/copilot/config handler'ı ve dar yanıt tipleri api.go'dan
@@ -37,6 +38,27 @@ type copilotProfileOption struct {
 	ID    string `json:"id"`
 	Label string `json:"label,omitempty"`
 	Model string `json:"model,omitempty"`
+	// v0.10.1138 — seçici menüsündeki kısa açıklama ("Hızlı", "Derin"); sır değil.
+	Description string `json:"description,omitempty"`
+}
+
+// copilotProfileOptions — v0.10.1138, SAF: çağıranın rolünün AÇIKÇA
+// seçebileceği profiller (rol allowlist'i boş = herkes). Liste yalnız >1
+// seçenek varsa döner: tek seçenekte seçici anlamsız (eski şekil korunur).
+// Varsayılan profil listede olmasa da seçimsiz istek onunla koşar — allowlist
+// yalnız açık seçimi kısıtlar (sunucu kapısı chatProfileGate ile aynı kural).
+func copilotProfileOptions(profiles []copilot.ModelProfile, role string) []copilotProfileOption {
+	var out []copilotProfileOption
+	for _, p := range profiles {
+		if !copilot.ProfileRoleAllowed(p, role) {
+			continue
+		}
+		out = append(out, copilotProfileOption{ID: p.ID, Label: p.Label, Model: p.Model, Description: p.Description})
+	}
+	if len(out) < 2 {
+		return nil
+	}
+	return out
 }
 
 type copilotConfigResponse struct {
@@ -68,13 +90,19 @@ func (s *Server) copilotConfig(w http.ResponseWriter, r *http.Request) {
 		Enabled: active,
 		Model:   s.copilot.ActiveModel(),
 	}
+	claims := auth.FromContext(r.Context())
+	role := ""
+	if claims != nil {
+		role = claims.Role
+	}
 	if profiles, def, _ := s.copilot.ProfilesSnapshot(); len(profiles) > 1 {
-		resp.DefaultProfile = def
-		for _, p := range profiles {
-			resp.Profiles = append(resp.Profiles, copilotProfileOption{ID: p.ID, Label: p.Label, Model: p.Model})
+		// v0.10.1138 — yalnız çağıranın rolüne açık profiller (rol allowlist'i).
+		if opts := copilotProfileOptions(profiles, role); len(opts) > 0 {
+			resp.DefaultProfile = def
+			resp.Profiles = opts
 		}
 	}
 	wk := wikiKB()
-	resp.Wiki = chatWikiAvailable(active, wk != nil && wk.Enabled(), auth.FromContext(r.Context()))
+	resp.Wiki = chatWikiAvailable(active, wk != nil && wk.Enabled(), claims)
 	writeJSON(w, resp)
 }

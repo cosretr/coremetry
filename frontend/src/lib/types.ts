@@ -1597,7 +1597,13 @@ export interface AIModelProfile {
   timeoutS?: number;
   thinking?: AIThinking; // v0.10.534
   default?: boolean;
+  /** v0.10.1138 — sohbet model seçicisindeki kısa açıklama */
+  description?: string;
+  /** v0.10.1138 — profili açıkça seçebilecek roller; boş/yok = herkes */
+  roles?: Role[];
 }
+/** v0.10.1138 — /api/copilot/config profil seçeneği (sırsız: id/label/model/açıklama). */
+export interface CopilotProfileOption { id: string; label?: string; model?: string; description?: string }
 /** Yüzey grubu → profil kimliği ('' = varsayılan). intent = chat-intent; background = *-auto-explain. */
 export interface AISurfaceMap { intent?: string; background?: string }
 export interface AIModelProfileInput {
@@ -1612,6 +1618,8 @@ export interface AIModelProfileInput {
   temperature?: number | null;
   timeoutS?: number;
   thinking?: AIThinking; // v0.10.534
+  description?: string; // v0.10.1138
+  roles?: Role[];       // v0.10.1138 — boş = herkes
 }
 export interface AIProfilesPayload { profiles: AIModelProfile[]; defaultProfile: string; surfaceMap: AISurfaceMap }
 export interface AIProfileTestResult { ok: boolean; ms: number; profile: string; error?: string; sample?: string }
@@ -7132,7 +7140,33 @@ export interface ChatTurn extends ChatMessage {
    * kaynak/çip host'uysa tıklanır (components/ai/chatLinks.ts). Arşiv taşımaz.
    */
   allowedLinks?: string[];
+  /**
+   * v0.10.1138 — kullanıcı turunun yapısal kapsamı ve /komutu (gönderimde
+   * composer'dan çözülür; yeniden üret/düzenle aynı kapsamı yeniden yollar).
+   * Arşiv taşımaz: geri yüklenen metin anmaları zaten içerir.
+   */
+  scope?: ChatScope;
+  command?: ChatCommand;
+  /**
+   * v0.10.1138 — "↻ Yeniden üret" ile yerine yenisi gelen ÖNCEKİ cevaplar
+   * (eskiden yeniye). Ekranda "önceki cevap (1/2)" geçişi; geri bildirim her
+   * cevabın KENDİ exchangeId'sine yazılır (çift sayım yok). Arşiv yalnız
+   * görünen cevabı saklar.
+   */
+  alternatives?: ChatTurn[];
 }
+
+/** v0.10.1138 — composer @-anmalarının yapısal hâli (context.scope). */
+export interface ChatScope {
+  services?: string[];
+  trace?: string;
+  problem?: string;
+  env?: string;
+  team?: string;
+  wiki?: boolean;
+}
+/** v0.10.1138 — mesaj başı eğik komutları (context.command). */
+export type ChatCommand = 'wiki' | 'trace' | 'rca' | 'logs' | 'help';
 
 /** v0.10.773 — start-sends cevabı düğüm başına (komut düğüm-yerel). error = ilk hata; hosts kısmi başarıyı taşır. */
 export interface SpoolStartResult {

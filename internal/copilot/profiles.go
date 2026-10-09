@@ -63,13 +63,53 @@ type ModelProfile struct {
 	// anahtarı biliniyorsa (Qwen3: chat_template_kwargs.enable_thinking)
 	// gövdeye iner; bilinmiyorsa bir kez uyarılır, gövde değişmez.
 	Thinking string `json:"thinking,omitempty"`
+	// Description — v0.10.1138: sohbet model seçicisindeki kısa açıklama
+	// ("Hızlı, kısa cevaplar"); sır değil, /api/copilot/config'e girer.
+	Description string `json:"description,omitempty"`
+	// Roles — v0.10.1138: bu profili sohbette AÇIKÇA seçebilecek roller
+	// (admin|editor|viewer). Boş = herkes. Yalnız açık seçimi kısıtlar:
+	// seçimsiz istek varsayılan profil / yüzey eşlemesiyle koşar.
+	Roles []string `json:"roles,omitempty"`
+}
+
+// ErrProfileForbidden — çağıranın rolü profili seçemez (API 403'e çevirir).
+var ErrProfileForbidden = errors.New("bu model profili rolüne kapalı")
+
+// profileRoles — rol allowlist'inin geçerli değerleri (auth rolleriyle aynı
+// dizgiler; copilot paketi auth'u içe aktarmaz).
+var profileRoles = map[string]bool{"admin": true, "editor": true, "viewer": true}
+
+// ProfileRoleAllowed — SAF: boş liste herkes; aksi hâlde rol listede olmalı.
+func ProfileRoleAllowed(p ModelProfile, role string) bool {
+	if len(p.Roles) == 0 {
+		return true
+	}
+	for _, r := range p.Roles {
+		if r == role {
+			return true
+		}
+	}
+	return false
+}
+
+func sameStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // sameProfile — Temperature işaretçi olduğu için == kullanılamaz.
 func sameProfile(a, b ModelProfile) bool {
 	if a.ID != b.ID || a.Label != b.Label || a.Provider != b.Provider || a.BaseURL != b.BaseURL ||
 		a.APIKey != b.APIKey || a.Model != b.Model || a.SkipTLS != b.SkipTLS ||
-		a.MaxTokens != b.MaxTokens || a.TimeoutS != b.TimeoutS || a.Thinking != b.Thinking {
+		a.MaxTokens != b.MaxTokens || a.TimeoutS != b.TimeoutS || a.Thinking != b.Thinking ||
+		a.Description != b.Description || !sameStrings(a.Roles, b.Roles) {
 		return false
 	}
 	if (a.Temperature == nil) != (b.Temperature == nil) {
@@ -132,6 +172,19 @@ func ValidateProfile(p ModelProfile) error {
 	}
 	if !modelcaps.ValidThinking(p.Thinking) {
 		return errors.New("thinking boş, 'off' ya da 'on' olmalı")
+	}
+	if len([]rune(p.Description)) > 120 {
+		return errors.New("description ≤ 120 karakter")
+	}
+	seen := map[string]bool{}
+	for _, r := range p.Roles {
+		if !profileRoles[r] {
+			return fmt.Errorf("roles yalnız admin, editor, viewer içerebilir (%q)", r)
+		}
+		if seen[r] {
+			return fmt.Errorf("roles tekrar ediyor (%q)", r)
+		}
+		seen[r] = true
 	}
 	return ValidateTuning(p.MaxTokens, p.Temperature, p.TimeoutS)
 }
@@ -382,6 +435,25 @@ func (s *Service) ProfileTimeout(id string) time.Duration {
 		return s.clientTimeoutLocked()
 	}
 	return rt.effectiveTimeout(s.clientTimeoutLocked())
+}
+
+// CheckProfileAccess — v0.10.1138: sohbetteki AÇIK profil seçiminin kapısı.
+// Bilinmeyen kimlik ErrProfileNotFound, rolü kapalı profil ErrProfileForbidden.
+// Nil servis (AI hiç yapılandırılmamış) bilinmeyen sayılır.
+func (s *Service) CheckProfileAccess(id, role string) error {
+	if s == nil {
+		return ErrProfileNotFound
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	rt := s.profiles[id]
+	if rt == nil {
+		return ErrProfileNotFound
+	}
+	if !ProfileRoleAllowed(rt.cfg, role) {
+		return ErrProfileForbidden
+	}
+	return nil
 }
 
 // ProfilesSnapshot — tek RLock altında tutarlı üçlü (API yükü; #15).

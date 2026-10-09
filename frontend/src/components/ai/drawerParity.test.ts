@@ -53,7 +53,9 @@ describe('asistan cevabı = Explain kartı', () => {
 
 describe('CoSRE başlığı AIDrawer anatomisi', () => {
   it('meta şeridi: kapsam + model çipi; eski kapsam bandı yok', () => {
-    expect(chat).toContain('<span className="k">model</span>');
+    // v0.10.1138 — model çipi ModelPicker'da (tek profilde rozet, >1'de menü düğmesi).
+    expect(chat).toContain('<ModelPicker profiles={profiles}');
+    expect(read('./ModelPicker.tsx')).toContain('<span className="k">model</span>');
     expect(chat).not.toContain('sorular bu servise scope\'lanır');
   });
   it('v0.10.483 — Explain hedefi (?ai=) aynı çekmecede açıklama kipine geçer; kapatma yok', () => {

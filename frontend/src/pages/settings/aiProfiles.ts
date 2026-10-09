@@ -1,6 +1,21 @@
 // aiProfiles.ts — v0.10.176: AI model profilleri paneli için saf yardımcılar
 // (AiProfilesPanel.tsx). Test: aiProfiles.test.ts.
-import type { AIModelProfile, AIProvider } from '@/lib/types';
+import type { AIModelProfile, AIProvider, Role } from '@/lib/types';
+
+/** v0.10.1138 — profil rol allowlist'inin seçenekleri (sunucu ValidateProfile ile aynı). */
+export const PROFILE_ROLES: Role[] = ['admin', 'editor', 'viewer'];
+
+/** toggleRole — SAF: rolü ekle/çıkar; sıra PROFILE_ROLES sırası. */
+export function toggleRole(roles: readonly Role[], r: Role): Role[] {
+  const set = new Set(roles);
+  if (set.has(r)) set.delete(r); else set.add(r);
+  return PROFILE_ROLES.filter(x => set.has(x));
+}
+
+/** rolesSummary — tablodaki rozet: boş = "herkes", aksi hâlde "yalnız admin, editor". */
+export function rolesSummary(roles: readonly Role[] | undefined): string {
+  return roles && roles.length > 0 ? `yalnız ${roles.join(', ')}` : 'herkes';
+}
 
 /** Etiketten profil kimliği: [a-z0-9][a-z0-9_-]{0,39} (sunucu ValidateProfile ile aynı). */
 export function slugifyProfileId(label: string): string {

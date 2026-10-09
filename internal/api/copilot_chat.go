@@ -158,6 +158,11 @@ type chatRequest struct {
 		// (chat_wiki_followup.go). Geçmiş yalnız {role,text} taşıdığı için
 		// yapısal kaynak buradan gelir; yoksa sunucu hafızası / metin url'leri.
 		WikiRefs []string `json:"wikiRefs,omitempty"`
+		// Scope / Command (v0.10.1138, chat_scope.go) — composer'ın @-anmaları
+		// ve /-komutu YAPISAL olarak; router sezgilerinden önce uygulanır.
+		// İkisi de yokken her yol bayt bayt eski.
+		Scope   *chatScope `json:"scope,omitempty"`
+		Command string     `json:"command,omitempty"`
 	} `json:"context,omitempty"`
 }
 
@@ -181,6 +186,11 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(req.Messages) == 0 {
 		http.Error(w, `{"error":"messages required"}`, http.StatusBadRequest)
+		return
+	}
+	// v0.10.1138 — açık profil seçimi: var mı + rolün seçebilir mi (400/403,
+	// SSE başlıklarından ÖNCE; chat_profile_gate.go).
+	if !s.chatProfileGate(w, r, req.Context.Profile) {
 		return
 	}
 	// v0.9.1187 (AI Faz 4.5, K3) — geçmiş bütçesi SAYIDAN RUNE'A geçti.
@@ -300,6 +310,22 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 		emit("step", map[string]string{
 			"label": "pencere: " + anchorTo.UTC().Format("2006-01-02 15:04 UTC") + "'de bitiyor",
 		})
+	}
+
+	// v0.10.1138 — yapısal kapsam / eğik komut (chat_scope.go): router
+	// sezgilerinden ÖNCE. Kapsam ve komut yoksa kademe hiçbir şeye dokunmaz.
+	if chatScopeActive(req.Context.Scope, req.Context.Command) {
+		rq := chatScopeReq{Msgs: req.Messages, Scope: req.Context.Scope, Command: req.Context.Command,
+			Service: req.Context.Service, Env: req.Context.Env, Operation: req.Context.Operation,
+			RangeS: req.Context.RangeS, Loc: chatLocationNamed(req.Context.Tz, req.Context.TzOffsetMin), AnchorTo: anchorTo}
+		var handled, sok bool
+		ctx, handled, sok = s.chatScopeTier(ctx, emit, &rq)
+		if handled {
+			cspan.tier("scope", sok)
+			emit("done", map[string]bool{"ok": sok})
+			return
+		}
+		req.Messages, req.Context.Service, req.Context.Env = rq.Msgs, rq.Service, rq.Env
 	}
 
 	// v0.10.1124 — AÇIK wiki sorusu ("runbook'u nedir", "wikide nasıl

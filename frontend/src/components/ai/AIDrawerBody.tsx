@@ -14,6 +14,9 @@ import { useChatThread } from './useChatThread';
 import { useStickToBottom } from './stickToBottom';
 import { chatInputSubmitKey, autoGrowTextarea, CHAT_INPUT_MAX_PX } from './chatInputKey';
 import { useCopilotConfig } from './useCopilotEnabled';
+import { useAuthUserId } from '@/components/AuthProvider';
+import { useChatProfile } from './chatProfileStore'; // v0.10.1138 — kullanıcı başına seçim
+import { ModelPicker } from './ModelPicker'; // v0.10.1138 — kompakt "model ▾" menüsü
 import { capPageContext, traceChatWindow, traceContextToPage, type TraceAiContext } from '@/lib/traceAiContext';
 import type { AiConversation, PageContext } from '@/lib/types';
 
@@ -187,8 +190,12 @@ function AIDrawerChat({ subject, explainText, resumed = false, spanIds, traceIds
   // v0.10.183 — model profili seçici (çoklu model dilim C): >1 profil varsa
   // görünür; boş = sunucu varsayılanı / yüzey eşlemesi. Çekmece ömrü kadar
   // yaşar (URL/kalıcılık yok — operatör: "kalıcı olmasın" sınıfı).
+  // v0.10.1138 — seçim artık kullanıcı başına KALICI (CoSRE penceresiyle ortak,
+  // chatProfileStore); liste yalnız rolüne açık profiller (sunucu süzer).
   const cfgP = useCopilotConfig(true);
-  const [profile, setProfile] = useState('');
+  const userId = useAuthUserId();
+  const cfgProfiles = useMemo(() => cfgP?.profiles ?? [], [cfgP]);
+  const { profile, setProfile, activeModel } = useChatProfile(userId, cfgProfiles, cfgP?.defaultProfile, cfgP?.model);
   const navigate = useNavigate(); // v0.10.445 — "sayfasını aç" çekmece sohbetinde de gezer
 
   // v0.10.944 (CoSRE Faz A) — trace öznesinde HER TURDA bağlam: `trace`
@@ -219,6 +226,7 @@ function AIDrawerChat({ subject, explainText, resumed = false, spanIds, traceIds
     rangeS: win?.rangeS,
     toMs: win?.toMs,
     profile: profile || undefined,
+    onProfileRejected: () => setProfile(''), // v0.10.1138 — 400/403 → varsayılana dön
     // persist (v0.10.55, operatör ürün kararı) — çekmece sohbeti artık
     // global CoSRE penceresiyle AYNI arşive yazılıyor; kapatılan çekmece
     // "🕘 Geçmiş"ten yeniden açılabilir (gerekçe useChatThread.ts).
@@ -263,14 +271,11 @@ function AIDrawerChat({ subject, explainText, resumed = false, spanIds, traceIds
             ? 'Bu sohbet yukarıdaki açıklamayı bilir — takip sorusu sorabilirsin.'
             // v0.10.944 — açıklama yokken "açıklamayı bilir" demek yalan olurdu.
             : 'Kayıtlı konuşma — açıklama henüz yok; takip sorusu özneyi ve önceki turları taşır.'}</span>
-          {cfgP?.profiles && cfgP.profiles.length > 1 && (
-            <label style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-              model
-              <select value={profile} onChange={e => setProfile(e.target.value)} title="Bu sohbet için model profili (boş = sunucu varsayılanı)">
-                <option value="">varsayılan{cfgP.defaultProfile ? ` · ${cfgP.profiles.find(p => p.id === cfgP.defaultProfile)?.label || cfgP.defaultProfile}` : ''}</option>
-                {cfgP.profiles.filter(p => p.id !== cfgP.defaultProfile).map(p => <option key={p.id} value={p.id}>{p.label || p.id}{p.model ? ` · ${p.model}` : ''}</option>)}
-              </select>
-            </label>
+          {cfgProfiles.length > 1 && (
+            <span style={{ marginLeft: 'auto' }}>
+              <ModelPicker profiles={cfgProfiles} defaultProfile={cfgP?.defaultProfile} value={profile}
+                onChange={setProfile} activeModel={activeModel} />
+            </span>
           )}
         </div>
 

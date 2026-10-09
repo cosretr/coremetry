@@ -27,6 +27,12 @@ export function useAuth(): AuthState {
   return ctx;
 }
 
+/** v0.10.1138 — sağlayıcısız ağaçta (izole testler, kiosk dalı) atmayan
+ *  okuma: yalnız oturum kullanıcısının kimliği (kullanıcı başına tercihler). */
+export function useAuthUserId(): string | undefined {
+  return useContext(Ctx)?.user?.id;
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const { pathname, search, hash } = useLocation();

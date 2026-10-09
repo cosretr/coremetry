@@ -28,7 +28,13 @@ import { readSidebarCollapsed, writeSidebarCollapsed } from './ai/chatHistoryGro
 import { chatInputSubmitKey, autoGrowTextarea, CHAT_INPUT_MAX_PX } from './ai/chatInputKey';
 import { useNameCompletion } from './ai/useNameCompletion'; // v0.10.687 — D4 ad tamamlama
 import { NameCompletionPopup } from './ai/NameCompletionPopup';
-import { applyCompletion } from './ai/chatCompletion';
+import { applyCompletion, type CompletionItem } from './ai/chatCompletion';
+import { ModelPicker } from './ai/ModelPicker'; // v0.10.1138 — kompakt "model ▾" menüsü
+import { useChatProfile } from './ai/chatProfileStore'; // v0.10.1138 — kullanıcı başına seçim
+import { parseChatInput, removeToken, scopeChips } from './ai/chatScope'; // v0.10.1138 — @/ kapsamı
+import { answerVersion, canRegenerate, lastUserIndex } from './ai/chatRegenerate'; // v0.10.1138
+import { cosreFullPageHref } from './ai/drawerFullPage'; // v0.10.1138 — "Tam sayfada aç"
+import { isPlainLeftClick } from '@/lib/a11y';
 import { useCopilotConfig } from './ai/useCopilotEnabled'; // v0.10.483
 import { AI_DRAWER_WIDTH } from './ai/answerCard'; // v0.10.461
 import { AIDrawerBody } from './ai/AIDrawerBody'; // v0.10.483 — ✨ Explain gövdesi aynı çekmecede
@@ -133,7 +139,9 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
   const defaultProfile = cfg?.defaultProfile ?? '';
   // v0.10.461 — başlık meta şeridindeki model çipi (AIDrawer ile aynı anatomi).
   const model = cfg?.model ?? ''; // v0.10.483 — config tek kaynaktan (useCopilotConfig)
-  const [profile, setProfile] = useState('');
+  // v0.10.1138 — seçim kullanıcı başına kalıcı (chatProfileStore); rozet etkin modeli gösterir.
+  const { user } = useAuth();
+  const { profile, setProfile, activeModel } = useChatProfile(user?.id, profiles, defaultProfile, model);
   const [openState, setOpen] = useState(false);
   const open = isPage || openState; // v0.10.1125 — sayfa kipinde hep açık
   // v0.10.483 — ✨ Explain öznesi (`?ai=`): varsa çekmece AÇIK ve açıklama
@@ -182,8 +190,7 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
   // söyler. İki kaynak da UCUZ: ad zaten AuthProvider'da (login'de
   // gelen /api/auth/me), P1 listesi YALNIZ pencere açıkken ve henüz
   // soru sorulmamışken çekilir — ev kuralı: aç-üzerine-getir, liste
-  // prefetch'i yok, poll yok.
-  const { user } = useAuth();
+  // prefetch'i yok, poll yok. (v0.10.1138 — `user` yukarıda, profil seçimiyle birlikte.)
   // v0.9.182 — Alternatif A: sayfa-içi tam-boy expand (operatör seçimi).
   const [expanded, setExpanded] = useState(false);
   const [input, setInput] = useState('');
@@ -191,6 +198,13 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
   const [caret, setCaret] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const completion = useNameCompletion(input, caret);
+  // v0.10.1138 — tamamlamadan SEÇİLEN servis anmaları (biçimden bağımsız kapsam olur).
+  const [chosen, setChosen] = useState<string[]>([]);
+  const parsedInput = useMemo(() => parseChatInput(input, chosen), [input, chosen]);
+  const composerChips = useMemo(() => scopeChips(parsedInput), [parsedInput]);
+  // v0.10.1138 — son cevabın sürüm görünümü ("önceki cevap (1/2)"); yeni tur gelince sıfırlanır.
+  const [versionSel, setVersionSel] = useState<{ turn: unknown; idx: number } | null>(null);
+  const [opening, setOpening] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Context-awareness (v0.9.164) — bulunulan sayfanın servisi. Mesaj servis
@@ -269,7 +283,7 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
   // persist: true — KALICILIK YALNIZ BURADA (v0.9.1139, Faz 4.1).
   // AI çekmecesindeki özne sohbeti efemer kalıyor; gerekçe
   // useChatThread'in dosya başında.
-  const { turns, busy, send, retry, stop, clear, load, conversationId, last, showFollowups } =
+  const { turns, busy, send, retry, regenerate, editLast, stop, clear, load, flushSave, conversationId, last, showFollowups } =
     useChatThread({
       // v0.10.540 — pin varken eski alanlar pinden (boş alan = kapsamsız, ekrandan DEĞİL).
       service: pinnedLegacy ? (pinnedLegacy.service ?? '') : currentService,
@@ -281,6 +295,8 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
       page, // v0.10.539 — sayfa bağlamı protokolü (lib/pageContext, her turda)
       pinnedPage: pinned ?? undefined, // v0.10.540 — sabitlenmiş bağlam
       profile: profile || undefined,
+      // v0.10.1138 — sunucu seçili profili reddetti (rolüne kapalı / silinmiş) → varsayılana dön.
+      onProfileRejected: () => setProfile(''),
       persist: true,
       onOpen: href => {
         const to = mergeOpenHref(href, window.location.pathname, window.location.search); // v0.10.434 (D7b); v0.10.460 aynı sayfa
@@ -464,10 +480,16 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
     );
   }
 
-  const submit = (text: string) => { setInput(''); pinBottom(); void send(text); };
-  const acceptCompletion = (name: string) => {
-    if (!completion.cq || !name) return;
-    const r = applyCompletion(input, completion.cq, name);
+  const submit = (text: string) => {
+    const picked = chosen;
+    setInput(''); setChosen([]); pinBottom();
+    void send(text, { chosen: picked });
+  };
+  const acceptCompletion = (item: CompletionItem | undefined) => {
+    if (!completion.cq || !item) return;
+    const r = applyCompletion(input, completion.cq, item);
+    const svc = item.service;
+    if (svc) setChosen(c => (c.includes(svc) ? c : [...c, svc]));
     setInput(r.text);
     completion.dismiss();
     requestAnimationFrame(() => {
@@ -480,6 +502,27 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
     });
   };
 
+
+  // v0.10.1138 — son kullanıcı mesajı (✎) ve düzenleme gönderimi.
+  const lastUserIdx = lastUserIndex(turns);
+  const editLastAndPin = (text: string) => { pinBottom(); editLast(text); };
+  // v0.10.1138 — "Tam sayfada aç ↗": href her zaman gerçek (yeni sekme / kopyala).
+  // Düz tıkta: bekleyen kayıt hemen yazılır (kimlik sunucudan), çekmece kapanır,
+  // /cosre?chat=<id> aynı sekmede açılır; boş konuşma → yalnız /cosre.
+  const fullPageHref = cosreFullPageHref(conversationId);
+  const openFullPage = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (!isPlainLeftClick(e)) return; // Ctrl/Cmd/orta tık: tarayıcı yeni sekmede açar
+    e.preventDefault();
+    if (busy || opening) return;
+    setOpening(true);
+    const go = (id: string | null) => {
+      setOpening(false);
+      closeDrawer();
+      navigate(cosreFullPageHref(turns.length > 0 ? id : null));
+    };
+    if (turns.length === 0) { go(null); return; }
+    void flushSave().then(go, () => go(conversationId));
+  };
 
   // v0.10.1125 — başlık + gövde TEK yerde; çekmece ve /cosre sayfası aynı düğümleri sarar.
   const headerNode = (
@@ -518,21 +561,19 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
                 <Button variant="ghost" size="sm" onClick={() => setPinned(page)}
                   title={`Bu sayfanın bağlamını sohbete sabitle: ${pinLabelTR(page)}`} aria-label="Sayfa bağlamını sabitle">📌</Button>
               )}
-              {model && (
-                <span className="chip" style={{ flexShrink: 0, fontSize: 10.5 }} title="Cevapları üreten model">
-                  <span className="k">model</span>
-                  <b className="mono">{model}</b>
-                </span>
-              )}
+              {/* v0.10.1138 — model rozeti = seçici (>1 izinli profil); tek profilde tıklanamaz rozet. */}
+              <ModelPicker profiles={profiles} defaultProfile={defaultProfile} value={profile}
+                onChange={setProfile} activeModel={activeModel} />
               {/* v0.9.1139 — konuşma arşivi. Menü değil bir BÖLÜM:
                   çekmece zaten sağ kenarda ve ikinci bir uçan katman
                   (dropdown) sohbetin üstüne binerdi. */}
-              {profiles.length > 1 && (
-                <select value={profile} onChange={e => setProfile(e.target.value)} aria-label="Model profili"
-                  title="Bu konuşma için model profili (boş = sunucu varsayılanı / yüzey eşlemesi)" style={{ maxWidth: 180 }}>
-                  <option value="">model: varsayılan{defaultProfile ? ` · ${profiles.find(p => p.id === defaultProfile)?.label || defaultProfile}` : ''}</option>
-                  {profiles.filter(p => p.id !== defaultProfile).map(p => <option key={p.id} value={p.id}>{p.label || p.id}{p.model ? ` · ${p.model}` : ''}</option>)}
-                </select>
+              {/* v0.10.1138 — çekmeceden /cosre'ye: gerçek <a href> (Ctrl/Cmd/orta tık yeni
+                  sekme); düz tıkta önce bekleyen kayıt yazılır, çekmece kapanır, aynı sekmede gezer. */}
+              {!isPage && !subject && (
+                <Link to={fullPageHref} className="cosre-page__home cm-fullpage" data-fullpage=""
+                  aria-disabled={busy || opening || undefined}
+                  title={busy ? 'Cevap bitince tam sayfada açılabilir' : 'Bu konuşmayı /cosre tam sayfasında aç'}
+                  onClick={openFullPage}>Tam sayfada aç ↗</Link>
               )}
               {/* v0.10.1137 — /cosre'de geçmiş sol kenar çubuğunda; düğme yalnız çekmecede. */}
               {!isPage && (
@@ -719,9 +760,24 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
                 </div>
               </div>
             )}
-            {turns.map((t, i) => (
-              <ChatBubble key={i} turn={t} onRetry={i === turns.length - 1 && t.error && !busy ? retry : undefined} />
-            ))}
+            {turns.map((t, i) => {
+              const isLast = i === turns.length - 1;
+              // v0.10.1138 — son cevap: ↻ yeniden üret + sürüm geçişi; son kullanıcı mesajı: ✎ düzenle.
+              if (isLast && t.role === 'assistant' && !t.pending && t.alternatives?.length) {
+                const v = answerVersion(t, versionSel && versionSel.turn === t ? versionSel.idx : null);
+                return (
+                  <ChatBubble key={i} turn={v.view} busy={busy}
+                    onRegenerate={canRegenerate(turns) ? regenerate : undefined}
+                    versions={{ index: v.index, total: v.total, onSelect: idx => setVersionSel({ turn: t, idx }) }} />
+                );
+              }
+              return (
+                <ChatBubble key={i} turn={t} busy={busy}
+                  onRetry={isLast && t.error && !busy ? retry : undefined}
+                  onRegenerate={isLast && canRegenerate(turns) ? regenerate : undefined}
+                  onEdit={i === lastUserIdx && t.role === 'user' ? editLastAndPin : undefined} />
+              );
+            })}
             </div>
           </div>
           {/* v0.10.1137 — kullanıcı yukarı kaydırdıysa yapışma bırakılır; düğme dibe indirir ve yeniden yapıştırır. */}
@@ -773,7 +829,7 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
                   }
                   if (chatInputSubmitKey(e)) { e.preventDefault(); submit(input); }
                 }}
-                placeholder="CoSRE'ye sor… (Shift+Enter: yeni satır · @servis adı tamamlar)"
+                placeholder="CoSRE'ye sor… (Shift+Enter: yeni satır · @ kapsam · / komutlar)"
                 autoFocus
                 aria-autocomplete="list"
                 aria-controls="chat-complete"
@@ -800,6 +856,15 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
               </Button>
             )}
             </div>
+            {/* v0.10.1138 — yapısal kapsam çipleri: gönderimde context.scope/command olarak gider. */}
+            {composerChips.length > 0 && (
+              <div className="cm-scope-chips" aria-label="Mesaj kapsamı">
+                {composerChips.map(c => (
+                  <Chip key={c.key} pill size="sm" active onRemove={() => setInput(v => removeToken(v, c.token))}
+                    removeLabel={`${c.label} kapsamını kaldır`} title="Bu mesaj yapısal olarak buna kapsanır">{c.label}</Chip>
+                ))}
+              </div>
+            )}
           </form>
           </>)}
   </>);
