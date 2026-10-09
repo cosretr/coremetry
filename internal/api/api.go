@@ -1684,35 +1684,22 @@ func (s *Server) getClusters(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// getNamespaces returns the distinct derived namespaces across the
-// service catalog — the option list for the Services-page namespace
-// filter (v0.9.189). Sourced from service_metadata.Namespace (the
-// deriver coalesces service.namespace AND k8s.namespace.name), so it
-// costs NO span scan — a catalog read (~thousands of rows), 5-min
-// cached like getClusters. Small LowCardinality set → plain <select>.
+// getNamespaces — Services-page namespace options (v0.9.189): namespaces
+// seen in the window (entity_seen_5m) ∪ catalog values (v0.10.1140 — the
+// catalog keeps ONE namespace per service, so a minority-only namespace
+// was missing; services_namespace.go). Telemetry read fails open. 5-min cached.
 func (s *Server) getNamespaces(w http.ResponseWriter, r *http.Request) {
 	from, to := parseFromTo(r, 24*time.Hour)
-	key := "namespaces:" + cacheBucket(from, to)
-	s.serveCached(w, r, key, 5*time.Minute, func(ctx context.Context) (any, error) {
+	s.serveCached(w, r, namespacesCacheKey(from, to), 5*time.Minute, func(ctx context.Context) (any, error) {
 		catalog, err := s.store.ListServiceMetadata(ctx)
 		if err != nil {
 			return nil, err
 		}
-		seen := map[string]struct{}{}
-		names := []string{}
-		for _, md := range catalog {
-			ns := strings.TrimSpace(md.Namespace)
-			if ns == "" {
-				continue
-			}
-			if _, ok := seen[ns]; ok {
-				continue
-			}
-			seen[ns] = struct{}{}
-			names = append(names, ns)
+		seen, serr := s.store.NamespacesSeen(ctx, from, to)
+		if serr != nil {
+			log.Printf("[namespaces] telemetry namespaces unavailable, catalog only: %v", serr)
 		}
-		sort.Strings(names)
-		return map[string]any{"namespaces": names}, nil
+		return map[string]any{"namespaces": namespaceOptions(catalog, seen)}, nil
 	})
 }
 
@@ -1910,38 +1897,13 @@ func (s *Server) getServices(w http.ResponseWriter, r *http.Request) {
 	// switch in a session into one CH round-trip per (page,
 	// filter, range). Refresh button on the page can ?refresh=1.
 	s.serveCached(w, r, key, 30*time.Second, func(ctx context.Context) (any, error) {
-		// Resolve team filters → service-name allowlist via
-		// the catalog. Bounded by catalog size (~thousands),
-		// not span volume; effectively free.
-		var serviceIn []string
-		if ownerTeam != "" || sreTeam != "" || namespace != "" {
-			catalog, cerr := s.store.ListServiceMetadata(ctx)
-			if cerr != nil {
-				return nil, fmt.Errorf("catalog: %w", cerr)
-			}
-			for name, md := range catalog {
-				if ownerTeam != "" && md.OwnerTeam != ownerTeam {
-					continue
-				}
-				if sreTeam != "" && md.SRETeam != sreTeam {
-					continue
-				}
-				if namespace != "" && md.Namespace != namespace {
-					continue
-				}
-				serviceIn = append(serviceIn, name)
-			}
-			if len(serviceIn) == 0 {
-				// No catalog rows match the requested team
-				// — return empty without firing the spans
-				// query.
-				return map[string]any{
-					"services": []chstore.ServiceSummary{},
-					"hasMore":  false,
-					"offset":   offset,
-					"limit":    limit,
-				}, nil
-			}
+		// Team/namespace filters → service-name allowlist (catalog ∪
+		// namespace membership from entity_seen_5m; services_namespace.go).
+		serviceIn, filtered, ferr := s.servicesFilterAllowlist(ctx, from, to, cluster, ownerTeam, sreTeam, namespace)
+		if ferr != nil {
+			return nil, ferr
+		} else if filtered && len(serviceIn) == 0 { // nothing matches — skip the spans query
+			return map[string]any{"services": []chstore.ServiceSummary{}, "hasMore": false, "offset": offset, "limit": limit}, nil
 		}
 		// Fetch limit+1 so we can report hasMore without paying a
 		// separate count(DISTINCT) — at 10k+ services a count is
@@ -2029,6 +1991,7 @@ func (s *Server) getServices(w http.ResponseWriter, r *http.Request) {
 		// would have re-paginated the same service list to deliver one
 		// column, and the page would have to join them client-side.
 		s.applyServiceSeen(ctx, rows)
+		s.applyServiceNamespaceCounts(ctx, rows, namespace, from, to) // v0.10.1140 — "metrics are totals" badge
 		resp := map[string]any{
 			"services": rows,
 			"hasMore":  hasMore,

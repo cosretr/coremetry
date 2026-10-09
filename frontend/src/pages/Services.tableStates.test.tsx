@@ -194,3 +194,28 @@ describe('/services — durumlar tablonun içinde (v0.10.967)', () => {
     expect(el.querySelector('.pager')).toBeNull();
   });
 });
+
+// v0.10.1140 — namespace süzgeci açıkken çok-namespace'li servisin satırı
+// "metrikler toplamdır" rozetini taşır (service_summary_5m'de namespace
+// boyutu yok); süzgeç yokken ya da tek namespace'te rozet yok.
+describe('/services — namespace toplam rozeti (v0.10.1140)', () => {
+  const badges = (el: HTMLElement) =>
+    [...el.querySelectorAll('table tbody .badge')].filter(b => b.textContent?.includes('ns · toplam'));
+
+  it('süzgeç açık + 2 namespace: rozet, title sayıyı ve süzgeci söyler; tek namespace: rozet yok', async () => {
+    m.rows = [{ ...svc('svc-gateway'), namespaceCount: 2 }, svc('svc-orders')];
+    const el = await mount('/services?namespace=payments-uat');
+    expect(m.calls.at(-1)?.namespace).toBe('payments-uat');
+    const b = badges(el);
+    expect(b.length).toBe(1);
+    expect(b[0].textContent).toContain('2 ns');
+    expect(b[0].getAttribute('title')).toContain("2 namespace'te çalışıyor; metrikler toplamdır");
+    expect(b[0].getAttribute('title')).toContain('payments-uat');
+  });
+
+  it('süzgeç yok: alan gelse bile rozet yok', async () => {
+    m.rows = [{ ...svc('svc-gateway'), namespaceCount: 2 }];
+    const el = await mount('/services');
+    expect(badges(el).length).toBe(0);
+  });
+});

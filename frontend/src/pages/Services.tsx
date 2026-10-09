@@ -11,6 +11,7 @@ import { ServiceRuntimeBadge, formatRuntime } from '@/components/ServiceRuntimeB
 import { useDataTable, DataTableColgroup, DataTableHead, DataTableState, type DataTableStateProps } from '@/components/ui/DataTable';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
+import { Badge } from '@/components/ui/Badge';
 import {
   SERVICE_COLS, DEFAULT_SERVICES_SORT,
   sanitizeServicesSort, decodeLegacyServicesSort,
@@ -380,7 +381,7 @@ export default function ServicesPage() {
       // pagination, not just the loaded 50 rows.
       env: env || undefined,
       // Namespace filter (v0.9.189) — server resolves it to the
-      // service-name allowlist (catalog), so the page is correct across
+      // service-name allowlist (catalog ∪ entity_seen_5m membership), so the page is correct across
       // pagination and stays on the MV fast path (unlike cluster/env).
       namespace: namespace || undefined,
       withTotal: '1',
@@ -889,6 +890,15 @@ export default function ServicesPage() {
                       {runtimes && runtimes[s.name] && (
                         <ServiceRuntimeBadge rt={runtimes[s.name]} compact
                                              style={{ marginLeft: 8 }} />
+                      )}
+                      {/* v0.10.1140 — namespace süzgeci açıkken servis birden çok
+                          namespace'te koşuyorsa: service_summary_5m'de namespace
+                          boyutu yok, satırın metrikleri TOPLAMdır — ilan et. */}
+                      {namespace && (s.namespaceCount ?? 0) > 1 && (
+                        <Badge tone="neutral" style={{ marginLeft: 8 }}
+                          title={`Bu servis ${s.namespaceCount} namespace'te çalışıyor; metrikler toplamdır (yalnız ${namespace} değil).`}>
+                          {s.namespaceCount} ns · toplam
+                        </Badge>
                       )}
                     </td>
                     <td className="num">

@@ -257,6 +257,11 @@ type ServiceSummary struct {
 	// honest branch cannot be lost to a rendering change downstream.
 	LastSeen  int64 `json:"lastSeen,omitempty"`
 	FirstSeen int64 `json:"firstSeen,omitempty"`
+	// v0.10.1140 — namespace süzgeci açıkken servis pencerede >1 namespace'te
+	// koşuyorsa o sayı (entity_seen_5m). service_summary_5m'de namespace
+	// boyutu yok: satırın RED değerleri TÜM namespace'lerin toplamı; FE bunu
+	// rozetle ilan eder. Süzgeç yoksa ya da tek namespace'se yazılmaz.
+	NamespaceCount int `json:"namespaceCount,omitempty"`
 }
 
 // ── Exception aggregate (Errors page) ────────────────────────────────────────

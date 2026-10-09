@@ -3130,6 +3130,61 @@ Arka plandaki debounce kaydı hata durumunda eskisi gibi sessiz kalır.
 uygulanır; profilsiz istekler yine bu profille çalışır. AI ayarları paneli, varsayılan profilin rol listesi
 doluyken bunu bir uyarıyla söyler.
 
+## 2026-10-09 — Services namespace süzgeci: üyelik telemetriden, azınlık namespace kaybolmuyor (v0.10.1140)
+
+**Operatör (test ortamı):** Services sayfasında X-prep seçilince servisler geliyor, X-uat seçilince hiçbiri.
+Aynı servisler (ör. bir gateway) uat'tan da OTel ile trace gönderiyor, servis detayında env=uat trace
+gösteriyor. Prod'da sorun yok, çünkü orada her servis tek namespace'te koşuyor.
+
+**Kök neden:** `service_metadata` servis başına TEK namespace tutar. Deriver en sık görülen değeri yazar
+(`chstore/service_metadata.go` `marginalModes` → `populateNamespaces`). `getServices` süzgeci bu tek
+değerle eşitlik arıyordu (`md.Namespace != namespace`), dolayısıyla prep'te yoğun, uat'ta seyrek koşan
+bir service.name uat süzgecinde hiç çıkmıyordu. `getNamespaces` de aynı katalogdan besleniyordu, yani
+yalnız azınlıkta yaşayan bir namespace açılır listeye de giremiyordu.
+
+**Karar:** Namespace → servis üyeliği telemetriden okunuyor: `entity_seen_5m` içinde pencerede görülen
+(k8s_namespace, service_name) çiftleri (`ServicesSeenInNamespace`, cluster seçiliyse cluster koşulu da
+ekleniyor). Buna katalog değeri BİRLEŞİMLE ekleniyor: operatörün elle sabitlediği namespace hiç
+kaybolmuyor, `service.namespace` kaynaklı (k8s dışı) namespace'ler de korunuyor. Süzgeç hâlâ `serviceIn`
+allowlist'ine çözülüyor, yani MV hızlı yolu kapanmıyor (v0.9.189 sözleşmesi). Seçenek listesi de
+"pencerede görülen namespace'ler ∪ katalog" oluyor; anahtar `namespaces:v2:<from/to kovası>` (tek girdi
+from/to, v2 öneki dağıtım sırasında eski listenin servis edilmesini önlüyor). Telemetri okuması düşerse
+(`entity_seen_5m` yok, 0011 uygulanmamış) eski katalog-yalnız davranışa dönülüyor (fail-open). Kod:
+`internal/chstore/service_namespace_membership.go`, `internal/api/services_namespace.go`; api.go
+küçüldü (11521 → 11484).
+
+**CH maliyeti:** `entity_seen_5m`: AggregatingMergeTree, `PARTITION BY toDate(time_bucket)`,
+`ORDER BY (service_name, cluster, k8s_namespace, k8s_pod, time_bucket)`, TTL 30 gün, küme kipinde
+Distributed, shard anahtarı `cityHash64(service_name)`. Namespace okuması ORDER BY önekinde değil, yani
+budamayı gün partition'ı yapıyor. Okunan yalnız 3-4 dar kolon (agregat state'ler okunmuyor). 24 saatlik
+pencerede yaklaşık 1M satırın altı (~2.5k pod × 288 kova/gün), 30 sn (liste) ve 5 dk (seçenekler)
+önbellekli. Rozet sayımı `service_name IN (sayfa ≤500)`, yani önekten okuyor ve en ucuzu. Hepsinde zaman
+sınırlı WHERE + LIMIT (5000 servis / 1000 namespace / 500 ad) + `max_execution_time = 10` var. Ham
+`spans` taranmıyor. Ayrı, namespace önde bir MV tek bir süzgeç için her span INSERT'ine ikinci yazım
+yükü getirirdi; bu yüzden reddedildi.
+Bilinen sınır: `k8s_namespace` yalnız `k8s.namespace.name` / `kubernetes.namespace.name`'den geliyor,
+`service.namespace` azınlık üyeliği görünmüyor. Bu yüzden katalog birleşimi kalıcı.
+
+**Metrik doğruluğu (ayrı karar):** `service_summary_5m` `ORDER BY (service_name, time_bucket)`, ikizi
+`service_env_summary_5m` ise `(service_name, cluster, deploy_env, time_bucket)`. İkisinde de namespace
+boyutu yok. Ham yol da namespace yüklemi uygulamıyor. Sonuç: süzgeç açıkken satırdaki RED değerleri
+servisin TÜM namespace'lerinin toplamı (uat satırı prep trafiğini de taşıyor). Seçenekler:
+(a) boyutlu MV, `service_ns_summary_5m` `(service_name, k8s_namespace, time_bucket)`: doğru p99 ve
+apdex verir. Maliyeti her span INSERT'inde bir MV daha (+%1-2 ingest CPU), satır başına ~1-1.5 KB
+tDigest ve namespace/servis çarpanı kadar satır. Geriye dolmaz, `EnvSummaryCovers` benzeri bir kapsama
+probu gerekir. (b) Namespace seçiliyken env/cluster gibi ham yola düşmek: kod olarak ucuz, ama MV
+sözleşmesini bozar ve 1B span/gün'de pencere taraması `/api/services` 50 ms bütçesini aşar.
+(c) Satır rozeti. Bu sürümde YALNIZ (c) uygulandı: süzgeç açıkken servis >1 namespace'te koşuyorsa
+`namespaceCount` geliyor ve FE "N ns · toplam" rozetini gösteriyor; title "bu servis N namespace'te
+çalışıyor; metrikler toplamdır". Sayım aynı `entity_seen_5m`'den ve sayfayla sınırlı.
+**Öneri:** (a). Ara adım olarak `entity_seen_5m`'in kendi span/error/duration_sum state'lerinden
+namespace başına sayı / hata / ortalama verilebilir; p99 ve apdex verilemez, `k8s_pod` boşsa da eksik
+sayar.
+
+**Kuyruk:** (1) `service_ns_summary_5m` boyutlu MV + kapsama probu + namespace süzgecinde MV okuması
+(seçenek a). (2) Kapsama dışı pencerede ham yola düşme (seçenek b), yalnız (a)'nın geriye dolmayan
+penceresi için ve rozet korunarak.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

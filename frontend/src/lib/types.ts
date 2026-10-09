@@ -33,6 +33,10 @@ export interface Service {
   // tipte yok.
   lastSeen?: number;
   firstSeen?: number;
+  // v0.10.1140 — yalnız ?namespace= açıkken ve servis pencerede >1
+  // namespace'te koşuyorsa gelir; satırın metrikleri tüm namespace'lerin
+  // toplamıdır (service_summary_5m'de namespace boyutu yok).
+  namespaceCount?: number;
 }
 
 // Topology view (v0.5.100) — operation-level call graph rooted at
