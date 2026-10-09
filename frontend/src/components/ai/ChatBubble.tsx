@@ -367,7 +367,9 @@ function renderBlocks(blocks: readonly ChatBlock[], streaming: boolean, typedCha
         break;
       }
       case 'code': {
-        if (b.lang === 'chart') {
+        // v0.10.1145 — NO_CHARTS (kullanıcı turu / önizleme): ```chart çiti kod
+        // bloğu olarak kalır; kullanıcının yazdığı metin grafik sorgusu tetiklemez.
+        if (b.lang === 'chart' && typedCharts !== NO_CHARTS) {
           if (b.open) {
             if (streaming) {
               out.push(<span key={i} className="cm-md-wait">grafik hazırlanıyor…</span>);
@@ -405,15 +407,51 @@ function renderBlocks(blocks: readonly ChatBlock[], streaming: boolean, typedCha
 //   akıyor + kapanmamış → "grafik hazırlanıyor" satırı;
 //   bitti + kapanmamış (yanıt KESİLDİ) → kod bloğu (içerik yutulmaz);
 //   kapandı + geçerli spec → grafik; kapandı + bozuk → atlanır (v0.9.183).
-export function renderMessage(text: string, streaming = false, typed?: ChatTypedBlock[]) {
+// v0.10.1145 — `opts.charts: false`: ```chart çitleri grafik değil kod (kullanıcı metni).
+const NO_CHARTS: unknown[] = [];
+export function renderMessage(text: string, streaming = false, typed?: ChatTypedBlock[], opts?: { charts?: boolean }) {
   // v0.10.541 — tipli chart blokları varsa fence grafikleri ÇİZİLMEZ.
-  const typedCharts = chartBlocks(typed);
+  const typedCharts = opts?.charts === false ? NO_CHARTS : chartBlocks(typed);
   const blocks = parseChatBlocks(text, streaming);
   // Yedek dal İÇERİK YOKLUĞUNA bakıyor (bozuk chart bloğu bilinçli atlanır).
   if (blocks.length === 0) return <>{streaming && <Caret />}</>;
   return <>{renderBlocks(blocks, streaming, typedCharts, streaming, 'b')}</>;
 }
 
+
+// useChatNavClick — data-nav linkleri (trace id'ler, aynı-köken yollar) SPA
+// içinde gider (v0.9.419); yalnız DÜZ sol tık (v0.10.1105); /cosre'de (yeni
+// sekme kipi) yakalanmaz (v0.10.1125). Balon, kullanıcı turu ve önizleme ortak.
+function useChatNavClick(newTab: boolean) {
+  const navigate = useNavigate();
+  return (e: React.MouseEvent) => {
+    const a = (e.target as HTMLElement).closest?.('a[data-nav]');
+    if (a && !newTab && isPlainLeftClick(e)) {
+      e.preventDefault();
+      navigate(a.getAttribute('href') ?? '/');
+    }
+  };
+}
+
+// ChatMarkdown — v0.10.1145: KULLANICI metninin çizimi (sohbetteki kullanıcı
+// turu + composer önizlemesi). Cevaplarla AYNI çözücü ve çizici (renderMessage);
+// fark yalnız güven: bağlantı politikası BOŞ (sunucu doğrulaması yok) → dış
+// adresler "doğrulanmamış bağlantı" düz metni, yalnız aynı köken / uygulama
+// yolu tıklanır; ```chart çiti kod bloğu kalır (sorgu tetiklemez).
+export function ChatMarkdown({ text }: { text: string }) {
+  const newTab = useChatLinkNewTab();
+  const onClick = useChatNavClick(newTab);
+  const ctx = useMemo<MdCtx>(() => {
+    const origin = currentOrigin();
+    return { policy: buildLinkPolicy({ origin }), cites: [], newTab, origin };
+  }, [newTab]);
+  const body = useMemo(() => renderMessage(text, false, undefined, { charts: false }), [text]);
+  return (
+    <ChatMdContext.Provider value={ctx}>
+      <div className="cm-md-user" onClick={onClick}>{body}</div>
+    </ChatMdContext.Provider>
+  );
+}
 
 // ToolChips — ⚙ ilerleme çipleri + tıklayınca açılan KANIT bloğu
 // (v0.9.1181, AI Faz 4.3).
@@ -802,13 +840,7 @@ function ChatBubbleView({ turn, onRetry, stepsOpen, onRegenerate, busy, versions
   // DÜZ sol tık yakalanır. v0.10.1125 — /cosre'de (yeni sekme kipi) yakalanmaz.
   const newTab = useChatLinkNewTab();
   const linkProps = chatLinkTargetProps(newTab);
-  const onBodyClick = (e: React.MouseEvent) => {
-    const a = (e.target as HTMLElement).closest?.('a[data-nav]');
-    if (a && !newTab && isPlainLeftClick(e)) {
-      e.preventDefault();
-      navigate(a.getAttribute('href') ?? '/');
-    }
-  };
+  const onBodyClick = useChatNavClick(newTab);
   // v0.10.1137 — kopya DÜZ METİN: markdown işaretleri düşer, linkler adresleriyle.
   const copy = () => {
     navigator.clipboard?.writeText(chatPlainText(turn.text ?? '')).then(() => {
@@ -835,7 +867,7 @@ function ChatBubbleView({ turn, onRetry, stepsOpen, onRegenerate, busy, versions
   const hasSteps = !isUser && (!!turn.steps?.length || !!turn.stepDetails?.length);
 
   if (isUser) {
-    // Operatörün mesajı: sağa yaslı kompakt hap; ham metin (pre-wrap).
+    // Operatörün mesajı: sağa yaslı kompakt hap; v0.10.1145'ten beri markdown (ChatMarkdown).
     // v0.10.1138 — son mesajda ✎ (üstüne gelince / dokunmatikte hep): satır-içi
     // düzenleyici; "Gönder" sonrasını kırpar ve yeniden koşar.
     return <UserBubble turn={turn} onEdit={onEdit} busy={busy} />;
@@ -985,8 +1017,9 @@ function UserBubble({ turn, onEdit, busy }: { turn: ChatTurn; onEdit?: (text: st
   }
   return (
     <div className="cm-msg cm-msg--user">
+      {/* v0.10.1145 — kullanıcı turu da markdown (aynı çizici; dış link doğrulanmamış metin). */}
       <div className="cm-msg-user">
-        {turn.error ? <ChatErrorLine error={turn.error} isUser /> : turn.text}
+        {turn.error ? <ChatErrorLine error={turn.error} isUser /> : <ChatMarkdown text={turn.text ?? ''} />}
       </div>
       {onEdit && !turn.error && (
         <div className="cm-msg-actions cm-msg-actions--user" role="toolbar" aria-label="Mesaj eylemleri">

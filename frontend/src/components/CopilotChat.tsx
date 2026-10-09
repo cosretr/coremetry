@@ -25,7 +25,8 @@ import { useChatThread } from './ai/useChatThread';
 import { useStickToBottomState } from './ai/stickToBottom'; // v0.10.1137 — atBottom → "↓ En alta"
 import { CosreSidebar } from './ai/CosreSidebar'; // v0.10.1137 — /cosre sol kenar çubuğu
 import { readSidebarCollapsed, writeSidebarCollapsed } from './ai/chatHistoryGroups';
-import { chatInputSubmitKey, autoGrowTextarea, CHAT_INPUT_MAX_PX } from './ai/chatInputKey';
+import { ChatComposer } from './ai/ChatComposer'; // v0.10.1145 — markdown bilen composer (araç çubuğu, kısayol, yapıştırma, önizleme)
+import { useComposerDraft } from './ai/composerDraft'; // v0.10.1145 — konuşma başına taslak
 import { useNameCompletion } from './ai/useNameCompletion'; // v0.10.687 — D4 ad tamamlama
 import { NameCompletionPopup } from './ai/NameCompletionPopup';
 import { applyCompletion, type CompletionItem } from './ai/chatCompletion';
@@ -194,14 +195,6 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
   // prefetch'i yok, poll yok. (v0.10.1138 — `user` yukarıda, profil seçimiyle birlikte.)
   // v0.9.182 — Alternatif A: sayfa-içi tam-boy expand (operatör seçimi).
   const [expanded, setExpanded] = useState(false);
-  const [input, setInput] = useState('');
-  // v0.10.687 — D4 ad tamamlama: imleç konumu + aday listesi (sunucu araması).
-  const [caret, setCaret] = useState(0);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const completion = useNameCompletion(input, caret);
-  // v0.10.1138 — tamamlamadan SEÇİLEN servis anmaları (biçimden bağımsız kapsam olur).
-  const [chosen, setChosen] = useState<string[]>([]);
-  const parsedInput = useMemo(() => parseChatInput(input, chosen), [input, chosen]);
   // v0.10.1138 — son cevabın sürüm görünümü ("önceki cevap (1/2)"); yeni tur gelince sıfırlanır.
   const [versionSel, setVersionSel] = useState<{ turn: unknown; idx: number } | null>(null);
   const [opening, setOpening] = useState(false);
@@ -310,6 +303,19 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
         navigate(to, { replace: true });
       },
     });
+  // v0.10.1145 — composer taslağı konuşma başına sessionStorage'da (composerDraft):
+  // konuşma değişince / yenilemede kaybolmaz, gönderimde silinir. (Konuşma
+  // kimliği useChatThread'den geldiği için durum onun ALTINDA kurulur.)
+  const draft = useComposerDraft('chat', conversationId);
+  const input = draft.value;
+  const setInput = draft.setValue;
+  // v0.10.687 — D4 ad tamamlama: imleç konumu + aday listesi (sunucu araması).
+  const [caret, setCaret] = useState(0);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const completion = useNameCompletion(input, caret);
+  // v0.10.1138 — tamamlamadan SEÇİLEN servis anmaları (biçimden bağımsız kapsam olur).
+  const [chosen, setChosen] = useState<string[]>([]);
+  const parsedInput = useMemo(() => parseChatInput(input, chosen), [input, chosen]);
   // v0.10.1139 — kapsam çipleri gönderilecek hâli gösterir: trace bağlamında
   // @-kapsamı düşer (useChatThread aynı kuralı uygular), açık /komut kalır.
   const chipTrace = pinnedLegacy ? (pinnedLegacy.trace ?? '') : currentTrace;
@@ -318,6 +324,10 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
     [parsedInput, chipTrace, page]);
   // v0.10.540 — yeni konuşma pini de düşürür (pin thread'e bağlı).
   const clearAll = useCallback(() => { clear(); setPinned(null); }, [clear, setPinned]);
+  // v0.10.1145 — operatörün "yeni konuşma"sı AÇIK geçiştir: yeni konuşmanın kayıtlı
+  // taslağı yüklenir, ekrandaki taslak eski konuşmasında kalır (composerDraft.expect).
+  const expectDraft = draft.expect;
+  const startNew = useCallback(() => { expectDraft(null); clearAll(); }, [expectDraft, clearAll]);
 
   // v0.9.1258 — konuşma deep-link'i (?chat=<convId>): URL → state yarısı.
   // Ref sig-guard: aynı değer bir kez yüklenir; load zaten akış sürerken
@@ -329,9 +339,10 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
     chatParamRef.current = want;
     if (want !== conversationId) {
       setOpen(true);
+      expectDraft(want); // v0.10.1145 — o konuşmanın taslağı
       void load(want);
     }
-  }, [sp, conversationId, load]);
+  }, [sp, conversationId, load, expectDraft]);
   // state → URL yarısı: saf çekirdek karar verir (null = dokunma);
   // replace:true + prev kopyası — yabancı paramlar korunur.
   useEffect(() => {
@@ -392,6 +403,7 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
       }
       setSubject(null); // v0.10.483 — öznesiz konuşma genel kipe döner
       setResume(null);
+      expectDraft(t.id); // v0.10.1145 — açık geçiş: o konuşmanın kayıtlı taslağı
       await load(t.id);
       setShowHistory(false);
     } catch (e) {
@@ -412,7 +424,7 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
       setThreads(prev => (prev ?? []).filter(x => x.id !== t.id));
       // Ekrandaki konuşma silinen thread ise, kabuk artık ölü bir
       // kimliğe yazmaya devam etmemeli: yeni konuşma hâline dönüyoruz.
-      if (conversationId === t.id) clearAll();
+      if (conversationId === t.id) startNew();
     } catch (e) {
       setHistErr(e instanceof Error ? e.message : String(e));
     }
@@ -504,7 +516,6 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
       el.focus();
       el.setSelectionRange(r.caret, r.caret);
       setCaret(r.caret);
-      autoGrowTextarea(el);
     });
   };
 
@@ -595,7 +606,7 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
                   {expanded ? '⊟' : '⤢'}</Button>
               )}
               {!subject && turns.length > 0 && (
-                <Button variant="secondary" size="sm" onClick={clearAll}
+                <Button variant="secondary" size="sm" onClick={startNew}
                   title="Konuşmayı temizle ve yeni konuşma başlat">Temizle</Button>
               )}
               {/* v0.10.1125 — /cosre kromsuz: uygulamaya dönüş linki + tema düğmesi
@@ -635,7 +646,7 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
                 </span>
                 <span style={{ flex: 1 }} />
                 <Button variant="secondary" size="xs"
-                  onClick={() => { clearAll(); setShowHistory(false); }}
+                  onClick={() => { startNew(); setShowHistory(false); }}
                   title="Ekranı boşalt, yeni bir konuşma başlat">+ Yeni konuşma</Button>
               </div>
               {threads === undefined && (
@@ -810,43 +821,41 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
           {/* v0.10.1137 — composer: gölgeli tek kutu (metin + gönder/durdur), okuma sütunuyla hizalı. */}
           <form className="cm-composer"
             onSubmit={e => { e.preventDefault(); submit(input); }}>
-            <div className="cm-composer__box">
             {/* v0.10.664 — <textarea>: Enter gönderir, Shift+Enter yeni satır (stack
                 trace / SQL yapıştırılabilir); akarken KİLİTLİ DEĞİL — gönderim
                 mevcut akışı durdurup yeni soruyu gönderir (useChatThread). */}
             {/* v0.10.687 — D4: '@ad' ya da tireli token yazınca servis adı adayları
-                girişin ÜSTÜNDE; ↑↓ gezinir, Enter/Tab ekler (göndermez), Esc kapatır. */}
-            <div className="chat-composer-field">
-              {completion.open && (
+                girişin ÜSTÜNDE; ↑↓ gezinir, Enter/Tab ekler (göndermez), Esc kapatır.
+                v0.10.1145 — ChatComposer: markdown araç çubuğu + kısayollar + akıllı
+                yapıştırma + önizleme; açık popup'ın tuşları ÖNCE (onBeforeKey). */}
+            <ChatComposer
+              value={input}
+              onChange={setInput}
+              onCaret={setCaret}
+              onSubmit={() => submit(input)}
+              textareaRef={textareaRef}
+              autoFocus
+              placeholder="CoSRE'ye sor… (Shift+Enter: yeni satır · @ kapsam · / komutlar)"
+              ariaLabel="CoSRE'ye mesaj"
+              comboboxProps={{
+                'aria-autocomplete': 'list',
+                'aria-controls': 'chat-complete',
+                'aria-expanded': completion.open,
+                'aria-activedescendant': completion.open ? `chat-complete-${completion.highlight}` : undefined,
+              }}
+              popup={completion.open && (
                 <NameCompletionPopup id="chat-complete" items={completion.items} highlight={completion.highlight}
                   onPick={acceptCompletion} onHover={completion.setHighlight} />
               )}
-              <textarea
-                ref={textareaRef}
-                value={input}
-                rows={1}
-                onChange={e => { setInput(e.target.value); setCaret(e.target.selectionStart ?? e.target.value.length); }}
-                onSelect={e => setCaret(e.currentTarget.selectionStart ?? 0)}
-                onInput={e => autoGrowTextarea(e.currentTarget)}
-                onKeyDown={e => {
-                  if (completion.open) {
-                    if (e.key === 'ArrowDown') { e.preventDefault(); completion.move(1); return; }
-                    if (e.key === 'ArrowUp') { e.preventDefault(); completion.move(-1); return; }
-                    if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); acceptCompletion(completion.items[completion.highlight]); return; }
-                    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); completion.dismiss(); return; }
-                  }
-                  if (chatInputSubmitKey(e)) { e.preventDefault(); submit(input); }
-                }}
-                placeholder="CoSRE'ye sor… (Shift+Enter: yeni satır · @ kapsam · / komutlar)"
-                autoFocus
-                aria-autocomplete="list"
-                aria-controls="chat-complete"
-                aria-expanded={completion.open}
-                aria-activedescendant={completion.open ? `chat-complete-${completion.highlight}` : undefined}
-                className="cm-composer__input"
-                aria-label="CoSRE'ye mesaj"
-                style={{ maxHeight: CHAT_INPUT_MAX_PX }} />
-            </div>
+              onBeforeKey={e => {
+                if (!completion.open) return false;
+                if (e.key === 'ArrowDown') { e.preventDefault(); completion.move(1); return true; }
+                if (e.key === 'ArrowUp') { e.preventDefault(); completion.move(-1); return true; }
+                if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); acceptCompletion(completion.items[completion.highlight]); return true; }
+                if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); completion.dismiss(); return true; }
+                return false;
+              }}
+              actions={<>
             {/* v0.10.23 — DURDUR. AbortController zaten kuruluydu ama
                 hiçbir affordance'a bağlı değildi; yerel gemma4 tek GPU'da
                 koştuğu için istenmeyen bir 5-turlu döngü, operatörün
@@ -856,7 +865,6 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
             {/* v0.10.1141 — model seçici composer'ın İÇİNDE (Claude gibi), Gönder'in
                 solunda; menü yukarı açılır. Akarken devre dışı (model yalnız boştayken
                 değişir). Tek profilde aynı yerde tıklanamaz etiket. */}
-            <div className="cm-composer__actions">
             <ModelPicker profiles={profiles} defaultProfile={defaultProfile} value={profile}
               onChange={setProfile} activeModel={activeModel} disabled={busy} />
             {busy ? (
@@ -869,8 +877,7 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
                 Gönder
               </Button>
             )}
-            </div>
-            </div>
+              </>} />
             {/* v0.10.1138 — yapısal kapsam çipleri: gönderimde context.scope/command olarak gider. */}
             {composerChips.length > 0 && (
               <div className="cm-scope-chips" aria-label="Mesaj kapsamı">
@@ -900,7 +907,7 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
           <div className="cosre-page__main">
             <CosreSidebar threads={threads} error={histErr} activeId={conversationId}
               collapsed={sideCollapsed} mobileOpen={sideMobile}
-              onNew={() => { clearAll(); setSideMobile(false); }}
+              onNew={() => { startNew(); setSideMobile(false); }}
               onOpen={t => { setSideMobile(false); void openThread(t); }}
               onDelete={t => void removeThread(t)}
               onCloseMobile={() => setSideMobile(false)} />

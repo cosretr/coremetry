@@ -33,12 +33,18 @@ describe('autoGrowTextarea', () => {
 
 describe('BAĞLANMA', () => {
   const src = (f: string) => readFileSync(new URL(f, import.meta.url), 'utf8');
-  it('iki yüzey de <textarea> + chatInputSubmitKey kullanır, input akarken KİLİTLİ DEĞİL', () => {
+  // v0.10.1145 — iki yüzey textarea'yı artık TEK composer'dan (ChatComposer) alır;
+  // pin oraya taşındı: composer <textarea> + chatInputSubmitKey, yüzeyler onu kullanır
+  // ve composer'a `busy` ile kilit geçirmez.
+  it('iki yüzey de ChatComposer (<textarea> + chatInputSubmitKey) kullanır, input akarken KİLİTLİ DEĞİL', () => {
+    const c = src('./ChatComposer.tsx');
+    expect(c).toContain('<textarea');
+    expect(c).toContain('chatInputSubmitKey(e)');
+    expect(c).not.toMatch(/<textarea[\s\S]{0,600}disabled=/);
     for (const f of ['../CopilotChat.tsx', './AIDrawerBody.tsx']) {
       const s = src(f);
-      expect(s, f).toContain('<textarea');
-      expect(s, f).toContain('chatInputSubmitKey(e)');
-      expect(s, f).not.toMatch(/<textarea[\s\S]{0,400}disabled=\{busy\}/);
+      expect(s, f).toContain('<ChatComposer');
+      expect(s, f).not.toMatch(/<ChatComposer[\s\S]{0,400}disabled=\{busy\}/);
     }
   });
   it('useChatThread: akarken gelen soru DÜŞMEZ — durdur ve kuyruğa al, finally gönderir', () => {

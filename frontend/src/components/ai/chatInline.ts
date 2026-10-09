@@ -37,6 +37,10 @@ const TRACE_RE = /[0-9a-f]{32}/y;
 // Tuş kapağı: [[Ctrl+C]], [[⌘K]], [[Shift+Enter]] — dar karakter kümesi ki
 // iç içe köşeli parantezli düzyazı ("[[1], [2]]") tuşa dönmesin.
 const KBD_RE = /\[\[([A-Za-z0-9⌘⇧⌥⌃↵←→↑↓+\- ]{1,24})\]\]/y;
+// v0.10.1145 — CommonMark otomatik bağlantısı `<https://…>` (composer Ctrl/Cmd+K
+// seçili URL'yi böyle sarar): köşeli ayraçlar düşer, adres çıplak URL gibi
+// aynı güvenlik kararından geçer (chatLinks.classifyLink). Yalnız http(s).
+const AUTOLINK_RE = /<(https?:\/\/[^\s<>"`]+)>/iy;
 
 /** Satır içi iç içe vurgu derinliği tavanı (ötesi düz metin). */
 export const MAX_INLINE_DEPTH = 8;
@@ -129,6 +133,14 @@ export function parseInline(s: string, noLinks = false, depth = 0): InlineNode[]
       if (j > i + 1) {
         push({ t: 'code', v: s.slice(i + 1, j) });
         i = j + 1;
+        continue;
+      }
+    }
+    if (ch === '<' && !noLinks && (s[i + 1] === 'h' || s[i + 1] === 'H')) {
+      const m = at(AUTOLINK_RE, s, i);
+      if (m) {
+        push({ t: 'link', href: m[1], label: null });
+        i += m[0].length;
         continue;
       }
     }

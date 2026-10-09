@@ -12,7 +12,8 @@ import { ServiceChartsExplainBody } from './ServiceChartsExplainBody';
 import { aiSubjectQuestion, buildExplainContext, drawerFollowups } from './drawerChat';
 import { useChatThread } from './useChatThread';
 import { useStickToBottom } from './stickToBottom';
-import { chatInputSubmitKey, autoGrowTextarea, CHAT_INPUT_MAX_PX } from './chatInputKey';
+import { ChatComposer } from './ChatComposer'; // v0.10.1145 — CoSRE penceresiyle AYNI composer
+import { useComposerDraft } from './composerDraft'; // v0.10.1145 — özne başına taslak
 import { useCopilotConfig } from './useCopilotEnabled';
 import { useAuthUserId } from '@/components/AuthProvider';
 import { useChatProfile } from './chatProfileStore'; // v0.10.1138 — kullanıcı başına seçim
@@ -161,7 +162,6 @@ function AIDrawerChat({ subject, explainText, resumed = false, spanIds, traceIds
   // salt aşamalı-gösterimdi ve bir tık vergisiydi: composer'ın mount'u
   // BEDAVA (useChatThread yalnız send'de istek atar), yani kapının
   // koruduğu hiçbir maliyet yoktu.
-  const [input, setInput] = useState('');
   const endRef = useRef<HTMLDivElement>(null);
 
   const explain = useMemo(
@@ -178,6 +178,9 @@ function AIDrawerChat({ subject, explainText, resumed = false, spanIds, traceIds
   // yazıyor" gibi takipler açıklamanın metninde geçmediği için kör
   // cevaplanıyordu. `?ai=` kodeğinin AYNI biçimi — ikinci bir sözleşme yok.
   const subjectParam = useMemo(() => formatAiParam(subject), [subject]);
+  // v0.10.1145 — taslak özne başına sessionStorage'da (çekmece kapanıp aynı
+  // özne yeniden açılınca / yenilemede yazılan soru kaybolmaz; gönderimde silinir).
+  const { value: input, setValue: setInput } = useComposerDraft('explain:' + subjectParam, null);
   // title (v0.10.55) — ÖZNEDEN türer, takip sorusunun lafından değil:
   // "Geçmiş" listesinde "Explain trace · a1b2c3d4…" gibi tanınabilir
   // dursun (gerekçe useChatThread.ts dosya başında).
@@ -286,27 +289,21 @@ function AIDrawerChat({ subject, explainText, resumed = false, spanIds, traceIds
           </div>
         )}
 
-        <form
-          onSubmit={e => { e.preventDefault(); submit(input); }}
-          style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'flex-end' }}>
-          {/* v0.10.664 — <textarea> (Enter gönder, Shift+Enter satır); akarken kilitli değil. */}
-          <textarea
+        <form className="cm-composer cm-composer--inline"
+          onSubmit={e => { e.preventDefault(); submit(input); }}>
+          {/* v0.10.664 — <textarea> (Enter gönder, Shift+Enter satır); akarken kilitli değil.
+              v0.10.1145 — ChatComposer: CoSRE penceresiyle aynı araç çubuğu / kısayol /
+              akıllı yapıştırma / önizleme (tek composer, iki kabuk). */}
+          <ChatComposer
             value={input}
-            rows={1}
-            onChange={e => setInput(e.target.value)}
-            onInput={e => autoGrowTextarea(e.currentTarget)}
-            onKeyDown={e => { if (chatInputSubmitKey(e)) { e.preventDefault(); submit(input); } }}
-            placeholder="Bu konuda sor… (Shift+Enter: yeni satır)"
+            onChange={setInput}
+            onSubmit={() => submit(input)}
             autoFocus
-            style={{
-              flex: 1, minWidth: 0, padding: '7px 10px', fontSize: 13, lineHeight: '18px',
-              background: 'var(--bg)', color: 'var(--text)', fontFamily: 'inherit',
-              border: '1px solid var(--border)', borderRadius: 6,
-              resize: 'none', maxHeight: CHAT_INPUT_MAX_PX, overflowY: 'auto',
-            }} />
+            placeholder="Bu konuda sor… (Shift+Enter: yeni satır)"
+            ariaLabel="Bu konuda CoSRE'ye sor"
+            actions={<>
           {/* v0.10.1141 — model seçici composer'ın içinde, Gönder'in solunda (CopilotChat
               ile aynı yer); akarken devre dışı; tek profilde tıklanamaz etiket. */}
-          <div className="cm-composer__actions">
           <ModelPicker profiles={cfgProfiles} defaultProfile={cfgP?.defaultProfile} value={profile}
             onChange={setProfile} activeModel={activeModel} disabled={busy} />
           {/* v0.10.948 — DURDUR çekmecede de: trace takip soruları artık tam araç döngüsünü (≤5 tur/6 çağrı) koşuyor; akarken Gönder'in YERİNİ alır (CopilotChat v0.10.23 ile aynı). */}
@@ -320,7 +317,7 @@ function AIDrawerChat({ subject, explainText, resumed = false, spanIds, traceIds
               Gönder
             </Button>
           )}
-          </div>
+            </>} />
         </form>
       </DrawerSection>
     </div>

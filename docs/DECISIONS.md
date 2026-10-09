@@ -3272,6 +3272,44 @@ koşucusu 41 ms ölçtü (yerelde ~10 ms). Duvar saati eşiği makineye bağlı 
 ölçüsüne çevrildi: 10× girdi için süre oranı < 40 (doğrusal tarama ~10×, eski O(n²) ~100×),
 en iyi 5 koşu; mutlak tavan yalnız felaket emniyeti (500 ms). Ürün kodu değişmedi.
 
+## 2026-10-09 — CoSRE composer: markdown bilen zengin metin düzenleyici (v0.10.1145)
+
+**Operatör:** "rich text editör" — sohbet composer'ında biçimlendirme. **Karar:** contenteditable
+DEĞİL, markdown bilen `<textarea>`: mesaj biçimi sunucuya giden markdown METNİ olarak kalır (sunucu
+değişmedi), yeni bağımlılık yok (editör kütüphanesi reddedildi: paket bütçesi + contenteditable'ın
+IME/yapıştırma/geri-al tuzakları). Tek bileşen `ai/ChatComposer.tsx` üç yüzeyde (çekmece, /cosre,
+✨ Explain sohbeti); @-anma / komut popup'ı kabukta kalır, açıkken ↑↓ Enter Tab Esc ÖNCE ona gider
+(`onBeforeKey`). **Araç çubuğu** (kalın, italik, satır içi kod, kod bloğu, madde/numaralı liste,
+alıntı, bağlantı, Önizleme) operatör kararıyla VARSAYILAN KAPALI: model hapının yanındaki "Aa" açar /
+kapatır, durum kullanıcı başına localStorage'da (`cosre.composerTools.<kullanıcı>`); kapalıyken
+composer düz sohbet kutusudur. Her düğme aç-kapa (çift sarma yok, boşluk işaretin dışında, çok
+satırda satır satır, liste öneki dışarıda), seçim korunur, odak textarea'ya döner; düğmeler gerçek
+`IconButton` + aria-label + aria-keyshortcuts + kısayollu ipucu, tek sekme durağı (←/→). **Geri al:**
+düzenleme `execCommand('insertText')` ile (tarayıcının yerel Ctrl+Z yığını); yoksa `setRangeText` +
+elle geçmiş. **Kısayollar** (araç çubuğu kapalıyken de): Ctrl/Cmd+B/I/E/K, +Shift C/7/8/. — tuş adı
+`key`den, harf değilse `code`dan (Türkçe Q'da Shift+7 = "/"); Alt basılıyken hiçbiri (AltGr ile
+`{ [ ] }` yazılır); Ctrl/Cmd+K global ⌘K paletine sızmaz (stopPropagation). Ctrl/Cmd+K: seçim URL ise
+`<url>` (chatInline artık CommonMark otomatik bağlantısını tanır, aynı güvenlik kararı), değilse
+`[seçim](|)`. Enter: listede maddeyi sürdürür (numara artar, görev kutusu boş), boş maddede listeyi
+bitirir; ``` çitinin içinde ASLA göndermez; IME birleştirmesinde hiçbir tuş bizim değil. Tab/Shift+Tab
+yalnız listede girinti (kardeşin işaret genişliği kadar), dışarıda odak gezinmesi. **Akıllı
+yapıştırma:** seçimin üstüne URL → `[seçim](url)`; biçimli HTML (wiki/Confluence/Word/tarayıcı) →
+markdown (`htmlToMarkdown`: ayrık `DOMParser` belgesi, canlı DOM'a yazım yok; script/style/görsel/form
+düşer; yalnız mutlak http(s) bağlantı — WHATWG URL ile; tablo → GFM; 200 KB tavanı aşılırsa düz metin);
+≥3 satırlık kod/log/stack trace/JSON/YAML/SQL/XML → dil etiketli çit (`codeDetect`, her dalın yapı şartı
+var: "Servis: x" düzyazısı YAML, "Select … from" cümlesi SQL, `@anma`/`->` satırları kod sayılmaz). İmleç
+çitin içindeyse dönüşüm yok. Dönüşümlerde "Kod olarak yapıştırıldı · Geri al" ham metne döner.
+**Önizleme** ve **kullanıcı turları** cevaplarla AYNI çizici (`ChatMarkdown` → `renderMessage`): bağlantı
+politikası boş → dış adres "doğrulanmamış bağlantı" düz metni, yalnız aynı köken tıklanır; kullanıcının
+```chart çiti grafik sorgusu tetiklemez (kod bloğu). **Taslak:** konuşma başına sessionStorage
+(`cosre.draft.v1:<yüzey>:<konuşma>`, try/catch, 100 K karakter tavanı); geçmişten açma / yeni konuşma /
+`?chat=` AÇIK geçiştir (hedefin taslağı yüklenir), sunucunun yeni konuşmaya kimlik basması ÖRTÜK geçiştir
+(akış sürerken yazılan metin taşınır); gönderim siler. **Reddedilen:** Ctrl/Cmd+Enter ile her zaman
+gönderme (mevcut sözleşme: değiştiricili Enter = yeni satır); listedeki Enter'ın göndermesi (boş madde
+listeyi bitirir, sonraki Enter gönderir). **Testler:** `composerEdit.test.ts`, `htmlToMarkdown.test.ts`
+(XSS vektörleri dahil), `composerPaste.test.ts`, `ChatComposer.test.tsx`, `composerDraft.test.tsx`,
+`chatInline.autolink.test.ts`; `chatInputKey` / `nameCompletion` pinleri composer'a taşındı.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"
