@@ -1,6 +1,6 @@
 // aiProfiles.test.ts — v0.10.176 sözleşmesi.
 import { describe, it, expect } from 'vitest';
-import { slugifyProfileId, PROFILE_ID_RE, tuningSummary, endpointLabel, profileUsable } from './aiProfiles';
+import { slugifyProfileId, PROFILE_ID_RE, tuningSummary, endpointLabel, profileUsable, defaultRolesWarning, DEFAULT_ROLES_WARNING } from './aiProfiles';
 
 describe('aiProfiles yardımcıları', () => {
   it('slug: Türkçe harfler, boşluk, sınır; sunucu regex\'iyle uyumlu', () => {
@@ -31,5 +31,16 @@ describe('tuningSummary thinking', () => {
     expect(tuningSummary({ thinking: 'off' })).toBe('think=off');
     expect(tuningSummary({ maxTokens: 8192, thinking: 'on' })).toBe('8k tok · think=on');
     expect(tuningSummary({ thinking: '' })).toBe('küresel');
+  });
+});
+
+// v0.10.1139 — varsayılan profilin rol kısıtı yalnız açık seçimde uygulanır: uyarı.
+describe('defaultRolesWarning', () => {
+  it('yalnız VARSAYILAN profilin rol listesi doluyken uyarır', () => {
+    expect(defaultRolesWarning([{ default: true, roles: ['admin'] }, { roles: [] }])).toBe(DEFAULT_ROLES_WARNING);
+    expect(defaultRolesWarning([{ default: true, roles: [] }, { roles: ['viewer'] }])).toBeNull();
+    expect(defaultRolesWarning([{ default: true }])).toBeNull();
+    expect(defaultRolesWarning([])).toBeNull();
+    expect(DEFAULT_ROLES_WARNING).toContain('profilsiz istekler yine bu profille çalışır');
   });
 });

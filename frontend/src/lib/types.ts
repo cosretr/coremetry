@@ -7164,6 +7164,12 @@ export interface ChatScope {
   env?: string;
   team?: string;
   wiki?: boolean;
+  /**
+   * v0.10.1139 — services içinden YALNIZ biçimce eşleşen (tamamlamadan
+   * seçilmemiş) adlar. Sunucu bilinmeyen biçim-eşleşmesini sessizce düşürür
+   * ("@john.doe" sert "servis yok" cevabı almaz); yoksa her ad açık seçimdir.
+   */
+  shaped?: string[];
 }
 /** v0.10.1138 — mesaj başı eğik komutları (context.command). */
 export type ChatCommand = 'wiki' | 'trace' | 'rca' | 'logs' | 'help';

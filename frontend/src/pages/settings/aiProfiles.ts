@@ -12,7 +12,20 @@ export function toggleRole(roles: readonly Role[], r: Role): Role[] {
   return PROFILE_ROLES.filter(x => set.has(x));
 }
 
-/** rolesSummary — tablodaki rozet: boş = "herkes", aksi hâlde "yalnız admin, editor". */
+/**
+ * v0.10.1139 — varsayılan profilin rol allowlist'i yalnız AÇIK seçimde
+ * (sohbetin model menüsü / istekteki profile) uygulanır; profilsiz istekler
+ * yine varsayılanla çalışır. Allowlist doluysa panel bunu açıkça söyler.
+ */
+export const DEFAULT_ROLES_WARNING =
+  'Varsayılan profil rol kısıtını yalnız açık seçimde uygular; profilsiz istekler yine bu profille çalışır.';
+
+/** defaultRolesWarning — SAF: varsayılan profilin rol listesi boş değilse uyarı metni, aksi hâlde null. */
+export function defaultRolesWarning(profiles: readonly Pick<AIModelProfile, 'default' | 'roles'>[]): string | null {
+  return profiles.some(p => p.default && (p.roles?.length ?? 0) > 0) ? DEFAULT_ROLES_WARNING : null;
+}
+
+/** rolesSummary —tablodaki rozet: boş = "herkes", aksi hâlde "yalnız admin, editor". */
 export function rolesSummary(roles: readonly Role[] | undefined): string {
   return roles && roles.length > 0 ? `yalnız ${roles.join(', ')}` : 'herkes';
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { commandOf, parseChatInput, removeToken, scopeChips } from './chatScope';
+import { commandOf, hasDrawerContext, parseChatInput, pickedServices, removeToken, scopeChips, scopeForRequest } from './chatScope';
 import { answerVersion, canRegenerate, regenerateBase, MAX_ANSWER_VERSIONS } from './chatRegenerate';
 import type { ChatTurn } from '@/lib/types';
 
@@ -18,7 +18,7 @@ describe('parseChatInput', () => {
   });
   it('tür anmaları + servis biçimi → yapısal kapsam', () => {
     expect(parseChatInput(`@trace:${TID.toUpperCase()} @problem:p-42 @env:prod @team:platform @wiki @svc-orders neden?`)).toEqual({
-      scope: { trace: TID, problem: 'p-42', env: 'prod', team: 'platform', wiki: true, services: ['svc-orders'] },
+      scope: { trace: TID, problem: 'p-42', env: 'prod', team: 'platform', wiki: true, services: ['svc-orders'], shaped: ['svc-orders'] },
     });
   });
   it('servis: seçilen ya da servis biçimli; "@Override" / e-posta kapsam olmaz', () => {
@@ -26,7 +26,7 @@ describe('parseChatInput', () => {
     expect(parseChatInput('@checkout hataları', ['checkout'])).toEqual({ scope: { services: ['checkout'] } });
     expect(parseChatInput('Caused by @Override at x @deprecated')).toEqual({});
     expect(parseChatInput('dev@example.test hataları')).toEqual({});
-    expect(parseChatInput('@svc-orders, @svc-orders ve @svc-payments.')).toEqual({ scope: { services: ['svc-orders', 'svc-payments'] } });
+    expect(parseChatInput('@svc-orders, @svc-orders ve @svc-payments.')).toEqual({ scope: { services: ['svc-orders', 'svc-payments'], shaped: ['svc-orders', 'svc-payments'] } });
   });
   it('geçersiz trace kimliği ve boş değer düşer', () => {
     expect(parseChatInput('@trace:xyz @env: soru')).toEqual({});
@@ -36,7 +36,28 @@ describe('parseChatInput', () => {
     expect(parseChatInput("/api/x hatalı trace'lerini getir")).toEqual({});
   });
   it('komut + kapsam birlikte', () => {
-    expect(parseChatInput('/trace @svc-orders ORDER_TIMEOUT')).toEqual({ command: 'trace', scope: { services: ['svc-orders'] } });
+    expect(parseChatInput('/trace @svc-orders ORDER_TIMEOUT')).toEqual({ command: 'trace', scope: { services: ['svc-orders'], shaped: ['svc-orders'] } });
+  });
+  // v0.10.1139 — köken: seçilmemiş biçim-eşleşmesi işaretlenir (sunucu bilinmiyorsa sessiz düşürür).
+  it('biçim-eşleşmesi "shaped" işaretlenir; tamamlamadan seçilen işaretlenmez', () => {
+    expect(parseChatInput('@john.doe ve @spring-boot ne dedi')).toEqual({
+      scope: { services: ['john.doe', 'spring-boot'], shaped: ['john.doe', 'spring-boot'] },
+    });
+    const p = parseChatInput('@svc-orders ile @john.doe', ['svc-orders']);
+    expect(p).toEqual({ scope: { services: ['svc-orders', 'john.doe'], shaped: ['john.doe'] } });
+    expect(pickedServices(p.scope)).toEqual(['svc-orders']);
+    expect(pickedServices(undefined)).toEqual([]);
+  });
+  it('çekmece bağlamında @-kapsamı düşer, açık /komut kalır', () => {
+    const p = parseChatInput('/rca @svc-orders @env:prod');
+    expect(hasDrawerContext({})).toBe(false);
+    expect(hasDrawerContext({ explain: ' ', page: {} })).toBe(false);
+    for (const c of [{ explain: 'x' }, { subject: 'trace:abc' }, { trace: TID }, { page: { traceId: TID } }]) {
+      expect(hasDrawerContext(c)).toBe(true);
+    }
+    expect(scopeForRequest(p, true)).toEqual({ command: 'rca' });
+    expect(scopeForRequest(parseChatInput('@svc-orders logda ne var'), true)).toEqual({});
+    expect(scopeForRequest(p, false)).toBe(p);
   });
 });
 
@@ -70,6 +91,12 @@ describe('chatRegenerate', () => {
     expect(r.alternatives).toHaveLength(MAX_ANSWER_VERSIONS);
     expect(r.alternatives[r.alternatives.length - 1].exchangeId).toBe('xs');
     expect(r.alternatives.every(a => !a.alternatives)).toBe(true);
+  });
+  // v0.10.1139 — yeniden yüklenen konuşma turları {role,text}: parsed undefined → send yeniden çözer.
+  it('kapsamsız/komutsuz kullanıcı turunda parsed undefined', () => {
+    const r = regenerateBase([t('user', '/rca @svc-orders'), t('assistant', 'cevap')])!;
+    expect(r.parsed).toBeUndefined();
+    expect(r.question).toBe('/rca @svc-orders');
   });
   it('sürüm görünümü: varsayılan en yeni; seçilen eski cevap kendi exchangeId\'siyle', () => {
     const last = t('assistant', 'yeni', { exchangeId: 'x2', alternatives: [t('assistant', 'eski', { exchangeId: 'x1' })] });

@@ -35,9 +35,15 @@ function stripTurn(t: ChatTurn): ChatTurn {
  * regenerateBase — yeniden üretimin girdisi: son soru+cevap düşmüş turlar,
  * aynı soru ve AYNI kapsam/komut, yeni cevabın taşıyacağı önceki cevaplar
  * (eskiden yeniye, en çok MAX_ANSWER_VERSIONS). Koşul sağlanmazsa null.
+ *
+ * v0.10.1139 — kalıcı turlar yalnız {role,text} saklar: yeniden yüklenmiş
+ * konuşmada kullanıcı turunun scope/command'ı YOK. O durumda parsed undefined
+ * döner ve send metni yeniden çözer (parseChatInput) — "/rca @svc-orders"
+ * yeniden üretilince komut/kapsam yine gider. Boş `{}` dönmek yeniden
+ * çözümü engelliyordu (send `so.parsed ?? parse…`).
  */
 export function regenerateBase(turns: readonly ChatTurn[]): {
-  base: ChatTurn[]; question: string; parsed: ParsedChatInput; alternatives: ChatTurn[];
+  base: ChatTurn[]; question: string; parsed?: ParsedChatInput; alternatives: ChatTurn[];
 } | null {
   if (!canRegenerate(turns)) return null;
   const n = turns.length;
@@ -47,7 +53,9 @@ export function regenerateBase(turns: readonly ChatTurn[]): {
   return {
     base: turns.slice(0, n - 2),
     question: user.text ?? '',
-    parsed: { ...(user.command ? { command: user.command } : {}), ...(user.scope ? { scope: user.scope } : {}) },
+    parsed: user.command || user.scope
+      ? { ...(user.command ? { command: user.command } : {}), ...(user.scope ? { scope: user.scope } : {}) }
+      : undefined,
     alternatives,
   };
 }

@@ -31,10 +31,11 @@ import { NameCompletionPopup } from './ai/NameCompletionPopup';
 import { applyCompletion, type CompletionItem } from './ai/chatCompletion';
 import { ModelPicker } from './ai/ModelPicker'; // v0.10.1138 — kompakt "model ▾" menüsü
 import { useChatProfile } from './ai/chatProfileStore'; // v0.10.1138 — kullanıcı başına seçim
-import { parseChatInput, removeToken, scopeChips } from './ai/chatScope'; // v0.10.1138 — @/ kapsamı
+import { hasDrawerContext, parseChatInput, removeToken, scopeChips, scopeForRequest } from './ai/chatScope'; // v0.10.1138 — @/ kapsamı
 import { answerVersion, canRegenerate, lastUserIndex } from './ai/chatRegenerate'; // v0.10.1138
 import { cosreFullPageHref } from './ai/drawerFullPage'; // v0.10.1138 — "Tam sayfada aç"
 import { isPlainLeftClick } from '@/lib/a11y';
+import { toast } from '@/lib/toast'; // v0.10.1139 — tam sayfa kayıt hatası
 import { useCopilotConfig } from './ai/useCopilotEnabled'; // v0.10.483
 import { AI_DRAWER_WIDTH } from './ai/answerCard'; // v0.10.461
 import { AIDrawerBody } from './ai/AIDrawerBody'; // v0.10.483 — ✨ Explain gövdesi aynı çekmecede
@@ -201,7 +202,6 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
   // v0.10.1138 — tamamlamadan SEÇİLEN servis anmaları (biçimden bağımsız kapsam olur).
   const [chosen, setChosen] = useState<string[]>([]);
   const parsedInput = useMemo(() => parseChatInput(input, chosen), [input, chosen]);
-  const composerChips = useMemo(() => scopeChips(parsedInput), [parsedInput]);
   // v0.10.1138 — son cevabın sürüm görünümü ("önceki cevap (1/2)"); yeni tur gelince sıfırlanır.
   const [versionSel, setVersionSel] = useState<{ turn: unknown; idx: number } | null>(null);
   const [opening, setOpening] = useState(false);
@@ -310,6 +310,12 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
         navigate(to, { replace: true });
       },
     });
+  // v0.10.1139 — kapsam çipleri gönderilecek hâli gösterir: trace bağlamında
+  // @-kapsamı düşer (useChatThread aynı kuralı uygular), açık /komut kalır.
+  const chipTrace = pinnedLegacy ? (pinnedLegacy.trace ?? '') : currentTrace;
+  const composerChips = useMemo(
+    () => scopeChips(scopeForRequest(parsedInput, hasDrawerContext({ trace: chipTrace, page }))),
+    [parsedInput, chipTrace, page]);
   // v0.10.540 — yeni konuşma pini de düşürür (pin thread'e bağlı).
   const clearAll = useCallback(() => { clear(); setPinned(null); }, [clear, setPinned]);
 
@@ -521,7 +527,12 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
       navigate(cosreFullPageHref(turns.length > 0 ? id : null));
     };
     if (turns.length === 0) { go(null); return; }
-    void flushSave().then(go, () => go(conversationId));
+    // v0.10.1139 — kayıt başarısızsa GEZİNME YOK (sessiz kayıp olmasın): çekmece
+    // açık kalır, operatör hatayı görür ve yeniden deneyebilir.
+    void flushSave().then(go, (err: unknown) => {
+      setOpening(false);
+      toast.error(`Konuşma kaydedilemedi — tam sayfaya geçilmedi. ${err instanceof Error ? err.message : String(err)}`.trim());
+    });
   };
 
   // v0.10.1125 — başlık + gövde TEK yerde; çekmece ve /cosre sayfası aynı düğümleri sarar.

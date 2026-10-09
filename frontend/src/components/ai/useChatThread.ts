@@ -7,7 +7,7 @@ import { capPageContext } from '@/lib/traceAiContext';
 import { isAbortError, settleStoppedTurn, settleTruncatedTurn } from './chatAbort';
 import { failedQuestion, dropFailedTail } from './chatRetry';
 import { prevWikiRefs } from './chatWikiRefs';
-import { parseChatInput, type ParsedChatInput } from './chatScope';
+import { hasDrawerContext, parseChatInput, pickedServices, scopeForRequest, type ParsedChatInput } from './chatScope';
 import { ChatRequestError } from '@/lib/api';
 import { lastUserIndex, regenerateBase } from './chatRegenerate';
 import {
@@ -158,7 +158,9 @@ export function useChatThread(opts: ChatThreadOpts = {}) {
   // 600 ms'lik kaydı siliyordu → önceki konuşmanın SON alışverişi hiç
   // yazılmıyordu. Artık geçişte bekleyen kayıt İPTAL değil, hemen yazılır.
   const genRef = useRef(0);
-  const saveNow = useCallback((): Promise<string | null> => {
+  // v0.10.1139 — strict: hata yutulmaz, reddedilir ("Tam sayfada aç" kayıt
+  // başarısızken gezinmemeli). Arka plan kaydı (schedulePersist) yine sessiz.
+  const saveNow = useCallback((strict = false): Promise<string | null> => {
     const snapshot = turnsRef.current;
     if (!hasCompletedExchange(snapshot)) return Promise.resolve(convIdRef.current);
     const gen = genRef.current;
@@ -177,18 +179,22 @@ export function useChatThread(opts: ChatThreadOpts = {}) {
       convIdRef.current = c.id;
       setConversationId(c.id);
       return c.id;
-    }).catch(() => convIdRef.current /* sessiz — sonraki tur yeniden dener */);
+    }).catch((err: unknown) => {
+      if (strict) throw err;
+      return convIdRef.current; /* sessiz — sonraki tur yeniden dener */
+    });
   }, []);
 
   // v0.10.1138 — "Tam sayfada aç": bekleyen (debounce) kayıt hemen yazılır ve
   // konuşma kimliği döner; tamamlanmış alışveriş yoksa mevcut kimlik (ya da null).
+  // v0.10.1139 — kayıt hatası REDDEDİLİR (çağıran gezinmez, hatayı gösterir).
   const flushSave = useCallback((): Promise<string | null> => {
     if (saveTimerRef.current) {
       clearTimeout(saveTimerRef.current);
       saveTimerRef.current = null;
     }
     if (!optsRef.current.persist) return Promise.resolve(convIdRef.current);
-    return saveNow();
+    return saveNow(true);
   }, [saveNow]);
 
   const schedulePersist = useCallback(() => {
@@ -209,7 +215,9 @@ export function useChatThread(opts: ChatThreadOpts = {}) {
     const o = optsRef.current;
     // v0.10.1138 — @-anmalar / komut → yapısal kapsam. Yoksa ikisi de undefined
     // ve istek gövdesi bayt bayt eski (chatScope.ts).
-    const parsed = so?.parsed ?? parseChatInput(q, so?.chosen ?? []);
+    // v0.10.1139 — çekmece bağlamında (explain/subject/trace/sayfa traceId)
+    // @-kapsamı düşer, açık /komut kalır (chatScope.scopeForRequest).
+    const parsed = scopeForRequest(so?.parsed ?? parseChatInput(q, so?.chosen ?? []), hasDrawerContext(o));
     // v0.10.1134 — önceki cevabın wiki sayfaları (geçmiş yalnız {role,text}).
     const wikiRefs = prevWikiRefs(turnsRef.current);
     const history: ChatMessage[] = [
@@ -438,7 +446,8 @@ export function useChatThread(opts: ChatThreadOpts = {}) {
     const base = ts.slice(0, i);
     turnsRef.current = base;
     setTurns(base);
-    void send(q, { chosen: [...(ts[i].scope?.services ?? []), ...(chosen ?? [])] });
+    // v0.10.1139 — yalnız AÇIKÇA seçilenler devralınır; biçim-eşleşmesi yine biçim-eşleşmesi.
+    void send(q, { chosen: [...pickedServices(ts[i].scope), ...(chosen ?? [])] });
     return true;
   }, [send]);
 

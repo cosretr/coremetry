@@ -56,6 +56,7 @@ export function parseChatInput(text: string, chosen: readonly string[] = []): Pa
   const command = commandOf(text);
   const scope: ChatScope = {};
   const services: string[] = [];
+  const shaped: string[] = [];
   const chosenSet = new Set(chosen.map(c => c.toLowerCase()));
   for (const m of text.matchAll(MENTION_RE)) {
     const raw = m[2].replace(TRAIL, '');
@@ -70,13 +71,47 @@ export function parseChatInput(text: string, chosen: readonly string[] = []): Pa
     }
     if (head === 'wiki' && colon < 0) { scope.wiki = true; continue; }
     if (colon >= 0 || !raw) continue;
-    if ((chosenSet.has(raw.toLowerCase()) || SERVICE_SHAPE.test(raw)) && !services.includes(raw) && services.length < SCOPE_MAX_SERVICES) {
+    const picked = chosenSet.has(raw.toLowerCase());
+    if ((picked || SERVICE_SHAPE.test(raw)) && !services.includes(raw) && services.length < SCOPE_MAX_SERVICES) {
       services.push(raw);
+      // v0.10.1139 — köken: seçilmemiş biçim-eşleşmesi ("@john.doe",
+      // "@spring-boot") işaretlenir; sunucu bilinmiyorsa sessizce düşürür.
+      if (!picked) shaped.push(raw);
     }
   }
   if (services.length > 0) scope.services = services;
+  if (shaped.length > 0) scope.shaped = shaped;
   const hasScope = Object.keys(scope).length > 0;
   return { ...(command ? { command } : {}), ...(hasScope ? { scope } : {}) };
+}
+
+/** v0.10.1139 — çekmece bağlamı alanları (useChatThread seçeneklerinin alt kümesi). */
+export interface DrawerContextFields {
+  explain?: string;
+  subject?: string;
+  trace?: string;
+  page?: { traceId?: string };
+}
+
+/** hasDrawerContext — SAF: istek trace/exception çekmecesi bağlamı taşıyor mu. */
+export function hasDrawerContext(c: DrawerContextFields): boolean {
+  return [c.explain, c.subject, c.trace, c.page?.traceId].some(v => !!v?.trim());
+}
+
+/**
+ * scopeForRequest — SAF (v0.10.1139): çekmece bağlamında @-kapsamı düşer
+ * (trace/exception takipleri kendi akışında kalsın); mesaj başındaki AÇIK
+ * /komut yine uygulanır. Bağlam yoksa çözüm aynen.
+ */
+export function scopeForRequest(p: ParsedChatInput, drawer: boolean): ParsedChatInput {
+  if (!drawer) return p;
+  return p.command ? { command: p.command } : {};
+}
+
+/** pickedServices — SAF: kapsamdaki AÇIKÇA seçilmiş servisler (biçim-eşleşmeleri hariç). */
+export function pickedServices(scope: ChatScope | undefined): string[] {
+  const shaped = new Set((scope?.shaped ?? []).map(s => s.toLowerCase()));
+  return (scope?.services ?? []).filter(s => !shaped.has(s.toLowerCase()));
 }
 
 export interface ScopeChip { key: string; label: string; token: string }

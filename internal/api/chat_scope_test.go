@@ -408,3 +408,94 @@ func TestChatProfileRoleAllowlist(t *testing.T) {
 		t.Fatalf("admin seçenekleri: %+v", opts)
 	}
 }
+
+// ── v0.10.1139: biçim-eşleşmesi kökeni + çekmece kapısı ─────────────────
+
+// Seçilmemiş, yalnız biçimce eşleşen bilinmeyen ad ("@john.doe") sessizce
+// düşer; seçilen ad ve tek servisli /rca sert cevabı korur.
+func TestValidateChatScopeShapedOrigin(t *testing.T) {
+	cases := []struct {
+		name      string
+		sc        chatScope
+		cmd       string
+		wantIssue bool
+		wantSvcs  []string
+	}{
+		{"biçim-eşleşmesi bilinmeyen düşer", chatScope{Services: []string{"john.doe"}, Shaped: []string{"john.doe"}}, "", false, nil},
+		{"biçim-eşleşmesi bilinen kalır", chatScope{Services: []string{"svc-orders", "spring-boot"}, Shaped: []string{"svc-orders", "spring-boot"}}, "", false, []string{"svc-orders"}},
+		{"seçilen bilinmeyen sert", chatScope{Services: []string{"svc-order"}}, "", true, nil},
+		{"tek servisli /rca sert", chatScope{Services: []string{"svc-order"}, Shaped: []string{"svc-order"}}, "rca", true, nil},
+		{"iki servisli /rca biçim-eşleşmesi düşer", chatScope{Services: []string{"svc-orders", "john.doe"}, Shaped: []string{"svc-orders", "john.doe"}}, "rca", false, []string{"svc-orders"}},
+		{"/trace biçim-eşleşmesi düşer", chatScope{Services: []string{"john.doe"}, Shaped: []string{"john.doe"}}, "trace", false, nil},
+	}
+	for _, c := range cases {
+		got, issue := validateChatScope(strictScope(c.sc, c.cmd), scopeSvcs, scopeEnvs, nil)
+		if (issue != nil) != c.wantIssue {
+			t.Errorf("%s: issue=%+v", c.name, issue)
+			continue
+		}
+		if !c.wantIssue && !reflect.DeepEqual(got.Services, c.wantSvcs) {
+			t.Errorf("%s: services=%v want %v", c.name, got.Services, c.wantSvcs)
+		}
+		if got.Shaped != nil {
+			t.Errorf("%s: Shaped doğrulanmış kapsama sızdı", c.name)
+		}
+	}
+}
+
+func TestChatScopeDrawerGate(t *testing.T) {
+	sc := &chatScope{Services: []string{"svc-orders"}}
+	if chatScopeDrawerGate(sc, "", " ", "") != sc {
+		t.Fatal("bağlamsız istekte kapsam düştü")
+	}
+	for _, ctx := range [][]string{{"açıklama", "", "", ""}, {"", "trace:abc", "", ""}, {"", "", "0af7651916cd43dd8448eb211c80319c", ""}, {"", "", "", "0af7651916cd43dd8448eb211c80319c"}} {
+		if chatScopeDrawerGate(sc, ctx...) != nil {
+			t.Fatalf("çekmece bağlamında kapsam kaldı: %q", ctx)
+		}
+	}
+}
+
+// Gerçek handler: biçim-eşleşmesi bilinmeyen servis sert "yok" cevabı
+// üretmez; çekmece bağlamında açıkça seçilen bilinmeyen servis de üretmez
+// (kapsam kademesi atlanır). Açık /help komutu çekmecede de çalışır; tek
+// servisli /rca biçim-eşleşmesinde bile sert cevap korunur.
+func TestChatShapedAndDrawerScopeNoHardReply(t *testing.T) {
+	llm := noLLM(t)
+	s, _ := newLoopTestServer(t, llm, "u-shaped")
+	// Kademe: yalnız düşen biçim-eşleşmesi → dokunmadan döner (metin aynen,
+	// cevap yok); serbest metin yolu bayt bayt eski.
+	var emitted []string
+	msgs := []copilot.ChatMessage{{Role: "user", Text: "@john.doe ile konuştum, durum ne"}}
+	rq := chatScopeReq{Msgs: msgs, Scope: &chatScope{Services: []string{"john.doe"}, Shaped: []string{"john.doe"}}}
+	_, handled, _ := s.chatScopeTier(context.Background(), func(k string, _ any) { emitted = append(emitted, k) }, &rq)
+	if handled || len(emitted) != 0 || rq.Msgs[0].Text != msgs[0].Text || rq.Service != "" {
+		t.Fatalf("biçim-eşleşmesi kademeye dokundu: handled=%v emitted=%v rq=%+v", handled, emitted, rq)
+	}
+	// Çekmece (trace takibi): geçersiz kapsam bile sert cevap üretmez — kademe atlanır.
+	s.copilot.SetIntentClassify(copilot.IntentOff)
+	fr := postLoopChat(t, s, context.Background(), "u-shaped", map[string]any{
+		"messages": []map[string]any{{"role": "user", "text": "Dünle kıyasla?"}},
+		"context": map[string]any{"explain": "önceki açıklama", "subject": "trace:" + tfTrace,
+			"scope": map[string]any{"trace": "xyz"}},
+	})
+	for _, a := range framesOf(fr, "answer") {
+		if text, _ := a["text"].(string); strings.Contains(text, "geçerli bir trace kimliği değil") {
+			t.Fatalf("çekmecede kapsam kademesi koştu: %s", text)
+		}
+	}
+	fr = postLoopChat(t, s, context.Background(), "u-shaped", map[string]any{
+		"messages": []map[string]any{{"role": "user", "text": "/help"}},
+		"context":  map[string]any{"command": "help", "explain": "önceki açıklama"},
+	})
+	if !strings.Contains(answerTextOf(t, fr), "/rca") {
+		t.Fatal("çekmecede açık /help uygulanmadı")
+	}
+	before := len(llm.calls())
+	fr = postLoopChat(t, s, context.Background(), "u-shaped", map[string]any{
+		"messages": []map[string]any{{"role": "user", "text": "/rca @checkou-x"}},
+		"context":  map[string]any{"command": "rca", "scope": map[string]any{"services": []string{"checkou-x"}, "shaped": []string{"checkou-x"}}},
+	})
+	if text := answerTextOf(t, fr); !strings.Contains(text, "checkou-x") || len(llm.calls()) != before {
+		t.Fatalf("/rca tek servis sert cevabı: %s", text)
+	}
+}

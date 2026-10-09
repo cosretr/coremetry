@@ -56,6 +56,43 @@ type chatScope struct {
 	Env      string   `json:"env,omitempty"`
 	Team     string   `json:"team,omitempty"`
 	Wiki     bool     `json:"wiki,omitempty"`
+	// Shaped (v0.10.1139) — Services içinden YALNIZ biçimce eşleşen (servis
+	// adı biçimli "@john.doe", "@spring-boot"; tamamlamadan SEÇİLMEMİŞ) adlar.
+	// Bilinmeyen biçim-eşleşmesi sessizce düşer (sert "X adında servis yok"
+	// cevabı yalnız seçilen adda ya da tek servisli /rca'da). Yoksa (eski
+	// istemci) her servis açık seçim sayılır — v0.10.1138 davranışı.
+	Shaped []string `json:"shaped,omitempty"`
+}
+
+// strictScope — SAF: tek servisli /rca'da ad biçimce yazılmış olsa bile
+// operatör açıkça o servisi istedi → Shaped temizlenir (sert cevap kalır).
+func strictScope(sc chatScope, cmd string) chatScope {
+	if cmd == "rca" && len(sc.Services) == 1 {
+		sc.Shaped = nil
+	}
+	return sc
+}
+
+func (sc *chatScope) isShaped(name string) bool {
+	for _, v := range sc.Shaped {
+		if strings.EqualFold(v, name) {
+			return true
+		}
+	}
+	return false
+}
+
+// chatScopeDrawerGate — SAF (v0.10.1139): çekmece bağlamı (explain / subject /
+// ekrandaki trace / sayfanın traceId'si) varken @-kapsamı DÜŞER — trace ve
+// exception çekmecesi takipleri kendi akışlarında kalır. Açık /komut bu kapıdan
+// etkilenmez (istemci yalnız mesaj başındaki eğik çizgiden basar), aynen uygulanır.
+func chatScopeDrawerGate(sc *chatScope, drawerCtx ...string) *chatScope {
+	for _, v := range drawerCtx {
+		if strings.TrimSpace(v) != "" {
+			return nil
+		}
+	}
+	return sc
 }
 
 // chatScopeMaxServices — tek mesajda en çok bu kadar servis anması işlenir.
@@ -176,6 +213,10 @@ func validateChatScope(sc chatScope, svcNames, envNames, teamNames []string) (ch
 		}
 		if svcNames != nil {
 			c, ok := scopeNameMatch(s, svcNames)
+			if !ok && sc.isShaped(s) {
+				// v0.10.1139 — seçilmemiş biçim-eşleşmesi ("@john.doe") sessizce düşer.
+				continue
+			}
 			if !ok {
 				return out, &chatScopeIssue{Dim: "service", Value: s, Options: scopeNearNames(s, svcNames)}
 			}
@@ -544,7 +585,7 @@ func (s *Server) chatScopeTier(ctx context.Context, emit func(string, any), rq *
 	if sc.Team != "" {
 		teamNames = s.guidedTeamNames(ctx)
 	}
-	vsc, issue := validateChatScope(sc, svcNames, envNames, teamNames)
+	vsc, issue := validateChatScope(strictScope(sc, cmd), svcNames, envNames, teamNames)
 	if issue != nil {
 		text, chips := chatScopeIssueAnswer(*issue, rest)
 		ans := map[string]any{"text": text}
@@ -553,6 +594,10 @@ func (s *Server) chatScopeTier(ctx context.Context, emit func(string, any), rq *
 		}
 		emit("answer", ans)
 		return ctx, true, true
+	}
+	if cmd == "" && vsc.empty() {
+		// v0.10.1139 — yalnız düşen biçim-eşleşmeleri vardı: serbest metin yolu bayt bayt eski.
+		return ctx, false, false
 	}
 	if routed != "" {
 		rq.Msgs = replaceLastUserText(rq.Msgs, routed)

@@ -3101,6 +3101,35 @@ komutsuz serbest metin bayt bayt eski yoldadır (testle pinli). `@team:` tamamla
 sunucu basar), çekmece kapanır, aynı sekmede gezilir; boş konuşmada yalnız `/cosre`. Akarken kapalı,
 çünkü gezinme akışı keserdi. /cosre'deki "Coremetry'yi aç" aynen kaldı.
 
+## 2026-10-09 — CoSRE @-kapsamı: köken işareti, çekmece kapısı, yeniden üretimde yeniden çözüm (v0.10.1139)
+
+v0.10.1138 incelemesinin bulguları.
+
+**Karar 1, yeniden yüklenen konuşmada yeniden üret:** Kalıcı turlar yalnız `{role,text}` saklar; geçmişten
+açılan konuşmada kullanıcı turunun kapsamı/komutu yoktur. `regenerateBase` bu durumda boş `{}` yerine
+`parsed: undefined` döner ve `send` metni yeniden çözer: "/rca @svc-orders" yeniden üretildiğinde
+`context.command`/`context.scope` yine gider. Oturum içindeki turda kayıtlı kapsam aynen kullanılır.
+
+**Karar 2, anmanın kökeni:** Servis adı biçimi (küçük harf + nokta/tire) "@john.doe", "@spring-boot" gibi
+kişi/kütüphane anmalarını da yakalıyor. İstemci tamamlamadan SEÇİLMEMİŞ, yalnız biçimce eşleşen adları
+`scope.shaped` ile işaretler. Sunucu bilinmeyen biçim-eşleşmesini sessizce düşürür; sert "X adında bir
+servis yok" cevabı yalnız tamamlamadan seçilen adda ve tek servisli `/rca`'da kalır. Biçim-eşleşmeleri
+düşünce kapsam boş kalır ve komut da yoksa kademe hiçbir şeye dokunmaz, serbest metin yolu bayt bayt
+eskidir. `shaped` alanı olmayan eski istemcide her ad açık seçim sayılır (v0.10.1138 davranışı).
+
+**Karar 3, çekmece kapısı:** İstek çekmece bağlamı taşıyorsa (explain, subject, ekrandaki trace ya da
+sayfanın traceId'si), istemci @-kapsamını göndermez, sunucu da kapsam kademesine almaz
+(`chatScopeDrawerGate`). Böylece trace/exception çekmecesi takipleri kendi akışlarında kalır. Mesaj
+başındaki açık `/komut` ise yine uygulanır. Composer çipleri gönderilecek hâli gösterir.
+
+**Karar 4, tam sayfaya geçişte kayıt hatası:** "Tam sayfada aç" bekleyen kaydı hemen yazar. Kayıt
+başarısızsa artık gezinilmez: çekmece açık kalır, hata toast'u gösterilir, operatör yeniden deneyebilir.
+Arka plandaki debounce kaydı hata durumunda eskisi gibi sessiz kalır.
+
+**Karar 5, varsayılan profilde rol kısıtı:** Varsayılan profilin rol allowlist'i yalnız açık seçimde
+uygulanır; profilsiz istekler yine bu profille çalışır. AI ayarları paneli, varsayılan profilin rol listesi
+doluyken bunu bir uyarıyla söyler.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

@@ -314,6 +314,12 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 
 	// v0.10.1138 — yapısal kapsam / eğik komut (chat_scope.go): router
 	// sezgilerinden ÖNCE. Kapsam ve komut yoksa kademe hiçbir şeye dokunmaz.
+	// v0.10.1139 — çekmece bağlamında @-kapsamı düşer, açık /komut kalır.
+	pageTID := ""
+	if req.Context.Page != nil {
+		pageTID = req.Context.Page.TraceID
+	}
+	req.Context.Scope = chatScopeDrawerGate(req.Context.Scope, req.Context.Explain, req.Context.Subject, req.Context.Trace, pageTID)
 	if chatScopeActive(req.Context.Scope, req.Context.Command) {
 		rq := chatScopeReq{Msgs: req.Messages, Scope: req.Context.Scope, Command: req.Context.Command,
 			Service: req.Context.Service, Env: req.Context.Env, Operation: req.Context.Operation,

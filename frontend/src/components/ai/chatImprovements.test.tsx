@@ -37,6 +37,7 @@ import { CopilotChat } from '@/components/CopilotChat';
 import { __resetCopilotEnabledCache } from './useCopilotEnabled';
 import { readChatProfile } from './chatProfileStore';
 import { cosreFullPageHref } from './drawerFullPage';
+import { toast } from '@/lib/toast';
 
 let host: HTMLDivElement;
 let root: Root;
@@ -77,13 +78,13 @@ const commandOf = (a: CallArgs) => a[17];
 type Thread = ReturnType<typeof useChatThread>;
 let thread: Thread;
 let rejected: string[] = [];
-function Probe({ profile }: { profile?: string }) {
-  thread = useChatThread({ persist: true, profile, onProfileRejected: p => { rejected.push(p); } });
+function Probe({ profile, explain, subject }: { profile?: string; explain?: string; subject?: string }) {
+  thread = useChatThread({ persist: true, profile, explain, subject, onProfileRejected: p => { rejected.push(p); } });
   return null;
 }
-async function mountProbe(profile?: string) {
+async function mountProbe(profile?: string, drawer?: { explain?: string; subject?: string }) {
   rejected = [];
-  await act(async () => { root.render(<Probe profile={profile} />); });
+  await act(async () => { root.render(<Probe profile={profile} {...drawer} />); });
 }
 
 describe('useChatThread — yeniden üret (1)', () => {
@@ -165,7 +166,7 @@ describe('useChatThread — yapısal kapsam yükü (3)', () => {
     await mountProbe();
     await act(async () => { await thread.send('/rca @svc-orders @env:prod neden yavaş'); });
     expect(histOf(calls[0])).toEqual(['user:/rca @svc-orders @env:prod neden yavaş']);
-    expect(scopeOf(calls[0])).toEqual({ services: ['svc-orders'], env: 'prod' });
+    expect(scopeOf(calls[0])).toEqual({ services: ['svc-orders'], shaped: ['svc-orders'], env: 'prod' });
     expect(commandOf(calls[0])).toBe('rca');
     // Tamamlamadan seçilen tek-sözcük servis de kapsam olur.
     await act(async () => { await thread.send('@checkout hataları', { chosen: ['checkout'] }); });
@@ -174,6 +175,38 @@ describe('useChatThread — yapısal kapsam yükü (3)', () => {
     await act(async () => { thread.regenerate(); });
     await act(async () => { await Promise.resolve(); });
     expect(scopeOf(calls[2])).toEqual({ services: ['checkout'] });
+  });
+
+  // v0.10.1139 — yeniden yüklenen konuşma ({role,text}) yeniden üretilince
+  // komut/kapsam metinden yeniden çözülür (eskiden {} gidiyordu).
+  it('yeniden yükleme sonrası yeniden üret: "/rca @svc-orders" komut + kapsamla gider', async () => {
+    const { calls } = stubChat();
+    vi.spyOn(api, 'saveAiConversation').mockResolvedValue({ id: 'C1', title: 't', updatedAt: 1, messages: [] });
+    await mountProbe();
+    await act(async () => {
+      thread.adopt({ id: 'C1', title: 't', updatedAt: 1, messages: [
+        { role: 'user', text: '/rca @svc-orders' }, { role: 'assistant', text: 'eski cevap' },
+      ] } as AiConversation);
+    });
+    await act(async () => { thread.regenerate(); });
+    await act(async () => { await Promise.resolve(); });
+    expect(calls).toHaveLength(1);
+    expect(commandOf(calls[0])).toBe('rca');
+    expect(scopeOf(calls[0])).toEqual({ services: ['svc-orders'], shaped: ['svc-orders'] });
+  });
+
+  // v0.10.1139 — çekmece (explain/subject) takipleri kendi akışında: @-kapsamı
+  // gitmez; mesaj başındaki açık /komut yine gider.
+  it('çekmece bağlamında scope gitmez, açık /komut gider', async () => {
+    const { calls } = stubChat();
+    vi.spyOn(api, 'saveAiConversation').mockResolvedValue({ id: 'C1', title: 't', updatedAt: 1, messages: [] });
+    await mountProbe(undefined, { explain: 'önceki açıklama', subject: 'trace:0af7651916cd43dd8448eb211c80319c' });
+    await act(async () => { await thread.send('@svc-orders logda ne yazıyor', { chosen: ['svc-orders'] }); });
+    expect(scopeOf(calls[0])).toBeUndefined();
+    expect(commandOf(calls[0])).toBeUndefined();
+    await act(async () => { await thread.send('/rca @svc-orders'); });
+    expect(commandOf(calls[1])).toBe('rca');
+    expect(scopeOf(calls[1])).toBeUndefined();
   });
 
   it('serbest metin: scope ve command undefined (gövde eski)', async () => {
@@ -303,6 +336,27 @@ describe('CopilotChat — model menüsü, tam sayfa, composer (5)(6)', () => {
     expect(save).toHaveBeenCalledTimes(1);
     expect(loc()).toBe('/cosre?chat=C9');
     expect(document.body.querySelector('textarea.cm-composer__input')).toBeNull(); // çekmece kapandı
+  });
+
+  // v0.10.1139 — kayıt başarısızsa gezinme yok, hata toast'u (sessiz kayıp yok).
+  it('"Tam sayfada aç ↗": kayıt başarısızsa gezinmez ve hata gösterir', async () => {
+    stubChat();
+    vi.spyOn(api, 'saveAiConversation').mockRejectedValue(new Error('HTTP 500: kayıt hatası'));
+    const err = vi.spyOn(toast, 'error').mockImplementation(() => {});
+    await openDrawer();
+    const ta = document.body.querySelector<HTMLTextAreaElement>('textarea.cm-composer__input')!;
+    await typeInto(ta, 'svc-orders neden yavaş');
+    await act(async () => { button('Gönder')!.click(); });
+    const link = document.body.querySelector<HTMLAnchorElement>('a[data-fullpage]')!;
+    await act(async () => {
+      link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }));
+    });
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(loc()).toBe('/services');
+    expect(err).toHaveBeenCalledTimes(1);
+    expect(err.mock.calls[0][0]).toContain('kaydedilemedi');
+    expect(document.body.querySelector('textarea.cm-composer__input')).not.toBeNull(); // çekmece açık
+    expect(document.body.querySelector('a[data-fullpage]')?.getAttribute('aria-disabled')).toBeNull(); // yeniden denenebilir
   });
 
   it('kaydedilmiş konuşmada href ?chat=<id> taşır (Ctrl/Cmd/orta tık yeni sekme)', async () => {

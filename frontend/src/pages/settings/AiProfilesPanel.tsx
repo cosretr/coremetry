@@ -9,7 +9,18 @@ import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type Col
 import { api } from '@/lib/api';
 import type { AIModelProfile, AIModelProfileInput, AIProfilesPayload, AIProvider, AIProfileTestResult, AIThinking, Role } from '@/lib/types';
 import { Field2, FlashBox, Row } from './shared';
-import { slugifyProfileId, PROFILE_ID_RE, tuningSummary, endpointLabel, profileUsable, PROFILE_ROLES, rolesSummary, toggleRole } from './aiProfiles';
+import { slugifyProfileId, PROFILE_ID_RE, tuningSummary, endpointLabel, profileUsable, PROFILE_ROLES, rolesSummary, toggleRole, defaultRolesWarning, DEFAULT_ROLES_WARNING } from './aiProfiles';
+
+// v0.10.1139 — varsayılan profilin rol kısıtı uyarısı (FlashBox'ın uyarı tonu).
+function RolesWarning({ text }: { text: string }) {
+  return (
+    <div role="note" data-default-roles-warning="" style={{
+      color: 'var(--warn)', fontSize: 12, marginTop: 8, padding: '6px 10px',
+      background: 'color-mix(in srgb, var(--warn) 8%, transparent)',
+      border: '1px solid color-mix(in srgb, var(--warn) 30%, transparent)', borderRadius: 4,
+    }}>⚠ {text}</div>
+  );
+}
 
 // v0.10.942 (tablo standardı dilim 3) — 11px ikincil hücreler `tone: muted`
 // (S3); eylemler `kind: 'actions'`. 340 = eski `trailing` 330 + ButtonGroup'un
@@ -40,6 +51,7 @@ export function AiProfilesPanel({ payload, onChange }: { payload: AIProfilesPayl
   const [isNew, setIsNew] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  const defaultWarn = defaultRolesWarning(payload.profiles); // v0.10.1139
   const [tests, setTests] = useState<Record<string, AIProfileTestResult | 'pending'>>({});
   const [surface, setSurface] = useState({ intent: payload.surfaceMap.intent ?? '', background: payload.surfaceMap.background ?? '' });
   // silme/varsayılan sonrası sunucunun haritası yeniden yüklenir (bayat kimlik 400 verirdi, inceleme #4)
@@ -87,6 +99,7 @@ export function AiProfilesPanel({ payload, onChange }: { payload: AIProfilesPayl
           <Button variant="secondary" size="sm" onClick={() => { setIsNew(true); setDraft(emptyDraft()); }}>Profil ekle</Button>
         </span>
       </Row>
+      {defaultWarn && <RolesWarning text={defaultWarn} />}
       {/* v0.10.967 — dtNoState: durum satırı yok — tablo boş olamaz: AiTab paneli
           yalnız `profiles.length > 0` iken bağlar ve varsayılan profil silinemez
           (copilot.DeleteProfile); yükleniyor / hata sekmenin ayar yükleme kapısında. */}
@@ -171,6 +184,7 @@ export function AiProfilesPanel({ payload, onChange }: { payload: AIProfilesPayl
                   </label>
                 ))}
               </div>
+              {!isNew && draft.roles.length > 0 && payload.profiles.some(p => p.id === draft.id && p.default) && <RolesWarning text={DEFAULT_ROLES_WARNING} />}
             </fieldset>
             <Field2 label="API anahtarı" hint={isNew ? 'Yerel endpoint için boş bırakılabilir' : 'Boş = mevcut anahtar korunur'}><input type="password" autoComplete="new-password" value={draft.apiKey} onChange={e => setDraft({ ...draft, apiKey: e.target.value })} /></Field2>
             {draft.provider === 'openai' && <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12, marginBottom: 12 }}><input type="checkbox" checked={draft.skipTls} onChange={e => setDraft({ ...draft, skipTls: e.target.checked })} /> TLS doğrulamasını atla (öz-imzalı yerel uç)</label>}
