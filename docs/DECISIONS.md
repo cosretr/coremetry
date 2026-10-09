@@ -3185,6 +3185,29 @@ sayar.
 (seçenek a). (2) Kapsama dışı pencerede ham yola düşme (seçenek b), yalnız (a)'nın geriye dolmayan
 penceresi için ve rozet korunarak.
 
+## 2026-10-09 — CoSRE model seçici composer'ın içinde (v0.10.1141)
+
+**Operatör:** model seçici Claude'daki gibi mesaj kutusunun içinde olsun; başlık sade kalsın.
+**Karar:** `ModelPicker` sohbet başlığından composer'a taşındı — üç yüzeyde de (CoSRE çekmecesi,
+`/cosre` sayfası, ✨ Explain çekmecesi sohbeti) Gönder/Durdur'un solunda kompakt hap
+(`.cm-composer__actions` › `.cm-model-pill`, yalnız model adı + ▾). Başlıkta yalnız başlık, Geçmiş/kenar
+çubuğu, Temizle, Tam sayfada aç, tema kalır. Menü YUKARI açılır: `ui/Popover`'a isteğe bağlı
+`placement` ({prefer:'top', align:'start'}) ve `initialFocus` eklendi, `placeMenu` saf işlevi aynı
+tercihleri alır (verilmezse eski kural bayt bayt aynı; tüm diğer menüler etkilenmez); üst sığmazsa alta
+döner, telefon genişliğinde viewport kenar payında kıstırılır. Satır: ✓ + ad + model + açıklama,
+seçili `menuitemradio aria-checked`; açılışta odak seçili satırda. Klavye: yerel düğme (Enter/Space),
+↑/↓ hapı da açar, menüde ↑↓ Home End, Esc kapatır ve odak hapa döner (tek Esc kanalı escLayer). Akış
+sürerken hap `disabled` ve açık menü kapanır — model yalnız boştayken değişir. ≤1 izinli profilde aynı
+yerde tıklanamaz `model <ad>` etiketi (v0.9.1037 sözleşmesi; çekmecede de tutuldu, gizlenmedi). Kalıcılık
+(`chatProfileStore`) ve 400/403 → varsayılana dönüş aynen. Renkler yalnız token (açık/koyu).
+**Reddedilen:** Claude'un iki satırlı düzeni (metin üstte, araç çubuğu altta) — composer'ı bir satır
+uzatırdı, dar çekmecede sohbete yer kalmıyordu; hap aynı satırda Gönder'in yanında. Ayrı bir menü
+bileşeni yazmak — Popover zaten rol/klavye/Esc/odak dönüşü sözleşmesini taşıyor; yalnız yerleşim
+tercihi eksikti.
+**Testler:** `modelPicker.composer.test.tsx` (üç yüzeyde composer içinde, yukarı açılış, klavye,
+akarken devre dışı, tek profil etiketi), `menuPlacement.test.ts` (prefer top / align start / telefon),
+başlık pinleri güncellendi (`drawerParity`, `chatImprovements`, `modelChip`).
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

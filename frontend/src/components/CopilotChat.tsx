@@ -544,7 +544,7 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
                   AiMark de eşlik etsin diye 18→20. */}
               {/* v0.10.483 (operatör: "Geçmiş/Temizle butonları kaymış") — TEK
                   SATIR: marka · meta (kapsam ya da ✨ Explain öznesi, ellipsis)
-                  · model çipi · eylemler. 461'in iki satırlı başlığı Drawer'ın
+                  · eylemler (v0.10.1141: model seçici composer'a taşındı). 461'in iki satırlı başlığı Drawer'ın
                   ✕ hizasını ve eylem düğmelerini kaydırıyordu. */}
               <AiMark size={20} />
               <span style={{ fontWeight: 700, fontSize: 16, letterSpacing: 0.3, flexShrink: 0 }}>CoSRE</span>
@@ -572,9 +572,6 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
                 <Button variant="ghost" size="sm" onClick={() => setPinned(page)}
                   title={`Bu sayfanın bağlamını sohbete sabitle: ${pinLabelTR(page)}`} aria-label="Sayfa bağlamını sabitle">📌</Button>
               )}
-              {/* v0.10.1138 — model rozeti = seçici (>1 izinli profil); tek profilde tıklanamaz rozet. */}
-              <ModelPicker profiles={profiles} defaultProfile={defaultProfile} value={profile}
-                onChange={setProfile} activeModel={activeModel} />
               {/* v0.9.1139 — konuşma arşivi. Menü değil bir BÖLÜM:
                   çekmece zaten sağ kenarda ve ikinci bir uçan katman
                   (dropdown) sohbetin üstüne binerdi. */}
@@ -856,6 +853,12 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
                 sıradaki meşru sorusunun önünü dakikalarca tıkıyordu.
                 Akarken Gönder'in YERİNİ alıyor: iki düğme yan yana
                 durursa hangisinin etkin olduğu belirsizleşir. */}
+            {/* v0.10.1141 — model seçici composer'ın İÇİNDE (Claude gibi), Gönder'in
+                solunda; menü yukarı açılır. Akarken devre dışı (model yalnız boştayken
+                değişir). Tek profilde aynı yerde tıklanamaz etiket. */}
+            <div className="cm-composer__actions">
+            <ModelPicker profiles={profiles} defaultProfile={defaultProfile} value={profile}
+              onChange={setProfile} activeModel={activeModel} disabled={busy} />
             {busy ? (
               <Button variant="secondary" type="button" onClick={stop}
                 title="Cevabı durdur — o ana kadar akan metin korunur">
@@ -866,6 +869,7 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
                 Gönder
               </Button>
             )}
+            </div>
             </div>
             {/* v0.10.1138 — yapısal kapsam çipleri: gönderimde context.scope/command olarak gider. */}
             {composerChips.length > 0 && (

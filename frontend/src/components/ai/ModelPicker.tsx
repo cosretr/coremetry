@@ -1,31 +1,42 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { Button } from '@/components/ui/Button';
 import { MenuItem } from '@/components/ui/Menu';
 import { Popover } from '@/components/ui/Popover';
 import type { CopilotProfileOption } from '@/lib/types';
 
-// ModelPicker — v0.10.1138: sohbet başlığındaki kompakt "model ▾" menüsü
-// (CoSRE penceresi, /cosre sayfası ve ✨ Explain çekmecesi sohbeti AYNI bileşen).
+// ModelPicker — v0.10.1138: kompakt "model ▾" menüsü (CoSRE penceresi,
+// /cosre sayfası ve ✨ Explain çekmecesi sohbeti AYNI bileşen).
 //
-// ≤1 seçenekte menü yok: yalnız etkin modeli gösteren tıklanamaz rozet
-// (v0.9.1037 model çipi sözleşmesi — sahte affordance yok). >1 seçenekte rozet
-// bir düğmedir; menü satırı ad + model + kısa açıklama ("Hızlı", "Derin")
-// taşır, seçili satır `menuitemradio aria-checked`. Seçim kalıcılığı
-// çağıranda (useChatProfile).
-export function ModelPicker({ profiles, defaultProfile, value, onChange, activeModel }: {
+// v0.10.1141 (operatör: "Claude'daki gibi mesaj kutusunun içinde olsun") —
+// seçici artık sohbet BAŞLIĞINDA değil, COMPOSER kutusunun içinde, Gönder'in
+// solunda bir hap (`.cm-model-pill`). Menü YUKARI açılır (composer ekranın
+// dibinde; Popover `placement.prefer='top'`, sığmazsa alta), çapanın sol
+// kenarına hizalı, viewport içinde kıstırılı (telefon genişliği dahil).
+// Klavye: düğme yerel <button> → Enter/Space açar; ↑ de açar (menü yukarıda);
+// menüde ↑↓ Home End gezinir, Esc kapatır ve odak hapa döner (Popover
+// sözleşmesi). Açılışta seçili satır odak alır.
+//
+// ≤1 seçenekte menü yok: yalnız etkin modeli gösteren tıklanamaz etiket
+// (v0.9.1037 model çipi sözleşmesi — sahte affordance yok), AYNI yerde.
+// Akış sürerken (`disabled`) hap devre dışı ve açık menü kapanır — model
+// yalnız boştayken değişir. Seçim kalıcılığı çağıranda (useChatProfile).
+export function ModelPicker({ profiles, defaultProfile, value, onChange, activeModel, disabled = false }: {
   profiles: CopilotProfileOption[];
   defaultProfile?: string;
   /** '' = varsayılan */
   value: string;
   onChange: (id: string) => void;
   activeModel: string;
+  /** Akış sürerken true: hap tıklanamaz, açık menü kapanır. */
+  disabled?: boolean;
 }) {
   const anchorRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
+  useEffect(() => { if (disabled) setOpen(false); }, [disabled]);
   if (profiles.length < 2) {
     if (!activeModel) return null;
     return (
-      <span className="chip" style={{ flexShrink: 0, fontSize: 10.5 }} title="Cevapları üreten model">
+      <span className="chip cm-model-label" title="Cevapları üreten model">
         <span className="k">model</span>
         <b className="mono">{activeModel}</b>
       </span>
@@ -33,27 +44,36 @@ export function ModelPicker({ profiles, defaultProfile, value, onChange, activeM
   }
   const def = profiles.find(p => p.id === defaultProfile);
   const pick = (id: string) => { setOpen(false); onChange(id); };
+  const onKeyDown = (e: ReactKeyboardEvent<HTMLButtonElement>) => {
+    if (disabled || open) return;
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); setOpen(true); }
+  };
   const row = (p: CopilotProfileOption | undefined, id: string, title: string) => (
     <MenuItem key={id || '__default'} role="menuitemradio" aria-checked={value === id}
       data-profile={id} onClick={() => pick(id)}>
-      <span style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
-        <span style={{ display: 'flex', gap: 6, alignItems: 'baseline' }}>
-          <b>{value === id ? '✓ ' : ''}{title}</b>
-          {p?.model && <span className="mono" style={{ fontSize: 10.5, color: 'var(--text3)' }}>{p.model}</span>}
+      <span className="cm-model-row">
+        <span className="cm-model-row__head">
+          <span className="cm-model-row__check" aria-hidden="true">{value === id ? '✓' : ''}</span>
+          <b>{title}</b>
+          {p?.model && <span className="mono cm-model-row__model">{p.model}</span>}
         </span>
-        {p?.description && <span style={{ fontSize: 11, color: 'var(--text2)', whiteSpace: 'normal' }}>{p.description}</span>}
+        {p?.description && <span className="cm-model-row__desc">{p.description}</span>}
       </span>
     </MenuItem>
   );
+  const label = activeModel || 'varsayılan';
   return (
     <>
-      <Button ref={anchorRef} variant="ghost" size="sm" onClick={() => setOpen(o => !o)}
-        aria-haspopup="menu" aria-expanded={open} aria-label={`Model: ${activeModel || 'varsayılan'} — değiştir`}
-        title="Bu konuşmanın modeli (seçim kullanıcı başına hatırlanır)" style={{ flexShrink: 0 }}>
-        <span className="k" style={{ fontSize: 10.5, color: 'var(--text3)' }}>model</span>{' '}
-        <b className="mono" style={{ fontSize: 10.5 }}>{activeModel || 'varsayılan'}</b> ▾
+      <Button ref={anchorRef} variant="ghost" size="sm" className="cm-model-pill" type="button"
+        onClick={() => setOpen(o => !o)} onKeyDown={onKeyDown} disabled={disabled}
+        aria-haspopup="menu" aria-expanded={open} aria-label={`Model: ${label} — değiştir`}
+        title={disabled ? 'Cevap bitince model değiştirilebilir' : 'Bu konuşmanın modeli (seçim kullanıcı başına hatırlanır)'}>
+        <span className="cm-model-pill__name mono">{label}</span>
+        <span aria-hidden="true">▾</span>
       </Button>
-      <Popover anchorRef={anchorRef} open={open} onClose={() => setOpen(false)} kind="menu" ariaLabel="Model profili" width={260}>
+      <Popover anchorRef={anchorRef} open={open && !disabled} onClose={() => setOpen(false)} kind="menu"
+        ariaLabel="Model profili" width={280} placement={{ prefer: 'top', align: 'start' }}
+        initialFocus='[role="menuitemradio"][aria-checked="true"]'>
         {row(def, '', `Varsayılan${def ? ` · ${def.label || def.id}` : ''}`)}
         {profiles.filter(p => p.id !== defaultProfile).map(p => row(p, p.id, p.label || p.id))}
       </Popover>

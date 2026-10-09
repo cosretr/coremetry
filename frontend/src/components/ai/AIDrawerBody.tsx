@@ -271,12 +271,6 @@ function AIDrawerChat({ subject, explainText, resumed = false, spanIds, traceIds
             ? 'Bu sohbet yukarıdaki açıklamayı bilir — takip sorusu sorabilirsin.'
             // v0.10.944 — açıklama yokken "açıklamayı bilir" demek yalan olurdu.
             : 'Kayıtlı konuşma — açıklama henüz yok; takip sorusu özneyi ve önceki turları taşır.'}</span>
-          {cfgProfiles.length > 1 && (
-            <span style={{ marginLeft: 'auto' }}>
-              <ModelPicker profiles={cfgProfiles} defaultProfile={cfgP?.defaultProfile} value={profile}
-                onChange={setProfile} activeModel={activeModel} />
-            </span>
-          )}
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -294,7 +288,7 @@ function AIDrawerChat({ subject, explainText, resumed = false, spanIds, traceIds
 
         <form
           onSubmit={e => { e.preventDefault(); submit(input); }}
-          style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+          style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'flex-end' }}>
           {/* v0.10.664 — <textarea> (Enter gönder, Shift+Enter satır); akarken kilitli değil. */}
           <textarea
             value={input}
@@ -310,6 +304,11 @@ function AIDrawerChat({ subject, explainText, resumed = false, spanIds, traceIds
               border: '1px solid var(--border)', borderRadius: 6,
               resize: 'none', maxHeight: CHAT_INPUT_MAX_PX, overflowY: 'auto',
             }} />
+          {/* v0.10.1141 — model seçici composer'ın içinde, Gönder'in solunda (CopilotChat
+              ile aynı yer); akarken devre dışı; tek profilde tıklanamaz etiket. */}
+          <div className="cm-composer__actions">
+          <ModelPicker profiles={cfgProfiles} defaultProfile={cfgP?.defaultProfile} value={profile}
+            onChange={setProfile} activeModel={activeModel} disabled={busy} />
           {/* v0.10.948 — DURDUR çekmecede de: trace takip soruları artık tam araç döngüsünü (≤5 tur/6 çağrı) koşuyor; akarken Gönder'in YERİNİ alır (CopilotChat v0.10.23 ile aynı). */}
           {busy ? (
             <Button variant="secondary" type="button" onClick={stop}
@@ -321,6 +320,7 @@ function AIDrawerChat({ subject, explainText, resumed = false, spanIds, traceIds
               Gönder
             </Button>
           )}
+          </div>
         </form>
       </DrawerSection>
     </div>

@@ -2,7 +2,7 @@
 //
 // v0.10.1125 — /cosre bağımsız CoSRE sayfası, render ile:
 //   (1) rota sohbeti SIDEBAR'SIZ çizer (AppShell kromsuz dalı) — başlıkta
-//       CoSRE + model çipi + Geçmiş + "Coremetry'yi aç" + tema düğmesi; FAB yok;
+//       CoSRE + Geçmiş + "Coremetry'yi aç" + tema düğmesi (model çipi v0.10.1141'ten beri composer'da); FAB yok;
 //       sekme başlığı "CoSRE";
 //   (2) custom-rol kısıtlı kullanıcı /cosre'den ilk izinli sayfaya ışınlanmaz;
 //   (3) kimliksiz açılış /login'e gider ve derin bağlantı olarak /cosre saklanır
@@ -111,7 +111,9 @@ describe('/cosre bağımsız sohbet sayfası', () => {
     expect(document.querySelector('[role="dialog"]'), 'çekmece değil, sayfa').toBeNull();
     const head = document.querySelector('.cosre-page__head');
     expect(head?.textContent).toContain('CoSRE');
-    expect(head?.textContent).toContain('model-x');
+    // v0.10.1141 — model etiketi başlıkta DEĞİL, composer'ın içinde.
+    expect(head?.textContent).not.toContain('model-x');
+    expect(document.querySelector('form.cm-composer .cm-model-label')?.textContent).toContain('model-x');
     // v0.10.1137 — geçmiş başlık düğmesi değil, sol kenar çubuğu (Claude gibi).
     expect(head?.textContent).not.toContain('Geçmiş');
     expect(document.getElementById('cosre-side')?.textContent).toContain('Yeni sohbet');

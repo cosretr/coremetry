@@ -298,7 +298,9 @@ describe('CopilotChat — model menüsü, tam sayfa, composer (5)(6)', () => {
     const { calls } = stubChat();
     vi.spyOn(api, 'saveAiConversation').mockResolvedValue({ id: 'C1', title: 't', updatedAt: 1, messages: [] });
     await openDrawer();
-    const trigger = button('model');
+    // v0.10.1141 — seçici composer'ın içinde (hap), başlıkta değil.
+    const pill = () => document.body.querySelector<HTMLButtonElement>('.cm-composer__box .cm-model-pill');
+    const trigger = pill();
     expect(trigger?.textContent).toContain('small'); // rozet etkin model
     await act(async () => { trigger!.click(); });
     const items = Array.from(document.body.querySelectorAll('[role="menuitemradio"]'));
@@ -310,7 +312,7 @@ describe('CopilotChat — model menüsü, tam sayfa, composer (5)(6)', () => {
     expect(items[1].textContent).toContain('Derin analiz');
     await act(async () => { (items[1] as HTMLButtonElement).click(); });
     expect(readChatProfile('u1')).toBe('deep');
-    expect(button('model')?.textContent).toContain('big');
+    expect(pill()?.textContent).toContain('big');
 
     const ta = document.body.querySelector<HTMLTextAreaElement>('textarea.cm-composer__input')!;
     await typeInto(ta, 'durum nedir');

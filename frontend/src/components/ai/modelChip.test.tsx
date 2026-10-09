@@ -58,10 +58,14 @@ async function mountDrawer() {
       </MemoryRouter>,
     );
   });
+  // config → açıklama → sohbet bölümü: birkaç mikro görev
+  for (let i = 0; i < 4; i++) await act(async () => { await Promise.resolve(); });
 }
 
+// v0.10.1141 — çip artık başlıkta değil, çekmece sohbetinin COMPOSER'ında
+// (Gönder'in solunda, `.cm-model-label`); composer açıklama gelince çizilir.
 function chip(): HTMLElement | null {
-  return document.querySelector('.chip');
+  return document.querySelector('form .cm-model-label');
 }
 
 beforeEach(() => {
@@ -69,10 +73,11 @@ beforeEach(() => {
   document.body.appendChild(host);
   root = createRoot(host);
   __resetCopilotEnabledCache();
-  // Çekmece gövdesi kendi ucunu çağırır; bu test yalnız BAŞLIK şeridiyle
-  // ilgili, gövde isteğini sessizce düşürüyoruz.
+  // v0.10.1141 — çip composer'da: açıklama gelmeli ki çekmece sohbeti (ve
+  // composer'ı) çizilsin.
   vi.spyOn(api, 'copilotExplainServiceHealth')
-    .mockRejectedValue(new Error('gövde kapsam dışı'));
+    .mockResolvedValue({ explanation: 'payment sağlıklı.', exchangeId: 'e1' } as never);
+  (Element.prototype as unknown as { scrollTo: () => void }).scrollTo = () => {};
   // v0.10.483 — kabuk artık CopilotChat: AuthProvider `me` reddedince /login'e
   // yönlenir ve ?ai= silinirdi; sohbet kabuğunun diğer okumaları da mock.
   vi.spyOn(api, 'me').mockResolvedValue({ id: 'u1', email: 'op@x.io', role: 'admin', firstName: 'Cenk' } as never);

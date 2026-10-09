@@ -52,9 +52,13 @@ describe('asistan cevabı = Explain kartı', () => {
 });
 
 describe('CoSRE başlığı AIDrawer anatomisi', () => {
-  it('meta şeridi: kapsam + model çipi; eski kapsam bandı yok', () => {
+  it('meta şeridi: kapsam; model çipi composer\'da; eski kapsam bandı yok', () => {
     // v0.10.1138 — model çipi ModelPicker'da (tek profilde rozet, >1'de menü düğmesi).
+    // v0.10.1141 — seçici başlıktan composer'a taşındı (Claude gibi); başlık
+    // yalnız başlık + eylemler. Yerleşim render ile modelPicker.composer.test.tsx'te.
     expect(chat).toContain('<ModelPicker profiles={profiles}');
+    const head = chat.slice(chat.indexOf('const headerNode'), chat.indexOf('const bodyNode'));
+    expect(head).not.toContain('<ModelPicker');
     expect(read('./ModelPicker.tsx')).toContain('<span className="k">model</span>');
     expect(chat).not.toContain('sorular bu servise scope\'lanır');
   });

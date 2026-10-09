@@ -4,7 +4,7 @@ import {
 } from 'react';
 import { Link } from 'react-router-dom';
 import { useEscLayer } from '@/lib/escLayer';
-import { placeMenu } from './DataTable/menuPlacement';
+import { placeMenu, type MenuPlaceOpts } from './DataTable/menuPlacement';
 
 // Popover — v0.10.968 (Trace › Metrics yeniden tasarımı; tasarım sistemi
 // §1 "bulamazsan ui/ altına yaz + barrel'a ekle"). Çapaya bağlı küçük yüzey:
@@ -36,13 +36,17 @@ export interface PopoverProps {
   kind: 'menu' | 'dialog';   // role=menu (↑↓ Home End among [role^="menuitem"]) | role=dialog
   ariaLabel: string;
   width?: number;            // px, default 240
+  /** v0.10.1141 — yerleşim tercihi (varsayılan: alt, sağ kenara hizalı). */
+  placement?: MenuPlaceOpts;
+  /** v0.10.1141 — menüde açılışta odaklanacak öğe (ör. seçili `[aria-checked="true"]`); yoksa ilk öğe. */
+  initialFocus?: string;
   children: ReactNode;
 }
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 const MENU_ITEMS = '[role^="menuitem"]';
 
-export function Popover({ anchorRef, open, onClose, kind, ariaLabel, width = 240, children }: PopoverProps) {
+export function Popover({ anchorRef, open, onClose, kind, ariaLabel, width = 240, placement, initialFocus, children }: PopoverProps) {
   const popRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
@@ -69,6 +73,7 @@ export function Popover({ anchorRef, open, onClose, kind, ariaLabel, width = 240
   if (!open) return null;
   return (
     <PopoverSurface popRef={popRef} anchorRef={anchorRef} kind={kind} ariaLabel={ariaLabel} width={width}
+      prefer={placement?.prefer} align={placement?.align} initialFocus={initialFocus}
       onClose={() => onCloseRef.current()} onCloseToAnchor={closeToAnchor}>
       {children}
     </PopoverSurface>
@@ -78,12 +83,15 @@ export function Popover({ anchorRef, open, onClose, kind, ariaLabel, width = 240
 // Açık yüzey AYRI bileşen: temizliği (odak dönüşü) React onun <div>'ini
 // DOM'dan kaldırmadan ÖNCE koşar — silinen alt ağaçtaki layout temizlikleri
 // ana düğüm çıkarılmadan önce çağrılır (DataTableState StateBody deseni).
-function PopoverSurface({ popRef, anchorRef, kind, ariaLabel, width, onClose, onCloseToAnchor, children }: {
+function PopoverSurface({ popRef, anchorRef, kind, ariaLabel, width, prefer, align, initialFocus, onClose, onCloseToAnchor, children }: {
   popRef: RefObject<HTMLDivElement>;
   anchorRef: RefObject<HTMLElement | null>;
   kind: 'menu' | 'dialog';
   ariaLabel: string;
   width: number;
+  prefer?: MenuPlaceOpts['prefer'];
+  align?: MenuPlaceOpts['align'];
+  initialFocus?: string;
   onClose: () => void;
   onCloseToAnchor: () => void;
   children: ReactNode;
@@ -101,6 +109,7 @@ function PopoverSurface({ popRef, anchorRef, kind, ariaLabel, width, onClose, on
       { left: r.left, top: r.top, width: r.width, height: r.height },
       { width: pop.offsetWidth, height: pop.offsetHeight },
       { width: window.innerWidth, height: window.innerHeight },
+      { prefer, align },
     );
     // Ölçülen yerleşim doğrudan DOM'a: React stili her render'da ezmesin.
     pop.style.left = `${want.left}px`;
@@ -112,7 +121,7 @@ function PopoverSurface({ popRef, anchorRef, kind, ariaLabel, width, onClose, on
       pop.style.left = `${want.left - dx}px`;
       pop.style.top = `${want.top - dy}px`;
     }
-  }, [anchorRef, popRef]);
+  }, [anchorRef, popRef, prefer, align]);
 
   useLayoutEffect(() => {
     const pop = popRef.current;
@@ -120,9 +129,10 @@ function PopoverSurface({ popRef, anchorRef, kind, ariaLabel, width, onClose, on
     // Açılıştaki çapa: kapanışta odak ona döner (yüzey çapa başına bir kez bağlanır).
     const anchor = anchorRef.current;
     place();
-    const first = kind === 'menu'
+    const preferred = initialFocus ? pop.querySelector<HTMLElement>(initialFocus) : null;
+    const first = preferred ?? (kind === 'menu'
       ? pop.querySelector<HTMLElement>(`${MENU_ITEMS}:not([aria-disabled="true"]):not(:disabled)`)
-      : pop.querySelector<HTMLElement>(FOCUSABLE);
+      : pop.querySelector<HTMLElement>(FOCUSABLE));
     (first ?? pop).focus({ preventScroll: true });
     let raf = 0;
     const onMove = () => {
@@ -138,7 +148,7 @@ function PopoverSurface({ popRef, anchorRef, kind, ariaLabel, width, onClose, on
       // Kapanış: odak içerideyse çapaya döner (düğüm henüz DOM'da).
       if (pop.contains(document.activeElement)) anchor?.focus({ preventScroll: true });
     };
-  }, [kind, place, anchorRef, popRef]);
+  }, [kind, place, anchorRef, popRef, initialFocus]);
 
   const onKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
     if (kind !== 'menu') return;
