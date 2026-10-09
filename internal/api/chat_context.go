@@ -177,6 +177,10 @@ func contextPatchFromRoute(c ChatContext, route guidedRoute, rangeS int64, expli
 		c.SearchText = route.SearchText
 		c.Filters = nil
 		for _, k := range route.SearchKeys {
+			if len(route.OracleCodes) > 0 { // v0.10.1133 — değer operasyon adı değil, çevrilen KOD(lar)
+				c.Filters = append(c.Filters, oracleCodeFilter(k, route.OracleCodes))
+				continue
+			}
 			c.Filters = append(c.Filters, chstore.FilterExpr{Key: k, Op: "=", Values: []string{route.SearchText}})
 		}
 	}

@@ -60,6 +60,14 @@ defteri 64 oldu, dış MCP yüzeyi yine DEĞİŞMEDİ: `search_wiki` ve
 nasıl yapılır sayfaları) aynı sözleşmeyle yalnız uygulama içi sohbette,
 oturum kullanıcısına ve wiki bilgisi açık + DevOps bağlıyken sunulur
 (`chatOnlyTools`) — wiki içeriği MCP üzerinden dışarı çıkmaz.
+v0.10.1133'te kayıt defteri 65 oldu ve dış MCP yüzeyi BİR araç büyüdü:
+`resolve_oracle_operation` — Oracle operasyon adını (büyük harfli, alt çizgili;
+span'lerde yok) span'lerin taşıdığı `FUNCTION_CODE` değer(ler)ine çevirir.
+Salt okumadır (Coremetry'nin `oracle_error_log` kopyası, son 7 gün; canlı
+Oracle'a gitmez), `MinRole=""` (REST eşi `GET /api/oracle/operations` rol
+kapısız). Yalnız TAM ad eşleşmesi kod verir; alt-dize isabetleri `near_names`
+olarak döner ve otomatik aranmaz. Etkin Oracle kaynağı yoksa `enabled:false`
+döner; uygulama içi sohbette araç o durumda hiç sunulmaz.
 
 ### "Benim servislerim" MCP'de YOK (bilinçli)
 

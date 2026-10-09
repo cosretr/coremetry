@@ -2829,6 +2829,51 @@ reddi, tekrar), plan (taze kurulum, operatör kaydı korunur, silinen geri gelme
 boyunca idempotentlik. `helm template` iki token kipi × openshift açık/kapalı × NetworkPolicy açık/kapalı ×
 monolitik/distributed.
 
+## 2026-10-09 — CoSRE: Oracle operasyon adıyla trace araması fonksiyon koduna çevrilir (v0.10.1133)
+
+**Operatör:** CoSRE'ye büyük harfli, alt çizgili bir Oracle operasyon adıyla ("…_INQUIRY_REST_… operasyonuna
+ait trace'leri getir") sorulunca "trace bulunamadı" diyordu. Komut paleti aynı adı doğru çeviriyordu.
+**Kök neden:** operasyon adı span'lerde yok, span'ler yalnız fonksiyon kodunu taşır (`FUNCTION_CODE`).
+Köprü Oracle hata satırlarıdır. Palet bu çeviriyi `/api/oracle/operations` ile yapıyordu, CoSRE ise adı
+haystack'te arıyordu.
+
+**Karar:** tek çözümleyici. `getOracleOperations` içindeki kaynak, kod kaynağı
+(`oracle.CodeIsFunctionCode`) ve span anahtarı yazımı (`chstore.PromotedAttrSpelling`) çözümü
+`oracleOpScope`'a taşındı. Handler, fonksiyon kodu sözlüğü ve yeni `ResolveOracleOperation` onu
+paylaşır. SAF çekirdek `mcptools.ResolveOracleOpHits` yalnız TAM eşleşmeden (kırpılmış, harf duyarsız)
+kod üretir, en çok 5 tekil kod. Tam ad önce ayrı bir eşitlik sorgusuyla (`OracleOperationExact`) okunur.
+Böylece adı içeren daha kalabalık adlar, alt-dize listesinin LIMIT 20'si yüzünden tam eşi dışarıda
+bırakamaz. Alt-dize araması yalnız ayrı bir "yakın adlar" listesi verir ve hiçbir yüzey onlarla
+kendiliğinden aramaz, çünkü yanlış operasyonun trace'leri doğru cevap gibi görünürdü. İki okuma da
+`oracle_error_log` üzerindedir (7 gün, LIMIT, `max_execution_time`). Canlı Oracle'a gidilmez. Oracle kapalıysa sonuç boş
+döner, hata vermez.
+
+**Guided:** `guidedTraceSearchBundle` okumaları enjekte edilen `traceSearchIO` ile yapar. Anahtar keşfi
+boş döner ya da servis yoksa, haystack'ten önce metnin operasyon adı şekline bakılır (büyük harf, rakam,
+alt çizgi, ≥6, en az bir alt çizgi). Şekle uyuyorsa çözümleyiciye sorulur: `resolve_oracle_operation` adımı ("SAMP01 (1 kod)")
+gelir, ardından her kod için `FUNCTION_CODE = kod` süzgeçli bir `trace_search` çalışır (servissiz de
+olur) ve sonuçlar `mergeTraceRows` ile birleşir. Kanıt ve kaynak satırı çeviriyi açıkça söyler. Kod
+bulunup trace çıkmazsa Oracle satırındaki son trace "son hata trace'i" olarak eklenir. Link ve sohbet
+bağlamı süzgeci adla değil kodla kurar (`guidedRoute.OracleCodes`). Eşleşme yoksa haystack aynen çalışır,
+yalnız yakın adlar varsa "Bunu mu demek istediniz?" notu eklenir. Oracle'sız kurulumda adım hiç çıkmaz.
+Router'a dar bir kural eklendi, yalnız etkin Oracle kaynağı varken (`routeGuidedIntentOpts` bayrağı;
+Oracle kapalıyken rota bayt-bayt eskisi). Kural: trace kökü, "operasyon/operation" sözcüğü ve o sözcüğe
+bitişik tek bir alt çizgili büyük harf adı → `trace_search`. Bilinen servis ya da ortam adıyla (harf
+duyarsız) eşleşen kelime aday sayılmaz: "PAYMENT_SERVICE operasyonlarının hatalı trace'leri" aile
+trace'lerine kalır. Bitişiklik şartı "CONNECTION_TIMEOUT hatası veren operasyonların trace'leri" gibi
+hata kodlarını eski rotasında bırakır. Bu soru önceden sınıflandırıcıya kalıyordu.
+
+**Araç:** `resolve_oracle_operation` (mcptools/oracle_operation.go) ad → kodlar, span anahtarı, satır
+sayısı, son trace ve yakın adlar döndürür. Salt okumadır, `MinRole=""` (REST eşi kapısız). Dış MCP'de
+kayıtlıdır. Sohbette koşullu: etkin Oracle kaynağı yoksa sunulmaz. Kompakt katalog 9.1 KB'ta kaldı.
+Koşullu tavan 650 → 820 B oldu, bedelini yalnız Oracle'lı kurulum öder. Katalog pini 64 → 65.
+
+**Test:** `mcptools/oracle_operation_test.go` (çekirdek tablosu: tam eşleşme, harf duyarsızlık,
+alt-dize asla kod üretmez, çok kod, harf varyantı birleşimi; araç şeması, geçersiz girdi → bad_args,
+Oracle kapalı), `api/oracle_op_resolve_test.go` (kapalı çözümleyici, kapsam, şekil kapısı, router,
+servissiz/anahtar keşfi boş guided akış, sıfır trace → son hata trace'i, eşleşmesizlikte haystack
+süzgeci/kanıtı/kaynağı birebir). `/api/oracle/operations` cevap şekli değişmedi.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

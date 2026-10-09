@@ -63,7 +63,9 @@ const shortCatalogMaxBytes = 9100
 // dışı bir servise çağrı harcamasın) 321 B → tavan 330 B.
 // v0.10.1122 — + search_wiki (~180 B) + read_wiki_page (~140 B) → 622 B, tavan 650 B
 // (yalnız wiki bilgisi açık + DevOps bağlı kurulumda ödenir).
-const shortCatalogConditionalMaxBytes = 650
+// v0.10.1133 — + resolve_oracle_operation (~170 B; yalnız etkin Oracle kaynağı olan
+// kurulumda ödenir) → ~795 B, tavan 820 B. Koşulsuz katalog 9.1 KB'ta kaldı.
+const shortCatalogConditionalMaxBytes = 820
 
 // TAMLIK — her tool'un kompakt metni olmalı. Yeni bir tool kompakt
 // açıklamasız gemiye giremez (mcp.Tool.ChatDescription() tam metne

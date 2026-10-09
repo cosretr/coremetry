@@ -81,3 +81,21 @@ func TestOracleFnOpsSQL(t *testing.T) {
 		t.Errorf("yer tutucu sayısı / kaynak dalı:\n%s", mixed)
 	}
 }
+
+// v0.10.1133 — tam ad sorgusu: alt-dize sorgusuyla aynı sınırlar, yüklem eşitlik.
+func TestOracleOpExactSQL(t *testing.T) {
+	for _, n := range []int{0, 2} {
+		q := oracleOpExactSQL(n)
+		for _, w := range []string{
+			"FROM oracle_error_log", "WHERE time >= ? AND time < ? AND operation_code != ''",
+			"lowerUTF8(trimBoth(operation_code)) = lowerUTF8(?)", "LIMIT ?", "SETTINGS max_execution_time = 5",
+		} {
+			if !strings.Contains(q, w) {
+				t.Errorf("n=%d: SQL %q içermeli", n, w)
+			}
+		}
+		if strings.Contains(q, "positionCaseInsensitiveUTF8") || strings.Count(q, "?") != strings.Count(oracleOpSearchSQL(n), "?") {
+			t.Errorf("n=%d: yalnız yüklem farklı olmalı:\n%s", n, q)
+		}
+	}
+}

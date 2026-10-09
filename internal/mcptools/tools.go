@@ -59,7 +59,7 @@
 //     doğru çağrının koşulu, orada kazanılan bayt yanlış argümanla
 //     harcanan bir tura değmez.
 //
-// Tool catalogue (64 tools; v0.10.1122 — 62 → 64: wiki_tools.go search_wiki / read_wiki_page, yalnız uygulama içi sohbet ve yalnız wiki bilgisi açık + DevOps bağlıyken; v0.10.1050 — 61 → 62: source_code.go read_source_code, yalnız uygulama içi sohbet ve yalnız DevOps bağlıyken; v0.10.993 — 60 → 61: bubble_up.go, yalnız dış MCP; v0.10.944 — 57 → 60: logs_tools.go list_log_fields, metrics_tools.go list_metric_labels, compare_periods.go; search_logs / query_metric / get_trace yeni dosyalarında; v0.10.809 — 56 → 57: product_guide.go; v0.10.559 — 54 → 56: knowledge_tools.go get_runbook / search_knowledge; v0.10.556 — 52 → 54: signal_tools.go log_patterns / cluster_metric; v0.10.555 — 48 → 52: problem_tools.go get_problem / get_correlation_evidence / similar_problems / get_capabilities; v0.10.545 — 47 → 48: list_deployments.go; v0.10.478 — 44 → 47: context_tools.go; v0.10.475 — 43 → 44: build_link.go; v0.10.474 — 42 → 43: trace_stats.go; v0.10.472 — 40 → 42: attr_discovery.go; v0.10.469 — 39 → 40: resolve_entity.go; v0.10.468 — 36 → 39: entity_catalog.go list_namespaces / list_workloads / list_pods; sayım v0.9.1050'de düzeltildi — blok
+// Tool catalogue (65 tools; v0.10.1133 — 64 → 65: oracle_operation.go resolve_oracle_operation, salt okuma, sohbette yalnız etkin Oracle kaynağı varken; v0.10.1122 — 62 → 64: wiki_tools.go search_wiki / read_wiki_page, yalnız uygulama içi sohbet ve yalnız wiki bilgisi açık + DevOps bağlıyken; v0.10.1050 — 61 → 62: source_code.go read_source_code, yalnız uygulama içi sohbet ve yalnız DevOps bağlıyken; v0.10.993 — 60 → 61: bubble_up.go, yalnız dış MCP; v0.10.944 — 57 → 60: logs_tools.go list_log_fields, metrics_tools.go list_metric_labels, compare_periods.go; search_logs / query_metric / get_trace yeni dosyalarında; v0.10.809 — 56 → 57: product_guide.go; v0.10.559 — 54 → 56: knowledge_tools.go get_runbook / search_knowledge; v0.10.556 — 52 → 54: signal_tools.go log_patterns / cluster_metric; v0.10.555 — 48 → 52: problem_tools.go get_problem / get_correlation_evidence / similar_problems / get_capabilities; v0.10.545 — 47 → 48: list_deployments.go; v0.10.478 — 44 → 47: context_tools.go; v0.10.475 — 43 → 44: build_link.go; v0.10.474 — 42 → 43: trace_stats.go; v0.10.472 — 40 → 42: attr_discovery.go; v0.10.469 — 39 → 40: resolve_entity.go; v0.10.468 — 36 → 39: entity_catalog.go list_namespaces / list_workloads / list_pods; sayım v0.9.1050'de düzeltildi — blok
 // v0.6.5'te kalmıştı, get_problem_root_cause/render_chart sayılmıyordu;
 // v0.9.1227'de get_operation_health ile 33; v0.9.1233'te
 // get_exception_samples ile 34; v0.9.1244'te list_teams +
@@ -90,6 +90,7 @@
 //   - render_chart (v0.9.520)
 //   - read_source_code (v0.10.1050 — sohbet-yalnız, koşullu; source_code.go)
 //   - search_wiki / read_wiki_page (v0.10.1122 — sohbet-yalnız, koşullu; wiki_tools.go)
+//   - resolve_oracle_operation (v0.10.1133 — Oracle operasyon adı → FUNCTION_CODE; oracle_operation.go)
 //
 // Keşif tool'ları (v0.9.1141, AI Faz 3.2 — discovery.go). Hepsi bir
 // ARG'ın eşi: arg'ı kabul edip listesini vermeyen tool = kimlik
@@ -234,6 +235,10 @@ type Deps struct {
 	// doldurur). nil = wiki bilgisi kapalı ya da DevOps yok → ChatToolList
 	// araçları HİÇ sunmaz; dış MCP'de hiç kayıtlı değiller (chatOnlyTools).
 	Wiki WikiSource
+	// v0.10.1133 — resolve_oracle_operation çözümleyicisi (oracle_operation.go;
+	// api/oracle_op_resolve.go doldurur). nil ya da Enabled()=false = etkin
+	// Oracle kaynağı yok → sohbete SUNULMAZ; dış MCP'de araç dürüst enabled=false döner.
+	OracleOps OracleOpSource
 }
 
 // MetricSource is the metric-read half of Deps, satisfied by
@@ -341,6 +346,9 @@ func ToolList(d Deps) []mcp.Tool {
 		describeAttributesTool(d),
 		findAttributeByValueTool(d),
 		getTraceAnalyzedTool(d), // v0.10.944 — analizli get_trace (trace_tools.go)
+		// v0.10.1133 — Oracle operasyon adı → FUNCTION_CODE (oracle_operation.go): search_traces
+		// süzgecinden ÖNCE; KOŞULLU (etkin Oracle kaynağı varsa sohbete sunulur).
+		resolveOracleOperationTool(d),
 		// v0.9.1087 (Faz 4) — id'siz giriş: trace ID'yi BULMANIN yolu.
 		searchTracesTool(d),
 		// v0.10.474 (Faz 3, F3-3) — ham listeden ÖNCE sayı: trace_stats (trace_stats.go), aramanın hemen yanında.
@@ -446,6 +454,8 @@ func chatOffered(d Deps, name string) bool {
 		return d.SourceCode != nil
 	case WikiSearchToolName, WikiReadToolName:
 		return d.Wiki != nil
+	case OracleOperationToolName: // v0.10.1133
+		return d.OracleOps != nil && d.OracleOps.Enabled()
 	}
 	return true
 }

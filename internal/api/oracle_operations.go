@@ -29,6 +29,10 @@ package api
 // operasyon"). Sözlüğün tamamı tek cevapta (kod başına en çok satırlı ≤3 ad +
 // toplam ad sayısı): FE onu 5 dk tazelikle bir kez çeker, trace başına istek
 // atmaz; sunucu da 5 dk önbellekler — eşleme dakikada değişen bir şey değil.
+//
+// v0.10.1133 — kaynak / kod kaynağı / span anahtarı çözümü oracleOpScope'ta;
+// iki handler ve CoSRE'nin ad → kod çözümleyicisi (oracle_op_resolve.go) onu
+// paylaşır — palet ile CoSRE aynı kuralla çevirir.
 
 import (
 	"context"
@@ -112,13 +116,58 @@ func oracleOperationHits(hits []chstore.OracleOpHit, names map[string]string, le
 	return out
 }
 
-func (s *Server) getOracleOperations(w http.ResponseWriter, r *http.Request) {
-	spanKey := chstore.PromotedAttrSpelling(oracleFunctionCodeAttr, strings.ToLower(oracleFunctionCodeAttr))
-	if spanKey == "" {
-		spanKey = oracleFunctionCodeAttr
+// oracleOpScope — v0.10.1133: operasyon araması ile ad → kod çözümleyicisinin
+// (oracle_op_resolve.go) ORTAK girdisi. İkisi aynı kuralı okumalı: kodun
+// hangi kaynakta `code` alanından geldiği (oracle.CodeIsFunctionCode) ve
+// span süzgecinin anahtar yazımı (chstore.PromotedAttrSpelling) bir yerde
+// ayrışırsa palet doğru, CoSRE yanlış koda bakar.
+type oracleOpScope struct {
+	Enabled     bool              // etkin Oracle kaynağı + depo var
+	SpanKey     string            // süzgeç anahtarı (kayıtlı yazım ya da kanonik ad)
+	CodeSources []string          // `code` alanı fonksiyon kodu olan kaynak kimlikleri
+	Names       map[string]string // kaynak kimliği → ad
+}
+
+// oracleOpSpanKey — süzgecin anahtar yazımı: terfi kolonu probe'unun
+// doğruladığı yazım, kayıtlı değilse kanonik FUNCTION_CODE.
+func oracleOpSpanKey() string {
+	if k := chstore.PromotedAttrSpelling(oracleFunctionCodeAttr, strings.ToLower(oracleFunctionCodeAttr)); k != "" {
+		return k
 	}
-	empty := oracleOperationsResponse{SpanAttrKey: spanKey, Operations: []oracleOperationHit{}}
+	return oracleFunctionCodeAttr
+}
+
+// oracleOpScopeFrom — SAF (tablo testli): kaynak listesi → kod kaynakları + adlar.
+func oracleOpScopeFrom(enabled bool, spanKey string, sources []oracle.SourceConfig) oracleOpScope {
+	sc := oracleOpScope{Enabled: enabled, SpanKey: spanKey, Names: make(map[string]string, len(sources))}
+	for _, src := range sources {
+		sc.Names[src.ID] = src.Name
+		if oracle.CodeIsFunctionCode(src) {
+			sc.CodeSources = append(sc.CodeSources, src.ID)
+		}
+	}
+	return sc
+}
+
+// oracleOpsEnabled — etkin Oracle kaynağı ve depo var mı (CH'ye gitmeden).
+func (s *Server) oracleOpsEnabled() bool {
 	if s.oracle == nil || s.store == nil || !s.oracle.HasEnabledSources() {
+		return false
+	}
+	return true
+}
+
+func (s *Server) oracleOpScope() oracleOpScope {
+	if !s.oracleOpsEnabled() {
+		return oracleOpScopeFrom(false, oracleOpSpanKey(), nil)
+	}
+	return oracleOpScopeFrom(true, oracleOpSpanKey(), s.oracle.CurrentSettings().Sources)
+}
+
+func (s *Server) getOracleOperations(w http.ResponseWriter, r *http.Request) {
+	sc := s.oracleOpScope()
+	empty := oracleOperationsResponse{SpanAttrKey: sc.SpanKey, Operations: []oracleOperationHit{}}
+	if !sc.Enabled {
 		writeJSON(w, empty)
 		return
 	}
@@ -132,18 +181,9 @@ func (s *Server) getOracleOperations(w http.ResponseWriter, r *http.Request) {
 	if limit <= 0 || limit > oracleOpSearchLimitMax {
 		limit = oracleOpSearchLimit
 	}
-	sources := s.oracle.CurrentSettings().Sources
 	s.serveCached(w, r, oracleOpSearchKey(q, limit), 60*time.Second, func(ctx context.Context) (any, error) {
 		now := time.Now()
-		var codeSources []string
-		names := make(map[string]string, len(sources))
-		for _, src := range sources {
-			names[src.ID] = src.Name
-			if oracle.CodeIsFunctionCode(src) {
-				codeSources = append(codeSources, src.ID)
-			}
-		}
-		hits, err := s.store.OracleOperationSearch(ctx, q, codeSources, now.Add(-oracleOpSearchWindow), now, limit)
+		hits, err := s.store.OracleOperationSearch(ctx, q, sc.CodeSources, now.Add(-oracleOpSearchWindow), now, limit)
 		if err != nil {
 			return nil, err
 		}
@@ -159,8 +199,8 @@ func (s *Server) getOracleOperations(w http.ResponseWriter, r *http.Request) {
 			}
 			learned[h.SourceID] = m
 		}
-		return oracleOperationsResponse{Enabled: true, SpanAttrKey: spanKey,
-			Operations: oracleOperationHits(hits, names, learned, now)}, nil
+		return oracleOperationsResponse{Enabled: true, SpanAttrKey: sc.SpanKey,
+			Operations: oracleOperationHits(hits, sc.Names, learned, now)}, nil
 	})
 }
 
@@ -208,16 +248,12 @@ func oracleFnDictKey(codeSources []string) string {
 }
 
 func (s *Server) getOracleFunctionCodes(w http.ResponseWriter, r *http.Request) {
-	if s.oracle == nil || s.store == nil || !s.oracle.HasEnabledSources() {
+	sc := s.oracleOpScope()
+	if !sc.Enabled {
 		writeJSON(w, oracleFunctionCodesResponse{Codes: map[string]oracleFunctionCodeEntry{}})
 		return
 	}
-	var codeSources []string
-	for _, src := range s.oracle.CurrentSettings().Sources {
-		if oracle.CodeIsFunctionCode(src) {
-			codeSources = append(codeSources, src.ID)
-		}
-	}
+	codeSources := sc.CodeSources
 	s.serveCached(w, r, oracleFnDictKey(codeSources), oracleFnDictTTL, func(ctx context.Context) (any, error) {
 		now := time.Now()
 		pairs, truncated, err := s.store.OracleFunctionOperations(ctx, codeSources, now.Add(-oracleOpSearchWindow), now)

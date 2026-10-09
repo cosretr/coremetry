@@ -62,6 +62,9 @@ func (s *Server) mcpDeps() mcptools.Deps {
 		// v0.10.1122 — search_wiki / read_wiki_page (chat_wiki.go); wiki kapalı ya
 		// da DevOps yoksa nil → araçlar sohbete sunulmaz; dış MCP'de hiç yok.
 		Wiki: s.wikiSourceOrNil(),
+		// v0.10.1133 — resolve_oracle_operation (oracle_op_resolve.go); Enabled canlı,
+		// etkin Oracle kaynağı yoksa araç sohbete sunulmaz.
+		OracleOps: oracleOpSource{s},
 		CopilotModel: func() string {
 			if s.copilot == nil || !s.copilot.Configured() {
 				return ""

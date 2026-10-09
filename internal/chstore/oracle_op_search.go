@@ -52,6 +52,19 @@ func clampOracleOpSearch(limit int) int {
 // oracleOpSearchSQL — SAF: nCodeSources = `code` alanı fonksiyon kodu olan
 // kaynak sayısı (IN listesi yer tutucuları); 0 ise kod yalnız attribute'tan.
 func oracleOpSearchSQL(nCodeSources int) string {
+	return oracleOpHitsSQL(nCodeSources, "positionCaseInsensitiveUTF8(operation_code, ?) > 0")
+}
+
+// oracleOpExactSQL — v0.10.1133, SAF: aynı sorgu, TAM ad (kırpılmış, harf
+// duyarsız eşitlik). Alt-dize araması en çok satırlı ≤20 adı döndürür; adı
+// içeren daha uzun ve daha kalabalık adlar tam eşi o listeden itebilirdi.
+func oracleOpExactSQL(nCodeSources int) string {
+	return oracleOpHitsSQL(nCodeSources, "lowerUTF8(trimBoth(operation_code)) = lowerUTF8(?)")
+}
+
+// oracleOpHitsSQL — SAF: isabet sorgusunun ortak gövdesi; pred tek yer tutuculu
+// operation_code yüklemi.
+func oracleOpHitsSQL(nCodeSources int, pred string) string {
 	fc := oracleFunctionCodeAttrExpr
 	if nCodeSources > 0 {
 		holders := strings.TrimSuffix(strings.Repeat("?,", nCodeSources), ",")
@@ -66,7 +79,7 @@ func oracleOpSearchSQL(nCodeSources int) string {
 			SELECT operation_code, time, trace_id, source_id, ` + fc + ` AS fc
 			FROM oracle_error_log
 			WHERE time >= ? AND time < ? AND operation_code != ''
-			  AND positionCaseInsensitiveUTF8(operation_code, ?) > 0
+			  AND ` + pred + `
 		)
 		GROUP BY operation_code
 		ORDER BY n DESC, operation_code
@@ -78,6 +91,20 @@ func oracleOpSearchSQL(nCodeSources int) string {
 // en çok satırlı önce, ≤limit. codeSources: `code` alanı fonksiyon kodu olan
 // kaynak kimlikleri.
 func (s *Store) OracleOperationSearch(ctx context.Context, q string, codeSources []string, from, to time.Time, limit int) ([]OracleOpHit, error) {
+	return s.oracleOpHits(ctx, oracleOpSearchSQL(len(codeSources)), q, codeSources, from, to, clampOracleOpSearch(limit))
+}
+
+// oracleOpExactLimit — tam ad isabeti tavanı: operation_code GROUP BY'ı harf
+// duyarlı, yani yalnız aynı adın harf varyantları gelir.
+const oracleOpExactLimit = 5
+
+// OracleOperationExact — v0.10.1133: name ile TAM (kırpılmış, harf duyarsız)
+// eşleşen operasyonlar; pencere/LIMIT/max_execution_time alt-dize aramasıyla aynı.
+func (s *Store) OracleOperationExact(ctx context.Context, name string, codeSources []string, from, to time.Time) ([]OracleOpHit, error) {
+	return s.oracleOpHits(ctx, oracleOpExactSQL(len(codeSources)), name, codeSources, from, to, oracleOpExactLimit)
+}
+
+func (s *Store) oracleOpHits(ctx context.Context, query, q string, codeSources []string, from, to time.Time, limit int) ([]OracleOpHit, error) {
 	out := []OracleOpHit{}
 	q = strings.TrimSpace(q)
 	if q == "" || !to.After(from) {
@@ -89,8 +116,8 @@ func (s *Store) OracleOperationSearch(ctx context.Context, q string, codeSources
 	for _, id := range codeSources {
 		args = append(args, id)
 	}
-	args = append(args, from, to, q, clampOracleOpSearch(limit))
-	rows, err := s.conn.Query(ctx, oracleOpSearchSQL(len(codeSources)), args...)
+	args = append(args, from, to, q, limit)
+	rows, err := s.conn.Query(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}

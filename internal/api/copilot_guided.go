@@ -270,6 +270,10 @@ type guidedRoute struct {
 	// v0.10.476 (F3-5, trace_nl_search.go) — değerin bulunduğu attribute anahtarları
 	// (bundle yazar; link süzgeç çipine döner).
 	SearchKeys []string
+	// v0.10.1133 (trace_nl_search.go) — SearchText bir Oracle operasyon adıydı ve
+	// bu fonksiyon kodlarına çevrildi (bundle yazar); link ve sohbet bağlamı
+	// süzgeci SearchKeys[0] = kod(lar) ile kurar, ad span'lerde yok.
+	OracleCodes []string
 	// v0.10.688 (endpoint_traces.go) — endpoint_candidates turunun adayları
 	// (bundle yazar; çipler ve trace cevabının başlığı okur).
 	EndpointOptions []endpointCandidate
@@ -931,6 +935,13 @@ func hasCompareSignal(toks []string) bool {
 // teams (v0.9.1134) — canlı takım kataloğu (teamCatalogue); nil = takım
 // farkındalığı kapalı, o hâlde davranış bayt-bayt eskisidir.
 func routeGuidedIntent(raw string, services, envs, teams []string, ctxService string) guidedRoute {
+	return routeGuidedIntentOpts(raw, services, envs, teams, ctxService, false)
+}
+
+// routeGuidedIntentOpts — v0.10.1133: routeGuidedIntent + oracleOps bayrağı
+// (etkin Oracle kaynağı var mı; çağıran söyler, router SAF kalır). false iken
+// rota bayt-bayt eskisi: Oracle operasyon adı kuralı hiç denenmez.
+func routeGuidedIntentOpts(raw string, services, envs, teams []string, ctxService string, oracleOps bool) guidedRoute {
 	msg := normalizeGuidedMsg(raw)
 	toks := guidedTokens(msg)
 	// v0.9.537 — açık 32-hex trace ID'si EN GÜÇLÜ sinyaldir ve her şeyi
@@ -1082,6 +1093,15 @@ func routeGuidedIntent(raw string, services, envs, teams []string, ctxService st
 			}
 		}
 		return guidedRoute{Intent: guidedTraceSearch, Service: tsvc, Env: env, SearchText: frag, SearchSQL: isSQL}
+	}
+	// v0.10.1133 — "<ORACLE_OPERASYON_ADI> operasyonuna ait trace'leri getir":
+	// trace_search; bundle adı fonksiyon koduna çevirir (trace_nl_search.go).
+	// Servis/ortam adıyla çakışan büyük harfli kelime operasyon sayılmaz
+	// ("PAYMENT_SERVICE operasyonları" aile trace'lerine kalır).
+	if oracleOps {
+		if op, ok := extractOracleOpTraceRequest(raw, toks, append(append([]string{svc, env}, services...), envs...)); ok {
+			return guidedRoute{Intent: guidedTraceSearch, Service: svc, Env: env, SearchText: op, TraceErrorsOnly: hasErrorSignal(toks)}
+		}
 	}
 	// v0.10.465 (D2) — "… hatalı/yavaş trace'ler(i getir)": trace kökü + hata/yavaş
 	// → aile/çoklu/tek servis trace LİSTESİ (family_traces.go). Kıyas ve aile
@@ -1511,7 +1531,7 @@ func (s *Server) copilotChatGuided(ctx context.Context, emit func(string, any), 
 	}
 	svcNames, envNames := s.guidedServiceNames(ctx), s.guidedEnvNames(ctx)
 	teamNames := s.guidedTeamNames(ctx)
-	route := routeGuidedIntent(question, svcNames, envNames, teamNames, ctxService)
+	route := routeGuidedIntentOpts(question, svcNames, envNames, teamNames, ctxService, s.oracleOpsEnabled())
 	// v0.10.479 (F4-2, G10) — TAKİP MUTASYONU: "son 1 saate genişlet" / "sadece
 	// hatalı olanlar" / "bunun pod'larını göster" / "aynı filtreyle loglara bak"
 	// → aktif bağlamın son rotası klonlanır, alan değişir, aynı dispatch; router'ın

@@ -564,7 +564,8 @@ func TestDiscoveryToolsGroupedNearConsumers(t *testing.T) {
 	// v0.10.993 — 60 → 61: bubble_up.go (yalnız dış MCP — externalOnlyTools; REST eşi GET /api/spans/bubbleup kapısız).
 	// v0.10.1050 — 61 → 62: source_code.go read_source_code (sohbet-yalnız + koşullu; MinRole "" — "Kodu da incele" de requireCopilot dışında kapısız).
 	// v0.10.1122 — 62 → 64: wiki_tools.go search_wiki / read_wiki_page (sohbet-yalnız + koşullu; MinRole "", REST eşi yok).
-	if len(tools) != 64 { // v0.10.944 — 57 → 60: list_log_fields / list_metric_labels / compare_periods (CoSRE araştırma asistanı; üçü de viewer, REST eşleri /api/logs/fields, /api/metrics label okumaları ve servis RED kıyası kapısız)
+	// v0.10.1133 — 64 → 65: oracle_operation.go resolve_oracle_operation (salt okuma; sohbette koşullu — etkin Oracle kaynağı; MinRole "", REST eşi GET /api/oracle/operations kapısız).
+	if len(tools) != 65 { // v0.10.944 — 57 → 60: list_log_fields / list_metric_labels / compare_periods (CoSRE araştırma asistanı; üçü de viewer, REST eşleri /api/logs/fields, /api/metrics label okumaları ve servis RED kıyası kapısız)
 		t.Errorf("katalog %d tool — sayı değiştiyse tools.go başlığındaki sayım yorumunu, "+
 			"api/mcp_authz_test.go'daki duruş notunu ve docs/runbooks/mcp-claude-code.md'yi de güncelle", len(tools))
 	}

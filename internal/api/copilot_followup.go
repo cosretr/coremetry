@@ -469,6 +469,10 @@ func guidedAnswerLinkTargets(route guidedRoute) []guidedAnswerLink {
 			fe, _ := json.Marshal([]chstore.FilterExpr{{Key: route.SearchKeys[0], Op: "=", Values: []string{route.SearchText}}})
 			href = "/traces?filters=" + url.QueryEscape(string(fe))
 		}
+		if len(route.SearchKeys) > 0 && len(route.OracleCodes) > 0 { // v0.10.1133 — Oracle operasyon adı → kod
+			fe, _ := json.Marshal([]chstore.FilterExpr{oracleCodeFilter(route.SearchKeys[0], route.OracleCodes)})
+			href = "/traces?filters=" + url.QueryEscape(string(fe))
+		}
 		if route.SearchSQL {
 			fe, _ := json.Marshal([]chstore.FilterExpr{{Key: "db.statement", Op: "LIKE", Values: []string{route.SearchText}}})
 			href = "/traces?filters=" + url.QueryEscape(string(fe))
