@@ -184,7 +184,9 @@ func (s *Server) wikiChatAnswer(ctx context.Context, emit func(string, any), msg
 	}
 	strong, weak := wikiQuestionCue(question)
 	if !strong && !weak {
-		return false, false
+		// v0.10.1143 — işaretsiz soru: İÇERİK yoklaması (chat_wiki_probe.go;
+		// tek yerel lexical arama, kapı geçmezse hiçbir olay yok).
+		return s.wikiProbeAnswer(ctx, emit, w, msgs, question)
 	}
 	if !strong && s.wikiWeakCueVetoed(ctx, question) {
 		// v0.10.1126 inceleme — servis adı + telemetri sinyali: guided'ın sorusu.

@@ -3233,6 +3233,38 @@ daraltılmış ray — mevcut ☰ gizle/göster davranışı korundu (isteğe ba
 kuralları değişkenleri okuyor, sayfa+çekmece kökleri `.cosre-root` taşıyor, kenar çubuğu başlık span'ı +
 ipucu + etkin satır).
 
+## 2026-10-09 — CoSRE: işaretsiz soruda İÇERİK tabanlı wiki yoklaması (v0.10.1143)
+
+**Operatör (prod):** /cosre'de "Sık karşılaşılan cache refresh hataları nelerdir?" telemetriden
+cevaplandı ("paylaşılan veriler içerisinde cache refresh hatalarına dair bilgi bulunmamaktadır… Kaynak:
+açık problemler + triage önceliği + kök-neden hipotezleri (canlı)"); wiki'de başlığı "Cache Refresh
+Akışı" olan sayfa vardı. **Kök neden:** `wikiChatAnswer` (chat_wiki_tier.go) wiki işareti olmayan soruda
+sessizce çekiliyordu ("nelerdir" işaret değil); guided router (`routeGuidedIntentOpts`) servis adsız +
+"hata" sorusunu son dal `case hasErrorSignal(toks)` ile filo geneli `guidedProblems`'e verdi →
+`runGuidedRoute` → `guidedProblemsBundle`; wiki hiç aranmadı.
+**Karar:** karar KALIP sözcükten değil İÇERİKTEN. İşaretsiz soruda — bağlamsız pencere, servis adı +
+telemetri sinyali yok, açık telemetri çapası (zaman penceresi, trace/span/istek/problem kimliği,
+sayısal eşik) yok — TEK yerel lexical arama koşar (`wiki.LiveOff`, `NoSemantic`; ADO'ya istek yok,
+5 sn tavan). Kapı (`wikiProbeStrong`, saf): en iyi yerel parçanın idf-ağırlıklı terim kapsamı ≥ 0.7
+VE eşleşen terimlerden biri başlık/başlık yolunda. Genel telemetri sözcükleri (hata, servis, problem,
+yavaş, error, oran, latency…) ve soru niteleyicileri (sık, karşılaşılan, yaygın, bilinen) kapsamaya
+sayılmaz (tek liste, `chat_wiki_probe.go`); ayıklama sonrası < 2 içerik terimi kalan soru hiç aramaz.
+Kapı geçerse kademenin anlatım yolu aynen (çok-sayfa okuma + wiki_select) ve guided'ın bu soruya
+seçeceği rota "Telemetri için:" çipi olarak eklenir (router yalnız; veri okuması/model çağrısı yok).
+Geçmezse hiçbir olay yok, akış bayt bayt eski. Ters yön: `guidedProblems` servis adsız soruda sıfır
+problem döndürürse (`markFleetZeroMatch`, üretim noktasında işaret) aynı yoklamanın sayfası cevabın
+sonuna yalnız bağlantı olarak eklenir ("Wiki'de ilgili olabilir: <başlık>"); yoklama alışveriş başına
+en çok bir kez. `wiki.Hit` yerel isabette `TermCoverage` + `HeadMatch` taşır (skor değişmedi).
+**Eşikler:** 0.7 — iki terimli soruda iki terim de aynı parçada olmalı (biri ≈0.5); üç terimde eksik
+terim ancak belirgin yaygınsa geçer. En az 2 içerik terimi — tek terimde kapsam terim geçtiği an 1.0
+olur ("kafka hataları" Kafka sayfasına kaçardı). Ayar/env yok.
+**Reddedilen:** "nelerdir", "sık karşılaşılan" gibi kalıp sözcükleri wiki işaretine eklemek — kalıp
+telemetri sorusunda da geçer ("açık problemler nelerdir"); karar sayfa içeriğine bağlanmalı. Canlı ADO
+yedeği — her işaretsiz soruya dış istek eklerdi. **Testler:** `chat_wiki_probe_test.go` (terim
+ayıklama, çapa, kapı tablosu, cache refresh → wiki + çip, kapı geçmezse sessiz, telemetri soruları hiç
+aramaz, kapılar, sıfır-eşleşme ipucu, çiplerin rotaya dönüşü, kaynak pinleri),
+`internal/wiki/rank_probe_test.go`.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

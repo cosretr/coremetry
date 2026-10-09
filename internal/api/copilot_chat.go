@@ -343,6 +343,9 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 	if req.Context.Page != nil {
 		wikiTC.PageTraceID = req.Context.Page.TraceID
 	}
+	// v0.10.1143 — içerik yoklaması durumu (chat_wiki_probe.go): kademe ve
+	// guidedProblems'in sıfır-eşleşme ipucu aynı tek aramayı paylaşır.
+	ctx = s.armWikiProbe(ctx, req.Messages, wikiTC)
 	if handled, wok := s.wikiChatAnswer(ctx, emit, req.Messages, wikiTC); handled {
 		cspan.tier("wiki", wok)
 		emit("done", map[string]bool{"ok": wok})

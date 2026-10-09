@@ -94,6 +94,14 @@ type Hit struct {
 	// LocalScore — canlıyla birleşen yerel isabetin YEREL skoru (mergeHits;
 	// birleşmeyen yerel isabette Score zaten yereldir, Live=false).
 	LocalScore float64 `json:"-"`
+	// TermCoverage — v0.10.1143: YEREL lexical isabetin idf-ağırlıklı terim
+	// kapsamı (RankLexical'in cov'u, 0..1; skorun bm25 çarpanı HARİÇ).
+	// Sohbetin içerik yoklaması (api/chat_wiki_probe.go) mutlak kapsam ister;
+	// Score = cov × (0.6+0.4·rel) bunu göremez. Canlı isabette 0.
+	TermCoverage float64 `json:"-"`
+	// HeadMatch — v0.10.1143: eşleşen terimlerden en az biri parçanın
+	// başlık / başlık yolunda (head_tokens; HTF > 0).
+	HeadMatch bool `json:"-"`
 }
 
 // EvidencedAt — v0.10.1126: isabet floor'u KANITLA mı geçiyor: yerel skor
@@ -277,11 +285,13 @@ func RankLexical(cands []Candidate, st Stats, terms []string) []Hit {
 	type scored struct {
 		c       Candidate
 		bm, cov float64
+		head    bool
 	}
 	rows := make([]scored, 0, len(cands))
 	maxBM := 0.0
 	for _, c := range cands {
 		var bm, matched float64
+		head := false
 		dl := float64(c.DL)
 		for i, g := range ex.groups {
 			var tf, htf float64
@@ -291,6 +301,9 @@ func RankLexical(cands []Candidate, st Stats, terms []string) []Hit {
 			}
 			if tf == 0 && htf == 0 {
 				continue
+			}
+			if htf > 0 {
+				head = true
 			}
 			w := 1.0
 			if at(c.TF, g[0]) == 0 && at(c.HTF, g[0]) == 0 {
@@ -310,7 +323,7 @@ func RankLexical(cands []Candidate, st Stats, terms []string) []Hit {
 		if bm > maxBM {
 			maxBM = bm
 		}
-		rows = append(rows, scored{c: c, bm: bm, cov: cov})
+		rows = append(rows, scored{c: c, bm: bm, cov: cov, head: head})
 	}
 	out := make([]Hit, 0, len(rows))
 	for _, r := range rows {
@@ -319,7 +332,7 @@ func RankLexical(cands []Candidate, st Stats, terms []string) []Hit {
 			rel = r.bm / maxBM
 		}
 		lex := r.cov * (0.6 + 0.4*rel)
-		out = append(out, Hit{ChunkRef: r.c.ChunkRef, Score: lex, Lexical: lex})
+		out = append(out, Hit{ChunkRef: r.c.ChunkRef, Score: lex, Lexical: lex, TermCoverage: r.cov, HeadMatch: r.head})
 	}
 	sortHits(out)
 	return out

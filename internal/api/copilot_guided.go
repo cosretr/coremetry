@@ -1929,6 +1929,9 @@ func (s *Server) runGuidedRoute(ctx context.Context, emit func(string, any), rou
 	// köprüsü çipleri eklenir (operatör-bildirimi: CoSRE id'yi
 	// buluyor ama linklemiyordu).
 	links = append(links, s.answerRequestIDLinks(ctx, answer, ctxService)...)
+	// v0.10.1143 — filo geneli guidedProblems sıfır eşleşme: içerik yoklamasının
+	// kapıyı geçen wiki sayfası yalnız bağlantı olarak (chat_wiki_probe.go).
+	answer, links = s.wikiZeroMatchHint(ctx, question, answer, links)
 	// v0.9.411 — konuya-duyarlı takip önerileri (guidedSuggestions,
 	// copilot_followup.go). Eski frontend'ler alanı yok sayar.
 	emit("answer", map[string]any{
@@ -2326,6 +2329,9 @@ func (s *Server) guidedProblemsBundle(ctx context.Context, emit func(string, any
 	if err != nil {
 		emitGuidedStepResult(emit, nProb, "list_problems", "", err)
 		return "", "", err
+	}
+	if len(probs) == 0 && service == "" {
+		markFleetZeroMatch(ctx) // v0.10.1143 — wiki ipucu (chat_wiki_probe.go)
 	}
 	probs = s.enrichProblemsForRead(ctx, probs) // v0.9.553 — deploy+öncelik, sırası sabit
 	// v0.9.1229 — çipin kanıtı: hipotez eklenmeden ÖNCEKİ liste.
