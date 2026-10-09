@@ -5340,27 +5340,160 @@ tbody td.tpm-more-cell { color: var(--text2); }
 .cm-model-row__model { font-size: var(--fs-2xs); color: var(--text3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cm-model-row__desc { padding-left: calc(1em + var(--sp-2)); font-size: var(--fs-xs); color: var(--text2); white-space: normal; }
 
+/* ── v0.10.1142 — CoSRE tip ölçeği + boşluk ritmi (operatör: "sol geçmiş
+   yazısı çok küçük; gerçek bir sohbet asistanı gibi tutarlı olsun") ──
+   Tek kaynak: .cosre-root (sayfa = .cosre-root--page, çekmece gövdesi =
+   .cosre-root--drawer) ve başlık satırı .cosre-head. Değerler tema-bağımsız
+   (yalnız boyut/ağırlık/aralık); renkler tema token'larından gelir. Yazı
+   ailesi evin yığını: gövde body'den miras, teknik ayrıntı --font-mono.
+   Ölçek ayrı bir merdiven çünkü sohbet okuma yüzeyi (15px gövde) — uygulama
+   yoğun tablo yüzeyi (--fs-* 9–18px, gövde 12px); --fs-*'a karışmaz.
+   Kapsam .cosre-root altında: ChatBubble/cm-md-* başka yüzeylerde de
+   (RCAVerdictPanel, CopilotExplain, AIDrawer) — orada görünüm DEĞİŞMEZ. */
+.cosre-root, .cosre-head {
+  --cosre-fs-body: 14px;     /* mesaj gövdesi (çekmece) */
+  --cosre-fs-ui: 14px;       /* kenar çubuğu satırı, arama, düğme, tablo */
+  --cosre-fs-small: 13px;    /* hap/çip, kaynaklar, kod */
+  --cosre-fs-meta: 12px;     /* grup başlığı, adımlar, zaman/meta */
+  --cosre-fs-h1: 20px;
+  --cosre-fs-h2: 17px;
+  --cosre-fs-h3: 15px;
+  --cosre-fs-h4: 14px;
+  --cosre-fs-title: 16px;    /* başlık satırındaki marka */
+  --cosre-lh-body: 1.6;
+  --cosre-lh-heading: 1.35;
+  --cosre-lh-ui: 1.4;
+  --cosre-fw-regular: 400;
+  --cosre-fw-medium: 500;
+  --cosre-fw-semibold: 600;
+  --cosre-fw-bold: 700;
+  --cosre-ls-title: .01em;
+  --cosre-ls-meta: .03em;
+  --cosre-font-mono: var(--font-mono);
+  /* 4/8 ritmi */
+  --cosre-s1: 4px;
+  --cosre-s2: 8px;
+  --cosre-s3: 12px;
+  --cosre-s4: 16px;
+  --cosre-s5: 24px;
+  --cosre-row-h: 38px;
+}
+.cosre-root--page, .cosre-root--page .cosre-head {
+  --cosre-fs-body: 15px;
+  --cosre-fs-h1: 22px;
+  --cosre-fs-h2: 18px;
+  --cosre-fs-h3: 16px;
+  --cosre-fs-h4: 15px;
+}
+.cosre-root--drawer { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+
+/* Başlık satırı */
+.cosre-head__title { flex-shrink: 0; font-size: var(--cosre-fs-title); font-weight: var(--cosre-fw-bold); letter-spacing: var(--cosre-ls-title); line-height: var(--cosre-lh-heading); }
+.cosre-head__meta { font-size: var(--cosre-fs-meta); }
+.cosre-head .cosre-page__home { font-size: var(--cosre-fs-small); }
+
+/* Karşılama + çekmece geçmiş bölümü */
+.cm-greet { color: var(--text3); font-size: var(--cosre-fs-small); line-height: var(--cosre-lh-ui); }
+.cm-greet__hello { margin-bottom: var(--cosre-s1); color: var(--text); font-size: var(--cosre-fs-body); font-weight: var(--cosre-fw-semibold); }
+.cm-hist__h { font-size: var(--cosre-fs-meta); font-weight: var(--cosre-fw-semibold); color: var(--text2); letter-spacing: var(--cosre-ls-meta); }
+.cm-hist__meta { font-size: var(--cosre-fs-meta); color: var(--text3); white-space: nowrap; }
+
+/* Mesajlar */
+.cosre-root .cm-thread { padding: var(--cosre-s4); }
+.cosre-root .cm-thread__col { gap: var(--cosre-s5); }
+.cosre-root .cm-msg-user { font-size: var(--cosre-fs-body); line-height: var(--cosre-lh-body); padding: var(--cosre-s2) var(--cosre-s3); }
+.cosre-root .cm-msg-ai { font-size: var(--cosre-fs-body); line-height: var(--cosre-lh-body); }
+.cosre-root .cm-msg-ai__who { font-size: var(--cosre-fs-meta); font-weight: var(--cosre-fw-semibold); margin-bottom: var(--cosre-s1); }
+.cosre-root .cm-msg-note { font-size: var(--cosre-fs-meta); margin-top: var(--cosre-s2); }
+.cosre-root .cm-md-p { margin-bottom: var(--cosre-s3); }
+.cosre-root .cm-msg-ai .cm-md-h { margin: var(--cosre-s5) 0 var(--cosre-s2); font-weight: var(--cosre-fw-semibold); line-height: var(--cosre-lh-heading); }
+.cosre-root .cm-msg-ai .cm-md-h:first-child { margin-top: 0; }
+.cosre-root .cm-msg-ai .cm-md-h1 { font-size: var(--cosre-fs-h1); }
+.cosre-root .cm-msg-ai .cm-md-h2 { font-size: var(--cosre-fs-h2); }
+.cosre-root .cm-msg-ai .cm-md-h3 { font-size: var(--cosre-fs-h3); }
+.cosre-root .cm-msg-ai .cm-md-h4 { font-size: var(--cosre-fs-h4); }
+.cosre-root .cm-msg-ai .cm-md-list { margin-bottom: var(--cosre-s3); }
+.cosre-root .cm-msg-ai .cm-md-list li { margin: var(--cosre-s1) 0; }
+.cosre-root .cm-md-quote, .cosre-root .cm-md-dl, .cosre-root .cm-md-details { margin-bottom: var(--cosre-s3); }
+.cosre-root .cm-msg-ai code { font-size: .87em; }
+.cosre-root .cm-msg-ai pre code { font-size: inherit; }
+/* Tablolar 14px, kod/dosya blokları 13px mono */
+.cosre-root .cm-msg-ai .cm-md-table { font-size: var(--cosre-fs-ui); line-height: var(--cosre-lh-ui); }
+.cosre-root .cm-msg-ai .cm-md-table thead th { font-size: var(--cosre-fs-small); font-weight: var(--cosre-fw-semibold); }
+.cosre-root .cm-msg-ai .cm-md-table thead th, .cosre-root .cm-msg-ai .cm-md-table tbody td { padding: var(--cosre-s2) var(--cosre-s3); }
+.cosre-root .cm-msg-ai .cm-md-tw, .cosre-root .cm-msg-ai .cm-md-code { margin-bottom: var(--cosre-s4); }
+.cosre-root .cm-md-code pre { font: var(--cosre-fs-small)/1.55 var(--cosre-font-mono); padding: var(--cosre-s2) var(--cosre-s3); }
+.cosre-root .cm-md-code-h { min-height: 28px; padding: var(--cosre-s1) var(--cosre-s1) var(--cosre-s1) var(--cosre-s3); }
+.cosre-root .cm-md-code-lang, .cosre-root .cm-md-code-st { font-size: var(--cosre-fs-meta); letter-spacing: var(--cosre-ls-meta); }
+.cosre-root .cm-md-code .cm-md-code-file { font-size: var(--cosre-fs-meta); }
+/* Callout'lar */
+.cosre-root .cm-callout { padding: var(--cosre-s2) var(--cosre-s3); margin-bottom: var(--cosre-s4); }
+.cosre-root .cm-callout__h { font-size: var(--cosre-fs-small); margin-bottom: var(--cosre-s1); }
+/* Atıf hapları + kaynak listesi (13px) */
+.cosre-root .cm-cite > a, .cosre-root .cm-cite > span { font-size: var(--cosre-fs-meta); }
+.cosre-root .cm-cite { font-size: inherit; }
+.cosre-root .cm-sources { font-size: var(--cosre-fs-small); margin-top: var(--cosre-s4); padding-top: var(--cosre-s2); }
+.cosre-root .cm-sources__h { font-size: var(--cosre-fs-meta); font-weight: var(--cosre-fw-semibold); letter-spacing: var(--cosre-ls-meta); margin-bottom: var(--cosre-s2); }
+.cosre-root .cm-sources__list { gap: var(--cosre-s1); }
+.cosre-root .cm-sources__list li { gap: var(--cosre-s2); }
+.cosre-root .cm-sources__n { font-size: var(--cosre-fs-meta); }
+.cosre-root .cm-sources__host { font-size: var(--cosre-fs-meta); }
+/* Adımlar ("Nasıl buldum"): meta 12px; mono yalnız teknik ayrıntıda (araç adı, argüman) */
+.cosre-root .cm-how__btn { font-size: var(--cosre-fs-meta); }
+.cosre-root .cm-how__body { font-family: inherit; font-size: var(--cosre-fs-meta); line-height: var(--cosre-lh-ui); padding: var(--cosre-s2) var(--cosre-s3); }
+.cosre-root .cm-steps-sum { font-size: var(--cosre-fs-meta); gap: var(--cosre-s2); }
+.cosre-root .cm-steps-t { font-size: var(--cosre-fs-meta); }
+.cosre-root .cm-steps-t th { font-size: var(--cosre-fs-meta); padding: var(--cosre-s1) var(--cosre-s2); }
+.cosre-root .cm-steps-t td { padding: var(--cosre-s1) var(--cosre-s2); }
+.cosre-root .cm-steps-tool, .cosre-root .cm-steps-args { font-family: var(--cosre-font-mono); }
+/* Çipler/haplar 13px; "neler yapabilirim" satırları */
+.cosre-root .chip, .cosre-root .cm-model-pill { font-size: var(--cosre-fs-small); }
+.cosre-root .cm-model-label { font-size: var(--cosre-fs-meta); }
+.cosre-root .cm-followups { gap: var(--cosre-s2); padding: 0 var(--cosre-s4) var(--cosre-s2); }
+.cosre-root .cosre-cap { gap: var(--cosre-s1); margin-bottom: var(--cosre-s3); }
+.cosre-root button.cosre-cap__row { font-size: var(--cosre-fs-small); line-height: var(--cosre-lh-ui); padding: var(--cosre-s1) var(--cosre-s2); }
+/* Composer: metin gövdeyle aynı (sayfa 15px, çekmece 14px) */
+.cosre-root .cm-composer { padding: var(--cosre-s2) var(--cosre-s4) var(--cosre-s4); }
+.cosre-root .cm-composer__box { gap: var(--cosre-s2); padding: var(--cosre-s2) var(--cosre-s2) var(--cosre-s2) var(--cosre-s3); }
+.cosre-root .cm-composer__input { font-size: var(--cosre-fs-body); line-height: var(--cosre-lh-body); padding: var(--cosre-s1) 0; }
+.cosre-root .cm-composer__actions { gap: var(--cosre-s1); }
+.cosre-root .cm-composer__actions > button:not(.cm-model-pill) { font-size: var(--cosre-fs-ui); }
+
 /* /cosre sol kenar çubuğu (Claude gibi) */
 .cosre-page__main { display: flex; flex: 1; min-height: 0; }
 .cosre-page__main > .cosre-page__body { flex: 1; min-width: 0; }
 .cosre-page__menu { margin-right: var(--sp-4); flex: none; }
-.cosre-side { flex: none; width: 260px; display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--divider); background: var(--bg1); }
+.cosre-side { flex: none; width: 280px; display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--divider); background: var(--bg1); font-size: var(--cosre-fs-ui); line-height: var(--cosre-lh-ui); }
 .cosre-side.is-collapsed { display: none; }
-.cosre-side__top { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-5) var(--sp-5) var(--sp-3); }
-.cosre-side__new { flex: 1; justify-content: center; }
-.cosre-side__search { padding: 0 var(--sp-5) var(--sp-4); }
+.cosre-side__top { display: flex; align-items: center; gap: var(--cosre-s2); padding: var(--cosre-s3) var(--cosre-s3) var(--cosre-s2); }
+.cosre-side .cosre-side__new { flex: 1; justify-content: center; min-height: var(--cosre-row-h); font-size: var(--cosre-fs-ui); font-weight: var(--cosre-fw-medium); }
+.cosre-side__search { padding: 0 var(--cosre-s3) var(--cosre-s2); }
 .cosre-side__search .sf-wrap { width: 100%; }
-.cosre-side__search .sf-input { width: 100%; }
-.cosre-side__list { flex: 1; overflow-y: auto; padding: 0 var(--sp-3) var(--sp-6); }
-.cosre-side__state { padding: var(--sp-4) var(--sp-5); }
-.cosre-side__group { margin-top: var(--sp-4); }
-.cosre-side__gh { margin: 0; padding: var(--sp-2) var(--sp-4); font-size: var(--fs-2xs); font-weight: 600; color: var(--text3); letter-spacing: .02em; }
-.cosre-side__group ul { list-style: none; margin: 0; padding: 0; }
-.cosre-side__item { display: flex; align-items: center; border-radius: var(--radius-sm); }
+.cosre-side__search .sf-input { width: 100%; min-height: 34px; font-size: var(--cosre-fs-ui); }
+.cosre-side__list { flex: 1; overflow-y: auto; padding: 0 var(--cosre-s2) var(--cosre-s4); }
+.cosre-side__state { padding: var(--cosre-s2) var(--cosre-s3); }
+.cosre-side__group { margin-top: var(--cosre-s2); }
+/* Grup başlığı: 12px soluk meta, kaydırırken yapışkan (zemin = çubuk zemini) */
+.cosre-side__gh {
+  position: sticky; top: 0; margin: 0; padding: var(--cosre-s2) var(--cosre-s2) var(--cosre-s1);
+  background: var(--bg1); font-size: var(--cosre-fs-meta); font-weight: var(--cosre-fw-semibold);
+  line-height: var(--cosre-lh-ui); color: var(--text3); letter-spacing: var(--cosre-ls-meta); text-transform: uppercase;
+}
+.cosre-side__group ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.cosre-side__item { display: flex; align-items: center; min-height: var(--cosre-row-h); border-radius: var(--radius-sm); }
 .cosre-side__item:hover, .cosre-side__item:focus-within { background: var(--bg2); }
-.cosre-side__item.is-active { background: var(--accent-soft); }
-.cosre-side__open { flex: 1; min-width: 0; justify-content: flex-start; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
-.cosre-side__del { opacity: 0; flex: none; }
+.cosre-side__item.is-active { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+.cosre-side__item.is-active .cosre-side__open { color: var(--text); font-weight: var(--cosre-fw-medium); }
+.cosre-side .cosre-side__open {
+  flex: 1; min-width: 0; min-height: var(--cosre-row-h); padding: 0 var(--cosre-s2);
+  justify-content: flex-start; text-align: left; overflow: hidden;
+  font-size: var(--cosre-fs-ui); line-height: var(--cosre-lh-ui); color: var(--text);
+}
+.cosre-side .cosre-side__open:hover:not(:disabled) { background: transparent; }
+.cosre-side .cosre-side__open:focus-visible { outline-offset: -2px; }
+.cosre-side__open > .row { min-width: 0; max-width: 100%; }
+.cosre-side__title { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cosre-side__del { opacity: 0; flex: none; margin-right: var(--cosre-s1); }
 .cosre-side__item:hover .cosre-side__del, .cosre-side__item:focus-within .cosre-side__del { opacity: 1; }
 @media (hover: none) { .cosre-side__del { opacity: 1; } }
 .cosre-side__scrim { display: none; }
@@ -5377,6 +5510,7 @@ tbody td.tpm-more-cell { color: var(--text2); }
   .cosre-side.is-open { transform: none; visibility: visible; }
   .cosre-side__scrim { display: block; position: fixed; inset: 0; background: var(--backdrop); z-index: var(--z-drawer-scrim); }
   .cm-msg-user { max-width: 92%; }
-  .cm-composer { padding: var(--sp-3) var(--sp-5) var(--sp-5); }
+  .cm-composer, .cosre-root .cm-composer { padding: var(--sp-3) var(--sp-5) var(--sp-5); }
+  .cosre-root .cm-thread { padding: var(--sp-6); }
   .cm-model-pill, .cm-model-label { max-width: 110px; }
 }

@@ -16,6 +16,12 @@ import { groupConversations, sidebarTitle } from './chatHistoryGroups';
 // Daraltma tercihi localStorage'da (chatHistoryGroups read/write, try/catch);
 // telefon genişliğinde (≤640px) çubuk ekran dışı çekmecedir — başlıktaki ☰
 // açar, örtü / seçim / Esc kapatır.
+//
+// v0.10.1142 (operatör: "geçmiş yazısı çok küçük, gerçek bir sohbet asistanı
+// gibi") — tipografi .cosre-root'taki --cosre-fs-* ölçeğinden: satır başlığı
+// 14px (uzunsa ellipsis + title ipucu), grup başlığı 12px soluk meta ve
+// kaydırırken yapışkan, satır yüksekliği --cosre-row-h (38px). Kurallar
+// globals.css "CoSRE tip ölçeği" bölümünde.
 export function CosreSidebar({
   threads, error, activeId, collapsed, mobileOpen, onNew, onOpen, onDelete, onCloseMobile, nowMs,
 }: {
@@ -66,7 +72,7 @@ export function CosreSidebar({
                     <Button variant="ghost" size="sm" className="cosre-side__open"
                       aria-current={t.id === activeId ? 'true' : undefined}
                       onClick={() => onOpen(t)} title={t.title}>
-                      {sidebarTitle(t.title)}
+                      <span className="cosre-side__title">{sidebarTitle(t.title)}</span>
                     </Button>
                     <Button variant="ghost-danger" size="xs" className="cosre-side__del"
                       onClick={() => onDelete(t)} aria-label={`${t.title} konuşmasını sil`} title="Konuşmayı sil">✕</Button>

@@ -3208,6 +3208,31 @@ tercihi eksikti.
 akarken devre dışı, tek profil etiketi), `menuPlacement.test.ts` (prefer top / align start / telefon),
 başlık pinleri güncellendi (`drawerParity`, `chatImprovements`, `modelChip`).
 
+## 2026-10-09 — CoSRE tip ölçeği: sohbet yüzeyleri tek tipografi + 4/8 ritmi (v0.10.1142)
+
+**Operatör:** `/cosre` sol geçmiş çubuğunun yazısı çok küçük (11px düğme metni); genel tipografi
+tutarsız — "gerçek bir sohbet asistanı (Claude) gibi" olsun.
+**Karar:** CoSRE'ye ait küçük bir tip ölçeği `.cosre-root` (+ başlık satırı `.cosre-head`) üzerinde CSS
+değişkeni olarak tanımlandı, tema-bağımsız (yalnız boyut/ağırlık/aralık; renkler tema token'ı):
+`--cosre-fs-body` 14px (çekmece) / 15px (`.cosre-root--page`), `--cosre-fs-ui` 14px, `--cosre-fs-small`
+13px, `--cosre-fs-meta` 12px, `--cosre-fs-h1..h4`, satır yüksekliği 1.6 gövde / 1.35 başlık, ağırlık ve
+harf aralığı kademeleri, 4/8 boşluk (`--cosre-s1..s5`) ve `--cosre-row-h` 38px. Yazı ailesi yeni değil:
+gövde body yığınından miras, teknik ayrıntı `--font-mono`. Uygulama: kenar çubuğu satırı 14px (uzun
+başlık ellipsis + `title` ipucu, etkin satır zemin + sol vurgu çizgisi), grup başlığı 12px büyük harf
+soluk meta ve kaydırırken yapışkan, arama + "Yeni sohbet" 14px, çubuk 260→280px; başlık markası 16px,
+meta 12px; mesaj gövdesi + composer gövde boyutunda; çip/hap/kaynaklar/kod 13px (kod mono), tablolar
+14px, adımlar 12px (mono yalnız araç adı/argümanda). Çekmece gövdesi `.cosre-root--drawer` sarmalına
+alındı. Telefon davranışı (ekran dışı çekmece, ☰) ve sohbet mantığı DEĞİŞMEDİ; odak halkası evin
+`:focus-visible` kuralı (kenar çubuğu satırında içe kaydırılmış, kırpılmasın diye).
+**Reddedilen:** Ölçeği evin `--fs-*` merdivenine eklemek — o merdiven yoğun tablo yüzeylerinin (gövde
+12px) ölçülmüş dağılımı; okuma yüzeyi 15px gövde ister, karıştırmak iki tarafı da bozardı. Kuralları
+`.cm-*` tabanına doğrudan yazmak — `ChatBubble`/`cm-md-*` RCAVerdictPanel, CopilotExplain ve ✨ Explain
+çekmecesinde de kullanılıyor; kapsam `.cosre-root` altında tutuldu, oralarda görünüm aynı. İkon-yalnız
+daraltılmış ray — mevcut ☰ gizle/göster davranışı korundu (isteğe bağlıydı).
+**Testler:** `cosreTypeScale.test.tsx` (kök değişkenleri tanımlıyor, sayfa 15px, kenar çubuğu/composer/kod
+kuralları değişkenleri okuyor, sayfa+çekmece kökleri `.cosre-root` taşıyor, kenar çubuğu başlık span'ı +
+ipucu + etkin satır).
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

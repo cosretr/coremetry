@@ -473,7 +473,7 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
     // boş ekran olurdu (ev kuralı: boş panel yok). Bilinmiyorken yükleniyor,
     // kapalıyken açıklama + uygulamaya dönüş.
     return (
-      <div className="cosre-page">
+      <div className="cosre-page cosre-root cosre-root--page">
         <div className="cosre-page__state">
           {enabled === null ? <Spinner label="CoSRE yükleniyor…" /> : (
             <Empty icon="✨" title="CoSRE bu kurulumda kapalı">
@@ -537,7 +537,7 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
 
   // v0.10.1125 — başlık + gövde TEK yerde; çekmece ve /cosre sayfası aynı düğümleri sarar.
   const headerNode = (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0, flexWrap: isPage ? 'wrap' : undefined }}>
+            <div className="cosre-head" style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0, flexWrap: isPage ? 'wrap' : undefined }}>
               {/* v0.9.1253 (operatör: "CoSRE yazısı biraz daha belirgin,
                   büyük font olabilir") — 13→16 + 700 + hafif harf aralığı;
                   marka adı çekmece başlığında artık ilk bakışta okunur.
@@ -547,9 +547,9 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
                   · eylemler (v0.10.1141: model seçici composer'a taşındı). 461'in iki satırlı başlığı Drawer'ın
                   ✕ hizasını ve eylem düğmelerini kaydırıyordu. */}
               <AiMark size={20} />
-              <span style={{ fontWeight: 700, fontSize: 16, letterSpacing: 0.3, flexShrink: 0 }}>CoSRE</span>
-              <span className="mono" style={{
-                flex: 1, minWidth: 0, fontSize: 11,
+              <span className="cosre-head__title">CoSRE</span>
+              <span className="mono cosre-head__meta" style={{
+                flex: 1, minWidth: 0,
                 color: subject ? 'var(--text2)' : currentService ? 'var(--accent2)' : 'var(--text3)',
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }} title={subject ? `${aiSubjectTitle(subject)} · ${aiSubjectSubtitle(subject)}` : currentService ? `Sorular ${currentService} servisine kapsanır` : 'Filo geneli sorular'}>
@@ -630,7 +630,7 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
                 display: 'flex', alignItems: 'center', gap: 8,
                 padding: '6px 10px 6px 14px',
               }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text2)' }}>
+                <span className="cm-hist__h">
                   Geçmiş
                 </span>
                 <span style={{ flex: 1 }} />
@@ -671,7 +671,7 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
                       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                     }}>{t.title}</span>
                   </Button>
-                  <span style={{ fontSize: 10, color: 'var(--text3)', whiteSpace: 'nowrap' }}
+                  <span className="cm-hist__meta"
                     title={`${t.messages} mesaj`}>
                     {tsRel(t.updatedAt)} · {t.messages}
                   </span>
@@ -702,12 +702,12 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
             style={{ flex: 1, overflowY: 'auto' }}>
             <div className="cm-thread__col">
             {turns.length === 0 && (
-              <div style={{ color: 'var(--text3)', fontSize: 12 }}>
+              <div className="cm-greet">
                 {/* Karşılama (v0.9.528) — LLM çağrısı YOK; ad
                     /api/auth/me'den, durum açık P1'lerden. Durum satırı
                     yüklenirken BOŞ döner: "P1 yok" yanlış iddiası
                     operatörü yanıltırdı (greeting.ts). */}
-                <div style={{ marginBottom: 4, color: 'var(--text)', fontSize: 13, fontWeight: 600 }}>
+                <div className="cm-greet__hello">
                   {greetHello(user?.firstName)}
                 </div>
                 {greetStatus(p1s) && (
@@ -887,7 +887,8 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
   if (isPage) {
     return (
       <ChatLinkNewTabContext.Provider value>
-        <div className="cosre-page">
+        {/* v0.10.1142 — .cosre-root: CoSRE tip ölçeği (--cosre-fs-*) burada tanımlı (globals.css). */}
+        <div className="cosre-page cosre-root cosre-root--page">
           <header className="cosre-page__head">
             {/* v0.10.1137 — ☰: genişte kenar çubuğunu daraltır/açar, telefonda çekmeceyi açar. */}
             <IconButton variant="ghost" size="sm" className="cosre-page__menu" icon="☰"
@@ -972,7 +973,7 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
           width={expanded ? 1100 : AI_DRAWER_WIDTH}
           bodyStyle={{ display: 'flex', flexDirection: 'column', padding: 0 }}
           header={headerNode}>
-          {bodyNode}
+          <div className="cosre-root cosre-root--drawer">{bodyNode}</div>
         </Drawer>
       )}
     </>
