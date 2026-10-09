@@ -22,7 +22,7 @@ ENV VITE_APP_VERSION=${VITE_APP_VERSION}
 RUN npm run build
 
 # ── Stage 2: build Go binaries (with embedded frontend/dist) ──────────────────
-FROM golang:1.25-alpine AS go-builder
+FROM golang:1.26-alpine AS go-builder
 # VERSION is the release tag stamped into the binary via -ldflags.
 # `docker compose build --build-arg VERSION=$(git describe --tags)`
 # during release; falls back to "dev" for local builds without a

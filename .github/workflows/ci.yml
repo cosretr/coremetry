@@ -62,7 +62,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
         with:
-          go-version: '1.25'
+          go-version: '1.26'
           # check-latest: the hosted runner's toolcache can lag a patch
           # behind (v0.8.557 incident: cache served 1.25.11 while the
           # crypto/tls fix GO-2026-5856 landed in 1.25.12, so the hard
@@ -158,7 +158,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
         with:
-          go-version: '1.25'
+          go-version: '1.26'
           # check-latest: the hosted runner's toolcache can lag a patch
           # behind (v0.8.557 incident: cache served 1.25.11 while the
           # crypto/tls fix GO-2026-5856 landed in 1.25.12, so the hard
@@ -201,7 +201,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
         with:
-          go-version: '1.25'
+          go-version: '1.26'
           # check-latest: the hosted runner's toolcache can lag a patch
           # behind (v0.8.557 incident: cache served 1.25.11 while the
           # crypto/tls fix GO-2026-5856 landed in 1.25.12, so the hard
@@ -223,11 +223,11 @@ jobs:
       # makes it safe as a blocking gate.
       - name: govulncheck (Go reachable CVEs)
         run: |
-          # v0.10.622 — @latest DEĞİL: x/vuln v1.8.0 go >= 1.26 istiyor, bu job go 1.25
-          # + GOTOOLCHAIN=local ile koşuyor ve 2026-09-10'da kurulum adımı düştü
-          # (main kırmızı, kod değişmeden). v1.7.0 = go 1.25 ile derlenen son sürüm;
-          # toolchain yükseltilince (go.mod) birlikte güncellenir.
-          go install golang.org/x/vuln/cmd/govulncheck@v1.7.0
+          # v0.10.622 — @latest DEĞİL (sabit sürüm; kurulum adımı düşmesin).
+          # v0.10.1135 — toolchain go 1.26'ya çıktı (GO-2026-6612/6613/6617:
+          # stdlib düzeltmesi yalnız 1.26.9'da, x/net v0.60 go 1.26 istiyor);
+          # govulncheck v1.8.0 go >= 1.26 ile derlenir.
+          go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
           "$(go env GOPATH)/bin/govulncheck" ./...
       # Policy unchanged: HIGH + CRITICAL block, moderate does not (10 exist
       # with no non-major fix). What changed (v0.9.266) is that a gate can no

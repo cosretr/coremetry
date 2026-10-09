@@ -2921,6 +2921,16 @@ yalnız hafıza); sayfada yok → bağlamlı arama; hiçbiri cevaplamıyor → a
 tur; kapılar (kapalı, token, çekmece, telemetri); anlatımda önceki tur. Saf yardımcılar da ayrıca test
 edilir. FE tarafında `chatWikiRefs.test.ts` var.
 
+## 2026-10-09 — Go 1.26 toolchain + x/net v0.60 (govulncheck: GO-2026-6610…6617) (v0.10.1135)
+
+1133'ün CI'ı Security adımında kırmızıya düştü: yeni yayımlanan GO-2026-6610/6611/6612/6613/6617
+(net/http, net/textproto, crypto/tls, html/template, x/net/http2) erişilebilir yollarda. Stdlib
+düzeltmesi yalnız go1.26.9'da (1.25 dalı artık yama almıyor), x/net düzeltmesi v0.60.0'da ve
+o sürüm `go 1.26` istiyor. Karar: go.mod `go 1.26.0`; CI/CodeQL/Release `go-version: '1.26'`
+(check-latest açık → en son 1.26.x yaması); Dockerfile ve demo Dockerfile `golang:1.26-alpine`;
+govulncheck v1.7.0 → v1.8.0 (go >= 1.26). Kod değişikliği yok; x/sync, x/sys, x/text bağımlılık
+olarak yükseldi. On-prem derleme ortamı golang:1.25 imajını aynalıyorsa 1.26 imajı da aynalanmalı.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

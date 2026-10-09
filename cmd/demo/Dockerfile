@@ -10,7 +10,7 @@
 # Build context MUST be the repo root (it needs go.mod / go.sum + cmd/demo).
 
 # ── Stage 1: build the Go binary ──────────────────────────────────────────────
-FROM golang:1.25-alpine AS builder
+FROM golang:1.26-alpine AS builder
 # VERSION is informational only — cmd/demo doesn't stamp a version into the
 # binary (no -X main.Version), so this is here purely to mirror the root
 # Dockerfile's release-tag convention and land a /app/VERSION file.
