@@ -206,7 +206,7 @@ func (s *Server) wikiChatAnswer(ctx context.Context, emit func(string, any), msg
 	exID := copilot.MetaFromContext(ctx).ExchangeID
 	if len(hits) == 0 {
 		emit("answer", map[string]any{"text": wikiNotFoundText(res, noTerms), "exchangeId": exID,
-			"sources": []any{}, "links": []guidedAnswerLink{}})
+			"sources": []any{}, "links": []guidedAnswerLink{}, "allowedLinks": []string{}})
 		return true, true
 	}
 	ans, used, err := s.wikiNarratedAnswer(ctx, w, question, wikiPriorTurns(msgs), hits, emit)
@@ -249,7 +249,7 @@ func (s *Server) wikiNarratedAnswer(ctx context.Context, w *wiki.Service, questi
 	if err != nil {
 		return nil, nil, err
 	}
-	return map[string]any{
+	ans := map[string]any{
 		"text":       strings.TrimSpace(raw),
 		"exchangeId": copilot.MetaFromContext(ctx).ExchangeID,
 		// v0.10.1127: sayfa başına tek çip ("Kaynak 1", "Kaynak 2" …) —
@@ -257,5 +257,9 @@ func (s *Server) wikiNarratedAnswer(ctx context.Context, w *wiki.Service, questi
 		// v0.10.1136: sıra = bağlamdaki [n] sırası = okunan sayfa sırası.
 		"sources": dedupeChatSources(sources),
 		"links":   ragWikiLinks(used),
-	}, used, nil
+	}
+	// v0.10.1137 — cevaptaki URL'lerin doğrulama listesi: modele verilen
+	// wiki bağlamı (wctx; önceki tur HARİÇ) + çipler + kaynaklar.
+	withAllowedLinks(ans, wctx)
+	return ans, used, nil
 }

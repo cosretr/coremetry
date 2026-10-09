@@ -7125,6 +7125,13 @@ export interface ChatTurn extends ChatMessage {
   suggestions?: string[];
   // v0.9.419 — rotadan türetilen derin-link çipleri.
   links?: ChatAnswerLink[];
+  /**
+   * v0.10.1137 — sunucunun "kaynakta gerçekten vardı" dediği bağlantılar
+   * (modele verilen wiki/doküman bağlamındaki URL'ler + çip/kaynak href'leri +
+   * aynı-köken yollar). Cevap metnindeki dış link YALNIZ buradaysa ya da host'u
+   * kaynak/çip host'uysa tıklanır (components/ai/chatLinks.ts). Arşiv taşımaz.
+   */
+  allowedLinks?: string[];
 }
 
 /** v0.10.773 — start-sends cevabı düğüm başına (komut düğüm-yerel). error = ilk hata; hosts kısmi başarıyı taşır. */
@@ -7247,7 +7254,7 @@ export type ChatStreamEvent =
   // href; frontend SPA içinde oraya gider, sohbet açık kalır.
   // evidenceSpanIds / cached (v0.10.453) — trace açıklaması Explain çekirdeğinden:
   // kanıt span'leri ve önbellek isabeti (sohbet ile ✨ Explain aynı cevabı paylaşır).
-  | { kind: 'answer'; text: string; exchangeId?: string; sources?: RagSource[]; suggestions?: string[]; links?: ChatAnswerLink[]; open?: string; evidenceSpanIds?: string[]; cached?: boolean }
+  | { kind: 'answer'; text: string; exchangeId?: string; sources?: RagSource[]; suggestions?: string[]; links?: ChatAnswerLink[]; open?: string; evidenceSpanIds?: string[]; cached?: boolean; allowedLinks?: string[] }
   // v0.10.541 (Faz 3.3a) — tipli blok: model yalnız metin üretir; chart/link
   // (ileride trace_list/table/action/evidence) deterministik, tool sonucundan.
   | { kind: 'block'; id: string; type: ChatBlockType; seq: number; final: boolean; payload: unknown }

@@ -17,5 +17,6 @@ export function useChatLinkNewTab(): boolean {
 
 /** <Link>/<a>'ya yayılacak nitelikler: yeni sekme kipinde target+rel, değilse boş. */
 export function chatLinkTargetProps(newTab: boolean): { target?: '_blank'; rel?: string } {
-  return newTab ? { target: '_blank', rel: 'noopener' } : {};
+  // v0.10.1137 inceleme — iç linkte de Referer gitmesin (sohbet URL'si ?chat= taşır).
+  return newTab ? { target: '_blank', rel: 'noopener noreferrer' } : {};
 }

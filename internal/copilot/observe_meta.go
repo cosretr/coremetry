@@ -56,6 +56,7 @@ var promptVersionRegistry = map[string]string{
 	"systemGuidedChat":           systemGuidedChat,
 	"systemDrawerChat":           systemDrawerChat,
 	"systemRAGChat":              systemRAGChat,
+	"ChatAnswerStyle":            ChatAnswerStyle,       // v0.10.1137 — ortak sohbet cevap biçimi
 	"systemWikiChat":             systemWikiChat,        // v0.10.1124
 	"systemWikiFollowUp":         systemWikiFollowUp,    // v0.10.1134 — wiki takip sorusu
 	"ragChatCore":                ragChatCore,           // v0.10.1136 — RAG gövdesi (wiki eki bunun üstüne)

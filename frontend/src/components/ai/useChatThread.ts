@@ -244,7 +244,7 @@ export function useChatThread(opts: ChatThreadOpts = {}) {
         } else if (e.kind === 'delta') {
           patchLast(t => ({ ...t, text: (t.text ?? '') + e.text }));
         } else if (e.kind === 'answer') {
-          patchLast(t => ({ ...t, text: e.text, exchangeId: e.exchangeId, sources: e.sources, suggestions: e.suggestions, links: e.links, pending: false }));
+          patchLast(t => ({ ...t, text: e.text, exchangeId: e.exchangeId, sources: e.sources, suggestions: e.suggestions, links: e.links, allowedLinks: e.allowedLinks, pending: false })); // v0.10.1137 — link doğrulama listesi
           // v0.10.434 (D7b) — yalnız uygulama-içi (kök-göreli) href; dış adres asla.
           if (e.open && e.open.startsWith('/') && !e.open.startsWith('//')) o.onOpen?.(e.open);
         } else if (e.kind === 'error') {

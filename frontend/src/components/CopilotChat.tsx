@@ -22,7 +22,9 @@ import { Empty, Spinner } from './Spinner';
 import { ChatBubble } from './ai/ChatBubble';
 import { TraceExplainNudge } from './ai/TraceExplainNudge';
 import { useChatThread } from './ai/useChatThread';
-import { useStickToBottom } from './ai/stickToBottom';
+import { useStickToBottomState } from './ai/stickToBottom'; // v0.10.1137 — atBottom → "↓ En alta"
+import { CosreSidebar } from './ai/CosreSidebar'; // v0.10.1137 — /cosre sol kenar çubuğu
+import { readSidebarCollapsed, writeSidebarCollapsed } from './ai/chatHistoryGroups';
 import { chatInputSubmitKey, autoGrowTextarea, CHAT_INPUT_MAX_PX } from './ai/chatInputKey';
 import { useNameCompletion } from './ai/useNameCompletion'; // v0.10.687 — D4 ad tamamlama
 import { NameCompletionPopup } from './ai/NameCompletionPopup';
@@ -324,10 +326,15 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
   const [showHistory, setShowHistory] = useState(false);
   const [threads, setThreads] = useState<AiConversationSummary[] | undefined>(undefined);
   const [histErr, setHistErr] = useState('');
+  // v0.10.1137 — /cosre kenar çubuğu listeyi hep gösterir: yeni konuşma
+  // saklanınca (sunucu kimlik basınca) liste bir kez yenilenir ve eski liste
+  // yenilenirken EKRANDA kalır (yükleniyor göstergesi yalnız ilk açılışta).
+  // Çekmecede davranış aynen: yalnız açılışta.
+  const listKey = isPage ? (conversationId ?? '') : '';
   useEffect(() => {
     if (!open) return;
     let alive = true;
-    setThreads(undefined);
+    if (!isPage) setThreads(undefined);
     setHistErr('');
     api.aiConversations()
       .then(t => { if (alive) setThreads(t ?? []); })
@@ -335,7 +342,16 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
         if (alive) { setThreads([]); setHistErr(e instanceof Error ? e.message : String(e)); }
       });
     return () => { alive = false; };
-  }, [open]);
+  }, [open, isPage, listKey]);
+  // v0.10.1137 — kenar çubuğu: daraltma (localStorage) + telefonda çekmece.
+  const [sideCollapsed, setSideCollapsed] = useState<boolean>(() => readSidebarCollapsed());
+  const [sideMobile, setSideMobile] = useState(false);
+  const toggleSide = () => {
+    const narrow = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+      && window.matchMedia('(max-width: 640px)').matches;
+    if (narrow) { setSideMobile(v => !v); return; }
+    setSideCollapsed(v => { writeSidebarCollapsed(!v); return !v; });
+  };
 
   const openThread = async (t: AiConversationSummary) => {
     try {
@@ -390,7 +406,7 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
 
 
   // v0.10.650 — yalnız dipteyken yapış (stickToBottom.ts); soru gönderimi pin'ler.
-  const pinBottom = useStickToBottom(scrollRef, [turns, open]);
+  const { pin: pinBottom, atBottom } = useStickToBottomState(scrollRef, [turns, open]);
   // v0.10.702 — VERİ çipleri: takımın en kötü servisi + o servisin en çok
   // hata alan yolu (sunucu, 60 s). Yalnız çekmece açık + sohbet boşken.
   const dataStarters = useCopilotStarters(drawerOpen && enabled === true && turns.length === 0);
@@ -518,9 +534,12 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
                   {profiles.filter(p => p.id !== defaultProfile).map(p => <option key={p.id} value={p.id}>{p.label || p.id}{p.model ? ` · ${p.model}` : ''}</option>)}
                 </select>
               )}
-              <Button variant="ghost" size="sm" onClick={() => setShowHistory(h => !h)}
-                aria-expanded={showHistory}
-                title="Konuşma geçmişi">🕘 Geçmiş</Button>
+              {/* v0.10.1137 — /cosre'de geçmiş sol kenar çubuğunda; düğme yalnız çekmecede. */}
+              {!isPage && (
+                <Button variant="ghost" size="sm" onClick={() => setShowHistory(h => !h)}
+                  aria-expanded={showHistory}
+                  title="Konuşma geçmişi">🕘 Geçmiş</Button>
+              )}
               {!isPage && (
                 <Button variant="ghost" size="sm" onClick={() => setExpanded(e => !e)}
                   title={expanded ? 'Daralt' : 'Genişlet'}>
@@ -553,7 +572,7 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
               sayısı. Satıra tıklamak konuşmayı YÜKLER; satır sonundaki
               quiet-destructive düğme onaydan sonra siler. Yükleniyor /
               hata / boş üç hâlin hepsi çizilir (ev kuralı: boş panel yok). */}
-          {showHistory && (
+          {showHistory && !isPage && (
             <div style={{
               borderBottom: '1px solid var(--divider)', background: 'var(--bg1)',
               maxHeight: 240, overflowY: 'auto',
@@ -627,7 +646,12 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
             </div>
           ) : (<>
           {/* Messages */}
-          <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: 'var(--sp-7)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {/* v0.10.1137 — okuma sütunu (/cosre'de ≤760px), role=log + aria-live:
+              akan cevap ekran okuyucuya bitince okunur (aria-busy). */}
+          <div className="cm-thread-wrap">
+          <div ref={scrollRef} className="cm-thread" role="log" aria-live="polite" aria-busy={busy} aria-label="CoSRE sohbeti"
+            style={{ flex: 1, overflowY: 'auto' }}>
+            <div className="cm-thread__col">
             {turns.length === 0 && (
               <div style={{ color: 'var(--text3)', fontSize: 12 }}>
                 {/* Karşılama (v0.9.528) — LLM çağrısı YOK; ad
@@ -698,13 +722,20 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
             {turns.map((t, i) => (
               <ChatBubble key={i} turn={t} onRetry={i === turns.length - 1 && t.error && !busy ? retry : undefined} />
             ))}
+            </div>
+          </div>
+          {/* v0.10.1137 — kullanıcı yukarı kaydırdıysa yapışma bırakılır; düğme dibe indirir ve yeniden yapıştırır. */}
+          {!atBottom && turns.length > 0 && (
+            <Button variant="secondary" size="sm" className="cm-jump" onClick={pinBottom}
+              title="En son mesaja in" aria-label="En alta in">↓ En alta</Button>
+          )}
           </div>
 
           {/* Follow-up çipleri (v0.9.163; v0.9.411 konuya-duyarlı) —
               guided cevap kendi rotasından öneri getirirse onlar,
               yoksa statik drill-down listesi. */}
           {showFollowups && (
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', padding: '0 var(--sp-7) 8px' }}>
+            <div className="cm-followups">
               {(last.suggestions?.length ? last.suggestions : FOLLOWUPS).map(q => (
                 <Chip key={q} pill onClick={() => submit(q)}>↳ {q}</Chip>
               ))}
@@ -712,9 +743,10 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
           )}
 
           {/* Composer */}
-          <form
-            onSubmit={e => { e.preventDefault(); submit(input); }}
-            style={{ display: 'flex', gap: 8, padding: 'var(--sp-5) var(--sp-7)', borderTop: '1px solid var(--divider)' }}>
+          {/* v0.10.1137 — composer: gölgeli tek kutu (metin + gönder/durdur), okuma sütunuyla hizalı. */}
+          <form className="cm-composer"
+            onSubmit={e => { e.preventDefault(); submit(input); }}>
+            <div className="cm-composer__box">
             {/* v0.10.664 — <textarea>: Enter gönderir, Shift+Enter yeni satır (stack
                 trace / SQL yapıştırılabilir); akarken KİLİTLİ DEĞİL — gönderim
                 mevcut akışı durdurup yeni soruyu gönderir (useChatThread). */}
@@ -747,12 +779,9 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
                 aria-controls="chat-complete"
                 aria-expanded={completion.open}
                 aria-activedescendant={completion.open ? `chat-complete-${completion.highlight}` : undefined}
-                style={{
-                  flex: 1, padding: '7px 10px', fontSize: 13, lineHeight: '18px',
-                  background: 'var(--bg)', color: 'var(--text)', fontFamily: 'inherit',
-                  border: '1px solid var(--border)', borderRadius: 6,
-                  resize: 'none', maxHeight: CHAT_INPUT_MAX_PX, overflowY: 'auto',
-                }} />
+                className="cm-composer__input"
+                aria-label="CoSRE'ye mesaj"
+                style={{ maxHeight: CHAT_INPUT_MAX_PX }} />
             </div>
             {/* v0.10.23 — DURDUR. AbortController zaten kuruluydu ama
                 hiçbir affordance'a bağlı değildi; yerel gemma4 tek GPU'da
@@ -770,6 +799,7 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
                 Gönder
               </Button>
             )}
+            </div>
           </form>
           </>)}
   </>);
@@ -779,11 +809,24 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
       <ChatLinkNewTabContext.Provider value>
         <div className="cosre-page">
           <header className="cosre-page__head">
+            {/* v0.10.1137 — ☰: genişte kenar çubuğunu daraltır/açar, telefonda çekmeceyi açar. */}
+            <IconButton variant="ghost" size="sm" className="cosre-page__menu" icon="☰"
+              aria-label={sideCollapsed ? 'Konuşma listesini göster' : 'Konuşma listesini gizle'}
+              aria-controls="cosre-side" aria-expanded={sideMobile || !sideCollapsed}
+              onClick={toggleSide} />
             {headerNode}
           </header>
-          <main className="cosre-page__body">
-            {bodyNode}
-          </main>
+          <div className="cosre-page__main">
+            <CosreSidebar threads={threads} error={histErr} activeId={conversationId}
+              collapsed={sideCollapsed} mobileOpen={sideMobile}
+              onNew={() => { clearAll(); setSideMobile(false); }}
+              onOpen={t => { setSideMobile(false); void openThread(t); }}
+              onDelete={t => void removeThread(t)}
+              onCloseMobile={() => setSideMobile(false)} />
+            <main className="cosre-page__body">
+              {bodyNode}
+            </main>
+          </div>
         </div>
       </ChatLinkNewTabContext.Provider>
     );

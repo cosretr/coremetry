@@ -1,4 +1,4 @@
-import { Fragment, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { Component, Fragment, createContext, memo, useContext, useMemo, useState, type ErrorInfo, type ReactNode } from 'react';
 import { chatErrorText } from './chatErrorText';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AIFeedbackButtons } from './AIFeedbackButtons';
@@ -7,128 +7,243 @@ import { ChatTraceList } from './ChatTraceList'; // v0.10.688 — trace_list blo
 import { evidenceBlocks } from '@/lib/chatEvidence'; // v0.10.558
 import { EvidenceCard } from './EvidenceCard';
 import { parseAction, actionVisible, applyActionHref } from '@/lib/pageActions';
-import { escapeHTML } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import type { ChatTurn, ChatStepDetail, ChatTypedBlock } from '@/lib/types';
 import { traceHref } from '@/lib/traceHref';
 import { isPlainLeftClick } from '@/lib/a11y'; // v0.10.1105
 import { CosreChart, type CosreChartSpec } from '@/components/CosreChart';
-import { parseChatBlocks, type ChatBlock } from './chatMarkdown';
+import {
+  chatPlainText, parseChatBlocks, codeLineCount, definitionRows, diffLineKind, sanitizeFileName,
+  CALLOUT_LABEL, CODE_COLLAPSE_LINES, type CalloutVariant, type ChatBlock,
+} from './chatMarkdown';
+import { parseInline, inlinePlain, type InlineNode } from './chatInline'; // v0.10.1137
+import { buildLinkPolicy, classifyLink, EMPTY_POLICY, hostOf, toAppPath, UNVERIFIED_TITLE, type LinkPolicy } from './chatLinks'; // v0.10.1137
 import { parseStepPreview, fmtPreviewBytes } from './stepPreview';
 import { DisclosureButton } from '@/components/ui/DisclosureButton';
 import { Chip } from '@/components/ui/Chip';
 import { summarizeSteps, parseToolError, previewFirstLine, visibleRows, isDeadlineError, fmtMs, VISIBLE_ROWS, sourceStates, stateUnknown, stepRunning, toolErrorLabel } from './toolSteps';
 import { StateBadges } from './StateBadges'; // v0.10.948 — paylaşılan durum rozetleri
 import { chatLinkTargetProps, useChatLinkNewTab } from './chatLinkTarget'; // v0.10.1125 — /cosre yeni sekme
-import { sourceChips } from './sourceChips'; // v0.10.1127 — hedef başına tek kaynak çipi
+import { sourceChips, type SourceChip } from './sourceChips'; // v0.10.1127 — hedef başına tek kaynak çipi
 
 // ChatBubble — bir sohbet turunun ÇİZİMİ. v0.9.479'da CopilotChat.tsx'ten
 // buraya taşındı: AI çekmecesi içindeki sohbet (AIDrawer) aynı balonu
-// kullanır — ikinci bir chat implementasyonu YOK. Taşıma sırasında
-// davranış değişmedi (mdLite/renderMessage/balon gövdesi birebir);
-// yalnız `Turn` tipi lib/types.ts'teki paylaşılan ChatTurn oldu.
+// kullanır — ikinci bir chat implementasyonu YOK.
 //
-// Balonun taşıdığı affordance'lar (adım çipleri, RAG kaynakları, derin
-// linkler, kopyala, 👍/👎) böylece çekmeceye de bedelsiz gelir.
+// v0.10.1137 (operatör: "URL'ler tıklanabilir olsun", "Claude gibi profesyonel
+// bir sohbet") — üç değişiklik:
+//   1. SATIR İÇİ ÇİZİM innerHTML DEĞİL. mdLite (escapeHTML → regex → HTML
+//      dizesi) yerini saf düğüm çözücüsüne (chatInline.ts) bıraktı; düğümler
+//      React çocukları olarak basılıyor, yani balonda dangerouslySetInnerHTML
+//      HİÇ yok ve kaçış React'in kendisi. Ham HTML hiçbir koşulda geçmez.
+//   2. LİNKLER güvenlik kararından geçer (chatLinks.ts): aynı-köken yol ya da
+//      sunucunun "kaynakta vardı" dediği adres tıklanır; gerisi tam adresiyle
+//      düz metin + "doğrulanmamış bağlantı". Görsel asla çizilmez.
+//   3. GÖRÜNÜM: asistan cevabı kart değil sayfadaki düz metin (Claude gibi);
+//      [n] atıfları kaynak hapı; adımlar tek "Nasıl cevapladım" açılırında;
+//      kaynaklar altta numaralı liste; eylemler (kopyala / 👍👎) üstüne
+//      gelince.
 
-// mdLite — güvenli hafif markdown: ÖNCE escapeHTML (XSS), sonra 32-hex
-// trace id'leri tıklanabilir link (v0.9.419 — href salt hex'ten kurulur,
-// injection yüzeyi yok; data-nav ile SPA navigate, sayfa yenilenmez ve
-// chat state'i yaşar), sonra `kod` + **kalın**. Satır sonları/madde
-// tireleri container'ın white-space:pre-wrap'ıyla korunur.
-export function mdLite(raw: string): string {
-  return escapeHTML(raw)
-    // v0.9.1352 — href traceHref üreticisinden. Girdi zaten 32-hex'e
-    // kısıtlı (injection yüzeyi yok, v0.9.419), yani bu bir güvenlik
-    // düzeltmesi DEĞİL: amaç, depoda /trace yolunu heceleyen tek yerin
-    // üretici olması — kaynak-tarama kapısı buna yaslanıyor.
-    .replace(/\b[0-9a-f]{32}\b/g, m => `<a href="${traceHref(m)}" data-nav="1">${m}</a>`)
-    .replace(/`([^`\n]+)`/g, '<code>$1</code>')
-    .replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>');
+// MdCtx — satır içi çizimin bağlamı: link politikası, atıf → kaynak eşlemesi,
+// /cosre yeni-sekme kipi, aynı köken. Bağlamsız çizim (Explain/test) güvenli
+// varsayılanla: hiçbir dış link doğrulanmış sayılmaz.
+interface MdCtx { policy: LinkPolicy; cites: readonly SourceChip[]; newTab: boolean; origin: string }
+const ChatMdContext = createContext<MdCtx>({ policy: EMPTY_POLICY, cites: [], newTab: false, origin: '' });
+
+function currentOrigin(): string {
+  return typeof window !== 'undefined' && window.location ? window.location.origin : '';
 }
 
-// MdInline — satır içi işaretlemenin TEK basım noktası (v0.9.1148).
-//
-// XSS DİSİPLİNİ: dosyada dangerouslySetInnerHTML'in TEK yeri burası ve
-// beslediği tek şey mdLite (yani escapeHTML'den GEÇMİŞ) dizesi. Faz 4.2
-// öncesi aynı çağrı ÜÇ yerde yazılıydı; tablo hücreleri + başlık +
-// liste maddeleri eklenince altı olacaktı. Yeni yüzey açmak yerine
-// mevcut disiplin tek bileşende toplandı: bundan sonra "chat HTML'i
-// nereden basıyor" sorusunun tek cevabı var, ve kapı testi bunu sayıyor.
-//
-// v0.10.1125 (/cosre) — kromsuz sohbet sayfasında mdLite'ın trace id
-// linkleri YENİ SEKMEDE açılır. Dize üreticisi (mdLite) saf ve tek kalır;
-// nitelik commit sonrası yalnız bu basım noktasının kendi <a data-nav>'larına
-// yazılır (href aynı-köken /trace?id=… yolu, değişmez).
+function renderNodes(nodes: readonly InlineNode[], ctx: MdCtx, kp: string): ReactNode[] {
+  return nodes.map((n, i) => {
+    const k = `${kp}${i}`;
+    switch (n.t) {
+      case 'text': return <Fragment key={k}>{n.v}</Fragment>;
+      case 'code': return <code key={k}>{n.v}</code>;
+      case 'strong': return <b key={k}>{renderNodes(n.c, ctx, k + '.')}</b>;
+      case 'em': return <em key={k}>{renderNodes(n.c, ctx, k + '.')}</em>;
+      case 'del': return <del key={k}>{renderNodes(n.c, ctx, k + '.')}</del>;
+      case 'kbd': return <kbd key={k} className="cm-kbd">{n.v}</kbd>;
+      case 'trace':
+        // v0.9.419 — href traceHref üreticisinden; data-nav ile SPA içi gezinme
+        // (ChatBubble onBodyClick). /cosre'de yeni sekme (v0.10.1125).
+        return <a key={k} href={traceHref(n.id)} data-nav="1" {...chatLinkTargetProps(ctx.newTab)}>{n.id}</a>;
+      case 'cite': return <CitePill key={k} n={n.n} ctx={ctx} />;
+      case 'link': return <MdLink key={k} href={n.href} label={n.label} ctx={ctx} k={k} />;
+    }
+    return null;
+  });
+}
+
+// MdLink — v0.10.1137: bağlantının tek çizim noktası; karar chatLinks.classifyLink'te.
+function MdLink({ href, label, ctx, k }: { href: string; label: InlineNode[] | null; ctx: MdCtx; k: string }) {
+  const cls = classifyLink(href, ctx.policy);
+  const labelText = label ? inlinePlain(label) : '';
+  if (cls === 'relative') {
+    // v0.10.1137 inceleme — güvenli SPA yolu (köken WHATWG URL ile karşılaştırılır,
+    // "//evil" / "/\evil" / %2F%2F / %5C reddedilir); çıkmazsa doğrulanmamış metin.
+    const to = toAppPath(href, ctx.origin);
+    if (to) {
+      return (
+        <a href={to} data-nav="1" className="cm-md-a" title={to} {...chatLinkTargetProps(ctx.newTab)}>
+          {label ? renderNodes(label, ctx, k + '.') : to}
+        </a>
+      );
+    }
+    return <span className="cm-md-unverified" title={UNVERIFIED_TITLE}>{label && labelText !== href ? `${labelText} (${href})` : href}</span>;
+  }
+  if (cls === 'allowed') {
+    // Tam adres sunucunun doğrulama listesinde: etiket metni kalır, host ipucunda.
+    const host = hostOf(href);
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer" className="cm-md-a is-ext"
+        title={label && labelText !== href ? `${host} — ${href}` : href}>
+        {label ? renderNodes(label, ctx, k + '.') : href}
+      </a>
+    );
+  }
+  if (cls === 'allowed-host') {
+    // Yalnız host (+ çok kiracılıda ilk yol parçası) tuttu: etiket adresi
+    // GİZLEMEZ — etiketin yanında host ↗ görünür, tam adres ipucunda.
+    const host = hostOf(href);
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer" className="cm-md-a is-host" title={href}>
+        {label && labelText !== href ? <>{renderNodes(label, ctx, k + '.')} <span className="cm-md-a-host">({host})</span></> : href}
+      </a>
+    );
+  }
+  if (cls === 'unverified') {
+    // TAM adres görünür: doğrulanmamış bir host için yanıltıcı çapa metni yok.
+    return (
+      <span className="cm-md-unverified" title={UNVERIFIED_TITLE}>
+        {label && labelText !== href ? `${labelText} (${href})` : href}
+      </span>
+    );
+  }
+  // blocked (javascript:, data:, //host …) — asla link; yalnız etiket metni.
+  return <>{label ? renderNodes(label, ctx, k + '.') : href}</>;
+}
+
+// CitePill — [n] atfı: kaynak listesindeki n. kaynağa eşlenir (sunucu bağlam
+// numarasını "Kaynak n" sırasıyla verir, chat_sources.go sourceNumbers).
+// Eşleşme yoksa işaret olduğu gibi metin kalır (uydurma numara hap olmaz).
+function CitePill({ n, ctx }: { n: number; ctx: MdCtx }) {
+  const src = n >= 1 ? ctx.cites[n - 1] : undefined;
+  if (!src) return <>[{n}]</>;
+  const tip = `${src.name}${src.host ? ` · ${src.host}` : ''}`;
+  return (
+    <sup className="cm-cite">
+      {src.href ? (
+        <a href={src.href} target="_blank" rel="noopener noreferrer" data-tip={tip}
+          aria-label={`Kaynak ${n}: ${src.name}`}>{n}</a>
+      ) : (
+        <span tabIndex={0} data-tip={tip} aria-label={`Kaynak ${n}: ${src.name}`}>{n}</span>
+      )}
+    </sup>
+  );
+}
+
+// MdInline — satır içi işaretlemenin TEK basım noktası. Satır içi SPAN: akış
+// imleci metne yapışık durur (ChatBubble.render.test.tsx).
 function MdInline({ text }: { text: string }) {
-  const newTab = useChatLinkNewTab();
-  const ref = useRef<HTMLSpanElement>(null);
-  useLayoutEffect(() => {
-    if (!newTab || !ref.current) return;
-    ref.current.querySelectorAll('a[data-nav]').forEach(a => {
-      a.setAttribute('target', '_blank');
-      a.setAttribute('rel', 'noopener');
-    });
-  }, [newTab, text]);
-  return <span ref={ref} dangerouslySetInnerHTML={{ __html: mdLite(text) }} />;
+  const ctx = useContext(ChatMdContext);
+  const nodes = useMemo(() => parseInline(text), [text]);
+  return <span>{renderNodes(nodes, ctx, 'i')}</span>;
 }
 
-// CodeBlock (v0.9.1148) — ``` fence'inin çizimi. Gövde React ÇOCUĞU
-// olarak basılıyor, mdLite'tan GEÇMİYOR: kod literaldir (React kendi
-// kaçışını yapar) ve `**` ya da `` ` `` içeren bir SQL parçası
-// biçimlenmemeli.
+// CodeBlock (v0.9.1148; v0.10.1137 dosya bloğu) — ``` fence'inin çizimi.
+// Gövde React ÇOCUĞU olarak basılıyor, satır içi çözücüden GEÇMİYOR: kod
+// literaldir. v0.10.1137: başlık şeridinde dosya adı (bilgi dizesinin
+// title=/lang:yol kısmı) + dil + Kopyala + İndir; satır numaraları CSS
+// sayacıyla (kopyalanan/seçilen metne karışmaz); 25 satırı aşan blok
+// "Tümünü göster (N satır)" arkasında; diff satırları +/- renkli; uzun
+// satırlar düğmeyle sarılır, yoksa yatay kayar.
 //
-// Kopyala butonu yalnız çit KAPANDIYSA görünür: yarım bir bloğu
-// kopyalatmak, operatörün sessizce eksik bir komut çalıştırması demek.
-// Butonun YOKLUĞU tek başına sessiz bir sinyal olurdu, o yüzden başlık
-// şeridi durumu YAZIYOR: akarken "yazılıyor…", akış bitmiş ama çit hiç
-// kapanmamışsa "kesildi" (Faz 1.5'in truncation sözlüğü). İkinci hâlde
-// "yazılıyor" demek yalan olurdu.
-function CodeBlock({ lang, code, open, streaming }: {
-  lang: string; code: string; open: boolean; streaming: boolean;
+// Kopyala/İndir yalnız çit KAPANDIYSA görünür: yarım bir bloğu kopyalatmak,
+// operatörün sessizce eksik bir komut çalıştırması demek. Başlık şeridi
+// durumu YAZIYOR: akarken "yazılıyor…", akış bitmiş ama çit hiç
+// kapanmamışsa "kesildi".
+function CodeBlock({ lang, code, open, streaming, title }: {
+  lang: string; code: string; open: boolean; streaming: boolean; title?: string;
 }) {
   const [copied, setCopied] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [wrap, setWrap] = useState(false);
   const copy = () => {
     navigator.clipboard?.writeText(code).then(() => {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1400);
     }).catch(() => {});
   };
+  const download = () => {
+    try {
+      const url = URL.createObjectURL(new Blob([code], { type: 'text/plain;charset=utf-8' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = sanitizeFileName(title, lang);
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch { /* indirme desteklenmiyor — sessiz */ }
+  };
+  const total = codeLineCount(code);
+  const collapsible = !open && total > CODE_COLLAPSE_LINES;
+  const lines = code.split('\n');
+  const shown = collapsible && !expanded ? lines.slice(0, CODE_COLLAPSE_LINES) : lines;
+  const isDiff = lang === 'diff' || lang === 'patch';
+  const numbered = total > 1;
   return (
-    <div className="cm-md-code">
+    <div className={`cm-md-code${title ? ' is-file' : ''}`}>
       <div className="cm-md-code-h">
-        <span className="cm-md-code-lang">{lang || 'kod'}</span>
+        {title && <span className="cm-md-code-file" title={title}>{title}</span>}
+        <span className="cm-md-code-lang">{lang || (title ? '' : 'kod')}</span>
         {open && <span className="cm-md-code-st">{streaming ? 'yazılıyor…' : 'kesildi'}</span>}
         {!open && (
-          <Button variant="ghost" size="sm" onClick={copy}
-            title="Kodu kopyala" aria-label="Kod bloğunu kopyala"
-            className={copied ? 'is-ok' : undefined}
-            style={{ padding: '0 6px', fontSize: 12 }}>
-            {copied ? '✓' : '⧉'}
-          </Button>
+          <span className="cm-md-code-acts">
+            <Button variant="ghost" size="xs" onClick={() => setWrap(w => !w)} aria-pressed={wrap}
+              title={wrap ? 'Uzun satırları kaydır' : 'Uzun satırları sar'}>{wrap ? '↔' : '↩'}</Button>
+            {(title || total >= 10) && (
+              <Button variant="ghost" size="xs" onClick={download}
+                title={`İndir: ${sanitizeFileName(title, lang)}`} aria-label="Kod bloğunu indir">⤓ İndir</Button>
+            )}
+            <Button variant="ghost" size="xs" onClick={copy}
+              title="Kodu kopyala" aria-label="Kod bloğunu kopyala"
+              className={copied ? 'is-ok' : undefined}>
+              {copied ? '✓' : '⧉ Kopyala'}
+            </Button>
+          </span>
         )}
       </div>
-      <pre>{code}</pre>
+      {numbered || isDiff ? (
+        <pre className={[numbered ? 'is-num' : '', wrap ? 'is-wrap' : ''].filter(Boolean).join(' ') || undefined}><code>
+          {shown.map((l, i) => {
+            const dk = isDiff ? diffLineKind(l) : null;
+            return <span key={i} className={dk ? `cm-cl is-${dk}` : 'cm-cl'}>{l}{i < shown.length - 1 ? '\n' : ''}</span>;
+          })}
+        </code></pre>
+      ) : (
+        <pre className={wrap ? 'is-wrap' : undefined}>{code}</pre>
+      )}
+      {collapsible && (
+        <div className="cm-md-code-more">
+          <DisclosureButton anatomy="row" expanded={expanded} onClick={() => setExpanded(v => !v)}>
+            {expanded ? 'Daralt' : `Tümünü göster (${total} satır)`}
+          </DisclosureButton>
+        </div>
+      )}
     </div>
   );
 }
 
-// MdTable (v0.9.1148) — markdown tablosu GERÇEK tablo.
-//
-// useDataTable YOK ve bu bilinçli: primitif tipli bir COLS dizisi
-// (sortValue/numeric) istiyor, buradaki kolonlar ise modelin o cevapta
-// uydurduğu başlıklar — sıralama/yeniden boyutlandırma anlamsız,
-// storageKey'i olmayan bir tablo layout'u da kalıcılaştırılamaz. Görsel
-// dil yine paylaşılıyor: kaydırma kabı `.table-wrap` (yatay taşma
-// TABLONUN kabında kalır, sayfa gövdesi yana kaymaz — v0.9.1078 dersi),
-// hizalama `.num` (sağ + tabular-nums), gerisi `.cm-md-table` remap'i.
+// MdTable (v0.9.1148) — markdown tablosu GERÇEK tablo (sohbet markdown'ı
+// tablo standardından muaf: kolonlar modelin o cevapta uydurduğu başlıklar).
+// Kaydırma kabı `.table-wrap` (yatay taşma TABLONUN kabında), hizalama
+// `.num`, zebra + kenarlık `.cm-md-table`.
 function MdTable({ block }: { block: Extract<ChatBlock, { kind: 'table' }> }) {
   const cls = (i: number) => (block.align[i] === 'right' ? 'num' : block.align[i] === 'center' ? 'ta-c' : undefined);
-  // 100+ satır kuralı (ev kısıtı) BURADA DA geçerli: tool sonucu geniş
-  // dönerse model 200 satırlık bir tablo yazabiliyor ve balon o zaman
-  // sayfanın en pahalı düğümü olur. Sanallaştırma yanlış araç (satır
-  // yüksekliği içerikle değişiyor, kaydırma da sayfada), content-visibility
-  // ise bedelsiz: görünmeyen satır layout'a girmez.
+  // 100+ satır kuralı (ev kısıtı): content-visibility bedelsiz.
   const heavy = block.rows.length > 100;
   const rowStyle = heavy
     ? { contentVisibility: 'auto' as const, containIntrinsicSize: '26px' }
@@ -151,47 +266,102 @@ function MdTable({ block }: { block: Extract<ChatBlock, { kind: 'table' }> }) {
   );
 }
 
-const H_TAG = { 1: 'h4', 2: 'h5', 3: 'h6' } as const;
+// v0.10.1137 — dört kademe; etiket h4–h6 (cevap sayfanın başlık
+// hiyerarşisini ele geçirmez), görsel ölçek sınıftan (.cm-md-h1…h4).
+const H_TAG = { 1: 'h4', 2: 'h5', 3: 'h6', 4: 'h6' } as const;
+const CALLOUT_ICON: Record<CalloutVariant, string> = {
+  summary: '≡', note: 'ℹ', tip: '💡', warning: '⚠', important: '❗', caution: '⛔',
+};
+const Caret = () => <span className="cm-ai-cursor" aria-hidden="true" />;
 
-// renderMessage (v0.9.183, Faz 4.2'de blok çözücüye geçti) — asistan
-// metnini çizer: düz metin koşuları mdLite ile (SATIR İÇİ span, balonun
-// pre-wrap'ı ve akış imlecinin metne YAPIŞIK durması bu yüzden bozulmaz),
-// tablo/fence/başlık/liste blok öğeleriyle, ```chart``` blokları canlı
-// <CosreChart> ile.
-//
-// `streaming` = tur akıyor (turn.pending). Çözücüye geçiyor çünkü yarım
-// satır kararı orada (chatMarkdown.ts). Chart bloğunun akış davranışı:
-//   akıyor + kapanmamış → "grafik hazırlanıyor" satırı. Eskiden ham JSON
-//     düzyazı olarak akıyordu (mdLite yolu) — operatöre gösterilecek bir
-//     şey değil.
-//   bitti + kapanmamış (yanıt KESİLDİ) → kod bloğu. İçeriği yutmak,
-//     kesildiğini göstermekten kötü.
-//   kapandı + geçerli spec → grafik. Kapandı + bozuk → atlanır
-//     (v0.9.183 kararı, aynen korundu: deterministik üreticinin bozuk
-//     çıktısı operatörün sorunu değil).
-export function renderMessage(text: string, streaming = false, typed?: ChatTypedBlock[]) {
-  // v0.10.541 — tipli chart blokları varsa fence grafikleri ÇİZİLMEZ (aynı grafik,
-  // mutlak pencereli hâli aşağıda); arşiv turn'ü blok taşımaz → fence yine çizilir.
-  const typedCharts = chartBlocks(typed);
-  const blocks = parseChatBlocks(text, streaming);
+// Paragraflar: boş satırla ayrılan koşular <p>; tek satır sonu pre-wrap ile
+// korunur. İmleç SON paragrafın içinde, metne yapışık.
+function renderText(text: string, key: string, caret: boolean): ReactNode {
+  const paras = text.split(/\n[ \t]*\n+/);
+  return (
+    <Fragment key={key}>
+      {paras.map((p, i) => {
+        // v0.10.1137 — "**Anahtar:** değer" satırları tanım listesi.
+        const rows = !(caret && i === paras.length - 1) ? definitionRows(p) : null;
+        if (rows) {
+          return (
+            <dl key={i} className="cm-md-dl">
+              {rows.map((r, k) => (
+                <Fragment key={k}><dt><MdInline text={r.key} /></dt><dd><MdInline text={r.value} /></dd></Fragment>
+              ))}
+            </dl>
+          );
+        }
+        return (
+        <p key={i} className="cm-md-p">
+          <MdInline text={p} />
+          {caret && i === paras.length - 1 && <Caret />}
+        </p>
+        );
+      })}
+    </Fragment>
+  );
+}
+
+function renderBlocks(blocks: readonly ChatBlock[], streaming: boolean, typedCharts: unknown[], caret: boolean, kp: string): ReactNode[] {
   const out: ReactNode[] = [];
-  blocks.forEach((b, i) => {
+  blocks.forEach((b, idx) => {
+    const i = `${kp}${idx}`;
+    const last = idx === blocks.length - 1;
     switch (b.kind) {
       case 'text':
-        out.push(<MdInline key={i} text={b.text} />);
+        out.push(renderText(b.text, i, caret && last));
+        if (caret && last) caret = false;
         break;
       case 'heading': {
-        // h1-h3 DEĞİL: balon sayfanın içinde bir kutu, başlık hiyerarşisini
+        // h1-h3 DEĞİL: cevap sayfanın içinde bir bölüm, başlık hiyerarşisini
         // ele geçirmemeli (ekran okuyucu için sayfa özeti bozulur).
         const H = H_TAG[b.level];
         out.push(<H key={i} className={`cm-md-h cm-md-h${b.level}`}><MdInline text={b.text} /></H>);
         break;
       }
+      case 'hr':
+        out.push(<hr key={i} className="cm-md-hr" />);
+        break;
+      case 'callout':
+        out.push(
+          <div key={i} className={`cm-callout is-${b.variant}`} role={b.variant === 'warning' || b.variant === 'caution' ? 'note' : undefined}>
+            <div className="cm-callout__h">
+              <span className="cm-callout__i" aria-hidden="true">{CALLOUT_ICON[b.variant]}</span>
+              <span>{CALLOUT_LABEL[b.variant]}</span>
+              {b.title && <span className="cm-callout__t"><MdInline text={b.title} /></span>}
+            </div>
+            <div className="cm-callout__b">{renderBlocks(b.blocks, streaming, typedCharts, caret && last, i + '.')}</div>
+          </div>
+        );
+        if (caret && last) caret = false;
+        break;
+      case 'details':
+        out.push(
+          <details key={i} className="cm-md-details" open={b.open || (streaming && !b.closed) || undefined}>
+            <summary><MdInline text={b.summary} /></summary>
+            <div className="cm-md-details__b">{renderBlocks(b.blocks, streaming, typedCharts, false, i + '.')}</div>
+          </details>
+        );
+        break;
+      case 'quote':
+        out.push(<blockquote key={i} className="cm-md-quote">{renderBlocks(b.blocks, streaming, typedCharts, false, i + '.')}</blockquote>);
+        break;
       case 'list': {
         const L = b.ordered ? 'ol' : 'ul';
         out.push(
-          <L key={i} className="cm-md-list">
-            {b.items.map((it, k) => <li key={k}><MdInline text={it} /></li>)}
+          <L key={i} className="cm-md-list" start={b.ordered ? b.start : undefined}>
+            {b.items.map((it, k) => (
+              <li key={k} className={b.tasks?.[k] != null ? 'is-task' : undefined}>
+                {b.tasks?.[k] != null && (
+                  // Salt-okunur görev kutusu (GFM): tıklanamaz, durum aria'da.
+                  <input type="checkbox" className="cm-task" checked={!!b.tasks[k]} readOnly disabled
+                    aria-label={b.tasks[k] ? 'tamamlandı' : 'yapılacak'} />
+                )}
+                <MdInline text={it} />
+                {b.nested?.[k] && renderBlocks(b.nested[k] as ChatBlock[], streaming, typedCharts, false, `${i}.${k}.`)}
+              </li>
+            ))}
           </L>
         );
         break;
@@ -214,7 +384,7 @@ export function renderMessage(text: string, streaming = false, typed?: ChatTyped
             break;
           }
         }
-        out.push(<CodeBlock key={i} lang={b.lang} code={b.code} open={b.open} streaming={streaming} />);
+        out.push(<CodeBlock key={i} lang={b.lang} code={b.code} open={b.open} streaming={streaming} title={b.title} />);
         break;
       }
       case 'table':
@@ -222,12 +392,26 @@ export function renderMessage(text: string, streaming = false, typed?: ChatTyped
         break;
     }
   });
-  // Yedek dal İÇERİK YOKLUĞUNA bakıyor, ÇIKTI yokluğuna değil. Fark
-  // gerçek: bozuk bir chart bloğu bilinçli olarak ATLANIYOR ve o hâlde
-  // `out` boş kalır — `out.length`e bakan bir koşul o an balonun HAM
-  // markdown'ını (çitler dahil) ekrana dökerdi. Yedek yalnız "hiç blok
-  // çıkmadı" (boş/yalnız-boşluk metin) hâli için var.
-  return blocks.length === 0 ? <MdInline text={text} /> : <>{out}</>;
+  if (caret) out.push(<Caret key={`${kp}caret`} />);
+  return out;
+}
+
+// renderMessage (v0.9.183, Faz 4.2'de blok çözücüye geçti) — asistan
+// metnini çizer: paragraflar, başlık/liste (iç içe)/alıntı/çizgi/tablo/kod
+// blokları, ```chart``` blokları canlı <CosreChart> ile. `streaming` =
+// tur akıyor (turn.pending): yarım satır kararı çözücüde, imleç burada
+// (son metnin içinde).
+// Chart bloğunun akış davranışı:
+//   akıyor + kapanmamış → "grafik hazırlanıyor" satırı;
+//   bitti + kapanmamış (yanıt KESİLDİ) → kod bloğu (içerik yutulmaz);
+//   kapandı + geçerli spec → grafik; kapandı + bozuk → atlanır (v0.9.183).
+export function renderMessage(text: string, streaming = false, typed?: ChatTypedBlock[]) {
+  // v0.10.541 — tipli chart blokları varsa fence grafikleri ÇİZİLMEZ.
+  const typedCharts = chartBlocks(typed);
+  const blocks = parseChatBlocks(text, streaming);
+  // Yedek dal İÇERİK YOKLUĞUNA bakıyor (bozuk chart bloğu bilinçli atlanır).
+  if (blocks.length === 0) return <>{streaming && <Caret />}</>;
+  return <>{renderBlocks(blocks, streaming, typedCharts, streaming, 'b')}</>;
 }
 
 
@@ -332,7 +516,7 @@ function ToolEvidence({ d }: { d: ChatStepDetail }) {
       {/* v0.9.1228 — çağrının ürün görünümü: sunucunun K4-denetimli
           haritasından gelir (model metninden asla), yoksa çizilmez. */}
       {d.href && (
-        <a className="sec" href={d.href} target="_blank" rel="noopener"
+        <a className="sec" href={d.href} target="_blank" rel="noopener noreferrer"
           style={{ fontSize: 10.5, padding: '2px 8px', marginBottom: 4, display: 'inline-block' }}>
           ↗ Üründe aç
         </a>
@@ -493,7 +677,109 @@ export function ToolStepsPanel({ details: allDetails, error, turnDone, evId, set
   );
 }
 
-export function ChatBubble({ turn, onRetry }: { turn: ChatTurn; onRetry?: () => void }) {
+
+// StepsDisclosure — v0.10.1137: adım çipleri + şeffaflık paneli TEK, sessiz
+// bir "Nasıl cevapladım · N adım" açılırında (Claude'un "düşünce" şeridi gibi).
+// Akış sürerken AÇIK (ilerleme görünür), tur bitince KENDİLİĞİNDEN kapanır —
+// operatör elle açtı/kapattıysa onun seçimi kalır. `initialOpen` test dikişi.
+function StepsDisclosure({ turn, evId, setEvId, initialOpen }: {
+  turn: ChatTurn; evId: number | null; setEvId: (i: number | null) => void; initialOpen?: boolean;
+}) {
+  const [userOpen, setUserOpen] = useState<boolean | null>(initialOpen ?? null);
+  const open = userOpen ?? !!turn.pending;
+  const n = turn.steps?.length ?? 0;
+  return (
+    <div className="cm-how">
+      <DisclosureButton anatomy="row" expanded={open} onClick={() => setUserOpen(!open)}
+        className="cm-how__btn" title="Bu cevap için çalıştırılan adımlar ve kanıtları">
+        Nasıl cevapladım · {n} adım{turn.pending ? ' · sürüyor…' : ''}
+      </DisclosureButton>
+      {open && (
+        <div className="cm-how__body">
+          {n > 0 && (
+            <ToolChips steps={turn.steps ?? []} details={turn.stepDetails} hasText={!!turn.text} turnDone={!turn.pending} evId={evId} setEvId={setEvId} />
+          )}
+          {/* v0.10.161 — şeffaflık paneli yalnız detay (i'li step) varken; açık kanıt çiplerle ortak. */}
+          {!!turn.stepDetails?.length && (
+            <ToolStepsPanel details={turn.stepDetails} error={turn.error} turnDone={!turn.pending} evId={evId} setEvId={setEvId} />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// SourceList — v0.10.1137: "Kaynak n" çip satırı yerine cevabın altında
+// numaralı "Kaynaklar" listesi (başlık + host); 3'ten fazlası katlanır.
+// Numara = metindeki [n] atfı = sunucunun bağlam numarası.
+function SourceList({ chips }: { chips: readonly SourceChip[] }) {
+  const [all, setAll] = useState(false);
+  const shown = all || chips.length <= 3 ? chips : chips.slice(0, 3);
+  return (
+    <div className="cm-sources" role="group" aria-label="Kaynaklar">
+      <div className="cm-sources__h">Kaynaklar</div>
+      <ol className="cm-sources__list">
+        {shown.map(c => (
+          <li key={c.key} title={c.title}>
+            <span className="cm-sources__n">{c.n}</span>
+            {c.href ? (
+              <a href={c.href} target="_blank" rel="noopener noreferrer" className="cm-sources__t">{c.name}</a>
+            ) : (
+              <span className="cm-sources__t">{c.name}</span>
+            )}
+            {c.host && <span className="cm-sources__host">{c.host}</span>}
+          </li>
+        ))}
+      </ol>
+      {chips.length > 3 && (
+        <DisclosureButton anatomy="row" expanded={all} onClick={() => setAll(v => !v)} className="cm-sources__more">
+          {all ? 'daha az' : `${chips.length - 3} kaynak daha`}
+        </DisclosureButton>
+      )}
+    </div>
+  );
+}
+
+interface ChatBubbleProps {
+  turn: ChatTurn; onRetry?: () => void;
+  /** test dikişi — "Nasıl cevapladım" açılırını tıklamadan açık çizer (statik render). */
+  stepsOpen?: boolean;
+}
+
+// BubbleBoundary — v0.10.1137 inceleme: tek bir cevabın çiziminde beklenmedik
+// bir hata (bozuk/kötü niyetli markdown, özyineleme) bütün sohbet ağacını
+// söküp boş ekran bırakmasın — o balon DÜZ METİN olarak çizilir. Tur değişince
+// (yeni delta / yeni cevap) sınır sıfırlanır ve zengin çizim yeniden denenir.
+interface BoundaryState { hasError: boolean; turn: ChatTurn }
+class BubbleBoundary extends Component<{ turn: ChatTurn; children: ReactNode }, BoundaryState> {
+  state: BoundaryState = { hasError: false, turn: this.props.turn };
+  static getDerivedStateFromError(): Partial<BoundaryState> { return { hasError: true }; }
+  static getDerivedStateFromProps(props: { turn: ChatTurn }, state: BoundaryState): Partial<BoundaryState> | null {
+    if (props.turn !== state.turn) return { hasError: false, turn: props.turn };
+    return null;
+  }
+  componentDidCatch(e: Error, _info: ErrorInfo) {
+    if (typeof console !== 'undefined') console.warn('[cosre] cevap çizimi düz metne düştü:', e?.message);
+  }
+  render() {
+    if (!this.state.hasError) return this.props.children;
+    const t = this.props.turn;
+    return (
+      <div className={t.role === 'user' ? 'cm-msg cm-msg--user' : 'cm-msg cm-msg--ai'} data-fallback="1">
+        <div className={t.role === 'user' ? 'cm-msg-user' : 'cm-msg-ai cm-md-p'}>{t.text ?? ''}</div>
+      </div>
+    );
+  }
+}
+
+// v0.10.1137 inceleme — React.memo: akış sırasında yalnız SON tur değişir
+// (useChatThread patchLast diğer turların kimliğini korur); tamamlanmış
+// balonlar yeniden çizilmez, çözücü yalnız akan mesajda koşar.
+export const ChatBubble = memo(function ChatBubble(props: ChatBubbleProps) {
+  return <BubbleBoundary turn={props.turn}><ChatBubbleView {...props} /></BubbleBoundary>;
+});
+
+function ChatBubbleView({ turn, onRetry, stepsOpen }: ChatBubbleProps) {
   const effLinks = mergeBlockLinks(turn.links, turn.blocks); // v0.10.541 — link blokları çiplere katılır
   const isUser = turn.role === 'user';
   const navigate = useNavigate();
@@ -501,13 +787,9 @@ export function ChatBubble({ turn, onRetry }: { turn: ChatTurn; onRetry?: () => 
   const [copied, setCopied] = useState(false);
   // v0.10.161 — açık kanıt kimliği (d.i): çip şeridi ve şeffaflık paneli paylaşır.
   const [evId, setEvId] = useState<number | null>(null);
-  // v0.9.419 — mdLite'ın enjekte ettiği data-nav linkleri (trace id'ler)
-  // SPA içi gider: tam sayfa yenilenmesi efemer chat'i sıfırlardı.
-  // v0.10.1105 (operatör: trace id'ler orta/Ctrl tıkla yeni sekmede açılsın) —
-  // yalnız DÜZ sol tık yakalanır. Eskiden her tıkta preventDefault vardı:
-  // Ctrl/⌘-tık yeni sekme yerine AYNI sekmede gidiyordu. Değiştiricili tık ve
-  // orta tık tarayıcıya kalır (href zaten gerçek /trace?id=… yolu).
-  // v0.10.1125 — /cosre'de (yeni sekme kipi) yakalanmaz: <a target=_blank> tarayıcıya kalır.
+  // v0.9.419 — data-nav linkleri (trace id'ler, aynı-köken yollar) SPA içi
+  // gider: tam sayfa yenilenmesi efemer chat'i sıfırlardı. v0.10.1105 — yalnız
+  // DÜZ sol tık yakalanır. v0.10.1125 — /cosre'de (yeni sekme kipi) yakalanmaz.
   const newTab = useChatLinkNewTab();
   const linkProps = chatLinkTargetProps(newTab);
   const onBodyClick = (e: React.MouseEvent) => {
@@ -517,56 +799,58 @@ export function ChatBubble({ turn, onRetry }: { turn: ChatTurn; onRetry?: () => 
       navigate(a.getAttribute('href') ?? '/');
     }
   };
+  // v0.10.1137 — kopya DÜZ METİN: markdown işaretleri düşer, linkler adresleriyle.
   const copy = () => {
-    navigator.clipboard?.writeText(turn.text ?? '').then(() => {
+    navigator.clipboard?.writeText(chatPlainText(turn.text ?? '')).then(() => {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1400);
     }).catch(() => {});
   };
+  const cites = useMemo(() => sourceChips(turn.sources), [turn.sources]);
+  const mdCtx = useMemo<MdCtx>(() => {
+    const origin = currentOrigin();
+    return {
+      policy: buildLinkPolicy({ allowedLinks: turn.allowedLinks, sources: turn.sources, links: effLinks, origin }),
+      cites, newTab, origin,
+    };
+    // effLinks her render'da yeni dizi; kimliği turn.links/blocks'tan türer.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [turn.allowedLinks, turn.sources, turn.links, turn.blocks, cites, newTab]);
+  // Çözüm + çizim metin/akış/blok kimliğine bağlı (chatMarkdown ayrıca önbellekli).
+  const body = useMemo(
+    () => (turn.text && !isUser ? renderMessage(turn.text, turn.pending, turn.blocks) : null),
+    [turn.text, turn.pending, turn.blocks, isUser],
+  );
   const done = !isUser && !turn.pending && !turn.error && !!turn.text;
+  const hasSteps = !isUser && (!!turn.steps?.length || !!turn.stepDetails?.length);
+
+  if (isUser) {
+    // Operatörün mesajı: sağa yaslı kompakt hap; ham metin (pre-wrap).
+    return (
+      <div className="cm-msg cm-msg--user">
+        <div className="cm-msg-user">
+          {turn.error ? <ChatErrorLine error={turn.error} isUser /> : turn.text}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div style={{ alignSelf: isUser ? 'flex-end' : 'stretch', maxWidth: isUser ? '85%' : '100%' }}>
-      {/* pre-wrap BURADA KALIYOR ve bu, diğer AI yüzeylerinin tersi
-          (orada Markdown blok üretince pre-wrap satır aralığını ikiye
-          katlıyordu — v0.9.641/696). Fark şu: balonun düz metin koşuları
-          bilinçli olarak SATIR İÇİ span (blok değil), çünkü akış imleci
-          metne yapışık durmak zorunda ve kullanıcı balonu da ham metin.
-          Satır sonlarını taşıyan tek şey pre-wrap; kaldırılırsa çok
-          satırlı cevap tek paragrafa yapışır. Blok öğeler (tablo/kod/
-          başlık/liste) kendi margin'lerini `.cm-md-*` üzerinden alıyor. */}
-      {/* v0.10.461 — asistan turu = Explain cevap kartı (`.ai-answer-card`,
-          answerCard.ts): CoSRE çekmecesi ile Explain çekmecesi aynı kartı
-          çizer; gri 85%'lik balon yalnız operatörün kendi mesajı için. */}
-      <div onClick={onBodyClick} className={isUser ? undefined : 'ai-answer-card'} style={isUser ? {
-        padding: '8px 11px', borderRadius: 10, fontSize: 13, lineHeight: 1.5,
-        whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-        // v0.10.920 — dolgu --accent (beyaz ≥4.61); --accent2 bağlantı METNİ tonu, beyaz 2.48 idi.
-        background: 'var(--accent)', color: 'var(--on-accent)', border: 'none',
-      } : { whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-        {/* Tool-call progress chips (assistant only). v0.9.1181 (Faz 4.3):
-            veri gelmişse çip TIKLANABİLİR ve altında kanıt bloğu açılır. */}
-        {!isUser && turn.steps && turn.steps.length > 0 && (
-          <ToolChips steps={turn.steps} details={turn.stepDetails} hasText={!!turn.text} turnDone={!turn.pending} evId={evId} setEvId={setEvId} />
-        )}
-        {/* v0.10.161 — şeffaflık paneli yalnız detay (i'li step) varken; açık kanıt çiplerle ortak. */}
-        {!isUser && !!turn.stepDetails?.length && (
-          <ToolStepsPanel details={turn.stepDetails} error={turn.error} turnDone={!turn.pending} evId={evId} setEvId={setEvId} />
-        )}
-        {isUser ? (
-          turn.error ? <ChatErrorLine error={turn.error} isUser /> : turn.text
-        ) : (<>
+    <ChatMdContext.Provider value={mdCtx}>
+    <div className="cm-msg cm-msg--ai">
+      {/* v0.10.1137 — asistan cevabı kart DEĞİL: sayfadaki düz metin (Claude gibi),
+          küçük marka etiketi. Explain paneli kendi .ai-answer-card'ını korur. */}
+      <div className="cm-msg-ai__who" aria-hidden="true">
+        <img src="/favicon.svg" width={14} height={14} alt="" draggable={false} /> CoSRE
+      </div>
+      <div onClick={onBodyClick} className="cm-msg-ai" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
+        {/* v0.10.1137 — adımlar tek açılırda (akarken açık, bitince kapanır). */}
+        {hasSteps && <StepsDisclosure turn={turn} evId={evId} setEvId={setEvId} initialOpen={stepsOpen} />}
         {turn.text ? (
-          // Asistan metni: hafif markdown (escape'li) + tablo/fence/başlık/
-          // liste blokları (v0.9.1148) + gömülü canlı grafikler (```chart```)
-          // + akış sürüyorsa imleç.
-          //
           // `turn.pending` çözücüye GEÇİYOR: yarım tablo satırı / kapanmamış
-          // çit kararı ona bağlı (chatMarkdown.ts). Bayrağı bağlamayı unutmak
-          // testten geçen ama ekranda titreyen bir render verirdi — bu yüzden
-          // ChatBubble.render.test.tsx bunu pending=true/false çiftiyle
-          // çalışma zamanında ölçüyor ("saf test ≠ BAĞLANMA" dersi).
+          // çit kararı ona bağlı (chatMarkdown.ts); imleç de son metnin içinde.
           <>
-            {renderMessage(turn.text, turn.pending, turn.blocks)}
+            {body}
             {/* v0.10.541 — tipli chart blokları (mutlak pencere; CosreChart fromNs/toNs'i önceler) */}
             {!turn.pending && chartBlocks(turn.blocks).map((spec, i) => <CosreChart key={`blk-${i}`} spec={spec as CosreChartSpec} />)}
             {/* v0.10.558 — kök-neden rotasının yapısal kanıt kartı (operatör mockup onayı) */}
@@ -587,25 +871,15 @@ export function ChatBubble({ turn, onRetry }: { turn: ChatTurn; onRetry?: () => 
                 </div>
               );
             })}
-            {turn.pending && <span className="cm-ai-cursor" />}
-            {/* v0.10.63 — YARIM CEVAP TAM GİBİ OKUNMASIN.
-                `stopped` bayrağı v0.10.23'ten beri YAZILIYOR ama hiçbir yer
-                OKUMUYORDU: operatörün yarıda kestiği cevap, tamamlanmış bir
-                cevaptan ayırt edilemiyordu. Tipin kendi yorumu bile "bayrak
-                yalnız 'cevap yarım' bilgisini taşıyor" diyordu — taşıyordu
-                ama kimseye ulaşmıyordu.
-                Kırmızı DEĞİL: bu bir arıza değil, operatörün kararı. */}
+            {/* v0.10.63 — YARIM CEVAP TAM GİBİ OKUNMASIN (operatörün kararı, kırmızı değil). */}
             {turn.stopped && !turn.pending && (
-              <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6 }}>
+              <div className="cm-msg-note">
                 ⏹ Durduruldu — bu cevap <b>yarım</b> kaldı.
               </div>
             )}
           </>
         ) : null}
-        {/* v0.10.649 — akış ortası `error` AKAN METNİ GİZLEMEZ (ai-ui-patterns #2):
-            sunucu deadline/overflow'da deltalardan SONRA error basabiliyor
-            (copilot_chat.go); eski ternary yalnız ⚠ çiziyor, okunan metni
-            siliyordu. Metin üstte kalır, ⚠ altına iner. */}
+        {/* v0.10.649 — akış ortası `error` AKAN METNİ GİZLEMEZ; ⚠ altına iner. */}
         {turn.error && (
           <div style={{ marginTop: turn.text ? 6 : 0 }}><ChatErrorLine error={turn.error} isUser={false} /></div>
         )}
@@ -613,44 +887,20 @@ export function ChatBubble({ turn, onRetry }: { turn: ChatTurn; onRetry?: () => 
         {turn.error && !turn.pending && onRetry && (
           <div style={{ marginTop: 6 }}><Button variant="secondary" size="sm" onClick={onRetry}>↺ Yeniden dene</Button></div>
         )}
+        {/* v0.10.1137 — ilk token gelene dek "Düşünüyor…" parıltısı. */}
         {!turn.text && !turn.error && turn.pending && (
-          <span style={{ color: 'var(--text3)' }}>yazıyor<span className="cm-ai-cursor" /></span>
+          <span className="cm-thinking">Düşünüyor…</span>
         )}
-        </>)}
       </div>
 
-      {/* Kaynak chip'leri (RAG dayanağı). v0.9.515 (operatör): doküman
-          ADI çipte GÖSTERİLMİYOR — dosya adı iç artefakt, cevabın parçası
-          değil. Çip yine de duruyor ki cevabın bir dokümana dayandığı
-          görünsün; ad ipucuna (hover) taşındı, yani denetlenebilirlik
-          kaybolmadan gürültü kalktı. */}
-      {!isUser && !!turn.sources?.length && !turn.pending && !turn.error && (
-        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
-          {/* v0.10.1127 — hedef başına tek çip ("Kaynak 1", "Kaynak 2"); parça
-              başına özdeş "Kaynak §1" çipleri yığılıyordu (sourceChips.ts). */}
-          {sourceChips(turn.sources).map((c) => c.href ? (
-            <a key={c.key} href={c.href} target="_blank" rel="noopener"
-              className="badge b-info" style={{ textDecoration: 'none', fontSize: 10 }}
-              title={c.title}>
-              📄 {c.label}
-            </a>
-          ) : (
-            <span key={c.key} className="badge b-info" style={{ fontSize: 10 }}
-              title={c.title}>
-              📄 {c.label}
-            </span>
-          ))}
-        </div>
+      {/* v0.10.1137 — Kaynaklar: numaralı liste ([n] atıflarıyla aynı numara). */}
+      {!!turn.sources?.length && !turn.pending && !turn.error && cites.length > 0 && (
+        <SourceList chips={cites} />
       )}
 
-      {/* Derin-link çipleri (v0.9.419) — cevabın konusuna tek tık.
-          Sunucu rotadan deterministik üretir; SPA Link, chat yaşar. */}
-      {/* v0.10.546 — Operator-reported: "servis overview vb. çipler çıkıyor ama
-          kullanıcılar fark etmiyor". İç çipler 10 px `badge b-info` idi (kaynak/model
-          çipleriyle aynı ağırlık, başlıksız). Artık etiketli "Aç →" satırı; iç ve
-          dış çipler aynı boyda, kenarlıklı (.ai-link). Dış URL yine <a target=_blank>
-          (v0.9.709: router path sanıp kırıyordu), iç link SPA <Link>. */}
-      {!isUser && !!effLinks.length && !turn.pending && !turn.error && (
+      {/* Derin-link çipleri (v0.9.419; v0.10.546 etiketli "Aç →" satırı). Dış
+          URL <a target=_blank> (v0.9.709), iç link SPA <Link>. */}
+      {!!effLinks.length && !turn.pending && !turn.error && (
         <div className="ai-links" role="group" aria-label="İlgili sayfalar">
           <span className="ai-links__cap">Aç →</span>
           {effLinks.map((l, i) => (
@@ -667,14 +917,14 @@ export function ChatBubble({ turn, onRetry }: { turn: ChatTurn; onRetry?: () => 
         </div>
       )}
 
-      {/* Aksiyon satırı — copy + thumbs (tamamlanmış asistan cevabı) */}
+      {/* Eylem satırı — kopyala + 👍/👎 (tamamlanmış cevap). v0.10.1137: üstüne
+          gelince / odakta görünür, dokunmatikte hep görünür (globals.css). */}
       {done && (
-        <div style={{ display: 'flex', gap: 2, marginTop: 2, alignItems: 'center' }}>
+        <div className="cm-msg-actions" role="toolbar" aria-label="Cevap eylemleri">
           <Button variant="ghost" size="sm" onClick={copy}
-            title="Kopyala" aria-label="Cevabı kopyala"
-            className={copied ? 'is-ok' : undefined}
-        style={{ padding: '0 6px', fontSize: 12 }}>
-            {copied ? '✓' : '⧉'}
+            title="Kopyala (düz metin)" aria-label="Cevabı kopyala"
+            className={copied ? 'is-ok' : undefined}>
+            {copied ? '✓ Kopyalandı' : '⧉ Kopyala'}
           </Button>
           {/* v0.10.537 — paylaşılan atom: 👎'de yorum kutusu (arşivden gelen
               turn exchangeId taşımaz → atom hiç çizilmez, chatPersist sözleşmesi). */}
@@ -682,8 +932,10 @@ export function ChatBubble({ turn, onRetry }: { turn: ChatTurn; onRetry?: () => 
         </div>
       )}
     </div>
+    </ChatMdContext.Provider>
   );
 }
+
 
 /**
  * ChatErrorLine — v0.10.22 — HAM SAĞLAYICI METNİ DEĞİL. Operatör

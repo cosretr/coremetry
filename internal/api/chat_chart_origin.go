@@ -104,7 +104,28 @@ func fenceLang(line string) string {
 		// PANİK ederdi ve bu dal sohbette EN SIK görülen çit biçimi.
 		return ""
 	}
-	return strings.ToLower(f[0])
+	// v0.10.1137 — arayüzün parseFenceInfo İKİZİ: "lang:yol" biçiminde dil
+	// iki noktadan önceki kısım, "title=…" ilk sözcükse dil yok; dil
+	// [a-z0-9_+.#-] dışı karakterlerden arınır ve 20'de kesilir.
+	w := f[0]
+	if strings.Contains(w, "=") {
+		return ""
+	}
+	if i := strings.IndexByte(w, ':'); i > 0 {
+		w = w[:i]
+	}
+	w = strings.ToLower(w)
+	var b strings.Builder
+	for _, r := range w {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || strings.ContainsRune("_+.#-", r) {
+			b.WriteRune(r)
+		}
+	}
+	out := b.String()
+	if len(out) > 20 {
+		out = out[:20]
+	}
+	return out
 }
 
 // stripModelChartFences — modelin kendi yazdığı ```chart``` çitlerini

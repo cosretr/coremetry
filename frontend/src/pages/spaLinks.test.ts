@@ -40,8 +40,9 @@ const ALLOWED: { file: string; why: string }[] = [
   },
   {
     file: 'components/ai/ChatBubble.tsx',
-    why: 'Markdown render çıktısındaki HTML dizesi; gezinme data-nav="1" '
-      + 'üzerinden delege ediliyor. JSX değil, dize — <Link> yazılamaz.',
+    why: 'Markdown satır içi çizimi (v0.10.1137: düğüm listesi → <a data-nav="1">); '
+      + 'gezinme balonun tek onBodyClick işleyicisine delege ediliyor (düz sol tık SPA, '
+      + 'Ctrl/orta tık tarayıcıya — v0.10.1105) ve /cosre\'de yeni sekme; <Link> o ayrımı yapmaz.',
   },
   {
     file: 'components/dashboard/PanelRenderer.tsx',

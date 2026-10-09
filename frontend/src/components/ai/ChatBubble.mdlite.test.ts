@@ -1,33 +1,38 @@
 import { describe, expect, it } from 'vitest';
-import { mdLite } from './ChatBubble';
+import { parseInline } from './chatInline';
 
-// v0.9.419 pinleri — mdLite (v0.9.479'da CopilotChat.tsx'ten ai/ChatBubble.tsx'e
-// taşındı; davranış aynı): 32-hex trace id'ler data-nav linkine döner
-// (href SALT hex'ten kurulur — injection yüzeyi yok), escape HER ZAMAN
-// linkify'dan önce (XSS), kod/kalın davranışı değişmedi.
-describe('mdLite', () => {
+// v0.9.419 pinleri — v0.10.1137'de mdLite (HTML dizesi) yerini saf düğüm
+// çözücüsüne (chatInline.parseInline) bıraktı; aynı sözleşme düğüm düzeyinde:
+// 32-hex trace id'ler trace düğümü (href SALT hex'ten, ChatBubble traceHref
+// ile kurar), sınırlar aynı, HTML hiçbir zaman işaret olarak çözülmez, kod +
+// kalın davranışı değişmedi.
+describe('satır içi çözücü — mdLite sözleşmesi', () => {
   const tid = 'a1b2c3d4e5f60718293a4b5c6d7e8f90';
 
-  it('32-hex trace id → data-nav link', () => {
-    const html = mdLite(`trace ${tid} yavaş`);
-    expect(html).toContain(`<a href="/trace?id=${tid}" data-nav="1">${tid}</a>`);
+  it('32-hex trace id → trace düğümü', () => {
+    expect(parseInline(`trace ${tid} yavaş`)).toEqual([
+      { t: 'text', v: 'trace ' }, { t: 'trace', id: tid }, { t: 'text', v: ' yavaş' },
+    ]);
   });
 
   it('31 hex ya da hex-olmayan token linklenmez', () => {
-    expect(mdLite(tid.slice(0, 31))).not.toContain('<a ');
-    expect(mdLite('g'.repeat(32))).not.toContain('<a ');
-    // 33-hex: \b sınırı içinde 32'lik alt-parça yakalanmamalı
-    expect(mdLite(tid + '0')).not.toContain('<a ');
+    const traces = (s: string) => parseInline(s).filter(n => n.t === 'trace');
+    expect(traces(tid.slice(0, 31))).toEqual([]);
+    expect(traces('g'.repeat(32))).toEqual([]);
+    // 33-hex: sınır içinde 32'lik alt-parça yakalanmamalı
+    expect(traces(tid + '0')).toEqual([]);
   });
 
-  it('escape linkify\'dan ÖNCE — HTML enjekte edilemez', () => {
-    const html = mdLite(`<img src=x onerror=alert(1)> ${tid}`);
-    expect(html).not.toContain('<img');
-    expect(html).toContain('&lt;img');
-    expect(html).toContain('data-nav');
+  it('HTML işaret olarak çözülmez — metin kalır (React kaçışı)', () => {
+    const nodes = parseInline(`<img src=x onerror=alert(1)> ${tid}`);
+    expect(nodes[0]).toEqual({ t: 'text', v: '<img src=x onerror=alert(1)> ' });
+    expect(nodes[1]).toEqual({ t: 'trace', id: tid });
   });
 
   it('kod + kalın davranışı korunur', () => {
-    expect(mdLite('a `k` **b**')).toBe('a <code>k</code> <b>b</b>');
+    expect(parseInline('a `k` **b**')).toEqual([
+      { t: 'text', v: 'a ' }, { t: 'code', v: 'k' }, { t: 'text', v: ' ' },
+      { t: 'strong', c: [{ t: 'text', v: 'b' }] },
+    ]);
   });
 });

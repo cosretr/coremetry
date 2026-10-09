@@ -69,7 +69,8 @@ describe('tablo', () => {
   it('ayraç hücre SAYISI başlıkla eşleşmezse tablo değil', () => {
     // `| önemli | not |` + `---` (yatay çizgi): sayı kapısı olmasa
     // düzyazı boş bir tabloya dönerdi.
-    expect(kinds(parseChatBlocks('| önemli | not |\n---\n'))).toEqual(['text']);
+    // v0.10.1137 — `---` artık yatay çizgi bloğu; tablo DEĞİL (asıl iddia).
+    expect(kinds(parseChatBlocks('| önemli | not |\n---\n'))).toEqual(['text', 'hr']);
     expect(kinds(parseChatBlocks('| a | b | c |\n|---|---|\n| 1 | 2 | 3 |\n'))).toEqual(['text']);
   });
 
@@ -120,13 +121,15 @@ describe('fence', () => {
 });
 
 describe('başlık ve liste', () => {
-  it('# / ## / ### kademeleri, #### üçe kırpılıyor', () => {
+  // v0.10.1137 — dört kademe (h1–h4 sohbet ölçeği); ##### ve ötesi 4'e kırpılır.
+  it('# / ## / ### / #### kademeleri, ##### dörde kırpılıyor', () => {
     const bs = parseChatBlocks('# bir\n## iki\n### üç\n#### dört\n');
+    expect(parseChatBlocks('##### beş\n')).toEqual([{ kind: 'heading', level: 4, text: 'beş' }]);
     expect(bs).toEqual([
       { kind: 'heading', level: 1, text: 'bir' },
       { kind: 'heading', level: 2, text: 'iki' },
       { kind: 'heading', level: 3, text: 'üç' },
-      { kind: 'heading', level: 3, text: 'dört' },
+      { kind: 'heading', level: 4, text: 'dört' },
     ]);
   });
 
@@ -142,8 +145,9 @@ describe('başlık ve liste', () => {
     ]);
   });
 
+  // v0.10.1137 — `---` liste değil, yatay çizgi BLOĞU (önceden düz metindi).
   it('--- yatay çizgisi liste değil', () => {
-    expect(kinds(parseChatBlocks('---\n'))).toEqual(['text']);
+    expect(kinds(parseChatBlocks('---\n'))).toEqual(['hr']);
   });
 });
 

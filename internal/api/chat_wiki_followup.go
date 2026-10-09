@@ -415,8 +415,39 @@ func wikiNotInPage(raw string) bool {
 }
 
 // wikiDeclined — SAF: wiki anlatımı "Wikide bulunamadı" ile mi başladı.
+// v0.10.1137 (inceleme): cevap biçimi eki (ChatAnswerStyle) modele "ilk satır
+// **Özet:**" diyor; ret cümlesine özet yazmaması söylense de yazarsa önek
+// kaçmasın — baştaki özet başlığı / satırı ve `> [!…]` uyarı başlığı soyulup
+// her aday için önek denetlenir (stripLeadingSummary).
 func wikiDeclined(raw string) bool {
-	return strings.HasPrefix(wiki.Fold(strings.TrimSpace(raw)), wiki.Fold("Wikide bulunamadı"))
+	want := wiki.Fold("Wikide bulunamadı")
+	for _, c := range summaryCandidates(raw) {
+		if strings.HasPrefix(wiki.Fold(c), want) {
+			return true
+		}
+	}
+	return false
+}
+
+// leadingSummaryRe — arayüzün SUMMARY_LINE / `> [!ÖZET]` İKİZİ: baştaki
+// "**Özet:**" / "**TL;DR:**" / "**Kısaca:**" başlığı ya da `> [!TÜR] …` uyarı
+// satırı (alıntı işaretiyle birlikte).
+var leadingSummaryRe = regexp.MustCompile(`(?is)^(?:\*\*\s*(?:özet|ozet|tl;dr|kısaca|kisaca)\s*:?\s*\*\*\s*:?|>\s*\[![^\]\s]{2,12}\][^\n]*\n?)\s*`)
+
+// summaryCandidates — SAF: önek denetimi için adaylar: metnin kendisi, özet
+// başlığı soyulmuş hâli ve (ilk satır bir özet satırıysa) ikinci paragraftan
+// itibaren kalan. Alıntı işaretleri ("> ") her adayın başından atılır.
+func summaryCandidates(raw string) []string {
+	t := strings.TrimSpace(raw)
+	out := []string{t}
+	if loc := leadingSummaryRe.FindStringIndex(t); loc != nil {
+		head := strings.TrimSpace(t[loc[1]:])
+		out = append(out, strings.TrimSpace(strings.TrimLeft(head, "> ")))
+		if i := strings.IndexByte(t, '\n'); i > 0 {
+			out = append(out, strings.TrimSpace(strings.TrimLeft(strings.TrimSpace(t[i+1:]), "> ")))
+		}
+	}
+	return out
 }
 
 func wikiRecSource(rec *wiki.PageRecord) chatSource {
@@ -539,8 +570,11 @@ func (s *Server) wikiFollowUpAnswer(ctx context.Context, emit func(string, any),
 		} else if !wikiNotInPage(raw) {
 			text := strings.TrimSpace(raw)
 			s.rememberWikiAnswer(ctx, text, recRefs(recs))
-			emit("answer", map[string]any{"text": text, "exchangeId": exID,
-				"sources": dedupeChatSources(sources), "links": wikiRecLinks(recs)})
+			ans := map[string]any{"text": text, "exchangeId": exID,
+				"sources": dedupeChatSources(sources), "links": wikiRecLinks(recs)}
+			// v0.10.1137 — doğrulama listesi yalnız SAYFA bloğundan (önceki tur öneki hariç).
+			withAllowedLinks(ans, strings.TrimPrefix(user, prior))
+			emit("answer", ans)
 			return true, true
 		}
 	}
@@ -591,6 +625,7 @@ func (s *Server) wikiFollowUpAnswer(ctx context.Context, emit func(string, any),
 	// v0.10.1136: yeni sayfalar önce ([n] / "Kaynak n" sırası), önceki sayfanın çipi (bağlam çıpası) sonda.
 	links, _ := ans["links"].([]guidedAnswerLink)
 	ans["links"] = dedupLinksByHref(append(append([]guidedAnswerLink(nil), links...), wikiRecLinks(recs)...))
+	withAllowedLinks(ans, "") // v0.10.1137 — önceki sayfanın çipi de doğrulama listesine
 	text, _ := ans["text"].(string)
 	s.rememberWikiAnswer(ctx, text, wikiPageRefs(used))
 	emit("answer", ans)

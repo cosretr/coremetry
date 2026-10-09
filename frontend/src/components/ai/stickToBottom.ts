@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type RefObject } from 'react';
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 
 // stickToBottom — v0.10.650 (ai-ui-patterns bulgusu #4). İki sohbet yüzeyi
 // de her `turns` değişiminde (yani her delta'da) dibe kaydırıyordu: operatör
@@ -41,31 +41,54 @@ export function findScrollParent(el: HTMLElement | null): HTMLElement | null {
  * yeniden açar (yeni soru gönderimi).
  */
 export function useStickToBottom(ref: RefObject<HTMLElement | null>, deps: unknown[]) {
+  return useStickToBottomState(ref, deps).pin;
+}
+
+/**
+ * v0.10.1137 — aynı kalıp + `atBottom` durumu: kullanıcı yukarı kaydırınca
+ * false olur ve sohbet "↓ En alta" düğmesini gösterir; düğme `pin()`i çağırır.
+ */
+export function useStickToBottomState(ref: RefObject<HTMLElement | null>, deps: unknown[]) {
   const stuck = useRef(true);
   const elRef = useRef<HTMLElement | null>(null);
+  const [atBottom, setAtBottom] = useState(true);
 
-  useEffect(() => {
-    const el = findScrollParent(ref.current);
+  // v0.10.1137 — dinleyici kap DEĞİŞİNCE yeniden bağlanır. Eskiden yalnız
+  // ilk commit'te ([ref]) bağlanıyordu: çekmece kapalı / sohbet yüklenirken
+  // kap henüz yoktu, dinleyici hiç kurulmuyor ve "dipte değil" hiç
+  // öğrenilmiyordu (yukarı kaydıran operatör yine dibe fırlatılırdı).
+  const unbindRef = useRef<(() => void) | null>(null);
+  const bind = useCallback((el: HTMLElement | null) => {
+    if (el === elRef.current) return;
+    unbindRef.current?.();
+    unbindRef.current = null;
     elRef.current = el;
     if (!el) return;
-    const onScroll = () => { stuck.current = isNearBottom(el); };
+    const onScroll = () => { stuck.current = isNearBottom(el); setAtBottom(stuck.current); };
     el.addEventListener('scroll', onScroll, { passive: true });
-    return () => el.removeEventListener('scroll', onScroll);
-  }, [ref]);
+    unbindRef.current = () => el.removeEventListener('scroll', onScroll);
+  }, []);
+  useEffect(() => () => { unbindRef.current?.(); unbindRef.current = null; elRef.current = null; }, []);
 
   useEffect(() => {
-    const el = elRef.current ?? findScrollParent(ref.current);
+    bind(findScrollParent(ref.current));
+    const el = elRef.current;
     if (!el || !stuck.current) return;
     el.scrollTop = el.scrollHeight;
     // deps çağıranın listesi (turns/open): kuralın statik doğrulaması bilerek atlanır.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 
-  return useCallback(() => {
+  const pin = useCallback(() => {
     stuck.current = true;
+    setAtBottom(true);
     const el = elRef.current ?? findScrollParent(ref.current);
     if (!el) return;
-    if (typeof el.scrollTo === 'function') el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    const reduce = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (typeof el.scrollTo === 'function') el.scrollTo({ top: el.scrollHeight, behavior: reduce ? 'auto' : 'smooth' });
     else el.scrollTop = el.scrollHeight;
   }, [ref]);
+
+  return { pin, atBottom };
 }

@@ -430,12 +430,16 @@ func (s *Server) ragChatAnswer(ctx context.Context, emit func(string, any), msgs
 	// (kaynak-pin testi kilitler). v0.10.1122 — wiki çipleri ÖNE eklenir;
 	// request-ID çipleri kendi tavanıyla AYNEN kalır (wiki yoksa bayt bayt eski).
 	links := ragAnswerLinks(ragWikiLinks(wikiHits), s.answerRequestIDLinks(ctx, raw, ctxService))
-	emit("answer", map[string]any{
+	ans := map[string]any{
 		"text":       strings.TrimSpace(raw),
 		"exchangeId": copilot.MetaFromContext(ctx).ExchangeID,
 		"sources":    dedupeChatSources(sources), // v0.10.1127: hedef başına tek çip
 		"links":      links,
-	})
+	}
+	// v0.10.1137 — cevaptaki URL'lerin doğrulama listesi: modele verilen
+	// doküman/wiki bağlamı + çipler + kaynaklar (chat_allowed_links.go).
+	withAllowedLinks(ans, b.String())
+	emit("answer", ans)
 	s.rememberWikiAnswer(ctx, strings.TrimSpace(raw), wikiPageRefs(wikiHits)) // v0.10.1134 — takip sorusu için
 	return true, true
 }

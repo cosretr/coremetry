@@ -40,10 +40,14 @@ describe('asistan cevabı = Explain kartı', () => {
     expect(explain).toContain('className="ai-answer-card"');
     expect(explain).not.toContain("background: 'color-mix(in srgb, var(--accent) 8%, transparent)'");
   });
-  it('ChatBubble asistan turu aynı kart, tam genişlik; kullanıcı balonu değişmedi', () => {
-    expect(bubble).toContain("className={isUser ? undefined : 'ai-answer-card'}");
-    expect(bubble).toContain("alignSelf: isUser ? 'flex-end' : 'stretch'");
-    expect(bubble).not.toContain("background: isUser ? 'var(--accent2)' : 'var(--bg2)'");
+  // v0.10.1137 (operatör: "Claude gibi") — sohbet asistan turu artık kart
+  // DEĞİL, sayfadaki düz metin (.cm-msg-ai); kullanıcı mesajı sağa yaslı hap
+  // (.cm-msg-user). Explain paneli kartını korur (yukarıdaki iddia).
+  it('ChatBubble asistan turu kartsız düz metin, kullanıcı sağa yaslı hap', () => {
+    expect(bubble).toContain('className="cm-msg-ai"');
+    expect(bubble).toContain('className="cm-msg-user"');
+    expect(bubble).not.toContain("'ai-answer-card'");
+    expect(css).toMatch(/\.cm-msg--user\s*\{[^}]*justify-content:\s*flex-end/);
   });
 });
 

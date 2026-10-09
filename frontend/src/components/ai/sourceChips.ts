@@ -15,7 +15,16 @@ export interface SourceChip {
   label: string;
   href?: string;
   title: string;
+  /** v0.10.1137 — atıf numarası ([n] = "Kaynak n"), okunur ad ("Wiki · " öneksiz) ve host. */
+  n: number;
+  name: string;
+  host: string;
 }
+
+const WIKI_PREFIX = 'Wiki · ';
+const hostOfRef = (u?: string) => /^https?:\/\/([^/?#\s]+)/i.exec(u ?? '')?.[1].toLowerCase() ?? '';
+// Yalnız http(s) ve kök-göreli href tıklanır (javascript:/data: asla).
+const safeHref = (u?: string) => (u && (/^https?:\/\//i.test(u) || (u.startsWith('/') && !u.startsWith('//'))) ? u : undefined);
 
 function targetKey(s: RagSource): string {
   const ref = (s.ref ?? '').trim();
@@ -36,12 +45,15 @@ export function sourceChips(sources: readonly RagSource[] | undefined): SourceCh
       continue;
     }
     at.set(k, out.length);
-    out.push({ key: k, label: '', href: s.ref || undefined, title: '', score: s.score, sections: [...secs], doc: s.doc });
+    out.push({ key: k, label: '', href: safeHref(s.ref), title: '', n: 0, name: '', host: '', score: s.score, sections: [...secs], doc: s.doc });
   }
   return out.map((c, i) => ({
     key: c.key,
     label: `Kaynak ${i + 1}`,
     href: c.href,
     title: `${c.doc} §${c.sections.join(', §')} · benzerlik ${(c.score * 100).toFixed(0)}%`,
+    n: i + 1,
+    name: c.doc.startsWith(WIKI_PREFIX) ? c.doc.slice(WIKI_PREFIX.length) : c.doc,
+    host: hostOfRef(c.href),
   }));
 }

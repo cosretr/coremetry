@@ -145,9 +145,17 @@ func TestFenceRuleMatchesFrontend(t *testing.T) {
 			"onun İKİZİ; biri kayarsa model-yazımı çit ya sökülmeden canlı çizilir " +
 			"ya da meşru kod bloğu boşuna sökülür")
 	}
-	// Dil çıkarımı: ilk sözcük + küçük harf.
-	if !strings.Contains(src, "split(/\\s+/)[0].toLowerCase()") {
-		t.Error("arayüzün dil çıkarımı değişmiş — fenceLang onun İKİZİ")
+	// Dil çıkarımı (v0.10.1137 parseFenceInfo): ilk sözcük, "lang:yol"da
+	// iki noktadan önce, küçük harf + [a-z0-9_+.#-] süzgeci, 20 karakter.
+	for _, w := range []string{"const first = s.split(/\\s+/)[0]", "first.indexOf(':')", "lang.toLowerCase().replace(/[^a-z0-9_+.#-]/g, '').slice(0, 20)"} {
+		if !strings.Contains(src, w) {
+			t.Errorf("arayüzün dil çıkarımı değişmiş (%q) — fenceLang onun İKİZİ", w)
+		}
+	}
+	for in, want := range map[string]string{"```chart": "chart", "```Chart:x.json": "chart", "```yaml title=a.yaml": "yaml", "```title=a": "", "```": ""} {
+		if got := fenceLang(in); got != want {
+			t.Errorf("fenceLang(%q) = %q, want %q", in, got, want)
+		}
 	}
 	// Arayüz hâlâ SALT dile bakarak canlı grafik çiziyor mu? Bir gün köken
 	// işareti eklenirse bu sökme gereksizleşir ve gerekçesi yeniden

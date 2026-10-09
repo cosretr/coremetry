@@ -112,7 +112,9 @@ describe('/cosre bağımsız sohbet sayfası', () => {
     const head = document.querySelector('.cosre-page__head');
     expect(head?.textContent).toContain('CoSRE');
     expect(head?.textContent).toContain('model-x');
-    expect(head?.textContent).toContain('Geçmiş');
+    // v0.10.1137 — geçmiş başlık düğmesi değil, sol kenar çubuğu (Claude gibi).
+    expect(head?.textContent).not.toContain('Geçmiş');
+    expect(document.getElementById('cosre-side')?.textContent).toContain('Yeni sohbet');
     expect(head?.textContent).not.toContain('⤢');
     const home = Array.from(head?.querySelectorAll('a') ?? []).find(a => a.textContent === "Coremetry'yi aç");
     expect(home?.getAttribute('href')).toBe('/');
@@ -194,11 +196,11 @@ describe('cevap linkleri: /cosre\'de yeni sekme', () => {
     const chip = Array.from(host.querySelectorAll('a.ai-link')).find(a => a.textContent?.includes('payment'));
     expect(chip?.getAttribute('href')).toBe('/service?service=payment');
     expect(chip?.getAttribute('target')).toBe('_blank');
-    expect(chip?.getAttribute('rel')).toBe('noopener');
+    expect(chip?.getAttribute('rel')).toBe('noopener noreferrer'); // v0.10.1137 — Referer yok
     const traceA = host.querySelector('a[data-nav]');
     expect(traceA?.getAttribute('href')?.startsWith('/trace')).toBe(true);
     expect(traceA?.getAttribute('target')).toBe('_blank');
-    expect(traceA?.getAttribute('rel')).toBe('noopener');
+    expect(traceA?.getAttribute('rel')).toBe('noopener noreferrer');
   });
 
   it('çekmecede (bağlam yok) iç linkler aynı sekmede kalır', async () => {

@@ -443,13 +443,13 @@ describe('markdown yolu TEK', () => {
     });
   }
 
-  it('ChatBubble: innerHTML TEK yerde ve mdLite besliyor', () => {
+  // v0.10.1137 — satır içi çizim düğüm listesinden (chatInline.ts) React
+  // çocukları olarak: balonda innerHTML HİÇ yok (önceki kapı "tek yer" idi).
+  it('ChatBubble: innerHTML YOK; kod gövdesi React çocuğu', () => {
     const src = read('./ChatBubble.tsx');
-    const hits = src.match(/dangerouslySetInnerHTML/g) ?? [];
-    expect(hits.length, 'yeni bir HTML basım yüzeyi açılmış').toBe(1);
-    expect(src).toContain('dangerouslySetInnerHTML={{ __html: mdLite(text) }}');
-    // Kod gövdesi ASLA innerHTML'e gitmez: React çocuğu olarak basılır.
-    expect(src).toContain('<pre>{code}</pre>');
+    expect(src.match(/dangerouslySetInnerHTML/g) ?? [], 'yeni bir HTML basım yüzeyi açılmış').toEqual([]);
+    // Kod ASLA innerHTML'e gitmez: React çocuğu olarak basılır.
+    expect(src).toContain("<pre className={wrap ? 'is-wrap' : undefined}>{code}</pre>");
   });
 });
 
@@ -469,9 +469,16 @@ describe('markdown yolu TEK', () => {
 describe('ChatBubble — tool kanıtı (Faz 4.3)', () => {
   const withSteps = (over: Partial<ChatTurn>): ChatTurn =>
     asst('bakıyorum', { steps: ['get_topology'], ...over });
+  // v0.10.1137 — tamamlanmış turda adımlar "Nasıl cevapladım" açılırının arkasında.
+  const openHow = async () => {
+    const b = qa('button').find(x => (x.textContent ?? '').includes('Nasıl cevapladım')) as HTMLButtonElement;
+    expect(b, 'açılır yok').toBeTruthy();
+    await act(async () => { b.click(); });
+  };
 
   it('detay YOKSA çip düz etiket kalır (tıklanamaz)', async () => {
     await mount(withSteps({}));
+    await openHow();
     expect(text()).toContain('⚙ get_topology');
     expect(qa('button').some(b => (b.textContent ?? '').includes('get_topology'))).toBe(false);
   });
@@ -480,6 +487,7 @@ describe('ChatBubble — tool kanıtı (Faz 4.3)', () => {
     await mount(withSteps({
       stepDetails: [{ i: 1, tool: 'get_topology', ok: true, preview: '[{"service":"api","calls":12}]' }],
     }));
+    await openHow();
     const chip = qa('button').find(b => (b.textContent ?? '').includes('get_topology')) as HTMLButtonElement;
     expect(chip).toBeTruthy();
     expect(chip.getAttribute('aria-expanded')).toBe('false');
@@ -504,6 +512,7 @@ describe('ChatBubble — tool kanıtı (Faz 4.3)', () => {
         preview: '[{"service":"api","cal', truncated: true, bytes: 128000,
       }],
     }));
+    await openHow();
     const chip = qa('button').find(b => (b.textContent ?? '').includes('get_topology')) as HTMLButtonElement;
     await act(async () => { chip.click(); });
     expect(text()).toContain('kırpıldı');
@@ -517,6 +526,7 @@ describe('ChatBubble — tool kanıtı (Faz 4.3)', () => {
     await mount(withSteps({
       stepDetails: [{ i: 1, tool: 'get_topology', ok: false, preview: 'error: upstream 502' }],
     }));
+    await openHow();
     const chip = qa('button').find(b => (b.textContent ?? '').includes('get_topology')) as HTMLButtonElement;
     expect(chip.textContent).toContain('⚠');
     await act(async () => { chip.click(); });
@@ -529,6 +539,7 @@ describe('ChatBubble — tool kanıtı (Faz 4.3)', () => {
       steps: ['get_topology', 'get_blast_radius'],
       stepDetails: [{ i: 1, tool: 'get_topology', ok: true, preview: '[]' }],
     }));
+    await openHow();
     expect(text()).toContain('get_blast_radius');
     expect(qa('button').filter(b => (b.textContent ?? '').includes('get_')).length).toBe(1);
   });

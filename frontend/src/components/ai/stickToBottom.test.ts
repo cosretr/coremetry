@@ -43,7 +43,7 @@ describe('BAĞLANMA (kaynak pinleri)', () => {
   it('iki yüzey de useStickToBottom kullanır ve her turns değişiminde dibe zorlamaz', () => {
     const chat = src('../CopilotChat.tsx');
     const drawer = src('./AIDrawerBody.tsx');
-    expect(chat).toContain('useStickToBottom(');
+    expect(chat).toMatch(/useStickToBottom(State)?\(/); // v0.10.1137 — atBottom'lı varyant
     expect(drawer).toContain('useStickToBottom(');
     // Eski desenler: her delta'da koşulsuz dibe.
     expect(chat).not.toContain("scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });\n  }, [turns, open]);");

@@ -156,6 +156,7 @@ func withTelemetryChips(ans map[string]any, text string, chips []string, links [
 	if len(links) > 0 {
 		wl, _ := ans["links"].([]guidedAnswerLink)
 		ans["links"] = dedupLinksByHref(append(append([]guidedAnswerLink(nil), wl...), links...))
+		withAllowedLinks(ans, "") // v0.10.1137 — yeni çip href'leri doğrulama listesine
 	}
 }
 

@@ -10,8 +10,9 @@ import { MemoryRouter } from 'react-router-dom';
 import { ChatBubble, ToolStepsPanel } from './ChatBubble';
 import type { ChatTurn, ChatStepDetail } from '@/lib/types';
 
+// v0.10.1137 — adımlar "Nasıl cevapladım" açılırında; statik render tıklayamaz → `stepsOpen` dikişi.
 function html(turn: ChatTurn): string {
-  return renderToStaticMarkup(<MemoryRouter><ChatBubble turn={turn} /></MemoryRouter>);
+  return renderToStaticMarkup(<MemoryRouter><ChatBubble turn={turn} stepsOpen /></MemoryRouter>);
 }
 function panel(details: ChatStepDetail[], over: { error?: string; turnDone?: boolean } = {}): string {
   return renderToStaticMarkup(<ToolStepsPanel details={details} error={over.error} turnDone={over.turnDone ?? true} evId={null} setEvId={() => {}} initialOpen />);

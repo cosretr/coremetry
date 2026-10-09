@@ -3005,6 +3005,57 @@ ve zaman aşımında düşüş; tek adayda ve ayar kapalıyken çağrı yok); ay
 `modelcaps` pencere tablosu, prompt pinleri (`prompt_wiki_multisource_test.go`, dil ve enjeksiyon
 sicilleri) ve FE alanı (`WikiKnowledgeSection.test.tsx`) test edilir.
 
+## 2026-10-09 — CoSRE sohbeti: güvenli tıklanır linkler, Claude benzeri görünüm, sol kenar çubuğunda geçmiş (v0.10.1137)
+
+**Operatör (prod, wiki cevabı ekran görüntüsü):** cevaptaki Jenkins adresi düz metin çiziliyor; sohbet
+"Claude gibi" profesyonel görünmeli; /cosre'de geçmiş solda dursun. Sohbet balonu v0.9.1148'den beri
+bilinçli olarak hiç link çizmiyordu. Sebep prompt-injection: wiki sayfasına gömülü bir talimat modele
+"şu adrese ?q=<gizli> ekle" dedirtebilir ve tıklanır bir link veriyi dışarı sızdırır.
+
+**Karar 1, link güvenliği (`chatLinks.ts`, `chat_allowed_links.go`):** sunucu her wiki, takip, kurtarma
+ve RAG cevabına `allowedLinks` ekler. Liste şunlardan kurulur: modele GERÇEKTEN verilen wiki/doküman
+bağlamındaki URL'ler (katı regex; tekilleştirilir; en çok 50 adres; önceki soru/cevap bloğu HARİÇ, çünkü
+orası model çıktısıdır), çip href'leri, kaynak ref'leri ve aynı-köken yollar. Arayüz bir linki üç
+durumda tıklanır çizer: (a) normalize adresi listede ise (host küçük harfe çevrilir, sondaki noktalama
+kırpılır, `#` parçası yok sayılır), (b) göreli ya da aynı-köken bir yol ise, (c) host'u bu cevabın
+KAYNAK veya ÇİP host'u ise. Host kümesi bilinçli olarak bağlamdaki her URL'nin host'undan kurulmaz.
+Aksi hâlde enjekte bir sayfanın andığı saldırgan host'una modelin uydurduğu sorgu dizesi geçerdi. Bu
+koşullara uymayan adres düz metin olarak, tam hâliyle ve "doğrulanmamış bağlantı" ipucuyla çizilir;
+markdown linkinde metin ile adres birlikte gösterilir. `javascript:`, `data:` ve `//host` hiçbir
+koşulda link olmaz, görsel hiç çizilmez. Arşivden açılan konuşma `allowedLinks` taşımaz, bu yüzden
+orada dış link doğrulanmamış sayılır (güvenli varsayılan).
+
+**Karar 2, çizim:** satır içi çizim artık innerHTML ile değil, saf bir düğüm çözücüsüyle (`chatInline.ts`)
+ve React çocukları olarak yapılıyor; balonda `dangerouslySetInnerHTML` hiç kalmadı. `chatMarkdown.ts` (saf)
+şunları biliyor: h1–h4, iç içe ve N'den başlayan listeler, görev listesi, alıntı, çizgi, GFM uyarı
+kutuları (NOTE/TIP/WARNING/IMPORTANT/CAUTION ve NOT/İPUCU/UYARI/ÖNEMLİ/DİKKAT), en üstteki
+"**Özet:**" satırı ya da `> [!ÖZET]` bloğundan özet kutusu, `<details><summary>` (yalnız bu iki etiket;
+geri kalan her şey metin), dosya bloğu, diff renkleri, uzun satır sarma, ~~üstü çizili~~, `[[Ctrl+C]]`
+tuş kapağı ve "**Anahtar:** değer" tanım satırları. Dosya bloğu `title=`/`lang:yol` başlığı, satır
+numarası, Kopyala ve İndir düğmeleri taşır. İndirilen dosyanın adı süzülür ve yalnız son yol parçası
+kalır. 25 satırı aşan blok "Tümünü göster" ile katlanır. Sunucudaki `fenceLang` da aynı bilgi dizesi
+kuralıyla güncellendi (ikiz pin). Kaynaklar şöyle çiziliyor: [n] atıfı üst simge hap olur ve ipucunda
+kaynak başlığı ile host görünür; "Kaynak n" çipleri yerine numaralı ve katlanır bir "Kaynaklar" listesi
+geldi. Adımlar tek bir "Nasıl cevapladım · N adım" açılırında toplandı: akış sürerken açık, bitince
+kapalı. İlk token gelene dek "Düşünüyor…" görünür. Kaydırma yapışması kap değişince yeniden bağlanıyor;
+önceden çekmece kapalıyken dinleyici hiç kurulmuyordu. Kullanıcı yukarı kaydırınca "↓ En alta"
+düğmesi çıkar. Asistan cevabı kart değil, düz metin olarak çizilir; operatörün mesajı sağa yaslı
+haptır. /cosre'de okuma sütunu 760px'dir. Kopyala düğmesi düz metin kopyalar. Yeniden üret düğmesi
+eklenmedi, çünkü yalnız hata sonrası "Yeniden dene" yolu var.
+
+**Karar 3, geçmiş:** /cosre'de "🕘 Geçmiş" düğmesinin yerini kalıcı bir sol kenar çubuğu aldı (260px).
+Çubukta "Yeni sohbet", istemci tarafı başlık araması ve "Bugün / Dün / Son 7 gün / Daha eski" grupları
+var; etkin konuşma vurgulanır, tıklanınca `?chat=` yazılır. Daraltma tercihi localStorage'da tutulur.
+Telefonda çubuk ekran dışı bir çekmecedir ve ☰ ile açılır. Veri kaynağı aynı (`/api/ai/conversations`).
+Yeniden adlandırma ucu olmadığı için menüde yalnız silme var; yeni uç eklenmedi. Uygulama içi çekmece
+kompakt Geçmiş düğmesini korur.
+
+**Karar 4, cevap üslubu:** `ChatAnswerStyle` eki wiki, wiki takip, RAG ve serbest döngü anlatım
+prompt'larına eklendi: tek satırlık özet, prosedür için liste, karşılaştırma için tablo, dil etiketli ve
+`title=` başlıklı kod bloğu, uyarı için callout. Bulunamadı ve ret cümleleri özet satırı almaz, çünkü
+`wikiDeclined` önek, `ragDeclined` içerik eşleşmesi kullanıyor. Guided ve çekmece prompt'ları değişmedi.
+Giriş kutusu için zengin metin düzenleyicisi kapsam dışı; kuyruğa alındı.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"
