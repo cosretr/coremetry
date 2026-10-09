@@ -73,6 +73,7 @@ func promptRegistry() map[string]promptClass {
 		"ServiceAnalysis": classTurkishNative, // JSON çıktı, Türkçe talimat
 		"RAGChat":         classTurkishNative, // kademe 3 — doküman yolu
 		"WikiChat":        classTurkishNative, // v0.10.1124 — açık wiki sorusu kademesi
+		"WikiFollowUp":    classTurkishNative, // v0.10.1134 — wiki takip sorusu (sayfa yeniden okuma)
 		// v0.9.1232 — kademe 4 (serbest tool döngüsü) classDirective'ten
 		// buraya taşındı: metin artık Türkçe yazılmış. ChatRoundCap aynı
 		// döngünün tur-tavanı hâli; sicile girmesiyle copilot_chat.go'daki
@@ -113,8 +114,9 @@ func promptTexts() map[string]string {
 		"ChatRoundCap": SystemPromptChatRoundCap(), "ChatAgentLoop": SystemPromptChatAgentLoop(),
 		"RCAVerdict": SystemPromptRCAVerdict(), "ServiceAnalysis": SystemPromptServiceAnalysis(),
 		"RAGChat": SystemPromptRAGChat(), "ShiftSummary": SystemPromptShiftSummary(),
-		"WikiChat":   SystemPromptWikiChat(),
-		"AlertNoise": SystemPromptAlertNoise(), "LogPatterns": SystemPromptLogPatterns(),
+		"WikiChat":     SystemPromptWikiChat(),
+		"WikiFollowUp": SystemPromptWikiFollowUp(),
+		"AlertNoise":   SystemPromptAlertNoise(), "LogPatterns": SystemPromptLogPatterns(),
 		"Postmortem": SystemPromptPostmortem(), "RunbookUpdate": SystemPromptRunbookUpdate(),
 		"NLToQuery": SystemPromptNLToQuery(), "CHQueryOptimize": SystemPromptCHQueryOptimize(),
 		"ServiceTags": SystemPromptServiceTags(), "OracleException": SystemPromptOracleException(),

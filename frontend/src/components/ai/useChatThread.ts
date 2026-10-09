@@ -6,6 +6,7 @@ import type { ChatMessage, ChatTurn } from '@/lib/types';
 import { capPageContext } from '@/lib/traceAiContext';
 import { isAbortError, settleStoppedTurn, settleTruncatedTurn } from './chatAbort';
 import { failedQuestion, dropFailedTail } from './chatRetry';
+import { prevWikiRefs } from './chatWikiRefs';
 import {
   PERSIST_DEBOUNCE_MS, hasCompletedExchange, persistMessages, restoreTurns,
 } from './chatPersist';
@@ -175,6 +176,8 @@ export function useChatThread(opts: ChatThreadOpts = {}) {
       return;
     }
     const o = optsRef.current;
+    // v0.10.1134 — önceki cevabın wiki sayfaları (geçmiş yalnız {role,text}).
+    const wikiRefs = prevWikiRefs(turnsRef.current);
     const history: ChatMessage[] = [
       ...(o.seed ?? []),
       // v0.10.63 — DURDURULAN TUR YARIM OLDUĞUNU SÖYLER.
@@ -253,7 +256,8 @@ export function useChatThread(opts: ChatThreadOpts = {}) {
         o.subject || undefined, o.rangeS || undefined, o.trace || undefined, o.env || undefined,
         o.toMs || undefined, o.profile || undefined, // v0.10.183 — model profili
         convIdRef.current || undefined, // v0.10.478 — konuşma kimliği (sunucu bağlam state'i)
-        o.page || undefined, o.pinnedPage || undefined); // v0.10.539 — sayfa bağlamı + pin
+        o.page || undefined, o.pinnedPage || undefined, // v0.10.539 — sayfa bağlamı + pin
+        wikiRefs.length > 0 ? wikiRefs : undefined); // v0.10.1134 — wiki takip sorusu
       // v0.10.648 — terminal olaysız EOF: tur asılı kalmasın (chatAbort.ts).
       patchLast(settleTruncatedTurn);
     } catch (err) {

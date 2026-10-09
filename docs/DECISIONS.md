@@ -2874,6 +2874,53 @@ Oracle kapalı), `api/oracle_op_resolve_test.go` (kapalı çözümleyici, kapsam
 servissiz/anahtar keşfi boş guided akış, sıfır trace → son hata trace'i, eşleşmesizlikte haystack
 süzgeci/kanıtı/kaynağı birebir). `/api/oracle/operations` cevap şekli değişmedi.
 
+## 2026-10-09 — CoSRE wiki takip sorusu: önceki cevabın sayfası yeniden okunur (v0.10.1134)
+
+**Operatör (prod, CoSRE):** 1. tur "production clusterlarında yeni namespace nasıl oluşturabilirim"
+wiki sayfasından doğru cevaplandı ("ilgili namespace pipeline'ı tetiklenmelidir"). 2. tur "pipeline
+linki nedir" bağlamı kaybetti: wiki'de yalnız "pipeline linki" arandı ve alakasız sayfaların linkleri
+listelendi.
+
+**Kök neden:** Her wiki yolu yalnız son kullanıcı metnini görüyordu. `wikiChatAnswer` önce
+`lastUserText` alır, sonra işaret kapısına bakar; takip sorusu işaret taşımadığı için kademe atlanır.
+RAG kademesi `ragWikiHits(ctx, question)` ile çıplak takip sorusunu arar. Anlatım prompt'u ("SORU: …")
+önceki turu hiç taşımaz. İstemci geçmişi de yalnız `{role,text}` gönderdiği için önceki cevabın
+"Wiki · " çipleri sunucuya hiç ulaşmıyordu.
+
+**Karar:** Wiki kademesine kapıların ardında, işaret kontrolünden önce bir takip adımı eklendi
+(`chat_wiki_followup.go`). Takip sayılması için iki koşul gerekir. Önceki asistan turu bir wiki cevabı
+olmalı, yani kaynak sayfası çözülebilmeli. Yeni soru da ≤8 sözcük olmalı ya da geri atıf taşımalı
+("bu", "linki", "peki", "nerede"…). Telemetri sinyali taşıyan soru ve servis adı + sinyal taşıyan soru
+takip sayılmaz. Önceki sayfa şu sırayla çözülür:
+
+1. Yapısal veri: istemci son turun wiki href'lerini `context.wikiRefs` alanında gönderir.
+2. Sunucu hafızası: cevap metninin FNV özetinden sayfa kimliklerine; Redis'te ve süreç içinde, 24 saat.
+3. Önceki cevap metnindeki wiki url'leri.
+
+URL'yi sayfaya eşlemek için önce hafızaya bakılır, sonra `pagePath` ayrıştırılır, en son başlıkla arama
+yapılır. Akış üç adımdır:
+
+- **(a)** Önceki 1–2 sayfa `ReadPage` ile yeniden okunur; bu karma, senkron ve canlı modda çalışır.
+  Modele sayfa, önceki soru-cevap ve takip sorusu gider. Model ya sayfadan cevaplar ya da
+  `[[WIKI_NOT_IN_PAGE]]` döner; tahmin yapmaz.
+- **(b)** Sayfa cevaplamazsa bağlamlı arama yapılır. Sorgu takip terimleri, sayfa başlığı ve önceki
+  sorudan oluşur. Önce aynı projede aranır, önceki sayfa hariç tutulur. "Wikide bulunamadı" cevabı
+  kabul edilmez.
+- **(c)** O da cevaplamazsa bugünkü akış aynen sürer.
+
+Tüm wiki anlatımları (kademe, netleştirme kurtarması, RAG'ın wiki yarısı) son soru-cevap çiftini kırpılmış
+ve `<onceki_konusma>` çitiyle taşır. İlk turda prompt bayt bayt eskidir. Adım çipi `wiki_followup · <sayfa>`
+olarak görünür, önceki sayfanın çipi ilk sıradadır. Yeni prompt `systemWikiFollowUp`, `prompts.go`'dadır.
+
+**Değişmeyen:** API token'ı, panel/çekmece bağlamı ve kapalı wiki için kapı aynıdır. Önceki tur wiki
+değilse hiçbir okuma ya da arama yapılmaz. Telemetri takipleri guided'a gider. `api.go` büyümedi.
+
+**Test:** `chat_wiki_followup_test.go` sentetik sayfalarla çalışır. A sayfası namespace pipeline
+`definitionId=123` içerir, B/C başka pipeline linkleri taşır. Senaryolar: iki turlu akış (yapısal ref ve
+yalnız hafıza); sayfada yok → bağlamlı arama; hiçbiri cevaplamıyor → akışa bırakma; wiki olmayan önceki
+tur; kapılar (kapalı, token, çekmece, telemetri); anlatımda önceki tur. Saf yardımcılar da ayrıca test
+edilir. FE tarafında `chatWikiRefs.test.ts` var.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

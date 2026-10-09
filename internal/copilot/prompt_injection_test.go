@@ -52,6 +52,7 @@ func chatTiers() map[string]string {
 		"DrawerChat":   SystemPromptDrawerChat(),
 		"RAGChat":      SystemPromptRAGChat(),
 		"WikiChat":     SystemPromptWikiChat(),
+		"WikiFollowUp": SystemPromptWikiFollowUp(),
 		"Chat":         SystemPromptChat(),
 		"ChatRoundCap": SystemPromptChatRoundCap(),
 	}

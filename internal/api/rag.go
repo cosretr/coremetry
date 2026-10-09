@@ -385,6 +385,11 @@ func (s *Server) ragChatAnswer(ctx context.Context, emit func(string, any), msgs
 	}
 
 	user := "SORU: " + question + "\n\nBAĞLAM:\n" + b.String()
+	if len(wikiHits) > 0 {
+		// v0.10.1134 — wiki dayanaklı anlatım önceki soru/cevabı görür (atıf
+		// çözümü, chat_wiki_followup.go); wiki isabeti yoksa prompt bayt bayt eski.
+		user = wikiPriorTurns(msgs) + user
+	}
 	// v0.10.14 — TOKEN AKIŞI BU KADEMEDE KAPALI, bilinçli.
 	//
 	// Cevabın reddetme olup olmadığı ancak TAMAMLANDIĞINDA bilinir; akış
@@ -420,6 +425,7 @@ func (s *Server) ragChatAnswer(ctx context.Context, emit func(string, any), msgs
 		"sources":    dedupeChatSources(sources), // v0.10.1127: hedef başına tek çip
 		"links":      links,
 	})
+	s.rememberWikiAnswer(ctx, strings.TrimSpace(raw), wikiPageRefs(wikiHits)) // v0.10.1134 — takip sorusu için
 	return true, true
 }
 

@@ -66,6 +66,7 @@ type disambigRescue struct {
 	w        *wiki.Service
 	emit     func(string, any)
 	question string
+	prior    string // v0.10.1134 — önceki soru/cevap (wikiPriorTurns)
 	mark     *disambigMark
 	tried    atomic.Bool
 }
@@ -93,7 +94,7 @@ func (s *Server) armDisambigRescue(ctx context.Context, emit func(string, any), 
 	}
 	m := &disambigMark{}
 	ctx = context.WithValue(ctx, disambigMarkKey{}, m)
-	r := &disambigRescue{s: s, ctx: ctx, w: w, emit: emit, question: q, mark: m}
+	r := &disambigRescue{s: s, ctx: ctx, w: w, emit: emit, question: q, prior: wikiPriorTurns(msgs), mark: m}
 	return ctx, r.emitEvent
 }
 
@@ -122,7 +123,7 @@ func (r *disambigRescue) rescue(orig map[string]any) bool {
 		return false
 	}
 	r.emit("step", map[string]string{"label": "kurum wiki'si"})
-	ans, err := r.s.wikiNarratedAnswer(r.ctx, r.w, r.question, hits)
+	ans, err := r.s.wikiNarratedAnswer(r.ctx, r.w, r.question, r.prior, hits)
 	if err != nil {
 		return false // anlatım başarısız → özgün netleştirme aynen
 	}
@@ -130,6 +131,9 @@ func (r *disambigRescue) rescue(orig map[string]any) bool {
 	chips, _ := orig["suggestions"].([]string)
 	links, _ := orig["links"].([]guidedAnswerLink)
 	withTelemetryChips(ans, text, chips, links)
+	if t, _ := ans["text"].(string); !wikiDeclined(t) {
+		r.s.rememberWikiAnswer(r.ctx, t, wikiPageRefs(hits))
+	}
 	r.emit("answer", ans)
 	return true
 }

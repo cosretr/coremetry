@@ -153,6 +153,11 @@ type chatRequest struct {
 		// bağlam (pin). Eski düz alanlar guided/drawer için aynen kalır.
 		Page       *agentctx.PageContext `json:"page,omitempty"`
 		PinnedPage *agentctx.PageContext `json:"pinnedPage,omitempty"`
+		// WikiRefs (v0.10.1134) — önceki asistan turunun "Wiki · " çip/kaynak
+		// href'leri: wiki takip sorusu önceki sayfayı yeniden okur
+		// (chat_wiki_followup.go). Geçmiş yalnız {role,text} taşıdığı için
+		// yapısal kaynak buradan gelir; yoksa sunucu hafızası / metin url'leri.
+		WikiRefs []string `json:"wikiRefs,omitempty"`
 	} `json:"context,omitempty"`
 }
 
@@ -302,7 +307,7 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 	// anlatımına kaçıyordu (chat_wiki_tier.go). İşaretsiz soru bayt bayt eski.
 	// İnceleme F1: panel/çekmece/exception/trace bağlamında kademe kapalı.
 	wikiTC := wikiTierContext{Explain: req.Context.Explain, Subject: req.Context.Subject,
-		Trace: req.Context.Trace, Service: req.Context.Service}
+		Trace: req.Context.Trace, Service: req.Context.Service, PrevWikiRefs: req.Context.WikiRefs}
 	if req.Context.Page != nil {
 		wikiTC.PageTraceID = req.Context.Page.TraceID
 	}

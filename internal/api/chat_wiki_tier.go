@@ -100,6 +100,10 @@ func wikiQuestionCue(q string) (strong, weak bool) {
 // wikiTierContext — sohbet isteğinin panel/çekmece bağlamı (kademe kapısı).
 type wikiTierContext struct {
 	Explain, Subject, Trace, PageTraceID, Service string
+	// PrevWikiRefs — v0.10.1134: istemcinin yolladığı önceki asistan turunun
+	// wiki kaynak href'leri (context.wikiRefs; takip sorusu, chat_wiki_followup.go).
+	// Kapı alanı DEĞİL: wikiTierAllowed yalnız panel/çekmece alanlarına bakar.
+	PrevWikiRefs []string
 }
 
 // wikiTierAllowed — SAF (inceleme F1): panel, çekmece, exception ya da trace
@@ -223,6 +227,12 @@ func (s *Server) wikiChatAnswer(ctx context.Context, emit func(string, any), msg
 	if question == "" {
 		return false, false
 	}
+	// v0.10.1134 — önceki tur wiki cevabıysa ve soru eliptik/geri atıflıysa
+	// ("pipeline linki nedir") önce önceki sayfa yeniden okunur, sonra bağlamlı
+	// arama (chat_wiki_followup.go). Cevaplamazsa aşağıdaki akış AYNEN.
+	if h, fok := s.wikiFollowUpAnswer(ctx, emit, w, msgs, tc.PrevWikiRefs, question); h {
+		return true, fok
+	}
 	strong, weak := wikiQuestionCue(question)
 	if !strong && !weak {
 		return false, false
@@ -250,7 +260,7 @@ func (s *Server) wikiChatAnswer(ctx context.Context, emit func(string, any), msg
 			"sources": []any{}, "links": []guidedAnswerLink{}})
 		return true, true
 	}
-	ans, err := s.wikiNarratedAnswer(ctx, w, question, hits)
+	ans, err := s.wikiNarratedAnswer(ctx, w, question, wikiPriorTurns(msgs), hits)
 	if err != nil {
 		emit("error", map[string]string{"error": err.Error()})
 		return true, false
@@ -261,18 +271,23 @@ func (s *Server) wikiChatAnswer(ctx context.Context, emit func(string, any), msg
 	if text, chips, links, ok := s.guidedDisambigProbe(ctx, question); ok {
 		withTelemetryChips(ans, text, chips, links)
 	}
+	if text, _ := ans["text"].(string); !wikiDeclined(text) {
+		s.rememberWikiAnswer(ctx, text, wikiPageRefs(hits))
+	}
 	emit("answer", ans)
 	return true, true
 }
 
 // wikiNarratedAnswer — wiki isabetlerinden araçsız TEK anlatım çağrısı ve
 // cevap yükü (açık wiki kademesi ve netleştirme kurtarması ortak; v0.10.1126).
-func (s *Server) wikiNarratedAnswer(ctx context.Context, w *wiki.Service, question string, hits []wiki.Hit) (map[string]any, error) {
+// v0.10.1134: prior — son soru/cevap çifti (wikiPriorTurns; boşsa prompt
+// bayt bayt eski) ki "bu", "o pipeline" gibi atıflar çözülsün.
+func (s *Server) wikiNarratedAnswer(ctx context.Context, w *wiki.Service, question, prior string, hits []wiki.Hit) (map[string]any, error) {
 	sources := make([]chatSource, 0, len(hits))
 	for _, h := range hits {
 		sources = append(sources, wikiHitSource(h))
 	}
-	user := "SORU: " + question + "\n\nBAĞLAM:\n" + s.wikiContextFor(ctx, w, hits, numberSources(sources))
+	user := prior + "SORU: " + question + "\n\nBAĞLAM:\n" + s.wikiContextFor(ctx, w, hits, numberSources(sources))
 	raw, err := wikiNarrateFn(s, ctx, copilot.SystemPromptWikiChat(), user)
 	if err != nil {
 		return nil, err

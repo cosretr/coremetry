@@ -2400,6 +2400,9 @@ export const api = {
     // v0.10.539 (Faz 3.2) — sayfa bağlamı (lib/pageContext) + sabitlenmiş bağlam.
     contextPage?: import('./types').PageContext,
     contextPinnedPage?: import('./types').PageContext,
+    // v0.10.1134 — önceki asistan turunun wiki kaynak href'leri (takip sorusu
+    // önceki sayfayı yeniden okur; components/ai/chatWikiRefs.ts).
+    contextWikiRefs?: string[],
   ): Promise<void> => {
     // v0.10.437 (D6) — tarayıcı saat dilimi: mutlak tarih/saat soruları
     // ("08/08/2026 04-08 arası") operatörün yerel saatinde yorumlanır.
@@ -2407,7 +2410,7 @@ export const api = {
     // v0.10.745 — çift lib/browserTz'den; Explain/insight uçlarıyla aynı kaynak.
     const { tz, tzOffsetMin } = browserTz();
     const context =
-      contextService || contextOperation || contextExplain || contextSubject || contextRangeS || contextTrace || contextEnv || contextToMs || contextProfile || contextConversation || contextPage || contextPinnedPage || tzOffsetMin !== 0 || tz
+      contextService || contextOperation || contextExplain || contextSubject || contextRangeS || contextTrace || contextEnv || contextToMs || contextProfile || contextConversation || contextPage || contextPinnedPage || (contextWikiRefs && contextWikiRefs.length > 0) || tzOffsetMin !== 0 || tz
         ? {
             ...(tzOffsetMin !== 0 ? { tzOffsetMin } : {}),
             ...(tz ? { tz } : {}),
@@ -2423,6 +2426,7 @@ export const api = {
             ...(contextConversation ? { conversation: contextConversation } : {}),
             ...(contextPage ? { page: contextPage } : {}),
             ...(contextPinnedPage ? { pinnedPage: contextPinnedPage } : {}),
+            ...(contextWikiRefs && contextWikiRefs.length > 0 ? { wikiRefs: contextWikiRefs } : {}),
           }
         : undefined;
     const r = await fetch(API_BASE + '/api/copilot/chat', {

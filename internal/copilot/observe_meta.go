@@ -56,7 +56,9 @@ var promptVersionRegistry = map[string]string{
 	"systemGuidedChat":           systemGuidedChat,
 	"systemDrawerChat":           systemDrawerChat,
 	"systemRAGChat":              systemRAGChat,
-	"systemWikiChat":             systemWikiChat, // v0.10.1124
+	"systemWikiChat":             systemWikiChat,        // v0.10.1124
+	"systemWikiFollowUp":         systemWikiFollowUp,    // v0.10.1134 — wiki takip sorusu
+	"WikiNotInPageSentinel":      WikiNotInPageSentinel, // v0.10.1134 — takip "sayfada yok" işareti
 	"systemChat":                 systemChat,
 	"systemChatRoundCap":         systemChatRoundCap,
 	"systemChatRoundCapAddendum": systemChatRoundCapAddendum, // v0.10.806
