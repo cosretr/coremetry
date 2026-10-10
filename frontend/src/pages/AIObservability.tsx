@@ -5,6 +5,7 @@ import { Spinner, Empty } from '@/components/Spinner';
 import { Button, Drawer, DrawerSection, SegmentedControl } from '@/components/ui';
 import { api } from '@/lib/api';
 import { cachedPctLabel } from './ai/cachedTokens';
+import { ExchangesPanel } from './ai/ExchangesPanel';
 import { useUrlRange } from '@/lib/useUrlRange';
 import { rcaPctText, rcaEngineTone, rcaSatisfactionText, rcaBucketLabel, rcaBucketSatisfaction, rcaCalibrationNote } from './ai/rcaQualityView';
 import type { RCAVerdictQuality, AIBudgetStatus, NegativeFeedbackCall } from '@/lib/types';
@@ -279,6 +280,15 @@ export default function AIObservabilityPage() {
           </>
           );
         })()}
+
+        {/* v0.10.1153 — CoSRE etkileşimleri: kullanıcı turu başına bir satır
+            (LLM'siz cevaplar dahil), alt çağrılar çekmecede. Çağrı tablosu
+            aşağıda model çağrısı başına kalır. Değerlendirme kaynağında tur
+            yok (evalset tek çağrı koşar) — panel yalnız üretimde. */}
+        {source !== 'evalset' && (
+          <ExchangesPanel range={range}
+            onOpenCall={id => { api.aiCall(id).then(c => { if (c) setOpen(c); }).catch(() => { /* satır TTL'le düşmüş olabilir */ }); }} />
+        )}
 
         {/* Filter strip */}
         <PageControls sticky style={{ marginTop: 18, marginBottom: 8 }}>

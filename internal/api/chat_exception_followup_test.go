@@ -390,11 +390,8 @@ func TestExceptionFollowUpNoLeakEndToEnd(t *testing.T) {
 	if ans := answerText(t, frames); !strings.HasSuffix(ans, drawerSourceNote("exception")+" + read_source_code (kaynak kod)") {
 		t.Fatalf("künye kod okumasını adlandırmalı: %q", ans)
 	}
-	recs := rec.wait(t, 1)
-	last := recs[len(recs)-1]
-	if strings.Contains(last.PromptSample+last.ResponseSample, scLeakMarker) {
-		t.Fatalf("ai_calls kodu taşıyor: %+v", last)
-	}
+	// v0.10.1153 — model çağrısı + turun etkileşim satırı; ikisi de kod taşımaz.
+	last := modelCallAndTurnNoLeak(t, rec.wait(t, 2), scLeakMarker)
 	if last.Surface != exceptionCodeSurface || !strings.Contains(last.PromptSample, "[kod: payments/src/main/java/com/example/cards/ChargeHandler.java:115-125 · 11 satır · release (dal)]") {
 		t.Fatalf("ai_calls: yüzey %q, örnek %q", last.Surface, last.PromptSample)
 	}

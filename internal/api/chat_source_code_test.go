@@ -281,11 +281,8 @@ func TestReadSourceCodeNoLeakEndToEnd(t *testing.T) {
 		t.Fatalf("kaynak rozeti: %v", res["sources"])
 	}
 	// 2) ai_calls kaydı: maskeli "[kod: …]" özeti var, kod yok.
-	recs := rec.wait(t, 1)
-	last := recs[len(recs)-1]
-	if strings.Contains(last.PromptSample+last.ResponseSample, scLeakMarker) {
-		t.Fatalf("ai_calls kodu taşıyor: %+v", last)
-	}
+	// v0.10.1153 — model çağrısı + turun etkileşim satırı; ikisi de kod taşımaz.
+	last := modelCallAndTurnNoLeak(t, rec.wait(t, 2), scLeakMarker)
 	if !strings.Contains(last.PromptSample, "[kod: payments/src/main/java/com/example/cards/ChargeHandler.java:115-125 · 11 satır · release (dal)]") {
 		t.Fatalf("ai_calls maskeli özet yok: %q", last.PromptSample)
 	}

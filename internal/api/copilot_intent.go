@@ -36,6 +36,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cilcenk/coremetry/internal/ai/aisurface"
 	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/copilot"
 )
@@ -386,11 +387,13 @@ func (s *Server) copilotChatIntent(ctx context.Context, emit func(string, any), 
 	const tool = "intent_classify"
 	i := emitStepChipOrigin(emit, tool, intentStepArgs(q), "intent")
 	t0 := time.Now()
-	// Sınıflandırma çağrısı EXCHANGE'SİZ: aynı exchange_id altında ikinci
-	// ai_calls satırı geri bildirim/KB adayı JOIN'lerini ikiye katlıyordu
-	// (inceleme #2); satır yine yazılır (surface chat-intent), oylanamaz.
+	// Sınıflandırma çağrısı KÖK exchange'i taşımaz: aynı exchange_id altında
+	// ikinci ai_calls satırı geri bildirim/KB adayı JOIN'lerini ikiye
+	// katlıyordu (inceleme #2); satır yine yazılır (surface chat-intent),
+	// oylanamaz. v0.10.1153 — çocuk kimlik ("kök:chat-intent"): tam eşitlik
+	// JOIN'ine girmez ama /ai etkileşiminin altında gruplanır.
 	m := copilot.MetaFromContext(ctx)
-	m.ExchangeID = ""
+	m.ExchangeID = aisurface.ChildExchangeID(m.ExchangeID, aisurface.ChatIntent)
 	cctx, cancel := context.WithTimeout(copilot.WithMeta(ctx, m), intentClassifyTimeout(s.copilot.ClientTimeout()))
 	raw, err := s.copilotExplainJSONSurface(cctx, "chat-intent", copilot.SystemPromptIntentClassify(), q, intentClassifySchema())
 	cancel()
@@ -425,7 +428,8 @@ func (s *Server) copilotChatIntent(ctx context.Context, emit func(string, any), 
 		// soruları surface='chat' ile sayar; on_no_loop'ta o satır hiç
 		// yazılmaz — none sonucu ayrı yüzeyle kaydedilir ki rapor kör
 		// kalmasın (#6). Exchange'siz: KB adayı JOIN'ine girmez.
-		s.copilot.RecordUsage(copilot.WithMeta(ctx, copilot.CallMeta{Surface: "chat-intent-none", UserID: m.UserID, UserEmail: m.UserEmail}), t0,
+		s.copilot.RecordUsage(copilot.WithMeta(ctx, copilot.CallMeta{Surface: "chat-intent-none", UserID: m.UserID, UserEmail: m.UserEmail,
+			ExchangeID: aisurface.ChildExchangeID(m.ExchangeID, aisurface.ChatIntentNone)}), t0, // v0.10.1153 — turun altında
 			0, 0, 0, "ok", "", question, strings.TrimSpace(raw))
 		if mode != copilot.IntentOnNoLoop {
 			return false, false
@@ -477,7 +481,8 @@ func (s *Server) copilotChatIntent(ctx context.Context, emit func(string, any), 
 		// Konu dışı satırı ayrı yüzeyle (chat-offtopic): /ai kullanım listesi
 		// kullanıcıların ne sorduğunu türüyle görür; model koşmadı (0 token),
 		// exchange'siz (oylanmaz). Cevap runGuidedRoute → guidedOffTopicAnswer.
-		s.copilot.RecordUsage(copilot.WithMeta(ctx, copilot.CallMeta{Surface: "chat-offtopic", UserID: m.UserID, UserEmail: m.UserEmail}), t0,
+		s.copilot.RecordUsage(copilot.WithMeta(ctx, copilot.CallMeta{Surface: "chat-offtopic", UserID: m.UserID, UserEmail: m.UserEmail,
+			ExchangeID: aisurface.ChildExchangeID(m.ExchangeID, aisurface.ChatOffTopic)}), t0, // v0.10.1153 — turun altında
 			0, 0, 0, "ok", "", question, offTopicAnswerText(question, ctxService))
 	}
 	if route.Env == "" && ctxEnv != "" {

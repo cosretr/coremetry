@@ -7,6 +7,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/cilcenk/coremetry/internal/ai/aisurface"
 )
 
 // AICall is one Copilot LLM round-trip. Recorded by copilot.Service
@@ -229,8 +231,15 @@ func aiCallsSourceCond(src AICallSource) string {
 	if src == AICallSourceEvalset {
 		return cond
 	}
-	return "NOT " + cond
+	return "NOT " + cond + " AND " + aiCallsNotTurnCond
 }
+
+// aiCallsNotTurnCond — v0.10.1153: CoSRE etkileşim satırları (yüzey
+// "cosre-turn:…", ai_exchanges.go) model çağrısı DEĞİL; çağrı agregatlarına
+// (KPI, seri, bütçe, çağrı listesi) girmez. Üretim koşulunun parçası ki tek
+// kurucudan geçen her okuyucu onu kendiliğinden dışlasın (K2'nin aynı
+// "tek yazım" gerekçesi). Evalset satırları bu önekle hiç başlamaz.
+const aiCallsNotTurnCond = "NOT startsWith(surface, '" + aisurface.TurnPrefix + "')"
 
 // aiCallsWindowWhere — v0.10.940: agregat okuyucuların ortak WHERE'i
 // (pencere + kaynak). İki bind (from, to) — çağıranların arg listesi

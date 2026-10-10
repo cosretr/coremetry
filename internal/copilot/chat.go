@@ -135,6 +135,51 @@ func (s *Service) RecordUsage(ctx context.Context, started time.Time, inTok, out
 	}
 	rec.PromptVersion = PromptVersion() // v0.10.409
 	rec.ProfileID = s.profileID(ctx)
+	s.emitRecord(rec)
+}
+
+// RecordExchange — v0.10.1153: bir CoSRE kullanıcı turunun /ai etkileşim
+// satırı (api/chat_exchange.go). RecordUsage'ın ikizi ve AYNI kaydedici:
+// aynı Recorder, aynı 4 KB örnek tavanı (truncForSample), aynı ateşle-unut
+// gorutini. Farkı: bu satır bir model çağrısı DEĞİL — token taşımaz (turun
+// model çağrıları kendi satırlarında, aynı exchange köküyle) ve sağlayıcı /
+// model boştur; LLM'siz (deterministik) bir tur da böylece /ai'da görünür.
+// Örnekler: soru (operatörün metni) ve ekrana giden cevap — prompt gövdesi
+// DEĞİL. Yüzey ve exchange kimliği meta'dan (çağıran etkileşim etiketini ve
+// TurnExchangeID'yi koyar). started sıfırsa süre 0 (RecordUsage sözleşmesi).
+func (s *Service) RecordExchange(ctx context.Context, started time.Time, status, errMsg, question, answer string) {
+	if s == nil || s.recorder == nil {
+		return
+	}
+	meta := MetaFromContext(ctx)
+	created := started
+	if created.IsZero() {
+		created = time.Now()
+	}
+	rec := CallRecord{
+		CreatedAt:      created,
+		Surface:        meta.Surface,
+		ExchangeID:     meta.ExchangeID,
+		DurationMs:     durationMsSince(started),
+		Status:         status,
+		PromptChars:    uint32(len(question)),
+		ResponseChars:  uint32(len(answer)),
+		UserID:         meta.UserID,
+		UserEmail:      meta.UserEmail,
+		PromptSample:   truncForSample(question),
+		ResponseSample: truncForSample(answer),
+	}
+	if status == "error" {
+		rec.ErrorMsg = truncErr(errMsg)
+		rec.ErrorClass = ClassifyAIErrorText(errMsg)
+	}
+	rec.ProfileID = s.profileID(ctx)
+	s.emitRecord(rec)
+}
+
+// emitRecord — kaydı kendi gorutininde, sınırlı ctx ile yazar (kullanıcı
+// yanıtı CH yazımını beklemez; takılı bir yazım gorutini rehin tutamaz).
+func (s *Service) emitRecord(rec CallRecord) {
 	go func(r Recorder, rec CallRecord) {
 		rctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()

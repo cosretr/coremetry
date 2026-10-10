@@ -70,6 +70,9 @@ func (s *Server) registerAIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/ai/calls", auth.RequireRole(auth.RoleAdmin, s.listAICalls))
 	mux.HandleFunc("GET /api/ai/calls/{id}", auth.RequireRole(auth.RoleAdmin, s.getAICall))
 	mux.HandleFunc("GET /api/ai/stats", auth.RequireRole(auth.RoleAdmin, s.aiStats))
+	// v0.10.1153 — CoSRE etkileşimleri: her tur bir satır, altında model
+	// çağrıları; LLM'siz cevaplar dahil (ai_exchanges.go).
+	mux.HandleFunc("GET /api/ai/exchanges", auth.RequireRole(auth.RoleAdmin, s.listAIExchanges))
 	// v0.9.549 — guided router'ın yakalayamadığı sorular (serbest tool
 	// döngüsüne düşenler). "Sıradaki intent ne olmalı" ölçüye bağlanıyor.
 	mux.HandleFunc("GET /api/ai/router-gaps", auth.RequireRole(auth.RoleAdmin, s.aiRouterGaps))

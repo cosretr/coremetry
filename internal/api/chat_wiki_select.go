@@ -28,6 +28,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cilcenk/coremetry/internal/ai/aisurface"
 	"github.com/cilcenk/coremetry/internal/copilot"
 	"github.com/cilcenk/coremetry/internal/wiki"
 )
@@ -162,10 +163,13 @@ func (s *Server) wikiSelectPages(ctx context.Context, emit func(string, any), qu
 	if len(cands) > dm.wikiCandidates() {
 		cands = cands[:dm.wikiCandidates()]
 	}
-	// Exchange'siz (niyet sınıflandırıcısının emsali): aynı exchange altında
-	// ikinci ai_calls satırı geri bildirim JOIN'lerini ikiye katlamasın.
+	// Kök kimliği TAŞIMAZ (niyet sınıflandırıcısının emsali): aynı exchange
+	// altında ikinci ai_calls satırı geri bildirim JOIN'lerini ikiye
+	// katlamasın. v0.10.1153 — ama boş da değil: çocuk kimlik
+	// ("kök:wiki-select") /ai'da turun altında gruplanır (eskiden turla
+	// ilişkisiz görünüyordu).
 	m := copilot.MetaFromContext(ctx)
-	m.ExchangeID = ""
+	m.ExchangeID = aisurface.ChildExchangeID(m.ExchangeID, aisurface.WikiSelect)
 	var client time.Duration
 	if s != nil && s.copilot != nil {
 		client = s.copilot.ClientTimeout()

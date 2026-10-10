@@ -30,7 +30,9 @@ import (
 )
 
 const (
-	wantProdCond    = "NOT startsWith(surface, 'evalset-')"
+	// v0.10.1153 — üretim koşulu CoSRE etkileşim satırlarını da dışlar
+	// (model çağrısı değiller; ai_exchanges.go).
+	wantProdCond    = "NOT startsWith(surface, 'evalset-') AND NOT startsWith(surface, 'cosre-turn')"
 	wantEvalsetCond = "startsWith(surface, 'evalset-')"
 )
 
@@ -164,7 +166,9 @@ var aiCallsReaderDecisions = map[string]string{
 	"aiCallsTimeseriesSQL":           "source",
 	"aiCallsListSQL":                 "source",
 	"aiBudgetUsageQueries":           "source",
-	"RouterGaps":                     "whitelist", // surface IN ('chat', 'chat-intent-none')
+	"RouterGaps":                     "whitelist", // surface IN (?) ← aisurface.RouterGapLabels (v0.10.1153)
+	"aiExchangeCallsSQL":             "source",    // v0.10.1153 — etkileşimin model çağrıları
+	"aiExchangeTurnsSQL":             "turn",      // v0.10.1153 — YALNIZ etkileşim satırları
 	"GetAICall":                      "point",
 	"aiCallEvalSelect":               "point", // AICallForEvalset (exchange_id)
 	"AICallSurfaceByExchange":        "point",
@@ -254,6 +258,11 @@ func TestAICallsReaderInventory(t *testing.T) {
 		case "whitelist":
 			if !strings.Contains(rd.sql.String(), "surface IN (") || strings.Contains(rd.sql.String(), AICallEvalsetSurfacePrefix) {
 				t.Errorf("%s: yüzey whitelist'i kayboldu — evalset satırları sayılabilir", n)
+			}
+		case "turn":
+			// v0.10.1153 — etkileşim okuyucusu yalnız "cosre-turn" satırlarını seçer.
+			if !rd.idents["aiCallsTurnCond"] {
+				t.Errorf("%s: 'turn' kararlı ama aiCallsTurnCond'u kullanmıyor", n)
 			}
 		}
 	}

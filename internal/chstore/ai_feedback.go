@@ -3,6 +3,8 @@ package chstore
 import (
 	"context"
 	"time"
+
+	"github.com/cilcenk/coremetry/internal/ai/aisurface"
 )
 
 // AI answer feedback (v0.8.399, AI audit feedback slice). One row per
@@ -267,13 +269,13 @@ func (s *Store) ListKBCandidates(ctx context.Context, from, to time.Time, limit 
 		LEFT JOIN ai_calls AS c ON c.exchange_id = f.exchange_id
 		WHERE f.verdict = 1 AND f.created_at >= ? AND f.created_at <= ?
 		  AND c.response_sample != ''
-		  AND c.surface != 'chat-general'
+		  AND c.surface NOT IN (?)
 		  AND f.exchange_id GLOBAL NOT IN (
 		      SELECT source_ref FROM rag_chunks FINAL
 		      WHERE source = 'curated' AND source_ref != '')
 		ORDER BY f.created_at DESC
 		LIMIT ?
-		SETTINGS max_execution_time = 10`, from, to, limit)
+		SETTINGS max_execution_time = 10`, from, to, aisurface.NoKBLabels(), limit) // v0.10.1153 — yüzey kaydından (chat-general)
 	if err != nil {
 		return nil, err
 	}

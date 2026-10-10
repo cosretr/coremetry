@@ -1256,6 +1256,10 @@ export const api = {
     get<import('./types').AICall[]>(`/api/ai/calls?${qs(params)}`),
   aiCall: (id: string) =>
     get<import('./types').AICall>(`/api/ai/calls/${encodeURIComponent(id)}`),
+  // v0.10.1153 — CoSRE etkileşimleri: her tur bir satır (LLM'siz dahil),
+  // altında model çağrıları. Önbelleksiz (yeni tur hemen görünür).
+  aiExchanges: (params: { from?: number; to?: number; limit?: number }) =>
+    get<import('./types').AIExchange[]>(`/api/ai/exchanges?${qs(params)}`),
   aiStats: (params: { from?: number; to?: number; source?: import('./types').AICallSource }) =>
     get<import('./types').AIStats>(`/api/ai/stats?${qs(params)}`),
   aiSeries: (params: { from?: number; to?: number; source?: import('./types').AICallSource }) =>

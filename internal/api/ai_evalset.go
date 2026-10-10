@@ -24,6 +24,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cilcenk/coremetry/internal/ai/aisurface"
 	"github.com/cilcenk/coremetry/internal/auth"
 	"github.com/cilcenk/coremetry/internal/chstore"
 )
@@ -69,8 +70,18 @@ type evalsetExportPayload struct {
 // (copilot.SystemPromptX). Bilinmeyen etiket "Unknown": fikstür doğrulaması
 // (TestEvalsetFixturesValid) commit'te kırmızı olur — operatör düzeltir.
 func evalSurfaceFromLabel(label string) string {
+	// v0.10.1153 — CoSRE sohbet yüzeyleri YÜZEY KAYDINDAN (aisurface): elle
+	// yazılmış case listesi wiki-chat / wiki-select / rag-chat'i hiç
+	// görmüyordu. Kayıt her yüzeyin evalset kararını açıkça taşır; Eval ""
+	// = sistem prompt'u koşucuda yok (bağlam istek anında kurulur) → Unknown.
+	if sp, ok := aisurface.Lookup(label); ok {
+		if sp.Eval == "" {
+			return "Unknown"
+		}
+		return sp.Eval
+	}
 	switch label {
-	case "explain-trace", "explain-trace:nudge", "explain-trace:chat": // :nudge v0.10.432 (D8), :chat v0.10.453 — aynı prompt ailesi
+	case "explain-trace", "explain-trace:nudge": // :nudge v0.10.432 (D8); :chat (v0.10.453) yüzey kaydında
 		return "Trace"
 	case "explain-span":
 		return "Span"
@@ -102,12 +113,6 @@ func evalSurfaceFromLabel(label string) string {
 		return "RCAVerdict"
 	case "explain-charts":
 		return "ServiceCharts"
-	case "chat-general", "chat-intent-none", "chat-offtopic": // chat-offtopic v0.10.819 (oylanmaz; tamlık)
-		return "GeneralChat"
-	case "chat", "chat-guided", "chat-drawer":
-		return "Chat"
-	case "chat-intent":
-		return "IntentClassify"
 	}
 	return "Unknown"
 }

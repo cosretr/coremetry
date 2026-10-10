@@ -277,6 +277,13 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 	// v0.10.1150 — "Derin düşün" kararı bir kez türetilir ve ctx ile iner
 	// (chat_deep.go); kapalıyken ctx ve olay akışı aynen.
 	dm := s.chatDeepMode(r, req.Context.Deep, req.Context.Profile)
+	// v0.10.1153 — turun /ai etkileşim satırı (chat_exchange.go): TEK defer,
+	// her kademe ve erken dönüş dahil (LLM'siz cevaplar da). emit sarmalanır
+	// ki cevap/hata metni okunsun; closure son ctx'i (profil/derin) görür.
+	xch := newChatExchange(exchangeID, lastUserText(req.Messages), dm.On, chatT0)
+	ctx = withChatExchange(ctx, xch)
+	emit = xch.tap(emit)
+	defer func() { s.recordChatExchange(ctx, xch, cspan) }()
 	if dm.On {
 		ctx = withDeepMode(ctx, dm)
 		emit("step", map[string]string{"label": dm.stepLabel()})

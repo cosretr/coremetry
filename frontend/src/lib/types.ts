@@ -3150,6 +3150,48 @@ export interface AICallsTimePoint {
   outputTokens: number;
 }
 
+/** v0.10.1153 — bir CoSRE etkileşiminin altındaki ai_calls satırı (örneksiz;
+ *  tam satır `api.aiCall(id)`). `llm: false` = model koşmadan yazılan işaret
+ *  satırı (chat-offtopic, chat-intent-none). Go: chstore.AIExchangeCall. */
+export interface AIExchangeCall {
+  id: string;
+  createdAt: number;
+  surface: string;
+  provider: string;
+  model: string;
+  durationMs: number;
+  inputTokens: number;
+  outputTokens: number;
+  status: string;
+  llm: boolean;
+}
+
+/** v0.10.1153 — /api/ai/exchanges: bir CoSRE kullanıcı turu (LLM'siz
+ *  cevaplar dahil; `llmCalls: 0` = "LLM yok"). `exchangeId` 👍/👎 anahtarı.
+ *  Go: chstore.AIExchange. */
+export interface AIExchange {
+  exchangeId: string;
+  createdAt: number;
+  tier: string;
+  route?: string;
+  deep?: boolean;
+  question: string;
+  answer?: string;
+  status: 'ok' | 'error';
+  errorMsg?: string;
+  durationMs: number;
+  userId?: string;
+  userEmail?: string;
+  profileId?: string;
+  llmCalls: number;
+  inputTokens: number;
+  outputTokens: number;
+  models: string[];
+  calls: AIExchangeCall[];
+  feedback?: 1 | -1;
+  feedbackComment?: string;
+}
+
 /** v0.10.940 — /api/ai/{stats,series,calls} `?source=`. Parametre YOK =
  *  üretim (evalset koşularının `evalset-*` yüzeyli satırları HARİÇ); `evalset`
  *  = YALNIZ o satırlar. Tek değerli birlik bilerek: "üretim" tel üstünde bir

@@ -3,6 +3,8 @@ package chstore
 import (
 	"context"
 	"time"
+
+	"github.com/cilcenk/coremetry/internal/ai/aisurface"
 )
 
 // Router boşluk raporu — v0.9.549.
@@ -53,14 +55,16 @@ func (s *Store) RouterGaps(ctx context.Context, since time.Duration, limit int) 
 		       toUnixTimestamp64Nano(max(created_at)) AS last_at,
 		       uniqExact(user_id)                   AS users
 		FROM ai_calls
-		WHERE surface IN ('chat', 'chat-intent-none')
+		WHERE surface IN (?)
 		  AND created_at >= ?
 		  AND prompt_sample != ''
 		GROUP BY q
 		ORDER BY n DESC, last_at DESC
 		LIMIT ?
 		SETTINGS max_execution_time = 10`,
-		chDateTime64Arg(time.Now().Add(-since)), limit)
+		// v0.10.1153 — liste yüzey kaydından (chat, chat-intent-none): elle
+		// yazılmış IN listesi yeni yüzeyleri görmüyordu.
+		aisurface.RouterGapLabels(), chDateTime64Arg(time.Now().Add(-since)), limit)
 	if err != nil {
 		return nil, err
 	}

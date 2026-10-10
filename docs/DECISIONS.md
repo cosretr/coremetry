@@ -3423,6 +3423,40 @@ telefon genişliğinde (≤640px) yalnız ikon. Yukarı açılan menü tam ayrı
 aynen taşır; tek profilli tıklanamaz etiket de aynı kompakt biçim. Pinler: `deepThink.test.tsx`,
 `modelPicker.composer.test.tsx` (etiket türetme tablo testi, tooltip, ≤640px kuralı).
 
+## 2026-10-10 — /ai her CoSRE turunu bir etkileşim olarak gösterir; sohbet yüzeyleri tek kayıt defterinde (v0.10.1153)
+
+**Operatör (prod):** "AI insights (/ai) her sohbet / CoSRE etkileşimini göstermiyor." **Kök neden:** /ai
+yalnız ai_calls'ı okuyor ve o tabloya yalnız MODEL ÇAĞRILARI yazılıyordu; turun kendisi hiçbir yerde kayıt
+değildi. (1) LLM'siz cevaplar hiç satır üretmiyordu: kapsam kademesi (/help, bilinmeyen komut, "bunu mu
+demek istedin", problem bulunamadı, /wiki kapı mesajları — `chat_scope.go` chatScopeTier/wikiForcedAnswer),
+"Wikide bulunamadı" (`chat_wiki_tier.go` wikiChatAnswer), guided şablonları/netleştirme/varlık kartı/önbellekten
+trace anlatımı. (2) Yardımcı çağrılar bilerek exchange'siz yazılıyordu (`chat_wiki_select.go` wiki-select,
+`copilot_intent.go` chat-intent / chat-intent-none / chat-offtopic — geri bildirim JOIN'i ikiye katlanmasın
+diye): turla ilişkisiz satırlar. (3) Kademe, rota, Derin bayrağı ve sonuç hiçbir satırda yoktu. (4) Yüzey
+listeleri elle yazılmıştı: evalset eşlemesi (`ai_evalset.go` evalSurfaceFromLabel) wiki-chat / wiki-select /
+rag-chat'i görmüyordu, router-gap `surface IN ('chat','chat-intent-none')` ve KB `!= 'chat-general'` düz
+literal. Ayrıca çağrı tablosu 200 satır, yüzey kırılımı ilk 20 yüzey: yoğun pencerede arka plan RCA/insight
+çağrıları sohbet satırlarını iterdi.
+
+**Karar:** Yeni tablo/kolon YOK (iki-boot probe sözleşmesine üçüncü bayrak eklenmez — v0.10.940 evalset
+öneki emsali). Her CoSRE turu, kademesi ne olursa olsun, sonunda ai_calls'a TEK bir **etkileşim satırı**
+yazar: `copilotChat`'in tek defer'i (`chat_exchange.go`) → `copilot.RecordExchange` (RecordUsage'ın ikizi,
+aynı Recorder / 4 KB örnek tavanı / 90 g TTL). Yüzey `cosre-turn:<kademe>[/<rota>][+deep]` (rota yalnız
+`[a-z0-9_]`, ≤40 — kardinalite sınırlı), exchange_id `<kök>:turn`, token yok, sağlayıcı/model boş; örnek
+soru + ekrandaki cevap (prompt gövdesi değil). Turun model çağrıları köke bağlanır: cevap çağrısı kökü
+AYNEN taşır (👍/👎, KB, evalset JOIN'leri tam eşitlikle değişmeden çalışır), yardımcı/işaret satırları
+`<kök>:<yüzey>` taşır (JOIN'e girmez, gruplanır). Çağrı agregatları (KPI, seri, bütçe, çağrı listesi)
+etkileşim satırlarını üretim koşulunun içinde dışlar (`aiCallsNotTurnCond`, tek kurucu). Okuma: `GET
+/api/ai/exchanges` (admin, önbelleksiz) — üç küçük sorgu + Go'da birleşim (tur, köklerin çağrıları,
+ai_feedback FINAL); /ai'da "CoSRE etkileşimleri" paneli (soru, kademe/rota, derin, model, süre, token,
+sonuç, oy; LLM'siz tur "LLM yok"; satır çekmecesinde alt çağrılar → çağrı çekmecesi). Sohbet yüzeyleri
+`internal/ai/aisurface` kaydında (rol: cevap / yardımcı / işaret, evalset yüzeyi, router-gap, KB-dışı);
+evalset eşlemesi, router-gap IN listesi ve KB dışlaması kayıttan türer. **Pinler:** `ai_surface_registry_test.go`
+(sohbet kodundaki her yüzey etiketi kayıtlı, kayıtta ölü etiket yok, her `cspan.tier` adı kayıtlı kademe),
+`chat_exchange_test.go` (kapsam / guided / wiki bulunamadı / wiki anlatımı+derin / yoklama / netleştirme
+kurtarması / wiki takibi / serbest döngü / niyet alt çağrıları: tur başına tek etkileşim satırı, çağrılar
+köke bağlı), `chstore/ai_exchanges_test.go`, `ai_calls_source_test.go` envanteri.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"
