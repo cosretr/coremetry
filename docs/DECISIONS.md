@@ -3457,6 +3457,17 @@ evalset eşlemesi, router-gap IN listesi ve KB dışlaması kayıttan türer. **
 kurtarması / wiki takibi / serbest döngü / niyet alt çağrıları: tur başına tek etkileşim satırı, çağrılar
 köke bağlı), `chstore/ai_exchanges_test.go`, `ai_calls_source_test.go` envanteri.
 
+## 2026-10-10 — CI kırmızısı: audit yinelenen rota yanlış pozitifi + iki kırılgan frontend testi (v0.10.1154)
+
+1153'ün CI'ı ve Release kapısı `make audit` CHECK 7'de ("duplicate route: GET /api/ai/exchanges")
+düştü: rota tek kayıtlı, ama `chat_exchange_test.go` kayıt satırını birebir dize olarak arıyordu
+ve audit `internal/api/*.go` glob'u test dosyalarını da tarıyor. Test dizesi `mux.HandleFunc(`
+önekisiz arayacak biçimde değişti. 1150–1152 CI'ları frontend'te iki kırılgan testle kırmızıydı:
+`composerDraft.test.tsx` (Ctrl+B ×2 aç/kapa adımı CI'da imleç konumuna bağlı) sıralaması Enter →
+Ctrl+B olarak değişti (aç/kapa semantiği composerEdit saf testlerinde pinli);
+`htmlToMarkdown.test.ts` 5000 seviyeli iç içe HTML CI'da 5 sn'yi aştı → 1500 seviye + 30 sn tavan.
+Ürün kodu değişmedi.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

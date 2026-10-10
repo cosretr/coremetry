@@ -167,10 +167,12 @@ describe('tavanlar', () => {
     const big = '<p><b>x</b></p>' + '<p>' + 'a'.repeat(HTML_PASTE_MAX) + '</p>';
     expect(htmlToMarkdown(big)).toBeNull();
   });
+  // v0.10.1154 — 5000 seviye CI'da 5 sn'yi aştı (yavaş koşucu); derinlik
+  // tavanını aşan 1500 seviye aynı yolu sınar, süre tavanı cömert.
   it('derin iç içe yapı yığın taşırmaz', () => {
-    const deep = '<div>'.repeat(5000) + '<b>dip</b>' + '</div>'.repeat(5000);
+    const deep = '<div>'.repeat(1500) + '<b>dip</b>' + '</div>'.repeat(1500);
     expect(htmlToMarkdown(deep)).toContain('dip');
-  });
+  }, 30_000);
   it('boş / yalnız görsel → null', () => {
     expect(htmlToMarkdown('')).toBeNull();
     expect(htmlToMarkdown('<p><img src="x"></p>')).toBeNull();

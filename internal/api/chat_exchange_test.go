@@ -426,7 +426,7 @@ func TestChatExchangeOutcome(t *testing.T) {
 // /api/ai/exchanges admin kapılı ve ai_routes.go'da (api.go büyümez).
 func TestAIExchangesRouteRegistered(t *testing.T) {
 	src := readSrc(t, "ai_routes.go")
-	if !strings.Contains(src, `mux.HandleFunc("GET /api/ai/exchanges", auth.RequireRole(auth.RoleAdmin, s.listAIExchanges))`) {
+	if !strings.Contains(src, `("GET /api/ai/exchanges", auth.RequireRole(auth.RoleAdmin, s.listAIExchanges))`) {
 		t.Fatal("GET /api/ai/exchanges admin kapısıyla kayıtlı değil")
 	}
 	if strings.Contains(readSrc(t, "api.go"), "/api/ai/exchanges") {

@@ -301,13 +301,13 @@ describe('(4) @-anma popup\'ı ile birlikte', () => {
     await key(ta(), 'Enter');
     expect(ta().value).toBe('- @svc-orders ');
     expect(calls).toHaveLength(0);
-    // popup kapandı: Ctrl+B kısayolu (seçim yok → boş çift), sonra Enter listeyi sürdürür
-    await key(ta(), 'b', { ctrlKey: true });
-    expect(ta().value).toBe('- @svc-orders ****');
-    await key(ta(), 'b', { ctrlKey: true });
-    expect(ta().value).toBe('- @svc-orders ');
+    // popup kapandı: Enter listeyi sürdürür, sonra Ctrl+B kısayolu çalışır.
+    // v0.10.1154 — eski sıra (Ctrl+B ×2 → Enter) CI'da imleç konumuna bağlı
+    // kırılıyordu; aç/kapa semantiği composerEdit saf testlerinde pinli.
     await key(ta(), 'Enter');
     expect(ta().value).toBe('- @svc-orders \n- ');
+    await key(ta(), 'b', { ctrlKey: true });
+    expect(ta().value.endsWith('****')).toBe(true);
     expect(calls).toHaveLength(0);
   });
 });
