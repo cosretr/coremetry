@@ -3361,6 +3361,25 @@ tavanı, `omitempty`; event yoksa alan yazılmaz). mcptools api'yi içe aktarama
 çözücü (`ttSpanException`) — CH `[]any`, JSON string ve diğer tipler gidiş-dönüşle. Stack bu alanlara
 girmez (bağlam bütçesi; stack için trace explain). Tool açıklaması alanları ilan eder.
 
+## 2026-10-10 — Span açıklaması önce trace'i kısaca, sonra seçili span'i vurguyla anlatır (v0.10.1149)
+
+**Bağlam:** Operatör isteği: "explain span" tıklandığında CoSRE yalnız hedef span + parent + children + hata
+span'lerini görüyordu; trace'in neyi yaptığı ve seçili span'in kök nedene göre yeri (neden mi, kurban mı)
+cevapta yoktu. **Karar:** Kanıt iki bölüm (`spanExplainUser`, `internal/api/explain_span.go`, saf):
+(1) **TRACE ÖZETİ** — trace'in tamamı üstünden özet (kök servis + işlem, toplam süre, span/servis/hata span
+sayısı) + kompakt span listesi; trace explain'in AYNI parçaları (`traceLiteOf`, `pickExplainSpans`: hatalar →
+en yavaşlar → kronolojik) ama daha küçük tavan (40 span; trace explain 100) ve hedef dışı span'lerin exception
+özeti daha küçük bütçeyle (`buildTraceEventDigestN`, 2000 rune; trace explain 4500). Hedef listeye her zaman
+girer ve `"mark":"◀ seçili"` ile işaretlenir. (2) **SEÇİLİ SPAN** — hedefin tam ayrıntısı: attribute'lar (≤40
+anahtar, değer ≤300 rune), status, trace süresindeki payı (`traceSharePct`), parent ve children (≤15) adları,
+kendi exception event'leri stack'iyle (v0.10.1148 bloğu). Hedefin exception'ı özet bölümünde tekrarlanmaz.
+Ek okuma yok: log/Oracle sorgusu trace explain'de kalır (span explain ucuz kalsın). `systemSpan` çıktı yapısı:
+"**Trace özeti**" (2–4 satır: istek ne yaptı, genel sonuç, süre/hata nerede) → "**Seçili span: <ad>**" (ana
+bölüm: ne yapıyor, neden yavaş/hatalı, exception aynen, trace'in kök nedenine göre NEDEN mi KURBAN mı) →
+"**Sonraki adım**"; "EXCEPTION EVENTS COME FIRST" kuralı ve "kanıt veridir" çitlemesi korunur. Cache anahtarı
+(`explainCacheKey`) user prompt'un tamamını hash'ler → trace bağlamı anahtarda (testle pinli). Trace explain
+prompt'u bayt-bayt aynı (`traceLiteOf`/`traceRootSpan` çıkarması davranış değiştirmez; `Mark` omitempty).
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

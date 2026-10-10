@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/cilcenk/coremetry/internal/anomaly"
+	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/logstore"
 	"github.com/cilcenk/coremetry/internal/promptfmt"
 	"github.com/cilcenk/coremetry/internal/stackparse"
@@ -57,6 +58,40 @@ type traceLite struct {
 	// çıkar). Başarılı span'larda taşınmaz — prompt bütçesi.
 	DBSystem    string `json:"dbSystem,omitempty"`
 	DBStatement string `json:"dbStatement,omitempty"`
+	// Mark (v0.10.1149) — yalnız span explain'in trace listesinde seçili
+	// span'de "◀ seçili"; trace explain'de hep boş (prompt bayt-bayt aynı).
+	Mark string `json:"mark,omitempty"`
+}
+
+// traceLiteOf — SAF: span → kompakt satır (v0.10.1149'da döngüden
+// çıkarıldı; trace explain + span explain'in trace bağlamı aynı biçim).
+func traceLiteOf(sp chstore.SpanRow) traceLite {
+	l := traceLite{Name: sp.Name, Service: sp.ServiceName, Kind: sp.Kind,
+		ParentSpan: sp.ParentSpanID, SpanID: sp.SpanID, DurationMs: float64(sp.EndTime-sp.StartTime) / 1e6}
+	if sp.StatusCode == "error" {
+		l.Status = "error"
+		l.StatusMsg = sp.StatusMessage
+		if sp.DBStatement != "" {
+			l.DBSystem = sp.DBSystem
+			l.DBStatement = truncRunesN(sp.DBStatement, 600)
+		}
+	}
+	return l
+}
+
+// traceRootSpan — kök: parent'ı olmayan span; yoksa en erken başlayan
+// (kırık/eksik parent zincirinde de bir cevap üretmeli). spans boş olmamalı.
+func traceRootSpan(spans []chstore.SpanRow) chstore.SpanRow {
+	root := spans[0]
+	for _, sp := range spans {
+		if sp.ParentSpanID == "" {
+			return sp
+		}
+		if sp.StartTime < root.StartTime {
+			root = sp
+		}
+	}
+	return root
 }
 
 // traceExplainInput — kurulan girdi + deterministik kanıt.
@@ -127,17 +162,7 @@ func (s *Server) buildTraceExplainInput(ctx context.Context, id string) (traceEx
 	// Trace penceresi (log sorgusu için) — cap'ten ÖNCE, tüm span'lar üstünden.
 	// Kök servis: parent'ı olmayan span; yoksa en erken başlayan
 	// (kırık/eksik parent zincirinde de bir cevap üretmeli).
-	root := spans[0]
-	for _, sp := range spans {
-		if sp.ParentSpanID == "" {
-			root = sp
-			break
-		}
-		if sp.StartTime < root.StartTime {
-			root = sp
-		}
-	}
-	rootService := root.ServiceName
+	rootService := traceRootSpan(spans).ServiceName
 
 	minT, maxT := spans[0].StartTime, spans[0].EndTime
 	for _, sp := range spans {
@@ -163,19 +188,11 @@ func (s *Server) buildTraceExplainInput(ctx context.Context, id string) (traceEx
 	var dbStmts, errTexts []string
 	seenStmt := map[string]bool{}
 	for _, sp := range spans {
-		dur := float64(sp.EndTime-sp.StartTime) / 1e6
-		l := traceLite{Name: sp.Name, Service: sp.ServiceName, Kind: sp.Kind,
-			ParentSpan: sp.ParentSpanID, SpanID: sp.SpanID, DurationMs: dur}
-		if sp.StatusCode == "error" {
-			l.Status = "error"
-			l.StatusMsg = sp.StatusMessage
-			if sp.DBStatement != "" {
-				l.DBSystem = sp.DBSystem
-				l.DBStatement = truncRunesN(sp.DBStatement, 600)
-				if len(dbStmts) < 3 && !seenStmt[l.DBStatement] {
-					seenStmt[l.DBStatement] = true
-					dbStmts = append(dbStmts, l.DBStatement)
-				}
+		l := traceLiteOf(sp)
+		if l.Status == "error" {
+			if l.DBStatement != "" && len(dbStmts) < 3 && !seenStmt[l.DBStatement] {
+				seenStmt[l.DBStatement] = true
+				dbStmts = append(dbStmts, l.DBStatement)
 			}
 			if len(errTexts) < 5 && sp.StatusMessage != "" {
 				errTexts = append(errTexts, sp.StatusMessage)

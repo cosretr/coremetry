@@ -212,6 +212,12 @@ type traceEventDigest struct {
 // eşitlikte başlangıç sırası. Tavanlar yukarıda; toplam JSON yükü
 // traceEventsBlockMaxRunes'u aşmaz.
 func buildTraceEventDigest(spans []chstore.SpanRow) traceEventDigest {
+	return buildTraceEventDigestN(spans, traceEventsBlockMaxRunes)
+}
+
+// buildTraceEventDigestN — bütçe parametreli gövde (v0.10.1149: span
+// explain'in trace bağlamı daha küçük bütçeyle çağırır).
+func buildTraceEventDigestN(spans []chstore.SpanRow, maxRunes int) traceEventDigest {
 	var d traceEventDigest
 	slowest, slowDur := -1, int64(-1)
 	for i := range spans {
@@ -306,7 +312,7 @@ func buildTraceEventDigest(spans []chstore.SpanRow) traceEventDigest {
 		if len(d.Spans) > 0 {
 			sep = 1 // ","
 		}
-		if !fitTraceEventEntry(&entry, traceEventsBlockMaxRunes-used-sep, len(d.Spans) == 0) {
+		if !fitTraceEventEntry(&entry, maxRunes-used-sep, len(d.Spans) == 0) {
 			d.SkippedSpans++
 			continue
 		}
