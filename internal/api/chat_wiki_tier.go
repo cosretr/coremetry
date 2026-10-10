@@ -127,7 +127,20 @@ var wikiNarrateFn = func(s *Server, ctx context.Context, system, user string) (s
 // farklı sayfadan (v0.10.1136: aday kümesi; hangi sayfaların okunacağına
 // wikiPlanPages karar verir — model seçimi ya da skor tabanlı ≤5 sayfa).
 func wikiTierSelect(h []wiki.Hit) []wiki.Hit {
-	return wikiPagesHits(wikiGroupPages(h, wikiTierFloor, wikiSelectMaxCandidates))
+	return wikiTierSelectN(h, wikiSelectMaxCandidates)
+}
+
+// wikiTierSelectN — wikiTierSelect, aday tavanı açık (v0.10.1150 Derin: 15).
+func wikiTierSelectN(h []wiki.Hit, maxPages int) []wiki.Hit {
+	return wikiPagesHits(wikiGroupPages(h, wikiTierFloor, maxPages))
+}
+
+// wikiTierSearch — kademe araması + aday kümesi; Derin kipte (ctx) daha geniş
+// havuz. Kapalıyken Limit/aday tavanı eski sabitler (v0.10.1150).
+func wikiTierSearch(ctx context.Context, w *wiki.Service, question, project string, live wiki.LiveMode) (wiki.SearchResult, []wiki.Hit, error) {
+	dm := deepModeFrom(ctx)
+	res, err := w.SearchWith(ctx, question, project, wiki.SearchOptions{Limit: dm.wikiSearchLimit(), PerPage: wikiTierPerPage, Live: live})
+	return res, wikiTierSelectN(res.Hits, dm.wikiCandidates()), err
 }
 
 // wikiDominantPage — SAF: en iyi sayfa baskın mı (tek sayfa ya da skoru
@@ -192,12 +205,11 @@ func (s *Server) wikiChatAnswer(ctx context.Context, emit func(string, any), msg
 		// v0.10.1126 inceleme — servis adı + telemetri sinyali: guided'ın sorusu.
 		return false, false
 	}
-	res, err := w.SearchWith(ctx, question, "", wiki.SearchOptions{Limit: wikiTierSearchLimit, PerPage: wikiTierPerPage, Live: wiki.LiveOnWeak})
+	res, hits, err := wikiTierSearch(ctx, w, question, "", wiki.LiveOnWeak) // v0.10.1150 — Derin: geniş havuz
 	noTerms := errors.Is(err, wiki.ErrNoTerms)
 	if err != nil && !noTerms && ctx.Err() != nil {
 		return false, false
 	}
-	hits := wikiTierSelect(res.Hits)
 	if !strong && (len(hits) == 0 || !hits[0].EvidencedAt(ragWikiFloor)) {
 		// v0.10.1126 — canlı isabette sıra skoru yetmez, kök kapsamı da ≥ taban.
 		// Zayıf işaret + iyi isabet yok → kademe SESSİZ: hiçbir olay basılmaz,
@@ -247,7 +259,7 @@ func (s *Server) wikiNarratedAnswer(ctx context.Context, w *wiki.Service, questi
 	used := wikiPagesHits(in)
 	sources := wikiHitSources(used)
 	user := prior + "SORU: " + question + "\n\nBAĞLAM:\n" + wctx
-	raw, err := wikiNarrateFn(s, ctx, copilot.SystemPromptWikiChat(), user)
+	raw, err := wikiNarrateFn(s, ctx, deepModeFrom(ctx).answerPrefix()+copilot.SystemPromptWikiChat(), user) // v0.10.1150 — kapalıyken ""
 	if err != nil {
 		return nil, nil, err
 	}

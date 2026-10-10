@@ -113,12 +113,11 @@ func (r *disambigRescue) rescue(orig map[string]any) bool {
 		return false // alışveriş başına en çok bir arama
 	}
 	sctx, cancel := context.WithTimeout(r.ctx, wiki.LiveBudget)
-	res, err := r.w.SearchWith(sctx, r.question, "", wiki.SearchOptions{Limit: wikiTierSearchLimit, PerPage: wikiTierPerPage, Live: wiki.LiveOnWeak})
+	_, hits, err := wikiTierSearch(sctx, r.w, r.question, "", wiki.LiveOnWeak) // v0.10.1150 — Derin: geniş havuz
 	cancel()
 	if err != nil {
 		return false
 	}
-	hits := wikiTierSelect(res.Hits)
 	if len(hits) == 0 || !hits[0].EvidencedAt(ragWikiFloor) {
 		return false
 	}

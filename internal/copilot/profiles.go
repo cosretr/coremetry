@@ -70,6 +70,11 @@ type ModelProfile struct {
 	// (admin|editor|viewer). Boş = herkes. Yalnız açık seçimi kısıtlar:
 	// seçimsiz istek varsayılan profil / yüzey eşlemesiyle koşar.
 	Roles []string `json:"roles,omitempty"`
+	// Deep — v0.10.1150: "Derin düşün" profili. Sohbette Derin açıkken ve
+	// kullanıcı AÇIKÇA profil seçmemişken bu profil kullanılır (rol allowlist'i
+	// yine geçerli; geçmezse sessizce mevcut model). Tek profil işaretli olur:
+	// UpsertProfile yenisini işaretleyince diğerlerinden düşürür.
+	Deep bool `json:"deep,omitempty"`
 }
 
 // ErrProfileForbidden — çağıranın rolü profili seçemez (API 403'e çevirir).
@@ -109,7 +114,7 @@ func sameProfile(a, b ModelProfile) bool {
 	if a.ID != b.ID || a.Label != b.Label || a.Provider != b.Provider || a.BaseURL != b.BaseURL ||
 		a.APIKey != b.APIKey || a.Model != b.Model || a.SkipTLS != b.SkipTLS ||
 		a.MaxTokens != b.MaxTokens || a.TimeoutS != b.TimeoutS || a.Thinking != b.Thinking ||
-		a.Description != b.Description || !sameStrings(a.Roles, b.Roles) {
+		a.Description != b.Description || !sameStrings(a.Roles, b.Roles) || a.Deep != b.Deep {
 		return false
 	}
 	if (a.Temperature == nil) != (b.Temperature == nil) {
@@ -456,6 +461,22 @@ func (s *Service) CheckProfileAccess(id, role string) error {
 	return nil
 }
 
+// DeepProfile — v0.10.1150: "Derin düşün" için işaretli profil (sıradaki
+// ilk işaretli; normalde tek). Yoksa ok=false.
+func (s *Service) DeepProfile() (ModelProfile, bool) {
+	if s == nil {
+		return ModelProfile{}, false
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, p := range s.profilesLocked() {
+		if p.Deep {
+			return p, true
+		}
+	}
+	return ModelProfile{}, false
+}
+
 // ProfilesSnapshot — tek RLock altında tutarlı üçlü (API yükü; #15).
 func (s *Service) ProfilesSnapshot() (profiles []ModelProfile, defaultID string, surface map[string]string) {
 	s.mu.RLock()
@@ -492,10 +513,12 @@ func (s *Service) MaxTokensFor(ctx context.Context) int {
 	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	if p := s.resolveProfileLocked(ctx).cfg; p.MaxTokens > 0 {
-		return p.MaxTokens
+	p := s.resolveProfileLocked(ctx).cfg
+	maxTok := s.tuneMaxTokensLocked()
+	if p.MaxTokens > 0 {
+		maxTok = p.MaxTokens
 	}
-	return s.tuneMaxTokensLocked()
+	return deepMaxTokensFor(ctx, maxTok, p.Model) // v0.10.1150 — Derin kapalıyken aynen
 }
 
 // DefaultMaxTokens — küresel varsayılan completion bütçesi (AI yokken de).
@@ -553,6 +576,14 @@ func (s *Service) UpsertProfile(ctx context.Context, store SettingsStore, p Mode
 			return fmt.Errorf("en fazla %d profil", MaxProfiles)
 		}
 		list = append(list, p)
+	}
+	if p.Deep {
+		// v0.10.1150 — derin profil tektir: yeni işaret eskisini düşürür.
+		for i := range list {
+			if list[i].ID != p.ID {
+				list[i].Deep = false
+			}
+		}
 	}
 	def := s.defaultID
 	if def == "" {

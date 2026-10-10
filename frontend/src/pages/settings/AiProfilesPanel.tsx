@@ -36,13 +36,14 @@ const COLS: ColumnDef<AIModelProfile>[] = [
   { id: 'actions',  label: 'Eylemler',  kind: 'actions', width: 340, minWidth: 340 },
 ];
 
-type Draft = { id: string; label: string; provider: AIProvider; baseUrl: string; apiKey: string; model: string; skipTls: boolean; maxTokens: string; temperature: string; timeoutS: string; thinking: AIThinking; description: string; roles: Role[] };
-const emptyDraft = (): Draft => ({ id: '', label: '', provider: 'openai', baseUrl: '', apiKey: '', model: '', skipTls: false, maxTokens: '', temperature: '', timeoutS: '', thinking: '', description: '', roles: [] });
+type Draft = { id: string; label: string; provider: AIProvider; baseUrl: string; apiKey: string; model: string; skipTls: boolean; maxTokens: string; temperature: string; timeoutS: string; thinking: AIThinking; description: string; roles: Role[]; deep: boolean };
+const emptyDraft = (): Draft => ({ id: '', label: '', provider: 'openai', baseUrl: '', apiKey: '', model: '', skipTls: false, maxTokens: '', temperature: '', timeoutS: '', thinking: '', description: '', roles: [], deep: false });
 const draftOf = (p: AIModelProfile): Draft => ({
   id: p.id, label: p.label ?? '', provider: p.provider, baseUrl: p.baseUrl ?? '', apiKey: '', model: p.model ?? '', skipTls: !!p.skipTls,
   maxTokens: p.maxTokens ? String(p.maxTokens) : '', temperature: p.temperature === undefined || p.temperature === null ? '' : String(p.temperature), timeoutS: p.timeoutS ? String(p.timeoutS) : '',
   thinking: p.thinking ?? '',
   description: p.description ?? '', roles: p.roles ?? [], // v0.10.1138
+  deep: !!p.deep, // v0.10.1150
 });
 
 export function AiProfilesPanel({ payload, onChange }: { payload: AIProfilesPayload; onChange: (p: AIProfilesPayload) => void }) {
@@ -78,6 +79,7 @@ export function AiProfilesPanel({ payload, onChange }: { payload: AIProfilesPayl
       thinking: draft.thinking || undefined,
       description: draft.description.trim() || undefined, // v0.10.1138 — sohbet seçicisindeki kısa açıklama
       roles: draft.roles, // v0.10.1138 — boş = herkes (sunucu üçü de seçiliyse boşa indirir)
+      deep: draft.deep, // v0.10.1150 — "Derin düşün" profili (tek; sunucu öncekini düşürür)
     };
     await run(() => api.putAIProfile(id, body), isNew ? `Profil eklendi: ${id}` : `Profil güncellendi: ${id}`);
     setDraft(null);
@@ -119,6 +121,8 @@ export function AiProfilesPanel({ payload, onChange }: { payload: AIProfilesPayl
                       {p.label ? p.id : null}{p.default && <Badge>varsayılan</Badge>}
                       {/* v0.10.1138 — rol allowlist'i: yalnız kısıtlıysa görünür */}
                       {!!p.roles?.length && <span className="badge b-gray" title="Sohbette bu profili açıkça seçebilen roller">{rolesSummary(p.roles)}</span>}
+                      {/* v0.10.1150 — sohbette "Derin" açıkken (açık seçim yoksa) bu profil */}
+                      {p.deep && <span className="badge b-gray" title="Derin düşün profili: sohbette Derin açıkken ve model açıkça seçilmemişken kullanılır">derin</span>}
                     </div>
                   </DataTableCell>
                   <DataTableCell dt={dt} col="provider" row={p}><span className="badge b-gray">{p.provider}</span></DataTableCell>
@@ -186,6 +190,11 @@ export function AiProfilesPanel({ payload, onChange }: { payload: AIProfilesPayl
               </div>
               {!isNew && draft.roles.length > 0 && payload.profiles.some(p => p.id === draft.id && p.default) && <RolesWarning text={DEFAULT_ROLES_WARNING} />}
             </fieldset>
+            {/* v0.10.1150 — tek derin profil: işaretlemek öncekinin işaretini kaldırır (sunucu); rol allowlist'i burada da geçerli. */}
+            <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12, marginBottom: 12 }}
+              title="Sohbette Derin açıkken ve model açıkça seçilmemişken bu profil kullanılır. Tek profil işaretli olabilir; rolü bu profile kapalı kullanıcıda mevcut model kalır.">
+              <input type="checkbox" checked={draft.deep} onChange={e => setDraft({ ...draft, deep: e.target.checked })} /> Derin düşün profili
+            </label>
             <Field2 label="API anahtarı" hint={isNew ? 'Yerel endpoint için boş bırakılabilir' : 'Boş = mevcut anahtar korunur'}><input type="password" autoComplete="new-password" value={draft.apiKey} onChange={e => setDraft({ ...draft, apiKey: e.target.value })} /></Field2>
             {draft.provider === 'openai' && <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12, marginBottom: 12 }}><input type="checkbox" checked={draft.skipTls} onChange={e => setDraft({ ...draft, skipTls: e.target.checked })} /> TLS doğrulamasını atla (öz-imzalı yerel uç)</label>}
             <Row>

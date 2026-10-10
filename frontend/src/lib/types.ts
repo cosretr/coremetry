@@ -1605,6 +1605,8 @@ export interface AIModelProfile {
   description?: string;
   /** v0.10.1138 — profili açıkça seçebilecek roller; boş/yok = herkes */
   roles?: Role[];
+  /** v0.10.1150 — "Derin düşün" profili (tek; sohbette Derin açıkken, açık seçim yoksa) */
+  deep?: boolean;
 }
 /** v0.10.1138 — /api/copilot/config profil seçeneği (sırsız: id/label/model/açıklama). */
 export interface CopilotProfileOption { id: string; label?: string; model?: string; description?: string }
@@ -1624,6 +1626,7 @@ export interface AIModelProfileInput {
   thinking?: AIThinking; // v0.10.534
   description?: string; // v0.10.1138
   roles?: Role[];       // v0.10.1138 — boş = herkes
+  deep?: boolean;       // v0.10.1150 — "Derin düşün" profili (tek)
 }
 export interface AIProfilesPayload { profiles: AIModelProfile[]; defaultProfile: string; surfaceMap: AISurfaceMap }
 export interface AIProfileTestResult { ok: boolean; ms: number; profile: string; error?: string; sample?: string }
@@ -7130,6 +7133,8 @@ export interface ChatTurn extends ChatMessage {
    */
   stopped?: boolean;
   exchangeId?: string;
+  /** v0.10.1150 — cevap "Derin düşün" açıkken istendi (adım satırında rozet). Arşiv taşımaz. */
+  deep?: boolean;
   verdict?: 1 | -1;
   sources?: RagSource[];
   // v0.9.411 — sunucunun rotadan türettiği konuya-duyarlı takip

@@ -60,6 +60,7 @@ func (s *Service) callSnapshot(ctx context.Context) (cfg provider.Config, req pr
 	if p.MaxTokens > 0 {
 		maxTok = p.MaxTokens
 	}
+	maxTok = deepMaxTokensFor(ctx, maxTok, model) // v0.10.1150 — Derin kapalıyken aynen
 	req = provider.Request{
 		Model:     model,
 		MaxTokens: maxTok,

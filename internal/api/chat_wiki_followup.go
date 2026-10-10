@@ -561,7 +561,7 @@ func (s *Server) wikiFollowUpAnswer(ctx context.Context, emit func(string, any),
 			sources = append(sources, wikiRecSource(r))
 		}
 		user := buildWikiFollowUpUser(prior, question, recs, numberSources(sources), s.wikiBudget(ctx, w, "wiki-chat"))
-		raw, err := wikiNarrateFn(s, ctx, copilot.SystemPromptWikiFollowUp(), user)
+		raw, err := wikiNarrateFn(s, ctx, deepModeFrom(ctx).answerPrefix()+copilot.SystemPromptWikiFollowUp(), user) // v0.10.1150 — kapalıyken ""
 		if err != nil {
 			if ctx.Err() != nil {
 				emit("error", map[string]string{"error": err.Error()})
@@ -592,8 +592,9 @@ func (s *Server) wikiFollowUpAnswer(ctx context.Context, emit func(string, any),
 	}
 	q := wikiContextQuery(question, prevUser, titles)
 	var hits []wiki.Hit
+	dm := deepModeFrom(ctx) // v0.10.1150 — Derin: geniş havuz (kapalıyken eski sabitler)
 	for _, project := range []string{pages[0].Project, ""} {
-		res, err := w.SearchWith(ctx, q, project, wiki.SearchOptions{Limit: wikiTierSearchLimit, PerPage: wikiTierPerPage, Live: wiki.LiveOnWeak})
+		res, err := w.SearchWith(ctx, q, project, wiki.SearchOptions{Limit: dm.wikiSearchLimit(), PerPage: wikiTierPerPage, Live: wiki.LiveOnWeak})
 		if err != nil && ctx.Err() != nil {
 			return false, false
 		}
@@ -603,7 +604,7 @@ func (s *Server) wikiFollowUpAnswer(ctx context.Context, emit func(string, any),
 				keep = append(keep, h)
 			}
 		}
-		if hits = wikiTierSelect(keep); len(hits) > 0 || project == "" {
+		if hits = wikiTierSelectN(keep, dm.wikiCandidates()); len(hits) > 0 || project == "" {
 			break
 		}
 	}

@@ -179,7 +179,8 @@ func TestFreeLoopAppliesTheAnchorNotJustDeclaresIt(t *testing.T) {
 	// Çıpa tool döngüsünden ÖNCE kurulmalı; sonrasına konursa hiçbir
 	// araç çağrısı onu görmez ve test yeşil kalırken kusur geri gelir
 	// ([[feedback-tested-but-unreachable]]).
-	loop := strings.Index(src, "for round := 0; round < chatMaxToolRounds")
+	// v0.10.1150 — tur tavanı deepMode'dan (kapalıyken chatMaxToolRounds).
+	loop := strings.Index(src, "for round := 0; round < maxRounds")
 	if loop < 0 {
 		t.Fatal("tool döngüsü bulunamadı — test bayatlamış, elle doğrula")
 	}

@@ -5277,6 +5277,9 @@ tbody td.tpm-more-cell { color: var(--text2); }
 /* "Nasıl cevapladım · N adım" */
 .cm-how { margin: 0 0 var(--sp-5); }
 .cm-how__btn { font-size: var(--fs-xs); color: var(--text3); }
+/* v0.10.1150 — "Derin düşün" rozeti: adım satırında sessiz, token renkli. */
+.cm-how__head { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; min-width: 0; }
+.cm-deep-badge { display: inline-flex; align-items: center; gap: 3px; padding: 0 var(--sp-2); border-radius: 999px; font-size: var(--fs-2xs); line-height: 1.6; color: var(--accent2); background: var(--accent-soft); }
 .cm-how__body { margin-top: var(--sp-3); padding: var(--sp-4) var(--sp-5); border-left: 2px solid var(--divider); font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--text2); }
 .cm-how__body .cm-steps { font-family: inherit; }
 
@@ -5477,6 +5480,10 @@ tbody td.tpm-more-cell { color: var(--text2); }
 .cm-composer__tools-end { flex: none; margin-left: auto; padding-left: var(--sp-2); }
 .cm-composer__tools-end button[aria-pressed="true"] { color: var(--accent2); background: var(--accent-soft); }
 .cm-composer__aa { font-weight: 600; letter-spacing: -.02em; }
+/* v0.10.1150 — "Derin" hapı (Aa'nın yanında): kapalıyken sessiz, açıkken accent. */
+.cm-deep-pill { flex: none; border-radius: 999px; color: var(--text2); font-size: var(--fs-xs); }
+.cm-deep-pill[aria-pressed="true"] { color: var(--accent2); background: var(--accent-soft); }
+.cm-deep-pill:disabled { opacity: .55; cursor: not-allowed; }
 .cm-composer__input[hidden] { display: none; }
 .cm-composer__preview { flex: 1; min-width: 0; max-height: 264px; overflow-y: auto; padding: var(--sp-3) 0; font-size: var(--fs-md); }
 .cosre-root .cm-composer__preview { font-size: var(--cosre-fs-body); line-height: var(--cosre-lh-body); padding: var(--cosre-s1) 0; }

@@ -1733,6 +1733,29 @@ topladığın veriyle şimdi cevap ver. Toplayamadığın kısmı açıkça beli
 // ChatRoundCapAddendum — yalnız tavan eki (systemChat'siz).
 func ChatRoundCapAddendum() string { return systemChatRoundCapAddendum }
 
+// chatDeepAddendum — v0.10.1150 "Derin düşün": operatör composer'da Derin'i
+// açtığında serbest döngünün ve wiki anlatımının sistem mesajının ÖNÜNE
+// eklenir (kapalıyken hiç eklenmez — prompt bayt bayt eskisi). Kısalık
+// talimatını gevşetir; uydurma yasağı ve kaynak kuralları aynen kalır.
+const chatDeepAddendum = `DERİN DÜŞÜN KİPİ (operatör açtı): bu soruda kısalık kuralını gevşet. Bulguları
+gerekçesi ve kanıtıyla daha ayrıntılı yaz; birden çok olası açıklama varsa
+karşılaştır ve hangisini neden öne aldığını söyle. Uydurma yasağı, kaynak ve
+biçim kuralları AYNEN geçerli; dolgu ve tekrar yine yok.
+
+`
+
+// chatDeepLoopBudget — v0.10.1150: Derin kipte serbest döngünün genişleyen
+// araç bütçesi (sayılar çağrı yerinde, kodun gerçek tavanı).
+const chatDeepLoopBudget = `DERİN KİP ARAÇ BÜTÇESİ: bu alışverişte en çok %d tool çağrısı ve %d tur
+hakkın var ("en çok 6 tool çağrısı" hatırlatmasının yerine bu geçerli). Kanıtı
+birden çok açıdan topla (kıyas, log, metrik) ama aynı çağrıyı tekrarlama.
+
+`
+
+// ChatDeepAddendum — Derin kip cevap üslubu eki. (Bütçe satırı ve wiki seçim
+// varyantı deep.go'da: biçimlendirme gerektiriyorlar.)
+func ChatDeepAddendum() string { return chatDeepAddendum }
+
 // sourceCodeChatAddendum — v0.10.1050 (operatör: "Sohbet kod okuyabilsin: takip
 // soruları bugün kod okuyamıyor."): serbest döngünün sistem mesajına YALNIZ
 // read_source_code araç kataloğunda SUNULUYORSA (DevOps bağlı) eklenir; sunulmuyorsa

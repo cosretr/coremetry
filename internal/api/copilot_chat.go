@@ -163,6 +163,9 @@ type chatRequest struct {
 		// İkisi de yokken her yol bayt bayt eski.
 		Scope   *chatScope `json:"scope,omitempty"`
 		Command string     `json:"command,omitempty"`
+		// Deep (v0.10.1150, chat_deep.go) — composer'ın "Derin düşün" anahtarı.
+		// Yokken/false iken her yol bayt bayt eski.
+		Deep bool `json:"deep,omitempty"`
 	} `json:"context,omitempty"`
 }
 
@@ -270,6 +273,13 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 		// v0.10.183 — seçilen profil bütün alışverişe (guided/intent/loop) uygulanır;
 		// yüzey eşlemesini ezer (operatörün açık seçimi). Bilinmeyen id → varsayılan.
 		ctx = copilot.WithProfile(ctx, p)
+	}
+	// v0.10.1150 — "Derin düşün" kararı bir kez türetilir ve ctx ile iner
+	// (chat_deep.go); kapalıyken ctx ve olay akışı aynen.
+	dm := s.chatDeepMode(r, req.Context.Deep, req.Context.Profile)
+	if dm.On {
+		ctx = withDeepMode(ctx, dm)
+		emit("step", map[string]string{"label": dm.stepLabel()})
 	}
 	// v0.9.528 Faz 2 — model kiminle konuştuğunu bilsin: ad (hitap için)
 	// ve rol (viewer'a yapamayacağı eylemi ÖNERMEMESİ için). Ad çözümü
@@ -643,6 +653,7 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 		traceFollowUpPromptTR(traceFU, req.Context.Explain) + // v0.10.948 — boşsa ""
 		chatSourceCodePromptTR(tools) + // v0.10.1050 — read_source_code sunulmuyorsa ""
 		chatWikiPromptTR(tools) + // v0.10.1122 — wiki araçları sunulmuyorsa ""
+		dm.loopPrefix() + // v0.10.1150 — Derin kapalıyken ""
 		withAddressee(addressee, copilot.SystemPromptChat())
 	if isTraceFollowUp {
 		// v0.10.948 — sayı denetiminin tohumu: açıklamasız AKTİF BAĞLAM + ekran ve
@@ -674,14 +685,16 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 
-	callsLeft := chatMaxToolCalls
+	// v0.10.1150 — tavanlar deepMode'dan: kapalıyken chatMaxToolCalls/Rounds.
+	maxCalls, maxRounds := dm.toolCalls(), dm.toolRounds()
+	callsLeft := maxCalls
 	// v0.10.948 — hak ≠ iş: bilinmeyen/tekrar/kapsam reddi hak yer ama yürümez;
 	// bütçe notu yürütülen ve alışveriş boyunca yürütülmeyen çağrıyı ayrı sayar.
 	executedN, skippedN := 0, 0
 	// v0.10.948 — bütçe sessiz değil: operatör döngünün sınırını baştan görür,
 	// dolunca da ne kadarının kullanıldığını (chat_loop_steps.go).
-	emit("step", map[string]string{"label": chatBudgetLabelTR(chatMaxToolCalls, chatMaxToolRounds)})
-	for round := 0; round < chatMaxToolRounds; round++ {
+	emit("step", map[string]string{"label": chatBudgetLabelTR(maxCalls, maxRounds)})
+	for round := 0; round < maxRounds; round++ {
 		tctx, endTurn := cspan.turn(ctx, round, overflowRetried) // v0.10.425 — ai.chat.turn
 		turn, err := s.copilot.ChatWithTools(tctx, loopPrompt, conv, specs)
 		endTurn(turn.InputTokens, turn.OutputTokens, turn.CachedTokens, err)
@@ -946,10 +959,10 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 		// literaldi; prompt METNİ olduğu için internal/copilot/prompts.go'ya
 		// taşındı (SystemPromptChatRoundCap = taban + ek). Sicil
 		// accessor'lardan türediğinden bu ek artık dil kapısının kapsamında.
-		if round == chatMaxToolRounds-1 || callsLeft <= 0 {
+		if round == maxRounds-1 || callsLeft <= 0 {
 			// v0.10.948 — bütçe dolduğu AÇIKÇA söylenir: harcanan hak/tur, yürütülen
 			// ve alışveriş boyunca yürütülmeyen çağrı (eski "tool-çağrı tavanı" etiketinin yerine).
-			emit("step", map[string]string{"label": chatBudgetExhaustedLabelTR(chatMaxToolCalls-callsLeft, executedN, skippedN, round+1)})
+			emit("step", map[string]string{"label": chatBudgetExhaustedCapsLabelTR(maxCalls-callsLeft, maxCalls, executedN, skippedN, round+1, maxRounds)})
 			// v0.10.806 — tavan eki döngü prompt'unun SONUNA: önek aynı kalır
 			// (önbellek isabeti) ve tavan turu bağlam önsözlerini de görür
 			// (eskiden yalnız hitap + sohbet çekirdeği + ek gidiyordu).

@@ -3380,6 +3380,25 @@ bölüm: ne yapıyor, neden yavaş/hatalı, exception aynen, trace'in kök neden
 (`explainCacheKey`) user prompt'un tamamını hash'ler → trace bağlamı anahtarda (testle pinli). Trace explain
 prompt'u bayt-bayt aynı (`traceLiteOf`/`traceRootSpan` çıkarması davranış değiştirmez; `Mark` omitempty).
 
+## 2026-10-10 — CoSRE composer'ında "Derin düşün" anahtarı (v0.10.1150)
+
+**Bağlam:** Operatör isteği: bazı sorular (çok sayfalı wiki konuları, çok adımlı soruşturmalar) varsayılan
+bütçelere sığmıyor; ama bütçeyi herkes için büyütmek her cevabı yavaşlatır. **Karar:** composer'da Aa ile
+model hapı arasında "Derin" hapı (çekmece, /cosre, ✨ Explain sohbeti aynı `ChatComposer`); varsayılan kapalı,
+kullanıcı başına localStorage (`cosre.deepThink.<user>`, try/catch), akarken devre dışı; açıkken gövdeye
+`context.deep: true`. Sunucu kararı istek başına BİR kez türetir (`deepMode`, `internal/api/chat_deep.go`) ve
+ctx ile indirir: (1) **model** — Ayarlar'da "Derin düşün profili" işaretli profil (tek; işaretlemek öncekini
+düşürür, profil audit satırına `deep=true`) kullanılır; kullanıcının açık profil seçimi kazanır, derin
+profilin rol allowlist'i çağıranı kapsamıyorsa sessizce mevcut model; (2) **wiki** (kademe / takip /
+netleştirme kurtarması / probe) — bütçe ×1.5 (model penceresi tavanı aynen; RAG yarısı değişmez), en çok 8
+sayfa (5), `wiki_select` aday havuzu 15 (10; arama limiti 45), seçim prompt'u "1–8"; (3) **serbest araç
+döngüsü** — tur 5→7, çağrı hakkı 6→9 (mutlak tavan 8/12, alışveriş deadline'ı aynen); exception kod döngüsü
+değişmez; (4) **üslup** — kısalık talimatını gevşeten ek (`chatDeepAddendum`, döngüde gerçek bütçe satırıyla)
+ve completion bütçesi ×1.5 (`copilot.DeepMaxTokens`: en çok `maxMaxTokens` ve bilinen pencerenin yarısı,
+tabanın altına inmez). Görünürlük: alışverişin başında "derin düşün" adım çipi ve cevabın adım satırında
+"Derin" rozeti. **Kapalıyken** ctx sarılmaz, gövdede `deep` anahtarı yok, tavanlar/prompt'lar/etiketler bayt
+bayt eski (`chat_deep_test.go` pinler).
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

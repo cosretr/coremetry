@@ -56,6 +56,7 @@ type aiProfileView struct {
 	// v0.10.1138 — sohbet seçicisinin kısa açıklaması + rol allowlist'i (boş = herkes).
 	Description string   `json:"description,omitempty"`
 	Roles       []string `json:"roles,omitempty"`
+	Deep        bool     `json:"deep,omitempty"` // v0.10.1150 — "Derin düşün" profili
 }
 
 func aiProfileViews(profiles []copilot.ModelProfile, defaultID string) []aiProfileView {
@@ -65,7 +66,7 @@ func aiProfileViews(profiles []copilot.ModelProfile, defaultID string) []aiProfi
 			ID: p.ID, Label: p.Label, Provider: p.Provider, BaseURL: p.BaseURL, Model: p.Model, SkipTLS: p.SkipTLS,
 			HasKey: p.APIKey != "", MaxTokens: p.MaxTokens, Temperature: p.Temperature, TimeoutS: p.TimeoutS,
 			Thinking: p.Thinking, Default: p.ID == defaultID,
-			Description: p.Description, Roles: p.Roles,
+			Description: p.Description, Roles: p.Roles, Deep: p.Deep,
 		})
 	}
 	return out
@@ -119,6 +120,7 @@ func (s *Server) putAIProfile(w http.ResponseWriter, r *http.Request) {
 		Thinking    string   `json:"thinking"`    // v0.10.534
 		Description string   `json:"description"` // v0.10.1138 — seçicideki kısa açıklama
 		Roles       []string `json:"roles"`       // v0.10.1138 — boş = herkes
+		Deep        bool     `json:"deep"`        // v0.10.1150 — "Derin düşün" profili (tek)
 	}
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "geçersiz JSON: "+err.Error())
@@ -131,6 +133,7 @@ func (s *Server) putAIProfile(w http.ResponseWriter, r *http.Request) {
 		Thinking:    strings.TrimSpace(in.Thinking),
 		Description: strings.TrimSpace(in.Description),
 		Roles:       normalizeProfileRoles(in.Roles),
+		Deep:        in.Deep,
 	}
 	if err := copilot.ValidateProfile(p); err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
@@ -142,7 +145,7 @@ func (s *Server) putAIProfile(w http.ResponseWriter, r *http.Request) {
 	}
 	s.publishConfigReload(r.Context(), "ai")
 	s.audit(r, "settings.ai.profile.upsert", "settings", id,
-		fmt.Sprintf("provider=%s model=%s baseUrl=%s hasKey=%v roles=%s", p.Provider, p.Model, p.BaseURL, in.APIKey != "", profileRolesAudit(p.Roles)))
+		fmt.Sprintf("provider=%s model=%s baseUrl=%s hasKey=%v roles=%s", p.Provider, p.Model, p.BaseURL, in.APIKey != "", profileRolesAudit(p.Roles))+profileDeepAudit(p.Deep))
 	writeJSON(w, s.aiProfilesPayload())
 }
 
@@ -162,6 +165,15 @@ func normalizeProfileRoles(in []string) []string {
 		return nil
 	}
 	return out
+}
+
+// profileDeepAudit — v0.10.1150, SAF: derin profil işareti audit satırına
+// (yalnız işaretliyse; işaretsiz satır bayt bayt eski).
+func profileDeepAudit(deep bool) string {
+	if !deep {
+		return ""
+	}
+	return " deep=true"
 }
 
 // profileRolesAudit — audit satırı için: boş liste "all".

@@ -132,7 +132,13 @@ func (s *Server) wikiBudget(ctx context.Context, w *wiki.Service, surface string
 		manual = w.Config().ContextChars
 	}
 	window, completion := wikiModelLimitsFn(s, ctx, surface)
-	return wikiBudgetFor(manual, window, completion)
+	b := wikiBudgetFor(manual, window, completion)
+	if surface == "wiki-chat" {
+		// v0.10.1150 — Derin düşün: kademe/takip/kurtarma ×1.5 (pencere tavanı
+		// aynen); RAG yarısı değişmez. Kapalıyken b aynen.
+		b = deepModeFrom(ctx).wikiBudget(b, manual, window, completion)
+	}
+	return b
 }
 
 // wikiModelLimitsFn — yüzeyin modelinin penceresi (bilinmiyorsa 0) ve
@@ -198,13 +204,18 @@ func wikiGroupPages(h []wiki.Hit, floor float64, maxPages int) []wikiPage {
 // wikiScorePages — SAF: skor tabanlı çok-kaynak seçimi — göreli taban altı
 // sayfa düşer, en çok wikiMaxPages.
 func wikiScorePages(p []wikiPage) []wikiPage {
+	return wikiScorePagesN(p, wikiMaxPages)
+}
+
+// wikiScorePagesN — wikiScorePages, sayfa tavanı açık (v0.10.1150 Derin: 8).
+func wikiScorePagesN(p []wikiPage, maxPages int) []wikiPage {
 	if len(p) == 0 {
 		return nil
 	}
 	top := p[0].score()
-	out := make([]wikiPage, 0, wikiMaxPages)
+	out := make([]wikiPage, 0, maxPages)
 	for _, x := range p {
-		if len(out) >= wikiMaxPages {
+		if len(out) >= maxPages {
 			break
 		}
 		if len(out) > 0 && x.score() < wikiRelFloor*top {

@@ -63,8 +63,14 @@ func chatBudgetLabelTR(calls, rounds int) string {
 // tavan aşımını sayıyordu (gereksinim 8: ilerleme yalnız GERÇEKTEN yürüyeni
 // gösterir). Artık hak, yürütülen ve alışveriş boyunca yürütülmeyen ayrı.
 func chatBudgetExhaustedLabelTR(slotsUsed, executed, skipped, roundsUsed int) string {
+	return chatBudgetExhaustedCapsLabelTR(slotsUsed, chatMaxToolCalls, executed, skipped, roundsUsed, chatMaxToolRounds)
+}
+
+// chatBudgetExhaustedCapsLabelTR — v0.10.1150: tavanları açık alan hâli
+// (Derin düşün tavanları büyütür; varsayılan tavanlarla chatBudgetExhaustedLabelTR).
+func chatBudgetExhaustedCapsLabelTR(slotsUsed, maxCalls, executed, skipped, roundsUsed, maxRounds int) string {
 	s := fmt.Sprintf("araştırma bütçesi doldu (%d/%d çağrı hakkı · %d/%d tur) — %d çağrı yürütüldü",
-		slotsUsed, chatMaxToolCalls, roundsUsed, chatMaxToolRounds, executed)
+		slotsUsed, maxCalls, roundsUsed, maxRounds, executed)
 	if skipped > 0 {
 		s += fmt.Sprintf(", %d yürütülmedi", skipped)
 	}

@@ -224,13 +224,14 @@ func wikiProbeRun(ctx context.Context, w *wiki.Service, question string) []wiki.
 	}
 	pctx, cancel := context.WithTimeout(ctx, wikiProbeTimeout)
 	defer cancel()
+	dm := deepModeFrom(ctx) // v0.10.1150 — Derin: geniş havuz (kapalıyken eski sabitler)
 	res, err := w.SearchWith(pctx, strings.Join(terms, " "), "", wiki.SearchOptions{
-		Limit: wikiTierSearchLimit, PerPage: wikiTierPerPage, Live: wiki.LiveOff, NoSemantic: true,
+		Limit: dm.wikiSearchLimit(), PerPage: wikiTierPerPage, Live: wiki.LiveOff, NoSemantic: true,
 	})
 	if err != nil || !wikiProbeStrong(res.Hits) {
 		return nil
 	}
-	return wikiTierSelect(res.Hits)
+	return wikiTierSelectN(res.Hits, dm.wikiCandidates())
 }
 
 // wikiProbe — alışveriş başına en çok bir yoklama (durum varsa sonucu saklar).

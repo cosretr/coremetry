@@ -90,6 +90,11 @@ func buildWikiSelectUser(question, prior string, pages []wikiPage) string {
 // sırası, tekil, liste dışı yok sayılır, en çok wikiSelectMaxPick). Geçerli
 // numara yoksa ok=false (çağıran skor sırasına düşer).
 func parseWikiSelect(raw string, n int) ([]int, bool) {
+	return parseWikiSelectN(raw, n, wikiSelectMaxPick)
+}
+
+// parseWikiSelectN — parseWikiSelect, seçim tavanı açık (v0.10.1150 Derin: 8).
+func parseWikiSelectN(raw string, n, maxPick int) ([]int, bool) {
 	t := strings.TrimSpace(raw)
 	t = strings.TrimPrefix(strings.TrimPrefix(t, "```json"), "```")
 	t = strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(t), "```"))
@@ -127,7 +132,7 @@ func parseWikiSelect(raw string, n int) ([]int, bool) {
 		}
 		seen[k] = true
 		out = append(out, k-1)
-		if len(out) >= wikiSelectMaxPick {
+		if len(out) >= maxPick {
 			break
 		}
 	}
@@ -152,9 +157,10 @@ func (s *Server) wikiSelectPages(ctx context.Context, emit func(string, any), qu
 	if len(pages) < 2 {
 		return nil, false
 	}
+	dm := deepModeFrom(ctx) // v0.10.1150 — kapalıyken 10 aday / 5 seçim / eski prompt
 	cands := pages
-	if len(cands) > wikiSelectMaxCandidates {
-		cands = cands[:wikiSelectMaxCandidates]
+	if len(cands) > dm.wikiCandidates() {
+		cands = cands[:dm.wikiCandidates()]
 	}
 	// Exchange'siz (niyet sınıflandırıcısının emsali): aynı exchange altında
 	// ikinci ai_calls satırı geri bildirim JOIN'lerini ikiye katlamasın.
@@ -165,12 +171,12 @@ func (s *Server) wikiSelectPages(ctx context.Context, emit func(string, any), qu
 		client = s.copilot.ClientTimeout()
 	}
 	cctx, cancel := context.WithTimeout(copilot.WithMeta(ctx, m), wikiSelectTimeoutFor(client))
-	raw, err := wikiSelectFn(s, cctx, copilot.SystemPromptWikiSelect(), buildWikiSelectUser(question, prior, cands))
+	raw, err := wikiSelectFn(s, cctx, dm.wikiSelectPrompt(), buildWikiSelectUser(question, prior, cands))
 	cancel()
 	var idx []int
 	ok := false
 	if err == nil {
-		idx, ok = parseWikiSelect(raw, len(cands))
+		idx, ok = parseWikiSelectN(raw, len(cands), dm.wikiMaxPages())
 	}
 	if !ok {
 		emit("step", map[string]string{"label": wikiSelectStep(len(cands), nil)})
@@ -187,11 +193,12 @@ func (s *Server) wikiSelectPages(ctx context.Context, emit func(string, any), qu
 // wikiPlanPages — çok-kaynak okumanın sayfa planı: iki aşamalı seçim (açıksa
 // ve ≥2 aday varsa) ya da skor tabanlı seçim. selected=true → model seçti.
 func (s *Server) wikiPlanPages(ctx context.Context, w *wiki.Service, hits []wiki.Hit, question, prior string, emit func(string, any)) (pages []wikiPage, selected bool) {
-	cands := wikiGroupPages(hits, wikiTierFloor, wikiSelectMaxCandidates)
+	dm := deepModeFrom(ctx) // v0.10.1150 — Derin: 15 aday, en çok 8 sayfa
+	cands := wikiGroupPages(hits, wikiTierFloor, dm.wikiCandidates())
 	if emit != nil && w != nil && !w.Config().DisablePageSelect && len(cands) > 1 {
 		if chosen, ok := s.wikiSelectPages(ctx, emit, question, prior, cands); ok {
 			return chosen, true
 		}
 	}
-	return wikiScorePages(cands), false
+	return wikiScorePagesN(cands, dm.wikiMaxPages()), false
 }

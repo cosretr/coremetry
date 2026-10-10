@@ -679,14 +679,13 @@ func (s *Server) wikiForcedAnswer(ctx context.Context, emit func(string, any), m
 	if question == "" {
 		return answer("Wikide ne arayayım? Örnek: `/wiki svc-orders deploy runbook'u`.")
 	}
-	res, err := w.SearchWith(ctx, question, "", wiki.SearchOptions{Limit: wikiTierSearchLimit, PerPage: wikiTierPerPage, Live: wiki.LiveOnWeak})
+	res, hits, err := wikiTierSearch(ctx, w, question, "", wiki.LiveOnWeak) // v0.10.1150 — Derin: geniş havuz
 	noTerms := errors.Is(err, wiki.ErrNoTerms)
 	if err != nil && !noTerms && ctx.Err() != nil {
 		emit("error", map[string]string{"error": err.Error()})
 		return false
 	}
 	emit("step", map[string]string{"label": "kurum wiki'si"})
-	hits := wikiTierSelect(res.Hits)
 	if len(hits) == 0 {
 		emit("answer", map[string]any{"text": wikiNotFoundText(res, noTerms), "exchangeId": copilot.MetaFromContext(ctx).ExchangeID,
 			"sources": []any{}, "links": []guidedAnswerLink{}, "allowedLinks": []string{}})

@@ -17,6 +17,7 @@ import { useComposerDraft } from './composerDraft'; // v0.10.1145 — özne baş
 import { useCopilotConfig } from './useCopilotEnabled';
 import { useAuthUserId } from '@/components/AuthProvider';
 import { useChatProfile } from './chatProfileStore'; // v0.10.1138 — kullanıcı başına seçim
+import { useDeepThink } from './deepThink'; // v0.10.1150 — "Derin düşün"
 import { ModelPicker } from './ModelPicker'; // v0.10.1138 — kompakt "model ▾" menüsü
 import { capPageContext, traceChatWindow, traceContextToPage, type TraceAiContext } from '@/lib/traceAiContext';
 import type { AiConversation, PageContext } from '@/lib/types';
@@ -199,6 +200,7 @@ function AIDrawerChat({ subject, explainText, resumed = false, spanIds, traceIds
   const userId = useAuthUserId();
   const cfgProfiles = useMemo(() => cfgP?.profiles ?? [], [cfgP]);
   const { profile, setProfile, activeModel } = useChatProfile(userId, cfgProfiles, cfgP?.defaultProfile, cfgP?.model);
+  const [deep, setDeep] = useDeepThink(userId); // v0.10.1150 — "Derin düşün" (kullanıcı başına, CoSRE penceresiyle ortak)
   const navigate = useNavigate(); // v0.10.445 — "sayfasını aç" çekmece sohbetinde de gezer
 
   // v0.10.944 (CoSRE Faz A) — trace öznesinde HER TURDA bağlam: `trace`
@@ -229,6 +231,7 @@ function AIDrawerChat({ subject, explainText, resumed = false, spanIds, traceIds
     rangeS: win?.rangeS,
     toMs: win?.toMs,
     profile: profile || undefined,
+    deep, // v0.10.1150 — açıkken context.deep: true
     onProfileRejected: () => setProfile(''), // v0.10.1138 — 400/403 → varsayılana dön
     // persist (v0.10.55, operatör ürün kararı) — çekmece sohbeti artık
     // global CoSRE penceresiyle AYNI arşive yazılıyor; kapatılan çekmece
@@ -301,6 +304,7 @@ function AIDrawerChat({ subject, explainText, resumed = false, spanIds, traceIds
             autoFocus
             placeholder="Bu konuda sor… (Shift+Enter: yeni satır)"
             ariaLabel="Bu konuda CoSRE'ye sor"
+            deep={deep} onDeepChange={setDeep} deepDisabled={busy}
             actions={<>
           {/* v0.10.1141 — model seçici composer'ın içinde, Gönder'in solunda (CopilotChat
               ile aynı yer); akarken devre dışı; tek profilde tıklanamaz etiket. */}

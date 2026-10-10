@@ -2,7 +2,7 @@ import {
   useCallback, useEffect, useId, useLayoutEffect, useRef, useState,
   type ClipboardEvent, type KeyboardEvent, type ReactNode, type RefObject, type TextareaHTMLAttributes,
 } from 'react';
-import { Bold, Code, Eye, Italic, Link as LinkIcon, List, ListOrdered, SquareCode, TextQuote, type LucideIcon } from 'lucide-react';
+import { Bold, Brain, Code, Eye, Italic, Link as LinkIcon, List, ListOrdered, SquareCode, TextQuote, type LucideIcon } from 'lucide-react';
 import { IconButton } from '@/components/ui/IconButton';
 import { Button } from '@/components/ui/Button';
 import { LinkButton } from '@/components/ui/LinkButton';
@@ -13,6 +13,7 @@ import { continueList, inCodeFence, indentList, inlineActive, isNoopEdit, type E
 import { actionEdit, ariaShortcut, composerShortcut, isMacPlatform, shortcutLabel, type ComposerAction } from './composerKeys';
 import { planPaste } from './composerPaste';
 import { readToolsOpen, writeToolsOpen } from './composerDraft';
+import { DEEP_THINK_TOOLTIP } from './deepThink';
 
 // ChatComposer — v0.10.1145 (operatör: "rich text editör"): CoSRE sohbetinin
 // composer'ı — çekmece, /cosre sayfası ve ✨ Explain sohbeti AYNI bileşen.
@@ -31,7 +32,9 @@ import { readToolsOpen, writeToolsOpen } from './composerDraft';
 //     listeyi bitirir, kod çitinin içinde satır sonu (ASLA göndermez);
 //     dışarıda Enter gönderir, Shift+Enter satır; IME birleştirmesi gönderMEZ;
 //   - akıllı yapıştırma (composerPaste.ts) + "Geri al";
-//   - Önizleme: cevaplarla AYNI çizici (ChatMarkdown), dış link doğrulanmamış.
+//   - Önizleme: cevaplarla AYNI çizici (ChatMarkdown), dış link doğrulanmamış;
+//   - v0.10.1150 "Derin" hapı (Aa'nın yanında): context.deep; durum kabukta
+//     (deepThink.ts, kullanıcı başına), akış sürerken devre dışı.
 //
 // Geri al: düzenlemeler `document.execCommand('insertText')` ile uygulanır →
 // tarayıcının yerel Ctrl+Z yığını korunur. Komut yoksa / reddedilirse
@@ -75,11 +78,20 @@ export interface ChatComposerProps {
   autoFocus?: boolean;
   comboboxProps?: Pick<TextareaHTMLAttributes<HTMLTextAreaElement>,
     'aria-autocomplete' | 'aria-controls' | 'aria-expanded' | 'aria-activedescendant'>;
+  /**
+   * v0.10.1150 — "Derin düşün" anahtarı (Aa'nın yanında hap). Durumu kabuk
+   * tutar (useDeepThink: kullanıcı başına localStorage); onDeepChange yoksa çizilmez.
+   */
+  deep?: boolean;
+  onDeepChange?: (on: boolean) => void;
+  /** Akış sürerken Derin değiştirilemez (model hapı gibi). */
+  deepDisabled?: boolean;
 }
 
 export function ChatComposer({
   value, onChange, onSubmit, onCaret, onBeforeKey, popup, actions,
   placeholder, ariaLabel, textareaRef, autoFocus, comboboxProps,
+  deep, onDeepChange, deepDisabled,
 }: ChatComposerProps) {
   const innerRef = useRef<HTMLTextAreaElement>(null);
   const ref = textareaRef ?? innerRef;
@@ -340,6 +352,15 @@ export function ChatComposer({
           tooltip={toolsOn ? 'Biçimlendirme araçlarını gizle' : 'Biçimlendirme araçlarını göster'}
           onMouseDown={e => e.preventDefault()}
           onClick={toggleTools} />
+        {onDeepChange && (
+          <Button variant="ghost" size="sm" type="button" className="cm-deep-pill"
+            aria-pressed={!!deep} aria-label="Derin düşün"
+            disabled={deepDisabled}
+            leftIcon={<Brain size={14} strokeWidth={2} aria-hidden="true" />}
+            title={DEEP_THINK_TOOLTIP}
+            onMouseDown={e => e.preventDefault()}
+            onClick={() => onDeepChange(!deep)}>Derin</Button>
+        )}
         {actions}
       </div>
       {liveNote && (

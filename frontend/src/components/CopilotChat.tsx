@@ -32,6 +32,7 @@ import { NameCompletionPopup } from './ai/NameCompletionPopup';
 import { applyCompletion, type CompletionItem } from './ai/chatCompletion';
 import { ModelPicker } from './ai/ModelPicker'; // v0.10.1138 — kompakt "model ▾" menüsü
 import { useChatProfile } from './ai/chatProfileStore'; // v0.10.1138 — kullanıcı başına seçim
+import { useDeepThink } from './ai/deepThink'; // v0.10.1150 — "Derin düşün"
 import { hasDrawerContext, parseChatInput, removeToken, scopeChips, scopeForRequest } from './ai/chatScope'; // v0.10.1138 — @/ kapsamı
 import { answerVersion, canRegenerate, lastUserIndex } from './ai/chatRegenerate'; // v0.10.1138
 import { cosreFullPageHref } from './ai/drawerFullPage'; // v0.10.1138 — "Tam sayfada aç"
@@ -144,6 +145,7 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
   // v0.10.1138 — seçim kullanıcı başına kalıcı (chatProfileStore); rozet etkin modeli gösterir.
   const { user } = useAuth();
   const { profile, setProfile, activeModel } = useChatProfile(user?.id, profiles, defaultProfile, model);
+  const [deep, setDeep] = useDeepThink(user?.id); // v0.10.1150 — "Derin düşün" (kullanıcı başına, kalıcı)
   const [openState, setOpen] = useState(false);
   const open = isPage || openState; // v0.10.1125 — sayfa kipinde hep açık
   // v0.10.483 — ✨ Explain öznesi (`?ai=`): varsa çekmece AÇIK ve açıklama
@@ -288,6 +290,7 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
       page, // v0.10.539 — sayfa bağlamı protokolü (lib/pageContext, her turda)
       pinnedPage: pinned ?? undefined, // v0.10.540 — sabitlenmiş bağlam
       profile: profile || undefined,
+      deep, // v0.10.1150 — açıkken context.deep: true
       // v0.10.1138 — sunucu seçili profili reddetti (rolüne kapalı / silinmiş) → varsayılana dön.
       onProfileRejected: () => setProfile(''),
       persist: true,
@@ -837,6 +840,7 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
               autoFocus
               placeholder="CoSRE'ye sor… (Shift+Enter: yeni satır · @ kapsam · / komutlar)"
               ariaLabel="CoSRE'ye mesaj"
+              deep={deep} onDeepChange={setDeep} deepDisabled={busy}
               comboboxProps={{
                 'aria-autocomplete': 'list',
                 'aria-controls': 'chat-complete',

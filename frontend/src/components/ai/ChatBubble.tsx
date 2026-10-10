@@ -21,6 +21,7 @@ import { buildLinkPolicy, classifyLink, EMPTY_POLICY, hostOf, toAppPath, UNVERIF
 import { parseStepPreview, fmtPreviewBytes } from './stepPreview';
 import { DisclosureButton } from '@/components/ui/DisclosureButton';
 import { Chip } from '@/components/ui/Chip';
+import { Brain } from 'lucide-react'; // v0.10.1150 — "Derin" rozeti
 import { summarizeSteps, parseToolError, previewFirstLine, visibleRows, isDeadlineError, fmtMs, VISIBLE_ROWS, sourceStates, stateUnknown, stepRunning, toolErrorLabel } from './toolSteps';
 import { StateBadges } from './StateBadges'; // v0.10.948 — paylaşılan durum rozetleri
 import { chatLinkTargetProps, useChatLinkNewTab } from './chatLinkTarget'; // v0.10.1125 — /cosre yeni sekme
@@ -728,10 +729,18 @@ function StepsDisclosure({ turn, evId, setEvId, initialOpen }: {
   const n = turn.steps?.length ?? 0;
   return (
     <div className="cm-how">
-      <DisclosureButton anatomy="row" expanded={open} onClick={() => setUserOpen(!open)}
-        className="cm-how__btn" title="Bu cevap için çalıştırılan adımlar ve kanıtları">
-        Nasıl cevapladım · {n} adım{turn.pending ? ' · sürüyor…' : ''}
-      </DisclosureButton>
+      <div className="cm-how__head">
+        <DisclosureButton anatomy="row" expanded={open} onClick={() => setUserOpen(!open)}
+          className="cm-how__btn" title="Bu cevap için çalıştırılan adımlar ve kanıtları">
+          Nasıl cevapladım · {n} adım{turn.pending ? ' · sürüyor…' : ''}
+        </DisclosureButton>
+        {/* v0.10.1150 — "Derin düşün" açıkken istenen cevap: sessiz rozet. */}
+        {turn.deep && (
+          <span className="cm-deep-badge" title="Bu cevap Derin düşün açıkken üretildi (daha çok kaynak, daha çok adım)">
+            <Brain size={11} strokeWidth={2} aria-hidden="true" /> Derin
+          </span>
+        )}
+      </div>
       {open && (
         <div className="cm-how__body">
           {n > 0 && (

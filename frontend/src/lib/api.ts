@@ -2419,6 +2419,9 @@ export const api = {
     // Yokken gövde bayt bayt eski.
     contextScope?: import('./types').ChatScope,
     contextCommand?: import('./types').ChatCommand,
+    // v0.10.1150 — composer'ın "Derin düşün" anahtarı (internal/api/chat_deep.go).
+    // Kapalıyken anahtar gövdede HİÇ yok (bayt bayt eski).
+    contextDeep?: boolean,
   ): Promise<void> => {
     // v0.10.437 (D6) — tarayıcı saat dilimi: mutlak tarih/saat soruları
     // ("08/08/2026 04-08 arası") operatörün yerel saatinde yorumlanır.
@@ -2426,7 +2429,7 @@ export const api = {
     // v0.10.745 — çift lib/browserTz'den; Explain/insight uçlarıyla aynı kaynak.
     const { tz, tzOffsetMin } = browserTz();
     const context =
-      contextService || contextOperation || contextExplain || contextSubject || contextRangeS || contextTrace || contextEnv || contextToMs || contextProfile || contextConversation || contextPage || contextPinnedPage || (contextWikiRefs && contextWikiRefs.length > 0) || contextScope || contextCommand || tzOffsetMin !== 0 || tz
+      contextService || contextOperation || contextExplain || contextSubject || contextRangeS || contextTrace || contextEnv || contextToMs || contextProfile || contextConversation || contextPage || contextPinnedPage || (contextWikiRefs && contextWikiRefs.length > 0) || contextScope || contextCommand || contextDeep || tzOffsetMin !== 0 || tz
         ? {
             ...(tzOffsetMin !== 0 ? { tzOffsetMin } : {}),
             ...(tz ? { tz } : {}),
@@ -2445,6 +2448,7 @@ export const api = {
             ...(contextWikiRefs && contextWikiRefs.length > 0 ? { wikiRefs: contextWikiRefs } : {}),
             ...(contextScope ? { scope: contextScope } : {}),
             ...(contextCommand ? { command: contextCommand } : {}),
+            ...(contextDeep ? { deep: true } : {}),
           }
         : undefined;
     const r = await fetch(API_BASE + '/api/copilot/chat', {

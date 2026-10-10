@@ -88,6 +88,8 @@ export interface ChatThreadOpts {
   title?: string;
   /** v0.10.183 — istek başına model profili; boş = sunucu varsayılanı / yüzey eşlemesi */
   profile?: string;
+  /** v0.10.1150 — "Derin düşün" (composer hapı, deepThink.ts); açıkken context.deep: true. */
+  deep?: boolean;
   /** v0.10.539 — sayfa bağlamı (lib/pageContext, her turda) ve sabitlenmiş bağlam. */
   page?: PageContext;
   pinnedPage?: PageContext;
@@ -242,7 +244,7 @@ export function useChatThread(opts: ChatThreadOpts = {}) {
     setTurns(prev => [
       ...prev,
       { role: 'user', text: q, ...(parsed.scope ? { scope: parsed.scope } : {}), ...(parsed.command ? { command: parsed.command } : {}) },
-      { role: 'assistant', text: '', steps: [], pending: true, ...(so?.alternatives?.length ? { alternatives: so.alternatives } : {}) },
+      { role: 'assistant', text: '', steps: [], pending: true, ...(so?.alternatives?.length ? { alternatives: so.alternatives } : {}), ...(o.deep ? { deep: true } : {}) },
     ]);
     busyRef.current = true;
     setBusy(true);
@@ -300,7 +302,8 @@ export function useChatThread(opts: ChatThreadOpts = {}) {
         convIdRef.current || undefined, // v0.10.478 — konuşma kimliği (sunucu bağlam state'i)
         o.page || undefined, o.pinnedPage || undefined, // v0.10.539 — sayfa bağlamı + pin
         wikiRefs.length > 0 ? wikiRefs : undefined, // v0.10.1134 — wiki takip sorusu
-        parsed.scope, parsed.command); // v0.10.1138 — yapısal @-kapsam + /komut
+        parsed.scope, parsed.command, // v0.10.1138 — yapısal @-kapsam + /komut
+        o.deep || undefined); // v0.10.1150 — Derin düşün (kapalıyken gövdede yok)
       // v0.10.648 — terminal olaysız EOF: tur asılı kalmasın (chatAbort.ts).
       patchLast(settleTruncatedTurn);
     } catch (err) {

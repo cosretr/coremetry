@@ -46,7 +46,10 @@ func TestChatLoopEnforcesCallBudget(t *testing.T) {
 	for _, want := range []string{
 		"splitByCallBudget(turn.ToolCalls, callsLeft)",
 		"for _, tc := range run {",
-		"round == chatMaxToolRounds-1 || callsLeft <= 0",
+		// v0.10.1150 — tavanlar deepMode'dan (kapalıyken chatMaxToolCalls/Rounds, chat_deep_test.go).
+		"maxCalls, maxRounds := dm.toolCalls(), dm.toolRounds()",
+		"callsLeft := maxCalls",
+		"round == maxRounds-1 || callsLeft <= 0",
 		"ChatWithTools(copilot.WithNoToolCalls(tctx2), capPrompt, conv, specs)",
 	} {
 		if !strings.Contains(src, want) {

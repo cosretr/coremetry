@@ -28,8 +28,8 @@ describe('sohbet model profili kablolaması (v0.10.183)', () => {
     expect(src).toMatch(/profile\?: string;/);
     // v0.10.478 — konuşma kimliği (sunucu bağlam state'i) profilin ARDINDA geçer; profil hâlâ son-öncesi argüman.
     // v0.10.539 — son argümanlar artık sayfa bağlamı (page, pinnedPage); profil ondan önce.
-    // v0.10.1134 — wiki href'leri; v0.10.1138 — en sonda yapısal kapsam + komut.
-    expect(src).toMatch(/o\.toMs \|\| undefined, o\.profile \|\| undefined,[\s\S]{0,140}convIdRef\.current \|\| undefined,[\s\S]{0,160}o\.page \|\| undefined, o\.pinnedPage \|\| undefined,[\s\S]{0,120}wikiRefs\.length > 0 \? wikiRefs : undefined,[\s\S]{0,80}parsed\.scope, parsed\.command\)/);
+    // v0.10.1134 — wiki href'leri; v0.10.1138 — yapısal kapsam + komut; v0.10.1150 — en sonda Derin düşün.
+    expect(src).toMatch(/o\.toMs \|\| undefined, o\.profile \|\| undefined,[\s\S]{0,140}convIdRef\.current \|\| undefined,[\s\S]{0,160}o\.page \|\| undefined, o\.pinnedPage \|\| undefined,[\s\S]{0,120}wikiRefs\.length > 0 \? wikiRefs : undefined,[\s\S]{0,80}parsed\.scope, parsed\.command,[\s\S]{0,120}o\.deep \|\| undefined\)/);
   });
   it("iki yüzey de seçimi hook'a geçirir; seçici ModelPicker (yalnız >1 profilde menü)", () => {
     for (const rel of ['./AIDrawerBody.tsx', '../CopilotChat.tsx']) {
