@@ -3344,6 +3344,23 @@ Deterministik trace şablonu yok; guided trace/span/request-id yolları aynı ku
 üzerinden düzeldi. **Bilinçli kapsam dışı:** span explain (`copilotExplainSpan`, api.go büyüyemez) ve MCP
 `get_trace` analizinin `error_spans`'ı event taşımıyor — ayrı iş.
 
+## 2026-10-10 — Span açıklaması ve MCP get_trace span exception event'lerini taşır (v0.10.1148)
+
+**Bağlam:** v0.10.1147 trace explain + takip sohbetine span exception event'lerini ekledi; "ayrı iş" diye
+bırakılan iki yüzey hâlâ yalnız status mesajını görüyordu: span ✨ Explain (`copilotExplainSpan`) ve MCP
+`get_trace` analizinin `error_spans`'ı. Status mesajı boş bir producer span'inde (yetki hatası gibi) ikisi
+de asıl nedeni kaçırıyordu. **Karar:** (1) `copilotExplainSpan` api.go'dan `internal/api/explain_span.go`'ya
+gövdesi aynen taşındı (api.go küçüldü, taban indirildi); kanıta hedef span'in event bloğu eklendi —
+trace explain'in AYNI builder'ı (`buildTraceEventDigest`, tek span'lik dilim): exception önce, tip + mesaj +
+kırpılmış stack, aynı tavanlar ve aynı exception yönergesi. `systemSpan` istemi "EXCEPTION EVENTS COME
+FIRST" kuralını alır (tip ve mesaj aynen birincil neden, belirleyici kısım alıntı, düzeltme sınıfı, uydurma
+yok). Ek okuma yok; event'siz span'de prompt ve explain cache anahtarı bayt-bayt aynı. Blok yalnız HEDEF
+span içindir — komşu hata span'lerinin event'leri için trace explain var. (2) `get_trace` `error_spans`
+girdileri span'in ilk exception event'inden `exception_type` / `exception_message` alır (her biri 300 rune
+tavanı, `omitempty`; event yoksa alan yazılmaz). mcptools api'yi içe aktaramadığı için küçük, saf bir
+çözücü (`ttSpanException`) — CH `[]any`, JSON string ve diğer tipler gidiş-dönüşle. Stack bu alanlara
+girmez (bağlam bütçesi; stack için trace explain). Tool açıklaması alanları ilan eder.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

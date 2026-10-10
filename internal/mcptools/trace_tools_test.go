@@ -424,3 +424,37 @@ func TestTraceToolStubUnreadablePayload(t *testing.T) {
 		t.Error("açıklama stub_unreadable sözleşmesini taşımalı")
 	}
 }
+
+// v0.10.1148 — error_spans span'in exception event'ini taşır (tip + mesaj,
+// 300 rune tavanı); event'siz hata span'inde alanlar JSON'a girmez.
+func TestTraceToolErrorSpansCarryException(t *testing.T) {
+	withEx := ttSpan("e1", "root", "svc-orders", "orders.dlq publish", 10, 20, "error")
+	withEx.Events = []any{
+		map[string]any{"name": "log", "attributes": map[string]any{"message": "retrying"}},
+		map[string]any{"name": "exception", "attributes": map[string]any{
+			"exception.type":    "org.example.TopicAuthorizationException",
+			"exception.message": "Not authorized to access topics: [orders.dlq] " + strings.Repeat("x", 400),
+		}},
+	}
+	asJSON := ttSpan("e2", "root", "svc-orders", "op", 30, 40, "error")
+	asJSON.Events = `[{"name":"exception","attributes":{"exception.type":"java.net.SocketTimeoutException","exception.message":"Read timed out"}}]`
+	spans := []chstore.SpanRow{ttSpan("root", "", "svc-api", "root", 0, 100, "ok"), withEx, asJSON,
+		ttSpan("e3", "root", "svc-orders", "op", 50, 60, "error")}
+	an := buildTraceToolAnalysis(spans, false)
+	if len(an.ErrorSpans) != 3 {
+		t.Fatalf("hata span'i: %d", len(an.ErrorSpans))
+	}
+	e := an.ErrorSpans[0]
+	if e.ExceptionType != "org.example.TopicAuthorizationException" ||
+		!strings.HasPrefix(e.ExceptionMessage, "Not authorized to access topics: [orders.dlq]") ||
+		len([]rune(e.ExceptionMessage)) != traceToolStatusRunes+1 {
+		t.Errorf("exception alanları: %q / %d rune", e.ExceptionType, len([]rune(e.ExceptionMessage)))
+	}
+	if an.ErrorSpans[1].ExceptionType != "java.net.SocketTimeoutException" || an.ErrorSpans[1].ExceptionMessage != "Read timed out" {
+		t.Errorf("string events çözülmedi: %+v", an.ErrorSpans[1])
+	}
+	b, _ := json.Marshal(an.ErrorSpans[2])
+	if strings.Contains(string(b), "exception_") {
+		t.Errorf("event'siz span exception alanı yazdı: %s", b)
+	}
+}

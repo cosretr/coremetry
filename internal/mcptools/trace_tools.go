@@ -102,13 +102,18 @@ type traceToolSelfSpan struct {
 }
 
 type traceToolErrorSpan struct {
-	SpanID        string  `json:"span_id"`
-	Service       string  `json:"service"`
-	Name          string  `json:"name"`
-	StatusMessage string  `json:"status_message,omitempty"`
-	StartISO      string  `json:"start_iso"`
-	StartUnixNs   int64   `json:"start_unix_ns"`
-	DurationMs    float64 `json:"duration_ms"`
+	SpanID        string `json:"span_id"`
+	Service       string `json:"service"`
+	Name          string `json:"name"`
+	StatusMessage string `json:"status_message,omitempty"`
+	// ExceptionType / ExceptionMessage — v0.10.1148: span'in İLK exception
+	// event'i (ttSpanException); status mesajı boş producer span'inde asıl
+	// neden burada (ör. yetki hatası). Event yoksa alanlar yazılmaz.
+	ExceptionType    string  `json:"exception_type,omitempty"`
+	ExceptionMessage string  `json:"exception_message,omitempty"`
+	StartISO         string  `json:"start_iso"`
+	StartUnixNs      int64   `json:"start_unix_ns"`
+	DurationMs       float64 `json:"duration_ms"`
 }
 
 type traceToolPathStep struct {
@@ -348,10 +353,13 @@ func buildTraceToolAnalysis(spans []chstore.SpanRow, storeCapped bool) traceTool
 			break
 		}
 		s := &spans[i]
+		exType, exMsg := ttSpanException(s.Events)
 		out.ErrorSpans = append(out.ErrorSpans, traceToolErrorSpan{
 			SpanID: s.SpanID, Service: s.ServiceName, Name: s.Name,
-			StatusMessage: ttCapRunes(s.StatusMessage, traceToolStatusRunes),
-			StartISO:      time.Unix(0, s.StartTime).UTC().Format(time.RFC3339Nano), StartUnixNs: s.StartTime,
+			StatusMessage:    ttCapRunes(s.StatusMessage, traceToolStatusRunes),
+			ExceptionType:    ttCapRunes(exType, traceToolStatusRunes),
+			ExceptionMessage: ttCapRunes(exMsg, traceToolStatusRunes),
+			StartISO:         time.Unix(0, s.StartTime).UTC().Format(time.RFC3339Nano), StartUnixNs: s.StartTime,
 			DurationMs: ttNsToMs(ttSpanDur(s)),
 		})
 	}
@@ -422,6 +430,37 @@ func buildTraceToolAnalysis(spans []chstore.SpanRow, storeCapped bool) traceTool
 		out.Notes = append(out.Notes, fmt.Sprintf("ClickHouse okuması %d span tavanına takıldı: trace daha büyük, analiz ilk %d span üzerinden.", traceStoreSpanCap, traceStoreSpanCap))
 	}
 	return out
+}
+
+// ttSpanException — SAF (v0.10.1148): SpanRow.Events'teki İLK exception
+// event'inin (ad "exception" ya da exception.type/message taşıyan) tip ve
+// mesajı. CH yolu []any açar; başka tip (Tempo struct dilimi, ham JSON
+// string) JSON gidiş-dönüşüyle aynı şekle indirilir. Çözülemezse "".
+func ttSpanException(events any) (exType, exMsg string) {
+	arr, ok := events.([]any)
+	if !ok && events != nil {
+		raw, isStr := events.(string)
+		b := []byte(raw)
+		if !isStr {
+			var err error
+			if b, err = json.Marshal(events); err != nil {
+				return "", ""
+			}
+		}
+		if json.Unmarshal(b, &arr) != nil {
+			return "", ""
+		}
+	}
+	for _, e := range arr {
+		m, _ := e.(map[string]any)
+		attrs, _ := m["attributes"].(map[string]any)
+		t, _ := attrs["exception.type"].(string)
+		msg, _ := attrs["exception.message"].(string)
+		if name, _ := m["name"].(string); name == "exception" || t != "" || msg != "" {
+			return strings.TrimSpace(t), strings.TrimSpace(msg)
+		}
+	}
+	return "", ""
 }
 
 // ttCapRunes — rune sınırında keser, kesildiğini "…" ile söyler.
@@ -623,7 +662,7 @@ func getTraceAnalyzedTool(d Deps) mcp.Tool {
 			"Bounded span list: at most 200 spans (all ERROR spans first, then the slowest); truncated=true + total_span_count carry the real size. " +
 			"`analysis` is computed over ALL spans read (not just the 200 listed): wall_ms (root span duration = the critical path's wall clock), extent_ms (first start → last end, includes async tails), " +
 			"services[{service, self_ms, self_pct, spans, errors}] where self time = span duration minus the UNION of its direct children's intervals (parallel children are never subtracted twice; self_pct is a share of total self time, not of wall time), " +
-			"top_self_spans (≤10), error_spans (≤10, earliest first, with status_message), critical_path[{span_id, service, name, self_on_path_ms}] — " +
+			"top_self_spans (≤10), error_spans (≤10, earliest first, with status_message and exception_type/exception_message from the span's exception event when present), critical_path[{span_id, service, name, self_on_path_ms}] — " +
 			"NEVER add span durations or critical-path steps together: nested and parallel spans overlap in time, so sums overstate latency; quote wall_ms for the trace's duration. " +
 			"context[{service, env, cluster, namespace, pods, versions}] comes from resource attributes using the same keys ClickHouse derives its columns from " +
 			"(env = deployment.environment.name|deployment.environment, cluster = k8s.cluster.name|openshift.cluster.name|cluster, namespace = k8s.namespace.name, pod = k8s.pod.name else host.name, version = container image tag → service.version chain). " +
