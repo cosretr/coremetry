@@ -627,6 +627,9 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 	fuHadExplain := isTraceFollowUp && strings.TrimSpace(req.Context.Explain) != ""
 	if isTraceFollowUp {
 		tf := buildTraceFollowUp(traceSubj, pageCtx, loopEnv, req.Context.RangeS, anchorTo, time.Now())
+		// v0.10.1147 — ilk cevabın span exception özeti takibe de (aynı okuma,
+		// aynı blok; explain_trace_events.go). Okunamazsa "" ve takip aynen.
+		tf.Events = s.traceFollowUpEvents(ctx, tf.TraceID)
 		traceFU = &tf
 		emit("step", map[string]string{"label": traceFollowUpChipTR(tf)})
 		// v0.10.1050 — read_source_code sürümü argümansız çağrıldığında öznenin

@@ -158,7 +158,7 @@ func (s *Server) buildTraceExplainInput(ctx context.Context, id string) (traceEx
 	// v0.10.1044 — çalışan sürüm seçimi TÜM span'lerden (100'lük prompt
 	// kesiminden önce): sayım ne kadar çok örnekse o kadar sağlam.
 	allSpans := spans
-	spans = pickExplainSpans(spans, 100)
+	spans = pickExplainSpans(spans, traceExplainSpanCap)
 	compact := make([]traceLite, 0, len(spans))
 	var dbStmts, errTexts []string
 	seenStmt := map[string]bool{}
@@ -184,6 +184,13 @@ func (s *Server) buildTraceExplainInput(ctx context.Context, id string) (traceEx
 		compact = append(compact, l)
 	}
 	payload, _ := json.Marshal(compact)
+	// v0.10.1147 (operatör-bildirimli) — SPAN EVENT'LERİ. traceLite events
+	// taşımıyordu: logu olmayan tek span'lik ERROR trace'in nedeni
+	// (exception.type/message/stacktrace) modele hiç ulaşmıyordu. Ek okuma yok
+	// — aynı span'lerin events alanı (explain_trace_events.go). Hata span'inin
+	// exception'ı şema kanıtının hata metnine de girer.
+	evd := buildTraceEventDigest(spans)
+	errTexts = append(errTexts, evd.ErrTexts...)
 
 	// Trace'in LOGLARI — SADECE kullanıcı bu explain'i tetiklediğinde, log
 	// store'a TEK sorgu (poll/proaktif YOK; operatör isteği v0.9.166).
@@ -292,10 +299,20 @@ func (s *Server) buildTraceExplainInput(ctx context.Context, id string) (traceEx
 		cancel()
 	}
 
+	// v0.10.1147 — loglarda stack yoksa "Kodu da incele" hata span'inin
+	// exception event'indeki HAM stack'le çalışır (servis + span'in kendi
+	// sürümü; StackVersion span kimliğinden çözer). Log stack'i varsa öncelik
+	// onda kalır — bugünkü davranış.
+	if rawStack == "" && evd.RawStack != "" {
+		rawStack, stackService, stackSpanID = evd.RawStack, evd.RawStackService, evd.RawStackSpanID
+	}
+
 	oracleWG.Wait()
 	// Oracle bloğu logların ARKASINA; çekmece kırpması (clampDrawerEvidence)
 	// bu kuyruğu bütün tutar, span listesini keser.
-	tail := logsBlock + oracleBlock
+	// v0.10.1147 — span event bloğu kuyruğun BAŞINA: kırpmada span listesi
+	// kesilir, exception özeti korunur (yalnız-log modunda da baştan kesilir).
+	tail := evd.Block() + logsBlock + oracleBlock
 	return traceExplainInput{
 		User:         traceExplainUser(id, len(compact), totalSpans, string(payload), tail),
 		Evidence:     traceEvidenceSpanIDs(compact),

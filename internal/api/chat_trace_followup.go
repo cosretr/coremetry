@@ -106,6 +106,12 @@ type traceFollowUp struct {
 	// v0.10.1075 — klasik ilk cevapta (v0.10.1036) dönem kıyası yok; pencere
 	// yalnız takibin compare_periods çağrısı içindir.
 	CmpFrom, CmpTo time.Time
+	// Events — v0.10.1147 (operatör-bildirimli): ilk cevabın kanıtındaki SPAN
+	// EVENT'LERİ bloğunun AYNISI (traceEventDigest.Block; "\n\n" ile başlar,
+	// "" = event yok). "Bu neden oluyor?" takibi exception tipini ve mesajını
+	// görmeden cevaplanıyordu. Sunucu kurar (traceFollowUpEvents), modelden
+	// çıkarılmaz.
+	Events string
 }
 
 // traceFollowUpPage — v0.10.948 — page yalnız AYNI trace'i kanıtlıyorsa (traceId == özne); boş traceId de uyuşmazlık.
@@ -222,6 +228,10 @@ func traceFollowUpPromptTR(tf *traceFollowUp, explain string) string {
 		b.WriteString(traceFollowUpWindowUnknown + "\n")
 	}
 	out := strings.TrimRight(b.String(), "\n") + copilot.TraceFollowUpAddendum()
+	// v0.10.1147 — span exception özeti (VERİ bloğu, çitli): talimattan sonra,
+	// önceki açıklamadan önce. Sayı denetiminin tohumuna da girer (açıklamasız
+	// çağrı) — mesajdaki değerler temellenir.
+	out += tf.Events
 	if ex := clampDrawerExplain(explain); ex != "" {
 		out += "\n\n" + traceFollowUpExplainHeader + "```text\n" + promptfmt.FenceSafe(ex) + "\n```"
 	}
@@ -239,6 +249,10 @@ func traceFollowUpChipTR(tf traceFollowUp) string {
 		if v = strings.TrimSpace(v); v != "" {
 			parts = append(parts, v)
 		}
+	}
+	if tf.Events != "" {
+		// v0.10.1147 — bağlam sessizce uygulanmaz: span event'leri de bağlamda.
+		parts = append(parts, "span event'leri")
 	}
 	return "trace takibi (araçlarla): " + strings.Join(parts, " · ")
 }

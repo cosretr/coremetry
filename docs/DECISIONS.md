@@ -3321,6 +3321,29 @@ Kurum alan adı repoya yazılmaz: `gatewayHosts` boş, karar DESENE göre (ilk y
 host + `_<port>`); dolu olursa yalnız o host'lara uygulanır. Ayar/UI yok. Mevcut kovalar eski
 adla kalır; yeni 5 dk kovalarından itibaren yeni adlar görünür.
 
+## 2026-10-10 — CoSRE trace açıklaması span exception event'lerini okur (v0.10.1147)
+
+**Operatör (prod):** tek span'lik ERROR trace (Kafka producer "… publish", status error) için "CoSRE'ye
+sor" genel bir özet verdi ("… publish işlemi sırasında error statüsü ile hata almıştır"); asıl neden span'in
+exception event'indeydi (`exception.type` = `TopicAuthorizationException`, mesaj "Not authorized to access
+topics: […]", stacktrace) ve Logs sekmesi "0 log satırı + 1 span event'i" gösteriyordu. **Kök neden:**
+`buildTraceExplainInput` span'leri `traceLite`'a indirirken `SpanRow.Events`'i hiç okumuyordu; oysa CH
+`events` kolonu `GetTrace`'te zaten okunuyor, Tempo yolu da aynı şekli dolduruyor. Exception'ın tek kaynağı
+log store'du. **Karar:** ek okuma yok — aynı span'lerin event'lerinden sınırlı bir VERİ bloğu
+(`explain_trace_events.go`): hata span'leri → en yavaş span → exception taşıyan diğerleri; exception önce
+(tip, mesaj ≤500, stack ≤12 satır/1500 rune — `stackparse` ile çerçeve frame'leri segment başına ilk 3'e
+katlanır, uygulama frame'leri ve "Caused by" kalır; sonraki farklı exception'lar 6/600, aynı tip+mesaj
+stack'i bir kez), ≤5 span, span başına ≤4 event (≤2 exception), toplam ≤4500 rune; atlananlar sayıyla
+söylenir. Blok kuyruğun başına girer (çekmece kırpması span listesini keser, bloğu korur); takip sohbetinin
+sistem mesajına da aynı blok (`traceFollowUp.Events`, explain'le aynı Tempo-önce okuma, 5 sn, sessiz düşüş).
+Loglarda stack yoksa "Kodu da incele" span'in ham stack'iyle çalışır; exception "tip: mesaj" şema
+kanıtının hata metnine girer. İstemler (`systemTraceBody`, takip eki, çekmece): exception event'i varsa tip
+ve mesaj aynen birincil neden, belirleyici kısım alıntılanır, tipin işaret ettiği düzeltme sınıfı önerilir
+(yetki → ACL/izin), event'te olmayan ayrıntı uydurulmaz. Event'siz trace'te prompt bayt-bayt aynı.
+Deterministik trace şablonu yok; guided trace/span/request-id yolları aynı kurucu + `SystemPromptTrace`
+üzerinden düzeldi. **Bilinçli kapsam dışı:** span explain (`copilotExplainSpan`, api.go büyüyemez) ve MCP
+`get_trace` analizinin `error_spans`'ı event taşımıyor — ayrı iş.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"
