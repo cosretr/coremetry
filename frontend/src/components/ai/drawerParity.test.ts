@@ -59,7 +59,7 @@ describe('CoSRE başlığı AIDrawer anatomisi', () => {
     expect(chat).toContain('<ModelPicker profiles={profiles}');
     const head = chat.slice(chat.indexOf('const headerNode'), chat.indexOf('const bodyNode'));
     expect(head).not.toContain('<ModelPicker');
-    expect(read('./ModelPicker.tsx')).toContain('<span className="k">model</span>');
+    expect(read('./ModelPicker.tsx')).toContain('<span className="chip cm-model-label"');
     expect(chat).not.toContain('sorular bu servise scope\'lanır');
   });
   it('v0.10.483 — Explain hedefi (?ai=) aynı çekmecede açıklama kipine geçer; kapatma yok', () => {

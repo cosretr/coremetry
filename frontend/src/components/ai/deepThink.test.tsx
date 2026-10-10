@@ -2,9 +2,10 @@
 //
 // deepThink.test.tsx — v0.10.1150 "Derin düşün" sözleşmesi:
 //   (1) istek gövdesi: açıkken context.deep: true; kapalıyken anahtar HİÇ yok;
-//   (2) composer hapı: varsayılan kapalı, tıklayınca aç/kapa, durum kullanıcı
+//   (2) composer hapı: varsayılan AÇIK (2026-10-10 operatör isteği; kayıtlı
+//       '0' — kullanıcı kapattı — korunur), tıklayınca aç/kapa, durum kullanıcı
 //       başına localStorage'da ve yeniden açılışta korunur; depolama atarsa
-//       bellekte çalışır; akış sürerken devre dışı; tooltip metni;
+//       açık başlar, bellekte çalışır; akış sürerken devre dışı; tooltip metni;
 //   (3) kablolama: iki kabuk (CoSRE penceresi + ✨ Explain sohbeti) hook'u
 //       useChatThread'e ve composer'a geçirir; cevapta "Derin" rozeti.
 // Adlar sentetik.
@@ -16,7 +17,7 @@ import { resolve } from 'node:path';
 import { MemoryRouter } from 'react-router-dom';
 import { api } from '@/lib/api';
 import { ChatComposer } from './ChatComposer';
-import { DEEP_THINK_TOOLTIP, deepThinkKey, useDeepThink } from './deepThink';
+import { DEEP_THINK_TOOLTIP, deepThinkKey, readDeepThink, useDeepThink } from './deepThink';
 
 const read = (rel: string) => readFileSync(resolve(__dirname, rel), 'utf8').replace(/^\s*\/\/.*$/gm, '');
 
@@ -101,53 +102,68 @@ describe('composer "Derin" hapı', () => {
     await mount(user, busy);
   }
 
-  it('varsayılan kapalı; Aa ile kabuk eylemleri arasında; etiket + tooltip', async () => {
+  it('readDeepThink: kayıt yoksa açık; kayıtlı 0 kapalı; 1 açık', () => {
+    expect(readDeepThink('u-9')).toBe(true);
+    window.localStorage.setItem(deepThinkKey('u-9'), '0');
+    expect(readDeepThink('u-9')).toBe(false);
+    window.localStorage.setItem(deepThinkKey('u-9'), '1');
+    expect(readDeepThink('u-9')).toBe(true);
+  });
+
+  it('kayıtlı kapalı tercih korunur (varsayılan açığa dönmez)', async () => {
+    window.localStorage.setItem(deepThinkKey('u-1'), '0');
+    await mount('u-1');
+    expect(pill().getAttribute('aria-pressed')).toBe('false');
+    expect(state()).toBe('0');
+  });
+
+  it('varsayılan açık; Aa ile kabuk eylemleri arasında; etiket + tooltip', async () => {
     await mount('u-1');
     expect(pill()).not.toBeNull();
     expect(pill().textContent).toContain('Derin');
-    expect(pill().getAttribute('aria-pressed')).toBe('false');
+    expect(pill().getAttribute('aria-pressed')).toBe('true');
     expect(pill().getAttribute('title')).toBe(DEEP_THINK_TOOLTIP);
     expect(DEEP_THINK_TOOLTIP).toBe('Daha çok kaynak okur, daha çok adım atar; cevap daha yavaş gelir.');
     const actions = host.querySelector('.cm-composer__actions')!;
     expect(pill().previousElementSibling?.classList.contains('cm-composer__aa')).toBe(true);
     expect(actions.querySelector('[data-actions]')).not.toBeNull();
-    expect(state()).toBe('0');
+    expect(state()).toBe('1');
   });
 
   it("aç/kapa kullanıcı başına localStorage'da ve yeniden açılışta korunur", async () => {
     await mount('u-1');
     await act(async () => { pill().click(); });
-    expect(pill().getAttribute('aria-pressed')).toBe('true');
-    expect(state()).toBe('1');
-    expect(window.localStorage.getItem(deepThinkKey('u-1'))).toBe('1');
-    await remount('u-1');
-    expect(pill().getAttribute('aria-pressed')).toBe('true');
-    // başka kullanıcıya sızmaz
-    await remount('u-2');
     expect(pill().getAttribute('aria-pressed')).toBe('false');
-    await remount('u-1');
-    await act(async () => { pill().click(); });
+    expect(state()).toBe('0');
     expect(window.localStorage.getItem(deepThinkKey('u-1'))).toBe('0');
     await remount('u-1');
     expect(pill().getAttribute('aria-pressed')).toBe('false');
+    // başka kullanıcıya sızmaz (u-2 varsayılanda: açık)
+    await remount('u-2');
+    expect(pill().getAttribute('aria-pressed')).toBe('true');
+    await remount('u-1');
+    await act(async () => { pill().click(); });
+    expect(window.localStorage.getItem(deepThinkKey('u-1'))).toBe('1');
+    await remount('u-1');
+    expect(pill().getAttribute('aria-pressed')).toBe('true');
   });
 
   it('akış sürerken devre dışı (tık durumu değiştirmez)', async () => {
     await mount('u-1', true);
     expect(pill().disabled).toBe(true);
     await act(async () => { pill().click(); });
-    expect(state()).toBe('0');
+    expect(state()).toBe('1');
     await remount('u-1', false);
     expect(pill().disabled).toBe(false);
   });
 
-  it('depolama atarsa kapalı başlar ve hap bellekte çalışır', async () => {
+  it('depolama atarsa açık başlar ve hap bellekte çalışır', async () => {
     const boom = () => { throw new Error('SecurityError'); };
     vi.stubGlobal('localStorage', { getItem: boom, setItem: boom, removeItem: boom, clear: boom, key: boom, length: 0 });
     await mount('u-1');
-    expect(state()).toBe('0');
-    await act(async () => { pill().click(); });
     expect(state()).toBe('1');
+    await act(async () => { pill().click(); });
+    expect(state()).toBe('0');
   });
 
   it('onDeepChange verilmezse hap çizilmez (eski composer)', async () => {

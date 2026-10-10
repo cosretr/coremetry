@@ -99,7 +99,10 @@ describe('AI çekmecesi — model çipi', () => {
     await mountDrawer();
     const c = chip();
     expect(c).not.toBeNull();
-    expect(c?.textContent).toContain('gemma4-26b-a4b-it');
+    // 2026-10-10 — kompakt: görünen kısa ad, tam kimlik tooltip + aria-label'da.
+    expect(c?.textContent).toContain('gemma4 26b');
+    expect(c?.getAttribute('title')).toBe('Model: gemma4-26b-a4b-it');
+    expect(c?.getAttribute('aria-label')).toBe('Model: gemma4-26b-a4b-it');
     // Konum iddiası YOK — prod'da LLM uzak uçta.
     expect(c?.textContent?.toLowerCase()).not.toMatch(/yerel|local|on-?prem/);
   });

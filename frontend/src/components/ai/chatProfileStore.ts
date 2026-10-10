@@ -53,6 +53,33 @@ export function activeProfileModel(profile: string, profiles: CopilotProfileOpti
   return p?.model || fallback || '';
 }
 
+// 2026-10-10 — kompakt model hapı etiketi (ModelPicker).
+const LABEL_MAX = 12;
+// Boyut parçası: 31b, 7B, 1.5b, 270m, 8x7b.
+const SIZE_RE = /^\d+(?:\.\d+)?[bmk]$|^\d+x\d+(?:\.\d+)?b$/i;
+
+function clipLabel(s: string): string {
+  return s.length > LABEL_MAX ? `${s.slice(0, LABEL_MAX - 1)}…` : s;
+}
+
+/** shortModelName — SAF: satıcı öneki (`org/`) atılır; ilk '-' (ya da ':')
+ *  öncesi parça + varsa boyut parçası; kuantizasyon/sonek gürültüsü (it, qat,
+ *  w4a16, ct, instruct…) düşer. En çok 12 karakter, aşarsa '…'.
+ *  "gemma4-31b-it-qat-w4a16-ct" → "gemma4 31b". */
+export function shortModelName(model: string): string {
+  const base = model.trim().split('/').pop() ?? '';
+  const [head = '', ...rest] = base.split(/[-:]/);
+  if (!head) return clipLabel(base);
+  const size = rest.find(t => SIZE_RE.test(t));
+  return clipLabel(size ? `${head} ${size}` : head);
+}
+
+/** compactModelLabel — SAF: hap etiketi = profilin görünen adı, yoksa kısaltılmış model adı. */
+export function compactModelLabel(profileLabel: string | undefined, model: string): string {
+  const name = profileLabel?.trim();
+  return name ? clipLabel(name) : shortModelName(model);
+}
+
 export interface ChatProfileState {
   /** '' = sunucu varsayılanı / yüzey eşlemesi */
   profile: string;

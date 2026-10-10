@@ -113,7 +113,8 @@ describe('/cosre bağımsız sohbet sayfası', () => {
     expect(head?.textContent).toContain('CoSRE');
     // v0.10.1141 — model etiketi başlıkta DEĞİL, composer'ın içinde.
     expect(head?.textContent).not.toContain('model-x');
-    expect(document.querySelector('form.cm-composer .cm-model-label')?.textContent).toContain('model-x');
+    // 2026-10-10 — kompakt etiket: tam model kimliği tooltip'te.
+    expect(document.querySelector('form.cm-composer .cm-model-label')?.getAttribute('title')).toBe('Model: model-x');
     // v0.10.1137 — geçmiş başlık düğmesi değil, sol kenar çubuğu (Claude gibi).
     expect(head?.textContent).not.toContain('Geçmiş');
     expect(document.getElementById('cosre-side')?.textContent).toContain('Yeni sohbet');

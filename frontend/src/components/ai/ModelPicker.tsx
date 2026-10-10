@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { Cpu } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { MenuItem } from '@/components/ui/Menu';
 import { Popover } from '@/components/ui/Popover';
 import type { CopilotProfileOption } from '@/lib/types';
+import { compactModelLabel } from './chatProfileStore';
 
 // ModelPicker — v0.10.1138: kompakt "model ▾" menüsü (CoSRE penceresi,
 // /cosre sayfası ve ✨ Explain çekmecesi sohbeti AYNI bileşen).
@@ -20,6 +22,13 @@ import type { CopilotProfileOption } from '@/lib/types';
 // (v0.9.1037 model çipi sözleşmesi — sahte affordance yok), AYNI yerde.
 // Akış sürerken (`disabled`) hap devre dışı ve açık menü kapanır — model
 // yalnız boştayken değişir. Seçim kalıcılığı çağıranda (useChatProfile).
+//
+// 2026-10-10 (operatör: "model hapı çok uzun") — tetikleyici KOMPAKT: Cpu ikonu +
+// kısa etiket (compactModelLabel: profil adı, yoksa kısaltılmış model adı); tam
+// model kimliği tooltip + aria-label'da ("Model: <tam id>"). Telefon genişliğinde
+// yalnız ikon (CSS, ≤640px). Menü satırları tam ayrıntıyı (ad + model + açıklama)
+// aynen taşır; tek profilli etiket de aynı kompakt biçim.
+
 export function ModelPicker({ profiles, defaultProfile, value, onChange, activeModel, disabled = false }: {
   profiles: CopilotProfileOption[];
   defaultProfile?: string;
@@ -33,12 +42,15 @@ export function ModelPicker({ profiles, defaultProfile, value, onChange, activeM
   const anchorRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   useEffect(() => { if (disabled) setOpen(false); }, [disabled]);
+  const cur = profiles.find(p => p.id === (value || defaultProfile));
+  const short = compactModelLabel(cur?.label, activeModel) || 'varsayılan';
+  const nameCls = cur?.label?.trim() ? '' : ' mono';
   if (profiles.length < 2) {
     if (!activeModel) return null;
     return (
-      <span className="chip cm-model-label" title="Cevapları üreten model">
-        <span className="k">model</span>
-        <b className="mono">{activeModel}</b>
+      <span className="chip cm-model-label" title={`Model: ${activeModel}`} aria-label={`Model: ${activeModel}`}>
+        <Cpu size={12} strokeWidth={2} aria-hidden="true" />
+        <b className={`cm-model-label__name${nameCls}`}>{short}</b>
       </span>
     );
   }
@@ -61,15 +73,17 @@ export function ModelPicker({ profiles, defaultProfile, value, onChange, activeM
       </span>
     </MenuItem>
   );
-  const label = activeModel || 'varsayılan';
+  const full = activeModel || 'varsayılan';
   return (
     <>
       <Button ref={anchorRef} variant="ghost" size="sm" className="cm-model-pill" type="button"
         onClick={() => setOpen(o => !o)} onKeyDown={onKeyDown} disabled={disabled}
-        aria-haspopup="menu" aria-expanded={open} aria-label={`Model: ${label} — değiştir`}
-        title={disabled ? 'Cevap bitince model değiştirilebilir' : 'Bu konuşmanın modeli (seçim kullanıcı başına hatırlanır)'}>
-        <span className="cm-model-pill__name mono">{label}</span>
-        <span aria-hidden="true">▾</span>
+        aria-haspopup="menu" aria-expanded={open}
+        aria-label={`Model: ${full}${nameCls ? '' : ` (${short})`} — değiştir`}
+        title={`Model: ${full}${disabled ? ' · cevap bitince değiştirilebilir' : ''}`}
+        leftIcon={<Cpu size={14} strokeWidth={2} aria-hidden="true" />}>
+        <span className={`cm-model-pill__name${nameCls}`}>{short}</span>
+        <span className="cm-model-pill__caret" aria-hidden="true">▾</span>
       </Button>
       <Popover anchorRef={anchorRef} open={open && !disabled} onClose={() => setOpen(false)} kind="menu"
         ariaLabel="Model profili" width={280} placement={{ prefer: 'top', align: 'start' }}

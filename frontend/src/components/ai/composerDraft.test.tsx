@@ -243,10 +243,10 @@ describe('(3) araç çubuğu üç yüzeyde', () => {
     const tb = () => box.querySelector('[role="toolbar"][aria-label="Biçimlendirme"]');
     const aa = box.querySelector<HTMLButtonElement>('button.cm-composer__aa')!;
     expect(aa).not.toBeNull();
-    // Aa → "Derin" hapı (v0.10.1150, varsayılan kapalı) → model hapı (aynı eylem kümesi)
+    // Aa → "Derin" hapı (v0.10.1150; 2026-10-10'dan beri varsayılan AÇIK) → model hapı (aynı eylem kümesi)
     const deep = aa.nextElementSibling;
     expect(deep?.classList.contains('cm-deep-pill')).toBe(true);
-    expect(deep?.getAttribute('aria-pressed')).toBe('false');
+    expect(deep?.getAttribute('aria-pressed')).toBe('true');
     expect(deep?.nextElementSibling?.classList.contains('cm-model-pill') || deep?.nextElementSibling?.classList.contains('cm-model-label')).toBe(true);
     await act(async () => { ta().focus(); });
     expect(tb()).toBeNull(); // varsayılan kapalı, odakta da

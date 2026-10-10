@@ -3410,6 +3410,19 @@ yeniden yazıldı (`https*`, `[0-9][0-9]*`, sınıftaki '?' için ClickHouse ka�
 SQL'e gömülen ifadede '?', '{', '}' olmamasını pinler. Kayıp aralık: 1146 kurulumundan bu
 sürüme kadar topoloji kovaları boş; yeni kovalar normal yazılır.
 
+## 2026-10-10 — CoSRE composer: "Derin düşün" varsayılan açık, model hapı kompakt (v0.10.1152)
+
+**Bağlam:** Operatör isteği: (1) Derin düşün her sohbette elle açılıyordu; (2) composer'daki model hapı tam
+model kimliğini gösteriyordu ("gemma4-31b-it-qat-w4…") ve eylem satırını dolduruyordu. **Karar:** (1)
+`readDeepThink` kayıt yoksa (ya da depolama atarsa) **açık** döner; kayıtlı `'0'` (kullanıcı kapattı)
+korunur — v0.10.1150 kararının yalnız varsayılanı değişti, sunucu tarafı aynen. (2) `ModelPicker`
+tetikleyicisi Cpu ikonu + kısa etiket: profilin görünen adı (ör. "Hızlı"/"Derin"), yoksa
+`shortModelName` (satıcı öneki atılır, ilk '-' öncesi parça + varsa boyut: "gemma4-31b-it-qat-w4a16-ct" →
+"gemma4 31b"; en çok 12 karakter, aşarsa '…'). Tam kimlik tooltip + aria-label'da ("Model: <tam id>");
+telefon genişliğinde (≤640px) yalnız ikon. Yukarı açılan menü tam ayrıntıyı (ad + tam model + açıklama)
+aynen taşır; tek profilli tıklanamaz etiket de aynı kompakt biçim. Pinler: `deepThink.test.tsx`,
+`modelPicker.composer.test.tsx` (etiket türetme tablo testi, tooltip, ≤640px kuralı).
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"

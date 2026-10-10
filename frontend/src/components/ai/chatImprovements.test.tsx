@@ -301,7 +301,9 @@ describe('CopilotChat — model menüsü, tam sayfa, composer (5)(6)', () => {
     // v0.10.1141 — seçici composer'ın içinde (hap), başlıkta değil.
     const pill = () => document.body.querySelector<HTMLButtonElement>('.cm-composer__box .cm-model-pill');
     const trigger = pill();
-    expect(trigger?.textContent).toContain('small'); // rozet etkin model
+    // 2026-10-10 — kompakt hap: görünen etiket profil adı, tam model tooltip'te.
+    expect(trigger?.textContent).toContain('Hızlı');
+    expect(trigger?.getAttribute('title')).toContain('Model: small');
     await act(async () => { trigger!.click(); });
     const items = Array.from(document.body.querySelectorAll('[role="menuitemradio"]'));
     expect(items.map(i => i.textContent)).toEqual([
@@ -312,7 +314,8 @@ describe('CopilotChat — model menüsü, tam sayfa, composer (5)(6)', () => {
     expect(items[1].textContent).toContain('Derin analiz');
     await act(async () => { (items[1] as HTMLButtonElement).click(); });
     expect(readChatProfile('u1')).toBe('deep');
-    expect(pill()?.textContent).toContain('big');
+    expect(pill()?.textContent).toContain('Derin');
+    expect(pill()?.getAttribute('title')).toContain('Model: big');
 
     const ta = document.body.querySelector<HTMLTextAreaElement>('textarea.cm-composer__input')!;
     await typeInto(ta, 'durum nedir');

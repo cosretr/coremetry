@@ -8,11 +8,16 @@
 //       aria-checked ve açılışta odak onda;
 //   (3) klavye: ↑ hapı açar, ↑↓ gezinir, Esc kapatır ve odak hapa döner;
 //   (4) akış sürerken hap devre dışı (model yalnız boştayken değişir);
-//   (5) tek profilde aynı yerde tıklanamaz model etiketi.
+//   (5) tek profilde aynı yerde tıklanamaz model etiketi;
+//   (6) 2026-10-10 (operatör: "model hapı çok uzun") — kompakt tetikleyici:
+//       ikon + kısa etiket (profil adı / kısaltılmış model), tam id tooltip +
+//       aria-label'da, telefonda yalnız ikon; menü tam ayrıntıyı taşır.
 // Adlar sentetik.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -31,6 +36,8 @@ import { ConfirmProvider } from '@/components/ui/ConfirmDialog';
 import { CopilotChat } from '@/components/CopilotChat';
 import { __resetEscLayers, topEscLayer } from '@/lib/escLayer';
 import { AIDrawerBody } from './AIDrawerBody';
+import { ModelPicker } from './ModelPicker';
+import { compactModelLabel, shortModelName } from './chatProfileStore';
 import { __resetCopilotEnabledCache } from './useCopilotEnabled';
 
 const PROFILES: CopilotProfileOption[] = [
@@ -130,7 +137,8 @@ describe('ModelPicker composer içinde — üç yüzey (1)', () => {
     const actions = pill().closest('.cm-composer__actions')!;
     expect(Array.from(actions.querySelectorAll('button')).some(b => b.textContent?.includes('Gönder'))).toBe(true);
     expect(document.body.querySelector('.cosre-page__head .cm-model-pill, .cm-model-pill:not(form .cm-model-pill)')).toBeNull();
-    expect(pill().textContent).toContain('small');
+    expect(pill().textContent).toContain('Hızlı'); // kompakt: profil adı
+    expect(pill().getAttribute('title')).toBe('Model: small');
   });
 });
 
@@ -192,7 +200,8 @@ describe('menü yukarı açılır, klavye (2)(3)', () => {
     await act(async () => { pill().click(); });
     await act(async () => { items()[1].click(); });
     expect(menu()).toBeNull();
-    expect(pill().textContent).toContain('big');
+    expect(pill().textContent).toContain('Derin');
+    expect(pill().getAttribute('aria-label')).toContain('Model: big');
     await act(async () => { pill().click(); });
     expect(items()[1].getAttribute('aria-checked')).toBe('true');
     expect(document.activeElement).toBe(items()[1]);
@@ -239,5 +248,77 @@ describe('tek profil: tıklanamaz etiket aynı yerde (5)', () => {
     expect(labels[0].closest('.cm-composer__actions')).not.toBeNull();
     expect(labels[0].querySelector('button')).toBeNull();
     expect(labels[0].textContent).toContain('small');
+    expect(labels[0].getAttribute('title')).toBe('Model: small');
+  });
+});
+
+describe('kompakt tetikleyici (6)', () => {
+  it.each([
+    ['gemma4-31b-it-qat-w4a16-ct', 'gemma4 31b'],
+    ['gemma4-26b-a4b-it', 'gemma4 26b'],
+    ['google/gemma-3-27b-it', 'gemma 27b'],
+    ['Qwen/Qwen2.5-72B-Instruct-AWQ', 'Qwen2.5 72B'],
+    ['llama3.1:8b-instruct-q4_K_M', 'llama3.1 8b'],
+    ['mixtral-8x7b-instruct', 'mixtral 8x7b'],
+    ['gpt-4o-mini', 'gpt'],
+    ['small', 'small'],
+    ['verylongmodelname-7b', 'verylongmod…'],
+    ['', ''],
+  ])('shortModelName(%j) = %j', (model, want) => {
+    expect(shortModelName(model)).toBe(want);
+    expect(shortModelName(model).length).toBeLessThanOrEqual(12);
+  });
+
+  it.each([
+    ['Hızlı', 'gemma4-31b-it-qat-w4a16-ct', 'Hızlı'],
+    [undefined, 'gemma4-31b-it-qat-w4a16-ct', 'gemma4 31b'],
+    ['  ', 'small', 'small'],
+    ['Çok uzun profil adı', 'small', 'Çok uzun pr…'],
+  ] as const)('compactModelLabel(%j, %j) = %j', (label, model, want) => {
+    expect(compactModelLabel(label, model)).toBe(want);
+  });
+
+  const FULL = 'gemma4-31b-it-qat-w4a16-ct';
+  const render = (profiles: CopilotProfileOption[], value = '') => act(async () => {
+    root.render(<ModelPicker profiles={profiles} defaultProfile={profiles[0]?.id} value={value}
+      onChange={() => {}} activeModel={FULL} />);
+  });
+
+  it('profilsiz: ikon + kısa model adı; tam id tooltip + aria-label; menü tam ayrıntı', async () => {
+    await render([{ id: 'a', model: FULL, description: 'Tek GPU' }, { id: 'b', model: 'big' }]);
+    const p = pill();
+    expect(p.querySelector('svg')).not.toBeNull();
+    expect(p.querySelector('.cm-model-pill__name')!.textContent).toBe('gemma4 31b');
+    expect(p.textContent).not.toContain(FULL);
+    expect(p.getAttribute('title')).toBe(`Model: ${FULL}`);
+    expect(p.getAttribute('aria-label')).toContain(`Model: ${FULL}`);
+    await act(async () => { p.click(); });
+    expect(items()[0].textContent).toContain(FULL);
+    expect(items()[0].textContent).toContain('Tek GPU');
+  });
+
+  it('profil adı varsa etiket o; tek profilli etiket aynı kompakt biçim', async () => {
+    await render([{ id: 'a', label: 'Hızlı', model: FULL }, { id: 'b', label: 'Derin', model: 'big' }]);
+    expect(pill().querySelector('.cm-model-pill__name')!.textContent).toBe('Hızlı');
+    expect(pill().getAttribute('title')).toBe(`Model: ${FULL}`);
+    await render([]);
+    const l = document.body.querySelector<HTMLElement>('.cm-model-label')!;
+    expect(l.querySelector('svg')).not.toBeNull();
+    expect(l.querySelector('.cm-model-label__name')!.textContent).toBe('gemma4 31b');
+    expect(l.getAttribute('title')).toBe(`Model: ${FULL}`);
+    expect(l.getAttribute('aria-label')).toBe(`Model: ${FULL}`);
+    await render([{ id: 'a', label: 'Hızlı', model: FULL }]);
+    expect(document.body.querySelector('.cm-model-label__name')!.textContent).toBe('Hızlı');
+  });
+
+  it('telefon genişliğinde yalnız ikon: ad + ▾ sınıflı, ≤640px kuralı gizler', async () => {
+    await render([{ id: 'a', model: FULL }, { id: 'b', model: 'big' }]);
+    const p = pill();
+    expect(p.querySelector('.cm-model-pill__name')).not.toBeNull();
+    expect(p.querySelector('.cm-model-pill__caret')!.textContent).toBe('▾');
+    // İkon gizlenen parçaların dışında.
+    expect(p.querySelector('svg')!.closest('.cm-model-pill__name, .cm-model-pill__caret')).toBeNull();
+    const css = readFileSync(resolve(__dirname, '../../styles/globals.css'), 'utf8');
+    expect(css).toMatch(/@media \(max-width: 640px\) \{[^@]*\.cm-model-pill__name, \.cm-model-pill__caret, \.cm-model-label__name \{ display: none; \}/);
   });
 });
