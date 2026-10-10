@@ -811,6 +811,13 @@ func (s *Store) WriteTopologyBucket(ctx context.Context, bucketStart time.Time) 
 					nullIf(attr_values[indexOf(attr_keys, 'messaging.destination')], ''),
 					''
 				) AS msg_dest,
+				-- v0.10.1146 — çıkış geçidi: gerçek hedef url yolunda gömülü
+				-- (/<host>_<port>/<svc>/…), bkz. gatewayExtExpr.
+				extractGroups(coalesce(
+					nullIf(attr_values[indexOf(attr_keys, 'url.full')], ''),
+					nullIf(attr_values[indexOf(attr_keys, 'http.url')], ''),
+					''
+				), '`+gatewayPathRegex+`') AS gw_groups,
 				multiIf(
 					-- v0.9.1318 (Ç10) — TEK db dalı. dbInstanceExpr 'unknown'
 					-- terminaline düştüğü için db_instance, db_system doluyken
@@ -832,7 +839,7 @@ func (s *Store) WriteTopologyBucket(ctx context.Context, bucketStart time.Time) 
 					msg_system != '' AND kind != 'consumer',
 						concat('queue:', msg_system),
 					peer_service != '' AND kind = 'client',
-						concat('ext:', peer_service),
+						concat('ext:', `+gatewayExtExpr("peer_service")+`),
 					-- v0.8.448 — semconv fallback: hedefini yalnız
 					-- server.address / net.peer.name ile adlandıran HTTP/RPC
 					-- client'ları (standart semconv; peer.service opt-in bir
@@ -849,7 +856,7 @@ func (s *Store) WriteTopologyBucket(ctx context.Context, bucketStart time.Time) 
 							SELECT DISTINCT service_name FROM service_summary_5m
 							WHERE time_bucket >= toDateTime(?, 'UTC')
 						),
-						concat('ext:', infra_host),
+						concat('ext:', `+gatewayExtExpr("infra_host")+`),
 					''
 				) AS child,
 				-- proto/kind_out child'dan türetilir (alias zinciri) —
@@ -1482,4 +1489,33 @@ func (s *Store) ReadServiceTopologyAggForFocus(ctx context.Context, from, to tim
 		frontier = topologyNextFrontier(fresh, seen, frontierCap)
 	}
 	return out, nil
+}
+
+// v0.10.1146 — çıkış geçidi (egress gateway) arkasındaki gerçek hedef.
+// Kurum dış çağrıları tek bir geçit host'u üzerinden yapıyor; gerçek hedef
+// url yolunda gömülü: https://<geçit>/<ip|host>_<port>/<Svc>/… →
+// "<Svc>@<ip|host>:<port>". Eşleşmezse bugünkü düğüm adı (host) kalır.
+//
+// gatewayHosts BOŞ = desene göre: yolun ilk parçası "<noktalı host>_<port>"
+// ise geçit sayılır (kurum alan adı repoya yazılmaz). Doluysa yalnız bu
+// host'lar için uygulanır. Ayar/UI yok — bilinçli.
+var gatewayHosts = []string{}
+
+// gatewayPathRegex — [.] ve [0-9]: ClickHouse dize literalinde ters eğik
+// çizgi kaçışı gerekmesin. İlk parçada nokta şartı "/order_42/items" gibi
+// sıradan yolları geçit sanmayı engeller.
+const gatewayPathRegex = `^https?://[^/]+/([^/_]*[.][^/_]+)_([0-9]{1,5})/([^/?#]+)`
+
+// gatewayExtExpr — hostCol için ext: düğüm adı ifadesi (gw_groups alias'ı
+// iç SELECT'te tanımlı).
+func gatewayExtExpr(hostCol string) string {
+	cond := "length(gw_groups) = 3"
+	if len(gatewayHosts) > 0 {
+		q := make([]string, 0, len(gatewayHosts))
+		for _, h := range gatewayHosts {
+			q = append(q, "'"+strings.ReplaceAll(h, "'", "''")+"'")
+		}
+		cond += " AND " + hostCol + " IN (" + strings.Join(q, ", ") + ")"
+	}
+	return "if(" + cond + ", concat(gw_groups[3], '@', gw_groups[1], ':', gw_groups[2]), " + hostCol + ")"
 }

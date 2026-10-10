@@ -3310,6 +3310,17 @@ listeyi bitirir, sonraki Enter gönderir). **Testler:** `composerEdit.test.ts`, 
 (XSS vektörleri dahil), `composerPaste.test.ts`, `ChatComposer.test.tsx`, `composerDraft.test.tsx`,
 `chatInline.autolink.test.ts`; `chatInputKey` / `nameCompletion` pinleri composer'a taşındı.
 
+## 2026-10-10 — Topoloji: çıkış geçidi arkasındaki gerçek hedef (v0.10.1146)
+
+Kurum dış çağrıları tek bir çıkış geçidi (egress gateway) host'u üzerinden yapıyor; topolojide
+tüm dış hedefler tek `ext:<geçit>` düğümüne çöküyordu. Gerçek hedef url yolunda gömülü:
+`https://<geçit>/<ip|host>_<port>/<Svc>/…`. topology.go dış dalı (peer_service ve infra_host
+dalları) artık url.full (yoksa http.url) yolunu `extractGroups` ile ayrıştırıp düğümü
+`ext:<Svc>@<ip|host>:<port>` adlandırıyor; eşleşmezse eski `ext:<host>` kalır.
+Kurum alan adı repoya yazılmaz: `gatewayHosts` boş, karar DESENE göre (ilk yol parçası noktalı
+host + `_<port>`); dolu olursa yalnız o host'lara uygulanır. Ayar/UI yok. Mevcut kovalar eski
+adla kalır; yeni 5 dk kovalarından itibaren yeni adlar görünür.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"
