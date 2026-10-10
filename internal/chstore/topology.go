@@ -1501,10 +1501,15 @@ func (s *Store) ReadServiceTopologyAggForFocus(ctx context.Context, from, to tim
 // host'lar için uygulanır. Ayar/UI yok — bilinçli.
 var gatewayHosts = []string{}
 
-// gatewayPathRegex — [.] ve [0-9]: ClickHouse dize literalinde ters eğik
-// çizgi kaçışı gerekmesin. İlk parçada nokta şartı "/order_42/items" gibi
-// sıradan yolları geçit sanmayı engeller.
-const gatewayPathRegex = `^https?://[^/]+/([^/_]*[.][^/_]+)_([0-9]{1,5})/([^/?#]+)`
+// gatewayPathRegex — SQL METNİNE gömülür, bu yüzden İÇİNDE '?' ve '{…}'
+// OLAMAZ: clickhouse-go '?'yi konumsal yer tutucu sayar (v0.10.1146 prod
+// hatası: "have no arg for param ? at last 2 positions" — topology_edges_5m
+// INSERT'i düştü), '{…:…}' ise sunucu tarafı parametre moduna geçirir.
+// Bu yüzden https? → https*, {1,5} → [0-9][0-9]*, sınıftaki '?' → \x3F
+// (ClickHouse dize kaçışı; re2'ye '?' olarak ulaşır). [.] kaçışsız nokta.
+// İlk parçada nokta şartı "/order_42/items" gibi sıradan yolları geçit
+// sanmayı engeller.
+const gatewayPathRegex = `^https*://[^/]+/([^/_]*[.][^/_]+)_([0-9][0-9]*)/([^/#\x3F]+)`
 
 // gatewayExtExpr — hostCol için ext: düğüm adı ifadesi (gw_groups alias'ı
 // iç SELECT'te tanımlı).

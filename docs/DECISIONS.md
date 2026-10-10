@@ -3399,6 +3399,17 @@ tabanın altına inmez). Görünürlük: alışverişin başında "derin düşü
 "Derin" rozeti. **Kapalıyken** ctx sarılmaz, gövdede `deep` anahtarı yok, tavanlar/prompt'lar/etiketler bayt
 bayt eski (`chat_deep_test.go` pinler).
 
+## 2026-10-10 — Topoloji INSERT'i düşüyordu: geçit regex'inde '?' (v0.10.1151)
+
+v0.10.1146'nın çıkış geçidi regex'i SQL metnine gömülüydü ve `https?://` ile `[^/?#]` içindeki
+'?' karakterleri clickhouse-go tarafından konumsal yer tutucu sayıldı: coremetry-worker'ın
+`INSERT INTO topology_edges_5m` sorgusu "have no arg for param ? at last 2 positions" ile her
+turda düştü (topoloji kovaları yazılmadı). Düzeltme: regex '?' ve '{…}' içermeyecek biçimde
+yeniden yazıldı (`https*`, `[0-9][0-9]*`, sınıftaki '?' için ClickHouse kaçışı `\x3F`);
+`clickhouse local` ile aynı eşleşmeler doğrulandı. Regresyon: `TestGatewayPathRegexIsBindSafe`
+SQL'e gömülen ifadede '?', '{', '}' olmamasını pinler. Kayıp aralık: 1146 kurulumundan bu
+sürüme kadar topoloji kovaları boş; yeni kovalar normal yazılır.
+
 ## 2026-10-02 — Log deseni anomalisi: servis adı olmadan da loglara geçiş (v0.10.1062)
 
 **Operatör (prod, ES):** servissiz log deseni anomalisinde "Ne yapabilirim" yalnız "servis adı taşımıyor"
