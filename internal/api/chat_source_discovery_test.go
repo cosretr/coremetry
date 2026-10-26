@@ -28,7 +28,7 @@ func TestPickChatSource(t *testing.T) {
 		{"zayıf telemetri başa baş sayılmaz", []srcCand{wk, tlmWeak}, srcWiki, []string{srcTelemetry}, nil},
 		{"Excel + servis adı eşit güçlü → sor", []srcCand{tlm, ex}, "", nil, []string{srcExcel, srcTelemetry}},
 		{"exceptions 0.85 ile excel 0.9 başa baş → sor", []srcCand{exc, ex}, "", nil, []string{srcExcel, srcExceptions}},
-		{"fark ≥ 0.1 → kazanan", []srcCand{srcCand{Kind: srcExcel, Score: 0.95}, wk}, srcExcel, []string{srcWiki}, nil},
+		{"fark ≥ 0.1 → kazanan", []srcCand{{Kind: srcExcel, Score: 0.95}, wk}, srcExcel, []string{srcWiki}, nil},
 	}
 	kinds := func(cs []srcCand) []string {
 		var out []string
