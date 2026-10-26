@@ -118,6 +118,12 @@ var chatCommands = []chatCommandInfo{
 	{"trace", "/trace <ifade>", "trace araması (servis için @servis ekle)"},
 	{"rca", "/rca <servis ya da @problem:id>", "kök neden analizi"},
 	{"logs", "/logs <ifade>", "log araması (alan=değer de olur)"},
+	// v0.10.1553 — kaynak komutları (chat_source_discovery.go); argümansız ya da
+	// yalnız "· etiket" taşıyan komut önceki soruyu o kaynakla yeniden sorar.
+	{"excel", "/excel <soru>", "yalnız yüklenen tablolarda (Excel / CSV) satır ara"},
+	{"telemetri", "/telemetri <soru>", "yalnız canlı telemetriden cevapla"},
+	{"exceptions", "/exceptions <tip ya da kod>", "Exceptions gruplarında ara"},
+	{"genel", "/genel <soru>", "modelin genel bilgisiyle cevapla"},
 	{"help", "/help", "bu liste"},
 }
 
@@ -607,6 +613,19 @@ func (s *Server) chatScopeTier(ctx context.Context, emit func(string, any), rq *
 		return ctx, true, true
 	}
 	routed, rest := cleanScopedQuestion(lastUserText(rq.Msgs))
+	// v0.10.1553 — kaynak komutları (keşfin alternatif çipleri de bunlar).
+	if kind := sourceCommandKind(cmd); kind != "" {
+		q := sourceCommandQuestion(rest, rq.Msgs)
+		if q != "" {
+			rq.Msgs = replaceLastUserText(rq.Msgs, q)
+		}
+		return s.sourceForcedAnswer(ctx, emit, kind, q, rq.Msgs)
+	}
+	if cmd == "wiki" {
+		if q := sourceCommandQuestion(rest, rq.Msgs); q != rest && q != "" { // çip: "/wiki · <sayfa>" → önceki soru
+			rest, routed = q, q
+		}
+	}
 	var sc chatScope
 	if rq.Scope != nil {
 		sc = *rq.Scope

@@ -11942,3 +11942,32 @@ Panonun iki eksenli grafikleri (fetch rate + size, rebalance rate + latency, par
 records/request) tek birimli iki ayrı grafiğe bölündü (uPlot panelimiz tek eksen).
 
 **Geri alma.** `git revert <sha>`; yalnız FE.
+
+## 2026-10-26 — v0.10.1553 — CoSRE kaynak keşfi + kayıt anlatımı (LLM)
+
+**Bağlam.** Operatör: "Gerekirse tüm kaynakları search edip kullanıcıya hangi
+kaynaktan cevabı istersin diye sorsun mu, otomatik mi discover etsin?" → spec
+onayı "Önerin"; ek direktif: "LLM'i iyi kullanalım muhakkak, kullanıcı
+cevaplardan tatmin olsun". Kök sorun: sohbet kademeleri "ilk eşleşen kazanır";
+CRMHouse vakasında wiki anlatımı Excel'in 16 satırından 1'ini okudu.
+
+**Karar.**
+- Cevaplamadan ÖNCE dört kaynak paralel + LLM'siz yoklanır
+  (`api/chat_source_discovery.go`): yüklenen tablolar (birebir hücre), wiki
+  (yerel lexical yoklama), telemetri (katalogda servis adı / sinyal), Exceptions
+  (exception tipi ya da hata kodu). Saf `pickChatSource`: en güçlü kanıt
+  cevaplar; diğerleri "/<kaynak> · <kanıt>" çipi; iki güçlü kaynak başa baş
+  (fark < 0.1, ≥ 0.7) → "Hangisinden cevaplayayım?" + çipler. Tek kaynak →
+  zincir AYNEN (yalnız Exceptions'ın kendi cevabı yeni). Kanıt yok → zincir.
+- Çip = eğik komut (`/excel`, `/wiki`, `/telemetri`, `/exceptions`, `/genel`);
+  argümansız ya da yalnız "· etiket" taşıyan komut ÖNCEKİ soruyu o kaynakla
+  yeniden sorar. Komutlar composer'da elle de çalışır.
+- Deterministik kayıt kümesi (tablo satırları / Exceptions grupları) modele
+  EKSİKSİZ verilir (`SystemPromptRecordsAnswer`, yüzey `chat-records`): soruyu
+  doğrudan cevaplar, istenen alanın değerlerini atlamadan listeler, ilişkileri
+  özetler; tam tablo altta sunucudan. Model yok / boş → yalnız tablo.
+- Kapı `ai.generalQuestions.sourceDiscovery` (nil = açık; Ayarlar › CoSRE).
+  Panel / çekmece / trace bağlamında keşif koşmaz.
+
+**Geri alma.** Ayarı kapat (`sourceDiscovery:false`) → v0.10.1552 zinciri bayt
+bayt; kayıt anlatımı model kapalıyken zaten devre dışı.

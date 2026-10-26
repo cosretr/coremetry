@@ -63,6 +63,9 @@ type exScope struct {
 	MinOcc               uint64
 	FloorExempt          []string
 	FloorExemptRegressed bool
+	// Search — v0.10.1553 kaynak keşfi: exception tipi / hata kodu araması
+	// (Exceptions sayfasının arama kutusuyla aynı süzgeç).
+	Search string
 }
 
 // exGroupLine — bir grubun modele ve karta giden kompakt hâli.
@@ -148,7 +151,7 @@ func lookbackSeconds(sc exScope) int64 {
 // collectExceptionGroups — okuma + kompaktlama (sahte okuyucuyla test edilir).
 func collectExceptionGroups(ctx context.Context, rd exGroupsReader, sc exScope, h exGroupHooks) exceptionGroupsEvidence {
 	ev := exceptionGroupsEvidence{Groups: []exGroupLine{}, LookbackS: lookbackSeconds(sc), at: sc.To}
-	if len(sc.Messages) == 0 && strings.TrimSpace(sc.Service) == "" && len(sc.Services) == 0 {
+	if len(sc.Messages) == 0 && strings.TrimSpace(sc.Service) == "" && len(sc.Services) == 0 && strings.TrimSpace(sc.Search) == "" {
 		ev.Err = "kapsam yok"
 		return ev
 	}
@@ -161,7 +164,7 @@ func collectExceptionGroups(ctx context.Context, rd exGroupsReader, sc exScope, 
 		show = maxShow
 	}
 	f := chstore.ExceptionGroupFilter{Service: sc.Service, Messages: sc.Messages, Sort: "lastSeen", Dir: "desc", Limit: exGroupListLimit,
-		Services: sc.Services, State: sc.State, MinOccurrences: sc.MinOcc}
+		Services: sc.Services, State: sc.State, MinOccurrences: sc.MinOcc, Search: strings.TrimSpace(sc.Search)}
 	if sc.MinOcc > 0 { // v0.10.1385 — taban istisnaları yalnız tabanla anlamlı
 		f.FloorExempt, f.FloorExemptRegressed = sc.FloorExempt, sc.FloorExemptRegressed
 	}

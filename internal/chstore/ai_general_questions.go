@@ -31,9 +31,18 @@ const AIGeneralQuestionsKey = "ai.generalQuestions"
 
 // AIGeneralQuestions — blob.
 type AIGeneralQuestions struct {
-	Allow     bool      `json:"allow"`
-	UpdatedBy string    `json:"updatedBy,omitempty"`
-	UpdatedAt time.Time `json:"updatedAt,omitzero"`
+	Allow bool `json:"allow"`
+	// SourceDiscovery — v0.10.1553 (operatör onayı "Önerin"): CoSRE kaynak
+	// keşfi (api/chat_source_discovery.go). nil = AÇIK (varsayılan), false =
+	// v0.10.1552 kademe zinciri bayt bayt.
+	SourceDiscovery *bool     `json:"sourceDiscovery,omitempty"`
+	UpdatedBy       string    `json:"updatedBy,omitempty"`
+	UpdatedAt       time.Time `json:"updatedAt,omitzero"`
+}
+
+// SourceDiscoveryOn — SAF: nil = açık.
+func (a AIGeneralQuestions) SourceDiscoveryOn() bool {
+	return a.SourceDiscovery == nil || *a.SourceDiscovery
 }
 
 // DefaultAIGeneralQuestions — blob yokken geçerli ayar: AÇIK.
@@ -64,9 +73,10 @@ func parseAIGeneralQuestions(raw []byte) (AIGeneralQuestions, bool) {
 		return DefaultAIGeneralQuestions(), true
 	}
 	var in struct {
-		Allow     *bool     `json:"allow"`
-		UpdatedBy string    `json:"updatedBy"`
-		UpdatedAt time.Time `json:"updatedAt"`
+		Allow           *bool     `json:"allow"`
+		SourceDiscovery *bool     `json:"sourceDiscovery"`
+		UpdatedBy       string    `json:"updatedBy"`
+		UpdatedAt       time.Time `json:"updatedAt"`
 	}
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return AIGeneralQuestions{}, false
@@ -75,6 +85,7 @@ func parseAIGeneralQuestions(raw []byte) (AIGeneralQuestions, bool) {
 	if in.Allow != nil {
 		out.Allow = *in.Allow
 	}
+	out.SourceDiscovery = in.SourceDiscovery
 	out.UpdatedBy = strings.TrimSpace(in.UpdatedBy)
 	out.UpdatedAt = in.UpdatedAt
 	return out, true

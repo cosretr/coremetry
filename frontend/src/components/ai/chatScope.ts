@@ -14,7 +14,7 @@ import type { ChatCommand, ChatScope } from '@/lib/types';
 //   @<servis>  — yalnız tamamlamadan SEÇİLDİYSE (chosen) ya da servis adı
 //                biçimindeyse (küçük harf + tire/nokta: svc-orders). Yapıştırılan
 //                stack trace'teki "@Override" / "@Transactional" kapsam olmaz.
-// Komut: mesajın BAŞINDA `/wiki|/trace|/rca|/logs|/help` + boşluk/son. "/api/x"
+// Komut: mesajın BAŞINDA `/wiki|/trace|/rca|/logs|/excel|/telemetri|/exceptions|/genel|/help` + boşluk/son. "/api/x"
 // gibi yollar komut değildir.
 
 export const CHAT_COMMANDS: { cmd: ChatCommand; usage: string; hint: string }[] = [
@@ -22,6 +22,12 @@ export const CHAT_COMMANDS: { cmd: ChatCommand; usage: string; hint: string }[] 
   { cmd: 'trace', usage: '/trace <ifade>', hint: 'Trace araması (@servis ile daralt)' },
   { cmd: 'rca', usage: '/rca <servis | @problem:id>', hint: 'Kök neden analizi' },
   { cmd: 'logs', usage: '/logs <ifade>', hint: 'Log araması (alan:"değer" de olur)' },
+  // v0.10.1553 — kaynak komutları (kaynak keşfinin alternatif çipleri de bunlar;
+  // argümansız komut önceki soruyu o kaynakla yeniden sorar).
+  { cmd: 'excel', usage: '/excel <soru>', hint: 'Yalnız yüklenen tablolarda (Excel / CSV) ara' },
+  { cmd: 'telemetri', usage: '/telemetri <soru>', hint: 'Yalnız canlı telemetriden cevapla' },
+  { cmd: 'exceptions', usage: '/exceptions <tip ya da kod>', hint: 'Exceptions gruplarında ara' },
+  { cmd: 'genel', usage: '/genel <soru>', hint: 'Modelin genel bilgisiyle cevapla' },
   { cmd: 'help', usage: '/help', hint: 'Komut listesi (LLM yok)' },
 ];
 
@@ -33,7 +39,7 @@ export const MENTION_KINDS: { kind: 'trace' | 'problem' | 'env' | 'team' | 'wiki
   { kind: 'wiki', insert: '@wiki ', hint: "Yalnız wiki'den cevapla" },
 ];
 
-const CMD_RE = /^\s*\/(wiki|trace|rca|logs|help)(?=\s|$)/i;
+const CMD_RE = /^\s*\/(wiki|trace|rca|logs|excel|telemetri|exceptions|genel|help)(?=\s|$)/i;
 const MENTION_RE = /(^|\s)@([^\s]+)/g;
 const SERVICE_SHAPE = /^[a-z0-9][a-z0-9_]*(?:[-.][a-z0-9_]+)+$/;
 const TRACE_RE = /^[0-9a-f]{32}$/i;

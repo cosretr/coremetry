@@ -39,6 +39,9 @@ const (
 	// cevabı (ai.generalQuestions açıkken; api/chat_offtopic_general.go).
 	// Araçsız, kanıtsız tek model çağrısı — cevabın kendisi, oylanabilir.
 	ChatOffTopicGeneral = "chat-offtopic-general"
+	// ChatRecords — v0.10.1553: kaynak keşfinin kayıt kümesi anlatımı (yüklenen
+	// tablo satırları / Exceptions grupları; api/chat_source_discovery.go).
+	ChatRecords = "chat-records"
 	// ChatResourceClassify — v0.10.1442: niyet kademesinin içinde kaynak
 	// sorusu ön-sınıflandırıcısı (yardımcı JSON çağrısı; api/chat_resource_classify.go).
 	ChatResourceClassify = "chat-resource-classify"
@@ -131,6 +134,8 @@ var registry = []Spec{
 	// canlı katalog/pod doğrulamasına bağlı, yeniden üretilemez).
 	{Label: ChatResourceClassify, Role: RoleSubCall},
 	{Label: WikiChat, Role: RoleAnswer},
+	// v0.10.1553 — evalset vakası yok (kayıt kümesi istek anında okunur, yeniden üretilemez).
+	{Label: ChatRecords, Role: RoleAnswer},
 	{Label: WikiSelect, Role: RoleSubCall},
 	{Label: RAGChat, Role: RoleAnswer},
 	{Label: ExplainTraceChat, Role: RoleAnswer, Eval: "Trace"},
@@ -214,7 +219,9 @@ const (
 	TierRAG    = "rag"
 	// TierDocRows — v0.10.1176: yüklenen Excel / CSV'de birebir satır araması (api/chat_doc_rows.go).
 	TierDocRows = "doc-rows"
-	TierIntent  = "intent"
+	// TierDiscovery — v0.10.1553: kaynak keşfi (çok kaynakta kanıt → en güçlüsü + alternatif çipleri; api/chat_source_discovery.go).
+	TierDiscovery = "discovery"
+	TierIntent    = "intent"
 	// TierOperation — operasyon adı çoklu eşleşti, seçim çipleriyle bitti (api/chat_operation_prefetch.go).
 	TierOperation = "operation"
 	// TierMemory — v0.10.1289: "bunu hatırla" / "hangi kuralları biliyorsun" (api/chat_memory.go).
@@ -230,7 +237,7 @@ const (
 )
 
 var tiers = map[string]bool{TierScope: true, TierWiki: true, TierGuided: true, TierDrawer: true,
-	TierRAG: true, TierIntent: true, TierLoop: true, TierOther: true, TierDocRows: true, TierOperation: true,
+	TierRAG: true, TierIntent: true, TierLoop: true, TierOther: true, TierDocRows: true, TierDiscovery: true, TierOperation: true,
 	TierMemory: true, TierExplain: true, TierCodeSticky: true}
 
 // KnownTier — kademe adı kayıtlı mı (api kaynak testi copilotChat'in

@@ -61,19 +61,28 @@ func (s *Server) putAIGeneralQuestions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct {
-		Allow *bool `json:"allow"`
+		Allow           *bool `json:"allow"`
+		SourceDiscovery *bool `json:"sourceDiscovery"` // v0.10.1553
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "geçersiz JSON: "+err.Error())
 		return
 	}
-	if in.Allow == nil {
-		writeJSONError(w, http.StatusBadRequest, "allow alanı zorunlu (true | false)")
+	if in.Allow == nil && in.SourceDiscovery == nil {
+		writeJSONError(w, http.StatusBadRequest, "allow ya da sourceDiscovery alanı zorunlu (true | false)")
 		return
 	}
 	prev := chstore.CurrentAIGeneralQuestions()
-	next := chstore.AIGeneralQuestions{Allow: *in.Allow, UpdatedAt: time.Now().UTC()}
+	// v0.10.1553 — gelmeyen alan saklı değeri korur.
+	next := chstore.AIGeneralQuestions{Allow: prev.Allow, SourceDiscovery: prev.SourceDiscovery, UpdatedAt: time.Now().UTC()}
+	if in.Allow != nil {
+		next.Allow = *in.Allow
+	}
+	if in.SourceDiscovery != nil {
+		v := *in.SourceDiscovery
+		next.SourceDiscovery = &v
+	}
 	if c := auth.FromContext(r.Context()); c != nil {
 		next.UpdatedBy = c.Email
 		if next.UpdatedBy == "" {
@@ -87,6 +96,7 @@ func (s *Server) putAIGeneralQuestions(w http.ResponseWriter, r *http.Request) {
 	}
 	chstore.SetAIGeneralQuestions(saved) // sahte depo testleri için de yayınla
 	s.audit(r, "settings.ai_general_questions.update", "settings", chstore.AIGeneralQuestionsKey,
-		fmt.Sprintf(`{"before":{"allow":%v},"after":{"allow":%v}}`, prev.Allow, saved.Allow))
+		fmt.Sprintf(`{"before":{"allow":%v,"sourceDiscovery":%v},"after":{"allow":%v,"sourceDiscovery":%v}}`,
+			prev.Allow, prev.SourceDiscoveryOn(), saved.Allow, saved.SourceDiscoveryOn()))
 	writeJSON(w, saved)
 }

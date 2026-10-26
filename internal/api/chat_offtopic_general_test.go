@@ -381,7 +381,7 @@ func TestAIGeneralQuestionsRolesAuditRoundTrip(t *testing.T) {
 	}
 	a := nextAudit(t, s)
 	if a.Action != "settings.ai_general_questions.update" || a.TargetID != chstore.AIGeneralQuestionsKey ||
-		a.Details != `{"before":{"allow":true},"after":{"allow":false}}` {
+		a.Details != `{"before":{"allow":true,"sourceDiscovery":true},"after":{"allow":false,"sourceDiscovery":true}}` {
 		t.Fatalf("audit = %+v", a)
 	}
 }

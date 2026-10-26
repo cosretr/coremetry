@@ -446,23 +446,40 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 	// v0.10.1143 — içerik yoklaması durumu (chat_wiki_probe.go): kademe ve
 	// guidedProblems'in sıfır-eşleşme ipucu aynı tek aramayı paylaşır.
 	ctx = s.armWikiProbe(ctx, req.Messages, wikiTC)
+	// v0.10.1553 — kaynak keşfi (chat_source_discovery.go): tablo / wiki /
+	// telemetri / exceptions paralel ve LLM'siz yoklanır; birden çok kaynakta
+	// kanıt varsa en güçlüsü cevaplar, diğerleri alternatif çipi olur. Tek kaynak
+	// ya da kanıt yoksa aşağıdaki zincir AYNEN. /telemetri komutu tablo / wiki
+	// kademelerini atlatır.
+	skipDocs := forcedChatSource(ctx) == srcTelemetry
+	if !skipDocs {
+		var dh, dok bool
+		dh, dok, emit, skipDocs = s.chatSourceDiscoveryTier(ctx, emit, req.Messages, wikiTC)
+		if dh {
+			cspan.tier("discovery", dok)
+			emit("done", map[string]bool{"ok": dok})
+			return
+		}
+	}
 	// v0.10.1176 — yüklenen Excel / CSV'de kimliğin birebir satırları (chat_doc_rows.go):
 	// guided'dan ÖNCE ki uygulama kodu telemetriye kaçmasın; telemetri sinyalinde çekilir.
 	// v0.10.1551 (operatör: "CRMHouse ait vserver adreslerini getir" → wiki anlatımı
 	// 16 satırdan 1'ini okudu) — wiki kademesinden de ÖNCE: güçlü bir değer bir
 	// hücreyle birebir eşleşiyorsa TÜM satırlar deterministik gelir; eşleşme yoksa
 	// olay basılmaz, wiki kademesi aynen sürer.
-	if wikiTierAllowed(wikiTC) {
+	if wikiTierAllowed(wikiTC) && !skipDocs {
 		if handled, dok := s.docRowsAnswer(ctx, emit, req.Messages, true); handled {
 			cspan.tier("doc-rows", dok)
 			emit("done", map[string]bool{"ok": dok})
 			return
 		}
 	}
-	if handled, wok := s.wikiChatAnswer(ctx, emit, req.Messages, wikiTC); handled {
-		cspan.tier("wiki", wok)
-		emit("done", map[string]bool{"ok": wok})
-		return
+	if !skipDocs {
+		if handled, wok := s.wikiChatAnswer(ctx, emit, req.Messages, wikiTC); handled {
+			cspan.tier("wiki", wok)
+			emit("done", map[string]bool{"ok": wok})
+			return
+		}
 	}
 	// v0.10.1126 — netleştirme kurtarması: guided/niyet yolu YALNIZ "hangisini
 	// kastettin?" ile bitecekse ve wiki bu çağırana açıksa önce wiki denenir

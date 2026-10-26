@@ -43,6 +43,20 @@ export function AiGeneralQuestionsPanel({ canEdit: canEditProp }: { canEdit?: bo
     }
   };
 
+  // v0.10.1553 — kaynak keşfi anahtarı (aynı blob; undefined = açık).
+  const toggleDiscovery = async (on: boolean) => {
+    setBusy(true);
+    try {
+      const next = await api.putAISourceDiscovery(on);
+      setData(next);
+      toast.success(t('aiSourceDisc.saved').replace('{state}', t(next.sourceDiscovery !== false ? 'aiGeneralQ.on' : 'aiGeneralQ.off')));
+    } catch (e) {
+      toast.error(t('aiGeneralQ.saveFailed').replace('{err}', humanize(e)));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div data-testid="ai-general-questions-panel" style={{ marginTop: 18, padding: 16, borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--border)', maxWidth: 640 }}>
       <SectionTitle>{t('aiGeneralQ.title')}</SectionTitle>
@@ -53,6 +67,15 @@ export function AiGeneralQuestionsPanel({ canEdit: canEditProp }: { canEdit?: bo
         <div>
           <div>{t('aiGeneralQ.label')}</div>
           <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2, lineHeight: 1.5 }}>{t('aiGeneralQ.hint')}</div>
+        </div>
+      </label>
+      <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12, color: 'var(--text2)', marginTop: 10 }}>
+        <input type="checkbox" checked={data ? data.sourceDiscovery !== false : false} disabled={!data || !canEdit || busy}
+               data-testid="ai-source-discovery"
+               onChange={e => { void toggleDiscovery(e.target.checked); }} style={{ marginTop: 2 }} />
+        <div>
+          <div>{t('aiSourceDisc.label')}</div>
+          <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2, lineHeight: 1.5 }}>{t('aiSourceDisc.hint')}</div>
         </div>
       </label>
       {!canEdit && <p className="field-hint">{t('aiGeneralQ.readOnly')}</p>}

@@ -1375,6 +1375,9 @@ export const api = {
     get<import('./types').AIGeneralQuestions>(`/api/ai/general-questions`, signal),
   putAIGeneralQuestions: (allow: boolean) =>
     request<import('./types').AIGeneralQuestions>(`/api/ai/general-questions`, { method: 'PUT', body: JSON.stringify({ allow }) }),
+  // v0.10.1553 — CoSRE kaynak keşfi anahtarı (aynı blob; gelmeyen alan korunur).
+  putAISourceDiscovery: (sourceDiscovery: boolean) =>
+    request<import('./types').AIGeneralQuestions>(`/api/ai/general-questions`, { method: 'PUT', body: JSON.stringify({ sourceDiscovery }) }),
   // v0.10.1434 — AI araç setleri (toolset): durum + sağlık her rol; aç/kapa admin.
   aiToolsets: (signal?: AbortSignal) => get<import('./types').AISourceToolsetsPayload>(`/api/ai/toolsets`, signal),
   putAIToolsets: (disabled: string[]) =>

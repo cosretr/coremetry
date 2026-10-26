@@ -309,13 +309,24 @@ func mapStr(xs []string, f func(string) string) []string {
 // docRowsAnswer — kademe (strict: erken kademe; değil: doküman adımı).
 // handled=false → olay yok, akış aynen sürer.
 func (s *Server) docRowsAnswer(ctx context.Context, emit func(string, any), msgs []copilot.ChatMessage, strict bool) (handled, ok bool) {
-	if !wikiDocsActive(ctx) || s.store == nil {
+	q := lastUserText(msgs)
+	rows, vals := s.docRowsFind(ctx, q, strict)
+	if len(rows) == 0 {
 		return false, false
 	}
-	question := lastUserText(msgs)
+	s.docRowsEmit(withRecordsQuestion(ctx, q), emit, rows, vals, nil)
+	return true, true
+}
+
+// docRowsFind — v0.10.1553: kademenin OKUMA yarısı (kaynak keşfi de çağırır;
+// olay basmaz). Eşleşme yoksa nil.
+func (s *Server) docRowsFind(ctx context.Context, question string, strict bool) ([]docRowMatch, []string) {
+	if !wikiDocsActive(ctx) || s.store == nil {
+		return nil, nil
+	}
 	needles := rowNeedles(question)
 	if len(needles) == 0 || (strict && s.wikiWeakCueVetoed(ctx, question)) {
-		return false, false
+		return nil, nil
 	}
 	if strict {
 		strong := false
@@ -323,7 +334,7 @@ func (s *Server) docRowsAnswer(ctx context.Context, emit func(string, any), msgs
 			strong = strong || n.strong
 		}
 		if !strong && len(needles) < 2 {
-			return false, false
+			return nil, nil
 		}
 	}
 	// Aday başına ayrı okuma: OR'lu tek sorgu yaygın kelimeyle tavanı doldurup
@@ -342,10 +353,12 @@ func (s *Server) docRowsAnswer(ctx context.Context, emit func(string, any), msgs
 			}
 		}
 	}
-	rows, vals := matchDocRows(chunks, question, strict)
-	if len(rows) == 0 {
-		return false, false
-	}
+	return matchDocRows(chunks, question, strict)
+}
+
+// docRowsEmit — kademenin YAZMA yarısı: tablo cevabı (+ kaynak keşfinin
+// alternatif çipleri; nil = yok).
+func (s *Server) docRowsEmit(ctx context.Context, emit func(string, any), rows []docRowMatch, vals []string, alts []string) {
 	emitGuidedContextStep(emit, "yüklenen belgeler · satır araması")
 	var sources []chatSource
 	seen := map[string]bool{}
@@ -360,9 +373,16 @@ func (s *Server) docRowsAnswer(ctx context.Context, emit func(string, any), msgs
 		}
 		sources = append(sources, chatSource{Doc: "Belge · " + r.Doc, Ref: r.URL, Chunk: 1, Score: 1, Kind: kind})
 	}
-	emit("answer", map[string]any{
-		"text": docRowsMarkdown(vals, rows), "exchangeId": copilot.MetaFromContext(ctx).ExchangeID,
+	// v0.10.1553 — LLM anlatımı (soru eşleşen satırlardan cevaplanır, ilişkiler
+	// özetlenir); tam tablo altta. Model yoksa / boşsa yalnız tablo (eski).
+	table := docRowsMarkdown(vals, rows)
+	text := withRecordsNarrative(s.narrateRecords(ctx, emit, lastQuestionOr(ctx, ""), "yüklenen tablo satırları", table), table)
+	ans := map[string]any{
+		"text": text, "exchangeId": copilot.MetaFromContext(ctx).ExchangeID,
 		"sources": dedupeChatSources(sources), "links": []guidedAnswerLink{}, "allowedLinks": []string{},
-	})
-	return true, true
+	}
+	if len(alts) > 0 {
+		ans["suggestions"] = alts
+	}
+	emit("answer", ans)
 }

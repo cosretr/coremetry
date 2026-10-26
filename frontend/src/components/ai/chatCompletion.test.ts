@@ -40,7 +40,7 @@ describe('completionQuery', () => {
 
 describe('staticItems / nameItems', () => {
   it('komut menüsü önekle süzülür', () => {
-    expect(staticItems(completionQuery('/', 1)).map(i => i.insert)).toEqual(['/wiki ', '/trace ', '/rca ', '/logs ', '/help ']);
+    expect(staticItems(completionQuery('/', 1)).map(i => i.insert)).toEqual(['/wiki ', '/trace ', '/rca ', '/logs ', '/excel ', '/telemetri ', '/exceptions ', '/genel ', '/help ']); // v0.10.1553 + kaynak komutları
     expect(staticItems(completionQuery('/r', 2)).map(i => i.insert)).toEqual(['/rca ']);
   });
   it("'@' anma türlerini, '@t' eşleşen türleri önerir", () => {

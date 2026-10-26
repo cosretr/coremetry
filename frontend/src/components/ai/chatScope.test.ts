@@ -134,3 +134,15 @@ describe('wiki çipi (v0.10.1378)', () => {
     }
   });
 });
+
+// v0.10.1553 — kaynak komutları: keşfin alternatif çipleri ("/excel · 16 satır")
+// gönderilince komut olarak çözülür (sunucu önceki soruyu kullanır).
+describe('kaynak komutları', () => {
+  it('çip metni komut olarak çözülür', () => {
+    expect(commandOf('/excel · 16 satır')).toBe('excel');
+    expect(commandOf('/telemetri · orders servisi')).toBe('telemetri');
+    expect(commandOf('/exceptions BSAException')).toBe('exceptions');
+    expect(commandOf('/genel opentelemetry java')).toBe('genel');
+    expect(commandOf('/excelx')).toBeUndefined();
+  });
+});

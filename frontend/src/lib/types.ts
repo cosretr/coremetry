@@ -7951,6 +7951,8 @@ export interface AIChatRetention { days: number }
 // kısa genel cevap anahtarı; blob yokken allow=true. Go: chstore.AIGeneralQuestions.
 export interface AIGeneralQuestions {
   allow: boolean;
+  /** v0.10.1553 — CoSRE kaynak keşfi; yok/undefined = açık. */
+  sourceDiscovery?: boolean;
   updatedBy?: string;
   updatedAt?: string; // RFC3339
 }
@@ -8254,7 +8256,8 @@ export interface RoutingReport {
 // internal/api/chat_exchange.go normalizeChatAttempt). Yeni soru = yok.
 export type ChatAttempt = 'retry' | 'regenerate' | 'edit';
 
-export type ChatCommand = 'wiki' | 'trace' | 'rca' | 'logs' | 'help';
+// v0.10.1553 — + kaynak komutları (excel / telemetri / exceptions / genel).
+export type ChatCommand = 'wiki' | 'trace' | 'rca' | 'logs' | 'excel' | 'telemetri' | 'exceptions' | 'genel' | 'help';
 
 /** v0.10.773 — start-sends cevabı düğüm başına (komut düğüm-yerel). error = ilk hata; hosts kısmi başarıyı taşır. */
 export interface SpoolStartResult {
