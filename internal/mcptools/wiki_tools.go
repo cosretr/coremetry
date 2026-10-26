@@ -162,6 +162,7 @@ type readWikiArgs struct {
 	Wiki    string `json:"wiki"`
 	Path    string `json:"path"`
 	Offset  int    `json:"offset,omitempty"`
+	Find    string `json:"find,omitempty"` // v0.10.1554 — yüklenen tabloda hücre değeri: belgenin tamamında eşleşen satırlar
 }
 
 func readWikiPageTool(d Deps) mcp.Tool {
@@ -170,6 +171,7 @@ func readWikiPageTool(d Deps) mcp.Tool {
 		ShortDescription: "search_wiki'nin bulduğu wiki sayfasının Markdown içeriğini oku (project, wiki, path); uzun sayfa offset ile parça parça gelir.",
 		Description: "Read the Markdown content of ONE Azure DevOps wiki page (project, wiki name, page path — take them from a search_wiki row). " +
 			"Content is served in windows of ~4800 characters; when `next_offset` is present call again with offset=next_offset for the rest. Pages are capped at ~40 KB (truncated=true says so). " +
+			"For an UPLOADED TABLE document (xlsx/csv) pass `find=<cell value>` (an owner, hostname, IP…): the WHOLE document is scanned and EVERY row containing it is returned (up to 200) — use this instead of paging through windows. " +
 			"Answer only from text you read and cite the page url. Wikis outside Coremetry's configured allowlist are refused. " +
 			"In-app chat only, signed-in users (not API tokens) — not exposed on the MCP server.",
 		InputSchema: map[string]any{
@@ -179,6 +181,7 @@ func readWikiPageTool(d Deps) mcp.Tool {
 				"wiki":    map[string]any{"type": "string", "maxLength": 200, "description": "Wiki name (search_wiki row `wiki`)."},
 				"path":    map[string]any{"type": "string", "maxLength": 1000, "description": "Page path, e.g. /Runbooks/Restart svc-orders (search_wiki row `path`)."},
 				"offset":  map[string]any{"type": "integer", "minimum": 0, "description": "Character offset for long pages (next_offset of the previous call). Default 0."},
+				"find":    map[string]any{"type": "string", "maxLength": 200, "description": "Uploaded table documents only: return every row whose cell contains this value (whole document, up to 200 rows) instead of a content window."},
 			},
 			"required":             []string{"project", "wiki", "path"},
 			"additionalProperties": false,
@@ -217,7 +220,10 @@ func readWikiPageTool(d Deps) mcp.Tool {
 				return map[string]any{"source": sourcestate.Result("wiki", "local", sourcestate.Outcome{}), "found": false,
 					"hint": "Sayfa bulunamadı — yolu search_wiki satırından aynen al; yoksa bunu söyle, içerik uydurma."}, nil
 			}
-			return WikiPageWindow(*rec, a.Offset), nil
+			if strings.TrimSpace(a.Find) != "" { // v0.10.1554 — belgenin tamamında satır araması
+				return WikiPageFindRows(*rec, a.Find), nil
+			}
+			return wikiPageWindowWithTableHint(*rec, a.Offset), nil
 		},
 	}
 }

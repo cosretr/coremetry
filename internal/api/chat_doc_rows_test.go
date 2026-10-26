@@ -106,3 +106,29 @@ func TestDocRowsMixedCaseOwnerAllRows(t *testing.T) {
 		}
 	}
 }
+
+// v0.10.1554 — parça sınırında bölünen satır tam sayfadan gelir; tam metni
+// olmayan sayfa parçalarıyla kalır, aynı sayfanın parçaları tekilleşir.
+func TestDocRowsMergeFullPage(t *testing.T) {
+	row := func(i int) string {
+		return fmt.Sprintf("vserver · satır %d — Load Balancer: lb-%d_443 · Environment: PROD · CC Owner: CRMHouse\n", i, i)
+	}
+	full := row(1) + row(2) + row(3)
+	cut := strings.Index(full, "CC Owner: CRMHouse\nvserver · satır 3")
+	chunks := []docRowChunk{
+		{Title: "vserver", Path: "/vserver.xlsx", Text: full[:cut+3]}, // satır 2 "CC " ile kesik
+		{Title: "vserver", Path: "/vserver.xlsx", Text: full[cut+3:]},
+		{Title: "diger", Path: "/diger.xlsx", Text: "diger · satır 7 — Host: x · CC Owner: CRMHouse\n"},
+	}
+	if rows, _ := matchDocRows(chunks, "CRMHouse satırlarını getir", true); len(rows) != 3 {
+		t.Fatalf("parçalardan %d satır (kesik satır 2 kaçar) — beklenen 3", len(rows))
+	}
+	merged := docRowsMergeFull(chunks, map[string]string{"/vserver.xlsx": full})
+	if len(merged) != 2 || merged[0].Text != full || merged[1].Title != "diger" {
+		t.Fatalf("birleşme: %+v", merged)
+	}
+	rows, vals := matchDocRows(merged, "CRMHouse satırlarını getir", true)
+	if len(rows) != 4 || vals[0] != "crmhouse" {
+		t.Fatalf("tam sayfadan %d satır %v — beklenen 4", len(rows), vals)
+	}
+}

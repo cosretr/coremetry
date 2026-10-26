@@ -21,6 +21,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 	"unicode"
 
@@ -142,7 +143,7 @@ func foldWords(s string) string {
 	return " " + strings.Join(parts, " ") + " "
 }
 
-type docRowChunk struct{ Title, URL, Text string }
+type docRowChunk struct{ Title, URL, Path, Text string }
 
 // matchDocRows — SAF: eşleşen satırlar (belge + sayfa + satır tekil, ≤docRowsMax)
 // ve eşleşmeyi taşıyan değerler.
@@ -344,16 +345,17 @@ func (s *Server) docRowsFind(ctx context.Context, question string, strict bool) 
 	for _, n := range needles {
 		found, err := s.store.LocalDocChunksMatching(ctx, wiki.LocalWikiID, []string{n.raw}, docRowsChunkLimit)
 		if err != nil {
+			log.Printf("[doc-rows] parça araması %q: %v", n.raw, err) // v0.10.1554 — sessiz yutma yok
 			continue
 		}
 		for _, c := range found {
 			if k := c.Path + "\x00" + c.Text; !seenChunk[k] {
 				seenChunk[k] = true
-				chunks = append(chunks, docRowChunk{Title: c.Title, URL: c.URL, Text: c.Text})
+				chunks = append(chunks, docRowChunk{Title: c.Title, URL: c.URL, Path: c.Path, Text: c.Text})
 			}
 		}
 	}
-	return matchDocRows(chunks, question, strict)
+	return matchDocRows(s.docRowsFullPages(ctx, chunks), question, strict) // v0.10.1554 — tam sayfa
 }
 
 // docRowsEmit — kademenin YAZMA yarısı: tablo cevabı (+ kaynak keşfinin
