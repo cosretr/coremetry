@@ -6418,3 +6418,7 @@ a.idchip__val:hover { color: var(--accent2); text-decoration: underline; }
 .ps-attr-act { margin-left: 6px; padding: 0 5px; border-radius: var(--radius-xs); font-size: var(--fs-xs); color: var(--text3); text-decoration: none; opacity: .55; }
 tr:hover .ps-attr-act, .ps-attr-act:focus-visible { opacity: 1; }
 .ps-attr-act:hover { color: var(--accent2); background: var(--accent-bg); }
+
+/* v0.10.1556 — trace servis lejantı tıklanabilir (servise git). */
+.wf-svcbreak-legend--pick { gap: 6px; }
+.wf-svcbreak-legend--pick .btn-chip { gap: 5px; }

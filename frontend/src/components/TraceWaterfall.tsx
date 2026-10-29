@@ -121,7 +121,14 @@ export const svcColorToken = svcColor;
 // trace-summary pattern: "stripe-api ate 83% of these 4.8s" at a
 // glance. Colours come from the same svcColorToken hash the waterfall
 // stripes use so the strip and the rows read as one palette.
-export function TraceServiceBreakdown({ spans, services }: { spans: SpanRow[]; services?: TraceServiceSummary[] }) {
+export function TraceServiceBreakdown({ spans, services, active, onPick }: {
+  spans: SpanRow[]; services?: TraceServiceSummary[];
+  /** v0.10.1556 — seçili (odaktaki) servis; onPick verilirse lejant çip olur. */
+  active?: string | null;
+  /** v0.10.1556 — servise tık: o servisin span'lerine git (aynı servise ikinci tık kapatır). */
+  onPick?: (service: string | null) => void;
+}) {
+  const [showAll, setShowAll] = useState(false);
   const breakdown = useMemo(() => {
     // v0.10.276 — sunucu özeti varsa (aralık birleşimli öz süre) onu kullan;
     // naif çocuk-toplamı yalnız analysis'siz çağıranlar (Public/Compare) için.
@@ -157,6 +164,26 @@ export function TraceServiceBreakdown({ spans, services }: { spans: SpanRow[]; s
              title={`${b.svc} — ${fmtNs(b.ns)} self time (${b.pct.toFixed(b.pct < 1 ? 1 : 0)}%)`} />
         ))}
       </div>
+      {onPick ? (
+        <div className="wf-svcbreak-legend wf-svcbreak-legend--pick" role="group" aria-label="Servise git">
+          {(showAll ? breakdown : breakdown.slice(0, 5)).map(b => (
+            <Chip key={b.svc} size="xs" pill active={active === b.svc}
+              title={active === b.svc ? `${b.svc} odağını kaldır` : `${b.svc} span'lerine git (diğerleri soluk)`}
+              onClick={() => onPick(active === b.svc ? null : b.svc)}>
+              <span className="sw" style={{ background: svcColorToken(b.svc) }} />
+              {b.svc} <span className="ms">{fmtNs(b.ns)} · {b.pct.toFixed(b.pct < 1 ? 1 : 0)}%</span>
+            </Chip>
+          ))}
+          {breakdown.length > 5 && (
+            <Chip size="xs" pill onClick={() => setShowAll(v => !v)}>
+              {showAll ? 'daha az' : `+${breakdown.length - 5} servis`}
+            </Chip>
+          )}
+          {active && (
+            <Chip size="xs" pill onClick={() => onPick(null)} title="Servis odağını kaldır">✕ odağı kaldır</Chip>
+          )}
+        </div>
+      ) : (
       <div className="wf-svcbreak-legend">
         {breakdown.slice(0, 5).map(b => (
           <span className="it" key={b.svc}>
@@ -170,6 +197,7 @@ export function TraceServiceBreakdown({ spans, services }: { spans: SpanRow[]; s
           </span>
         )}
       </div>
+      )}
     </div>
   );
 }
@@ -593,7 +621,10 @@ export function TraceWaterfall({
   // Derin bağlantı: bir kez, satırlar gelince.
   const revealedRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!revealSpanId || rows.length === 0 || revealedRef.current === revealSpanId) return;
+    // v0.10.1556 — hedef kalkınca hafıza sıfırlanır: aynı servise yeniden odak
+    // yeniden kaydırır.
+    if (!revealSpanId) { revealedRef.current = null; return; }
+    if (rows.length === 0 || revealedRef.current === revealSpanId) return;
     const idx = rows.findIndex(r => r.span.spanId === revealSpanId || r.memberIds?.includes(revealSpanId));
     if (idx < 0) return;
     revealedRef.current = revealSpanId;

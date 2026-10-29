@@ -42,6 +42,7 @@ import { traceBackHref } from '@/lib/traceBackHref';
 import { SvcBadge } from '@/components/traces/shared';
 import type { ExternalLink, LogRow, SpanRow, TimeRange, TraceAnalysis, TraceLinkCandidate } from '@/lib/types';
 import { TraceWaterfall, TraceServiceBreakdown } from '@/components/TraceWaterfall';
+import { serviceFocus } from '@/lib/traceServiceFocus'; // v0.10.1556
 import { SpanDetail } from '@/components/SpanDetail';
 import { TraceHonesty } from '@/components/traces/TraceHonesty';
 import { OracleOperationChip, TraceEntryCodes } from '@/components/traces/OracleOperationChip';
@@ -120,6 +121,8 @@ function TraceDetailInner() {
   // Aşağıdaki span/tab yazıcısıyla AYNI efektte URL'e iniyor.
   const [groupSimilar, setGroupSimilar] = useState(
     () => searchParams.get('xn') === '1');
+  // v0.10.1556 — servis odağı (?svc=); ayrıntı aşağıda svcFocusInfo'da.
+  const [svcFocus, setSvcFocus] = useState<string | null>(() => searchParams.get('svc'));
 
   // Trace-anchored log lookup window (Unix ns) — min(span.startTime)-1min ..
   // max(span.endTime)+1min. Bounds the trace→logs ES query to the trace's own
@@ -250,8 +253,10 @@ function TraceDetailInner() {
     if (tab !== 'metrics') { for (const k of TRACE_METRICS_URL_PARAMS) url.searchParams.delete(k); }
     if (groupSimilar) url.searchParams.set('xn', '1');
     else url.searchParams.delete('xn');
+    if (svcFocus) url.searchParams.set('svc', svcFocus); // v0.10.1556
+    else url.searchParams.delete('svc');
     window.history.replaceState({}, '', url.toString());
-  }, [selectedId, tab, id, groupSimilar]);
+  }, [selectedId, tab, id, groupSimilar, svcFocus]);
 
   // v0.10.944 (CoSRE Faz A) — CoSRE çekmecesinin "Bağlam" şeridi + her
   // takip turunun page/env/pencere alanları: yüklü span'lerden ve seçili
@@ -380,6 +385,16 @@ function TraceDetailInner() {
   // the dominant latency chain reads as the only bright thing on
   // screen. Composes with the span filter's own dimming.
   const [critFocus, setCritFocus] = useState(false);
+  // v0.10.1556 (operatör: "Üzerine tıkladığım servisin alt span'lerine
+  // götürsün, göstersin") — servis lejantından odak: o servisin span'leri
+  // vurgulu (diğerleri soluk), en erken span'ine kaydırılır. URL'de (?svc=);
+  // kritik yol odağıyla karşılıklı dışlayan.
+  const svcFocusInfo = useMemo(() => serviceFocus(spans, svcFocus), [spans, svcFocus]);
+  // Operatör servis odağına bir kez dokunduysa ?span= derin bağlantı kaydırması
+  // bir daha devreye girmez (odak kalkınca ilk span'e geri sıçramasın).
+  const [svcTouched, setSvcTouched] = useState(false);
+  const pickSvcFocus = (svc: string | null) => { setSvcTouched(true); setSvcFocus(svc); if (svc) setCritFocus(false); };
+  const pickCritFocus = (on: boolean) => { setCritFocus(on); if (on) setSvcFocus(null); };
   // Trace'in TAMAMINDAKİ tekrar desenleri. Ham `spans` kimliğine bağlı —
   // seçim / sekme değişimi yeniden hesaplatmaz.
   const repeatGroups = useMemo(
@@ -780,10 +795,11 @@ function TraceDetailInner() {
                 <TraceHonesty spans={spans} source={source} capped={spanCap.capped} totalSpans={spanCap.total} />
                 <div ref={spanAreaRef} style={{ display: 'flex', alignItems: 'stretch', gap: 10, minHeight: 240 }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <TraceServiceBreakdown spans={spans} services={analysis?.services} />
+                    <TraceServiceBreakdown spans={spans} services={analysis?.services}
+                      active={svcFocusInfo.ids.size > 0 ? svcFocus : null} onPick={pickSvcFocus} />
                     <SpanFilterBar spans={spans} value={spanFilter} onChange={setSpanFilter}
                       critCount={criticalPath?.ids.size ?? 0}
-                      critFocus={critFocus} onCritFocus={setCritFocus}
+                      critFocus={critFocus} onCritFocus={pickCritFocus}
                       repeatGroups={repeatGroups}
                       onRepeatChip={g => { setSpanFilter(g.name); setGroupSimilar(true); }} />
                     <TraceWaterfall spans={spans} selectedId={selectedId}
@@ -792,8 +808,10 @@ function TraceDetailInner() {
                       groupSimilar={groupSimilar}
                       onGroupSimilarChange={setGroupSimilar}
                       criticalPathIds={criticalPathIds} matchIds={spanMatchIds}
-                      focusIds={critFocus && criticalPath ? criticalPath.ids : undefined}
-                      linkedSpanIds={linkedIds} analysis={analysis} revealSpanId={revealSpanId}
+                      focusIds={critFocus && criticalPath ? criticalPath.ids
+                        : svcFocusInfo.ids.size > 0 ? svcFocusInfo.ids : undefined}
+                      linkedSpanIds={linkedIds} analysis={analysis}
+                      revealSpanId={svcFocusInfo.first ?? (svcTouched ? null : revealSpanId)}
                       logSignals={logSignals} onLogsClick={() => setTab('logs')}
                       /* v0.10.691 (operatör: "inline gösterim trace'te iyiymiş, Coremetry
                          içindeki trace'lerde de yapalım") — span detayı sağda yüzen panel
