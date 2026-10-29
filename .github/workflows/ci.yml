@@ -118,11 +118,14 @@ jobs:
       # Boş bir CH yeter: satır dönmesi beklenmiyor, aranan tek şey
       # sorgunun hatasız çalışması. Tip/sözdizimi hataları boş tabloda
       # da patlar.
+      #
+      # v0.10.1584 — sürüm prod ile aynı (26.2), docker-compose.yml ve
+      # chart ile tek pin; 24.8 prod'da olmayan bir sürümü sınıyordu.
       - name: ClickHouse başlat (tip duman testi)
         run: |
           docker run -d --name ch-smoke -p 19000:9000 \
             -e CLICKHOUSE_SKIP_USER_SETUP=1 \
-            clickhouse/clickhouse-server:24.8
+            clickhouse/clickhouse-server:26.2.4.23-alpine
           for i in $(seq 1 60); do
             if docker exec ch-smoke clickhouse-client --query "SELECT 1" >/dev/null 2>&1; then
               echo "ClickHouse hazır ($i sn)"; exit 0
