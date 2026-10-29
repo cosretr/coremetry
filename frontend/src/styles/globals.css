@@ -5716,6 +5716,8 @@ tbody td.tpm-more-cell { color: var(--text2); }
 .cosre-root .cm-msg-ai .cm-md-list li { margin: var(--cosre-s1) 0; }
 .cosre-root .cm-md-quote, .cosre-root .cm-md-dl, .cosre-root .cm-md-details { margin-bottom: var(--cosre-s3); }
 .cosre-root .cm-msg-ai code { font-size: .87em; }
+/* v0.10.1567 — otomatik vurgu (autoHighlight.ts): hata parçaları (HTTP 5xx, …Exception, MCA-00029) kırmızı çip; kod konumları olağan mavi çip. */
+.cm-msg-ai code.cm-hl-err { background: var(--err-bg); color: var(--err); }
 .cosre-root .cm-msg-ai pre code { font-size: inherit; }
 /* Tablolar 14px, kod/dosya blokları 13px mono */
 .cosre-root .cm-msg-ai .cm-md-table { font-size: var(--cosre-fs-ui); line-height: var(--cosre-lh-ui); }

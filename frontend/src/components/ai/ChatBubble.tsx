@@ -43,6 +43,7 @@ import { turnToPanels } from '@/lib/chatPanelSpec'; // v0.10.1443
 import { ctxAppliedLabel, stepEvidenceItems } from './evidenceChip'; // v0.10.1274 — ekran kapsamı künyesi; v0.10.1275 — hop listesi
 import { phaseTrail } from './phaseTrail'; // v0.10.1273 — Metrik → Log → Trace kırıntısı
 import { MdTable } from './MdTable'; // v0.10.1357 — paylaşılan markdown tablosu (RenderedMarkdown da çizer)
+import { highlightParts } from './autoHighlight'; // v0.10.1567
 import { AiThinking } from './AiThinking'; // v0.10.1384 — tek tip "düşünüyor" göstergesi
 import { useTypewriter } from './useTypewriter'; // v0.10.1384 — büyük parçada hızlı yazma efekti
 import { ExplainBody } from './ExplainBody'; // v0.10.1400 — açıklama turu ✨ Explain anatomisiyle
@@ -77,7 +78,9 @@ import { agoTR } from '@/lib/utils'; // v0.10.1444 — arşiv notu
 // MdCtx — satır içi çizimin bağlamı: link politikası, atıf → kaynak eşlemesi,
 // /cosre yeni-sekme kipi, aynı köken. Bağlamsız çizim (Explain/test) güvenli
 // varsayılanla: hiçbir dış link doğrulanmış sayılmaz.
-interface MdCtx { policy: LinkPolicy; cites: readonly SourceChip[]; newTab: boolean; origin: string }
+// hl — v0.10.1567: düz metindeki teknik parçaların otomatik vurgusu
+// (autoHighlight.ts); YALNIZ asistan cevabında açık, kullanıcı metninde kapalı.
+interface MdCtx { policy: LinkPolicy; cites: readonly SourceChip[]; newTab: boolean; origin: string; hl?: boolean }
 const ChatMdContext = createContext<MdCtx>({ policy: EMPTY_POLICY, cites: [], newTab: false, origin: '' });
 // v0.10.1272 — kanıt çipine bağlı sohbet içi bloklar (evidenceRef → blok); adım
 // panelindeki çip de aynı bloğu açabilsin diye bağlamla iner.
@@ -91,7 +94,15 @@ function renderNodes(nodes: readonly InlineNode[], ctx: MdCtx, kp: string): Reac
   return nodes.map((n, i) => {
     const k = `${kp}${i}`;
     switch (n.t) {
-      case 'text': return <Fragment key={k}>{n.v}</Fragment>;
+      case 'text':
+        if (!ctx.hl) return <Fragment key={k}>{n.v}</Fragment>;
+        return (
+          <Fragment key={k}>
+            {highlightParts(n.v).map((p, j) => p.kind
+              ? <code key={j} className={p.kind === 'err' ? 'cm-hl-err' : undefined}>{p.v}</code>
+              : <Fragment key={j}>{p.v}</Fragment>)}
+          </Fragment>
+        );
       case 'code': return <code key={k}>{n.v}</code>;
       case 'strong': return <b key={k}>{renderNodes(n.c, ctx, k + '.')}</b>;
       case 'em': return <em key={k}>{renderNodes(n.c, ctx, k + '.')}</em>;
@@ -945,7 +956,7 @@ function ChatBubbleView({ turn, onRetry, stepsOpen, onRegenerate, busy, versions
     const origin = currentOrigin();
     return {
       policy: buildLinkPolicy({ allowedLinks: turn.allowedLinks, sources: turn.sources, links: effLinks, origin }),
-      cites, newTab, origin,
+      cites, newTab, origin, hl: true, // v0.10.1567 — otomatik vurgu
     };
     // effLinks her render'da yeni dizi; kimliği turn.links/blocks'tan türer.
     // eslint-disable-next-line react-hooks/exhaustive-deps

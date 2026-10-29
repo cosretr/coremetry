@@ -573,3 +573,28 @@ describe('↺ Yeniden dene (v0.10.650)', () => {
     expect(qa('button').some(b => b.textContent?.includes('Yeniden dene'))).toBe(false);
   });
 });
+
+// v0.10.1567 — otomatik vurgu (autoHighlight.ts) BAĞLANMASI: asistan
+// cevabının düz metninde dosya:satır mavi, HTTP 500 / Exception / hata kodu
+// kırmızı çip olur; modelin kendi `kod`u ve kullanıcı metni değişmez.
+describe('otomatik vurgu', () => {
+  const ANS = "Kök neden: CreditCardDetailsService.java:151'de NullPointerException, HTTP 500, kod MCA-00029. `zaten kod`";
+
+  it('asistan cevabında çip; hata türleri kırmızı', async () => {
+    await mount(asst(ANS));
+    const codes = qa('.cm-msg-ai code').map(e => `${e.className || '-'}:${e.textContent}`);
+    expect(codes).toEqual([
+      '-:CreditCardDetailsService.java:151',
+      'cm-hl-err:NullPointerException',
+      'cm-hl-err:HTTP 500',
+      'cm-hl-err:MCA-00029',
+      '-:zaten kod',
+    ]);
+    expect(text()).toContain("CreditCardDetailsService.java:151'de NullPointerException");
+  });
+
+  it('kullanıcı mesajında vurgu yok', async () => {
+    await mount({ role: 'user', text: ANS } as ChatTurn);
+    expect(qa('code.cm-hl-err').length).toBe(0);
+  });
+});
