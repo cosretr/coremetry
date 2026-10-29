@@ -354,8 +354,11 @@ func (s *Store) SetNeighborProvider(np NeighborProvider) {
 //
 // Grouping rules (in priority order):
 //
-//  1. Already attached? Return that incident.
-//  2. Open incident with matching service in the window — even
+//  1. Already attached to a non-resolved incident? Return it
+//     (v0.10.1580: a binding to a resolved incident is rewritten).
+//  2. Open incident with matching service ACTIVE in the window
+//     (v0.10.1581: greatest(started_at, updated_at); attaching
+//     refreshes updated_at) — even
 //     if the severities differ. Critical p99 and warning
 //     error_rate on the same service are one incident, not two.
 //  3. Open incident on a 1-hop topological neighbour of this
@@ -399,13 +402,21 @@ func (s *Store) AttachProblemToIncidentWith(ctx context.Context, p Problem, np N
 
 	// Rule 2: same service, ignore severity. Multiple severity
 	// levels on the same service share an incident.
+	//
+	// v0.10.1581 — pencere başlangıca değil ETKİNLİĞE bakar: çözülmemiş VE
+	// son 30 dk'da etkin (greatest(started_at, updated_at)). Öncesi
+	// started_at >= now−30m idi; 30 dk'dan uzun süren bir incident yeni
+	// aynı-servis / komşu problemleri alamıyor, her biri yeni incident
+	// açıyordu. Etkinlik sinyali updated_at: bağlanma (aşağıda) onu
+	// tazeler, operatör eylemleri (ack/atama/postmortem) de; 30 dk sessiz
+	// incident yeni problemi emmez (sonsuz kova olmaz). Yeni şema yok.
 	cutoff := time.Now().Add(-groupingWindow).UTC()
 	matchRow := s.conn.QueryRow(ctx, `
 		SELECT id FROM incidents FINAL
 		WHERE status != 'resolved'
 		  AND service  = ?
-		  AND started_at >= ?
-		ORDER BY started_at DESC
+		  AND greatest(started_at, updated_at) >= ?
+		ORDER BY greatest(started_at, updated_at) DESC
 		LIMIT 1`, p.Service, cutoff)
 	var matched string
 	_ = matchRow.Scan(&matched)
@@ -432,8 +443,8 @@ func (s *Store) AttachProblemToIncidentWith(ctx context.Context, p Problem, np N
 				SELECT id FROM incidents FINAL
 				WHERE status != 'resolved'
 				  AND service IN (`+strings.Join(holders, ",")+`)
-				  AND started_at >= ?
-				ORDER BY started_at DESC
+				  AND greatest(started_at, updated_at) >= ?
+				ORDER BY greatest(started_at, updated_at) DESC
 				LIMIT 1`, args...)
 			_ = ngRow.Scan(&matched)
 			if matched != "" {
@@ -458,12 +469,19 @@ func (s *Store) AttachProblemToIncidentWith(ctx context.Context, p Problem, np N
 			// Tam-satır upsert (inc GetIncident kopyası — invariant #4).
 			// isKnownSeverity: severityRank bilinmeyeni warning sayar (2) — boş
 			// ya da yabancı bir şiddet info incident'ı "" ile ezmesin.
-			if isKnownSeverity(p.Severity) && severityRank(p.Severity) > severityRank(inc.Severity) {
-				old := inc.Severity
+			//
+			// v0.10.1581 — şiddet yükselmese de satır yeniden yazılır: bağlanma
+			// incident'ın ETKİNLİĞİDİR ve updated_at'i tazeler (kural 2/3'ün
+			// eşleme penceresi buna bakar). Tam-satır kopya, tek yazım.
+			old := inc.Severity
+			raised := isKnownSeverity(p.Severity) && severityRank(p.Severity) > severityRank(inc.Severity)
+			if raised {
 				inc.Severity = p.Severity
-				if err := s.UpsertIncident(ctx, &inc); err != nil {
-					return nil, fmt.Errorf("raise incident severity: %w", err)
-				}
+			}
+			if err := s.UpsertIncident(ctx, &inc); err != nil {
+				return nil, fmt.Errorf("refresh incident on attach: %w", err)
+			}
+			if raised {
 				_ = s.AppendIncidentLifecycle(ctx, inc, IncidentEvent{
 					IncidentID: inc.ID, Kind: "severity_raised", Actor: "system",
 					Body:  old + " → " + p.Severity + " (" + p.RuleName + ")",

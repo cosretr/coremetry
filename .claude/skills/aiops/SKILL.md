@@ -84,7 +84,10 @@ Ne üretiyorsun?
    `escalationExempt` (`evaluator.go:1226`) — hem tazeleme dalına hem
    süpürmeye; tekine konursa v0.8.309 seli geri gelir.
 3. **Incident'a bağlanacak mı?** Tek açıcı `AttachProblemToIncidentWith`
-   (`incident.go:368-488`; 30 dk aynı servis, 1-hop komşu, yoksa yeni). Anomali
+   (`incident.go` `AttachProblemToIncidentWith`; mevcut bağ yalnız incident
+   çözülmemişse — v0.10.1580; aynı servis, 1-hop komşu: çözülmemiş VE son
+   30 dk'da ETKİN `greatest(started_at, updated_at)`, bağlanma updated_at'i
+   tazeler — v0.10.1581; yoksa yeni). Anomali
    ailesi tek kapılı olan (`attachToIncident`, `anomaly_sensitivity.go:58-73`).
 4. **Tam satır değiştirme:** `UpsertProblem` tüm satırı yazar; tazeleme yolu
    Status/Assignee/Pod/AISummary'yi TAŞIMALI (`carryProblemOperatorState`,
