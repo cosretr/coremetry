@@ -149,7 +149,7 @@ jobs:
       # notifier fan-out, SSE broker, Redis cache/locks) where a data race would
       # otherwise hide until a production heisenbug.
       - name: go test -race (concurrency packages)
-        run: go test -race ./internal/agent/... ./internal/notify/... ./internal/sse/... ./internal/cache/...
+        run: go test -race ./internal/agent/... ./internal/notify/... ./internal/sse/... ./internal/cache/... ./internal/cosre/...
 
   lint:
     name: Lint (golangci-lint)

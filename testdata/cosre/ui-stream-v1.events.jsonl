@@ -1,0 +1,15 @@
+{"kind":"step","payload":{"i":1,"label":"araştırma bütçesi: 6 araç · 5 tur"}}
+{"kind":"step","payload":{"i":2,"tool":"get_service_health","args":"{\"service\":\"orders-api\"}","phase":"Sağlık"}}
+{"kind":"block","payload":{"id":"b1","type":"link","seq":1,"final":true,"payload":{"label":"orders-api · Overview","href":"/service?name=orders-api"}}}
+{"kind":"step-result","payload":{"i":2,"tool":"get_service_health","ok":true,"preview":"{\"p95_ms\":1830}","truncated":false,"bytes":15,"durationMs":42,"href":"/service?name=orders-api","sources":[{"source":"traces","state":"ok"}]}}
+{"kind":"step","payload":{"i":3,"tool":"query_metrics","args":"service=orders-api"}}
+{"kind":"step-result","payload":{"i":3,"tool":"query_metrics","ok":false,"skipped":true,"reason":"araştırma bütçesi doldu"}}
+{"kind":"block","payload":{"id":"b2","type":"chart","seq":2,"final":true,"payload":{"title":"orders-api p95","unit":"ms","series":[{"name":"p95","points":[[1790496000000,1200],[1790496060000,1830]]}]}}}
+{"kind":"delta","payload":{"text":"**Bulgu** — "}}
+{"kind":"delta","payload":{"text":"orders-api p95 "}}
+{"kind":"delta","payload":{"text":"yükseldi"}}
+{"kind":"delta","payload":{"reset":true}}
+{"kind":"delta","payload":{"text":"**Bulgu** — orders-api"}}
+{"kind":"code-lock","payload":{"locked":true}}
+{"kind":"answer","payload":{"text":"**Bulgu** — orders-api p95 1830 ms'ye çıktı; com.acme.orders.PaymentClient yavaş.\n\nKaynak: get_service_health (1 araç)","exchangeId":"golden-xid","callId":"call-1","evidenceSpanIds":["00f067aa0ba902b7"],"allowedLinks":["/service?name=orders-api"],"sources":[{"doc":"orders-runbook.md","chunk":3,"score":0.82,"label":"Orders runbook","kind":"upload"},{"doc":"wiki-42","ref":"https://wiki.example.test/orders","chunk":0,"score":0.61,"label":"Orders wiki","kind":"wiki"}],"links":[{"label":"orders-api · Overview","href":"/service?name=orders-api"}],"followups":["orders-api loglarına bak"],"suggestions":["Son deploy'u karşılaştır"],"evidence":[{"tool":"get_service_health","state":"ok"}]}}
+{"kind":"done","payload":{"ok":true}}

@@ -1,0 +1,26 @@
+data: {"type":"start"}
+
+data: {"type":"start-step"}
+
+data: {"dynamic":true,"toolCallId":"s1","toolName":"get_service_health","type":"tool-input-start"}
+
+data: {"dynamic":true,"input":{"argsText":"{\"service\":\"orders-api\"}"},"toolCallId":"s1","toolName":"get_service_health","type":"tool-input-available"}
+
+data: {"dynamic":true,"output":{"bytes":2,"durationMs":5,"ok":true,"preview":"{}","truncated":false},"toolCallId":"s1","type":"tool-output-available"}
+
+data: {"id":"t1","type":"text-start"}
+
+data: {"delta":"Yarım taslak","id":"t1","type":"text-delta"}
+
+data: {"data":{"class":"deadline","raw":"Bu alışveriş 3 dakika tavanına dayandı ve durduruldu. Soru muhtemelen çok geniş: tek bir servise ya da daha dar bir zaman aralığına sorun."},"id":"error","type":"data-error"}
+
+data: {"errorText":"Bu alışveriş 3 dakika tavanına dayandı ve durduruldu. Soru muhtemelen çok geniş: tek bir servise ya da daha dar bir zaman aralığına sorun.","type":"error"}
+
+data: {"id":"t1","type":"text-end"}
+
+data: {"type":"finish-step"}
+
+data: {"finishReason":"error","type":"finish"}
+
+data: [DONE]
+

@@ -1,0 +1,68 @@
+data: {"type":"start"}
+
+data: {"type":"start-step"}
+
+data: {"data":{"i":1,"label":"araştırma bütçesi: 6 araç · 5 tur"},"id":"s1","type":"data-step"}
+
+data: {"dynamic":true,"toolCallId":"s2","toolName":"get_service_health","type":"tool-input-start"}
+
+data: {"dynamic":true,"input":{"argsText":"{\"service\":\"orders-api\"}"},"toolCallId":"s2","toolName":"get_service_health","type":"tool-input-available"}
+
+data: {"data":{"final":true,"payload":{"href":"/service?name=orders-api","label":"orders-api · Overview"},"seq":1},"id":"b1","type":"data-block-link"}
+
+data: {"dynamic":true,"output":{"bytes":15,"durationMs":42,"href":"/service?name=orders-api","ok":true,"preview":"{\"p95_ms\":1830}","sources":[{"source":"traces","state":"ok"}],"truncated":false},"toolCallId":"s2","type":"tool-output-available"}
+
+data: {"dynamic":true,"toolCallId":"s3","toolName":"query_metrics","type":"tool-input-start"}
+
+data: {"dynamic":true,"input":{"argsText":"service=orders-api"},"toolCallId":"s3","toolName":"query_metrics","type":"tool-input-available"}
+
+data: {"dynamic":true,"output":{"ok":false,"reason":"araştırma bütçesi doldu","skipped":true},"toolCallId":"s3","type":"tool-output-available"}
+
+data: {"data":{"final":true,"payload":{"series":[{"name":"p95","points":[[1790496000000,1200],[1790496060000,1830]]}],"title":"orders-api p95","unit":"ms"},"seq":2},"id":"b2","type":"data-block-chart"}
+
+data: {"id":"t1","type":"text-start"}
+
+data: {"delta":"**Bulgu** — ","id":"t1","type":"text-delta"}
+
+data: {"delta":"orders-api p95 ","id":"t1","type":"text-delta"}
+
+data: {"delta":"yükseldi","id":"t1","type":"text-delta"}
+
+data: {"id":"t1","type":"text-end"}
+
+data: {"data":{"target":"t1"},"id":"r1","type":"data-reset"}
+
+data: {"id":"t2","type":"text-start"}
+
+data: {"delta":"**Bulgu** — orders-api","id":"t2","type":"text-delta"}
+
+data: {"data":{"locked":true},"id":"code-lock","type":"data-code-lock"}
+
+data: {"id":"t2","type":"text-end"}
+
+data: {"data":{"target":"t2"},"id":"r2","type":"data-reset"}
+
+data: {"id":"t3","type":"text-start"}
+
+data: {"delta":"**Bulgu** — orders-api p95 1830 ms'ye çıktı; com.acme.orders.PaymentClient yavaş.\n\nKaynak: get_service_health (1 araç)","id":"t3","type":"text-delta"}
+
+data: {"id":"t3","type":"text-end"}
+
+data: {"mediaType":"text/plain","sourceId":"orders-runbook.md#3","title":"Orders runbook","type":"source-document"}
+
+data: {"sourceId":"wiki-42#0","title":"Orders wiki","type":"source-url","url":"https://wiki.example.test/orders"}
+
+data: {"data":{"links":[{"href":"/service?name=orders-api","label":"orders-api · Overview"}]},"id":"links","type":"data-links"}
+
+data: {"data":{"followups":["orders-api loglarına bak"],"suggestions":["Son deploy'u karşılaştır"]},"id":"followups","type":"data-followups"}
+
+data: {"data":{"evidence":[{"state":"ok","tool":"get_service_health"}]},"id":"evidence","type":"data-evidence-summary"}
+
+data: {"messageMetadata":{"allowedLinks":["/service?name=orders-api"],"callId":"call-1","evidenceSpanIds":["00f067aa0ba902b7"],"exchangeId":"golden-xid"},"type":"message-metadata"}
+
+data: {"type":"finish-step"}
+
+data: {"finishReason":"stop","type":"finish"}
+
+data: [DONE]
+

@@ -1,0 +1,22 @@
+data: {"type":"start"}
+
+data: {"type":"start-step"}
+
+data: {"data":{"i":1,"label":"araştırma bütçesi: 6 araç · 5 tur"},"id":"s1","type":"data-step"}
+
+data: {"id":"t1","type":"text-start"}
+
+data: {"delta":"Bağlantı kopmadan önceki taslak","id":"t1","type":"text-delta"}
+
+data: {"id":"t1","type":"text-end"}
+
+data: {"data":{"class":"closed","raw":"stream closed before completion"},"id":"error","type":"data-error"}
+
+data: {"errorText":"stream closed before completion","type":"error"}
+
+data: {"type":"finish-step"}
+
+data: {"finishReason":"error","type":"finish"}
+
+data: [DONE]
+

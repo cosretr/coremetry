@@ -1,0 +1,5 @@
+{"kind":"step","payload":{"i":1,"tool":"get_service_health","args":"{\"service\":\"orders-api\"}"}}
+{"kind":"step-result","payload":{"i":1,"tool":"get_service_health","ok":true,"preview":"{}","truncated":false,"bytes":2,"durationMs":5}}
+{"kind":"delta","payload":{"text":"Yarım taslak"}}
+{"kind":"error","payload":{"error":"Bu alışveriş 3 dakika tavanına dayandı ve durduruldu. Soru muhtemelen çok geniş: tek bir servise ya da daha dar bir zaman aralığına sorun."}}
+{"kind":"done","payload":{"ok":false}}
