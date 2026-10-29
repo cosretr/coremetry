@@ -12042,3 +12042,16 @@ yazar (sayfa, ne değişti, silinen atomlar). Ekran görüntüsü zorunlu değil
 rotası + vitest/axe. Playwright elle, yalnız görünüm belirgin değiştiğinde.
 
 **Neden:** Tek stil sistemi, sohbete özel istisna yok.
+
+## 2026-10-30 — Option B superseded — global shadcn migration; CoSRE v2 builds on it
+
+**Karar:** Option B superseded — global shadcn migration; CoSRE v2 builds on it.
+Rationale: one style system for the whole app, no chat-only exception. 2026-09-25
+"Buton bütünlüğü: shadcn/Tailwind DEĞİL, mevcut atomlar (Seçenek B)" ve 2026-10-29
+"CoSRE v2 sohbeti Seçenek B'ye uyar" kayıtları bu kayıtla tamamen geçersiz.
+`components/ui` DONDURULDU (yalnız aşağı inen mandal); yeni bileşik
+`components/coremetry/` altına, üretilen bileşenler `components/shadcn/` altına.
+Uygulama planı: `docs/frontend/shadcn-phase1-plan.md` (onaylı, §12 operatör kararları
+bağlayıcı); sürüm kaydı: `docs/frontend/migration-log.md`. Operatör onayı 2026-10-30.
+
+**Neden:** Tek stil sistemi, sohbete özel istisna yok.

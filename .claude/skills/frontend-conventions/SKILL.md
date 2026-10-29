@@ -93,8 +93,9 @@ one exists because its violation shipped a bug or an incident.
 
 ## 5. Theme tokens
 
-- CSS variables in `styles/globals.css` are the ONLY styling
-  system. Three palettes: dark (default), light,
+- CSS variables are the ONLY colour/geometry source: values in
+  `styles/globals.css`, shadcn/Tailwind names in `styles/tokens.css`
+  BY REFERENCE (no new colours). Three palettes: dark (default), light,
   `redhat` (v0.8.268 — PatternFly light + OpenShift-style dark
   sidebar; the operator's stated visual direction).
 - Theme work stays TOKEN-level. Chrome variants use the scoped
@@ -103,8 +104,12 @@ one exists because its violation shipped a bug or an incident.
 - Charts re-resolve CSS vars on `data-theme` mutation
   (`useThemeTick`); never hardcode palette hex in components
   (chart-series tokens exist: --purple/--orange/--teal…).
-- No PatternFly/shadcn/Tailwind packages; no external font
-  fetches (font-family preferences with system fallbacks only).
+- Global shadcn migration (DECISIONS 2026-10-30, plan
+  `docs/frontend/shadcn-phase1-plan.md`): Tailwind v4 + generated
+  `components/shadcn/` + `components/coremetry/` composites;
+  `components/ui/` is FROZEN (no new file, no new importer). No
+  PatternFly packages, no other UI kit; no external font fetches
+  (font-family preferences with system fallbacks only).
 
 ## 6. Data fetching, polling, ES cost
 

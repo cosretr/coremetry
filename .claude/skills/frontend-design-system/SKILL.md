@@ -350,7 +350,7 @@ import eklenince kayar, v0.9.887).
 
 1. **Yeni ham `<button>` / `role="button"`** (ESLint `ui/no-raw-button`; istisna yalnız `-- gerekçe` ile).
 2. **Yeni `Field`/`Stat`/`Chip` tanımı** — kanonik varken 8./7./6. kopya.
-3. **`ui/` dışına atom yazmak** — yeni primitif `ui/` altına + barrel'a.
+3. **`coremetry/` dışına bileşik yazmak** — yeni primitif `components/coremetry/` altına (shadcn üzerine) + barrel'a; `ui/` DONDURULDU (yeni dosya/importçu yok).
 4. **`aria-label`'sız `IconButton`**, `htmlFor`/`useId`'siz form alanı.
 5. **Tamamen statik inline style bloğu.**
 6. **`.tsx`'te yeni hex/rgba** (canvas fallback'i hariç, o da token

@@ -32,12 +32,13 @@ Datadog / Dynatrace / Honeycomb engineer this?"**
 `chstore.Store`, `logstore.Store` (CH or ES via
 `COREMETRY_LOGS_BACKEND`), `tempo.Service`, `cache.Cache`,
 `auth.Service`, `notify.Notifier`, `copilot.Service`.
-**Frontend:** React + Vite, no Tailwind (CSS vars in `globals.css`),
+**Frontend:** React + Vite, Tailwind v4 + shadcn (`components/shadcn`,
+generated; land in Phase 1 R4/R5) + `components/coremetry` composites; `components/ui` FROZEN
+(ratchet only down); tokens in `styles/globals.css` + `styles/tokens.css`.
 React Query, react-router v6. No state library — URL is source of
 truth for shareable views. Charts: `uPlot` only — never Chart.js or
-heavy chart libs. CoSRE v2 Seçenek B'ye uyar (mevcut `ui/` atomları,
-Tailwind/shadcn yok); shadcn sorusu frontend audit'ine ertelendi
-(DECISIONS 2026-10-29).
+heavy chart libs. Global shadcn migration supersedes Option B; CoSRE v2
+builds on it (DECISIONS 2026-10-30, `docs/frontend/shadcn-phase1-plan.md`).
 **Versioning:** git tags `v0.10.X`; 1.0 deferred by operator ([docs/RELEASE-1.0.md](docs/RELEASE-1.0.md)).
 Runtime: ldflag > `/app/VERSION` > `"dev"` = **build** kimliği; `COREMETRY_VERSION`
 env yalnız GÖSTERİLENİ değiştirir; `/api/version` ikisini + `overridden`
@@ -72,7 +73,7 @@ never `s.copilot.Explain` direct (/ai attribution).
 
 ## Code patterns
 
-- **Buttons/fields — one design language:** `ui/` atoms only (`<Button variant size>` in `components/ui/Button.tsx`, `IconButton`, `SegmentedControl`, `TabStrip`, `Badge`, …), `Field.tsx` for labelled inputs, `.badge .b-ok/.b-err`. Raw `<button>` outside `ui/` is blocked (`buttonUnityRatchet` + ESLint `ui/no-raw-button`).
+- **Buttons/fields — one design language:** `coremetry/*` + `shadcn/*` first; `ui/` atoms (`Button`, `IconButton`, `Field`, `Badge`, `.badge .b-*`, …) only on unmigrated pages. Raw `<button>/<input>/<select>/<textarea>` outside `shadcn/`/`ai-elements/` is blocked (`buttonUnityRatchet` + ESLint `ui/no-raw-button`; the input/select/textarea half lands with `ui/no-raw-element`, Phase 1 R6).
 - **URL = source of truth** for every selection (drawer/focus/filters/tab/range) — write with `replace:true`; sig-guard URL→state imports (v0.8.253); one-way-read is a recurring bug class (256/265/267).
 - **Themes** are token-level CSS vars only (dark/light/redhat v0.8.268); chrome variants via scoped token remap; charts re-resolve on `data-theme`.
 - **ES-cost UI:** fetch on expand/open only, no list prefetch, staleTime ≥ server TTL, cache-key params snapped to bounded rungs (v0.8.270).
