@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-theme="redhat">
+<html lang="en" data-theme="__COREMETRY_DEFAULT_THEME__">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -47,9 +47,11 @@
           t = localStorage.getItem('coremetry-theme');
           // v0.8.285 — default to 'redhat' (PatternFly/OpenShift) for new
           // sessions; a saved pref still wins so existing users keep their pick.
-          if (t !== 'light' && t !== 'dark' && t !== 'redhat') t = 'redhat';
+          // v0.10.1610 — the default is written by vite.config.ts
+          // (transformIndexHtml) from lib/themeDefault.ts DEFAULT_THEME.
+          if (t !== 'light' && t !== 'dark' && t !== 'redhat') t = '__COREMETRY_DEFAULT_THEME__';
         } catch (e) {
-          t = 'redhat';
+          t = '__COREMETRY_DEFAULT_THEME__';
         }
         document.documentElement.setAttribute('data-theme', t);
         var meta = document.querySelector('meta[name="theme-color"]');

@@ -7,9 +7,13 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { THEME_COLOR, THEMES, applyTheme, cycleTheme, syncThemeColor, type Theme } from './theme';
+import { THEME_COLOR, THEMES, DEFAULT_THEME, applyTheme, cycleTheme, syncThemeColor, type Theme } from './theme';
+import { renderDefaultTheme } from './themeDefault';
 
-const HTML = readFileSync(resolve(__dirname, '../../index.html'), 'utf8');
+// v0.10.1610 — index.html varsayılan temayı yer tutucuyla taşır; Vite
+// (transformIndexHtml) onu DEFAULT_THEME ile doldurur. Test aynı dönüşümü
+// uygular, yani tarayıcının gördüğü HTML'i sınar.
+const HTML = renderDefaultTheme(readFileSync(resolve(__dirname, '../../index.html'), 'utf8'));
 const CSS = readFileSync(resolve(__dirname, '../styles/globals.css'), 'utf8')
   .replace(/\/\*[\s\S]*?\*\//g, '');
 
@@ -45,7 +49,7 @@ describe('v0.10.1339 — theme-color', () => {
   it('index.html meta taşıyor (varsayılan redhat) ve betik haritası TS ile aynı', () => {
     const m = /<meta name="theme-color" content="(#[0-9a-fA-F]{6})"\s*\/>/.exec(HTML);
     expect(m, 'index.html theme-color meta kayboldu').toBeTruthy();
-    expect(m![1]).toBe(THEME_COLOR.redhat);
+    expect(m![1]).toBe(THEME_COLOR[DEFAULT_THEME]);
     // Meta, onu güncelleyen açılış betiğinden ÖNCE gelmeli (betik ayrıştırma
     // sırasında çalışır; sonra gelen meta henüz DOM'da yoktur).
     expect(HTML.indexOf('name="theme-color"')).toBeLessThan(HTML.indexOf("localStorage.getItem('coremetry-theme')"));
@@ -53,7 +57,7 @@ describe('v0.10.1339 — theme-color', () => {
   });
 
   it.each([
-    ['dark', 'dark'], ['light', 'light'], ['redhat', 'redhat'], [null, 'redhat'], ['cozy', 'redhat'],
+    ['dark', 'dark'], ['light', 'light'], ['redhat', 'redhat'], [null, DEFAULT_THEME], ['cozy', DEFAULT_THEME],
   ] as const)('açılış betiği: kayıtlı %s → %s rengi', (stored, want) => {
     const script = /<script>\s*(\(function\(\) \{[\s\S]*?coremetry-theme[\s\S]*?\}\)\(\);)\s*<\/script>/.exec(HTML);
     expect(script, 'tema açılış betiği bulunamadı').toBeTruthy();

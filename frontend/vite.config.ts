@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { visualizer } from 'rollup-plugin-visualizer';
 import path from 'path';
+import { renderDefaultTheme } from './src/lib/themeDefault';
 
 // Vite config — pure SPA build, output to dist/ which the Go
 // binary embeds via //go:embed all:frontend/dist. Dev-only API
@@ -16,6 +17,10 @@ const analyze = process.env.ANALYZE === '1' || process.env.ANALYZE === 'true';
 export default defineConfig({
   plugins: [
     react(),
+    // v0.10.1610 (shadcn Faz 1 R3, §12): <html data-theme> ve açılış betiğinin
+    // geri dönüşü lib/themeDefault.ts DEFAULT_THEME'den yazılır — literal yok.
+    // 'pre': Vite'ın %ENV% değiştirmesinden önce; dev ve build ikisi de geçer.
+    { name: 'coremetry-default-theme', transformIndexHtml: { order: 'pre', handler: (html: string) => renderDefaultTheme(html) } },
     ...(analyze ? [
       visualizer({
         filename: 'dist/bundle-analysis.html',

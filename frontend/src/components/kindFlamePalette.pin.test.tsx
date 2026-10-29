@@ -13,7 +13,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import type { ReactElement } from 'react';
 import { KindBadge, BreakdownBar, kindColor, kindLabel } from './KindBadge';
 import { FlameGraph } from './FlameGraph';
-import { SERIES_PALETTES, seriesColor } from '@/lib/chartFmt';
+import { seriesPalette, seriesColor } from '@/lib/chartFmt';
 import type { FlameNode, ProfileFrameKind } from '@/lib/types';
 
 const KINDS: ProfileFrameKind[] = ['cpu', 'lock', 'io', 'sleep', 'gc'];
@@ -37,7 +37,8 @@ describe('BreakdownBar — grafik dilimleri seri paletinden', () => {
     const cs = KINDS.map(kindColor);
     for (const c of cs) {
       expect(c).not.toMatch(/--(ok|brand|err|warn)/);
-      expect(SERIES_PALETTES.dark).toContain(c);
+      // v0.10.1610: belge yokken palet DEFAULT_THEME'inki (lib/theme.ts).
+      expect(seriesPalette()).toContain(c);
     }
     expect(new Set(cs).size).toBe(KINDS.length);
   });

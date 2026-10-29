@@ -10,7 +10,7 @@ import {
   momentRow, THROTTLE_NOTE, podSuffix, suffixLabels, flaggedNav, relToTrace, agoText, podBadges, subLine,
   clusterNameOf, funnelCaption, compareColors, chartHeadline, podFacts, type LaneSpan,
 } from './tracePodPanelModel';
-import { preferredSlot, seriesColor } from '@/lib/chartFmt';
+import { preferredSlot, seriesColor, seriesPalette } from '@/lib/chartFmt';
 
 // tracePodPanel.test.ts — v0.10.968 — Trace › Metrics seçili pod paneli ve
 // odak görünümünün SAF yardımcıları (tablo testli). Model fikstürleri elle
@@ -498,7 +498,9 @@ describe('v0.10.968 — çakışmasız karşılaştırma renkleri (MF-1)', () =>
   it('compareColors farklı renk verir; ilk gelen tercih ettiği yuvayı korur', () => {
     const c = compareColors([a.pod, b.pod], labels, 'dark');
     expect(c.get('p5r8d')).not.toBe(c.get('b2q6f'));
-    expect(c.get('p5r8d')).toBe(seriesColor('p5r8d'));
+    // v0.10.1610: seriesColor belge yokken DEFAULT_THEME paletini okur;
+    // compareColors'a verilen 'dark' ile aynı paletten kıyasla.
+    expect(c.get('p5r8d')).toBe(seriesPalette('dark')[preferredSlot('p5r8d')]);
   });
   it('buildChartItems: çizgi rengi = lejant rengi = harita; kardeş (muted) renksiz', () => {
     const c = compareColors([a.pod, b.pod], labels, 'dark');

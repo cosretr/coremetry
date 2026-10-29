@@ -38,6 +38,7 @@ import {
   type GrafanaTheme2,
 } from '@grafana/data';
 import type { SpanMetricSeries } from '@/lib/types';
+import { currentTheme, isLightTheme } from '@/lib/theme';
 
 // ---------------------------------------------------------------------------
 // Tema: display processor renk/eşik çözerken tema ister. Coremetry'nin
@@ -46,13 +47,11 @@ import type { SpanMetricSeries } from '@/lib/types';
 // veriyoruz. isDark, data-theme'den okunur; resolveVar zaten bu deseni
 // kullanıyor.
 // ---------------------------------------------------------------------------
-// v0.10.1595: redhat açık bir temadır; CSS'te yalnız light/redhat açık blok
-// tanımlar, başka her değer :root (dark) token'larına düşer.
+// v0.10.1595: redhat açık bir temadır (light ile birlikte açık blok).
+// v0.10.1610: okuma lib/theme.ts currentTheme() — belge yok / değer geçersiz
+// → DEFAULT_THEME (redhat → light mod; node'da eskisiyle aynı sonuç).
 export function chartTheme(): GrafanaTheme2 {
-  const attr = typeof document !== 'undefined'
-    ? document.documentElement.getAttribute('data-theme')
-    : 'light'; // document yoksa (node testleri) eski davranış: light
-  const isDark = attr !== 'light' && attr !== 'redhat';
+  const isDark = !isLightTheme(currentTheme());
   return createTheme({ colors: { mode: isDark ? 'dark' : 'light' } });
 }
 

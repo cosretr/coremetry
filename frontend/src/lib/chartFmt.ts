@@ -5,6 +5,7 @@
 // raw numbers like "12500" and one-off colours via hashColor
 // look home-rolled; "12.5k rps" with a curated 10-colour
 // palette looks like a product.
+import { currentTheme } from '@/lib/theme';
 
 // fmtSmart — turns a raw value into a human-readable label,
 // unit-aware. Axis ticks + tooltip values + KPI tiles all
@@ -185,14 +186,12 @@ export function inkOn(fill: string): '#ffffff' | '#15171a' {
 }
 export const SERIES_SLOTS = 8;
 
-// chartTheme — <html data-theme>'den; yalnız light/redhat token setini
-// değiştirir (globals.css), yokluk/dark = koyu tokenlar. Canvas var()
-// okuyamadığı için palet burada çözülür; tema değişince grafikler
-// useThemeTick ile yeniden kurulur.
+// chartTheme — <html data-theme>'den, lib/theme.ts currentTheme() ile
+// (v0.10.1610: tek okuyucu; belge yok/değer geçersiz → DEFAULT_THEME).
+// Canvas var() okuyamadığı için palet burada çözülür; tema değişince
+// grafikler useThemeTick ile yeniden kurulur.
 export function chartTheme(): ChartTheme {
-  if (typeof document === 'undefined') return 'dark';
-  const t = document.documentElement.getAttribute('data-theme');
-  return t === 'light' || t === 'redhat' ? t : 'dark';
+  return currentTheme();
 }
 
 export function seriesPalette(theme: ChartTheme = chartTheme()): readonly string[] {
