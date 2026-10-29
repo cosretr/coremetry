@@ -79,6 +79,9 @@ type copilotConfigResponse struct {
 	// döner. available=false iken reason ("kapalı: yerel profil yok");
 	// profileLabel kod/wiki turlarının gideceği yerel profilin ETİKETİ (adres yok).
 	CodeRead *copilotCodeRead `json:"codeRead,omitempty"`
+	// v0.10.1592 — CoSRE v2 admin bayrağı (cosre_v2_flag.go): istemcinin v2
+	// lazy chunk'ını açar. false iken alan hiç görünmez (eski şekil aynen).
+	CosreV2 bool `json:"cosreV2,omitempty"`
 }
 
 type copilotCodeRead struct {
@@ -143,5 +146,6 @@ func (s *Server) copilotConfig(w http.ResponseWriter, r *http.Request) {
 	if active {
 		resp.CodeRead = copilotCodeReadFor(s.devops != nil && s.devops.Configured(), localID, localLabel)
 	}
+	resp.CosreV2 = s.cosreV2Enabled(r.Context())
 	writeJSON(w, resp)
 }
