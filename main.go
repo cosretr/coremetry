@@ -1558,6 +1558,9 @@ func main() {
 		// v0.10.242 — Problem↔Rollout korelasyonu: küme çevirisi (span değeri →
 		// EffectiveID) + rollouts bayrağı; kapalıyken hiçbir sorgu koşmaz.
 		rcSynth.SetRollouts(rolloutClusterSource{thanosSvc}, func() bool { return rolloutSettings.Resolved().Enabled })
+		// v0.10.1583 — aday satırları uygulanan kaynaktan (v1 workload_rollouts |
+		// v2 rollout_events); /api/rollouts* ile aynı karar (ResolvedV2().Source).
+		rcSynth.SetRolloutSource(func() string { return rolloutSettings.ResolvedV2().Source })
 		// v0.10.374 — VM dilim 3c: JVM heap / GC kanıtı VM yapılandırılmışsa
 		// VictoriaMetrics'ten (çağrı anında karar), değilse ClickHouse.
 		// v0.10.1270 — karar metricsrc çözümleyicisinde (FamilyOTelRuntime).

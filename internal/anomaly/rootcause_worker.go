@@ -130,6 +130,9 @@ type RootCauseSynthesizer struct {
 	// korelasyonu (rollout_causes.go); SetRollouts ile kurulur, nil = kapalı.
 	rolloutClusters rollout.ClusterSource
 	rolloutEnabled  func() bool
+	// rolloutSource — v0.10.1583: uygulanan rollout kaynağı ("v1" | "v2");
+	// nil = v1 (bugünkü okuma). SetRolloutSource kurar.
+	rolloutSource func() string
 }
 
 // SetAutoVerdict — kancayı bağlar. Start()'tan ÖNCE çağrılmalı (main.go

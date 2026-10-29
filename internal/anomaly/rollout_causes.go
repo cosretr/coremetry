@@ -145,6 +145,21 @@ func (s *RootCauseSynthesizer) SetRollouts(clusters rollout.ClusterSource, enabl
 	s.rolloutEnabled = enabled
 }
 
+// SetRolloutSource — v0.10.1583: rollout aday satırlarının kaynağı
+// (rollouts.source; main.go ResolvedV2().Source). Start() öncesi kurulur.
+func (s *RootCauseSynthesizer) SetRolloutSource(source func() string) {
+	if s == nil {
+		return
+	}
+	s.rolloutSource = source
+}
+
+// rolloutReadsV2 — SAF: kaynak fonksiyonu v2 diyorsa rollout_events okunur;
+// nil / v1 / sözlük dışı → v1 workload_rollouts (bugünkü yol).
+func rolloutReadsV2(source func() string) bool {
+	return source != nil && source() == rollout.SourceV2
+}
+
 // rolloutCauses — CH'ye dokunan tek fonksiyon; hata = kanıt yok (log),
 // sentez devam eder. in.Rollouts'u doldurur, DeepEvidence satırlarını
 // döndürür.
@@ -175,7 +190,18 @@ func (s *RootCauseSynthesizer) rolloutCauses(ctx context.Context, p chstore.Prob
 	if len(keys) == 0 {
 		return nil
 	}
-	rows, err := s.store.RolloutsForWorkloads(ctx, keys, from, to)
+	// v0.10.1583 — kaynak rollouts.source'u izler. v2 (varsayılan) iken satırları
+	// v2 dedektörü rollout_events'e yazar, workload_rollouts boş kalır; aday
+	// eskiden HİÇ çıkmıyordu. v2 satırı RolloutRowFromV2 ile v1 şekline eşlenir
+	// (durum v1 sözlüğü, DetectedBy "ksm" → KSM payı), puan aynı (rollout.Rank).
+	// Bilinen boşluk: v2 STS/DS revizyonu update_revision / controller hash,
+	// aktivite MV'sindeki revizyon vekili imaj tag'i — pod eşlemesi (+0.05)
+	// yalnız Deployment'ta (RS adı) tutar; servis eşlemesi her türde.
+	readRollouts := s.store.RolloutsForWorkloads
+	if rolloutReadsV2(s.rolloutSource) {
+		readRollouts = s.store.RolloutV2ForWorkloads
+	}
+	rows, err := readRollouts(ctx, keys, from, to)
 	if err != nil {
 		log.Printf("[rootcause-synth] rollouts for %s: %v", p.Service, err)
 		return nil
