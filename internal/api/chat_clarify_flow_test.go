@@ -197,7 +197,13 @@ func TestClarifySourceAskThenCoremetry(t *testing.T) {
 func TestClarifySourceAskUnrelatedReplyDropped(t *testing.T) {
 	rg := newClarifyRig(t, nil)
 	rg.post(t, clarifyQ)
-	rg.post(t, clarifyQ, sourceAskTextTR, "checkout sağlığı nasıl?")
+	frames := rg.post(t, clarifyQ, sourceAskTextTR, "checkout sağlığı nasıl?")
+	// v0.10.1575 — düşen soru ekranda adım çizmez; ölçüm satırda kalır (aşağıda).
+	for _, f := range frames {
+		if f.event == "step" && f.data["tool"] == clarifyReplyTool {
+			t.Fatalf("düşen soru için clarify_reply adımı ekrana basılmamalı: %v", f.data)
+		}
+	}
 	r := lastRow(t, rg.rows())
 	if r.Tier != aisurface.TierGuided || len(*rg.routes) == 0 || (*rg.routes)[0] != string(guidedServiceHealth) {
 		t.Fatalf("ilgisiz cevap yeni soru gibi guided'a gitmeli: tier=%q rotalar=%v", r.Tier, *rg.routes)

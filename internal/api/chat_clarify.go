@@ -240,8 +240,17 @@ func (s *Server) chatClarifyReplyTier(ctx context.Context, emit func(string, any
 	reply := lastUserText(msgs)
 	class := clarifyReplyClass(p, reply)
 	args, _ := json.Marshal(map[string]string{"kind": p.Kind, "reply": class})
-	n := emitGuidedStep(emit, clarifyReplyTool, string(args))
-	emitGuidedStepResult(emit, n, clarifyReplyTool, clarifyReplyEvidenceTR(p, class), nil)
+	if class == clarifyReplyDropped {
+		// v0.10.1575 — düşen soru EKRANDA adım çizmez ("Nasıl cevapladım"da
+		// gürültüydü: kullanıcı yeni bir soru sordu); ölçüm için yalnız
+		// etkileşim satırına yazılır (aynı tool adı + args, kimlik -1).
+		if x := chatExchangeFrom(ctx); x != nil {
+			x.noteStep(map[string]any{"tool": clarifyReplyTool, "args": string(args), "i": -1}, time.Now())
+		}
+	} else {
+		n := emitGuidedStep(emit, clarifyReplyTool, string(args))
+		emitGuidedStepResult(emit, n, clarifyReplyTool, clarifyReplyEvidenceTR(p, class), nil)
+	}
 	switch {
 	case p.Kind == pendingKindSource && class == sourceReplyWiki:
 		out.msgs = replaceLastUserText(msgs, p.Question)
