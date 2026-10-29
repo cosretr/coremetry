@@ -135,7 +135,7 @@ jobs:
         env:
           CH_SMOKE_ADDR: localhost:19000
         run: |
-          go test -tags=chsmoke ./internal/chstore/ -run 'TestCHSmokeReads|TestAttachReopenedProblemSkipsResolvedIncident|TestAttachMatchesActiveLongRunningIncident' -v
+          go test -tags=chsmoke ./internal/chstore/ -run 'TestCHSmokeReads|TestAttachReopenedProblemSkipsResolvedIncident|TestAttachMatchesActiveLongRunningIncident|TestEnrichProblemsSeesPipelineDeployEvents' -v
           go test -tags=chsmoke ./internal/anomaly/ -run TestRootCauseDeployEvidenceSurvivesAge -v
 
       - name: ClickHouse durdur

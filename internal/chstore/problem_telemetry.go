@@ -22,6 +22,7 @@ import (
 	"hash/fnv"
 	"log"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -100,8 +101,101 @@ func (s *Store) fetchDeploysByService(ctx context.Context, services map[string]s
 		byService = got
 	}
 
+	// v0.10.1582 — pipeline deploy event'leri (events kind='deploy',
+	// POST /api/operator-events) da aynı listeye: GetRecentDeploys /
+	// GetDeploysInWindow / GetServiceDeploys v0.9.1204'ten beri birleştiriyor,
+	// bu toplu okuma birleştirmiyordu — hipotezin gördüğü pipeline deploy'u
+	// Problem çipinde / DeployBox'ında yoktu. Aynı servis kümesi + pencere,
+	// TEK sınırlı okuma; soft-fail (events okunamazsa span çıkarımı yaşar).
+	if evs, err := s.deployEventsForServices(ctx, services, from, to); err != nil {
+		log.Printf("[deploys] event kaynağı okunamadı (problem zenginleştirme): %v — yalnız span çıkarımı", err)
+	} else {
+		byService = mergeDeployEventsByService(byService, evs)
+	}
+
 	s.storeDeploysCacheEntry(key, deploysCacheEntry{at: now, byService: byService}, now)
 	return byService, nil
+}
+
+// deployEventsForServices — events(kind='deploy') servis kümesi + pencere
+// için tek okuma (v0.10.1582). Küçük tablo; yine de LIMIT + zaman WHERE +
+// max_execution_time. Servissiz (global) olaylar alınmaz: bir servise
+// bağlanmayan deploy hiçbir problemin RecentDeploy'u olamaz (deployEventEntries
+// ile aynı kural).
+func (s *Store) deployEventsForServices(ctx context.Context, services map[string]struct{}, from, to time.Time) ([]RecentDeployEntry, error) {
+	if len(services) == 0 {
+		return nil, nil
+	}
+	holders := make([]string, 0, len(services))
+	args := make([]any, 0, len(services)+2)
+	for svc := range services {
+		holders = append(holders, "?")
+		args = append(args, svc)
+	}
+	args = append(args, from, to)
+	rows, err := s.conn.Query(ctx, `
+		SELECT service, label, toUnixTimestamp64Nano(time)
+		FROM events FINAL
+		WHERE kind = 'deploy'
+		  AND service IN (`+strings.Join(holders, ",")+`)
+		  AND time >= ? AND time <= ?
+		ORDER BY time DESC
+		LIMIT 2000
+		SETTINGS max_execution_time = 5`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []RecentDeployEntry
+	for rows.Next() {
+		var e RecentDeployEntry
+		if err := rows.Scan(&e.Service, &e.Version, &e.FirstSeenNs); err != nil {
+			return nil, err
+		}
+		e.Version = strings.TrimSpace(e.Version)
+		if e.Service == "" || e.Version == "" {
+			continue
+		}
+		e.Source = "event"
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+// mergeDeployEventsByService — SAF (v0.10.1582): mergeDeployEntries'in
+// servis-haritası ikizi. (service, version) aynıysa EVENT KAZANIR (zaman
+// event'ten — pipeline kaydı gerçeğin kendisi, v0.9.1204 kararı); yeni
+// sürümler eklenir; her servis listesi zaman ASC kalır (pickProblemDeploy
+// sondan yürür). Girdi haritası yerinde güncellenir ve döner.
+func mergeDeployEventsByService(byService map[string][]spanDeploy, events []RecentDeployEntry) map[string][]spanDeploy {
+	if len(events) == 0 {
+		return byService
+	}
+	if byService == nil {
+		byService = map[string][]spanDeploy{}
+	}
+	touched := map[string]bool{}
+	for _, e := range events {
+		list := byService[e.Service]
+		replaced := false
+		for i := range list {
+			if list[i].version == e.Version {
+				list[i].ns = e.FirstSeenNs
+				replaced = true
+				break
+			}
+		}
+		if !replaced {
+			list = append(list, spanDeploy{version: e.Version, ns: e.FirstSeenNs})
+		}
+		byService[e.Service] = list
+		touched[e.Service] = true
+	}
+	for svc := range touched {
+		list := byService[svc]
+		sort.SliceStable(list, func(i, j int) bool { return list[i].ns < list[j].ns })
+	}
+	return byService
 }
 
 // deploysByServiceRawSQL — SAF: ham spans yolu (MV pencereyi kapsamıyorsa).

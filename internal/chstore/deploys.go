@@ -1090,7 +1090,10 @@ func (s *Store) deploysInWindowInferred(ctx context.Context, from, to time.Time,
 // yalnız grafik marker'ı çiziyordu; artık deploy OKUYAN üç huni
 // (GetRecentDeploys / GetServiceDeploys / GetDeploysInWindow) span
 // çıkarımı ∪ deploy-event birleşimini döner — banner, marker'lar,
-// problem zenginleştirme, hipotez, impact ve rollouts bedavaya görür.
+// hipotez, impact ve rollouts bedavaya görür. Problem/anomali
+// zenginleştirmesi bu hunileri KULLANMAZ (toplu fetchDeploysByService);
+// v0.10.1582'ye dek event'leri hiç görmüyordu, artık aynı kuralla
+// (event kazanır) mergeDeployEventsByService ile birleştirir.
 //
 // Kararlar (operatör onayı): event Label'ı OLDUĞU GİBİ versiyondur
 // (parse yok); aynı (service, version) iki kaynaktan gelirse EVENT
