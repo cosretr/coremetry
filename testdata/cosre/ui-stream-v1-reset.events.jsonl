@@ -1,0 +1,5 @@
+{"kind":"delta","payload":{"text":"İlk "}}
+{"kind":"delta","payload":{"text":"taslak "}}
+{"kind":"delta","payload":{"text":"metin"}}
+{"kind":"delta","payload":{"reset":true,"text":"Düzeltilmiş tam metin."}}
+{"kind":"done","payload":{"ok":true}}

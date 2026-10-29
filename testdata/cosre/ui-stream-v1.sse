@@ -36,7 +36,7 @@ data: {"delta":"yükseldi","id":"t1","type":"text-delta"}
 
 data: {"id":"t1","type":"text-end"}
 
-data: {"data":{"target":"t1"},"id":"r1","type":"data-reset"}
+data: {"data":{"textId":"t1"},"type":"data-reset"}
 
 data: {"id":"t2","type":"text-start"}
 
@@ -46,7 +46,7 @@ data: {"data":{"locked":true},"id":"code-lock","type":"data-code-lock"}
 
 data: {"id":"t2","type":"text-end"}
 
-data: {"data":{"target":"t2"},"id":"r2","type":"data-reset"}
+data: {"data":{"textId":"t2"},"type":"data-reset"}
 
 data: {"id":"t3","type":"text-start"}
 

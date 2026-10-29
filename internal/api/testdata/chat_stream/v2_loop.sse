@@ -20,7 +20,7 @@ data: {"delta":"**Bulgu** — orders-api p95 yükseldi.","id":"t1","type":"text-
 
 data: {"id":"t1","type":"text-end"}
 
-data: {"data":{"target":"t1"},"id":"r1","type":"data-reset"}
+data: {"data":{"textId":"t1"},"type":"data-reset"}
 
 data: {"id":"t2","type":"text-start"}
 

@@ -6,13 +6,26 @@
 import { describe, it, expect } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { DATA_PART_NAMES, MESSAGE_ID_RE, UI_STREAM_PART_TYPES, dataPartName, isDataPart } from './protocol';
+import { DATA_PART_NAMES, MESSAGE_ID_RE, UI_STREAM_PART_TYPES, dataPartName, isDataPart, parseDataReset } from './protocol';
 import { parseUIStreamSSE } from './uiStreamFixture';
 
 const ROOT = resolve(__dirname, '../../../..');
-const FIXTURES = ['ui-stream-v1', 'ui-stream-v1-error', 'ui-stream-v1-closed'];
+const FIXTURES = ['ui-stream-v1', 'ui-stream-v1-error', 'ui-stream-v1-closed', 'ui-stream-v1-reset'];
 const PART_TYPES = new Set<string>(UI_STREAM_PART_TYPES);
 const DATA_NAMES = new Set<string>(DATA_PART_NAMES);
+
+describe('parseDataReset (v0.10.1606)', () => {
+  it.each([
+    [{ type: 'data-reset', data: { textId: 't1' } }, 't1'],
+    [{ type: 'data-reset', data: { target: 't1' }, id: 'r1' }, null],
+    [{ type: 'data-reset', id: 'r1', data: { textId: 't1' } }, null],
+    [{ type: 'data-reset', data: { textId: 't1', providerMetadata: {} } }, null],
+    [{ type: 'data-reset', data: { textId: '' } }, null],
+    [{ type: 'text-end', id: 't1' }, null],
+  ])('%j → %s', (p, want) => {
+    expect(parseDataReset(p)?.data.textId ?? null).toBe(want);
+  });
+});
 
 describe('parseUIStreamSSE', () => {
   it('yorum (ping) satırlarını atlar, [DONE] sonrası çerçeveyi sayar', () => {
@@ -72,8 +85,10 @@ describe.each(FIXTURES)('%s.sse', name => {
         closed.add(String(p.id));
       }
       if (p.type === 'data-reset') {
-        const target = (p.data as { target?: string }).target ?? '';
-        expect(closed.has(target), `reset hedefi ${target}`).toBe(true);
+        const reset = parseDataReset(p);
+        expect(reset, JSON.stringify(p)).not.toBeNull();
+        const textId = reset?.data.textId ?? '';
+        expect(closed.has(textId), `reset hedefi ${textId}`).toBe(true);
       }
     }
   });
@@ -99,4 +114,22 @@ it('ana fixture beklenen kanalları taşır (data-reset, data-budget, kaynaklar)
   for (const t of ['data-reset', 'data-budget', 'data-step', 'source-url', 'source-document', 'message-metadata', 'data-block-chart', 'data-code-lock']) {
     expect(types.has(t), t).toBe(true);
   }
+});
+
+// v0.10.1606 — geri alma senaryosu: dizi tam olarak pinli (Go golden ile aynı).
+it('reset fixture: t1 akar, data-reset{textId:t1}, t2 yeni tam metinle kapanır', () => {
+  const { parts } = parseUIStreamSSE(readFileSync(join(ROOT, 'testdata', 'cosre', 'ui-stream-v1-reset.sse'), 'utf8'));
+  expect(parts.slice(2)).toEqual([
+    { type: 'text-start', id: 't1' },
+    { type: 'text-delta', id: 't1', delta: 'İlk ' },
+    { type: 'text-delta', id: 't1', delta: 'taslak ' },
+    { type: 'text-delta', id: 't1', delta: 'metin' },
+    { type: 'text-end', id: 't1' },
+    { type: 'data-reset', data: { textId: 't1' } },
+    { type: 'text-start', id: 't2' },
+    { type: 'text-delta', id: 't2', delta: 'Düzeltilmiş tam metin.' },
+    { type: 'text-end', id: 't2' },
+    { type: 'finish-step' },
+    { type: 'finish', finishReason: 'stop' },
+  ]);
 });

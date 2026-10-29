@@ -20,7 +20,8 @@
 //   - `start` parçası sunucu üretimi `messageId` taşır (ULID, ulid.go;
 //     v0.10.1603).
 //
-// Geri alma TEK mekanizmadır: `data-reset{data:{target:<metin parça id>}}`.
+// Geri alma TEK mekanizmadır: `data-reset{data:{textId:<text-start id>}}`
+// (v0.10.1606; parçanın kendi id'si yok).
 // Son cevap, akan taslağı reset'le geri alıp otoriter metni TEK delta olarak
 // yollar; önek farkı hesaplanmaz.
 package uistream

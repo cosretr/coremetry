@@ -9,11 +9,11 @@ import (
 // Translator — tek akışın durum makinesi (akış başına bir tane; eşzamanlı
 // kullanım çağıranın kilidi altında). Translate G/Ç yapmaz.
 type Translator struct {
-	textSeq, resetSeq int
-	openText          string // açık metin parçasının id'si; "" = yok
-	started           bool
-	sawAnswerOrError  bool
-	sawDone           bool
+	textSeq          int
+	openText         string // açık metin parçasının id'si; "" = yok
+	started          bool
+	sawAnswerOrError bool
+	sawDone          bool
 	// messageID — `start` parçasının messageId'si (v0.10.1603); "" = yok.
 	messageID string
 }
@@ -157,16 +157,18 @@ func (t *Translator) delta(m map[string]any) []Part {
 }
 
 // retract — açık segmenti kapatıp geri alır (data-reset); açık yoksa boş.
+// v0.10.1606: parça TAM OLARAK {"type":"data-reset","data":{"textId":<id>}}
+// — kendi `id`'si yok: hiçbir tüketici reset parçasını uzlaştırmıyor (her
+// reset tekil olay, öncekinin yerine geçmez), providerMetadata yok.
 func (t *Translator) retract() []Part {
 	if t.openText == "" {
 		return nil
 	}
 	target := t.openText
 	t.openText = ""
-	t.resetSeq++
 	return []Part{
 		{"type": "text-end", "id": target},
-		{"type": "data-reset", "id": "r" + strconv.Itoa(t.resetSeq), "data": map[string]any{"target": target}},
+		{"type": "data-reset", "data": map[string]any{"textId": target}},
 	}
 }
 
