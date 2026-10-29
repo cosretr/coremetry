@@ -383,7 +383,18 @@ func (s *Store) AttachProblemToIncidentWith(ctx context.Context, p Problem, np N
 		`SELECT incident_id FROM incident_problems FINAL WHERE problem_id = ? LIMIT 1`, p.ID)
 	var existingID string
 	if err := row.Scan(&existingID); err == nil && existingID != "" {
-		return s.GetIncident(ctx, existingID)
+		// v0.10.1580 — bağ yalnız incident çözülmemişse yeniden kullanılır.
+		// Sabit kimlikli aile (anomaly-auto:, anomaly-cluster: …) yeniden
+		// açıldığında bağ ÇÖZÜLMÜŞ incident'ı gösterebilir; o zaman kural
+		// 2/3/yeni incident'a düşülür ve aşağıdaki bağ yazımı (yeni version)
+		// eski bağın yerini alır. Çözülmüş incident yeniden AÇILMAZ.
+		inc, err := s.GetIncident(ctx, existingID)
+		if err != nil {
+			return nil, err
+		}
+		if reuseIncidentBinding(inc) {
+			return inc, nil
+		}
 	}
 
 	// Rule 2: same service, ignore severity. Multiple severity
@@ -516,6 +527,13 @@ func (s *Store) AttachProblemToIncidentWith(ctx context.Context, p Problem, np N
 		RefID:      p.ID,
 	})
 	return &inc, nil
+}
+
+// reuseIncidentBinding — SAF (v0.10.1580): kural 1'in mevcut bağı
+// döndürme koşulu. Satırı okunamayan (silinmiş) ya da çözülmüş incident'a
+// bağ yeniden kullanılmaz.
+func reuseIncidentBinding(inc *Incident) bool {
+	return inc != nil && inc.Status != "resolved"
 }
 
 // isKnownSeverity — SAF (v0.10.802): yalnız üç bilinen seviye; şiddet
