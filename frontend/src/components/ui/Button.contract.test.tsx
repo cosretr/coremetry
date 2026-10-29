@@ -246,7 +246,10 @@ describe('Button — loading genişlik koruması (v0.10.919)', () => {
   });
 
   it('CSS: etiket opacity ile gizlenir (visibility DEĞİL — erişilebilir ad kalır), spinner ortalanır', () => {
-    const css = readFileSync(resolve(__dirname, '..', '..', 'styles', 'globals.css'), 'utf8');
+    // v0.10.1611 — öğe kuralları `:where(:not([data-slot]))` korumasını taşır
+    // (özgüllük 0, shadcn öğelerini dışlar; tokens.pin çiviliyor) — burada
+    // korumasız taban seçiciyle okunur.
+    const css = readFileSync(resolve(__dirname, '..', '..', 'styles', 'globals.css'), 'utf8').split(':where(:not([data-slot]))').join('');
     expect(css).toMatch(/button\.is-loading \{ position: relative; \}/);
     const label = /button\.is-loading > \.row \{([^}]*)\}/.exec(css);
     expect(label?.[1]).toMatch(/opacity: 0/);
@@ -288,7 +291,7 @@ describe('Button — icons and passthrough', () => {
 describe('MB3 — loading görünürlüğü', () => {
   it('aria-busy istisnası CSS\'te tanımlı', () => {
     const css = readFileSync(
-      resolve(__dirname, '..', '..', 'styles', 'globals.css'), 'utf8');
+      resolve(__dirname, '..', '..', 'styles', 'globals.css'), 'utf8').split(':where(:not([data-slot]))').join(''); // v0.10.1611 data-slot koruması
     const SEL = 'button[aria-busy=' + '"true"]:disabled';
     const m = new RegExp(`${SEL.replace(/[[\]]/g, m => '\\' + m)}\\s*\\{[^}]*opacity:\\s*1`).exec(css);
     expect(m, 'yüklenen buton hâlâ %40 opaklıkta soluyor').not.toBeNull();
@@ -296,7 +299,7 @@ describe('MB3 — loading görünürlüğü', () => {
 
   it('taban solma kuralı hâlâ var (istisna hâlâ gerekli)', () => {
     const css = readFileSync(
-      resolve(__dirname, '..', '..', 'styles', 'globals.css'), 'utf8');
+      resolve(__dirname, '..', '..', 'styles', 'globals.css'), 'utf8').split(':where(:not([data-slot]))').join(''); // v0.10.1611 data-slot koruması
     expect(css.includes('button:disabled { opacity: .4;')).toBe(true);
   });
 });

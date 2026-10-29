@@ -34,7 +34,9 @@ const SIDEBAR = block(/\[data-theme="redhat"\] #sidebar\s*\{([\s\S]*?)\n\}/);
 function rulesFor(selector: string): string[] {
   const out: string[] = [];
   for (const m of CSS.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-    const sels = m[1].split(',').map(s => s.trim());
+    // v0.10.1611 (shadcn Faz 1 R4) — öğe kuralları `:where(:not([data-slot]))`
+    // korumasını taşır (özgüllük 0); taban seçici aynı kuraldır.
+    const sels = m[1].split(',').map(s => s.trim().split(':where(:not([data-slot]))').join(''));
     if (sels.includes(selector)) out.push(m[2]);
   }
   return out;

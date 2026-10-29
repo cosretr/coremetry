@@ -1,0 +1,25 @@
+/* index.css — v0.10.1611 (shadcn Faz 1 R4, plan §2.1 + §12 Q4). TEK CSS
+   girişi (main.tsx; eager tek sahip — v0.9.708 notu geçerli).
+   legacy = bugünkü CSS, en alt katman: Tailwind yardımcıları geçirilmiş
+   sayfalarda `tbody td {…}` gibi eski kuralları yener. Katman İÇİNDE sıra
+   bugünkü TARAYICI sırası: uPlot.min.css → globals.css (ölçüldü: R3
+   build'inde index.html önce charts-*.css'i, sonra index-*.css'i bağlıyordu;
+   main.tsx'teki import sırası modül sahipliğiydi, kaskad sırası değil).
+   Eskiler arasındaki her kaskad kararı aynı kalır.
+   chart.css KATMANSIZ: katmansız her kural her katmanı yener, @grafana/ui
+   emotion stilleri (çalışma anı, katmansız) dahil — .u-* ve CorePanel
+   kuralları emotion'a karşı bugünkü gibi yarışır.
+   Preflight YOK: yalnız theme + utilities. source(none): Tailwind depoyu
+   kendiliğinden TARAMAZ — tarasaydı eski sınıf adlarından (`hidden`,
+   `flex`, `table`, `border`, `sticky` …) legacy'yi yenen yardımcılar
+   üretirdi. Kaynaklar R5'te `@source` ile yalnız components/shadcn ve
+   components/coremetry olarak eklenir. */
+@layer legacy, theme, base, components, utilities;
+/* Göreli yol bilerek: çıplak kimlik vite.config.ts'te boş dosyaya alias'lı
+   (grafana'nın importu ikinci, katmansız kopya getirmesin). */
+@import '../../node_modules/uplot/dist/uPlot.min.css' layer(legacy);
+@import './globals.css' layer(legacy);
+@import './chart.css';
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities) source(none);
+@import './tokens.css';

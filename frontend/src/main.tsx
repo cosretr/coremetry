@@ -5,13 +5,13 @@ import { QueryClient, QueryClientProvider, keepPreviousData } from '@tanstack/re
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import App from './App';
 import { getRaw, STORAGE_KEYS } from './lib/storage';
-import './styles/globals.css';
-// uPlot temel CSS'i TEK yerden (v0.9.708): dört preset ayrı ayrı import
+// v0.10.1611 (shadcn Faz 1 R4) — TEK CSS girişi: katman sırası + globals.css
+// + uPlot.min.css + chart.css + Tailwind theme/utilities + tokens.css.
+// uPlot temel CSS'i hâlâ TEK yerden (v0.9.708): dört preset ayrı ayrı import
 // edince rolldown css modülünün sahipliğini @grafana chunk'ına verdi ve
 // preset'ler 198 KB gzip'lik lazy chunk'a statik kenar açtı. Eager tek
-// sahip = index; grafana'nın aynı css importu eager modüle çözülür,
-// ters kenar doğmaz.
-import 'uplot/dist/uPlot.min.css';
+// sahip = index (artık index.css içinden); ters kenar doğmaz.
+import './styles/index.css';
 
 // v0.9.753 (operatör: "752 sonrası Service Overview hataya düşüyor") —
 // deploy sonrası BAYAT CHUNK sınıfı: açık sekmenin eski index.html'i,

@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 import { visualizer } from 'rollup-plugin-visualizer';
 import path from 'path';
 import { renderDefaultTheme } from './src/lib/themeDefault';
@@ -21,6 +22,9 @@ export default defineConfig({
     // geri dönüşü lib/themeDefault.ts DEFAULT_THEME'den yazılır — literal yok.
     // 'pre': Vite'ın %ENV% değiştirmesinden önce; dev ve build ikisi de geçer.
     { name: 'coremetry-default-theme', transformIndexHtml: { order: 'pre', handler: (html: string) => renderDefaultTheme(html) } },
+    // v0.10.1611 (shadcn Faz 1 R4) — Tailwind v4, CSS-first: yapılandırma
+    // src/styles/tokens.css + index.css (source(none)); PostCSS yok.
+    tailwindcss(),
     ...(analyze ? [
       visualizer({
         filename: 'dist/bundle-analysis.html',
@@ -32,7 +36,13 @@ export default defineConfig({
     ] : []),
   ],
   resolve: {
-    alias: { '@': path.resolve(__dirname, 'src') },
+    alias: [
+      { find: '@', replacement: path.resolve(__dirname, 'src') },
+      // v0.10.1611 (shadcn Faz 1 R4) — uPlot temel CSS'i tek kopya, index.css
+      // `layer(legacy)` içinde. @grafana/ui'nin aynı importu boş dosyaya düşer
+      // (ayrıntı: src/styles/uplotGrafanaImport.css).
+      { find: /^uplot\/dist\/uPlot\.min\.css$/, replacement: path.resolve(__dirname, 'src/styles/uplotGrafanaImport.css') },
+    ],
   },
   server: {
     port: 4888,

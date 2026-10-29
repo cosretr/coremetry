@@ -143,6 +143,19 @@ describe('undefinedCssRefs — sessizce düşen token/sınıf referansları', ()
     expect(stripComments(cb)).not.toContain('var(--muted)');
   });
 
+  // v0.10.1611 (shadcn Faz 1 R4) — tanım kaynağı globals.css'ten bölünen
+  // chart.css'i ve shadcn adlarını taşıyan tokens.css'i de kapsıyor: TSX'teki
+  // var(--status-*) / var(--series-*) tanımlı sayılır, taşınan .u-*/
+  // .cp-legend-scroll sınıfları tanımlı kalır. Tarama src/**.css'in tamamı;
+  // bu iddia o kapsamın bu iki dosyayı gerçekten içerdiğini çiviler.
+  it('tanım kaynakları tokens.css ve chart.css\'i içeriyor', () => {
+    const css = ALL.filter(p => p.endsWith('.css')).map(rel);
+    expect(css).toEqual(expect.arrayContaining(['styles/globals.css', 'styles/tokens.css', 'styles/chart.css']));
+    expect(definedTokens.has('--status-critical-fg')).toBe(true);
+    expect(definedTokens.has('--series-1')).toBe(true);
+    expect(definedClasses.has('cp-legend-scroll')).toBe(true);
+  });
+
   it('token izin listesi yok — çıplak var() muafiyeti kabul edilmiyor', () => {
     // Sınıf tarafının izin listesi var (öksüzler zararsız), token tarafının
     // YOK ve olmamalı: tanımsız bir renk/ölçü token'ı her zaman görünür bir

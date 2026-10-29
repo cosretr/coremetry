@@ -265,7 +265,8 @@ describe('v0.10.1319 K1 — sayfa özel çiviler', () => {
 
 // ── C) CSS ────────────────────────────────────────────────────────────
 describe('v0.10.1319 K1 — CSS yuva kuralları', () => {
-  const css = read('styles/globals.css').replace(/\/\*[\s\S]*?\*\//g, '');
+  // v0.10.1611 — öğe kuralları `:where(:not([data-slot]))` korumalı; taban seçiciyle oku.
+  const css = read('styles/globals.css').replace(/\/\*[\s\S]*?\*\//g, '').split(':where(:not([data-slot]))').join('');
   const rule = (sel: string) => {
     const i = css.indexOf(sel + ' {');
     return i < 0 ? '' : css.slice(i, css.indexOf('}', i));
@@ -305,7 +306,8 @@ describe('v0.10.1319 K1 — CSS yuva kuralları', () => {
 // yuvadaki md buton taban `button` metriklerini (5px 14px / 13px) giyer,
 // filtre barı butonları birebir eskisi gibi küçülür.
 describe('v0.10.1322 — yoğunluk: eylem yuvası md kalıyor', () => {
-  const css = read('styles/globals.css').replace(/\/\*[\s\S]*?\*\//g, '');
+  // v0.10.1611 — öğe kuralları `:where(:not([data-slot]))` korumalı; taban seçiciyle oku.
+  const css = read('styles/globals.css').replace(/\/\*[\s\S]*?\*\//g, '').split(':where(:not([data-slot]))').join('');
   const PHONE = css.indexOf('@media (max-width: 640px)');
   // Taban katmandaki (telefon katmanından önce) kurallar: [seçiciler, gövde].
   const baseRules = (): Array<{ sels: string[]; body: string }> => {

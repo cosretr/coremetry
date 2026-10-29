@@ -226,3 +226,22 @@ describe('mK6 token tanımları', () => {
     }
   });
 });
+
+// v0.10.1611 (shadcn Faz 1 R4) — kapsam globals.css'ten bölünen iki dosyaya
+// genişledi. chart.css: uPlot/CorePanel kuralları (globals'tan taşındı) —
+// tema bloğu YOK, dolayısıyla hiçbir literal meşru değil. tokens.css:
+// shadcn adları globals'a REFERANS; tek literal evi --series-N aynası
+// (lib/chartFmt.ts SERIES_PALETTES, tokens.pin eşitliği çiviliyor).
+describe('colorLeaks — chart.css ve tokens.css', () => {
+  const read = (f: string) => stripComments(readFileSync(resolve(__dirname, f), 'utf8'));
+  it('chart.css kural gövdelerinde renk literali yok', () => {
+    const leaks = read('chart.css').split('\n').map((t, i) => ({ line: i + 1, t })).filter(l => LEAK.test(l.t));
+    expect(leaks).toEqual([]);
+  });
+  it('tokens.css literali yalnız --series-N bildirimi', () => {
+    const leaks = read('tokens.css').split('\n')
+      .map((t, i) => ({ line: i + 1, t: t.replace(/--series-\d:\s*#[0-9a-f]{6};/g, '') }))
+      .filter(l => LEAK.test(l.t));
+    expect(leaks).toEqual([]);
+  });
+});

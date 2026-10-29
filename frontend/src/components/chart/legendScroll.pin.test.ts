@@ -8,7 +8,8 @@ const read = (p: string) => readFileSync(new URL(p, import.meta.url), 'utf8');
 describe('lejant: kaydırılabilir tablo + Kafka panellerinde kapalı', () => {
   it('lejant tablosu sabit yükseklikli kaydırma kabında', () => {
     expect(read('./PanelLegend.tsx')).toContain('<div className="cp-legend-scroll">');
-    const css = read('../../styles/globals.css');
+    // v0.10.1611 — kural katmansız chart.css'e taşındı (shadcn Faz 1 R4, §12 Q4).
+    const css = read('../../styles/chart.css');
     expect(css).toMatch(/\.cp-legend-scroll \{ overflow: auto; max-height: \d+px; \}/);
     expect(css).toContain('.cp-legend-scroll thead th { position: sticky; top: 0;');
   });

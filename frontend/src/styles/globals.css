@@ -620,39 +620,42 @@ code, pre, .mono { font-family: var(--font-mono); font-size: 12px; } /* v0.10.93
   border-bottom: 1px solid var(--border);
 }
 
-/* v0.10.1423 — alan zemini --field-bg (açık temalarda beyaz, dark'ta --bg2). */
-input, select {
+/* v0.10.1423 — alan zemini --field-bg (açık temalarda beyaz, dark'ta --bg2).
+   v0.10.1611 (shadcn Faz 1 R4, karar c) — öğe kuralları `:where(:not([data-slot]))`
+   ile shadcn öğelerini (data-slot taşıyan) DIŞARIDA bırakır; :where()
+   özgüllüğe 0 katar, mevcut kurallar aynı ağırlıkta kalır. */
+input:where(:not([data-slot])), select:where(:not([data-slot])) {
   background: var(--field-bg); border: 1px solid var(--border); color: var(--text);
   border-radius: var(--radius-sm); padding: 5px 10px; font-size: 13px; outline: none;
   transition: border-color .15s; font-family: inherit;
 }
-input:focus, select:focus { border-color: var(--focus); }
+input:where(:not([data-slot])):focus, select:where(:not([data-slot])):focus { border-color: var(--focus); }
 select option { background: var(--field-bg); }
 /* textarea'nın taban kuralı yoktu (UA zemini); yalnız zemin + metin rengi
    alanlarla hizalanır — dolgu/kenar/yazı tipi çağıranlarda kalır. */
-textarea { background: var(--field-bg); color: var(--text); }
-button {
+textarea:where(:not([data-slot])) { background: var(--field-bg); color: var(--text); }
+button:where(:not([data-slot])) {
   background: var(--accent); color: var(--on-accent); border: none;
   border-radius: var(--radius-sm); padding: 5px 14px; font-size: 13px; cursor: pointer;
   transition: background .15s; font-family: inherit;
 }
-button:hover:not(:disabled) { background: var(--accent-hover); }
-button:disabled { opacity: .4; cursor: not-allowed; }
+button:where(:not([data-slot])):hover:not(:disabled) { background: var(--accent-hover); }
+button:where(:not([data-slot])):disabled { opacity: .4; cursor: not-allowed; }
 /* MB3 (v0.9.925) — YÜKLENEN buton solmaz. `Button` atomu `loading`
    iken `disabled` de basıyor (tıkı yutmak için), dolayısıyla yukarıdaki
    kural spinner'ı %40 opaklıkta çiziyordu: tam da "çalışıyorum" demesi
    gereken anda gösterge en zor görüleni oluyordu. `aria-busy` iki
    durumu ayırt eden tek işaret — "kullanılamaz" ile "şu an çalışıyor"
    aynı şey değil ve aynı görünmemeli. */
-button[aria-busy="true"]:disabled { opacity: 1; cursor: wait; }
+button:where(:not([data-slot]))[aria-busy="true"]:disabled { opacity: 1; cursor: wait; }
 /* v0.10.919 — yüklenen buton GENİŞLİK KORUR. Etiket yerinde kalır ama
    görünmez (`opacity`, `visibility` DEĞİL: erişilebilir ad düşmesin);
    spinner üstüne ortalanır. Eskiden spinner etiketin SOLUNA ekleniyordu
    ve ikonsuz buton istek anında 18px büyüyordu. Ortalama `inset + margin
    auto` ile — transform yok (spin animasyonu transform'u zaten kullanıyor). */
-button.is-loading { position: relative; }
-button.is-loading > .row { opacity: 0; }
-button.is-loading > .spinner { position: absolute; inset: 0; margin: auto; }
+button:where(:not([data-slot])).is-loading { position: relative; }
+button:where(:not([data-slot])).is-loading > .row { opacity: 0; }
+button:where(:not([data-slot])).is-loading > .spinner { position: absolute; inset: 0; margin: auto; }
 /* a11y (v0.7.86) — a visible keyboard focus ring on EVERY focusable
    element, not just <button>. Operators who drive by keyboard (and
    screen-reader users) need to see where focus is on links, nav items,
@@ -2288,103 +2291,6 @@ a.dep-prob-mark:hover { text-decoration: none; }
    source order is the only thing overriding its translateY(-50%). The
    -100% pulls the label's RIGHT edge to the bar's start. */
 .wf-bar-label-outside-left { transform: translate(-100%, -50%); }
-
-/* uPlot legend overrides — chart panels render a legend table
-   below the canvas listing each series + its live value at the
-   cursor. uPlot's default font sizes are tuned for standalone
-   charts; in a packed dashboard the legend looked oversized
-   compared to the chart itself. Tightened typography +
-   row padding to match the rest of the metric-panel chrome.
-   `font-feature-settings: tnum` keeps the live values aligned
-   when the digit count fluctuates (12.34 → 1.23k). */
-.u-legend {
-  font-size: 10px !important;
-  font-family: var(--font-mono);
-  font-feature-settings: 'tnum' 1;
-  color: var(--text2);
-  padding: 4px 0 0 0;
-}
-.u-legend th, .u-legend td {
-  padding: 1px 8px 1px 0 !important;
-  font-weight: 500 !important;
-}
-.u-legend .u-marker {
-  width: 8px !important;
-  height: 8px !important;
-  border-radius: 2px !important;
-  margin-right: 4px;
-}
-.u-legend .u-series:first-child {
-  /* Hide the x-axis row in the legend — its label is "Time"
-     which is implied by the axis itself; showing it eats a
-     row of vertical space and adds no information. */
-  display: none;
-}
-/* Grafana-style click-to-isolate: rows act as buttons. Cursor
-   hint + subtle hover bg communicate the affordance; the JS
-   handler in MultiLineChart wires the actual show/hide. */
-.u-legend tr.u-series {
-  cursor: pointer;
-  user-select: none;
-}
-.u-legend tr.u-series:hover {
-  background: var(--bg3);
-}
-.u-legend tr.u-series.u-off {
-  opacity: 0.45;
-}
-/* ── By-operation RED legends → Grafana stats table ──────────────────────
-   MultiLineChart renders Last/Min/Max/Avg (over the visible range) via
-   uPlot's multi-value `series.values`. Scope to .mlc-chart so other uPlot
-   surfaces (heatmap, histograms) keep their single-column legend. The
-   swatch + name column stays left; the numeric stat columns right-align
-   with tabular figures so they read as a column of numbers. */
-.mlc-chart .u-legend { width: 100%; }
-.mlc-chart .u-legend th { text-align: left; }
-.mlc-chart .u-legend td.u-value {
-  text-align: right;
-  min-width: 52px;
-  color: var(--text);
-}
-.mlc-chart .u-legend tr.u-series.u-off td.u-value { color: var(--text3); }
-
-/* ── Lejant LİSTE modu (v0.9.541) ────────────────────────────────────────
-   Operatör (mockup C + otomatik seçim): pod grafiklerinde lejant tam pod
-   adlarıyla dikey tabloydu — 40 pod = 40 satır, grafik sayfanın çok altına
-   iniyordu. Grafana yoğunluğunu veren şey dolgu DEĞİL yatay lejant;
-   40-serilik mockup kıyası dolgunun kalabalıkta alttaki serileri gizlediğini
-   gösterdi, o yüzden dolgu bilinçli kapalı kalıyor.
-
-   Yaklaşım: uPlot'un KENDİ <table> lejantını yerinde tutup display ile
-   yeniden akıtıyoruz. <tr>'ler DOM'da kalıyor, dolayısıyla tıkla-izole
-   işleyicisi, .u-off opaklığı ve legendVisibility persist katmanı hiç
-   değişmeden çalışıyor — JS'e dokunmadan yalnız düzen değişiyor.
-
-   Sayı sütunları (Last/Min/Max/Avg) burada gizlenir: kalabalıkta zaten
-   okunmuyorlardı ve satır başına ~200px yiyorlardı. Değerler tooltip'te
-   ve ≤6 serili grafiklerin tablo modunda duruyor. Mod seçimi
-   lib/chart/legendMode (tek eşik, iki bileşen). */
-.mlc-legend-list .u-legend,
-.mlc-legend-list .u-legend tbody {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 3px 14px;
-  width: 100%;
-}
-.mlc-legend-list .u-legend tr.u-series {
-  display: inline-flex;
-  align-items: center;
-  max-width: 240px;
-}
-.mlc-legend-list .u-legend th {
-  display: inline-flex;
-  align-items: center;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-/* Sayı sütunları liste modunda yok. */
-.mlc-legend-list .u-legend td.u-value { display: none !important; }
 
 /* ── Dashboard row header (Grafana-style collapsible groups) ──────────── */
 .dash-row-header {
@@ -6413,11 +6319,6 @@ a.idchip__val:hover { color: var(--accent2); text-decoration: underline; }
 .mtp-kafka-h { font-size: var(--fs-md); font-weight: 600; margin: 14px 0 8px; }
 .mtp-kafka-lag--alarm { border-left: 3px solid var(--warn); padding-left: 10px; }
 .mtp-span-h { color: var(--text3); border-top: 1px solid var(--border); padding-top: 14px; margin-top: 22px; }
-
-/* v0.10.1547 — grafik lejantı Grafana tablo lejantı gibi: sabit yükseklik,
-   kaydırma, yapışkan başlık (çok seri panel boyunu uzatmaz). */
-.cp-legend-scroll { overflow: auto; max-height: 184px; }
-.cp-legend-scroll thead th { position: sticky; top: 0; z-index: 1; background: var(--bg1); }
 
 /* v0.10.1555 — span attribute satırında "bu değerle trace ara / hariç tut"
    eylemleri: soluk, satır üzerinde ya da odakta belirgin. */

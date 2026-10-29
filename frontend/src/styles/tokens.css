@@ -1,0 +1,142 @@
+/* tokens.css — v0.10.1611 (shadcn Faz 1 R4, plan §2.1-2.3).
+   shadcn/Tailwind adlarının TEK kaynağı, globals.css'e REFERANSLA: yeni
+   renk yok (hex yalnız --series-*'ta; lib/chartFmt.ts SERIES_PALETTES'in
+   aynası, tokens.pin eşitliği çiviliyor). Değerler globals.css'in üç tema
+   bloğunda yaşamaya devam eder.
+
+   Seçici `:root, [data-theme]`: var()'a referans veren özel özellik
+   bildirildiği öğede hesaplanır ve DEĞER olarak miras alınır; bir
+   `<div data-theme="light">` kabı (/design) --background'ı ancak orada
+   yeniden bildirilirse yeniden çözer.
+
+   shadcn `--accent`/`--accent-foreground` BİLDİRİLMEZ: Coremetry --accent
+   (birincil mavi, ~300 kural) ile çakışır. shadcn'in "accent"i (menü
+   öğesi / ghost buton hover zemini) yalnız Tailwind düzeyinde eşlenir
+   (--color-accent ← --bg3). Hata METNİ --status-critical-fg'dir,
+   `text-destructive` değil (--destructive bir DOLGU: --err-solid).
+
+   --muted-foreground ← --text2 (§12 Q10): --text2 ve --text3 üç temada da
+   --bg0/--bg1/--bg2 üstünde ≥ 4.5:1 geçiyor (tokens.pin hesaplıyor);
+   ikisi de geçtiği için plan §2.2 varsayılanı (--text2, daha yüksek
+   karşıtlık) seçildi. */
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *, html:not([data-theme]), html:not([data-theme]) *));
+
+:root, [data-theme] {
+  --background: var(--bg0);
+  --foreground: var(--text);
+  --card: var(--bg1);
+  --card-foreground: var(--text);
+  --popover: var(--bg1);
+  --popover-foreground: var(--text);
+  --primary: var(--accent);
+  --primary-foreground: var(--on-accent);
+  --secondary: var(--bg2);
+  --secondary-foreground: var(--text);
+  --muted: var(--bg2);
+  --muted-foreground: var(--text2);
+  --destructive: var(--err-solid);
+  --destructive-foreground: var(--on-accent);
+  --input: var(--border-control);
+  --ring: var(--focus);
+
+  --status-ok-fg: var(--ok);
+  --status-ok-bg: var(--ok-bg);
+  --status-ok-border: var(--ok);
+  --status-warn-fg: var(--warn);
+  --status-warn-bg: var(--warn-bg);
+  --status-warn-border: var(--warn);
+  --status-warn-solid: var(--warn-solid);
+  --status-critical-fg: var(--err);
+  --status-critical-bg: var(--err-bg);
+  --status-critical-border: var(--err);
+  --status-critical-solid: var(--err-solid);
+  --status-info-fg: var(--info);
+  --status-info-bg: var(--info-bg);
+  --status-unknown-fg: var(--text2);
+  --status-unknown-bg: var(--bg3);
+  --status-unknown-border: var(--border);
+  --status-fatal-fg: var(--fatal);
+}
+
+:root, [data-theme="dark"] {
+  --series-1: #288dd4; --series-2: #06d8d9; --series-3: #cb4f73; --series-4: #b5b614;
+  --series-5: #95b6fe; --series-6: #d76f04; --series-7: #ac78d2; --series-8: #fca0e8;
+}
+[data-theme="light"], [data-theme="redhat"] {
+  --series-1: #045c93; --series-2: #0c9999; --series-3: #921545; --series-4: #898905;
+  --series-5: #567cd3; --series-6: #d46e07; --series-7: #7b489e; --series-8: #bf68ae;
+}
+
+/* `inline`: yardımcı sınıflar değeri (var(--radius-sm) …) GÖMER.
+   `reference`: bu bloktaki değişkenler :root'a HİÇ yazılmaz. İkisi birlikte
+   ŞART (ölçüldü, Tailwind 4.3.3): yalnız `inline` iken Tailwind
+   `--radius-sm: var(--radius-sm)` gibi KENDİNE referans veren bildirimi
+   `@layer theme` içinde :root'a yazıyor — theme katmanı legacy'nin üstünde,
+   döngüsel değer geçersiz → Coremetry'nin her --radius-sm/--shadow-sm/
+   --font-mono kullanımı düşerdi. Ad alanlarını silmek Tailwind paletini de
+   kaldırır: "yeni renk yok" temanın kendisiyle zorlanır. */
+@theme inline reference {
+  --color-*: initial;
+  --radius-*: initial;
+  --shadow-*: initial;
+  --font-*: initial;
+  --text-*: initial;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--bg3);
+  --color-accent-foreground: var(--text);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-field: var(--field-bg);
+
+  --color-status-ok: var(--status-ok-fg);
+  --color-status-ok-bg: var(--status-ok-bg);
+  --color-status-ok-border: var(--status-ok-border);
+  --color-status-warn: var(--status-warn-fg);
+  --color-status-warn-bg: var(--status-warn-bg);
+  --color-status-warn-border: var(--status-warn-border);
+  --color-status-warn-solid: var(--status-warn-solid);
+  --color-status-critical: var(--status-critical-fg);
+  --color-status-critical-bg: var(--status-critical-bg);
+  --color-status-critical-border: var(--status-critical-border);
+  --color-status-critical-solid: var(--status-critical-solid);
+  --color-status-info: var(--status-info-fg);
+  --color-status-info-bg: var(--status-info-bg);
+  --color-status-unknown: var(--status-unknown-fg);
+  --color-status-unknown-bg: var(--status-unknown-bg);
+  --color-status-unknown-border: var(--status-unknown-border);
+  --color-status-fatal: var(--status-fatal-fg);
+
+  --radius-xs: var(--radius-xs);
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius);
+  --radius-lg: var(--radius-lg);
+
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-pop: var(--shadow-pop);
+  --shadow-modal: var(--shadow-modal);
+
+  --font-mono: var(--font-mono);
+
+  --text-xs: var(--fs-xs);
+  --text-sm: var(--fs-sm);
+  --text-base: var(--fs-md);
+  --text-lg: var(--fs-lg);
+  --text-xl: var(--fs-xl);
+}

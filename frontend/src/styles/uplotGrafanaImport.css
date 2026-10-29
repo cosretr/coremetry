@@ -1,0 +1,7 @@
+/* uplotGrafanaImport.css — v0.10.1611 (shadcn Faz 1 R4). BİLEREK BOŞ.
+   @grafana/ui Plot.mjs `import 'uplot/dist/uPlot.min.css'` yapar; o
+   kimlik vite.config.ts resolve.alias ile buraya çözülür. uPlot'un temel
+   CSS'i TEK kopya olarak index.css'te `layer(legacy)` içinde, globals.css'in
+   ARDINDAN yüklenir (bugünkü main.tsx sırası). Alias olmasa grafana'nın
+   importu ikinci, KATMANSIZ bir kopya getirirdi (tembel grafana chunk'ında)
+   ve o kopya her eski kuralı yenerdi. */
