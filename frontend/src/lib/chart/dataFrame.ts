@@ -46,10 +46,13 @@ import type { SpanMetricSeries } from '@/lib/types';
 // veriyoruz. isDark, data-theme'den okunur; resolveVar zaten bu deseni
 // kullanıyor.
 // ---------------------------------------------------------------------------
+// v0.10.1595: redhat açık bir temadır; CSS'te yalnız light/redhat açık blok
+// tanımlar, başka her değer :root (dark) token'larına düşer.
 export function chartTheme(): GrafanaTheme2 {
-  const isDark =
-    typeof document !== 'undefined' &&
-    document.documentElement.getAttribute('data-theme') !== 'light';
+  const attr = typeof document !== 'undefined'
+    ? document.documentElement.getAttribute('data-theme')
+    : 'light'; // document yoksa (node testleri) eski davranış: light
+  const isDark = attr !== 'light' && attr !== 'redhat';
   return createTheme({ colors: { mode: isDark ? 'dark' : 'light' } });
 }
 
