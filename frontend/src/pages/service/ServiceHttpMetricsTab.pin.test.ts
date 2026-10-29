@@ -8,7 +8,7 @@ const read = (p: string) => readFileSync(resolve(__dirname, p), 'utf8');
 describe('HTTP Metrics sekmesi', () => {
   it('Service sekme şeridinde ve render ediliyor', () => {
     const svc = read('../Service.tsx');
-    expect(svc).toContain("{ key: 'http',       label: 'HTTP Metrics', hint: httpHint }"); // v0.10.1429 — aile rozeti (gRPC / +gRPC)
+    expect(svc).toContain("{ key: 'http',       label: 'HTTP/RPC', hint: httpHint }"); // v0.10.1429 — aile rozeti (gRPC / +gRPC); v0.10.1560 — ad HTTP/RPC
     // v0.10.1377 — env + Topbar cluster kapsamı sekmeye iner (VM ortam süzgeci).
     expect(svc).toContain("{tab === 'http' && <ServiceHttpMetricsTab service={svc} range={range} env={env} cluster={scopeCluster} />}");
   });

@@ -662,7 +662,7 @@ export default function EndpointsPage() {
     // v0.10.1359 — metrik kipi servis ister (filo geneli PromQL yok).
     metricMode && !service ? {
       kind: 'empty',
-      message: 'Metrik kipinde servis seçin — liste, seçili servisin HTTP Metrics sekmesiyle aynı PromQL\'i okur (VictoriaMetrics, method + route başına).',
+      message: 'Metrik kipinde servis seçin — liste, seçili servisin HTTP/RPC sekmesiyle aynı PromQL\'i okur (VictoriaMetrics, method + route başına).',
     }
     : rows === undefined ? { kind: 'loading' }
     : rows === null ? {
@@ -744,7 +744,7 @@ export default function EndpointsPage() {
             aria-label="Veri kaynağı"
             title={src === 'metric'
               // v0.10.1359
-              ? 'Kaynak: metrik — HTTP Metrics sekmesinin PromQL\'i (VictoriaMetrics, pencere increase[W]); servis seçimi gerekir, satır = method + route; örneklemeden bağımsız tam sayım; p90 yok'
+              ? 'Kaynak: metrik — HTTP/RPC sekmesinin PromQL\'i (VictoriaMetrics, pencere increase[W]); servis seçimi gerekir, satır = method + route; örneklemeden bağımsız tam sayım; p90 yok'
               : 'Kaynak: span — spanmetrics_1m (izlerden türetilmiş); collector örnekliyorsa eksik sayar'}>
             <option value="span">Kaynak: span</option>
             <option value="metric">Kaynak: metrik</option>
@@ -800,7 +800,7 @@ export default function EndpointsPage() {
           {/* v0.10.1359 — metrik kipinde devre dışı: satır greni sekmeyle aynı (method, route). */}
           <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, cursor: metricMode ? 'not-allowed' : 'pointer', opacity: metricMode ? 0.6 : undefined }}
             title={metricMode
-              ? 'Metrik kipinde şekle göre gruplama yok: satırlar HTTP Metrics sekmesi gibi method + route (http_route zaten şablonlu). Gruplamak için Kaynak: span.'
+              ? 'Metrik kipinde şekle göre gruplama yok: satırlar HTTP/RPC sekmesi gibi method + route (http_route zaten şablonlu). Gruplamak için Kaynak: span.'
               : 'Group endpoints by normalized shape: paths carrying IDs (/orders/8421) collapse into one stable group (/orders/:id). p99/error-rate stay exact.'}>
             <input type="checkbox"
               checked={bySignature}
@@ -1136,7 +1136,7 @@ export default function EndpointsPage() {
               <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text3)' }}>
                 {/* v0.10.1359 — sayılar HTTP Metrics sekmesinin AYNI PromQL'i. */}
                 Path = <code>http_route</code>, Method = <code>http_request_method</code> etiketi
-                (VictoriaMetrics, OTel HTTP server histogramı). Sayılar Service → HTTP Metrics
+                (VictoriaMetrics, OTel HTTP server histogramı). Sayılar Service → HTTP/RPC
                 sekmesinin "Endpoint Detayları" tablosu ve endpoint detay karolarıyla aynı
                 PromQL: pencere <code>increase[W]</code>; yüzdelikler penceredeki kova artışlarından
                 (<code>histogram_quantile</code>). En çok çağrılan ilk {fmtNum(metricN)} satır.

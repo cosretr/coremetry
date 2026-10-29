@@ -854,7 +854,7 @@ function TabStrip({ tab, onChange, opCount, httpHint }: {
     { key: 'details',    label: 'Details' },
     { key: 'infra',      label: 'Infrastructure' },
     { key: 'gitops',     label: 'GitOps' }, // v0.10.981
-    { key: 'http',       label: 'HTTP Metrics', hint: httpHint }, // v0.10.1244; v0.10.1429 aile rozeti
+    { key: 'http',       label: 'HTTP/RPC', hint: httpHint }, // v0.10.1244; v0.10.1429 aile rozeti; v0.10.1560 ad HTTP/RPC (operatör: gRPC de bu sekmede)
     { key: 'messaging',  label: 'Messaging' }, // v0.10.1536 — Kafka istemci metrikleri (Grafana panosu paritesi)
     { key: 'topology',   label: 'Topology' },
     { key: 'logs',       label: 'Logs' },

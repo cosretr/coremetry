@@ -270,7 +270,7 @@ func (s *Server) readServiceHTTPRED(ctx context.Context, rd redFamilyReader, isV
 		}
 	}
 	if fr.Both {
-		res.Notes = append(res.Notes, "servis gRPC sunucu histogramı da yazıyor ("+redFamilies[1].Label+" RED'i HTTP ile TOPLANMADI; HTTP çizildi — gRPC bölümü Service → HTTP Metrics sekmesinde)")
+		res.Notes = append(res.Notes, "servis gRPC sunucu histogramı da yazıyor ("+redFamilies[1].Label+" RED'i HTTP ile TOPLANMADI; HTTP çizildi — gRPC bölümü Service → HTTP/RPC sekmesinde)")
 	}
 	qs := svcREDFamilyQueries(fam, service, sr.Label, envMatcher, status, metricChartWinS(step))
 	run := func(q svcHTTPREDQuery) svcHTTPREDChart {
@@ -348,14 +348,14 @@ func svcHTTPREDNameSeries(in []mcptools.EvChartSeries) []mcptools.EvChartSeries 
 // svcHTTPREDHeadTR — SAF: kanıt bloğunun başlığı (kaynak açık).
 func svcHTTPREDHeadTR(service string, rangeS int64, step int) string {
 	return fmt.Sprintf("SERVİS HTTP RED GRAFİKLERİ (%s, son %s; kaynak: VictoriaMetrics, örneklenmemiş — OTel collector'ın HTTP sunucu histogramı "+
-		"http_server_request_duration_seconds_*, Service → HTTP Metrics sekmesiyle aynı metrik; adım %ds):\n", service, fmtAgoTR(rangeS), step)
+		"http_server_request_duration_seconds_*, Service → HTTP/RPC sekmesiyle aynı metrik; adım %ds):\n", service, fmtAgoTR(rangeS), step)
 }
 
 // svcGRPCREDHeadTR — SAF (v0.10.1429): gRPC ailesinin kanıt başlığı; metrik
 // adı ve hata kümesi açık (anlatım "5xx" demesin).
 func svcGRPCREDHeadTR(fam redFamily, service string, rangeS int64, step int) string {
 	return fmt.Sprintf("SERVİS gRPC RED GRAFİKLERİ (%s, son %s; kaynak: VictoriaMetrics, örneklenmemiş — OTel gRPC sunucu histogramı "+
-		"%s_* (%s), Service → HTTP Metrics sekmesinin gRPC bölümüyle aynı metrik; servis HTTP sunucu histogramı yazmıyor; hata = %s; adım %ds):\n",
+		"%s_* (%s), Service → HTTP/RPC sekmesinin gRPC bölümüyle aynı metrik; servis HTTP sunucu histogramı yazmıyor; hata = %s; adım %ds):\n",
 		service, fmtAgoTR(rangeS), fam.names(), fam.Probe, fam.errorNoteTR(), step)
 }
 

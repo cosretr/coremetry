@@ -136,7 +136,7 @@ describe('Service Overview metrik karoları — pencere değeri (v0.10.1360)', (
     expect(t.sub).toBe('P99 (metrik) · 456 ms');
     expect(t.val).not.toContain('50');
     expect(t.sub).not.toContain('900');
-    expect(t.note).toContain('increase[3600s], HTTP Metrics ile aynı');
+    expect(t.note).toContain('increase[3600s], HTTP/RPC ile aynı');
     expect(t.note).toContain('P50 40 ms');
     // istenen sorgular windowQueries({ app }, W) çıktısının kendisi
     for (const e of windowExprs) expect(m.promql).toContain(e);

@@ -48,7 +48,7 @@ export function MetricREDStrip({ res, windowSec, compare, onToggleCompare, famil
       <Card style={{ marginBottom: 12 }}>
         <Empty icon="!" title={`${family.label} metrikleri okunamadı`}>
           {err.message} — metrik kipi VictoriaMetrics'ten okur
-          ({family.names.count.replace(/_count$/, '_*')}, HTTP Metrics sekmesiyle aynı sorgular).
+          ({family.names.count.replace(/_count$/, '_*')}, HTTP/RPC sekmesiyle aynı sorgular).
         </Empty>
       </Card>
     );

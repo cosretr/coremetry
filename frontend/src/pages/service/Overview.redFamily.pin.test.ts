@@ -16,7 +16,7 @@ describe('Overview RED ailesi (v0.10.1429)', () => {
     expect(src).toContain("`kaynak: metrik (${metricRedQ.data?.source ?? '…'})${familyBadgeSuffix(fam)}`");
     expect(src).toContain('{metricMode && famGrpc && (');
     expect(src).toContain('{metricMode && fam.both && (');
-    expect(src).toContain('gRPC de var → HTTP Metrics');
+    expect(src).toContain('gRPC de var → HTTP/RPC');
   });
   it('throughput kimliği ve kırılım aileden; Response time by rpc.method', () => {
     expect(src).toContain("{ breakdown: famGrpc ? 'rpc_method' : 'route', rateWindow: 180, env: env || undefined, ...famOpt }");

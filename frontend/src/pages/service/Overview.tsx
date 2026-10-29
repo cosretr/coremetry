@@ -896,7 +896,7 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
   // v0.10.1360 — pencere karosu kaynağını, pencereyi ve dört pencere değerini yazar.
   const fmtMs = (v: number | null) => (v == null ? '—' : `${v.toFixed(v < 10 ? 1 : 0)} ms`);
   const rtTileNote = rtFromWindow
-    ? `Kaynak: ${family.names.count.replace(/_count$/, '')} · karolar pencere değeri (increase[${windowRange(ovWinSec)}], HTTP Metrics ile aynı), service_name = ${service}`
+    ? `Kaynak: ${family.names.count.replace(/_count$/, '')} · karolar pencere değeri (increase[${windowRange(ovWinSec)}], HTTP/RPC ile aynı), service_name = ${service}`
       + ` · avg ${fmtMs(ovWin.avgMs)} · P50 ${fmtMs(ovWin.p50Ms)} · P95 ${fmtMs(ovWin.p95Ms)} · P99 ${fmtMs(ovWin.p99Ms)}`
       + (env ? ` · ${httpEnvScopeNote(envScope)?.text ?? 'env süzgeci yok'}` : '') // v0.10.1377
       + '; sparkline ve grafikler adım başına seri'
@@ -1041,7 +1041,7 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
           style={{ fontSize: 11 }} aria-label="RED kaynağı"
           title={metricMode
             // v0.10.1360 — grafik = adım serisi, karo = pencere değeri.
-            ? 'Kaynak: metrik — OTel HTTP server histogramı (VM ya da ClickHouse): grafik serileri adım başına histogram_quantile(rate[180s]); karolar pencere değeri (increase[W], HTTP Metrics ile aynı); Failure rate 5xx; örneklemeden bağımsız'
+            ? 'Kaynak: metrik — OTel HTTP server histogramı (VM ya da ClickHouse): grafik serileri adım başına histogram_quantile(rate[180s]); karolar pencere değeri (increase[W], HTTP/RPC ile aynı); Failure rate 5xx; örneklemeden bağımsız'
             : 'Kaynak: span — giriş span\u2019lerinden (server/consumer) türetilmiş RED; collector örnekliyorsa eksik sayar'}>
           <option value="span">Kaynak: span</option>
           <option value="metric">Kaynak: metrik</option>
@@ -1067,8 +1067,8 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
           </span>
         )}
         {metricMode && fam.both && (
-          <span className="badge b-gray" title="Servis hem HTTP hem gRPC sunucu histogramı yazıyor. Bu karolar HTTP; gRPC RED'i HTTP Metrics sekmesinin gRPC bölümünde (ikisi toplanmaz)">
-            gRPC de var → HTTP Metrics
+          <span className="badge b-gray" title="Servis hem HTTP hem gRPC sunucu histogramı yazıyor. Bu karolar HTTP; gRPC RED'i HTTP/RPC sekmesinin gRPC bölümünde (ikisi toplanmaz)">
+            gRPC de var → HTTP/RPC
           </span>
         )}
         {metricMode && familyUnknownNote(fam) && <span className="badge b-warn" title={familyUnknownNote(fam) ?? ''}>metrik ailesi bilinemedi</span>}
