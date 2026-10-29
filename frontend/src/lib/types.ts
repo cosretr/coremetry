@@ -9376,6 +9376,18 @@ export interface AnomalyCalendarConfig {
   timezone?: string;
 }
 
+// Anomali terfi ayarları (GET/PUT /api/settings/anomaly-promotion).
+// v0.10.1587 — countOnlyMinCount: tabanı olmayan (yalnız sayım) olayların
+// (operasyonda yeni hata, yeni log deseni) terfi sayım tabanı; yok = 20.
+export interface AnomalyPromotionConfig {
+  enabled: boolean;
+  minPeakRatio: number;
+  criticalPeakRatio: number;
+  minSustainedSec: number;
+  minCount: number;
+  countOnlyMinCount?: number;
+}
+
 export interface AnomalySensitivityConfig {
   metrics: Record<string, AnomalyMetricSensitivity>;
   // Açılmak için üst üste ateşlemesi gereken 5-dk bucket sayısı.

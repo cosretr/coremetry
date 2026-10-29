@@ -164,7 +164,13 @@ func TestClassifyTraceOpsBatchExtBaseline(t *testing.T) {
 			if len(got) != 1 || got[0].Kind != tt.wantKind {
 				t.Fatalf("kind=%s bekleniyordu, got=%+v", tt.wantKind, got)
 			}
-			if !nearlyEqual(got[0].Ratio, tt.wantRatio) {
+			// v0.10.1587 — new_error oransız (CountOnlyRatio); tablodaki eski
+			// "oran" ham sayıydı ve CurrentErrors'a eşit kalmalı.
+			if tt.wantKind == "new_error" {
+				if got[0].Ratio != chstore.CountOnlyRatio || float64(got[0].CurrentErrors) != tt.wantRatio {
+					t.Fatalf("new_error: ratio=%v (want 0) count=%d (want %v)", got[0].Ratio, got[0].CurrentErrors, tt.wantRatio)
+				}
+			} else if !nearlyEqual(got[0].Ratio, tt.wantRatio) {
 				t.Fatalf("ratio=%v, beklenen %v", got[0].Ratio, tt.wantRatio)
 			}
 			if got[0].BaselineErrors != tt.wantBase {
@@ -595,7 +601,7 @@ func TestDetectTraceOpsBatchExtBehaviour(t *testing.T) {
 	t.Run("uzun tabanda veri yok (gerçek ilk hata) → new_error", func(t *testing.T) {
 		conn := &fakeTraceOpConn{main: []traceOpBucket{weekly}, ext: map[traceOpPair][2]uint64{}}
 		out, logs := runFakeTraceOps(t, conn, def, 5*time.Minute)
-		if len(conn.extQueries()) != 1 || len(out) != 1 || out[0].Kind != "new_error" || out[0].Ratio != 20 || len(logs) != 0 {
+		if len(conn.extQueries()) != 1 || len(out) != 1 || out[0].Kind != "new_error" || out[0].Ratio != chstore.CountOnlyRatio || out[0].CurrentErrors != 20 || len(logs) != 0 { // v0.10.1587 oransız
 			t.Fatalf("new_error bekleniyordu: %+v log %v", out, logs)
 		}
 	})
@@ -863,7 +869,7 @@ func TestTraceOpBatchExtAgreesWithClickHouse(t *testing.T) {
 	if w := got["orders-batch/worse"]; !nearlyEqual(w.Ratio, 3.5) || w.BaselineErrors != 20 {
 		t.Fatalf("worse: ×%v prev %d, beklenen ×3.5 prev 20", w.Ratio, w.BaselineErrors)
 	}
-	if e := got["orders-batch/escape"]; e.Ratio != 1_000 || e.BaselineErrors != 0 {
+	if e := got["orders-batch/escape"]; e.Ratio != chstore.CountOnlyRatio || e.CurrentErrors != 1_000 || e.BaselineErrors != 0 { // v0.10.1587 oransız
 		t.Fatalf("escape: bugünkü new_error (×1000, prev 0) bekleniyordu: %+v", e)
 	}
 	if c := got["orders-batch/clean-yesterday"]; !nearlyEqual(c.Ratio, 0.025/(10.0/101_000.0)) {

@@ -156,3 +156,33 @@ func TestClassifyTraceOpsOrderAndCap(t *testing.T) {
 		t.Fatalf("50 tavanı uygulanmalıydı, got=%d", len(got))
 	}
 }
+
+// v0.10.1587 — Davis paritesi FAZ 0.5 / B: tabanı olmayan (sayım-yalnız)
+// trace_op olayları oran taşımaz. Belirti: new_error ve pencere-normalize
+// tabanı 0'a yuvarlanan error_spike ham hata SAYISINI ratio'ya yazıyordu;
+// terfide 20 hata "20×" → critical P1.
+func TestClassifyTraceOpsCountOnlyKindsReportZeroRatio(t *testing.T) {
+	const wr = 5.0 / (24 * 60)
+	batch := func(s string) bool { return s == "nightly-batch" }
+	cases := []struct {
+		name      string
+		in        traceOpBucket
+		isBatch   func(string) bool
+		wantKind  string
+		wantRatio float64
+	}{
+		{"new_error", traceOpBucket{Service: "orders-api", Operation: "a", CurErrs: 40, CurCalls: 400}, nil, "new_error", 0},
+		{"taban 0'a yuvarlanan error_spike", traceOpBucket{Service: "orders-api", Operation: "b", CurErrs: 40, CurCalls: 400, BaseErrs: 100}, nil, "error_spike", 0},
+		{"gerçek oranlı error_spike", traceOpBucket{Service: "orders-api", Operation: "c", CurErrs: 200, CurCalls: 1000, BaseErrs: 2880}, nil, "error_spike", 20},
+		{"batch uzun taban mutlak artış → new_error, oransız",
+			traceOpBucket{Service: "nightly-batch", Operation: "d", CurErrs: 100, CurCalls: 200, ExtErrs: 1, ExtCalls: 1000, BaseCalls: 50}, batch, "new_error", 0},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := classifyTraceOps([]traceOpBucket{c.in}, wr, c.isBatch, 1)
+			if len(got) != 1 || got[0].Kind != c.wantKind || got[0].Ratio != c.wantRatio {
+				t.Fatalf("got %+v, want %s / %v", got, c.wantKind, c.wantRatio)
+			}
+		})
+	}
+}

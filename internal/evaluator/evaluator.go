@@ -1291,6 +1291,11 @@ func anomalyPromotionDescription(ev chstore.AnomalyEvent) string {
 	if note := logstore.VerifiedRatioNote(ev.VerifiedRatio); note != "" {
 		tail = "; " + note
 	}
+	if chstore.IsCountOnlyAnomaly(ev) {
+		// v0.10.1587 — oran yok: "peak ratio 0.0×" yalan olurdu.
+		return "Auto-promoted from anomaly: " + ev.Kind + " / " + ev.Pattern +
+			" (yeni — taban yok, count " + formatUint(ev.CurrentCount) + tail + ")"
+	}
 	return "Auto-promoted from anomaly: " + ev.Kind + " / " + ev.Pattern +
 		" (peak ratio " + formatFloat(ev.PeakRatio, 1) +
 		"×, count " + formatUint(ev.CurrentCount) + tail + ")"
@@ -1402,11 +1407,10 @@ func (e *Evaluator) promoteStrongAnomalies(ctx context.Context) {
 		// GetAnomalyPromotion guarantees it is >= MinPeakRatio, so
 		// "everything promoted is critical" only happens when the
 		// operator actually asks for it.
-		sev := "warning"
-		if ev.PeakRatio >= cfg.CriticalPeakRatio {
-			sev = "critical"
-		}
+		// v0.10.1587 — sayım-yalnız olay critical açılmaz (promotedSeverity).
+		sev := promotedSeverity(ev, cfg)
 		desc := truncate(anomalyPromotionDescription(ev), 480)
+		measure := promotedProblemMeasure(ev, cfg)
 		var startedAt int64
 		var id string
 		if open != nil {
@@ -1428,9 +1432,10 @@ func (e *Evaluator) promoteStrongAnomalies(ctx context.Context) {
 			RuleName:    "Anomaly · " + ev.Pattern,
 			Severity:    sev,
 			Service:     ev.Service,
-			Metric:      "anomaly_ratio",
-			Value:       ev.PeakRatio,
-			Threshold:   cfg.MinPeakRatio,
+			Metric:      measure.Metric,
+			Comparator:  measure.Comparator,
+			Value:       measure.Value,
+			Threshold:   measure.Threshold,
 			Status:      "open",
 			Description: desc,
 			StartedAt:   startedAt,
@@ -1510,6 +1515,15 @@ func anomalyPromotionStep(active, muted, gateOK bool, hasOpen func() bool) promo
 // açılıyordu. Artık yeni bölüm started_at'i sıfırdan alır
 // (chstore.MergeAnomalyCarry) ve bu kapı yeniden 300 sn bekler.
 func promotionGate(ev chstore.AnomalyEvent, cfg chstore.AnomalyPromotionConfig, now time.Time) bool {
+	// v0.10.1587 (Davis paritesi FAZ 0.5 / B) — sayım-yalnız olay (taban yok,
+	// oran 0) oran kapısı yerine SAYIM kapısından geçer (CountOnlyMinCount ≥
+	// MinCount, Normalize garanti eder); sürdürme aynı.
+	if chstore.IsCountOnlyAnomaly(ev) {
+		if ev.CurrentCount < cfg.CountOnlyMinCount || ev.CurrentCount < cfg.MinCount {
+			return false
+		}
+		return now.Sub(time.Unix(0, ev.StartedAt)) >= time.Duration(cfg.MinSustainedSec)*time.Second
+	}
 	if ev.PeakRatio < cfg.MinPeakRatio {
 		return false
 	}
@@ -1517,6 +1531,33 @@ func promotionGate(ev chstore.AnomalyEvent, cfg chstore.AnomalyPromotionConfig, 
 		return false
 	}
 	return now.Sub(time.Unix(0, ev.StartedAt)) >= time.Duration(cfg.MinSustainedSec)*time.Second
+}
+
+// promotedMeasure — terfi Problem'inin ölçüsü (v0.10.1587).
+type promotedMeasure struct {
+	Metric, Comparator string
+	Value, Threshold   float64
+}
+
+// promotedSeverity — SAF (v0.10.1587): terfi şiddeti. Sayım-yalnız olay
+// (chstore.IsCountOnlyAnomaly) critical OLAMAZ — critical kapısı yalnız
+// gerçek oran içindir; yaş eskalasyonu (değişmedi) sonra yükseltebilir.
+func promotedSeverity(ev chstore.AnomalyEvent, cfg chstore.AnomalyPromotionConfig) string {
+	if !chstore.IsCountOnlyAnomaly(ev) && ev.PeakRatio >= cfg.CriticalPeakRatio {
+		return "critical"
+	}
+	return "warning"
+}
+
+// promotedProblemMeasure — SAF (v0.10.1587): oranlı olayda bugünkü ölçü
+// (anomaly_ratio, PeakRatio / MinPeakRatio, karşılaştırıcı boş) BİREBİR;
+// sayım-yalnız olayda anomaly_count = sayım / CountOnlyMinCount, ">=". Value
+// sayımdır, asla 0 değil (0 / >0 tam kayıp sayılıp P1 olurdu).
+func promotedProblemMeasure(ev chstore.AnomalyEvent, cfg chstore.AnomalyPromotionConfig) promotedMeasure {
+	if chstore.IsCountOnlyAnomaly(ev) {
+		return promotedMeasure{Metric: "anomaly_count", Comparator: ">=", Value: float64(ev.CurrentCount), Threshold: float64(cfg.CountOnlyMinCount)}
+	}
+	return promotedMeasure{Metric: "anomaly_ratio", Value: ev.PeakRatio, Threshold: cfg.MinPeakRatio}
 }
 
 // carryProblemOperatorState — terfi refresh'inin saf çekirdeği: mevcut

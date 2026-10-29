@@ -131,7 +131,9 @@ func qualifyLogPattern(cur uint64, basePerWindow float64) (kind string, ratio fl
 		if cur < logPatternMinNewCount {
 			return "", 0
 		}
-		return "new", float64(cur)
+		// v0.10.1587 (Davis paritesi FAZ 0.5 / B) — oran YOK (eskiden ham
+		// sayı; terfide "30×" → critical). Sayım CurrentCount'ta.
+		return "new", chstore.CountOnlyRatio
 	}
 	if r := float64(cur) / basePerWindow; r >= logPatternMinRatio {
 		return "spike", r

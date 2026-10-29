@@ -188,8 +188,9 @@ func TestDetectLogPatterns_ESVerification(t *testing.T) {
 				if a.CurrentCount != c.wantCur || a.VerifiedRatio != c.wantR || a.Sample != c.wantSampl || a.Kind != "new" {
 					t.Errorf("got %+v", a)
 				}
-				if a.Ratio != float64(c.wantCur) {
-					t.Errorf("'new' oranı tahmini sayı olmalı: %v", a.Ratio)
+				// v0.10.1587 — "new" oransız (CountOnlyRatio); sayı CurrentCount'ta.
+				if a.Ratio != 0 {
+					t.Errorf("'new' oranı 0 olmalı: %v", a.Ratio)
 				}
 			}
 		})

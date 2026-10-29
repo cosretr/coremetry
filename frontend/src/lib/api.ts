@@ -41,7 +41,7 @@ OracleLogsResponse,
   OtlpExemplar, TraceLinks, TraceCountResponse, TraceErrorHistogramResponse, CorrelationLinkSettings,
   ExceptionTriageConfig, ProblemPriorityConfig, FailureSLOConfig, MetricExclusions, AnomalyTrackedConfig,
   InsightKind, InsightResponse, InsightSignal, InsightLink, InsightChartSpec,
-  AnomalySensitivityConfig, AnomalyREDSourceStats, TailPoint, LogPatternsResult, LogTemplate, TraceFacet, TraceFacetsResponse, DBSlowQueryConfig, StatementSearchRow,
+  AnomalyPromotionConfig, AnomalySensitivityConfig, AnomalyREDSourceStats, TailPoint, LogPatternsResult, LogTemplate, TraceFacet, TraceFacetsResponse, DBSlowQueryConfig, StatementSearchRow,
   CopilotStartersResponse,
 } from './types';
 import { encodeMetricQuery, type MetricQuery } from './metricQuery';
@@ -1474,8 +1474,7 @@ export const api = {
   // so an install that never PUTs the endpoint keeps the
   // pre-tunable behaviour.
   getAnomalyPromotion: () =>
-    get<{ enabled: boolean; minPeakRatio: number; criticalPeakRatio: number; minSustainedSec: number; minCount: number }>(
-      `/api/settings/anomaly-promotion`),
+    get<AnomalyPromotionConfig>(`/api/settings/anomaly-promotion`),
   // v0.9.248 — age-based escalation (escalateStaleProblems). Separate
   // key from anomaly promotion because it applies to EVERY Problem,
   // not just promoted anomalies.
@@ -1561,10 +1560,8 @@ export const api = {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(c),
     }),
-  putAnomalyPromotion: (c: {
-    enabled: boolean; minPeakRatio: number; criticalPeakRatio: number; minSustainedSec: number; minCount: number;
-  }) =>
-    request<typeof c>(`/api/settings/anomaly-promotion`, {
+  putAnomalyPromotion: (c: AnomalyPromotionConfig) =>
+    request<AnomalyPromotionConfig>(`/api/settings/anomaly-promotion`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(c),
     }),

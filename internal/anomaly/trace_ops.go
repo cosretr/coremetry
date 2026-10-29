@@ -227,19 +227,26 @@ func classifyTraceOps(rows []traceOpBucket, windowRatio float64, isBatch func(se
 			// pay 3× → pay oranlı error_spike; değilse sessiz.
 			switch verdict, share, expected := traceOpBatchExtShare(r); verdict {
 			case traceOpExtNew:
-				kind, ratio = "new_error", float64(r.CurErrs)
+				// v0.10.1587 — taban yok: oran yok (sayım-yalnız).
+				kind, ratio = "new_error", chstore.CountOnlyRatio
 			case traceOpExtSpike:
 				kind, ratio, baseline = "error_spike", share, expected
 			}
 		case r.BaseErrs == 0:
-			kind, ratio = "new_error", float64(r.CurErrs)
+			// v0.10.1587 (Davis paritesi FAZ 0.5 / B) — taban yok: oran YOK
+			// (chstore.CountOnlyRatio). Ham sayıyı oran diye yazmak terfide 20
+			// yeni hatayı "20×" → critical P1 yapıyordu; terfi sayım-yalnız
+			// olayı ayrı sayım kapısıyla değerlendirir (IsCountOnlyAnomaly).
+			kind, ratio = "new_error", chstore.CountOnlyRatio
 		case basePerWindow == 0:
 			// Baseline var ama pencere-normalize edilince sıfıra
 			// yuvarlanıyor (çok seyrek tarihî hata). Eski SQL bu dalda
 			// cur/(base*ratio) ile KALİFİYE eder (payda <1 → oran şişer),
 			// raporlanan ratio'yu ise cur olarak verirdi — birebir aynı.
+			// v0.10.1587 — raporlanan oran eskiden cur'du (sayı); pencereye
+			// normalize taban 0 olduğu için dürüst bir oran yok → sayım-yalnız.
 			if float64(r.CurErrs)/(float64(r.BaseErrs)*windowRatio) >= traceOpMinRatio {
-				kind, ratio = "error_spike", float64(r.CurErrs)
+				kind, ratio = "error_spike", chstore.CountOnlyRatio
 			}
 		case float64(r.CurErrs)/float64(basePerWindow) >= traceOpMinRatio:
 			kind, ratio = "error_spike", float64(r.CurErrs)/float64(basePerWindow)

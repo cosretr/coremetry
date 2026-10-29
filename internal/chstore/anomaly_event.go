@@ -92,6 +92,12 @@ type AnomalyEvent struct {
 // (v0.10.1042): üretici ve IsAnomalyFingerprint aynı sabiti okur.
 const anomalyFingerprintLen = 16
 
+// CountOnlyRatio — v0.10.1587 (Davis paritesi FAZ 0.5 / B): tabanı olmayan
+// (yalnız sayım) olayın oran değeri = "oran yok". Eskiden ham sayı yazılıyor
+// ve terfide oran gibi okunuyordu (20 yeni hata = "20×" → critical P1).
+// log_template_new emsali (recorder 0 yazar); IsCountOnlyAnomaly okur.
+const CountOnlyRatio = 0.0
+
 // FingerprintAnomaly stitches the same (kind, pattern, service)
 // detections into one event row across detector ticks. Stable
 // across process restarts — sha1 is deterministic.

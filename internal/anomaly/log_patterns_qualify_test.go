@@ -36,8 +36,9 @@ func TestQualifyLogPattern(t *testing.T) {
 		// daha zayıf bir iddia.
 		{"yeni desen, ortak tabanda ama yeni-tabanının altında", 10, 0, "", 0},
 		{"yeni desen, yeni-tabanının hemen altında", 29, 0, "", 0},
-		{"yeni desen, tam yeni-tabanında", 30, 0, "new", 30},
-		{"yeni desen, bol hacim", 250, 0, "new", 250},
+		// v0.10.1587 — "new" oransız (0): ham sayı oran değildir.
+		{"yeni desen, tam yeni-tabanında", 30, 0, "new", 0},
+		{"yeni desen, bol hacim", 250, 0, "new", 0},
 
 		// The count floor binds on the spike branch too — that symmetry is
 		// what kept drifting when the logic lived inside a closure.
@@ -78,5 +79,17 @@ func TestDetectorFloorsAgree(t *testing.T) {
 	}
 	if logPatternMinRatio != traceOpMinRatio {
 		t.Errorf("ratio floors diverged: log=%v trace=%v", logPatternMinRatio, traceOpMinRatio)
+	}
+}
+
+// v0.10.1587 — Davis paritesi FAZ 0.5 / B: "new" dalının tabanı yok; ham
+// sayıyı oran diye raporlamak terfide 30 yeni satırı "30×" (critical ≥ 20)
+// yapıyordu. Artık oran 0 (= yok); kapı sayım tabanıyla.
+func TestQualifyLogPatternNewHasNoRatio(t *testing.T) {
+	if k, r := qualifyLogPattern(250, 0); k != "new" || r != 0 {
+		t.Fatalf("new: kind=%q ratio=%v, want new / 0", k, r)
+	}
+	if k, r := qualifyLogPattern(30, 10); k != "spike" || r != 3 {
+		t.Fatalf("spike gerçek oranı korur: %q %v", k, r)
 	}
 }

@@ -136,7 +136,12 @@ func TestClassifyTraceOpsBatch(t *testing.T) {
 			if len(got) != 1 || got[0].Kind != tt.wantKind {
 				t.Fatalf("kind=%s bekleniyordu, got=%+v", tt.wantKind, got)
 			}
-			if d := got[0].Ratio - tt.wantRatio; d > 1e-9 || d < -1e-9 {
+			// v0.10.1587 — new_error oransız; tablodaki eski oran ham sayıydı.
+			if tt.wantKind == "new_error" {
+				if got[0].Ratio != chstore.CountOnlyRatio || float64(got[0].CurrentErrors) != tt.wantRatio {
+					t.Fatalf("new_error: ratio=%v (want 0) count=%d (want %v)", got[0].Ratio, got[0].CurrentErrors, tt.wantRatio)
+				}
+			} else if d := got[0].Ratio - tt.wantRatio; d > 1e-9 || d < -1e-9 {
 				t.Fatalf("ratio=%v, beklenen %v", got[0].Ratio, tt.wantRatio)
 			}
 		})

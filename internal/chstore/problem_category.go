@@ -64,7 +64,7 @@ func ProblemCategory(p Problem) string {
 	// Hata ailesi.
 	case rule == "exception-storm" || strings.HasPrefix(metric, "exception"):
 		return CategoryError
-	case metric == "error_rate" || metric == "error_count" || metric == "log_query" || metric == "watcher" || metric == "anomaly_ratio":
+	case metric == "error_rate" || metric == "error_count" || metric == "log_query" || metric == "watcher" || metric == "anomaly_ratio" || metric == "anomaly_count":
 		return CategoryError
 	case metric == "http_route_error_rate" || metric == "kafka_producer_error_rate":
 		return CategoryError

@@ -50,6 +50,12 @@ type AnomalyPromotionConfig struct {
 	// critical", which is a legitimate choice for a small
 	// hand-curated set.
 	CriticalPeakRatio float64 `json:"criticalPeakRatio"`
+	// CountOnlyMinCount — v0.10.1587 (Davis paritesi FAZ 0.5 / B, operatör
+	// onayı 2026-10-29): tabanı olmayan (yalnız sayım) olaylar — trace_op
+	// new_error, log_pattern "new" — oran taşımaz (peak_ratio 0); terfi kapısı
+	// onlarda oran yerine bu SAYIM tabanını ister (+ aynı sürdürme). Varsayılan
+	// 20; 0 / eksik → varsayılan, MinCount'un altı → MinCount.
+	CountOnlyMinCount uint64 `json:"countOnlyMinCount"`
 
 	// Seasonal* — consumed by the anomaly DETECTOR's seasonal
 	// baseline (internal/anomaly), NOT the promotion sweep. They
@@ -86,6 +92,8 @@ func DefaultAnomalyPromotion() AnomalyPromotionConfig {
 		// kept as the default so an install that never visits the
 		// setting keeps its existing severity split (v0.9.247).
 		CriticalPeakRatio: 20.0,
+		// v0.10.1587 — sayım-yalnız (oransız) olay terfi tabanı (operatör onayı).
+		CountOnlyMinCount: 20,
 		// Mirror the anomaly-detector compile-time defaults
 		// (internal/anomaly: seasonalDays / seasonalMinSamples /
 		// seasonalNeighborBuckets). chstore can't import anomaly
@@ -113,6 +121,13 @@ func (s *Store) GetAnomalyPromotion(ctx context.Context) AnomalyPromotionConfig 
 	if err := json.Unmarshal(raw, &c); err != nil {
 		return DefaultAnomalyPromotion()
 	}
+	return NormalizeAnomalyPromotion(c)
+}
+
+// NormalizeAnomalyPromotion — SAF (v0.10.1587'de GetAnomalyPromotion'dan
+// çıkarıldı, gövde aynı + countOnlyMinCount): eksik / sıfır-ama-anlamlı
+// alanlar varsayılana yamanır.
+func NormalizeAnomalyPromotion(c AnomalyPromotionConfig) AnomalyPromotionConfig {
 	// Patch missing / zero-but-load-bearing fields back to
 	// defaults so a partial save (e.g. a future field that
 	// existing rows don't carry) doesn't pin promotion to 0.
@@ -136,6 +151,14 @@ func (s *Store) GetAnomalyPromotion(ctx context.Context) AnomalyPromotionConfig 
 	}
 	if c.CriticalPeakRatio < c.MinPeakRatio {
 		c.CriticalPeakRatio = c.MinPeakRatio
+	}
+	// v0.10.1587 — sayım-yalnız terfi tabanı: eksik / 0 → 20; MinCount'un
+	// altı MinCount (genel hacim tabanı iki kapıda da geçerli).
+	if c.CountOnlyMinCount == 0 {
+		c.CountOnlyMinCount = d.CountOnlyMinCount
+	}
+	if c.CountOnlyMinCount < c.MinCount {
+		c.CountOnlyMinCount = c.MinCount
 	}
 	// Seasonal knobs: zero/absent (older saved rows written before
 	// v0.8.250 don't carry these fields, or a partial PUT omits
@@ -169,4 +192,14 @@ func (s *Store) SaveAnomalyPromotion(ctx context.Context, c AnomalyPromotionConf
 		return err
 	}
 	return s.PutSetting(ctx, anomalyPromotionKey, raw)
+}
+
+// IsCountOnlyAnomaly — v0.10.1587 (Davis paritesi FAZ 0.5 / B): tabanı
+// olmayan, yalnız SAYIM taşıyan terfi adayı mı? trace_op (new_error ve taban
+// 0'a yuvarlanan error_spike) ile log_pattern ("new") bu olaylarda
+// peak_ratio'ya CountOnlyRatio (0) yazar. Yalnız bu iki tür: oransız başka
+// türler (log_template_new, davranış…) bugün olduğu gibi hiç terfi etmez —
+// sayım kapısı onları AÇMAZ.
+func IsCountOnlyAnomaly(ev AnomalyEvent) bool {
+	return ev.PeakRatio == CountOnlyRatio && (ev.Kind == "trace_op" || ev.Kind == "log_pattern")
 }

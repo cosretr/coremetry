@@ -3,7 +3,7 @@ import type { AnomalyRuntimeConfig } from '@/lib/types'; // v0.10.890
 import { Spinner } from '@/components/Spinner';
 import { Button } from '@/components/ui';
 import { api } from '@/lib/api';
-import type { AnomalyTrackedConfig, AnomalySensitivityConfig, AnomalyBehaviorConfig, ExceptionTriageConfig, ProblemPriorityConfig, DBSlowQueryConfig, DBHealthConfig } from '@/lib/types';
+import type { AnomalyPromotionConfig, AnomalyTrackedConfig, AnomalySensitivityConfig, AnomalyBehaviorConfig, ExceptionTriageConfig, ProblemPriorityConfig, DBSlowQueryConfig, DBHealthConfig } from '@/lib/types';
 import { Field, FlashBox, humanize } from './shared';
 import { droppedPatternCount, formatBatchPatterns, parseBatchPatterns } from './batchPatterns'; // v0.10.1039
 import { ServiceSlowdownSubsection } from './ServiceSlowdownSubsection'; // v0.10.1091
@@ -22,11 +22,7 @@ import { errorRampErrors, withErrorRampDefaults } from './errorRamp';
 // the on-call. Master enable flag lets operators kill the
 // feature for a chatty detector without changing thresholds.
 export function AnomalyPromotionTab() {
-  type Cfg = {
-    enabled: boolean; minPeakRatio: number; criticalPeakRatio: number;
-    minSustainedSec: number; minCount: number;
-  };
-  const [cfg, setCfg] = useState<Cfg | null>(null);
+  const [cfg, setCfg] = useState<AnomalyPromotionConfig | null>(null);
   const [busy, setBusy] = useState(false);
   const [flash, setFlash] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
@@ -147,6 +143,21 @@ export function AnomalyPromotionTab() {
           <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
             Absolute volume floor — a 100× ratio on 2 occurrences is
             meaningless. Default 10.
+          </div>
+        </Field>
+
+        {/* v0.10.1587 — sayım-yalnız (oransız) olaylar: operasyonda yeni hata,
+            yeni log deseni. Oran kapısı yerine bu sayım tabanı; critical açılmaz. */}
+        <Field label="Yeni hata / yeni desen: en az sayım">
+          <input type="number" min={cfg.minCount} max={1000000} step={1}
+            aria-label="Yeni hata en az sayım"
+            value={cfg.countOnlyMinCount ?? 20}
+            onChange={e => setCfg({ ...cfg, countOnlyMinCount: Number(e.target.value) })}
+            disabled={!cfg.enabled} />
+          <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
+            Tabanı olmayan olaylarda (operasyonda ilk kez görülen hata, yeni log deseni)
+            oran yoktur; terfi bu sayıya ve sürdürmeye bakar ve uyarı (warning) olarak
+            açılır. En az &quot;Minimum count&quot; kadar. Varsayılan 20.
           </div>
         </Field>
       </div>
