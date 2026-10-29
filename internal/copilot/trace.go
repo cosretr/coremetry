@@ -36,7 +36,7 @@ type tracedTransport struct {
 }
 
 func (t *tracedTransport) RoundTrip(r *http.Request) (*http.Response, error) {
-	return t.rt.RoundTrip(r)
+	return gatedRoundTrip(t.rt, r) // v0.10.1564 — eşzamanlılık kapısı (provider_gate.go)
 }
 
 // tracedProviderTransport — sağlayıcı istemcisinin taşıyıcısı (tek kurulum

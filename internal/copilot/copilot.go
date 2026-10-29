@@ -79,6 +79,10 @@ type Service struct {
 	// kota dönmüş demektir ve pencere sonunda kesici kendiliğinden
 	// kapanır. Kota-olmayan hatalar (timeout, 5xx) kesiciyi AÇMAZ.
 	quotaUntil time.Time
+	// overloadUntil (v0.10.1564, denetim L1) — sağlayıcı 503 (aşırı yük /
+	// "no slot") döndü: arka plan tüketicileri kısa süre (providerOverloadPause)
+	// geri çekilir; kota kesicisinin 1 saatinden ayrı, geçici bir durum.
+	overloadUntil time.Time
 
 	// enabled — master on/off switch INDEPENDENT of whether creds
 	// are stored (wf: enable/disable toggle). Configured() means
@@ -747,6 +751,16 @@ func (s *Service) explain(ctx context.Context, systemPrompt, userPrompt string, 
 	return out, err
 }
 
+// providerOverloadPause — 503 sonrası arka plan geri çekilmesi (v0.10.1564).
+const providerOverloadPause = 2 * time.Minute
+
+// isOverloadErr — SAF: sağlayıcı 503 (aşırı yük / slot yok) mu. Kota DEĞİL:
+// dakikalar içinde düzelir, kota kesicisinin 1 saati yanlış olurdu.
+func isOverloadErr(err error) bool {
+	var he *aiprovider.HTTPError
+	return errors.As(err, &he) && he.Status == http.StatusServiceUnavailable
+}
+
 // isQuotaErr — sağlayıcı kota/hız-limiti hatası mı? (Gemini free tier
 // "429 ... quota", OpenAI "rate limit", Google RESOURCE_EXHAUSTED.)
 // Saf + table-tested; timeout/5xx gibi geçici hatalar kota SAYILMAZ.
@@ -768,6 +782,15 @@ func isQuotaErr(err error) bool {
 // düzelmez; interaktif çağrılar yine de denediği için erken dönüş
 // operatörü bekletmez.
 func (s *Service) noteProviderError(err error) {
+	if isOverloadErr(err) {
+		s.mu.Lock()
+		if time.Now().After(s.overloadUntil) {
+			log.Printf("[copilot] provider overloaded (503) — background AI consumers paused for %s", providerOverloadPause)
+		}
+		s.overloadUntil = time.Now().Add(providerOverloadPause)
+		s.mu.Unlock()
+		return
+	}
 	if !isQuotaErr(err) {
 		return
 	}
@@ -785,7 +808,8 @@ func (s *Service) noteProviderError(err error) {
 func (s *Service) QuotaBackoffActive() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return time.Now().Before(s.quotaUntil)
+	now := time.Now()
+	return now.Before(s.quotaUntil) || now.Before(s.overloadUntil) // v0.10.1564 — 503 kısa geri çekilme
 }
 
 // recordNarration emits the single ai_calls row for a one-shot
