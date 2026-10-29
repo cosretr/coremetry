@@ -4,11 +4,12 @@ package api
 // "ilgili / ilgisiz" ve mesaj notu ağırlıkları system_settings("cosre")
 // blobunun signals.weights yolunda (cosrelearn/signal_weights.go).
 //
-//   GET /api/admin/cosre/signal-weights → {evidence_relevant, evidence_irrelevant, note}  (admin)
-//   PUT /api/admin/cosre/signal-weights {…}                                              (admin + audit)
+//   GET /api/admin/cosre/signal-weights → {evidence_relevant, evidence_irrelevant}  (admin)
+//   PUT /api/admin/cosre/signal-weights {…}                                        (admin + audit)
 //
 // Okuyan tek yer gece kalite işi (worker, her koşuda okur) — istek yolunda
-// okunmadığı için memo/cache yok. PUT katıdır (işaret + |w| ≤ 0.5, aksi 400);
+// okunmadığı için memo/cache yok. PUT katıdır (işaret + |w| ≤ 0.25, note
+// yalnız 0 ya da yok — v0.10.1605; aksi 400);
 // okuma hoşgörülüdür (bozuk blob → varsayılanlar). "cosre" blobunun diğer
 // anahtarları korunur (MergeSignalWeights).
 
@@ -46,14 +47,15 @@ func (s *Server) getCosreSignalWeights(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) putCosreSignalWeights(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, cosreSignalWeightsMaxBody)
-	var in cosrelearn.SignalWeights
+	var in cosrelearn.SignalWeightsInput
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&in); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "geçersiz JSON: "+err.Error())
 		return
 	}
-	if err := cosrelearn.ValidateSignalWeights(in); err != nil {
+	weights, err := cosrelearn.ValidateSignalWeights(in)
+	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -66,7 +68,7 @@ func (s *Server) putCosreSignalWeights(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	raw, err := cosrelearn.MergeSignalWeights(existing, in)
+	raw, err := cosrelearn.MergeSignalWeights(existing, weights)
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -75,7 +77,7 @@ func (s *Server) putCosreSignalWeights(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	details, _ := json.Marshal(in)
+	details, _ := json.Marshal(weights)
 	s.audit(r, "settings.cosre_signal_weights.update", "settings", cosrelearn.SignalSettingsKey, string(details))
-	writeJSON(w, in)
+	writeJSON(w, weights)
 }

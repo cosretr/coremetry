@@ -3,7 +3,12 @@ package cosrelearn
 // signal_weights.go — v0.10.1601 (CoSRE v2 Faz 1 sonrası, operatör kararı
 // 2026-10-29 §1): kart "ilgili / ilgisiz" ve mesaj notu ağırlıkları kod
 // sabiti değil, system_settings("cosre") blobunun signals.weights yolu.
-// Varsayılanlar +0.10 / −0.10 / 0 (not nötr kalır).
+// Varsayılanlar +0.10 / −0.10.
+//
+// v0.10.1605 (operatör kararı, kesin): not ağırlığı 0'a KİLİTLİ — blob
+// şeklinde alanı yok, PUT'ta note ≠ 0 → 400 (0 ya da yok → kabul, yazılmaz),
+// puanlama sabit NoteWeight (0) kullanır. Ağırlık başına sınır ±0.25
+// (WeightLimit): PUT katı, okuma saklı değeri kırpar. Kart kırpması ±0.5.
 //
 // Kart puanı: aynı cevabın (exchange_id) aynı kartına (ayrıntı = adım
 // kimliği s<i>) düşen evidence_* sinyallerinin toplamı, [-0.5, +0.5]'e
@@ -27,20 +32,35 @@ const SignalSettingsKey = "cosre"
 // CardScoreLimit — kart (ve mesaj notu) puanının mutlak tavanı.
 const CardScoreLimit = 0.5
 
+// WeightLimit — ayarlanabilir tek bir ağırlığın mutlak tavanı (v0.10.1605).
+const WeightLimit = 0.25
+
+// NoteWeight — mesaj notunun KİLİTLİ ağırlığı (v0.10.1605): serbest not
+// içeriği puana çevrilmez, insan incelemesi içindir.
+const NoteWeight = 0
+
 // messageCard — not sinyallerinin toplandığı kart anahtarı (mesaj düzeyi).
 const messageCard = ""
 
 const (
 	defaultEvidenceRelevantWeight   = 0.10
 	defaultEvidenceIrrelevantWeight = -0.10
-	defaultNoteWeight               = 0
+	defaultNoteWeight               = NoteWeight
 )
 
-// SignalWeights — operatörün ayarlayabildiği istemci sinyali ağırlıkları.
+// SignalWeights — operatörün ayarlayabildiği istemci sinyali ağırlıkları
+// (blob şeklinin tamamı; note yok — kilitli 0).
 type SignalWeights struct {
 	EvidenceRelevant   float64 `json:"evidence_relevant"`
 	EvidenceIrrelevant float64 `json:"evidence_irrelevant"`
-	Note               float64 `json:"note"`
+}
+
+// SignalWeightsInput — admin PUT gövdesi. Note yalnız "0 ya da yok"
+// sözleşmesini denetlemek için okunur; saklanmaz.
+type SignalWeightsInput struct {
+	EvidenceRelevant   float64  `json:"evidence_relevant"`
+	EvidenceIrrelevant float64  `json:"evidence_irrelevant"`
+	Note               *float64 `json:"note,omitempty"`
 }
 
 // DefaultSignalWeights — ayar yok / bozuk iken geçerli ağırlıklar.
@@ -48,7 +68,6 @@ func DefaultSignalWeights() SignalWeights {
 	return SignalWeights{
 		EvidenceRelevant:   defaultEvidenceRelevantWeight,
 		EvidenceIrrelevant: defaultEvidenceIrrelevantWeight,
-		Note:               defaultNoteWeight,
 	}
 }
 
@@ -60,7 +79,7 @@ func (w SignalWeights) For(kind string) (float64, bool) {
 	case SigEvidenceIrrelevant:
 		return w.EvidenceIrrelevant, true
 	case SigNote:
-		return w.Note, true
+		return NoteWeight, true
 	}
 	return 0, false
 }
@@ -73,39 +92,42 @@ func ClampCardScore(x float64) float64 {
 	return math.Max(-CardScoreLimit, math.Min(CardScoreLimit, x))
 }
 
-// ValidateSignalWeights — SAF: admin PUT'un katı denetimi. İşaret sözleşmesi
-// (ilgili ≥ 0, ilgisiz ≤ 0) ve |w| ≤ CardScoreLimit; sonlu olmayan değer red.
-func ValidateSignalWeights(w SignalWeights) error {
+// ValidateSignalWeights — SAF: admin PUT'un katı denetimi. note yalnız 0
+// ya da yok; işaret sözleşmesi (ilgili ≥ 0, ilgisiz ≤ 0) ve |w| ≤
+// WeightLimit; sonlu olmayan değer red. Geçerliyse saklanacak şekli döner.
+func ValidateSignalWeights(in SignalWeightsInput) (SignalWeights, error) {
+	if in.Note != nil && *in.Note != NoteWeight {
+		return SignalWeights{}, fmt.Errorf("%s ağırlığı 0'a kilitli (%.4g)", SigNote, *in.Note)
+	}
 	for _, f := range []struct {
 		name string
 		v    float64
 		lo   float64
 		hi   float64
 	}{
-		{SigEvidenceRelevant, w.EvidenceRelevant, 0, CardScoreLimit},
-		{SigEvidenceIrrelevant, w.EvidenceIrrelevant, -CardScoreLimit, 0},
-		{SigNote, w.Note, -CardScoreLimit, CardScoreLimit},
+		{SigEvidenceRelevant, in.EvidenceRelevant, 0, WeightLimit},
+		{SigEvidenceIrrelevant, in.EvidenceIrrelevant, -WeightLimit, 0},
 	} {
 		if math.IsNaN(f.v) || math.IsInf(f.v, 0) {
-			return fmt.Errorf("%s sonlu bir sayı olmalı", f.name)
+			return SignalWeights{}, fmt.Errorf("%s sonlu bir sayı olmalı", f.name)
 		}
 		if f.v < f.lo || f.v > f.hi {
-			return fmt.Errorf("%s [%.2f, %.2f] aralığında olmalı (%.4g)", f.name, f.lo, f.hi, f.v)
+			return SignalWeights{}, fmt.Errorf("%s [%.2f, %.2f] aralığında olmalı (%.4g)", f.name, f.lo, f.hi, f.v)
 		}
 	}
-	return nil
+	return SignalWeights{EvidenceRelevant: in.EvidenceRelevant, EvidenceIrrelevant: in.EvidenceIrrelevant}, nil
 }
 
-// rawSignalWeights — blob okuması; eksik alan nil → varsayılan.
+// rawSignalWeights — blob okuması; eksik alan nil → varsayılan. Eski
+// sürümün yazdığı "note" alanı bilerek okunmaz (kilitli 0).
 type rawSignalWeights struct {
 	EvidenceRelevant   *float64 `json:"evidence_relevant"`
 	EvidenceIrrelevant *float64 `json:"evidence_irrelevant"`
-	Note               *float64 `json:"note"`
 }
 
 // ParseSignalWeights — SAF, hoşgörülü: boş / bozuk blob → varsayılanlar;
 // eksik alan → o alanın varsayılanı; aralık dışı → aralığa kırpılır
-// (işaret sözleşmesi dahil). Okuma yolu hiçbir zaman hata döndürmez:
+// (±WeightLimit, işaret sözleşmesi dahil). Okuma yolu hiçbir zaman hata döndürmez:
 // bozuk bir ayar gece puanlamasını durdurmamalı.
 func ParseSignalWeights(raw []byte) SignalWeights {
 	w := DefaultSignalWeights()
@@ -127,9 +149,8 @@ func ParseSignalWeights(raw []byte) SignalWeights {
 		}
 		return math.Max(lo, math.Min(hi, *p))
 	}
-	w.EvidenceRelevant = pick(r.EvidenceRelevant, w.EvidenceRelevant, 0, CardScoreLimit)
-	w.EvidenceIrrelevant = pick(r.EvidenceIrrelevant, w.EvidenceIrrelevant, -CardScoreLimit, 0)
-	w.Note = pick(r.Note, w.Note, -CardScoreLimit, CardScoreLimit)
+	w.EvidenceRelevant = pick(r.EvidenceRelevant, w.EvidenceRelevant, 0, WeightLimit)
+	w.EvidenceIrrelevant = pick(r.EvidenceIrrelevant, w.EvidenceIrrelevant, -WeightLimit, 0)
 	return w
 }
 

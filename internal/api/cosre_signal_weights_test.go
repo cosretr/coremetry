@@ -3,6 +3,7 @@ package api
 // cosre_signal_weights_test.go — operatör kararı 2026-10-29 §1: kart sinyali
 // ağırlıkları system_settings("cosre").signals.weights. Pinler: rotalar
 // admin kapısının arkasında defterde, PUT audit yazar, katı denetim 400.
+// v0.10.1605: note ≠ 0 → 400 (0 / yok kabul, saklanmaz); |w| > 0.25 → 400.
 
 import (
 	"encoding/json"
@@ -49,9 +50,12 @@ func TestPutCosreSignalWeightsValidation(t *testing.T) {
 	}{
 		{"bozuk JSON", `{`, http.StatusBadRequest},
 		{"bilinmeyen alan", `{"evidence_relevant":0.1,"x":1}`, http.StatusBadRequest},
-		{"ilgili > 0.5", `{"evidence_relevant":0.6,"evidence_irrelevant":-0.1,"note":0}`, http.StatusBadRequest},
-		{"ilgisiz pozitif", `{"evidence_relevant":0.1,"evidence_irrelevant":0.1,"note":0}`, http.StatusBadRequest},
-		{"geçerli, depo yok", `{"evidence_relevant":0.2,"evidence_irrelevant":-0.2,"note":0}`, http.StatusServiceUnavailable},
+		{"ilgili 0.3", `{"evidence_relevant":0.3,"evidence_irrelevant":-0.1}`, http.StatusBadRequest},
+		{"ilgisiz -0.3", `{"evidence_relevant":0.1,"evidence_irrelevant":-0.3}`, http.StatusBadRequest},
+		{"ilgisiz pozitif", `{"evidence_relevant":0.1,"evidence_irrelevant":0.1}`, http.StatusBadRequest},
+		{"note ≠ 0", `{"evidence_relevant":0.1,"evidence_irrelevant":-0.1,"note":0.05}`, http.StatusBadRequest},
+		{"note 0 kabul, depo yok", `{"evidence_relevant":0.2,"evidence_irrelevant":-0.2,"note":0}`, http.StatusServiceUnavailable},
+		{"note yok kabul, depo yok", `{"evidence_relevant":0.25,"evidence_irrelevant":-0.25}`, http.StatusServiceUnavailable},
 	} {
 		w := httptest.NewRecorder()
 		s.putCosreSignalWeights(w, httptest.NewRequest(http.MethodPut, "/api/admin/cosre/signal-weights", strings.NewReader(c.body)))

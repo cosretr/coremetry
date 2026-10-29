@@ -44,7 +44,7 @@ func AnswerScore(kinds []string, cards map[string]float64, w SignalWeights) (sco
 // CardScores — SAF: exchange_id → kart (adım kimliği s<i>; mesaj notu "")
 // → kırpılmış kart puanı. Yalnız penceredeki turlara düşen istemci
 // sinyalleri sayılır (DeriveSignals ile aynı süzgeç). Ağırlığı 0 olan
-// sinyal kart açmaz (nötr not puanı etkilemez).
+// sinyal kart açmaz (not ağırlığı kilitli 0 → not hiç kart açmaz).
 func CardScores(in Inputs, w SignalWeights) map[string]map[string]float64 {
 	known := make(map[string]bool, len(in.Interactions))
 	for _, r := range in.Interactions {

@@ -5,6 +5,11 @@ package cosrelearn
 // taşındı; kart puanı [-0.5, +0.5]'e kırpılır. Pinler: varsayılanlar,
 // kırpma, okuma normalizasyonu (hoşgörülü), PUT denetimi (katı), blob
 // birleştirme (diğer anahtarlar korunur) ve gece işinin ayarı okuması.
+//
+// v0.10.1605 (operatör kararı, kesin): not ağırlığı 0'a KİLİTLİ — blob
+// şeklinde yok, PUT'ta note ≠ 0 → 400; ağırlık başına sınır ±0.25 (PUT
+// katı 400, saklı blob okumada ±0.25'e kırpılır); kart kırpması [-0.5,
+// +0.5] değişmez.
 
 import (
 	"context"
@@ -20,7 +25,7 @@ func near(a, b float64) bool { return math.Abs(a-b) < 1e-9 }
 
 func TestDefaultSignalWeights(t *testing.T) {
 	w := DefaultSignalWeights()
-	if !near(w.EvidenceRelevant, 0.10) || !near(w.EvidenceIrrelevant, -0.10) || w.Note != 0 {
+	if !near(w.EvidenceRelevant, 0.10) || !near(w.EvidenceIrrelevant, -0.10) {
 		t.Fatalf("varsayılanlar +0.10 / -0.10 / 0 olmalı: %+v", w)
 	}
 	// Weight haritası varsayılanla aynı kaynaktan (oy-ağırlığı pini buna bakar).
@@ -32,6 +37,29 @@ func TestDefaultSignalWeights(t *testing.T) {
 	}
 	if _, ok := w.For(SigCopy); ok {
 		t.Error("copy ayarlanabilir tür değil")
+	}
+	// Not ağırlığı sabit 0 (v0.10.1605): ne blobdan ne PUT'tan gelir.
+	if got, ok := w.For(SigNote); !ok || got != 0 {
+		t.Errorf("note ağırlığı sabit 0 olmalı: %v %v", got, ok)
+	}
+}
+
+// v0.10.1605: blob şekli yalnız iki alan taşır; note yazılmaz.
+func TestSignalWeightsBlobShapeHasNoNote(t *testing.T) {
+	out, err := MergeSignalWeights([]byte(`{"signals":{"weights":{"evidence_relevant":0.1,"evidence_irrelevant":-0.1,"note":0.4}}}`), DefaultSignalWeights())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m struct {
+		Signals struct {
+			Weights map[string]any `json:"weights"`
+		} `json:"signals"`
+	}
+	if err := json.Unmarshal(out, &m); err != nil {
+		t.Fatal(err)
+	}
+	if len(m.Signals.Weights) != 2 || m.Signals.Weights["note"] != nil {
+		t.Fatalf("weights yalnız evidence_relevant / evidence_irrelevant olmalı: %s", out)
 	}
 }
 
@@ -57,43 +85,54 @@ func TestParseSignalWeights(t *testing.T) {
 		{"boş", "", def},
 		{"bozuk JSON", "{", def},
 		{"signals yok", `{"other":1}`, def},
-		{"tam", `{"signals":{"weights":{"evidence_relevant":0.2,"evidence_irrelevant":-0.3,"note":0.05}}}`, SignalWeights{0.2, -0.3, 0.05}},
-		{"eksik alan varsayılan", `{"signals":{"weights":{"evidence_relevant":0.25}}}`, SignalWeights{0.25, -0.10, 0}},
-		{"aralık üstü kırpılır", `{"signals":{"weights":{"evidence_relevant":3,"evidence_irrelevant":-9,"note":-2}}}`, SignalWeights{0.5, -0.5, -0.5}},
-		{"ters işaret sıfıra kırpılır", `{"signals":{"weights":{"evidence_relevant":-0.2,"evidence_irrelevant":0.2}}}`, SignalWeights{0, 0, 0}},
+		{"tam", `{"signals":{"weights":{"evidence_relevant":0.2,"evidence_irrelevant":-0.15}}}`, SignalWeights{0.2, -0.15}},
+		{"eksik alan varsayılan", `{"signals":{"weights":{"evidence_relevant":0.25}}}`, SignalWeights{0.25, -0.10}},
+		{"saklı 0.4 → 0.25", `{"signals":{"weights":{"evidence_relevant":0.4,"evidence_irrelevant":-0.4}}}`, SignalWeights{0.25, -0.25}},
+		{"aralık üstü kırpılır", `{"signals":{"weights":{"evidence_relevant":3,"evidence_irrelevant":-9}}}`, SignalWeights{0.25, -0.25}},
+		{"saklı eski note yok sayılır", `{"signals":{"weights":{"evidence_relevant":0.2,"evidence_irrelevant":-0.2,"note":-2}}}`, SignalWeights{0.2, -0.2}},
+		{"ters işaret sıfıra kırpılır", `{"signals":{"weights":{"evidence_relevant":-0.2,"evidence_irrelevant":0.2}}}`, SignalWeights{0, 0}},
 		{"tür hatası varsayılan", `{"signals":{"weights":"x"}}`, def},
 	} {
 		got := ParseSignalWeights([]byte(c.raw))
-		if !near(got.EvidenceRelevant, c.want.EvidenceRelevant) || !near(got.EvidenceIrrelevant, c.want.EvidenceIrrelevant) || !near(got.Note, c.want.Note) {
+		if !near(got.EvidenceRelevant, c.want.EvidenceRelevant) || !near(got.EvidenceIrrelevant, c.want.EvidenceIrrelevant) {
 			t.Errorf("%s: %+v, want %+v", c.name, got, c.want)
 		}
 	}
 }
 
 func TestValidateSignalWeights(t *testing.T) {
+	f := func(v float64) *float64 { return &v }
 	for _, c := range []struct {
 		name string
-		w    SignalWeights
+		in   SignalWeightsInput
 		ok   bool
 	}{
-		{"varsayılan", DefaultSignalWeights(), true},
-		{"sınırlar", SignalWeights{0.5, -0.5, -0.5}, true},
-		{"sıfırlar", SignalWeights{}, true},
-		{"ilgili negatif", SignalWeights{-0.1, -0.1, 0}, false},
-		{"ilgisiz pozitif", SignalWeights{0.1, 0.1, 0}, false},
-		{"ilgili > 0.5", SignalWeights{0.51, -0.1, 0}, false},
-		{"not > 0.5", SignalWeights{0.1, -0.1, 0.6}, false},
-		{"NaN", SignalWeights{math.NaN(), -0.1, 0}, false},
-		{"Inf", SignalWeights{0.1, math.Inf(-1), 0}, false},
+		{"varsayılan", SignalWeightsInput{EvidenceRelevant: 0.10, EvidenceIrrelevant: -0.10}, true},
+		{"sınırlar ±0.25", SignalWeightsInput{EvidenceRelevant: 0.25, EvidenceIrrelevant: -0.25}, true},
+		{"sıfırlar", SignalWeightsInput{}, true},
+		{"note 0 kabul", SignalWeightsInput{EvidenceRelevant: 0.1, EvidenceIrrelevant: -0.1, Note: f(0)}, true},
+		{"note ≠ 0 red", SignalWeightsInput{EvidenceRelevant: 0.1, EvidenceIrrelevant: -0.1, Note: f(0.05)}, false},
+		{"note negatif red", SignalWeightsInput{EvidenceRelevant: 0.1, EvidenceIrrelevant: -0.1, Note: f(-0.1)}, false},
+		{"ilgili 0.3 red", SignalWeightsInput{EvidenceRelevant: 0.3, EvidenceIrrelevant: -0.1}, false},
+		{"ilgisiz -0.3 red", SignalWeightsInput{EvidenceRelevant: 0.1, EvidenceIrrelevant: -0.3}, false},
+		{"ilgili negatif", SignalWeightsInput{EvidenceRelevant: -0.1, EvidenceIrrelevant: -0.1}, false},
+		{"ilgisiz pozitif", SignalWeightsInput{EvidenceRelevant: 0.1, EvidenceIrrelevant: 0.1}, false},
+		{"NaN", SignalWeightsInput{EvidenceRelevant: math.NaN(), EvidenceIrrelevant: -0.1}, false},
+		{"Inf", SignalWeightsInput{EvidenceRelevant: 0.1, EvidenceIrrelevant: math.Inf(-1)}, false},
 	} {
-		if err := ValidateSignalWeights(c.w); (err == nil) != c.ok {
+		w, err := ValidateSignalWeights(c.in)
+		if (err == nil) != c.ok {
 			t.Errorf("%s: err=%v, ok beklenen %v", c.name, err, c.ok)
+			continue
+		}
+		if c.ok && (w.EvidenceRelevant != c.in.EvidenceRelevant || w.EvidenceIrrelevant != c.in.EvidenceIrrelevant) {
+			t.Errorf("%s: dönen ağırlık %+v", c.name, w)
 		}
 	}
 }
 
 func TestMergeSignalWeightsKeepsOtherKeys(t *testing.T) {
-	w := SignalWeights{0.2, -0.2, 0}
+	w := SignalWeights{0.2, -0.2}
 	for _, existing := range []string{"", "{", `{"other":{"x":1},"signals":{"keep":true,"weights":{"note":0.4}}}`} {
 		out, err := MergeSignalWeights([]byte(existing), w)
 		if err != nil {
@@ -136,11 +175,19 @@ func TestCardScoresClampPerCard(t *testing.T) {
 	if !near(got["b"]["s3"], -0.2) {
 		t.Fatalf("b kartı: %+v", got["b"])
 	}
-	// Not ağırlığı ayarla açılınca mesaj kartı da kırpılır.
-	w.Note = 0.3
+	// Not ağırlığı kilitli 0 (v0.10.1605): saklı blob ne derse desin
+	// notlar mesaj kartı açmaz.
+	w = ParseSignalWeights([]byte(`{"signals":{"weights":{"note":0.3}}}`))
 	in.Signals = []chstore.CosreSignal{sig("a", SigNote, "1"), sig("a", SigNote, "2")}
-	if got := CardScores(in, w); !near(got["a"][messageCard], 0.5) {
-		t.Fatalf("mesaj kartı kırpılmadı: %+v", got)
+	if got := CardScores(in, w); len(got) != 0 {
+		t.Fatalf("not kart açtı: %+v", got)
+	}
+	// Kart kırpması değişmedi: ±0.25 ağırlıkla 3 tık 0.75 değil 0.5.
+	w = SignalWeights{EvidenceRelevant: 0.25, EvidenceIrrelevant: -0.25}
+	in.Signals = []chstore.CosreSignal{sig("a", SigEvidenceRelevant, "s1"), sig("a", SigEvidenceRelevant, "s1"), sig("a", SigEvidenceRelevant, "s1"),
+		sig("b", SigEvidenceIrrelevant, "s1"), sig("b", SigEvidenceIrrelevant, "s1"), sig("b", SigEvidenceIrrelevant, "s1")}
+	if got := CardScores(in, w); !near(got["a"]["s1"], 0.5) || !near(got["b"]["s1"], -0.5) {
+		t.Fatalf("kart kırpması [-0.5, +0.5] olmalı: %+v", got)
 	}
 }
 
@@ -170,7 +217,7 @@ func TestAnswerScoreUsesCardScores(t *testing.T) {
 func TestRunQualityDayReadsSignalWeights(t *testing.T) {
 	day := time.Date(2026, 10, 14, 0, 0, 0, 0, time.UTC)
 	a := turn("a", "c", 0, "q")
-	blob, _ := MergeSignalWeights(nil, SignalWeights{EvidenceRelevant: 0.4, EvidenceIrrelevant: -0.1})
+	blob, _ := MergeSignalWeights(nil, SignalWeights{EvidenceRelevant: 0.2, EvidenceIrrelevant: -0.1})
 	st := &fakeStore{
 		rows:     []chstore.CosreInteraction{a},
 		settings: blob,
@@ -179,8 +226,8 @@ func TestRunQualityDayReadsSignalWeights(t *testing.T) {
 	if _, _, err := RunQualityDay(context.Background(), st, day); err != nil {
 		t.Fatal(err)
 	}
-	// 0.5 taban − 0.15 (fake 👎) + 0.4 (ayardan kart) = 0.75
-	if len(st.answers) != 1 || !near(float64(st.answers[0].Score), float64(float32(0.75))) {
+	// 0.5 taban − 0.15 (fake 👎) + 0.2 (ayardan kart) = 0.55
+	if len(st.answers) != 1 || !near(float64(st.answers[0].Score), float64(float32(0.55))) {
 		t.Fatalf("ayar puana yansımadı: %+v", st.answers)
 	}
 }
