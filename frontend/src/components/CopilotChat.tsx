@@ -1087,6 +1087,7 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
           backdrop={false}
           closeOnEmptyClick
           width={AI_DRAWER_WIDTH}
+          resizeKey="coremetry-cosre-drawer-w" // v0.10.1570 — sola sürüklenerek genişler
           bodyStyle={{ display: 'flex', flexDirection: 'column', padding: 0 }}
           header={headerNode}>
           <div className="cosre-root cosre-root--drawer" data-tour="cosre-drawer">{bodyNode}</div>

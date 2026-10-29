@@ -1,4 +1,6 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { getRaw, setRaw } from '@/lib/storage';
+import { DRAWER_MIN_WIDTH, clampDrawerWidth } from './drawerWidth';
 import { useFocusTrap } from './useFocusTrap';
 import { useEscLayer } from '@/lib/escLayer';
 import { isEmptyAreaClick } from './emptyAreaClose';
@@ -12,7 +14,13 @@ import { Sparkline } from '@/components/Sparkline';
 // olup Drawer'da eksik kalan ayağı. İçerik (bölümler, tablolar,
 // trendler) çağıranda kalır. İlk migrasyon External + Hosts (bayt-bayt
 // aynı kopyalar); kalan 5 çekmece yüzeyi kendi sürümlerinde taşınır.
-export function Drawer({ onClose, header, width = 560, backdrop = true, closeOnEmptyClick = false, bodyStyle, children, ariaLabel = 'Detay çekmecesi' }: {
+// v0.10.1570 (operatör: "CoSRE çekmecesi genişletilebilir sola doğru olsun") —
+// isteğe bağlı sol kenar tutamağı. resizeKey verilen çekmece sola sürüklenerek
+// genişler (SpanDetail tutamağıyla aynı Pointer Events deseni), genişlik
+// localStorage'da kalır, çift tık varsayılana döner. Vermeyen çağıranlar aynen.
+// Sınırlar drawerWidth.ts'te (saf; bileşen dosyası yalnız bileşen dışa aktarır).
+
+export function Drawer({ onClose, header, width = 560, backdrop = true, closeOnEmptyClick = false, bodyStyle, children, ariaLabel = 'Detay çekmecesi', resizeKey }: {
   onClose: () => void;
   // Başlık satırının sol tarafı (ad + rozetler); ✕ butonunu kabuk koyar.
   header: React.ReactNode;
@@ -37,9 +45,57 @@ export function Drawer({ onClose, header, width = 560, backdrop = true, closeOnE
   bodyStyle?: React.CSSProperties;
   /** v0.10.389 — ekran okuyucu diyalog adı; başlık ReactNode olduğu için ayrı. */
   ariaLabel?: string;
+  /** v0.10.1570 — sol kenardan genişletme; localStorage anahtarı. Yoksa sabit genişlik. */
+  resizeKey?: string;
   children: React.ReactNode;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const [userW, setUserW] = useState<number | null>(() => {
+    if (!resizeKey) return null;
+    const raw = parseInt(getRaw(resizeKey) ?? '', 10);
+    return Number.isFinite(raw) && raw >= DRAWER_MIN_WIDTH ? raw : null;
+  });
+  const dragRef = useRef<{ startX: number; startW: number; w: number } | null>(null);
+  const effW = userW ?? width;
+  const onResizeStart = (e: React.PointerEvent) => {
+    if (!resizeKey) return;
+    e.preventDefault();
+    const startW = panelRef.current?.getBoundingClientRect().width || effW;
+    dragRef.current = { startX: e.clientX, startW, w: startW };
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  };
+  useEffect(() => {
+    if (!resizeKey) return;
+    const onMove = (e: PointerEvent) => {
+      const d = dragRef.current;
+      if (!d) return;
+      // Sol kenar: imleç sola gittikçe çekmece genişler (sağa sabit).
+      d.w = clampDrawerWidth(d.startW + (d.startX - e.clientX), window.innerWidth);
+      setUserW(d.w);
+    };
+    const onUp = () => {
+      const d = dragRef.current;
+      if (!d) return;
+      dragRef.current = null;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      setRaw(resizeKey, String(d.w));
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+    };
+  }, [resizeKey]);
+  const onResetWidth = () => {
+    if (!resizeKey) return;
+    setUserW(null);
+    setRaw(resizeKey, '');
+  };
   const lastFocusRef = useRef<Element | null>(null);
 
   // v0.9.950 (E2/Ö28) — Esc artık KATMAN. Öncesinde kendi document
@@ -128,11 +184,11 @@ export function Drawer({ onClose, header, width = 560, backdrop = true, closeOnE
           altında). Sınıfın MASAÜSTÜ kuralı YOK — yalnız `@media
           (max-width: 640px)` bloğunda tanımlı, dolayısıyla geniş ekranda
           tek piksel değişmiyor. */}
-      <div ref={panelRef} tabIndex={-1} className="drawer-panel"
+      <div ref={panelRef} tabIndex={-1} className="drawer-panel" data-width={effW}
         role="dialog" aria-modal={backdrop ? true : undefined} aria-label={ariaLabel}
         style={{
         position: 'fixed', right: 0, top: 0, bottom: 0,
-        width: `min(${width}px, 100vw)`,
+        width: `min(${effW}px, 100vw)`,
         background: 'var(--bg)', borderLeft: '1px solid var(--border)',
         boxShadow: 'var(--shadow-pop)',
         // MK2 (v0.9.911) — irtifa KİPE bağlı, sabit değil.
@@ -153,6 +209,11 @@ export function Drawer({ onClose, header, width = 560, backdrop = true, closeOnE
         // bugünkü davranış (tek dikey kaydırma) aynen sürüyor.
         ...(bodyStyle ?? { overflowY: 'auto' }),
       }}>
+        {resizeKey && (
+          <div className="drawer-resizer" role="separator" aria-orientation="vertical"
+            aria-label="Çekmece genişliği" title="Sürükle: genişlet · çift tık: varsayılan genişlik"
+            onPointerDown={onResizeStart} onDoubleClick={onResetWidth} />
+        )}
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', marginBottom: 'var(--sp-2)' }}>
           {header}
           <span style={{ flex: 1 }} />
