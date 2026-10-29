@@ -1,0 +1,18 @@
+data: {"type":"start"}
+
+data: {"type":"start-step"}
+
+data: {"id":"t1","type":"text-start"}
+
+data: {"delta":"Kullanılabilir komutlar (mesajın başına yaz):\n\n- `/wiki \u003csoru\u003e` — yalnız kurum wiki'sinde ara (telemetri yok)\n- `/trace \u003cifade\u003e` — trace araması (servis için @servis ekle)\n- `/rca \u003cservis ya da @problem:id\u003e` — kök neden analizi\n- `/logs \u003cifade\u003e` — log araması (alan=değer de olur)\n- `/excel \u003csoru\u003e` — yalnız yüklenen tablolarda (Excel / CSV) satır ara\n- `/telemetri \u003csoru\u003e` — yalnız canlı telemetriden cevapla\n- `/exceptions \u003ctip ya da kod\u003e` — Exceptions gruplarında ara\n- `/genel \u003csoru\u003e` — modelin genel bilgisiyle cevapla\n- `/help` — bu liste\n\nKapsam için @ kullan: `@servis`, `@trace:\u003cid\u003e`, `@problem:\u003cid\u003e`, `@env:\u003cad\u003e`, `@team:\u003cad\u003e`, `@wiki`.","id":"t1","type":"text-delta"}
+
+data: {"id":"t1","type":"text-end"}
+
+data: {"messageMetadata":{"turnId":"golden-xid"},"type":"message-metadata"}
+
+data: {"type":"finish-step"}
+
+data: {"finishReason":"stop","type":"finish"}
+
+data: [DONE]
+

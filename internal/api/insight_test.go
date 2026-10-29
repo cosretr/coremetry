@@ -350,6 +350,9 @@ func TestAISurfaceFromInsightPath(t *testing.T) {
 		{"/api/copilot/draft-postmortem/inc-1", "draft-postmortem"}, // v0.9.1197 Faz 5.4
 		{"/api/copilot/runbook-update/ex-1", "runbook-update"},      // v0.9.1198 Faz 5.5
 		{"/api/admin/clickhouse/optimize-query", "ch-optimize"},
+		{"/api/cosre/v2/chat", "chat"}, // v0.10.1593 — v2 taşıma, aynı yüzey
+		{"/api/cosre/v2/other", "other"},
+		{"/api/cosre/greeting", "other"},
 		{"/api/problems", "other"},
 	}
 	for _, tc := range cases {

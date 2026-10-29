@@ -302,6 +302,11 @@ func aiSurfaceFromPath(p string) string {
 		}
 		return "other"
 	}
+	// v0.10.1593 — CoSRE v2 sohbeti (cosre_v2_chat.go) v1 ile AYNI yüzey
+	// etiketi: gövde ortak, callMeta.Surface "chat"; yalnız taşıma farklı.
+	if len(parts) == 4 && parts[0] == "api" && parts[1] == "cosre" && parts[2] == "v2" && parts[3] == "chat" {
+		return "chat"
+	}
 	if len(parts) < 3 || parts[0] != "api" || parts[1] != "copilot" {
 		return "other"
 	}

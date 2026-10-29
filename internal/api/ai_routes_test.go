@@ -3,6 +3,7 @@ package api
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -16,16 +17,38 @@ import (
 //  2. Paket içinde handler-içi `!s.copilot.Active()` kapısı kalmamalı;
 //     izinli istisnalar middleware'in kendisi (ai_routes.go) ve
 //     domain'e gömülü rootcause verdict gövdesi (rootcause.go).
+//
+// v0.10.1593 (CoSRE v2 Faz 1, R5) — tarama ai_routes.go'dan PAKETİN TÜM
+// kaynak dosyalarına genişledi ve /api/cosre/v2/ ailesini de kapsar: v2
+// sohbet ucu kendi dosyasında (cosre_v2_chat.go) kaydoluyor. Yorum satırları
+// kayıt değildir (chat_span.go'daki span adı açıklaması), atlanır.
 func TestRequireCopilotRouteCoverage(t *testing.T) {
-	b, err := os.ReadFile("ai_routes.go")
+	files, err := filepath.Glob("*.go")
 	if err != nil {
-		t.Fatalf("ai_routes.go okunamadı: %v", err)
+		t.Fatal(err)
 	}
-	for _, line := range strings.Split(string(b), "\n") {
-		if strings.Contains(line, `"POST   /api/copilot/`) &&
-			!strings.Contains(line, "s.requireCopilot(") {
-			t.Errorf("requireCopilot sarımı olmayan copilot route'u: %s", strings.TrimSpace(line))
+	re := regexp.MustCompile(`"POST\s+/api/(copilot|cosre/v2)/`)
+	seen := 0
+	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") {
+			continue
 		}
+		b, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatalf("%s okunamadı: %v", f, err)
+		}
+		for _, line := range strings.Split(string(b), "\n") {
+			if strings.HasPrefix(strings.TrimSpace(line), "//") || !re.MatchString(line) {
+				continue
+			}
+			seen++
+			if !strings.Contains(line, "s.requireCopilot(") {
+				t.Errorf("%s: requireCopilot sarımı olmayan AI route'u: %s", f, strings.TrimSpace(line))
+			}
+		}
+	}
+	if seen < 10 {
+		t.Fatalf("yalnız %d AI POST kaydı bulundu — tarama bozulmuş olabilir", seen)
 	}
 }
 

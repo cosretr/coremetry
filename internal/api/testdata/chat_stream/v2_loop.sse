@@ -1,0 +1,38 @@
+data: {"type":"start"}
+
+data: {"type":"start-step"}
+
+data: {"data":{"i":1,"label":"araştırma bütçesi: 6 araç · 5 tur"},"id":"s1","type":"data-step"}
+
+data: {"dynamic":true,"toolCallId":"s2","toolName":"get_service_health","type":"tool-input-start"}
+
+data: {"dynamic":true,"input":{"argsText":"{\"service\":\"orders-api\"}"},"toolCallId":"s2","toolName":"get_service_health","type":"tool-input-available"}
+
+data: {"data":{"final":true,"payload":{"href":"/service?name=orders-api","label":"orders-api · Overview"},"seq":1},"id":"b1","type":"data-block-link"}
+
+data: {"dynamic":true,"output":{"bytes":94,"durationMs":0,"href":"/service?name=orders-api","ok":true,"preview":"{\"source\":{\"backend\":\"clickhouse\",\"source\":\"traces\",\"state\":\"ok\"},\"tool\":\"get_service_health\"}","sources":[{"source":"traces","state":"ok"}],"truncated":false},"toolCallId":"s2","type":"tool-output-available"}
+
+data: {"id":"t1","type":"text-start"}
+
+data: {"delta":"**Bulgu** — orders-api p95 yükseldi.","id":"t1","type":"text-delta"}
+
+data: {"id":"t1","type":"text-end"}
+
+data: {"data":{"target":"t1"},"id":"r1","type":"data-reset"}
+
+data: {"id":"t2","type":"text-start"}
+
+data: {"delta":"**Bulgu** — orders-api p95 yükseldi.\n\nKaynak: get_service_health (1 araç)","id":"t2","type":"text-delta"}
+
+data: {"id":"t2","type":"text-end"}
+
+data: {"data":{"links":[{"href":"/service?name=orders-api","label":"orders-api · Overview"}]},"id":"links","type":"data-links"}
+
+data: {"messageMetadata":{"callId":"X","exchangeId":"golden-xid"},"type":"message-metadata"}
+
+data: {"type":"finish-step"}
+
+data: {"finishReason":"stop","type":"finish"}
+
+data: [DONE]
+
