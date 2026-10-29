@@ -11,6 +11,9 @@ import (
 // Options — Heartbeat > 0: `: ping\n\n` yorumu bu aralıkla (yazım kilidi paylaşılır).
 type Options struct {
 	Heartbeat time.Duration
+	// MessageID — `start` parçasının sunucu üretimi messageId'si (v0.10.1603);
+	// nil → NewMessageID (monotonik ULID). Golden'lar sabit üretici enjekte eder.
+	MessageID func() string
 }
 
 // Emitter — v1 olaylarını UI Message Stream SSE olarak yazar. blocks.Emitter
@@ -41,6 +44,11 @@ func NewEmitter(w http.ResponseWriter, o Options) (*Emitter, bool) {
 	h.Set("X-Accel-Buffering", "no")
 	h.Set(HeaderName, ProtocolVersion)
 	e := &Emitter{w: w, f: f, tr: NewTranslator()}
+	gen := o.MessageID
+	if gen == nil {
+		gen = NewMessageID
+	}
+	e.tr.messageID = gen()
 	if o.Heartbeat > 0 {
 		e.hbStop, e.hbDone = make(chan struct{}), make(chan struct{})
 		go e.heartbeat(o.Heartbeat)

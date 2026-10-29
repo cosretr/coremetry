@@ -35,7 +35,7 @@ func renderFixture(t *testing.T, name string) (string, *httptest.ResponseRecorde
 		t.Fatal(err)
 	}
 	rec := httptest.NewRecorder()
-	e, ok := NewEmitter(rec, Options{})
+	e, ok := NewEmitter(rec, Options{MessageID: GoldenMessageID})
 	if !ok {
 		t.Fatal("emitter")
 	}

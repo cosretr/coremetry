@@ -26,7 +26,7 @@ func TestEmitterRejectsNonFlusher(t *testing.T) {
 
 func TestEmitterHeadersFramingAndDone(t *testing.T) {
 	rec := httptest.NewRecorder()
-	e, ok := NewEmitter(rec, Options{})
+	e, ok := NewEmitter(rec, Options{MessageID: func() string { return "m1" }})
 	if !ok {
 		t.Fatal("recorder reddedildi")
 	}
@@ -41,7 +41,7 @@ func TestEmitterHeadersFramingAndDone(t *testing.T) {
 	e.Emit("done", map[string]bool{"ok": true})
 	e.Close()
 	e.Close() // idempotent
-	want := "data: {\"type\":\"start\"}\n\n" +
+	want := "data: {\"messageId\":\"m1\",\"type\":\"start\"}\n\n" +
 		"data: {\"type\":\"start-step\"}\n\n" +
 		"data: {\"type\":\"finish-step\"}\n\n" +
 		"data: {\"finishReason\":\"stop\",\"type\":\"finish\"}\n\n" +

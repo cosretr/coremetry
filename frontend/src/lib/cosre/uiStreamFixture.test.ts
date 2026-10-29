@@ -6,7 +6,7 @@
 import { describe, it, expect } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { DATA_PART_NAMES, UI_STREAM_PART_TYPES, dataPartName, isDataPart } from './protocol';
+import { DATA_PART_NAMES, MESSAGE_ID_RE, UI_STREAM_PART_TYPES, dataPartName, isDataPart } from './protocol';
 import { parseUIStreamSSE } from './uiStreamFixture';
 
 const ROOT = resolve(__dirname, '../../../..');
@@ -52,6 +52,13 @@ describe.each(FIXTURES)('%s.sse', name => {
   it('start, start-step ile açılır; finish ile kapanır', () => {
     expect(parts.slice(0, 2).map(p => p.type)).toEqual(['start', 'start-step']);
     expect(parts[parts.length - 1].type).toBe('finish');
+  });
+
+  // v0.10.1603 — start sunucu üretimi ULID messageId taşır; fixture'lar sabit
+  // üreticiyle (GoldenMessageID) deterministik.
+  it('start, ULID messageId taşır; başka parça taşımaz', () => {
+    expect(String(parts[0].messageId ?? '')).toMatch(MESSAGE_ID_RE);
+    expect(parts.slice(1).some(p => 'messageId' in p)).toBe(false);
   });
 
   it('metin parçaları açılmadan kullanılmaz; reset kapanmış metni hedefler', () => {

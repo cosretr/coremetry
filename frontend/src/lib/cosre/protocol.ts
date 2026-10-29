@@ -16,6 +16,10 @@ export const PROTOCOL_VERSION = 'v1';
 export const PROTOCOL_HEADER = 'x-vercel-ai-ui-message-stream';
 export const DONE_MARKER = '[DONE]';
 
+/** v0.10.1603 — `start` parçasının sunucu üretimi messageId'si: ULID
+ *  (26 karakter Crockford base32; Go: internal/cosre/uistream/ulid.go). */
+export const MESSAGE_ID_RE = /^[0-9A-HJKMNP-TV-Z]{26}$/;
+
 /** Çeviricinin ürettiği data-* dışı parça türleri. */
 export const UI_STREAM_PART_TYPES = [
   'start', 'start-step', 'finish-step', 'finish',

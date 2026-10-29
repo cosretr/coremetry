@@ -14,6 +14,8 @@ type Translator struct {
 	started           bool
 	sawAnswerOrError  bool
 	sawDone           bool
+	// messageID — `start` parçasının messageId'si (v0.10.1603); "" = yok.
+	messageID string
 }
 
 // NewTranslator — boş akış.
@@ -34,7 +36,11 @@ func (t *Translator) Translate(kind string, payload any) []Part {
 	var out []Part
 	if !t.started {
 		t.started = true
-		out = append(out, Part{"type": "start"}, Part{"type": "start-step"})
+		start := Part{"type": "start"}
+		if t.messageID != "" {
+			start["messageId"] = t.messageID
+		}
+		out = append(out, start, Part{"type": "start-step"})
 	}
 	m := toMap(payload)
 	switch kind {

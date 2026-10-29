@@ -16,7 +16,9 @@
 //   - akışın sonu `data: [DONE]\n\n`;
 //   - heartbeat SSE yorumu `: ping\n\n` (ayrıştırıcı yorum satırını atlar);
 //   - araç parçaları `dynamic:true` (araç kümesi açık uçlu: 74 araç + MCP);
-//   - aynı `id`'li `data-*` parçası öncekinin yerine geçer.
+//   - aynı `id`'li `data-*` parçası öncekinin yerine geçer;
+//   - `start` parçası sunucu üretimi `messageId` taşır (ULID, ulid.go;
+//     v0.10.1603).
 //
 // Geri alma TEK mekanizmadır: `data-reset{data:{target:<metin parça id>}}`.
 // Son cevap, akan taslağı reset'le geri alıp otoriter metni TEK delta olarak

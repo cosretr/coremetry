@@ -49,9 +49,13 @@ func (s *Server) cosreV2Chat(w http.ResponseWriter, r *http.Request) {
 	s.copilotChatWith(w, r, v2ChatSink)
 }
 
+// v2MessageIDSeam — test dikişi: golden'lar `start` messageId'sini sabitler
+// (v0.10.1603). Üretimde nil → uistream.NewMessageID (monotonik ULID).
+var v2MessageIDSeam func() string
+
 // v2ChatSink — UI Message Stream yazıcısı (heartbeat v1 ile aynı aralık).
 func v2ChatSink(w http.ResponseWriter) (chatSink, bool) {
-	em, ok := uistream.NewEmitter(w, uistream.Options{Heartbeat: sseHeartbeatEvery})
+	em, ok := uistream.NewEmitter(w, uistream.Options{Heartbeat: sseHeartbeatEvery, MessageID: v2MessageIDSeam})
 	if !ok {
 		return nil, false // açık nil: nil *Emitter'ı arayüze sarmak nil-olmayan arayüz verir
 	}

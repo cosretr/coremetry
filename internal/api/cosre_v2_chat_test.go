@@ -20,7 +20,8 @@ import (
 func setCosreV2(t *testing.T, s *Server, on bool) {
 	t.Helper()
 	s.cosreV2Memo().set(on)
-	t.Cleanup(func() { cosreV2Memos.Delete(s) })
+	v2MessageIDSeam = uistream.GoldenMessageID // v0.10.1603 — sabit messageId
+	t.Cleanup(func() { cosreV2Memos.Delete(s); v2MessageIDSeam = nil })
 }
 
 func serveV2(s *Server, r *http.Request) *httptest.ResponseRecorder {
