@@ -16,8 +16,9 @@ func TestTurnLabelRoundTrip(t *testing.T) {
 		{TierGuided, "service_health", false, "cosre-turn:guided/service_health", TierGuided, "service_health"},
 		{TierWiki, "", true, "cosre-turn:wiki+deep", TierWiki, ""},
 		{TierIntent, "root_cause", true, "cosre-turn:intent/root_cause+deep", TierIntent, "root_cause"},
-		{TierMemory, "", false, "cosre-turn:memory", TierMemory, ""},              // v0.10.1289
-		{TierCodeSticky, "", false, "cosre-turn:code-sticky", TierCodeSticky, ""}, // v0.10.1465
+		{TierMemory, "", false, "cosre-turn:memory", TierMemory, ""},                                   // v0.10.1289
+		{TierCodeSticky, "", false, "cosre-turn:code-sticky", TierCodeSticky, ""},                      // v0.10.1465
+		{TierClarify, "source_ask", false, "cosre-turn:clarify/source_ask", TierClarify, "source_ask"}, // v0.10.1571
 		// Bilinmeyen kademe → other; kurala uymayan rota düşer (kardinalite).
 		{"bogus", "Service Health", false, "cosre-turn:other", TierOther, ""},
 		{TierLoop, "a:b", false, "cosre-turn:loop", TierLoop, ""},

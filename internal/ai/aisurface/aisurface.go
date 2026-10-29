@@ -232,13 +232,16 @@ const (
 	// TierCodeSticky — v0.10.1465: kod okunmuş konuşmada yerel profil yok →
 	// dürüst kapalı cevap, LLM'siz (api/chat_code_sticky.go).
 	TierCodeSticky = "code-sticky"
-	TierLoop       = "loop"
-	TierOther      = "other"
+	// TierClarify — v0.10.1571: düz metin netleştirme sorusu ("Coremetry verisinde
+	// mi, wikide mi?") ya da cevabının LLM'siz kapanışı (api/chat_clarify.go).
+	TierClarify = "clarify"
+	TierLoop    = "loop"
+	TierOther   = "other"
 )
 
 var tiers = map[string]bool{TierScope: true, TierWiki: true, TierGuided: true, TierDrawer: true,
 	TierRAG: true, TierIntent: true, TierLoop: true, TierOther: true, TierDocRows: true, TierDiscovery: true, TierOperation: true,
-	TierMemory: true, TierExplain: true, TierCodeSticky: true}
+	TierMemory: true, TierExplain: true, TierCodeSticky: true, TierClarify: true}
 
 // KnownTier — kademe adı kayıtlı mı (api kaynak testi copilotChat'in
 // cspan.tier(...) adlarını buna karşı denetler).

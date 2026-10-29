@@ -450,7 +450,7 @@ func (s *Server) sourceForcedAnswer(ctx context.Context, emit func(string, any),
 	ctx = withRecordsQuestion(ctx, question)
 	switch kind {
 	case srcTelemetry:
-		return context.WithValue(ctx, forcedSourceKey{}, srcTelemetry), false, false
+		return withForcedChatSource(ctx, srcTelemetry), false, false
 	case srcExcel:
 		rows, vals := s.docRowsFind(ctx, question, false)
 		if len(rows) == 0 {

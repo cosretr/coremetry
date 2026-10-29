@@ -434,6 +434,20 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// v0.10.1571 — düz metin netleştirme cevabı (chat_clarify.go): önceki tur
+	// CoSRE bir soru sorduysa ("Coremetry verisinde mi, wikide mi?") bu turun
+	// metni cevap olarak yorumlanır; özgün soru seçilen kaynakta yeniden koşar.
+	// Bekleyen soru yoksa / cevap tanınmazsa ctx ve mesajlar AYNEN.
+	if evm == nil {
+		cr := s.chatClarifyReplyTier(ctx, emit, req.Messages, cst)
+		ctx, req.Messages = cr.ctx, cr.msgs
+		if cr.handled {
+			cspan.tier("wiki", cr.ok)
+			emit("done", map[string]bool{"ok": cr.ok})
+			return
+		}
+	}
+
 	// v0.10.1124 — AÇIK wiki sorusu ("runbook'u nedir", "wikide nasıl
 	// anlatılıyor") guided'dan ÖNCE: servis adı taşıyan wiki sorusu telemetri
 	// anlatımına kaçıyordu (chat_wiki_tier.go). İşaretsiz soru bayt bayt eski.
@@ -553,6 +567,15 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 	}
 	traceSubj, isTraceFollowUp := drawerTraceFollowUp(req.Context.Explain, req.Context.Subject, pageTraceID)
 	if !isTraceFollowUp && !ct.On && opPre == nil { // v0.10.1461 — kod turu da orta kademeleri atlar
+		// v0.10.1571 — kaynak sorusu (chat_clarify.go): telemetri şekilli soru
+		// guided'a oturmadı ve wiki gerçek bir alternatif → yalnız "Coremetry
+		// verisinde mi, wikide mi?" sorulur (düz metin, LLM'siz). Kapı kapalıysa
+		// zincir bayt bayt eski.
+		if evm == nil && s.chatSourceAskTier(ctx, emit, req.Messages, wikiTC, cst) {
+			cspan.tier("clarify", true)
+			emit("done", map[string]bool{"ok": true})
+			return
+		}
 		// v0.10.1053 — exception takibinin tek araçlı kod döngüsü bu alışverişin
 		// audit'ini, span'ını, tavanını kullanır (chat_exception_followup.go).
 		drawerEnv := drawerLoopEnv{r: r, span: cspan, exchangeMax: exchangeMax, started: chatT0}

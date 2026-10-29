@@ -327,6 +327,31 @@ var routingRegressionRows = []routingRow{
 		q: "takımının servisleri nasıl?", wantTier: aisurface.TierGuided, wantRoute: string(guidedMyServices)},
 	{release: "v0.10.1569", name: "ekibinin problemleri → my_problems",
 		q: "ekibinin açık problemleri neler", wantTier: aisurface.TierGuided, wantRoute: string(guidedMyProblems)},
+
+	// v0.10.1571 — düz metin kaynak sorusu (chat_clarify.go): telemetri şekilli,
+	// guided'a oturmayan soru wiki kuruluyken yalnız "Coremetry mi, wiki mi?"
+	// sorusunu alır (LLM'siz, çip yok). Açık wiki sorusu ve guided'a oturan soru
+	// eskisi gibi.
+	{release: "v0.10.1571", name: "belirsiz telemetri sorusu + wiki → kaynak sorusu (düz metin)",
+		q: "servis sahipliği kimde", setup: withRoutingWiki,
+		wantTier: aisurface.TierClarify, wantRoute: "source_ask", noLLM: true, ansPrefix: sourceAskTextTR},
+	{release: "komşu v0.10.1571", name: "açık wiki sorusu + wiki → wiki kademesi (soru sorulmaz)",
+		q: "servis sahipliği runbook'u nedir", setup: withRoutingWiki,
+		wantTier: aisurface.TierWiki, ansNot: []string{sourceAskTextTR}},
+	{release: "komşu v0.10.1571", name: "takımının servisleri + wiki → my_services (1569 kalır)",
+		q: "takımının servisleri nasıl?", setup: withRoutingWiki,
+		wantTier: aisurface.TierGuided, wantRoute: string(guidedMyServices)},
+	{release: "komşu v0.10.1571", name: "servis sağlığı + wiki → service_health (soru sorulmaz)",
+		q: rrSvc + " sağlığı nasıl?", setup: withRoutingWiki,
+		wantTier: aisurface.TierGuided, wantRoute: string(guidedServiceHealth), noLLM: true},
+}
+
+// withRoutingWiki — v0.10.1571: wiki kurulu (servis sahipliği sayfası).
+func withRoutingWiki(t *testing.T, _ *routingRig) {
+	t.Helper()
+	withWikiService(t, wiki.Config{Enabled: true}, &fakeWikiAPI{pages: map[string]string{
+		"/Platform/Servis sahipliği runbook": "# Servis sahipliği\nHer servisin sahibi takım kataloğunda tutulur.",
+	}})
 }
 
 // routingPassThrough — dikişin demeti koşturduğu rotalar (store'suz çalışanlar).
@@ -474,7 +499,7 @@ func assertServiceHealthNoSpanChart(t *testing.T) {
 func TestRoutingRegressionRowsWellFormed(t *testing.T) {
 	known := map[string]bool{aisurface.TierScope: true, aisurface.TierWiki: true, aisurface.TierGuided: true,
 		aisurface.TierDrawer: true, aisurface.TierIntent: true, aisurface.TierOperation: true, aisurface.TierMemory: true,
-		aisurface.TierExplain: true, "rag": true, "doc-rows": true}
+		aisurface.TierExplain: true, aisurface.TierClarify: true, "rag": true, "doc-rows": true}
 	seen := map[string]bool{}
 	for _, r := range routingRegressionRows {
 		key := r.release + " " + r.name
@@ -488,7 +513,7 @@ func TestRoutingRegressionRowsWellFormed(t *testing.T) {
 		if !known[r.wantTier] {
 			t.Errorf("%s: bilinmeyen kademe %q (serbest döngü beklenen bir yönlendirme değildir)", key, r.wantTier)
 		}
-		if r.wantRoute != "" && r.wantTier != aisurface.TierGuided && r.wantTier != aisurface.TierIntent {
+		if r.wantRoute != "" && r.wantTier != aisurface.TierGuided && r.wantTier != aisurface.TierIntent && r.wantTier != aisurface.TierClarify {
 			t.Errorf("%s: rota yalnız guided / niyet kademesinde anlamlı", key)
 		}
 	}

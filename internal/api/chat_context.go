@@ -56,6 +56,11 @@ type ChatContext struct {
 	// kümesi DEĞİLDİR: Empty / çip / önsöz / get_context görmez, clear_context
 	// silmez; yalnız yeni konuşma (yeni kimlik) sıfırlar.
 	CodeSticky bool `json:"codeSticky,omitempty"`
+	// Pending — v0.10.1571 (chat_clarify.go): CoSRE'nin düz metinle sorduğu ve
+	// cevabını bir SONRAKİ serbest metin turunda beklediği netleştirme sorusu.
+	// CodeSticky gibi çalışma kümesi DEĞİLDİR (Empty / çip / önsöz görmez);
+	// sonraki tur onu okur ve siler, 10 dk'dan eskisi yok sayılır.
+	Pending *chatPendingAsk `json:"pending,omitempty"`
 }
 
 func (c ChatContext) Empty() bool {
@@ -286,7 +291,7 @@ func applyContextPatch(c ChatContext, patch map[string]any) (ChatContext, error)
 // clearContextFields — SAF: alan listesi boşsa hepsi.
 func clearContextFields(c ChatContext, fields []string) (ChatContext, error) {
 	if len(fields) == 0 {
-		return ChatContext{CodeSticky: c.CodeSticky}, nil // v0.10.1465 — yapışkan kod işareti çalışma kümesi değil
+		return ChatContext{CodeSticky: c.CodeSticky, Pending: c.Pending}, nil // v0.10.1465 — yapışkan kod işareti çalışma kümesi değil; v0.10.1571 — bekleyen soru da
 	}
 	for _, f := range fields {
 		switch strings.TrimSpace(f) {
