@@ -113,3 +113,23 @@ func TestEmitterConcurrentEmitHeartbeatClose(t *testing.T) {
 		t.Fatal("Close'dan sonra yazım")
 	}
 }
+
+// v0.10.1595 — regresyon (v0.10.1591'in emitter'ı): `: ping` [DONE]'dan
+// sonra düşüyordu. İki boşluk: Close [DONE]'u yazıp kilidi bıraktıktan SONRA
+// heartbeat'i durduruyordu (TestEmitterConcurrentEmitHeartbeatClose
+// -count=50 -race'te 14/50 kırmızı), ve `done` olayı [DONE]'u Emit içinde
+// yazdıktan sonra heartbeat Close'a dek tiklemeye devam ediyordu (bu test
+// eski kodda 5/5 kırmızı). Mikrosaniyelik heartbeat'le: [DONE] her seferinde
+// SON satır.
+func TestEmitterCloseNoPingAfterDone(t *testing.T) {
+	for i := 0; i < 300; i++ {
+		rec := httptest.NewRecorder()
+		e, _ := NewEmitter(rec, Options{Heartbeat: time.Microsecond})
+		e.Emit("done", map[string]bool{"ok": true})
+		time.Sleep(time.Duration(i%3) * time.Microsecond)
+		e.Close()
+		if body := rec.Body.String(); !strings.HasSuffix(body, "data: [DONE]\n\n") {
+			t.Fatalf("tur %d: [DONE] son satır değil: ...%q", i, body[max(0, len(body)-60):])
+		}
+	}
+}

@@ -6,8 +6,6 @@ import (
 	"net/http"
 	"sync"
 	"time"
-
-	"github.com/cilcenk/coremetry/internal/ai/agent/blocks"
 )
 
 // Options — Heartbeat > 0: `: ping\n\n` yorumu bu aralıkla (yazım kilidi paylaşılır).
@@ -23,7 +21,10 @@ type Emitter struct {
 	mu          sync.Mutex
 	tr          *Translator
 	doneWritten bool
-	hb          *blocks.Heartbeat
+	// heartbeat — kendi döngüsü (blocks.StartHeartbeat değil): tik [DONE]'dan
+	// sonra yazmamalı ve bunu yazım kilidi altında doneWritten'a bakarak bilir.
+	hbStop, hbDone chan struct{}
+	hbOnce         sync.Once
 }
 
 // NewEmitter — ok=false: yazıcı Flush edemiyor. Başlıklar kurucuda yazılır
@@ -41,7 +42,8 @@ func NewEmitter(w http.ResponseWriter, o Options) (*Emitter, bool) {
 	h.Set(HeaderName, ProtocolVersion)
 	e := &Emitter{w: w, f: f, tr: NewTranslator()}
 	if o.Heartbeat > 0 {
-		e.hb = blocks.StartHeartbeat(&e.mu, w, f, o.Heartbeat)
+		e.hbStop, e.hbDone = make(chan struct{}), make(chan struct{})
+		go e.heartbeat(o.Heartbeat)
 	}
 	return e, true
 }
@@ -56,19 +58,55 @@ func (e *Emitter) Emit(kind string, payload any) {
 	}
 }
 
-// Close — akış başladıysa borçlu parçalar (Translator.Finish) + [DONE];
-// sonra heartbeat'i durdurup bitmesini bekler. İdempotent, nil-güvenli.
+// Close — ÖNCE heartbeat'i durdurup bitmesini bekler, sonra akış başladıysa
+// borçlu parçalar (Translator.Finish) + [DONE]. İdempotent, nil-güvenli.
+//
+// v0.10.1595 — [DONE] protokolün SON satırıdır; iki boşluk `: ping`i ondan
+// sonraya düşürüyordu: (1) Close [DONE]'u yazıp kilidi bıraktıktan SONRA
+// heartbeat'i durduruyordu; (2) `done` olayı [DONE]'u Emit içinde yazar ve
+// handler'ın ertelenmiş işleri (kayıt) bitene dek heartbeat tiklemeye devam
+// ediyordu. Çare: tik yazım kilidi altında doneWritten'a bakar; Close
+// heartbeat'i kilidi TUTMADAN durdurur (tik kilidi bekliyorsa alır, yazar,
+// çıkar — kilitlenme yok).
 func (e *Emitter) Close() {
 	if e == nil {
 		return
 	}
+	e.stopHeartbeat()
 	e.mu.Lock()
 	if e.tr.Started() {
 		e.writeLocked(e.tr.Finish())
 		e.writeDoneLocked()
 	}
 	e.mu.Unlock()
-	e.hb.Stop()
+}
+
+func (e *Emitter) heartbeat(every time.Duration) {
+	defer close(e.hbDone)
+	t := time.NewTicker(every)
+	defer t.Stop()
+	for {
+		select {
+		case <-e.hbStop:
+			return
+		case <-t.C:
+			e.mu.Lock()
+			if !e.doneWritten {
+				_, _ = io.WriteString(e.w, ": ping\n\n")
+				e.f.Flush()
+			}
+			e.mu.Unlock()
+		}
+	}
+}
+
+// stopHeartbeat — durdurur ve goroutine'in bittiğini bekler; idempotent.
+func (e *Emitter) stopHeartbeat() {
+	if e.hbStop == nil {
+		return
+	}
+	e.hbOnce.Do(func() { close(e.hbStop) })
+	<-e.hbDone
 }
 
 func (e *Emitter) writeLocked(parts []Part) {
