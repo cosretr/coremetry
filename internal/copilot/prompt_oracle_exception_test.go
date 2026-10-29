@@ -87,3 +87,29 @@ func TestExceptionPromptsSampleTraceLogs(t *testing.T) {
 		t.Fatal("iki prompt da sürüm sicilinde güncel değeriyle olmalı")
 	}
 }
+
+// TestOracleTraceSynthesisAddendumAnchors — v0.10.1572 (operatör, 2026-10-29):
+// Oracle cevabından sonra "trace'le birlikte inceleyeyim mi?" sorusuna olumlu
+// cevapta kullanılan ek sicilde (PromptVersion kapsar), Oracle prompt'unun
+// bölüm adını AYNEN anar, sunucu bloğunun adını ("TRACE KANITI") ve dosya:satır
+// kuralını taşır; dil direktifi tekrarlanmaz (taban prompt zaten taşır).
+func TestOracleTraceSynthesisAddendumAnchors(t *testing.T) {
+	a := OracleTraceSynthesisAddendum()
+	if promptVersionRegistry["oracleTraceSynthesisAddendum"] != a {
+		t.Fatal("ek promptVersionRegistry'de değil — PromptVersion değişimi görmez")
+	}
+	for _, want := range []string{"TRACE KANITI", "HATA ZİNCİRİ", "**Çağıran taraf (Coremetry trace)**", "**Ne kontrol edilmeli**", "dosya:satır"} {
+		if !strings.Contains(a, want) {
+			t.Errorf("ek %q anmalı", want)
+		}
+		if strings.HasPrefix(want, "**") && !strings.Contains(SystemPromptOracleException(), want) {
+			t.Errorf("başlık %q Oracle prompt'unda yok — iki metin ayrıştı", want)
+		}
+	}
+	if strings.Contains(a, AnswerInTurkish) {
+		t.Error("dil direktifi tabanda; ekte tekrarlanmamalı")
+	}
+	if n := strings.Count(strings.TrimSpace(a), "\n") + 1; n > 10 {
+		t.Errorf("ek %d satır, ≤10 olmalı (küçük model)", n)
+	}
+}

@@ -231,7 +231,7 @@ func withForcedChatSource(ctx context.Context, kind string) context.Context {
 
 // chatClarifyReplyTier — bekleyen soru varsa bu turun metnini cevap olarak
 // yorumlar. Bekleyen soru yoksa ctx / msgs aynen döner.
-func (s *Server) chatClarifyReplyTier(ctx context.Context, emit func(string, any), msgs []copilot.ChatMessage, cst *chatContextState) clarifyReply {
+func (s *Server) chatClarifyReplyTier(ctx context.Context, emit func(string, any), msgs []copilot.ChatMessage, cst *chatContextState, loc *time.Location) clarifyReply {
 	out := clarifyReply{ctx: ctx, msgs: msgs}
 	p, ok := cst.takePending(time.Now())
 	if !ok {
@@ -250,6 +250,13 @@ func (s *Server) chatClarifyReplyTier(ctx context.Context, emit func(string, any
 	case p.Kind == pendingKindSource && class == sourceReplyTelemetry:
 		out.msgs = replaceLastUserText(msgs, p.Question)
 		out.ctx = withRecordsQuestion(withForcedChatSource(ctx, srcTelemetry), p.Question)
+	case p.Kind == pendingKindTraceSynth && class == synthReplyYes: // v0.10.1572 dilim 2 (chat_clarify_synth.go)
+		out.handled, out.ok = s.chatTraceSynthesisAnswer(ctx, emit, p, loc)
+		out.tier = "operation"
+	case p.Kind == pendingKindTraceSynth && class == synthReplyNo:
+		chatExchangeFrom(ctx).noteRoute("trace_declined")
+		emit("answer", map[string]any{"text": synthDeclinedTR, "sources": []any{}, "links": []guidedAnswerLink{}, "allowedLinks": []string{}})
+		out.tier, out.handled, out.ok = "clarify", true, true
 	}
 	return out
 }
@@ -261,6 +268,9 @@ func clarifyReplyClass(p *chatPendingAsk, reply string) string {
 		if c := classifySourceReply(reply); c != "" {
 			return c
 		}
+	}
+	if p != nil && p.Kind == pendingKindTraceSynth {
+		return synthReplyClass(reply)
 	}
 	return clarifyReplyDropped
 }
@@ -277,6 +287,10 @@ func clarifyReplyEvidenceTR(p *chatPendingAsk, class string) string {
 		what = "özgün soru wiki dokümanlarında aranıyor"
 	case sourceReplyTelemetry:
 		what = "özgün soru Coremetry verisinde cevaplanıyor"
+	case synthReplyYes:
+		what = "Oracle açıklaması trace " + p.TraceID + " ile sentezleniyor"
+	case synthReplyNo:
+		what = "trace incelemesi atlandı"
 	}
 	return "bekleyen soru (" + p.Kind + "): " + clipRunes(q, 200) + "\ncevap: " + class + " — " + what
 }

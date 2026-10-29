@@ -261,8 +261,11 @@ type opPrefetch struct {
 	// searchText — v0.10.1373: yol-yalnız hedefin trace arama metni
 	// (pathSearchText); "" = katalog hedefi.
 	searchText string
-	endpoint   bool // endpoint anma aşamasından geldi
-	argsJSON   string
+	// screen — v0.10.1572 (chat_clarify_synth.go): ekrandaki trace; Oracle
+	// açıklamasının sentez sorusu önce bunu seçer (sıfır değer = ekran yok).
+	screen   opScreenTrace
+	endpoint bool // endpoint anma aşamasından geldi
+	argsJSON string
 	// codeKey — v0.10.1297: operasyon span'lerde yok, köprü fonksiyon kodu
 	// (Oracle katalog satırı) → span anahtarının yazımı; "" = span operasyonu
 	// ya da kod yok (döngü linkleri yeniden yazılmaz).

@@ -2213,6 +2213,24 @@ verilen kod, sayı ve id'leri kullan.`
 // OperationExceptionsAddendum — v0.10.1331: operasyonun Exceptions grubu varken serbest döngü eki.
 func OperationExceptionsAddendum() string { return operationExceptionsAddendum }
 
+// oracleTraceSynthesisAddendum — v0.10.1572 (operatör, 2026-10-29): Oracle
+// operasyon cevabından sonra CoSRE "trace'le birlikte hata zincirini ve
+// stack'i de inceleyeyim mi?" diye sorar; olumlu cevapta systemOracleException
+// bu ekle çağrılır ve girdinin sonuna sunucunun kurduğu "TRACE KANITI" bloğu
+// gelir (api/chat_clarify_synth.go). Bölüm adları DEĞİŞMEZ; tek sentez cevabı.
+const oracleTraceSynthesisAddendum = `
+
+TRACE SENTEZİ: girdinin sonundaki "TRACE KANITI" bloğu operatörün bağlamındaki
+Coremetry trace'idir (HATA ZİNCİRİ, hata metni, SQL, uygulama stack çerçeveleri,
+loglar). Aynı dört başlığı koru. **Çağıran taraf (Coremetry trace)** başlığını
+BU bloktan yaz: zinciri halka halka (servis · metot · hedef · kod) ve kök nedeni
+tek cümleyle; "trace yok" DEME. **Ne kontrol edilmeli** ilk maddesi stack'teki
+uygulama çerçevesini dosya:satır ile göstersin (ör. OrderService.java:42);
+çerçeve yoksa bunu söyle. Yalnız bloktaki ad, kod, id ve satırları kullan; kısa yaz.`
+
+// OracleTraceSynthesisAddendum — v0.10.1572: Oracle grubu + bağlam trace'i sentez eki.
+func OracleTraceSynthesisAddendum() string { return oracleTraceSynthesisAddendum }
+
 // operationClusterCompareAddendum — v0.10.1374 (operator-reported: bir endpoint
 // iki bölgeden servis ediliyor, DB çoğunlukla birinde; "hem eu-a hem tr-c
 // kümelerinde çağrılıyor, tekrar eden DB/servis çağrılarına bak"): endpoint

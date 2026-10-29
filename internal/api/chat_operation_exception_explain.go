@@ -318,6 +318,15 @@ func (s *Server) opExceptionExplainInChat(ctx context.Context, emit func(string,
 	}
 	xid := res.Xid
 	text := trimExplainText(res) + opExceptionExplainFooterTR(top, p.Operation)
+	// v0.10.1572 (chat_clarify_synth.go) — Oracle grubu + uygun hatalı trace →
+	// cevabın sonuna düz metin sentez sorusu; cevap sonraki turda yorumlanır.
+	// Bekleyen soru taşınamıyorsa (kullanıcısız / önbelleksiz) soru eklenmez.
+	if chstore.IsOracleGroup(top.Fingerprint) && s.canRemember(chatContextFromCtx(ctx)) {
+		if tid := pickSynthesisTrace(p.screen, p.Services, p.Traces); tid != "" {
+			text += "\n\n" + traceAskTextTR(tid)
+			noteTraceSynthAsk(ctx, tid, top.Fingerprint, p.Operation)
+		}
+	}
 	// v0.10.1400 — grup linki ÇIPLAK grup sayfası: açıklama zaten bu turda;
 	// `&ai=exception` artık sohbete yeni bir açıklama turu açar (çift tur olurdu).
 	groupHref := top.Href

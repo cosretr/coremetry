@@ -439,10 +439,17 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 	// metni cevap olarak yorumlanır; özgün soru seçilen kaynakta yeniden koşar.
 	// Bekleyen soru yoksa / cevap tanınmazsa ctx ve mesajlar AYNEN.
 	if evm == nil {
-		cr := s.chatClarifyReplyTier(ctx, emit, req.Messages, cst)
+		cr := s.chatClarifyReplyTier(ctx, emit, req.Messages, cst, chatLocationNamed(req.Context.Tz, req.Context.TzOffsetMin))
 		ctx, req.Messages = cr.ctx, cr.msgs
 		if cr.handled {
-			cspan.tier("wiki", cr.ok)
+			switch cr.tier { // literal adlar: ai_surface_registry_test kayıtlı kademeyi denetler
+			case "operation":
+				cspan.tier("operation", cr.ok)
+			case "clarify":
+				cspan.tier("clarify", cr.ok)
+			default:
+				cspan.tier("wiki", cr.ok)
+			}
 			emit("done", map[string]bool{"ok": cr.ok})
 			return
 		}
@@ -517,6 +524,7 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 	// chat_operation_exception_explain.go). Grup yok / okunamadı / soru
 	// hata-neden değil → handled=false, akış aşağıda bayt bayt eski.
 	if opPre != nil && opPre.errorAsk {
+		opPre.screen = opScreenTraceOf(req.Context.Trace, pageTID, req.Context.Subject, req.Context.Service) // v0.10.1572 — sentez sorusunun trace'i
 		if handled, eok := s.opExceptionExplainInChat(ctx, emit, opPre, chatLocationNamed(req.Context.Tz, req.Context.TzOffsetMin)); handled {
 			cspan.tier("operation", eok)
 			emit("done", map[string]bool{"ok": eok})

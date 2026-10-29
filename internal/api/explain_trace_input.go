@@ -159,7 +159,15 @@ type traceExplainInput struct {
 	// ZİNCİRİ'nin kaynak span'i (en derin hatalı yaprak); "" = trace'te hata
 	// yok. Kanıt listesinin (Evidence) BAŞINDA — waterfall önce onu kutular.
 	ErrorOrigin string
+	// ChainBlock — v0.10.1572 (chat_clarify_synth.go): User'ın başındaki HATA
+	// ZİNCİRİ bloğunun kendisi ("" = trace'te hata yok). Oracle + trace sentezi
+	// zinciri ayrı bloğa koyar; prompt'a buradan EK bir şey girmez.
+	ChainBlock string
 }
+
+// traceExplainInputSeam — TEST DİKİŞİ (prod'da nil): trace kanıt paketi.
+// v0.10.1572 — trace sentezi store'suz testte bu dikişten okur.
+var traceExplainInputSeam func(ctx context.Context, id string) (traceExplainInput, error)
 
 // buildTraceExplainInput — trace'in span'lerini çekip kompakt JSON'a
 // indirger, ilişkili logları (varsa) ekler ve deterministik kanıt
@@ -167,6 +175,9 @@ type traceExplainInput struct {
 // hata/boşluk durumunda sessizce trace-only'e düşer (v0.9.166 maliyet
 // disiplini: proaktif/poll YOK).
 func (s *Server) buildTraceExplainInput(ctx context.Context, id string) (traceExplainInput, error) {
+	if traceExplainInputSeam != nil {
+		return traceExplainInputSeam(ctx, id)
+	}
 	// v0.9.632 — operator-reported: Tempo fallback trace'i bulup
 	// waterfall'ı çizerken explain "trace not found" diyordu. Burası
 	// doğrudan s.store.GetTrace çağırıyordu; /api/traces/{id} ise CH
@@ -400,6 +411,7 @@ func (s *Server) buildTraceExplainInput(ctx context.Context, id string) (traceEx
 		User:         chainBlock + traceExplainUser(id, len(compact), totalSpans, string(payload), tail), // v0.10.1371 — zincir başta
 		Evidence:     prependUnique(chain.Origin.Span.SpanID, traceEvidenceSpanIDs(compact)),             // v0.10.1371 — kaynak önce kutulanır
 		ErrorOrigin:  chain.Origin.Span.SpanID,                                                           // v0.10.1371
+		ChainBlock:   strings.TrimSpace(chainBlock),                                                      // v0.10.1572
 		LogsBlock:    tail,
 		OracleRows:   oracleRows,
 		Stack:        rawStack,
