@@ -154,6 +154,18 @@ sıçramalı geçmiş toleransı `spikyBandFactor` 1.5: yukarı HER dilim kovas�
 aşmalı, p90 aynı `Values`'tan Go'da, SQL aynı; saklanan baseline medyan. Bedel: sıkı kovada
 1.3× mevsimsel artık açılmaz — tabanları kaldırmayı önerme).
 
+**trace_op + log_pattern sürdürmesi (v0.10.1586, Davis FAZ 0.5 / C, operatör onayı 2026-10-29):** recorder'ın olay
+YAZAN yolu (`DetectTraceOpAnomaliesSustained`, `DetectLogPatternsSustained`) ardışık `anomaly_sensitivity.traceOpDwellBuckets` /
+`logPatternDwellBuckets` (vars. 2, 1–6; 1 = tek pencere) penceresinin HER BİRİNDE eşik ister — trace_op'ta error_spike VE
+new_error (önceki kova: ≥10 hata, ≥%1 pay, spike'ta ≥3× normalize taban; `traceOpSustained`), log_pattern'de "new" ve "spike"
+(`qualifyLogPattern` her önceki pencerede). Taban sürdürme penceresinden ÖNCE biter (`traceOpWindows` / `logPatternWindows`).
+Aktif olay (son 15 dk, `ListActiveAnomalyKeys` tik başına tek okuma, tavan 200) muaf — yalnız AÇILIŞ kapılı; okuma hatası →
+muafiyet yok. trace_op SQL'i `traceOpQueryDwell` (multiIf kova kolonu, HAVING'de önceki kova koşulları + aktif tuple IN +
+batch'te `base_errs = 0` muaf); dwell 1 `traceOpQuery` BİREBİR. Batch uzun-taban dalı (v0.10.1043) KAPISIZ. CountPatterns
+`prevStarts` alır (CH `prev_<i>` countIf, ES `prev_window_<i>` filtre agg — aynı tek sorgu / tek `_msearch`; boşken bayt bayt
+eski). Canlı şeritler (`/api/anomalies/trace-ops`, `/logs` desen şeridi, MCP, insight) `DetectTraceOpAnomalies` /
+`DetectLogPatterns` ile TEK pencere kalır. Bedel: tek pencerelik patlama olay yazmaz (amaç), anomaly_events hacmi düşer.
+
 **Batch yüklemi (v0.10.1039, operatör: "Bazı batch işlerde ani yük artışı
 olabilir, onları anomali gibi düşünme"):** `anomaly_sensitivity.batchServicePatterns`
 (`*[]string`; nil = `["-batch"]`, `[]` = kapalı) → TEK yüklem

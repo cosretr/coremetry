@@ -23,7 +23,7 @@ type stubLogStore struct{}
 func (stubLogStore) Search(context.Context, logstore.Filter) (*logstore.Page, error) {
 	return &logstore.Page{}, nil
 }
-func (stubLogStore) CountPatterns(context.Context, []logstore.PatternSpec, time.Time, time.Time, time.Time) ([]logstore.PatternStats, error) {
+func (stubLogStore) CountPatterns(context.Context, []logstore.PatternSpec, time.Time, []time.Time, time.Time, time.Time) ([]logstore.PatternStats, error) {
 	return nil, nil
 }
 func (stubLogStore) VerifyPatterns(context.Context, []logstore.PatternSpec, time.Time, time.Time) ([]logstore.PatternVerification, error) {

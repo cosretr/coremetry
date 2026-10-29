@@ -570,6 +570,32 @@ function SensitivitySection() {
               </Field>
             </div>
           </div>
+          {/* v0.10.1586 — trace_op / log_pattern sürdürme (Davis paritesi FAZ 0.5 / C):
+              olay ancak ardışık N pencerede eşiği geçerse açılır; aynı Kaydet. */}
+          <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16, marginTop: 4 }}>
+            <div style={{ fontSize: 13, color: 'var(--text)' }}>
+              Operasyon hatası ve log deseni olayları: sürdürme
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4, lineHeight: 1.5 }}>
+              Operasyon hata sıçraması / yeni hata ve log deseni (yeni ya da sıçrama) olayı
+              ancak bu kadar ardışık 5 dakikalık pencerenin her birinde eşiği geçerse açılır;
+              zaten açık olay tek pencerede tazelenir. 1–6, varsayılan 2. 1 = eski davranış.
+            </div>
+            <div style={{ display: 'flex', gap: 16, marginTop: 10, flexWrap: 'wrap' }}>
+              <Field label="Operasyon hatası: kaç ardışık pencere">
+                <input type="number" min={1} max={6} step={1}
+                  aria-label="Operasyon hatası ardışık pencere"
+                  value={cfg.traceOpDwellBuckets ?? 2}
+                  onChange={e => setCfg({ ...cfg, traceOpDwellBuckets: Number(e.target.value) })} />
+              </Field>
+              <Field label="Log deseni: kaç ardışık pencere">
+                <input type="number" min={1} max={6} step={1}
+                  aria-label="Log deseni ardışık pencere"
+                  value={cfg.logPatternDwellBuckets ?? 2}
+                  onChange={e => setCfg({ ...cfg, logPatternDwellBuckets: Number(e.target.value) })} />
+              </Field>
+            </div>
+          </div>
           {/* v0.10.1091 — yaygın yavaşlama hızlı yolu (operatör: "Dün söylediğim
               CRM sorunu yine oldu, bir sürü anomali geldi ama P1 problem
               gelmedi" → "Onay"). Operasyon gecikmesinin yanında, aynı Kaydet. */}

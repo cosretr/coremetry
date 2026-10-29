@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestChPatternMatchSQL(t *testing.T) {
@@ -43,7 +44,18 @@ func TestCountOnePattern_UsesSharedPredicate(t *testing.T) {
 	}
 	body := s[i:]
 	body = body[:strings.Index(body, "\n}\n")]
-	if n := strings.Count(body, "chPatternMatchSQL(tokensSQL)"); n != 2 {
+	// v0.10.1586 — ana sayım sorgusu saf chCountPatternSQL'e çıktı; iki
+	// sorgunun yüklemi yine ortak (biri orada, top-servis sorgusu burada).
+	j := strings.Index(s, "func chCountPatternSQL(")
+	if j < 0 {
+		t.Fatal("chCountPatternSQL bulunamadı")
+	}
+	main := s[j:]
+	main = main[:strings.Index(main, "\n}\n")]
+	if !strings.Contains(body, "chCountPatternSQL(tokensSQL,") {
+		t.Fatal("countOnePattern ana sorguyu chCountPatternSQL'den almıyor")
+	}
+	if n := strings.Count(body, "chPatternMatchSQL(tokensSQL)") + strings.Count(main, "chPatternMatchSQL(tokensSQL)"); n != 2 {
 		t.Fatalf("countOnePattern'ın iki sorgusu da ortak yüklemi kullanmalı, %d", n)
 	}
 	if strings.Contains(body, `"multiSearchAnyCaseInsensitive(body, "`) {
@@ -133,5 +145,39 @@ func TestDecodePatternHistogram(t *testing.T) {
 	empty := decodePatternHistogram(esPatternHistogramResponse{})
 	if empty.Points == nil || len(empty.Points) != 0 {
 		t.Fatalf("boş cevap boş (nil olmayan) dilim olmalı: %#v", empty.Points)
+	}
+}
+
+// v0.10.1586 — sürdürme penceresi yokken ana sayım sorgusu ve argümanları
+// bayt bayt öncekiyle aynı (eski satır içi metin buraya sabitlendi).
+func TestCHCountPatternSQLLegacyIdentity(t *testing.T) {
+	cur := time.Date(2026, 10, 29, 9, 55, 0, 0, time.UTC)
+	base, now := cur.Add(-55*time.Minute), cur.Add(5*time.Minute)
+	sql, args := chCountPatternSQL("['ora-']", `ORA-[0-9]+`, cur, nil, base, now)
+	want := `
+		SELECT
+		  countIf(time >= ?)                                      AS cur,
+		  countIf(time <  ?)                                      AS base,
+		  anyHeavyIf(service_name, time >= ?)                     AS svc,
+		  anyIf(body, time >= ?)                                  AS sample,
+		  toUnixTimestamp64Nano(maxIf(time, time >= ?))           AS last_ns
+		FROM logs
+		WHERE time >= ? AND time < ? AND ` + chPatternMatchSQL("['ora-']") + `
+		SETTINGS max_execution_time = 10`
+	if sql != want {
+		t.Fatalf("metin değişti:\n%s\n---\n%s", sql, want)
+	}
+	wantArgs := []any{cur, cur, cur, cur, cur, base, now, `ORA-[0-9]+`}
+	if !reflect.DeepEqual(args, wantArgs) {
+		t.Fatalf("argümanlar: %v", args)
+	}
+	p0, p1 := cur.Add(-5*time.Minute), cur.Add(-10*time.Minute)
+	sql, args = chCountPatternSQL("['ora-']", `ORA-[0-9]+`, cur, []time.Time{p0, p1}, base, now)
+	if strings.Count(sql, "?") != len(args) || !strings.Contains(sql, "AS prev_0") || !strings.Contains(sql, "AS prev_1") {
+		t.Fatalf("sürdürme kolonları: %s %v", sql, args)
+	}
+	if !args[1].(time.Time).Equal(p1) || !args[5].(time.Time).Equal(p0) || !args[6].(time.Time).Equal(cur) ||
+		!args[7].(time.Time).Equal(p1) || !args[8].(time.Time).Equal(p0) {
+		t.Fatalf("pencere bağları: taban üstü en eski başlangıç, prev_0=[p0,cur), prev_1=[p1,p0): %v", args)
 	}
 }

@@ -2260,7 +2260,7 @@ func (s *ESStore) Histogram(ctx context.Context, f Filter, bucketSec int, groupB
 func (s *ESStore) CountPatterns(
 	ctx context.Context,
 	pats []PatternSpec,
-	curStart, baseStart, now time.Time,
+	curStart time.Time, prevStarts []time.Time, baseStart, now time.Time,
 ) ([]PatternStats, error) {
 	out := make([]PatternStats, len(pats))
 	if len(pats) == 0 {
@@ -2270,6 +2270,11 @@ func (s *ESStore) CountPatterns(
 	curFrom := curStart.UTC().Format(time.RFC3339Nano)
 	baseFrom := baseStart.UTC().Format(time.RFC3339Nano)
 	curEnd := now.UTC().Format(time.RFC3339Nano)
+	// v0.10.1586 — sürdürme pencereleri (boş = gövde bayt bayt öncekiyle aynı).
+	prevFroms := make([]string, len(prevStarts))
+	for i, ps := range prevStarts {
+		prevFroms[i] = ps.UTC().Format(time.RFC3339Nano)
+	}
 
 	// Build the _msearch body: alternating header + body lines,
 	// one pair per pattern. Empty-token patterns get a no-op
@@ -2314,7 +2319,7 @@ func (s *ESStore) CountPatterns(
 		// ilk çağrıdan sonra map bakışı).
 		body := patternCountBody(
 			patternMatchClause(pat, s.fields.Body), s.fields.Body, s.fields.Timestamp, s.termsAggField(ctx, s.fields.Service),
-			baseFrom, curFrom, curEnd, patTimeout)
+			baseFrom, curFrom, curEnd, patTimeout, prevFroms...)
 		bb, _ := json.Marshal(body)
 		ndjson.Write(bb)
 		ndjson.WriteByte('\n')
@@ -2340,7 +2345,11 @@ func (s *ESStore) CountPatterns(
 	var raw struct {
 		Responses []struct {
 			esSearchEnvelope // v0.9.288 — per sub-response in the _msearch
-			Aggregations     struct {
+			// AggsRaw — v0.10.1586: aggregations nesnesi ham; aşağıda iki kez
+			// çözülür (sabit agg'ler + dinamik adlı prev_window_<i>). Aynı JSON
+			// adına iki etiketli alan encoding/json'da İKİSİNİ DE düşürür.
+			AggsRaw      json.RawMessage `json:"aggregations"`
+			Aggregations struct {
 				Cur struct {
 					DocCount  float64 `json:"doc_count"`
 					ByService struct {
@@ -2360,7 +2369,7 @@ func (s *ESStore) CountPatterns(
 				Base struct {
 					DocCount float64 `json:"doc_count"`
 				} `json:"base_window"`
-			} `json:"aggregations"`
+			} `json:"-"`
 			// Per-sub-query errors land per-response, not at the
 			// top level — ES returns 200 with mixed success/error
 			// items. We log + zero-out the failing slot.
@@ -2374,6 +2383,17 @@ func (s *ESStore) CountPatterns(
 	for i, r := range raw.Responses {
 		if i >= len(out) {
 			break
+		}
+		var prevAggs esPrevWindowAggs
+		if len(r.AggsRaw) > 0 {
+			if err := json.Unmarshal(r.AggsRaw, &r.Aggregations); err != nil {
+				return out, fmt.Errorf("decode ES msearch aggregations: %w", err)
+			}
+			if len(prevStarts) > 0 {
+				if err := json.Unmarshal(r.AggsRaw, &prevAggs); err != nil {
+					return out, fmt.Errorf("decode ES msearch prev windows: %w", err)
+				}
+			}
 		}
 		if r.Error != nil {
 			// Sub-query failed (e.g. service.name.keyword not
@@ -2391,6 +2411,12 @@ func (s *ESStore) CountPatterns(
 		stats := PatternStats{
 			Cur:  uint64(r.Aggregations.Cur.DocCount),
 			Base: uint64(r.Aggregations.Base.DocCount),
+		}
+		if len(prevStarts) > 0 {
+			stats.Prev = make([]uint64, len(prevStarts))
+			for k := range stats.Prev {
+				stats.Prev[k] = uint64(prevAggs[fmt.Sprintf("prev_window_%d", k)].DocCount)
+			}
 		}
 		if len(r.Aggregations.Cur.ByService.Buckets) > 0 {
 			stats.Service = r.Aggregations.Cur.ByService.Buckets[0].Key
@@ -2434,7 +2460,37 @@ func (s *ESStore) CountPatterns(
 // otherwise hold the slot to the handler deadline). At parity with
 // buildHistogramBody. v0.10.1087 — desen yan tümcesi (patternMatchClause)
 // çağırandan hazır gelir: grafik / pivot / örneklemle aynı harita.
-func patternCountBody(patClause map[string]any, bodyField, tsField, svcField, baseFrom, curFrom, curEnd, timeout string) map[string]any {
+//
+// v0.10.1586 — prevFroms (yeniden eskiye, boş = gövde öncekiyle aynı):
+// sürdürme pencereleri `prev_window_<i>` filtre agg'leri [prevFroms[i],
+// prevFroms[i−1] ya da curFrom); base_window üst sınırı en eski başlangıç.
+// Sorgu aralığı [baseFrom, curEnd) değişmez (pencerelerin birleşimi).
+func patternCountBody(patClause map[string]any, bodyField, tsField, svcField, baseFrom, curFrom, curEnd, timeout string, prevFroms ...string) map[string]any {
+	body := patternCountBodyBase(patClause, bodyField, tsField, svcField, baseFrom, curFrom, curEnd, timeout)
+	if len(prevFroms) == 0 {
+		return body
+	}
+	aggs := body["aggs"].(map[string]any)
+	upper := curFrom
+	for i, pf := range prevFroms {
+		aggs[fmt.Sprintf("prev_window_%d", i)] = map[string]any{
+			"filter": map[string]any{"range": map[string]any{tsField: map[string]any{"gte": pf, "lt": upper}}},
+		}
+		upper = pf
+	}
+	aggs["base_window"] = map[string]any{
+		"filter": map[string]any{"range": map[string]any{tsField: map[string]any{"gte": baseFrom, "lt": upper}}},
+	}
+	return body
+}
+
+// esPrevWindowAggs — _msearch alt cevabının aggregations nesnesinden yalnız
+// doc_count'lar (prev_window_<i> adları dinamik olduğu için harita).
+type esPrevWindowAggs map[string]struct {
+	DocCount float64 `json:"doc_count"`
+}
+
+func patternCountBodyBase(patClause map[string]any, bodyField, tsField, svcField, baseFrom, curFrom, curEnd, timeout string) map[string]any {
 	return map[string]any{
 		"size":             0,
 		"track_total_hits": false,

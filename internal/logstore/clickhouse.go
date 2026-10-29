@@ -459,11 +459,11 @@ func (s *CHStore) Histogram(ctx context.Context, f Filter, bucketSec int, groupB
 func (s *CHStore) CountPatterns(
 	ctx context.Context,
 	pats []PatternSpec,
-	curStart, baseStart, now time.Time,
+	curStart time.Time, prevStarts []time.Time, baseStart, now time.Time,
 ) ([]PatternStats, error) {
 	out := make([]PatternStats, len(pats))
 	for i, pat := range pats {
-		stats, err := s.countOnePattern(ctx, pat, curStart, baseStart, now)
+		stats, err := s.countOnePattern(ctx, pat, curStart, prevStarts, baseStart, now)
 		if err != nil {
 			return out, err
 		}
@@ -475,34 +475,24 @@ func (s *CHStore) CountPatterns(
 func (s *CHStore) countOnePattern(
 	ctx context.Context,
 	pat PatternSpec,
-	curStart, baseStart, now time.Time,
+	curStart time.Time, prevStarts []time.Time, baseStart, now time.Time,
 ) (PatternStats, error) {
 	var out PatternStats
 	tokensSQL := chBuildTokenLiteral(pat.Tokens)
-	// v0.10.1060 — eşleşme yüklemi chPatternMatchSQL'de: PatternHistogram
-	// (anomali detayının desen sayısı grafiği) AYNI yüklemle sayar. Üretilen
-	// SQL bayt bayt öncekiyle aynı.
-	where := "time >= ? AND time < ? AND " + chPatternMatchSQL(tokensSQL)
-	sql := `
-		SELECT
-		  countIf(time >= ?)                                      AS cur,
-		  countIf(time <  ?)                                      AS base,
-		  anyHeavyIf(service_name, time >= ?)                     AS svc,
-		  anyIf(body, time >= ?)                                  AS sample,
-		  toUnixTimestamp64Nano(maxIf(time, time >= ?))           AS last_ns
-		FROM logs
-		WHERE ` + where + `
-		SETTINGS max_execution_time = 10`
+	sql, args := chCountPatternSQL(tokensSQL, pat.Regex, curStart, prevStarts, baseStart, now)
 	// v0.10.858 (scale-audit) — ana toplama tavansızdı; 20 satır altındaki
 	// servis kırılımı `= 5` taşıyordu. Dedektör tikinde desen başına sıralı
 	// koşar: N tavansız regex taraması. Tavan aşımı hata döner ve tik düşer
 	// (CountPatterns sözleşmesi) — sessiz eksik sayımdan (timeout 'break')
 	// daha dürüst; diğer dedektör okumalarıyla aynı 10 s.
-	err := s.store.Conn().QueryRow(ctx, sql,
-		curStart, curStart, curStart, curStart, curStart,
-		baseStart, now, pat.Regex,
-	).Scan(&out.Cur, &out.Base, &out.Service, &out.Sample, &out.LastSeenNs)
-	if err != nil {
+	dest := []any{&out.Cur, &out.Base, &out.Service, &out.Sample, &out.LastSeenNs}
+	if len(prevStarts) > 0 {
+		out.Prev = make([]uint64, len(prevStarts))
+		for i := range out.Prev {
+			dest = append(dest, &out.Prev[i])
+		}
+	}
+	if err := s.store.Conn().QueryRow(ctx, sql, args...).Scan(dest...); err != nil {
 		return PatternStats{}, err
 	}
 	// v0.5.287 — per-service breakdown for the current window
@@ -536,6 +526,42 @@ func (s *CHStore) countOnePattern(
 		}
 	}
 	return out, nil
+}
+
+// chCountPatternSQL — SAF (v0.10.1586'da countOnePattern'dan çıkarıldı):
+// desen sayımının ana sorgusu + argümanları. prevStarts boşken metin ve
+// argümanlar öncekiyle BAYT BAYT aynı (TestCHCountPatternSQLLegacyIdentity).
+// Doluyken: taban üst sınırı en eski sürdürme başlangıcı, her sürdürme
+// penceresi için `prev_<i>` kolonu (Scan sırası: cur, base, svc, sample,
+// last_ns, prev_0…).
+func chCountPatternSQL(tokensSQL, regex string, curStart time.Time, prevStarts []time.Time, baseStart, now time.Time) (string, []any) {
+	// v0.10.1060 — eşleşme yüklemi chPatternMatchSQL'de: PatternHistogram
+	// (anomali detayının desen sayısı grafiği) AYNI yüklemle sayar.
+	where := "time >= ? AND time < ? AND " + chPatternMatchSQL(tokensSQL)
+	baseEnd := curStart
+	prevCols := ""
+	var prevArgs []any
+	upper := curStart
+	for i, ps := range prevStarts {
+		prevCols += fmt.Sprintf(",\n\t\t  countIf(time >= ? AND time < ?)                       AS prev_%d", i)
+		prevArgs = append(prevArgs, ps, upper)
+		upper = ps
+		baseEnd = ps
+	}
+	sql := `
+		SELECT
+		  countIf(time >= ?)                                      AS cur,
+		  countIf(time <  ?)                                      AS base,
+		  anyHeavyIf(service_name, time >= ?)                     AS svc,
+		  anyIf(body, time >= ?)                                  AS sample,
+		  toUnixTimestamp64Nano(maxIf(time, time >= ?))           AS last_ns` + prevCols + `
+		FROM logs
+		WHERE ` + where + `
+		SETTINGS max_execution_time = 10`
+	args := []any{curStart, baseEnd, curStart, curStart, curStart}
+	args = append(args, prevArgs...)
+	args = append(args, baseStart, now, regex)
+	return sql, args
 }
 
 // chBuildTokenLiteral renders []string as a CH array literal

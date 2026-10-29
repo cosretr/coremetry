@@ -2,6 +2,7 @@ package anomaly
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"math"
 	"sort"
@@ -64,6 +65,20 @@ type traceOpBucket struct {
 	// AYIRMAZ: ikisinde de karar bugünkü gibi new_error.
 	ExtErrs  uint64
 	ExtCalls uint64
+	// Earlier — v0.10.1586 (Davis paritesi FAZ 0.5 / C): sürdürme
+	// penceresinin en yeni kovadan ÖNCEKİ kovaları, yeniden eskiye
+	// (Earlier[0] = bir önceki tamamlanmış kova). dwell = 1'de boş. Verisiz
+	// kova sıfır değer (hata 0 → taban altı → ihlal DEĞİL).
+	Earlier []traceOpSlot
+	// Active — v0.10.1586: çiftin trace_op olayı zaten AKTİF (son
+	// opLatActiveAge içinde yazılmış). Sürdürme yalnız AÇILIŞI yönetir.
+	Active bool
+}
+
+// traceOpSlot — sürdürme penceresinin tek bir önceki kovası (v0.10.1586).
+type traceOpSlot struct {
+	Errs  uint64
+	Calls uint64
 }
 
 // traceOpPair — bir (servis, operasyon) çifti; uzun taban okumasının
@@ -185,7 +200,15 @@ const (
 // hata vermeye başlaması gerçek sinyal. Batch olmayan servis, nil yüklem
 // (kural kapalı) ya da base_errs > 0 → bu dal hiç koşmaz, karar birebir
 // bugünkü.
-func classifyTraceOps(rows []traceOpBucket, windowRatio float64, isBatch func(service string) bool) []TraceOpAnomaly {
+//
+// v0.10.1586 (Davis paritesi FAZ 0.5 / C, operatör onayı 2026-10-29) — dwell
+// (sürdürme): error_spike VE new_error çift ancak ardışık `dwell` tamamlanmış
+// kovanın HER BİRİNDE aynı tabanları (traceOpFloorsHold) ve aynı türün sayım
+// kuralını geçerse olaydır (traceOpSustained). Batch uzun-taban dalının
+// sonuçları (seyrek koşan iş, v0.10.1043) KAPISIZ — o dal tek koşuya bakar.
+// Aktif olay muaf (yalnız açılış; op_latency v0.10.1085 emsali). dwell ≤ 1 =
+// bugünkü tek-pencere kararı birebir.
+func classifyTraceOps(rows []traceOpBucket, windowRatio float64, isBatch func(service string) bool, dwell int) []TraceOpAnomaly {
 	out := []TraceOpAnomaly{}
 	for _, r := range rows {
 		if !traceOpFloorsHold(r) {
@@ -195,8 +218,10 @@ func classifyTraceOps(rows []traceOpBucket, windowRatio float64, isBatch func(se
 		baseline := basePerWindow
 		var kind string
 		var ratio float64
+		extBranch := false
 		switch {
 		case r.BaseErrs == 0 && r.ExtErrs > 0 && r.ExtCalls > 0 && isBatch != nil && isBatch(r.Service):
+			extBranch = true
 			// v0.10.1043 — seyrek koşan batch işi: 24 sa'de hata yok ama uzun
 			// taban hata görmüş. Mutlak artış kaçışı → bugünkü new_error;
 			// pay 3× → pay oranlı error_spike; değilse sessiz.
@@ -220,6 +245,11 @@ func classifyTraceOps(rows []traceOpBucket, windowRatio float64, isBatch func(se
 			kind, ratio = "error_spike", float64(r.CurErrs)/float64(basePerWindow)
 		}
 		if kind == "" {
+			continue
+		}
+		// v0.10.1586 — sürdürme yalnız açılışa (aktif olay tek kovada
+		// tazelenir); batch uzun-taban dalı kapısız.
+		if dwell > 1 && !extBranch && !r.Active && !traceOpSustained(r, dwell, windowRatio) {
 			continue
 		}
 		// v0.10.1039 — batch: sayım kuralının üstüne EK koşul (yalnız eler).
@@ -254,6 +284,39 @@ func classifyTraceOps(rows []traceOpBucket, windowRatio float64, isBatch func(se
 		out = out[:50]
 	}
 	return out
+}
+
+// traceOpSlotQualifies — SAF (v0.10.1586): bir sürdürme kovası, en yeni
+// kovanın türüyle aynı kuralı geçiyor mu? Tabanlar (≥ traceOpMinErrs hata,
+// ≥ %1 pay) her türde; error_spike'ta ek olarak sayım oranı ≥ 3 × pencereye
+// normalize taban — classifyTraceOps'un iki spike dalıyla aynı aritmetik.
+// new_error'da taban zaten 0 (pencere tabanın tamamı için geçerli).
+func traceOpSlotQualifies(sl traceOpSlot, baseErrs uint64, windowRatio float64) bool {
+	if !traceOpFloorsHold(traceOpBucket{CurErrs: sl.Errs, CurCalls: sl.Calls}) {
+		return false
+	}
+	if baseErrs == 0 {
+		return true
+	}
+	basePerWindow := uint64(float64(baseErrs) * windowRatio)
+	if basePerWindow == 0 {
+		return float64(sl.Errs)/(float64(baseErrs)*windowRatio) >= traceOpMinRatio
+	}
+	return float64(sl.Errs)/float64(basePerWindow) >= traceOpMinRatio
+}
+
+// traceOpSustained — SAF (v0.10.1586): en yeni kovadan önceki dwell−1 kovanın
+// HER BİRİ de ihlal ediyor mu? Eksik kova → false.
+func traceOpSustained(r traceOpBucket, dwell int, windowRatio float64) bool {
+	if len(r.Earlier) < dwell-1 {
+		return false
+	}
+	for i := 0; i < dwell-1; i++ {
+		if !traceOpSlotQualifies(r.Earlier[i], r.BaseErrs, windowRatio) {
+			return false
+		}
+	}
+	return true
 }
 
 // traceOpBatchShareHolds — v0.10.1039, batch serviste sayım kuralına EK
@@ -567,6 +630,127 @@ func traceOpQuery(curStart, baseStart, alignedNow time.Time, windowRatio float64
 
 const traceOpBucketLen = 5 * time.Minute
 
+// traceOpWindows — SAF (v0.10.1586): tespitin zaman sınırları, op_latency
+// opLatencyWindows'un ikizi. slotStarts[i] = en yeni (i+1). kovanın başı,
+// hepsi TAMAMLANMIŞ; taban sürdürme penceresinin TAMAMINDAN önce biter
+// (sıçrayan kovalar kendi tabanını şişirmez). windowRatio = kova / taban boyu
+// (taban boyu bugünkü kural: 24 sa ya da 12 × kova). dwell = 1 → bugünkü
+// pencereler birebir.
+func traceOpWindows(now time.Time, window time.Duration, dwell int) (slotStarts []time.Time, baseStart, alignedNow time.Time, windowRatio float64) {
+	if dwell < 1 {
+		dwell = 1
+	}
+	alignedNow = now.Truncate(traceOpBucketLen)
+	curBuckets := int(window / traceOpBucketLen)
+	if curBuckets < 1 {
+		curBuckets = 1
+	}
+	curWindow := time.Duration(curBuckets) * traceOpBucketLen
+	slotStarts = make([]time.Time, dwell)
+	for i := range slotStarts {
+		slotStarts[i] = alignedNow.Add(-time.Duration(i+1) * curWindow)
+	}
+	baseLookback := 24 * time.Hour
+	if 12*curWindow > baseLookback {
+		baseLookback = 12 * curWindow
+	}
+	baseStart = slotStarts[dwell-1].Add(-baseLookback)
+	return slotStarts, baseStart, alignedNow, float64(curWindow) / float64(baseLookback)
+}
+
+// traceOpQueryDwell — v0.10.1586: traceOpQuery'nin sürdürmeli hâli. len(slotStarts)
+// ≤ 1 → traceOpQuery BİREBİR (TestTraceOpQueryLegacyIdentity korunur). dwell ≥ 2:
+// iç alt sorgu kovayı `slot` kolonuna böler (multiIf: 0 = en yeni, i = önceki,
+// −1 = taban), dış seviye önceki kova başına prev_errs_<i> / prev_calls_<i>;
+// HAVING'e her önceki kova için aynı tabanlar + aynı sayım kuralı VE ile eklenir,
+// iki muafiyetle: (a) olayı AKTİF çiftler (tuple IN), (b) batch kalıbı doluyken
+// batch çiftinde base_errs = 0 (uzun-taban dalı kapısız, kararı Go verir).
+// Koşul yalnız ELER — LIMIT yalnız hayatta kalabilecek satırlarda ısırır.
+func traceOpQueryDwell(slotStarts []time.Time, baseStart, alignedNow time.Time, windowRatio float64, batchCond string, batchArgs []any, active []traceOpPair) (string, []any) {
+	if len(slotStarts) <= 1 {
+		var cur time.Time
+		if len(slotStarts) == 1 {
+			cur = slotStarts[0]
+		}
+		return traceOpQuery(cur, baseStart, alignedNow, windowRatio, batchCond, batchArgs)
+	}
+	sel := `
+		SELECT service_name, name,
+		       sumIf(errs,  slot = 0)  AS cur_errs,
+		       sumIf(errs,  slot = -1) AS base_errs,
+		       sumIf(calls, slot = 0)  AS cur_calls`
+	if batchCond != "" {
+		sel += `,
+		       sumIf(calls, slot = -1) AS base_calls`
+	}
+	slotExpr := "multiIf("
+	var slotArgs []any
+	for i, st := range slotStarts {
+		slotExpr += fmt.Sprintf("time_bucket >= ?, %d, ", i)
+		slotArgs = append(slotArgs, st)
+		if i > 0 {
+			sel += fmt.Sprintf(`,
+		       sumIf(errs,  slot = %d) AS prev_errs_%d,
+		       sumIf(calls, slot = %d) AS prev_calls_%d`, i, i, i, i)
+		}
+	}
+	slotExpr += "-1)"
+
+	args := append([]any{}, slotArgs...)
+	args = append(args, baseStart, alignedNow, traceOpMinErrs, traceOpMinErrShare)
+	spike := `((base_errs = 0) OR (cur_errs >= ? * base_errs * ?))`
+	if batchCond == "" {
+		args = append(args, traceOpMinRatio, windowRatio)
+	} else {
+		spike = `((base_errs = 0)
+		        OR (cur_errs >= ? * base_errs * ?
+		            AND (NOT (` + batchCond + ` AND base_calls > 0)
+		                 OR cur_errs / cur_calls >= ? * (base_errs / base_calls))))`
+		args = append(args, traceOpMinRatio, windowRatio)
+		args = append(args, batchArgs...)
+		args = append(args, traceOpMinRatio)
+	}
+	sustain := ""
+	for i := 1; i < len(slotStarts); i++ {
+		if i > 1 {
+			sustain += "\n\t\t        AND "
+		}
+		sustain += fmt.Sprintf(`(prev_errs_%d >= ? AND prev_calls_%d > 0 AND prev_errs_%d >= ? * prev_calls_%d
+		             AND ((base_errs = 0) OR (prev_errs_%d >= ? * base_errs * ?)))`, i, i, i, i, i)
+		args = append(args, traceOpMinErrs, traceOpMinErrShare, traceOpMinRatio, windowRatio)
+	}
+	if batchCond != "" {
+		sustain += "\n\t\t        OR (" + batchCond + " AND base_errs = 0)"
+		args = append(args, batchArgs...)
+	}
+	if len(active) > 0 {
+		tuples := make([]string, len(active))
+		for i, p := range active {
+			tuples[i] = "(?, ?)"
+			args = append(args, p.Service, p.Operation)
+		}
+		sustain += "\n\t\t        OR (service_name, name) IN (" + strings.Join(tuples, ", ") + ")"
+	}
+	return sel + `
+		FROM (
+		  SELECT service_name, name,
+		         ` + slotExpr + ` AS slot,
+		         countIfMerge(error_count_state) AS errs,
+		         countMerge(span_count_state)    AS calls
+		  FROM operation_summary_5m
+		  WHERE time_bucket >= ? AND time_bucket < ?
+		  GROUP BY service_name, name, slot
+		)
+		GROUP BY service_name, name
+		HAVING cur_errs >= ? AND cur_calls > 0
+		   AND cur_errs >= ? * cur_calls
+		   AND ` + spike + `
+		   AND (` + sustain + `)
+		ORDER BY cur_errs DESC
+		LIMIT 200
+		SETTINGS max_execution_time = 25`, args
+}
+
 // DetectTraceOpAnomalies finds per-operation error spikes over
 // the last `window` against a longer trailing baseline (1h or
 // 12×window, whichever is larger, capped at 24h).
@@ -585,6 +769,9 @@ const traceOpBucketLen = 5 * time.Minute
 // spikes visible for ~1 hour — a window-vs-window comparison would
 // have the spike fall into baseline within minutes, flickering the
 // anomaly section as windows slide.
+//
+// v0.10.1586 — bu yol (/api/anomalies/trace-ops canlı şeridi) TEK pencere;
+// olay yazan recorder DetectTraceOpAnomaliesSustained'i çağırır.
 func DetectTraceOpAnomalies(ctx context.Context, store *chstore.Store, window time.Duration) ([]TraceOpAnomaly, error) {
 	// v0.10.1039 — batch kalıpları: metrik dedektörünün okuduğu AYNI atomic
 	// ayar (tik başına CH okuması YOK; boot hidrasyonu + 30 sn yenileme).
@@ -593,23 +780,53 @@ func DetectTraceOpAnomalies(ctx context.Context, store *chstore.Store, window ti
 	// kapalı) batchCond "" ve sorgu bugünküyle birebir. ForDetectors: ayar
 	// hiç doğrulanmadıysa liste boş (kural devre dışı, tahminle susturma yok).
 	sens := store.AnomalySensitivityForDetectors()
-	return detectTraceOps(ctx, store.TelemetryReadConn(), sens, time.Now(), window, log.Printf)
+	return detectTraceOps(ctx, store.TelemetryReadConn(), sens, time.Now(), window, 1, nil, log.Printf)
 }
+
+// DetectTraceOpAnomaliesSustained — v0.10.1586 (Davis paritesi FAZ 0.5 / C,
+// operatör onayı 2026-10-29): recorder'ın olay yazan yolu. Sürdürme
+// anomaly_sensitivity.traceOpDwellBuckets (vars. 2) ardışık kova; recorder 1
+// dk'da bir 5 dk pencereye bakar ve tek kovalık sıçrama 5 tik yeniden
+// yazılıp terfinin MinSustained'ini geçiyordu (FP sınıfı d_single_window).
+// dwell ≥ 2'de sorgudan ÖNCE tek sınırlı aktif-olay okuması (op_latency'nin
+// aynı ListActiveAnomalyKeys + tavanları): o çiftler sürdürmeden muaf.
+// Okuma hatası → muafiyet YOK (aktif çift de iki kova ister — sessiz yön),
+// geçişte bir kez log.
+func DetectTraceOpAnomaliesSustained(ctx context.Context, store *chstore.Store, window time.Duration) ([]TraceOpAnomaly, error) {
+	sens := store.AnomalySensitivityForDetectors()
+	dwell := sens.TraceOpDwell()
+	var active []traceOpPair
+	if dwell > 1 {
+		keys, err := store.ListActiveAnomalyKeys(ctx, traceOpKind, "", opLatActiveAge, "", nil, batchLatActiveCap+1)
+		traceOpActiveReadLatch.report(err != nil,
+			"[anomaly-recorder] trace ops: aktif olay okunamadı (%v) — sürdürme muafiyeti bu okuma düzelene dek UYGULANMIYOR", err)
+		capped, _ := batchLatCapKeys(keys)
+		capped, _ = opLatCapExemptBytes(capped)
+		for _, p := range opLatSustainExempt(dwell, capped, err) {
+			active = append(active, traceOpPair(p))
+		}
+	}
+	return detectTraceOps(ctx, store.TelemetryReadConn(), sens, time.Now(), window, dwell, active, log.Printf)
+}
+
+// traceOpKind — anomaly_events.kind (recorder yazımı + aktif-olay okuması).
+const traceOpKind = "trace_op"
 
 // detectTraceOps — DetectTraceOpAnomalies'in gövdesi. v0.10.1043'te
 // bağlantı, ayar, saat ve log enjekte edilebilir oldu: batch uzun tabanının
 // "okuma hatası → bugünkü new_error, tek log" ve "tavan aşımı" yönleri sahte
 // bağlantıyla DAVRANIŞ olarak testli (trace_ops_batch_ext_test.go).
+//
+// v0.10.1586 — dwell + active (sürdürme; dwell ≤ 1 → bugünkü tek pencere
+// birebir, active yok sayılır).
 func detectTraceOps(ctx context.Context, conn traceOpConn, sens chstore.AnomalySensitivityConfig,
-	now time.Time, window time.Duration, logf func(string, ...any)) ([]TraceOpAnomaly, error) {
+	now time.Time, window time.Duration, dwell int, active []traceOpPair, logf func(string, ...any)) ([]TraceOpAnomaly, error) {
 	// Tam-bucket hizası: MV bucket'ı kapanmadan sayımı eksiktir.
-	alignedNow := now.Truncate(traceOpBucketLen)
-	curBuckets := int(window / traceOpBucketLen)
-	if curBuckets < 1 {
-		curBuckets = 1
+	if dwell < 1 {
+		dwell = 1
 	}
-	curWindow := time.Duration(curBuckets) * traceOpBucketLen
-	curStart := alignedNow.Add(-curWindow)
+	slotStarts, baseStart, alignedNow, windowRatio := traceOpWindows(now, window, dwell)
+	curStart := slotStarts[0]
 
 	// v0.9.334 — taban penceresi 1 saat → 24 saat.
 	//
@@ -629,20 +846,23 @@ func detectTraceOps(ctx context.Context, conn traceOpConn, sens chstore.AnomalyS
 	// Maliyet ölçüldü (yerel, operation_summary_5m): 1h 0.050s / 24h 0.058s.
 	// MV önceden toplandığı için genişleme çıktı kardinalitesini değil yalnız
 	// birleştirilen bucket sayısını artırıyor.
-	baseLookback := 24 * time.Hour
-	if 12*curWindow > baseLookback {
-		baseLookback = 12 * curWindow
-	}
-	baseStart := curStart.Add(-baseLookback)
-	windowRatio := float64(curWindow) / float64(baseLookback)
+	// (Pencereler v0.10.1586'dan beri traceOpWindows'ta — dwell = 1'de birebir.)
 
 	batchCond, batchArgs := sens.BatchServiceSQL("service_name")
+	activeSet := make(map[traceOpPair]bool, len(active))
+	if dwell > 1 {
+		for _, p := range active {
+			activeSet[p] = true
+		}
+	} else {
+		active = nil
+	}
 
 	// Tek MV geçişi: iç seviye (pair, is_cur) bazında state merge, dış
 	// seviye cur/base'i yan yana koyar. Kaba eleme SQL'de kalır ki
 	// LIMIT anlamlı olsun (eşiğin gevşek hâli); kesin eşik/kind
 	// sınıflaması Go'da (classifyTraceOps, tablo-testli).
-	q, args := traceOpQuery(curStart, baseStart, alignedNow, windowRatio, batchCond, batchArgs)
+	q, args := traceOpQueryDwell(slotStarts, baseStart, alignedNow, windowRatio, batchCond, batchArgs, active)
 	rows, err := conn.Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
@@ -656,9 +876,16 @@ func detectTraceOps(ctx context.Context, conn traceOpConn, sens chstore.AnomalyS
 		if batchCond != "" {
 			dest = append(dest, &b.BaseCalls)
 		}
+		if dwell > 1 {
+			b.Earlier = make([]traceOpSlot, dwell-1)
+			for i := range b.Earlier {
+				dest = append(dest, &b.Earlier[i].Errs, &b.Earlier[i].Calls)
+			}
+		}
 		if err := rows.Scan(dest...); err != nil {
 			return nil, err
 		}
+		b.Active = activeSet[traceOpPair{Service: b.Service, Operation: b.Operation}]
 		buckets = append(buckets, b)
 	}
 	if err := rows.Err(); err != nil {
@@ -675,7 +902,7 @@ func detectTraceOps(ctx context.Context, conn traceOpConn, sens chstore.AnomalyS
 	// koşuluyla kısıtlı; hata → bugünkü new_error + tek log. Liste boşken
 	// (isBatch nil) hiç kurulmaz.
 	readTraceOpBatchExt(ctx, conn, buckets, isBatch, alignedNow, baseStart, batchCond, batchArgs, logf)
-	out := classifyTraceOps(buckets, windowRatio, isBatch)
+	out := classifyTraceOps(buckets, windowRatio, isBatch, dwell)
 	if len(out) == 0 {
 		return out, nil
 	}

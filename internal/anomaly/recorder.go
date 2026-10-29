@@ -102,7 +102,11 @@ func (r *Recorder) tick(ctx context.Context) {
 	// slow significant_text/_msearch on the worker pod hanging against
 	// the process-lifetime ctx and double-loading the ES cluster.
 	logCtx, logCancel := context.WithTimeout(ctx, 30*time.Second)
-	logHits, err := DetectLogPatterns(logCtx, r.logs, r.window)
+	// v0.10.1586 (Davis paritesi FAZ 0.5 / C) — olay yazan yol sürdürmeli:
+	// desen ardışık logPatternDwellBuckets (vars. 2) pencerede eşiği geçmeli;
+	// olayı aktif desenler muaf (tek okuma, yalnız dwell ≥ 2).
+	lpDwell := r.store.AnomalySensitivityForDetectors().LogPatternDwell()
+	logHits, err := DetectLogPatternsSustained(logCtx, r.logs, r.window, lpDwell, logPatternActiveSet(ctx, r.store, lpDwell))
 	logCancel()
 	if err != nil {
 		log.Printf("[anomaly-recorder] log patterns: %v", err)
@@ -146,7 +150,8 @@ func (r *Recorder) tick(ctx context.Context) {
 		r.store.UpsertAnomalyEvent)
 
 	// ── Trace-op anomalies ────────────────────────────────────
-	traceHits, err := DetectTraceOpAnomalies(ctx, r.store, r.window)
+	// v0.10.1586 — sürdürmeli yol (traceOpDwellBuckets, vars. 2; aktif olay muaf).
+	traceHits, err := DetectTraceOpAnomaliesSustained(ctx, r.store, r.window)
 	if err != nil {
 		log.Printf("[anomaly-recorder] trace ops: %v", err)
 	}
@@ -253,4 +258,27 @@ func recordOpLatency(ctx context.Context, on bool, now time.Time,
 			log.Printf("[anomaly-recorder] upsert op-latency %s/%s: %v", a.Service, a.Operation, err)
 		}
 	}
+}
+
+// logPatternActiveSet — v0.10.1586: olayı zaten AKTİF log_pattern
+// desenlerinin FingerprintAnomaly kümesi (sürdürme muafiyeti; yalnız
+// açılış kapılı). dwell ≤ 1 → okuma yok. Okuma hatası → boş küme (aktif desen
+// de iki pencere ister — sessiz yön), geçişte bir kez log. Tavan
+// batchLatActiveCap; ötesi muaf değil.
+func logPatternActiveSet(ctx context.Context, store *chstore.Store, dwell int) map[string]bool {
+	if dwell <= 1 || store == nil {
+		return nil
+	}
+	keys, err := store.ListActiveAnomalyKeys(ctx, "log_pattern", "", opLatActiveAge, "", nil, batchLatActiveCap+1)
+	logPatternActiveReadLatch.report(err != nil,
+		"[anomaly-recorder] log patterns: aktif olay okunamadı (%v) — sürdürme muafiyeti bu okuma düzelene dek UYGULANMIYOR", err)
+	if err != nil {
+		return nil
+	}
+	keys, _ = batchLatCapKeys(keys)
+	out := make(map[string]bool, len(keys))
+	for _, k := range keys {
+		out[chstore.FingerprintAnomaly("log_pattern", k.Pattern, k.Service)] = true
+	}
+	return out
 }

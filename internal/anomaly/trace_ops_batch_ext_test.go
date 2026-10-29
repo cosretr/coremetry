@@ -154,7 +154,7 @@ func TestClassifyTraceOpsBatchExtBaseline(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := classifyTraceOps([]traceOpBucket{tt.in}, wr, tt.isBatch)
+			got := classifyTraceOps([]traceOpBucket{tt.in}, wr, tt.isBatch, 1)
 			if tt.wantKind == "" {
 				if len(got) != 0 {
 					t.Fatalf("olay beklenmiyordu: %+v", got)
@@ -184,7 +184,7 @@ func TestClassifyTraceOpsBatchExtBaseline(t *testing.T) {
 	} {
 		zero := r
 		zero.ExtErrs, zero.ExtCalls = 0, 0
-		if a, b := classifyTraceOps([]traceOpBucket{r}, wr, def.IsBatchService), classifyTraceOps([]traceOpBucket{zero}, wr, def.IsBatchService); !reflect.DeepEqual(a, b) {
+		if a, b := classifyTraceOps([]traceOpBucket{r}, wr, def.IsBatchService, 1), classifyTraceOps([]traceOpBucket{zero}, wr, def.IsBatchService, 1); !reflect.DeepEqual(a, b) {
 			t.Fatalf("base_errs > 0 iken uzun taban kararı değiştirdi:\n%+v\n%+v", a, b)
 		}
 	}
@@ -219,9 +219,9 @@ func TestTraceOpBatchExtNeverAddsEvents(t *testing.T) {
 									BaseErrs: be, BaseCalls: bc, ExtErrs: ee, ExtCalls: ec}
 								zero := r
 								zero.ExtErrs, zero.ExtCalls = 0, 0
-								old := classifyTraceOps([]traceOpBucket{zero}, wr, on)
-								neu := classifyTraceOps([]traceOpBucket{r}, wr, on)
-								if !reflect.DeepEqual(classifyTraceOps([]traceOpBucket{r}, wr, nil), classifyTraceOps([]traceOpBucket{zero}, wr, nil)) {
+								old := classifyTraceOps([]traceOpBucket{zero}, wr, on, 1)
+								neu := classifyTraceOps([]traceOpBucket{r}, wr, on, 1)
+								if !reflect.DeepEqual(classifyTraceOps([]traceOpBucket{r}, wr, nil, 1), classifyTraceOps([]traceOpBucket{zero}, wr, nil, 1)) {
 									t.Fatalf("kural kapalıyken uzun taban kararı etkiledi: %+v", r)
 								}
 								if len(neu) > len(old) {
@@ -291,8 +291,8 @@ func TestTraceOpBatchExtNeverAddsEvents(t *testing.T) {
 		r.ExtErrs, r.ExtCalls = 0, 0
 		zeroAll[i] = r
 	}
-	oldTop := classifyTraceOps(zeroAll, wr, on)
-	newTop := classifyTraceOps(all, wr, on)
+	oldTop := classifyTraceOps(zeroAll, wr, on, 1)
+	newTop := classifyTraceOps(all, wr, on, 1)
 	if len(oldTop) != 50 || len(newTop) != 50 {
 		t.Fatalf("ilk 50 tavanı ısırmıyor (%d/%d) — yer kaybı testi anlamsız", len(oldTop), len(newTop))
 	}
@@ -504,7 +504,7 @@ var fakeNow = time.Date(2026, 10, 2, 12, 2, 30, 0, time.UTC)
 func runFakeTraceOps(t *testing.T, conn *fakeTraceOpConn, sens chstore.AnomalySensitivityConfig, window time.Duration) ([]TraceOpAnomaly, []string) {
 	t.Helper()
 	var logs []string
-	out, err := detectTraceOps(context.Background(), conn, sens, fakeNow, window,
+	out, err := detectTraceOps(context.Background(), conn, sens, fakeNow, window, 1, nil,
 		func(f string, a ...any) { logs = append(logs, fmt.Sprintf(f, a...)) })
 	if err != nil {
 		t.Fatal(err)
@@ -835,7 +835,7 @@ func TestTraceOpBatchExtAgreesWithClickHouse(t *testing.T) {
 
 	conn := &chLocalTraceOpConn{t: t, bin: bin, fixture: fixture}
 	var logs []string
-	out, err := detectTraceOps(context.Background(), conn, chstore.AnomalySensitivityConfig{}, fakeNow, 5*time.Minute,
+	out, err := detectTraceOps(context.Background(), conn, chstore.AnomalySensitivityConfig{}, fakeNow, 5*time.Minute, 1, nil,
 		func(f string, a ...any) { logs = append(logs, fmt.Sprintf(f, a...)) })
 	if err != nil {
 		t.Fatal(err)

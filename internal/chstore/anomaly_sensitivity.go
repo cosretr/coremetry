@@ -130,6 +130,17 @@ type AnomalySensitivityConfig struct {
 	// Normalize her zaman 1–6 yazar, alanın varlığı göçün "bu blob yeni
 	// sürümde kaydedildi" işaretidir.
 	OpLatencyDwellBuckets int `json:"opLatencyDwellBuckets"`
+	// TraceOpDwellBuckets — v0.10.1586 (Davis paritesi FAZ 0.5 / C, operatör
+	// onayı 2026-10-29): trace_op olayının (error_spike VE new_error) AÇILMASI
+	// için ardışık tamamlanmış kova sayısı; her önceki kova aynı tabanları
+	// (≥ 10 hata, ≥ %1 pay) ve aynı türün oran kuralını taşımalı. Aktif olay
+	// muaf (yalnız açılış). Batch uzun-taban dalı kapısız. 1–6, varsayılan 2;
+	// 1 = tek pencere (eski davranış). omitempty YOK (Normalize her zaman yazar).
+	TraceOpDwellBuckets int `json:"traceOpDwellBuckets"`
+	// LogPatternDwellBuckets — v0.10.1586: log_pattern olayının ("new" ve
+	// "spike") açılması için ardışık pencere sayısı (aynı semantik, aynı
+	// aktif-olay muafiyeti). 1–6, varsayılan 2; 1 = tek pencere.
+	LogPatternDwellBuckets int `json:"logPatternDwellBuckets"`
 	// LogTemplateNew — v0.10.1061 (operatör onaylı, prod: "Bu log anomalileri
 	// de false pozitif geliyor"): Drain'in ilk kez gördüğü log biçimi
 	// (`log_template_new`, internal/anomaly/log_templates.go). OpLatency'nin
@@ -221,6 +232,27 @@ const (
 // varsayılan 2.
 func (c AnomalySensitivityConfig) OpLatencyDwell() int {
 	return clampRangeI(c.OpLatencyDwellBuckets, opLatencyDwellMin, opLatencyDwellMax, opLatencyDwellDefault)
+}
+
+// trace_op / log_pattern sürdürme penceresi (v0.10.1586) — opLatency ile aynı
+// aralık ve gerekçe.
+const (
+	traceOpDwellMin        = 1
+	traceOpDwellMax        = 6
+	traceOpDwellDefault    = 2
+	logPatternDwellMin     = 1
+	logPatternDwellMax     = 6
+	logPatternDwellDefault = 2
+)
+
+// TraceOpDwell — aralık dışı (eski blobun 0'ı dahil) → varsayılan 2.
+func (c AnomalySensitivityConfig) TraceOpDwell() int {
+	return clampRangeI(c.TraceOpDwellBuckets, traceOpDwellMin, traceOpDwellMax, traceOpDwellDefault)
+}
+
+// LogPatternDwell — aralık dışı (eski blobun 0'ı dahil) → varsayılan 2.
+func (c AnomalySensitivityConfig) LogPatternDwell() int {
+	return clampRangeI(c.LogPatternDwellBuckets, logPatternDwellMin, logPatternDwellMax, logPatternDwellDefault)
 }
 
 // LogTemplateNewOn — v0.10.1061: log_template_new dedektörü koşsun mu? nil ⇒
@@ -587,7 +619,10 @@ func DefaultAnomalySensitivity() AnomalySensitivityConfig {
 		// geri alındı).
 		OpLatency:             boolPtr(true),
 		OpLatencyDwellBuckets: opLatencyDwellDefault,
-		LogTemplateNew:        boolPtr(false), // v0.10.1061 — operatör onaylı: varsayılan KAPALI
+		// v0.10.1586 — trace_op / log_pattern iki ardışık pencere (operatör onayı).
+		TraceOpDwellBuckets:    traceOpDwellDefault,
+		LogPatternDwellBuckets: logPatternDwellDefault,
+		LogTemplateNew:         boolPtr(false), // v0.10.1061 — operatör onaylı: varsayılan KAPALI
 		// v0.10.1091 — yaygın yavaşlama hızlı yolu, operatör onaylı: AÇIK.
 		ServiceSlowdown: DefaultServiceSlowdown(),
 		ErrorRamp:       DefaultErrorRamp(),
@@ -640,6 +675,9 @@ func NormalizeAnomalySensitivity(c AnomalySensitivityConfig) AnomalySensitivityC
 		// v0.10.1085 — sürdürme kova sayısı; kopyalanmazsa PUT'ta düşerdi.
 		// Aralık dışı / eksik → 2.
 		OpLatencyDwellBuckets: c.OpLatencyDwell(),
+		// v0.10.1586 — kopyalanmazsa PUT'ta düşerdi; aralık dışı / eksik → 2.
+		TraceOpDwellBuckets:    c.TraceOpDwell(),
+		LogPatternDwellBuckets: c.LogPatternDwell(),
 		// v0.10.1061 — aynı gerekçe: kopyalanmazsa PUT'ta düşer. nil → false.
 		LogTemplateNew: boolPtr(c.LogTemplateNewOn()),
 		// v0.10.1091 — kopyalanmazsa PUT'ta düşerdi. Eksik bölüm (eski blob)

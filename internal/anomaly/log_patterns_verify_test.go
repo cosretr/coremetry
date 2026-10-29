@@ -87,7 +87,7 @@ type verifyStore struct {
 	lastPats []logstore.PatternSpec
 }
 
-func (s *verifyStore) CountPatterns(context.Context, []logstore.PatternSpec, time.Time, time.Time, time.Time) ([]logstore.PatternStats, error) {
+func (s *verifyStore) CountPatterns(context.Context, []logstore.PatternSpec, time.Time, []time.Time, time.Time, time.Time) ([]logstore.PatternStats, error) {
 	return s.stats, nil
 }
 

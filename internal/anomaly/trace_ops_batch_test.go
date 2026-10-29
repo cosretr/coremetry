@@ -126,7 +126,7 @@ func TestClassifyTraceOpsBatch(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := classifyTraceOps([]traceOpBucket{tt.in}, wr, tt.sens.IsBatchService)
+			got := classifyTraceOps([]traceOpBucket{tt.in}, wr, tt.sens.IsBatchService, 1)
 			if tt.wantKind == "" {
 				if len(got) != 0 {
 					t.Fatalf("olay beklenmiyordu: %+v", got)
@@ -144,7 +144,7 @@ func TestClassifyTraceOpsBatch(t *testing.T) {
 
 	// nil yüklem = kural kapalı = v0.10.1039 öncesi davranış.
 	surge := []traceOpBucket{row("orders-batch", 600, 20_000, baseErrs, baseCalls)}
-	if got := classifyTraceOps(surge, wr, nil); len(got) != 1 || got[0].Kind != "error_spike" {
+	if got := classifyTraceOps(surge, wr, nil, 1); len(got) != 1 || got[0].Kind != "error_spike" {
 		t.Fatalf("nil yüklemle bugünkü sayım kuralı bekleniyordu: %+v", got)
 	}
 }
@@ -179,8 +179,8 @@ func TestTraceOpBatchIsPureSuppression(t *testing.T) {
 	}
 	nonEmpty := 0
 	for _, r := range all {
-		old := classifyTraceOps([]traceOpBucket{r}, wr, nil)
-		neu := classifyTraceOps([]traceOpBucket{r}, wr, on)
+		old := classifyTraceOps([]traceOpBucket{r}, wr, nil, 1)
+		neu := classifyTraceOps([]traceOpBucket{r}, wr, on, 1)
 		if len(old) > 0 {
 			nonEmpty++
 		}
@@ -206,8 +206,8 @@ func TestTraceOpBatchIsPureSuppression(t *testing.T) {
 			spikes = append(spikes, r)
 		}
 	}
-	oldTop := classifyTraceOps(spikes, wr, nil)
-	newTop := classifyTraceOps(spikes, wr, on)
+	oldTop := classifyTraceOps(spikes, wr, nil, 1)
+	newTop := classifyTraceOps(spikes, wr, on, 1)
 	if len(oldTop) != 50 {
 		t.Fatalf("ilk 50 tavanı ısırmıyor (%d) — yer kaybı testi anlamsız", len(oldTop))
 	}
@@ -352,7 +352,7 @@ func TestTraceOpsReadsPublishedSettings(t *testing.T) {
 	if strings.Contains(body, "GetAnomalySensitivity(") || strings.Contains(body, "GetSetting(") {
 		t.Fatal("trace_op tik başına ayarı CH'den okuyor")
 	}
-	if !strings.Contains(body, "classifyTraceOps(buckets, windowRatio, isBatch)") {
+	if !strings.Contains(body, "classifyTraceOps(buckets, windowRatio, isBatch, dwell)") {
 		t.Fatal("Go kemeri batch yüklemini almıyor")
 	}
 }
@@ -408,7 +408,7 @@ func TestTraceOpHavingAgreesWithGo(t *testing.T) {
 		}
 	}
 	goSet := map[string]bool{}
-	for _, a := range classifyTraceOps(rows, traceOpWindowRatio, sens.IsBatchService) {
+	for _, a := range classifyTraceOps(rows, traceOpWindowRatio, sens.IsBatchService, 1) {
 		goSet[a.Service+"/"+a.Operation] = true
 	}
 	if !reflect.DeepEqual(sqlSet, goSet) {

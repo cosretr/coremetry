@@ -66,8 +66,8 @@ func (s *Switchable) Search(ctx context.Context, f Filter) (*Page, error) {
 	return s.Current().Search(ctx, f)
 }
 
-func (s *Switchable) CountPatterns(ctx context.Context, pats []PatternSpec, curStart, baseStart, now time.Time) ([]PatternStats, error) {
-	return s.Current().CountPatterns(ctx, pats, curStart, baseStart, now)
+func (s *Switchable) CountPatterns(ctx context.Context, pats []PatternSpec, curStart time.Time, prevStarts []time.Time, baseStart, now time.Time) ([]PatternStats, error) {
+	return s.Current().CountPatterns(ctx, pats, curStart, prevStarts, baseStart, now)
 }
 
 func (s *Switchable) VerifyPatterns(ctx context.Context, pats []PatternSpec, from, to time.Time) ([]PatternVerification, error) {

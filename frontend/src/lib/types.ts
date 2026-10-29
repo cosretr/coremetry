@@ -9406,6 +9406,11 @@ export interface AnomalySensitivityConfig {
   // tamamlanmış 5 dk kova sayısı; 1–6, yok/aralık dışı = 2 (sunucu
   // kelepçeler). 1 = eski tek-kova davranışı.
   opLatencyDwellBuckets?: number;
+  // v0.10.1586 — trace_op (operasyon hata sıçraması / yeni hata) ve
+  // log_pattern olaylarının açılması için ardışık 5 dk pencere sayısı;
+  // 1–6, yok/aralık dışı = 2 (sunucu kelepçeler). 1 = eski tek pencere.
+  traceOpDwellBuckets?: number;
+  logPatternDwellBuckets?: number;
   // v0.10.1061 — log_template_new (Drain'in ilk kez gördüğü log biçimi)
   // dedektörü; VARSAYILAN KAPALI (operatör onaylı: "Bu log anomalileri de
   // false pozitif geliyor"). opLatency ile aynı sözleşme: okuma `=== true`,

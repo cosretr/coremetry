@@ -121,4 +121,7 @@ var (
 	opLatActiveBytesLatch   batchLatLatch
 	behaviorActiveReadLatch batchLatLatch
 	behaviorActiveCapLatch  batchLatLatch
+	// v0.10.1586 — trace_op / log_pattern sürdürme muafiyetinin aktif-olay okuması.
+	traceOpActiveReadLatch    batchLatLatch
+	logPatternActiveReadLatch batchLatLatch
 )

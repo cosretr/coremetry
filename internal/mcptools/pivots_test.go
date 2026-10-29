@@ -122,7 +122,7 @@ func (s *stubLogStore) Search(_ context.Context, f logstore.Filter) (*logstore.P
 	return s.page, nil
 }
 
-func (s *stubLogStore) CountPatterns(context.Context, []logstore.PatternSpec, time.Time, time.Time, time.Time) ([]logstore.PatternStats, error) {
+func (s *stubLogStore) CountPatterns(context.Context, []logstore.PatternSpec, time.Time, []time.Time, time.Time, time.Time) ([]logstore.PatternStats, error) {
 	return nil, nil
 }
 func (s *stubLogStore) VerifyPatterns(context.Context, []logstore.PatternSpec, time.Time, time.Time) ([]logstore.PatternVerification, error) {

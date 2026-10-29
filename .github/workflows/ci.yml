@@ -139,7 +139,8 @@ jobs:
           CH_SMOKE_ADDR: localhost:19000
         run: |
           go test -tags=chsmoke ./internal/chstore/ -run 'TestCHSmokeReads|TestAttachReopenedProblemSkipsResolvedIncident|TestAttachMatchesActiveLongRunningIncident|TestEnrichProblemsSeesPipelineDeployEvents' -v
-          go test -tags=chsmoke ./internal/anomaly/ -run 'TestRootCauseDeployEvidenceSurvivesAge|TestRolloutCausesReadsConfiguredSource' -v
+          go test -tags=chsmoke ./internal/anomaly/ -run 'TestRootCauseDeployEvidenceSurvivesAge|TestRolloutCausesReadsConfiguredSource|TestTraceOpDwellQueryOnCH' -v
+          go test -tags=chsmoke ./internal/logstore/ -run 'TestCountPatternsPrevWindowBoundaries' -v
 
       - name: ClickHouse durdur
         if: always()

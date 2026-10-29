@@ -174,7 +174,7 @@ func TestLogTemplateNewSwitchWiring(t *testing.T) {
 	// log_pattern adımı tikte koşulsuz kalır (operatör: doğru yakalama).
 	tick := rec[strings.Index(rec, "func (r *Recorder) tick("):]
 	tick = tick[:strings.Index(tick, "\n}\n")]
-	lp := strings.Index(tick, "DetectLogPatterns(logCtx, r.logs, r.window)")
+	lp := strings.Index(tick, "DetectLogPatternsSustained(logCtx, r.logs, r.window,")
 	if lp < 0 {
 		t.Fatal("log_pattern adımı tikten çıkmış")
 	}

@@ -159,3 +159,26 @@ describe('Operasyon gecikmesi anomalileri kutusu', () => {
     expect(dwellInput(el).value).toBe('1');
   });
 });
+
+// v0.10.1586 — trace_op / log_pattern sürdürme alanları (Davis paritesi FAZ 0.5 / C).
+describe('Operasyon hatası / log deseni sürdürme alanları', () => {
+  const num = (el: HTMLElement, label: string) => {
+    const i = el.querySelector<HTMLInputElement>(`input[type="number"][aria-label="${label}"]`);
+    if (!i) throw new Error(`${label} alanı yok`);
+    return i;
+  };
+  it('alanı taşımayan blob → 2 / 2; değişiklik kayıtla gider', async () => {
+    const el = await mount();
+    expect(num(el, 'Operasyon hatası ardışık pencere').value).toBe('2');
+    expect(num(el, 'Log deseni ardışık pencere').value).toBe('2');
+    const input = num(el, 'Log deseni ardışık pencere');
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+      setter.call(input, '3');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => { sensitivitySave(el).click(); });
+    await settle();
+    expect(m.puts[0].logPatternDwellBuckets).toBe(3);
+  });
+});
