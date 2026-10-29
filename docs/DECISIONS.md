@@ -11971,3 +11971,40 @@ CRMHouse vakasında wiki anlatımı Excel'in 16 satırından 1'ini okudu.
 
 **Geri alma.** Ayarı kapat (`sourceDiscovery:false`) → v0.10.1552 zinciri bayt
 bayt; kayıt anlatımı model kapalıyken zaten devre dışı.
+
+## 2026-10-29 — v0.10.1577 — Kök-neden derin kanıtına BubbleUp (dış skill denetimi V1 dilim 2)
+
+**Bağlam.** Operatör onayı 2026-10-29 ("4ü yap": V1 dilim 2). Dilim 1 (v0.10.992) BubbleUp'ı
+CoSRE demetine koydu; arka planda üretilen problem açıklaması (AISummary → maildeki özet)
+"hangi rota / pod / sürümde yoğunlaşıyor" sorusuna hâlâ kanıtsızdı. Dilim 1 kaydının
+çekincesi: sentezleyici her 30 s her derin çıpaya okuma yapar — düz bir çağrı çıpa başına
+saatte 120 ham spans taraması demekti.
+
+**Karar.**
+- BubbleUp `DeepEvidence.BubbleUp`'a (JSON, `omitempty`; CH şeması değişmedi) YALNIZ
+  sentezleyici yazar (tek yazıcı), yalnız derin kapıdan (`shouldDeepInvestigate`) geçen
+  problem çıpasında. Kıyas türü `chstore.ProblemBubbleMode` (v0.10.1495 kararı api'den
+  taşındı, gövde aynı): none türleri (runtime:, db-capacity:, db-health:, monitor:, self-,
+  servis olmayan özne, dış kaynak) HİÇ okuma yapmaz.
+- **Maliyet tavanı:** bölüm (problem id + StartedAt) başına BİR tarama, sonuç kalıcı yazılır
+  ve sonraki tiklerde TAŞINIR; taşımanın kaynağı kalıcı hipotez (tik başına TEK
+  `GetHypotheses` okuması, ≤64 kimlik; bellek içi memo yok — lider değişiminde yeniden
+  taramasın). İlk tarama 10 dk'lık pencere dolmadan koştuysa EN ÇOK bir tazeleme; okuma
+  düşerse ≥5 dk sonra EN ÇOK bir yeniden deneme (bölüm başına 2 deneme), sonra "okunamadı"
+  dürüstçe kalır; düşen tazeleme eski sonucu korur. Tik başına en çok 2 tarama × 8 s
+  (`rca.BubbleUpTimeout`) → tik duvarı en kötü +16 s, filo tavanı 240 tarama/saat;
+  kararlı durum 0. Pencere `[StartedAt, StartedAt+10 dk]` (`rca.ExtrasWindow`), servis
+  süzgeçli — hakem kataloğu ve CoSRE çıpalı planıyla aynı.
+- Metin tek gövde: `rca.RenderBubbleUpTR` (CoSRE demetinin bayt pinleri değişmeden yeşil).
+  Açıklama istemine derin kanıt bloğunun sonunda girer; yalnız BubbleUp varken SORUŞTURMA
+  başlığı basılmaz ve uydurma-yasağı satırı olmayan listeye atıf yapmayan biçimdedir.
+  Kanıt kataloğuna `CheckedSignal` satırı EKLENMEDİ (katalog id'leri kayardı).
+- Mail şablonu değişmedi: mail AISummary'yi basar, kanıt oradan görünür.
+
+**Bilinen sınırlar.** Bir tikte 2'den fazla yeni P1 açılırsa kalanlar sonraki tiklerde
+taranır; açıklayıcı özeti bir kez ürettiği için o problemlerin özetinde BubbleUp
+eksik kalabilir (kabul). Derin kapıdan düşen problem satırı tam-satır yazımla kanıtı
+kaybeder; yeniden derinleşirse bir tarama daha (aynı bölüm sayacı sıfırlanır).
+
+**Geri alma.** `attachBubbleUp` çağrısını kaldırmak v0.10.1576 davranışına döner; saklı
+JSON'daki alan okuyucularca yok sayılır.

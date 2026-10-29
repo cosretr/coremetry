@@ -62,6 +62,45 @@ type DeepEvidence struct {
 	// Rollouts — v0.10.241 Problem↔Rollout korelasyonu: problemin
 	// servisine/pod'una bağlanan, puanlanmış rollout adayları (≤3).
 	Rollouts []RolloutEvidence `json:"rollouts,omitempty"`
+	// BubbleUp — v0.10.1577 (dış skill denetimi V1 dilim 2): problemin
+	// açılışını izleyen 10 dk'da ayrışan span attribute'ları. YALNIZ
+	// sentezleyici yazar, bölüm (problem id + StartedAt) başına BİR tarama;
+	// sonraki tikler bu alanı TAŞIR (anomaly/rootcause_bubbleup.go). nil =
+	// kıyas türü none ya da henüz taranmadı. Eski JSON'da alan yok → nil.
+	BubbleUp *BubbleUpEvidence `json:"bubbleUp,omitempty"`
+}
+
+// BubbleUpEvidence — DeepEvidence.BubbleUp (v0.10.1577). Attributes
+// chstore birimindedir (pay = ORAN, 0–1); metne dönüşüm rca.TopBubbleUp'ta.
+// Status: ok (sonuç var — ayrışma olsun olmasın) | unreadable (okuma düştü;
+// Error = sourcestate sınıfı). AnchorStartNs = taramanın ait olduğu bölüm
+// (Problem.StartedAt); farklıysa kanıt bayattır, yeniden taranır.
+type BubbleUpEvidence struct {
+	Mode           string              `json:"mode"`
+	AnchorStartNs  int64               `json:"anchorStartNs"`
+	FromNs         int64               `json:"fromNs"`
+	ToNs           int64               `json:"toNs"`
+	ComputedNs     int64               `json:"computedNs"`
+	Attempts       uint8               `json:"attempts"`
+	Status         string              `json:"status"`
+	Error          string              `json:"error,omitempty"`
+	SelectionTotal int64               `json:"selectionTotal"`
+	BaselineTotal  int64               `json:"baselineTotal"`
+	Attributes     []BubbleUpAttribute `json:"attributes,omitempty"`
+}
+
+// BubbleUpEvidence durumları.
+const (
+	BubbleUpStatusOK         = "ok"
+	BubbleUpStatusUnreadable = "unreadable"
+)
+
+// Result — kalıcı kanıtı render girdisine çevirir (Status ok değilse nil).
+func (e *BubbleUpEvidence) Result() *BubbleUpResult {
+	if e == nil || e.Status != BubbleUpStatusOK {
+		return nil
+	}
+	return &BubbleUpResult{SelectionTotal: e.SelectionTotal, BaselineTotal: e.BaselineTotal, Attributes: e.Attributes}
 }
 
 // RolloutEvidence — DeepEvidence.Rollouts satırı (v0.10.241). FE

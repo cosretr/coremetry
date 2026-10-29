@@ -96,6 +96,63 @@ func TestPromptGoldenScenarios(t *testing.T) {
 		},
 	}
 
+	// v0.10.1577 (V1 dilim 2) — sentezleyicinin BubbleUp kanıtı.
+	t0 := time.Date(2026, 10, 29, 9, 0, 0, 0, time.UTC)
+	bu := func(status, errClass string) *chstore.BubbleUpEvidence {
+		e := &chstore.BubbleUpEvidence{Mode: "errors", AnchorStartNs: t0.UnixNano(), FromNs: t0.UnixNano(),
+			ToNs: t0.Add(10 * time.Minute).UnixNano(), ComputedNs: t0.Add(20 * time.Minute).UnixNano(),
+			Attempts: 1, Status: status, Error: errClass}
+		if status == chstore.BubbleUpStatusOK {
+			e.SelectionTotal, e.BaselineTotal = 40, 900
+			e.Attributes = []chstore.BubbleUpAttribute{{Key: "http.route", Values: []chstore.BubbleUpValue{
+				{Value: "/v1/pay-now", SelectionCount: 32, BaselineCount: 99, SelectionPct: 0.8, BaselinePct: 0.11, Score: 0.69}}}}
+		}
+		return e
+	}
+	errProb := chstore.Problem{Service: "orders-api", RuleName: "hata oranı", Metric: "error_rate", Severity: "critical", Value: 4.2, Threshold: 1}
+	scenarios = append(scenarios,
+		promptScenario{
+			name:    "BubbleUp yogunlasma + sorusturma",
+			problem: errProb,
+			deep: chstore.DeepEvidence{
+				Checked:  []chstore.CheckedSignal{{Family: "exceptions", Found: false, Detail: "bakıldı, kayıt yok"}},
+				BubbleUp: bu(chstore.BubbleUpStatusOK, ""),
+			},
+			wantIn: []string{
+				"SORUŞTURMA", "Ayrışan boyutlar (BubbleUp)",
+				"problemin açılışını izleyen 10 dk, hatalı 40 / tüm 900 span",
+				"  - http.route=/v1/pay-now: hatalı kümede %80, tüm span'lerde %11\n",
+				"tek başına sebep kanıtı değildir", "KURAL",
+			},
+			wantNotIn: []string{"OKUNAMADI", "%1,"},
+		},
+		promptScenario{
+			name:      "BubbleUp okunamadi",
+			problem:   errProb,
+			deep:      chstore.DeepEvidence{Checked: []chstore.CheckedSignal{{Family: "logs", Found: false, Detail: "bakıldı"}}, BubbleUp: bu(chstore.BubbleUpStatusUnreadable, "timeout")},
+			wantIn:    []string{"Ayrışan boyutlar (BubbleUp) OKUNAMADI (timeout)", "BİLİNMİYOR", "KURAL"},
+			wantNotIn: []string{"belirgin ayrışma YOK", "http.route"},
+		},
+		promptScenario{
+			name:    "BubbleUp zaman kiyasi (gecikme) — hata dili yok",
+			problem: chstore.Problem{Service: "orders-api", RuleName: "p99", Metric: "p99_ms", Severity: "critical", Value: 2100, Threshold: 800},
+			deep: func() chstore.DeepEvidence {
+				e := bu(chstore.BubbleUpStatusOK, "")
+				e.Mode = "window"
+				return chstore.DeepEvidence{Checked: []chstore.CheckedSignal{{Family: "operations", Found: true, Detail: "1 operasyon", Records: 1}}, BubbleUp: e}
+			}(),
+			wantIn:    []string{"bu pencere ÖNCEKİ eş-boy pencereyle kıyaslandı; problemin açılışını izleyen 10 dk, bu pencere 40 / önceki 900 span", "bu pencerede %80, önceki pencerede %11"},
+			wantNotIn: []string{"hatalı kümede", "hatalı span"},
+		},
+		promptScenario{
+			name:      "yalniz BubbleUp (plan bos)",
+			problem:   errProb,
+			deep:      chstore.DeepEvidence{BubbleUp: bu(chstore.BubbleUpStatusOK, "")},
+			wantIn:    []string{"\nAyrışan boyutlar (BubbleUp) — ", "http.route=/v1/pay-now", "KURAL", "sebep uydurma"},
+			wantNotIn: []string{"SORUŞTURMA"},
+		},
+	)
+
 	for _, sc := range scenarios {
 		t.Run(sc.name, func(t *testing.T) {
 			bundle := EvidenceBundle{Problem: sc.problem, Deep: sc.deep}

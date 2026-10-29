@@ -388,10 +388,14 @@ func firstOpName(ops []chstore.OperationSummary) string {
 // renderDeepEvidence — kanıt bloğuna "neye bakıldı, ne bulundu" bölümünü
 // basar. Model bu metni okuyup anlatır; operatör de aynı metni görebilir.
 func renderDeepEvidence(sb *strings.Builder, d chstore.DeepEvidence) {
-	if len(d.Checked) == 0 {
+	// v0.10.1577 — BubbleUp kanıtı Checked'ten bağımsız gelebilir (plansız
+	// türde yalnız o); SORUŞTURMA başlığı yalnız bakılan sinyal varken.
+	if len(d.Checked) == 0 && d.BubbleUp == nil {
 		return
 	}
-	sb.WriteString("\nSORUŞTURMA — bakılan sinyaller:\n")
+	if len(d.Checked) > 0 {
+		sb.WriteString("\nSORUŞTURMA — bakılan sinyaller:\n")
+	}
 	for _, c := range d.Checked {
 		mark := "yok"
 		if c.Found {
@@ -480,6 +484,14 @@ func renderDeepEvidence(sb *strings.Builder, d chstore.DeepEvidence) {
 			sb.WriteString("En ağır operasyonlar:\n")
 		}
 		fmt.Fprintf(sb, "  - %s: p99 %.0fms, %d çağrı\n", o.Name, o.P99Ms, o.SpanCount)
+	}
+	// v0.10.1577 (V1 dilim 2) — ayrışan boyutlar; metin CoSRE demetiyle tek
+	// gövde (rca.RenderBubbleUpTR), okunamadı / ayrışma yok AYRI söylenir.
+	if d.BubbleUp != nil {
+		if len(d.Checked) == 0 {
+			sb.WriteString("\n")
+		}
+		sb.WriteString(renderBubbleUpEvidence(d.BubbleUp))
 	}
 }
 

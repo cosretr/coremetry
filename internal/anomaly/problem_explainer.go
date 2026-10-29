@@ -291,8 +291,16 @@ func buildProblemPrompt(p chstore.Problem, bundle EvidenceBundle, hyp *chstore.R
 	// bağlamın başında değil, kanıtın YANINDA olunca daha iyi tutuyor.
 	// Derin kanıt vermek modeli daha İDDİALI yapar; bu satır onu
 	// dengeliyor — model ne kadar iyi olursa olsun geçerli.
-	if len(bundle.Deep.Checked) > 0 {
+	// v0.10.1577 — BubbleUp kanıtı (sentezleyici, bölüm başına bir tarama)
+	// tek başına da bloğu açar; uydurma yasağı yine hemen ardında.
+	if len(bundle.Deep.Checked) > 0 || bundle.Deep.BubbleUp != nil {
 		renderDeepEvidence(&sb, bundle.Deep)
+		if len(bundle.Deep.Checked) == 0 {
+			// Yalnız BubbleUp: olmayan bir SORUŞTURMA listesine atıf yapma.
+			sb.WriteString("\nKURAL: Yukarıdaki ayrışan boyutlar yalnız dağılım farkıdır, sebep değildir. " +
+				"Başka kanıt yoksa sebep uydurma — 'kanıt yetersiz' de.\n")
+			return sb.String()
+		}
 		sb.WriteString("\nKURAL: Yukarıdaki SORUŞTURMA listesi neye BAKILDIĞINI söyler. " +
 			"Bir sinyalde 'yok' yazıyorsa o sinyali sebep olarak GÖSTERME. " +
 			"Hiçbir sinyalde kanıt yoksa sebep uydurma — 'kanıt yetersiz' de ve " +

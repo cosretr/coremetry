@@ -16,33 +16,20 @@ import (
 // monitor, self, servis olmayan özne — tarama yok). Servis adları sentetik.
 
 func TestRootCauseBubbleModeByKind(t *testing.T) {
-	cases := []struct {
-		name string
-		p    *chstore.Problem
-		want string
-	}{
-		{"hata oranı kuralı", &chstore.Problem{ID: "r1", RuleID: "r1", Service: "orders-api", Metric: "error_rate"}, bubbleModeErrors},
-		{"http hata oranı", &chstore.Problem{ID: "r2", Service: "orders-api", Metric: "http_error_rate"}, bubbleModeErrors},
-		{"p99 gecikme — hata dili YOK", &chstore.Problem{ID: "r3", Service: "orders-api", Metric: "p99_ms"}, bubbleModeWindow},
-		{"trafik", &chstore.Problem{ID: "r4", Service: "orders-api", Metric: "request_rate"}, bubbleModeWindow},
-		{"yaygın yavaşlama", &chstore.Problem{ID: "svc-slowdown:orders-api", Service: "orders-api", Metric: "p99_ms"}, bubbleModeWindow},
-		{"prod: JVM GC tek pod", &chstore.Problem{ID: "runtime:jvm-gc:core-api:core-api-7d9f-abcde", RuleID: "runtime:jvm-gc:core-api:core-api-7d9f-abcde",
-			Service: "core-api", Pod: "core-api-7d9f-abcde", Metric: "jvm_gc_pause_ratio"}, bubbleModeNone},
-		{"runtime ailesi rule id ile", &chstore.Problem{ID: "x", RuleID: "runtime:heap:core-api", Service: "core-api", Metric: "heap_used_pct"}, bubbleModeNone},
-		{"runtime ama metrik adı error içerse de none", &chstore.Problem{ID: "runtime:thread-errors:core-api", Service: "core-api", Metric: "thread_error_count"}, bubbleModeNone},
-		{"db kapasite", &chstore.Problem{ID: "db-capacity:db1", Service: "db.example.test", Kind: "database", Metric: "conn_pct"}, bubbleModeNone},
-		{"db sağlık", &chstore.Problem{ID: "db-health:x", Service: "orders-api", Metric: "error_count"}, bubbleModeNone},
-		{"monitor", &chstore.Problem{ID: "monitor:abc", Service: "orders-api", Metric: "up"}, bubbleModeNone},
-		{"self-health", &chstore.Problem{ID: "self-ingest", Service: "coremetry", Metric: "lag"}, bubbleModeNone},
-		{"servissiz özne", &chstore.Problem{ID: "exception-storm", Metric: "error_count"}, bubbleModeNone},
-		{"nil", nil, bubbleModeNone},
+	// v0.10.1577 — tür tablosu chstore/bubbleup_mode_test.go'ya taşındı (karar
+	// orada); burada sarmalayıcının aynı kararı aynı sabitlerle döndürdüğü.
+	for _, p := range []*chstore.Problem{
+		{ID: "r1", Service: "orders-api", Metric: "error_rate"},
+		{ID: "r3", Service: "orders-api", Metric: "p99_ms"},
+		{ID: "runtime:heap:core-api", Service: "core-api", Metric: "heap_used_pct"},
+		nil,
+	} {
+		if got, want := rootCauseBubbleMode(p), string(chstore.ProblemBubbleMode(p)); got != want {
+			t.Errorf("rootCauseBubbleMode(%+v) = %q, chstore %q", p, got, want)
+		}
 	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			if got := rootCauseBubbleMode(c.p); got != c.want {
-				t.Errorf("rootCauseBubbleMode = %q, want %q", got, c.want)
-			}
-		})
+	if bubbleModeErrors != "errors" || bubbleModeWindow != "window" || bubbleModeNone != "none" {
+		t.Error("bubbleMode sabitleri istemci sözleşmesidir (errors/window/none)")
 	}
 	if anomalyBubbleMode("trace_op") != bubbleModeErrors || anomalyBubbleMode("log_pattern") != bubbleModeWindow ||
 		anomalyBubbleMode("trace_op_latency") != bubbleModeWindow {

@@ -116,10 +116,13 @@ type RootCauseSynthesizer struct {
 	// runtimePods — v0.10.374 (VM dilim 3c): JVM heap / GC evidence
 	// reader; nil → store. Set by main.go (metricsrc Resolver.RuntimePods, v0.10.1270).
 	runtimePods chstore.RuntimePodReader
-	lock        cache.Lock
-	leader      *cache.LeaderHolder
-	interval    time.Duration
-	batch       int
+	// bubble — v0.10.1577 BubbleUp okuyucusu (rootcause_bubbleup.go);
+	// nil → store. Yalnız testler kurar.
+	bubble   bubbleUpReader
+	lock     cache.Lock
+	leader   *cache.LeaderHolder
+	interval time.Duration
+	batch    int
 	// autoVerdict — bkz. AutoVerdictFunc. Start() öncesinde SetAutoVerdict
 	// ile kuruluyor; tick'ler tek goroutine'de koştuğu için yarış yok.
 	autoVerdict AutoVerdictFunc
@@ -248,6 +251,18 @@ func (s *RootCauseSynthesizer) run(ctx context.Context) {
 			log.Printf("[rootcause-synth] promoted anomaly sources (bugünkü deploy atfı): %v", perr)
 			promoted = nil
 		}
+		// v0.10.1577 (V1 dilim 2) — BubbleUp taşımasının kaynağı: kalıcı
+		// hipotezler, tik başına TEK toplu okuma (yalnız tarama adayları,
+		// ≤ batch kimlik). Okunamazsa o tik "önceki yok" — bütçe yine 2.
+		var priorHyps map[string]chstore.RootCauseHypothesis
+		if ids := bubbleCandidateIDs(problems); len(ids) > 0 {
+			var herr error
+			if priorHyps, herr = s.store.GetHypotheses(ctx, "problem", ids); herr != nil {
+				log.Printf("[rootcause-synth] prior hypotheses (BubbleUp taşıma): %v", herr)
+				priorHyps = nil
+			}
+		}
+		bubbleBudget := synthesizerBubbleScansPerTick
 		for _, p := range problems {
 			if done >= s.batch {
 				break
@@ -295,8 +310,15 @@ func (s *RootCauseSynthesizer) run(ctx context.Context) {
 			isP1 := len(prio) > 0 && prio[0].Priority == "P1"
 			deep := shouldDeepInvestigate(isP1, bundle.Deploy != nil)
 			if deep {
-				if plan := investigationPlan(p); len(plan) > 0 {
-					d := gatherDeepEvidence(ctx, s.store, s.runtimePods, p, plan, now.Add(-evidenceWindow), now)
+				var d chstore.DeepEvidence
+				plan := investigationPlan(p)
+				if len(plan) > 0 {
+					d = gatherDeepEvidence(ctx, s.store, s.runtimePods, p, plan, now.Add(-evidenceWindow), now)
+				}
+				// v0.10.1577 — BubbleUp: bölüm başına bir tarama, sonra taşınır
+				// (rootcause_bubbleup.go; tik bütçesi 2, 8 s tavan).
+				s.attachBubbleUp(ctx, p, &d, priorBubbleUps(priorHyps, p.ID), &bubbleBudget, now)
+				if len(plan) > 0 || d.BubbleUp != nil {
 					h.Deep = &d
 				}
 			}

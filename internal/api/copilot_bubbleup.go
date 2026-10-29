@@ -18,15 +18,16 @@ package api
 //     rca.ExtrasWindow (10 dk — verdict kataloğuyla aynı): açık problem varsa
 //     onun AÇILIŞINI izleyen 10 dk ("açılışta ne değişti"), yoksa sorunun
 //     SON 10 dakikası.
-//   - renderBubbleUpTR (SAF): küçük model için prefetch metni — en çok 3
-//     boyut, yalnız ≥5 puan ayrışan; "ayrışma yok" ve "okunamadı" AYRI söylenir
-//     (yokluk ≠ okunamadı).
+//   - renderBubbleUpTR (SAF): küçük model için prefetch metni — gövde
+//     v0.10.1577'den beri rca.RenderBubbleUpTR (en çok 3 boyut, yalnız ≥5
+//     puan ayrışan; "ayrışma yok" ve "okunamadı" AYRI söylenir).
 //
 // Maliyet: ham spans taraması — bu yüzden soru başına BİR kez, 10 dakikalık
 // pencere (/rootcause paneli 1 saate kadar tarar ve ~40 sn sürebiliyor; sohbet
 // cevabı onu bekleyemez) ve rca.BubbleUpTimeout (8 sn) tavanıyla; süre
-// dolarsa adım "okunamadı" der, demet düşmez. Arka plan işçisine (sentezleyici) TAŞINMADI:
-// o dilim açık problem × tik başına ham tarama demek, ayrı karar ister.
+// dolarsa adım "okunamadı" der, demet düşmez. Arka plan işçisi (sentezleyici)
+// v0.10.1577'de (V1 dilim 2) kendi kopyasını alır: bölüm başına BİR tarama,
+// tik başına bütçe 2 — anomaly/rootcause_bubbleup.go.
 
 import (
 	"context"
@@ -37,17 +38,6 @@ import (
 	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/rca"
 	"github.com/cilcenk/coremetry/internal/sourcestate"
-)
-
-const (
-	// guidedBubbleUpCap — demet metnine giren en çok boyut (katalogla aynı: 3).
-	guidedBubbleUpCap = 3
-	// guidedBubbleUpMinScore — en küçük ayrışma (pay farkı, oran): 5 puan.
-	// Katalog > 0 kullanır (hakem her satırı tartar); küçük modele giden
-	// prefetch'te %0,4'lük fark "ayrışma" diye sunulursa uydurma sebep olur.
-	guidedBubbleUpMinScore = 0.05
-	// guidedBubbleUpValueMax — değer kırpma (URL / SQL attribute'ları uzun olur).
-	guidedBubbleUpValueMax = 80
 )
 
 // serviceBubbleUp — servis kapsamlı BubbleUp kıyası (dosya başı). Kıyasın
@@ -89,50 +79,20 @@ func (p guidedBubbleUpPlan) compare() string {
 	return "window_vs_previous"
 }
 
-// renderBubbleUpTR — SAF: demet metni (dosya başı). err ≠ nil → "OKUNAMADI"
-// (sınıfıyla); seçim ya da taban boş → kıyas kurulamadı; ayrışma yok → açıkça
-// "YOK"; aksi hâlde en çok guidedBubbleUpCap satır.
+// renderBubbleUpTR — demet metni: pencere sözcüğü burada, metnin gövdesi
+// rca.RenderBubbleUpTR'de (v0.10.1577 — arka plan problem açıklaması da aynı
+// gövdeyi okur). err ≠ nil → "OKUNAMADI" (sınıfıyla).
 func renderBubbleUpTR(bu *chstore.BubbleUpResult, plan guidedBubbleUpPlan, err error) string {
-	const title = "Ayrışan boyutlar (BubbleUp)"
-	if err != nil || bu == nil {
-		why := "sonuç yok"
-		if err != nil {
-			why = string(sourcestate.Classify(err))
-		}
-		return fmt.Sprintf("%s OKUNAMADI (%s) — sorunun belirli bir boyutta (rota, pod, sürüm…) yoğunlaşıp yoğunlaşmadığı BİLİNMİYOR; bu konuda sonuç çıkarma.\n", title, why)
-	}
 	mins := int(plan.End.Sub(plan.Started).Minutes())
 	win := fmt.Sprintf("son %d dk", mins)
 	if plan.Anchored {
 		win = fmt.Sprintf("problemin açılışını izleyen %d dk", mins)
 	}
-	var head, selWord, baseWord string
-	if plan.ErrorFamily {
-		head = fmt.Sprintf("hatalı span'ler aynı penceredeki TÜM span'lerle kıyaslandı; %s, hatalı %d / tüm %d span", win, bu.SelectionTotal, bu.BaselineTotal)
-		selWord, baseWord = "hatalı kümede", "tüm span'lerde"
-	} else {
-		head = fmt.Sprintf("bu pencere ÖNCEKİ eş-boy pencereyle kıyaslandı; %s, bu pencere %d / önceki %d span", win, bu.SelectionTotal, bu.BaselineTotal)
-		selWord, baseWord = "bu pencerede", "önceki pencerede"
+	r := rca.BubbleUpRender{ErrorFamily: plan.ErrorFamily, Window: win, Result: bu}
+	if err != nil {
+		r.Unreadable = string(sourcestate.Classify(err))
 	}
-	switch {
-	case bu.SelectionTotal == 0 && plan.ErrorFamily:
-		return fmt.Sprintf("%s: bu pencerede (%s) hatalı span yok — kıyas kurulamadı.\n", title, win)
-	case bu.SelectionTotal == 0:
-		return fmt.Sprintf("%s: bu pencerede (%s) span yok — kıyas kurulamadı.\n", title, win)
-	case bu.BaselineTotal == 0:
-		return fmt.Sprintf("%s: önceki pencerede span yok — kıyas kurulamadı (servis yeni başlamış ya da trafik yeni gelmiş olabilir).\n", title)
-	}
-	tops := rca.TopBubbleUp(bu, guidedBubbleUpCap, guidedBubbleUpMinScore)
-	if len(tops) == 0 {
-		return fmt.Sprintf("%s — %s: belirgin ayrışma YOK (hiçbir attribute değeri en az 5 puan fazla temsil edilmiyor) — sorun tek bir rota / pod / sürüme özgü görünmüyor.\n", title, head)
-	}
-	var b strings.Builder
-	fmt.Fprintf(&b, "%s — %s:\n", title, head)
-	for _, t := range tops {
-		fmt.Fprintf(&b, "  - %s=%s: %s %%%.0f, %s %%%.0f\n", t.Key, truncate(t.Value, guidedBubbleUpValueMax), selWord, t.SelPct, baseWord, t.BasePct)
-	}
-	b.WriteString("Bu satırlar HESAPLANMIŞ dağılım farkıdır: sorun bu değerlerde yoğunlaşıyor demektir, tek başına sebep kanıtı değildir.\n")
-	return b.String()
+	return rca.RenderBubbleUpTR(r)
 }
 
 // guidedBubbleUpStep — kök-neden demetinin BubbleUp adımı: çip + kanıt +

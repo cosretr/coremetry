@@ -17,38 +17,19 @@ package api
 //     heap, thread — tek pod'un süreci), veritabanı kapasite/sağlık, monitor,
 //     self-health, servis olmayan özne. Ham spans taraması HİÇ koşmaz.
 
-import (
-	"strings"
+import "github.com/cilcenk/coremetry/internal/chstore"
 
-	"github.com/cilcenk/coremetry/internal/chstore"
-)
-
+// v0.10.1577 — karar chstore.ProblemBubbleMode'a taşındı (sentezleyici de
+// okuyor); burada yalnız api'nin string sabitleri + ince sarmalayıcı kalır.
 const (
-	bubbleModeErrors = "errors"
-	bubbleModeWindow = "window"
-	bubbleModeNone   = "none"
+	bubbleModeErrors = string(chstore.BubbleModeErrors)
+	bubbleModeWindow = string(chstore.BubbleModeWindow)
+	bubbleModeNone   = string(chstore.BubbleModeNone)
 )
 
-// bubbleNonePrefixes — span attribute kıyası anlamsız olan kural/problem id
-// önekleri (aiops §3 aileleri).
-var bubbleNonePrefixes = []string{"runtime:", "db-capacity:", "db-health:", "monitor:", "self-"}
-
-// rootCauseBubbleMode — SAF (rootcause_bubble_mode_test.go tablo).
+// rootCauseBubbleMode — chstore.ProblemBubbleMode sarmalayıcısı.
 func rootCauseBubbleMode(p *chstore.Problem) string {
-	if p == nil || p.Service == "" || (p.Kind != "" && p.Kind != chstore.ProblemKindService) {
-		return bubbleModeNone
-	}
-	for _, id := range []string{p.ID, p.RuleID} {
-		for _, pre := range bubbleNonePrefixes {
-			if strings.HasPrefix(id, pre) {
-				return bubbleModeNone
-			}
-		}
-	}
-	if exemplarKindForMetric(p.Metric) == chstore.ExemplarError {
-		return bubbleModeErrors
-	}
-	return bubbleModeWindow
+	return string(chstore.ProblemBubbleMode(p))
 }
 
 // anomalyBubbleMode — SAF: anomali çıpası. trace_op hata oranı anomalisidir.

@@ -53,16 +53,7 @@ type RootCause struct {
 // that best illustrates it: error_rate → an erroring trace, latency → a slow
 // trace, everything else → any representative trace.
 func exemplarKindForMetric(metric string) chstore.ExemplarKind {
-	m := strings.ToLower(metric)
-	switch {
-	case strings.Contains(m, "error"):
-		return chstore.ExemplarError
-	case strings.Contains(m, "p99") || strings.Contains(m, "p95") ||
-		strings.Contains(m, "latency") || strings.Contains(m, "duration") || strings.Contains(m, "ms"):
-		return chstore.ExemplarSlow
-	default:
-		return chstore.ExemplarAny
-	}
+	return chstore.ExemplarKindForMetric(metric) // v0.10.1577 — tek gövde chstore'da
 }
 
 // AnomalyRootCause is the anomaly-anchored sibling of RootCause (v0.8.x).

@@ -81,7 +81,7 @@ func ExceptionWindow(firstSeenNs, lastSeenNs int64) (fromNs, toNs int64) {
 }
 
 // MetricFamily — problemin ihlal ettiği metrik ailesi. Alt dize listesi
-// exemplarKindForMetric (internal/api/rootcause.go:44) ile BİREBİR: aynı
+// chstore.ExemplarKindForMetric (internal/chstore/bubbleup_mode.go) ile BİREBİR: aynı
 // problemde örnek trace "yavaş" seçilirken kart linki "hatalı" göstermesin.
 // Dönüş: "error" | "latency" | "other".
 func MetricFamily(metric string) string {
