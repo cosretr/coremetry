@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -115,3 +116,34 @@ type readCloser struct{ *bytes.Reader }
 func (readCloser) Close() error { return nil }
 
 func httptestBody(s string) readCloser { return readCloser{bytes.NewReader([]byte(s))} }
+
+// v0.10.1602 — operatör kararı 2026-10-29 §2: bayrak YALNIZ istek başında
+// okunur (requireCosreV2). Açık bir v2 akışı bayrak kapatılsa da sonuna dek
+// sürer; kapatma yalnız YENİ istekleri 404'e çevirir (podlar arası 30 s
+// yayılım kabul). Pin: araç çağrısının ortasında bayrak kapanır → akış yine
+// son cevabı ve [DONE]'u yazar, model iki kez çağrılır; sonraki istek 404.
+func TestCosreV2ChatFlagOffMidStreamDoesNotCutStream(t *testing.T) {
+	llm := goldenLoopLLM(t)
+	s, _ := newLoopTestServer(t, llm, "u-golden")
+	setCosreV2(t, s, true)
+	flipped := false
+	ft := &fakeTools{onCall: func(string) {
+		s.cosreV2Memo().set(false) // admin PUT'un yerel etkisi
+		flipped = !s.cosreV2Enabled(context.Background())
+	}}
+	ft.install(t)
+	w := serveV2(s, chatGoldenRequest("/api/cosre/v2/chat", chatGoldenLoopBody(), true))
+	if !flipped {
+		t.Fatal("bayrak akış ortasında kapanmadı (test kurgusu)")
+	}
+	assertV2Headers(t, w)
+	if n := len(llm.calls()); n != 2 {
+		t.Fatalf("model %d kez çağrıldı — akış bayrakla kesildi", n)
+	}
+	if !strings.Contains(w.Body.String(), "orders-api p95 yükseldi") {
+		t.Fatal("son cevap akışta yok — bayrak kapanınca akış kesildi")
+	}
+	if w2 := serveV2(s, chatGoldenRequest("/api/cosre/v2/chat", chatGoldenHelpBody(), false)); w2.Code != http.StatusNotFound {
+		t.Fatalf("kapandıktan sonraki yeni istek %d, 404 bekleniyordu", w2.Code)
+	}
+}

@@ -28,6 +28,12 @@ func (s *Server) registerCosreV2ChatRoutes(mux *http.ServeMux) {
 }
 
 // requireCosreV2 — bayrak kapalıysa 404 (JSON).
+//
+// v0.10.1602 — operatör kararı 2026-10-29 §2: bayrak YALNIZ burada, istek
+// başında okunur. Açık bir akış bayrak kapatılınca kesilmez, sonuna dek
+// sürer; yalnız yeni istekler 404 alır (podlar arası ≤30 s memo yayılımı
+// kabul). Gövdeye (copilotChatWith) bayrak okuması EKLEME —
+// TestCosreV2ChatFlagOffMidStreamDoesNotCutStream pinler.
 func (s *Server) requireCosreV2(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !s.cosreV2Enabled(r.Context()) {
