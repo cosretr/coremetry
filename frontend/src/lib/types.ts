@@ -8389,11 +8389,27 @@ export interface ChatStepDetail {
   ctxApplied?: ChatCtxApplied;
 }
 
+// ChatBudget (v0.10.1594) — internal/api chatBudget aynası: serbest döngünün
+// araç/tur bütçesi. Başlangıç adımında yalnız tavanlar dolu; tükenince
+// exhausted=true ve harcanan/yürütülen/yürütülmeyen sayılar.
+export interface ChatBudget {
+  maxCalls: number;
+  maxRounds: number;
+  slotsUsed: number;
+  executed: number;
+  skipped: number;
+  roundsUsed: number;
+  exhausted: boolean;
+}
+
 export type ChatStreamEvent =
   // v0.10.161 — `tool`suz etiket adımları da gelir (ekran bağlamı / pencere
   // çapası / taşma yeniden denemesi: {label}); şeffaflık paneli onları saymaz.
   // phase (v0.10.1273) — aracın insan-okur evresi ("Metrik"/"Log"/"Trace"…); eski sunucu ve bilinmeyen araç göndermez.
-  | { kind: 'step'; i?: number; tool?: string; label?: string; args?: string; origin?: string; phase?: string }
+  // budget / argsJson (v0.10.1594, CoSRE v2 Faz 1 R6) — yapısal bütçe sayacı ve
+  // geçerli JSON argüman; v2 akış çevirici (internal/cosre/uistream) içindir,
+  // v1 UI okumaz (useChatThread alanları tek tek seçer).
+  | { kind: 'step'; i?: number; tool?: string; label?: string; args?: string; origin?: string; phase?: string; budget?: ChatBudget; argsJson?: unknown }
   // skipped (v0.10.944, Faz B sunucusu) — çağrı yürütülmedi; süre ölçüm değildir.
   // sources (v0.10.944) — sunucunun TAM çıktıdan okuduğu kaynak durumları (kırpık önizlemeden bağımsız).
   // evidence (v0.10.1272) — query_metrics/traces/logs kanıtı; eski sunucu göndermez.

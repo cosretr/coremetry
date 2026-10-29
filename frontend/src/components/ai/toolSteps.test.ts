@@ -10,7 +10,9 @@ import {
   sourceStates, sourceStateTone, SOURCE_STATE_LABELS, stepRunning, isToolName, toolErrorLabel, stateUnknown,
   windowPrefix,
 } from './toolSteps';
-import type { ChatStepDetail } from '@/lib/types';
+import type { ChatStepDetail, ChatStreamEvent } from '@/lib/types';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 const d = (i: number, over: Partial<ChatStepDetail> = {}): ChatStepDetail => ({ i, tool: `t${i}`, ok: true, preview: 'x', ...over });
 
@@ -224,5 +226,33 @@ describe('windowPrefix', () => {
     expect(windowPrefix('referans penceresi: code: 159 timeout')).toBe('referans · ');
     expect(windowPrefix('dial tcp: connection refused')).toBe('');
     expect(windowPrefix(undefined)).toBe('');
+  });
+});
+
+// v0.10.1594 (CoSRE v2 Faz 1, R6) — `step` olayı artık budget (yapısal
+// bütçe) ve argsJson (geçerli JSON argüman) taşıyabilir. v1 UI bunları
+// OKUMAZ: useChatThread step dalı ChatStepDetail'i alanları TEK TEK seçerek
+// kurar (`...e` yayılımı yok), dolayısıyla çip/şeffaflık paneli aynı kalır.
+describe('step budget/argsJson v1 UI tarafından yok sayılır', () => {
+  const src = readFileSync(resolve(__dirname, 'useChatThread.ts'), 'utf8');
+  const start = src.indexOf("if (e.kind === 'step')");
+  const end = src.indexOf("} else if (e.kind === 'step-result')", start);
+  const branch = src.slice(start, end);
+  it('step dalı bulunur', () => {
+    expect(start).toBeGreaterThan(0);
+    expect(end).toBeGreaterThan(start);
+  });
+  it('dal olayı yaymaz ve yeni alanları okumaz', () => {
+    expect(branch).not.toMatch(/\.\.\.e\b/);
+    expect(branch).not.toMatch(/e\.budget|e\.argsJson/);
+  });
+  it('yeni alanlı olay tipte geçerli, özet aynı', () => {
+    const ev: ChatStreamEvent = {
+      kind: 'step', i: 1, tool: 'get_service_health', args: '{"service":"orders-api"}',
+      argsJson: { service: 'orders-api' },
+      budget: { maxCalls: 6, maxRounds: 5, slotsUsed: 0, executed: 0, skipped: 0, roundsUsed: 0, exhausted: false },
+    };
+    expect(ev.kind).toBe('step');
+    expect(summarizeSteps([d(1, { durationMs: 5 })])).toMatchObject({ count: 1, errors: 0, totalMs: 5 });
   });
 });

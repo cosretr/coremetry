@@ -1,9 +1,10 @@
-{"kind":"step","payload":{"i":1,"label":"araştırma bütçesi: 6 araç · 5 tur"}}
-{"kind":"step","payload":{"i":2,"tool":"get_service_health","args":"{\"service\":\"orders-api\"}","phase":"Sağlık"}}
+{"kind":"step","payload":{"i":1,"label":"araştırma bütçesi: 6 araç · 5 tur","budget":{"maxCalls":6,"maxRounds":5,"slotsUsed":0,"executed":0,"skipped":0,"roundsUsed":0,"exhausted":false}}}
+{"kind":"step","payload":{"i":2,"tool":"get_service_health","args":"{\"service\":\"orders-api\"}","argsJson":{"service":"orders-api"},"phase":"Sağlık"}}
 {"kind":"block","payload":{"id":"b1","type":"link","seq":1,"final":true,"payload":{"label":"orders-api · Overview","href":"/service?name=orders-api"}}}
 {"kind":"step-result","payload":{"i":2,"tool":"get_service_health","ok":true,"preview":"{\"p95_ms\":1830}","truncated":false,"bytes":15,"durationMs":42,"href":"/service?name=orders-api","sources":[{"source":"traces","state":"ok"}]}}
 {"kind":"step","payload":{"i":3,"tool":"query_metrics","args":"service=orders-api"}}
 {"kind":"step-result","payload":{"i":3,"tool":"query_metrics","ok":false,"skipped":true,"reason":"araştırma bütçesi doldu"}}
+{"kind":"step","payload":{"i":4,"label":"araştırma bütçesi doldu (2/2 çağrı hakkı · 1/5 tur) — 1 çağrı yürütüldü, 1 yürütülmedi; eldeki kanıtla cevaplanıyor","budget":{"maxCalls":2,"maxRounds":5,"slotsUsed":2,"executed":1,"skipped":1,"roundsUsed":1,"exhausted":true}}}
 {"kind":"block","payload":{"id":"b2","type":"chart","seq":2,"final":true,"payload":{"title":"orders-api p95","unit":"ms","series":[{"name":"p95","points":[[1790496000000,1200],[1790496060000,1830]]}]}}}
 {"kind":"delta","payload":{"text":"**Bulgu** — "}}
 {"kind":"delta","payload":{"text":"orders-api p95 "}}

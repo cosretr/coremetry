@@ -49,6 +49,25 @@ func skippedStepResult(i int, tool, content, reason string) map[string]any {
 	}
 }
 
+// chatBudget — v0.10.1594 (CoSRE v2 Faz 1, R6): bütçe adımının yapısal
+// sayaçları. v2 istemcisi bütçe göstergesini TR etiketini ayrıştırmadan
+// çizer (uistream → data-budget); v1 etiketi aynen kalır, v1 UI alanı okumaz.
+type chatBudget struct {
+	MaxCalls   int  `json:"maxCalls"`
+	MaxRounds  int  `json:"maxRounds"`
+	SlotsUsed  int  `json:"slotsUsed"`
+	Executed   int  `json:"executed"`
+	Skipped    int  `json:"skipped"`
+	RoundsUsed int  `json:"roundsUsed"`
+	Exhausted  bool `json:"exhausted"`
+}
+
+// chatBudgetStep — bütçe adımının yükü (SAF): v1 etiketi + yapısal bütçe.
+// map[string]any: withStepIDs `i`yi yerinde basar.
+func chatBudgetStep(label string, b chatBudget) map[string]any {
+	return map[string]any{"label": label, "budget": b}
+}
+
 // chatBudgetLabelTR — döngü başındaki bütçe etiketi (SAF).
 func chatBudgetLabelTR(calls, rounds int) string {
 	return fmt.Sprintf("araştırma bütçesi: %d araç · %d tur", calls, rounds)

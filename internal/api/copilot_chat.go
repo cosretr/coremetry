@@ -1045,7 +1045,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	executedN, skippedN := 0, 0
 	// v0.10.948 — bütçe sessiz değil: operatör döngünün sınırını baştan görür,
 	// dolunca da ne kadarının kullanıldığını (chat_loop_steps.go).
-	emit("step", map[string]string{"label": chatBudgetLabelTR(maxCalls, maxRounds)})
+	emit("step", chatBudgetStep(chatBudgetLabelTR(maxCalls, maxRounds), chatBudget{MaxCalls: maxCalls, MaxRounds: maxRounds})) // v0.10.1594 — yapısal bütçe
 	// v0.10.1324 (operatör-bildirimi) — FİNAL METİN SÜZGECİ + YİNELEME DÜŞÜŞÜ
 	// (chat_answer_degen.go). gemma4 31b bir önsöz cümlesini max_tokens dolana
 	// dek yazdı; iki final çıkış da metni yalnız sanitizeAnswerLinks'ten
@@ -1201,7 +1201,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			// v0.10.1274 — ekran kapsamı argümana (deterministik); çip GERÇEKTEN
 			// çalışan argümanı gösterir, tekrar muhafızı da onu anahtarlar.
 			cargs, scopeApplied := applyScreenContext(tc.Name, tc.Input, toolSchemas[tc.Name], toolScope, time.Now())
-			stepN = emitStepChip(emit, tc.Name, string(cargs))
+			stepN = emitStepChipInput(emit, tc.Name, string(cargs), "", cargs) // v0.10.1594 — argsJson (v2)
 			// v0.10.948 — İPTAL her çağrıdan ÖNCE denetlenir: Executor.Call ilk iş
 			// ctx'e bakar (Kind cancelled, handler çağrılmaz); turun kalanları da
 			// aynı yoldan yürütülmeden geçer ve döngü aşağıda biter.
@@ -1423,7 +1423,8 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 		if round == maxRounds-1 || callsLeft <= 0 {
 			// v0.10.948 — bütçe dolduğu AÇIKÇA söylenir: harcanan hak/tur, yürütülen
 			// ve alışveriş boyunca yürütülmeyen çağrı (eski "tool-çağrı tavanı" etiketinin yerine).
-			emit("step", map[string]string{"label": chatBudgetExhaustedCapsLabelTR(maxCalls-callsLeft, maxCalls, executedN, skippedN, round+1, maxRounds)})
+			emit("step", chatBudgetStep(chatBudgetExhaustedCapsLabelTR(maxCalls-callsLeft, maxCalls, executedN, skippedN, round+1, maxRounds),
+				chatBudget{MaxCalls: maxCalls, MaxRounds: maxRounds, SlotsUsed: maxCalls - callsLeft, Executed: executedN, Skipped: skippedN, RoundsUsed: round + 1, Exhausted: true})) // v0.10.1594
 			// v0.10.806 — tavan eki döngü prompt'unun SONUNA: önek aynı kalır
 			// (önbellek isabeti) ve tavan turu bağlam önsözlerini de görür
 			// (eskiden yalnız hitap + sohbet çekirdeği + ek gidiyordu).

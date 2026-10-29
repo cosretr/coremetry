@@ -73,6 +73,20 @@ func TestTranslateSequences(t *testing.T) {
 			},
 		},
 		{
+			// v0.10.1594 (R6) — yapısal bütçe ve JSON argüman.
+			name: "budget step adds data-budget; argsJson becomes input.args",
+			evs: []ev{
+				{"step", map[string]any{"i": 1, "label": "araştırma bütçesi: 6 araç · 5 tur", "budget": map[string]any{"maxCalls": 6, "maxRounds": 5}}},
+				{"step", map[string]any{"i": 2, "tool": "t", "args": `{"a":1}`, "argsJson": json.RawMessage(`{"a":1}`)}},
+			},
+			want: []string{pStart, pStartStep,
+				`{"data":{"i":1,"label":"araştırma bütçesi: 6 araç · 5 tur"},"id":"s1","type":"data-step"}`,
+				`{"data":{"maxCalls":6,"maxRounds":5},"id":"budget","type":"data-budget"}`,
+				`{"dynamic":true,"toolCallId":"s2","toolName":"t","type":"tool-input-start"}`,
+				`{"dynamic":true,"input":{"args":{"a":1},"argsText":"{\"a\":1}"},"toolCallId":"s2","toolName":"t","type":"tool-input-available"}`,
+			},
+		},
+		{
 			name: "tool step without i never invents a tool call id",
 			evs:  []ev{{"step", map[string]string{"tool": "x", "args": "a"}}},
 			want: []string{pStart, pStartStep, `{"data":{"args":"a","tool":"x"},"type":"data-step"}`},

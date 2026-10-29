@@ -24,6 +24,7 @@ package api
 // numarayı alır.
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -87,6 +88,32 @@ func emitStepChipOrigin(emit func(string, any), tool, args, origin string) int {
 	}
 	if p := stepPhaseTR(tool); p != "" {
 		m["phase"] = p // v0.10.1273 — isteğe bağlı evre (chat_step_phase.go)
+	}
+	emit("step", m)
+	if i, ok := m["i"].(int); ok {
+		return i
+	}
+	return 0
+}
+
+// stepArgsJSONMax — argsJson tavanı: daha büyük argüman yalnız metin (args)
+// olarak gider; v2 istemcisi yapısal görünümü atlar.
+const stepArgsJSONMax = 8 << 10
+
+// emitStepChipInput — v0.10.1594 (CoSRE v2 Faz 1, R6): emitStepChipOrigin +
+// geçerli ve ≤8 KiB JSON argümanı `argsJson` olarak (uistream →
+// tool-input-available.input.args). Yalnız serbest döngünün model çağrısı
+// sitesinde kullanılır; v1 alanları (tool/args/origin/phase) aynen.
+func emitStepChipInput(emit func(string, any), tool, args, origin string, input json.RawMessage) int {
+	m := map[string]any{"tool": tool, "args": args}
+	if origin != "" {
+		m["origin"] = origin
+	}
+	if p := stepPhaseTR(tool); p != "" {
+		m["phase"] = p
+	}
+	if len(input) > 0 && len(input) <= stepArgsJSONMax && json.Valid(input) {
+		m["argsJson"] = input
 	}
 	emit("step", m)
 	if i, ok := m["i"].(int); ok {

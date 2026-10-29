@@ -4,9 +4,11 @@ data: {"type":"start-step"}
 
 data: {"data":{"i":1,"label":"araştırma bütçesi: 6 araç · 5 tur"},"id":"s1","type":"data-step"}
 
+data: {"data":{"executed":0,"exhausted":false,"maxCalls":6,"maxRounds":5,"roundsUsed":0,"skipped":0,"slotsUsed":0},"id":"budget","type":"data-budget"}
+
 data: {"dynamic":true,"toolCallId":"s2","toolName":"get_service_health","type":"tool-input-start"}
 
-data: {"dynamic":true,"input":{"argsText":"{\"service\":\"orders-api\"}"},"toolCallId":"s2","toolName":"get_service_health","type":"tool-input-available"}
+data: {"dynamic":true,"input":{"args":{"service":"orders-api"},"argsText":"{\"service\":\"orders-api\"}"},"toolCallId":"s2","toolName":"get_service_health","type":"tool-input-available"}
 
 data: {"data":{"final":true,"payload":{"href":"/service?name=orders-api","label":"orders-api · Overview"},"seq":1},"id":"b1","type":"data-block-link"}
 

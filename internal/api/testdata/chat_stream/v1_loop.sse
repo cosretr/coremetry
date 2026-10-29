@@ -1,8 +1,8 @@
 event: step
-data: {"i":1,"label":"araştırma bütçesi: 6 araç · 5 tur"}
+data: {"budget":{"maxCalls":6,"maxRounds":5,"slotsUsed":0,"executed":0,"skipped":0,"roundsUsed":0,"exhausted":false},"i":1,"label":"araştırma bütçesi: 6 araç · 5 tur"}
 
 event: step
-data: {"args":"{\"service\":\"orders-api\"}","i":2,"phase":"Sağlık","tool":"get_service_health"}
+data: {"args":"{\"service\":\"orders-api\"}","argsJson":{"service":"orders-api"},"i":2,"phase":"Sağlık","tool":"get_service_health"}
 
 event: block
 data: {"final":true,"id":"b1","payload":{"label":"orders-api · Overview","href":"/service?name=orders-api"},"seq":1,"type":"link"}
