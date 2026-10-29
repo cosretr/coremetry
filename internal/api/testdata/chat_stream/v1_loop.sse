@@ -1,0 +1,21 @@
+event: step
+data: {"i":1,"label":"araştırma bütçesi: 6 araç · 5 tur"}
+
+event: step
+data: {"args":"{\"service\":\"orders-api\"}","i":2,"phase":"Sağlık","tool":"get_service_health"}
+
+event: block
+data: {"final":true,"id":"b1","payload":{"label":"orders-api · Overview","href":"/service?name=orders-api"},"seq":1,"type":"link"}
+
+event: step-result
+data: {"bytes":94,"durationMs":0,"href":"/service?name=orders-api","i":2,"ok":true,"preview":"{\"source\":{\"backend\":\"clickhouse\",\"source\":\"traces\",\"state\":\"ok\"},\"tool\":\"get_service_health\"}","sources":[{"source":"traces","state":"ok"}],"tool":"get_service_health","truncated":false}
+
+event: delta
+data: {"text":"**Bulgu** — orders-api p95 yükseldi."}
+
+event: answer
+data: {"callId":"X","exchangeId":"golden-xid","links":[{"label":"orders-api · Overview","href":"/service?name=orders-api"}],"text":"**Bulgu** — orders-api p95 yükseldi.\n\nKaynak: get_service_health (1 araç)"}
+
+event: done
+data: {"ok":true}
+
