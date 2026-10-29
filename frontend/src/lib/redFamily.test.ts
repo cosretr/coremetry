@@ -7,7 +7,7 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   HTTP_FAMILY, GRPC_LEGACY_FAMILY, GRPC_STABLE_FAMILY, RED_FAMILIES, familyById, GRPC_CODE_NAMES,
   statusClassOf, statusClassToken, statusCodeLabel, serverErrorLabel,
-  redFamilyView, pickFamilySection, familySections, familyBadgeSuffix, familyUnknownNote,
+  redFamilyView, pickFamilySection, familySections, familyBadgeSuffix, familyUnknownNote, familyPartialNote,
   type RedFamilyResolution,
 } from './redFamily';
 
@@ -111,5 +111,21 @@ describe('api.serviceRedFamily yolu', () => {
     expect(u.searchParams.get('metricsrc')).toBe('vm');
     expect(u.searchParams.get('env')).toBe('eu-a');
     expect(u.searchParams.has('cluster')).toBe(false);
+  });
+});
+
+// v0.10.1559 — kısmi çözüm: HTTP okunamadı (zaman aşımı) ama gRPC bulundu.
+// İki bölüm çizilir, not yalnız kısmi okumayı söyler; "bilinemedi" DEĞİL.
+describe('kısmi aile çözümü (v0.10.1559)', () => {
+  it('HTTP okunamadı + gRPC var → iki bölüm + kısmi not', () => {
+    const v = redFamilyView({ data: {
+      service: 's', state: 'known', primary: 'http', both: true,
+      reason: 'Bazı aileler okunamadı (okunamadı ≠ yok); okunanlar çizildi: http_server_request_duration_seconds_count: okunamadı (timeout) — yok DEĞİL',
+      http: { id: 'http', kind: 'http' }, grpc: { id: 'grpc_legacy', kind: 'grpc' },
+      tried: ['http_server_request_duration_seconds_count: okunamadı (timeout) — yok DEĞİL'],
+    } });
+    expect(familySections(v).map(s => s.family.kind)).toEqual(['http', 'grpc']);
+    expect(familyUnknownNote(v)).toBeNull();
+    expect(familyPartialNote(v)).toContain('okunamadı ≠ yok');
   });
 });

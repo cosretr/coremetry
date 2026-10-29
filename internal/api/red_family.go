@@ -50,12 +50,14 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
 	"time"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
+	"github.com/cilcenk/coremetry/internal/sourcestate"
 	"github.com/cilcenk/coremetry/internal/vmetrics"
 )
 
@@ -254,23 +256,47 @@ func (s *Server) resolveServiceREDFamily(ctx context.Context, rd redFamilyReader
 		return cached, nil
 	}
 	res := redFamilyResolution{Service: service, State: "known", Primary: redKindNone, Tried: []string{}}
+	// v0.10.1559 (operatör, prod: gRPC metrikleri VM'de var ama HTTP/RPC
+	// sekmesinde gRPC bölümü hiç çıkmıyor; /red-family → state unknown,
+	// reason timeout, tried []). Kök neden: bir ailenin okuma hatası tüm
+	// çözümü bitiriyordu — HTTP etiket okuması zaman aşımına düşünce gRPC
+	// aileleri HİÇ denenmiyordu. Artık hata AİLE BAŞINA: okunamayan aile
+	// tried'a "okunamadı" diye yazılır, sıradaki denenir. Okunamayan HTTP
+	// bugünkü gibi çizilir (varsayılan aile; unknown hâlinde de çiziliyordu);
+	// yalnız HEPSİ okunamazsa unknown. Kısmi sonuç önbelleğe yazılmaz.
+	var firstErr error
+	failed := 0
 	for _, f := range redFamilies {
 		labels, err := s.metricChartLabelSet(ctx, rd, f.Probe, at)
-		if err != nil {
-			return redFamilyUnknown(service, "etiket okuması ("+f.vmCount()+")", err), err
-		}
-		if len(labels) == 0 {
+		if err == nil && len(labels) == 0 {
 			res.Tried = append(res.Tried, f.vmCount()+": metrik yok (son 24 sa)")
 			continue
 		}
-		sr := vmetrics.ResolveLabelRole(vmetrics.RoleService, lm, labels, true)
-		if !sr.Applied() {
-			res.Tried = append(res.Tried, f.vmCount()+": servis etiketi yok (service_name / LabelMap)")
-			continue
+		var sr vmetrics.LabelResolution
+		if err == nil {
+			sr = vmetrics.ResolveLabelRole(vmetrics.RoleService, lm, labels, true)
+			if !sr.Applied() {
+				res.Tried = append(res.Tried, f.vmCount()+": servis etiketi yok (service_name / LabelMap)")
+				continue
+			}
 		}
-		ser, err := rd.QueryPromQLInstant(ctx, redFamilyPresenceQuery(f, sr.Label, service), at)
+		var ser []chstore.SpanMetricSeries
+		if err == nil {
+			ser, err = rd.QueryPromQLInstant(ctx, redFamilyPresenceQuery(f, sr.Label, service), at)
+		}
 		if err != nil {
-			return redFamilyUnknown(service, "yoklama sorgusu ("+f.vmCount()+")", err), err
+			if errors.Is(err, context.Canceled) {
+				return redFamilyUnknown(service, "okuması ("+f.vmCount()+")", err), err
+			}
+			if firstErr == nil {
+				firstErr = err
+			}
+			failed++
+			res.Tried = append(res.Tried, f.vmCount()+": okunamadı ("+string(sourcestate.Classify(err))+") — yok DEĞİL")
+			if f.Kind == redKindHTTP {
+				res.HTTP = &redFamilyPresence{ID: f.ID, Kind: f.Kind}
+			}
+			continue
 		}
 		if len(ser) == 0 {
 			res.Tried = append(res.Tried, f.vmCount()+": bu servisin serisi yok (son 1 sa)")
@@ -306,6 +332,13 @@ func (s *Server) resolveServiceREDFamily(ctx context.Context, rd redFamilyReader
 		res.Primary = redKindGRPC
 	}
 	res.Both = res.HTTP != nil && res.GRPC != nil
+	if failed == len(redFamilies) {
+		return redFamilyUnknown(service, "okuması", firstErr), firstErr
+	}
+	if failed > 0 {
+		res.Reason = "Bazı aileler okunamadı (okunamadı ≠ yok); okunanlar çizildi: " + strings.Join(res.Tried, " · ")
+		return res, nil
+	}
 	s.metricChartCacheSet(ctx, key, res, redFamilyTTL)
 	return res, nil
 }

@@ -201,6 +201,15 @@ export function familyBadgeSuffix(v: RedFamilyView): string {
   return '';
 }
 
+/**
+ * v0.10.1559 — kısmi çözüm notu: bazı aileler okunamadı (ör. HTTP etiket
+ * okuması zaman aşımı), okunanlar çizildi. Yalnız HTTP/RPC sekmesi gösterir;
+ * Overview'un "bilinemedi" rozeti bu hâlde YANLIŞ olurdu (aile biliniyor).
+ */
+export function familyPartialNote(v: RedFamilyView): string | null {
+  return v.state === 'known' && v.reason ? v.reason : null;
+}
+
 /** Çözüm bilinmiyor / okunamadı notu (null = not yok). */
 export function familyUnknownNote(v: RedFamilyView): string | null {
   if (v.state === 'unknown') return `Metrik ailesi BİLİNEMEDİ (${v.reason ?? 'okunamadı'}) — HTTP sorguları koşuyor; gRPC yok DEĞİL`;

@@ -25,7 +25,7 @@ import {
 } from '@/components/ui/DataTable';
 import { useHttpPromql, useRedFamily, sectionEnvScope } from '@/lib/queries/httpMetrics';
 import { httpEnvScopeReady, type HttpEnvScopeView } from '@/lib/httpEnvScopeNote';
-import { familySections, familyUnknownNote, statusCodeLabel, type RedFamilySpec } from '@/lib/redFamily';
+import { familySections, familyUnknownNote, familyPartialNote, statusCodeLabel, type RedFamilySpec } from '@/lib/redFamily';
 import { timeRangeToNs } from '@/lib/utils';
 import { fmtSmart } from '@/lib/chartFmt';
 import { useUrlParams, strParam } from '@/lib/urlParams';
@@ -116,7 +116,7 @@ export function ServiceHttpMetricsTab({ service, range, env = '', cluster = '' }
   const fam = useRedFamily(service, env, cluster, win.to);
   if (!fam.ready) return <Spinner />;
   const sections = familySections(fam);
-  const note = familyUnknownNote(fam);
+  const note = familyUnknownNote(fam) ?? familyPartialNote(fam); // v0.10.1559 — kısmi okuma da söylenir
   return (
     <div>
       {note && <div className="field-hint" style={{ marginBottom: 10 }}>{note}</div>}

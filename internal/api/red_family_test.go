@@ -147,7 +147,10 @@ func TestResolveServiceREDFamilyTable(t *testing.T) {
 		{"metrik yok → none", map[string][]string{}, nil, nil, nil, redKindNone, "", "", false, "known", 3},
 		{"metrik var, servisin serisi yok → none", famLabels(redFamilyHTTP, redFamilyGRPCLegacy), map[string]bool{}, nil, nil, redKindNone, "", "", false, "known", 3},
 		{"etiket hatası → unknown (okunamadı ≠ yok)", famLabels(redFamilyHTTP), nil, errors.New("vm down"), nil, redKindHTTP, "", "", false, "unknown", 0},
-		{"yoklama hatası → unknown", famLabels(redFamilyHTTP), nil, nil, errors.New("timeout"), redKindHTTP, "", "", false, "unknown", 0},
+		// v0.10.1559 — tek okunabilir aile (HTTP) yoklamada düşer, gRPC
+		// aileleri "metrik yok" diye KESİN cevap verir: unknown değil; HTTP
+		// varsayılan olarak çizilir, gerekçe reason'da (okunamadı ≠ yok).
+		{"yoklama hatası → HTTP varsayılan, kısmi", famLabels(redFamilyHTTP), nil, nil, errors.New("timeout"), redKindHTTP, redFamilyHTTP, "", false, "known", 3},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -166,7 +169,7 @@ func TestResolveServiceREDFamilyTable(t *testing.T) {
 			if res.State != c.state || res.Primary != c.primary || gotHTTP != c.httpID || gotGRPC != c.grpcID || res.Both != c.both || len(res.Tried) != c.tried {
 				t.Errorf("got state=%s primary=%s http=%q grpc=%q both=%v tried=%v (%s)", res.State, res.Primary, gotHTTP, gotGRPC, res.Both, res.Tried, res.Reason)
 			}
-			if c.state == "unknown" && !strings.Contains(res.Reason, "okunamadı ≠ yok") {
+			if (c.state == "unknown" || c.instErr != nil) && !strings.Contains(res.Reason, "okunamadı ≠ yok") {
 				t.Errorf("unknown gerekçesi: %s", res.Reason)
 			}
 			if res.Tried == nil {
@@ -535,5 +538,54 @@ func TestServiceREDFamilyRoute(t *testing.T) {
 	}
 	if n := strings.Count(stripGoCommentsAPI(readRepoFile(t, "red_family.go")), ".QueryPromQLInstant("); n != 1 {
 		t.Errorf("TEK anlık yoklama çağrı yeri bekleniyordu, %d", n)
+	}
+}
+
+// labelErrReader — v0.10.1559: yalnız verilen probe'ların etiket okuması düşer.
+type labelErrReader struct {
+	*famReader
+	errFor map[string]error
+}
+
+func (r labelErrReader) MetricLabelNamesIn(ctx context.Context, metric string, from, to time.Time) ([]string, bool, error) {
+	if e := r.errFor[metric]; e != nil {
+		return nil, false, e
+	}
+	return r.famReader.MetricLabelNamesIn(ctx, metric, from, to)
+}
+
+// TestResolveREDFamilyOneFamilyFailureDoesNotHideOthers — v0.10.1559
+// (operatör, prod bsa-crm-contentmanagement-prod: rpc_server_duration_
+// milliseconds_* VM'de var, HTTP/RPC sekmesinde gRPC bölümü yok;
+// /red-family → state unknown, reason timeout, tried []). Kök neden: HTTP
+// etiket okumasının zaman aşımı çözücüyü İLK ailede bitiriyordu, gRPC hiç
+// denenmiyordu. Beklenen: HTTP okunamadı diye işaretli ama çizilir, gRPC
+// bulunur, ikisi birlikte (both), kısmi sonuç önbelleğe yazılmaz.
+func TestResolveREDFamilyOneFamilyFailureDoesNotHideOthers(t *testing.T) {
+	to := time.Date(2026, 10, 29, 12, 0, 30, 0, time.UTC)
+	s := &Server{}
+	httpF, _ := redFamilyByID(redFamilyHTTP)
+	rd := labelErrReader{
+		famReader: &famReader{fakeChartReader: fakeChartReader{labels: famLabels(redFamilyHTTP, redFamilyGRPCLegacy)},
+			present: map[string]bool{redFamilyGRPCLegacy: true}},
+		errFor: map[string]error{httpF.Probe: context.DeadlineExceeded},
+	}
+	res, err := s.resolveServiceREDFamily(context.Background(), rd, "bsa-crm-contentmanagement-prod", nil, to)
+	if err != nil {
+		t.Fatalf("tek ailenin hatası çözümü düşürmemeli: %v", err)
+	}
+	if res.State != "known" || res.GRPC == nil || res.GRPC.ID != redFamilyGRPCLegacy {
+		t.Fatalf("gRPC bulunmalı: state=%s grpc=%+v tried=%v", res.State, res.GRPC, res.Tried)
+	}
+	if res.HTTP == nil || res.Primary != redKindHTTP || !res.Both {
+		t.Errorf("okunamayan HTTP varsayılan olarak çizilmeli: http=%+v primary=%s both=%v", res.HTTP, res.Primary, res.Both)
+	}
+	if !strings.Contains(res.Reason, "okunamadı ≠ yok") || !strings.Contains(strings.Join(res.Tried, "|"), "okunamadı") {
+		t.Errorf("kısmi okuma ilan edilmeli: reason=%q tried=%v", res.Reason, res.Tried)
+	}
+	// İptal hâlâ tüm çözümü durdurur (istemci gitti — sonuç yazılmaz).
+	rd.errFor[httpF.Probe] = context.Canceled
+	if _, err := s.resolveServiceREDFamily(context.Background(), rd, "x", nil, to); !errors.Is(err, context.Canceled) {
+		t.Errorf("iptal yayılmalı, got %v", err)
 	}
 }
