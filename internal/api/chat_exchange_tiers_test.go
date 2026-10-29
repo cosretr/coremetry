@@ -220,12 +220,12 @@ func TestCopilotChatRecordsBeforeAnyTierReturn(t *testing.T) {
 	}
 	var fn *ast.FuncDecl
 	for _, d := range af.Decls {
-		if f, ok := d.(*ast.FuncDecl); ok && f.Name.Name == "copilotChat" {
+		if f, ok := d.(*ast.FuncDecl); ok && f.Name.Name == "copilotChatWith" { // v0.10.1590 — gövde chatSink dikişinin arkasında
 			fn = f
 		}
 	}
 	if fn == nil {
-		t.Fatal("copilotChat bulunamadı")
+		t.Fatal("copilotChatWith bulunamadı")
 	}
 	var minted, deferAt token.Pos
 	var returns, tiers []token.Pos

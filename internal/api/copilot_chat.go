@@ -187,10 +187,11 @@ type chatRequest struct {
 	} `json:"context,omitempty"`
 }
 
-// copilotChat is the SSE chat endpoint. Runs the agentic loop and
-// streams progress + the final answer. One ai_calls row is written
-// per exchange (summing per-round token usage) via RecordUsage.
-func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
+// copilotChatWith — sohbet gövdesi (v1 ve v2 taşıma ortak; chat_sink.go).
+// Runs the agentic loop and streams progress + the final answer through
+// the sink newSink builds. One ai_calls row is written per exchange
+// (summing per-round token usage) via RecordUsage.
+func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink chatSinkFactory) {
 	chatT0 := time.Now() // v0.10.397 — sohbet süresi ai_calls'a
 	var req chatRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -236,12 +237,12 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 		req.Messages = append([]copilot.ChatMessage{{Role: "user", Text: note}}, req.Messages...)
 	}
 
-	// v0.10.535 — SSE çıkışı tek yazımda (ai/agent/blocks.Emitter): eager
-	// başlık + paylaşılan yazım kilidi + 15 s heartbeat (v0.10.27: serbest
-	// döngü buffered, ilk LLM çağrısı 180 s sürebilir, sessiz bağlantı
-	// proxy'de kopuyordu) + senkron Close. Çerçeve şekli explain/insight ile
-	// birebir aynı (emitter_test.go).
-	em, ok := blocks.NewEmitter(w, blocks.Options{EagerHeaders: true, Heartbeat: sseHeartbeatEvery})
+	// v0.10.535 — SSE çıkışı tek yazımda: eager başlık + paylaşılan yazım
+	// kilidi + 15 s heartbeat (v0.10.27: serbest döngü buffered, ilk LLM
+	// çağrısı 180 s sürebilir, sessiz bağlantı proxy'de kopuyordu) + senkron
+	// Close. v0.10.1590 — yazıcı fabrikadan (chat_sink.go): v1 blocks.Emitter,
+	// v2 UI Message Stream; üstteki zincir ikisinde de aynı.
+	em, ok := newSink(w)
 	if !ok {
 		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
 		return

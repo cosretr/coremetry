@@ -185,14 +185,23 @@ func TestChatWiresHeartbeat(t *testing.T) {
 	// v0.10.535 — heartbeat + yazım kilidi blocks.Emitter'ın içinde (kilit
 	// paylaşımı ve senkron Stop blocks/emitter_test.go'da kanıtlı); sohbet
 	// yalnız Heartbeat seçeneğiyle kurar ve Close'u ertelenmiş çağırır.
+	// v0.10.1590 — kurulum chatSink fabrikasında (chat_sink.go); gövde
+	// yazıcıyı fabrikadan alır.
 	for _, must := range []string{
-		"blocks.NewEmitter(w, blocks.Options{EagerHeaders: true, Heartbeat: sseHeartbeatEvery})",
+		"em, ok := newSink(w)",
 		"defer em.Close()",
 		"emit := withStepIDs(em.Emit)",
 	} {
 		if !strings.Contains(src, must) {
 			t.Errorf("sohbet tek SSE emitter'ını kurmuyor, kayıp: %s", must)
 		}
+	}
+	sb, err := os.ReadFile("chat_sink.go")
+	if err != nil {
+		t.Fatalf("chat_sink.go okunamadı: %v", err)
+	}
+	if !strings.Contains(stripGoCommentsAPI(string(sb)), "blocks.NewEmitter(w, blocks.Options{EagerHeaders: true, Heartbeat: sseHeartbeatEvery})") {
+		t.Error("v1ChatSink heartbeat'li blocks.Emitter kurmuyor")
 	}
 	if strings.Contains(src, "var wmu sync.Mutex") || strings.Contains(src, "text/event-stream") {
 		t.Error("sohbette elle SSE gövdesi kalmamalı (blocks tek yazım)")
