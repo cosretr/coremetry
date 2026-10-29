@@ -79,9 +79,12 @@ var Weight = map[string]float64{
 	// girmez (TestEvidenceRelevanceSignalsAreVoteWeight). Serbest not nötr
 	// (0): içeriği puana çevrilmez, insan incelemesi içindir. Ağırlıklar
 	// operatör onayı bekleyen öneri (Faz 1 planı açık soru 4).
-	SigEvidenceRelevant:   0.10,
-	SigEvidenceIrrelevant: -0.10,
-	SigNote:               0,
+	// Operatör 2026-10-29: puanlama bu üçünü system_settings("cosre")
+	// signals.weights'ten okur (signal_weights.go); buradaki değerler
+	// VARSAYILAN ve oy-ağırlığı pininin dayanağıdır.
+	SigEvidenceRelevant:   defaultEvidenceRelevantWeight,
+	SigEvidenceIrrelevant: defaultEvidenceIrrelevantWeight,
+	SigNote:               defaultNoteWeight,
 
 	SigRephrase:   -0.30,
 	SigRegenerate: -0.30,

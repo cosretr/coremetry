@@ -11,28 +11,77 @@ import (
 const baseScore = 0.5
 
 // AnswerScore — SAF: sinyal türlerinden [0,1] puan; olumlu/olumsuz sayısı.
-func AnswerScore(kinds []string) (score float64, pos, neg int) {
+// Ayarlanabilir istemci sinyalleri (evidence_relevant / evidence_irrelevant /
+// note) türden değil KART puanından gelir (cards: CardScores'un o cevaba ait
+// kırpılmış değerleri); türleri yalnız olumlu/olumsuz sayımına girer
+// (işaret = ayardaki ağırlık).
+func AnswerScore(kinds []string, cards map[string]float64, w SignalWeights) (score float64, pos, neg int) {
 	score = baseScore
 	for _, k := range kinds {
-		w := Weight[k]
-		score += w
+		cw, configurable := w.For(k)
+		if !configurable {
+			cw = Weight[k]
+			score += cw
+		}
 		switch {
-		case w > 0:
+		case cw > 0:
 			pos++
-		case w < 0:
+		case cw < 0:
 			neg++
 		}
+	}
+	ids := make([]string, 0, len(cards))
+	for id := range cards {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids) // sabit toplama sırası → bit-kararlı puan
+	for _, id := range ids {
+		score += ClampCardScore(cards[id])
 	}
 	return math.Max(0, math.Min(1, score)), pos, neg
 }
 
+// CardScores — SAF: exchange_id → kart (adım kimliği s<i>; mesaj notu "")
+// → kırpılmış kart puanı. Yalnız penceredeki turlara düşen istemci
+// sinyalleri sayılır (DeriveSignals ile aynı süzgeç). Ağırlığı 0 olan
+// sinyal kart açmaz (nötr not puanı etkilemez).
+func CardScores(in Inputs, w SignalWeights) map[string]map[string]float64 {
+	known := make(map[string]bool, len(in.Interactions))
+	for _, r := range in.Interactions {
+		known[r.ExchangeID] = true
+	}
+	sum := map[string]map[string]float64{}
+	for _, g := range in.Signals {
+		cw, ok := w.For(g.Kind)
+		if !ok || cw == 0 || !known[g.ExchangeID] || !ClientSignalKinds[g.Kind] {
+			continue
+		}
+		card := g.Detail
+		if g.Kind == SigNote {
+			card = messageCard
+		}
+		m := sum[g.ExchangeID]
+		if m == nil {
+			m = map[string]float64{}
+			sum[g.ExchangeID] = m
+		}
+		m[card] += cw
+	}
+	for _, m := range sum {
+		for card, v := range m {
+			m[card] = ClampCardScore(v)
+		}
+	}
+	return sum
+}
+
 // ScoreAnswers — SAF: penceredeki her tur için puan satırı (sinyalsiz tur
 // taban puanı alır: "kimse bir şey demedi" nötrdür, iyi değil).
-func ScoreAnswers(rows []chstore.CosreInteraction, derived map[string][]string) []chstore.CosreAnswerQuality {
+func ScoreAnswers(rows []chstore.CosreInteraction, derived map[string][]string, cards map[string]map[string]float64, w SignalWeights) []chstore.CosreAnswerQuality {
 	out := make([]chstore.CosreAnswerQuality, 0, len(rows))
 	for _, r := range rows {
 		kinds := derived[r.ExchangeID]
-		sc, pos, neg := AnswerScore(kinds)
+		sc, pos, neg := AnswerScore(kinds, cards[r.ExchangeID], w)
 		out = append(out, chstore.CosreAnswerQuality{
 			ExchangeID: r.ExchangeID, CreatedAt: r.CreatedAt, Tier: r.Tier,
 			Score: float32(sc), Positives: clampU8(pos), Negatives: clampU8(neg),

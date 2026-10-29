@@ -107,7 +107,7 @@ func TestAnswerScore(t *testing.T) {
 		{[]string{SigThumbsUp, SigProblemNote, SigCopy}, 1, 3, 0},
 	}
 	for _, c := range cases {
-		got, p, n := AnswerScore(c.kinds)
+		got, p, n := AnswerScore(c.kinds, nil, DefaultSignalWeights())
 		if diff := got - c.want; diff > 1e-9 || diff < -1e-9 || p != c.pos || n != c.neg {
 			t.Errorf("%v: %v %d %d", c.kinds, got, p, n)
 		}
@@ -152,6 +152,8 @@ type fakeStore struct {
 	tools    []chstore.CosreToolQuality
 	from     time.Time
 	to       time.Time
+	settings []byte
+	signals  []chstore.CosreSignal
 }
 
 func (f *fakeStore) ListCosreInteractionsForScoring(_ context.Context, from, to time.Time) ([]chstore.CosreInteraction, error) {
@@ -159,7 +161,7 @@ func (f *fakeStore) ListCosreInteractionsForScoring(_ context.Context, from, to 
 	return f.rows, nil
 }
 func (f *fakeStore) ListCosreSignals(context.Context, time.Time, time.Time) ([]chstore.CosreSignal, error) {
-	return nil, nil
+	return f.signals, nil
 }
 func (f *fakeStore) AIFeedbackVerdictsSince(context.Context, time.Time) (map[string]int8, error) {
 	return map[string]int8{"a": -1}, nil
@@ -176,6 +178,12 @@ func (f *fakeStore) InsertCosreToolQuality(_ context.Context, r []chstore.CosreT
 	return nil
 }
 func (f *fakeStore) CosreQualityDayDone(context.Context, time.Time) (bool, error) { return false, nil }
+func (f *fakeStore) GetSetting(_ context.Context, key string) ([]byte, error) {
+	if key == SignalSettingsKey {
+		return f.settings, nil
+	}
+	return nil, nil
+}
 
 func TestRunQualityDayScoresOnlyThatDay(t *testing.T) {
 	day := time.Date(2026, 10, 14, 0, 0, 0, 0, time.UTC)

@@ -114,7 +114,7 @@ func TestEvidenceRelevanceSignalsAreVoteWeight(t *testing.T) {
 			t.Errorf("%s istemci sinyali olarak kabul edilmeli", k)
 		}
 	}
-	if _, pos, neg := AnswerScore([]string{SigNote}); pos != 0 || neg != 0 {
+	if _, pos, neg := AnswerScore([]string{SigNote}, nil, DefaultSignalWeights()); pos != 0 || neg != 0 {
 		t.Error("not olumlu/olumsuz sayılmamalı")
 	}
 }

@@ -19,6 +19,7 @@ type QualityStore interface {
 	InsertCosreToolQuality(ctx context.Context, rows []chstore.CosreToolQuality) error
 	CosreQualityDayDone(ctx context.Context, day time.Time) (bool, error)
 	GroundingStore // Faz 4 — çevrimdışı dayanak denetimi puanlamadan ÖNCE
+	SettingsReader // istemci sinyali ağırlıkları (system_settings "cosre")
 }
 
 const (
@@ -88,14 +89,19 @@ func RunQualityDayWithJudge(ctx context.Context, st QualityStore, judge Judge, m
 	if err != nil {
 		return 0, 0, err
 	}
-	derived := DeriveSignals(Inputs{Interactions: all, Signals: sigs, Feedback: fb, Resolved: resolved, Ungrounded: ungrounded})
+	in := Inputs{Interactions: all, Signals: sigs, Feedback: fb, Resolved: resolved, Ungrounded: ungrounded}
+	derived := DeriveSignals(in)
+	weights, werr := LoadSignalWeights(ctx, st)
+	if werr != nil {
+		log.Printf("[cosre-quality] %s: sinyal ağırlıkları okunamadı, varsayılanlar: %v", day.Format("2006-01-02"), werr)
+	}
 	var dayRows []chstore.CosreInteraction
 	for _, r := range all {
 		if !r.CreatedAt.Before(from) && r.CreatedAt.Before(to) {
 			dayRows = append(dayRows, r)
 		}
 	}
-	aq := ScoreAnswers(dayRows, derived)
+	aq := ScoreAnswers(dayRows, derived, CardScores(in, weights), weights)
 	if err := st.InsertCosreAnswerQuality(ctx, aq); err != nil {
 		return 0, 0, err
 	}
