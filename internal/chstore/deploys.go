@@ -1169,6 +1169,46 @@ func (s *Store) GetRecentDeploys(ctx context.Context, since time.Duration, limit
 	return mergeDeployEntries(inferred, ev, limit), nil
 }
 
+// GetEvidenceDeploys — v0.10.1579: kök-neden işçisinin tik başına TEK
+// deploy okuması, en eski çıpanın onset penceresini kapsayacak kadar
+// geniş (since). Seçim deploy'un onset'ten önceki 30 dk'da doğmasını
+// ister; [now−30m, now] okuması, deploy'dan >~30 dk sonra hâlâ açık bir
+// problemin deploy kanıtını her tikte yeniden yazılan hipotezden
+// düşürüyordu.
+//
+// Maliyet sözleşmesi: geniş çıkarım YALNIZ service_version_5m MV'si
+// pencereyi kapsıyorsa okunur; MV ısınırken (ya da hata verirse) çıkarım
+// bugünkü 30 dk banner okumasına iner — her 30 s'de 24 saatlik ham spans
+// taraması yok. Deploy event'leri (küçük tablo) her zaman tam pencere.
+func (s *Store) GetEvidenceDeploys(ctx context.Context, since time.Duration, limit int) ([]RecentDeployEntry, error) {
+	const banner = 30 * time.Minute
+	if since <= banner {
+		return s.GetRecentDeploys(ctx, since, limit)
+	}
+	if limit <= 0 || limit > 2000 {
+		limit = 200
+	}
+	now := time.Now()
+	cutoff := now.Add(-since)
+	var inferred []RecentDeployEntry
+	var err error
+	wide := false
+	if s.deployMVCovers(ctx, cutoff.Add(-deployJudgmentLookback)) {
+		if inferred, err = s.deploysInWindowFromMV(ctx, cutoff, now, limit); err == nil {
+			wide = true
+		} else {
+			log.Printf("[deploys] evidence MV path: %v — 30 dk banner okumasına iniliyor", err)
+		}
+	}
+	if !wide {
+		if inferred, err = s.recentDeploysInferred(ctx, banner, limit); err != nil {
+			return nil, err
+		}
+	}
+	ev := s.deployEventEntries(ctx, "", cutoff, now)
+	return mergeDeployEntries(inferred, ev, limit), nil
+}
+
 // GetDeploysInWindow — pencere hunisi: span çıkarımı ∪ deploy event'leri.
 func (s *Store) GetDeploysInWindow(ctx context.Context, from, to time.Time, limit int) ([]RecentDeployEntry, error) {
 	if limit <= 0 || limit > 2000 {

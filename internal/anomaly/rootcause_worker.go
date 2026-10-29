@@ -190,7 +190,6 @@ func (s *RootCauseSynthesizer) tickIfLeader(ctx context.Context) {
 // inputs so the tick costs four bounded reads total regardless of anchor count.
 func (s *RootCauseSynthesizer) run(ctx context.Context) {
 	now := time.Now()
-	in := gatherEvidenceInputs(ctx, s.store)
 
 	done := 0
 
@@ -205,6 +204,24 @@ func (s *RootCauseSynthesizer) run(ctx context.Context) {
 	if err != nil {
 		log.Printf("[rootcause-synth] list anomalies: %v", err)
 	}
+	// Anchor 2 adayları da ÖNCE okunur (snapshot, 5 s memo — CH okuması
+	// değil): paylaşılan deploy okuması her çıpanın onset penceresini
+	// kapsamalı (v0.10.1579, deployFetchLookback).
+	// v0.10.156 — snapshot (5 s memo); ayrı `problems FINAL` taraması yok.
+	var problems []chstore.Problem
+	if snap, err := s.store.OpenProblemsSnapshot(ctx); err != nil {
+		log.Printf("[rootcause-synth] list problems: %v", err)
+	} else {
+		problems = snap.Filter("open", "critical", s.batch)
+	}
+	onsets := make([]int64, 0, len(events)+len(problems))
+	for i := range events {
+		onsets = append(onsets, events[i].StartedAt)
+	}
+	for i := range problems {
+		onsets = append(onsets, problems[i].StartedAt)
+	}
+	in := gatherEvidenceInputs(ctx, s.store, deployFetchLookback(now.UnixNano(), onsets))
 	for _, ev := range events {
 		if done >= s.batch {
 			break
@@ -236,13 +253,6 @@ func (s *RootCauseSynthesizer) run(ctx context.Context) {
 	// explainer's batch. buildEvidenceBundle is the existing pure fuser over
 	// the shared inputs; we distil its bundle into the synthesis input.
 	if done < s.batch {
-		// v0.10.156 — snapshot (5 s memo); ayrı `problems FINAL` taraması yok.
-		var problems []chstore.Problem
-		if snap, err := s.store.OpenProblemsSnapshot(ctx); err != nil {
-			log.Printf("[rootcause-synth] list problems: %v", err)
-		} else {
-			problems = snap.Filter("open", "critical", s.batch)
-		}
 		// v0.10.1054 — anomaliden terfi etmiş çıpaların kaynak olayları, tik
 		// başına TEK toplu okuma (terfi çıpası yoksa okuma yok; ≤ batch kimlik).
 		// Okunamazsa o tik bugünkü atıf: okunamayan süzgeç süzmez.

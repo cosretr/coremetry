@@ -28,6 +28,12 @@ const (
 	// evidenceDeployLookback — a deploy of the same service this long before
 	// the anomaly onset is treated as the prime "what changed" suspect.
 	evidenceDeployLookback = 30 * time.Minute
+	// evidenceDeployFetchCap (v0.10.1579) — tik başına deploy okumasının üst
+	// sınırı. Okuma en eski çıpanın onset'i − evidenceDeployLookback'e kadar
+	// genişler (deployFetchLookback); bu tavanın ötesinde açık kalan bir
+	// çıpanın deploy kanıtı düşer (bilinçli sınır, service_version_5m'in
+	// 24h hüküm ufkuyla aynı).
+	evidenceDeployFetchCap = 24 * time.Hour
 	// evidenceWindow — how far back recorded signals/edges count as part of
 	// the same incident.
 	evidenceWindow = 60 * time.Minute
@@ -100,9 +106,43 @@ type evidenceInputs struct {
 	runsOn []chstore.RunsOnPlacement
 }
 
+// deployFetchLookback — SAF (v0.10.1579): tik başına paylaşılan deploy
+// okumasının geriye bakışı. Seçim (buildEvidenceBundle /
+// synthInputForAnomaly) deploy'un [onset−30m, onset] içinde doğmasını
+// ister; okuma [now−30m, now] kalırsa onset'i 30 dk'dan eski her çıpanın
+// deploy'u okumanın dışında kalıyor ve her 30 s yeniden yazılan hipotezden
+// sessizce düşüyordu. Pencere en eski çıpayı kapsar: now − min(onset) +
+// 30m; taban 30m (çıpasız / gelecekteki onset), tavan evidenceDeployFetchCap.
+// Tek okuma, çıpa başına sorgu yok — seçim çıpa başına bellekte kalır.
+func deployFetchLookback(nowNs int64, onsets []int64) time.Duration {
+	lb := evidenceDeployLookback
+	for _, o := range onsets {
+		if o <= 0 || o > nowNs {
+			continue
+		}
+		if need := time.Duration(nowNs-o) + evidenceDeployLookback; need > lb {
+			lb = need
+		}
+	}
+	if lb > evidenceDeployFetchCap {
+		lb = evidenceDeployFetchCap
+	}
+	return lb
+}
+
+// deployFetchLimit — geniş pencerede (binlerce servis × saatler) 200 satır
+// en yeni deploy'larla dolup eski çıpanınkini kırpardı (FirstSeen DESC).
+func deployFetchLimit(lookback time.Duration) int {
+	if lookback > evidenceDeployLookback {
+		return 1000
+	}
+	return 200
+}
+
 // gatherEvidenceInputs reads the four evidence sources. Best-effort: any read
 // error degrades to a smaller bundle rather than failing the explain.
-func gatherEvidenceInputs(ctx context.Context, store *chstore.Store) evidenceInputs {
+// deployLookback = deployFetchLookback(çıpaların onset'leri) (v0.10.1579).
+func gatherEvidenceInputs(ctx context.Context, store *chstore.Store, deployLookback time.Duration) evidenceInputs {
 	var in evidenceInputs
 	// v0.10.156 — snapshot (5 s memo); ayrı `problems FINAL` taraması yok.
 	if snap, err := store.OpenProblemsSnapshot(ctx); err == nil {
@@ -114,7 +154,7 @@ func gatherEvidenceInputs(ctx context.Context, store *chstore.Store) evidenceInp
 	}); err == nil {
 		in.events = ev
 	}
-	if d, err := store.GetRecentDeploys(ctx, evidenceDeployLookback, 200); err == nil {
+	if d, err := store.GetEvidenceDeploys(ctx, deployLookback, deployFetchLimit(deployLookback)); err == nil {
 		in.deploys = d
 	}
 	if a, err := store.GetServiceAdjacency(ctx, evidenceWindow); err == nil {

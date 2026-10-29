@@ -146,7 +146,11 @@ func (e *ProblemExplainer) run(ctx context.Context) {
 	}
 	// Phase 7 — fetch the cross-signal evidence inputs ONCE per tick (shared
 	// across the batch).
-	inputs := gatherEvidenceInputs(ctx, e.store)
+	onsets := make([]int64, 0, len(candidates))
+	for i := range candidates {
+		onsets = append(onsets, candidates[i].StartedAt)
+	}
+	inputs := gatherEvidenceInputs(ctx, e.store, deployFetchLookback(time.Now().UnixNano(), onsets))
 	// v0.8.394 (AI audit A1) — batch-read the persisted root-cause hypotheses
 	// the RootCauseSynthesizer already computed for these problems (ONE
 	// GetHypotheses round-trip, same N+1-free join the /problems ribbon uses)
