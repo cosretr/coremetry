@@ -119,7 +119,7 @@ export const TOUR_ANCHORS: Record<string, string> = {
   'traces-active-chips': 'pages/Traces.tsx',
   'traces-table': 'pages/Traces.tsx',
   // v0.10.1336 — adım 5 (cosre)
-  'cosre-fab': 'components/CopilotChat.tsx',
+  'cosre-fab': 'components/ai/CopilotFab.tsx', // v0.10.1599 — FAB taşındı
   'cosre-drawer': 'components/CopilotChat.tsx',
   'cosre-composer': 'components/CopilotChat.tsx',
 };

@@ -11,7 +11,8 @@ const cc = readFileSync(resolve(__dirname, 'CopilotChat.tsx'), 'utf8');
 describe('CopilotChat launcher kipi (v0.10.732)', () => {
   it('prop varsayılanı true; FAB ve nudge launcher\'a bağlı; poll launcher kapalıyken atılmaz', () => {
     // v0.10.1125 — /cosre `variant="page"` FAB'ı da kapatır (launcher = prop && !isPage).
-    expect(cc).toContain("export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' }");
+    // v0.10.1599 — + defaultOpen (kabuk kapısı FAB tıklamasıyla ilk yüklemede açık başlatır).
+    expect(cc).toContain("export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer', defaultOpen = false }");
     expect(cc).toContain('const launcher = launcherProp && !isPage;');
     expect(cc).toContain('{launcher && !drawerOpen && <TraceExplainNudge />}');
     expect(cc).toContain('{launcher && !drawerOpen && (');

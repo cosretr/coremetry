@@ -10,6 +10,7 @@ import type { ChatExplainAsk, ChatTurn, PageContext } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { IconButton } from '@/components/ui/IconButton';
+import { AiMark, CopilotFab } from './ai/CopilotFab'; // v0.10.1599
 import { Drawer } from '@/components/ui/Drawer';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { useOpenCriticalCount } from '@/lib/queries';
@@ -97,17 +98,7 @@ const FOLLOWUPS = [
 // satırından ÇIKTI, CosreCapabilities'in en üstteki Takımım kartına taşındı
 // (takım seçici + aynı üç soru; capabilityHints TEAM_ASKS / teamCardQuestion).
 
-// CoSRE markası — v0.10.498 (operatör: "direkt OpenTelemetry iconu olsun";
-// teleskop mockup'ı reddedildi): resmî OpenTelemetry ikonu, repodaki
-// /favicon.svg (CNCF artwork'ten birebir kopya, v0.9.495) — ikinci kopya
-// yok, favicon güncellenince düğme de güncellenir. Eski gradient sparkline
-// (v0.9.163, varyant B) ve .cm-ai-spark çizim animasyonu kaldırıldı.
-function AiMark({ size = 26 }: { size?: number }) {
-  return (
-    <img src="/favicon.svg" width={size} height={size} alt="" aria-hidden="true" draggable={false}
-      style={{ display: 'block', width: size, height: size }} />
-  );
-}
+// v0.10.1599 — AiMark + FAB ai/CopilotFab.tsx'ye taşındı (kabuk tembel yükleme kapısı da çizer).
 
 // v0.10.732 (operatör: "Kiosk modunda da Explain trace yapılabilsin") —
 // `launcher={false}`: FAB, kritik-problem rozeti ve nudge baloncuğu
@@ -121,7 +112,7 @@ function AiMark({ size = 26 }: { size?: number }) {
 // Sayfa kipinde pencere hep "açık" (geçmiş/karşılama/?chat= senkronu açık
 // çekmece gibi işler), FAB çizilmez, iç linkler yeni sekmede açılır
 // (chatLinkTarget) ve sunucunun `open` önerisi sohbeti terk ettirmez.
-export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' }: { launcher?: boolean; variant?: 'drawer' | 'page' } = {}) {
+export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer', defaultOpen = false }: { launcher?: boolean; variant?: 'drawer' | 'page'; defaultOpen?: boolean } = {}) {
   const isPage = variant === 'page';
   const launcher = launcherProp && !isPage;
   // v0.10.483 — config TEK kaynaktan (useCopilotConfig: modül cache'i, AIDrawer
@@ -142,7 +133,9 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
   const [codePill, setCodePill] = useCodeRead(user?.id);
   const codeRead = cfg?.codeRead;
   const code = codePill && !!codeRead?.available;
-  const [openState, setOpen] = useState(false);
+  // v0.10.1599 — defaultOpen: kabuk kapısı (CopilotChatGate) sohbeti FAB tıklamasıyla
+  // İLK kez yüklediğinde açık başlar; başka her mount'ta eskisi gibi kapalı.
+  const [openState, setOpen] = useState(defaultOpen);
   const open = isPage || openState; // v0.10.1125 — sayfa kipinde hep açık
   // v0.10.483 — ✨ Explain öznesi (`?ai=`). v0.10.1400/1405 — tek seferlik
   // niyet: aşağıdaki effect tüketir ve açıklamayı SOHBET TURU olarak gönderir.
@@ -1037,36 +1030,7 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer' 
           atomda bir rung değil, satır-içi kalır; `bare` zemin boyamaz. */}
       {launcher && !drawerOpen && <TraceExplainNudge />}{/* v0.10.432 (D8) — FAB'ın üstündeki baloncuk */}
       {launcher && !drawerOpen && (
-        // v0.10.926 — title kalır: ipucu kutusu FAB'ın KARDEŞİ olarak
-        // `--z-tooltip` (30) ile çizilir, FAB ise `--z-fab` (80). Sağ kenardaki
-        // çekmeceler (60/61), span paneli (40) ve üstteki nudge baloncuğu (80)
-        // açıkken ipucu onların ALTINDA kalıp görünmez; yerel title üstte.
-        <IconButton variant="bare" data-tour="cosre-fab"
-          className={criticalOpen > 0 ? 'cm-ai-fab is-alert' : 'cm-ai-fab'}
-          onClick={() => setOpen(true)}
-          title={criticalOpen > 0 ? `CoSRE — ${criticalOpen} açık kritik problem` : "CoSRE'ye sor"}
-          aria-label={criticalOpen > 0 ? `CoSRE, ${criticalOpen} açık kritik problem` : 'CoSRE'}
-          style={{
-            position: 'fixed', right: 18, bottom: 18, zIndex: 'var(--z-fab)',
-            width: 48, height: 48, borderRadius: 24,
-            background: 'linear-gradient(135deg, var(--accent-soft), var(--bg1))',
-            border: '1px solid var(--accent2)',
-            display: 'grid', placeItems: 'center',
-            cursor: 'pointer', boxShadow: '0 2px 14px rgba(0,0,0,0.3)',
-          }}
-          icon={<>
-            <AiMark size={26} />
-            {criticalOpen > 0 && (
-              <span aria-hidden="true" style={{
-                position: 'absolute', top: -3, right: -3,
-                minWidth: 18, height: 18, padding: '0 5px', boxSizing: 'border-box',
-                borderRadius: 9, background: 'var(--err-solid)', color: 'var(--on-accent)',
-                fontSize: 10, fontWeight: 700, lineHeight: '14px',
-                display: 'grid', placeItems: 'center',
-                border: '2px solid var(--bg1)',
-              }}>{criticalOpen > 9 ? '9+' : criticalOpen}</span>
-            )}
-          </>} />
+        <CopilotFab criticalOpen={criticalOpen} onClick={() => setOpen(true)} />
       )}
 
       {/* v0.9.654 (operatör: "CoSRE drawer gibi çıksa … Chat'ten devam et

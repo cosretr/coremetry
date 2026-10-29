@@ -5,7 +5,7 @@ import { AnnouncementBanner } from './AnnouncementBanner';
 import { ShortcutsHelp } from './ShortcutsHelp';
 import { TourProvider } from '@/features/tour'; // v0.10.1334 — rehberli tur
 import { CommandPalette } from './CommandPalette';
-import { CopilotChat } from './CopilotChat';
+import { CopilotChatGate } from './CopilotChatGate'; // v0.10.1599 — sohbet tembel yüklenir
 import { GlobalShortcuts } from './GlobalShortcuts';
 import { Toaster } from './Toaster';
 import { useAuth } from './AuthProvider';
@@ -281,8 +281,10 @@ export function AppShell() {
       {/* CopilotChat (v0.6.53) — global in-app AI assistant. Fixed
           bottom-right launcher → drawer. Self-hides when no AI key
           is configured. Mounted here so it's reachable on every
-          authenticated page, like CommandPalette. */}
-      <CopilotChat />
+          authenticated page, like CommandPalette.
+          v0.10.1599 — kapı (CopilotChatGate) FAB'ı çizer, sohbet yığınını
+          ilk açılma niyetinde tembel yükler (ana yığından çıktı). */}
+      <CopilotChatGate />
       {/* v0.10.483 — ✨ Explain (`?ai=`) artık CopilotChat'in içinde açılır;
           ayrı AIDrawer mount'u YOK (iki çekmece = operatör raporu ×3). */}
       {/* Toaster (v0.5.455) — singleton notification surface.
