@@ -42,9 +42,9 @@ describe('oraclePaletteResults', () => {
 
   it('fonksiyon kodu olan operasyon: Traces süzgeci + son hata trace\'i', () => {
     const r = oraclePaletteResults(resp, win);
-    expect(r[0]).toMatchObject({ kind: 'operation', label: 'TRANSFER_CONFIRM_SERVICE', hint: "Oracle operasyonu · fonksiyon kodu EFT001 → trace'ler" });
+    expect(r[0]).toMatchObject({ kind: 'operation', label: 'TRANSFER_CONFIRM_SERVICE', hint: "Operasyon · fonksiyon kodu EFT001 → trace'ler" });
     expect(filtersOf(r[0].to)).toEqual([{ k: 'function_code', op: '=', v: ['EFT001'] }]);
-    expect(r[1]).toMatchObject({ kind: 'trace', label: 'TRANSFER_CONFIRM_SERVICE', hint: "Oracle · son hata trace'i" });
+    expect(r[1]).toMatchObject({ kind: 'trace', label: 'TRANSFER_CONFIRM_SERVICE', hint: "Son hata trace'i" });
     expect(r[1].to).toContain('/trace?id=ab12cd34ef56ab12cd34ef56ab12cd34');
     expect(r[1].to).toContain('tab=logs');
   });
@@ -52,10 +52,10 @@ describe('oraclePaletteResults', () => {
   it('çok kod kısaltılır ama süzgece hepsi girer; kod yoksa servisin hatalı trace\'leri; ikisi de yoksa sonuç YOK', () => {
     const r = oraclePaletteResults(resp, win);
     const many = r.find(x => x.label === 'OP_MANY');
-    expect(many?.hint).toBe("Oracle operasyonu · fonksiyon kodu A1, B2 +1 → trace'ler");
+    expect(many?.hint).toBe("Operasyon · fonksiyon kodu A1, B2 +1 → trace'ler");
     expect(filtersOf(many!.to)).toEqual([{ k: 'function_code', op: 'IN', v: ['A1', 'B2', 'C3'] }]);
     const svc = r.find(x => x.label === 'OP_SERVICE_ONLY');
-    expect(svc?.hint).toBe("Oracle operasyonu · fonksiyon kodu yok → acme-atm-core-prod hatalı trace'leri");
+    expect(svc?.hint).toBe("Operasyon · fonksiyon kodu yok → acme-atm-core-prod hatalı trace'leri");
     const q = new URLSearchParams(svc!.to.slice(svc!.to.indexOf('?') + 1));
     expect(q.get('service')).toBe('acme-atm-core-prod');
     expect(q.get('hasError')).toBe('true');
@@ -84,6 +84,6 @@ describe('CommandPalette kablosu', () => {
     const src = readFileSync(resolve(__dirname, '../components/CommandPalette.tsx'), 'utf8');
     expect(src).toContain('api.oracleOperations(q, 6)');
     expect(src).toContain('[...endpoints, ...oracleOps]');
-    expect(src).toContain("r.kind === 'operation' ? 'oracle'");
+    expect(src).toContain("r.kind === 'operation' ? 'operasyon'");
   });
 });

@@ -816,7 +816,7 @@ export function CommandPalette() {
                 {r.kind === 'trace' ? 'trace'
                  : r.kind === 'service' ? 'service'
                  : r.kind === 'endpoint' ? 'endpoint'
-                 : r.kind === 'operation' ? 'oracle'
+                 : r.kind === 'operation' ? 'operasyon' // v0.10.1573 — "oracle" etiketi yok (operatör)
                  : r.kind === 'action' ? 'action'
                  : 'page'}
               </span>

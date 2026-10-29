@@ -42,20 +42,20 @@ function hitResults(h: OracleOperationHit, attrKey: string, window: TracesPivot[
   if (h.functionCodes.length > 0) {
     out.push({
       kind: 'operation', label: h.operation,
-      hint: `Oracle operasyonu · fonksiyon kodu ${codesLabel(h.functionCodes)} → trace'ler`,
+      hint: `Operasyon · fonksiyon kodu ${codesLabel(h.functionCodes)} → trace'ler`, // v0.10.1573 — "Oracle" yazısı yok (operatör)
       to: functionCodeTracesHref({ window, attrKey, codes: h.functionCodes }),
     });
   } else if (h.service) {
     out.push({
       kind: 'operation', label: h.operation,
-      hint: `Oracle operasyonu · fonksiyon kodu yok → ${h.service} hatalı trace'leri`,
+      hint: `Operasyon · fonksiyon kodu yok → ${h.service} hatalı trace'leri`,
       to: tracesPivotHref({ window, service: h.service, hasError: true, view: 'list', rootOnly: false }),
     });
   }
   if (h.lastTraceId) {
     out.push({
       kind: 'trace', label: h.operation,
-      hint: 'Oracle · son hata trace\'i',
+      hint: 'Son hata trace\'i',
       to: traceHref(h.lastTraceId, { tab: 'logs' }),
     });
   }
