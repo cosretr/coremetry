@@ -1260,7 +1260,8 @@ func main() {
 			// v0.10.1092 — exception grupları (kendi bütçesi; toplama sorgusu ≤20 sn).
 			// Hata poll'u / sayacı etkilemez; imleç yalnız başarılı yazımda ilerler.
 			gctx, gcancel := context.WithTimeout(ctx, 30*time.Second)
-			if gres, gerr := oracleExGroups.Refresh(gctx, src); gerr != nil {
+			// v0.10.1562 — kendi log_comment etiketi (query_log maliyet ölçümü).
+			if gres, gerr := oracleExGroups.Refresh(chstore.WithQueryTag(gctx, "worker:oracle-exgroups"), src); gerr != nil {
 				log.Printf("[oracle/exgroups] %s: tazeleme düştü (imleç ilerlemedi): %v", src.Name, gerr)
 			} else if gres.Groups > 0 {
 				log.Printf("[oracle/exgroups] %s: %d grup tazelendi [%s, %s)", src.Name, gres.Groups,

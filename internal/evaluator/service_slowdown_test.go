@@ -515,14 +515,14 @@ func TestSvcSlowWiring(t *testing.T) {
 		t.Fatal(err)
 	}
 	ev := string(src)
-	health := strings.Index(ev, "e.evaluateDBHealth(ctx)")
-	slow := strings.Index(ev, "e.evaluateServiceSlowdown(ctx)")
+	health := strings.Index(ev, "e.evaluateDBHealth(")
+	slow := strings.Index(ev, "e.evaluateServiceSlowdown(")
 	runtime := strings.Index(ev, "e.evaluateRuntimePods(ctx)")
 	sweep := strings.Index(ev, "\te.sweepStaleProblems(ctx)")
 	if health < 0 || slow < 0 || !(health < slow && slow < runtime && slow < sweep) {
 		t.Errorf("sıra bozuk: health=%d slow=%d runtime=%d sweep=%d", health, slow, runtime, sweep)
 	}
-	if strings.Count(ev, "e.evaluateServiceSlowdown(ctx)") != 1 {
+	if strings.Count(ev, "e.evaluateServiceSlowdown(") != 1 {
 		t.Error("tik başına bir kez çağrılmalı")
 	}
 }

@@ -370,7 +370,7 @@ func TestDBHealthTickOrder(t *testing.T) {
 	}
 	src := string(b)
 	slow := strings.Index(src, "e.evaluateDBSlowStatements(ctx)")
-	health := strings.Index(src, "e.evaluateDBHealth(ctx)")
+	health := strings.Index(src, "e.evaluateDBHealth(")
 	runtime := strings.Index(src, "e.evaluateRuntimePods(ctx)")
 	all := strings.Index(src, "func (e *Evaluator) evaluateAll(")
 	if slow < 0 || health < 0 || runtime < 0 || all < 0 {
@@ -379,7 +379,7 @@ func TestDBHealthTickOrder(t *testing.T) {
 	if !(all < slow && slow < health && health < runtime) {
 		t.Errorf("sıra bozuk: evaluateAll=%d slow=%d health=%d runtime=%d", all, slow, health, runtime)
 	}
-	if strings.Count(src, "e.evaluateDBHealth(ctx)") != 1 {
+	if strings.Count(src, "e.evaluateDBHealth(") != 1 {
 		t.Error("db-health tik başına bir kez çağrılmalı")
 	}
 }

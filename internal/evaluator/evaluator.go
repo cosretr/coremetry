@@ -625,11 +625,13 @@ func (e *Evaluator) evaluateAll(ctx context.Context) int {
 	e.evaluateDBSlowStatements(ctx) // v0.10.325 — yavaş SQL → Problem (Kind=db → sahibi + SRE maili)
 	// v0.10.1073 — veritabanı SAĞLIĞI (db-health): db hata % / p99, ≥2 çağıran,
 	// 2 ardışık kova. Yavaş ifadeden SONRA (db_health_test.go sırayı pinler).
-	e.evaluateDBHealth(ctx)
+	// v0.10.1562 — kendi log_comment etiketi: prod query_log maliyet ölçümü
+	// worker:evaluator içinden bu dedektörü ayırabilsin (WithQueryTag üzerine yazar).
+	e.evaluateDBHealth(chstore.WithQueryTag(ctx, "worker:evaluator:db-health"))
 	// v0.10.1091 — yaygın yavaşlama hızlı yolu (svc-slowdown): tek kovada ≥ 3
 	// operasyon p99 ≥ 5 s VE ≥ 20× taban → servis üzerinde critical (P1).
 	// Eskalasyon ve bayat süpürmeden ÖNCE (açık satırlar her tik tazelenir).
-	e.evaluateServiceSlowdown(ctx)
+	e.evaluateServiceSlowdown(chstore.WithQueryTag(ctx, "worker:evaluator:svc-slowdown")) // v0.10.1562 — log_comment
 
 	// Runtime pod detector (v0.9.90) — JVM heap saturation + GC pause per
 	// pod. Overview's Runtime panel only SHOWS these; this pass makes them
