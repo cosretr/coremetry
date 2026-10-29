@@ -208,6 +208,12 @@ func (s *Server) readScopedSource(ctx context.Context, req mcptools.SourceCodeRe
 		out.Outcome, out.Reason = devops.SourceRepoUnresolved, reason
 		return out
 	}
+	// v0.10.1563 — kullanıcı başına git çağrı sınırı (chat_source_rate.go);
+	// yalnız depo çözüldükten sonra sayılır.
+	if ok, retry := sourceRateAllow(ctx, sourceRateRead); !ok {
+		out.Outcome, out.Reason = devops.SourceRateLimited, sourceRateReason(sourceRateRead, retry)
+		return out
+	}
 	out.SourceRead = s.devops.ReadSource(ctx, devops.SourceRequest{
 		Repo: res.Repo, Hint: res.Project, Service: svc,
 		File: req.File, Line: req.Line, Context: req.ContextLines, Version: version,

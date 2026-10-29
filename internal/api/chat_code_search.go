@@ -53,6 +53,11 @@ func (s *Server) searchServiceCode(ctx context.Context, service, query string, l
 		out.Outcome, out.Hint = "no_repo", strings.TrimSpace("servisin deposu çözülemedi: "+res.Reason)
 		return out, nil
 	}
+	// v0.10.1563 — kullanıcı başına git çağrı sınırı (chat_source_rate.go).
+	if ok, retry := sourceRateAllow(ctx, sourceRateSearch); !ok {
+		out.Outcome, out.Hint = "rate_limited", sourceRateReason(sourceRateSearch, retry)
+		return out, nil
+	}
 	hits, err := s.devops.SearchServiceCode(ctx, res.Repo, query, limit)
 	if err != nil {
 		out.Outcome, out.Hint = "error", err.Error()

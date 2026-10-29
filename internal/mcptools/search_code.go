@@ -31,7 +31,7 @@ const (
 
 // CodeSearchResult — api tarafının cevabı.
 type CodeSearchResult struct {
-	Outcome    string                  `json:"outcome"` // ok | no_repo | no_hits | error
+	Outcome    string                  `json:"outcome"` // ok | no_repo | no_hits | error | rate_limited (v0.10.1563)
 	Repo       string                  `json:"repo,omitempty"`
 	RepoSource string                  `json:"repo_source,omitempty"`
 	Hits       []devops.ServiceCodeHit `json:"hits"`

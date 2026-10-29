@@ -70,6 +70,9 @@ const (
 	// (grubun servisi + stack'i basan servis) doğrulanamaz, kod okunmaz
 	// (api/chat_exception_followup.go).
 	SourceExceptionUnreadable SourceOutcome = "exception_unreadable"
+	// v0.10.1563 — kullanıcı başına git çağrı sınırı doldu (api/chat_source_rate.go);
+	// DevOps'a istek GİTMEDİ.
+	SourceRateLimited SourceOutcome = "rate_limited"
 )
 
 // sourceDeniedReasonTR — reddin modele ve operatöre giden cümlesi (içerik yok).
