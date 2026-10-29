@@ -321,6 +321,12 @@ var routingRegressionRows = []routingRow{
 	// team_services gövdesinde taşır; soru o gövdeye gitmeye devam etmeli.
 	{release: "komşu v0.10.1473", name: "takımımın servisleri → my_services (son loglar bölümü bu gövdede)",
 		q: "takımımın servisleri nasıl?", wantTier: aisurface.TierGuided, wantRoute: string(guidedMyServices)},
+	// v0.10.1569 — operatör-bildirimi: "takımının servisleri nasıl?" wiki'ye
+	// gidiyordu; cümle iyelikle başlıyor, adı geçen takım yok → kendi takımı.
+	{release: "v0.10.1569", name: "takımının servisleri (iyelikle başlayan) → my_services",
+		q: "takımının servisleri nasıl?", wantTier: aisurface.TierGuided, wantRoute: string(guidedMyServices)},
+	{release: "v0.10.1569", name: "ekibinin problemleri → my_problems",
+		q: "ekibinin açık problemleri neler", wantTier: aisurface.TierGuided, wantRoute: string(guidedMyProblems)},
 }
 
 // routingPassThrough — dikişin demeti koşturduğu rotalar (store'suz çalışanlar).

@@ -53,6 +53,9 @@ func TestRouteGuidedIntent(t *testing.T) {
 		// generic problem/health stemlerinden ÖNCE kazanır; "mysql" gibi
 		// adlar "my" prefix tuzağına düşmez (tam-token eşleme).
 		{"my services turkish", "takımımın servisleri nasıl", guidedMyServices, "", ""},
+		// v0.10.1569 — iyelikle BAŞLAYAN soru kendi takımı; ad öndeyse değil.
+		{"my services leading possessive", "takımının servisleri nasıl?", guidedMyServices, "", ""},
+		{"my services takımın", "takımın servisleri sağlıklı mı", guidedMyServices, "", ""},
 		{"my services benim", "benim servislerim sağlıklı mı", guidedMyServices, "", ""},
 		{"my services english", "how are my team services", guidedMyServices, "", ""},
 		{"my problems turkish", "takımımın açık problemleri neler", guidedMyProblems, "", ""},
@@ -983,5 +986,24 @@ func TestHowToNotServiceHealthFromCtx(t *testing.T) {
 	}
 	if r := routeGuidedIntent("bunu nasıl analiz edebilirim", svcs, nil, nil, ctx); r.Intent == guidedServiceReport || r.Intent == guidedServiceHealth {
 		t.Errorf("nasıl-yapılır şekli rapora/sağlığa gitmemeli, %s", r.Intent)
+	}
+}
+
+// v0.10.1569 — iyelik ancak İLK sözcükse kendi takımı: adı önde olan soru
+// (çözülemeyen ad da olsa) kendi takıma kaymaz; adı geçen takım kendi dalında.
+func TestLeadingTeamPossessiveScope(t *testing.T) {
+	if r := routeGuidedIntent("foo takımının servisleri nasıl", nil, nil, nil, ""); r.Intent == guidedMyServices {
+		t.Errorf("bilinmeyen ad önde: kendi takıma kaymamalı, got %s", r.Intent)
+	}
+	if r := routeGuidedIntent("platform takımının servisleri nasıl", nil, nil, []string{"platform"}, ""); r.Intent != guidedTeamServices || r.Team != "platform" {
+		t.Errorf("adı geçen takım kendi dalında kalmalı, got %s/%s", r.Intent, r.Team)
+	}
+	for _, q := range []string{"takımının servisleri nasıl?", "Ekibinin problemleri", "takımınızın servisleri"} {
+		if !leadingTeamPossessive(strings.Fields(strings.ToLower(q))) {
+			t.Errorf("%q iyelikle başlıyor", q)
+		}
+	}
+	if leadingTeamPossessive([]string{"takımına"}) || leadingTeamPossessive(nil) {
+		t.Error("yönelme eki / boş girdi iyelik değil")
 	}
 }

@@ -774,6 +774,26 @@ func hasTeamSelfSignal(tokens []string) bool {
 	return benim && tokenHasPrefix(tokens, "takım", "ekip", "servis", "problem", "exception")
 }
 
+// leadingTeamPossessive (v0.10.1569) — operatör-bildirimi: "takımının
+// servisleri nasıl?" wiki'ye gidiyordu. Önek listesi yalnız "takımım"ı
+// tanıyor; "takımının / takımın / takımınızın / ekibinin" konuşma dilinde
+// "(benim) takımın" anlamında da yazılıyor. Yalnız İLK sözcükse sayılır:
+// "foo takımının servisleri" gibi adı (çözülemeyen de olsa) önde olan soru
+// adı geçen takımın sorusudur, kendi takıma kaymaz. Çağıran ayrıca adı geçen
+// takım ve servis yokluğunu şart koşar.
+func leadingTeamPossessive(tokens []string) bool {
+	if len(tokens) == 0 {
+		return false
+	}
+	// Kesin biçimler, önek DEĞİL: "takımına" (yönelme) da "takımın" ile başlar.
+	switch tokens[0] {
+	case "takımın", "takımının", "takımınız", "takımınızın",
+		"ekibin", "ekibinin", "ekibiniz", "ekibinizin":
+		return true
+	}
+	return false
+}
+
 // guidedStopwords are message tokens that must never be treated as a
 // service-name candidate in the unique-prefix fallback.
 var guidedStopwords = map[string]bool{
@@ -1517,7 +1537,9 @@ func routeGuidedIntentExt(raw string, services, envs, teams []string, ctxService
 	// v0.9.375 — iyelik takım sinyali HER ŞEYDEN önce: "takımımın açık
 	// problemleri" generic problem yolundan önce yakalanmalı, yoksa tüm
 	// filonun problemleri döner ve "takımımın" kelimesi sessizce düşer.
-	case hasTeamSelfSignal(toks):
+	// v0.10.1569 — ya da cümle iyelikle BAŞLIYOR ("takımının servisleri nasıl?",
+	// "ekibin problemleri") ve adı geçen takım / servis yok: kendi takımı.
+	case hasTeamSelfSignal(toks) || (team == "" && svc == "" && leadingTeamPossessive(toks)):
 		// v0.9.650 — exception kelimesi problem/hata sinyalinden ÖNCE:
 		// "takımımın exception'ları" ikisini birden taşıyor ve problems
 		// dalı kazanırsa soru sessizce "açık problemler"e çöker.
