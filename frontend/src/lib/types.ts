@@ -3147,6 +3147,11 @@ export interface AIBudgetUsage {
   byModel: Array<{ provider: string; model: string; inputTokens: number; outputTokens: number }>;
 }
 
+/** v0.10.1604 — GET /api/admin/cosre-v2 (system_settings "cosre_v2"). */
+export interface CosreV2Flag {
+  enabled: boolean;
+}
+
 export interface AIBudgetStatus {
   budget: AIBudget;
   configured: boolean;

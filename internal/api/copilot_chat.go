@@ -193,8 +193,16 @@ type chatRequest struct {
 // (summing per-round token usage) via RecordUsage.
 func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink chatSinkFactory) {
 	chatT0 := time.Now() // v0.10.397 — sohbet süresi ai_calls'a
+	// v0.10.1604 (operatör kararı 2026-10-29 §4) — v1 ve v2 için TEK gövde
+	// duvarı (256 KiB, ai_conversations.go ile aynı); aşan gövde SSE
+	// başlığından önce 413. Eskiden v1'de duvar yoktu, v2 400 dönüyordu.
+	r.Body = http.MaxBytesReader(w, r.Body, aiChatMaxRequestBytes)
 	var req chatRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if code := chatBodyErrStatus(err); code == http.StatusRequestEntityTooLarge {
+			http.Error(w, fmt.Sprintf("body > %d KiB", aiChatMaxRequestBytes>>10), code)
+			return
+		}
 		http.Error(w, "invalid body", http.StatusBadRequest)
 		return
 	}

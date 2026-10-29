@@ -12,6 +12,7 @@ import { EVAL_URL_PARAMS } from './aiEval';
 import { CosreRulesPanel } from '@/components/ai/CosreRulesPanel'; // v0.10.1289
 import { AiToolsetsPanel } from './AiToolsetsPanel'; // v0.10.1434
 import { AiGeneralQuestionsPanel } from './AiGeneralQuestionsPanel'; // v0.10.1458
+import { CosreV2StatusLine } from './CosreV2StatusLine'; // v0.10.1604
 import { useT } from '@/lib/i18n'; // v0.10.1434
 import { tuningToForm, tuningToWire } from './aiTuning';
 import { IconSparkles } from '@/components/icons';
@@ -59,6 +60,7 @@ export function AITab() {
     }, { replace: true });
   return (
     <>
+      <CosreV2StatusLine />
       <TabStrip ariaLabel="CoSRE ayar sekmeleri" value={tab} onChange={setTab}
         tabs={[{ key: 'provider', label: 'Sağlayıcı ve profiller' }, { key: 'eval', label: 'Değerlendirme' }, { key: 'rules', label: 'Kurallar' }, { key: 'toolsets', label: t('aiToolsets.tab') }]} />
       {tab === 'eval' ? <AiEvalPanel /> : tab === 'rules' ? <CosreRulesPanel canEdit storageKey="settings-cosre-rules" />

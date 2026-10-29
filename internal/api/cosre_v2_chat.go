@@ -11,8 +11,9 @@ package api
 //
 // Kapı sırası: admin bayrağı EN DIŞTA (kapalıyken copilot durumundan bağımsız
 // 404 — yüzey yokmuş gibi), sonra requireCopilot (503), sonra gövde tavanı
-// (256 KiB, ai_conversations.go ile aynı duvar) — reddedilen istek SSE
-// başlığı yazılmadan 400 alır. Yüzey etiketi /ai'da "chat" (v1 ile aynı;
+// (256 KiB, ai_conversations.go ile aynı duvar; v0.10.1604'ten beri
+// copilotChatWith'te, v1 ile ortak) — reddedilen istek SSE başlığı
+// yazılmadan 413 alır. Yüzey etiketi /ai'da "chat" (v1 ile aynı;
 // aiSurfaceFromPath).
 
 import (
@@ -44,8 +45,9 @@ func (s *Server) requireCosreV2(h http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// cosreV2Chat — gövde duvarı (256 KiB → 413) copilotChatWith'in başında,
+// v1 ile ortak (v0.10.1604).
 func (s *Server) cosreV2Chat(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, aiChatMaxRequestBytes)
 	s.copilotChatWith(w, r, v2ChatSink)
 }
 

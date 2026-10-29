@@ -1308,6 +1308,8 @@ export const api = {
     get<Record<string, import('./types').AIRate>>(`/api/ai/rates`),
   // v0.10.411 — AI bütçesi: tavanlar + son 24 saat kullanımı.
   aiBudget: () => get<import('./types').AIBudgetStatus>(`/api/ai/budget`),
+  // v0.10.1604 — CoSRE v2 admin bayrağının durumu (Settings › CoSRE tek satır).
+  cosreV2Flag: () => get<import('./types').CosreV2Flag>(`/api/admin/cosre-v2`),
   // v0.10.562 — Problem detayı insight şeridi (deterministik, 30 s cache).
   // v0.10.1529 (Problem standardı R2) — detay başlığı; ref = InboxItem.id biçimi
   // (problem:/exception:/anomaly:/incident:). null = bulunamadı.

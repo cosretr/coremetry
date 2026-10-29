@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/cilcenk/coremetry/internal/ai/agent/blocks"
@@ -34,7 +35,18 @@ func v1ChatSink(w http.ResponseWriter) (chatSink, bool) {
 }
 
 // copilotChat is the SSE chat endpoint (v1 transport). Runs the agentic
-// loop and streams progress + the final answer.
+// loop and streams progress + the final answer. Gövde duvarı (256 KiB,
+// 413) copilotChatWith'in başında — v1 ve v2 için tek yer (v0.10.1604).
 func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 	s.copilotChatWith(w, r, v1ChatSink)
+}
+
+// chatBodyErrStatus — SAF: gövde çözme hatasının HTTP durumu. 256 KiB
+// duvarı (MaxBytesReader) 413, diğer her şey 400 (v0.10.1604).
+func chatBodyErrStatus(err error) int {
+	var mbe *http.MaxBytesError
+	if errors.As(err, &mbe) {
+		return http.StatusRequestEntityTooLarge
+	}
+	return http.StatusBadRequest
 }
