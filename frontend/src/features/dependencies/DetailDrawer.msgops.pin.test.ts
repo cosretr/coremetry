@@ -13,10 +13,10 @@ import { resolve } from 'node:path';
 const drawer = readFileSync(resolve(__dirname, 'DetailDrawer.tsx'), 'utf8');
 
 describe('Operasyonlar · MV bölümü (v0.10.563)', () => {
-  it('queue dalında: Consumers SONRASI, KafkaClientsSection ÖNCESİ', () => {
+  it('queue dalında: Consumers SONRASI, Kafka topic metrikleri ÖNCESİ (v0.10.1557)', () => {
     const consumers = drawer.indexOf('title={`Consumers ·');
     const sec = drawer.indexOf('Operasyonlar · MV ·');
-    const kafka = drawer.indexOf('<KafkaClientsSection');
+    const kafka = drawer.indexOf('<KafkaTopicMetrics');
     expect(consumers).toBeGreaterThan(-1);
     expect(sec).toBeGreaterThan(consumers);
     expect(sec).toBeLessThan(kafka);
@@ -61,7 +61,7 @@ describe('Operasyonlar · MV bölümü (v0.10.563)', () => {
     // messagingTracesHref'in `operation` parametresi span ADINA çevriliyor;
     // buradaki değer operasyon TÜRÜ. Eşitleyen bir link ölü olurdu.
     const sec = drawer.indexOf('Operasyonlar · MV ·');
-    const kafka = drawer.indexOf('<KafkaClientsSection');
+    const kafka = drawer.indexOf('<KafkaTopicMetrics');
     const block = drawer.slice(sec, kafka);
     expect(block).not.toContain('messagingTracesHref(');
   });

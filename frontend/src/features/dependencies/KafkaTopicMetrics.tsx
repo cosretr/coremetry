@@ -8,8 +8,11 @@
 // lib/kafkaTopicMetrics.ts'te (tablo testli). Sıra: özet kartları (lag dahil),
 // üretim↔tüketim + hata grafiği, lag (grafik + partition tablosu; lag/lead
 // eşiği aşıldıysa vurgulu), "kim yazıyor / kim okuyor" tablosu.
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Button } from '@/components/ui/Button';
+import { KafkaAlertModal } from '@/pages/alerts/KafkaAlertModal';
+import { messagingTopicHref } from '@/pages/messaging/topicHref';
 import { Empty, Spinner } from '@/components/Spinner';
 import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef } from '@/components/ui/DataTable';
 import { HttpStat, HttpChartPanel } from '@/pages/service/httpMetricsViz';
@@ -25,10 +28,17 @@ import type { TimeRange } from '@/lib/types';
 const itemsOf = (ps: KafkaTopicPanel[]): HttpPromqlItem[] =>
   ps.flatMap(p => p.queries.map((q, i) => ({ id: `${p.id}#${i}`, expr: q.expr, instant: false })));
 
-export function KafkaTopicMetrics({ system, cluster, topic, range, win }: {
+export function KafkaTopicMetrics({ system, cluster, topic, range, win, compact = false }: {
   system: string; cluster: string; topic: string; range: TimeRange; win: { from: number; to: number };
+  /**
+   * v0.10.1557 (operatör: Messaging çekmecesi topic sayfasıyla aynı görünüm) —
+   * çekmece kipi: kartlar + üç grafik; partition / istemci tabloları yalnız topic
+   * sayfasında (bağlantı), "Lag alarmı" eylemi burada.
+   */
+  compact?: boolean;
 }) {
   useThemeTick();
+  const [alertOpen, setAlertOpen] = useState(false);
   const step = stepSeconds(Math.max(60, Math.round((win.to - win.from) / 1e9)));
   const panels = useMemo(() => kafkaTopicPanels(topic), [topic]);
   const stats = panels.filter(p => p.kind === 'stat');
@@ -61,7 +71,7 @@ export function KafkaTopicMetrics({ system, cluster, topic, range, win }: {
         VictoriaMetrics&apos;te <span className="mono">topic=&quot;{topic}&quot;</span> etiketli
         {' '}<span className="mono">kafka_producer_record_send_rate</span> /{' '}
         <span className="mono">kafka_consumer_records_consumed_rate</span> serisi bulunamadı.
-        Span tarafı aşağıdaki sekmelerde.
+        {compact ? ' Span tarafı yukarıda.' : ' Span tarafı aşağıdaki sekmelerde.'}
       </Empty>
     );
   }
@@ -83,19 +93,52 @@ export function KafkaTopicMetrics({ system, cluster, topic, range, win }: {
     </div>
   );
   const byId = (id: string) => charts.find(p => p.id === id)!;
+  const consumerServices = [...new Set(clients.filter(c => c.side === 'consumer' && c.service).map(c => c.service))].sort();
+  const statRow = (
+    <div className="mtp-kafka-stats">
+      {stats.map(p => {
+        const { v, tone } = statOf(p);
+        return (
+          <HttpStat key={p.id} label={p.title} title={p.hint}
+            value={st.pending(`${p.id}#0`) ? '…' : v == null ? '—' : fmtSmart(v, p.unit)}
+            tone={tone} spark={sparkValues(st.data[`${p.id}#0`])} />
+        );
+      })}
+    </div>
+  );
+
+  if (compact) {
+    return (
+      <section className="mtp-kafka mtp-kafka--compact" aria-label="Kafka topic metrikleri">
+        <div className="mtp-kafka-compact-head">
+          <h3 className="mtp-kafka-h">
+            Kafka · VictoriaMetrics
+            {lagAlarm && <span className="badge b-warn" style={{ marginLeft: 8 }}>lag eşiği aşıldı</span>}
+          </h3>
+          {consumerServices.length > 0 && (
+            <Button variant="secondary" size="sm" onClick={() => setAlertOpen(true)}
+              title="Bu topic için tüketici lag alarmı (istemcinin gördüğü lag)">
+              Lag alarmı
+            </Button>
+          )}
+        </div>
+        {alertOpen && (
+          <KafkaAlertModal open onClose={() => setAlertOpen(false)} services={consumerServices}
+            target={{ topic }} defaultMetric="kafka_lag_max" />
+        )}
+        {statRow}
+        <div className="mtp-kafka-grid">{chart(byId('flow'))}{chart(byId('errors_by_client'))}{chart(byId('lag_by_client'))}</div>
+        <div className="field-hint">
+          Partition lag&apos;i ve producer / consumer istemci tablosu:{' '}
+          <Link to={messagingTopicHref({ system, cluster, destination: topic, range })}>topic sayfasında tüm metrikler →</Link>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <div className="mtp-kafka">
-      <div className="mtp-kafka-stats">
-        {stats.map(p => {
-          const { v, tone } = statOf(p);
-          return (
-            <HttpStat key={p.id} label={p.title} title={p.hint}
-              value={st.pending(`${p.id}#0`) ? '…' : v == null ? '—' : fmtSmart(v, p.unit)}
-              tone={tone} spark={sparkValues(st.data[`${p.id}#0`])} />
-          );
-        })}
-      </div>
+      {statRow}
 
       <div className="mtp-kafka-grid">{chart(byId('flow'))}{chart(byId('errors_by_client'))}</div>
 

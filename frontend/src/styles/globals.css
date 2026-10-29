@@ -6422,3 +6422,9 @@ tr:hover .ps-attr-act, .ps-attr-act:focus-visible { opacity: 1; }
 /* v0.10.1556 — trace servis lejantı tıklanabilir (servise git). */
 .wf-svcbreak-legend--pick { gap: 6px; }
 .wf-svcbreak-legend--pick .btn-chip { gap: 5px; }
+
+/* v0.10.1557 — Messaging çekmecesinde topic metrikleri (kompakt). */
+.mtp-kafka--compact { margin: 10px 0 14px; }
+.mtp-kafka-compact-head { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+.mtp-kafka--compact .mtp-kafka-stats { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
+.mtp-kafka--compact .mtp-kafka-grid { grid-template-columns: 1fr; }

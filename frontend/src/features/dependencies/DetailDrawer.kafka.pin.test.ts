@@ -9,14 +9,17 @@ const drawer = readFileSync(resolve(__dirname, 'DetailDrawer.tsx'), 'utf8');
 const caller = readFileSync(resolve(__dirname, 'CallerSection.tsx'), 'utf8'); // v0.10.575
 const list = readFileSync(resolve(__dirname, '../../pages/Messaging.tsx'), 'utf8');
 
-describe('KafkaClientsSection yerleşimi', () => {
+// v0.10.1557 — bölüm topic sayfasıyla aynı bileşen (KafkaTopicMetrics, kompakt).
+describe('Kafka topic metrikleri yerleşimi', () => {
   it('queue dalında, Consumers sonrası, Top operations öncesi', () => {
-    const sec = drawer.indexOf('<KafkaClientsSection');
+    const sec = drawer.indexOf('<KafkaTopicMetrics');
     const consumers = drawer.indexOf('title={`Consumers ·');
     const topOps = drawer.indexOf('{/* Top operations');
     expect(sec).toBeGreaterThan(consumers);
     expect(sec).toBeLessThan(topOps);
-    expect(drawer).toContain("import { KafkaClientsSection } from './KafkaClientsSection'");
+    expect(drawer).toContain("import { KafkaTopicMetrics } from './KafkaTopicMetrics'");
+    expect(drawer).toContain('<KafkaTopicMetrics system={system} cluster={cluster} topic={name} range={range} win={detailWindow} compact />');
+    expect(drawer).not.toContain('<KafkaClientsSection');
   });
   it('pod hücresi podDetailPath ile linkli', () => {
     // v0.10.575 — CallerSection çekmeceden ÇIKARILDI (/messaging/topic sayfası
@@ -35,6 +38,7 @@ describe('KafkaClientsSection yerleşimi', () => {
   });
   it('liste sayfasına grafik/bölüm girmez', () => {
     expect(list).not.toContain('KafkaClientsSection');
+    expect(list).not.toContain('KafkaTopicMetrics');
     expect(list).not.toContain('CorePanelMulti');
   });
 });

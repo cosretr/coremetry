@@ -47,7 +47,7 @@ const REFETCH_FILES = [
   'lib/queries/health.ts',
   'lib/queries/inbox.ts',
   'lib/queries/incidents.ts',
-  'lib/queries/messaging.ts',
+  // v0.10.1557 — lib/queries/messaging.ts çıktı (Kafka istemcileri sekmesi sorgusu kaldırıldı).
   'lib/queries/monitors.ts',
   'lib/queries/problems.ts',
   'lib/queries/rollouts.ts',

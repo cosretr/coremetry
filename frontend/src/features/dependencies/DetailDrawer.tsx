@@ -14,7 +14,7 @@ import { OraclePanel } from './panels/OraclePanel';
 import { PostgresPanel } from './panels/PostgresPanel';
 import { MySQLPanel } from './panels/MySQLPanel';
 import { RedisPanel } from './panels/RedisPanel';
-import { KafkaClientsSection } from './KafkaClientsSection'; // v0.10.551
+import { KafkaTopicMetrics } from './KafkaTopicMetrics'; // v0.10.1557 (v0.10.551 KafkaClientsSection yerine)
 // v0.10.575 — CallerSection ARTIK PAYLAŞILIYOR: aynı (servis, pod) kırılımını
 // /messaging/topic sayfası da çiziyor. Bileşen buradan çıkarıldı, davranış
 // bayt-bayt aynı (yeni propların ikisi de opsiyonel ve çekmece geçmiyor).
@@ -512,10 +512,10 @@ export function DetailDrawer({ system, cluster, name, instance, dbName, kind, so
               </table>
             </div>
           </div>
-          {/* v0.10.551 — Kafka istemci metrikleri (VM seam): span tarafından
-              SONRA, Top operations'tan ÖNCE (operatör mockup onayı). */}
-          <KafkaClientsSection system={system} cluster={cluster} destination={name}
-            range={range} xRange={drawerXRange} syncKey={drawerSync} />
+          {/* v0.10.551 — Kafka istemci metrikleri: span tarafından SONRA, Top
+              operations'tan ÖNCE (operatör mockup onayı). v0.10.1557 — topic
+              sayfasıyla aynı görünüm (KafkaTopicMetrics kompakt kipi, doğrudan VM). */}
+          <KafkaTopicMetrics system={system} cluster={cluster} topic={name} range={range} win={detailWindow} compact />
         </>
       ) : (
         <CallerSection
