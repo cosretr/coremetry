@@ -291,7 +291,7 @@ func TestServiceMetricREDNote_WindowTilesWording_v0101360(t *testing.T) {
 		StatusState: statusLabelPresent, StatusKey: "http.response.status_code",
 	}
 	note := serviceMetricREDNote(r)
-	want := "grafik serileri adım başına histogram_quantile(rate[180s]); karolar pencere değeri (increase[W], HTTP/RPC ile aynı)"
+	want := "grafik serileri adım başına histogram_quantile(rate[180s]); karolar pencere değeri (increase[W], HTTP/GRPC ile aynı)"
 	if !strings.Contains(note, want) || !strings.Contains(note, "birim s") {
 		t.Fatalf("not %q içermeli: %s", want, note)
 	}

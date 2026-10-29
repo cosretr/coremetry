@@ -33,7 +33,7 @@ describe('endpoints source defaults (v0.10.454 + v0.10.788)', () => {
     expect(detail).toContain('<option value="metric">Kaynak: metrik</option>');
     // v0.10.1350 → v0.10.1352 (operatör bildirimi) — metrik kipinde TÜM RED
     // karoları ve grafikler VM'den (sekmenin sorguları); alt bölümler span.
-    expect(detail).toContain('Tüm RED karoları ve grafikler: VictoriaMetrics (HTTP/RPC sekmesiyle aynı sorgular');
+    expect(detail).toContain('Tüm RED karoları ve grafikler: VictoriaMetrics (HTTP/GRPC sekmesiyle aynı sorgular');
     expect(detail).toContain('histogram, durum kırılımı, çağıranlar ve trace bölümleri span türevli');
     expect(detail).not.toContain('RED şeridi ve Calls/Errors/latency grafikleri: metrik');
     // tdigest iddiası yalnız span kipinde.

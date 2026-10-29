@@ -301,7 +301,7 @@ export default function EndpointDetailPage() {
               <select value={detailSrc} onChange={e => setDetailSrc(e.target.value as 'span' | 'metric')}
                 aria-label="RED şeridinin kaynağı"
                 title={detailSrc === 'metric'
-                  ? 'Kaynak: metrik — RED karoları ve grafikler VictoriaMetrics\'ten (HTTP/RPC sekmesiyle aynı sorgular, bu route\'a süzülü), örneklemeden bağımsız; histogram, durum kırılımı, çağıranlar ve trace bölümleri span türevli'
+                  ? 'Kaynak: metrik — RED karoları ve grafikler VictoriaMetrics\'ten (HTTP/GRPC sekmesiyle aynı sorgular, bu route\'a süzülü), örneklemeden bağımsız; histogram, durum kırılımı, çağıranlar ve trace bölümleri span türevli'
                   : 'Kaynak: span — spanmetrics (izlerden türetilmiş); collector örnekliyorsa eksik sayar'}>
                 <option value="span">Kaynak: span</option>
                 <option value="metric">Kaynak: metrik</option>
@@ -336,8 +336,8 @@ export default function EndpointDetailPage() {
                 PromQL'i (VM), alt bölümler span türevli. v0.10.1350 metni
                 "satırın kovaları" diyordu; o satır artık okunmuyor. */}
             <div className="badge b-info" style={{ marginTop: -6, marginBottom: 12 }}
-              title="Metrik kipi: RED karoları ve grafikler Service → HTTP/RPC sekmesinin aynı sorguları (/api/metrics/promql, VictoriaMetrics), bu route'a süzülü; karolar gerçek pencere değerleri (increase[pencere]). Histogram, durum kırılımı, çağıranlar ve trace bölümleri span türevlidir">
-              Tüm RED karoları ve grafikler: VictoriaMetrics (HTTP/RPC sekmesiyle aynı sorgular{family.kind === 'grpc' ? `, gRPC ailesi ${family.names.count.replace(/_count$/, '_*')} — rpc_service=${refObj.method ?? '*'}, rpc_method=${refObj.path}` /* v0.10.1429 */ : refObj.sig ? ', route şekle göre regex' : refObj.method ? `, method=${refObj.method}` /* v0.10.1359 */ : ', tüm methodlar'}) · histogram, durum kırılımı, çağıranlar ve trace bölümleri span türevli
+              title="Metrik kipi: RED karoları ve grafikler Service → HTTP/GRPC sekmesinin aynı sorguları (/api/metrics/promql, VictoriaMetrics), bu route'a süzülü; karolar gerçek pencere değerleri (increase[pencere]). Histogram, durum kırılımı, çağıranlar ve trace bölümleri span türevlidir">
+              Tüm RED karoları ve grafikler: VictoriaMetrics (HTTP/GRPC sekmesiyle aynı sorgular{family.kind === 'grpc' ? `, gRPC ailesi ${family.names.count.replace(/_count$/, '_*')} — rpc_service=${refObj.method ?? '*'}, rpc_method=${refObj.path}` /* v0.10.1429 */ : refObj.sig ? ', route şekle göre regex' : refObj.method ? `, method=${refObj.method}` /* v0.10.1359 */ : ', tüm methodlar'}) · histogram, durum kırılımı, çağıranlar ve trace bölümleri span türevli
             </div>
             {/* v0.10.1377 — env/cluster süzgecinin metrikteki hâli (uygulandı / uygulanamadı / çözülemedi). */}
             <HttpEnvScopeBand view={envScope} style={{ display: 'block', marginTop: -6, marginBottom: 12 }} />
@@ -441,7 +441,7 @@ export default function EndpointDetailPage() {
           table's own path fallbacks — never the span name. Server / consumer
           spans only; outbound client spans count under the callee.
           {detailSrc === 'metric'
-            ? ` Metrik kipi: RED karoları ve grafikler VictoriaMetrics ${family.names.count.replace(/_count$/, '_*')} (HTTP/RPC sekmesiyle aynı PromQL, bu ${family.kind === 'grpc' ? 'rpc method\'una' : 'route\'a'} süzülü); P50/P95/P99 karoları penceredeki kova artışlarından (histogram_quantile over increase[pencere])${family.kind === 'grpc' ? `; hata = gRPC sunucu-hatası kodları (${family.serverErr})` : ''}.`
+            ? ` Metrik kipi: RED karoları ve grafikler VictoriaMetrics ${family.names.count.replace(/_count$/, '_*')} (HTTP/GRPC sekmesiyle aynı PromQL, bu ${family.kind === 'grpc' ? 'rpc method\'una' : 'route\'a'} süzülü); P50/P95/P99 karoları penceredeki kova artışlarından (histogram_quantile over increase[pencere])${family.kind === 'grpc' ? `; hata = gRPC sunucu-hatası kodları (${family.serverErr})` : ''}.`
             : ' P50/P95/P99 are true window quantiles (tdigest).'}
         </div>
         {alertOpen && (
