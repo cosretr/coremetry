@@ -512,9 +512,15 @@ func (s *Service) labelNames(ctx context.Context, metric, service string, since 
 // uçlarında da döndürür): liste eksik olabilir, "yok" kanıtı değildir.
 // labelNames bayrağı düşürür (eski çağıranların sözleşmesi).
 func (s *Service) labelNamesBetween(ctx context.Context, cfg Settings, metric, service string, from, to time.Time) (vals []string, partial bool, err error) {
+	return s.labelNamesBetweenSvc(ctx, cfg, metric, serviceLabel(), service, from, to)
+}
+
+// labelNamesBetweenSvc — v0.10.1574: servis etiketi parametreli gövde (etiket
+// haritası özelleştirilmiş kurulum: service_name yerine LabelMap.Service).
+func (s *Service) labelNamesBetweenSvc(ctx context.Context, cfg Settings, metric, svcLabel, service string, from, to time.Time) (vals []string, partial bool, err error) {
 	matchers := []string{nameMatcher(discoveryNameCandidates(metric))}
 	if svc := strings.TrimSpace(service); svc != "" {
-		matchers = append(matchers, serviceLabel()+"="+quotePromString(svc))
+		matchers = append(matchers, svcLabel+"="+quotePromString(svc))
 	}
 	params := url.Values{
 		"start":   {promTime(from)},

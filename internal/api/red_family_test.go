@@ -547,6 +547,13 @@ type labelErrReader struct {
 	errFor map[string]error
 }
 
+func (r labelErrReader) MetricLabelNamesForServiceIn(ctx context.Context, metric, svcLabel, service string, from, to time.Time) ([]string, bool, error) {
+	if e := r.errFor[metric]; e != nil {
+		return nil, false, e
+	}
+	return r.famReader.MetricLabelNamesForServiceIn(ctx, metric, svcLabel, service, from, to)
+}
+
 func (r labelErrReader) MetricLabelNamesIn(ctx context.Context, metric string, from, to time.Time) ([]string, bool, error) {
 	if e := r.errFor[metric]; e != nil {
 		return nil, false, e
@@ -587,5 +594,42 @@ func TestResolveREDFamilyOneFamilyFailureDoesNotHideOthers(t *testing.T) {
 	rd.errFor[httpF.Probe] = context.Canceled
 	if _, err := s.resolveServiceREDFamily(context.Background(), rd, "x", nil, to); !errors.Is(err, context.Canceled) {
 		t.Errorf("iptal yayılmalı, got %v", err)
+	}
+}
+
+// TestREDFamilyLabelReadIsServiceScoped — v0.10.1574 (prod: HTTP ailesi
+// "okunamadı (etiket okuması?, timeout)" — filonun tamamının histogramı 24 sa
+// taranıyordu). Etiket keşfi YALNIZ servise kapsanmış okumayla yapılır
+// (varsayılan etiket service_name, etiket haritası varsa onun adı); kapsamsız
+// okuma çağrılmaz. Hata satırı hangi adımın düştüğünü söyler.
+func TestREDFamilyLabelReadIsServiceScoped(t *testing.T) {
+	to := time.Date(2026, 10, 29, 17, 45, 0, 0, time.UTC)
+	s := &Server{}
+	rd := &famReader{fakeChartReader: fakeChartReader{labels: famLabels(redFamilyHTTP, redFamilyGRPCLegacy)},
+		present: map[string]bool{redFamilyGRPCLegacy: true}}
+	if _, err := s.resolveServiceREDFamily(context.Background(), rd, "orders-api", nil, to); err != nil {
+		t.Fatal(err)
+	}
+	if rd.unscopedCalls != 0 {
+		t.Errorf("kapsamsız etiket okuması çağrıldı: %d", rd.unscopedCalls)
+	}
+	if len(rd.scopedLabelCalls) != len(redFamilies) {
+		t.Fatalf("aile başına bir kapsamlı okuma beklenirdi: %v", rd.scopedLabelCalls)
+	}
+	for _, c := range rd.scopedLabelCalls {
+		if c != "service_name=orders-api" {
+			t.Errorf("kapsam %q, beklenen service_name=orders-api", c)
+		}
+	}
+	if got := redFamilySvcLabel(vmetrics.LabelMap{Service: "app"}); got != "app" {
+		t.Errorf("etiket haritası servis adı kullanılmalı, got %q", got)
+	}
+
+	httpF, _ := redFamilyByID(redFamilyHTTP)
+	er := labelErrReader{famReader: &famReader{fakeChartReader: fakeChartReader{labels: famLabels(redFamilyHTTP, redFamilyGRPCLegacy)},
+		present: map[string]bool{redFamilyGRPCLegacy: true}}, errFor: map[string]error{httpF.Probe: context.DeadlineExceeded}}
+	res, _ := s.resolveServiceREDFamily(context.Background(), er, "orders-api", nil, to)
+	if !strings.Contains(strings.Join(res.Tried, "|"), "okunamadı (etiket okuması, timeout)") {
+		t.Errorf("düşen adım adlandırılmalı: %v", res.Tried)
 	}
 }

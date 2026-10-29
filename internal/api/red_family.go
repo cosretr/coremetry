@@ -217,6 +217,7 @@ func redFamilyUnknown(service, what string, err error) redFamilyResolution {
 // anlık sorgu (vmMetricSource karşılar; testler sahte okuyucu verir).
 type redFamilyReader interface {
 	metricChartReader
+	redFamilyLabelReader
 	QueryPromQLInstant(ctx context.Context, query string, at time.Time) ([]chstore.SpanMetricSeries, error)
 }
 
@@ -233,6 +234,52 @@ func redFamilyPresenceQuery(f redFamily, svcLabel, service string) string {
 func redFamilyKey(lm vmetrics.LabelMap, service, env, cluster string, to time.Time, src string) string {
 	return "red-family:v1:" + fnvStr(src, service, env, cluster, lm.Service, lm.Env, lm.Cluster,
 		fmt.Sprint(to.Truncate(httpEnvValuesSnap).Unix()))
+}
+
+// redFamilySvcLabel — SAF: servise kapsanmış etiket keşfinde kullanılacak servis
+// etiketi: etiket haritasındaki (normalize) ad, yoksa VM'in varsayılanı.
+func redFamilySvcLabel(lm vmetrics.LabelMap) string {
+	if l := strings.TrimSpace(lm.Service); l != "" {
+		return l
+	}
+	return "service_name"
+}
+
+// redFamilyLabelReader — çözücünün servise kapsanmış etiket keşfi (vmMetricSource).
+type redFamilyLabelReader interface {
+	MetricLabelNamesForServiceIn(ctx context.Context, metric, svcLabel, service string, from, to time.Time) ([]string, bool, error)
+}
+
+// redFamilyLabelSet — v0.10.1574 (prod, bsa-crm-contentmanagement-prod:
+// /red-family → "http_server_request_duration_seconds_count: okunamadı
+// (timeout)", gRPC aynı okumayla geldi). metricChartLabelSet filonun TAMAMININ
+// histogramını 24 sa tarıyordu ({__name__=~…}, 2 sn bütçe); HTTP'nin seri
+// sayısında bütçe yetmiyordu. Burada aynı pencere ve bütçe, ama
+// {__name__=~…, <servis etiketi>="<servis>"} — tek servisin serileri.
+// Önbellek anahtarı servisi ve etiketi taşır (tüm girdiler).
+func (s *Server) redFamilyLabelSet(ctx context.Context, rd redFamilyReader, metric, svcLabel, service string, to time.Time) (map[string]bool, error) {
+	key := "red-family-labels:v1:" + fnvStr(metric, svcLabel, service,
+		fmt.Sprint(to.Truncate(httpEnvValuesSnap).Unix()), fmt.Sprint(int64(metricChartLabelsLookbk/time.Second)))
+	var names []string
+	if !s.metricChartCacheGet(ctx, key, &names) {
+		lctx, cancel := context.WithTimeout(ctx, metricChartLabelTimeout)
+		end := to.Truncate(httpEnvValuesSnap).Add(httpEnvValuesSnap)
+		got, _, err := rd.MetricLabelNamesForServiceIn(lctx, metric, svcLabel, service, end.Add(-metricChartLabelsLookbk), end)
+		cancel()
+		if err != nil {
+			return nil, err
+		}
+		names = got
+		if names == nil {
+			names = []string{}
+		}
+		s.metricChartCacheSet(ctx, key, names, metricChartLabelsTTL)
+	}
+	set := make(map[string]bool, len(names))
+	for _, n := range names {
+		set[n] = true
+	}
+	return set, nil
 }
 
 // redFamilyStatusLabel — SAF: kümedeki ilk durum etiketi ("" = yok).
@@ -267,9 +314,12 @@ func (s *Server) resolveServiceREDFamily(ctx context.Context, rd redFamilyReader
 	var firstErr error
 	failed := 0
 	for _, f := range redFamilies {
-		labels, err := s.metricChartLabelSet(ctx, rd, f.Probe, at)
+		// v0.10.1574 — etiket keşfi SERVİSE kapsanır (redFamilyLabelSet); boş küme
+		// = bu servis bu aileyi 24 sa'te yazmamış (filo geneli yokluk iddiası değil).
+		step := "etiket okuması"
+		labels, err := s.redFamilyLabelSet(ctx, rd, f.Probe, redFamilySvcLabel(lm), service, at)
 		if err == nil && len(labels) == 0 {
-			res.Tried = append(res.Tried, f.vmCount()+": metrik yok (son 24 sa)")
+			res.Tried = append(res.Tried, f.vmCount()+": metrik yok (bu servis için, son 24 sa)")
 			continue
 		}
 		var sr vmetrics.LabelResolution
@@ -282,6 +332,7 @@ func (s *Server) resolveServiceREDFamily(ctx context.Context, rd redFamilyReader
 		}
 		var ser []chstore.SpanMetricSeries
 		if err == nil {
+			step = "yoklama"
 			ser, err = rd.QueryPromQLInstant(ctx, redFamilyPresenceQuery(f, sr.Label, service), at)
 		}
 		if err != nil {
@@ -292,7 +343,7 @@ func (s *Server) resolveServiceREDFamily(ctx context.Context, rd redFamilyReader
 				firstErr = err
 			}
 			failed++
-			res.Tried = append(res.Tried, f.vmCount()+": okunamadı ("+string(sourcestate.Classify(err))+") — yok DEĞİL")
+			res.Tried = append(res.Tried, f.vmCount()+": okunamadı ("+step+", "+string(sourcestate.Classify(err))+") — yok DEĞİL")
 			if f.Kind == redKindHTTP {
 				res.HTTP = &redFamilyPresence{ID: f.ID, Kind: f.Kind}
 			}

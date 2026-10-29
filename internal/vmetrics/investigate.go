@@ -76,6 +76,39 @@ func (s *Service) MetricLabelNamesIn(ctx context.Context, metric string, from, t
 	return s.labelNamesBetween(ctx, cfg, metric, "", from, to)
 }
 
+// MetricLabelNamesForServiceIn — v0.10.1574 (prod: /red-family HTTP ailesi
+// "okunamadı (timeout)"): MetricLabelNamesIn'in SERVİSE kapsanmış hâli —
+// {__name__=~…, <svcLabel>="<service>"}. Filonun tamamının HTTP histogramını
+// 24 sa taramak 2 sn bütçeyi aşıyordu; tek servisin serileri ucuz. svcLabel
+// geçerli bir Prometheus etiket adı değilse varsayılan servis etiketi.
+func (s *Service) MetricLabelNamesForServiceIn(ctx context.Context, metric, svcLabel, service string, from, to time.Time) ([]string, bool, error) {
+	if strings.TrimSpace(metric) == "" || strings.TrimSpace(service) == "" {
+		return nil, false, nil
+	}
+	cfg, err := s.ready()
+	if err != nil {
+		return nil, false, err
+	}
+	if !validPromLabelName(svcLabel) {
+		svcLabel = serviceLabel()
+	}
+	return s.labelNamesBetweenSvc(ctx, cfg, metric, svcLabel, service, from, to)
+}
+
+// validPromLabelName — SAF: [a-zA-Z_][a-zA-Z0-9_]*.
+func validPromLabelName(l string) bool {
+	if l == "" {
+		return false
+	}
+	for i, r := range l {
+		ok := r == '_' || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (i > 0 && r >= '0' && r <= '9')
+		if !ok {
+			return false
+		}
+	}
+	return true
+}
+
 // MetricLabelValuesIn — bir etiketin [from, to] penceresindeki değerleri
 // (sıralı, en çok limit; limit 1..1000). Çağıran `limit+1` isteyip fazlalığı
 // has_more olarak okuyabilir. v0.10.944 — ikinci dönüş VM `isPartial`.

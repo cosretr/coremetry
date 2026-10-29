@@ -660,6 +660,12 @@ func (v vmMetricSource) MetricLabelNamesIn(ctx context.Context, metric string, f
 	return out, partial, upstream(err)
 }
 
+// MetricLabelNamesForServiceIn — v0.10.1574: servise kapsanmış etiket keşfi (red_family.go).
+func (v vmMetricSource) MetricLabelNamesForServiceIn(ctx context.Context, metric, svcLabel, service string, from, to time.Time) ([]string, bool, error) {
+	out, partial, err := v.svc.MetricLabelNamesForServiceIn(ctx, metric, svcLabel, service, from, to)
+	return out, partial, upstream(err)
+}
+
 func (v vmMetricSource) MetricLabelValuesIn(ctx context.Context, metric, label string, from, to time.Time, limit int) ([]string, bool, error) {
 	out, partial, err := v.svc.MetricLabelValuesIn(ctx, metric, label, from, to, limit)
 	return out, partial, upstream(err)

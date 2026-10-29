@@ -387,6 +387,20 @@ type fakeChartReader struct {
 	queries  []string
 	steps    []int
 	instants []string
+	// v0.10.1574 — aile çözücüsünün servise kapsanmış etiket keşfi: "<etiket>=<servis>" kaydı.
+	scopedLabelCalls []string
+	unscopedCalls    int
+}
+
+// MetricLabelNamesForServiceIn — v0.10.1574: servise kapsanmış etiket keşfi (aynı labels haritası).
+func (f *fakeChartReader) MetricLabelNamesForServiceIn(_ context.Context, metric, svcLabel, service string, _, _ time.Time) ([]string, bool, error) {
+	f.mu.Lock()
+	f.scopedLabelCalls = append(f.scopedLabelCalls, svcLabel+"="+service)
+	f.mu.Unlock()
+	if f.labelErr != nil {
+		return nil, false, f.labelErr
+	}
+	return f.labels[metric], false, nil
 }
 
 func (f *fakeChartReader) QueryPromQLInstant(_ context.Context, q string, _ time.Time) ([]chstore.SpanMetricSeries, error) {
@@ -403,6 +417,9 @@ func (f *fakeChartReader) QueryPromQLInstant(_ context.Context, q string, _ time
 }
 
 func (f *fakeChartReader) MetricLabelNamesIn(_ context.Context, metric string, _, _ time.Time) ([]string, bool, error) {
+	f.mu.Lock()
+	f.unscopedCalls++
+	f.mu.Unlock()
 	if f.labelErr != nil {
 		return nil, false, f.labelErr
 	}
