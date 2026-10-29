@@ -69,3 +69,43 @@ func TestEvaluateAnomaly(t *testing.T) {
 		}
 	})
 }
+
+// v0.10.1585 — Davis paritesi FAZ 0.5 / A. Belirti: 55, 30 ve 5 dk önceki üç
+// tekil sıçrama (aralarında trafik yok) sıkıştırılmış seride "son üç kova"
+// sayılıp dwell=3 "sürekli" anomali açıyordu. Izgara dolgusuyla pencere
+// [0, 0, sıçrama] olur: açılmaz, gerekçe seyrek seri.
+func TestEvaluateAnomalySparseSeriesDoesNotOpen(t *testing.T) {
+	cfg := chstore.DefaultAnomalySensitivity()
+	const s = int64(bucketSeconds)
+	upper := int64(1_800_000_000) - int64(1_800_000_000)%s
+	var times []int64
+	var vals, rates []float64
+	for k := 40; k >= 25; k-- { // 16 kovalık sağlıklı taban (2 sa önce)
+		times = append(times, upper-int64(k+60)*s)
+		vals, rates = append(vals, 100), append(rates, 1)
+	}
+	for _, k := range []int{11, 6, 1} { // üç tekil sıçrama, ardışık DEĞİL
+		times = append(times, upper-int64(k)*s)
+		vals, rates = append(vals, 900), append(rates, 1)
+	}
+	// Bugünkü yol (yalnız kuyruk dolgusu): açılıyordu.
+	legacyV := padTrailingSilence(append([]float64(nil), vals...), times[len(times)-1], upper)
+	legacyR := padTrailingSilence(append([]float64(nil), rates...), times[len(times)-1], upper)
+	if oc := evaluateAnomaly("p99_ms", legacyV, nil, legacyR, 4, false, batchLatSeries{}, cfg); oc.Action != "open" {
+		t.Fatalf("ön koşul: sıkıştırılmış seri bugün açmalı (vaka), action=%q", oc.Action)
+	}
+	gotV, gotR := fillDwellGrid(append([]float64(nil), vals...), append([]float64(nil), rates...), times, upper, cfg.DwellBuckets)
+	oc := evaluateAnomaly("p99_ms", gotV, nil, gotR, 4, false, batchLatSeries{}, cfg)
+	if oc.Action == "open" {
+		t.Fatalf("seyrek seri ardışık olmayan kovalardan açtı: %+v", oc)
+	}
+	if oc.ZBlocker != zBlockSparse {
+		t.Fatalf("ZBlocker=%q, want %q", oc.ZBlocker, zBlockSparse)
+	}
+	// Ardışık üç sıçrama hâlâ açar (gerçek olay korunur).
+	times2 := append(append([]int64(nil), times[:len(times)-3]...), upper-3*s, upper-2*s, upper-s)
+	v2, r2 := fillDwellGrid(append([]float64(nil), vals...), append([]float64(nil), rates...), times2, upper, cfg.DwellBuckets)
+	if oc := evaluateAnomaly("p99_ms", v2, nil, r2, 4, false, batchLatSeries{}, cfg); oc.Action != "open" {
+		t.Fatalf("ardışık sıçrama açmalı, action=%q blocker=%q", oc.Action, oc.ZBlocker)
+	}
+}

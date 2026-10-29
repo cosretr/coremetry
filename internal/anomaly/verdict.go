@@ -110,7 +110,11 @@ func evaluateAnomaly(
 	}
 	zOpen := allOpen
 	zBlocker := ""
-	if !zOpen {
+	if !zOpen && len(rates) == len(buckets) && windowHasSilentBucket(rates, split) {
+		// v0.10.1585 — dwell penceresinde trafiksiz (ızgara dolgusu ya da
+		// susan kuyruk) kova: seri seyrek, "sürekli" değil (fillDwellGrid).
+		zBlocker = zBlockSparse
+	} else if !zOpen {
 		zBlocker = windowBlocker(metric, median, mad, window, pol, cfg.CriticalZ)
 		if zBlocker == "" {
 			zBlocker = "hacim kapısı (minBaselineRate) / batch yük kapısı"
@@ -160,6 +164,21 @@ func evaluateAnomaly(
 	return out
 }
 
+// windowHasSilentBucket — SAF: hizalı hacim serisinde dwell penceresinin
+// (rates[split:]) trafiksiz kovası var mı. Hizasız/boş hacim serisi = bilinmiyor
+// → false (gerekçe yalnız ölçülmüş sessizlikte yazılır).
+func windowHasSilentBucket(rates []float64, split int) bool {
+	if split < 0 || split > len(rates) {
+		return false
+	}
+	for _, r := range rates[split:] {
+		if r == 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // Ani-sapma kapılarının gerekçeleri (decideAnomaly'nin sırasıyla).
 const (
 	zBlockDirection = "z açılma eşiğinin altında (openZ)"
@@ -168,6 +187,7 @@ const (
 	zBlockAbsFloor  = "değer mutlak tabanın altında (absFloor)"
 	zBlockCritical  = "z critical eşiğinin altında (criticalZ)"
 	zBlockFlip      = "pencere içinde yön değişti"
+	zBlockSparse    = "dwell penceresinde trafiksiz kova (seyrek seri)"
 )
 
 // decideBlocker — SAF: decideAnomaly'nin İKİZİ; açmayan örnekte ilk kapının

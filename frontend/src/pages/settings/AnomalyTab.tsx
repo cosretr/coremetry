@@ -312,8 +312,8 @@ const SENSITIVITY_FIELDS: {
     hint: '|güncel − medyan| bunun altındaysa açılmaz. Küçük medyanlarda yüzde tabanının kör noktasını kapatır.' },
   { key: 'minMAD', label: 'En küçük MAD (σ tabanı)', step: 0.1, unitKind: 'value',
     hint: 'Sapma ölçüsünün alt sınırı. Çok sıkı bir geçmişte z\'nin patlamasını engeller — asıl gürültü kaynağı budur.' },
-  { key: 'minBaselineRate', label: 'En düşük hacim', step: 0.5, unitKind: 'rate',
-    hint: 'Son 5 dakikanın istek hızı bunun altındaysa AÇILMAZ. Düşük hacimde yüzdeler gürültüdür. Çözülmeyi etkilemez.' },
+  { key: 'minBaselineRate', label: 'En düşük hacim', step: 0.1, unitKind: 'rate',
+    hint: 'Son 5 dakikanın istek hızı bunun altındaysa AÇILMAZ. Düşük hacimde yüzdeler gürültüdür. Çözülmeyi etkilemez. Varsayılan: hata oranı 0.2, p99 0.5, istek hızı 0 (kapalı).' },
 ];
 
 function SensitivitySection() {

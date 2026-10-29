@@ -362,11 +362,13 @@ func TestDefaultsMatchShippedBehaviour(t *testing.T) {
 		t.Errorf("p99_ms varsayılanı %+v — operatör vakasını kapatan iki vida "+
 			"{minMAD 1.0ms, absFloor 10ms} olmalı", p)
 	}
-	// Yeni vidalar KAPALI: davranış değişmemeli.
+	// MinAbsDelta KAPALI. v0.10.1585 — BİLİNÇLİ VARSAYILAN DEĞİŞİKLİĞİ
+	// (Davis paritesi FAZ 0.5 / A, operatör onayı): minBaselineRate
+	// error_rate 0.2, p99_ms 0.5, request_rate 0 istek/sn.
+	wantRate := map[string]float64{"error_rate": 0.2, "p99_ms": 0.5, "request_rate": 0}
 	for _, m := range chstore.AnomalySensitivityMetrics {
-		if s := d.Metrics[m]; s.MinAbsDelta != 0 || s.MinBaselineRate != 0 {
-			t.Errorf("%s: yeni vidalar varsayılanda AÇIK (%+v) — bu sürüm "+
-				"davranışı sessizce değiştirirdi", m, s)
+		if s := d.Metrics[m]; s.MinAbsDelta != 0 || s.MinBaselineRate != wantRate[m] {
+			t.Errorf("%s: varsayılan %+v — minAbsDelta 0, minBaselineRate %v olmalı", m, s, wantRate[m])
 		}
 	}
 	// Globaller v0.8.220 / v0.9.193 ile aynı.

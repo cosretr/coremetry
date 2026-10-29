@@ -391,7 +391,7 @@ func (v *vmREDView) seriesFor(service, metric string, dwell int) (vmSeries, redS
 	in.MetricOK, in.MetricReason = v.metricOK(fi, service, metric)
 	var s vmSeries
 	if in.MetricOK {
-		s = v.buildSeries(fi, service, metric)
+		s = v.buildSeries(fi, service, metric, dwell)
 	}
 	in.Enough = enoughHistory(len(s.Values), dwell)
 	useVM, r := pickREDSource(in)
@@ -408,11 +408,12 @@ func (v *vmREDView) seriesFor(service, metric string, dwell int) (vmSeries, redS
 }
 
 // buildSeries — span okumalarının VM ikizi: ardışık seri (istekli kovalar,
-// artan zaman, kuyruk sessizliği sıfırla — padTrailingSilence) + mevsimsel
+// artan zaman, kuyruk sessizliği + dwell ızgarası sıfırla — fillDwellGrid,
+// v0.10.1585) + mevsimsel
 // örnekler (gün çeşitliliği budaması fetchAllSeasonal ile aynı).
-func (v *vmREDView) buildSeries(fi int, service, metric string) vmSeries {
+func (v *vmREDView) buildSeries(fi int, service, metric string, dwell int) vmSeries {
 	s := vmSeries{Family: vmREDFamilies[fi].Label}
-	var lastT int64
+	var times []int64
 	for _, b := range v.consec {
 		val, rate, ok := v.vmBucketValue(fi, service, metric, b)
 		if !ok {
@@ -420,10 +421,9 @@ func (v *vmREDView) buildSeries(fi int, service, metric string) vmSeries {
 		}
 		s.Values = append(s.Values, val)
 		s.Rates = append(s.Rates, rate)
-		lastT = b
+		times = append(times, b)
 	}
-	s.Values = padTrailingSilence(s.Values, lastT, v.upper)
-	s.Rates = padTrailingSilence(s.Rates, lastT, v.upper)
+	s.Values, s.Rates = fillDwellGrid(s.Values, s.Rates, times, v.upper, dwell)
 	days := map[int64]struct{}{}
 	var seas, seasRates []float64
 	for _, b := range v.seasonal {

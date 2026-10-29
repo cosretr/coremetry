@@ -237,7 +237,7 @@ func explainRun(ctx context.Context, vm REDVM, reader spanRowsReader, beh behavi
 			vals, seas, rates = s.Values, s.Seasonal, s.Rates
 		default:
 			st.Source, st.SourceReason = redSourceSpan, shownSourceReason(u.Reason)
-			vals, rates = spanConsecutiveAt(rows, now)
+			vals, rates = spanConsecutiveAt(rows, now, sens.DwellBuckets)
 			seas = spanSeasonalAt(rows, now, days, neighbor, sens.Calendar)
 		}
 		if len(rates) > 0 {
@@ -301,19 +301,19 @@ func explainStepTimes(from, to time.Time) []time.Time {
 }
 
 // spanConsecutiveAt — SAF: fetchAllBuckets'ın tek servis ikizi (aynı pencere,
-// yalnız satırı olan kovalar, kuyruk sessizliği sıfır dolgu).
-func spanConsecutiveAt(rows map[int64]spanRow, now time.Time) ([]float64, []float64) {
+// yalnız satırı olan kovalar, kuyruk sessizliği + dwell ızgarası sıfır
+// dolgu — fillDwellGrid, v0.10.1585).
+func spanConsecutiveAt(rows map[int64]spanRow, now time.Time, dwell int) ([]float64, []float64) {
 	var vals, rates []float64
-	var last int64
+	var times []int64
 	for _, b := range vmConsecutiveBuckets(now) {
 		r, ok := rows[b]
 		if !ok {
 			continue
 		}
-		vals, rates, last = append(vals, r.v), append(rates, r.rate), b
+		vals, rates, times = append(vals, r.v), append(rates, r.rate), append(times, b)
 	}
-	upper := lastCompleteBucketStart(now).Unix()
-	return padTrailingSilence(vals, last, upper), padTrailingSilence(rates, last, upper)
+	return fillDwellGrid(vals, rates, times, lastCompleteBucketStart(now).Unix(), dwell)
 }
 
 // spanSeasonalAt — SAF: fetchAllSeasonal'ın tek servis ikizi (aynı kova

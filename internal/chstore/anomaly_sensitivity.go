@@ -523,6 +523,13 @@ const (
 	anomalyMaxExternalOpenCap = 200
 )
 
+// v0.10.1585 — metrik başına hacim kapısı varsayılanları (istek/sn); göç de
+// bu iki sabiti yazar.
+const (
+	MinBaselineRateErrorDefault = 0.2
+	MinBaselineRateP99Default   = 0.5
+)
+
 // DefaultAnomalySensitivity — v0.9.826'nın gemiye giren davranışı:
 // BUGÜNKÜ davranış, ARTI iki cerrahi düzeltme (p99_ms).
 //
@@ -537,15 +544,23 @@ const (
 //   - AbsFloor 10ms: 10ms'nin altındaki bir p99 yükseliş yönünde hiç
 //     olay sayılmaz — göreli oran ne olursa olsun.
 //
-// Diğer metrikler AYNEN bugünkü sabitler; yeni vidalar (MinAbsDelta,
-// MinBaselineRate) 0 = kapalı, yani davranış değişmiyor.
+// Diğer metrikler AYNEN bugünkü sabitler; MinAbsDelta 0 = kapalı.
+//
+// v0.10.1585 (Davis paritesi FAZ 0.5 / A, operatör onayı 2026-10-29) —
+// MinBaselineRate metrik başına küçük taban: error_rate 0.2 istek/sn (5 dk
+// kovada 60 istek → tek hata %1.67 ≈ absFloor %1), p99_ms 0.5 istek/sn (150
+// istek → p99 en az iki örnekle). request_rate 0: düşüş yönünde son kova
+// tanım gereği düşüktür, taban düşüşü susturur. Kapı SON kovaya bakar (aynı
+// semantik); davranış motoru da aynı politikayı okur (evalBehaviorWhy).
+// Kayıtlı 0 Normalize'dan geçtiği için yeni değer prod'a tek seferlik göçle
+// ulaşır (anomaly_sensitivity_minrate_migrate.go).
 func DefaultAnomalySensitivity() AnomalySensitivityConfig {
 	return AnomalySensitivityConfig{
 		Metrics: map[string]AnomalyMetricSensitivity{
 			// v0.9.180: <%1 = birkaç-hata gürültüsü, açma.
-			"error_rate": {FloorPct: 0.10, AbsFloor: 1.0},
+			"error_rate": {FloorPct: 0.10, AbsFloor: 1.0, MinBaselineRate: MinBaselineRateErrorDefault},
 			// v0.9.826: iki cerrahi düzeltme — gerekçe yukarıda.
-			"p99_ms": {FloorPct: 0.10, AbsFloor: 10.0, MinMAD: 1.0},
+			"p99_ms": {FloorPct: 0.10, AbsFloor: 10.0, MinMAD: 1.0, MinBaselineRate: MinBaselineRateP99Default},
 			// Hacim sıçraması VE düşüşü; mutlak taban yok (düşüş yönü
 			// zaten AbsFloor'dan etkilenmiyor, sıçrama için de anlamlı
 			// bir evrensel taban yok).

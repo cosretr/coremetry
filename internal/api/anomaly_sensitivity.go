@@ -38,6 +38,8 @@ func (s *Server) LoadAnomalySensitivity(ctx context.Context) {
 	// İşaretli; başarana dek her 30 sn'lik turda yeniden dener.
 	if s.store != nil {
 		chstore.MigrateOpLatencyDefaultOnce(ctx, s.store)
+		// v0.10.1585 — minBaselineRate 0 (eski varsayılan) → metrik başına taban.
+		chstore.MigrateMinRateDefaultOnce(ctx, s.store)
 	}
 	s.store.LoadAnomalySensitivity(ctx)
 }

@@ -572,7 +572,7 @@ func (d *Detector) scan(ctx context.Context) {
 	go func() { redCh <- d.red.prepare(ctx, now, sens, days, neighbor) }()
 	bucketsByMetric, seasonalByMetric, ratesByMetric := batchSeries(tracked,
 		func(m string) (map[string][]float64, map[string][]float64, error) {
-			return d.fetchAllBuckets(ctx, m, now)
+			return d.fetchAllBuckets(ctx, m, now, sens.DwellBuckets)
 		}, fetchSeasonal)
 	// v0.10.1478 — servis × metrik başına kaynak: VM (örneklenmemiş) varsa
 	// span serisinin YERİNE geçer (dört seri birlikte — red_vm_select.go
@@ -1251,6 +1251,67 @@ func padTrailingSilence(series []float64, lastBucketUnix int64, upperUnix int64)
 	return series
 }
 
+// fillDwellGrid (v0.10.1585, Davis paritesi FAZ 0.5 / A) — seyrek seride
+// dwell kovaları ARDIŞIK olsun. GROUP BY yalnız verisi olan kovaları
+// döndürür; sıkışmış seride son `dwell` ÖRNEK, son `dwell` KOVA değildir:
+// 55, 30 ve 5 dk önceki üç tekil sıçrama "15 dk sürekli" sayılıp anomali
+// açıyordu. Bu işlev padTrailingSilence'ın üst kümesidir:
+//
+//   - son gözlem dwell penceresinden ([upper − dwell·5dk, upper)) önceyse
+//     davranış padTrailingSilence ile BİREBİR (kuyruk sıfırla dolar);
+//   - değilse pencerenin her ızgara kovası seride bir eleman olur:
+//     gözlem varsa o, yoksa (0, 0) — yalnız İLK gözlemden sonraki kovalar
+//     (veri başlangıcından önceki yokluk kanıt değildir).
+//
+// Taban kısmı (pencereden önceki gözlemler) AYNEN: iç boşluk doldurulmaz
+// (v0.9.449'un "asgari cerrahi" kararı; trimTrailingSilent sözleşmesi).
+// times = her gözlemin kova başı (unix sn, artan). Izgaraya oturmayan ya da
+// upper'dan sonraki gözlemde (olmamalı) bugünkü kuyruk dolgusuna düşer.
+// values ve rates AYNI dolguyu alır (hizalı kalmalı). Saf — tablo-testli.
+func fillDwellGrid(values, rates []float64, times []int64, upper int64, dwell int) ([]float64, []float64) {
+	n := len(times)
+	if n == 0 || len(values) != n || len(rates) != n {
+		var last int64
+		if n > 0 {
+			last = times[n-1]
+		}
+		return padTrailingSilence(values, last, upper), padTrailingSilence(rates, last, upper)
+	}
+	const step = int64(bucketSeconds)
+	last := times[n-1]
+	winStart := upper - int64(dwell)*step
+	if dwell <= 0 || last < winStart {
+		return padTrailingSilence(values, last, upper), padTrailingSilence(rates, last, upper)
+	}
+	cut := n
+	for i, t := range times {
+		if t >= winStart {
+			cut = i
+			break
+		}
+	}
+	for _, t := range times[cut:] {
+		if t >= upper || (t-winStart)%step != 0 {
+			return padTrailingSilence(values, last, upper), padTrailingSilence(rates, last, upper)
+		}
+	}
+	outV := append(make([]float64, 0, cut+dwell), values[:cut]...)
+	outR := append(make([]float64, 0, cut+dwell), rates[:cut]...)
+	j := cut
+	for t := winStart; t < upper; t += step {
+		if t < times[0] {
+			continue
+		}
+		if j < n && times[j] == t {
+			outV, outR = append(outV, values[j]), append(outR, rates[j])
+			j++
+			continue
+		}
+		outV, outR = append(outV, 0), append(outR, 0)
+	}
+	return outV, outR
+}
+
 // buildAllBucketsQuery is the batched twin of the old per-service fetchBuckets
 // read: ONE `GROUP BY service_name, t` pass over service_summary_5m for a
 // metric, instead of one `WHERE service_name = ?` query PER service. The metric
@@ -1299,7 +1360,7 @@ func buildAllBucketsQuery(vexpr string) string {
 // service absent from the map had no complete buckets in the window; checkOne's
 // enoughHistory guard skips it. `now` is fixed by the caller for the whole tick
 // so every service shares one window. v0.8.507.
-func (d *Detector) fetchAllBuckets(ctx context.Context, metric string, now time.Time) (map[string][]float64, map[string][]float64, error) {
+func (d *Detector) fetchAllBuckets(ctx context.Context, metric string, now time.Time, dwell int) (map[string][]float64, map[string][]float64, error) {
 	vexpr, err := metricValueExpr(metric)
 	if err != nil {
 		return nil, nil, err
@@ -1313,7 +1374,7 @@ func (d *Detector) fetchAllBuckets(ctx context.Context, metric string, now time.
 	defer rows.Close()
 	out := make(map[string][]float64)
 	rates := make(map[string][]float64)
-	lastT := make(map[string]int64)
+	times := make(map[string][]int64)
 	for rows.Next() {
 		var svc string
 		var t uint32
@@ -1323,7 +1384,7 @@ func (d *Detector) fetchAllBuckets(ctx context.Context, metric string, now time.
 		}
 		accumulateSeries(out, svc, v)
 		accumulateSeries(rates, svc, rate)
-		lastT[svc] = int64(t) // ORDER BY service, t — son görülen kazanır
+		times[svc] = append(times[svc], int64(t)) // ORDER BY service, t — artan
 	}
 	if err := rows.Err(); err != nil {
 		return nil, nil, err
@@ -1333,9 +1394,10 @@ func (d *Detector) fetchAllBuckets(ctx context.Context, metric string, now time.
 	// Hacim serisi de AYNI dolguyu alır: iki seri hizada kalmalı, yoksa
 	// "son bucket" ikisinde farklı zamanı gösterir. Sıfır hacim zaten
 	// sessizliğin dürüst temsili ve kapı çözülmeye uygulanmıyor.
+	// v0.10.1585 — dwell penceresi ızgaraya oturur (fillDwellGrid): seyrek
+	// seride son üç ÖRNEK "son üç kova" sayılmaz.
 	for svc, series := range out {
-		out[svc] = padTrailingSilence(series, lastT[svc], upper.Unix())
-		rates[svc] = padTrailingSilence(rates[svc], lastT[svc], upper.Unix())
+		out[svc], rates[svc] = fillDwellGrid(series, rates[svc], times[svc], upper.Unix(), dwell)
 	}
 	return out, rates, nil
 }
