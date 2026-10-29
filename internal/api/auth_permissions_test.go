@@ -418,6 +418,8 @@ func TestOIDCLoginUser(t *testing.T) {
 		{name: "claim yok / kapalı: yeni kullanıcı yine açılmaz", wantNil: true},
 		{name: "disabled → giriş reddi, yeniden açılmaz", existing: user(auth.RoleViewer, true), wantErr: errOIDCAccountDisabled},
 		{name: "disabled + claim → yine red", existing: user(auth.RoleAdmin, true), claimRole: auth.RoleAdmin, wantErr: errOIDCAccountDisabled},
+		// v0.10.1561 — engelli hesap (disabled=2) da aynı red; audit gerekçesi "blocked".
+		{name: "engelli → red, gerekçe blocked", existing: &chstore.User{ID: "u1", Email: email, Role: auth.RoleViewer, Disabled: true, Blocked: true, AuthProvider: "oidc"}, wantErr: errOIDCAccountDisabled},
 		{name: "YÜKSELTME yok: viewer + claim admin", existing: user(auth.RoleViewer, false), claimRole: auth.RoleAdmin, wantRole: auth.RoleViewer},
 		{name: "YÜKSELTME yok: editor + claim admin", existing: user(auth.RoleEditor, false), claimRole: auth.RoleAdmin, wantRole: auth.RoleEditor},
 		{name: "aynı rol → yazma yok", existing: user(auth.RoleEditor, false), claimRole: auth.RoleEditor, wantRole: auth.RoleEditor},
@@ -444,6 +446,16 @@ func TestOIDCLoginUser(t *testing.T) {
 			if c.wantErr != nil {
 				if !errors.Is(err, c.wantErr) || u != nil || len(st.ups) != 0 {
 					t.Fatalf("err=%v u=%v ups=%d; beklenen %v", err, u, len(st.ups), c.wantErr)
+				}
+				// v0.10.1561 (operatör: engelli kullanıcıya genel hata) — sayfa
+				// metni hesabın durumunu söylemez; red audit'e düşer.
+				if err.Error() != oidcLoginFailedMsg {
+					t.Errorf("sayfa metni genel olmalı, got %q", err.Error())
+				}
+				want := oidcRefusalReason(*c.existing)
+				if len(as) != 1 || as[0].Action != "auth.oidc.login_refused" || as[0].TargetID != "u1" ||
+					as[0].IP != "203.0.113.7" || !strings.Contains(as[0].Details, `"reason":"`+want+`"`) {
+					t.Errorf("red audit'i yanlış (beklenen reason=%s): %+v", want, as)
 				}
 				return
 			}

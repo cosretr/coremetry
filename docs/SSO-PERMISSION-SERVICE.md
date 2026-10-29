@@ -137,8 +137,10 @@ curl -sS -X POST https://coremetry.example.test/api/auth/permissions \
 - Claim adı standart kimlik/profil claim'lerinden biri olamaz (`sub`, `name`,
   `given_name`, `family_name`, `preferred_username`, `email`, `profile`, …,
   `iss`, `aud`, `exp`, `iat`, `nonce`, `at_hash`, `azp`); kayıt reddedilir.
-- Devre dışı bırakılmış bir kullanıcı SSO ile giremez ("hesap devre dışı");
-  giriş onu yeni bir kullanıcı olarak yeniden açmaz.
+- Devre dışı bırakılmış (silinmiş ya da engellenmiş) bir kullanıcı SSO ile
+  giremez; giriş sayfası diğer SSO retleriyle aynı genel cümleyi gösterir
+  (v0.10.1561 — hesabın durumu söylenmez), red `auth.oidc.login_refused`
+  audit satırına düşer. Giriş onu yeni bir kullanıcı olarak yeniden açmaz.
 
 > Not: merkezi login cevabı `ttlSeconds` boyunca önbellekte tutar. Bu açıkken
 > bir yönetici Coremetry'de bir kullanıcıyı yükseltirse, kullanıcının o süre

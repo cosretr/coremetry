@@ -277,9 +277,20 @@ type oidcUserStore interface {
 // oidcUserStoreFor — YALNIZ test dikişi; üretimde s.store.
 var oidcUserStoreFor = func(s *Server) oidcUserStore { return s.store }
 
-// errOIDCAccountDisabled — giriş sayfasında görünen metin (callback
-// oidcFail(err.Error()) ile basar).
-var errOIDCAccountDisabled = errors.New("hesap devre dışı — yöneticinize başvurun")
+// errOIDCAccountDisabled — devre dışı (silinmiş ya da engelli) hesabın SSO
+// reddi. v0.10.1561 (operatör: "SSO'da engelli kullanıcıya genel hata mesajı
+// dön"): sayfa metni diğer SSO retleriyle AYNI genel cümle (oidcLoginFailedMsg)
+// — eskiden "hesap devre dışı" yazıyordu. Neden sayfada değil, sınıf logda ve
+// audit'te (auth.oidc.login_refused).
+var errOIDCAccountDisabled error = &oidcLoginPageError{Class: "account_disabled", Msg: oidcLoginFailedMsg}
+
+// oidcRefusalReason — SAF: reddin audit gerekçesi (engelli / silinmiş).
+func oidcRefusalReason(u chstore.User) string {
+	if u.Blocked {
+		return "blocked"
+	}
+	return "deleted"
+}
 
 // v0.10.1120 (güvenlik incelemesi) — trustUnverifiedEmail ile gelen giriş
 // (claims.ViaTrust, email_verified=false) yerel/LDAP ya da admin hesabına
@@ -339,6 +350,11 @@ func (s *Server) oidcLoginUser(r *http.Request, email string, claims *auth.OIDCC
 	}
 	if u.Disabled {
 		log.Printf("[oidc] login refused: user id=%s is disabled", u.ID)
+		// v0.10.1561 — IdP kimliği doğruladı ama Coremetry reddetti: kayıt
+		// audit'e (oturum yok — aktör hesabın kendisi, link_ldap emsali).
+		details, _ := json.Marshal(map[string]any{"reason": oidcRefusalReason(*u), "provider": "oidc"})
+		s.auditAs(&auth.Claims{UserID: u.ID, Email: u.Email, Role: u.Role}, clientIP(r),
+			"auth.oidc.login_refused", "user", u.ID, string(details))
 		return nil, errOIDCAccountDisabled
 	}
 	if claims != nil && claims.ViaTrust && !oidcTrustLinkAllowed(*u) {
