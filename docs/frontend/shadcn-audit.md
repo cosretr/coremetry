@@ -419,6 +419,18 @@ Değişenler:
     gerekirse ayrı sürüm(ler), çıktı eşitliği CorePanel sözleşme testleriyle
     (`corePanelContracts.test.ts`) pinlenir; çizim motoru uPlot kalır. React 19 bu paket
     yüzünden gecikmez.
+  - **Karar merdiveni (operatör, 2026-10-29 — `o` bunu uygular):**
+    1. `@grafana/ui` peer aralığı React 19'u kapsıyor **veya** `CorePanel` testleri React
+       19'da yeşil → paket kalır; kaldırma chart katmanı workstream'ine ertelenir.
+    2. Değilse → React 19 destekli `@grafana/ui` **minor** yükseltmesi.
+    3. O da yoksa → `CorePanel` uPlot katmanı `corePanelContracts.test.ts` arkasında elle
+       yazılır, ayrı sürüm.
+  - `@grafana/data` `@grafana/ui`'den **bağımsız** değerlendirilir; `@grafana/ui` giderse
+    de kalabilir (display processor, `DataFrame`).
+  - **Chart-layer audit input — hedef tek `TimeSeriesPanel`** (bu geçişte DOKUNULMAZ):
+    beş uPlot sarmalayıcısı — `components/chart/CorePanel.tsx`,
+    `components/charts/TimeChart.tsx`, `components/viz/TimeSeriesPanel.tsx`,
+    `lib/chart/engine.ts`, `pages/service/charts/OverviewChart.tsx`.
 - **n — Geçirilen sayfada inline style sıfır.** Ratchet'e sayfa bazlı inline-style
   sayacı eklenir; sayfa ancak sayaç sıfırlanınca "geçti" sayılır.
 - **Bütçe — görevler, koşul değil.**
