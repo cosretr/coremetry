@@ -12008,3 +12008,22 @@ kaybeder; yeniden derinleşirse bir tarama daha (aynı bölüm sayacı sıfırla
 
 **Geri alma.** `attachBubbleUp` çağrısını kaldırmak v0.10.1576 davranışına döner; saklı
 JSON'daki alan okuyucularca yok sayılır.
+
+## 2026-10-29 — CoSRE v2 sohbeti Seçenek B'ye uyar; shadcn sorusu frontend audit'ine ertelendi
+
+**Karar:** CoSRE v2 (AI SDK UI Message Stream + `useChat`) mevcut `components/ui`
+atomlarıyla yazılır; AI Elements yalnız YAPI/DAVRANIŞ referansıdır (parça → bileşen
+eşlemesi, Conversation/Message/PromptInput/Tool ayrımı), kopyası alınmaz. Tailwind,
+shadcn, Streamdown, Shiki eklenmez; sohbet bileşenleri `components/cosre/`
+(`conversation/`, `evidence/`, `prompt/`) altında. Aynı gün verilen geniş shadcn geçişi
+kararı da GERİ ALINDI; geniş frontend/shadcn audit'i koşulduğunda yeniden bakılır.
+Operatör onayı 2026-10-29 (audit: `docs/cosre/chat-ui-audit.md`).
+
+**Neden:** "Yalnız sohbet için Tailwind" tam da kaçınılan çift stil sistemi — ya global
+geçiş ya hiç. Faz 0 bulgusu: 45 elle yazılmış atom + üç tema.
+
+**Gelecek audit için not:** Tema argümanı aslında engel değil — shadcn CSS değişkeni
+kullanır; `.dark` yalnız Tailwind'in `darkMode: ['selector', '[data-theme="dark"]']`
+ayarıdır ve üç `[data-theme]` bloğuna eşlenebilir. Asıl maliyet 45 atomu yeniden yazmak
+ve iki sistemi bir süre paralel taşımak. (2026-09-25 kaydındaki ".dark sözleşmesine
+uymuyor" gerekçesi bu notla düzeltilir.)

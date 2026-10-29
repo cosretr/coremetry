@@ -34,7 +34,9 @@ Datadog / Dynatrace / Honeycomb engineer this?"**
 `auth.Service`, `notify.Notifier`, `copilot.Service`.
 **Frontend:** React + Vite, no Tailwind (CSS vars in `globals.css`),
 React Query, react-router v6. No state library — URL is source of
-truth for shareable views.
+truth for shareable views. CoSRE v2 Seçenek B'ye uyar (mevcut `ui/`
+atomları, Tailwind/shadcn yok); shadcn sorusu frontend audit'ine
+ertelendi (DECISIONS 2026-10-29).
 **Versioning:** git tags `v0.10.X`; 1.0 is deferred by operator decision (cut procedure + smoke checklist when it comes: [docs/RELEASE-1.0.md](docs/RELEASE-1.0.md)). Runtime resolution:
 ldflag > `/app/VERSION` > `"dev"` = **build** kimliği; `COREMETRY_VERSION`
 env yalnız GÖSTERİLENİ değiştirir. `/api/version` ikisini de döndürür +
