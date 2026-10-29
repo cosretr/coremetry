@@ -12027,3 +12027,18 @@ kullanır; `.dark` yalnız Tailwind'in `darkMode: ['selector', '[data-theme="dar
 ayarıdır ve üç `[data-theme]` bloğuna eşlenebilir. Asıl maliyet 45 atomu yeniden yazmak
 ve iki sistemi bir süre paralel taşımak. (2026-09-25 kaydındaki ".dark sözleşmesine
 uymuyor" gerekçesi bu notla düzeltilir.)
+
+## 2026-10-29 (sonra) — Global shadcn geçişi; CoSRE kararları 1 ve 3 geçersiz
+
+**Karar:** Aynı gün verilen "CoSRE v2 Seçenek B'ye uyar" kaydı ve
+`docs/cosre/chat-ui-audit.md` §0 karar 1 ile 3, **global shadcn geçişiyle geçersiz**.
+CoSRE v2 frontend'i shadcn temel fazı (Faz 1) merge'ünden sonra `components/shadcn` +
+`components/ai-elements` üzerine kurulur. CoSRE Faz 1 (Go akış adaptörü) bağımsızdır,
+devam eder. Geçiş denetimi: `docs/frontend/shadcn-audit.md`. Operatör kararı.
+
+**Süreç notu:** PR yok, main'e doğrudan sürüm. Brief'teki "PR açıklamasında önce/sonra
+ekran görüntüsü" kuralı yerine her sürüm `docs/frontend/migration-log.md`'ye kısa giriş
+yazar (sayfa, ne değişti, silinen atomlar). Ekran görüntüsü zorunlu değil; kapı `/design`
+rotası + vitest/axe. Playwright elle, yalnız görünüm belirgin değiştiğinde.
+
+**Neden:** Tek stil sistemi, sohbete özel istisna yok.

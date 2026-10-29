@@ -20,6 +20,9 @@ onlara göre yeniden yazıldı. Faz 1 uygulama planı: scratchpad `cosre-phase1-
    yapısı/davranışı referanstır (parça → bileşen eşlemesi, Conversation / Message /
    PromptInput / Tool ayrımı). Tailwind yok, shadcn yok, AI Elements kopyası yok, yeni UI
    bağımlılığı yok.
+   > **2026-10-29: global shadcn geçişiyle geçersiz.** CoSRE v2 frontend'i Faz 1 merge'ünden
+   > sonra `components/shadcn` + `components/ai-elements` üzerine kurulur. CoSRE Faz 1 (Go akış
+   > adaptörü) bağımsız, devam eder. (Brief: `docs/frontend/shadcn-audit.md`, DECISIONS 2026-10-29.)
 2. **👍/👎 yok.** Kart başına "ilgili / ilgisiz" + mesaj düzeyinde serbest metin not;
    ikisi de `cosre_signals`'a (mevcut `POST /api/ai/signal`, yeni türler) yazılır. Mevcut
    söküm ratchet'i (aiVoteRemoved.ratchet.test.ts, TestAIFeedbackWriteRouteRemoved) aynen.
@@ -27,6 +30,9 @@ onlara göre yeniden yazıldı. Faz 1 uygulama planı: scratchpad `cosre-phase1-
    `frontend/src/components/cosre/` altında, alt klasörler `conversation/`, `evidence/`,
    `prompt/`. Mevcut `components/ui` ve `components/ai` dokunulmaz (macOS APFS büyük/küçük
    harf çakışması notu geçerli).
+   > **2026-10-29: global shadcn geçişiyle geçersiz.** CoSRE v2 frontend'i Faz 1 merge'ünden
+   > sonra `components/shadcn` + `components/ai-elements` üzerine kurulur. CoSRE Faz 1 (Go akış
+   > adaptörü) bağımsız, devam eder. (Brief: `docs/frontend/shadcn-audit.md`, DECISIONS 2026-10-29.)
 4. **Markdown:** mevcut chatMarkdown motoru. Streamdown yok, Shiki yok. Mevcut ```chart
    çiti `coremetry-chart` adıyla da uyumlu kalır (istemci ikisini de kabul eder).
 5. **Testler:** vitest + axe kapıdır; Playwright yalnız elle. Ek şart: Go altın SSE fixture
