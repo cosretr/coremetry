@@ -51,7 +51,11 @@ file types changed:
 - Any `frontend/**` change:
   `cd frontend && npx tsc --noEmit && npx eslint src && TZ=UTC npx vitest run`
   (vitest carries the ratchets — `buttonUnityRatchet`, `tableUnityRatchet` —
-  a red one otherwise surfaces only in CI after the tag is pushed)
+  a red one otherwise surfaces only in CI after the tag is pushed),
+  then `npm run bundle:check` (v0.10.1609: initial-load JS ≤ 347 KB gz, no
+  Radix/cmdk/sonner/shadcn in the entry — the same step CI runs after the
+  Vite build; on shadcn-migration releases paste its last line into
+  `docs/frontend/migration-log.md`)
 - Any `*.go` change: `go build ./... && go vet ./...`
 
 If either fails, surface the error and stop — don't try to fix it

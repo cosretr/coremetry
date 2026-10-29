@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "bundle:check": "vite build && node scripts/bundle-budget.mjs",
     "build:analyze": "tsc --noEmit && ANALYZE=1 vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",

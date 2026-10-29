@@ -1,0 +1,121 @@
+#!/usr/bin/env node
+// bundle-budget — v0.10.1609 (shadcn Faz 1 R2, plan §1.3).
+//
+// Ölçülen şey TARAYICININ ilk yükü: dist/index.html'deki
+// <script type="module" src> + her <link rel="modulepreload" href>.
+// Kural (audit §11 "Bütçe"): ilk yükün JS gz toplamı ≤ BUNDLE_BUDGET_KB
+// (varsayılan 347) ve bu kümedeki HİÇBİR chunk'ın sourcemap'inde
+// Radix / cmdk / sonner / floating-ui / components/shadcn kaynağı yok.
+// Neden sourcemap: Vite/rolldown manifest'i chunk'ları listeler, içindeki
+// modülleri değil; zaten üretilen .map dosyalarının sources[]'ı listeler
+// (build.sourcemap: true, vite.config.ts). Manifest üretilmez — go:embed
+// all:frontend/dist onu da binary'ye gömerdi.
+//
+// gz = zlib.gzipSync varsayılan seviye (Vite'ın build raporuyla aynı
+// yöntem) — tek yöntem çivili, sayı sürümden sürüme kıyaslanabilir.
+// Çıktı stdout + dist/bundle-budget.txt; son satır migration-log.md'ye
+// AYNEN yapıştırılır. Bağımlılık yok (Node ≥ 22).
+import { readFileSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
+import { gzipSync } from 'node:zlib';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const DIST = path.join(ROOT, 'dist');
+const BUDGET_KB = Number(process.env.BUNDLE_BUDGET_KB || 347);
+
+// Yasak kaynaklar (plan §1.3 adım 3). Radix paketleme biçimi R5'te
+// `shadcn init` çıktısına göre kesinleşir (§12 Q8) — o sürüm bu
+// regex'i ve vite.config.ts'teki `radix` grubunu birlikte günceller.
+const FORBIDDEN_SOURCES = [
+  /node_modules\/(radix-ui|@radix-ui|cmdk|sonner|@floating-ui|react-remove-scroll|aria-hidden)\//,
+  /src\/components\/shadcn\//,
+];
+
+const kb = (n) => (n / 1024).toFixed(1);
+
+function fail(msg) {
+  console.error(`bundle-budget: ${msg}`);
+  process.exit(1);
+}
+
+if (!existsSync(path.join(DIST, 'index.html'))) fail('dist/index.html yok — önce `vite build`');
+const html = readFileSync(path.join(DIST, 'index.html'), 'utf8');
+
+const attr = (tag, name) => {
+  const m = tag.match(new RegExp(`\\s${name}=["']([^"']+)["']`));
+  return m ? m[1] : null;
+};
+const initial = [];
+for (const m of html.matchAll(/<script\b[^>]*>/g)) {
+  if (attr(m[0], 'type') === 'module' && attr(m[0], 'src')) initial.push(attr(m[0], 'src'));
+}
+for (const m of html.matchAll(/<link\b[^>]*>/g)) {
+  if (attr(m[0], 'rel') === 'modulepreload' && attr(m[0], 'href')) initial.push(attr(m[0], 'href'));
+}
+if (initial.length === 0) fail('index.html içinde module script / modulepreload bulunamadı');
+
+const readSources = (file) => {
+  const map = `${file}.map`;
+  // Yalnız sanal modül taşıyan chunk'ların .map'i yok: rolldown çalışma
+  // zamanı + \0-önekli preload/interop yardımcıları (vite.config.ts
+  // priority 110 `vendor` grubu). Bugün 2; MAX_MAPLESS aşılırsa sourcemap
+  // bozulmuş demektir ve tarama kör olur → FAIL.
+  if (!existsSync(map)) { mapless.push(path.basename(file)); return []; }
+  return JSON.parse(readFileSync(map, 'utf8')).sources || [];
+};
+
+const MAX_MAPLESS = 2;
+const mapless = [];
+const rows = [];
+const offenders = [];
+let initialGz = 0;
+let mainGz = 0;
+for (const href of [...new Set(initial)]) {
+  const file = path.join(DIST, href.replace(/^\//, ''));
+  if (!existsSync(file)) fail(`${href} index.html'de var ama dist'te yok`);
+  const buf = readFileSync(file);
+  const gz = gzipSync(buf).length;
+  initialGz += gz;
+  const base = path.basename(file);
+  if (/^index-[^/]*\.js$/.test(base)) mainGz = gz;
+  rows.push({ base, gz });
+  const bad = readSources(file).filter((s) => FORBIDDEN_SOURCES.some((re) => re.test(s)));
+  if (bad.length) offenders.push({ base, bad });
+}
+
+// Rapor (kapı değil, plan §1.3 adım 5): radix/toast grup chunk'ları ve
+// shadcn kaynağı taşıyan chunk sayısı (Faz 1'de 0, ilk dilimden sonra > 0).
+const assets = readdirSync(path.join(DIST, 'assets'));
+const groupChunk = (name) => {
+  const f = assets.find((a) => a.startsWith(`${name}-`) && a.endsWith('.js'));
+  return f ? `${f} ${kb(gzipSync(readFileSync(path.join(DIST, 'assets', f))).length)} KB gz` : 'absent';
+};
+let shadcnChunks = 0;
+for (const a of assets) {
+  if (!a.endsWith('.js.map')) continue;
+  const src = JSON.parse(readFileSync(path.join(DIST, 'assets', a), 'utf8')).sources || [];
+  if (src.some((s) => FORBIDDEN_SOURCES[1].test(s))) shadcnChunks++;
+}
+
+if (mapless.length > MAX_MAPLESS) fail(`${mapless.length} ilk-yük chunk'ının .map'i yok (${mapless.join(', ')}) — build.sourcemap kapalı mı?`);
+
+const over = initialGz > BUDGET_KB * 1024;
+const out = [];
+out.push(`bundle-budget  dist/index.html  ${rows.length} preloaded JS`);
+for (const r of [...rows].sort((a, b) => b.gz - a.gz)) out.push(`  ${kb(r.gz).padStart(6)} KB gz  ${r.base}`);
+out.push(`initial-load JS gz: ${kb(initialGz)} KB   budget ${BUDGET_KB} KB   main (index-*.js) ${kb(mainGz)} KB gz   ${over ? 'OVER BUDGET' : 'OK'}`);
+out.push(`forbidden in entry: ${offenders.length ? offenders.map((o) => o.base).join(', ') : 'none'} (radix/cmdk/sonner/shadcn)   radix chunk: ${groupChunk('radix')}   toast chunk: ${groupChunk('toast')}   shadcn sources in output: ${shadcnChunks} chunks`);
+for (const o of offenders) {
+  out.push(`  ${o.base}:`);
+  for (const s of o.bad.slice(0, 5)) out.push(`    ${s}`);
+}
+out.push(`no sourcemap (virtual-only chunks, max ${MAX_MAPLESS}): ${mapless.join(', ') || 'none'}`);
+out.push(`| initial ${kb(initialGz)} KB gz | main ${kb(mainGz)} KB gz | budget ${BUDGET_KB} | radix-in-entry ${offenders.length} |`);
+
+const text = out.join('\n') + '\n';
+process.stdout.write(text);
+writeFileSync(path.join(DIST, 'bundle-budget.txt'), text);
+
+if (offenders.length) fail(`ilk yükte yasak kaynak: ${offenders.map((o) => o.base).join(', ')}`);
+if (over) fail(`ilk yük ${kb(initialGz)} KB gz > bütçe ${BUDGET_KB} KB`);

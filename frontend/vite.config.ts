@@ -78,6 +78,16 @@ export default defineConfig({
             { name: 'charts', test: /node_modules\/uplot/, priority: 95 },
             { name: 'otel', test: /node_modules\/(@opentelemetry|zone\.js)/, priority: 80 },
             { name: 'graph', test: /node_modules\/(dagre|graphlib|lodash)/, priority: 80 },
+            // v0.10.1609 — shadcn Faz 1 R2 (plan §1.1): Radix/shadcn çalışma
+            // zamanı eager vendor catch-all'ına (aşağıda) DÜŞMESİN — orası
+            // lucide + virtual-core ile index.html'de preload ediliyor. Geçişli
+            // bağımlılıklar açıkça listeli: eşleşmeyen catch-all'a düşer ve
+            // ilk yüke biner. sonner kendi grubunda: tembel Toaster ilk
+            // toast'ta bütün Radix grubunu değil yalnız onu çeker. Regex R5'te
+            // `shadcn init` çıktısına göre kesinleşir (§12 Q8);
+            // scripts/bundle-budget.mjs ilk yükte bunları yasaklıyor.
+            { name: 'toast', test: /node_modules\/sonner[\/]/, priority: 86 },
+            { name: 'radix', test: /node_modules\/(radix-ui|@radix-ui|cmdk|@floating-ui|react-remove-scroll(-bar)?|react-style-singleton|use-callback-ref|use-sidecar|aria-hidden|get-nonce)[\/]/, priority: 85 },
             { name: 'vendor', test: /node_modules/, priority: 10 },
           ],
         },

@@ -90,6 +90,7 @@ never `s.copilot.Explain` direct (/ai attribution).
 **Release — every functional change:**
 ```
 edit → (fe) npx tsc --noEmit && npx eslint src && TZ=UTC npx vitest run
+   && npm run bundle:check
 → go build ./... && go vet ./... → go test ./... → make audit
 → git add <files> → commit (heredoc) → tag v0.10.X
 → git push && git push --tags → deploy (background, ONE at a time)

@@ -99,4 +99,38 @@ export default tseslint.config(
     plugins: { ui: { rules: { 'no-raw-button': noRawButton } } },
     rules: { 'ui/no-raw-button': 'error' },
   },
+  {
+    // v0.10.1609 — shadcn Faz 1 R2 (plan §1.2): kabuk (bugünkü eager
+    // closure) Radix'e statik bağlanamaz; bağlanırsa Radix/cmdk/sonner
+    // index.html modulepreload'ına biner. Bugün no-op (kabuk yalnız
+    // components/ui import ediyor). Geçişli kenarları yalnız
+    // scripts/bundle-budget.mjs görür — bu blok satır-hassas hızlı yarısı.
+    files: [
+      'src/App.tsx',
+      'src/main.tsx',
+      'src/components/AppShell.tsx',
+      'src/components/Topbar.tsx',
+      'src/components/Sidebar.tsx',
+      'src/components/CommandPalette.tsx',
+      'src/components/TimeRangePicker.tsx',
+      'src/components/ContextBar/**',
+      'src/components/CopilotChatGate.tsx',
+      'src/components/Toaster.tsx',
+      'src/components/GlobalShortcuts.tsx',
+      'src/components/AnnouncementBanner.tsx',
+    ],
+    ignores: ['src/**/*.test.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': ['error', {
+        patterns: [{
+          group: [
+            '**/components/shadcn', '**/components/shadcn/**', './shadcn/**',
+            '**/coremetry/overlay', '**/coremetry/overlay/**',
+            'radix-ui', 'radix-ui/**', '@radix-ui/*', 'cmdk', 'sonner',
+          ],
+          message: 'Kabuk Radix/shadcn overlay import edemez (ilk yüke biner, plan §1.2). Sayfa chunk\'ında kullan ya da tembel kapı (CopilotChatGate deseni).',
+        }],
+      }],
+    },
+  },
 );
