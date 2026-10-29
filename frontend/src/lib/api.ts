@@ -3651,6 +3651,12 @@ export const api = {
     }),
   deleteUser: (id: string) =>
     request<void>(`/api/users/${id}`, { method: 'DELETE' }),
+  // v0.10.1558 — engelle / engeli kaldır (admin, audit'li). Sunucu kendini
+  // ve son aktif admini engellemeyi reddeder.
+  blockUser: (id: string) =>
+    request<void>(`/api/users/${id}/block`, { method: 'POST' }),
+  unblockUser: (id: string) =>
+    request<void>(`/api/users/${id}/unblock`, { method: 'POST' }),
   // setUserRole flips a user to admin / editor / viewer.
   // Server refuses to demote the last admin so the system
   // can't lock itself out.
@@ -4119,6 +4125,9 @@ export interface AuthUser {
 }
 export interface UserRow extends AuthUser {
   disabled: boolean;
+  // v0.10.1558 — engelli hesap: giriş yapamaz, listede kalır, geri alınabilir
+  // (silinen hesap listeye hiç gelmez). Go chstore.User.Blocked, omitempty.
+  blocked?: boolean;
   authProvider: string;  // 'local' | 'oidc'
   team: string;          // free-text grouping label, '' when unassigned
   createdAt: number;     // unix ns

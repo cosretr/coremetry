@@ -5899,6 +5899,11 @@ func (s *Server) loginViaLDAP(ctx context.Context, email, password string, exist
 	//       mapping every login so AD promotions/demotions take effect.
 	//   (c) Existing local-provider row converting to LDAP: keep the
 	//       admin's manually-set role — that's a deliberate override.
+	// v0.10.1558 — engelli hesap burada durur (users_block.go); aksi halde
+	// GetUserByEmail onu görmez ve aşağıdaki (a) dalı yeni satır açardı.
+	if err := s.refuseBlockedLDAPLogin(ctx, finalEmail, res.User.Username); err != nil {
+		return nil, err
+	}
 	if existing == nil {
 		existing, _ = s.store.GetUserByEmail(ctx, finalEmail)
 	}
@@ -6948,7 +6953,7 @@ func (s *Server) listUsers(w http.ResponseWriter, r *http.Request) {
 		}
 		row := map[string]interface{}{
 			"id": u.ID, "email": u.Email, "role": u.Role,
-			"disabled":     u.Disabled,
+			"disabled": u.Disabled, "blocked": u.Blocked,
 			"authProvider": provider,
 			"team":         u.Team,
 			"createdAt":    u.CreatedAt,
@@ -7130,44 +7135,6 @@ func (s *Server) setUserRole(w http.ResponseWriter, r *http.Request) {
 	// token'ı dolana kadar (24 saate kadar) hiç etkili olmuyordu.
 	s.auth.InvalidateAuthz(target.ID)
 	writeJSON(w, map[string]any{"id": target.ID, "email": target.Email, "role": target.Role})
-}
-
-func (s *Server) deleteUser(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	caller := auth.FromContext(r.Context())
-	if caller != nil && caller.UserID == id {
-		http.Error(w, `{"error":"cannot delete your own account"}`, http.StatusBadRequest)
-		return
-	}
-	target, err := s.store.GetUserByID(r.Context(), id)
-	if err != nil {
-		writeErr(w, err)
-		return
-	}
-	if target == nil {
-		http.Error(w, `{"error":"user not found"}`, http.StatusNotFound)
-		return
-	}
-	// Refuse to remove the last remaining admin — locks the system.
-	if target.Role == auth.RoleAdmin {
-		n, err := s.store.CountAdmins(r.Context())
-		if err != nil {
-			writeErr(w, err)
-			return
-		}
-		if n <= 1 {
-			http.Error(w, `{"error":"cannot remove the last admin"}`, http.StatusBadRequest)
-			return
-		}
-	}
-	if err := s.store.DisableUser(r.Context(), id); err != nil {
-		writeErr(w, err)
-		return
-	}
-	details, _ := json.Marshal(map[string]any{"email": target.Email, "role": target.Role})
-	s.audit(r, "user.delete", "user", id, string(details))
-	s.auth.InvalidateAuthz(id)
-	writeJSON(w, map[string]string{"status": "ok"})
 }
 
 // resetUserPassword lets an admin set a new password for any user without

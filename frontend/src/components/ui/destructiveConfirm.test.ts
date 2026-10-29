@@ -194,7 +194,10 @@ describe('Kapı B — yıkıcı dosyalarda kırmızı dil', () => {
   it('yıkıcı dosyaların hepsinde en az bir kırmızı varyant var', () => {
     const bad = destructiveFiles
       .filter(f => !CONFIRM_EXEMPT[f.rel])
-      .filter(f => !/variant=["'{]?\s*(["'])?(ghost-)?danger/.test(f.src))
+      // v0.10.1558 — `<MenuItem danger>` de kırmızı dil: taşma menüsündeki
+      // yıkıcı satırın atomu (ui/Menu.tsx; Users satır menüsü). Button
+      // varyantı aramak menüye taşınan Delete'i yanlış yere düşürüyordu.
+      .filter(f => !/variant=["'{]?\s*(["'])?(ghost-)?danger|<MenuItem\b[^>]*\bdanger\b/.test(f.src))
       .map(f => f.rel);
     expect(bad, 'kalıcı silme yolu `secondary`/`ghost` ile Edit’le eş ağırlıkta duramaz').toEqual([]);
   });

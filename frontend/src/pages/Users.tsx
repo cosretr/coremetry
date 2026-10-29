@@ -14,6 +14,8 @@ import { USER_COLS } from './usersColumns';
 import { PageControls } from '@/components/ui/PageControls';
 import { PageShell } from '@/components/ui/PageShell';
 import { Combobox } from '@/components/Combobox';
+import { MenuItem } from '@/components/ui/Menu';
+import { Popover } from '@/components/ui/Popover';
 
 
 export default function UsersPage() {
@@ -121,6 +123,26 @@ export default function UsersPage() {
     }
   };
 
+  // v0.10.1558 — engel geri alınabilir; onay yalnız engellerken (kaldırmak
+  // erişimi geri verir ama hiçbir şeyi silmez).
+  const onToggleBlock = async (u: UserRow) => {
+    setActionError(null);
+    if (!u.blocked && !await confirm({
+      title: 'Kullanıcı engellensin mi?',
+      body: <><b>{u.email}</b> şifre, LDAP ya da SSO ile giriş yapamayacak; açık
+        oturumları en geç 10 saniyede düşer. Hesap listede kalır, engeli
+        istediğin zaman kaldırabilirsin.</>,
+      confirmLabel: 'Engelle',
+      danger: true,
+    })) return;
+    try {
+      await (u.blocked ? api.unblockUser(u.id) : api.blockUser(u.id));
+      refresh();
+    } catch (e) {
+      setActionError(humanize(e));
+    }
+  };
+
   return (
     <>
       <Topbar title="Users" />
@@ -202,6 +224,10 @@ export default function UsersPage() {
                         }}>{u.email[0]}</span>
                       )}
                       <span style={{ fontWeight: 600 }}>{u.email}</span>
+                      {u.blocked && (
+                        <span className="badge b-err" style={{ marginLeft: 8 }}
+                          title="Giriş yapamaz — engeli Actions sütunundan kaldırılır">Engelli</span>
+                      )}
                       {isMe && (
                         <span style={{
                           marginLeft: 8, fontSize: 10, color: 'var(--text3)',
@@ -290,16 +316,15 @@ export default function UsersPage() {
                     </td>
                     <td className="col-actions">
                       <Button variant="secondary" onClick={() => setResetFor(u)}
-                        disabled={isOIDC}
-                        title={isOIDC ? 'OIDC users authenticate via SSO — no local password' : 'Set a new password'}
+                        disabled={isOIDC || u.blocked}
+                        title={isOIDC ? 'OIDC users authenticate via SSO — no local password'
+                          : u.blocked ? 'Önce engeli kaldır' : 'Set a new password'}
                         style={{ marginRight: 6 }}>
                         Reset password
                       </Button>
-                      <Button variant="ghost-danger" onClick={() => void onDelete(u)}
-                        disabled={isMe}
-                        title={isMe ? "You can't delete your own account" : 'Disable user'}>
-                        Delete
-                      </Button>
+                      <UserRowMenu user={u} isMe={isMe}
+                        onToggleBlock={() => void onToggleBlock(u)}
+                        onDelete={() => void onDelete(u)} />
                     </td>
                   </tr>
                 );
@@ -451,6 +476,41 @@ function ResetPasswordModal({ user, onClose, onDone }: {
 // the global Field error slot only covers per-field errors. If a
 // third caller in another page wants the same look, lift this
 // to ui/.
+// UserRowMenu — v0.10.1558: Engelle / Engeli kaldır + Delete taşma menüsü.
+// Aksiyon kolonu üçüncü düğmeye yer bırakmıyordu (usersColumns.ts bütçesi);
+// kendi hesabında menü kapalı — ikisini de sunucu zaten reddeder.
+function UserRowMenu({ user, isMe, onToggleBlock, onDelete }: {
+  user: UserRow;
+  isMe: boolean;
+  onToggleBlock: () => void;
+  onDelete: () => void;
+}) {
+  const anchorRef = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+  const pick = (fn: () => void) => () => { setOpen(false); fn(); };
+  return (
+    <>
+      <Button ref={anchorRef} variant="ghost" aria-haspopup="menu" aria-expanded={open}
+        aria-label={`More actions for ${user.email}`}
+        disabled={isMe}
+        title={isMe ? "You can't block or delete your own account" : 'Engelle / Delete'}
+        onClick={() => setOpen(o => !o)}>
+        ⋯
+      </Button>
+      <Popover anchorRef={anchorRef} open={open} onClose={() => setOpen(false)} kind="menu"
+        ariaLabel={`Actions for ${user.email}`} width={180}>
+        <MenuItem onClick={pick(onToggleBlock)}
+          title={user.blocked ? 'Girişe yeniden izin ver' : 'Giriş yapmasını engelle — hesap listede kalır'}>
+          {user.blocked ? 'Engeli kaldır' : 'Engelle'}
+        </MenuItem>
+        <MenuItem danger onClick={pick(onDelete)} title="Disable user">
+          Delete
+        </MenuItem>
+      </Popover>
+    </>
+  );
+}
+
 function ErrorBox({ children }: { children: React.ReactNode }) {
   return (
     <div style={{
@@ -521,7 +581,7 @@ function RoleEditor({ user, isMe, onChanged }: {
 
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-      <select value={user.role} disabled={busy}
+      <select value={user.role} disabled={busy || !!user.blocked}
         onChange={e => apply(e.target.value as Role)}
         style={{ fontSize: 11, padding: '2px 6px', minWidth: 90,
                  fontFamily: 'var(--font-mono)',
@@ -581,7 +641,7 @@ function CustomRoleEditor({ user, catalog, onChanged }: {
   };
 
   return (
-    <select value={user.customRole ?? ''} disabled={busy}
+    <select value={user.customRole ?? ''} disabled={busy || !!user.blocked}
       onChange={e => apply(e.target.value)}
       style={{ fontSize: 11, padding: '2px 6px', minWidth: 130,
                fontFamily: 'var(--font-mono)' }}

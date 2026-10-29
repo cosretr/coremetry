@@ -78,7 +78,9 @@ export const USER_COLS: DataTableColumn<UserRow>[] = [
   // title'da. Bir hesabın oluşturulma saniyesi kolon genişliğine
   // değmiyor; 170px'ti ve tablodaki en pahalı ikinci kolondu.
   { id: 'created',    label: 'Created',     sortValue: u => u.createdAt,         naturalDir: 'desc', width: 145 },
-  // 195 = "Reset password" (.sec ≈ 105) + 6 boşluk + "Delete" (≈ 52)
-  // + 24. Eskiden 230'du; fazlalık doğrudan taşmaya gidiyordu.
+  // 195 = "Reset password" (.sec ≈ 105) + 6 boşluk + "⋯" menüsü (≈ 32)
+  // + 24. Eskiden 230'du; fazlalık doğrudan taşmaya gidiyordu. v0.10.1558:
+  // Engelle eklenince Delete ile birlikte "⋯" taşma menüsüne geçti
+  // (üçüncü düğme bütçeyi 95px aşıyordu — usersColumns.test.ts).
   { id: 'actions',    label: 'Actions',     align: 'right', width: 195 },
 ];

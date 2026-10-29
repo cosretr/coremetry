@@ -12,6 +12,13 @@ type User struct {
 	PasswordHash string `json:"-"`
 	Role         string `json:"role"` // admin | editor | viewer
 	Disabled     bool   `json:"disabled"`
+	// Blocked — v0.10.1558 (operatör: "kullanıcıları bloklama özelliği de
+	// olsun, o kullanıcı login olamasın"): disabled kolonunda userBlocked
+	// değeri. Blocked ⇒ Disabled, bu yüzden disabled = 0 süzen her okuma
+	// (şifre girişi, oturum LiveAuthz, takım listesi, admin sayımı) engelli
+	// hesabı ek kod olmadan dışarıda bırakır; ListUsers ise onu GÖSTERİR
+	// (silinenden farkı: geri alınabilir ve listede kalır).
+	Blocked      bool   `json:"blocked,omitempty"`
 	AuthProvider string `json:"authProvider"` // local | oidc — drives "Change password" UI
 	// Team — free-text grouping the admin picks (e.g. "platform-sre",
 	// "fraud", "payments"). Backed by a LowCardinality column so
@@ -81,6 +88,7 @@ func scanUserRow(sc interface{ Scan(...any) error }, hasLdap bool) (*User, error
 		return nil, err
 	}
 	u.Disabled = disabled != 0
+	u.Blocked = disabled == userBlocked
 	u.Photo, u.HasPhoto = []byte(photo), photo != ""
 	return &u, nil
 }
@@ -210,10 +218,7 @@ func (s *Store) UpsertUser(ctx context.Context, u User) error {
 	if err != nil {
 		return fmt.Errorf("prepare users: %w", err)
 	}
-	var dis uint8
-	if u.Disabled {
-		dis = 1
-	}
+	dis := userDisabledCode(u)
 	provider := u.AuthProvider
 	if provider == "" {
 		provider = "local"
@@ -244,7 +249,7 @@ func (s *Store) ListUsers(ctx context.Context) ([]User, error) {
 		       toUnixTimestamp64Nano(created_at), length(photo) > 0 AS has_photo, full_name, org,
 		       toUnixTimestamp64Nano(last_login_at)
 		FROM users FINAL
-		WHERE disabled = 0
+		WHERE disabled IN (0, 2)
 		ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, err
@@ -258,6 +263,7 @@ func (s *Store) ListUsers(ctx context.Context) ([]User, error) {
 			return nil, err
 		}
 		u.Disabled = disabled != 0
+		u.Blocked = disabled == userBlocked
 		u.HasPhoto = hasPhoto != 0
 		out = append(out, u)
 	}
@@ -347,16 +353,100 @@ func (s *Store) SetUserTeam(ctx context.Context, userID, team string) error {
 	return s.UpsertUser(ctx, *u)
 }
 
-// DisableUser soft-deletes by inserting a new row with disabled=1.
+// userBlocked — disabled kolonunda "engelli" değeri (v0.10.1558). Yeni kolon
+// yerine mevcut UInt8'in üçüncü değeri: kolon eklemek UpsertUser'a (her
+// girişte koşan yazım) probe'lu koşullu kolon + iki-boot sözleşmesi getirirdi;
+// 0 = aktif, 1 = silinmiş, 2 = engelli. ListUsers'taki "IN (0, 2)" bu sabitle
+// aynı değeri anar.
+const userBlocked = 2
+
+// userDisabledCode — SAF: User'ın disabled kolonuna yazılan değeri. Blocked
+// Disabled'dan önce gelir: engelli satır 1 yazılırsa listeden düşer ve engeli
+// kaldırılamaz hale gelir.
+func userDisabledCode(u User) uint8 {
+	switch {
+	case u.Blocked:
+		return userBlocked
+	case u.Disabled:
+		return 1
+	}
+	return 0
+}
+
+// GetUserByIDAnyState — id'nin SON satırı, durum süzgeci olmadan (aktif,
+// silinmiş ya da engelli). Engeli kaldırma ve engelli hesabı silme bu okumayla
+// satırı bulur; GetUserByID disabled = 0 süzdüğü için ikisini de göremez.
+func (s *Store) GetUserByIDAnyState(ctx context.Context, id string) (*User, error) {
+	row := s.conn.QueryRow(ctx, `
+		SELECT `+s.userSelectExpr()+`
+		FROM users FINAL
+		WHERE id = ?
+		LIMIT 1`, id)
+	u, err := scanUserRow(row, s.hasLdapUsernameCol)
+	if err != nil {
+		if err.Error() == "sql: no rows in result set" {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return u, nil
+}
+
+// DisableUser soft-deletes by inserting a new row with disabled=1. A blocked
+// user can be deleted too (v0.10.1558) — the row leaves the list for good.
 func (s *Store) DisableUser(ctx context.Context, userID string) error {
-	u, err := s.GetUserByID(ctx, userID)
+	u, err := s.GetUserByIDAnyState(ctx, userID)
 	if err != nil {
 		return err
 	}
-	if u == nil {
+	if u == nil || (u.Disabled && !u.Blocked) {
 		return fmt.Errorf("user not found")
 	}
-	u.Disabled = true
+	u.Disabled, u.Blocked = true, false
+	return s.UpsertUser(ctx, *u)
+}
+
+// loginBlockedQuery — SAF: kimliğe (e-posta ya da LDAP kullanıcı adı) ait
+// ENGELLİ satır sayımı. Tekil "en iyi satır" okuması (GetUserByEmailAnyState,
+// ORDER BY disabled ASC) burada YANLIŞ olurdu: silinip LDAP'la yeniden açılan
+// ve sonra engellenen hesapta aynı e-postanın disabled=1 eski satırı engelli
+// satırın önüne geçer ve engel delinir. Sayım hangi satırın "kazandığına"
+// bakmaz. Kullanıcı adı kolu yalnız kolon varken ve girdi boş değilken.
+func loginBlockedQuery(hasLdap bool, email, username string) (string, []any) {
+	q := `SELECT count() FROM users FINAL WHERE disabled = 2 AND (lowerUTF8(email) = ?`
+	args := []any{email}
+	if hasLdap && username != "" {
+		q += ` OR (ldap_username != '' AND lowerUTF8(ldap_username) = ?)`
+		args = append(args, username)
+	}
+	return q + `) SETTINGS max_execution_time = 5`, args
+}
+
+// LoginBlocked — dizinde doğrulanan kimlik engelli bir hesaba mı ait
+// (v0.10.1558, loginViaLDAP'ın provisioning öncesi kapısı). Girdiler çağıranda
+// küçük harfe indirilir.
+func (s *Store) LoginBlocked(ctx context.Context, email, username string) (bool, error) {
+	q, args := loginBlockedQuery(s.hasLdapUsernameCol, email, username)
+	var n uint64
+	if err := s.conn.QueryRow(ctx, q, args...).Scan(&n); err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}
+
+// SetUserBlocked — engelle (true) / engeli kaldır (false), v0.10.1558.
+// Tam satır yeniden yazılır (rol, takım, foto, son giriş taşınır). Engellenecek
+// hesap aktif, engeli kaldırılacak hesap engelli olmalı; silinmiş hesap ikisine
+// de "user not found" döner — silme engel kaldırmayla geri getirilemez.
+func (s *Store) SetUserBlocked(ctx context.Context, userID string, blocked bool) error {
+	u, err := s.GetUserByIDAnyState(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if u == nil || (blocked && u.Disabled) || (!blocked && !u.Blocked) {
+		return fmt.Errorf("user not found")
+	}
+	u.Disabled, u.Blocked = blocked, blocked
 	return s.UpsertUser(ctx, *u)
 }
 
