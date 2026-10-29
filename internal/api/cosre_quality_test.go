@@ -43,3 +43,42 @@ func TestCosreQualityDays(t *testing.T) {
 		}
 	}
 }
+
+// v0.10.1597 (CoSRE v2 Faz 1, R7) — kart başına "ilgili / ilgisiz" ve mesaj
+// düzeyinde serbest not (operatör kararı §0-2, 👍/👎 yerine). evidence_*
+// ayrıntısı kartın adım kimliği s<i> olmak ZORUNDA (sinyal hangi kanıta
+// düştü); not 2 KiB'a dek, diğer türler 512 B.
+func TestValidateCosreSignalV2Kinds(t *testing.T) {
+	ok := []cosreSignalRequest{
+		{ExchangeID: "ab", Kind: "evidence_relevant", Detail: "s3"},
+		{ExchangeID: "ab", Kind: "evidence_irrelevant", Detail: " s12 "},
+		{ExchangeID: "ab", Kind: "note", Detail: "kanıt yanlış servisten"},
+		{ExchangeID: "ab", Kind: "note"},
+	}
+	for _, r := range ok {
+		if _, err := validateCosreSignal(r); err != nil {
+			t.Errorf("%+v: %v", r, err)
+		}
+	}
+	bad := []cosreSignalRequest{
+		{ExchangeID: "ab", Kind: "evidence_relevant"},
+		{ExchangeID: "ab", Kind: "evidence_relevant", Detail: "b1"},
+		{ExchangeID: "ab", Kind: "evidence_irrelevant", Detail: "s"},
+		{ExchangeID: "ab", Kind: "evidence_irrelevant", Detail: "s12345"},
+		{ExchangeID: "ab", Kind: "evidence_relevant", Detail: "s1; DROP"},
+		{ExchangeID: "ab", Kind: "relevant"},
+	}
+	for _, r := range bad {
+		if _, err := validateCosreSignal(r); err == nil {
+			t.Errorf("%+v kabul edildi", r)
+		}
+	}
+	n, _ := validateCosreSignal(cosreSignalRequest{ExchangeID: "a", Kind: "note", Detail: strings.Repeat("ş", 1500)})
+	if len(n.Detail) > cosreNoteDetailMax || len(n.Detail) <= cosreSignalDetailMax {
+		t.Errorf("not tavanı: %d (512 < x ≤ %d bekleniyordu)", len(n.Detail), cosreNoteDetailMax)
+	}
+	e, _ := validateCosreSignal(cosreSignalRequest{ExchangeID: "a", Kind: "evidence_relevant", Detail: " s7 "})
+	if e.Detail != "s7" {
+		t.Errorf("evidence detail %q", e.Detail)
+	}
+}

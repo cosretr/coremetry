@@ -4,7 +4,9 @@ package api
 //
 //   POST /api/ai/signal   — istemcinin örtük sinyali (copy / link_click /
 //                           evidence_click / problem_note / followup_click
-//                           — v0.10.1291). Kimliği doğrulanmış
+//                           — v0.10.1291; evidence_relevant /
+//                           evidence_irrelevant / note — v0.10.1597).
+//                           Kimliği doğrulanmış
 //                           her kullanıcı (sohbet edebilen sinyal üretir; 👍/👎
 //                           ucu emsal). Sinyal kullanıcı içeriği değil, telemetri:
 //                           audit satırı YAZILMAZ (her kopya tıkı audit_log'u
@@ -21,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -31,6 +34,14 @@ import (
 )
 
 const cosreSignalDetailMax = 512
+
+// cosreNoteDetailMax — v0.10.1597: mesaj düzeyinde serbest not daha uzun
+// olabilir (gövde tavanı 4 KiB'ın içinde kalır).
+const cosreNoteDetailMax = 2048
+
+// cosreEvidenceDetailRE — evidence_* sinyalinin ayrıntısı: kartın adım
+// kimliği (uistream toolCallId / data-step id = s<i>).
+var cosreEvidenceDetailRE = regexp.MustCompile(`^s[0-9]{1,4}$`)
 
 func (s *Server) registerCosreQualityRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/ai/signal", s.postCosreSignal)
@@ -56,7 +67,17 @@ func validateCosreSignal(req cosreSignalRequest) (cosreSignalRequest, error) {
 	case !cosrelearn.ClientSignalKinds[req.Kind]:
 		return req, fmt.Errorf("unknown kind %q", req.Kind)
 	}
-	req.Detail = clipBytes(strings.TrimSpace(req.Detail), cosreSignalDetailMax)
+	req.Detail = strings.TrimSpace(req.Detail)
+	switch req.Kind {
+	case cosrelearn.SigEvidenceRelevant, cosrelearn.SigEvidenceIrrelevant:
+		if !cosreEvidenceDetailRE.MatchString(req.Detail) {
+			return req, fmt.Errorf("detail must be a step id (s<i>) for %s", req.Kind)
+		}
+	case cosrelearn.SigNote:
+		req.Detail = clipBytes(req.Detail, cosreNoteDetailMax)
+	default:
+		req.Detail = clipBytes(req.Detail, cosreSignalDetailMax)
+	}
 	return req, nil
 }
 

@@ -61,7 +61,7 @@ func (e *Emitter) Emit(kind string, payload any) {
 // Close — ÖNCE heartbeat'i durdurup bitmesini bekler, sonra akış başladıysa
 // borçlu parçalar (Translator.Finish) + [DONE]. İdempotent, nil-güvenli.
 //
-// v0.10.1595 — [DONE] protokolün SON satırıdır; iki boşluk `: ping`i ondan
+// v0.10.1596 — [DONE] protokolün SON satırıdır; iki boşluk `: ping`i ondan
 // sonraya düşürüyordu: (1) Close [DONE]'u yazıp kilidi bıraktıktan SONRA
 // heartbeat'i durduruyordu; (2) `done` olayı [DONE]'u Emit içinde yazar ve
 // handler'ın ertelenmiş işleri (kayıt) bitene dek heartbeat tiklemeye devam

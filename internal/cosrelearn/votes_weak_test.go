@@ -93,3 +93,28 @@ func TestFollowupClickIsWeakObserved(t *testing.T) {
 		t.Error("followup_click istemci sinyali olarak kabul edilmeli")
 	}
 }
+
+// v0.10.1597 (CoSRE v2 Faz 1, R7) — kart "ilgili / ilgisiz" bir OY'dur
+// (operatörün öznel yargısı), gözlenen davranış değil: ağırlığı 👍/👎 ile
+// aynı mertebede kalır ve "güçlü gözlenen" listesine girmez. Serbest not
+// nötrdür (0): içeriği puana çevrilmez; insan incelemesi içindir.
+func TestEvidenceRelevanceSignalsAreVoteWeight(t *testing.T) {
+	vote := math.Max(math.Abs(Weight[SigThumbsUp]), math.Abs(Weight[SigThumbsDown]))
+	if w := Weight[SigEvidenceRelevant]; w <= 0 || w > vote {
+		t.Errorf("evidence_relevant %.2f — (0, %.2f] olmalı", w, vote)
+	}
+	if w := Weight[SigEvidenceIrrelevant]; w >= 0 || -w > vote {
+		t.Errorf("evidence_irrelevant %.2f — [-%.2f, 0) olmalı", w, vote)
+	}
+	if w, ok := Weight[SigNote]; !ok || w != 0 {
+		t.Errorf("note ağırlığı %v (tanımlı=%v) — 0 olmalı", w, ok)
+	}
+	for _, k := range []string{SigEvidenceRelevant, SigEvidenceIrrelevant, SigNote} {
+		if !ClientSignalKinds[k] {
+			t.Errorf("%s istemci sinyali olarak kabul edilmeli", k)
+		}
+	}
+	if _, pos, neg := AnswerScore([]string{SigNote}); pos != 0 || neg != 0 {
+		t.Error("not olumlu/olumsuz sayılmamalı")
+	}
+}

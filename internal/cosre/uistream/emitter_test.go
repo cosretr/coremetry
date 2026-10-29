@@ -114,7 +114,7 @@ func TestEmitterConcurrentEmitHeartbeatClose(t *testing.T) {
 	}
 }
 
-// v0.10.1595 — regresyon (v0.10.1591'in emitter'ı): `: ping` [DONE]'dan
+// v0.10.1596 — regresyon (v0.10.1591'in emitter'ı): `: ping` [DONE]'dan
 // sonra düşüyordu. İki boşluk: Close [DONE]'u yazıp kilidi bıraktıktan SONRA
 // heartbeat'i durduruyordu (TestEmitterConcurrentEmitHeartbeatClose
 // -count=50 -race'te 14/50 kırmızı), ve `done` olayı [DONE]'u Emit içinde

@@ -28,6 +28,12 @@ const (
 	// SigFollowupClick — v0.10.1291: operatör cevabın KURAL-türevli takip
 	// çipine tıkladı (chat_followup_chips.go). Gözlenen davranış, oy değil.
 	SigFollowupClick = "followup_click"
+	// v0.10.1597 (CoSRE v2 Faz 1, R7) — operatör kararı §0-2: 👍/👎 yerine
+	// kart başına "ilgili / ilgisiz" (ayrıntı = kartın adım kimliği s<i>) ve
+	// mesaj düzeyinde serbest not.
+	SigEvidenceRelevant   = "evidence_relevant"
+	SigEvidenceIrrelevant = "evidence_irrelevant"
+	SigNote               = "note"
 
 	SigRephrase   = "rephrase"
 	SigRegenerate = "regenerate"
@@ -46,7 +52,8 @@ const (
 // ClientSignalKinds — istemcinin POST edebileceği kapalı küme.
 var ClientSignalKinds = map[string]bool{
 	SigCopy: true, SigLinkClick: true, SigEvidenceClick: true, SigProblemNote: true,
-	SigFollowupClick: true,
+	SigFollowupClick:    true,
+	SigEvidenceRelevant: true, SigEvidenceIrrelevant: true, SigNote: true, // v0.10.1597
 }
 
 // Weight — sinyalin puana katkısı (taban 0.5, sonuç [0,1]).
@@ -67,6 +74,14 @@ var Weight = map[string]float64{
 	// aşağı çekmeye zorlamasın; kendi pini TestFollowupClickIsWeakObserved.
 	// Çalışma zamanı kararına okunmaz (yalnız gece kalite puanı).
 	SigFollowupClick: 0.05,
+	// v0.10.1597 — kart ilgili/ilgisiz bir OY'dur (öznel yargı), gözlenen
+	// davranış değil: 👍/👎 mertebesinde (±0.10), "güçlü gözlenen" listesine
+	// girmez (TestEvidenceRelevanceSignalsAreVoteWeight). Serbest not nötr
+	// (0): içeriği puana çevrilmez, insan incelemesi içindir. Ağırlıklar
+	// operatör onayı bekleyen öneri (Faz 1 planı açık soru 4).
+	SigEvidenceRelevant:   0.10,
+	SigEvidenceIrrelevant: -0.10,
+	SigNote:               0,
 
 	SigRephrase:   -0.30,
 	SigRegenerate: -0.30,
