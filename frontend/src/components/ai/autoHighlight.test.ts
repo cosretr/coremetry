@@ -9,12 +9,12 @@ const hits = (s: string) => highlightParts(s).filter(p => p.kind).map(p => `${p.
 describe('highlightParts — prod cevabındaki kritik parçalar', () => {
   it.each([
     ['CreditCardDetailsService.java:151\'de NPE', ['code:CreditCardDetailsService.java:151']],
-    ['com.akbank.juzdan.card.service.CreditCardDetails.CreditCardDetailsService (x)', ['code:com.akbank.juzdan.card.service.CreditCardDetails.CreditCardDetailsService']],
+    ['com.acme.juzdan.card.service.CreditCardDetails.CreditCardDetailsService (x)', ['code:com.acme.juzdan.card.service.CreditCardDetails.CreditCardDetailsService']],
     ['DTOCardDetail.getTdrkLimArr() null olduğu için', ['code:DTOCardDetail.getTdrkLimArr()']],
     ['POST /api/card/crdCard/getCardLimitInfo çağrısı HTTP 500 döndü', ['code:POST /api/card/crdCard/getCardLimitInfo', 'err:HTTP 500']],
     ['NullPointerException üretildi; BSARuntimeException: "BSA_020"', ['err:NullPointerException', 'err:BSARuntimeException', 'err:BSA_020']],
     ['error_code=MCA-00029 (Oracle)', ['err:MCA-00029']],
-    ['com.akbank.cards.util.util.OceanBackendFeignBase$FeignClientExceptionHandler.decode', ['code:com.akbank.cards.util.util.OceanBackendFeignBase$FeignClientExceptionHandler.decode']],
+    ['com.acme.cards.util.util.OceanBackendFeignBase$FeignClientExceptionHandler.decode', ['code:com.acme.cards.util.util.OceanBackendFeignBase$FeignClientExceptionHandler.decode']],
   ])('%s', (input, want) => {
     expect(hits(input)).toEqual(want);
   });
