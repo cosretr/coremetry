@@ -6412,3 +6412,9 @@ a.idchip__val:hover { color: var(--accent2); text-decoration: underline; }
    kaydırma, yapışkan başlık (çok seri panel boyunu uzatmaz). */
 .cp-legend-scroll { overflow: auto; max-height: 184px; }
 .cp-legend-scroll thead th { position: sticky; top: 0; z-index: 1; background: var(--bg1); }
+
+/* v0.10.1555 — span attribute satırında "bu değerle trace ara / hariç tut"
+   eylemleri: soluk, satır üzerinde ya da odakta belirgin. */
+.ps-attr-act { margin-left: 6px; padding: 0 5px; border-radius: var(--radius-xs); font-size: var(--fs-xs); color: var(--text3); text-decoration: none; opacity: .55; }
+tr:hover .ps-attr-act, .ps-attr-act:focus-visible { opacity: 1; }
+.ps-attr-act:hover { color: var(--accent2); background: var(--accent-bg); }

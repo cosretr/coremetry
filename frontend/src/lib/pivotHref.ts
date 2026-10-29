@@ -465,3 +465,31 @@ export function bucketTracesHref(p: {
     rootOnly: false,
   });
 }
+
+// attrTracesHref — v0.10.1555 (operatör: "Custom attribute'lara göre filtreleme
+// yapabilmeli kullanıcılar"). Span detayındaki bir attribute satırından
+// /traces'e: `key = value` (ya da `!=`, hariç tut) süzgeci, resource
+// attribute'unda `resource.` öneki (filterexpr: res_keys/res_values yolu).
+// Pencere span anının 24 sa öncesi → 1 sa sonrası (aynı değerin geçmişi).
+// rootOnly:false — custom attribute çoğunlukla çocuk span'de.
+export const ATTR_PIVOT_BEFORE_NS = 24 * 3600 * 1e9;
+export const ATTR_PIVOT_AFTER_NS = 3600 * 1e9;
+export const ATTR_PIVOT_MAX_VALUE = 500;
+
+export function attrTracesHref(p: {
+  key: string;
+  value: string;
+  atNs: number;
+  exclude?: boolean;
+  resource?: boolean;
+}): string | null {
+  const key = p.key.trim();
+  if (!key || !p.value || p.value.length > ATTR_PIVOT_MAX_VALUE || !(p.atNs > 0)) return null;
+  const k = p.resource && !key.startsWith('resource.') ? `resource.${key}` : key;
+  return tracesPivotHref({
+    window: { fromNs: p.atNs - ATTR_PIVOT_BEFORE_NS, toNs: p.atNs + ATTR_PIVOT_AFTER_NS },
+    filters: encodeFilters([{ k, op: p.exclude ? '!=' : '=', v: [p.value] }]),
+    view: 'list',
+    rootOnly: false,
+  });
+}

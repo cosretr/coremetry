@@ -1,3 +1,4 @@
+import { attrTracesHref } from '@/lib/pivotHref'; // v0.10.1555
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useEscLayer } from '@/lib/escLayer';
 import { Link } from 'react-router-dom';
@@ -282,6 +283,7 @@ export function SpanDetail({ span, onClose, logsFrom, logsTo, serviceLinks = tru
 
   return (
     <SpanK8sCtx.Provider value={k8sCtx}>
+    <AttrPivotCtx.Provider value={span.startTime > 0 ? span.startTime : 0}>
     <ServiceLinkCtx.Provider value={spanLinkCtx}>
     <div id="span-panel" className={inline ? 'span-panel-inline' : undefined} style={inline ? undefined : { width: panelW }}>
       {/* v0.10.691 — satır-içi kipte yüzen panel de tutamaç da yok. */}
@@ -365,7 +367,7 @@ export function SpanDetail({ span, onClose, logsFrom, logsTo, serviceLinks = tru
             {attrGroups.map(g => (
               <details key={g.key} open className="kiosk-span__group">
                 <summary className="ps-sec-title">{g.label} <span className="kiosk-span__cnt">{g.entries.length}</span></summary>
-                <KV>{g.entries.map(([k, v]) => <Row key={k} k={k} v={v} copyable />)}</KV>
+                <KV>{g.entries.map(([k, v]) => <Row key={k} k={k} v={v} copyable scope="span" />)}</KV>
               </details>
             ))}
           </div>
@@ -375,7 +377,7 @@ export function SpanDetail({ span, onClose, logsFrom, logsTo, serviceLinks = tru
             {resGroups.map(g => (
               <details key={g.key} open className="kiosk-span__group">
                 <summary className="ps-sec-title">{g.label} <span className="kiosk-span__cnt">{g.entries.length}</span></summary>
-                <KV>{g.entries.map(([k, v]) => <Row key={k} k={k} v={v} copyable />)}</KV>
+                <KV>{g.entries.map(([k, v]) => <Row key={k} k={k} v={v} copyable scope="resource" />)}</KV>
               </details>
             ))}
           </div>
@@ -582,6 +584,7 @@ export function SpanDetail({ span, onClose, logsFrom, logsTo, serviceLinks = tru
       </div>
     </div>
     </ServiceLinkCtx.Provider>
+    </AttrPivotCtx.Provider>
     </SpanK8sCtx.Provider>
   );
 }
@@ -758,13 +761,23 @@ const DB_LINK_HINT: Record<DbLinkKind, string> = {
 // tıklanabilsin"). null = bayrak kapalı / uygulama-içi link yok.
 const SpanK8sCtx = createContext<SpanK8sContext | null>(null);
 
+// AttrPivotCtx — v0.10.1555 (operatör: "Custom attribute'lara göre filtreleme
+// yapabilmeli kullanıcılar"): span anı (ns); attribute satırı "= / ≠" ile o
+// değere göre /traces'e süzgeçli geçer (attrTracesHref). 0 = eylem yok.
+const AttrPivotCtx = createContext<number>(0);
+
 // v0.10.945 — ölü `mono`/`pre` bayrakları (hiçbir çağıran vermiyordu) ve
 // onların satır içi hücre stili silindi; değer hücresi `.ps-kv td:last-child`.
-function Row({ k, v, copyable }: {
+function Row({ k, v, copyable, scope }: {
   k: string; v: string; copyable?: boolean;
+  /** v0.10.1555 — verilirse "bu değerle trace ara / hariç tut" eylemleri. */
+  scope?: 'span' | 'resource';
 }) {
   const links = useContext(ServiceLinkCtx);
   const k8s = useContext(SpanK8sCtx);
+  const atNs = useContext(AttrPivotCtx);
+  const eqHref = scope ? attrTracesHref({ key: k, value: v, atNs, resource: scope === 'resource' }) : null;
+  const neHref = scope ? attrTracesHref({ key: k, value: v, atNs, resource: scope === 'resource', exclude: true }) : null;
   const tr = useT();
   // v0.10.34 — servis + endpoint tek çözücüde (spanEntityLinks.ts).
   // v0.10.150 — k8s attribute'ları entity odağına (k8sAttrHref).
@@ -783,6 +796,14 @@ function Row({ k, v, copyable }: {
           ? <Link to={href} title={title}>{v}</Link>
           : v}
         {copyable && v && <CopyButton value={v} title={`Copy ${k.toLowerCase()}`} />}
+        {eqHref && (
+          <Link className="ps-attr-act" to={eqHref} title={`${k} = ${v} olan trace'ler (span anının son 24 saati)`}
+            aria-label={`${k} = ${v} ile trace ara`}>=</Link>
+        )}
+        {neHref && (
+          <Link className="ps-attr-act" to={neHref} title={`${k} ≠ ${v} olan trace'ler (bu değeri hariç tut)`}
+            aria-label={`${k} ≠ ${v} ile trace ara`}>≠</Link>
+        )}
       </td>
     </tr>
   );
