@@ -196,6 +196,10 @@ func (e *Evaluator) reconcileSharedBurst(ctx context.Context, b chstore.SharedEx
 		}
 		e.countOpened()
 		log.Printf("[evaluator] PROBLEM OPENED (exception.shared_dependency): %s", p.Description)
+		// v0.10.1588 (Davis paritesi FAZ 0.5 / D, operatör kararı 7) — tekil
+		// exception problemi YALNIZ etkilenen servislerden birinde / 1-hop
+		// komşusunda AÇIK incident varsa ona katılır; kendi incident'ını açmaz.
+		e.joinOpenIncident(ctx, p, b.Services)
 		if e.notifier != nil {
 			go e.notifier.SendProblemAlert(context.Background(), p)
 		}

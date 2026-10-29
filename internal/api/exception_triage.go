@@ -161,10 +161,11 @@ func (s *Server) putExceptionTriage(w http.ResponseWriter, r *http.Request) {
 	}
 	setExceptionTriage(c)
 	s.audit(r, "settings.update", "exception_triage", "exception_triage",
-		fmt.Sprintf(`{"p1FreshHours":%d,"p2SameDayHours":%d,"staleResolveHours":%d,"burstMinRate":%.0f,"burstMinTotal":%d,"p1MinOccurrences":%d,"stormWindowMinutes":%d,"stormMinServices":%d,"oracleP1MinOccurrences":%d}`,
+		fmt.Sprintf(`{"p1FreshHours":%d,"p2SameDayHours":%d,"staleResolveHours":%d,"burstMinRate":%.0f,"burstMinTotal":%d,"p1MinOccurrences":%d,"stormWindowMinutes":%d,"stormMinServices":%d,"oracleP1MinOccurrences":%d,"stormAttachToIncident":%t,"singleGroupJoinIncident":%t}`,
 			c.P1FreshHours, c.P2SameDayHours, c.StaleResolveHours,
 			c.BurstMinRate, c.BurstMinTotal, c.P1MinOccurrences,
-			c.StormWindowMinutes, c.StormMinServices, c.OracleP1MinOccurrences))
+			c.StormWindowMinutes, c.StormMinServices, c.OracleP1MinOccurrences,
+			c.StormAttachesToIncident(), c.SingleGroupJoinsIncident())) // v0.10.1588
 	log.Printf("[settings] exception_triage: P1 ≤%dsa · P2 ≤%dsa · stale %dsa · patlama ≥%.0f/dk & ≥%d · P1 hacim ≥%d · fırtına %ddk/%d servis",
 		c.P1FreshHours, c.P2SameDayHours, c.StaleResolveHours,
 		c.BurstMinRate, c.BurstMinTotal, c.P1MinOccurrences,

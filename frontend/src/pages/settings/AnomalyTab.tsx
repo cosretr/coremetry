@@ -89,6 +89,17 @@ export function AnomalyPromotionTab() {
           Güçlü log/iz anomalilerini Problem&apos;e terfi ettir
         </span>
       </label>
+      {/* v0.10.1588 — terfi Problem'i incident'a bağlansın (Davis paritesi
+          FAZ 0.5 / D). Alan yoksa AÇIK (`!== false`); kayıt açık boolean. */}
+      <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16 }}>
+        <input type="checkbox" aria-label="Terfi Problem'i incident'a bağlansın"
+          checked={cfg.attachToIncident !== false}
+          onChange={e => setCfg({ ...cfg, attachToIncident: e.target.checked })}
+          disabled={!cfg.enabled} />
+        <span style={{ fontSize: 13, color: 'var(--text)' }}>
+          Terfi edilen Problem incident&apos;a bağlansın (aynı servis / komşu; yoksa yeni incident)
+        </span>
+      </label>
 
       <div style={{ display: 'grid', gap: 12, opacity: cfg.enabled ? 1 : 0.5 }}>
         <Field label="Minimum peak ratio (× baseline)">
@@ -1198,6 +1209,26 @@ function ExceptionTriageSection() {
                 critical bildirim kanallarına düşer. Varsayılan 5.
               </div>
             </Field>
+
+            {/* v0.10.1588 — incident bağlama (Davis paritesi FAZ 0.5 / D). Alan
+                yoksa AÇIK okunur (`!== false`); kayıt açık boolean gönderir. */}
+            <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input type="checkbox" aria-label="Fırtına incident'a bağlansın"
+                checked={cfg.stormAttachToIncident !== false}
+                onChange={e => setCfg({ ...cfg, stormAttachToIncident: e.target.checked })} />
+              <span style={{ fontSize: 13, color: 'var(--text)' }}>
+                Exception fırtınası incident&apos;a bağlansın (yoksa kendi incident&apos;ı açılır)
+              </span>
+            </label>
+            <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input type="checkbox" aria-label="Tekil exception problemi açık incident'a katılsın"
+                checked={cfg.singleGroupJoinIncident !== false}
+                onChange={e => setCfg({ ...cfg, singleGroupJoinIncident: e.target.checked })} />
+              <span style={{ fontSize: 13, color: 'var(--text)' }}>
+                Ölümcül / paylaşılan exception problemi, aynı servis ya da komşusunda AÇIK
+                incident varsa ona katılsın (kendi incident&apos;ını açmaz)
+              </span>
+            </label>
 
             <Field label="P2 aynı-gün penceresi (saat)">
               <input type="number" min={cfg.p1FreshHours} max={720} step={1}

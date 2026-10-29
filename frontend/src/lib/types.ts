@@ -9206,6 +9206,11 @@ export interface ExceptionTriageConfig {
   // (p1MinOccurrences'ın Oracle ikizi; patlamanın hacim tabanı da bu).
   // Varsayılan 5000 — durgun akış ilk gün tüm Exceptions'ı P1 yapmasın.
   oracleP1MinOccurrences?: number;
+  // v0.10.1588 — incident bağlama; yok = AÇIK (`!== false`). Fırtına bağlanır
+  // (yoksa kendi incident'ı); tekil (ölümcül / paylaşılan) yalnız AÇIK
+  // incident'a katılır.
+  stormAttachToIncident?: boolean;
+  singleGroupJoinIncident?: boolean;
 }
 
 // v0.9.838 — ALERT PROBLEMİ öncelik merdiveninin vidaları (backend:
@@ -9386,6 +9391,8 @@ export interface AnomalyPromotionConfig {
   minSustainedSec: number;
   minCount: number;
   countOnlyMinCount?: number;
+  // v0.10.1588 — terfi Problem'i incident'a bağlansın; yok = AÇIK (`!== false`).
+  attachToIncident?: boolean;
 }
 
 export interface AnomalySensitivityConfig {

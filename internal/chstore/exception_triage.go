@@ -110,6 +110,27 @@ type ExceptionTriageConfig struct {
 	// ≥ bu eşik VE ≥ 3× önceki 1 sa (patlama) ya da grup yeni (ilk görülme P1
 	// penceresinde) ve son 1 sa ≥ bu eşik — api.oraclePriorityAt. Varsayılan 5000.
 	OracleP1MinOccurrences int `json:"oracleP1MinOccurrences"`
+
+	// ── v0.10.1588 — incident bağlama (Davis paritesi FAZ 0.5 / D, operatör
+	// kararı 7). *bool: nil = AÇIK, yalnız açıkça false kapatır.
+	//
+	// StormAttachToIncident — fırtına Problem'i açılışta incident'a bağlanır
+	// (diğer ailelerle aynı kurallar; yoksa kendi incident'ı açılır).
+	StormAttachToIncident *bool `json:"stormAttachToIncident,omitempty"`
+	// SingleGroupJoinIncident — tekil exception problemleri (ölümcül altyapı
+	// + paylaşılan bağımlılık patlaması) YALNIZ aynı servis / 1-hop komşuda
+	// AÇIK incident varsa ona katılır; kendi incident'ını AÇMAZ.
+	SingleGroupJoinIncident *bool `json:"singleGroupJoinIncident,omitempty"`
+}
+
+// StormAttachesToIncident — v0.10.1588: nil ⇒ AÇIK.
+func (c ExceptionTriageConfig) StormAttachesToIncident() bool {
+	return c.StormAttachToIncident == nil || *c.StormAttachToIncident
+}
+
+// SingleGroupJoinsIncident — v0.10.1588: nil ⇒ AÇIK.
+func (c ExceptionTriageConfig) SingleGroupJoinsIncident() bool {
+	return c.SingleGroupJoinIncident == nil || *c.SingleGroupJoinIncident
 }
 
 // DefaultExceptionTriage — v0.9.775'in gemiye giren davranışı.

@@ -115,6 +115,8 @@ func (e *Evaluator) reconcileFatalException(ctx context.Context, f chstore.Fatal
 		}
 		e.countOpened()
 		log.Printf("[evaluator] PROBLEM OPENED (exception.fatal_infrastructure): %s", p.Description)
+		// v0.10.1588 — açık incident'a katılır, yeni açmaz (joinOpenIncident).
+		e.joinOpenIncident(ctx, p, []string{f.Service})
 		if e.notifier != nil {
 			go e.notifier.SendProblemAlert(context.Background(), p)
 		}
@@ -135,5 +137,21 @@ func (e *Evaluator) reconcileFatalException(ctx context.Context, f chstore.Fatal
 		}
 		e.countResolved()
 		log.Printf("[evaluator] PROBLEM RESOLVED (exception.fatal_infrastructure): %s", id)
+	}
+}
+
+// joinOpenIncident — v0.10.1588 (Davis paritesi FAZ 0.5 / D): tekil exception
+// problemlerinin (ölümcül altyapı + paylaşılan bağımlılık patlaması) incident
+// katılımı. Vida exception_triage.singleGroupJoinIncident (nil = açık), açılış
+// başına tek okuma; yalnız AÇIK incident'a katılır, yeni AÇMAZ
+// (chstore.JoinOpenIncident). Yumuşak hata.
+func (e *Evaluator) joinOpenIncident(ctx context.Context, p chstore.Problem, services []string) {
+	if !e.store.GetExceptionTriage(ctx).SingleGroupJoinsIncident() {
+		return
+	}
+	if _, joined, err := e.store.JoinOpenIncident(ctx, p, services); err != nil {
+		log.Printf("[evaluator] %s: incident katılımı: %v", p.RuleID, err)
+	} else if joined {
+		log.Printf("[evaluator] %s açık incident'a katıldı", p.ID)
 	}
 }

@@ -61,3 +61,24 @@ describe('Yeni hata / yeni desen sayım tabanı', () => {
     expect(m.puts[0].minPeakRatio).toBe(5);
   });
 });
+
+// v0.10.1588 — terfi incident bağlama kutusu: alan yok → işaretli; kaldırınca
+// kayıt açık false gönderir.
+describe('Terfi Problem’i incident bağlama', () => {
+  it('alan yok → işaretli; kaldırınca false gider', async () => {
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await act(async () => { root!.render(<AnomalyPromotionTab />); });
+    await settle();
+    const box = host.querySelector<HTMLInputElement>('input[aria-label="Terfi Problem\'i incident\'a bağlansın"]');
+    if (!box) throw new Error('kutu yok');
+    expect(box.checked).toBe(true);
+    await act(async () => { box.click(); });
+    const save = [...host.querySelectorAll('button')].find(b => b.textContent?.trim() === 'Save');
+    if (!save) throw new Error('Save yok');
+    await act(async () => { save.click(); });
+    await settle();
+    expect(m.puts[0].attachToIncident).toBe(false);
+  });
+});

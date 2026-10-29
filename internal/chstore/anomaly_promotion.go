@@ -56,6 +56,11 @@ type AnomalyPromotionConfig struct {
 	// onlarda oran yerine bu SAYIM tabanını ister (+ aynı sürdürme). Varsayılan
 	// 20; 0 / eksik → varsayılan, MinCount'un altı → MinCount.
 	CountOnlyMinCount uint64 `json:"countOnlyMinCount"`
+	// AttachToIncident — v0.10.1588 (Davis paritesi FAZ 0.5 / D, operatör
+	// kararı 7): terfi edilen anomali Problem'i (anomaly-auto:) açılışta
+	// incident'a bağlansın (aynı servis / 1-hop komşu / yoksa yeni incident —
+	// diğer ailelerle aynı AttachProblemToIncident). *bool: nil = AÇIK.
+	AttachToIncident *bool `json:"attachToIncident,omitempty"`
 
 	// Seasonal* — consumed by the anomaly DETECTOR's seasonal
 	// baseline (internal/anomaly), NOT the promotion sweep. They
@@ -192,6 +197,11 @@ func (s *Store) SaveAnomalyPromotion(ctx context.Context, c AnomalyPromotionConf
 		return err
 	}
 	return s.PutSetting(ctx, anomalyPromotionKey, raw)
+}
+
+// AttachesToIncident — v0.10.1588: nil ⇒ AÇIK; yalnız açıkça false kapatır.
+func (c AnomalyPromotionConfig) AttachesToIncident() bool {
+	return c.AttachToIncident == nil || *c.AttachToIncident
 }
 
 // IsCountOnlyAnomaly — v0.10.1587 (Davis paritesi FAZ 0.5 / B): tabanı

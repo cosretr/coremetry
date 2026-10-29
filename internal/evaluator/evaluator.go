@@ -1453,6 +1453,16 @@ func (e *Evaluator) promoteStrongAnomalies(ctx context.Context) {
 		if isNew {
 			log.Printf("[evaluator] AUTO-PROMOTED anomaly %s · %s · ratio %.1fx → %s",
 				ev.Service, ev.Pattern, ev.PeakRatio, sev)
+			// v0.10.1588 (Davis paritesi FAZ 0.5 / D, operatör kararı 7) —
+			// terfi Problem'i de incident'a bağlanır (aynı servis / 1-hop komşu
+			// / yoksa yeni): aynı olaya N ayrı satır yerine Inbox'ta tek
+			// incident satırı. Vida anomaly_promotion.attachToIncident (nil =
+			// açık); yumuşak hata.
+			if cfg.AttachesToIncident() {
+				if _, err := e.store.AttachProblemToIncident(ctx, p); err != nil {
+					log.Printf("[evaluator] anomaly promotion: incident attach %s: %v", p.ID, err)
+				}
+			}
 			if e.notifier != nil {
 				go e.notifier.SendProblemAlert(context.Background(), p)
 			}

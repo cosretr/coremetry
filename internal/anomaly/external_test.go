@@ -31,6 +31,7 @@ type fakeExtStore struct {
 	seasonal     map[string][]float64
 	seasonalDays map[string]map[int64]struct{}
 	seasonalReqs []chstore.ExternalSeasonalReq
+	attached     []chstore.Problem // v0.10.1588
 }
 
 func (f *fakeExtStore) GetAnomalyPromotion(context.Context) chstore.AnomalyPromotionConfig {
@@ -65,6 +66,12 @@ func (f *fakeExtStore) UpsertProblem(_ context.Context, p chstore.Problem) error
 	return nil
 }
 func (f *fakeExtStore) AnomalySensitivity() chstore.AnomalySensitivityConfig { return f.cfg }
+
+// v0.10.1588 — incident bağlama çağrıları kaydedilir.
+func (f *fakeExtStore) AttachProblemToIncident(_ context.Context, p chstore.Problem) (*chstore.Incident, error) {
+	f.attached = append(f.attached, p)
+	return &chstore.Incident{ID: "inc-" + p.ID}, nil
+}
 
 // extSeries — end'de biten, dakikada bir noktalı seri.
 func extSeries(vals []float64, end time.Time, key ...string) chstore.SpanMetricSeries {

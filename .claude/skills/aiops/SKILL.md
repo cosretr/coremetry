@@ -89,6 +89,15 @@ Ne üretiyorsun?
    30 dk'da ETKİN `greatest(started_at, updated_at)`, bağlanma updated_at'i
    tazeler — v0.10.1581; yoksa yeni). Anomali
    ailesi tek kapılı olan (`attachToIncident`, `anomaly_sensitivity.go:58-73`).
+   **v0.10.1588 (Davis FAZ 0.5 / D, operatör kararı 7):** terfi (`anomaly-auto:`,
+   açılışta, vida `anomaly_promotion.attachToIncident`), fırtına (vida
+   `exception_triage.stormAttachToIncident`) ve dış kaynak (seri / küme / tavan /
+   ext-down — YALNIZ canlı tarayıcı, gölge bağlamaz; vida `anomaly_sensitivity.
+   attachToIncident`) da `AttachProblemToIncident` ile bağlanır; tekil exception
+   (ölümcül + paylaşılan patlama, vida `exception_triage.singleGroupJoinIncident`)
+   `JoinOpenIncident` ile YALNIZ açık incident'a katılır, ASLA açmaz (kural 1 →
+   servisler → komşular `joinCandidateNeighbours`). Üç vida da `*bool` nil = açık.
+   Bağlama yalnız AÇILIŞTA (sonra açılan incident'a geriye bağlanmaz).
 4. **Tam satır değiştirme:** `UpsertProblem` tüm satırı yazar; tazeleme yolu
    Status/Assignee/Pod/AISummary'yi TAŞIMALI (`carryProblemOperatorState`,
    `problem_aisummary_test.go`). Unutulan alan sıfırlanır (invariant #4).

@@ -123,6 +123,15 @@ func (d *Detector) checkExceptionStorm(ctx context.Context) {
 		}
 		log.Printf("[exception-storm] AÇILDI: %d servis / %s pencere (eşik %d)",
 			len(cands), shortWindow(window), minSvc)
+		// v0.10.1588 (Davis paritesi FAZ 0.5 / D, operatör kararı 7) — fırtına
+		// incident'a bağlanır (filo düzeyi, Service ""; yoksa kendi incident'ı
+		// "Exception fırtınası"). Vida exception_triage.stormAttachToIncident
+		// (nil = açık); yumuşak hata.
+		if cfg.StormAttachesToIncident() {
+			if _, err := d.store.AttachProblemToIncident(ctx, p); err != nil {
+				log.Printf("[exception-storm] incident attach: %v", err)
+			}
+		}
 		// Spec sorusu 2 (operatör: "düşsün"): fırtına critical bildirim
 		// kanallarına normal Problem gibi gider. Yalnız açılışta — tazeleme
 		// bildirimi spam olurdu.

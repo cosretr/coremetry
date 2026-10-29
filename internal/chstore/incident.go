@@ -379,7 +379,6 @@ func (s *Store) AttachProblemToIncident(ctx context.Context, p Problem) (*Incide
 // untouched. The base AttachProblemToIncident calls this with
 // nil for the provider.
 func (s *Store) AttachProblemToIncidentWith(ctx context.Context, p Problem, np NeighborProvider) (*Incident, error) {
-	const groupingWindow = 30 * time.Minute
 
 	// Already attached?
 	row := s.conn.QueryRow(ctx,
@@ -410,16 +409,8 @@ func (s *Store) AttachProblemToIncidentWith(ctx context.Context, p Problem, np N
 	// açıyordu. Etkinlik sinyali updated_at: bağlanma (aşağıda) onu
 	// tazeler, operatör eylemleri (ack/atama/postmortem) de; 30 dk sessiz
 	// incident yeni problemi emmez (sonsuz kova olmaz). Yeni şema yok.
-	cutoff := time.Now().Add(-groupingWindow).UTC()
-	matchRow := s.conn.QueryRow(ctx, `
-		SELECT id FROM incidents FINAL
-		WHERE status != 'resolved'
-		  AND service  = ?
-		  AND greatest(started_at, updated_at) >= ?
-		ORDER BY greatest(started_at, updated_at) DESC
-		LIMIT 1`, p.Service, cutoff)
-	var matched string
-	_ = matchRow.Scan(&matched)
+	cutoff := time.Now().Add(-incidentGroupingWindow).UTC()
+	matched := s.matchIncidentSameService(ctx, p.Service, cutoff)
 
 	// topologicallyMatched marks rule-3 wins so the timeline event
 	// records "clustered via service topology" instead of the
@@ -430,26 +421,9 @@ func (s *Store) AttachProblemToIncidentWith(ctx context.Context, p Problem, np N
 	// same-service incident matched, since same-service is
 	// strictly more specific.
 	if matched == "" && np != nil {
-		neighbours := np.Neighbors(p.Service)
-		if len(neighbours) > 0 {
-			holders := make([]string, len(neighbours))
-			args := make([]any, 0, len(neighbours)+1)
-			for i, n := range neighbours {
-				holders[i] = "?"
-				args = append(args, n)
-			}
-			args = append(args, cutoff)
-			ngRow := s.conn.QueryRow(ctx, `
-				SELECT id FROM incidents FINAL
-				WHERE status != 'resolved'
-				  AND service IN (`+strings.Join(holders, ",")+`)
-				  AND greatest(started_at, updated_at) >= ?
-				ORDER BY greatest(started_at, updated_at) DESC
-				LIMIT 1`, args...)
-			_ = ngRow.Scan(&matched)
-			if matched != "" {
-				topologicallyMatched = true
-			}
+		matched = s.matchIncidentAmong(ctx, np.Neighbors(p.Service), cutoff)
+		if matched != "" {
+			topologicallyMatched = true
 		}
 	}
 
@@ -459,77 +433,151 @@ func (s *Store) AttachProblemToIncidentWith(ctx context.Context, p Problem, np N
 		if err != nil || got == nil {
 			matched = ""
 		} else {
-			inc = *got
-			// v0.10.802 (dış skill denetimi I1, oncall-irm / incident-response:
-			// incident şiddeti alert grubuyla yaşar, SEV yeniden değerlendirilir;
-			// operatör onayı). Öncesi şiddet ilk problemden bir kez yazılıyor,
-			// sonra bağlanan critical problem warning incident'ı YÜKSELTMİYORDU:
-			// bildirim P2'de, Inbox P2'de, liste warning pilinde kalıyordu.
-			// Yalnız yukarı: düşürme yok (P1 yapışkanlık ilkesiyle aynı yön).
-			// Tam-satır upsert (inc GetIncident kopyası — invariant #4).
-			// isKnownSeverity: severityRank bilinmeyeni warning sayar (2) — boş
-			// ya da yabancı bir şiddet info incident'ı "" ile ezmesin.
-			//
-			// v0.10.1581 — şiddet yükselmese de satır yeniden yazılır: bağlanma
-			// incident'ın ETKİNLİĞİDİR ve updated_at'i tazeler (kural 2/3'ün
-			// eşleme penceresi buna bakar). Tam-satır kopya, tek yazım.
-			old := inc.Severity
-			raised := isKnownSeverity(p.Severity) && severityRank(p.Severity) > severityRank(inc.Severity)
-			if raised {
-				inc.Severity = p.Severity
+			refreshed, err := s.refreshIncidentOnAttach(ctx, *got, p)
+			if err != nil {
+				return nil, err
 			}
-			if err := s.UpsertIncident(ctx, &inc); err != nil {
-				return nil, fmt.Errorf("refresh incident on attach: %w", err)
-			}
-			if raised {
-				_ = s.AppendIncidentLifecycle(ctx, inc, IncidentEvent{
-					IncidentID: inc.ID, Kind: "severity_raised", Actor: "system",
-					Body:  old + " → " + p.Severity + " (" + p.RuleName + ")",
-					RefID: p.ID,
-				})
-			}
+			inc = refreshed
 		}
 	}
 	if matched == "" {
-		// Create new incident headed by this problem.
-		title := p.RuleName
-		if p.Service != "" {
-			title = p.Service + " — " + p.RuleName
+		created, err := s.createIncidentFor(ctx, p)
+		if err != nil {
+			return nil, err
 		}
-		inc = Incident{
-			Title:     title,
-			Severity:  p.Severity,
-			Status:    "open",
-			Service:   p.Service,
-			Summary:   p.Description,
-			StartedAt: p.StartedAt,
-		}
-		if err := s.UpsertIncident(ctx, &inc); err != nil {
-			return nil, fmt.Errorf("create incident: %w", err)
-		}
-		// v0.10.748 — yaşam döngüsü kancası (incident bildirimi).
+		inc = *created
+	}
+	if err := s.bindProblemToIncident(ctx, p, inc.ID, topologicallyMatched); err != nil {
+		return &inc, err
+	}
+	return &inc, nil
+}
+
+// incidentGroupingWindow — kural 2/3'ün etkinlik penceresi (v0.10.1581).
+const incidentGroupingWindow = 30 * time.Minute
+
+// matchIncidentSameService — kural 2'nin eşleme okuması (v0.10.1588'de
+// AttachProblemToIncidentWith'ten çıkarıldı; SQL metni aynı). "" = eşleşme yok
+// (okuma hatası da yok sayılır — bugünkü `_ = Scan` davranışı).
+func (s *Store) matchIncidentSameService(ctx context.Context, service string, cutoff time.Time) string {
+	matchRow := s.conn.QueryRow(ctx, `
+		SELECT id FROM incidents FINAL
+		WHERE status != 'resolved'
+		  AND service  = ?
+		  AND greatest(started_at, updated_at) >= ?
+		ORDER BY greatest(started_at, updated_at) DESC
+		LIMIT 1`, service, cutoff)
+	var matched string
+	_ = matchRow.Scan(&matched)
+	return matched
+}
+
+// matchIncidentAmong — kural 3'ün eşleme okuması (v0.10.1588'de çıkarıldı;
+// SQL metni aynı). Boş liste → okuma yok, "".
+func (s *Store) matchIncidentAmong(ctx context.Context, services []string, cutoff time.Time) string {
+	if len(services) == 0 {
+		return ""
+	}
+	holders := make([]string, len(services))
+	args := make([]any, 0, len(services)+1)
+	for i, n := range services {
+		holders[i] = "?"
+		args = append(args, n)
+	}
+	args = append(args, cutoff)
+	ngRow := s.conn.QueryRow(ctx, `
+				SELECT id FROM incidents FINAL
+				WHERE status != 'resolved'
+				  AND service IN (`+strings.Join(holders, ",")+`)
+				  AND greatest(started_at, updated_at) >= ?
+				ORDER BY greatest(started_at, updated_at) DESC
+				LIMIT 1`, args...)
+	var matched string
+	_ = ngRow.Scan(&matched)
+	return matched
+}
+
+// refreshIncidentOnAttach — eşleşen incident'a bağlanma: şiddet yalnız yukarı,
+// satır her bağlanmada yeniden yazılır (updated_at = etkinlik). v0.10.1588'de
+// çıkarıldı; davranış aynı.
+func (s *Store) refreshIncidentOnAttach(ctx context.Context, inc Incident, p Problem) (Incident, error) {
+	// v0.10.802 (dış skill denetimi I1, oncall-irm / incident-response:
+	// incident şiddeti alert grubuyla yaşar, SEV yeniden değerlendirilir;
+	// operatör onayı). Öncesi şiddet ilk problemden bir kez yazılıyor,
+	// sonra bağlanan critical problem warning incident'ı YÜKSELTMİYORDU:
+	// bildirim P2'de, Inbox P2'de, liste warning pilinde kalıyordu.
+	// Yalnız yukarı: düşürme yok (P1 yapışkanlık ilkesiyle aynı yön).
+	// Tam-satır upsert (inc GetIncident kopyası — invariant #4).
+	// isKnownSeverity: severityRank bilinmeyeni warning sayar (2) — boş
+	// ya da yabancı bir şiddet info incident'ı "" ile ezmesin.
+	//
+	// v0.10.1581 — şiddet yükselmese de satır yeniden yazılır: bağlanma
+	// incident'ın ETKİNLİĞİDİR ve updated_at'i tazeler (kural 2/3'ün
+	// eşleme penceresi buna bakar). Tam-satır kopya, tek yazım.
+	old := inc.Severity
+	raised := isKnownSeverity(p.Severity) && severityRank(p.Severity) > severityRank(inc.Severity)
+	if raised {
+		inc.Severity = p.Severity
+	}
+	if err := s.UpsertIncident(ctx, &inc); err != nil {
+		return inc, fmt.Errorf("refresh incident on attach: %w", err)
+	}
+	if raised {
 		_ = s.AppendIncidentLifecycle(ctx, inc, IncidentEvent{
-			IncidentID: inc.ID, Kind: "created", Actor: "system",
-			Body: "Auto-created from " + p.RuleName,
+			IncidentID: inc.ID, Kind: "severity_raised", Actor: "system",
+			Body:  old + " → " + p.Severity + " (" + p.RuleName + ")",
+			RefID: p.ID,
 		})
 	}
+	return inc, nil
+}
 
+// createIncidentFor — kural 4: problemin başlattığı yeni incident (v0.10.1588'de
+// çıkarıldı; davranış aynı).
+func (s *Store) createIncidentFor(ctx context.Context, p Problem) (*Incident, error) {
+	// Create new incident headed by this problem.
+	title := p.RuleName
+	if p.Service != "" {
+		title = p.Service + " — " + p.RuleName
+	}
+	inc := Incident{
+		Title:     title,
+		Severity:  p.Severity,
+		Status:    "open",
+		Service:   p.Service,
+		Summary:   p.Description,
+		StartedAt: p.StartedAt,
+	}
+	if err := s.UpsertIncident(ctx, &inc); err != nil {
+		return nil, fmt.Errorf("create incident: %w", err)
+	}
+	// v0.10.748 — yaşam döngüsü kancası (incident bildirimi).
+	_ = s.AppendIncidentLifecycle(ctx, inc, IncidentEvent{
+		IncidentID: inc.ID, Kind: "created", Actor: "system",
+		Body: "Auto-created from " + p.RuleName,
+	})
+	return &inc, nil
+}
+
+// bindProblemToIncident — problem → incident bağı + zaman çizelgesi satırı
+// (v0.10.1588'de çıkarıldı; SQL ve metin aynı).
+func (s *Store) bindProblemToIncident(ctx context.Context, p Problem, incidentID string, topological bool) error {
 	// Bind problem → incident.
 	batch, err := s.conn.PrepareBatch(ctx,
 		`INSERT INTO incident_problems (problem_id, incident_id, attached_at, version)`)
 	if err != nil {
-		return &inc, err
+		return err
 	}
 	now := time.Now().UTC()
-	if err := batch.Append(p.ID, inc.ID, now, uint64(now.UnixNano())); err != nil {
-		return &inc, err
+	if err := batch.Append(p.ID, incidentID, now, uint64(now.UnixNano())); err != nil {
+		return err
 	}
 	if err := batch.Send(); err != nil {
-		return &inc, err
+		return err
 	}
 
 	body := p.RuleName
-	if topologicallyMatched {
+	if topological {
 		// Tag the timeline so the operator sees this incident
 		// absorbed a problem from a *neighbour* service, not the
 		// same one. Useful when triaging a cascading outage:
@@ -538,13 +586,13 @@ func (s *Store) AttachProblemToIncidentWith(ctx context.Context, p Problem, np N
 		body = p.RuleName + " [clustered via service topology — " + p.Service + "]"
 	}
 	_ = s.AppendIncidentEvent(ctx, IncidentEvent{
-		IncidentID: inc.ID,
+		IncidentID: incidentID,
 		Kind:       "problem_attached",
 		Actor:      "system",
 		Body:       body,
 		RefID:      p.ID,
 	})
-	return &inc, nil
+	return nil
 }
 
 // reuseIncidentBinding — SAF (v0.10.1580): kural 1'in mevcut bağı
@@ -672,4 +720,102 @@ func (s *Store) OpenIncidentRollups(ctx context.Context) ([]OpenIncidentRollup, 
 		out = append(out, ro)
 	}
 	return out, rows.Err()
+}
+
+// JoinOpenIncident — v0.10.1588 (Davis paritesi FAZ 0.5 / D, operatör kararı
+// 7: "tekil exception grubu yalnız aynı servis/komşuda AÇIK incident varsa
+// katılır, kendi incident'ını açmaz"). AttachProblemToIncidentWith'in
+// açmayan kardeşi; aynı kurallar, aynı okumalar:
+//
+//  1. mevcut bağ çözülmemiş incident'ı gösteriyorsa o (reuseIncidentBinding);
+//  2. services'ten herhangi birinde çözülmemiş VE son 30 dk'da etkin incident;
+//  3. services'in 1-hop komşularında (joinCandidateNeighbours) aynısı;
+//  4. değilse HİÇBİR ŞEY — yeni incident AÇILMAZ, (nil, false, nil).
+//
+// services boş → okuma yok. Eşleşmede şiddet yalnız yukarı + updated_at
+// tazelenir ve bağ yazılır (refreshIncidentOnAttach + bindProblemToIncident).
+func (s *Store) JoinOpenIncident(ctx context.Context, p Problem, services []string) (*Incident, bool, error) {
+	return s.JoinOpenIncidentWith(ctx, p, services, s.neighborProvider)
+}
+
+// JoinOpenIncidentWith — komşu sağlayıcısı enjekte edilebilir hâli (test).
+func (s *Store) JoinOpenIncidentWith(ctx context.Context, p Problem, services []string, np NeighborProvider) (*Incident, bool, error) {
+	selves := dedupNonEmpty(services)
+	if len(selves) == 0 {
+		return nil, false, nil
+	}
+	row := s.conn.QueryRow(ctx,
+		`SELECT incident_id FROM incident_problems FINAL WHERE problem_id = ? LIMIT 1`, p.ID)
+	var existingID string
+	if err := row.Scan(&existingID); err == nil && existingID != "" {
+		inc, err := s.GetIncident(ctx, existingID)
+		if err != nil {
+			return nil, false, err
+		}
+		if reuseIncidentBinding(inc) {
+			return inc, true, nil
+		}
+	}
+	cutoff := time.Now().Add(-incidentGroupingWindow).UTC()
+	matched := s.matchIncidentAmong(ctx, selves, cutoff)
+	topological := false
+	if matched == "" {
+		matched = s.matchIncidentAmong(ctx, joinCandidateNeighbours(selves, np), cutoff)
+		topological = matched != ""
+	}
+	if matched == "" {
+		return nil, false, nil
+	}
+	got, err := s.GetIncident(ctx, matched)
+	if err != nil || got == nil {
+		return nil, false, err
+	}
+	inc, err := s.refreshIncidentOnAttach(ctx, *got, p)
+	if err != nil {
+		return nil, false, err
+	}
+	if err := s.bindProblemToIncident(ctx, p, inc.ID, topological); err != nil {
+		return &inc, false, err
+	}
+	return &inc, true, nil
+}
+
+// joinCandidateNeighbours — SAF (v0.10.1588): servislerin 1-hop komşularının
+// birleşimi, ilk görülme sırasıyla, tekrarsız, servislerin kendileri ve boş
+// adlar hariç. Sağlayıcı yoksa nil.
+func joinCandidateNeighbours(services []string, np NeighborProvider) []string {
+	if np == nil {
+		return nil
+	}
+	selves := dedupNonEmpty(services)
+	self := make(map[string]bool, len(selves))
+	for _, s := range selves {
+		self[s] = true
+	}
+	seen := map[string]bool{}
+	var out []string
+	for _, s := range selves {
+		for _, n := range np.Neighbors(s) {
+			if n == "" || self[n] || seen[n] {
+				continue
+			}
+			seen[n] = true
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+// dedupNonEmpty — SAF: boş adlar atılır, ilk görülme sırası korunur.
+func dedupNonEmpty(in []string) []string {
+	seen := make(map[string]bool, len(in))
+	var out []string
+	for _, s := range in {
+		if s == "" || seen[s] {
+			continue
+		}
+		seen[s] = true
+		out = append(out, s)
+	}
+	return out
 }

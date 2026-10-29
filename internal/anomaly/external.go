@@ -128,6 +128,9 @@ type externalStore interface {
 	GetAnomalyPromotion(ctx context.Context) chstore.AnomalyPromotionConfig
 	MetricsHorizonDays(ctx context.Context) int
 	ExternalSeasonal(ctx context.Context, req chstore.ExternalSeasonalReq) (map[string][]float64, map[string]map[int64]struct{}, error)
+	// v0.10.1588 (Davis paritesi FAZ 0.5 / D) — canlı tarayıcının açtığı dış
+	// Problem incident'a bağlanır (diğer ailelerle aynı kurallar).
+	AttachProblemToIncident(ctx context.Context, p chstore.Problem) (*chstore.Incident, error)
 }
 
 // ExternalScanner — kaynak+sorgu başına seri tarayıcısı.
@@ -140,10 +143,31 @@ type ExternalScanner struct {
 	// downStreak (v0.10.588) — kaynak id → ardışık başarısız poll sayısı;
 	// tek goroutine (worker tiki). Başarı sıfırlar.
 	downStreak map[string]int
+	// live — v0.10.1588: bildirim gönderen (canlı) tarayıcı mı. Gölge
+	// tarayıcı (notifier nil — Oracle gölge kipi) incident'a BAĞLAMAZ:
+	// incident açılışı kendi bildirimini gönderirdi (operatör kararı).
+	live bool
 }
 
 func NewExternalScanner(store externalStore, n *notify.Notifier) *ExternalScanner {
-	return &ExternalScanner{store: store, notifier: n, now: time.Now, lastEnriched: map[string]time.Time{}, downStreak: map[string]int{}}
+	return &ExternalScanner{store: store, notifier: n, live: n != nil, now: time.Now, lastEnriched: map[string]time.Time{}, downStreak: map[string]int{}}
+}
+
+// externalAttachAllowed — SAF (v0.10.1588): dış Problem incident'a bağlansın
+// mı? Yalnız canlı tarayıcı VE anomaly_sensitivity.attachToIncident açık
+// (anomali ailesiyle aynı vida).
+func externalAttachAllowed(live bool, sens chstore.AnomalySensitivityConfig) bool {
+	return live && sens.AttachesToIncident()
+}
+
+// attachExternal — açılış sonrası yumuşak-hatalı incident bağlama.
+func (s *ExternalScanner) attachExternal(ctx context.Context, p chstore.Problem) {
+	if !externalAttachAllowed(s.live, s.store.AnomalySensitivity()) {
+		return
+	}
+	if _, err := s.store.AttachProblemToIncident(ctx, p); err != nil {
+		log.Printf("[anomaly/external] incident attach %s: %v", p.RuleID, err)
+	}
 }
 
 // externalDownAfter — kaynağın "erişilemiyor" Problem'i için ardışık
@@ -238,6 +262,7 @@ func (s *ExternalScanner) ReportSourceHealth(ctx context.Context, sourceID, sour
 	if s.notifier != nil {
 		go s.notifier.SendProblemAlert(context.Background(), p)
 	}
+	s.attachExternal(ctx, p) // v0.10.1588
 }
 
 // Scan — hedefin bütün serilerini okur, her biri için karar verir ve
@@ -521,6 +546,7 @@ func (s *ExternalScanner) applyExternalClusters(ctx context.Context, t ExternalT
 		if s.notifier != nil {
 			go s.notifier.SendProblemAlert(context.Background(), p)
 		}
+		s.attachExternal(ctx, p) // v0.10.1588
 	}
 }
 
@@ -596,6 +622,7 @@ func (s *ExternalScanner) applyOpenCap(ctx context.Context, t ExternalTarget, me
 	if s.notifier != nil {
 		go s.notifier.SendProblemAlert(context.Background(), p)
 	}
+	s.attachExternal(ctx, p) // v0.10.1588
 }
 
 // seasonalFor (v0.10.231, D6) — hedefin bütün serileri için aynı-dilim
@@ -704,6 +731,7 @@ func (s *ExternalScanner) apply(ctx context.Context, rep *ExternalScanReport, t 
 		if s.notifier != nil {
 			go s.notifier.SendProblemAlert(context.Background(), p)
 		}
+		s.attachExternal(ctx, p) // v0.10.1588
 		return &p
 	case "resolve":
 		if !hasOpen {
