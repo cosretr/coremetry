@@ -6,7 +6,7 @@ import { TraceMinimap } from './traces/TraceMinimap';
 import { Chip } from './ui/Chip';
 import { DisclosureButton } from './ui/DisclosureButton';
 import type { SpanRow, TraceAnalysis, TraceNode, TraceServiceSummary } from '@/lib/types';
-import { collectSubtreeIds, groupParentOf, clusterBadge } from './traceWaterfall.tree';
+import { collectSubtreeIds, groupParentOf, clusterBadge, ancestorChain, expandForReveal, findRevealRow } from './traceWaterfall.tree';
 import { resolveResource } from '@/lib/otel/semconv';
 import { fmtNs, displaySpanName } from '@/lib/utils';
 import { inkOn } from '@/lib/chartFmt';
@@ -625,10 +625,20 @@ export function TraceWaterfall({
     // yeniden kaydırır.
     if (!revealSpanId) { revealedRef.current = null; return; }
     if (rows.length === 0 || revealedRef.current === revealSpanId) return;
-    const idx = rows.findIndex(r => r.span.spanId === revealSpanId || r.memberIds?.includes(revealSpanId));
-    if (idx < 0) return;
+    // v0.10.1565 (operatör: "Spanler kapalı olduğunda seçtiğim servis
+    // focuslanmıyor") — hedef görünmüyorsa ata yolu (ve yoldaki kapalı ×N
+    // grup satırları) açılır; satırlar yeniden kurulunca efekt tekrar koşar.
+    // Açılacak bir şey kalmadıysa (hedef bir ×N grubun temsilci olmayan
+    // üyesinin altında) en yakın GÖRÜNEN ataya kaydırılır.
+    const chain = ancestorChain(tree.map, revealSpanId);
+    const hit = findRevealRow(rows, [revealSpanId, ...chain]);
+    if (!hit.exact) {
+      const next = expandForReveal(collapsed, chain);
+      if (next) { setCollapsed(next); return; }
+    }
+    if (hit.idx < 0) return;
     revealedRef.current = revealSpanId;
-    seekRow(idx);
+    seekRow(hit.idx);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [revealSpanId, rows]);
   const minimapSpans = useMemo(() => rows.map(r => r.span), [rows]);

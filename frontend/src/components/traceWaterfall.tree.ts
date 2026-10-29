@@ -64,3 +64,55 @@ export function groupParentOf(id: string): string | null {
   const cut = rest.indexOf(':');
   return cut < 0 ? null : rest.slice(0, cut);
 }
+
+// ── v0.10.1565 — kapalı ağaçta hedefe git ──────────────────────────────────
+// Operatör: "Spanler kapalı olduğunda seçtiğim servis focuslanmıyor." Servis
+// odağı / ?span= derin bağlantısı hedefi yalnız GÖRÜNEN satırlarda arıyordu;
+// ataları kapalı span satırda yok → sessizce kaydırma yok.
+
+/** Hedefin ataları, yakından uzağa (döngü korumalı). */
+export function ancestorChain(byId: Map<string, SpanRow>, id: string): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>([id]);
+  let p = byId.get(id)?.parentSpanId;
+  while (p && byId.has(p) && !seen.has(p)) {
+    out.push(p);
+    seen.add(p);
+    p = byId.get(p)?.parentSpanId;
+  }
+  return out;
+}
+
+/**
+ * Hedefe giden yolu açan yeni küme: zincirdeki kapalı span'ler ve ebeveyni
+ * zincirde olan kapalı ×N grup satırları açılır. Değişiklik yoksa null.
+ */
+export function expandForReveal(collapsed: ReadonlySet<string>, chain: readonly string[]): Set<string> | null {
+  const anc = new Set(chain);
+  let changed = false;
+  const next = new Set(collapsed);
+  for (const c of collapsed) {
+    const gp = groupParentOf(c);
+    if (anc.has(c) || (gp !== null && anc.has(gp))) {
+      next.delete(c);
+      changed = true;
+    }
+  }
+  return changed ? next : null;
+}
+
+/**
+ * İlk görünen aday satırın indeksi (hedef önce, sonra atalar yakından uzağa);
+ * span kimliği ya da ×N grup üyeliği. Yoksa -1. exact = hedefin kendisi.
+ */
+export function findRevealRow(
+  rows: readonly { span: { spanId: string }; memberIds?: string[] }[],
+  candidates: readonly string[],
+): { idx: number; exact: boolean } {
+  for (let k = 0; k < candidates.length; k++) {
+    const id = candidates[k];
+    const idx = rows.findIndex(r => r.span.spanId === id || r.memberIds?.includes(id));
+    if (idx >= 0) return { idx, exact: k === 0 };
+  }
+  return { idx: -1, exact: false };
+}
