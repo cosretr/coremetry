@@ -17,7 +17,7 @@ export interface LogsTableToolbarProps {
   shownCount: number;
   narrow: string;
   onNarrow: (v: string) => void;
-  narrowRef: RefObject<HTMLInputElement>;
+  narrowRef: RefObject<HTMLInputElement | null>;
   columns: string[];
   fields: string[];
   onColumns: (next: string[]) => void;

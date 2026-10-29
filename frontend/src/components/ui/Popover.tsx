@@ -84,7 +84,7 @@ export function Popover({ anchorRef, open, onClose, kind, ariaLabel, width = 240
 // DOM'dan kaldırmadan ÖNCE koşar — silinen alt ağaçtaki layout temizlikleri
 // ana düğüm çıkarılmadan önce çağrılır (DataTableState StateBody deseni).
 function PopoverSurface({ popRef, anchorRef, kind, ariaLabel, width, prefer, align, initialFocus, onClose, onCloseToAnchor, children }: {
-  popRef: RefObject<HTMLDivElement>;
+  popRef: RefObject<HTMLDivElement | null>;
   anchorRef: RefObject<HTMLElement | null>;
   kind: 'menu' | 'dialog';
   ariaLabel: string;

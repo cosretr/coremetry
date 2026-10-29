@@ -78,7 +78,7 @@ export interface ChatComposerProps {
   actions: ReactNode;
   placeholder: string;
   ariaLabel: string;
-  textareaRef?: RefObject<HTMLTextAreaElement>;
+  textareaRef?: RefObject<HTMLTextAreaElement | null>;
   autoFocus?: boolean;
   comboboxProps?: Pick<TextareaHTMLAttributes<HTMLTextAreaElement>,
     'aria-autocomplete' | 'aria-controls' | 'aria-expanded' | 'aria-activedescendant'>;

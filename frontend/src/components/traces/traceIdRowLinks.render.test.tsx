@@ -13,7 +13,7 @@
 //   • Ctrl-tık / ⌘-tık / orta tık satırı AYNI sekmede gezdirmez.
 // Satırın boş yerine düz tık hâlâ trace'i açar (rowActivation korunur).
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { act, useEffect } from 'react';
+import { act, useEffect, type JSX } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import type { RepeatedSpanRow, TraceRow } from '@/lib/types';

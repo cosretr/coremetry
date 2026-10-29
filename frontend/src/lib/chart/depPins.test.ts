@@ -13,7 +13,7 @@ import { resolve } from 'node:path';
 // yok, imleç sadece geçmez. Bu test package.json'u SÖZLEŞME olarak okur.
 const pkg = JSON.parse(readFileSync(resolve(__dirname, '../../../package.json'), 'utf8')) as {
   dependencies: Record<string, string>;
-  overrides?: Record<string, string>;
+  overrides?: Record<string, string | Record<string, string>>;
 };
 
 describe('chart layer dependency pins (Dilim 0)', () => {
@@ -29,8 +29,21 @@ describe('chart layer dependency pins (Dilim 0)', () => {
     expect(pkg.overrides?.uplot).toBe(pkg.dependencies.uplot);
     expect(pkg.overrides?.uplot).toBe('1.6.32');
   });
-  it('React 18 pin @grafana/ui 13.1.x peer tavanıyla uyumlu', () => {
-    expect(pkg.dependencies.react).toMatch(/^18\./);
-    expect(pkg.dependencies['@grafana/ui']).toMatch(/^13\.1\./);
+  // v0.10.1600 — React 19'a geçildi. @grafana/ui + @grafana/data 13.1.x peer'ı
+  // hâlâ `react ^18.0.0` (13.2+ `>=19` ister, 18'i bırakır). Uyumsuzluk global
+  // --legacy-peer-deps ile DEĞİL, package.json `overrides`'ta paket-kapsamlı
+  // `$react` / `$react-dom` ile çözülür → `npm ci` deterministik, ağaçta tek
+  // React kopyası. CorePanel + tüm chart testleri React 19 altında yeşil.
+  // Bu blok @grafana/ui 13.2+'ya geçince (peer >=19) silinmeli.
+  it('React 19 exact pin; @grafana/* 13.1.x peer uyumsuzluğu overrides ile kapsamlı', () => {
+    const deps = pkg.dependencies;
+    expect(deps.react).toMatch(/^19\.\d+\.\d+$/);
+    expect(deps['react-dom']).toBe(deps.react);
+    expect(deps['@grafana/ui']).toMatch(/^13\.1\./);
+    const ov = pkg.overrides ?? {};
+    for (const name of ['@grafana/ui', '@grafana/data', 'react-custom-scrollbars-2']) {
+      expect(ov[name], name).toEqual({ react: '$react', 'react-dom': '$react-dom' });
+    }
+    expect(ov['react-table']).toEqual({ react: '$react' });
   });
 });

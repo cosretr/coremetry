@@ -21,7 +21,7 @@
 //     satıra çıkmaz;
 //   • traceSource="tempo" → gerçek link + "Tempo" rozeti (açıklayıcı title).
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { act, useEffect } from 'react';
+import { act, useEffect, type JSX } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';

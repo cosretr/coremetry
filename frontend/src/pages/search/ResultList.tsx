@@ -22,7 +22,7 @@ export function ResultList({ rows, group, facets, terms, selected, t, openTarget
   openTarget: (r: SearchResult) => { href: string; label: string } | null;
   onOpen: (r: SearchResult, idx: number) => void;
   onSelect: (idx: number) => void;
-  listRef: React.RefObject<HTMLDivElement>;
+  listRef: React.RefObject<HTMLDivElement | null>;
 }) {
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
