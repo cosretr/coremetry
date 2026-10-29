@@ -344,6 +344,40 @@ var routingRegressionRows = []routingRow{
 	{release: "komşu v0.10.1571", name: "servis sağlığı + wiki → service_health (soru sorulmaz)",
 		q: rrSvc + " sağlığı nasıl?", setup: withRoutingWiki,
 		wantTier: aisurface.TierGuided, wantRoute: string(guidedServiceHealth), noLLM: true},
+
+	// v0.10.1576 (operator-reported) — takım sorusuna cevap olarak yazılan çıplak
+	// takım adı yüklü tabloda da eşleşiyordu → doc-rows cevapladı. Artık düz
+	// metin "takım mı, doküman mı?" sorusu (chat_clarify_entity.go). Çıplak
+	// olmayan doküman sorusu ve tabloda olmayan takım adı eskisi gibi.
+	{release: "v0.10.1576", name: "çıplak takım adı + tabloda eşleşme → doc_or_entity sorusu",
+		q: "Payments-Core", setup: withRoutingDocTeam(true),
+		wantTier: aisurface.TierClarify, wantRoute: "doc_or_entity_ask", noLLM: true,
+		ansPrefix: docOrEntityAskTR(bareEntityTeam, "Payments-Core"), ansNot: []string{"srvpay01"}},
+	{release: "komşu v0.10.1576", name: "çıplak olmayan doküman sorusu → doc-rows (soru sorulmaz)",
+		q: "Payments-Core sunucuları hangi ortamda", setup: withRoutingDocTeam(true),
+		wantTier: aisurface.TierDocRows, ansHas: []string{"srvpay01"}},
+	{release: "komşu v0.10.1576", name: "çıplak takım adı, tabloda yok → team_services",
+		q: "Payments-Core", setup: withRoutingDocTeam(false),
+		wantTier: aisurface.TierGuided, wantRoute: string(guidedTeamServices)},
+}
+
+// withRoutingDocTeam — v0.10.1576: wiki kurulu + takım kataloğunda
+// Payments-Core; rows → yüklü tabloda o takımın satırları.
+func withRoutingDocTeam(rows bool) func(t *testing.T, s *routingRig) {
+	return func(t *testing.T, s *routingRig) {
+		t.Helper()
+		withRoutingWiki(t, s)
+		s.cache["copilot:guided:teamcat:v2"] = []byte(`[{"team":"Payments-Core","services":3,"owner":3}]`)
+		table := "ekip_envanteri · satır 2 — Takım: Payments-Core · Sunucu: srvpay01 · Ortam: PROD\n"
+		prev := docRowChunksSeam
+		docRowChunksSeam = func(_ context.Context, needle string) ([]chstore.LocalDocChunk, error) {
+			if !rows || !strings.Contains(strings.ToLower(table), strings.ToLower(needle)) {
+				return nil, nil
+			}
+			return []chstore.LocalDocChunk{{Title: "ekip_envanteri", Text: table}}, nil
+		}
+		t.Cleanup(func() { docRowChunksSeam = prev })
+	}
 }
 
 // withRoutingWiki — v0.10.1571: wiki kurulu (servis sahipliği sayfası).

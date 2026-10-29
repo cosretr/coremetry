@@ -62,6 +62,8 @@ type chatPendingAsk struct {
 	TraceID     string `json:"traceId,omitempty"`
 	Fingerprint string `json:"fingerprint,omitempty"`
 	Operation   string `json:"operation,omitempty"`
+	// Entity — v0.10.1576 doc_or_entity sorusunun varlık türü (team | service).
+	Entity string `json:"entity,omitempty"`
 }
 
 // pendingAskValid — SAF: soru tanınan türde, öznesi dolu ve TTL içinde mi.
@@ -71,7 +73,7 @@ func pendingAskValid(p *chatPendingAsk, now time.Time) bool {
 		return false
 	}
 	switch p.Kind {
-	case pendingKindSource:
+	case pendingKindSource, pendingKindDocOrEntity:
 		if strings.TrimSpace(p.Question) == "" {
 			return false
 		}
@@ -162,37 +164,49 @@ func foldedHasPrefix(f string, stems []string) bool {
 }
 
 // classifySourceReply — SAF: kaynak sorusuna verilen serbest metin cevabın
-// sınıfı: "wiki" | "telemetri" | "" (cevap değil). 1–6 sözcük; her sözcük
-// tek bir listeye önekle uyar ya da dolgu sözcüğüdür; iki liste birden → "".
+// sınıfı: "wiki" | "telemetri" | "" (cevap değil).
 func classifySourceReply(text string) string {
-	toks := memTokens(text)
-	if len(toks) == 0 || len(toks) > 6 {
-		return ""
-	}
-	var wikiHit, telHit bool
-	for _, t := range toks {
-		w, tm := foldedHasPrefix(t.f, sourceReplyWikiStems), foldedHasPrefix(t.f, sourceReplyTelStems)
-		switch {
-		case w && tm:
-			return ""
-		case w:
-			wikiHit = true
-		case tm:
-			telHit = true
-		case sourceReplyFillers[t.f]:
-		default:
-			return ""
-		}
-	}
-	switch {
-	case wikiHit && telHit:
-		return ""
-	case wikiHit:
+	switch classifyStemReply(text, sourceReplyWikiStems, sourceReplyTelStems, sourceReplyFillers) {
+	case 1:
 		return sourceReplyWiki
-	case telHit:
+	case 2:
 		return sourceReplyTelemetry
 	}
 	return ""
+}
+
+// classifyStemReply — SAF: iki seçenekli sorunun cevabı. 1–6 sözcük; her
+// sözcük tek bir listeye önekle uyar ya da dolgu sözcüğüdür. 1 = a, 2 = b,
+// 0 = cevap değil (yabancı sözcük, iki liste birden ya da yalnız dolgu).
+func classifyStemReply(text string, a, b []string, fillers map[string]bool) int {
+	toks := memTokens(text)
+	if len(toks) == 0 || len(toks) > 6 {
+		return 0
+	}
+	var aHit, bHit bool
+	for _, t := range toks {
+		ia, ib := foldedHasPrefix(t.f, a), foldedHasPrefix(t.f, b)
+		switch {
+		case ia && ib:
+			return 0
+		case ia:
+			aHit = true
+		case ib:
+			bHit = true
+		case fillers[t.f]:
+		default:
+			return 0
+		}
+	}
+	switch {
+	case aHit && bHit:
+		return 0
+	case aHit:
+		return 1
+	case bHit:
+		return 2
+	}
+	return 0
 }
 
 // chatSourceAskTier — kaynak sorusu. Kapılardan biri kapalıysa false ve akış
@@ -262,6 +276,18 @@ func (s *Server) chatClarifyReplyTier(ctx context.Context, emit func(string, any
 	case p.Kind == pendingKindTraceSynth && class == synthReplyYes: // v0.10.1572 dilim 2 (chat_clarify_synth.go)
 		out.handled, out.ok = s.chatTraceSynthesisAnswer(ctx, emit, p, loc)
 		out.tier = "operation"
+	case p.Kind == pendingKindDocOrEntity && class == entityReplyDocs: // v0.10.1576 (chat_clarify_entity.go)
+		out.msgs = replaceLastUserText(msgs, p.Question)
+		out.handled = true
+		if h, dok := s.docRowsAnswer(ctx, emit, out.msgs, true); h {
+			out.tier, out.ok = "doc-rows", dok
+			break
+		}
+		emit("answer", map[string]any{"text": docOrEntityNoRowsTR(p.Question), "sources": []any{}, "links": []guidedAnswerLink{}, "allowedLinks": []string{}})
+		out.tier, out.ok = "clarify", true
+	case p.Kind == pendingKindDocOrEntity && class == entityReplyEntity:
+		out.msgs = replaceLastUserText(msgs, p.Question)
+		out.ctx = withForcedChatSource(ctx, srcTelemetry)
 	case p.Kind == pendingKindTraceSynth && class == synthReplyNo:
 		chatExchangeFrom(ctx).noteRoute("trace_declined")
 		emit("answer", map[string]any{"text": synthDeclinedTR, "sources": []any{}, "links": []guidedAnswerLink{}, "allowedLinks": []string{}})
@@ -280,6 +306,11 @@ func clarifyReplyClass(p *chatPendingAsk, reply string) string {
 	}
 	if p != nil && p.Kind == pendingKindTraceSynth {
 		return synthReplyClass(reply)
+	}
+	if p != nil && p.Kind == pendingKindDocOrEntity {
+		if c := classifyDocOrEntityReply(reply); c != "" {
+			return c
+		}
 	}
 	return clarifyReplyDropped
 }
@@ -300,6 +331,10 @@ func clarifyReplyEvidenceTR(p *chatPendingAsk, class string) string {
 		what = "Oracle açıklaması trace " + p.TraceID + " ile sentezleniyor"
 	case synthReplyNo:
 		what = "trace incelemesi atlandı"
+	case entityReplyDocs:
+		what = "ad yüklü dokümanlarda aranıyor"
+	case entityReplyEntity:
+		what = "ad Coremetry varlığı (" + p.Entity + ") olarak cevaplanıyor"
 	}
 	return "bekleyen soru (" + p.Kind + "): " + clipRunes(q, 200) + "\ncevap: " + class + " — " + what
 }

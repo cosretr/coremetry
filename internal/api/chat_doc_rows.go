@@ -25,6 +25,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/copilot"
 	"github.com/cilcenk/coremetry/internal/rag"
 	"github.com/cilcenk/coremetry/internal/wiki"
@@ -322,7 +323,7 @@ func (s *Server) docRowsAnswer(ctx context.Context, emit func(string, any), msgs
 // docRowsFind — v0.10.1553: kademenin OKUMA yarısı (kaynak keşfi de çağırır;
 // olay basmaz). Eşleşme yoksa nil.
 func (s *Server) docRowsFind(ctx context.Context, question string, strict bool) ([]docRowMatch, []string) {
-	if !wikiDocsActive(ctx) || s.store == nil {
+	if !wikiDocsActive(ctx) || (s.store == nil && docRowChunksSeam == nil) {
 		return nil, nil
 	}
 	needles := rowNeedles(question)
@@ -343,7 +344,7 @@ func (s *Server) docRowsFind(ctx context.Context, question string, strict bool) 
 	var chunks []docRowChunk
 	seenChunk := map[string]bool{}
 	for _, n := range needles {
-		found, err := s.store.LocalDocChunksMatching(ctx, wiki.LocalWikiID, []string{n.raw}, docRowsChunkLimit)
+		found, err := s.docRowChunks(ctx, n.raw)
 		if err != nil {
 			log.Printf("[doc-rows] parça araması %q: %v", n.raw, err) // v0.10.1554 — sessiz yutma yok
 			continue
@@ -356,6 +357,18 @@ func (s *Server) docRowsFind(ctx context.Context, question string, strict bool) 
 		}
 	}
 	return matchDocRows(s.docRowsFullPages(ctx, chunks), question, strict) // v0.10.1554 — tam sayfa
+}
+
+// docRowChunksSeam — test dikişi (v0.10.1576): store'suz handler testlerinde
+// parça okuması; üretimde nil.
+var docRowChunksSeam func(ctx context.Context, needle string) ([]chstore.LocalDocChunk, error)
+
+// docRowChunks — tek adayın parça okuması (yerel wiki kaynağı).
+func (s *Server) docRowChunks(ctx context.Context, needle string) ([]chstore.LocalDocChunk, error) {
+	if docRowChunksSeam != nil {
+		return docRowChunksSeam(ctx, needle)
+	}
+	return s.store.LocalDocChunksMatching(ctx, wiki.LocalWikiID, []string{needle}, docRowsChunkLimit)
 }
 
 // docRowsEmit — kademenin YAZMA yarısı: tablo cevabı (+ kaynak keşfinin

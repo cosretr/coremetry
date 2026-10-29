@@ -447,6 +447,8 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 				cspan.tier("operation", cr.ok)
 			case "clarify":
 				cspan.tier("clarify", cr.ok)
+			case "doc-rows": // v0.10.1576 — doc_or_entity sorusunda doküman seçildi
+				cspan.tier("doc-rows", cr.ok)
 			default:
 				cspan.tier("wiki", cr.ok)
 			}
@@ -473,6 +475,14 @@ func (s *Server) copilotChat(w http.ResponseWriter, r *http.Request) {
 	// ya da kanıt yoksa aşağıdaki zincir AYNEN. /telemetri komutu tablo / wiki
 	// kademelerini atlatır.
 	skipDocs := forcedChatSource(ctx) == srcTelemetry
+	// v0.10.1576 (operator-reported) — çıplak takım / servis adı yüklü tabloda da
+	// eşleşiyorsa doküman kademeleri kendiliğinden cevaplamaz: düz metin soru
+	// (chat_clarify_entity.go). Çıplak varlık değil / eşleşme yok → akış aynen.
+	if !skipDocs && evm == nil && s.chatDocOrEntityAskTier(ctx, emit, req.Messages, wikiTC, cst) {
+		cspan.tier("clarify", true)
+		emit("done", map[string]bool{"ok": true})
+		return
+	}
 	if !skipDocs {
 		var dh, dok bool
 		dh, dok, emit, skipDocs = s.chatSourceDiscoveryTier(ctx, emit, req.Messages, wikiTC)
