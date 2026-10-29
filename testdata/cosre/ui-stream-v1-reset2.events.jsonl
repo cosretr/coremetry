@@ -1,0 +1,7 @@
+{"kind":"delta","payload":{"text":"Birinci "}}
+{"kind":"delta","payload":{"text":"taslak"}}
+{"kind":"delta","payload":{"reset":true}}
+{"kind":"delta","payload":{"text":"İkinci "}}
+{"kind":"delta","payload":{"text":"taslak"}}
+{"kind":"delta","payload":{"reset":true,"text":"Son tam metin."}}
+{"kind":"done","payload":{"ok":true}}

@@ -61,23 +61,28 @@ export function dataPartName(p: UIStreamPart): string {
 }
 
 /** v0.10.1606 — geri alma parçası, TAM OLARAK
- *  `{"type":"data-reset","data":{"textId":"<text-start id>"}}`: kendi `id`'si
- *  yok (uzlaştırılmaz, her reset tekil olay), providerMetadata yok. İstemci
- *  `textId`'li metin parçasını boşaltır. */
+ *  `{"type":"data-reset","data":{"textId":"<text-start id>"},"transient":true}`:
+ *  kendi `id`'si yok (uzlaştırılmaz, her reset tekil olay), providerMetadata
+ *  yok. İstemci `textId`'li metin parçasını boşaltır. v0.10.1607: `transient`
+ *  ZORUNLU — AI SDK parçayı yalnız `onData`'ya iletir, `message.parts`'a
+ *  eklemez (kalıcı mesaj içeriği değil, akış olayı). */
 export interface DataResetPart {
   type: 'data-reset';
   data: { textId: string };
+  transient: true;
 }
 
 /** Parça geçerli bir data-reset ise onu döner; şekil dışıysa (eski `target`,
- *  boş textId, fazladan alan) null — sözleşme kayması sessiz geçmesin. */
+ *  boş textId, fazladan alan, transient eksik/false) null — sözleşme kayması
+ *  sessiz geçmesin. */
 export function parseDataReset(p: UIStreamPart): DataResetPart | null {
   if (p.type !== 'data-reset') return null;
-  if (Object.keys(p).some(k => k !== 'type' && k !== 'data')) return null;
+  if (Object.keys(p).some(k => k !== 'type' && k !== 'data' && k !== 'transient')) return null;
+  if (p.transient !== true) return null;
   const d = p.data;
   if (typeof d !== 'object' || d === null) return null;
   const keys = Object.keys(d);
   const textId = (d as { textId?: unknown }).textId;
   if (keys.length !== 1 || typeof textId !== 'string' || textId === '') return null;
-  return { type: 'data-reset', data: { textId } };
+  return { type: 'data-reset', data: { textId }, transient: true };
 }

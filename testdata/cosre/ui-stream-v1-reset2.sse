@@ -1,0 +1,36 @@
+data: {"messageId":"01M62F9N000000000000000000","type":"start"}
+
+data: {"type":"start-step"}
+
+data: {"id":"t1","type":"text-start"}
+
+data: {"delta":"Birinci ","id":"t1","type":"text-delta"}
+
+data: {"delta":"taslak","id":"t1","type":"text-delta"}
+
+data: {"id":"t1","type":"text-end"}
+
+data: {"data":{"textId":"t1"},"transient":true,"type":"data-reset"}
+
+data: {"id":"t2","type":"text-start"}
+
+data: {"delta":"İkinci ","id":"t2","type":"text-delta"}
+
+data: {"delta":"taslak","id":"t2","type":"text-delta"}
+
+data: {"id":"t2","type":"text-end"}
+
+data: {"data":{"textId":"t2"},"transient":true,"type":"data-reset"}
+
+data: {"id":"t3","type":"text-start"}
+
+data: {"delta":"Son tam metin.","id":"t3","type":"text-delta"}
+
+data: {"id":"t3","type":"text-end"}
+
+data: {"type":"finish-step"}
+
+data: {"finishReason":"stop","type":"finish"}
+
+data: [DONE]
+

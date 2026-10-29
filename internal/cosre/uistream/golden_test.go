@@ -28,7 +28,11 @@ var update = flag.Bool("update", false, "rewrite testdata/cosre/*.sse")
 // data-reset{textId:t1}, t2 yeni tam metinle açılır ve kapanır. Ayrı dosya
 // çünkü dizi tam olarak (kesin parça listesiyle) pinlenir; ana fixture'ın
 // çok kanallı akışı buna gürültü katardı.
-var goldenFixtures = []string{"ui-stream-v1", "ui-stream-v1-error", "ui-stream-v1-closed", "ui-stream-v1-reset"}
+//
+// ui-stream-v1-reset2 (v0.10.1607) — ÇİFT geri alma: t1 → data-reset{t1} →
+// t2 → data-reset{t2} → t3 tam metin. Her reset transient:true; ardışık
+// resetlerin her biri yalnız kendi segmentini hedefler.
+var goldenFixtures = []string{"ui-stream-v1", "ui-stream-v1-error", "ui-stream-v1-closed", "ui-stream-v1-reset", "ui-stream-v1-reset2"}
 
 func fixtureDir() string { return filepath.Join("..", "..", "..", "testdata", "cosre") }
 

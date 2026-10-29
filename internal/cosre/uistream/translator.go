@@ -160,6 +160,8 @@ func (t *Translator) delta(m map[string]any) []Part {
 // v0.10.1606: parça TAM OLARAK {"type":"data-reset","data":{"textId":<id>}}
 // — kendi `id`'si yok: hiçbir tüketici reset parçasını uzlaştırmıyor (her
 // reset tekil olay, öncekinin yerine geçmez), providerMetadata yok.
+// v0.10.1607: "transient":true — AI SDK parçayı onData'ya iletir ama
+// message.parts'a EKLEMEZ; reset bir akış olayıdır, kalıcı mesaj içeriği değil.
 func (t *Translator) retract() []Part {
 	if t.openText == "" {
 		return nil
@@ -168,7 +170,7 @@ func (t *Translator) retract() []Part {
 	t.openText = ""
 	return []Part{
 		{"type": "text-end", "id": target},
-		{"type": "data-reset", "data": map[string]any{"textId": target}},
+		{"type": "data-reset", "data": map[string]any{"textId": target}, "transient": true},
 	}
 }
 
