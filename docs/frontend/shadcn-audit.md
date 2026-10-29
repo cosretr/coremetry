@@ -371,7 +371,7 @@ Per-slice rules: one page group per release; the release deletes the page's `glo
 
 `components/ui` removed (`uiImportRatchet` 0 → test deleted); `build:ds` retargeted or removed (OQ f); `buttonUnityRatchet`/`tableUnityRatchet` collapse to "no raw element outside `components/shadcn`"; `globals.css` reduced to tokens + the chart/waterfall/flame rendering CSS; `docs/DECISIONS.md` entry; CLAUDE.md "Frontend UI conventions" rewritten (atoms → shadcn/coremetry); `.claude/skills/frontend-design-system` + `frontend-conventions` updated.
 
-## 10. Open questions for the operator (not decided here; recommended default in italics)
+## 10. Open questions for the operator — **DECIDED 2026-10-29, see §11** (recommended default in italics)
 
 1. **(a) Density values.** Brief says `compact|comfortable`; the system is 3 steps `comfortable·compact·dense` (`lib/density.ts:10`, attribute values `compact|dense` on `<html>`, comfortable = base) with a global `DensityToggle`. *Keep the 3 existing values and the attribute; the density context maps them to shadcn sizes; no rename.*
 2. **(b) SelectField is a native `<select>`** (31 sites + 167 raw `<select>`). Radix Select changes keyboard/type-ahead/mobile behaviour and option rendering. *Native `<select>` styled by shadcn `native-select` for data forms; Radix Select only where options carry icons/descriptions (ask-before-behaviour-change rule).*
@@ -389,3 +389,46 @@ Per-slice rules: one page group per release; the release deletes the page's `glo
 14. **(n) Inline `style={{`** (5,309 sites). *Only inside migrated pages, and only where a token exists; no global sweep release.*
 15. **(o) Phase 0.5 fallback.** If `@grafana/ui` 13.1.2 refuses React 19 and 13.2.x changes chart behaviour. *Wait for the Phase 0.5 result; fallback is forwardRef ports on React 18 (throw-away work, so only if the bump is blocked for more than one release).*
 16. **(p) Shell `Sidebar` + redhat dark-rail remap** (`globals.css:391-417`). *Last slice; keep the scoped remap as a token override under `[data-theme="redhat"] [data-slot=sidebar]`.*
+
+## 11. Operator rulings on §10 (2026-10-29) — binding, override §9/§10 where they differ
+
+§10 kararları: a, b, c, d, e, f, h, i, j, k, l, m, p önerildiği gibi.
+Değişenler:
+
+- **g — Tek tablo yığını.** Karar Traces diliminde: TanStack `useDataTable`'ın tüm
+  özelliklerini + virtualization'ı karşılarsa her yer (Traces/Logs dahil) TanStack;
+  karşılamazsa TanStack hiç girmez, `coremetry/DataTable` bileşiği mevcut
+  `useDataTable`'ı sarar. İki yığın paralel yaşamaz.
+- **o — `@grafana/ui` React 19'u engellerse paket kaldırılır, beklenmez.** Bugün ne
+  sağladığı (2026-10-29, `grep -rnE "from ['\"]@grafana/(ui|data)" frontend/src`, testler hariç):
+  - `@grafana/ui` → yalnız `components/chart/CorePanel.tsx:33-37`: `UPlotChart` (uPlot
+    örneğinin React yaşam döngüsü: config kimliği değişince destroy/recreate, :1081,
+    :1367), `UPlotConfigBuilder` (eksen/ölçek/seri config üreticisi; :124'te
+    `MeasuredAxisConfigBuilder` ondan türer) ve enum'lar (`AxisPlacement`,
+    `ScaleOrientation`, `ScaleDirection`, `ScaleDistribution`, `GraphGradientMode`,
+    `DrawStyle`, `PointVisibility`).
+  - `@grafana/data` → `CorePanel.tsx:38` (`DataFrame`, `DecimalCount` tipleri) +
+    `lib/chart/dataFrame.ts:30-39` (`FieldType`, `ThresholdsMode`,
+    `getDisplayProcessor`, `createTheme`; `framesToAligned`, `chartTheme`).
+  - `CorePanel`'i kullanan dosya: 64. Diğer uPlot sarmalayıcıları (`TimeChart`,
+    `viz/TimeSeriesPanel`, `lib/chart/engine.ts`, `service/charts/OverviewChart`)
+    uPlot'u DOĞRUDAN kullanır, Grafana'ya bağlı değil.
+  - **Sonuç: yalnız tema köprüsü DEĞİL.** Kaldırmak = `CorePanel`'in config üreticisi +
+    yaşam döngüsü + değer biçimleyicisini (display processor: birim/ondalık/eşik rengi)
+    elle yazmak. Bu, "uPlot only, rendering untouched" kuralına dokunur → kaldırma
+    gerekirse ayrı sürüm(ler), çıktı eşitliği CorePanel sözleşme testleriyle
+    (`corePanelContracts.test.ts`) pinlenir; çizim motoru uPlot kalır. React 19 bu paket
+    yüzünden gecikmez.
+- **n — Geçirilen sayfada inline style sıfır.** Ratchet'e sayfa bazlı inline-style
+  sayacı eklenir; sayfa ancak sayaç sıfırlanınca "geçti" sayılır.
+- **Bütçe — görevler, koşul değil.**
+  - CoSRE lazy: ayrı sürüm (yürüyor).
+  - Radix'in sayfa bazlı chunk'a girmesi (giriş paketinde Radix yok) **Faz 1 kabul kriteri**.
+  - `globals.css` kalıntı silimi **her sayfa diliminin kabul kriteri**.
+  - CI gerçek giriş sayfası ilk yüklemesini (preload edilen JS gz toplamı) ölçer, 347 KB
+    gz ile karşılaştırır; §7'deki hesap her sürümde ölçülen sayıyla yan yana
+    `migration-log.md`'ye yazılır.
+- **b notu:** form başına tek select tipi; aynı formda native + Radix karışmaz.
+
+**Sıra:** Faz 1'e onay. Faz 0.5 (React 19) ve CoSRE lazy merge olmadan Faz 1 başlamaz.
+
