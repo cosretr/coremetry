@@ -8,7 +8,7 @@
 //   (K1, operatör) light'ı beyaz kart / gri sayfaya çevirdi:
 //   dark    --bg0 #09090b  <  --bg1 #18181b   (v0.10.1621 zinc dark)
 //   light   --bg0 #f4f6f8  <  --bg1 #ffffff
-//   redhat  --bg0 #f0f0f0  <  --bg1 #ffffff
+//   redhat  --bg0 #f4f4f5  <  --bg1 #ffffff
 // Yön artık üç temada AYNI; kural yine geçerli: `--bg0` sayfa zeminidir,
 // bir yüzeye verilince yüzey sayfaya karışır (kartın kenarı kaybolur).
 // Denetimin KN-3'ü tam olarak budur ve `colorLeaks` bunu göremez:
@@ -91,7 +91,7 @@ describe('D1 — --bg0 yalnız sayfa zemini', () => {
     expect(val('dark', '--bg1')).toBe('#18181b');
     expect(val('light', '--bg0')).toBe('#f4f6f8');
     expect(val('light', '--bg1')).toBe('#ffffff');   // beyaz kart, gri sayfa
-    expect(val('redhat', '--bg0')).toBe('#f0f0f0');
+    expect(val('redhat', '--bg0')).toBe('#f4f4f5');  // v0.10.1649 zinc-100
     expect(val('redhat', '--bg1')).toBe('#ffffff');
   });
 });

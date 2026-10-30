@@ -23,7 +23,7 @@ export const THEME_LABEL = LABEL;
  *  boyanır; index.html açılış betiği AYNI haritayı taşır (platformCss.pin
  *  ikisini ve CSS'i birbirine çiviliyor). */
 export const THEME_COLOR: Record<Theme, string> = {
-  dark: '#09090b', light: '#f4f6f8', redhat: '#f0f0f0',
+  dark: '#09090b', light: '#f4f6f8', redhat: '#f4f4f5',
 };
 
 /** v0.10.1339 — theme-color meta'sını temaya eşitler (yoksa ekler). */

@@ -326,12 +326,17 @@
    from the theme toggle (dark → light → redhat cycle); purely
    additive, zero new dependencies, the Red Hat Text font is a
    local-only font-family preference with clean fallbacks (no
-   external font fetch). */
+   external font fetch).
+   v0.10.1649 (audit §13, operatör 2026-10-30) — nötr yüzey/metin/kenar
+   token'ları shadcn zinc açık değerlerine; köşe merdiveni 3/4/6/8
+   (shadcn sm/md/lg'ye yakın, hâlâ Primer'dan kare). PF mavisi, marka
+   kırmızısı, durum paleti ve koyu ray AYNI (ray zinc 900'e taşındı).
+   Değer tablosu + karşıtlık: redhatPalette.pin.test.ts. */
 [data-theme="redhat"] {
-  --bg0: #f0f0f0;
+  --bg0: #f4f4f5;
   --bg1: #ffffff;
-  --bg2: #f5f5f5;
-  --bg3: #ebebeb;
+  --bg2: #fafafa;
+  --bg3: #ececee;
   /* v0.10.1423 (Seçenek A) — alanlar beyaz; #f5f5f5 alan #f0f0f0 sayfada
      %2 parlaklık farkıyla zemine karışıyordu. Kenarlık --border kalır. */
   --field-bg: var(--bg1);
@@ -339,12 +344,12 @@
      D7 dark ve light'ı buna hizaladı, tersini değil. Varsayılan tema
      bu, yani operatörün ekranı bu dalgada bit-bit aynı kaldı. */
   --bg:  #ffffff;
-  --border: #d2d2d2;
+  --border: #e4e4e7;
   /* v0.10.928 (Y2) — PF satır çizgisi #d2d2d2'nin yarısı; bilinçli sadeleştirme. */
-  --divider: #e9e9e9;
-  --text:  #151515;
-  --text2: #4f5255;
-  --text3: #676b70;  /* v0.10.920 — PF #6a6e73'ün fark edilmez koyusu: --bg3 ve durum tonları üzerinde 4.5 */
+  --divider: #ebebed;
+  --text:  #09090b;
+  --text2: #52525b;
+  --text3: #63636b;  /* zinc 500-600 arası: zinc-500 #71717a --bg0'da 4.40 < 4.5, kullanılmadı */
 
   --brand:  #ee0000;  /* Red Hat red */
   --brand2: #e30613;
@@ -372,22 +377,22 @@
   --orange: #ec7a08;
   --teal:   #009596;
   --accent-soft:   rgba(0, 102, 204, .08);
-  --border-strong: #8a8d90;  /* PF form kenarı; #b8bbbe beyazda 1.93 idi (1.4.11 ≥3) */
-  --border-control: #b6b7b8;  /* v0.10.928 (Y4) */
+  --border-strong: #71717a;  /* zinc-500 form kenarı (1.4.11 ≥3; beyazda 4.83) */
+  --border-control: #a1a1aa;  /* v0.10.928 (Y4) — zinc-400; shadcn input zinc-200 beyazda 1.27, ≥2 bandını geçmez */
   --shadow-pop:    0 8px 24px rgba(21, 21, 21, .16);
   --shadow-sm:     0 1px 2px rgba(21, 21, 21, .08);
 
   --accent-bg:     #e7f1fa;  /* PF blue-50 */
   --accent-border: #bee1f4;
-  --text-faint:    #8a8d90;
+  --text-faint:    #8b8b93;
   --shadow-md:     0 4px 16px rgba(21, 21, 21, .10);
   /* mK6 — PF danger red, darkened one step for the severity above error. */
   --fatal:         #a30000;
   --shadow-modal:  0 20px 60px rgba(21, 21, 21, .20);
-  /* PatternFly runs squarer than Primer. */
-  --radius-xs: 2px;
-  --radius-sm: 3px;
-  --radius:    4px;
+  /* Primer'dan kare kalır; shadcn sm 4 / md 6 / lg 8 merdivenine yakın. */
+  --radius-xs: 3px;
+  --radius-sm: 4px;
+  --radius:    6px;
   --radius-lg: 8px;
 
   color-scheme: light;
@@ -398,22 +403,22 @@
    any component change. Active items keep the blue accent, which
    reads exactly like the console's selected-nav treatment. */
 [data-theme="redhat"] #sidebar {
-  --bg1: #151515;
-  --bg2: #26292d;
-  --bg3: #333333;
+  --bg1: #18181b;
+  --bg2: #212125;
+  --bg3: #27272a;
   /* v0.10.1423 — --field-bg html'de beyaza çözülüp buraya öyle miras
      kalırdı; koyu rayda alanlar bugünkü gibi rayın --bg2'si. */
   --field-bg: var(--bg2);
-  --bg:  #151515;
-  --border: #3c3f42;
+  --bg:  #18181b;
+  --border: #3f3f46;
   /* v0.10.928 — ikisi de ELLE eşlenir: yoksa redhat'in açık değerleri koyu
      raya miras kalır (#e9e9e9 ayraç ~14:1, açık gri sb-collapse kenarı). */
-  --divider: #2c2e30;
-  --border-control: #46494c;
-  --text:  #ffffff;
-  --text2: #d2d2d2;
-  --text3: #989b9e;   /* v0.10.920 — koyu basamaklarda ≥4.5 */
-  --text-faint: #6a6e73;
+  --divider: #2c2c31;
+  --border-control: #52525b;
+  --text:  #fafafa;
+  --text2: #d4d4d8;
+  --text3: #a6a6ae;   /* v0.10.920 — koyu basamaklarda ≥4.5 */
+  --text-faint: #71717a;
   --accent-soft: rgba(115, 188, 247, .14);
   /* v0.10.920 — seçili menü öğesi `--accent2` okuyor; eşlenmediği için
      #0066cc koyu zeminde 2.62:1 kalıyordu. PF blue-200. */
