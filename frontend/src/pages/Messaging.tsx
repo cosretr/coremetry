@@ -13,7 +13,7 @@ import { useUrlRange, DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import { encodeDestinationParam, decodeDestinationParam } from './messaging/destinationParam';
 import { depRowKey } from '@/lib/depsTable';
 import type { MessagingInstance, MessagingOverview } from '@/lib/types';
-import { PageShell } from '@/components/ui/PageShell';
+import { PageShell } from '@/components/coremetry/PageShell';
 
 // /messaging — top-level queue / topic technologies overview.
 // Kafka brokers, RabbitMQ vhosts, IBM MQ queues, NATS subjects,

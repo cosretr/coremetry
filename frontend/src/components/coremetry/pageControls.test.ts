@@ -171,7 +171,7 @@ describe('sticky bar #content ağacında', () => {
     // sayfayı YANLIŞ yere işaretlerdi.
     // v0.9.992 — `<PageShell>` de geçerli host. D9 kademeli geçişinde
     // sayfalar kabı elle yazmayı bırakıp atomu çağırıyor; atom `#content`i
-    // basan tek yer (`components/ui/PageShell.tsx`). Bu satır olmasaydı
+    // basan tek yer (`components/coremetry/PageShell.tsx`). Bu satır olmasaydı
     // geçen her pilot bu kapıyı YANLIŞ yere kırardı — kapı "kabuk kabı"
     // kavramını ölçüyor, o kavramın YAZILIŞINI değil.
     const HOSTS = ['id="content"', 'className="page-body"', '<PageShell>'];

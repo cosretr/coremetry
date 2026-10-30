@@ -27,7 +27,7 @@ import { DASHBOARD_RESERVED_PARAMS, isDashboardVariableParam } from '@/lib/dashb
 import { useRefreshHold } from '@/lib/useAutoRefresh';
 import { serializeDashboard, suggestedFilename } from '@/lib/dashboardIO';
 import { panelToExploreHref } from '@/pages/explore/panelToExplore';
-import { PageShell } from '@/components/ui/PageShell';
+import { PageShell } from '@/components/coremetry/PageShell';
 // v0.10.1435 — panelden "Bu grafiği açıkla"
 import { AIExplainButton } from '@/components/ai/AIExplainButton';
 import { metricPanelSubject } from '@/components/ai/metricPanelAsk';

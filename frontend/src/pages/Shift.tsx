@@ -12,7 +12,7 @@ import { tsLong, fmtFixed } from '@/lib/utils';
 import { serviceHref, eventLifespanWindow, exceptionGroupWindow } from '@/lib/serviceHref';
 import { SHIFT_WINDOWS, normalizeShiftWindow, shiftWindowNs } from './shift/shiftWindow';
 import type { Problem, ChangedService, ExceptionGroup } from '@/lib/types';
-import { PageShell } from '@/components/ui/PageShell';
+import { PageShell } from '@/components/coremetry/PageShell';
 import { RenderedMarkdown } from '@/components/Markdown';
 import { SubjectLink } from '../components/SubjectLink';
 

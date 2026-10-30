@@ -17,7 +17,7 @@ import {
 import { serviceHref, pointEventWindow } from '@/lib/serviceHref';
 import type { NotificationLogEntry } from '@/lib/types';
 import { UNMATCHED_KIND } from '@/lib/notifyRouting';
-import { PageShell } from '@/components/ui/PageShell';
+import { PageShell } from '@/components/coremetry/PageShell';
 
 // v0.6.15 — Operator events list/delete UI.
 //

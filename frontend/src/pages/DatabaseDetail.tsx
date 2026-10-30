@@ -19,7 +19,7 @@ import {
 import { DatabaseProblemsSection } from '@/pages/databases/DatabaseProblemsSection';
 import { DatabaseErrorsSection } from '@/pages/databases/DatabaseErrorsSection';
 import type { DBDetail, SlowQueryRow } from '@/lib/types';
-import { PageShell } from '@/components/ui/PageShell';
+import { PageShell } from '@/components/coremetry/PageShell';
 
 // /database — the full-page database detail (v0.9.840).
 //

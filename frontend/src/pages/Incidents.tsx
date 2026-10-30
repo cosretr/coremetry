@@ -16,8 +16,8 @@ import {
   type ColumnDef, type DataTableStateProps,
 } from '@/components/ui/DataTable';
 import type { Incident, IncidentStatus } from '@/lib/types';
-import { PageControls } from '@/components/ui/PageControls';
-import { PageShell } from '@/components/ui/PageShell';
+import { PageControls } from '@/components/coremetry/PageControls';
+import { PageShell } from '@/components/coremetry/PageShell';
 import { TriageStatusBadge } from '@/features/anomalies/statusTone'; // v0.10.929 (K5) — tek durum sözlüğü (hafif yaprak)
 
 // Columns for the shared sortable + resizable DataTable. Ongoing

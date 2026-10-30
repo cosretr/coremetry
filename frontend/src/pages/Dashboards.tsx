@@ -14,8 +14,8 @@ import { parseDashboardImport } from '@/lib/dashboardIO';
 import { toast } from '@/lib/toast';
 import { tsLong, fmtNum } from '@/lib/utils';
 import type { DashboardSummary } from '@/lib/types';
-import { PageControls } from '@/components/ui/PageControls';
-import { PageShell } from '@/components/ui/PageShell';
+import { PageControls } from '@/components/coremetry/PageControls';
+import { PageShell } from '@/components/coremetry/PageShell';
 
 // STAR_PAGE (v0.9.780) — yıldızlar saved_views'te yaşıyor, YENİ ŞEMA YOK
 // (CLAUDE.md: kullanıcı-kaydı state için saved_views). Satır başına

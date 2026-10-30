@@ -29,7 +29,7 @@ import {
   useEnableRunbook, useDisableRunbook,
 } from '@/lib/queries';
 import { tsLong } from '@/lib/utils';
-import { PageShell } from '@/components/ui/PageShell';
+import { PageShell } from '@/components/coremetry/PageShell';
 
 // Runbooks list (v0.7.0) — operator-authored executable procedures
 // (OneUptime model). This page is the catalogue: title, step count,

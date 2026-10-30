@@ -67,7 +67,7 @@ import type { PhysicalAddrs } from '@/lib/types';
 //   · URL SAHİPLİĞİ: ebeveyn AÇILIŞ parametresini sahiplenir (`?stmt=`),
 //     bölüm yalnız KENDİ alt-eksenini. Bugün hiçbir bölümün alt-ekseni yok,
 //     o yüzden hiçbiri `useSearchParams` çağırmıyor — ihtiyaç kanıtlanmadan
-//     API büyütülmüyor (`ui/PageShell.tsx:35-38`).
+//     API büyütülmüyor (`coremetry/PageShell.tsx:35-38`).
 //
 // KAPSAM DIŞI, bilinçli: `Stat` üçlüsünün birleştirilmesi (üçü bayt-bayt
 // DEĞİL — `slowqueries/StmtDetailDrawer.tsx:169`de `minWidth: 0` ve

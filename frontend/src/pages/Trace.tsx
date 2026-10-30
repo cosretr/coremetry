@@ -54,7 +54,7 @@ import { traceFunctionCodes } from '@/lib/oracleFunctionOps';
 import { copyToClipboard } from '@/lib/clipboard';
 import { indexSpanLinks, linkedSpanIds } from '@/lib/spanLinks';
 import { traceHref } from '@/lib/traceHref';
-import { PageShell } from '@/components/ui/PageShell';
+import { PageShell } from '@/components/coremetry/PageShell';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { useT } from '@/lib/i18n';
 import { clearTraceAiContext, publishTraceAiContext, traceChatContext } from '@/lib/traceAiContext'; // v0.10.944

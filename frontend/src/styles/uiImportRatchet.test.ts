@@ -75,23 +75,27 @@ export function atomsImported(src: string, file: string): Set<string> {
 }
 
 // Taban: R6 commit'inde ölçüldü — 342 dosya, 969 çift (plan §3.1 tablosu
-// birebir).
+// birebir). R8: 969 → 902 (PageShell 51 + PageControls 17 ayrıldı,
+// DisclosureButton +1 taşınan PageControls'ten).
 const CEILINGS: Record<string, number> = {
   Button: 209,
   DataTable: 126,
   Badge: 63,
-  PageShell: 51,
   IconButton: 50,
   Field: 37,
   Chip: 36,
   ConfirmDialog: 35,
   SegmentedControl: 35,
-  DisclosureButton: 31,
+  // v0.10.1616 (R8): 31 → 32 — ARTIŞ değil TAŞIMA: coremetry/PageControls
+  // (ui/'den değişmeden taşındı, karar k) dar ekran "Filtreler (N)"
+  // düğmesini hâlâ DisclosureButton ile çiziyor; ui/ içindeyken sayılmıyordu.
+  // Düğmeyi shadcn'e çevirmek görünür değişiklik olur — PageControls'ü
+  // geçiren dilimin işi; o commit bunu 31'e indirir.
+  DisclosureButton: 32,
   LinkButton: 31,
   Modal: 23,
   Stack: 23,
   Card: 19,
-  PageControls: 17,
   TabStrip: 17,
   Drawer: 15,
   KeyValue: 14,
@@ -120,7 +124,8 @@ const CEILINGS: Record<string, number> = {
   VirtualList: 1,
 };
 
-// 45 girdi (DataTable/ dizini ve index.ts dahil, testler hariç).
+// 43 girdi (DataTable/ dizini ve index.ts dahil, testler hariç). v0.10.1616
+// (R8): PageShell + PageControls coremetry/'e taşındı (45 → 43).
 const FROZEN_UI_ENTRIES = [
   'ActionRow.tsx',
   'Badge.tsx',
@@ -144,8 +149,6 @@ const FROZEN_UI_ENTRIES = [
   'MethodBadge.tsx',
   'Modal.tsx',
   'OptionRow.tsx',
-  'PageControls.tsx',
-  'PageShell.tsx',
   'PanelTitle.tsx',
   'PickerPopover.tsx',
   'Popover.tsx',

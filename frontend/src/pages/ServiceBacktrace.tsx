@@ -15,7 +15,7 @@ import type { CallerRow, TimeRange } from '@/lib/types';
 import { useUrlRange, DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import { tracesPivotHref } from '@/lib/pivotHref';
 import { serviceHref } from '@/lib/serviceHref';
-import { PageShell } from '@/components/ui/PageShell';
+import { PageShell } from '@/components/coremetry/PageShell';
 
 // Dynatrace-style "service consumers" / backtrace view. One row per
 // distinct (caller service × pod/instance × client IP × user-agent)

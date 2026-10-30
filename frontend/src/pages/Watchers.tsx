@@ -13,8 +13,8 @@ import type { AlertRule, WatcherSummaryEntry } from '@/lib/types';
 import { fmtAgoNs, fmtDurShort, tsLong } from '@/lib/utils';
 import { buildWatcherTimeline, summarizeWatcherHistory, type WatcherTimelineEntry } from '@/lib/watcherTimeline';
 import { WatcherImportModal } from './alerts/WatcherImportModal';
-import { PageControls } from '@/components/ui/PageControls';
-import { PageShell } from '@/components/ui/PageShell';
+import { PageControls } from '@/components/coremetry/PageControls';
+import { PageShell } from '@/components/coremetry/PageShell';
 import { TriageStatusBadge } from '@/features/anomalies/statusTone'; // v0.10.929 (K5) — tek durum sözlüğü (hafif yaprak)
 
 // /watchers (v0.9.196) — dedicated surface for the imported ES

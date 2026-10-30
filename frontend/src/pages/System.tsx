@@ -4,7 +4,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { Spinner } from '@/components/Spinner';
 import { Topbar } from '@/components/Topbar';
 import { useUrlRange, DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
-import { PageShell } from '@/components/ui/PageShell';
+import { PageShell } from '@/components/coremetry/PageShell';
 
 // System — the consolidated admin area (v0.8.9). The ten former /admin/*
 // pages are re-homed here as tabbed sub-views behind a single left vertical

@@ -101,16 +101,12 @@ export type { VirtualListProps } from './VirtualList';
 // süpürme, kendi kararı), ama yeni çağrı yeri artık barrel'ı bulur.
 export { VirtualTable } from './DataTable/VirtualTable';
 export { FacetMultiSelect } from './FacetMultiSelect';
-export { PageControls } from './PageControls';
 export { RouteSkeleton } from './RouteSkeleton';
 
-// v0.9.1300 — BEŞİNCİ eksik primitif, aynı mK7 gerekçesiyle. PageShell
-// kullanımda ikinci sıradaki primitif (59 site / 44 dosya) ama barrel'da
-// YOKTU: "bu zaten var mı" diye barrel'a bakan biri onu bulamıyordu.
-// Bu, ölçülen kopya ailelerinin (Stat ×6, Field ×7) doğum mekanizmasının
-// ta kendisi — /frontend-design-system §1 "barrel YETMEZ" uyarısı bunun
-// üzerine yazıldı. Salt EKLEME: mevcut doğrudan import'lar taşınmıyor.
-export { PageShell } from './PageShell';
+// PageShell + PageControls — v0.10.1616 (shadcn Faz 1 R8, karar k, §12 Q6)
+// components/coremetry/'e TAŞINDI (yerleşim, atom değil); burada yeniden
+// dışa aktarım YOK (şim yasak). İçe aktar: @/components/coremetry/PageShell,
+// @/components/coremetry/PageControls.
 
 // v0.9.1364 — bölüm-içi yokluk satırı. İki BAYT BAYT aynı yerel nüshanın
 // (endpoints/detailSections + slowqueries/StmtDetailDrawer) tek eve

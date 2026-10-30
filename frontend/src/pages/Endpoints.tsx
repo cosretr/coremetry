@@ -31,13 +31,13 @@ import { SearchField } from '@/components/ui/SearchField';
 import type { DataTableColumn } from '@/lib/dataTable';
 import type { EndpointRow } from '@/lib/types';
 import { traceHref } from '@/lib/traceHref';
-import { PageControls } from '@/components/ui/PageControls';
+import { PageControls } from '@/components/coremetry/PageControls';
 import { Button } from '@/components/ui/Button';
 import { MethodBadge } from '@/components/ui'; // v0.10.1429 — method rozeti atomdan (v0.10.1425)
 import { IconButton } from '@/components/ui/IconButton';
 import { useAuth } from '@/components/AuthProvider';
 import { RouteAlertModal } from '@/pages/alerts/RouteAlertModal'; // v0.10.705
-import { PageShell } from '@/components/ui/PageShell';
+import { PageShell } from '@/components/coremetry/PageShell';
 // v0.10.1359 — metrik kipi: Service → HTTP Metrics sekmesinin PromQL'i.
 import { useHttpPromql, useRedFamily, sectionEnvScope } from '@/lib/queries/httpMetrics';
 // v0.10.1429 — RED ailesi: yalnız gRPC sunan serviste liste rpc_server_duration_* ailesinden

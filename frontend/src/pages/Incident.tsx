@@ -33,7 +33,7 @@ import type { Incident } from '@/lib/types';
 import { serviceHref, eventLifespanWindow } from '@/lib/serviceHref';
 import { incidentRootCauseLabel } from '@/lib/incidentRootCause';
 import { Button } from '@/components/ui/Button';
-import { PageShell } from '@/components/ui/PageShell';
+import { PageShell } from '@/components/coremetry/PageShell';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { IconSparkles } from '@/components/icons';
 import { aiErrorHint } from '@/lib/aiErrors';

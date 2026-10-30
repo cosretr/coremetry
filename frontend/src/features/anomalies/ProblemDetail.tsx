@@ -39,7 +39,7 @@ import { Button } from '@/components/ui/Button';
 import { DataTableState, type DataTableStateStaticProps } from '@/components/ui/DataTable'; // v0.10.977 (T12, P-2)
 import { PriorityBadge } from '@/components/ui/PriorityBadge'; // v0.10.922 (sade palet adım 1)
 import { TriageStatusBadge, ProblemStatusBadge } from './statusTone'; // v0.10.929 (K5) — hafif yaprak
-import { PageShell } from '@/components/ui/PageShell';
+import { PageShell } from '@/components/coremetry/PageShell';
 import { ShareButton } from '@/components/ShareButton';
 import { copyToClipboard } from '@/lib/clipboard';
 import { QueryErrorInline } from '@/components/QueryError';

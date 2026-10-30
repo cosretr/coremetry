@@ -11,8 +11,8 @@ import { seriesColor } from '@/lib/chartFmt';
 
 describe('seriesRoleColor', () => {
   it('semantik roller token döndürür — tema-canlı', () => {
-    expect(seriesRoleColor('errors', 'error')).toBe('var(--err)');
-    expect(seriesRoleColor('ok', 'success')).toBe('var(--ok)');
+    expect(seriesRoleColor('errors', 'error')).toBe('var(--status-critical-fg)');
+    expect(seriesRoleColor('ok', 'success')).toBe('var(--status-ok-fg)');
     expect(seriesRoleColor('other', 'muted')).toBe('var(--text3)');
   });
 
@@ -24,7 +24,54 @@ describe('seriesRoleColor', () => {
   it('rol etiketten TAHMİN EDİLMEZ: "error" adlı seri data rolünde palet alır', () => {
     // "error-budget-service" bir VERİ serisidir; kırmızıya zorlamak yanlış.
     expect(seriesRoleColor('error', 'data')).toBe(seriesColor('error'));
-    expect(seriesRoleColor('error', 'data')).not.toBe('var(--err)');
+    expect(seriesRoleColor('error', 'data')).not.toBe('var(--status-critical-fg)');
+  });
+});
+
+// v0.10.1616 (shadcn Faz 1 R8) — rol token'ı --err/--ok'tan --status-*-fg'ye
+// geçti; ÇÖZÜLEN değer aynı kalmalı (grafik rengi değişmez). jsdom özel
+// özelliklerde var() zincirini çözmüyor (ölçüldü) → zincir burada CSS
+// metninden, tarayıcının yaptığı gibi çözülür: tema bloğu (light/redhat)
+// önce, yoksa :root; tokens.css `:root, [data-theme]` bloğu her temada.
+describe('seriesRoleColor: durum token\'ı eskisiyle AYNI çözülür (3 tema)', () => {
+  const styles = resolve(__dirname, '../../styles');
+  const strip = (x: string) => x.replace(/\/\*[\s\S]*?\*\//g, '');
+  const globals = strip(readFileSync(resolve(styles, 'globals.css'), 'utf8'));
+  const tokens = strip(readFileSync(resolve(styles, 'tokens.css'), 'utf8'));
+  const block = (css: string, sel: string) => {
+    const i = css.indexOf(`${sel} {`);
+    return i < 0 ? '' : css.slice(i, css.indexOf('}', i));
+  };
+  const decl = (body: string, name: string) => new RegExp(`(?:^|[;{\\s])${name}:\\s*([^;]+);`).exec(body)?.[1].trim();
+  const resolveIn = (theme: 'dark' | 'light' | 'redhat', value: string, depth = 0): string => {
+    const m = /^var\((--[\w-]+)\)$/.exec(value);
+    if (!m || depth > 8) return value;
+    const name = m[1];
+    const v = (theme !== 'dark' ? decl(block(globals, `[data-theme="${theme}"]`), name) : undefined)
+      ?? decl(block(tokens, ':root, [data-theme]'), name)
+      ?? decl(block(globals, ':root'), name);
+    expect(v, `${theme}: ${name} bildirilmemiş`).toBeDefined();
+    return resolveIn(theme, v!, depth + 1);
+  };
+  for (const theme of ['dark', 'light', 'redhat'] as const) {
+    it(`${theme}: error == var(--err), success == var(--ok), sonuç hex`, () => {
+      const err = resolveIn(theme, seriesRoleColor('x', 'error'));
+      const ok = resolveIn(theme, seriesRoleColor('x', 'success'));
+      expect(err).toBe(resolveIn(theme, 'var(--err)'));
+      expect(ok).toBe(resolveIn(theme, 'var(--ok)'));
+      expect(err).toMatch(/^#[0-9a-f]{6}$/i);
+      expect(ok).toMatch(/^#[0-9a-f]{6}$/i);
+    });
+  }
+  it('ayırt edicilik: tema blokları gerçekten okunuyor (dark ≠ light ≠ redhat)', () => {
+    const v = (['dark', 'light', 'redhat'] as const).map(t => resolveIn(t, 'var(--status-critical-fg)'));
+    expect(new Set(v).size).toBe(3);
+  });
+  it('--status-critical-fg / --status-ok-fg başka hiçbir CSS dosyasında yeniden bildirilmiyor', () => {
+    const all = [globals, strip(readFileSync(resolve(styles, 'chart.css'), 'utf8'))].join('\n');
+    expect(all).not.toMatch(/--status-(critical|ok)-fg\s*:/);
+    expect(tokens.match(/--status-critical-fg\s*:/g)?.length).toBe(1);
+    expect(tokens.match(/--status-ok-fg\s*:/g)?.length).toBe(1);
   });
 });
 

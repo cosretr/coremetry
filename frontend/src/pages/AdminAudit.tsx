@@ -9,7 +9,7 @@ import {
   type ColumnDef, type DataTableStateProps,
 } from '@/components/ui/DataTable';
 import type { AuditEntry } from '@/lib/types';
-import { PageControls } from '@/components/ui/PageControls';
+import { PageControls } from '@/components/coremetry/PageControls';
 
 // Columns for the shared sortable + resizable DataTable (v0.7.53
 // primitive). Default sort is Time desc — newest first, the

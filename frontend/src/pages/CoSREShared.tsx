@@ -5,7 +5,7 @@
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Topbar } from '@/components/Topbar';
-import { PageShell } from '@/components/ui/PageShell';
+import { PageShell } from '@/components/coremetry/PageShell';
 import { Spinner, Empty } from '@/components/Spinner';
 import { ChatMarkdown } from '@/components/ai/ChatBubble';
 import { api } from '@/lib/api';

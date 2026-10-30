@@ -30,10 +30,10 @@ import { useUrlPage } from '@/lib/useUrlPage';
 import { getItem, setItem } from '@/lib/storage';
 import { getPinnedServices, isServicePinned, toggleServicePin } from '@/lib/recentServices';
 import type { Service, SparklineBucket, TimeRange, SpanAgg } from '@/lib/types';
-import { PageControls } from '@/components/ui/PageControls';
+import { PageControls } from '@/components/coremetry/PageControls';
 import { EnterHint } from '@/components/ui/EnterHint';
 import { serviceHref } from '@/lib/serviceHref';
-import { PageShell } from '@/components/ui/PageShell';
+import { PageShell } from '@/components/coremetry/PageShell';
 import { Pager } from '@/components/Pager';
 
 // v0.8.251 — the page's hand-rolled SortKey/NATURAL_DIR/SortTh server-sort

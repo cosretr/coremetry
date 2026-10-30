@@ -7,7 +7,7 @@ import { RenderedMarkdown } from '@/components/Markdown';
 import { useRunbookExecution, useRunbookStepAction, useCancelRunbookExecution } from '@/lib/queries';
 import { tsLong } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
-import { PageShell } from '@/components/ui/PageShell';
+import { PageShell } from '@/components/coremetry/PageShell';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 
 // Runbook execution runner (v0.7.0) — step through a live run. Manual steps

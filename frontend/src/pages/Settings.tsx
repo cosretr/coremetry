@@ -46,7 +46,7 @@ import { CustomRolesTab } from './settings/RolesTab';
 import { PipelineTab } from './settings/PipelineTab';
 import { BackupTab } from './settings/BackupTab';
 import { DangerZoneTab } from './settings/DangerZoneTab';
-import { PageShell } from '@/components/ui/PageShell';
+import { PageShell } from '@/components/coremetry/PageShell';
 
 interface SettingsTab {
   slug: string;

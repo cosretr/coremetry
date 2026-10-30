@@ -20,7 +20,7 @@ import { useUrlRange, DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import { encodeRange } from '@/lib/urlState';
 import type { ServiceMap } from '@/lib/types';
 import { serviceHref } from '@/lib/serviceHref';
-import { PageShell } from '@/components/ui/PageShell';
+import { PageShell } from '@/components/coremetry/PageShell';
 
 // Service map: global topology view + a focus mode that
 // narrows to a single service's 1-hop neighbourhood. The

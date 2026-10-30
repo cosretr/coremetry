@@ -12,9 +12,15 @@
 // pekâlâ olur ve o bir VERİ serisidir, hata serisi değil. Hangi serinin
 // hata/başarı olduğunu yalnız sorguyu kuran bilir.
 //
-// Semantik roller TOKEN döndürür (var(--err)/var(--ok)) — tema-canlı;
+// Semantik roller TOKEN döndürür — tema-canlı;
 // draw anında resolveVar çözer (canvas CSS var okuyamaz). Palet hex'i
 // bilinçli tema-bağımsız (bugünkü davranış; seriesColor sözleşmesi).
+//
+// v0.10.1616 (shadcn Faz 1 R8, plan §2.2): hata/başarı rolü artık
+// `--status-critical-fg` / `--status-ok-fg` — rozet (StatusBadge), hücre
+// tonu ve grafik rolü TEK durum token adını paylaşıyor. tokens.css bunları
+// `var(--err)` / `var(--ok)` olarak bildiriyor: çözülen değer üç temada
+// birebir aynı (corePanelContracts.test.ts zinciri çözüp çiviliyor).
 
 import { seriesColor } from '@/lib/chartFmt';
 
@@ -22,8 +28,8 @@ export type SeriesRole = 'data' | 'error' | 'success' | 'muted';
 
 export function seriesRoleColor(label: string, role: SeriesRole = 'data'): string {
   switch (role) {
-    case 'error':   return 'var(--err)';
-    case 'success': return 'var(--ok)';
+    case 'error':   return 'var(--status-critical-fg)';
+    case 'success': return 'var(--status-ok-fg)';
     case 'muted':   return 'var(--text3)';
     case 'data':    return seriesColor(label);
   }

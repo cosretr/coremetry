@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/DataTable';
 import type { HostRow, HostDetail, HostServiceRow, TimeRange } from '@/lib/types';
 import { serviceHref } from '@/lib/serviceHref';
-import { PageShell } from '@/components/ui/PageShell';
+import { PageShell } from '@/components/coremetry/PageShell';
 
 // v0.9.873 (tutarlılık denetimi BT12) — HostDrawer'ın servis tablosu.
 // Yoğun bir host'ta "CPU'yu kim yiyor" sorusu bugün göz taramasıyla

@@ -38,7 +38,7 @@ import { serviceHref } from '@/lib/serviceHref';
 import { logsHref } from '@/lib/logsUrl';
 import { encodeFiltersParam } from '@/lib/logFilters';
 import { tracesPivotHref } from '@/lib/pivotHref';
-import { PageShell } from '@/components/ui/PageShell';
+import { PageShell } from '@/components/coremetry/PageShell';
 import { useEntityEnabled, useEntity, useEntityServices, useEntityContainers, useAnomalyEvents, useAnomalySilences } from '@/lib/queries';
 import { windowAnomalies, anomalyRegions, silencedSet } from '@/lib/anomalyRegions';
 import { entityHref, entityLiveness } from '@/lib/entityHref';

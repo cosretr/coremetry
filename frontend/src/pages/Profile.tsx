@@ -14,7 +14,7 @@ import { raceGuard } from '@/lib/raceGuard';
 import { tsLong, fmtNum } from '@/lib/utils';
 import { diffFlame } from '@/lib/flameDiff';
 import type { ProfileDetail, ProfileRow } from '@/lib/types';
-import { PageShell } from '@/components/ui/PageShell';
+import { PageShell } from '@/components/coremetry/PageShell';
 
 // /profile renders one profile's flamegraph by default. When
 // the URL carries `?baseline=<id>` we fetch a second profile,

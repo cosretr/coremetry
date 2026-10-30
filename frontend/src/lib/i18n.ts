@@ -29,6 +29,12 @@ const EN: Catalog = {
   // v0.10.1340 — kabuk atlama bağlantısı (AppShell SkipToContent)
   'shell.skipToContent': 'Skip to content',
   // v0.10.1340 END
+  // v0.10.1616 — coremetry/StatusBadge varsayılan etiketleri (shadcn Faz 1 R8)
+  'status.ok': 'OK',
+  'status.warn': 'Warning',
+  'status.critical': 'Critical',
+  'status.info': 'Info',
+  'status.unknown': 'Unknown',
 
   // Sidebar
   // v0.9.323 — triage merge. The merged queue takes the name operators
@@ -687,6 +693,12 @@ const TR: Catalog = {
   // v0.10.1340 — kabuk atlama bağlantısı (AppShell SkipToContent)
   'shell.skipToContent': 'İçeriğe atla',
   // v0.10.1340 END
+  // v0.10.1616 — coremetry/StatusBadge varsayılan etiketleri (shadcn Faz 1 R8)
+  'status.ok': 'Sağlıklı',
+  'status.warn': 'Uyarı',
+  'status.critical': 'Kritik',
+  'status.info': 'Bilgi',
+  'status.unknown': 'Bilinmiyor',
 
   // Login
   'login.signIn':      'Giriş yap',

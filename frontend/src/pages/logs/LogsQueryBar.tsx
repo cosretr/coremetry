@@ -15,7 +15,7 @@ import { ServicePicker } from '@/components/ServicePicker';
 import { KqlSearchInput } from '@/components/KqlSearchInput';
 import { Button } from '@/components/ui/Button';
 import { EnterHint } from '@/components/ui/EnterHint';
-import { PageControls } from '@/components/ui/PageControls';
+import { PageControls } from '@/components/coremetry/PageControls';
 import type { LogsUrlFilter } from '@/lib/logsUrl';
 import { fmtClock } from '@/lib/utils';
 

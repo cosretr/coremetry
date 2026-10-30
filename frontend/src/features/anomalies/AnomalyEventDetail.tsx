@@ -5,7 +5,7 @@ import { Topbar } from '@/components/Topbar';
 import { Spinner, Empty } from '@/components/Spinner';
 import { Badge } from '@/components/ui';
 import { Button } from '@/components/ui/Button';
-import { PageShell } from '@/components/ui/PageShell';
+import { PageShell } from '@/components/coremetry/PageShell';
 import { ShareButton } from '@/components/ShareButton';
 import { RootCauseRibbon } from '@/components/RootCauseRibbon';
 import { AIExplainButton } from '@/components/ai/AIExplainButton';

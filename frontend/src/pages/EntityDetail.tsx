@@ -17,7 +17,7 @@ import { fmtBytes } from '@/lib/utils';
 import { fmtCores } from '@/pages/clusters/thresholds';
 import { ThanosTrendPanel } from '@/pages/clusters/TrendPanel';
 import { Topbar } from '@/components/Topbar';
-import { PageShell } from '@/components/ui/PageShell';
+import { PageShell } from '@/components/coremetry/PageShell';
 import { Stack, Row, Badge, Button } from '@/components/ui';
 import { Spinner, Empty } from '@/components/Spinner';
 import { usePageZoomRange } from '@/lib/chart/usePageZoomRange';

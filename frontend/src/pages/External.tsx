@@ -16,7 +16,7 @@ import {
 import { ExternalPaths } from '@/components/ExternalPaths';
 import type { ExternalCaller, ExternalHost, ExternalHostDetail, TimeRange } from '@/lib/types';
 import { serviceHref } from '@/lib/serviceHref';
-import { PageShell } from '@/components/ui/PageShell';
+import { PageShell } from '@/components/coremetry/PageShell';
 
 // /external — third-party API inventory (v0.8.446, SigNoz/Uptrace
 // gap-closure Wave 3 / A1). One row per external destination the

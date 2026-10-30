@@ -25,8 +25,8 @@ import {
 } from '@/lib/types';
 import { Link, useSearchParams } from 'react-router-dom';
 import { traceHref } from '@/lib/traceHref';
-import { PageControls } from '@/components/ui/PageControls';
-import { PageShell } from '@/components/ui/PageShell';
+import { PageControls } from '@/components/coremetry/PageControls';
+import { PageShell } from '@/components/coremetry/PageShell';
 import { useAuthRole } from '@/components/AuthProvider'; // v0.10.1484
 
 // /ai — Coremetry-native AI observability dashboard. The

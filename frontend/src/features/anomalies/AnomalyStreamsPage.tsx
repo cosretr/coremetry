@@ -2,7 +2,7 @@ import { Topbar } from '@/components/Topbar';
 import { SavedViewsBar } from '@/components/SavedViewsBar';
 import { TriageCrumb } from '@/components/TriageCrumb';
 import { AnomalyStreams } from './streams';
-import { PageShell } from '@/components/ui/PageShell';
+import { PageShell } from '@/components/coremetry/PageShell';
 
 // /anomalies — live early-warning streams. Distinct from /problems
 // (which holds the assignable exception inbox + alert-rule firings).

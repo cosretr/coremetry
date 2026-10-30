@@ -20,9 +20,9 @@ import {
 import { stmtDetailHref } from '@/pages/slowqueries/stmtParam';
 import { useStmtParamRedirect } from '@/pages/slowqueries/useStmtParamRedirect';
 import type { SlowQueryRow, TimeRange } from '@/lib/types';
-import { PageControls } from '@/components/ui/PageControls';
+import { PageControls } from '@/components/coremetry/PageControls';
 import { serviceHref } from '@/lib/serviceHref';
-import { PageShell } from '@/components/ui/PageShell';
+import { PageShell } from '@/components/coremetry/PageShell';
 import { useT } from '@/lib/i18n';
 // v0.9.1137 (AI Faz 2.4) satır-içi ✨ Explain yerine insight kartı gelmişti;
 // v0.10.652 (operatör) kart yuvası + "Ne oldu?" çipi bu sayfadan söküldü.

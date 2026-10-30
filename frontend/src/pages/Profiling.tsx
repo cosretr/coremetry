@@ -15,7 +15,7 @@ import {
   type ColumnDef, type DataTableStateProps,
 } from '@/components/ui/DataTable';
 import type { ProfileRow, ProfileHotspotsResponse, TimeRange } from '@/lib/types';
-import { PageShell } from '@/components/ui/PageShell';
+import { PageShell } from '@/components/coremetry/PageShell';
 import { Button, SegmentedControl, TabStrip } from '@/components/ui'; // v0.10.914 dilim 2 (buton bütünlüğü); v0.10.924 Faz 2
 
 // Columns for the shared sortable + resizable DataTable.

@@ -26,7 +26,7 @@ import {
   HistogramSection, StatusSection, ExceptionsSection, FailingTracesSection,
   SplitSection, WhereTheTimeGoesSection, CallersSection,
 } from '@/pages/endpoints/detailSections';
-import { PageShell } from '@/components/ui/PageShell';
+import { PageShell } from '@/components/coremetry/PageShell';
 import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/components/AuthProvider';
 import { RouteAlertModal } from '@/pages/alerts/RouteAlertModal'; // v0.10.705

@@ -7,7 +7,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { navHref } from '@/lib/navHref';
 import { Topbar } from '@/components/Topbar';
 import { Spinner, Empty } from '@/components/Spinner';
-import { PageShell } from '@/components/ui/PageShell';
+import { PageShell } from '@/components/coremetry/PageShell';
 import { usePageZoomRange } from '@/lib/chart/usePageZoomRange';
 import { timeRangeToNs } from '@/lib/utils';
 import { useDBStmtDetail } from '@/lib/queries';

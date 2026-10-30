@@ -46,7 +46,7 @@ import { keys } from '@/lib/queries/keys';
 import type { Service, Problem, OperationSummary, OperationRoutesFor, SLORow, TimeRange } from '@/lib/types';
 import { QueryError } from '@/components/QueryError';
 import type { DataTableStateProps } from '@/components/ui/DataTable';
-import { PageShell } from '@/components/ui/PageShell';
+import { PageShell } from '@/components/coremetry/PageShell';
 import { ServiceHttpMetricsTab } from './service/ServiceHttpMetricsTab';
 import { ServiceMessagingTab } from './service/ServiceMessagingTab'; // v0.10.1536
 import { withPivotCtx, pivotCtxFromSearch, type PivotDim } from '@/lib/pivotContext';

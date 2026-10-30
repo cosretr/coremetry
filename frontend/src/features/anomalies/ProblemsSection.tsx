@@ -47,7 +47,7 @@ import { PriorityBadge } from '@/components/ui/PriorityBadge'; // v0.10.922 (sad
 import { withProblemParam, problemDetailHref } from './problemLink';
 import { findProblemInCaches } from './problemResolve';
 import { RenderedMarkdown, stripMarkdown } from '@/components/Markdown';
-import { PageShell } from '@/components/ui/PageShell';
+import { PageShell } from '@/components/coremetry/PageShell';
 // v0.9.1133 (AI Faz 2.3) — satır-altı insight kartının yuvası; şerit
 // RootCauseRibbon ile BİRLEŞİK (iki ayrı kanıt yüzeyi değil).
 import { useInsightRow, InsightRowChip, InsightRowSlot } from '@/components/ai/insightRow';

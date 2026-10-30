@@ -27,8 +27,8 @@ import {
 import { SearchField } from '@/components/ui/SearchField';
 import type { DataTableColumn } from '@/lib/dataTable';
 import type { MetricInfo } from '@/lib/types';
-import { PageControls } from '@/components/ui/PageControls';
-import { PageShell } from '@/components/ui/PageShell';
+import { PageControls } from '@/components/coremetry/PageControls';
+import { PageShell } from '@/components/coremetry/PageShell';
 
 // Metrics — v0.8.x Phase-5 collapse. /metrics is now a CATALOGUE: a
 // server-side-searchable, sortable index of every metric name (name / type /

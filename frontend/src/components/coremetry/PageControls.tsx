@@ -2,7 +2,7 @@ import { Children, isValidElement, useEffect, useId, useMemo, useRef, useState }
 import type { CSSProperties, HTMLAttributes, ReactNode } from 'react';
 import { useIsNarrow } from '@/lib/useNarrow';
 import { useEscLayer } from '@/lib/escLayer';
-import { DisclosureButton } from './DisclosureButton';
+import { DisclosureButton } from '@/components/ui/DisclosureButton';
 
 // v0.9.639 — liste sayfalarının filtre barı için tek primitif.
 //

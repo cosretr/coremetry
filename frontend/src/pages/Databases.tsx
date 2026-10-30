@@ -35,7 +35,7 @@ const DB_STMT_COLS: ColumnDef<SlowQueryRow>[] = [
   { id: 'db',        label: 'DB',     sortValue: r => r.dbName || r.dbSystem, naturalDir: 'asc', width: 130 },
 ];
 import type { DBInstance, DatabasesOverview } from '@/lib/types';
-import { PageShell } from '@/components/ui/PageShell';
+import { PageShell } from '@/components/coremetry/PageShell';
 
 // /databases — two distinct panels driven by data origin:
 //

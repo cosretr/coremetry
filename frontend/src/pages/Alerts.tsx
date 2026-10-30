@@ -26,8 +26,8 @@ import { ConditionPreview } from './alerts/ConditionPreview';
 import { NoisyRulesPanel } from './alerts/NoisyRulesPanel';
 import { WatcherImportModal } from './alerts/WatcherImportModal';
 import { Link } from 'react-router-dom';
-import { PageControls } from '@/components/ui/PageControls';
-import { PageShell } from '@/components/ui/PageShell';
+import { PageControls } from '@/components/coremetry/PageControls';
+import { PageShell } from '@/components/coremetry/PageShell';
 
 // alertTypeLabel — Type hücresinin bastığı rozet metni. Sıralama accessor'ı
 // buradan okuyor ki kolon GÖRÜNENE göre sıralansın (ham `metric` alanı

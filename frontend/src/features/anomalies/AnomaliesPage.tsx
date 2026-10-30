@@ -28,7 +28,7 @@ import { SearchField } from '@/components/ui/SearchField';
 import { ProblemDetail, TriageStatusBadge } from './ProblemDetail';
 import { withProblemParam, withExcParam, excDetailHref } from './problemLink';
 import { emptySamplesNote, type SampleScanEnvelope } from './exceptionSamples';
-import { PageControls } from '@/components/ui/PageControls';
+import { PageControls } from '@/components/coremetry/PageControls';
 // v0.9.837 — the "Alert rules" section moved to /inbox ("Problems").
 // The ?problem= deep-link host stays HERE too: notification e-mails
 // point at /problems?problem=<id> and that contract is test-locked.
@@ -36,7 +36,7 @@ import { AlertProblemHost } from './ProblemsSection';
 import { serviceHref } from '@/lib/serviceHref';
 import { SampleTraceId } from './ExceptionSampleRow'; // v0.10.1369
 import { QueryErrorInline } from '@/components/QueryError';
-import { PageShell } from '@/components/ui/PageShell';
+import { PageShell } from '@/components/coremetry/PageShell';
 import { stripMarkdown } from '@/components/Markdown';
 import { TriageTitleCell } from './TriageTitleCell'; // v0.10.1084 — Problems kuyruğuyla ortak
 import { Badge } from '@/components/ui/Badge';

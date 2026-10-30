@@ -1,7 +1,7 @@
 // pageShellAdoption — DALGA 9 kaynak-kapısı (v0.9.991), v0.9.1000'den
 // beri TAM KİLİT.
 //
-// Ne çiviliyor: `id="content"` YALNIZ `components/ui/PageShell.tsx`te
+// Ne çiviliyor: `id="content"` YALNIZ `components/coremetry/PageShell.tsx`te
 // yazılabilir. Atom geldiğinde elle yazan 43 dosya vardı; aşağıdaki liste
 // o günün DONDURULMUŞ hâlinden arta kalandır ve YALNIZ KÜÇÜLEBİLİR.
 // Seyir: 43 (991) → 36 (992) → 24 (993) → 13 (994) → 2 (995) → 1 (998)
@@ -38,7 +38,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { resolve, join, sep } from 'node:path';
 
 const SRC = resolve(__dirname, '..');
-const ATOM = 'components/ui/PageShell.tsx';
+const ATOM = 'components/coremetry/PageShell.tsx';
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const e of readdirSync(dir)) {

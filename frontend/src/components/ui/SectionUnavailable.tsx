@@ -7,7 +7,7 @@
 // kendi satırını basar, kabuk çizilmeye devam eder
 // (`pages/endpoints/detailSections.tsx:34-36`).
 //
-// NEDEN ATOM: PageShell'in ölçütü (`ui/PageShell.tsx:1-8`) — "bu atom bir
+// NEDEN ATOM: PageShell'in ölçütü (`coremetry/PageShell.tsx:1-8`) — "bu atom bir
 // soyutlama DEĞİL, tekrarlanan bir sabitin tek kaynağa çekilmesi; çıktısı
 // bit bit aynı". Burada da öyle: iki nüsha (`endpoints/detailSections.tsx:57`
 // ve `slowqueries/StmtDetailDrawer.tsx:161`) v0.9.1364'te BAYT BAYT aynıydı

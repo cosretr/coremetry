@@ -50,7 +50,7 @@ import { decideTeamAutoApply, isSameTeam, readTeamOptOut, writeTeamOptOut } from
 import { useAuth } from '@/components/AuthProvider';
 import { useT } from '@/lib/i18n';
 import type { LogsResponse, LogRow, TimeRange } from '@/lib/types';
-import { PageShell } from '@/components/ui/PageShell';
+import { PageShell } from '@/components/coremetry/PageShell';
 import { LogsQueryBar } from './logs/LogsQueryBar';
 import { LogsFilterRow } from './logs/LogsFilterRow';
 import { LogsNotices } from './logs/LogsNotices';

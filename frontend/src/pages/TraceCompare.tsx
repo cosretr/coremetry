@@ -11,7 +11,7 @@ import {
   useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState,
   type ColumnDef, type CellTone, type DataTableStateProps,
 } from '@/components/ui/DataTable';
-import { PageShell } from '@/components/ui/PageShell';
+import { PageShell } from '@/components/coremetry/PageShell';
 import { api } from '@/lib/api';
 import { fmtNs } from '@/lib/utils';
 import type { SpanRow, TraceDetailResponse } from '@/lib/types';

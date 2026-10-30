@@ -12,8 +12,8 @@ import { tsLong } from '@/lib/utils';
 import type { Monitor, MonitorRow, MonitorStats, MonitorType } from '@/lib/types';
 import { QueryError } from '@/components/QueryError';
 import { readState } from '@/lib/readState';
-import { PageControls } from '@/components/ui/PageControls';
-import { PageShell } from '@/components/ui/PageShell';
+import { PageControls } from '@/components/coremetry/PageControls';
+import { PageShell } from '@/components/coremetry/PageShell';
 
 // /monitors — synthetic uptime + heartbeat dashboard.
 //

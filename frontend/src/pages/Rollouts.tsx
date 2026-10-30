@@ -38,7 +38,7 @@ import { TabStrip } from '@/components/ui/TabStrip'; // v0.10.456 (D5)
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { Topbar } from '@/components/Topbar';
-import { PageShell } from '@/components/ui/PageShell';
+import { PageShell } from '@/components/coremetry/PageShell';
 import { Spinner, Empty } from '@/components/Spinner';
 import { Badge, Button, Field, StatTile } from '@/components/ui';
 import {

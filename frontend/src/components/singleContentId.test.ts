@@ -18,7 +18,7 @@
 // render olmaz. Ayırt etmenin tek kaynak-seviyesi yolu `return`
 // sayısıyla karşılaştırmak.
 //
-// Tam kilit (`id="content"` yalnız `components/ui/PageShell.tsx`te)
+// Tam kilit (`id="content"` yalnız `components/coremetry/PageShell.tsx`te)
 // v0.9.1000'de YÜRÜRLÜĞE GİRDİ — `pageShellAdoption.test.ts` allowlist'i
 // boşaldı. Bu kapı buna rağmen GEVŞEK kalıyor ve kaldırılmıyor: iki kapı
 // aynı şeyi ölçmüyor. O, kabın nereden BASILDIĞINI kilitliyor; bu, aynı
@@ -135,7 +135,7 @@ describe('D3 — tek #content', () => {
   // listesinden düşerse /inbox ve /problems'ta yapışkan tablo başlığı
   // `top: 0`a düşüp filtre barının ALTINA gizlenir (v0.9.697 sınıfı).
   it('PageControls host araması .page-body\'yi de kabul ediyor', () => {
-    const pc = readFileSync(join(SRC, 'components/ui/PageControls.tsx'), 'utf8');
+    const pc = readFileSync(join(SRC, 'components/coremetry/PageControls.tsx'), 'utf8');
     expect(pc).toContain("closest('#content, .page-body')");
   });
 });

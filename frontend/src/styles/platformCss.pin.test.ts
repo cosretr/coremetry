@@ -129,7 +129,7 @@ describe('v0.10.1339 — platform CSS kazanımları', () => {
       '.dt-menu-pop': 'components/ui/DataTable/HeadMenu.tsx',
       '.cb-list': 'components/ai/NameCompletionPopup.tsx',
       '.pick-list': 'components/ui/PickerPopover.tsx',
-      '.pc-panel': 'components/ui/PageControls.tsx',
+      '.pc-panel': 'components/coremetry/PageControls.tsx',
     };
     for (const sel of OVERLAYS) {
       expect(read(owners[sel]), `${sel} ${owners[sel]} içinde artık yok`).toContain(sel.slice(1));
@@ -144,7 +144,7 @@ describe('v0.10.1339 — platform CSS kazanımları', () => {
       expect(read(file), `${sel} hedefi ${file} içinde yok`).toContain(needle);
     }
     // --controls-h hâlâ PageControls tarafından yayınlanıyor.
-    expect(read('components/ui/PageControls.tsx')).toContain("setProperty('--controls-h'");
+    expect(read('components/coremetry/PageControls.tsx')).toContain("setProperty('--controls-h'");
   });
 
   it('5 — iOS yakınlaştırma: telefon katmanında form alanları 16px', () => {

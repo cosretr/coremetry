@@ -38,7 +38,7 @@ import {
 } from '@/components/ui/DataTable';
 import type { ClusterPodRow, ClusterNodeRow, ClusterNamespaceRow, ClusterDeploymentRow, ClusterAlertRow, ClusterSummary, TimeRange, CapacityForecastDays } from '@/lib/types';
 import { serviceHref } from '@/lib/serviceHref';
-import { PageShell } from '@/components/ui/PageShell';
+import { PageShell } from '@/components/coremetry/PageShell';
 
 // /clusters — uzak OpenShift cluster'larının Thanos metrikleri.
 // v0.8.587 redesign (audit: docs/audit/clusters-overview-redesign-

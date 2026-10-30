@@ -62,7 +62,7 @@ import { VizRail } from './explore/VizRail';
 import { SplitByPicker } from './explore/SplitByPicker';
 import { Button } from '@/components/ui/Button';
 import { Chip, SegmentedControl } from '@/components/ui'; // v0.10.914 dilim 2 (buton bütünlüğü)
-import { PageShell } from '@/components/ui/PageShell';
+import { PageShell } from '@/components/coremetry/PageShell';
 // v0.10.1435 — panelden "Bu grafiği açıkla"
 import { metricPanelSubject, useMetricPanelAsk } from '@/components/ai/metricPanelAsk';
 import { usePublishPageOverlay } from '@/lib/pageContextOverlay';

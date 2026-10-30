@@ -19,7 +19,7 @@ import { IconSparkles } from '@/components/icons';
 import { aiErrorHint } from '@/lib/aiErrors';
 import { tsLong } from '@/lib/utils';
 import type { AuditEntry, Runbook, RunbookStep, RunbookStepKind, RunbookExecution } from '@/lib/types';
-import { PageShell } from '@/components/ui/PageShell';
+import { PageShell } from '@/components/coremetry/PageShell';
 
 // Runbook detail (v0.7.0) — Overview + the Steps editor (the OneUptime
 // "Runbook Steps" surface: kind cards to add, drag-to-reorder, per-step
