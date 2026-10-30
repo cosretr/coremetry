@@ -878,8 +878,10 @@ export function CosreComposerForm({ input: composer, ask, busy, stop, codeLocked
         {...(codeRead || codeLocked ? { code: codePill, onCodeChange: setCodePill, codeDisabled: busy, codeReason: codeRead?.available ? undefined : (codeRead?.reason || 'kapalı'), codeLocked } : {})}
         comboboxProps={{
           'aria-autocomplete': 'list',
-          'aria-controls': 'chat-complete',
-          'aria-expanded': completion.open,
+          // v0.10.1655 — aria-expanded YOK: <textarea> rolü textbox, bu durumu
+          // desteklemez (axe aria-allowed-attr); aria-controls yalnız popup DOM'dayken
+          // (yok olan id'ye işaret = aria-valid-attr-value).
+          'aria-controls': completion.open ? 'chat-complete' : undefined,
           'aria-activedescendant': completion.open ? `chat-complete-${completion.highlight}` : undefined,
         }}
         popup={completion.open && (

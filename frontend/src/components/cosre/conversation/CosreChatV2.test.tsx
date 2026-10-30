@@ -297,17 +297,15 @@ describe('CosreChatV2 × v1 paylaşılan karşılama + composer (plan §10)', ()
     expect(sheet()!.querySelector('.cm-msg-ai')?.textContent?.trim()).toBe('Düzeltilmiş tam metin.');
   });
 
-  // v1'den DEVRALINAN iki bulgu (v1 composer'ı/seçicileri birebir, DOM'u değiştirilmez —
-  // plan §10): textarea'daki combobox aria-* (aria-allowed-attr) ve yalnız title'lı
-  // arama kutuları (label-title-only). v2'nin kendi katmanı (Sheet, başlık, cevap
-  // yolu) ihlalsiz; kendi parçaları designAxe `cosre/ChatV2` 3 hücrede.
-  it('axe: v2 katmanı ihlalsiz; yalnız v1\'den devralınan iki bilinen kural', async () => {
+  // v0.10.1655 — v1'den devralınan iki bulgu kapandı: textarea'dan aria-expanded
+  // düştü (textbox rolü desteklemez, aria-allowed-attr) ve Service/OperationPicker
+  // kutuları placeholder'dan aria-label alır (label-title-only). v1 ve v2 ikisi de
+  // ihlalsiz; kendi parçaları designAxe `cosre/ChatV2` 3 hücrede.
+  it('axe: v2 ve v1 çekmecesi ihlalsiz (devralınan bulgular kapandı)', async () => {
     await render({ defaultOpen: true }, URL);
-    const ids = (await axeViolations(sheet()!)).map(v => v.split(':')[0]).sort();
-    expect(ids).toEqual(['aria-allowed-attr', 'label-title-only']);
+    expect(await axeViolations(sheet()!)).toEqual([]);
     await unmount();
     await mount(<CopilotChat defaultOpen />, URL);
-    const v1 = (await axeViolations(document.querySelector('[data-tour="cosre-drawer"]')!)).map(v => v.split(':')[0]).sort();
-    expect(v1).toEqual(ids);
+    expect(await axeViolations(document.querySelector('[data-tour="cosre-drawer"]')!)).toEqual([]);
   });
 });

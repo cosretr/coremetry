@@ -154,6 +154,9 @@ export function ServicePicker({
       recentKey={SERVICE_RECENT_KEY}
       optionMeta={optionMeta}
       placeholder={placeholder}
+      // v0.10.1655 — erişilebilir ad placeholder'dan (TeamPicker emsali);
+      // yalnız title'lı kutu axe label-title-only.
+      ariaLabel={placeholder}
       width={width}
       onEnter={() => onEnter?.(undefined)}
       // v0.9.951 (E5/Ö31) — `/` kısayolunun AÇIK hedefi. İşaret

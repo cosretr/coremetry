@@ -81,7 +81,7 @@ export interface ChatComposerProps {
   textareaRef?: RefObject<HTMLTextAreaElement | null>;
   autoFocus?: boolean;
   comboboxProps?: Pick<TextareaHTMLAttributes<HTMLTextAreaElement>,
-    'aria-autocomplete' | 'aria-controls' | 'aria-expanded' | 'aria-activedescendant'>;
+    'aria-autocomplete' | 'aria-controls' | 'aria-activedescendant'>;
   /**
    * v0.10.1150 — "Derin düşün" anahtarı (Aa'nın yanında hap). Durumu kabuk
    * tutar (useDeepThink: kullanıcı başına localStorage); onDeepChange yoksa çizilmez.

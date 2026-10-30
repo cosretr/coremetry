@@ -87,6 +87,7 @@ export function OperationPicker({
       status={search.status}
       recentKey={recentKey}
       placeholder={placeholder}
+      ariaLabel={placeholder} // v0.10.1655 — axe label-title-only (TeamPicker emsali)
       width={width}
       onEnter={() => onEnter?.(undefined)}
       footer={truncated
