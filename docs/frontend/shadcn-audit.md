@@ -444,3 +444,11 @@ Değişenler:
 
 **Sıra:** Faz 1'e onay. Faz 0.5 (React 19) ve CoSRE lazy merge olmadan Faz 1 başlamaz.
 
+
+## 13. Design permission on migrated pages (operator, 2026-10-30) — binding for Phase 2
+
+- **Free on a migrated page:** visual hierarchy, spacing/density, alignment, icons, empty/loading/error states, typographic consistency.
+- **Reference language:** two screens the operator places under `docs/frontend/mockups/` (CoSRE chat, service overview); shadcn zinc dark, Inter + JetBrains Mono, dense tables, the status palette. Mockups stay in `docs/` — never copied into `src/`.
+- **Stop and ask (information architecture):** page layout, navigation, which data lives where, column set, default filters.
+- **Logging:** every visual change gets a `design:` line in that release's `docs/frontend/migration-log.md` entry.
+- Open (asked 2026-10-30): font delivery (today no web font is fetched — `globals.css:316`, `--font-mono` system stack `:186`); whether "zinc dark" re-values the global dark theme tokens or stays a migrated-page look.
