@@ -230,13 +230,85 @@ describe('CosreChatV2 kabuğu', () => {
     expect(fabSrc).not.toMatch(/visibility:/);
   });
 
-  it('?chat= açar ve adreste KALIR; ?ai= gelince kapanır', async () => {
+  it('?chat= açar, konuşmayı YÜKLER ve adreste kalır; ?ai= gelince kapanır', async () => {
+    const load = vi.spyOn(api, 'aiConversation').mockResolvedValue({
+      id: 'c1', title: 't', messages: [{ role: 'user', text: 'eski soru' }, { role: 'assistant', text: 'eski cevap', exchangeId: 'x0' }],
+    } as never);
     await render({}, '/services?chat=c1');
     expect(sheet()).not.toBeNull();
+    await vi.waitFor(() => expect(sheet()!.textContent).toContain('eski cevap'));
+    expect(load).toHaveBeenCalledWith('c1');
     expect(readSp!()).toBe('chat=c1');
     await act(async () => { setSp!('chat=c1&ai=trace'); });
     await tick();
     expect(sheet()).toBeNull();
+  });
+});
+
+// v0.10.1664 (B6, plan §1.4 / §5.5) — kalıcılık + Geçmiş + genişlik tutamağı.
+describe('CosreChatV2 B6: kalıcılık, ?chat=, Geçmiş, tutamak', () => {
+  const second = () => cosreFixture('ui-stream-v1-reset').replaceAll('01M62F9N000000000000000000', '01M62F9N000000000000000009');
+
+  it('finish → tek kayıt (reset uygulanmış metin); sunucu id ?chat= e yazılır ve ikinci tur taşır', async () => {
+    const save = vi.spyOn(api, 'saveAiConversation').mockResolvedValue({ id: 'c9' } as never);
+    await render({ defaultOpen: true });
+    await typeAndSend('ilk soru');
+    await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    expect(save.mock.calls[0][0]).toEqual({ id: undefined, messages: [
+      { role: 'user', text: 'ilk soru' }, expect.objectContaining({ role: 'assistant', text: 'Düzeltilmiş tam metin.' }),
+    ] });
+    await vi.waitFor(() => expect(readSp!()).toBe('chat=c9'));
+    v2Body = second();
+    await typeAndSend('ikinci soru');
+    await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(2));
+    expect(save.mock.calls[1][0].id).toBe('c9');
+    expect(save.mock.calls[1][0].messages.map((m: { text?: string }) => m.text)).toEqual(['ilk soru', 'Düzeltilmiş tam metin.', 'ikinci soru', 'Düzeltilmiş tam metin.']);
+    // Temizle: kimlik düşer, adres temizlenir.
+    const clear = [...sheet()!.querySelectorAll('button')].find(b => b.textContent === 'Temizle')!;
+    await act(async () => { clear.click(); });
+    await tick();
+    expect(readSp!()).toBe('');
+  });
+
+  it('hatalı tur kaydedilmez', async () => {
+    const save = vi.spyOn(api, 'saveAiConversation').mockResolvedValue({ id: 'c9' } as never);
+    v2Body = cosreFixture('ui-stream-v1-error');
+    await render({ defaultOpen: true });
+    await typeAndSend('soru');
+    await vi.waitFor(() => expect([...sheet()!.querySelectorAll('button')].some(x => x.textContent?.includes('Yeniden dene'))).toBe(true));
+    await tick();
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it('🕘 Geçmiş: liste açılışta çekilir, satır konuşmayı yükler; boş liste boş durumu çizer', async () => {
+    vi.spyOn(api, 'aiConversations').mockResolvedValue([{ id: 'c2', title: 'Eski konuşma', updatedAt: Date.now() * 1e6, messages: 2 }] as never);
+    vi.spyOn(api, 'aiConversation').mockResolvedValue({ id: 'c2', title: 'Eski konuşma', messages: [{ role: 'user', text: 'q' }, { role: 'assistant', text: 'arşiv cevabı' }] } as never);
+    await render({ defaultOpen: true });
+    const btn = [...sheet()!.querySelectorAll('button')].find(b => b.textContent === '🕘 Geçmiş')!;
+    await act(async () => { btn.click(); });
+    await tick();
+    const row = [...sheet()!.querySelectorAll<HTMLButtonElement>('[data-chat-history] button')].find(b => b.textContent === 'Eski konuşma')!;
+    await act(async () => { row.click(); });
+    await vi.waitFor(() => expect(sheet()!.textContent).toContain('arşiv cevabı'));
+    expect(sheet()!.querySelector('[data-chat-history]')).toBeNull();
+    await vi.waitFor(() => expect(readSp!()).toBe('chat=c2'));
+  });
+
+  it('tutamak: sola sürükle genişletir ve v1 anahtarına yazar; çift tık varsayılana döner', async () => {
+    store.set('coremetry-cosre-drawer-w', '700');
+    vi.stubGlobal('innerWidth', 1600);
+    await render({ defaultOpen: true });
+    const h = sheet()!.querySelector<HTMLElement>('[data-cosre-resize]')!;
+    await act(async () => {
+      h.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, clientX: 900 }));
+      window.dispatchEvent(new MouseEvent('pointermove', { clientX: 800 }));
+      window.dispatchEvent(new MouseEvent('pointerup'));
+    });
+    expect(store.get('coremetry-cosre-drawer-w')).toBe('800');
+    expect(sheet()!.style.getPropertyValue('--cosre-sheet-w')).toBe('800px');
+    await act(async () => { h.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })); });
+    expect(store.get('coremetry-cosre-drawer-w')).toBe('');
+    expect(sheet()!.style.getPropertyValue('--cosre-sheet-w')).toBe('620px');
   });
 });
 

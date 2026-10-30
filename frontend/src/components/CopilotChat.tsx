@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { mergeOpenHref } from '@/lib/openHref'; // v0.10.460
 import { Link, useNavigate } from 'react-router-dom';
-import { api } from '@/lib/api';
 import { takeMetricPanelAsk } from '@/lib/pageContextOverlay'; // v0.10.1435
 import { hasPinnableContext, pinLabelTR } from '@/lib/pinnedContext';
 import type { ChatExplainAsk, ChatTurn, PageContext } from '@/lib/types';
@@ -10,9 +9,10 @@ import { Chip } from '@/components/ui/Chip';
 import { IconButton } from '@/components/ui/IconButton';
 import { AiMark, CopilotFab } from './ai/CopilotFab'; // v0.10.1599
 import { Drawer } from '@/components/ui/Drawer';
-import { useConfirm } from '@/components/ui/ConfirmDialog';
-import { useOpenCriticalCount } from '@/lib/queries';
+import { api } from '@/lib/api';
+import { useChatHistory, type ChatHistory } from './ai/useChatHistory'; // v0.10.1664 — v1 + v2 ortak Geçmiş
 import { tsRel } from '@/lib/utils';
+import { useOpenCriticalCount } from '@/lib/queries';
 import type { ChatContextStarter } from '@/lib/chatContext';
 import { syncChatParam } from '@/lib/chatUrl';
 import { Empty, Spinner } from './Spinner';
@@ -239,27 +239,15 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer',
   // getir, prefetch yok, poll yok). Bu oturumda başlatılan bir konuşma
   // listede bir SONRAKİ açılışta görünür — bunun için ekstra istek
   // atmak, maliyet disiplininin karşılığını vermiyor.
-  const confirm = useConfirm();
   const [showHistory, setShowHistory] = useState(false);
-  const [threads, setThreads] = useState<AiConversationSummary[] | undefined>(undefined);
-  const [histErr, setHistErr] = useState('');
   // v0.10.1137 — /cosre kenar çubuğu listeyi hep gösterir: yeni konuşma
   // saklanınca (sunucu kimlik basınca) liste bir kez yenilenir ve eski liste
   // yenilenirken EKRANDA kalır (yükleniyor göstergesi yalnız ilk açılışta).
   // Çekmecede davranış aynen: yalnız açılışta.
+  // v0.10.1664 — veri + paylaş/sil ai/ChatHistoryPanel'de (v2 Sheet de kullanır).
   const listKey = isPage ? (conversationId ?? '') : '';
-  useEffect(() => {
-    if (!open) return;
-    let alive = true;
-    if (!isPage) setThreads(undefined);
-    setHistErr('');
-    api.aiConversations()
-      .then(t => { if (alive) setThreads(t ?? []); })
-      .catch(e => {
-        if (alive) { setThreads([]); setHistErr(e instanceof Error ? e.message : String(e)); }
-      });
-    return () => { alive = false; };
-  }, [open, isPage, listKey]);
+  const history = useChatHistory(open, listKey, isPage);
+  const { threads, error: histErr, setError: setHistErr } = history;
   // v0.10.1137 — kenar çubuğu: daraltma (localStorage) + telefonda çekmece.
   const [sideCollapsed, setSideCollapsed] = useState<boolean>(() => readSidebarCollapsed());
   const [sideMobile, setSideMobile] = useState(false);
@@ -283,35 +271,11 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer',
     }
   };
 
-  // v0.10.1167 — salt-okunur paylaşım bağlantısı panoya.
-  const shareThread = async (t: AiConversationSummary) => {
-    try {
-      const r = await api.shareAiConversation(t.id);
-      const url = `${window.location.origin}${r.path}`;
-      try { await navigator.clipboard.writeText(url); toast.success('Salt-okunur bağlantı panoya kopyalandı'); }
-      catch { toast.info(`Salt-okunur bağlantı: ${url}`, 10000); }
-    } catch (e) {
-      toast.error(`Paylaşılamadı: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  };
-
+  const shareThread = history.share;
   const removeThread = async (t: AiConversationSummary) => {
-    if (!await confirm({
-      title: 'Konuşma silinsin mi?',
-      body: <><b>{t.title}</b> konuşması kalıcı olarak silinecek. Yalnız
-        sohbet kaydı gider — telemetri verisine dokunulmaz.</>,
-      confirmLabel: 'Konuşmayı sil',
-      danger: true,
-    })) return;
-    try {
-      await api.deleteAiConversation(t.id);
-      setThreads(prev => (prev ?? []).filter(x => x.id !== t.id));
-      // Ekrandaki konuşma silinen thread ise, kabuk artık ölü bir
-      // kimliğe yazmaya devam etmemeli: yeni konuşma hâline dönüyoruz.
-      if (conversationId === t.id) startNew();
-    } catch (e) {
-      setHistErr(e instanceof Error ? e.message : String(e));
-    }
+    // Ekrandaki konuşma silinen thread ise, kabuk artık ölü bir
+    // kimliğe yazmaya devam etmemeli: yeni konuşma hâline dönüyoruz.
+    if (await history.remove(t, deleteConversation) && conversationId === t.id) startNew();
   };
 
   // v0.10.1648 — karşılama verisi (hata özeti + takım) ai/cosreAsk.ts'te; aynı koşul.
@@ -511,70 +475,9 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer',
               quiet-destructive düğme onaydan sonra siler. Yükleniyor /
               hata / boş üç hâlin hepsi çizilir (ev kuralı: boş panel yok). */}
           {showHistory && !isPage && (
-            <div style={{
-              borderBottom: '1px solid var(--divider)', background: 'var(--bg1)',
-              maxHeight: 240, overflowY: 'auto',
-            }}>
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                padding: '6px 10px 6px 14px',
-              }}>
-                <span className="cm-hist__h">
-                  Geçmiş
-                </span>
-                <span style={{ flex: 1 }} />
-                <Button variant="secondary" size="xs"
-                  onClick={() => { startNew(); setShowHistory(false); }}
-                  title="Ekranı boşalt, yeni bir konuşma başlat">+ Yeni konuşma</Button>
-              </div>
-              {threads === undefined && (
-                <div style={{ padding: '4px 14px 10px' }}>
-                  <Spinner label="Konuşmalar yükleniyor…" />
-                </div>
-              )}
-              {histErr && (
-                <div style={{ padding: '0 14px 8px' }}>
-                  <span className="badge b-err" title={histErr}>Geçmiş okunamadı</span>
-                </div>
-              )}
-              {threads?.length === 0 && !histErr && (
-                <Empty icon="🕘" compact title="Kayıtlı konuşma yok">
-                  Bir soru sorduğunda konuşma otomatik saklanır.
-                </Empty>
-              )}
-              {threads?.map(t => (
-                <div key={t.id} style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  padding: '0 8px 0 14px',
-                  background: t.id === conversationId ? 'var(--accent-soft)' : undefined,
-                }}>
-                  <Button variant="ghost" size="sm"
-                    onClick={() => void openThread(t)}
-                    title={t.title}
-                    style={{
-                      flex: 1, minWidth: 0, justifyContent: 'flex-start',
-                      textAlign: 'left',
-                    }}>
-                    <span style={{
-                      display: 'block', maxWidth: '100%',
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    }}>{t.title}</span>
-                  </Button>
-                  <span className="cm-hist__meta"
-                    title={`${t.messages} mesaj`}>
-                    {tsRel(t.updatedAt)} · {t.messages}
-                  </span>
-                  <Button variant="ghost" size="xs"
-                    onClick={() => void shareThread(t)}
-                    aria-label={`${t.title} konuşmasını paylaş`}
-                    title="Salt-okunur bağlantıyı kopyala">🔗</Button>
-                  <Button variant="ghost-danger" size="xs"
-                    onClick={() => void removeThread(t)}
-                    aria-label={`${t.title} konuşmasını sil`}
-                    title="Konuşmayı sil">✕</Button>
-                </div>
-              ))}
-            </div>
+            <ChatHistoryPanel history={history} activeId={conversationId}
+              onNew={() => { startNew(); setShowHistory(false); }}
+              onOpen={t => void openThread(t)} onDelete={t => void removeThread(t)} />
           )}
 
           {/* Messages */}
@@ -926,5 +829,89 @@ export function CosreComposerForm({ input: composer, ask, busy, stop, codeLocked
         </div>
       )}
     </form>
+  );
+}
+
+// v0.10.1664 (CoSRE v2 Faz 2b B6) — Geçmiş bölümü (v0.9.1139) çekmece gövdesinden
+// çıkarıldı; v2 Sheet de AYNI paneli çizer (veri: ai/useChatHistory). Kalıcı silme
+// çağrısı ghost-danger düğmesiyle aynı dosyada (destructiveConfirm Kapı B).
+export const deleteConversation = (id: string) => api.deleteAiConversation(id);
+export interface ChatHistoryPanelProps {
+  history: ChatHistory;
+  activeId: string | null;
+  onNew(): void;
+  onOpen(t: AiConversationSummary): void;
+  onDelete(t: AiConversationSummary): void;
+}
+
+/** Çekmece içi Geçmiş bölümü — menü değil bir BÖLÜM (çekmece zaten sağ kenarda;
+ *  uçan bir katman sohbetin üstüne binerdi). */
+export function ChatHistoryPanel({ history, activeId, onNew, onOpen, onDelete }: ChatHistoryPanelProps) {
+  const { threads, error: histErr } = history;
+  return (
+    <div data-chat-history="" style={{
+      borderBottom: '1px solid var(--divider)', background: 'var(--bg1)',
+      maxHeight: 240, overflowY: 'auto',
+    }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        padding: '6px 10px 6px 14px',
+      }}>
+        <span className="cm-hist__h">
+          Geçmiş
+        </span>
+        <span style={{ flex: 1 }} />
+        <Button variant="secondary" size="xs"
+          onClick={onNew}
+          title="Ekranı boşalt, yeni bir konuşma başlat">+ Yeni konuşma</Button>
+      </div>
+      {threads === undefined && (
+        <div style={{ padding: '4px 14px 10px' }}>
+          <Spinner label="Konuşmalar yükleniyor…" />
+        </div>
+      )}
+      {histErr && (
+        <div style={{ padding: '0 14px 8px' }}>
+          <span className="badge b-err" title={histErr}>Geçmiş okunamadı</span>
+        </div>
+      )}
+      {threads?.length === 0 && !histErr && (
+        <Empty icon="🕘" compact title="Kayıtlı konuşma yok">
+          Bir soru sorduğunda konuşma otomatik saklanır.
+        </Empty>
+      )}
+      {threads?.map(t => (
+        <div key={t.id} style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          padding: '0 8px 0 14px',
+          background: t.id === activeId ? 'var(--accent-soft)' : undefined,
+        }}>
+          <Button variant="ghost" size="sm"
+            onClick={() => onOpen(t)}
+            title={t.title}
+            style={{
+              flex: 1, minWidth: 0, justifyContent: 'flex-start',
+              textAlign: 'left',
+            }}>
+            <span style={{
+              display: 'block', maxWidth: '100%',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>{t.title}</span>
+          </Button>
+          <span className="cm-hist__meta"
+            title={`${t.messages} mesaj`}>
+            {tsRel(t.updatedAt)} · {t.messages}
+          </span>
+          <Button variant="ghost" size="xs"
+            onClick={() => void history.share(t)}
+            aria-label={`${t.title} konuşmasını paylaş`}
+            title="Salt-okunur bağlantıyı kopyala">🔗</Button>
+          <Button variant="ghost-danger" size="xs"
+            onClick={() => onDelete(t)}
+            aria-label={`${t.title} konuşmasını sil`}
+            title="Konuşmayı sil">✕</Button>
+        </div>
+      ))}
+    </div>
   );
 }

@@ -12,7 +12,7 @@
 // v0.10.1650 (B2): gövde çağıranın — v1 karşılaması/composer'ı + v2 cevap yolu
 // (CosreChatV2). Bu dosya sunumsal kalır (katalog statik içerikle çizer).
 // components/ui'den HİÇBİR şey içe aktarılmaz (uiImportRatchet, ui/ donmuş).
-import { useCallback, useEffect, useRef, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/coremetry/overlay';
 import { AiMark } from '@/components/ai/CopilotFab';
 import { isEmptyAreaClick } from '@/lib/emptyAreaClose';
@@ -39,6 +39,9 @@ export function CosreSheet({ open, onOpenChange, width, contentProps, headerCont
     panelRef.current = el;
     el?.style.setProperty('--cosre-sheet-w', `${width}px`);
   }, [width]);
+  // v0.10.1664 (B6) — tutamak sürüklerken genişlik değişir; Radix'in birleşik
+  // ref'i yeniden çağrılmayabilir → açık panele ayrıca yazılır.
+  useLayoutEffect(() => { panelRef.current?.style.setProperty('--cosre-sheet-w', `${width}px`); }, [width]);
 
   // v1 Drawer closeOnEmptyClick ile aynı: metin seçimi kapatmaz; dinleyici bir
   // tık sonra bağlanır ki açan tıklama hemen kapatmasın.

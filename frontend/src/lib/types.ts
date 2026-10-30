@@ -7467,6 +7467,19 @@ export interface CosreMessageMetadata {
   resetApplied?: number[];
   /** v0.10.1660 (B5) — sunucunun "bu sayfayı aç" yönergesi (v1 answer.open, D7b); istemci isSafeAppPath kapısından SPA ile gider. */
   open?: string;
+  /** v0.10.1664 (B6) — Geçmiş'ten açılan tur kimliği (v1 ChatTurn.archiveExchangeId):
+   *  sinyal düğmeleri kapalı, yeniden kayıtta exchangeId olarak geri yazılır. */
+  archiveExchangeId?: string;
+  /** v0.10.1664 (B6) — arşiv blok zarfının damgası / sığmayan türler (v1 ChatMessage). */
+  blocksAt?: number;
+  blocksDropped?: string[];
+  /** v0.10.1664 (B6) — açıklama turunun künyesi (sunucu answer.explain → message-metadata;
+   *  arşivden de). v1 ChatBubble ExplainBody / charts / log-spike / metric-panel kipini buradan seçer. */
+  explain?: ChatExplainMeta;
+  /** v0.10.1665 (B7) — kullanıcı turunun açıklama niyeti (fresh'siz) ve sabit penceresi:
+   *  yeniden dene aynısını yollar, bekleyen cevap baştan açıklama turu çizilir. */
+  explainAsk?: ChatExplainAsk;
+  window?: ChatSendWindow;
 }
 
 /**

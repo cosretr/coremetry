@@ -10,6 +10,8 @@ export const COSRE_V2_STRINGS = {
   threadLabel: 'CoSRE mesajları',
   fullPage: 'Tam sayfada aç ↗',
   fullPageTitle: "CoSRE'yi /cosre tam sayfasında aç",
+  history: '🕘 Geçmiş',
+  historyTitle: 'Konuşma geçmişi',
   clear: 'Temizle',
   clearTitle: 'Konuşmayı temizle ve yeni konuşma başlat',
   jumpBottom: '↓ En alta',

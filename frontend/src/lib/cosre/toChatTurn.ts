@@ -191,6 +191,12 @@ export function toChatTurn(m: CosreUIMessage, parts: readonly Part[], opts: ToCh
     // v0.10.1659 (B4) — sinyal anahtarı + cevabın kanıt çipleri.
     ...(meta?.exchangeId ? { exchangeId: meta.exchangeId } : {}),
     ...(meta?.turnId ? { turnId: meta.turnId } : {}),
+    // v0.10.1664 (B6) — Geçmiş'ten açılan tur: arşiv kimliği (sinyal yok) +
+    // "Arşiv anlık görüntüsü" notu; açıklama künyesi (v1 restoreTurns).
+    ...(meta?.archiveExchangeId ? { archiveExchangeId: meta.archiveExchangeId } : {}),
+    ...(meta?.blocksAt ? { blocksAt: meta.blocksAt } : {}),
+    ...(meta?.blocksDropped?.length ? { blocksDropped: meta.blocksDropped } : {}),
+    ...(meta?.explain ? { explain: meta.explain } : {}),
     ...evidenceOf(parts),
     ...channelsOf(parts),
   };

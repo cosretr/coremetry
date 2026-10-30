@@ -4,8 +4,9 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { PERSIST_MESSAGE_CAP, persistMessages } from '@/components/ai/chatPersist';
-import { COSRE_PERSIST_CAP, STOPPED_NOTE, hasCompletedExchange, toPersistMessages, toRequestMessages } from './cosrePersist';
+import { PERSIST_MESSAGE_CAP, persistMessages, restoreTurns } from '@/components/ai/chatPersist';
+import { COSRE_PERSIST_CAP, STOPPED_NOTE, fromPersistMessages, hasCompletedExchange, messageText, toPersistMessages, toRequestMessages } from './cosrePersist';
+import { toChatTurn } from './toChatTurn';
 import type { CosreUIMessage } from './resetReducer';
 
 const text = (t: string) => ({ type: 'text' as const, text: t, state: 'done' as const });
@@ -71,5 +72,55 @@ describe('toRequestMessages', () => {
   it('STOPPED_NOTE v1 useChatThread history notuyla bayt bayt aynı', () => {
     const src = readFileSync(resolve(__dirname, '../../components/ai/useChatThread.ts'), 'utf8');
     expect(src).toContain('`${t.text}' + STOPPED_NOTE.replace(/\n/g, '\\n') + '`');
+  });
+});
+
+// v0.10.1664 (B6, plan §1.4 / §5.5) — bayrak çevrimi thread kaybettirmez:
+// aynı blob iki yönde de okunur.
+describe('fromPersistMessages + bayrak çevrimi yuvarlaması', () => {
+  const ev = { tool: 'q', source: 'spans', window: { fromMs: 1, toMs: 2 } };
+  const explain = { kind: 'trace', id: 'abc', label: 'trace abc' };
+  const v1Blob = [
+    { role: 'user' as const, text: 'bu trace neden yavaş' },
+    {
+      role: 'assistant' as const, text: 'çünkü db', exchangeId: '0123456789abcdef0123456789abcdef', codeRead: true,
+      evidence: [ev], explain, blocks: [{ id: 'b1', type: 'charts_signals' as const, seq: 2, final: true, payload: { a: 1 } }],
+      blocksAt: 1700000000000, blocksDropped: ['topology'],
+    },
+  ];
+
+  it('v1 blobu → v2: metin, data-block, kanıt, kod kilidi; exchangeId arşiv kimliği (canlı değil)', () => {
+    const out = fromPersistMessages(v1Blob as never, 'c1');
+    expect(out.map(m => m.id)).toEqual(['c1:0', 'c1:1']);
+    const a = out[1];
+    expect(a.metadata).toEqual({ archiveExchangeId: v1Blob[1].exchangeId, explain, blocksAt: 1700000000000, blocksDropped: ['topology'] });
+    expect(a.metadata?.exchangeId).toBeUndefined();
+    expect(a.parts.map(p => p.type)).toEqual(['text', 'data-block-charts_signals', 'data-evidence-summary', 'data-code-lock']);
+    const turn = toChatTurn(a, a.parts);
+    expect(turn).toMatchObject({ text: 'çünkü db', archiveExchangeId: v1Blob[1].exchangeId, explain, codeRead: true, evidence: [ev] });
+    expect(turn.exchangeId).toBeUndefined();
+    expect(turn.blocks).toEqual([{ id: 'b1', type: 'charts_signals', seq: 2, final: true, payload: { a: 1 } }]);
+  });
+
+  it('v1 → v2 → v1: yeniden kayıt v1 persistMessages(restoreTurns(blob)) ile aynı', () => {
+    expect(toPersistMessages(fromPersistMessages(v1Blob as never, 'c1'))).toEqual(persistMessages(restoreTurns(v1Blob as never)));
+  });
+
+  it('v2 → v1: v2 kaydı v1 restoreTurns ile aynı metinleri ve künyeyi verir (yarım tur dahil)', () => {
+    const saved = toPersistMessages([
+      user('01M62F9N000000000000000001', 'q1'),
+      asst('01M62F9N000000000000000002', [text('a1'), { type: 'data-evidence-summary', id: 'evidence', data: { evidence: [ev] } }], { turnId: 't1', explain: explain as never }),
+      user('01M62F9N000000000000000003', 'q2'),
+      asst('01M62F9N000000000000000004', [text('a2 yarım')], { exchangeId: 'x2', partial: true }),
+    ]);
+    const back = restoreTurns(saved);
+    expect(back.map(t => t.text)).toEqual(['q1', 'a1', 'q2', 'a2 yarım']);
+    expect(back[1]).toMatchObject({ archiveExchangeId: 't1', explain, evidence: [ev] });
+    expect(fromPersistMessages(saved, 'c').map(messageText)).toEqual(['q1', 'a1', 'q2', 'a2 yarım']);
+  });
+
+  it('boş metinli mesaj düşer; boş girdi boş dizi', () => {
+    expect(fromPersistMessages(undefined, 'c')).toEqual([]);
+    expect(fromPersistMessages([{ role: 'user', text: '  ' }], 'c')).toEqual([]);
   });
 });

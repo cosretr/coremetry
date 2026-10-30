@@ -2412,6 +2412,8 @@ a.dep-prob-mark:hover { text-decoration: none; }
 .drawer-resizer { position: absolute; left: 0; top: 0; bottom: 0; width: 6px; cursor: col-resize; z-index: var(--z-handle); background: transparent; transition: background .12s; touch-action: none; }
 .drawer-resizer:hover { background: var(--accent); opacity: .6; }
 .drawer-resizer:active { background: var(--accent); }
+/* v0.10.1664 — v2 Sheet tutamağı sürüklenirken (SheetResizeHandle; inline style yok). */
+body.cm-col-resizing { cursor: col-resize; user-select: none; }
 #span-panel-head { padding: 10px 14px; border-bottom: 1px solid var(--divider); display: flex; align-items: flex-start; justify-content: space-between; position: sticky; top: 0; background: var(--bg1); z-index: var(--z-sticky-bar); }
 .ps-title { font-size: 13px; font-weight: 600; word-break: break-word; flex: 1; padding-right: 8px; }
 #span-panel-body { padding: 12px 14px; }

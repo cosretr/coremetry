@@ -18,9 +18,12 @@
 //
 // Açılış yolları (v1 ile aynı, Q1 hariç):
 //   • FAB (kapalıyken bu bileşen çizer; kritik-problem rozeti aynı RQ anahtarı)
-//   • `?chat=<id>` → açılır. Parametre YAZILMAZ/silinmez: bayrak kapatılınca v1
-//     aynı adresle aynı thread'i yükler (iki gerçekleme tek kalıcılık, §1.4).
-//     Thread'in v2'ye yüklenmesi B6.
+//   • `?chat=<id>` → açılır ve o konuşma YÜKLENİR (v0.10.1664 B6); açık
+//     thread ⇔ `?chat=` (lib/chatUrl.syncChatParam, v1 ile aynı saf çekirdek,
+//     replace:true). Kayıt finish'ten sonra chat.messages'tan (useConversation):
+//     aynı uç + aynı blob → bayrak çevrilince thread iki UI'da da açılır.
+//     Başlıkta 🕘 Geçmiş (v1 paneli, CopilotChat ChatHistoryPanel); sol kenar tutamağı
+//     (SheetResizeHandle) v1 ile aynı genişlik anahtarı.
 //   • `coremetry:ai-ask` → açılır + soruyu gönderir; AI_PREFILL_EVENT → açılır +
 //     composer'ı doldurur (GÖNDERMEZ) — v1 köprüleriyle aynı.
 //   • `?ai=` açıklama turu → v1'in (kapı yanına `launcher={false}` mount eder);
@@ -33,6 +36,12 @@ import { isSafeAppPath } from '@/lib/safeAppPath';
 import { useOpenCriticalCount } from '@/lib/queries';
 import { AI_PARAM } from '@/lib/aiSubject';
 import { getRaw } from '@/lib/storage';
+import { syncChatParam } from '@/lib/chatUrl';
+import type { AiConversationSummary } from '@/lib/types';
+import { useChatHistory } from '@/components/ai/useChatHistory';
+import { cosreFullPageHref } from '@/components/ai/drawerFullPage';
+import { useConversation } from './useConversation';
+import { SheetResizeHandle } from './SheetResizeHandle';
 import type { ChatExplainAsk } from '@/lib/types';
 import { COSRE_DRAWER_WIDTH_KEY, cosreSheetWidth } from '@/lib/cosre/sheetWidth';
 import { useCosreChat } from '@/lib/cosre/useCosreChat';
@@ -45,7 +54,7 @@ import { useCosreAskContext, useCosreComposerInput, useCosreWelcomeData } from '
 import { useStickToBottomState } from '@/components/ai/stickToBottom';
 import { explainAskFor, explainAskSubject, explainTurnSendOpts } from '@/components/ai/explainTurn';
 import type { ChatSendOpts } from '@/components/ai/useChatThread';
-import { CosreComposerForm, CosreHeaderContext, CosreWelcome } from '@/components/CopilotChat';
+import { ChatHistoryPanel, CosreComposerForm, CosreHeaderContext, CosreWelcome, deleteConversation } from '@/components/CopilotChat';
 import { Button } from '@/components/shadcn/button';
 import { CosreSheet } from './CosreSheet';
 import { MessageList } from './MessageList';
@@ -78,11 +87,14 @@ export function CosreChatV2({ defaultOpen = false, yieldToV1 = false }: CosreCha
 
   // v1 ile ORTAK kancalar (ai/cosreAsk): bağlam, composer girdisi, karşılama.
   const ask = useCosreAskContext();
-  const { messages, status, error, sendMessage, stop, setMessages, regenerate, visibleParts } = useCosreChat();
+  const conv = useConversation();
+  const { messages, status, error, sendMessage, stop, setMessages, regenerate, visibleParts } = useCosreChat({ onPersist: conv.persist });
   const busy = status === 'submitted' || status === 'streaming';
+  const busyRef = useRef(busy);
+  busyRef.current = busy;
   const codeLocked = useMemo(() => messages.some(hasCodeLock), [messages]);
-  // Konuşma kimliği B6'ya dek yok (kalıcılık) → taslak "yeni konuşma" yuvasında.
-  const composer = useCosreComposerInput(null, ask.page, ask.chipTrace);
+  // v0.10.1664 (B6) — taslak konuşmanın yuvasında (v1 ile aynı anahtar).
+  const composer = useCosreComposerInput(conv.conversationId, ask.page, ask.chipTrace);
   const welcome = useCosreWelcomeData(ask.enabled === true && open && messages.length === 0, ask.env);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { pin: pinBottom, atBottom } = useStickToBottomState(scrollRef, [messages, open]);
@@ -124,9 +136,52 @@ export function CosreChatV2({ defaultOpen = false, yieldToV1 = false }: CosreCha
   const clear = () => {
     if (busy) void stop();
     setMessages([]);
+    conv.clear();
     ask.setPinned(null);
     ask.setCtxExcluded(new Set());
     composer.expectDraft(null);
+  };
+
+  // v0.10.1664 (B6) — `?chat=<id>` URL → state (ref sig-guard: aynı değer bir
+  // kez yüklenir; akış sürerken load kendini iptal eder) ve state → URL
+  // (syncChatParam; replace:true, yabancı paramlar korunur). v1 ile birebir.
+  const { sp: askSp, setSp } = ask;
+  const loadRef = useRef(conv.load);
+  loadRef.current = conv.load;
+  const chatParamRef = useRef('');
+  const openConversation = (id: string) => {
+    composer.expectDraft(id);
+    return loadRef.current(id, () => busyRef.current, setMessages);
+  };
+  const openRef = useRef(openConversation);
+  openRef.current = openConversation;
+  useEffect(() => {
+    const want = askSp.get('chat') ?? '';
+    if (!want || chatParamRef.current === want) return;
+    chatParamRef.current = want;
+    if (want !== conv.conversationId) {
+      // Silinmiş / okunamayan thread: v1 gibi boş sohbet kalır (karşılama çizilir).
+      openRef.current(want).catch(() => {});
+    }
+  }, [askSp, conv.conversationId]);
+  useEffect(() => {
+    const next = syncChatParam(askSp, conv.conversationId, open);
+    if (next) setSp(next, { replace: true });
+  }, [askSp, setSp, conv.conversationId, open]);
+
+  // ── Geçmiş (v1 paneli + kancası; liste yalnız açılışta) ──
+  const [showHistory, setShowHistory] = useState(false);
+  const history = useChatHistory(open && showHistory);
+  const openThread = async (t: AiConversationSummary) => {
+    try {
+      await openConversation(t.id);
+      setShowHistory(false);
+    } catch (e) {
+      history.setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+  const removeThread = async (t: AiConversationSummary) => {
+    if (await history.remove(t, deleteConversation) && conv.conversationId === t.id) clear();
   };
 
   // v0.10.1660 (B5) — sunucunun `open` yönergesi (v1 answer.open, D7b): bitmiş
@@ -166,10 +221,13 @@ export function CosreChatV2({ defaultOpen = false, yieldToV1 = false }: CosreCha
   // Rozet: kapalıyken (FAB görünürken) poll; RQ gizli sekmede durur.
   const criticalOpen = useOpenCriticalCount({ enabled: !open }).data ?? 0;
   // Genişlik her açılışta okunur (v1'de sürüklenip saklanmış olabilir).
-  const width = useMemo(
+  // v0.10.1664 (B6) — tutamakla seçilen genişlik (anahtara da yazılır) saklanandan önce gelir.
+  const [dragW, setDragW] = useState<number | null>(null);
+  const storedW = useMemo(
     () => (open ? cosreSheetWidth(getRaw(COSRE_DRAWER_WIDTH_KEY), AI_DRAWER_WIDTH, window.innerWidth) : AI_DRAWER_WIDTH),
     [open],
   );
+  const width = dragW ?? storedW;
 
   return (
     <>
@@ -181,12 +239,22 @@ export function CosreChatV2({ defaultOpen = false, yieldToV1 = false }: CosreCha
         width={width}
         headerContext={<CosreHeaderContext currentService={ask.currentService} env={ask.env} pinned={ask.pinned} setPinned={ask.setPinned} page={ask.page} />}
         headerActions={<>
-          <Link to="/cosre" className="cosre-page__home cm-fullpage" title={T.fullPageTitle}>{T.fullPage}</Link>
+          <Link to={cosreFullPageHref(messages.length > 0 ? conv.conversationId : null)} className="cosre-page__home cm-fullpage"
+            data-fullpage="" title={T.fullPageTitle}>{T.fullPage}</Link>
+          <Button variant="ghost" size="sm" className="cm-head-btn" onClick={() => setShowHistory(h => !h)}
+            aria-expanded={showHistory} title={T.historyTitle}>{T.history}</Button>
           {messages.length > 0 && (
             <Button variant="secondary" size="sm" onClick={clear} title={T.clearTitle}>{T.clear}</Button>
           )}
         </>}>
+        <SheetResizeHandle width={width} onWidth={setDragW}
+          onReset={() => setDragW(cosreSheetWidth(null, AI_DRAWER_WIDTH, window.innerWidth))} />
         <div className="cosre-root cosre-root--drawer" data-cosre-body="">
+          {showHistory && (
+            <ChatHistoryPanel history={history} activeId={conv.conversationId}
+              onNew={() => { clear(); setShowHistory(false); }}
+              onOpen={t => void openThread(t)} onDelete={t => void removeThread(t)} />
+          )}
           <div className="cm-thread-wrap">
             <div ref={scrollRef} className="cm-thread flex-1 overflow-y-auto" role="log" aria-live="polite" aria-busy={busy} aria-label={T.threadLabel}>
               <div className="cm-thread__col">
