@@ -397,8 +397,8 @@
     ]
   },
   "conditional/v2": {
-    "count": 70,
-    "sha256": "ac9df19e3ca1197aaa8fa59c12c9e77ab4207ae63bffbb29ad9630cfe7de87c6",
+    "count": 73,
+    "sha256": "416e4aad5ed6c90a44a200a831a48abb9ef686e3ccd5b3261139c9d382a167d0",
     "names": [
       "list_services",
       "list_teams",
@@ -417,6 +417,7 @@
       "get_problem_root_cause",
       "list_anomalies",
       "query_logs",
+      "search_logs",
       "list_log_fields",
       "list_clusters",
       "get_log_histogram",
@@ -469,7 +470,9 @@
       "set_context",
       "get_context",
       "clear_context",
-      "list_my_services"
+      "list_my_services",
+      "find_traces",
+      "explain_trace"
     ]
   },
   "zero/chat": {
@@ -850,8 +853,8 @@
     ]
   },
   "zero/v2": {
-    "count": 65,
-    "sha256": "9c55ad5aa44b873ced376db68d48d6c96c53f445d67078469f6e1f4c5d9876e0",
+    "count": 68,
+    "sha256": "25589ef1b3f59f88d00386c1ae3f10251c77b80a682fe0b1a854830db29958eb",
     "names": [
       "list_services",
       "list_teams",
@@ -870,6 +873,7 @@
       "get_problem_root_cause",
       "list_anomalies",
       "query_logs",
+      "search_logs",
       "list_log_fields",
       "list_clusters",
       "get_log_histogram",
@@ -917,7 +921,9 @@
       "set_context",
       "get_context",
       "clear_context",
-      "list_my_services"
+      "list_my_services",
+      "find_traces",
+      "explain_trace"
     ]
   }
 }

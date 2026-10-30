@@ -707,7 +707,8 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 		tools := toolsForRole(mcptools.ChatToolListFor(s.mcpDeps(), toolset), role) // v0.10.993 — dış-yalnız araçlar (bubble_up) hariç
 		if cosreV2Marked(ctx) {
 			// araç seti dilim 2 (chat_user_scope.go) — v2-yalnız araçlar (list_my_services); v1 kataloğu aynen.
-			tools = append(tools, toolsForRole(mcptools.V2OnlyTools(s.mcpDeps()), role)...)
+			// dilim 3 — aynı adlı v2 aracı (search_logs) v1'inkinin yerini alır.
+			tools = mcptools.V2MergeTools(tools, toolsForRole(mcptools.V2OnlyTools(s.mcpDeps()), role))
 		}
 		if evm != nil {
 			tools = evalAgentTools(tools) // v0.10.1316 — sohbet bağlamı araçları düşer

@@ -161,7 +161,7 @@ func specNames(specs []copilot.ToolSpec) []string {
 // v2 prepareStep planı ile mcptools.V2ToolList (altın `*/v2`) aynı listeyi verir.
 func TestV2PlanMatchesV2ToolList(t *testing.T) {
 	d := mcptools.Deps{}
-	full := specsOf(append(mcptools.ChatToolListFor(d, "full"), mcptools.V2OnlyTools(d)...))
+	full := specsOf(mcptools.V2MergeTools(mcptools.ChatToolListFor(d, "full"), mcptools.V2OnlyTools(d)))
 	in := stepInput{Kind: stepNormal, Specs: full, V2: &v2LoopPlan{Addendum: "\n\nEK"}}
 	plan := v2Prepare(in)
 	got := specNames(plan.planSpecs(in))

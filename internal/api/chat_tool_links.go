@@ -153,6 +153,10 @@ func toolResultDeepLink(tool, content string) (guidedAnswerLink, bool) {
 		label, prefix = "Loglar'da aç", "/logs?"
 	case mcptools.ListMyServicesName: // araç seti dilim 2 — v2-yalnız; sonuç page_url taşır
 		label, prefix = "Servisler'de aç", "/services"
+	case mcptools.FindTracesName: // dilim 3
+		label, prefix = "Traces'te aç", "/traces?"
+	case mcptools.ExplainTraceName: // dilim 3
+		label, prefix = "Trace'i aç", "/trace/"
 	default:
 		return guidedAnswerLink{}, false
 	}
@@ -163,8 +167,8 @@ func toolResultDeepLink(tool, content string) (guidedAnswerLink, bool) {
 	if err := json.Unmarshal([]byte(content), &r); err != nil {
 		return guidedAnswerLink{}, false
 	}
-	if r.DeepLink == "" && tool == mcptools.ListMyServicesName {
-		r.DeepLink = r.PageURL
+	if r.DeepLink == "" {
+		r.DeepLink = mcptools.V2PageURL(tool, content) // dilim 2-3 — v2 araçları page_url taşır
 	}
 	if !strings.HasPrefix(r.DeepLink, prefix) || len(r.DeepLink) > 4096 {
 		return guidedAnswerLink{}, false

@@ -54,7 +54,54 @@ const (
 
 // registerV2Subset — yalnız v2 sohbet kataloğuna eklenen araçlar (sıra = modelin gördüğü sıra).
 func registerV2Subset(d Deps) []mcp.Tool {
-	return []mcp.Tool{listMyServicesTool(d)}
+	return []mcp.Tool{listMyServicesTool(d), findTracesTool(d), cosreSearchLogsTool(d), explainTraceTool(d)}
+}
+
+// V2MergeTools — SAF (dilim 3): v2 kataloğu = taban katalog + v2 araçları;
+// aynı adlı v2 aracı (search_logs) tabandakinin yerini AYNI SIRADA alır,
+// gerisi sona eklenir. Taban girdi değişmez.
+func V2MergeTools(base, v2 []mcp.Tool) []mcp.Tool {
+	byName := make(map[string]mcp.Tool, len(v2))
+	for _, t := range v2 {
+		byName[t.Name] = t
+	}
+	used := map[string]bool{}
+	out := make([]mcp.Tool, 0, len(base)+len(v2))
+	for _, t := range base {
+		if r, ok := byName[t.Name]; ok {
+			t = r
+			used[t.Name] = true
+		}
+		out = append(out, t)
+	}
+	for _, t := range v2 {
+		if !used[t.Name] {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// v2PageURLTools — sonucu kök-göreli `page_url` taşıyan v2 araçları (adım
+// sonucunun href'i buradan; v1 search_logs çıktısında page_url yok).
+var v2PageURLTools = map[string]bool{ListMyServicesName: true, FindTracesName: true, SearchLogsV2Name: true, ExplainTraceName: true}
+
+// V2PageURL — SAF: v2 aracının JSON sonucundaki kök-göreli page_url ("" = yok).
+func V2PageURL(tool, content string) string {
+	if !v2PageURLTools[tool] {
+		return ""
+	}
+	var r struct {
+		PageURL string `json:"page_url"`
+	}
+	if json.Unmarshal([]byte(content), &r) != nil {
+		return ""
+	}
+	u := r.PageURL
+	if !strings.HasPrefix(u, "/") || strings.HasPrefix(u, "//") || strings.HasPrefix(u, "/\\") || len(u) > 4096 {
+		return ""
+	}
+	return u
 }
 
 // V2OnlyTools — api v2 döngüsünün yerli kataloğa eklediği araçlar.
@@ -63,7 +110,6 @@ func V2OnlyTools(d Deps) []mcp.Tool { return registerV2Subset(d) }
 // v2HiddenTools — v2 model alt kümesinden düşen genel sorgu araçları (G10/Q7).
 var v2HiddenTools = map[string]bool{
 	tsSearchTraces:     true, // açık öznitelik filtresi + regex = genel CH taraması
-	tsSearchLogs:       true, // Lucene query_string geçişi = genel ES aracı
 	tsQueryMetric:      true, // serbest metrik adı + etiket = kılık değiştirmiş PromQL
 	tsListMetricLabels: true, // yalnız query_metric'i besliyordu
 }
@@ -154,7 +200,8 @@ func V2StripArgs(name string, args json.RawMessage) (json.RawMessage, []string) 
 // api'nin prepareStep planı aynı üç kuralı (V2Hidden, V2NarrowSchema,
 // V2OnlyTools) uygular; TestV2PlanMatchesV2ToolList ikisini eşitler.
 func V2ToolList(d Deps, toolset string) []mcp.Tool {
-	all := append(ChatToolListFor(d, toolset), registerV2Subset(d)...)
+	// dilim 3 — v1 search_logs (Lucene) v2 search_logs (düz kelime) ile ADIYLA değişir.
+	all := V2MergeTools(ChatToolListFor(d, toolset), registerV2Subset(d))
 	out := make([]mcp.Tool, 0, len(all))
 	for _, t := range all {
 		if V2Hidden(t.Name) {

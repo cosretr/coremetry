@@ -170,6 +170,13 @@ func emitStepEvidence(emit func(string, any), i int, tool, text string, err erro
 		// geçerse çip aynı kanıtı taşır (chat_evidence.go). v0.10.1275 — liste
 		// varyantı: bileşik araçta `evidenceList` de yazılır.
 		attachStepEvidenceList(ev, tool, text)
+		// araç seti dilim 3 — v2 aracının page_url'i adımın href'i (data-tool-result
+		// page_url bundan); kanıt zarfı href verdiyse o kalır. v1 araçlarında no-op.
+		if _, has := ev["href"]; !has {
+			if u := mcptools.V2PageURL(tool, text); u != "" {
+				ev["href"] = u
+			}
+		}
 	}
 	emit("step-result", ev)
 }
