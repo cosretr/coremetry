@@ -3,10 +3,11 @@
 // + DataTableHead + DataTableCell + DataTableState (ui/DataTable), `virtual`
 // verilince VirtualTable. Kararı Traces dilimi verir (TanStack mı, bu mu);
 // o gün yalnız bu dosya değişir. Prod tüketicisi yok.
-import { useRef, useState, type ReactNode } from 'react';
+import { Fragment, useRef, useState, type ReactNode } from 'react';
 import { Ellipsis } from 'lucide-react';
 import {
   useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, VirtualTable,
+  type DataTableStateStaticProps,
 } from '@/components/ui/DataTable';
 import { Button } from '@/components/shadcn/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/coremetry/overlay/DropdownMenu';
@@ -15,7 +16,7 @@ import type { ColumnDef, DataTableProps } from './types';
 const ACTIONS_W = 40;
 
 export function DataTable<T>(props: DataTableProps<T>) {
-  const { storageKey, columns, rows, sort, columnModel, selection, getRowHref, rowLinkReplace, onOpen, state, virtual, density, renderCell, rowActions, getRowKey } = props;
+  const { storageKey, columns, rows, sort, columnModel, selection, getRowHref, rowLinkReplace, onOpen, state, virtual, density, renderCell, rowActions, getRowKey, detail } = props;
   const dt = useDataTable<T>({
     storageKey, columns, rows,
     initialSort: sort?.initial,
@@ -77,10 +78,19 @@ export function DataTable<T>(props: DataTableProps<T>) {
             {dt.sortedRows.length === 0
               ? <DataTableState dt={dt} trailing={trailing} {...state} />
               : dt.sortedRows.map((row, i) => (
-                <tr key={keyOf(row, i)} {...dt.rowProps(i, row)}>
-                  {dt.shownColumns.map(c => cell(row, c))}
-                  {actionsCell(row)}
-                </tr>
+                <Fragment key={keyOf(row, i)}>
+                  <tr {...dt.rowProps(i, row)}>
+                    {dt.shownColumns.map(c => cell(row, c))}
+                    {actionsCell(row)}
+                  </tr>
+                  {/* R5 (G4): ayrıntı satırı — veri satırı DEĞİL (rowProps yok:
+                      tıklanmaz, seçilmez, sıralanmaz); tek hücre tüm genişlik. */}
+                  {detail?.isOpen(row) && (
+                    <tr data-dt-detail="">
+                      <td colSpan={dt.shownColumns.length + (rowActions ? 1 : 0)}>{detail.render(row)}</td>
+                    </tr>
+                  )}
+                </Fragment>
               ))}
           </tbody>
         </table>
@@ -103,4 +113,12 @@ export function DataTable<T>(props: DataTableProps<T>) {
       )}
     </div>
   );
+}
+
+/** Faz 2 dilim 1 R5 (G3): gerekçeli STATİK tablonun (shadcn `Table`, T1)
+ *  durum satırı — loading / error / empty, `colSpan` çağırandan. Bugünkü
+ *  `ui/DataTable` `DataTableState`'in statik kipinin aynısı (aynı metinler,
+ *  aynı odak inişi); geçirilen sayfa ui/ içe aktarmadan kullanır. */
+export function DataTableStateRow(props: DataTableStateStaticProps) {
+  return <DataTableState {...props} />;
 }

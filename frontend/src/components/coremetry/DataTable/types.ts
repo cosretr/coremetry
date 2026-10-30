@@ -8,11 +8,11 @@ import type { ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import type {
   ColumnDef, SortState, ServerBinding, SelectionBinding, ColumnModelBinding,
-  DataTableStateProps as UiDataTableStateProps,
+  DataTableStateProps as UiDataTableStateProps, DataTableStateStaticProps,
 } from '@/components/ui/DataTable';
 import type { Density } from '@/lib/density';
 
-export type { ColumnDef, SortState, ServerBinding, SelectionBinding, ColumnModelBinding };
+export type { ColumnDef, SortState, ServerBinding, SelectionBinding, ColumnModelBinding, DataTableStateStaticProps };
 
 /** Satır yokken basılan durum (loading / empty / no-match / error …); `dt`
  *  ve kolon sayımı bileşenin. Bugünkü sayfaların hesapladığı tipin aynısı
@@ -60,4 +60,10 @@ export interface DataTableProps<T> {
   rowActions?: { items(row: T): MenuItemSpec[]; label: string };
   /** Satır anahtarı (verilmezse selection.getRowId, yoksa sıra). */
   getRowKey?(row: T, index: number): string;
+  /** Faz 2 dilim 1 R5 (G4, operatör onaylı; ADDITIVE): satır başına açılır
+   *  ayrıntı satırı — veri satırının hemen altında ikinci bir `<tr>`, tek
+   *  hücre, `colSpan` = görünür kolonlar (+1 rowActions). Açık/kapalı durumu
+   *  SAYFANIN (`isOpen`). `virtual` ile çizilmez (rowActions'la aynı Faz 1
+   *  sınırı: VirtualTable'ın satır başına ikinci satırı yok). */
+  detail?: { isOpen(row: T): boolean; render(row: T): ReactNode };
 }

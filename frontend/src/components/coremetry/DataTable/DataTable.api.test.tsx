@@ -9,7 +9,8 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import type { ColumnDef as UiColumnDef, SortState as UiSortState, ServerBinding as UiServerBinding } from '@/components/ui/DataTable';
-import { DataTable, type DataTableProps, type ColumnDef, type SortState, type ServerBinding } from './index';
+import { DataTable, DataTableStateRow, type DataTableProps, type ColumnDef, type SortState, type ServerBinding } from './index';
+import { Table, TableBody } from '@/components/shadcn/table';
 
 vi.mock('@/lib/branding', () => ({ useBranding: () => ({ language: 'en' }) }));
 
@@ -83,5 +84,56 @@ describe('coremetry/DataTable — devretme', () => {
     await act(async () => { await new Promise(r => setTimeout(r, 0)); });
     const item = [...document.querySelectorAll('[role="menuitem"]')].find(e => e.textContent === 'Open cart');
     expect(item).toBeTruthy();
+  });
+});
+
+// Faz 2 dilim 1 R5 (G3 + G4) — additive: ayrıntı satırı + statik durum satırı.
+describe('coremetry/DataTable — detail (G4)', () => {
+  const ROWS: Row[] = [{ id: 'a', svc: 'checkout', n: 3 }, { id: 'b', svc: 'cart', n: 7 }];
+  it('yalnız isOpen satırının ALTINDA tek hücreli satır; colSpan = görünür kolonlar', () => {
+    const h = render({ rows: ROWS, getRowKey: r => r.id, sort: { initial: { id: 'svc', dir: 'asc' } } as DataTableProps<Row>['sort'],
+      detail: { isOpen: r => r.id === 'a', render: r => <span data-d={r.id}>detay {r.svc}</span> } });
+    const trs = [...h.querySelectorAll('tbody tr')];
+    expect(trs).toHaveLength(3);
+    const d = h.querySelector('tr[data-dt-detail]')!;
+    expect(d.previousElementSibling!.textContent).toContain('checkout');
+    const td = d.querySelector('td')!;
+    expect(d.querySelectorAll('td')).toHaveLength(1);
+    expect(td.colSpan).toBe(trs[0].querySelectorAll('td').length);
+    expect(td.textContent).toBe('detay checkout');
+  });
+  it('rowActions ile colSpan +1; kapalıyken satır yok', () => {
+    const h = render({ rows: ROWS, getRowKey: r => r.id,
+      rowActions: { label: 'Row actions', items: () => [] },
+      detail: { isOpen: r => r.id === 'b', render: () => 'x' } });
+    const d = h.querySelector('tr[data-dt-detail]')!;
+    const dataTds = d.previousElementSibling!.querySelectorAll('td').length;
+    expect(d.querySelector('td')!.colSpan).toBe(dataTds);
+    expect(dataTds).toBe(3);
+    const h2 = render({ rows: ROWS, detail: { isOpen: () => false, render: () => 'x' } });
+    expect(h2.querySelector('tr[data-dt-detail]')).toBeNull();
+  });
+  it('virtual kipinde çizilmez (Faz 1 sınırı)', () => {
+    const h = render({ rows: ROWS, virtual: { height: 200 }, detail: { isOpen: () => true, render: () => <i data-d="" /> } });
+    expect(h.querySelector('[data-d]')).toBeNull();
+  });
+});
+
+describe('coremetry/DataTable — DataTableStateRow (G3)', () => {
+  it('shadcn Table gövdesinde tek satır, verilen colSpan, durum metni', () => {
+    host = document.createElement('div'); document.body.appendChild(host);
+    root = createRoot(host);
+    act(() => { root!.render(<Table><TableBody><DataTableStateRow colSpan={6} kind="empty" message="Değer yok" /></TableBody></Table>); });
+    const tr = host.querySelector('tbody tr[data-dt-state="empty"]')!;
+    expect(tr.querySelector('td')!.colSpan).toBe(6);
+    expect(tr.textContent).toContain('Değer yok');
+  });
+  it('error ve loading kipleri', () => {
+    host = document.createElement('div'); document.body.appendChild(host);
+    root = createRoot(host);
+    act(() => { root!.render(<table><tbody><DataTableStateRow colSpan={3} kind="error" message="Yüklenemedi" /></tbody></table>); });
+    expect(host.querySelector('tr[data-dt-state="error"]')!.textContent).toContain('Yüklenemedi');
+    act(() => { root!.render(<table><tbody><DataTableStateRow colSpan={3} kind="loading" /></tbody></table>); });
+    expect(host.querySelector('tr[data-dt-state="loading"] [role="status"]')).not.toBeNull();
   });
 });
