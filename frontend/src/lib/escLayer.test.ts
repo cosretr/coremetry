@@ -116,7 +116,7 @@ describe('göç bütünlüğü (v0.9.950)', () => {
     'components/ui/Drawer.tsx',
     'components/ui/Modal.tsx',
     'components/ui/FacetMultiSelect.tsx',
-    'components/coremetry/CommandPalette/CommandPaletteBody.tsx',
+    // v0.10.1658 (P2): ⌘K paleti coremetry/overlay/Dialog'da (escBridge = useEscLayer); eylem kipinin Esc'i öğe düzeyinde harcanır (Q3).
     'components/HeatmapCellExemplars.tsx',
     'components/SpanDetail.tsx',
     'components/MetricPanel.tsx',

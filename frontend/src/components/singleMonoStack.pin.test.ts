@@ -31,7 +31,7 @@ const FONT_MONO = /fontFamily:\s*'var\(--font-mono\)'/g;
 
 // dosya → dilim 6'da `var(--font-mono)`a taşınan yer sayısı (en az)
 const TOKENISED: Record<string, number> = {
-  'components/coremetry/CommandPalette/CommandPaletteBody.tsx': 2, // eylem rozeti + sonuç türü rozeti (10px kalır)
+  // v0.10.1658 (P2): ⌘K tür rozetleri kalktı (grup başlıkları) — palet cmdk'de, mono yüz yok.
   // v0.10.1406 — CopilotExplain'in iki dosya satırı tek bileşene (ai/CodeSourceFooter) taşındı;
   // iki kart ve sohbet balonunun kod turu onu çizer.
   'components/ai/CodeSourceFooter.tsx': 1, // "Kodu da incele" dosya satırları

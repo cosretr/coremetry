@@ -21,7 +21,7 @@ import ts from 'typescript';
 // Serbest (bilgi): checkbox 129 + radio 7 = 136, file 7, range 1, color 1.
 // R2 (Faz 2 dilim 1): checkbox serbest kümeden çıktı → MAX_RAW_CHECKBOX 129,
 // eslint-suppressions.json toplamı 544 → 673.
-const MAX_RAW_INPUT = 344; // Faz 2 dilim 1 R7: 350 → 344 (Remote Cluster)
+const MAX_RAW_INPUT = 341; // Faz 2 dilim 1 R7: 350 → 344 (Remote Cluster); etkileşim P2: 344 → 341 (⌘K cmdk)
 const MAX_RAW_SELECT = 159; // R7: 161 → 159
 const MAX_RAW_TEXTAREA = 33;
 // Faz 2 dilim 1 R2 (G10, operatör Q-IA7): shadcn checkbox kuruldu, `checkbox`

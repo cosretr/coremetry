@@ -155,3 +155,12 @@
   --text-lg: var(--fs-lg);
   --text-xl: var(--fs-xl);
 }
+
+/* v0.10.1658 (etkileşim P2) — ⌘K paleti (coremetry/CommandPalette/
+   CommandPaletteView, Radix Dialog): içerik `z-[var(--z-modal)]` taşır; üretilen
+   perde (`z-50` = çekmece panelinin ALTI) kardeş seçiciyle aynı rungu ve eski
+   paletin perde token'ını alır. utilities katmanında: `.z-50`/`bg-black/50`
+   yardımcılarını özgüllükle yener (globals.css legacy katmanı yenemezdi). */
+@layer utilities {
+  [data-slot="dialog-overlay"]:has(+ .cp-dialog) { z-index: var(--z-modal); background: var(--backdrop); }
+}

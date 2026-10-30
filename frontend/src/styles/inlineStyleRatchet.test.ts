@@ -25,9 +25,9 @@ const CEILINGS: Record<Page, number> = {
   Traces: 103, // 13
   Explore: 141, // 17
   Metrics: 50, // 3
-  Shell: 43, // 5
+  Shell: 16, // 5 — etkileşim P2: 43 → 16 (⌘K cmdk)
 };
-const TOTAL = 5208; // 449 dosya (plan §3.2 v0.10.1604 ölçümü 5,244; aradaki sürümler +15) — Faz 2 dilim 1 R7: 5259 → 5209; CoSRE 2b B1: 5209 → 5208
+const TOTAL = 5180; // 449 dosya (plan §3.2 v0.10.1604 ölçümü 5,244; aradaki sürümler +15) — Faz 2 dilim 1 R7: 5259 → 5209; CoSRE 2b B1: 5209 → 5208; etkileşim P2: 5180 (⌘K −27, aradaki sürümler −1)
 const MIGRATED: Page[] = ['RemoteCluster']; // Faz 2 dilim 1 R7 — pilot
 
 function walk(dir: string, out: string[] = []): string[] {

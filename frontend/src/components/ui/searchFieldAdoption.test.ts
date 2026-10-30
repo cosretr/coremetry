@@ -125,7 +125,7 @@ describe('M8 — dönüştürülen yüzeyler', () => {
   });
 
   it('L3 — palette placeholder’ı dar modalda kesilmiyor', () => {
-    const m = /placeholder="([^"]*)"/.exec(read('components/coremetry/CommandPalette/CommandPaletteBody.tsx'));
+    const m = /SEARCH_PLACEHOLDER = '([^']*)'/.exec(read('components/coremetry/CommandPalette/CommandPaletteBody.tsx')); // v0.10.1658 (P2): cmdk girdisine prop
     expect(m).toBeTruthy();
     expect(m![1].length).toBeLessThanOrEqual(40);
   });

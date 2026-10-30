@@ -80,10 +80,15 @@ describe('oracleOperationQuery', () => {
 });
 
 describe('CommandPalette kablosu', () => {
-  it('Oracle isabetleri endpoint\'lerin ardından sıralanır ve kendi rozetini alır', () => {
-    const src = readFileSync(resolve(__dirname, '../components/coremetry/CommandPalette/CommandPaletteBody.tsx'), 'utf8');
-    expect(src).toContain('api.oracleOperations(q, 6)');
-    expect(src).toContain('[...endpoints, ...oracleOps]');
-    expect(src).toContain("r.kind === 'operation' ? 'operasyon'");
+  it('Oracle isabetleri endpoint\'lerin ardından sıralanır ve kendi grubunu alır', () => {
+    // v0.10.1658 (P2): arama lib/palette/usePaletteEndpoints, sıra lib/palette/results,
+    // tür rozeti → grup başlığı "Operations" (v0.10.1573: "Oracle" yazısı yok).
+    const hook = readFileSync(resolve(__dirname, 'palette/usePaletteEndpoints.ts'), 'utf8');
+    expect(hook).toContain('api.oracleOperations(q, PALETTE_ORACLE_LIMIT)');
+    expect(hook).toContain('PALETTE_ORACLE_LIMIT = 6');
+    expect(readFileSync(resolve(__dirname, 'palette/results.ts'), 'utf8')).toContain('[...endpoints, ...oracleOps]');
+    const groups = readFileSync(resolve(__dirname, 'palette/groups.ts'), 'utf8');
+    expect(groups).toContain("case 'operation': return 'operations';");
+    expect(groups).not.toMatch(/oracle/i);
   });
 });

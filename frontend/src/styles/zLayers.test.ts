@@ -212,8 +212,14 @@ describe('MK2 — yüzey ikili sıraları (kaynak-seviyesi matris)', () => {
       .toBeGreaterThan(z(rungOf(b[0], b[1])));
 
   it('Command palette (modal) çekmece panelinin ÜSTÜNDE', () => {
-    expect(z(rungOf('components/coremetry/CommandPalette/CommandPaletteBody.tsx', 'alignItems: \'flex-start\'')))
-      .toBeGreaterThan(z(drawerPanelRung()));
+    // v0.10.1658 (P2): palet Radix Dialog'da — rung Tailwind sınıfında
+    // (`z-[var(--z-…)]`); perde aynı rungu tokens.css kardeş kuralından alır.
+    const view = readFileSync(join(SRC, 'components/coremetry/CommandPalette/CommandPaletteView.tsx'), 'utf8');
+    const m = /'cp-dialog z-\[var\(--z-([\w-]+)\)\]/.exec(view);
+    expect(m, 'palet rungu okunamadı — matris girdisi BAYAT').not.toBeNull();
+    expect(z(m![1])).toBeGreaterThan(z(drawerPanelRung()));
+    const tokens = readFileSync(join(SRC, 'styles/tokens.css'), 'utf8');
+    expect(tokens).toContain(`[data-slot="dialog-overlay"]:has(+ .cp-dialog) { z-index: var(--z-${m![1]});`);
   });
 
   it('Çekmece paneli kolon dropdown\'ının ÜSTÜNDE', () => {

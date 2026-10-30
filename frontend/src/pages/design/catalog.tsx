@@ -38,6 +38,8 @@ import { Field, SelectField, TextareaField, CheckboxField } from '@/components/c
 import { SegmentedControl } from '@/components/coremetry/SegmentedControl';
 // v0.10.1647 (CoSRE v2 Faz 2b B1, plan §5.4): v2 sohbet kabuğu (boş durum).
 import { CosreSheet } from '@/components/cosre/conversation/CosreSheet';
+import { CommandPaletteView } from '@/components/coremetry/CommandPalette/CommandPaletteView';
+import type { CommandPaletteGroup } from '@/components/coremetry/CommandPalette/CommandPalette';
 import { MessageList, type CosreChatMessage } from '@/components/cosre/conversation/MessageList';
 import CoremetryToaster from '@/components/coremetry/Toaster';
 import { CM_STRINGS } from '@/components/coremetry/strings';
@@ -607,6 +609,31 @@ function CosreChatV2Demo({ cell, forceOpen }: CatalogCtx) {
   );
 }
 
+// v0.10.1658 (etkileşim P2) — ⌘K paleti gövdesinin çizicisi, dolu gruplarla
+// (gerçek paletin başlıkları ve satır biçimi; veriler sabit).
+const PALETTE_DEMO_GROUPS: CommandPaletteGroup[] = [
+  { id: 'actions', label: 'Actions', items: [{ id: 'a:ack', label: 'Acknowledge problem', hint: 'Mark an open problem as acknowledged', run: () => {} }] },
+  { id: 'services', label: 'Services', items: [
+    { id: 's:checkout', label: 'checkout', hint: 'Service', run: () => {} },
+    { id: 's:checkout-worker', label: 'checkout-worker', hint: 'Service', run: () => {} },
+  ] },
+  { id: 'endpoints', label: 'Endpoints', items: [{ id: 'e:get', label: 'GET /api/checkout', hint: 'Endpoint', run: () => {} }] },
+  { id: 'pages', label: 'Pages', items: [{ id: 'p:services', label: 'Services', hint: 'Per-service RED + latency', run: () => {} }] },
+  { id: 'search', label: 'Search', items: [{ id: 'q:all', label: 'See all results for “check” →', hint: 'Search', run: () => {} }] },
+];
+
+function CommandPaletteDemo({ forceOpen }: CatalogCtx) {
+  const [open, setOpen] = useState(forceOpen);
+  const [q, setQ] = useState('check');
+  return (
+    <>
+      <Row label="⌘K"><Button variant="outline" size="sm" onClick={() => setOpen(true)}>Paleti aç</Button></Row>
+      <CommandPaletteView open={open} onOpenChange={setOpen} groups={PALETTE_DEMO_GROUPS}
+        query={{ value: q, onChange: setQ, placeholder: 'Search or paste a trace id…' }} />
+    </>
+  );
+}
+
 export const CATALOG: Record<string, (ctx: CatalogCtx) => ReactNode> = {
   'alert-dialog': (ctx) => <AlertDialogDemo {...ctx} />,
   'badge': () => <BadgeDemo />,
@@ -637,5 +664,6 @@ export const CATALOG: Record<string, (ctx: CatalogCtx) => ReactNode> = {
   'coremetry/Toaster': (ctx) => <ToasterDemo {...ctx} />,
   'coremetry/Field': () => <FieldDemo />,
   'coremetry/SegmentedControl': () => <SegmentedControlDemo />,
+  'coremetry/CommandPalette': (ctx) => <CommandPaletteDemo {...ctx} />,
   'cosre/ChatV2': (ctx) => <CosreChatV2Demo {...ctx} />,
 };

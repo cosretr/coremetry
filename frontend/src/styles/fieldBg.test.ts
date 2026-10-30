@@ -146,9 +146,12 @@ describe('arama kutuları --field-bg okuyor', () => {
     const i = trace.indexOf('placeholder="Filter spans (name, service, attr value)…"');
     expect(i).toBeGreaterThan(0);
     expect(trace.slice(i, trace.indexOf('/>', i))).toContain("background: 'var(--field-bg)'");
-    const cp = readSrc('components/coremetry/CommandPalette/CommandPaletteBody.tsx');
-    expect((cp.match(/background: 'var\(--field-bg\)'/g) ?? []).length).toBe(3);
-    expect(cp).not.toMatch(/outline: 'none',\s*background: 'transparent'/);
+    // v0.10.1658 (etkileşim P2): palet cmdk'de — tek girdi shadcn CommandInput,
+    // satır içi zemin yok; yüzey `--bg` (eski palet kutusu), girdi saydam.
+    const cp = readSrc('components/coremetry/CommandPalette/CommandPaletteView.tsx');
+    expect(cp).toContain('<CommandInput ');
+    expect(cp).toContain('bg-[var(--bg)]');
+    expect(cp).not.toMatch(/style=\{\{/);
     expect(readSrc('components/TopbarSearch.tsx')).toMatch(/className="tb-search"/);
   });
 
