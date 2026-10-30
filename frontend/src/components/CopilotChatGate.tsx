@@ -28,10 +28,9 @@ import { Spinner } from './Spinner';
 // v0.10.1647 (CoSRE v2 Faz 2b B1, plan §1.2) — kapı İKİ tembel gerçekleme
 // tanır; seçim saf `pickChatImpl(cfg, niyet)`:
 //   • cosreV2 kapalı → her niyet v1; aşağıdaki v1 dalı bugünküyle BİREBİR.
-//   • cosreV2 açık → FAB / ?chat= / ai-ask / prefill → v2 (ayrı chunk,
-//     components/cosre — yalnız dinamik import()); `?ai=` açıklama turu B7'ye
-//     dek v1: v2 mount iken bile yanına `<CopilotChat launcher={false} />`
-//     (kiosk deseni v0.10.732, FAB yok) mount edilir, v2 kendini kapatır.
+//   • cosreV2 açık → her niyet v2 (ayrı chunk, components/cosre — yalnız
+//     dinamik import()). v0.10.1672 (B7): `?ai=` açıklama turu da v2; Q1-a
+//     geçiş dalı (yanına FAB'sız v1 örneği) silindi.
 
 const CopilotChat = lazy(() => import('./CopilotChat').then(m => ({ default: m.CopilotChat })));
 const CosreChatV2 = lazy(() => import('./cosre/conversation/CosreChatV2').then(m => ({ default: m.CosreChatV2 })));
@@ -71,15 +70,9 @@ export function CopilotChatGate() {
     setPendingEvt(null);
     mount(pickChatImpl(cfg, pendingEvt));
   }
-  // v2 kipinde v1 açıklama örneği mount iken pencere olayını v1 KENDİ
-  // dinleyicisiyle alır; kuyruğa alıp yeniden yayınlamak v1'e ikinci kez
-  // gönderirdi (v2 bu durumda kendini kapatır — yieldToV1).
-  const v1Yields = useRef(false);
-  useEffect(() => { v1Yields.current = cfg?.cosreV2 === true && mounted.v1; }, [cfg, mounted.v1]);
-
   useEffect(() => {
     const h = (e: Event) => {
-      if (chatLive.current || v1Yields.current) return; // sohbet kendi dinleyicisiyle alır
+      if (chatLive.current) return; // sohbet kendi dinleyicisiyle alır
       queue.current.push({ type: e.type, detail: (e as CustomEvent<unknown>).detail });
       setPendingEvt(e.type === AI_PREFILL_EVENT ? 'prefill' : 'ask');
     };
@@ -108,20 +101,12 @@ export function CopilotChatGate() {
       </Suspense>
     );
   }
+  if (!mounted.v2) return launcher('v2');
   return (
-    <>
-      {mounted.v2 ? (
-        <Suspense fallback={<GateLoading />}>
-          <CosreChatV2 defaultOpen={openFirst} yieldToV1={mounted.v1} />
-          <ReplayQueued queue={queue} live={chatLive} />
-        </Suspense>
-      ) : launcher(pickChatImpl(cfg, 'fab'))}
-      {mounted.v1 && (
-        <Suspense fallback={null}>
-          <CopilotChat launcher={false} />
-        </Suspense>
-      )}
-    </>
+    <Suspense fallback={<GateLoading />}>
+      <CosreChatV2 defaultOpen={openFirst} />
+      <ReplayQueued queue={queue} live={chatLive} />
+    </Suspense>
   );
 }
 

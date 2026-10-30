@@ -18,7 +18,8 @@ import { syncChatParam } from '@/lib/chatUrl';
 import { Empty, Spinner } from './Spinner';
 import { ChatBubble } from './ai/ChatBubble';
 import { TraceExplainNudge } from './ai/TraceExplainNudge';
-import { useChatThread, type ChatSendOpts } from './ai/useChatThread';
+import { useChatThread, type ChatSendOpts, type ChatThreadOpts } from './ai/useChatThread';
+import { useExplainContext } from './ai/useExplainContext'; // v0.10.1672 — v1 + v2 ortak takip bağlamı
 import { FollowupChips } from './ai/FollowupChips'; // v0.10.1291 — kural-türevli takip çipleri
 import { useStickToBottomState } from './ai/stickToBottom'; // v0.10.1137 — atBottom → "↓ En alta"
 import { CosreSidebar } from './ai/CosreSidebar'; // v0.10.1137 — /cosre sol kenar çubuğu
@@ -28,7 +29,7 @@ import { NameCompletionPopup } from './ai/NameCompletionPopup';
 import { ModelPicker } from './ai/ModelPicker'; // v0.10.1138 — kompakt "model ▾" menüsü
 import { removeToken } from './ai/chatScope'; // v0.10.1138 — @/ kapsamı
 import { ChatContextBar } from './ai/ChatContextBar'; // v0.10.1274 — aktif bağlam şeridi
-import { applyContextExclusions, shouldResetExclusions, type ChatRequestContext, type ContextBarItem, type ContextKey } from './ai/chatContextScope';
+import { type ContextBarItem, type ContextKey } from './ai/chatContextScope';
 import { answerVersion, canRegenerate, lastUserIndex } from './ai/chatRegenerate'; // v0.10.1138
 import { cosreFullPageHref } from './ai/drawerFullPage'; // v0.10.1138 — "Tam sayfada aç"
 import { isPlainLeftClick } from '@/lib/a11y';
@@ -38,11 +39,10 @@ import { AI_PREFILL_EVENT, type AIPrefillDetail } from './ai/aiEvents'; // v0.10
 import { AI_DRAWER_WIDTH } from './ai/answerCard'; // v0.10.461
 import { useAiSubject } from './ai/useAiSubject';
 import { AI_CODE_PARAM, AI_SRC_PARAM, formatAiParam } from '@/lib/aiSubject';
-import { activeExplainFrom, explainAskFor, explainAskSubject, explainContextLabel, explainFollowupContext, explainSubject, explainTurnSendOpts } from './ai/explainTurn'; // v0.10.1400; v0.10.1405; v0.10.1407 — AI_KINDS'in tümü
+import { explainAskFor, explainAskSubject, explainSubject, explainTurnSendOpts } from './ai/explainTurn'; // v0.10.1400; v0.10.1405; v0.10.1407 — AI_KINDS'in tümü
 import { drawerFollowups, FOLLOWUPS } from './ai/drawerChat'; // v0.10.1400 — açıklama turunun takip çipleri; v0.10.1660 — statik takip listesi
 import { greetHello, greetHref } from './ai/greeting';
 import type { AiConversationSummary } from '@/lib/types';
-import { traceChatWindow, traceContextToPage, useTraceAiContext, type TraceAiContext } from '@/lib/traceAiContext'; // v0.10.944; v0.10.1400 — açıklama turunun trace bağlamı
 import { TraceContextStrip } from './ai/TraceContextStrip'; // v0.10.944
 import { ChatLinkNewTabContext } from './ai/chatLinkTarget'; // v0.10.1125 — /cosre
 import { ThemeToggle } from './ThemeToggle';
@@ -143,26 +143,10 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer',
   // penceresi (AIDrawerChat ile aynı kural). Gönderim ANINDA turlardan çözülür
   // (useChatThread resolveOpts). Bağlam şeridinde "✨ trace …" öğesi; ✕ o
   // açıklama turunu bağlamdan çıkarır (yeni açıklama turu yeniden bağlar).
-  const [explainOff, setExplainOff] = useState('');
-  const explainTraceCtxRef = useRef<TraceAiContext | null>(null);
-  const resolveExplainOpts = (ts: readonly ChatTurn[]) => {
-    const a = activeExplainFrom(ts);
-    if (!a || a.key === explainOff) return {};
-    const fc = explainFollowupContext(a);
-    if (a.meta.kind !== 'trace') return fc;
-    const live = explainTraceCtxRef.current?.traceId === a.meta.id ? explainTraceCtxRef.current : null;
-    const win = live ? traceChatWindow(live, Date.now()) : null;
-    const scoped = applyContextExclusions({
-      trace: a.meta.id,
-      page: live ? traceContextToPage(live) : { page: 'trace', path: '/trace', traceId: a.meta.id },
-      ...(live?.env ? { env: live.env } : {}),
-      ...(win ? { rangeS: win.rangeS, toMs: win.toMs } : {}),
-    }, ctxExcluded);
-    const out: Partial<ChatRequestContext> & { explain: string; subject: string } = { ...fc, trace: scoped.trace, page: scoped.page };
-    if (live?.env && scoped.env) out.env = scoped.env;
-    if (win && scoped.rangeS) { out.rangeS = scoped.rangeS; out.toMs = scoped.toMs; }
-    return out;
-  };
+  // v0.10.1672 — kural ai/useExplainContext'te (v1 + v2 ortak); kanca turlardan
+  // sonra kurulur, gönderim anında ref'ten okunur.
+  const explainResolveRef = useRef<(ts: readonly ChatTurn[]) => Partial<ChatThreadOpts>>(() => ({}));
+  const resolveExplainOpts = (ts: readonly ChatTurn[]) => explainResolveRef.current(ts);
   const { turns, busy, send, retry, regenerate, editLast, stop, clear, load, flushSave, conversationId, last, showFollowups, codeLocked } =
     useChatThread({
       ...reqCtx,
@@ -186,26 +170,11 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer',
       },
     });
   const dashCtx = useMemo(() => ({ conversationId }), [conversationId]); // v0.10.1443 — sohbetten dashboard
-  // v0.10.1400 — etkin açıklama turu (✕ ile çıkarılmadıysa) + trace bağlamı.
-  const activeExplainAll = useMemo(() => activeExplainFrom(turns), [turns]);
-  const activeExplain = activeExplainAll && activeExplainAll.key !== explainOff ? activeExplainAll : null;
-  const explainTraceId = activeExplain?.meta.kind === 'trace' ? activeExplain.meta.id : null;
-  const liveTraceCtx = useTraceAiContext(explainTraceId);
-  explainTraceCtxRef.current = liveTraceCtx;
-  const ctxItems = useMemo(() => (activeExplain
-    ? [{ key: 'explain' as const, label: explainContextLabel(activeExplain.meta),
-        title: 'Takip soruları bu açıklamaya bağlanır (aynı kanıt) — ✕ ile bu konuşmadan çıkar' }, ...baseCtxItems]
-    : baseCtxItems), [activeExplain, baseCtxItems]);
-  // v0.10.1274 — bağlam şeridinde ✕: öğe BU konuşmanın isteğinden düşer.
-  const removeCtx = (k: ContextKey) => (k === 'explain'
-    ? setExplainOff(activeExplain?.key ?? '') // v0.10.1400 — bu açıklama turu bağlamdan çıkar
-    : setCtxExcluded(prev => new Set(prev).add(k)));
-  // v0.10.1274 — çıkarmalar konuşmaya bağlı: başka konuşmaya geçince sıfır.
-  const prevConvRef = useRef(conversationId);
-  useEffect(() => {
-    if (shouldResetExclusions(prevConvRef.current, conversationId)) { setCtxExcluded(new Set()); setExplainOff(''); }
-    prevConvRef.current = conversationId;
-  }, [conversationId, setCtxExcluded]);
+  // v0.10.1672 — etkin açıklama turu, trace bağlamı, bağlam çipi, ✕ ve konuşma
+  // geçişinde sıfırlama ai/useExplainContext'te (v2 Sheet ile ortak).
+  const explainCtx = useExplainContext({ turns, ctxExcluded, setCtxExcluded, baseCtxItems, conversationId });
+  explainResolveRef.current = explainCtx.resolve;
+  const { activeExplain, liveTraceCtx, ctxItems, removeCtx } = explainCtx;
   // v0.10.1648 — composer girdisi (taslak, ad tamamlama, @/ kapsam) ai/cosreAsk.ts'te.
   const composerInput = useCosreComposerInput(conversationId, page, chipTrace);
   const { setInput, chosen, setChosen, expectDraft, prefill } = composerInput;

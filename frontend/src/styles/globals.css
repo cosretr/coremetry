@@ -4182,13 +4182,6 @@ tr:hover .pv-row, tr:focus-within .pv-row, .pv-row.is-set, .pv-row:focus-within 
   border-radius: var(--radius); box-shadow: var(--shadow-pop); font-size: var(--fs-md); color: var(--text); }
 .cm-ai-nudge-text { display: flex; align-items: center; gap: var(--sp-3); }
 .cm-ai-nudge-actions { display: flex; gap: var(--sp-3); flex-wrap: wrap; }
-/* v0.10.1647 (CoSRE v2 Faz 2b B1, Q1-a geçiş dalı) — bayrak açıkken FAB'ı v2
-   çizer; `?ai=` açıklama turu yanına mount edilen v1 çekmecesinde (launcher=false)
-   açıkken FAB onun composer'ının üstünde kalmasın. Bayrak kapalıyken etkisiz:
-   v1 kendi çekmecesi açıkken FAB'ı zaten çizmez. B7 ile birlikte silinir.
-   visibility (display değil): FAB'ın satır-içi `display: grid`'i display'i ezer. */
-body:has([data-tour="cosre-drawer"]) .cm-ai-fab,
-body:has([data-tour="cosre-drawer"]) .cm-ai-nudge { visibility: hidden; }
 @media (prefers-reduced-motion: reduce) { .cm-ai-cursor { animation: none; } .cm-ai-fab.is-alert::before { animation: none; opacity: .55; transform: none; } }
 
 /* ── Sohbet balonu markdown blokları (v0.9.1148, AI Faz 4.2) ─────────

@@ -10,7 +10,7 @@
 //   • B2: gönderim → POST /api/cosre/v2/chat, `context` v1'in /api/copilot/chat
 //     gövdesindekiyle AYNI; cevap çizilir, ai-ask soruyu gönderir, prefill doldurur
 //   • açılış yolları: FAB, ?chat=, ai-ask/prefill; `?ai=` gelince kapanır;
-//     yieldToV1 iken olay açmaz; ?chat= adreste kalır
+//     ?chat= adreste kalır; B7: ?ai= açıklama turu v2 Sheet'inde
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
 import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -107,7 +107,7 @@ async function mount(node: ReactNode, url = '/') {
   });
   await tick();
 }
-const render = (props: { defaultOpen?: boolean; yieldToV1?: boolean } = {}, url = '/') => mount(<CosreChatV2 {...props} />, url);
+const render = (props: { defaultOpen?: boolean } = {}, url = '/') => mount(<CosreChatV2 {...props} />, url);
 const unmount = async () => {
   await act(async () => { root!.unmount(); });
   host?.remove();
@@ -199,7 +199,7 @@ describe('CosreChatV2 kabuğu', () => {
     expect(sheet()).toBeNull();
   });
 
-  it('ai-ask açar ve soruyu v2 ucuna gönderir; prefill doldurur (göndermez); yieldToV1 iken açmaz', async () => {
+  it('ai-ask açar ve soruyu v2 ucuna gönderir; prefill doldurur (göndermez)', async () => {
     await render();
     await act(async () => { window.dispatchEvent(new CustomEvent('coremetry:ai-ask', { detail: { question: 'p1 var mı' } })); });
     await tick();
@@ -213,24 +213,18 @@ describe('CosreChatV2 kabuğu', () => {
     await tick();
     expect(textarea()?.value).toBe('doldur');
     expect(calls).toEqual([]);
-    await unmount();
-    await render({ yieldToV1: true });
-    await act(async () => { window.dispatchEvent(new CustomEvent('coremetry:ai-prefill', { detail: { question: 'x' } })); });
-    await tick();
-    expect(sheet()).toBeNull();
   });
 
-  it('Q1-a geçiş: v1 açıklama çekmecesi açıkken v2 FAB\'ı gizli (visibility — FAB satır-içi display taşır)', () => {
+  // v0.10.1672 (B7) — Q1-a geçiş dalı silindi: v1 yanına mount edilmiyor, FAB'ı
+  // gizleyen `:has()` kuralına gerek yok (geri gelirse v2 FAB'ı yanlışlıkla gizler).
+  it('B7: Q1-a geçiş CSS gizlemesi ve kapıdaki v1 dalı yok', () => {
     const css = readFileSync(resolve(__dirname, '../../../styles/globals.css'), 'utf8');
-    expect(css).toContain('body:has([data-tour="cosre-drawer"]) .cm-ai-fab,\nbody:has([data-tour="cosre-drawer"]) .cm-ai-nudge { visibility: hidden; }');
-    const v1 = readFileSync(resolve(__dirname, '../../CopilotChat.tsx'), 'utf8');
-    expect(v1).toContain('data-tour="cosre-drawer"');
-    const fabSrc = readFileSync(resolve(__dirname, '../../ai/CopilotFab.tsx'), 'utf8');
-    expect(fabSrc).toContain("'cm-ai-fab'");
-    expect(fabSrc).not.toMatch(/visibility:/);
+    expect(css).not.toContain('body:has([data-tour="cosre-drawer"])');
+    const gate = readFileSync(resolve(__dirname, '../../CopilotChatGate.tsx'), 'utf8');
+    expect(gate).not.toMatch(/launcher=\{false\}|yieldToV1/);
   });
 
-  it('?chat= açar, konuşmayı YÜKLER ve adreste kalır; ?ai= gelince kapanır', async () => {
+  it('?chat= açar, konuşmayı YÜKLER ve adreste kalır; ?ai= açıklama turunu aynı Sheet\'te gönderir', async () => {
     const load = vi.spyOn(api, 'aiConversation').mockResolvedValue({
       id: 'c1', title: 't', messages: [{ role: 'user', text: 'eski soru' }, { role: 'assistant', text: 'eski cevap', exchangeId: 'x0' }],
     } as never);
@@ -239,9 +233,13 @@ describe('CosreChatV2 kabuğu', () => {
     await vi.waitFor(() => expect(sheet()!.textContent).toContain('eski cevap'));
     expect(load).toHaveBeenCalledWith('c1');
     expect(readSp!()).toBe('chat=c1');
-    await act(async () => { setSp!('chat=c1&ai=trace'); });
-    await tick();
-    expect(sheet()).toBeNull();
+    await act(async () => { setSp!('chat=c1&id=0af7651916cd43dd8448eb211c80319c&ai=trace'); });
+    await vi.waitFor(() => expect(calls).toHaveLength(1));
+    expect(sheet()).not.toBeNull();
+    expect(calls[0].body.context).toMatchObject({ explainAsk: { kind: 'trace', id: '0af7651916cd43dd8448eb211c80319c' }, conversation: 'c1' });
+    expect(calls[0].body.messages).toEqual([{ role: 'user', text: 'eski soru' }, { role: 'assistant', text: 'eski cevap' },
+      { role: 'user', text: expect.stringContaining("Bu trace'i açıkla") }]);
+    await vi.waitFor(() => expect(readSp!()).not.toContain('ai='));
   });
 });
 

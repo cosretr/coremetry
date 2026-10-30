@@ -16,7 +16,14 @@
 // v0.10.1660 (B5) — takip çipleri askChip'e, "↺ Yeniden dene" SDK regenerate'ine,
 // cevabın `open` yönergesi bir kez SPA navigasyonuna bağlı.
 //
-// Açılış yolları (v1 ile aynı, Q1 hariç):
+// v0.10.1672 (B7) — bağlam paritesi: gövdeye `conversation`, `wikiRefs` ve son
+// açıklama turunun takip bağlamı (ai/useExplainContext — v1 ile AYNI kanca:
+// explain / subject / trace / page / env / pencere; bağlam şeridinde "✨ trace"
+// çipi, canlı TraceContextStrip). Kullanıcı mesajı niyeti metadata'da taşır
+// (explainAsk fresh'siz + pencere) → bekleyen cevap baştan açıklama balonu,
+// "↺ Yeniden dene" aynı niyet ve pencereyle.
+//
+// Açılış yolları (v1 ile aynı):
 //   • FAB (kapalıyken bu bileşen çizer; kritik-problem rozeti aynı RQ anahtarı)
 //   • `?chat=<id>` → açılır ve o konuşma YÜKLENİR (v0.10.1664 B6); açık
 //     thread ⇔ `?chat=` (lib/chatUrl.syncChatParam, v1 ile aynı saf çekirdek,
@@ -26,18 +33,24 @@
 //     (SheetResizeHandle) v1 ile aynı genişlik anahtarı.
 //   • `coremetry:ai-ask` → açılır + soruyu gönderir; AI_PREFILL_EVENT → açılır +
 //     composer'ı doldurur (GÖNDERMEZ) — v1 köprüleriyle aynı.
-//   • `?ai=` açıklama turu → v1'in (kapı yanına `launcher={false}` mount eder);
-//     v2 kendini KAPATIR. `yieldToV1` iken (v1 açıklama örneği mount) gelen
-//     ai-ask/prefill'i de v1 kendi dinleyicisiyle alır → v2 kapanır, iki panel
-//     üst üste binmez. B7 bu dalı siler.
+//   • `?ai=<özne>` (✨ Explain düğmeleri, nudge, derin linkler) → v0.10.1672
+//     (B7) v1 ile aynı TEK SEFERLİK niyet: Sheet açılır, açıklama SOHBET TURU
+//     olarak gider (context.explainAsk), `?ai=` (+ `?aicode=`) hemen düşer.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { mergeOpenHref } from '@/lib/openHref';
 import { isSafeAppPath } from '@/lib/safeAppPath';
 import { useOpenCriticalCount } from '@/lib/queries';
-import { AI_PARAM } from '@/lib/aiSubject';
+import { AI_CODE_PARAM, AI_SRC_PARAM, formatAiParam } from '@/lib/aiSubject';
+import { takeMetricPanelAsk } from '@/lib/pageContextOverlay';
+import { toChatTurns } from '@/lib/cosre/toChatTurn';
+import { useAiSubject } from '@/components/ai/useAiSubject';
+import { useExplainContext } from '@/components/ai/useExplainContext';
+import { prevWikiRefs } from '@/components/ai/chatWikiRefs';
+import { TraceContextStrip } from '@/components/ai/TraceContextStrip';
 import { getRaw } from '@/lib/storage';
 import { syncChatParam } from '@/lib/chatUrl';
-import type { AiConversationSummary } from '@/lib/types';
+import type { AiConversationSummary, ChatTurn } from '@/lib/types';
 import { useChatHistory } from '@/components/ai/useChatHistory';
 import { cosreFullPageHref } from '@/components/ai/drawerFullPage';
 import { useConversation } from './useConversation';
@@ -52,7 +65,7 @@ import { CopilotFab } from '@/components/ai/CopilotFab';
 import { TraceExplainNudge } from '@/components/ai/TraceExplainNudge';
 import { useCosreAskContext, useCosreComposerInput, useCosreWelcomeData } from '@/components/ai/cosreAsk';
 import { useStickToBottomState } from '@/components/ai/stickToBottom';
-import { explainAskFor, explainAskSubject, explainTurnSendOpts } from '@/components/ai/explainTurn';
+import { explainAskFor, explainAskSubject, explainTurnSendOpts, withoutFresh } from '@/components/ai/explainTurn';
 import type { ChatSendOpts } from '@/components/ai/useChatThread';
 import { ChatHistoryPanel, CosreComposerForm, CosreHeaderContext, CosreWelcome, deleteConversation } from '@/components/CopilotChat';
 import { Button } from '@/components/shadcn/button';
@@ -63,26 +76,18 @@ import { COSRE_V2_STRINGS as T } from './strings';
 
 export interface CosreChatV2Props {
   defaultOpen?: boolean;
-  /** v1 açıklama örneği (Q1-a) mount mu: pencere olaylarını v1 alır. */
-  yieldToV1?: boolean;
 }
 
-export function CosreChatV2({ defaultOpen = false, yieldToV1 = false }: CosreChatV2Props) {
+export function CosreChatV2({ defaultOpen = false }: CosreChatV2Props) {
   const [open, setOpen] = useState(defaultOpen);
   const [sp] = useSearchParams();
 
-  // Adres niyetleri render sırasında (türetilmiş state; kapı deseni).
-  const aiParam = sp.has(AI_PARAM);
+  // Adres niyeti render sırasında (türetilmiş state; kapı deseni).
   const chatParam = sp.get('chat') ?? '';
-  const [seenAi, setSeenAi] = useState(false);
   const [seenChat, setSeenChat] = useState('');
-  if (aiParam !== seenAi) {
-    setSeenAi(aiParam);
-    if (aiParam && open) setOpen(false);
-  }
   if (chatParam !== seenChat) {
     setSeenChat(chatParam);
-    if (chatParam && !aiParam && !open) setOpen(true);
+    if (chatParam && !open) setOpen(true);
   }
 
   // v1 ile ORTAK kancalar (ai/cosreAsk): bağlam, composer girdisi, karşılama.
@@ -102,16 +107,47 @@ export function CosreChatV2({ defaultOpen = false, yieldToV1 = false }: CosreCha
   // Gönderim: v1 send'in v2 karşılığı. Akarken gelen soru: akışı durdur, sonra
   // gönder (v1 "durdur ve gönder"). Güncel değerler ref'ten (dinleyiciler bayat
   // closure çağırmasın — v1 useChatThread deseni).
-  const live = useRef({ ask, codeLocked, busy, sendMessage, stop, pinBottom, prefill: composer.prefill });
-  live.current = { ask, codeLocked, busy, sendMessage, stop, pinBottom, prefill: composer.prefill };
+  // v0.10.1672 (B7) — konuşmanın v1 tur görünümü: takip bağlamı + wikiRefs v1
+  // saf yardımcılarından (activeExplainFrom / prevWikiRefs) aynı kuralla.
+  const turns = useMemo(() => toChatTurns(messages, visibleParts), [messages, visibleParts]);
+  const explainCtx = useExplainContext({
+    turns, ctxExcluded: ask.ctxExcluded, setCtxExcluded: ask.setCtxExcluded,
+    baseCtxItems: ask.baseCtxItems, conversationId: conv.conversationId,
+  });
+  const live = useRef({ ask, codeLocked, busy, sendMessage, stop, pinBottom, prefill: composer.prefill, turns, explainCtx, conv });
+  live.current = { ask, codeLocked, busy, sendMessage, stop, pinBottom, prefill: composer.prefill, turns, explainCtx, conv };
+  /** Gönderimin `context`i — v1 useChatThread.send ile aynı katmanlar. */
+  const contextFor = (q: string, so: ChatSendOpts | undefined, base: readonly ChatTurn[]) => {
+    const c = live.current;
+    const { explain, subject, ...scope } = c.explainCtx.resolve(base);
+    return cosreRequestContext({ ...c.ask.reqCtx, ...scope }, { profile: c.ask.profile, deep: c.ask.deep, code: c.ask.code }, q, so, c.codeLocked,
+      { conversation: c.conv.idRef.current, wikiRefs: prevWikiRefs(base), explain, subject });
+  };
   const send = (text: string, so?: ChatSendOpts) => {
     const c = live.current;
     const q = text.trim();
     if (!q) return;
-    const context = cosreRequestContext(c.ask.reqCtx, { profile: c.ask.profile, deep: c.ask.deep, code: c.ask.code }, q, so, c.codeLocked);
-    const go = () => c.sendMessage({ text: q }, context ? { body: { context } } : undefined);
+    const context = contextFor(q, so, c.turns);
+    // Kullanıcı turu niyeti `fresh`SİZ saklar (v1 v0.10.1406) + sabit pencere.
+    const metadata = {
+      ...(so?.explainAsk ? { explainAsk: withoutFresh(so.explainAsk) } : {}),
+      ...(so?.window ? { window: so.window } : {}),
+    };
+    const go = () => c.sendMessage({ text: q, ...(Object.keys(metadata).length ? { metadata } : {}) }, context ? { body: { context } } : undefined);
     if (c.busy) void c.stop().then(go);
     else void go();
+  };
+  // "↺ Yeniden dene": SDK regenerate aynı geçmişi yeniden yollar; gövde v1 retry
+  // gibi aynı niyet (fresh'siz) + aynı pencere + attempt:'retry'.
+  const retry = () => {
+    const c = live.current;
+    const idx = c.turns.map(t => t.role).lastIndexOf('user');
+    if (idx < 0) return;
+    const ut = c.turns[idx];
+    const so: ChatSendOpts = { attempt: 'retry', ...(ut.explainAsk ? { explainAsk: ut.explainAsk } : {}), ...(ut.window ? { window: ut.window } : {}) };
+    const context = contextFor(ut.text ?? '', so, c.turns.slice(0, idx));
+    pinBottom();
+    void regenerate(context ? { body: { context } } : undefined);
   };
   const sendRef = useRef(send);
   sendRef.current = send;
@@ -194,18 +230,37 @@ export function CosreChatV2({ defaultOpen = false, yieldToV1 = false }: CosreCha
     const to = lastMsg.metadata?.open;
     if (!to || opened.current.has(lastMsg.id)) return;
     opened.current.add(lastMsg.id);
-    if (isSafeAppPath(to)) navigate(to);
+    // v0.10.1672 (B7) — v1 onOpen ile aynı: isSafeAppPath kapısı + aynı sayfada
+    // parametre birleştirme (mergeOpenHref), replace (hedef ?ai= ise AYNI Sheet'te tur).
+    if (!isSafeAppPath(to)) return;
+    const href = mergeOpenHref(to, window.location.pathname, window.location.search);
+    if (href) navigate(href, { replace: true });
   }, [status, lastMsg, navigate]);
+
+  // v0.10.1672 (B7) — `?ai=<özne>` TEK SEFERLİK niyet (v1 v0.10.1400/1405/1407 ile
+  // aynı): Sheet açılır, açıklama sohbet turu olarak gider, `?ai=` + `?aicode=`
+  // düşer. Ref muhafızı: StrictMode çift effect'i / yeniden render tek tur.
+  const [rawSubject, setSubject] = useAiSubject();
+  const rawSubjectKey = rawSubject ? formatAiParam(rawSubject) : '';
+  const explainAskSentRef = useRef('');
+  useEffect(() => {
+    if (!rawSubject) { explainAskSentRef.current = ''; return; }
+    if (ask.enabled !== true || explainAskSentRef.current === rawSubjectKey) return;
+    explainAskSentRef.current = rawSubjectKey;
+    const panel = rawSubject.kind === 'metric_panel' ? takeMetricPanelAsk(rawSubjectKey) : undefined;
+    const x = explainAskFor(rawSubject, sp.get(AI_SRC_PARAM) || 'ai-param', undefined, sp.get(AI_CODE_PARAM) === '1', panel);
+    setOpen(true);
+    setSubject(null);
+    if (x) { live.current.pinBottom(); sendRef.current(x.userText, explainTurnSendOpts(x)); }
+  }, [rawSubject, rawSubjectKey, ask.enabled, sp, setSubject]);
 
   useEffect(() => {
     const onAsk = (e: Event) => {
-      if (yieldToV1) { setOpen(false); return; }
       setOpen(true);
       const q = (e as CustomEvent<{ question?: string }>).detail?.question;
       if (q) { live.current.pinBottom(); sendRef.current(q); }
     };
     const onPrefill = (e: Event) => {
-      if (yieldToV1) { setOpen(false); return; }
       setOpen(true);
       const q = (e as CustomEvent<AIPrefillDetail>).detail?.question;
       if (q) live.current.prefill(q, q.length);
@@ -216,7 +271,7 @@ export function CosreChatV2({ defaultOpen = false, yieldToV1 = false }: CosreCha
       window.removeEventListener('coremetry:ai-ask', onAsk);
       window.removeEventListener(AI_PREFILL_EVENT, onPrefill);
     };
-  }, [yieldToV1]);
+  }, []);
 
   // Rozet: kapalıyken (FAB görünürken) poll; RQ gizli sekmede durur.
   const criticalOpen = useOpenCriticalCount({ enabled: !open }).data ?? 0;
@@ -250,6 +305,11 @@ export function CosreChatV2({ defaultOpen = false, yieldToV1 = false }: CosreCha
         <SheetResizeHandle width={width} onWidth={setDragW}
           onReset={() => setDragW(cosreSheetWidth(null, AI_DRAWER_WIDTH, window.innerWidth))} />
         <div className="cosre-root cosre-root--drawer" data-cosre-body="">
+          {/* v0.10.1672 (B7) — etkin açıklama turu bir trace ve sayfa canlı bağlamını
+              yayınlıyorsa şerit (v1 ile aynı yer: başlığın altı). */}
+          {explainCtx.activeExplain?.meta.kind === 'trace' && explainCtx.liveTraceCtx && (
+            <TraceContextStrip traceId={explainCtx.activeExplain.meta.id} ctx={explainCtx.liveTraceCtx} />
+          )}
           {showHistory && (
             <ChatHistoryPanel history={history} activeId={conv.conversationId}
               onNew={() => { clear(); setShowHistory(false); }}
@@ -263,7 +323,7 @@ export function CosreChatV2({ defaultOpen = false, yieldToV1 = false }: CosreCha
                     onPrefill={composer.prefill} onAsk={askChip} onAskExplain={askExplain} onSubmit={submit} />
                 ) : (
                   <MessageList messages={messages} visibleParts={visibleParts} status={status} error={error}
-                    onAsk={askChip} onRetry={() => { pinBottom(); void regenerate(); }} />
+                    onAsk={askChip} onRetry={retry} />
                 )}
               </div>
             </div>
@@ -273,7 +333,7 @@ export function CosreChatV2({ defaultOpen = false, yieldToV1 = false }: CosreCha
             )}
           </div>
           <CosreComposerForm input={composer} ask={ask} busy={busy} stop={() => void stop()} codeLocked={codeLocked}
-            ctxItems={ask.baseCtxItems} onRemoveCtx={k => ask.setCtxExcluded(prev => new Set(prev).add(k))} submit={submit} />
+            ctxItems={explainCtx.ctxItems} onRemoveCtx={explainCtx.removeCtx} submit={submit} />
         </div>
       </CosreSheet>
     </>

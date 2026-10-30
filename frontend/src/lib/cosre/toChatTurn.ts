@@ -13,7 +13,7 @@
 //                      v1 step-result alanlarıyla aynı adlarla
 //   • budget         : data-budget (tek parça, aynı id yerine geçer)
 // Saf: React yok; testler fixture'ı gerçek SDK'dan geçirip bunu çağırır.
-import type { ChatAnswerLink, ChatFollowup, ChatQueryEvidence, ChatStepDetail, ChatStepSourceState, ChatTurn, ChatTypedBlock, CosreStepBudget, RagSource } from '@/lib/types';
+import type { ChatAnswerLink, ChatExplainAsk, ChatFollowup, ChatQueryEvidence, ChatStepDetail, ChatStepSourceState, ChatTurn, ChatTypedBlock, CosreStepBudget, RagSource } from '@/lib/types';
 import { BLOCK_TYPES } from './protocol';
 import type { CosreUIMessage } from './resetReducer';
 
@@ -24,6 +24,8 @@ export interface ToChatTurnOpts {
   pending?: boolean;
   /** Akış hatası (yalnız son mesaj, status error). */
   error?: string;
+  /** v0.10.1672 (B7) — önceki kullanıcı turunun açıklama niyeti (geçici künye). */
+  explainAsk?: ChatExplainAsk;
 }
 
 type Rec = Record<string, unknown>;
@@ -196,8 +198,37 @@ export function toChatTurn(m: CosreUIMessage, parts: readonly Part[], opts: ToCh
     ...(meta?.archiveExchangeId ? { archiveExchangeId: meta.archiveExchangeId } : {}),
     ...(meta?.blocksAt ? { blocksAt: meta.blocksAt } : {}),
     ...(meta?.blocksDropped?.length ? { blocksDropped: meta.blocksDropped } : {}),
-    ...(meta?.explain ? { explain: meta.explain } : {}),
+    // v0.10.1672 (B7) — açıklama turu: cevap künyesi gelene dek kullanıcı
+    // turunun niyetinden geçici künye (v1 send: balon baştan ExplainBody).
+    ...(meta?.explain ? { explain: meta.explain } : opts.explainAsk ? { explain: { kind: opts.explainAsk.kind, id: opts.explainAsk.id } } : {}),
     ...evidenceOf(parts),
     ...channelsOf(parts),
   };
+}
+
+/** v0.10.1672 (B7) — kullanıcı mesajı → v1 kullanıcı turu (metin + açıklama niyeti + pencere). */
+export function userTurn(m: CosreUIMessage): ChatTurn {
+  const text = m.parts.flatMap(p => (p.type === 'text' ? [p.text] : [])).join('\n\n');
+  const md = m.metadata;
+  return { role: 'user', text, ...(md?.explainAsk ? { explainAsk: md.explainAsk } : {}), ...(md?.window ? { window: md.window } : {}) };
+}
+
+/** v0.10.1672 (B7) — konuşmanın v1 tur dizisi: takip bağlamı (activeExplainFrom) ve
+ *  wikiRefs v1'in SAF yardımcılarıyla aynı kuralla çözülür. Asistanın geçici
+ *  künyesi önceki kullanıcı turunun niyetinden. */
+export function toChatTurns(
+  messages: readonly CosreUIMessage[], visible: (m: CosreUIMessage) => readonly Part[], live?: { pendingId?: string; error?: string; errorId?: string },
+): ChatTurn[] {
+  const out: ChatTurn[] = [];
+  messages.forEach((m, i) => {
+    if (m.role === 'user') { out.push(userTurn(m)); return; }
+    if (m.role !== 'assistant') return;
+    const prev = messages[i - 1];
+    out.push(toChatTurn(m, visible(m), {
+      pending: live?.pendingId === m.id,
+      ...(live?.errorId === m.id && live.error ? { error: live.error } : {}),
+      ...(prev?.role === 'user' && prev.metadata?.explainAsk ? { explainAsk: prev.metadata.explainAsk } : {}),
+    }));
+  });
+  return out;
 }

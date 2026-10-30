@@ -20,7 +20,7 @@ const seen: { type: string; q?: string }[] = [];
 const mounts: { defaultOpen?: boolean }[] = [];
 const v1Launcher: (boolean | undefined)[] = [];
 const v2Seen: { type: string; q?: string }[] = [];
-const v2Mounts: { defaultOpen?: boolean; yieldToV1?: boolean }[] = [];
+const v2Mounts: { defaultOpen?: boolean }[] = [];
 const cfgBox = vi.hoisted(() => ({ cfg: { enabled: true } as { enabled: boolean; cosreV2?: boolean } | null }));
 
 vi.mock('./CopilotChat', () => {
@@ -42,8 +42,8 @@ vi.mock('./CopilotChat', () => {
 });
 // v0.10.1647 (Faz 2b B1): v2 kabuğu sahte; aynı pencere olaylarını dinler.
 vi.mock('./cosre/conversation/CosreChatV2', () => {
-  function CosreChatV2(p: { defaultOpen?: boolean; yieldToV1?: boolean }) {
-    v2Mounts.push({ defaultOpen: p.defaultOpen, yieldToV1: p.yieldToV1 });
+  function CosreChatV2(p: { defaultOpen?: boolean }) {
+    v2Mounts.push({ defaultOpen: p.defaultOpen });
     useEffect(() => {
       const h = (e: Event) => v2Seen.push({ type: e.type, q: (e as CustomEvent<{ question?: string }>).detail?.question });
       window.addEventListener('coremetry:ai-ask', h);
@@ -156,8 +156,8 @@ describe('CopilotChatGate davranışı', () => {
 
 // v0.10.1647 (CoSRE v2 Faz 2b B1, plan §1.2 / §5.2). Bayrak kapalıyken yukarıdaki
 // v1 sözleşmesi BİREBİR (o blok cosreV2'siz koşar; burada açık/kapalı ayrımı
-// tekrar çivilenir). Açıkken FAB / ?chat= / olaylar → v2; `?ai=` → v1
-// `launcher={false}` (Q1-a), v2 yieldToV1.
+// tekrar çivilenir). Açıkken FAB / ?chat= / olaylar → v2; v0.10.1672 (B7):
+// `?ai=` de v2 (Q1-a geçiş dalı silindi — v1 bayrak açıkken hiç yüklenmez).
 describe('CopilotChatGate × cosreV2 bayrağı', () => {
   it('bayrak kapalı (cosreV2:false) → FAB v1 açar, v2 hiç yüklenmez', async () => {
     cfgBox.cfg = { enabled: true, cosreV2: false };
@@ -176,7 +176,7 @@ describe('CopilotChatGate × cosreV2 bayrağı', () => {
     await act(async () => { fab()!.click(); });
     await flush();
     expect(chatV2()).not.toBeNull();
-    expect(v2Mounts.at(-1)).toEqual({ defaultOpen: true, yieldToV1: false });
+    expect(v2Mounts.at(-1)).toEqual({ defaultOpen: true });
     expect(chat()).toBeNull();
     expect(fab()).toBeNull(); // kapalıyken FAB'ı v2 kendisi çizer (burada sahte)
   });
@@ -206,21 +206,16 @@ describe('CopilotChatGate × cosreV2 bayrağı', () => {
     expect(chat()).toBeNull();
   });
 
-  it('bayrak açık + ?ai= → v1 launcher={false} (Q1-a), kapı FAB\'ı v2 için çizer', async () => {
+  it('bayrak açık + ?ai= → v2 mount (B7), v1 hiç yüklenmez', async () => {
     cfgBox.cfg = { enabled: true, cosreV2: true };
     await render('/trace?id=abc&ai=trace');
     await flush();
-    expect(chat()).not.toBeNull();
-    expect(v1Launcher).toEqual([false]);
-    expect(chatV2()).toBeNull();
-    expect(fab()).not.toBeNull();
-    await act(async () => { fab()!.click(); });
-    await flush();
     expect(chatV2()).not.toBeNull();
-    expect(v2Mounts.at(-1)).toEqual({ defaultOpen: true, yieldToV1: true });
+    expect(chat()).toBeNull();
+    expect(v1Launcher).toEqual([]);
   });
 
-  it('bayrak açık + v1 açıklama örneği mount iken olay v1\'e bir kez (kapı yeniden yayınlamaz)', async () => {
+  it('bayrak açık + ?ai= mount iken olay v2\'ye bir kez (kapı yeniden yayınlamaz)', async () => {
     cfgBox.cfg = { enabled: true, cosreV2: true };
     await render('/trace?id=abc&ai=trace');
     await flush();
@@ -228,7 +223,8 @@ describe('CopilotChatGate × cosreV2 bayrağı', () => {
       window.dispatchEvent(new CustomEvent('coremetry:ai-ask', { detail: { question: 'tek' } }));
     });
     await flush();
-    expect(seen.filter(s => s.q === 'tek')).toHaveLength(1);
+    expect(v2Seen.filter(s => s.q === 'tek')).toHaveLength(1);
+    expect(seen).toEqual([]);
   });
 
   it('config henüz yokken (null) hiçbir şey çizilmez, niyet cfg gelince doğru gerçeklemeye', async () => {

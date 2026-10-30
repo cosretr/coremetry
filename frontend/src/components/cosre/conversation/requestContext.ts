@@ -3,9 +3,10 @@
 // kuralla kurduğu nesne: ekran kapsamı (bağlam şeridi çıkarmaları uygulanmış),
 // model profili, Derin düşün, Kod hapı + konuşma kod kilidi, @-kapsam / /komut
 // (trace bağlamında @ düşer), gönderimin sabit penceresi, açıklama niyeti.
-// Kurucu ortak (lib/copilotChatContext). v1'de olup v2'de HENÜZ olmayanlar:
-// `conversation` (sunucu kimliği — kalıcılık B6), `wikiRefs` (kaynak
-// parçaları B5), açıklama turunun takip bağlamı explain/subject (`?ai=` B7).
+// Kurucu ortak (lib/copilotChatContext). v0.10.1672 (B7) — v1 paritesi tamam:
+// `conversation` (sunucu kimliği), `wikiRefs` (önceki cevabın wiki sayfaları),
+// açıklama turunun takip bağlamı explain / subject (+ trace / page / env /
+// pencere — ai/useExplainContext, çağıran ekran kapsamının üstüne biner).
 import { buildCopilotChatContext } from '@/lib/copilotChatContext';
 import { hasDrawerContext, parseChatInput, scopeForRequest } from '@/components/ai/chatScope';
 import type { ChatRequestContext } from '@/components/ai/chatContextScope';
@@ -19,12 +20,27 @@ export interface CosreAskSelection {
   code: boolean;
 }
 
+/** v0.10.1672 (B7) — konuşmaya bağlı alanlar (v1 useChatThread send ile aynı). */
+export interface CosreThreadFields {
+  conversation?: string | null;
+  wikiRefs?: string[];
+  /** Son açıklama turunun takip bağlamı (ai/useExplainContext.resolve). */
+  explain?: string;
+  subject?: string;
+}
+
 export function cosreRequestContext(
   screen: ChatRequestContext, sel: CosreAskSelection, text: string, so: ChatSendOpts | undefined, codeLocked: boolean,
+  thread: CosreThreadFields = {},
 ): Record<string, unknown> | undefined {
   const o = so?.window ? { ...screen, rangeS: so.window.rangeS, toMs: so.window.toMs } : screen;
-  const parsed = scopeForRequest(so?.parsed ?? parseChatInput(text.trim(), so?.chosen ?? []), hasDrawerContext(o));
+  const parsed = scopeForRequest(so?.parsed ?? parseChatInput(text.trim(), so?.chosen ?? []),
+    hasDrawerContext({ ...o, explain: thread.explain, subject: thread.subject }));
   return buildCopilotChatContext({
+    explain: thread.explain || undefined,
+    subject: thread.subject || undefined,
+    conversation: thread.conversation || undefined,
+    wikiRefs: thread.wikiRefs?.length ? thread.wikiRefs : undefined,
     service: o.service || undefined,
     operation: o.operation || undefined,
     rangeS: o.rangeS || undefined,

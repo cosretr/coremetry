@@ -25,10 +25,9 @@ import type { ChatSendOpts } from '@/components/ai/useChatThread';
 import { FOLLOWUPS } from '@/components/ai/drawerChat';
 import { Button } from '@/components/shadcn/button';
 import { chatErrorText } from '@/components/ai/chatErrorText';
-import { messageText } from '@/lib/cosre/cosrePersist';
-import { toChatTurn } from '@/lib/cosre/toChatTurn';
+import { toChatTurn, userTurn } from '@/lib/cosre/toChatTurn';
 import type { CosreUIMessage } from '@/lib/cosre/resetReducer';
-import type { ChatTurn } from '@/lib/types';
+import type { ChatExplainAsk, ChatTurn } from '@/lib/types';
 
 /** useChat durumu (ai ChatStatus ile aynı küme; tip importu katalogdan bağımsız). */
 export type CosreChatStatus = 'submitted' | 'streaming' | 'ready' | 'error';
@@ -57,12 +56,16 @@ export function MessageList({ messages, visibleParts, status, error, onAsk, onRe
         if (m.role === 'user') return <UserMessage key={m.id} m={m} />;
         if (m.role !== 'assistant') return null;
         const isLast = i === messages.length - 1;
+        const prev = messages[i - 1];
         return <AssistantMessage key={m.id} m={m} visibleParts={visibleParts} live={isLast && busy} error={isLast ? errText : undefined}
+          explainAsk={prev?.role === 'user' ? prev.metadata?.explainAsk : undefined}
           followups={isLast && status === 'ready' ? onAsk : undefined} onRetry={isLast && errText ? onRetry : undefined} />;
       })}
       {/* İlk parça gelmeden (yalnız soru gitti): v1 bekleyiş göstergesi. */}
-      {busy && last?.role !== 'assistant' && (
-        <div className="cm-msg cm-msg--ai" data-cosre-thinking=""><AiThinking /></div>
+      {busy && last?.role !== 'assistant' && (last?.metadata?.explainAsk
+        // v0.10.1672 (B7) — açıklama turu: v1 gibi baştan künyeli bekleyen balon (ExplainBody yükleniyor).
+        ? <ChatBubble turn={{ role: 'assistant', text: '', pending: true, explain: { kind: last.metadata.explainAsk.kind, id: last.metadata.explainAsk.id } }} />
+        : <div className="cm-msg cm-msg--ai" data-cosre-thinking=""><AiThinking /></div>
       )}
       {/* Asistan mesajı oluşmadan gelen hata: balon yok, v1 dilinde satır. */}
       {errText && last?.role !== 'assistant' && <ErrorLine message={errText} onRetry={onRetry} />}
@@ -71,19 +74,21 @@ export function MessageList({ messages, visibleParts, status, error, onAsk, onRe
 }
 
 function UserMessage({ m }: { m: CosreUIMessage }) {
-  const turn = useMemo<ChatTurn>(() => ({ role: 'user', text: messageText(m) }), [m]);
+  const turn = useMemo<ChatTurn>(() => userTurn(m), [m]); // v0.10.1672 (B7) — açıklama niyeti dahil
   return <ChatBubble turn={turn} />;
 }
 
-function AssistantMessage({ m, visibleParts, live, error, followups, onRetry }: {
+function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, explainAsk }: {
   m: CosreUIMessage; visibleParts: (m: CosreUIMessage) => Part[]; live: boolean; error?: string;
   /** Son, bitmiş cevap: takip çiplerinin sahibi (v1 showFollowups). */
   followups?: (text: string, opts?: ChatSendOpts) => void;
   onRetry?: () => void;
+  /** v0.10.1672 (B7) — önceki kullanıcı turunun açıklama niyeti (geçici künye). */
+  explainAsk?: ChatExplainAsk;
 }) {
   // SDK akışta son mesajı her parçada yeni nesneyle değiştirir; bitmiş
   // mesajlar kimliğini korur → ChatBubble (memo) yalnız akan balonu çizer.
-  const turn = useMemo(() => toChatTurn(m, visibleParts(m), { pending: live, error }), [m, visibleParts, live, error]);
+  const turn = useMemo(() => toChatTurn(m, visibleParts(m), { pending: live, error, explainAsk }), [m, visibleParts, live, error, explainAsk]);
   const xid = live ? undefined : turn.exchangeId;
   const slots = useMemo<ChatBubbleSlots>(() => ({
     stepExtra: d => <RelevanceToggle exchangeId={xid} stepId={`s${d.i}`} />,
@@ -91,7 +96,8 @@ function AssistantMessage({ m, visibleParts, live, error, followups, onRetry }: 
   }), [xid]);
   // v1 showFollowups: bitmiş, hatasız, metinli son cevap.
   const showFu = !!followups && !turn.error && !!turn.text;
-  if (live && !turn.text && !turn.steps?.length) {
+  // Açıklama turu baştan ExplainBody çizer (v1: bekleyen künye, kendi yükleniyor'u).
+  if (live && !turn.text && !turn.steps?.length && !turn.explain) {
     return <div className="cm-msg cm-msg--ai" data-cosre-thinking=""><AiThinking /></div>;
   }
   return (

@@ -7476,7 +7476,7 @@ export interface CosreMessageMetadata {
   /** v0.10.1664 (B6) — açıklama turunun künyesi (sunucu answer.explain → message-metadata;
    *  arşivden de). v1 ChatBubble ExplainBody / charts / log-spike / metric-panel kipini buradan seçer. */
   explain?: ChatExplainMeta;
-  /** v0.10.1665 (B7) — kullanıcı turunun açıklama niyeti (fresh'siz) ve sabit penceresi:
+  /** v0.10.1672 (B7) — kullanıcı turunun açıklama niyeti (fresh'siz) ve sabit penceresi:
    *  yeniden dene aynısını yollar, bekleyen cevap baştan açıklama turu çizilir. */
   explainAsk?: ChatExplainAsk;
   window?: ChatSendWindow;

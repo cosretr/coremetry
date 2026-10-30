@@ -15,8 +15,8 @@ describe('pickChatImpl', () => {
 
   it.each([
     ['fab', 'v2'], ['chatParam', 'v2'], ['ask', 'v2'], ['prefill', 'v2'],
-    // Q1-a: açıklama turu B7'ye dek v1.
-    ['aiSubject', 'v1'],
+    // v0.10.1672 (B7): açıklama turu da v2 (Q1-a geçiş dalı silindi).
+    ['aiSubject', 'v2'],
   ] as const)('bayrak açık: %s → %s', (intent, want) => {
     expect(pickChatImpl({ cosreV2: true }, intent)).toBe(want);
   });
