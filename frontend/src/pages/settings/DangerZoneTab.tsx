@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Button } from '@/components/ui';
+import { Button } from '@/components/shadcn/button';
+import { Field } from '@/components/coremetry/Field';
 import { ActionRow } from '@/components/coremetry/ActionRow';
 import { api } from '@/lib/api';
 import { humanize, FlashBox } from './shared';
@@ -15,6 +16,11 @@ import type { PurgeResult } from '@/lib/types';
 // Admin-only (the whole Settings area is admin-gated); the backend re-checks
 // the role on the route. Two-step type-to-confirm so it can't fire by accident.
 const CONFIRM = 'purge all telemetry';
+
+// Faz 2 dilim 1 R14 — inline stil → Tailwind utility; ui/Button → shadcn
+// (`destructive`); onay cümlesi kutusu coremetry Field (etiket bağlı).
+// Type-to-confirm kapısı, sıra ve metinler aynı.
+const LIST = 'm-0 pl-[18px] text-[length:var(--fs-sm)] leading-relaxed text-(--text2)';
 
 const DELETED = [
   'Spans, logs, metrics, profiles (raw signals)',
@@ -51,46 +57,41 @@ export function DangerZoneTab() {
   };
 
   return (
-    <div className="card" style={{ padding: 16, maxWidth: 760 }}>
-      <h3 style={{ margin: '0 0 12px' }}>⚠ Danger zone — Purge telemetry data</h3>
-      <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 16, lineHeight: 1.5 }}>
+    <div className="card max-w-[760px] p-4">
+      <h3 className="mb-3 mt-0">⚠ Danger zone — Purge telemetry data</h3>
+      <div className="mb-4 text-[length:var(--fs-sm)] leading-normal text-(--text3)">
         A factory reset of observability data: every span, log and metric, plus
         the aggregation / topology / trace views, are emptied from ClickHouse.
         <strong> All configuration is preserved.</strong> This cannot be undone.
       </div>
 
-      <div style={{ display: 'flex', gap: 24, marginBottom: 18, flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: 240 }}>
-          <div style={{ fontWeight: 600, marginBottom: 6 }}>Deleted</div>
-          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: 'var(--text2)', lineHeight: 1.6 }}>
+      <div className="mb-[18px] flex flex-wrap gap-6">
+        <div className="min-w-[240px] flex-1">
+          <div className="mb-1.5 font-semibold">Deleted</div>
+          <ul className={LIST}>
             {DELETED.map(d => <li key={d}>{d}</li>)}
           </ul>
         </div>
-        <div style={{ flex: 1, minWidth: 240 }}>
-          <div style={{ fontWeight: 600, marginBottom: 6 }}>Kept</div>
-          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: 'var(--text2)', lineHeight: 1.6 }}>
+        <div className="min-w-[240px] flex-1">
+          <div className="mb-1.5 font-semibold">Kept</div>
+          <ul className={LIST}>
             {KEPT.map(k => <li key={k}>{k}</li>)}
           </ul>
         </div>
       </div>
 
       {!arming ? (
-        <Button variant="danger" onClick={() => { setArming(true); setMsg(null); }}>
+        <Button variant="destructive" onClick={() => { setArming(true); setMsg(null); }}>
           Purge telemetry data…
         </Button>
       ) : (
-        <div style={{ borderTop: '1px solid var(--divider)', paddingTop: 14 }}>
-          <div style={{ fontSize: 12, marginBottom: 8 }}>
-            Type <code>{CONFIRM}</code> to confirm:
-          </div>
-          <input
-            className="field"
+        <div className="border-t border-(--divider) pt-3.5">
+          <Field label={<>Type <code>{CONFIRM}</code> to confirm:</>}
+            className="mb-3 max-w-[280px]"
             value={phrase}
             onChange={e => setPhrase(e.target.value)}
             placeholder={CONFIRM}
-            autoFocus
-            style={{ maxWidth: 280, marginBottom: 12, display: 'block' }}
-          />
+            autoFocus />
           {/* v0.9.1007 (M5/O8) — K5 ile K6'nın kesiştiği tek nokta:
               YIKICI ONAY EN SOLDAYDI, yani kas hafızasının "iptal"
               beklediği yerde. Type-to-confirm kapısı riski büyük ölçüde
@@ -103,14 +104,14 @@ export function DangerZoneTab() {
               </Button>
             )}
             confirm={(
-              <Button variant="danger" disabled={phrase.trim() !== CONFIRM} onClick={onPurge} loading={busy}>
+              <Button variant="destructive" disabled={phrase.trim() !== CONFIRM} onClick={() => { void onPurge(); }} loading={busy}>
                 Confirm — delete all telemetry
               </Button>
             )} />
         </div>
       )}
 
-      {msg && <div style={{ marginTop: 14 }}><FlashBox kind={msg.kind}>{msg.text}</FlashBox></div>}
+      {msg && <FlashBox kind={msg.kind}>{msg.text}</FlashBox>}
     </div>
   );
 }

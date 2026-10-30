@@ -1,7 +1,15 @@
 import { useState } from 'react';
-import { Button } from '@/components/ui';
+import { Button } from '@/components/shadcn/button';
+import { ActionRow } from '@/components/coremetry/ActionRow';
+import { cn } from '@/lib/cn';
 import { api } from '@/lib/api';
-import { humanize } from './shared';
+import { humanize, FlashBox } from './shared';
+
+// Faz 2 dilim 1 R14 — inline stil → Tailwind utility; ui/Button → shadcn;
+// Preview/Upload satırı ActionRow (birincil sağda). Dosya girdisi ve iki
+// kip radyosu native (plan Q3 muafiyeti). Metinler ve akış aynı.
+const NOTE = 'text-[length:var(--fs-sm)] leading-normal text-(--text3)';
+const HINT = 'text-[length:var(--fs-xs)] leading-snug text-(--text3)';
 
 // ── Backup / Restore tab ────────────────────────────────────────────────────
 //
@@ -97,9 +105,9 @@ export function BackupTab() {
   };
 
   return (
-    <div className="card" style={{ padding: 16, maxWidth: 760 }}>
-      <h3 style={{ margin: '0 0 12px' }}>Backup / Restore</h3>
-      <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 16, lineHeight: 1.5 }}>
+    <div className="card max-w-[760px] p-4">
+      <h3 className="mb-3 mt-0">Backup / Restore</h3>
+      <div className={cn(NOTE, 'mb-4')}>
         Export every operator-set table (settings, channels, alert
         rules, dashboards, saved views, SLOs, maintenance windows,
         monitors, status page) to a JSON file. Replay later to
@@ -109,12 +117,12 @@ export function BackupTab() {
         log) — those are rebuilt from ingest.
       </div>
 
-      <div style={{ borderTop: '1px solid var(--divider)', paddingTop: 16, marginBottom: 20 }}>
-        <div style={{ fontWeight: 600, marginBottom: 8 }}>Export</div>
-        <Button variant="primary" onClick={onExport} loading={busy}>
+      <div className="mb-5 border-t border-(--divider) pt-4">
+        <div className="mb-2 font-semibold">Export</div>
+        <Button onClick={() => { void onExport(); }} loading={busy}>
           Download config (JSON)
         </Button>
-        <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6 }}>
+        <div className={cn(HINT, 'mt-1.5')}>
           File contains every row from system_settings, alert_rules,
           dashboards, saved_views, notification_channels, slos,
           maintenance_windows, anomaly_silences, monitors,
@@ -125,60 +133,71 @@ export function BackupTab() {
         </div>
       </div>
 
-      <div style={{ borderTop: '1px solid var(--divider)', paddingTop: 16 }}>
-        <div style={{ fontWeight: 600, marginBottom: 8 }}>Restore</div>
+      <div className="border-t border-(--divider) pt-4">
+        <div className="mb-2 font-semibold">Restore</div>
+        {/* Yerel dosya girdisi ve iki kip radyosu bilinçli olarak native (plan Q3). */}
         <input
           type="file"
           accept="application/json,.json"
+          aria-label="Config JSON file"
           onChange={e => onFileChange(e.target.files?.[0] ?? null)}
           disabled={busy}
-          style={{ marginBottom: 12, display: 'block' }}
+          className="mb-3 block text-[length:var(--fs-sm)]"
         />
-        <label style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>
-          <input
-            type="radio"
-            name="iox-mode"
-            checked={mode === 'merge'}
-            onChange={() => setMode('merge')}
-            disabled={busy}
-            style={{ marginRight: 6 }}
-          />
-          <strong>Merge</strong> — preserve local edits made after the export.
-          {' '}Imported rows only win where no newer local edit exists.
-        </label>
-        <label style={{ display: 'block', marginBottom: 16, fontSize: 12 }}>
-          <input
-            type="radio"
-            name="iox-mode"
-            checked={mode === 'replace'}
-            onChange={() => setMode('replace')}
-            disabled={busy}
-            style={{ marginRight: 6 }}
-          />
-          <strong>Replace</strong> — imported rows always win, even
-          over newer local edits. Use this for clean-install
-          restore.
-        </label>
-        <div style={{ display: 'flex', gap: 8 }}>
-          {/* v0.9.1006 (M4/O6) — kuru çalıştırma İKİNCİL. Eskiden bu ve
-              "Upload + apply" iki ÖZDEŞ dolu mavi butondu ve hangisinin
-              yazdığı ayırt edilemiyordu; üstelik bu buton varyantını
-              yazmadığı için ihlal kaynakta görünmüyordu (M3). */}
-          <Button variant="secondary"
-            disabled={!file}
-            onClick={onPreviewDiff}
-            title="Dry-run: shows what would be added / overwritten / left alone, no writes." loading={busy}>
-            Preview diff
-          </Button>
-          <Button
-            variant="primary"
-            disabled={!file}
-            onClick={onImport}
-           loading={busy}>
-            Upload + apply
-          </Button>
+        <div role="radiogroup" aria-label="Import mode" className="mb-4 flex flex-col gap-2">
+          <label className="flex items-start gap-1.5 text-[length:var(--fs-sm)]">
+            <input
+              type="radio"
+              name="iox-mode"
+              checked={mode === 'merge'}
+              onChange={() => setMode('merge')}
+              disabled={busy}
+              className="mt-0.5 accent-(--accent)"
+            />
+            <span>
+              <strong>Merge</strong> — preserve local edits made after the export.
+              {' '}Imported rows only win where no newer local edit exists.
+            </span>
+          </label>
+          <label className="flex items-start gap-1.5 text-[length:var(--fs-sm)]">
+            <input
+              type="radio"
+              name="iox-mode"
+              checked={mode === 'replace'}
+              onChange={() => setMode('replace')}
+              disabled={busy}
+              className="mt-0.5 accent-(--accent)"
+            />
+            <span>
+              <strong>Replace</strong> — imported rows always win, even
+              over newer local edits. Use this for clean-install
+              restore.
+            </span>
+          </label>
         </div>
-        <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6 }}>
+        {/* v0.9.1006 (M4/O6) — kuru çalıştırma İKİNCİL. Eskiden bu ve
+            "Upload + apply" iki ÖZDEŞ dolu mavi butondu ve hangisinin
+            yazdığı ayırt edilemiyordu; üstelik bu buton varyantını
+            yazmadığı için ihlal kaynakta görünmüyordu (M3).
+            Faz 2 dilim 1 R14 — ActionRow: birincil EN SAĞDA (D4). */}
+        <ActionRow
+          secondary={
+            <Button variant="outline"
+              disabled={!file}
+              onClick={() => { void onPreviewDiff(); }}
+              title="Dry-run: shows what would be added / overwritten / left alone, no writes." loading={busy}>
+              Preview diff
+            </Button>
+          }
+          confirm={
+            <Button
+              disabled={!file}
+              onClick={() => { void onImport(); }}
+              loading={busy}>
+              Upload + apply
+            </Button>
+          } />
+        <div className={cn(HINT, 'mt-1.5')}>
           Live settings hot-reload after the import — no restart
           needed. Unknown tables in the file are skipped (forward-
           compat). Truncate is never performed; import always
@@ -189,71 +208,48 @@ export function BackupTab() {
             +willAdd  · ~willOverwrite · =unchanged · DB-only.
             Operator confirms scope before triggering import. */}
         {diff && (
-          <div style={{
-            marginTop: 14, padding: '10px 12px',
-            border: '1px solid var(--border)', borderRadius: 6,
-            background: 'var(--bg1)',
-            fontSize: 12,
-          }}>
-            <div style={{
-              fontSize: 10, fontWeight: 700,
-              textTransform: 'uppercase', letterSpacing: 0.4,
-              color: 'var(--text2)', marginBottom: 8,
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            }}>
+          <div className="mt-3.5 rounded-md border border-(--border) bg-(--bg1) px-3 py-2.5 text-[length:var(--fs-sm)]">
+            <div className="mb-2 flex items-center justify-between text-[length:var(--fs-xs)] font-bold uppercase tracking-[0.4px] text-(--text2)">
               <span>Diff preview</span>
-              <span style={{ color: 'var(--text3)', textTransform: 'none', letterSpacing: 0, fontWeight: 400 }}>
+              <span className="font-normal normal-case tracking-normal text-(--text3)">
                 from {diff.exportedAt || '?'}
                 {diff.coremetryVersion && ` · ${diff.coremetryVersion}`}
               </span>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div className="flex flex-col gap-1">
               {Object.entries(diff.tables).length === 0 && (
-                <span style={{ color: 'var(--text3)' }}>No tables in this file matched the catalogue.</span>
+                <span className="text-(--text3)">No tables in this file matched the catalogue.</span>
               )}
               {Object.entries(diff.tables).map(([t, d]) => (
-                <div key={t} style={{
-                  display: 'grid',
-                  gridTemplateColumns: '180px repeat(4, 1fr)',
-                  gap: 8, padding: '3px 0',
-                  fontFamily: 'var(--font-mono)', fontSize: 11,
-                  borderBottom: '1px solid var(--divider)',
-                }}>
-                  <span style={{ color: 'var(--text)', fontWeight: 600 }}>{t}</span>
+                <div key={t} className="grid grid-cols-[180px_repeat(4,1fr)] gap-2 border-b border-(--divider) py-[3px] font-mono text-[length:var(--fs-xs)] tabular-nums">
+                  <span className="font-semibold text-(--text)">{t}</span>
                   {/* v0.10.929 (K5) — "yeni" bir değişiklik, iyileşme değil: vurgu (--accent2), yeşil değil. */}
-                  <span style={{ color: d.willAdd.length > 0 ? 'var(--accent2)' : 'var(--text3)' }}
+                  <span className={d.willAdd.length > 0 ? 'text-(--accent2)' : 'text-(--text3)'}
                     title={d.willAdd.length > 0 ? d.willAdd.slice(0, 20).join('\n') : 'no new rows'}>
                     +{d.willAdd.length} new
                   </span>
-                  <span style={{ color: d.willOverwrite.length > 0 ? 'var(--warn)' : 'var(--text3)' }}
+                  <span className={d.willOverwrite.length > 0 ? 'text-(--warn)' : 'text-(--text3)'}
                     title={d.willOverwrite.length > 0 ? d.willOverwrite.slice(0, 20).join('\n') : 'no overwrites'}>
                     ~{d.willOverwrite.length} overwrite
                   </span>
-                  <span style={{ color: 'var(--text3)' }}>
+                  <span className="text-(--text3)">
                     ={d.unchanged} same
                   </span>
-                  <span style={{ color: 'var(--text3)' }}
+                  <span className="text-(--text3)"
                     title="Rows present in DB but not in the file. Import never deletes — these stay.">
                     {d.onlyInDB} DB-only
                   </span>
                 </div>
               ))}
             </div>
-            <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 8, lineHeight: 1.4 }}>
+            <div className={cn(HINT, 'mt-2')}>
               <strong>+new</strong>: rows in file that don't exist locally · <strong>~overwrite</strong>: rows whose version differs (merge mode keeps newer; replace mode forces file) · <strong>=same</strong>: identical · <strong>DB-only</strong>: kept as-is, import never deletes.
             </div>
           </div>
         )}
       </div>
 
-      {msg && (
-        <div style={{
-          marginTop: 16, fontSize: 12,
-          color: msg.kind === 'ok' ? 'var(--ok)' : 'var(--err)',
-        }}>
-          {msg.text}
-        </div>
-      )}
+      {msg && <FlashBox kind={msg.kind}>{msg.text}</FlashBox>}
     </div>
   );
 }

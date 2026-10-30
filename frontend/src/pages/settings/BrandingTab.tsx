@@ -1,9 +1,21 @@
 import { useEffect, useState, type FormEvent, type ChangeEvent } from 'react';
 import { Spinner } from '@/components/Spinner';
-import { Button, useConfirm, Field as LabeledInput, SelectField } from '@/components/ui'; // v0.10.1334 — SelectField
+import { Button } from '@/components/shadcn/button';
+import { Field, SelectField, TextareaField, CheckboxField } from '@/components/coremetry/Field';
+import { StatusBadge } from '@/components/coremetry/StatusBadge';
+import { ActionRow } from '@/components/coremetry/ActionRow';
+import { useConfirm } from '@/components/coremetry/Confirm';
+import { cn } from '@/lib/cn';
 import { api } from '@/lib/api';
 import { DEFAULT_BRANDING, ORACLE_GROUP_LABEL_MAX, invalidateBranding, type BrandingSettings } from '@/lib/branding';
-import { Field, Row, SettingsLoadError, useSettingsLoad } from './shared';
+import { SettingsLoadError, useSettingsLoad, FlashBox } from './shared';
+
+// Faz 2 dilim 1 R14 — inline stil → Tailwind utility; shared Field/Row +
+// ui/ atomları → coremetry Field ailesi + shadcn. Alan sırası, metinler,
+// kaydetme gövdesi aynı. Row düzeni: flex-wrap, alan flex 1 / min 200.
+const H2 = 'mb-1.5 text-[length:var(--fs-lg)] font-semibold';
+const ROW = 'flex flex-wrap items-start gap-3';
+const WIDE = 'min-w-[200px] flex-1';
 
 // BrandingTab — white-label / customisation form. Admin paints the
 // login page (logo + title + button label + footer) and the
@@ -91,148 +103,121 @@ export function BrandingTab() {
   };
 
   return (
-    <div style={{ maxWidth: 720 }}>
-      <h2 style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Branding</h2>
-      <p style={{ color: 'var(--text2)', fontSize: 13, marginBottom: 16 }}>
+    <div className="max-w-[720px]">
+      <h2 className={H2}>Branding</h2>
+      <p className="mb-4 text-[length:var(--fs-md)] text-(--text2)">
         White-label the login page + browser tab title. Empty fields fall back to the
         Coremetry defaults shown as placeholders. Changes apply immediately — no
         restart, no reload needed.
       </p>
 
-      <form onSubmit={save} style={{
-        padding: 16, borderRadius: 8,
-        background: 'var(--bg2)', border: '1px solid var(--border)',
-      }}>
-        <Row>
-          <Field label="App name" flex={1}>
-            <input value={b.appName ?? ''} onChange={e => set('appName', e.target.value)}
-                   placeholder={DEFAULT_BRANDING.appName} style={{ width: '100%' }} />
-          </Field>
-          <Field label="Browser tab title" flex={1}>
-            <input value={b.browserTitle ?? ''} onChange={e => set('browserTitle', e.target.value)}
-                   placeholder={DEFAULT_BRANDING.browserTitle} style={{ width: '100%' }} />
-          </Field>
-        </Row>
+      <form onSubmit={save} className="flex flex-col gap-3 rounded-lg border border-(--border) bg-(--bg2) p-4">
+        <div className={ROW}>
+          <Field className={WIDE} label="App name" value={b.appName ?? ''}
+            onChange={e => set('appName', e.target.value)}
+            placeholder={DEFAULT_BRANDING.appName} />
+          <Field className={WIDE} label="Browser tab title" value={b.browserTitle ?? ''}
+            onChange={e => set('browserTitle', e.target.value)}
+            placeholder={DEFAULT_BRANDING.browserTitle} />
+        </div>
 
-        <Field label="Login page title">
-          <input value={b.loginTitle ?? ''} onChange={e => set('loginTitle', e.target.value)}
-                 placeholder="Sign in to Coremetry" style={{ width: '100%' }} />
-        </Field>
-        <Field label="Login subtitle (optional — shown under the title)">
-          <textarea value={b.loginSubtitle ?? ''} onChange={e => set('loginSubtitle', e.target.value)}
-                    placeholder='e.g. "Acme Bank observability. Access requires VPN."'
-                    rows={2} style={{ width: '100%', resize: 'vertical' }} />
-        </Field>
+        <Field label="Login page title" value={b.loginTitle ?? ''}
+          onChange={e => set('loginTitle', e.target.value)}
+          placeholder="Sign in to Coremetry" />
+        <TextareaField label="Login subtitle (optional — shown under the title)"
+          value={b.loginSubtitle ?? ''} onChange={e => set('loginSubtitle', e.target.value)}
+          placeholder='e.g. "Acme Bank observability. Access requires VPN."'
+          rows={2} controlClassName="resize-y" />
 
-        <Row>
-          <Field label="Sign-in button label" flex={1}>
-            <input value={b.signInButtonLabel ?? ''} onChange={e => set('signInButtonLabel', e.target.value)}
-                   placeholder={DEFAULT_BRANDING.signInButtonLabel} style={{ width: '100%' }} />
-          </Field>
-          <Field label="Username field label" flex={1}>
-            <input value={b.usernameLabel ?? ''} onChange={e => set('usernameLabel', e.target.value)}
-                   placeholder='e.g. "Corporate ID" or "Domain user"' style={{ width: '100%' }} />
-          </Field>
-        </Row>
+        <div className={ROW}>
+          <Field className={WIDE} label="Sign-in button label" value={b.signInButtonLabel ?? ''}
+            onChange={e => set('signInButtonLabel', e.target.value)}
+            placeholder={DEFAULT_BRANDING.signInButtonLabel} />
+          <Field className={WIDE} label="Username field label" value={b.usernameLabel ?? ''}
+            onChange={e => set('usernameLabel', e.target.value)}
+            placeholder='e.g. "Corporate ID" or "Domain user"' />
+        </div>
 
-        <Field label="Footer text (small line at the bottom of the login card)">
-          <input value={b.footerText ?? ''} onChange={e => set('footerText', e.target.value)}
-                 placeholder='e.g. "© Acme Bank · Internal use only"' style={{ width: '100%' }} />
-        </Field>
+        <Field label="Footer text (small line at the bottom of the login card)"
+          value={b.footerText ?? ''} onChange={e => set('footerText', e.target.value)}
+          placeholder='e.g. "© Acme Bank · Internal use only"' />
 
-        <Field label="UI language">
-          <select value={b.language ?? 'en'}
-                  onChange={e => set('language', e.target.value)}
-                  style={{ fontSize: 13, padding: '4px 8px', minWidth: 200 }}>
-            <option value="en">English (default)</option>
-            <option value="tr">Türkçe</option>
-          </select>
-          <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
-            Drives sidebar labels, login strings, common buttons, page titles.
-            Applies to every operator hitting this Coremetry instance.
-          </div>
-        </Field>
+        <SelectField label="UI language" className="max-w-[260px]"
+          value={b.language ?? 'en'}
+          onChange={e => set('language', e.target.value)}
+          hint={<>Drives sidebar labels, login strings, common buttons, page titles.
+            Applies to every operator hitting this Coremetry instance.</>}>
+          <option value="en">English (default)</option>
+          <option value="tr">Türkçe</option>
+        </SelectField>
 
         {/* v0.10.1334 — rehberli tur: yeni kullanıcıya (hesap ≤ 7 gün) ilk
             girişte kendiliğinden açılsın mı. Kapalıyken menüdeki "Turu yeniden
             başlat" çalışmaya devam eder; anahtar yalnız oto-başlatmayı keser. */}
-        <div style={{ marginBottom: 12 }}>
-          <SelectField label="Rehberli tur (yeni kullanıcı)"
-            value={b.onboardingTour === 'off' ? 'off' : 'on'}
-            onChange={e => set('onboardingTour', e.target.value)}
-            hint="Açık: ilk 7 gün içindeki kullanıcıya tur ilk girişte bir kez açılır. Kullanıcı menüsündeki “Turu yeniden başlat” her durumda çalışır.">
-            <option value="on">Açık (varsayılan)</option>
-            <option value="off">Kapalı</option>
-          </SelectField>
-        </div>
+        <SelectField label="Rehberli tur (yeni kullanıcı)"
+          value={b.onboardingTour === 'off' ? 'off' : 'on'}
+          onChange={e => set('onboardingTour', e.target.value)}
+          hint="Açık: ilk 7 gün içindeki kullanıcıya tur ilk girişte bir kez açılır. Kullanıcı menüsündeki “Turu yeniden başlat” her durumda çalışır.">
+          <option value="on">Açık (varsayılan)</option>
+          <option value="off">Kapalı</option>
+        </SelectField>
 
         {/* v0.10.1108 (operatör: "exceptionsta Oracle yazıyor onun yerine … Teknik
             Hata gibi") — `ora:` gruplarının görünen adı; boş = "Teknik hata".
             Sunucu kırpar + 40 rune'a keser; maxLength aynı tavan. */}
-        <div style={{ marginBottom: 12 }}>
-          <LabeledInput label="Oracle hata grubu etiketi"
-            value={b.oracleGroupLabel ?? ''} onChange={e => set('oracleGroupLabel', e.target.value)}
-            placeholder={DEFAULT_BRANDING.oracleGroupLabel} maxLength={ORACLE_GROUP_LABEL_MAX}
-            style={{ width: '100%' }}
-            hint='Exceptions/Problems satırlarında, rozetinde, çipinde ve AI satırında "Oracle" kelimesinin yerine görünür.' />
+        <Field label="Oracle hata grubu etiketi"
+          value={b.oracleGroupLabel ?? ''} onChange={e => set('oracleGroupLabel', e.target.value)}
+          placeholder={DEFAULT_BRANDING.oracleGroupLabel} maxLength={ORACLE_GROUP_LABEL_MAX}
+          hint='Exceptions/Problems satırlarında, rozetinde, çipinde ve AI satırında "Oracle" kelimesinin yerine görünür.' />
+
+        <div className="flex items-end gap-2">
+          <Field className="flex-1" label="Primary color (CSS — e.g. #4f46e5, rgb(79,70,229))"
+            value={b.primaryColor ?? ''} onChange={e => set('primaryColor', e.target.value)}
+            placeholder="leave empty for the bundled accent" />
+          {/* Faz 2 dilim 1 R14 — hesaplanan renk inline stil değil: ref
+              `--swatch` CSS değişkenini yazar, sınıf okur. */}
+          {b.primaryColor && (
+            <span aria-hidden="true" data-swatch=""
+              ref={el => { el?.style.setProperty('--swatch', b.primaryColor ?? ''); }}
+              className="h-8 w-8 shrink-0 rounded border border-(--border) bg-(--swatch)" />
+          )}
         </div>
 
-        <Field label="Primary color (CSS — e.g. #4f46e5, rgb(79,70,229))">
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <input value={b.primaryColor ?? ''} onChange={e => set('primaryColor', e.target.value)}
-                   placeholder="leave empty for the bundled accent"
-                   style={{ flex: 1 }} />
-            {b.primaryColor && (
-              <span style={{
-                width: 32, height: 28, borderRadius: 4,
-                background: b.primaryColor,
-                border: '1px solid var(--border)',
-              }} />
-            )}
-          </div>
-        </Field>
-
-        <Field label="Logo (PNG / SVG / JPG, ≤ 200 KB)">
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+        <div className="flex min-w-0 flex-col gap-1">
+          <span className="text-[length:var(--fs-sm)] leading-tight text-(--text2)">Logo (PNG / SVG / JPG, ≤ 200 KB)</span>
+          <div className="flex items-center gap-3">
+            {/* Yerel dosya girdisi bilinçli olarak native (plan Q3). */}
             <input type="file" accept="image/png,image/svg+xml,image/jpeg,image/webp"
-                   onChange={onLogo} />
+              aria-label="Logo (PNG / SVG / JPG, ≤ 200 KB)"
+              className="text-[length:var(--fs-sm)]"
+              onChange={onLogo} />
             {b.logoDataUri && (
               <>
                 <img src={b.logoDataUri} alt="logo preview"
-                     style={{ maxHeight: 48, maxWidth: 140, objectFit: 'contain',
-                              border: '1px solid var(--border)', borderRadius: 4,
-                              padding: 4, background: 'var(--bg)' }} />
-                <Button type="button" variant="danger" size="sm"
+                  className="max-h-12 max-w-[140px] rounded border border-(--border) bg-(--bg) object-contain p-1" />
+                <Button type="button" variant="destructive" size="sm"
                   onClick={() => set('logoDataUri', '')}>
                   Remove
                 </Button>
               </>
             )}
           </div>
-        </Field>
-
-        {msg && (
-          <div style={{
-            marginTop: 14, padding: '6px 10px', borderRadius: 4, fontSize: 12,
-            color: msg.kind === 'ok' ? 'var(--ok)' : 'var(--err)',
-            background: msg.kind === 'ok' ? 'rgba(63,185,80,0.10)' : 'rgba(220,38,38,0.08)',
-            border: `1px solid ${msg.kind === 'ok' ? 'rgba(63,185,80,0.35)' : 'rgba(220,38,38,0.3)'}`,
-          }}>
-            {msg.text}
-          </div>
-        )}
-
-        <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-          <Button type="submit" variant="primary" loading={busy}>
-            Save
-          </Button>
-          {/* v0.9.1006 (M4/O6) — dolu Save'in yanında dolu kırmızı ikinci
-              bir ağırlık vardı. `ghost-danger` tam bu iş için var
-              (globals.css:517): kırmızı DİLİ taşır, ikinci dolgu değil. */}
-          <Button type="button" variant="ghost-danger" onClick={resetAll} disabled={busy}>
-            Reset to defaults
-          </Button>
         </div>
+
+        {msg && <FlashBox kind={msg.kind}>{msg.text}</FlashBox>}
+
+        {/* v0.9.1006 (M4/O6) — dolu Save'in yanında dolu kırmızı ikinci
+            bir ağırlık vardı. `ghost-danger` kırmızı DİLİ taşır, ikinci
+            dolgu değil (R14: shadcn'deki coremetry varyantı); ActionRow
+            yıkıcıyı EN SOLA, Save'i EN SAĞA koyar (D4). */}
+        <ActionRow
+          destructive={
+            <Button type="button" variant="ghost-danger"
+              onClick={() => { void resetAll(); }} disabled={busy}>
+              Reset to defaults
+            </Button>
+          }
+          confirm={<Button type="submit" loading={busy}>Save</Button>} />
       </form>
 
       <AnnouncementSection />
@@ -252,7 +237,7 @@ function AnnouncementSection() {
     api.getAnnouncement().then(setA).catch(() => setA(null));
   }, []);
 
-  if (a === undefined) return <div style={{ marginTop: 24 }}><Spinner /></div>;
+  if (a === undefined) return <div className="mt-6"><Spinner /></div>;
   if (a === null) return null;
 
   const save = async () => {
@@ -267,54 +252,41 @@ function AnnouncementSection() {
   };
 
   return (
-    <div style={{ marginTop: 28, paddingTop: 18, borderTop: '1px solid var(--border)' }}>
-      <h2 style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>
+    <div className="mt-7 border-t border-(--border) pt-[18px]">
+      <h2 className={cn(H2, 'flex items-center gap-2')}>
         Duyuru şeridi
-        {a.enabled && a.text
-          ? <span className="badge b-gray" style={{ marginLeft: 8 }}>aktif</span>
-          : <span className="badge b-gray" style={{ marginLeft: 8 }}>kapalı</span>}
+        <StatusBadge status="unknown">{a.enabled && a.text ? 'aktif' : 'kapalı'}</StatusBadge>
       </h2>
-      <p style={{ color: 'var(--text2)', fontSize: 13, marginBottom: 12 }}>
+      <p className="mb-3 text-[length:var(--fs-md)] text-(--text2)">
         Tüm kullanıcılara sayfa üstünde gösterilen genel duyuru — ör. destek
         e-postası, wiki adresi, planlı bakım notu. Kullanıcı kapatabilir;
         metni güncellediğinde herkese yeniden görünür.
       </p>
-      <Row>
-        <Field label="Duyuru metni">
-          <input value={a.text ?? ''} maxLength={500} style={{ width: '100%' }}
-            placeholder="Coremetry ile ilgili sorularınız için: apm-destek@…"
-            onChange={e => setA({ ...a, text: e.target.value })} />
-        </Field>
-      </Row>
-      <Row>
-        <Field label="Link (opsiyonel)">
-          <input value={a.linkUrl ?? ''} placeholder="http://wiki.local/coremetry"
-            style={{ width: '100%' }}
+      <div className="flex flex-col gap-3">
+        <Field label="Duyuru metni" value={a.text ?? ''} maxLength={500}
+          placeholder="Coremetry ile ilgili sorularınız için: apm-destek@…"
+          onChange={e => setA({ ...a, text: e.target.value })} />
+        <div className={ROW}>
+          <Field className={WIDE} label="Link (opsiyonel)" value={a.linkUrl ?? ''}
+            placeholder="http://wiki.local/coremetry"
             onChange={e => setA({ ...a, linkUrl: e.target.value })} />
-        </Field>
-        <Field label="Link etiketi">
-          <input value={a.linkLabel ?? ''} maxLength={80} placeholder="Wiki"
-            style={{ width: '100%' }}
+          <Field className={WIDE} label="Link etiketi" value={a.linkLabel ?? ''} maxLength={80}
+            placeholder="Wiki"
             onChange={e => setA({ ...a, linkLabel: e.target.value })} />
-        </Field>
-        <Field label="Ton">
-          <select value={a.tone ?? 'info'}
+          <SelectField small label="Ton" value={a.tone ?? 'info'}
             onChange={e => setA({ ...a, tone: e.target.value as 'info' | 'warn' })}>
             <option value="info">Bilgi</option>
             <option value="warn">Önemli (amber)</option>
-          </select>
-        </Field>
-      </Row>
-      <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 10 }}>
-        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
-          <input type="checkbox" checked={a.enabled}
-            onChange={e => setA({ ...a, enabled: e.target.checked })} />
-          Şerit aktif
-        </label>
-        <Button variant="primary" onClick={() => { void save(); }} loading={busy}>
+          </SelectField>
+        </div>
+      </div>
+      <div className="mt-2.5 flex items-center gap-2.5">
+        <CheckboxField label="Şerit aktif" checked={a.enabled}
+          onCheckedChange={v => setA({ ...a, enabled: v })} />
+        <Button onClick={() => { void save(); }} loading={busy}>
           Kaydet
         </Button>
-        {msg && <span style={{ fontSize: 12, color: 'var(--text2)' }}>{msg}</span>}
+        {msg && <span role="status" className="text-[length:var(--fs-sm)] text-(--text2)">{msg}</span>}
       </div>
     </div>
   );

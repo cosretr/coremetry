@@ -1,11 +1,29 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Spinner, Empty } from '@/components/Spinner';
-import { Button, ButtonGroup, Modal, Stack, useConfirm } from '@/components/ui';
+import { Button } from '@/components/shadcn/button';
+import { ButtonGroup } from '@/components/shadcn/button-group';
+import { Input } from '@/components/shadcn/input';
+import { NativeSelect } from '@/components/shadcn/native-select';
+import { Checkbox } from '@/components/shadcn/checkbox';
+import { Field, SelectField, CheckboxField } from '@/components/coremetry/Field';
+import { StatusBadge } from '@/components/coremetry/StatusBadge';
+import { ActionRow } from '@/components/coremetry/ActionRow';
+import { useConfirm } from '@/components/coremetry/Confirm';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/coremetry/overlay';
+import { DataTable, type ColumnDef, type DataTableStateInput } from '@/components/coremetry/DataTable';
+import { cn } from '@/lib/cn';
 import { api, type PipelineRule } from '@/lib/api';
 import type { MetricExclusionRule } from '@/lib/types';
-import { Field, FlashBox, humanize } from './shared';
+import { FlashBox, humanize } from './shared';
 import { buildPipelineRuleBody, describeCondition } from './pipelineRuleBody';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef } from '@/components/ui/DataTable';
+
+// Faz 2 dilim 1 R14 — inline stil → Tailwind utility; ui/ DataTable kancası
+// → coremetry DataTable (renderCell), Modal → coremetry/overlay Dialog,
+// shared Field + elle yazılmış etiketler → coremetry Field ailesi. Kolon
+// kümesi/sırası, kural gövdesi (buildPipelineRuleBody) ve metinler aynı.
+const LABEL = 'text-[length:var(--fs-sm)] leading-tight text-(--text2)';
+const HINT = 'text-[length:var(--fs-xs)] leading-snug text-(--text3)';
+const CTL = 'h-8 bg-field border-(--border-control) text-[length:var(--fs-sm)] md:text-[length:var(--fs-sm)] dark:bg-field';
 
 // v0.9.875 (tutarlılık denetimi MT6) — kural tablosu paylaşılan primitife.
 // v0.9.797'den beri türetilmiş-metrik kuralları da buraya yazılıyor ve liste
@@ -56,11 +74,6 @@ export function PipelineTab() {
   const [spanPrefill, setSpanPrefill] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
-  const dt = useDataTable<PipelineRule>({
-    storageKey: 'settings-pipeline-rules', columns: RULE_COLS, rows: rules ?? [],
-    initialSort: { id: 'name', dir: 'asc' },
-  });
-
   const load = () => {
     setRules(undefined);
     api.listPipelineRules().then(r => setRules(r.rules ?? [])).catch(() => setRules(null));
@@ -97,90 +110,88 @@ export function PipelineTab() {
   if (rules === undefined) return <Spinner />;
   if (rules === null) return <Empty icon="!" title="Failed to load pipeline rules" />;
 
+  // v0.10.954 — tablo standardı T12: boş durum tablonun İÇİNDE, başlık
+  // durur (sekme düzeyindeki yükleniyor / hata dönüşleri kalır).
+  const ruleState: DataTableStateInput<PipelineRule> = {
+    kind: 'empty',
+    message: "Henüz pipeline kuralı yok — gürültülü span trafiğini ingest'te düşürmek için bir kural oluşturun.",
+  };
+
+  const ruleCell = (r: PipelineRule, col: ColumnDef<PipelineRule>) => {
+    switch (col.id) {
+      case 'name': return <span className="font-semibold text-(--text)">{r.name}</span>;
+      case 'kind': return (
+        <StatusBadge status={r.kind === 'drop' ? 'critical' : 'info'}>
+          {r.kind.toUpperCase()}
+        </StatusBadge>
+      );
+      case 'signal': return <code className="text-[length:var(--fs-xs)]">{r.signal}</code>;
+      case 'predicate': return (
+        <>
+          {r.when.key} <b>{r.when.op}</b>{' '}
+          <span className="text-(--text2)">"{r.when.value}"</span>
+          {/* v0.9.803 — EK koşullar listede de görünür. Yalnız
+              `when`'i basmak, tek-metrik kısıtlı türetilmiş bir
+              kuralı "her metrik" gibi okutuyordu. */}
+          {(r.and ?? []).map((c, i) => (
+            <span key={i}>
+              {' '}<b className="text-(--text3)">AND</b>{' '}
+              {c.key} <b>{c.op}</b>{' '}
+              <span className="text-(--text2)">"{c.value}"</span>
+            </span>
+          ))}
+          {r.kind === 'enrich' && r.setAttributes && Object.entries(r.setAttributes).map(([k, v]) => (
+            <span key={k} className="ml-2 text-(--accent2)">
+              → {k}=<b>"{v}"</b>
+            </span>
+          ))}
+          {r.kind === 'sample' && r.rate != null && (
+            <span className="ml-2 text-(--accent2) tabular-nums">
+              keep <b>{(r.rate * 100).toFixed(1)}%</b>
+            </span>
+          )}
+        </>
+      );
+      case 'enabled': return (
+        <Checkbox checked={r.enabled} aria-label={`${r.name} enabled`}
+          onCheckedChange={() => { void toggle(r); }} />
+      );
+      case 'actions': return (
+        // R14 (D5): satır eylemleri ghost `sm`, aynı iki eylem aynı sırada.
+        <ButtonGroup aria-label={`${r.name} actions`} className="ml-auto">
+          <Button variant="ghost" size="sm" onClick={() => setEditing(r)}>
+            Edit
+          </Button>
+          <Button variant="ghost-danger" size="sm" onClick={() => void remove(r)}>
+            Delete
+          </Button>
+        </ButtonGroup>
+      );
+      default: return null;
+    }
+  };
+
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 12 }}>
-        <span style={{ fontSize: 12, color: 'var(--text2)', flex: 1 }}>
+      <div className="mb-3 flex items-baseline gap-3">
+        <span className="flex-1 text-[length:var(--fs-sm)] text-(--text2)">
           Ingest-time rules evaluated <b>before</b> the store write. A "drop"
           rule that matches removes the record entirely — no CH write. Use
           for noisy health-check spans, DEBUG logs, high-cardinality debug
           metrics, or whole services you've decided to drop for cost.
           Choose the <b>signal</b> (spans / logs / metrics) each rule scopes to.
         </span>
-        <Button variant="primary" onClick={() => setCreating(true)}>+ New rule</Button>
+        <Button onClick={() => setCreating(true)}>+ New rule</Button>
       </div>
 
-      {msg && (
-        <div style={{
-          marginBottom: 10, padding: '6px 10px', borderRadius: 4, fontSize: 13,
-          color: msg.kind === 'ok' ? 'var(--ok)' : 'var(--err)',
-          background: msg.kind === 'ok' ? 'color-mix(in srgb, var(--ok) 8%, transparent)' : 'color-mix(in srgb, var(--err) 8%, transparent)',
-          border: `1px solid ${msg.kind === 'ok' ? 'color-mix(in srgb, var(--ok) 30%, transparent)' : 'color-mix(in srgb, var(--err) 30%, transparent)'}`,
-        }}>{msg.text}</div>
-      )}
+      {msg && <div className="mb-2.5"><FlashBox kind={msg.kind}>{msg.text}</FlashBox></div>}
 
-      {/* v0.10.954 — tablo standardı T12: boş durum tablonun İÇİNDE, başlık
-          durur (sekme düzeyindeki yükleniyor / hata dönüşleri kalır). */}
       <div className="table-wrap">
-        <table {...dt.tableProps}>
-          <DataTableColgroup dt={dt} />
-          <DataTableHead dt={dt} />
-          <tbody>
-            {dt.sortedRows.length === 0 ? (
-              <DataTableState dt={dt} kind="empty"
-                message="Henüz pipeline kuralı yok — gürültülü span trafiğini ingest'te düşürmek için bir kural oluşturun." />
-            ) : dt.sortedRows.map(r => (
-              <tr key={r.id}>
-                <DataTableCell dt={dt} col="name" row={r} value={r.name} className="cell-strong" />
-                <DataTableCell dt={dt} col="kind" row={r}>
-                  <span className={r.kind === 'drop' ? 'badge b-err' : 'badge b-info'}>
-                    {r.kind.toUpperCase()}
-                  </span>
-                </DataTableCell>
-                <DataTableCell dt={dt} col="signal" row={r}>
-                  <code style={{ fontSize: 11 }}>{r.signal}</code>
-                </DataTableCell>
-                <DataTableCell dt={dt} col="predicate" row={r}>
-                  {r.when.key} <b>{r.when.op}</b>{' '}
-                  <span style={{ color: 'var(--text2)' }}>"{r.when.value}"</span>
-                  {/* v0.9.803 — EK koşullar listede de görünür. Yalnız
-                      `when`'i basmak, tek-metrik kısıtlı türetilmiş bir
-                      kuralı "her metrik" gibi okutuyordu. */}
-                  {(r.and ?? []).map((c, i) => (
-                    <span key={i}>
-                      {' '}<b style={{ color: 'var(--text3)' }}>AND</b>{' '}
-                      {c.key} <b>{c.op}</b>{' '}
-                      <span style={{ color: 'var(--text2)' }}>"{c.value}"</span>
-                    </span>
-                  ))}
-                  {r.kind === 'enrich' && r.setAttributes && Object.entries(r.setAttributes).map(([k, v]) => (
-                    <span key={k} style={{ marginLeft: 8, color: 'var(--accent2)' }}>
-                      → {k}=<b>"{v}"</b>
-                    </span>
-                  ))}
-                  {r.kind === 'sample' && r.rate != null && (
-                    <span style={{ marginLeft: 8, color: 'var(--accent2)' }}>
-                      keep <b>{(r.rate * 100).toFixed(1)}%</b>
-                    </span>
-                  )}
-                </DataTableCell>
-                <DataTableCell dt={dt} col="enabled" row={r}>
-                  <input type="checkbox" checked={r.enabled} onChange={() => toggle(r)} />
-                </DataTableCell>
-                <DataTableCell dt={dt} col="actions" row={r}>
-                  <ButtonGroup aria-label={`${r.name} actions`} size="sm">
-                    <Button variant="secondary" onClick={() => setEditing(r)}>
-                      Edit
-                    </Button>
-                    <Button variant="ghost-danger" onClick={() => void remove(r)}>
-                      Delete
-                    </Button>
-                  </ButtonGroup>
-                </DataTableCell>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <DataTable<PipelineRule> storageKey="settings-pipeline-rules" columns={RULE_COLS} rows={rules}
+          sort={{ initial: { id: 'name', dir: 'asc' } }}
+          getRowKey={r => r.id}
+          state={ruleState}
+          renderCell={ruleCell} />
       </div>
 
       {(creating || editing) && (
@@ -199,7 +210,7 @@ export function PipelineTab() {
           ÜSTTEKİ tabloda görünen türetilmiş bir kural yazıyor (tek drop
           motoru). Ayrı bir sekmeye koysaydık iki liste birbirinden
           habersiz görünürdü. */}
-      <div style={{ marginTop: 28, paddingTop: 20, borderTop: '1px solid var(--border)' }}>
+      <div className="mt-7 border-t border-(--border) pt-5">
         <MetricExclusionsSection
           onChanged={load}
           onSpanRule={() => { setSpanPrefill(true); setCreating(true); }}
@@ -263,14 +274,14 @@ function MetricExclusionsSection({ onChanged, onSpanRule }: {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 8 }}>
-        <h2 style={{ fontSize: 14, fontWeight: 600, flex: 1 }}>Metrik dışlamaları</h2>
-        <Button variant="secondary" size="sm"
+      <div className="mb-2 flex items-baseline gap-3">
+        <h2 className="flex-1 text-[length:var(--fs-lg)] font-semibold">Metrik dışlamaları</h2>
+        <Button variant="outline" size="sm"
           onClick={() => setRules([...(rules ?? []), { metric: '*', pattern: '', dropAtIngest: false }])}>
           + Kural
         </Button>
       </div>
-      <p style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 14, lineHeight: 1.55 }}>
+      <p className="mb-3.5 text-[length:var(--fs-sm)] leading-normal text-(--text2)">
         Healthcheck route&apos;larını metrik grafiklerinden düşürmek için. Kural
         eklendiği anda <b>geçmiş dahil</b> tüm metrik okumaları filtrelenir;
         kural silinince veri aynen geri gelir &mdash; hiçbir şey kaybolmaz.
@@ -290,13 +301,8 @@ function MetricExclusionsSection({ onChanged, onSpanRule }: {
           motorun sahibi pipeline, ve aynı kuralı iki yerden yazılabilir
           yapmak UI çoğaltması olurdu. Link yukarıdaki tabloya taslak
           açar — tek sahip, tek liste. */}
-      <div style={{
-        display: 'flex', gap: 10, alignItems: 'baseline', flexWrap: 'wrap',
-        marginBottom: 14, padding: '8px 12px', borderRadius: 6,
-        border: '1px solid var(--border)', background: 'var(--bg2)',
-        fontSize: 12, color: 'var(--text2)', lineHeight: 1.55,
-      }}>
-        <span style={{ flex: '1 1 340px' }}>
+      <div className="mb-3.5 flex flex-wrap items-baseline gap-2.5 rounded-md border border-(--border) bg-(--bg2) px-3 py-2 text-[length:var(--fs-sm)] leading-normal text-(--text2)">
+        <span className="flex-[1_1_340px]">
           <b>Span&apos;ler için:</b> yukarıdaki Pipeline kuralları tablosunda
           {' '}<code>kind=drop</code> bir kural (<code>http.route</code> ya da span
           adı eşleşmesi). Span tarafında OKUMA filtresi <b>yok</b>: dar rollup ve
@@ -305,7 +311,7 @@ function MetricExclusionsSection({ onChanged, onSpanRule }: {
           Bu yüzden span dışlaması <b>yalnız ingest&apos;te</b> uygulanır &mdash;
           geçmiş veriyi etkilemez, ileriye dönük yazılmaz.
         </span>
-        <Button variant="secondary" size="sm" onClick={onSpanRule}>
+        <Button variant="outline" size="sm" onClick={onSpanRule}>
           + Span drop kuralı
         </Button>
       </div>
@@ -315,40 +321,23 @@ function MetricExclusionsSection({ onChanged, onSpanRule }: {
           Healthcheck route&apos;larını grafiklerden düşürmek için bir kural ekleyin.
         </Empty>
       ) : (
-        <div style={{ display: 'grid', gap: 10 }}>
+        <div className="grid gap-2.5">
           {rules.map((r, i) => (
-            <div key={i} style={{
-              display: 'flex', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap',
-              padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 6,
-              background: 'var(--bg2)',
-            }}>
-              <div style={{ flex: '1 1 220px' }}>
-                <Field label="Metrik">
-                  <input value={r.metric} placeholder="* veya http.server.duration"
-                    onChange={e => patch(i, { metric: e.target.value })} style={{ width: '100%' }} />
-                </Field>
-              </div>
-              <div style={{ flex: '2 1 280px' }}>
-                <Field label="http.route deseni (RE2)">
-                  <input value={r.pattern} placeholder="^/health"
-                    onChange={e => patch(i, { pattern: e.target.value })} style={{ width: '100%' }} />
-                </Field>
-              </div>
-              <div style={{ flex: '1 1 260px', paddingTop: 18 }}>
-                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12.5 }}>
-                  <input type="checkbox" checked={!!r.dropAtIngest}
-                    onChange={e => patch(i, { dropAtIngest: e.target.checked })} />
-                  <span>
-                    ingest&apos;te düşür
-                    <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}>
-                      Pipeline kuralı olarak uygulanır &mdash; yukarıdaki listede de
-                      görünür. Yazılmayan datapoint <b>geri gelmez</b>.
-                    </div>
-                  </span>
-                </label>
-              </div>
-              <div style={{ paddingTop: 18 }}>
-                <Button variant="secondary" size="sm"
+            <div key={i} role="group" aria-label={`Dışlama kuralı ${i + 1}`}
+              className="flex flex-wrap items-start gap-2.5 rounded-md border border-(--border) bg-(--bg2) px-3 py-2.5">
+              <Field className="flex-[1_1_220px]" label="Metrik" value={r.metric}
+                placeholder="* veya http.server.duration"
+                onChange={e => patch(i, { metric: e.target.value })} />
+              <Field className="flex-[2_1_280px]" label="http.route deseni (RE2)" value={r.pattern}
+                placeholder="^/health"
+                onChange={e => patch(i, { pattern: e.target.value })} />
+              <CheckboxField className="flex-[1_1_260px] pt-[22px]" label="ingest'te düşür"
+                checked={!!r.dropAtIngest}
+                onCheckedChange={v => patch(i, { dropAtIngest: v })}
+                hint={<>Pipeline kuralı olarak uygulanır &mdash; yukarıdaki listede de
+                  görünür. Yazılmayan datapoint <b>geri gelmez</b>.</>} />
+              <div className="pt-[18px]">
+                <Button variant="outline" size="sm"
                   onClick={() => setRules(rules.filter((_, j) => j !== i))}>Sil</Button>
               </div>
             </div>
@@ -356,8 +345,8 @@ function MetricExclusionsSection({ onChanged, onSpanRule }: {
         </div>
       )}
 
-      <div style={{ marginTop: 16, display: 'flex', gap: 8, alignItems: 'center' }}>
-        <Button variant="primary" onClick={save} loading={busy}>
+      <div className="mt-4 flex items-center gap-2">
+        <Button onClick={() => { void save(); }} loading={busy}>
           Kaydet
         </Button>
         {flash && <FlashBox kind={flash.kind}>{flash.text}</FlashBox>}
@@ -432,58 +421,41 @@ function PipelineRuleModal({ existing, prefill, onClose, onSaved }: {
   };
 
   return (
-    <Modal
-      open
-      onClose={onClose}
-      title={existing ? `Edit rule — ${existing.name}` : 'New pipeline rule'}
-      size="md"
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button variant="primary" type="submit" form="pipeline-form" loading={busy}>Save</Button>
-        </>
-      }>
-      <form id="pipeline-form" onSubmit={submit}>
-        <Stack gap={3}>
-          <div>
-            <label style={{ display: 'block', fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>Rule name</label>
-            <input value={name} onChange={e => setName(e.target.value)} required
-              placeholder="e.g. drop frontend health-checks"
-              style={{ width: '100%' }} />
+    // Faz 2 dilim 1 R14 — ui/Modal (size md) → coremetry/overlay Dialog
+    // (D8): başlık, × kapat, odak tuzağı, Esc yığını; alan sırası aynı.
+    <Dialog open onOpenChange={o => { if (!o) onClose(); }}>
+      <DialogContent aria-describedby={undefined} className="max-h-[calc(100vh-32px)] gap-0 overflow-auto p-0 sm:max-w-[560px]">
+        <DialogHeader className="border-b border-(--divider) px-[18px] py-3.5">
+          <DialogTitle className="text-[length:var(--fs-lg)]">{existing ? `Edit rule — ${existing.name}` : 'New pipeline rule'}</DialogTitle>
+        </DialogHeader>
+        <form id="pipeline-form" onSubmit={submit} className="flex flex-col gap-3 px-[18px] py-4">
+          <Field label="Rule name" value={name} onChange={e => setName(e.target.value)} required
+            placeholder="e.g. drop frontend health-checks" />
+          <div className="grid grid-cols-2 gap-2.5">
+            <SelectField label="Action" value={kind} onChange={e => setKind(e.target.value as PipelineRule['kind'])}>
+              <option value="drop">Drop — discard the matching signal</option>
+              <option value="enrich">Enrich — set a resource attribute</option>
+              <option value="sample">Sample — keep at probability</option>
+            </SelectField>
+            <SelectField label="Signal" value={signal} onChange={e => setSignal(e.target.value as PipelineRule['signal'])}>
+              <option value="spans">spans</option>
+              <option value="logs">logs</option>
+              <option value="metrics">metrics</option>
+            </SelectField>
           </div>
-          <div className="grid-2" style={{ display: 'grid', gap: 10 }}>
-            <div>
-              <label style={{ display: 'block', fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>Action</label>
-              <select value={kind} onChange={e => setKind(e.target.value as PipelineRule['kind'])}
-                style={{ width: '100%' }}>
-                <option value="drop">Drop — discard the matching signal</option>
-                <option value="enrich">Enrich — set a resource attribute</option>
-                <option value="sample">Sample — keep at probability</option>
-              </select>
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>Signal</label>
-              <select value={signal} onChange={e => setSignal(e.target.value as PipelineRule['signal'])}
-                style={{ width: '100%' }}>
-                <option value="spans">spans</option>
-                <option value="logs">logs</option>
-                <option value="metrics">metrics</option>
-              </select>
-            </div>
-          </div>
-          <div>
-            <label style={{ display: 'block', fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>
-              When (predicate)
-            </label>
-            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 2fr', gap: 8 }}>
-              <input value={whenKey} onChange={e => setWhenKey(e.target.value)} required
+          <div role="group" aria-labelledby="pipeline-when-label" className="flex flex-col gap-1">
+            <span id="pipeline-when-label" className={LABEL}>When (predicate)</span>
+            <div className="grid grid-cols-[2fr_1fr_2fr] gap-2">
+              <Input value={whenKey} onChange={e => setWhenKey(e.target.value)} required
+                aria-label="Predicate key"
                 placeholder={
                   signal === 'logs' ? 'service.name | severity_text | body | attr.X'
                   : signal === 'metrics' ? 'metric | unit | instrument | service.name'
                   : 'service.name | name | kind | attr.X | resource.X'}
-                className="mono" />
-              <select value={whenOp} onChange={e => setWhenOp(e.target.value as PipelineRule['when']['op'])}
-                className="mono">
+                className={cn(CTL, 'font-mono')} />
+              <NativeSelect size="sm" value={whenOp} aria-label="Predicate operator"
+                onChange={e => setWhenOp(e.target.value as PipelineRule['when']['op'])}
+                className={cn(CTL, 'font-mono')}>
                 <option value="=">=</option>
                 <option value="!=">!=</option>
                 <option value="contains">contains</option>
@@ -493,18 +465,20 @@ function PipelineRuleModal({ existing, prefill, onClose, onSaved }: {
                     validateCondition) ama dropdown sunmuyordu; operatör
                     contains ile idare ediyordu. */}
                 <option value="=~">=~ (regex)</option>
-              </select>
-              <input value={whenVal} onChange={e => setWhenVal(e.target.value)} required
+              </NativeSelect>
+              <Input value={whenVal} onChange={e => setWhenVal(e.target.value)} required
+                aria-label="Predicate value"
+                aria-invalid={patternError ? true : undefined}
                 placeholder={whenOp === '=~' ? 'RE2 pattern, e.g. ^/health' : 'value'}
-                className="mono" />
+                className={cn(CTL, 'font-mono')} />
             </div>
             {/* v0.9.802 — bozuk desen backend'de 400 döner (validateCondition).
                 O hata genel kutuda değil DESENİN ALTINDA görünsün: operatör
                 düzelteceği alana bakıyor. */}
             {patternError && (
-              <div style={{ fontSize: 11, color: 'var(--err)', marginTop: 4 }}>{patternError}</div>
+              <div role="alert" className="text-[length:var(--fs-xs)] text-status-critical">{patternError}</div>
             )}
-            <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
+            <div className={HINT}>
               {signal === 'logs' ? (
                 <>Well-known log fields branch directly: <code>service.name</code>,
                 {' '}<code>severity_text</code>, <code>severity_number</code>,
@@ -525,14 +499,14 @@ function PipelineRuleModal({ existing, prefill, onClose, onSaved }: {
                   spans'e özgü, o yüzden yalnız bu dalda. */}
               {signal === 'spans' && (
                 <>
-                  <div style={{ marginTop: 6 }}>
+                  <div className="mt-1.5">
                     <code>http.route</code> matches the <b>derived</b> route, not the raw
                     attribute: services that only emit <code>url.path</code> (no route
                     templating) still match, via the id-stripped template
                     (<code>/api/accounts/12345</code> → <code>/api/accounts/:id</code>).
                     Use <code>attr.http.route</code> if you need the raw attribute.
                   </div>
-                  <div style={{ marginTop: 6 }}>
+                  <div className="mt-1.5">
                     Trace integrity: a drop rule removes <b>the matching span only</b> —
                     the rest of its trace is still written, so a child can be left without
                     its parent. Match on the entry span of a self-contained trace
@@ -549,19 +523,14 @@ function PipelineRuleModal({ existing, prefill, onClose, onSaved }: {
               "when: http.route =~ ^/health" satırını görüp kuralı "her
               route" sanmamalı — kısıtın ikinci yarısı burada. */}
           {existing?.and && existing.and.length > 0 && (
-            <div>
-              <label style={{ display: 'block', fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>
-                Ek koşullar (AND) — salt okunur
-              </label>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            <div className="flex flex-col gap-1">
+              <span className={LABEL}>Ek koşullar (AND) — salt okunur</span>
+              <div className="flex flex-wrap gap-1.5">
                 {existing.and.map((c, i) => (
-                  <code key={i} style={{
-                    fontSize: 11, padding: '3px 8px', borderRadius: 4,
-                    border: '1px solid var(--border)', background: 'var(--bg2)',
-                  }}>{describeCondition(c)}</code>
+                  <code key={i} className="rounded border border-(--border) bg-(--bg2) px-2 py-[3px] text-[length:var(--fs-xs)]">{describeCondition(c)}</code>
                 ))}
               </div>
-              <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
+              <div className={HINT}>
                 Kural yalnız <b>hepsi</b> sağlandığında eşleşir. Bu koşullar bu
                 formda düzenlenmez ve kaydederken <b>olduğu gibi korunur</b> —
                 genelde türetilmiş bir kuralın (<code>metric-excl-…</code>) metrik
@@ -572,39 +541,39 @@ function PipelineRuleModal({ existing, prefill, onClose, onSaved }: {
 
           {/* v0.5.270 — enrich-only fields */}
           {kind === 'enrich' && (
-            <div>
-              <label style={{ display: 'block', fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>
-                Set resource attribute
-              </label>
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 3fr', gap: 8 }}>
-                <input value={enrichKey} onChange={e => setEnrichKey(e.target.value)}
+            <div role="group" aria-labelledby="pipeline-enrich-label" className="flex flex-col gap-1">
+              <span id="pipeline-enrich-label" className={LABEL}>Set resource attribute</span>
+              <div className="grid grid-cols-[2fr_3fr] gap-2">
+                <Input value={enrichKey} onChange={e => setEnrichKey(e.target.value)}
+                  aria-label="Attribute key"
                   placeholder="e.g. team, region, cluster"
-                  className="mono" />
-                <input value={enrichVal} onChange={e => setEnrichVal(e.target.value)}
+                  className={cn(CTL, 'font-mono')} />
+                <Input value={enrichVal} onChange={e => setEnrichVal(e.target.value)}
+                  aria-label="Attribute value"
                   placeholder="value"
-                  className="mono" />
+                  className={cn(CTL, 'font-mono')} />
               </div>
-              <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
+              <div className={HINT}>
                 Sets a resource attribute on every matching record. Existing keys are
                 overridden. Multi-attribute support coming later — start with one.
               </div>
             </div>
           )}
 
-          {/* v0.5.270 — sample-only fields */}
+          {/* v0.5.270 — sample-only fields. Aralık girdisi native (plan Q3). */}
           {kind === 'sample' && (
-            <div>
-              <label style={{ display: 'block', fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="pipeline-rate" className={LABEL}>
                 Keep rate ({(rate * 100).toFixed(1)}%)
               </label>
-              <input type="range" min={0} max={1} step={0.01}
+              <input id="pipeline-rate" type="range" min={0} max={1} step={0.01}
                 value={rate} onChange={e => setRate(Number(e.target.value))}
-                style={{ width: '100%' }} />
-              <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
+                className="w-full accent-(--accent)" />
+              <div className={HINT}>
                 Probability of keeping each matching record. 1.0 = no-op; 0.0 = use a
                 drop rule instead.
                 {signal === 'metrics' && (
-                  <span style={{ color: 'var(--warn, var(--err))' }}>
+                  <span className="text-(--warn)">
                     {' '}Note: sampling metrics makes sums / counts / histograms an
                     estimate — prefer drop for whole noisy series.
                   </span>
@@ -613,19 +582,17 @@ function PipelineRuleModal({ existing, prefill, onClose, onSaved }: {
             </div>
           )}
 
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
-            <input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)} />
-            Enabled
-          </label>
+          <CheckboxField label="Enabled" checked={enabled} onCheckedChange={setEnabled} />
           {error && !patternError && (
-            <div style={{
-              color: 'var(--err)', fontSize: 12,
-              padding: '4px 8px', background: 'color-mix(in srgb, var(--err) 8%, transparent)',
-              border: '1px solid color-mix(in srgb, var(--err) 30%, transparent)', borderRadius: 4,
-            }}>{error}</div>
+            <div role="alert" className="rounded bg-status-critical-bg px-2 py-1 text-[length:var(--fs-sm)] text-status-critical">{error}</div>
           )}
-        </Stack>
-      </form>
-    </Modal>
+        </form>
+        <DialogFooter className="border-t border-(--divider) bg-(--bg2) px-[18px] py-3">
+          <ActionRow
+            secondary={<Button variant="outline" onClick={onClose}>Cancel</Button>}
+            confirm={<Button type="submit" form="pipeline-form" loading={busy}>Save</Button>} />
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

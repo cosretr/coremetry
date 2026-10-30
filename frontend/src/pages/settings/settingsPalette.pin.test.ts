@@ -118,6 +118,7 @@ describe('Settings sade palet — K5 artıkları (v0.10.929)', () => {
     expect(mt).toMatch(/past: +\{ status: 'unknown', +label: 'PAST' \}/);
     expect(mt).toMatch(/active: +\{ status: 'warn', +label: 'ACTIVE' \}/);
     expect(mt).toContain('<StatusBadge status={b.status} size="sm">{b.label}</StatusBadge>');
-    expect(read('BackupTab.tsx')).toContain("color: d.willAdd.length > 0 ? 'var(--accent2)' : 'var(--text3)'");
+    // Faz 2 dilim 1 R14 — inline renk → Tailwind token utility'si; anlam aynı.
+    expect(read('BackupTab.tsx')).toContain("className={d.willAdd.length > 0 ? 'text-(--accent2)' : 'text-(--text3)'}");
   });
 });

@@ -479,19 +479,9 @@
       "count": 3
     }
   },
-  "src/pages/settings/BrandingTab.tsx": {
-    "ui/no-raw-element": {
-      "count": 14
-    }
-  },
   "src/pages/settings/CalendarSubsection.tsx": {
     "ui/no-raw-element": {
       "count": 6
-    }
-  },
-  "src/pages/settings/DangerZoneTab.tsx": {
-    "ui/no-raw-element": {
-      "count": 1
     }
   },
   "src/pages/settings/ErrorRampSubsection.tsx": {
@@ -502,11 +492,6 @@
   "src/pages/settings/OracleTab.tsx": {
     "ui/no-raw-element": {
       "count": 6
-    }
-  },
-  "src/pages/settings/PipelineTab.tsx": {
-    "ui/no-raw-element": {
-      "count": 13
     }
   },
   "src/pages/settings/REDSourceSubsection.tsx": {
