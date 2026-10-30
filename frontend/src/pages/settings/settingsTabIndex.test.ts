@@ -28,3 +28,21 @@ describe('SETTINGS_TAB_INDEX ↔ TAB_COMPS', () => {
     expect(slugs.length).toBeGreaterThanOrEqual(20);
   });
 });
+
+// shadcn dilim 1 R0 — sekmeler tembel yüklenir: Settings.tsx bir sekme
+// dosyasını STATİK import ederse rolldown o sekmeyi (ve bağımlılıklarını)
+// kabuk chunk'ına geri çeker; 31 sekme yeniden tek ~167 KB gz chunk olur.
+// Yalnız yaprak dizin (tabIndex) statik kalır.
+describe('Settings tabs are lazy (R0)', () => {
+  const src = readFileSync(new URL('../Settings.tsx', import.meta.url), 'utf8');
+  it('no static import of a tab module', () => {
+    const statics = [...src.matchAll(/^import [^;]* from '\.\/settings\/([A-Za-z]+)';/gm)].map(m => m[1]);
+    expect(statics).toEqual(['tabIndex']);
+  });
+  it('every mapped component is a lazy() import', () => {
+    const lazies = [...src.matchAll(/^const (\w+) = lazy\(\(\) => import\('\.\/settings\/\w+'\)/gm)].map(m => m[1]);
+    const comps = [...src.matchAll(/^\s*'[a-z-]+': ([A-Za-z0-9_]+),\s*$/gm)].map(m => m[1]);
+    expect(comps.length).toBeGreaterThanOrEqual(20);
+    expect(comps.filter(c => !lazies.includes(c))).toEqual([]);
+  });
+});

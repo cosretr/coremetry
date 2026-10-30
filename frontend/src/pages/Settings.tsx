@@ -1,8 +1,8 @@
-import type { ComponentType } from 'react';
+import { lazy, Suspense, type ComponentType } from 'react';
 import { SETTINGS_TAB_INDEX } from './settings/tabIndex';
 import { useParams, Navigate, NavLink } from 'react-router-dom';
 import { Topbar } from '@/components/Topbar';
-import { Empty } from '@/components/Spinner';
+import { Empty, Spinner } from '@/components/Spinner';
 import { useAuth } from '@/components/AuthProvider';
 import { IconLock } from '@/components/icons';
 
@@ -15,38 +15,43 @@ import { IconLock } from '@/components/icons';
 // each section — every save handler + API call — is unchanged; this was a
 // pure file split.
 
-import { SMTPTab } from './settings/SmtpTab';
-import { ChannelsTab } from './settings/ChannelsTab';
-import { TeamRoutingTab } from './settings/TeamRoutingTab';
-import { NotifyPolicyTab } from './settings/NotifyPolicyTab'; // v0.10.1533
-import { ApiTokensTab } from './settings/ApiTokensTab';
-import { MaintenanceTab } from './settings/MaintenanceTab';
-import { AITab } from './settings/AiTab';
-import { AiSreTab } from './settings/AiSreTab';
-import { KnowledgeTab } from './settings/KnowledgeTab';
-import { TempoTab } from './settings/TempoTab';
-import { MetricsBackendTab } from './settings/MetricsBackendTab';
-import { TraceFacetsTab } from './settings/TraceFacetsTab';
-import { ExternalLinksTab } from './settings/ExternalLinksTab';
-import { DevOpsTab } from './settings/DevOpsTab';
-import { McpServersTab } from './settings/McpServersTab';
-import { ClustersTab } from './settings/ClustersTab';
-import { ArgoCDTab } from './settings/ArgoCDTab';
-import { OracleTab } from './settings/OracleTab';
-import { EntitiesTab } from './settings/EntitiesTab';
-import { ElasticTab } from './settings/ElasticTab';
-import { KibanaTab } from './settings/KibanaTab';
-import { LogBridgeTab } from './settings/LogBridgeTab';
-import { LDAPTab } from './settings/LdapTab';
-import { SSOTab } from './settings/SsoTab';
-import { RetentionTab } from './settings/RetentionTab';
-import { AnomalyPromotionTab } from './settings/AnomalyTab';
-import { BrandingTab } from './settings/BrandingTab';
-import { CustomRolesTab } from './settings/RolesTab';
-import { PipelineTab } from './settings/PipelineTab';
-import { BackupTab } from './settings/BackupTab';
-import { DangerZoneTab } from './settings/DangerZoneTab';
 import { PageShell } from '@/components/coremetry/PageShell';
+
+// shadcn dilim 1 R0 — sekmeler tembel: her sekme kendi chunk'ı
+// (audit §10 j). Eskiden 31 sekme tek ~167 KB gz chunk'tı; şimdi
+// bir Settings ziyareti kabuk + bir sekme indirir. Sekme bileşenleri
+// adlı export olduğundan `.then(m => ({ default }))`.
+const SMTPTab = lazy(() => import('./settings/SmtpTab').then(m => ({ default: m.SMTPTab })));
+const ChannelsTab = lazy(() => import('./settings/ChannelsTab').then(m => ({ default: m.ChannelsTab })));
+const TeamRoutingTab = lazy(() => import('./settings/TeamRoutingTab').then(m => ({ default: m.TeamRoutingTab })));
+const NotifyPolicyTab = lazy(() => import('./settings/NotifyPolicyTab').then(m => ({ default: m.NotifyPolicyTab }))); // v0.10.1533
+const ApiTokensTab = lazy(() => import('./settings/ApiTokensTab').then(m => ({ default: m.ApiTokensTab })));
+const MaintenanceTab = lazy(() => import('./settings/MaintenanceTab').then(m => ({ default: m.MaintenanceTab })));
+const AITab = lazy(() => import('./settings/AiTab').then(m => ({ default: m.AITab })));
+const AiSreTab = lazy(() => import('./settings/AiSreTab').then(m => ({ default: m.AiSreTab })));
+const KnowledgeTab = lazy(() => import('./settings/KnowledgeTab').then(m => ({ default: m.KnowledgeTab })));
+const TempoTab = lazy(() => import('./settings/TempoTab').then(m => ({ default: m.TempoTab })));
+const MetricsBackendTab = lazy(() => import('./settings/MetricsBackendTab').then(m => ({ default: m.MetricsBackendTab })));
+const TraceFacetsTab = lazy(() => import('./settings/TraceFacetsTab').then(m => ({ default: m.TraceFacetsTab })));
+const ExternalLinksTab = lazy(() => import('./settings/ExternalLinksTab').then(m => ({ default: m.ExternalLinksTab })));
+const DevOpsTab = lazy(() => import('./settings/DevOpsTab').then(m => ({ default: m.DevOpsTab })));
+const McpServersTab = lazy(() => import('./settings/McpServersTab').then(m => ({ default: m.McpServersTab })));
+const ClustersTab = lazy(() => import('./settings/ClustersTab').then(m => ({ default: m.ClustersTab })));
+const ArgoCDTab = lazy(() => import('./settings/ArgoCDTab').then(m => ({ default: m.ArgoCDTab })));
+const OracleTab = lazy(() => import('./settings/OracleTab').then(m => ({ default: m.OracleTab })));
+const EntitiesTab = lazy(() => import('./settings/EntitiesTab').then(m => ({ default: m.EntitiesTab })));
+const ElasticTab = lazy(() => import('./settings/ElasticTab').then(m => ({ default: m.ElasticTab })));
+const KibanaTab = lazy(() => import('./settings/KibanaTab').then(m => ({ default: m.KibanaTab })));
+const LogBridgeTab = lazy(() => import('./settings/LogBridgeTab').then(m => ({ default: m.LogBridgeTab })));
+const LDAPTab = lazy(() => import('./settings/LdapTab').then(m => ({ default: m.LDAPTab })));
+const SSOTab = lazy(() => import('./settings/SsoTab').then(m => ({ default: m.SSOTab })));
+const RetentionTab = lazy(() => import('./settings/RetentionTab').then(m => ({ default: m.RetentionTab })));
+const AnomalyPromotionTab = lazy(() => import('./settings/AnomalyTab').then(m => ({ default: m.AnomalyPromotionTab })));
+const BrandingTab = lazy(() => import('./settings/BrandingTab').then(m => ({ default: m.BrandingTab })));
+const CustomRolesTab = lazy(() => import('./settings/RolesTab').then(m => ({ default: m.CustomRolesTab })));
+const PipelineTab = lazy(() => import('./settings/PipelineTab').then(m => ({ default: m.PipelineTab })));
+const BackupTab = lazy(() => import('./settings/BackupTab').then(m => ({ default: m.BackupTab })));
+const DangerZoneTab = lazy(() => import('./settings/DangerZoneTab').then(m => ({ default: m.DangerZoneTab })));
 
 interface SettingsTab {
   slug: string;
@@ -139,7 +144,9 @@ export default function SettingsPage() {
             ))}
           </nav>
           <div className="sys-content">
-            <Body />
+            <Suspense fallback={<Spinner />}>
+              <Body />
+            </Suspense>
           </div>
         </div>
       </PageShell>
