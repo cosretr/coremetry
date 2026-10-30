@@ -1074,8 +1074,8 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			emit("step", map[string]string{"label": chatDegenRetryLabel})
 			emit("delta", chatDeltaPayload(copilot.TextDelta{Reset: true}))
 			rctx, endR := cspan.turn(ctx, round, false)
-			rt, rerr := s.chatLoopTurn(copilot.WithMaxTokensCap(copilot.WithNoToolCalls(rctx), chatDegenRetryMaxTokens),
-				prompt+copilot.ChatDegenRetryAddendum(), conv, specs, emit)
+			// agent-core S3 — degenRetryPlan: ek + çağrı yasağı + token tavanı (chat_prepare_step.go).
+			rt, _, rerr := s.loopTurn(rctx, prompt, stepInput{Kind: stepDegenRetry, Conv: conv, Specs: specs, Role: role}, emit)
 			endR(rt.InputTokens, rt.OutputTokens, rt.CachedTokens, rerr)
 			totalIn += rt.InputTokens
 			totalCached += rt.CachedTokens
@@ -1101,7 +1101,10 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	for round := 0; round < maxRounds; round++ {
 		tctx, endTurn := cspan.turn(ctx, round, overflowRetried) // v0.10.425 — ai.chat.turn
 		// v0.10.1273 — final turun metni canlı akar (chat_step_phase.go chatLoopTurn).
-		turn, err := s.chatLoopTurn(tctx, loopPrompt, conv, specs, emit)
+		turn, _, err := s.loopTurn(tctx, loopPrompt, stepInput{
+			State: loopState{Round: round, MaxRounds: maxRounds, CallsLeft: callsLeft, MaxCalls: maxCalls, Executed: executedN, Skipped: skippedN, TokensIn: totalIn, TokensOut: totalOut},
+			Kind:  stepNormal, Conv: conv, Specs: specs, Role: role,
+		}, emit) // agent-core S3 — normal tur: boş plan (bayt aynı)
 		endTurn(turn.InputTokens, turn.OutputTokens, turn.CachedTokens, err)
 		if evm != nil && evm.OnTurn != nil {
 			evm.OnTurn(round, turn, err) // v0.10.1316
@@ -1449,9 +1452,13 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			// verir, barındırılan OpenAI boş tools dizisini reddeder; tanımlar
 			// kalınca önek önbelleği de korunur. Yerel uçlarda gövde bugünkü
 			// şekilde (boş dizi) kalır — provider.ChatRequest.NoToolCalls.
-			capPrompt := loopPrompt + copilot.ChatRoundCapAddendum()
+			// agent-core S3 — capTurnPlan: loopPrompt + ChatRoundCapAddendum + WithNoToolCalls
+			// (chat_prepare_step.go); capPrompt turun gerçek prompt'u (süzgeç/düşüş yeniden kullanır).
 			tctx2, endTurn2 := cspan.turn(ctx, round, false) // v0.10.425 — tur tavanı da bir tur
-			turn2, err2 := s.chatLoopTurn(copilot.WithNoToolCalls(tctx2), capPrompt, conv, specs, emit)
+			turn2, capPrompt, err2 := s.loopTurn(tctx2, loopPrompt, stepInput{
+				State: loopState{Round: round, MaxRounds: maxRounds, CallsLeft: callsLeft, MaxCalls: maxCalls, Executed: executedN, Skipped: skippedN, TokensIn: totalIn, TokensOut: totalOut},
+				Kind:  stepCap, Conv: conv, Specs: specs, Role: role,
+			}, emit)
 			endTurn2(turn2.InputTokens, turn2.OutputTokens, turn2.CachedTokens, err2)
 			if evm != nil && evm.OnTurn != nil {
 				evm.OnTurn(-1, turn2, err2) // v0.10.1316 — tavan turu

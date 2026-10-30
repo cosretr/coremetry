@@ -80,6 +80,16 @@ func noToolCallsFrom(ctx context.Context) bool {
 	return v
 }
 
+// NoToolCallsSet — agent-core S3: ctx WithNoToolCalls taşıyor mu (döngü
+// adım planının kimlik testleri; sağlayıcı yolu noToolCallsFrom'u okur).
+func NoToolCallsSet(ctx context.Context) bool { return noToolCallsFrom(ctx) }
+
+// MaxTokensCapOf — agent-core S3: ctx'teki WithMaxTokensCap değeri (yoksa 0).
+func MaxTokensCapOf(ctx context.Context) int {
+	c, _ := ctx.Value(maxTokensCapKey{}).(int)
+	return c
+}
+
 type maxTokensCapKey struct{}
 
 // WithMaxTokensCap — v0.10.1324: bu çağrının completion bütçesine TAVAN

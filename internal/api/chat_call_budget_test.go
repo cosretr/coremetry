@@ -54,7 +54,10 @@ func TestChatLoopEnforcesCallBudget(t *testing.T) {
 		"loopStop := defaultStop(maxRounds)",
 		"if isCapStop(reason) {",
 		// v0.10.1273 — tur akan ikizden (chatLoopTurn → ChatWithToolsStream).
-		"chatLoopTurn(copilot.WithNoToolCalls(tctx2), capPrompt, conv, specs, emit)",
+		// agent-core S3 — tavan turu capTurnPlan'dan (WithNoToolCalls + ek;
+		// TestDefaultPrepareIdentity), tanımlar aynen (Specs: specs).
+		"turn2, capPrompt, err2 := s.loopTurn(tctx2, loopPrompt, stepInput{",
+		"Kind:  stepCap, Conv: conv, Specs: specs, Role: role,",
 	} {
 		if !strings.Contains(src, want) {
 			t.Errorf("copilot_chat.go %q içermiyor", want)

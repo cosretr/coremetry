@@ -149,7 +149,8 @@ func TestChatSpanWiring(t *testing.T) {
 	}
 	// v0.10.1273 — turlar akan ikizden (chatLoopTurn → ChatWithToolsStream).
 	// v0.10.1324 — üçüncüsü yineleme düşüşünün araçsız yeniden denemesi.
-	if n := strings.Count(b, "s.chatLoopTurn("); n != 3 {
+	// agent-core S3 — üçü de adım planı kapısından (s.loopTurn → chatLoopTurn).
+	if n := strings.Count(b, "s.loopTurn("); n != 3 {
 		t.Fatalf("chatLoopTurn çağrı sayısı değişti (%d) — tur span'ı eşlemesini güncelle", n)
 	}
 	// v0.10.536 — araç span'ı tools.Executor'ın Span kancasından (executor_test.go

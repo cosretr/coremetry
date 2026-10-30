@@ -25,8 +25,12 @@ func TestChatRoundCapExtendsLoopPrompt(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := string(src)
-	if !strings.Contains(s, "capPrompt := loopPrompt + copilot.ChatRoundCapAddendum()") {
+	// agent-core S3 — ek capTurnPlan'da (chat_prepare_step.go); döngü loopPrompt'u verir.
+	if !strings.Contains(s, "turn2, capPrompt, err2 := s.loopTurn(tctx2, loopPrompt, stepInput{") {
 		t.Error("tavan prompt'u döngü prompt'u + ek olarak kurulmuyor")
+	}
+	if p := defaultPrepare(stepInput{Kind: stepCap}); p.SystemAddendum != add {
+		t.Error("capTurnPlan eki ChatRoundCapAddendum değil")
 	}
 	if strings.Contains(s, "withAddressee(addressee, copilot.SystemPromptChatRoundCap())") {
 		t.Error("eski tavan prompt'u (bağlamsız, farklı önek) geri gelmiş")
