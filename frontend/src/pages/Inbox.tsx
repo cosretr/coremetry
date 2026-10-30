@@ -50,15 +50,15 @@ import { isOracleGroup, isSyntheticOracleService, oracleInboxDetail } from '@/fe
 import { useBranding } from '@/lib/branding'; // v0.10.1109 — Oracle grubu görünen adı
 import { Badge } from '@/components/ui/Badge';
 import type { SubjectLane } from '@/lib/types';
-import { useProblemVerdicts } from '@/lib/queries';
 import { ProblemVerdictPolicyBar } from '@/components/ProblemVerdictPolicyBar';
-import { ProblemVerdictActions } from '@/components/ProblemVerdictActions'; // v0.10.1529 — satır Karar hücresi (D1)
+import { ProblemVerdictRow } from '@/components/ProblemVerdictActions';
+import { useVerdictRowContext } from '@/components/useVerdictRowContext'; // v0.10.1529 — satır Karar hücresi (D1); v0.10.1626 tek dizin
 import { NoiseReasonButton, type NoiseReasonChoice } from '@/components/NoiseReasonButton'; // v0.10.1531 — toplu triyaj
 import {
   splitStdHeadline, stdSourceChip, stdSourceName, stdSamplingNote, stdImpactSecondary, stdSinceLine, stdDurationLine,
   stdConfidenceTone, stdConfidenceRank, stdGateTitle, STD_CONFIDENCE_LABEL,
 } from '@/lib/problemStandardView'; // v0.10.1529 — Problem standardı R2
-import { verdictIndex, verdictOf, countNoise, filterByVerdictView, parseVerdictView, inboxVerdictSubject, type VerdictView } from '@/lib/problemVerdict';
+import { verdictOf, countNoise, filterByVerdictView, parseVerdictView, inboxVerdictSubject, type VerdictView } from '@/lib/problemVerdict';
 
 // Facet vocab + defaults (v0.8.291) — both defaults are what the URL codec
 // omits so a fresh link stays clean.
@@ -622,8 +622,10 @@ export default function InboxPage() {
   // be the ONLY place the facet is applied again.
   // v0.10.1015 — öğretme kararları (imza → gerçek / problem değil). Kararlar
   // yüklenemezse dizin boş kalır: hiçbir satır gizlenmez (güvenli taraf).
-  const verdictsQ = useProblemVerdicts();
-  const verdicts = useMemo(() => verdictIndex(verdictsQ.data?.verdicts), [verdictsQ.data]);
+  // v0.10.1626 (perf §10 i) — sorgu, dizin ve mutation BURADA bir kez; satır
+  // hücreleri (ProblemVerdictRow) aynı bağlamdan yalnız bakar.
+  const verdictCtx = useVerdictRowContext();
+  const verdicts = verdictCtx.index;
   // Düz hesap (memo değil): satır başına bir harita bakışı; `data`ya bağlı bir
   // memo daha, bu dosyadaki "data conditional" lint sınıfını büyütürdü.
   const noiseCount = countNoise(Array.isArray(data) ? data : null, verdicts);
@@ -1346,7 +1348,7 @@ export default function InboxPage() {
                   </td>
                   <td>
                     {/* v0.10.1529 (D1) — satır triyajı hover/focus'ta (pv-row). */}
-                    <ProblemVerdictActions item={it} row />
+                    <ProblemVerdictRow item={it} ctx={verdictCtx} />
                   </td>
                   <td className="num">
                     {/* v0.10.1084 — incident satırında katlanmış (bağlı) problem sayısı. */}
