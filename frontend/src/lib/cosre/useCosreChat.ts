@@ -43,7 +43,12 @@ export function createCosreChat(opts: CosreChatOptions = {}): CosreChatCore {
   const inner = new DefaultChatTransport<CosreUIMessage>({
     api: COSRE_V2_CHAT_API,
     fetch: opts.fetch,
-    prepareSendMessagesRequest: ({ messages }) => ({ body: { messages: toRequestMessages(messages) } }),
+    // v0.10.1650 (2b B2) — `context`: sendMessage(…, { body: { context } }) ile
+    // gelen v1-eşdeğeri bağlam (components/cosre/conversation/requestContext);
+    // yokken gövde 2a'daki gibi yalnız `messages`.
+    prepareSendMessagesRequest: ({ messages, body }) => ({
+      body: { messages: toRequestMessages(messages), ...(body?.context ? { context: body.context } : {}) },
+    }),
   });
   const transport: ChatTransport<CosreUIMessage> = {
     sendMessages: async o => map.wrap(await inner.sendMessages(o)),

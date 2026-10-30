@@ -7,13 +7,12 @@
 //   • Esc: coremetry/overlay escBridge (tek Esc yığını, v1 useEscLayer ile aynı).
 //   • Genişlik: v1 ile aynı anahtar + kelepçe (lib/cosre/sheetWidth); inline
 //     style YOK — `--cosre-sheet-w` ref'ten yazılır, sınıf okur. <640px tam genişlik.
-//   • Başlık: AiMark + "CoSRE" + Yeni + Tam sayfa (/cosre, v1) + ✕ (IA-2).
-// B1 gövdesi boş durum + PASİF composer (gönderim yok; konuşma B2'de bağlanır).
+//   • Başlık: AiMark + "CoSRE" + v1'in bağlam pini (CosreHeaderContext) + eylemler
+//     (Tam sayfada aç, Temizle) + ✕ (IA-2; v0.10.1650 plan §10: v1 başlık eylemleri).
+// v0.10.1650 (B2): gövde çağıranın — v1 karşılaması/composer'ı + v2 cevap yolu
+// (CosreChatV2). Bu dosya sunumsal kalır (katalog statik içerikle çizer).
 // components/ui'den HİÇBİR şey içe aktarılmaz (uiImportRatchet, ui/ donmuş).
-import { useCallback, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
-import { Button } from '@/components/shadcn/button';
-import { Textarea } from '@/components/shadcn/textarea';
+import { useCallback, useEffect, useRef, type ReactNode } from 'react';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/coremetry/overlay';
 import { AiMark } from '@/components/ai/CopilotFab';
 import { isEmptyAreaClick } from '@/lib/emptyAreaClose';
@@ -26,9 +25,15 @@ export interface CosreSheetProps {
   width: number;
   /** Katalog: portal içeriğine hücre teması (data-theme/data-density). */
   contentProps?: Record<`data-${string}`, string>;
+  /** Başlıkta marka ile eylemler arası (v1 bağlam pini); yoksa boşluk. */
+  headerContext?: ReactNode;
+  /** Başlık eylemleri (Tam sayfada aç, Temizle). */
+  headerActions?: ReactNode;
+  /** Gövde (karşılama / mesajlar + composer). */
+  children?: ReactNode;
 }
 
-export function CosreSheet({ open, onOpenChange, width, contentProps }: CosreSheetProps) {
+export function CosreSheet({ open, onOpenChange, width, contentProps, headerContext, headerActions, children }: CosreSheetProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const setPanel = useCallback((el: HTMLDivElement | null) => {
     panelRef.current = el;
@@ -58,6 +63,8 @@ export function CosreSheet({ open, onOpenChange, width, contentProps }: CosreShe
         aria-label={T.sheetLabel}
         data-cosre-v2=""
         onInteractOutside={e => e.preventDefault()}
+        // Açılış odağı composer'ın (v1 gibi; ChatComposer autoFocus) — Radix ilk düğmeye taşımasın.
+        onOpenAutoFocus={e => e.preventDefault()}
         onCloseAutoFocus={e => {
           // Odak FAB'a döner (kapanışta FAB yeniden çizilir); sayfada başka
           // bir öğeye tıklanarak kapandıysa odak orada kalır.
@@ -68,23 +75,14 @@ export function CosreSheet({ open, onOpenChange, width, contentProps }: CosreShe
         }}
         className="w-full gap-0 p-0 sm:w-(--cosre-sheet-w) sm:max-w-none"
         {...contentProps}>
-        <SheetHeader className="flex-row items-center gap-2 border-b px-4 py-3 pr-12">
+        <SheetHeader className="cosre-head flex-row items-center gap-3 border-b px-4 py-3 pr-12">
           <AiMark size={20} />
-          <SheetTitle className="flex-1">{T.title}</SheetTitle>
+          <SheetTitle>{T.title}</SheetTitle>
           <SheetDescription className="sr-only">{T.description}</SheetDescription>
-          <Button variant="ghost" size="sm" disabled title={T.newChatTitle}>{T.newChat}</Button>
-          <Button variant="ghost" size="sm" asChild>
-            <Link to="/cosre" title={T.fullPageTitle}>{T.fullPage}</Link>
-          </Button>
+          {headerContext ?? <span className="flex-1" />}
+          {headerActions}
         </SheetHeader>
-        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 p-6 text-center">
-          <p className="text-sm font-semibold text-foreground">{T.emptyTitle}</p>
-          <p className="text-sm text-muted-foreground">{T.emptyBody}</p>
-        </div>
-        {/* B1: pasif composer yerinde (form + gönder düğmesi B2'de, Composer.tsx). */}
-        <div className="border-t p-3">
-          <Textarea aria-label={T.composerLabel} placeholder={T.composerPlaceholder} rows={2} disabled />
-        </div>
+        {children}
       </SheetContent>
     </Sheet>
   );

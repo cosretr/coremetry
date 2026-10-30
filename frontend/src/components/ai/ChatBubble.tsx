@@ -474,6 +474,30 @@ export function ChatMarkdown({ text }: { text: string }) {
   );
 }
 
+// ChatAnswerMarkdown — v0.10.1650 (CoSRE v2 Faz 2b B2, plan §2.2 MarkdownText):
+// v2 CEVAP metninin çizimi. Balonla AYNI motor (renderMessage: chatMarkdown +
+// chatInline + MdTable + CodeBlock + ```chart çiti + akış imleci) ve aynı
+// bağlantı kuralı (sunucunun allowedLinks listesi; atıf/otomatik vurgu açık),
+// v1 balonunun kanıt/kart katmanları olmadan (v2'de ayrı parçalar, B3–B5).
+export function ChatAnswerMarkdown({ text, streaming = false, allowedLinks }: {
+  text: string;
+  streaming?: boolean;
+  allowedLinks?: readonly string[];
+}) {
+  const newTab = useChatLinkNewTab();
+  const onClick = useChatNavClick(newTab);
+  const ctx = useMemo<MdCtx>(() => {
+    const origin = currentOrigin();
+    return { policy: buildLinkPolicy({ allowedLinks, origin }), cites: [], newTab, origin, hl: true };
+  }, [allowedLinks, newTab]);
+  const body = useMemo(() => renderMessage(text, streaming), [text, streaming]);
+  return (
+    <ChatMdContext.Provider value={ctx}>
+      <div className="cm-msg-ai" onClick={onClick}>{body}</div>
+    </ChatMdContext.Provider>
+  );
+}
+
 // ToolChips — ⚙ ilerleme çipleri + tıklayınca açılan KANIT bloğu
 // (v0.9.1181, AI Faz 4.3).
 //

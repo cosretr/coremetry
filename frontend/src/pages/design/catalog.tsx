@@ -38,6 +38,7 @@ import { Field, SelectField, TextareaField, CheckboxField } from '@/components/c
 import { SegmentedControl } from '@/components/coremetry/SegmentedControl';
 // v0.10.1647 (CoSRE v2 Faz 2b B1, plan §5.4): v2 sohbet kabuğu (boş durum).
 import { CosreSheet } from '@/components/cosre/conversation/CosreSheet';
+import { MessageList, type CosreChatMessage } from '@/components/cosre/conversation/MessageList';
 import CoremetryToaster from '@/components/coremetry/Toaster';
 import { CM_STRINGS } from '@/components/coremetry/strings';
 import { toast, type ToastEntry } from '@/lib/toast';
@@ -577,12 +578,31 @@ function ToasterDemo({ forceOpen }: CatalogCtx) {
 }
 
 /** Anahtar = components/shadcn/<ad>.tsx (+ coremetry bileşikleri). */
+// v0.10.1650 (2b B2) — cevap yolu: soru, bitmiş cevap (markdown), durdurulmuş
+// cevap ve hata satırı. Karşılama + composer v1'in paylaşılan bileşenleri
+// (QueryClient/Auth ister; v1 yüzeyinin kendi testleri kapsar).
+const COSRE_DEMO_MESSAGES: CosreChatMessage[] = [
+  { id: 'u1', role: 'user', parts: [{ type: 'text', text: 'orders-api neden yavaş?' }] },
+  { id: 'a1', role: 'assistant', parts: [{ type: 'text', text: "**Bulgu** — orders-api p95 1830 ms'ye çıktı.\n\n- `PaymentClient` çağrıları yavaş\n- hata oranı değişmedi" }] },
+  { id: 'u2', role: 'user', parts: [{ type: 'text', text: 'Son 1 saatte hata var mı?' }] },
+  { id: 'a2', role: 'assistant', parts: [{ type: 'text', text: 'Son 1 saatte iki' }], metadata: { partial: true } },
+];
+const COSRE_DEMO_ERROR = new Error('Bu alışveriş 3 dakika tavanına dayandı ve durduruldu.');
+
 function CosreChatV2Demo({ cell, forceOpen }: CatalogCtx) {
   const [open, setOpen] = useState(forceOpen);
   return (
     <>
-      <Row label="boş"><Button variant="outline" size="sm" onClick={() => setOpen(true)}>CoSRE v2 aç</Button></Row>
-      <CosreSheet open={open} onOpenChange={setOpen} width={620} contentProps={themeAttrs(cell)} />
+      <Row label="cevap"><Button variant="outline" size="sm" onClick={() => setOpen(true)}>CoSRE v2 aç</Button></Row>
+      <CosreSheet open={open} onOpenChange={setOpen} width={620} contentProps={themeAttrs(cell)}>
+        <div className="cosre-root cosre-root--drawer">
+          <div className="cm-thread" role="log" aria-label="CoSRE mesajları">
+            <div className="cm-thread__col">
+              <MessageList messages={COSRE_DEMO_MESSAGES} visibleParts={m => m.parts} status="error" error={COSRE_DEMO_ERROR} />
+            </div>
+          </div>
+        </div>
+      </CosreSheet>
     </>
   );
 }

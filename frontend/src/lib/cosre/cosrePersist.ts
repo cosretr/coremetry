@@ -21,6 +21,12 @@ export function messageText(m: CosreUIMessage): string {
   return m.parts.flatMap(p => (p.type === 'text' ? [p.text] : [])).join('\n\n');
 }
 
+/** Mesaj kod okundu kilidi taşıyor mu (data-code-lock {locked:true}). v0.10.1650 —
+ *  v2 composer'ı konuşma kilidini buradan türetir (v1 codeLockedOf ikizi). */
+export function hasCodeLock(m: CosreUIMessage): boolean {
+  return m.parts.some(p => p.type === 'data-code-lock' && (p.data as { locked?: unknown })?.locked === true);
+}
+
 function failed(m: CosreUIMessage): boolean {
   return m.metadata?.error === true || m.parts.some(p => p.type === 'data-error');
 }
@@ -34,7 +40,7 @@ export function toPersistMessages(messages: CosreUIMessage[]): ChatMessage[] {
     .map<ChatMessage>(m => {
       const role = m.role as ChatMessage['role'];
       const id = m.metadata?.turnId || m.metadata?.exchangeId;
-      const codeRead = m.parts.some(p => p.type === 'data-code-lock' && (p.data as { locked?: unknown })?.locked === true);
+      const codeRead = hasCodeLock(m);
       return {
         role, text: messageText(m),
         ...(role === 'assistant' && id ? { exchangeId: id } : {}),

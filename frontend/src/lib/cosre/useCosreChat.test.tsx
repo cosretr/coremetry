@@ -11,8 +11,9 @@
 //   idempotans: onError + onFinish ikisi de temizler, sonuç tek temizlik;
 //   kalıcılık: chat.messages'tan (temizlik sonrası), sunucu kimlikleri.
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { existsSync, readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { COSRE_REPO_ROOT, cosreFixture, sseFetch } from '@/test/cosreSse';
 import { createRoot, type Root } from 'react-dom/client';
 import { act, useEffect } from 'react';
 import type { ChatMessage } from '@/lib/types';
@@ -21,37 +22,11 @@ import type { CosreUIMessage } from './resetReducer';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const ROOT = resolve(__dirname, '../../../..');
-const sse = (name: string) => readFileSync(join(ROOT, 'testdata', 'cosre', `${name}.sse`), 'utf8');
+// v0.10.1650 — sürücü src/test/cosreSse'ye çıktı (2b parça→bileşen testi aynısını kullanır).
+const ROOT = COSRE_REPO_ROOT;
+const sse = cosreFixture;
 const MID = '01M62F9N000000000000000000';
 const texts = (m: CosreUIMessage | undefined) => (m?.parts ?? []).flatMap(p => (p.type === 'text' ? [p.text] : []));
-
-/** SSE gövdesini çerçeve çerçeve yollayan sahte fetch; `pauseAfter` doğru
- *  dönen çerçeveden sonra `release()`e dek bekler; abort akışı keser. */
-function sseFetch(body: string, pauseAfter?: (frame: string) => boolean) {
-  const calls: Array<{ url: string; body: unknown }> = [];
-  let release = () => {};
-  const gate = new Promise<void>(r => { release = r; });
-  const fetch = (async (url: RequestInfo | URL, init?: RequestInit) => {
-    calls.push({ url: String(url), body: JSON.parse(String(init?.body)) });
-    const signal = init?.signal;
-    return new Response(new ReadableStream<Uint8Array>({
-      async start(c) {
-        signal?.addEventListener('abort', () => {
-          try { c.error(new DOMException('aborted', 'AbortError')); } catch { /* kapalı */ }
-        });
-        const enc = new TextEncoder();
-        for (const f of body.split('\n\n').filter(Boolean)) {
-          if (signal?.aborted) return;
-          c.enqueue(enc.encode(`${f}\n\n`));
-          if (pauseAfter?.(f)) await gate;
-        }
-        if (!signal?.aborted) c.close();
-      },
-    }), { headers: { 'content-type': 'text/event-stream', 'x-vercel-ai-ui-message-stream': 'v1' } });
-  }) as typeof globalThis.fetch;
-  return { fetch, calls, release: () => release() };
-}
 
 it('repo kökü bulunur', () => {
   expect(existsSync(join(ROOT, 'go.mod'))).toBe(true);
