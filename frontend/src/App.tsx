@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect } from 'react';
 import { Routes, Route, Navigate, useParams, useLocation } from 'react-router-dom';
 import { AuthProvider } from './components/AuthProvider';
 import { ConfirmProvider } from './components/ui/ConfirmDialog';
+import { ConfirmGate } from './components/coremetry/Confirm/ConfirmGate';
 import { AppShell } from './components/AppShell';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { RouteSkeleton } from './components/ui/RouteSkeleton';
@@ -155,8 +156,13 @@ export default function App() {
         host'u. AuthProvider'ın DIŞINDA: /login ve public yüzeyler de
         aynı ağaçta ve bir gün onay isterlerse kırılmasınlar; provider
         kendisi hiçbir şey render etmiyor (yalnız bir context + açıkken
-        bir Modal), yani bedeli sıfır. */}
+        bir Modal), yani bedeli sıfır.
+        Faz 2 dilim 1 R3 — ConfirmGate (coremetry/Confirm) YANINDA: shadcn
+        alert-dialog üstündeki halef; kapı Radix'siz, çizici ilk istekte
+        tembel. Geçirilen sayfa coremetry useConfirm'ü, geçirilmemiş sayfa
+        ui useConfirm'ü kullanır; son ui tüketicisi gidince eski kalkar. */}
     <ConfirmProvider>
+    <ConfirmGate>
     <AuthProvider>
       <PerfMeter />
       <Suspense fallback={<RouteSkeleton />}>
@@ -246,6 +252,7 @@ export default function App() {
         </Routes>
       </Suspense>
     </AuthProvider>
+    </ConfirmGate>
     </ConfirmProvider>
     </ErrorBoundary>
   );

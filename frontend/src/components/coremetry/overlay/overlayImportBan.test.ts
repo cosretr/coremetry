@@ -14,7 +14,7 @@ async function restricted(code: string, file: string): Promise<boolean> {
 }
 
 describe('Radix overlay importu yalnız components/coremetry içinden', () => {
-  const OVERLAYS = ['dialog', 'sheet', 'popover', 'dropdown-menu', 'context-menu', 'tooltip', 'command', 'select'];
+  const OVERLAYS = ['dialog', 'alert-dialog', 'sheet', 'popover', 'dropdown-menu', 'context-menu', 'tooltip', 'command', 'select'];
 
   it('sayfa: shadcn overlay dosyası (takma ad + göreli) ve radix-ui yasak', async () => {
     for (const n of OVERLAYS) {

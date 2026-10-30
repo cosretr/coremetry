@@ -148,7 +148,7 @@ export default tseslint.config(
       'no-restricted-imports': ['error', {
         patterns: [{
           group: [
-            ...['dialog', 'sheet', 'popover', 'dropdown-menu', 'context-menu', 'tooltip', 'command', 'select'].map((n) => `**/shadcn/${n}`),
+            ...['dialog', 'alert-dialog', 'sheet', 'popover', 'dropdown-menu', 'context-menu', 'tooltip', 'command', 'select'].map((n) => `**/shadcn/${n}`),
             'radix-ui', 'radix-ui/**', '@radix-ui/*',
           ],
           message: 'Radix overlays only via @/components/coremetry/overlay (Esc stack, lib/escLayer.ts) — Radix katmanları yalnız coremetry/overlay sarmalayıcılarıyla.',
@@ -173,6 +173,9 @@ export default tseslint.config(
       'src/components/ContextBar/**',
       'src/components/CopilotChatGate.tsx',
       'src/components/Toaster.tsx',
+      // Faz 2 dilim 1 R3: onay kapısı eager (App.tsx) — çizicisi tembel.
+      'src/components/coremetry/Confirm/ConfirmGate.tsx',
+      'src/components/coremetry/Confirm/context.ts',
       'src/components/GlobalShortcuts.tsx',
       'src/components/AnnouncementBanner.tsx',
     ],

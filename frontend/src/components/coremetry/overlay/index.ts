@@ -7,3 +7,4 @@ export * from './Popover';
 export * from './DropdownMenu';
 export * from './ContextMenu';
 export * from './Tooltip';
+export * from './AlertDialog';

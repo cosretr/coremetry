@@ -8,6 +8,7 @@
 // üretilen dosyalardaki İngilizce metnin sarmalayıcıda kapatıldığını çiviler.
 export const CM_STRINGS = {
   close: 'Kapat',
+  cancel: 'Vazgeç',
   noResults: 'Sonuç yok',
   suggestions: 'Öneriler',
   search: 'Ara…',

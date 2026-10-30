@@ -27,6 +27,8 @@ import {
   Popover, PopoverContent, PopoverDescription, PopoverHeader, PopoverTitle, PopoverTrigger,
   Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle,
   Tooltip, TooltipContent, TooltipTrigger,
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/coremetry/overlay';
 import { StatusBadge } from '@/components/coremetry/StatusBadge';
 import { Field, SelectField, TextareaField, CheckboxField } from '@/components/coremetry/Field';
@@ -196,6 +198,29 @@ function DialogDemo({ cell, forceOpen }: CatalogCtx) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </>
+  );
+}
+
+function AlertDialogDemo({ cell, forceOpen }: CatalogCtx) {
+  // Onay diyaloğu (coremetry/Confirm çizicisinin gövdesi): odak Cancel'da,
+  // dış tık kapatmaz; danger → destructive.
+  const [open, setOpen] = useState(forceOpen);
+  return (
+    <>
+      <Button variant="outline" size="sm" onClick={() => setOpen(true)}>Onay aç</Button>
+      <AlertDialog open={open} onOpenChange={setOpen}>
+        <AlertDialogContent {...themeAttrs(cell)}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Kümeyi kaldır?</AlertDialogTitle>
+            <AlertDialogDescription>prod-ist kaydı ve saklı token'ı silinir.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel size="sm">{CM_STRINGS.cancel}</AlertDialogCancel>
+            <AlertDialogAction size="sm" variant="destructive">Kaldır</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
@@ -478,6 +503,7 @@ function ToasterDemo({ forceOpen }: CatalogCtx) {
 
 /** Anahtar = components/shadcn/<ad>.tsx (+ coremetry bileşikleri). */
 export const CATALOG: Record<string, (ctx: CatalogCtx) => ReactNode> = {
+  'alert-dialog': (ctx) => <AlertDialogDemo {...ctx} />,
   'badge': () => <BadgeDemo />,
   'button': () => <ButtonDemo />,
   'button-group': () => <ButtonGroupDemo />,
