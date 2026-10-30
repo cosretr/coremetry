@@ -45,6 +45,11 @@ const (
 type InboxOpenQuery struct {
 	Team, Service, Env string
 	Limit              int
+	// Attention — v0.10.1694 (operator-reported): servis sayfası şeridinin
+	// istemci süzgeci de uygulanır (api serviceAttentionItems: "problem değil"
+	// kararlı imzalar gizlenir, SLO burn-rate satır değil SLOCount, anomaliler
+	// dışarıda). Rows/Total şeridin "N açık konu"su olur.
+	Attention bool
 }
 
 // InboxRow — bir inbox satırının araç şekli (api.InboxItem'dan).
@@ -66,6 +71,10 @@ type InboxOpenResult struct {
 	Rows       []InboxRow
 	Total      int
 	ScanCapped bool
+	// Truncated — v0.10.1694: inbox tavanından fazla aday vardı (sayı "en az").
+	Truncated bool
+	// SLOCount — v0.10.1694: Attention'da dipnota giden SLO burn-rate problemleri.
+	SLOCount int
 }
 
 // InboxOpenReader — api'nin inbox çekirdeği (nil = bağlı değil).

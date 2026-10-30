@@ -49,7 +49,7 @@ func baseSweepReaders() sweepReaders {
 		windowRED: func(_ context.Context, _, _ string, from, _ time.Time) (chstore.ServiceWindowRED, error) {
 			return chstore.ServiceWindowRED{Spans: 10000, Errors: 10, P99Ms: 120}, nil
 		},
-		problems: func(context.Context, chstore.ProblemFilter) ([]chstore.Problem, error) { return nil, nil },
+		openItems: func(context.Context, InboxOpenQuery) (InboxOpenResult, error) { return InboxOpenResult{}, nil },
 		ops: func(context.Context, string, time.Time, time.Time) ([]chstore.OperationSummary, error) {
 			return []chstore.OperationSummary{
 				{Name: "GET /ok", SpanCount: 5000, ErrorRate: 0.1, P99Ms: 100, HasPrior: true, PriorSpanCount: 5000, PriorErrorRate: 0.1, PriorP99Ms: 100},

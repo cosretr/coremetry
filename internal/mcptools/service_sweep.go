@@ -14,7 +14,7 @@ package mcptools
 // EVRE 1 (paralel; sweepBudget 15 s, executor 20 s):
 //
 //	red        ServiceWindowRED / ServiceEnvWindowRED (service_summary_5m / env MV), şimdiki + önceki eş pencere   3 s  env VAR
-//	problems   açık problemler (ProblemFilter.Env = servis üyeliği)                                              3 s  üyelik
+//	problems   açık konular: Deps.InboxOpen + ServiceAttentionQuery (servis şeridinin kümesi, v0.10.1694)            3 s  env YOK (şerit)
 //	ops        GetOperationSummaryCompared (operation_summary_5m, şimdiki + önceki)                              5 s  env YOK (not)
 //	functions  FUNCTION_CODE: geniş rollup (function_code grubu, ≤20) → yoksa BusinessBreakdown (ham, LIMIT 8)    5 s  env YOK
 //	pods       Deps.ServicePods: Thanos PodMetrics + increase(restarts[pencere]); servisin eşlenen cluster'ları (≤3), yoksa tüm etkin (≤6)  6 s  env YOK
@@ -327,7 +327,7 @@ type sweepData struct {
 	CodeFunctions []chstore.CodeFunctionSlice `json:"codeFunctions,omitempty"` // derin kip, ÖRNEKLEM
 	Pods          []sweepPodRow               `json:"pods"`
 	JVM           []pivotJVMRow               `json:"jvm"`
-	Problems      []string                    `json:"problems,omitempty"`
+	OpenItems     []InboxRow                  `json:"openItems,omitempty"`
 	FindingLogs   []sweepFindingLogRows       `json:"findingLogs,omitempty"`
 	Patterns      []sweepPattern              `json:"patterns,omitempty"`
 	Blocks        []pivotBlock                `json:"blocks"`
@@ -356,8 +356,9 @@ type SweepResult struct {
 // ── okuyucular (test dikişi) ────────────────────────────────────────────
 
 type sweepReaders struct {
-	windowRED     func(ctx context.Context, service, env string, from, to time.Time) (chstore.ServiceWindowRED, error)
-	problems      func(ctx context.Context, f chstore.ProblemFilter) ([]chstore.Problem, error)
+	windowRED func(ctx context.Context, service, env string, from, to time.Time) (chstore.ServiceWindowRED, error)
+	// openItems — v0.10.1694: servis şeridinin "Açık konular" kümesi (Deps.InboxOpen + Attention).
+	openItems     InboxOpenReader
 	ops           func(ctx context.Context, service string, from, to time.Time) ([]chstore.OperationSummary, error)
 	fnRollup      func(ctx context.Context, service string, from, to time.Time) ([]chstore.RollupSeries, error)
 	fnSpans       func(ctx context.Context, service string, from, to time.Time) ([]chstore.BusinessSlice, error)
@@ -386,7 +387,7 @@ type sweepReaders struct {
 }
 
 func sweepReadersFrom(d Deps) sweepReaders {
-	r := sweepReaders{servicePods: d.ServicePods, logs: d.LogStore, clusters: d.Clusters,
+	r := sweepReaders{servicePods: d.ServicePods, logs: d.LogStore, clusters: d.Clusters, openItems: d.InboxOpen,
 		runtimeAlerts: func(context.Context) chstore.RuntimeAlertConfig { return chstore.DefaultRuntimeAlerts() }}
 	r.runtime, r.runtimeSource = d.RuntimePods, evSourceCH
 	if d.MetricRouter != nil {
@@ -408,7 +409,6 @@ func sweepReadersFrom(d Deps) sweepReaders {
 			}
 			return st.ServiceWindowRED(ctx, service, from, to)
 		}
-		r.problems = st.ListProblems
 		r.ops = func(ctx context.Context, service string, from, to time.Time) ([]chstore.OperationSummary, error) {
 			return st.GetOperationSummaryCompared(ctx, service, 0, from, to, false, "")
 		}
@@ -464,8 +464,8 @@ type sweepOutcome struct {
 	redErr       error
 	redOK        bool
 	priorOK      bool
-	problems     []chstore.Problem
-	problemsOK   bool
+	openItems    InboxOpenResult
+	openItemsOK  bool
 	ops          []chstore.OperationSummary
 	opRows       []sweepOpRow
 	fnRows       []sweepFnRow
@@ -671,7 +671,7 @@ wait:
 			}
 		}
 		if req.Env != "" {
-			applied := o.section.Name == sweepHopRED || o.section.Name == sweepHopProblems
+			applied := o.section.Name == sweepHopRED
 			o.section.EnvApplied = &applied
 			if !applied && o.section.Note == "" && o.section.State != hopSkipped {
 				o.section.Note = "env uygulanmadı: bu kaynak ortam boyutu taşımıyor"
@@ -725,8 +725,8 @@ wait:
 		}
 	}
 	openN := 0
-	if pr != nil && pr.problemsOK {
-		openN = len(pr.problems)
+	if pr != nil && pr.openItemsOK {
+		openN = pr.openItems.Total
 	}
 	label, reasons, next := healthverdict.Service(cur, base, redErr, openN, 0)
 	res.Verdict = sweepVerdictOf(label, reasons, next, findings, anyData)
@@ -749,12 +749,13 @@ wait:
 		res.Data.JVM = append(res.Data.JVM, o.jvm...)
 	}
 	res.Scanned = sc
-	if pr != nil {
-		for i, p := range pr.problems {
+	if pr != nil && pr.openItemsOK {
+		for i, it := range pr.openItems.Rows {
 			if i >= sweepProblemsMax {
 				break
 			}
-			res.Data.Problems = append(res.Data.Problems, truncateRunes(firstNonEmpty(p.RuleName, p.RuleID)+" ("+p.Severity+")", sweepReasonRunes))
+			it.Title = truncateRunes(it.Title, sweepReasonRunes)
+			res.Data.OpenItems = append(res.Data.OpenItems, it)
 		}
 	}
 	res.Data.CodeFunctions = p2.code
@@ -782,7 +783,7 @@ func sweepSectionLabelTR(n string) string {
 	case sweepHopRED:
 		return "servis RED"
 	case sweepHopProblems:
-		return "açık problemler"
+		return "açık konular"
 	case sweepHopOps:
 		return "operasyonlar"
 	case sweepHopFunctions:
@@ -866,34 +867,66 @@ func sweepREDArgs(service, env string, from, to time.Time) []any {
 	return []any{service, chstore.AlignBucketStart(from), to}
 }
 
+// sweepRunProblems — v0.10.1694 (operator-reported): "Açık konular", servis
+// sayfası şeridinin AYNI kümesi (problem + exception/httperror + incident;
+// Deps.InboxOpen + ServiceAttentionQuery → api inboxOpenAttention). Yalnız problems tablosu
+// okunuyordu: exception grupları Inbox'ta dururken bölüm "açık problem yok"
+// diyordu. Şerit ortamsız okur (serviceInboxHref env=), bölüm de öyle —
+// env üyeliği şeridin gösterdiği satırı düşürmesin.
 func sweepRunProblems(ctx context.Context, r sweepReaders, req SweepRequest) sweepOutcome {
 	o := sweepOutcome{section: SweepSection{Name: sweepHopProblems}}
-	if r.problems == nil {
-		o.section.State, o.section.Summary, o.failed = hopSkipped, "ClickHouse okuyucusu bağlı değil", true
+	if r.openItems == nil {
+		o.section.State, o.section.Summary, o.failed = hopSkipped, "Inbox okuyucusu bağlı değil", true
 		return o
 	}
-	ps, err := r.problems(ctx, chstore.ProblemFilter{Status: "open", Service: req.Service, Env: req.Env, Limit: sweepProblemsMax + 1})
+	oi, err := r.openItems(ctx, ServiceAttentionQuery(req.Service))
 	if err != nil {
 		o.failed = true
-		o.section.State, o.section.Summary = sweepFailState(err), cosreErrMsg("açık problemler okunamadı", err)
+		o.section.State, o.section.Summary = sweepFailState(err), cosreErrMsg("açık konular okunamadı", err)
 		return o
 	}
-	o.problems, o.problemsOK = ps, true
+	o.openItems, o.openItemsOK = oi, true
 	if req.Env != "" {
-		o.section.Note = envMembershipNote
+		o.section.Note = "env uygulanmadı: açık konular servis sayfası şeridiyle aynı kapsamda (tüm ortamlar)"
 	}
-	if len(ps) == 0 {
-		o.section.State, o.section.Summary = hopEmpty, "açık problem yok"
+	o.section.Summary = sweepOpenItemsSummary(oi, ServiceInboxHref(req.Service))
+	if oi.Total == 0 {
+		o.section.State = hopEmpty
 		return o
 	}
 	o.anyDataFound = true
 	o.section.State = hopOK
-	n := fmt.Sprint(len(ps))
-	if len(ps) > sweepProblemsMax {
-		n = fmt.Sprintf("%d+", sweepProblemsMax)
-	}
-	o.section.Summary = n + " açık problem: " + truncateRunes(firstNonEmpty(ps[0].RuleName, ps[0].RuleID), 80)
 	return o
+}
+
+// sweepOpenItemsSummary — SAF: "N açık konu: P1 exception — başlık; … (Inbox: href)".
+func sweepOpenItemsSummary(oi InboxOpenResult, href string) string {
+	if oi.Total == 0 {
+		s := "açık konu yok"
+		if oi.SLOCount > 0 {
+			s += fmt.Sprintf(" (SLO burn-rate %d uyarı)", oi.SLOCount)
+		}
+		return s
+	}
+	n := fmt.Sprint(oi.Total)
+	if oi.Truncated || oi.ScanCapped {
+		n += "+"
+	}
+	parts := make([]string, 0, 3)
+	for i, it := range oi.Rows {
+		if i >= 3 {
+			break
+		}
+		parts = append(parts, it.Priority+" "+it.Kind+" — "+truncateRunes(it.Title, 80))
+	}
+	s := n + " açık konu: " + strings.Join(parts, "; ")
+	if oi.SLOCount > 0 {
+		s += fmt.Sprintf(" · SLO burn-rate %d uyarı", oi.SLOCount)
+	}
+	if href != "" {
+		s += " (Inbox: " + href + ")"
+	}
+	return s
 }
 
 func sweepRunOps(ctx context.Context, r sweepReaders, req SweepRequest) sweepOutcome {
@@ -1952,7 +1985,7 @@ func serviceHealthSweepTool(d Deps) mcp.Tool {
 			"type": "object",
 			"properties": map[string]any{
 				"service": map[string]any{"type": "string", "description": "Exact service name. Required."},
-				"env":     map[string]any{"type": "string", "description": "Deployment environment; applies to the RED summary and open problems (service membership). Operations, functions, pods and JVM carry no env dimension (each section says so)."},
+				"env":     map[string]any{"type": "string", "description": "Deployment environment; applies to the RED summary (service membership). Open items mirror the Service page strip (all envs); operations, functions, pods and JVM carry no env dimension (each section says so)."},
 				"window":  map[string]any{"type": "string", "enum": sweepWindowEnum, "description": "Sweep window, compared with the equal prior window. Default 1h."},
 				"deep":    map[string]any{"type": "boolean", "description": "Deeper sweep: top 5 findings, sampled code.* functions, log patterns. Default false."},
 				"top_n":   map[string]any{"type": "integer", "minimum": 1, "maximum": sweepTopNMax, "description": "Findings to rank and read logs for. Default 3 (5 when deep)."},

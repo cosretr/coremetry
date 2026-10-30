@@ -72,7 +72,15 @@ func inboxRowsFrom(items []InboxItem) []mcptools.InboxRow {
 
 // inboxOpen — mcptools.InboxOpenReader: inbox çekirdeğini önbelleksiz koşar
 // (araç kendi Memo'sunu, worker kendi tikini taşır).
+//
+// v0.10.1694 (operator-reported) — q.Attention: servis sayfası şeridinin
+// kümesi. Okuma şeridin /api/inbox isteğiyle AYNI önbellek girdisinden
+// (cachedJSON, aynı anahtar → aynı gövde) ve şeridin istemci süzgeci
+// (serviceAttentionItems) sunucuda uygulanır; Total = şeridin "N açık konu"su.
 func (s *Server) inboxOpen(ctx context.Context, q mcptools.InboxOpenQuery) (mcptools.InboxOpenResult, error) {
+	if q.Attention {
+		return s.inboxOpenAttention(ctx, q)
+	}
 	_, build := s.inboxView(inboxOpenValues(q))
 	raw, err := build(ctx)
 	if err != nil {
@@ -85,5 +93,6 @@ func (s *Server) inboxOpen(ctx context.Context, q mcptools.InboxOpenQuery) (mcpt
 	items, _ := m["items"].([]InboxItem)
 	total, _ := m["total"].(int)
 	capped, _ := m["scanCapped"].(bool)
-	return mcptools.InboxOpenResult{Rows: inboxRowsFrom(items), Total: total, ScanCapped: capped}, nil
+	truncated, _ := m["truncated"].(bool)
+	return mcptools.InboxOpenResult{Rows: inboxRowsFrom(items), Total: total, ScanCapped: capped, Truncated: truncated}, nil
 }
