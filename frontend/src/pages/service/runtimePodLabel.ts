@@ -10,14 +10,14 @@
 //   [2] service.instance.id  — javaagent'in ürettiği UUID (SON çare;
 //                              operatör "4abcd5" olarak bunu görüyordu)
 //
-// Okunabilir pod adı (0 veya 1) varsa servis-adı prefix'i kırpılır
-// (svc-...-login-prep-6f9c7b-x2v → 6f9c7b-x2v); yoksa instance id ilk 8;
-// üçü de boşsa spec fallback'i (tek çizgi aggregate).
-export function podLineLabel(groupKey: string[], service: string, fallback: string): string {
+// Okunabilir pod adı (0 veya 1) varsa TAM hali basılır; yoksa instance id
+// ilk 8; üçü de boşsa spec fallback'i (tek çizgi aggregate).
+// v0.10.1640 (operatör raporu) — servis-adı öneki artık KIRPILMAZ: eski
+// kırpma lejand/tooltip'te yalnız "6b49d8f679-69tf7" bırakıyordu, pod
+// kimliği okunmuyordu. Dar lejand TimeSeriesPanel'de ellipsis + title.
+export function podLineLabel(groupKey: string[], fallback: string): string {
   const podName = (groupKey[0] ?? '').trim() || (groupKey[1] ?? '').trim();
-  if (podName) {
-    return podName.startsWith(service + '-') ? podName.slice(service.length + 1) : podName;
-  }
+  if (podName) return podName;
   const inst = (groupKey[2] ?? '').trim();
   if (inst) return inst.slice(0, 8);
   return fallback;

@@ -55,7 +55,7 @@ interface LineSpec {
   scale?: number;     // değer çarpanı (By→MB, s→ms, ns→ms)
   fanout?: boolean;   // groupBy fan-out: dönen her seri ayrı çizgi
   // Fanout etiketi üreticisi (pod kırılımı); yoksa groupKey.join('/').
-  labelOf?: (gk: string[], service: string, fallback: string) => string;
+  labelOf?: (gk: string[], fallback: string) => string;
   // Referans çizgisi (ör. heap limit) — kesikli çizilir, pod çizgileri
   // ona yaklaşınca "doldu" gözle okunur.
   ref?: boolean;
@@ -247,7 +247,7 @@ export function RuntimeCharts({ service, from, to, onZoom, onZoomReset, hideHead
           const multi = clusterSet.size > 1;
           data.slice(0, FANOUT_MAX).forEach(s => {
             const base = line.labelOf
-              ? line.labelOf(s.groupKey, service, line.label)
+              ? line.labelOf(s.groupKey, line.label)
               : (s.groupKey.filter(Boolean).join('/') || line.label);
             tsSeries.push({
               label: withClusterPrefix(base, podClusterOf(s.groupKey), multi),
