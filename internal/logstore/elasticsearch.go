@@ -2778,6 +2778,16 @@ func (s *ESStore) buildQuery(f Filter) map[string]any {
 				"minimum_should_match": 1,
 			},
 		})
+	} else if svcs := logServicesSet(f); len(svcs) > 0 {
+		// v0.10.1684 — servis kümesi: tekil dalın AYNI aday alanları ve
+		// env-eki soyma kuralı, ama alan başına tek `terms` (clause sayısı
+		// küme boyutundan bağımsız; esServicesShould).
+		filter = append(filter, map[string]any{
+			"bool": map[string]any{
+				"should":               esServicesShould([]string{s.fields.Service, "kubernetes.container.name", "kubernetes.container_name", "kubernetes.labels.app", "kubernetes.labels_app"}, svcs),
+				"minimum_should_match": 1,
+			},
+		})
 	}
 	// v0.5.471 — cluster filter. Match any of the three known
 	// resource-attribute paths (ECS k8s, OpenShift, bare).

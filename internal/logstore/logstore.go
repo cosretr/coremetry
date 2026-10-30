@@ -37,7 +37,11 @@ const logsTailMax = LogsTailMax
 // (with a log line).
 type Filter struct {
 	Service string
-	Cluster string // v0.5.471 — k8s/openshift cluster name; empty = any
+	// Services — v0.10.1684 (CoSRE v2 dilim 3): servis KÜMESİ, herhangi biri
+	// (OR). Service doluysa yok sayılır; sıralı + tekil + ≤100
+	// (chstore.LogServicesSet). ES: aday alanlar × `terms`; CH: IN.
+	Services []string
+	Cluster  string // v0.5.471 — k8s/openshift cluster name; empty = any
 	// Pod (v0.9.1249 — Kibana-parite artığı) — k8s pod identity, empty
 	// = any. Born for the /logs Context modal: on a crowded service the
 	// ±window around a pivot fills with OTHER pods' lines, so the

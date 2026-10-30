@@ -1912,6 +1912,10 @@ type TraceFilter struct {
 	// drill-in to surface only traces where caller × callee
 	// actually co-occur.
 	RequireServices []string
+	// Services — v0.10.1684: servis KÜMESİ (IN), tekil Service'in çoğul
+	// ikizi, aynı span-düzeyi anlam (trace_services_in.go). Service /
+	// RequireServices doluysa düşer; GetTraces girişi normalize eder.
+	Services []string
 	// TraceIDs restricts the result to this explicit set of trace IDs
 	// (rendered as `trace_id IN (…)`). Used by the relations view
 	// (relations.go): the bounded self-join resolves a page of trace
@@ -2105,6 +2109,9 @@ func buildGetTracesWhere(f TraceFilter, clusterExpr string) whereClause {
 			args[i] = s
 		}
 		wc.add("service_name IN ("+strings.Join(holders, ",")+")", args...)
+	case len(f.Services) > 0:
+		// v0.10.1684 — servis kümesi (trace_services_in.go); PK öneki IN.
+		wc.add("service_name IN ("+inHolders(len(f.Services))+")", servicesArgs(f.Services)...)
 	case f.Service != "":
 		// v0.5.440 — narrow service-scope restored. v0.5.371
 		// previously widened this to a `trace_id IN (subquery)`
@@ -2394,7 +2401,9 @@ func tracesMVEligible(f TraceFilter) bool {
 		len(f.Filters) == 0 &&
 		!f.FilterRoot.hasPredicate() &&
 		len(f.RequireServices) == 0 &&
-		len(f.TraceIDs) == 0
+		len(f.TraceIDs) == 0 &&
+		// v0.10.1684 — servis kümesi + yalnız hatalı: dilim hata bilmez (trace_services_in.go)
+		(len(f.Services) == 0 || !f.HasError)
 }
 
 func countModeAllowsMV(mode string) bool {
@@ -2459,7 +2468,8 @@ func (s *Store) traceDisplaySvcExpr() string {
 // GetTraces — the /traces list. Trace-level NOT HAS (trace_exclude.go): the
 // deferred page guard below makes the raw paths exact past the anti-join cap.
 func (s *Store) GetTraces(ctx context.Context, f TraceFilter) (gtRows []TraceRow, gtTotal uint64, gtHasMore bool, gtErr error) {
-	f = hoistTraceExcludes(f) // trace-level NOT HAS → f.Excludes (trace_exclude.go)
+	f = hoistTraceExcludes(f)     // trace-level NOT HAS → f.Excludes (trace_exclude.go)
+	f = normalizeTraceServices(f) // v0.10.1684 — servis kümesi sözleşmesi
 	if len(f.Excludes) > 0 {
 		exact := false
 		f.excludeExact = &exact
@@ -3948,7 +3958,28 @@ func (s *Store) getTracesFromMV(ctx context.Context, f TraceFilter) ([]TraceRow,
 	// bağlanabiliyorsa aday kümesi İNDEKSTEN gelir (spans, zaman sıralı);
 	// servis/recency dilimleri atlanır. Boş sonuç = bulunamadı (dilime
 	// düşülmez). Diğer yüklemler aşama 2'de tam listeyle koşar.
-	if attrSQL, attrArgs, attrOK := attrSlicePredicates(f); attrOK {
+	if len(f.Services) > 0 {
+		// v0.10.1684 — servis kümesi: tekil servis diliminin IN ikizi (trace_services_in.go).
+		want, sliceOrder, sliced := serviceSlicePlan(f, pageLimit, stage1Limit)
+		s1f := f
+		s1f.Order = sliceOrder
+		ids, cut, exhausted, err := s.traceServicesSlice(ctx, s1f, want)
+		if err != nil {
+			return nil, 0, false, fmt.Errorf("stage1 services: %w", err)
+		}
+		if len(ids) == 0 {
+			return []TraceRow{}, 0, false, nil
+		}
+		traceIDs = ids
+		holders = inHolders(len(ids))
+		stage2Floor, stage2Ceil = sliceStageBounds(sliceOrder, cut, exhausted)
+		if sliced && f.RankedWithin != nil {
+			*f.RankedWithin = len(ids)
+			if exhausted {
+				*f.RankedWithin = 0
+			}
+		}
+	} else if attrSQL, attrArgs, attrOK := attrSlicePredicates(f); attrOK {
 		want, sliceOrder, sliced := serviceSlicePlan(f, pageLimit, stage1Limit)
 		s1f := f
 		s1f.Order = sliceOrder
@@ -5006,6 +5037,9 @@ func scanSpanRows(rows driver.Rows) ([]SpanRow, error) {
 
 type LogFilter struct {
 	Service string
+	// Services — v0.10.1684: servis KÜMESİ (IN); Service doluysa yok sayılır,
+	// MaxTraceServices'te kesilir (LogServicesSet).
+	Services []string
 	// Env (v0.8.400 — env-separation Phase 4) — deployment-environment
 	// filter, applied as the bounded res-array conjunct
 	// logsEnvChainSQL. Empty = all environments.
@@ -5270,6 +5304,8 @@ func logsWhere(f LogFilter) whereClause {
 	}
 	if f.Service != "" {
 		wc.add("service_name = ?", f.Service)
+	} else if svcs := LogServicesSet(f.Service, f.Services); len(svcs) > 0 {
+		wc.add("service_name IN ("+inHolders(len(svcs))+")", servicesArgs(svcs)...) // v0.10.1684
 	}
 	if f.Env != "" {
 		// v0.8.400 — env conjunct.

@@ -63,7 +63,7 @@ func spanScopedChips(f TraceFilter) bool {
 // Root → boş liste; fonksiyon kodunu kök span taşımıyor). Daraltılmış şekilde
 // kök, daraltılmamış kaynaktan sorulur (aday id'ler üstünde MV nokta okuması).
 func rootScopeNarrowed(f TraceFilter) bool {
-	return f.Service != "" || len(f.RequireServices) > 0 || spanScopedChips(f)
+	return f.Service != "" || len(f.RequireServices) > 0 || len(f.Services) > 0 || spanScopedChips(f)
 }
 
 // withoutChips — SAF: aynı süzgecin çipsiz, hata-WHERE'siz kopyası (satırı

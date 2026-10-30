@@ -40,8 +40,9 @@ func chSearchLogFilter(f Filter) chstore.LogFilter {
 	patSQL, patArgs := chPatternConjunct(f.Pattern)
 	return chstore.LogFilter{
 		Service:     f.Service,
-		Env:         f.Env, // v0.8.400 — env-separation Phase 4
-		Pod:         f.Pod, // v0.9.1249 — bağlam pod kapsamı
+		Services:    f.Services, // v0.10.1684
+		Env:         f.Env,      // v0.8.400 — env-separation Phase 4
+		Pod:         f.Pod,      // v0.9.1249 — bağlam pod kapsamı
 		Search:      f.Search,
 		From:        f.From,
 		To:          f.To,
@@ -320,6 +321,11 @@ func chLogsHistogramWhere(f Filter, from, to time.Time) (string, []any) {
 	if f.Service != "" {
 		wc += " AND service_name = ?"
 		args = append(args, f.Service)
+	} else if svcs := chstore.LogServicesSet(f.Service, f.Services); len(svcs) > 0 {
+		wc += " AND service_name IN (" + strings.TrimSuffix(strings.Repeat("?,", len(svcs)), ",") + ")" // v0.10.1684
+		for _, sv := range svcs {
+			args = append(args, sv)
+		}
 	}
 	if f.Search != "" {
 		// multiSearchAnyCaseInsensitive uses the tokenbf_v1 index
@@ -699,6 +705,11 @@ func (s *CHStore) FieldStats(ctx context.Context, f Filter, field string, limit 
 	if f.Service != "" {
 		wc += " AND service_name = ?"
 		args = append(args, f.Service)
+	} else if svcs := chstore.LogServicesSet(f.Service, f.Services); len(svcs) > 0 {
+		wc += " AND service_name IN (" + strings.TrimSuffix(strings.Repeat("?,", len(svcs)), ",") + ")" // v0.10.1684
+		for _, sv := range svcs {
+			args = append(args, sv)
+		}
 	}
 	if f.Search != "" {
 		// v0.8.521 — bkz. Search'teki id-şekilli dal (yukarıdaki site).
