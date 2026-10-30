@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react';
-import { Button, useConfirm } from '@/components/ui';
+import { Button } from '@/components/shadcn/button';
+import { Badge } from '@/components/shadcn/badge';
+import { Field, SelectField } from '@/components/coremetry/Field';
+import { StatusBadge } from '@/components/coremetry/StatusBadge';
+import { useConfirm } from '@/components/coremetry/Confirm';
+import { DataTable, type ColumnDef, type DataTableStateInput } from '@/components/coremetry/DataTable';
 import { api } from '@/lib/api';
 import { copyToClipboard } from '@/lib/clipboard';
 import type { APIToken } from '@/lib/types';
-import { Field2, FlashBox, Row } from './shared';
+import { FlashBox } from './shared';
 import { tsLong } from '@/lib/utils';
-import {
-  useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState,
-  type ColumnDef, type DataTableStateProps,
-} from '@/components/ui/DataTable';
 
 // v0.9.872 (tutarlılık denetimi BT5) — `is-fit` sınıfı vardı, primitif
 // yoktu. Kolon genişliği BEYAN EDİLMEDİĞİ için isFitTables.test.ts bu
@@ -33,6 +34,8 @@ const TOKEN_COLS: ColumnDef<APIToken>[] = [
 // vb.) MCP/REST erişimi için servis token'ları. Düz token create
 // yanıtında BİR KEZ gösterilir (SMTP-secret sözleşmesi); listede yalnız
 // prefix durur. Revoke tombstone'dur — kayıt audit izi olarak kalır.
+// Faz 2 dilim 1 R10 — shadcn/coremetry bileşikleri (Field, DataTable,
+// StatusBadge); kolonlar, metinler, sıralama ve storageKey aynı.
 
 export function ApiTokensTab() {
   const confirm = useConfirm();
@@ -47,11 +50,6 @@ export function ApiTokensTab() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
-  const dt = useDataTable<APIToken>({
-    storageKey: 'settings-api-tokens', columns: TOKEN_COLS, rows: tokens ?? [],
-    initialSort: { id: 'createdAt', dir: 'desc' },
-  });
-
   const load = () => {
     api.listAPITokens().then(r => setTokens(r.tokens ?? [])).catch(() => setTokens(null));
   };
@@ -59,7 +57,7 @@ export function ApiTokensTab() {
 
   // v0.10.954 — tablo standardı T12: yükleniyor / hata / boş tablonun
   // İÇİNDE, başlık durur (undefined / null / [] sırası aynı).
-  const tableState: Omit<DataTableStateProps<APIToken>, 'dt'> =
+  const tableState: DataTableStateInput<APIToken> =
     tokens === undefined ? { kind: 'loading' }
     : tokens === null ? { kind: 'error' }
     : { kind: 'empty', message: 'Henüz token yok — yukarıdan bir ad verip üret, GenAI Studio agent\'ının MCP bağlantısına yapıştır.' };
@@ -76,10 +74,41 @@ export function ApiTokensTab() {
     } finally { setBusy(false); }
   };
 
+  const revoke = async (t: APIToken) => {
+    if (!await confirm({
+      title: 'Token iptal edilsin mi?',
+      body: <><b>{t.name}</b> iptal edilecek. Bu token’ı kullanan
+        sistemler <b>ANINDA</b> erişimi kaybeder; iptal geri alınamaz.</>,
+      confirmLabel: 'Token’ı iptal et',
+      danger: true,
+    })) return;
+    try { await api.revokeAPIToken(t.id); load(); }
+    catch (e) { setMsg({ kind: 'err', text: e instanceof Error ? e.message : String(e) }); }
+  };
+
+  // R10 — iptal edilmiş satırın sönükleştirmesi satır içi opacity yerine
+  // `data-revoked` işaretinden: tablo kabındaki `:has()` utility'si satırı
+  // .55'e indirir (eski değer).
+  const cell = (t: APIToken, col: ColumnDef<APIToken>) => {
+    switch (col.id) {
+      case 'name': return <span className="font-semibold" data-revoked={t.revoked ? '' : undefined}>{t.name}</span>;
+      case 'prefix': return t.prefix;
+      case 'role': return <Badge variant="secondary">{t.role}</Badge>;
+      case 'createdBy': return t.createdBy;
+      // v0.10.942 — zaman damgası mono kalır: S2 yalnız sayı hücresini kapsar.
+      case 'createdAt': return <span className="font-mono">{tsLong(t.createdAt)}</span>;
+      case 'revoked': return <StatusBadge status="unknown">{t.revoked ? 'REVOKED' : 'ACTIVE'}</StatusBadge>;
+      case 'actions': return !t.revoked && (
+        <Button variant="ghost-danger" size="sm" onClick={() => { void revoke(t); }}>İptal et</Button>
+      );
+      default: return null;
+    }
+  };
+
   return (
-    <div style={{ maxWidth: 720 }}>
-      <h2 style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>API Tokens</h2>
-      <p style={{ color: 'var(--text2)', fontSize: 13, marginBottom: 16 }}>
+    <div className="max-w-[720px]">
+      <h2 className="mb-1.5 text-[length:var(--fs-lg)] font-semibold">API Tokens</h2>
+      <p className="mb-4 text-[length:var(--fs-md)] text-(--text2)">
         Harici sistemlerin (GenAI Studio agent'ları, otomasyonlar) Coremetry
         API'sine ve MCP'ye (<code>/api/mcp/sse</code>) kimlikle bağlanması için
         uzun ömürlü token'lar. <code>Authorization: Bearer cmk_…</code> ile
@@ -87,35 +116,23 @@ export function ApiTokensTab() {
         tool'ları salt okuma).
       </p>
 
-      <Row>
-        <Field2 label="Ad" small hint="ör. genai-studio-sre-agent">
-          <input value={name} onChange={e => setName(e.target.value)} style={{ width: '100%' }} />
-        </Field2>
-        <Field2 label="Rol" small>
-          <select value={role} onChange={e => setRole(e.target.value)} style={{ width: '100%' }}>
-            <option value="viewer">viewer (önerilen)</option>
-            <option value="editor">editor</option>
-            <option value="admin">admin</option>
-          </select>
-        </Field2>
-        <Button variant="primary" onClick={() => { void create(); }} disabled={!name.trim()} style={{ marginTop: 18 }} loading={busy}>
+      <div className="flex flex-wrap items-start gap-3">
+        <Field label="Ad" small hint="ör. genai-studio-sre-agent" value={name} onChange={e => setName(e.target.value)} />
+        <SelectField label="Rol" small value={role} onChange={e => setRole(e.target.value)}>
+          <option value="viewer">viewer (önerilen)</option>
+          <option value="editor">editor</option>
+          <option value="admin">admin</option>
+        </SelectField>
+        <Button className="mt-5" size="sm" onClick={() => { void create(); }} disabled={!name.trim()} loading={busy}>
           + Token üret
         </Button>
-      </Row>
+      </div>
 
       {fresh && (
-        <div style={{
-          margin: '12px 0', padding: '10px 12px', borderRadius: 6,
-          background: 'color-mix(in srgb, var(--warn) 8%, transparent)',
-          border: '1px solid color-mix(in srgb, var(--warn) 35%, transparent)',
-          fontSize: 12,
-        }}>
+        <div className="my-3 rounded-md border border-(--warn)/35 bg-(--warn)/8 px-3 py-2.5 text-[length:var(--fs-sm)]">
           <b>Token'ı ŞİMDİ kopyala — bir daha gösterilmeyecek:</b>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 6 }}>
-            <code className="mono" style={{
-              padding: '4px 8px', background: 'var(--bg2)', borderRadius: 4,
-              overflowWrap: 'anywhere', flex: 1,
-            }}>{fresh}</code>
+          <div className="mt-1.5 flex items-center gap-2">
+            <code className="mono flex-1 rounded-sm bg-(--bg2) px-2 py-1 [overflow-wrap:anywhere]">{fresh}</code>
             <Button variant="secondary" size="sm"
               onClick={async () => {
                 const ok = await copyToClipboard(fresh);
@@ -129,51 +146,17 @@ export function ApiTokensTab() {
               düz HTTP'de (secure context yok) fallback de reddedilebilir.
               Operatör kopyaladığını sanıp sekmeyi kapatırsa token gider. */}
           {copyOk === false && (
-            <div style={{ marginTop: 6, color: 'var(--err)' }}>
+            <div className="mt-1.5 text-(--err)">
               Kopyalanamadı — token'ı yukarıdan elle seçip kopyala.
             </div>
           )}
         </div>
       )}
 
-      <div className="table-wrap">
-        <table {...dt.tableProps}>
-          <DataTableColgroup dt={dt} />
-          <DataTableHead dt={dt} />
-          <tbody>
-            {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...tableState} /> : dt.sortedRows.map(t => (
-              <tr key={t.id} style={{ opacity: t.revoked ? 0.55 : 1 }}>
-                <DataTableCell dt={dt} col="name" row={t} value={t.name} className="cell-strong" />
-                <DataTableCell dt={dt} col="prefix" row={t} value={t.prefix} />
-                <DataTableCell dt={dt} col="role" row={t}><span className="badge b-gray">{t.role}</span></DataTableCell>
-                <DataTableCell dt={dt} col="createdBy" row={t} value={t.createdBy} />
-                {/* v0.10.942 — zaman damgası mono kalır: S2 yalnız sayı hücresini kapsar. */}
-                <DataTableCell dt={dt} col="createdAt" row={t} value={tsLong(t.createdAt)} className="mono" />
-                <DataTableCell dt={dt} col="revoked" row={t}>{t.revoked
-                  ? <span className="badge b-gray">REVOKED</span>
-                  : <span className="badge b-gray">ACTIVE</span>}</DataTableCell>
-                <DataTableCell dt={dt} col="actions" row={t}>
-                  {!t.revoked && (
-                    <Button variant="danger" size="sm"
-                      onClick={async () => {
-                        if (!await confirm({
-                          title: 'Token iptal edilsin mi?',
-                          body: <><b>{t.name}</b> iptal edilecek. Bu token’ı kullanan
-                            sistemler <b>ANINDA</b> erişimi kaybeder; iptal geri alınamaz.</>,
-                          confirmLabel: 'Token’ı iptal et',
-                          danger: true,
-                        })) return;
-                        try { await api.revokeAPIToken(t.id); load(); }
-                        catch (e) { setMsg({ kind: 'err', text: e instanceof Error ? e.message : String(e) }); }
-                      }}>
-                      İptal et
-                    </Button>
-                  )}
-                </DataTableCell>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="table-wrap [&_tr:has([data-revoked])]:opacity-55">
+        <DataTable<APIToken> storageKey="settings-api-tokens" columns={TOKEN_COLS} rows={tokens ?? []}
+          sort={{ initial: { id: 'createdAt', dir: 'desc' } }} state={tableState}
+          getRowKey={t => t.id} renderCell={cell} />
       </div>
       {msg && <FlashBox kind={msg.kind}>{msg.text}</FlashBox>}
     </div>

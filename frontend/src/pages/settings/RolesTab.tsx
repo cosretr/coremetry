@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Spinner, Empty } from '@/components/Spinner';
-import { Button, ButtonGroup, Modal, Stack, useConfirm } from '@/components/ui';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef } from '@/components/ui/DataTable';
+import { Button } from '@/components/shadcn/button';
+import { ButtonGroup } from '@/components/shadcn/button-group';
+import { Field, CheckboxField } from '@/components/coremetry/Field';
+import { useConfirm } from '@/components/coremetry/Confirm';
+import { DataTable, type ColumnDef } from '@/components/coremetry/DataTable';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/coremetry/overlay/Dialog';
+import { cn } from '@/lib/cn';
 import { api, type CustomRole, type AvailablePage } from '@/lib/api';
 
 // v0.9.871 (tutarlılık denetimi BT13) — paylaşılan primitif. Kolon kümesi,
@@ -18,6 +23,9 @@ const ROLE_COLS: ColumnDef<CustomRole>[] = [
     tone: r => (r.pages.length === 0 ? 'err' : 'muted') },
   { id: 'actions', label: 'Actions', kind: 'actions', width: 160, minWidth: 160 },
 ];
+
+// Sonuç/hata kutusu — eski satır içi color-mix değerleri, utility olarak.
+const NOTE_ERR = 'text-(--err) bg-(--err)/8 border-(--err)/30';
 
 // ── Custom roles tab ────────────────────────────────────────────────────────
 //
@@ -73,65 +81,50 @@ export function CustomRolesTab() {
     }
   };
 
-  // Koşulsuz hook — erken dönüşlerin ÜSTÜNDE kalmalı (rules-of-hooks).
-  const dt = useDataTable<CustomRole>({
-    storageKey: 'settings-custom-roles', columns: ROLE_COLS, rows: roles ?? [],
-    initialSort: { id: 'name', dir: 'asc' },
-  });
-
   if (roles === undefined || pages === undefined) return <Spinner />;
   if (roles === null || pages === null) {
     return <Empty icon="!" title="Failed to load custom roles">Reload the page.</Empty>;
   }
 
+  const cell = (r: CustomRole, col: ColumnDef<CustomRole>) => {
+    switch (col.id) {
+      case 'name': return <span className="font-semibold">{r.name}</span>;
+      case 'pages': return r.pages.length === 0 ? '(none — user will see no nav)' : r.pages.join(', ');
+      case 'actions': return (
+        <ButtonGroup aria-label={`${r.name} actions`}>
+          <Button variant="secondary" size="sm" onClick={() => setEditing(r)}>Edit</Button>
+          <Button variant="ghost-danger" size="sm" onClick={() => void remove(r.name)} disabled={busy === r.name}>
+            Delete
+          </Button>
+        </ButtonGroup>
+      );
+      default: return null;
+    }
+  };
+
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 12 }}>
-        <span style={{ fontSize: 12, color: 'var(--text2)', flex: 1 }}>
+      <div className="mb-3 flex items-baseline gap-3">
+        <span className="flex-1 text-[length:var(--fs-sm)] text-(--text2)">
           Custom roles subset the <b>viewer</b> base role to a chosen set of
           pages — e.g. a "readonly-3" that only sees traces, metrics, logs.
           Admin / editor roles are unaffected.
         </span>
-        <Button variant="primary" onClick={() => setCreating(true)}>+ New role</Button>
+        <Button size="sm" onClick={() => setCreating(true)}>+ New role</Button>
       </div>
 
       {msg && (
-        <div style={{
-          marginBottom: 10, padding: '6px 10px', borderRadius: 4,
-          fontSize: 13,
-          color: msg.kind === 'ok' ? 'var(--ok)' : 'var(--err)',
-          background: msg.kind === 'ok' ? 'color-mix(in srgb, var(--ok) 8%, transparent)' : 'color-mix(in srgb, var(--err) 8%, transparent)',
-          border: `1px solid ${msg.kind === 'ok' ? 'color-mix(in srgb, var(--ok) 30%, transparent)' : 'color-mix(in srgb, var(--err) 30%, transparent)'}`,
-        }}>{msg.text}</div>
+        <div className={cn('mb-2.5 rounded-sm border px-2.5 py-1.5 text-[length:var(--fs-md)]', msg.kind === 'ok' ? 'text-(--ok) bg-(--ok)/8 border-(--ok)/30' : NOTE_ERR)}>
+          {msg.text}
+        </div>
       )}
 
       {/* v0.10.954 — tablo standardı T12: boş hâl tablonun İÇİNDE, başlık
           durur (rol + sayfa listesi yükleme kapısı yukarıda kalır). */}
       <div className="table-wrap">
-        <table {...dt.tableProps}>
-          <DataTableColgroup dt={dt} />
-          <DataTableHead dt={dt} />
-          <tbody>
-            {roles.length === 0 ? (
-              <DataTableState dt={dt} kind="empty"
-                message="Henüz özel rol yok — bir viewer'a sayfaların yalnız bir alt kümesini açmak için bir tane oluştur." />
-            ) : dt.sortedRows.map(r => (
-              <tr key={r.name}>
-                <DataTableCell dt={dt} col="name" row={r} value={r.name} className="cell-strong" />
-                <DataTableCell dt={dt} col="pages" row={r}
-                  value={r.pages.length === 0 ? '(none — user will see no nav)' : r.pages.join(', ')} />
-                <DataTableCell dt={dt} col="actions" row={r}>
-                  <ButtonGroup aria-label={`${r.name} actions`} size="sm">
-                    <Button variant="secondary" onClick={() => setEditing(r)}>Edit</Button>
-                    <Button variant="ghost-danger" onClick={() => void remove(r.name)} disabled={busy === r.name}>
-                      Delete
-                    </Button>
-                  </ButtonGroup>
-                </DataTableCell>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <DataTable<CustomRole> storageKey="settings-custom-roles" columns={ROLE_COLS} rows={roles}
+          sort={{ initial: { id: 'name', dir: 'asc' } }} getRowKey={r => r.name} renderCell={cell}
+          state={{ kind: 'empty', message: "Henüz özel rol yok — bir viewer'a sayfaların yalnız bir alt kümesini açmak için bir tane oluştur." }} />
       </div>
 
       {(creating || editing) && (
@@ -191,79 +184,50 @@ function RoleEditorModal({ existing, pages, onClose, onSaved }: {
     }
   };
 
+  // Faz 2 dilim 1 R10 (D8) — ui/Modal → coremetry Dialog (480px = eski `md`).
   return (
-    <Modal
-      open
-      onClose={onClose}
-      title={existing ? `Edit role — ${existing.name}` : 'New custom role'}
-      size="md"
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button variant="primary" type="submit" form="role-form" loading={busy}>Save</Button>
-        </>
-      }>
-      <form id="role-form" onSubmit={submit}>
-        <Stack gap={3}>
+    <Dialog open onOpenChange={o => { if (!o) onClose(); }}>
+      <DialogContent className="sm:max-w-[480px]" aria-describedby={undefined}>
+        <DialogHeader>
+          <DialogTitle>{existing ? `Edit role — ${existing.name}` : 'New custom role'}</DialogTitle>
+        </DialogHeader>
+        <form id="role-form" onSubmit={submit} className="flex min-w-0 flex-col gap-3">
+          <Field label="Role name" value={name} onChange={e => setName(e.target.value)} required
+            disabled={!!existing} placeholder="e.g. readonly-3, sre-readonly, audit-only"
+            hint="Cannot be admin/editor/viewer." />
           <div>
-            <label style={{ display: 'block', fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>
-              Role name
-            </label>
-            <input
-              value={name}
-              onChange={e => setName(e.target.value)}
-              required
-              disabled={!!existing}
-              style={{ width: '100%' }}
-              placeholder="e.g. readonly-3, sre-readonly, audit-only" />
-            <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
-              Cannot be admin/editor/viewer.
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 6 }}>
+            <div className="mb-1.5 text-[length:var(--fs-sm)] text-(--text2)">
               Pages this role can see ({selected.size} selected)
             </div>
-            <div style={{
-              border: '1px solid var(--border)', borderRadius: 4,
-              padding: 10, maxHeight: 320, overflowY: 'auto',
-            }}>
+            <div className="max-h-80 overflow-y-auto rounded-sm border border-(--border) p-2.5">
               {[...byGroup.entries()].map(([g, items]) => (
-                <div key={g} style={{ marginBottom: 8 }}>
+                <div key={g} className="mb-2">
                   {g !== '_ungrouped' && (
-                    <div style={{
-                      fontSize: 10, fontWeight: 700, color: 'var(--text3)',
-                      textTransform: 'uppercase', letterSpacing: 0.6,
-                      marginBottom: 4,
-                    }}>{g.replace('navGroup.', '')}</div>
+                    <div className="mb-1 text-[length:var(--fs-xs)] font-bold tracking-[0.6px] text-(--text3) uppercase">
+                      {g.replace('navGroup.', '')}
+                    </div>
                   )}
                   {items.map(p => (
-                    <label key={p.id} style={{
-                      display: 'flex', alignItems: 'center', gap: 8,
-                      padding: '3px 4px', fontSize: 13, cursor: 'pointer',
-                    }}>
-                      <input type="checkbox"
-                        checked={selected.has(p.id)}
-                        onChange={() => toggle(p.id)} />
-                      <code style={{ fontSize: 11, color: 'var(--text3)' }}>{p.id}</code>
-                      <span style={{ color: 'var(--text)' }}>
-                        {p.label.replace('nav.', '')}
-                      </span>
-                    </label>
+                    <CheckboxField key={p.id} className="px-1 py-[3px]"
+                      checked={selected.has(p.id)} onCheckedChange={() => toggle(p.id)}
+                      label={<>
+                        <code className="text-[length:var(--fs-xs)] text-(--text3)">{p.id}</code>{' '}
+                        <span className="text-[length:var(--fs-md)] text-(--text)">{p.label.replace('nav.', '')}</span>
+                      </>} />
                   ))}
                 </div>
               ))}
             </div>
           </div>
           {error && (
-            <div style={{
-              color: 'var(--err)', fontSize: 12,
-              padding: '4px 8px', background: 'color-mix(in srgb, var(--err) 8%, transparent)',
-              border: '1px solid color-mix(in srgb, var(--err) 30%, transparent)', borderRadius: 4,
-            }}>{error}</div>
+            <div role="alert" className={cn('rounded-sm border px-2 py-1 text-[length:var(--fs-sm)]', NOTE_ERR)}>{error}</div>
           )}
-        </Stack>
-      </form>
-    </Modal>
+        </form>
+        <DialogFooter>
+          <Button variant="secondary" size="sm" onClick={onClose}>Cancel</Button>
+          <Button size="sm" type="submit" form="role-form" loading={busy}>Save</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

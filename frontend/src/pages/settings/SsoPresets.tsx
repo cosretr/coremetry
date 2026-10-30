@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { TabStrip } from '@/components/ui/TabStrip'; // v0.10.456 (D5)
-import { Button } from '@/components/ui/Button';
-import { DisclosureButton } from '@/components/ui';
+import { ChevronRight } from 'lucide-react';
+import { Button } from '@/components/shadcn/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/shadcn/tabs';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/shadcn/collapsible';
 import { copyToClipboard } from '@/lib/clipboard';
 
 // SsoPresets — sağlayıcı başına örnek ayar (OIDC + trusted-header proxy
@@ -11,15 +12,22 @@ import { copyToClipboard } from '@/lib/clipboard';
 // issuer URL kalıbı, önerilen kapsamlar, sağlayıcıya özgü notlar (Azure
 // tenant yer tutucusu, Keycloak realm parçası, oauth2-proxy CIDR'ı).
 // Trusted-header kipi hâlâ yalnız config.yaml'dan kurulur.
+// Faz 2 dilim 1 R10 — DisclosureButton → shadcn collapsible (tetikleyici
+// aynı `section` anatomisi: tam genişlik, 14px iç boşluk, açıkken alt
+// ayırıcı ARIA/state'ten; ▸/▾ glifi → lucide chevron, D12), TabStrip →
+// shadcn tabs (`line`). Kapalı gelir; gövde yalnız açıkken bağlanır.
 export function SsoPresets() {
   const [open, setOpen] = useState(false);
   return (
-    <div className="sso-presets">
-      <DisclosureButton anatomy="section" expanded={open} onClick={() => setOpen(o => !o)}>
+    <Collapsible open={open} onOpenChange={setOpen} className="mt-6 rounded-lg border border-(--border)">
+      <CollapsibleTrigger className="group/dsc flex w-full cursor-pointer items-center gap-3 border-b border-transparent bg-transparent p-3.5 text-left text-[length:var(--fs-sm)] font-semibold text-(--text2) transition-colors hover:text-(--text) data-[state=open]:border-(--divider)">
+        <ChevronRight aria-hidden="true" className="size-3.5 shrink-0 transition-transform group-data-[state=open]/dsc:rotate-90" />
         Örnek IdP ayarları
-      </DisclosureButton>
-      {open && <SsoPresetsBody />}
-    </div>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <SsoPresetsBody />
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 
@@ -160,39 +168,37 @@ function SsoPresetsBody() {
     }
   };
   return (
-    <div className="sso-presets__body">
+    <div className="px-4 py-3">
       <p className="sso-note">
         Sağlayıcıya göre örnek değerler. OIDC alanlarını yukarıdaki forma girmeniz yeterli;
         YAML yalnız <code>config.yaml</code> / Helm ile kurmak isteyenler ve Settings'ten
         yönetilmeyen trusted-header kipi için.
       </p>
-      <TabStrip ariaLabel="SSO sağlayıcı ön ayarları" value={activeKey} onChange={setActiveKey}
-        tabs={presets.map(p => ({ key: p.key, label: p.label }))} />
-      <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 10, lineHeight: 1.6 }}>
-        {active.description}
-      </div>
-      <div style={{ position: 'relative' }}>
-        {/* v0.10.928 — <pre> üstünde yüzer: dolgusuz secondary'de kod satırı
-            etiketin altından akmasın diye opak (is-overlay). */}
-        <Button variant="secondary" size="sm" onClick={copy} className="is-overlay"
-          style={{ position: 'absolute', top: 8, right: 8 }}>
-          {copied ? '✓ copied' : 'Copy'}
-        </Button>
-        <pre style={{
-          margin: 0, padding: 14, background: 'var(--bg)',
-          border: '1px solid var(--border)', borderRadius: 6,
-          lineHeight: 1.6, overflowX: 'auto',
-        }}>
-          <code>{active.yaml}</code>
-        </pre>
-      </div>
-      <div style={{
-        marginTop: 14, padding: '10px 12px', borderRadius: 6,
-        background: 'var(--bg2)', border: '1px solid var(--border)',
-        fontSize: 12, color: 'var(--text2)', lineHeight: 1.6,
-      }}>
+      <Tabs value={activeKey} onValueChange={setActiveKey}>
+        <TabsList variant="line" aria-label="SSO sağlayıcı ön ayarları" className="mb-2.5 max-w-full justify-start overflow-x-auto">
+          {presets.map(p => <TabsTrigger key={p.key} value={p.key} className="flex-none">{p.label}</TabsTrigger>)}
+        </TabsList>
+        {presets.map(p => (
+          <TabsContent key={p.key} value={p.key}>
+            <div className="mb-2.5 text-[length:var(--fs-sm)] leading-relaxed text-(--text2)">
+              {p.description}
+            </div>
+            <div className="relative">
+              {/* v0.10.928 — <pre> üstünde yüzer: secondary dolgulu (opak), kod
+                  satırı etiketin altından akmaz. */}
+              <Button variant="secondary" size="sm" onClick={() => { void copy(); }} className="absolute top-2 right-2">
+                {copied ? '✓ copied' : 'Copy'}
+              </Button>
+              <pre className="m-0 overflow-x-auto rounded-md border border-(--border) bg-(--bg) p-3.5 leading-relaxed">
+                <code>{p.yaml}</code>
+              </pre>
+            </div>
+          </TabsContent>
+        ))}
+      </Tabs>
+      <div className="mt-3.5 rounded-md border border-(--border) bg-(--bg2) px-3 py-2.5 text-[length:var(--fs-sm)] leading-relaxed text-(--text2)">
         <b>Notlar:</b>
-        <ul style={{ paddingLeft: 18, margin: '6px 0 0' }}>
+        <ul className="mt-1.5 mb-0 pl-[18px]">
           <li>Settings'te kaydedilen OIDC ayarı <code>config.yaml</code>'daki <code>auth.oidc</code>'nin önüne geçer; config.yaml'daki değişiklik yalnız Settings'te kayıt yokken ve restart'la uygulanır.</li>
           <li>Local username/password login stays available alongside OIDC so admins always have a fallback.</li>
           <li>Trusted-header mode <b>requires</b> <code>trusted_proxies</code> — empty list = boot refused. Source-IP gate prevents header spoofing from any caller outside the proxy mesh.</li>

@@ -1,11 +1,12 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Button, Modal, Stack, useConfirm } from '@/components/ui';
+import { Button } from '@/components/shadcn/button';
+import { Field, SelectField, CheckboxField } from '@/components/coremetry/Field';
+import { StatusBadge } from '@/components/coremetry/StatusBadge';
+import { useConfirm } from '@/components/coremetry/Confirm';
+import { DataTable, type ColumnDef, type DataTableStateInput } from '@/components/coremetry/DataTable';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/coremetry/overlay/Dialog';
+import { cn } from '@/lib/cn';
 import { api, type MaintenanceWindow } from '@/lib/api';
-import { Field, Row } from './shared';
-import {
-  useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState,
-  type ColumnDef, type DataTableStateProps,
-} from '@/components/ui/DataTable';
 import { tsLong } from '@/lib/utils';
 import { formatDateTime, parseDateTime } from '@/lib/rangePicker';
 
@@ -46,6 +47,19 @@ const WINDOW_COLS: ColumnDef<MaintenanceWindow>[] = [
     sortValue: w => STATUS_RANK[maintenanceStatus(w, Date.now() * 1e6)], width: 110 },
   { id: 'actions',  label: 'Actions',  kind: 'actions', width: 150, minWidth: 150 },
 ];
+
+// v0.10.929 (K5) — DISABLED/PAST geçmiş kayıt: nötr (eskiden kırmızı/yeşil).
+// ACTIVE amber kalır: şu an uyarıları susturan pencere bir sapma.
+// Faz 2 dilim 1 R10 — `.badge b-*` + satır içi 9px → StatusBadge `sm`.
+const STATUS_BADGE: Record<WindowStatus, { status: 'unknown' | 'warn' | 'info'; label: string }> = {
+  disabled: { status: 'unknown', label: 'DISABLED' },
+  active:   { status: 'warn',    label: 'ACTIVE' },
+  upcoming: { status: 'info',    label: 'UPCOMING' },
+  past:     { status: 'unknown', label: 'PAST' },
+};
+
+// Sonuç/hata kutusu — eski satır içi color-mix değerleri, utility olarak.
+const NOTE_ERR = 'text-(--err) bg-(--err)/8 border-(--err)/30';
 
 // ── Maintenance windows tab ────────────────────────────────────────────────
 //
@@ -89,15 +103,11 @@ export function MaintenanceTab() {
   };
 
   const now = Date.now() * 1e6;
-  const dt = useDataTable<MaintenanceWindow>({
-    storageKey: 'settings-maintenance-windows', columns: WINDOW_COLS, rows: items ?? [],
-    initialSort: { id: 'starts', dir: 'desc' },
-  });
   // v0.10.954 — tablo standardı T12: yükleniyor / hata / boş tablonun
   // İÇİNDE, başlık durur; ↻ aynı `load`. v0.9.865 (MT1): hata satırı "boş
   // liste değil" uyarısını ve en pahalı sonucu (aktif pencere hâlâ
   // uyarıları susturuyor olabilir) taşımaya devam eder.
-  const tableState: Omit<DataTableStateProps<MaintenanceWindow>, 'dt'> =
+  const tableState: DataTableStateInput<MaintenanceWindow> =
     items === undefined ? { kind: 'loading' }
     : items === null ? {
         kind: 'error', onRetry: load,
@@ -108,66 +118,50 @@ export function MaintenanceTab() {
         message: 'Bakım penceresi yok — planlı bir deploy öncesi etkilenen servislerde uyarıları susturmak için bir pencere tanımla. '
           + 'Pencereler kendiliğinden sona erer, temizlik gerekmez.',
       };
+
+  const cell = (w: MaintenanceWindow, col: ColumnDef<MaintenanceWindow>) => {
+    switch (col.id) {
+      case 'service': return <span className="font-semibold">{w.service}</span>;
+      // v0.10.942 — büyük harf satır içi textTransform yerine değerde (ASCII enum, lang=en: aynı glifler).
+      case 'severity': return <span className="font-mono">{w.severity.toUpperCase()}</span>;
+      case 'starts': return <span className="font-mono">{tsLong(w.startAt)}</span>;
+      case 'ends': return <span className="font-mono">{tsLong(w.endAt)}</span>;
+      case 'reason': return w.reason;
+      case 'by': return w.createdBy;
+      case 'status': {
+        const b = STATUS_BADGE[maintenanceStatus(w, now)];
+        return <StatusBadge status={b.status} size="sm">{b.label}</StatusBadge>;
+      }
+      case 'actions': return !w.disabled && (
+        <Button variant="ghost-danger" size="sm" onClick={() => { void del(w.id); }}>End / delete</Button>
+      );
+      default: return null;
+    }
+  };
+
   return (
     <div>
-      <div style={{ marginBottom: 12, fontSize: 12, color: 'var(--text2)' }}>
+      <div className="mb-3 text-[length:var(--fs-sm)] text-(--text2)">
         While an active window matches a problem's <code>(service, severity)</code>,
         the live channel fan-out is suppressed. Problems still open + auto-resolve
         so the post-window review on <code>/anomalies</code> + <code>/incidents</code>
         is intact. Service supports <code>*</code> (all), an exact name, or a
         <code>name*</code> prefix.
       </div>
-      <div className="controls" style={{ marginBottom: 12 }}>
-        <Button variant="primary" onClick={() => setCreating(true)}>+ New maintenance window</Button>
-        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5,
-                        color: 'var(--text2)', cursor: 'pointer', marginLeft: 'auto' }}>
-          <input type="checkbox" checked={showAll}
-                 onChange={e => setShowAll(e.target.checked)} />
-          Show past / disabled (last 30d)
-        </label>
+      <div className="controls mb-3">
+        <Button size="sm" onClick={() => setCreating(true)}>+ New maintenance window</Button>
+        <CheckboxField className="ml-auto text-(--text2)" checked={showAll} onCheckedChange={setShowAll}
+          label="Show past / disabled (last 30d)" />
       </div>
       {msg && (
-        <div style={{
-          marginBottom: 10, padding: '6px 10px', borderRadius: 4, fontSize: 12,
-          color: msg.kind === 'ok' ? 'var(--ok)' : 'var(--err)',
-          background: msg.kind === 'ok' ? 'color-mix(in srgb, var(--ok) 10%, transparent)' : 'color-mix(in srgb, var(--err) 8%, transparent)',
-          border: `1px solid ${msg.kind === 'ok' ? 'color-mix(in srgb, var(--ok) 35%, transparent)' : 'color-mix(in srgb, var(--err) 30%, transparent)'}`,
-        }}>{msg.text}</div>
+        <div className={cn('mb-2.5 rounded-sm border px-2.5 py-1.5 text-[length:var(--fs-sm)]', msg.kind === 'ok' ? 'text-(--ok) bg-(--ok)/10 border-(--ok)/35' : NOTE_ERR)}>
+          {msg.text}
+        </div>
       )}
       <div className="table-wrap">
-        <table {...dt.tableProps}>
-          <DataTableColgroup dt={dt} />
-          <DataTableHead dt={dt} />
-          <tbody>
-            {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...tableState} /> : dt.sortedRows.map(w => {
-              const status = maintenanceStatus(w, now);
-              return (
-                <tr key={w.id}>
-                  <DataTableCell dt={dt} col="service" row={w} value={w.service} className="cell-strong" />
-                  {/* v0.10.942 — büyük harf satır içi textTransform yerine değerde (ASCII enum, lang=en: aynı glifler). */}
-                  <DataTableCell dt={dt} col="severity" row={w} value={w.severity.toUpperCase()} className="mono" />
-                  <DataTableCell dt={dt} col="starts" row={w} value={tsLong(w.startAt)} className="mono" />
-                  <DataTableCell dt={dt} col="ends" row={w} value={tsLong(w.endAt)} className="mono" />
-                  <DataTableCell dt={dt} col="reason" row={w} value={w.reason} />
-                  <DataTableCell dt={dt} col="by" row={w} value={w.createdBy} />
-                  <DataTableCell dt={dt} col="status" row={w}>
-                    {/* v0.10.929 (K5) — DISABLED/PAST geçmiş kayıt: nötr (eskiden kırmızı/yeşil).
-                        ACTIVE amber kalır: şu an uyarıları susturan pencere bir sapma. */}
-                    {status === 'disabled' ? <span className="badge b-gray" style={{ fontSize: 9 }}>DISABLED</span>
-                      : status === 'active'   ? <span className="badge b-warn" style={{ fontSize: 9 }}>ACTIVE</span>
-                      : status === 'upcoming' ? <span className="badge b-info" style={{ fontSize: 9 }}>UPCOMING</span>
-                      :                         <span className="badge b-gray" style={{ fontSize: 9 }}>PAST</span>}
-                  </DataTableCell>
-                  <DataTableCell dt={dt} col="actions" row={w}>
-                    {!w.disabled && (
-                      <Button variant="danger" size="sm" onClick={() => del(w.id)}>End / delete</Button>
-                    )}
-                  </DataTableCell>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <DataTable<MaintenanceWindow> storageKey="settings-maintenance-windows" columns={WINDOW_COLS} rows={items ?? []}
+          sort={{ initial: { id: 'starts', dir: 'desc' } }} state={tableState}
+          getRowKey={w => w.id} renderCell={cell} />
       </div>
       {creating && (
         <NewMaintenanceModal onClose={() => setCreating(false)}
@@ -221,64 +215,44 @@ function NewMaintenanceModal({ onClose, onCreated }: {
     }
   };
 
+  // Faz 2 dilim 1 R10 (D8) — ui/Modal → coremetry Dialog (480px = eski `md`);
+  // başlık, × kapat, odak tuzağı, Esc yığını Dialog'un.
   return (
-    <Modal open onClose={onClose} title="New maintenance window" size="md"
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button variant="primary" type="submit" form="new-mw-form" loading={busy}>Create</Button>
-        </>
-      }>
-      <form id="new-mw-form" onSubmit={submit}>
-        <Stack gap={3}>
-          <Field label='Service ("*" for global · exact name · "payment*" prefix)'>
-            <input required value={service}
-              onChange={e => setService(e.target.value)}
-              style={{ width: '100%' }} />
-          </Field>
-          <Field label="Severity">
-            <select value={severity} onChange={e => setSeverity(e.target.value)}
-              style={{ width: '100%' }}>
-              <option value="*">All severities</option>
-              <option value="info">info only</option>
-              <option value="warning">warning only</option>
-              <option value="critical">critical only</option>
-            </select>
-          </Field>
-          <Row>
-            <Field label="Starts at" flex={1}>
-              <input type="text" required value={startAt} spellCheck={false}
-                placeholder="2026-08-10 14:00:00" inputMode="numeric"
-                onChange={e => setStartAt(e.target.value)}
-                style={{
-                  width: '100%', fontFamily: 'var(--font-mono)',
-                  ...(parseDateTime(startAt) === null ? { borderColor: 'var(--err)' } : {}),
-                }} />
-            </Field>
-            <Field label="Ends at" flex={1}>
-              <input type="text" required value={endAt} spellCheck={false}
-                placeholder="2026-08-10 15:00:00" inputMode="numeric"
-                onChange={e => setEndAt(e.target.value)}
-                style={{
-                  width: '100%', fontFamily: 'var(--font-mono)',
-                  ...(parseDateTime(endAt) === null ? { borderColor: 'var(--err)' } : {}),
-                }} />
-            </Field>
-          </Row>
-          <Field label='Reason (optional) — e.g. "deploy payment-api v2.34"'>
-            <input value={reason}
-              onChange={e => setReason(e.target.value)}
-              style={{ width: '100%' }} />
-          </Field>
+    <Dialog open onOpenChange={o => { if (!o) onClose(); }}>
+      <DialogContent className="sm:max-w-[480px]" aria-describedby={undefined}>
+        <DialogHeader>
+          <DialogTitle>New maintenance window</DialogTitle>
+        </DialogHeader>
+        <form id="new-mw-form" onSubmit={submit} className="flex flex-col gap-3">
+          <Field label='Service ("*" for global · exact name · "payment*" prefix)' required value={service}
+            onChange={e => setService(e.target.value)} />
+          <SelectField label="Severity" value={severity} onChange={e => setSeverity(e.target.value)}>
+            <option value="*">All severities</option>
+            <option value="info">info only</option>
+            <option value="warning">warning only</option>
+            <option value="critical">critical only</option>
+          </SelectField>
+          <div className="flex gap-3">
+            <Field label="Starts at" className="flex-1" controlClassName="font-mono" type="text" required value={startAt}
+              spellCheck={false} placeholder="2026-08-10 14:00:00" inputMode="numeric"
+              aria-invalid={parseDateTime(startAt) === null}
+              onChange={e => setStartAt(e.target.value)} />
+            <Field label="Ends at" className="flex-1" controlClassName="font-mono" type="text" required value={endAt}
+              spellCheck={false} placeholder="2026-08-10 15:00:00" inputMode="numeric"
+              aria-invalid={parseDateTime(endAt) === null}
+              onChange={e => setEndAt(e.target.value)} />
+          </div>
+          <Field label='Reason (optional) — e.g. "deploy payment-api v2.34"' value={reason}
+            onChange={e => setReason(e.target.value)} />
           {error && (
-            <div style={{
-              padding: 8, borderRadius: 4, fontSize: 12,
-              color: 'var(--err)', background: 'color-mix(in srgb, var(--err) 8%, transparent)',
-              border: '1px solid color-mix(in srgb, var(--err) 30%, transparent)',
-            }}>{error}</div>
+            <div role="alert" className={cn('rounded-sm border p-2 text-[length:var(--fs-sm)]', NOTE_ERR)}>{error}</div>
           )}
-        </Stack>
-      </form>
-    </Modal>
+        </form>
+        <DialogFooter>
+          <Button variant="secondary" size="sm" onClick={onClose}>Cancel</Button>
+          <Button size="sm" type="submit" form="new-mw-form" loading={busy}>Create</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -9,6 +9,7 @@
 // preferred_username; işaretlenip claim değiştirilince PUT gövdesi
 // usernameFallback:true + usernameClaim taşır; boş claim varsayılana döner;
 // form yardımcıları gidiş-dönüş.
+import '@/test/radixJsdom'; // Faz 2 dilim 1 R10: Radix Checkbox (form içi) jsdom eksikleri
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -111,13 +112,13 @@ describe('SsoTab — e-posta yoksa kullanıcı adıyla eşleştir (v0.10.1121)',
   it('varsayılan kapalı: kapalı açıklaması görünür, claim kutusu pasif', async () => {
     h.get.mockResolvedValue(snap());
     const el = await mount();
-    expect(box(el).checked).toBe(false);
+    expect(box(el).getAttribute('aria-checked')).toBe('false');
     expect(el.textContent).toContain(t('sso.usernameFallback.off', 'tr'));
     expect(el.textContent).not.toContain(t('sso.usernameFallback.on', 'tr'));
     expect(claimBox(el).disabled).toBe(true);
     expect(claimBox(el).value).toBe('preferred_username');
     expect(adminBox(el).disabled).toBe(true);
-    expect(adminBox(el).checked).toBe(false);
+    expect(adminBox(el).getAttribute('aria-checked')).toBe('false');
   });
 
   it('admin açık-seçimi: yalnız eşleştirme açıkken seçilebilir, kırmızı uyarı, gövdeye gider', async () => {
@@ -136,7 +137,7 @@ describe('SsoTab — e-posta yoksa kullanıcı adıyla eşleştir (v0.10.1121)',
     // Eşleştirme kapanınca admin kutusu pasif ve gövdeye false gider.
     act(() => { box(el).click(); });
     expect(adminBox(el).disabled).toBe(true);
-    expect(adminBox(el).checked).toBe(false);
+    expect(adminBox(el).getAttribute('aria-checked')).toBe('false');
     await save(el);
     expect(h.put.mock.calls[1][0]).toMatchObject({ usernameFallback: false, usernameFallbackAllowAdmin: false });
   });
@@ -156,7 +157,7 @@ describe('SsoTab — e-posta yoksa kullanıcı adıyla eşleştir (v0.10.1121)',
     h.put.mockImplementation(s => Promise.resolve(snap({ usernameFallback: s.usernameFallback, usernameClaim: s.usernameClaim })));
     const el = await mount();
     act(() => { box(el).click(); });
-    expect(box(el).checked).toBe(true);
+    expect(box(el).getAttribute('aria-checked')).toBe('true');
     expect(el.textContent).toContain(t('sso.usernameFallback.on', 'tr'));
     expect(el.textContent).toContain(t('sso.usernameFallback.risk', 'tr'));
     expect(claimBox(el).disabled).toBe(false);

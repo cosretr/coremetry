@@ -1,8 +1,11 @@
-import { useState, type FormEvent } from 'react';
+import { useState, type FormEvent, type ReactNode } from 'react';
 import { Spinner } from '@/components/Spinner';
-import { Button, Field, SelectField, TextareaField } from '@/components/ui';
+import { Button } from '@/components/shadcn/button';
+import { Field, SelectField, TextareaField, CheckboxField } from '@/components/coremetry/Field';
+import { ActionRow } from '@/components/coremetry/ActionRow';
 import { KeyValue, KeyValueRow } from '@/components/coremetry/KeyValue';
 import { useAuth } from '@/components/AuthProvider';
+import { cn } from '@/lib/cn';
 import { api } from '@/lib/api';
 import { useT } from '@/lib/i18n';
 import type { OidcSettingsSnapshot, OidcTestResult } from '@/lib/types';
@@ -44,6 +47,30 @@ import { SsoPresets } from './SsoPresets';
 // Admin olmayan: ayar ucu admin-only (IdP adresi / client id hassas); form
 // yine BOŞ çizilmez — public /api/auth/config'ten SSO'nun açık olup
 // olmadığı ve düğme etiketi gelir, alanlar salt-okunur.
+//
+// Faz 2 dilim 1 R10 — shadcn/coremetry: ui Field ailesi → coremetry Field
+// (D1), yerel onay kutuları → CheckboxField (D13, pasifken etiket sönük),
+// Kaydet satırı ActionRow (D4). `.sso-*` sayfa sınıfları utility oldu;
+// yalnız AI SRE ile paylaşılan dört sınıf (settings-pane / sso-title /
+// sso-note / sso-fieldset) kalır (R12'de birlikte gider). Alan sırası,
+// metinler, kaydetme gövdesi aynı (secret sözleşmesi: SsoTab.secret.test).
+
+// Eski `.sso-row` (sarar, 10px aralık) + `.sso-row > .field` (1 1 260px).
+const ROW = 'mb-2.5 flex flex-wrap gap-2.5';
+const GROW = 'min-w-0 flex-[1_1_260px]';
+// Eski `.sso-check` (12px alt boşluk) / `--tight` (6px).
+const CHECK = 'mb-3';
+const CHECK_TIGHT = 'mb-1.5';
+// Kırmızı / amber uyarı satırları (eski .sso-tls__warn / .sso-perm__warn).
+const WARN_ERR = 'mb-2 text-[length:var(--fs-sm)] text-(--err)';
+const WARN_AMBER = 'mb-2 text-[length:var(--fs-sm)] text-(--warn)';
+const MONO_XS = 'font-mono text-[length:var(--fs-xs)] md:text-[length:var(--fs-xs)]';
+
+/** "· kayıtlı" — etiket satırında, --text3 (K5: saklı hâl nötr). */
+function StoredMark({ on }: { on: boolean }): ReactNode {
+  return on ? <span className="text-[length:var(--fs-sm)] text-(--text3)">{' · kayıtlı'}</span> : null;
+}
+
 export function SSOTab() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
@@ -111,31 +138,28 @@ function SSOTabBody({ isAdmin }: { isAdmin: boolean }) {
 
       <ConfigStatusBanner label={status.label}>{status.text}</ConfigStatusBanner>
       {isAdmin && (
-        <div className="sso-source">
+        <div className="mt-2 text-[length:var(--fs-xs)] text-(--text3)">
           {snap.source === 'settings'
             ? 'Kaynak: Settings.'
             : 'Kaynak: config.yaml (Helm) — Kaydet’e basınca Settings’e geçer.'}
-          {snap.lastError && <> · <span className="is-err">Son hata: {snap.lastError}</span></>}
+          {snap.lastError && <> · <span className="text-(--err)">Son hata: {snap.lastError}</span></>}
         </div>
       )}
       {!isAdmin && (
-        <div className="sso-source">Ayarları yalnız yöneticiler görür ve değiştirir.</div>
+        <div className="mt-2 text-[length:var(--fs-xs)] text-(--text3)">Ayarları yalnız yöneticiler görür ve değiştirir.</div>
       )}
 
-      <form onSubmit={save} className="sso-form">
+      <form onSubmit={save} className="mt-3 rounded-lg border border-(--border) bg-(--bg2) p-4">
         <fieldset disabled={!isAdmin} className="sso-fieldset">
-          <label className="sso-check">
-            <input type="checkbox" checked={form.enabled}
-              onChange={e => patch({ enabled: e.target.checked })} />
-            <span>SSO ile girişi aç</span>
-          </label>
+          <CheckboxField className={CHECK} checked={form.enabled}
+            onCheckedChange={v => patch({ enabled: v })} label="SSO ile girişi aç" />
 
-          <div className="sso-row">
-            <Field label="Issuer URL" value={form.issuerUrl} autoComplete="off"
+          <div className={ROW}>
+            <Field className={GROW} label="Issuer URL" value={form.issuerUrl} autoComplete="off"
               onChange={e => patch({ issuerUrl: e.target.value })}
               placeholder={adminOnly ?? 'https://idp.example.test/realms/coremetry'}
               hint="Kimlik sağlayıcının adresi; https olmalı." />
-            <Field label="Client ID" value={form.clientId} autoComplete="off"
+            <Field className={GROW} label="Client ID" value={form.clientId} autoComplete="off"
               onChange={e => patch({ clientId: e.target.value })}
               placeholder={adminOnly ?? 'coremetry'} />
           </div>
@@ -144,38 +168,38 @@ function SSOTabBody({ isAdmin }: { isAdmin: boolean }) {
           <OidcTrustEmailField form={form} patch={patch} />
           <OidcUsernameFallbackField form={form} patch={patch} />
 
-          <div className="sso-row">
-            <Field type="password" autoComplete="new-password" value={form.clientSecret}
-              label={<>Client secret{snap.clientSecretStored && <span style={{ color: 'var(--text3)' }}> · kayıtlı</span>}</>}
+          <div className={ROW}>
+            <Field className={GROW} type="password" autoComplete="new-password" value={form.clientSecret}
+              label="Client secret" labelAside={<StoredMark on={snap.clientSecretStored} />}
               onChange={e => patch({ clientSecret: e.target.value })}
               placeholder={adminOnly ?? (snap.clientSecretStored
                 ? '(kayıtlı değeri korumak için boş bırakın)'
                 : 'kimlik sağlayıcıdaki istemci parolası')}
               hint="Saklanır, geri gösterilmez; issuer ya da client id değişirse yeniden girin." />
-            <Field label="Yönlendirme adresi (redirect URL)" value={form.redirectUrl} autoComplete="off"
+            <Field className={GROW} label="Yönlendirme adresi (redirect URL)" value={form.redirectUrl} autoComplete="off"
               onChange={e => patch({ redirectUrl: e.target.value })}
               placeholder={adminOnly ?? (snap.defaultRedirectUrl || 'https://coremetry.example.test/api/auth/oidc/callback')}
               hint="Kimlik sağlayıcıda geri dönüş adresi olarak tanımlayın." />
           </div>
 
-          <div className="sso-row">
-            <Field label="Kapsamlar (scopes)" value={form.scopes} autoComplete="off"
+          <div className={ROW}>
+            <Field className={GROW} label="Kapsamlar (scopes)" value={form.scopes} autoComplete="off"
               onChange={e => patch({ scopes: e.target.value })}
               placeholder={adminOnly ?? 'openid email profile'}
               hint="Boşlukla ayırın; openid zorunlu." />
-            <Field label="Düğme etiketi" value={form.displayName} maxLength={40}
+            <Field className={GROW} label="Düğme etiketi" value={form.displayName} maxLength={40}
               onChange={e => patch({ displayName: e.target.value })}
               placeholder="SSO"
               hint="Giriş sayfasındaki düğmede görünür." />
           </div>
 
-          <div className="sso-row">
-            <SelectField label="Varsayılan rol" value={form.defaultRole}
+          <div className={ROW}>
+            <SelectField className={GROW} label="Varsayılan rol" value={form.defaultRole}
               onChange={e => patch({ defaultRole: e.target.value })}
               hint="İlk kez SSO ile girene verilir; viewer dışı rol izinli alan adı ister.">
               {OIDC_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
             </SelectField>
-            <Field label="İzinli alan adları" value={form.allowedDomains} autoComplete="off"
+            <Field className={GROW} label="İzinli alan adları" value={form.allowedDomains} autoComplete="off"
               onChange={e => patch({ allowedDomains: e.target.value })}
               placeholder={adminOnly ?? 'example.test, corp.example.test'}
               hint="Virgülle ayırın; boş bırakılırsa herkes girebilir." />
@@ -188,14 +212,15 @@ function SSOTabBody({ isAdmin }: { isAdmin: boolean }) {
         {msg && <FlashBox kind={msg.kind}>{msg.text}</FlashBox>}
 
         {isAdmin && (
-          <div className="sso-actions">
-            <Button type="button" variant="secondary" loading={busy === 'test'}
-              disabled={busy !== null || !form.issuerUrl.trim()} onClick={() => void runTest()}>
-              Bağlantıyı test et
-            </Button>
-            <Button type="submit" variant="primary" loading={busy === 'save'} disabled={busy !== null}>
-              Kaydet
-            </Button>
+          <div className="mt-3">
+            <ActionRow
+              secondary={<Button type="button" variant="secondary" size="sm" loading={busy === 'test'}
+                disabled={busy !== null || !form.issuerUrl.trim()} onClick={() => void runTest()}>
+                Bağlantıyı test et
+              </Button>}
+              confirm={<Button type="submit" size="sm" loading={busy === 'save'} disabled={busy !== null}>
+                Kaydet
+              </Button>} />
           </div>
         )}
       </form>
@@ -218,22 +243,20 @@ function OidcTlsFields({ form, patch, adminOnly }: {
 }) {
   const ca = caPemInfo(form.tlsCACertPEM);
   return (
-    <div className="sso-tls">
-      <div className="sso-row">
-        <TextareaField label="Özel CA sertifikası (PEM)" rows={4} value={form.tlsCACertPEM}
-          className="sso-tls__pem" autoComplete="off" spellCheck={false}
+    <div className="mb-2.5">
+      <div className={ROW}>
+        <TextareaField className={GROW} label="Özel CA sertifikası (PEM)" rows={4} value={form.tlsCACertPEM}
+          controlClassName={MONO_XS} autoComplete="off" spellCheck={false}
           onChange={e => patch({ tlsCACertPEM: e.target.value })}
           placeholder={adminOnly ?? '-----BEGIN CERTIFICATE-----\n…\n-----END CERTIFICATE-----'}
           error={ca.error}
           hint={`Kurum içi CA ile imzalı IdP için; birden çok sertifika eklenebilir.${ca.certs > 0 ? ` (${ca.certs} sertifika)` : ''}`} />
       </div>
-      <label className="sso-check sso-check--tight">
-        <input type="checkbox" checked={form.tlsInsecureSkipVerify}
-          onChange={e => patch({ tlsInsecureSkipVerify: e.target.checked })} />
-        <span>TLS sertifika doğrulamasını kapat (önerilmez)</span>
-      </label>
+      <CheckboxField className={CHECK_TIGHT} checked={form.tlsInsecureSkipVerify}
+        onCheckedChange={v => patch({ tlsInsecureSkipVerify: v })}
+        label="TLS sertifika doğrulamasını kapat (önerilmez)" />
       {form.tlsInsecureSkipVerify && (
-        <p className="sso-tls__warn" role="alert">⚠ {TLS_SKIP_VERIFY_WARNING}</p>
+        <p className={WARN_ERR} role="alert">⚠ {TLS_SKIP_VERIFY_WARNING}</p>
       )}
     </div>
   );
@@ -252,14 +275,12 @@ function OidcTrustEmailField({ form, patch }: {
   const allowed = trustUnverifiedEmailAllowed(form);
   const on = allowed && form.trustUnverifiedEmail;
   return (
-    <div className="sso-trust">
-      <label className={`sso-check sso-check--tight${allowed ? '' : ' is-disabled'}`}>
-        <input type="checkbox" checked={on} disabled={!allowed}
-          onChange={e => patch({ trustUnverifiedEmail: e.target.checked })} />
-        <span>{t('sso.trustEmail.label')}</span>
-      </label>
-      {!allowed && <p className="sso-trust__hint">{t('sso.trustEmail.needsDomains')}</p>}
-      <p className="sso-tls__warn" role={on ? 'alert' : undefined}>⚠ {t('sso.trustEmail.warning')}</p>
+    <div className="mb-2.5">
+      <CheckboxField className={CHECK_TIGHT} checked={on} disabled={!allowed}
+        onCheckedChange={v => patch({ trustUnverifiedEmail: v })}
+        label={t('sso.trustEmail.label')} />
+      {!allowed && <p className="mb-1.5 text-[length:var(--fs-xs)] text-(--text3)">{t('sso.trustEmail.needsDomains')}</p>}
+      <p className={WARN_ERR} role={on ? 'alert' : undefined}>⚠ {t('sso.trustEmail.warning')}</p>
       <OidcLdapLinkField form={form} patch={patch} trustOn={on} />
     </div>
   );
@@ -279,20 +300,16 @@ function OidcLdapLinkField({ form, patch, trustOn }: {
   const t = useT();
   const { linkLdapByUsername: on, linkLdapByUsernameAllowAdmin: adminOn } = ldapLinkInput(form);
   return (
-    <div className="sso-trust sso-trust--nested" data-testid="sso-ldap-link">
-      <label className={`sso-check sso-check--tight${trustOn ? '' : ' is-disabled'}`}>
-        <input type="checkbox" checked={on} disabled={!trustOn}
-          onChange={e => patch({ linkLdapByUsername: e.target.checked })} />
-        <span>{t('sso.ldapLink.label')}</span>
-      </label>
+    <div className="mt-1.5 ml-2.5" data-testid="sso-ldap-link">
+      <CheckboxField className={CHECK_TIGHT} checked={on} disabled={!trustOn}
+        onCheckedChange={v => patch({ linkLdapByUsername: v })}
+        label={t('sso.ldapLink.label')} />
       <p className="sso-note">{t('sso.ldapLink.note')}</p>
-      {on && <p className="sso-tls__warn" role="alert">⚠ {t('sso.ldapLink.warning')}</p>}
-      <label className={`sso-check sso-check--tight${on ? '' : ' is-disabled'}`}>
-        <input type="checkbox" checked={adminOn} disabled={!on}
-          onChange={e => patch({ linkLdapByUsernameAllowAdmin: e.target.checked })} />
-        <span>{t('sso.ldapLinkAdmin.label')}</span>
-      </label>
-      {adminOn && <p className="sso-tls__warn" role="alert">⚠ {t('sso.ldapLinkAdmin.warning')}</p>}
+      {on && <p className={WARN_ERR} role="alert">⚠ {t('sso.ldapLink.warning')}</p>}
+      <CheckboxField className={CHECK_TIGHT} checked={adminOn} disabled={!on}
+        onCheckedChange={v => patch({ linkLdapByUsernameAllowAdmin: v })}
+        label={t('sso.ldapLinkAdmin.label')} />
+      {adminOn && <p className={WARN_ERR} role="alert">⚠ {t('sso.ldapLinkAdmin.warning')}</p>}
     </div>
   );
 }
@@ -311,24 +328,20 @@ function OidcUsernameFallbackField({ form, patch }: {
   // v0.10.1403 — claim adı LDAP bağlamasında da okunur.
   const claimUsed = on || ldapLinkInput(form).linkLdapByUsername;
   return (
-    <div className="sso-trust">
-      <label className="sso-check sso-check--tight">
-        <input type="checkbox" checked={on}
-          onChange={e => patch({ usernameFallback: e.target.checked })} />
-        <span>{t('sso.usernameFallback.label')}</span>
-      </label>
+    <div className="mb-2.5">
+      <CheckboxField className={CHECK_TIGHT} checked={on}
+        onCheckedChange={v => patch({ usernameFallback: v })}
+        label={t('sso.usernameFallback.label')} />
       <p className="sso-note" role="status">{t(on ? 'sso.usernameFallback.on' : 'sso.usernameFallback.off')}</p>
-      {on && <p className="sso-tls__warn">⚠ {t('sso.usernameFallback.risk')}</p>}
-      <label className={`sso-check sso-check--tight${on ? '' : ' is-disabled'}`}>
-        <input type="checkbox" checked={on && form.usernameFallbackAllowAdmin} disabled={!on}
-          onChange={e => patch({ usernameFallbackAllowAdmin: e.target.checked })} />
-        <span>{t('sso.usernameAdmin.label')}</span>
-      </label>
+      {on && <p className={WARN_ERR}>⚠ {t('sso.usernameFallback.risk')}</p>}
+      <CheckboxField className={CHECK_TIGHT} checked={on && form.usernameFallbackAllowAdmin} disabled={!on}
+        onCheckedChange={v => patch({ usernameFallbackAllowAdmin: v })}
+        label={t('sso.usernameAdmin.label')} />
       {on && form.usernameFallbackAllowAdmin && (
-        <p className="sso-tls__warn" role="alert">⚠ {t('sso.usernameAdmin.warning')}</p>
+        <p className={WARN_ERR} role="alert">⚠ {t('sso.usernameAdmin.warning')}</p>
       )}
-      <div className="sso-row">
-        <Field label={t('sso.usernameClaim.label')} value={form.usernameClaim} autoComplete="off" maxLength={64}
+      <div className={ROW}>
+        <Field className={GROW} label={t('sso.usernameClaim.label')} value={form.usernameClaim} autoComplete="off" maxLength={64}
           spellCheck={false} disabled={!claimUsed}
           onChange={e => patch({ usernameClaim: e.target.value })}
           placeholder={USERNAME_CLAIM_DEFAULT}
@@ -349,8 +362,8 @@ function PermissionServiceSection({ form, snap, patch, adminOnly }: {
   const role = form.defaultRole || 'viewer';
   const warnings = permissionNetWarnings(form);
   return (
-    <section className="sso-perm" aria-label="Yetki servisi (merkezi login)">
-      <h3 className="sso-subtitle">Yetki servisi (merkezi login)</h3>
+    <section className="mt-4 border-t border-(--border) pt-3" aria-label="Yetki servisi (merkezi login)">
+      <h3 className="mb-1.5 text-[length:var(--fs-sm)] font-semibold">Yetki servisi (merkezi login)</h3>
       <p className="sso-note">
         Merkezi login, kullanıcı oturumu başına bir kez bu uca sorar ve dönen yetkileri access
         token'a <code>{form.permissionsClaim || 'permissions'}</code> claim'i olarak koyar. Roller
@@ -358,22 +371,16 @@ function PermissionServiceSection({ form, snap, patch, adminOnly }: {
         kullanıcıya varsayılan rol (<b>{role}</b>) bildirilir — herkes girebilir; yalnız devre dışı
         bırakılmış hesaba yetki verilmez (204).
       </p>
-      <label className="sso-check">
-        <input type="checkbox" checked={form.permissionServiceEnabled}
-          onChange={e => patch({ permissionServiceEnabled: e.target.checked })} />
-        <span>Yetki servisini aç</span>
-      </label>
-      <label className="sso-check sso-check--tight">
-        <input type="checkbox" checked={form.permissionServiceAllowNoKey}
-          onChange={e => patch({ permissionServiceAllowNoKey: e.target.checked })} />
-        <span>Anahtarsız kabul et</span>
-      </label>
-      <p className="sso-note sso-perm__explain">
+      <CheckboxField className={CHECK} checked={form.permissionServiceEnabled}
+        onCheckedChange={v => patch({ permissionServiceEnabled: v })} label="Yetki servisini aç" />
+      <CheckboxField className={CHECK_TIGHT} checked={form.permissionServiceAllowNoKey}
+        onCheckedChange={v => patch({ permissionServiceAllowNoKey: v })} label="Anahtarsız kabul et" />
+      <p className="sso-note mb-2.5">
         Başlık hiç denetlenmez — uç ağdan erişen herkese açık olur; IP izin listesi kullanın.
       </p>
-      <div className="sso-row">
-        <Field type="password" autoComplete="new-password" value={form.permissionServiceKey}
-          label={<>Paylaşılan anahtar{snap.permissionServiceKeySet && <span style={{ color: 'var(--text3)' }}> · kayıtlı</span>}</>}
+      <div className={ROW}>
+        <Field className={GROW} type="password" autoComplete="new-password" value={form.permissionServiceKey}
+          label="Paylaşılan anahtar" labelAside={<StoredMark on={snap.permissionServiceKeySet} />}
           onChange={e => patch({ permissionServiceKey: e.target.value })}
           placeholder={adminOnly ?? (snap.permissionServiceKeySet
             ? '(kayıtlı değeri korumak için boş bırakın)'
@@ -383,38 +390,35 @@ function PermissionServiceSection({ form, snap, patch, adminOnly }: {
           hint={form.permissionServiceAllowNoKey
             ? 'Anahtarsız kabul açıkken kullanılmaz (isteğe bağlı). Saklanır, geri gösterilmez.'
             : 'Merkezi login bu değeri başlıkta gönderir. Saklanır, geri gösterilmez.'} />
-        <Field type="number" min={60} max={3600} step={1} value={form.permissionTTLSeconds}
+        <Field className={GROW} type="number" min={60} max={3600} step={1} value={form.permissionTTLSeconds}
           label="Önbellek süresi (ttlSeconds)"
           onChange={e => patch({ permissionTTLSeconds: e.target.value })}
           hint="Merkezi login'in cevabı önbellekte tutma süresi; 60–3600 sn, varsayılan 300." />
       </div>
-      <div className="sso-row">
-        <Field label="Claim adı" value={form.permissionsClaim} autoComplete="off" maxLength={64}
+      <div className={ROW}>
+        <Field className={GROW} label="Claim adı" value={form.permissionsClaim} autoComplete="off" maxLength={64}
           onChange={e => patch({ permissionsClaim: e.target.value })}
           placeholder="permissions"
           hint="Token'da yetkilerin bulunduğu claim; varsayılan permissions." />
       </div>
-      <div className="sso-row">
-        <TextareaField label="IP izin listesi (CIDR)" rows={3} value={form.permissionServiceAllowedCIDRs}
+      <div className={ROW}>
+        <TextareaField className={GROW} label="IP izin listesi (CIDR)" rows={3} value={form.permissionServiceAllowedCIDRs}
           autoComplete="off" spellCheck={false}
           onChange={e => patch({ permissionServiceAllowedCIDRs: e.target.value })}
           placeholder={adminOnly ?? '203.0.113.0/24\n2001:db8::/32'}
           hint={`Satır başına bir IP ya da CIDR (en çok ${PERMISSION_MAX_CIDRS}); boş = IP kısıtı yok. Listede olmayan çağırana 403.`} />
-        <TextareaField label="Güvenilen vekiller (ingress)" rows={3} value={form.permissionServiceTrustedProxies}
+        <TextareaField className={GROW} label="Güvenilen vekiller (ingress)" rows={3} value={form.permissionServiceTrustedProxies}
           autoComplete="off" spellCheck={false}
           onChange={e => patch({ permissionServiceTrustedProxies: e.target.value })}
           placeholder={adminOnly ?? '10.0.0.0/8'}
           hint="X-Forwarded-For yalnız bu adreslerden gelen istekte okunur; boşsa doğrudan bağlanan adres kullanılır." />
       </div>
       {warnings.map(w => (
-        <p key={w} className="sso-perm__warn" role="status">⚠ {w}</p>
+        <p key={w} className={WARN_AMBER} role="status" data-testid="sso-perm-warn">⚠ {w}</p>
       ))}
-      <label className="sso-check sso-check--tight">
-        <input type="checkbox" checked={form.roleFromClaim}
-          onChange={e => patch({ roleFromClaim: e.target.checked })} />
-        <span>Rolü token'daki claim'den al</span>
-      </label>
-      <p className="sso-note sso-perm__explain">
+      <CheckboxField className={CHECK_TIGHT} checked={form.roleFromClaim}
+        onCheckedChange={v => patch({ roleFromClaim: v })} label="Rolü token'daki claim'den al" />
+      <p className="sso-note mb-2.5">
         {form.roleFromClaim
           ? <>Açık: claim (dizi) <code>COREMETRY_ADMIN</code> / <code>COREMETRY_EDITOR</code> / <code>COREMETRY_VIEWER</code>
             taşıyor ve kayıtlı rolden DÜŞÜKSE kullanıcının rolü SSO girişinde ona düşürülür; claim'den rol yalnız
@@ -435,8 +439,9 @@ function PermissionServiceSection({ form, snap, patch, adminOnly }: {
 function OidcTestResultView({ tr }: { tr: OidcTestResult }) {
   const d = tr.discovery;
   return (
-    <div className="sso-result" role="status" aria-live="polite">
-      <div className="sso-result__head" style={{ color: tr.ok ? 'var(--ok)' : 'var(--err)' }}>
+    <div className="mt-2.5 rounded-sm border border-(--border) bg-(--bg1) px-3 py-2.5 text-[length:var(--fs-sm)]"
+      role="status" aria-live="polite" data-testid="sso-result">
+      <div className={cn('mb-1.5 font-semibold', tr.ok ? 'text-(--ok)' : 'text-(--err)')}>
         {tr.ok ? '✓ Kimlik sağlayıcı bulundu' : `✗ Bağlantı başarısız: ${tr.error ?? 'bilinmeyen hata'}`}
       </div>
       {tr.ok && d && (
@@ -448,7 +453,7 @@ function OidcTestResultView({ tr }: { tr: OidcTestResult }) {
           <KeyValueRow k="JWKS" v={d.jwksUri} mono />
           {d.unsupportedScopes && d.unsupportedScopes.length > 0 && (
             <KeyValueRow k="Uyarı"
-              v={<span className="is-err">IdP bu kapsamları listelemiyor: {d.unsupportedScopes.join(', ')}</span>} />
+              v={<span className="text-(--err)">IdP bu kapsamları listelemiyor: {d.unsupportedScopes.join(', ')}</span>} />
           )}
         </KeyValue>
       )}

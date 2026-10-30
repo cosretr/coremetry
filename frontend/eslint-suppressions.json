@@ -489,11 +489,6 @@
       "count": 73
     }
   },
-  "src/pages/settings/ApiTokensTab.tsx": {
-    "ui/no-raw-element": {
-      "count": 2
-    }
-  },
   "src/pages/settings/ArgoCDEnvPanel.tsx": {
     "ui/no-raw-element": {
       "count": 1
@@ -549,21 +544,6 @@
       "count": 12
     }
   },
-  "src/pages/settings/LdapTab.tsx": {
-    "ui/no-raw-element": {
-      "count": 38
-    }
-  },
-  "src/pages/settings/LdapUserPicker.tsx": {
-    "ui/no-raw-element": {
-      "count": 2
-    }
-  },
-  "src/pages/settings/MaintenanceTab.tsx": {
-    "ui/no-raw-element": {
-      "count": 6
-    }
-  },
   "src/pages/settings/McpServersTab.tsx": {
     "ui/no-raw-element": {
       "count": 7
@@ -584,19 +564,9 @@
       "count": 3
     }
   },
-  "src/pages/settings/RolesTab.tsx": {
-    "ui/no-raw-element": {
-      "count": 2
-    }
-  },
   "src/pages/settings/ServiceSlowdownSubsection.tsx": {
     "ui/no-raw-element": {
       "count": 2
-    }
-  },
-  "src/pages/settings/SsoTab.tsx": {
-    "ui/no-raw-element": {
-      "count": 10
     }
   },
   "src/pages/settings/WikiKnowledgeSection.tsx": {

@@ -8,6 +8,7 @@
 // adları boşken PASİF + ipucu; alan adı yazılınca etkin; işaretlenip
 // kaydedilince PUT gövdesi trustUnverifiedEmail:true taşır; alan adları
 // silinirse kutu pasifleşir ve gövdeye false gider; kırmızı açıklama görünür.
+import '@/test/radixJsdom'; // Faz 2 dilim 1 R10: Radix Checkbox (form içi) jsdom eksikleri
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -112,7 +113,7 @@ describe('SsoTab — doğrulanmamış e-postaya güven (v0.10.1120)', () => {
     h.get.mockResolvedValue(snap());
     const el = await mount();
     expect(trustBox(el).disabled).toBe(true);
-    expect(trustBox(el).checked).toBe(false);
+    expect(trustBox(el).getAttribute('aria-checked')).toBe('false');
     expect(el.textContent).toContain(HINT);
     expect(el.textContent).toContain(t('sso.trustEmail.warning', 'tr'));
     typeInto(domainsBox(el), 'example.test');
@@ -126,7 +127,7 @@ describe('SsoTab — doğrulanmamış e-postaya güven (v0.10.1120)', () => {
     const el = await mount();
     expect(trustBox(el).disabled).toBe(false);
     act(() => { trustBox(el).click(); });
-    expect(trustBox(el).checked).toBe(true);
+    expect(trustBox(el).getAttribute('aria-checked')).toBe('true');
     await save(el);
     expect(h.put).toHaveBeenCalledTimes(1);
     expect(h.put.mock.calls[0][0]).toMatchObject({ allowedDomains: ['example.test'], trustUnverifiedEmail: true });
@@ -136,10 +137,10 @@ describe('SsoTab — doğrulanmamış e-postaya güven (v0.10.1120)', () => {
     h.get.mockResolvedValue(snap({ allowedDomains: ['example.test'], trustUnverifiedEmail: true }));
     h.put.mockResolvedValue(snap());
     const el = await mount();
-    expect(trustBox(el).checked).toBe(true);
+    expect(trustBox(el).getAttribute('aria-checked')).toBe('true');
     typeInto(domainsBox(el), '');
     expect(trustBox(el).disabled).toBe(true);
-    expect(trustBox(el).checked).toBe(false);
+    expect(trustBox(el).getAttribute('aria-checked')).toBe('false');
     await save(el);
     expect(h.put.mock.calls[0][0]).toMatchObject({ allowedDomains: [], trustUnverifiedEmail: false });
   });

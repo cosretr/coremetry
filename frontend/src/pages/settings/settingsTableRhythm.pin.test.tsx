@@ -58,8 +58,12 @@ describe('ayar tabloları taban ritminde (v0.10.977)', () => {
     const src = read('LdapTab.tsx');
     expect(withStyle(src, 'td').map(t => t.line)).toEqual([]);
     expect(jsxOpenTags(src, 'th').filter(t => /padding/.test(t.tag)).map(t => t.line)).toEqual([]);
-    expect(src).toContain('<th className="col-actions" aria-label="Eylemler" style={{ width: 32 }} />');
-    expect(src).toContain('<td className="col-actions">');
+    // Faz 2 dilim 1 R10 — shadcn Table: aynı sözleşme TableHead/TableCell'de
+    // (eylem sütunu col-actions, genişlik utility, satır içi stil yok).
+    expect(withStyle(src, 'TableCell').map(t => t.line)).toEqual([]);
+    expect(withStyle(src, 'TableHead').map(t => t.line)).toEqual([]);
+    expect(src).toContain('<TableHead className="col-actions w-8" aria-label="Eylemler" />');
+    expect(src).toContain('<TableCell className="col-actions">');
   });
 
   it('LdapUserPicker: <td>/<th> dolgusuz, satırın kendi üst çizgisi yok (tek ayraç)', () => {
@@ -67,7 +71,10 @@ describe('ayar tabloları taban ritminde (v0.10.977)', () => {
     expect(withStyle(src, 'td').map(t => t.line)).toEqual([]);
     expect(jsxOpenTags(src, 'th').filter(t => /padding/.test(t.tag)).map(t => t.line)).toEqual([]);
     expect(jsxOpenTags(src, 'tr').filter(t => /borderTop/.test(t.tag)).map(t => t.line)).toEqual([]);
-    expect(src).toContain('<th className="col-actions" aria-label="Eylemler" style={{ width: 100 }} />');
+    // Faz 2 dilim 1 R10 — shadcn Table: TableCell/TableRow satır içi stil taşımaz.
+    expect(withStyle(src, 'TableCell').map(t => t.line)).toEqual([]);
+    expect(withStyle(src, 'TableRow').map(t => t.line)).toEqual([]);
+    expect(src).toContain('<TableHead className="col-actions w-[100px]" aria-label="Eylemler" />');
   });
 
   it('ZoomChannelPicker: kap table-wrap is-scroll (flex: 1), <thead> ve <th> satır içi stil taşımaz', () => {

@@ -1,6 +1,10 @@
 import { useState, type FormEvent } from 'react';
-import { Button } from '@/components/ui';
-import { DataTableState, type DataTableStateStaticProps } from '@/components/ui/DataTable';
+import { Button } from '@/components/shadcn/button';
+import { Input } from '@/components/shadcn/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/shadcn/table';
+import { SelectField } from '@/components/coremetry/Field';
+import { DataTableStateRow, type DataTableStateStaticProps } from '@/components/coremetry/DataTable';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/coremetry/overlay/Dialog';
 import { api } from '@/lib/api';
 import type { LDAPDirectoryUser, Role } from '@/lib/types';
 
@@ -8,6 +12,9 @@ import type { LDAPDirectoryUser, Role } from '@/lib/types';
 // directory entry, picks a role, hits Provision. Pre-creates the
 // users row so first-login lands them with the right access without
 // having to wait for the group mapping to apply.
+// Faz 2 dilim 1 R10 — shadcn Input/Table/Button + coremetry Dialog (D8: elle
+// kurulmuş sabit-zeminli pencere gerçek dialog oldu — role=dialog, başlık,
+// × kapat, odak tuzağı, Esc yığını, kaydırma kilidi). Kolonlar, metinler aynı.
 export function LDAPUserPicker() {
   const [q, setQ] = useState('');
   const [results, setResults] = useState<LDAPDirectoryUser[] | null>(null);
@@ -60,20 +67,18 @@ export function LDAPUserPicker() {
     : { kind: 'empty', message: 'Dizinde kullanıcı bulunamadı' };
 
   return (
-    <div style={{
-      marginTop: 18, padding: 16, borderRadius: 8,
-      background: 'var(--bg2)', border: '1px solid var(--border)',
-    }}>
-      <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Pre-provision a directory user</h3>
-      <p style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 12 }}>
+    <div className="mt-[18px] rounded-lg border border-(--border) bg-(--bg2) p-4">
+      <h3 className="mb-1.5 text-[length:var(--fs-md)] font-semibold">Pre-provision a directory user</h3>
+      <p className="mb-3 text-[length:var(--fs-xs)] text-(--text3)">
         Find a user in your LDAP, pick a role, and we'll create their Coremetry
         row up-front. They keep that role even if their AD groups would map them
         to a different one — useful for "trust this person specifically" cases.
       </p>
-      <form onSubmit={search} style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-        <input value={q} onChange={e => setQ(e.target.value)}
-               placeholder="Name, email or username" style={{ flex: 1 }} />
-        <Button type="submit" variant="primary" loading={busy}>Search</Button>
+      <form onSubmit={search} className="mb-3 flex gap-2">
+        <Input value={q} onChange={e => setQ(e.target.value)} aria-label="Name, email or username"
+          placeholder="Name, email or username"
+          className="h-8 flex-1 border-(--border-control) bg-field text-[length:var(--fs-sm)] md:text-[length:var(--fs-sm)] dark:bg-field" />
+        <Button type="submit" size="sm" loading={busy}>Search</Button>
       </form>
       {/* v0.10.967 — tablo standardı dilim 5 (P-2): arama hatası (kırmızı
           satır) ve "No matches." paragrafı tablonun İÇİNE indi, başlık durur.
@@ -83,75 +88,67 @@ export function LDAPUserPicker() {
           ikisini de sıfırlayarak başlar. */}
       {(error !== null || results !== null) && (
         // v0.10.942 — statik tablo: seçici liste (≤25 arama sonucu, Provision ile seçilir; T1).
-        // v0.10.977 — dilim 3'ün "sınıf karşılığı yok" diye bıraktığı 6px hücre
-        // dolgusu ve satırın kendi üst çizgisi düştü: hücreler taban `tbody td`
-        // ritminde (T5/T6, yoğunluk ayarı artık ulaşır), ayraç yalnız `tbody tr`
-        // alt çizgisi (T2 — çift ayraç yok). Başlık dolgusu da tabana indi ki
-        // sütun metni hücreyle hizalı kalsın; eylem sütunu tek sağ sütun (T8).
-        <table>
-          <thead>
-            <tr style={{ background: 'var(--bg)', color: 'var(--text2)' }}>
-              <th>Name</th>
-              <th>Username</th>
-              <th>Email</th>
-              <th className="col-actions" aria-label="Eylemler" style={{ width: 100 }} />
-            </tr>
-          </thead>
-          <tbody>
+        // Faz 2 dilim 1 R10 — shadcn Table (satır ritmi --row-h, yoğunlukla); kolonlar aynı.
+        <Table className="tabular-nums">
+          <TableHeader>
+            <TableRow className="bg-(--bg) text-(--text2)">
+              <TableHead>Name</TableHead>
+              <TableHead>Username</TableHead>
+              <TableHead>Email</TableHead>
+              <TableHead className="col-actions w-[100px]" aria-label="Eylemler" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {/* v0.10.967 (P-2) — statik tablonun durum satırı; colSpan = thead'deki 4 <th>. */}
-            {!showRows ? <DataTableState colSpan={4} {...searchState} /> : (results ?? []).map(u => (
-              <tr key={u.dn}>
-                <td>{u.displayName || '—'}</td>
-                <td><code>{u.username}</code></td>
-                <td>{u.email || '—'}</td>
-                <td className="col-actions">
+            {!showRows ? <DataTableStateRow colSpan={4} {...searchState} /> : (results ?? []).map(u => (
+              <TableRow key={u.dn}>
+                <TableCell>{u.displayName || '—'}</TableCell>
+                <TableCell><code>{u.username}</code></TableCell>
+                <TableCell>{u.email || '—'}</TableCell>
+                <TableCell className="col-actions">
                   <Button variant="secondary" size="sm" type="button"
                           onClick={() => setProvisionFor(u)}>
                     Provision
                   </Button>
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       )}
 
-      {provisionFor && (
-        <div onClick={() => setProvisionFor(null)} style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
-          display: 'grid', placeItems: 'center', zIndex: 'var(--z-modal)',
-        }}>
-          {/* v0.9.988 (D6.2) — görüntü alanına kelepçeli genişlik. */}
-          <div onClick={e => e.stopPropagation()} style={{
-            width: 'min(380px, calc(100vw - 32px))', maxHeight: 'calc(100vh - 32px)', overflow: 'auto',
-            padding: 20, borderRadius: 8,
-            background: 'var(--bg2)', border: '1px solid var(--border)',
-          }}>
-            <div style={{ fontWeight: 600, marginBottom: 10 }}>Provision LDAP user</div>
-            <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 12 }}>
-              <div>{provisionFor.displayName || provisionFor.username}</div>
-              <div style={{ color: 'var(--text3)' }}>{provisionFor.email || provisionFor.dn}</div>
-            </div>
-            <label style={{ display: 'block', marginBottom: 14 }}>
-              <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>Role</div>
-              <select value={role} onChange={e => setRole(e.target.value as Role)}
-                      style={{ width: '100%' }}>
+      {/* v0.9.988 (D6.2) — görüntü alanına kelepçeli genişlik: Dialog'un
+          max-w-[calc(100%-2rem)] tabanı + 380px tavan. */}
+      <Dialog open={provisionFor !== null} onOpenChange={o => { if (!o) setProvisionFor(null); }}>
+        <DialogContent className="max-h-[calc(100vh-32px)] overflow-auto sm:max-w-[380px]">
+          {provisionFor && (
+            <>
+              <DialogHeader>
+                <DialogTitle>Provision LDAP user</DialogTitle>
+                <DialogDescription asChild>
+                  <div className="text-[length:var(--fs-sm)] text-(--text2)">
+                    <div>{provisionFor.displayName || provisionFor.username}</div>
+                    <div className="text-(--text3)">{provisionFor.email || provisionFor.dn}</div>
+                  </div>
+                </DialogDescription>
+              </DialogHeader>
+              <SelectField label="Role" value={role} onChange={e => setRole(e.target.value as Role)}>
                 <option value="viewer">Viewer (read only)</option>
                 <option value="editor">Editor (dashboards / monitors / alerts)</option>
                 <option value="admin">Admin (full access)</option>
-              </select>
-            </label>
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <Button type="button" variant="secondary" onClick={() => setProvisionFor(null)}>Cancel</Button>
-              <Button type="button" variant="primary" onClick={provision} loading={busy}>
-                Provision
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+              </SelectField>
+              <DialogFooter>
+                <Button type="button" variant="secondary" size="sm" onClick={() => setProvisionFor(null)}>Cancel</Button>
+                <Button type="button" size="sm" onClick={() => { void provision(); }} loading={busy}>
+                  Provision
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
       {provisionMsg && (
-        <div style={{ marginTop: 10, fontSize: 12, color: 'var(--ok)' }}>{provisionMsg}</div>
+        <div className="mt-2.5 text-[length:var(--fs-sm)] text-(--ok)">{provisionMsg}</div>
       )}
     </div>
   );

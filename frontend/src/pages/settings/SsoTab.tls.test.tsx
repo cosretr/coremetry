@@ -7,6 +7,7 @@
 // skip-verify forma gelir; skip-verify açıkken kırmızı uyarı satırı görünür,
 // kapalıyken yok; "Bağlantıyı test et" formun KAYDEDİLMEMİŞ TLS alanlarını
 // yollar (kaydetmeden doğrulama); özel anahtar yapıştırılınca alan hatası.
+import '@/test/radixJsdom'; // Faz 2 dilim 1 R10: Radix Checkbox (form içi) jsdom eksikleri
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -92,7 +93,7 @@ describe('SsoTab — IdP TLS alanları (v0.10.1112)', () => {
     h.get.mockResolvedValue(snap({ tlsCACertPEM: PEM, tlsInsecureSkipVerify: true }));
     const el = await mount();
     expect(caBox(el).value).toBe(PEM);
-    expect(skipBox(el).checked).toBe(true);
+    expect(skipBox(el).getAttribute('aria-checked')).toBe('true');
     expect(warning(el)).toBeTruthy();
     expect(el.textContent).toContain('Kurum içi CA ile imzalı IdP için; birden çok sertifika eklenebilir.');
   });
@@ -100,7 +101,7 @@ describe('SsoTab — IdP TLS alanları (v0.10.1112)', () => {
   it('skip kapalıyken uyarı yok; işaretlenince görünür, kaldırılınca gider', async () => {
     h.get.mockResolvedValue(snap());
     const el = await mount();
-    expect(skipBox(el).checked).toBe(false);
+    expect(skipBox(el).getAttribute('aria-checked')).toBe('false');
     expect(warning(el)).toBeUndefined();
     act(() => { skipBox(el).click(); });
     expect(warning(el)).toBeTruthy();

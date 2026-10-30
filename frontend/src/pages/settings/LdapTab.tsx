@@ -1,10 +1,18 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Spinner } from '@/components/Spinner';
-import { Button } from '@/components/ui';
+import { Button } from '@/components/shadcn/button';
+import { Input } from '@/components/shadcn/input';
+import { NativeSelect } from '@/components/shadcn/native-select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/shadcn/table';
+import { Field, SelectField, TextareaField, CheckboxField } from '@/components/coremetry/Field';
+import { StatusBadge } from '@/components/coremetry/StatusBadge';
+import { SectionHead } from '@/components/coremetry/SectionHead';
+import { ActionRow } from '@/components/coremetry/ActionRow';
+import { cn } from '@/lib/cn';
 import { api } from '@/lib/api';
-import type { LDAPConfig, LDAPGroupRoleMapping, Role } from '@/lib/types';
+import type { LDAPConfig, LDAPGroupRoleMapping, LDAPGroupSyncConfig, LDAPGroupSyncPreview, LDAPGroupSyncSummary, Role } from '@/lib/types';
 import { tsLong } from '@/lib/utils';
-import { Row, Field2, SectionTitle, FlashBox, useSettingsLoad, SettingsLoadError } from './shared';
+import { FlashBox, useSettingsLoad, SettingsLoadError } from './shared';
 import { LDAPUserPicker } from './LdapUserPicker';
 
 // LDAPTab — enterprise auth configuration. Three sections:
@@ -21,6 +29,22 @@ import { LDAPUserPicker } from './LdapUserPicker';
 // Bind password is never echoed back from the API; the GET endpoint
 // returns the literal "__SET__" sentinel when one is saved, which we
 // translate into a "leave empty to keep current" affordance.
+//
+// Faz 2 dilim 1 R10 — shadcn/coremetry bileşikleri: shared `Field2` →
+// coremetry Field (`small` = 180px, geniş alan satırda esner), `SectionTitle`
+// → SectionHead (açıklama paragrafı `description`), statik tablolar shadcn
+// Table + tabular-nums (D6). Alan sırası, etiketler, ipuçları, kaydetme
+// gövdesi aynı (secret sözleşmesi: LdapTab.secret.test).
+
+// Alan satırı (eski shared `Row`: sarar, 12px aralık) + esneyen geniş alan
+// (eski Field2: flex 1, en az 200px).
+const ROW = 'mb-3 flex flex-wrap items-start gap-3';
+const GROW = 'min-w-[200px] flex-1';
+// Tablo hücresindeki çıplak denetimler — Field anatomisinin denetim sınıfı (D1).
+const CELL_CTL = 'border-(--border-control) bg-field text-[length:var(--fs-sm)] md:text-[length:var(--fs-sm)] dark:bg-field';
+const MONO_XS = 'font-mono text-[length:var(--fs-xs)] md:text-[length:var(--fs-xs)]';
+const CARD = 'rounded-lg border border-(--border) bg-(--bg2) p-4';
+
 export function LDAPTab() {
   const [cfg, setCfg] = useState<LDAPConfig | null>(null);
   const [busy, setBusy] = useState(false);
@@ -84,132 +108,99 @@ export function LDAPTab() {
     }
   };
 
+  const pwStored = cfg.bindPassword === '__SET__' && !pwTouched;
+
   return (
-    <div style={{ maxWidth: 800 }}>
-      <h2 style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>LDAP / Active Directory</h2>
-      <p style={{ color: 'var(--text2)', fontSize: 13, marginBottom: 16 }}>
+    <div className="max-w-[800px]">
+      <h2 className="mb-1.5 text-[length:var(--fs-lg)] font-semibold">LDAP / Active Directory</h2>
+      <p className="mb-4 text-[length:var(--fs-md)] text-(--text2)">
         Authenticate users against your corporate directory. Domain users sign in
         with their normal credentials; their Coremetry role is resolved from AD
         group membership via the mapping table below. Local accounts (bootstrap
         admin) keep working as a fallback.
       </p>
 
-      <form onSubmit={save} style={{
-        padding: 16, borderRadius: 8,
-        background: 'var(--bg2)', border: '1px solid var(--border)',
-      }}>
+      <form onSubmit={save} className={CARD}>
         {/* ── Section 1: Enable + connection ─────────────────────────── */}
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-          <input type="checkbox" checked={cfg.enabled}
-                 onChange={e => update({ enabled: e.target.checked })} />
-          <span style={{ fontSize: 13, fontWeight: 600 }}>Enable LDAP authentication</span>
-        </label>
+        <CheckboxField className="mb-3.5" checked={cfg.enabled} onCheckedChange={v => update({ enabled: v })}
+          label={<span className="text-[length:var(--fs-md)] font-semibold">Enable LDAP authentication</span>} />
 
-        <SectionTitle>Connection</SectionTitle>
-        <Row>
-          <Field2 label="Host" hint="e.g. ldap.corp.example.com">
-            <input value={cfg.host} onChange={e => update({ host: e.target.value })}
-                   placeholder="ldap.example.com" style={{ width: '100%' }} />
-          </Field2>
-          <Field2 label="Port" hint="636 for LDAPS, 389 for plain/StartTLS" small>
-            <input type="number" value={cfg.port || ''}
-                   onChange={e => update({ port: parseInt(e.target.value, 10) || 0 })}
-                   placeholder="636" style={{ width: '100%' }} />
-          </Field2>
-        </Row>
-        <Row>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
-            <input type="checkbox" checked={cfg.useTLS}
-                   onChange={e => update({ useTLS: e.target.checked, startTLS: e.target.checked ? false : cfg.startTLS })} />
-            Use LDAPS (direct TLS, default port 636)
-          </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
-            <input type="checkbox" checked={cfg.startTLS} disabled={cfg.useTLS}
-                   onChange={e => update({ startTLS: e.target.checked })} />
-            StartTLS upgrade (legacy, port 389)
-          </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
-            <input type="checkbox" checked={cfg.skipVerify}
-                   onChange={e => update({ skipVerify: e.target.checked })} />
-            Skip cert verification (dev only)
-          </label>
-        </Row>
-        <Field2 label="Internal CA certificate (PEM, optional)"
-                hint="Paste the PEM bundle if your AD uses an internal CA. Leave empty to use system roots.">
-          <textarea value={cfg.caCert || ''} onChange={e => update({ caCert: e.target.value })}
-                    rows={3}
-                    style={{ width: '100%', fontFamily: 'var(--font-mono)', fontSize: 11 }}
-                    placeholder="-----BEGIN CERTIFICATE-----..." />
-        </Field2>
+        <SectionHead title="Connection" />
+        <div className={ROW}>
+          <Field label="Host" hint="e.g. ldap.corp.example.com" className={GROW}
+            value={cfg.host} onChange={e => update({ host: e.target.value })} placeholder="ldap.example.com" />
+          <Field label="Port" hint="636 for LDAPS, 389 for plain/StartTLS" small
+            type="number" value={cfg.port || ''}
+            onChange={e => update({ port: parseInt(e.target.value, 10) || 0 })} placeholder="636" />
+        </div>
+        <div className={ROW}>
+          <CheckboxField checked={cfg.useTLS}
+            onCheckedChange={v => update({ useTLS: v, startTLS: v ? false : cfg.startTLS })}
+            label="Use LDAPS (direct TLS, default port 636)" />
+          <CheckboxField checked={cfg.startTLS} disabled={cfg.useTLS}
+            onCheckedChange={v => update({ startTLS: v })}
+            label="StartTLS upgrade (legacy, port 389)" />
+          <CheckboxField checked={cfg.skipVerify}
+            onCheckedChange={v => update({ skipVerify: v })}
+            label="Skip cert verification (dev only)" />
+        </div>
+        <TextareaField label="Internal CA certificate (PEM, optional)" className="mb-3"
+          hint="Paste the PEM bundle if your AD uses an internal CA. Leave empty to use system roots."
+          value={cfg.caCert || ''} onChange={e => update({ caCert: e.target.value })}
+          rows={3} controlClassName={MONO_XS} placeholder="-----BEGIN CERTIFICATE-----..." />
 
-        <Row>
-          <Field2 label="Bind DN (service account)" hint="Used to look up users + groups">
-            <input value={cfg.bindDN} onChange={e => update({ bindDN: e.target.value })}
-                   placeholder="CN=svc-coremetry,OU=Service Accounts,DC=corp,DC=example"
-                   style={{ width: '100%' }} />
-          </Field2>
-        </Row>
-        <Row>
-          <Field2 label="Bind password"
-                  hint={cfg.bindPassword === '__SET__' && !pwTouched
-                    ? 'A password is saved. Leave empty to keep it; type a new one to rotate.'
-                    : 'Service-account password.'}>
-            <input type="password"
-                   value={pwTouched ? cfg.bindPassword : (cfg.bindPassword === '__SET__' ? '' : cfg.bindPassword)}
-                   onFocus={() => { if (!pwTouched && cfg.bindPassword === '__SET__') { setPwTouched(true); update({ bindPassword: '' }); } }}
-                   onChange={e => { setPwTouched(true); update({ bindPassword: e.target.value }); }}
-                   placeholder={cfg.bindPassword === '__SET__' && !pwTouched ? '••••••••••••' : ''}
-                   autoComplete="off" style={{ width: '100%' }} />
-          </Field2>
-        </Row>
+        <div className={ROW}>
+          <Field label="Bind DN (service account)" hint="Used to look up users + groups" className={GROW}
+            value={cfg.bindDN} onChange={e => update({ bindDN: e.target.value })}
+            placeholder="CN=svc-coremetry,OU=Service Accounts,DC=corp,DC=example" />
+        </div>
+        <div className={ROW}>
+          <Field label="Bind password" className={GROW}
+            hint={pwStored
+              ? 'A password is saved. Leave empty to keep it; type a new one to rotate.'
+              : 'Service-account password.'}
+            type="password"
+            value={pwTouched ? cfg.bindPassword : (cfg.bindPassword === '__SET__' ? '' : cfg.bindPassword)}
+            onFocus={() => { if (!pwTouched && cfg.bindPassword === '__SET__') { setPwTouched(true); update({ bindPassword: '' }); } }}
+            onChange={e => { setPwTouched(true); update({ bindPassword: e.target.value }); }}
+            placeholder={pwStored ? '••••••••••••' : ''}
+            autoComplete="off" />
+        </div>
 
         {/* ── Section 2: Search ──────────────────────────────────────── */}
-        <SectionTitle>User search</SectionTitle>
-        <Row>
-          <Field2 label="Base DN" hint="Where to search for users">
-            <input value={cfg.baseDN} onChange={e => update({ baseDN: e.target.value })}
-                   placeholder="OU=Users,DC=corp,DC=example" style={{ width: '100%' }} />
-          </Field2>
-        </Row>
-        <Row>
-          <Field2 label="User search filter" hint="{{username}} is replaced at runtime">
-            <input value={cfg.userSearchFilter}
-                   onChange={e => update({ userSearchFilter: e.target.value })}
-                   placeholder="(sAMAccountName={{username}})" style={{ width: '100%' }} />
-          </Field2>
-        </Row>
-        <Row>
-          <Field2 label="User attribute" small>
-            <input value={cfg.userAttribute} onChange={e => update({ userAttribute: e.target.value })}
-                   placeholder="sAMAccountName" style={{ width: '100%' }} />
-          </Field2>
-          <Field2 label="Email attribute" small>
-            <input value={cfg.emailAttribute} onChange={e => update({ emailAttribute: e.target.value })}
-                   placeholder="mail" style={{ width: '100%' }} />
-          </Field2>
-          <Field2 label="Display attribute" small>
-            <input value={cfg.displayAttribute} onChange={e => update({ displayAttribute: e.target.value })}
-                   placeholder="displayName" style={{ width: '100%' }} />
-          </Field2>
-        </Row>
+        <SectionHead title="User search" />
+        <div className={ROW}>
+          <Field label="Base DN" hint="Where to search for users" className={GROW}
+            value={cfg.baseDN} onChange={e => update({ baseDN: e.target.value })} placeholder="OU=Users,DC=corp,DC=example" />
+        </div>
+        <div className={ROW}>
+          <Field label="User search filter" hint="{{username}} is replaced at runtime" className={GROW}
+            value={cfg.userSearchFilter} onChange={e => update({ userSearchFilter: e.target.value })}
+            placeholder="(sAMAccountName={{username}})" />
+        </div>
+        <div className={ROW}>
+          <Field label="User attribute" small
+            value={cfg.userAttribute} onChange={e => update({ userAttribute: e.target.value })} placeholder="sAMAccountName" />
+          <Field label="Email attribute" small
+            value={cfg.emailAttribute} onChange={e => update({ emailAttribute: e.target.value })} placeholder="mail" />
+          <Field label="Display attribute" small
+            value={cfg.displayAttribute} onChange={e => update({ displayAttribute: e.target.value })} placeholder="displayName" />
+        </div>
         {/* v0.8.538 — the identity attributes and the team pair are two
             Rows, not one five-field Row. Row now wraps, so one Row would
             reflow on its own, but it would break 4+1 and split Team
             attribute from Team regex — a pair whose hints reference each
             other. Splitting 3+2 keeps them together and leaves every
             field at its 180px basis instead of squeezing to ~150px. */}
-        <Row>
-          <Field2 label="Team attribute" small
-            hint="boş = department→ou · dn-ou = DN'deki en derin OU (alt ekip) · veya attribute adı">
-            <input value={cfg.teamAttribute ?? ''} onChange={e => update({ teamAttribute: e.target.value })}
-                   placeholder="örn. displayName / division / dn-ou" style={{ width: '100%' }} />
-          </Field2>
-          <Field2 label="Team regex" small
-            hint={'opsiyonel — ilk yakalama grubu ekip olur; ör. "…ÜNVAN-Ekip" için -([^-]+)$ (son tireden sonrası). Eşleşme yoksa ekip boş kalır.'}>
-            <input value={cfg.teamRegex ?? ''} onChange={e => update({ teamRegex: e.target.value })}
-                   placeholder="-([^-]+)$" style={{ width: '100%', fontFamily: 'var(--font-mono)' }} />
-          </Field2>
-        </Row>
+        <div className={ROW}>
+          <Field label="Team attribute" small
+            hint="boş = department→ou · dn-ou = DN'deki en derin OU (alt ekip) · veya attribute adı"
+            value={cfg.teamAttribute ?? ''} onChange={e => update({ teamAttribute: e.target.value })}
+            placeholder="örn. displayName / division / dn-ou" />
+          <Field label="Team regex" small controlClassName="font-mono"
+            hint={'opsiyonel — ilk yakalama grubu ekip olur; ör. "…ÜNVAN-Ekip" için -([^-]+)$ (son tireden sonrası). Eşleşme yoksa ekip boş kalır.'}
+            value={cfg.teamRegex ?? ''} onChange={e => update({ teamRegex: e.target.value })} placeholder="-([^-]+)$" />
+        </div>
         {/* v0.8.430 — attribute discovery. Operator-reported: users.team
             herkes için üst division ("TECHNOLOGY") geliyordu çünkü AD bunu
             department'ta tutuyor; alt ekibin HANGİ attribute'ta olduğunu
@@ -217,135 +208,112 @@ export function LDAPTab() {
         <InspectPanel onPick={(attr, pattern) => update({ teamAttribute: attr, teamRegex: pattern })} />
 
         {/* ── Section 3: Groups ──────────────────────────────────────── */}
-        <SectionTitle>Group lookup (optional)</SectionTitle>
-        <p style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 8 }}>
+        <SectionHead title="Group lookup (optional)" description={<>
           Some directories don't populate <code>memberOf</code> on user entries.
           Set a group base + filter to do a separate group search; otherwise leave blank.
-        </p>
-        <Row>
-          <Field2 label="Group search base">
-            <input value={cfg.groupSearchBase}
-                   onChange={e => update({ groupSearchBase: e.target.value })}
-                   placeholder="OU=Groups,DC=corp,DC=example" style={{ width: '100%' }} />
-          </Field2>
-        </Row>
-        <Row>
-          <Field2 label="Group filter" hint="{{userDN}} is replaced at runtime">
-            <input value={cfg.groupFilter} onChange={e => update({ groupFilter: e.target.value })}
-                   placeholder="(member={{userDN}})" style={{ width: '100%' }} />
-          </Field2>
-        </Row>
-        <Row>
-          <label style={{
-            display: 'flex', alignItems: 'flex-start', gap: 8,
-            fontSize: 12, cursor: 'pointer', padding: '8px 0',
-          }}>
-            <input type="checkbox"
-              checked={!!cfg.skipMemberOfFetch}
-              onChange={e => update({ skipMemberOfFetch: e.target.checked })}
-              style={{ marginTop: 2 }} />
-            <span>
-              <span style={{ fontWeight: 600 }}>
-                Skip memberOf in user search (AD MaxValRange / 1MB workaround)
-              </span>
-              <span style={{ display: 'block', color: 'var(--text3)', fontSize: 11, marginTop: 2, lineHeight: 1.5 }}>
-                Set when users with very large nested-group memberships trip
-                AD's <code>MaxValRange</code> (1500) or <code>MaxReceiveBuffer</code>
-                (~1MB) caps and login fails with "size limit" / "1MB area" /
-                <code>LDAP_ADMIN_LIMIT_EXCEEDED</code>. Drops the
-                <code>memberOf</code> attribute from the user search; the
-                separate group search (above) then becomes the authoritative
-                role source. <b>Requires Group search base + filter to be set.</b>
-              </span>
-            </span>
-          </label>
-        </Row>
+        </>} />
+        <div className={ROW}>
+          <Field label="Group search base" className={GROW}
+            value={cfg.groupSearchBase} onChange={e => update({ groupSearchBase: e.target.value })}
+            placeholder="OU=Groups,DC=corp,DC=example" />
+        </div>
+        <div className={ROW}>
+          <Field label="Group filter" hint="{{userDN}} is replaced at runtime" className={GROW}
+            value={cfg.groupFilter} onChange={e => update({ groupFilter: e.target.value })} placeholder="(member={{userDN}})" />
+        </div>
+        <div className={ROW}>
+          <CheckboxField className="py-2" checked={!!cfg.skipMemberOfFetch}
+            onCheckedChange={v => update({ skipMemberOfFetch: v })}
+            label={<span className="font-semibold">Skip memberOf in user search (AD MaxValRange / 1MB workaround)</span>}
+            hint={<span className="leading-normal">
+              Set when users with very large nested-group memberships trip
+              AD's <code>MaxValRange</code> (1500) or <code>MaxReceiveBuffer</code>
+              (~1MB) caps and login fails with "size limit" / "1MB area" /
+              <code>LDAP_ADMIN_LIMIT_EXCEEDED</code>. Drops the
+              <code>memberOf</code> attribute from the user search; the
+              separate group search (above) then becomes the authoritative
+              role source. <b>Requires Group search base + filter to be set.</b>
+            </span>} />
+        </div>
 
         {/* ── Section 4: Role mapping ────────────────────────────────── */}
-        <SectionTitle>Group → role mapping</SectionTitle>
-        <p style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 8 }}>
+        <SectionHead title="Group → role mapping" description={<>
           When a user signs in, we walk their group memberships and pick the
           highest-privilege match. Group string can be a full DN or a CN
           fragment — match is case-insensitive substring.
-        </p>
+        </>} />
         {/* v0.10.942 — statik tablo: düzenlenebilir eşleme listesi (T1).
             v0.10.977 — dilim 3'ün "sınıf karşılığı yok" diye bıraktığı 4px hücre
             dolgusu düştü: giriş kutuları taban `tbody td` ritminde (T5/T6,
             yoğunluk ayarı artık ulaşır); silme hücresi tek sağ eylem sütunu
             (`col-actions`, T8). Başlık dolgusu da tabana indi ki sütun metni
-            hücreyle hizalı kalsın. */}
-        <table style={{ marginBottom: 8 }}>
-          <thead>
-            <tr style={{ background: 'var(--bg)', color: 'var(--text2)' }}>
-              <th>Group (DN or CN substring)</th>
-              <th style={{ width: 160 }}>Role</th>
-              <th className="col-actions" aria-label="Eylemler" style={{ width: 32 }} />
-            </tr>
-          </thead>
-          <tbody>
+            hücreyle hizalı kalsın.
+            Faz 2 dilim 1 R10 — shadcn Table (satır ritmi --row-h), kolonlar aynı. */}
+        <Table className="mb-2 tabular-nums">
+          <TableHeader>
+            <TableRow className="bg-(--bg) text-(--text2)">
+              <TableHead>Group (DN or CN substring)</TableHead>
+              <TableHead className="w-[160px]">Role</TableHead>
+              <TableHead className="col-actions w-8" aria-label="Eylemler" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {(cfg.groupRoleMap || []).map((m, i) => (
-              <tr key={i}>
-                <td>
-                  <input value={m.group}
-                         onChange={e => updateMapping(cfg, setCfg, i, { group: e.target.value })}
-                         placeholder="CN=Coremetry-Admins,OU=Groups,DC=corp,DC=example"
-                         style={{ width: '100%' }} />
-                </td>
-                <td>
-                  <select value={m.role}
-                          onChange={e => updateMapping(cfg, setCfg, i, { role: e.target.value as Role })}>
+              <TableRow key={i}>
+                <TableCell>
+                  <Input value={m.group} aria-label="Group (DN or CN substring)"
+                    onChange={e => updateMapping(cfg, setCfg, i, { group: e.target.value })}
+                    placeholder="CN=Coremetry-Admins,OU=Groups,DC=corp,DC=example"
+                    className={cn('h-7', CELL_CTL)} />
+                </TableCell>
+                <TableCell>
+                  <NativeSelect size="sm" value={m.role} aria-label="Role" className={cn('h-7 data-[size=sm]:h-7', CELL_CTL)}
+                    onChange={e => updateMapping(cfg, setCfg, i, { role: e.target.value as Role })}>
                     <option value="admin">admin</option>
                     <option value="editor">editor</option>
                     <option value="viewer">viewer</option>
-                  </select>
-                </td>
-                <td className="col-actions">
+                  </NativeSelect>
+                </TableCell>
+                <TableCell className="col-actions">
                   <Button variant="ghost-danger" size="sm"
-                          onClick={() => removeMapping(cfg, setCfg, i)}
-                          title="Remove this group mapping"
-                          aria-label="Remove this group mapping">×</Button>
-                </td>
-              </tr>
+                    onClick={() => removeMapping(cfg, setCfg, i)}
+                    title="Remove this group mapping"
+                    aria-label="Remove this group mapping">×</Button>
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
-        <Button type="button" variant="secondary" size="sm"
-                onClick={() => addMapping(cfg, setCfg)}>
+          </TableBody>
+        </Table>
+        <Button type="button" variant="secondary" size="sm" className="mb-3"
+          onClick={() => addMapping(cfg, setCfg)}>
           + Add mapping
         </Button>
 
-        <Row>
-          <Field2 label="Default role" hint="Applied when no group matches">
-            <select value={cfg.defaultRole}
-                    onChange={e => update({ defaultRole: e.target.value as Role })}
-                    style={{ width: '100%' }}>
-              <option value="viewer">viewer</option>
-              <option value="editor">editor</option>
-              <option value="admin">admin</option>
-            </select>
-          </Field2>
-        </Row>
+        <div className={ROW}>
+          <SelectField label="Default role" hint="Applied when no group matches" className={GROW}
+            value={cfg.defaultRole} onChange={e => update({ defaultRole: e.target.value as Role })}>
+            <option value="viewer">viewer</option>
+            <option value="editor">editor</option>
+            <option value="admin">admin</option>
+          </SelectField>
+        </div>
 
         <GroupSyncSection cfg={cfg} update={update} />
 
         {msg && (
-          <div style={{
-            margin: '14px 0 12px', padding: '6px 10px', borderRadius: 4, fontSize: 12,
-            color: msg.kind === 'ok' ? 'var(--ok)' : 'var(--err)',
-            background: msg.kind === 'ok' ? 'rgba(63,185,80,0.10)' : 'rgba(220,38,38,0.08)',
-            border: `1px solid ${msg.kind === 'ok' ? 'rgba(63,185,80,0.35)' : 'rgba(220,38,38,0.3)'}`,
-          }}>
+          <div className={cn('mt-3.5 mb-3 rounded-sm border px-2.5 py-1.5 text-[length:var(--fs-sm)]',
+            msg.kind === 'ok' ? 'text-(--ok) bg-(--ok)/10 border-(--ok)/35' : 'text-(--err) bg-(--err)/8 border-(--err)/30')}>
             {msg.text}
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-          <Button type="submit" variant="primary" loading={busy}>
-            Save
-          </Button>
-          <Button type="button" variant="secondary" disabled={busy} onClick={test}>
-            Test connection
-          </Button>
+        {/* D4 — birincil (Save) en sağda, ikincil solunda. */}
+        <div className="mt-4">
+          <ActionRow
+            secondary={<Button type="button" variant="secondary" size="sm" disabled={busy} onClick={() => { void test(); }}>
+              Test connection
+            </Button>}
+            confirm={<Button type="submit" size="sm" loading={busy}>Save</Button>} />
         </div>
       </form>
 
@@ -366,100 +334,70 @@ function GroupSyncSection({ cfg, update }: {
   update: (patch: Partial<LDAPConfig>) => void;
 }) {
   const gs = cfg.groupSync ?? emptyGroupSync();
-  const patch = (p: Partial<import('@/lib/types').LDAPGroupSyncConfig>) =>
+  const patch = (p: Partial<LDAPGroupSyncConfig>) =>
     update({ groupSync: { ...gs, ...p } });
   const linesToList = (s: string) => s.split('\n').map(x => x.trim()).filter(Boolean);
 
   return (
     <>
-      <SectionTitle>Group sync (directory → members)</SectionTitle>
-      <p style={{ fontSize: 11.5, color: 'var(--text3)', margin: '0 0 8px' }}>
+      <SectionHead title="Group sync (directory → members)" description={<>
         Periyodik olarak kapsamdaki AD gruplarını ve (nested dahil) efektif
         üyelerini keşfeder; yetkilendirme için kullanılır. Login-anı grup
         aramasından bağımsızdır. Kaydettikten sonra aşağıdaki karttan
         <b> Şimdi senkronla</b> / <b>Önizle</b> ile test et.
-      </p>
-      <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-        <input type="checkbox" checked={gs.enabled}
-               onChange={e => patch({ enabled: e.target.checked })} />
-        <span style={{ fontSize: 13, fontWeight: 600 }}>Enable group sync</span>
-      </label>
-      <Row>
-        <Field2 label="Sync interval" hint="ör. 30m" small>
-          <input value={gs.syncInterval} onChange={e => patch({ syncInterval: e.target.value })}
-                 placeholder="30m" style={{ width: '100%' }} />
-        </Field2>
-        <Field2 label="Timeout" hint="tam senkron başına, ör. 60s" small>
-          <input value={gs.timeout} onChange={e => patch({ timeout: e.target.value })}
-                 placeholder="60s" style={{ width: '100%' }} />
-        </Field2>
-        <Field2 label="Page size" hint="AD MaxPageSize 1000 altı" small>
-          <input type="number" value={gs.pageSize || ''}
-                 onChange={e => patch({ pageSize: parseInt(e.target.value, 10) || 0 })}
-                 placeholder="500" style={{ width: '100%' }} />
-        </Field2>
-        <Field2 label="Max members / group" hint="aşan grup kırpılır" small>
-          <input type="number" value={gs.maxGroupMembers || ''}
-                 onChange={e => patch({ maxGroupMembers: parseInt(e.target.value, 10) || 0 })}
-                 placeholder="50000" style={{ width: '100%' }} />
-        </Field2>
-      </Row>
-      <Row>
-        <Field2 label="Users base DN" hint="kullanıcı aramasının kökü">
-          <input value={gs.usersBaseDN} onChange={e => patch({ usersBaseDN: e.target.value })}
-                 placeholder="OU=Users,DC=corp,DC=example" className="mono" style={{ width: '100%' }} />
-        </Field2>
-        <Field2 label="User filter" small>
-          <input value={gs.userFilter} onChange={e => patch({ userFilter: e.target.value })}
-                 placeholder="(objectClass=user)" className="mono" style={{ width: '100%' }} />
-        </Field2>
-        <Field2 label="Username attr" hint="üye kimliği" small>
-          <input value={gs.userNameAttribute} onChange={e => patch({ userNameAttribute: e.target.value })}
-                 placeholder="sAMAccountName" style={{ width: '100%' }} />
-        </Field2>
-      </Row>
-      <Row>
-        <Field2 label="Groups base DN" hint="grup keşfinin kökü">
-          <input value={gs.groupsBaseDN} onChange={e => patch({ groupsBaseDN: e.target.value })}
-                 placeholder="OU=Groups,DC=corp,DC=example" className="mono" style={{ width: '100%' }} />
-        </Field2>
-        <Field2 label="Group filter" small>
-          <input value={gs.groupFilter} onChange={e => patch({ groupFilter: e.target.value })}
-                 placeholder="(objectClass=group)" className="mono" style={{ width: '100%' }} />
-        </Field2>
-      </Row>
-      <Row>
-        <Field2 label="Include prefixes" hint="her satır bir DN/OU soneki — boşsa tüm gruplar">
-          <textarea value={(gs.includePrefixes || []).join('\n')}
-                    onChange={e => patch({ includePrefixes: linesToList(e.target.value) })}
-                    rows={2} spellCheck={false}
-                    placeholder="OU=DistributionGroups,OU=Groups,DC=corp,DC=example"
-                    style={{ width: '100%', fontFamily: 'var(--font-mono)', fontSize: 11.5 }} />
-        </Field2>
-        <Field2 label="Exclude prefixes" hint="kapsam dışı bırakılacaklar">
-          <textarea value={(gs.excludePrefixes || []).join('\n')}
-                    onChange={e => patch({ excludePrefixes: linesToList(e.target.value) })}
-                    rows={2} spellCheck={false}
-                    style={{ width: '100%', fontFamily: 'var(--font-mono)', fontSize: 11.5 }} />
-        </Field2>
-      </Row>
+      </>} />
+      <CheckboxField className="mb-3" checked={gs.enabled} onCheckedChange={v => patch({ enabled: v })}
+        label={<span className="text-[length:var(--fs-md)] font-semibold">Enable group sync</span>} />
+      <div className={ROW}>
+        <Field label="Sync interval" hint="ör. 30m" small
+          value={gs.syncInterval} onChange={e => patch({ syncInterval: e.target.value })} placeholder="30m" />
+        <Field label="Timeout" hint="tam senkron başına, ör. 60s" small
+          value={gs.timeout} onChange={e => patch({ timeout: e.target.value })} placeholder="60s" />
+        <Field label="Page size" hint="AD MaxPageSize 1000 altı" small
+          type="number" value={gs.pageSize || ''}
+          onChange={e => patch({ pageSize: parseInt(e.target.value, 10) || 0 })} placeholder="500" />
+        <Field label="Max members / group" hint="aşan grup kırpılır" small
+          type="number" value={gs.maxGroupMembers || ''}
+          onChange={e => patch({ maxGroupMembers: parseInt(e.target.value, 10) || 0 })} placeholder="50000" />
+      </div>
+      <div className={ROW}>
+        <Field label="Users base DN" hint="kullanıcı aramasının kökü" className={GROW} controlClassName="font-mono"
+          value={gs.usersBaseDN} onChange={e => patch({ usersBaseDN: e.target.value })} placeholder="OU=Users,DC=corp,DC=example" />
+        <Field label="User filter" small controlClassName="font-mono"
+          value={gs.userFilter} onChange={e => patch({ userFilter: e.target.value })} placeholder="(objectClass=user)" />
+        <Field label="Username attr" hint="üye kimliği" small
+          value={gs.userNameAttribute} onChange={e => patch({ userNameAttribute: e.target.value })} placeholder="sAMAccountName" />
+      </div>
+      <div className={ROW}>
+        <Field label="Groups base DN" hint="grup keşfinin kökü" className={GROW} controlClassName="font-mono"
+          value={gs.groupsBaseDN} onChange={e => patch({ groupsBaseDN: e.target.value })} placeholder="OU=Groups,DC=corp,DC=example" />
+        <Field label="Group filter" small controlClassName="font-mono"
+          value={gs.groupFilter} onChange={e => patch({ groupFilter: e.target.value })} placeholder="(objectClass=group)" />
+      </div>
+      <div className={ROW}>
+        <TextareaField label="Include prefixes" hint="her satır bir DN/OU soneki — boşsa tüm gruplar" className={GROW}
+          value={(gs.includePrefixes || []).join('\n')}
+          onChange={e => patch({ includePrefixes: linesToList(e.target.value) })}
+          rows={2} spellCheck={false} controlClassName={MONO_XS}
+          placeholder="OU=DistributionGroups,OU=Groups,DC=corp,DC=example" />
+        <TextareaField label="Exclude prefixes" hint="kapsam dışı bırakılacaklar" className={GROW}
+          value={(gs.excludePrefixes || []).join('\n')}
+          onChange={e => patch({ excludePrefixes: linesToList(e.target.value) })}
+          rows={2} spellCheck={false} controlClassName={MONO_XS} />
+      </div>
       {/* Sır kaynağı referansları (dosya/env) — doluysa yukarıdaki inline
           CA/bind şifresini EZER (audit kararı). Değer sırrın kendisi değil,
           yol/anahtar olduğundan düz gösterilir. */}
-      <Row>
-        <Field2 label="CA file path" hint="doluysa inline CA cert'i ezer" small>
-          <input value={cfg.caFile ?? ''} onChange={e => update({ caFile: e.target.value })}
-                 placeholder="/etc/coremetry/ldap-ca.pem" className="mono" style={{ width: '100%' }} />
-        </Field2>
-        <Field2 label="Bind password file" hint="doluysa inline şifreyi ezer" small>
-          <input value={cfg.bindPasswordFile ?? ''} onChange={e => update({ bindPasswordFile: e.target.value })}
-                 placeholder="/etc/coremetry/ldap-bind.pass" className="mono" style={{ width: '100%' }} />
-        </Field2>
-        <Field2 label="Bind password env" hint="ortam değişkeni adı" small>
-          <input value={cfg.bindPasswordEnv ?? ''} onChange={e => update({ bindPasswordEnv: e.target.value })}
-                 placeholder="COREMETRY_LDAP_BIND_PASSWORD" className="mono" style={{ width: '100%' }} />
-        </Field2>
-      </Row>
+      <div className={ROW}>
+        <Field label="CA file path" hint="doluysa inline CA cert'i ezer" small controlClassName="font-mono"
+          value={cfg.caFile ?? ''} onChange={e => update({ caFile: e.target.value })} placeholder="/etc/coremetry/ldap-ca.pem" />
+        <Field label="Bind password file" hint="doluysa inline şifreyi ezer" small controlClassName="font-mono"
+          value={cfg.bindPasswordFile ?? ''} onChange={e => update({ bindPasswordFile: e.target.value })}
+          placeholder="/etc/coremetry/ldap-bind.pass" />
+        <Field label="Bind password env" hint="ortam değişkeni adı" small controlClassName="font-mono"
+          value={cfg.bindPasswordEnv ?? ''} onChange={e => update({ bindPasswordEnv: e.target.value })}
+          placeholder="COREMETRY_LDAP_BIND_PASSWORD" />
+      </div>
     </>
   );
 }
@@ -468,8 +406,8 @@ function GroupSyncSection({ cfg, update }: {
 // dry-run önizleme. Form ayrı kaydedildikten sonra kullanılır; her üç
 // çağrı da admin-gated ve CH'ye (preview hariç) yazar.
 function GroupSyncStatus() {
-  const [sum, setSum] = useState<import('@/lib/types').LDAPGroupSyncSummary | null | undefined>(undefined);
-  const [prev, setPrev] = useState<import('@/lib/types').LDAPGroupSyncPreview | null>(null);
+  const [sum, setSum] = useState<LDAPGroupSyncSummary | null | undefined>(undefined);
+  const [prev, setPrev] = useState<LDAPGroupSyncPreview | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
@@ -495,43 +433,43 @@ function GroupSyncStatus() {
     } finally { setBusy(false); }
   };
 
-  if (sum === undefined) return <div style={{ marginTop: 18 }}><Spinner /></div>;
+  if (sum === undefined) return <div className="mt-[18px]"><Spinner /></div>;
+
+  const zeroMatch = !!sum && sum.stats.totalAlias > 0 && sum.stats.matchRatio === 0;
 
   return (
-    <div style={{ marginTop: 18, padding: 16, borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--border)' }}>
-      <h3 style={{ fontSize: 13, fontWeight: 600, margin: '0 0 8px' }}>
+    <div className={cn('mt-[18px]', CARD)}>
+      <h3 className="mb-2 flex items-center gap-2 text-[length:var(--fs-md)] font-semibold">
         Group sync durumu
-        {sum && (sum.enabled
-          ? <span className="badge b-gray" style={{ marginLeft: 8 }}>aktif</span>
-          : <span className="badge b-gray" style={{ marginLeft: 8 }}>kapalı</span>)}
+        {/* K5 — ayarın hâli nötr (ne sağlık ne sapma). */}
+        {sum && <StatusBadge status="unknown">{sum.enabled ? 'aktif' : 'kapalı'}</StatusBadge>}
       </h3>
       {!sum || !sum.configured ? (
-        <p style={{ fontSize: 12, color: 'var(--text3)' }}>
+        <p className="text-[length:var(--fs-sm)] text-(--text3)">
           LDAP yapılandırılmamış. Bağlantıyı kurup kaydettikten sonra senkron çalışır.
         </p>
       ) : (
         <>
-          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 12, marginBottom: 10 }}>
+          <div className="mb-2.5 flex flex-wrap gap-4 text-[length:var(--fs-sm)] tabular-nums">
             <span>Snapshot: <b>{sum.synced ? 'var' : 'yok'}</b></span>
             {sum.syncedAt && <span>Son senkron: <b className="mono">{tsLong(new Date(sum.syncedAt).getTime() * 1e6)}</b></span>}
             <span>Gruplar: <b className="mono">{sum.stats.groups}</b></span>
             <span>Üyeler: <b className="mono">{sum.stats.users}</b></span>
-            {sum.stats.truncated > 0 && <span style={{ color: 'var(--warn)' }}>kırpılan: <b>{sum.stats.truncated}</b></span>}
+            {sum.stats.truncated > 0 && <span className="text-(--warn)">kırpılan: <b>{sum.stats.truncated}</b></span>}
             <span title="Alias'ların Coremetry kullanıcılarıyla kesişim oranı">
-              Kimlik eşleşmesi: <b className={sum.stats.totalAlias > 0 && sum.stats.matchRatio === 0 ? '' : 'mono'}
-                style={{ color: sum.stats.totalAlias > 0 && sum.stats.matchRatio === 0 ? 'var(--err)' : undefined }}>
+              Kimlik eşleşmesi: <b className={zeroMatch ? 'text-(--err)' : 'mono'}>
                 %{(sum.stats.matchRatio * 100).toFixed(0)}</b>
             </span>
           </div>
-          {sum.stats.totalAlias > 0 && sum.stats.matchRatio === 0 && (
+          {zeroMatch && (
             <FlashBox kind="err">
               Senkron çalıştı ama HİÇBİR üye bir Coremetry kullanıcısıyla eşleşmedi —
               userNameAttribute / alias eşlemesini users.email veya users.ldap_username
               ile kontrol edin (Inspect ile alanı doğrulayın).
             </FlashBox>
           )}
-          <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-            <Button variant="primary" size="sm" type="button" onClick={() => { void syncNow(); }} loading={busy}>
+          <div className="mb-2 flex gap-2">
+            <Button size="sm" type="button" onClick={() => { void syncNow(); }} loading={busy}>
               ⟳ Şimdi senkronla
             </Button>
             <Button variant="secondary" size="sm" type="button" disabled={busy} onClick={() => { void preview(); }}>
@@ -540,26 +478,28 @@ function GroupSyncStatus() {
           </div>
           {msg && <FlashBox kind={msg.kind}>{msg.text}</FlashBox>}
           {prev && (
-            <div style={{ marginTop: 8, fontSize: 12 }}>
-              <div style={{ marginBottom: 6 }}>
+            <div className="mt-2 text-[length:var(--fs-sm)]">
+              <div className="mb-1.5 tabular-nums">
                 Kapsamda <b>{prev.totalGroupsInScope}</b> grup · örneklenen <b>{prev.sampledGroups}</b> ·
                 kimlik eşleşmesi <b>%{(prev.matchRatio * 100).toFixed(0)}</b> ({prev.matched}/{prev.totalAliases})
               </div>
               {prev.warning && <FlashBox kind="err">{prev.warning}</FlashBox>}
-              <div className="table-wrap is-scroll" style={{ maxHeight: 260 }}>
+              <div className="table-wrap is-scroll max-h-[260px]">
                 {/* v0.10.942 — statik tablo: önizleme en çok 10 grup örnekler, sıralanmaz (T1). */}
-                <table>
-                  <thead><tr><th>Grup (CN)</th><th>Üye</th><th>Örnek üyeler</th></tr></thead>
-                  <tbody>
+                <Table className="tabular-nums">
+                  <TableHeader>
+                    <TableRow><TableHead>Grup (CN)</TableHead><TableHead className="num">Üye</TableHead><TableHead>Örnek üyeler</TableHead></TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {prev.groups.map(g => (
-                      <tr key={g.uid}>
-                        <td className="mono" title={g.dn}>{g.cn}</td>
-                        <td className="num">{g.memberCount}</td>
-                        <td className="mono cell-muted">{g.sampleMembers.join(', ') || '—'}</td>
-                      </tr>
+                      <TableRow key={g.uid}>
+                        <TableCell className="font-mono" title={g.dn}>{g.cn}</TableCell>
+                        <TableCell className="num">{g.memberCount}</TableCell>
+                        <TableCell className="font-mono whitespace-normal text-(--text2)">{g.sampleMembers.join(', ') || '—'}</TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
             </div>
           )}
@@ -569,7 +509,7 @@ function GroupSyncStatus() {
   );
 }
 
-function emptyGroupSync(): import('@/lib/types').LDAPGroupSyncConfig {
+function emptyGroupSync(): LDAPGroupSyncConfig {
   return {
     enabled: false, syncInterval: '30m', timeout: '60s', pageSize: 500,
     usersBaseDN: '', userFilter: '(objectClass=user)', userNameAttribute: 'sAMAccountName',
@@ -621,65 +561,65 @@ function InspectPanel({ onPick }: { onPick: (attr: string, pattern: string) => v
   };
 
   return (
-    <div style={{
-      marginTop: 10, padding: '10px 12px', borderRadius: 6,
-      background: 'var(--bg1)', border: '1px solid var(--border)',
-    }}>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-        <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4, color: 'var(--text2)' }}>
+    <div className="mt-2.5 mb-3 rounded-md border border-(--border) bg-(--bg1) px-3 py-2.5">
+      <div className="mb-2 flex items-center gap-2">
+        <span className="text-[length:var(--fs-xs)] font-bold tracking-[0.4px] text-(--text2) uppercase">
           Kullanıcı incele
         </span>
-        <input value={u} onChange={e => setU(e.target.value)}
+        <Input value={u} onChange={e => setU(e.target.value)} aria-label="Kullanıcı incele"
           onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void run(); } }}
-          placeholder="kullanıcı adı" style={{ width: 200, fontSize: 12 }} />
+          placeholder="kullanıcı adı" className={cn('h-8 w-[200px]', CELL_CTL)} />
         <Button variant="secondary" size="sm" type="button" onClick={() => { void run(); }} disabled={busy || !u.trim()}>
           {busy ? 'Sorgulanıyor…' : 'Attribute\'ları getir'}
         </Button>
-        {err && <span style={{ fontSize: 12, color: 'var(--err)' }}>{err}</span>}
+        {err && <span className="text-[length:var(--fs-sm)] text-(--err)">{err}</span>}
       </div>
       {res && (
         <>
-          <div className="mono" style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 6, overflowWrap: 'anywhere' }}>
+          <div className="mono mb-1.5 text-[length:var(--fs-xs)] text-(--text2) [overflow-wrap:anywhere]">
             {res.dn}
           </div>
-          <div style={{ fontSize: 11, marginBottom: 8, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          <div className="mb-2 flex flex-wrap gap-3 text-[length:var(--fs-xs)]">
             <span>Şu anki team değeri: <b className="mono">{res.team || '—'}</b></span>
             <span title="Team attribute = dn-ou seçilirse bu değer yazılır">
               dn-ou verirdi: <b className="mono">{res.deepestOu || '—'}</b>
             </span>
           </div>
           {picked && (
-            <div style={{ fontSize: 12, color: 'var(--ok)', marginBottom: 6 }}>
+            // "✓ Seçildi" — kullanıcının az önce bastığı adayın geri bildirimi (K5: yeşil serbest).
+            <div className="mb-1.5 text-[length:var(--fs-sm)] text-(--ok)">
               ✓ Seçildi: <b className="mono">{picked}</b> — yukarıdaki Team attribute/regex
               alanları dolduruldu; <b>Kaydet</b>'e basıp çıkış/giriş yapınca uygulanır.
             </div>
           )}
-          <div className="table-wrap is-scroll" style={{ maxHeight: 360 }}>
+          <div className="table-wrap is-scroll max-h-[360px]">
             {/* v0.10.942 — statik tablo: seçici liste, aday düğmesi Team alanlarını doldurur (T1). */}
-            <table>
-              <thead><tr><th>Attribute</th><th>Değer(ler)</th><th>Ekip adayları — tıkla, seç</th></tr></thead>
-              <tbody>
+            <Table className="tabular-nums">
+              <TableHeader>
+                <TableRow><TableHead>Attribute</TableHead><TableHead>Değer(ler)</TableHead><TableHead>Ekip adayları — tıkla, seç</TableHead></TableRow>
+              </TableHeader>
+              <TableBody>
                 {Object.entries(res.attributes).sort(([a], [b]) => a.localeCompare(b)).map(([k, vs]) => (
-                  <tr key={k}>
-                    <td className="mono">{k}</td>
-                    <td className="mono">{vs.join(' · ')}</td>
-                    <td>
+                  <TableRow key={k}>
+                    <TableCell className="font-mono">{k}</TableCell>
+                    <TableCell className="font-mono whitespace-normal [overflow-wrap:anywhere]">{vs.join(' · ')}</TableCell>
+                    <TableCell className="whitespace-normal">
                       {/* v0.8.523 — sunucu ürettiği canlı-önizlemeli adaylar:
                           operatör ÇIKAN DEĞERİ görür, tıklar; regex arkada. */}
-                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                      <div className="flex flex-wrap gap-1 py-1">
                         {(res.teamCandidates?.[k] ?? []).map(c => (
-                          <Button key={c.pattern || 'raw'} variant="secondary" size="sm"
+                          <Button key={c.pattern || 'raw'} variant="secondary" size="xs"
                             title={`${c.label}${c.pattern ? ` — regex: ${c.pattern}` : ''}`}
                             onClick={() => { onPick(k, c.pattern); setPicked(c.extracted); }}>
                             {c.extracted.length > 40 ? c.extracted.slice(0, 40) + '…' : c.extracted}
                           </Button>
                         ))}
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         </>
       )}

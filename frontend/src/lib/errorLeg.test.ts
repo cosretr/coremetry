@@ -87,7 +87,9 @@ const CONVERTED: Array<[file: string, release: string, what: string]> = [
 // bağlı: ya <QueryError>/<QueryErrorInline>, ya da <DataTableState> İLE
 // birlikte `kind: 'error'` / `kind="error"`. Tek başına kind:'error' yetmez.
 const ERROR_LEG = /<QueryError(Inline)?\b/;
-const TABLE_STATE = /<DataTableState\b/;
+// Faz 2 dilim 1 R10: coremetry DataTable aynı 'error' durumunu `state=` prop'u
+// ya da `<DataTableStateRow>` ile basar — ikisi de aynı imza.
+const TABLE_STATE = /<DataTableState(Row)?\b|<DataTable\b[\s\S]*?\bstate=/;
 const TABLE_ERROR_KIND = /\bkind:\s*'error'|\bkind="error"/;
 const hasErrorLeg = (src: string): boolean =>
   ERROR_LEG.test(src) || (TABLE_STATE.test(src) && TABLE_ERROR_KIND.test(src));

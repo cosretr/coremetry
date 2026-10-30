@@ -10,6 +10,7 @@
 // ön koşul uyarısı + PUT gövdesi linkLdapByUsername:true; admin alt kutusu
 // yalnız bağlama açıkken etkin ve ayrı uyarı; güven kapatılınca ikisi de false
 // gider; kullanıcı adı claim'i kutusu bağlama açıkken düzenlenebilir.
+import '@/test/radixJsdom'; // Faz 2 dilim 1 R10: Radix Checkbox (form içi) jsdom eksikleri
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -114,7 +115,7 @@ describe('SsoTab — LDAP hesabını kullanıcı adıyla SSO\'ya bağla (v0.10.1
     expect(box(el, ADMIN).disabled).toBe(true);
     expect(el.textContent).not.toContain(t('sso.ldapLink.warning', 'tr'));
     act(() => { box(el, LINK).click(); });
-    expect(box(el, LINK).checked).toBe(true);
+    expect(box(el, LINK).getAttribute('aria-checked')).toBe('true');
     expect(box(el, ADMIN).disabled).toBe(false);
     expect(box(el, CLAIM).disabled).toBe(false);
     expect(el.textContent).toContain(t('sso.ldapLink.warning', 'tr'));
@@ -139,11 +140,11 @@ describe('SsoTab — LDAP hesabını kullanıcı adıyla SSO\'ya bağla (v0.10.1
       linkLdapByUsername: true, linkLdapByUsernameAllowAdmin: true }));
     h.put.mockResolvedValue(snap());
     const el = await mount();
-    expect(box(el, LINK).checked).toBe(true);
-    expect(box(el, ADMIN).checked).toBe(true);
+    expect(box(el, LINK).getAttribute('aria-checked')).toBe('true');
+    expect(box(el, ADMIN).getAttribute('aria-checked')).toBe('true');
     act(() => { box(el, TRUST).click(); });
     expect(box(el, LINK).disabled).toBe(true);
-    expect(box(el, LINK).checked).toBe(false);
+    expect(box(el, LINK).getAttribute('aria-checked')).toBe('false');
     await save(el);
     expect(h.put.mock.calls[0][0]).toMatchObject({ trustUnverifiedEmail: false, linkLdapByUsername: false, linkLdapByUsernameAllowAdmin: false });
   });

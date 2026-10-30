@@ -33,8 +33,9 @@ const files = readdirSync(__dirname)
 
 // Koşulsuz yeşil — ikisi de kullanıcı eyleminin doğrudan geri bildirimi.
 const UNCONDITIONAL_OK: Record<string, RegExp> = {
-  'LdapTab.tsx': /color: 'var\(--ok\)', marginBottom: 6/,        // "✓ Seçildi" (kullanıcı az önce seçti)
-  'LdapUserPicker.tsx': /color: 'var\(--ok\)' \}\}>\{provisionMsg\}/, // provision sonucu
+  // Faz 2 dilim 1 R10 — iki satır Tailwind utility'sine geçti (`text-(--ok)`).
+  'LdapTab.tsx': /<div className="mb-1\.5 text-\[length:var\(--fs-sm\)\] text-\(--ok\)">$/,        // "✓ Seçildi" (kullanıcı az önce seçti)
+  'LdapUserPicker.tsx': /text-\(--ok\)">\{provisionMsg\}/, // provision sonucu
 };
 const OK_BRANCH = /(kind === 'ok'|\btest\.ok|\btr\.ok) \?/;
 
@@ -85,7 +86,9 @@ describe('Settings sade palet — K5 artıkları (v0.10.929)', () => {
 
   it('var(--ok) yalnız eylem geri bildiriminin yeşil kolu', () => {
     for (const f of files) {
-      const lines = read(f).split('\n').filter(l => l.includes('var(--ok)'));
+      // R10 — iki yazım: `var(--ok)` ve Tailwind `text-(--ok)` / `bg-(--ok)/…`
+      // (tek yazımı tarayan kapı ikizini muaf tutardı).
+      const lines = read(f).split('\n').filter(l => l.includes('(--ok)'));
       for (const l of lines) {
         if (OK_BRANCH.test(l)) continue; // FlashBox dahil: kind === 'ok' ? 'var(--ok)'
         expect(UNCONDITIONAL_OK[f]?.test(l), `${f}: ${l.trim()}`).toBe(true);
@@ -109,9 +112,11 @@ describe('Settings sade palet — K5 artıkları (v0.10.929)', () => {
 
   it('Maintenance: DISABLED/PAST nötr, ACTIVE amber; Backup "+N new" --accent2', () => {
     const mt = read('MaintenanceTab.tsx');
-    expect(mt).toContain('<span className="badge b-gray" style={{ fontSize: 9 }}>DISABLED</span>');
-    expect(mt).toContain('<span className="badge b-gray" style={{ fontSize: 9 }}>PAST</span>');
-    expect(mt).toContain('<span className="badge b-warn" style={{ fontSize: 9 }}>ACTIVE</span>');
+    // Faz 2 dilim 1 R10 — `.badge b-*` → StatusBadge: nötr = 'unknown', amber = 'warn'.
+    expect(mt).toMatch(/disabled: \{ status: 'unknown', +label: 'DISABLED' \}/);
+    expect(mt).toMatch(/past: +\{ status: 'unknown', +label: 'PAST' \}/);
+    expect(mt).toMatch(/active: +\{ status: 'warn', +label: 'ACTIVE' \}/);
+    expect(mt).toContain('<StatusBadge status={b.status} size="sm">{b.label}</StatusBadge>');
     expect(read('BackupTab.tsx')).toContain("color: d.willAdd.length > 0 ? 'var(--accent2)' : 'var(--text3)'");
   });
 });

@@ -8,6 +8,7 @@
 // hiç çağırmaz; secret "· kayıtlı" işareti clientSecretStored'dan gelir ve
 // kutu boştur; test sonucu üç hâl (bulundu + uç noktalar, hata metni,
 // ağ hatası) formun içinde çizilir; boş secret PUT gövdesine girmez.
+import '@/test/radixJsdom'; // Faz 2 dilim 1 R10: Radix Checkbox (form içi) jsdom eksikleri
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -128,7 +129,7 @@ describe('SSOTab — admin', () => {
     } });
     const el = await mount();
     await act(async () => { button(el, 'Bağlantıyı test et')!.click(); });
-    const res = el.querySelector('.sso-result')!;
+    const res = el.querySelector('[data-testid="sso-result"]')!;
     expect(res.textContent).toContain('Kimlik sağlayıcı bulundu');
     expect(res.textContent).toContain('https://idp.example.test/token');
     expect(res.textContent).toContain('https://idp.example.test/certs');
@@ -141,17 +142,17 @@ describe('SSOTab — admin', () => {
     h.test.mockResolvedValueOnce({ ok: false, error: 'keşif uç noktası HTTP 404 döndü' });
     const el = await mount();
     await act(async () => { button(el, 'Bağlantıyı test et')!.click(); });
-    expect(el.querySelector('.sso-result')!.textContent).toContain('Bağlantı başarısız: keşif uç noktası HTTP 404 döndü');
+    expect(el.querySelector('[data-testid="sso-result"]')!.textContent).toContain('Bağlantı başarısız: keşif uç noktası HTTP 404 döndü');
     h.test.mockRejectedValueOnce(new Error('HTTP 403: {"error":"forbidden"}'));
     await act(async () => { button(el, 'Bağlantıyı test et')!.click(); });
-    expect(el.querySelector('.sso-result')!.textContent).toContain('Bağlantı başarısız: forbidden');
+    expect(el.querySelector('[data-testid="sso-result"]')!.textContent).toContain('Bağlantı başarısız: forbidden');
   });
 
   // v0.10.1110 — Yetki servisi (merkezi login) alt bölümü.
   it('yetki servisi: kayıtlı anahtar işareti, uç + başlık satırı, claim KAPALI açıklaması', async () => {
     h.get.mockResolvedValue({ ...stored, permissionServiceEnabled: true, permissionServiceKeySet: true, permissionTTLSeconds: 600 });
     const el = await mount();
-    const sec = el.querySelector('.sso-perm')!;
+    const sec = el.querySelector('section[aria-label="Yetki servisi (merkezi login)"]')!;
     expect(sec.textContent).toContain('Yetki servisi (merkezi login)');
     const key = input(el, 'Paylaşılan anahtar');
     expect(key.type).toBe('password');
@@ -173,7 +174,7 @@ describe('SSOTab — admin', () => {
   it('yetki servisi: claim\'den rol AÇIKKEN açıklama "yalnız düşürür" der', async () => {
     h.get.mockResolvedValue({ ...stored, roleFromClaim: true });
     const el = await mount();
-    const sec = el.querySelector('.sso-perm')!;
+    const sec = el.querySelector('section[aria-label="Yetki servisi (merkezi login)"]')!;
     expect(sec.textContent).toContain('yalnız düşürür');
     expect(sec.textContent).toContain('yükseltme Kullanıcılar sayfasından');
   });
@@ -196,14 +197,14 @@ describe('SSOTab — admin', () => {
   it('anahtarsız kabul: tek satırlık uyarı her zaman, liste boşken görünür uyarı satırı', async () => {
     h.get.mockResolvedValue({ ...stored, permissionServiceEnabled: true, permissionServiceAllowNoKey: true });
     const el = await mount();
-    const sec = el.querySelector('.sso-perm')!;
+    const sec = el.querySelector('section[aria-label="Yetki servisi (merkezi login)"]')!;
     const cb = Array.from(sec.querySelectorAll('label')).find(l => l.textContent?.includes('Anahtarsız kabul et'))!
-      .querySelector('input') as HTMLInputElement;
-    expect(cb.checked).toBe(true);
+      .getAttribute('for');
+    expect(document.getElementById(cb!)!.getAttribute('aria-checked')).toBe('true');
     expect(sec.textContent).toContain('uç ağdan erişen herkese açık olur; IP izin listesi kullanın');
     expect(input(el, 'Paylaşılan anahtar').placeholder).toContain('isteğe bağlı');
     expect(sec.textContent).toContain('X-Coremetry-Auth-Key (denetlenmiyor)');
-    const warn = sec.querySelectorAll('.sso-perm__warn');
+    const warn = sec.querySelectorAll('[data-testid="sso-perm-warn"]');
     expect(warn).toHaveLength(1);
     expect(warn[0].textContent).toContain('IP izin listesi boş');
   });
@@ -216,7 +217,7 @@ describe('SSOTab — admin', () => {
     const ta = input(el, 'IP izin listesi') as unknown as HTMLTextAreaElement;
     expect(ta.tagName).toBe('TEXTAREA');
     expect(ta.value).toBe('203.0.113.0/24\n2001:db8::/32');
-    expect(el.querySelectorAll('.sso-perm__warn')).toHaveLength(0);
+    expect(el.querySelectorAll('[data-testid="sso-perm-warn"]')).toHaveLength(0);
     await act(async () => {
       el.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     });
@@ -230,8 +231,8 @@ describe('SSOTab — admin', () => {
   it('anahtar kipi (varsayılan): uyarı satırı yok, başlık denetlenir', async () => {
     h.get.mockResolvedValue({ ...stored, permissionServiceEnabled: true, permissionServiceKeySet: true });
     const el = await mount();
-    const sec = el.querySelector('.sso-perm')!;
-    expect(sec.querySelectorAll('.sso-perm__warn')).toHaveLength(0);
+    const sec = el.querySelector('section[aria-label="Yetki servisi (merkezi login)"]')!;
+    expect(sec.querySelectorAll('[data-testid="sso-perm-warn"]')).toHaveLength(0);
     expect(sec.textContent).not.toContain('(denetlenmiyor)');
   });
 
@@ -251,7 +252,7 @@ describe('SSOTab — viewer', () => {
     expect(h.get).not.toHaveBeenCalled();
     expect(el.querySelector('fieldset')!.disabled).toBe(true);
     expect(input(el, 'Düğme etiketi').value).toBe('Kurumsal SSO');
-    expect((el.querySelector('input[type="checkbox"]') as HTMLInputElement).checked).toBe(true);
+    expect(el.querySelector('[role="checkbox"]')!.getAttribute('aria-checked')).toBe('true');
     expect(input(el, 'Issuer URL').placeholder).toBe('Yalnız yönetici görür');
     expect(el.textContent).toContain('AÇIK');
     expect(el.textContent).toContain('yalnız yöneticiler');
