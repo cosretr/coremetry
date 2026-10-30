@@ -3057,6 +3057,29 @@ func canonicalTables(sd, ld, md int) []string {
 		ORDER BY (source, operation, service)
 		TTL toDate(last_seen) + INTERVAL 30 DAY`,
 
+		// cosre_briefings — CoSRE Login Briefing Faz 1 (docs/cosre/briefing-audit.md
+		// "Tasarım önerisi"): takım × env başına TEK kart; worker 5 dk'da bir
+		// yeniden yazar → RMT(version), ORDER BY dedup anahtarı (team_key, env)
+		// münhasıran (O3), partition YOK (P1), Nullable yok (C4). team_key =
+		// TeamAliases.CanonTeam çıktısı (distinct sayısı ölçülmedi → LC değil, C3);
+		// env mevcut env kolonlarıyla aynı sınıf (LC). Kart okumada ayarın ttl_s'i
+		// ile süzülür (varsayılan 10 dk); tablo TTL'i satır-düzeyi 1 SAAT — yalnız
+		// temizlik, sub-day matematik toDate() içine sarılmaz (v0.6.36).
+		`CREATE TABLE IF NOT EXISTS cosre_briefings (
+			team_key     String,
+			env          LowCardinality(String) DEFAULT '',
+			team         String DEFAULT '',
+			briefing_id  String,
+			scope_hash   String DEFAULT '',
+			window_s     UInt32 DEFAULT 0,
+			generated_at DateTime64(3),
+			silence      UInt8 DEFAULT 0,
+			payload      String CODEC(ZSTD(3)),
+			version      UInt64 DEFAULT toUnixTimestamp64Nano(now64(9))
+		) ENGINE = ReplacingMergeTree(version)
+		ORDER BY (team_key, env)
+		TTL toDateTime(generated_at) + INTERVAL 1 HOUR`,
+
 		// cosre_answer_grounding — CoSRE öğrenme Faz 4: çevrimdışı öz-
 		// değerlendirme. Gece örneklenen cevabın her iddiası, turda okunan
 		// tool çıktılarına karşı self-hosted modelle etiketlenir. Yeniden

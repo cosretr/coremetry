@@ -1334,6 +1334,17 @@ export const api = {
     request<import('./types').AIUserScopeSetting>(`/api/ai/user-scope`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     }),
+  // CoSRE Login Briefing Faz 1 — kullanıcının takım kartı (GET her rol, 30 s cache;
+  // refresh editor+ + audit). Kart UI'ı Faz 2 (welcome mockup + shadcn).
+  cosreBriefing: (env: string, signal?: AbortSignal) =>
+    get<import('./types').CosreBriefingResponse>(`/api/cosre/v2/briefing?env=${encodeURIComponent(env)}`, signal),
+  refreshCosreBriefing: (env: string) =>
+    request<import('./types').CosreBriefingResponse>(`/api/cosre/v2/briefing/refresh?env=${encodeURIComponent(env)}`, { method: 'POST', timeoutMs: 65_000 }),
+  cosreBriefingSettings: () => get<import('./types').CosreBriefingSettings>(`/api/ai/briefing`),
+  putCosreBriefingSettings: (body: import('./types').CosreBriefingSettings) =>
+    request<import('./types').CosreBriefingSettings>(`/api/ai/briefing`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    }),
   // v0.10.562 — Problem detayı insight şeridi (deterministik, 30 s cache).
   // v0.10.1529 (Problem standardı R2) — detay başlığı; ref = InboxItem.id biçimi
   // (problem:/exception:/anomaly:/incident:). null = bulunamadı.

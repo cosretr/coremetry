@@ -8196,6 +8196,92 @@ export interface AIUserScopeSetting {
   enabled: boolean;
 }
 
+/** CoSRE Login Briefing Faz 1 — kalem kimliği (Go internal/cosre/briefing ItemOrder; kart sırası). */
+export type CosreBriefingItem = 'red' | 'client' | 'exception' | 'log' | 'oracle' | 'problem' | 'rollout';
+
+/** briefing.Finding — tek kanıt satırı; sayılar okumadan aynen (LLM'den geçmez). */
+export interface CosreBriefingFinding {
+  item: CosreBriefingItem;
+  kind: string;
+  service?: string;
+  label?: string;
+  now: number;
+  prev: number;
+  unit?: string;
+  score: number;
+  text: string;
+  page_url: string;
+}
+
+/** briefing.Line — kalem başına bir satır; rows ≤ 3, total kalemdeki tüm bulgu. */
+export interface CosreBriefingLine {
+  item: CosreBriefingItem;
+  text: string;
+  page_url: string;
+  total: number;
+  rows: CosreBriefingFinding[];
+}
+
+/** briefing.Briefing — takım × env kartı (cosre_briefings.payload). */
+export interface CosreBriefing {
+  id: string;
+  team: string;
+  team_key: string;
+  env: string;
+  window_s: number;
+  generated_at_ms: number;
+  scope_hash: string;
+  services: number;
+  /** MaxTeamServices tavanı dışında kalan servis (Q12 "N servis dışarıda"). */
+  trimmed: number;
+  lines: CosreBriefingLine[];
+  silence: boolean;
+  summary: string;
+  phrasing: 'template' | 'llm';
+  /** Okunamayan kalemler — "yok" değil "okunamadı". */
+  partial?: CosreBriefingItem[];
+  /** Bu kurulumda / dilimde kaynağı olmayan kalemler. */
+  skipped?: CosreBriefingItem[];
+}
+
+export type CosreBriefingStatus = 'ready' | 'pending' | 'disabled' | 'unscoped' | 'unavailable';
+
+/** GET /api/cosre/v2/briefing · POST …/refresh (Go api/cosre_briefing.go briefingResponse). */
+export interface CosreBriefingResponse {
+  status: CosreBriefingStatus;
+  reason?: string;
+  /** unscoped → "Ekibin tanımlı değil — hangi takımdasın?" */
+  line?: string;
+  scope?: CosreScope;
+  env: string;
+  ttl_s: number;
+  scope_changed?: boolean;
+  briefing?: CosreBriefing;
+}
+
+/** system_settings `cosre.briefing` (GET /api/ai/briefing her rol; PUT admin + audit). */
+export interface CosreBriefingSettings {
+  enabled: boolean;
+  window_s: number;
+  refresh_interval_s: number;
+  ttl_s: number;
+  envs: string[];
+  llm_phrasing: boolean;
+  thresholds: {
+    err_rate_x: number;
+    err_rate_min_pct: number;
+    latency_x: number;
+    traffic_drop_pct: number;
+    min_spans: number;
+    client_x: number;
+    log_level_x: number;
+    log_min_count: number;
+    oracle_code_x: number;
+    oracle_min_count: number;
+    deploy_err_delta_pts: number;
+  };
+}
+
 /** agent-core S5 — `data-approval{id:"a<i>"}`: onay bekleyen araç çağrısı
  *  (Go api/chat_approval_resume.go; eşli dynamic-tool parçası input-available). */
 export interface CosreApproval {

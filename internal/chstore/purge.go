@@ -76,7 +76,7 @@ var telemetryPurgeTables = []string{
 	// preserved (see configPreserveTables) even though they reference telemetry
 	// that is gone. Clear them from their own surfaces if a fuller reset is
 	// wanted.
-	"anomaly_events", "root_cause_hypotheses", "ai_calls", "cosre_interactions", "cosre_signals", "cosre_answer_quality", "cosre_tool_quality", "cosre_answer_grounding", "cosre_operation_catalog", "business_code_summary_5m", "monitor_results",
+	"anomaly_events", "root_cause_hypotheses", "ai_calls", "cosre_interactions", "cosre_signals", "cosre_answer_quality", "cosre_tool_quality", "cosre_answer_grounding", "cosre_operation_catalog", "cosre_briefings", "business_code_summary_5m", "monitor_results",
 	// v0.10.17 (F0.4) — beş aile listeden EKSİKTİ. Hepsi telemetriden
 	// türeyen combined-form MV ya da model üretimi; hiçbiri operatör
 	// içeriği taşımıyor, hepsi yeni ingest'ten yeniden doğar. Eksik
