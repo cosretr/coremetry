@@ -5,7 +5,7 @@
 import { describe, it, expect } from 'vitest';
 import { cosreFixture, sseFetch } from '@/test/cosreSse';
 import { createCosreChat } from './useCosreChat';
-import { parseBudget, stepIndex, toChatTurn } from './toChatTurn';
+import { evidenceOf, parseBudget, stepIndex, toChatTurn } from './toChatTurn';
 
 async function lastTurn(name: string) {
   const core = createCosreChat({ fetch: sseFetch(cosreFixture(name)).fetch });
@@ -70,5 +70,15 @@ describe('toChatTurn (B3: adımlar + bütçe)', () => {
     expect(parseBudget({ executed: 1, maxCalls: 2, roundsUsed: 1 })).toBeNull();
     expect(parseBudget(null)).toBeNull();
     expect(parseBudget({ executed: 0, maxCalls: 6, roundsUsed: 0, maxRounds: 5 })).toEqual({ executed: 0, maxCalls: 6, roundsUsed: 0, maxRounds: 5, skipped: 0, exhausted: false });
+  });
+
+  // v0.10.1659 (B4) — sinyal anahtarı + kanıt çipleri.
+  it('B4: exchangeId metadata\'dan; kısmi kanıt kaydı (kaynak/pencere yok) çip olmaz', async () => {
+    const t = await lastTurn('ui-stream-v1');
+    expect(t.exchangeId).toBe('golden-xid');
+    expect(t.evidence).toBeUndefined(); // fixture: {state, tool} — v1 çipi kaynak + pencere ister
+    const full = { tool: 'query_metrics', source: 'Thanos', query: 'up', queryKind: 'promql', window: { fromMs: 1, toMs: 2 }, durationMs: 3 };
+    expect(evidenceOf([{ type: 'data-evidence-summary', id: 'evidence', data: { evidence: [full, { tool: 'x' }, null] } }])).toEqual({ evidence: [full] });
+    expect(evidenceOf([{ type: 'data-evidence-summary', id: 'evidence', data: {} }])).toEqual({});
   });
 });

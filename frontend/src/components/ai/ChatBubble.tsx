@@ -86,6 +86,19 @@ const ChatMdContext = createContext<MdCtx>({ policy: EMPTY_POLICY, cites: [], ne
 // panelindeki çip de aynı bloğu açabilsin diye bağlamla iner.
 const EvidenceBlocksContext = createContext<ReadonlyMap<string, EvidenceBlockView> | undefined>(undefined);
 
+/**
+ * v0.10.1659 (CoSRE v2 B4) — balona dışarıdan eklenen yuvalar. v1 vermez
+ * (balon aynı); v2 MessageList araç kanıtının altına İlgili/İlgisiz,
+ * eylem satırına Not koyar.
+ */
+export interface ChatBubbleSlots {
+  /** Açılan araç kanıtının (ToolEvidence) altı; yalnız araç satırları. */
+  stepExtra?: (d: ChatStepDetail) => ReactNode;
+  /** Tamamlanmış cevabın eylem satırı (Kopyala'nın yanı). */
+  actionsExtra?: ReactNode;
+}
+export const ChatBubbleSlotsContext = createContext<ChatBubbleSlots>({});
+
 function currentOrigin(): string {
   return typeof window !== 'undefined' && window.location ? window.location.origin : '';
 }
@@ -586,6 +599,7 @@ function ToolChips({ steps, details, hasText, turnDone, evId, setEvId }: {
 function ToolEvidence({ d }: { d: ChatStepDetail }) {
   const view = parseStepPreview(d.preview ?? '', d.truncated);
   const evBlocks = useContext(EvidenceBlocksContext);
+  const slots = useContext(ChatBubbleSlotsContext); // v0.10.1659
   return (
     <div style={{
       marginTop: 6, padding: '6px 8px', borderRadius: 6,
@@ -647,6 +661,7 @@ function ToolEvidence({ d }: { d: ChatStepDetail }) {
           fontSize: 10, color: 'var(--text2)',
         }}>{view.text || '(boş)'}</pre>
       )}
+      {d.tool && slots.stepExtra?.(d)}
     </div>
   );
 }
@@ -955,6 +970,7 @@ function ChatBubbleView({ turn, onRetry, stepsOpen, onRegenerate, busy, versions
   // CoSRE öğrenme Faz 2 — örtük olumlu sinyal (kopya, link, kanıt, not);
   // balon başına tür başına bir kez (tekrar tık ağırlığı şişirmesin).
   const signal = useCosreSignal(turn.exchangeId);
+  const { actionsExtra } = useContext(ChatBubbleSlotsContext); // v0.10.1659
   // v0.10.1384 — yazma efekti: yalnız canlı turun BÜYÜK parçası (arrivedAt;
   // arşiv/geri yükleme taşımaz). Kartlar, kopya, takip çipleri TAM metinle
   // (turn.*) hemen çizilir; yalnız gövde metni açılır. Dibe yapışma: balon.
@@ -1229,6 +1245,7 @@ function ChatBubbleView({ turn, onRetry, stepsOpen, onRegenerate, busy, versions
               ↻ Yeniden üret
             </Button>
           )}
+          {actionsExtra /* v0.10.1659 — v2 yuvası (Not) */}
           {/* v0.10.1443 — cevabın bütün grafikleri tek panoya (≥2 çevrilebilen panel). */}
           {dashPanels.length >= 2 && <AddToDashboardButton panels={dashPanels} mode="all" />}
           {versions && versions.total > 1 && (

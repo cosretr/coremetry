@@ -7,10 +7,14 @@
 //     katlanır ve v1 ChatBubble çizer — "Nasıl cevapladım" adım açılırı (akarken
 //     açık, bitince kapalı), araç çipleri + şeffaflık paneli, bütçe özeti;
 //     durdurma notu ve hata satırı da v1'inki.
+//   • v0.10.1659 (B4): exchangeId + cevabın kanıt çipleri (data-evidence-summary);
+//     açılan her araç kanıtının altında İlgili / İlgisiz, eylem satırında Not
+//     (components/ai/EvidenceRelevance → cosre_signals). 👍/👎 yok.
 //   • Bilinmeyen parça çizilmez (çökmez).
 // Sunumsal: Chat örneği yok (katalog ve testler statik mesajla da çizer).
 import { useMemo } from 'react';
-import { ChatBubble } from '@/components/ai/ChatBubble';
+import { ChatBubble, ChatBubbleSlotsContext, type ChatBubbleSlots } from '@/components/ai/ChatBubble';
+import { MessageNote, RelevanceToggle } from '@/components/ai/EvidenceRelevance';
 import { AiThinking } from '@/components/ai/AiThinking';
 import { chatErrorText } from '@/components/ai/chatErrorText';
 import { messageText } from '@/lib/cosre/cosrePersist';
@@ -64,12 +68,19 @@ function AssistantMessage({ m, visibleParts, live, error }: {
   // SDK akışta son mesajı her parçada yeni nesneyle değiştirir; bitmiş
   // mesajlar kimliğini korur → ChatBubble (memo) yalnız akan balonu çizer.
   const turn = useMemo(() => toChatTurn(m, visibleParts(m), { pending: live, error }), [m, visibleParts, live, error]);
+  const xid = live ? undefined : turn.exchangeId;
+  const slots = useMemo<ChatBubbleSlots>(() => ({
+    stepExtra: d => <RelevanceToggle exchangeId={xid} stepId={`s${d.i}`} />,
+    actionsExtra: <MessageNote exchangeId={xid} />,
+  }), [xid]);
   if (live && !turn.text && !turn.steps?.length) {
     return <div className="cm-msg cm-msg--ai" data-cosre-thinking=""><AiThinking /></div>;
   }
   return (
     <div data-cosre-message={m.id} className="contents">
-      <ChatBubble turn={turn} />
+      <ChatBubbleSlotsContext.Provider value={slots}>
+        <ChatBubble turn={turn} />
+      </ChatBubbleSlotsContext.Provider>
     </div>
   );
 }

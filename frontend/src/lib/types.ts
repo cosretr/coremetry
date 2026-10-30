@@ -8243,7 +8243,8 @@ export interface CosreRuleInput {
 
 // CoSRE öğrenme Faz 2 — istemcinin örtük sinyalleri (POST /api/ai/signal;
 // internal/cosrelearn ClientSignalKinds). Türetilenler sunucuda hesaplanır.
-export type CosreSignalKind = 'copy' | 'link_click' | 'evidence_click' | 'problem_note' | 'followup_click'; // v0.10.1291 — takip çipi
+export type CosreSignalKind = 'copy' | 'link_click' | 'evidence_click' | 'problem_note' | 'followup_click' // v0.10.1291 — takip çipi
+  | 'evidence_relevant' | 'evidence_irrelevant' | 'note'; // v0.10.1659 (CoSRE v2 B4) — kanıt başına ilgili/ilgisiz + mesaj notu (Go cosrelearn ClientSignalKinds)
 
 // GET /api/ai/quality — gece kalite puanı (internal/chstore/cosre_quality.go).
 export interface CosreWorstAnswer {

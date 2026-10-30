@@ -5455,6 +5455,12 @@ tbody td.tpm-more-cell { color: var(--text2); }
 .cm-msg--user { flex-wrap: wrap; }
 .cm-msg-actions--user { flex-basis: 100%; justify-content: flex-end; margin-top: var(--sp-1); }
 .cm-msg-edit textarea { width: 100%; resize: vertical; font: inherit; }
+/* v0.10.1659 (CoSRE v2 B4) — kanıt başına İlgili/İlgisiz + cevaba not. */
+.cm-ev-rel { display: flex; gap: var(--sp-1); margin-top: var(--sp-1); }
+.cm-msg-note-form { flex-basis: 100%; display: flex; flex-direction: column; gap: var(--sp-1); }
+.cm-msg-note-form textarea { width: 100%; resize: vertical; font: inherit; }
+.cm-msg-note-form__row { display: flex; gap: var(--sp-1); justify-content: flex-end; }
+.cm-msg-actions:has(.cm-msg-note-form) { flex-wrap: wrap; opacity: 1; }
 /* v0.10.1138 — son cevabın sürüm geçişi ("önceki cevap (1/2)") ve çekmecedeki "Tam sayfada aç ↗". */
 .cm-msg-versions { display: inline-flex; align-items: center; gap: 2px; }
 .cm-fullpage { flex-shrink: 0; }

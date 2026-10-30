@@ -1,4 +1,5 @@
-// toChatTurn — v0.10.1656 (CoSRE v2 Faz 2b B3, plan §3 / §10). v2 asistan
+// toChatTurn — v0.10.1656 (CoSRE v2 Faz 2b B3, plan §3 / §10); B4 (v0.10.1659):
+// exchangeId / turnId + data-evidence-summary → evidence. v2 asistan
 // mesajını (AI SDK UIMessage parçaları) v1'in ChatTurn şekline çevirir; v2
 // cevabı v1 ChatBubble'ıyla çizilir — operatör aynı balonu görür.
 //
@@ -98,6 +99,22 @@ export function stepsOf(parts: readonly Part[]): Pick<ChatTurn, 'steps' | 'stepD
   };
 }
 
+/** v1 kanıt çipinin okuduğu asgari şekil: kaynak + pencere (kısmi kayıt çip çizmez). */
+function isQueryEvidence(v: unknown): v is ChatQueryEvidence {
+  const e = rec(v);
+  const w = rec(e.window);
+  return typeof e.tool === 'string' && typeof e.source === 'string' && num(w.fromMs) !== undefined && num(w.toMs) !== undefined;
+}
+
+/** v0.10.1659 (B4) — data-evidence-summary → ChatTurn.evidence (v1 answer.evidence). */
+export function evidenceOf(parts: readonly Part[]): Pick<ChatTurn, 'evidence'> {
+  const p = parts.find(x => x.type === 'data-evidence-summary');
+  if (!p || p.type !== 'data-evidence-summary') return {};
+  const list = rec(p.data).evidence;
+  const ev = Array.isArray(list) ? list.filter(isQueryEvidence) : [];
+  return ev.length ? { evidence: ev } : {};
+}
+
 /** Görünür parçalar (visibleParts) → v1 asistan turu. */
 export function toChatTurn(m: CosreUIMessage, parts: readonly Part[], opts: ToChatTurnOpts = {}): ChatTurn {
   const text = parts.flatMap(p => (p.type === 'text' && p.text !== '' ? [p.text] : [])).join('\n\n');
@@ -110,5 +127,9 @@ export function toChatTurn(m: CosreUIMessage, parts: readonly Part[], opts: ToCh
     ...(opts.error ? { error: opts.error } : {}),
     ...(meta?.partial ? { stopped: true } : {}),
     ...(meta?.allowedLinks ? { allowedLinks: meta.allowedLinks } : {}),
+    // v0.10.1659 (B4) — sinyal anahtarı + cevabın kanıt çipleri.
+    ...(meta?.exchangeId ? { exchangeId: meta.exchangeId } : {}),
+    ...(meta?.turnId ? { turnId: meta.turnId } : {}),
+    ...evidenceOf(parts),
   };
 }
