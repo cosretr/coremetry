@@ -16,6 +16,9 @@ type Translator struct {
 	sawDone          bool
 	// messageID — `start` parçasının messageId'si (v0.10.1603); "" = yok.
 	messageID string
+	// awaitingApproval — agent-core S4: bir araç çağrısı operatör onayı
+	// bekliyor; başarılı `done` finish{finishReason:"tool-calls"} olur.
+	awaitingApproval bool
 }
 
 // NewTranslator — boş akış.
@@ -65,7 +68,10 @@ func (t *Translator) Translate(kind string, payload any) []Part {
 	case "done":
 		ok, _ := m["ok"].(bool)
 		reason := "error"
-		if ok {
+		switch {
+		case ok && t.awaitingApproval:
+			reason = "tool-calls" // agent-core S4: araç parçası input-available'da, istemci onayı yazar
+		case ok:
 			reason = "stop"
 		}
 		out = append(out, t.closeText()...)
@@ -129,6 +135,20 @@ func (t *Translator) stepResult(kind string, payload any, m map[string]any) []Pa
 	i, ok := asInt(m["i"])
 	if !ok || i <= 0 {
 		return []Part{unknown(kind, payload)}
+	}
+	// agent-core S4 (docs/cosre/agent-core-ideas.md §4.1 adım 4) — onay bekleyen
+	// çağrı: tool-output-available YAZILMAZ (parça input-available'da kalır,
+	// AI SDK v5 insan-onayı deseni); yerine eşli data-approval.
+	if reason, _ := m["reason"].(string); reason == ReasonApprovalRequired {
+		if ap, ok := m["approval"].(map[string]any); ok {
+			t.awaitingApproval = true
+			id := strconv.Itoa(i)
+			data := map[string]any{"toolCallId": "s" + id, "tool": m["tool"]}
+			for k, v := range ap {
+				data[k] = v
+			}
+			return []Part{{"type": "data-approval", "id": "a" + id, "data": data}}
+		}
 	}
 	return []Part{{
 		"type": "tool-output-available", "toolCallId": "s" + strconv.Itoa(i), "dynamic": true,

@@ -10,7 +10,7 @@ import { DATA_PART_NAMES, MESSAGE_ID_RE, UI_STREAM_PART_TYPES, dataPartName, isD
 import { parseUIStreamSSE } from './uiStreamFixture';
 
 const ROOT = resolve(__dirname, '../../../..');
-const FIXTURES = ['ui-stream-v1', 'ui-stream-v1-error', 'ui-stream-v1-closed', 'ui-stream-v1-reset', 'ui-stream-v1-reset2'];
+const FIXTURES = ['ui-stream-v1', 'ui-stream-v1-error', 'ui-stream-v1-closed', 'ui-stream-v1-reset', 'ui-stream-v1-reset2', 'ui-stream-v1-approval'];
 const PART_TYPES = new Set<string>(UI_STREAM_PART_TYPES);
 const DATA_NAMES = new Set<string>(DATA_PART_NAMES);
 
@@ -161,4 +161,20 @@ it('reset2 fixture: t1 → reset t1 → t2 → reset t2 → t3 tam metin', () =>
     { type: 'finish', finishReason: 'stop' },
   ]);
   expect(parts.filter(p => p.type === 'data-reset').every(p => parseDataReset(p) !== null)).toBe(true);
+});
+
+// agent-core S4 — onay bekleyen araç: girdisi var, çıktısı YOK (input-available'da
+// kalır); eşli data-approval aynı toolCallId'yi taşır; akış finish 'tool-calls'.
+it('approval fixture: onay bekleyen araç çıktısız, eşli data-approval, finish tool-calls', () => {
+  const { parts } = parseUIStreamSSE(readFileSync(join(ROOT, 'testdata', 'cosre', 'ui-stream-v1-approval.sse'), 'utf8'));
+  const approvals = parts.filter(p => p.type === 'data-approval');
+  expect(approvals).toHaveLength(1);
+  const data = approvals[0].data as Record<string, unknown>;
+  expect(approvals[0].id).toBe('a3');
+  expect(Object.keys(data).sort()).toEqual(['argsDigest', 'expiresAt', 'token', 'tool', 'toolCallId']);
+  expect(data.toolCallId).toBe('s3');
+  expect(parts.some(p => p.type === 'tool-input-available' && p.toolCallId === 's3')).toBe(true);
+  expect(parts.some(p => p.type === 'tool-output-available' && p.toolCallId === 's3')).toBe(false);
+  expect(parts.some(p => p.type === 'tool-output-available' && p.toolCallId === 's2')).toBe(true);
+  expect(parts.at(-1)).toEqual({ type: 'finish', finishReason: 'tool-calls' });
 });

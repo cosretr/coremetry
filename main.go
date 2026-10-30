@@ -1058,6 +1058,12 @@ func main() {
 		log.Printf("[tool-args] load persisted settings: %v", err)
 	}
 	cfgRefresh.Add("ai-toolarg-validation", store.LoadAIToolArgValidation)
+	// agent-core S4 — CoSRE araç onayı (system_settings ai.toolApproval);
+	// yüklenemezse varsayılan KAPALI.
+	if err := store.LoadAIToolApproval(ctx); err != nil {
+		log.Printf("[tool-approval] load persisted settings: %v", err)
+	}
+	cfgRefresh.Add("ai-tool-approval", store.LoadAIToolApproval)
 	// v0.10.1458 — konu dışı sorulara genel cevap anahtarı (system_settings
 	// ai.generalQuestions) HER rolde (sohbet api'de); yüklenemezse varsayılan
 	// AÇIK (operatör kararı 2026-10-23).

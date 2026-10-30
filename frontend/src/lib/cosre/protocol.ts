@@ -38,6 +38,9 @@ export const BLOCK_TYPES = [
 export const DATA_PART_NAMES = [
   'step', 'budget', 'reset', 'links', 'followups', 'evidence-summary',
   'code-lock', 'error', 'unknown',
+  // agent-core S4 — araç onayı: toolCallId'li parça input-available'da kalır,
+  // eşli data-approval{toolCallId, tool, token, argsDigest, expiresAt}; finish 'tool-calls'.
+  'approval',
   ...BLOCK_TYPES.map(t => `block-${t}` as const),
 ] as const;
 

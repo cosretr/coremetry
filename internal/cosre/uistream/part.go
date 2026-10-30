@@ -12,5 +12,10 @@ var KnownKinds = map[string]bool{
 	"block": true, "error": true, "code-lock": true, "done": true,
 }
 
+// ReasonApprovalRequired — agent-core S4: `step-result.reason` onay bekleyen
+// çağrı (api skipReasonApproval / Executor KindApproval ile aynı dizgi; api
+// testi eşitliği pinler). Böyle bir sonuç data-approval'a çevrilir.
+const ReasonApprovalRequired = "approval_required"
+
 // BlockPartName — blok tipinin data parçası adı.
 func BlockPartName(blockType string) string { return "data-block-" + blockType }

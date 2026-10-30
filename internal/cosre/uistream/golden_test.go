@@ -32,7 +32,10 @@ var update = flag.Bool("update", false, "rewrite testdata/cosre/*.sse")
 // ui-stream-v1-reset2 (v0.10.1607) — ÇİFT geri alma: t1 → data-reset{t1} →
 // t2 → data-reset{t2} → t3 tam metin. Her reset transient:true; ardışık
 // resetlerin her biri yalnız kendi segmentini hedefler.
-var goldenFixtures = []string{"ui-stream-v1", "ui-stream-v1-error", "ui-stream-v1-closed", "ui-stream-v1-reset", "ui-stream-v1-reset2"}
+//
+// ui-stream-v1-approval (agent-core S4) — onay bekleyen araç: s3 girdisi var,
+// çıktısı yok; eşli data-approval{toolCallId:s3}; finish 'tool-calls'.
+var goldenFixtures = []string{"ui-stream-v1", "ui-stream-v1-error", "ui-stream-v1-closed", "ui-stream-v1-reset", "ui-stream-v1-reset2", "ui-stream-v1-approval"}
 
 func fixtureDir() string { return filepath.Join("..", "..", "..", "testdata", "cosre") }
 

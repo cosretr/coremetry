@@ -44,7 +44,28 @@ type Hooks struct {
 	Span func(ctx context.Context, name string, external bool) (context.Context, func(bytes int, isErr bool))
 	// Audit — yürütülen her çağrı (başarısız dâhil); yürütülmeyenler (bilinmeyen/tekrar) hariç.
 	Audit func(name string, args json.RawMessage, dur time.Duration, err error, bytes int)
+	// Approve — agent-core S4: kapsam/şema SONRASI (çalışacak argümanla) insan
+	// onayı kararı. nil = bugünkü yol (onay yok). ApprovalAsk → handler
+	// ÇAĞRILMAZ, span/audit yok; Outcome{Kind: KindApproval, Args: cargs}.
+	Approve func(ctx context.Context, name string, cargs json.RawMessage) ApprovalDecision
 }
+
+// ApprovalDecision — Hooks.Approve sonucu.
+type ApprovalDecision int
+
+const (
+	// ApprovalAllow — onay gerekmez (ya da önceden verildi): çağrı yürür.
+	ApprovalAllow ApprovalDecision = iota
+	// ApprovalAsk — çağrı durur; döngü operatörden onay ister.
+	ApprovalAsk
+)
+
+// ApprovalRequiredJSON — onay bekleyen çağrının modele giden sonucu
+// (mcp.ToolErrorJSON alanları). Döngü onay bekleyince modeli yeniden
+// çağırmaz; metin geçmişte kalırsa model aracı tekrar denememeli.
+const ApprovalRequiredJSON = `{"error":"approval_required","retryable":false,` +
+	`"hint":"Bu araç operatör onayı ister; onay kartı operatöre gösterildi. ` +
+	`Aynı çağrıyı tekrarlama."}`
 
 // Outcome.Kind değerleri. v0.10.948 — adlandırıldı: sohbet döngüsü ve trace
 // incelemesi yürütülmeyen çağrının NEDENİNİ (step-result skipped) buradan okur.
@@ -62,6 +83,9 @@ const (
 	// KindScope'tan ayrı: döngü/sohbet muhasebesi "kapsam reddi" ile "model
 	// argümanı yanlış yazdı"yı ayırt eder.
 	KindBadArgs = "bad_args"
+	// KindApproval — agent-core S4: Hooks.Approve onay istedi; handler
+	// çağrılmadı. Outcome.Args çalışacak argümandır (onay jetonunun digest'i).
+	KindApproval = "approval_required"
 )
 
 // Outcome — bir çağrının sonucu.
@@ -72,10 +96,13 @@ type Outcome struct {
 	// Executed — handler gerçekten koştu (bilinmeyen ad, tekrar, kapsam reddi,
 	// iptal: false; süre yazılmaz).
 	Executed bool
-	// Kind — ok | error | unknown | repeated | scope | cancelled | bad_args
+	// Kind — ok | error | unknown | repeated | scope | cancelled | bad_args | approval_required
 	Kind     string
 	Duration time.Duration
 	Err      error
+	// Args — yalnız KindApproval: kapsam/şema sonrası çalışacak argüman
+	// (operatörün onaylayacağı ve jetonun bağlandığı bayt).
+	Args json.RawMessage
 }
 
 type Executor struct {
@@ -113,7 +140,7 @@ func (x *Executor) WithBudget(d time.Duration) *Executor {
 func (x *Executor) Known(name string) bool { _, ok := x.byName[name]; return ok }
 
 // Call — sıra sözleşmesi (chat döngüsünün eski gövdesiyle birebir):
-// iptal → bilinmeyen → tekrar muhafızı → kapsam → span aç → bütçeli
+// iptal → bilinmeyen → tekrar muhafızı → kapsam → onay (S4) → span aç → bütçeli
 // yürütme → JSON'la / ToolErrorJSON → span kapat(bayt, ok) → audit.
 func (x *Executor) Call(ctx context.Context, name string, args json.RawMessage) Outcome {
 	// v0.10.948 — İPTAL HER ÇAĞRIDAN ÖNCE. Eskiden bitmiş ctx ile de handler
@@ -141,6 +168,11 @@ func (x *Executor) Call(ctx context.Context, name string, args json.RawMessage) 
 			kind = KindBadArgs // v0.10.1456 (C1)
 		}
 		return Outcome{Content: mcp.ToolErrorJSON(serr), IsError: true, Kind: kind, Err: serr}
+	}
+	// agent-core S4 — ONAY, kapsam/şemadan SONRA: operatör çalışacak
+	// argümanı onaylar (model metnini değil); handler, span, audit yok.
+	if x.hooks.Approve != nil && x.hooks.Approve(ctx, name, cargs) == ApprovalAsk {
+		return Outcome{Content: ApprovalRequiredJSON, IsError: true, Kind: KindApproval, Args: cargs}
 	}
 	end := func(int, bool) {}
 	if x.hooks.Span != nil {

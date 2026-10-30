@@ -103,6 +103,21 @@ describe('createCosreChat × paylaşılan fixture', () => {
     expect(chat.messages.at(-1)!.metadata).toMatchObject({ resetApplied: [0], error: true });
   });
 
+  // agent-core S4 — gerçek ai istemcisi onay akışını kabul eder: hata yok, onay
+  // bekleyen dinamik araç input-available'da kalır, data-approval mesajda; S4'te
+  // istemci kendiliğinden yeni POST atmaz (sendAutomaticallyWhen yok — S5).
+  it('ui-stream-v1-approval: araç input-available kalır, data-approval mesajda, ikinci istek yok', async () => {
+    const f = sseFetch(sse('ui-stream-v1-approval'));
+    const { chat } = createCosreChat({ fetch: f.fetch });
+    await chat.sendMessage({ text: 'q' });
+    expect(chat.status).toBe('ready');
+    const parts = chat.messages.at(-1)!.parts as Array<{ type: string; toolCallId?: string; state?: string }>;
+    expect(parts.find(p => p.type === 'dynamic-tool' && p.toolCallId === 's3')?.state).toBe('input-available');
+    expect(parts.find(p => p.type === 'dynamic-tool' && p.toolCallId === 's2')?.state).toBe('output-available');
+    expect(parts.some(p => p.type === 'data-approval')).toBe(true);
+    expect(f.calls).toHaveLength(1);
+  });
+
   it('ui-stream-v1 (tam senaryo): exchangeId metadata\'dan, codeRead, yalnız t3', async () => {
     const persisted: ChatMessage[][] = [];
     const { chat } = createCosreChat({ fetch: sseFetch(sse('ui-stream-v1')).fetch, onPersist: m => persisted.push(m) });

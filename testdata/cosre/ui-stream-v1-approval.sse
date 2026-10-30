@@ -1,0 +1,26 @@
+data: {"messageId":"01M62F9N000000000000000000","type":"start"}
+
+data: {"type":"start-step"}
+
+data: {"data":{"i":1,"label":"araştırma bütçesi: 6 araç · 5 tur"},"id":"s1","type":"data-step"}
+
+data: {"data":{"executed":0,"exhausted":false,"maxCalls":6,"maxRounds":5,"roundsUsed":0,"skipped":0,"slotsUsed":0},"id":"budget","type":"data-budget"}
+
+data: {"dynamic":true,"toolCallId":"s2","toolName":"get_problem","type":"tool-input-start"}
+
+data: {"dynamic":true,"input":{"args":{"id":"p-1"},"argsText":"{\"id\":\"p-1\"}"},"toolCallId":"s2","toolName":"get_problem","type":"tool-input-available"}
+
+data: {"dynamic":true,"output":{"bytes":12,"durationMs":7,"ok":true,"preview":"{\"id\":\"p-1\"}","truncated":false},"toolCallId":"s2","type":"tool-output-available"}
+
+data: {"dynamic":true,"toolCallId":"s3","toolName":"add_problem_note","type":"tool-input-start"}
+
+data: {"dynamic":true,"input":{"args":{"problemId":"p-1","text":"DB havuzu doldu"},"argsText":"{\"problemId\":\"p-1\",\"text\":\"DB havuzu doldu\"}"},"toolCallId":"s3","toolName":"add_problem_note","type":"tool-input-available"}
+
+data: {"data":{"argsDigest":"4f1c0b6e","expiresAt":1800000300000,"token":"eyJrIjoiY29zcmUtYXBwcm92YWwifQ.c2ln","tool":"add_problem_note","toolCallId":"s3"},"id":"a3","type":"data-approval"}
+
+data: {"type":"finish-step"}
+
+data: {"finishReason":"tool-calls","type":"finish"}
+
+data: [DONE]
+

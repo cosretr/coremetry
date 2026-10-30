@@ -34,6 +34,14 @@ func TestMCPToolsNoWriteTool(t *testing.T) {
 	}
 	seenAllow := map[string]bool{}
 	for _, tl := range tools {
+		// agent-core S4 — tek istisna onay-kapılı araç (Approval:true): yazar
+		// ama insan onayıyla; MCP teli ve toolsForRole onu sunmaz.
+		if tl.Approval {
+			if tl.MinRole == "" {
+				t.Errorf("%s: onay-kapılı araç MinRole ister (editor+)", tl.Name)
+			}
+			continue
+		}
 		if tl.MinRole != "" {
 			t.Errorf("%s: MinRole %q — sohbet/değerlendirme kataloğu viewer tabanında salt-okur kalmalı", tl.Name, tl.MinRole)
 		}

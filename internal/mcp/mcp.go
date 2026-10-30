@@ -286,6 +286,12 @@ type Tool struct {
 	// yeni tool'un yazarı iki görünümü de yan yana görür (ve
 	// mcptools'taki yapısal test boş bırakılmasına izin vermez).
 	ShortDescription string
+	// Approval — agent-core S4 (docs/cosre/agent-core-ideas.md §4): durum
+	// değiştiren araç; çalışmadan önce İNSAN ONAYI ister (MinRole ≥ editor
+	// ile birlikte). Onay akışı yalnız in-app sohbette (v2) var: dış MCP
+	// telinde onay yüzeyi YOK, bu yüzden RegisterTool böyle bir aracı
+	// kaydetmez ve sohbet kataloğu (api toolsForRole) onu hiç sunmaz.
+	Approval bool
 }
 
 // ChatDescription — kataloğun sohbet (küçük model) görünümü.
@@ -641,6 +647,12 @@ func (s *Server) ResourceCount() (int, int) {
 func (s *Server) RegisterTool(t Tool) {
 	if t.Name == "" {
 		log.Printf("[mcp] RegisterTool: empty name; skipped")
+		return
+	}
+	if t.Approval {
+		// agent-core S4 — dış MCP istemcisinin onay yüzeyi yok: onay-kapılı
+		// araç bu telde HİÇ listelenmez/çağrılmaz.
+		log.Printf("[mcp] RegisterTool: %q onay-kapılı (Approval) — MCP telinde sunulmaz; skipped", t.Name)
 		return
 	}
 	s.mu.Lock()

@@ -40,6 +40,9 @@ type loopState struct {
 	Cancelled bool
 	// CtxErr — alışveriş ctx'inin hatası (istemci iptali / alışveriş tavanı).
 	CtxErr error
+	// ApprovalPending — agent-core S4: bu turda bir çağrı operatör onayı
+	// bekliyor (Executor KindApproval). Bugün hiçbir araç onay istemez.
+	ApprovalPending bool
 }
 
 // stopCond — saf koşul: durma nedeni ya da "".
@@ -120,13 +123,16 @@ func stopAtTokens(n uint64) stopCond {
 // (model yeniden çağrılmaz), sonra tur tavanı, sonra çağrı tavanı (ikisi
 // birlikteyse tur tavanı raporlanır — eski `||` zincirinin sırası).
 func defaultStop(maxRounds int) stopCond {
-	return stopAny(stopOnCtxDone(), stopAtRound(maxRounds), stopWhenCallsExhausted())
+	// agent-core S4 — onay bekleyen tur iptalden sonra, tavanlardan ÖNCE:
+	// model yeniden çağrılmaz (tavan turu da yok); ApprovalPending bugün hep false.
+	return stopAny(stopOnCtxDone(), stopOnApprovalPending(), stopAtRound(maxRounds), stopWhenCallsExhausted())
 }
 
 // isCapStop — neden "tavan turuna geç" mi (elindekiyle cevapla turu). İptal
-// ve "" değil; diğer her neden tavan turu ister.
+// ve "" değil; onay bekleme de değil (S4: model yeniden çağrılmaz); diğer
+// her neden tavan turu ister.
 func isCapStop(r stopReason) bool {
-	return r != stopNone && r != stopCancelled
+	return r != stopNone && r != stopCancelled && r != stopApprovalPending
 }
 
 // toolCallNames — turun çağrı adları (loopState.LastCalls); boş tur nil.

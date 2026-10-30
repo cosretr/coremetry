@@ -93,9 +93,16 @@ func roleSatisfies(role, minRole string) bool {
 // eklendiğinde onun guided ikizine de aynı rol kontrolü GEREKİR;
 // bugün tek istisna read_source_code (editor, v0.10.1050) ve guided ikizi
 // YOK — açık bir delik yok.
+//
+// agent-core S4 — onay-kapılı araç (mcp.Tool.Approval) burada HİÇ geçmez:
+// onay akışı (jeton + devam isteği) gelene dek sohbet onu sunamaz; S5 aracı
+// ayrı, ayar-kapılı bir kapıdan (ai.toolApproval) geri alır.
 func toolsForRole(tools []mcp.Tool, role string) []mcp.Tool {
 	out := make([]mcp.Tool, 0, len(tools))
 	for _, t := range tools {
+		if t.Approval {
+			continue
+		}
 		if roleSatisfies(role, t.MinRole) {
 			out = append(out, t)
 		}

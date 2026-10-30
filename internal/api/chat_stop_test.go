@@ -94,7 +94,7 @@ func TestStopAnyOrderAndNil(t *testing.T) {
 func TestIsCapStop(t *testing.T) {
 	for r, want := range map[stopReason]bool{
 		stopNone: false, stopCancelled: false, stopRoundCap: true, stopCallCap: true,
-		stopTokenBudget: true, "tool_called:x": true,
+		stopTokenBudget: true, "tool_called:x": true, stopApprovalPending: false,
 	} {
 		if isCapStop(r) != want {
 			t.Errorf("isCapStop(%q) = %v", r, !want)
