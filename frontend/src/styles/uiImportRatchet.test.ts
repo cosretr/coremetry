@@ -79,16 +79,16 @@ export function atomsImported(src: string, file: string): Set<string> {
 // DisclosureButton +1 taşınan PageControls'ten). R9: 902 → 904 (coremetry/
 // DataTable sarmalayıcısının iki dosyası ui/DataTable'ı içe aktarıyor).
 const CEILINGS: Record<string, number> = {
-  Button: 162, // Faz 2 dilim 1 R17 (Anomaly): 164 → 162; Faz 2 dilim 1 R16 (Oracle): 165 → 164; Faz 2 dilim 1 R14 (işletim): 169 → 165; Faz 2 dilim 1 R13 (DevOps + MCP): 171 → 169; Faz 2 dilim 1 R12 (AI SRE + Knowledge): 177 → 171; Faz 2 dilim 1 R11 (CoSRE): 184 → 177; Faz 2 dilim 1 R10 (erişim): 191 → 184; Faz 2 dilim 1 R7: 209 → 207 (Remote Cluster); etkileşim P2: 207 → 206 (⌘K); R8: 206 → 197; R9: 197 → 191
+  Button: 156, // Faz 2 dilim 1 R15 (Argo CD): 162 → 156; Faz 2 dilim 1 R17 (Anomaly): 164 → 162; Faz 2 dilim 1 R16 (Oracle): 165 → 164; Faz 2 dilim 1 R14 (işletim): 169 → 165; Faz 2 dilim 1 R13 (DevOps + MCP): 171 → 169; Faz 2 dilim 1 R12 (AI SRE + Knowledge): 177 → 171; Faz 2 dilim 1 R11 (CoSRE): 184 → 177; Faz 2 dilim 1 R10 (erişim): 191 → 184; Faz 2 dilim 1 R7: 209 → 207 (Remote Cluster); etkileşim P2: 207 → 206 (⌘K); R8: 206 → 197; R9: 197 → 191
   // v0.10.1617 (R9): 126 → 128 — coremetry/DataTable dondurulmuş API'nin Faz 1
   // gövdesi ui/DataTable'ı SARIYOR (plan §6: "thin wrapper over today's
   // code"): DataTable.tsx (gövde) + types.ts (bugünkü tiplerin yeniden dışa
   // aktarımı). Benimseme değil, halef; gövde Traces diliminde değişince düşer.
-  DataTable: 110, // Faz 2 dilim 1 R14 (işletim): 111 → 110; R9 artığı (ChannelsTab → coremetry/DataTable renderHeader): 112 → 111; Faz 2 dilim 1 R12 (AI SRE + Knowledge): 114 → 112; Faz 2 dilim 1 R11 (CoSRE): 117 → 114; Faz 2 dilim 1 R10 (erişim): 121 → 117; Faz 2 dilim 1 R7: 128 → 127 (SpanClusterValuesPanel); R8: 127 → 124; R9: 124 → 121
-  Badge: 52, // Faz 2 dilim 1 R16 (Oracle): 53 → 52; Faz 2 dilim 1 R13 (DevOps + MCP): 54 → 53; Faz 2 dilim 1 R11 (CoSRE): 58 → 54; R7: 63 → 61; CoSRE 2b B1: 61 → 60 (CosreV2StatusLine → coremetry Field); R8: 60 → 58
-  IconButton: 50,
-  Field: 22, // Faz 2 dilim 1 R16 (Oracle): 23 → 22; Faz 2 dilim 1 R14 (işletim): 24 → 23; Faz 2 dilim 1 R13 (DevOps + MCP): 25 → 24; Faz 2 dilim 1 R12 (AI SRE + Knowledge): 27 → 25; Faz 2 dilim 1 R11 (CoSRE): 29 → 27; Faz 2 dilim 1 R10 (erişim): 30 → 29; R7: 37 → 36; R8: 36 → 31; R9: 31 → 30
-  Chip: 35, // Faz 2 dilim 1 R11 (CoSRE): 36 → 35
+  DataTable: 107, // Faz 2 dilim 1 R15 (Argo CD): 110 → 107; Faz 2 dilim 1 R14 (işletim): 111 → 110; R9 artığı (ChannelsTab → coremetry/DataTable renderHeader): 112 → 111; Faz 2 dilim 1 R12 (AI SRE + Knowledge): 114 → 112; Faz 2 dilim 1 R11 (CoSRE): 117 → 114; Faz 2 dilim 1 R10 (erişim): 121 → 117; Faz 2 dilim 1 R7: 128 → 127 (SpanClusterValuesPanel); R8: 127 → 124; R9: 124 → 121
+  Badge: 49, // Faz 2 dilim 1 R15 (Argo CD): 52 → 49; Faz 2 dilim 1 R16 (Oracle): 53 → 52; Faz 2 dilim 1 R13 (DevOps + MCP): 54 → 53; Faz 2 dilim 1 R11 (CoSRE): 58 → 54; R7: 63 → 61; CoSRE 2b B1: 61 → 60 (CosreV2StatusLine → coremetry Field); R8: 60 → 58
+  IconButton: 48, // Faz 2 dilim 1 R15 (Argo CD): 50 → 48
+  Field: 19, // Faz 2 dilim 1 R15 (Argo CD): 22 → 19; Faz 2 dilim 1 R16 (Oracle): 23 → 22; Faz 2 dilim 1 R14 (işletim): 24 → 23; Faz 2 dilim 1 R13 (DevOps + MCP): 25 → 24; Faz 2 dilim 1 R12 (AI SRE + Knowledge): 27 → 25; Faz 2 dilim 1 R11 (CoSRE): 29 → 27; Faz 2 dilim 1 R10 (erişim): 30 → 29; R7: 37 → 36; R8: 36 → 31; R9: 31 → 30
+  Chip: 34, // Faz 2 dilim 1 R15 (Argo CD): 35 → 34; Faz 2 dilim 1 R11 (CoSRE): 36 → 35
   ConfirmDialog: 20, // Faz 2 dilim 1 R14 (işletim): 22 → 20; Faz 2 dilim 1 R13 (DevOps + MCP): 23 → 22; Faz 2 dilim 1 R12 (AI SRE + Knowledge): 25 → 23; Faz 2 dilim 1 R11 (CoSRE): 28 → 25; Faz 2 dilim 1 R10 (erişim): 31 → 28; R8: 35 → 34; R9: 34 → 31
   SegmentedControl: 33, // Faz 2 dilim 1 R12 (AI SRE + Knowledge): 34 → 33; Faz 2 dilim 1 R11 (CoSRE): 35 → 34
   // v0.10.1616 (R8): 31 → 32 — ARTIŞ değil TAŞIMA: coremetry/PageControls
@@ -96,17 +96,17 @@ const CEILINGS: Record<string, number> = {
   // düğmesini hâlâ DisclosureButton ile çiziyor; ui/ içindeyken sayılmıyordu.
   // Düğmeyi shadcn'e çevirmek görünür değişiklik olur — PageControls'ü
   // geçiren dilimin işi; o commit bunu 31'e indirir.
-  DisclosureButton: 30, // Faz 2 dilim 1 R12 (AI SRE + Knowledge): 31 → 30; Faz 2 dilim 1 R10 (erişim): 32 → 31
-  LinkButton: 29, // R7: 31 → 30; etkileşim P2: 30 → 29 (⌘K)
+  DisclosureButton: 29, // Faz 2 dilim 1 R15 (Argo CD): 30 → 29; Faz 2 dilim 1 R12 (AI SRE + Knowledge): 31 → 30; Faz 2 dilim 1 R10 (erişim): 32 → 31
+  LinkButton: 26, // Faz 2 dilim 1 R15 (Argo CD): 29 → 26; R7: 31 → 30; etkileşim P2: 30 → 29 (⌘K)
   Modal: 19, // Faz 2 dilim 1 R14 (işletim): 20 → 19; Faz 2 dilim 1 R11 (CoSRE): 21 → 20; Faz 2 dilim 1 R10 (erişim): 23 → 21
   Stack: 15, // Faz 2 dilim 1 R14 (işletim): 16 → 15; Faz 2 dilim 1 R10 (erişim): 18 → 16; R7: 23 → 21; R8: 21 → 18
   Card: 18, // Faz 2 dilim 1 R11 (CoSRE): 19 → 18
   TabStrip: 15, // Faz 2 dilim 1 R11 (CoSRE): 16 → 15; Faz 2 dilim 1 R10 (erişim): 17 → 16
   Drawer: 10, // Faz 2 dilim 1 R11 (CoSRE): 15 → 14; etkileşim S2 (External + Hosts → DetailSheet): 14 → 12; S3 (Watchers + ExchangesPanel): 12 → 10
-  Menu: 14,
+  Menu: 13, // Faz 2 dilim 1 R15 (Argo CD): 14 → 13
   StatTile: 13,
   SafeHref: 12,
-  Popover: 11,
+  Popover: 10, // Faz 2 dilim 1 R15 (Argo CD): 11 → 10
   SearchField: 10, // Faz 2 dilim 1 R12 (AI SRE + Knowledge): 11 → 10
   PanelTitle: 10,
   PriorityBadge: 8,

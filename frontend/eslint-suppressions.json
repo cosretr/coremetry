@@ -454,26 +454,6 @@
       "count": 1
     }
   },
-  "src/pages/settings/ArgoCDEnvPanel.tsx": {
-    "ui/no-raw-element": {
-      "count": 1
-    }
-  },
-  "src/pages/settings/ArgoCDHubsPanel.tsx": {
-    "ui/no-raw-element": {
-      "count": 2
-    }
-  },
-  "src/pages/settings/ArgoCDInstanceForm.tsx": {
-    "ui/no-raw-element": {
-      "count": 4
-    }
-  },
-  "src/pages/settings/ArgoCDTab.tsx": {
-    "ui/no-raw-element": {
-      "count": 3
-    }
-  },
   "src/pages/traces/ColumnFilter.tsx": {
     "ui/no-raw-element": {
       "count": 4

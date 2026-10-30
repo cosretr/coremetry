@@ -164,3 +164,120 @@ describe('coremetry/DataTable — renderHeader', () => {
     expect(h.querySelector('thead [data-h="svc"]')).not.toBeNull();
   });
 });
+
+// R15 (ADDITIVE, operatör onayı 2026-10-30) — Settings › Argo CD instance
+// tablosunun ihtiyaçları: satır başına ⋯ adı/id'si/devre dışı, sıralama
+// dışı sabitlenmiş satır, açık satır vurgusu + etkinleştirme, odağı taşıyan
+// eylemde odak geri çekilmez. Verilmeyen prop = bugünkü işaretleme.
+describe('coremetry/DataTable — R15 eklemeleri', () => {
+  const ROWS: Row[] = [{ id: 'a', svc: 'checkout', n: 3 }, { id: 'b', svc: 'cart', n: 7 }];
+  const flush = async () => { await act(async () => { await new Promise(r => setTimeout(r, 0)); }); };
+
+  it('verilmezse ⋯ düğmesi bugünkü gibi: ad = label, id ve disabled yok; satırda role/sınıf yok', () => {
+    const h = render({ rows: ROWS, getRowKey: r => r.id, rowActions: { label: 'Row actions', items: () => [] } });
+    const b = h.querySelector<HTMLButtonElement>('tbody button[aria-haspopup="menu"]')!;
+    expect(b.getAttribute('aria-label')).toBe('Row actions');
+    expect(b.hasAttribute('id')).toBe(false);
+    expect(b.disabled).toBe(false);
+    const tr = h.querySelector('tbody tr')!;
+    expect(tr.hasAttribute('role')).toBe(false);
+    expect(tr.hasAttribute('tabindex')).toBe(false);
+    expect(tr.hasAttribute('class')).toBe(false);
+  });
+
+  it('ariaLabel → <table aria-label>; verilmezse öznitelik yok', () => {
+    expect(render({ rows: ROWS }).querySelector('table')!.hasAttribute('aria-label')).toBe(false);
+    expect(render({ rows: ROWS, ariaLabel: 'Hub listesi' }).querySelector('table')!.getAttribute('aria-label')).toBe('Hub listesi');
+  });
+
+  it('triggerLabel / triggerId / isDisabled satır başına', () => {
+    const h = render({ rows: ROWS, getRowKey: r => r.id,
+      rowActions: { label: 'Row actions', items: () => [], triggerLabel: r => `${r.svc} eylemleri`, triggerId: r => `m-${r.id}`, isDisabled: r => r.id === 'b' } });
+    const a = h.querySelector<HTMLButtonElement>('#m-a')!;
+    const b = h.querySelector<HTMLButtonElement>('#m-b')!;
+    expect(a.getAttribute('aria-label')).toBe('checkout eylemleri');
+    expect(a.disabled).toBe(false);
+    expect(b.getAttribute('aria-label')).toBe('cart eylemleri');
+    expect(b.disabled).toBe(true);
+  });
+
+  it('pinnedRows sıralamanın dışında, her iki yönde de sonda; boş durumu bastırır', () => {
+    const blank: Row = { id: 'z', svc: 'aaa-new', n: 0 };
+    const order = (h: HTMLElement) => [...h.querySelectorAll('tbody tr')].map(t => t.querySelector('td')!.textContent);
+    const h = render({ rows: ROWS, getRowKey: r => r.id, pinnedRows: [blank], sort: { initial: { id: 'svc', dir: 'asc' } } });
+    expect(order(h)).toEqual(['cart', 'checkout', 'aaa-new']);
+    act(() => { h.querySelector<HTMLElement>('thead th')!.click(); });
+    expect(order(h)).toEqual(['checkout', 'cart', 'aaa-new']);
+    const e = render({ rows: [], pinnedRows: [blank], state: { kind: 'empty', message: 'Nothing here' } });
+    expect(e.querySelector('[data-dt-state]')).toBeNull();
+    expect(order(e)).toEqual(['aaa-new']);
+  });
+
+  it('detail.cellClassName ayrıntı hücresine; verilmezse sınıfsız', () => {
+    const h = render({ rows: ROWS, getRowKey: r => r.id,
+      detail: { isOpen: () => true, render: () => 'x', cellClassName: r => (r.id === 'a' ? 'row-detail' : undefined) } });
+    const tds = [...h.querySelectorAll('tr[data-dt-detail] > td')];
+    expect(tds.map(t => t.getAttribute('class'))).toEqual(['row-detail', null]);
+  });
+
+  it('pinnedRows: ayrıntı satırı ve ⋯ düğmesi de çizilir', () => {
+    const blank: Row = { id: 'z', svc: 'new', n: 0 };
+    const h = render({ rows: ROWS, getRowKey: r => r.id, pinnedRows: [blank],
+      rowActions: { label: 'Row actions', items: () => [], triggerId: r => `m-${r.id}`, isDisabled: r => r.id === 'z' },
+      detail: { isOpen: r => r.id === 'z', render: () => <span data-d="z" /> } });
+    const d = h.querySelector('tr[data-dt-detail]')!;
+    expect(d.previousElementSibling!.textContent).toContain('new');
+    expect(d.querySelector('[data-d="z"]')).not.toBeNull();
+    expect(h.querySelector<HTMLButtonElement>('#m-z')!.disabled).toBe(true);
+  });
+
+  it('openRow: açık satır row-selected; onActivate tık + Enter/Space, ⋯ tıkı satıra çıkmaz', () => {
+    const onActivate = vi.fn();
+    const h = render({ rows: ROWS, getRowKey: r => r.id,
+      rowActions: { label: 'Row actions', items: () => [] },
+      openRow: { isOpen: r => r.id === 'a', onActivate: r => onActivate(r.id) } });
+    const [ta, tb] = [...h.querySelectorAll<HTMLTableRowElement>('tbody tr')];
+    expect(ta.classList.contains('row-selected')).toBe(true);
+    expect(tb.classList.contains('row-selected')).toBe(false);
+    expect(ta.getAttribute('role')).toBe('button');
+    expect(ta.tabIndex).toBe(0);
+    act(() => { tb.click(); });
+    expect(onActivate).toHaveBeenLastCalledWith('b');
+    act(() => { ta.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); });
+    expect(onActivate).toHaveBeenLastCalledWith('a');
+    act(() => { tb.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true })); });
+    expect(onActivate).toHaveBeenLastCalledWith('b');
+    const n = onActivate.mock.calls.length;
+    act(() => { tb.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')!.click(); });
+    expect(onActivate.mock.calls.length).toBe(n);
+  });
+
+  it('openRow yalnız isOpen: vurgu var, etkinleştirme yok', () => {
+    const h = render({ rows: ROWS, getRowKey: r => r.id, openRow: { isOpen: r => r.id === 'b' } });
+    const [ta, tb] = [...h.querySelectorAll('tbody tr')];
+    expect(tb.classList.contains('row-selected')).toBe(true);
+    expect(ta.hasAttribute('role')).toBe(false);
+  });
+
+  it('menü kapanınca odak ⋯ düğmesine döner (engellenen eylem); eylem odağı taşıdıysa geri çekilmez', async () => {
+    const h = render({ rows: ROWS, getRowKey: r => r.id,
+      rowActions: { label: 'Row actions', triggerId: r => `m-${r.id}`, items: () => [
+        { id: 'noop', label: 'Blocked', onSelect: () => {} },
+        { id: 'move', label: 'Move', onSelect: () => { setTimeout(() => document.getElementById('elsewhere')?.focus(), 0); } },
+      ] } });
+    const target = document.createElement('input');
+    target.id = 'elsewhere';
+    h.appendChild(target);
+    const pick = async (label: string) => {
+      await act(async () => { h.querySelector<HTMLButtonElement>('#m-b')!.click(); });
+      await flush();
+      const item = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(e => e.textContent === label)!;
+      await act(async () => { item.click(); });
+      await flush(); await flush();
+    };
+    await pick('Blocked');
+    expect(document.activeElement?.id).toBe('m-b');
+    await pick('Move');
+    expect(document.activeElement?.id).toBe('elsewhere');
+  });
+});

@@ -1,16 +1,11 @@
-import type { CSSProperties, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 
 // ArgoCDSectionPanel — v0.10.974 — Ayarlar › Argo CD bölümlerinin ortak
 // kabuğu (mockup Main: başlık + soluk sayaç + açıklama paragrafı). Hub'lar,
 // Instance'lar, Ortamlar ve keşif paneli aynı başlık ritmini kullanır; beş
 // dosyada aynı statik stili tekrarlamak yerine tek yer. Bu iş akışı
-// styles/**'a dokunmuyor (paylaşılan globals.css eşzamanlı düzenleniyor):
-// statik değerler dosya düzeyinde adlandırılmış sabitlerde, token'larla.
-
-const TITLE: CSSProperties = { margin: 0, fontSize: 'var(--fs-md)', fontWeight: 600, color: 'var(--text)' };
-const META: CSSProperties = { fontSize: 'var(--fs-sm)', color: 'var(--text3)' };
-const DESC: CSSProperties = { margin: 0, maxWidth: 760, fontSize: 'var(--fs-sm)', lineHeight: '18px', color: 'var(--text2)' };
-const NOTE: CSSProperties = { margin: 0, maxWidth: 760, fontSize: 'var(--fs-xs)', lineHeight: '16px', color: 'var(--text3)' };
+// styles/**'a dokunmuyor. Faz 2 dilim 1 R15: CSSProperties sabitleri →
+// Tailwind utility (aynı token'lar).
 
 export function ArgoCDSectionPanel({ id, title, meta, desc, children }: {
   id: string;
@@ -20,12 +15,12 @@ export function ArgoCDSectionPanel({ id, title, meta, desc, children }: {
   children?: ReactNode;
 }) {
   return (
-    <section aria-labelledby={id} className="stack gap-3">
-      <div className="row gap-4 row-wrap">
-        <h3 id={id} style={TITLE}>{title}</h3>
-        {meta != null && meta !== '' && <span style={META}>{meta}</span>}
+    <section aria-labelledby={id} className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-4">
+        <h3 id={id} className="m-0 text-[length:var(--fs-md)] font-semibold text-(--text)">{title}</h3>
+        {meta != null && meta !== '' && <span className="text-[length:var(--fs-sm)] text-(--text3)">{meta}</span>}
       </div>
-      {desc && <p style={DESC}>{desc}</p>}
+      {desc && <p className="m-0 max-w-[760px] text-[length:var(--fs-sm)] leading-[18px] text-(--text2)">{desc}</p>}
       {children}
     </section>
   );
@@ -33,5 +28,5 @@ export function ArgoCDSectionPanel({ id, title, meta, desc, children }: {
 
 /** Bölüm altı dipnotu (11px, --text3) — `id` aria-describedby hedefi olabilir. */
 export function ArgoCDNote({ id, children }: { id?: string; children: ReactNode }) {
-  return <p id={id} style={NOTE}>{children}</p>;
+  return <p id={id} className="m-0 max-w-[760px] text-[length:var(--fs-xs)] leading-4 text-(--text3)">{children}</p>;
 }

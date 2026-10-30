@@ -62,7 +62,18 @@ export interface DataTableProps<T> {
   renderHeader?(col: ColumnDef<T>): ReactNode;
   /** Satır başına ⋯ menüsü — tabloda TEK paylaşılan menü (satır başına Radix kökü yok).
    *  Faz 1: `virtual` ile birlikte çizilmez (VirtualTable trailing kolonu yok). */
-  rowActions?: { items(row: T): MenuItemSpec[]; label: string };
+  rowActions?: {
+    items(row: T): MenuItemSpec[];
+    label: string;
+    /** R15 (v0.10.X, ADDITIVE, operatör onayı 2026-10-30): satırın ⋯
+     *  düğmesinin erişilebilir adı (verilmezse `label`, ör. "zeta-prod eylemleri"). */
+    triggerLabel?(row: T): string;
+    /** R15: ⋯ düğmesinin `id`'si — sayfanın odak hedefi (engellenen eylemden
+     *  sonra odak o satırın düğmesine döner). Verilmezse id basılmaz. */
+    triggerId?(row: T): string;
+    /** R15: ⋯ düğmesi devre dışı (ör. sabitlenmiş boş "yeni" satır). */
+    isDisabled?(row: T): boolean;
+  };
   /** Satır anahtarı (verilmezse selection.getRowId, yoksa sıra). */
   getRowKey?(row: T, index: number): string;
   /** Faz 2 dilim 1 R5 (G4, operatör onaylı; ADDITIVE): satır başına açılır
@@ -70,5 +81,28 @@ export interface DataTableProps<T> {
    *  hücre, `colSpan` = görünür kolonlar (+1 rowActions). Açık/kapalı durumu
    *  SAYFANIN (`isOpen`). `virtual` ile çizilmez (rowActions'la aynı Faz 1
    *  sınırı: VirtualTable'ın satır başına ikinci satırı yok). */
-  detail?: { isOpen(row: T): boolean; render(row: T): ReactNode };
+  detail?: {
+    isOpen(row: T): boolean;
+    render(row: T): ReactNode;
+    /** R15 (ADDITIVE): ayrıntı hücresinin sınıfı (ör. T6 `row-detail` —
+     *  bg2 + dolgu + sarar; `td-full` — tam genişlik, sarar). Verilmezse
+     *  sınıfsız `<td>` (bugünkü işaretleme). */
+    cellClassName?(row: T): string | undefined;
+  };
+  /** R15 (ADDITIVE, operatör onayı 2026-10-30): sıralanan satırların
+   *  ARDINDAN, sıralamanın DIŞINDA çizilen satırlar (ör. Argo CD'nin boş
+   *  "yeni instance" satırı — yön ne olursa olsun en sonda). Aynı hücre /
+   *  rowActions / detail / openRow; boş olmayan liste boş durumu bastırır.
+   *  `virtual` kipinde çizilmez. */
+  pinnedRows?: T[];
+  /** R15 (ADDITIVE): açık satır — `isOpen` satırı `row-selected` vurgusu
+   *  alır (satır içi form / ayrıntı açıkken). `onActivate` verilince satır
+   *  etkinleştirilir (role=button, tabIndex 0, tık + Enter/Space —
+   *  lib/a11y `rowActivation`; içteki düğmelerin tıkı satıra çıkmaz). onOpen'ın
+   *  global j/k gezinmesi YOK. `virtual` kipinde çizilmez. */
+  openRow?: { isOpen(row: T): boolean; onActivate?(row: T): void };
+  /** R15 (ADDITIVE): `<table aria-label>` — tablonun erişilebilir adı (bir
+   *  sayfada birden çok tablo: "hub-1 keşif adayları"). Verilmezse basılmaz.
+   *  `virtual` kipinde çizilmez. */
+  ariaLabel?: string;
 }

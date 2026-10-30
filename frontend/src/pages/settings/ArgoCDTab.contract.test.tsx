@@ -9,6 +9,12 @@
 // taslak inject bayrağıyla), 429 metni, "Ekle" / "Geri al", "kayıtlı"
 // eşleşmesinin yalnız aynı hub'daki KAYITLI satırla olması ve tek seferlik
 // "etiketsiz yeniden ara".
+// Faz 2 dilim 1 R15 (shadcn) — yalnız sorgu çevirisi: ⋯ menüsü Radix
+// DropdownMenu (`[role=menu]`, `.ui-popover` yok), onay kutuları Radix
+// (`[role=checkbox]` + `aria-checked`), keşif rozeti StatusBadge
+// (`[data-slot=badge]` + `data-status`), hücre aria-describedby'ı hücre
+// içeriğinin span'inde (coremetry/DataTable renderCell).
+import '@/test/radixJsdom';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -132,6 +138,10 @@ const byId = <T extends HTMLElement>(el: HTMLElement, id: string) => {
   return n as T;
 };
 const live = (el: HTMLElement) => el.querySelector('[role="status"].sr-only')?.textContent ?? '';
+const MENU = '[role="menu"]';
+const ITEMS = '[role="menu"] [role="menuitem"]';
+const hubBox = (el: HTMLElement, hub: string) => el.querySelector<HTMLButtonElement>(`[role="checkbox"][aria-label^='cluster="${hub}"']`);
+const isChecked = (b: Element | null) => b?.getAttribute('aria-checked') === 'true';
 const instRows = (el: HTMLElement) => [...el.querySelectorAll('table[aria-label="Argo CD instance\'ları"] tbody tr[role="button"]')];
 async function save(el: HTMLElement): Promise<ArgoCDSettingsInput> {
   click(button(el, 'Kaydet'));
@@ -327,11 +337,34 @@ describe('ArgoCDTab — ⋯ menüsü ve istemci denetimi', () => {
     const el = render();
     await tick();
     click(byId(el, 'acd-inst-menu-s_team-a-prod'));
-    const menu = el.ownerDocument.querySelector('.ui-popover[role="menu"]')!;
+    const menu = el.ownerDocument.querySelector(MENU)!;
     expect([...menu.querySelectorAll('[role="menuitem"]')].map(b => b.textContent)).toEqual(['Düzenle', 'Devre dışı bırak', 'Tablodan kaldır']);
     click([...menu.querySelectorAll('[role="menuitem"]')].find(b => b.textContent === 'Tablodan kaldır')!);
     expect(el.querySelector('[role="alert"]')?.textContent).toBe("team-a-prod kaldırılamaz: bu instance'a 1 pin bağlı; önce API'den pin'leri kaldırın (PUT /api/settings/argocd, pins[]).");
     expect(instRows(el)).toHaveLength(3);
+    // R15: engellenen kaldırma odağı o satırın ⋯ düğmesine döndürür (satır başına ad + id).
+    await tick();
+    expect(document.activeElement?.id).toBe('acd-inst-menu-s_team-a-prod');
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('team-a-prod eylemleri');
+  });
+
+  it('R15: ⋯ → "Düzenle" odağı formun ad alanına verir (menünün kapanışı geri çekmez); boş yeni satırın ⋯ düğmesi devre dışı ve en sonda', async () => {
+    setup();
+    const el = render();
+    await tick();
+    click(byId(el, 'acd-inst-menu-s_zeta-prod'));
+    click([...el.ownerDocument.querySelectorAll(ITEMS)].find(b => b.textContent === 'Düzenle')!);
+    await tick();
+    expect(document.activeElement?.id).toBe('acd-ed-name');
+    click(button(el, 'Vazgeç'));
+    click(button(el, '+ Instance ekle'));
+    const rows = instRows(el);
+    const last = rows[rows.length - 1];
+    expect(last.textContent).toContain('yeni instance');
+    expect(last.classList.contains('row-selected')).toBe(true);
+    const trig = last.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')!;
+    expect(trig.getAttribute('aria-label')).toBe('yeni instance eylemleri');
+    expect(trig.disabled).toBe(true);
   });
 
   it('BE3 aynası: kaldırılan kayıtlı kimliğin yuvasına yeni kimlik → Kaydet istek GÖNDERMEZ, hata satırda', async () => {
@@ -339,7 +372,7 @@ describe('ArgoCDTab — ⋯ menüsü ve istemci denetimi', () => {
     const el = render();
     await tick();
     click(byId(el, 'acd-inst-menu-s_zeta-prod'));
-    click([...el.ownerDocument.querySelectorAll('.ui-popover [role="menuitem"]')].find(b => b.textContent === 'Tablodan kaldır')!);
+    click([...el.ownerDocument.querySelectorAll(ITEMS)].find(b => b.textContent === 'Tablodan kaldır')!);
     expect(live(el)).toBe('zeta-prod tablodan kaldırıldı — kaydedilmedi.');
     click(button(el, '+ Instance ekle'));
     setInput(byId(el, 'acd-ed-id'), 'zeta-gitops');
@@ -372,7 +405,7 @@ describe('ArgoCDTab — keşif', () => {
     const el = render();
     await tick();
     // hub-2'nin işaretini taslakta aç (kaydetmeden): keşif TASLAK değeri gönderir.
-    click(el.querySelector('input[aria-label^=\'cluster="hub-2"\']')!);
+    click(hubBox(el, 'hub-2')!);
     click(button(el, "Hub'larda instance ara"));
     await tick();
     expect(discoverArgoCD).toHaveBeenCalledTimes(1);
@@ -479,7 +512,7 @@ describe('ArgoCDTab — keşif', () => {
     expect(discoverArgoCD).toHaveBeenCalledTimes(1);
     expect(discoverArgoCD.mock.calls[0][0]).toEqual({ hubClusterId: H1, injectClusterLabel: false });
     // Ayar değişmedi: taslakta hub-1 işareti hâlâ açık.
-    expect((el.querySelector('input[aria-label^=\'cluster="hub-1"\']') as HTMLInputElement).checked).toBe(true);
+    expect(isChecked(hubBox(el, 'hub-1'))).toBe(true);
     expect(el.textContent).toContain('Kayıtlı ayarlarla aynı.');
   });
 
@@ -570,9 +603,9 @@ describe('ArgoCDTab — keşif', () => {
     await tick(40);
     expect(discoverArgoCD).toHaveBeenCalledTimes(2);
     const block = () => [...el.querySelectorAll('h5')].find(h => h.textContent === 'hub-1')!.parentElement!.parentElement!;
-    const badge = () => block().querySelector('.badge')!;
+    const badge = () => block().querySelector('[data-slot="badge"]')!;
     expect(badge().textContent).toBe('yetki yok');
-    expect(badge().classList.contains('b-err')).toBe(true);
+    expect(badge().getAttribute('data-status')).toBe('critical');
     expect(block().textContent).toContain('0 aday · ');
     expect(block().textContent).toContain(' · HTTP 403');
     expect(block().textContent).not.toContain('HTTP 502');
@@ -658,10 +691,10 @@ describe('ArgoCDTab — v0.10.974 inceleme düzeltmeleri', () => {
     const url = [...row.querySelectorAll('td')].find(td => td.textContent?.includes('argocd.team-a.example.invalid'))!;
     expect(url.classList.contains('cell-err')).toBe(true);
     expect(url.classList.contains('cell-muted')).toBe(false);
-    expect(url.getAttribute('aria-describedby')).toBe('acd-inst-err-s_team-a-prod');
+    expect(url.querySelector('[aria-describedby]')?.getAttribute('aria-describedby')).toBe('acd-inst-err-s_team-a-prod');
     const job = [...row.querySelectorAll('td')].find(td => td.textContent === 'team-a-prod-metrics')!;
     expect(job.classList.contains('cell-err')).toBe(false);
-    expect(job.hasAttribute('aria-describedby')).toBe(false);
+    expect(job.querySelector('[aria-describedby]')).toBeNull();
   });
 
   it('"Değişiklikleri geri al" hub kaldırma engelinin iletisini de siler', async () => {
@@ -672,7 +705,7 @@ describe('ArgoCDTab — v0.10.974 inceleme düzeltmeleri', () => {
     const hubAlert = () => [...el.querySelectorAll('[role="alert"]')].find(a => a.textContent?.includes('instance bağlı'));
     click(el.querySelector('button[aria-label="hub-1 hub listesinden kaldır"]')!);
     expect(hubAlert()).toBeTruthy();
-    click(el.querySelector('input[aria-label^=\'cluster="hub-2"\']')!);
+    click(hubBox(el, 'hub-2')!);
     expect(el.textContent).toContain('1 kaydedilmemiş değişiklik');
     click(button(el, 'Değişiklikleri geri al'));
     expect(hubAlert()).toBeUndefined();
@@ -688,11 +721,11 @@ describe('ArgoCDTab — v0.10.974 inceleme düzeltmeleri', () => {
     }));
     const el = render();
     await tick();
-    click(el.querySelector('input[aria-label^=\'cluster="hub-2"\']')!);
+    click(hubBox(el, 'hub-2')!);
     click(button(el, 'Kaydet'));
     await tick();
     expect(putArgoCDSettings).toHaveBeenCalledTimes(1);
-    const inj = el.querySelector<HTMLInputElement>('input[aria-label^=\'cluster="hub-1"\']')!;
+    const inj = hubBox(el, 'hub-1')!;
     const lock = inj.closest('fieldset')!;
     expect(lock.disabled).toBe(true);
     expect(lock.getAttribute('aria-busy')).toBe('true');
@@ -700,14 +733,14 @@ describe('ArgoCDTab — v0.10.974 inceleme düzeltmeleri', () => {
     expect(button(el, '+ Instance ekle').matches(':disabled')).toBe(true);
     expect(button(el, 'Değişiklikleri geri al').disabled).toBe(true);
     click(inj);
-    expect(inj.checked).toBe(true);
+    expect(isChecked(inj)).toBe(true);
     await act(async () => { finish!(); });
     await tick();
     expect(lock.disabled).toBe(false);
     expect(lock.hasAttribute('aria-busy')).toBe(false);
     expect(inj.matches(':disabled')).toBe(false);
     expect(el.textContent).toContain('Kayıtlı ayarlarla aynı.');
-    expect((el.querySelector('input[aria-label^=\'cluster="hub-2"\']') as HTMLInputElement).checked).toBe(true);
+    expect(isChecked(hubBox(el, 'hub-2'))).toBe(true);
   });
 
   it('hata kutusu Kaydet anının görüntüsü: satır içi formda yazmak onu yeniden yazmaz; taslak düzenlenince kapanır, alan hatası canlı kalır', async () => {
@@ -764,7 +797,7 @@ describe('ArgoCDTab — v0.10.974 inceleme düzeltmeleri', () => {
     await tick();
     const menuEdit = () => {
       click(byId(el, 'acd-inst-menu-s_zeta-prod'));
-      click([...el.ownerDocument.querySelectorAll('.ui-popover [role="menuitem"]')].find(b => b.textContent === 'Düzenle')!);
+      click([...el.ownerDocument.querySelectorAll(ITEMS)].find(b => b.textContent === 'Düzenle')!);
     };
     menuEdit();
     expect(el.querySelector('#acd-inst-edit')).not.toBeNull();
@@ -826,7 +859,7 @@ describe('ArgoCDTab — v0.10.978 bayat yazma koruması (409)', () => {
     const el = render();
     await tick();
     // Kullanıcı: hub-2 bayrağı AÇIK (sunucu dokunmayacak → korunur) ve reader.timeoutS = 40 (sunucu 35 yapacak → atılır).
-    click(el.querySelector('input[aria-label^=\'cluster="hub-2"\']')!);
+    click(hubBox(el, 'hub-2')!);
     click(byId(el, 'acd-adv-btn'));
     setInput(byId(el, 'acd-adv-reader-timeoutS'), '40');
     expect(el.textContent).toContain('2 kaydedilmemiş değişiklik');
@@ -842,7 +875,7 @@ describe('ArgoCDTab — v0.10.978 bayat yazma koruması (409)', () => {
     expect(box.textContent).toContain('son kayıt');
     expect(live(el)).toBe('Kaydedilmedi — ayarlar başka biri tarafından değiştirildi.');
     // Taslak yerinde: düzenlemeler kaybolmadı, kilit açık.
-    expect((el.querySelector('input[aria-label^=\'cluster="hub-2"\']') as HTMLInputElement).checked).toBe(true);
+    expect(isChecked(hubBox(el, 'hub-2'))).toBe(true);
     expect(el.textContent).toContain('2 kaydedilmemiş değişiklik');
     expect(el.querySelector('fieldset')!.disabled).toBe(false);
     // Yazmaya devam etmek kutuyu KAPATMAZ (tek çıkış yeniden yükleme; sonraki Kaydet yine 409 olurdu).
@@ -857,7 +890,7 @@ describe('ArgoCDTab — v0.10.978 bayat yazma koruması (409)', () => {
     await tick();
     expect(getArgoCDSettings).toHaveBeenCalledTimes(2);
     expect(staleBox(el)).toBeUndefined();
-    expect((el.querySelector('input[aria-label^=\'cluster="hub-2"\']') as HTMLInputElement).checked).toBe(true);
+    expect(isChecked(hubBox(el, 'hub-2'))).toBe(true);
     expect(byId<HTMLInputElement>(el, 'acd-adv-reader-timeoutS').value).toBe('35');
     expect(el.querySelector('button[aria-label="uat ortamını kaldır"]')).not.toBeNull();
     expect(el.textContent).toContain('1 kaydedilmemiş değişiklik: hub-2: küme etiketi eklenecek');
@@ -957,8 +990,8 @@ describe('ArgoCDTab — v0.10.978 bayat yazma koruması (409)', () => {
 // KAYITLI durumu söyler (taslağı değil).
 describe('ArgoCDTab — v0.10.983 metrik işçisi anahtarı', () => {
   const STALE = 'HTTP 409: {"error":"ayarlar bu sayfa yüklendikten sonra başka biri tarafından değiştirildi — yeniden yükleyin","errorType":"stale","updatedAt":1790000000000001000}';
-  const integ = (el: HTMLElement) => byId<HTMLInputElement>(el, 'acd-enabled');
-  const box = (el: HTMLElement) => byId<HTMLInputElement>(el, 'acd-metrics');
+  const integ = (el: HTMLElement) => byId<HTMLButtonElement>(el, 'acd-enabled');
+  const box = (el: HTMLElement) => byId<HTMLButtonElement>(el, 'acd-metrics');
   const label = (el: HTMLElement, id: string) => el.querySelector(`label[for="${id}"]`)?.textContent;
   const withWorker = (): ArgoCDSettings => ({ ...baseSettings(), metricsWorker: { enabled: true } });
 
@@ -968,9 +1001,9 @@ describe('ArgoCDTab — v0.10.983 metrik işçisi anahtarı', () => {
     await tick();
     expect(label(el, 'acd-enabled')).toBe('Argo CD entegrasyonu açık');
     expect(byId(el, 'acd-enabled-h').textContent).toContain('Tek başına hiçbir işçi başlatmaz');
-    expect(integ(el).checked).toBe(true);
+    expect(isChecked(integ(el))).toBe(true);
     expect(label(el, 'acd-metrics')).toBe('Metrik işçisini çalıştır (argocd-metrics)');
-    expect(box(el).checked).toBe(false);
+    expect(isChecked(box(el))).toBe(false);
     expect(box(el).disabled).toBe(false);
     expect(box(el).getAttribute('aria-describedby')).toBe('acd-metrics-h');
     expect(byId(el, 'acd-metrics-h').textContent).toContain("Argo CD API'sine bağlanılmaz");
@@ -982,7 +1015,7 @@ describe('ArgoCDTab — v0.10.983 metrik işçisi anahtarı', () => {
     setup(withWorker());
     const el = render();
     await tick();
-    expect(box(el).checked).toBe(true);
+    expect(isChecked(box(el))).toBe(true);
     expect(el.textContent).toContain('Metrik işçisi açık — hub metrikleri okunuyor');
     click(box(el));
     expect(el.textContent).toContain('metrik işçisi kapatıldı');
@@ -1001,11 +1034,11 @@ describe('ArgoCDTab — v0.10.983 metrik işçisi anahtarı', () => {
     const el = render();
     await tick();
     click(integ(el));
-    expect(box(el).checked).toBe(false);
+    expect(isChecked(box(el))).toBe(false);
     expect(box(el).disabled).toBe(true);
     expect(byId(el, 'acd-metrics-h').textContent).toContain('Önce Argo CD entegrasyonunu açın');
     click(integ(el));
-    expect(box(el).checked).toBe(false); // yeniden açılış işçiyi sessizce başlatmaz
+    expect(isChecked(box(el))).toBe(false); // yeniden açılış işçiyi sessizce başlatmaz
     click(integ(el));
     const body = await save(el);
     expect(body.enabled).toBe(false);

@@ -12119,3 +12119,27 @@ başka servis/takım adlandırırsa onunki kalır. Takım/servis/kimlik yoksa ka
 `@`-kapsam / `/`-komut; global `system_settings["ai.userScope"].enabled=false` (varsayılan açık). v1 ucu ve dış MCP
 sunucusu etkilenmez; v2 model alt kümesi (G10/Q7: search_traces, search_logs, query_metric, list_metric_labels
 gizli; explain_log_spike.query düşer) prepareStep planıyla, registry silinmeden.
+
+
+## 2026-10-31 — v0.10.1692 — coremetry/DataTable dondurulmuş API'ye R15 ekleri (operatör onayı 2026-10-30)
+
+**Bağlam.** shadcn Faz 2 dilim 1 R15 (Settings › Argo CD) instance tablosu bugün `ui/DataTable` kancası + elle
+tbody ile çiziliyor: satır başına ⋯ (paylaşılan Popover), sıralamanın dışında hep sonda duran boş "yeni instance"
+satırı, açık satırın vurgusu + satır tıkıyla aç/kapa, satır içi form ve hata satırı. Dondurulmuş
+`coremetry/DataTable` (R9, v0.10.1617) bunları taşımıyordu. Operatör 2026-10-30 "sırayla devam" ile R15'i ve G4
+(v0.10.1635 `detail`) gibi API genişletmesini onayladı.
+
+**Karar — yalnız ADDITIVE, isteğe bağlı prop; verilmezse işaretleme birebir aynı** (sözleşme testi
+`DataTable.api.test.tsx` "R15 eklemeleri"):
+- `rowActions.triggerLabel(row)` / `triggerId(row)` / `isDisabled(row)` — ⋯ düğmesinin satır başına adı, id'si
+  (engellenen kaldırma odağı o düğmeye döndürür) ve devre dışı hâli (boş yeni satır).
+- `pinnedRows: T[]` — sıralanan satırların ardından, sıralama DIŞINDA; aynı hücre/⋯/detail/openRow; boş
+  olmayan liste boş durumu bastırır.
+- `openRow: { isOpen(row); onActivate?(row) }` — açık satır `row-selected`; `onActivate` verilince satır
+  lib/a11y `rowActivation` (role=button, tık + Enter/Space). `onOpen`'ın global j/k gezinmesi DEĞİL.
+- Listede olmayan iki ek (aynı gerekçe, aynı kural): `ariaLabel` → `<table aria-label>` (sayfada birden çok
+  tablo: "hub-1 keşif adayları"); `detail.cellClassName(row)` → ayrıntı `<td>` sınıfı (`row-detail` / `td-full`;
+  sınıfsız `<td>` genel `tbody td` nowrap + 320px kuralını alır — WikiPagesTable bugün bu hâlde, dokunulmadı).
+- Davranış: ⋯ menüsü kapanınca odak düğmeye YALNIZ odak `<body>`'deyse döner; öğenin eylemi odağı başka yere
+  koyduysa (⋯ → Düzenle → formun ad alanı) o kalır. Bugün prod'da rowActions tüketicisi yoktu.
+- `virtual` kipinde pinnedRows / openRow / ariaLabel çizilmez (rowActions / detail ile aynı Faz 1 sınırı).

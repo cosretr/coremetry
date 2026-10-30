@@ -1,8 +1,8 @@
-import { Fragment, useCallback, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { Badge, IconButton, LinkButton, MenuItem, Popover } from '@/components/ui';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef } from '@/components/ui/DataTable';
-import type { ArgoCDPin, ArgoCDTokenStatus } from '@/lib/types';
-import { rowActivation } from '@/lib/a11y';
+import { useCallback, useMemo, type ReactNode } from 'react';
+import { Badge } from '@/components/shadcn/badge';
+import { Button } from '@/components/shadcn/button';
+import { DataTable, type ColumnDef, type MenuItemSpec } from '@/components/coremetry/DataTable';
+import type { ArgoCDTokenStatus } from '@/lib/types';
 import {
   applyBuffer, domKey, hubName, instanceChanged, tokenRank, tokenState,
   type BufferErrors, type Draft, type HubDraft, type InstanceBuffer, type InstanceDraft, type Issue, type RemoteCluster, type TokenState,
@@ -29,8 +29,17 @@ import { ArgoCDInstanceForm } from './ArgoCDInstanceForm';
 //     sorunlu alanın hücresi `err` tonu (kolon tone()'u üzerinden — ham
 //     .cell-err yazılsa sonraki .cell-muted/.cell-faint onu ezerdi) ve satırın
 //     hata satırına aria-describedby.
-
-const SEP: CSSProperties = { height: 1, margin: 'var(--sp-2) 0', background: 'var(--divider)' };
+//   • Faz 2 dilim 1 R15 — useDataTable + elle tbody → coremetry/DataTable
+//     (dondurulmuş API'nin R15 ekleriyle, operatör onayı 2026-10-30): ⋯
+//     paylaşılan Popover + MenuItem → `rowActions` (tek DropdownMenu; satır
+//     başına ad "<id> eylemleri" + id `acd-inst-menu-<k>` — engellenen
+//     kaldırma odağı oraya döndürür), boş yeni satır → `pinnedRows` (sıralama
+//     dışı, ⋯ devre dışı), açık satır → `openRow` (row-selected + satır tıkı /
+//     Enter aç-kapa), satır içi form + hata satırı → TEK `detail` hücresi
+//     (form `#acd-inst-edit`, hata bloğu `#acd-inst-err-<k>`). Hücre
+//     `aria-describedby`/`title` hücre içeriğinin span'inde. Menüdeki ayırıcı
+//     çizgi düştü (MenuItemSpec'te ayırıcı yok); "N pin bağlı" ipucu kaldırma
+//     reddinin iletisinde zaten yazıyor.
 
 /** Sunucu/istemci alan adı → tablo kolonu (hatalı değerin hücresi). */
 const FIELD_COL: Record<string, string> = {
@@ -53,7 +62,7 @@ function tokenCell(i: InstanceDraft, tokens: Record<string, ArgoCDTokenStatus>):
 }
 
 export function ArgoCDInstancesPanel({
-  instances, base, hubs, clusters, tokens, pins, buffer, bufErr, pending, issues, msg,
+  instances, base, hubs, clusters, tokens, buffer, bufErr, pending, issues, msg,
   onOpen, onEdit, onToggle, onRemove, onBufferChange, onApply, onCancel, onRemoveBuffer,
 }: {
   instances: InstanceDraft[];
@@ -61,7 +70,6 @@ export function ArgoCDInstancesPanel({
   hubs: HubDraft[];
   clusters: RemoteCluster[];
   tokens: Record<string, ArgoCDTokenStatus>;
-  pins: ArgoCDPin[];
   buffer: InstanceBuffer | null;
   bufErr: BufferErrors;
   pending: boolean;
@@ -100,110 +108,98 @@ export function ArgoCDInstancesPanel({
       sortValue: r => `${tokenRank(tokenState(r, tokens))} ${r.id}`,
       tone: r => { if (bad(r, 'token')) return 'err'; const s = tokenState(r, tokens); return s === 'unresolved' ? 'err' : s === 'none' ? 'faint' : 'muted'; } },
     { id: 'status', label: 'Durum', width: 70, naturalDir: 'asc', sortValue: r => `${r.enabled ? 0 : 1} ${r.id}`, tone: r => (bad(r, 'status') ? 'err' : r.enabled ? 'muted' : 'faint') },
-    { id: 'act', label: 'Eylemler', kind: 'actions', width: 48 },
   ], [hn, tokens, bad]);
-  const dt = useDataTable<InstanceDraft>({
-    storageKey: 'settings.argocd.instances', columns, rows: instances, initialSort: { id: 'hub', dir: 'asc' },
-  });
-
-  const [menu, setMenu] = useState<string | null>(null);
-  const anchorRef = useRef<HTMLElement | null>(null);
-  const closeMenu = useCallback(() => setMenu(null), []);
-  const menuRow = menu ? instances.find(i => i.key === menu) : undefined;
 
   const blank = buffer?.isNew ? applyBuffer(buffer) : null;
-  const colSpan = dt.visibleColumns.length;
-  const pinCount = (id: string) => pins.filter(p => p.instanceId === id).length;
+  const isBlank = (r: InstanceDraft) => !!blank && r.key === blank.key;
+  const rowIssues = (r: InstanceDraft) => issues.filter(i => i.target.kind === 'instance' && i.target.key === r.key);
+  const errIdOf = (r: InstanceDraft) => (rowIssues(r).length ? `acd-inst-err-${domKey(r.key)}` : undefined);
+  const isOpen = (r: InstanceDraft) => !!buffer && buffer.key === r.key;
 
-  const form = buffer && (
-    <tr id="acd-inst-edit">
-      <td colSpan={colSpan} className="row-detail">
-        <ArgoCDInstanceForm buffer={buffer} errors={bufErr} pending={pending} hubs={hubs} clusters={clusters} tokens={tokens}
-          onChange={onBufferChange} onApply={onApply} onCancel={onCancel} onRemove={onRemoveBuffer} />
-      </td>
-    </tr>
-  );
+  const cell = (r: InstanceDraft, col: ColumnDef<InstanceDraft>): ReactNode => {
+    const errId = errIdOf(r);
+    const errFor = (c: string) => (errId && bad(r, c) ? errId : undefined);
+    const text = (v: string, title?: string) => (
+      <span aria-describedby={errFor(col.id)} title={title ?? (v || undefined)}>{v || <span className="cell-empty">—</span>}</span>
+    );
+    switch (col.id) {
+      case 'name': {
+        const k = domKey(r.key);
+        const open = isOpen(r);
+        const nb = isBlank(r);
+        const label = r.id || 'yeni instance';
+        const tag = nb || r.origin === 'new' ? 'yeni' : instanceChanged(r, base) ? 'değişti' : '';
+        return (
+          <span className="inline-flex items-center gap-3">
+            <Button variant="link" size="xs" className="h-auto gap-1.5 p-0 text-(--text2) no-underline hover:no-underline"
+              id={`acd-inst-btn-${k}`} aria-expanded={open} aria-controls="acd-inst-edit"
+              aria-describedby={errId} onClick={e => { e.stopPropagation(); onOpen(r.key); }}>
+              {r.name && <span>{r.name}</span>}
+              <span className={bad(r, 'name') ? 'font-mono text-status-critical' : r.name || nb ? 'font-mono text-(--text3)' : 'font-mono'}>{label}</span>
+            </Button>
+            {tag && <Badge variant="secondary">{tag}</Badge>}
+          </span>
+        );
+      }
+      case 'hub': return text(hn(r.hubClusterId));
+      case 'ns': return text(r.hubNamespace);
+      case 'job': return text(r.metricsJob);
+      case 'url': return text(r.apiUrl ? r.apiUrl.replace(/^https?:\/\//, '') : 'yok', r.apiUrl || '');
+      case 'token': { const tok = tokenCell(r, tokens); return text(tok.text, tok.title); }
+      case 'status': return text(r.enabled ? 'açık' : 'kapalı');
+      default: return null;
+    }
+  };
 
-  const renderRow = (r: InstanceDraft, isBlank: boolean): ReactNode => {
-    const k = domKey(r.key);
-    const open = !!buffer && buffer.key === r.key;
-    const label = r.id || 'yeni instance';
-    const rowIssues = issues.filter(i => i.target.kind === 'instance' && i.target.key === r.key);
-    const errId = rowIssues.length ? `acd-inst-err-${k}` : undefined;
-    const tag = isBlank || r.origin === 'new' ? 'yeni' : instanceChanged(r, base) ? 'değişti' : '';
-    const tok = tokenCell(r, tokens);
-    const errFor = (col: string) => (errId && bad(r, col) ? errId : undefined);
+  // Açık satırın altında satır içi form; Kaydet'in sorunları satırın altında
+  // tam genişlik hata bloğu — ikisi aynı ayrıntı hücresinde, bu sırayla.
+  const detail = (r: InstanceDraft): ReactNode => {
+    const ri = rowIssues(r);
+    const errId = errIdOf(r);
     return (
-      <Fragment key={r.key}>
-        <tr {...rowActivation(() => onOpen(r.key))} className={open ? 'row-selected' : undefined}>
-          <td {...dt.cellProps(r, 'name')}>
-            <span className="row gap-3">
-              <LinkButton tone="muted" underline="none" id={`acd-inst-btn-${k}`} aria-expanded={open} aria-controls="acd-inst-edit"
-                aria-describedby={errId} onClick={e => { e.stopPropagation(); onOpen(r.key); }}>
-                {r.name && <span>{r.name}</span>}
-                <span className={bad(r, 'name') ? 'mono is-err' : r.name || isBlank ? 'mono cell-faint' : 'mono'}>{label}</span>
-              </LinkButton>
-              {tag && <Badge tone="neutral">{tag}</Badge>}
-            </span>
-          </td>
-          <DataTableCell dt={dt} col="hub" row={r} value={hn(r.hubClusterId)} aria-describedby={errFor('hub')} />
-          <DataTableCell dt={dt} col="ns" row={r} value={r.hubNamespace} aria-describedby={errFor('ns')} />
-          <DataTableCell dt={dt} col="job" row={r} value={r.metricsJob} aria-describedby={errFor('job')} />
-          <DataTableCell dt={dt} col="url" row={r} value={r.apiUrl ? r.apiUrl.replace(/^https?:\/\//, '') : 'yok'} title={r.apiUrl || undefined}
-            aria-describedby={errFor('url')} />
-          <DataTableCell dt={dt} col="token" row={r} value={tok.text} title={tok.title} aria-describedby={errFor('token')} />
-          <DataTableCell dt={dt} col="status" row={r} value={r.enabled ? 'açık' : 'kapalı'} aria-describedby={errFor('status')} />
-          <td {...dt.cellProps(r, 'act')}>
-            <IconButton size="xs" icon="⋯" aria-label={`${label} eylemleri`} aria-haspopup="menu" id={`acd-inst-menu-${k}`}
-              aria-expanded={menu === r.key} disabled={isBlank}
-              onClick={e => { e.stopPropagation(); anchorRef.current = e.currentTarget; setMenu(m => (m === r.key ? null : r.key)); }} />
-          </td>
-        </tr>
-        {open && form}
-        {errId && (
-          <tr>
-            <td colSpan={colSpan} id={errId} tabIndex={-1} className="td-full is-err">
-              {rowIssues.map((is, ix) => (
-                <div key={ix}><span className="mono">{is.path}:</span> {is.message}</div>
-              ))}
-            </td>
-          </tr>
+      <>
+        {isOpen(r) && buffer && (
+          <div id="acd-inst-edit">
+            <ArgoCDInstanceForm buffer={buffer} errors={bufErr} pending={pending} hubs={hubs} clusters={clusters} tokens={tokens}
+              onChange={onBufferChange} onApply={onApply} onCancel={onCancel} onRemove={onRemoveBuffer} />
+          </div>
         )}
-      </Fragment>
+        {errId && (
+          <div id={errId} tabIndex={-1} className={isOpen(r) ? 'mt-3 text-status-critical' : 'text-status-critical'}>
+            {ri.map((is, ix) => (
+              <div key={ix}><span className="font-mono">{is.path}:</span> {is.message}</div>
+            ))}
+          </div>
+        )}
+      </>
     );
   };
+
+  const items = (r: InstanceDraft): MenuItemSpec[] => [
+    { id: 'edit', label: 'Düzenle', onSelect: () => onEdit(r.key) },
+    { id: 'toggle', label: r.enabled ? 'Devre dışı bırak' : 'Etkinleştir', onSelect: () => onToggle(r.key) },
+    { id: 'remove', label: 'Tablodan kaldır', danger: true,
+      onSelect: () => onRemove(r.key, { ok: 'acd-inst-add', blocked: `acd-inst-menu-${domKey(r.key)}` }) },
+  ];
 
   return (
     <>
       <div className="table-wrap">
-        <table {...dt.tableProps} aria-label="Argo CD instance'ları">
-          <DataTableColgroup dt={dt} />
-          <DataTableHead dt={dt} />
-          <tbody>
-            {dt.sortedRows.length === 0 && !blank
-              ? <DataTableState dt={dt} kind="empty" message="Instance yok — keşifle ya da elle ekleyin." />
-              : <>
-                  {dt.sortedRows.map(r => renderRow(r, false))}
-                  {blank && renderRow(blank, true)}
-                </>}
-          </tbody>
-        </table>
-        <Popover key={menu ?? ''} anchorRef={anchorRef} open={!!menuRow} onClose={closeMenu} kind="menu"
-          ariaLabel={menuRow ? `${menuRow.id} eylemleri` : 'Instance eylemleri'} width={200}>
-          {menuRow && (
-            <>
-              <MenuItem onClick={() => { closeMenu(); onEdit(menuRow.key); }}>Düzenle</MenuItem>
-              <MenuItem onClick={() => { closeMenu(); onToggle(menuRow.key); }}>{menuRow.enabled ? 'Devre dışı bırak' : 'Etkinleştir'}</MenuItem>
-              <div role="separator" style={SEP} />
-              <MenuItem danger title={pinCount(menuRow.id) ? `${pinCount(menuRow.id)} pin bağlı` : undefined}
-                onClick={() => { closeMenu(); onRemove(menuRow.key, { ok: 'acd-inst-add', blocked: `acd-inst-menu-${domKey(menuRow.key)}` }); }}>
-                Tablodan kaldır
-              </MenuItem>
-            </>
-          )}
-        </Popover>
+        <DataTable<InstanceDraft> storageKey="settings.argocd.instances" columns={columns} rows={instances}
+          ariaLabel="Argo CD instance'ları" sort={{ initial: { id: 'hub', dir: 'asc' } }}
+          getRowKey={r => r.key} renderCell={cell}
+          pinnedRows={blank ? [blank] : undefined}
+          openRow={{ isOpen, onActivate: r => onOpen(r.key) }}
+          detail={{ isOpen: r => isOpen(r) || !!errIdOf(r), render: detail, cellClassName: r => (isOpen(r) ? 'row-detail' : 'td-full') }}
+          rowActions={{
+            label: 'Instance eylemleri', items,
+            triggerLabel: r => `${r.id || 'yeni instance'} eylemleri`,
+            triggerId: r => `acd-inst-menu-${domKey(r.key)}`,
+            isDisabled: isBlank,
+          }}
+          state={{ kind: 'empty', message: 'Instance yok — keşifle ya da elle ekleyin.' }} />
       </div>
-      {msg && <div role="alert" className="field-error">{msg}</div>}
+      {msg && <div role="alert" className="text-[length:var(--fs-xs)] text-status-critical">{msg}</div>}
     </>
   );
 }

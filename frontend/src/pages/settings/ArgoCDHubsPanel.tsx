@@ -1,7 +1,10 @@
-import { Fragment, useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { Badge, Button } from '@/components/ui';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef } from '@/components/ui/DataTable';
+import { Badge } from '@/components/shadcn/badge';
+import { Button } from '@/components/shadcn/button';
+import { Checkbox } from '@/components/shadcn/checkbox';
+import { NativeSelect, NativeSelectOption } from '@/components/shadcn/native-select';
+import { DataTable, type ColumnDef } from '@/components/coremetry/DataTable';
 import type { ArgoCDPin } from '@/lib/types';
 import { domKey, type HubDraft, type InstanceDraft, type Issue, type RemoteCluster } from './argocdForm';
 import { ArgoCDNote, ArgoCDSectionPanel } from './ArgoCDSectionPanel';
@@ -28,6 +31,10 @@ import { ArgoCDNote, ArgoCDSectionPanel } from './ArgoCDSectionPanel';
 // (BE4): hub gövdeden çıkarken ona bağlı instance gövdede KALIRSA 400 —
 // ikisi birlikte çıkınca kural zaten sağlanır. Tek engel pin: pin'i olan
 // instance kaldırılamaz (pin editörü API'de), o hub'da onay sunulmaz.
+// Faz 2 dilim 1 R15: useDataTable + elle tbody → coremetry/DataTable
+// (`renderCell`; silinmiş / pasif / hatalı hub'ın tam genişlik satırı =
+// `detail`, hedef id'si içteki blokta), ham onay kutusu → shadcn Checkbox
+// (aria-label aynı), ham select → shadcn NativeSelect, ui → shadcn.
 
 interface HubRow { hub: HubDraft; rc: RemoteCluster | undefined; count: number; name: string }
 
@@ -65,7 +72,6 @@ export function ArgoCDHubsPanel({ hubs, instances, pins, clusters, issues, msg, 
     const rc = clusters.find(c => c.id === h.clusterId);
     return { hub: h, rc, name: rc ? rc.name : 'bilinmeyen kayıt', count: instances.filter(i => i.hubClusterId === h.clusterId).length };
   });
-  const dt = useDataTable<HubRow>({ storageKey: 'settings.argocd.hubs', columns: COLS, rows });
   const isHub = (id: string) => hubs.some(h => h.clusterId === id);
 
   const add = () => {
@@ -111,90 +117,97 @@ export function ArgoCDHubsPanel({ hubs, instances, pins, clusters, issues, msg, 
     focus(`acd-hub-rm-${domKey(r.hub.key)}`);
   };
 
+  // Hub satırının tam genişlik notu: sunucu/istemci sorunu, silinmiş kayıt
+  // (hata) ya da devre dışı kayıt (pasif hub, soluk bilgi).
+  const note = (r: HubRow): { id: string; node: ReactNode } | null => {
+    const k = domKey(r.hub.key);
+    const issue = issues.find(i => i.target.kind === 'hub' && i.target.key === r.hub.key);
+    const deleted = !r.rc;
+    const disabled = !!r.rc && !r.rc.enabled;
+    if (!issue && !deleted && !disabled) return null;
+    const id = `acd-hub-err-${k}`;
+    return {
+      id,
+      node: (
+        <div id={id} tabIndex={-1} className={issue || deleted ? 'text-status-critical' : 'text-(--text2)'}>
+          {issue ? (
+            <><span className="font-mono">{issue.path}:</span> {issue.message}</>
+          ) : deleted ? (
+            <>“{r.hub.clusterId}” artık bir Remote Cluster kaydı değil (silinmiş). Bu hub satırını kaldırın; Argo bu kümede çalışıyorsa kaydı <Link to="/settings/clusters">Ayarlar › Remote clusters</Link>'ta yeniden ekleyip hub olarak seçin.</>
+          ) : (
+            <>{r.name} Remote Cluster kaydı devre dışı — pasif hub: instance'ları taranmaz, kaydı engellemez. Etkinleştirmek için kaydı <Link to="/settings/clusters">Ayarlar › Remote clusters</Link>'ta açın.</>
+          )}
+        </div>
+      ),
+    };
+  };
+  const cell = (r: HubRow, col: ColumnDef<HubRow>): ReactNode => {
+    const k = domKey(r.hub.key);
+    const errId = note(r)?.id;
+    switch (col.id) {
+      case 'cluster':
+        return (
+          <span aria-describedby={errId} title={r.name}>
+            <span className={!r.rc ? 'font-mono text-status-critical' : 'font-mono'}>{r.name}</span>{' '}
+            <span className="font-mono text-(--text3)">{r.hub.clusterId}</span>
+            {!!r.rc && !r.rc.enabled && <>{' '}<Badge variant="secondary">pasif</Badge></>}
+          </span>
+        );
+      case 'label':
+        return r.rc?.label ? (
+          <span className="inline-flex items-center gap-2">
+            <Checkbox checked={r.hub.inject} aria-describedby="acd-hub-inj-h"
+              aria-label={`${r.rc.label} — ${r.name} Argo sorgularına eklensin`}
+              onCheckedChange={v => onInject(r.hub.key, v === true)} />
+            <span className={r.hub.inject ? 'font-mono' : 'font-mono text-(--text3)'}>{r.rc.label}</span>
+            <span className="text-(--text3)" aria-hidden="true">{r.hub.inject ? 'ekleniyor' : 'eklenmiyor'}</span>
+          </span>
+        ) : r.rc ? (
+          <span className="text-(--text3)">etiket yok — kayıt kendi Thanos URL'sini kullanıyor</span>
+        ) : <span className="cell-empty">—</span>;
+      case 'count':
+        return String(r.count);
+      case 'act':
+        return (
+          <Button variant="ghost" size="xs" id={`acd-hub-rm-${k}`} aria-describedby={errId}
+            aria-label={`${r.name} hub listesinden kaldır`} onClick={() => remove(r)}>
+            Kaldır
+          </Button>
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
     <ArgoCDSectionPanel id="acd-hubs-h" title="Hub'lar" meta={`${hubs.length} hub`}
       desc="Argo CD'nin çalıştığı kümeler. Her hub ayrı bir Remote Cluster kaydıdır ve kendi Thanos'unu gösterir; /clusters'ta normal küme olarak da görünür. Keşif ve sorgular hub başına ayrı koşar.">
       <div className="table-wrap">
-        <table {...dt.tableProps} aria-label="Hub'lar">
-          <DataTableColgroup dt={dt} />
-          <DataTableHead dt={dt} />
-          <tbody>
-            {dt.sortedRows.length === 0 ? (
-              <DataTableState dt={dt} kind="empty" message="Hub yok — aşağıdan bir Remote Cluster seçin." />
-            ) : dt.sortedRows.map(r => {
-              const k = domKey(r.hub.key);
-              const issue = issues.find(i => i.target.kind === 'hub' && i.target.key === r.hub.key);
-              const deleted = !r.rc;
-              const disabled = !!r.rc && !r.rc.enabled;
-              const errId = issue || deleted || disabled ? `acd-hub-err-${k}` : undefined;
-              return (
-                <Fragment key={r.hub.key}>
-                  <tr>
-                    <td {...dt.cellProps(r, 'cluster', r.name)} aria-describedby={errId}>
-                      <span className={deleted ? 'mono is-err' : 'mono'}>{r.name}</span>{' '}
-                      <span className="mono cell-faint">{r.hub.clusterId}</span>
-                      {disabled && <>{' '}<Badge tone="neutral">pasif</Badge></>}
-                    </td>
-                    <td {...dt.cellProps(r, 'label')}>
-                      {r.rc?.label ? (
-                        <label className="row gap-2">
-                          <input type="checkbox" checked={r.hub.inject} aria-describedby="acd-hub-inj-h"
-                            aria-label={`${r.rc.label} — ${r.name} Argo sorgularına eklensin`}
-                            onChange={e => onInject(r.hub.key, e.target.checked)} />
-                          <span className={r.hub.inject ? 'mono' : 'mono cell-faint'}>{r.rc.label}</span>
-                          <span className="cell-faint" aria-hidden="true">{r.hub.inject ? 'ekleniyor' : 'eklenmiyor'}</span>
-                        </label>
-                      ) : r.rc ? (
-                        <span className="cell-faint">etiket yok — kayıt kendi Thanos URL'sini kullanıyor</span>
-                      ) : <span className="cell-empty">—</span>}
-                    </td>
-                    <DataTableCell dt={dt} col="count" row={r} value={String(r.count)} />
-                    <td {...dt.cellProps(r, 'act')}>
-                      <Button variant="ghost" size="xs" id={`acd-hub-rm-${k}`} aria-describedby={errId}
-                        aria-label={`${r.name} hub listesinden kaldır`} onClick={() => remove(r)}>
-                        Kaldır
-                      </Button>
-                    </td>
-                  </tr>
-                  {errId && (
-                    <tr>
-                      <td colSpan={COLS.length} id={errId} tabIndex={-1}
-                        className={issue || deleted ? 'td-full is-err' : 'td-full cell-muted'}>
-                        {issue ? (
-                          <><span className="mono">{issue.path}:</span> {issue.message}</>
-                        ) : deleted ? (
-                          <>“{r.hub.clusterId}” artık bir Remote Cluster kaydı değil (silinmiş). Bu hub satırını kaldırın; Argo bu kümede çalışıyorsa kaydı <Link to="/settings/clusters">Ayarlar › Remote clusters</Link>'ta yeniden ekleyip hub olarak seçin.</>
-                        ) : (
-                          <>{r.name} Remote Cluster kaydı devre dışı — pasif hub: instance'ları taranmaz, kaydı engellemez. Etkinleştirmek için kaydı <Link to="/settings/clusters">Ayarlar › Remote clusters</Link>'ta açın.</>
-                        )}
-                      </td>
-                    </tr>
-                  )}
-                </Fragment>
-              );
-            })}
-          </tbody>
-        </table>
+        <DataTable<HubRow> storageKey="settings.argocd.hubs" columns={COLS} rows={rows} ariaLabel="Hub'lar"
+          getRowKey={r => r.hub.key} renderCell={cell}
+          state={{ kind: 'empty', message: 'Hub yok — aşağıdan bir Remote Cluster seçin.' }}
+          detail={{ isOpen: r => !!note(r), render: r => note(r)?.node, cellClassName: () => 'td-full' }} />
       </div>
-      {msg && <div role="alert" className="field-error">{msg}</div>}
+      {msg && <div role="alert" className="text-[length:var(--fs-xs)] text-status-critical">{msg}</div>}
       {pending && (
-        <div className="row gap-4 row-wrap">
-          <Button variant="danger" size="sm" id={`acd-hub-rmall-${domKey(pending.hub.key)}`} onClick={() => removeAll(pending)}>
+        <div className="flex flex-wrap items-center gap-4">
+          <Button variant="destructive" size="sm" id={`acd-hub-rmall-${domKey(pending.hub.key)}`} onClick={() => removeAll(pending)}>
             Hub'ı {pending.count} instance ile birlikte kaldır
           </Button>
           <Button variant="ghost" size="sm" onClick={() => cancel(pending)}>Vazgeç</Button>
         </div>
       )}
-      <div className="row gap-4 row-wrap">
+      <div className="flex flex-wrap items-center gap-4">
         <label htmlFor="acd-hub-add" className="sr-only">Hub olarak eklenecek Remote Cluster</label>
-        <select id="acd-hub-add" value={pick} onChange={e => { setPick(e.target.value); setConfirm(null); onMsg(''); }}>
-          <option value="">Remote Cluster seç…</option>
+        <NativeSelect id="acd-hub-add" size="sm" className="bg-field text-[length:var(--fs-sm)]" value={pick}
+          onChange={e => { setPick(e.target.value); setConfirm(null); onMsg(''); }}>
+          <NativeSelectOption value="">Remote Cluster seç…</NativeSelectOption>
           {clusters.map(c => (
-            <option key={c.id} value={c.id} disabled={isHub(c.id)}>{c.name}{c.enabled ? '' : ' (devre dışı)'}</option>
+            <NativeSelectOption key={c.id} value={c.id} disabled={isHub(c.id)}>{c.name}{c.enabled ? '' : ' (devre dışı)'}</NativeSelectOption>
           ))}
-        </select>
-        <Button variant="secondary" size="sm" onClick={add}>Hub ekle</Button>
-        <span className="field-hint">Listede yoksa önce <Link to="/settings/clusters">Ayarlar › Remote clusters</Link> kaydını ekleyin.</span>
+        </NativeSelect>
+        <Button variant="outline" size="sm" onClick={add}>Hub ekle</Button>
+        <span className="text-[length:var(--fs-xs)] text-(--text3)">Listede yoksa önce <Link to="/settings/clusters">Ayarlar › Remote clusters</Link> kaydını ekleyin.</span>
       </div>
       <ArgoCDNote id="acd-hub-inj-h">
         Remote Cluster kaydı bir Thanos küme etiketi taşıyorsa Coremetry onu her sorguya ekler. Argo serileri farklı dış

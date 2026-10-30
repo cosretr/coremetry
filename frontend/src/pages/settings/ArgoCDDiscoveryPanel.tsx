@@ -1,7 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { Badge, Button, IconButton } from '@/components/ui';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef } from '@/components/ui/DataTable';
+import { X } from 'lucide-react';
+import { Button } from '@/components/shadcn/button';
+import { StatusBadge } from '@/components/coremetry/StatusBadge';
+import { DataTable, type ColumnDef } from '@/components/coremetry/DataTable';
+import type { Status } from '@/lib/statusTone';
 import { api, isCanceled } from '@/lib/api';
 import type { ArgoCDCandidate } from '@/lib/types';
 import { domKey, fmtHourMinute, hubName, trLocative, type HubDraft, type InstanceDraft, type RemoteCluster } from './argocdForm';
@@ -47,20 +50,18 @@ import { ArgoCDNote } from './ArgoCDSectionPanel';
 
 // `.card` kabı: içindeki aday tabloları çerçevesiz (tablo standardı T10, tek
 // çerçeve); dolgu blokların kendisinde.
-const PANEL: CSSProperties = { padding: 0 };
-const PANEL_HEAD: CSSProperties = { display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', padding: 'var(--sp-4) var(--sp-4) var(--sp-4) var(--sp-7)', borderBottom: '1px solid var(--divider)' };
-const PANEL_TITLE: CSSProperties = { margin: 0, fontSize: 'var(--fs-md)', fontWeight: 600, color: 'var(--text)' };
-const INTRO: CSSProperties = { margin: 0, maxWidth: 900, padding: 'var(--sp-5) var(--sp-7)', fontSize: 'var(--fs-sm)', lineHeight: '18px', color: 'var(--text2)' };
-const BLOCK: CSSProperties = { borderTop: '1px solid var(--divider)' };
-const BLOCK_HEAD: CSSProperties = { display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--sp-4)', padding: 'var(--sp-4) var(--sp-7) var(--sp-2)' };
-const HUB_TITLE: CSSProperties = { margin: 0, fontSize: 'var(--fs-sm)', fontWeight: 600, color: 'var(--text)' };
-const TEXT: CSSProperties = { fontSize: 'var(--fs-sm)', lineHeight: '18px', color: 'var(--text2)' };
-const DETAIL: CSSProperties = { margin: 0, padding: '0 var(--sp-7) var(--sp-3)', fontSize: 'var(--fs-sm)', lineHeight: '18px', color: 'var(--text2)' };
-const NOTICE: CSSProperties = { margin: '0 var(--sp-7) var(--sp-5)', padding: 'var(--sp-5) var(--sp-6)', borderRadius: 'var(--radius-sm)', background: 'var(--bg2)', border: '1px solid var(--border)', fontSize: 'var(--fs-sm)', lineHeight: '18px', color: 'var(--text2)' };
-const STRONG: CSSProperties = { color: 'var(--text)' };
-const FOOT: CSSProperties = { padding: 'var(--sp-5) var(--sp-7)', borderTop: '1px solid var(--divider)' };
+// Faz 2 dilim 1 R15: CSSProperties → utility; aday tablosu useDataTable +
+// elle tbody → coremetry/DataTable (`renderCell`, `ariaLabel`), rozet
+// ui Badge → StatusBadge (neutral → unknown, warning → warn, danger →
+// critical), ✕ IconButton → shadcn ghost icon + lucide X.
 // v0.10.974 — mockup rerunOp: koşu sürerken yeniden-ara düğmeleri soluk (aria-disabled'ın görünür hâli).
-const DIM: CSSProperties = { opacity: 0.45, cursor: 'not-allowed' };
+const DIM = 'aria-disabled:cursor-not-allowed aria-disabled:opacity-45';
+const TEXT = 'text-[length:var(--fs-sm)] leading-[18px] text-(--text2)';
+const NOTICE = `mx-4 mb-2.5 flex flex-col gap-1 rounded-[var(--radius-sm)] border border-(--border) bg-(--bg2) px-3 py-2.5 ${TEXT}`;
+const HINT = 'text-[length:var(--fs-xs)] text-(--text3)';
+/** Boş değer soluk "—" (DataTableCell'in T4 glifi; renderCell yolunda elle). */
+const orDash = (v: string | undefined): ReactNode => v || <span className="cell-empty">—</span>;
+const BADGE: Record<'neutral' | 'warning' | 'danger', Status> = { neutral: 'unknown', warning: 'warn', danger: 'critical' };
 
 const CAND_COLS: ColumnDef<CandRow>[] = [
   { id: 'ns', label: 'Namespace', width: 150, mono: true },
@@ -80,48 +81,51 @@ function HubCandidates({ name, rows, onAdd, onUndo }: {
   onAdd: (r: CandRow) => void;
   onUndo: (r: CandRow) => void;
 }) {
-  const dt = useDataTable<CandRow>({ storageKey: 'settings.argocd.candidates', columns: CAND_COLS, rows });
   const scroll = rows.length > 10;
-  const table = (
-    <table {...dt.tableProps} aria-label={`${name} keşif adayları`}>
-      <DataTableColgroup dt={dt} />
-      <DataTableHead dt={dt} />
-      <tbody>
-        {rows.length === 0 ? <DataTableState dt={dt} kind="empty" message="Aday yok." /> : dt.sortedRows.map(r => {
-          const k = domKey(r.key);
+  const cell = (r: CandRow, col: ColumnDef<CandRow>): ReactNode => {
+    const k = domKey(r.key);
+    switch (col.id) {
+      case 'ns': return orDash(r.cand.hubNamespace);
+      case 'job': return orDash(r.cand.metricsJob);
+      case 'id': return <span className={r.status === 'saved' ? 'text-(--text2)' : undefined}>{orDash(r.id)}</span>;
+      case 'apps': return <span title={r.countTitle || undefined}>{orDash(r.apps)}</span>;
+      case 'shards': return <span title={r.countTitle || undefined}>{orDash(r.shards)}</span>;
+      case 'note':
+        return (
+          <span title={r.noteTitle || undefined}
+            className={r.noteTone === 'err' ? 'text-status-critical' : r.noteTone === 'warn' ? 'text-status-warn' : 'text-(--text2)'}>
+            {orDash(r.note)}
+          </span>
+        );
+      case 'act':
+        if (r.status === 'new') {
           return (
-            <tr key={r.key}>
-              <DataTableCell dt={dt} col="ns" row={r} value={r.cand.hubNamespace} />
-              <DataTableCell dt={dt} col="job" row={r} value={r.cand.metricsJob} />
-              <DataTableCell dt={dt} col="id" row={r} value={r.id} className={r.status === 'saved' ? 'cell-muted' : undefined} />
-              <DataTableCell dt={dt} col="apps" row={r} value={r.apps} title={r.countTitle || undefined} />
-              <DataTableCell dt={dt} col="shards" row={r} value={r.shards} title={r.countTitle || undefined} />
-              <DataTableCell dt={dt} col="note" row={r} value={r.note} title={r.noteTitle || undefined}
-                className={r.noteTone === 'err' ? 'cell-err' : r.noteTone === 'warn' ? 'cell-warn' : 'cell-muted'} />
-              <td {...dt.cellProps(r, 'act')}>
-                {r.status === 'new' && (
-                  <Button variant="secondary" size="xs" id={`acd-cand-add-${k}`}
-                    aria-label={`${name} · ${r.cand.hubNamespace || r.cand.metricsJob} adayını ekle`}
-                    onClick={() => onAdd(r)}>+ Ekle</Button>
-                )}
-                {r.status === 'added' && (
-                  <span className="row gap-3">
-                    <span className="cell-muted">eklendi</span>
-                    <Button variant="ghost" size="xs" id={`acd-cand-undo-${k}`} aria-label={`${r.id} eklemesini geri al`}
-                      onClick={() => onUndo(r)}>Geri al</Button>
-                  </span>
-                )}
-                {r.status === 'saved' && <span className="cell-faint">kayıtlı</span>}
-                {r.status === 'error' && <span className="cell-empty">—</span>}
-              </td>
-            </tr>
+            <Button variant="outline" size="xs" id={`acd-cand-add-${k}`}
+              aria-label={`${name} · ${r.cand.hubNamespace || r.cand.metricsJob} adayını ekle`}
+              onClick={() => onAdd(r)}>+ Ekle</Button>
           );
-        })}
-      </tbody>
-    </table>
+        }
+        if (r.status === 'added') {
+          return (
+            <span className="inline-flex items-center gap-3">
+              <span className="text-(--text2)">eklendi</span>
+              <Button variant="ghost" size="xs" id={`acd-cand-undo-${k}`} aria-label={`${r.id} eklemesini geri al`}
+                onClick={() => onUndo(r)}>Geri al</Button>
+            </span>
+          );
+        }
+        if (r.status === 'saved') return <span className="text-(--text3)">kayıtlı</span>;
+        return <span className="cell-empty">—</span>;
+      default:
+        return null;
+    }
+  };
+  const table = (
+    <DataTable<CandRow> storageKey="settings.argocd.candidates" columns={CAND_COLS} rows={rows} ariaLabel={`${name} keşif adayları`}
+      getRowKey={r => r.key} renderCell={cell} state={{ kind: 'empty', message: 'Aday yok.' }} />
   );
   return scroll ? (
-    <div className="table-wrap is-scroll" style={{ maxHeight: 360 }} tabIndex={0} role="region" aria-label={`${name} adayları (kaydırılabilir)`}>
+    <div className="table-wrap is-scroll max-h-[360px]" tabIndex={0} role="region" aria-label={`${name} adayları (kaydırılabilir)`}>
       {table}
     </div>
   ) : <div className="table-wrap">{table}</div>;
@@ -231,28 +235,30 @@ export function ArgoCDDiscoveryPanel({ hubs, clusters, instances, leading, onAdd
 
   return (
     <>
-      <div className="row gap-4 row-wrap">
+      <div className="flex flex-wrap items-center gap-4">
         {leading}
-        <Button variant="secondary" size="sm" id="acd-disc-btn" aria-expanded={open} aria-controls="acd-disc-panel"
+        <Button variant="outline" size="sm" id="acd-disc-btn" aria-expanded={open} aria-controls="acd-disc-panel"
           disabled={hubs.length === 0} aria-disabled={busy || undefined} title={hubs.length === 0 ? 'Önce bir hub ekleyin' : undefined}
           onClick={toggle}>
           {label}
         </Button>
-        <span className="field-hint">
+        <span className={HINT}>
           Keşif salt okunur ve hub başına ayrı bir istektir: hiçbir şey kaydedilmez; denetim kaydına hub başına bir <code>settings.argocd.discover</code> yazılır.
         </span>
       </div>
       {open && (
-        <section id="acd-disc-panel" className="card" aria-label="Keşif sonucu" aria-busy={busy} style={PANEL}>
-          <div style={PANEL_HEAD}>
-            <h4 style={PANEL_TITLE}>Keşif sonucu</h4>
-            <span className="field-hint">{at ? panelMeta(at, views) : 'aranıyor…'}</span>
-            <span className="row-grow" />
-            <Button variant="ghost" size="sm" aria-disabled={busy || undefined} style={busy ? DIM : undefined}
+        <section id="acd-disc-panel" className="card p-0" aria-label="Keşif sonucu" aria-busy={busy}>
+          <div className="flex items-center gap-2.5 border-b border-(--divider) py-2 pr-2 pl-4">
+            <h4 className="m-0 text-[length:var(--fs-md)] font-semibold text-(--text)">Keşif sonucu</h4>
+            <span className={HINT}>{at ? panelMeta(at, views) : 'aranıyor…'}</span>
+            <span className="flex-1" />
+            <Button variant="ghost" size="sm" className={DIM} aria-disabled={busy || undefined}
               onClick={() => { if (!busy) void run(all()); }}>Yeniden ara</Button>
-            <IconButton size="sm" icon="✕" aria-label="Keşif sonucunu kapat" onClick={() => { setOpen(false); focus('acd-disc-btn'); }} />
+            <Button variant="ghost" size="icon-sm" aria-label="Keşif sonucunu kapat" onClick={() => { setOpen(false); focus('acd-disc-btn'); }}>
+              <X />
+            </Button>
           </div>
-          <p style={INTRO}>
+          <p className={`m-0 max-w-[900px] px-4 py-2.5 ${TEXT}`}>
             Her hub'da <code>argocd_app_info</code> serilerinin <code>job</code>, <code>namespace</code> ve <code>exported_namespace</code> değerleri
             label-values API'siyle okunur (≤500 iş, iş başına ≤500 değer, çağrı başına 15 sn); ayrıca iş başına bir count sorgusu (uygulama) ile
             pod değerleri (shard) — hub başına ≤2.000 çağrı ve 60 sn. “Ekle” adayı, “Tümünü ekle” hub'ın namespace'i belli tüm yeni adaylarını
@@ -266,32 +272,32 @@ export function ArgoCDDiscoveryPanel({ hubs, clusters, instances, leading, onAdd
             const running = r.kind === 'running';
             const nAdd = addableRows(rows).length;
             return (
-              <div key={h.key} style={BLOCK}>
-                <div style={BLOCK_HEAD}>
-                  <h5 className="mono" style={HUB_TITLE}>{name}</h5>
-                  {v.badge && <Badge tone={v.badge.tone}>{v.badge.text}</Badge>}
-                  <span style={TEXT}>{v.summary}</span>
-                  <span className="row-grow" />
+              <div key={h.key} className="border-t border-(--divider)">
+                <div className="flex flex-wrap items-center gap-2 px-4 pt-2 pb-1">
+                  <h5 className="m-0 font-mono text-[length:var(--fs-sm)] font-semibold text-(--text)">{name}</h5>
+                  {v.badge && <StatusBadge status={BADGE[v.badge.tone]}>{v.badge.text}</StatusBadge>}
+                  <span className={TEXT}>{v.summary}</span>
+                  <span className="flex-1" />
                   {nAdd > 0 && (
-                    <Button variant="secondary" size="xs" id={`acd-disc-addall-${domKey(h.clusterId)}`}
+                    <Button variant="outline" size="xs" id={`acd-disc-addall-${domKey(h.clusterId)}`}
                       aria-label={`${name} · ${nAdd} yeni adayın tümünü ekle`}
                       title="Namespace'i belli tüm yeni adayları tabloya kaydedilmemiş satır olarak ekler; Kaydet'e basmadan hiçbir şey yazılmaz."
                       onClick={() => addAll(h, rows)}>
                       Tümünü ekle ({nAdd})
                     </Button>
                   )}
-                  <Button variant="ghost" size="xs" aria-disabled={busy || undefined} style={busy ? DIM : undefined}
+                  <Button variant="ghost" size="xs" className={DIM} aria-disabled={busy || undefined}
                     onClick={() => { if (!busy) void run(one(h)); }}>
                     {running ? `${name} aranıyor…` : `${name}${trLocative(name)} yeniden ara`}
                   </Button>
                 </div>
-                {v.detail.map((line, i) => <p key={i} style={DETAIL}>{line}</p>)}
+                {v.detail.map((line, i) => <p key={i} className={`m-0 px-4 pb-1.5 ${TEXT}`}>{line}</p>)}
                 {v.notice?.kind === 'unauthorized' && (
-                  <div role="alert" style={NOTICE}>
-                    <div style={STRONG}>{name} Thanos'u isteği reddetti: kayıttaki token (ya da tokenRef) bu Thanos'ta okuma yetkisi taşımıyor. Aday listesi boş, ama bu “Argo CD yok” demek değil.</div>
+                  <div role="alert" className={NOTICE}>
+                    <div className="text-(--text)">{name} Thanos'u isteği reddetti: kayıttaki token (ya da tokenRef) bu Thanos'ta okuma yetkisi taşımıyor. Aday listesi boş, ama bu “Argo CD yok” demek değil.</div>
                     <div>Yapılacak: <Link to="/settings/clusters">Ayarlar › Remote clusters › {name}</Link> kaydında token'ı ya da tokenRef'i <code>cluster-monitoring-view</code> yetkili bir ServiceAccount token'ıyla yenileyin, kaydedin, sonra yeniden arayın.</div>
-                    <div className="row gap-4 row-wrap">
-                      <Button variant="secondary" size="xs" id={`acd-disc-retry-${domKey(h.clusterId)}`} aria-disabled={busy || undefined} style={busy ? DIM : undefined}
+                    <div className="flex flex-wrap items-center gap-4">
+                      <Button variant="outline" size="xs" id={`acd-disc-retry-${domKey(h.clusterId)}`} className={DIM} aria-disabled={busy || undefined}
                         onClick={() => { if (!busy) void run(one(h)); }}>
                         {name}{trLocative(name)} yeniden ara
                       </Button>
@@ -299,25 +305,25 @@ export function ArgoCDDiscoveryPanel({ hubs, clusters, instances, leading, onAdd
                   </div>
                 )}
                 {v.notice?.kind === 'emptyLabel' && (
-                  <div style={NOTICE}>
-                    <div style={STRONG}><code>argocd_app_info</code> için 0 seri döndü. Sorgu hatasız; ama {name} kaydı her sorguya <code>{v.notice.label}</code> ekliyor. Argo serileri farklı dış etiketlerle geliyorsa (ör. user-workload monitoring) bu eşleştirici hepsini dışarıda bırakır.</div>
+                  <div className={NOTICE}>
+                    <div className="text-(--text)"><code>argocd_app_info</code> için 0 seri döndü. Sorgu hatasız; ama {name} kaydı her sorguya <code>{v.notice.label}</code> ekliyor. Argo serileri farklı dış etiketlerle geliyorsa (ör. user-workload monitoring) bu eşleştirici hepsini dışarıda bırakır.</div>
                     <div>Yapılacak: etiketsiz bir kez daha arayın. Aday çıkarsa Hub'lar tablosunda {name} için “Argo sorgularına eklenen küme etiketi” işaretini kaldırıp kaydedin. Etiketsiz arama da boşsa {name}{trLocative(name)} Argo metrikleri toplanmıyordur (ServiceMonitor).</div>
-                    <div className="row gap-4 row-wrap">
-                      <Button variant="secondary" size="xs" aria-disabled={busy || undefined} style={busy ? DIM : undefined}
+                    <div className="flex flex-wrap items-center gap-4">
+                      <Button variant="outline" size="xs" className={DIM} aria-disabled={busy || undefined}
                         onClick={() => { if (!busy) void run(one(h, true)); }}>
                         {name}{trLocative(name)} etiketsiz yeniden ara
                       </Button>
-                      <span className="field-hint">Tek seferlik; ayarı değiştirmez.</span>
+                      <span className={HINT}>Tek seferlik; ayarı değiştirmez.</span>
                     </div>
                   </div>
                 )}
                 {v.notice?.kind === 'emptyNoLabel' && (
-                  <div style={NOTICE}>
+                  <div className={NOTICE}>
                     <code>argocd_app_info</code> için 0 seri döndü{v.notice.afterOneShot ? ' (etiketsiz arama)' : ''}. Sorgu hatasız ve küme etiketi eklenmedi: {name}{trLocative(name)} Argo metrikleri toplanmıyordur (ServiceMonitor) ya da hub'ın Thanos'u bu kümeyi görmüyor.
                   </div>
                 )}
                 {v.notice?.kind === 'oneShotFound' && (
-                  <div style={NOTICE}>
+                  <div className={NOTICE}>
                     Etiketsiz aramada aday çıktı: Hub'lar tablosunda {name} için “Argo sorgularına eklenen küme etiketi” işaretini kaldırıp kaydedin; yoksa işçiler bu hub'da 0 seri görür.
                   </div>
                 )}
@@ -325,7 +331,7 @@ export function ArgoCDDiscoveryPanel({ hubs, clusters, instances, leading, onAdd
               </div>
             );
           })}
-          <div style={FOOT}>
+          <div className="border-t border-(--divider) px-4 py-2.5">
             <ArgoCDNote>
               Uygulama: iş başına tek anlık <code>{'count by (namespace) (group by (namespace, exported_namespace, name) (argocd_app_info{job="…"}))'}</code> · Shard: iş başına <code>pod</code> değerleri (≤100). Aynı namespace iki hub'da iki ayrı instance'tır; “kayıtlı” eşleşmesi yalnız o hub'daki kayıtlarla (namespace, metricsJob) yapılır.
             </ArgoCDNote>

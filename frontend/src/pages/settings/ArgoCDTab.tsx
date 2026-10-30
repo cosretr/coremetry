@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Spinner } from '@/components/Spinner';
-import { Button, LinkButton } from '@/components/ui';
+import { Button } from '@/components/shadcn/button';
+import { CheckboxField } from '@/components/coremetry/Field';
 import { api } from '@/lib/api';
 import type { ArgoCDBound, ArgoCDCandidate, ArgoCDPin, ArgoCDSettings, ArgoCDSettingsResponse, ArgoCDTokenStatus } from '@/lib/types';
 import { ConfigStatusBanner, FlashBox, SettingsLoadError, humanize, useSettingsLoad } from './shared';
@@ -63,19 +64,26 @@ import { ArgoCDEmptyPanel } from './ArgoCDEmptyPanel';
 //     yeniden yükleme Kaydet gibi engellenir (form birleştirmeye girmez,
 //     sessizce silinirdi).
 
-const EMPTY_ROOT: CSSProperties = { maxWidth: 660 };
-const H2: CSSProperties = { margin: 0, fontSize: 'var(--fs-lg)', fontWeight: 600 };
-const DESC: CSSProperties = { margin: 0, maxWidth: 760, fontSize: 'var(--fs-md)', lineHeight: '20px', color: 'var(--text2)' };
-const ASIDE: CSSProperties = { marginLeft: 'auto', fontSize: 'var(--fs-xs)', color: 'var(--text3)' };
-const CHECK: CSSProperties = { display: 'flex', alignItems: 'flex-start', gap: 'var(--sp-4)' };
-const SAVEBAR: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 'var(--sp-4)', paddingTop: 'var(--sp-7)', borderTop: '1px solid var(--divider)' };
-const BOLD: CSSProperties = { fontWeight: 600 };
-const DIRTY: CSSProperties = { fontSize: 'var(--fs-sm)', color: 'var(--text2)' };
-// v0.10.974 — Kaydet kilidinin fieldset'i görünmez: varsayılan kenarlık/dolgu
-// yok; min-width 0 (fieldset'in min-content varsayılanı tabloları taşırırdı).
-const LOCK: CSSProperties = { minWidth: 0, margin: 0, padding: 0, border: 0 };
-// v0.10.978 — bayat kutusunun eylem satırı (kutu metninden ayrık).
-const STALE_ACT: CSSProperties = { marginTop: 'var(--sp-3)' };
+// Faz 2 dilim 1 R15 — CSSProperties sabitleri → Tailwind utility (aynı
+// token'lar); ui Button/LinkButton → shadcn; üç ham onay kutusu →
+// coremetry CheckboxField (ipucu ayrı `#…-h` öğesinde: aria-describedby
+// sözleşmesi tek id). Kaydet kilidinin fieldset'i görünmez (kenarlık/dolgu
+// yok, min-w-0: fieldset'in min-content varsayılanı tabloları taşırırdı).
+const H2 = 'm-0 text-[length:var(--fs-lg)] font-semibold';
+const DESC = 'm-0 max-w-[760px] text-[length:var(--fs-md)] leading-5 text-(--text2)';
+const HINT = 'pl-6 text-[length:var(--fs-xs)] leading-snug text-(--text3)';
+
+/** Onay kutusu + altında `id`'li ipucu (aria-describedby = yalnız o id). */
+function Toggle({ id, label, checked, disabled, onChange, hint }: {
+  id: string; label: string; checked: boolean; disabled: boolean; onChange: (v: boolean) => void; hint: ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <CheckboxField id={id} label={label} checked={checked} disabled={disabled} aria-describedby={`${id}-h`} onCheckedChange={onChange} />
+      <div id={`${id}-h`} className={HINT}>{hint}</div>
+    </div>
+  );
+}
 
 const EMPTY_SETTINGS: ArgoCDSettings = { enabled: false, apiWorker: {}, classification: {}, reader: {}, intervals: {}, mapping: {} };
 const PENDING_TEXT = 'Açık düzenleme formunda uygulanmamış değişiklik var: önce “Tabloya uygula” ya da “Vazgeç”.';
@@ -376,61 +384,39 @@ export function ArgoCDTab() {
   const emptyMode = base.hubs.length === 0 && base.instances.length === 0 && draft.hubs.length === 0 && draft.instances.length === 0;
   const liveRegion = <div role="status" aria-live="polite" className="sr-only">{live}</div>;
   const banner = (text: string) => (
-    <ConfigStatusBanner label={savedEnabled ? 'Açık' : 'Kapalı'} aside={at ? <span style={ASIDE}>{at}</span> : undefined}>{text}</ConfigStatusBanner>
+    <ConfigStatusBanner label={savedEnabled ? 'Açık' : 'Kapalı'} aside={at ? <span className="ml-auto text-[length:var(--fs-xs)] text-(--text3)">{at}</span> : undefined}>{text}</ConfigStatusBanner>
   );
   const workerOn = !emptyMode && draft.enabled && draft.metricsWorker;
   const enabledBox = (
-    <div className="stack gap-3">
-      <div style={CHECK}>
-        <input id="acd-enabled" type="checkbox" checked={emptyMode ? false : draft.enabled} disabled={emptyMode}
-          aria-describedby="acd-enabled-h"
-          onChange={e => { const v = e.target.checked; change(d => ({ ...d, enabled: v, metricsWorker: v ? d.metricsWorker : false, autoRegister: v ? d.autoRegister : false })); }} />
-        <div>
-          <label htmlFor="acd-enabled">Argo CD entegrasyonu açık</label>
-          <div id="acd-enabled-h" className="field-hint">
-            {emptyMode
-              ? 'Açmak için önce bir hub ekleyin: açıkken en az bir etkin hub zorunlu.'
-              : 'Açıkken en az bir etkin hub zorunlu. Tek başına hiçbir işçi başlatmaz: metrik işçisi aşağıdaki ayrı anahtarla açılır, Argo CD API bağlantısı askıda.'}
-          </div>
-        </div>
-      </div>
-      <div style={CHECK}>
-        <input id="acd-metrics" type="checkbox" checked={workerOn} disabled={emptyMode || !draft.enabled}
-          aria-describedby="acd-metrics-h" onChange={e => { const v = e.target.checked; change(d => ({ ...d, metricsWorker: v })); }} />
-        <div>
-          <label htmlFor="acd-metrics">Metrik işçisini çalıştır (argocd-metrics)</label>
-          <div id="acd-metrics-h" className="field-hint">
-            {!emptyMode && !draft.enabled
-              ? 'Önce Argo CD entegrasyonunu açın.'
-              : <>Açıkken worker lideri her tik aralığında (Gelişmiş › <code>intervals.metricsS</code>, varsayılan 60 sn) hub Thanos'undaki <code>argocd_*</code> metriklerini okur ve Application durum değişimleriyle tamamlanan senkronları kaydeder. Argo CD API'sine bağlanılmaz; kapalıyken hiçbir hub sorgusu atılmaz.</>}
-          </div>
-        </div>
-      </div>
+    <div className="flex flex-col gap-3">
+      <Toggle id="acd-enabled" label="Argo CD entegrasyonu açık" checked={emptyMode ? false : draft.enabled} disabled={emptyMode}
+        onChange={v => change(d => ({ ...d, enabled: v, metricsWorker: v ? d.metricsWorker : false, autoRegister: v ? d.autoRegister : false }))}
+        hint={emptyMode
+          ? 'Açmak için önce bir hub ekleyin: açıkken en az bir etkin hub zorunlu.'
+          : 'Açıkken en az bir etkin hub zorunlu. Tek başına hiçbir işçi başlatmaz: metrik işçisi aşağıdaki ayrı anahtarla açılır, Argo CD API bağlantısı askıda.'} />
+      <Toggle id="acd-metrics" label="Metrik işçisini çalıştır (argocd-metrics)" checked={workerOn} disabled={emptyMode || !draft.enabled}
+        onChange={v => change(d => ({ ...d, metricsWorker: v }))}
+        hint={!emptyMode && !draft.enabled
+          ? 'Önce Argo CD entegrasyonunu açın.'
+          : <>Açıkken worker lideri her tik aralığında (Gelişmiş › <code>intervals.metricsS</code>, varsayılan 60 sn) hub Thanos'undaki <code>argocd_*</code> metriklerini okur ve Application durum değişimleriyle tamamlanan senkronları kaydeder. Argo CD API'sine bağlanılmaz; kapalıyken hiçbir hub sorgusu atılmaz.</>} />
       {/* v0.10.1013 (operatör: "autodiscover etse daha iyi olacak, tek tek ekle
           diyorum") — keşfedilen instance'ların kendiliğinden kaydı. Varsayılan
           kapalı; yalnız EKLER. Silinen instance'ın geri geleceği açıkça yazılır. */}
-      <div style={CHECK}>
-        <input id="acd-autoreg" type="checkbox" checked={!emptyMode && draft.enabled && draft.autoRegister} disabled={emptyMode || !draft.enabled}
-          aria-describedby="acd-autoreg-h" onChange={e => { const v = e.target.checked; change(d => ({ ...d, autoRegister: v })); }} />
-        <div>
-          <label htmlFor="acd-autoreg">Keşfedilen instance'ları kendiliğinden kaydet</label>
-          <div id="acd-autoreg-h" className="field-hint">
-            {!emptyMode && !draft.enabled
-              ? 'Önce Argo CD entegrasyonunu açın.'
-              : <>Açıkken 30 dakikada bir her etkin hub keşfedilir ve yeni, namespace'i belli adaylar instance tablosuna eklenir (elle “Tümünü ekle” ile aynı kural). Yalnız ekler: mevcut instance'lara dokunmaz, pasif hub'ı taramaz. Sildiğiniz bir instance Argo'da hâlâ varsa <b>geri eklenir</b> — istemediğiniz instance'ı silmeyin, devre dışı bırakın. Her ekleme denetim kaydına <code>settings.argocd.autoregister</code> olarak düşer.</>}
-          </div>
-        </div>
-      </div>
+      <Toggle id="acd-autoreg" label="Keşfedilen instance'ları kendiliğinden kaydet" checked={!emptyMode && draft.enabled && draft.autoRegister}
+        disabled={emptyMode || !draft.enabled} onChange={v => change(d => ({ ...d, autoRegister: v }))}
+        hint={!emptyMode && !draft.enabled
+          ? 'Önce Argo CD entegrasyonunu açın.'
+          : <>Açıkken 30 dakikada bir her etkin hub keşfedilir ve yeni, namespace'i belli adaylar instance tablosuna eklenir (elle “Tümünü ekle” ile aynı kural). Yalnız ekler: mevcut instance'lara dokunmaz, pasif hub'ı taramaz. Sildiğiniz bir instance Argo'da hâlâ varsa <b>geri eklenir</b> — istemediğiniz instance'ı silmeyin, devre dışı bırakın. Her ekleme denetim kaydına <code>settings.argocd.autoregister</code> olarak düşer.</>} />
     </div>
   );
 
   if (emptyMode) {
     return (
-      <div className="stack gap-4" style={EMPTY_ROOT}>
+      <div className="flex max-w-[660px] flex-col gap-4">
         {liveRegion}
-        <div className="stack gap-2">
-          <h2 style={H2}>Argo CD</h2>
-          <p style={DESC}>Hub kümelerindeki Argo CD instance'larını tanımlar. Metrik işçisi açıkken Application durumu hub Thanos'undaki <code>argocd_*</code> metriklerinden izlenir; Argo CD API'sine bağlanılmaz.</p>
+        <div className="flex flex-col gap-2">
+          <h2 className={H2}>Argo CD</h2>
+          <p className={DESC}>Hub kümelerindeki Argo CD instance'larını tanımlar. Metrik işçisi açıkken Application durumu hub Thanos'undaki <code>argocd_*</code> metriklerinden izlenir; Argo CD API'sine bağlanılmaz.</p>
         </div>
         {banner(clusters.length ? 'Ayarlanmadı — hub ve instance yok' : 'Ayarlanmadı — Remote Cluster kaydı yok')}
         {enabledBox}
@@ -455,11 +441,11 @@ export function ArgoCDTab() {
   const instMeta = `${draft.instances.length} instance · ${draft.hubs.length} hub${badRows ? ` · ${badRows}${trPossessive3(badRows)} hatalı` : ''}`;
 
   return (
-    <div className="stack gap-6">
+    <div className="flex flex-col gap-6">
       {liveRegion}
-      <div className="stack gap-2">
-        <h2 style={H2}>Argo CD</h2>
-        <p style={DESC}>
+      <div className="flex flex-col gap-2">
+        <h2 className={H2}>Argo CD</h2>
+        <p className={DESC}>
           Hub kümelerindeki Argo CD instance'larını tanımlar. Metrik işçisi açıkken Application durum değişimleri ve tamamlanan senkronlar
           hub'ın <code>argocd_*</code> metriklerinden kaydedilir; rollout'larla eşleme sonraki adımda. Hub, o kümenin <code>argocd_*</code>
           serilerini tutan Thanos'u gösteren sıradan bir Remote Cluster kaydıdır. Salt okuma: Coremetry Argo CD'ye yazmaz, refresh tetiklemez;
@@ -467,7 +453,7 @@ export function ArgoCDTab() {
         </p>
       </div>
       {banner(`${savedWorker ? 'Metrik işçisi açık — hub metrikleri okunuyor' : savedEnabled ? 'Ayarlar saklanıyor ve doğrulanıyor — metrik işçisi kapalı' : 'Kapalı — ayarlar saklanıyor, metrik işçisi çalışmıyor'} · Argo CD API bağlantısı askıda`)}
-      <fieldset disabled={busy} aria-busy={busy || undefined} className="stack gap-6" style={LOCK}>
+      <fieldset disabled={busy} aria-busy={busy || undefined} className="m-0 flex min-w-0 flex-col gap-6 border-0 p-0">
         {enabledBox}
 
         <ArgoCDHubsPanel hubs={draft.hubs} instances={draft.instances} pins={snap.pins} clusters={clusters} issues={issues}
@@ -481,12 +467,12 @@ export function ArgoCDTab() {
         <ArgoCDSectionPanel id="acd-inst-h" title="Instance'lar" meta={instMeta}
           desc={<>Her instance, bir hub üzerindeki bir Argo CD namespace'idir. Kimlik (id) hub'lar arasında da tekil olmalı (ClickHouse <code>argocd_app_status.instance_id</code>). Argo CD API erişimi yalnız token referansıyla (<code>tokenRef</code>) verilir; referansı olmayan instance yalnız metriklerle izlenir.</>}>
           <ArgoCDInstancesPanel instances={draft.instances} base={base} hubs={draft.hubs} clusters={clusters} tokens={snap.tokens}
-            pins={snap.pins} buffer={buffer} bufErr={bufErr} pending={pending} issues={issues} msg={instMsg}
+            buffer={buffer} bufErr={bufErr} pending={pending} issues={issues} msg={instMsg}
             onOpen={openEdit} onEdit={editInstance} onToggle={toggleInstance} onRemove={removeInstance} onBufferChange={changeBuffer}
             onApply={applyEdit} onCancel={closeEdit} onRemoveBuffer={removeBuffer} />
           <ArgoCDDiscoveryPanel hubs={draft.hubs} clusters={clusters} instances={draft.instances}
             leading={(
-              <Button variant="secondary" size="sm" id="acd-inst-add" disabled={draft.hubs.length === 0}
+              <Button variant="outline" size="sm" id="acd-inst-add" disabled={draft.hubs.length === 0}
                 title={draft.hubs.length === 0 ? 'Önce bir hub ekleyin' : undefined} onClick={newInstance}>
                 + Instance ekle
               </Button>
@@ -502,17 +488,17 @@ export function ArgoCDTab() {
           onMode={(m: MetricsOnlyMode) => change(d => ({ ...d, metricsOnlyMode: m }))} />
       </fieldset>
 
-      <div style={SAVEBAR}>
+      <div className="flex flex-col gap-2 border-t border-(--divider) pt-4">
         {boxIssues.length > 0 && (
           <FlashBox kind="err">
-            <div style={BOLD}>{header}</div>
+            <div className="font-semibold">{header}</div>
             {boxIssues.map((is, ix) => (
               <div key={ix}>
                 {'· '}
                 {!is.path ? is.message
                   : is.target.kind === 'other'
-                    ? <><span className="mono">{is.path}</span> — {is.short}</>
-                    : <><LinkButton tone="muted" underline="dotted" onClick={() => goTo(is)}><span className="mono">{is.path}</span></LinkButton> — {is.short}</>}
+                    ? <><span className="font-mono">{is.path}</span> — {is.short}</>
+                    : <><Button variant="link" size="xs" className="h-auto p-0 text-[length:inherit] text-inherit underline decoration-dotted" onClick={() => goTo(is)}><span className="font-mono">{is.path}</span></Button> — {is.short}</>}
               </div>
             ))}
           </FlashBox>
@@ -520,24 +506,24 @@ export function ArgoCDTab() {
         {saveError && <FlashBox kind="err">Kaydedilmedi — {saveError}. Hiçbir değişiklik yazılmadı; kayıtlı ayar olduğu gibi duruyor.</FlashBox>}
         {stale && (
           <FlashBox kind="err">
-            <div style={BOLD}>
+            <div className="font-semibold">
               Kaydedilmedi — ayarlar başka biri tarafından değiştirildi ({savedAtText(stale.updatedAt) || 'kayıt zamanı bilinmiyor'}) — yeniden yükle.
             </div>
             <div>
               Sunucuda değişmemiş alan ya da satırlardaki düzenlemeleriniz korunur; sunucuda da değişen alanlar ve satırlar bütünüyle sunucunun değeriyle gelir.
               Hiçbir değişiklik yazılmadı; kayıtlı ayar olduğu gibi duruyor.
             </div>
-            <div style={STALE_ACT}>
-              <Button variant="secondary" size="sm" loading={reloading} onClick={() => { void reload(); }}>Yeniden yükle</Button>
+            <div className="mt-1.5">
+              <Button variant="outline" size="sm" loading={reloading} onClick={() => { void reload(); }}>Yeniden yükle</Button>
             </div>
           </FlashBox>
         )}
         {note && <FlashBox kind={note.kind}>{note.text}</FlashBox>}
         {okText && <FlashBox kind="ok">{okText}</FlashBox>}
-        <div className="row gap-4 row-wrap">
-          <Button variant="secondary" disabled={busy || (phrases.length === 0 && !formDirty)} onClick={revert}>Değişiklikleri geri al</Button>
-          <Button variant="primary" id="acd-save" loading={busy && !reloading} disabled={reloading} onClick={() => { void save(); }}>Kaydet</Button>
-          <span style={DIRTY}>{dirtyText(phrases, formDirty)}</span>
+        <div className="flex flex-wrap items-center gap-4">
+          <Button variant="outline" disabled={busy || (phrases.length === 0 && !formDirty)} onClick={revert}>Değişiklikleri geri al</Button>
+          <Button id="acd-save" loading={busy && !reloading} disabled={reloading} onClick={() => { void save(); }}>Kaydet</Button>
+          <span className="text-[length:var(--fs-sm)] text-(--text2)">{dirtyText(phrases, formDirty)}</span>
         </div>
         <ArgoCDNote>
           Kaydet önce doğrular, sonra <code>settings.argocd.update</code> denetim kaydını yazar; tüm pod'lar 30 sn içinde yeni ayarı alır.

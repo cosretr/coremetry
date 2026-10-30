@@ -10,13 +10,14 @@ import {
   type DataTableStateStaticProps,
 } from '@/components/ui/DataTable';
 import { Button } from '@/components/shadcn/button';
+import { rowActivation } from '@/lib/a11y';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/coremetry/overlay/DropdownMenu';
 import type { ColumnDef, DataTableProps } from './types';
 
 const ACTIONS_W = 40;
 
 export function DataTable<T>(props: DataTableProps<T>) {
-  const { storageKey, columns, rows, sort, columnModel, selection, getRowHref, rowLinkReplace, onOpen, state, virtual, density, renderCell, renderHeader, rowActions, getRowKey, detail } = props;
+  const { storageKey, columns, rows, sort, columnModel, selection, getRowHref, rowLinkReplace, onOpen, state, virtual, density, renderCell, renderHeader, rowActions, getRowKey, detail, pinnedRows, openRow, ariaLabel } = props;
   const dt = useDataTable<T>({
     storageKey, columns, rows,
     initialSort: sort?.initial,
@@ -51,15 +52,41 @@ export function DataTable<T>(props: DataTableProps<T>) {
     const v = col.sortValue?.(row);
     return <DataTableCell key={col.id} dt={dt} col={col.id} row={row} value={v == null ? null : v} />;
   };
+  // R15 (ADDITIVE): satır başına ad / id / devre dışı — verilmezse bugünkü
+  // işaretleme birebir (aria-label = label, id ve disabled yok).
   const actionsCell = (row: T) => rowActions && (
     <td className="col-actions">
-      <Button size="icon-xs" variant="ghost" aria-label={rowActions.label} aria-haspopup="menu"
+      <Button size="icon-xs" variant="ghost" aria-label={rowActions.triggerLabel?.(row) ?? rowActions.label} aria-haspopup="menu"
+        id={rowActions.triggerId?.(row)} disabled={rowActions.isDisabled?.(row) || undefined}
         onClick={(e) => { e.stopPropagation(); openActions(row, e.currentTarget); }}>
         <Ellipsis />
       </Button>
     </td>
   );
   const keyOf = (row: T, i: number) => getRowKey?.(row, i) ?? selection?.getRowId(row) ?? String(i);
+  const pinned = pinnedRows ?? [];
+  // Satır + (açıksa) ayrıntı satırı. `i` = görsel sıra (sabitlenmiş satırlar
+  // sıralananların ardından sayılır). openRow verilmezse bugünkü <tr> birebir.
+  const bodyRow = (row: T, i: number) => {
+    const rp = dt.rowProps(i, row);
+    const open = openRow?.isOpen(row) ?? false;
+    const act = openRow?.onActivate ? rowActivation(() => openRow.onActivate!(row)) : undefined;
+    return (
+      <Fragment key={keyOf(row, i)}>
+        <tr {...rp} {...act} className={open ? 'row-selected' : rp.className}>
+          {dt.shownColumns.map(c => cell(row, c))}
+          {actionsCell(row)}
+        </tr>
+        {/* R5 (G4): ayrıntı satırı — veri satırı DEĞİL (rowProps yok:
+            tıklanmaz, seçilmez, sıralanmaz); tek hücre tüm genişlik. */}
+        {detail?.isOpen(row) && (
+          <tr data-dt-detail="">
+            <td colSpan={dt.shownColumns.length + (rowActions ? 1 : 0)} className={detail.cellClassName?.(row)}>{detail.render(row)}</td>
+          </tr>
+        )}
+      </Fragment>
+    );
+  };
 
   return (
     <div data-density={density}>
@@ -71,27 +98,17 @@ export function DataTable<T>(props: DataTableProps<T>) {
           renderRow={(row) => <>{dt.shownColumns.map(c => cell(row, c))}</>}
           state={state} />
       ) : (
-        <table {...dt.tableProps}>
+        <table {...dt.tableProps} aria-label={ariaLabel}>
           <DataTableColgroup dt={dt} trailing={trailing} />
           <DataTableHead dt={dt} renderLabel={renderHeader} trailing={rowActions ? <th className="col-actions" aria-label={rowActions.label} /> : undefined} />
           <tbody>
-            {dt.sortedRows.length === 0
+            {dt.sortedRows.length === 0 && pinned.length === 0
               ? <DataTableState dt={dt} trailing={trailing} {...state} />
-              : dt.sortedRows.map((row, i) => (
-                <Fragment key={keyOf(row, i)}>
-                  <tr {...dt.rowProps(i, row)}>
-                    {dt.shownColumns.map(c => cell(row, c))}
-                    {actionsCell(row)}
-                  </tr>
-                  {/* R5 (G4): ayrıntı satırı — veri satırı DEĞİL (rowProps yok:
-                      tıklanmaz, seçilmez, sıralanmaz); tek hücre tüm genişlik. */}
-                  {detail?.isOpen(row) && (
-                    <tr data-dt-detail="">
-                      <td colSpan={dt.shownColumns.length + (rowActions ? 1 : 0)}>{detail.render(row)}</td>
-                    </tr>
-                  )}
-                </Fragment>
-              ))}
+              : <>
+                  {dt.sortedRows.map((row, i) => bodyRow(row, i))}
+                  {/* R15: sabitlenmiş satırlar sıralamanın DIŞINDA, hep sonda. */}
+                  {pinned.map((row, j) => bodyRow(row, dt.sortedRows.length + j))}
+                </>}
           </tbody>
         </table>
       )}
@@ -101,7 +118,13 @@ export function DataTable<T>(props: DataTableProps<T>) {
             <span ref={anchorRef} aria-hidden="true" tabIndex={-1}
               className="pointer-events-none fixed top-(--dt-menu-y) left-(--dt-menu-x) size-0" />
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" onCloseAutoFocus={(e) => { e.preventDefault(); returnTo.current?.focus(); }}>
+          {/* R15: odak düğmeye YALNIZ kimse taşımadıysa döner — öğenin
+              eylemi odağı başka yere koyduysa (ör. açılan form) o kalır. */}
+          <DropdownMenuContent align="start" onCloseAutoFocus={(e) => {
+            e.preventDefault();
+            const a = document.activeElement;
+            if (!a || a === document.body || !a.isConnected) returnTo.current?.focus();
+          }}>
             {active !== null && rowActions.items(active).map(it => (
               <DropdownMenuItem key={it.id} disabled={it.disabled} variant={it.danger ? 'destructive' : 'default'}
                 onSelect={() => it.onSelect()}>

@@ -1,5 +1,8 @@
 import { useRef, useState } from 'react';
-import { Button, Chip } from '@/components/ui';
+import { X } from 'lucide-react';
+import { Badge } from '@/components/shadcn/badge';
+import { Button } from '@/components/shadcn/button';
+import { Input } from '@/components/shadcn/input';
 import { ENV_RE, MAX_ENVS, type Issue } from './argocdForm';
 import { ArgoCDSectionPanel } from './ArgoCDSectionPanel';
 
@@ -11,6 +14,8 @@ import { ArgoCDSectionPanel } from './ArgoCDSectionPanel';
 // 16'da açık" cümlesinin yerine, spec §3.9.2).
 // v0.10.974 — çipin ×'i kendi çipiyle DOM'dan düşer: odak ekleme kutusuna
 // taşınır (<body>'ye kaçmasın; goTo'nun env hedefi de bu kutu).
+// Faz 2 dilim 1 R15: ui Chip → shadcn Badge outline + ghost icon-xs ×
+// (coremetry/FilterBar çipiyle aynı anatomi), ham input → shadcn Input.
 
 export function ArgoCDEnvPanel({ envList, issues, onChange }: {
   envList: string[];
@@ -35,21 +40,27 @@ export function ArgoCDEnvPanel({ envList, issues, onChange }: {
   const shown = err || (issue ? `${issue.path}: ${issue.message}` : '');
 
   return (
-    <ArgoCDSectionPanel id="acd-env-h" title={<>Ortamlar <span className="mono cell-faint">envList</span></>}
+    <ArgoCDSectionPanel id="acd-env-h" title={<>Ortamlar <span className="font-mono text-(--text3)">envList</span></>}
       desc={<>Application adındaki ortam jetonu: <code>önek-takım-bileşen-<b>env</b>-ek</code> (ek = Remote Cluster'daki Argo eki). Tek jeton — küçük harf ve rakam; tire ad ayrıştırmayı bozar.</>}>
-      <div className="row gap-3 row-wrap">
+      <div className="flex flex-wrap items-center gap-3">
         {envList.map(e => (
-          <Chip key={e} className="mono" removeLabel={`${e} ortamını kaldır`}
-            onRemove={() => { onChange(envList.filter(x => x !== e)); inRef.current?.focus(); }}>{e}</Chip>
+          <Badge key={e} variant="outline" className="font-mono">
+            {e}
+            <Button size="icon-xs" variant="ghost" aria-label={`${e} ortamını kaldır`}
+              onClick={() => { onChange(envList.filter(x => x !== e)); inRef.current?.focus(); }}>
+              <X />
+            </Button>
+          </Badge>
         ))}
         <label htmlFor="acd-env-in" className="sr-only">Ortam ekle</label>
-        <input id="acd-env-in" ref={inRef} className="mono" size={14} value={text} placeholder="ortam ekle" autoComplete="off" spellCheck={false}
+        <Input id="acd-env-in" ref={inRef} className="h-7 w-[140px] bg-field font-mono text-[length:var(--fs-sm)] md:text-[length:var(--fs-sm)]" value={text}
+          placeholder="ortam ekle" autoComplete="off" spellCheck={false}
           aria-invalid={shown ? 'true' : undefined} aria-describedby="acd-env-hint"
           onChange={e => { setText(e.target.value); setErr(''); }}
           onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} />
-        <Button variant="secondary" size="xs" onClick={add}>Ekle</Button>
+        <Button variant="outline" size="xs" onClick={add}>Ekle</Button>
       </div>
-      <div id="acd-env-hint" className={shown ? 'field-error' : 'field-hint'}>
+      <div id="acd-env-hint" className={shown ? 'text-[length:var(--fs-xs)] text-status-critical' : 'text-[length:var(--fs-xs)] text-(--text3)'}>
         {shown || 'Karar 16: ortamın asıl kaynağı servis adı eki (-prod, -int, -uat, -prep); ek yoksa ya da tanınmazsa Argo uygulama adındaki bu jeton.'}
       </div>
     </ArgoCDSectionPanel>
