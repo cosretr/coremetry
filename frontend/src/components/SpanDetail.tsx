@@ -516,14 +516,14 @@ export function SpanDetail({ span, onClose, logsFrom, logsTo, serviceLinks = tru
             spanLogs.map(l => (
               <div key={l.id} className="ps-log">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span className={sevClass(l.severity)} style={{ fontSize: 10, fontWeight: 700, minWidth: 42 }}>
+                  <span className={sevClass(l.severity)} style={{ fontSize: 11, fontWeight: 700, minWidth: 42 }}>
                     {l.severityText || sevName(l.severity)}
                   </span>
-                  <span style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--font-mono)' }}>
+                  <span style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--font-mono)' }}>
                     {tsShort(l.timestamp)}
                   </span>
                 </div>
-                <div style={{ fontSize: 11, marginTop: 2, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{l.body}</div>
+                <div style={{ fontSize: 12.5, marginTop: 2, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{l.body}</div>
               </div>
             ))
           )}
