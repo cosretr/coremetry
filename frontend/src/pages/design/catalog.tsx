@@ -1,6 +1,6 @@
 import { useRef, useState, type ReactNode } from 'react';
 import type { VariantProps } from 'class-variance-authority';
-import { Bell, Copy, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Bell, Bold, ChevronDown, Copy, Italic, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Badge, badgeVariants } from '@/components/shadcn/badge';
 import { Button, buttonVariants } from '@/components/shadcn/button';
 import { ButtonGroup, ButtonGroupSeparator, ButtonGroupText } from '@/components/shadcn/button-group';
@@ -10,6 +10,9 @@ import {
 import { Input } from '@/components/shadcn/input';
 import { Label } from '@/components/shadcn/label';
 import { Checkbox } from '@/components/shadcn/checkbox';
+import { Toggle, toggleVariants } from '@/components/shadcn/toggle';
+import { ToggleGroup, ToggleGroupItem } from '@/components/shadcn/toggle-group';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/shadcn/collapsible';
 import { NativeSelect, NativeSelectOption } from '@/components/shadcn/native-select';
 import { ScrollArea } from '@/components/shadcn/scroll-area';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/shadcn/select';
@@ -32,6 +35,7 @@ import {
 } from '@/components/coremetry/overlay';
 import { StatusBadge } from '@/components/coremetry/StatusBadge';
 import { Field, SelectField, TextareaField, CheckboxField } from '@/components/coremetry/Field';
+import { SegmentedControl } from '@/components/coremetry/SegmentedControl';
 import CoremetryToaster from '@/components/coremetry/Toaster';
 import { CM_STRINGS } from '@/components/coremetry/strings';
 import { toast, type ToastEntry } from '@/lib/toast';
@@ -75,7 +79,14 @@ type TabsVariant = NonNullable<VariantProps<typeof tabsListVariants>['variant']>
 const TABS_VARIANTS = ['default', 'line'] as const satisfies readonly TabsVariant[];
 const tabsVariantsCovered: Exhaustive<TabsVariant, typeof TABS_VARIANTS[number]> = true;
 
-export const VARIANTS_COVERED = buttonVariantsCovered && buttonSizesCovered && badgeVariantsCovered && tabsVariantsCovered;
+type ToggleVariant = NonNullable<VariantProps<typeof toggleVariants>['variant']>;
+type ToggleSize = NonNullable<VariantProps<typeof toggleVariants>['size']>;
+const TOGGLE_VARIANTS = ['default', 'outline'] as const satisfies readonly ToggleVariant[];
+const TOGGLE_SIZES = ['sm', 'default', 'lg'] as const satisfies readonly ToggleSize[];
+const toggleVariantsCovered: Exhaustive<ToggleVariant, typeof TOGGLE_VARIANTS[number]> = true;
+const toggleSizesCovered: Exhaustive<ToggleSize, typeof TOGGLE_SIZES[number]> = true;
+
+export const VARIANTS_COVERED = buttonVariantsCovered && buttonSizesCovered && badgeVariantsCovered && tabsVariantsCovered && toggleVariantsCovered && toggleSizesCovered;
 
 const themeAttrs = (c: Cell) => ({ 'data-theme': c.theme, 'data-density': c.density });
 
@@ -470,6 +481,68 @@ function FieldDemo() {
   );
 }
 
+function ToggleDemo() {
+  return (
+    <>
+      {TOGGLE_VARIANTS.map(v => (
+        <Row key={v} label={v}>
+          {TOGGLE_SIZES.map(sz => <Toggle key={sz} variant={v} size={sz} aria-label={`Kalın ${v} ${sz}`}><Bold /></Toggle>)}
+          <Toggle variant={v} defaultPressed aria-label={`Basılı ${v}`}><Italic /></Toggle>
+          <Toggle variant={v} disabled aria-label={`Devre dışı ${v}`}><Bold /></Toggle>
+        </Row>
+      ))}
+    </>
+  );
+}
+
+function ToggleGroupDemo() {
+  return (
+    <>
+      <Row label="single">
+        <ToggleGroup type="single" variant="outline" defaultValue="1h" aria-label="Pencere">
+          <ToggleGroupItem value="15m">15 dk</ToggleGroupItem>
+          <ToggleGroupItem value="1h">1 sa</ToggleGroupItem>
+          <ToggleGroupItem value="6h" disabled>6 sa</ToggleGroupItem>
+        </ToggleGroup>
+      </Row>
+      <Row label="multiple">
+        <ToggleGroup type="multiple" defaultValue={['err']} aria-label="Süzgeç">
+          <ToggleGroupItem value="err">Hatalı</ToggleGroupItem>
+          <ToggleGroupItem value="slow">Yavaş</ToggleGroupItem>
+        </ToggleGroup>
+      </Row>
+    </>
+  );
+}
+
+function CollapsibleDemo() {
+  const [open, setOpen] = useState(true);
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <CollapsibleTrigger asChild>
+        <Button variant="ghost" size="sm">Gelişmiş <ChevronDown /></Button>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <p className="dc-label">Zaman aşımı, yeniden deneme ve TLS ayarları.</p>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+function SegmentedControlDemo() {
+  const [v, setV] = useState<'list' | 'graph' | 'map'>('list');
+  return (
+    <>
+      {(['md', 'sm'] as const).map(size => (
+        <Row key={size} label={size}>
+          <SegmentedControl aria-label={`Görünüm ${size}`} size={size} value={v} onChange={setV}
+            options={[{ value: 'list', label: 'Liste' }, { value: 'graph', label: 'Grafik' }, { value: 'map', label: 'Harita', disabled: true }]} />
+        </Row>
+      ))}
+    </>
+  );
+}
+
 function StatusBadgeDemo() {
   return (
     <>
@@ -524,8 +597,12 @@ export const CATALOG: Record<string, (ctx: CatalogCtx) => ReactNode> = {
   'table': () => <TableDemo />,
   'tabs': () => <TabsDemo />,
   'textarea': () => <TextareaDemo />,
+  'toggle': () => <ToggleDemo />,
+  'toggle-group': () => <ToggleGroupDemo />,
+  'collapsible': () => <CollapsibleDemo />,
   'tooltip': (ctx) => <TooltipDemo {...ctx} />,
   'coremetry/StatusBadge': () => <StatusBadgeDemo />,
   'coremetry/Toaster': (ctx) => <ToasterDemo {...ctx} />,
   'coremetry/Field': () => <FieldDemo />,
+  'coremetry/SegmentedControl': () => <SegmentedControlDemo />,
 };
