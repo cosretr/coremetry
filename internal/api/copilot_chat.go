@@ -1048,6 +1048,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// v0.10.1150 — tavanlar deepMode'dan: kapalıyken chatMaxToolCalls/Rounds.
 	maxCalls, maxRounds := dm.toolCalls(), dm.toolRounds()
 	callsLeft := maxCalls
+	loopStop := defaultStop(maxRounds) // agent-core S1 (chat_stop.go)
 	// v0.10.948 — hak ≠ iş: bilinmeyen/tekrar/kapsam reddi hak yer ama yürümez;
 	// bütçe notu yürütülen ve alışveriş boyunca yürütülmeyen çağrıyı ayrı sayar.
 	executedN, skippedN := 0, 0
@@ -1409,7 +1410,14 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			}
 			skippedN += len(over)
 		}
-		if cancelled || ctx.Err() != nil {
+		// agent-core S1 — durma kararı adlandırılmış koşullardan (chat_stop.go);
+		// tek değerlendirme, iki dal: iptal → model çağrılmaz, diğer neden → tavan turu.
+		reason := loopStop(loopState{
+			Round: round, MaxRounds: maxRounds, CallsLeft: callsLeft, MaxCalls: maxCalls,
+			Executed: executedN, Skipped: skippedN, TokensIn: totalIn, TokensOut: totalOut,
+			LastCalls: toolCallNames(turn.ToolCalls), Cancelled: cancelled, CtxErr: ctx.Err(),
+		})
+		if reason == stopCancelled {
 			// v0.10.948 — İPTAL: kalan çağrılar yürütülmedi (skipped), model
 			// yeniden ÇAĞRILMAZ (tavan turu dâhil) — cevabı bekleyen yok ya da
 			// alışveriş tavanı doldu; ikinci bir LLM çağrısı boşa bütçe yakar.
@@ -1428,7 +1436,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 		// literaldi; prompt METNİ olduğu için internal/copilot/prompts.go'ya
 		// taşındı (SystemPromptChatRoundCap = taban + ek). Sicil
 		// accessor'lardan türediğinden bu ek artık dil kapısının kapsamında.
-		if round == maxRounds-1 || callsLeft <= 0 {
+		if isCapStop(reason) { // = round == maxRounds-1 || callsLeft <= 0 (defaultStop)
 			// v0.10.948 — bütçe dolduğu AÇIKÇA söylenir: harcanan hak/tur, yürütülen
 			// ve alışveriş boyunca yürütülmeyen çağrı (eski "tool-çağrı tavanı" etiketinin yerine).
 			emit("step", chatBudgetStep(chatBudgetExhaustedCapsLabelTR(maxCalls-callsLeft, maxCalls, executedN, skippedN, round+1, maxRounds),

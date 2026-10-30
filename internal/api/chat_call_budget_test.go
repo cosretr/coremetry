@@ -49,7 +49,10 @@ func TestChatLoopEnforcesCallBudget(t *testing.T) {
 		// v0.10.1150 — tavanlar deepMode'dan (kapalıyken chatMaxToolCalls/Rounds, chat_deep_test.go).
 		"maxCalls, maxRounds := dm.toolCalls(), dm.toolRounds()",
 		"callsLeft := maxCalls",
-		"round == maxRounds-1 || callsLeft <= 0",
+		// agent-core S1 — karar chat_stop.go defaultStop'ta (≡ eski ifade:
+		// TestDefaultStopMatchesOldLoopDecision); döngü onu çağırır.
+		"loopStop := defaultStop(maxRounds)",
+		"if isCapStop(reason) {",
 		// v0.10.1273 — tur akan ikizden (chatLoopTurn → ChatWithToolsStream).
 		"chatLoopTurn(copilot.WithNoToolCalls(tctx2), capPrompt, conv, specs, emit)",
 	} {
