@@ -38,6 +38,10 @@ export default defineConfig({
   resolve: {
     alias: [
       { find: '@', replacement: path.resolve(__dirname, 'src') },
+      // v0.10.1613 (shadcn Faz 1 R5) — üretilen shadcn dosyalarının
+      // `import { cn } from "cn"` satırı npm `cn` paketine değil src/lib/cn.ts'e
+      // (twMerge(clsx)) çözülür; paket kurulmaz (plan §5.5, cnAlias.pin).
+      { find: /^cn$/, replacement: path.resolve(__dirname, 'src/lib/cn.ts') },
       // v0.10.1611 (shadcn Faz 1 R4) — uPlot temel CSS'i tek kopya, index.css
       // `layer(legacy)` içinde. @grafana/ui'nin aynı importu boş dosyaya düşer
       // (ayrıntı: src/styles/uplotGrafanaImport.css).
@@ -98,11 +102,18 @@ export default defineConfig({
             // lucide + virtual-core ile index.html'de preload ediliyor. Geçişli
             // bağımlılıklar açıkça listeli: eşleşmeyen catch-all'a düşer ve
             // ilk yüke biner. sonner kendi grubunda: tembel Toaster ilk
-            // toast'ta bütün Radix grubunu değil yalnız onu çeker. Regex R5'te
-            // `shadcn init` çıktısına göre kesinleşir (§12 Q8);
-            // scripts/bundle-budget.mjs ilk yükte bunları yasaklıyor.
+            // toast'ta bütün Radix grubunu değil yalnız onu çeker.
+            // v0.10.1613 (R5, §12 Q8): shadcn@4.21.5 `radix-ui` TEK paketini
+            // üretiyor; regex package-lock kapanışından (radix-ui + cmdk → 60
+            // @radix-ui/* + aşağıdakiler; tslib genel amaçlı, grupta değil).
+            // Öncelik 92: grafana'nın (90) ÜSTÜ — @floating-ui / aria-hidden /
+            // react-remove-scroll @grafana/ui'nin de bağımlılığı; 85'te grafana
+            // onları yutar, Radix kullanan her sayfa tembel grafana chunk'ını
+            // statik çekerdi (v0.9.708 sınıfı). charts (95) altı.
+            // scripts/bundle-budget.mjs ilk yükte bunları ve radix → grafana
+            // statik importunu yasaklıyor.
             { name: 'toast', test: /node_modules\/sonner[\/]/, priority: 86 },
-            { name: 'radix', test: /node_modules\/(radix-ui|@radix-ui|cmdk|@floating-ui|react-remove-scroll(-bar)?|react-style-singleton|use-callback-ref|use-sidecar|aria-hidden|get-nonce)[\/]/, priority: 85 },
+            { name: 'radix', test: /node_modules\/(radix-ui|@radix-ui|cmdk|@floating-ui|react-remove-scroll(-bar)?|react-style-singleton|use-callback-ref|use-sidecar|detect-node-es|aria-hidden|get-nonce)[\/]/, priority: 92 },
             { name: 'vendor', test: /node_modules/, priority: 10 },
           ],
         },

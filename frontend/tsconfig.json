@@ -14,7 +14,7 @@
     "jsx": "react-jsx",
     "useDefineForClassFields": true,
     "types": ["vite/client"],
-    "paths": { "@/*": ["./src/*"] }
+    "paths": { "@/*": ["./src/*"], "cn": ["./src/lib/cn.ts"] }
   },
   "include": ["src", "vite.config.ts"],
   "exclude": ["node_modules", "dist", ".next", "out"]

@@ -26,7 +26,10 @@ import { jsxOpenTags } from './jsxTags';
 // sıkı kip, canvas için çözümlenmiş mono belirteci) ister; artış ise
 // gerekçesiz yeni kullanımdır ve bu dosyada değil, o kodda düzeltilir.
 const SRC = resolve(__dirname, '..');
-const PRIMITIVE = join('components', 'ui', 'DataTable') + '/';
+// v0.10.1613 (shadcn Faz 1 R5, plan §3.3): tablo ilkelinin evleri listesi —
+// bugünkü ui/DataTable, R9'un coremetry/DataTable sarmalayıcısı ve üretilen
+// shadcn/table. Tavanlar değişmez.
+const PRIMITIVES = [join('components', 'ui', 'DataTable'), join('components', 'coremetry', 'DataTable'), join('components', 'shadcn')].map(d => d + '/');
 
 const CEILINGS = {
   /** T1 — `<table>` sayısı eksi `<DataTableHead>` sayısı (dosya başına).
@@ -169,7 +172,7 @@ function walk(dir: string, out: string[] = []): string[] {
   }
   return out;
 }
-const files = walk(SRC).filter(p => !p.includes(PRIMITIVE));
+const files = walk(SRC).filter(p => !PRIMITIVES.some(d => p.includes(d)));
 const code = files.map(p => stripTsComments(readFileSync(p, 'utf8')));
 const count = (re: RegExp) => code.reduce((a, s) => a + (s.match(re)?.length ?? 0), 0);
 

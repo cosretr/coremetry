@@ -93,9 +93,11 @@ export default tseslint.config(
   },
   {
     // v0.10.919 — ui/no-raw-button (gerekçe yukarıda). Atomların evi ve
-    // test fixture'ları kapsam dışı.
+    // test fixture'ları kapsam dışı. v0.10.1613 (shadcn Faz 1 R5, plan
+    // §3.3): üretilen components/shadcn ve CoSRE v2'nin ai-elements dizini
+    // de muaf (karar 8); components/coremetry MUAF DEĞİL.
     files: ['src/**/*.tsx'],
-    ignores: ['src/components/ui/**', 'src/**/*.test.tsx'],
+    ignores: ['src/components/ui/**', 'src/components/shadcn/**', 'src/components/ai-elements/**', 'src/**/*.test.tsx'],
     plugins: { ui: { rules: { 'no-raw-button': noRawButton } } },
     rules: { 'ui/no-raw-button': 'error' },
   },

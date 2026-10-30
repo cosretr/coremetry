@@ -134,6 +134,14 @@
 
   --font-mono: var(--font-mono);
 
+  /* v0.10.1613 (R5): ölçek px'e çivili — Tailwind'in .25rem'i tarayıcı yazı
+     boyuna bağlı. Üretilen yardımcıların dördü globals.css'in eski
+     sınıflarıyla AYNI ADI taşıyor (.gap-1/.gap-2/.gap-4, .sr-only) ve
+     katman sırası gereği eski işaretlemede de kazanıyor; 4px ile değerleri
+     globals.css'tekiyle birebir (4/8/16px) — geçirilmemiş sayfada piksel
+     değişmez (tailwindSources.pin.test.ts ölçüyor). */
+  --spacing: 4px;
+
   --text-xs: var(--fs-xs);
   --text-sm: var(--fs-sm);
   --text-base: var(--fs-md);

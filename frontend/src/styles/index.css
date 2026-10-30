@@ -12,8 +12,10 @@
    Preflight YOK: yalnız theme + utilities. source(none): Tailwind depoyu
    kendiliğinden TARAMAZ — tarasaydı eski sınıf adlarından (`hidden`,
    `flex`, `table`, `border`, `sticky` …) legacy'yi yenen yardımcılar
-   üretirdi. Kaynaklar R5'te `@source` ile yalnız components/shadcn ve
-   components/coremetry olarak eklenir. */
+   üretirdi. Kaynaklar AÇIKÇA listeli (v0.10.1613, R5; operatör): yalnız
+   components/shadcn, components/ai-elements, components/coremetry —
+   tailwindSources.pin.test.ts listeyi kilitler, eski sınıf adı taşıyan
+   hiçbir dizin taranmaz. */
 @layer legacy, theme, base, components, utilities;
 /* Göreli yol bilerek: çıplak kimlik vite.config.ts'te boş dosyaya alias'lı
    (grafana'nın importu ikinci, katmansız kopya getirmesin). */
@@ -23,3 +25,6 @@
 @import 'tailwindcss/theme.css' layer(theme);
 @import 'tailwindcss/utilities.css' layer(utilities) source(none);
 @import './tokens.css';
+@source '../components/shadcn';
+@source '../components/ai-elements';
+@source '../components/coremetry';

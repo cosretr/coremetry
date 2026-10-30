@@ -133,6 +133,12 @@ describe('sectionAtomsGate', () => {
       const strays: string[] = [];
       for (const f of files) {
         if (f === atom.home) continue;
+        // v0.10.1613 (shadcn Faz 1 R5) — components/shadcn ÜRETİLMİŞ kayıt
+        // defteri kodu (shadcn@4.21.5; Tooltip, ButtonGroup orada da var).
+        // Yerel kopya değil, ui/ atomunun Faz 2'deki halefi; elle
+        // düzenlenemez (plan §5.1), dolayısıyla "bulamadım, yazdım"
+        // mekanizması orada işlemez.
+        if (f.startsWith('components/shadcn/')) continue;
         const hits = definitionsIn(readFileSync(join(SRC, f), 'utf8'), atom.name);
         for (const h of hits) strays.push(`${f} — ${h}`);
       }

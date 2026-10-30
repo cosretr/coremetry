@@ -15,9 +15,14 @@ describe('bundle bütçe kapısı kablolu', () => {
   it('vite.config.ts: radix + toast grupları catch-all üstünde, sourcemap açık', () => {
     const cfg = read('vite.config.ts');
     expect(cfg).toContain("{ name: 'toast', test: /node_modules\\/sonner[\\/]/, priority: 86 },");
+    // v0.10.1613 (R5, §12 Q8 + operatör): `radix-ui` tek paketi; öncelik 92 =
+    // grafana (90) üstü, charts (95) altı.
     expect(cfg).toContain(
-      "{ name: 'radix', test: /node_modules\\/(radix-ui|@radix-ui|cmdk|@floating-ui|react-remove-scroll(-bar)?|react-style-singleton|use-callback-ref|use-sidecar|aria-hidden|get-nonce)[\\/]/, priority: 85 },",
+      "{ name: 'radix', test: /node_modules\\/(radix-ui|@radix-ui|cmdk|@floating-ui|react-remove-scroll(-bar)?|react-style-singleton|use-callback-ref|use-sidecar|detect-node-es|aria-hidden|get-nonce)[\\/]/, priority: 92 },",
     );
+    const prio = (name: string) => Number(new RegExp(`name: '${name}',[^}]*priority: (\\d+)`).exec(cfg)?.[1]);
+    expect(prio('radix')).toBeGreaterThan(prio('grafana'));
+    expect(prio('radix')).toBeLessThan(prio('charts'));
     expect(cfg).toMatch(/sourcemap:\s*true/);
     // Gruplar catch-all'dan ÖNCE tanımlı (sıra okunabilirlik; öncelik sayısı bağlayıcı).
     expect(cfg.indexOf("name: 'radix'")).toBeLessThan(cfg.indexOf("{ name: 'vendor', test: /node_modules/, priority: 10 }"));
@@ -25,12 +30,36 @@ describe('bundle bütçe kapısı kablolu', () => {
 
   it('scripts/bundle-budget.mjs: yasak kaynak regex\'i, 347 KB, zlib, index.html kümesi', () => {
     const s = read('scripts/bundle-budget.mjs');
-    expect(s).toContain('/node_modules\\/(radix-ui|@radix-ui|cmdk|sonner|@floating-ui|react-remove-scroll|aria-hidden)\\//');
+    expect(s).toContain('/node_modules\\/(radix-ui|@radix-ui|cmdk|sonner|@floating-ui|react-remove-scroll|aria-hidden|use-sidecar|use-callback-ref|react-style-singleton|get-nonce|detect-node-es)\\//');
     expect(s).toContain('/src\\/components\\/shadcn\\//');
     expect(s).toContain('process.env.BUNDLE_BUDGET_KB || 347');
     expect(s).toContain('gzipSync(buf)');
     expect(s).toContain("'modulepreload'");
     expect(s).toContain("'bundle-budget.txt'");
+  });
+
+  it('radix → grafana statik import KAPISI (operatör, R5): ayrıştırma + FAIL', () => {
+    const s = read('scripts/bundle-budget.mjs');
+    expect(s).toContain("a.startsWith('radix-') && a.endsWith('.js')");
+    expect(s).toContain('/^grafana-/.test(m[1])');
+    expect(s).toContain('if (radixToGrafana.length) fail(');
+    // Ayrıştırıcının kendisi: statik biçimler yakalanır, dinamik import yakalanmaz.
+    const re = new RegExp(/STATIC_IMPORT = (\/.*\/g);/.exec(s)![1].slice(1, -2), 'g');
+    const hits = (t: string) => [...t.matchAll(re)].map(m => m[1]);
+    expect(hits('import{a as b,c}from"./grafana-X1.js";')).toEqual(['grafana-X1.js']);
+    expect(hits('x();import"./grafana-Y.js";')).toEqual(['grafana-Y.js']);
+    expect(hits('import*as R from"./grafana-Z.js"')).toEqual(['grafana-Z.js']);
+    expect(hits('import{a}from"./vendor-Q.js";')).toEqual(['vendor-Q.js']);
+    expect(hits('const q=import("./grafana-D.js")')).toEqual([]);
+  });
+
+  it('yardımcı ↔ eski sınıf adı çakışma KAPISI (R5): izin listesi değerleri eşit olanlar', () => {
+    const s = read('scripts/bundle-budget.mjs');
+    expect(s).toContain("const ALLOWED_LEGACY_COLLISIONS = ['gap-1', 'gap-2', 'gap-4', 'sr-only'];");
+    expect(s).toContain("css.indexOf('@layer utilities{')");
+    expect(s).toContain('if (badCollisions.length) fail(');
+    // İzinli gap-* çakışmalarının değeri ancak ölçek px'e çiviliyse eşit.
+    expect(read('src/styles/tokens.css')).toMatch(/@theme inline reference \{[\s\S]*--spacing: 4px;[\s\S]*\}/);
   });
 
   it('CI frontend işi Vite build\'den hemen sonra betiği koşar', () => {

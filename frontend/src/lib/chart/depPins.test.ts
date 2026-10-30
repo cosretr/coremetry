@@ -46,4 +46,15 @@ describe('chart layer dependency pins (Dilim 0)', () => {
     }
     expect(ov['react-table']).toEqual({ react: '$react' });
   });
+  // v0.10.1613 (shadcn Faz 1 R5, plan §5.5): DOM'u şekillendiren UI
+  // kütüphaneleri TAM pin — minor sürüm işaretlemeyi/davranışı değiştirir
+  // (Radix odak/Esc, cmdk filtre, sonner yığını). shadcn@4.21.5 `radix-ui`
+  // tek paketini üretiyor (§12 Q8); @radix-ui/* doğrudan bağımlılık değil.
+  it('radix-ui, cmdk, sonner tam pin; @radix-ui/* doğrudan değil', () => {
+    const deps = pkg.dependencies;
+    expect(deps['radix-ui']).toBe('1.8.1');
+    expect(deps.cmdk).toBe('1.1.1');
+    expect(deps.sonner).toBe('2.0.8');
+    expect(Object.keys(deps).filter(n => n.startsWith('@radix-ui/'))).toEqual([]);
+  });
 });

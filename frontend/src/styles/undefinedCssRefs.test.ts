@@ -38,6 +38,15 @@ function walk(dir: string, out: string[] = []): string[] {
 }
 
 const ALL = walk(SRC);
+// v0.10.1613 (shadcn Faz 1 R5) — Tailwind'in taradığı dizinler (index.css
+// `@source` satırları, TEK gövde: liste buradan değil oradan okunur). Bu
+// dizinlerde className = Tailwind yardımcısı; CSS dosyasında tanımlanmaz,
+// build'de üretilir → sınıf kontrolü kapsam dışı. Üretilen shadcn
+// dosyaları ayrıca Radix'in çalışma anında yazdığı `--radix-*` değişkenlerini
+// okur → var() kontrolünden de muaf (coremetry/ai-elements DEĞİL).
+const TAILWIND_DIRS = [...readFileSync(resolve(SRC, 'styles/index.css'), 'utf8')
+  .matchAll(/@source\s+'\.\.\/([^']+)'/g)].map(m => m[1] + '/');
+const GENERATED_DIR = 'components/shadcn/';
 const rel = (p: string) => relative(SRC, p).split('\\').join('/');
 const stripComments = (s: string) =>
   s.replace(/\/\*[\s\S]*?\*\//g, '').split('\n').map(l => l.replace(/\/\/.*$/, '')).join('\n');
@@ -79,6 +88,7 @@ describe('undefinedCssRefs — sessizce düşen token/sınıf referansları', ()
     for (const p of ALL) {
       if (!/\.(tsx?|css)$/.test(p)) continue;
       if (/\.test\.tsx?$/.test(p)) continue; // test fixture'ları (`var(--a)`) kapsam dışı
+      if (rel(p).startsWith(GENERATED_DIR)) continue;
       const raw = readFileSync(p, 'utf8').split('\n');
       blankComments(readFileSync(p, 'utf8')).split('\n').forEach((code, i) => {
         for (const m of code.matchAll(bare))
@@ -121,6 +131,7 @@ describe('undefinedCssRefs — sessizce düşen token/sınıf referansları', ()
     const offenders: string[] = [];
     for (const p of ALL) {
       if (!p.endsWith('.tsx') || /\.test\.tsx$/.test(p)) continue;
+      if (TAILWIND_DIRS.some(d => rel(p).startsWith(d))) continue;
       const raw = readFileSync(p, 'utf8').split('\n');
       blankComments(readFileSync(p, 'utf8')).split('\n').forEach((code, i) => {
         for (const m of code.matchAll(lit))
@@ -154,6 +165,10 @@ describe('undefinedCssRefs — sessizce düşen token/sınıf referansları', ()
     expect(definedTokens.has('--status-critical-fg')).toBe(true);
     expect(definedTokens.has('--series-1')).toBe(true);
     expect(definedClasses.has('cp-legend-scroll')).toBe(true);
+  });
+
+  it('Tailwind dizinleri index.css @source listesinden okunuyor (tam üç)', () => {
+    expect(TAILWIND_DIRS).toEqual(['components/shadcn/', 'components/ai-elements/', 'components/coremetry/']);
   });
 
   it('token izin listesi yok — çıplak var() muafiyeti kabul edilmiyor', () => {

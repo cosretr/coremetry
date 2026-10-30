@@ -21,7 +21,11 @@ export default defineConfig({
   // Mirror the Vite `@` → src alias so tests can import components that use it
   // (e.g. ServicePicker imports '@/lib/api').
   resolve: {
-    alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+    // `cn` → src/lib/cn.ts: vite.config.ts'teki shadcn takma adının ikizi.
+    alias: [
+      { find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
+      { find: /^cn$/, replacement: fileURLToPath(new URL('./src/lib/cn.ts', import.meta.url)) },
+    ],
   },
   test: {
     environment: 'node',

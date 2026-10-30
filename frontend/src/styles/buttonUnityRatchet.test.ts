@@ -49,7 +49,10 @@ function walk(dir: string, out: string[] = []): string[] {
   }
   return out;
 }
-const files = walk(SRC).filter(p => !p.includes(join('components', 'ui') + '/'));
+// v0.10.1613 (shadcn Faz 1 R5, plan §3.3): üretilen shadcn ve ai-elements
+// dizinleri de atomların evi gibi kapsam dışı; components/coremetry DEĞİL.
+const EXEMPT_DIRS = ['ui', 'shadcn', 'ai-elements'].map(d => join('components', d) + '/');
+const files = walk(SRC).filter(p => !EXEMPT_DIRS.some(d => p.includes(d)));
 // Gerekçeli satır istisnası (eslint.config.js'te belgeli
 //   `eslint-disable-next-line ui/no-raw-button -- <neden>`) ESLint'ten
 // geçer; mandal da onu SAYMAZ — aksi hâlde belgelenen kaçış yolu sıfır
