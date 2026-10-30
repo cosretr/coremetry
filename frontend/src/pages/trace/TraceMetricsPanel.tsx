@@ -438,7 +438,7 @@ export function TraceMetricsPanel({ traceId, spans, analysis, criticalPath, span
         /* v0.10.976 — tek sütun: ayrıntı tablonun içinde, seçili satırın altında. */
         <section aria-label="Pod tablosu" className="tpm-main">
           <TracePodTable model={model} rows={rows} selected={selectedPod} metrics={metrics}
-            hideMetrics={thanosOff} window={windowInfo} grouping={url.grouping}
+            hideMetrics={thanosOff} window={windowInfo}
             onSelectPod={onSelectRow} onToggleGroup={onToggleGroup} onExpandMore={onExpandMore}
             onToggleNoPod={setNoPodOpen} onShowPodSpans={onShowPodSpans} onRetryService={onRetryService}
             onClearFilters={clearFilters} announce={announce} focusRow={focusReq}

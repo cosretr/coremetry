@@ -115,14 +115,15 @@ function headTip(id: string, stepSec: number | null): string | null {
 }
 
 /** v0.10.968 — pod adı: soluk hash parçası (replicaset), ortadan kırpma
- *  (MiddleEllipsis baş kısmı kırpar, hash+ek hiç kırpılmaz). Servis kipinde
- *  baş (deployment adı) grup başlığında zaten yazılı → yalnız hash-ek;
- *  Düz kipte tam ad. Birincil olmayan cluster değeri önek olarak. */
-function PodName({ p, flat, primaryCluster }: { p: TracePodInfo; flat: boolean; primaryCluster: string }) {
+ *  (MiddleEllipsis baş kısmı kırpar, hash+ek hiç kırpılmaz). Birincil
+ *  olmayan cluster değeri önek olarak. v0.10.1644 (operator-reported): servis
+ *  kipinde de TAM ad (deployment öneki artık atılmaz); dar kolon baş kısmı
+ *  CSS ile kırpar, tam ad title'da. */
+function PodName({ p, primaryCluster }: { p: TracePodInfo; primaryCluster: string }) {
   const pre = p.clusterValue && p.clusterValue !== primaryCluster ? `${p.clusterValue} · ` : '';
   const { head, rs, tail } = p.nameParts;
   if (!rs) return <MiddleEllipsis text={pre + p.pod} title={p.pod} className="tpm-pod-name" />;
-  const lead = flat ? `${pre}${head}-` : pre;
+  const lead = `${pre}${head}-`;
   const end = `${rs}-${tail}`;
   return (
     <span className="tpm-pod" style={{ '--tpm-pod-tail-w': `${end.length}ch` } as CSSProperties} title={p.pod}>
@@ -139,7 +140,6 @@ export interface TracePodTableProps {
   metrics: (pod: string) => PodMetricState;
   hideMetrics: boolean;
   window: TraceMetricsWindowInfo;
-  grouping: 'service' | 'flat';
   onSelectPod: (pod: string) => void;
   onToggleGroup: (service: string, open: boolean) => void;
   onExpandMore: (service: string) => void;
@@ -160,7 +160,7 @@ export interface TracePodTableProps {
 
 export function TracePodTable(props: TracePodTableProps) {
   const {
-    model, rows, selected, metrics, hideMetrics, window: w, grouping,
+    model, rows, selected, metrics, hideMetrics, window: w,
     onSelectPod, onToggleGroup, onExpandMore, onToggleNoPod, onShowPodSpans, onRetryService, onClearFilters, announce,
     focusRow, detail = null, detailFromUrl = false,
   } = props;
@@ -170,7 +170,6 @@ export function TracePodTable(props: TracePodTableProps) {
   });
   const visible = dt.visibleColumns;
   const many = rows.length > 100;
-  const flat = grouping === 'flat';
 
   // ── gezici tabindex + klavye ──────────────────────────────────────────
   const tbodyRef = useRef<HTMLTableSectionElement>(null);
@@ -379,7 +378,7 @@ export function TracePodTable(props: TracePodTableProps) {
           return (
             <td key="pod" {...dt.cellProps(r, 'pod', p.pod)}>
               <span className={cls('tpm-podcell', r.level === 2 && 'is-l2')}>
-                <PodName p={p} flat={flat} primaryCluster={model.primaryCluster} />
+                <PodName p={p} primaryCluster={model.primaryCluster} />
                 {p.rootCause && <Badge tone="danger" className="tpm-badge">kök hata</Badge>}
                 {p.entry && <Badge tone="neutral" className="tpm-badge">giriş</Badge>}
               </span>

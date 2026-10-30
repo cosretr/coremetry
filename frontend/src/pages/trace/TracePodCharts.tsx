@@ -72,7 +72,7 @@ export function PodChart({ build, height, syncKey, xRange, head, legendLimit = t
         {build.legend.map(l => (
           <span key={l.pod} title={l.pod}>
             <span className="tpp-swatch" aria-hidden="true" style={{ background: l.color }} />
-            {' '}<span className="mono">{l.label}</span> {legendValue(k, l.value)}
+            {' '}<span className="mono tpp-pod-name">{l.label}</span> {legendValue(k, l.value)}
           </span>
         ))}
         {legendLimit && build.limit != null && <span>{limitLegend(k, build.limit)}</span>}

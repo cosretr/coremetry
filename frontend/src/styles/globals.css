@@ -5157,6 +5157,10 @@ a.ins-val:hover { text-decoration: underline; }
 .tpp-msg { background: var(--bg2); border-radius: var(--radius-sm); padding: var(--sp-3) var(--sp-4); font-size: var(--fs-sm); }
 .tpp-msg.is-err { color: var(--err); }
 .tpp-chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+/* v0.10.1644 — tam pod adı (çip, lejant, odak rayı, konum): dar yerde CSS
+   ellipsis; tam ad title'da (elle kırpılmış dizgi YOK). */
+.tpp-pod-name { display: inline-block; min-width: 0; max-width: 36ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+.tpp-rail-item .tpp-pod-name { flex: 1 1 auto; max-width: none; }
 .tpp-swatch { display: inline-block; width: 8px; height: 8px; border-radius: 2px; flex: none; vertical-align: middle; }
 /* v0.10.1096 — tek kolon minmax(0,1fr): örtük `auto` iz, uPlot tuvalinin
    ilk çizim genişliğini min-content sayıp dar ızgara hücresinden taşıyordu

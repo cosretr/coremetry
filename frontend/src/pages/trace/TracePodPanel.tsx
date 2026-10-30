@@ -65,7 +65,7 @@
 // yedeğiyle ve yalnız başarıda "kopyalandı" der; (4) "+N" menüsü açıkken
 // üyeliği donar (işaretlenen satır odağı <body>'ye düşürmez); (5) "Yeniden
 // dene"/"Yükle" bastıktan sonra odak mesaj kutusunda kalır.
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Check, Copy, Maximize2, X } from 'lucide-react';
 import { Badge, Button, Chip, DisclosureButton, IconButton, LinkButton, MenuItem, Popover } from '@/components/ui';
@@ -81,14 +81,14 @@ import {
   type TracePodInfo, type TracePodPanelProps,
 } from './traceMetricsModel';
 import { fmtClockNs, fmtDurNs, fmtPct } from './traceMetricsFmt';
-import { shortPod, togglePod, traceMetricsPodHref } from './traceMetrics';
+import { togglePod, traceMetricsPodHref } from './traceMetrics';
 import { TraceJvmPanel } from './TraceJvmPanel';
 import { PodChart } from './TracePodCharts';
 import { podChartsCaption, usePodChartBuilds } from './usePodChartBuilds';
 import { usePanelNote } from './usePanelNote';
 import {
   agoText, CAP_REASON, chartHeadline, clusterNameOf, compareChipLayout, compareColors, hhmm, momentRow, nowNote, nowSection,
-  podBadges, podFacts, servicePods, siblingCopy, siblingStats, stateMessage, subLine, suffixLabels,
+  podBadges, podFacts, servicePods, siblingCopy, siblingStats, stateMessage, subLine,
   type ChartHeadline, type CompareChip, type MomentRow, type NowRow,
 } from './tracePodPanelModel';
 
@@ -206,7 +206,7 @@ function ChipBody({ c, color }: { c: CompareChip; color: string | undefined }) {
   return (
     <>
       {c.on && <><Check size={12} aria-hidden="true" /><span className="tpp-swatch" aria-hidden="true" style={{ background: color }} /></>}
-      <span className="mono">{c.label}</span>
+      <span className="mono tpp-pod-name">{c.label}</span>
       <span> · {c.spans}</span>
       {c.errors > 0 && <span className="cell-err"> · ⚠{c.errors}</span>}
     </>
@@ -246,14 +246,13 @@ export function CompareSection({
 }) {
   const themeTick = useThemeTick();
   const pods = useMemo(() => servicePods(model, p.service), [model, p.service]);
-  const labels = useMemo(() => suffixLabels(pods), [pods]);
   // Tema değişince palet yeniden çözülür (seriesColorsFor chartTheme okur).
   // eslint-disable-next-line react-hooks/exhaustive-deps -- v0.10.968: themeTick yalnız yeniden çözme tetikleyicisi
-  const colors = useMemo(() => compareColors(compare, labels), [compare, labels, themeTick]);
+  const colors = useMemo(() => compareColors(compare), [compare, themeTick]);
   const [menuPods, setMenuPods] = useState<ReadonlySet<string> | null>(null);
   const [seenSvc, setSeenSvc] = useState(p.service);
   if (seenSvc !== p.service) { setSeenSvc(p.service); setMenuPods(null); }
-  const { visible, overflow } = compareChipLayout(pods, compare, metrics, labels, menuPods ?? undefined);
+  const { visible, overflow } = compareChipLayout(pods, compare, metrics, menuPods ?? undefined);
   const moreRef = useRef<HTMLButtonElement>(null);
   useEffect(() => { if (overflow.length === 0) setMenuPods(null); }, [overflow.length]);
   // Çıkarılan çip "+N"ye kaydıysa odak oraya (karşılaştırma yazımı commit olunca).
@@ -297,7 +296,7 @@ export function CompareSection({
             {overflow.map(c => (
               <MenuItem key={c.pod} role="menuitemcheckbox" aria-checked={c.on} aria-disabled={c.disabled || undefined}
                 title={c.title} onClick={() => toggle(c)}>
-                <span className="mono">{c.label}</span> · {c.spans}{c.errors > 0 && <span className="cell-err"> · ⚠{c.errors}</span>}
+                <span className="mono tpp-pod-name">{c.label}</span> · {c.spans}{c.errors > 0 && <span className="cell-err"> · ⚠{c.errors}</span>}
                 {c.note && <span className="cell-faint"> · {c.note}</span>}
               </MenuItem>
             ))}
@@ -375,7 +374,7 @@ export function StateBlock({ state, pod, onRetry, height = 140 }: { state: PodMe
 
 /** v0.10.968 — JVM heap + GC: yalnız familyOf(runtime) === 'jvm' (Thanos
  *  durumundan BAĞIMSIZ); JVM değilse tek satır not; runtime bilinmiyorsa hiç.
- *  Seri etiketi ve rengi çip / Bellek / CPU ile AYNI (suffixLabels +
+ *  Seri etiketi (tam pod adı, v0.10.1644) ve rengi çip / Bellek / CPU ile AYNI (
  *  compareColors): bir pod dört grafikte de tek ad, tek renk.
  *
  *  v0.10.976'nın `collapsible`ı (kapalı açılır bölüm) v0.10.1096'te kalktı:
@@ -388,10 +387,8 @@ export function JvmSection({ model, p, compare, window: w, inline = false }: {
   const themeTick = useThemeTick();
   const svcPods = useMemo(() => servicePods(model, p.service), [model, p.service]);
   const queryPods = useMemo(() => svcPods.map(x => x.pod), [svcPods]);
-  const labels = useMemo(() => suffixLabels(svcPods), [svcPods]);
-  const labelOf = useCallback((pod: string) => labels.get(pod) ?? shortPod(pod), [labels]);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- v0.10.968: themeTick yalnız yeniden çözme tetikleyicisi
-  const colors = useMemo(() => compareColors(compare, labels), [compare, labels, themeTick]);
+  const colors = useMemo(() => compareColors(compare), [compare, themeTick]);
   const deploys = useMemo(() => [{ timeUnixNs: w.startNs, label: 'trace' }], [w.startNs]);
   const xRange = useMemo(() => ({ from: w.fromNs / 1e9, to: w.toNs / 1e9 }), [w.fromNs, w.toNs]);
   if (!p.runtime) return null;
@@ -399,7 +396,7 @@ export function JvmSection({ model, p, compare, window: w, inline = false }: {
   const panel = (
     <TraceJvmPanel service={p.service} pods={compare} queryPods={queryPods} runtime={p.runtime}
       from={w.fromNs} to={w.toNs} syncKey={`trace-metrics-${p.service}`} deploys={deploys} xRange={xRange}
-      labelOf={labelOf} seriesColors={colors} chartHeight={inline ? DETAIL_CHART_H : undefined} />
+      seriesColors={colors} chartHeight={inline ? DETAIL_CHART_H : undefined} />
   );
   if (inline) return panel;
   return (

@@ -8,7 +8,7 @@
 // saf: model (buildTraceMetricsModel), satırlar (buildRows), toplu uç dilimleri
 // (tracePodChunks / chunksToEnable), dilim sonucu → pod durumu
 // (podMetricState), seçim kuralı (selectPod). v0.10.962'nin dışa aktarımları
-// (shortPod, jvmPodSeries, traceMetricsPodHref, togglePod, podAtCap,
+// (jvmPodSeries, traceMetricsPodHref, togglePod, podAtCap,
 // tracePods) aynı imzayla duruyor.
 import type { SpanMetricSeries, SpanRow, TraceAnalysis, TracePodMetricsResponse, TracePodSeriesRow } from '@/lib/types';
 import type { CriticalPath } from '@/lib/criticalPath';
@@ -924,22 +924,15 @@ export function traceMetricsPodHref(
   });
 }
 
-/** Kısa pod etiketi (grafikte): son iki "-" parçası (replicaset-hash + ek). */
-export function shortPod(pod: string): string {
-  const parts = pod.split('-');
-  return parts.length > 2 ? '…' + parts.slice(-2).join('-') : pod;
-}
-
 // jvmPodSeries — v0.10.923 (operatör: "sonra JVM GC metriğine bakarız"):
 // pod kırılımlı metrik serilerini Trace Metrics grafiğine hazırlar — boş
-// seriler düşer, etiket kısa pod adı (tam ad fullKey'de, tooltip/lejant
-// title'ında), değer ölçeklenir (GC süresi saniye → ms). SAF.
+// seriler düşer, değer ölçeklenir (GC süresi saniye → ms). SAF.
 //
-// v0.10.968 — `labelOf` (varsayılan shortPod): seçili pod paneli JVM
-// çizgilerini çip / Bellek / CPU ile AYNI etiketle adlandırır (suffixLabels);
-// renk addan türediği için aynı pod dört grafikte de aynı renkte kalır.
+// v0.10.1644 (operator-reported) — etiket TAM pod adı (lejant, tooltip,
+// seri listesi); dar lejant CSS ellipsis + title ile kısaltır. Çip / Bellek /
+// CPU da tam adı kullanır, renk addan türediği için pod dört grafikte tek renk.
 export function jvmPodSeries(
-  series: SpanMetricSeries[] | null | undefined, scale = 1, labelOf: (pod: string) => string = shortPod,
+  series: SpanMetricSeries[] | null | undefined, scale = 1,
 ): SpanMetricSeries[] {
   return (series ?? [])
     .filter(s => s.points.length > 0)
@@ -947,7 +940,7 @@ export function jvmPodSeries(
       const pod = s.groupKey[0] ?? '';
       return {
         ...s,
-        groupKey: [labelOf(pod)],
+        groupKey: [pod],
         fullKey: [pod],
         points: scale === 1 ? s.points : s.points.map(p => ({ time: p.time, value: p.value * scale })),
       };

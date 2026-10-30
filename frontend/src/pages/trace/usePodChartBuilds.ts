@@ -14,7 +14,7 @@ import { useMemo } from 'react';
 import { useThemeTick } from '@/lib/useThemeTick';
 import type { PodMetricState, TraceMetricsModel, TraceMetricsWindowInfo, TracePodInfo } from './traceMetricsModel';
 import {
-  buildChartItems, chartCaption, chartPods, compareColors, servicePods, suffixLabels, type ChartBuild,
+  buildChartItems, chartCaption, chartPods, compareColors, type ChartBuild,
 } from './tracePodPanelModel';
 
 export interface PodChartInputs {
@@ -39,10 +39,9 @@ export interface PodChartBuilds {
 export function usePodChartBuilds({ model, selected, compare, metrics, window: w, siblingLines }: PodChartInputs): PodChartBuilds {
   const themeTick = useThemeTick();
   const pods = useMemo(() => chartPods(model, selected, compare, metrics), [model, selected, compare, metrics]);
-  const labels = useMemo(() => suffixLabels(servicePods(model, selected.service)), [model, selected.service]);
   // themeTick: palet temaya göre çözülür (seriesColorsFor chartTheme okur).
   // eslint-disable-next-line react-hooks/exhaustive-deps -- v0.10.968: themeTick tema değişiminde yeniden çözme tetikleyicisi
-  const colors = useMemo(() => compareColors(compare, labels), [compare, labels, themeTick]);
+  const colors = useMemo(() => compareColors(compare), [compare, themeTick]);
   const stepSec = pods.compared[0]?.data.stepSec ?? w.stepSec ?? 0;
   const [mem, cpu] = useMemo(() => {
     const inp = { ...pods, siblingLines, traceStartNs: w.startNs, traceEndNs: w.endNs, stepSec, colors };

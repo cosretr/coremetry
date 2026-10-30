@@ -7,7 +7,7 @@ import { MAX_SIBLING_LINES } from './traceMetricsModel';
 import {
   median, siblingRatio, siblingStats, siblingCopy, compareChipLayout, CAP_REASON, buildChartItems, chartPods,
   chartCaption, timelineLanes, timelineTicks, timelineModel, nowSection, nowNote, stateMessage, errorReason,
-  momentRow, THROTTLE_NOTE, podSuffix, suffixLabels, flaggedNav, relToTrace, agoText, podBadges, subLine,
+  momentRow, THROTTLE_NOTE, flaggedNav, relToTrace, agoText, podBadges, subLine,
   clusterNameOf, funnelCaption, compareColors, chartHeadline, podFacts, type LaneSpan,
 } from './tracePodPanelModel';
 import { preferredSlot, seriesColor, seriesPalette } from '@/lib/chartFmt';
@@ -118,7 +118,7 @@ describe('v0.10.968 — karşılaştırma çipleri', () => {
     const { visible, overflow } = compareChipLayout(ps, [ps[0].pod, ps[7].pod], allOk);
     expect(visible.map(c => c.pod)).toEqual([0, 1, 2, 3, 4, 5, 7, 8].map(i => ps[i].pod));
     expect(overflow.map(c => c.pod)).toEqual([ps[6].pod, ps[9].pod]);
-    expect(visible[0]).toMatchObject({ on: true, slot: 0, label: 'p0aaa', disabled: false });
+    expect(visible[0]).toMatchObject({ on: true, slot: 0, label: ps[0].pod, disabled: false });
     expect(visible[6]).toMatchObject({ on: true, slot: 1 });
     expect(visible[0].title).toBe(`${ps[0].pod} · karşılaştırmadan çıkar`);
     expect(visible[1].title).toBe(`${ps[1].pod} · karşılaştırmaya ekle`);
@@ -156,12 +156,12 @@ describe('v0.10.968 — grafik öğeleri', () => {
 
   it('karşılaştırılan → data, kardeş → muted; en çok 12 kardeş + "+N çizilmedi" sayısı', () => {
     const b = buildChartItems('mem', base(true));
-    expect(b.items.slice(0, 2).map(i => [i.name, i.role])).toEqual([['p00aa', 'data'], ['p01aa', 'data']]);
+    expect(b.items.slice(0, 2).map(i => [i.name, i.role])).toEqual([[ps[0].pod, 'data'], [ps[1].pod, 'data']]);
     const muted = b.items.filter(i => i.role === 'muted');
     expect(muted).toHaveLength(MAX_SIBLING_LINES);
     expect(b.siblingsDrawn).toBe(12);
     expect(b.siblingsHidden).toBe(2);
-    expect(b.legend.map(l => l.label)).toEqual(['p00aa', 'p01aa']);
+    expect(b.legend.map(l => l.label)).toEqual([ps[0].pod, ps[1].pod]);
     expect(chartCaption({ durNs: 3.42e9, stepSec: 15, service: SVC, siblingsDrawn: 12, siblingsHidden: 2, cpuNoLimit: false }))
       .toContain(`Soluk çizgiler: ${SVC} servisinin bu trace'teki diğer 14 pod'u (+2 çizilmedi).`);
   });
@@ -175,7 +175,7 @@ describe('v0.10.968 — grafik öğeleri', () => {
   });
   it('metriği olmayan pod ne karşılaştırmada ne kardeşte çizilir', () => {
     const b = buildChartItems('cpu', base(true, p => (p === ps[1].pod || p === ps[5].pod ? { kind: 'loading' } : ok())));
-    expect(b.items.filter(i => i.role === 'data').map(i => i.name)).toEqual(['p00aa']);
+    expect(b.items.filter(i => i.role === 'data').map(i => i.name)).toEqual([ps[0].pod]);
     expect(b.items.some(i => i.name === 'p05aa')).toBe(false);
   });
   it('trace bandı en az BİR adım geniş; gerçek bitiş endSec\'te; renk accent2, etiket trace', () => {
@@ -285,7 +285,7 @@ describe('v0.10.968 — span zaman çizelgesi', () => {
     expect(tl.bars.find(b => b.id === 'k1')).toMatchObject({ error: false, critical: true, status: 'ok' });
     expect(tl.lanes).toBe(2);
     expect(tl.marks.map(x => x.own)).toEqual([true, false]);
-    expect(tl.marks[0].title).toBe(`${SVC} …m3t9w · POST /v1/score · DEADLINE_EXCEEDED · +1,802 sn`);
+    expect(tl.marks[0].title).toBe(`${SVC} ${p.pod} · POST /v1/score · DEADLINE_EXCEEDED · +1,802 sn`);
     expect(tl.summary).toBe('2 span · 1 hata · kritik yolda 1,30 sn');
     expect(tl.active.x0).toBeCloseTo(0.294 / 3.42);
   });
@@ -406,15 +406,8 @@ describe('v0.10.968 — trace anı satırı ve başlık', () => {
     expect(momentRow('cpu', series({ cpuLimit: undefined, inventory: 'unknown' })).rest).toContain('limit okunamadı (kube-state-metrics sorgusu başarısız)');
     expect(momentRow('cpu', series({ cpuAt: null })).main).toBe('—');
   });
-  it('son ek + benzersiz etiket; alt satır; cluster adı', () => {
+  it('alt satır; cluster adı', () => {
     const a = pod(`${SVC}-6b7d9f8c5-m3t9w`);
-    const b = pod(`${SVC}-7c8d9e0f1-m3t9w`);
-    const c = pod('ledger-writer-prod-1', { service: 'ledger-writer-prod' });
-    expect(podSuffix(a)).toBe('m3t9w');
-    expect(podSuffix(c)).toBe('prod-1');
-    const l = suffixLabels([a, b, c]);
-    expect(l.get(a.pod)).toBe(a.pod);          // çakışma → tam ad
-    expect(l.get(c.pod)).toBe('prod-1');
     expect(subLine(a, ok())).toEqual([SVC, 'ns payments', 'dc-east-1', 'java']);
     expect(subLine({ ...a, runtime: '' }, { kind: 'unmapped', clusterValue: 'dc-east-2', reason: 'no_remote_cluster' }))
       .toEqual([SVC, 'ns payments', 'dc-east-1']);
@@ -486,34 +479,36 @@ describe('v0.10.968 — kube-state-metrics kısmen düştü: "tanımsız" değil
 });
 
 describe('v0.10.968 — çakışmasız karşılaştırma renkleri (MF-1)', () => {
-  const a = pod(`${SVC}-6b7d9f8c5-p5r8d`);
-  const b = pod(`${SVC}-6b7d9f8c5-b2q6f`);
+  // v0.10.1644: etiket tam pod adı → hash yuvası ÇAKIŞAN iki tam ad aranır.
+  const names = Array.from({ length: 200 }, (_, i) => `${SVC}-6b7d9f8c5-x${String(i).padStart(4, '0')}`);
+  const an = names[0];
+  const bn = names.find(n => n !== an && preferredSlot(n) === preferredSlot(an))!;
+  const a = pod(an);
+  const b = pod(bn);
   const m = model([a, b]);
-  const labels = suffixLabels([a, b]);
-  it('önkoşul: iki etiket de hash yuvası 0 (hash-yalnız renk ÇAKIŞIR)', () => {
-    expect(preferredSlot('p5r8d')).toBe(0);
-    expect(preferredSlot('b2q6f')).toBe(0);
-    expect(seriesColor('p5r8d')).toBe(seriesColor('b2q6f'));
+  it('önkoşul: iki etiket de aynı hash yuvası (hash-yalnız renk ÇAKIŞIR)', () => {
+    expect(bn).toBeDefined();
+    expect(seriesColor(an)).toBe(seriesColor(bn));
   });
   it('compareColors farklı renk verir; ilk gelen tercih ettiği yuvayı korur', () => {
-    const c = compareColors([a.pod, b.pod], labels, 'dark');
-    expect(c.get('p5r8d')).not.toBe(c.get('b2q6f'));
+    const c = compareColors([a.pod, b.pod], 'dark');
+    expect(c.get(an)).not.toBe(c.get(bn));
     // v0.10.1610: seriesColor belge yokken DEFAULT_THEME paletini okur;
     // compareColors'a verilen 'dark' ile aynı paletten kıyasla.
-    expect(c.get('p5r8d')).toBe(seriesPalette('dark')[preferredSlot('p5r8d')]);
+    expect(c.get(an)).toBe(seriesPalette('dark')[preferredSlot(an)]);
   });
   it('buildChartItems: çizgi rengi = lejant rengi = harita; kardeş (muted) renksiz', () => {
-    const c = compareColors([a.pod, b.pod], labels, 'dark');
+    const c = compareColors([a.pod, b.pod], 'dark');
     const cp = chartPods(m, a, [a.pod, b.pod], () => ok());
     const bld = buildChartItems('mem', { ...cp, siblingLines: true, traceStartNs: T0, traceEndNs: T0 + 1e9, stepSec: 15, colors: c });
     const data = bld.items.filter(i => i.role === 'data');
-    expect(data.map(i => i.color)).toEqual([c.get('p5r8d'), c.get('b2q6f')]);
+    expect(data.map(i => i.color)).toEqual([c.get(an), c.get(bn)]);
     expect(new Set(data.map(i => i.color)).size).toBe(2);
     expect(bld.legend.map(l => l.color)).toEqual(data.map(i => i.color));
     const three = pod(`${SVC}-6b7d9f8c5-z9z9z`);
     const m3 = model([a, b, three]);
     const cp3 = chartPods(m3, a, [a.pod], () => ok());
-    const b3 = buildChartItems('cpu', { ...cp3, siblingLines: true, traceStartNs: T0, traceEndNs: T0 + 1e9, stepSec: 15, colors: compareColors([a.pod], suffixLabels([a, b, three]), 'dark') });
+    const b3 = buildChartItems('cpu', { ...cp3, siblingLines: true, traceStartNs: T0, traceEndNs: T0 + 1e9, stepSec: 15, colors: compareColors([a.pod], 'dark') });
     expect(b3.items.filter(i => i.role === 'muted').every(i => i.color === undefined)).toBe(true);
   });
 });
@@ -522,7 +517,7 @@ describe('v0.10.968 — "+N" menüsü açıkken üyelik donar (F4 ui)', () => {
   const ps = Array.from({ length: 8 }, (_, i) => pod(`${SVC}-6b7d9f8c5-q${i}aaa`));
   it('pinned: işaretlenen taşma çipi menüde kalır; bırakılınca görünür akar', () => {
     const pinned = new Set([ps[6].pod, ps[7].pod]);
-    const open = compareChipLayout(ps, [ps[0].pod, ps[6].pod], () => ok(), suffixLabels(ps), pinned);
+    const open = compareChipLayout(ps, [ps[0].pod, ps[6].pod], () => ok(), pinned);
     expect(open.overflow.map(c => [c.pod, c.on])).toEqual([[ps[6].pod, true], [ps[7].pod, false]]);
     const closed = compareChipLayout(ps, [ps[0].pod, ps[6].pod], () => ok());
     expect(closed.visible.map(c => c.pod)).toContain(ps[6].pod);

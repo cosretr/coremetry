@@ -33,7 +33,7 @@ import {
   CompareSection, CopyPodButton, JvmSection, MomentSection, NowSection, PodBadges, PodPageLink, StateBlock, TraceFacts,
 } from './TracePodPanel';
 import { usePanelNote } from './usePanelNote';
-import { flaggedNav, funnelCaption, podSuffix, subLine } from './tracePodPanelModel';
+import { flaggedNav, funnelCaption, subLine } from './tracePodPanelModel';
 
 function NavButton({ dir, target, onSelect }: { dir: 'prev' | 'next'; target: TracePodInfo | null; onSelect: (pod: string) => void }) {
   const label = dir === 'prev' ? '‹ Önceki işaretli' : 'Sonraki işaretli ›';
@@ -45,7 +45,7 @@ function NavButton({ dir, target, onSelect }: { dir: 'prev' | 'next'; target: Tr
       {label} <span className="cell-faint">{key}</span>
     </Button>
   );
-  return target ? <Tooltip content={`${podSuffix(target)} · ${target.service}`}>{btn}</Tooltip> : btn;
+  return target ? <Tooltip content={`${target.pod} · ${target.service}`}>{btn}</Tooltip> : btn;
 }
 
 export function TracePodFocus(props: TracePodPanelProps) {
@@ -77,7 +77,7 @@ export function TracePodFocus(props: TracePodPanelProps) {
       <div className="tpp-focus-bar">
         <Button ref={backRef} variant="secondary" size="sm" onClick={onToggleFocus}>← Tüm pod'lar <span className="cell-faint">Esc</span></Button>
         <nav aria-label="Konum" className="tpp-sub">
-          <span>{p.service}</span><span aria-hidden="true">›</span><span className="mono">{podSuffix(p)}</span>
+          <span>{p.service}</span><span aria-hidden="true">›</span><span className="mono tpp-pod-name" title={p.pod}>{p.pod}</span>
         </nav>
         <span className="row-grow" />
         <NavButton dir="prev" target={nav.prev} onSelect={onSelect} />
@@ -92,7 +92,7 @@ export function TracePodFocus(props: TracePodPanelProps) {
               return (
                 <div role="listitem" key={r.pod}>
                   <OptionRow selected={cur} className={cur ? 'tpp-rail-item is-current' : 'tpp-rail-item'} title={r.pod} onClick={() => onSelect(r.pod)}>
-                    <span className="mono">…{podSuffix(r)}</span>
+                    <span className="mono tpp-pod-name">{r.pod}</span>
                     <span className="cell-muted">{r.service}</span>
                     {r.errors > 0 && <span className="cell-err">⚠{r.errors}</span>}
                     <span className="cell-faint">{fmtPct(r.critShare)}</span>

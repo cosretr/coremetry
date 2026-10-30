@@ -26,7 +26,7 @@ import {
 } from './traceMetricsModel';
 import { fmtBytesTr, fmtClockNs, fmtClockSec, fmtCores, fmtCoresShort, fmtDurNs, fmtPct, fmtRatio } from './traceMetricsFmt';
 import { trPossessive } from './trSuffix';
-import { podAtCap, shortPod } from './traceMetrics';
+import { podAtCap } from './traceMetrics';
 
 // ── Ortak ─────────────────────────────────────────────────────────────────
 
@@ -50,24 +50,6 @@ export function coreNum(v: number): string {
  *  okunuşundan, trSuffix). */
 export function pctOf(ratio: number): string {
   return `${fmtPct(ratio)}${trPossessive(Math.round(ratio * 100))}`;
-}
-
-/** v0.10.968 — pod adının ayırt edici son eki: ReplicaSet bölünmüşse kuyruk
- *  (`m3t9w`), değilse son iki "-" parçası (`prod-1`). Çip / grafik etiketi. */
-export function podSuffix(p: Pick<TracePodInfo, 'pod' | 'nameParts'>): string {
-  const { rs, tail } = p.nameParts;
-  if (rs && tail) return tail;
-  return shortPod(p.pod).replace(/^…/, '');
-}
-
-/** v0.10.968 — servis pod'larına BENZERSİZ etiket: son ek çakışırsa (iki
- *  ReplicaSet'te aynı kuyruk) tam ad. Grafik rengi CorePanel'de ADDAN
- *  türediği için (seriesRoleColor) çip swatch'ı ile çizgi aynı adı kullanmalı. */
-export function suffixLabels(pods: readonly Pick<TracePodInfo, 'pod' | 'nameParts'>[]): Map<string, string> {
-  const base = pods.map(p => podSuffix(p));
-  const count = new Map<string, number>();
-  for (const b of base) count.set(b, (count.get(b) ?? 0) + 1);
-  return new Map(pods.map((p, i) => [p.pod, (count.get(base[i]) ?? 0) > 1 ? p.pod : base[i]]));
 }
 
 /** v0.10.968 — seçili pod'un servisinin BU TRACE'teki pod'ları, model sırasıyla. */
@@ -255,7 +237,6 @@ export function compareChipLayout(
   pods: TracePodInfo[],
   compare: readonly string[],
   metrics: (pod: string) => PodMetricState,
-  labels: ReadonlyMap<string, string> = suffixLabels(pods),
   pinned?: ReadonlySet<string>,
 ): { visible: CompareChip[]; overflow: CompareChip[] } {
   const sel = [...compare];
@@ -273,7 +254,7 @@ export function compareChipLayout(
       : `${p.pod} · ${on ? 'karşılaştırmadan çıkar' : 'karşılaştırmaya ekle'}`;
     const byRank = i < CHIPS_VISIBLE_FIRST || p.flagged;
     return {
-      i, pod: p.pod, label: labels.get(p.pod) ?? podSuffix(p), spans: p.spans, errors: p.errors,
+      i, pod: p.pod, label: p.pod, spans: p.spans, errors: p.errors,
       flagged: p.flagged, on, slot, disabled, title,
       // v0.10.968 — okunamayan kardeş "metrik yok" değil: hata boş sonuç gibi yazılmaz.
       note: noM ? (st.kind === 'error' ? 'okunamadı' : 'metrik yok') : '',
@@ -293,9 +274,9 @@ export function compareChipLayout(
  *  çizgileri ve JVM çizgileri BU haritadan okur (tek pod = tek renk).
  *  Tema-farkında: çağıran render'da (useThemeTick altında) çağırır. */
 export function compareColors(
-  compare: readonly string[], labels: ReadonlyMap<string, string>, theme?: ChartTheme,
+  compare: readonly string[], theme?: ChartTheme,
 ): Map<string, string> {
-  return seriesColorsFor(compare.map(p => labels.get(p) ?? p), undefined, theme);
+  return seriesColorsFor(compare, undefined, theme);
 }
 
 // ── Grafik öğeleri ────────────────────────────────────────────────────────
@@ -370,13 +351,12 @@ export function buildChartItems(kind: 'mem' | 'cpu', inp: {
 
 /** v0.10.968 — panel bağlamından grafik girdisi: karşılaştırılan (metriği ok,
  *  karşılaştırma sırasıyla) + kardeşler (servisin diğer ok pod'ları, model
- *  sırasıyla). Etiketler servis çapında benzersiz (suffixLabels). */
+ *  sırasıyla). Etiket tam pod adı (v0.10.1644). */
 export function chartPods(model: TraceMetricsModel, selected: TracePodInfo, compare: readonly string[], metrics: (pod: string) => PodMetricState): { compared: ChartPod[]; siblings: ChartPod[] } {
   const pods = servicePods(model, selected.service);
-  const labels = suffixLabels(pods);
   const pick = (pod: string): ChartPod | null => {
     const d = okData(metrics(pod));
-    return d ? { pod, label: labels.get(pod) ?? pod, data: d } : null;
+    return d ? { pod, label: pod, data: d } : null;
   };
   const compared = compare.map(pick).filter((c): c is ChartPod => c != null);
   const siblings = pods.filter(p => !compare.includes(p.pod)).map(p => pick(p.pod)).filter((c): c is ChartPod => c != null);
@@ -472,13 +452,9 @@ export function timelineModel(model: TraceMetricsModel, pod: TracePodInfo, maxLa
   const bars: TimelineBar[] = spans.map(s => ({
     ...s, x0: frac(s.startNs), x1: frac(s.endNs), lane: lay.laneOf.get(s.id) ?? 0, critical: model.criticalIds.has(s.id),
   }));
-  const labelOf = (p: string) => {
-    const info = model.byPod.get(p);
-    return info ? `…${podSuffix(info)}` : shortPod(p);
-  };
   const marks: TimelineMark[] = model.errorMarks.map(m => ({
     spanId: m.spanId, x: frac(m.timeNs), own: m.pod === pod.pod,
-    title: `${m.service}${m.pod ? ` ${labelOf(m.pod)}` : ''} · ${m.name} · ${m.status} · +${((m.timeNs - t0) / 1e9).toFixed(3).replace('.', ',')} sn`,
+    title: `${m.service}${m.pod ? ` ${m.pod}` : ''} · ${m.name} · ${m.status} · +${((m.timeNs - t0) / 1e9).toFixed(3).replace('.', ',')} sn`,
   }));
   const critNs = pod.critNs;
   return {

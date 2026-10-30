@@ -5,7 +5,7 @@ import { decodeRange } from '@/lib/urlState';
 import {
   buildRows, buildTraceMetricsModel, chunkEligible, chunksToEnable, coverageSummary, defaultOpenGroups, defaultTracePod,
   hottestPodState, jvmPodSeries, metricErrorReason, metricLevel, moreRowNotes, okCellText, podAtCap, podMetricState,
-  podNameParts, quoteMetaLen, selectPod, shortPod, spanDepthMap, spanErrorStatus, stateCellText, togglePod,
+  podNameParts, quoteMetaLen, selectPod, spanDepthMap, spanErrorStatus, stateCellText, togglePod,
   traceMetricsPodHref, traceMetricsWindow, traceMomentValue, tracePodChunks, tracePods,
   type ChunkPhase, type ChunkSnapshot, type TraceMetricsRow, type TraceMetricsRowView,
 } from './traceMetrics';
@@ -675,18 +675,12 @@ describe('20. v0.10.962 — "Pod sayfasında aç" pencereyi taşır (hata 2) + j
   it('jvm: boş seriler düşer, etiket kısa pod, tam ad fullKey; ölçek; null güvenli', () => {
     const out = jvmPodSeries([s('checkout-api-7c8977f965-7hrqz', [1, 2]), s('checkout-api-7c8977f965-empty', [])]);
     expect(out).toHaveLength(1);
-    expect(out[0].groupKey).toEqual([shortPod('checkout-api-7c8977f965-7hrqz')]);
+    expect(out[0].groupKey).toEqual(['checkout-api-7c8977f965-7hrqz']); // v0.10.1644: tam ad
     expect(out[0].fullKey).toEqual(['checkout-api-7c8977f965-7hrqz']);
     expect(jvmPodSeries([s('p-a-b', [0.012])], 1000)[0].points[0].value).toBeCloseTo(12);
     const pts = [{ time: 0, value: 5 }];
     expect(jvmPodSeries([{ groupKey: ['x-y-z'], points: pts }])[0].points).toBe(pts);
     expect(jvmPodSeries(null)).toEqual([]);
     expect(jvmPodSeries(undefined)).toEqual([]);
-    expect(shortPod('fraud-score-prod-6b7d9f8c5-m3t9w')).toBe('…6b7d9f8c5-m3t9w');
-  });
-  it('v0.10.968 — jvmPodSeries labelOf: etiket çiple aynı, tam ad fullKey\'de kalır', () => {
-    const out = jvmPodSeries([s('checkout-api-7c8977f965-7hrqz', [1])], 1, () => '7hrqz');
-    expect(out[0].groupKey).toEqual(['7hrqz']);
-    expect(out[0].fullKey).toEqual(['checkout-api-7c8977f965-7hrqz']);
   });
 });

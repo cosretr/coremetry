@@ -34,11 +34,10 @@ import { jvmPodSeries } from './traceMetrics';
 // Sıra ve adlar aynen: GC sonrası heap önce, jvm.gc.duration duruyor, dürüst
 // başlıklar ("GC sonrası" / "anlık kullanım"). Heap limit çizgisi YOK (ertelendi).
 //
-// v0.10.968 — iki opsiyonel prop daha (seçili pod paneli için): `labelOf`
-// seri etiketini çip / Bellek / CPU ile AYNI yapar (varsayılan shortPod —
-// "…6b7d9f8c5-m3t9w" yerine "m3t9w"), `seriesColors` o etiketlerin
-// çakışmasız rengini MultiLineChart'a geçirir: bir pod dört grafikte de tek
-// renk. Süzgeç (only) HAM pod adıyla eşleşir; yeniden adlandırma sonra.
+// v0.10.968 — `seriesColors` (seçili pod paneli için) etiketlerin çakışmasız
+// rengini MultiLineChart'a geçirir: bir pod dört grafikte de tek renk.
+// v0.10.1644: seri etiketi tam pod adı (labelOf kalktı); süzgeç (only) de
+// aynı ham adla eşleşir.
 //
 // v0.10.1096 — `chartHeight`: satır altı ayrıntıda heap ve GC, Bellek/CPU ile
 // AYNI yatay ızgarada ve aynı yükseklikte çizilir (varsayılan 180 / 160).
@@ -47,7 +46,7 @@ const HEAP: FilterExpr = { k: 'jvm.memory.type', op: '=', v: ['heap'] };
 const POD_KEY = 'resource.k8s.pod.name';
 
 export function TraceJvmPanel({
-  service, pods, from, to, syncKey, deploys, xRange, runtime, queryPods, maxDataPoints, labelOf, seriesColors, chartHeight,
+  service, pods, from, to, syncKey, deploys, xRange, runtime, queryPods, maxDataPoints, seriesColors, chartHeight,
 }: {
   service: string;
   pods: string[];
@@ -59,7 +58,6 @@ export function TraceJvmPanel({
   runtime?: string;
   queryPods?: string[];
   maxDataPoints?: number;
-  labelOf?: (pod: string) => string;
   seriesColors?: ReadonlyMap<string, string>;
   chartHeight?: number;
 }) {
@@ -95,10 +93,10 @@ export function TraceJvmPanel({
   const only = (s: SpanMetricSeries[] | null | undefined) => (s ?? []).filter(x => shown.has(x.groupKey[0] ?? ''));
   if (!isJvm) return null;
 
-  const postGc = jvmPodSeries(only(postGcQ.data), 1, labelOf);
-  const heap = postGc.length > 0 ? postGc : jvmPodSeries(only(usedQ.data), 1, labelOf);
+  const postGc = jvmPodSeries(only(postGcQ.data), 1);
+  const heap = postGc.length > 0 ? postGc : jvmPodSeries(only(usedQ.data), 1);
   const heapTitle = postGc.length > 0 ? 'JVM heap, GC sonrası (bytes)' : 'JVM heap, anlık kullanım (bytes)';
-  const gc = jvmPodSeries(only(gcQ.data), 1000, labelOf);
+  const gc = jvmPodSeries(only(gcQ.data), 1000);
   const pending = postGcQ.isLoading || usedQ.isLoading || gcQ.isLoading;
   if (pending) return <Skeleton height={chartHeight ?? 120} />;
   if (heap.length === 0 && gc.length === 0 && (postGcQ.isError || usedQ.isError || gcQ.isError)) {

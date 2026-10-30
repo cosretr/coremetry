@@ -292,7 +292,7 @@ describe('TracePodPanel — v0.10.968', () => {
     const charts = [...el.querySelectorAll('[data-cpm]')];
     expect(charts.map(c => c.getAttribute('data-cpm'))).toEqual(['bytes', 'cores']);
     expect(charts.every(c => c.getAttribute('data-zero') === 'true')).toBe(true);
-    expect(charts[0].getAttribute('data-items')).toBe('m3t9w:data|h8k2v:data|p5r8d:muted|w9z2c:muted|k7n4b:muted');
+    expect(charts[0].getAttribute('data-items')).toBe(['m3t9w:data', 'h8k2v:data', 'p5r8d:muted', 'w9z2c:muted', 'k7n4b:muted'].map(x => `${SVC}-6b7d9f8c5-${x}`).join('|'));
     expect(charts[1].getAttribute('data-thr')).toBe('1');
     expect(charts[0].getAttribute('data-region')).toBe(`${T0 / 1e9}-${T0 / 1e9 + 15}`);
     // v0.10.1096 — görünen başlık tek satır değer + limit; grafik adı erişilebilir adda kalır.
@@ -399,8 +399,8 @@ describe('TracePodPanel — v0.10.968', () => {
     expect(menu.getAttribute('aria-label')).toBe(`${SVC} için diğer pod'lar`);
     const rows = [...menu.querySelectorAll<HTMLButtonElement>('[role="menuitemcheckbox"]')];
     expect(rows.map(r => [r.textContent, r.getAttribute('aria-checked'), r.getAttribute('aria-disabled')])).toEqual([
-      ['g7xyz · 5', 'false', null],
-      ['h8xyz · 5 · metrik yok', 'false', 'true'],
+      [`${many[6].pod} · 5`, 'false', null],
+      [`${many[7].pod} · 5 · metrik yok`, 'false', 'true'],
     ]);
     expect(rows[1].title).toBe(`${many[7].pod} · metrik yok (dc-east-2 eşlenmemiş)`);
     act(() => { rows[1].click(); });
@@ -459,7 +459,7 @@ describe('TracePodFocus — v0.10.968', () => {
     expect(p.onSelect).toHaveBeenLastCalledWith(OTHER.pod);
     act(() => { byText(el, `Tüm ${M.pods.length} pod'u tabloda göster`)!.click(); });
     expect(p.onToggleFocus).toHaveBeenCalledTimes(1);
-    expect(el.querySelector('nav[aria-label="Konum"]')!.textContent).toBe(`${SVC}›m3t9w`);
+    expect(el.querySelector('nav[aria-label="Konum"]')!.textContent).toBe(`${SVC}›${PODS[0].pod}`);
     expect(el.textContent).toContain('ReplicaSet fraud-score-prod-6b7d9f8c5');
     expect(el.textContent).toContain("Metrik grafiklerinde bu 3,42 sn tek bir 15 sn'lik adıma düşer.");
     expect(el.querySelector('[role="img"][aria-label^="Bu pod\'un span\'ları"]')).not.toBeNull();
@@ -524,15 +524,15 @@ describe('TracePodPanel — v0.10.968 inceleme turu', () => {
     const el = await mount(<TracePodPanel {...props({ model: mm, selected: a, compare: [a.pod, b.pod] })} />);
     const mem = el.querySelector('[data-cpm="bytes"]')!;
     const pairs = Object.fromEntries(mem.getAttribute('data-colors')!.split('|').map(x => x.split('=')));
-    expect(pairs.p5r8d).toBeTruthy();
-    expect(pairs.p5r8d).not.toBe(pairs.b2q6f);
+    expect(pairs[a.pod]).toBeTruthy();
+    expect(pairs[a.pod]).not.toBe(pairs[b.pod]);
     const sw = (label: string) => [...el.querySelectorAll<HTMLButtonElement>('button.btn-chip')]
       .find(c => c.textContent?.includes(label))!.querySelector<HTMLElement>('.tpp-swatch')!.style.background;
-    expect(sw('p5r8d')).toBe(norm(pairs.p5r8d));
-    expect(sw('b2q6f')).toBe(norm(pairs.b2q6f));
+    expect(sw(a.pod)).toBe(norm(pairs[a.pod]));
+    expect(sw(b.pod)).toBe(norm(pairs[b.pod]));
     // Lejant swatch'ı da aynı.
     const leg = [...mem.parentElement!.querySelectorAll<HTMLElement>('.tpp-legend .tpp-swatch')].map(x => x.style.background);
-    expect(leg).toEqual([norm(pairs.p5r8d), norm(pairs.b2q6f)]);
+    expect(leg).toEqual([norm(pairs[a.pod]), norm(pairs[b.pod])]);
   });
 
   it('MF-2: JVM serileri çiple AYNI etiket ve renk (tek pod = dört grafikte tek renk)', async () => {
@@ -543,10 +543,10 @@ describe('TracePodPanel — v0.10.968 inceleme turu', () => {
     await wait();
     expect(m.mlc.length).toBeGreaterThan(0);
     const last = m.mlc[m.mlc.length - 1];
-    expect(last.names).toEqual(['m3t9w', 'h8k2v']);
+    expect(last.names).toEqual(cmp); // v0.10.1644: tam pod adı
     const mem = el.querySelector('[data-cpm="bytes"]')!;
     const pairs = Object.fromEntries(mem.getAttribute('data-colors')!.split('|').map(x => x.split('=')));
-    expect(last.colors).toEqual([pairs.m3t9w, pairs.h8k2v]);
+    expect(last.colors).toEqual([pairs[cmp[0]], pairs[cmp[1]]]);
   });
 
   it('F4 ui: "+N" menüsünde işaretlenen satır menüde kalır ve odağı tutar; taşma boşalınca menü kendiliğinden AÇILMAZ', async () => {
@@ -668,7 +668,7 @@ describe('TracePodPanel — v0.10.976 kompakt satır altı ayrıntı', () => {
     // Limit çizgisi, etkin aralık (trace) bandı, kardeş çizgileri (muted) — hepsi grafikte.
     expect(charts[1].getAttribute('data-thr')).toBe('1');
     expect(charts[0].getAttribute('data-region')).toBe(`${T0 / 1e9}-${T0 / 1e9 + 15}`);
-    expect(charts[0].getAttribute('data-items')).toBe('m3t9w:data|h8k2v:data|p5r8d:muted|w9z2c:muted|k7n4b:muted');
+    expect(charts[0].getAttribute('data-items')).toBe(['m3t9w:data', 'h8k2v:data', 'p5r8d:muted', 'w9z2c:muted', 'k7n4b:muted'].map(x => `${SVC}-6b7d9f8c5-${x}`).join('|'));
     // Karşılaştır: blok değil, ızgaranın başlık çubuğunda küçük denetim (çipler + "Kardeş çizgileri").
     const bar = el.querySelector('.tpp-chart-bar')!;
     const cmp = bar.querySelector('section.tpp-cmp[aria-label="Karşılaştır"]')!;
