@@ -81,7 +81,7 @@ describe('oracleOperationQuery', () => {
 
 describe('CommandPalette kablosu', () => {
   it('Oracle isabetleri endpoint\'lerin ardından sıralanır ve kendi rozetini alır', () => {
-    const src = readFileSync(resolve(__dirname, '../components/CommandPalette.tsx'), 'utf8');
+    const src = readFileSync(resolve(__dirname, '../components/coremetry/CommandPalette/CommandPaletteBody.tsx'), 'utf8');
     expect(src).toContain('api.oracleOperations(q, 6)');
     expect(src).toContain('[...endpoints, ...oracleOps]');
     expect(src).toContain("r.kind === 'operation' ? 'operasyon'");

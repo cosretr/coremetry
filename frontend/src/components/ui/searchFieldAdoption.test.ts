@@ -125,7 +125,7 @@ describe('M8 — dönüştürülen yüzeyler', () => {
   });
 
   it('L3 — palette placeholder’ı dar modalda kesilmiyor', () => {
-    const m = /placeholder="([^"]*)"/.exec(read('components/CommandPalette.tsx'));
+    const m = /placeholder="([^"]*)"/.exec(read('components/coremetry/CommandPalette/CommandPaletteBody.tsx'));
     expect(m).toBeTruthy();
     expect(m![1].length).toBeLessThanOrEqual(40);
   });

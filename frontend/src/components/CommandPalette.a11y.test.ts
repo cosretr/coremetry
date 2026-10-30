@@ -5,7 +5,7 @@ import { resolve } from 'node:path';
 // v0.10.458 (dış skill denetimi D4) — komut paleti diyalog: role/aria-modal,
 // odak tuzağı, combobox → listbox/option + activedescendant; ham renk yok.
 describe('CommandPalette a11y (D4)', () => {
-  const src = readFileSync(resolve(__dirname, 'CommandPalette.tsx'), 'utf8');
+  const src = readFileSync(resolve(__dirname, 'coremetry/CommandPalette/CommandPaletteBody.tsx'), 'utf8');
   it('is a modal dialog with the shared focus trap and modal tokens', () => {
     expect(src).toContain('role="dialog" aria-modal="true" aria-label="Komut paleti"');
     expect(src).toContain('useFocusTrap(dialogRef, open)');

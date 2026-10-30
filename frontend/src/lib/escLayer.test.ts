@@ -116,7 +116,7 @@ describe('göç bütünlüğü (v0.9.950)', () => {
     'components/ui/Drawer.tsx',
     'components/ui/Modal.tsx',
     'components/ui/FacetMultiSelect.tsx',
-    'components/CommandPalette.tsx',
+    'components/coremetry/CommandPalette/CommandPaletteBody.tsx',
     'components/HeatmapCellExemplars.tsx',
     'components/SpanDetail.tsx',
     'components/MetricPanel.tsx',

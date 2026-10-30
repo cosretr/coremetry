@@ -264,7 +264,7 @@ const CONVERTED = [
   // v0.9.968 — PENCERESİZ bırakılan tek site + panel host linki.
   // CommandPalette bilerek range yazmıyor: pencere katmanı navHref'te
   // (v0.9.932), ve o katman göreli preset'i BİLEREK taşımıyor.
-  'components/CommandPalette.tsx',
+  'components/coremetry/CommandPalette/CommandPaletteBody.tsx',
   'features/dependencies/panels/shared.tsx',
 ];
 

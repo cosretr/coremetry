@@ -174,7 +174,7 @@ const CONVERTED = [
   'components/HeatmapCellExemplars.tsx',
   'components/RootCausePanel.tsx',
   'components/RootCauseRibbon.tsx',
-  'components/CommandPalette.tsx',
+  'components/coremetry/CommandPalette/CommandPaletteBody.tsx',
   'components/LogTable.tsx',
   'components/ai/ChatBubble.tsx',
   'features/anomalies/AnomaliesPage.tsx',

@@ -24,7 +24,7 @@ const routes = [...new Set(
 )].sort();
 
 const paletteTargets = new Set(
-  Array.from(read('components/CommandPalette.tsx').matchAll(/to: '([^']+)'/g), m => m[1]),
+  Array.from(read('components/coremetry/CommandPalette/CommandPaletteBody.tsx').matchAll(/to: '([^']+)'/g), m => m[1]),
 );
 
 // Sidebar girdileri `href:` alanında tanımlı (nav modeli), `to=` değil.

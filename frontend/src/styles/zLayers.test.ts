@@ -212,7 +212,7 @@ describe('MK2 — yüzey ikili sıraları (kaynak-seviyesi matris)', () => {
       .toBeGreaterThan(z(rungOf(b[0], b[1])));
 
   it('Command palette (modal) çekmece panelinin ÜSTÜNDE', () => {
-    expect(z(rungOf('components/CommandPalette.tsx', 'alignItems: \'flex-start\'')))
+    expect(z(rungOf('components/coremetry/CommandPalette/CommandPaletteBody.tsx', 'alignItems: \'flex-start\'')))
       .toBeGreaterThan(z(drawerPanelRung()));
   });
 

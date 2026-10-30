@@ -9,11 +9,6 @@
       "count": 1
     }
   },
-  "src/components/CommandPalette.tsx": {
-    "ui/no-raw-element": {
-      "count": 3
-    }
-  },
   "src/components/ContextBar/ContextBar.tsx": {
     "ui/no-raw-element": {
       "count": 2
@@ -107,6 +102,11 @@
   "src/components/ai/ChatComposer.tsx": {
     "ui/no-raw-element": {
       "count": 1
+    }
+  },
+  "src/components/coremetry/CommandPalette/CommandPaletteBody.tsx": {
+    "ui/no-raw-element": {
+      "count": 3
     }
   },
   "src/components/dashboard/PanelEditor.tsx": {

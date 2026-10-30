@@ -86,7 +86,7 @@ describe('üç nav yüzeyi de helperdan geçiyor', () => {
   });
 
   it('⌘K sonuçları', () => {
-    const src = comp('CommandPalette.tsx');
+    const src = comp('coremetry/CommandPalette/CommandPaletteBody.tsx');
     expect(src).toContain('navHref(r.to, locationSearch)');
     expect(/navigate\(r\.to\)/.test(src)).toBe(false);
   });

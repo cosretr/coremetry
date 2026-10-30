@@ -33,7 +33,7 @@ describe('paletteIdentityQuery (v0.10.674)', () => {
 });
 
 describe('BAĞLANMA (CommandPalette.tsx)', () => {
-  const src = readFileSync(resolve(__dirname, '../components/CommandPalette.tsx'), 'utf8');
+  const src = readFileSync(resolve(__dirname, '../components/coremetry/CommandPalette/CommandPaletteBody.tsx'), 'utf8');
   it('kimlik önerisi ham sorgudan türer, küçük harfli q ile değil', () => {
     expect(src).toContain('paletteIdentityQuery(query)');
     const i = src.indexOf('Kimlikle trace ara');

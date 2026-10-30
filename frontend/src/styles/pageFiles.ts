@@ -27,7 +27,8 @@ export const PAGE_FILES: Record<Page, readonly string[]> = {
   Metrics: ['pages/Metrics.tsx', 'components/viz/MetricQueryEditor.tsx', 'components/viz/TimeSeriesPanel.tsx'],
   Shell: [
     'components/AppShell.tsx', 'components/Topbar.tsx', 'components/Sidebar.tsx',
-    'components/CommandPalette.tsx', 'components/TimeRangePicker.tsx',
+    'components/CommandPalette.tsx', 'components/coremetry/CommandPalette/CommandPaletteBody.tsx',
+    'components/TimeRangePicker.tsx',
   ],
 };
 

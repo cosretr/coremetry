@@ -10,7 +10,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { searchSeeAllHref } from '@/lib/searchUrl';
 
-const src = readFileSync(new URL('./CommandPalette.tsx', import.meta.url), 'utf8');
+const src = readFileSync(new URL('./coremetry/CommandPalette/CommandPaletteBody.tsx', import.meta.url), 'utf8');
 
 describe('⌘K — /search girişi ve "tüm sonuçlar" satırı (v0.10.1335)', () => {
   it('PAGES kataloğunda /search var (nav.search)', () => {
