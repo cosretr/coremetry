@@ -14,7 +14,7 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
 import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter, useSearchParams } from 'react-router-dom';
+import { MemoryRouter, useLocation, useSearchParams } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -86,8 +86,11 @@ function Harness() {
   const [sp, set] = useSearchParams();
   setSp = (s: string) => set(new URLSearchParams(s), { replace: true });
   readSp = () => sp.toString();
+  const loc = useLocation();
+  readPath = () => loc.pathname + loc.search;
   return null;
 }
+let readPath: (() => string) | null = null;
 
 async function mount(node: ReactNode, url = '/') {
   host = document.createElement('div');
@@ -273,6 +276,34 @@ describe('CosreChatV2 × v1 paylaşılan karşılama + composer (plan §10)', ()
     const clear = [...sheet()!.querySelectorAll('button')].find(b => b.textContent === 'Temizle')!;
     await act(async () => { clear.click(); });
     expect(sheet()!.querySelector('.cm-greet')).not.toBeNull();
+  });
+
+  // v0.10.1660 (B5) — takip çipi v1 askChip'ten gönderir; `open` yönergesi bir kez SPA ile;
+  // hata turunda "↺ Yeniden dene" aynı soruyu yeniden koşar.
+  it('B5: takip çipi gönderir, metadata.open bir kez gezinir, hata → Yeniden dene', async () => {
+    v2Body = cosreFixture('ui-stream-v1').replace('"exchangeId":"golden-xid"}', '"exchangeId":"golden-xid","open":"/service?name=orders-api"}');
+    await render({ defaultOpen: true }, '/');
+    await typeAndSend('q');
+    await vi.waitFor(() => expect(readPath!()).toBe('/service?name=orders-api'));
+    const fu = await vi.waitFor(() => {
+      const b = [...sheet()!.querySelectorAll('[data-cosre-followups] button')].find(x => x.textContent?.includes('orders-api loglarına bak'));
+      if (!b) throw new Error('takip çipi yok');
+      return b as HTMLButtonElement;
+    });
+    // sunucu her cevaba yeni ULID verir; iki fixture aynı messageId'yi taşır → ikincisini değiştir.
+    v2Body = cosreFixture('ui-stream-v1-error').replace('01M62F9N000000000000000000', '01M62F9N000000000000000001');
+    await act(async () => { fu.click(); });
+    await vi.waitFor(() => expect(calls).toHaveLength(2));
+    expect(JSON.stringify(calls[1].body.messages)).toContain('orders-api loglarına bak');
+    const retry = await vi.waitFor(() => {
+      const b = [...sheet()!.querySelectorAll('button')].find(x => x.textContent?.includes('Yeniden dene'));
+      if (!b) throw new Error('Yeniden dene yok');
+      return b as HTMLButtonElement;
+    });
+    expect(readPath!()).toBe('/service?name=orders-api'); // ikinci cevap open taşımadı
+    await act(async () => { retry.click(); });
+    await vi.waitFor(() => expect(calls).toHaveLength(3));
+    expect(calls[2].body.messages).toEqual(calls[1].body.messages);
   });
 
   it('akarken Durdur → yarım cevap + not', async () => {

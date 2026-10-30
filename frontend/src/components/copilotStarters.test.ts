@@ -13,7 +13,8 @@ import { TEAM_ASKS, teamCardQuestion } from './ai/capabilityHints';
 // geri gelir.
 
 const src = readFileSync(resolve(__dirname, './CopilotChat.tsx'), 'utf8')
-  + readFileSync(resolve(__dirname, './ai/cosreAsk.ts'), 'utf8'); // v0.10.1648 — bağlam/composer/karşılama kancaları ai/cosreAsk.ts'e taşındı (v1/v2 ortak)
+  + readFileSync(resolve(__dirname, './ai/cosreAsk.ts'), 'utf8') // v0.10.1648
+  + readFileSync(resolve(__dirname, './ai/drawerChat.ts'), 'utf8'); // v0.10.1660 — FOLLOWUPS taşındı; v0.10.1648 — bağlam/composer/karşılama kancaları ai/cosreAsk.ts'e taşındı (v1/v2 ortak)
 
 function arrayLiteral(name: string): string[] {
   const i = src.indexOf(`const ${name} = [`);

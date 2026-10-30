@@ -142,3 +142,14 @@ export function drawerFollowups(s: AISubject | null): string[] {
   }
   return ['Bu neden oluyor?', 'Nasıl düzeltirim?', 'Hangi kanıta dayanıyorsun?'];
 }
+
+// Follow-up önerileri — cevaptan sonra sıradaki faydalı drill-down'lar.
+// v0.10.1660 — CopilotChat.tsx'ten taşındı (v1 çekmecesi + v2 MessageList aynı liste).
+export const FOLLOWUPS = [
+  'Açık problemlerin kök nedeni?',
+  'Takımımın servisleri nasıl?',
+  'En yavaş servisler?',
+  // v0.9.652 (operatör: "son deploy etkisine gerek yok") — deploy
+  // sorusu STATİK listeden çıktı. Rotaya bağlı follow-up'larda duruyor:
+  // orada bir CEVABIN devamı, burada ise bağlamsız bir menü maddesiydi.
+];

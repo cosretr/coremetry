@@ -7465,6 +7465,8 @@ export interface CosreMessageMetadata {
   error?: boolean;
   /** Kaldırılmış text parçalarının ÖZGÜN sıraları (resetReducer idempotansı). */
   resetApplied?: number[];
+  /** v0.10.1660 (B5) — sunucunun "bu sayfayı aç" yönergesi (v1 answer.open, D7b); istemci isSafeAppPath kapısından SPA ile gider. */
+  open?: string;
 }
 
 /**

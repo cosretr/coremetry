@@ -216,6 +216,43 @@ describe('MessageList × paylaşılan fixture (gerçek SDK)', () => {
     expect(btns.every(b => (b as HTMLButtonElement).disabled)).toBe(true);
   });
 
+  // v0.10.1660 (B5) — veri blokları / linkler / kaynaklar / takipler v1 çizicileriyle.
+  it('ui-stream-v1 (B5): Aç → tek link (blok + data-links birleşir), Kaynaklar 2, takip çipi onAsk', async () => {
+    const core = createCosreChat({ fetch: sseFetch(cosreFixture('ui-stream-v1')).fetch });
+    await core.chat.sendMessage({ text: 'q' });
+    const asked: string[] = [];
+    host = document.createElement('div'); document.body.appendChild(host); root = createRoot(host);
+    await act(async () => {
+      root!.render(<MemoryRouter><MessageList messages={core.chat.messages} visibleParts={core.visibleParts} status="ready"
+        onAsk={t => asked.push(t)} /></MemoryRouter>);
+    });
+    const el = host;
+    const links = [...el.querySelectorAll('.ai-links a')].map(a => a.getAttribute('href'));
+    expect(links).toEqual(['/service?name=orders-api']);
+    const src = el.querySelector('.cm-sources, [aria-label="Kaynaklar"]') ?? [...el.querySelectorAll('*')].find(n => n.textContent?.startsWith('Kaynaklar'));
+    expect(src?.textContent).toContain('wiki-42'); // v1 SourceList belge adını çizer (etiket = "Kaynak n" sunucuda)
+    expect(src?.textContent).toContain('orders-runbook.md');
+    const fu = [...el.querySelectorAll('[data-cosre-followups] button')];
+    expect(fu.map(b => b.textContent?.trim())).toEqual(['↳ orders-api loglarına bak']); // v1: kural-türevli takip varsa öneriler gizli
+    await act(async () => { (fu[0] as HTMLButtonElement).click(); });
+    expect(asked).toEqual(['orders-api loglarına bak']);
+  });
+
+  it('B5: akarken ve hata turunda takip çipi yok; hatada Yeniden dene onRetry', async () => {
+    const core = createCosreChat({ fetch: sseFetch(cosreFixture('ui-stream-v1-error')).fetch });
+    await core.chat.sendMessage({ text: 'q' });
+    let retried = 0;
+    host = document.createElement('div'); document.body.appendChild(host); root = createRoot(host);
+    await act(async () => {
+      root!.render(<MemoryRouter><MessageList messages={core.chat.messages} visibleParts={core.visibleParts} status="error"
+        error={core.chat.error} onAsk={() => {}} onRetry={() => { retried++; }} /></MemoryRouter>);
+    });
+    expect(host.querySelector('[data-cosre-followups]')).toBeNull();
+    const btn = [...host.querySelectorAll('button')].find(b => b.textContent?.includes('Yeniden dene'))!;
+    await act(async () => { btn.click(); });
+    expect(retried).toBe(1);
+  });
+
   it('gönderildi, ilk parça yok → bekleyiş göstergesi; bilinmeyen parça çökertmez', async () => {
     const core = createCosreChat({ fetch: sseFetch(cosreFixture('ui-stream-v1-reset')).fetch });
     core.chat.messages = [{ id: 'u', role: 'user', parts: [{ type: 'text', text: 'q' }] }];

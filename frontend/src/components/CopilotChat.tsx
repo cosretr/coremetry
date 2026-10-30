@@ -39,7 +39,7 @@ import { AI_DRAWER_WIDTH } from './ai/answerCard'; // v0.10.461
 import { useAiSubject } from './ai/useAiSubject';
 import { AI_CODE_PARAM, AI_SRC_PARAM, formatAiParam } from '@/lib/aiSubject';
 import { activeExplainFrom, explainAskFor, explainAskSubject, explainContextLabel, explainFollowupContext, explainSubject, explainTurnSendOpts } from './ai/explainTurn'; // v0.10.1400; v0.10.1405; v0.10.1407 — AI_KINDS'in tümü
-import { drawerFollowups } from './ai/drawerChat'; // v0.10.1400 — açıklama turunun takip çipleri
+import { drawerFollowups, FOLLOWUPS } from './ai/drawerChat'; // v0.10.1400 — açıklama turunun takip çipleri; v0.10.1660 — statik takip listesi
 import { greetHello, greetHref } from './ai/greeting';
 import type { AiConversationSummary } from '@/lib/types';
 import { traceChatWindow, traceContextToPage, useTraceAiContext, type TraceAiContext } from '@/lib/traceAiContext'; // v0.10.944; v0.10.1400 — açıklama turunun trace bağlamı
@@ -69,15 +69,7 @@ import { ChatDashContext } from './ai/chatDash'; // v0.10.1443
 // slow_traces / log_errors / deploy_impact / service_health). Backend'in
 // yanıtlayamadığı şekle çip koymuyoruz; pod/JVM intent'i gelince çipi de
 // gelir (v0.9.376 adayı).
-// Follow-up önerileri — cevaptan sonra sıradaki faydalı drill-down'lar.
-const FOLLOWUPS = [
-  'Açık problemlerin kök nedeni?',
-  'Takımımın servisleri nasıl?',
-  'En yavaş servisler?',
-  // v0.9.652 (operatör: "son deploy etkisine gerek yok") — deploy
-  // sorusu STATİK listeden çıktı. Rotaya bağlı follow-up'larda duruyor:
-  // orada bir CEVABIN devamı, burada ise bağlamsız bir menü maddesiydi.
-];
+// v0.10.1660 — statik takip listesi (FOLLOWUPS) ai/drawerChat.ts'e taşındı (v1 + v2 ortak).
 
 // v0.9.652 — BOŞ sohbetteki başlangıç çipleri (v0.9.579 "menü değil araç"
 // gerekçesiyle üç çip: takımın servisleri / exception'ları / en hatalı

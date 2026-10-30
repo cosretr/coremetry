@@ -13,6 +13,9 @@
 // (renderMessage motoru, visibleParts ile reset gizleme). Sohbet state'i bu
 // her-zaman-mount bileşende: Sheet kapanınca içerik söker, konuşma kalır.
 //
+// v0.10.1660 (B5) — takip çipleri askChip'e, "↺ Yeniden dene" SDK regenerate'ine,
+// cevabın `open` yönergesi bir kez SPA navigasyonuna bağlı.
+//
 // Açılış yolları (v1 ile aynı, Q1 hariç):
 //   • FAB (kapalıyken bu bileşen çizer; kritik-problem rozeti aynı RQ anahtarı)
 //   • `?chat=<id>` → açılır. Parametre YAZILMAZ/silinmez: bayrak kapatılınca v1
@@ -25,7 +28,8 @@
 //     ai-ask/prefill'i de v1 kendi dinleyicisiyle alır → v2 kapanır, iki panel
 //     üst üste binmez. B7 bu dalı siler.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { isSafeAppPath } from '@/lib/safeAppPath';
 import { useOpenCriticalCount } from '@/lib/queries';
 import { AI_PARAM } from '@/lib/aiSubject';
 import { getRaw } from '@/lib/storage';
@@ -74,7 +78,7 @@ export function CosreChatV2({ defaultOpen = false, yieldToV1 = false }: CosreCha
 
   // v1 ile ORTAK kancalar (ai/cosreAsk): bağlam, composer girdisi, karşılama.
   const ask = useCosreAskContext();
-  const { messages, status, error, sendMessage, stop, setMessages, visibleParts } = useCosreChat();
+  const { messages, status, error, sendMessage, stop, setMessages, regenerate, visibleParts } = useCosreChat();
   const busy = status === 'submitted' || status === 'streaming';
   const codeLocked = useMemo(() => messages.some(hasCodeLock), [messages]);
   // Konuşma kimliği B6'ya dek yok (kalıcılık) → taslak "yeni konuşma" yuvasında.
@@ -124,6 +128,19 @@ export function CosreChatV2({ defaultOpen = false, yieldToV1 = false }: CosreCha
     ask.setCtxExcluded(new Set());
     composer.expectDraft(null);
   };
+
+  // v0.10.1660 (B5) — sunucunun `open` yönergesi (v1 answer.open, D7b): bitmiş
+  // cevapta BİR KEZ, yalnız uygulama-içi güvenli yol, SPA ile (Sheet açık kalır).
+  const navigate = useNavigate();
+  const opened = useRef(new Set<string>());
+  const lastMsg = messages.at(-1);
+  useEffect(() => {
+    if (status !== 'ready' || lastMsg?.role !== 'assistant') return;
+    const to = lastMsg.metadata?.open;
+    if (!to || opened.current.has(lastMsg.id)) return;
+    opened.current.add(lastMsg.id);
+    if (isSafeAppPath(to)) navigate(to);
+  }, [status, lastMsg, navigate]);
 
   useEffect(() => {
     const onAsk = (e: Event) => {
@@ -177,7 +194,8 @@ export function CosreChatV2({ defaultOpen = false, yieldToV1 = false }: CosreCha
                   <CosreWelcome firstName={ask.user?.firstName} env={ask.env} data={welcome} wiki={ask.wikiOn} ctxStarter={ask.ctxStarter}
                     onPrefill={composer.prefill} onAsk={askChip} onAskExplain={askExplain} onSubmit={submit} />
                 ) : (
-                  <MessageList messages={messages} visibleParts={visibleParts} status={status} error={error} />
+                  <MessageList messages={messages} visibleParts={visibleParts} status={status} error={error}
+                    onAsk={askChip} onRetry={() => { pinBottom(); void regenerate(); }} />
                 )}
               </div>
             </div>

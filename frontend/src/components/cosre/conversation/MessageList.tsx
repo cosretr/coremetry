@@ -10,12 +10,20 @@
 //   • v0.10.1659 (B4): exchangeId + cevabın kanıt çipleri (data-evidence-summary);
 //     açılan her araç kanıtının altında İlgili / İlgisiz, eylem satırında Not
 //     (components/ai/EvidenceRelevance → cosre_signals). 👍/👎 yok.
+//   • v0.10.1660 (B5): veri blokları (data-block-* 13 tür → v1 kartları), Aç →
+//     link çipleri (data-links + link blokları), Kaynaklar listesi (source-*),
+//     kod kilidi (codeRead), takip çipleri (v1 FollowupChips, son cevap),
+//     hata satırı + "↺ Yeniden dene" (regenerate), durdurma notu — hepsi v1'in.
 //   • Bilinmeyen parça çizilmez (çökmez).
 // Sunumsal: Chat örneği yok (katalog ve testler statik mesajla da çizer).
 import { useMemo } from 'react';
 import { ChatBubble, ChatBubbleSlotsContext, type ChatBubbleSlots } from '@/components/ai/ChatBubble';
 import { MessageNote, RelevanceToggle } from '@/components/ai/EvidenceRelevance';
 import { AiThinking } from '@/components/ai/AiThinking';
+import { FollowupChips } from '@/components/ai/FollowupChips';
+import type { ChatSendOpts } from '@/components/ai/useChatThread';
+import { FOLLOWUPS } from '@/components/ai/drawerChat';
+import { Button } from '@/components/shadcn/button';
 import { chatErrorText } from '@/components/ai/chatErrorText';
 import { messageText } from '@/lib/cosre/cosrePersist';
 import { toChatTurn } from '@/lib/cosre/toChatTurn';
@@ -33,9 +41,13 @@ export interface MessageListProps {
   visibleParts: (m: CosreUIMessage) => Part[];
   status: CosreChatStatus;
   error?: Error;
+  /** v0.10.1660 (B5) — takip çipi tıkı (v1 askChip: metin + çipin kapsamı). Yoksa çip çizilmez. */
+  onAsk?: (text: string, opts?: ChatSendOpts) => void;
+  /** v0.10.1660 (B5) — hatalı son turda "↺ Yeniden dene" (SDK regenerate). */
+  onRetry?: () => void;
 }
 
-export function MessageList({ messages, visibleParts, status, error }: MessageListProps) {
+export function MessageList({ messages, visibleParts, status, error, onAsk, onRetry }: MessageListProps) {
   const busy = status === 'submitted' || status === 'streaming';
   const last = messages.at(-1);
   const errText = status === 'error' && error ? error.message : undefined;
@@ -45,14 +57,15 @@ export function MessageList({ messages, visibleParts, status, error }: MessageLi
         if (m.role === 'user') return <UserMessage key={m.id} m={m} />;
         if (m.role !== 'assistant') return null;
         const isLast = i === messages.length - 1;
-        return <AssistantMessage key={m.id} m={m} visibleParts={visibleParts} live={isLast && busy} error={isLast ? errText : undefined} />;
+        return <AssistantMessage key={m.id} m={m} visibleParts={visibleParts} live={isLast && busy} error={isLast ? errText : undefined}
+          followups={isLast && status === 'ready' ? onAsk : undefined} onRetry={isLast && errText ? onRetry : undefined} />;
       })}
       {/* İlk parça gelmeden (yalnız soru gitti): v1 bekleyiş göstergesi. */}
       {busy && last?.role !== 'assistant' && (
         <div className="cm-msg cm-msg--ai" data-cosre-thinking=""><AiThinking /></div>
       )}
       {/* Asistan mesajı oluşmadan gelen hata: balon yok, v1 dilinde satır. */}
-      {errText && last?.role !== 'assistant' && <ErrorLine message={errText} />}
+      {errText && last?.role !== 'assistant' && <ErrorLine message={errText} onRetry={onRetry} />}
     </>
   );
 }
@@ -62,8 +75,11 @@ function UserMessage({ m }: { m: CosreUIMessage }) {
   return <ChatBubble turn={turn} />;
 }
 
-function AssistantMessage({ m, visibleParts, live, error }: {
+function AssistantMessage({ m, visibleParts, live, error, followups, onRetry }: {
   m: CosreUIMessage; visibleParts: (m: CosreUIMessage) => Part[]; live: boolean; error?: string;
+  /** Son, bitmiş cevap: takip çiplerinin sahibi (v1 showFollowups). */
+  followups?: (text: string, opts?: ChatSendOpts) => void;
+  onRetry?: () => void;
 }) {
   // SDK akışta son mesajı her parçada yeni nesneyle değiştirir; bitmiş
   // mesajlar kimliğini korur → ChatBubble (memo) yalnız akan balonu çizer.
@@ -73,21 +89,32 @@ function AssistantMessage({ m, visibleParts, live, error }: {
     stepExtra: d => <RelevanceToggle exchangeId={xid} stepId={`s${d.i}`} />,
     actionsExtra: <MessageNote exchangeId={xid} />,
   }), [xid]);
+  // v1 showFollowups: bitmiş, hatasız, metinli son cevap.
+  const showFu = !!followups && !turn.error && !!turn.text;
   if (live && !turn.text && !turn.steps?.length) {
     return <div className="cm-msg cm-msg--ai" data-cosre-thinking=""><AiThinking /></div>;
   }
   return (
     <div data-cosre-message={m.id} className="contents">
       <ChatBubbleSlotsContext.Provider value={slots}>
-        <ChatBubble turn={turn} />
+        <ChatBubble turn={turn} onRetry={onRetry} shownFollowups={showFu ? turn.followups : undefined} />
       </ChatBubbleSlotsContext.Provider>
+      {showFu && (
+        <div className="cm-followups" data-cosre-followups="">
+          <FollowupChips followups={turn.followups} suggestions={turn.suggestions} fallback={FOLLOWUPS}
+            exchangeId={turn.exchangeId} onAsk={followups} />
+        </div>
+      )}
     </div>
   );
 }
 
-function ErrorLine({ message }: { message: string }) {
+function ErrorLine({ message, onRetry }: { message: string; onRetry?: () => void }) {
   const ev = chatErrorText(message);
   return (
-    <div className="cm-msg-note text-destructive" role="alert" title={ev.raw ?? undefined}>⚠ {ev.text}</div>
+    <>
+      <div className="cm-msg-note text-destructive" role="alert" title={ev.raw ?? undefined}>⚠ {ev.text}</div>
+      {onRetry && <Button variant="secondary" size="sm" onClick={onRetry}>↺ Yeniden dene</Button>}
+    </>
   );
 }

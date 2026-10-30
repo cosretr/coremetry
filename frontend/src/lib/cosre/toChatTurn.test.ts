@@ -5,7 +5,7 @@
 import { describe, it, expect } from 'vitest';
 import { cosreFixture, sseFetch } from '@/test/cosreSse';
 import { createCosreChat } from './useCosreChat';
-import { evidenceOf, parseBudget, stepIndex, toChatTurn } from './toChatTurn';
+import { evidenceOf, parseBudget, splitSourceId, stepIndex, toChatTurn } from './toChatTurn';
 
 async function lastTurn(name: string) {
   const core = createCosreChat({ fetch: sseFetch(cosreFixture(name)).fetch });
@@ -80,5 +80,41 @@ describe('toChatTurn (B3: adımlar + bütçe)', () => {
     const full = { tool: 'query_metrics', source: 'Thanos', query: 'up', queryKind: 'promql', window: { fromMs: 1, toMs: 2 }, durationMs: 3 };
     expect(evidenceOf([{ type: 'data-evidence-summary', id: 'evidence', data: { evidence: [full, { tool: 'x' }, null] } }])).toEqual({ evidence: [full] });
     expect(evidenceOf([{ type: 'data-evidence-summary', id: 'evidence', data: {} }])).toEqual({});
+  });
+
+  // v0.10.1660 (B5) — cevabın kanal parçaları v1 ChatTurn alanlarına.
+  it('B5 ui-stream-v1: bloklar seq sıralı, link, takip (dize → nesne), öneri, kaynaklar, kod kilidi', async () => {
+    const t = await lastTurn('ui-stream-v1');
+    expect(t.blocks?.map(b => [b.id, b.type, b.seq, b.final])).toEqual([['b1', 'link', 1, true], ['b2', 'chart', 2, true]]);
+    expect(t.blocks?.[0].payload).toEqual({ href: '/service?name=orders-api', label: 'orders-api · Overview' });
+    expect(t.links).toEqual([{ label: 'orders-api · Overview', href: '/service?name=orders-api' }]);
+    expect(t.followups).toEqual([{ text: 'orders-api loglarına bak', kind: '' }]);
+    expect(t.suggestions).toEqual(["Son deploy'u karşılaştır"]);
+    expect(t.sources).toEqual([
+      { doc: 'orders-runbook.md', chunk: 3, score: 0, label: 'Orders runbook', kind: 'upload' },
+      { doc: 'wiki-42', chunk: 0, ref: 'https://wiki.example.test/orders', score: 0, label: 'Orders wiki' },
+    ]);
+    expect(t.codeRead).toBe(true);
+  });
+
+  it('B5: bilinmeyen blok türü ve bozuk link/takip düşer; nesne takip alanlarını korur', () => {
+    const t = toChatTurn({ id: 'a', role: 'assistant', parts: [] }, [
+      { type: 'data-block-nope', id: 'x', data: { seq: 1, payload: {} } },
+      { type: 'data-block-table', id: 'b9', data: { seq: 9, payload: { rows: [] } } },
+      { type: 'data-links', id: 'links', data: { links: [{ label: 'a' }, { label: 'b', href: '/b' }] } },
+      { type: 'data-followups', id: 'followups', data: { followups: ['', { text: 'x', kind: 'slow', label: 'X' }, { kind: 'bad' }], suggestions: ['', 3, 's'] } },
+      { type: 'data-code-lock', id: 'code-lock', data: { locked: false } },
+    ]);
+    expect(t.blocks).toEqual([{ id: 'b9', type: 'table', seq: 9, final: true, payload: { rows: [] } }]);
+    expect(t.links).toEqual([{ label: 'b', href: '/b' }]);
+    expect(t.followups).toEqual([{ text: 'x', kind: 'slow', label: 'X' }]);
+    expect(t.suggestions).toEqual(['s']);
+    expect(t.codeRead).toBeUndefined();
+  });
+
+  it.each([
+    ['doc#3', 'doc', 3], ['a#b#2', 'a#b', 2], ['doc', 'doc', 0], ['doc#x', 'doc', 0], ['doc#-1', 'doc', 0],
+  ])('splitSourceId(%j) = {%j, %j}', (id, doc, chunk) => {
+    expect(splitSourceId(id)).toEqual({ doc, chunk });
   });
 });

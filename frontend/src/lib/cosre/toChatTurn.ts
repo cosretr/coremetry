@@ -1,5 +1,6 @@
 // toChatTurn — v0.10.1656 (CoSRE v2 Faz 2b B3, plan §3 / §10); B4 (v0.10.1659):
-// exchangeId / turnId + data-evidence-summary → evidence. v2 asistan
+// exchangeId / turnId + data-evidence-summary → evidence; B5 (v0.10.1660):
+// data-block-* / data-links / data-followups / source-* / data-code-lock. v2 asistan
 // mesajını (AI SDK UIMessage parçaları) v1'in ChatTurn şekline çevirir; v2
 // cevabı v1 ChatBubble'ıyla çizilir — operatör aynı balonu görür.
 //
@@ -12,7 +13,8 @@
 //                      v1 step-result alanlarıyla aynı adlarla
 //   • budget         : data-budget (tek parça, aynı id yerine geçer)
 // Saf: React yok; testler fixture'ı gerçek SDK'dan geçirip bunu çağırır.
-import type { ChatQueryEvidence, ChatStepDetail, ChatStepSourceState, ChatTurn, CosreStepBudget } from '@/lib/types';
+import type { ChatAnswerLink, ChatFollowup, ChatQueryEvidence, ChatStepDetail, ChatStepSourceState, ChatTurn, ChatTypedBlock, CosreStepBudget, RagSource } from '@/lib/types';
+import { BLOCK_TYPES } from './protocol';
 import type { CosreUIMessage } from './resetReducer';
 
 type Part = CosreUIMessage['parts'][number];
@@ -29,6 +31,7 @@ const rec = (v: unknown): Rec => (typeof v === 'object' && v !== null && !Array.
 const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined);
 const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
 const bool = (v: unknown): boolean | undefined => (typeof v === 'boolean' ? v : undefined);
+const asArr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 
 /** "s12" → 12; biçim dışı → undefined (detay açılmaz, çip düz etiket kalır). */
 export function stepIndex(id: unknown): number | undefined {
@@ -115,6 +118,64 @@ export function evidenceOf(parts: readonly Part[]): Pick<ChatTurn, 'evidence'> {
   return ev.length ? { evidence: ev } : {};
 }
 
+/** v0.10.1660 (B5) — "doc#chunk" → {doc, chunk}; chunk sayı değilse 0. */
+export function splitSourceId(id: string): { doc: string; chunk: number } {
+  const at = id.lastIndexOf('#');
+  if (at < 0) return { doc: id, chunk: 0 };
+  const n = Number(id.slice(at + 1));
+  return { doc: id.slice(0, at), chunk: Number.isInteger(n) && n >= 0 ? n : 0 };
+}
+
+const BLOCK_PREFIX = 'data-block-';
+
+/** v0.10.1660 (B5) — cevabın kanal parçaları: bloklar, linkler, takipler, kaynaklar, kod kilidi. */
+export function channelsOf(parts: readonly Part[]): Pick<ChatTurn, 'blocks' | 'links' | 'followups' | 'suggestions' | 'sources' | 'codeRead'> {
+  const blocks: ChatTypedBlock[] = [];
+  const links: ChatAnswerLink[] = [];
+  const sources: RagSource[] = [];
+  let followups: ChatFollowup[] = [];
+  let suggestions: string[] = [];
+  let codeRead = false;
+  for (const p of parts) {
+    if (p.type.startsWith(BLOCK_PREFIX)) {
+      const type = p.type.slice(BLOCK_PREFIX.length);
+      if (!(BLOCK_TYPES as readonly string[]).includes(type)) continue;
+      const d = rec((p as { data?: unknown }).data);
+      const id = str((p as { id?: unknown }).id) ?? `${type}-${blocks.length}`;
+      blocks.push({ id, type: type as ChatTypedBlock['type'], seq: num(d.seq) ?? blocks.length, final: bool(d.final) ?? true, payload: d.payload });
+    } else if (p.type === 'data-links') {
+      for (const l of asArr(rec(p.data).links)) {
+        const r = rec(l);
+        const label = str(r.label), href = str(r.href);
+        if (label && href) links.push({ label, href });
+      }
+    } else if (p.type === 'data-followups') {
+      const d = rec(p.data);
+      followups = asArr(d.followups).flatMap(f => {
+        if (typeof f === 'string') return f ? [{ text: f, kind: '' }] : [];
+        const r = rec(f);
+        return typeof r.text === 'string' && r.text ? [{ ...r, text: r.text, kind: str(r.kind) ?? '' } as ChatFollowup] : [];
+      });
+      suggestions = asArr(d.suggestions).filter((s): s is string => typeof s === 'string' && s !== '');
+    } else if (p.type === 'source-url') {
+      sources.push({ ...splitSourceId(p.sourceId), ref: p.url, score: 0, ...(p.title ? { label: p.title } : {}) });
+    } else if (p.type === 'source-document') {
+      sources.push({ ...splitSourceId(p.sourceId), score: 0, ...(p.title ? { label: p.title } : {}), kind: 'upload' });
+    } else if (p.type === 'data-code-lock') {
+      if (rec(p.data).locked === true) codeRead = true;
+    }
+  }
+  blocks.sort((a, b) => a.seq - b.seq);
+  return {
+    ...(blocks.length ? { blocks } : {}),
+    ...(links.length ? { links } : {}),
+    ...(followups.length ? { followups } : {}),
+    ...(suggestions.length ? { suggestions } : {}),
+    ...(sources.length ? { sources } : {}),
+    ...(codeRead ? { codeRead: true } : {}),
+  };
+}
+
 /** Görünür parçalar (visibleParts) → v1 asistan turu. */
 export function toChatTurn(m: CosreUIMessage, parts: readonly Part[], opts: ToChatTurnOpts = {}): ChatTurn {
   const text = parts.flatMap(p => (p.type === 'text' && p.text !== '' ? [p.text] : [])).join('\n\n');
@@ -131,5 +192,6 @@ export function toChatTurn(m: CosreUIMessage, parts: readonly Part[], opts: ToCh
     ...(meta?.exchangeId ? { exchangeId: meta.exchangeId } : {}),
     ...(meta?.turnId ? { turnId: meta.turnId } : {}),
     ...evidenceOf(parts),
+    ...channelsOf(parts),
   };
 }
