@@ -1,0 +1,34 @@
+# design-axe-nightly — v0.10.1619 (shadcn Faz 1 R10, plan §8.2; §12 Q7).
+# /design kataloğunun TAM axe matrisi: 3 tema × 3 yoğunluk = 9 hücre.
+# CI (ci.yml `npx vitest run`) yalnız 3 hücreyi koşar (tema başına bir,
+# varsayılan yoğunluk); yoğunluk hücreleri burada, gece ve el ile.
+# Yerelde: `cd frontend && npm run design:axe:full`.
+name: Design axe nightly
+
+on:
+  schedule:
+    - cron: '41 2 * * *' # her gece 02:41 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: design-axe-nightly
+  cancel-in-progress: true
+
+jobs:
+  axe-full:
+    name: /design axe (9 cells)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install
+        working-directory: frontend
+        run: npm ci
+      - name: axe full matrix
+        working-directory: frontend
+        run: npm run design:axe:full

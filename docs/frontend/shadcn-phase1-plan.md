@@ -363,6 +363,8 @@ Rejected: `next-themes` (registry sonner dep — not needed, §1.4), `jest-axe` 
 | **PageShell / PageControls** (R8) | unchanged: `PageShell { children; variant?: 'default' \| 'full' }` (`ui/PageShell.tsx:40`); `PageControlsProps { children; sticky?; className?; style?; actions? } & div attrs` (`ui/PageControls.tsx:30-62`) | `git mv`, zero code change; `--controls-h` publication, ≤640px "Filters (N)" collapse, Esc layer all as today | decision k: layout, not atoms |
 | **Toaster** (R10) | none exported; `lib/toast.ts` API unchanged (`toast.success/error/info/warning(message, durationMs)`) | `coremetry/Toaster.tsx` = sonner `<Toaster theme position="top-right" />` fed by `subscribeToasts`; mounted lazily by `components/Toaster.tsx` gate (§1.4) | decision h |
 
+**Known limitation — `coremetry/DataTable` (frozen API, R9; recorded R10 v0.10.1619):** `virtual` + `rowActions` together draw **no actions column** — `VirtualTable` has no trailing column, so the ⋯ cell and its `DropdownMenu` are skipped in `virtual` mode (types.ts JSDoc on `rowActions`, `DataTable.tsx` comment). Not a bug to patch in place: the Traces slice decides the virtual body (TanStack or today's `VirtualTable`, audit §11 g) and lifts this limitation there.
+
 Not composites (stay where they are): `Spinner`/`Empty` (`components/Spinner.tsx`, 155 importers — keep API, restyle in place when `shadcn/spinner`/`empty` are added, Q2), `Combobox` + pickers (server search stays; `command`-based list in the first picker slice), `Pager`, `CopyButton`, `QueryError`.
 
 ## 7. Global element-rule scoping, Esc layer, density, `cn()`, icons

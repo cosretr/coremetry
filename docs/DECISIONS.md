@@ -12055,3 +12055,28 @@ Uygulama planı: `docs/frontend/shadcn-phase1-plan.md` (onaylı, §12 operatör 
 bağlayıcı); sürüm kaydı: `docs/frontend/migration-log.md`. Operatör onayı 2026-10-30.
 
 **Neden:** Tek stil sistemi, sohbete özel istisna yok.
+
+## 2026-10-30 — v0.10.1619 — Radix Esc köprüsü plan §7.2'nin YERİNE geçer
+
+**Karar:** `components/coremetry/overlay/escBridge.ts` (R7, v0.10.1615) Radix
+overlay'lerinin Esc entegrasyonunun tek doğru biçimidir; plan
+`docs/frontend/shadcn-phase1-plan.md` §7.2'deki yalnız-`escPending` deseni
+geçersiz. Köprü, Radix 1.8.1 `DismissableLayer`'ın `onDismiss`'ten ÖNCE kendi
+çağırdığı `event.preventDefault()`'u — tam olarak o BİR çağrıyı — tek atımlık
+yutar (kendini kaldırır + microtask'ta geri yükler); Esc'in sahibi
+`lib/escLayer` yığını kalır, `lib/keyboard.ts:238` "öğe Esc'i sahiplendi"
+kontrolü bozulmaz.
+
+**Neden:** §7.2 deseninde Radix'in kendi `preventDefault`'u `keyboard.ts`'e
+"bir öğe Esc'i yuttu" diye okunur ve HİÇBİR katman kapanmaz (R7'de ölçüldü).
+
+**Kırılma riski — her Radix yükseltmesinde:** köprü Radix'in iç davranışına
+(hangi aşamada, kaç kez `preventDefault` çağrıldığı) yaslanır. `radix-ui`
+(ya da herhangi bir `@radix-ui/*`) sürümü değiştiğinde
+`coremetry/overlay/escLayer.contract.test.tsx`'teki dört çivili test —
+çıplak-Radix varsayım testi ("Radix kendi preventDefault'unu çağırır"),
+Dialog + sonradan açılan Drawer (üstteki kapanır), Esc'i sahiplenen iç input
+(Dialog açık kalır), tek Dialog tam BİR kez kapanır — yeniden koşulup
+yeniden doğrulanır; varsayım testi kırmızıysa köprü yeniden tasarlanır,
+yükseltme o sürümde durur. Mutasyon kanıtı (R7): yutmayı ya da escPending
+korumasını kaldırmak 4 testi kırmızıya çevirir.

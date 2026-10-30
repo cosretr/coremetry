@@ -48,8 +48,6 @@ const ALLOW_OK = new Map<string, string>([
   ['button.is-ok',                        'kopyalandı geri bildirimi (CopyButton, ChatBubble, Trace)'],
   ['button.is-ok:hover:not(:disabled)',   'kopyalandı geri bildirimi, hover'],
   ['button.accent.copied',                'ShareButton kopyalandı geri bildirimi'],
-  ['.toast-success',                      'başarı tostu (eylem geri bildirimi)'],
-  ['.toast-success .toast-icon',          'başarı tostu ikonu'],
   ['.pb-tl li.ok::after',                 'ProblemDetail zaman çizelgesi "Resolved" noktası (geçiş)'],
   // v0.10.1137 — sohbet diff bloğunda eklenen satır: sağlık değil DEĞİŞİM (geçiş) — +/- renk kodu.
   ['.cm-cl.is-add',                       'sohbet kod bloğu diff "+" satırı (değişiklik, sağlık değil)'],

@@ -1,3 +1,10 @@
+/* v0.10.1619 (shadcn Faz 1 R10): koyu blok `[data-theme="dark"]` öğesinde
+   de bildirilir — /design kataloğunun koyu hücresi (açık/redhat <html>
+   altında `<div data-theme="dark">`) değerleri yeniden çözsün. <html>'de
+   sonuç aynı: açık/redhat blokları sonra gelir, eşit özgüllükle kazanır.
+   Kök seçici kendi satırında bilerek: token testleri bloğu kök adının
+   hemen ardından gelen süslü parantezle bulur. */
+[data-theme="dark"],
 :root {
   /* ── Dark theme (default) — GitHub Dark Dimmed ───────────────────────────
      v0.9.167: softened from the near-black GitHub-dark (#0d1117 floor) to the
@@ -3496,64 +3503,6 @@ button.cosre-cap__row > .row { align-items: flex-start; min-width: 0; }
 @keyframes slideInRight {
   from { transform: translateX(100%); }
   to   { transform: translateX(0); }
-}
-
-/* Toaster (v0.5.455) — top-right stack of click-dismiss toast
-   chips. Click-through container with click-catching children
-   so the toast surface doesn't block the page underneath when
-   no toasts are present. */
-.toaster {
-  position: fixed;
-  top: 16px;
-  right: 16px;
-  z-index: var(--z-toast);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  pointer-events: none;
-}
-.toast {
-  pointer-events: auto;
-  min-width: 240px;
-  max-width: 420px;
-  padding: 10px 14px;
-  border-radius: var(--radius-xs);
-  font-size: 12px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  animation: toastIn 180ms ease-out;
-  box-shadow: var(--shadow-md);
-  color: var(--text);
-  background: var(--bg2);
-  border: 1px solid var(--border);
-}
-.toast-success {
-  background: color-mix(in srgb, var(--ok) 16%, transparent);
-  border-color: color-mix(in srgb, var(--ok) 55%, transparent);
-}
-.toast-success .toast-icon { color: var(--ok); font-weight: bold; }
-.toast-error {
-  background: color-mix(in srgb, var(--err) 16%, transparent);
-  border-color: color-mix(in srgb, var(--err) 55%, transparent);
-}
-.toast-error .toast-icon { color: var(--err); font-weight: bold; }
-.toast-info {
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
-  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
-}
-.toast-info .toast-icon { color: var(--accent2); font-weight: bold; }
-/* v0.8.303 (quality bar U4) — warning severity, PF AlertGroup parity */
-.toast-warning {
-  background: color-mix(in srgb, var(--warn) 15%, transparent);
-  border-color: color-mix(in srgb, var(--warn) 50%, transparent);
-}
-.toast-warning .toast-icon { color: var(--warn); font-weight: bold; }
-.toast-msg { flex: 1; }
-@keyframes toastIn {
-  from { opacity: 0; transform: translateX(20px); }
-  to   { opacity: 1; transform: translateX(0); }
 }
 
 /* ════════════════════════════════════════════════════════════════════════

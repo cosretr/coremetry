@@ -35,7 +35,7 @@ describe('coremetry/FilterBar', () => {
     const onChange = vi.fn();
     const h = render({ chips: CHIPS, onChange });
     expect([...h.querySelectorAll('li')].map(li => li.textContent)).toEqual(['service.name=checkout', 'db.system exists']);
-    act(() => { (h.querySelector('button[aria-label="Remove filter: service.name=checkout"]') as HTMLButtonElement).click(); });
+    act(() => { (h.querySelector('button[aria-label="Filtreyi kaldır: service.name=checkout"]') as HTMLButtonElement).click(); });
     expect(onChange).toHaveBeenCalledWith([CHIPS[1]]);
   });
   it('sorgu kutusu: shadcn input (data-slot), değer + onChange', () => {

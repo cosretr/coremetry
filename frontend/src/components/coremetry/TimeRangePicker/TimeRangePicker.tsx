@@ -9,6 +9,7 @@ import type { TimeRange } from '@/lib/types';
 import { windowOptions } from './windowOptions';
 import { TimeRangePicker as GlobalTimeRangePicker } from '@/components/TimeRangePicker';
 import { NativeSelect, NativeSelectOption } from '@/components/shadcn/native-select';
+import { CM_STRINGS } from '../strings';
 
 export interface TimeRangePickerProps {
   value: TimeRange;
@@ -25,7 +26,7 @@ export function TimeRangePicker({ value, onChange, variant = 'global', presets, 
   if (variant === 'global') return <GlobalTimeRangePicker value={value} onChange={onChange} />;
   const opts = windowOptions(presets);
   return (
-    <NativeSelect size="sm" aria-label={label ?? 'Window'} value={value.preset}
+    <NativeSelect size="sm" aria-label={label ?? CM_STRINGS.window} value={value.preset}
       onChange={(e) => onChange({ preset: e.target.value })}>
       {opts.map(p => <NativeSelectOption key={p} value={p}>{p}</NativeSelectOption>)}
     </NativeSelect>

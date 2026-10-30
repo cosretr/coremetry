@@ -6,6 +6,7 @@ import {
   ActionRow, Button, ButtonGroup, Card, Chip, DisclosureButton, IconButton, LinkButton,
   SegmentedControl, Tooltip,
 } from '@/components/ui';
+import { ShadcnCatalog } from './design/ShadcnCatalog';
 import './design/design.css';
 
 // Design — v0.10.919 (buton bütünlüğü, Seçenek B; operatör onayı
@@ -264,6 +265,9 @@ export default function DesignPage() {
           <TextButtonSection />
           <TooltipSection />
           <ActionRowSection />
+          {/* v0.10.1619 (R10): shadcn dosyaları + coremetry StatusBadge/Toaster,
+              tema × yoğunluk hücreleri (plan §8.1). */}
+          <ShadcnCatalog />
         </div>
       </PageShell>
     </>

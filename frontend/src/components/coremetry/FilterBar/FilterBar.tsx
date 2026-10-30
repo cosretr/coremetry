@@ -12,6 +12,7 @@ import { Input } from '@/components/shadcn/input';
 import { Badge } from '@/components/shadcn/badge';
 import { Button } from '@/components/shadcn/button';
 import { formatChip, type FilterChip } from '@/lib/filterChips';
+import { CM_STRINGS } from '../strings';
 
 export type { FilterChip, FilterOp } from '@/lib/filterChips';
 
@@ -31,15 +32,15 @@ export interface FilterBarProps {
   removeLabel?: string;
 }
 
-export function FilterBar({ chips, onChange, query, saved, sticky, actions, children, removeLabel = 'Remove filter' }: FilterBarProps) {
+export function FilterBar({ chips, onChange, query, saved, sticky, actions, children, removeLabel = CM_STRINGS.removeFilter }: FilterBarProps) {
   return (
     <PageControls sticky={sticky} actions={actions}>
       {query && (
         <Input className="h-8 w-64 bg-field" value={query.value} placeholder={query.placeholder}
-          aria-label={query.placeholder ?? 'Filter'} onChange={(e) => query.onChange(e.target.value)} />
+          aria-label={query.placeholder ?? CM_STRINGS.filter} onChange={(e) => query.onChange(e.target.value)} />
       )}
       {chips.length > 0 && (
-        <ul className="m-0 flex list-none flex-wrap items-center gap-1 p-0" aria-label="Filters">
+        <ul className="m-0 flex list-none flex-wrap items-center gap-1 p-0" aria-label={CM_STRINGS.filters}>
           {chips.map((c, i) => {
             const text = formatChip(c);
             return (

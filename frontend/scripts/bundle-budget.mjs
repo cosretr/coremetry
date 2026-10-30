@@ -35,6 +35,14 @@ const FORBIDDEN_SOURCES = [
   /node_modules\/(ai|@ai-sdk)\//,
 ];
 
+// İlk yükte AÇIKÇA İZİNLİ kaynaklar (v0.10.1619, R10; operatör 2026-10-30):
+// shadcn'in sınıf yardımcıları küçük ve her shadcn tüketicisinde ortak —
+// ayrı chunk grubu YOK, kullanıldıklarında eager vendor'da kalırlar. Liste
+// çivili (bundleBudget.pin); burada olmayan, yasak listede de olmayan bir
+// paket bugünkü gibi serbest (catch-all vendor), bu satır yalnız bu üçünün
+// ilk yükte bulunduğunu RAPORLAR.
+const ALLOWED_IN_ENTRY = [/node_modules\/(class-variance-authority|clsx|tailwind-merge)\//];
+
 // Eski sınıf adıyla AYNI adı taşıyan Tailwind yardımcıları (R5). utilities
 // katmanı legacy'nin üstünde → böyle bir yardımcı GEÇİRİLMEMİŞ sayfadaki
 // eski işaretlemede de kazanır. İzinli olanların değeri globals.css'tekiyle
@@ -79,6 +87,7 @@ const MAX_MAPLESS = 2;
 const mapless = [];
 const rows = [];
 const offenders = [];
+const allowedHits = new Set();
 let initialGz = 0;
 let mainGz = 0;
 for (const href of [...new Set(initial)]) {
@@ -90,7 +99,9 @@ for (const href of [...new Set(initial)]) {
   const base = path.basename(file);
   if (/^index-[^/]*\.js$/.test(base)) mainGz = gz;
   rows.push({ base, gz });
-  const bad = readSources(file).filter((s) => FORBIDDEN_SOURCES.some((re) => re.test(s)));
+  const srcs = readSources(file);
+  for (const s of srcs) for (const re of ALLOWED_IN_ENTRY) { const m = re.exec(s); if (m) allowedHits.add(m[1]); }
+  const bad = srcs.filter((s) => FORBIDDEN_SOURCES.some((re) => re.test(s)));
   if (bad.length) offenders.push({ base, bad });
 }
 
@@ -157,6 +168,7 @@ for (const o of offenders) {
   for (const s of o.bad.slice(0, 5)) out.push(`    ${s}`);
 }
 out.push(`radix → grafana static import: ${radixFile ? (radixToGrafana.length ? radixToGrafana.join(', ') : 'none') : 'n/a (no radix chunk)'}   utility∩legacy class names: ${collisions.length} (${collisions.join(' ') || '—'}; not allowed: ${badCollisions.join(' ') || 'none'})`);
+out.push(`allowed in entry (cva/clsx/tailwind-merge): ${[...allowedHits].sort().join(' ') || 'none present'}`);
 out.push(`no sourcemap (virtual-only chunks, max ${MAX_MAPLESS}): ${mapless.join(', ') || 'none'}`);
 out.push(`| initial ${kb(initialGz)} KB gz | main ${kb(mainGz)} KB gz | budget ${BUDGET_KB} | radix-in-entry ${offenders.length} |`);
 

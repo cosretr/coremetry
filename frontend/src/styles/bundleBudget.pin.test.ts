@@ -62,6 +62,14 @@ describe('bundle bütçe kapısı kablolu', () => {
     expect(read('src/styles/tokens.css')).toMatch(/@theme inline reference \{[\s\S]*--spacing: 4px;[\s\S]*\}/);
   });
 
+  it('ilk yükte izinli liste (R10, operatör): cva/clsx/tailwind-merge çivili, yasakla çakışmıyor', () => {
+    const s = read('scripts/bundle-budget.mjs');
+    expect(s).toContain('const ALLOWED_IN_ENTRY = [/node_modules\\/(class-variance-authority|clsx|tailwind-merge)\\//];');
+    expect(s).toContain('allowed in entry (cva/clsx/tailwind-merge)');
+    const forbidden = /const FORBIDDEN_SOURCES = \[([\s\S]*?)\n\];/.exec(s)![1];
+    for (const pkg of ['class-variance-authority', 'clsx', 'tailwind-merge']) expect(forbidden).not.toContain(pkg);
+  });
+
   it('CI frontend işi Vite build\'den hemen sonra betiği koşar', () => {
     const ci = readFileSync(resolve(FE, '..', '.github/workflows/ci.yml'), 'utf8');
     const build = ci.indexOf('run: npx vite build');

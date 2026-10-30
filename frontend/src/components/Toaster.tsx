@@ -1,52 +1,33 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { subscribeToasts, type ToastEntry } from '@/lib/toast';
 
-// Toaster (v0.5.455) — singleton render surface for toast
-// notifications. Mounted once at AppShell so toast.X() from
-// anywhere in the app lands here without wiring per-page.
-//
-// Positioning: top-right, fixed, z-index above all other
-// overlays (Modal, CommandPalette, TimeRangePicker dialog).
-// Stack grows downward with newest at top.
-//
-// Dismissal: auto after entry.durationMs, OR click-to-dismiss.
-// The auto-timer uses window.setTimeout — if the entry has
-// already been removed (e.g. operator clicked), the second
-// filter pass is a no-op.
+// Toaster — v0.10.1619 (shadcn Faz 1 R10, plan §1.4 A; §12 Q1). Kabuktaki
+// tek toast yüzeyi artık bir KAPI: eager ve küçük, sonner'ı içe aktarmaz
+// (eslint kabuk bloğu `sonner` yasağı; bundle-budget ilk yükte sonner'ı
+// yasaklıyor). İlk toast'ta çiziciyi (coremetry/Toaster, sonner içinde)
+// tembel çeker; o yüklenene kadar gelen girdiler sıraya alınır ve çizici
+// mount olunca aynen yeniden oynatılır — CopilotChatGate (v0.10.1599)
+// deseni. İlk toast bir chunk getirmesi kadar gecikir, sonrakiler anında.
+// lib/toast.ts (toast.success/error/info/warning) değişmedi.
+// Eski el yapımı çizici (v0.5.455) ve `.toast-*` CSS'i bu sürümde silindi.
+
+const CoremetryToaster = lazy(() => import('./coremetry/Toaster'));
 
 export function Toaster() {
-  const [entries, setEntries] = useState<ToastEntry[]>([]);
+  const [mounted, setMounted] = useState(false);
+  const queue = useRef<ToastEntry[]>([]);
+  const live = useRef(false);
 
-  useEffect(() => {
-    return subscribeToasts(t => {
-      setEntries(es => [t, ...es]);
-      window.setTimeout(() => {
-        setEntries(es => es.filter(x => x.id !== t.id));
-      }, t.durationMs);
-    });
-  }, []);
+  useEffect(() => subscribeToasts(t => {
+    if (live.current) return; // çizici kendi aboneliğiyle alır
+    queue.current.push(t);
+    setMounted(true);
+  }), []);
 
-  const dismiss = (id: string) => {
-    setEntries(es => es.filter(x => x.id !== id));
-  };
-
-  if (entries.length === 0) return null;
-
+  if (!mounted) return null;
   return (
-    // aria-live="polite" so screen readers announce the toast
-    // without interrupting the current focus. role="status"
-    // is the right semantic role for non-critical updates.
-    <div className="toaster" role="status" aria-live="polite">
-      {entries.map(e => (
-        <div key={e.id} className={`toast toast-${e.kind}`}
-          onClick={() => dismiss(e.id)}
-          title="Click to dismiss">
-          <span className="toast-icon" aria-hidden>
-            {e.kind === 'success' ? '✓' : e.kind === 'error' ? '✕' : e.kind === 'warning' ? '⚠' : 'ℹ'}
-          </span>
-          <span className="toast-msg">{e.message}</span>
-        </div>
-      ))}
-    </div>
+    <Suspense fallback={null}>
+      <CoremetryToaster queue={queue} live={live} />
+    </Suspense>
   );
 }

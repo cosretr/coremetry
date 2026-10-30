@@ -127,8 +127,14 @@
   --radius-md: var(--radius);
   --radius-lg: var(--radius-lg);
 
+  /* v0.10.1619 (R10, operatör): shadcn'in kullandığı iki ad Coremetry
+     gölgelerine — `shadow-xs` (outline buton, input) → --shadow-sm,
+     `shadow-lg` (dialog, sheet) → --shadow-modal. R8'e kadar bu ikisi CSS
+     üretmiyordu (yalnız sm/md/pop/modal eşliydi). */
+  --shadow-xs: var(--shadow-sm);
   --shadow-sm: var(--shadow-sm);
   --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-modal);
   --shadow-pop: var(--shadow-pop);
   --shadow-modal: var(--shadow-modal);
 

@@ -18,3 +18,26 @@
   .dc-row { grid-template-columns: 1fr; gap: var(--sp-2); }
   .dc-matrix, .dc-matrix.dc-matrix-3 { grid-template-columns: repeat(2, max-content); }
 }
+
+/* v0.10.1619 (shadcn Faz 1 R10) — tema × yoğunluk hücreleri. Hücre kendi
+   data-theme'iyle token'ları yeniden çözer; zemini o temanın --bg0'ı. */
+.dc-cell {
+  background: var(--bg0); color: var(--text);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  padding: var(--sp-4); display: grid; gap: var(--sp-4);
+}
+.dc-cell-h { margin: 0; font-size: var(--fs-md); font-family: var(--font-mono); }
+.dc-entry { display: grid; gap: var(--sp-2); padding-top: var(--sp-3); border-top: 1px solid var(--border); }
+.dc-entry-h { margin: 0; font-size: var(--fs-sm); color: var(--text2); font-weight: 600; }
+.dc-drop {
+  display: grid; place-items: center; width: 240px; height: 72px;
+  border: 1px dashed var(--border-control); border-radius: var(--radius-sm); color: var(--text2);
+}
+.dc-list { margin: 0; padding: var(--sp-2) var(--sp-3); list-style: none; display: grid; gap: var(--sp-1); }
+.dc-sep-h { display: grid; gap: var(--sp-2); width: 160px; }
+.dc-sep-v { height: 24px; }
+/* Tailwind pages/design'ı taramaz (index.css @source listesi) → ölçüler burada. */
+.dc-boxed { border: 1px solid var(--border); border-radius: var(--radius); }
+.dc-scroll { height: 128px; width: 224px; }
+.dc-skel { height: 16px; width: 128px; }
+.dc-skel.dc-skel-lg { width: 192px; }

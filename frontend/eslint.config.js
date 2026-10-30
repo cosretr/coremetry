@@ -134,8 +134,11 @@ export default tseslint.config(
     // (escLayer.ts :4-10 hata #1/#2). shadcn/ (üretilen) ve ai-elements/
     // (karar 8) muaf. Kabuk dosyaları aşağıdaki DAHA SIKI blokla eşleşir
     // (flat config: sonraki blok aynı kuralı ezer).
+    // v0.10.1619 (R10): pages/design/catalog.tsx muaf — YALNIZ geliştirme
+    // kataloğu (App.tsx DEV kapısı, Design.pin) select + command'ı
+    // sarmalayıcıları gelmeden shadcn dosyasından çizer; tek dosya, glob değil.
     files: ['src/**/*.{ts,tsx}'],
-    ignores: ['src/components/coremetry/**', 'src/components/shadcn/**', 'src/components/ai-elements/**'],
+    ignores: ['src/components/coremetry/**', 'src/components/shadcn/**', 'src/components/ai-elements/**', 'src/pages/design/catalog.tsx'],
     rules: {
       'no-restricted-imports': ['error', {
         patterns: [{
