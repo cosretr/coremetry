@@ -117,6 +117,10 @@ type traceFollowUp struct {
 	// başlar; "" = trace'te hata yok. "Neden" takibi bağımlı çağrının HTTP
 	// kodunu ve hedefini görmeden yerel exception'ı kök neden sanmasın.
 	Chain string
+	// Critical — v0.10.1627: ilk cevabın KRİTİK YOL bloğu, AYNI span'lerden
+	// ("\n\n" ile başlar; "" = tek adımlı yol). "Neden yavaş / nerede
+	// bekliyor" takibi en büyük paylı adımı ve hedefini görsün.
+	Critical string
 	// Simple — v0.10.1302: serbest döngü simple araç setinde (küçük model;
 	// serbest-sorgu araçları gizli). Takip talimatı ve pencere satırı gizli
 	// araçların yerine yapısal karşılıklarını anar (copilot.ToolsetText).
@@ -240,7 +244,7 @@ func traceFollowUpPromptTR(tf *traceFollowUp, explain string) string {
 	// v0.10.1147 — span exception özeti (VERİ bloğu, çitli): talimattan sonra,
 	// önceki açıklamadan önce. Sayı denetiminin tohumuna da girer (açıklamasız
 	// çağrı) — mesajdaki değerler temellenir.
-	out += tf.Chain + tf.Events // v0.10.1371 — zincir event bloğundan önce
+	out += tf.Chain + tf.Critical + tf.Events // v0.10.1371 — zincir event bloğundan önce; v0.10.1627 — kritik yol zincirden sonra
 	if ex := clampDrawerExplain(explain); ex != "" {
 		out += "\n\n" + traceFollowUpExplainHeader + "```text\n" + promptfmt.FenceSafe(ex) + "\n```"
 	}
@@ -266,6 +270,10 @@ func traceFollowUpChipTR(tf traceFollowUp) string {
 	if tf.Chain != "" {
 		// v0.10.1371 — hata zinciri de bağlamda (sessizce uygulanmaz).
 		parts = append(parts, "hata zinciri")
+	}
+	if tf.Critical != "" {
+		// v0.10.1627 — kritik yol da bağlamda (sessizce uygulanmaz).
+		parts = append(parts, "kritik yol")
 	}
 	return "trace takibi (araçlarla): " + strings.Join(parts, " · ")
 }

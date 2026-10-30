@@ -942,7 +942,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 		tf.Simple = simpleTools // v0.10.1302 — takip talimatı araç setine göre
 		// v0.10.1147 — ilk cevabın span exception özeti takibe de (aynı okuma,
 		// aynı blok; explain_trace_events.go). Okunamazsa "" ve takip aynen.
-		tf.Events, tf.Chain = s.traceFollowUpEvents(ctx, tf.TraceID) // v0.10.1371 — + hata zinciri (aynı okuma)
+		tf.Events, tf.Chain, tf.Critical = s.traceFollowUpEvents(ctx, tf.TraceID) // v0.10.1371 — + hata zinciri; v0.10.1627 — + kritik yol (aynı okuma)
 		traceFU = &tf
 		emit("step", map[string]string{"label": traceFollowUpChipTR(tf)})
 		// v0.10.1050 — read_source_code sürümü argümansız çağrıldığında öznenin

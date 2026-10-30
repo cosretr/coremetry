@@ -322,7 +322,7 @@ func TestTraceFollowUpPromptCarriesChain(t *testing.T) {
 	s := &Server{}
 	s.tempo = tempo.New()
 	s.tempo.Configure(tempo.Settings{Enabled: true, BaseURL: chTempoOperatorTrace(t).URL})
-	events, chain := s.traceFollowUpEvents(context.Background(), defTestTrace)
+	events, chain, _ := s.traceFollowUpEvents(context.Background(), defTestTrace)
 	if events != "" {
 		t.Errorf("event'siz trace'te events bloğu: %q", events)
 	}

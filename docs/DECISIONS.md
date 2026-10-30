@@ -12080,3 +12080,25 @@ Dialog + sonradan açılan Drawer (üstteki kapanır), Esc'i sahiplenen iç inpu
 yeniden doğrulanır; varsayım testi kırmızıysa köprü yeniden tasarlanır,
 yükseltme o sürümde durur. Mutasyon kanıtı (R7): yutmayı ya da escPending
 korumasını kaldırmak 4 testi kırmızıya çevirir.
+
+## 2026-10-30 — v0.10.1627 — Trace açıklaması: deterministik KRİTİK YOL bloğu (v0.10.1371/1379 "ayrı blok" kararının uzantısı)
+
+**Bağlam:** yavaş ama sağlıklı trace'te HATA ZİNCİRİ boştur; modele hiçbir deterministik gecikme çapası gitmiyordu.
+Operatör "LLM paketinde url.* / server.* / peer.service / db.name / messaging.* kesiliyor mu" diye sordu. **Bulgu:**
+bir izin listesi YOK; kompakt span satırı (`traceLite`, `liteSpan`) attribute haritasını hiç kopyalamaz — v0.9.462'den
+beri bilinçli izdüşüm ("tam attribute haritaları büyük trace'te prompt'u patlatır"); hiçbir anahtar kaldırılmadı.
+**Karar — taşıyıcı span JSON'u değil, ayrı blok (v0.10.1371/1379 ile aynı üç neden):** golden pinler
+(`TestTraceExplainUserGolden`) yeşil kalır, prompt 100 × alan yerine sınırlı tek blok büyür, en büyük paylı adım
+100'lük kesimin dışında kalamaz. `tracechain.CriticalPathOf` TÜM span'ler üstünden (`BuildTraceAnalysis` kuralı, UI
+`criticalPath.ts` ile parite fikstürü `testdata/critpath/` — v0.10.1625) adım başına servis · TÜR · ad · süre · yol-üstü
+öz süre (pay = kök süresine oranı) · CLIENT/PRODUCER için hedef (url.full → server.address:server.port →
+peer.service → db.system/db.name → messaging.system/hedef; `PeerOf`'un peer.service-önce sırası gruplama anahtarı
+olarak DEĞİŞMEDİ) basar; kapanış satırı en büyük paylı adımı "dış bağımlılık beklemesi" (CLIENT/PRODUCER, trace'te
+çocuğu yok) / "bağımlı servis beklemesi: <svc>" (izlenen çocuğu var ama zincire girmedi — saat kayması) / "servis içi
+süre" diye sınıflar. Yer: User'ın başı, HATA ZİNCİRİ'nden SONRA (hata gecikmeyi geçer), span JSON'undan önce (çekmece
+6000-rune kırpması baştan tutar); ≤1200 rune, ≤12 adım (kök, en büyük pay, yaprak hep kalır). Tek adımlı yolda blok
+YOK — o trace'lerin kanıtı bayt bayt eski. Takip turu (`traceFollowUp.Critical`) aynı bloğu zincirden sonra taşır;
+Evidence gecikme sahibini kutular (hata kaynağı önce). `get_trace` adımları EK alanlar alır (kind, duration_ms,
+self_ms, share_pct, target, target_source, peer, http_status, top) + `critical_path_top_external_wait`. Ek CH okuması
+yok; redaksiyon yok. Kapsam yalnız trace açıklaması yolu (Explain / çekmece / chat trace_by_id / yapıştırılan id);
+Exceptions örnek trace'i ve rehberli drill ayrı onay. İstem kuralı + mekanik önek ayrı sürüm (R3).

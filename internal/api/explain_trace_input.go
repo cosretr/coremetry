@@ -15,6 +15,7 @@ import (
 	"github.com/cilcenk/coremetry/internal/logstore"
 	"github.com/cilcenk/coremetry/internal/promptfmt"
 	"github.com/cilcenk/coremetry/internal/stackparse"
+	"github.com/cilcenk/coremetry/internal/tracechain"
 )
 
 // explain_trace_input.go — trace explain'in KANIT paketi kurucusu
@@ -163,6 +164,14 @@ type traceExplainInput struct {
 	// ZİNCİRİ bloğunun kendisi ("" = trace'te hata yok). Oracle + trace sentezi
 	// zinciri ayrı bloğa koyar; prompt'a buradan EK bir şey girmez.
 	ChainBlock string
+	// CriticalBlock / TopStep / TopExternalWait — v0.10.1627 (CoSRE kritik yol
+	// planı R2): User'ın başındaki KRİTİK YOL bloğu (HATA ZİNCİRİ'nin ardından,
+	// span JSON'undan önce), en büyük paylı adım ve o adımın dış bağımlılık
+	// beklemesi olup olmadığı. Tek adımlı trace'te blok yok (TopStep nil) —
+	// kanıt bayt bayt eskisi gibi.
+	CriticalBlock   string
+	TopStep         *tracechain.PathStep
+	TopExternalWait bool
 }
 
 // traceExplainInputSeam — TEST DİKİŞİ (prod'da nil): trace kanıt paketi.
@@ -217,6 +226,9 @@ func (s *Server) buildTraceExplainInput(ctx context.Context, id string) (traceEx
 	// v0.10.1371 — HATA ZİNCİRİ TÜM span'lerden (kaynak 100'lük kesimin
 	// dışında kalabilir); sağlıklı trace'te OK=false ve blok "".
 	chain := traceErrorChainOf(allSpans)
+	// v0.10.1627 — KRİTİK YOL da TÜM span'lerden (en büyük paylı adım 100'lük
+	// kesimin dışında kalabilir). Ek okuma yok.
+	crit := traceCriticalPathOf(allSpans)
 	spans = pickExplainSpans(spans, traceExplainSpanCap)
 	compact := make([]traceLite, 0, len(spans))
 	var dbStmts, errTexts []string
@@ -407,19 +419,27 @@ func (s *Server) buildTraceExplainInput(ctx context.Context, id string) (traceEx
 	// kesilir, exception özeti korunur (yalnız-log modunda da baştan kesilir).
 	tail := evd.Block() + logsBlock + oracleBlock
 	mainOp, otherOps, opSource := pickMainOperation(oracleRowsRead, allSpans, logsRead)
+	critHead, critTop := traceCriticalHead(crit)
+	evidence := traceEvidenceSpanIDs(compact)
+	if critTop != nil {
+		evidence = prependUnique(critTop.SpanID, evidence) // v0.10.1627 — gecikme sahibi de kutulanır
+	}
 	return traceExplainInput{
-		User:         chainBlock + traceExplainUser(id, len(compact), totalSpans, string(payload), tail), // v0.10.1371 — zincir başta
-		Evidence:     prependUnique(chain.Origin.Span.SpanID, traceEvidenceSpanIDs(compact)),             // v0.10.1371 — kaynak önce kutulanır
-		ErrorOrigin:  chain.Origin.Span.SpanID,                                                           // v0.10.1371
-		ChainBlock:   strings.TrimSpace(chainBlock),                                                      // v0.10.1572
-		LogsBlock:    tail,
-		OracleRows:   oracleRows,
-		Stack:        rawStack,
-		StackService: stackService,
-		StackVersion: anomaly.StackVersion(allSpans, stackService, stackSpanID, stackRes),
-		RootService:  rootService,
-		DBStatements: dbStmts,
-		ErrorText:    truncRunesN(strings.Join(errTexts, "\n")+"\n"+rawStack, 2000),
+		User:            chainBlock + critHead + traceExplainUser(id, len(compact), totalSpans, string(payload), tail), // v0.10.1371 — zincir başta; v0.10.1627 — kritik yol ikinci
+		Evidence:        prependUnique(chain.Origin.Span.SpanID, evidence),                                             // v0.10.1371 — kaynak önce kutulanır
+		CriticalBlock:   strings.TrimSpace(critHead),                                                                   // v0.10.1627
+		TopStep:         critTop,                                                                                       // v0.10.1627
+		TopExternalWait: critTop != nil && crit.TopIsExternalWait(),                                                    // v0.10.1627
+		ErrorOrigin:     chain.Origin.Span.SpanID,                                                                      // v0.10.1371
+		ChainBlock:      strings.TrimSpace(chainBlock),                                                                 // v0.10.1572
+		LogsBlock:       tail,
+		OracleRows:      oracleRows,
+		Stack:           rawStack,
+		StackService:    stackService,
+		StackVersion:    anomaly.StackVersion(allSpans, stackService, stackSpanID, stackRes),
+		RootService:     rootService,
+		DBStatements:    dbStmts,
+		ErrorText:       truncRunesN(strings.Join(errTexts, "\n")+"\n"+rawStack, 2000),
 		// v0.10.1329 — dikiş: henüz prompt'a girmez.
 		MainOperation:   mainOp,
 		OtherOperations: otherOps,

@@ -117,11 +117,24 @@ type traceToolErrorSpan struct {
 	DurationMs       float64 `json:"duration_ms"`
 }
 
+// traceToolPathStep — v0.10.1627: kind / duration_ms / self_ms / share_pct /
+// target… EK alanlar (tracechain.CriticalPathFrom; trace açıklamasının KRİTİK
+// YOL bloğuyla aynı hesap). share_pct kök süresine oranıdır; top = en büyük
+// paylı adım. Eski alanlar aynen.
 type traceToolPathStep struct {
 	SpanID       string  `json:"span_id"`
 	Service      string  `json:"service"`
 	Name         string  `json:"name"`
 	SelfOnPathMs float64 `json:"self_on_path_ms"`
+	Kind         string  `json:"kind,omitempty"`
+	DurationMs   float64 `json:"duration_ms"`
+	SelfMs       float64 `json:"self_ms"`
+	SharePct     float64 `json:"share_pct"`
+	Target       string  `json:"target,omitempty"`
+	TargetSource string  `json:"target_source,omitempty"`
+	Peer         string  `json:"peer,omitempty"`
+	HTTPStatus   int     `json:"http_status,omitempty"`
+	Top          bool    `json:"top,omitempty"`
 }
 
 type traceToolContext struct {
@@ -156,7 +169,10 @@ type traceToolAnalysis struct {
 	ErrorSpans        []traceToolErrorSpan `json:"error_spans"`
 	CriticalPath      []traceToolPathStep  `json:"critical_path"`
 	CriticalPathSteps int                  `json:"critical_path_steps"`
-	Context           []traceToolContext   `json:"context"` // ≤ traceToolServices (v0.10.944)
+	// CriticalPathTopExternalWait — v0.10.1627: en büyük paylı adım
+	// CLIENT/PRODUCER ve trace'te çocuğu yok (izlenmeyen dış bağımlılık).
+	CriticalPathTopExternalWait bool               `json:"critical_path_top_external_wait"`
+	Context                     []traceToolContext `json:"context"` // ≤ traceToolServices (v0.10.944)
 }
 
 func ttNsToMs(ns int64) float64 {
@@ -209,13 +225,15 @@ func ttSpanContext(s *chstore.SpanRow) (env, cluster, namespace, pod, version st
 // bloğu aynı adımları kullanır; mcptools → anomaly → tracechain döngüsü
 // yüzünden api buradan okuyamaz). Adım i için süre(i) − (i+1'in i'ye
 // kırpılmış aralığı); son adım kendi süresi. Bilerek TOPLANMAZ.
-func ttCriticalPathSteps(spans []chstore.SpanRow, ta chstore.TraceAnalysis) []traceToolPathStep {
+func ttCriticalPathSteps(spans []chstore.SpanRow, ta chstore.TraceAnalysis) ([]traceToolPathStep, bool) {
 	cp := tracechain.CriticalPathFrom(spans, ta)
 	out := make([]traceToolPathStep, 0, len(cp.Steps))
-	for _, st := range cp.Steps {
-		out = append(out, traceToolPathStep{SpanID: st.SpanID, Service: st.Service, Name: st.Name, SelfOnPathMs: ttNsToMs(st.SelfOnPathNs)})
+	for i, st := range cp.Steps {
+		out = append(out, traceToolPathStep{SpanID: st.SpanID, Service: st.Service, Name: st.Name, SelfOnPathMs: ttNsToMs(st.SelfOnPathNs),
+			Kind: st.Kind, DurationMs: ttNsToMs(st.DurNs), SelfMs: ttNsToMs(st.SelfNs), SharePct: float64(int(st.Share*1000+0.5)) / 10,
+			Target: st.Target.Value, TargetSource: st.Target.Source, Peer: st.Target.Peer, HTTPStatus: st.HTTPCode, Top: i == cp.Top})
 	}
-	return out
+	return out, cp.TopIsExternalWait()
 }
 
 // ttTrimPathSteps — SAF: uzun yolu en büyük self_on_path adımlarıyla kırpar,
@@ -344,7 +362,8 @@ func buildTraceToolAnalysis(spans []chstore.SpanRow, storeCapped bool) traceTool
 		})
 	}
 
-	steps := ttCriticalPathSteps(spans, ta)
+	steps, extWait := ttCriticalPathSteps(spans, ta)
+	out.CriticalPathTopExternalWait = extWait
 	out.CriticalPathSteps = len(steps)
 	out.CriticalPath = ttTrimPathSteps(steps, traceToolPathSteps)
 
@@ -396,7 +415,8 @@ func buildTraceToolAnalysis(spans []chstore.SpanRow, storeCapped bool) traceTool
 
 	out.Notes = append(out.Notes,
 		"Öz süre (self_ms) = span süresi − doğrudan çocukların ARALIK BİRLEŞİMİ; paralel çocuklar iki kez düşülmez. self_pct toplam öz sürenin payıdır, duvar saatinin değil.",
-		"Kritik yol süreleri TOPLANMAZ: self_on_path_ms her adımın yolda tek başına geçen süresidir; yolun duvar saati wall_ms (kök süresi).")
+		"Kritik yol süreleri TOPLANMAZ: self_on_path_ms her adımın yolda tek başına geçen süresidir; yolun duvar saati wall_ms (kök süresi).",
+		"share_pct kök süresine (wall_ms) oranıdır, öz sürelerin toplamına değil; top=true en büyük paylı adımdır. critical_path_top_external_wait=true: o adım çocuğu izlenmeyen bir CLIENT/PRODUCER çağrısıdır (dış bağımlılık beklemesi, hedef target).")
 	if out.CriticalPathSteps > len(out.CriticalPath) {
 		out.Notes = append(out.Notes, fmt.Sprintf("Kritik yol %d adım; yalnız yolda en uzun kalan %d adım (yol sırasıyla) listelendi.", out.CriticalPathSteps, len(out.CriticalPath)))
 	}
@@ -622,7 +642,9 @@ func getTraceAnalyzedTool(d Deps) mcp.Tool {
 			"Bounded span list: at most 200 spans (all ERROR spans first, then the slowest); truncated=true + total_span_count carry the real size. " +
 			"`analysis` is computed over ALL spans read (not just the 200 listed): wall_ms (root span duration = the critical path's wall clock), extent_ms (first start → last end, includes async tails), " +
 			"services[{service, self_ms, self_pct, spans, errors}] where self time = span duration minus the UNION of its direct children's intervals (parallel children are never subtracted twice; self_pct is a share of total self time, not of wall time), " +
-			"top_self_spans (≤10), error_spans (≤10, earliest first, with status_message and exception_type/exception_message from the span's exception event when present), critical_path[{span_id, service, name, self_on_path_ms}] — " +
+			"top_self_spans (≤10), error_spans (≤10, earliest first, with status_message and exception_type/exception_message from the span's exception event when present), critical_path[{span_id, service, name, self_on_path_ms, kind, duration_ms, self_ms, share_pct, target, target_source, peer, http_status, top}] " +
+			"(share_pct = self_on_path_ms / wall_ms; top marks the largest share; target = url.full → server.address:port → peer.service → db.system/db.name → messaging.system/destination for CLIENT/PRODUCER steps) and critical_path_top_external_wait " +
+			"(true when the top step is a CLIENT/PRODUCER call with no traced child span — an external dependency wait) — " +
 			"NEVER add span durations or critical-path steps together: nested and parallel spans overlap in time, so sums overstate latency; quote wall_ms for the trace's duration. " +
 			"context[{service, env, cluster, namespace, pods, versions}] comes from resource attributes using the same keys ClickHouse derives its columns from " +
 			"(env = deployment.environment.name|deployment.environment, cluster = k8s.cluster.name|openshift.cluster.name|cluster, namespace = k8s.namespace.name, pod = k8s.pod.name else host.name, version = container image tag → service.version chain). " +
