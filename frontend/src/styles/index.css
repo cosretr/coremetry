@@ -29,6 +29,8 @@
 @source '../components/shadcn';
 @source '../components/ai-elements';
 @source '../components/coremetry';
+/* CoSRE v2 Faz 2b B1 (plan §1.3): v2 sohbet ağacı; yoksa utility'leri üretilmez. */
+@source '../components/cosre';
 /* Faz 2 dilim 1 R1 (G11, operatör Q-IA8): geçirilen sayfa dizini başına bir
    satır. pages/settings legacy sınıf adları (gap-3/gap-6 …) bundle-budget
    çakışma kapısından geçer; değerler --spacing: 4px ile eşit. */

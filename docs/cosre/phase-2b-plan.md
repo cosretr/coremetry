@@ -148,6 +148,11 @@ Pin: `CopilotChatGate.pin.test`: `cosreV2:false` → v1; `true` + FAB → v2 chu
 - Hedef ölçü: initial değişmez (±0; yalnız kapı +~0.3 KB gz); `ai-*.js` ~35–45 KB gz
   *(tahmin; B1 ölçer, migration-log'a yazar)*; `CosreChatV2-*.js` B6 sonunda ≤ 40 KB gz
   *(tahmin)*.
+- **B1 ölçümü (v0.10.1647, sapma):** zod `ai` regex'indeyken grafana (90) onu yuttu
+  ve `ai-*.js` grafana chunk'ını statik import etti (sonda build'i; yeni `ai → grafana`
+  kapısı FAIL) → zod AYRI grup `{ name: 'zod', priority: 91 }`, `ai` regex'inden
+  çıkarıldı. Sonda: `ai` 15.8 + `zod` 39.5 (grafana ile paylaşılan) KB gz. Initial
+  +1.5 KB gz (paylaşılan modüller ayrı preload chunk'larına bölündü), migration-log.
 
 ### 1.4 Bayrak çevrimi thread kaybettirmez (aynı kalıcılık)
 İki gerçekleme AYNI uç ve AYNI blob'u kullanır: `api.saveAiConversation({id?, messages})`

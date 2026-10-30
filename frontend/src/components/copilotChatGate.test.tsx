@@ -18,10 +18,15 @@ import { MemoryRouter } from 'react-router-dom';
 
 const seen: { type: string; q?: string }[] = [];
 const mounts: { defaultOpen?: boolean }[] = [];
+const v1Launcher: (boolean | undefined)[] = [];
+const v2Seen: { type: string; q?: string }[] = [];
+const v2Mounts: { defaultOpen?: boolean; yieldToV1?: boolean }[] = [];
+const cfgBox = vi.hoisted(() => ({ cfg: { enabled: true } as { enabled: boolean; cosreV2?: boolean } | null }));
 
 vi.mock('./CopilotChat', () => {
-  function CopilotChat(p: { defaultOpen?: boolean }) {
+  function CopilotChat(p: { defaultOpen?: boolean; launcher?: boolean }) {
     mounts.push({ defaultOpen: p.defaultOpen });
+    v1Launcher.push(p.launcher);
     useEffect(() => {
       const h = (e: Event) => seen.push({ type: e.type, q: (e as CustomEvent<{ question?: string }>).detail?.question });
       window.addEventListener('coremetry:ai-ask', h);
@@ -35,7 +40,24 @@ vi.mock('./CopilotChat', () => {
   }
   return { CopilotChat };
 });
-vi.mock('./ai/useCopilotEnabled', () => ({ useCopilotConfig: () => ({ enabled: true }) }));
+// v0.10.1647 (Faz 2b B1): v2 kabuğu sahte; aynı pencere olaylarını dinler.
+vi.mock('./cosre/conversation/CosreChatV2', () => {
+  function CosreChatV2(p: { defaultOpen?: boolean; yieldToV1?: boolean }) {
+    v2Mounts.push({ defaultOpen: p.defaultOpen, yieldToV1: p.yieldToV1 });
+    useEffect(() => {
+      const h = (e: Event) => v2Seen.push({ type: e.type, q: (e as CustomEvent<{ question?: string }>).detail?.question });
+      window.addEventListener('coremetry:ai-ask', h);
+      window.addEventListener('coremetry:ai-prefill', h);
+      return () => {
+        window.removeEventListener('coremetry:ai-ask', h);
+        window.removeEventListener('coremetry:ai-prefill', h);
+      };
+    }, []);
+    return <div data-testid="chat-v2" />;
+  }
+  return { CosreChatV2 };
+});
+vi.mock('./ai/useCopilotEnabled', () => ({ useCopilotConfig: () => cfgBox.cfg }));
 vi.mock('@/lib/queries', () => ({ useOpenCriticalCount: () => ({ data: 0 }) }));
 vi.mock('./ai/TraceExplainNudge', () => ({ TraceExplainNudge: () => null }));
 
@@ -46,7 +68,8 @@ let root: Root;
 
 beforeEach(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-  seen.length = 0; mounts.length = 0;
+  seen.length = 0; mounts.length = 0; v1Launcher.length = 0; v2Seen.length = 0; v2Mounts.length = 0;
+  cfgBox.cfg = { enabled: true };
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
@@ -66,6 +89,7 @@ async function flush() {
 }
 const fab = () => host.querySelector<HTMLElement>('[data-tour="cosre-fab"]');
 const chat = () => host.querySelector('[data-testid="chat"]');
+const chatV2 = () => host.querySelector('[data-testid="chat-v2"]');
 
 describe('kaynak pini: sohbet ana yığına statik girmez', () => {
   const shell = readFileSync(resolve(__dirname, 'AppShell.tsx'), 'utf8');
@@ -127,5 +151,95 @@ describe('CopilotChatGate davranışı', () => {
     expect(urlWantsChat(new URLSearchParams('ai=trace'))).toBe(true);
     expect(urlWantsChat(new URLSearchParams('chat=c1'))).toBe(true);
     expect(urlWantsChat(new URLSearchParams('range=1h&service=orders-api'))).toBe(false);
+  });
+});
+
+// v0.10.1647 (CoSRE v2 Faz 2b B1, plan §1.2 / §5.2). Bayrak kapalıyken yukarıdaki
+// v1 sözleşmesi BİREBİR (o blok cosreV2'siz koşar; burada açık/kapalı ayrımı
+// tekrar çivilenir). Açıkken FAB / ?chat= / olaylar → v2; `?ai=` → v1
+// `launcher={false}` (Q1-a), v2 yieldToV1.
+describe('CopilotChatGate × cosreV2 bayrağı', () => {
+  it('bayrak kapalı (cosreV2:false) → FAB v1 açar, v2 hiç yüklenmez', async () => {
+    cfgBox.cfg = { enabled: true, cosreV2: false };
+    await render();
+    await act(async () => { fab()!.click(); });
+    await flush();
+    expect(chat()).not.toBeNull();
+    expect(v1Launcher).toEqual([undefined]);
+    expect(v2Mounts).toHaveLength(0);
+  });
+
+  it('bayrak açık + FAB → v2 açık başlar, v1 yüklenmez', async () => {
+    cfgBox.cfg = { enabled: true, cosreV2: true };
+    await render();
+    expect(fab()).not.toBeNull();
+    await act(async () => { fab()!.click(); });
+    await flush();
+    expect(chatV2()).not.toBeNull();
+    expect(v2Mounts.at(-1)).toEqual({ defaultOpen: true, yieldToV1: false });
+    expect(chat()).toBeNull();
+    expect(fab()).toBeNull(); // kapalıyken FAB'ı v2 kendisi çizer (burada sahte)
+  });
+
+  it('bayrak açık + ?chat= → v2 mount, parametre adreste KALIR (kapatınca v1 aynı thread)', async () => {
+    cfgBox.cfg = { enabled: true, cosreV2: true };
+    await render('/services?chat=c1');
+    await flush();
+    expect(chatV2()).not.toBeNull();
+    expect(chat()).toBeNull();
+  });
+
+  it('bayrak açık + yükleme öncesi olaylar → v2\'ye bir kez, v1 yüklenmez', async () => {
+    cfgBox.cfg = { enabled: true, cosreV2: true };
+    await render();
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('coremetry:ai-prefill', { detail: { question: 'orders-api neden yavaş' } }));
+      window.dispatchEvent(new CustomEvent('coremetry:ai-ask', { detail: { question: 'p1 var mı' } }));
+    });
+    await flush();
+    expect(chatV2()).not.toBeNull();
+    expect(v2Seen).toEqual([
+      { type: 'coremetry:ai-prefill', q: 'orders-api neden yavaş' },
+      { type: 'coremetry:ai-ask', q: 'p1 var mı' },
+    ]);
+    expect(seen).toEqual([]);
+    expect(chat()).toBeNull();
+  });
+
+  it('bayrak açık + ?ai= → v1 launcher={false} (Q1-a), kapı FAB\'ı v2 için çizer', async () => {
+    cfgBox.cfg = { enabled: true, cosreV2: true };
+    await render('/trace?id=abc&ai=trace');
+    await flush();
+    expect(chat()).not.toBeNull();
+    expect(v1Launcher).toEqual([false]);
+    expect(chatV2()).toBeNull();
+    expect(fab()).not.toBeNull();
+    await act(async () => { fab()!.click(); });
+    await flush();
+    expect(chatV2()).not.toBeNull();
+    expect(v2Mounts.at(-1)).toEqual({ defaultOpen: true, yieldToV1: true });
+  });
+
+  it('bayrak açık + v1 açıklama örneği mount iken olay v1\'e bir kez (kapı yeniden yayınlamaz)', async () => {
+    cfgBox.cfg = { enabled: true, cosreV2: true };
+    await render('/trace?id=abc&ai=trace');
+    await flush();
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('coremetry:ai-ask', { detail: { question: 'tek' } }));
+    });
+    await flush();
+    expect(seen.filter(s => s.q === 'tek')).toHaveLength(1);
+  });
+
+  it('config henüz yokken (null) hiçbir şey çizilmez, niyet cfg gelince doğru gerçeklemeye', async () => {
+    cfgBox.cfg = null;
+    await render('/services?chat=c1');
+    await flush();
+    expect(host.innerHTML).toBe('');
+    cfgBox.cfg = { enabled: true, cosreV2: true };
+    await render('/services?chat=c1');
+    await flush();
+    expect(chatV2()).not.toBeNull();
+    expect(chat()).toBeNull();
   });
 });

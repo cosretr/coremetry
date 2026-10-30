@@ -7,7 +7,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
 import { Drawer } from './Drawer';
-import { clampDrawerWidth, DRAWER_MIN_WIDTH } from './drawerWidth';
+import { clampDrawerWidth, DRAWER_MIN_WIDTH } from '@/lib/drawerWidth';
 import { getRaw, setRaw } from '@/lib/storage';
 
 describe('clampDrawerWidth', () => {

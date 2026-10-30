@@ -27,6 +27,11 @@ export interface CopilotConfig {
   /** v0.10.1451 / v0.10.1461 — kod okuma durumu (yalnız DevOps bağlıyken); "Kod"
    *  hapı bunu okur: yoksa hap çizilmez, available=false → devre dışı + reason. */
   codeRead?: CopilotCodeRead;
+  /** v0.10.1647 (CoSRE v2 Faz 2b B1) — admin bayrağı system_settings("cosre_v2")
+   *  (sunucu `cosreV2,omitempty`). true → kabuk kapısı v2 sohbetini seçer
+   *  (lib/cosre/pickChatImpl). Modül önbelleği süreç ömrü boyunca sabit →
+   *  bayrak değişimi yeni sayfa yüklemesinde görünür. */
+  cosreV2?: boolean;
 }
 
 const OFF: CopilotConfig = { enabled: false };
@@ -51,6 +56,9 @@ export function normalizeCopilotConfig(c: Partial<CopilotConfig> | null | undefi
     ...(c.codeRead && typeof c.codeRead === 'object'
       ? { codeRead: { available: !!c.codeRead.available, ...(c.codeRead.reason ? { reason: c.codeRead.reason } : {}), ...(c.codeRead.profileLabel ? { profileLabel: c.codeRead.profileLabel } : {}) } }
       : {}),
+    // v0.10.1647 (CoSRE v2 Faz 2b B1) — cosreV2 de taşınır; bilinmeyen alan
+    // düşürülüyordu ve bayrak FE'ye hiç ulaşmıyordu (1138/1461'in üçüncü ikizi).
+    ...(c.cosreV2 === true ? { cosreV2: true } : {}),
   };
 }
 

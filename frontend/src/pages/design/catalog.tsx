@@ -36,6 +36,8 @@ import {
 import { StatusBadge } from '@/components/coremetry/StatusBadge';
 import { Field, SelectField, TextareaField, CheckboxField } from '@/components/coremetry/Field';
 import { SegmentedControl } from '@/components/coremetry/SegmentedControl';
+// v0.10.1647 (CoSRE v2 Faz 2b B1, plan §5.4): v2 sohbet kabuğu (boş durum).
+import { CosreSheet } from '@/components/cosre/conversation/CosreSheet';
 import CoremetryToaster from '@/components/coremetry/Toaster';
 import { CM_STRINGS } from '@/components/coremetry/strings';
 import { toast, type ToastEntry } from '@/lib/toast';
@@ -575,6 +577,16 @@ function ToasterDemo({ forceOpen }: CatalogCtx) {
 }
 
 /** Anahtar = components/shadcn/<ad>.tsx (+ coremetry bileşikleri). */
+function CosreChatV2Demo({ cell, forceOpen }: CatalogCtx) {
+  const [open, setOpen] = useState(forceOpen);
+  return (
+    <>
+      <Row label="boş"><Button variant="outline" size="sm" onClick={() => setOpen(true)}>CoSRE v2 aç</Button></Row>
+      <CosreSheet open={open} onOpenChange={setOpen} width={620} contentProps={themeAttrs(cell)} />
+    </>
+  );
+}
+
 export const CATALOG: Record<string, (ctx: CatalogCtx) => ReactNode> = {
   'alert-dialog': (ctx) => <AlertDialogDemo {...ctx} />,
   'badge': () => <BadgeDemo />,
@@ -605,4 +617,5 @@ export const CATALOG: Record<string, (ctx: CatalogCtx) => ReactNode> = {
   'coremetry/Toaster': (ctx) => <ToasterDemo {...ctx} />,
   'coremetry/Field': () => <FieldDemo />,
   'coremetry/SegmentedControl': () => <SegmentedControlDemo />,
+  'cosre/ChatV2': (ctx) => <CosreChatV2Demo {...ctx} />,
 };

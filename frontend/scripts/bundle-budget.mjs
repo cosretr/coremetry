@@ -45,7 +45,14 @@ const FORBIDDEN_SOURCES = [
   /src\/components\/shadcn\//,
   // v0.10.1618 (CoSRE v2 Faz 2a): AI SDK yalnız v2 sohbetinin tembel
   // chunk'ında; ilk yüke binmez. Sıra önemli: [1] shadcn sayımında kullanılır.
-  /node_modules\/(ai|@ai-sdk)\//,
+  // v0.10.1647 (Faz 2b B1, plan §1.3): + AI SDK'ya özgü kapanış (swr,
+  // throttleit) + ai-elements'in use-stick-to-bottom'u (B2). zod burada YOK:
+  // @grafana/data'nın da bağımlılığı (tembel grafana); ilk yüke binerse
+  // [0]–[3] değil bütçe yakalar.
+  /node_modules\/(ai|@ai-sdk|swr|throttleit|use-stick-to-bottom)\//,
+  // v0.10.1647 (Faz 2b B1): v2 sohbet ağacı (components/cosre + ai-elements)
+  // yalnız kapının dinamik import()'u ile; kabuk statik import edemez.
+  /src\/components\/(cosre|ai-elements)\//,
 ];
 
 // İlk yükte AÇIKÇA İZİNLİ kaynaklar (v0.10.1619, R10; operatör 2026-10-30):
@@ -147,6 +154,15 @@ if (radixFile) {
   const src = readFileSync(path.join(DIST, 'assets', radixFile), 'utf8');
   for (const m of src.matchAll(STATIC_IMPORT)) if (/^grafana-/.test(m[1])) radixToGrafana.push(m[1]);
 }
+// v0.10.1647 (Faz 2b B1, plan §1.3): aynı kapı `ai` grubu için — zod
+// @grafana/data'nın da bağımlılığı; grafana (90) ai'den (88) yüksek öncelikli
+// olduğundan yutarsa v2 sohbeti 180 KB gz'lik grafana chunk'ını statik çeker.
+const aiFile = assets.find((a) => a.startsWith('ai-') && a.endsWith('.js'));
+const aiToGrafana = [];
+if (aiFile) {
+  const src = readFileSync(path.join(DIST, 'assets', aiFile), 'utf8');
+  for (const m of src.matchAll(STATIC_IMPORT)) if (/^grafana-/.test(m[1])) aiToGrafana.push(m[1]);
+}
 
 // Yazı tipi ölçümü (ayrı satır, JS bütçesi dışında).
 const entryCss = [];
@@ -203,12 +219,12 @@ const out = [];
 out.push(`bundle-budget  dist/index.html  ${rows.length} preloaded JS`);
 for (const r of [...rows].sort((a, b) => b.gz - a.gz)) out.push(`  ${kb(r.gz).padStart(6)} KB gz  ${r.base}`);
 out.push(`initial-load JS gz: ${kb(initialGz)} KB   budget ${BUDGET_KB} KB   main (index-*.js) ${kb(mainGz)} KB gz   ${over ? 'OVER BUDGET' : 'OK'}`);
-out.push(`forbidden in entry: ${offenders.length ? offenders.map((o) => o.base).join(', ') : 'none'} (radix/cmdk/sonner/shadcn/ai)   radix chunk: ${groupChunk('radix')}   toast chunk: ${groupChunk('toast')}   shadcn sources in output: ${shadcnChunks} chunks`);
+out.push(`forbidden in entry: ${offenders.length ? offenders.map((o) => o.base).join(', ') : 'none'} (radix/cmdk/sonner/shadcn/ai/cosre)   radix chunk: ${groupChunk('radix')}   toast chunk: ${groupChunk('toast')}   ai chunk: ${groupChunk('ai')}   cosre v2 chunk: ${groupChunk('CosreChatV2')}   shadcn sources in output: ${shadcnChunks} chunks`);
 for (const o of offenders) {
   out.push(`  ${o.base}:`);
   for (const s of o.bad.slice(0, 5)) out.push(`    ${s}`);
 }
-out.push(`radix → grafana static import: ${radixFile ? (radixToGrafana.length ? radixToGrafana.join(', ') : 'none') : 'n/a (no radix chunk)'}   utility∩legacy class names: ${collisions.length} (${collisions.join(' ') || '—'}; not allowed: ${badCollisions.join(' ') || 'none'})`);
+out.push(`radix → grafana static import: ${radixFile ? (radixToGrafana.length ? radixToGrafana.join(', ') : 'none') : 'n/a (no radix chunk)'}   ai → grafana static import: ${aiFile ? (aiToGrafana.length ? aiToGrafana.join(', ') : 'none') : 'n/a (no ai chunk)'}   utility∩legacy class names: ${collisions.length} (${collisions.join(' ') || '—'}; not allowed: ${badCollisions.join(' ') || 'none'})`);
 out.push(`allowed in entry (cva/clsx/tailwind-merge): ${[...allowedHits].sort().join(' ') || 'none present'}`);
 out.push(`no sourcemap (virtual-only chunks, max ${MAX_MAPLESS}): ${mapless.join(', ') || 'none'}`);
 out.push(`fonts (woff2, not in JS budget): ${fontFiles.size} files ${[...fontFiles].map(([n, b]) => `${n.replace(/-[\w-]{8}\.woff2$/, '')} ${kb(b)}`).join(', ') || '—'}`);
@@ -219,6 +235,7 @@ const text = out.join('\n') + '\n';
 process.stdout.write(text);
 writeFileSync(path.join(DIST, 'bundle-budget.txt'), text);
 
+if (aiToGrafana.length) fail(`${aiFile} grafana chunk'ını statik import ediyor: ${aiToGrafana.join(', ')} — vite.config.ts ai grubu önceliği/regex'i`);
 if (radixToGrafana.length) fail(`${radixFile} grafana chunk'ını statik import ediyor: ${radixToGrafana.join(', ')} — vite.config.ts radix grubu önceliği/regex'i`);
 if (badCollisions.length) fail(`Tailwind yardımcısı eski sınıf adıyla çakışıyor: ${badCollisions.join(' ')} (scripts/bundle-budget.mjs ALLOWED_LEGACY_COLLISIONS)`);
 if (offenders.length) fail(`ilk yükte yasak kaynak: ${offenders.map((o) => o.base).join(', ')}`);

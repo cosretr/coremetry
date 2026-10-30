@@ -16,7 +16,7 @@ function render(ui: React.ReactElement) {
   act(() => { root!.render(ui); });
 }
 function cleanup() { if (root) act(() => { root!.unmount(); }); root = null; }
-import { isEmptyAreaClick } from './emptyAreaClose';
+import { isEmptyAreaClick } from '@/lib/emptyAreaClose';
 
 afterEach(() => { cleanup(); document.body.innerHTML = ''; });
 

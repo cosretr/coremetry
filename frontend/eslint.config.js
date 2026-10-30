@@ -187,8 +187,13 @@ export default tseslint.config(
             '**/components/shadcn', '**/components/shadcn/**', './shadcn/**',
             '**/coremetry/overlay', '**/coremetry/overlay/**',
             'radix-ui', 'radix-ui/**', '@radix-ui/*', 'cmdk', 'sonner',
+            // v0.10.1647 (CoSRE v2 Faz 2b B1, plan §1.3): v2 sohbet ağacı ve AI SDK
+            // kabukta yalnız dinamik import() ile (kural import()'u saymaz).
+            '**/components/cosre', '**/components/cosre/**', './cosre/**',
+            '**/components/ai-elements', '**/components/ai-elements/**',
+            '@ai-sdk/*',
           ],
-          message: 'Kabuk Radix/shadcn overlay import edemez (ilk yüke biner, plan §1.2). Sayfa chunk\'ında kullan ya da tembel kapı (CopilotChatGate deseni).',
+          message: 'Kabuk Radix/shadcn overlay, CoSRE v2 (components/cosre, ai-elements) ya da AI SDK import edemez (ilk yüke biner, plan §1.2). Sayfa chunk\'ında kullan ya da tembel kapı (CopilotChatGate deseni).',
         }, {
           // v0.10.1617 (R9): coremetry BARREL'ı overlay'i yeniden dışa aktarır;
           // kabuk PageShell/PageControls'ü dosya yolundan alır. regex: glob
@@ -196,6 +201,11 @@ export default tseslint.config(
           // açılamaz.
           regex: '(^|/)components/coremetry(/index)?$|^\\.{1,2}/coremetry(/index)?$',
           message: 'Kabuk coremetry barrel\'ını import edemez (overlay → Radix ilk yüke biner). Dosya yolundan al: @/components/coremetry/PageShell.',
+        }, {
+          // v0.10.1647 (Faz 2b B1): çıplak `ai` paketi regex ile — glob `ai/**`
+          // göreli './ai/…' (components/ai) yollarını da yakalardı.
+          regex: '^ai(/.*)?$',
+          message: 'Kabuk AI SDK (`ai`) import edemez — yalnız v2 sohbetinin tembel chunk\'ında (plan §1.3).',
         }],
       }],
     },

@@ -28,6 +28,28 @@ describe('bundle bütçe kapısı kablolu', () => {
     expect(cfg.indexOf("name: 'radix'")).toBeLessThan(cfg.indexOf("{ name: 'vendor', test: /node_modules/, priority: 10 }"));
   });
 
+  // v0.10.1647 (CoSRE v2 Faz 2b B1, plan §1.3 / §5.3): AI SDK kapanışı kendi
+  // tembel grubunda; grafana (90) altı, 80'li grupların (otel @opentelemetry/api
+  // dahil) üstü. Grupsuz kalırsa eager vendor catch-all'ına düşer.
+  it('vite.config.ts: ai grubu regex\'i + öncelik 88 + ayrı zod grubu (91), catch-all üstünde', () => {
+    const cfg = read('vite.config.ts');
+    expect(cfg).toContain(
+      "{ name: 'ai', test: /node_modules\\/(ai|@ai-sdk|swr|throttleit|@standard-schema|eventsource-parser|@vercel\\/oidc|json-schema|use-stick-to-bottom)[\\/]/, priority: 88 },",
+    );
+    const prio = (name: string) => Number(new RegExp(`name: '${name}',[^}]*priority: (\\d+)`).exec(cfg)?.[1]);
+    // zod ayrı grup, grafana üstü (ölçüldü: ai regex'indeyken grafana yuttu → ai → grafana statik import).
+    expect(cfg).toContain("{ name: 'zod', test: /node_modules\\/zod[\\/]/, priority: 91 },");
+    expect(prio('zod')).toBeGreaterThan(prio('grafana'));
+    expect(prio('zod')).toBeLessThan(prio('radix'));
+    expect(prio('ai')).toBe(88);
+    expect(prio('ai')).toBeLessThan(prio('grafana'));
+    expect(prio('ai')).toBeGreaterThan(prio('otel'));
+    expect(cfg.indexOf("name: 'ai'")).toBeLessThan(cfg.indexOf("{ name: 'vendor', test: /node_modules/, priority: 10 }"));
+    const re = /node_modules\/(ai|@ai-sdk|swr|throttleit|@standard-schema|eventsource-parser|@vercel\/oidc|json-schema|use-stick-to-bottom)[/]/;
+    for (const p of ['node_modules/ai/dist/index.mjs', 'node_modules/@ai-sdk/provider-utils/dist/index.mjs', 'node_modules/json-schema/lib/validate.js']) expect(re.test(p), p).toBe(true);
+    for (const p of ['node_modules/zod/v4/index.js', 'node_modules/aria-hidden/dist/index.js', 'node_modules/json-schema-traverse/index.js', 'node_modules/@opentelemetry/api/build/index.js']) expect(re.test(p), p).toBe(false);
+  });
+
   it('scripts/bundle-budget.mjs: yasak kaynak regex\'i, 347 KB, zlib, index.html kümesi', () => {
     const s = read('scripts/bundle-budget.mjs');
     expect(s).toContain('/node_modules\\/(radix-ui|@radix-ui|cmdk|sonner|@floating-ui|react-remove-scroll|aria-hidden|use-sidecar|use-callback-ref|react-style-singleton|get-nonce|detect-node-es)\\//');
@@ -95,7 +117,9 @@ describe('bundle bütçe kapısı kablolu', () => {
       expect(e).toContain(`'${f}'`);
     }
     expect(block).toContain("'no-restricted-imports'");
-    for (const p of ["'radix-ui'", "'@radix-ui/*'", "'cmdk'", "'sonner'", "'**/components/shadcn/**'", "'**/coremetry/overlay/**'"]) {
+    for (const p of ["'radix-ui'", "'@radix-ui/*'", "'cmdk'", "'sonner'", "'**/components/shadcn/**'", "'**/coremetry/overlay/**'",
+      // v0.10.1647 (Faz 2b B1): v2 sohbet ağacı + AI SDK kabukta statik yasak.
+      "'**/components/cosre/**'", "'./cosre/**'", "'**/components/ai-elements/**'", "'@ai-sdk/*'", "regex: '^ai(/.*)?$'"]) {
       expect(block).toContain(p);
     }
   });

@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { getRaw, setRaw } from '@/lib/storage';
-import { DRAWER_MIN_WIDTH, clampDrawerWidth } from './drawerWidth';
+import { DRAWER_MIN_WIDTH, clampDrawerWidth } from '@/lib/drawerWidth';
 import { useFocusTrap } from './useFocusTrap';
 import { useEscLayer } from '@/lib/escLayer';
-import { isEmptyAreaClick } from './emptyAreaClose';
+import { isEmptyAreaClick } from '@/lib/emptyAreaClose';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { Sparkline } from '@/components/Sparkline';

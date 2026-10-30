@@ -114,6 +114,22 @@ export default defineConfig({
             // statik importunu yasaklıyor.
             { name: 'toast', test: /node_modules\/sonner[\/]/, priority: 86 },
             { name: 'radix', test: /node_modules\/(radix-ui|@radix-ui|cmdk|@floating-ui|react-remove-scroll(-bar)?|react-style-singleton|use-callback-ref|use-sidecar|detect-node-es|aria-hidden|get-nonce)[\/]/, priority: 92 },
+            // v0.10.1647 — CoSRE v2 Faz 2b B1 (plan §1.3): AI SDK kapanışı kendi
+            // tembel grubunda (ai-*.js). Grupsuz kalırsa yalnız tembel v2 chunk'ı
+            // import etse bile eager `vendor` catch-all'ına (preload'lu) düşerdi.
+            // Kapanış package-lock'tan: ai → @ai-sdk/{gateway,provider,provider-utils};
+            // @ai-sdk/react → swr, throttleit; peer zod (ayrı grup, aşağıda); alt @standard-schema/spec,
+            // eventsource-parser, @vercel/oidc, json-schema. @opentelemetry/api
+            // `otel` (80) grubunda kalır. use-stick-to-bottom B2'de gelir (Q3).
+            // 88: grafana (90) altı, 80'li grupların üstü.
+            // zod AYRI grup (91, ÖLÇÜLDÜ): @grafana/data'nın da bağımlılığı; ai
+            // regex'inde kalınca grafana (90) onu yutuyor ve ai chunk'ı 180 KB gz'lik
+            // grafana chunk'ını statik import ediyordu (B1 sonda build'i; kapı
+            // bundle-budget `ai → grafana`). 91 = grafana üstü, radix (92) altı:
+            // iki tembel tüketici (grafana + ai) küçük zod chunk'ını paylaşır, ai
+            // grafana'yı, grafana ai'yi çekmez.
+            { name: 'zod', test: /node_modules\/zod[\/]/, priority: 91 },
+            { name: 'ai', test: /node_modules\/(ai|@ai-sdk|swr|throttleit|@standard-schema|eventsource-parser|@vercel\/oidc|json-schema|use-stick-to-bottom)[\/]/, priority: 88 },
             { name: 'vendor', test: /node_modules/, priority: 10 },
           ],
         },

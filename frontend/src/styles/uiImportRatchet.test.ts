@@ -85,7 +85,7 @@ const CEILINGS: Record<string, number> = {
   // code"): DataTable.tsx (gövde) + types.ts (bugünkü tiplerin yeniden dışa
   // aktarımı). Benimseme değil, halef; gövde Traces diliminde değişince düşer.
   DataTable: 127, // Faz 2 dilim 1 R7: 128 → 127 (SpanClusterValuesPanel)
-  Badge: 61, // R7: 63 → 61
+  Badge: 60, // R7: 63 → 61; CoSRE 2b B1: 61 → 60 (CosreV2StatusLine → coremetry Field)
   IconButton: 50,
   Field: 36, // R7: 37 → 36
   Chip: 36,
@@ -126,9 +126,11 @@ const CEILINGS: Record<string, number> = {
   VirtualList: 1,
 };
 
-// 40 girdi (DataTable/ dizini ve index.ts dahil, testler hariç). v0.10.1616
+// 38 girdi (DataTable/ dizini ve index.ts dahil, testler hariç). v0.10.1616
 // (R8): PageShell + PageControls coremetry/'e taşındı (45 → 43). Faz 2
 // dilim 1 R4: KeyValue, SectionHead, ActionRow coremetry/'e taşındı (43 → 40).
+// CoSRE v2 Faz 2b B1: saf drawerWidth + emptyAreaClose lib/'e taşındı (40 →
+// 38) — v2 Sheet'i ui/'den hiçbir şey içe aktaramaz (tavanı olmayan atom = 0).
 const FROZEN_UI_ENTRIES = [
   'Badge.tsx',
   'Button.tsx',
@@ -166,8 +168,6 @@ const FROZEN_UI_ENTRIES = [
   'Tooltip.tsx',
   'VirtualList.tsx',
   'buttonGroupContext.ts',
-  'drawerWidth.ts',
-  'emptyAreaClose.ts',
   'index.ts',
   'useFocusTrap.ts',
 ];

@@ -43,4 +43,25 @@ describe('Radix overlay importu yalnız components/coremetry içinden', () => {
     expect(await restricted(`import { PageShell } from '@/components/coremetry';\nexport const y = PageShell;\n`, 'src/components/AppShell.tsx')).toBe(true);
     expect(await restricted(`import { PageShell } from '@/components/coremetry/PageShell';\nexport const y = PageShell;\n`, 'src/components/AppShell.tsx')).toBe(false);
   });
+
+  // v0.10.1647 (CoSRE v2 Faz 2b B1, plan §1.3): v2 ağacı overlay'i yalnız
+  // coremetry/overlay'den alır; kabuk v2'yi / AI SDK'yı yalnız import() ile anar.
+  it('components/cosre: shadcn sheet doğrudan yasak, coremetry/overlay serbest', async () => {
+    const f = 'src/components/cosre/conversation/Probe.tsx';
+    expect(await restricted(`import { Sheet } from '@/components/shadcn/sheet';\nexport const y = Sheet;\n`, f)).toBe(true);
+    expect(await restricted(`import { Dialog } from 'radix-ui';\nexport const y = Dialog;\n`, f)).toBe(true);
+    expect(await restricted(`import { Sheet } from '@/components/coremetry/overlay';\nexport const y = Sheet;\n`, f)).toBe(false);
+  });
+
+  it('kabuk: components/cosre / ai-elements / ai / @ai-sdk statik yasak, dinamik import() serbest', async () => {
+    const g = 'src/components/CopilotChatGate.tsx';
+    expect(await restricted(`import { CosreChatV2 } from './cosre/conversation/CosreChatV2';\nexport const y = CosreChatV2;\n`, g)).toBe(true);
+    expect(await restricted(`import { CosreChatV2 } from '@/components/cosre/conversation/CosreChatV2';\nexport const y = CosreChatV2;\n`, g)).toBe(true);
+    expect(await restricted(`import { Conversation } from '@/components/ai-elements/conversation';\nexport const y = Conversation;\n`, g)).toBe(true);
+    expect(await restricted(`import { Chat } from 'ai';\nexport const y = Chat;\n`, g)).toBe(true);
+    expect(await restricted(`import { Chat } from '@ai-sdk/react';\nexport const y = Chat;\n`, g)).toBe(true);
+    expect(await restricted(`export const y = () => import('./cosre/conversation/CosreChatV2');\n`, g)).toBe(false);
+    // Saf seçici lib/cosre'de, kabukta serbest (AI SDK taşımaz).
+    expect(await restricted(`import { pickChatImpl } from '@/lib/cosre/pickChatImpl';\nexport const y = pickChatImpl;\n`, g)).toBe(false);
+  });
 }, 60_000);

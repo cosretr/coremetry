@@ -6,8 +6,8 @@ import { resolve } from 'node:path';
 // Tailwind depoyu kendiliğinden TARAMAZ (`source(none)`, R4): taransaydı eski
 // sınıf adlarından (`hidden`, `table`, `border`, `sticky` …) legacy katmanını
 // yenen yardımcılar üretirdi ve geçirilmemiş sayfalar piksel değiştirirdi.
-// Taranan dizinler TAM OLARAK üç: üretilen shadcn, CoSRE v2 ai-elements ve
-// coremetry bileşikleri; Faz 2 dilim 1 R1’den beri + geçirilen sayfa dizinleri
+// Taranan dizinler: üretilen shadcn, CoSRE v2 ai-elements, coremetry
+// bileşikleri ve (Faz 2b B1) CoSRE v2 sohbet ağacı components/cosre; Faz 2 dilim 1 R1’den beri + geçirilen sayfa dizinleri
 // (pages/settings). Başka bir yol (components/ui, geçirilmemiş pages/ …) = kırmızı.
 const css = readFileSync(resolve(__dirname, 'index.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
 
@@ -18,6 +18,8 @@ describe('Tailwind kaynak listesi kilitli', () => {
       "'../components/shadcn'",
       "'../components/ai-elements'",
       "'../components/coremetry'",
+      // CoSRE v2 Faz 2b B1: v2 sohbet ağacı (components/cosre).
+      "'../components/cosre'",
       // Faz 2 dilim 1 R1 (G11): geçirilen sayfa dizinleri, birer satır.
       "'../pages/settings'",
     ]);
