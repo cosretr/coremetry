@@ -169,6 +169,8 @@ var aiCallsReaderDecisions = map[string]string{
 	"RouterGaps":                     "whitelist", // surface IN (?) ← aisurface.RouterGapLabels (v0.10.1153)
 	"aiExchangeCallsSQL":             "source",    // v0.10.1153 — etkileşimin model çağrıları
 	"aiExchangeTurnsSQL":             "turn",      // v0.10.1153 — YALNIZ etkileşim satırları
+	"aiExchangeCountSQL":             "turn",      // v0.10.1646 — süzgece uyan tur sayısı (Pager toplamı)
+	"aiExchangeUsersSQL":             "turn",      // v0.10.1646 — kullanıcı seçicisi (soru soranlar)
 	"GetAICall":                      "point",
 	"aiCallEvalSelect":               "point", // AICallForEvalset (exchange_id)
 	"AICallSampleByExchange":         "point",

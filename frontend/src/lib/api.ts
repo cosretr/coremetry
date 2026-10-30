@@ -1219,8 +1219,20 @@ export const api = {
   // v0.10.1153 — CoSRE etkileşimleri: her tur bir satır (LLM'siz dahil),
   // altında model çağrıları. Önbelleksiz (yeni tur hemen görünür).
   // v0.10.1280 — `feedback`: 👍/👎 süzgeci (down = yalnız 👎); yoksa hepsi.
-  aiExchanges: (params: { from?: number; to?: number; limit?: number; feedback?: import('./types').AIExchangeFeedbackFilter }) =>
-    get<import('./types').AIExchange[]>(`/api/ai/exchanges?${qs(params)}`),
+  // v0.10.1646 — sunucu sayfası (`offset`) + arama (`q`) + kullanıcı/kademe
+  // süzgeci; yanıt {rows,total,hasMore}. Sunucu 10 sn önbellekli.
+  aiExchanges: (params: {
+    from?: number; to?: number; limit?: number; offset?: number;
+    feedback?: import('./types').AIExchangeFeedbackFilter; q?: string; user?: string; tier?: string;
+  }) =>
+    get<import('./types').AIExchangesPage>(`/api/ai/exchanges?${qs(params)}`),
+  // v0.10.1646 — kullanıcı seçicisi: pencerede soru soranlar, sunucu araması.
+  aiExchangeUsers: (params: { from?: number; to?: number; q?: string; limit?: number }) =>
+    get<import('./types').AIExchangeUser[]>(`/api/ai/exchanges/users?${qs(params)}`),
+  // v0.10.1646 — süzgeçli CSV (sunucu akıtır, sert tavan 50.000 satır).
+  aiExchangesCSV: (params: {
+    from?: number; to?: number; feedback?: import('./types').AIExchangeFeedbackFilter; q?: string; user?: string; tier?: string;
+  }) => downloadFile(`/api/ai/exchanges/csv?${qs(params)}`, 'coremetry-ai-exchanges.csv'),
   aiStats: (params: { from?: number; to?: number; source?: import('./types').AICallSource }) =>
     get<import('./types').AIStats>(`/api/ai/stats?${qs(params)}`),
   aiSeries: (params: { from?: number; to?: number; source?: import('./types').AICallSource }) =>
@@ -4378,12 +4390,19 @@ function amp(q: string): string { return q ? '&' + q : ''; }
 
 // downloadEvalset — evalset JSON ek dosyasını indirir (iki dışa aktarım ucu
 // aynı sözleşme: Content-Disposition dosya adı, 401 → oturum akışı).
-async function downloadEvalset(path: string): Promise<void> {
+function downloadEvalset(path: string): Promise<void> {
+  return downloadFile(path, 'coremetry-evalset.json');
+}
+
+// downloadFile — v0.10.1646: ek dosya indirme sözleşmesinin tek gövdesi
+// (Content-Disposition dosya adı, 401 → oturum akışı); evalset ve
+// /ai etkileşim CSV'si paylaşır.
+async function downloadFile(path: string, fallbackName: string): Promise<void> {
   const r = await fetch(API_BASE + path, { credentials: 'include' });
   if (r.status === 401) { onUnauthorized?.(); throw new UnauthorizedError(); }
   if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
   const blob = await r.blob();
-  let fname = 'coremetry-evalset.json';
+  let fname = fallbackName;
   const m = /filename="([^"]+)"/.exec(r.headers.get('content-disposition') ?? '');
   if (m) fname = m[1];
   const url = URL.createObjectURL(blob);

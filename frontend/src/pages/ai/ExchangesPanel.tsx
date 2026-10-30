@@ -1,4 +1,4 @@
-import { useMemo, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
@@ -6,18 +6,26 @@ import { rowActivation } from '@/lib/a11y';
 import { timeRangeToNs, tsCompact, tsLong, fmtNum } from '@/lib/utils';
 import type { AIExchange, AIExchangeCall, AIExchangeFeedbackFilter, TimeRange } from '@/lib/types';
 import { Drawer, DrawerSection, SegmentedControl } from '@/components/ui';
+import { Button } from '@/components/shadcn/button';
+import { Pager } from '@/components/Pager';
+import { PageControls } from '@/components/coremetry/PageControls';
+import { Input } from '@/components/shadcn/input';
+import { NativeSelect, NativeSelectOption } from '@/components/shadcn/native-select';
 import { KeyValue } from '@/components/coremetry/KeyValue';
 import {
   useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState,
   type ColumnDef, type DataTableStateProps,
 } from '@/components/ui/DataTable';
 import {
-  NO_LLM_LABEL, EXCHANGE_FEEDBACK_FILTERS, aiExchangesQueryKey, aiExchangesRequestParams,
+  NO_LLM_LABEL, EXCHANGE_FEEDBACK_FILTERS, EXCHANGE_TIER_OPTIONS, EXCHANGES_CSV_MAX_ROWS, EXCHANGES_MAX_OFFSET, EXCHANGES_PAGE_SIZE,
+  aiExchangesCSVParams, aiExchangesQueryKey, aiExchangesRequestParams,
   exchangeCallsSummary, exchangeConversationHref, exchangeFeedbackCounts, exchangeFeedbackLabel,
   exchangeModelLabel, exchangeStatusBadge, exchangeTierLabel, exchangeTokensLabel, exchangeUsedLLM,
-  parseExchangeFeedbackFilter, type AIExchangesQueryParams,
+  exchangesQueryParams, exchangesUrlSig, readExchangesUrlState, writeExchangesUrlState,
+  type ExchangesUrlState,
   EXCHANGE_SUBJECT_LABELS, exchangeSubjectRef,
 } from './exchangeView';
+import { ExchangeUserPicker } from './ExchangeUserPicker';
 import { CopyButton } from '@/components/CopyButton';
 import { traceHref } from '@/lib/traceHref';
 
@@ -30,16 +38,22 @@ import { traceHref } from '@/lib/traceHref';
 // süre, token (LLM kullanıldıysa), sonuç, 👍/👎. Satır → çekmece: cevap ve
 // turun alt çağrıları; alt çağrı → mevcut çağrı çekmecesi (onOpenCall).
 //
-// Sunucu LIMIT 200 (kayıt listesi, useDataTable; satır > 100 olabilir →
-// content-visibility). Çekmece seçimi URL'de (?exchange=, replace) — liste
-// pencere değişince yeniden okunur, seçili tur listede yoksa çekmece kapanır.
+// Çekmece seçimi URL'de (?exchange=, replace) — liste pencere değişince
+// yeniden okunur, seçili tur sayfada yoksa çekmece kapanır.
 //
 // v0.10.1280 (CoSRE adım 8) — 👍/👎 süzgeci (`?fb=down` = operatörün inceleme
 // kuyruğu; sunucu tarafında, LIMIT'ten önce), görünen satırların 👍/👎 sayımı,
 // 👎'nin hazır nedeni, oyun bağlandığı alt çağrı ve konuşma arşivi bağı.
 // Sorgu anahtarı isteğin TÜM girdilerinden (aiExchangesQueryKey).
-
-const LIMIT = 200;
+//
+// v0.10.1646 (operatör onaylı) — pencerenin TÜM soruları: eski LIMIT 200
+// eski turları gizliyordu. Sunucu sayfası (Pager offset, kesin toplam) +
+// soru metninde arama (300 ms debounce, sunucu) + kullanıcı (sunucu
+// taraflı seçici) ve kademe süzgeci + süzgeçli CSV (sunucu, 50.000 satır
+// tavanı). Hepsi URL'de (fb/xq/xuser/xtier/xpage, replace; içe alma
+// imzalı). Sıra sunucuda sabit (en yeni önce) → tablo YALNIZ boyutlanır
+// (sunucu sayfalı tablo kuralı: bir sayfanın içini istemcide sıralamak
+// yanıltır). Kolonlar ve çekmece aynı.
 
 // Örnek blokları — çağrı çekmecesinin (CallDrawer) <pre> görünümüyle aynı.
 const SAMPLE_STYLE: CSSProperties = {
@@ -48,17 +62,18 @@ const SAMPLE_STYLE: CSSProperties = {
   borderRadius: 4, border: '1px solid var(--border)',
 };
 
+// v0.10.1646 — sortValue YOK: sıra sunucuda (created_at ↓), tablo resize-only.
 const COLS: ColumnDef<AIExchange>[] = [
-  { id: 'time', label: 'Zaman', sortValue: x => x.createdAt, width: 120, minWidth: 96, priority: 3, tone: () => 'muted' },
-  { id: 'question', label: 'Soru', sortValue: x => x.question, naturalDir: 'asc', flex: true, priority: 1 },
-  { id: 'tier', label: 'Kademe', sortValue: x => exchangeTierLabel(x), naturalDir: 'asc', width: 190, minWidth: 120, priority: 1 },
-  { id: 'model', label: 'Model', sortValue: x => exchangeModelLabel(x), naturalDir: 'asc', width: 170, minWidth: 100, priority: 2,
+  { id: 'time', label: 'Zaman', width: 120, minWidth: 96, priority: 3, tone: () => 'muted' },
+  { id: 'question', label: 'Soru', flex: true, priority: 1 },
+  { id: 'tier', label: 'Kademe', width: 190, minWidth: 120, priority: 1 },
+  { id: 'model', label: 'Model', width: 170, minWidth: 100, priority: 2,
     tone: x => (exchangeUsedLLM(x) ? undefined : 'faint') },
-  { id: 'duration', label: 'Süre', sortValue: x => x.durationMs, numeric: true, width: 90, minWidth: 70, priority: 2 },
-  { id: 'tokens', label: 'Token (gir / çık)', sortValue: x => x.inputTokens + x.outputTokens, numeric: true, width: 130, minWidth: 90, priority: 2, tone: () => 'faint' },
-  { id: 'status', label: 'Sonuç', sortValue: x => x.status, naturalDir: 'asc', width: 85, minWidth: 70, priority: 1 },
-  { id: 'feedback', label: 'Oy', sortValue: x => x.feedback ?? 0, numeric: true, width: 100, minWidth: 60, priority: 2 },
-  { id: 'user', label: 'Kullanıcı', sortValue: x => x.userEmail || x.userId || '', naturalDir: 'asc', width: 170, minWidth: 100, priority: 3, tone: () => 'faint' },
+  { id: 'duration', label: 'Süre', numeric: true, width: 90, minWidth: 70, priority: 2 },
+  { id: 'tokens', label: 'Token (gir / çık)', numeric: true, width: 130, minWidth: 90, priority: 2, tone: () => 'faint' },
+  { id: 'status', label: 'Sonuç', width: 85, minWidth: 70, priority: 1 },
+  { id: 'feedback', label: 'Oy', numeric: true, width: 100, minWidth: 60, priority: 2 },
+  { id: 'user', label: 'Kullanıcı', width: 170, minWidth: 100, priority: 3, tone: () => 'faint' },
 ];
 
 const CALL_COLS: ColumnDef<AIExchangeCall>[] = [
@@ -69,49 +84,97 @@ const CALL_COLS: ColumnDef<AIExchangeCall>[] = [
   { id: 'status', label: 'Durum', sortValue: c => c.status, naturalDir: 'asc', width: 80, minWidth: 64, priority: 1 },
 ];
 
+const SEARCH_DEBOUNCE_MS = 300;
+// CSV tavanı tam sayıyla (fmtNum kısaltır: "50.0K" bir tavan beyanı için belirsiz).
+const CSV_CAP_LABEL = EXCHANGES_CSV_MAX_ROWS.toLocaleString('tr-TR');
+
 export function ExchangesPanel({ range, onOpenCall }: { range: TimeRange; onOpenCall: (id: string) => void }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedId = searchParams.get('exchange') ?? '';
-  const feedback = parseExchangeFeedbackFilter(searchParams.get('fb'));
+  const st = readExchangesUrlState(searchParams);
   const setSelected = (id: string) => setSearchParams(prev => {
     const p = new URLSearchParams(prev);
     if (id) p.set('exchange', id);
     else p.delete('exchange');
     return p;
   }, { replace: true });
-  // v0.10.1280 — süzgeç URL'de (paylaşılan link aynı görünümü açar).
-  const setFeedback = (v: AIExchangeFeedbackFilter) => setSearchParams(prev => {
-    const p = new URLSearchParams(prev);
-    if (v) p.set('fb', v);
-    else p.delete('fb');
-    return p;
-  }, { replace: true });
+  // v0.10.1280 / v0.10.1646 — panelin tüm seçimleri URL'de (paylaşılan link
+  // aynı görünümü açar); süzgeç değişince sayfa başa döner.
+  const setUrl = (patch: Partial<ExchangesUrlState>) =>
+    setSearchParams(prev => writeExchangesUrlState(prev, patch), { replace: true });
+  const setFeedback = (v: AIExchangeFeedbackFilter) => setUrl({ feedback: v });
+
+  // Arama + kullanıcı taslakları: yazarken yerel, URL'e debounce / seçimle.
+  // URL→taslak içe alma İMZALI (v0.8.253): yalnız panelin parametreleri
+  // değişince — aralık ya da çekmece yazımı yazılmakta olan metni ezmez.
+  const [qText, setQText] = useState(st.q);
+  const [userText, setUserText] = useState(st.user);
+  const sig = exchangesUrlSig(searchParams);
+  const lastSigRef = useRef(sig);
+  useEffect(() => {
+    if (sig === lastSigRef.current) return;
+    lastSigRef.current = sig;
+    const cur = readExchangesUrlState(searchParams);
+    setQText(cur.q);
+    setUserText(cur.user);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sig]);
+  const qTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(qTimer.current), []);
+  const onSearch = (v: string) => {
+    setQText(v);
+    window.clearTimeout(qTimer.current);
+    qTimer.current = window.setTimeout(() => setUrl({ q: v.trim() }), SEARCH_DEBOUNCE_MS);
+  };
+  const clearFilters = () => {
+    window.clearTimeout(qTimer.current);
+    setQText('');
+    setUserText('');
+    setUrl({ q: '', user: '', tier: '', feedback: '' });
+  };
 
   // timeRangeToNs yalnız memo içinde (v0.5.184): pencere değişmedikçe sabit.
-  const params = useMemo<AIExchangesQueryParams>(() => {
-    const { from, to } = timeRangeToNs(range);
-    return { from, to, limit: LIMIT, feedback };
-  }, [range, feedback]);
+  const win = useMemo(() => timeRangeToNs(range), [range]);
+  const params = useMemo(
+    () => exchangesQueryParams(win, { feedback: st.feedback, q: st.q, user: st.user, tier: st.tier, page: st.page }),
+    [win, st.feedback, st.q, st.user, st.tier, st.page]);
   const q = useQuery({
     queryKey: aiExchangesQueryKey(params),
-    queryFn: () => api.aiExchanges(aiExchangesRequestParams(params)).then(r => r ?? []),
+    queryFn: () => api.aiExchanges(aiExchangesRequestParams(params)),
     staleTime: 15_000,
   });
-  const rows: AIExchange[] | null | undefined = q.isPending ? undefined : q.isError ? null : q.data;
+  const rows: AIExchange[] | null | undefined = useMemo(
+    () => (q.isPending ? undefined : q.isError ? null : q.data?.rows ?? []),
+    [q.isPending, q.isError, q.data]);
+  const total = q.data?.total ?? 0;
+  const hasMore = q.data?.hasMore ?? false;
+  const filtered = !!(st.feedback || st.q || st.user || st.tier);
 
-  const dt = useDataTable<AIExchange>({
-    storageKey: 'ai-exchanges', columns: COLS, rows: rows ?? [],
-    initialSort: { id: 'time', dir: 'desc' },
-  });
+  const dt = useDataTable<AIExchange>({ storageKey: 'ai-exchanges', columns: COLS, rows: rows ?? [] });
   const state: Omit<DataTableStateProps<AIExchange>, 'dt'> =
     rows === undefined ? { kind: 'loading' }
     : rows === null ? { kind: 'error' }
-    : feedback
-      ? { kind: 'empty', message: 'Bu pencerede bu oyu alan CoSRE turu yok — süzgeci "Tümü"ne alın ya da pencereyi genişletin.' }
+    : st.page > 0 && total > 0
+      ? { kind: 'empty', message: 'Bu sayfa boş — ilk sayfaya dönün.' }
+    : filtered
+      ? { kind: 'empty', message: 'Bu pencerede süzgece uyan CoSRE turu yok — süzgeçleri temizleyin ya da pencereyi genişletin.' }
       : { kind: 'empty', message: 'Bu pencerede CoSRE etkileşimi yok — CoSRE penceresinde ya da bir AI çekmecesinde soru sorulunca burada görünür.' };
   const noLLM = useMemo(() => (rows ?? []).filter(x => !exchangeUsedLLM(x)).length, [rows]);
   const votes = useMemo(() => exchangeFeedbackCounts(rows ?? []), [rows]);
   const selected = selectedId ? (rows ?? []).find(x => x.exchangeId === selectedId) : undefined;
+  // Son sayfa yalnız KESİN ve sunucu ofset tavanı içinde ulaşılabilirken (Pager sözleşmesi).
+  const lastPageRaw = total > 0 ? Math.ceil(total / EXCHANGES_PAGE_SIZE) - 1 : -1;
+  const lastPage = lastPageRaw >= 0 && lastPageRaw * EXCHANGES_PAGE_SIZE <= EXCHANGES_MAX_OFFSET ? lastPageRaw : undefined;
+
+  const [csvBusy, setCsvBusy] = useState(false);
+  const [csvErr, setCsvErr] = useState<string | null>(null);
+  const downloadCSV = () => {
+    setCsvBusy(true);
+    setCsvErr(null);
+    api.aiExchangesCSV(aiExchangesCSVParams(params))
+      .catch((e: unknown) => setCsvErr(e instanceof Error ? e.message : String(e)))
+      .finally(() => setCsvBusy(false));
+  };
 
   return (
     <div className="card" style={{ marginTop: 16 }}>
@@ -123,15 +186,38 @@ export function ExchangesPanel({ range, onOpenCall }: { range: TimeRange; onOpen
         <span style={{ marginLeft: 'auto', display: 'inline-flex', gap: 10, alignItems: 'center' }}>
           {rows && rows.length > 0 && (
             <span style={{ fontSize: 11, color: 'var(--text3)' }}
-              title="v0.10.1393 — AI cevaplarında 👍/👎 artık sorulmuyor; sayımlar yalnız geçmiş oylar (yeni turlarda Oy '—')">
-              {fmtNum(rows.length)} tur · {fmtNum(noLLM)} {NO_LLM_LABEL} · 👍 {fmtNum(votes.up)} · 👎 {fmtNum(votes.down)}
+              title="Toplam: süzgece uyan bütün turlar. LLM yok ve 👍/👎 sayımı bu sayfanın satırları. v0.10.1393 — AI cevaplarında 👍/👎 artık sorulmuyor; sayımlar yalnız geçmiş oylar (yeni turlarda Oy '—')">
+              {fmtNum(total)} tur · sayfada {fmtNum(noLLM)} {NO_LLM_LABEL} · 👍 {fmtNum(votes.up)} · 👎 {fmtNum(votes.down)}
             </span>
           )}
           <SegmentedControl size="sm" aria-label="Geri bildirim süzgeci"
-            value={feedback} onChange={setFeedback} options={EXCHANGE_FEEDBACK_FILTERS} />
+            value={st.feedback} onChange={setFeedback} options={EXCHANGE_FEEDBACK_FILTERS} />
         </span>
       </div>
       <div className="ov-card-b">
+        <PageControls className="ai-exch-controls" actions={
+          <>
+            {csvErr && <span className="ai-exch-csv-err" title={csvErr}>CSV indirilemedi</span>}
+            <Button variant="secondary" size="sm" onClick={downloadCSV} loading={csvBusy}
+              disabled={!rows || total === 0}
+              title={`Süzgece uyan turları CSV olarak indir (en çok ${CSV_CAP_LABEL} satır, en yeni önce; fazlası kesilir)`}>
+              {`↓ CSV (en çok ${CSV_CAP_LABEL})`}
+            </Button>
+          </>
+        }>
+          <Input type="search" className="ai-exch-search" value={qText} onChange={e => onSearch(e.target.value)}
+            placeholder="Soru içinde ara…" aria-label="Soru içinde ara" />
+          <ExchangeUserPicker value={userText} onChange={setUserText}
+            onCommit={v => setUrl({ user: v })} from={win.from} to={win.to} />
+          {/* Kapalı küme (aisurface kademeleri, ~15) — katalog değil, sunucu araması gerekmez. */}
+          <NativeSelect size="sm" className="ai-exch-tier" value={st.tier} onChange={e => setUrl({ tier: e.target.value })}
+            aria-label="Kademe süzgeci">
+            {EXCHANGE_TIER_OPTIONS.map(o => <NativeSelectOption key={o.value} value={o.value}>{o.label}</NativeSelectOption>)}
+          </NativeSelect>
+          {filtered && (
+            <Button variant="secondary" size="sm" onClick={clearFilters}>Temizle</Button>
+          )}
+        </PageControls>
         <div className="table-wrap">
           <table {...dt.tableProps}>
             <DataTableColgroup dt={dt} />
@@ -158,10 +244,9 @@ export function ExchangesPanel({ range, onOpenCall }: { range: TimeRange; onOpen
             </tbody>
           </table>
         </div>
-        {rows && rows.length >= LIMIT && (
-          <div className="pager" style={{ color: 'var(--text3)' }}>
-            son {LIMIT} tur gösteriliyor — tavana dayandı; daha fazlası için pencereyi daraltın
-          </div>
+        {(st.page > 0 || hasMore) && (
+          <Pager mode="offset" count="exact" total={total} page={st.page} pageSize={EXCHANGES_PAGE_SIZE}
+            hasMore={hasMore} onPage={p => setUrl({ page: p })} lastReachablePage={lastPage} />
         )}
       </div>
       {selected && <ExchangeDrawer ex={selected} onClose={() => setSelected('')} onOpenCall={onOpenCall} />}

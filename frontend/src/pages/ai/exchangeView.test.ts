@@ -62,7 +62,7 @@ describe('exchangeView', () => {
 // ── v0.10.1280 — CoSRE adım 8: /ai 👍/👎 süzgeci + arşiv bağı ─────────────
 
 describe('aiExchangesQueryKey — anahtar isteğin TÜM girdilerini taşır', () => {
-  const base: AIExchangesQueryParams = { from: 1, to: 2, limit: 200, feedback: '' };
+  const base: AIExchangesQueryParams = { from: 1, to: 2, limit: 100, offset: 0, feedback: '', q: '', user: '', tier: '' };
   it('her alan anahtar listesinde (yeni girdi unutulamaz)', () => {
     // Örnek nesnenin HER alanı listede olmalı: tip bir alan kazanıp liste
     // kazanmazsa bu kırmızı (anahtar o girdiyi görmezdi).
@@ -73,6 +73,10 @@ describe('aiExchangesQueryKey — anahtar isteğin TÜM girdilerini taşır', ()
     ['to', { to: 9 }],
     ['limit', { limit: 50 }],
     ['feedback', { feedback: 'down' }],
+    ['offset', { offset: 100 }],
+    ['q', { q: 'x' }],
+    ['user', { user: 'u' }],
+    ['tier', { tier: 'loop' }],
   ] as const)('%s değişince anahtar değişir', (_name, patch) => {
     const a = JSON.stringify(aiExchangesQueryKey(base));
     const b = JSON.stringify(aiExchangesQueryKey({ ...base, ...patch } as AIExchangesQueryParams));

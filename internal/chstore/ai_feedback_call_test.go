@@ -129,13 +129,13 @@ func TestAIExchangeFeedbackFilterSQL(t *testing.T) {
 		if got := NormalizeAIExchangeFeedback(c.in); got != c.norm {
 			t.Errorf("Normalize(%q) = %q, beklenen %q", c.in, got, c.norm)
 		}
-		q := aiExchangeTurnsSQL(true, c.norm)
+		q := aiExchangeTurnsSQL(true, ListAIExchangesParams{Feedback: c.norm})
 		args := aiExchangeTurnsArgs(ListAIExchangesParams{From: from, To: to, Limit: 50, Feedback: c.norm})
 		if n := strings.Count(q, "?"); n != len(args) {
 			t.Errorf("%q: %d bind, %d arg", c.in, n, len(args))
 		}
-		if args[len(args)-1] != 50 {
-			t.Errorf("%q: LIMIT son bind olmalı: %v", c.in, args)
+		if args[len(args)-2] != 50 || args[len(args)-1] != 0 {
+			t.Errorf("%q: LIMIT, OFFSET son iki bind olmalı (v0.10.1646): %v", c.in, args)
 		}
 		if c.cond == "" {
 			if strings.Contains(q, "ai_feedback") {

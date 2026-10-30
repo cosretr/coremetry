@@ -23,6 +23,7 @@ package chstore
 import (
 	"context"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/cilcenk/coremetry/internal/ai/aisurface"
@@ -101,24 +102,72 @@ func NormalizeAIExchangeFeedback(v string) string {
 	return ""
 }
 
-// ListAIExchangesParams — pencere + tavan (sıfır değerler: son 24 sa, 100).
+// ListAIExchangesParams — pencere + sayfa + süzgeçler (sıfır değerler: son
+// 24 sa, 100 satır, ilk sayfa). NormalizeAIExchangeParams tek doğrulayıcı.
 type ListAIExchangesParams struct {
 	From  time.Time
 	To    time.Time
 	Limit int
+	// Offset — v0.10.1646: sunucu sayfası (satır ofseti, aiExchangesMaxOffset tavanlı).
+	Offset int
 	// Feedback — v0.10.1280: NormalizeAIExchangeFeedback kümesi.
 	Feedback string
+	// Q — v0.10.1646: soru metninde büyük/küçük harf duyarsız alt dize
+	// (positionCaseInsensitiveUTF8; bind, joker yok → kaçış gerekmez).
+	Q string
+	// User — v0.10.1646: user_email ya da user_id tam eşleşmesi (seçici
+	// /api/ai/exchanges/users'tan gelen değer).
+	User string
+	// Tier — v0.10.1646: kademe (aisurface.KnownTier kapalı kümesi).
+	Tier string
 }
 
 const (
 	aiExchangesDefaultLimit = 100
 	aiExchangesMaxLimit     = 500
+	// aiExchangesMaxOffset — derin ofset tavanı; ai_calls 90 g TTL'li küçük
+	// bir tablo, tavan yalnız saçma isteği keser.
+	aiExchangesMaxOffset = 100_000
+	// Girdi tavanları (rune).
+	aiExchangeSearchMaxRunes = 200
+	aiExchangeUserMaxRunes   = 320
 	// aiExchangeCallSlack — turun çağrıları tur başlangıcından sonra yazılır;
 	// alışveriş tavanı (chatDeadlineMax 15 dk) + pay.
 	aiExchangeCallSlack = 20 * time.Minute
 	// aiExchangeCallsPerTurn — çağrı sorgusunun tavanı (tur başına pay).
 	aiExchangeCallsPerTurn = 20
 )
+
+// NormalizeAIExchangeParams — SAF: tek doğrulayıcı (liste, sayım, CSV ve
+// önbellek anahtarı aynı normalize değerleri görür).
+func NormalizeAIExchangeParams(p ListAIExchangesParams) ListAIExchangesParams {
+	if p.Limit <= 0 || p.Limit > aiExchangesMaxLimit {
+		p.Limit = aiExchangesDefaultLimit
+	}
+	p.Offset = min(max(p.Offset, 0), aiExchangesMaxOffset)
+	if p.To.IsZero() {
+		p.To = time.Now().UTC()
+	}
+	if p.From.IsZero() {
+		p.From = p.To.Add(-24 * time.Hour)
+	}
+	p.Feedback = NormalizeAIExchangeFeedback(p.Feedback)
+	p.Q = clipRunes(strings.TrimSpace(p.Q), aiExchangeSearchMaxRunes)
+	p.User = clipRunes(strings.TrimSpace(p.User), aiExchangeUserMaxRunes)
+	if !aisurface.KnownTier(p.Tier) {
+		p.Tier = ""
+	}
+	return p
+}
+
+// clipRunes — SAF: UTF-8 güvenli kırpma.
+func clipRunes(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n])
+}
 
 // aiCallsTurnCond — etkileşim satırlarını seçen koşul (aiCallsNotTurnCond'un tersi).
 const aiCallsTurnCond = "startsWith(surface, '" + aisurface.TurnPrefix + "')"
@@ -140,45 +189,135 @@ func aiExchangeFeedbackVerdictCond(fb string) string {
 	return ""
 }
 
-// aiExchangeTurnsSQL — SAF: pencere içindeki etkileşim satırları. profile_id
-// yalnız genişletilmiş kolonlar varken (iki-boot sözleşmesi). Bind: from, to,
-// [fbFrom — süzgeç varken], limit.
+// aiExchangeTierArgs — SAF: kademe süzgecinin üç bind'ı. Etiket
+// "cosre-turn:<kademe>[/<rota>][+deep]" — tam eşitlik ya da ayırıcıyla
+// devam; "code" gibi bir önek "code-sticky"yi yakalamasın.
+func aiExchangeTierArgs(tier string) []string {
+	base := aisurface.TurnPrefix + ":" + tier
+	return []string{base, base + "/", base + "+"}
+}
+
+// aiExchangeFilterWhere — SAF: etkileşim satırı okumalarının ORTAK WHERE
+// gövdesi (liste, sayım, CSV). Zaman sınırı indeksli created_at üstünde;
+// kullanıcı metni YALNIZ bind (aiExchangeFilterArgs aynı sırayla).
+// aiCallsTurnCond her kurucunun KENDİ metninde (ai_calls okuyucu envanteri
+// kurucu başına "turn" kararını ister).
 //
 // v0.10.1280 — 👍/👎 süzgeci: kökü ai_feedback'te (FINAL — son oy) eşleşen
 // turlar. Süzgeç LIMIT'ten ÖNCE: "son 200 turdan 👎 olanlar" değil "pencerenin
 // 👎 turları". Alt sorgu GLOBAL (make audit CHECK 5: dağıtıkta GLOBAL'siz
 // IN alt sorguyu her shard'da ayrı koşar) ve zaman sınırlı — oy turdan
 // SONRA verilir, alt sınır pencerenin başı.
-func aiExchangeTurnsSQL(ext bool, fb string) string {
+//
+// v0.10.1646 — arama (positionCaseInsensitiveUTF8: joker yok, kaçış
+// gerekmez), kullanıcı (e-posta ya da kimlik), kademe (kapalı küme).
+func aiExchangeFilterWhere(p ListAIExchangesParams) string {
+	w := `created_at >= toDateTime64(?, 9, 'UTC')
+		  AND created_at <  toDateTime64(?, 9, 'UTC')`
+	if vc := aiExchangeFeedbackVerdictCond(p.Feedback); vc != "" {
+		w += `
+		  AND ` + aiExchangeRootExpr + ` GLOBAL IN (
+		      SELECT exchange_id FROM ai_feedback FINAL
+		      WHERE ` + vc + ` AND created_at >= toDateTime64(?, 9, 'UTC'))`
+	}
+	if p.Q != "" {
+		w += `
+		  AND positionCaseInsensitiveUTF8(prompt_sample, ?) > 0`
+	}
+	if p.User != "" {
+		w += `
+		  AND (user_email = ? OR user_id = ?)`
+	}
+	if p.Tier != "" {
+		w += `
+		  AND (surface = ? OR startsWith(surface, ?) OR startsWith(surface, ?))`
+	}
+	return w
+}
+
+// aiExchangeFilterArgs — SAF: aiExchangeFilterWhere'in bind sırası.
+func aiExchangeFilterArgs(p ListAIExchangesParams) []any {
+	args := []any{chDateTime64Arg(p.From), chDateTime64Arg(p.To)}
+	if aiExchangeFeedbackVerdictCond(p.Feedback) != "" {
+		args = append(args, chDateTime64Arg(p.From))
+	}
+	if p.Q != "" {
+		args = append(args, p.Q)
+	}
+	if p.User != "" {
+		args = append(args, p.User, p.User)
+	}
+	if p.Tier != "" {
+		for _, a := range aiExchangeTierArgs(p.Tier) {
+			args = append(args, a)
+		}
+	}
+	return args
+}
+
+// aiExchangeTurnsSQL — SAF: pencere içindeki etkileşim satırlarının BİR
+// sayfası. profile_id yalnız genişletilmiş kolonlar varken (iki-boot
+// sözleşmesi). v0.10.1646: OFFSET sayfalama; eşit created_at'te sıra
+// exchange_id ile sabit (sayfa sınırında tekrar / atlama yok).
+func aiExchangeTurnsSQL(ext bool, p ListAIExchangesParams) string {
 	cols := `exchange_id, toUnixTimestamp64Nano(created_at), surface, status, error_msg,
 		       duration_ms, user_id, user_email, prompt_sample, response_sample`
 	if ext {
 		cols += `, profile_id`
 	}
-	fbCond := ""
-	if vc := aiExchangeFeedbackVerdictCond(fb); vc != "" {
-		fbCond = `
-		  AND ` + aiExchangeRootExpr + ` GLOBAL IN (
-		      SELECT exchange_id FROM ai_feedback FINAL
-		      WHERE ` + vc + ` AND created_at >= toDateTime64(?, 9, 'UTC'))`
-	}
 	return `SELECT ` + cols + `
 		FROM ai_calls
-		WHERE created_at >= toDateTime64(?, 9, 'UTC')
-		  AND created_at <  toDateTime64(?, 9, 'UTC')
-		  AND ` + aiCallsTurnCond + fbCond + `
-		ORDER BY created_at DESC
-		LIMIT ?
+		WHERE ` + aiCallsTurnCond + `
+		  AND ` + aiExchangeFilterWhere(p) + `
+		ORDER BY created_at DESC, exchange_id DESC
+		LIMIT ? OFFSET ?
 		SETTINGS max_execution_time = 10`
 }
 
 // aiExchangeTurnsArgs — SAF: aiExchangeTurnsSQL'in bind sırası.
 func aiExchangeTurnsArgs(p ListAIExchangesParams) []any {
-	args := []any{chDateTime64Arg(p.From), chDateTime64Arg(p.To)}
-	if aiExchangeFeedbackVerdictCond(p.Feedback) != "" {
-		args = append(args, chDateTime64Arg(p.From))
+	return append(aiExchangeFilterArgs(p), p.Limit, p.Offset)
+}
+
+// aiExchangeCountSQL — SAF: süzgece uyan tur sayısı (Pager'ın kesin toplamı).
+func aiExchangeCountSQL(p ListAIExchangesParams) string {
+	return `SELECT count()
+		FROM ai_calls
+		WHERE ` + aiCallsTurnCond + `
+		  AND ` + aiExchangeFilterWhere(p) + `
+		SETTINGS max_execution_time = 10`
+}
+
+// aiExchangeUserExpr — kullanıcı seçicisinin değeri: e-posta, yoksa kimlik.
+const aiExchangeUserExpr = "if(user_email != '', user_email, user_id)"
+
+// aiExchangeUsersSQL — SAF: pencerede soru sormuş kullanıcılar (sunucu
+// taraflı seçici; tam liste istemciye gitmez). Bind: from, to, [q], limit.
+func aiExchangeUsersSQL(q string) string {
+	cond := ""
+	if q != "" {
+		cond = `
+		  AND positionCaseInsensitiveUTF8(u, ?) > 0`
 	}
-	return append(args, p.Limit)
+	return `SELECT ` + aiExchangeUserExpr + ` AS u, count() AS n
+		FROM ai_calls
+		WHERE created_at >= toDateTime64(?, 9, 'UTC')
+		  AND created_at <  toDateTime64(?, 9, 'UTC')
+		  AND ` + aiCallsTurnCond + `
+		  AND u != ''` + cond + `
+		GROUP BY u
+		ORDER BY n DESC, u
+		LIMIT ?
+		SETTINGS max_execution_time = 5`
+}
+
+// aiExchangeUsersArgs — SAF: aiExchangeUsersSQL'in bind sırası.
+func aiExchangeUsersArgs(from, to time.Time, q string, limit int) []any {
+	args := []any{chDateTime64Arg(from), chDateTime64Arg(to)}
+	if q != "" {
+		args = append(args, q)
+	}
+	return append(args, limit)
 }
 
 // aiExchangeCallsSQL — SAF: verilen köklerin model çağrıları. Üretim kaynak
@@ -322,18 +461,9 @@ func aiExchangeCallWindow(turns []aiTurnRow) (from, to time.Time) {
 
 // ListAIExchanges — /api/ai/exchanges. En yeni tur önce.
 func (s *Store) ListAIExchanges(ctx context.Context, p ListAIExchangesParams) ([]AIExchange, error) {
-	if p.Limit <= 0 || p.Limit > aiExchangesMaxLimit {
-		p.Limit = aiExchangesDefaultLimit
-	}
-	if p.To.IsZero() {
-		p.To = time.Now().UTC()
-	}
-	if p.From.IsZero() {
-		p.From = p.To.Add(-24 * time.Hour)
-	}
-	p.Feedback = NormalizeAIExchangeFeedback(p.Feedback)
+	p = NormalizeAIExchangeParams(p)
 	ext := aiCallsExtended.Load()
-	rows, err := s.conn.Query(ctx, aiExchangeTurnsSQL(ext, p.Feedback), aiExchangeTurnsArgs(p)...)
+	rows, err := s.conn.Query(ctx, aiExchangeTurnsSQL(ext, p), aiExchangeTurnsArgs(p)...)
 	if err != nil {
 		return nil, err
 	}
@@ -431,4 +561,54 @@ func (s *Store) aiExchangeConversations(ctx context.Context, from, to time.Time,
 		}
 	}
 	return out
+}
+
+// CountAIExchanges — v0.10.1646: süzgece uyan tur sayısı (Pager'ın kesin toplamı).
+func (s *Store) CountAIExchanges(ctx context.Context, p ListAIExchangesParams) (uint64, error) {
+	p = NormalizeAIExchangeParams(p)
+	var n uint64
+	if err := s.conn.QueryRow(ctx, aiExchangeCountSQL(p), aiExchangeFilterArgs(p)...).Scan(&n); err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+// AIExchangeUser — kullanıcı seçicisinin satırı (değer = user_email, yoksa user_id).
+type AIExchangeUser struct {
+	User  string `json:"user"`
+	Turns uint64 `json:"turns"`
+}
+
+const (
+	aiExchangeUsersDefaultLimit = 20
+	aiExchangeUsersMaxLimit     = 50
+)
+
+// ListAIExchangeUsers — v0.10.1646: pencerede soru sormuş kullanıcılar
+// (q alt dizesine uyan, en çok soran önce, tavanlı).
+func (s *Store) ListAIExchangeUsers(ctx context.Context, from, to time.Time, q string, limit int) ([]AIExchangeUser, error) {
+	if limit <= 0 || limit > aiExchangeUsersMaxLimit {
+		limit = aiExchangeUsersDefaultLimit
+	}
+	if to.IsZero() {
+		to = time.Now().UTC()
+	}
+	if from.IsZero() {
+		from = to.Add(-24 * time.Hour)
+	}
+	q = clipRunes(strings.TrimSpace(q), aiExchangeUserMaxRunes)
+	rows, err := s.conn.Query(ctx, aiExchangeUsersSQL(q), aiExchangeUsersArgs(from, to, q, limit)...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []AIExchangeUser{}
+	for rows.Next() {
+		var u AIExchangeUser
+		if err := rows.Scan(&u.User, &u.Turns); err != nil {
+			return nil, err
+		}
+		out = append(out, u)
+	}
+	return out, rows.Err()
 }

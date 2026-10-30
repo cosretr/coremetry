@@ -5123,6 +5123,12 @@ a.ins-val:hover { text-decoration: underline; }
    select` kuralları (yoğunluk + ≤640px iOS 16px) yine kazanır. Bilerek ≤640px
    katmanının DIŞINDA — yalnız masaüstü tabanı. */
 .ai-filter-select { font-size: var(--fs-sm); }
+/* v0.10.1646 — /ai CoSRE etkileşimleri süzgeç satırı (shadcn Input / NativeSelect
+   genişlikleri; pages/ai Tailwind taraması dışında, sınıf burada). */
+.ai-exch-controls { margin-bottom: 8px; }
+.ai-exch-search { width: 224px; height: 32px; }
+.ai-exch-tier { width: 192px; }
+.ai-exch-csv-err { font-size: var(--fs-xs); color: var(--err); }
 
 /* ── v0.10.968 — ui/Popover (components/ui/Popover.tsx) ─────────────────
    Çapaya bağlı menü/diyalog: satır ⋯ menüleri, "+N" çip menüsü, kapsam

@@ -14,17 +14,17 @@ import (
 
 func TestAIExchangeSQLShapes(t *testing.T) {
 	for _, ext := range []bool{false, true} {
-		q := aiExchangeTurnsSQL(ext, "")
+		q := aiExchangeTurnsSQL(ext, ListAIExchangesParams{})
 		if !strings.Contains(q, "startsWith(surface, 'cosre-turn')") || strings.Contains(q, "NOT startsWith(surface, 'cosre-turn')") {
 			t.Errorf("etkileşim okuması yalnız etkileşim satırlarını seçmeli:\n%s", q)
 		}
-		if n := strings.Count(q, "?"); n != 3 {
-			t.Errorf("turns ext=%v: %d bind, beklenen 3 (from, to, limit)", ext, n)
+		if n := strings.Count(q, "?"); n != 4 {
+			t.Errorf("turns ext=%v: %d bind, beklenen 4 (from, to, limit, offset — v0.10.1646)", ext, n)
 		}
 		if strings.Contains(q, "profile_id") != ext {
 			t.Errorf("profile_id yalnız genişletilmiş kolonlarla seçilmeli (ext=%v)", ext)
 		}
-		if !strings.Contains(q, "LIMIT ?") || !strings.Contains(q, "max_execution_time") {
+		if !strings.Contains(q, "LIMIT ? OFFSET ?") || !strings.Contains(q, "max_execution_time") {
 			t.Errorf("turns: LIMIT / max_execution_time eksik")
 		}
 	}

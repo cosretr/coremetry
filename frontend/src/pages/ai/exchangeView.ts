@@ -80,21 +80,120 @@ export interface AIExchangesQueryParams {
   from: number;
   to: number;
   limit: number;
+  /** v0.10.1646 — sunucu sayfası (satır ofseti). */
+  offset: number;
   feedback: AIExchangeFeedbackFilter;
+  /** v0.10.1646 — soru metninde arama (sunucu, büyük/küçük harf duyarsız). */
+  q: string;
+  /** v0.10.1646 — kullanıcı (e-posta ya da kimlik, seçiciden). */
+  user: string;
+  /** v0.10.1646 — kademe (EXCHANGE_TIER_OPTIONS). */
+  tier: string;
 }
 
 /** Sabit sıra — yeni girdi buraya eklenmeden anahtar onu görmez; test
  *  AIExchangesQueryParams'ın her alanının burada olduğunu pinler. */
-export const AI_EXCHANGES_QUERY_FIELDS = ['from', 'to', 'limit', 'feedback'] as const satisfies ReadonlyArray<keyof AIExchangesQueryParams>;
+export const AI_EXCHANGES_QUERY_FIELDS = ['from', 'to', 'limit', 'offset', 'feedback', 'q', 'user', 'tier'] as const satisfies ReadonlyArray<keyof AIExchangesQueryParams>;
 
 export function aiExchangesQueryKey(p: AIExchangesQueryParams): readonly unknown[] {
   return ['ai-exchanges', ...AI_EXCHANGES_QUERY_FIELDS.map(k => p[k])];
 }
 
-/** İsteğin sorgu parametreleri: süzgeç yoksa alan HİÇ gönderilmez (eski gövde). */
-export function aiExchangesRequestParams(p: AIExchangesQueryParams): { from: number; to: number; limit: number; feedback?: AIExchangeFeedbackFilter } {
-  const { feedback, ...rest } = p;
-  return feedback ? { ...rest, feedback } : rest;
+type ExchangeFilterReq = { feedback?: AIExchangeFeedbackFilter; q?: string; user?: string; tier?: string };
+
+function filterReq(p: Pick<AIExchangesQueryParams, 'feedback' | 'q' | 'user' | 'tier'>): ExchangeFilterReq {
+  const out: ExchangeFilterReq = {};
+  if (p.feedback) out.feedback = p.feedback;
+  if (p.q) out.q = p.q;
+  if (p.user) out.user = p.user;
+  if (p.tier) out.tier = p.tier;
+  return out;
+}
+
+/** İsteğin sorgu parametreleri: boş süzgeç HİÇ gönderilmez. */
+export function aiExchangesRequestParams(p: AIExchangesQueryParams): { from: number; to: number; limit: number; offset: number } & ExchangeFilterReq {
+  return { from: p.from, to: p.to, limit: p.limit, offset: p.offset, ...filterReq(p) };
+}
+
+/** v0.10.1646 — CSV isteği: AYNI süzgeçler, sayfa yok (sunucu tavanı). */
+export function aiExchangesCSVParams(p: AIExchangesQueryParams): { from: number; to: number } & ExchangeFilterReq {
+  return { from: p.from, to: p.to, ...filterReq(p) };
+}
+
+// ── v0.10.1646 — sayfa, arama, kullanıcı/kademe süzgeci: URL durumu ───────
+
+/** Sunucu sayfa boyu (chstore aiExchangesMaxLimit 500 altında). */
+export const EXCHANGES_PAGE_SIZE = 100;
+/** CSV'nin sert satır tavanı (Go: api.aiExchangesCSVMaxRows). */
+export const EXCHANGES_CSV_MAX_ROWS = 50_000;
+/** Sunucu ofset tavanı (Go: chstore.aiExchangesMaxOffset). */
+export const EXCHANGES_MAX_OFFSET = 100_000;
+
+/** Panelin URL durumu. Parametreler /ai'ın diğer panelleriyle çakışmasın
+ *  diye `x` önekli; `fb` v0.10.1280'den beri. */
+export interface ExchangesUrlState {
+  feedback: AIExchangeFeedbackFilter;
+  q: string;
+  user: string;
+  tier: string;
+  page: number;
+}
+
+const URL_KEYS = { feedback: 'fb', q: 'xq', user: 'xuser', tier: 'xtier', page: 'xpage' } as const satisfies Record<keyof ExchangesUrlState, string>;
+
+/** Kademe süzgeci seçenekleri: Tümü + sunucunun kademe kümesi (kapalı). */
+export const EXCHANGE_TIER_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: '', label: 'Tüm kademeler' },
+  ...Object.entries(TIER_LABELS).map(([value, label]) => ({ value, label })),
+];
+
+export function parseExchangeTier(v: string | null | undefined): string {
+  return v && Object.prototype.hasOwnProperty.call(TIER_LABELS, v) ? v : '';
+}
+
+export function readExchangesUrlState(sp: URLSearchParams): ExchangesUrlState {
+  const page = Math.floor(Number(sp.get(URL_KEYS.page)));
+  return {
+    feedback: parseExchangeFeedbackFilter(sp.get(URL_KEYS.feedback)),
+    q: (sp.get(URL_KEYS.q) ?? '').trim(),
+    user: (sp.get(URL_KEYS.user) ?? '').trim(),
+    tier: parseExchangeTier(sp.get(URL_KEYS.tier)),
+    page: Number.isFinite(page) && page > 0 ? page : 0,
+  };
+}
+
+/** `setSearchParams(prev => writeExchangesUrlState(prev, patch), { replace: true })`.
+ *  Yabancı parametreler korunur (kopya); süzgeç değişince sayfa başa döner
+ *  (bayat sayfa boş liste gösterirdi). Boş değer parametreyi siler. */
+export function writeExchangesUrlState(prev: URLSearchParams, patch: Partial<ExchangesUrlState>): URLSearchParams {
+  const next = new URLSearchParams(prev);
+  const filterChanged = (['feedback', 'q', 'user', 'tier'] as const).some(k => k in patch);
+  for (const k of ['feedback', 'q', 'user', 'tier'] as const) {
+    if (!(k in patch)) continue;
+    const v = (patch[k] ?? '').trim();
+    if (v) next.set(URL_KEYS[k], v);
+    else next.delete(URL_KEYS[k]);
+  }
+  if ('page' in patch || filterChanged) {
+    const p = filterChanged && !('page' in patch) ? 0 : Math.max(0, Math.floor(patch.page ?? 0));
+    if (p > 0) next.set(URL_KEYS.page, String(p));
+    else next.delete(URL_KEYS.page);
+  }
+  return next;
+}
+
+/** URL→durum içe alma imzası: YALNIZ panelin parametreleri (v0.8.253 —
+ *  ilgisiz bir yazım, ör. aralık, yerel taslağı silmesin). */
+export function exchangesUrlSig(sp: URLSearchParams): string {
+  return Object.values(URL_KEYS).map(k => `${k}=${sp.get(k) ?? ''}`).join('&');
+}
+
+/** URL durumu + pencere → istek girdileri (sorgu anahtarı da bundan). */
+export function exchangesQueryParams(win: { from: number; to: number }, st: ExchangesUrlState): AIExchangesQueryParams {
+  return {
+    from: win.from, to: win.to, limit: EXCHANGES_PAGE_SIZE, offset: st.page * EXCHANGES_PAGE_SIZE,
+    feedback: st.feedback, q: st.q, user: st.user, tier: st.tier,
+  };
 }
 
 /** Görünen satırların 👍/👎 sayımı. */

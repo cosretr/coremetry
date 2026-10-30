@@ -3228,6 +3228,21 @@ export type AIFeedbackReason = 'wrong' | 'incomplete' | 'irrelevant';
 /** v0.10.1280 — /api/ai/exchanges `?feedback=` süzgeci; '' = hepsi. */
 export type AIExchangeFeedbackFilter = '' | 'down' | 'up' | 'rated';
 
+/** v0.10.1646 — /api/ai/exchanges yanıtı: bir sunucu sayfası + süzgece
+ *  uyan kesin tur sayısı. Go: api.AIExchangesPage. */
+export interface AIExchangesPage {
+  rows: AIExchange[];
+  total: number;
+  hasMore: boolean;
+}
+
+/** v0.10.1646 — /api/ai/exchanges/users kullanıcı seçicisi satırı
+ *  (değer = e-posta, yoksa kullanıcı kimliği). Go: chstore.AIExchangeUser. */
+export interface AIExchangeUser {
+  user: string;
+  turns: number;
+}
+
 /** v0.10.940 — /api/ai/{stats,series,calls} `?source=`. Parametre YOK =
  *  üretim (evalset koşularının `evalset-*` yüzeyli satırları HARİÇ); `evalset`
  *  = YALNIZ o satırlar. Tek değerli birlik bilerek: "üretim" tel üstünde bir
