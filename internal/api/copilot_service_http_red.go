@@ -234,11 +234,14 @@ func (s *Server) readServiceHTTPRED(ctx context.Context, rd redFamilyReader, isV
 	}
 	probe.MetricPresent, probe.SvcLabelOK = true, true
 	res.Family, res.FamilyID, res.Both = fam.Kind, fam.ID, fr.Both
-	labels, err := s.metricChartLabelSet(ctx, rd, fam.Probe, qTo)
+	// v0.10.1689 — etiket kümesi SERVİSE kapsanır (aile çözücüsüyle aynı okuma
+	// + aynı önbellek anahtarı): kapsamsız metricChartLabelSet filonun 24 sa'ini
+	// taradı, prod VM'de zaman aşımı → sayfa çizerken CoSRE "çizemedi" dedi.
+	lm := rd.MetricLabelMap().Normalized()
+	labels, err := s.redFamilyLabelSet(ctx, rd, fam.Probe, redFamilySvcLabel(lm), service, qTo)
 	if probe.LabelErr = err; err != nil {
 		return fallback()
 	}
-	lm := rd.MetricLabelMap().Normalized()
 	sr := vmetrics.ResolveLabelRole(vmetrics.RoleService, lm, labels, true)
 	if probe.SvcLabelOK = sr.Applied(); !probe.SvcLabelOK {
 		return fallback()

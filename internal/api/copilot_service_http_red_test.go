@@ -322,7 +322,11 @@ func TestServiceHTTPREDReadOnly(t *testing.T) {
 	}
 	both := src + stripGoCommentsAPI(string(vb))
 	// v0.10.1429 — etiket keşfi ve ortam çözümü aile çözücüsünün içinde (red_family.go).
-	for _, w := range []string{"s.metricChartLabelSet(ctx, rd, fam.Probe, qTo)", "s.resolveServiceREDFamily(", "svcHTTPREDCacheKey(q.Kind, q.Query, service, envMatcher, from, to, step)", "metricChartStatsTR("} {
+	// v0.10.1689 — etiket kümesi servise kapsanır; kapsamsız keşif prod VM'de zaman aşımı.
+	if strings.Contains(src, "s.metricChartLabelSet(") {
+		t.Error("kapsamsız metricChartLabelSet çağrılmamalı (v0.10.1689)")
+	}
+	for _, w := range []string{"s.redFamilyLabelSet(ctx, rd, fam.Probe, redFamilySvcLabel(lm), service, qTo)", "s.resolveServiceREDFamily(", "svcHTTPREDCacheKey(q.Kind, q.Query, service, envMatcher, from, to, step)", "metricChartStatsTR("} {
 		if !strings.Contains(both, w) {
 			t.Errorf("%q taşımalı (v0.10.1386 makinesi yeniden kullanılır)", w)
 		}

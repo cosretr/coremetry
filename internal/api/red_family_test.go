@@ -633,3 +633,39 @@ func TestREDFamilyLabelReadIsServiceScoped(t *testing.T) {
 		t.Errorf("düşen adım adlandırılmalı: %v", res.Tried)
 	}
 }
+
+// unscopedLabelTimeoutReader — kapsamsız (filo geneli) etiket okuması zaman
+// aşımına düşer; servise kapsanmış okuma ve sorgular çalışır (prod VM şekli).
+type unscopedLabelTimeoutReader struct{ *famReader }
+
+func (r unscopedLabelTimeoutReader) MetricLabelNamesIn(ctx context.Context, metric string, from, to time.Time) ([]string, bool, error) {
+	_, _, _ = r.famReader.MetricLabelNamesIn(ctx, metric, from, to) // sayaç
+	return nil, false, context.DeadlineExceeded
+}
+
+// TestServiceHTTPREDLabelReadIsServiceScoped — v0.10.1689 (operatör, prod:
+// servis sayfası ALTIN SİNYALLER'i VM'den çiziyor, aynı servis/pencere için
+// CoSRE servis sağlığı "grafik yok: VictoriaMetrics çizemedi" + "etiket okuması
+// BAŞARISIZ … /api/v1/labels match[]={__name__=~…} context deadline exceeded").
+// Kök neden: aile çözümü (v0.10.1574) servise kapsanmış keşif yaptıktan SONRA
+// readServiceHTTPRED aynı histogram için KAPSAMSIZ metricChartLabelSet çağırıyordu
+// (servis seçicisiz, tüm filonun 24 sa'i) — prod VM'de zaman aşımı → span'e düş.
+// Beklenen: kapsamsız okuma hiç çağrılmaz, VM grafikleri çizilir.
+func TestServiceHTTPREDLabelReadIsServiceScoped(t *testing.T) {
+	to := time.Date(2026, 10, 30, 12, 0, 0, 0, time.UTC)
+	from := to.Add(-3 * time.Hour)
+	s := &Server{}
+	fr := &famReader{fakeChartReader: fakeChartReader{labels: famLabels(redFamilyHTTP)},
+		present: map[string]bool{redFamilyHTTP: true},
+		rate:    []chstore.SpanMetricSeries{{Points: []chstore.SpanMetricPoint{{Time: from.UnixNano(), Value: 3}}}}}
+	res := s.readServiceHTTPRED(context.Background(), unscopedLabelTimeoutReader{fr}, true, "orders-api", "", from, to, 10800)
+	if !res.UseVM || len(res.Charts) == 0 {
+		t.Fatalf("VM grafikleri çizilmeli (kapsamsız etiket okuması gerekmez): reason=%q", res.Reason)
+	}
+	if fr.unscopedCalls != 0 {
+		t.Errorf("kapsamsız etiket okuması çağrıldı: %d", fr.unscopedCalls)
+	}
+	if !res.routeLabelOK || res.statusLabel == "" || res.svcLabel != "service_name" {
+		t.Errorf("kapsamlı etiket kümesinden çözülmeli: route=%v status=%q svc=%q", res.routeLabelOK, res.statusLabel, res.svcLabel)
+	}
+}
