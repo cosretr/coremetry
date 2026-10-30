@@ -303,7 +303,7 @@ export default function LoginPage() {
             {brand.appName} {version}
             <span style={{ marginLeft: 6, color: 'var(--text3)' }}>
               · an{' '}
-              <a href="https://opentelemetry.io"
+              <a href="https://opentelemetry.io/ecosystem/adopters/"
                  target="_blank" rel="noopener"
                  style={{ color: 'var(--accent2)', textDecoration: 'none' }}>
                 OpenTelemetry
