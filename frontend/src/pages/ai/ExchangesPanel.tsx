@@ -5,7 +5,8 @@ import { api } from '@/lib/api';
 import { rowActivation } from '@/lib/a11y';
 import { timeRangeToNs, tsCompact, tsLong, fmtNum } from '@/lib/utils';
 import type { AIExchange, AIExchangeCall, AIExchangeFeedbackFilter, TimeRange } from '@/lib/types';
-import { Drawer, DrawerSection, SegmentedControl } from '@/components/ui';
+import { SegmentedControl } from '@/components/ui';
+import { DetailSheet, SheetSection, useSheetParam } from '@/components/coremetry/DetailSheet';
 import { Button } from '@/components/shadcn/button';
 import { Pager } from '@/components/Pager';
 import { PageControls } from '@/components/coremetry/PageControls';
@@ -38,7 +39,8 @@ import { traceHref } from '@/lib/traceHref';
 // süre, token (LLM kullanıldıysa), sonuç, 👍/👎. Satır → çekmece: cevap ve
 // turun alt çağrıları; alt çağrı → mevcut çağrı çekmecesi (onOpenCall).
 //
-// Çekmece seçimi URL'de (?exchange=, replace) — liste pencere değişince
+// Çekmece seçimi URL'de (?exchange=, useSheetParam — v0.10.1673 S3: açılış
+// geçmişe girer, Geri kapatır; değişim / kapanış replace) — liste pencere değişince
 // yeniden okunur, seçili tur sayfada yoksa çekmece kapanır.
 //
 // v0.10.1280 (CoSRE adım 8) — 👍/👎 süzgeci (`?fb=down` = operatörün inceleme
@@ -90,14 +92,9 @@ const CSV_CAP_LABEL = EXCHANGES_CSV_MAX_ROWS.toLocaleString('tr-TR');
 
 export function ExchangesPanel({ range, onOpenCall }: { range: TimeRange; onOpenCall: (id: string) => void }) {
   const [searchParams, setSearchParams] = useSearchParams();
-  const selectedId = searchParams.get('exchange') ?? '';
+  const [sheetId, setSelected] = useSheetParam('exchange');
+  const selectedId = sheetId ?? '';
   const st = readExchangesUrlState(searchParams);
-  const setSelected = (id: string) => setSearchParams(prev => {
-    const p = new URLSearchParams(prev);
-    if (id) p.set('exchange', id);
-    else p.delete('exchange');
-    return p;
-  }, { replace: true });
   // v0.10.1280 / v0.10.1646 — panelin tüm seçimleri URL'de (paylaşılan link
   // aynı görünümü açar); süzgeç değişince sayfa başa döner.
   const setUrl = (patch: Partial<ExchangesUrlState>) =>
@@ -265,13 +262,14 @@ function ExchangeDrawer({ ex, onClose, onOpenCall }: { ex: AIExchange; onClose: 
   // v0.10.1645 — açıklanan öznenin tam kimliği (eski satırda bağlam kimliğinden).
   const subj = exchangeSubjectRef(ex);
   return (
-    <Drawer onClose={onClose} width={680} header={
-      <>
-        <StatusBadge ex={ex} />
-        <span style={{ fontWeight: 700, fontSize: 13 }}>{exchangeTierLabel(ex)}</span>
-        {!exchangeUsedLLM(ex) && <span className="badge b-gray">{NO_LLM_LABEL}</span>}
-      </>
-    }>
+    <DetailSheet open onOpenChange={o => { if (!o) onClose(); }} width={680} resizeKey="coremetry-ai-exchange-drawer-w"
+      title={exchangeTierLabel(ex)}
+      badges={
+        <>
+          <StatusBadge ex={ex} />
+          {!exchangeUsedLLM(ex) && <span className="badge b-gray">{NO_LLM_LABEL}</span>}
+        </>
+      }>
       <div style={{ paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 16 }}>
         <KeyValue items={[
           { k: 'Zaman', v: tsLong(ex.createdAt) },
@@ -303,17 +301,17 @@ function ExchangeDrawer({ ex, onClose, onOpenCall }: { ex: AIExchange; onClose: 
           }] : []),
         ]} />
         {ex.errorMsg && (
-          <DrawerSection title="Hata">
+          <SheetSection title="Hata">
             <pre style={{ ...SAMPLE_STYLE, color: 'var(--err)' }}>{ex.errorMsg}</pre>
-          </DrawerSection>
+          </SheetSection>
         )}
-        <DrawerSection title="Soru">
+        <SheetSection title="Soru">
           <pre style={SAMPLE_STYLE}>{subj?.question || ex.question || '(boş)'}</pre>
-        </DrawerSection>
-        <DrawerSection title="Cevap (örnek)">
+        </SheetSection>
+        <SheetSection title="Cevap (örnek)">
           <pre style={SAMPLE_STYLE}>{ex.answer || '(boş)'}</pre>
-        </DrawerSection>
-        <DrawerSection title={`Alt çağrılar — ${exchangeCallsSummary(ex)}`}>
+        </SheetSection>
+        <SheetSection title={`Alt çağrılar — ${exchangeCallsSummary(ex)}`}>
           <div className="table-wrap">
             <table {...callDt.tableProps}>
               <DataTableColgroup dt={callDt} />
@@ -342,8 +340,8 @@ function ExchangeDrawer({ ex, onClose, onOpenCall }: { ex: AIExchange; onClose: 
               </tbody>
             </table>
           </div>
-        </DrawerSection>
+        </SheetSection>
       </div>
-    </Drawer>
+    </DetailSheet>
   );
 }

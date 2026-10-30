@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
 import { rowActivation } from '@/lib/a11y'; // v0.10.455 (dış denetim D3 dilim 3)
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { Topbar } from '@/components/Topbar';
 import { Spinner, Empty } from '@/components/Spinner';
 import { Sparkline } from '@/components/Sparkline';
-import { Button, Drawer, DrawerSection } from '@/components/ui';
+import { Button } from '@/components/ui';
+import { DetailSheet, SheetSection, useSheetParam } from '@/components/coremetry/DetailSheet';
 import { useAuth } from '@/components/AuthProvider';
 import { useAlertRules, useWatchersSummary, useWatcherHistory, useEnableAlertRule, useDisableAlertRule, useUpdateAlertRule } from '@/lib/queries';
 import { useDataTable, DataTableHead, DataTableColgroup, DataTableState, type DataTableStateProps } from '@/components/ui/DataTable';
@@ -31,10 +32,10 @@ import { TriageStatusBadge } from '@/features/anomalies/statusTone'; // v0.10.92
 //                  with /api/watchers/summary (ONE bulk rollup — never
 //                  per-row history calls).
 //   • drawer     — /api/watchers/{id}/history, fetched on OPEN only.
-//   • deep link  — ?watcher=<ruleId> rides the URL (replace:true), so
-//                  a copied link opens the same drawer. Read straight
-//                  from searchParams — no local mirror, no sig-guard
-//                  needed.
+//   • deep link  — ?watcher=<ruleId> rides the URL (useSheetParam,
+//                  v0.10.1673 S3: opening pushes so Back closes, switch /
+//                  close replace), so a copied link opens the same drawer.
+//                  Derived from the URL — no local mirror.
 // Viewer role sees everything read-only; only the Import affordance
 // is editor+.
 
@@ -74,14 +75,7 @@ export default function WatchersPage() {
   const enableRule = useEnableAlertRule();
   const disableRule = useDisableAlertRule();
   const [showImport, setShowImport] = useState(false);
-  const [searchParams, setSearchParams] = useSearchParams();
-  const selectedId = searchParams.get('watcher');
-  const openWatcher = (id: string | null) =>
-    setSearchParams(prev => {
-      const p = new URLSearchParams(prev); // preserve foreign params
-      if (id) p.set('watcher', id); else p.delete('watcher');
-      return p;
-    }, { replace: true });
+  const [selectedId, openWatcher] = useSheetParam('watcher');
 
   const rulesQ = useAlertRules();
   const summaryQ = useWatchersSummary();
@@ -264,19 +258,17 @@ function WatcherHistoryDrawer({ watcher, onClose }: {
   const indices = watchIndices(watcher.watcherJson);
 
   return (
-    <Drawer onClose={onClose} width={640}
-      header={
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-          <b style={{ fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {watcher.name}
-          </b>
+    <DetailSheet open onOpenChange={o => { if (!o) onClose(); }} width={640} resizeKey="coremetry-watchers-drawer-w"
+      title={watcher.name}
+      badges={
+        <>
           <span className="badge b-watcher">ES WATCHER</span>
           {/* v0.10.929 (K5) — satırla aynı: ON nötr (ayar durumu), OPEN tek durum sözlüğünden. */}
           {watcher.enabled
             ? <span className="badge b-gray">ON</span>
             : <span className="badge b-gray" title={watcher.disabledReason || 'Disabled by operator'}>OFF</span>}
           {watcher.openNow && <TriageStatusBadge s="open" label="OPEN" />}
-        </div>
+        </>
       }>
       {/* Summary strip — mockup's .sum row. v0.9.196 review-fix: 24h
           fire sayısı + son fire, satırın SUNUCU rollup'ından gelir
@@ -307,7 +299,7 @@ function WatcherHistoryDrawer({ watcher, onClose }: {
         </b></span>
       </div>
 
-      <DrawerSection title={`Definition — ${watcher.name}`}>
+      <SheetSection title={`Definition — ${watcher.name}`}>
         <div style={{
           display: 'grid', gridTemplateColumns: '110px 1fr',
           gap: '4px 10px', fontSize: 12.5,
@@ -355,9 +347,9 @@ function WatcherHistoryDrawer({ watcher, onClose }: {
                   ))}
           </span>
         </div>
-      </DrawerSection>
+      </SheetSection>
 
-      <DrawerSection title="History — fire · notification · resolve">
+      <SheetSection title="History — fire · notification · resolve">
         {history === undefined && <Spinner />}
         {history === null && <Empty icon="⚠" title="Failed to load history" />}
         {history && timeline.length === 0 && (
@@ -368,8 +360,8 @@ function WatcherHistoryDrawer({ watcher, onClose }: {
           </Empty>
         )}
         {timeline.length > 0 && <Timeline entries={timeline} />}
-      </DrawerSection>
-    </Drawer>
+      </SheetSection>
+    </DetailSheet>
   );
 }
 

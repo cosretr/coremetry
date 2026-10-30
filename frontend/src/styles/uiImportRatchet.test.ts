@@ -102,7 +102,7 @@ const CEILINGS: Record<string, number> = {
   Stack: 16, // Faz 2 dilim 1 R10 (erişim): 18 → 16; R7: 23 → 21; R8: 21 → 18
   Card: 18, // Faz 2 dilim 1 R11 (CoSRE): 19 → 18
   TabStrip: 15, // Faz 2 dilim 1 R11 (CoSRE): 16 → 15; Faz 2 dilim 1 R10 (erişim): 17 → 16
-  Drawer: 12, // Faz 2 dilim 1 R11 (CoSRE): 15 → 14; etkileşim S2 (External + Hosts → DetailSheet): 14 → 12
+  Drawer: 10, // Faz 2 dilim 1 R11 (CoSRE): 15 → 14; etkileşim S2 (External + Hosts → DetailSheet): 14 → 12; S3 (Watchers + ExchangesPanel): 12 → 10
   Menu: 14,
   StatTile: 13,
   SafeHref: 12,
