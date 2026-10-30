@@ -236,3 +236,26 @@ func (s *Server) guidedDisambigProbe(ctx context.Context, question string) (text
 	}
 	return "", nil, nil, false
 }
+
+// wikiProbeTeamRouted — v0.10.1687, SAF: guided router soruyu ADI GEÇEN bir
+// takıma çözüyor mu (team_services / team_exceptions / team_top_errors —
+// route.Team dolu). Operatör (prod): "<takım> takımının servisleri nasıl?"
+// wiki yoklamasına kaçıyordu; servis vetosu (wikiWeakCueVetoed) takım adını
+// tanımıyordu. Takım kataloğu boşsa veto yok.
+func wikiProbeTeamRouted(question string, svcs, envs, teams []string) bool {
+	if len(teams) == 0 {
+		return false
+	}
+	return routeGuidedIntent(question, svcs, envs, teams, "").Team != ""
+}
+
+// wikiProbeTeamVetoed — yoklamanın takım vetosu. Ad listeleri yalnız guided
+// sinyali ya da takım-adı şekli varken okunur (60 sn önbellekli).
+func (s *Server) wikiProbeTeamVetoed(ctx context.Context, question string) bool {
+	norm := normalizeGuidedMsg(question)
+	if !hasGuidedSignal(norm) && !mayNameTeam(norm) {
+		return false
+	}
+	svcs, envs, teams := wikiProbeNames(s, ctx, true)
+	return wikiProbeTeamRouted(question, svcs, envs, teams)
+}

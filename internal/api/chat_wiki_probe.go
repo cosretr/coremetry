@@ -207,12 +207,13 @@ func (s *Server) armWikiProbe(ctx context.Context, msgs []copilot.ChatMessage, t
 }
 
 // wikiProbeEligible — yoklamanın ön koşulları (sorgusuz): çapa yok, yeterli
-// içerik terimi var, servis adı + telemetri sinyali yok.
+// içerik terimi var, servis adı + telemetri sinyali yok, router soruyu adı
+// geçen bir takıma çözmüyor (v0.10.1687 — takım sorusu guided team_services'in).
 func (s *Server) wikiProbeEligible(ctx context.Context, question string) bool {
 	if wikiProbeTelemetryAnchor(question) || len(wikiProbeTerms(question)) < wikiProbeMinTerms {
 		return false
 	}
-	return !s.wikiWeakCueVetoed(ctx, question)
+	return !s.wikiWeakCueVetoed(ctx, question) && !s.wikiProbeTeamVetoed(ctx, question)
 }
 
 // wikiProbeRun — TEK yerel lexical arama + kapı. Canlı ADO yok (LiveOff),
