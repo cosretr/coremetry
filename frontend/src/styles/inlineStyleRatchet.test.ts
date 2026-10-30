@@ -18,7 +18,7 @@ const SRC = resolve(__dirname, '..');
 
 // Taban: R6 commit'inde ölçüldü.
 const CEILINGS: Record<Page, number> = {
-  Settings: 16, // Faz 2 dilim 1 R15 (Argo CD): 18 → 16; Faz 2 dilim 1 R17 (Anomaly): 240 → 18; Faz 2 dilim 1 R16 (Oracle): 254 → 240; Faz 2 dilim 1 R14 (işletim): 383 → 254; Faz 2 dilim 1 R13 (DevOps + MCP): 508 → 383; Faz 2 dilim 1 R12 (AI SRE + Knowledge): 612 → 508; Faz 2 dilim 1 R11 (CoSRE): 703 → 612; Faz 2 dilim 1 R10 (erişim): 845 → 703; 63 dosya — Faz 2 dilim 1 R7: 1182 → 1132 (Remote Cluster 50 → 0); CoSRE 2b B1: 1132 → 1131 (CosreV2StatusLine); R8 (backends): 1131 → 950; R9 (bildirim): 950 → 845
+  Settings: 0, // Faz 2 dilim 1 R18 (Settings kapanışı, shared.tsx): 16 → 0, MIGRATED; Faz 2 dilim 1 R15 (Argo CD): 18 → 16; Faz 2 dilim 1 R17 (Anomaly): 240 → 18; Faz 2 dilim 1 R16 (Oracle): 254 → 240; Faz 2 dilim 1 R14 (işletim): 383 → 254; Faz 2 dilim 1 R13 (DevOps + MCP): 508 → 383; Faz 2 dilim 1 R12 (AI SRE + Knowledge): 612 → 508; Faz 2 dilim 1 R11 (CoSRE): 703 → 612; Faz 2 dilim 1 R10 (erişim): 845 → 703; 63 dosya — Faz 2 dilim 1 R7: 1182 → 1132 (Remote Cluster 50 → 0); CoSRE 2b B1: 1132 → 1131 (CosreV2StatusLine); R8 (backends): 1131 → 950; R9 (bildirim): 950 → 845
   RemoteCluster: 0, // 2 dosya (Settings alt kümesi) — Faz 2 dilim 1 R7: 50 → 0, MIGRATED
   Logs: 94, // 14
   Trace: 150, // 17
@@ -27,8 +27,8 @@ const CEILINGS: Record<Page, number> = {
   Metrics: 50, // 3
   Shell: 16, // 5 — etkileşim P2: 43 → 16 (⌘K cmdk)
 };
-const TOTAL = 4060; // Faz 2 dilim 1 R15 (Argo CD): 4062 → 4060; Faz 2 dilim 1 R17 (Anomaly): 4284 → 4062; Faz 2 dilim 1 R16 (Oracle): 4298 → 4284; Faz 2 dilim 1 R14 (işletim): 4427 → 4298; Faz 2 dilim 1 R13 (DevOps + MCP): 4557 → 4427; Faz 2 dilim 1 R12 (AI SRE + Knowledge): 4661 → 4557; Faz 2 dilim 1 R11 (CoSRE): 4752 → 4661; Faz 2 dilim 1 R10 (erişim): 4894 → 4752; 449 dosya (plan §3.2 v0.10.1604 ölçümü 5,244; aradaki sürümler +15) — Faz 2 dilim 1 R7: 5259 → 5209; CoSRE 2b B1: 5209 → 5208; etkileşim P2: 5180 (⌘K −27, aradaki sürümler −1); R8: 5180 → 4999; R9: 4999 → 4894
-const MIGRATED: Page[] = ['RemoteCluster']; // Faz 2 dilim 1 R7 — pilot
+const TOTAL = 4044; // Faz 2 dilim 1 R18 (Settings kapanışı): 4060 → 4044; Faz 2 dilim 1 R15 (Argo CD): 4062 → 4060; Faz 2 dilim 1 R17 (Anomaly): 4284 → 4062; Faz 2 dilim 1 R16 (Oracle): 4298 → 4284; Faz 2 dilim 1 R14 (işletim): 4427 → 4298; Faz 2 dilim 1 R13 (DevOps + MCP): 4557 → 4427; Faz 2 dilim 1 R12 (AI SRE + Knowledge): 4661 → 4557; Faz 2 dilim 1 R11 (CoSRE): 4752 → 4661; Faz 2 dilim 1 R10 (erişim): 4894 → 4752; 449 dosya (plan §3.2 v0.10.1604 ölçümü 5,244; aradaki sürümler +15) — Faz 2 dilim 1 R7: 5259 → 5209; CoSRE 2b B1: 5209 → 5208; etkileşim P2: 5180 (⌘K −27, aradaki sürümler −1); R8: 5180 → 4999; R9: 4999 → 4894
+const MIGRATED: Page[] = ['RemoteCluster', 'Settings']; // Faz 2 dilim 1 R7 — pilot; R18 — Settings (her dosya 0)
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const e of readdirSync(dir)) {

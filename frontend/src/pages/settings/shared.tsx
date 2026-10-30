@@ -5,31 +5,25 @@
 // tabs. Pulling them here keeps the per-section files importing a single
 // stable module instead of re-declaring the same markup. Behaviour is
 // unchanged — these are the exact functions the tabs used before.
-import {
-  cloneElement, isValidElement, useCallback, useEffect, useId, useRef, useState,
-  type ReactElement, type ReactNode,
-} from 'react';
+//
+// Faz 2 dilim 1 R18 — Settings kapanışı: kullanılmayan yerel kopyalar
+// (`Field2`, `Row`, `SettingRow`) silindi; kalan görsel atomlar
+// (`Field` — alerts modallarının etiketi, `SectionTitle`, `SettingsSection`,
+// `FlashBox`, `ConfigStatusBanner`) inline stil yerine Tailwind utility
+// (aynı değerler, token'lar); kullanılmayan `Field.flex` /
+// `SettingsSection.maxWidth` prop'ları düştü. Davranış (rol / aria-live,
+// okuma kapısı) aynı.
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { QueryError } from '@/components/QueryError';
 
 // ── Tiny shared form atoms ──────────────────────────────────────────────────
 
-export function Field({ label, children, flex }: { label: string; children: ReactNode; flex?: number }) {
+export function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <label style={{ display: 'block', marginBottom: 12, flex }}>
-      <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 4 }}>{label}</div>
+    <label className="mb-3 block">
+      <div className="mb-1 text-[11px] text-(--text2)">{label}</div>
       {children}
     </label>
-  );
-}
-
-// v0.8.538 — flexWrap so a row that cannot fit drops its overflow onto a
-// second line instead of squeezing past the panel edge. Rows that already
-// fit are untouched: flex-wrap only engages once the line overflows.
-export function Row({ children }: { children: ReactNode }) {
-  return (
-    <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-      {children}
-    </div>
   );
 }
 
@@ -38,18 +32,13 @@ export function Row({ children }: { children: ReactNode }) {
 // as one alert family; the old dark-palette rgba literals never
 // re-resolved under the light/redhat themes.
 export function FlashBox({ kind, children }: { kind: 'ok' | 'err'; children: ReactNode }) {
-  const tok = kind === 'ok' ? 'var(--ok)' : 'var(--err)';
+  const tone = kind === 'ok' ? 'text-(--ok) border-[color-mix(in_srgb,var(--ok)_30%,transparent)] bg-[color-mix(in_srgb,var(--ok)_8%,transparent)]' : 'text-(--err) border-[color-mix(in_srgb,var(--err)_30%,transparent)] bg-[color-mix(in_srgb,var(--err)_8%,transparent)]';
   // v0.10.379 (dış skill denetimi D6) — 20+ ayar sekmesinin kaydet/hata
   // geri bildirimi buradan geçer; role + aria-live olmadan ekran okuyucu
   // sonucu hiç duymuyordu. Hata "alert" (assertive), başarı "status".
   return (
-    <div role={kind === 'err' ? 'alert' : 'status'} aria-live={kind === 'err' ? 'assertive' : 'polite'} style={{
-      color: tok, fontSize: 12, marginTop: 12,
-      padding: '6px 10px',
-      background: `color-mix(in srgb, ${tok} 8%, transparent)`,
-      border: `1px solid color-mix(in srgb, ${tok} 30%, transparent)`,
-      borderRadius: 4,
-    }}>{children}</div>
+    <div role={kind === 'err' ? 'alert' : 'status'} aria-live={kind === 'err' ? 'assertive' : 'polite'}
+      className={`mt-3 rounded-[4px] border px-2.5 py-1.5 text-[12px] ${tone}`}>{children}</div>
   );
 }
 
@@ -72,7 +61,7 @@ export function ConfigStatusBanner({ label, children, aside }: {
   return (
     <div className="status-banner status-banner-neutral">
       <span className="status-pill status-pill-neutral">{label}</span>
-      <span style={{ fontWeight: 600, fontSize: 14 }}>{children}</span>
+      <span className="text-[14px] font-semibold">{children}</span>
       {aside}
     </div>
   );
@@ -82,49 +71,7 @@ export function ConfigStatusBanner({ label, children, aside }: {
 //    Settings shared primitives during the split).
 export function SectionTitle({ children }: { children: ReactNode }) {
   return (
-    <div style={{
-      marginTop: 16, marginBottom: 8,
-      fontSize: 12, fontWeight: 600, color: 'var(--text2)',
-      textTransform: 'uppercase', letterSpacing: '0.5px',
-    }}>{children}</div>
-  );
-}
-
-// v0.8.538 — minWidth follows `small`. It used to be a flat 200px, which
-// sat ABOVE small's own 180px flex-basis: min-width is the floor the flex
-// shrink algorithm honours, so a `small` field could never reach its basis
-// and the flag did nothing. 140px is the floor a small field actually
-// needs — the narrowest content is LdapTab's Team regex, whose monospace
-// placeholder "-([^-]+)$" is ~70px of glyphs plus input padding.
-// v0.9.15 (a11y) — etiket artık gerçek <label htmlFor>: tek çocuk
-// bir element ise useId'li id enjekte edilir (kendi id'si varsa o
-// korunur) — etikete tıklamak inputu odaklar, ekran okuyucu
-// eşleşmesi kurulur. Field.tsx'in useId sözleşmesinin, çocuğu
-// çağıranın sahiplendiği varyantı. Çocuk element değilse (çoklu
-// node) label htmlFor'suz kalır — davranış eskisi gibi, semantik
-// yine kazanır.
-export function Field2({ label, hint, small, children }: {
-  label: string; hint?: string; small?: boolean; children: ReactNode;
-}) {
-  const autoId = useId();
-  let control: ReactNode = children;
-  let labelFor: string | undefined;
-  if (isValidElement<{ id?: string }>(children)) {
-    const childId = children.props.id ?? autoId;
-    labelFor = childId;
-    control = children.props.id
-      ? children
-      : cloneElement(children as ReactElement<{ id?: string }>, { id: childId });
-  }
-  return (
-    <div style={{ flex: small ? '0 1 180px' : 1, minWidth: small ? 140 : 200 }}>
-      <label htmlFor={labelFor}
-        style={{ display: 'block', fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>
-        {label}
-      </label>
-      {control}
-      {hint && <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4, lineHeight: 1.4 }}>{hint}</div>}
-    </div>
+    <div className="mt-4 mb-2 text-[12px] font-semibold tracking-[0.5px] text-(--text2) uppercase">{children}</div>
   );
 }
 
@@ -206,44 +153,22 @@ export function SettingsLoadError({ error, onRetry }: { error: string; onRetry: 
 // border:1px solid var(--border)` card the tabs hand-rolled, plus an
 // optional heading + description so each section reads consistently.
 //
-// SettingRow — a label + control + optional hint row, the same shape the
-// Tempo / Kibana / AI forms used inline (label div over the control over a
-// muted hint). Adopt where it's a clean win; the existing inline markup is
-// left untouched where a row doesn't fit (grids, checkboxes, tables).
 export function SettingsSection({
-  title, description, children, maxWidth,
+  title, description, children,
 }: {
   title?: ReactNode;
   description?: ReactNode;
   children: ReactNode;
-  maxWidth?: number;
 }) {
   return (
-    <div style={{ maxWidth }}>
-      {title && <h2 style={{ fontSize: 14, fontWeight: 600, marginBottom: description ? 6 : 12 }}>{title}</h2>}
+    <div>
+      {title && <h2 className={`text-[14px] font-semibold ${description ? 'mb-1.5' : 'mb-3'}`}>{title}</h2>}
       {description && (
-        <p style={{ color: 'var(--text2)', fontSize: 13, marginBottom: 16 }}>{description}</p>
+        <p className="mb-4 text-[13px] text-(--text2)">{description}</p>
       )}
-      <div style={{
-        padding: 16, borderRadius: 8,
-        background: 'var(--bg2)', border: '1px solid var(--border)',
-      }}>
+      <div className="rounded-lg border border-(--border) bg-(--bg2) p-4">
         {children}
       </div>
     </div>
-  );
-}
-
-export function SettingRow({ label, hint, children }: {
-  label: ReactNode;
-  hint?: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <label style={{ display: 'block', marginBottom: 12 }}>
-      <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>{label}</div>
-      {children}
-      {hint && <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4, lineHeight: 1.5 }}>{hint}</div>}
-    </label>
   );
 }
