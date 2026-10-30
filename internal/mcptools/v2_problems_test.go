@@ -6,6 +6,7 @@ package mcptools
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -46,71 +47,102 @@ func TestOpenProblemsPageURL(t *testing.T) {
 		team string
 		want string
 	}{
-		{[]string{"orders-api"}, "acme", "/problems?service=orders-api"},
-		{[]string{"orders-api", "payments-core"}, "acme team", "/inbox?owner=acme+team"},
-		{[]string{"orders-api", "payments-core"}, "", "/problems"},
+		{[]string{"orders-api"}, "", "/inbox?service=orders-api"},
+		{[]string{"orders-api"}, "acme team", "/inbox?team=acme+team"},
+		{[]string{"orders-api", "payments-core"}, "", "/inbox"},
 	} {
 		if got := OpenProblemsPageURL(c.svcs, c.team); got != c.want {
 			t.Errorf("%v/%q → %q, want %q", c.svcs, c.team, got, c.want)
 		}
 	}
-	if V2PageURL(OpenProblemsName, `{"page_url":"/problems?service=x"}`) != "/problems?service=x" {
+	if V2PageURL(OpenProblemsName, `{"page_url":"/inbox?team=x"}`) != "/inbox?team=x" {
 		t.Error("open_problems page_url V2PageURL'den geçmiyor")
 	}
 }
 
-func TestProblemReason(t *testing.T) {
-	long := strings.Repeat("x", 300)
-	for _, c := range []struct {
-		p    chstore.Problem
-		want string
-	}{
-		{chstore.Problem{PriorityReason: "  P1: 3× eşik ", Description: "d", RuleName: "r"}, "P1: 3× eşik"},
-		{chstore.Problem{Description: "hata\noranı  yüksek", RuleName: "r"}, "hata oranı yüksek"},
-		{chstore.Problem{RuleName: "error rate"}, "error rate"},
+func TestInboxReason(t *testing.T) {
+	for _, c := range []struct{ pr, title, want string }{
+		{"  P1: 3× eşik ", "t", "P1: 3× eşik"},
+		{"", "hata\noranı  yüksek", "hata oranı yüksek"},
+		{"", "", ""},
 	} {
-		if got := problemReason(c.p); got != c.want {
+		if got := InboxReason(c.pr, c.title); got != c.want {
 			t.Errorf("got %q want %q", got, c.want)
 		}
 	}
-	if n := len([]rune(problemReason(chstore.Problem{Description: long}))); n != openProblemsReasonMax {
+	if n := len([]rune(InboxReason(strings.Repeat("x", 300), ""))); n != openProblemsReasonMax {
 		t.Errorf("kırpma %d", n)
 	}
 }
 
-func TestOpenProblemsPayload(t *testing.T) {
-	mk := func(i int) chstore.Problem {
-		return chstore.Problem{ID: "p-" + strings.Repeat("9", 20) + string(rune('a'+i%26)), Service: "orders-api", Status: "open",
-			Priority: "P2", Description: strings.Repeat("timeout ", 15), StartedAt: int64(1_800_000_000) * int64(time.Second)}
+func TestInboxOpenPlan(t *testing.T) {
+	qs, exact, unread := InboxOpenPlan("acme", []string{"orders-api", "payments-core"}, "prod", 500)
+	if len(qs) != 1 || qs[0].Team != "acme" || qs[0].Env != "prod" || exact || unread != 0 {
+		t.Fatalf("takım planı %+v %v %d", qs, exact, unread)
 	}
+	qs, exact, _ = InboxOpenPlan("", []string{"orders-api"}, "", 500)
+	if len(qs) != 1 || qs[0].Service != "orders-api" || exact {
+		t.Fatalf("tek servis (şeridin kendisi) %+v", qs)
+	}
+	var many []string
+	for i := 0; i < 13; i++ {
+		many = append(many, fmt.Sprintf("svc-%02d", i))
+	}
+	qs, exact, unread = InboxOpenPlan("", many, "", 500)
+	if len(qs) != inboxFanoutMax || !exact || unread != 3 {
+		t.Fatalf("fan-out %d %v %d", len(qs), exact, unread)
+	}
+}
+
+func TestReadInboxOpenFanoutExactAndDedup(t *testing.T) {
+	d := Deps{InboxOpen: func(_ context.Context, q InboxOpenQuery) (InboxOpenResult, error) {
+		// inbox ?service= alt-dize eşler: orders-api sorgusu orders-api-v2'yi de döndürür
+		rows := []InboxRow{{ID: "problem:1", Service: q.Service}, {ID: "problem:shared", Service: "orders-api"}, {ID: "x:" + q.Service, Service: q.Service + "-v2"}}
+		return InboxOpenResult{Rows: rows, Total: len(rows)}, nil
+	}}
+	res, unread, err := ReadInboxOpen(context.Background(), d, "", []string{"orders-api", "payments-core"}, "", 500)
+	if err != nil || unread != 0 {
+		t.Fatal(err)
+	}
+	got := OpenCounts(res.Rows)
+	if got["orders-api"] != 2 || got["payments-core"] != 0 || got["orders-api-v2"] != 0 || res.Total != 2 {
+		t.Fatalf("birebir süzgeç + tekilleştirme: %v total=%d", got, res.Total)
+	}
+	// payments-core satırı "problem:1" kimliğini paylaşıyor → tekilleşti; tek okuma yolunda süzgeç yok (şeritle aynı)
+	if _, _, err := ReadInboxOpen(context.Background(), Deps{}, "acme", nil, "", 10); err != errNoInboxReader {
+		t.Fatalf("bağlı değil hatası: %v", err)
+	}
+}
+
+func TestOpenProblemsPayload(t *testing.T) {
 	t.Run("boş → neden, uydurma yok", func(t *testing.T) {
-		out := openProblemsPayload("acme", "", []string{"orders-api"}, 0, nil, 10)
+		out := openProblemsPayload("acme", "", []string{"orders-api"}, 0, 0, InboxOpenResult{}, 10)
 		if out["total_open"] != 0 || out["reasons"] == nil || out["has_more"] != false {
 			t.Fatalf("%v", out)
 		}
 	})
 	t.Run("limit + 2KB tavanı", func(t *testing.T) {
-		var probs []chstore.Problem
+		var rows []InboxRow
 		for i := 0; i < 40; i++ {
-			probs = append(probs, mk(i))
+			rows = append(rows, InboxRow{ID: fmt.Sprintf("problem:%030d", i), Kind: "problem", Service: "orders-api", Priority: "P2",
+				Reason: strings.Repeat("timeout ", 15), SinceUnix: 1_800_000_000, PageURL: "/problems?problem=p"})
 		}
-		out := openProblemsPayload("acme", "prod", []string{"orders-api", "payments-core"}, 3, probs, 25)
+		out := openProblemsPayload("acme", "prod", []string{"orders-api", "payments-core"}, 3, 0, InboxOpenResult{Rows: rows, Total: 41}, 25)
 		b, _ := json.Marshal(out)
 		if len(b) > OpenProblemsMaxBytes {
 			t.Fatalf("gövde %d B", len(b))
 		}
-		if out["total_open"] != 40 || out["has_more"] != true || out["scoped_services"] != 5 || out["env"] != "prod" {
+		if out["total_open"] != 41 || out["has_more"] != true || out["scoped_services"] != 5 || out["env"] != "prod" {
 			t.Fatalf("%v", out)
 		}
-		rows := out["problems"].([]OpenProblemRow)
-		if len(rows) == 0 || rows[0].PageURL != ProblemPageURL(rows[0].ID) || rows[0].SinceUnix != 1_800_000_000 {
-			t.Fatalf("satır %+v", rows)
+		if strings.Contains(string(b), "StartedAtNs") {
+			t.Fatal("iç alan gövdeye sızdı")
 		}
 	})
 }
 
-func TestOpenProblemCounts(t *testing.T) {
-	got := OpenProblemCounts([]chstore.Problem{{Service: "orders-api"}, {Service: "orders-api"}, {Service: "payments-core"}})
+func TestOpenCounts(t *testing.T) {
+	got := OpenCounts([]InboxRow{{Service: "orders-api"}, {Service: "orders-api"}, {Service: "payments-core"}})
 	if got["orders-api"] != 2 || got["payments-core"] != 1 || got["billing-api"] != 0 {
 		t.Fatalf("%v", got)
 	}
@@ -127,7 +159,6 @@ func TestMyServicesPayloadEnvAndOpen(t *testing.T) {
 	if !strings.Contains(string(b), `"open_problems":2`) {
 		t.Fatalf("satırda açık sayı yok: %s", b)
 	}
-	// open nil → alan yazılmaz; env boş → env alanları yok
 	out = myServicesPayload("acme", resolved, 0, rows, 3600, 10, "", false, nil)
 	b, _ = json.Marshal(out)
 	if strings.Contains(string(b), "open_problems") || strings.Contains(string(b), "env_applied") {

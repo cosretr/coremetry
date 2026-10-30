@@ -277,6 +277,10 @@ type Deps struct {
 	// singleflight). fn'in bool'u false → gövde döner ama SAKLANMAZ (kısmi
 	// sonuç). nil = önbelleksiz (testler, doğrudan Deps kurulumu).
 	Memo func(ctx context.Context, key string, ttl time.Duration, fn func(context.Context) (any, bool, error)) ([]byte, error)
+	// InboxOpen — briefing Faz 1 (operatör kararı 2026-10-31): open_problems ve
+	// list_my_services açık-konu sayısı /api/inbox çekirdeğinden okur (Service
+	// şeridiyle aynı boru hattı; api/cosre_inbox_open.go). nil = araç adlı hata döner.
+	InboxOpen InboxOpenReader
 	// v0.10.1276 (CoSRE adım 7) — service_health_sweep'in pod bölümü (Thanos
 	// PodMetrics + penceredeki restart artışı; api/mcp_service_pods.go,
 	// guidedThanosPods ile aynı pod seçicisi). nil = Thanos yok → bölüm skipped.

@@ -421,10 +421,11 @@ func listMyServicesTool(d Deps) mcp.Tool {
 				if err != nil {
 					return nil, err
 				}
-				// R6 — açık Problem sayısı; okuma hatası RED'i düşürmez (alan yazılmaz).
+				// R6 — açık konu sayısı (Inbox boru hattı, şeritle aynı); okuma
+				// hatası RED'i düşürmez (alan yazılmaz).
 				var open map[string]int
-				if probs, perr := ReadOpenProblems(c, d, svcs, env, false); perr == nil {
-					open = OpenProblemCounts(probs)
+				if res, _, perr := ReadInboxOpen(c, d, team, svcs, env, InboxOpenScan); perr == nil {
+					open = OpenCounts(res.Rows)
 				}
 				return myServicesPayload(team, svcs, trimmed, rows, windowS, limit, env, envApplied, open), nil
 			}

@@ -264,3 +264,9 @@ Streaming'e geçilirse: v1 olay `briefing` → `data-briefing{id:"briefing"}` + 
 | Q10 | Satır başı useful/noise çipi Faz 1'de mi? | **evet** — `cosre_signals` DDL'siz |
 | Q11 | HTTP client (giden) metrikleri Go'ya taşınsın mı? | **Faz 2**; Faz 1 server aileleri |
 | Q12 | >100 servisli takım: kırpılmış küme üzerinden mi, uyarı mı? | **kırpılmış + kartta "N servis dışarıda"** |
+
+## Onay
+
+- 2026-10-30: Q1–Q12 öneriler olduğu gibi onaylandı; Faz 1 başladı (v0.10.1690).
+- Q10 operatör 2026-10-31 geri aldı: satır geri bildirimi yok (cosre_signals'a briefing kinds eklenmez).
+- 2026-10-31: kalem 6 / `open_problems` kaynağı problems tablosu değil, Service şeridiyle aynı Inbox boru hattı (`inboxView`; v0.10.1691).

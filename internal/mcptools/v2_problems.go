@@ -1,14 +1,17 @@
 package mcptools
 
-// v2_problems.go — CoSRE Login Briefing Faz 1 dilim 1 (docs/cosre/briefing-audit.md
+// v2_problems.go — CoSRE Login Briefing Faz 1 (docs/cosre/briefing-audit.md
 // §1 kalem 6, §10 R6; operatör onayı 2026-10-30).
 //
-// open_problems — kapsamdaki servis KÜMESİNİN açık (resolved dışı) Problem'leri.
-// list_problems tekil `service` alır; v2 kapsamı bir küme olduğundan küme
-// SQL'e iner (ProblemFilter.Services → service IN …, LIMIT'ten ÖNCE). Aynı
-// okuma list_my_services satırına `open_problems` sayısını verir (R6 borcu:
-// env + açık-Problem sayısı). Kimlik yok: kapsam döngüden enjekte edilir
-// (applyUserScope `services` + `team`).
+// open_problems — kapsamın AÇIK konuları. Operatör kararı 2026-10-31: kaynak
+// yalnız problems tablosu DEĞİL, Service sayfası şeridiyle (ServiceAttentionStrip
+// → /api/inbox) AYNI boru hattı — problems + exception/httperror grupları +
+// anomaliler, aynı süzgeç/taban/öncelik. Okuma api tarafındaki inbox
+// çekirdeğinden (inboxView) Deps.InboxOpen dikişiyle gelir; burada ikinci bir
+// uygulama YOK. Kapsam: takım → Inbox ?team= (owner VEYA sre — TeamServiceNames
+// ile aynı birleşim); tek servis → ?service= (şeridin kendisi); takımsız çoklu
+// küme → servis başına (≤ inboxFanoutMax) + birebir servis süzgeci.
+// Aynı okuma list_my_services satırına `open_problems` sayısını verir (R6).
 
 import (
 	"context"
@@ -19,7 +22,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/mcp"
 )
 
@@ -29,21 +31,51 @@ const OpenProblemsName = "open_problems"
 const (
 	openProblemsDefaultRows = 10
 	openProblemsMaxRows     = 25
-	// openProblemsScan — SQL taraması (problems state tablosu küçük; küme
-	// SQL'de daraltılır, sayım taramanın tamamından).
-	openProblemsScan = 500
+	// InboxOpenScan — inbox okumasının satır tavanı (inboxView üst sınırı 500).
+	InboxOpenScan = 500
+	// inboxFanoutMax — takımsız çoklu kümede servis başına okuma tavanı.
+	inboxFanoutMax = 10
 	// OpenProblemsMaxBytes — gövde tavanı (≤ 2 KB); fazlası page_url.
 	OpenProblemsMaxBytes  = 2048
 	openProblemsCacheTTL  = 30 * time.Second
 	openProblemsReasonMax = 140
 )
 
-// openProblemsNotStatuses — açık = resolved DIŞI her şey (v0.9.322: tanınmayan
-// durum insan bekler; izin listesi değil dışlama).
-var openProblemsNotStatuses = []string{"resolved"}
+// InboxOpenQuery — inbox çekirdeğinin açık-konu sorgusu (status=open).
+type InboxOpenQuery struct {
+	Team, Service, Env string
+	Limit              int
+}
+
+// InboxRow — bir inbox satırının araç şekli (api.InboxItem'dan).
+type InboxRow struct {
+	ID          string `json:"id"`
+	Kind        string `json:"kind"` // problem | exception | httperror | anomaly | incident
+	Priority    string `json:"priority,omitempty"`
+	Severity    string `json:"severity,omitempty"`
+	Service     string `json:"service"`
+	Title       string `json:"title,omitempty"`
+	Reason      string `json:"reason"`
+	StartedAtNs int64  `json:"-"`
+	SinceUnix   int64  `json:"since_unix"`
+	PageURL     string `json:"page_url,omitempty"`
+}
+
+// InboxOpenResult — okumanın sonucu (Total = tavandan önceki aday sayısı).
+type InboxOpenResult struct {
+	Rows       []InboxRow
+	Total      int
+	ScanCapped bool
+}
+
+// InboxOpenReader — api'nin inbox çekirdeği (nil = bağlı değil).
+type InboxOpenReader func(ctx context.Context, q InboxOpenQuery) (InboxOpenResult, error)
 
 // errNoProblemScope — kapsam yok: model takımı sorar.
 var errNoProblemScope = errors.New("no user scope: pass `services` (or `team`) — the caller's team is unknown; ask the user which team they mean, never guess one")
+
+// errNoInboxReader — Deps.InboxOpen bağlı değil (yalnız doğrudan Deps kurulumunda).
+var errNoInboxReader = errors.New("open-items reader is not wired on this server")
 
 type openProblemsArgs struct {
 	Services []string `json:"services,omitempty"`
@@ -52,48 +84,28 @@ type openProblemsArgs struct {
 	Limit    int      `json:"limit,omitempty"`
 }
 
-// OpenProblemRow — open_problems satırı (briefing kalem 6 da bu şekli taşır).
-type OpenProblemRow struct {
-	ID        string `json:"id"`
-	DisplayID string `json:"display_id,omitempty"`
-	Priority  string `json:"priority,omitempty"`
-	Severity  string `json:"severity,omitempty"`
-	Service   string `json:"service"`
-	Kind      string `json:"kind,omitempty"`
-	Status    string `json:"status"`
-	Reason    string `json:"reason"`
-	SinceUnix int64  `json:"since_unix"`
-	PageURL   string `json:"page_url"`
-}
-
 // openProblemsCacheKey — SAF: TÜM girdiler (sıralı küme FNV, takım, env, satır, dakika).
 func openProblemsCacheKey(services []string, team, env string, limit int, now time.Time) string {
-	return fmt.Sprintf("mcp:open_problems:v1:%s:%s:%s:%d:%d", fnvHex(services...), fnvHex(team), fnvHex(env), limit, now.Unix()/60)
+	return fmt.Sprintf("mcp:open_problems:v2:%s:%s:%s:%d:%d", fnvHex(services...), fnvHex(team), fnvHex(env), limit, now.Unix()/60)
 }
 
-// ProblemPageURL — SAF: tek Problem'in sayfası (kök-göreli).
-func ProblemPageURL(id string) string { return "/problems?problem=" + url.QueryEscape(id) }
-
-// OpenProblemsPageURL — SAF: kümenin liste sayfası. Tek servis → servis süzgeci;
-// takım → Inbox sahip süzgeci (yalnız ownerTeam; OR semantiği orada yok); yoksa genel.
+// OpenProblemsPageURL — SAF: kümenin Inbox görünümü (takım → ?team= birleşimi;
+// tek servis → şeridin "tümü" bağlantısı; yoksa genel).
 func OpenProblemsPageURL(services []string, team string) string {
-	if len(services) == 1 {
-		return "/problems?service=" + url.QueryEscape(services[0])
-	}
 	if t := strings.TrimSpace(team); t != "" {
-		return "/inbox?owner=" + url.QueryEscape(t)
+		return "/inbox?team=" + url.QueryEscape(t)
 	}
-	return "/problems"
+	if len(services) == 1 {
+		return "/inbox?service=" + url.QueryEscape(services[0])
+	}
+	return "/inbox"
 }
 
-// problemReason — SAF: satırın tek-satır nedeni (öncelik nedeni > açıklama > kural adı), kırpılmış.
-func problemReason(p chstore.Problem) string {
-	r := strings.TrimSpace(p.PriorityReason)
+// InboxReason — SAF: satırın tek-satır nedeni (öncelik nedeni > başlık), boşluk katlanmış, kırpılmış.
+func InboxReason(priorityReason, title string) string {
+	r := strings.TrimSpace(priorityReason)
 	if r == "" {
-		r = strings.TrimSpace(p.Description)
-	}
-	if r == "" {
-		r = strings.TrimSpace(p.RuleName)
+		r = strings.TrimSpace(title)
 	}
 	r = strings.Join(strings.Fields(r), " ")
 	if rs := []rune(r); len(rs) > openProblemsReasonMax {
@@ -102,67 +114,91 @@ func problemReason(p chstore.Problem) string {
 	return r
 }
 
-// OpenProblemRows — SAF: Problem → satır (sıra çağırandan: öncelik sırası).
-func OpenProblemRows(probs []chstore.Problem) []OpenProblemRow {
-	out := make([]OpenProblemRow, 0, len(probs))
-	for _, p := range probs {
-		out = append(out, OpenProblemRow{
-			ID: p.ID, DisplayID: p.DisplayID, Priority: p.Priority, Severity: p.Severity,
-			Service: p.Service, Kind: p.Kind, Status: p.Status, Reason: problemReason(p),
-			SinceUnix: p.StartedAt / int64(time.Second), PageURL: ProblemPageURL(p.ID),
-		})
+// InboxOpenPlan — SAF: kapsam → inbox sorguları. exact=true → satırlar
+// birebir servis kümesiyle süzülür (inbox ?service= alt-dize eşler);
+// unread = fan-out tavanına takılıp okunmayan servis.
+func InboxOpenPlan(team string, services []string, env string, limit int) (qs []InboxOpenQuery, exact bool, unread int) {
+	if t := strings.TrimSpace(team); t != "" {
+		return []InboxOpenQuery{{Team: t, Env: env, Limit: limit}}, false, 0
 	}
-	return out
+	if len(services) == 1 {
+		return []InboxOpenQuery{{Service: services[0], Env: env, Limit: limit}}, false, 0
+	}
+	n := len(services)
+	if n > inboxFanoutMax {
+		unread, n = n-inboxFanoutMax, inboxFanoutMax
+	}
+	for _, s := range services[:n] {
+		qs = append(qs, InboxOpenQuery{Service: s, Env: env, Limit: limit})
+	}
+	return qs, true, unread
 }
 
-// OpenProblemCounts — SAF: servis başına açık Problem sayısı.
-func OpenProblemCounts(probs []chstore.Problem) map[string]int {
+// ReadInboxOpen — kapsamın açık konuları, inbox çekirdeğinden (plan yukarıda).
+// Satırlar inbox sırası (öncelik); çoklu okumada birleşim + tekilleştirme.
+func ReadInboxOpen(ctx context.Context, d Deps, team string, services []string, env string, limit int) (InboxOpenResult, int, error) {
+	if d.InboxOpen == nil {
+		return InboxOpenResult{}, 0, errNoInboxReader
+	}
+	qs, exact, unread := InboxOpenPlan(team, services, env, limit)
+	if len(qs) == 1 {
+		r, err := d.InboxOpen(ctx, qs[0])
+		return r, unread, err
+	}
+	allow := make(map[string]bool, len(services))
+	for _, s := range services {
+		allow[s] = true
+	}
+	var out InboxOpenResult
+	seen := map[string]bool{}
+	for _, q := range qs {
+		r, err := d.InboxOpen(ctx, q)
+		if err != nil {
+			return InboxOpenResult{}, 0, err
+		}
+		out.ScanCapped = out.ScanCapped || r.ScanCapped || r.Total > len(r.Rows)
+		for _, row := range r.Rows {
+			if (exact && !allow[row.Service]) || seen[row.ID] {
+				continue
+			}
+			seen[row.ID] = true
+			out.Rows = append(out.Rows, row)
+		}
+	}
+	out.Total = len(out.Rows)
+	return out, unread, nil
+}
+
+// OpenCounts — SAF: servis başına açık konu sayısı.
+func OpenCounts(rows []InboxRow) map[string]int {
 	out := map[string]int{}
-	for _, p := range probs {
-		out[p.Service]++
+	for _, r := range rows {
+		out[r.Service]++
 	}
 	return out
-}
-
-// ReadOpenProblems — kümenin açık Problem'leri, öncelik zenginleştirmeli ve
-// öncelik sıralı. Boş küme → okuma yok (boş IN = tüm filo değil, hiçbir şey).
-// enrich=false yalnız sayım isteyenler için (list_my_services).
-func ReadOpenProblems(ctx context.Context, d Deps, services []string, env string, enrich bool) ([]chstore.Problem, error) {
-	if len(services) == 0 || d.Store == nil {
-		return nil, nil
-	}
-	rows, err := d.Store.ListProblems(ctx, chstore.ProblemFilter{
-		NotStatuses: openProblemsNotStatuses,
-		Services:    services,
-		Env:         env,
-		Limit:       openProblemsScan,
-	})
-	if err != nil {
-		return nil, err
-	}
-	if enrich {
-		rows = d.Store.EnrichProblemsForRead(ctx, rows, mcpDeployLookback)
-		rows = chstore.SortProblemsByPriority(rows)
-	}
-	return rows, nil
 }
 
 // openProblemsPayload — SAF: ≤ OpenProblemsMaxBytes gövde; sığmayan satır sondan düşer.
-func openProblemsPayload(team, env string, services []string, trimmed int, probs []chstore.Problem, limit int) map[string]any {
-	all := OpenProblemRows(probs)
-	total := len(all)
-	hasMore := total > limit
+func openProblemsPayload(team, env string, services []string, trimmed, unread int, res InboxOpenResult, limit int) map[string]any {
+	all := append([]InboxRow(nil), res.Rows...)
+	if all == nil {
+		all = []InboxRow{}
+	}
+	hasMore := len(all) > limit
 	if hasMore {
 		all = all[:limit]
 	}
 	out := map[string]any{
 		"scoped_services":  len(services) + trimmed,
 		"trimmed_services": trimmed,
-		"total_open":       total,
-		"scan_capped":      len(probs) >= openProblemsScan,
-		"order":            "priority (P1 first), then newest",
-		"source":           "problems state table (FINAL), status != resolved; service set applied in SQL",
+		"total_open":       res.Total,
+		"scan_capped":      res.ScanCapped,
+		"order":            "inbox priority order (P1 first)",
+		"source":           "Inbox pipeline (problems + exception/http-error groups + anomalies), status=open — the same read as the Service page attention strip",
 		"page_url":         OpenProblemsPageURL(services, team),
+	}
+	if unread > 0 {
+		out["unread_services"] = unread
 	}
 	if team != "" {
 		out["team"] = team
@@ -170,12 +206,12 @@ func openProblemsPayload(team, env string, services []string, trimmed int, probs
 	if env != "" {
 		out["env"] = env
 	}
-	if total == 0 {
-		out["reasons"] = []string{fmt.Sprintf("no open problem on the %d scoped service(s) — say so plainly; do not invent one", len(services)+trimmed)}
+	if res.Total == 0 {
+		out["reasons"] = []string{fmt.Sprintf("no open item on the %d scoped service(s) — say so plainly; do not invent one", len(services)+trimmed)}
 	}
 	truncated := false
 	for {
-		out["problems"], out["count"] = all, len(all)
+		out["items"], out["count"] = all, len(all)
 		b, err := json.Marshal(out)
 		if err != nil || len(b) <= OpenProblemsMaxBytes || len(all) == 0 {
 			break
@@ -183,7 +219,7 @@ func openProblemsPayload(team, env string, services []string, trimmed int, probs
 		all = all[:len(all)-1]
 		truncated = true
 	}
-	out["has_more"] = hasMore || truncated
+	out["has_more"] = hasMore || truncated || res.Total > len(res.Rows)
 	if truncated {
 		out["truncated"] = true
 	}
@@ -193,12 +229,12 @@ func openProblemsPayload(team, env string, services []string, trimmed int, probs
 func openProblemsTool(d Deps) mcp.Tool {
 	return mcp.Tool{
 		Name: OpenProblemsName,
-		ShortDescription: "Kullanıcının servislerindeki AÇIK Problem'ler (çözülmemiş), P1 önce; kapsamı sunucu koyar. " +
-			"\"Açık problemim var mı / ne alarm veriyor\" sorusunun girişi. env verilirse o ortamda koşan servislerle daraltır.",
-		Description: "Return the OPEN (not resolved) Problems on a SET of services — normally the caller's own services, injected by the chat loop — with priority (P1/P2/P3), severity, service, kind, a one-line reason, start time and a page_url per problem. " +
-			"Use it for 'do I have open problems', 'what is alerting in my area'. Scope is filled by the server; pass `services`/`team` only when the user names them. Without scope the call fails with a named error: ask the user which team, never guess. " +
-			"`env` narrows to problems whose service ran in that environment in the last hour. Rows are priority-ordered; the body stays under 2 KB (at most 25 rows) and `total_open` counts every open problem in the set. " +
-			"Reads the small problems state table once for the whole set (cached 30 s). For one named service's full history use list_problems; for a problem's evidence use get_problem.",
+		ShortDescription: "Kullanıcının servislerindeki AÇIK konular (Problem + exception/HTTP hata grubu + anomali), P1 önce — " +
+			"Service sayfası şeridi / Inbox ile aynı okuma. Kapsamı sunucu koyar. \"Açık problemim var mı / ne alarm veriyor\" sorusunun girişi.",
+		Description: "Return the OPEN items on the caller's services — the same Inbox pipeline the Service page attention strip and /inbox read: alert-rule Problems, exception / HTTP-error groups and anomalies, with priority (P1/P2/P3), severity, kind, service, a one-line reason, start time and a page_url per item. " +
+			"Use it for 'do I have open problems', 'what is alerting in my area'. Scope is filled by the server (team → owner OR sre services); pass `services`/`team` only when the user names them. Without scope the call fails with a named error: ask the user which team, never guess. " +
+			"`env` keeps items whose service ran in that environment in the last hour. Rows are Inbox-ordered; the body stays under 2 KB (at most 25 rows) and `total_open` is the Inbox count. " +
+			"Cached 30 s. For one problem's evidence use get_problem; for exception detail use the exception tools.",
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -210,7 +246,7 @@ func openProblemsTool(d Deps) mcp.Tool {
 				},
 				"team": map[string]any{
 					"type":        "string",
-					"description": "Team label (ownerTeam OR sreTeam); used only when `services` is empty. Omit unless the user names a team.",
+					"description": "Team label (ownerTeam OR sreTeam). Filled by the server with the user's team. Omit unless the user names a team.",
 				},
 				"env": map[string]any{
 					"type":        "string",
@@ -220,7 +256,7 @@ func openProblemsTool(d Deps) mcp.Tool {
 					"type":        "integer",
 					"minimum":     1,
 					"maximum":     openProblemsMaxRows,
-					"description": "Max problem rows. Default 10, max 25.",
+					"description": "Max rows. Default 10, max 25.",
 				},
 			},
 		},
@@ -234,22 +270,16 @@ func openProblemsTool(d Deps) mcp.Tool {
 			}
 			team, env := strings.TrimSpace(a.Team), strings.TrimSpace(a.Env)
 			svcs, trimmed := normalizeMyServices(a.Services)
-			if len(svcs) == 0 && team != "" {
-				var err error
-				if svcs, trimmed, err = ReadTeamServiceNames(ctx, d, team); err != nil {
-					return nil, err
-				}
-			}
-			if len(svcs) == 0 {
+			if len(svcs) == 0 && team == "" {
 				return nil, errNoProblemScope
 			}
 			limit := clampLimit(a.Limit, openProblemsDefaultRows, openProblemsMaxRows)
 			run := func(c context.Context) (map[string]any, error) {
-				probs, err := ReadOpenProblems(c, d, svcs, env, true)
+				res, unread, err := ReadInboxOpen(c, d, team, svcs, env, InboxOpenScan)
 				if err != nil {
 					return nil, err
 				}
-				return openProblemsPayload(team, env, svcs, trimmed, probs, limit), nil
+				return openProblemsPayload(team, env, svcs, trimmed, unread, res, limit), nil
 			}
 			if d.Memo == nil {
 				return run(ctx)
