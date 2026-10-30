@@ -132,6 +132,8 @@ describe('Tailwind Coremetry değişkenlerini ezemez', () => {
     expect(imports).toEqual([
       "'../../node_modules/uplot/dist/uPlot.min.css' layer(legacy)",
       "'./globals.css' layer(legacy)",
+      // v0.10.1620 (yazı tipi sürümü): @font-face katmansız (katman @font-face'i etkilemez).
+      "'./fonts.css'",
       "'./chart.css'",
       "'tailwindcss/theme.css' layer(theme)",
       "'tailwindcss/utilities.css' layer(utilities) source(none)",

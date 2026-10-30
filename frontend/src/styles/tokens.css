@@ -139,6 +139,7 @@
   --shadow-modal: var(--shadow-modal);
 
   --font-mono: var(--font-mono);
+  --font-sans: var(--font-sans);
 
   /* v0.10.1613 (R5): ölçek px'e çivili — Tailwind'in .25rem'i tarayıcı yazı
      boyuna bağlı. Üretilen yardımcıların dördü globals.css'in eski

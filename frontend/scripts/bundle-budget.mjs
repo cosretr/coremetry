@@ -23,6 +23,19 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = path.join(ROOT, 'dist');
 const BUDGET_KB = Number(process.env.BUNDLE_BUDGET_KB || 347);
+// Yazı tipi bütçesi (v0.10.1620, audit §13; operatör): JS bütçesine SAYILMAZ,
+// ayrı satır. YÖNTEM (çivili, bundleBudget.pin): giriş sayfasının
+// <link rel="stylesheet"> CSS'lerinin url(…woff2) ile başvurduğu dosyaların
+// HAM bayt toplamı (woff2 zaten sıkıştırılmış — gz uygulanmaz), her dosya
+// bir kez. Bu, sayfa latin + latin-ext karakter taşıdığında (Türkçe metin
+// = ikisi de) tarayıcının indirebileceği en fazla font baytıdır. Kapılar:
+// toplam ≤ FONT_BUDGET_KB; yalnız latin / latin-ext normal alt kümeleri;
+// her woff2 @font-face'i `font-display: swap`; index.html'de font preload yok.
+// 190 KB (operatör 2026-10-30, seçenek A): audit §13'teki 120 KB ölçümle
+// tutmadı — Inter latin + latin-ext tek başına 130.2 KB; Türkçe ğ/ş/İ
+// latin-ext'te. Ölçülen 184.5 KB. Daha büyük set = açık operatör artışı.
+const FONT_BUDGET_KB = Number(process.env.FONT_BUDGET_KB || 190);
+const FONT_SUBSET_OK = /-(latin|latin-ext)-wght-normal-[\w-]+\.woff2$/;
 
 // Yasak kaynaklar (plan §1.3 adım 3). v0.10.1613 (R5, §12 Q8): paketleme
 // `radix-ui` tek paketi (shadcn@4.21.5 çıktısı); liste vite.config.ts
@@ -132,6 +145,31 @@ if (radixFile) {
   for (const m of src.matchAll(STATIC_IMPORT)) if (/^grafana-/.test(m[1])) radixToGrafana.push(m[1]);
 }
 
+// Yazı tipi ölçümü (ayrı satır, JS bütçesi dışında).
+const entryCss = [];
+for (const m of html.matchAll(/<link\b[^>]*>/g)) {
+  if (attr(m[0], 'rel') === 'stylesheet' && attr(m[0], 'href')) entryCss.push(attr(m[0], 'href'));
+}
+const fontFiles = new Map();
+const fontProblems = [];
+for (const href of entryCss) {
+  const css = readFileSync(path.join(DIST, href.replace(/^\//, '')), 'utf8');
+  for (const face of css.match(/@font-face\s*{[^}]*}/g) || []) {
+    const urls = [...face.matchAll(/url\(\s*["']?([^"')]+\.woff2)["']?\s*\)/g)].map((u) => u[1]);
+    if (urls.length && !/font-display:\s*swap/.test(face)) fontProblems.push(`font-display≠swap: ${urls.join(' ')}`);
+    for (const u of urls) {
+      const base = path.basename(u);
+      if (!FONT_SUBSET_OK.test(base)) fontProblems.push(`izinsiz alt küme: ${base}`);
+      const f = path.join(DIST, 'assets', base);
+      if (!existsSync(f)) { fontProblems.push(`dist'te yok: ${base}`); continue; }
+      fontFiles.set(base, readFileSync(f).length);
+    }
+  }
+}
+if (/<link\b[^>]*rel=["']preload["'][^>]*as=["']font["']/.test(html) || /<link\b[^>]*as=["']font["'][^>]*rel=["']preload["']/.test(html)) fontProblems.push('index.html font preload içeriyor');
+const fontBytes = [...fontFiles.values()].reduce((a, b) => a + b, 0);
+const fontOver = fontBytes > FONT_BUDGET_KB * 1024;
+
 // KAPI (R5): yardımcı ↔ eski sınıf adı çakışması (ALLOWED_LEGACY_COLLISIONS).
 const utilityNames = new Set();
 const legacyNames = new Set();
@@ -170,6 +208,8 @@ for (const o of offenders) {
 out.push(`radix → grafana static import: ${radixFile ? (radixToGrafana.length ? radixToGrafana.join(', ') : 'none') : 'n/a (no radix chunk)'}   utility∩legacy class names: ${collisions.length} (${collisions.join(' ') || '—'}; not allowed: ${badCollisions.join(' ') || 'none'})`);
 out.push(`allowed in entry (cva/clsx/tailwind-merge): ${[...allowedHits].sort().join(' ') || 'none present'}`);
 out.push(`no sourcemap (virtual-only chunks, max ${MAX_MAPLESS}): ${mapless.join(', ') || 'none'}`);
+out.push(`fonts (woff2, not in JS budget): ${fontFiles.size} files ${[...fontFiles].map(([n, b]) => `${n.replace(/-[\w-]{8}\.woff2$/, '')} ${kb(b)}`).join(', ') || '—'}`);
+out.push(`| fonts ${kb(fontBytes)} KB woff2 | font budget ${FONT_BUDGET_KB} | files ${fontFiles.size} | ${fontOver || fontProblems.length ? 'FAIL' : 'OK'} |`);
 out.push(`| initial ${kb(initialGz)} KB gz | main ${kb(mainGz)} KB gz | budget ${BUDGET_KB} | radix-in-entry ${offenders.length} |`);
 
 const text = out.join('\n') + '\n';
@@ -179,4 +219,6 @@ writeFileSync(path.join(DIST, 'bundle-budget.txt'), text);
 if (radixToGrafana.length) fail(`${radixFile} grafana chunk'ını statik import ediyor: ${radixToGrafana.join(', ')} — vite.config.ts radix grubu önceliği/regex'i`);
 if (badCollisions.length) fail(`Tailwind yardımcısı eski sınıf adıyla çakışıyor: ${badCollisions.join(' ')} (scripts/bundle-budget.mjs ALLOWED_LEGACY_COLLISIONS)`);
 if (offenders.length) fail(`ilk yükte yasak kaynak: ${offenders.map((o) => o.base).join(', ')}`);
+if (fontProblems.length) fail(`yazı tipi kapısı: ${fontProblems.join('; ')}`);
+if (fontOver) fail(`yazı tipi ${kb(fontBytes)} KB woff2 > bütçe ${FONT_BUDGET_KB} KB`);
 if (over) fail(`ilk yük ${kb(initialGz)} KB gz > bütçe ${BUDGET_KB} KB`);

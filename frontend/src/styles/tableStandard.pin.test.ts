@@ -149,7 +149,9 @@ describe('T4/T5 — tek yazı boyu, sayılar arayüz fontunda, tek mono yığın
 
   it('TEK monospace yığını: yalnız --font-mono token\'ı "monospace" yazar', () => {
     const hits = [...CLEAN.matchAll(/[^\n;{}]*monospace[^\n;{}]*/g)].map(m => m[0].trim());
-    expect(hits).toEqual(['--font-mono: ui-monospace, SFMono-Regular, Menlo, monospace']);
+    // v0.10.1620 (yazı tipi sürümü): sistem yığını --font-mono-fallback'te;
+    // --font-mono = paketli JetBrains Mono + o yedek (redhat yalnız yedek).
+    expect(hits).toEqual(['--font-mono-fallback: ui-monospace, SFMono-Regular, Menlo, monospace']);
     expect(bodyOf('.mono')).toMatch(/font-family:\s*var\(--font-mono\)/);
     expect(bodyOf('.logtbl-dense > tbody > tr > td')).toMatch(/font-family:\s*var\(--font-mono\)/);
   });

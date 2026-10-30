@@ -190,7 +190,12 @@
   /* v0.10.933 (tablo standardı T5) — TEK monospace yığını. Eskiden beş
      ayrı yığın (düz `monospace` / `ui-monospace, monospace` / … Consolas)
      iki görünür yüz üretiyordu; her mono kural bunu okur. */
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-mono-fallback: ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* v0.10.1620 (audit §13) — koyu + açık: paketli JetBrains Mono / Inter
+     (styles/fonts.css), sistem yığını yedek. redhat bloğu ikisini de
+     bugünkü değerine geri çeker (yerel-yalnız Red Hat Text tercihi). */
+  --font-mono: 'JetBrains Mono Variable', var(--font-mono-fallback);
+  --font-sans: 'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   /* v0.10.933 (tablo standardı T6) — satır ritmi. Bu RAHAT (varsayılan)
      değer; compact/dense kendi değerini dolgu kurallarının yanında
      bildirir. rowHeight.ts `ROW_H` ile eşit olmak ZORUNDA (rowHeight.test). */
@@ -323,6 +328,11 @@
    local-only font-family preference with clean fallbacks (no
    external font fetch). */
 [data-theme="redhat"] {
+  /* v0.10.1620 (audit §13): redhat paketli Inter/JetBrains Mono'yu ALMAZ —
+     gövde yerel-yalnız Red Hat Text (aşağıdaki body kuralı), diğer yığınlar
+     bugünkü sistem değerleri. */
+  --font-mono: var(--font-mono-fallback);
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   --bg0: #f0f0f0;
   --bg1: #ffffff;
   --bg2: #f5f5f5;
@@ -432,7 +442,7 @@ html, body { height: 100%; }
 html, body { overscroll-behavior-y: none; }
 body {
   background: var(--bg0); color: var(--text);
-  font: 13px/1.5 -apple-system, 'Segoe UI', sans-serif;
+  font: 13px/1.5 var(--font-sans);
 }
 a { color: var(--accent2); text-decoration: none; }
 a:hover { text-decoration: underline; }
@@ -2134,7 +2144,7 @@ a.dep-prob-mark:hover { text-decoration: none; }
   font-size: 12px;
   font-weight: 500;
   color: var(--text2);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-family: var(--font-sans);
   flex-shrink: 0;
   max-width: 160px;
   overflow: hidden;
@@ -2197,7 +2207,7 @@ a.dep-prob-mark:hover { text-decoration: none; }
   border-radius: 3px;
   margin-right: 8px;
   text-transform: uppercase;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-family: var(--font-sans);
   background: transparent;
   /* v0.10.922 (sade palet adım 1) — kategori renk almaz: DB/MQ/RPC/HTTP nötr. */
   border: 1px solid var(--border);
@@ -3153,7 +3163,7 @@ button.accent.copied {
   white-space: normal; overflow-wrap: anywhere; text-align: left;
   /* v0.10.926 — kutu tetiğin DOM kardeşi: font atadan gelirdi (log
      satırı / kv tablosu monospace). Gövde yığınına sabitle. */
-  font-family: -apple-system, 'Segoe UI', sans-serif;
+  font-family: var(--font-sans);
   pointer-events: auto;
   animation: fadeIn .12s ease-out;
 }
@@ -4754,7 +4764,7 @@ tr:hover .row-kiosk, .row-kiosk:focus-visible { opacity: 1; }
 .pod-pivot { padding: 5px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: var(--fs-xs); color: var(--text); text-decoration: none; background: var(--bg1); white-space: nowrap; }
 .pod-pivot:hover { background: var(--bg2); color: var(--text); }
 .pod-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
-.pod-kpi-sub { display: block; font-family: -apple-system, 'Segoe UI', sans-serif; font-size: var(--fs-xs); font-weight: 400; color: var(--text3); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pod-kpi-sub { display: block; font-family: var(--font-sans); font-size: var(--fs-xs); font-weight: 400; color: var(--text3); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pod-cap { font-size: var(--fs-xs); color: var(--text3); margin: 6px 0 0; }
 .pod-sec { margin-top: 18px; }
 .pod-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
