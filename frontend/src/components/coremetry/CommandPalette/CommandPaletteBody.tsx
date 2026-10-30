@@ -3,7 +3,17 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useT } from '@/lib/i18n';
 import { navHref } from '@/lib/navHref';
 import { serviceHref } from '@/lib/serviceHref';
-import { getRecentServices, getPinnedServices } from '@/lib/recentServices';
+import { getRecentServices, getPinnedServices, isServicePinned, toggleServicePin } from '@/lib/recentServices';
+import { applyTheme, currentTheme } from '@/lib/theme';
+import { applyDensity, currentDensity } from '@/lib/density';
+import { copyToClipboard } from '@/lib/clipboard';
+import { openShortcutsHelp } from '@/lib/shortcutsHelp';
+import { emitAiPrefill } from '@/components/ai/aiEvents';
+import { useCopilotConfig } from '@/components/ai/useCopilotEnabled';
+import {
+  filterLocalActions, runLocalAction, serviceFromLocation,
+  type LocalActionCtx, type LocalActionEffects, type LocalActionId,
+} from '@/lib/palette/localActions';
 import { useAuth } from '@/components/AuthProvider';
 import type { Action, ParamValues, SuggestItem } from '@/lib/actions';
 import { toast } from '@/lib/toast';
@@ -31,6 +41,17 @@ import type { CommandPaletteGroup } from './CommandPalette';
 
 const SEARCH_PLACEHOLDER = 'Search or paste a trace id…';
 
+// v0.10.1665 (P3) — yerel eylemlerin yan etkileri; hepsi mevcut tek yollar.
+const LOCAL_EFFECTS: LocalActionEffects = {
+  copy: copyToClipboard,
+  prefill: question => emitAiPrefill({ question }),
+  theme: applyTheme,
+  density: applyDensity,
+  shortcutsHelp: openShortcutsHelp,
+  togglePin: toggleServicePin,
+  toast: (kind, msg) => (kind === 'success' ? toast.success(msg) : toast.error(msg)),
+};
+
 export interface CommandPaletteBodyProps {
   open: boolean;
   onOpenChange(open: boolean): void;
@@ -45,8 +66,23 @@ export function CommandPaletteBody({ open, onOpenChange, openSeq, takeBufferedQu
   const t = useT();
   // v0.9.855 — pivot href'leri operatörün BAKTIĞI pencereyi taşısın diye
   // sayfanın aralığı (useUrlRange önceliğiyle) buradan çözülür.
-  const { search: locationSearch } = useLocation();
+  const { search: locationSearch, pathname, hash } = useLocation();
   const { user } = useAuth();
+  // v0.10.1665 (P3) — yerel eylemlerin bağlamı; her açılışta tazelenir
+  // (tema / yoğunluk / sabitleme DOM + depodan okunur). Copilot yapılandırması
+  // modül önbelleğinden (kapı zaten yüklüyor) — kapalı kurulumda "Ask CoSRE" yok.
+  const copilot = useCopilotConfig(open);
+  const localCtx = useMemo<LocalActionCtx>(() => {
+    const service = serviceFromLocation(pathname, locationSearch);
+    return {
+      href: '', nowMs: 0, service,
+      servicePinned: service ? isServicePinned(service) : false,
+      copilotEnabled: !!copilot?.enabled,
+      theme: currentTheme(), density: currentDensity(),
+    };
+    // openSeq: her açılışta tema/yoğunluk/★ yeniden okunur.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname, locationSearch, copilot?.enabled, openSeq]);
   const [query, setQuery] = useState('');
   const services = usePaletteServices(query, open);
   const endpoints = usePaletteEndpoints(query, open, locationSearch);
@@ -120,7 +156,15 @@ export function CommandPaletteBody({ open, onOpenChange, openSeq, takeBufferedQu
   const results = useMemo(() => buildPaletteResults({
     query, pages: localizedPages, services, endpoints, oracleOps, pivotSvcs,
     role: user?.role, seeAllLabel: t('search.seeAll'),
-  }), [query, services, endpoints, oracleOps, pivotSvcs, user?.role, localizedPages, t]);
+    localActions: filterLocalActions(localCtx, query),
+  }), [query, services, endpoints, oracleOps, pivotSvcs, user?.role, localizedPages, t, localCtx]);
+
+  const runLocal = (id: LocalActionId) => {
+    // Pencere TIK anında dondurulur; URL o anki adres çubuğu (origin dahil).
+    const ctx = { ...localCtx, href: window.location.href, nowMs: Date.now() };
+    onOpenChange(false);
+    void runLocalAction(id, ctx, LOCAL_EFFECTS);
+  };
 
   const enterAction = (a: Action) => {
     setActiveAction(a);
@@ -131,6 +175,7 @@ export function CommandPaletteBody({ open, onOpenChange, openSeq, takeBufferedQu
   };
 
   const pick = (r: PaletteResult) => {
+    if (r.kind === 'action' && r.local) { runLocal(r.local); return; }
     if (r.kind === 'action' && r.action) { enterAction(r.action); return; }
     if (r.to) {
       navigate(navHref(r.to, locationSearch));
@@ -215,7 +260,7 @@ export function CommandPaletteBody({ open, onOpenChange, openSeq, takeBufferedQu
       label: g.label,
       items: g.rows.map((r, i) => ({
         // Benzersiz: aynı hedef iki satırda görünebilir (cmdk değeri = seçim kimliği).
-        id: `${g.id}#${i}:${r.kind}:${r.to ?? r.action?.id ?? ''}`,
+        id: `${g.id}#${i}:${r.kind}:${r.to ?? r.action?.id ?? r.local ?? ''}`,
         label: r.label,
         hint: r.hint,
         href: r.to,

@@ -21,6 +21,7 @@ const apiMock = vi.hoisted(() => ({
   serviceNames: vi.fn(async (q: string) => ({ names: q.startsWith('check') ? ['checkout', 'checkout-worker'] : [] })),
   operationNames: vi.fn(async () => ({ names: [] as string[] })),
   oracleOperations: vi.fn(async () => ({ hits: [], attrKey: '' })),
+  copilotConfig: vi.fn(async () => ({ enabled: false })),
 }));
 vi.mock('@/lib/api', () => ({ api: apiMock }));
 vi.mock('@/components/AuthProvider', () => ({ useAuth: () => ({ user: { id: 'u1', role: 'editor' } }) }));
@@ -121,6 +122,17 @@ describe('CommandPaletteBody (cmdk)', () => {
     expect(onClose).not.toHaveBeenCalled();
     expect(headings()).not.toContain('Acknowledge problem — esc: back to search');
     await key('Escape');
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('yerel eylem (P3): "dense" → ↵ yoğunluğu uygular ve kapatır; parametre kipi yok', async () => {
+    const onClose = vi.fn();
+    await mount(<Harness onClose={onClose} />);
+    await type('dense');
+    await settle();
+    expect(headings()[0]).toBe('Actions');
+    await key('Enter');
+    expect(document.documentElement.getAttribute('data-density')).toBe('dense');
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 

@@ -8,6 +8,7 @@ import { traceHref } from '@/lib/traceHref';
 import { paletteIdentityQuery, identityTracesHref, paletteProblemId, problemDisplayHref } from '@/lib/paletteIdentity';
 import { searchSeeAllHref } from '@/lib/searchUrl'; // v0.10.1335
 import type { PaletteResult } from './pages';
+import type { LocalActionSpec } from './localActions';
 
 export const TRACE_ID_RE = /^[a-f0-9]{16,32}$/i;
 // v0.10.350 — kimlik adayı (function_id gibi): kalıp + değer artık
@@ -25,7 +26,12 @@ export interface PaletteResultInput {
   role: string | undefined;
   /** "“{q}” için tüm sonuçlar" şablonu (t('search.seeAll')). */
   seeAllLabel: string;
+  /** v0.10.1665 (P3) — sorguya süzülmüş yerel eylemler (filterLocalActions). */
+  localActions?: LocalActionSpec[];
 }
+
+/** Durum değiştiren eylemlerin görsel etiketi (P3). */
+export const CHANGES_STATE = 'changes state';
 
 export function buildPaletteResults(inp: PaletteResultInput): PaletteResult[] {
   const { query, pages: localizedPages, services, endpoints, oracleOps, pivotSvcs } = inp;
@@ -50,13 +56,18 @@ export function buildPaletteResults(inp: PaletteResultInput): PaletteResult[] {
   // "ack" → Acknowledge problem float ABOVE navigation results
   // because the operator's intent when typing a verb is action,
   // not page nav. filterActions handles role-gating + ranking.
+  // v0.10.1665 (P3) — durum değiştiren altı eylemin ipucuna "changes state"
+  // etiketi (yalnız görsel); yerel eylemler (localActions) onların ardından.
   const actionMatches = filterActions(inp.role, q).map<PaletteResult>(a => ({
     kind: 'action',
     label: a.label,
-    hint: a.hint,
+    hint: `${a.hint} · ${CHANGES_STATE}`,
     action: a,
     score: 800,
   }));
+  for (const a of inp.localActions ?? []) {
+    actionMatches.push({ kind: 'action', label: a.label, hint: a.hint, local: a.id, score: 790 });
+  }
   if (actionMatches.length > 0) {
     scored = [...actionMatches, ...scored];
   }

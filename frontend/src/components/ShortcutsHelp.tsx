@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Modal, LinkButton } from '@/components/ui';
 import { listShortcuts, useShortcuts, type Shortcut } from '@/lib/keyboard';
 import { useT } from '@/lib/i18n';
 import { requestTourRestart } from '@/features/tour/restart'; // v0.10.1334
+import { SHORTCUTS_HELP_EVENT } from '@/lib/shortcutsHelp'; // v0.10.1665 — ⌘K eylemi
 
 // Help modal that lists every registered shortcut. The "?"
 // global binding toggles it open. Bindings register and
@@ -42,6 +43,13 @@ export function ShortcutsHelp() {
     ],
     [],
   );
+
+  // v0.10.1665 — ⌘K "shortcuts-help" eylemi (lib/shortcutsHelp).
+  useEffect(() => {
+    const h = () => setOpen(true);
+    window.addEventListener(SHORTCUTS_HELP_EVENT, h);
+    return () => window.removeEventListener(SHORTCUTS_HELP_EVENT, h);
+  }, []);
 
   if (!open) return null;
   const all = listShortcuts();

@@ -3,6 +3,7 @@
 // v0.10.1653 gövdesi) AYNEN taşındı. Saf: bileşen importu yok.
 import { SETTINGS_TAB_INDEX } from '@/pages/settings/tabIndex';
 import type { Action } from '@/lib/actions';
+import type { LocalActionId } from './localActions';
 import type { PaletteGroupId } from './groups';
 
 export type PaletteResult = {
@@ -25,6 +26,8 @@ export type PaletteResult = {
   to?: string;
   // action payload — set when kind === 'action'.
   action?: Action;
+  // v0.10.1665 (P3) — yerel eylem (sunucu durumu yazmaz; lib/palette/localActions).
+  local?: LocalActionId;
   score?: number;
 };
 

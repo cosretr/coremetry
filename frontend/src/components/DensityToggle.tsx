@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getRaw, setRaw } from '@/lib/storage';
 import { IconButton } from '@/components/ui/IconButton';
-import { DENSITY_STEPS, normalizeDensity, type Density } from '@/lib/density';
+import { applyDensity, currentDensity, nextDensity, normalizeDensity, DENSITY_EVENT, DENSITY_STORAGE_KEY, type Density } from '@/lib/density';
 
 // Density toggle — global UI density level. Datadog has 2 levels
 // (compact/comfortable), Grafana has 3, Salesforce has 4. The
@@ -17,7 +17,8 @@ import { DENSITY_STEPS, normalizeDensity, type Density } from '@/lib/density';
 // font-size: 11px }`-style selectors. localStorage persists the
 // choice across reloads.
 
-const STORAGE_KEY = 'coremetry-density';
+// v0.10.1665 — anahtar + yazıcı lib/density.ts'te (⌘K density-* eylemleriyle ortak).
+const STORAGE_KEY = DENSITY_STORAGE_KEY;
 
 // Step order — clicking the toggle cycles through DENSITY_STEPS. We go
 // up (denser → smaller) since the typical reason an operator touches
@@ -47,15 +48,13 @@ export function DensityToggle() {
     if (stored !== null && stored !== initial) setRaw(STORAGE_KEY, initial);
     setDensity(initial);
     document.documentElement.setAttribute('data-density', initial);
+    // ⌘K density-* seçimi glifi tazeler (v0.10.1665).
+    const h = () => setDensity(currentDensity());
+    window.addEventListener(DENSITY_EVENT, h);
+    return () => window.removeEventListener(DENSITY_EVENT, h);
   }, []);
 
-  const cycle = () => {
-    const i = DENSITY_STEPS.indexOf(density);
-    const next = DENSITY_STEPS[(i + 1) % DENSITY_STEPS.length];
-    setDensity(next);
-    document.documentElement.setAttribute('data-density', next);
-    setRaw(STORAGE_KEY, next);
-  };
+  const cycle = () => { applyDensity(nextDensity(currentDensity())); };
 
   const tip = `Density: ${LABEL[density]} — click to cycle`;
   // v0.10.924 — buton bütünlüğü Faz 2: ThemeToggle ile aynı IconButton kalıbı.
