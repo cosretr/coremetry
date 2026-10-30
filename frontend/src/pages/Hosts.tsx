@@ -5,7 +5,7 @@ import { paramHref } from '@/lib/paramHref';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { Topbar } from '@/components/Topbar';
 import { Spinner, Empty } from '@/components/Spinner';
-import { Drawer, DrawerSection, DrawerTrendRow } from '@/components/ui';
+import { DetailSheet, SheetSection, SheetTrendRow } from '@/components/coremetry/DetailSheet';
 import { api } from '@/lib/api';
 import { timeRangeToNs, fmtBytes, fmtAgoNs, rowClickHandlers } from '@/lib/utils';
 import { useUrlRange } from '@/lib/useUrlRange';
@@ -188,32 +188,27 @@ function HostDrawer({ host, range, onClose }: {
   });
 
   return (
-    <Drawer onClose={onClose} header={
-      <>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 600 }}>
-          {host}
-        </span>
-        {detail?.zone && (
-          <span className="badge b-gray" title="cloud.availability_zone">{detail.zone}</span>
-        )}
-      </>
-    }>
+    <DetailSheet open onOpenChange={o => { if (!o) onClose(); }} resizeKey="coremetry-hosts-drawer-w"
+      title={<span className="mono">{host}</span>}
+      badges={detail?.zone && (
+        <span className="badge b-gray" title="cloud.availability_zone">{detail.zone}</span>
+      )}>
         {detail === undefined && <Spinner />}
         {detail === null && <Empty icon="✗" title="Failed to load host detail" />}
         {detail && (
           <>
-            <DrawerSection title="Trend (per minute)">
+            <SheetSection title="Trend (per minute)">
               {trend.length === 0 ? (
                 <div style={{ fontSize: 12, color: 'var(--text3)' }}>No samples in this window.</div>
               ) : (
                 <div style={{ display: 'grid', gap: 6 }}>
-                  <DrawerTrendRow label="CPU %" values={trend.map(p => p.cpuPct)} color="var(--warn)" />
-                  <DrawerTrendRow label="Memory" values={trend.map(p => p.memBytes)} color="var(--accent2)" />
+                  <SheetTrendRow label="CPU %" values={trend.map(p => p.cpuPct)} color="var(--warn)" />
+                  <SheetTrendRow label="Memory" values={trend.map(p => p.memBytes)} color="var(--accent2)" />
                 </div>
               )}
-            </DrawerSection>
+            </SheetSection>
 
-            <DrawerSection title={`Services on this host (${detail.services.length})`}>
+            <SheetSection title={`Services on this host (${detail.services.length})`}>
               {/* v0.10.954 — tablo standardı T12: boş durum tablonun İÇİNDE
                   (çekmece düzeyindeki yükleniyor / hata dışarıda kalır). */}
               <table {...svcDt.tableProps}>
@@ -235,9 +230,9 @@ function HostDrawer({ host, range, onClose }: {
                   ))}
                 </tbody>
               </table>
-            </DrawerSection>
+            </SheetSection>
           </>
         )}
-    </Drawer>
+    </DetailSheet>
   );
 }

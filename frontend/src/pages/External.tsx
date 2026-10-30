@@ -5,7 +5,7 @@ import { paramHref } from '@/lib/paramHref';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { Topbar } from '@/components/Topbar';
 import { Spinner, Empty } from '@/components/Spinner';
-import { Drawer, DrawerSection, DrawerTrendRow } from '@/components/ui';
+import { DetailSheet, SheetSection, SheetTrendRow } from '@/components/coremetry/DetailSheet';
 import { api } from '@/lib/api';
 import { timeRangeToNs, fmtNum, fmtFixed, rowClickHandlers } from '@/lib/utils';
 import { useUrlRange, DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
@@ -220,14 +220,9 @@ function ExternalHostDrawer({ host, range, onClose }: {
   const p99Series = trend.map(p => p.p99Ms);
 
   return (
-    <Drawer onClose={onClose} header={
-      <>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 600 }}>
-          {detail?.display || host}
-        </span>
-        <CategoryBadge category={detail?.category} />
-      </>
-    }>
+    <DetailSheet open onOpenChange={o => { if (!o) onClose(); }} resizeKey="coremetry-external-drawer-w"
+      title={<span className="mono">{detail?.display || host}</span>}
+      badges={<CategoryBadge category={detail?.category} />}>
         {detail?.display && (
           <div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--font-mono)', marginBottom: 8 }}>
             {host}
@@ -243,19 +238,19 @@ function ExternalHostDrawer({ host, range, onClose }: {
         {detail === null && <Empty icon="✗" title="Failed to load host detail" />}
         {detail && (
           <>
-            <DrawerSection title="Traffic (5-min buckets)">
+            <SheetSection title="Traffic (5-min buckets)">
               {trend.length === 0 ? (
                 <div style={{ fontSize: 12, color: 'var(--text3)' }}>No buckets in this window.</div>
               ) : (
                 <div style={{ display: 'grid', gap: 6 }}>
-                  <DrawerTrendRow label="Calls" values={callsSeries} color="var(--accent2)" />
-                  <DrawerTrendRow label="Errors" values={errorSeries} color="var(--err)" />
-                  <DrawerTrendRow label="P99 ms" values={p99Series} color="var(--warn)" />
+                  <SheetTrendRow label="Calls" values={callsSeries} color="var(--accent2)" />
+                  <SheetTrendRow label="Errors" values={errorSeries} color="var(--err)" />
+                  <SheetTrendRow label="P99 ms" values={p99Series} color="var(--warn)" />
                 </div>
               )}
-            </DrawerSection>
+            </SheetSection>
 
-            <DrawerSection title={`Calling services (${detail.callers.length})`}>
+            <SheetSection title={`Calling services (${detail.callers.length})`}>
               <table {...callersDt.tableProps}>
                 <DataTableColgroup dt={callersDt} />
                 <DataTableHead dt={callersDt} />
@@ -279,7 +274,7 @@ function ExternalHostDrawer({ host, range, onClose }: {
                   ))}
                 </tbody>
               </table>
-            </DrawerSection>
+            </SheetSection>
 
             {/* v0.9.1255 — Operator-reported: dış düğümde host değil
                 hangi UÇ olduğu anlamlı. `esbprod.example.internal` tek bir
@@ -287,15 +282,15 @@ function ExternalHostDrawer({ host, range, onClose }: {
                 yerlesimyerisorgulama gibi ayrı uçlar var. Ham url.full
                 DEĞİL, normalize yol grupları: tek span'ın değeri
                 yerine "hangi uç sıcak" sorusunun cevabı. */}
-            <DrawerSection title="En çok çağrılan yollar">
+            <SheetSection title="En çok çağrılan yollar">
               <ExternalPaths
                 paths={detail.paths}
                 error={detail.pathsError}
                 windowS={detail.pathsWindowS}
               />
-            </DrawerSection>
+            </SheetSection>
           </>
         )}
-    </Drawer>
+    </DetailSheet>
   );
 }
