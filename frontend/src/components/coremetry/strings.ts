@@ -22,6 +22,10 @@ export const CM_STRINGS = {
   selectPlaceholder: 'Seçin…',
   notifications: 'Bildirimler',
   closeToast: 'Bildirimi kapat',
+  detailSheet: 'Detay çekmecesi',
+  openPage: 'Sayfayı aç ↗',
+  sheetWidth: 'Çekmece genişliği',
+  sheetResizeHint: 'Sürükle: genişlet · çift tık: varsayılan genişlik',
 } as const;
 
 export type CmStringKey = keyof typeof CM_STRINGS;

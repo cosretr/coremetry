@@ -1416,7 +1416,7 @@ button.btn-chip-label:hover { background: transparent; color: var(--accent2); }
    zemini ona dayanıyor (surfaceTokens). `.empty` soymasıyla aynı desen;
    yeni bir yüzey kabı eklenince iki listeye de eklenir. */
 .card .table-wrap, .card-static .table-wrap, .ov-card-b .table-wrap,
-.drawer-panel .table-wrap, .drawer-section .table-wrap,
+.drawer-panel .table-wrap, .drawer-section .table-wrap, .sheet-section .table-wrap,
 .modal-dialog .table-wrap { border: 0; border-radius: 0; }
 
 /* v0.9.644 — YAPIŞKAN TABLO BAŞLIĞI, tablo başına OPT-IN.

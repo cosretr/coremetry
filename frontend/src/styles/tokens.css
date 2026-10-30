@@ -164,3 +164,14 @@
 @layer utilities {
   [data-slot="dialog-overlay"]:has(+ .cp-dialog) { z-index: var(--z-modal); background: var(--backdrop); }
 }
+
+/* v0.10.1669 (etkileşim S1) — coremetry/DetailSheet irtifası `ui/Drawer`ınkiyle
+   aynı rung'lar: modal → perde --z-drawer, panel --z-drawer-panel (sayfa
+   dropdown'larının üstü, ⌘K'nın altı); eşlik kipi → --z-nav (topbar
+   seçicileri üstte kalır). Zemin + kenar Drawer'ın token'ları. */
+@layer utilities {
+  [data-slot="sheet-overlay"]:has(+ .cm-detail-sheet) { z-index: var(--z-drawer); background: var(--backdrop); }
+  .cm-detail-sheet[data-modal="true"] { z-index: var(--z-drawer-panel); }
+  .cm-detail-sheet[data-modal="false"] { z-index: var(--z-nav); }
+  .cm-detail-sheet { background: var(--bg); border-color: var(--border); box-shadow: var(--shadow-pop); }
+}

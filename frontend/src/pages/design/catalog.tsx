@@ -43,6 +43,7 @@ import type { CommandPaletteGroup } from '@/components/coremetry/CommandPalette/
 import { MessageList, type CosreChatMessage } from '@/components/cosre/conversation/MessageList';
 import CoremetryToaster from '@/components/coremetry/Toaster';
 import { CM_STRINGS } from '@/components/coremetry/strings';
+import { DetailSheet, SheetSection, SheetTrendRow } from '@/components/coremetry/DetailSheet';
 import { toast, type ToastEntry } from '@/lib/toast';
 import { STATUSES } from '@/lib/statusTone';
 import type { Cell } from './cells';
@@ -634,6 +635,26 @@ function CommandPaletteDemo({ forceOpen }: CatalogCtx) {
   );
 }
 
+// v0.10.1669 (etkileşim S1) — `ui/Drawer` halefi: başlık + rozet + "Sayfayı aç",
+// bölüm + trend satırı, tutamak (resizeKey), modal (varsayılan).
+function DetailSheetDemo({ cell, forceOpen }: CatalogCtx) {
+  const [open, setOpen] = useState(forceOpen);
+  return (
+    <>
+      <Row label="detay"><Button variant="outline" size="sm" onClick={() => setOpen(true)}>Detay çekmecesi aç</Button></Row>
+      <DetailSheet open={open} onOpenChange={setOpen} title="checkout-api-7d9f"
+        badges={<StatusBadge status="ok">sağlıklı</StatusBadge>} pageHref="/host?name=checkout-api-7d9f"
+        resizeKey="coremetry-design-detail-w" contentProps={themeAttrs(cell)}
+        footer={<Button variant="outline" size="sm" onClick={() => setOpen(false)}>{CM_STRINGS.close}</Button>}>
+        <SheetSection title="Özet"><p>CPU %42 · bellek 3,1 GB · 12 pod</p></SheetSection>
+        <SheetSection title="Trend">
+          <SheetTrendRow label="CPU" values={[3, 5, 4, 6, 8, 7, 9, 6, 5, 7]} color="var(--accent)" />
+        </SheetSection>
+      </DetailSheet>
+    </>
+  );
+}
+
 export const CATALOG: Record<string, (ctx: CatalogCtx) => ReactNode> = {
   'alert-dialog': (ctx) => <AlertDialogDemo {...ctx} />,
   'badge': () => <BadgeDemo />,
@@ -665,5 +686,6 @@ export const CATALOG: Record<string, (ctx: CatalogCtx) => ReactNode> = {
   'coremetry/Field': () => <FieldDemo />,
   'coremetry/SegmentedControl': () => <SegmentedControlDemo />,
   'coremetry/CommandPalette': (ctx) => <CommandPaletteDemo {...ctx} />,
+  'coremetry/DetailSheet': (ctx) => <DetailSheetDemo {...ctx} />,
   'cosre/ChatV2': (ctx) => <CosreChatV2Demo {...ctx} />,
 };
