@@ -2237,10 +2237,14 @@ a.dep-prob-mark:hover { text-decoration: none; }
 }
 
 /* Cluster tag — root span only (v0.8.539). Shares the .wf-cat
-   outlined-pill geometry so the two sit as one chip group, but stays
-   mixed-case in the mono face and takes muted/border tokens instead of
+   outlined-pill geometry so the two sit as one chip group, is
+   upper-cased via .cluster-name in the mono face and takes muted/border tokens instead of
    a per-category colour, so it reads as ambient context rather than
    another classification. Tokens only — dark/light/redhat follow. */
+/* v0.10.1663 — Küme adı rozetleri büyük harf (operatör). Yalnız gösterim:
+   URL/süzgeç/kopya/title özgün yazımı taşır. */
+.cluster-name { text-transform: uppercase; }
+
 .wf-cluster {
   font-size: 9px;
   font-weight: 600;

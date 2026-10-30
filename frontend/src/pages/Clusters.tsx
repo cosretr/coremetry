@@ -658,7 +658,7 @@ export default function ClustersPage() {
                       replace
                       header={
                         <span style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
-                          <span style={{ fontFamily: 'var(--font-mono)' }}>{name}</span>
+                          <span className="cluster-name" style={{ fontFamily: 'var(--font-mono)' }}>{name}</span>
                           <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                             {!unreachable && !seen && (
                               <span className="badge b-gray" title="Name not seen in the last 24h of telemetry — the service pivot will not match">not in telemetry</span>
@@ -720,7 +720,7 @@ export default function ClustersPage() {
               <LinkButton onClick={backToOverview} style={{ fontSize: 12 }}>
                 ← All clusters
               </LinkButton>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 600 }}>
+              <span className="cluster-name" style={{ fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 600 }}>
                 {clusterParam}
               </span>
               {detailSummaryQ.isError

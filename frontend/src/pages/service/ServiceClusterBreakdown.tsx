@@ -131,7 +131,7 @@ export function ServiceClusterBreakdown({ service, range }: {
               return (
                 <tr key={c.cluster}>
                   <td>
-                    <Link to={`/services?cluster=${encodeURIComponent(c.cluster)}`} className="mono"
+                    <Link to={`/services?cluster=${encodeURIComponent(c.cluster)}`} className="mono cluster-name"
                           title={`Filter /services to cluster ${c.cluster}`}>
                       {c.cluster}
                     </Link>

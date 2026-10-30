@@ -368,7 +368,7 @@ export function ServiceInfraTab({ service, range, onZoom, onZoomReset }: {
                         açılsın istendi. Ad artık satır tıkının parçası (pod'ları açar/kapar);
                         cluster detayı yanındaki ↗ linkte. */}
                     <td className="mono" title={sel ? "Pod'ları gizle" : "Pod'ları satırın altında göster"}>
-                      <span style={{ fontWeight: 600 }}>{r.cluster}</span>
+                      <span className="cluster-name" style={{ fontWeight: 600 }}>{r.cluster}</span>
                       <span onClick={e => e.stopPropagation()}>
                         {' '}<Link to={entityHref({ type: 'cluster', id: r.cluster, name: r.cluster, clusterId: r.cluster }, { range })}
                           className="row-link" title="Cluster detayı" aria-label={`${r.cluster} cluster detayı`}>↗</Link>

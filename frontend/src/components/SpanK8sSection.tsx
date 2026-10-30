@@ -18,7 +18,7 @@ export function SpanK8sSection({ span, clusters, range }: { span: SpanRow; clust
     return (
       <Row gap={2} wrap>
         <Badge tone="neutral">{ctx.reason === 'no-k8s' ? 'bağlam yok' : ctx.reason === 'no-namespace' ? 'namespace\'siz' : 'link yok'}</Badge>
-        {ctx.clusterHref && <Link to={ctx.clusterHref} className="sec" title={ctx.clusterId}>{ctx.clusterName}</Link>}
+        {ctx.clusterHref && <Link to={ctx.clusterHref} className="sec cluster-name" title={ctx.clusterId}>{ctx.clusterName}</Link>}
         {/* v0.10.190 — namespace'siz span: ham /pod linki (sayfa namespace'i Thanos'tan çözer) */}
         {ctx.pod && (ctx.podHref
           ? <Link to={ctx.podHref} className="sec mono" title={`Pod sayfası · ${ctx.clusterName ?? ctx.clusterValue ?? ''} / ${ctx.pod} · namespace Thanos'tan çözülmeye çalışılır (topk 500 dışındaysa çözülemez)`}>{ctx.pod}</Link>
@@ -30,7 +30,7 @@ export function SpanK8sSection({ span, clusters, range }: { span: SpanRow; clust
   }
   return (
     <Row gap={2} wrap>
-      {ctx.clusterHref && <Link to={ctx.clusterHref} className="sec" title={ctx.clusterId}>{ctx.clusterName}</Link>}
+      {ctx.clusterHref && <Link to={ctx.clusterHref} className="sec cluster-name" title={ctx.clusterId}>{ctx.clusterName}</Link>}
       {ctx.namespaceHref && <><span className="field-hint">›</span><Link to={ctx.namespaceHref} className="sec">{ctx.namespace}</Link></>}
       <span className="field-hint">›</span>
       <Link to={ctx.podHref!} className="sec" title={`Pod detayı · ${ctx.clusterName} / ${ctx.namespace} / ${ctx.pod} · span anı`}>{ctx.pod}</Link>

@@ -878,7 +878,7 @@ export function TraceWaterfall({
                 {/* Silent when the resource carries no cluster attribute —
                     '' is falsy, so no placeholder chip is rendered. */}
                 {rootCluster && (
-                  <span className="wf-cluster" title={`Cluster: ${rootCluster}`}>
+                  <span className="wf-cluster cluster-name" title={`Cluster: ${rootCluster}`}>
                     {rootCluster}
                   </span>
                 )}
