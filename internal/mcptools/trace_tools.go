@@ -636,7 +636,7 @@ func traceToolMissPayload(id string, stub chstore.TraceAggregateStub, agedOut bo
 func getTraceAnalyzedTool(d Deps) mcp.Tool {
 	return mcp.Tool{
 		Name:             "get_trace",
-		ShortDescription: "Trace span'leri + analiz: öz süreler, hatalar, kritik yol, env/pod/sürüm. Süre toplanmaz, CPU değildir.",
+		ShortDescription: "Trace span'leri + analiz. 'Neden yavaş' → critical_path top adımı; critical_path_top_external_wait=true ise cevap 'dış bağımlılık bekleme: <target> <süre>' ile başlar. Süreler toplanmaz.",
 		Description: "Fetch one trace by its 32-hex trace ID: the span waterfall plus a server-computed `analysis`. " +
 			"Use after search_traces / search_logs / get_exemplar_traces surfaced a trace ID. " +
 			"Bounded span list: at most 200 spans (all ERROR spans first, then the slowest); truncated=true + total_span_count carry the real size. " +
@@ -645,6 +645,9 @@ func getTraceAnalyzedTool(d Deps) mcp.Tool {
 			"top_self_spans (≤10), error_spans (≤10, earliest first, with status_message and exception_type/exception_message from the span's exception event when present), critical_path[{span_id, service, name, self_on_path_ms, kind, duration_ms, self_ms, share_pct, target, target_source, peer, http_status, top}] " +
 			"(share_pct = self_on_path_ms / wall_ms; top marks the largest share; target = url.full → server.address:port → peer.service → db.system/db.name → messaging.system/destination for CLIENT/PRODUCER steps) and critical_path_top_external_wait " +
 			"(true when the top step is a CLIENT/PRODUCER call with no traced child span — an external dependency wait) — " +
+			"critical_path is the server-computed latency owner: the root-to-leaf chain of spans that actually held the trace's wall clock (same rule as the Trace › Metrics tab and the trace explanation's KRİTİK YOL block). " +
+			"Use it to answer 'why is this trace slow / where does it wait': name the top=true step with its self_on_path_ms and share_pct instead of picking the longest span yourself (a long span whose children run in parallel is not the owner). " +
+			"When critical_path_top_external_wait is true, start the answer with the line `dış bağımlılık bekleme: <target> <self_on_path_ms>` — the time is spent waiting on an untraced downstream (DB, HTTP endpoint, broker), so the fix lives in that dependency, not in the calling service's code; when false, omit that prefix. " +
 			"NEVER add span durations or critical-path steps together: nested and parallel spans overlap in time, so sums overstate latency; quote wall_ms for the trace's duration. " +
 			"context[{service, env, cluster, namespace, pods, versions}] comes from resource attributes using the same keys ClickHouse derives its columns from " +
 			"(env = deployment.environment.name|deployment.environment, cluster = k8s.cluster.name|openshift.cluster.name|cluster, namespace = k8s.namespace.name, pod = k8s.pod.name else host.name, version = container image tag → service.version chain). " +
