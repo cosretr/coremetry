@@ -3215,6 +3215,11 @@ export interface AIExchange {
   /** v0.10.1280 — konuşma arşivi (/cosre?chat=<id>, sahibine açılır) + tur no. */
   conversationId?: string;
   turn?: number;
+  /** v0.10.1645 — turun bağlam kimlikleri (cosre_interactions trace_id /
+   *  exception_id / problem_id): eski açıklama turlarında tam kimlik. */
+  traceId?: string;
+  exceptionId?: string;
+  problemId?: string;
 }
 
 /** v0.10.1280 — 👎 hazır nedenleri (Go: chstore.AIFeedbackReasons; kapalı küme). */

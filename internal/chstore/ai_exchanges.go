@@ -76,6 +76,12 @@ type AIExchange struct {
 	// henüz inmedi / süpürüldü.
 	ConversationID string `json:"conversationId,omitempty"`
 	Turn           uint16 `json:"turn,omitempty"`
+	// v0.10.1645 — turun bağlam kimlikleri (cosre_interactions trace_id /
+	// exception_id / problem_id): /ai çekmecesi açıklanan öznenin TAM
+	// kimliğini eski (kısa kimlikle kaydedilmiş) satırlarda buradan kurar.
+	TraceID     string `json:"traceId,omitempty"`
+	ExceptionID string `json:"exceptionId,omitempty"`
+	ProblemID   string `json:"problemId,omitempty"`
 }
 
 // Etkileşim listesinin 👍/👎 süzgeci (v0.10.1280). "" = hepsi.
@@ -208,7 +214,11 @@ func aiExchangeFeedbackSQL(callCols bool) string {
 // aiExchangeConversationSQL — v0.10.1280: köklerin konuşma kimliği + tur no
 // (cosre_interactions; exchange_id bloom indeksli, zaman sınırlı, LIMIT).
 // Bind: from, to, roots, limit.
-const aiExchangeConversationSQL = `SELECT exchange_id, conversation_id, turn
+//
+// v0.10.1645 — + trace_id / exception_id / problem_id: /ai çekmecesi eski
+// açıklama turlarında (soru kısa kimlikle kaydedilmiş) tam kimliği buradan
+// geri kurar (pages/ai/exchangeView.ts exchangeSubjectRef).
+const aiExchangeConversationSQL = `SELECT exchange_id, conversation_id, turn, trace_id, exception_id, problem_id
 		FROM cosre_interactions
 		WHERE created_at >= toDateTime64(?, 9, 'UTC')
 		  AND created_at <  toDateTime64(?, 9, 'UTC')
@@ -220,6 +230,8 @@ const aiExchangeConversationSQL = `SELECT exchange_id, conversation_id, turn
 type aiExchangeConv struct {
 	ConversationID string
 	Turn           uint16
+	// v0.10.1645 — turun bağlam kimlikleri (cosre_interactions).
+	TraceID, ExceptionID, ProblemID string
 }
 
 // aiTurnRow / aiExchangeChild / aiExchangeVerdict — birleşimin girdileri.
@@ -286,6 +298,7 @@ func assembleAIExchanges(turns []aiTurnRow, calls []aiExchangeChild, fb map[stri
 		}
 		if c, ok := conv[root]; ok {
 			ex.ConversationID, ex.Turn = c.ConversationID, c.Turn
+			ex.TraceID, ex.ExceptionID, ex.ProblemID = c.TraceID, c.ExceptionID, c.ProblemID // v0.10.1645
 		}
 		out = append(out, ex)
 	}
@@ -410,10 +423,10 @@ func (s *Store) aiExchangeConversations(ctx context.Context, from, to time.Time,
 	for rows.Next() {
 		var id string
 		var c aiExchangeConv
-		if err := rows.Scan(&id, &c.ConversationID, &c.Turn); err != nil {
+		if err := rows.Scan(&id, &c.ConversationID, &c.Turn, &c.TraceID, &c.ExceptionID, &c.ProblemID); err != nil {
 			return out
 		}
-		if c.ConversationID != "" {
+		if c.ConversationID != "" || c.TraceID != "" || c.ExceptionID != "" || c.ProblemID != "" {
 			out[id] = c
 		}
 	}

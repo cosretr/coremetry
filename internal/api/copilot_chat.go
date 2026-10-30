@@ -321,7 +321,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// v0.10.1153 — turun /ai etkileşim satırı (chat_exchange.go): TEK defer,
 	// her kademe ve erken dönüş dahil (LLM'siz cevaplar da). emit sarmalanır
 	// ki cevap/hata metni okunsun; closure son ctx'i (profil/derin) görür.
-	xch := newChatExchange(exchangeID, lastUserText(req.Messages), dm.On, chatT0)
+	xch := newChatExchange(exchangeID, explainRecordedQuestion(lastUserText(req.Messages), req.Context.ExplainAsk), dm.On, chatT0) // v0.10.1645 — tam kimlik
 	xch.setInteraction(req.Context.Conversation, chatUserTurns(req.Messages), req.Context.Attempt,
 		agentctx.Sanitize(req.Context.Page), req.Context.Service, req.Context.Trace) // Faz 1 — cosre_interactions
 	xch.setBlockCapture(blockCap) // v0.10.1444

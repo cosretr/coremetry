@@ -16,7 +16,10 @@ import {
   exchangeCallsSummary, exchangeConversationHref, exchangeFeedbackCounts, exchangeFeedbackLabel,
   exchangeModelLabel, exchangeStatusBadge, exchangeTierLabel, exchangeTokensLabel, exchangeUsedLLM,
   parseExchangeFeedbackFilter, type AIExchangesQueryParams,
+  EXCHANGE_SUBJECT_LABELS, exchangeSubjectRef,
 } from './exchangeView';
+import { CopyButton } from '@/components/CopyButton';
+import { traceHref } from '@/lib/traceHref';
 
 // ExchangesPanel — v0.10.1153 (operatör, prod: "/ai her CoSRE etkileşimini
 // göstermiyor"). Çağrı tablosu MODEL ÇAĞRISI başına bir satırdı: LLM'siz
@@ -137,7 +140,8 @@ export function ExchangesPanel({ range, onOpenCall }: { range: TimeRange; onOpen
               {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...state} /> : dt.sortedRows.map(x => (
                 <tr key={x.exchangeId} className="cv-row" {...rowActivation(() => setSelected(x.exchangeId))}>
                   <DataTableCell dt={dt} col="time" row={x} value={tsCompact(x.createdAt)} title={tsLong(x.createdAt)} />
-                  <DataTableCell dt={dt} col="question" row={x} value={x.question || null} />
+                  {/* v0.10.1645 — satır kompakt kalır; title açıklanan öznenin TAM kimliğini taşır */}
+                  <DataTableCell dt={dt} col="question" row={x} value={x.question || null} title={exchangeSubjectRef(x)?.question || x.question || undefined} />
                   <DataTableCell dt={dt} col="tier" row={x}>
                     {exchangeTierLabel(x)}{x.deep && <span className="badge b-info" style={{ marginLeft: 6 }}>derin</span>}
                   </DataTableCell>
@@ -173,6 +177,8 @@ function StatusBadge({ ex }: { ex: AIExchange }) {
 function ExchangeDrawer({ ex, onClose, onOpenCall }: { ex: AIExchange; onClose: () => void; onOpenCall: (id: string) => void }) {
   const callDt = useDataTable<AIExchangeCall>({ storageKey: 'ai-exchange-calls', columns: CALL_COLS, rows: ex.calls ?? [] });
   const convHref = exchangeConversationHref(ex);
+  // v0.10.1645 — açıklanan öznenin tam kimliği (eski satırda bağlam kimliğinden).
+  const subj = exchangeSubjectRef(ex);
   return (
     <Drawer onClose={onClose} width={680} header={
       <>
@@ -200,6 +206,16 @@ function ExchangeDrawer({ ex, onClose, onOpenCall }: { ex: AIExchange; onClose: 
               : null,
           },
           { k: 'Exchange', v: ex.exchangeId, mono: true },
+          ...(subj ? [{
+            k: EXCHANGE_SUBJECT_LABELS[subj.kind],
+            v: !subj.full
+              ? <span title="Bu eski kayıtta tam kimlik saklanmamış">{subj.id}</span>
+              : subj.kind === 'trace'
+                ? <Link to={traceHref(subj.id)} title="Açıklanan trace'i aç">{subj.id}</Link>
+                : subj.id,
+            mono: true,
+            actions: subj.full ? <CopyButton value={subj.id} title="Kimliği kopyala" /> : undefined,
+          }] : []),
         ]} />
         {ex.errorMsg && (
           <DrawerSection title="Hata">
@@ -207,7 +223,7 @@ function ExchangeDrawer({ ex, onClose, onOpenCall }: { ex: AIExchange; onClose: 
           </DrawerSection>
         )}
         <DrawerSection title="Soru">
-          <pre style={SAMPLE_STYLE}>{ex.question || '(boş)'}</pre>
+          <pre style={SAMPLE_STYLE}>{subj?.question || ex.question || '(boş)'}</pre>
         </DrawerSection>
         <DrawerSection title="Cevap (örnek)">
           <pre style={SAMPLE_STYLE}>{ex.answer || '(boş)'}</pre>

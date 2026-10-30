@@ -125,3 +125,74 @@ export function exchangeCallsSummary(ex: Pick<AIExchange, 'llmCalls' | 'calls'>)
   if (!exchangeUsedLLM(ex)) return markers ? `${NO_LLM_LABEL} · ${markers} işaret satırı` : NO_LLM_LABEL;
   return markers ? `${ex.llmCalls} model çağrısı · ${markers} işaret satırı` : `${ex.llmCalls} model çağrısı`;
 }
+
+// ── v0.10.1645 — açıklanan öznenin TAM kimliği ─────────────────────────────
+// Operator-reported: "Açıklama turu" çekmecesinin SORU kutusu
+// `Bu trace'i açıkla · eea6c7b0…` gösteriyordu — sohbet balonunun kısa kimliği
+// (explainTurn.ts shortExplainId) sorunun KENDİSİ olarak kaydediliyordu.
+// v0.10.1645'ten sonra sunucu tam kimliği kaydeder (chat_explain_question.go);
+// eski satırlarda kısa belirteç turun bağlam kimliğinden (traceId /
+// exceptionId / problemId) önek eşleşmesiyle geri kurulur. Eşleşme yoksa
+// belirteç olduğu gibi kalır (tam kimlik saklanmamış — uydurulmaz).
+
+export type ExchangeSubjectKind = 'trace' | 'exception' | 'span' | 'problem' | 'incident' | 'anomaly' | 'runbook';
+
+export interface ExchangeSubjectRef {
+  kind: ExchangeSubjectKind;
+  /** Kimlik — `full` false iken kısa belirteç ("eea6c7b0…"). */
+  id: string;
+  full: boolean;
+  /** Tam kimlikle yeniden yazılmış soru metni. */
+  question: string;
+}
+
+/** explainTurnText'in (components/ai/explainTurn.ts) kimlikli kalıpları. */
+const SUBJECT_PATTERNS: ReadonlyArray<{ kind: ExchangeSubjectKind; re: RegExp }> = [
+  { kind: 'trace', re: /^Bu trace'i (?:kodla birlikte )?açıkla · (\S+)$/ },
+  { kind: 'exception', re: /grubunu (?:kodla birlikte )?açıkla · (\S+)$/ },
+  { kind: 'span', re: /^Bu span'i açıkla · (\S+)$/ },
+  { kind: 'problem', re: /^Bu problemi açıkla · (\S+)$/ },
+  { kind: 'incident', re: /^Bu olayı açıkla · (\S+)$/ },
+  { kind: 'anomaly', re: /^Bu anomaliyi açıkla · (\S+)$/ },
+  { kind: 'runbook', re: /^Bu problem için runbook çıkar · (\S+)$/ },
+];
+
+/** Türün eski satırda geri düşebileceği bağlam kimliği (span / incident / anomaly: yok). */
+function fallbackId(kind: ExchangeSubjectKind, ex: Pick<AIExchange, 'traceId' | 'exceptionId' | 'problemId'>): string {
+  switch (kind) {
+    case 'trace': return ex.traceId ?? '';
+    case 'exception': return ex.exceptionId ?? '';
+    case 'problem':
+    case 'runbook': return ex.problemId ?? '';
+    default: return '';
+  }
+}
+
+/** exchangeSubjectRef — açıklama turunun öznesi (tür + tam kimlik); kimlikli kalıp değilse null. */
+export function exchangeSubjectRef(ex: Pick<AIExchange, 'question' | 'traceId' | 'exceptionId' | 'problemId'>): ExchangeSubjectRef | null {
+  const q = (ex.question ?? '').trim();
+  for (const { kind, re } of SUBJECT_PATTERNS) {
+    const m = re.exec(q);
+    if (!m) continue;
+    const token = m[1];
+    if (!token.endsWith('…')) return { kind, id: token, full: true, question: q };
+    const prefix = token.slice(0, -1);
+    const cand = fallbackId(kind, ex);
+    if (prefix && cand.length > prefix.length && cand.startsWith(prefix)) {
+      return { kind, id: cand, full: true, question: q.slice(0, q.length - token.length) + cand };
+    }
+    return { kind, id: token, full: false, question: q };
+  }
+  return null;
+}
+
+/** Çekmecedeki kimlik satırının etiketi. */
+export const EXCHANGE_SUBJECT_LABELS: Record<ExchangeSubjectKind, string> = {
+  trace: 'Trace',
+  exception: 'Exception grubu',
+  span: 'Span',
+  problem: 'Problem',
+  incident: 'Olay',
+  anomaly: 'Anomali',
+  runbook: 'Problem (runbook)',
+};
