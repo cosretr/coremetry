@@ -61,7 +61,10 @@ const ALLOWED_IN_ENTRY = [/node_modules\/(class-variance-authority|clsx|tailwind
 // eski işaretlemede de kazanır. İzinli olanların değeri globals.css'tekiyle
 // birebir (tokens.css `--spacing: 4px`; .sr-only aynı gizleme). Listede
 // olmayan bir çakışma = FAIL: ya üretilen sınıfı değiştir ya eski kuralı sil.
-const ALLOWED_LEGACY_COLLISIONS = ['gap-1', 'gap-2', 'gap-4', 'sr-only'];
+// Faz 2 dilim 1 R1: pages/settings taranınca gap-3 (12px) ve gap-6 (24px)
+// eklendi — globals.css:1209-1210 değerleriyle eşit; gap-6 Argo CD (R15) son
+// eski tüketiciyi geçirince eski kuralla birlikte listeden düşer.
+const ALLOWED_LEGACY_COLLISIONS = ['gap-1', 'gap-2', 'gap-3', 'gap-4', 'gap-6', 'sr-only'];
 
 const kb = (n) => (n / 1024).toFixed(1);
 

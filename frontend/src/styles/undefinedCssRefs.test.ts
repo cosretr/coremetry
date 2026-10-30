@@ -167,8 +167,8 @@ describe('undefinedCssRefs — sessizce düşen token/sınıf referansları', ()
     expect(definedClasses.has('cp-legend-scroll')).toBe(true);
   });
 
-  it('Tailwind dizinleri index.css @source listesinden okunuyor (tam üç)', () => {
-    expect(TAILWIND_DIRS).toEqual(['components/shadcn/', 'components/ai-elements/', 'components/coremetry/']);
+  it('Tailwind dizinleri index.css @source listesinden okunuyor (üç + pages/settings, R1)', () => {
+    expect(TAILWIND_DIRS).toEqual(['components/shadcn/', 'components/ai-elements/', 'components/coremetry/', 'pages/settings/']);
   });
 
   it('token izin listesi yok — çıplak var() muafiyeti kabul edilmiyor', () => {

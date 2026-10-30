@@ -3439,10 +3439,10 @@ button.cosre-cap__row > .row { align-items: flex-start; min-width: 0; }
    butonlar kendi boy sınıfını (md taban 5px 14px / 13px) giyer; isabet
    tabanı aşağıdaki çıplak `min-height` kuralından gelmeye devam eder ve
    telefon katmanı (`[data-density] .controls button`, ≤640px) dokunulmadı. */
-[data-density="compact"] .controls input,
-[data-density="compact"] .controls select,
-[data-density="compact"] .controls > button,
-[data-density="compact"] .controls > :where(:not(.pc-actions)) button { padding: 3px 8px; font-size: 11px; }
+[data-density="compact"] .controls input:where(:not([data-slot])),
+[data-density="compact"] .controls select:where(:not([data-slot])),
+[data-density="compact"] .controls > button:where(:not([data-slot])),
+[data-density="compact"] .controls > :where(:not(.pc-actions)) button:where(:not([data-slot])) { padding: 3px 8px; font-size: 11px; }
 [data-density="compact"] .controls button { min-height: var(--hit-min); } /* v0.10.1317 — ~22.5px → 24 */
 [data-density="compact"] #content, [data-density="compact"] .page-body { padding: 10px 12px; }
 [data-density="compact"] .empty { padding: 24px; }
@@ -3458,10 +3458,10 @@ button.cosre-cap__row > .row { align-items: flex-start; min-width: 0; }
 [data-density="dense"] .row-link { padding: 2px 5px; } /* v0.10.225 */
 [data-density="dense"] .controls { gap: 4px; }
 /* v0.10.1322 — yuva hariç (compact notu). */
-[data-density="dense"] .controls input,
-[data-density="dense"] .controls select,
-[data-density="dense"] .controls > button,
-[data-density="dense"] .controls > :where(:not(.pc-actions)) button { padding: 2px 6px; font-size: 10px; }
+[data-density="dense"] .controls input:where(:not([data-slot])),
+[data-density="dense"] .controls select:where(:not([data-slot])),
+[data-density="dense"] .controls > button:where(:not([data-slot])),
+[data-density="dense"] .controls > :where(:not(.pc-actions)) button:where(:not([data-slot])) { padding: 2px 6px; font-size: 10px; }
 [data-density="dense"] .controls button { min-height: var(--hit-min); } /* v0.10.1317 — 19px → 20 (dense istisnası) */
 [data-density="dense"] #content, [data-density="dense"] .page-body { padding: 6px 10px; }
 [data-density="dense"] .empty { padding: 18px; font-size: 11px; }

@@ -7,16 +7,19 @@ import { resolve } from 'node:path';
 // sınıf adlarından (`hidden`, `table`, `border`, `sticky` …) legacy katmanını
 // yenen yardımcılar üretirdi ve geçirilmemiş sayfalar piksel değiştirirdi.
 // Taranan dizinler TAM OLARAK üç: üretilen shadcn, CoSRE v2 ai-elements ve
-// coremetry bileşikleri. Başka bir yol (pages/, components/ui …) = kırmızı.
+// coremetry bileşikleri; Faz 2 dilim 1 R1’den beri + geçirilen sayfa dizinleri
+// (pages/settings). Başka bir yol (components/ui, geçirilmemiş pages/ …) = kırmızı.
 const css = readFileSync(resolve(__dirname, 'index.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
 
 describe('Tailwind kaynak listesi kilitli', () => {
-  it('@source satırları tam olarak üç dizin, bu sırayla', () => {
+  it('@source satırları: üç bileşik dizini + geçirilen sayfa dizinleri, bu sırayla', () => {
     const sources = [...css.matchAll(/@source\s+([^;]+);/g)].map(m => m[1].trim());
     expect(sources).toEqual([
       "'../components/shadcn'",
       "'../components/ai-elements'",
       "'../components/coremetry'",
+      // Faz 2 dilim 1 R1 (G11): geçirilen sayfa dizinleri, birer satır.
+      "'../pages/settings'",
     ]);
   });
 

@@ -55,11 +55,14 @@ describe('bundle bütçe kapısı kablolu', () => {
 
   it('yardımcı ↔ eski sınıf adı çakışma KAPISI (R5): izin listesi değerleri eşit olanlar', () => {
     const s = read('scripts/bundle-budget.mjs');
-    expect(s).toContain("const ALLOWED_LEGACY_COLLISIONS = ['gap-1', 'gap-2', 'gap-4', 'sr-only'];");
+    expect(s).toContain("const ALLOWED_LEGACY_COLLISIONS = ['gap-1', 'gap-2', 'gap-3', 'gap-4', 'gap-6', 'sr-only'];");
     expect(s).toContain("css.indexOf('@layer utilities{')");
     expect(s).toContain('if (badCollisions.length) fail(');
     // İzinli gap-* çakışmalarının değeri ancak ölçek px'e çiviliyse eşit.
     expect(read('src/styles/tokens.css')).toMatch(/@theme inline reference \{[\s\S]*--spacing: 4px;[\s\S]*\}/);
+    // Faz 2 dilim 1 R1 — izinli gap-N'in eski değeri N×4px (yardımcıyla eşit).
+    const g = read('src/styles/globals.css');
+    for (const n of [1, 2, 3, 4, 6]) expect(g).toMatch(new RegExp(`\\.gap-${n} \\{ gap: ${n * 4}px; \\}`));
   });
 
   it('ilk yükte izinli liste (R10, operatör): cva/clsx/tailwind-merge çivili, yasakla çakışmıyor', () => {

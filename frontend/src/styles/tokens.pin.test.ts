@@ -174,6 +174,22 @@ describe('§7.1 öğe kuralları data-slot taşıyan (shadcn) öğeleri dışar�
     expect(GLOBALS).not.toMatch(/\n(input, select|input:focus, select:focus|textarea|button|button:hover:not\(:disabled\)|button:disabled|button\[aria-busy="true"\]:disabled|button\.is-loading) \{/);
   });
 
+  // Faz 2 dilim 1 R1 (plan §7.1 dilim-1 işi): `.controls` yoğunluk kuralları
+  // da shadcn öğelerini (data-slot) dışarıda bırakır — geçirilen bir araç
+  // çubuğundaki shadcn Button/Input yoğunluğunu kendi boyut varyantından alır.
+  it('.controls yoğunluk kuralları korumalı (compact + dense)', () => {
+    for (const d of ['compact', 'dense']) {
+      for (const s of [
+        `[data-density="${d}"] .controls input${G},`, `[data-density="${d}"] .controls select${G},`,
+        `[data-density="${d}"] .controls > button${G},`, `[data-density="${d}"] .controls > :where(:not(.pc-actions)) button${G} {`,
+      ]) expect(GLOBALS, s).toContain(s);
+      // padding/font korumasız eşi yok; `.controls button { min-height }`
+      // isabet tabanı (hitArea.pin) bilerek KORUMASIZ: shadcn düğmesine de uyar.
+      expect(GLOBALS).not.toMatch(new RegExp(`\\[data-density="${d}"\\] \\.controls (input|select|> button),\\s`));
+      expect(GLOBALS).toContain(`[data-density="${d}"] .controls button { min-height: var(--hit-min); }`);
+    }
+  });
+
   it('data-slot yalnız components/shadcn altında (R4: hiçbir yerde → kapsam no-op)', () => {
     const walk = (dir: string, out: string[] = []): string[] => {
       for (const e of readdirSync(dir)) {
