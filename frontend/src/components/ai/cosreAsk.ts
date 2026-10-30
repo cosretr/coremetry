@@ -214,7 +214,7 @@ export type CosreComposerInput = ReturnType<typeof useCosreComposerInput>;
 
 /** Karşılamanın canlı yarısı: hata özeti + takımın varsayılanı. `active` =
  *  copilot açık · pencere açık · henüz konuşma yok (yalnız karşılama ekrandayken). */
-export function useCosreWelcomeData(active: boolean, env: string) {
+export function useCosreWelcomeData(active: boolean, env: string, { greeting = true }: { greeting?: boolean } = {}) {
   // Karşılamanın canlı yarısı (v0.9.528). `enabled` ÜÇ koşulu birden
   // taşır: copilot açık, pencere açık, ve henüz konuşma başlamamış —
   // yani sorgu SADECE karşılama gerçekten ekrandayken koşar. Kapalı
@@ -227,7 +227,8 @@ export function useCosreWelcomeData(active: boolean, env: string) {
   const greetQ = useQuery({
     queryKey: ['cosre-greeting', env],
     queryFn: () => api.cosreGreeting(env),
-    enabled: active,
+    // v2 karşılaması hata hapını çizmez (yerini brifing aldı) → istek de gitmez.
+    enabled: active && greeting,
     staleTime: 60_000,
   });
   const greetLine = greetErrors(greetQ.data ?? undefined);
@@ -239,6 +240,6 @@ export function useCosreWelcomeData(active: boolean, env: string) {
   // satırlarının altında (CosreCapabilities); env yalnız P1'e uygulanır.
   // v0.10.1402 — `team`: sunucunun çözdüğü kullanıcı takımı (Takımım kartının varsayılanı).
   const starters = useCopilotStarters(active, env);
-  return { greetLine, greetTitle, greetAlert, team: starters.team };
+  return { greetLine, greetTitle, greetAlert, team: starters.team, teamSettled: starters.settled };
 }
 export type CosreWelcomeData = ReturnType<typeof useCosreWelcomeData>;

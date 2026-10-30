@@ -25,3 +25,5 @@ export type { ActionRowProps } from './ActionRow';
 // Faz 2 dilim 1 R6 (G8): radiogroup anlamlı toggle-group sarmalayıcısı.
 export { SegmentedControl } from './SegmentedControl';
 export type { SegmentedControlProps, SegmentedOption } from './SegmentedControl';
+export { SearchCommand } from './SearchCommand';
+export type { SearchCommandProps } from './SearchCommand';

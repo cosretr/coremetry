@@ -27,6 +27,7 @@ import { CopilotChat } from '@/components/CopilotChat';
 import { __resetCopilotEnabledCache } from '@/components/ai/useCopilotEnabled';
 import { cosreFixture, sseFetch } from '@/test/cosreSse';
 import { axeViolations } from '@/test/axe';
+import '@/test/radixJsdom';
 
 vi.mock('@/components/ai/TraceExplainNudge', () => ({ TraceExplainNudge: () => null }));
 
@@ -181,7 +182,7 @@ describe('CosreChatV2 kabuğu', () => {
     await render({ defaultOpen: true });
     const btn = document.createElement('button');
     document.body.appendChild(btn);
-    await act(async () => { sheet()!.querySelector<HTMLElement>('.cm-greet__ask')!.click(); });
+    await act(async () => { sheet()!.querySelector<HTMLElement>('.cosre-welcome__hello')!.click(); });
     await act(async () => { btn.click(); });
     expect(sheet()).not.toBeNull();
     const empty = document.createElement('div');
@@ -357,17 +358,26 @@ describe('CosreChatV2 B6: kalıcılık, ?chat=, Geçmiş, tutamak', () => {
 describe('CosreChatV2 × v1 paylaşılan karşılama + composer (plan §10)', () => {
   const URL = '/service?name=orders-api';
 
-  it('karşılama ve composer v1 ile AYNI: seçiciler, çipler, Derin/Aa/model, bağlam şeridi', async () => {
+  // v0.10.1697 — karşılama v2'nin kendisi (mockup B, operatör onayı 2026-10-31):
+  // hata hapı ve satır içi seçiciler yok, niyet sekmeleri var. Composer v1 ile AYNI.
+  it('v2 karşılaması mockup B; composer v1 ile AYNI (Derin/Aa/model, bağlam şeridi)', async () => {
     await render({ defaultOpen: true }, URL);
-    const v2 = welcomeFace(sheet()!);
+    const el = sheet()!;
+    const v2 = welcomeFace(el);
+    expect(el.querySelector('.cosre-welcome__hello')?.textContent).toBe('Merhaba Ada.');
+    expect(el.querySelector('.cm-greet__status')).toBeNull();
+    expect(v2.caps).toEqual([]);
+    expect([...el.querySelectorAll<HTMLElement>('[data-welcome-tab]')].map(b => b.dataset.welcomeTab)).toEqual(['investigate', 'find']);
+    expect(el.querySelector('input[placeholder="Servis ara…"]')).toBeNull();
+    expect(el.querySelector('[data-team-scope]')?.textContent).toContain('Takım seç');
     await unmount();
     await mount(<CopilotChat defaultOpen />, URL);
     const v1 = welcomeFace(document.querySelector('[data-tour="cosre-drawer"]')!);
-    expect(v2.caps).toEqual(['team', 'service', 'operation', 'exceptions']);
-    expect(v2.chips).toContain("…/yol hatalı trace'leri");
     expect(v2.composer).toContain('Derin düşün');
     expect(v2.ctxBar).toBe(true);
-    expect(v2).toEqual(v1);
+    expect(v2.composer[0]).toBe('Takım seç'); // v2 kapsam satırı (yalnız karşılamada)
+    expect(v2.composer.slice(1)).toEqual(v1.composer);
+    expect(v2.placeholder).toEqual(v1.placeholder);
   });
 
   it('gönderim: v2 gövdesinin context\'i v1\'inkiyle aynı; cevap çizilir (yalnız son metin), Temizle karşılamaya döner', async () => {
@@ -385,11 +395,11 @@ describe('CosreChatV2 × v1 paylaşılan karşılama + composer (plan §10)', ()
     expect(v1ctx).toBeDefined();
     expect(calls[0].body.context).toEqual(v1ctx);
     await vi.waitFor(() => expect(sheet()!.querySelector('.cm-msg--ai .cm-msg-ai')?.textContent?.trim()).toBe('Düzeltilmiş tam metin.'));
-    expect(sheet()!.querySelector('.cm-greet')).toBeNull();
+    expect(sheet()!.querySelector('[data-cosre-welcome]')).toBeNull();
     expect(textarea()!.value).toBe('');
     const clear = [...sheet()!.querySelectorAll('button')].find(b => b.textContent === 'Temizle')!;
     await act(async () => { clear.click(); });
-    expect(sheet()!.querySelector('.cm-greet')).not.toBeNull();
+    expect(sheet()!.querySelector('[data-cosre-welcome]')).not.toBeNull();
   });
 
   // v0.10.1660 (B5) — takip çipi v1 askChip'ten gönderir; `open` yönergesi bir kez SPA ile;

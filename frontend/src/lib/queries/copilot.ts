@@ -13,7 +13,7 @@ import { api } from '@/lib/api';
 // kartının varsayılan takımı; ikinci istek yok.
 // v0.10.1515 — exceptions grubu kalktı (sunucu `groups: []`); kullanılan tek
 // alan `team` (Takımım + exceptions kartlarının varsayılan takımı).
-export function useCopilotStarters(enabled: boolean, env = ''): { team: string } {
+export function useCopilotStarters(enabled: boolean, env = ''): { team: string; settled: boolean } {
   const q = useQuery({
     queryKey: ['copilot', 'starters', env],
     queryFn: ({ signal }) => api.copilotStarters(env, signal),
@@ -21,7 +21,9 @@ export function useCopilotStarters(enabled: boolean, env = ''): { team: string }
     staleTime: 60_000,
     retry: false,
   });
-  return { team: q.data?.team ?? '' };
+  // v2 karşılaması — `settled`: cevap (ya da hata) geldi; yüklenirken takım
+  // "bilinmiyor" sayılmaz ("Ekibin tanımlı değil" yanıp sönmesin).
+  return { team: q.data?.team ?? '', settled: q.isFetched || q.isError };
 }
 
 // v0.10.1289 — CoSRE operatör kuralları (GET /api/ai/rules, her rol). Yalnız

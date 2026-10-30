@@ -4,8 +4,8 @@
 // Bir kez mount olunca mount kalır (v1 deseni: taslak/thread gezinmede korunur).
 //
 // v0.10.1650 (B2, plan §10 bağlayıcı revizyon): v2, v1'in açılış ekranını ve
-// composer'ını AYNEN kullanır — CosreWelcome (selam + hata özeti, takım /
-// servis / operasyon seçicileri, başlangıç çipleri, "Bu trace'i açıkla"),
+// composer'ını AYNEN kullanır — v0.10.1697: karşılama artık v2'nin kendi
+// CosreWelcomeV2'si (mockup B, operatör onayı 2026-10-31; v1 CosreWelcome aynen),
 // CosreComposerForm (Aa / Derin / Kod, model seçici, `@` kapsam + `/` komut,
 // Bağlam çipleri), CosreHeaderContext (pin) — aynı kancalarla (ai/cosreAsk).
 // Yalnız cevap yolu farklı: gönderim useCosreChat → POST /api/cosre/v2/chat,
@@ -69,7 +69,9 @@ import { useCosreAskContext, useCosreComposerInput, useCosreWelcomeData } from '
 import { useStickToBottomState } from '@/components/ai/stickToBottom';
 import { explainAskFor, explainAskSubject, explainTurnSendOpts, withoutFresh } from '@/components/ai/explainTurn';
 import type { ChatSendOpts } from '@/components/ai/useChatThread';
-import { ChatHistoryPanel, CosreComposerForm, CosreHeaderContext, CosreWelcome, deleteConversation } from '@/components/CopilotChat';
+import { ChatHistoryPanel, CosreComposerForm, CosreHeaderContext, deleteConversation } from '@/components/CopilotChat';
+import { CosreTeamScopeChip, CosreWelcomeV2 } from './CosreWelcomeV2';
+import { useCosreTeamScope } from './useCosreTeamScope';
 import { Button } from '@/components/shadcn/button';
 import { CosreSheet } from './CosreSheet';
 import { MessageList } from './MessageList';
@@ -102,7 +104,9 @@ export function CosreChatV2({ defaultOpen = false }: CosreChatV2Props) {
   const codeLocked = useMemo(() => messages.some(hasCodeLock), [messages]);
   // v0.10.1664 (B6) — taslak konuşmanın yuvasında (v1 ile aynı anahtar).
   const composer = useCosreComposerInput(conv.conversationId, ask.page, ask.chipTrace);
-  const welcome = useCosreWelcomeData(ask.enabled === true && open && messages.length === 0, ask.env);
+  // v2 karşılaması (mockup B, 2026-10-31): hata hapı yok → selam isteği de yok; takım tek kapsam.
+  const welcome = useCosreWelcomeData(ask.enabled === true && open && messages.length === 0, ask.env, { greeting: false });
+  const teamScope = useCosreTeamScope(welcome.team, welcome.teamSettled);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { pin: pinBottom, atBottom } = useStickToBottomState(scrollRef, [messages, open]);
 
@@ -356,8 +360,8 @@ export function CosreChatV2({ defaultOpen = false }: CosreChatV2Props) {
             <div ref={scrollRef} className="cm-thread flex-1 overflow-y-auto" role="log" aria-live="polite" aria-busy={busy} aria-label={T.threadLabel}>
               <div className="cm-thread__col">
                 {messages.length === 0 ? (
-                  <CosreWelcome firstName={ask.user?.firstName} env={ask.env} data={welcome} wiki={ask.wikiOn} ctxStarter={ask.ctxStarter}
-                    onPrefill={composer.prefill} onAsk={askChip} onAskExplain={askExplain} onSubmit={submit} />
+                  <CosreWelcomeV2 firstName={ask.user?.firstName} scope={teamScope} wiki={ask.wikiOn} ctxStarter={ask.ctxStarter}
+                    briefing={null} onPrefill={composer.prefill} onAsk={askChip} onAskExplain={askExplain} />
                 ) : (
                   <MessageList messages={messages} visibleParts={visibleParts} status={status} error={error}
                     onAsk={askChip} onRetry={retry} onApproval={approve} />
@@ -370,7 +374,8 @@ export function CosreChatV2({ defaultOpen = false }: CosreChatV2Props) {
             )}
           </div>
           <CosreComposerForm input={composer} ask={ask} busy={busy} stop={() => void stop()} codeLocked={codeLocked}
-            ctxItems={explainCtx.ctxItems} onRemoveCtx={explainCtx.removeCtx} submit={submit} />
+            ctxItems={explainCtx.ctxItems} onRemoveCtx={explainCtx.removeCtx} submit={submit}
+            scopeRow={messages.length === 0 ? <CosreTeamScopeChip scope={teamScope} /> : undefined} />
         </div>
       </CosreSheet>
     </>

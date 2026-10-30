@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback, type ReactNode } from 'react';
 import { mergeOpenHref } from '@/lib/openHref'; // v0.10.460
 import { Link, useNavigate } from 'react-router-dom';
 import { takeMetricPanelAsk } from '@/lib/pageContextOverlay'; // v0.10.1435
@@ -713,15 +713,19 @@ export interface CosreComposerFormProps {
   ctxItems: readonly ContextBarItem[];
   onRemoveCtx: (k: ContextKey) => void;
   submit: (text: string) => void;
+  /** v2 karşılaması (mockup B, 2026-10-31) — metin kutusunun ÜSTÜNDE kapsam satırı
+   *  (takım çipi); v1 vermez. */
+  scopeRow?: ReactNode;
 }
 
 /** Composer: metin + Derin/Kod/model + gönder/durdur, bağlam şeridi, kapsam çipleri. */
-export function CosreComposerForm({ input: composer, ask, busy, stop, codeLocked, ctxItems, onRemoveCtx, submit }: CosreComposerFormProps) {
+export function CosreComposerForm({ input: composer, ask, busy, stop, codeLocked, ctxItems, onRemoveCtx, submit, scopeRow }: CosreComposerFormProps) {
   const { input, setInput, setCaret, textareaRef, completion, composerChips, acceptCompletion } = composer;
   const { profiles, defaultProfile, profile, setProfile, activeModel, deep, setDeep, codePill, setCodePill, codeRead } = ask;
   return (
     <form className="cm-composer" data-tour="cosre-composer"
       onSubmit={e => { e.preventDefault(); submit(input); }}>
+      {scopeRow && <div className="cm-composer__scope" role="group" aria-label={tCosre('cosre.welcome.scope.aria')}>{scopeRow}</div>}
       {/* v0.10.664 — <textarea>: Enter gönderir, Shift+Enter yeni satır (stack
           trace / SQL yapıştırılabilir); akarken KİLİTLİ DEĞİL — gönderim
           mevcut akışı durdurup yeni soruyu gönderir (useChatThread). */}
