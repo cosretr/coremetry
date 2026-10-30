@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/shadcn/button';
 import { ButtonGroup } from '@/components/shadcn/button-group';
@@ -11,7 +11,7 @@ import { FlashBox, humanize } from './shared';
 import { ChannelModal } from './ChannelModal';
 import { readState } from '@/lib/readState';
 import { fmtAgoNs } from '@/lib/utils';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef, type DataTableStateProps } from '@/components/ui/DataTable';
+import { DataTable, type ColumnDef, type DataTableStateInput } from '@/components/coremetry/DataTable';
 import { kindsSummary } from '@/lib/notifyKinds'; // v0.10.747
 import type { Status } from '@/lib/statusTone';
 
@@ -40,7 +40,7 @@ function healthRank(h: ChannelHealthRow | undefined): number {
 // `minWidth = width` onu eski sabit `trailing` genişliğinde kilitler.
 const channelCols = (health: Map<string, ChannelHealthRow>): ColumnDef<NotificationChannel>[] => [
   { id: 'name',   label: 'Name',                 sortValue: c => c.name, naturalDir: 'asc', width: 190 },
-  { id: 'type',   label: 'Type',                 sortValue: c => c.type, naturalDir: 'asc', width: 130 },
+  { id: 'type',   label: 'Type',                 sortValue: c => c.type, naturalDir: 'asc', width: 130, mono: true },
   { id: 'target', label: 'Recipients / target',  sortValue: c => summarizeChannel(c), naturalDir: 'asc', flex: true, mono: true },
   { id: 'sev',    label: 'Min severity',         sortValue: c => SEVERITY_RANK[String(c.minSeverity).toLowerCase()] ?? 0, width: 130 },
   { id: 'kinds',  label: 'Türler',               sortValue: c => kindsSummary(c.matchRules?.kinds), naturalDir: 'asc', width: 150 }, // v0.10.747
@@ -75,10 +75,6 @@ export function ChannelsTab() {
   const capped = (health.data ?? []).some(h => h.capped);
 
   const cols = useMemo(() => channelCols(healthMap), [healthMap]);
-  const dt = useDataTable<NotificationChannel>({
-    storageKey: 'settings-channels', columns: cols, rows: items ?? [],
-    initialSort: { id: 'name', dir: 'asc' },
-  });
 
   const refresh = () => {
     setItems(undefined);
@@ -90,7 +86,7 @@ export function ChannelsTab() {
   // İÇİNDE, başlık durur. Tri-state aynı (v0.9.858: hata ≠ hiç kanal yok);
   // ↻ aynı `refresh`.
   const rs = readState(items);
-  const tableState: Omit<DataTableStateProps<NotificationChannel>, 'dt'> =
+  const tableState: DataTableStateInput<NotificationChannel> =
     rs === 'loading' ? { kind: 'loading' }
     : rs === 'error' ? {
       kind: 'error', onRetry: refresh,
@@ -131,6 +127,36 @@ export function ChannelsTab() {
     await refreshHealth();
   };
 
+  // Hücreler — coremetry/DataTable `renderCell`; içerik/ipucu eski
+  // DataTableCell'lerin aynısı (çocuk verilince değer ipucu basılmadığından
+  // kırpılan dizgeler `title`'ı kendi span'inde taşır).
+  const channelCell = (c: NotificationChannel, col: string): ReactNode => {
+    switch (col) {
+      case 'name': return <b>{c.name}</b>;
+      case 'type': return <span title={c.type}>{c.type}</span>;
+      case 'target': { const t = summarizeChannel(c); return <span title={t}>{t}</span>; }
+      case 'sev': return <StatusBadge status={severityStatus(c.minSeverity)}>{c.minSeverity.toUpperCase()}</StatusBadge>;
+      case 'kinds': return <span title="Kanalın aldığı olay türleri (boş = hepsi)">{kindsSummary(c.matchRules?.kinds)}</span>;
+      // v0.10.929 (K5) — açık/kapalı bir ayar durumu: iki uç da nötr.
+      case 'status': return <Badge variant="secondary">{c.enabled ? 'ON' : 'OFF'}</Badge>;
+      case 'health': return (
+        <HealthCell
+          h={healthMap.get(healthKey(c.type, c.name))}
+          state={health.isError ? 'error' : health.isPending ? 'loading' : 'ready'}
+        />
+      );
+      case 'actions': return (
+        // R9 (D5): satır eylemleri ghost `sm`, aynı üç eylem aynı sırada.
+        <ButtonGroup aria-label={`${c.name} actions`} className="ml-auto">
+          <Button variant="ghost" size="sm" onClick={() => onTest(c)}>Test</Button>
+          <Button variant="ghost" size="sm" onClick={() => setEditing(c)}>Edit</Button>
+          <Button variant="ghost-danger" size="sm" onClick={() => onDelete(c)}>Delete</Button>
+        </ButtonGroup>
+      );
+      default: return null;
+    }
+  };
+
   return (
     <div>
       {/* Faz 2 dilim 1 R9 (D5): ham `.controls` araç çubuğu düz flex satırı;
@@ -148,48 +174,16 @@ export function ChannelsTab() {
           sunuluyordu: operatör var olan kanalların üstüne yeni kanal
           kurmaya yönlendiriliyordu. v0.10.954 — durum satırı tablonun içinde. */}
       <div className="table-wrap">
-        <table {...dt.tableProps}>
-          <DataTableColgroup dt={dt} />
-          <DataTableHead
-            dt={dt}
-            // Kapak-fetch tavanına çarpıldığında sayılar bir ALT sınır;
-            // dürüstlük başlıkta da duruyor, yalnız satır tooltip'inde
-            // değil (operatör kolonu okurken tavanı bilmeli).
-            renderLabel={c => (c.id === 'health' && capped
-              ? <span title="Son 5000 gönderim kaydıyla sınırlı — ardışık hata sayıları bir ALT sınırdır.">Sağlık ⚠</span>
-              : c.label)}
-          />
-          <tbody>
-            {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...tableState} /> : dt.sortedRows.map(c => (
-              <tr key={c.id}>
-                <DataTableCell dt={dt} col="name" row={c}><b>{c.name}</b></DataTableCell>
-                <DataTableCell dt={dt} col="type" row={c} value={c.type} className="mono" />
-                <DataTableCell dt={dt} col="target" row={c} value={summarizeChannel(c)} />
-                <DataTableCell dt={dt} col="sev" row={c}><StatusBadge status={severityStatus(c.minSeverity)}>{c.minSeverity.toUpperCase()}</StatusBadge></DataTableCell>
-                <DataTableCell dt={dt} col="kinds" row={c} value={kindsSummary(c.matchRules?.kinds)}
-                  title="Kanalın aldığı olay türleri (boş = hepsi)" />
-                {/* v0.10.929 (K5) — açık/kapalı bir ayar durumu: iki uç da nötr. */}
-                <DataTableCell dt={dt} col="status" row={c}>
-                  <Badge variant="secondary">{c.enabled ? 'ON' : 'OFF'}</Badge>
-                </DataTableCell>
-                <DataTableCell dt={dt} col="health" row={c}>
-                  <HealthCell
-                    h={healthMap.get(healthKey(c.type, c.name))}
-                    state={health.isError ? 'error' : health.isPending ? 'loading' : 'ready'}
-                  />
-                </DataTableCell>
-                <DataTableCell dt={dt} col="actions" row={c}>
-                  {/* R9 (D5): satır eylemleri ghost `sm`, aynı üç eylem aynı sırada. */}
-                  <ButtonGroup aria-label={`${c.name} actions`} className="ml-auto">
-                    <Button variant="ghost" size="sm" onClick={() => onTest(c)}>Test</Button>
-                    <Button variant="ghost" size="sm" onClick={() => setEditing(c)}>Edit</Button>
-                    <Button variant="ghost-danger" size="sm" onClick={() => onDelete(c)}>Delete</Button>
-                  </ButtonGroup>
-                </DataTableCell>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <DataTable<NotificationChannel> storageKey="settings-channels" columns={cols} rows={items ?? []}
+          sort={{ initial: { id: 'name', dir: 'asc' } }} state={tableState} getRowKey={c => c.id}
+          // Kapak-fetch tavanına çarpıldığında sayılar bir ALT sınır;
+          // dürüstlük başlıkta da duruyor, yalnız satır tooltip'inde
+          // değil (operatör kolonu okurken tavanı bilmeli).
+          renderHeader={c => (c.id === 'health' && capped
+            ? <span title="Son 5000 gönderim kaydıyla sınırlı — ardışık hata sayıları bir ALT sınırdır.">Sağlık ⚠</span>
+            : c.label)}
+          renderCell={(c, col) => channelCell(c, col.id)} />
+
       </div>
 
       {editing && (

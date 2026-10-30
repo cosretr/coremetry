@@ -16,7 +16,7 @@ import type { ColumnDef, DataTableProps } from './types';
 const ACTIONS_W = 40;
 
 export function DataTable<T>(props: DataTableProps<T>) {
-  const { storageKey, columns, rows, sort, columnModel, selection, getRowHref, rowLinkReplace, onOpen, state, virtual, density, renderCell, rowActions, getRowKey, detail } = props;
+  const { storageKey, columns, rows, sort, columnModel, selection, getRowHref, rowLinkReplace, onOpen, state, virtual, density, renderCell, renderHeader, rowActions, getRowKey, detail } = props;
   const dt = useDataTable<T>({
     storageKey, columns, rows,
     initialSort: sort?.initial,
@@ -67,13 +67,13 @@ export function DataTable<T>(props: DataTableProps<T>) {
         // Faz 1 sınırı: VirtualTable'ın trailing kolonu yok → `virtual` kipinde
         // rowActions ÇİZİLMEZ (colgroup kayardı). Gövde kararı Traces diliminde.
         <VirtualTable dt={dt} height={virtual.height ?? 480} rowHeight={virtual.rowHeight} overscan={virtual.overscan}
-          getRowKey={keyOf}
+          getRowKey={keyOf} renderHeadLabel={renderHeader}
           renderRow={(row) => <>{dt.shownColumns.map(c => cell(row, c))}</>}
           state={state} />
       ) : (
         <table {...dt.tableProps}>
           <DataTableColgroup dt={dt} trailing={trailing} />
-          <DataTableHead dt={dt} trailing={rowActions ? <th className="col-actions" aria-label={rowActions.label} /> : undefined} />
+          <DataTableHead dt={dt} renderLabel={renderHeader} trailing={rowActions ? <th className="col-actions" aria-label={rowActions.label} /> : undefined} />
           <tbody>
             {dt.sortedRows.length === 0
               ? <DataTableState dt={dt} trailing={trailing} {...state} />

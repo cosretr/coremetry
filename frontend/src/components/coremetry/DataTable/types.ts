@@ -55,6 +55,11 @@ export interface DataTableProps<T> {
   density?: Density;
   /** Hücre içeriği; verilmezse `col.sortValue(row)` düz değer olarak. */
   renderCell?(row: T, col: ColumnDef<T>): ReactNode;
+  /** v0.10.1674 (ADDITIVE): başlık içeriği; verilmezse `col.label`. Kolon
+   *  tipi (`label: string`) değişmez — sıra/boyut/storageKey `id`'ye bağlı,
+   *  başlık yalnız GÖRÜNTÜ (ör. ipuçlu "Sağlık ⚠"). `kind: 'actions'`
+   *  kolonunun başlığı yine boş. ui/DataTableHead `renderLabel`'ın aynısı. */
+  renderHeader?(col: ColumnDef<T>): ReactNode;
   /** Satır başına ⋯ menüsü — tabloda TEK paylaşılan menü (satır başına Radix kökü yok).
    *  Faz 1: `virtual` ile birlikte çizilmez (VirtualTable trailing kolonu yok). */
   rowActions?: { items(row: T): MenuItemSpec[]; label: string };

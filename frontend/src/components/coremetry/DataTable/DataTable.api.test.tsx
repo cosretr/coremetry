@@ -137,3 +137,30 @@ describe('coremetry/DataTable — DataTableStateRow (G3)', () => {
     expect(host.querySelector('tr[data-dt-state="loading"] [role="status"]')).not.toBeNull();
   });
 });
+
+// v0.10.1674 — renderHeader (ADDITIVE): başlık ReactNode (ChannelsTab
+// "Sağlık ⚠" + ipucu); kolon tipi (`label: string`) aynı, sıralama başlığı
+// düğümlü başlıkta da çalışır, actions kolonu boş kalır.
+describe('coremetry/DataTable — renderHeader', () => {
+  const ROWS: Row[] = [{ id: 'a', svc: 'checkout', n: 3 }, { id: 'b', svc: 'cart', n: 7 }];
+  it('verilen kolon için düğüm (ipucu dahil), diğerleri col.label', () => {
+    const h = render({ rows: ROWS, getRowKey: r => r.id,
+      renderHeader: c => c.id === 'n' ? <span data-h="n" title="alt sınır">Count ⚠</span> : c.label });
+    const node = h.querySelector('thead [data-h="n"]')!;
+    expect(node.textContent).toBe('Count ⚠');
+    expect(node.getAttribute('title')).toBe('alt sınır');
+    expect(h.querySelector('thead')!.textContent).toContain('Service');
+  });
+  it('düğümlü başlığa tık sıralamayı o kolona taşır', () => {
+    const h = render({ rows: ROWS, getRowKey: r => r.id, sort: { initial: { id: 'svc', dir: 'asc' } },
+      renderHeader: c => c.id === 'n' ? <span data-h="n">Count ⚠</span> : c.label });
+    const th = h.querySelector('[data-h="n"]')!.closest('th')!;
+    expect(th.getAttribute('aria-sort')).toBe('none');
+    act(() => { th.click(); });
+    expect(['ascending', 'descending']).toContain(th.getAttribute('aria-sort'));
+  });
+  it('virtual kipinde de başlığa gider', () => {
+    const h = render({ rows: ROWS, virtual: { height: 200 }, renderHeader: c => <i data-h={c.id}>{c.label}</i> });
+    expect(h.querySelector('thead [data-h="svc"]')).not.toBeNull();
+  });
+});

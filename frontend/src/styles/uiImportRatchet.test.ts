@@ -84,7 +84,7 @@ const CEILINGS: Record<string, number> = {
   // gövdesi ui/DataTable'ı SARIYOR (plan §6: "thin wrapper over today's
   // code"): DataTable.tsx (gövde) + types.ts (bugünkü tiplerin yeniden dışa
   // aktarımı). Benimseme değil, halef; gövde Traces diliminde değişince düşer.
-  DataTable: 112, // Faz 2 dilim 1 R12 (AI SRE + Knowledge): 114 → 112; Faz 2 dilim 1 R11 (CoSRE): 117 → 114; Faz 2 dilim 1 R10 (erişim): 121 → 117; Faz 2 dilim 1 R7: 128 → 127 (SpanClusterValuesPanel); R8: 127 → 124; R9: 124 → 121
+  DataTable: 111, // R9 artığı (ChannelsTab → coremetry/DataTable renderHeader): 112 → 111; Faz 2 dilim 1 R12 (AI SRE + Knowledge): 114 → 112; Faz 2 dilim 1 R11 (CoSRE): 117 → 114; Faz 2 dilim 1 R10 (erişim): 121 → 117; Faz 2 dilim 1 R7: 128 → 127 (SpanClusterValuesPanel); R8: 127 → 124; R9: 124 → 121
   Badge: 54, // Faz 2 dilim 1 R11 (CoSRE): 58 → 54; R7: 63 → 61; CoSRE 2b B1: 61 → 60 (CosreV2StatusLine → coremetry Field); R8: 60 → 58
   IconButton: 50,
   Field: 25, // Faz 2 dilim 1 R12 (AI SRE + Knowledge): 27 → 25; Faz 2 dilim 1 R11 (CoSRE): 29 → 27; Faz 2 dilim 1 R10 (erişim): 30 → 29; R7: 37 → 36; R8: 36 → 31; R9: 31 → 30
