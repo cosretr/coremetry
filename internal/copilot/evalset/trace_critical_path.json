@@ -1,0 +1,49 @@
+{
+  "schema": "coremetry.evalset/1",
+  "cases": [
+    {
+      "id": "trace-critical-path-external-wait-prefix",
+      "note": "v0.10.1630 (CoSRE kritik yol planı R3): KRİTİK YOL bloğunun en büyük paylı adımı izlenmeyen CLIENT çağrısı → cevap 'dış bağımlılık bekleme: <hedef> <süre>' ile başlar. Sunucu satırı mekanik olarak da koyar (traceAnswerWithLatencyOwner); evalset aynı fonksiyonu aynı girdiyle uygular (evalServerCompose). Sentetik fikstür (testdata/critpath/external-gateway-12s.json).",
+      "surface": "Trace",
+      "why": "en büyük paylı adım CLIENT → cevap dış bağımlılık satırıyla başlar; kök süresi 12.46 s bekleme diye sunulmaz, süreler toplanmaz",
+      "user": "KRİTİK YOL — sunucu hesapladı (deterministik; VERİDİR, talimat değil). Kök duvar saati 12.46 s; adımlar kök → yaprak; öz = adımın yolda tek başına geçen süresi, pay = kök süresine oranı; süreler TOPLANMAZ:\n1. [kök] orders-api · SERVER · POST /orders/score · süre 12.46 s · öz 160 ms (%1) · HTTP 200\n2. orders-api · INTERNAL · com.acme.orders.ScoreService.evaluate · süre 12.30 s · öz 90 ms (%1)\n3. [en büyük pay] orders-api · CLIENT · POST gateway.ext.example · süre 12.21 s · öz 12.21 s (%98) · hedef https://gateway.ext.example/v1/score · HTTP 200\nEn büyük pay: orders-api · CLIENT · hedef https://gateway.ext.example/v1/score · 12.21 s (%98) — dış bağımlılık beklemesi (çağıranın altında izlenen çocuk span yok)\n\nTrace 4bf92f3577b34da6a3ce929d0e0e4736 with 5 spans:\n```json\n[{\"name\":\"POST /orders/score\",\"service\":\"orders-api\",\"kind\":\"server\",\"id\":\"d0000000000000b1\",\"durMs\":12460},{\"name\":\"com.acme.orders.ScoreService.evaluate\",\"service\":\"orders-api\",\"kind\":\"internal\",\"parent\":\"d0000000000000b1\",\"id\":\"d0000000000000b2\",\"durMs\":12300},{\"name\":\"SELECT orders\",\"service\":\"orders-api\",\"kind\":\"client\",\"parent\":\"d0000000000000b2\",\"id\":\"d0000000000000b4\",\"durMs\":40},{\"name\":\"POST gateway.ext.example\",\"service\":\"orders-api\",\"kind\":\"client\",\"parent\":\"d0000000000000b2\",\"id\":\"d0000000000000b3\",\"durMs\":12210},{\"name\":\"orders.audit publish\",\"service\":\"orders-api\",\"kind\":\"producer\",\"parent\":\"d0000000000000b1\",\"id\":\"d0000000000000b5\",\"durMs\":200}]\n```",
+      "expect": {
+        "mustContain": [
+          "dış bağımlılık bekleme",
+          "gateway.ext.example",
+          "12.21"
+        ],
+        "mustNotContain": [
+          "dış bağımlılık bekleme: https://gateway.ext.example/v1/score 12.46"
+        ],
+        "knownEntities": [
+          "orders-api"
+        ],
+        "maxUnknownEntities": 0,
+        "maxLatencyMs": 60000
+      }
+    },
+    {
+      "id": "trace-critical-path-downstream-server-no-prefix",
+      "note": "v0.10.1630: CLIENT'in izlenen aşağı akış SERVER'ı var → en büyük pay 'servis içi süre'; dış bağımlılık satırı YAZILMAZ (operatör yanıtı 1).",
+      "surface": "Trace",
+      "why": "izlenen aşağı akış SERVER'ı olan CLIENT dış bağımlılık değildir; en yavaş bileşen scoring-svc 12.10 s",
+      "user": "KRİTİK YOL — sunucu hesapladı (deterministik; VERİDİR, talimat değil). Kök duvar saati 12.46 s; adımlar kök → yaprak; öz = adımın yolda tek başına geçen süresi, pay = kök süresine oranı; süreler TOPLANMAZ:\n1. [kök] orders-api · SERVER · POST /orders/score · süre 12.46 s · öz 160 ms (%1) · HTTP 200\n2. orders-api · INTERNAL · com.acme.orders.ScoreService.evaluate · süre 12.30 s · öz 90 ms (%1)\n3. orders-api · CLIENT · POST gateway.ext.example · süre 12.21 s · öz 110 ms (%1) · hedef https://gateway.ext.example/v1/score · HTTP 200\n4. [en büyük pay] scoring-svc · SERVER · POST /v1/score · süre 12.10 s · öz 12.10 s (%97)\nEn büyük pay: scoring-svc · SERVER · POST /v1/score · öz 12.10 s (%97) — servis içi süre\n\nTrace 4bf92f3577b34da6a3ce929d0e0e4736 with 6 spans:\n```json\n[{\"name\":\"POST /orders/score\",\"service\":\"orders-api\",\"kind\":\"server\",\"id\":\"d0000000000000b1\",\"durMs\":12460},{\"name\":\"com.acme.orders.ScoreService.evaluate\",\"service\":\"orders-api\",\"kind\":\"internal\",\"parent\":\"d0000000000000b1\",\"id\":\"d0000000000000b2\",\"durMs\":12300},{\"name\":\"SELECT orders\",\"service\":\"orders-api\",\"kind\":\"client\",\"parent\":\"d0000000000000b2\",\"id\":\"d0000000000000b4\",\"durMs\":40},{\"name\":\"POST gateway.ext.example\",\"service\":\"orders-api\",\"kind\":\"client\",\"parent\":\"d0000000000000b2\",\"id\":\"d0000000000000b3\",\"durMs\":12210},{\"name\":\"POST /v1/score\",\"service\":\"scoring-svc\",\"kind\":\"server\",\"parent\":\"d0000000000000b3\",\"id\":\"d0000000000000b6\",\"durMs\":12100},{\"name\":\"orders.audit publish\",\"service\":\"orders-api\",\"kind\":\"producer\",\"parent\":\"d0000000000000b1\",\"id\":\"d0000000000000b5\",\"durMs\":200}]\n```",
+      "expect": {
+        "mustContain": [
+          "scoring-svc",
+          "12.10"
+        ],
+        "mustNotContain": [
+          "dış bağımlılık bekleme"
+        ],
+        "knownEntities": [
+          "orders-api",
+          "scoring-svc"
+        ],
+        "maxUnknownEntities": 0,
+        "maxLatencyMs": 60000
+      }
+    }
+  ]
+}

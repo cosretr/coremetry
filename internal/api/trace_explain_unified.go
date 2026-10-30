@@ -87,7 +87,7 @@ func (s *Server) guidedTraceExplain(ctx context.Context, emit func(string, any),
 	system := copilot.SystemPromptTrace()
 	user := in.User + "\n\nOperatörün sorusu (yalnız yukarıdaki kanıta dayanarak, kanıtta olmayanı söylemeden cevapla): " + strings.TrimSpace(question)
 	// soruya özel: önbelleğe girmez (anahtar "").
-	res, ok := s.streamExplainCore(ctx, emit, aisurface.ExplainTraceChat, system, user, "", false)
+	res, ok := s.streamTraceExplainCore(ctx, emit, aisurface.ExplainTraceChat, system, user, "", false) // v0.10.1630 — dış bağımlılık satırı
 	if !ok {
 		return true, false
 	}

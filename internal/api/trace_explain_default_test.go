@@ -201,7 +201,9 @@ func TestExplainTraceDefaultIsClassic(t *testing.T) {
 		}
 	}
 	text, _ := first["text"].(string)
-	if text != model || deltas.String() != model {
+	// v0.10.1630 — POST /charge en büyük paylı, çocuksuz CLIENT: sunucunun
+	// mekanik satırı answer çerçevesinde gelir (akan delta model metnidir).
+	if text != defLatencyLine+model || deltas.String() != model {
 		t.Errorf("cevap model metni olmalı (künye/sayı uyarısı yok):\ntext=%q\ndelta=%q", text, deltas.String())
 	}
 	if frames[len(frames)-1].event != "done" {
@@ -245,7 +247,7 @@ func TestExplainTraceDefaultIsClassic(t *testing.T) {
 	if p.requests() != 1 {
 		t.Fatalf("isabette LLM koştu (llm=%d)", p.requests())
 	}
-	if hit["cached"] != true || hit["cachedAtMs"] == nil || hit["text"] != model || hit["exchangeId"] != first["exchangeId"] {
+	if hit["cached"] != true || hit["cachedAtMs"] == nil || hit["text"] != defLatencyLine+model || hit["exchangeId"] != first["exchangeId"] {
 		t.Errorf("isabet: cached=%v cachedAtMs=%v xid=%v/%v text=%q", hit["cached"], hit["cachedAtMs"], hit["exchangeId"], first["exchangeId"], hit["text"])
 	}
 	if ev, _ := hit["evidenceSpanIds"].([]any); len(ev) == 0 {
@@ -269,7 +271,7 @@ func TestExplainTraceDefaultBufferedBody(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 		t.Fatalf("buffered gövde JSON değil: %v (%s)", err, w.Body.String())
 	}
-	if body["explanation"] != defAnswerA+defAnswerB {
+	if body["explanation"] != defLatencyLine+defAnswerA+defAnswerB { // v0.10.1630
 		t.Errorf("explanation = %q", body["explanation"])
 	}
 	if ev, _ := body["evidenceSpanIds"].([]any); len(ev) == 0 {

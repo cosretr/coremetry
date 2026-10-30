@@ -90,10 +90,10 @@ func (s *Server) copilotExplainTrace(w http.ResponseWriter, r *http.Request) {
 	// aynı, tek önbellek satırı.
 	p := s.traceCodeExplainPrep(r.Context(), in)
 	cacheKey := p.CacheKey
-	run := explainPromptBuffered(func() (string, error) {
+	run := traceComposeRun(explainPromptBuffered(func() (string, error) { // v0.10.1630 — dış bağımlılık satırı
 		return s.copilotExplainEvidence(r,
 			p.SystemNoCode, p.SystemWithCode, in.User, p.CC, p.SE)
-	})
+	}), in.User)
 	// v0.9.1127 (Faz 1.5) — cevabın çıkışı tek yerden (deliverExplain).
 	s.deliverExplain(w, r, xid, traceExplainExtra(in, p.CC, opts.IncludeCode), run, in.RootService, cacheKey)
 }
@@ -140,7 +140,7 @@ func (s *Server) explainTraceClassicPrepared(r *http.Request) (explainPrepared, 
 	}
 	return explainPrepared{
 		extra:    traceExplainExtra(in, devops.CodeContext{}, false),
-		run:      s.explainPrompt(r, copilot.SystemPromptTrace(), in.User),
+		run:      traceComposeRun(s.explainPrompt(r, copilot.SystemPromptTrace(), in.User), in.User), // v0.10.1630
 		service:  in.RootService,
 		cacheKey: explainCacheKey(copilot.SystemPromptTrace(), in.User, ""),
 	}, nil

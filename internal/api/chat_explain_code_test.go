@@ -235,22 +235,22 @@ func TestChatExplainFreshSkipsReadAndWrites(t *testing.T) {
 	p := newDefProvider(t, "eski cevap")
 	s := defServer(t, p)
 	first, _ := xcTurn(t, s, chatExplainAsk{Kind: "trace", ID: defTestTrace}, "x-old")
-	if first["text"] != "eski cevap" || p.requests() != 1 {
+	if first["text"] != defLatencyLine+"eski cevap" || p.requests() != 1 { // v0.10.1630
 		t.Fatalf("ilk tur %v", first["text"])
 	}
 	xcSetAnswer(p, "taze ", "cevap")
 	fresh, _ := xcTurn(t, s, chatExplainAsk{Kind: "trace", ID: defTestTrace, Fresh: true}, "x-new")
-	if p.requests() != 2 || fresh["cached"] == true || fresh["text"] != "taze cevap" || xcMeta(t, fresh).Cached {
+	if p.requests() != 2 || fresh["cached"] == true || fresh["text"] != defLatencyLine+"taze cevap" || xcMeta(t, fresh).Cached {
 		t.Fatalf("fresh önbelleği okumamalı: LLM %d cached=%v text=%v", p.requests(), fresh["cached"], fresh["text"])
 	}
 	again, _ := xcTurn(t, s, chatExplainAsk{Kind: "trace", ID: defTestTrace}, "x-later")
-	if p.requests() != 2 || again["cached"] != true || again["text"] != "taze cevap" || again["exchangeId"] != "x-new" {
+	if p.requests() != 2 || again["cached"] != true || again["text"] != defLatencyLine+"taze cevap" || again["exchangeId"] != "x-new" {
 		t.Fatalf("olağan istek taze cevaba isabet etmeli: LLM %d cached=%v text=%v xid=%v", p.requests(), again["cached"], again["text"], again["exchangeId"])
 	}
 	// Düğme de aynı satırı okur (✨ "Yeniden sor" ile aynı sözleşme).
 	var body map[string]any
 	_ = json.Unmarshal(defCall(s, "", "").Body.Bytes(), &body)
-	if body["cached"] != true || body["explanation"] != "taze cevap" {
+	if body["cached"] != true || body["explanation"] != defLatencyLine+"taze cevap" {
 		t.Fatalf("düğme taze cevabı görmeli: %v", body)
 	}
 	// Kayıt türleri (genel tur) de fresh'i taşır.

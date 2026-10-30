@@ -370,11 +370,11 @@ func (s *Server) emitTraceExplainTurn(ctx context.Context, emit func(string, any
 	var ok bool
 	var code *codeContextPayload
 	if ask.Code {
-		p := s.traceCodeExplainPrep(ctx, in) // copilotExplainTrace'in kod dalıyla AYNI kurucu
-		res, ok = s.streamExplainCodeCore(ctx, emit, aisurface.ExplainTraceChat, p, in.User, ask.Fresh)
+		p := s.traceCodeExplainPrep(ctx, in)                                                                 // copilotExplainTrace'in kod dalıyla AYNI kurucu
+		res, ok = s.streamTraceExplainCodeCore(ctx, emit, aisurface.ExplainTraceChat, p, in.User, ask.Fresh) // v0.10.1630 — dış bağımlılık satırı
 		code = codePayload(p.CC, true)
 	} else {
-		res, ok = s.streamExplainCore(ctx, emit, aisurface.ExplainTraceChat, system, in.User, cacheKey, ask.Fresh)
+		res, ok = s.streamTraceExplainCore(ctx, emit, aisurface.ExplainTraceChat, system, in.User, cacheKey, ask.Fresh) // v0.10.1630
 	}
 	if !ok {
 		return true, false

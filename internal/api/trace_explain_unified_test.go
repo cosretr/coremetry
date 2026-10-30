@@ -44,7 +44,7 @@ func TestChatTraceExplainMatchesExplainButton(t *testing.T) {
 		// v0.10.1400 (Tek CoSRE) — açıklama isteği çekmece AÇMAZ; sohbet içinde
 		// düğmenin klasik anahtarıyla akar (emitTraceExplainAnswer).
 		`return s.emitTraceExplainAnswer(ctx, emit, route.TraceID, in, route, links)`,
-		`s.streamExplainCore(ctx, emit, aisurface.ExplainTraceChat, system, user, "", false)`, // v0.10.1406 — + fresh
+		`s.streamTraceExplainCore(ctx, emit, aisurface.ExplainTraceChat, system, user, "", false)`, // v0.10.1406 — + fresh; v0.10.1630 — dış bağımlılık satırlı ikiz
 		`"evidenceSpanIds": in.Evidence`,
 	} {
 		if !strings.Contains(us, want) {

@@ -745,6 +745,8 @@ func evalServerCompose(surface, user, answer string) string {
 	switch surface {
 	case "SLOBurn": // copilot_explain_slo.go — alarm eşiği satırı
 		return sloAnswerWithBurnVerdict(user, answer)
+	case "Trace": // v0.10.1630 — trace_explain_latency_owner.go — dış bağımlılık satırı
+		return traceAnswerWithLatencyOwner(user, answer)
 	}
 	return answer
 }

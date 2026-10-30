@@ -75,6 +75,12 @@ const AnswerInTurkish = "\n\n" + answerInTurkishLine
 // 500'ü anmadı. Kanıt artık sunucunun hesapladığı HATA ZİNCİRİ bloğuyla
 // başlar (api/explain_trace_chain.go); CAUSAL CHAIN kuralı bağımlı çağrının
 // hatasını yerel exception'ın ÖNÜNE koyar, Kök Neden iki sonraki adım ister.
+//
+// v0.10.1630 (CoSRE kritik yol planı R3) — kanıt KRİTİK YOL bloğunu taşır
+// (api/explain_trace_critpath.go); LATENCY OWNER kuralı en büyük paylı adım
+// dış bağımlılık beklemesiyse cevabı "dış bağımlılık bekleme: <hedef> <süre>"
+// satırıyla başlatır (sunucu ayrıca mekanik olarak garanti eder:
+// api/trace_explain_latency_owner.go). "toplam sürenin %" → "kök süresinin %".
 const systemTraceBody = `You are a senior SRE assistant inside an APM tool. You are given a JSON
 representation of a single distributed trace (spans with service, name,
 parent, duration, status), when present the SPAN EVENTS of its error and
@@ -120,6 +126,21 @@ in <class:line>'. Name the dependency's host and path verbatim from the
 block. Never present the local exception as the cause while the block
 shows a failed downstream call beneath it.
 
+LATENCY OWNER IS PRECOMPUTED. When the evidence carries a KRİTİK YOL block
+(server-computed, deterministic), its closing "En büyük pay" line names the
+critical-path step with the largest on-path self-time share and says whether
+it is "dış bağımlılık beklemesi" (a CLIENT/PRODUCER step with no traced child),
+"bağımlı servis beklemesi" or "servis içi süre". Do not rediscover the slowest
+component by adding span durations — nested and parallel spans overlap.
+If, and only if, that closing line says "dış bağımlılık beklemesi", the VERY
+FIRST line of your answer — before any section header — is exactly:
+dış bağımlılık bekleme: <hedef> <süre>
+where <hedef> is the step's "hedef" value and <süre> is THAT step's own
+duration, both copied verbatim from the block (never the root or SERVER
+span's duration, never a sum). Otherwise do not write this line. In every
+case the "En yavaş bileşen" bullet quotes the same step, its duration and
+its share from the block.
+
 Structure the answer with these bold section headers, skipping a
 section entirely when its evidence is absent:
 
@@ -128,7 +149,8 @@ operation and the initiating service; the critical failure point
 (service + exact exception type and message from the span's exception
 event, or the exact error code/message from the logs or the Oracle rows); notable or faulty
 business data visible in log bodies (input values, IDs); the slowest
-component and the share of total trace time it consumed; the chain of
+component and its share of the root span's duration (from the KRİTİK
+YOL block when present); the chain of
 errors across services (which service surfaced what upward). Do NOT
 add a separate correlation-ID bullet: an ID already shown under one
 label (request_id, channel, …) must never repeat under another — one
@@ -166,11 +188,13 @@ gemma4 / qwen3 follow a concrete shape far better than prose rules, and both
 then give the same depth). Replace every <…> with a value from the evidence;
 never print the angle brackets; drop a line whose value is absent:
 
+dış bağımlılık bekleme: <hedef> <süre>   (only when the KRİTİK YOL closing line says "dış bağımlılık beklemesi"; otherwise omit)
+
 **İşlem Akışı ve Veri Özeti**
 - Operasyon: <initiating service> · <METHOD route>
 - Kritik hata noktası: <service> → <target host + path> → <HTTP code or exception type>: "<exact message>"
 - İş verisi: <field>=<value> (from log bodies)
-- En yavaş bileşen: <service or span> <duration> (toplam sürenin %<share>'ı)
+- En yavaş bileşen: <KRİTİK YOL "En büyük pay" step> <duration> (kök süresinin %<share>'ı)
 - Hata zinciri: <origin> → <next hop> → … → <root span and its status>
 
 **Stacktrace Detayı**
@@ -197,6 +221,7 @@ const systemTrace = systemTraceBody + AnswerInTurkish
 // "Bu neden oluyor?" / "Nasıl düzeltirim?" exception'ı birincil neden alır.
 // v0.10.1371 (operatör-bildirimli) — takibe HATA ZİNCİRİ de girer
 // (traceFollowUp.Chain); "neden" önce zinciri söyler, bağımlı çağrının kodunu anar.
+// v0.10.1630 — KRİTİK YOL bloğu da takibe girer (traceFollowUp.Critical).
 const traceFollowUpAddendum = `
 
 TRACE İNCELEMESİ SÜRÜYOR. Önsözdeki AKTİF BAĞLAM (trace, span, servis, ortam,
@@ -225,7 +250,11 @@ yetkisiz topic adı) alıntıla ve tipin açıkça işaret ettiği düzeltme sı
 olmayan ayrıntıyı (principal, komut, config anahtarı) uydurma.
 HATA ZİNCİRİ bloğu varsa 'neden' sorularında önce zinciri (kaynak uç → belirti)
 söyle; yerel exception'ı kök neden diye sunma, bağımlı çağrının HTTP kodunu ve
-hedefini an.`
+hedefini an.
+KRİTİK YOL bloğu varsa "neden yavaş / nerede bekliyor" sorularında en büyük
+paylı adımı, hedefini ve O adımın süresini aynen an; "dış bağımlılık
+beklemesi" yazıyorsa cevaba "dış bağımlılık bekleme: <hedef> <süre>" satırıyla
+başla; süreleri toplama, kök süresini bekleme süresi diye sunma.`
 
 // TraceFollowUpAddendum — v0.10.948: çekmecedeki trace/span sohbetinde serbest araç
 // döngüsünün sistem mesajına eklenen inceleme talimatı.

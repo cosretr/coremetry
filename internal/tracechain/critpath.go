@@ -466,3 +466,45 @@ func (c CriticalPath) Block() string {
 	}
 	return promptfmt.FenceSafe(TruncRunes(out, BlockMaxRunes))
 }
+
+const (
+	critClosingPrefix   = "En büyük pay: "
+	critExternalSuffix  = " — dış bağımlılık beklemesi"
+	critClosingPartsMin = 4 // servis · TÜR · hedef/ad · süre
+)
+
+// ExternalWaitLineFromBlock — SAF (v0.10.1630): kanıt METNİNDEKİ KRİTİK YOL
+// bloğunun kapanış satırından ExternalWaitLine'ı geri okur ("" = blok yok ya
+// da dış bekleme değil). Evalset yalnız metni görür; prod da aynı yolu
+// kullanır ki puanlanan ile operatörün gördüğü aynı olsun. Biçim closingLine
+// ile birlikte değişir (round-trip testi).
+func ExternalWaitLineFromBlock(text string) string {
+	i := strings.Index(text, CritHeader)
+	if i < 0 {
+		return ""
+	}
+	rest := text[i:]
+	if j := strings.Index(rest, "\n\n"); j >= 0 {
+		rest = rest[:j]
+	}
+	for _, ln := range strings.Split(rest, "\n") {
+		if !strings.HasPrefix(ln, critClosingPrefix) {
+			continue
+		}
+		k := strings.Index(ln, critExternalSuffix)
+		if k < 0 {
+			return ""
+		}
+		body := ln[len(critClosingPrefix):k]
+		if p := strings.LastIndex(body, " (%"); p >= 0 {
+			body = body[:p]
+		}
+		parts := strings.Split(body, " · ")
+		if len(parts) < critClosingPartsMin {
+			return ""
+		}
+		what := strings.TrimPrefix(strings.Join(parts[2:len(parts)-1], " · "), "hedef ")
+		return ExternalWaitPrefix + " " + what + " " + parts[len(parts)-1]
+	}
+	return ""
+}

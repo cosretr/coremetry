@@ -96,7 +96,7 @@ func TestChatExplainTurnTraceSharesButtonCache(t *testing.T) {
 		t.Fatal("sistem prompt'u Explain trace'inki değil")
 	}
 	ans := xtAnswer(t, evs)
-	if ans["text"] != "**Kök neden:** payments POST /charge card declined." || ans["exchangeId"] != "x-trace-1" {
+	if ans["text"] != defLatencyLine+"**Kök neden:** payments POST /charge card declined." || ans["exchangeId"] != "x-trace-1" { // v0.10.1630 — POST /charge en büyük pay, çocuksuz CLIENT
 		t.Fatalf("cevap %v / %v", ans["text"], ans["exchangeId"])
 	}
 	if _, has := ans["open"]; has {
@@ -267,8 +267,8 @@ func TestChatExplainTurnTierIsFirst(t *testing.T) {
 	}
 	// Üç çağıran da tek çekirdekten akar. v0.10.1406 — + fresh (Yeniden üret).
 	for f, want := range map[string]string{
-		"chat_explain_turn.go":                `s.streamExplainCore(ctx, emit, aisurface.ExplainTraceChat, system, in.User, cacheKey, ask.Fresh)`,
-		"trace_explain_unified.go":            `s.streamExplainCore(ctx, emit, aisurface.ExplainTraceChat, system, user, "", false)`,
+		"chat_explain_turn.go":                `s.streamTraceExplainCore(ctx, emit, aisurface.ExplainTraceChat, system, in.User, cacheKey, ask.Fresh)`, /* v0.10.1630 — dış bağımlılık satırlı ikiz */
+		"trace_explain_unified.go":            `s.streamTraceExplainCore(ctx, emit, aisurface.ExplainTraceChat, system, user, "", false)`,              // v0.10.1630
 		"chat_operation_exception_explain.go": `s.streamExplainCore(ctx, emit, aisurface.ExplainExceptionChat, system, in.User,`,
 	} {
 		if !strings.Contains(readRepoFile(t, f), want) {

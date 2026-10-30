@@ -124,3 +124,19 @@ func TestCriticalPathParityFixtures(t *testing.T) {
 		})
 	}
 }
+
+// TestExternalWaitLineFromBlockRoundTrip — v0.10.1630 (R3): sunucunun mekanik
+// öneki (api traceAnswerWithLatencyOwner) evalset'te yalnız kanıt METNİNİ
+// görür; bloktan geri okunan satır yapıdan kurulanla bayt bayt aynı olmalı.
+func TestExternalWaitLineFromBlockRoundTrip(t *testing.T) {
+	for _, f := range loadCritPathFixtures(t) {
+		cp := CriticalPathOf(f.rows())
+		evidence := "önsöz\n\n" + cp.Block() + "\n\nTrace x with 3 spans:\n```json\n[]\n```"
+		if got, want := ExternalWaitLineFromBlock(evidence), cp.ExternalWaitLine(); got != want {
+			t.Errorf("%s: bloktan %q, yapıdan %q", f.Name, got, want)
+		}
+	}
+	if ExternalWaitLineFromBlock("En büyük pay: a · CLIENT · hedef x · 1 s (%9) — dış bağımlılık beklemesi") != "" {
+		t.Error("KRİTİK YOL başlığı olmadan satır okundu")
+	}
+}
