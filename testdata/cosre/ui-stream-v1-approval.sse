@@ -18,7 +18,7 @@ data: {"dynamic":true,"toolCallId":"s3","toolName":"add_problem_note","type":"to
 
 data: {"dynamic":true,"input":{"args":{"problemId":"p-1","text":"DB havuzu doldu"},"argsText":"{\"problemId\":\"p-1\",\"text\":\"DB havuzu doldu\"}"},"toolCallId":"s3","toolName":"add_problem_note","type":"tool-input-available"}
 
-data: {"data":{"argsDigest":"4f1c0b6e","expiresAt":1800000300000,"token":"eyJrIjoiY29zcmUtYXBwcm92YWwifQ.c2ln","tool":"add_problem_note","toolCallId":"s3"},"id":"a3","type":"data-approval"}
+data: {"data":{"argsDigest":"4f1c0b6e","exchangeId":"x-approval-1","expiresAt":1800000300000,"token":"eyJrIjoiY29zcmUtYXBwcm92YWwifQ.c2ln","tool":"add_problem_note","toolCallId":"s3"},"id":"a3","type":"data-approval"}
 
 data: {"data":{"calls":2,"elapsed_ms":950,"reason":"approval_pending","rounds":1},"id":"stop","type":"data-stop"}
 

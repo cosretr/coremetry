@@ -17,6 +17,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"sort"
 	"strings"
@@ -84,20 +85,32 @@ func (s *Server) createProblemNote(w http.ResponseWriter, r *http.Request) {
 		ID: problemNoteRowID(body.Token), ProblemID: pid, Text: body.Text,
 		Tool: clampChatRunes(body.Tool, 80), By: firstNonEmpty(c.Email, c.UserID), At: time.Now().UnixNano(),
 	}
+	if err := s.saveProblemNote(r, n, "cosre"); err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, n)
+}
+
+// saveProblemNote — notun TEK yazma yolu (tıkla-onayla ucu + agent-core S5
+// onay-kapılı add_problem_note aracı): saved_views satırı + audit
+// problem.note.create (source: cosre | cosre-approval).
+func (s *Server) saveProblemNote(r *http.Request, n problemNote, source string) error {
+	if s.store == nil {
+		return errors.New("not deposu yapılandırılmamış")
+	}
 	raw, err := json.Marshal(n)
 	if err != nil {
-		writeErr(w, err)
-		return
+		return err
 	}
 	if err := s.store.UpsertSavedView(r.Context(), chstore.SavedView{
-		ID: n.ID, OwnerID: "", Name: pid, Page: problemNotePage, QueryString: string(raw), CreatedAt: n.At,
+		ID: n.ID, OwnerID: "", Name: n.ProblemID, Page: problemNotePage, QueryString: string(raw), CreatedAt: n.At,
 	}); err != nil {
-		writeErr(w, err)
-		return
+		return err
 	}
-	det, _ := json.Marshal(map[string]any{"note": n.ID, "tool": n.Tool, "source": "cosre"})
-	s.audit(r, "problem.note.create", "problem", pid, string(det))
-	writeJSON(w, n)
+	det, _ := json.Marshal(map[string]any{"note": n.ID, "tool": n.Tool, "source": source})
+	s.audit(r, "problem.note.create", "problem", n.ProblemID, string(det))
+	return nil
 }
 
 // problemNotesFor — SAF: satırlardan bu problemin notları, yeniden eskiye.

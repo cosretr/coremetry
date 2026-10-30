@@ -50,7 +50,7 @@ import { prevWikiRefs } from '@/components/ai/chatWikiRefs';
 import { TraceContextStrip } from '@/components/ai/TraceContextStrip';
 import { getRaw } from '@/lib/storage';
 import { syncChatParam } from '@/lib/chatUrl';
-import type { AiConversationSummary, ChatTurn } from '@/lib/types';
+import type { AiConversationSummary, ChatTurn, CosreApprovalAnswer } from '@/lib/types';
 import { useChatHistory } from '@/components/ai/useChatHistory';
 import { cosreFullPageHref } from '@/components/ai/drawerFullPage';
 import { useConversation } from './useConversation';
@@ -95,7 +95,7 @@ export function CosreChatV2({ defaultOpen = false }: CosreChatV2Props) {
   // v1 ile ORTAK kancalar (ai/cosreAsk): bağlam, composer girdisi, karşılama.
   const ask = useCosreAskContext();
   const conv = useConversation();
-  const { messages, status, error, sendMessage, stop, setMessages, regenerate, visibleParts } = useCosreChat({ onPersist: conv.persist });
+  const { messages, status, error, sendMessage, stop, setMessages, regenerate, visibleParts, answerApproval } = useCosreChat({ onPersist: conv.persist });
   const busy = status === 'submitted' || status === 'streaming';
   const busyRef = useRef(busy);
   busyRef.current = busy;
@@ -150,6 +150,17 @@ export function CosreChatV2({ defaultOpen = false }: CosreChatV2Props) {
     const context = contextFor(ut.text ?? '', so, c.turns.slice(0, idx));
     pinBottom();
     void regenerate(context ? { body: { context } } : undefined);
+  };
+  // agent-core S5 — onay kartı: son kullanıcı turunun bağlamıyla aynı sohbet
+  // approvals[] ile devam eder (karar ve yürütme sunucuda).
+  const approve = (a: CosreApprovalAnswer) => {
+    const c = live.current;
+    if (c.busy) return;
+    const idx = c.turns.map(t => t.role).lastIndexOf('user');
+    const ut = idx >= 0 ? c.turns[idx] : undefined;
+    const context = ut ? contextFor(ut.text ?? '', ut.window ? { window: ut.window } : undefined, c.turns.slice(0, idx)) : undefined;
+    pinBottom();
+    void answerApproval(a, context);
   };
   const sendRef = useRef(send);
   sendRef.current = send;
@@ -349,7 +360,7 @@ export function CosreChatV2({ defaultOpen = false }: CosreChatV2Props) {
                     onPrefill={composer.prefill} onAsk={askChip} onAskExplain={askExplain} onSubmit={submit} />
                 ) : (
                   <MessageList messages={messages} visibleParts={visibleParts} status={status} error={error}
-                    onAsk={askChip} onRetry={retry} />
+                    onAsk={askChip} onRetry={retry} onApproval={approve} />
                 )}
               </div>
             </div>

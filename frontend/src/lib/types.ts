@@ -8196,6 +8196,34 @@ export interface AIUserScopeSetting {
   enabled: boolean;
 }
 
+/** agent-core S5 — `data-approval{id:"a<i>"}`: onay bekleyen araç çağrısı
+ *  (Go api/chat_approval_resume.go; eşli dynamic-tool parçası input-available). */
+export interface CosreApproval {
+  /** Eşli araç parçası (`s<i>`). */
+  toolCallId: string;
+  tool: string;
+  /** HMAC tek-kullanım jetonu (cosre-approval). */
+  token: string;
+  argsDigest: string;
+  /** Unix ms; geçince karar RET (zaman aşımı = ret). */
+  expiresAt: number;
+  /** Onayı isteyen alışveriş (jetonun `x`i). */
+  exchangeId?: string;
+}
+
+/** agent-core S5 — devam isteğinin `approvals[]` kalemi (Go approvalAnswer). */
+export interface CosreApprovalAnswer {
+  stepId: string;
+  tool: string;
+  /** Çalışacak argüman (tool-input-available `input.args`, sunucu digest'i). */
+  args: unknown;
+  token: string;
+  approved: boolean;
+  exchangeId?: string;
+  /** Asistan mesajındaki en büyük `s<i>` (devam kimlikleri çakışmasın). */
+  stepBase?: number;
+}
+
 /** v0.10.1656 — `data-budget` (internal/cosre/uistream; Go chat döngüsü bütçesi). */
 export interface CosreStepBudget {
   executed: number;

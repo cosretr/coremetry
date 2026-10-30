@@ -11,7 +11,7 @@
 // uiStreamFixture.test.ts (paylaşılan testdata/cosre/*.sse) kırmızıya döner;
 // fixture yenilendiği commit'te bu dosya da güncellenir.
 
-import type { CosreScope, CosreScopeReason, CosreStop, CosreStopReason, CosreToolResult, CosreToolResultKind } from '@/lib/types';
+import type { CosreApproval, CosreScope, CosreScopeReason, CosreStop, CosreStopReason, CosreToolResult, CosreToolResultKind } from '@/lib/types';
 
 export const PROTOCOL_VERSION = 'v1';
 export const PROTOCOL_HEADER = 'x-vercel-ai-ui-message-stream';
@@ -92,6 +92,17 @@ export function parseDataToolResult(p: { type: string; id?: unknown; data?: unkn
   const url = d.page_url;
   if (typeof url !== 'string' || !url.startsWith('/') || url.startsWith('//') || url.startsWith('/\\')) delete out.page_url;
   return out;
+}
+
+/** agent-core S5 — data-approval → CosreApproval; biçimsiz id/toolCallId,
+ *  boş jeton ya da sayı olmayan expiresAt null (kart çizilmez). */
+export function parseDataApproval(p: { type: string; id?: unknown; data?: unknown }): CosreApproval | null {
+  if (p.type !== 'data-approval' || !isRecord(p.data)) return null;
+  const { toolCallId, tool, token, argsDigest, expiresAt, exchangeId } = p.data;
+  const exp = finiteNum(expiresAt);
+  if (typeof toolCallId !== 'string' || !TOOL_RESULT_ID_RE.test(toolCallId) || typeof tool !== 'string' || !tool
+    || typeof token !== 'string' || !token || typeof argsDigest !== 'string' || exp === undefined) return null;
+  return { toolCallId, tool, token, argsDigest, expiresAt: exp, ...(typeof exchangeId === 'string' && exchangeId ? { exchangeId } : {}) };
 }
 
 /** data-stop → CosreStop; bilinmeyen neden ya da sayı olmayan alan null. */

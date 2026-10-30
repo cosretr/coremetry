@@ -45,7 +45,13 @@ import (
 // büyüyor; numarasız bir çip diziyi kaydırıp sonraki kanıtı yanlış
 // çipe bindirirdi.
 func withStepIDs(emit func(string, any)) func(string, any) {
-	n := 0
+	return withStepIDsFrom(emit, 0)
+}
+
+// withStepIDsFrom — agent-core S5: sayaç `base`ten başlar (onay devamı aynı
+// v2 asistan mesajına yazar; kimlikler önceki akışınkilerle çakışmasın).
+func withStepIDsFrom(emit func(string, any), base int) func(string, any) {
+	n := base
 	return func(kind string, payload any) {
 		if kind == "step" {
 			n++

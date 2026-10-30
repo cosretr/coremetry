@@ -34,7 +34,13 @@ var update = flag.Bool("update", false, "rewrite testdata/cosre/*.sse")
 // resetlerin her biri yalnız kendi segmentini hedefler.
 //
 // ui-stream-v1-approval (agent-core S4) — onay bekleyen araç: s3 girdisi var,
-// çıktısı yok; eşli data-approval{toolCallId:s3}; finish 'tool-calls'.
+// çıktısı yok; eşli data-approval{toolCallId:s3, …, exchangeId}; finish
+// 'tool-calls'.
+//
+// ui-stream-v1-approval-resume (agent-core S5) — onayın DEVAM akışı: önceki
+// akışın s3'üne (eşli step'i bu akışta yok) tool-output-available, sayaç
+// tabanın üstünden (s4), cevap, finish 'stop'. İstemci aynı asistan mesajına
+// yazar (frontend useCosreChat.test.tsx gerçek istemciyle sınar).
 //
 // ui-stream-v1-stops (araç seti dilim 1, tools-audit §10 G2) — data-stop
 // sözlüğü: StopReasons'ın her nedeni için bir satır (gerçek akışta tek
@@ -45,7 +51,7 @@ var update = flag.Bool("update", false, "rewrite testdata/cosre/*.sse")
 // ui-stream-v1-scope (araç seti dilim 2, tools-audit §3 Q1/Q2) — data-scope
 // sözlüğü: ScopeReasons'ın her nedeni için bir satır (gerçek akışta tek
 // data-scope olur). Ana fixture kapsamlı (team) satırı akışın başında taşır.
-var goldenFixtures = []string{"ui-stream-v1", "ui-stream-v1-error", "ui-stream-v1-closed", "ui-stream-v1-reset", "ui-stream-v1-reset2", "ui-stream-v1-approval", "ui-stream-v1-stops", "ui-stream-v1-scope"}
+var goldenFixtures = []string{"ui-stream-v1", "ui-stream-v1-error", "ui-stream-v1-closed", "ui-stream-v1-reset", "ui-stream-v1-reset2", "ui-stream-v1-approval", "ui-stream-v1-approval-resume", "ui-stream-v1-stops", "ui-stream-v1-scope"}
 
 func fixtureDir() string { return filepath.Join("..", "..", "..", "testdata", "cosre") }
 

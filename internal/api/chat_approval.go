@@ -82,6 +82,12 @@ type approvalAnswer struct {
 	Args     json.RawMessage `json:"args"`
 	Token    string          `json:"token"`
 	Approved bool            `json:"approved"`
+	// ExchangeID — S5: onayı isteyen alışveriş (data-approval exchangeId);
+	// jetonun `x` alanıyla eşit olmalı.
+	ExchangeID string `json:"exchangeId,omitempty"`
+	// StepBase — S5: istemcinin asistan mesajındaki en büyük s<i>; devam
+	// akışının adım kimlikleri bunun üstünden sayar (aynı mesajda çakışmasın).
+	StepBase int `json:"stepBase,omitempty"`
 }
 
 // approvalCaller — devam isteğini yapan (rol İSTEK anında yeniden okunur).

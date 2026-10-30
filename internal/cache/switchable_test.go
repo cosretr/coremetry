@@ -133,3 +133,15 @@ func TestReprobeSwapsOnceThenStops(t *testing.T) {
 		t.Fatalf("onRecovered fired %d times, want exactly 1", recovered.Load())
 	}
 }
+
+// agent-core S5 — onay jetonunun tek-kullanımı Redis ister: no-op (sarılı ya
+// da çıplak) ve nil IsNoop; no-op olmayan uygulama değil.
+func TestIsNoop(t *testing.T) {
+	n, _ := NewNoop()
+	if !IsNoop(n) || !IsNoop(NewSwitchableCache(n)) || !IsNoop(nil) {
+		t.Fatal("no-op önbellek IsNoop olmalı")
+	}
+	if IsNoop(stubCache{}) || IsNoop(NewSwitchableCache(stubCache{})) {
+		t.Fatal("no-op olmayan önbellek IsNoop olmamalı")
+	}
+}

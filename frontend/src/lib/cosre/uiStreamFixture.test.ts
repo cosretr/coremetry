@@ -8,12 +8,12 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import {
   DATA_PART_NAMES, MESSAGE_ID_RE, SCOPE_REASONS, STOP_REASONS, TOOL_RESULT_KINDS, TOOL_RESULT_MAX_BYTES, UI_STREAM_PART_TYPES,
-  dataPartName, isDataPart, parseDataReset, parseDataScope, parseDataStop, parseDataToolResult,
+  dataPartName, isDataPart, parseDataApproval, parseDataReset, parseDataScope, parseDataStop, parseDataToolResult,
 } from './protocol';
 import { parseUIStreamSSE } from './uiStreamFixture';
 
 const ROOT = resolve(__dirname, '../../../..');
-const FIXTURES = ['ui-stream-v1', 'ui-stream-v1-error', 'ui-stream-v1-closed', 'ui-stream-v1-reset', 'ui-stream-v1-reset2', 'ui-stream-v1-approval', 'ui-stream-v1-stops', 'ui-stream-v1-scope'];
+const FIXTURES = ['ui-stream-v1', 'ui-stream-v1-error', 'ui-stream-v1-closed', 'ui-stream-v1-reset', 'ui-stream-v1-reset2', 'ui-stream-v1-approval', 'ui-stream-v1-approval-resume', 'ui-stream-v1-stops', 'ui-stream-v1-scope'];
 const PART_TYPES = new Set<string>(UI_STREAM_PART_TYPES);
 const DATA_NAMES = new Set<string>(DATA_PART_NAMES);
 
@@ -110,6 +110,8 @@ describe.each(FIXTURES)('%s.sse', name => {
 
   it('araç çıktısı bilinen bir araç girdisine bağlanır', () => {
     const inputs = new Set(parts.filter(p => p.type === 'tool-input-available').map(p => String(p.toolCallId)));
+    // agent-core S5 — onay devamı önceki akışın s3 girdisine yazar (aynı asistan mesajı).
+    if (name === 'ui-stream-v1-approval-resume') inputs.add('s3');
     for (const p of parts.filter(p => p.type === 'tool-output-available')) {
       expect(inputs.has(String(p.toolCallId))).toBe(true);
     }
@@ -174,12 +176,33 @@ it('approval fixture: onay bekleyen araç çıktısız, eşli data-approval, fin
   expect(approvals).toHaveLength(1);
   const data = approvals[0].data as Record<string, unknown>;
   expect(approvals[0].id).toBe('a3');
-  expect(Object.keys(data).sort()).toEqual(['argsDigest', 'expiresAt', 'token', 'tool', 'toolCallId']);
+  expect(Object.keys(data).sort()).toEqual(['argsDigest', 'exchangeId', 'expiresAt', 'token', 'tool', 'toolCallId']);
   expect(data.toolCallId).toBe('s3');
   expect(parts.some(p => p.type === 'tool-input-available' && p.toolCallId === 's3')).toBe(true);
   expect(parts.some(p => p.type === 'tool-output-available' && p.toolCallId === 's3')).toBe(false);
   expect(parts.some(p => p.type === 'tool-output-available' && p.toolCallId === 's2')).toBe(true);
   expect(parts.at(-1)).toEqual({ type: 'finish', finishReason: 'tool-calls' });
+  expect(parseDataApproval(approvals[0])).toMatchObject({ toolCallId: 's3', tool: 'add_problem_note', exchangeId: 'x-approval-1' });
+});
+
+// agent-core S5 — onayın devam akışı: önceki akışın s3'üne çıktı (eşli girdi bu
+// akışta yok), sayaç tabanın üstünden (s4), yeni onay yok, finish 'stop'.
+it('approval-resume fixture: s3 çıktısı, kimlikler tabanın üstünde, finish stop', () => {
+  const { parts } = parseUIStreamSSE(readFileSync(join(ROOT, 'testdata', 'cosre', 'ui-stream-v1-approval-resume.sse'), 'utf8'));
+  expect(parts.some(p => p.type === 'tool-output-available' && p.toolCallId === 's3')).toBe(true);
+  expect(parts.some(p => p.type === 'tool-input-available')).toBe(false);
+  expect(parts.some(p => p.type === 'data-approval')).toBe(false);
+  expect(parts.filter(p => p.type === 'data-step').map(p => p.id)).toEqual(['s4']);
+  expect(parts.at(-1)).toEqual({ type: 'finish', finishReason: 'stop' });
+});
+
+it('parseDataApproval: biçimsiz id, boş jeton, sayı olmayan expiresAt reddedilir', () => {
+  const ok = { toolCallId: 's3', tool: 't', token: 'k', argsDigest: 'd', expiresAt: 1 };
+  expect(parseDataApproval({ type: 'data-approval', data: ok })).toEqual(ok);
+  expect(parseDataApproval({ type: 'data-approval', data: { ...ok, toolCallId: 'x3' } })).toBeNull();
+  expect(parseDataApproval({ type: 'data-approval', data: { ...ok, token: '' } })).toBeNull();
+  expect(parseDataApproval({ type: 'data-approval', data: { ...ok, expiresAt: '1' } })).toBeNull();
+  expect(parseDataApproval({ type: 'data-step', data: ok })).toBeNull();
 });
 
 // CoSRE v2 araç seti dilim 1 (tools-audit §10 G1/G2) — data-tool-result her
@@ -188,7 +211,7 @@ it('approval fixture: onay bekleyen araç çıktısız, eşli data-approval, fin
 describe('data-tool-result + data-stop (araç seti dilim 1)', () => {
   const read = (n: string) => parseUIStreamSSE(readFileSync(join(ROOT, 'testdata', 'cosre', `${n}.sse`), 'utf8')).parts;
 
-  it.each(['ui-stream-v1', 'ui-stream-v1-error', 'ui-stream-v1-approval'])('%s: her tool-output-available eşli data-tool-result taşır, ≤ 2 KB', n => {
+  it.each(['ui-stream-v1', 'ui-stream-v1-error', 'ui-stream-v1-approval', 'ui-stream-v1-approval-resume'])('%s: her tool-output-available eşli data-tool-result taşır, ≤ 2 KB', n => {
     const parts = read(n);
     const outs = parts.filter(p => p.type === 'tool-output-available').map(p => String(p.toolCallId));
     const results = parts.filter(p => p.type === 'data-tool-result');

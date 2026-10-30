@@ -118,6 +118,39 @@ describe('createCosreChat × paylaşılan fixture', () => {
     expect(f.calls).toHaveLength(1);
   });
 
+  // agent-core S5 — onay kartı cevabı gerçek istemciyle: araç parçasına
+  // {approved} yazılır, AYNI sohbet approvals[] ile gider; devam akışının yeni
+  // start.messageId'si mevcut asistan mesajına çevrilir (tek mesaj, s3 sunucu
+  // sonucuyla output-available, cevap metni aynı mesajda).
+  it('answerApproval: approvals[] gövdesi, devam aynı asistan mesajına yazar', async () => {
+    const OTHER = '01M62F9NZZZZZZZZZZZZZZZZZZ';
+    const first = sseFetch(sse('ui-stream-v1-approval'));
+    const second = sseFetch(sse('ui-stream-v1-approval-resume').replace(MID, OTHER));
+    let n = 0;
+    const fetch = ((u: RequestInfo | URL, i?: RequestInit) => (n++ === 0 ? first : second).fetch(u, i)) as typeof globalThis.fetch;
+    const { chat, answerApproval } = createCosreChat({ fetch });
+    await chat.sendMessage({ text: 'notu ekle' });
+    const answer = { stepId: 's3', tool: 'add_problem_note', args: { problemId: 'p-1', text: 'DB havuzu doldu' },
+      token: 'eyJrIjoiY29zcmUtYXBwcm92YWwifQ.c2ln', approved: true, exchangeId: 'x-approval-1', stepBase: 3 };
+    await answerApproval(answer, { service: 'orders-api' });
+    expect(second.calls).toHaveLength(1);
+    // Boş asistan metni sunucuda süzülür (sanitizeClientHistory); önsöz varsa sentez turuna girer.
+    expect(second.calls[0].body).toEqual({
+      messages: [{ role: 'user', text: 'notu ekle' }, { role: 'assistant', text: '' }],
+      context: { service: 'orders-api' }, approvals: [answer],
+    });
+    expect(chat.messages.map(m => m.role)).toEqual(['user', 'assistant']);
+    const last = chat.messages.at(-1)!;
+    expect(last.id).toBe(MID);
+    const parts = last.parts as Array<{ type: string; toolCallId?: string; state?: string; output?: Record<string, unknown> }>;
+    const s3 = parts.filter(p => p.type === 'dynamic-tool' && p.toolCallId === 's3');
+    expect(s3).toHaveLength(1);
+    expect(s3[0].state).toBe('output-available');
+    expect(s3[0].output).toMatchObject({ ok: true });
+    expect(texts(last).at(-1)).toBe('Not probleme eklendi.');
+    expect(chat.status).toBe('ready');
+  });
+
   it('ui-stream-v1 (tam senaryo): exchangeId metadata\'dan, codeRead, yalnız t3', async () => {
     const persisted: ChatMessage[][] = [];
     const { chat } = createCosreChat({ fetch: sseFetch(sse('ui-stream-v1')).fetch, onPersist: m => persisted.push(m) });

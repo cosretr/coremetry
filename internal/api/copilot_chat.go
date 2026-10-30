@@ -185,6 +185,10 @@ type chatRequest struct {
 		// `subject` (`?ai=` kodeği). Yokken her yol bayt bayt eski.
 		ExplainAsk *chatExplainAsk `json:"explainAsk,omitempty"`
 	} `json:"context,omitempty"`
+	// Approvals — agent-core S5 (chat_approval_resume.go): v2 onay kartının
+	// cevabı; dolu istek onay bekleyen alışverişin DEVAMIDIR (kademeler atlanır,
+	// döngü jetonun bütçesiyle sürer). v1 handler'ı okumaz.
+	Approvals []approvalAnswer `json:"approvals,omitempty"`
 }
 
 // copilotChatWith — sohbet gövdesi (v1 ve v2 taşıma ortak; chat_sink.go).
@@ -260,6 +264,14 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// birden çok yol adım yayınlayabiliyor; ayrı sayaçlar aynı `i`yi iki kez
 	// üretir ve frontend kanıtı yanlış çipe yapıştırırdı.
 	emit := withStepIDs(em.Emit)
+	// agent-core S5 — onay devamı (yalnız v2): kimlikler aynı asistan mesajında
+	// önceki akışın üstünden sayar; kademeler aşağıda atlanır.
+	isV2 := isV2Sink(em)
+	apCont := newChatApprovalCont(isV2, req.Approvals)
+	if apCont.on {
+		emit = withStepIDsFrom(em.Emit, apCont.base)
+		req.Context.ExplainAsk = nil
+	}
 	var blockSeq blocks.Sequencer // v0.10.557 — tek sıralayıcı (chart/link/action + guided evidence)
 	// v0.10.1444 — sıralayıcının ürettiği `block` çerçeveleri → arşiv zarfı.
 	blockCap := &turnBlockCapture{}
@@ -437,7 +449,13 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// (doğrulanmış @-kapsam ctx'te → kuralın varsayılan kapsamı), wiki / guided /
 	// niyet / döngüden önce. Hiçbir şey kaydetmez: onay kartı (action
 	// cosre_rule) tık bekler. Eşleşme yoksa akış bayt bayt eski.
-	if handled, mok := s.chatMemoryTier(ctx, emit, &blockSeq, memoryTierReq{Msgs: req.Messages, CtxService: req.Context.Service}); handled {
+	// agent-core S5 — onay devamı kademeleri atlar (asıl tur döngüye düşmüştü);
+	// yalnız yapısal kapsam kademesi (yukarıda) aynen koşar.
+	memHandled, mok := false, false
+	if !apCont.on {
+		memHandled, mok = s.chatMemoryTier(ctx, emit, &blockSeq, memoryTierReq{Msgs: req.Messages, CtxService: req.Context.Service})
+	}
+	if memHandled {
 		cspan.tier("memory", mok)
 		emit("done", map[string]bool{"ok": mok})
 		return
@@ -447,7 +465,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// CoSRE bir soru sorduysa ("Coremetry verisinde mi, wikide mi?") bu turun
 	// metni cevap olarak yorumlanır; özgün soru seçilen kaynakta yeniden koşar.
 	// Bekleyen soru yoksa / cevap tanınmazsa ctx ve mesajlar AYNEN.
-	if evm == nil {
+	if evm == nil && !apCont.on {
 		cr := s.chatClarifyReplyTier(ctx, emit, req.Messages, cst, chatLocationNamed(req.Context.Tz, req.Context.TzOffsetMin))
 		ctx, req.Messages = cr.ctx, cr.msgs
 		if cr.handled {
@@ -483,7 +501,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// kanıt varsa en güçlüsü cevaplar, diğerleri alternatif çipi olur. Tek kaynak
 	// ya da kanıt yoksa aşağıdaki zincir AYNEN. /telemetri komutu tablo / wiki
 	// kademelerini atlatır.
-	skipDocs := forcedChatSource(ctx) == srcTelemetry
+	skipDocs := forcedChatSource(ctx) == srcTelemetry || apCont.on // S5 — onay devamı doküman kademelerini atlar
 	// v0.10.1576 (operator-reported) — çıplak takım / servis adı yüklü tabloda da
 	// eşleşiyorsa doküman kademeleri kendiliğinden cevaplamaz: düz metin soru
 	// (chat_clarify_entity.go). Çıplak varlık değil / eşleşme yok → akış aynen.
@@ -552,7 +570,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	}
 	if opPre == nil && !ct.On { // v0.10.1461 — kod turu guided'ı atlar (chat_code_turn.go)
 		handled, gok := false, false
-		if !evm.skipGuided() { // v0.10.1476 — değerlendirme döngü sondası da atlar (chat_eval_mode.go)
+		if !evm.skipGuided() && !apCont.on { // v0.10.1476 — değerlendirme döngü sondası da atlar (chat_eval_mode.go); S5 onay devamı da
 			handled, gok = s.copilotChatGuided(ctx, emit, req.Messages, req.Context.Service, req.Context.Operation, req.Context.Explain, req.Context.RangeS, req.Context.Trace, req.Context.Env, anchorTo, req.Context.TzOffsetMin, req.Context.Tz)
 		}
 		if handled {
@@ -594,50 +612,52 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	}
 	traceSubj, isTraceFollowUp := drawerTraceFollowUp(req.Context.Explain, req.Context.Subject, pageTraceID)
 	if !isTraceFollowUp && !ct.On && opPre == nil { // v0.10.1461 — kod turu da orta kademeleri atlar
-		// v0.10.1571 — kaynak sorusu (chat_clarify.go): telemetri şekilli soru
-		// guided'a oturmadı ve wiki gerçek bir alternatif → yalnız "Coremetry
-		// verisinde mi, wikide mi?" sorulur (düz metin, LLM'siz). Kapı kapalıysa
-		// zincir bayt bayt eski.
-		if evm == nil && s.chatSourceAskTier(ctx, emit, req.Messages, wikiTC, cst) {
-			cspan.tier("clarify", true)
-			emit("done", map[string]bool{"ok": true})
-			return
-		}
-		// v0.10.1053 — exception takibinin tek araçlı kod döngüsü bu alışverişin
-		// audit'ini, span'ını, tavanını kullanır (chat_exception_followup.go).
-		drawerEnv := drawerLoopEnv{r: r, span: cspan, exchangeMax: exchangeMax, started: chatT0}
-		if handled, dok := s.copilotChatDrawer(ctx, emit, req.Messages, req.Context.Explain, req.Context.Subject, req.Context.Service, chatLocationNamed(req.Context.Tz, req.Context.TzOffsetMin), drawerEnv); handled {
-			cspan.tier("drawer", dok)
-			emit("done", map[string]bool{"ok": dok})
-			return
-		}
-
-		// v0.8.438 — doküman RAG yolu: guided telemetri router'ı
-		// eşleşmediyse ve soru yüklü dokümanlara yeterince benziyorsa
-		// (skor tabanı) tek narration çağrısıyla kaynak atıflı cevap.
-		// Sıra bilinçli: telemetri şekilleri > dokümanlar > serbest döngü.
-		if !evm.skipGuided() { // v0.10.1476 — döngü sondası doküman RAG'ını da atlar
-			if handled, rok := s.ragChatAnswer(ctx, emit, req.Messages, req.Context.Service); handled {
-				cspan.tier("rag", rok)
-				emit("done", map[string]bool{"ok": rok})
+		if !apCont.on { // agent-core S5 — onay devamı orta kademeleri de atlar
+			// v0.10.1571 — kaynak sorusu (chat_clarify.go): telemetri şekilli soru
+			// guided'a oturmadı ve wiki gerçek bir alternatif → yalnız "Coremetry
+			// verisinde mi, wikide mi?" sorulur (düz metin, LLM'siz). Kapı kapalıysa
+			// zincir bayt bayt eski.
+			if evm == nil && s.chatSourceAskTier(ctx, emit, req.Messages, wikiTC, cst) {
+				cspan.tier("clarify", true)
+				emit("done", map[string]bool{"ok": true})
 				return
 			}
-		}
-
-		// v0.10.172 — kademe 3.5: LLM niyet sınıflandırıcısı (copilot_intent.go).
-		// Deterministik router (kademe 1) ve RAG eşleşmeyen serbest soruyu
-		// küçük model tek katı-JSON çağrısıyla kılavuz niyetine eşler; eşlerse
-		// cevap AYNI prefetch→anlatım yolundan (runGuidedRoute). Eşlemezse
-		// ayara göre öneri çipleri (on_no_loop, prod varsayılanı) ya da aşağıdaki
-		// serbest döngü (on). Sınıflandırıcı hatası sessizce düşer — döngü sürer.
-		// v0.10.1321 (operatör) — ajan kipi evalset vakasında niyet kademesi
-		// kapalı (chatEvalMode.SkipIntent): vaka araç döngüsünü ölçer. nil
-		// işarette skipIntent false → üretim aynen.
-		if !evm.skipIntent() {
-			if handled, iok := s.copilotChatIntent(ctx, emit, req.Messages, req.Context.Service, req.Context.Operation, req.Context.Explain, req.Context.RangeS, req.Context.Env, anchorTo, req.Context.TzOffsetMin, req.Context.Tz); handled {
-				cspan.tier("intent", iok)
-				emit("done", map[string]bool{"ok": iok})
+			// v0.10.1053 — exception takibinin tek araçlı kod döngüsü bu alışverişin
+			// audit'ini, span'ını, tavanını kullanır (chat_exception_followup.go).
+			drawerEnv := drawerLoopEnv{r: r, span: cspan, exchangeMax: exchangeMax, started: chatT0}
+			if handled, dok := s.copilotChatDrawer(ctx, emit, req.Messages, req.Context.Explain, req.Context.Subject, req.Context.Service, chatLocationNamed(req.Context.Tz, req.Context.TzOffsetMin), drawerEnv); handled {
+				cspan.tier("drawer", dok)
+				emit("done", map[string]bool{"ok": dok})
 				return
+			}
+
+			// v0.8.438 — doküman RAG yolu: guided telemetri router'ı
+			// eşleşmediyse ve soru yüklü dokümanlara yeterince benziyorsa
+			// (skor tabanı) tek narration çağrısıyla kaynak atıflı cevap.
+			// Sıra bilinçli: telemetri şekilleri > dokümanlar > serbest döngü.
+			if !evm.skipGuided() { // v0.10.1476 — döngü sondası doküman RAG'ını da atlar
+				if handled, rok := s.ragChatAnswer(ctx, emit, req.Messages, req.Context.Service); handled {
+					cspan.tier("rag", rok)
+					emit("done", map[string]bool{"ok": rok})
+					return
+				}
+			}
+
+			// v0.10.172 — kademe 3.5: LLM niyet sınıflandırıcısı (copilot_intent.go).
+			// Deterministik router (kademe 1) ve RAG eşleşmeyen serbest soruyu
+			// küçük model tek katı-JSON çağrısıyla kılavuz niyetine eşler; eşlerse
+			// cevap AYNI prefetch→anlatım yolundan (runGuidedRoute). Eşlemezse
+			// ayara göre öneri çipleri (on_no_loop, prod varsayılanı) ya da aşağıdaki
+			// serbest döngü (on). Sınıflandırıcı hatası sessizce düşer — döngü sürer.
+			// v0.10.1321 (operatör) — ajan kipi evalset vakasında niyet kademesi
+			// kapalı (chatEvalMode.SkipIntent): vaka araç döngüsünü ölçer. nil
+			// işarette skipIntent false → üretim aynen.
+			if !evm.skipIntent() {
+				if handled, iok := s.copilotChatIntent(ctx, emit, req.Messages, req.Context.Service, req.Context.Operation, req.Context.Explain, req.Context.RangeS, req.Context.Env, anchorTo, req.Context.TzOffsetMin, req.Context.Tz); handled {
+					cspan.tier("intent", iok)
+					emit("done", map[string]bool{"ok": iok})
+					return
+				}
 			}
 		}
 	}
@@ -763,6 +783,11 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			}
 		}
 	}
+	// agent-core S5 — onay-kapılı araçlar (chat_approval_resume.go): yalnız v2,
+	// ayar ai.toolApproval açık + listede, rol yeter, problem sayfası. Ayar
+	// kapalıyken nil → katalog bayt aynı.
+	apTools, apGated, apCfg := s.chatApprovalCatalog(r, pageCtx, isV2, evm != nil, isTraceFollowUp, role)
+	tools = append(tools, apTools...)
 	if evm != nil && evm.OnCatalog != nil { // v0.10.1476 — sunulan katalog (değerlendirme izi)
 		names := make([]string, 0, len(tools)+len(extTools))
 		for _, t := range tools {
@@ -1056,6 +1081,12 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	if evm != nil {
 		execHooks.Audit = nil // v0.10.1316 (D4) — koşu düzeyi audit ai.evalset.run kalır
 	}
+	// agent-core S5 — kapılı araç yalnız onaylanmış devam çağrısında yürür;
+	// kapılı araç yoksa kanca nil (bugünkü yol).
+	apPre := &approvalPreApproved{}
+	if len(apGated) > 0 {
+		execHooks.Approve = approvalHook(apGated, apPre)
+	}
 	// v0.10.1456 (C1) — argüman şema doğrulaması (ai_toolarg_settings.go): kip
 	// off → nil, Executor bugünkü yol; warn → çağrı aynen koşar, modelin gördüğü
 	// değişmez (log + metrik + span özniteliği + ai_calls notu).
@@ -1124,7 +1155,26 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	}
 	// araç seti dilim 1 (chat_stop_event.go) — her break bir çıkış nedeni yazar.
 	exitReason, exitRounds := stopNone, 0
+	// agent-core S5 — onay devamı: karar + (onaylıysa) tek yürütme + konuşma
+	// çifti; döngü jetonun taşıdığı kalan bütçeyle ve turdan sürer.
+	apStartRound := 0
+	if apCont.on {
+		rr := s.resumeApprovalTurn(ctx, r, emit, exec, apPre, apCont, resumeApprovalIn{
+			Answer: apCont.ans, Who: approvalCaller{UserID: uid, Role: role}, Cfg: apCfg, Offered: apGated, Now: time.Now(),
+		}, conv, maxCalls, maxRounds)
+		conv, callsLeft, apStartRound = rr.conv, rr.callsLeft, rr.startRound
+		if rr.executed {
+			executedN++
+		}
+		if rr.skipped {
+			skippedN++
+		}
+	}
+	var apPending *pendingApproval // bu turda onay isteyen çağrı (tur sonunda jeton basılır)
 	for round := 0; round < maxRounds; round++ {
+		if round < apStartRound {
+			continue // S5 — devam önceki turların bütçesini harcamış sayılır
+		}
 		exitRounds = round + 1
 		tctx, endTurn := cspan.turn(ctx, round, overflowRetried) // v0.10.425 — ai.chat.turn
 		// v0.10.1273 — final turun metni canlı akar (chat_step_phase.go chatLoopTurn).
@@ -1217,6 +1267,16 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 		callsLeft -= len(run)
 		cancelled := false // v0.10.948 — tur ortasında ctx bitti mi
 		for _, tc := range run {
+			if apPending != nil {
+				// agent-core S5 — onay bekleyen çağrıdan sonrakiler yürütülmez
+				// (call_cap gibi); hakları jetonun bütçesine geri döner.
+				n := emitStepChip(emit, tc.Name, string(tc.Input))
+				emit("step-result", skippedStepResult(n, tc.Name, chatCallCapContent, skipReasonCallCap))
+				results = append(results, copilot.ToolResult{CallID: tc.ID, Name: tc.Name, IsError: true, Content: chatCallCapContent})
+				skippedN++
+				apPending.refund++
+				continue
+			}
 			// v0.9.1181 (Faz 4.3) — çipin kimliği. `step` tool ÇALIŞMADAN
 			// önce çıkar (ilerleme geri bildirimi), sonuç ise çalıştıktan
 			// sonra ayrı bir olayla; ikisini bu sayı eşler. Tur içindeki
@@ -1262,6 +1322,13 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			oc := exec.Call(ctx, tc.Name, cargs)
 			if evm != nil && evm.OnTool != nil {
 				evm.OnTool(tc.Name, cargs, oc) // v0.10.1316
+			}
+			if oc.Kind == agenttools.KindApproval {
+				// agent-core S5 — operatör onayı: jeton tur sonunda (emitApprovalAsk).
+				apPending = &pendingApproval{stepN: stepN, tool: tc.Name, args: oc.Args, resultIdx: len(results)}
+				results = append(results, copilot.ToolResult{CallID: tc.ID, Name: tc.Name, IsError: true, Content: oc.Content})
+				skippedN++
+				continue
 			}
 			if !oc.Executed {
 				// bilinmeyen ad / tekrar muhafızı / kapsam reddi / iptal:
@@ -1445,12 +1512,25 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			}
 			skippedN += len(over)
 		}
+		// agent-core S5 — onay isteği tur sonunda: jeton kalan bütçeyi (onaydan
+		// sonra yürütülmeyenlerin hakkı dahil) taşır. Basılamazsa çağrı hata
+		// olarak raporlanır ve döngü bugünkü gibi sürer.
+		apAsked := false
+		if apPending != nil {
+			if !cancelled && ctx.Err() == nil {
+				content, ok := s.emitApprovalAsk(r, emit, apPending, exchangeID, uid, apCfg, callsLeft, round+1)
+				results[apPending.resultIdx].Content = content
+				apAsked = ok
+			}
+			apPending = nil
+		}
 		// agent-core S1 — durma kararı adlandırılmış koşullardan (chat_stop.go);
 		// tek değerlendirme, iki dal: iptal → model çağrılmaz, diğer neden → tavan turu.
 		reason := loopStop(loopState{
 			Round: round, MaxRounds: maxRounds, CallsLeft: callsLeft, MaxCalls: maxCalls,
 			Executed: executedN, Skipped: skippedN, TokensIn: totalIn, TokensOut: totalOut,
 			LastCalls: toolCallNames(turn.ToolCalls), Cancelled: cancelled, CtxErr: ctx.Err(),
+			ApprovalPending: apAsked,
 		})
 		if reason == stopCancelled {
 			// v0.10.948 — İPTAL: kalan çağrılar yürütülmedi (skipped), model

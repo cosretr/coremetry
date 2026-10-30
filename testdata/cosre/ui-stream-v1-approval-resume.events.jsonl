@@ -1,0 +1,6 @@
+{"kind":"step-result","payload":{"i":3,"tool":"add_problem_note","ok":true,"preview":"{\"id\":\"pn-1\",\"ok\":true,\"problemId\":\"p-1\"}","truncated":false,"bytes":40,"durationMs":4}}
+{"kind":"step","payload":{"i":4,"label":"araştırma bütçesi: 6 araç · 5 tur","budget":{"maxCalls":6,"maxRounds":5,"slotsUsed":2,"executed":1,"skipped":0,"roundsUsed":1,"exhausted":false}}}
+{"kind":"delta","payload":{"text":"Not probleme eklendi."}}
+{"kind":"answer","payload":{"text":"Not probleme eklendi.","exchangeId":"x-approval-2"}}
+{"kind":"stop","payload":{"reason":"stop","calls":2,"rounds":2,"elapsed_ms":620}}
+{"kind":"done","payload":{"ok":true}}

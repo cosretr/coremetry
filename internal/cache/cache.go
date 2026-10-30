@@ -105,6 +105,20 @@ type noopLock struct{}
 // grants the lock. Used when Redis is not configured.
 func NewNoop() (Cache, Lock) { return noopCache{}, noopLock{} }
 
+// IsNoop — c Redis'siz no-op önbellek mi (SwitchableCache içi dahil; nil da
+// no-op sayılır). agent-core S5: no-op SETNX her zaman kazanır; onay jetonunun
+// tek-kullanımı (api/chat_approval.go claimApprovalOnce) Redis'siz kurulumda RET.
+func IsNoop(c Cache) bool {
+	if sw, ok := c.(*SwitchableCache); ok && sw != nil {
+		c = sw.Current()
+	}
+	if c == nil {
+		return true
+	}
+	_, ok := c.(noopCache)
+	return ok
+}
+
 func (noopCache) Get(context.Context, string) ([]byte, bool, error)        { return nil, false, nil }
 func (noopCache) Set(context.Context, string, []byte, time.Duration) error { return nil }
 func (noopCache) SetNX(context.Context, string, []byte, time.Duration) (bool, error) {

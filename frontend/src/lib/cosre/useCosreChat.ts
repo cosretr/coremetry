@@ -14,8 +14,8 @@
 //              `message` argümanı SDK'nın iç kopyası (taslak dahil) — kullanılmaz.
 import { useEffect, useRef, useState } from 'react';
 import { Chat, useChat } from '@ai-sdk/react';
-import { DefaultChatTransport, type ChatTransport } from 'ai';
-import type { ChatMessage } from '@/lib/types';
+import { DefaultChatTransport, type ChatTransport, type UIMessageChunk } from 'ai';
+import type { ChatMessage, CosreApprovalAnswer } from '@/lib/types';
 import { parseDataReset } from './protocol';
 import { createTextIdMap } from './textIdMap';
 import { applyResets, markFinished, recordReset, visibleParts, type CosreUIMessage, type ResetSet } from './resetReducer';
@@ -35,6 +35,25 @@ export interface CosreChatCore {
   chat: Chat<CosreUIMessage>;
   /** Render yardımcısı: akış sırasında reset edilen text parçaları gizli. */
   visibleParts: (m: CosreUIMessage) => CosreUIMessage['parts'];
+  /** agent-core S5 — onay kartı cevabı: araç parçasına {approved} yazılır ve
+   *  aynı sohbet approvals[] ile yeniden gönderilir (sunucu kararı verir;
+   *  istemci hiçbir şeyi kendisi yürütmez). `context` normal gönderimle aynı. */
+  answerApproval: (a: CosreApprovalAnswer, context?: unknown) => Promise<void>;
+}
+
+/** Gövde onay devamı mı (approvals[] dolu). */
+function isResume(body: object | undefined): boolean {
+  const a = (body as { approvals?: unknown } | undefined)?.approvals;
+  return Array.isArray(a) && a.length > 0;
+}
+
+/** `start.messageId` → id (yalnız devam akışı). */
+function retargetStart(s: ReadableStream<UIMessageChunk>, id: string): ReadableStream<UIMessageChunk> {
+  return s.pipeThrough(new TransformStream<UIMessageChunk, UIMessageChunk>({
+    transform(chunk, ctl) {
+      ctl.enqueue(chunk.type === 'start' ? { ...chunk, messageId: id } : chunk);
+    },
+  }));
 }
 
 export function createCosreChat(opts: CosreChatOptions = {}): CosreChatCore {
@@ -46,12 +65,25 @@ export function createCosreChat(opts: CosreChatOptions = {}): CosreChatCore {
     // v0.10.1650 (2b B2) — `context`: sendMessage(…, { body: { context } }) ile
     // gelen v1-eşdeğeri bağlam (components/cosre/conversation/requestContext);
     // yokken gövde 2a'daki gibi yalnız `messages`.
+    // agent-core S5 — `approvals`: onay kartının cevabı (answerApproval); dolu
+    // gövde onay bekleyen alışverişin devamıdır.
     prepareSendMessagesRequest: ({ messages, body }) => ({
-      body: { messages: toRequestMessages(messages), ...(body?.context ? { context: body.context } : {}) },
+      body: {
+        messages: toRequestMessages(messages),
+        ...(body?.context ? { context: body.context } : {}),
+        ...(Array.isArray(body?.approvals) && body.approvals.length ? { approvals: body.approvals } : {}),
+      },
     }),
   });
   const transport: ChatTransport<CosreUIMessage> = {
-    sendMessages: async o => map.wrap(await inner.sendMessages(o)),
+    // agent-core S5 — devam akışı AYNI asistan mesajına yazar: sunucunun yeni
+    // `start.messageId`si mesajın kimliğine çevrilir (yoksa SDK ikinci bir
+    // mesaj iterdi ve araç parçaları çiftlenirdi).
+    sendMessages: async o => {
+      const s = await inner.sendMessages(o);
+      const last = o.messages.at(-1);
+      return map.wrap(isResume(o.body) && last?.role === 'assistant' ? retargetStart(s, last.id) : s);
+    },
     reconnectToStream: async () => null, // v2 ucu akış devamını desteklemez
   };
   // `settle` ve geri çağrılar `chat`e yalnız istek sırasında (kuruluştan
@@ -78,7 +110,11 @@ export function createCosreChat(opts: CosreChatOptions = {}): CosreChatCore {
       if (hasCompletedExchange(msgs)) opts.onPersist(msgs);
     },
   });
-  return { chat, visibleParts: m => visibleParts(m, resets) };
+  const answerApproval = async (a: CosreApprovalAnswer, context?: unknown) => {
+    await chat.addToolOutput({ tool: a.tool, toolCallId: a.stepId, output: { approved: a.approved } });
+    await chat.sendMessage(undefined, { body: { ...(context ? { context } : {}), approvals: [a] } });
+  };
+  return { chat, visibleParts: m => visibleParts(m, resets), answerApproval };
 }
 
 /** React kancası — Chat örneği bileşen ömrü boyunca tek; onPersist güncel
@@ -88,5 +124,5 @@ export function useCosreChat(opts: CosreChatOptions = {}) {
   useEffect(() => { persistRef.current = opts.onPersist; });
   const [core] = useState(() => createCosreChat({ fetch: opts.fetch, onPersist: m => persistRef.current?.(m) }));
   const helpers = useChat<CosreUIMessage>({ chat: core.chat });
-  return { ...helpers, visibleParts: core.visibleParts };
+  return { ...helpers, visibleParts: core.visibleParts, answerApproval: core.answerApproval };
 }

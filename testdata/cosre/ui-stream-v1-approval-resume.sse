@@ -1,0 +1,36 @@
+data: {"messageId":"01M62F9N000000000000000000","type":"start"}
+
+data: {"type":"start-step"}
+
+data: {"dynamic":true,"output":{"bytes":40,"durationMs":4,"ok":true,"preview":"{\"id\":\"pn-1\",\"ok\":true,\"problemId\":\"p-1\"}","truncated":false},"toolCallId":"s3","type":"tool-output-available"}
+
+data: {"data":{"bytes":40,"duration_ms":4,"kind":"text","ok":true,"text":"{\"id\":\"pn-1\",\"ok\":true,\"problemId\":\"p-1\"}","tool":"add_problem_note"},"id":"s3","type":"data-tool-result"}
+
+data: {"data":{"i":4,"label":"araştırma bütçesi: 6 araç · 5 tur"},"id":"s4","type":"data-step"}
+
+data: {"data":{"executed":1,"exhausted":false,"maxCalls":6,"maxRounds":5,"roundsUsed":1,"skipped":0,"slotsUsed":2},"id":"budget","type":"data-budget"}
+
+data: {"id":"t1","type":"text-start"}
+
+data: {"delta":"Not probleme eklendi.","id":"t1","type":"text-delta"}
+
+data: {"id":"t1","type":"text-end"}
+
+data: {"data":{"textId":"t1"},"transient":true,"type":"data-reset"}
+
+data: {"id":"t2","type":"text-start"}
+
+data: {"delta":"Not probleme eklendi.","id":"t2","type":"text-delta"}
+
+data: {"id":"t2","type":"text-end"}
+
+data: {"messageMetadata":{"exchangeId":"x-approval-2"},"type":"message-metadata"}
+
+data: {"data":{"calls":2,"elapsed_ms":620,"reason":"stop","rounds":2},"id":"stop","type":"data-stop"}
+
+data: {"type":"finish-step"}
+
+data: {"finishReason":"stop","type":"finish"}
+
+data: [DONE]
+

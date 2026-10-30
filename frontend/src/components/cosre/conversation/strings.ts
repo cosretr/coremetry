@@ -18,4 +18,18 @@ export const COSRE_V2_STRINGS = {
   jumpBottom: '↓ En alta',
   jumpBottomTitle: 'En son mesaja in',
   jumpBottomLabel: 'En alta in',
+  // agent-core S5 — onay kartı (ApprovalCard).
+  approvalTitle: 'Onayın gerekiyor',
+  approvalHint: 'CoSRE bu işlemi yapmak istiyor. Yalnız sen onaylarsan, gösterilen değerlerle çalışır.',
+  approvalApprove: 'Onayla',
+  approvalDeny: 'Reddet',
+  approvalApproved: 'Onaylandı',
+  approvalDenied: 'Yürütülmedi',
+  approvalExpired: 'Süresi doldu — yürütülmedi',
+  approvalExpiresIn: 'Geçerlilik sonu',
 } as const;
+
+/** agent-core S5 — onay-kapılı araçların operatör dilindeki adı (yoksa ham ad). */
+export const COSRE_APPROVAL_TOOL_LABELS: Readonly<Record<string, string>> = {
+  add_problem_note: 'Probleme not ekle',
+};

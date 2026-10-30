@@ -2,6 +2,6 @@
 {"kind":"step","payload":{"i":2,"tool":"get_problem","args":"{\"id\":\"p-1\"}","argsJson":{"id":"p-1"}}}
 {"kind":"step-result","payload":{"i":2,"tool":"get_problem","ok":true,"preview":"{\"id\":\"p-1\"}","truncated":false,"bytes":12,"durationMs":7}}
 {"kind":"step","payload":{"i":3,"tool":"add_problem_note","args":"{\"problemId\":\"p-1\",\"text\":\"DB havuzu doldu\"}","argsJson":{"problemId":"p-1","text":"DB havuzu doldu"}}}
-{"kind":"step-result","payload":{"i":3,"tool":"add_problem_note","ok":false,"skipped":true,"reason":"approval_required","preview":"{\"error\":\"approval_required\"}","truncated":false,"bytes":29,"approval":{"token":"eyJrIjoiY29zcmUtYXBwcm92YWwifQ.c2ln","argsDigest":"4f1c0b6e","expiresAt":1800000300000}}}
+{"kind":"step-result","payload":{"i":3,"tool":"add_problem_note","ok":false,"skipped":true,"reason":"approval_required","preview":"{\"error\":\"approval_required\"}","truncated":false,"bytes":29,"approval":{"token":"eyJrIjoiY29zcmUtYXBwcm92YWwifQ.c2ln","argsDigest":"4f1c0b6e","expiresAt":1800000300000,"exchangeId":"x-approval-1"}}}
 {"kind":"stop","payload":{"reason":"approval_pending","calls":2,"rounds":1,"elapsed_ms":950}}
 {"kind":"done","payload":{"ok":true}}
