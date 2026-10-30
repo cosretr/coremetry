@@ -13,3 +13,4 @@ export * from './DataTable';
 export * from './TimeRangePicker';
 export * from './FilterBar';
 export * from './CommandPalette';
+export * from './Field';

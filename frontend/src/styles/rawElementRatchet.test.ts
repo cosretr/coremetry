@@ -19,13 +19,19 @@ import ts from 'typescript';
 // Taban (R6 commit'i, ölçüldü): input 350 · select 161 · textarea 33;
 // eslint-suppressions.json toplamı 544 = üçünün toplamı (124 dosya).
 // Serbest (bilgi): checkbox 129 + radio 7 = 136, file 7, range 1, color 1.
+// R2 (Faz 2 dilim 1): checkbox serbest kümeden çıktı → MAX_RAW_CHECKBOX 129,
+// eslint-suppressions.json toplamı 544 → 673.
 const MAX_RAW_INPUT = 350;
 const MAX_RAW_SELECT = 161;
 const MAX_RAW_TEXTAREA = 33;
+// Faz 2 dilim 1 R2 (G10, operatör Q-IA7): shadcn checkbox kuruldu, `checkbox`
+// serbest kümeden çıktı. Ham kutuların AYRI tavanı (MAX_RAW_INPUT hiç
+// yükselmez); ölçüldü: R2 commit'i. Yalnız aşağı iner.
+const MAX_RAW_CHECKBOX = 129;
 
 const SRC = resolve(__dirname, '..');
 const FE = resolve(SRC, '..');
-const ALLOWED_INPUT_TYPES = ['file', 'checkbox', 'radio', 'hidden', 'range', 'color'];
+const ALLOWED_INPUT_TYPES = ['file', 'radio', 'hidden', 'range', 'color'];
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const e of readdirSync(dir)) {
@@ -76,17 +82,18 @@ export function rawFormElements(src: string, file = 'x.tsx'): Hit[] {
 }
 
 function counts() {
-  let input = 0, checkboxRadio = 0, otherAllowed = 0, select = 0, textarea = 0;
+  let input = 0, checkbox = 0, radio = 0, otherAllowed = 0, select = 0, textarea = 0;
   for (const p of files) {
     for (const h of rawFormElements(readFileSync(p, 'utf8'), p)) {
       if (h.el === 'select') select++;
       else if (h.el === 'textarea') textarea++;
+      else if (h.type === 'checkbox') checkbox++;
       else if (h.type === null || !ALLOWED_INPUT_TYPES.includes(h.type)) input++;
-      else if (h.type === 'checkbox' || h.type === 'radio') checkboxRadio++;
+      else if (h.type === 'radio') radio++;
       else otherAllowed++;
     }
   }
-  return { input, checkboxRadio, otherAllowed, select, textarea };
+  return { input, checkbox, radio, otherAllowed, select, textarea };
 }
 
 describe('ham form öğesi mandalı (ui/no-raw-element ikizi)', () => {
@@ -94,10 +101,13 @@ describe('ham form öğesi mandalı (ui/no-raw-element ikizi)', () => {
 
   it('tarama kaynak buluyor', () => {
     expect(files.length).toBeGreaterThan(300);
-    expect(c.checkboxRadio, 'checkbox/radio sayımı (bilgi; kapı değil, Q3)').toBeGreaterThan(0);
+    expect(c.radio, 'radio sayımı (bilgi; kapı değil, Q3)').toBeGreaterThan(0);
   });
   it('ham <input> (serbest literal tipler hariç) tavanı aşmaz', () => {
     expect(c.input, 'Field bileşiği / shadcn input kullan').toBeLessThanOrEqual(MAX_RAW_INPUT);
+  });
+  it('ham <input type="checkbox"> tavanı aşmaz (R2, ayrı tavan)', () => {
+    expect(c.checkbox, 'coremetry CheckboxField / shadcn Checkbox kullan').toBeLessThanOrEqual(MAX_RAW_CHECKBOX);
   });
   it('ham <select> tavanı aşmaz', () => {
     expect(c.select, 'shadcn native-select / select kullan').toBeLessThanOrEqual(MAX_RAW_SELECT);
@@ -106,11 +116,11 @@ describe('ham form öğesi mandalı (ui/no-raw-element ikizi)', () => {
     expect(c.textarea, 'shadcn textarea kullan').toBeLessThanOrEqual(MAX_RAW_TEXTAREA);
   });
 
-  it('ikiz eşitliği: eslint-suppressions.json toplamı = ölçülen üç sayının toplamı', () => {
+  it('ikiz eşitliği: eslint-suppressions.json toplamı = ölçülen dört sayının toplamı (R2: + checkbox)', () => {
     const sup = JSON.parse(readFileSync(resolve(FE, 'eslint-suppressions.json'), 'utf8')) as Record<string, Record<string, { count: number }>>;
     let total = 0;
     for (const rules of Object.values(sup)) total += rules['ui/no-raw-element']?.count ?? 0;
-    expect(total).toBe(c.input + c.select + c.textarea);
+    expect(total).toBe(c.input + c.select + c.textarea + c.checkbox);
   });
 
   it('serbest tip kümesi eslint.config.js ile aynı', () => {

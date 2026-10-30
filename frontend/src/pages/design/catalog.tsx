@@ -8,6 +8,8 @@ import {
   Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandShortcut,
 } from '@/components/shadcn/command';
 import { Input } from '@/components/shadcn/input';
+import { Label } from '@/components/shadcn/label';
+import { Checkbox } from '@/components/shadcn/checkbox';
 import { NativeSelect, NativeSelectOption } from '@/components/shadcn/native-select';
 import { ScrollArea } from '@/components/shadcn/scroll-area';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/shadcn/select';
@@ -27,6 +29,7 @@ import {
   Tooltip, TooltipContent, TooltipTrigger,
 } from '@/components/coremetry/overlay';
 import { StatusBadge } from '@/components/coremetry/StatusBadge';
+import { Field, SelectField, TextareaField, CheckboxField } from '@/components/coremetry/Field';
 import CoremetryToaster from '@/components/coremetry/Toaster';
 import { CM_STRINGS } from '@/components/coremetry/strings';
 import { toast, type ToastEntry } from '@/lib/toast';
@@ -396,6 +399,52 @@ function TooltipDemo({ cell, forceOpen }: CatalogCtx) {
   );
 }
 
+function LabelDemo() {
+  return (
+    <Row label="htmlFor">
+      <Label htmlFor="dc-label-in">Thanos Querier URL</Label>
+      <Input id="dc-label-in" placeholder="https://…" />
+    </Row>
+  );
+}
+
+function CheckboxDemo() {
+  return (
+    <Row label="durumlar">
+      <Checkbox aria-label="Kapalı" />
+      <Checkbox aria-label="Açık" defaultChecked />
+      <Checkbox aria-label="Devre dışı" disabled />
+      <Checkbox aria-label="Devre dışı açık" disabled defaultChecked />
+      <Checkbox aria-label="Geçersiz" aria-invalid="true" />
+    </Row>
+  );
+}
+
+function FieldDemo() {
+  const [on, setOn] = useState(true);
+  return (
+    <>
+      <Row label="Field">
+        <Field label="Cluster name" placeholder="prod-ist" hint="join key" />
+        <Field label="Token" type="password" labelAside={<span>· stored</span>} placeholder="(leave empty to keep stored value)" />
+        <Field small label="Port" defaultValue="6443" error="1–65535 arası" />
+      </Row>
+      <Row label="Select / Textarea">
+        <SelectField small label="Auth" defaultValue="bearer">
+          <option value="bearer">Bearer token</option>
+          <option value="none">None</option>
+        </SelectField>
+        <TextareaField label="API server URLs" rows={2} hint="satır ya da virgül" />
+      </Row>
+      <Row label="Checkbox">
+        <CheckboxField label="Enabled" checked={on} onCheckedChange={setOn} />
+        <CheckboxField label="Skip TLS verify" hint="yalnız test kümeleri" checked={false} onCheckedChange={() => {}} />
+        <CheckboxField label="Devre dışı" disabled checked onCheckedChange={() => {}} />
+      </Row>
+    </>
+  );
+}
+
 function StatusBadgeDemo() {
   return (
     <>
@@ -437,6 +486,8 @@ export const CATALOG: Record<string, (ctx: CatalogCtx) => ReactNode> = {
   'dialog': (ctx) => <DialogDemo {...ctx} />,
   'dropdown-menu': (ctx) => <DropdownMenuDemo {...ctx} />,
   'input': () => <InputDemo />,
+  'label': () => <LabelDemo />,
+  'checkbox': () => <CheckboxDemo />,
   'native-select': () => <NativeSelectDemo />,
   'popover': (ctx) => <PopoverDemo {...ctx} />,
   'scroll-area': () => <ScrollAreaDemo />,
@@ -450,4 +501,5 @@ export const CATALOG: Record<string, (ctx: CatalogCtx) => ReactNode> = {
   'tooltip': (ctx) => <TooltipDemo {...ctx} />,
   'coremetry/StatusBadge': () => <StatusBadgeDemo />,
   'coremetry/Toaster': (ctx) => <ToasterDemo {...ctx} />,
+  'coremetry/Field': () => <FieldDemo />,
 };

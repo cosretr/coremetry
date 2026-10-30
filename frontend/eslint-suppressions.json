@@ -64,6 +64,11 @@
       "count": 1
     }
   },
+  "src/components/NoiseReasonButton.tsx": {
+    "ui/no-raw-element": {
+      "count": 1
+    }
+  },
   "src/components/Pager.tsx": {
     "ui/no-raw-element": {
       "count": 1
@@ -81,7 +86,7 @@
   },
   "src/components/SavedViewsBar.tsx": {
     "ui/no-raw-element": {
-      "count": 2
+      "count": 4
     }
   },
   "src/components/ServiceCatalogPill.tsx": {
@@ -96,7 +101,7 @@
   },
   "src/components/ai/ChatBubble.tsx": {
     "ui/no-raw-element": {
-      "count": 1
+      "count": 2
     }
   },
   "src/components/ai/ChatComposer.tsx": {
@@ -124,6 +129,11 @@
       "count": 2
     }
   },
+  "src/components/topology/FocusedNeighborhood.tsx": {
+    "ui/no-raw-element": {
+      "count": 2
+    }
+  },
   "src/components/viz/GroupedMetricPicker.tsx": {
     "ui/no-raw-element": {
       "count": 1
@@ -131,7 +141,7 @@
   },
   "src/components/viz/MetricQueryEditor.tsx": {
     "ui/no-raw-element": {
-      "count": 14
+      "count": 15
     }
   },
   "src/features/anomalies/AnomaliesPage.tsx": {
@@ -146,7 +156,7 @@
   },
   "src/features/anomalies/ProblemsSection.tsx": {
     "ui/no-raw-element": {
-      "count": 3
+      "count": 5
     }
   },
   "src/features/dependencies/CallerSection.tsx": {
@@ -176,7 +186,7 @@
   },
   "src/pages/AdminClickhouse.tsx": {
     "ui/no-raw-element": {
-      "count": 10
+      "count": 16
     }
   },
   "src/pages/AdminQuery.tsx": {
@@ -201,7 +211,7 @@
   },
   "src/pages/Clusters.tsx": {
     "ui/no-raw-element": {
-      "count": 2
+      "count": 3
     }
   },
   "src/pages/Dashboard.tsx": {
@@ -211,7 +221,7 @@
   },
   "src/pages/Databases.tsx": {
     "ui/no-raw-element": {
-      "count": 2
+      "count": 3
     }
   },
   "src/pages/EndpointDetail.tsx": {
@@ -221,7 +231,7 @@
   },
   "src/pages/Endpoints.tsx": {
     "ui/no-raw-element": {
-      "count": 3
+      "count": 5
     }
   },
   "src/pages/Events.tsx": {
@@ -236,7 +246,7 @@
   },
   "src/pages/Inbox.tsx": {
     "ui/no-raw-element": {
-      "count": 3
+      "count": 5
     }
   },
   "src/pages/Incident.tsx": {
@@ -250,6 +260,16 @@
     }
   },
   "src/pages/Login.tsx": {
+    "ui/no-raw-element": {
+      "count": 2
+    }
+  },
+  "src/pages/Messaging.tsx": {
+    "ui/no-raw-element": {
+      "count": 1
+    }
+  },
+  "src/pages/Monitors.tsx": {
     "ui/no-raw-element": {
       "count": 2
     }
@@ -271,7 +291,7 @@
   },
   "src/pages/Runbook.tsx": {
     "ui/no-raw-element": {
-      "count": 15
+      "count": 18
     }
   },
   "src/pages/RunbookExecution.tsx": {
@@ -291,12 +311,17 @@
   },
   "src/pages/Services.tsx": {
     "ui/no-raw-element": {
-      "count": 6
+      "count": 8
     }
   },
   "src/pages/SlowQueries.tsx": {
     "ui/no-raw-element": {
       "count": 3
+    }
+  },
+  "src/pages/StatementDetail.tsx": {
+    "ui/no-raw-element": {
+      "count": 1
     }
   },
   "src/pages/Trace.tsx": {
@@ -311,7 +336,7 @@
   },
   "src/pages/Traces.tsx": {
     "ui/no-raw-element": {
-      "count": 6
+      "count": 8
     }
   },
   "src/pages/Users.tsx": {
@@ -324,9 +349,19 @@
       "count": 1
     }
   },
+  "src/pages/adminch/StatePathRebuild.tsx": {
+    "ui/no-raw-element": {
+      "count": 2
+    }
+  },
   "src/pages/alerts/KafkaAlertModal.tsx": {
     "ui/no-raw-element": {
       "count": 8
+    }
+  },
+  "src/pages/alerts/NoisyRulesPanel.tsx": {
+    "ui/no-raw-element": {
+      "count": 2
     }
   },
   "src/pages/alerts/RouteAlertModal.tsx": {
@@ -350,6 +385,11 @@
     }
   },
   "src/pages/clusters/NamespaceCombobox.tsx": {
+    "ui/no-raw-element": {
+      "count": 1
+    }
+  },
+  "src/pages/endpoints/ColumnToggle.tsx": {
     "ui/no-raw-element": {
       "count": 1
     }
@@ -429,19 +469,29 @@
       "count": 1
     }
   },
+  "src/pages/settings/AiGeneralQuestionsPanel.tsx": {
+    "ui/no-raw-element": {
+      "count": 2
+    }
+  },
   "src/pages/settings/AiProfilesPanel.tsx": {
     "ui/no-raw-element": {
-      "count": 10
+      "count": 14
+    }
+  },
+  "src/pages/settings/AiSreTab.tsx": {
+    "ui/no-raw-element": {
+      "count": 2
     }
   },
   "src/pages/settings/AiTab.tsx": {
     "ui/no-raw-element": {
-      "count": 8
+      "count": 11
     }
   },
   "src/pages/settings/AnomalyTab.tsx": {
     "ui/no-raw-element": {
-      "count": 58
+      "count": 73
     }
   },
   "src/pages/settings/ApiTokensTab.tsx": {
@@ -456,32 +506,42 @@
   },
   "src/pages/settings/ArgoCDHubsPanel.tsx": {
     "ui/no-raw-element": {
-      "count": 1
+      "count": 2
     }
   },
   "src/pages/settings/ArgoCDInstanceForm.tsx": {
     "ui/no-raw-element": {
-      "count": 1
+      "count": 4
+    }
+  },
+  "src/pages/settings/ArgoCDTab.tsx": {
+    "ui/no-raw-element": {
+      "count": 3
     }
   },
   "src/pages/settings/BrandingTab.tsx": {
     "ui/no-raw-element": {
-      "count": 13
+      "count": 14
     }
   },
   "src/pages/settings/CalendarSubsection.tsx": {
     "ui/no-raw-element": {
-      "count": 5
+      "count": 6
     }
   },
   "src/pages/settings/ChannelModal.tsx": {
     "ui/no-raw-element": {
-      "count": 26
+      "count": 29
     }
   },
   "src/pages/settings/ClustersTab.tsx": {
     "ui/no-raw-element": {
-      "count": 7
+      "count": 9
+    }
+  },
+  "src/pages/settings/ContextPackPanel.tsx": {
+    "ui/no-raw-element": {
+      "count": 2
     }
   },
   "src/pages/settings/DangerZoneTab.tsx": {
@@ -491,32 +551,37 @@
   },
   "src/pages/settings/DevOpsTab.tsx": {
     "ui/no-raw-element": {
-      "count": 14
+      "count": 16
     }
   },
   "src/pages/settings/ElasticTab.tsx": {
     "ui/no-raw-element": {
-      "count": 8
+      "count": 9
     }
   },
-  "src/pages/settings/ErrorRampSubsection.tsx": {
+  "src/pages/settings/EntitiesTab.tsx": {
     "ui/no-raw-element": {
       "count": 1
     }
   },
-  "src/pages/settings/KibanaTab.tsx": {
+  "src/pages/settings/ErrorRampSubsection.tsx": {
     "ui/no-raw-element": {
       "count": 2
     }
   },
+  "src/pages/settings/KibanaTab.tsx": {
+    "ui/no-raw-element": {
+      "count": 3
+    }
+  },
   "src/pages/settings/KnowledgeTab.tsx": {
     "ui/no-raw-element": {
-      "count": 10
+      "count": 12
     }
   },
   "src/pages/settings/LdapTab.tsx": {
     "ui/no-raw-element": {
-      "count": 32
+      "count": 38
     }
   },
   "src/pages/settings/LdapUserPicker.tsx": {
@@ -531,27 +596,27 @@
   },
   "src/pages/settings/MaintenanceTab.tsx": {
     "ui/no-raw-element": {
-      "count": 5
+      "count": 6
     }
   },
   "src/pages/settings/McpServersTab.tsx": {
     "ui/no-raw-element": {
-      "count": 6
+      "count": 7
     }
   },
   "src/pages/settings/MetricsBackendTab.tsx": {
     "ui/no-raw-element": {
-      "count": 5
+      "count": 9
     }
   },
   "src/pages/settings/OracleTab.tsx": {
     "ui/no-raw-element": {
-      "count": 2
+      "count": 6
     }
   },
   "src/pages/settings/PipelineTab.tsx": {
     "ui/no-raw-element": {
-      "count": 10
+      "count": 13
     }
   },
   "src/pages/settings/REDSourceSubsection.tsx": {
@@ -566,32 +631,37 @@
   },
   "src/pages/settings/RolesTab.tsx": {
     "ui/no-raw-element": {
-      "count": 1
+      "count": 2
     }
   },
   "src/pages/settings/ServiceSlowdownSubsection.tsx": {
     "ui/no-raw-element": {
-      "count": 1
+      "count": 2
     }
   },
   "src/pages/settings/SmtpTab.tsx": {
     "ui/no-raw-element": {
-      "count": 7
+      "count": 9
     }
   },
   "src/pages/settings/SpanClusterValuesPanel.tsx": {
     "ui/no-raw-element": {
-      "count": 1
+      "count": 2
+    }
+  },
+  "src/pages/settings/SsoTab.tsx": {
+    "ui/no-raw-element": {
+      "count": 10
     }
   },
   "src/pages/settings/TeamRoutingTab.tsx": {
     "ui/no-raw-element": {
-      "count": 5
+      "count": 7
     }
   },
   "src/pages/settings/TempoTab.tsx": {
     "ui/no-raw-element": {
-      "count": 5
+      "count": 7
     }
   },
   "src/pages/settings/TraceFacetsTab.tsx": {
@@ -601,7 +671,7 @@
   },
   "src/pages/settings/WikiKnowledgeSection.tsx": {
     "ui/no-raw-element": {
-      "count": 5
+      "count": 7
     }
   },
   "src/pages/settings/WikiTestSearch.tsx": {
@@ -616,7 +686,7 @@
   },
   "src/pages/traces/ColumnFilter.tsx": {
     "ui/no-raw-element": {
-      "count": 2
+      "count": 4
     }
   }
 }

@@ -49,7 +49,10 @@ const isButtonRoleValue = (v) => {
 // checkbox / radio (shadcn checkbox / radio-group kurulana dek — o sürüm
 // muafiyeti kaldırır), hidden / range / color (kurulum kümesinde karşılığı
 // yok). components/coremetry MUAF DEĞİL: bileşikler shadcn'i birleştirir.
-const ALLOWED_INPUT_TYPES = new Set(['file', 'checkbox', 'radio', 'hidden', 'range', 'color']);
+// Faz 2 dilim 1 R2 (G10, operatör Q-IA7): shadcn checkbox kuruldu →
+// `checkbox` muafiyetten çıktı; ham kutu kendi iletisiyle raporlanır,
+// vitest ikizinde ayrı tavan (MAX_RAW_CHECKBOX). radio muaf kalır.
+const ALLOWED_INPUT_TYPES = new Set(['file', 'radio', 'hidden', 'range', 'color']);
 const literalType = (node) => {
   const a = node.attributes.find((x) => x.type === 'JSXAttribute' && x.name.type === 'JSXIdentifier' && x.name.name === 'type');
   if (!a || !a.value) return null;
@@ -68,7 +71,8 @@ const noRawElement = {
     messages: {
       raw: 'Ham <button> yerine atom kullan (ui: Button / IconButton / Chip / LinkButton / SegmentedControl / ButtonGroup; geçirilmiş sayfada shadcn Button).',
       role: 'role="button" taklidi yerine gerçek düğme atomu kullan (Button / IconButton; görünmez düğme için btn-bare).',
-      input: 'Ham <input> yerine Field bileşiği / shadcn input kullan (serbest: literal type file, checkbox, radio, hidden, range, color).',
+      input: 'Ham <input> yerine Field bileşiği / shadcn input kullan (serbest: literal type file, radio, hidden, range, color).',
+      checkbox: 'Ham <input type="checkbox"> yerine coremetry CheckboxField / shadcn Checkbox kullan.',
       select: 'Ham <select> yerine shadcn native-select (veri formu varsayılanı) ya da select kullan.',
       textarea: 'Ham <textarea> yerine shadcn textarea kullan.',
     },
@@ -80,6 +84,7 @@ const noRawElement = {
         const n = node.name.name;
         if (n === 'button') context.report({ node, messageId: 'raw' });
         else if (n === 'select' || n === 'textarea') context.report({ node, messageId: n });
+        else if (n === 'input' && literalType(node) === 'checkbox') context.report({ node, messageId: 'checkbox' });
         else if (n === 'input' && !ALLOWED_INPUT_TYPES.has(literalType(node))) context.report({ node, messageId: 'input' });
       },
       JSXAttribute(node) {
