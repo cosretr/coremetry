@@ -5,8 +5,8 @@ package mcptools
 //
 // open_problems — kapsamın AÇIK konuları. Operatör kararı 2026-10-31: kaynak
 // yalnız problems tablosu DEĞİL, Service sayfası şeridiyle (ServiceAttentionStrip
-// → /api/inbox) AYNI boru hattı — problems + exception/httperror grupları +
-// anomaliler, aynı süzgeç/taban/öncelik. Okuma api tarafındaki inbox
+// → /api/inbox) AYNI boru hattı — problems + exception/httperror grupları,
+// şeridin süzgeci (v0.10.1695 Attention: "problem değil" gizli, SLO dipnot, anomali yok). Okuma api tarafındaki inbox
 // çekirdeğinden (inboxView) Deps.InboxOpen dikişiyle gelir; burada ikinci bir
 // uygulama YOK. Kapsam: takım → Inbox ?team= (owner VEYA sre — TeamServiceNames
 // ile aynı birleşim); tek servis → ?service= (şeridin kendisi); takımsız çoklu
@@ -126,21 +126,34 @@ func InboxReason(priorityReason, title string) string {
 // InboxOpenPlan — SAF: kapsam → inbox sorguları. exact=true → satırlar
 // birebir servis kümesiyle süzülür (inbox ?service= alt-dize eşler);
 // unread = fan-out tavanına takılıp okunmayan servis.
+//
+// v0.10.1695 (operatör kararı 2026-10-31) — her sorgu Attention: şeridin
+// süzgeci ("problem değil" gizli, SLO dipnot, anomali yok). Tek servis + env
+// yok → şeridin SORGUSU birebir (ServiceAttentionQuery: limit 20, aynı
+// önbellek girdisi) → sayı şeritle aynı. Takım → ?team= aynı süzgeçle.
 func InboxOpenPlan(team string, services []string, env string, limit int) (qs []InboxOpenQuery, exact bool, unread int) {
 	if t := strings.TrimSpace(team); t != "" {
-		return []InboxOpenQuery{{Team: t, Env: env, Limit: limit}}, false, 0
+		return []InboxOpenQuery{{Team: t, Env: env, Limit: limit, Attention: true}}, false, 0
 	}
 	if len(services) == 1 {
-		return []InboxOpenQuery{{Service: services[0], Env: env, Limit: limit}}, false, 0
+		return []InboxOpenQuery{serviceStripQuery(services[0], env, limit)}, false, 0
 	}
 	n := len(services)
 	if n > inboxFanoutMax {
 		unread, n = n-inboxFanoutMax, inboxFanoutMax
 	}
 	for _, s := range services[:n] {
-		qs = append(qs, InboxOpenQuery{Service: s, Env: env, Limit: limit})
+		qs = append(qs, serviceStripQuery(s, env, limit))
 	}
 	return qs, true, unread
+}
+
+// serviceStripQuery — SAF: env yoksa şeridin sorgusu birebir; env varsa aynı süzgeç + env.
+func serviceStripQuery(service, env string, limit int) InboxOpenQuery {
+	if env == "" {
+		return ServiceAttentionQuery(service)
+	}
+	return InboxOpenQuery{Service: service, Env: env, Limit: limit, Attention: true}
 }
 
 // ReadInboxOpen — kapsamın açık konuları, inbox çekirdeğinden (plan yukarıda).
@@ -165,7 +178,9 @@ func ReadInboxOpen(ctx context.Context, d Deps, team string, services []string, 
 		if err != nil {
 			return InboxOpenResult{}, 0, err
 		}
-		out.ScanCapped = out.ScanCapped || r.ScanCapped || r.Total > len(r.Rows)
+		out.ScanCapped = out.ScanCapped || r.ScanCapped
+		out.Truncated = out.Truncated || r.Truncated || r.Total > len(r.Rows)
+		out.SLOCount += r.SLOCount
 		for _, row := range r.Rows {
 			if (exact && !allow[row.Service]) || seen[row.ID] {
 				continue
@@ -202,8 +217,9 @@ func openProblemsPayload(team, env string, services []string, trimmed, unread in
 		"trimmed_services": trimmed,
 		"total_open":       res.Total,
 		"scan_capped":      res.ScanCapped,
+		"truncated_source": res.Truncated,
 		"order":            "inbox priority order (P1 first)",
-		"source":           "Inbox pipeline (problems + exception/http-error groups + anomalies), status=open — the same read as the Service page attention strip",
+		"source":           "Service page attention strip set (Inbox pipeline, status=open: alert Problems + exception/http-error groups; items marked not-a-problem hidden, SLO burn-rate counted in slo_burn_problems, anomalies excluded)",
 		"page_url":         OpenProblemsPageURL(services, team),
 	}
 	if unread > 0 {
@@ -228,7 +244,10 @@ func openProblemsPayload(team, env string, services []string, trimmed, unread in
 		all = all[:len(all)-1]
 		truncated = true
 	}
-	out["has_more"] = hasMore || truncated || res.Total > len(res.Rows)
+	if res.SLOCount > 0 {
+		out["slo_burn_problems"] = res.SLOCount // şerit gibi: satır değil dipnot
+	}
+	out["has_more"] = hasMore || truncated || res.Truncated || res.Total > len(res.Rows)
 	if truncated {
 		out["truncated"] = true
 	}
@@ -238,9 +257,9 @@ func openProblemsPayload(team, env string, services []string, trimmed, unread in
 func openProblemsTool(d Deps) mcp.Tool {
 	return mcp.Tool{
 		Name: OpenProblemsName,
-		ShortDescription: "Kullanıcının servislerindeki AÇIK konular (Problem + exception/HTTP hata grubu + anomali), P1 önce — " +
+		ShortDescription: "Kullanıcının servislerindeki AÇIK konular (Problem + exception/HTTP hata grubu), P1 önce — " +
 			"Service sayfası şeridi / Inbox ile aynı okuma. Kapsamı sunucu koyar. \"Açık problemim var mı / ne alarm veriyor\" sorusunun girişi.",
-		Description: "Return the OPEN items on the caller's services — the same Inbox pipeline the Service page attention strip and /inbox read: alert-rule Problems, exception / HTTP-error groups and anomalies, with priority (P1/P2/P3), severity, kind, service, a one-line reason, start time and a page_url per item. " +
+		Description: "Return the OPEN items on the caller's services — the same Inbox pipeline the Service page attention strip and /inbox read: alert-rule Problems and exception / HTTP-error groups (items marked not-a-problem hidden, SLO burn-rate problems counted in `slo_burn_problems`, anomalies excluded — exactly what the strip counts), with priority (P1/P2/P3), severity, kind, service, a one-line reason, start time and a page_url per item. " +
 			"Use it for 'do I have open problems', 'what is alerting in my area'. Scope is filled by the server (team → owner OR sre services); pass `services`/`team` only when the user names them. Without scope the call fails with a named error: ask the user which team, never guess. " +
 			"`env` keeps items whose service ran in that environment in the last hour. Rows are Inbox-ordered; the body stays under 2 KB (at most 25 rows) and `total_open` is the Inbox count. " +
 			"Cached 30 s. For one problem's evidence use get_problem; for exception detail use the exception tools.",
