@@ -11,6 +11,7 @@
 //     gövdenin geri kalanı korunur;
 //   • aralık dışı değer satır içi uyarı + Kaydet gövde GÖNDERMEZ (sunucu
 //     aralık dışını sessizce varsayılana döndürürdü).
+import '@/test/radixJsdom'; // Faz 2 dilim 1 R17 — Radix Checkbox
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -70,7 +71,7 @@ async function mount(): Promise<HTMLElement> {
 }
 
 const toggle = (el: HTMLElement) => {
-  const b = el.querySelector<HTMLInputElement>('input[type="checkbox"][aria-label="Sürekli teknik hata yükselişi"]');
+  const b = el.querySelector<HTMLButtonElement>('button[role="checkbox"][aria-label="Sürekli teknik hata yükselişi"]');
   if (!b) throw new Error('Teknik hata yükselişi kutusu yok');
   return b;
 };
@@ -108,7 +109,7 @@ const E = 'Hata hızı tabanı (hata/sn)';
 describe('Sürekli teknik hata yükselişi bölümü', () => {
   it('bölümü taşımayan blob → AÇIK, varsayılanlar, dakika ve Türkçe kapsam metni', async () => {
     const el = await mount();
-    expect(toggle(el).checked).toBe(true);
+    expect(toggle(el).getAttribute('aria-checked')).toBe('true');
     expect(numInput(el, W).value).toBe('6');
     expect(numInput(el, F).value).toBe('2');
     expect(numInput(el, R).value).toBe('0.2');
@@ -126,7 +127,7 @@ describe('Sürekli teknik hata yükselişi bölümü', () => {
   it('kayıtlı değerler + enabled:false gidiş-dönüş: aynı değerler, enabled false gider', async () => {
     m.sens = baseSens({ errorRamp: { enabled: false, windowBuckets: 12, ratioFactor: 3, minRatioPct: 0.5, minErrorsPerSec: 4 } });
     const el = await mount();
-    expect(toggle(el).checked).toBe(false);
+    expect(toggle(el).getAttribute('aria-checked')).toBe('false');
     expect(numInput(el, W).disabled).toBe(true);
     expect(numInput(el, W).value).toBe('12');
     expect(el.textContent).toContain('= 60 dakika');

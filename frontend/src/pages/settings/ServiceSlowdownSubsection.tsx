@@ -1,5 +1,5 @@
 import type { ServiceSlowdownConfig } from '@/lib/types';
-import { Field } from './shared';
+import { Field, CheckboxField } from '@/components/coremetry/Field';
 
 // ServiceSlowdownSubsection — v0.10.1091: "yaygın yavaşlama" hızlı yolunun
 // vidaları (anomaly_sensitivity.serviceSlowdown; Dedektör hassasiyeti bölümü,
@@ -47,29 +47,24 @@ export function ServiceSlowdownSubsection({ value, onChange }: {
   const on = v.enabled !== false;
   const set = (patch: Partial<ServiceSlowdownConfig>) => onChange({ ...v, ...patch });
   return (
-    <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16, marginTop: 4 }}>
-      <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <input type="checkbox" aria-label="Yaygın yavaşlama problemi"
-          checked={on} onChange={e => set({ enabled: e.target.checked })} />
-        <span style={{ fontSize: 13, color: 'var(--text)' }}>Yaygın yavaşlama problemi (P1)</span>
-      </label>
-      <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4, marginLeft: 24, lineHeight: 1.5 }}>
-        Açık (varsayılan): tek bir 5 dk kovada bir servisin en az {v.minOps} operasyonunun p99&apos;u
-        {' '}{v.minP99Ms} ms&apos;yi ve kendi normalinin {v.riseFactor} katını aşarsa servis üzerinde
-        critical problem açılır (sürdürme beklenmez). Operasyon anomalileri ayrıca açılmaya devam eder.
-      </div>
-      <div style={{
-        display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-        marginTop: 10, marginLeft: 24, opacity: on ? 1 : 0.5,
-      }}>
+    <div className="mt-1 border-t border-(--border) pt-4">
+      <CheckboxField aria-label="Yaygın yavaşlama problemi"
+        checked={on} onCheckedChange={c => set({ enabled: c })}
+        label="Yaygın yavaşlama problemi (P1)"
+        hint={<>
+          Açık (varsayılan): tek bir 5 dk kovada bir servisin en az {v.minOps} operasyonunun p99&apos;u
+          {' '}{v.minP99Ms} ms&apos;yi ve kendi normalinin {v.riseFactor} katını aşarsa servis üzerinde
+          critical problem açılır (sürdürme beklenmez). Operasyon anomalileri ayrıca açılmaya devam eder.
+        </>} />
+      {/* Faz 2 dilim 1 R17 — coremetry Field; kapalı bölüm `data-disabled`. */}
+      <div data-disabled={!on || undefined}
+        className="mt-2.5 ml-6 grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-3 data-[disabled]:opacity-50">
         {FIELDS.map(f => (
-          <Field key={f.k} label={f.label}>
-            <input type="number" min={f.min} max={f.max} step={f.step ?? 1}
-              aria-label={`Yaygın yavaşlama: ${f.label}`}
-              disabled={!on} value={v[f.k]}
-              onChange={e => set({ [f.k]: Number(e.target.value) })} />
-            <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4, lineHeight: 1.5 }}>{f.help}</div>
-          </Field>
+          <Field key={f.k} label={f.label} type="number" min={f.min} max={f.max} step={f.step ?? 1}
+            aria-label={`Yaygın yavaşlama: ${f.label}`}
+            disabled={!on} value={v[f.k]}
+            onChange={e => set({ [f.k]: Number(e.target.value) })}
+            hint={f.help} />
         ))}
       </div>
     </div>

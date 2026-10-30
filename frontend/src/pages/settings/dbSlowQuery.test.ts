@@ -37,7 +37,8 @@ describe('DB yavaş sorgu ayarları', () => {
   it('Hariç sistemler alanı + yardım metni + tip', () => {
     expect(types).toMatch(/export interface DBHealthConfig \{[^}]*excludeSystems\?: string\[\]/);
     const sec = tab.slice(tab.indexOf('function DBSlowQuerySection()'));
-    expect(sec).toContain('<Field label="Hariç sistemler">');
+    // Faz 2 dilim 1 R17 — coremetry Field (aria-label aynı, yardım `hint`).
+    expect(sec).toContain('<Field label="Hariç sistemler" aria-label="Hariç sistemler"');
     expect(sec).toContain("hata oranı anlamsız olan istemciler, ör. couchbase: KV 'bulunamadı' cevabı hata sayılır");
     expect(sec).toContain('setHealth({ excludeSystems: parseExcludeSystems(e.target.value) })');
     // Ayrıştırma virgül ya da boşlukla; son biçim (küçük harf, tekrarsız) sunucuda.

@@ -21,13 +21,13 @@ import ts from 'typescript';
 // Serbest (bilgi): checkbox 129 + radio 7 = 136, file 7, range 1, color 1.
 // R2 (Faz 2 dilim 1): checkbox serbest kümeden çıktı → MAX_RAW_CHECKBOX 129,
 // eslint-suppressions.json toplamı 544 → 673.
-const MAX_RAW_INPUT = 190; // Faz 2 dilim 1 R14 (işletim): 208 → 190; Faz 2 dilim 1 R13 (DevOps + MCP): 223 → 208; Faz 2 dilim 1 R12 (AI SRE + Knowledge): 236 → 223; Faz 2 dilim 1 R11 (CoSRE): 255 → 236; Faz 2 dilim 1 R10 (erişim): 289 → 255; Faz 2 dilim 1 R7: 350 → 344 (Remote Cluster); etkileşim P2: 344 → 341 (⌘K cmdk); R8: 341 → 322; R9: 322 → 289
-const MAX_RAW_SELECT = 131; // Faz 2 dilim 1 R16 (Oracle): 133 → 131; Faz 2 dilim 1 R14 (işletim): 138 → 133; Faz 2 dilim 1 R13 (DevOps + MCP): 141 → 138; Faz 2 dilim 1 R11 (CoSRE): 143 → 141; Faz 2 dilim 1 R10 (erişim): 148 → 143; R7: 161 → 159; R8: 159 → 152; R9: 152 → 148
+const MAX_RAW_INPUT = 128; // Faz 2 dilim 1 R17 (Anomaly): 190 → 128; Faz 2 dilim 1 R14 (işletim): 208 → 190; Faz 2 dilim 1 R13 (DevOps + MCP): 223 → 208; Faz 2 dilim 1 R12 (AI SRE + Knowledge): 236 → 223; Faz 2 dilim 1 R11 (CoSRE): 255 → 236; Faz 2 dilim 1 R10 (erişim): 289 → 255; Faz 2 dilim 1 R7: 350 → 344 (Remote Cluster); etkileşim P2: 344 → 341 (⌘K cmdk); R8: 341 → 322; R9: 322 → 289
+const MAX_RAW_SELECT = 125; // Faz 2 dilim 1 R17 (Anomaly): 131 → 125; Faz 2 dilim 1 R16 (Oracle): 133 → 131; Faz 2 dilim 1 R14 (işletim): 138 → 133; Faz 2 dilim 1 R13 (DevOps + MCP): 141 → 138; Faz 2 dilim 1 R11 (CoSRE): 143 → 141; Faz 2 dilim 1 R10 (erişim): 148 → 143; R7: 161 → 159; R8: 159 → 152; R9: 152 → 148
 const MAX_RAW_TEXTAREA = 21; // Faz 2 dilim 1 R14 (işletim): 22 → 21; Faz 2 dilim 1 R13 (DevOps + MCP): 24 → 22; Faz 2 dilim 1 R12 (AI SRE + Knowledge): 27 → 24; Faz 2 dilim 1 R11 (CoSRE): 28 → 27; Faz 2 dilim 1 R10 (erişim): 31 → 28; R9: 33 → 31
 // Faz 2 dilim 1 R2 (G10, operatör Q-IA7): shadcn checkbox kuruldu, `checkbox`
 // serbest kümeden çıktı. Ham kutuların AYRI tavanı (MAX_RAW_INPUT hiç
 // yükselmez); ölçüldü: R2 commit'i. Yalnız aşağı iner.
-const MAX_RAW_CHECKBOX = 64; // Faz 2 dilim 1 R16 (Oracle): 68 → 64; Faz 2 dilim 1 R14 (işletim): 72 → 68; Faz 2 dilim 1 R13 (DevOps + MCP): 75 → 72; Faz 2 dilim 1 R12 (AI SRE + Knowledge): 83 → 75; Faz 2 dilim 1 R11 (CoSRE): 92 → 83; Faz 2 dilim 1 R10 (erişim): 110 → 92; R7: 129 → 126; R8: 126 → 117; R9: 117 → 110
+const MAX_RAW_CHECKBOX = 46; // Faz 2 dilim 1 R17 (Anomaly): 64 → 46; Faz 2 dilim 1 R16 (Oracle): 68 → 64; Faz 2 dilim 1 R14 (işletim): 72 → 68; Faz 2 dilim 1 R13 (DevOps + MCP): 75 → 72; Faz 2 dilim 1 R12 (AI SRE + Knowledge): 83 → 75; Faz 2 dilim 1 R11 (CoSRE): 92 → 83; Faz 2 dilim 1 R10 (erişim): 110 → 92; R7: 129 → 126; R8: 126 → 117; R9: 117 → 110
 
 const SRC = resolve(__dirname, '..');
 const FE = resolve(SRC, '..');

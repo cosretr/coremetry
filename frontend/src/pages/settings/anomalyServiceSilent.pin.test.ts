@@ -9,7 +9,8 @@ const src = readFileSync(resolve(__dirname, 'AnomalyTab.tsx'), 'utf8');
 describe('service_silent ayarı', () => {
   it('kutu === true okur, serviceSilent yazar', () => {
     expect(src).toContain('checked={cfg.serviceSilent === true}');
-    expect(src).toContain('setCfg({ ...cfg, serviceSilent: e.target.checked })');
+    // Faz 2 dilim 1 R17 — Radix CheckboxField: onCheckedChange(boolean).
+    expect(src).toContain('onCheckedChange={v => setCfg({ ...cfg, serviceSilent: v })}');
     expect(src).not.toContain('cfg.serviceSilent !== false');
   });
 });

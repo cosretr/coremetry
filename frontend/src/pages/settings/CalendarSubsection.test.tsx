@@ -2,6 +2,7 @@
 //
 // CalendarSubsection — v0.10.1483: özel gün listesi (ekle / düzenle / sil) ve
 // otomatik ay sonu kutusu; eski blob (bölüm yok) boş takvimle çizilir.
+import '@/test/radixJsdom'; // Faz 2 dilim 1 R17 — Radix Checkbox
 import { describe, it, expect, afterEach } from 'vitest';
 import { act, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -44,7 +45,7 @@ describe('CalendarSubsection', () => {
   it('eski blob: boş takvim, otomatik ay sonu kapalı', () => {
     const h = mount(undefined);
     expect(h.textContent).toContain('Özel gün yok.');
-    expect((h.querySelector('[aria-label="Otomatik ay sonu sınıfı"]') as HTMLInputElement).checked).toBe(false);
+    expect(h.querySelector('button[role="checkbox"][aria-label="Otomatik ay sonu sınıfı"]')?.getAttribute('aria-checked')).toBe('false');
     expect(h.querySelector('[aria-label="Ayın son kaç iş günü"]')).toBeNull();
   });
 
@@ -63,7 +64,7 @@ describe('CalendarSubsection', () => {
   it('otomatik ay sonu açılınca iş günü alanı görünür', () => {
     const h = mount({ days: [{ from: '2031-03-12', to: '2031-03-14', label: 'Bayram', kind: 'holiday' }], monthEndAuto: false, monthEndBusinessDays: 2 });
     expect((h.querySelector('[aria-label="Özel gün 1 bitiş"]') as HTMLInputElement).value).toBe('2031-03-14');
-    act(() => (h.querySelector('[aria-label="Otomatik ay sonu sınıfı"]') as HTMLInputElement).click());
+    act(() => (h.querySelector('button[role="checkbox"][aria-label="Otomatik ay sonu sınıfı"]') as HTMLButtonElement).click());
     expect(last?.monthEndAuto).toBe(true);
     act(() => setInput(h.querySelector('[aria-label="Ayın son kaç iş günü"]') as HTMLInputElement, '3'));
     expect(last?.monthEndBusinessDays).toBe(3);

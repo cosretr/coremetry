@@ -14,6 +14,7 @@
 //   • dokunmadan kayıt AÇIK `opLatency: true` gönderir (alan atlanmaz);
 //   • kutuyu kapatıp kayıt `opLatency: false` gönderir; gövdenin geri kalanı korunur;
 //   • kova sayısı alanı kayıtla gider (yoksa 2 gösterilir).
+import '@/test/radixJsdom'; // Faz 2 dilim 1 R17 — Radix Checkbox
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -78,7 +79,7 @@ async function mount(): Promise<HTMLElement> {
 }
 
 const toggle = (el: HTMLElement) => {
-  const b = el.querySelector<HTMLInputElement>('input[type="checkbox"][aria-label="Operasyon gecikmesi anomalileri"]');
+  const b = el.querySelector<HTMLButtonElement>('button[role="checkbox"][aria-label="Operasyon gecikmesi anomalileri"]');
   if (!b) throw new Error('Operasyon gecikmesi kutusu yok');
   return b;
 };
@@ -107,7 +108,7 @@ describe('Operasyon gecikmesi anomalileri kutusu', () => {
   it('alanı taşımayan blob → AÇIK, kova 2, ipucu sürdürmeyi söyler', async () => {
     expect('opLatency' in m.sens).toBe(false);
     const el = await mount();
-    expect(toggle(el).checked).toBe(true);
+    expect(toggle(el).getAttribute('aria-checked')).toBe('true');
     expect(dwellInput(el).value).toBe('2');
     expect(dwellInput(el).disabled).toBe(false);
     expect(el.textContent).toContain('iki ardışık kovada sürmeli; tek sıçrama');
@@ -118,7 +119,7 @@ describe('Operasyon gecikmesi anomalileri kutusu', () => {
   it('kayıtlı false → kapalı, kova alanı devre dışı', async () => {
     m.sens = baseSens({ opLatency: false, opLatencyDwellBuckets: 3 });
     const el = await mount();
-    expect(toggle(el).checked).toBe(false);
+    expect(toggle(el).getAttribute('aria-checked')).toBe('false');
     expect(dwellInput(el).disabled).toBe(true);
     expect(dwellInput(el).value).toBe('3');
   });
@@ -135,13 +136,13 @@ describe('Operasyon gecikmesi anomalileri kutusu', () => {
   it('kutuyu kapatıp kayıt false gönderir, gövdenin geri kalanı korunur', async () => {
     const el = await mount();
     await act(async () => { toggle(el).click(); });
-    expect(toggle(el).checked).toBe(false);
+    expect(toggle(el).getAttribute('aria-checked')).toBe('false');
     await act(async () => { sensitivitySave(el).click(); });
     await settle();
     expect(m.puts[0].opLatency).toBe(false);
     expect(m.puts[0].criticalZ).toBe(6);
     expect(m.puts[0].serviceSilent).toBe(false);
-    expect(toggle(el).checked).toBe(false);
+    expect(toggle(el).getAttribute('aria-checked')).toBe('false');
   });
 
   it('kova sayısı kayıtla gider', async () => {

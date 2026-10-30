@@ -3,6 +3,7 @@
 // AnomalyTab.countOnly — v0.10.1587 (Davis paritesi FAZ 0.5 / B): sayım-yalnız
 // (oransız) olayların terfi sayım tabanı. Alanı taşımayan blob → 20 gösterilir;
 // değişiklik terfi Kaydet'iyle gider, gövdenin geri kalanı korunur.
+import '@/test/radixJsdom'; // Faz 2 dilim 1 R17 — Radix Checkbox
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -71,9 +72,9 @@ describe('Terfi Problem’i incident bağlama', () => {
     root = createRoot(host);
     await act(async () => { root!.render(<AnomalyPromotionTab />); });
     await settle();
-    const box = host.querySelector<HTMLInputElement>('input[aria-label="Terfi Problem\'i incident\'a bağlansın"]');
+    const box = host.querySelector<HTMLButtonElement>('button[role="checkbox"][aria-label="Terfi Problem\'i incident\'a bağlansın"]');
     if (!box) throw new Error('kutu yok');
-    expect(box.checked).toBe(true);
+    expect(box.getAttribute('aria-checked')).toBe('true');
     await act(async () => { box.click(); });
     const save = [...host.querySelectorAll('button')].find(b => b.textContent?.trim() === 'Save');
     if (!save) throw new Error('Save yok');

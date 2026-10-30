@@ -11,6 +11,7 @@
 //   • kayıtlı true → kutu açık;
 //   • dokunmadan kayıt AÇIK `sloBurnProblems: false` gönderir;
 //   • kutuyu açıp kayıt `true` gönderir; diğer vidalar korunur.
+import '@/test/radixJsdom'; // Faz 2 dilim 1 R17 — Radix Checkbox
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -66,7 +67,7 @@ async function mount(): Promise<HTMLElement> {
 }
 
 const box = (el: HTMLElement) => {
-  const b = el.querySelector<HTMLInputElement>('input[type="checkbox"][aria-label="SLO burn-rate problemleri"]');
+  const b = el.querySelector<HTMLButtonElement>('button[role="checkbox"][aria-label="SLO burn-rate problemleri"]');
   if (!b) throw new Error('SLO burn-rate kutusu yok');
   return b;
 };
@@ -89,14 +90,14 @@ describe('SLO burn-rate problemleri kutusu', () => {
   it('alanı taşımayan blob → KAPALI, ipucu görünür', async () => {
     expect('sloBurnProblems' in m.prio).toBe(false);
     const el = await mount();
-    expect(box(el).checked).toBe(false);
+    expect(box(el).getAttribute('aria-checked')).toBe('false');
     expect(el.textContent).toContain('Kapalı (varsayılan): SLO bütçe yanması Problem, incident ve bildirim açmaz');
   });
 
   it('kayıtlı true → açık', async () => {
     m.prio = basePrio({ sloBurnProblems: true });
     const el = await mount();
-    expect(box(el).checked).toBe(true);
+    expect(box(el).getAttribute('aria-checked')).toBe('true');
   });
 
   it('dokunmadan kayıt AÇIK false gönderir', async () => {
@@ -110,7 +111,7 @@ describe('SLO burn-rate problemleri kutusu', () => {
   it('kutuyu açıp kayıt true gönderir, diğer vidalar korunur', async () => {
     const el = await mount();
     await act(async () => { box(el).click(); });
-    expect(box(el).checked).toBe(true);
+    expect(box(el).getAttribute('aria-checked')).toBe('true');
     await act(async () => { prioritySave(el).click(); });
     await settle();
     expect(m.puts[0].sloBurnProblems).toBe(true);

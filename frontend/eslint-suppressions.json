@@ -454,11 +454,6 @@
       "count": 1
     }
   },
-  "src/pages/settings/AnomalyTab.tsx": {
-    "ui/no-raw-element": {
-      "count": 73
-    }
-  },
   "src/pages/settings/ArgoCDEnvPanel.tsx": {
     "ui/no-raw-element": {
       "count": 1
@@ -477,26 +472,6 @@
   "src/pages/settings/ArgoCDTab.tsx": {
     "ui/no-raw-element": {
       "count": 3
-    }
-  },
-  "src/pages/settings/CalendarSubsection.tsx": {
-    "ui/no-raw-element": {
-      "count": 6
-    }
-  },
-  "src/pages/settings/ErrorRampSubsection.tsx": {
-    "ui/no-raw-element": {
-      "count": 2
-    }
-  },
-  "src/pages/settings/REDSourceSubsection.tsx": {
-    "ui/no-raw-element": {
-      "count": 3
-    }
-  },
-  "src/pages/settings/ServiceSlowdownSubsection.tsx": {
-    "ui/no-raw-element": {
-      "count": 2
     }
   },
   "src/pages/traces/ColumnFilter.tsx": {

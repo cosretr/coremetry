@@ -112,17 +112,20 @@ export interface CheckboxFieldProps {
   disabled?: boolean;
   id?: string;
   'aria-describedby'?: string;
+  /** Görünen etiketten farklı erişilebilir ad (R17: sorgu/test sözleşmesi
+   *  `[aria-label=…]` olan eski kutular). Verilmezse ad = etiket. */
+  'aria-label'?: string;
   className?: string;
 }
 
 /** Kutu solda, etiket SAĞDA (D13). Radix Checkbox `<button role="checkbox">`;
  *  `<form>` içinde gizli input basmaz (name verilmez). */
-export function CheckboxField({ label, hint, checked, onCheckedChange, disabled, id, 'aria-describedby': describedBy, className }: CheckboxFieldProps) {
+export function CheckboxField({ label, hint, checked, onCheckedChange, disabled, id, 'aria-describedby': describedBy, 'aria-label': ariaLabel, className }: CheckboxFieldProps) {
   const { fieldId, noteId, desc } = useFieldIds(id, !!hint, describedBy);
   return (
     <div data-cm-field="" className={cn('flex min-w-0 flex-col gap-0.5', className)}>
       <div className="flex items-center gap-2">
-        <Checkbox id={fieldId} checked={checked} disabled={disabled} aria-describedby={desc}
+        <Checkbox id={fieldId} checked={checked} disabled={disabled} aria-describedby={desc} aria-label={ariaLabel}
           onCheckedChange={v => onCheckedChange(v === true)} />
         <Label htmlFor={fieldId} className="text-[length:var(--fs-sm)] font-normal leading-tight">{label}</Label>
       </div>

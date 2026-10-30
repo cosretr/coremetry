@@ -6,6 +6,7 @@
 // NE ÇİVİLİYOR: alanı taşımayan blob → kutu AÇIK, 1 hata/sn + %0,2; kayıtlı
 // false → kapalı, alanlar devre dışı; değişiklik kayıtla behavior içinde gider
 // ve gövdenin geri kalanı korunur.
+import '@/test/radixJsdom'; // Faz 2 dilim 1 R17 — Radix Checkbox
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -65,7 +66,7 @@ async function mount(): Promise<HTMLElement> {
 }
 
 const hvToggle = (el: HTMLElement) => {
-  const b = el.querySelector<HTMLInputElement>('input[type="checkbox"][aria-label="Yüksek hacimde düşük hata tabanı"]');
+  const b = el.querySelector<HTMLButtonElement>('button[role="checkbox"][aria-label="Yüksek hacimde düşük hata tabanı"]');
   if (!b) throw new Error('kutu yok');
   return b;
 };
@@ -95,7 +96,7 @@ afterEach(() => {
 describe('Davranış: yüksek hacimde düşük hata tabanı', () => {
   it('alanı taşımayan blob → AÇIK, varsayılanlar, Türkçe açıklama', async () => {
     const el = await mount();
-    expect(hvToggle(el).checked).toBe(true);
+    expect(hvToggle(el).getAttribute('aria-checked')).toBe('true');
     expect(numInput(el, 'hata hızı eşiği').value).toBe('1');
     expect(numInput(el, 'hata oranı tabanı').value).toBe('0.2');
     expect(el.textContent).toContain('düşük hacimli');
@@ -104,7 +105,7 @@ describe('Davranış: yüksek hacimde düşük hata tabanı', () => {
   it('kayıtlı false → kapalı, alanlar devre dışı', async () => {
     m.sens = baseSens({ behavior: behavior({ highVolumeErrorFloor: false, highVolumeErrorsPerSec: 3, highVolumeMinErrorRatePct: 0.4 }) });
     const el = await mount();
-    expect(hvToggle(el).checked).toBe(false);
+    expect(hvToggle(el).getAttribute('aria-checked')).toBe('false');
     expect(numInput(el, 'hata hızı eşiği').disabled).toBe(true);
     expect(numInput(el, 'hata hızı eşiği').value).toBe('3');
   });
@@ -117,7 +118,9 @@ describe('Davranış: yüksek hacimde düşük hata tabanı', () => {
       setter.call(input, '0.3');
       input.dispatchEvent(new Event('input', { bubbles: true }));
     });
-    await act(async () => { hvToggle(el).click(); hvToggle(el).click(); });
+    // Faz 2 dilim 1 R17 — Radix Checkbox kontrollü prop'tan okur: iki tık ayrı act'te.
+    await act(async () => { hvToggle(el).click(); });
+    await act(async () => { hvToggle(el).click(); });
     await act(async () => { sensitivitySave(el).click(); });
     await settle();
     expect(m.puts).toHaveLength(1);

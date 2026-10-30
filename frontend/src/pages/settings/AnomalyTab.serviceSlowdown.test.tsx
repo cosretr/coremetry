@@ -10,6 +10,7 @@
 //   • kayıtlı enabled:false → kutu kapalı, alanlar devre dışı;
 //   • alan değişikliği + kutu kayıtla gider (enabled AÇIK boolean), gövdenin
 //     geri kalanı korunur.
+import '@/test/radixJsdom'; // Faz 2 dilim 1 R17 — Radix Checkbox
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -69,7 +70,7 @@ async function mount(): Promise<HTMLElement> {
 }
 
 const toggle = (el: HTMLElement) => {
-  const b = el.querySelector<HTMLInputElement>('input[type="checkbox"][aria-label="Yaygın yavaşlama problemi"]');
+  const b = el.querySelector<HTMLButtonElement>('button[role="checkbox"][aria-label="Yaygın yavaşlama problemi"]');
   if (!b) throw new Error('Yaygın yavaşlama kutusu yok');
   return b;
 };
@@ -95,7 +96,7 @@ afterEach(() => {
 describe('Yaygın yavaşlama problemi bölümü', () => {
   it('bölümü taşımayan blob → AÇIK, varsayılanlar, alan başına yardım', async () => {
     const el = await mount();
-    expect(toggle(el).checked).toBe(true);
+    expect(toggle(el).getAttribute('aria-checked')).toBe('true');
     expect(numInput(el, 'En az operasyon').value).toBe('3');
     expect(numInput(el, 'Operasyon p99 tabanı (ms)').value).toBe('5000');
     expect(numInput(el, 'Artış katı (× kendi tabanı)').value).toBe('20');
@@ -112,7 +113,7 @@ describe('Yaygın yavaşlama problemi bölümü', () => {
   it('kayıtlı enabled:false → kapalı, alanlar devre dışı', async () => {
     m.sens = baseSens({ serviceSlowdown: { enabled: false, minOps: 4, minCallsPerOp: 30, minP99Ms: 8000, riseFactor: 20, minCallsTotal: 100, dropPct: 40, clearBuckets: 2, maxNewPerTick: 10 } });
     const el = await mount();
-    expect(toggle(el).checked).toBe(false);
+    expect(toggle(el).getAttribute('aria-checked')).toBe('false');
     expect(numInput(el, 'En az operasyon').disabled).toBe(true);
     expect(numInput(el, 'En az operasyon').value).toBe('4');
     expect(numInput(el, 'Operasyon p99 tabanı (ms)').value).toBe('8000');

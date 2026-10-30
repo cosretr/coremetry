@@ -12,6 +12,7 @@
 //   • dokunmadan kayıt AÇIK `logTemplateNew: false` gönderir (alan atlanmaz);
 //   • kutuyu açıp kayıt `logTemplateNew: true` gönderir; komşu opLatency ve
 //     gövdenin geri kalanı korunur.
+import '@/test/radixJsdom'; // Faz 2 dilim 1 R17 — Radix Checkbox
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -75,7 +76,7 @@ async function mount(): Promise<HTMLElement> {
 }
 
 const toggle = (el: HTMLElement) => {
-  const b = el.querySelector<HTMLInputElement>('input[type="checkbox"][aria-label="Yeni log deseni anomalileri"]');
+  const b = el.querySelector<HTMLButtonElement>('button[role="checkbox"][aria-label="Yeni log deseni anomalileri"]');
   if (!b) throw new Error('Yeni log deseni kutusu yok');
   return b;
 };
@@ -98,7 +99,7 @@ describe('Yeni log deseni anomalileri kutusu', () => {
   it('alanı taşımayan blob → KAPALI, ipucu görünür', async () => {
     expect('logTemplateNew' in m.sens).toBe(false);
     const el = await mount();
-    expect(toggle(el).checked).toBe(false);
+    expect(toggle(el).getAttribute('aria-checked')).toBe('false');
     expect(el.textContent).toContain('Kapalı (varsayılan): ilk kez görülen log desenleri anomali açmaz');
     expect(el.textContent).toContain('log desen sıçramaları etkilenmez.');
   });
@@ -106,7 +107,7 @@ describe('Yeni log deseni anomalileri kutusu', () => {
   it('kayıtlı true → açık', async () => {
     m.sens = baseSens({ logTemplateNew: true });
     const el = await mount();
-    expect(toggle(el).checked).toBe(true);
+    expect(toggle(el).getAttribute('aria-checked')).toBe('true');
   });
 
   it('dokunmadan kayıt AÇIK false gönderir', async () => {
@@ -121,13 +122,13 @@ describe('Yeni log deseni anomalileri kutusu', () => {
   it('kutuyu açıp kayıt true gönderir, komşu opLatency ve gövde korunur', async () => {
     const el = await mount();
     await act(async () => { toggle(el).click(); });
-    expect(toggle(el).checked).toBe(true);
+    expect(toggle(el).getAttribute('aria-checked')).toBe('true');
     await act(async () => { sensitivitySave(el).click(); });
     await settle();
     expect(m.puts[0].logTemplateNew).toBe(true);
     expect(m.puts[0].opLatency).toBe(true);
     expect(m.puts[0].criticalZ).toBe(6);
     expect(m.puts[0].serviceSilent).toBe(false);
-    expect(toggle(el).checked).toBe(true);
+    expect(toggle(el).getAttribute('aria-checked')).toBe('true');
   });
 });

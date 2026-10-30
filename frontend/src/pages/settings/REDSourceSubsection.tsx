@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import type { AnomalyREDSourceStats } from '@/lib/types';
+import { Field, SelectField } from '@/components/coremetry/Field';
 import { humanize } from './shared';
 
 // REDSourceSubsection — v0.10.1478 (operatör: "Servislerin kendi içerisinde
@@ -12,6 +13,9 @@ import { humanize } from './shared';
 //
 // v0.10.1489 — alarm kurallarının kaynağı da burada (anomaly_sensitivity
 // .alertSource; aynı VM kapsamı / ortam). Altında evaluator'ın son tiki.
+const NOTE = 'mt-1 ml-6 text-[length:var(--fs-xs)] leading-normal text-(--text3)';
+const STATUS = 'mt-2 ml-6 text-[length:var(--fs-xs)] leading-[1.6] text-(--text2)';
+
 export function REDSourceSubsection({ source, env, alertSource, onChange, onAlertSourceChange }: {
   source?: 'auto' | 'span';
   env?: string;
@@ -26,33 +30,30 @@ export function REDSourceSubsection({ source, env, alertSource, onChange, onAler
   useEffect(() => {
     api.getAnomalyREDSourceStatus().then(setSt).catch(e => setErr(humanize(e)));
   }, []);
+  // Faz 2 dilim 1 R17 — coremetry SelectField / Field (aria-label'lar aynı);
+  // satır-içi stiller utility.
   return (
-    <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16, marginTop: 4 }}>
-      <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <span style={{ fontSize: 13, color: 'var(--text)' }}>RED serisi kaynağı</span>
-        <select aria-label="RED serisi kaynağı" value={mode}
-          onChange={e => onChange(e.target.value === 'span' ? 'span' : 'auto', env ?? '')}>
-          <option value="auto">Otomatik — VictoriaMetrics varsa örneklenmemiş metrik</option>
-          <option value="span">Span — örneklenmiş trace (eski davranış)</option>
-        </select>
-      </label>
-      <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4, marginLeft: 24, lineHeight: 1.5 }}>
+    <div className="mt-1 border-t border-(--border) pt-4">
+      <SelectField label="RED serisi kaynağı" aria-label="RED serisi kaynağı" className="max-w-[420px]" value={mode}
+        onChange={e => onChange(e.target.value === 'span' ? 'span' : 'auto', env ?? '')}>
+        <option value="auto">Otomatik — VictoriaMetrics varsa örneklenmemiş metrik</option>
+        <option value="span">Span — örneklenmiş trace (eski davranış)</option>
+      </SelectField>
+      <div className={NOTE}>
         Otomatik (varsayılan): servisin OTel HTTP/gRPC sunucu histogramı VictoriaMetrics&apos;te varsa hata
         oranı, istek hızı ve p99 oradan (örneklenmemiş) okunur; yoksa servis başına span&apos;e düşülür.
         Taban (14 gün aynı saat, 28 gün haftanın saati), sürdürme ve eşikler aynıdır. Problem açıklaması
         kaynağı yazar: &quot;kaynak: VictoriaMetrics (örneklenmemiş)&quot; ya da &quot;kaynak: span (örneklenmiş)&quot;.
       </div>
-      <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10, marginLeft: 24 }}>
-        <span style={{ fontSize: 12, color: 'var(--text2)' }}>Ortam</span>
-        <input type="text" aria-label="RED kaynağı ortamı" placeholder="boş = tüm ortamlar" maxLength={200}
-          value={env ?? ''} disabled={mode === 'span' && alertMode === 'span'}
-          onChange={e => onChange(mode, e.target.value)} />
-      </label>
-      <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4, marginLeft: 24, lineHeight: 1.5 }}>
-        Doluysa VM serisi bu ortama süzülür (deployment_environment_name; toleranslı eşleme). Eşleşmezse
-        VM kullanılmaz, span&apos;e düşülür.
-      </div>
-      <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 8, marginLeft: 24, lineHeight: 1.6 }}>
+      <Field label="Ortam" aria-label="RED kaynağı ortamı" className="mt-2.5 ml-6 max-w-[396px]"
+        placeholder="boş = tüm ortamlar" maxLength={200}
+        value={env ?? ''} disabled={mode === 'span' && alertMode === 'span'}
+        onChange={e => onChange(mode, e.target.value)}
+        hint={<>
+          Doluysa VM serisi bu ortama süzülür (deployment_environment_name; toleranslı eşleme). Eşleşmezse
+          VM kullanılmaz, span&apos;e düşülür.
+        </>} />
+      <div className={STATUS}>
         {err && <span>Durum okunamadı: {err}</span>}
         {!err && st && !st.lastUnix && <span>Bu pod dedektörü koşturmuyor (lider başka pod) — ölçüm yok.</span>}
         {!err && st && !!st.lastUnix && (
@@ -75,22 +76,19 @@ export function REDSourceSubsection({ source, env, alertSource, onChange, onAler
       </div>
       {onAlertSourceChange && (
         <>
-          <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 14 }}>
-            <span style={{ fontSize: 13, color: 'var(--text)' }}>Alarm kuralı kaynağı</span>
-            <select aria-label="Alarm kuralı kaynağı" value={alertMode}
-              onChange={e => onAlertSourceChange(e.target.value === 'span' ? 'span' : 'auto')}>
-              <option value="auto">Otomatik — VictoriaMetrics varsa örneklenmemiş metrik</option>
-              <option value="span">Span — örneklenmiş trace (eski davranış)</option>
-            </select>
-          </label>
-          <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4, marginLeft: 24, lineHeight: 1.5 }}>
+          <SelectField label="Alarm kuralı kaynağı" aria-label="Alarm kuralı kaynağı" className="mt-3.5 max-w-[420px]" value={alertMode}
+            onChange={e => onAlertSourceChange(e.target.value === 'span' ? 'span' : 'auto')}>
+            <option value="auto">Otomatik — VictoriaMetrics varsa örneklenmemiş metrik</option>
+            <option value="span">Span — örneklenmiş trace (eski davranış)</option>
+          </SelectField>
+          <div className={NOTE}>
             Otomatik (varsayılan): alarm kuralları (error_rate, error_count, request_rate, avg_ms, p50/p95/p99_ms)
             servisin HTTP/gRPC sunucu histogramından, kuralın kendi penceresiyle ölçülür; yoksa kural×servis başına
             span&apos;e düşülür. Eşik, sürdürme ve bekleme aynıdır; VM verisi ~2 dk geriden gelir ve minSamples gerçek
             istek sayısını sayar. Kural önizlemesi ve eşik önerisi aynı kaynağı kullanır. Ortam yukarıdaki alandan.
           </div>
           {!err && st?.alert && !!st.alert.lastUnix && (
-            <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 8, marginLeft: 24, lineHeight: 1.6 }}>
+            <div className={STATUS}>
               <div>
                 Son evaluator tiki: {st.alert.configured ? 'VictoriaMetrics bağlı' : (st.alert.reason || 'VM yok')} · {st.alert.lastQueries} sorgu
                 {st.alert.lastQueryErrors ? ` (${st.alert.lastQueryErrors} hata)` : ''}
