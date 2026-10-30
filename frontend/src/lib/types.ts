@@ -8236,10 +8236,20 @@ export interface CosreWorstTool {
   rephraseRate: number;
   score: number;
 }
+// v0.10.1637 — trace açıklamasının "dış bağımlılık bekleme" satırını sunucu
+// kaç kez ekledi / düzeltti (oran payda = kuralın uygulandığı açıklamalar).
+export interface CosrePrefixStats {
+  applied: number;
+  added: number;
+  corrected: number;
+  addedRate: number;
+  correctedRate: number;
+}
 export interface CosreQualityView {
   days: number;
   answers: CosreWorstAnswer[];
   tools: CosreWorstTool[];
+  prefix?: CosrePrefixStats;
 }
 
 // v0.10.1464 — GET /api/ai/routing-report: haftalık yanlış-yönlendirme adayları

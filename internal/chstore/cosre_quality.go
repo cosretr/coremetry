@@ -331,3 +331,46 @@ func (s *Store) WorstCosreTools(ctx context.Context, fromDay time.Time, minCalls
 	}
 	return out, rows.Err()
 }
+
+// CosrePrefixStats — v0.10.1637: trace açıklamasının "dış bağımlılık bekleme"
+// satırı penceresinde kaç kez uygulandı (payda) ve sunucu modelin cevabını kaç
+// kez değiştirdi (eklendi / düzeltildi). Kaynak cosre_signals sistem satırları
+// (cosrelearn.SigPrefixApplied / SigPrefixCorrected).
+type CosrePrefixStats struct {
+	Applied       uint64  `json:"applied"`
+	Added         uint64  `json:"added"`
+	Corrected     uint64  `json:"corrected"`
+	AddedRate     float64 `json:"addedRate"`
+	CorrectedRate float64 `json:"correctedRate"`
+}
+
+// WithRates — SAF: oranlar [0,1] (payda 0 → 0; pencere kenarında pay paydayı
+// aşarsa 1'de kırpılır).
+func (p CosrePrefixStats) WithRates() CosrePrefixStats {
+	rate := func(n uint64) float64 {
+		if p.Applied == 0 {
+			return 0
+		}
+		return min(1, float64(n)/float64(p.Applied))
+	}
+	p.AddedRate, p.CorrectedRate = rate(p.Added), rate(p.Corrected)
+	return p
+}
+
+// cosrePrefixStatsSQL — ORDER BY (created_at, kind) önekiyle zaman sınırlı;
+// tek satırlık toplam.
+const cosrePrefixStatsSQL = `
+		SELECT countIf(kind = 'prefix_applied'),
+		       countIf(kind = 'prefix_corrected' AND startsWith(detail, 'action=added')),
+		       countIf(kind = 'prefix_corrected' AND startsWith(detail, 'action=corrected'))
+		FROM cosre_signals
+		WHERE created_at >= ? AND kind IN ('prefix_applied', 'prefix_corrected')
+		LIMIT 1
+		SETTINGS max_execution_time = 10`
+
+// CosrePrefixStatsSince — pencere [from, şimdi) toplamı.
+func (s *Store) CosrePrefixStatsSince(ctx context.Context, from time.Time) (CosrePrefixStats, error) {
+	var p CosrePrefixStats
+	err := s.conn.QueryRow(ctx, cosrePrefixStatsSQL, chDateTime64Arg(from)).Scan(&p.Applied, &p.Added, &p.Corrected)
+	return p.WithRates(), err
+}

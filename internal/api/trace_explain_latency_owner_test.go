@@ -8,6 +8,7 @@ package api
 // Bayt bayt: dış bekleme yoksa / blok yoksa cevap AYNEN.
 
 import (
+	"context"
 	"strings"
 	"testing"
 )
@@ -45,7 +46,7 @@ func TestTraceAnswerWithLatencyOwner(t *testing.T) {
 	if got := evalServerCompose("Trace", ext, body); got != line+"\n\n"+body {
 		t.Errorf("evalServerCompose(Trace) mekanik öneki uygulamıyor: %q", got)
 	}
-	run := traceComposeRun(func(func(string)) (string, error) { return body, nil }, ext)
+	run := (&Server{}).traceComposeRun(context.Background(), func(func(string)) (string, error) { return body, nil }, ext) // v0.10.1637 — yöntem (sayım)
 	if out, err := run(nil); err != nil || out != line+"\n\n"+body {
 		t.Errorf("traceComposeRun: %q %v", out, err)
 	}

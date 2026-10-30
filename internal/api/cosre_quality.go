@@ -109,6 +109,10 @@ type cosreQualityView struct {
 	Days    int                        `json:"days"`
 	Answers []chstore.CosreWorstAnswer `json:"answers"`
 	Tools   []chstore.CosreWorstTool   `json:"tools"`
+	// Prefix — v0.10.1637: trace açıklamasının "dış bağımlılık bekleme"
+	// satırını sunucu kaç kez ekledi/düzeltti (pencerede, kural uygulanan
+	// açıklamalara oran; cosre_system_signal.go).
+	Prefix chstore.CosrePrefixStats `json:"prefix"`
 }
 
 // cosreQualityDays — SAF: ?days= 1..30, varsayılan 7.
@@ -125,7 +129,7 @@ func cosreQualityDays(raw string) int {
 
 func (s *Server) getCosreQuality(w http.ResponseWriter, r *http.Request) {
 	days := cosreQualityDays(r.URL.Query().Get("days"))
-	key := fmt.Sprintf("cosre:quality:d=%d", days)
+	key := fmt.Sprintf("cosre:quality:v2:d=%d", days) // v2 — v0.10.1637: + prefix (eski şekil önbellekten dönmesin)
 	s.serveCached(w, r, key, 5*time.Minute, func(ctx context.Context) (any, error) {
 		from := time.Now().UTC().AddDate(0, 0, -days)
 		answers, err := s.store.WorstCosreAnswers(ctx, from, 20)
@@ -142,6 +146,10 @@ func (s *Server) getCosreQuality(w http.ResponseWriter, r *http.Request) {
 		if tools == nil {
 			tools = []chstore.CosreWorstTool{}
 		}
-		return cosreQualityView{Days: days, Answers: answers, Tools: tools}, nil
+		prefix, err := s.store.CosrePrefixStatsSince(ctx, from)
+		if err != nil {
+			return nil, err
+		}
+		return cosreQualityView{Days: days, Answers: answers, Tools: tools, Prefix: prefix}, nil
 	})
 }

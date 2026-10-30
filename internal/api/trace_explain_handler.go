@@ -90,7 +90,7 @@ func (s *Server) copilotExplainTrace(w http.ResponseWriter, r *http.Request) {
 	// aynı, tek önbellek satırı.
 	p := s.traceCodeExplainPrep(r.Context(), in)
 	cacheKey := p.CacheKey
-	run := traceComposeRun(explainPromptBuffered(func() (string, error) { // v0.10.1630 — dış bağımlılık satırı
+	run := s.traceComposeRun(r.Context(), explainPromptBuffered(func() (string, error) { // v0.10.1630 — dış bağımlılık satırı
 		return s.copilotExplainEvidence(r,
 			p.SystemNoCode, p.SystemWithCode, in.User, p.CC, p.SE)
 	}), in.User)
@@ -140,7 +140,7 @@ func (s *Server) explainTraceClassicPrepared(r *http.Request) (explainPrepared, 
 	}
 	return explainPrepared{
 		extra:    traceExplainExtra(in, devops.CodeContext{}, false),
-		run:      traceComposeRun(s.explainPrompt(r, copilot.SystemPromptTrace(), in.User), in.User), // v0.10.1630
+		run:      s.traceComposeRun(r.Context(), s.explainPrompt(r, copilot.SystemPromptTrace(), in.User), in.User), // v0.10.1630; v0.10.1637 sayım
 		service:  in.RootService,
 		cacheKey: explainCacheKey(copilot.SystemPromptTrace(), in.User, ""),
 	}, nil

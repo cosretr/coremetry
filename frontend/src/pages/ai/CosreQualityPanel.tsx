@@ -7,9 +7,9 @@ import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui';
 import { tsLong, fmtNum } from '@/lib/utils';
-import type { CosreWorstAnswer, CosreWorstTool } from '@/lib/types';
+import type { CosrePrefixStats, CosreWorstAnswer, CosreWorstTool } from '@/lib/types';
 import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef, type DataTableStateProps } from '@/components/ui/DataTable';
-import { reasonLabel, reasonIsPositive, pct, scoreTone } from './cosreQualityView';
+import { reasonLabel, reasonIsPositive, pct, scoreTone, prefixStatsLine } from './cosreQualityView';
 
 const ANSWER_COLS: ColumnDef<CosreWorstAnswer>[] = [
   { id: 'score',    label: 'Puan',     sortValue: r => r.score, numeric: true, width: 70, tone: r => scoreTone(r.score) },
@@ -34,10 +34,11 @@ const TOOL_COLS: ColumnDef<CosreWorstTool>[] = [
 export function CosreQualityPanel() {
   const [answers, setAnswers] = useState<CosreWorstAnswer[] | null | undefined>(undefined);
   const [tools, setTools] = useState<CosreWorstTool[] | null | undefined>(undefined);
+  const [prefix, setPrefix] = useState<CosrePrefixStats | undefined>(undefined); // v0.10.1637
   useEffect(() => {
     let cancelled = false;
     api.cosreQuality(7)
-      .then(r => { if (!cancelled) { setAnswers(r.answers); setTools(r.tools); } })
+      .then(r => { if (!cancelled) { setAnswers(r.answers); setTools(r.tools); setPrefix(r.prefix); } })
       .catch(() => { if (!cancelled) { setAnswers(null); setTools(null); } });
     return () => { cancelled = true; };
   }, []);
@@ -91,6 +92,12 @@ export function CosreQualityPanel() {
           </table>
         </div>
       </div>
+      {tools !== undefined && tools !== null && ( /* v0.10.1637 — tek satır; yükleme/hata tablo durumlarında */
+        <div className="ov-card-b ov-sub"
+          title="Trace açıklamasında en büyük paylı kritik yol adımı dış bağımlılık beklemesiyse sunucu cevabın ilk satırını kanıttan kurar; model yazmadıysa eklenir, yanlış değerle yazdıysa düzeltilir. Oran payda = kuralın uygulandığı üretilmiş açıklamalar (önbellek isabetleri sayılmaz).">
+          {prefixStatsLine(prefix)}
+        </div>
+      )}
       <div className="ov-card-h" style={{ marginTop: 12 }}>
         <h3>En kötü tool'lar</h3>
         <span className="ov-sub">puan = başarı × (1 − sonrasında yeniden sorma oranı)</span>

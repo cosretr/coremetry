@@ -56,6 +56,23 @@ var ClientSignalKinds = map[string]bool{
 	SigEvidenceRelevant: true, SigEvidenceIrrelevant: true, SigNote: true, // v0.10.1597
 }
 
+// v0.10.1637 (CoSRE kritik yol takibi) — SUNUCU kaynaklı sinyaller: trace
+// açıklamasında "dış bağımlılık bekleme" kuralı uygulandı (prefix_applied =
+// payda) ve sunucu modelin cevabını değiştirdi (prefix_corrected, ayrıntı
+// "action=added|corrected …"). İstemci POST EDEMEZ (ClientSignalKinds dışı)
+// ve gece puanına GİRMEZ (Weight yok; DeriveSignals/Score yalnız istemci
+// türlerini okur) — yalnız haftalık oran (chstore.CosrePrefixStatsSince).
+const (
+	SigPrefixApplied   = "prefix_applied"
+	SigPrefixCorrected = "prefix_corrected"
+)
+
+// SystemSignalKinds — sunucunun yazabileceği kapalı küme.
+var SystemSignalKinds = map[string]bool{SigPrefixApplied: true, SigPrefixCorrected: true}
+
+// SystemSignalActor — sistem sinyallerinin user_email değeri (kullanıcı değil).
+const SystemSignalActor = "system:cosre"
+
 // Weight — sinyalin puana katkısı (taban 0.5, sonuç [0,1]).
 var Weight = map[string]float64{
 	SigCopy:            0.15,
