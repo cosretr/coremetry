@@ -17,7 +17,8 @@
  * token'ları; yeni tablo elemanı yok (T1 ratchet tavanı) — satırlar ul/li.
  */
 import { useId, useState } from 'react';
-import { Button, Modal, SectionHead } from '@/components/ui';
+import { Button, Modal } from '@/components/ui';
+import { SectionHead } from '@/components/coremetry/SectionHead';
 import { api, apiErrorDetail, UnauthorizedError } from '@/lib/api';
 import type { CHStatePathCheck, CHStatePathRebuildPlan, CHStatePathRebuildResult } from '@/lib/types';
 import {

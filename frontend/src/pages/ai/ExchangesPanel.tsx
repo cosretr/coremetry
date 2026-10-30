@@ -6,7 +6,7 @@ import { rowActivation } from '@/lib/a11y';
 import { timeRangeToNs, tsCompact, tsLong, fmtNum } from '@/lib/utils';
 import type { AIExchange, AIExchangeCall, AIExchangeFeedbackFilter, TimeRange } from '@/lib/types';
 import { Drawer, DrawerSection, SegmentedControl } from '@/components/ui';
-import { KeyValue } from '@/components/ui/KeyValue';
+import { KeyValue } from '@/components/coremetry/KeyValue';
 import {
   useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState,
   type ColumnDef, type DataTableStateProps,

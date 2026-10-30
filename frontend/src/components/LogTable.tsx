@@ -18,7 +18,8 @@ import { AIExplainButton } from './ai/AIExplainButton';
 import { IconSparkles } from './icons';
 import { useT } from '@/lib/i18n'; // v0.10.1338
 import { getRaw, setRaw } from '@/lib/storage'; // v0.10.1502 — doc viewer sekme hafızası
-import { Button, IconButton, KeyValue, KeyValueRow } from '@/components/ui';
+import { Button, IconButton } from '@/components/ui';
+import { KeyValue, KeyValueRow } from '@/components/coremetry/KeyValue';
 
 // Column model (Discover revamp step 3): Time is fixed left, Message
 // is fixed right (flexes), the Trace deep-link column trails when

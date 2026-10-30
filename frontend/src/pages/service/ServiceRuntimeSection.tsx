@@ -3,7 +3,7 @@
 // Thanos kaynak grafikleri), Infrastructure sekmesinin altında.
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { SectionHead } from '@/components/ui';
+import { SectionHead } from '@/components/coremetry/SectionHead';
 import { RuntimeCharts, familyOf } from './RuntimeCharts';
 import { HeapBaselineCard } from './HeapBaselineCard'; // v0.10.887 — paritesi #4 dilim 1
 import { PodResourceCharts } from './PodResourceCharts';

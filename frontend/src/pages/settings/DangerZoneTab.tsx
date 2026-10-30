@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { ActionRow, Button } from '@/components/ui';
+import { Button } from '@/components/ui';
+import { ActionRow } from '@/components/coremetry/ActionRow';
 import { api } from '@/lib/api';
 import { humanize, FlashBox } from './shared';
 import type { PurgeResult } from '@/lib/types';

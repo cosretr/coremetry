@@ -15,3 +15,10 @@ export * from './FilterBar';
 export * from './CommandPalette';
 export * from './Field';
 export * from './Confirm';
+// Faz 2 dilim 1 R4 (G5/G6/G7): ui/ dizininden değişmeden taşındı (R8 emsali).
+export { KeyValue, KeyValueRow } from './KeyValue';
+export type { KeyValueProps, KeyValueRowProps, KeyValueItem, KeyValueLabelWidth } from './KeyValue';
+export { SectionHead } from './SectionHead';
+export type { SectionHeadProps } from './SectionHead';
+export { ActionRow } from './ActionRow';
+export type { ActionRowProps } from './ActionRow';

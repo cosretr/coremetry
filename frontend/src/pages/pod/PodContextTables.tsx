@@ -10,7 +10,8 @@
 // KeyValue; ömür tarihçesi statik tablo kalır (gerekçe tablonun içinde).
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Badge, Button, KeyValue } from '@/components/ui';
+import { Badge, Button } from '@/components/ui';
+import { KeyValue } from '@/components/coremetry/KeyValue';
 import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef, type DataTableStateStaticProps } from '@/components/ui/DataTable';
 import { fmtDateTime, fmtBytes } from '@/lib/utils';
 import { fmtCores, podPhaseBadge } from '@/pages/clusters/thresholds';

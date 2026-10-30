@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Spinner } from '@/components/Spinner';
-import { Button, Field, KeyValue, KeyValueRow, SelectField, TextareaField } from '@/components/ui';
+import { Button, Field, SelectField, TextareaField } from '@/components/ui';
+import { KeyValue, KeyValueRow } from '@/components/coremetry/KeyValue';
 import { useAuth } from '@/components/AuthProvider';
 import { api } from '@/lib/api';
 import { useT } from '@/lib/i18n';

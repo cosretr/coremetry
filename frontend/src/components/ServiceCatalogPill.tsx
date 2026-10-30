@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, apiErrorText } from '@/lib/api';
 import { useAuth } from '@/components/AuthProvider';
 import { Button } from '@/components/ui/Button';
-import { ActionRow } from '@/components/ui/ActionRow';
+import { ActionRow } from '@/components/coremetry/ActionRow';
 import { Chip } from '@/components/ui/Chip';
 import { SafeHref } from '@/components/ui/SafeHref';
 import type { ServiceMetadata } from '@/lib/types';

@@ -23,7 +23,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { Spinner, Empty } from '@/components/Spinner';
 import { QueryErrorInline } from '@/components/QueryError';
-import { Badge, Button, Card, Chip, Drawer, DrawerSection, KeyValue, SectionHead, SegmentedControl, SelectField } from '@/components/ui';
+import { Badge, Button, Card, Chip, Drawer, DrawerSection, SegmentedControl, SelectField } from '@/components/ui';
+import { KeyValue } from '@/components/coremetry/KeyValue';
+import { SectionHead } from '@/components/coremetry/SectionHead';
 import {
   useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState,
   type ColumnDef, type DataTableStateKind,

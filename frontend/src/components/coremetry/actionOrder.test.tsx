@@ -25,7 +25,7 @@ import { act } from 'react';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { ActionRow } from './ActionRow';
-import { Button } from './Button';
+import { Button } from '../ui/Button';
 import { stripTsComments } from '../../styles/zLayers.test';
 
 const SRC = resolve(__dirname, '..', '..');

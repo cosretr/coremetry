@@ -68,7 +68,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Check, Copy, Maximize2, X } from 'lucide-react';
-import { Badge, Button, Chip, DisclosureButton, IconButton, KeyValue, LinkButton, MenuItem, Popover, type KeyValueItem } from '@/components/ui';
+import { Badge, Button, Chip, DisclosureButton, IconButton, LinkButton, MenuItem, Popover } from '@/components/ui';
+import { KeyValue, type KeyValueItem } from '@/components/coremetry/KeyValue';
 import { MiddleEllipsis } from '@/components/ui/DataTable/MiddleEllipsis';
 import { Skeleton } from '@/components/Skeleton';
 import { copyToClipboard } from '@/lib/clipboard';

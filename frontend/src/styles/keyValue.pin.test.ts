@@ -1,7 +1,7 @@
 // keyValue.pin — v0.10.939 (tablo standardı T1, dilim 2: KeyValue atomu).
 //
 // Operatör onayı: docs/DECISIONS.md "Tablo standardı"; mockup "Anahtar/değer"
-// bölümü. Atomun DOM sözleşmesi `components/ui/KeyValue.contract.test.tsx`te;
+// bölümü. Atomun DOM sözleşmesi `components/coremetry/KeyValue.contract.test.tsx`te;
 // burada GÖRÜNÜM kararları çivileniyor — hiçbiri tsc/eslint/colorLeaks'e
 // takılmaz: `.keyval__val`e `word-break: break-all` yazmak geçerli CSS'tir,
 // ekranda yalnız kimlikler harf ortasından kırılır; açığa çıkarma kuralından
@@ -107,7 +107,7 @@ describe('T1 — KeyValue görünümü', () => {
   });
 
   it('atomun bastığı her sınıf globals.css\'te tanımlı', () => {
-    const src = readFileSync(resolve(__dirname, '../components/ui/KeyValue.tsx'), 'utf8')
+    const src = readFileSync(resolve(__dirname, '../components/coremetry/KeyValue.tsx'), 'utf8')
       .replace(/\/\*[\s\S]*?\*\//g, '').split('\n').map(l => l.replace(/\/\/.*$/, '')).join('\n');
     const emitted = new Set([...src.matchAll(/'(keyval[\w-]*)'|"(keyval[\w-]*)"/g)].map(m => m[1] ?? m[2]));
     expect(emitted.size, 'atomun sınıfları bulunamadı — desen kaymış').toBeGreaterThanOrEqual(8);

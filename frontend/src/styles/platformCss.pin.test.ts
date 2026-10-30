@@ -90,7 +90,7 @@ const TOUCH_SEL = ':where(button, a, .btn-icon, [role="button"], summary, label[
 const OVERLAYS = ['.modal-dialog', '.drawer-panel', '.ui-popover', '.dt-menu-pop', '.cb-list', '.pc-panel', '.pick-list'];
 // Çapa hedefleri ve kaynakta bu id'yi/sınıfı taşıyan dosya.
 const ANCHORS: Array<[string, string, string]> = [
-  ['.sec-head[id]', 'components/ui/SectionHead.tsx', 'className="dtl-sech sec-head" id={id}'],
+  ['.sec-head[id]', 'components/coremetry/SectionHead.tsx', 'className="dtl-sech sec-head" id={id}'],
   ['#dtl-props', 'pages/Service.tsx', 'id="dtl-props"'],
   ['#deploys', 'pages/Service.tsx', 'id="deploys"'],
   ['#db-errors', 'pages/databases/databaseParam.ts', "DATABASE_ERRORS_ANCHOR = 'db-errors'"],

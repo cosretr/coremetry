@@ -32,7 +32,7 @@ import { DBQueriesPanel } from '@/components/DBQueriesPanel';
 import { DeployHistoryPanel } from '@/components/DeployHistoryPanel';
 import { DetailsPropsStrip } from './service/DetailsPropsStrip';
 import { DetailsEndpointsSection } from './service/DetailsEndpointsSection'; // v0.10.715
-import { SectionHead } from '@/components/ui/SectionHead'; // v0.10.715
+import { SectionHead } from '@/components/coremetry/SectionHead'; // v0.10.715
 import { ClusterModeToggle } from '@/components/ClusterModeToggle'; // v0.10.717
 import { DetailsToc } from './service/DetailsToc';
 import { DetailsMetricsSection, useDetailsMetricPanels } from './service/DetailsMetricsSection';

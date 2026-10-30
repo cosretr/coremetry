@@ -1,5 +1,5 @@
 import { lazy, Suspense, useMemo } from 'react';
-import { SectionHead } from '@/components/ui/SectionHead'; // v0.10.715
+import { SectionHead } from '@/components/coremetry/SectionHead'; // v0.10.715
 import { msSyncKey } from '@/lib/chart/syncNamespace';
 import { useNavigate } from 'react-router-dom';
 import { useQueries, useQuery } from '@tanstack/react-query';

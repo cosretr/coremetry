@@ -103,15 +103,12 @@ const CEILINGS: Record<string, number> = {
   Card: 19,
   TabStrip: 17,
   Drawer: 15,
-  KeyValue: 14,
   Menu: 14,
   StatTile: 13,
   SafeHref: 12,
-  SectionHead: 12,
   Popover: 11,
   SearchField: 11,
   PanelTitle: 10,
-  ActionRow: 8,
   PriorityBadge: 8,
   ButtonGroup: 7,
   Tooltip: 6,
@@ -129,10 +126,10 @@ const CEILINGS: Record<string, number> = {
   VirtualList: 1,
 };
 
-// 43 girdi (DataTable/ dizini ve index.ts dahil, testler hariç). v0.10.1616
-// (R8): PageShell + PageControls coremetry/'e taşındı (45 → 43).
+// 40 girdi (DataTable/ dizini ve index.ts dahil, testler hariç). v0.10.1616
+// (R8): PageShell + PageControls coremetry/'e taşındı (45 → 43). Faz 2
+// dilim 1 R4: KeyValue, SectionHead, ActionRow coremetry/'e taşındı (43 → 40).
 const FROZEN_UI_ENTRIES = [
-  'ActionRow.tsx',
   'Badge.tsx',
   'Button.tsx',
   'ButtonGroup.tsx',
@@ -148,7 +145,6 @@ const FROZEN_UI_ENTRIES = [
   'Field.tsx',
   'IconButton.tsx',
   'IdentityChip.tsx',
-  'KeyValue.tsx',
   'LinkButton.tsx',
   'Menu.tsx',
   'MethodBadge.tsx',
@@ -161,7 +157,6 @@ const FROZEN_UI_ENTRIES = [
   'RouteSkeleton.tsx',
   'SafeHref.tsx',
   'SearchField.tsx',
-  'SectionHead.tsx',
   'SectionUnavailable.tsx',
   'SegmentedControl.tsx',
   'Stack.tsx',

@@ -12,7 +12,8 @@
 // nedenini ekler; durum ipucu KSM anlamıyla (statusTitle v2).
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { Drawer, DrawerSection, Badge, KeyValue, KeyValueRow } from '@/components/ui';
+import { Drawer, DrawerSection, Badge } from '@/components/ui';
+import { KeyValue, KeyValueRow } from '@/components/coremetry/KeyValue';
 import { RecurringMarker } from '@/features/anomalies/RecurringMarker'; // v0.10.1049
 import { Spinner, Empty } from '@/components/Spinner';
 import { serviceHref } from '@/lib/serviceHref';

@@ -3,7 +3,8 @@
 // kalıyor. Okuma pahalı olabilir: yalnız düğmeyle başlar (ES/CH maliyet
 // disiplini), sunucu 5 dk önbellekler.
 import { useState } from 'react';
-import { Button, Badge, KeyValue, KeyValueRow } from '@/components/ui';
+import { Button, Badge } from '@/components/ui';
+import { KeyValue, KeyValueRow } from '@/components/coremetry/KeyValue';
 import { Spinner } from '@/components/Spinner';
 import { api } from '@/lib/api';
 import { fmtNum } from '@/lib/utils';

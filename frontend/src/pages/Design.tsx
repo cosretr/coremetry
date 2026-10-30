@@ -2,10 +2,8 @@ import { useState, type ReactNode } from 'react';
 import { ChevronRight, Copy, Download, Pencil, Plus, RefreshCw, Save, Star, Trash2, X } from 'lucide-react';
 import { Topbar } from '@/components/Topbar';
 import { PageShell } from '@/components/coremetry/PageShell';
-import {
-  ActionRow, Button, ButtonGroup, Card, Chip, DisclosureButton, IconButton, LinkButton,
-  SegmentedControl, Tooltip,
-} from '@/components/ui';
+import { Button, ButtonGroup, Card, Chip, DisclosureButton, IconButton, LinkButton, SegmentedControl, Tooltip } from '@/components/ui';
+import { ActionRow } from '@/components/coremetry/ActionRow';
 import { ShadcnCatalog } from './design/ShadcnCatalog';
 import './design/design.css';
 

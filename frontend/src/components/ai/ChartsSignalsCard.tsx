@@ -2,7 +2,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Chip } from '@/components/ui/Chip';
 import { DrawerSection } from '@/components/ui/Drawer';
-import { KeyValue, KeyValueRow } from '@/components/ui/KeyValue';
+import { KeyValue, KeyValueRow } from '@/components/coremetry/KeyValue';
 import { CHART_SCOPES, chartScopeLabel, type ChartScope } from '@/lib/aiSubject';
 import { operationTracesHref, tracesPivotHref } from '@/lib/pivotHref';
 import { fmtClock } from '@/lib/utils';

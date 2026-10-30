@@ -62,8 +62,6 @@ export { EnterHint } from './EnterHint'; // v0.10.1332
 export type { EnterHintProps } from './EnterHint';
 export type { SearchFieldProps } from './SearchField';
 
-export { ActionRow } from './ActionRow';
-export type { ActionRowProps } from './ActionRow';
 
 // v0.10.919 (buton bütünlüğü, Seçenek B) — eş eylem kümesi + ipucu.
 export { ButtonGroup } from './ButtonGroup';
@@ -118,12 +116,8 @@ export { SectionUnavailable } from './SectionUnavailable';
 export { PanelTitle } from './PanelTitle';
 export { PriorityBadge } from './PriorityBadge';
 
-export { SectionHead } from './SectionHead'; // v0.10.715 — bölüm başlığı atomu
-export type { SectionHeadProps } from './SectionHead';
 
 // v0.10.939 (tablo standardı T1) — öznitelik paneli atomu (dl/dt/dd); 21 yer dilim 3'te göçer.
-export { KeyValue, KeyValueRow } from './KeyValue';
-export type { KeyValueProps, KeyValueRowProps, KeyValueItem, KeyValueLabelWidth } from './KeyValue';
 
 export { Popover, PopoverLinkItem, PopoverHrefItem, type PopoverProps } from './Popover'; // v0.10.968 — çapaya bağlı menü/diyalog (satır ⋯, "+N" çip menüsü, kapsam)
 // v0.10.1089 — seçicilerin ortak açılır listesi (Combobox → Service/Operation/MetricName picker).

@@ -11,7 +11,7 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { fmtNum } from '@/lib/utils';
-import { KeyValue, KeyValueRow } from '@/components/ui/KeyValue';
+import { KeyValue, KeyValueRow } from '@/components/coremetry/KeyValue';
 import { QueryErrorInline } from '@/components/QueryError';
 import { serviceHref } from '@/lib/serviceHref';
 import type { ExceptionGroup, ExceptionSample } from '@/lib/types';

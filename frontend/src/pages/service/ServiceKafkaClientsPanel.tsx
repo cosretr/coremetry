@@ -7,7 +7,7 @@
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { LinkButton } from '@/components/ui/LinkButton'; // v0.10.719
-import { SectionHead } from '@/components/ui/SectionHead'; // v0.10.718
+import { SectionHead } from '@/components/coremetry/SectionHead'; // v0.10.718
 import { KafkaAlertModal } from '@/pages/alerts/KafkaAlertModal'; // v0.10.554
 import { StatTile } from '@/components/ui/StatTile';
 import { Spinner } from '@/components/Spinner';

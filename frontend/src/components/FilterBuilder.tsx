@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { attrKeyWindowParams } from '@/lib/attrKeyWindow';
 import { useEscLayer } from '@/lib/escLayer';
 import { Combobox } from './Combobox';
-import { ActionRow, Button, Chip, IconButton } from '@/components/ui';
+import { Button, Chip, IconButton } from '@/components/ui';
+import { ActionRow } from '@/components/coremetry/ActionRow';
 import { api } from '@/lib/api';
 import { metricLabelQ } from '@/lib/metricLabelQuery'; // v0.10.875
 import type { FilterExpr, FilterOp } from '@/lib/types';

@@ -7,7 +7,9 @@ import { useClickhouseHealth, useCHCoordinators, useDDLQueueHealth, useRollupSta
 import { useQuery } from '@tanstack/react-query';
 import { bucketBars, fleetVerdict, lossVerdict, nameTone, pctOf, rawHostLabel, sortRawHosts, staleVerdict } from './adminch/traceHealth'; // v0.10.757, ham sayım v0.10.823
 import { makeBaseline, nodeWorkView, type Baseline, type NodeWorkRow } from '@/lib/chNodeWork';
-import { Button, KeyValue, KeyValueRow, Modal, Row, SectionHead, SegmentedControl, SelectField } from '@/components/ui';
+import { Button, Modal, Row, SegmentedControl, SelectField } from '@/components/ui';
+import { KeyValue, KeyValueRow } from '@/components/coremetry/KeyValue';
+import { SectionHead } from '@/components/coremetry/SectionHead';
 import { useTraceRootDef, useSaveTraceRootDef } from '@/lib/queries'; // v0.10.733
 import { entryRootOf } from '@/lib/rootCoverage'; // v0.10.733 — saf
 import { canRepair, canSeedFirstReplica, catalogLabel, innerViewLabel, leavesFixTable, repairModeLabel, repairRequestMode, runbook, shortZk, statePathHeadline, statePathLabel, statePathOwnsRepair, summarize, verdictLabel, verdictRank, verdictTone } from './adminch/replicaConsistency'; // v0.10.791 — saf

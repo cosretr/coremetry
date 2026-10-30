@@ -2,7 +2,7 @@
 // salt-okunur özeti: açık mı, drain nerede koşuyor (launcher), rol görüldü mü,
 // kuyruk derinliği, koşan iş ve taze kalp atışı olan pod'lar. 10 s yoklama
 // (useSREStatus — gizli sekmede durur; sunucu önbelleği 5 s). Hiçbir eylem yok.
-import { KeyValue } from '@/components/ui';
+import { KeyValue } from '@/components/coremetry/KeyValue';
 import { Spinner } from '@/components/Spinner';
 import { QueryError } from '@/components/QueryError';
 import { useSREStatus } from '@/lib/queries';

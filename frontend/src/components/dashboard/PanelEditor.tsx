@@ -1,6 +1,7 @@
 import { UnitSelect } from './UnitSelect'; // v0.10.506 (D9)
 import { MetricNamePicker } from '../MetricNamePicker';
-import { ActionRow, Button, SegmentedControl } from '@/components/ui';
+import { Button, SegmentedControl } from '@/components/ui';
+import { ActionRow } from '@/components/coremetry/ActionRow';
 import { STEP_OPTIONS } from '@/pages/explore/presets';
 import type {
   Panel, PanelType, PanelWidth, PanelHeight,

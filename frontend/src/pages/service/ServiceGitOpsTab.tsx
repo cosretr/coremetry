@@ -24,7 +24,8 @@
 // notu bir yapılandırma uyarısı olduğu için Argo bölümüne taşındı.
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Badge, SectionHead } from '@/components/ui';
+import { Badge } from '@/components/ui';
+import { SectionHead } from '@/components/coremetry/SectionHead';
 import {
   useDataTable, DataTableColgroup, DataTableHead, DataTableCell, DataTableState,
   type ColumnDef, type DataTableStateProps,

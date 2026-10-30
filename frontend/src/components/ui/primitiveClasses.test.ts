@@ -46,7 +46,10 @@ const definedClasses = new Set<string>(
 const TEST_MARK = '.' + 'test' + '.';
 const primitives = readdirSync(UI)
   .filter(f => f.endsWith('.tsx') && !f.includes(TEST_MARK))
-  .sort();
+  .sort()
+  // Faz 2 dilim 1 R4: KeyValue / SectionHead / ActionRow coremetry/'e
+  // DEĞİŞMEDEN taşındı; sınıf haritaları hâlâ globals.css'e bağlı → kapsamda.
+  .concat(['../coremetry/ActionRow.tsx', '../coremetry/KeyValue.tsx', '../coremetry/SectionHead.tsx']);
 
 /**
  * Bir primitifin ÇALIŞMA ANINDA basabildiği bütün sınıflar. İki kaynak:

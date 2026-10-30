@@ -196,7 +196,7 @@ ColumnDef `mono` / `tone(row)` / `truncate: 'end'|'middle'|'wrap'` / `kind: 'act
 `<MiddleEllipsis>` (kimlik; LogTable `truncMid` buna taşınacak); `dt.tableProps`
 (satır içi `tableLayout` yerine `.dt`); `getRowHref` + `dt.rowLink(row, colId)`
 (gerçek bağlantı, yeni sekme); `<DataTableState kind>` (boş/eşleşme yok/yükleniyor/
-hata, tablonun İÇİNDE); `<BulkBar>` (`selection` ile); `ui/KeyValue` (öznitelik
+hata, tablonun İÇİNDE); `<BulkBar>` (`selection` ile); `coremetry/KeyValue` (öznitelik
 panelleri). "Kolonları sıfırla" başlığın ⋯ menüsünde, ayrı düğme yok.
 
 `storageKey` **zorunlu ve benzersiz** — 89 tablo, 0 çakışma. Kolon tanımı

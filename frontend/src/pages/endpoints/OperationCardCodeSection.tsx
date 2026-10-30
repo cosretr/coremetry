@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Badge, Button, DisclosureButton, KeyValue } from '@/components/ui';
+import { Badge, Button, DisclosureButton } from '@/components/ui';
+import { KeyValue } from '@/components/coremetry/KeyValue';
 import {
   useDataTable, DataTableHead, DataTableColgroup, DataTableState, type DataTableStateProps,
 } from '@/components/ui/DataTable';

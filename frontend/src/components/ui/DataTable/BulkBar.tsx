@@ -1,7 +1,7 @@
 import { useCallback, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import type { DataTable, DataTableSelection } from './DataTable';
 import { Button } from '../Button';
-import { ActionRow } from '../ActionRow';
+import { ActionRow } from '@/components/coremetry/ActionRow';
 
 // BulkBar — v0.10.939 (tablo standardı T8): toplu işlemin TEK çubuğu.
 //

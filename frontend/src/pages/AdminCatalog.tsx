@@ -8,7 +8,7 @@ import {
   useDataTable, DataTableHead, DataTableColgroup, DataTableState, type DataTableStateProps,
 } from '@/components/ui/DataTable';
 import { Button } from '@/components/ui/Button';
-import { ActionRow } from '@/components/ui/ActionRow';
+import { ActionRow } from '@/components/coremetry/ActionRow';
 import { SafeHref } from '@/components/ui/SafeHref';
 import type { DataTableColumn } from '@/lib/dataTable';
 import type { ServiceMetadata } from '@/lib/types';

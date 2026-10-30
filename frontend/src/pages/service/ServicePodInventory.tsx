@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useDataTable, type DataTableStateProps } from '@/components/ui/DataTable';
-import { IconButton, SectionHead, Row, SegmentedControl } from '@/components/ui';
+import { IconButton, Row, SegmentedControl } from '@/components/ui';
+import { SectionHead } from '@/components/coremetry/SectionHead';
 import { Badge } from '@/components/ui/Badge';
 import { ServicePodsTable } from './ServicePodsTable';
 import { useServicePods } from './useServicePods';

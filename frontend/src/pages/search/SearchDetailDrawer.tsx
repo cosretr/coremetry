@@ -18,7 +18,9 @@
 import { useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ActionRow, Badge, Button, Drawer, DrawerSection, KeyValue, SectionUnavailable, StatTile } from '@/components/ui';
+import { Badge, Button, Drawer, DrawerSection, SectionUnavailable, StatTile } from '@/components/ui';
+import { ActionRow } from '@/components/coremetry/ActionRow';
+import { KeyValue } from '@/components/coremetry/KeyValue';
 import { Spinner } from '@/components/Spinner';
 import { CopyButton } from '@/components/CopyButton';
 import { AIExplainButton } from '@/components/ai/AIExplainButton';

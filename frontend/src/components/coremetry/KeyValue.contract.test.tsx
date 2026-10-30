@@ -23,7 +23,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { KeyValue, KeyValueRow, type KeyValueItem } from './KeyValue';
 import { KeyValue as BarrelKeyValue, KeyValueRow as BarrelKeyValueRow } from './index';
-import { IconButton } from './IconButton';
+import { IconButton } from '../ui/IconButton';
 
 let host: HTMLDivElement | null = null;
 let root: Root | null = null;
