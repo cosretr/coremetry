@@ -157,3 +157,86 @@ func RolloutFindings(rows []RolloutRow, th Thresholds, env string, windowS int) 
 	}
 	return out
 }
+
+// ── Kalem 3: yeni / geri dönen exception (Q5; kaynak Inbox, R1) ─────────
+
+// ExceptionRow — Inbox exception/httperror satırı.
+type ExceptionRow struct {
+	ID, Kind, Service, Title, Status, Priority, PageURL string
+	StartedAtUnix                                       int64
+}
+
+// ExceptionQualifies — SAF: pencerede İLK görülen (new) ya da geri dönen
+// (regressed) exception ailesi satırı mı. "Artan tip" Faz 1'de yok (Q5, R2).
+func ExceptionQualifies(r ExceptionRow, fromUnix int64) (kind string, ok bool) {
+	if r.Kind != "exception" && r.Kind != "httperror" {
+		return "", false
+	}
+	switch {
+	case r.StartedAtUnix >= fromUnix:
+		return "new", true
+	case r.Status == "regressed":
+		return "regressed", true
+	}
+	return "", false
+}
+
+// ExceptionFindings — SAF: niteleyen satırlar → bulgu (yeni > geri dönen, sonra öncelik).
+func ExceptionFindings(rows []ExceptionRow, fromUnix int64) []Finding {
+	var out []Finding
+	for _, r := range rows {
+		kind, ok := ExceptionQualifies(r, fromUnix)
+		if !ok {
+			continue
+		}
+		verb := "yeni"
+		score := 2.0
+		if kind == "regressed" {
+			verb, score = "geri döndü", 1
+		}
+		score += prioScore[r.Priority] / 10
+		out = append(out, Finding{Item: ItemException, Kind: kind, Service: r.Service, Label: r.Title, Now: float64(r.StartedAtUnix),
+			Score: score, Text: fmt.Sprintf("%s: %s (%s)", r.Service, strings.TrimSpace(r.Title), verb), PageURL: r.PageURL})
+	}
+	return out
+}
+
+// ── Kalem 4: takım ERROR log sayısı (ES, 3×60 dk dilim — Q7) ────────────
+
+// LogSlices — SAF: [from,to) penceresini ≤ 60 dk dilimlere böler (ES takım
+// okuması 60 dk tavanlı); sıra eski → yeni.
+func LogSlices(fromUnix, toUnix int64) [][2]int64 {
+	const step = 3600
+	var out [][2]int64
+	for a := fromUnix; a < toUnix; a += step {
+		b := a + step
+		if b > toUnix {
+			b = toUnix
+		}
+		out = append(out, [2]int64{a, b})
+	}
+	return out
+}
+
+// LogFindings — SAF: takımın ERROR sayısı cur vs prev. Taban LogMinCount;
+// prev 0 iken cur ≥ taban → "yeni"; aksi kat ≥ LogLevelX. lowerBound = ES
+// sayımı alt sınır (track_total_hits tavanı) — metin söyler.
+func LogFindings(team string, cur, prev int64, lowerBound bool, th Thresholds, logsURL string) []Finding {
+	if cur < int64(th.LogMinCount) {
+		return nil
+	}
+	r := ratio(float64(cur), float64(prev))
+	if prev > 0 && r < th.LogLevelX {
+		return nil
+	}
+	n := fmt.Sprintf("%d", cur)
+	if lowerBound {
+		n = "≥" + n
+	}
+	text := fmt.Sprintf("takım logları: %s ERROR (önceki %d, %s; tüm ortamlar)", n, prev, xs(r))
+	score := r
+	if prev == 0 {
+		score = newErrScore
+	}
+	return []Finding{{Item: ItemLog, Kind: "error_up", Label: team, Now: float64(cur), Prev: float64(prev), Unit: "log", Score: score, Text: text, PageURL: logsURL}}
+}

@@ -168,3 +168,43 @@ func TestServiceURL(t *testing.T) {
 		t.Fatalf("%q", got)
 	}
 }
+
+func TestExceptionFindings(t *testing.T) {
+	from := int64(1000)
+	rows := []ExceptionRow{
+		{ID: "exception:a", Kind: "exception", Service: "orders-api", Title: "NullPointerException", StartedAtUnix: 1500, Priority: "P1"},
+		{ID: "httperror:b", Kind: "httperror", Service: "payments-core", Title: "503", Status: "regressed", StartedAtUnix: 10},
+		{ID: "exception:c", Kind: "exception", Service: "orders-api", Title: "old", Status: "open", StartedAtUnix: 10}, // eski, açık → değil
+		{ID: "problem:d", Kind: "problem", Service: "orders-api", StartedAtUnix: 1500},                                 // aile dışı
+	}
+	fs := ExceptionFindings(rows, from)
+	if len(fs) != 2 || fs[0].Kind != "new" || fs[1].Kind != "regressed" || fs[0].Score <= fs[1].Score {
+		t.Fatalf("%+v", fs)
+	}
+}
+
+func TestLogSlicesAndFindings(t *testing.T) {
+	if s := LogSlices(0, 10800); len(s) != 3 || s[2] != [2]int64{7200, 10800} {
+		t.Fatalf("%v", s)
+	}
+	if s := LogSlices(0, 5400); len(s) != 2 || s[1] != [2]int64{3600, 5400} {
+		t.Fatalf("kısmi dilim %v", s)
+	}
+	th := DefaultThresholds()
+	for name, c := range map[string]struct {
+		cur, prev int64
+		want      int
+	}{
+		"taban altı": {10, 0, 0},
+		"yeni":       {50, 0, 1},
+		"2× → bulgu": {100, 50, 1},
+		"1.5× → yok": {75, 50, 0},
+	} {
+		if got := LogFindings("acme", c.cur, c.prev, false, th, "/logs"); len(got) != c.want {
+			t.Errorf("%s: %d", name, len(got))
+		}
+	}
+	if got := LogFindings("acme", 100, 10, true, th, "/logs"); !strings.Contains(got[0].Text, "≥100") {
+		t.Fatalf("alt sınır metni %q", got[0].Text)
+	}
+}

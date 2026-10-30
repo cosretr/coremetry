@@ -61,6 +61,7 @@ type InboxRow struct {
 	Service     string `json:"service"`
 	Title       string `json:"title,omitempty"`
 	Reason      string `json:"reason"`
+	Status      string `json:"status,omitempty"` // exception: open | regressed; problem: open | acknowledged
 	StartedAtNs int64  `json:"-"`
 	SinceUnix   int64  `json:"since_unix"`
 	PageURL     string `json:"page_url,omitempty"`

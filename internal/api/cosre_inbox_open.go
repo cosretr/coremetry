@@ -64,7 +64,7 @@ func inboxRowsFrom(items []InboxItem) []mcptools.InboxRow {
 		out = append(out, mcptools.InboxRow{
 			ID: it.ID, Kind: it.Kind, Priority: it.Priority, Severity: it.Severity, Service: it.Service,
 			Title: it.Title, Reason: mcptools.InboxReason(it.PriorityReason, it.Title),
-			StartedAtNs: it.StartedAt, SinceUnix: it.StartedAt / 1e9, PageURL: inboxRowHref(it),
+			Status: it.Status, StartedAtNs: it.StartedAt, SinceUnix: it.StartedAt / 1e9, PageURL: inboxRowHref(it),
 		})
 	}
 	return out

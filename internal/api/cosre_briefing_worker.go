@@ -12,11 +12,17 @@ package api
 // Kalemler Service sekmelerinin okuduğu fonksiyonlardan (uyumsuzluk = bug):
 //   1 RED       — mcptools.ReadTeamServicesREDEnv (service_summary_5m /
 //                 service_env_summary_5m), cur + chstore.PriorWindow
-//   6 açık konu — mcptools.ReadInboxOpen (Service şeridiyle aynı Inbox çekirdeği)
+//   3 exception — aynı Inbox okumasının exception/httperror satırları: pencerede
+//                 ilk görülen (new) ya da geri dönen (regressed) — Q5, R1
+//   4 log       — takım ERROR sayısı, readTeamLogs (sohbet takım logları ile
+//                 aynı ES okuması + önbellek), 60 dk dilimler cur + prior (Q7);
+//                 env'siz (takım alanı) → metin "tüm ortamlar" der
+//   6 açık konu — mcptools.ReadInboxOpen (Service şeridiyle aynı Inbox çekirdeği);
+//                 kalem 3'e giden satır burada tekrar sayılmaz
 //   7 rollout   — GetRecentDeploys (tik başına TEK filo okuması) adayları →
 //                 servis başına GetServiceDeploys (Overview deploy işaretleri)
 //                 + ComputeDeployImpact (deploy etki paneli), takım başına ≤3
-// Kalem 2-5 (istemci metrikleri, exception, log, Oracle) sonraki dilimde;
+// Kalem 2 + 5 (istemci metrikleri, Oracle) sonraki dilimde;
 // kart bunları `skipped` ile söyler (sessizce "yok" değil).
 //
 // Maliyet (R9): takım × env başına 2 MV + 1 inbox + ≤3×2 deploy okuması.
@@ -26,6 +32,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -46,7 +53,7 @@ const (
 )
 
 // pendingItems — bu dilimde henüz okunmayan kalemler (kartta `skipped`).
-var briefingPendingItems = []string{briefing.ItemClient, briefing.ItemException, briefing.ItemLog, briefing.ItemOracle}
+var briefingPendingItems = []string{briefing.ItemClient, briefing.ItemOracle}
 
 // briefingTeam — üretim birimi: kanonik anahtar + gösterim adı + kapsam.
 type briefingTeam struct {
@@ -98,6 +105,21 @@ func toREDRows(rows []chstore.ServiceSummary) []briefing.REDRow {
 		out = append(out, briefing.REDRow{Service: r.Name, Spans: r.SpanCount, Errors: r.ErrorCount, P99Ms: r.P99Ms})
 	}
 	return out
+}
+
+// splitInboxRows — SAF: tek Inbox okuması → kalem 3 (yeni/geri dönen
+// exception) + kalem 6 (geri kalan açık konular); bir satır yalnız birinde.
+func splitInboxRows(rows []mcptools.InboxRow, fromUnix int64) (ex []briefing.ExceptionRow, rest []mcptools.InboxRow) {
+	for _, r := range rows {
+		er := briefing.ExceptionRow{ID: r.ID, Kind: r.Kind, Service: r.Service, Title: r.Title, Status: r.Status,
+			Priority: r.Priority, PageURL: r.PageURL, StartedAtUnix: r.SinceUnix}
+		if _, ok := briefing.ExceptionQualifies(er, fromUnix); ok {
+			ex = append(ex, er)
+			continue
+		}
+		rest = append(rest, r)
+	}
+	return ex, rest
 }
 
 // briefingProblemRows — SAF: inbox satırları → kalem 6 girdisi.
@@ -171,8 +193,53 @@ func (s *Server) readBriefingFleet(ctx context.Context, windowS int) briefingFle
 	return briefingFleet{Deploys: deps, DeploysErr: err}
 }
 
+// briefingLogs — kalem 4 okuması (takım başına bir kez; env'ler paylaşır).
+type briefingLogs struct {
+	State      string // ok | unsupported | partial
+	Cur, Prev  int64
+	LowerBound bool
+}
+
+// readBriefingLogs — cur + prior pencere, ≤60 dk dilimler; dilimler readTeamLogs'tan.
+func (s *Server) readBriefingLogs(ctx context.Context, team string, windowS int, now time.Time) briefingLogs {
+	fields := s.teamLogFields()
+	if len(fields) == 0 || s.logs == nil {
+		return briefingLogs{State: teamLogsUnsupported}
+	}
+	from, to := briefingWindow(now, windowS)
+	pFrom, pTo := chstore.PriorWindow(from, to)
+	values := s.resolveTeamLogValues(ctx, team)
+	cfgDigest := s.teamLogsCfgDigest()
+	out := briefingLogs{State: teamLogsOK}
+	sum := func(a, b time.Time, dst *int64) bool {
+		for _, sl := range briefing.LogSlices(a.Unix(), b.Unix()) {
+			o := s.readTeamLogs(ctx, cfgDigest, fields, values, time.Unix(sl[0], 0), time.Unix(sl[1], 0))
+			if o.State == teamLogsUnsupported {
+				out.State = teamLogsUnsupported
+				return false
+			}
+			if o.State != teamLogsOK || o.Res == nil {
+				out.State = "partial"
+				return false
+			}
+			*dst += o.Res.ErrorCount
+			out.LowerBound = out.LowerBound || o.Res.CountIsLowerBound
+		}
+		return true
+	}
+	if sum(from, to, &out.Cur) {
+		sum(pFrom, pTo, &out.Prev)
+	}
+	return out
+}
+
+// briefingLogsURL — SAF: takımın /logs görünümü (team= süzgeci, v0.10.1477).
+func briefingLogsURL(team string, windowS int) string {
+	return "/logs?team=" + url.QueryEscape(team) + "&range=" + briefing.RangeParam(windowS)
+}
+
 // buildBriefing — tek takım × env kartı (okumalar + saf derleme).
-func (s *Server) buildBriefing(ctx context.Context, t briefingTeam, env string, cfg briefing.Config, fleet briefingFleet, now time.Time) briefing.Briefing {
+func (s *Server) buildBriefing(ctx context.Context, t briefingTeam, env string, cfg briefing.Config, fleet briefingFleet, logs briefingLogs, now time.Time) briefing.Briefing {
 	d := s.mcpDeps()
 	th := cfg.Thresholds
 	from, to := briefingWindow(now, cfg.WindowS)
@@ -194,11 +261,24 @@ func (s *Server) buildBriefing(ctx context.Context, t briefingTeam, env string, 
 		findings = append(findings, briefing.REDFindings(toREDRows(cur), toREDRows(prev), th, env, cfg.WindowS)...)
 	}
 
-	// 6 — açık konular (Inbox çekirdeği, takım birleşimi).
+	// 3 + 6 — tek Inbox okuması (şerit kümesi, takım birleşimi).
 	if res, _, err := mcptools.ReadInboxOpen(ctx, d, t.Label, t.Services, env, mcptools.InboxOpenScan); err != nil {
-		partial = append(partial, briefing.ItemProblem)
+		partial = append(partial, briefing.ItemException, briefing.ItemProblem)
 	} else {
-		findings = append(findings, briefing.ProblemFindings(briefingProblemRows(res.Rows))...)
+		ex, rest := splitInboxRows(res.Rows, from.Unix())
+		findings = append(findings, briefing.ExceptionFindings(ex, from.Unix())...)
+		findings = append(findings, briefing.ProblemFindings(briefingProblemRows(rest))...)
+	}
+
+	// 4 — takım ERROR logları.
+	skipped := append([]string(nil), briefingPendingItems...)
+	switch logs.State {
+	case teamLogsOK:
+		findings = append(findings, briefing.LogFindings(t.Label, logs.Cur, logs.Prev, logs.LowerBound, th, briefingLogsURL(t.Label, cfg.WindowS))...)
+	case teamLogsUnsupported:
+		skipped = append(skipped, briefing.ItemLog)
+	default:
+		partial = append(partial, briefing.ItemLog)
 	}
 
 	// 7 — rollout etkisi.
@@ -235,7 +315,7 @@ func (s *Server) buildBriefing(ctx context.Context, t briefingTeam, env string, 
 	return briefing.Assemble(briefing.AssembleInput{
 		ID: uistream.NewMessageID(), Team: t.Label, TeamKey: t.Key, Env: env, WindowS: cfg.WindowS,
 		GeneratedAtMs: now.UnixMilli(), Services: t.Services, Trimmed: t.Trimmed,
-		Findings: findings, Partial: partial, Skipped: briefingPendingItems,
+		Findings: findings, Partial: partial, Skipped: skipped,
 	})
 }
 
@@ -277,12 +357,15 @@ func (s *Server) runBriefingTick(ctx context.Context, cfg briefing.Config, now t
 		if len(t.Services) == 0 {
 			continue
 		}
+		lctx, lcancel := context.WithTimeout(ctx, briefingTeamTimeout)
+		logs := s.readBriefingLogs(lctx, t.Label, cfg.WindowS, now)
+		lcancel()
 		for _, env := range cfg.Envs {
 			if ctx.Err() != nil {
 				return
 			}
 			tctx, cancel := context.WithTimeout(ctx, briefingTeamTimeout)
-			b := s.buildBriefing(tctx, t, env, cfg, fleet, now)
+			b := s.buildBriefing(tctx, t, env, cfg, fleet, logs, now)
 			err := s.storeBriefing(tctx, b)
 			cancel()
 			if err != nil {
