@@ -93,6 +93,9 @@
     },
     "react-table": {
       "react": "$react"
+    },
+    "@ai-sdk/provider-utils": {
+      "undici": "6.29.1"
     }
   },
   "types": "dist-ds/index.d.ts"

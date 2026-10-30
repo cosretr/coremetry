@@ -34,6 +34,23 @@ describe('AI SDK pini', () => {
     expect(copies).toEqual(['node_modules/ai']);
     expect(lock.packages['node_modules/ai'].version).toBe('5.0.276');
   });
+
+  // v0.10.1642: provider-utils 3.0.41 `undici ^5.29.0` ister → 5.29.0 +
+  // @fastify/busboy 2.1.1 (Trivy/Dependabot). Kapsamlı override yalnız bu
+  // yolu 6.29.1'e çeker (bağımlılığı yok → busboy ağaçtan çıkar); jsdom'un
+  // undici 7'si dokunulmaz.
+  it('package-lock: provider-utils undici override 6.29.1, busboy yok, jsdom undici 7', () => {
+    const pkg = JSON.parse(readFileSync(join(FE, 'package.json'), 'utf8')) as { overrides?: Record<string, unknown> };
+    expect(pkg.overrides?.['@ai-sdk/provider-utils']).toEqual({ undici: '6.29.1' });
+    const lock = JSON.parse(readFileSync(join(FE, 'package-lock.json'), 'utf8')) as { packages: Record<string, { version?: string; dependencies?: Record<string, string> }> };
+    const undici = Object.entries(lock.packages).filter(([k]) => /(^|\/)node_modules\/undici$/.test(k)).map(([k, v]) => `${k}@${v.version}`).sort();
+    expect(undici).toEqual([
+      'node_modules/@ai-sdk/provider-utils/node_modules/undici@6.29.1',
+      'node_modules/undici@7.30.1',
+    ]);
+    expect(Object.keys(lock.packages).filter(k => /node_modules\/@fastify\/busboy$/.test(k))).toEqual([]);
+    expect(json('node_modules/@ai-sdk/provider-utils/node_modules/undici/package.json').version).toBe('6.29.1');
+  });
 });
 
 function walk(dir: string, out: string[] = []): string[] {
