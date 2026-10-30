@@ -61,9 +61,9 @@ describe('--field-bg her temada tanımlı', () => {
     }
   });
 
-  it('dark: bugünkü değer aynen (--bg2 = #2c3035)', () => {
+  it('dark: alan zemini --bg2 (v0.10.1621 zinc dark: #212125)', () => {
     expect(decl(THEMES.dark, '--field-bg')).toBe('var(--bg2)');
-    expect(decl(THEMES.dark, '--bg2')?.toLowerCase()).toBe('#2c3035');
+    expect(decl(THEMES.dark, '--bg2')?.toLowerCase()).toBe('#212125');
   });
 
   it('redhat koyu sidebar: alanlar rayın kendi --bg2si (html’deki beyaz miras kalmaz)', () => {

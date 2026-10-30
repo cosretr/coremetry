@@ -6,7 +6,7 @@
 // Neden kural bu: yükseltme YÖNÜ temadan temaya değişiyor.
 //   v0.9.978'de light TERSTİ (sayfa #ffffff, yüzey #f6f8fa); v0.10.920
 //   (K1, operatör) light'ı beyaz kart / gri sayfaya çevirdi:
-//   dark    --bg0 #1e2124  <  --bg1 #24272b
+//   dark    --bg0 #09090b  <  --bg1 #18181b   (v0.10.1621 zinc dark)
 //   light   --bg0 #f4f6f8  <  --bg1 #ffffff
 //   redhat  --bg0 #f0f0f0  <  --bg1 #ffffff
 // Yön artık üç temada AYNI; kural yine geçerli: `--bg0` sayfa zeminidir,
@@ -86,8 +86,9 @@ describe('D1 — --bg0 yalnız sayfa zemini', () => {
         : new RegExp(`\\[data-theme="${theme}"\\]\\s*\\{([\\s\\S]*?)\\}`).exec(CSS)![1];
       return new RegExp(`${token}\\s*:\\s*([^;]+)`).exec(block)![1].trim();
     };
-    expect(val('dark', '--bg0')).toBe('#1e2124');
-    expect(val('dark', '--bg1')).toBe('#24272b');
+    // v0.10.1621 — zinc dark (audit §13): yön aynı, değerler zinc 950/900.
+    expect(val('dark', '--bg0')).toBe('#09090b');
+    expect(val('dark', '--bg1')).toBe('#18181b');
     expect(val('light', '--bg0')).toBe('#f4f6f8');
     expect(val('light', '--bg1')).toBe('#ffffff');   // beyaz kart, gri sayfa
     expect(val('redhat', '--bg0')).toBe('#f0f0f0');

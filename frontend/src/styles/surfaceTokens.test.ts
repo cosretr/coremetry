@@ -182,7 +182,8 @@ describe("D7 — --bg alias'ı yükseltilmiş yüzeye sabit", () => {
       ? /:root\s*\{([\s\S]*?)\n\}/.exec(CLEAN)![1]
       : new RegExp(`\\[data-theme="${t}"\\]\\s*\\{([\\s\\S]*?)\\n\\}`).exec(CLEAN)![1];
     // v0.10.920 (sade palet): dark #24272b · light #ffffff (K1: beyaz kart) · redhat DEĞİŞMEDİ
-    expect(declOf(theme('dark'), '--bg\\b')).toBe('#24272b');
+    // v0.10.1621 — zinc dark: alias yine --bg1 değeri (#18181b).
+    expect(declOf(theme('dark'), '--bg\\b')).toBe('#18181b');
     expect(declOf(theme('light'), '--bg\\b')).toBe('#ffffff');
     expect(declOf(theme('redhat'), '--bg\\b')).toBe('#ffffff');
   });

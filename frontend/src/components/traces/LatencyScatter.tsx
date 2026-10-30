@@ -119,7 +119,7 @@ export function LatencyScatter({
     const cBorder = cs.getPropertyValue('--border').trim() || '#3338';
     // v0.10.922 (sade palet adım 1) — "ok" noktaları NÖTR (sağlıklı durum renk almaz; vurgu grafik
     // alanında görünmez). Yedek :root --text3 ile aynı.
-    const cOk = cs.getPropertyValue('--text3').trim() || '#9fa5ad';
+    const cOk = cs.getPropertyValue('--text3').trim() || '#a6a6ae';
     const cErr = cs.getPropertyValue('--err').trim() || '#dc2626';
 
     // Log gridlines at 25/50/75/100% of max duration.

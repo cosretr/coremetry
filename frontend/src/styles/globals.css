@@ -16,10 +16,10 @@
      karşıtlık hedeflerine göre çözüldü (296 WCAG + renk farkı denetimi,
      0 başarısız). Merdiven: sayfa < yüzey < hover < basılı; metin üç
      kademe (12.5 / 9.0 / 6.0 yüzeyde), --text-faint yalnız devre dışı. */
-  --bg0: #1e2124;
-  --bg1: #24272b;
-  --bg2: #2c3035;
-  --bg3: #363a40;
+  --bg0: #09090b;
+  --bg1: #18181b;
+  --bg2: #212125;
+  --bg3: #27272a;
   /* v0.10.1423 — ALAN ZEMİNİ: input/select/textarea, FilterQueryBox barı,
      seçici tetikleyicileri, topbar arama kutusu. Tek token, tema başına
      tanımlı (styles/fieldBg.test.ts). Dark'ta bugünkü değer AYNEN (--bg2);
@@ -49,15 +49,15 @@
          yaptığı şeye yaklaştırır — redhat'te `--bg` bu satırdan önce de
          `#ffffff` = `--bg1` idi. Yani operatörün varsayılan teması
          (redhat) tek piksel oynamadı; dark/light ona hizalandı. */
-  --bg:  #24272b;
-  --border: #41454a;
+  --bg:  #18181b;
+  --border: #3f3f46;
   /* v0.10.928 (Y2) — İÇ ayraç: satır, başlık/alt şerit, menü çizgisi.
      Dış çerçeve --border'da kalır; ayraç onun ~yarı ağırlığı
      (bg1'e 1.15–1.30, bg2 hover satırında ≥1.07 — contrastTokens). */
-  --divider: #34383c;
-  --text: #e6ebf1;
-  --text2: #c2c9d1;
-  --text3: #9fa5ad;  /* v0.10.920 — ≥4.56 her zeminde (bg3 dahil); v0.10.450'de yalnız bg0/bg1'de geçiyordu */
+  --divider: #2c2c31;
+  --text: #fafafa;
+  --text2: #d4d4d8;
+  --text3: #a6a6ae;  /* v0.10.920 — ≥4.56 her zeminde (bg3 dahil); v0.10.450'de yalnız bg0/bg1'de geçiyordu */
 
   /* Brand — Corporate red, used sparingly: logo, primary CTAs, key brand surfaces. */
   --brand:  #E30613;
@@ -103,11 +103,11 @@
   /* v0.10.920 — YARI SAYDAM kalır: bg2 üstündeki seçimler (SegmentedControl,
      odak halkaları) ton olarak yığılır. Sabit seçim zemini --accent-bg. */
   --accent-soft:   color-mix(in srgb, var(--accent) 16%, transparent);
-  --border-strong: #6d7379;  /* v0.10.920 — form alanı kenarı ≥3:1 (WCAG 1.4.11) */
+  --border-strong: #71717a;  /* v0.10.920 — form alanı kenarı ≥3:1 (WCAG 1.4.11) */
   /* v0.10.928 (Y4) — dolgusuz ikincil düğmenin kenarı: --border (1.3–1.55)
      dolgu kalkınca kayboluyor, --border-strong 325 düğme için fazla yüksek.
      bg1'e ≥2.0, bg2'ye ≥1.75; hover --border-strong'a çıkar. */
-  --border-control: #51565b;
+  --border-control: #52525b;
   --shadow-pop:    0 8px 24px rgba(0, 0, 0, .45);
   --shadow-sm:     0 1px 2px rgba(0, 0, 0, .25);
 
@@ -121,7 +121,7 @@
      Only the genuinely-missing levels are defined here, in both themes. */
   --accent-bg:     #253040;  /* soft solid accent fill — focus ring, selected-row rail, active chip (design --primary-bg) */
   --accent-border: #294d82;  /* accent hairline — selected-row / active border (design --primary-border) */
-  --text-faint:    #71777d;  /* v0.10.920 — YALNIZ devre dışı metin (3.31:1); okunacak metin --text3 */
+  --text-faint:    #71717a;  /* v0.10.920 — YALNIZ devre dışı metin (3.31:1); okunacak metin --text3 */
   --shadow-md:     0 6px 20px rgba(0, 0, 0, .45);  /* drawers / popovers, between --shadow-sm and --shadow-pop */
 
   /* ── mK6 (v0.9.906) — the four leaks that had no token to land on ───────
