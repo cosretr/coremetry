@@ -52,7 +52,8 @@ func TestNodeCausesAreReachable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(fusion), "GetRunsOnPlacements(ctx, evidenceWindow)") {
+	// v0.10.1628 — pencere kümesi (taban + eski çıpaların onset pencereleri).
+	if !strings.Contains(string(fusion), "GetRunsOnPlacementsIn(ctx, edgeWindows)") {
 		t.Error("fusion yerleşimleri çekmiyor — adaylık girdisiz kalır")
 	}
 }

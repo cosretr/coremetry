@@ -224,7 +224,7 @@ func (s *RootCauseSynthesizer) run(ctx context.Context) {
 	for i := range problems {
 		onsets = append(onsets, problems[i].StartedAt)
 	}
-	in := gatherEvidenceInputs(ctx, s.store, deployFetchLookback(now.UnixNano(), onsets))
+	in := gatherEvidenceInputs(ctx, s.store, deployFetchLookback(now.UnixNano(), onsets), edgeFetchWindows(now.UnixNano(), onsets))
 	for _, ev := range events {
 		if done >= s.batch {
 			break

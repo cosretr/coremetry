@@ -37,6 +37,13 @@ const (
 	// evidenceWindow — how far back recorded signals/edges count as part of
 	// the same incident.
 	evidenceWindow = 60 * time.Minute
+	// evidenceEdgeOnsetLead / Trail (v0.10.1628) — onset'i tabandan eski
+	// çıpanın kenar okumasına eklenen [onset−lead, onset+trail] penceresi.
+	evidenceEdgeOnsetLead  = 15 * time.Minute
+	evidenceEdgeOnsetTrail = 15 * time.Minute
+	// evidenceEdgeFetchCap — kenar okumasının geriye bakış tavanı (deploy
+	// tavanıyla aynı ufuk); ötesinde açık kalan çıpanın onset kenarları düşer.
+	evidenceEdgeFetchCap = 24 * time.Hour
 	// maxEvidenceItems caps each rendered list so the Copilot user-context
 	// stays inside the token budget.
 	maxEvidenceItems = 5
@@ -130,6 +137,72 @@ func deployFetchLookback(nowNs int64, onsets []int64) time.Duration {
 	return lb
 }
 
+// edgeFetchWindows — SAF (v0.10.1628): tik başına paylaşılan komşuluk
+// okumalarının (topology_edges_5m: kenar, ağırlıklı kenar, RUNS_ON) pencere
+// kümesi. v0.10.1579 deploy okumasının ikizi: okuma [now−60m, now] kalırsa
+// kenarı yalnız onset civarında akmış (devre kesici açıldı, çağıran
+// bağımlılığı bıraktı) ve 60 dk'dan yaşlı açık çıpanın komşu adayı her 30 s
+// yeniden yazılan hipotezden düşüyordu.
+//
+// Taban [now−evidenceWindow, şimdi]; tabana sığmayan her çıpa için
+// [onset−lead, onset+trail] eklenir — tabana değen pencere tabanı genişletir,
+// üst üste binenler birleşir, sonuç kronolojik (taban en sonda). Tek okuma,
+// sıçrayan aralıklar: 24 sa'lik tek pencere yerine yalnız ilgili kovalar
+// taranır. Tavan evidenceEdgeFetchCap; geçersiz (≤0) / gelecekteki onset
+// yok sayılır. Çıpa sayısı tik batch'iyle sınırlı → pencere sayısı da.
+func edgeFetchWindows(nowNs int64, onsets []int64) []chstore.EdgeWindow {
+	now := time.Unix(0, nowNs).UTC()
+	base := now.Add(-evidenceWindow)
+	floor := now.Add(-evidenceEdgeFetchCap)
+	var old []chstore.EdgeWindow
+	for _, o := range onsets {
+		if o <= 0 || o > nowNs {
+			continue
+		}
+		onset := time.Unix(0, o).UTC()
+		from, to := onset.Add(-evidenceEdgeOnsetLead), onset.Add(evidenceEdgeOnsetTrail)
+		if !from.Before(base) {
+			continue // tabanın içinde
+		}
+		if to.Before(floor) {
+			continue // tavanın tamamen dışında
+		}
+		if from.Before(floor) {
+			from = floor
+		}
+		if !to.Before(base) {
+			base = from // tabana değiyor → taban genişler
+			continue
+		}
+		old = append(old, chstore.EdgeWindow{From: from, To: to})
+	}
+	sort.Slice(old, func(i, j int) bool { return old[i].From.Before(old[j].From) })
+	out := make([]chstore.EdgeWindow, 0, len(old)+1)
+	for _, w := range old {
+		if !w.To.Before(base) {
+			if w.From.Before(base) {
+				base = w.From
+			}
+			continue
+		}
+		if n := len(out); n > 0 && !w.From.After(out[n-1].To) {
+			if w.To.After(out[n-1].To) {
+				out[n-1].To = w.To
+			}
+			continue
+		}
+		out = append(out, w)
+	}
+	// Taban genişlediyse onunla örtüşen eski pencereler tabana katılır.
+	for len(out) > 0 && !out[len(out)-1].To.Before(base) {
+		if out[len(out)-1].From.Before(base) {
+			base = out[len(out)-1].From
+		}
+		out = out[:len(out)-1]
+	}
+	return append(out, chstore.EdgeWindow{From: base})
+}
+
 // deployFetchLimit — geniş pencerede (binlerce servis × saatler) 200 satır
 // en yeni deploy'larla dolup eski çıpanınkini kırpardı (FirstSeen DESC).
 func deployFetchLimit(lookback time.Duration) int {
@@ -141,8 +214,9 @@ func deployFetchLimit(lookback time.Duration) int {
 
 // gatherEvidenceInputs reads the four evidence sources. Best-effort: any read
 // error degrades to a smaller bundle rather than failing the explain.
-// deployLookback = deployFetchLookback(çıpaların onset'leri) (v0.10.1579).
-func gatherEvidenceInputs(ctx context.Context, store *chstore.Store, deployLookback time.Duration) evidenceInputs {
+// deployLookback = deployFetchLookback(çıpaların onset'leri) (v0.10.1579);
+// edgeWindows = edgeFetchWindows(çıpaların onset'leri) (v0.10.1628).
+func gatherEvidenceInputs(ctx context.Context, store *chstore.Store, deployLookback time.Duration, edgeWindows []chstore.EdgeWindow) evidenceInputs {
 	var in evidenceInputs
 	// v0.10.156 — snapshot (5 s memo); ayrı `problems FINAL` taraması yok.
 	if snap, err := store.OpenProblemsSnapshot(ctx); err == nil {
@@ -157,13 +231,13 @@ func gatherEvidenceInputs(ctx context.Context, store *chstore.Store, deployLookb
 	if d, err := store.GetEvidenceDeploys(ctx, deployLookback, deployFetchLimit(deployLookback)); err == nil {
 		in.deploys = d
 	}
-	if a, err := store.GetServiceAdjacency(ctx, evidenceWindow); err == nil {
+	if a, err := store.GetServiceAdjacencyIn(ctx, edgeWindows); err == nil {
 		in.adjacency = a
 	}
-	if a, err := store.GetServiceAdjacencyWeighted(ctx, evidenceWindow); err == nil {
+	if a, err := store.GetServiceAdjacencyWeightedIn(ctx, edgeWindows); err == nil {
 		in.weightedAdjacency = a
 	}
-	if r, err := store.GetRunsOnPlacements(ctx, evidenceWindow); err == nil {
+	if r, err := store.GetRunsOnPlacementsIn(ctx, edgeWindows); err == nil {
 		in.runsOn = r
 	}
 	return in

@@ -150,7 +150,8 @@ func (e *ProblemExplainer) run(ctx context.Context) {
 	for i := range candidates {
 		onsets = append(onsets, candidates[i].StartedAt)
 	}
-	inputs := gatherEvidenceInputs(ctx, e.store, deployFetchLookback(time.Now().UnixNano(), onsets))
+	nowNs := time.Now().UnixNano()
+	inputs := gatherEvidenceInputs(ctx, e.store, deployFetchLookback(nowNs, onsets), edgeFetchWindows(nowNs, onsets))
 	// v0.8.394 (AI audit A1) — batch-read the persisted root-cause hypotheses
 	// the RootCauseSynthesizer already computed for these problems (ONE
 	// GetHypotheses round-trip, same N+1-free join the /problems ribbon uses)

@@ -2,6 +2,7 @@ package chstore
 
 import (
 	"context"
+	"strings"
 	"time"
 )
 
@@ -101,19 +102,25 @@ func typeEdge(e *ServiceEdgePair) {
 func (s *Store) GetServiceAdjacency(
 	ctx context.Context, since time.Duration,
 ) ([]ServiceEdgePair, error) {
-	if since <= 0 {
-		since = time.Hour
-	}
-	bucketStart := time.Now().Add(-since).Truncate(5 * time.Minute)
+	return s.GetServiceAdjacencyIn(ctx, sinceEdgeWindows(since))
+}
+
+// GetServiceAdjacencyIn — GetServiceAdjacency, açık pencere kümesiyle
+// (v0.10.1628): kök-neden işçisi [now−60m, now]'a her eski çıpanın
+// onset penceresini ekler (anomaly.edgeFetchWindows). Boş küme = son 1 sa.
+func (s *Store) GetServiceAdjacencyIn(
+	ctx context.Context, windows []EdgeWindow,
+) ([]ServiceEdgePair, error) {
+	pred, args := edgeWindowPredicate(windows)
 	rows, err := s.conn.Query(ctx, `
 		SELECT parent_service, child_node
 		FROM topology_edges_5m FINAL
-		WHERE time_bucket >= ?
+		WHERE `+pred+`
 		  AND `+TopoCallEdgeFilterSQL+`
 		GROUP BY parent_service, child_node
 		ORDER BY parent_service, child_node
 		LIMIT 20000
-		SETTINGS max_execution_time = 10`, bucketStart)
+		SETTINGS max_execution_time = 10`, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -167,10 +174,16 @@ func (s *Store) GetServiceAdjacency(
 func (s *Store) GetServiceAdjacencyWeighted(
 	ctx context.Context, since time.Duration,
 ) ([]ServiceEdgePair, error) {
-	if since <= 0 {
-		since = time.Hour
-	}
-	bucketStart := time.Now().Add(-since).Truncate(5 * time.Minute)
+	return s.GetServiceAdjacencyWeightedIn(ctx, sinceEdgeWindows(since))
+}
+
+// GetServiceAdjacencyWeightedIn — ağırlıklı kardeş, açık pencere kümesiyle
+// (v0.10.1628; bkz. GetServiceAdjacencyIn). Ağırlık seçili kovaların
+// toplamı: eski çıpanın onset kovalarındaki hata taşıyan çağrılar sayılır.
+func (s *Store) GetServiceAdjacencyWeightedIn(
+	ctx context.Context, windows []EdgeWindow,
+) ([]ServiceEdgePair, error) {
+	pred, args := edgeWindowPredicate(windows)
 	rows, err := s.conn.Query(ctx, `
 		SELECT parent_service,
 		       child_node,
@@ -178,12 +191,12 @@ func (s *Store) GetServiceAdjacencyWeighted(
 		       sum(errors)          AS errors,
 		       sum(sum_duration_ns) AS sum_dur
 		FROM topology_edges_5m FINAL
-		WHERE time_bucket >= ?
+		WHERE `+pred+`
 		  AND `+TopoCallEdgeFilterSQL+`
 		GROUP BY parent_service, child_node
 		ORDER BY errors DESC, calls DESC
 		LIMIT 20000
-		SETTINGS max_execution_time = 10`, bucketStart)
+		SETTINGS max_execution_time = 10`, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -215,19 +228,22 @@ type RunsOnPlacement struct {
 // (startsWith node:). Aynı MV, aynı sınırlar; kenar yoksa boş küme —
 // dikey eksen adaylığı sessizce devre dışı kalır.
 func (s *Store) GetRunsOnPlacements(ctx context.Context, since time.Duration) ([]RunsOnPlacement, error) {
-	if since <= 0 {
-		since = time.Hour
-	}
-	bucketStart := time.Now().Add(-since).Truncate(5 * time.Minute)
+	return s.GetRunsOnPlacementsIn(ctx, sinceEdgeWindows(since))
+}
+
+// GetRunsOnPlacementsIn — yerleşimler, açık pencere kümesiyle (v0.10.1628):
+// eski çıpanın node'u onset'teki yerleşimden de okunur (pod sonradan taşınsa da).
+func (s *Store) GetRunsOnPlacementsIn(ctx context.Context, windows []EdgeWindow) ([]RunsOnPlacement, error) {
+	pred, args := edgeWindowPredicate(windows)
 	rows, err := s.conn.Query(ctx, `
 		SELECT parent_service, child_node
 		FROM topology_edges_5m FINAL
-		WHERE time_bucket >= ?
+		WHERE `+pred+`
 		  AND startsWith(child_node, '`+nodeIDPrefix+`')
 		GROUP BY parent_service, child_node
 		ORDER BY parent_service, child_node
 		LIMIT 20000
-		SETTINGS max_execution_time = 10`, bucketStart)
+		SETTINGS max_execution_time = 10`, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -245,4 +261,51 @@ func (s *Store) GetRunsOnPlacements(ctx context.Context, since time.Duration) ([
 		out = append(out, RunsOnPlacement{Service: svc, Node: name})
 	}
 	return out, rows.Err()
+}
+
+// EdgeWindow — topology_edges_5m okumasının bir zaman aralığı [From, To]
+// (v0.10.1628). To sıfırsa üst sınır yok (şimdiye kadar).
+type EdgeWindow struct {
+	From time.Time
+	To   time.Time
+}
+
+// sinceEdgeWindows — tek pencere [now−since, şimdi]; since ≤ 0 → 1 sa.
+func sinceEdgeWindows(since time.Duration) []EdgeWindow {
+	if since <= 0 {
+		since = time.Hour
+	}
+	return []EdgeWindow{{From: time.Now().Add(-since)}}
+}
+
+// edgeWindowPredicate — SAF (v0.10.1628): pencere kümesinden time_bucket
+// yüklemi. From aşağı 5 dk'ya hizalanır (v0.5.299 kısmi kova kuralı); To
+// kendi kovasına (o kova dahil). Çok pencerede dış `time_bucket >= en eski
+// From` birincil anahtarı tek aralığa daraltır; OR'lu aralıklar AYNI anahtar
+// kolonunda — indekssiz kol yok. Boş küme son 1 sa'e düşer: çağıran
+// sınırsız tarama üretemez.
+func edgeWindowPredicate(windows []EdgeWindow) (string, []any) {
+	if len(windows) == 0 {
+		windows = sinceEdgeWindows(0)
+	}
+	lo := windows[0].From.Truncate(5 * time.Minute)
+	arms := make([]string, 0, len(windows))
+	var armArgs []any
+	for _, w := range windows {
+		from := w.From.Truncate(5 * time.Minute)
+		if from.Before(lo) {
+			lo = from
+		}
+		if w.To.IsZero() {
+			arms = append(arms, "time_bucket >= ?")
+			armArgs = append(armArgs, from)
+			continue
+		}
+		arms = append(arms, "(time_bucket >= ? AND time_bucket <= ?)")
+		armArgs = append(armArgs, from, w.To.Truncate(5*time.Minute))
+	}
+	if len(arms) == 1 {
+		return arms[0], armArgs
+	}
+	return "time_bucket >= ? AND (" + strings.Join(arms, " OR ") + ")", append([]any{lo}, armArgs...)
 }
