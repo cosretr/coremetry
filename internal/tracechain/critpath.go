@@ -221,10 +221,11 @@ func attrFirst(sp chstore.SpanRow, keys ...string) (string, string) {
 	return "", ""
 }
 
-// TargetOf — SAF: operatörün sırası url.full|http.url → server.address|
+// TargetOf — SAF: operatörün sırası. DB span'i (db.system kolonu, sonra
+// db.system.name|db.system attribute'u) ÖNCE ve kendi kuralıyla çözülür
+// (dbTargetOf, v0.10.1639); diğerleri url.full|http.url → server.address|
 // net.peer.name|http.host (+ :server.port|net.peer.port) → peer.service
-// (kolon, sonra attribute) → db.system (kolon, sonra db.system|
-// db.system.name) + /db.name|db.namespace → messaging.system +
+// (kolon, sonra attribute) → messaging.system +
 // /messaging.destination.name|messaging.destination. Hiçbiri yoksa sıfır.
 func TargetOf(sp chstore.SpanRow) Target {
 	peer := strings.TrimSpace(sp.PeerService)
@@ -236,6 +237,9 @@ func TargetOf(sp chstore.SpanRow) Target {
 			t.Peer = peer
 		}
 		return t
+	}
+	if t, ok := dbTargetOf(sp); ok {
+		return withPeer(t)
 	}
 	if k, v := attrFirst(sp, "url.full", "http.url"); v != "" {
 		return withPeer(Target{Kind: "url", Value: v, Source: k})
@@ -257,18 +261,6 @@ func TargetOf(sp chstore.SpanRow) Target {
 	if peer != "" {
 		return Target{Kind: "peer.service", Value: peer, Source: "peer.service"}
 	}
-	dbKey, dbSys := "db.system", strings.TrimSpace(sp.DBSystem)
-	if dbSys == "" {
-		dbKey, dbSys = attrFirst(sp, "db.system", "db.system.name")
-	}
-	if dbSys != "" {
-		t := Target{Kind: "db", Value: dbSys, Source: dbKey}
-		if k, n := attrFirst(sp, "db.name", "db.namespace"); n != "" {
-			t.Value += "/" + n
-			t.Source += "+" + k
-		}
-		return t
-	}
 	if _, ms := attrFirst(sp, "messaging.system"); ms != "" {
 		t := Target{Kind: "messaging", Value: ms, Source: "messaging.system"}
 		if k, d := attrFirst(sp, "messaging.destination.name", "messaging.destination"); d != "" {
@@ -278,6 +270,35 @@ func TargetOf(sp chstore.SpanRow) Target {
 		return t
 	}
 	return Target{}
+}
+
+// dbTargetOf — v0.10.1639 (CoSRE kritik yol takibi, operatör onaylı): DB
+// CLIENT span'inin hedefi "<veritabanı>@<sunucu>"; url.full DB'de geçmez
+// (HTTP tabanlı DB istemcisinin uç adresi veritabanını söylemez), port
+// eklenmez (hedef veritabanı, soket değil). Kısmi veri: yalnız ad → ad;
+// yalnız sunucu → <db.system>@sunucu; ikisi de yok → db.system. Span ADINA
+// ASLA düşülmez (SQL özeti hedef değildir) — değer en az db.system'dir.
+// Takma adlar yeni → eski (internal/otlp/semconv.go sırası): db.system.name|
+// db.system, db.namespace|db.name, server.address|net.peer.name.
+func dbTargetOf(sp chstore.SpanRow) (Target, bool) {
+	sysKey, sys := "db.system", strings.TrimSpace(sp.DBSystem)
+	if sys == "" {
+		sysKey, sys = attrFirst(sp, "db.system.name", "db.system")
+	}
+	if sys == "" {
+		return Target{}, false
+	}
+	nameKey, name := attrFirst(sp, "db.namespace", "db.name")
+	hostKey, host := attrFirst(sp, "server.address", "net.peer.name")
+	switch {
+	case name != "" && host != "":
+		return Target{Kind: "db", Value: name + "@" + host, Source: nameKey + "+" + hostKey}, true
+	case name != "":
+		return Target{Kind: "db", Value: name, Source: nameKey}, true
+	case host != "":
+		return Target{Kind: "db", Value: sys + "@" + host, Source: sysKey + "+" + hostKey}, true
+	}
+	return Target{Kind: "db", Value: sys, Source: sysKey}, true
 }
 
 // TopStep — en büyük paylı adım.

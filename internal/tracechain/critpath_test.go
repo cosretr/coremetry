@@ -3,7 +3,10 @@ package tracechain
 // critpath_test.go — v0.10.1625 — CoSRE kritik yol planı R1 (operatör: kritik
 // yoldaki her span için ad, tür, servis, süre, yol-üstü öz süre ve pay; CLIENT
 // için hedef url.full → server.address:server.port → peer.service →
-// db.system/db.name → messaging.system/destination).
+// db.system/db.name → messaging.system/destination). v0.10.1639: DB CLIENT
+// önce ve kendi kuralıyla — "<db.namespace|db.name>@<server.address|
+// net.peer.name>", kısmi veride ad / <db.system>@sunucu / db.system; span
+// adına asla düşmez (testdata/critpath/db-client-*.json).
 //
 // Pinlenen sözleşme:
 //   - TargetOf operatörün sırasıyla çözer (PeerOf'un peer.service-önce sırası
@@ -41,8 +44,8 @@ func TestTargetOf(t *testing.T) {
 			want: Target{Kind: "url", Value: "https://a.ext.example/x", Source: "url.full", Peer: "gateway"}},
 		{name: "http.url eski ad", attrs: map[string]string{"http.url": "http://legacy.ext.example:8080/v2"},
 			want: Target{Kind: "url", Value: "http://legacy.ext.example:8080/v2", Source: "http.url"}},
-		{name: "server.address + server.port", attrs: map[string]string{"server.address": "pg.internal.example", "server.port": "5432", "db.system": "postgresql"},
-			want: Target{Kind: "server", Value: "pg.internal.example:5432", Source: "server.address+server.port"}},
+		{name: "server.address + server.port", attrs: map[string]string{"server.address": "cache.ext.example", "server.port": "6380"},
+			want: Target{Kind: "server", Value: "cache.ext.example:6380", Source: "server.address+server.port"}},
 		{name: "net.peer.name + net.peer.port", attrs: map[string]string{"net.peer.name": "old.ext.example", "net.peer.port": "443"},
 			want: Target{Kind: "server", Value: "old.ext.example:443", Source: "net.peer.name+net.peer.port"}},
 		{name: "yalnız server.address", attrs: map[string]string{"server.address": "cache.ext.example"},
@@ -53,12 +56,26 @@ func TestTargetOf(t *testing.T) {
 			want: Target{Kind: "peer.service", Value: "billing", Source: "peer.service"}},
 		{name: "peer.service attribute", attrs: map[string]string{"peer.service": "inventory"},
 			want: Target{Kind: "peer.service", Value: "inventory", Source: "peer.service"}},
-		{name: "db.system kolonu + db.name attribute (DBName damgası AI yolunda yok)", sp: chstore.SpanRow{DBSystem: "oracle"}, attrs: map[string]string{"db.name": "ORDERSDB"},
-			want: Target{Kind: "db", Value: "oracle/ORDERSDB", Source: "db.system+db.name"}},
-		{name: "db.system.name + db.namespace", attrs: map[string]string{"db.system.name": "postgresql", "db.namespace": "ordersdb"},
-			want: Target{Kind: "db", Value: "postgresql/ordersdb", Source: "db.system.name+db.namespace"}},
-		{name: "yalnız db.system", attrs: map[string]string{"db.system": "redis"},
+		// v0.10.1639 — DB CLIENT: "<db>@<sunucu>"; url.full geçmez, port eklenmez,
+		// span adına asla düşülmez; takma adlar yeni → eski.
+		{name: "db: ad + sunucu", attrs: map[string]string{"db.system": "postgresql", "db.name": "orders", "server.address": "db.ext.example", "server.port": "5432"},
+			want: Target{Kind: "db", Value: "orders@db.ext.example", Source: "db.name+server.address"}},
+		{name: "db: url.full geçmez", attrs: map[string]string{"db.system": "elasticsearch", "url.full": "https://search.ext.example:9200/orders/_search", "db.namespace": "orders", "server.address": "search.ext.example"},
+			want: Target{Kind: "db", Value: "orders@search.ext.example", Source: "db.namespace+server.address"}},
+		{name: "db: db.namespace db.name'i, server.address net.peer.name'i yener", attrs: map[string]string{"db.system.name": "postgresql", "db.namespace": "orders", "db.name": "legacy", "server.address": "db.ext.example", "net.peer.name": "old.ext.example"},
+			want: Target{Kind: "db", Value: "orders@db.ext.example", Source: "db.namespace+server.address"}},
+		{name: "db: eski adlar (db.name + net.peer.name)", sp: chstore.SpanRow{DBSystem: "oracle"}, attrs: map[string]string{"db.name": "ORDERSDB", "net.peer.name": "ora.ext.example", "net.peer.port": "1521"},
+			want: Target{Kind: "db", Value: "ORDERSDB@ora.ext.example", Source: "db.name+net.peer.name"}},
+		{name: "db: yalnız ad (DBName damgası AI yolunda yok)", sp: chstore.SpanRow{DBSystem: "oracle"}, attrs: map[string]string{"db.name": "ORDERSDB"},
+			want: Target{Kind: "db", Value: "ORDERSDB", Source: "db.name"}},
+		{name: "db: yalnız sunucu → <db.system>@sunucu", attrs: map[string]string{"db.system": "redis", "server.address": "cache.ext.example"},
+			want: Target{Kind: "db", Value: "redis@cache.ext.example", Source: "db.system+server.address"}},
+		{name: "db: yalnız db.system", attrs: map[string]string{"db.system": "redis"},
 			want: Target{Kind: "db", Value: "redis", Source: "db.system"}},
+		{name: "db: db.system.name eski adı yener", attrs: map[string]string{"db.system.name": "mysql", "db.system": "other"},
+			want: Target{Kind: "db", Value: "mysql", Source: "db.system.name"}},
+		{name: "db: peer.service ikincil ad", attrs: map[string]string{"db.system": "postgresql", "db.name": "orders", "peer.service": "orders-db"},
+			want: Target{Kind: "db", Value: "orders", Source: "db.name", Peer: "orders-db"}},
 		{name: "messaging.system + destination.name", attrs: map[string]string{"messaging.system": "kafka", "messaging.destination.name": "orders.audit"},
 			want: Target{Kind: "messaging", Value: "kafka/orders.audit", Source: "messaging.system+messaging.destination.name"}},
 		{name: "eski messaging.destination", attrs: map[string]string{"messaging.system": "rabbitmq", "messaging.destination": "q1"},

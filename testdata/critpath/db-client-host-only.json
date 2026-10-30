@@ -1,0 +1,56 @@
+{
+  "name": "db-client-host-only",
+  "why": "v0.10.1639 — DB CLIENT, yalnız sunucu (eski net.peer.name): hedef <db.system>@sunucu (sentetik)",
+  "spans": [
+    {
+      "spanId": "r1",
+      "parentId": "",
+      "startNs": 0,
+      "durNs": 4300000000,
+      "kind": "server",
+      "service": "orders-api",
+      "name": "GET /orders/{id}",
+      "attributes": {
+        "http.request.method": "GET",
+        "http.route": "/orders/{id}",
+        "http.response.status_code": "200"
+      }
+    },
+    {
+      "spanId": "d1",
+      "parentId": "r1",
+      "startNs": 100000000,
+      "durNs": 4100000000,
+      "kind": "client",
+      "service": "orders-api",
+      "name": "GET",
+      "attributes": {
+        "db.system.name": "redis",
+        "net.peer.name": "cache.ext.example",
+        "net.peer.port": "6379"
+      }
+    }
+  ],
+  "expect": {
+    "order": [
+      "r1",
+      "d1"
+    ],
+    "rootWallNs": 4300000000,
+    "onPathSelfNs": {
+      "r1": 200000000,
+      "d1": 4100000000
+    }
+  },
+  "expectGo": {
+    "top": "d1",
+    "topExternalWait": true,
+    "closing": "external",
+    "topTarget": {
+      "kind": "db",
+      "value": "redis@cache.ext.example",
+      "source": "db.system.name+net.peer.name"
+    },
+    "externalWaitLine": "dış bağımlılık bekleme: redis@cache.ext.example 4.10 s"
+  }
+}

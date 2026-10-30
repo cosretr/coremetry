@@ -1,0 +1,54 @@
+{
+  "name": "db-client-system-only",
+  "why": "v0.10.1639 — DB CLIENT, ad da sunucu da yok: hedef db.system; span adına (SQL özeti) ASLA düşülmez (sentetik)",
+  "spans": [
+    {
+      "spanId": "r1",
+      "parentId": "",
+      "startNs": 0,
+      "durNs": 4300000000,
+      "kind": "server",
+      "service": "orders-api",
+      "name": "GET /orders/{id}",
+      "attributes": {
+        "http.request.method": "GET",
+        "http.route": "/orders/{id}",
+        "http.response.status_code": "200"
+      }
+    },
+    {
+      "spanId": "d1",
+      "parentId": "r1",
+      "startNs": 100000000,
+      "durNs": 4100000000,
+      "kind": "client",
+      "service": "orders-api",
+      "name": "SELECT ORDERS_V",
+      "attributes": {
+        "db.system": "oracle"
+      }
+    }
+  ],
+  "expect": {
+    "order": [
+      "r1",
+      "d1"
+    ],
+    "rootWallNs": 4300000000,
+    "onPathSelfNs": {
+      "r1": 200000000,
+      "d1": 4100000000
+    }
+  },
+  "expectGo": {
+    "top": "d1",
+    "topExternalWait": true,
+    "closing": "external",
+    "topTarget": {
+      "kind": "db",
+      "value": "oracle",
+      "source": "db.system"
+    },
+    "externalWaitLine": "dış bağımlılık bekleme: oracle 4.10 s"
+  }
+}

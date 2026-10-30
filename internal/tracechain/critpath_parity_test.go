@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
@@ -49,6 +50,9 @@ type cpFixture struct {
 		TopTarget       *struct {
 			Kind, Value, Source string
 		} `json:"topTarget"`
+		// ExternalWaitLine — v0.10.1639: sunucunun mekanik önek satırı
+		// (api traceAnswerWithLatencyOwner) bayt bayt; boş = pinlenmez.
+		ExternalWaitLine string `json:"externalWaitLine"`
 	} `json:"expectGo"`
 }
 
@@ -119,6 +123,15 @@ func TestCriticalPathParityFixtures(t *testing.T) {
 			if tt := f.ExpectGo.TopTarget; tt != nil {
 				if top.Target.Kind != tt.Kind || top.Target.Value != tt.Value || top.Target.Source != tt.Source {
 					t.Errorf("hedef = %+v, beklenen %+v", top.Target, *tt)
+				}
+				// v0.10.1639 — blokta da aynı hedef; span adı hedef yerine geçmez.
+				if b := cp.Block(); !strings.Contains(b, "· hedef "+tt.Value+" ·") {
+					t.Errorf("blokta hedef %q yok:\n%s", tt.Value, b)
+				}
+			}
+			if want := f.ExpectGo.ExternalWaitLine; want != "" {
+				if got := cp.ExternalWaitLine(); got != want {
+					t.Errorf("önek satırı = %q, beklenen %q", got, want)
 				}
 			}
 		})
