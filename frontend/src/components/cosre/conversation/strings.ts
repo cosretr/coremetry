@@ -15,7 +15,4 @@ export const COSRE_V2_STRINGS = {
   jumpBottom: '↓ En alta',
   jumpBottomTitle: 'En son mesaja in',
   jumpBottomLabel: 'En alta in',
-  stoppedLead: '⏹ Durduruldu — bu cevap',
-  stoppedWord: 'yarım',
-  stoppedTail: 'kaldı.',
 } as const;

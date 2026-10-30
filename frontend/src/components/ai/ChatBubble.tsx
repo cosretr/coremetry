@@ -796,6 +796,13 @@ function StepsDisclosure({ turn, evId, setEvId, initialOpen }: {
             <Brain size={11} strokeWidth={2} aria-hidden="true" /> Derin
           </span>
         )}
+        {/* v0.10.1656 (CoSRE v2 B3) — araştırma bütçesi; yalnız v2 akışı doldurur. */}
+        {turn.budget && (
+          <span className="cell-hint" data-cosre-budget="" title="Araştırma bütçesi: yürütülen araç çağrısı / çağrı hakkı · kullanılan tur / tur hakkı">
+            {turn.budget.executed}/{turn.budget.maxCalls} çağrı · {turn.budget.roundsUsed}/{turn.budget.maxRounds} tur
+          </span>
+        )}
+        {turn.budget?.exhausted && <span className="badge b-warn" data-cosre-budget-exhausted="">bütçe doldu</span>}
       </div>
       {open && (
         <div className="cm-how__body">

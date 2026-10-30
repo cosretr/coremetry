@@ -8099,6 +8099,22 @@ export interface ChatTurn extends ChatMessage {
   explainAsk?: ChatExplainAsk;
   /** v0.10.1405 — kullanıcı turunun sabit penceresi (ChatSendWindow); arşiv taşımaz. */
   window?: ChatSendWindow;
+  /**
+   * v0.10.1656 (CoSRE v2 B3) — araştırma bütçesi (v2 `data-budget`; lib/cosre/
+   * toChatTurn). Adım açılırının başlığında özet + "bütçe doldu" rozeti.
+   * v1 akışı doldurmaz; arşiv taşımaz.
+   */
+  budget?: CosreStepBudget;
+}
+
+/** v0.10.1656 — `data-budget` (internal/cosre/uistream; Go chat döngüsü bütçesi). */
+export interface CosreStepBudget {
+  executed: number;
+  maxCalls: number;
+  roundsUsed: number;
+  maxRounds: number;
+  skipped: number;
+  exhausted: boolean;
 }
 
 /** v0.10.1384 — yazma efekti varış damgası (ChatTurn.arrivedAt). */

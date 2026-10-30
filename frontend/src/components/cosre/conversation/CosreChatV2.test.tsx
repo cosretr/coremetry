@@ -293,8 +293,9 @@ describe('CosreChatV2 × v1 paylaşılan karşılama + composer (plan §10)', ()
     await act(async () => { stopBtn.click(); });
     await tick();
     release();
-    await vi.waitFor(() => expect(sheet()!.querySelector('[data-cosre-partial]')?.textContent).toBe('⏹ Durduruldu — bu cevap yarım kaldı.'));
-    expect(sheet()!.querySelector('.cm-msg-ai')?.textContent?.trim()).toBe('Düzeltilmiş tam metin.');
+    // v0.10.1656 (B3) — v1 ChatBubble'ın notu (cevap gövdesinin içinde).
+    await vi.waitFor(() => expect(sheet()!.querySelector('.cm-msg-ai .cm-msg-note')?.textContent?.trim()).toBe('⏹ Durduruldu — bu cevap yarım kaldı.'));
+    expect(sheet()!.querySelector('.cm-msg-ai')?.textContent).toContain('Düzeltilmiş tam metin.');
   });
 
   // v0.10.1655 — v1'den devralınan iki bulgu kapandı: textarea'dan aria-expanded
