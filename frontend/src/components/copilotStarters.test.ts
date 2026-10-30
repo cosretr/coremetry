@@ -12,7 +12,8 @@ import { TEAM_ASKS, teamCardQuestion } from './ai/capabilityHints';
 // Bu testler v0.9.579'un dersini çiviliyor: liste büyürse menü hissi
 // geri gelir.
 
-const src = readFileSync(resolve(__dirname, './CopilotChat.tsx'), 'utf8');
+const src = readFileSync(resolve(__dirname, './CopilotChat.tsx'), 'utf8')
+  + readFileSync(resolve(__dirname, './ai/cosreAsk.ts'), 'utf8'); // v0.10.1648 — bağlam/composer/karşılama kancaları ai/cosreAsk.ts'e taşındı (v1/v2 ortak)
 
 function arrayLiteral(name: string): string[] {
   const i = src.indexOf(`const ${name} = [`);

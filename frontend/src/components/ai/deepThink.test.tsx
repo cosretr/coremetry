@@ -183,7 +183,7 @@ describe('Derin düşün kablolaması', () => {
   });
   it('iki kabuk da hook\'u thread\'e ve composer\'a geçirir (akarken devre dışı)', () => {
     for (const rel of ['../CopilotChat.tsx']) { // v0.10.1407 — AIDrawerBody silindi
-      const src = read(rel);
+      const src = read(rel) + read('./cosreAsk.ts'); // v0.10.1648 — bağlam/composer/karşılama kancaları ai/cosreAsk.ts'e taşındı (v1/v2 ortak)
       expect(src).toContain('useDeepThink(');
       expect(src).toMatch(/\n\s*deep, /);
       expect(src).toContain('deep={deep} onDeepChange={setDeep} deepDisabled={busy}');

@@ -4,7 +4,8 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const shell = readFileSync(resolve(__dirname, 'CopilotChat.tsx'), 'utf8');
+const shell = readFileSync(resolve(__dirname, 'CopilotChat.tsx'), 'utf8')
+  + readFileSync(resolve(__dirname, 'ai/cosreAsk.ts'), 'utf8'); // v0.10.1648 — bağlam/composer/karşılama kancaları ai/cosreAsk.ts'e taşındı (v1/v2 ortak)
 const hook = readFileSync(resolve(__dirname, 'ai', 'useChatThread.ts'), 'utf8');
 
 describe('sayfa bağlamı kablolaması', () => {

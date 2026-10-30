@@ -12,7 +12,8 @@ import { resolve } from 'node:path';
 // nitelikleri `comboboxProps` ile geçer, klavye dalı CopilotChat'in
 // `onBeforeKey`inde ve composer onu kısayollardan / liste sürdürmeden /
 // gönderimden ÖNCE çağırır (popup gezinmesi açıkken kazanır).
-const chat = readFileSync(resolve(__dirname, '../CopilotChat.tsx'), 'utf8');
+const chat = readFileSync(resolve(__dirname, '../CopilotChat.tsx'), 'utf8')
+  + readFileSync(resolve(__dirname, './cosreAsk.ts'), 'utf8'); // v0.10.1648 — bağlam/composer/karşılama kancaları ai/cosreAsk.ts'e taşındı (v1/v2 ortak)
 const composer = readFileSync(resolve(__dirname, 'ChatComposer.tsx'), 'utf8');
 const hook = readFileSync(resolve(__dirname, 'useNameCompletion.ts'), 'utf8');
 

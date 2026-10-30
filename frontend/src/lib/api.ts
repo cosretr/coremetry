@@ -60,7 +60,8 @@ import { readSSE } from './sse';
 // which has no day unit; see the type's comment in utils.ts.
 import type { GoDuration } from './utils';
 import { decodeBundle, SERIES_ENC, type CompactSeries } from './seriesCompact';
-import { browserTz, withTzQuery } from './browserTz'; // v0.10.745 — kanıt damgaları operatör diliminde
+import { withTzQuery } from './browserTz'; // v0.10.745 — kanıt damgaları operatör diliminde
+import { buildCopilotChatContext } from './copilotChatContext'; // v0.10.1648 — v1/v2 ortak sohbet bağlamı
 
 // Empty base = same origin (works in production where Go serves both UI and API).
 // In dev, Next.js rewrites /api/* to http://localhost:8088 (see next.config.mjs).
@@ -2502,38 +2503,14 @@ export const api = {
     // (internal/api/chat_code_sticky.go). Kilitsizken anahtar gövdede HİÇ yok.
     contextCodeLocked?: boolean,
   ): Promise<void> => {
-    // v0.10.437 (D6) — tarayıcı saat dilimi: mutlak tarih/saat soruları
-    // ("08/08/2026 04-08 arası") operatörün yerel saatinde yorumlanır.
-    // v0.10.445 — IANA adı da gider (sabit ofset DST'yi bilmez).
-    // v0.10.745 — çift lib/browserTz'den; Explain/insight uçlarıyla aynı kaynak.
-    const { tz, tzOffsetMin } = browserTz();
-    const context =
-      contextService || contextOperation || contextExplain || contextSubject || contextRangeS || contextTrace || contextEnv || contextToMs || contextProfile || contextConversation || contextPage || contextPinnedPage || (contextWikiRefs && contextWikiRefs.length > 0) || contextScope || contextCommand || contextDeep || contextAttempt || contextExplainAsk || contextCode || contextCodeLocked || tzOffsetMin !== 0 || tz
-        ? {
-            ...(tzOffsetMin !== 0 ? { tzOffsetMin } : {}),
-            ...(tz ? { tz } : {}),
-            ...(contextService ? { service: contextService } : {}),
-            ...(contextOperation ? { operation: contextOperation } : {}),
-            ...(contextExplain ? { explain: contextExplain } : {}),
-            ...(contextSubject ? { subject: contextSubject } : {}),
-            ...(contextRangeS && contextRangeS > 0 ? { rangeS: contextRangeS } : {}),
-            ...(contextTrace ? { trace: contextTrace } : {}),
-            ...(contextEnv ? { env: contextEnv } : {}),
-            ...(contextToMs && contextToMs > 0 ? { toMs: contextToMs } : {}),
-            ...(contextProfile ? { profile: contextProfile } : {}),
-            ...(contextConversation ? { conversation: contextConversation } : {}),
-            ...(contextPage ? { page: contextPage } : {}),
-            ...(contextPinnedPage ? { pinnedPage: contextPinnedPage } : {}),
-            ...(contextWikiRefs && contextWikiRefs.length > 0 ? { wikiRefs: contextWikiRefs } : {}),
-            ...(contextScope ? { scope: contextScope } : {}),
-            ...(contextCommand ? { command: contextCommand } : {}),
-            ...(contextDeep ? { deep: true } : {}),
-            ...(contextAttempt ? { attempt: contextAttempt } : {}),
-            ...(contextExplainAsk ? { explainAsk: contextExplainAsk } : {}),
-            ...(contextCode ? { code: true } : {}),
-            ...(contextCodeLocked ? { codeLocked: true } : {}),
-          }
-        : undefined;
+    // v0.10.1648 — gövde lib/copilotChatContext'ten (v2 aynı kurucuyu kullanır; bayt bayt aynı).
+    const context = buildCopilotChatContext({
+      service: contextService, operation: contextOperation, explain: contextExplain, subject: contextSubject,
+      rangeS: contextRangeS, trace: contextTrace, env: contextEnv, toMs: contextToMs, profile: contextProfile,
+      conversation: contextConversation, page: contextPage, pinnedPage: contextPinnedPage, wikiRefs: contextWikiRefs,
+      scope: contextScope, command: contextCommand, deep: contextDeep, attempt: contextAttempt,
+      explainAsk: contextExplainAsk, code: contextCode, codeLocked: contextCodeLocked,
+    });
     const r = await fetch(API_BASE + '/api/copilot/chat', {
       method: 'POST',
       credentials: 'include',

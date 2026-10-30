@@ -185,7 +185,7 @@ describe('Kod hapı — config ve kablolama', () => {
     expect(src).toMatch(/so\?\.explainAsk,[\s\S]{0,80}\(o\.code \|\| codeLocked\) \|\| undefined,/); // v0.10.1465 — kilitli konuşmada da açık
   });
   it('kabuk: yalnız available iken gövdeye; config yoksa hap yok', () => {
-    const src = read('../CopilotChat.tsx');
+    const src = read('../CopilotChat.tsx') + read('./cosreAsk.ts'); // v0.10.1648 — bağlam/composer/karşılama kancaları ai/cosreAsk.ts'e taşındı (v1/v2 ortak)
     expect(src).toContain('useCodeRead(');
     expect(src).toContain('const code = codePill && !!codeRead?.available;');
     expect(src).toMatch(/\n\s*code, /);

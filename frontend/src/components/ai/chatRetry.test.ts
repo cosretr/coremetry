@@ -68,6 +68,8 @@ describe('deneme beyanı (attempt)', () => {
     expect(hook).toMatch(/alternatives: r\.alternatives, attempt: 'regenerate', \.\.\.\(ask \? \{ explainAsk: ask \} : \{\}\), \.\.\.\(win \? \{ window: win \} : \{\}\) \}/);
     expect(hook).toMatch(/attempt: 'edit' \}\)/);
     const api = src('../../lib/api.ts');
-    expect(api).toContain('...(contextAttempt ? { attempt: contextAttempt } : {})');
+    // v0.10.1648 — bağlam gövdesi lib/copilotChatContext'te (v1/v2 ortak kurucu).
+    expect(api).toContain('attempt: contextAttempt,');
+    expect(src('../../lib/copilotChatContext.ts')).toContain('...(f.attempt ? { attempt: f.attempt } : {})');
   });
 });

@@ -147,7 +147,7 @@ describe('global env seçicisi → sohbet', () => {
     expect(resolveEnv(null, 'uat')).toBe('uat');
   });
   it('CopilotChat env\'i Topbar ile AYNI kaynaktan (useUrlEnv) okur ve şerit + istek aynı nesneden', () => {
-    const src = readFileSync(resolve(__dirname, '../CopilotChat.tsx'), 'utf8').replace(/^\s*\/\/.*$/gm, '');
+    const src = (readFileSync(resolve(__dirname, '../CopilotChat.tsx'), 'utf8') + readFileSync(resolve(__dirname, './cosreAsk.ts'), 'utf8')).replace(/^\s*\/\/.*$/gm, '');
     expect(src).toContain('const [env] = useUrlEnv();');
     expect(src).toMatch(/env: pinnedLegacy \? \(pinnedLegacy\.env \?\? ''\) : env,/);
     expect(src).toContain('const reqCtx = useMemo(() => applyContextExclusions(screenReqCtx, ctxExcluded)');

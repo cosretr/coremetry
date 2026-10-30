@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { mergeOpenHref } from '@/lib/openHref'; // v0.10.460
-import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { useCopilotStarters } from '@/lib/queries/copilot'; // v0.10.702
+import { Link, useNavigate } from 'react-router-dom';
 import { api } from '@/lib/api';
-import { pageContext } from '@/lib/pageContext';
-import { takeMetricPanelAsk, usePageOverlay, withPageOverlay } from '@/lib/pageContextOverlay'; // v0.10.1435
-import { hasPinnableContext, legacyFromPinned, pinLabelTR, readPin, writePin } from '@/lib/pinnedContext';
+import { takeMetricPanelAsk } from '@/lib/pageContextOverlay'; // v0.10.1435
+import { hasPinnableContext, pinLabelTR } from '@/lib/pinnedContext';
 import type { ChatExplainAsk, ChatTurn, PageContext } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -14,12 +12,8 @@ import { AiMark, CopilotFab } from './ai/CopilotFab'; // v0.10.1599
 import { Drawer } from '@/components/ui/Drawer';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { useOpenCriticalCount } from '@/lib/queries';
-import { useQuery } from '@tanstack/react-query';
-import { useAuth } from '@/components/AuthProvider';
-import { useUrlRange } from '@/lib/useUrlRange';
-import { useUrlEnv } from '@/lib/useUrlEnv';
-import { timeRangeToNs, tsRel } from '@/lib/utils';
-import { contextStarter, serviceFromRoute } from '@/lib/chatContext';
+import { tsRel } from '@/lib/utils';
+import type { ChatContextStarter } from '@/lib/chatContext';
 import { syncChatParam } from '@/lib/chatUrl';
 import { Empty, Spinner } from './Spinner';
 import { ChatBubble } from './ai/ChatBubble';
@@ -30,29 +24,23 @@ import { useStickToBottomState } from './ai/stickToBottom'; // v0.10.1137 — at
 import { CosreSidebar } from './ai/CosreSidebar'; // v0.10.1137 — /cosre sol kenar çubuğu
 import { readSidebarCollapsed, writeSidebarCollapsed } from './ai/chatHistoryGroups';
 import { ChatComposer } from './ai/ChatComposer'; // v0.10.1145 — markdown bilen composer (araç çubuğu, kısayol, yapıştırma, önizleme)
-import { useComposerDraft } from './ai/composerDraft'; // v0.10.1145 — konuşma başına taslak
-import { useNameCompletion } from './ai/useNameCompletion'; // v0.10.687 — D4 ad tamamlama
 import { NameCompletionPopup } from './ai/NameCompletionPopup';
-import { applyCompletion, type CompletionItem } from './ai/chatCompletion';
 import { ModelPicker } from './ai/ModelPicker'; // v0.10.1138 — kompakt "model ▾" menüsü
-import { useChatProfile } from './ai/chatProfileStore'; // v0.10.1138 — kullanıcı başına seçim
-import { useDeepThink } from './ai/deepThink'; // v0.10.1150 — "Derin düşün"
-import { useCodeRead } from './ai/codeRead'; // v0.10.1461 — "Kod" hapı (bağımsız sohbet kod turu)
-import { hasDrawerContext, parseChatInput, removeToken, scopeChips, scopeForRequest } from './ai/chatScope'; // v0.10.1138 — @/ kapsamı
+import { removeToken } from './ai/chatScope'; // v0.10.1138 — @/ kapsamı
 import { ChatContextBar } from './ai/ChatContextBar'; // v0.10.1274 — aktif bağlam şeridi
-import { applyContextExclusions, contextBarItems, shouldResetExclusions, type ChatRequestContext, type ContextKey } from './ai/chatContextScope';
+import { applyContextExclusions, shouldResetExclusions, type ChatRequestContext, type ContextBarItem, type ContextKey } from './ai/chatContextScope';
 import { answerVersion, canRegenerate, lastUserIndex } from './ai/chatRegenerate'; // v0.10.1138
 import { cosreFullPageHref } from './ai/drawerFullPage'; // v0.10.1138 — "Tam sayfada aç"
 import { isPlainLeftClick } from '@/lib/a11y';
 import { toast } from '@/lib/toast'; // v0.10.1139 — tam sayfa kayıt hatası
-import { useCopilotConfig } from './ai/useCopilotEnabled'; // v0.10.483
+import { useCosreAskContext, useCosreComposerInput, useCosreWelcomeData, type CosreAskContext, type CosreComposerInput, type CosreWelcomeData } from './ai/cosreAsk'; // v0.10.1648 — v1/v2 ortak kancalar
 import { AI_PREFILL_EVENT, type AIPrefillDetail } from './ai/aiEvents'; // v0.10.1336 — tur: aç + doldur, gönderme
 import { AI_DRAWER_WIDTH } from './ai/answerCard'; // v0.10.461
 import { useAiSubject } from './ai/useAiSubject';
 import { AI_CODE_PARAM, AI_SRC_PARAM, formatAiParam } from '@/lib/aiSubject';
 import { activeExplainFrom, explainAskFor, explainAskSubject, explainContextLabel, explainFollowupContext, explainSubject, explainTurnSendOpts } from './ai/explainTurn'; // v0.10.1400; v0.10.1405; v0.10.1407 — AI_KINDS'in tümü
 import { drawerFollowups } from './ai/drawerChat'; // v0.10.1400 — açıklama turunun takip çipleri
-import { greetHello, greetErrors, greetHref, greetTooltip } from './ai/greeting';
+import { greetHello, greetHref } from './ai/greeting';
 import type { AiConversationSummary } from '@/lib/types';
 import { traceChatWindow, traceContextToPage, useTraceAiContext, type TraceAiContext } from '@/lib/traceAiContext'; // v0.10.944; v0.10.1400 — açıklama turunun trace bağlamı
 import { TraceContextStrip } from './ai/TraceContextStrip'; // v0.10.944
@@ -115,24 +103,14 @@ const FOLLOWUPS = [
 export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer', defaultOpen = false }: { launcher?: boolean; variant?: 'drawer' | 'page'; defaultOpen?: boolean } = {}) {
   const isPage = variant === 'page';
   const launcher = launcherProp && !isPage;
-  // v0.10.483 — config TEK kaynaktan (useCopilotConfig: modül cache'i, AIDrawer
-  // ile aynı); eskiden CopilotChat kendi effect'iyle ikinci bir istek atıyordu.
-  const cfg = useCopilotConfig(true);
-  const enabled: boolean | null = cfg ? cfg.enabled : null;
-  // v0.10.183 — model profili seçici (>1 profil); boş = sunucu varsayılanı.
-  const profiles = useMemo(() => cfg?.profiles ?? [], [cfg]);
-  const defaultProfile = cfg?.defaultProfile ?? '';
-  // v0.10.461 — başlık meta şeridindeki model çipi (AIDrawer ile aynı anatomi).
-  const model = cfg?.model ?? ''; // v0.10.483 — config tek kaynaktan (useCopilotConfig)
-  // v0.10.1138 — seçim kullanıcı başına kalıcı (chatProfileStore); rozet etkin modeli gösterir.
-  const { user } = useAuth();
-  const { profile, setProfile, activeModel } = useChatProfile(user?.id, profiles, defaultProfile, model);
-  const [deep, setDeep] = useDeepThink(user?.id); // v0.10.1150 — "Derin düşün" (kullanıcı başına, kalıcı)
-  // v0.10.1461 — "Kod" hapı: yalnız DevOps bağlıyken (config.codeRead var) çizilir;
-  // sunucu kod okuyamıyorsa (yerel profil yok) devre dışı + gerekçe, istek gövdesine gitmez.
-  const [codePill, setCodePill] = useCodeRead(user?.id);
-  const codeRead = cfg?.codeRead;
-  const code = codePill && !!codeRead?.available;
+  // v0.10.1648 (CoSRE v2 Faz 2b B2a) — soru bağlamı (model/Derin/Kod + sayfa/pin/
+  // aralık/env kapsamı) ai/cosreAsk.ts'e taşındı; v2 aynı kancayı kullanır.
+  const askCtx = useCosreAskContext();
+  const {
+    enabled, user, profile, setProfile, deep, code,
+    page, pinned, setPinned, sp, setSp, ctxStarter,
+    currentService, env, ctxExcluded, setCtxExcluded, reqCtx, baseCtxItems, chipTrace, wikiOn,
+  } = askCtx;
   // v0.10.1599 — defaultOpen: kabuk kapısı (CopilotChatGate) sohbeti FAB tıklamasıyla
   // İLK kez yüklediğinde açık başlar; başka her mount'ta eskisi gibi kapalı.
   const [openState, setOpen] = useState(defaultOpen);
@@ -162,103 +140,9 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer',
   const [opening, setOpening] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Context-awareness (v0.9.164) — bulunulan sayfanın servisi. Mesaj servis
-  // adı taşımıyorsa backend guided router bunu varsayılan alır ("neden yavaş?"
-  // servis sayfasında → o servis). Banner scope'u şeffaf gösterir.
-  const loc = useLocation();
-  // v0.10.539 (Faz 3.2) — sayfa bağlamı: URL'den saf serileştirici; rota
-  // değişince yeniden hesaplanır (chat AppShell'de tek mount).
-  // v0.10.1435 — sayfanın yayınladığı grafik seçimleri (brush + seçili seri;
-  // lib/pageContextOverlay.ts) bağlama katılır: "bu tepe" soruları onları görür.
-  const pageOverlay = usePageOverlay();
-  const page = useMemo(() => withPageOverlay(pageContext(loc.pathname, loc.search), pageOverlay), [loc.pathname, loc.search, pageOverlay]);
-  // v0.10.540 (Faz 3.2b) — PIN: operatör sayfa bağlamını sohbete sabitler;
-  // sayfa değişse de özne kalır. Eski düz alanlar pinden türetilir (guided/
-  // drawer kademeleri sunucu değişikliği olmadan pini izler); sunucu önsözde
-  // pini ÖNCE yazar. Oturuma bağlı (sessionStorage), konuşma temizlenince düşer.
-  const [pinned, setPinnedState] = useState<PageContext | null>(() => readPin());
-  const setPinned = useCallback((ctx: PageContext | null) => { setPinnedState(ctx); writePin(ctx); }, []);
-  const pinnedLegacy = useMemo(() => (pinned ? legacyFromPinned(pinned) : null), [pinned]);
-  const [sp, setSp] = useSearchParams();
-  // v0.9.653 — ekrandaki özneden türeyen başlangıç çipi. Saf çözümleyici
-  // (lib/chatContext.ts); rota değişince kendiliğinden güncelleniyor.
-  const ctxStarter = useMemo(
-    () => contextStarter(loc.pathname, loc.search),
-    [loc.pathname, loc.search]);
-  // v0.9.1226 — saf çözümleyiciye taşındı (chatContext.serviceFromRoute):
-  // yalnız /service|/pod değil, ?service= taşıyan tüm liste rotaları
-  // bağlamı devrediyor; kapsam bandı + guided ctxService bedavaya doldu.
-  const currentService = useMemo(
-    () => serviceFromRoute(loc.pathname, loc.search),
-    [loc.pathname, loc.search]);
-  // v0.9.537 (operatör raporu: "ekrandaki trace'i anlamıyor") — trace
-  // sayfasındayken adresteki ID bağlam olarak gider; "bu trace neden
-  // yavaş" sunucuda guidedTraceByID'ye oturur. Mesaja yapıştırılan
-  // açık 32-hex her zaman bundan güçlüdür.
-  const currentTrace = useMemo(
-    () => (loc.pathname === '/trace' ? (sp.get('id') || '') : ''),
-    [loc.pathname, sp]);
-  // Operation-awareness (v0.9.184) — servis sayfasında seçili ?op=. "bu
-  // operasyonun durumu" gibi bir soru guided router'da RED'i o span-name'e
-  // daraltır (resolveGuidedOperation'ın context fallback'i).
-  const currentOp = useMemo(() => {
-    if (loc.pathname === '/service' || loc.pathname === '/service/backtrace') {
-      return sp.get('op') || '';
-    }
-    return '';
-  }, [loc.pathname, sp]);
-
-  // Tur state'i + gönderme döngüsü paylaşılan çekirdekte (v0.9.479).
-  // Global pencere explain bağlamı GÖNDERMEZ — filo geneli sorular
-  // sunucuda aynen guided/RAG/serbest döngü yollarına gider.
-  // v0.9.529 — ekrandaki zaman aralığı. Ev kuralı: timeRangeToNs bare
-  // JSX'te ASLA (v0.5.184 sonsuz refetch); burada useMemo içinde ve
-  // yalnız pencere kimliğinden türüyor, `now()` okunmuyor.
-  const [range] = useUrlRange();
-  // v0.9.1259 — env devri: ekrandaki global env seçimi sohbete bağlam
-  // olarak gider (rangeS aynası); kapsam bandı da gösterir.
-  const [env] = useUrlEnv();
-  const rangeS = useMemo(() => {
-    const { from, to } = timeRangeToNs(range);
-    const s = Math.round((to - from) / 1e9);
-    return s > 0 ? s : undefined;
-  }, [range]);
-  // v0.10.33 — MUTLAK pencerenin BİTİŞ anı. rangeS pencereyi SÜREYE
-  // çökertiyor ve sunucu onu şimdiye yeniden çapalıyordu: dün gece
-  // 03:00-04:00'a zoom yapıp soru sorunca cevap aynı UZUNLUKTA ama
-  // BUGÜNKÜ pencereden geliyordu. Sayılar gerçek olduğu için hata
-  // sessizdi.
-  //
-  // ⚠ YALNIZ custom/zoom aralıkta gönderiliyor. Göreli aralıkta ("son 1
-  // saat") çıpayı sabitlemek, uzun bir soruşturmada cevabı DONDURUR:
-  // operatör yirmi dakika sonra "şimdi nasıl" diye sorduğunda hâlâ
-  // yirmi dakika önceki pencereyi görürdü.
-  const toMs = useMemo(
-    () => (range.preset === 'custom' && range.toMs ? range.toMs : undefined),
-    [range],
-  );
-
   // persist: true — KALICILIK YALNIZ BURADA (v0.9.1139, Faz 4.1).
   // AI çekmecesindeki özne sohbeti efemer kalıyor; gerekçe
   // useChatThread'in dosya başında.
-  // v0.10.1274 (CoSRE adım 5) — bağlam şeridi: gönderilecek kapsam composer'ın
-  // üstünde görünür; ✕ ile çıkarılan öğe BU KONUŞMA için istekten düşer
-  // (chatContextScope.ts: düz alan + sayfa ikizi). Env Topbar'ın global
-  // seçicisinden (useUrlEnv, aynı URL/sticky kaynağı) — "Tüm ortamlar" = ''.
-  const [ctxExcluded, setCtxExcluded] = useState<ReadonlySet<ContextKey>>(() => new Set());
-  const screenReqCtx = useMemo<ChatRequestContext>(() => ({
-    // v0.10.540 — pin varken eski alanlar pinden (boş alan = kapsamsız, ekrandan DEĞİL).
-    service: pinnedLegacy ? (pinnedLegacy.service ?? '') : currentService,
-    operation: pinnedLegacy ? (pinnedLegacy.operation ?? '') : currentOp,
-    rangeS: pinnedLegacy ? pinnedLegacy.rangeS : rangeS,
-    toMs: pinnedLegacy ? pinnedLegacy.toMs : toMs,
-    trace: pinnedLegacy ? (pinnedLegacy.trace ?? '') : currentTrace,
-    env: pinnedLegacy ? (pinnedLegacy.env ?? '') : env,
-    page, // v0.10.539 — sayfa bağlamı protokolü (lib/pageContext, her turda)
-    pinnedPage: pinned ?? undefined, // v0.10.540 — sabitlenmiş bağlam
-  }), [pinnedLegacy, currentService, currentOp, rangeS, toMs, currentTrace, env, page, pinned]);
-  const reqCtx = useMemo(() => applyContextExclusions(screenReqCtx, ctxExcluded), [screenReqCtx, ctxExcluded]);
-  const baseCtxItems = useMemo(() => contextBarItems(reqCtx), [reqCtx]);
   // v0.10.1400 (Tek CoSRE) — açıklama turunun TAKİP bağlamı: konuşmadaki son
   // açıklama turu (explainTurn.activeExplainFrom) takip sorularına çekmece
   // özne kipindeki AYNI iki alanı ekler — context.explain (künye + metin +
@@ -309,10 +193,6 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer',
         navigate(to, { replace: true });
       },
     });
-  // v0.10.1145 — composer taslağı konuşma başına sessionStorage'da (composerDraft):
-  // konuşma değişince / yenilemede kaybolmaz, gönderimde silinir. (Konuşma
-  // kimliği useChatThread'den geldiği için durum onun ALTINDA kurulur.)
-  const draft = useComposerDraft('chat', conversationId);
   const dashCtx = useMemo(() => ({ conversationId }), [conversationId]); // v0.10.1443 — sohbetten dashboard
   // v0.10.1400 — etkin açıklama turu (✕ ile çıkarılmadıysa) + trace bağlamı.
   const activeExplainAll = useMemo(() => activeExplainFrom(turns), [turns]);
@@ -324,32 +204,21 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer',
     ? [{ key: 'explain' as const, label: explainContextLabel(activeExplain.meta),
         title: 'Takip soruları bu açıklamaya bağlanır (aynı kanıt) — ✕ ile bu konuşmadan çıkar' }, ...baseCtxItems]
     : baseCtxItems), [activeExplain, baseCtxItems]);
+  // v0.10.1274 — bağlam şeridinde ✕: öğe BU konuşmanın isteğinden düşer.
+  const removeCtx = (k: ContextKey) => (k === 'explain'
+    ? setExplainOff(activeExplain?.key ?? '') // v0.10.1400 — bu açıklama turu bağlamdan çıkar
+    : setCtxExcluded(prev => new Set(prev).add(k)));
   // v0.10.1274 — çıkarmalar konuşmaya bağlı: başka konuşmaya geçince sıfır.
   const prevConvRef = useRef(conversationId);
   useEffect(() => {
     if (shouldResetExclusions(prevConvRef.current, conversationId)) { setCtxExcluded(new Set()); setExplainOff(''); }
     prevConvRef.current = conversationId;
-  }, [conversationId]);
-  const input = draft.value;
-  const setInput = draft.setValue;
-  // v0.10.687 — D4 ad tamamlama: imleç konumu + aday listesi (sunucu araması).
-  const [caret, setCaret] = useState(0);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const completion = useNameCompletion(input, caret);
-  // v0.10.1138 — tamamlamadan SEÇİLEN servis anmaları (biçimden bağımsız kapsam olur).
-  const [chosen, setChosen] = useState<string[]>([]);
-  const parsedInput = useMemo(() => parseChatInput(input, chosen), [input, chosen]);
-  // v0.10.1139 — kapsam çipleri gönderilecek hâli gösterir: trace bağlamında
-  // @-kapsamı düşer (useChatThread aynı kuralı uygular), açık /komut kalır.
-  const chipTrace = pinnedLegacy ? (pinnedLegacy.trace ?? '') : currentTrace;
-  const composerChips = useMemo(
-    () => scopeChips(scopeForRequest(parsedInput, hasDrawerContext({ trace: chipTrace, page }))),
-    [parsedInput, chipTrace, page]);
+  }, [conversationId, setCtxExcluded]);
+  // v0.10.1648 — composer girdisi (taslak, ad tamamlama, @/ kapsam) ai/cosreAsk.ts'te.
+  const composerInput = useCosreComposerInput(conversationId, page, chipTrace);
+  const { setInput, chosen, setChosen, expectDraft, prefill } = composerInput;
   // v0.10.540 — yeni konuşma pini de düşürür (pin thread'e bağlı).
   const clearAll = useCallback(() => { clear(); setPinned(null); }, [clear, setPinned]);
-  // v0.10.1145 — operatörün "yeni konuşma"sı AÇIK geçiştir: yeni konuşmanın kayıtlı
-  // taslağı yüklenir, ekrandaki taslak eski konuşmasında kalır (composerDraft.expect).
-  const expectDraft = draft.expect;
   const startNew = useCallback(() => { expectDraft(null); clearAll(); }, [expectDraft, clearAll]);
 
   // v0.9.1258 — konuşma deep-link'i (?chat=<convId>): URL → state yarısı.
@@ -453,52 +322,12 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer',
     }
   };
 
-  // Karşılamanın canlı yarısı (v0.9.528). `enabled` ÜÇ koşulu birden
-  // taşır: copilot açık, pencere açık, ve henüz konuşma başlamamış —
-  // yani sorgu SADECE karşılama gerçekten ekrandayken koşar. Kapalı
-  // pencerede ya da sohbet ortasında tek istek bile gitmez.
-  // v0.10.1255 (operatör: "P1 yerine son 1 saatteki exception / hata sayısı")
-  // — filo hata (MV) + aktif exception grubu; yalnız karşılama ekrandayken.
-  // v0.10.1278 (operatör 2026-10-17: sayı tüm hatalı span'lerdi) — hatalı
-  // GİRİŞ isteği + açık/yeni exception grubu; global env (Topbar'la aynı
-  // useUrlEnv kaynağı) sorguya VE anahtara girer.
-  const greetQ = useQuery({
-    queryKey: ['cosre-greeting', env],
-    queryFn: () => api.cosreGreeting(env),
-    enabled: enabled === true && open && turns.length === 0,
-    staleTime: 60_000,
-  });
-  const greetLine = greetErrors(greetQ.data ?? undefined);
-  const greetTitle = greetTooltip(greetQ.data ?? undefined);
-  const greetAlert = !!greetQ.data && (greetQ.data.failedRequests1h > 0 || greetQ.data.openExceptionGroups1h > 0);
+  // v0.10.1648 — karşılama verisi (hata özeti + takım) ai/cosreAsk.ts'te; aynı koşul.
+  const welcome = useCosreWelcomeData(enabled === true && open && turns.length === 0, env);
 
 
   // v0.10.650 — yalnız dipteyken yapış (stickToBottom.ts); soru gönderimi pin'ler.
   const { pin: pinBottom, atBottom } = useStickToBottomState(scrollRef, [turns, open]);
-  // v0.10.702 — VERİ çipleri: takımın en kötü servisi + o servisin en çok
-  // hata alan yolu (sunucu, 60 s). Yalnız çekmece açık + sohbet boşken.
-  // v0.10.1382 — gruplu seçenekler (servis / operasyon / P1 / deploy) yetenek
-  // satırlarının altında (CosreCapabilities); env yalnız P1'e uygulanır.
-  // v0.10.1402 — `team`: sunucunun çözdüğü kullanıcı takımı (Takımım kartının varsayılanı).
-  const starters = useCopilotStarters(drawerOpen && enabled === true && turns.length === 0, env);
-  // v0.10.702 — şablon çipi: composer'ı doldurur, GÖNDERMEZ; imleç başta,
-  // operatör yolu yazar ("/api/x hatalı trace'lerini getir" → endpoint_traces).
-  // v0.10.1128 — genelleştirildi: yetenek satırları ve wiki çipi de aynı
-  // "doldur + imleci koy + odakla, GÖNDERME" yolunu kullanır.
-  const prefill = (text: string, at: number) => {
-    setInput(text);
-    setCaret(at);
-    requestAnimationFrame(() => {
-      const el = textareaRef.current;
-      if (!el) return;
-      el.focus();
-      el.setSelectionRange(at, at);
-    });
-  };
-  const prefillEndpoint = () => prefill(" hatalı trace'lerini getir", 0);
-  // v0.10.1128 — wiki ipucu/çipi yalnız sohbet bu kullanıcıya wiki'den cevap
-  // verebiliyorsa (/api/copilot/config `wiki`; yeni istek yok).
-  const wikiOn = cfg?.wiki === true;
 
   // Explain→chat köprüsü (v0.9.165): satır-içi explain panelleri (çekmece
   // OLMAYAN yüzeyler, örn. AnomalyDetailDrawer) bir global event atar; chat
@@ -595,21 +424,6 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer',
     const x = explainAskFor(explainAskSubject(a), a.src, undefined, undefined, a.panel); // v0.10.1435 — panel yükü korunur
     if (x) askChip(x.userText, explainTurnSendOpts(x));
   };
-  const acceptCompletion = (item: CompletionItem | undefined) => {
-    if (!completion.cq || !item) return;
-    const r = applyCompletion(input, completion.cq, item);
-    const svc = item.service;
-    if (svc) setChosen(c => (c.includes(svc) ? c : [...c, svc]));
-    setInput(r.text);
-    completion.dismiss();
-    requestAnimationFrame(() => {
-      const el = textareaRef.current;
-      if (!el) return;
-      el.focus();
-      el.setSelectionRange(r.caret, r.caret);
-      setCaret(r.caret);
-    });
-  };
 
 
   // v0.10.1138 — son kullanıcı mesajı (✎) ve düzenleme gönderimi.
@@ -655,29 +469,7 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer',
                 <AiMark size={20} />
                 <span className="cosre-head__title">CoSRE</span>
               </span>
-              <span className="mono cosre-head__meta" style={{
-                flex: 1, minWidth: 0,
-                color: currentService ? 'var(--accent2)' : 'var(--text3)',
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              }} title={currentService ? `Sorular ${currentService} servisine kapsanır` : undefined}>
-                {pinned
-                    ? ''
-                    // v0.10.1295 (operatör 2026-10-17: "filo geneli yazmasına gerek yok") —
-                    // servis yoksa etiket boş; yalnız env (varsa) kalır.
-                    : [currentService ? `📍 ${currentService}` : '', env ? `env ${env}` : ''].filter(Boolean).join(' · ')}
-              </span>
-              {/* v0.10.540 — pin çipi / sabitle düğmesi. */}
-              {pinned && (
-                <Chip pill size="sm" active onRemove={() => setPinned(null)} removeLabel="Sabitlemeyi kaldır"
-                  title={`Sabitlenmiş bağlam — sayfa değişse de sorular buna kapsanır: ${pinLabelTR(pinned)}`}
-                  style={{ flexShrink: 1, minWidth: 0, maxWidth: 260 }}>
-                  📌 {pinLabelTR(pinned)}
-                </Chip>
-              )}
-              {!pinned && hasPinnableContext(page) && (
-                <Button variant="ghost" size="sm" onClick={() => setPinned(page)}
-                  title={`Bu sayfanın bağlamını sohbete sabitle: ${pinLabelTR(page)}`} aria-label="Sayfa bağlamını sabitle">📌</Button>
-              )}
+              <CosreHeaderContext currentService={currentService} env={env} pinned={pinned} setPinned={setPinned} page={page} />
               {/* v0.9.1139 — konuşma arşivi. Menü değil bir BÖLÜM:
                   çekmece zaten sağ kenarda ve ikinci bir uçan katman
                   (dropdown) sohbetin üstüne binerdi. */}
@@ -801,67 +593,8 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer',
             style={{ flex: 1, overflowY: 'auto' }}>
             <div className="cm-thread__col">
             {turns.length === 0 && (
-              <div className="cm-greet">
-                {/* Karşılama (v0.9.528) — LLM çağrısı YOK; ad
-                    /api/auth/me'den, durum açık P1'lerden. Durum satırı
-                    yüklenirken BOŞ döner: "P1 yok" yanlış iddiası
-                    operatörü yanıltırdı (greeting.ts). */}
-                <div className="cm-greet__hello">
-                  {greetHello(user?.firstName)}
-                </div>
-                {greetLine && (
-                  <div className={`cm-greet__status${greetAlert ? ' is-alert' : ''}`} title={greetTitle}>
-                    {greetAlert
-                      ? <Link to={greetHref(env)} style={{ color: 'inherit' }}>{greetLine}</Link>
-                      : greetLine}
-                  </div>
-                )}
-                {/* v0.9.579 (operatör: "çıkar") — HAZIR SORU ÇİPLERİ
-                    KALDIRILDI. Sekiz sabit soru bir MENÜYDÜ, bir araç
-                    değil: operatörün kendi sorusu neredeyse hiçbir zaman
-                    listedekilerden biri olmuyor ve liste, asistanın
-                    yalnız onları anlayabildiği izlenimini veriyordu.
-                    Aynı gerekçeyle /explore'un soru kartları da
-                    kaldırılmıştı (v0.9.562).
-                    Cevap SONRASI follow-up çipleri KALDI: onlar bir menü
-                    değil, o cevaba bağlı sıradaki adım. */}
-                <div className="cm-greet__ask">Sana nasıl yardımcı olabilirim?</div>
-                {/* v0.10.1128 (operatör) — "neler yapabilirim" ipucu: yalnız
-                    boş sohbette; tıklama örnek soruyu composer'a DOLDURUR. */}
-                {/* v0.10.1382 — satır başlığı şablonu DOLDURUR; altındaki somut
-                    seçenek çipi HEMEN GÖNDERİR (askChip). v0.10.1390 — servis ve
-                    operasyon satırlarında çip yok, her zaman görünen arama kutusu;
-                    seçim de askChip ile gönderir. */}
-                {/* v0.10.1402 — en üstte Takımım kartı (takım seçici + üç çip). */}
-                <CosreCapabilities wiki={wikiOn} team={starters.team} onPrefill={prefill} onAsk={askChip} />
-                {/* v0.9.652 — başlangıç çipleri (operatör isteği). v0.10.1402 —
-                    "Takımımın …" çipleri Takımım kartına taşındı; burada bağlam,
-                    yol şablonu ve wiki çipi kalır. */}
-                <div className="cm-greet__chips">
-                  {/* v0.9.653 — EKRANDAKİ özne, statik çiplerden ÖNCE.
-                      Operatör bir trace'e bakarken sohbeti açtığında
-                      elindeki bağlam kaybolup ona takımının servisleri
-                      soruluyordu. Vurgulu çizilir: tek anlamlı öneri o.
-                      Otomatik açıklama DEĞİL — sohbeti açmak bir LLM
-                      çağrısı tetiklememeli (gerekçe lib/chatContext.ts). */}
-                  {ctxStarter && (
-                    <Chip pill tone="accent" onClick={() => (ctxStarter.explainAsk ? askExplain(ctxStarter.explainAsk) : submit(ctxStarter.question))}>
-                      ✨ {ctxStarter.chip}
-                    </Chip>
-                  )}
-                  {/* v0.10.702 — şablon: composer'a doldurur, yol operatörden. */}
-                  <Chip pill onClick={prefillEndpoint} title="Yolu yaz: /api/... hatalı trace'lerini getir">
-                    ⌨ …/yol hatalı trace'leri
-                  </Chip>
-                  {/* v0.10.1128 — wiki şablon çipi: "@wiki " doldurur (v0.10.1378) + odaklar.
-                      Dil: karşılamayla aynı (tCosre, sabit TR) — UI dili değil. */}
-                  {wikiOn && (
-                    <Chip pill data-chip="wiki" onClick={() => { const v = tCosre('cosre.chip.wiki.prompt'); prefill(v, v.length); }}>
-                      📚 {tCosre('cosre.chip.wiki')}
-                    </Chip>
-                  )}
-                </div>
-              </div>
+              <CosreWelcome firstName={user?.firstName} env={env} data={welcome} wiki={wikiOn} ctxStarter={ctxStarter}
+                onPrefill={prefill} onAsk={askChip} onAskExplain={askExplain} onSubmit={submit} />
             )}
             {/* v0.10.1443 — sohbetten dashboard: konuşma kimliği panel açıklamasına + audit'e. */}
             <ChatDashContext.Provider value={dashCtx}>
@@ -911,84 +644,8 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer',
 
           {/* Composer */}
           {/* v0.10.1137 — composer: gölgeli tek kutu (metin + gönder/durdur), okuma sütunuyla hizalı. */}
-          <form className="cm-composer" data-tour="cosre-composer"
-            onSubmit={e => { e.preventDefault(); submit(input); }}>
-            {/* v0.10.664 — <textarea>: Enter gönderir, Shift+Enter yeni satır (stack
-                trace / SQL yapıştırılabilir); akarken KİLİTLİ DEĞİL — gönderim
-                mevcut akışı durdurup yeni soruyu gönderir (useChatThread). */}
-            {/* v0.10.687 — D4: '@ad' ya da tireli token yazınca servis adı adayları
-                girişin ÜSTÜNDE; ↑↓ gezinir, Enter/Tab ekler (göndermez), Esc kapatır.
-                v0.10.1145 — ChatComposer: markdown araç çubuğu + kısayollar + akıllı
-                yapıştırma + önizleme; açık popup'ın tuşları ÖNCE (onBeforeKey). */}
-            <ChatComposer
-              value={input}
-              onChange={setInput}
-              onCaret={setCaret}
-              onSubmit={() => submit(input)}
-              textareaRef={textareaRef}
-              autoFocus
-              placeholder="CoSRE'ye sor… (Shift+Enter: yeni satır · @ kapsam · / komutlar)"
-              ariaLabel="CoSRE'ye mesaj"
-              deep={deep} onDeepChange={setDeep} deepDisabled={busy}
-              {...(codeRead || codeLocked ? { code: codePill, onCodeChange: setCodePill, codeDisabled: busy, codeReason: codeRead?.available ? undefined : (codeRead?.reason || 'kapalı'), codeLocked } : {})}
-              comboboxProps={{
-                'aria-autocomplete': 'list',
-                'aria-controls': 'chat-complete',
-                'aria-expanded': completion.open,
-                'aria-activedescendant': completion.open ? `chat-complete-${completion.highlight}` : undefined,
-              }}
-              popup={completion.open && (
-                <NameCompletionPopup id="chat-complete" items={completion.items} highlight={completion.highlight}
-                  onPick={acceptCompletion} onHover={completion.setHighlight} />
-              )}
-              onBeforeKey={e => {
-                if (!completion.open) return false;
-                if (e.key === 'ArrowDown') { e.preventDefault(); completion.move(1); return true; }
-                if (e.key === 'ArrowUp') { e.preventDefault(); completion.move(-1); return true; }
-                if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); acceptCompletion(completion.items[completion.highlight]); return true; }
-                if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); completion.dismiss(); return true; }
-                return false;
-              }}
-              actions={<>
-            {/* v0.10.23 — DURDUR. AbortController zaten kuruluydu ama
-                hiçbir affordance'a bağlı değildi; yerel gemma4 tek GPU'da
-                koştuğu için istenmeyen bir 5-turlu döngü, operatörün
-                sıradaki meşru sorusunun önünü dakikalarca tıkıyordu.
-                Akarken Gönder'in YERİNİ alıyor: iki düğme yan yana
-                durursa hangisinin etkin olduğu belirsizleşir. */}
-            {/* v0.10.1141 — model seçici composer'ın İÇİNDE (Claude gibi), Gönder'in
-                solunda; menü yukarı açılır. Akarken devre dışı (model yalnız boştayken
-                değişir). Tek profilde aynı yerde tıklanamaz etiket. */}
-            <ModelPicker profiles={profiles} defaultProfile={defaultProfile} value={profile}
-              onChange={setProfile} activeModel={activeModel} disabled={busy} />
-            {busy ? (
-              <Button variant="secondary" type="button" onClick={stop}
-                title="Cevabı durdur — o ana kadar akan metin korunur">
-                Durdur
-              </Button>
-            ) : (
-              // v0.10.1254 (operatör: "Claude chat gibi profesyonel") — yuvarlak ↑ gönder.
-              <Button variant="primary" type="submit" disabled={!input.trim()} className="cm-send"
-                title="Gönder (Enter)">
-                <span aria-hidden="true">↑</span><span className="sr-only">Gönder</span>
-              </Button>
-            )}
-              </>} />
-            {/* v0.10.1274 — aktif bağlam şeridi: sunucu bu kapsamı araçlara uygular; ✕ bu konuşmadan çıkarır. */}
-            <ChatContextBar items={ctxItems}
-              onRemove={k => (k === 'explain'
-                ? setExplainOff(activeExplain?.key ?? '') // v0.10.1400 — bu açıklama turu bağlamdan çıkar
-                : setCtxExcluded(prev => new Set(prev).add(k)))} />
-            {/* v0.10.1138 — yapısal kapsam çipleri: gönderimde context.scope/command olarak gider. */}
-            {composerChips.length > 0 && (
-              <div className="cm-scope-chips" aria-label="Mesaj kapsamı">
-                {composerChips.map(c => (
-                  <Chip key={c.key} pill size="sm" active onRemove={() => setInput(v => removeToken(v, c.token))}
-                    removeLabel={`${c.label} kapsamını kaldır`} title="Bu mesaj yapısal olarak buna kapsanır">{c.label}</Chip>
-                ))}
-              </div>
-            )}
-          </form>
+          <CosreComposerForm input={composerInput} ask={askCtx} busy={busy} stop={stop} codeLocked={codeLocked}
+            ctxItems={ctxItems} onRemoveCtx={removeCtx} submit={submit} />
   </>);
 
   if (isPage) {
@@ -1058,5 +715,222 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer',
         </Drawer>
       )}
     </>
+  );
+}
+
+
+// ── v0.10.1648 (CoSRE v2 Faz 2b B2a, plan §10) — v1 ile v2'nin PAYLAŞTIĞI parçalar.
+// JSX CopilotChat gövdesinden satır satır taşındı (v1 DOM'u aynı); v2
+// (components/cosre/conversation) aynı bileşenleri çizer, yalnız cevap yolu farklı.
+// Bu dosyada kalırlar: components/ui atomlarını kullanırlar ve uiImportRatchet
+// tavanları dosya sayar (yeni dosya = yeni importer).
+
+/** Başlıktaki kapsam etiketi + bağlam pini (çip ya da 📌 sabitle düğmesi). */
+export function CosreHeaderContext({ currentService, env, pinned, setPinned, page }: {
+  currentService: string; env: string; pinned: PageContext | null;
+  setPinned: (ctx: PageContext | null) => void; page: PageContext;
+}) {
+  return (<>
+    <span className="mono cosre-head__meta" style={{
+      flex: 1, minWidth: 0,
+      color: currentService ? 'var(--accent2)' : 'var(--text3)',
+      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+    }} title={currentService ? `Sorular ${currentService} servisine kapsanır` : undefined}>
+      {pinned
+          ? ''
+          // v0.10.1295 (operatör 2026-10-17: "filo geneli yazmasına gerek yok") —
+          // servis yoksa etiket boş; yalnız env (varsa) kalır.
+          : [currentService ? `📍 ${currentService}` : '', env ? `env ${env}` : ''].filter(Boolean).join(' · ')}
+    </span>
+    {/* v0.10.540 — pin çipi / sabitle düğmesi. */}
+    {pinned && (
+      <Chip pill size="sm" active onRemove={() => setPinned(null)} removeLabel="Sabitlemeyi kaldır"
+        title={`Sabitlenmiş bağlam — sayfa değişse de sorular buna kapsanır: ${pinLabelTR(pinned)}`}
+        style={{ flexShrink: 1, minWidth: 0, maxWidth: 260 }}>
+        📌 {pinLabelTR(pinned)}
+      </Chip>
+    )}
+    {!pinned && hasPinnableContext(page) && (
+      <Button variant="ghost" size="sm" onClick={() => setPinned(page)}
+        title={`Bu sayfanın bağlamını sohbete sabitle: ${pinLabelTR(page)}`} aria-label="Sayfa bağlamını sabitle">📌</Button>
+    )}
+  </>);
+}
+
+export interface CosreWelcomeProps {
+  firstName?: string;
+  env: string;
+  data: CosreWelcomeData;
+  wiki: boolean;
+  ctxStarter: ChatContextStarter | null;
+  onPrefill: (text: string, at: number) => void;
+  onAsk: (text: string, so?: ChatSendOpts) => void;
+  onAskExplain: (a: ChatExplainAsk) => void;
+  onSubmit: (text: string) => void;
+}
+
+/** Boş sohbetin karşılaması: selam + hata özeti + yetenek kartları + başlangıç çipleri. */
+export function CosreWelcome({ firstName, env, data, wiki: wikiOn, ctxStarter, onPrefill: prefill, onAsk: askChip, onAskExplain: askExplain, onSubmit: submit }: CosreWelcomeProps) {
+  const { greetLine, greetTitle, greetAlert } = data;
+  const starters = data;
+  const user = { firstName };
+  const prefillEndpoint = () => prefill(" hatalı trace'lerini getir", 0);
+  return (
+    <div className="cm-greet">
+      {/* Karşılama (v0.9.528) — LLM çağrısı YOK; ad
+          /api/auth/me'den, durum açık P1'lerden. Durum satırı
+          yüklenirken BOŞ döner: "P1 yok" yanlış iddiası
+          operatörü yanıltırdı (greeting.ts). */}
+      <div className="cm-greet__hello">
+        {greetHello(user?.firstName)}
+      </div>
+      {greetLine && (
+        <div className={`cm-greet__status${greetAlert ? ' is-alert' : ''}`} title={greetTitle}>
+          {greetAlert
+            ? <Link to={greetHref(env)} style={{ color: 'inherit' }}>{greetLine}</Link>
+            : greetLine}
+        </div>
+      )}
+      {/* v0.9.579 (operatör: "çıkar") — HAZIR SORU ÇİPLERİ
+          KALDIRILDI. Sekiz sabit soru bir MENÜYDÜ, bir araç
+          değil: operatörün kendi sorusu neredeyse hiçbir zaman
+          listedekilerden biri olmuyor ve liste, asistanın
+          yalnız onları anlayabildiği izlenimini veriyordu.
+          Aynı gerekçeyle /explore'un soru kartları da
+          kaldırılmıştı (v0.9.562).
+          Cevap SONRASI follow-up çipleri KALDI: onlar bir menü
+          değil, o cevaba bağlı sıradaki adım. */}
+      <div className="cm-greet__ask">Sana nasıl yardımcı olabilirim?</div>
+      {/* v0.10.1128 (operatör) — "neler yapabilirim" ipucu: yalnız
+          boş sohbette; tıklama örnek soruyu composer'a DOLDURUR. */}
+      {/* v0.10.1382 — satır başlığı şablonu DOLDURUR; altındaki somut
+          seçenek çipi HEMEN GÖNDERİR (askChip). v0.10.1390 — servis ve
+          operasyon satırlarında çip yok, her zaman görünen arama kutusu;
+          seçim de askChip ile gönderir. */}
+      {/* v0.10.1402 — en üstte Takımım kartı (takım seçici + üç çip). */}
+      <CosreCapabilities wiki={wikiOn} team={starters.team} onPrefill={prefill} onAsk={askChip} />
+      {/* v0.9.652 — başlangıç çipleri (operatör isteği). v0.10.1402 —
+          "Takımımın …" çipleri Takımım kartına taşındı; burada bağlam,
+          yol şablonu ve wiki çipi kalır. */}
+      <div className="cm-greet__chips">
+        {/* v0.9.653 — EKRANDAKİ özne, statik çiplerden ÖNCE.
+            Operatör bir trace'e bakarken sohbeti açtığında
+            elindeki bağlam kaybolup ona takımının servisleri
+            soruluyordu. Vurgulu çizilir: tek anlamlı öneri o.
+            Otomatik açıklama DEĞİL — sohbeti açmak bir LLM
+            çağrısı tetiklememeli (gerekçe lib/chatContext.ts). */}
+        {ctxStarter && (
+          <Chip pill tone="accent" onClick={() => (ctxStarter.explainAsk ? askExplain(ctxStarter.explainAsk) : submit(ctxStarter.question))}>
+            ✨ {ctxStarter.chip}
+          </Chip>
+        )}
+        {/* v0.10.702 — şablon: composer'a doldurur, yol operatörden. */}
+        <Chip pill onClick={prefillEndpoint} title="Yolu yaz: /api/... hatalı trace'lerini getir">
+          ⌨ …/yol hatalı trace'leri
+        </Chip>
+        {/* v0.10.1128 — wiki şablon çipi: "@wiki " doldurur (v0.10.1378) + odaklar.
+            Dil: karşılamayla aynı (tCosre, sabit TR) — UI dili değil. */}
+        {wikiOn && (
+          <Chip pill data-chip="wiki" onClick={() => { const v = tCosre('cosre.chip.wiki.prompt'); prefill(v, v.length); }}>
+            📚 {tCosre('cosre.chip.wiki')}
+          </Chip>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export interface CosreComposerFormProps {
+  input: CosreComposerInput;
+  ask: Pick<CosreAskContext, 'profiles' | 'defaultProfile' | 'profile' | 'setProfile' | 'activeModel' | 'deep' | 'setDeep' | 'codePill' | 'setCodePill' | 'codeRead'>;
+  busy: boolean;
+  stop: () => void;
+  codeLocked: boolean;
+  ctxItems: readonly ContextBarItem[];
+  onRemoveCtx: (k: ContextKey) => void;
+  submit: (text: string) => void;
+}
+
+/** Composer: metin + Derin/Kod/model + gönder/durdur, bağlam şeridi, kapsam çipleri. */
+export function CosreComposerForm({ input: composer, ask, busy, stop, codeLocked, ctxItems, onRemoveCtx, submit }: CosreComposerFormProps) {
+  const { input, setInput, setCaret, textareaRef, completion, composerChips, acceptCompletion } = composer;
+  const { profiles, defaultProfile, profile, setProfile, activeModel, deep, setDeep, codePill, setCodePill, codeRead } = ask;
+  return (
+    <form className="cm-composer" data-tour="cosre-composer"
+      onSubmit={e => { e.preventDefault(); submit(input); }}>
+      {/* v0.10.664 — <textarea>: Enter gönderir, Shift+Enter yeni satır (stack
+          trace / SQL yapıştırılabilir); akarken KİLİTLİ DEĞİL — gönderim
+          mevcut akışı durdurup yeni soruyu gönderir (useChatThread). */}
+      {/* v0.10.687 — D4: '@ad' ya da tireli token yazınca servis adı adayları
+          girişin ÜSTÜNDE; ↑↓ gezinir, Enter/Tab ekler (göndermez), Esc kapatır.
+          v0.10.1145 — ChatComposer: markdown araç çubuğu + kısayollar + akıllı
+          yapıştırma + önizleme; açık popup'ın tuşları ÖNCE (onBeforeKey). */}
+      <ChatComposer
+        value={input}
+        onChange={setInput}
+        onCaret={setCaret}
+        onSubmit={() => submit(input)}
+        textareaRef={textareaRef}
+        autoFocus
+        placeholder="CoSRE'ye sor… (Shift+Enter: yeni satır · @ kapsam · / komutlar)"
+        ariaLabel="CoSRE'ye mesaj"
+        deep={deep} onDeepChange={setDeep} deepDisabled={busy}
+        {...(codeRead || codeLocked ? { code: codePill, onCodeChange: setCodePill, codeDisabled: busy, codeReason: codeRead?.available ? undefined : (codeRead?.reason || 'kapalı'), codeLocked } : {})}
+        comboboxProps={{
+          'aria-autocomplete': 'list',
+          'aria-controls': 'chat-complete',
+          'aria-expanded': completion.open,
+          'aria-activedescendant': completion.open ? `chat-complete-${completion.highlight}` : undefined,
+        }}
+        popup={completion.open && (
+          <NameCompletionPopup id="chat-complete" items={completion.items} highlight={completion.highlight}
+            onPick={acceptCompletion} onHover={completion.setHighlight} />
+        )}
+        onBeforeKey={e => {
+          if (!completion.open) return false;
+          if (e.key === 'ArrowDown') { e.preventDefault(); completion.move(1); return true; }
+          if (e.key === 'ArrowUp') { e.preventDefault(); completion.move(-1); return true; }
+          if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); acceptCompletion(completion.items[completion.highlight]); return true; }
+          if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); completion.dismiss(); return true; }
+          return false;
+        }}
+        actions={<>
+      {/* v0.10.23 — DURDUR. AbortController zaten kuruluydu ama
+          hiçbir affordance'a bağlı değildi; yerel gemma4 tek GPU'da
+          koştuğu için istenmeyen bir 5-turlu döngü, operatörün
+          sıradaki meşru sorusunun önünü dakikalarca tıkıyordu.
+          Akarken Gönder'in YERİNİ alıyor: iki düğme yan yana
+          durursa hangisinin etkin olduğu belirsizleşir. */}
+      {/* v0.10.1141 — model seçici composer'ın İÇİNDE (Claude gibi), Gönder'in
+          solunda; menü yukarı açılır. Akarken devre dışı (model yalnız boştayken
+          değişir). Tek profilde aynı yerde tıklanamaz etiket. */}
+      <ModelPicker profiles={profiles} defaultProfile={defaultProfile} value={profile}
+        onChange={setProfile} activeModel={activeModel} disabled={busy} />
+      {busy ? (
+        <Button variant="secondary" type="button" onClick={stop}
+          title="Cevabı durdur — o ana kadar akan metin korunur">
+          Durdur
+        </Button>
+      ) : (
+        // v0.10.1254 (operatör: "Claude chat gibi profesyonel") — yuvarlak ↑ gönder.
+        <Button variant="primary" type="submit" disabled={!input.trim()} className="cm-send"
+          title="Gönder (Enter)">
+          <span aria-hidden="true">↑</span><span className="sr-only">Gönder</span>
+        </Button>
+      )}
+        </>} />
+      {/* v0.10.1274 — aktif bağlam şeridi: sunucu bu kapsamı araçlara uygular; ✕ bu konuşmadan çıkarır. */}
+      <ChatContextBar items={ctxItems}
+        onRemove={onRemoveCtx} />
+      {/* v0.10.1138 — yapısal kapsam çipleri: gönderimde context.scope/command olarak gider. */}
+      {composerChips.length > 0 && (
+        <div className="cm-scope-chips" aria-label="Mesaj kapsamı">
+          {composerChips.map(c => (
+            <Chip key={c.key} pill size="sm" active onRemove={() => setInput(v => removeToken(v, c.token))}
+              removeLabel={`${c.label} kapsamını kaldır`} title="Bu mesaj yapısal olarak buna kapsanır">{c.label}</Chip>
+          ))}
+        </div>
+      )}
+    </form>
   );
 }

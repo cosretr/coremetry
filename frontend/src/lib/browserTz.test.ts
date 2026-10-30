@@ -38,6 +38,7 @@ describe('browserTz — saf', () => {
 
 describe('browserTz — api.ts kablolaması', () => {
   const src = readFileSync(resolve(__dirname, 'api.ts'), 'utf8');
+  const ctx = readFileSync(resolve(__dirname, 'copilotChatContext.ts'), 'utf8');
 
   // v0.10.1407 — ✨ Explain istemci yöntemleri (explainInit gövdesi: tz +
   // tzOffsetMin) özne kipiyle silindi: her açıklama sohbet turu ve dilim
@@ -45,11 +46,13 @@ describe('browserTz — api.ts kablolaması', () => {
   it('explainInit kalktı; açıklama turu dilimi sohbet bağlamıyla taşır', () => {
     expect(src).not.toContain('function explainInit(');
     const chat = src.slice(src.indexOf('copilotChat: async ('), src.indexOf('copilotChat: async (') + 6000);
-    expect(chat).toContain('const { tz, tzOffsetMin } = browserTz();');
+    // v0.10.1648 — bağlam gövdesi lib/copilotChatContext'e çıktı (v1/v2 ortak).
+    expect(chat).toContain('const context = buildCopilotChatContext({');
+    expect(ctx).toContain('const { tz, tzOffsetMin } = browserTz(now);');
   });
 
   it('sohbet bağlamı ve insight yolu aynı yardımcıdan geçer', () => {
-    expect(src).toContain('const { tz, tzOffsetMin } = browserTz();');
+    expect(ctx).toContain('const { tz, tzOffsetMin } = browserTz(now);');
     expect(src).toContain('path = withTzQuery(path);');
     // Tek kaynak: ham getTimezoneOffset okuması api.ts'te kalmadı.
     expect(src).not.toContain('new Date().getTimezoneOffset()');

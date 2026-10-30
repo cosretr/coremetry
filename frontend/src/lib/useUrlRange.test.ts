@@ -111,7 +111,8 @@ describe('sahiplik sözleşmesi (v0.9.937)', () => {
     // Bu ikisi AppShell'de global mount ediliyor. Varsayılan verirlerse
     // (a) aralığı olmayan her sayfanın URL'i kirlenir ve (b) kendi
     // '30m' varsayılanları sayfanın '1h' varsayılanını EZER.
-    for (const f of ['../components/CopilotChat.tsx', '../components/FilterBuilder.tsx']) {
+    // v0.10.1648 — CopilotChat'in aralık okuması ai/cosreAsk.ts'e taşındı (v1/v2 ortak).
+    for (const f of ['../components/ai/cosreAsk.ts', '../components/FilterBuilder.tsx']) {
       const src = read(f);
       expect(src).toMatch(/useUrlRange\(\)/);
       expect(src).not.toMatch(/useUrlRange\(['"]/);

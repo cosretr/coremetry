@@ -21,7 +21,9 @@ describe('sohbet model profili kablolaması (v0.10.183)', () => {
   it('api.copilotChat profile parametresini gövdeye yazar', () => {
     const src = read('../../lib/api.ts');
     expect(src).toMatch(/contextProfile\?: string/);
-    expect(src).toMatch(/\.\.\.\(contextProfile \? \{ profile: contextProfile \} : \{\}\)/);
+    // v0.10.1648 — bağlam gövdesi lib/copilotChatContext'te (v1/v2 ortak kurucu).
+    expect(src).toContain('profile: contextProfile,');
+    expect(read('../../lib/copilotChatContext.ts')).toMatch(/\.\.\.\(f\.profile \? \{ profile: f\.profile \} : \{\}\)/);
   });
   it('useChatThread opts.profile → copilotChat son argüman', () => {
     const src = read('./useChatThread.ts');
@@ -33,7 +35,7 @@ describe('sohbet model profili kablolaması (v0.10.183)', () => {
   });
   it("iki yüzey de seçimi hook'a geçirir; seçici ModelPicker (yalnız >1 profilde menü)", () => {
     for (const rel of ['../CopilotChat.tsx']) { // v0.10.1407 — AIDrawerBody silindi
-      const src = read(rel);
+      const src = read(rel) + read('./cosreAsk.ts'); // v0.10.1648 — bağlam/composer/karşılama kancaları ai/cosreAsk.ts'e taşındı (v1/v2 ortak)
       expect(src).toMatch(/profile: profile \|\| undefined,/);
       expect(src).toContain('<ModelPicker');
       expect(src).toContain('useChatProfile(');
@@ -105,7 +107,7 @@ describe('chatProfileStore — kullanıcı başına kalıcılık', () => {
     expect(readChatProfile('u-4')).toBe('');
   });
   it('CopilotChat seçimi config varsayılanıyla damgalar (useChatProfile defaultProfile alır)', () => {
-    expect(read('../CopilotChat.tsx')).toMatch(/useChatProfile\(user\?\.id, profiles, defaultProfile, model\)/);
+    expect(read('../CopilotChat.tsx') + read('./cosreAsk.ts')).toMatch(/useChatProfile\(user\?\.id, profiles, defaultProfile, model\)/);
     expect(read('./chatProfileStore.ts')).toMatch(/writeChatProfile\(user, id, id \? defaultProfile : undefined\)/);
   });
   it('rozet etkin modeli gösterir (seçim > varsayılan profil > genel model)', () => {
