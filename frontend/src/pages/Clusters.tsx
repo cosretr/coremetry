@@ -1136,6 +1136,10 @@ export default function ClustersPage() {
                 {/* v0.9.35 (B2/F4) — CPU + Mem area, Total/By-node
                     toggle; seri yoksa kart gizli. v0.9.49: MetricArea
                     ortak bileşeni (§8 Service sekmesiyle paylaşılır). */}
+                {/* v0.10.1641 (operator-reported) — mutlak miktar kartları
+                    (CPU / Memory / Network) zeroBase: tabanı sıfır olmayan
+                    veri-fit y aralığı %0,2'lik değişimi tam boy sıçrama
+                    gibi çiziyordu (7.417 → 7.431 TiB). */}
                 {section === 'overview' && ((cpuTrendQ.data?.series?.length ?? 0) > 0 || (memTrendQ.data?.series?.length ?? 0) > 0) && (
                   <div className="grid-2" style={{ display: 'grid', gap: 14, marginTop: 14 }}>
                     {/* v0.9.58 — drag-seçim global range'e yazar
@@ -1145,11 +1149,11 @@ export default function ClustersPage() {
                         çift-tık zoom geri-yığını (chartZoomReset). */}
                     <MetricArea title={`CPU usage (cores)${clampSuffix(netClamped)}`} byLabel="By node"
                       by={cpuByNode} onToggle={setCpuByNode} onZoom={chartZoom} onZoomReset={chartZoomReset}
-                      syncKey="clusters" xRange={trendXRange}
+                      syncKey="clusters" xRange={trendXRange} zeroBase
                       series={cpuTrendQ.data?.series} seriesName="CPU" />
                     <MetricArea title={`Memory usage${clampSuffix(netClamped)}`} byLabel="By node"
                       by={memByNode} onToggle={setMemByNode} onZoom={chartZoom} onZoomReset={chartZoomReset}
-                      syncKey="clusters" xRange={trendXRange}
+                      syncKey="clusters" xRange={trendXRange} zeroBase
                       series={memTrendQ.data?.series} seriesName="Memory" unit="bytes" />
                   </div>
                 )}
@@ -1163,7 +1167,7 @@ export default function ClustersPage() {
                     <MultiLineChart
                       series={netTrendToSeries(netTrendQ.data!.trend!)}
                       unit="bytes" onZoom={chartZoom} onZoomReset={chartZoomReset}
-                      syncKey="clusters" xRange={trendXRange}
+                      syncKey="clusters" xRange={trendXRange} zeroBase
                       height={200} />
                   </Card>
                 )}

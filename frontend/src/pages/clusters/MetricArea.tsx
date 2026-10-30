@@ -10,7 +10,7 @@ import type { ClusterNamedSeries } from '@/lib/types';
 // CPU/Mem kartlarından çıkarıldı (v0.9.35 ResToggleHeader'ın genel
 // hali): Servis → Infrastructure sekmesi aynı kartı "By pod"
 // etiketiyle kullanır. Seri yoksa null döner — görünmez-düşer.
-export function MetricArea({ title, subtitle, byLabel, totalLabel = 'Total', by, onToggle, series, seriesName, unit, height = 180, maxSeries, totalSeries, onZoom, onZoomReset, syncKey, labelTrimPrefix, xRange, thresholds }: {
+export function MetricArea({ title, subtitle, byLabel, totalLabel = 'Total', by, onToggle, series, seriesName, unit, height = 180, maxSeries, totalSeries, onZoom, onZoomReset, syncKey, labelTrimPrefix, xRange, thresholds, zeroBase }: {
   title: string;
   // v0.9.383 (redesign D7) — insanileştirilmiş başlığın altında ham
   // metrik adı (monospace, soluk) — bilgi kaybı yasak.
@@ -55,6 +55,10 @@ export function MetricArea({ title, subtitle, byLabel, totalLabel = 'Total', by,
   // v0.10.719 — yatay eşik çizgileri (pod limit toplamı vb.); MultiLineChart'a
   // aynen iletilir. Verilmezse çizgi yok.
   thresholds?: Threshold[];
+  // v0.10.1641 (operator-reported) — y tabanı 0 (softMin 0; CorePanel
+  // zeroBase). Mutlak miktar kartları (Clusters CPU/Memory) verir; %0,2'lik
+  // değişim tam boy sıçrama gibi çizilmez. Verilmezse veri-fit (bugünkü).
+  zeroBase?: boolean;
 }) {
   if (!series || series.length === 0) return null;
   return (
@@ -81,7 +85,7 @@ export function MetricArea({ title, subtitle, byLabel, totalLabel = 'Total', by,
         )}
       </div>
     }>
-      <MultiLineChart series={namedSeriesToSeries(series, seriesName, labelTrimPrefix)} height={height} unit={unit} maxSeries={maxSeries} onZoom={onZoom} onZoomReset={onZoomReset} syncKey={syncKey} xRange={xRange} thresholds={thresholds} />
+      <MultiLineChart series={namedSeriesToSeries(series, seriesName, labelTrimPrefix)} height={height} unit={unit} maxSeries={maxSeries} onZoom={onZoom} onZoomReset={onZoomReset} syncKey={syncKey} xRange={xRange} thresholds={thresholds} zeroBase={zeroBase} />
     </Card>
   );
 }
