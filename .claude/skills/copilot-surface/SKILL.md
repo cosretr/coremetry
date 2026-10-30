@@ -161,7 +161,7 @@ drawer, where `CopilotExplain` (`components/CopilotExplain.tsx`)
 fetches by kind and renders `ExplainBody` + feedback. Mirror an
 existing kind (e.g. `anomaly`, `service-health`). Raw `<button>` is
 blocked outside `ui/` (`buttonUnityRatchet`, ESLint
-`ui/no-raw-button`).
+`ui/no-raw-element`).
 
 ## Verification
 

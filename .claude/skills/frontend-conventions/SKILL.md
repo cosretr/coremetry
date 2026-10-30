@@ -17,7 +17,7 @@ one exists because its violation shipped a bug or an incident.
   `ButtonGroup`, `DisclosureButton`, `OptionRow`, `TileButton`. Raw
   `<button>` / `role="button"` outside `ui/` is blocked
   (`buttonUnityRatchet.test.ts` holds both at 0; ESLint
-  `ui/no-raw-button`) — the 2px6px vs 3px7px drift class is what
+  `ui/no-raw-element`) — the 2px6px vs 3px7px drift class is what
   forced the atom (v0.7.54). Decision table: /frontend-design-system §4.
 - Labelled inputs: `components/ui/Field.tsx`; badges `.badge
   .b-ok/.b-err/.b-warn/.b-info/.b-gray` or the typed `<Badge tone>`

@@ -8,11 +8,11 @@ import { resolve, join } from 'node:path';
 // ui/ dışında yasaklıyor; mevcutlar eslint-suppressions.json'da sayılı.
 // Satır istisnası mümkün ama GEREKÇEYLE — ESLint 9'un `-- açıklama`
 // sözdizimi:
-//   {/* eslint-disable-next-line ui/no-raw-button -- <neden, ≥8 karakter> */}
+//   {/* eslint-disable-next-line ui/no-raw-element -- <neden, ≥8 karakter> */}
 // eslint-plugin-eslint-comments EKLENMEDİ (yeni bağımlılık); kapı burada.
 //
 // İki kural:
-//   1. `ui/no-raw-button`u susturan her yönerge gerekçe taşır.
+//   1. `ui/no-raw-element`i susturan her yönerge gerekçe taşır.
 //   2. Kural listesiz ("blanket") yönerge YOK — `// eslint-disable-line`
 //      tek başına bu kuralı da sessizce susturur ve 1. kuralı by-pass eder.
 //      Taban: 0 (ölçüldü; depodaki 74 yönergenin hepsi kural adlı).
@@ -21,7 +21,9 @@ import { resolve, join } from 'node:path';
 // kendini yakalamasın.
 const SRC = resolve(__dirname, '..');
 const DIRECTIVE = new RegExp('eslint-' + 'disable(?:-next-line|-line)?\\b([^\\n]*)', 'g');
-const RULE = 'ui/' + 'no-raw-button';
+// v0.10.1614 (shadcn Faz 1 R6): kural ui/no-raw-element oldu (ham
+// input/select/textarea da); eski ad tamamen kalktı, şim yok.
+const RULE = 'ui/' + 'no-raw-element';
 const SELF = 'eslintDisableReason' + '.test.ts';
 
 function walk(dir: string, out: string[] = []): string[] {

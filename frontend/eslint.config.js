@@ -21,7 +21,7 @@ import reactRefresh from 'eslint-plugin-react-refresh';
 // tavan); yenisi CI'da kırmızı. Bir ihlal düzeltilince aynı commit'te
 // `npx eslint src --prune-suppressions` (aksi hâlde eslint çıkış kodu 2).
 // Gerçekten gerekiyorsa satır istisnası GEREKÇEYLE:
-//   {/* eslint-disable-next-line ui/no-raw-button -- <neden> */}
+//   {/* eslint-disable-next-line ui/no-raw-element -- <neden> */}
 // Gerekçesiz istisnayı src/styles/eslintDisableReason.test.ts reddeder.
 // Aynı sayım vitest'te de var (buttonUnityRatchet.test.ts) — tek başına
 // eslint çalıştırmayan yol da kapıdan geçmesin.
@@ -41,21 +41,46 @@ const isButtonRoleValue = (v) => {
   if (v.type === 'JSXExpressionContainer') return isButtonExpr(v.expression);
   return false;
 };
-const noRawButton = {
+// v0.10.1614 (shadcn Faz 1 R6, plan §3.3) — kural `ui/no-raw-element`
+// oldu: aynı ziyaretçi <input>, <select>, <textarea>'yı da yakalar. Mevcut
+// ihlaller eslint-suppressions.json'da dosya başına sayılı (R6 tabanı),
+// yenisi kırmızı; vitest ikizi rawElementRatchet.test.ts. <input> yalnız
+// LİTERAL `type` şu kümedeyse serbest: file (kalıcı muaf, §12 Q3),
+// checkbox / radio (shadcn checkbox / radio-group kurulana dek — o sürüm
+// muafiyeti kaldırır), hidden / range / color (kurulum kümesinde karşılığı
+// yok). components/coremetry MUAF DEĞİL: bileşikler shadcn'i birleştirir.
+const ALLOWED_INPUT_TYPES = new Set(['file', 'checkbox', 'radio', 'hidden', 'range', 'color']);
+const literalType = (node) => {
+  const a = node.attributes.find((x) => x.type === 'JSXAttribute' && x.name.type === 'JSXIdentifier' && x.name.name === 'type');
+  if (!a || !a.value) return null;
+  if (a.value.type === 'Literal') return a.value.value;
+  if (a.value.type === 'JSXExpressionContainer') {
+    const e = a.value.expression;
+    if (e.type === 'Literal') return e.value;
+    if (e.type === 'TemplateLiteral' && e.expressions.length === 0) return e.quasis[0]?.value.cooked;
+  }
+  return null;
+};
+const noRawElement = {
   meta: {
     type: 'problem',
     schema: [],
     messages: {
-      raw: 'Ham <button> yerine ui atomu kullan (Button / IconButton / Chip / LinkButton / SegmentedControl / ButtonGroup).',
+      raw: 'Ham <button> yerine atom kullan (ui: Button / IconButton / Chip / LinkButton / SegmentedControl / ButtonGroup; geçirilmiş sayfada shadcn Button).',
       role: 'role="button" taklidi yerine gerçek düğme atomu kullan (Button / IconButton; görünmez düğme için btn-bare).',
+      input: 'Ham <input> yerine Field bileşiği / shadcn input kullan (serbest: literal type file, checkbox, radio, hidden, range, color).',
+      select: 'Ham <select> yerine shadcn native-select (veri formu varsayılanı) ya da select kullan.',
+      textarea: 'Ham <textarea> yerine shadcn textarea kullan.',
     },
   },
   create(context) {
     return {
       JSXOpeningElement(node) {
-        if (node.name.type === 'JSXIdentifier' && node.name.name === 'button') {
-          context.report({ node, messageId: 'raw' });
-        }
+        if (node.name.type !== 'JSXIdentifier') return;
+        const n = node.name.name;
+        if (n === 'button') context.report({ node, messageId: 'raw' });
+        else if (n === 'select' || n === 'textarea') context.report({ node, messageId: n });
+        else if (n === 'input' && !ALLOWED_INPUT_TYPES.has(literalType(node))) context.report({ node, messageId: 'input' });
       },
       JSXAttribute(node) {
         if (node.name.type === 'JSXIdentifier' && node.name.name === 'role' && isButtonRoleValue(node.value)) {
@@ -92,14 +117,14 @@ export default tseslint.config(
     },
   },
   {
-    // v0.10.919 — ui/no-raw-button (gerekçe yukarıda). Atomların evi ve
+    // v0.10.919 — ui/no-raw-button, R6'dan beri ui/no-raw-element (gerekçe yukarıda). Atomların evi ve
     // test fixture'ları kapsam dışı. v0.10.1613 (shadcn Faz 1 R5, plan
     // §3.3): üretilen components/shadcn ve CoSRE v2'nin ai-elements dizini
     // de muaf (karar 8); components/coremetry MUAF DEĞİL.
     files: ['src/**/*.tsx'],
     ignores: ['src/components/ui/**', 'src/components/shadcn/**', 'src/components/ai-elements/**', 'src/**/*.test.tsx'],
-    plugins: { ui: { rules: { 'no-raw-button': noRawButton } } },
-    rules: { 'ui/no-raw-button': 'error' },
+    plugins: { ui: { rules: { 'no-raw-element': noRawElement } } },
+    rules: { 'ui/no-raw-element': 'error' },
   },
   {
     // v0.10.1609 — shadcn Faz 1 R2 (plan §1.2): kabuk (bugünkü eager

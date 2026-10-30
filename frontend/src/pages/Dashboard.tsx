@@ -815,7 +815,7 @@ function DashboardGrid({
                        setCollapsed(next);
                      }
                    }}
-                   // eslint-disable-next-line ui/no-raw-button -- satır başlığı düzenleme kipinde Edit/Delete düğmelerini sarıyor; düğme içinde düğme olamaz
+                   // eslint-disable-next-line ui/no-raw-element -- satır başlığı düzenleme kipinde Edit/Delete düğmelerini sarıyor; düğme içinde düğme olamaz
                    role="button"
                    tabIndex={0}
                    aria-expanded={!isCollapsed}>

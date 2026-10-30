@@ -150,7 +150,7 @@ vakası) · pickerlar.
 
 `variant` **zorunlu prop** (451/451 sitede yazılı) — bu aileyi bozma.
 **Ham `<button>` / `role="button"` `ui/` dışında YASAK** (v0.10.919, ESLint
-`ui/no-raw-button`). v0.10.924'ten beri tavan **0 ham + 0 role**, bastırma
+`ui/no-raw-element`). v0.10.924'ten beri tavan **0 ham + 0 role**, bastırma
 yok; atoma sığmayan 9 yer (v0.10.927'de 17'den indi) gerekçeli satır
 istisnası taşır ve istisna sayısının da tavanı var (`buttonUnityRatchet`,
 yalnız azalır). Seçim listesi satırı → `OptionRow`; tıklanabilir karo →
@@ -159,7 +159,7 @@ yalnız azalır). Seçim listesi satırı → `OptionRow`; tıklanabilir karo �
 Primitif gövdesi `ui/` altına taşınır; tek seçim → `SegmentedControl`,
 eş eylemler → `ButtonGroup`, aç/kapa → `DisclosureButton`, sekme →
 `TabStrip`. Gerçekten gerekiyorsa satır istisnası gerekçeyle:
-`eslint-disable-next-line ui/no-raw-button -- <neden>` — liste seçeneği
+`eslint-disable-next-line ui/no-raw-element -- <neden>` — liste seçeneği
 (`role=option`), graf düğümü, `<td>`/`<tr>` hedefi, düğme İÇEREN başlık.
 
 ## 5. Tablo karar tablosu
@@ -290,7 +290,7 @@ ile ölçüyor, bizde Inter yok → kırpma).
 `ui/Tooltip.tsx` (v0.10.919) + saf yerleşim `lib/tipPlacement.ts`.
 Buton ailesinin tüm varyant × boyut × durumu geliştirmede `/design`
 sayfasında (yalnız `vite dev`; üretimde yok). Ham `<button>` /
-`role="button"` ui/ dışında ESLint `ui/no-raw-button` ile yasak.
+`role="button"` ui/ dışında ESLint `ui/no-raw-element` ile yasak.
 
 ## 8. Token disiplini
 
@@ -348,7 +348,7 @@ import eklenince kayar, v0.9.887).
 
 ## 9. Review çıtası — reddedilecek 10 madde
 
-1. **Yeni ham `<button>` / `role="button"`** (ESLint `ui/no-raw-button`; istisna yalnız `-- gerekçe` ile).
+1. **Yeni ham `<button>` / `role="button"`** (ESLint `ui/no-raw-element`; istisna yalnız `-- gerekçe` ile).
 2. **Yeni `Field`/`Stat`/`Chip` tanımı** — kanonik varken 8./7./6. kopya.
 3. **`coremetry/` dışına bileşik yazmak** — yeni primitif `components/coremetry/` altına (shadcn üzerine) + barrel'a; `ui/` DONDURULDU (yeni dosya/importçu yok).
 4. **`aria-label`'sız `IconButton`**, `htmlFor`/`useId`'siz form alanı.

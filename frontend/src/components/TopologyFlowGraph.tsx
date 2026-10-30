@@ -608,7 +608,7 @@ export function TopologyFlowGraph({
       {hulls.map(h => (
         <div key={`nshdr-${h.ns}`} className="topo-nshdr"
           style={{ left: h.x + 10, top: h.y + 6, color: h.color }}
-          // eslint-disable-next-line ui/no-raw-button -- tuval üstü hull etiketi: .topo-nshdr boyar ve pan istisnası closest('.topo-nshdr') ile; DisclosureButton dolgu/hover'ı etiket çerçevesiyle çakışır
+          // eslint-disable-next-line ui/no-raw-element -- tuval üstü hull etiketi: .topo-nshdr boyar ve pan istisnası closest('.topo-nshdr') ile; DisclosureButton dolgu/hover'ı etiket çerçevesiyle çakışır
           role="button" tabIndex={0}
           title={`ns: ${h.ns} — tıkla: ${h.n} servisi tek karta katla`}
           onClick={() => collapseNs(h.ns)}
@@ -719,7 +719,7 @@ export function TopologyFlowGraph({
                 left: p.x, top: p.y, cursor: 'pointer',
                 borderColor: `color-mix(in srgb, ${nsHue} 55%, var(--border))`,
               }}
-              // eslint-disable-next-line ui/no-raw-button -- graf düğüm kartı (katlı ns): konumlu .topo-node pill'i, blok içerik; pan istisnası closest('.topo-node') — düğme atomu değil
+              // eslint-disable-next-line ui/no-raw-element -- graf düğüm kartı (katlı ns): konumlu .topo-node pill'i, blok içerik; pan istisnası closest('.topo-node') — düğme atomu değil
               role="button" tabIndex={0}
               aria-label={`namespace ${ns} — genişlet`}
               onMouseEnter={() => onHoverNode(n.service)}
@@ -762,7 +762,7 @@ export function TopologyFlowGraph({
               (stripe ? ' ns-stripe' : '')
             }
             style={{ left: p.x, top: p.y, cursor: 'pointer', ...(stripe ? { ['--ns' as string]: stripe } : {}) }}
-            // eslint-disable-next-line ui/no-raw-button -- graf düğüm kartı: konumlu .topo-node pill'i, blok içerik; pan istisnası closest('.topo-node') — düğme atomu değil
+            // eslint-disable-next-line ui/no-raw-element -- graf düğüm kartı: konumlu .topo-node pill'i, blok içerik; pan istisnası closest('.topo-node') — düğme atomu değil
             role="button" tabIndex={0}
             aria-label={n.service}
             onMouseEnter={() => onHoverNode(n.service)}

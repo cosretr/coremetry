@@ -18,7 +18,7 @@ import './design/design.css';
 // görmek; yeni bir atom ya da CSS değişikliği önce burada gözle
 // doğrulanır. Hover/odak etkileşimlidir (fareyle/Tab ile deneyin);
 // disabled/loading/active sabit örneklerdir. Buradaki her şey atom —
-// sayfa kendi düğmesini kurmaz (buttonUnityRatchet + ui/no-raw-button).
+// sayfa kendi düğmesini kurmaz (buttonUnityRatchet + ui/no-raw-element).
 
 const BUTTON_VARIANTS = ['primary', 'secondary', 'ghost', 'accent', 'danger', 'ghost-danger'] as const;
 const BUTTON_SIZES = ['xs', 'sm', 'md', 'lg'] as const;

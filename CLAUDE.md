@@ -73,7 +73,7 @@ never `s.copilot.Explain` direct (/ai attribution).
 
 ## Code patterns
 
-- **Buttons/fields — one design language:** `coremetry/*` + `shadcn/*` first; `ui/` atoms (`Button`, `IconButton`, `Field`, `Badge`, `.badge .b-*`, …) only on unmigrated pages. Raw `<button>/<input>/<select>/<textarea>` outside `shadcn/`/`ai-elements/` is blocked (`buttonUnityRatchet` + ESLint `ui/no-raw-button`; the input/select/textarea half lands with `ui/no-raw-element`, Phase 1 R6).
+- **Buttons/fields — one design language:** `coremetry/*` + `shadcn/*` first; `ui/` atoms (`Button`, `IconButton`, `Field`, `Badge`, `.badge .b-*`, …) only on unmigrated pages. Raw `<button>/<input>/<select>/<textarea>` outside `shadcn/`/`ai-elements/` is blocked (ESLint `ui/no-raw-element` + `buttonUnityRatchet` / `rawElementRatchet`; existing input/select/textarea counted in `eslint-suppressions.json`, only down).
 - **URL = source of truth** for every selection (drawer/focus/filters/tab/range) — write with `replace:true`; sig-guard URL→state imports (v0.8.253); one-way-read is a recurring bug class (256/265/267).
 - **Themes** are token-level CSS vars only (dark/light/redhat v0.8.268); chrome variants via scoped token remap; charts re-resolve on `data-theme`.
 - **ES-cost UI:** fetch on expand/open only, no list prefetch, staleTime ≥ server TTL, cache-key params snapped to bounded rungs (v0.8.270).

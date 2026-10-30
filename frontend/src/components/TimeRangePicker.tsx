@@ -281,7 +281,7 @@ export function TimeRangePicker({ value, onChange }: {
                     <span key={d} className="trp-cal-dow">{d}</span>
                   ))}
                   {cells.map(c => (
-                    // eslint-disable-next-line ui/no-raw-button -- takvim gün hücresi: 1fr ızgara kolonuna gerilir ve sel/inrange/today durum sınıfları onu boyar (kesintisiz aralık bandı); hiçbir atom tarih-hücresi durumu taşımaz, IconButton'ın sabit karesi bandı kırardı
+                    // eslint-disable-next-line ui/no-raw-element -- takvim gün hücresi: 1fr ızgara kolonuna gerilir ve sel/inrange/today durum sınıfları onu boyar (kesintisiz aralık bandı); hiçbir atom tarih-hücresi durumu taşımaz, IconButton'ın sabit karesi bandı kırardı
                     <button key={`${c.y}-${c.m}-${c.d}`} className={dayCellClass(c)}
                       onClick={() => onDayClick(c)}>
                       {c.d}

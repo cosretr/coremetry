@@ -54,13 +54,14 @@ function walk(dir: string, out: string[] = []): string[] {
 const EXEMPT_DIRS = ['ui', 'shadcn', 'ai-elements'].map(d => join('components', d) + '/');
 const files = walk(SRC).filter(p => !EXEMPT_DIRS.some(d => p.includes(d)));
 // Gerekçeli satır istisnası (eslint.config.js'te belgeli
-//   `eslint-disable-next-line ui/no-raw-button -- <neden>`) ESLint'ten
+//   `eslint-disable-next-line ui/no-raw-element -- <neden>`) ESLint'ten
 // geçer; mandal da onu SAYMAZ — aksi hâlde belgelenen kaçış yolu sıfır
 // paylı tavanda yine kırmızı olurdu. Yorum ayıklanmadan ÖNCE, direktifin
 // hemen altındaki satırın belirteçleri etkisizleştirilir (satır silinmez:
 // `*/}` kapanışı düşerse stripTsComments devamı yutardı).
 // Gerekçe biçimini eslintDisableReason.test.ts ayrıca denetler.
-const REASONED = new RegExp('eslint-' + 'disable-next-line\\b[^\\n]*\\bui/no-raw-button\\b[^\\n]*\\s--\\s+\\S.{7,}');
+// v0.10.1614 (R6): kural adı ui/no-raw-element (ham input/select/textarea da).
+const REASONED = new RegExp('eslint-' + 'disable-next-line\\b[^\\n]*\\bui/no-raw-element\\b[^\\n]*\\s--\\s+\\S.{7,}');
 function exemptReasoned(src: string): string {
   const ls = src.split('\n');
   for (let i = 0; i < ls.length - 1; i++) {
@@ -124,7 +125,7 @@ describe('buton bütünlüğü mandalı', () => {
     expect(s).not.toMatch(/tl-go|tl-clear/);
   });
   it('gerekçeli istisna sayılmaz, gerekçesiz olan sayılır', () => {
-    const D = 'eslint-' + 'disable-next-line ui/no-raw-button';
+    const D = 'eslint-' + 'disable-next-line ui/no-raw-element';
     const B = '<' + 'button';
     const reasoned = `{/* ${D} -- üçüncü parti widget kökü */}\n      ${B} type="button">x</button>`;
     const bare = `{/* ${D} */}\n      ${B} type="button">x</button>`;
