@@ -1440,7 +1440,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			// v0.10.948 — bütçe dolduğu AÇIKÇA söylenir: harcanan hak/tur, yürütülen
 			// ve alışveriş boyunca yürütülmeyen çağrı (eski "tool-çağrı tavanı" etiketinin yerine).
 			emit("step", chatBudgetStep(chatBudgetExhaustedCapsLabelTR(maxCalls-callsLeft, maxCalls, executedN, skippedN, round+1, maxRounds),
-				chatBudget{MaxCalls: maxCalls, MaxRounds: maxRounds, SlotsUsed: maxCalls - callsLeft, Executed: executedN, Skipped: skippedN, RoundsUsed: round + 1, Exhausted: true})) // v0.10.1594
+				chatBudget{MaxCalls: maxCalls, MaxRounds: maxRounds, SlotsUsed: maxCalls - callsLeft, Executed: executedN, Skipped: skippedN, RoundsUsed: round + 1, Exhausted: true, StopReason: string(reason)})) // v0.10.1594; S2 neden
 			// v0.10.806 — tavan eki döngü prompt'unun SONUNA: önek aynı kalır
 			// (önbellek isabeti) ve tavan turu bağlam önsözlerini de görür
 			// (eskiden yalnız hitap + sohbet çekirdeği + ek gidiyordu).

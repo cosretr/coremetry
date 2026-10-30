@@ -22,6 +22,11 @@ func TestChatBudgetStep(t *testing.T) {
 			`{"budget":{"maxCalls":6,"maxRounds":5,"slotsUsed":0,"executed":0,"skipped":0,"roundsUsed":0,"exhausted":false},"label":"araştırma bütçesi: 6 araç · 5 tur"}`},
 		{"exhausted", "x", chatBudget{MaxCalls: 6, MaxRounds: 5, SlotsUsed: 6, Executed: 4, Skipped: 2, RoundsUsed: 5, Exhausted: true},
 			`{"budget":{"maxCalls":6,"maxRounds":5,"slotsUsed":6,"executed":4,"skipped":2,"roundsUsed":5,"exhausted":true},"label":"x"}`},
+		// agent-core S2 — neden eklemeli: yalnız doluyken, en sonda.
+		{"exhausted round_cap", "x", chatBudget{MaxCalls: 6, MaxRounds: 5, SlotsUsed: 4, Executed: 4, RoundsUsed: 5, Exhausted: true, StopReason: string(stopRoundCap)},
+			`{"budget":{"maxCalls":6,"maxRounds":5,"slotsUsed":4,"executed":4,"skipped":0,"roundsUsed":5,"exhausted":true,"stopReason":"round_cap"},"label":"x"}`},
+		{"exhausted call_cap", "x", chatBudget{MaxCalls: 6, MaxRounds: 5, SlotsUsed: 6, Executed: 6, RoundsUsed: 2, Exhausted: true, StopReason: string(stopCallCap)},
+			`{"budget":{"maxCalls":6,"maxRounds":5,"slotsUsed":6,"executed":6,"skipped":0,"roundsUsed":2,"exhausted":true,"stopReason":"call_cap"},"label":"x"}`},
 	}
 	for _, c := range cases {
 		b, _ := json.Marshal(chatBudgetStep(c.label, c.b))

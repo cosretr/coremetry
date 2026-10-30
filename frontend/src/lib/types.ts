@@ -8455,6 +8455,8 @@ export interface ChatBudget {
   skipped: number;
   roundsUsed: number;
   exhausted: boolean;
+  // agent-core S2 — döngünün durma nedeni; yalnız exhausted=true iken gelir.
+  stopReason?: 'round_cap' | 'call_cap' | (string & {});
 }
 
 export type ChatStreamEvent =

@@ -60,6 +60,10 @@ type chatBudget struct {
 	Skipped    int  `json:"skipped"`
 	RoundsUsed int  `json:"roundsUsed"`
 	Exhausted  bool `json:"exhausted"`
+	// StopReason — agent-core S2: döngünün neden durduğu (chat_stop.go
+	// stopReason: round_cap | call_cap | …). EKLEMELİ: yalnız bütçe dolunca
+	// yazılır; başlangıç adımı ve eski fixture'lar bayt bayt aynı.
+	StopReason string `json:"stopReason,omitempty"`
 }
 
 // chatBudgetStep — bütçe adımının yükü (SAF): v1 etiketi + yapısal bütçe.

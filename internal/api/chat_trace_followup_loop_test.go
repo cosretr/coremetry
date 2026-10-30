@@ -487,6 +487,16 @@ func TestTraceFollowUpLoopCallCap(t *testing.T) {
 	if !strings.Contains(strings.Join(stepLabels(frames), "\n"), chatBudgetExhaustedLabelTR(chatMaxToolCalls, chatMaxToolCalls, 2, 1)) {
 		t.Errorf("bütçe doldu notu yok: %v", stepLabels(frames))
 	}
+	// agent-core S2 — dolu bütçe adımı nedeni taşır (tur 1/5'te çağrı tavanı).
+	var reasons []any
+	for _, st := range framesOf(frames, "step") {
+		if b, ok := st["budget"].(map[string]any); ok && b["exhausted"] == true {
+			reasons = append(reasons, b["stopReason"])
+		}
+	}
+	if len(reasons) != 1 || reasons[0] != string(stopCallCap) {
+		t.Errorf("dolu bütçe stopReason: %v, want [call_cap]", reasons)
+	}
 	calls := llm.calls()
 	if len(calls) != 2 || !strings.HasSuffix(llmSystem(calls[1]), copilot.ChatRoundCapAddendum()) {
 		t.Fatalf("tavan turu: %d çağrı", len(calls))
