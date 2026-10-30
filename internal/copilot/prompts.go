@@ -2911,7 +2911,8 @@ const chatUserScopeAddendumTmpl = `
 
 KULLANICI KAPSAMI: Kullanıcının takımı %q; varsayılan kapsam bu takımın %d
 servisi (ownerTeam VEYA sreTeam). "Benim servislerim / bugün ne bozuldu"
-gibi sorularda önce list_my_services çağır; 'services' argümanı alan
+gibi sorularda önce list_my_services çağır; açık Problem soruları için
+open_problems; 'services' argümanı alan
 araçlara listeyi sunucu koyar. Kullanıcı başka bir servis ya da takım
 adlandırırsa onu kullan. Cevapta kapsamı bir kez söyle ("takımının N servisi").`
 

@@ -153,6 +153,8 @@ func toolResultDeepLink(tool, content string) (guidedAnswerLink, bool) {
 		label, prefix = "Loglar'da aç", "/logs?"
 	case mcptools.ListMyServicesName: // araç seti dilim 2 — v2-yalnız; sonuç page_url taşır
 		label, prefix = "Servisler'de aç", "/services"
+	case mcptools.OpenProblemsName: // briefing Faz 1 — /problems veya /inbox
+		label, prefix = "Problemler'de aç", "/"
 	case mcptools.FindTracesName: // dilim 3
 		label, prefix = "Traces'te aç", "/traces?"
 	case mcptools.ExplainTraceName: // dilim 3

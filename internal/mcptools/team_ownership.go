@@ -361,6 +361,23 @@ func ReadTeamServicesRED(ctx context.Context, d Deps, names []string, from, to t
 	return rows, nil
 }
 
+// ReadTeamServicesREDEnv — ReadTeamServicesRED + ortam: env doluysa ve ortam
+// MV'si (service_env_summary_5m) pencereyi kapsıyorsa o ortamın RED'i
+// (applied=true); kapsamıyorsa tüm ortamların toplamı (applied=false —
+// çağıran zarfta söyler). /api/services ile aynı kapsam kararı (EnvSummaryCovers).
+func ReadTeamServicesREDEnv(ctx context.Context, d Deps, names []string, env string, from, to time.Time) ([]chstore.ServiceSummary, bool, error) {
+	if env == "" || len(names) == 0 || !d.Store.EnvSummaryCovers(ctx, from) {
+		rows, err := ReadTeamServicesRED(ctx, d, names, from, to)
+		return rows, false, err
+	}
+	rows, err := d.Store.GetServicesEnvAggFiltered(ctx, from, to, "", names, "", "", len(names), 0, chstore.ServiceDisplayFilters{}, "", env)
+	if err != nil {
+		return nil, false, err
+	}
+	SortServicesByErrorRate(rows)
+	return rows, true, nil
+}
+
 // TeamServicesData — takım okumasının tam sonucu (tool tarafı; guided iki
 // yarıyı ayrı çağırıyor, bkz. dosya başlığı).
 type TeamServicesData struct {

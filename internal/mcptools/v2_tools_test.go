@@ -42,14 +42,14 @@ func TestNormalizeMyServices(t *testing.T) {
 // v0.5.187 dersi: aynı uzunlukta farklı küme farklı anahtar; her girdi anahtara girer.
 func TestMyServicesCacheKeyHashesAllInputs(t *testing.T) {
 	to := time.Unix(1_800_000_000, 0)
-	base := myServicesCacheKey([]string{"billing-api", "orders-api"}, 0, "acme-team", to, 3600, 10)
+	base := myServicesCacheKey([]string{"billing-api", "orders-api"}, 0, "acme-team", "", to, 3600, 10)
 	for name, k := range map[string]string{
-		"küme":    myServicesCacheKey([]string{"billing-api", "payments-api"}, 0, "acme-team", to, 3600, 10),
-		"tavan":   myServicesCacheKey([]string{"billing-api", "orders-api"}, 3, "acme-team", to, 3600, 10),
-		"takım":   myServicesCacheKey([]string{"billing-api", "orders-api"}, 0, "other-team", to, 3600, 10),
-		"dakika":  myServicesCacheKey([]string{"billing-api", "orders-api"}, 0, "acme-team", to.Add(2*time.Minute), 3600, 10),
-		"pencere": myServicesCacheKey([]string{"billing-api", "orders-api"}, 0, "acme-team", to, 7200, 10),
-		"satır":   myServicesCacheKey([]string{"billing-api", "orders-api"}, 0, "acme-team", to, 3600, 20),
+		"küme":    myServicesCacheKey([]string{"billing-api", "payments-api"}, 0, "acme-team", "", to, 3600, 10),
+		"tavan":   myServicesCacheKey([]string{"billing-api", "orders-api"}, 3, "acme-team", "", to, 3600, 10),
+		"takım":   myServicesCacheKey([]string{"billing-api", "orders-api"}, 0, "other-team", "", to, 3600, 10),
+		"dakika":  myServicesCacheKey([]string{"billing-api", "orders-api"}, 0, "acme-team", "", to.Add(2*time.Minute), 3600, 10),
+		"pencere": myServicesCacheKey([]string{"billing-api", "orders-api"}, 0, "acme-team", "", to, 7200, 10),
+		"satır":   myServicesCacheKey([]string{"billing-api", "orders-api"}, 0, "acme-team", "", to, 3600, 20),
 	} {
 		if k == base {
 			t.Errorf("%s anahtara girmiyor: %s", name, k)
@@ -97,7 +97,7 @@ func TestMyServicesPayload(t *testing.T) {
 	}
 	for _, c := range cases {
 		resolved := names(c.rows, c.resolvedExtra...)
-		out := myServicesPayload(c.team, resolved, 0, c.rows, 3600, c.limit)
+		out := myServicesPayload(c.team, resolved, 0, c.rows, 3600, c.limit, "", false, nil)
 		b, err := json.Marshal(out)
 		if err != nil {
 			t.Fatal(err)
