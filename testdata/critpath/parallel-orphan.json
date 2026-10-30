@@ -1,0 +1,66 @@
+{
+  "name": "parallel-orphan",
+  "why": "paralel çocuklar: en uzun zincir seçilir, eşitlikte girdi sırası; yetim span ikinci kök sayılır ama kısa",
+  "spans": [
+    {
+      "spanId": "a",
+      "parentId": "",
+      "startNs": 0,
+      "durNs": 100000000,
+      "kind": "server",
+      "service": "orders-api",
+      "name": "GET /checkout"
+    },
+    {
+      "spanId": "b",
+      "parentId": "a",
+      "startNs": 10000000,
+      "durNs": 60000000,
+      "kind": "client",
+      "service": "orders-api",
+      "name": "GET inv.ext.example",
+      "attributes": {
+        "peer.service": "inventory"
+      }
+    },
+    {
+      "spanId": "c",
+      "parentId": "a",
+      "startNs": 20000000,
+      "durNs": 60000000,
+      "kind": "client",
+      "service": "orders-api",
+      "name": "GET pay.ext.example"
+    },
+    {
+      "spanId": "o",
+      "parentId": "gone",
+      "startNs": 0,
+      "durNs": 30000000,
+      "kind": "internal",
+      "service": "orders-api",
+      "name": "orphan"
+    }
+  ],
+  "expect": {
+    "order": [
+      "a",
+      "b"
+    ],
+    "rootWallNs": 100000000,
+    "onPathSelfNs": {
+      "a": 40000000,
+      "b": 60000000
+    }
+  },
+  "expectGo": {
+    "top": "b",
+    "topExternalWait": true,
+    "closing": "external",
+    "topTarget": {
+      "kind": "peer.service",
+      "value": "inventory",
+      "source": "peer.service"
+    }
+  }
+}

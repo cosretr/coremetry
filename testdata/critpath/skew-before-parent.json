@@ -1,0 +1,44 @@
+{
+  "name": "skew-before-parent",
+  "why": "çocuk ebeveynden ÖNCE başlar (saat kayması): yalnız örtüşen pay düşer, asla negatif değil",
+  "spans": [
+    {
+      "spanId": "p",
+      "parentId": "",
+      "startNs": 100000000,
+      "durNs": 100000000,
+      "kind": "server",
+      "service": "orders-api",
+      "name": "GET /x"
+    },
+    {
+      "spanId": "c",
+      "parentId": "p",
+      "startNs": 90000000,
+      "durNs": 50000000,
+      "kind": "client",
+      "service": "orders-api",
+      "name": "GET cache.ext.example",
+      "attributes": {
+        "server.address": "cache.ext.example",
+        "server.port": "6379"
+      }
+    }
+  ],
+  "expect": {
+    "order": [
+      "p",
+      "c"
+    ],
+    "rootWallNs": 100000000,
+    "onPathSelfNs": {
+      "p": 60000000,
+      "c": 50000000
+    }
+  },
+  "expectGo": {
+    "top": "p",
+    "topExternalWait": false,
+    "closing": "internal"
+  }
+}

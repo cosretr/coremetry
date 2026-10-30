@@ -92,7 +92,9 @@ export function computeCriticalPath(spans: CriticalPathSpan[]): CriticalPath {
     // Defensive: cyclic data or all-orphan spans. Return empty.
     return EMPTY();
   }
-  roots.sort((a, b) => b.duration - a.duration);
+  // v0.10.1625 — aynı süreli köklerde EN ERKEN başlayan kazanır (Go ikizi
+  // chstore/tracetree.go kuralı; parite testdata/critpath/tied-roots.json).
+  roots.sort((a, b) => b.duration - a.duration || a.startTime - b.startTime);
   const root = roots[0];
 
   // DFS with memoisation. For each node return the best chain

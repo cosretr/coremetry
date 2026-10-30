@@ -204,37 +204,16 @@ func ttSpanContext(s *chstore.SpanRow) (env, cluster, namespace, pod, version st
 	return
 }
 
-// ttCriticalPathSteps — SAF: yol adımlarının YOLDA geçen süresi. Adım i için
-// süre(i) − (i+1'in i'ye kırpılmış aralığı); son adım kendi süresi. Toplamları
-// kökün süresini aşamaz — ama bilerek TOPLANMAZ ve dışarı verilmez.
-func ttCriticalPathSteps(ids []string, byID map[string]int, spans []chstore.SpanRow) []traceToolPathStep {
-	out := make([]traceToolPathStep, 0, len(ids))
-	for i, id := range ids {
-		idx, ok := byID[id]
-		if !ok {
-			continue
-		}
-		s := &spans[idx]
-		on := ttSpanDur(s)
-		if i+1 < len(ids) {
-			if nidx, ok := byID[ids[i+1]]; ok {
-				n := &spans[nidx]
-				a, b := n.StartTime, n.StartTime+ttSpanDur(n)
-				if a < s.StartTime {
-					a = s.StartTime
-				}
-				if end := s.StartTime + ttSpanDur(s); b > end {
-					b = end
-				}
-				if b > a {
-					on -= b - a
-				}
-			}
-		}
-		if on < 0 {
-			on = 0
-		}
-		out = append(out, traceToolPathStep{SpanID: id, Service: s.ServiceName, Name: s.Name, SelfOnPathMs: ttNsToMs(on)})
+// ttCriticalPathSteps — SAF: yol adımlarının YOLDA geçen süresi. v0.10.1625 —
+// gövde tracechain.CriticalPathFrom'a taşındı (trace açıklamasının KRİTİK YOL
+// bloğu aynı adımları kullanır; mcptools → anomaly → tracechain döngüsü
+// yüzünden api buradan okuyamaz). Adım i için süre(i) − (i+1'in i'ye
+// kırpılmış aralığı); son adım kendi süresi. Bilerek TOPLANMAZ.
+func ttCriticalPathSteps(spans []chstore.SpanRow, ta chstore.TraceAnalysis) []traceToolPathStep {
+	cp := tracechain.CriticalPathFrom(spans, ta)
+	out := make([]traceToolPathStep, 0, len(cp.Steps))
+	for _, st := range cp.Steps {
+		out = append(out, traceToolPathStep{SpanID: st.SpanID, Service: st.Service, Name: st.Name, SelfOnPathMs: ttNsToMs(st.SelfOnPathNs)})
 	}
 	return out
 }
@@ -365,7 +344,7 @@ func buildTraceToolAnalysis(spans []chstore.SpanRow, storeCapped bool) traceTool
 		})
 	}
 
-	steps := ttCriticalPathSteps(ta.CriticalIDs, byID, spans)
+	steps := ttCriticalPathSteps(spans, ta)
 	out.CriticalPathSteps = len(steps)
 	out.CriticalPath = ttTrimPathSteps(steps, traceToolPathSteps)
 

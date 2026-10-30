@@ -1,0 +1,101 @@
+{
+  "name": "downstream-server",
+  "why": "CLIENT'in izlenen SERVER çocuğu var → en büyük pay SERVER (servis içi), dış bağımlılık DEĞİL",
+  "spans": [
+    {
+      "spanId": "r1",
+      "parentId": "",
+      "startNs": 0,
+      "durNs": 12460000000,
+      "kind": "server",
+      "service": "orders-api",
+      "name": "POST /orders/score",
+      "attributes": {
+        "http.request.method": "POST",
+        "http.route": "/orders/score",
+        "http.response.status_code": "200"
+      }
+    },
+    {
+      "spanId": "i1",
+      "parentId": "r1",
+      "startNs": 100000000,
+      "durNs": 12300000000,
+      "kind": "internal",
+      "service": "orders-api",
+      "name": "com.acme.orders.ScoreService.evaluate"
+    },
+    {
+      "spanId": "c1",
+      "parentId": "i1",
+      "startNs": 150000000,
+      "durNs": 12210000000,
+      "kind": "client",
+      "service": "orders-api",
+      "name": "POST gateway.ext.example",
+      "attributes": {
+        "url.full": "https://gateway.ext.example/v1/score",
+        "server.address": "gateway.ext.example",
+        "server.port": "443",
+        "http.request.method": "POST",
+        "http.response.status_code": "200"
+      }
+    },
+    {
+      "spanId": "d1",
+      "parentId": "i1",
+      "startNs": 110000000,
+      "durNs": 40000000,
+      "kind": "client",
+      "service": "orders-api",
+      "name": "SELECT orders",
+      "attributes": {
+        "db.system": "postgresql",
+        "db.name": "ordersdb",
+        "server.address": "pg.internal.example"
+      }
+    },
+    {
+      "spanId": "p1",
+      "parentId": "r1",
+      "startNs": 12400000000,
+      "durNs": 200000000,
+      "kind": "producer",
+      "service": "orders-api",
+      "name": "orders.audit publish",
+      "attributes": {
+        "messaging.system": "kafka",
+        "messaging.destination.name": "orders.audit"
+      }
+    },
+    {
+      "spanId": "s2",
+      "parentId": "c1",
+      "startNs": 200000000,
+      "durNs": 12100000000,
+      "kind": "server",
+      "service": "scoring-svc",
+      "name": "POST /v1/score"
+    }
+  ],
+  "expect": {
+    "order": [
+      "r1",
+      "i1",
+      "c1",
+      "s2"
+    ],
+    "rootWallNs": 12460000000,
+    "onPathSelfNs": {
+      "r1": 160000000,
+      "i1": 90000000,
+      "c1": 110000000,
+      "s2": 12100000000
+    }
+  },
+  "expectGo": {
+    "top": "s2",
+    "topExternalWait": false,
+    "closing": "internal"
+  }
+}

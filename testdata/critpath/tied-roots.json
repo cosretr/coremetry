@@ -1,0 +1,49 @@
+{
+  "name": "tied-roots",
+  "why": "iki kök aynı süre: EN ERKEN başlayan kazanır (Go kuralı; TS v0.10.1625'te benimsedi), girdi sırası değil",
+  "spans": [
+    {
+      "spanId": "ra",
+      "parentId": "",
+      "startNs": 100000000,
+      "durNs": 50000000,
+      "kind": "server",
+      "service": "orders-api",
+      "name": "GET /late"
+    },
+    {
+      "spanId": "rb",
+      "parentId": "",
+      "startNs": 0,
+      "durNs": 50000000,
+      "kind": "server",
+      "service": "orders-api",
+      "name": "GET /early"
+    },
+    {
+      "spanId": "cb",
+      "parentId": "rb",
+      "startNs": 10000000,
+      "durNs": 20000000,
+      "kind": "internal",
+      "service": "orders-api",
+      "name": "com.acme.orders.Early.run"
+    }
+  ],
+  "expect": {
+    "order": [
+      "rb",
+      "cb"
+    ],
+    "rootWallNs": 50000000,
+    "onPathSelfNs": {
+      "rb": 30000000,
+      "cb": 20000000
+    }
+  },
+  "expectGo": {
+    "top": "rb",
+    "topExternalWait": false,
+    "closing": "internal"
+  }
+}
