@@ -148,6 +148,8 @@ describe('sticky bar #content ağacında', () => {
     }
     return out;
   };
+  const STICKY_BARS = ['<PageControls sticky', '<FilterBar sticky'];
+  const firstBar = (src: string) => Math.min(...STICKY_BARS.map(b => src.indexOf(b)).filter(i => i >= 0));
   const users = walk(SRCDIR)
     // v0.9.1001 — KAPILAR kapsam dışı. `pageControlsCollapse.test.tsx`
     // barı kasten kabuksuz mount ediyor (dar ekran dalını ölçmek için
@@ -155,8 +157,13 @@ describe('sticky bar #content ağacında', () => {
     // kural ürün kodunda aynen duruyor, yalnız ölçülen küme doğru
     // tanımlanıyor.
     .filter(p => !p.endsWith('.test.tsx'))
+    // v0.10.1617 (shadcn Faz 1 R9) — coremetry/FilterBar PageControls'ü
+    // BİRLEŞTİRİR ve `sticky`yi yalnız iletir: kabuk onun ÇAĞIRANINDA. Muafiyet
+    // boşluk bırakmıyor — `<FilterBar sticky` yazan sayfa aşağıda aynı
+    // kurala tabi (STICKY_BARS).
+    .filter(p => !p.endsWith(join('components', 'coremetry', 'FilterBar', 'FilterBar.tsx')))
     .map(p => ({ p, src: readFileSync(p, 'utf8') }))
-    .filter(f => f.src.includes('<PageControls sticky'));
+    .filter(f => STICKY_BARS.some(b => f.src.includes(b)));
 
   // Tarama boş dönerse aşağıdaki her şey hiçbir şey ölçmeden GEÇER.
   it('kullanımlar bulunabiliyor', () => {
@@ -200,7 +207,7 @@ describe('sticky bar #content ağacında', () => {
       .filter(f => {
         const at = HOSTS.map(h => f.src.indexOf(h)).filter(i => i >= 0);
         if (at.length === 0) return true;
-        return Math.min(...at) > f.src.indexOf('<PageControls sticky');
+        return Math.min(...at) > firstBar(f.src);
       })
       .map(f => f.p.slice(SRCDIR.length + 1));
     expect(bad, 'sticky bar bir kabuk kabının dışında — --controls-h yayınlanmaz').toEqual([]);

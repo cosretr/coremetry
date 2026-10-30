@@ -31,7 +31,9 @@ describe('DataTable barrel — tek yol', () => {
       const s = readFileSync(p, 'utf8');
       const rel = p.slice(SRC.length + 1);
       if (s.includes("from '@/components/DataTable'") || s.includes("from '@/components/ui/VirtualTable'")) bad.push(rel);
-      if (!rel.startsWith('components/ui/DataTable/') && /from '\.\.?\/(\.\.\/)*(components\/)?(DataTable|VirtualTable)'/.test(s)) bad.push(rel);
+      // v0.10.1617 (shadcn Faz 1 R9): components/coremetry/DataTable dondurulmuş
+      // halef bileşiği — './DataTable' orada KENDİ dosyası, eski yol değil.
+      if (!rel.startsWith('components/ui/DataTable/') && !rel.startsWith('components/coremetry/') && /from '\.\.?\/(\.\.\/)*(components\/)?(DataTable|VirtualTable)'/.test(s)) bad.push(rel);
     }
     expect(bad).toEqual([]);
   });

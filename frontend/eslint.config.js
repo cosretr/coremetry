@@ -178,6 +178,13 @@ export default tseslint.config(
             'radix-ui', 'radix-ui/**', '@radix-ui/*', 'cmdk', 'sonner',
           ],
           message: 'Kabuk Radix/shadcn overlay import edemez (ilk yüke biner, plan §1.2). Sayfa chunk\'ında kullan ya da tembel kapı (CopilotChatGate deseni).',
+        }, {
+          // v0.10.1617 (R9): coremetry BARREL'ı overlay'i yeniden dışa aktarır;
+          // kabuk PageShell/PageControls'ü dosya yolundan alır. regex: glob
+          // (gitignore) deseninde dizin eşleşmesi altını da kapsar, geri
+          // açılamaz.
+          regex: '(^|/)components/coremetry(/index)?$|^\\.{1,2}/coremetry(/index)?$',
+          message: 'Kabuk coremetry barrel\'ını import edemez (overlay → Radix ilk yüke biner). Dosya yolundan al: @/components/coremetry/PageShell.',
         }],
       }],
     },

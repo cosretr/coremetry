@@ -39,5 +39,8 @@ describe('Radix overlay importu yalnız components/coremetry içinden', () => {
   it('kabuk dosyası daha sıkı blokta: coremetry/overlay de yasak (ilk yük, plan §1.2)', async () => {
     expect(await restricted(`import { Dialog } from '@/components/coremetry/overlay';\nexport const y = Dialog;\n`, 'src/components/Topbar.tsx')).toBe(true);
     expect(await restricted(`import { Button } from '@/components/shadcn/button';\nexport const y = Button;\n`, 'src/components/Topbar.tsx')).toBe(true);
+    // v0.10.1617 (R9): barrel overlay'i taşır → kabukta yasak; dosya yolu serbest.
+    expect(await restricted(`import { PageShell } from '@/components/coremetry';\nexport const y = PageShell;\n`, 'src/components/AppShell.tsx')).toBe(true);
+    expect(await restricted(`import { PageShell } from '@/components/coremetry/PageShell';\nexport const y = PageShell;\n`, 'src/components/AppShell.tsx')).toBe(false);
   });
 }, 60_000);

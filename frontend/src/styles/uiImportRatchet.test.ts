@@ -76,10 +76,15 @@ export function atomsImported(src: string, file: string): Set<string> {
 
 // Taban: R6 commit'inde ölçüldü — 342 dosya, 969 çift (plan §3.1 tablosu
 // birebir). R8: 969 → 902 (PageShell 51 + PageControls 17 ayrıldı,
-// DisclosureButton +1 taşınan PageControls'ten).
+// DisclosureButton +1 taşınan PageControls'ten). R9: 902 → 904 (coremetry/
+// DataTable sarmalayıcısının iki dosyası ui/DataTable'ı içe aktarıyor).
 const CEILINGS: Record<string, number> = {
   Button: 209,
-  DataTable: 126,
+  // v0.10.1617 (R9): 126 → 128 — coremetry/DataTable dondurulmuş API'nin Faz 1
+  // gövdesi ui/DataTable'ı SARIYOR (plan §6: "thin wrapper over today's
+  // code"): DataTable.tsx (gövde) + types.ts (bugünkü tiplerin yeniden dışa
+  // aktarımı). Benimseme değil, halef; gövde Traces diliminde değişince düşer.
+  DataTable: 128,
   Badge: 63,
   IconButton: 50,
   Field: 37,
