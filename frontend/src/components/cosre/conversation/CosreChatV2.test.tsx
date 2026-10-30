@@ -268,6 +268,50 @@ describe('CosreChatV2 B6: kalıcılık, ?chat=, Geçmiş, tutamak', () => {
     expect(readSp!()).toBe('');
   });
 
+  // v0.10.1675 — Operator-reported: v2 "Tam sayfada aç" kaydetmeden geziniyordu;
+  // link son BİTEN cevabın kimliğini taşıyordu (arka plan kaydı başarısız / uçuşta
+  // ise /cosre kimliksiz açılırdı). v1 gibi: önce kayıt, kimlik o yanıttan.
+  const fullPage = () => sheet()!.querySelector<HTMLAnchorElement>('a[data-fullpage]')!;
+  const plainClick = (a: HTMLElement) => act(async () => {
+    a.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }));
+  });
+  it('v0.10.1675: Tam sayfada aç önce kaydeder, sonra kayıt kimliğiyle gezinir', async () => {
+    const save = vi.spyOn(api, 'saveAiConversation')
+      .mockRejectedValueOnce(new Error('geçici')) // arka plan kaydı düşer → kimlik yok
+      .mockResolvedValue({ id: 'c7' } as never);
+    await render({ defaultOpen: true });
+    await typeAndSend('ilk soru');
+    await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    await tick();
+    expect(fullPage().getAttribute('href')).toBe('/cosre'); // eski davranış buraya gezerdi
+    await plainClick(fullPage());
+    await tick();
+    expect(save).toHaveBeenCalledTimes(2);
+    expect(save.mock.calls[1][0]).toEqual({ id: undefined, messages: [
+      { role: 'user', text: 'ilk soru' }, expect.objectContaining({ role: 'assistant', text: 'Düzeltilmiş tam metin.' }),
+    ] });
+    await vi.waitFor(() => expect(readPath!()).toBe('/cosre?chat=c7'));
+  });
+  it('v0.10.1675: kayıt hatası → gezinme yok; boş konuşma → kayıtsız /cosre', async () => {
+    const save = vi.spyOn(api, 'saveAiConversation').mockRejectedValue(new Error('kapalı'));
+    await render({ defaultOpen: true });
+    await typeAndSend('soru');
+    await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    await tick();
+    await plainClick(fullPage());
+    await tick();
+    expect(save).toHaveBeenCalledTimes(2);
+    expect(readPath!()).toBe('/');
+    expect(sheet()).not.toBeNull();
+    await unmount();
+    save.mockClear();
+    await render({ defaultOpen: true });
+    await plainClick(fullPage());
+    await tick();
+    expect(save).not.toHaveBeenCalled();
+    expect(readPath!()).toBe('/cosre');
+  });
+
   it('hatalı tur kaydedilmez', async () => {
     const save = vi.spyOn(api, 'saveAiConversation').mockResolvedValue({ id: 'c9' } as never);
     v2Body = cosreFixture('ui-stream-v1-error');

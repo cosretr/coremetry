@@ -58,7 +58,9 @@ import { SheetResizeHandle } from './SheetResizeHandle';
 import type { ChatExplainAsk } from '@/lib/types';
 import { COSRE_DRAWER_WIDTH_KEY, cosreSheetWidth } from '@/lib/cosre/sheetWidth';
 import { useCosreChat } from '@/lib/cosre/useCosreChat';
-import { hasCodeLock } from '@/lib/cosre/cosrePersist';
+import { hasCodeLock, hasCompletedExchange, toPersistMessages } from '@/lib/cosre/cosrePersist';
+import { isPlainLeftClick } from '@/lib/a11y';
+import { toast } from '@/lib/toast';
 import { AI_PREFILL_EVENT, type AIPrefillDetail } from '@/components/ai/aiEvents';
 import { AI_DRAWER_WIDTH } from '@/components/ai/answerCard';
 import { CopilotFab } from '@/components/ai/CopilotFab';
@@ -273,6 +275,29 @@ export function CosreChatV2({ defaultOpen = false }: CosreChatV2Props) {
     };
   }, []);
 
+  // v0.10.1675 — "Tam sayfada aç ↗" v1 openFullPage (v0.10.1138/1139) ikizi:
+  // href her zaman gerçek (Ctrl/Cmd/orta tık yeni sekme); düz tıkta konuşma
+  // chat.messages'tan B6 yoluyla ÖNCE kaydedilir, kimlik o yanıttan, sonra Sheet
+  // kapanır ve aynı sekmede gezinilir. Kayıt hatası → gezinme yok + toast.
+  const [opening, setOpening] = useState(false);
+  const openFullPage = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (!isPlainLeftClick(e)) return;
+    e.preventDefault();
+    if (busy || opening) return;
+    const go = (id: string | null) => {
+      setOpening(false);
+      setOpen(false);
+      navigate(cosreFullPageHref(messages.length > 0 ? id : null));
+    };
+    const msgs = toPersistMessages(messages);
+    if (!hasCompletedExchange(msgs)) { go(conv.idRef.current); return; }
+    setOpening(true);
+    void conv.save(msgs).then(go, (err: unknown) => {
+      setOpening(false);
+      toast.error(`Konuşma kaydedilemedi — tam sayfaya geçilmedi. ${err instanceof Error ? err.message : String(err)}`.trim());
+    });
+  };
+
   // Rozet: kapalıyken (FAB görünürken) poll; RQ gizli sekmede durur.
   const criticalOpen = useOpenCriticalCount({ enabled: !open }).data ?? 0;
   // Genişlik her açılışta okunur (v1'de sürüklenip saklanmış olabilir).
@@ -295,7 +320,8 @@ export function CosreChatV2({ defaultOpen = false }: CosreChatV2Props) {
         headerContext={<CosreHeaderContext currentService={ask.currentService} env={ask.env} pinned={ask.pinned} setPinned={ask.setPinned} page={ask.page} />}
         headerActions={<>
           <Link to={cosreFullPageHref(messages.length > 0 ? conv.conversationId : null)} className="cosre-page__home cm-fullpage"
-            data-fullpage="" title={T.fullPageTitle}>{T.fullPage}</Link>
+            data-fullpage="" aria-disabled={busy || opening || undefined}
+            title={busy ? T.fullPageBusyTitle : T.fullPageTitle} onClick={openFullPage}>{T.fullPage}</Link>
           <Button variant="ghost" size="sm" className="cm-head-btn" onClick={() => setShowHistory(h => !h)}
             aria-expanded={showHistory} title={T.historyTitle}>{T.history}</Button>
           {messages.length > 0 && (

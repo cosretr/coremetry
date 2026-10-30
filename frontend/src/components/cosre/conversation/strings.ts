@@ -10,6 +10,7 @@ export const COSRE_V2_STRINGS = {
   threadLabel: 'CoSRE mesajları',
   fullPage: 'Tam sayfada aç ↗',
   fullPageTitle: "CoSRE'yi /cosre tam sayfasında aç",
+  fullPageBusyTitle: 'Cevap bitince tam sayfada açılabilir',
   history: '🕘 Geçmiş',
   historyTitle: 'Konuşma geçmişi',
   clear: 'Temizle',

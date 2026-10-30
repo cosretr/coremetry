@@ -9,6 +9,10 @@
 //   • load(id): arşiv → fromPersistMessages → setMessages; akış sürerken
 //     yüklemez (yarım cevabın üstüne başka konuşma basılmaz).
 //   • clear(): yeni konuşma — kimlik düşer.
+//   • save(msgs): v0.10.1675 — "Tam sayfada aç" (v1 flushSave, v0.10.1138/1139
+//     ikizi): AYNI yazım yolu ama STRICT (hata reddedilir → çağıran gezinmez)
+//     ve kimliği döner. Uçuştaki persist önce beklenir: ikisi de id'siz
+//     gidip iki ayrı thread açmasın (aynı kimliğe tekrar yazım = idempotent).
 // Kuşak (gen): load/clear her geçişte artar; uçuştaki kaydın yanıtı yeni
 // konuşmanın kimliğini ezmez (v1 v0.10.944 kuralı).
 import { useCallback, useRef, useState } from 'react';
@@ -22,6 +26,8 @@ export interface CosreConversation {
   /** Gönderim anında okunur (bayat closure yok). */
   idRef: { readonly current: string | null };
   persist(msgs: ChatMessage[]): void;
+  /** Strict kayıt; konuşma kimliğini döner, hata reddedilir (v0.10.1675). */
+  save(msgs: ChatMessage[]): Promise<string | null>;
   load(id: string, busy: () => boolean, setMessages: (m: CosreUIMessage[]) => void): Promise<boolean>;
   clear(): void;
 }
@@ -31,16 +37,26 @@ export function useConversation(): CosreConversation {
   const idRef = useRef<string | null>(null);
   const gen = useRef(0);
 
-  const persist = useCallback((msgs: ChatMessage[]) => {
+  const inflight = useRef<Promise<unknown>>(Promise.resolve());
+
+  const write = useCallback((msgs: ChatMessage[]): Promise<string | null> => {
     const g = gen.current;
-    api.saveAiConversation({ id: idRef.current ?? undefined, messages: msgs })
-      .then(c => {
-        if (g !== gen.current) return;
+    const p = inflight.current.catch(() => {}).then(() => {
+      if (g !== gen.current) return idRef.current;
+      return api.saveAiConversation({ id: idRef.current ?? undefined, messages: msgs }).then(c => {
+        if (g !== gen.current) return c.id;
         idRef.current = c.id;
         setConversationId(c.id);
-      })
-      .catch(() => { /* sessiz — sonraki tur yeniden dener (v1 schedulePersist) */ });
+        return c.id;
+      });
+    });
+    inflight.current = p;
+    return p;
   }, []);
+
+  const persist = useCallback((msgs: ChatMessage[]) => {
+    write(msgs).catch(() => { /* sessiz — sonraki tur yeniden dener (v1 schedulePersist) */ });
+  }, [write]);
 
   const load = useCallback(async (id: string, busy: () => boolean, setMessages: (m: CosreUIMessage[]) => void) => {
     if (busy()) return false;
@@ -59,5 +75,5 @@ export function useConversation(): CosreConversation {
     setConversationId(null);
   }, []);
 
-  return { conversationId, idRef, persist, load, clear };
+  return { conversationId, idRef, persist, save: write, load, clear };
 }
