@@ -10,7 +10,13 @@ type Part map[string]any
 var KnownKinds = map[string]bool{
 	"step": true, "step-result": true, "delta": true, "answer": true,
 	"block": true, "error": true, "code-lock": true, "done": true,
+	// araç seti dilim 1 — döngü çıkışı (data-stop); v1 yazıcısı düşürür (api chat_sink.go).
+	"stop": true,
 }
+
+// StopReasons — data-stop `reason` kapalı kümesi (api chat_stop_event.go
+// üretir; protocol.ts STOP_REASONS ile eşit, test pinler).
+var StopReasons = []string{"stop", "round_cap", "call_cap", "cancelled", "deadline", "approval_pending", "error", "token_budget"}
 
 // ReasonApprovalRequired — agent-core S4: `step-result.reason` onay bekleyen
 // çağrı (api skipReasonApproval / Executor KindApproval ile aynı dizgi; api

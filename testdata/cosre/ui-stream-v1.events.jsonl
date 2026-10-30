@@ -13,4 +13,5 @@
 {"kind":"delta","payload":{"text":"**Bulgu** — orders-api"}}
 {"kind":"code-lock","payload":{"locked":true}}
 {"kind":"answer","payload":{"text":"**Bulgu** — orders-api p95 1830 ms'ye çıktı; com.acme.orders.PaymentClient yavaş.\n\nKaynak: get_service_health (1 araç)","exchangeId":"golden-xid","callId":"call-1","evidenceSpanIds":["00f067aa0ba902b7"],"allowedLinks":["/service?name=orders-api"],"sources":[{"doc":"orders-runbook.md","chunk":3,"score":0.82,"label":"Orders runbook","kind":"upload"},{"doc":"wiki-42","ref":"https://wiki.example.test/orders","chunk":0,"score":0.61,"label":"Orders wiki","kind":"wiki"}],"links":[{"label":"orders-api · Overview","href":"/service?name=orders-api"}],"followups":["orders-api loglarına bak"],"suggestions":["Son deploy'u karşılaştır"],"evidence":[{"tool":"get_service_health","state":"ok"}]}}
+{"kind":"stop","payload":{"reason":"call_cap","calls":2,"rounds":1,"elapsed_ms":2140}}
 {"kind":"done","payload":{"ok":true}}

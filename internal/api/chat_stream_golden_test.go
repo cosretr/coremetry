@@ -43,6 +43,10 @@ var chatGoldenMasks = []struct {
 }{
 	// Araç süresi duvar saatinden ölçülür.
 	{regexp.MustCompile(`"durationMs":\d+`), `"durationMs":0`},
+	// araç seti dilim 1 — data-tool-result araç süresi ve data-stop alışveriş
+	// süresi duvar saatinden.
+	{regexp.MustCompile(`"duration_ms":\d+`), `"duration_ms":0`},
+	{regexp.MustCompile(`"elapsed_ms":\d+`), `"elapsed_ms":0`},
 	// callId = modele giden çağrının rastgele kimliği (newRandID). turnId
 	// MASKELENMEZ: kök exchangeId'dir (eval işaretiyle "golden-xid").
 	{regexp.MustCompile(`"callId":"[^"]*"`), `"callId":"X"`},

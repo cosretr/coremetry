@@ -114,6 +114,10 @@ type aiChatMessage struct {
 	// kod okunmuş (yapışkan) idi. Yalnız asistan; Geçmiş'ten açılan konuşma
 	// kilidi bundan kurar ve context.codeLocked gönderir (Redis TTL'inden bağımsız).
 	CodeRead bool `json:"codeRead,omitempty"`
+	// ToolResults / Stop — CoSRE v2 araç seti dilim 1: data-tool-result ve
+	// data-stop parçaları (yalnız asistan; sanitize ai_conversations_v2parts.go).
+	ToolResults []aiChatToolResult `json:"toolResults,omitempty"`
+	Stop        *aiChatStop        `json:"stop,omitempty"`
 }
 
 // sanitizeChatExplain — v0.10.1400: arşive girecek açıklama künyesi. Tür
@@ -319,11 +323,14 @@ func sanitizeChatMessages(in []aiChatMessage) []aiChatMessage {
 			m.Evidence = sanitizeChatEvidence(m.Evidence) // v0.10.1272
 			m.Explain = sanitizeChatExplain(m.Explain)    // v0.10.1400
 			m.ExchangeID = hex32Only(m.ExchangeID)        // v0.10.1444
+			m.ToolResults = sanitizeChatToolResults(m.ToolResults)
+			m.Stop = sanitizeChatStop(m.Stop)
 		} else {
 			m.Evidence = nil
 			m.Explain = nil
 			m.ExchangeID = ""
 			m.CodeRead = false // v0.10.1465 — yalnız asistan turu
+			m.ToolResults, m.Stop = nil, nil
 		}
 		// v0.10.1444 — bloklar yalnız sunucu kaynaklı (GET süsler).
 		m.Blocks, m.BlocksAt, m.BlocksDropped = nil, 0, nil

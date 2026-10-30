@@ -8,7 +8,8 @@
 // istemci üretmez. ChatMessage'ta mesaj kimliği alanı yok (v1 şeması); tura
 // bağlanan kimlik metadata.turnId / exchangeId → ChatMessage.exchangeId
 // (v1 turnArchiveId sırası: turnId önce).
-import type { ChatMessage, ChatQueryEvidence } from '@/lib/types';
+import type { ChatMessage, ChatQueryEvidence, CosreStop, CosreToolResult } from '@/lib/types';
+import { parseDataStop, parseDataToolResult } from './protocol';
 import type { CosreUIMessage } from './resetReducer';
 
 /** components/ai/chatPersist.ts PERSIST_MESSAGE_CAP ile eşit (test pinler). */
@@ -43,6 +44,28 @@ function evidenceList(m: CosreUIMessage): ChatQueryEvidence[] {
   return [];
 }
 
+/** data part'ın `data`sı = sonuç eksi `id` (id parçanın kendisinde). */
+function toolResultData(tr: CosreToolResult): Omit<CosreToolResult, 'id'> {
+  const { id: _id, ...data } = tr;
+  return data;
+}
+
+/** araç seti dilim 1 — data-tool-result + data-stop → arşiv alanları
+ *  (geçersiz parça düşer; sunucu ayrıca kompakt + sanitize eder). */
+function v2PartsOf(m: CosreUIMessage): Pick<ChatMessage, 'toolResults' | 'stop'> {
+  const toolResults: NonNullable<ChatMessage['toolResults']> = [];
+  let stop: CosreStop | null = null;
+  for (const p of m.parts) {
+    if (p.type === 'data-tool-result') {
+      const tr = parseDataToolResult(p);
+      if (tr) toolResults.push({ id: tr.id, data: tr });
+    } else if (p.type === 'data-stop') {
+      stop = parseDataStop(p) ?? stop;
+    }
+  }
+  return { ...(toolResults.length ? { toolResults } : {}), ...(stop ? { stop } : {}) };
+}
+
 /** Arşive yazılacak mesajlar: hatalı ve boş metinli düşer, son 40.
  *  v0.10.1664 (B6) — v1 persistMessages ile ALAN ALAN eşit: kanıt çipleri
  *  (data-evidence-summary → evidence), açıklama künyesi (metadata.explain),
@@ -64,6 +87,7 @@ export function toPersistMessages(messages: CosreUIMessage[]): ChatMessage[] {
         ...(md?.explain ? { explain: md.explain } : {}),
         ...(id ? { exchangeId: id } : {}),
         ...(hasCodeLock(m) ? { codeRead: true } : {}),
+        ...v2PartsOf(m),
       };
     });
   return keep.length > COSRE_PERSIST_CAP ? keep.slice(-COSRE_PERSIST_CAP) : keep;
@@ -92,6 +116,13 @@ export function fromPersistMessages(messages: ChatMessage[] | undefined, convId:
       }
       if (m.evidence?.length) parts.push({ type: 'data-evidence-summary', id: 'evidence', data: { evidence: m.evidence } });
       if (m.codeRead) parts.push({ type: 'data-code-lock', id: 'code-lock', data: { locked: true } });
+      // araç seti dilim 1 — arşivden geri: aynı ayrıştırıcıdan geçer (bilinmeyen kind / neden düşer).
+      for (const r of m.toolResults ?? []) {
+        const tr = parseDataToolResult({ type: 'data-tool-result', id: r.id, data: r.data });
+        if (tr) parts.push({ type: 'data-tool-result', id: tr.id, data: toolResultData(tr) });
+      }
+      const st = m.stop ? parseDataStop({ type: 'data-stop', data: m.stop }) : null;
+      if (st) parts.push({ type: 'data-stop', id: 'stop', data: st });
       const metadata: NonNullable<CosreUIMessage['metadata']> = {
         ...(m.exchangeId ? { archiveExchangeId: m.exchangeId } : {}),
         ...(m.explain ? { explain: m.explain } : {}),

@@ -57,6 +57,10 @@ func (t *Translator) Translate(kind string, payload any) []Part {
 		out = append(out, t.answer(m)...)
 	case "block":
 		out = append(out, block(m))
+	case "stop":
+		// araç seti dilim 1 (tools-audit §10 G2) — döngünün her çıkışında
+		// "neden durdum": {reason, calls, rounds, elapsed_ms}; tek parça (id sabit).
+		out = append(out, Part{"type": "data-stop", "id": "stop", "data": m})
 	case "code-lock":
 		out = append(out, Part{"type": "data-code-lock", "id": "code-lock", "data": m})
 	case "error":
@@ -150,10 +154,13 @@ func (t *Translator) stepResult(kind string, payload any, m map[string]any) []Pa
 			return []Part{{"type": "data-approval", "id": "a" + id, "data": data}}
 		}
 	}
+	id := "s" + strconv.Itoa(i)
+	// araç seti dilim 1 (tools-audit §10 G1) — yapısal sonuç tool-output-available'ın
+	// YANINDA (aynı s<i>); çıktı parçası bayt bayt aynı kalır.
 	return []Part{{
-		"type": "tool-output-available", "toolCallId": "s" + strconv.Itoa(i), "dynamic": true,
+		"type": "tool-output-available", "toolCallId": id, "dynamic": true,
 		"output": without(m, "i", "tool"),
-	}}
+	}, toolResultPart(id, m)}
 }
 
 func (t *Translator) delta(m map[string]any) []Part {

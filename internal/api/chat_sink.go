@@ -31,7 +31,7 @@ func v1ChatSink(w http.ResponseWriter) (chatSink, bool) {
 	if !ok {
 		return nil, false // açık nil: nil *Emitter'ı arayüze sarmak nil-olmayan arayüz verir
 	}
-	return em, true
+	return v1OnlySink{em: em}, true // araç seti dilim 1 — v2'ye özgü türler (stop) düşer
 }
 
 // copilotChat is the SSE chat endpoint (v1 transport). Runs the agentic

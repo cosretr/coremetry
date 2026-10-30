@@ -1,0 +1,10 @@
+{"kind":"answer","payload":{"text":"orders-api sağlıklı."}}
+{"kind":"stop","payload":{"reason":"stop","calls":1,"rounds":2,"elapsed_ms":3100}}
+{"kind":"stop","payload":{"reason":"round_cap","calls":5,"rounds":5,"elapsed_ms":41000}}
+{"kind":"stop","payload":{"reason":"call_cap","calls":6,"rounds":3,"elapsed_ms":28000}}
+{"kind":"stop","payload":{"reason":"cancelled","calls":2,"rounds":1,"elapsed_ms":4200}}
+{"kind":"stop","payload":{"reason":"deadline","calls":4,"rounds":3,"elapsed_ms":180000}}
+{"kind":"stop","payload":{"reason":"approval_pending","calls":2,"rounds":1,"elapsed_ms":950}}
+{"kind":"stop","payload":{"reason":"error","calls":0,"rounds":1,"elapsed_ms":800}}
+{"kind":"stop","payload":{"reason":"token_budget","calls":3,"rounds":2,"elapsed_ms":9000}}
+{"kind":"done","payload":{"ok":true}}

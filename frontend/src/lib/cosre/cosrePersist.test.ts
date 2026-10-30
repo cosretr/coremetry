@@ -124,3 +124,50 @@ describe('fromPersistMessages + bayrak çevrimi yuvarlaması', () => {
     expect(fromPersistMessages([{ role: 'user', text: '  ' }], 'c')).toEqual([]);
   });
 });
+
+// CoSRE v2 araç seti dilim 1 — data-tool-result + data-stop kayıt yolundan
+// (B6) gidip gelir; bilinmeyen kind / neden sessizce düşer, UI değişmez.
+describe('data-tool-result + data-stop kalıcılığı (araç seti dilim 1)', () => {
+  const tr = { kind: 'evidence', tool: 'query_traces', ok: true, query: 'SELECT 1', page_url: '/traces?service=orders-api' };
+  const stop = { reason: 'call_cap', calls: 6, rounds: 3, elapsed_ms: 2140 };
+  const msg = asst('01M62F9N000000000000000002', [
+    text('cevap'),
+    { type: 'data-tool-result', id: 's2', data: tr },
+    { type: 'data-tool-result', id: 's3', data: { kind: 'chart', ok: true } },
+    { type: 'data-tool-result', id: 's4', data: { kind: 'text', ok: true, page_url: 'https://evil.example/x' } },
+    { type: 'data-stop', id: 'stop', data: stop },
+  ]);
+
+  it('toPersistMessages: geçerli sonuçlar + durma; bilinmeyen kind ve dış page_url düşer', () => {
+    const [a] = toPersistMessages([msg]);
+    expect(a.toolResults).toEqual([
+      { id: 's2', data: { ...tr, id: 's2' } },
+      { id: 's4', data: { kind: 'text', ok: true, id: 's4' } },
+    ]);
+    expect(a.stop).toEqual(stop);
+  });
+
+  it('gidiş-dönüş: fromPersistMessages aynı parçaları kurar, yeniden kayıt aynı', () => {
+    const saved = toPersistMessages([user('u', 'q'), msg]);
+    const back = fromPersistMessages(saved, 'c1');
+    const parts = back[1].parts.filter(p => p.type === 'data-tool-result' || p.type === 'data-stop');
+    expect(parts).toEqual([
+      { type: 'data-tool-result', id: 's2', data: tr },
+      { type: 'data-tool-result', id: 's4', data: { kind: 'text', ok: true } },
+      { type: 'data-stop', id: 'stop', data: stop },
+    ]);
+    expect(toPersistMessages(back)).toEqual(saved);
+  });
+
+  it('görünür tur değişmez: toChatTurn parçaları yok sayar', () => {
+    const plain = asst('01M62F9N000000000000000002', [text('cevap')]);
+    expect(toChatTurn(msg, msg.parts)).toEqual(toChatTurn(plain, plain.parts));
+  });
+
+  it('arşivde bozuk kayıt düşer (bilinmeyen neden, biçimsiz id)', () => {
+    const back = fromPersistMessages([
+      { role: 'assistant', text: 'x', toolResults: [{ id: 'zz', data: tr as never }], stop: { ...stop, reason: 'bilinmeyen' as never } },
+    ], 'c');
+    expect(back[0].parts.map(p => p.type)).toEqual(['text']);
+  });
+});

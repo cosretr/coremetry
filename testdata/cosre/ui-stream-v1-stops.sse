@@ -1,0 +1,32 @@
+data: {"messageId":"01M62F9N000000000000000000","type":"start"}
+
+data: {"type":"start-step"}
+
+data: {"id":"t1","type":"text-start"}
+
+data: {"delta":"orders-api sağlıklı.","id":"t1","type":"text-delta"}
+
+data: {"id":"t1","type":"text-end"}
+
+data: {"data":{"calls":1,"elapsed_ms":3100,"reason":"stop","rounds":2},"id":"stop","type":"data-stop"}
+
+data: {"data":{"calls":5,"elapsed_ms":41000,"reason":"round_cap","rounds":5},"id":"stop","type":"data-stop"}
+
+data: {"data":{"calls":6,"elapsed_ms":28000,"reason":"call_cap","rounds":3},"id":"stop","type":"data-stop"}
+
+data: {"data":{"calls":2,"elapsed_ms":4200,"reason":"cancelled","rounds":1},"id":"stop","type":"data-stop"}
+
+data: {"data":{"calls":4,"elapsed_ms":180000,"reason":"deadline","rounds":3},"id":"stop","type":"data-stop"}
+
+data: {"data":{"calls":2,"elapsed_ms":950,"reason":"approval_pending","rounds":1},"id":"stop","type":"data-stop"}
+
+data: {"data":{"calls":0,"elapsed_ms":800,"reason":"error","rounds":1},"id":"stop","type":"data-stop"}
+
+data: {"data":{"calls":3,"elapsed_ms":9000,"reason":"token_budget","rounds":2},"id":"stop","type":"data-stop"}
+
+data: {"type":"finish-step"}
+
+data: {"finishReason":"stop","type":"finish"}
+
+data: [DONE]
+

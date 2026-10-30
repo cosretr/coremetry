@@ -11,6 +11,8 @@
 // uiStreamFixture.test.ts (paylaşılan testdata/cosre/*.sse) kırmızıya döner;
 // fixture yenilendiği commit'te bu dosya da güncellenir.
 
+import type { CosreStop, CosreStopReason, CosreToolResult, CosreToolResultKind } from '@/lib/types';
+
 export const PROTOCOL_VERSION = 'v1';
 export const PROTOCOL_HEADER = 'x-vercel-ai-ui-message-stream';
 export const DONE_MARKER = '[DONE]';
@@ -41,8 +43,58 @@ export const DATA_PART_NAMES = [
   // agent-core S4 — araç onayı: toolCallId'li parça input-available'da kalır,
   // eşli data-approval{toolCallId, tool, token, argsDigest, expiresAt}; finish 'tool-calls'.
   'approval',
+  // araç seti dilim 1 (docs/cosre/tools-audit.md §10 G1/G2) — yapısal araç
+  // sonucu (tek parça, kind içeride) + döngünün her çıkışında "neden durdum".
+  'tool-result', 'stop',
   ...BLOCK_TYPES.map(t => `block-${t}` as const),
 ] as const;
+
+/** data-tool-result `kind` kapalı kümesi (Go uistream.ToolResultKinds). */
+export const TOOL_RESULT_KINDS = ['text', 'evidence', 'error', 'skipped'] as const satisfies readonly CosreToolResultKind[];
+
+/** data-stop `reason` kapalı kümesi (Go uistream.StopReasons). */
+export const STOP_REASONS = [
+  'stop', 'round_cap', 'call_cap', 'cancelled', 'deadline', 'approval_pending', 'error', 'token_budget',
+] as const satisfies readonly CosreStopReason[];
+
+/** data-tool-result tavanı (Go uistream.ToolResultMaxBytes). */
+export const TOOL_RESULT_MAX_BYTES = 2048;
+
+const TOOL_RESULT_ID_RE = /^s[1-9]\d{0,4}$/;
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+const isKind = (v: unknown): v is CosreToolResultKind =>
+  typeof v === 'string' && (TOOL_RESULT_KINDS as readonly string[]).includes(v);
+
+const isStopReason = (v: unknown): v is CosreStopReason =>
+  typeof v === 'string' && (STOP_REASONS as readonly string[]).includes(v);
+
+const finiteNum = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+
+/** data-tool-result → CosreToolResult; bilinmeyen kind, biçimsiz id ya da
+ *  nesne olmayan data null (yok sayılır — ileri-uyum, akış kırılmaz). page_url
+ *  yalnız kök-göreli kalır. */
+export function parseDataToolResult(p: { type: string; id?: unknown; data?: unknown }): CosreToolResult | null {
+  if (p.type !== 'data-tool-result' || typeof p.id !== 'string' || !TOOL_RESULT_ID_RE.test(p.id)) return null;
+  const d = p.data;
+  if (!isRecord(d) || !isKind(d.kind)) return null;
+  const out: CosreToolResult = { ...(d as Partial<CosreToolResult>), id: p.id, kind: d.kind, ok: d.ok === true };
+  const url = d.page_url;
+  if (typeof url !== 'string' || !url.startsWith('/') || url.startsWith('//') || url.startsWith('/\\')) delete out.page_url;
+  return out;
+}
+
+/** data-stop → CosreStop; bilinmeyen neden ya da sayı olmayan alan null. */
+export function parseDataStop(p: { type: string; data?: unknown }): CosreStop | null {
+  if (p.type !== 'data-stop' || !isRecord(p.data)) return null;
+  const { reason, calls, rounds, elapsed_ms } = p.data;
+  const c = finiteNum(calls), r = finiteNum(rounds), e = finiteNum(elapsed_ms);
+  if (!isStopReason(reason) || c === undefined || r === undefined || e === undefined) return null;
+  return { reason, calls: c, rounds: r, elapsed_ms: e };
+}
 
 export type UIStreamPartType = (typeof UI_STREAM_PART_TYPES)[number];
 export type DataPartName = (typeof DATA_PART_NAMES)[number];

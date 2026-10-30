@@ -20,6 +20,11 @@
 //   - `start` parçası sunucu üretimi `messageId` taşır (ULID, ulid.go;
 //     v0.10.1603).
 //
+// Araç seti dilim 1 (docs/cosre/tools-audit.md §10 G1/G2): her araç
+// step-result'ı tool-output-available'ın yanında `data-tool-result{id:s<i>}`
+// (tek parça, `kind` içeride, ≤ 2 KB, tool_result.go) üretir; döngünün her
+// çıkışı `stop` → `data-stop{reason, calls, rounds, elapsed_ms}`.
+//
 // Geri alma TEK mekanizmadır: `data-reset{data:{textId:<text-start id>},transient:true}`
 // (v0.10.1606; parçanın kendi id'si yok).
 // Son cevap, akan taslağı reset'le geri alıp otoriter metni TEK delta olarak

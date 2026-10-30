@@ -6,11 +6,14 @@
 import { describe, it, expect } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { DATA_PART_NAMES, MESSAGE_ID_RE, UI_STREAM_PART_TYPES, dataPartName, isDataPart, parseDataReset } from './protocol';
+import {
+  DATA_PART_NAMES, MESSAGE_ID_RE, STOP_REASONS, TOOL_RESULT_KINDS, TOOL_RESULT_MAX_BYTES, UI_STREAM_PART_TYPES,
+  dataPartName, isDataPart, parseDataReset, parseDataStop, parseDataToolResult,
+} from './protocol';
 import { parseUIStreamSSE } from './uiStreamFixture';
 
 const ROOT = resolve(__dirname, '../../../..');
-const FIXTURES = ['ui-stream-v1', 'ui-stream-v1-error', 'ui-stream-v1-closed', 'ui-stream-v1-reset', 'ui-stream-v1-reset2', 'ui-stream-v1-approval'];
+const FIXTURES = ['ui-stream-v1', 'ui-stream-v1-error', 'ui-stream-v1-closed', 'ui-stream-v1-reset', 'ui-stream-v1-reset2', 'ui-stream-v1-approval', 'ui-stream-v1-stops'];
 const PART_TYPES = new Set<string>(UI_STREAM_PART_TYPES);
 const DATA_NAMES = new Set<string>(DATA_PART_NAMES);
 
@@ -177,4 +180,53 @@ it('approval fixture: onay bekleyen araç çıktısız, eşli data-approval, fin
   expect(parts.some(p => p.type === 'tool-output-available' && p.toolCallId === 's3')).toBe(false);
   expect(parts.some(p => p.type === 'tool-output-available' && p.toolCallId === 's2')).toBe(true);
   expect(parts.at(-1)).toEqual({ type: 'finish', finishReason: 'tool-calls' });
+});
+
+// CoSRE v2 araç seti dilim 1 (tools-audit §10 G1/G2) — data-tool-result her
+// araç çıktısının yanında (aynı s<i>), data-stop her çıkışta; sözlük fixture'ı
+// her nedenden bir satır taşır.
+describe('data-tool-result + data-stop (araç seti dilim 1)', () => {
+  const read = (n: string) => parseUIStreamSSE(readFileSync(join(ROOT, 'testdata', 'cosre', `${n}.sse`), 'utf8')).parts;
+
+  it.each(['ui-stream-v1', 'ui-stream-v1-error', 'ui-stream-v1-approval'])('%s: her tool-output-available eşli data-tool-result taşır, ≤ 2 KB', n => {
+    const parts = read(n);
+    const outs = parts.filter(p => p.type === 'tool-output-available').map(p => String(p.toolCallId));
+    const results = parts.filter(p => p.type === 'data-tool-result');
+    expect(results.map(p => p.id)).toEqual(outs);
+    for (const p of results) {
+      expect(parseDataToolResult(p), JSON.stringify(p)).not.toBeNull();
+      expect(new TextEncoder().encode(JSON.stringify(p.data)).length).toBeLessThanOrEqual(TOOL_RESULT_MAX_BYTES);
+    }
+  });
+
+  it.each([['ui-stream-v1', 'call_cap'], ['ui-stream-v1-error', 'deadline'], ['ui-stream-v1-approval', 'approval_pending']])('%s: data-stop %s, finish-step\'ten önce', (n, reason) => {
+    const parts = read(n);
+    const i = parts.findIndex(p => p.type === 'data-stop');
+    expect(parseDataStop(parts[i])?.reason).toBe(reason);
+    expect(i).toBeLessThan(parts.findIndex(p => p.type === 'finish-step'));
+  });
+
+  it('stops fixture: STOP_REASONS\'ın her nedeni bir kez, hepsi ayrıştırılır', () => {
+    const stops = read('ui-stream-v1-stops').filter(p => p.type === 'data-stop');
+    expect(stops.map(p => parseDataStop(p)?.reason)).toEqual([...STOP_REASONS]);
+  });
+
+  it('bilinmeyen kind / neden yok sayılır; dış page_url düşer', () => {
+    expect(parseDataToolResult({ type: 'data-tool-result', id: 's1', data: { kind: 'chart', ok: true } })).toBeNull();
+    expect(parseDataToolResult({ type: 'data-tool-result', id: 'b1', data: { kind: 'text', ok: true } })).toBeNull();
+    expect(parseDataToolResult({ type: 'data-tool-result', id: 's1', data: 'x' })).toBeNull();
+    expect(parseDataToolResult({ type: 'data-tool-result', id: 's1', data: { kind: 'text', ok: true, page_url: '//evil.example' } })).toEqual({ id: 's1', kind: 'text', ok: true });
+    expect(parseDataStop({ type: 'data-stop', data: { reason: 'later', calls: 1, rounds: 1, elapsed_ms: 1 } })).toBeNull();
+    expect(parseDataStop({ type: 'data-stop', data: { reason: 'stop', calls: '1', rounds: 1, elapsed_ms: 1 } })).toBeNull();
+    expect(TOOL_RESULT_KINDS).toEqual(['text', 'evidence', 'error', 'skipped']);
+  });
+
+  // Go kapalı kümeleri (part.go StopReasons, tool_result.go ToolResultKinds) ile eşit.
+  it('kapalı kümeler Go kaynağıyla eşit', () => {
+    const part = readFileSync(join(ROOT, 'internal', 'cosre', 'uistream', 'part.go'), 'utf8');
+    const m = /StopReasons = \[\]string\{([^}]*)\}/.exec(part);
+    expect(m?.[1].split(',').map(s => s.trim().replace(/"/g, ''))).toEqual([...STOP_REASONS]);
+    const tool = readFileSync(join(ROOT, 'internal', 'cosre', 'uistream', 'tool_result.go'), 'utf8');
+    for (const k of TOOL_RESULT_KINDS) expect(tool).toContain(`= "${k}"`);
+  });
 });

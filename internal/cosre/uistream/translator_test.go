@@ -95,7 +95,16 @@ func TestTranslateSequences(t *testing.T) {
 			name: "skipped step-result stays inside output",
 			evs:  []ev{{"step-result", map[string]any{"i": 3, "tool": "x", "ok": false, "skipped": true, "reason": "bütçe"}}},
 			want: []string{pStart, pStartStep,
-				`{"dynamic":true,"output":{"ok":false,"reason":"bütçe","skipped":true},"toolCallId":"s3","type":"tool-output-available"}`},
+				`{"dynamic":true,"output":{"ok":false,"reason":"bütçe","skipped":true},"toolCallId":"s3","type":"tool-output-available"}`,
+				`{"data":{"kind":"skipped","ok":false,"reason":"bütçe","tool":"x"},"id":"s3","type":"data-tool-result"}`},
+		},
+		{
+			name: "stop → data-stop before finish",
+			evs: []ev{{"stop", map[string]any{"reason": "round_cap", "calls": 6, "rounds": 5, "elapsed_ms": 1200}},
+				{"done", map[string]bool{"ok": true}}},
+			want: []string{pStart, pStartStep,
+				`{"data":{"calls":6,"elapsed_ms":1200,"reason":"round_cap","rounds":5},"id":"stop","type":"data-stop"}`,
+				`{"type":"finish-step"}`, `{"finishReason":"stop","type":"finish"}`},
 		},
 		{
 			name: "deltas share one segment; reset retracts it; next delta opens a fresh one",
@@ -307,19 +316,34 @@ func TestTranslateTypedPayload(t *testing.T) {
 	}
 	tr := NewTranslator()
 	parts := tr.Translate("step-result", stepRes{I: 4, Tool: "t", OK: true})
-	b, _ := json.Marshal(parts[len(parts)-1])
+	b, _ := json.Marshal(parts[len(parts)-2])
 	if string(b) != `{"dynamic":true,"output":{"ok":true},"toolCallId":"s4","type":"tool-output-available"}` {
+		t.Fatalf("%s", b)
+	}
+	b, _ = json.Marshal(parts[len(parts)-1])
+	if string(b) != `{"data":{"kind":"text","ok":true,"tool":"t"},"id":"s4","type":"data-tool-result"}` {
 		t.Fatalf("%s", b)
 	}
 }
 
+// araç seti dilim 1 — bilinen her tür kendi parçasına çevrilir; yeni iki
+// parça (data-tool-result, data-stop) beklenen türden üretilir.
 func TestKnownKindsAreTranslatedNotWrapped(t *testing.T) {
+	want := map[string]string{"step-result": "data-tool-result", "stop": "data-stop"}
 	for kind := range KnownKinds {
 		tr := NewTranslator()
-		for _, p := range tr.Translate(kind, map[string]any{"i": 1}) {
+		parts := tr.Translate(kind, map[string]any{"i": 1, "reason": "stop"})
+		saw := false
+		for _, p := range parts {
 			if p["type"] == "data-unknown" {
 				t.Errorf("%s data-unknown'a düştü", kind)
 			}
+			if p["type"] == want[kind] {
+				saw = true
+			}
+		}
+		if want[kind] != "" && !saw {
+			t.Errorf("%s → %s üretmedi: %v", kind, want[kind], parts)
 		}
 	}
 }

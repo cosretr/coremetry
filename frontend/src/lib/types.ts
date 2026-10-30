@@ -7445,6 +7445,14 @@ export interface ChatMessage {
    * asistan): Geçmiş'ten açılan konuşma "Kod" kilidini bundan kurar.
    */
   codeRead?: boolean;
+  /**
+   * CoSRE v2 araç seti dilim 1 — `data-tool-result` kayıtları (yalnız asistan,
+   * yalnız v2). Sunucu kompakt saklar: `text` düşer, ≤ 12 kayıt / 4 KB
+   * (internal/api/ai_conversations_v2parts.go).
+   */
+  toolResults?: { id: string; data: CosreToolResult }[];
+  /** CoSRE v2 araç seti dilim 1 — `data-stop` (yalnız asistan, yalnız v2). */
+  stop?: CosreStop;
 }
 
 /**
@@ -8120,6 +8128,51 @@ export interface ChatTurn extends ChatMessage {
    * v1 akışı doldurmaz; arşiv taşımaz.
    */
   budget?: CosreStepBudget;
+}
+
+/** CoSRE v2 araç seti dilim 1 — `data-tool-result.data.kind` kapalı kümesi
+ *  (Go uistream.ToolResultKinds; lib/cosre/protocol.ts TOOL_RESULT_KINDS). */
+export type CosreToolResultKind = 'text' | 'evidence' | 'error' | 'skipped';
+
+/** CoSRE v2 araç seti dilim 1 — `data-tool-result{id:"s<i>"}` (≤ 2 KB; Go
+ *  internal/cosre/uistream/tool_result.go). Bilinmeyen kind ayrıştırılmaz. */
+export interface CosreToolResult {
+  /** toolCallId ile aynı `s<i>`. */
+  id: string;
+  kind: CosreToolResultKind;
+  tool?: string;
+  ok: boolean;
+  page_url?: string;
+  duration_ms?: number;
+  bytes?: number;
+  truncated?: boolean;
+  /** text / error: önizleme (arşivde yok — sunucu kompakt tutar). */
+  text?: string;
+  /** skipped: yürütülmeme nedeni. */
+  reason?: string;
+  /** evidence: kanıt zarfının özeti. */
+  source?: string;
+  query?: string;
+  query_kind?: string;
+  rows?: number;
+  series?: number;
+  hop?: string;
+  env?: string;
+  cluster?: string;
+  window?: unknown;
+  evidence_count?: number;
+}
+
+/** CoSRE v2 araç seti dilim 1 — `data-stop.data.reason` kapalı kümesi (Go uistream.StopReasons). */
+export type CosreStopReason =
+  | 'stop' | 'round_cap' | 'call_cap' | 'cancelled' | 'deadline' | 'approval_pending' | 'error' | 'token_budget';
+
+/** CoSRE v2 araç seti dilim 1 — `data-stop`: döngünün neden durduğu (her çıkışta). */
+export interface CosreStop {
+  reason: CosreStopReason;
+  calls: number;
+  rounds: number;
+  elapsed_ms: number;
 }
 
 /** v0.10.1656 — `data-budget` (internal/cosre/uistream; Go chat döngüsü bütçesi). */

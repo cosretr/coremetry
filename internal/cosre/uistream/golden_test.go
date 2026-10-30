@@ -35,7 +35,13 @@ var update = flag.Bool("update", false, "rewrite testdata/cosre/*.sse")
 //
 // ui-stream-v1-approval (agent-core S4) — onay bekleyen araç: s3 girdisi var,
 // çıktısı yok; eşli data-approval{toolCallId:s3}; finish 'tool-calls'.
-var goldenFixtures = []string{"ui-stream-v1", "ui-stream-v1-error", "ui-stream-v1-closed", "ui-stream-v1-reset", "ui-stream-v1-reset2", "ui-stream-v1-approval"}
+//
+// ui-stream-v1-stops (araç seti dilim 1, tools-audit §10 G2) — data-stop
+// sözlüğü: StopReasons'ın her nedeni için bir satır (gerçek akışta tek
+// data-stop olur; aynı id öncekinin yerine geçer). Gerçekçi akışlar ayrıca
+// kendi nedenini taşır: ana fixture call_cap, error deadline, approval
+// approval_pending.
+var goldenFixtures = []string{"ui-stream-v1", "ui-stream-v1-error", "ui-stream-v1-closed", "ui-stream-v1-reset", "ui-stream-v1-reset2", "ui-stream-v1-approval", "ui-stream-v1-stops"}
 
 func fixtureDir() string { return filepath.Join("..", "..", "..", "testdata", "cosre") }
 

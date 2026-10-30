@@ -1098,7 +1098,10 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 		}
 		return chatDegenFallbackAnswer(pre, stepDigests)
 	}
+	// araç seti dilim 1 (chat_stop_event.go) — her break bir çıkış nedeni yazar.
+	exitReason, exitRounds := stopNone, 0
 	for round := 0; round < maxRounds; round++ {
+		exitRounds = round + 1
 		tctx, endTurn := cspan.turn(ctx, round, overflowRetried) // v0.10.425 — ai.chat.turn
 		// v0.10.1273 — final turun metni canlı akar (chat_step_phase.go chatLoopTurn).
 		turn, _, err := s.loopTurn(tctx, loopPrompt, stepInput{
@@ -1146,6 +1149,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 				msg = chatOverflowMessageTR(overflowRetried)
 			}
 			emit("error", map[string]string{"error": msg})
+			exitReason = ctxExitReason(dctx.Err(), stopModelError)
 			break
 		}
 		// No tool calls → this turn's text is the final answer (plus any
@@ -1175,6 +1179,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			xch.noteFinalCall(loopCallID) // v0.10.1280 — answer.callId
 			emit("answer", withAnswerFollowups(withAnswerEvidence(chatAnswerEvent(finalText, exchangeID, links,
 				answerOpenHref(lastUserText(req.Messages), loopOpen)), loopEvidence), s.chatLoopFollowups(ctx, fuFacts, req.Messages, pageCtx))) // v0.10.1291
+			exitReason = stopAnswered
 			break
 		}
 		// Record the assistant's tool-call turn, then execute each
@@ -1427,6 +1432,12 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			// ctx turun SON çağrısında bittiyse de (skipped yok) aynı son.
 			lastErr = ctx.Err()
 			emit("error", map[string]string{"error": chatCancelledMessageTR(lastErr, exchangeMax)})
+			exitReason = ctxExitReason(lastErr, stopCancelled)
+			break
+		}
+		if reason == stopApprovalPending {
+			// agent-core S4 — onay bekleniyor: model yeniden çağrılmaz (bugün ulaşılmaz).
+			exitReason = reason
 			break
 		}
 		conv = append(conv, copilot.ChatMessage{Role: "user", ToolResults: results})
@@ -1511,6 +1522,10 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 				emit("answer", withAnswerFollowups(withAnswerEvidence(chatAnswerEvent(finalText, exchangeID, links,
 					answerOpenHref(lastUserText(req.Messages), loopOpen)), loopEvidence), s.chatLoopFollowups(ctx, fuFacts, req.Messages, pageCtx))) // v0.10.1291
 			}
+			exitReason = reason // tavan; tavan turu alışveriş tavanına dayandıysa deadline
+			if err2 != nil {
+				exitReason = ctxExitReason(dctx.Err(), reason)
+			}
 			break // tavan turu son turdur (tur ya da çağrı tavanı)
 		}
 	}
@@ -1528,6 +1543,10 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// eklenir (explain yolunun sözleşmesi); okunmadıysa bayt bayt eski örnek.
 	s.copilot.RecordUsage(copilot.WithCallID(ctx, loopCallID), chatT0, totalIn, totalOut, totalCached, status, errMsg, chatPromptSample(lastUserText(req.Messages), codeReads), finalText)
 
+	if exitReason == stopNone {
+		exitReason = stopRoundCap // savunma: döngü break'siz yalnız turlar bitince biter
+	}
+	emit("stop", chatStopEvent(exitReason, maxCalls-callsLeft, exitRounds, time.Since(chatT0))) // araç seti dilim 1 — v1 yazıcısı düşürür
 	emit("done", map[string]bool{"ok": lastErr == nil})
 }
 

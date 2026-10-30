@@ -8,6 +8,8 @@ data: {"dynamic":true,"input":{"argsText":"{\"service\":\"orders-api\"}"},"toolC
 
 data: {"dynamic":true,"output":{"bytes":2,"durationMs":5,"ok":true,"preview":"{}","truncated":false},"toolCallId":"s1","type":"tool-output-available"}
 
+data: {"data":{"bytes":2,"duration_ms":5,"kind":"text","ok":true,"text":"{}","tool":"get_service_health"},"id":"s1","type":"data-tool-result"}
+
 data: {"id":"t1","type":"text-start"}
 
 data: {"delta":"Yarım taslak","id":"t1","type":"text-delta"}
@@ -15,6 +17,8 @@ data: {"delta":"Yarım taslak","id":"t1","type":"text-delta"}
 data: {"data":{"class":"deadline","raw":"Bu alışveriş 3 dakika tavanına dayandı ve durduruldu. Soru muhtemelen çok geniş: tek bir servise ya da daha dar bir zaman aralığına sorun."},"id":"error","type":"data-error"}
 
 data: {"errorText":"Bu alışveriş 3 dakika tavanına dayandı ve durduruldu. Soru muhtemelen çok geniş: tek bir servise ya da daha dar bir zaman aralığına sorun.","type":"error"}
+
+data: {"data":{"calls":1,"elapsed_ms":180000,"reason":"deadline","rounds":1},"id":"stop","type":"data-stop"}
 
 data: {"id":"t1","type":"text-end"}
 
