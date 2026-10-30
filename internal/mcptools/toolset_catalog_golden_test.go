@@ -123,6 +123,9 @@ func catalogVariants(t *testing.T, d Deps, prefix string) map[string]catalogGold
 		prefix + "/chat_auto":      goldenEntry(t, ChatToolListFor(d, "")),
 		prefix + "/chat_simple":    goldenEntry(t, ChatToolListFor(d, "simple")),
 		prefix + "/mcp_tools_list": goldenRaw(mcpToolsListRaw(t, srv)),
+		// CoSRE v2 araç seti dilim 2 (tools-audit §10 G10) — v2 modelinin
+		// gördüğü alt küme; eski anahtarlar bu eklemeyle DEĞİŞMEZ.
+		prefix + "/v2": goldenEntry(t, V2ToolList(d, "full")),
 	}
 }
 

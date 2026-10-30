@@ -70,6 +70,13 @@ type chatEvalMode struct {
 	OnTool func(name string, args json.RawMessage, oc agenttools.Outcome)
 	// Sink — turun sonucu (recordChatExchange'in yerine). nil = sonuç atılır.
 	Sink func(evalAgentOutcome)
+	// UserTeam — CoSRE v2 araç seti dilim 2 (tools-audit §10 G8): vakanın
+	// fikstür users.team'i; doluysa koşucu v2 döngüsünü işaretler ve kullanıcı
+	// kapsamı users tablosu okunmadan bu takımdan çözülür. "" = üretim yolu.
+	UserTeam string
+	// OnScope — v2 döngüsünün çözdüğü kullanıcı kapsamı (puanlama: her çağrının
+	// services ⊆ kapsam). nil = bildirim yok.
+	OnScope func(userScope)
 }
 
 // evalAgentOutcome — ajan kipi turun sonucu (chatExchange'den, kilit altında

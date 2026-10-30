@@ -37,6 +37,9 @@ type stepInput struct {
 	Conv  []copilot.ChatMessage
 	Specs []copilot.ToolSpec
 	Role  string
+	// V2 — CoSRE v2 araç seti dilim 2 (chat_user_scope.go): v2 döngüsünün
+	// alışveriş planı; v1'de nil (zincir bayt bayt eski).
+	V2 *v2LoopPlan
 }
 
 // stepPlan — bir turun ayarı. Sıfır değer = aynen (dış ayar).
@@ -123,19 +126,27 @@ func (p stepPlan) planSpecs(in stepInput) []copilot.ToolSpec {
 // narrowSpecs — SAF: sonuç `full` sırasını korur ve yalnız ondan seçer
 // (araç eklenemez); `subset`te olan ya da konuşmada çağrılmış her araç
 // kalır (keepReferenced: çağrılmış aracın tanımı düşürülemez).
+//
+// Araç seti dilim 2 — `subset`teki araç SUBSET'in tanımıyla gelir: plan bir
+// aracın şemasını DARALTABİLİR (v2: explain_log_spike.query düşer). Ad yine
+// `full`dan gelmek zorunda (ekleme yok); yalnız konuşmada çağrılmış, subsette
+// olmayan araç `full` tanımını korur.
 func narrowSpecs(full, subset []copilot.ToolSpec, conv []copilot.ChatMessage) []copilot.ToolSpec {
-	keep := make(map[string]bool, len(subset))
+	inSub := make(map[string]copilot.ToolSpec, len(subset))
 	for _, s := range subset {
-		keep[s.Name] = true
+		inSub[s.Name] = s
 	}
+	called := map[string]bool{}
 	for _, m := range conv {
 		for _, tc := range m.ToolCalls {
-			keep[tc.Name] = true
+			called[tc.Name] = true
 		}
 	}
 	out := make([]copilot.ToolSpec, 0, len(subset))
 	for _, s := range full {
-		if keep[s.Name] {
+		if sub, ok := inSub[s.Name]; ok {
+			out = append(out, sub)
+		} else if called[s.Name] {
 			out = append(out, s)
 		}
 	}
@@ -145,7 +156,11 @@ func narrowSpecs(full, subset []copilot.ToolSpec, conv []copilot.ChatMessage) []
 // loopTurn — döngünün TEK model-çağrı kapısı: plan → ctx, prompt eki, spec.
 // Turun gerçek sistem prompt'u da döner (cevap süzgeci/düşüş onu yeniden kullanır).
 func (s *Server) loopTurn(ctx context.Context, prompt string, in stepInput, emit func(string, any)) (copilot.ChatTurn, string, error) {
-	plan := defaultPrepare(in)
+	prep := defaultPrepare
+	if in.V2 = v2LoopPlanFrom(ctx); in.V2 != nil {
+		prep = v2Prepare // araç seti dilim 2 — v2 alt kümesi + kapsam eki
+	}
+	plan := prep(in)
 	sys := prompt + plan.SystemAddendum
 	turn, err := s.chatLoopTurn(plan.planCtx(ctx), sys, in.Conv, plan.planSpecs(in), emit)
 	return turn, sys, err

@@ -2,6 +2,8 @@ data: {"messageId":"01M62F9N000000000000000000","type":"start"}
 
 data: {"type":"start-step"}
 
+data: {"data":{"count":2,"reason":"team","services":["billing-api","orders-api"],"team":"acme-team","unscoped":false},"id":"scope","type":"data-scope"}
+
 data: {"data":{"i":1,"label":"araştırma bütçesi: 6 araç · 5 tur"},"id":"s1","type":"data-step"}
 
 data: {"data":{"executed":0,"exhausted":false,"maxCalls":6,"maxRounds":5,"roundsUsed":0,"skipped":0,"slotsUsed":0},"id":"budget","type":"data-budget"}

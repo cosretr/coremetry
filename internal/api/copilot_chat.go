@@ -685,6 +685,10 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// profile geçerse o profilin araç setiyle bir kez daha çağrılır (aşağıda).
 	nativeTools := func(toolset string) ([]mcp.Tool, bool) {
 		tools := toolsForRole(mcptools.ChatToolListFor(s.mcpDeps(), toolset), role) // v0.10.993 — dış-yalnız araçlar (bubble_up) hariç
+		if cosreV2Marked(ctx) {
+			// araç seti dilim 2 (chat_user_scope.go) — v2-yalnız araçlar (list_my_services); v1 kataloğu aynen.
+			tools = append(tools, toolsForRole(mcptools.V2OnlyTools(s.mcpDeps()), role)...)
+		}
 		if evm != nil {
 			tools = evalAgentTools(tools) // v0.10.1316 — sohbet bağlamı araçları düşer
 		}
@@ -986,6 +990,26 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// deneme ekleri (chat_answer_degen.go).
 	echoPhrases := chatEchoPhrases(append(chatLoopPreambles(screenCtx, pageCtx, pinnedCtx, cst.ctx),
 		copilot.ChatRoundCapAddendum(), copilot.ChatDegenRetryAddendum())...)
+	// araç seti dilim 2 (chat_user_scope.go) — YALNIZ v2: kullanıcı kapsamı bir
+	// kez çözülür, data-scope olarak söylenir ve döngü planına (prepareStep) iner.
+	// v1'de işaret yok → dal koşmaz, akış bayt bayt eski.
+	if cosreV2Marked(ctx) {
+		teamOverride := ""
+		if evm != nil {
+			teamOverride = evm.UserTeam
+		}
+		us := s.resolveUserScope(ctx, requestScopeEscape(req.Context.Scope, req.Context.Command), teamOverride)
+		if evm != nil && evm.OnScope != nil {
+			evm.OnScope(us)
+		}
+		emit(chatScopeEventKind, us.event())
+		v2p := &v2LoopPlan{Scope: us, Addendum: userScopeAddendum(us, req.Messages)}
+		if v2p.Addendum != "" {
+			echoPhrases = chatEchoPhrases(append(chatLoopPreambles(screenCtx, pageCtx, pinnedCtx, cst.ctx),
+				copilot.ChatRoundCapAddendum(), copilot.ChatDegenRetryAddendum(), v2p.Addendum)...)
+		}
+		ctx = withV2LoopPlan(ctx, v2p)
+	}
 	if isTraceFollowUp {
 		// v0.10.948 — sayı denetiminin tohumu: açıklamasız AKTİF BAĞLAM + ekran ve
 		// sayfa önsözleri + operatör turları. Önceki açıklama YOK (ilk cevabın sayı uyarısı
@@ -1218,6 +1242,9 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			// v0.10.1274 — ekran kapsamı argümana (deterministik); çip GERÇEKTEN
 			// çalışan argümanı gösterir, tekrar muhafızı da onu anahtarlar.
 			cargs, scopeApplied := applyScreenContext(tc.Name, tc.Input, toolSchemas[tc.Name], toolScope, time.Now())
+			if v2p := v2LoopPlanFrom(ctx); v2p != nil {
+				cargs, _ = applyUserScope(tc.Name, cargs, toolSchemas[tc.Name], v2p.Scope) // araç seti dilim 2
+			}
 			stepN = emitStepChipInput(emit, tc.Name, string(cargs), "", cargs) // v0.10.1594 — argsJson (v2)
 			// v0.10.948 — İPTAL her çağrıdan ÖNCE denetlenir: Executor.Call ilk iş
 			// ctx'e bakar (Kind cancelled, handler çağrılmaz); turun kalanları da

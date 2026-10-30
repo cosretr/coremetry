@@ -280,8 +280,9 @@ func TestEvalAgentLoopProbeDecision(t *testing.T) {
 		t.Fatal("döngü sondası guided + niyet atlar")
 	}
 	for _, c := range loadEvalset(t) {
-		if evalAgentCase(c) && (!evalAgentLoopProbe(c) || c.BindService == "" || strings.TrimSpace(c.Note) == "") {
-			t.Errorf("%s: agent_loop.json vakaları etiketli döngü sondası (expectTier loop + bindService + note)", c.ID)
+		// araç seti dilim 2 — userTeam vakası servise değil fikstür TAKIMINA bağlanır.
+		if evalAgentCase(c) && (!evalAgentLoopProbe(c) || (c.BindService == "" && c.UserTeam == "") || strings.TrimSpace(c.Note) == "") {
+			t.Errorf("%s: agent_loop.json vakaları etiketli döngü sondası (expectTier loop + bindService|userTeam + note)", c.ID)
 		}
 	}
 }

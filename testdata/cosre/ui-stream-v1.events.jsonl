@@ -1,3 +1,4 @@
+{"kind":"scope","payload":{"unscoped":false,"reason":"team","team":"acme-team","services":["billing-api","orders-api"],"count":2}}
 {"kind":"step","payload":{"i":1,"label":"araştırma bütçesi: 6 araç · 5 tur","budget":{"maxCalls":6,"maxRounds":5,"slotsUsed":0,"executed":0,"skipped":0,"roundsUsed":0,"exhausted":false}}}
 {"kind":"step","payload":{"i":2,"tool":"get_service_health","args":"{\"service\":\"orders-api\"}","argsJson":{"service":"orders-api"},"phase":"Sağlık"}}
 {"kind":"block","payload":{"id":"b1","type":"link","seq":1,"final":true,"payload":{"label":"orders-api · Overview","href":"/service?name=orders-api"}}}

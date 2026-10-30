@@ -53,7 +53,7 @@ func ctxExitReason(err error, fallback stopReason) stopReason {
 }
 
 // v2OnlyEventKinds — v1 tel sözleşmesinde olmayan türler; v1 yazıcısı düşürür.
-var v2OnlyEventKinds = map[string]bool{chatStopEventKind: true}
+var v2OnlyEventKinds = map[string]bool{chatStopEventKind: true, chatScopeEventKind: true} // dilim 2: scope
 
 // v1OnlySink — v1 yazıcısının süzgeci: v2'ye özgü türleri yazmaz.
 type v1OnlySink struct{ em *blocks.Emitter }

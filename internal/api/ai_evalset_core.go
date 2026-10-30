@@ -83,6 +83,10 @@ type evalExpect struct {
 	// Kısa-cevap sözleşmesi taşıyan yüzeyler için (OffTopicGeneral: "en
 	// fazla 2-3 cümle"); model-bağımsız, deterministik.
 	MaxAnswerRunes int `json:"maxAnswerRunes,omitempty"`
+	// ServicesInScope — CoSRE v2 araç seti dilim 2 (yalnız ajan kipi + userTeam):
+	// yürüyen her çağrının services[] / service argümanı kullanıcı kapsamının
+	// alt kümesi (tools-audit §10 G8; ai_evalset_agent_scope.go).
+	ServicesInScope bool `json:"servicesInScope,omitempty"`
 }
 
 type evalCase struct {
@@ -117,6 +121,10 @@ type evalCase struct {
 	// için döngü resolve_entity'de "bulunamadı" ile DOĞRU biçimde durur ve
 	// araç seçimi hiç ölçülmezdi.
 	BindService string `json:"bindService,omitempty"`
+	// UserTeam — CoSRE v2 araç seti dilim 2 (yalnız ajan kipi): fikstür
+	// users.team. Doluysa vaka v2 döngüsünden koşar ve kullanıcı kapsamı bu
+	// takımdan çözülür (chatEvalMode.UserTeam).
+	UserTeam string `json:"userTeam,omitempty"`
 	// Note — v0.10.1476: beklenti değişikliğinin yazılı gerekçesi (insan
 	// okur; koşucu kullanmaz). Bir beklenti gevşetildiyse neden burada.
 	Note string `json:"note,omitempty"`

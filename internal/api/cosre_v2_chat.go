@@ -47,8 +47,11 @@ func (s *Server) requireCosreV2(h http.HandlerFunc) http.HandlerFunc {
 
 // cosreV2Chat — gövde duvarı (256 KiB → 413) copilotChatWith'in başında,
 // v1 ile ortak (v0.10.1604).
+//
+// Araç seti dilim 2 (chat_user_scope.go) — istek ctx'i v2 işareti taşır:
+// kullanıcı kapsamı, v2-yalnız araçlar ve v2 model alt kümesi yalnız bu ucta.
 func (s *Server) cosreV2Chat(w http.ResponseWriter, r *http.Request) {
-	s.copilotChatWith(w, r, v2ChatSink)
+	s.copilotChatWith(w, r.WithContext(withCosreV2Loop(r.Context())), v2ChatSink)
 }
 
 // v2MessageIDSeam — test dikişi: golden'lar `start` messageId'sini sabitler

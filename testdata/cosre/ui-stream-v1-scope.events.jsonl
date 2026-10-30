@@ -1,0 +1,10 @@
+{"kind": "scope", "payload": {"unscoped": false, "reason": "team", "team": "acme-team", "services": ["orders-api"], "count": 1}}
+{"kind": "scope", "payload": {"unscoped": true, "reason": "no_identity", "count": 0}}
+{"kind": "scope", "payload": {"unscoped": true, "reason": "no_team", "count": 0}}
+{"kind": "scope", "payload": {"unscoped": true, "reason": "no_services", "count": 0, "team": "acme-team"}}
+{"kind": "scope", "payload": {"unscoped": true, "reason": "disabled", "count": 0}}
+{"kind": "scope", "payload": {"unscoped": true, "reason": "escape", "count": 0}}
+{"kind": "scope", "payload": {"unscoped": true, "reason": "error", "count": 0}}
+{"kind": "answer", "payload": {"text": "Hangi takım?"}}
+{"kind": "stop", "payload": {"reason": "stop", "calls": 0, "rounds": 1, "elapsed_ms": 900}}
+{"kind": "done", "payload": {"ok": true}}

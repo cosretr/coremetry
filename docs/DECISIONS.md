@@ -12102,3 +12102,20 @@ Evidence gecikme sahibini kutular (hata kaynağı önce). `get_trace` adımları
 self_ms, share_pct, target, target_source, peer, http_status, top) + `critical_path_top_external_wait`. Ek CH okuması
 yok; redaksiyon yok. Kapsam yalnız trace açıklaması yolu (Explain / çekmece / chat trace_by_id / yapıştırılan id);
 Exceptions örnek trace'i ve rehberli drill ayrı onay. İstem kuralı + mekanik önek ayrı sürüm (R3).
+
+## 2026-10-30 — v0.10.1683 — CoSRE v2 `user_scope`: "benim servislerim" = ownerTeam VEYA sreTeam (G9)
+
+**Bağlam.** `docs/cosre/tools-audit.md` §10 G9, Q1/Q2 (operatör onayı 2026-10-30). Kod tabanında iki sahiplik
+semantiği yan yana: sohbet `servicesForUserTeam` / `mcptools.TeamServiceNames` ownerTeam **VEYA** sreTeam
+(birleşim); Inbox `problems_filter.go` owner ve SRE süzgeçlerini **VE** ile bağlar.
+
+**Karar.** v2 sohbetinin varsayılan kullanıcı kapsamı (`user_scope`) VEYA semantiğini kullanır: oturum kimliği →
+`users.team` → `team_aliases` → `service_metadata` ownerTeam VEYA sreTeam (`TeamServiceNames`, sohbet emsali;
+"benim servisim" iki rolün birleşimi). Inbox'ın VE süzgeci DEĞİŞMEZ — iki yüzey iki ayrı soruyu cevaplar ve
+karıştırmak Inbox'ı sessizce genişletirdi. Kapsam alışveriş başına bir kez çözülür, `data-scope` parçasıyla söylenir
+ve `services[]` (+ `team`) argümanı olarak yalnız şeması bunu alan araçlara, model vermediyse enjekte edilir; model
+başka servis/takım adlandırırsa onunki kalır. Takım/servis/kimlik yoksa kapsam SESSİZCE genişlemez:
+`data-scope{unscoped:true, reason}` + model konuşmada bir kez "Hangi takım?" diye sorar. Kaçış: alışveriş başına
+`@`-kapsam / `/`-komut; global `system_settings["ai.userScope"].enabled=false` (varsayılan açık). v1 ucu ve dış MCP
+sunucusu etkilenmez; v2 model alt kümesi (G10/Q7: search_traces, search_logs, query_metric, list_metric_labels
+gizli; explain_log_spike.query düşer) prepareStep planıyla, registry silinmeden.

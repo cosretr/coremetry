@@ -153,6 +153,10 @@ type evalAgentStats struct {
 	// Offered — v0.10.1476: serbest döngünün modele sunduğu araç adları
 	// (chatEvalMode.OnCatalog); nil = döngü kataloğu kurulmadı.
 	Offered []string
+	// Scope / ScopeCalls — araç seti dilim 2 (ai_evalset_agent_scope.go): v2
+	// döngüsünün çözdüğü kullanıcı kapsamı + yürüyen çağrıların servisleri.
+	Scope      *userScope
+	ScopeCalls []evalScopeCall
 }
 
 // CapSkipped — tavanı aşıp Executor'a hiç gitmeyen çağrı sayısı.
@@ -193,6 +197,7 @@ func (c *evalAgentCollector) onTool(name string, args json.RawMessage, oc agentt
 	case agenttools.KindRepeated:
 		c.st.Repeated++
 	}
+	c.noteScopeCall(name, args, oc) // araç seti dilim 2
 	if !oc.Executed {
 		return
 	}
@@ -431,10 +436,14 @@ func (s *Server) evalsetServerAgent(job *evalJob) evalAgentFn {
 			SkipIntent: evalAgentSkipIntent(c), // v0.10.1321
 			LoopProbe:  evalAgentLoopProbe(c),  // v0.10.1476
 			OnTurn:     col.onTurn, OnTool: col.onTool, Sink: col.sink, OnCatalog: col.onCatalog,
+			UserTeam: c.UserTeam, OnScope: col.onScope, // araç seti dilim 2 — fikstür users.team
 		}
 		cctx := copilot.WithRecordSurfacePrefix(ctx, evalsetSurfacePrefix)
 		cctx = auth.ContextWithClaims(cctx, &auth.Claims{UserID: job.userID, Email: job.userEmail, Role: job.userRole})
 		cctx = withChatEvalMode(cctx, em)
+		if c.UserTeam != "" {
+			cctx = withCosreV2Loop(cctx) // araç seti dilim 2 — kullanıcı kapsamı yalnız v2 döngüsünde
+		}
 		cctx, cancel := context.WithTimeout(cctx, evalAgentCaseMax(s.copilot.ClientTimeout()))
 		defer cancel()
 		body, err := json.Marshal(evalAgentRequest(c))
@@ -473,7 +482,7 @@ func runEvalAgentCase(ctx context.Context, agent evalAgentFn, c evalCase, toolse
 	if o.BoundTo != "" { // v0.10.1476 — koşucunun bağladığı adla AYNI vaka puanlanır
 		c = evalBindCase(c, c.BindService, o.BoundTo)
 	}
-	if gap := evalAgentHarnessGap(c, st.Offered); gap != "" && err == nil {
+	if gap := evalAgentHarnessGap(c, st.Offered) + evalScopeHarnessGap(c, st); gap != "" && err == nil {
 		return evalCaseOutcome{Skipped: true, SkipReason: gap, User: c.User, Answer: o.Answer, Toolset: toolset, Mode: evalModeAgent}
 	}
 	out := evalCaseOutcome{User: c.User, Answer: o.Answer, Err: err, LatencyMs: time.Since(t0).Milliseconds(), Toolset: toolset, Mode: evalModeAgent}
@@ -488,6 +497,7 @@ func runEvalAgentCase(ctx context.Context, agent evalAgentFn, c evalCase, toolse
 		out.Fails = []string{"error: " + err.Error()}
 	} else {
 		out.Fails, unknown = scoreEvalAgentCase(c, o, st, st.ToolText)
+		out.Fails = append(out.Fails, evalScopeFails(c, st)...) // araç seti dilim 2 (G8)
 	}
 	out.Unknown = unknown
 	trail := evalAgentTrailFrom(c, o, st, out.LatencyMs)

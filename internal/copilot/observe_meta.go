@@ -73,23 +73,28 @@ var promptVersionRegistry = map[string]string{
 	"systemChatRoundCap":         systemChatRoundCap,
 	"systemChatRoundCapAddendum": systemChatRoundCapAddendum, // v0.10.806
 	"chatDegenRetryAddendum":     chatDegenRetryAddendum,     // v0.10.1324 — yineleme sonrası araçsız deneme
-	"chatDeepAddendum":           chatDeepAddendum,           // v0.10.1150 — Derin düşün üslubu
-	"chatDeepLoopBudget":         chatDeepLoopBudget,         // v0.10.1150 — Derin düşün araç bütçesi
-	"sourceCodeChatAddendum":     sourceCodeChatAddendum,
-	"codeTurnAddendum":           codeTurnAddendum,        // v0.10.1461 — R2 kod turu
-	"codeResolveChatAddendum":    codeResolveChatAddendum, // v0.10.1210
-	"codeSearchChatAddendum":     codeSearchChatAddendum,  // v0.10.1210     // v0.10.1050 — read_source_code sunulunca
-	"wikiChatAddendum":           wikiChatAddendum,        // v0.10.1122 — search_wiki / read_wiki_page sunulunca
-	"cosreRulesAddendum":         cosreRulesAddendum,      // v0.10.1289 — operatör kuralı bloğu varken
-	"systemRuleProposal":         systemRuleProposal,      // v0.10.1289 — "bunu hatırla" kural önerisi
-	"systemChatAgentLoop":        systemChatAgentLoop,     // v0.10.482
-	"systemIntentClassify":       systemIntentClassify,
-	"IntentNoInstructionLine":    IntentNoInstructionLine,
-	"systemGeneralChat":          systemGeneralChat,
-	"systemWikiGeneral":          systemWikiGeneral,     // v0.10.1550
-	"systemRecordsAnswer":        systemRecordsAnswer,   // v0.10.1553
-	"systemOffTopicGeneral":      systemOffTopicGeneral, // v0.10.1458
-	"AnswerInTurkish":            AnswerInTurkish,
+	// CoSRE v2 araç seti dilim 2 — kullanıcı kapsamı ekleri (yalnız v2 döngüsü).
+	"chatUserScopeAddendumTmpl":     chatUserScopeAddendumTmpl,
+	"chatUserScopeAskTeamAddendum":  chatUserScopeAskTeamAddendum,
+	"chatUserScopeUnscopedAddendum": chatUserScopeUnscopedAddendum,
+	"ChatUserScopeAskMarker":        ChatUserScopeAskMarker, // "bir kez sor" sezgisinin işareti
+	"chatDeepAddendum":              chatDeepAddendum,       // v0.10.1150 — Derin düşün üslubu
+	"chatDeepLoopBudget":            chatDeepLoopBudget,     // v0.10.1150 — Derin düşün araç bütçesi
+	"sourceCodeChatAddendum":        sourceCodeChatAddendum,
+	"codeTurnAddendum":              codeTurnAddendum,        // v0.10.1461 — R2 kod turu
+	"codeResolveChatAddendum":       codeResolveChatAddendum, // v0.10.1210
+	"codeSearchChatAddendum":        codeSearchChatAddendum,  // v0.10.1210     // v0.10.1050 — read_source_code sunulunca
+	"wikiChatAddendum":              wikiChatAddendum,        // v0.10.1122 — search_wiki / read_wiki_page sunulunca
+	"cosreRulesAddendum":            cosreRulesAddendum,      // v0.10.1289 — operatör kuralı bloğu varken
+	"systemRuleProposal":            systemRuleProposal,      // v0.10.1289 — "bunu hatırla" kural önerisi
+	"systemChatAgentLoop":           systemChatAgentLoop,     // v0.10.482
+	"systemIntentClassify":          systemIntentClassify,
+	"IntentNoInstructionLine":       IntentNoInstructionLine,
+	"systemGeneralChat":             systemGeneralChat,
+	"systemWikiGeneral":             systemWikiGeneral,     // v0.10.1550
+	"systemRecordsAnswer":           systemRecordsAnswer,   // v0.10.1553
+	"systemOffTopicGeneral":         systemOffTopicGeneral, // v0.10.1458
+	"AnswerInTurkish":               AnswerInTurkish,
 
 	// v0.10.1330 — stack yokken operasyon kodu eki (kendi hizalama grubu).
 	"systemOperationCodeAddendum": systemOperationCodeAddendum,

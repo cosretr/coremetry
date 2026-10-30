@@ -1,0 +1,32 @@
+data: {"messageId":"01M62F9N000000000000000000","type":"start"}
+
+data: {"type":"start-step"}
+
+data: {"data":{"count":1,"reason":"team","services":["orders-api"],"team":"acme-team","unscoped":false},"id":"scope","type":"data-scope"}
+
+data: {"data":{"count":0,"reason":"no_identity","unscoped":true},"id":"scope","type":"data-scope"}
+
+data: {"data":{"count":0,"reason":"no_team","unscoped":true},"id":"scope","type":"data-scope"}
+
+data: {"data":{"count":0,"reason":"no_services","team":"acme-team","unscoped":true},"id":"scope","type":"data-scope"}
+
+data: {"data":{"count":0,"reason":"disabled","unscoped":true},"id":"scope","type":"data-scope"}
+
+data: {"data":{"count":0,"reason":"escape","unscoped":true},"id":"scope","type":"data-scope"}
+
+data: {"data":{"count":0,"reason":"error","unscoped":true},"id":"scope","type":"data-scope"}
+
+data: {"id":"t1","type":"text-start"}
+
+data: {"delta":"Hangi takım?","id":"t1","type":"text-delta"}
+
+data: {"id":"t1","type":"text-end"}
+
+data: {"data":{"calls":0,"elapsed_ms":900,"reason":"stop","rounds":1},"id":"stop","type":"data-stop"}
+
+data: {"type":"finish-step"}
+
+data: {"finishReason":"stop","type":"finish"}
+
+data: [DONE]
+

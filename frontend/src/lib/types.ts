@@ -8175,6 +8175,27 @@ export interface CosreStop {
   elapsed_ms: number;
 }
 
+/** CoSRE v2 araç seti dilim 2 — `data-scope.data.reason` kapalı kümesi (Go uistream.ScopeReasons).
+ *  'team' = kapsamlı; gerisi unscoped (sessiz genişleme yok, rozet gösterilir). */
+export type CosreScopeReason =
+  | 'team' | 'no_identity' | 'no_team' | 'no_services' | 'disabled' | 'escape' | 'error';
+
+/** CoSRE v2 araç seti dilim 2 — `data-scope`: alışverişin kullanıcı kapsamı
+ *  (users.team → ownerTeam VEYA sreTeam servisleri). services ≤ 20 ad; count tamamı. */
+export interface CosreScope {
+  unscoped: boolean;
+  reason: CosreScopeReason;
+  count: number;
+  team?: string;
+  services?: string[];
+  trimmed?: number;
+}
+
+/** CoSRE v2 araç seti dilim 2 — system_settings `ai.userScope` (GET /api/ai/user-scope; PUT admin). */
+export interface AIUserScopeSetting {
+  enabled: boolean;
+}
+
 /** v0.10.1656 — `data-budget` (internal/cosre/uistream; Go chat döngüsü bütçesi). */
 export interface CosreStepBudget {
   executed: number;

@@ -1328,6 +1328,12 @@ export const api = {
     request<import('./types').CosreV2Flag>(`/api/admin/cosre-v2`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     }),
+  // CoSRE v2 araç seti dilim 2 — v2 sohbetinin varsayılan kullanıcı kapsamı (GET her rol; PUT admin + audit).
+  aiUserScope: () => get<import('./types').AIUserScopeSetting>(`/api/ai/user-scope`),
+  putAIUserScope: (body: import('./types').AIUserScopeSetting) =>
+    request<import('./types').AIUserScopeSetting>(`/api/ai/user-scope`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    }),
   // v0.10.562 — Problem detayı insight şeridi (deterministik, 30 s cache).
   // v0.10.1529 (Problem standardı R2) — detay başlığı; ref = InboxItem.id biçimi
   // (problem:/exception:/anomaly:/incident:). null = bulunamadı.

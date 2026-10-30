@@ -11,7 +11,7 @@
 // uiStreamFixture.test.ts (paylaşılan testdata/cosre/*.sse) kırmızıya döner;
 // fixture yenilendiği commit'te bu dosya da güncellenir.
 
-import type { CosreStop, CosreStopReason, CosreToolResult, CosreToolResultKind } from '@/lib/types';
+import type { CosreScope, CosreScopeReason, CosreStop, CosreStopReason, CosreToolResult, CosreToolResultKind } from '@/lib/types';
 
 export const PROTOCOL_VERSION = 'v1';
 export const PROTOCOL_HEADER = 'x-vercel-ai-ui-message-stream';
@@ -46,6 +46,8 @@ export const DATA_PART_NAMES = [
   // araç seti dilim 1 (docs/cosre/tools-audit.md §10 G1/G2) — yapısal araç
   // sonucu (tek parça, kind içeride) + döngünün her çıkışında "neden durdum".
   'tool-result', 'stop',
+  // araç seti dilim 2 (tools-audit §3, Q1/Q2) — alışverişin kullanıcı kapsamı.
+  'scope',
   ...BLOCK_TYPES.map(t => `block-${t}` as const),
 ] as const;
 
@@ -56,6 +58,11 @@ export const TOOL_RESULT_KINDS = ['text', 'evidence', 'error', 'skipped'] as con
 export const STOP_REASONS = [
   'stop', 'round_cap', 'call_cap', 'cancelled', 'deadline', 'approval_pending', 'error', 'token_budget',
 ] as const satisfies readonly CosreStopReason[];
+
+/** data-scope `reason` kapalı kümesi (Go uistream.ScopeReasons). */
+export const SCOPE_REASONS = [
+  'team', 'no_identity', 'no_team', 'no_services', 'disabled', 'escape', 'error',
+] as const satisfies readonly CosreScopeReason[];
 
 /** data-tool-result tavanı (Go uistream.ToolResultMaxBytes). */
 export const TOOL_RESULT_MAX_BYTES = 2048;
@@ -94,6 +101,29 @@ export function parseDataStop(p: { type: string; data?: unknown }): CosreStop | 
   const c = finiteNum(calls), r = finiteNum(rounds), e = finiteNum(elapsed_ms);
   if (!isStopReason(reason) || c === undefined || r === undefined || e === undefined) return null;
   return { reason, calls: c, rounds: r, elapsed_ms: e };
+}
+
+const isScopeReason = (v: unknown): v is CosreScopeReason =>
+  typeof v === 'string' && (SCOPE_REASONS as readonly string[]).includes(v);
+
+/** data-scope → CosreScope; bilinmeyen neden, biçimsiz alan ya da çelişki
+ *  (kapsamlı 'team' ama unscoped:true, ya da tersi) null — rozet yanlış
+ *  kapsam iddia etmesin. services yalnız dize elemanlarını tutar. */
+export function parseDataScope(p: { type: string; data?: unknown }): CosreScope | null {
+  if (p.type !== 'data-scope' || !isRecord(p.data)) return null;
+  const { unscoped, reason, count, team, services, trimmed } = p.data;
+  const n = finiteNum(count);
+  if (typeof unscoped !== 'boolean' || !isScopeReason(reason) || n === undefined) return null;
+  if (unscoped === (reason === 'team')) return null;
+  const out: CosreScope = { unscoped, reason, count: n };
+  if (typeof team === 'string' && team !== '') out.team = team;
+  if (Array.isArray(services)) {
+    const names = services.filter((s): s is string => typeof s === 'string' && s !== '');
+    if (names.length > 0) out.services = names;
+  }
+  const tr = finiteNum(trimmed);
+  if (tr !== undefined && tr > 0) out.trimmed = tr;
+  return out;
 }
 
 export type UIStreamPartType = (typeof UI_STREAM_PART_TYPES)[number];

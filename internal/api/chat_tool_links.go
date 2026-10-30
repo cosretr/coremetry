@@ -30,6 +30,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/cilcenk/coremetry/internal/mcptools"
 )
 
 // toolLinkArgs — köprünün okuduğu TEK alt küme. Bilinmeyen alanlar
@@ -149,14 +151,20 @@ func toolResultDeepLink(tool, content string) (guidedAnswerLink, bool) {
 		label, prefix = "Aggregated'de aç", "/traces?"
 	case "search_logs": // v0.10.944 — okunan sorgunun birebir /logs bağlantısı
 		label, prefix = "Loglar'da aç", "/logs?"
+	case mcptools.ListMyServicesName: // araç seti dilim 2 — v2-yalnız; sonuç page_url taşır
+		label, prefix = "Servisler'de aç", "/services"
 	default:
 		return guidedAnswerLink{}, false
 	}
 	var r struct {
 		DeepLink string `json:"deep_link"`
+		PageURL  string `json:"page_url"`
 	}
 	if err := json.Unmarshal([]byte(content), &r); err != nil {
 		return guidedAnswerLink{}, false
+	}
+	if r.DeepLink == "" && tool == mcptools.ListMyServicesName {
+		r.DeepLink = r.PageURL
 	}
 	if !strings.HasPrefix(r.DeepLink, prefix) || len(r.DeepLink) > 4096 {
 		return guidedAnswerLink{}, false

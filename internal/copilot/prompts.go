@@ -19,7 +19,10 @@
 // const'u tanımlamak YAPISAL kapıya takılır (promptOwnership testi).
 package copilot
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 // ── Prompt helpers (pre-baked so handlers don't have to compose) ────────────
 
@@ -2896,3 +2899,47 @@ KOD ARAMA:
 5. Kod gerektiğinde önce search_code(service, query) çağır; service yalnız resolve_business_code sonucundan ya da kullanıcının yazdığı servis olsun.
 6. Sonra read_source_code(service, file, line) ile oku; file ve line değerini search_code sonucundan AYNEN al, dosya yolu UYDURMA.
 7. search_code boş dönerse daha kısa ve tam bir tanımlayıcıyla bir kez daha dene; yine boşsa bunu söyle.`
+
+// ─── CoSRE v2 kullanıcı kapsamı (araç seti dilim 2, tools-audit §3 Q1/Q2) ───
+//
+// v2 döngüsünün (POST /api/cosre/v2/chat) prepareStep eki: kullanıcının
+// takımından çözülen varsayılan servis kapsamı. Kapsam argümanlara SUNUCU
+// tarafından konur (api applyUserScope); ek yalnız modelin bunu bilmesi ve
+// kapsam yokken bir kez "hangi takım?" diye sorması için.
+
+const chatUserScopeAddendumTmpl = `
+
+KULLANICI KAPSAMI: Kullanıcının takımı %q; varsayılan kapsam bu takımın %d
+servisi (ownerTeam VEYA sreTeam). "Benim servislerim / bugün ne bozuldu"
+gibi sorularda önce list_my_services çağır; 'services' argümanı alan
+araçlara listeyi sunucu koyar. Kullanıcı başka bir servis ya da takım
+adlandırırsa onu kullan. Cevapta kapsamı bir kez söyle ("takımının N servisi").`
+
+// ChatUserScopeAddendum — kapsamlı alışverişin eki.
+func ChatUserScopeAddendum(team string, n int) string {
+	return fmt.Sprintf(chatUserScopeAddendumTmpl, team, n)
+}
+
+const chatUserScopeAskTeamAddendum = `
+
+KULLANICI KAPSAMI YOK: Kullanıcının takımı çözülemedi. Soru kullanıcının
+KENDİ servislerini gerektiriyorsa ("benim servislerim", "takımım") araç
+çağırmadan önce tek cümleyle "Hangi takım?" diye sor; takım UYDURMA
+(list_teams adları verir). Soru belirli bir servisi ya da tüm sistemi
+soruyorsa sormadan kapsamsız devam et.`
+
+// ChatUserScopeAskTeamAddendum — kapsamsız alışveriş, takım henüz sorulmadı.
+func ChatUserScopeAskTeamAddendum() string { return chatUserScopeAskTeamAddendum }
+
+const chatUserScopeUnscopedAddendum = `
+
+KULLANICI KAPSAMI YOK: Takım bu konuşmada zaten soruldu; bir daha SORMA.
+Kullanıcı bir takım adı verdiyse get_team_services ile o takıma bak; yoksa
+tüm servislerde kapsamsız çalış ve cevapta bunu bir kez belirt.`
+
+// ChatUserScopeUnscopedAddendum — kapsamsız alışveriş, takım daha önce soruldu.
+func ChatUserScopeUnscopedAddendum() string { return chatUserScopeUnscopedAddendum }
+
+// ChatUserScopeAskMarker — "takım soruldu mu" sezgisinin aradığı ifade
+// (asistan turunda, katlanmış küçük harf). Ask ekinin istediği cümleyle aynı.
+const ChatUserScopeAskMarker = "hangi takım"

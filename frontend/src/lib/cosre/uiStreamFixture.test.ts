@@ -7,13 +7,13 @@ import { describe, it, expect } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import {
-  DATA_PART_NAMES, MESSAGE_ID_RE, STOP_REASONS, TOOL_RESULT_KINDS, TOOL_RESULT_MAX_BYTES, UI_STREAM_PART_TYPES,
-  dataPartName, isDataPart, parseDataReset, parseDataStop, parseDataToolResult,
+  DATA_PART_NAMES, MESSAGE_ID_RE, SCOPE_REASONS, STOP_REASONS, TOOL_RESULT_KINDS, TOOL_RESULT_MAX_BYTES, UI_STREAM_PART_TYPES,
+  dataPartName, isDataPart, parseDataReset, parseDataScope, parseDataStop, parseDataToolResult,
 } from './protocol';
 import { parseUIStreamSSE } from './uiStreamFixture';
 
 const ROOT = resolve(__dirname, '../../../..');
-const FIXTURES = ['ui-stream-v1', 'ui-stream-v1-error', 'ui-stream-v1-closed', 'ui-stream-v1-reset', 'ui-stream-v1-reset2', 'ui-stream-v1-approval', 'ui-stream-v1-stops'];
+const FIXTURES = ['ui-stream-v1', 'ui-stream-v1-error', 'ui-stream-v1-closed', 'ui-stream-v1-reset', 'ui-stream-v1-reset2', 'ui-stream-v1-approval', 'ui-stream-v1-stops', 'ui-stream-v1-scope'];
 const PART_TYPES = new Set<string>(UI_STREAM_PART_TYPES);
 const DATA_NAMES = new Set<string>(DATA_PART_NAMES);
 
@@ -228,5 +228,45 @@ describe('data-tool-result + data-stop (araç seti dilim 1)', () => {
     expect(m?.[1].split(',').map(s => s.trim().replace(/"/g, ''))).toEqual([...STOP_REASONS]);
     const tool = readFileSync(join(ROOT, 'internal', 'cosre', 'uistream', 'tool_result.go'), 'utf8');
     for (const k of TOOL_RESULT_KINDS) expect(tool).toContain(`= "${k}"`);
+  });
+});
+
+// CoSRE v2 araç seti dilim 2 (tools-audit §3, Q1/Q2) — data-scope: kullanıcı
+// kapsamı; kapsamsız her neden rozetle söylenir (sessiz genişleme yok).
+describe('data-scope (araç seti dilim 2)', () => {
+  const read = (n: string) => parseUIStreamSSE(readFileSync(join(ROOT, 'testdata', 'cosre', `${n}.sse`), 'utf8')).parts;
+
+  it('scope fixture: SCOPE_REASONS\'ın her nedeni bir kez, hepsi ayrıştırılır', () => {
+    const scopes = read('ui-stream-v1-scope').filter(p => p.type === 'data-scope');
+    const parsed = scopes.map(p => parseDataScope(p));
+    expect(parsed.map(s => s?.reason)).toEqual([...SCOPE_REASONS]);
+    expect(parsed.map(s => s?.unscoped)).toEqual(SCOPE_REASONS.map(r => r !== 'team'));
+  });
+
+  it('ana fixture kapsamlı akışla açılır (start-step\'ten hemen sonra)', () => {
+    const parts = read('ui-stream-v1');
+    expect(parts[2].type).toBe('data-scope');
+    expect(parseDataScope(parts[2])).toEqual({ unscoped: false, reason: 'team', count: 2, team: 'acme-team', services: ['billing-api', 'orders-api'] });
+  });
+
+  it.each([
+    [{ type: 'data-scope', data: { unscoped: true, reason: 'no_team', count: 0 } }, { unscoped: true, reason: 'no_team', count: 0 }],
+    [{ type: 'data-scope', data: { unscoped: false, reason: 'team', count: 130, team: 'acme-orders', services: ['orders-api', 7, ''], trimmed: 30 } },
+      { unscoped: false, reason: 'team', count: 130, team: 'acme-orders', services: ['orders-api'], trimmed: 30 }],
+    [{ type: 'data-scope', data: { unscoped: true, reason: 'later', count: 0 } }, null],
+    [{ type: 'data-scope', data: { unscoped: true, reason: 'team', count: 0 } }, null],
+    [{ type: 'data-scope', data: { unscoped: false, reason: 'no_team', count: 0 } }, null],
+    [{ type: 'data-scope', data: { unscoped: 'yes', reason: 'no_team', count: 0 } }, null],
+    [{ type: 'data-scope', data: { unscoped: true, reason: 'no_team', count: '0' } }, null],
+    [{ type: 'data-scope', data: 'x' }, null],
+    [{ type: 'data-stop', data: { unscoped: true, reason: 'no_team', count: 0 } }, null],
+  ])('%j → %j', (p, want) => {
+    expect(parseDataScope(p)).toEqual(want);
+  });
+
+  it('kapalı küme Go kaynağıyla eşit', () => {
+    const part = readFileSync(join(ROOT, 'internal', 'cosre', 'uistream', 'part.go'), 'utf8');
+    const m = /ScopeReasons = \[\]string\{([^}]*)\}/.exec(part);
+    expect(m?.[1].split(',').map(s => s.trim().replace(/"/g, ''))).toEqual([...SCOPE_REASONS]);
   });
 });

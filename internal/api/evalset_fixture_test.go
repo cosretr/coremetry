@@ -126,6 +126,13 @@ func checkAgentFixture(t *testing.T, c evalCase, knownTools map[string]bool) {
 	if agentOnly && !agent {
 		t.Errorf("%s/%s: anyOfTools / forbiddenTools / maxToolCalls / expectTier / maxTokens yalnız ajan kipinde", c.file, c.ID)
 	}
+	// araç seti dilim 2 — userTeam yalnız ajan kipinde; servicesInScope userTeam ister.
+	if (c.UserTeam != "" || e.ServicesInScope) && !agent {
+		t.Errorf("%s/%s: userTeam / servicesInScope yalnız ajan kipinde", c.file, c.ID)
+	}
+	if e.ServicesInScope && strings.TrimSpace(c.UserTeam) == "" {
+		t.Errorf("%s/%s: servicesInScope fikstür userTeam'i ister", c.file, c.ID)
+	}
 	if !agent {
 		return
 	}
@@ -140,7 +147,7 @@ func checkAgentFixture(t *testing.T, c evalCase, knownTools map[string]bool) {
 	}
 	for _, list := range [][]string{e.ExpectedTools, e.AnyOfTools, e.ForbiddenTools} {
 		for _, name := range list {
-			if !knownTools[name] {
+			if !knownTools[name] && !(c.UserTeam != "" && evalV2CatalogNames()[name]) {
 				t.Errorf("%s/%s: araç %q ne sohbet kataloğunda ne guided ön-yükleme çiplerinde", c.file, c.ID, name)
 			}
 		}
@@ -149,6 +156,9 @@ func checkAgentFixture(t *testing.T, c evalCase, knownTools map[string]bool) {
 	// DÖNGÜ kataloğunda olmalı (guided-yalnız çip adını model seçemez).
 	if evalAgentLoopProbe(c) {
 		loop := evalLoopCatalogNames()
+		if c.UserTeam != "" {
+			loop = evalV2CatalogNames() // araç seti dilim 2 — vaka v2 döngüsünden koşar
+		}
 		for _, list := range [][]string{e.ExpectedTools, e.AnyOfTools} {
 			for _, name := range list {
 				if !loop[name] {
@@ -163,6 +173,15 @@ func checkAgentFixture(t *testing.T, c evalCase, knownTools map[string]bool) {
 func evalLoopCatalogNames() map[string]bool {
 	out := map[string]bool{}
 	for _, tl := range mcptools.ChatToolListFor(mcptools.Deps{}, modelcaps.ToolsetFull) {
+		out[tl.Name] = true
+	}
+	return out
+}
+
+// evalV2CatalogNames — araç seti dilim 2: v2 döngüsünün (full) model kataloğu.
+func evalV2CatalogNames() map[string]bool {
+	out := map[string]bool{}
+	for _, tl := range mcptools.V2ToolList(mcptools.Deps{}, modelcaps.ToolsetFull) {
 		out[tl.Name] = true
 	}
 	return out
