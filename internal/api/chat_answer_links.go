@@ -33,11 +33,54 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 // answerToolEchoRe — "// build_link result", "# search_traces sonucu:" gibi
-// araç-çıktısı başlık satırları. Ad katalogda değilse satır kalır.
-var answerToolEchoRe = regexp.MustCompile(`(?m)^[ \t]*(?://+|#+|--)[ \t]*([A-Za-z][A-Za-z0-9_]*)[ \t]+(?i:result|results|output|response|sonucu|çıktısı|ciktisi)[ \t]*:?[ \t]*(?:\r?\n|$)`)
+// araç-çıktısı işaretleri. Ad katalogda değilse işaret kalır.
+//
+// v0.10.1679 (operatör-bildirimi) — eskiden satır başına çapalıydı ve satırın
+// TAMAMINI istiyordu: satır içi, markdown sarımlı (`…`, **…**) ya da ardından
+// içerik gelen yankı sızıyordu. Artık işaret satırın herhangi bir yerinde
+// eşleşir (stripToolEchoes); satırda yalnız markdown artığı kalırsa satır düşer.
+var answerToolEchoRe = regexp.MustCompile("[*_`]*(?://+|#+|--)[ \\t]*([A-Za-z][A-Za-z0-9_]*)[ \\t]+(?i:results|result|output|response|sonucu|çıktısı|ciktisi)([*_`]*)[ \\t]*:?[ \\t]*")
+
+// stripToolEchoes — SAF: katalog adlı araç-yankı işaretlerini siler. İşaretten
+// sonra harf/rakam geliyorsa (ör. "resultant") dokunmaz; işaret silinen satırda
+// yalnız boşluk/markdown artığı kalırsa satır (satır sonuyla) düşer.
+func stripToolEchoes(text string, tools map[string]bool) string {
+	if len(tools) == 0 {
+		return text
+	}
+	var b strings.Builder
+	for _, ln := range strings.SplitAfter(text, "\n") {
+		body := strings.TrimRight(ln, "\r\n")
+		eol := ln[len(body):]
+		locs := answerToolEchoRe.FindAllStringSubmatchIndex(body, -1)
+		hit := false
+		for i := len(locs) - 1; i >= 0; i-- {
+			l := locs[i]
+			if !tools[body[l[2]:l[3]]] {
+				continue
+			}
+			if r, _ := utf8.DecodeRuneInString(body[l[4]:]); l[4] < len(body) && (unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_') {
+				continue
+			}
+			body = body[:l[0]] + body[l[1]:]
+			hit = true
+		}
+		if hit {
+			body = strings.TrimRight(body, " \t")
+			if strings.Trim(body, " \t>*_`-+") == "" {
+				continue
+			}
+		}
+		b.WriteString(body)
+		b.WriteString(eol)
+	}
+	return b.String()
+}
 
 // answerMDLinkRe — markdown link, mutlak hedef.
 var answerMDLinkRe = regexp.MustCompile(`\[([^\]\n]*)\]\((https?://[^\s)]+)\)`)
@@ -55,13 +98,7 @@ func sanitizeAnswerLinks(text string, validated []guidedAnswerLink, publicURL st
 	if text == "" {
 		return text
 	}
-	text = answerToolEchoRe.ReplaceAllStringFunc(text, func(line string) string {
-		m := answerToolEchoRe.FindStringSubmatch(line)
-		if len(m) > 1 && tools[m[1]] {
-			return ""
-		}
-		return line
-	})
+	text = stripToolEchoes(text, tools)
 	if !strings.Contains(text, "://") {
 		return answerEmptyFenceRe.ReplaceAllString(text, "")
 	}
@@ -167,5 +204,9 @@ func chatToolNameSet[V any](schemas map[string]V) map[string]bool {
 		out[k] = true
 	}
 	out[opPrefetchTool] = true // sentetik ön-getirme kaydı da yankılanabilir
+	// v0.10.1679 — diğer tohumlanan sentetik adlar da (seededTools).
+	out[opExceptionsTool] = true
+	out[opDrillTool] = true
+	out[opClusterTool] = true
 	return out
 }
