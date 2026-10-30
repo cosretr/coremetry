@@ -3,22 +3,27 @@
 // sağlayıcı/endpoint/anahtar/model'i (ai_settings_profiles.go); admin bir
 // profili VARSAYILAN yapar, aşağıdaki eski form o profili düzenler.
 // Anahtar hiç geri gelmez (hasKey); boş anahtar = mevcut korunur.
-import { useEffect, useState, type FormEvent } from 'react';
-import { Button, ButtonGroup, Badge, Modal, SelectField, useConfirm } from '@/components/ui';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, type ColumnDef } from '@/components/ui/DataTable';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { Button } from '@/components/shadcn/button';
+import { Badge } from '@/components/shadcn/badge';
+import { Field, SelectField, TextareaField, CheckboxField } from '@/components/coremetry/Field';
+import { StatusBadge } from '@/components/coremetry/StatusBadge';
+import { ActionRow } from '@/components/coremetry/ActionRow';
+import { DataTable, type ColumnDef } from '@/components/coremetry/DataTable';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/coremetry/overlay';
+import { useConfirm } from '@/components/coremetry/Confirm';
 import { api } from '@/lib/api';
 import type { AIModelProfile, AIModelProfileInput, AIProfilesPayload, AIProvider, AIProfileTestResult, AIThinking, AIToolset, Role } from '@/lib/types';
-import { Field2, FlashBox, Row } from './shared';
+import { FlashBox } from './shared';
 import { slugifyProfileId, PROFILE_ID_RE, tuningSummary, endpointLabel, profileUsable, PROFILE_ROLES, rolesSummary, toggleRole, defaultRolesWarning, DEFAULT_ROLES_WARNING, formatHeaderLines, parseHeaderLines } from './aiProfiles';
 
 // v0.10.1139 — varsayılan profilin rol kısıtı uyarısı (FlashBox'ın uyarı tonu).
 function RolesWarning({ text }: { text: string }) {
   return (
-    <div role="note" data-default-roles-warning="" style={{
-      color: 'var(--warn)', fontSize: 12, marginTop: 8, padding: '6px 10px',
-      background: 'color-mix(in srgb, var(--warn) 8%, transparent)',
-      border: '1px solid color-mix(in srgb, var(--warn) 30%, transparent)', borderRadius: 4,
-    }}>⚠ {text}</div>
+    <div role="note" data-default-roles-warning=""
+      className="mt-2 rounded-sm border border-[color-mix(in_srgb,var(--warn)_30%,transparent)] bg-[color-mix(in_srgb,var(--warn)_8%,transparent)] px-2.5 py-1.5 text-[length:var(--fs-sm)] text-(--warn)">
+      ⚠ {text}
+    </div>
   );
 }
 
@@ -60,7 +65,7 @@ export function AiProfilesPanel({ payload, onChange }: { payload: AIProfilesPayl
   const [surface, setSurface] = useState({ intent: payload.surfaceMap.intent ?? '', background: payload.surfaceMap.background ?? '' });
   // silme/varsayılan sonrası sunucunun haritası yeniden yüklenir (bayat kimlik 400 verirdi, inceleme #4)
   useEffect(() => { setSurface({ intent: payload.surfaceMap.intent ?? '', background: payload.surfaceMap.background ?? '' }); }, [payload.surfaceMap.intent, payload.surfaceMap.background]);
-  const dt = useDataTable<AIModelProfile>({ storageKey: 'settings-ai-profiles', columns: COLS, rows: payload.profiles, initialSort: { id: 'label', dir: 'asc' } });
+  const set = (patch: Partial<Draft>) => setDraft(d => (d ? { ...d, ...patch } : d));
 
   const run = async (fn: () => Promise<AIProfilesPayload>, ok: string) => {
     setBusy(true); setMsg(null);
@@ -100,155 +105,162 @@ export function AiProfilesPanel({ payload, onChange }: { payload: AIProfilesPayl
   const saveSurface = () => run(() => api.putAISurfaceMap({ intent: surface.intent, background: surface.background }), 'Yüzey eşlemesi kaydedildi');
   const options = payload.profiles.map(p => <option key={p.id} value={p.id}>{p.label || p.id}</option>);
 
+  // Faz 2 dilim 1 R11 — hücreler coremetry DataTable'ın renderCell'inde (kolonlar,
+  // sıra, genişlikler aynı). undefined = DataTableCell'in soluk "—"sı.
+  const renderCell = (p: AIModelProfile, col: ColumnDef<AIModelProfile>): ReactNode => {
+    switch (col.id) {
+      case 'label': return (
+        <>
+          <div className="cell-strong truncate" title={p.id}>{p.label || p.id}</div>
+          {/* v0.10.179 — rozet kendi satırında: ellipsis rozeti yutuyordu (178 canlı görüntüsü) */}
+          <div className="field-hint flex items-center gap-1.5 font-mono">
+            {p.label ? p.id : null}{p.default && <Badge variant="outline">varsayılan</Badge>}
+            {/* v0.10.1138 — rol allowlist'i: yalnız kısıtlıysa görünür */}
+            {!!p.roles?.length && <Badge variant="secondary" title="Sohbette bu profili açıkça seçebilen roller">{rolesSummary(p.roles)}</Badge>}
+            {/* v0.10.1150 — sohbette "Derin" açıkken (açık seçim yoksa) bu profil */}
+            {p.deep && <Badge variant="secondary" title="Derin düşün profili: sohbette Derin açıkken ve model açıkça seçilmemişken kullanılır">derin</Badge>}
+            {/* v0.10.1451 (karar 8) — kod ve wiki içeriği yalnız bu işaretli profillere gider */}
+            {p.localOnly && <Badge variant="secondary" title="Yerel (self-hosted) model: kaynak kod ve wiki içeriği yalnız bu işaretli profillere gider">yerel</Badge>}
+            {/* v0.10.1302 — CoSRE araç seti: yalnız basit katalogda görünür (açık ayar ya da ≤12B otomatik) */}
+            {p.effectiveToolset === 'simple' && <Badge variant="secondary" title={p.toolset === 'simple' ? 'Araç seti: basit (açık ayar) — CoSRE sohbetinde serbest-sorgu araçları (query_metric, search_logs, search_traces, list_metric_labels) gizli' : 'Araç seti: basit (otomatik — model adı ≤12B) — CoSRE sohbetinde serbest-sorgu araçları gizli'}>basit</Badge>}
+          </div>
+        </>
+      );
+      case 'provider': return <Badge variant="secondary">{p.provider}</Badge>;
+      case 'model': return p.model || undefined;
+      case 'endpoint': return endpointLabel(p.provider, p.baseUrl) || undefined;
+      case 'key': return p.hasKey ? <Badge variant="secondary">stored</Badge> : profileUsable(p) ? <Badge variant="secondary">no auth</Badge> : <StatusBadge status="warn">yok</StatusBadge>;
+      case 'tuning': return tuningSummary(p) || undefined;
+      case 'actions': {
+        const t = tests[p.id];
+        return (
+          <>
+            <div role="group" aria-label={`${p.label || p.id} eylemleri`} className="flex flex-wrap items-center justify-end gap-1.5">
+              <Button variant="ghost" size="xs" onClick={() => { setIsNew(false); setDraft(draftOf(p)); }}>Düzenle</Button>
+              {!p.default && <Button variant="ghost" size="xs" disabled={busy} onClick={() => run(() => api.defaultAIProfile(p.id), `Varsayılan: ${p.id}`)}>Varsayılan yap</Button>}
+              <Button variant="ghost" size="xs" loading={t === 'pending'} onClick={() => test(p.id)}>Bağlantıyı dene</Button>
+              {!p.default && <Button variant="ghost-danger" size="xs" disabled={busy} onClick={async () => {
+                if (!await confirm({ title: 'Profil silinsin mi?', body: <><b>{p.label || p.id}</b> silinecek; bu profile eşlenmiş yüzeyler varsayılana döner.</>, confirmLabel: 'Sil', danger: true })) return;
+                await run(() => api.deleteAIProfile(p.id), `Silindi: ${p.id}`);
+              }}>Sil</Button>}
+            </div>
+            {t && t !== 'pending' && (
+              <div className={`field-hint text-right ${t.ok ? '' : 'is-err'}`} title={t.error ?? t.sample}>
+                {t.ok ? `✓ ${t.ms} ms${t.sample ? ` · «${t.sample}»` : ''}` : `✗ ${t.error ?? 'hata'}`}
+              </div>
+            )}
+          </>
+        );
+      }
+      default: return undefined;
+    }
+  };
+
   return (
-    <div style={{ marginBottom: 20 }}>
-      <Row>
-        <h3 style={{ fontSize: 13, fontWeight: 600, margin: 0 }}>Model profilleri</h3>
+    <div className="mb-5">
+      <div className="flex flex-wrap items-baseline gap-3">
+        <h3 className="m-0 text-[length:var(--fs-md)] font-semibold">Model profilleri</h3>
         <span className="field-hint">{payload.profiles.length} profil · varsayılan: <b>{payload.defaultProfile}</b> · aşağıdaki form varsayılan profili düzenler</span>
-        <span style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-          <Button variant="secondary" size="sm" onClick={() => { setIsNew(true); setDraft(emptyDraft()); }}>Profil ekle</Button>
+        <span className="ml-auto flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => { setIsNew(true); setDraft(emptyDraft()); }}>Profil ekle</Button>
         </span>
-      </Row>
+      </div>
       {defaultWarn && <RolesWarning text={defaultWarn} />}
-      {/* v0.10.967 — dtNoState: durum satırı yok — tablo boş olamaz: AiTab paneli
-          yalnız `profiles.length > 0` iken bağlar ve varsayılan profil silinemez
-          (copilot.DeleteProfile); yükleniyor / hata sekmenin ayar yükleme kapısında. */}
-      <div className="table-wrap" style={{ marginTop: 8 }}>
-        <table {...dt.tableProps}>
-          <DataTableColgroup dt={dt} />
-          <DataTableHead dt={dt} />
-          <tbody>
-            {dt.sortedRows.map(p => {
-              const t = tests[p.id];
-              return (
-                <tr key={p.id}>
-                  <DataTableCell dt={dt} col="label" row={p} className="cell-strong" title={p.id}>
-                    <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.label || p.id}</div>
-                    {/* v0.10.179 — rozet kendi satırında: ellipsis rozeti yutuyordu (178 canlı görüntüsü) */}
-                    <div className="field-hint mono" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                      {p.label ? p.id : null}{p.default && <Badge>varsayılan</Badge>}
-                      {/* v0.10.1138 — rol allowlist'i: yalnız kısıtlıysa görünür */}
-                      {!!p.roles?.length && <span className="badge b-gray" title="Sohbette bu profili açıkça seçebilen roller">{rolesSummary(p.roles)}</span>}
-                      {/* v0.10.1150 — sohbette "Derin" açıkken (açık seçim yoksa) bu profil */}
-                      {p.deep && <span className="badge b-gray" title="Derin düşün profili: sohbette Derin açıkken ve model açıkça seçilmemişken kullanılır">derin</span>}
-                      {/* v0.10.1451 (karar 8) — kod ve wiki içeriği yalnız bu işaretli profillere gider */}
-                      {p.localOnly && <span className="badge b-gray" title="Yerel (self-hosted) model: kaynak kod ve wiki içeriği yalnız bu işaretli profillere gider">yerel</span>}
-                      {/* v0.10.1302 — CoSRE araç seti: yalnız basit katalogda görünür (açık ayar ya da ≤12B otomatik) */}
-                      {p.effectiveToolset === 'simple' && <span className="badge b-gray" title={p.toolset === 'simple' ? 'Araç seti: basit (açık ayar) — CoSRE sohbetinde serbest-sorgu araçları (query_metric, search_logs, search_traces, list_metric_labels) gizli' : 'Araç seti: basit (otomatik — model adı ≤12B) — CoSRE sohbetinde serbest-sorgu araçları gizli'}>basit</span>}
-                    </div>
-                  </DataTableCell>
-                  <DataTableCell dt={dt} col="provider" row={p}><span className="badge b-gray">{p.provider}</span></DataTableCell>
-                  <DataTableCell dt={dt} col="model" row={p} value={p.model} />
-                  <DataTableCell dt={dt} col="endpoint" row={p} value={endpointLabel(p.provider, p.baseUrl)} />
-                  <DataTableCell dt={dt} col="key" row={p}>{p.hasKey ? <span className="badge b-gray">stored</span> : profileUsable(p) ? <span className="badge b-gray">no auth</span> : <span className="badge b-warn">yok</span>}</DataTableCell>
-                  <DataTableCell dt={dt} col="tuning" row={p} value={tuningSummary(p)} />
-                  <DataTableCell dt={dt} col="actions" row={p}>
-                    <ButtonGroup aria-label={`${p.label || p.id} eylemleri`} size="sm">
-                      <Button variant="secondary" onClick={() => { setIsNew(false); setDraft(draftOf(p)); }}>Düzenle</Button>
-                      {!p.default && <Button variant="secondary" disabled={busy} onClick={() => run(() => api.defaultAIProfile(p.id), `Varsayılan: ${p.id}`)}>Varsayılan yap</Button>}
-                      <Button variant="secondary" loading={t === 'pending'} onClick={() => test(p.id)}>Bağlantıyı dene</Button>
-                      {!p.default && <Button variant="ghost-danger" disabled={busy} onClick={async () => {
-                        if (!await confirm({ title: 'Profil silinsin mi?', body: <><b>{p.label || p.id}</b> silinecek; bu profile eşlenmiş yüzeyler varsayılana döner.</>, confirmLabel: 'Sil', danger: true })) return;
-                        await run(() => api.deleteAIProfile(p.id), `Silindi: ${p.id}`);
-                      }}>Sil</Button>}
-                    </ButtonGroup>
-                    {t && t !== 'pending' && (
-                      <div className={`field-hint ${t.ok ? '' : 'is-err'}`} style={{ textAlign: 'right' }} title={t.error ?? t.sample}>
-                        {t.ok ? `✓ ${t.ms} ms${t.sample ? ` · «${t.sample}»` : ''}` : `✗ ${t.error ?? 'hata'}`}
-                      </div>
-                    )}
-                  </DataTableCell>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      {/* v0.10.967 — tablo boş olamaz: AiTab paneli yalnız `profiles.length > 0` iken
+          bağlar ve varsayılan profil silinemez (copilot.DeleteProfile); yükleniyor /
+          hata sekmenin ayar yükleme kapısında. Faz 2 dilim 1 R11: coremetry DataTable
+          `state` ister → boş türü (asla görünmez, boş panel kuralının sözleşmesi). */}
+      <div className="table-wrap mt-2">
+        <DataTable<AIModelProfile> storageKey="settings-ai-profiles" columns={COLS} rows={payload.profiles}
+          sort={{ initial: { id: 'label', dir: 'asc' } }} getRowKey={p => p.id}
+          state={{ kind: 'empty', message: 'Profil yok' }} renderCell={renderCell} />
       </div>
 
-      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', marginTop: 12, flexWrap: 'wrap' }}>
-        <SelectField label="Niyet sınıflandırıcısı (chat-intent)" value={surface.intent} onChange={e => setSurface(s => ({ ...s, intent: e.target.value }))} hint="Serbest soru sınıflandırma çağrısı için profil; boş = varsayılan (küçük yerel model önerilir). Eşleşmeyen sorunun genel bilgi cevabı (chat-general) VARSAYILAN profilden gelir — sınıflandırıcıya seçilen küçük model genel cevap yazmaz.">
+      <div className="mt-3 flex flex-wrap items-end gap-3">
+        <SelectField className="w-auto min-w-[200px] flex-1" label="Niyet sınıflandırıcısı (chat-intent)" value={surface.intent} onChange={e => setSurface(s => ({ ...s, intent: e.target.value }))} hint="Serbest soru sınıflandırma çağrısı için profil; boş = varsayılan (küçük yerel model önerilir). Eşleşmeyen sorunun genel bilgi cevabı (chat-general) VARSAYILAN profilden gelir — sınıflandırıcıya seçilen küçük model genel cevap yazmaz.">
           <option value="">varsayılan</option>{options}
         </SelectField>
-        <SelectField label="Arka plan açıklayıcılar (auto-explain)" value={surface.background} onChange={e => setSurface(s => ({ ...s, background: e.target.value }))} hint="Problem/exception otomatik özetleri için profil; boş = varsayılan.">
+        <SelectField className="w-auto min-w-[200px] flex-1" label="Arka plan açıklayıcılar (auto-explain)" value={surface.background} onChange={e => setSurface(s => ({ ...s, background: e.target.value }))} hint="Problem/exception otomatik özetleri için profil; boş = varsayılan.">
           <option value="">varsayılan</option>{options}
         </SelectField>
-        <Button variant="secondary" size="sm" disabled={busy} onClick={saveSurface}>Eşlemeyi kaydet</Button>
+        <Button variant="outline" size="sm" disabled={busy} onClick={saveSurface}>Eşlemeyi kaydet</Button>
       </div>
       {msg && <FlashBox kind={msg.kind}>{msg.text}</FlashBox>}
 
-      <Modal open={!!draft} onClose={() => setDraft(null)} title={isNew ? 'Yeni model profili' : `Profili düzenle · ${draft?.id ?? ''}`}
-        footer={<Row><span style={{ marginLeft: 'auto' }} /><Button variant="secondary" onClick={() => setDraft(null)}>Vazgeç</Button><Button variant="primary" type="submit" form="ai-profile-form" loading={busy}>Kaydet</Button></Row>}>
-        {draft && (
-          <form id="ai-profile-form" onSubmit={saveDraft}>
-            <Field2 label="Etiket" hint="Tabloda ve seçicilerde görünen ad"><input value={draft.label} onChange={e => setDraft({ ...draft, label: e.target.value, id: isNew ? slugifyProfileId(e.target.value) : draft.id })} placeholder="Büyük model (gemma4-31b)" /></Field2>
-            <Field2 label="Kimlik" hint={isNew ? 'Etiketten türetilir; [a-z0-9][a-z0-9_-]{0,39}' : 'Kimlik değiştirilemez'}><input className="mono" value={draft.id} disabled={!isNew} onChange={e => setDraft({ ...draft, id: e.target.value })} /></Field2>
-            <SelectField label="Sağlayıcı" value={draft.provider} onChange={e => setDraft({ ...draft, provider: e.target.value as AIProvider })}>
-              <option value="openai">OpenAI-uyumlu (vLLM / Ollama / LM Studio / OpenAI)</option>
-              <option value="anthropic">Anthropic</option>
-              <option value="github">GitHub Copilot</option>
-            </SelectField>
-            {draft.provider === 'openai' && <Field2 label="Base URL" hint="Örn. http://vllm:8000/v1 — her profil kendi endpoint'ine gider"><input value={draft.baseUrl} onChange={e => setDraft({ ...draft, baseUrl: e.target.value })} placeholder="http://vllm:8000/v1" /></Field2>}
-            <Field2 label="Model"><input value={draft.model} onChange={e => setDraft({ ...draft, model: e.target.value })} placeholder="gemma4-31b" /></Field2>
-            {/* v0.10.1138 — sohbet "model ▾" menüsünde ad + model + bu kısa açıklama görünür */}
-            <Field2 label="Kısa açıklama" hint="Sohbetin model menüsünde görünür (≤120 karakter), ör. «Hızlı, kısa cevaplar»"><input value={draft.description} maxLength={120} onChange={e => setDraft({ ...draft, description: e.target.value })} placeholder="Derin analiz, yavaş" /></Field2>
-            <fieldset style={{ border: 0, padding: 0, margin: '0 0 12px' }}>
-              <legend className="field-hint" style={{ marginBottom: 4 }}>Sohbette seçebilen roller — hiçbiri işaretli değilse herkes</legend>
-              <div style={{ display: 'flex', gap: 12 }}>
-                {PROFILE_ROLES.map(r => (
-                  <label key={r} style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12 }}>
-                    <input type="checkbox" checked={draft.roles.includes(r)} onChange={() => setDraft({ ...draft, roles: toggleRole(draft.roles, r) })} /> {r}
-                  </label>
-                ))}
-              </div>
-              {!isNew && draft.roles.length > 0 && payload.profiles.some(p => p.id === draft.id && p.default) && <RolesWarning text={DEFAULT_ROLES_WARNING} />}
-            </fieldset>
-            {/* v0.10.1150 — tek derin profil: işaretlemek öncekinin işaretini kaldırır (sunucu); rol allowlist'i burada da geçerli. */}
-            <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12, marginBottom: 12 }}
-              title="Sohbette Derin açıkken ve model açıkça seçilmemişken bu profil kullanılır. Tek profil işaretli olabilir; rolü bu profile kapalı kullanıcıda mevcut model kalır.">
-              <input type="checkbox" checked={draft.deep} onChange={e => setDraft({ ...draft, deep: e.target.checked })} /> Derin düşün profili
-            </label>
-            <Field2 label="API anahtarı" hint={isNew ? 'Yerel endpoint için boş bırakılabilir' : 'Boş = mevcut anahtar korunur'}><input type="password" autoComplete="new-password" value={draft.apiKey} onChange={e => setDraft({ ...draft, apiKey: e.target.value })} /></Field2>
-            {/* v0.10.1238 — geçit yönlendirmesi vb. için her LLM isteğine eklenen başlıklar; auth başlıkları sunucuda reddedilir */}
-            <Field2 label="Ek HTTP başlıkları" hint="Satır başına «Ad: değer», ör. x-cluster: test-v2 — bu profilin her LLM isteğine eklenir. Authorization / api-key / Content-Type verilemez.">
-              <textarea className="mono" rows={3} value={draft.headers} onChange={e => setDraft({ ...draft, headers: e.target.value })} placeholder="x-cluster: test-v2" spellCheck={false} />
-            </Field2>
-            {/* v0.10.1451 (karar 8) — admin beyanı, anında yürürlükte; model adından çıkarım yok */}
-            {draft.provider === 'openai' && (
-              <div style={{ marginBottom: 12 }}>
-                <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12 }}>
-                  <input type="checkbox" checked={draft.localOnly} onChange={e => setDraft({ ...draft, localOnly: e.target.checked })} /> Yerel (self-hosted) model — kod ve wiki içeriği yalnız bu profile gider
-                </label>
-                <div className="field-hint">Kaynak kod («Kodu da incele», read_source_code, search_code) ve wiki sayfa içeriği YALNIZ bu işaretli profillere gönderilir. Hiçbir profil işaretli değilse kod/wiki okuma her yerde «kapalı: yerel profil yok» der. Yalnız kurumunuzda barınan uçlar için işaretleyin; genel LLM adresleri reddedilir.</div>
-              </div>
-            )}
-            {draft.provider === 'openai' && <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12, marginBottom: 12 }}><input type="checkbox" checked={draft.skipTls} onChange={e => setDraft({ ...draft, skipTls: e.target.checked })} /> TLS doğrulamasını atla (öz-imzalı yerel uç)</label>}
-            <Row>
-              <Field2 label="Max tokens" small hint="boş = küresel"><input value={draft.maxTokens} onChange={e => setDraft({ ...draft, maxTokens: e.target.value })} inputMode="numeric" /></Field2>
-              <Field2 label="Temperature" small hint="boş = küresel; 0 bir değerdir; Anthropic profillerinde uygulanmaz"><input value={draft.temperature} onChange={e => setDraft({ ...draft, temperature: e.target.value })} inputMode="decimal" /></Field2>
-              <Field2 label="Timeout (s)" small hint="boş = küresel"><input value={draft.timeoutS} onChange={e => setDraft({ ...draft, timeoutS: e.target.value })} inputMode="numeric" /></Field2>
-            </Row>
-            {/* v0.10.534 (modelcaps) — düşünme anahtarı modelin ailesine göre gövdeye iner
-                (Qwen3: chat_template_kwargs.enable_thinking); anahtarı bilinmeyen ailede
-                sunucu bir kez uyarır, gövde değişmez. Boş = modele dokunma. */}
-            {draft.provider === 'openai' && (
-              <SelectField label="Düşünme (thinking)" value={draft.thinking} onChange={e => setDraft({ ...draft, thinking: e.target.value as AIThinking })}
-                hint="Qwen3 gibi düşünen modellerde 'kapalı' boş cevap riskini keser; gemma/llama'da etkisiz. Boş = varsayılan.">
-                <option value="">varsayılan (dokunma)</option>
-                <option value="off">kapalı (enable_thinking=false)</option>
-                <option value="on">açık</option>
+      <Dialog open={!!draft} onOpenChange={o => { if (!o) setDraft(null); }}>
+        <DialogContent aria-describedby={undefined} className="max-h-[calc(100vh-32px)] gap-0 overflow-auto p-0 sm:max-w-[480px]">
+          <DialogHeader className="border-b border-(--divider) px-[18px] py-3.5">
+            <DialogTitle className="text-[length:var(--fs-lg)]">{isNew ? 'Yeni model profili' : `Profili düzenle · ${draft?.id ?? ''}`}</DialogTitle>
+          </DialogHeader>
+          {draft && (
+            <form id="ai-profile-form" onSubmit={saveDraft} className="flex flex-col gap-3 px-[18px] py-4">
+              <Field label="Etiket" hint="Tabloda ve seçicilerde görünen ad" value={draft.label} onChange={e => set({ label: e.target.value, id: isNew ? slugifyProfileId(e.target.value) : draft.id })} placeholder="Büyük model (gemma4-31b)" />
+              <Field label="Kimlik" hint={isNew ? 'Etiketten türetilir; [a-z0-9][a-z0-9_-]{0,39}' : 'Kimlik değiştirilemez'} controlClassName="font-mono" value={draft.id} disabled={!isNew} onChange={e => set({ id: e.target.value })} />
+              <SelectField label="Sağlayıcı" value={draft.provider} onChange={e => set({ provider: e.target.value as AIProvider })}>
+                <option value="openai">OpenAI-uyumlu (vLLM / Ollama / LM Studio / OpenAI)</option>
+                <option value="anthropic">Anthropic</option>
+                <option value="github">GitHub Copilot</option>
               </SelectField>
-            )}
-            {/* v0.10.1302 — CoSRE araç seti: küçük modelde serbest-sorgu araçları gizlenir;
-                dış MCP sunucusu ve guided/niyet kademeleri etkilenmez. */}
-            <SelectField label="Araç seti" value={draft.toolset} onChange={e => setDraft({ ...draft, toolset: e.target.value as AIToolset })}
-              hint="CoSRE sohbetinin bu profille gördüğü araçlar. Basit: query_metric / search_logs / search_traces / list_metric_labels gizli, yapısal query_metrics / query_logs / query_traces kalır (küçük model için). Otomatik: model adında ≤12B boyut varsa basit, aksi hâlde tam.">
-              <option value="">otomatik (model adına göre, ≤12B basit)</option>
-              <option value="simple">basit</option>
-              <option value="full">tam</option>
-            </SelectField>
-          </form>
-        )}
-      </Modal>
+              {draft.provider === 'openai' && <Field label="Base URL" hint="Örn. http://vllm:8000/v1 — her profil kendi endpoint'ine gider" value={draft.baseUrl} onChange={e => set({ baseUrl: e.target.value })} placeholder="http://vllm:8000/v1" />}
+              <Field label="Model" value={draft.model} onChange={e => set({ model: e.target.value })} placeholder="gemma4-31b" />
+              {/* v0.10.1138 — sohbet "model ▾" menüsünde ad + model + bu kısa açıklama görünür */}
+              <Field label="Kısa açıklama" hint="Sohbetin model menüsünde görünür (≤120 karakter), ör. «Hızlı, kısa cevaplar»" value={draft.description} maxLength={120} onChange={e => set({ description: e.target.value })} placeholder="Derin analiz, yavaş" />
+              <fieldset className="m-0 border-0 p-0">
+                <legend className="field-hint mb-1">Sohbette seçebilen roller — hiçbiri işaretli değilse herkes</legend>
+                <div className="flex gap-3">
+                  {PROFILE_ROLES.map(r => (
+                    <CheckboxField key={r} label={r} checked={draft.roles.includes(r)} onCheckedChange={() => set({ roles: toggleRole(draft.roles, r) })} />
+                  ))}
+                </div>
+                {!isNew && draft.roles.length > 0 && payload.profiles.some(p => p.id === draft.id && p.default) && <RolesWarning text={DEFAULT_ROLES_WARNING} />}
+              </fieldset>
+              {/* v0.10.1150 — tek derin profil: işaretlemek öncekinin işaretini kaldırır (sunucu); rol allowlist'i burada da geçerli. */}
+              <div title="Sohbette Derin açıkken ve model açıkça seçilmemişken bu profil kullanılır. Tek profil işaretli olabilir; rolü bu profile kapalı kullanıcıda mevcut model kalır.">
+                <CheckboxField label="Derin düşün profili" checked={draft.deep} onCheckedChange={v => set({ deep: v })} />
+              </div>
+              <Field label="API anahtarı" hint={isNew ? 'Yerel endpoint için boş bırakılabilir' : 'Boş = mevcut anahtar korunur'} type="password" autoComplete="new-password" value={draft.apiKey} onChange={e => set({ apiKey: e.target.value })} />
+              {/* v0.10.1238 — geçit yönlendirmesi vb. için her LLM isteğine eklenen başlıklar; auth başlıkları sunucuda reddedilir */}
+              <TextareaField label="Ek HTTP başlıkları" hint="Satır başına «Ad: değer», ör. x-cluster: test-v2 — bu profilin her LLM isteğine eklenir. Authorization / api-key / Content-Type verilemez."
+                controlClassName="font-mono" rows={3} value={draft.headers} onChange={e => set({ headers: e.target.value })} placeholder="x-cluster: test-v2" spellCheck={false} />
+              {/* v0.10.1451 (karar 8) — admin beyanı, anında yürürlükte; model adından çıkarım yok */}
+              {draft.provider === 'openai' && (
+                <CheckboxField label="Yerel (self-hosted) model — kod ve wiki içeriği yalnız bu profile gider" checked={draft.localOnly} onCheckedChange={v => set({ localOnly: v })}
+                  hint="Kaynak kod («Kodu da incele», read_source_code, search_code) ve wiki sayfa içeriği YALNIZ bu işaretli profillere gönderilir. Hiçbir profil işaretli değilse kod/wiki okuma her yerde «kapalı: yerel profil yok» der. Yalnız kurumunuzda barınan uçlar için işaretleyin; genel LLM adresleri reddedilir." />
+              )}
+              {draft.provider === 'openai' && <CheckboxField label="TLS doğrulamasını atla (öz-imzalı yerel uç)" checked={draft.skipTls} onCheckedChange={v => set({ skipTls: v })} />}
+              <div className="flex flex-wrap items-start gap-3">
+                <Field label="Max tokens" small hint="boş = küresel" value={draft.maxTokens} onChange={e => set({ maxTokens: e.target.value })} inputMode="numeric" />
+                <Field label="Temperature" small hint="boş = küresel; 0 bir değerdir; Anthropic profillerinde uygulanmaz" value={draft.temperature} onChange={e => set({ temperature: e.target.value })} inputMode="decimal" />
+                <Field label="Timeout (s)" small hint="boş = küresel" value={draft.timeoutS} onChange={e => set({ timeoutS: e.target.value })} inputMode="numeric" />
+              </div>
+              {/* v0.10.534 (modelcaps) — düşünme anahtarı modelin ailesine göre gövdeye iner
+                  (Qwen3: chat_template_kwargs.enable_thinking); anahtarı bilinmeyen ailede
+                  sunucu bir kez uyarır, gövde değişmez. Boş = modele dokunma. */}
+              {draft.provider === 'openai' && (
+                <SelectField label="Düşünme (thinking)" value={draft.thinking} onChange={e => set({ thinking: e.target.value as AIThinking })}
+                  hint="Qwen3 gibi düşünen modellerde 'kapalı' boş cevap riskini keser; gemma/llama'da etkisiz. Boş = varsayılan.">
+                  <option value="">varsayılan (dokunma)</option>
+                  <option value="off">kapalı (enable_thinking=false)</option>
+                  <option value="on">açık</option>
+                </SelectField>
+              )}
+              {/* v0.10.1302 — CoSRE araç seti: küçük modelde serbest-sorgu araçları gizlenir;
+                  dış MCP sunucusu ve guided/niyet kademeleri etkilenmez. */}
+              <SelectField label="Araç seti" value={draft.toolset} onChange={e => set({ toolset: e.target.value as AIToolset })}
+                hint="CoSRE sohbetinin bu profille gördüğü araçlar. Basit: query_metric / search_logs / search_traces / list_metric_labels gizli, yapısal query_metrics / query_logs / query_traces kalır (küçük model için). Otomatik: model adında ≤12B boyut varsa basit, aksi hâlde tam.">
+                <option value="">otomatik (model adına göre, ≤12B basit)</option>
+                <option value="simple">basit</option>
+                <option value="full">tam</option>
+              </SelectField>
+            </form>
+          )}
+          <DialogFooter className="border-t border-(--divider) bg-(--bg2) px-[18px] py-3">
+            <ActionRow
+              secondary={<Button variant="outline" onClick={() => setDraft(null)}>Vazgeç</Button>}
+              confirm={<Button type="submit" form="ai-profile-form" loading={busy}>Kaydet</Button>} />
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

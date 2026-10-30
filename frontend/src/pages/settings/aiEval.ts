@@ -176,20 +176,21 @@ export function passDeltas(runs: readonly EvalRunSummary[]): Record<string, numb
  *  son, biri işleyen iş, biri operatörün kendi eylemi. failed kırmızı,
  *  abandoned amber (sahibi düşmüş koşu: dikkat ister ama hata değil).
  *  Sınıflar globals.css `.status-dot*` (Monitors / StatusSection ailesi);
- *  `evs-dot` satır içi hizayı verir. */
+ *  satır içi hiza utility (Faz 2 dilim 1 R11: eski `evs-dot`). */
+const DOT = 'status-dot mr-1.5 inline-block align-middle';
 export const RUN_STATUS_VIEW: Record<EvalRunStatus, { label: string; dot: string; tone?: 'err' | 'warn' }> = {
-  running:   { label: 'Koşuyor',     dot: 'evs-dot status-dot status-dot-operational pulse-dot' },
-  done:      { label: 'Bitti',       dot: 'evs-dot status-dot status-dot-operational' },
-  cancelled: { label: 'Durduruldu',  dot: 'evs-dot status-dot status-dot-operational' },
-  failed:    { label: 'Başarısız',   dot: 'evs-dot status-dot status-dot-outage', tone: 'err' },
-  abandoned: { label: 'Yarım kaldı', dot: 'evs-dot status-dot status-dot-degraded', tone: 'warn' },
+  running:   { label: 'Koşuyor',     dot: `${DOT} status-dot-operational pulse-dot` },
+  done:      { label: 'Bitti',       dot: `${DOT} status-dot-operational` },
+  cancelled: { label: 'Durduruldu',  dot: `${DOT} status-dot-operational` },
+  failed:    { label: 'Başarısız',   dot: `${DOT} status-dot-outage`, tone: 'err' },
+  abandoned: { label: 'Yarım kaldı', dot: `${DOT} status-dot-degraded`, tone: 'warn' },
 };
 
 const isRunStatus = (s: string): s is EvalRunStatus => Object.prototype.hasOwnProperty.call(RUN_STATUS_VIEW, s);
 
 /** Bilinmeyen bir durum (yeni sunucu, eski istemci) çökertmesin: nötr, ham ad. */
 export function runStatusView(s: string): { label: string; dot: string; tone?: 'err' | 'warn' } {
-  return isRunStatus(s) ? RUN_STATUS_VIEW[s] : { label: s || '—', dot: 'evs-dot status-dot status-dot-operational' };
+  return isRunStatus(s) ? RUN_STATUS_VIEW[s] : { label: s || '—', dot: `${DOT} status-dot-operational` };
 }
 
 /** Karşılaştırma seçicisinin adayları: bitmiş, seçiliden farklı koşular. */

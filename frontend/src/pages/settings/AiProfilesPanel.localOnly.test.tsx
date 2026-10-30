@@ -6,6 +6,7 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
+import '@/test/radixJsdom';
 import type { AIProfilesPayload } from '@/lib/types';
 
 const api = vi.hoisted(() => ({
@@ -14,7 +15,7 @@ const api = vi.hoisted(() => ({
 vi.mock('@/lib/api', () => ({ api }));
 
 import { AiProfilesPanel } from './AiProfilesPanel';
-import { ConfirmProvider } from '@/components/ui';
+import { ConfirmGate } from '@/components/coremetry/Confirm';
 
 let host: HTMLDivElement | null = null; let root: Root | null = null;
 const payload: AIProfilesPayload = {
@@ -28,12 +29,16 @@ const payload: AIProfilesPayload = {
 function render(): HTMLElement {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   host = document.createElement('div'); document.body.appendChild(host); root = createRoot(host);
-  act(() => { root!.render(<MemoryRouter><ConfirmProvider><AiProfilesPanel payload={payload} onChange={() => {}} /></ConfirmProvider></MemoryRouter>); });
+  act(() => { root!.render(<MemoryRouter><ConfirmGate><AiProfilesPanel payload={payload} onChange={() => {}} /></ConfirmGate></MemoryRouter>); });
   return host;
 }
 afterEach(() => { act(() => root?.unmount()); host?.remove(); host = null; root = null; document.body.innerHTML = ''; });
 
-const localBox = () => Array.from(document.querySelectorAll('label')).find(l => l.textContent?.includes('Yerel (self-hosted) model'))?.querySelector('input') ?? null;
+// R11: Radix Checkbox `<button role="checkbox">`, etiket kardeş `<label for>` (eskiden sarmalayan label + input).
+const localBox = () => {
+  const l = Array.from(document.querySelectorAll('label')).find(x => x.textContent?.includes('Yerel (self-hosted) model'));
+  return l ? document.getElementById(l.htmlFor) : null;
+};
 const editBtn = (h: HTMLElement, label: string) => Array.from(h.querySelectorAll('tr')).find(r => r.textContent?.includes(label))!.querySelector('button')!;
 
 describe('AiProfilesPanel localOnly', () => {
@@ -51,7 +56,7 @@ describe('AiProfilesPanel localOnly', () => {
     act(() => { editBtn(h, 'Yerel gemma').click(); });
     const box = localBox();
     expect(box).not.toBeNull();
-    expect((box as HTMLInputElement).checked).toBe(true);
+    expect(box!.getAttribute('aria-checked')).toBe('true');
     await act(async () => { (document.getElementById('ai-profile-form') as HTMLFormElement).requestSubmit(); });
     expect(api.putAIProfile).toHaveBeenCalledWith('loc', expect.objectContaining({ localOnly: true }));
   });

@@ -147,7 +147,7 @@ describe('durum görünümü (T9: renk yalnız sapmada)', () => {
     expect(RUN_STATUS_VIEW.abandoned.dot).toContain('status-dot-degraded');
   });
   it('bilinmeyen durum çökertmez: nötr, ham ad', () => {
-    expect(runStatusView('queued')).toEqual({ label: 'queued', dot: 'evs-dot status-dot status-dot-operational' });
+    expect(runStatusView('queued')).toEqual({ label: 'queued', dot: 'status-dot mr-1.5 inline-block align-middle status-dot-operational' });
     expect(runStatusView('toString').label).toBe('toString'); // prototip anahtarı durum sayılmaz
     expect(runStatusView('done').label).toBe('Bitti');
   });

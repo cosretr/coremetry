@@ -6,6 +6,7 @@
 // Varsayılan AÇIK (blob yokken sunucu allow=true döner). Kutu tıklanınca hemen
 // kaydeder (AiToolsetsPanel'in aç/kapa duruşu); polling yok.
 import { useEffect, useState } from 'react';
+import { CheckboxField } from '@/components/coremetry/Field';
 import { useAuthRole } from '@/components/AuthProvider';
 import { api } from '@/lib/api';
 import { useT } from '@/lib/i18n';
@@ -58,26 +59,15 @@ export function AiGeneralQuestionsPanel({ canEdit: canEditProp }: { canEdit?: bo
   };
 
   return (
-    <div data-testid="ai-general-questions-panel" style={{ marginTop: 18, padding: 16, borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--border)', maxWidth: 640 }}>
+    <div data-testid="ai-general-questions-panel" className="mt-[18px] max-w-[640px] rounded-lg border border-(--border) bg-(--bg2) p-4">
       <SectionTitle>{t('aiGeneralQ.title')}</SectionTitle>
       {err && <p className="field-hint" role="alert">{t('aiGeneralQ.loadFailed').replace('{err}', err)}</p>}
-      <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12, color: 'var(--text2)' }}>
-        <input type="checkbox" checked={data?.allow ?? false} disabled={!data || !canEdit || busy}
-               onChange={e => { void toggle(e.target.checked); }} style={{ marginTop: 2 }} />
-        <div>
-          <div>{t('aiGeneralQ.label')}</div>
-          <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2, lineHeight: 1.5 }}>{t('aiGeneralQ.hint')}</div>
-        </div>
-      </label>
-      <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12, color: 'var(--text2)', marginTop: 10 }}>
-        <input type="checkbox" checked={data ? data.sourceDiscovery !== false : false} disabled={!data || !canEdit || busy}
-               data-testid="ai-source-discovery"
-               onChange={e => { void toggleDiscovery(e.target.checked); }} style={{ marginTop: 2 }} />
-        <div>
-          <div>{t('aiSourceDisc.label')}</div>
-          <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2, lineHeight: 1.5 }}>{t('aiSourceDisc.hint')}</div>
-        </div>
-      </label>
+      <CheckboxField label={t('aiGeneralQ.label')} hint={t('aiGeneralQ.hint')}
+        checked={data?.allow ?? false} disabled={!data || !canEdit || busy}
+        onCheckedChange={v => { void toggle(v); }} />
+      <CheckboxField id="ai-source-discovery" className="mt-2.5" label={t('aiSourceDisc.label')} hint={t('aiSourceDisc.hint')}
+        checked={data ? data.sourceDiscovery !== false : false} disabled={!data || !canEdit || busy}
+        onCheckedChange={v => { void toggleDiscovery(v); }} />
       {!canEdit && <p className="field-hint">{t('aiGeneralQ.readOnly')}</p>}
       {data?.updatedBy && data.updatedAt && (
         <p className="field-hint">

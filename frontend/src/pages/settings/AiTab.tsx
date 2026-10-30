@@ -1,8 +1,12 @@
 import { useState, type FormEvent } from 'react';
 import { Spinner } from '@/components/Spinner';
-import { Button, TabStrip, useConfirm } from '@/components/ui';
+import { Button } from '@/components/shadcn/button';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/shadcn/tabs';
+import { Field, SelectField, CheckboxField } from '@/components/coremetry/Field';
+import { ActionRow } from '@/components/coremetry/ActionRow';
+import { useConfirm } from '@/components/coremetry/Confirm';
 import { api } from '@/lib/api';
-import { useSettingsLoad, SettingsLoadError, Field, ConfigStatusBanner } from './shared';
+import { useSettingsLoad, SettingsLoadError, FlashBox, ConfigStatusBanner } from './shared';
 import type { AIProvider, AISettings, AIIntentClassify, AIProfilesPayload } from '@/lib/types';
 import { AiProfilesPanel } from './AiProfilesPanel';
 import { AiBudgetPanel } from './AiBudgetPanel'; // v0.10.411
@@ -58,13 +62,24 @@ export function AITab() {
       }
       return p;
     }, { replace: true });
+  // Faz 2 dilim 1 R11 — TabStrip → shadcn Tabs (öğeler, sıra, etiketler ve
+  // URL sözleşmesi aynı); yalnız seçili sekmenin gövdesi bağlanır (Radix).
+  const tabs: { key: AiTabKey; label: string }[] = [
+    { key: 'provider', label: 'Sağlayıcı ve profiller' }, { key: 'eval', label: 'Değerlendirme' },
+    { key: 'rules', label: 'Kurallar' }, { key: 'toolsets', label: t('aiToolsets.tab') },
+  ];
   return (
     <>
       <CosreV2StatusLine />
-      <TabStrip ariaLabel="CoSRE ayar sekmeleri" value={tab} onChange={setTab}
-        tabs={[{ key: 'provider', label: 'Sağlayıcı ve profiller' }, { key: 'eval', label: 'Değerlendirme' }, { key: 'rules', label: 'Kurallar' }, { key: 'toolsets', label: t('aiToolsets.tab') }]} />
-      {tab === 'eval' ? <AiEvalPanel /> : tab === 'rules' ? <CosreRulesPanel canEdit storageKey="settings-cosre-rules" />
-        : tab === 'toolsets' ? <AiToolsetsPanel /> : <AiProviderSettings />}
+      <Tabs value={tab} onValueChange={v => setTab(aiTabFromParam(v))}>
+        <TabsList variant="line" aria-label="CoSRE ayar sekmeleri" className="mb-3">
+          {tabs.map(x => <TabsTrigger key={x.key} value={x.key}>{x.label}</TabsTrigger>)}
+        </TabsList>
+        <TabsContent value="provider"><AiProviderSettings /></TabsContent>
+        <TabsContent value="eval"><AiEvalPanel /></TabsContent>
+        <TabsContent value="rules"><CosreRulesPanel canEdit storageKey="settings-cosre-rules" /></TabsContent>
+        <TabsContent value="toolsets"><AiToolsetsPanel /></TabsContent>
+      </Tabs>
     </>
   );
 }
@@ -80,6 +95,9 @@ export function AITab() {
 //   - GitHub Copilot: GitHub OAuth token (ghu_…) with Copilot access;
 //     server exchanges it for a session token and calls
 //     api.githubcopilot.com (OpenAI-compatible).
+// `code` çipi (eskiden satır içi: --bg0, 1px 5px, 3px köşe).
+const CODE = 'rounded-[3px] bg-(--bg0) px-[5px] py-px';
+
 function AiProviderSettings() {
   const confirm = useConfirm();
   const [provider, setProvider] = useState<AIProvider>('anthropic');
@@ -212,14 +230,14 @@ function AiProviderSettings() {
   const keyHint = provider === 'github' ? (
     <>
       Paste a GitHub OAuth token with Copilot access (starts with{' '}
-      <code style={{ background: 'var(--bg0)', padding: '1px 5px', borderRadius: 3 }}>ghu_</code>).
+      <code className={CODE}>ghu_</code>).
       You can copy it from{' '}
-      <code style={{ background: 'var(--bg0)', padding: '1px 5px', borderRadius: 3 }}>~/.config/github-copilot/hosts.json</code>{' '}
+      <code className={CODE}>~/.config/github-copilot/hosts.json</code>{' '}
       or run your own OAuth flow. Coremetry exchanges it for a Copilot session token automatically.
     </>
   ) : provider === 'openai' ? (
     <>
-      Drives any OpenAI-compatible <code style={{ background: 'var(--bg0)', padding: '1px 5px', borderRadius: 3 }}>/v1/chat/completions</code> endpoint —
+      Drives any OpenAI-compatible <code className={CODE}>/v1/chat/completions</code> endpoint —
       real OpenAI, Ollama, LM Studio, vLLM, llama.cpp server, LocalAI, OpenWebUI.
       Set <b>Base URL</b> below to your endpoint (e.g. <code>http://ollama:11434/v1</code>).
       API key is optional for local endpoints that don't gate on it (Ollama default).
@@ -227,10 +245,10 @@ function AiProviderSettings() {
   ) : (
     <>
       Paste your Anthropic API key (starts with{' '}
-      <code style={{ background: 'var(--bg0)', padding: '1px 5px', borderRadius: 3 }}>sk-ant-</code>).
+      <code className={CODE}>sk-ant-</code>).
       Get one at{' '}
       <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener"
-         style={{ color: 'var(--accent2)' }}>console.anthropic.com</a>.
+         className="text-(--accent2)">console.anthropic.com</a>.
     </>
   );
 
@@ -249,10 +267,10 @@ function AiProviderSettings() {
   return (
     // v0.10.178 — kök 1100: profil tablosu (6 sütun + eylemler) 640'ta sıkışıyordu
     // (176 canlı görüntüsü: «PRO… S… MO…»); metin/form 640'lık iç sargıda kalır.
-    <div style={{ maxWidth: 1100 }}>
-      <div style={{ maxWidth: 640 }}>
-      <h2 style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>CoSRE</h2>
-      <p style={{ color: 'var(--text2)', fontSize: 13, marginBottom: 16 }}>
+    <div className="max-w-[1100px]">
+      <div className="max-w-[640px]">
+      <h2 className="mb-1.5 text-[length:var(--fs-lg)] font-semibold">CoSRE</h2>
+      <p className="mb-4 text-[length:var(--fs-md)] text-(--text2)">
         Inline natural-language explanations for traces, Problems and exceptions.
         Pick a provider, paste your key, save — buttons appear automatically on the
         trace detail page and the Problems table. The OpenAI-compatible provider
@@ -295,80 +313,50 @@ function AiProviderSettings() {
       <AiBudgetPanel />
       <AiChatRetentionPanel />
       <AiGeneralQuestionsPanel />
-      <div style={{ maxWidth: 640 }}>
-      <form onSubmit={save} style={{
-        marginTop: 18, padding: 16, borderRadius: 8,
-        background: 'var(--bg2)', border: '1px solid var(--border)',
-      }}>
+      <div className="max-w-[640px]">
+      <form onSubmit={save} className="mt-[18px] flex flex-col gap-3 rounded-lg border border-(--border) bg-(--bg2) p-4">
         {/* Master on/off toggle (wf). Disabling stops the background
             problem-explainer, hides the in-app AI affordances, and
             503s the AI endpoints — all WITHOUT touching the stored
             key, so re-enabling is one click. Same checkbox markup as
             Skip-TLS below so the controls read as one family. */}
-        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8,
-                        marginBottom: 12, fontSize: 12, color: 'var(--text2)' }}>
-          <input type="checkbox" checked={enabled}
-                 onChange={e => setEnabled(e.target.checked)}
-                 style={{ marginTop: 2 }} />
-          <div>
-            <div>Enable CoSRE</div>
-            <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2, lineHeight: 1.5 }}>
-              Master switch. Uncheck + Save to turn CoSRE off
-              without removing the stored key — the background
-              problem-explainer stops, the ✨ Explain buttons hide,
-              and AI endpoints return 503. Re-check + Save to resume.
-            </div>
-          </div>
-        </label>
+        <CheckboxField label="Enable CoSRE" checked={enabled} onCheckedChange={setEnabled}
+          hint={<>Master switch. Uncheck + Save to turn CoSRE off
+            without removing the stored key — the background
+            problem-explainer stops, the ✨ Explain buttons hide,
+            and AI endpoints return 503. Re-check + Save to resume.</>} />
 
         {/* v0.9.1138 — otomatik açıklayıcı vidası. Master açıkken bile
             arka plan worker'ları (problem/exception auto-explain)
             ayrı kapatılabilir: ücretli sağlayıcıda AI'yı açmak anında
             otomatik LLM harcaması başlatıyordu (canlı kanıt bulgusu).
             Tıklamalı ✨ yüzeyleri bu vidadan ETKİLENMEZ. */}
-        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8,
-                        marginBottom: 12, fontSize: 12, color: 'var(--text2)' }}>
-          <input type="checkbox" checked={autoExplain}
-                 onChange={e => setAutoExplain(e.target.checked)}
-                 style={{ marginTop: 2 }} />
-          <div>
-            <div>Otomatik açıklamalar</div>
-            <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2, lineHeight: 1.5 }}>
-              Arka plan worker'ları açık problem ve exception'lara
-              kendiliğinden özet üretir (Inbox'taki pasif ✨ satırları).
-              Kapatınca yalnız bu otomatik harcama durur; ✨ Explain
-              düğmeleri ve chat çalışmaya devam eder.
-            </div>
-          </div>
-        </label>
+        <CheckboxField label="Otomatik açıklamalar" checked={autoExplain} onCheckedChange={setAutoExplain}
+          hint={<>Arka plan worker'ları açık problem ve exception'lara
+            kendiliğinden özet üretir (Inbox'taki pasif ✨ satırları).
+            Kapatınca yalnız bu otomatik harcama durur; ✨ Explain
+            düğmeleri ve chat çalışmaya devam eder.</>} />
         {/* v0.10.172 — serbest soru sınıflandırıcısı. Deterministik kılavuza
             oturmayan soruyu küçük model tek JSON çağrısıyla kılavuz niyetine
             eşler; none'da döngü yerine genel bilgi cevabı + öneri çipleri
             (v0.10.194; yerel küçük model). */}
-        <Field label="Serbest soru sınıflandırıcısı (sohbet)">
-          <select value={intentClassify} onChange={e => setIntentClassify(e.target.value as AIIntentClassify)} style={{ width: '100%' }}>
-            <option value="on_no_loop">Açık — eşleşmezse genel bilgiyle cevaplar + öneri çipleri, araç döngüsü yok (yerel küçük model için önerilen)</option>
-            <option value="on">Açık — eşleşmezse serbest araç döngüsü (frontier model)</option>
-            <option value="off">Kapalı — eski davranış</option>
-          </select>
-          <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4, lineHeight: 1.5 }}>
+        <SelectField label="Serbest soru sınıflandırıcısı (sohbet)" value={intentClassify} onChange={e => setIntentClassify(e.target.value as AIIntentClassify)}
+          hint={<>
             Kılavuz kalıplarına uymayan soruyu model yalnız <em>sınıflandırır</em> (tek kısa JSON çağrısı, ~1 s);
             cevap yine sunucunun topladığı kanıtla üretilir. Adım panelinde «niyet» rozeti olarak görünür.
             Hiçbir kalıba oturmayan soru (v0.10.194) araçsız tek çağrıyla genel bilgiyle cevaplanır ve
             cevabın başında «telemetriyle eşleşmedi» notu bulunur — sayılar operatörün verisinden gelmez.
-          </div>
-        </Field>
+          </>}>
+          <option value="on_no_loop">Açık — eşleşmezse genel bilgiyle cevaplar + öneri çipleri, araç döngüsü yok (yerel küçük model için önerilen)</option>
+          <option value="on">Açık — eşleşmezse serbest araç döngüsü (frontier model)</option>
+          <option value="off">Kapalı — eski davranış</option>
+        </SelectField>
 
-        <label style={{ display: 'block', marginBottom: 12 }}>
-          <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>Provider</div>
-          <select value={provider}
-                  onChange={e => setProvider(e.target.value as AIProvider)}
-                  style={{ width: '100%' }}>
-            <option value="anthropic">Anthropic (Claude)</option>
-            <option value="github">GitHub Copilot</option>
-            <option value="openai">OpenAI-compatible (Ollama / LM Studio / vLLM / OpenAI)</option>
-          </select>
-        </label>
+        <SelectField label="Provider" value={provider} onChange={e => setProvider(e.target.value as AIProvider)}>
+          <option value="anthropic">Anthropic (Claude)</option>
+          <option value="github">GitHub Copilot</option>
+          <option value="openai">OpenAI-compatible (Ollama / LM Studio / vLLM / OpenAI)</option>
+        </SelectField>
 
         {/* Base URL — only meaningful for the openai provider. The
             field is rendered for all providers but the openai branch
@@ -376,20 +364,15 @@ function AiProviderSettings() {
             otherwise (saved + ignored). Keeps the form layout
             stable when switching providers. */}
         {provider === 'openai' && (
-          <label style={{ display: 'block', marginBottom: 12 }}>
-            <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>
-              Base URL
-            </div>
-            <input value={baseUrl} onChange={e => setBaseUrl(e.target.value)}
-                   placeholder="http://ollama:11434/v1   (or https://api.openai.com/v1 for real OpenAI)"
-                   autoComplete="off" style={{ width: '100%', fontFamily: 'var(--font-mono)' }} />
-            <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4, lineHeight: 1.5 }}>
+          <Field label="Base URL" value={baseUrl} onChange={e => setBaseUrl(e.target.value)}
+            placeholder="http://ollama:11434/v1   (or https://api.openai.com/v1 for real OpenAI)"
+            autoComplete="off" controlClassName="font-mono"
+            hint={<>
               Endpoint must serve <code>/chat/completions</code> in OpenAI's request shape.
               Common paths: Ollama → <code>http://&lt;host&gt;:11434/v1</code>,
               LM Studio → <code>http://&lt;host&gt;:1234/v1</code>,
               vLLM → <code>http://&lt;host&gt;:8000/v1</code>.
-            </div>
-          </label>
+            </>} />
         )}
 
         {/* TLS verification toggle (v0.5.360). Matches the same
@@ -397,44 +380,26 @@ function AiProviderSettings() {
             for self-hosted endpoints fronted by an internal CA
             Go's default trust store doesn't know about. Off by
             default — operator flips it deliberately. */}
-        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8,
-                        marginBottom: 12, fontSize: 12, color: 'var(--text2)' }}>
-          <input type="checkbox" checked={skipTls}
-                 onChange={e => setSkipTls(e.target.checked)}
-                 style={{ marginTop: 2 }} />
-          <div>
-            <div>Skip TLS verification</div>
-            <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2, lineHeight: 1.5 }}>
-              Disables certificate verification on the outbound HTTPS
-              call to the AI provider. Useful for self-hosted LLMs
-              behind an enterprise CA. Leave off for public endpoints
-              (Anthropic, GitHub Copilot, OpenAI).
-            </div>
-          </div>
-        </label>
+        <CheckboxField label="Skip TLS verification" checked={skipTls} onCheckedChange={setSkipTls}
+          hint={<>Disables certificate verification on the outbound HTTPS
+            call to the AI provider. Useful for self-hosted LLMs
+            behind an enterprise CA. Leave off for public endpoints
+            (Anthropic, GitHub Copilot, OpenAI).</>} />
 
-        <label style={{ display: 'block', marginBottom: 6 }}>
-          <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>
-            API key {hasKey && <span style={{ color: 'var(--text3)' }}>(saved — leave empty to keep current)</span>}
-            {provider === 'openai' && (
-              <span style={{ color: 'var(--text3)' }}> (optional for local endpoints)</span>
-            )}
-          </div>
-          <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)}
-                 placeholder={hasKey ? '••••••••••••••••' :
-                   provider === 'github' ? 'ghu_…' :
-                   provider === 'openai' ? 'sk-… (optional)' : 'sk-ant-…'}
-                 autoComplete="off" style={{ width: '100%' }} />
-        </label>
-        <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 14, lineHeight: 1.5 }}>
-          {keyHint}
-        </div>
+        <Field label="API key" type="password" value={apiKey} onChange={e => setApiKey(e.target.value)}
+          labelAside={(hasKey || provider === 'openai') ? (
+            <span className="text-[length:var(--fs-sm)] text-(--text3)">
+              {hasKey && '(saved — leave empty to keep current)'}
+              {provider === 'openai' && ' (optional for local endpoints)'}
+            </span>
+          ) : undefined}
+          placeholder={hasKey ? '••••••••••••••••' :
+            provider === 'github' ? 'ghu_…' :
+            provider === 'openai' ? 'sk-… (optional)' : 'sk-ant-…'}
+          autoComplete="off" hint={keyHint} />
 
-        <label style={{ display: 'block', marginBottom: 14 }}>
-          <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>Model (optional)</div>
-          <input value={model} onChange={e => setModel(e.target.value)}
-                 placeholder={modelPlaceholder} style={{ width: '100%' }} />
-        </label>
+        <Field label="Model (optional)" value={model} onChange={e => setModel(e.target.value)}
+          placeholder={modelPlaceholder} />
 
         {/* v0.9.1120 (Faz 0.5) — call tuning. Every box is an OVERRIDE:
             the built-in default lives in the placeholder, so an empty
@@ -442,86 +407,60 @@ function AiProviderSettings() {
             a box + Save = reset that knob. Bounds are enforced
             server-side (copilot.ValidateTuning) and repeated in the
             hint so a rejected save is predictable, not a surprise. */}
-        <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text2)',
-                      marginBottom: 8, letterSpacing: 0.2 }}>
-          Call tuning <span style={{ fontWeight: 400, color: 'var(--text3)' }}>
+        <div className="text-[length:var(--fs-sm)] font-semibold text-(--text2)">
+          Call tuning <span className="font-normal text-(--text3)">
             — leave a box empty to use the built-in default
           </span>
         </div>
 
-        <Field label="Max tokens (optional)">
-          <input type="number" inputMode="numeric" min={256} max={32768} step={256}
-                 value={maxTokens} onChange={e => setMaxTokens(e.target.value)}
-                 placeholder="4096 (default)" style={{ width: '100%' }} />
-          <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4, lineHeight: 1.5 }}>
-            Completion budget per call. Range <b>256–32768</b>. Too low and
+        <Field label="Max tokens (optional)" type="number" inputMode="numeric" min={256} max={32768} step={256}
+          value={maxTokens} onChange={e => setMaxTokens(e.target.value)} placeholder="4096 (default)"
+          hint={<>Completion budget per call. Range <b>256–32768</b>. Too low and
             explanations get truncated mid-sentence; too high and a chatty
-            model burns quota on every ✨ button.
-          </div>
-        </Field>
+            model burns quota on every ✨ button.</>} />
 
-        <Field label="Temperature (optional)">
-          <input type="number" inputMode="decimal" min={0} max={2} step={0.1}
-                 value={temperature} onChange={e => setTemperature(e.target.value)}
-                 placeholder="0.2 (default)" style={{ width: '100%' }} />
-          <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4, lineHeight: 1.5 }}>
-            Range <b>0–2</b>. Applies to OpenAI-compatible and GitHub
+        <Field label="Temperature (optional)" type="number" inputMode="decimal" min={0} max={2} step={0.1}
+          value={temperature} onChange={e => setTemperature(e.target.value)} placeholder="0.2 (default)"
+          hint={<>Range <b>0–2</b>. Applies to OpenAI-compatible and GitHub
             endpoints; strict-JSON surfaces on OpenAI-compatible endpoints
             always run at 0. Anthropic requests never carry temperature
             (current Claude models reject sampling parameters), so this
-            field has no effect on Anthropic profiles.
-          </div>
-        </Field>
+            field has no effect on Anthropic profiles.</>} />
 
-        <Field label="Request timeout (seconds, optional)">
-          <input type="number" inputMode="numeric" min={10} max={600} step={10}
-                 value={timeoutS} onChange={e => setTimeoutS(e.target.value)}
-                 placeholder="180 (default)" style={{ width: '100%' }} />
-          <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4, lineHeight: 1.5 }}>
-            Range <b>10–600</b>. A local LLM loading a large model cold can
+        <Field label="Request timeout (seconds, optional)" type="number" inputMode="numeric" min={10} max={600} step={10}
+          value={timeoutS} onChange={e => setTimeoutS(e.target.value)} placeholder="180 (default)"
+          hint={<>Range <b>10–600</b>. A local LLM loading a large model cold can
             need 60s+ for a first generation. Above your reverse proxy /
             ingress timeout the value is a lie — the hop in front of
-            Coremetry cuts the request first.
-          </div>
-        </Field>
+            Coremetry cuts the request first.</>} />
 
-        {msg && (
-          <div style={{
-            marginBottom: 12, padding: '6px 10px', borderRadius: 4, fontSize: 12,
-            color: msg.kind === 'ok' ? 'var(--ok)' : 'var(--err)',
-            background: msg.kind === 'ok' ? 'rgba(63,185,80,0.10)' : 'rgba(220,38,38,0.08)',
-            border: `1px solid ${msg.kind === 'ok' ? 'rgba(63,185,80,0.35)' : 'rgba(220,38,38,0.3)'}`,
-          }}>
-            {msg.text}
-          </div>
-        )}
+        {/* v0.10.974 deseni — FlashBox: hata role=alert, başarı role=status (eskiden satır içi kutu). */}
+        {msg && <FlashBox kind={msg.kind}>{msg.text}</FlashBox>}
 
-        <div style={{ display: 'flex', gap: 8 }}>
-          {/* Save is actionable whenever there's something to persist:
-              a new key, an already-stored key, or an openai endpoint
-              with no key. The last clause keeps the Enable toggle
-              actionable on a no-auth-local install. */}
-          <Button type="submit" variant="primary"
-                  disabled={!apiKey && !hasKey && !(provider === 'openai' && !!baseUrl)} loading={busy}>
-            Save
-          </Button>
-          {/* v0.9.1006 (M4/O6) — dolu Save'in yanında ikinci dolgu
-              olmasın; kırmızı dil `ghost-danger`la korunuyor. */}
-          {hasKey && (
-            <Button type="button" variant="ghost-danger" onClick={clearKey} disabled={busy}>
-              Remove key
+        {/* Save is actionable whenever there's something to persist:
+            a new key, an already-stored key, or an openai endpoint
+            with no key. The last clause keeps the Enable toggle
+            actionable on a no-auth-local install.
+            v0.9.1006 (M4/O6) — dolu Save'in yanında ikinci dolgu
+            olmasın; kırmızı dil `ghost-danger`la korunuyor. */}
+        <ActionRow
+          destructive={hasKey ? (
+            <Button variant="ghost-danger" onClick={clearKey} disabled={busy}>Remove key</Button>
+          ) : undefined}
+          confirm={
+            <Button type="submit"
+              disabled={!apiKey && !hasKey && !(provider === 'openai' && !!baseUrl)} loading={busy}>
+              Save
             </Button>
-          )}
-        </div>
+          } />
       </form>
 
       {hasKey && (
-        <div style={{ marginTop: 18, padding: 16, borderRadius: 8,
-          background: 'var(--bg2)', border: '1px solid var(--border)' }}>
-          <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>What it does</h3>
-          <ul style={{ fontSize: 13, lineHeight: 1.7, color: 'var(--text)', paddingLeft: 18 }}>
+        <div className="mt-[18px] rounded-lg border border-(--border) bg-(--bg2) p-4">
+          <h3 className="mb-2 text-[length:var(--fs-md)] font-semibold">What it does</h3>
+          <ul className="list-disc pl-[18px] text-[length:var(--fs-md)] leading-[1.7] text-(--text)">
             <li><b><IconSparkles /> Ask CoSRE</b> — on any trace detail page.</li>
-            <li><b><IconSparkles /></b> column on the <Link to="/problems" style={{ color: 'var(--accent2)' }}>Problems</Link> page —
+            <li><b><IconSparkles /></b> column on the <Link to="/problems" className="text-(--accent2)">Problems</Link> page —
               plain-language meaning + ranked likely causes + first three things to check.</li>
           </ul>
         </div>

@@ -3,10 +3,17 @@
 // GET/PUT'u, kutu boş = varsayılan 90, 0 = süpürme kapalı. Worker saatte bir
 // süpürür (leader kilidi), silinen sayı sunucu logunda.
 import { useEffect, useState, type FormEvent } from 'react';
-import { Button } from '@/components/ui';
+import { Button } from '@/components/shadcn/button';
+import { Field } from '@/components/coremetry/Field';
+import { ActionRow } from '@/components/coremetry/ActionRow';
 import { api } from '@/lib/api';
-import { Field2, FlashBox, Row, SectionTitle, humanize } from './shared';
+import { FlashBox, SectionTitle, humanize } from './shared';
 import { retentionSummaryTR, retentionToForm, retentionToWire } from './aiChatRetention';
+
+
+// Kart (D3: bg2 + border + 8px köşe + 16px dolgu, aynı ölçüler; yalnız token utility).
+const CARD = 'mt-[18px] max-w-[640px] rounded-lg border border-(--border) bg-(--bg2) p-4';
+const INTRO = 'mb-2.5 text-[length:var(--fs-sm)] text-(--text2)';
 
 export function AiChatRetentionPanel() {
   const [form, setForm] = useState('');
@@ -39,18 +46,15 @@ export function AiChatRetentionPanel() {
   };
 
   return (
-    <form onSubmit={save} style={{ marginTop: 18, padding: 16, borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--border)', maxWidth: 640 }}>
+    <form onSubmit={save} className={CARD}>
       <SectionTitle>Sohbet arşivi</SectionTitle>
-      <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 10 }}>
+      <div className={INTRO}>
         CoSRE sohbetleri son yazımlarından bu kadar gün sonra silinir; boş = 90 (varsayılan), 0 = süpürme kapalı. Silme geri alınamaz.
       </div>
-      <Row>
-        <Field2 label="Saklama (gün)" small hint="0 = kapalı · en fazla 3650">
-          <input inputMode="numeric" value={form} onChange={e => setForm(e.target.value)} disabled={!loaded || busy} placeholder="90" />
-        </Field2>
-      </Row>
-      <div style={{ marginTop: 12 }}>
-        <Button type="submit" variant="primary" loading={busy} disabled={!loaded}>Kaydet</Button>
+      <Field label="Saklama (gün)" small hint="0 = kapalı · en fazla 3650"
+        inputMode="numeric" value={form} onChange={e => setForm(e.target.value)} disabled={!loaded || busy} placeholder="90" />
+      <div className="mt-3">
+        <ActionRow confirm={<Button type="submit" loading={busy} disabled={!loaded}>Kaydet</Button>} />
       </div>
       {flash && <FlashBox kind={flash.kind}>{flash.text}</FlashBox>}
     </form>

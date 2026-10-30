@@ -10,11 +10,14 @@
 // bayat profili değil); katalog alt sekme dönüşünde ve başlatma hatasında
 // tazelenir; kıyas ipucu duruma göre (süren / başarısız).
 // v0.10.1316 — ajan kipi: özet sütunları ve çekmecenin "Araç izi".
+// Faz 2 dilim 1 R11: `.evs-*` kancaları `data-evs-*` özniteliği, `.badge` → `[data-slot=badge]`
+// (sınıflar silindi; iddiaların anlamı aynı).
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import type { ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import '@/test/radixJsdom';
 import { MemoryRouter, useLocation, useNavigate, useSearchParams, type NavigateFunction } from 'react-router-dom';
 import type { EvalCaseResult, EvalRunSummary, EvalsetCatalog } from '@/lib/types';
 
@@ -309,12 +312,12 @@ describe('AiEvalPanel', () => {
     expect(drawer.textContent).toContain('Araç izi');
     expect(drawer.textContent).toContain('döngü · 3 tur · 4 çağrı (1 atlandı) · 6,1k token');
     expect(drawer.textContent).toContain('Araçlardan en az biri: compare_periods / get_service_health');
-    const items = Array.from(drawer.querySelectorAll('ol.evs-trail > li'));
+    const items = Array.from(drawer.querySelectorAll('ol[data-evs-trail] > li'));
     expect(items.length).toBe(2);
     expect(items[0].textContent).toContain('get_service_health');
     expect(items[1].textContent).toContain('atlandı');
     // Liste, tablo değil (≤12 sabit sıralı adım).
-    expect(drawer.querySelector('ol.evs-trail table')).toBeNull();
+    expect(drawer.querySelector('ol[data-evs-trail] table')).toBeNull();
   });
 
   it('tek çağrılı vakada Araç izi bölümü ve ajan rozeti yok', async () => {
@@ -323,7 +326,7 @@ describe('AiEvalPanel', () => {
     await tick();
     const drawer = document.body.querySelector('[aria-label="Vaka ayrıntısı"]')!;
     expect(drawer.textContent).not.toContain('Araç izi');
-    expect(drawer.querySelector('.badge')!.textContent).not.toBe('ajan');
+    expect(drawer.querySelector('[data-slot="badge"]')!.textContent).not.toBe('ajan'); // R11: shadcn Badge / StatusBadge
   });
 
   it('kalan vaka satırı gerçek ?case= linki; çekmece bölümleri + kırpma notu', async () => {
@@ -343,7 +346,7 @@ describe('AiEvalPanel', () => {
     for (const s of ['Özet', 'Neden', 'Beklenti', 'Girdi', 'Model cevabı', 'Niyet: find_entity · servis: checkout', 'kırpıldı — ilk 16 KiB']) {
       expect(drawer, s).toContain(s);
     }
-    expect(document.body.querySelector('ul.evs-fails')!.textContent).toBe('intent: want find_entity got none');
+    expect(document.body.querySelector('ul[data-evs-fails]')!.textContent).toBe('intent: want find_entity got none');
   });
 
   it('koşu geçmişi: Fark eksi → cell-err; durum nokta + metin; satır ?run= linki', async () => {
@@ -375,9 +378,9 @@ describe('AiEvalPanel', () => {
     api.aiEvalsetRun.mockResolvedValue({ run: failed, cases: [] });
     const el = render(<AiEvalPanel />, '/settings/ai?tab=eval&run=ev-fail');
     await tick();
-    const pick = el.querySelector('.evs-cmp-pick select') as HTMLSelectElement;
+    const pick = el.querySelector('[data-evs-cmp-pick] select') as HTMLSelectElement;
     expect(pick.disabled).toBe(true);
-    expect(el.querySelector('.evs-cmp-pick')!.textContent).toContain('Başarısız ya da yarım kalan koşu karşılaştırılamaz — bitmiş bir koşu seç.');
+    expect(el.querySelector('[data-evs-cmp-pick]')!.textContent).toContain('Başarısız ya da yarım kalan koşu karşılaştırılamaz — bitmiş bir koşu seç.');
     expect(el.textContent).not.toContain('Seçili koşu bitince karşılaştırılabilir.');
   });
 

@@ -6,6 +6,7 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import '@/test/radixJsdom';
 
 const api = vi.hoisted(() => ({
   aiGeneralQuestions: vi.fn(async (..._a: unknown[]): Promise<unknown> => null),
@@ -30,7 +31,9 @@ afterEach(() => {
 const tick = async () => {
   for (let i = 0; i < 3; i++) await act(async () => { await new Promise(r => setTimeout(r, 15)); });
 };
-const box = (el: HTMLElement) => el.querySelector('input[type="checkbox"]') as HTMLInputElement;
+// R11: Radix Checkbox `<button role="checkbox" aria-checked>` (eskiden native input).
+const box = (el: HTMLElement) => el.querySelector('[role="checkbox"]') as HTMLButtonElement;
+const checked = (b: HTMLButtonElement) => b.getAttribute('aria-checked') === 'true';
 
 describe('AiGeneralQuestionsPanel', () => {
   it('varsayılan açık görünür; admin kapatır (PUT allow=false) ve cevap yansır', async () => {
@@ -40,12 +43,12 @@ describe('AiGeneralQuestionsPanel', () => {
     await tick();
     expect(el.textContent).toMatch(/General questions|Genel sorular/);
     expect(el.textContent).toMatch(/Answer general questions|Genel sorulara cevap ver/);
-    expect(box(el).checked).toBe(true);
+    expect(checked(box(el))).toBe(true);
     expect(box(el).disabled).toBe(false);
     act(() => { box(el).click(); });
     await tick();
     expect(api.putAIGeneralQuestions).toHaveBeenCalledWith(false);
-    expect(box(el).checked).toBe(false);
+    expect(checked(box(el))).toBe(false);
     expect(el.textContent).toContain('admin@example.test');
   });
 
@@ -53,7 +56,7 @@ describe('AiGeneralQuestionsPanel', () => {
     api.aiGeneralQuestions.mockResolvedValueOnce({ allow: false });
     const el = render(false);
     await tick();
-    expect(box(el).checked).toBe(false);
+    expect(checked(box(el))).toBe(false);
     expect(box(el).disabled).toBe(true);
     expect(el.textContent).toMatch(/Read-only|Salt-okunur/);
     act(() => { box(el).click(); });

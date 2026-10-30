@@ -25,7 +25,11 @@ const api = vi.hoisted(() => ({
 vi.mock('@/lib/api', () => ({ api }));
 
 import { AITab } from './AiTab';
+import { ConfirmGate } from '@/components/coremetry/Confirm';
+// Kurallar sekmesi (components/ai/CosreRulesPanel, bu dilimin dışında) hâlâ ui/useConfirm'de:
+// iki kapı App.tsx'teki gibi yan yana.
 import { ConfirmProvider } from '@/components/ui';
+import '@/test/radixJsdom';
 
 let host: HTMLDivElement | null = null; let root: Root | null = null;
 let where = ''; let navType = '';
@@ -37,7 +41,7 @@ function render(entry: string): HTMLElement {
   act(() => {
     root!.render(
       <MemoryRouter initialEntries={[entry]}>
-        <QueryClientProvider client={qc}><ConfirmProvider><AITab /></ConfirmProvider></QueryClientProvider>
+        <QueryClientProvider client={qc}><ConfirmProvider><ConfirmGate><AITab /></ConfirmGate></ConfirmProvider></QueryClientProvider>
         <Where />
       </MemoryRouter>,
     );
@@ -54,6 +58,12 @@ const tick = async () => {
 };
 const tab = (el: HTMLElement, label: string) =>
   Array.from(el.querySelectorAll('[role="tab"]')).find(t => t.textContent === label) as HTMLButtonElement;
+// R11: shadcn/Radix Tabs sekmeyi `mousedown`da (sol tuş) seçer — `.click()` jsdom'da
+// mousedown üretmez; kullanıcının tıklamasıyla aynı olay sırası.
+const select = (t: HTMLElement) => {
+  t.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }));
+  t.click();
+};
 
 describe('AITab — sekmeler', () => {
   // v0.10.1434 — dördüncü sekme Kaynak araç setleri (?tab=toolsets); ayar okuması düşse de açılır.
@@ -73,7 +83,7 @@ describe('AITab — sekmeler', () => {
     expect(el.textContent).toContain('Ayarlar okunamadı');
     expect(el.querySelector('[role="tablist"]')).not.toBeNull();
     expect(tab(el, 'Sağlayıcı ve profiller').getAttribute('aria-selected')).toBe('true');
-    act(() => { tab(el, 'Değerlendirme').click(); });
+    act(() => { select(tab(el, 'Değerlendirme')); });
     await tick();
     expect(where).toBe('/settings/ai?tab=eval');
     expect(navType).toBe('REPLACE');
@@ -89,10 +99,10 @@ describe('AITab — sekmeler', () => {
     expect(tab(el, 'Kurallar').getAttribute('aria-selected')).toBe('true');
     expect(el.querySelector('[data-testid="cosre-rules-panel"]')).not.toBeNull();
     expect(el.textContent).toContain('Henüz kural yok');
-    act(() => { tab(el, 'Değerlendirme').click(); });
+    act(() => { select(tab(el, 'Değerlendirme')); });
     await tick();
     expect(where).toBe('/settings/ai?tab=eval&run=ev-1');
-    act(() => { tab(el, 'Kurallar').click(); });
+    act(() => { select(tab(el, 'Kurallar')); });
     await tick();
     expect(where).toBe('/settings/ai?tab=rules');
   });
@@ -100,7 +110,7 @@ describe('AITab — sekmeler', () => {
   it('ilk sekmeye dönüş tab + run/case/cmp siler, yabancı parametre kalır', async () => {
     const el = render('/settings/ai?tab=eval&run=ev-1&case=c1&cmp=ev-0&keep=1');
     await tick();
-    act(() => { tab(el, 'Sağlayıcı ve profiller').click(); });
+    act(() => { select(tab(el, 'Sağlayıcı ve profiller')); });
     await tick();
     expect(where).toBe('/settings/ai?keep=1');
   });

@@ -19,24 +19,27 @@
 // DataTableState): satır içi hücre stili, sayı hücresinde mono, `is-fit`
 // YOK — tableUnityRatchet tavanda, bu dosya hiçbir sayaca bir şey eklemez.
 // Saf kararlar (seçim, Fark, profil, süre, gruplama) aiEval.ts'te, testli.
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { Spinner, Empty } from '@/components/Spinner';
 import { QueryErrorInline } from '@/components/QueryError';
-import { Badge, Button, Card, Chip, Drawer, DrawerSection, SegmentedControl, SelectField } from '@/components/ui';
+import { Badge } from '@/components/shadcn/badge';
+import { Button } from '@/components/shadcn/button';
+import { ToggleGroup, ToggleGroupItem } from '@/components/shadcn/toggle-group';
+import { StatusBadge } from '@/components/coremetry/StatusBadge';
+import { SegmentedControl } from '@/components/coremetry/SegmentedControl';
+import { SelectField } from '@/components/coremetry/Field';
 import { KeyValue } from '@/components/coremetry/KeyValue';
 import { SectionHead } from '@/components/coremetry/SectionHead';
-import {
-  useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState,
-  type ColumnDef, type DataTableStateKind,
-} from '@/components/ui/DataTable';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/coremetry/overlay';
+import { DataTable, type ColumnDef, type DataTableStateInput } from '@/components/coremetry/DataTable';
 import { useEvalsetCatalog, useEvalRuns, useEvalRun, useEvalCompare, useStartEvalRun, useCancelEvalRun } from '@/lib/queries';
 import type { AIToolset, EvalCaseResult, EvalCompare, EvalRunSummary, EvalSurfaceSummary } from '@/lib/types';
 import { FlashBox, humanize } from './shared';
 import {
   activeRun, agentMetaLine, caseBadgeLabel, caseReason, compareCandidates, compareGroups, compareSummary, evalHref, expectLines, failingCases,
   fmtAvg1, fmtDec2, fmtRunTime, fmtSec1, fmtSignedInt, fmtTokensK, isFinished, passDeltas, pickDefaultProfile, pickDefaultRunId,
-  progressPct, progressText, routingHint, runStatusView, runToolsetView, selectionCaseCount, toggleSurface, toolsetLabel,
+  progressPct, progressText, routingHint, RUN_STATUS_VIEW, runStatusView, runToolsetView, selectionCaseCount, toggleSurface, toolsetLabel,
   trailRows, withEvalParams,
 } from './aiEval';
 
@@ -81,7 +84,24 @@ const RUN_COLS: ColumnDef<RunRow>[] = [
   { id: 'toolset', label: 'Araç seti', sortValue: r => r.toolset ?? '', naturalDir: 'asc', width: 110 },
 ];
 
-interface TableStateView { kind: DataTableStateKind; message?: string; onRetry?: () => void }
+type TableStateView = DataTableStateInput<unknown>;
+
+// Faz 2 dilim 1 R11 — eski `.evs-*` sınıflarının utility karşılıkları (aynı
+// ölçüler: --sp-3 = 1.5, --sp-4 = 2, --sp-5 = 2.5, --sp-6 = 3, --sp-7 = 4).
+const PRE = 'mt-1.5 max-h-80 overflow-auto rounded-sm border border-(--border) bg-(--bg2) px-2.5 py-2 text-[length:var(--fs-xs)] leading-[1.45] whitespace-pre-wrap [overflow-wrap:anywhere] text-(--text)';
+const LIST = 'm-0 list-disc pl-4 text-[length:var(--fs-sm)] leading-[1.6]';
+const NOTE = 'mt-1.5 text-[length:var(--fs-xs)]';
+// Kalan vaka noktası = başarısız koşu noktası (`status-dot-outage`, hiza utility).
+const FAIL_DOT = RUN_STATUS_VIEW.failed.dot;
+const ROW = 'mt-3 flex flex-wrap items-center gap-2';
+// Yüzey çiplerinin "Tümü" değeri (ToggleGroup çoklu; boş seçim = tümü).
+const ALL = '\u0000all';
+// SegmentedControl '' değeri taşıyamaz (Radix tekli: '' = seçimsiz) → otomatik
+// araç seti arayüzde 'auto', gövdede yine ''.
+type ToolsetPick = 'auto' | Exclude<AIToolset, ''>;
+
+/** undefined = DataTableCell'in soluk "—"sı (renderCell boş değer sözleşmesi). */
+const shown = <V,>(v: V | null | undefined): V | undefined => (v == null || v === '' ? undefined : v);
 
 export function AiEvalPanel() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -144,23 +164,6 @@ export function AiEvalPanel() {
     value: new Set(selectedId ? [selectedId] : []),
   }), [selectedId]);
 
-  const surfaceDt = useDataTable<EvalSurfaceSummary>({
-    storageKey: 'settings-ai-eval-surfaces', columns: SURFACE_COLS, rows: surfaceRows,
-  });
-  const caseDt = useDataTable<EvalCaseResult>({
-    storageKey: 'settings-ai-eval-cases', columns: CASE_COLS, rows: failing,
-    getRowHref: c => evalHref(pathname, searchParams, { run: selectedId, case: c.id }),
-    rowLinkReplace: true,
-  });
-  const runDt = useDataTable<RunRow>({
-    storageKey: 'settings-ai-eval-runs', columns: RUN_COLS, rows: runRows,
-    initialSort: { id: 'started', dir: 'desc' },
-    // Koşu değişince açık çekmece kapanır; taban hedefle aynı olamaz.
-    getRowHref: r => evalHref(pathname, searchParams, { run: r.id, case: null, cmp: cmpParam === r.id ? null : cmpParam }),
-    rowLinkReplace: true,
-    selection: runSelection,
-  });
-
   // ── Karşılaştırma: seçili (bitmiş) koşu HEDEF, seçicideki koşu TABAN ──
   const selectedFinished = !!selectedRun && isFinished(selectedRun.status);
   const candidates = useMemo(() => compareCandidates(runs, selectedId), [runs, selectedId]);
@@ -175,6 +178,16 @@ export function AiEvalPanel() {
   const routed = prof ? routingHint(surfaces, prof.profileId) : '';
   const order = useMemo(() => surfaces.map(s => s.surface), [surfaces]);
   const selCount = selectionCaseCount(surfaces, picked);
+  // ToggleGroup çoklu → bugünkü çip anlamı: "Tümü" seçimi boşaltır (zaten
+  // seçiliyken tık bir şey yapmaz), yüzey çipi toggleSurface ile aç/kapa.
+  const chipValue = picked.length === 0 ? [ALL] : picked;
+  const onChips = (next: string[]) => {
+    const added = next.find(v => !chipValue.includes(v));
+    const removed = chipValue.find(v => !next.includes(v));
+    const hit = added ?? removed;
+    if (!hit || hit === ALL) { if (added === ALL) setPicked([]); return; }
+    setPicked(p => toggleSurface(p, hit, order));
+  };
 
   // Koş'un kapalı olma SEBEBİ düğmenin yanında yazılı (devre dışı düğme
   // sebepsiz kalmasın). Sıra: AI hazır değil > koşu sürüyor > boş seçim.
@@ -224,12 +237,54 @@ export function AiEvalPanel() {
   const openCase = caseParam ? (detail?.cases ?? []).find(c => c.id === caseParam) ?? null : null;
   const caseHref = (id: string) => evalHref(pathname, searchParams, { run: selectedId, case: id });
 
+  // Hücreler (kolonlar, sıra, genişlikler aynı; coremetry DataTable renderCell).
+  const surfaceCell = (r: EvalSurfaceSummary, col: ColumnDef<EvalSurfaceSummary>): ReactNode => {
+    switch (col.id) {
+      case 'surface': return r.surface;
+      case 'pass': return r.pass;
+      case 'fail': return r.fail;
+      case 'unknown': return shown(r.unknownEntities);
+      case 'latency': return shown(fmtSec1(r.avgLatencyMs));
+      case 'toolCalls': return shown(fmtAvg1(r.avgToolCalls));
+      case 'tokens': return shown(fmtTokensK(r.avgTokens));
+      default: return undefined;
+    }
+  };
+  const caseCell = (c: EvalCaseResult, col: ColumnDef<EvalCaseResult>): ReactNode => {
+    switch (col.id) {
+      // T9/S4 — nokta tek başına durum taşımaz: bölüm başlığı ("Kalan") ve
+      // gerekçe metni yanında; ekran okuyucuya ayrıca.
+      case 'id': return (
+        <>
+          <span className={FAIL_DOT} aria-hidden="true" />
+          {c.id}
+          <span className="sr-only">{c.error ? ' — hata' : ' — kaldı'}</span>
+        </>
+      );
+      case 'surface': return c.surface;
+      case 'reason': return shown(caseReason(c));
+      default: return undefined;
+    }
+  };
+  const runCell = (r: RunRow, col: ColumnDef<RunRow>): ReactNode => {
+    switch (col.id) {
+      case 'started': return <span title={`${r.id} · ${r.startedBy || '—'}`}>{fmtRunTime(r.startedAt)}</span>;
+      case 'version': return r.appVersion ? <span title={`prompt ${r.promptVersion || '—'}`}>{r.appVersion}</span> : undefined;
+      case 'model': return shown(r.model);
+      case 'status': { const view = runStatusView(r.status); return <><span className={view.dot} aria-hidden="true" />{view.label}</>; }
+      case 'pass': return `${r.pass} / ${r.total}`;
+      case 'delta': return r.delta === null ? undefined : fmtSignedInt(r.delta);
+      case 'toolset': { const v = runToolsetView(r); return v.text ? <span title={v.title}>{v.text}</span> : undefined; }
+      default: return undefined;
+    }
+  };
+
   return (
-    <div className="evs-panel">
-      <Card
-        header="Değerlendirme (evalset)"
-        footer={<Link to="/ai?source=evalset">Bu koşuların çağrıları /ai'da, Kaynak: Değerlendirme</Link>}>
-        <p className="evs-intro">
+    <div className="max-w-[1100px]">
+      {/* Kart gruplaması aynı (D3): `.card` + başlık/altbilgi şeridi (eski ui/Card ölçüleri). */}
+      <div className="card">
+        <div className="mb-2.5 border-b border-(--divider) pb-2 text-[length:var(--fs-md)] font-semibold">Değerlendirme (evalset)</div>
+        <p className="mb-3 mt-0 text-[length:var(--fs-sm)] leading-normal text-(--text2)">
           Gömülü evalset vakalarını üretimle aynı yoldan — yapılandırılmış profil(ler), aynı sistem
           istemleri — sunucuda sırayla koşturur ve deterministik puanlar (içerik, uydurma ad, niyet,
           RCA hükmü, rubrik). Ajan vakaları (ChatLoop) canlı CoSRE döngüsünden — gerçek araç kataloğu,
@@ -246,124 +301,77 @@ export function AiEvalPanel() {
               { id: 'endpoint', k: 'Uç', v: prof?.baseUrl || prof?.provider, mono: !!prof?.baseUrl },
               { id: 'prompt', k: 'Prompt sürümü', v: catalog.promptVersion, mono: true, title: `uygulama ${catalog.appVersion}` },
             ]} />
-            {routed && <div className="field-hint evs-note">Farklı profile yönlenen: {routed}</div>}
-            <div className="evs-chips" role="group" aria-label="Koşulacak yüzeyler">
-              <Chip pill active={picked.length === 0} onClick={() => setPicked([])}>Tümü {catalog.total}</Chip>
+            {routed && <div className={`field-hint ${NOTE}`}>Farklı profile yönlenen: {routed}</div>}
+            {/* R11: Chip pill'leri → shadcn ToggleGroup çoklu (aria-pressed düğmeler, aynı anlam). */}
+            <ToggleGroup type="multiple" variant="outline" size="sm" spacing={1.5} value={chipValue} onValueChange={onChips}
+              aria-label="Koşulacak yüzeyler" className="mt-3 flex-wrap [&>*]:rounded-full [&>*]:px-3">
+              <ToggleGroupItem value={ALL}>Tümü {catalog.total}</ToggleGroupItem>
               {surfaces.map(s => (
-                <Chip key={s.surface} pill active={picked.includes(s.surface)}
-                  onClick={() => setPicked(p => toggleSurface(p, s.surface, order))}>
-                  {s.surface} {s.cases}
-                </Chip>
+                <ToggleGroupItem key={s.surface} value={s.surface}>{s.surface} {s.cases}</ToggleGroupItem>
               ))}
-            </div>
+            </ToggleGroup>
             {/* v0.10.1311 — araç seti yalnız serbest döngü yüzeylerine uygulanır;
                 kümede yoksa (katalog toolset '') seçici gösterilmez. */}
             {catalog.toolset && (
-              <div className="evs-actions">
-                <span className="field-hint">Araç seti</span>
-                <SegmentedControl<AIToolset> size="sm" aria-label="Araç seti" value={toolset} onChange={setToolset}
+              <div className={ROW}>
+                <span className="field-hint mt-0">Araç seti</span>
+                <SegmentedControl<ToolsetPick> size="sm" aria-label="Araç seti" value={toolset || 'auto'}
+                  onChange={v => setToolset(v === 'auto' ? '' : v)}
                   options={[
-                    { value: '', label: `Otomatik (${toolsetLabel(catalog.toolset) ?? '—'})`, title: 'Üretim profilinin araç seti: açık ayar, yoksa model adı ≤12B → basit' },
+                    { value: 'auto', label: `Otomatik (${toolsetLabel(catalog.toolset) ?? '—'})`, title: 'Üretim profilinin araç seti: açık ayar, yoksa model adı ≤12B → basit' },
                     { value: 'simple', label: 'Basit', title: 'query_metric / search_logs / search_traces / list_metric_labels anılmaz' },
                     { value: 'full', label: 'Tam' },
                   ]} />
-                <span className="field-hint">Serbest döngü yüzeylerine uygulanır: tek çağrılı vakada (ChatCodeResolve) prompt varyantı, ajan vakasında (ChatLoop) modele giden araç kataloğu da değişir.</span>
+                <span className="field-hint mt-0">Serbest döngü yüzeylerine uygulanır: tek çağrılı vakada (ChatCodeResolve) prompt varyantı, ajan vakasında (ChatLoop) modele giden araç kataloğu da değişir.</span>
               </div>
             )}
           </>
         )}
-        <div className="evs-actions">
-          <Button variant="primary" onClick={start} disabled={!canRun} loading={startM.isPending}>Koş</Button>
+        <div className={ROW}>
+          <Button onClick={start} disabled={!canRun} loading={startM.isPending}>Koş</Button>
           {active && (
-            <Button variant="secondary" onClick={cancel} loading={cancelM.isPending}>Durdur</Button>
+            <Button variant="outline" onClick={cancel} loading={cancelM.isPending}>Durdur</Button>
           )}
-          <span className="field-hint">{blockReason || (catalog ? `${selCount} vaka · sırayla koşar` : '')}</span>
+          <span className="field-hint mt-0">{blockReason || (catalog ? `${selCount} vaka · sırayla koşar` : '')}</span>
         </div>
         {/* v0.10.940 — süre son yoklamanın saatine göre (dataUpdatedAt): ayrı
             bir saniye sayacı (setInterval) yok; 10 s'lik yoklama zaten
             yeniden çiziyor ve gizli sekmede RQ ile birlikte durur. */}
         {active && <RunProgress run={active} nowMs={runsQ.dataUpdatedAt || Date.now()} />}
         {flash && <FlashBox kind={flash.kind}>{flash.text}</FlashBox>}
-      </Card>
+        <div className="mt-2.5 border-t border-(--divider) pt-2 text-[length:var(--fs-xs)] text-(--text3)">
+          <Link to="/ai?source=evalset">Bu koşuların çağrıları /ai'da, Kaynak: Değerlendirme</Link>
+        </div>
+      </div>
 
       <SectionHead title={`${runParam ? 'Seçili koşu' : 'Son koşu'} · yüzey özeti`}
         meta={selectedRun ? runMeta(selectedRun) : undefined} />
       {selectedRun?.status === 'failed' && selectedRun.error && (
-        <div className="is-err evs-note">Koşu başarısız: {selectedRun.error}</div>
+        <div className={`is-err ${NOTE}`}>Koşu başarısız: {selectedRun.error}</div>
       )}
       <div className="table-wrap">
-        <table {...surfaceDt.tableProps}>
-          <DataTableColgroup dt={surfaceDt} />
-          <DataTableHead dt={surfaceDt} />
-          <tbody>
-            {surfaceDt.sortedRows.length ? surfaceDt.sortedRows.map((r, i) => (
-              <tr key={r.surface} {...surfaceDt.rowProps(i, r)}>
-                <DataTableCell dt={surfaceDt} col="surface" row={r} value={r.surface} />
-                <DataTableCell dt={surfaceDt} col="pass" row={r} value={r.pass} />
-                <DataTableCell dt={surfaceDt} col="fail" row={r} value={r.fail} />
-                <DataTableCell dt={surfaceDt} col="unknown" row={r} value={r.unknownEntities} />
-                <DataTableCell dt={surfaceDt} col="latency" row={r} value={fmtSec1(r.avgLatencyMs)} />
-                <DataTableCell dt={surfaceDt} col="toolCalls" row={r} value={fmtAvg1(r.avgToolCalls)} />
-                <DataTableCell dt={surfaceDt} col="tokens" row={r} value={fmtTokensK(r.avgTokens)} />
-              </tr>
-            )) : <DataTableState dt={surfaceDt} {...summaryState} />}
-          </tbody>
-        </table>
+        <DataTable<EvalSurfaceSummary> storageKey="settings-ai-eval-surfaces" columns={SURFACE_COLS} rows={surfaceRows}
+          getRowKey={r => r.surface} renderCell={surfaceCell} state={summaryState} />
       </div>
 
       <SectionHead title="Kalan vakalar" meta={detail ? `${failing.length} vaka` : undefined} />
       <div className="table-wrap">
-        <table {...caseDt.tableProps}>
-          <DataTableColgroup dt={caseDt} />
-          <DataTableHead dt={caseDt} />
-          <tbody>
-            {caseDt.sortedRows.length ? caseDt.sortedRows.map((c, i) => (
-              <tr key={c.id} {...caseDt.rowProps(i, c)}>
-                {/* T9/S4 — nokta tek başına durum taşımaz: bölüm başlığı
-                    ("Kalan") ve gerekçe metni yanında; ekran okuyucuya ayrıca. */}
-                <DataTableCell dt={caseDt} col="id" row={c} value={c.id}>
-                  <span className="evs-dot status-dot status-dot-outage" aria-hidden="true" />
-                  {c.id}
-                  <span className="sr-only">{c.error ? ' — hata' : ' — kaldı'}</span>
-                </DataTableCell>
-                <DataTableCell dt={caseDt} col="surface" row={c} value={c.surface} />
-                <DataTableCell dt={caseDt} col="reason" row={c} value={caseReason(c)} />
-              </tr>
-            )) : <DataTableState dt={caseDt} {...casesState} />}
-          </tbody>
-        </table>
+        <DataTable<EvalCaseResult> storageKey="settings-ai-eval-cases" columns={CASE_COLS} rows={failing}
+          getRowHref={c => evalHref(pathname, searchParams, { run: selectedId, case: c.id })} rowLinkReplace
+          getRowKey={c => c.id} renderCell={caseCell} state={casesState} />
       </div>
 
       <SectionHead title="Koşu geçmişi ve karşılaştırma"
         meta={runs.length ? `son ${runs.length} koşu · en çok 20 tutulur` : undefined} />
       <div className="table-wrap">
-        <table {...runDt.tableProps}>
-          <DataTableColgroup dt={runDt} />
-          <DataTableHead dt={runDt} />
-          <tbody>
-            {runDt.sortedRows.length ? runDt.sortedRows.map((r, i) => {
-              const view = runStatusView(r.status);
-              return (
-                <tr key={r.id} {...runDt.rowProps(i, r)}>
-                  <DataTableCell dt={runDt} col="started" row={r} value={fmtRunTime(r.startedAt)}
-                    title={`${r.id} · ${r.startedBy || '—'}`} />
-                  <DataTableCell dt={runDt} col="version" row={r} value={r.appVersion}
-                    title={`prompt ${r.promptVersion || '—'}`} />
-                  <DataTableCell dt={runDt} col="model" row={r} value={r.model} />
-                  <DataTableCell dt={runDt} col="status" row={r} value={view.label}>
-                    <span className={view.dot} aria-hidden="true" />{view.label}
-                  </DataTableCell>
-                  <DataTableCell dt={runDt} col="pass" row={r} value={`${r.pass} / ${r.total}`} />
-                  <DataTableCell dt={runDt} col="delta" row={r} value={r.delta === null ? null : fmtSignedInt(r.delta)} />
-                  <DataTableCell dt={runDt} col="toolset" row={r} value={runToolsetView(r).text} title={runToolsetView(r).title} />
-                </tr>
-              );
-            }) : <DataTableState dt={runDt} {...runsState} />}
-          </tbody>
-        </table>
+        <DataTable<RunRow> storageKey="settings-ai-eval-runs" columns={RUN_COLS} rows={runRows}
+          sort={{ initial: { id: 'started', dir: 'desc' } }}
+          // Koşu değişince açık çekmece kapanır; taban hedefle aynı olamaz.
+          getRowHref={r => evalHref(pathname, searchParams, { run: r.id, case: null, cmp: cmpParam === r.id ? null : cmpParam })}
+          rowLinkReplace selection={runSelection} renderCell={runCell} state={runsState} />
       </div>
 
-      <div className="evs-cmp-pick">
+      <div data-evs-cmp-pick="" className="mt-3 max-w-[520px]">
         <SelectField label="Şununla karşılaştır" value={cmpBase ?? ''}
           onChange={e => setParams({ cmp: e.target.value || null })}
           disabled={!selectedFinished || candidates.length === 0}
@@ -382,19 +390,28 @@ export function AiEvalPanel() {
           : <Spinner label="Karşılaştırılıyor" />
       )}
 
-      {caseParam && (
-        <Drawer onClose={() => setParams({ case: null })} width={680} ariaLabel="Vaka ayrıntısı"
-          header={<CaseHeader id={caseParam} c={openCase} />}>
-          {openCase ? <CaseBody c={openCase} />
-            : detail ? (
-              <Empty compact icon="◇" title="Vaka bu koşuda yok">
-                Bağlantı başka bir koşuya ait olabilir; koşu geçmişinden seç.
-              </Empty>
-            )
-            : detailQ.isError ? <QueryErrorInline text={humanize(detailQ.error)} onRetry={() => { void detailQ.refetch(); }} />
-            : <Spinner label="Vaka yükleniyor" />}
-        </Drawer>
-      )}
+      {/* R11 (D9, Q-IA9 kabul): ui/Drawer → coremetry Sheet, sağ kenar, sabit 680 px
+          (sürükle-boyutla yok); bölümler SectionHead. Kapanış ?case='i siler. */}
+      <Sheet open={!!caseParam} onOpenChange={o => { if (!o) setParams({ case: null }); }}>
+        <SheetContent side="right" aria-label="Vaka ayrıntısı" aria-describedby={undefined}
+          className="w-full gap-0 overflow-y-auto p-0 sm:w-[680px] sm:max-w-[680px]">
+          <SheetHeader className="flex-row flex-wrap items-center gap-2 border-b border-(--divider) px-4 py-3 pr-12">
+            <SheetTitle className="contents text-[length:var(--fs-md)] font-semibold">
+              {caseParam && <CaseHeader id={caseParam} c={openCase} />}
+            </SheetTitle>
+          </SheetHeader>
+          <div className="px-4 py-4">
+            {openCase ? <CaseBody c={openCase} />
+              : detail ? (
+                <Empty compact icon="◇" title="Vaka bu koşuda yok">
+                  Bağlantı başka bir koşuya ait olabilir; koşu geçmişinden seç.
+                </Empty>
+              )
+              : detailQ.isError ? <QueryErrorInline text={humanize(detailQ.error)} onRetry={() => { void detailQ.refetch(); }} />
+              : <Spinner label="Vaka yükleniyor" />}
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
@@ -437,14 +454,19 @@ function emptyCasesText(run: EvalRunSummary, caseCount: number): string {
 
 function RunProgress({ run, nowMs }: { run: EvalRunSummary; nowMs: number }) {
   const pct = progressPct(run);
+  // R11: hesaplanan genişlik satır içi stil değil, CSS değişkeni (coremetry
+  // DataTable'ın ⋯ çapası deseni) — `w-[var(--evs-pct,0%)]`.
+  const fillRef = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => { fillRef.current?.style.setProperty('--evs-pct', `${pct}%`); }, [pct]);
   return (
-    <div className="evs-progress-row">
-      <div className="evs-progress" role="progressbar" aria-label="Değerlendirme ilerlemesi"
+    <div className="mt-3 flex flex-col gap-1.5">
+      {/* İz --bg3, dolgu --accent (rol: DOLGU, v0.10.920 renk rolleri). */}
+      <div className="h-1.5 overflow-hidden rounded-(--radius-xs) bg-(--bg3)" role="progressbar" aria-label="Değerlendirme ilerlemesi"
         aria-valuemin={0} aria-valuemax={run.total} aria-valuenow={run.done}
         aria-valuetext={`${run.done} / ${run.total} vaka`}>
-        <span className="evs-progress__fill" style={{ width: `${pct}%` }} />
+        <span ref={fillRef} className="block h-full w-[var(--evs-pct,0%)] bg-(--accent) transition-[width] duration-300" />
       </div>
-      <div className="evs-progress__text">{progressText(run, nowMs)}</div>
+      <div className="text-[length:var(--fs-sm)] tabular-nums text-(--text2)">{progressText(run, nowMs)}</div>
     </div>
   );
 }
@@ -454,13 +476,13 @@ function CaseHeader({ id, c }: { id: string; c: EvalCaseResult | null }) {
   return (
     <>
       {c && (
-        <Badge tone={!c.ok && !c.skipped ? 'danger' : 'neutral'}>
-          {caseBadgeLabel(c)}
-        </Badge>
+        !c.ok && !c.skipped
+          ? <StatusBadge status="critical">{caseBadgeLabel(c)}</StatusBadge>
+          : <Badge variant="secondary">{caseBadgeLabel(c)}</Badge>
       )}
-      {c?.mode === 'agent' && <Badge tone="neutral" title="Canlı ajan döngüsünde koştu">ajan</Badge>}
+      {c?.mode === 'agent' && <Badge variant="secondary" title="Canlı ajan döngüsünde koştu">ajan</Badge>}
       <span className="mono">{id}</span>
-      {c && <span className="field-hint">{c.surface}</span>}
+      {c && <span className="field-hint mt-0 font-normal">{c.surface}</span>}
     </>
   );
 }
@@ -472,8 +494,8 @@ function CaseBody({ c }: { c: EvalCaseResult }) {
   const maxUnknown = c.expect?.maxUnknownEntities;
   return (
     <>
-      {c.why && <p className="evs-why">{c.why}</p>}
-      <DrawerSection title="Özet">
+      {c.why && <p className="mb-3 mt-0 text-[length:var(--fs-sm)] leading-normal text-(--text2)">{c.why}</p>}
+      <CaseSection title="Özet">
         <KeyValue items={[
           { id: 'surface', k: 'Yüzey', v: c.surface },
           { id: 'profile', k: 'Profil', v: c.profileId, mono: true },
@@ -484,30 +506,30 @@ function CaseBody({ c }: { c: EvalCaseResult }) {
           { id: 'rubric', k: 'Rubrik', v: c.skipped ? null : fmtDec2(c.rubricTotal) },
           ...(c.skipped ? [{ id: 'skip', k: 'Atlama nedeni', v: c.skipReason }] : []),
         ]} />
-      </DrawerSection>
+      </CaseSection>
       {c.agent && <AgentTrail trail={c.agent} />}
       {(fails.length > 0 || errExtra) && (
-        <DrawerSection title="Neden">
-          <ul className="evs-fails">
+        <CaseSection title="Neden">
+          <ul data-evs-fails="" className={`${LIST} text-(--err)`}>
             {fails.map((f, i) => <li key={i}>{f}</li>)}
             {errExtra && <li>{errExtra}</li>}
           </ul>
-        </DrawerSection>
+        </CaseSection>
       )}
-      <DrawerSection title="Beklenti">
+      <CaseSection title="Beklenti">
         {lines.length > 0
-          ? <ul className="evs-expect">{lines.map((l, i) => <li key={i}>{l}</li>)}</ul>
+          ? <ul className={LIST}>{lines.map((l, i) => <li key={i}>{l}</li>)}</ul>
           : <div className="field-hint">Beklenti yok — yalnız cevap üretimi ölçülür.</div>}
-        <pre className="evs-pre">{JSON.stringify(c.expect ?? {}, null, 2)}</pre>
-      </DrawerSection>
-      <DrawerSection title="Girdi">
-        <pre className="evs-pre">{c.input || '(boş)'}</pre>
+        <pre className={PRE}>{JSON.stringify(c.expect ?? {}, null, 2)}</pre>
+      </CaseSection>
+      <CaseSection title="Girdi">
+        <pre className={PRE}>{c.input || '(boş)'}</pre>
         {c.inputTruncated && <div className="field-hint">kırpıldı — ilk 8 KiB</div>}
-      </DrawerSection>
-      <DrawerSection title="Model cevabı">
-        <pre className="evs-pre">{c.answer || '(boş)'}</pre>
+      </CaseSection>
+      <CaseSection title="Model cevabı">
+        <pre className={PRE}>{c.answer || '(boş)'}</pre>
         {c.answerTruncated && <div className="field-hint">kırpıldı — ilk 16 KiB</div>}
-      </DrawerSection>
+      </CaseSection>
     </>
   );
 }
@@ -517,46 +539,46 @@ function CaseBody({ c }: { c: EvalCaseResult }) {
 function AgentTrail({ trail }: { trail: NonNullable<EvalCaseResult['agent']> }) {
   const rows = trailRows(trail);
   return (
-    <DrawerSection title="Araç izi">
-      <div className="evs-trail__meta">{agentMetaLine(trail)}</div>
+    <CaseSection title="Araç izi">
+      <div className="text-[length:var(--fs-sm)] tabular-nums text-(--text)">{agentMetaLine(trail)}</div>
       {(trail.overruns ?? []).length > 0 && (
-        <div className="field-hint evs-note--warn">Ölçü aşımı (vakayı kaldırmaz): {(trail.overruns ?? []).join(' · ')}</div>
+        <div className="field-hint text-(--warn)">Ölçü aşımı (vakayı kaldırmaz): {(trail.overruns ?? []).join(' · ')}</div>
       )}
       {rows.length > 0 ? (
-        <ol className="evs-trail">
+        <ol data-evs-trail="" className="mt-2 mb-0 list-decimal pl-4 text-[length:var(--fs-sm)] leading-normal [&>li+li]:mt-2">
           {rows.map(r => (
             <li key={r.key}>
-              <div className="evs-trail__head">
+              <div className="flex flex-wrap items-baseline gap-1.5">
                 <span className="mono">{r.tool}</span>
-                {r.origin && <span className="field-hint">{r.origin}</span>}
-                <span className={r.status === 'err' ? 'is-err' : 'field-hint'}>{r.statusLabel}</span>
-                {r.meta && <span className="field-hint">{r.meta}</span>}
+                {r.origin && <span className="field-hint mt-0">{r.origin}</span>}
+                <span className={r.status === 'err' ? 'is-err' : 'field-hint mt-0'}>{r.statusLabel}</span>
+                {r.meta && <span className="field-hint mt-0">{r.meta}</span>}
               </div>
-              {r.args && <div className="evs-trail__args mono">{r.args}</div>}
-              {r.preview && <div className="evs-trail__preview">{r.preview}</div>}
+              {r.args && <div className="mono mt-0.5 text-[length:var(--fs-xs)] [overflow-wrap:anywhere] text-(--text2)">{r.args}</div>}
+              {r.preview && <div className="mt-1 max-h-24 overflow-auto rounded-sm border border-(--border) bg-(--bg2) px-2 py-1 text-[length:var(--fs-xs)] whitespace-pre-wrap [overflow-wrap:anywhere] text-(--text2)">{r.preview}</div>}
             </li>
           ))}
         </ol>
       ) : <div className="field-hint">Araç çağrılmadı — cevap araçsız üretildi.</div>}
       {trail.stepsTruncated && <div className="field-hint">ilk {rows.length} adım gösteriliyor</div>}
-    </DrawerSection>
+    </CaseSection>
   );
 }
 
 function CompareView({ cmp, hrefFor }: { cmp: EvalCompare; hrefFor: (caseId: string) => string }) {
   const groups = compareGroups(cmp);
   return (
-    <div className="evs-cmp">
-      <div className="evs-cmp__summary">{compareSummary(cmp)}</div>
-      {cmp.note && <div className={cmp.comparable ? 'field-hint' : 'field-hint evs-note--warn'}>{cmp.note}</div>}
+    <div className="mt-2.5 flex flex-col gap-2.5">
+      <div className="text-[length:var(--fs-sm)] tabular-nums text-(--text)">{compareSummary(cmp)}</div>
+      {cmp.note && <div className={cmp.comparable ? 'field-hint' : 'field-hint text-(--warn)'}>{cmp.note}</div>}
       {groups.length === 0
         ? <div className="field-hint">Vaka düzeyinde fark yok.</div>
         : groups.map(g => (
           <div key={g.key}>
-            <div className={g.tone === 'err' ? 'evs-cmp__title evs-cmp__title--err' : 'evs-cmp__title'}>
+            <div className={`mb-1 text-[length:var(--fs-xs)] font-semibold ${g.tone === 'err' ? 'text-(--err)' : 'text-(--text2)'}`}>
               {g.title} · {g.items.length}
             </div>
-            <ul className="evs-cmp__list">
+            <ul className={LIST}>
               {g.items.map(it => (
                 <li key={it.id}>
                   <Link to={hrefFor(it.id)} replace className="mono">{it.id}</Link>
@@ -567,5 +589,15 @@ function CompareView({ cmp, hrefFor }: { cmp: EvalCompare; hrefFor: (caseId: str
           </div>
         ))}
     </div>
+  );
+}
+
+/** R11 (D9): Sheet bölümü — eski DrawerSection'ın yerine SectionHead başlığı. */
+function CaseSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="mb-4">
+      <SectionHead title={title} />
+      {children}
+    </section>
   );
 }

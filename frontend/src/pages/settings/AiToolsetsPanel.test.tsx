@@ -33,7 +33,7 @@ vi.mock('@/lib/api', () => ({ api }));
 
 import { AiToolsetsPanel } from './AiToolsetsPanel';
 import { nextDisabled } from './AiToolsetsPanel';
-import { ConfirmProvider } from '@/components/ui';
+import { ConfirmGate } from '@/components/coremetry/Confirm';
 
 let host: HTMLDivElement | null = null; let root: Root | null = null;
 function render(canEdit: boolean): HTMLElement {
@@ -41,7 +41,7 @@ function render(canEdit: boolean): HTMLElement {
   host = document.createElement('div'); document.body.appendChild(host); root = createRoot(host);
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   act(() => {
-    root!.render(<QueryClientProvider client={qc}><ConfirmProvider><AiToolsetsPanel canEdit={canEdit} /></ConfirmProvider></QueryClientProvider>);
+    root!.render(<QueryClientProvider client={qc}><ConfirmGate><AiToolsetsPanel canEdit={canEdit} /></ConfirmGate></QueryClientProvider>);
   });
   return host;
 }
@@ -65,9 +65,11 @@ describe('AiToolsetsPanel', () => {
     expect(el.querySelectorAll('tbody tr[data-toolset]').length).toBe(12);
     expect(Array.from(el.querySelectorAll('tbody tr[data-toolset]')).map(r => r.getAttribute('data-toolset'))).toEqual(NAMES);
     expect(row(el, 'metrics').querySelector('[data-health]')?.getAttribute('data-health')).toBe('partial');
-    expect(row(el, 'metrics').querySelector('.b-warn')).not.toBeNull();
+    // R11 (D7): sapma rozeti StatusBadge (data-status), nötr rozet shadcn Badge (data-status yok).
+    expect(row(el, 'metrics').querySelector('[data-health] [data-status="warn"]')).not.toBeNull();
     expect(row(el, 'oracle').querySelector('[data-health="not_configured"]')).not.toBeNull();
-    expect(row(el, 'logs').querySelector('[data-health="ok"]')?.className).not.toMatch(/b-ok|b-err|b-warn/);
+    expect(row(el, 'logs').querySelector('[data-health="ok"] [data-slot="badge"]')).not.toBeNull();
+    expect(row(el, 'logs').querySelector('[data-health="ok"] [data-status]')).toBeNull();
     for (const n of REQUIRED) expect(buttonIn(row(el, n))).toBeNull();
     expect(row(el, 'devops-wiki').textContent).toMatch(/Off|Kapalı/);
 

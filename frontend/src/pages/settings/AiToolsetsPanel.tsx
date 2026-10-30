@@ -14,9 +14,14 @@
 // Renk yalnız sapan değerde (CLAUDE.md tablo standardı): sağlıklı = nötr
 // rozet; kısmi = uyarı; yapılandırılmamış = bilgi; erişilemiyor / yetki /
 // zaman aşımı / hata = tehlike.
-import { useEffect, useState } from 'react';
-import { Badge, Button, useConfirm, type Tone } from '@/components/ui';
-import { DataTableState } from '@/components/ui/DataTable';
+import { useEffect, useState, type ReactNode } from 'react';
+import { Badge } from '@/components/shadcn/badge';
+import { Button } from '@/components/shadcn/button';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/shadcn/table';
+import { StatusBadge } from '@/components/coremetry/StatusBadge';
+import { DataTableStateRow } from '@/components/coremetry/DataTable';
+import { useConfirm } from '@/components/coremetry/Confirm';
+import type { Status } from '@/lib/statusTone';
 import { useAuthRole } from '@/components/AuthProvider';
 import { api } from '@/lib/api';
 import { useT } from '@/lib/i18n';
@@ -25,10 +30,17 @@ import { fmtDateTime } from '@/lib/utils';
 import type { AISourceToolset, AISourceToolsetHealthState, AISourceToolsetsPayload } from '@/lib/types';
 import { SectionTitle, humanize } from './shared';
 
-const HEALTH_TONE: Record<AISourceToolsetHealthState, Tone> = {
-  ok: 'neutral', empty: 'neutral', delayed: 'warning', truncated: 'warning', partial: 'warning',
-  not_configured: 'info', unreachable: 'danger', unauthorized: 'danger', timeout: 'danger', error: 'danger',
+// Faz 2 dilim 1 R11 (D7): sapma StatusBadge (warn / info / critical); sağlıklı
+// (null) = nötr shadcn Badge — renk yalnız sapan değerde, eşleme aynı.
+const HEALTH_STATUS: Record<AISourceToolsetHealthState, Status | null> = {
+  ok: null, empty: null, delayed: 'warn', truncated: 'warn', partial: 'warn',
+  not_configured: 'info', unreachable: 'critical', unauthorized: 'critical', timeout: 'critical', error: 'critical',
 };
+
+/** Durum rozeti: sapma StatusBadge, nötr shadcn Badge (secondary). */
+function ToneBadge({ status, children }: { status: Status | null; children: ReactNode }) {
+  return status ? <StatusBadge status={status}>{children}</StatusBadge> : <Badge variant="secondary">{children}</Badge>;
+}
 
 /** SAF: bir toolset kapatılınca/açılınca gönderilecek kapalı ad listesi (sıralı, tekrarsız). */
 export function nextDisabled(current: string[], name: string, disable: boolean): string[] {
@@ -86,9 +98,9 @@ export function AiToolsetsPanel({ canEdit: canEditProp }: { canEdit?: boolean })
   const toolCount = data?.toolsets.reduce((n, ts) => n + ts.tools.length, 0) ?? 74;
   const rows = data?.toolsets ?? [];
   return (
-    <div data-testid="ai-toolsets-panel" style={{ marginTop: 12 }}>
+    <div data-testid="ai-toolsets-panel" className="mt-3">
       <SectionTitle>{t('aiToolsets.title')}</SectionTitle>
-      <p style={{ fontSize: 12, color: 'var(--text2)', maxWidth: 820, marginTop: 0 }}>
+      <p className="mt-0 max-w-[820px] text-[length:var(--fs-sm)] text-(--text2)">
         {t('aiToolsets.intro').replace('{n}', String(toolCount))}
       </p>
       {!canEdit && <p className="field-hint">{t('aiToolsets.readOnly')}</p>}
@@ -97,62 +109,62 @@ export function AiToolsetsPanel({ canEdit: canEditProp }: { canEdit?: boolean })
           {t('aiToolsets.lastChange').replace('{by}', data.updatedBy).replace('{at}', fmtDateTime(new Date(data.updatedAt)))}
         </p>
       )}
-      {/* v0.10.1434 — statik tablo (T1): düzenlenebilir sabit katalog, 12 satır, sunucu sırası, sıralanmaz. */}
-      <table>
-        <thead>
-          <tr>
-            <th>{t('aiToolsets.col.toolset')}</th>
-            <th>{t('aiToolsets.col.source')}</th>
-            <th>{t('aiToolsets.col.tools')}</th>
-            <th>{t('aiToolsets.col.health')}</th>
-            <th>{t('aiToolsets.col.status')}</th>
-          </tr>
-        </thead>
-        <tbody>
+      {/* v0.10.1434 — statik tablo (T1): düzenlenebilir sabit katalog, 12 satır, sunucu sırası, sıralanmaz.
+          Faz 2 dilim 1 R11: shadcn Table (T1 gerekçesi aynı), durum satırı coremetry DataTableStateRow. */}
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>{t('aiToolsets.col.toolset')}</TableHead>
+            <TableHead>{t('aiToolsets.col.source')}</TableHead>
+            <TableHead>{t('aiToolsets.col.tools')}</TableHead>
+            <TableHead>{t('aiToolsets.col.health')}</TableHead>
+            <TableHead>{t('aiToolsets.col.status')}</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {err ? (
-            <DataTableState colSpan={5} kind="error" message={t('aiToolsets.loadFailed')} detail={err} onRetry={() => setReload(n => n + 1)} />
+            <DataTableStateRow colSpan={5} kind="error" message={t('aiToolsets.loadFailed')} detail={err} onRetry={() => setReload(n => n + 1)} />
           ) : !data ? (
-            <DataTableState colSpan={5} kind="loading" skeletonRows={6} />
+            <DataTableStateRow colSpan={5} kind="loading" skeletonRows={6} />
           ) : rows.length === 0 ? (
-            <DataTableState colSpan={5} kind="empty" message={t('aiToolsets.empty')} />
+            <DataTableStateRow colSpan={5} kind="empty" message={t('aiToolsets.empty')} />
           ) : rows.map(ts => {
             const h = ts.health;
             const healthNote = [h.detail, ...(h.notes ?? [])].filter(Boolean).join(' · ');
             return (
-              <tr key={ts.name} data-toolset={ts.name}>
-                <td className="mono">
+              <TableRow key={ts.name} data-toolset={ts.name}>
+                <TableCell className="font-mono">
                   {ts.name}
-                  {ts.required && <> <Badge tone="neutral">{t('aiToolsets.required')}</Badge></>}
-                </td>
-                <td>{tOr(t, `aiToolsets.src.${ts.name}`, ts.source)}</td>
-                <td title={ts.tools.join(', ')}>
-                  <span className="cell-strong">{ts.tools.length}</span>
-                  <div className="field-hint mono">{ts.tools.join(', ')}</div>
-                </td>
-                <td>
-                  <Badge tone={HEALTH_TONE[h.state] ?? 'neutral'} data-health={h.state}>
-                    {tOr(t, `aiToolsets.health.${h.state}`, h.state)}
-                  </Badge>
+                  {ts.required && <> <Badge variant="secondary">{t('aiToolsets.required')}</Badge></>}
+                </TableCell>
+                <TableCell>{tOr(t, `aiToolsets.src.${ts.name}`, ts.source)}</TableCell>
+                <TableCell className="whitespace-normal" title={ts.tools.join(', ')}>
+                  <span className="cell-strong tabular-nums">{ts.tools.length}</span>
+                  <div className="field-hint font-mono">{ts.tools.join(', ')}</div>
+                </TableCell>
+                <TableCell className="whitespace-normal">
+                  <span data-health={h.state}>
+                    <ToneBadge status={HEALTH_STATUS[h.state] ?? null}>{tOr(t, `aiToolsets.health.${h.state}`, h.state)}</ToneBadge>
+                  </span>
                   {h.backend && <span className="cell-hint mono">{h.backend}</span>}
                   {healthNote && <div className="field-hint">{healthNote}</div>}
-                </td>
-                <td>
-                  <Badge tone={ts.enabled ? 'neutral' : 'warning'}>{t(ts.enabled ? 'aiToolsets.on' : 'aiToolsets.off')}</Badge>
-                  {canEdit && !ts.required && (
-                    <>
-                      {' '}
-                      <Button variant="secondary" size="xs" loading={busy === ts.name} disabled={busy !== null}
+                </TableCell>
+                <TableCell>
+                  <span className="inline-flex items-center gap-1.5">
+                    <ToneBadge status={ts.enabled ? null : 'warn'}>{t(ts.enabled ? 'aiToolsets.on' : 'aiToolsets.off')}</ToneBadge>
+                    {canEdit && !ts.required && (
+                      <Button variant="ghost" size="xs" loading={busy === ts.name} disabled={busy !== null}
                         onClick={() => { void toggle(ts); }}>
                         {t(ts.enabled ? 'aiToolsets.disable' : 'aiToolsets.enable')}
                       </Button>
-                    </>
-                  )}
-                </td>
-              </tr>
+                    )}
+                  </span>
+                </TableCell>
+              </TableRow>
             );
           })}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   );
 }

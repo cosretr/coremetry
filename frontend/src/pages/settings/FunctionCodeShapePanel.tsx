@@ -3,7 +3,9 @@
 // kalıyor. Okuma pahalı olabilir: yalnız düğmeyle başlar (ES/CH maliyet
 // disiplini), sunucu 5 dk önbellekler.
 import { useState } from 'react';
-import { Button, Badge } from '@/components/ui';
+import { Button } from '@/components/shadcn/button';
+import { Badge } from '@/components/shadcn/badge';
+import { StatusBadge } from '@/components/coremetry/StatusBadge';
 import { KeyValue, KeyValueRow } from '@/components/coremetry/KeyValue';
 import { Spinner } from '@/components/Spinner';
 import { api } from '@/lib/api';
@@ -21,22 +23,24 @@ export function FunctionCodeShapePanel() {
   };
   const s = data ? summarizeShape(data.rows) : null;
   return (
-    <div style={{ marginTop: 18, padding: 16, borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--border)' }}>
-      <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Fonksiyon kodu biçimi (son 1 saat)</h3>
-      <p style={{ color: 'var(--text2)', fontSize: 12, marginBottom: 10 }}>
+    <div className="mt-[18px] rounded-lg border border-(--border) bg-(--bg2) p-4">
+      <h3 className="mb-1.5 text-[length:var(--fs-md)] font-semibold">Fonksiyon kodu biçimi (son 1 saat)</h3>
+      <p className="mb-2.5 text-[length:var(--fs-sm)] text-(--text2)">
         İş kodu özeti yalnız biçime uyan değerleri saklar (<code>^[A-Z][A-Z0-9]{'{4,9}'}$</code>).
         Bu ölçüm dışarıda kalan değerlerin sayısını ve örneklerini gösterir; gerçek kodlar
         dışarıda kalıyorsa biçim genişletilmeli.
       </p>
       <Button variant="secondary" size="sm" onClick={measure} loading={busy}>{data ? 'Yeniden ölç' : 'Ölç'}</Button>
       {busy && !data && <Spinner />}
-      {err && <span style={{ fontSize: 12, color: 'var(--err)', marginLeft: 8 }}>{err}</span>}
-      {data && data.source === '' && <Badge>okuma yolu yok (geniş rollup ve attr_function_code kolonu bulunamadı)</Badge>}
+      {err && <span className="ml-2 text-[length:var(--fs-sm)] text-(--err)">{err}</span>}
+      {data && data.source === '' && <Badge variant="secondary">okuma yolu yok (geniş rollup ve attr_function_code kolonu bulunamadı)</Badge>}
       {s && data && data.source !== '' && (
         <>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', margin: '8px 0' }}>
-            <Badge tone="neutral">biçime uyan: {fmtNum(s.okDistinct)} değer · {fmtNum(s.okSpans)} span</Badge>
-            <Badge tone={s.offDistinct > 0 ? 'warning' : 'neutral'}>biçim dışı: {fmtNum(s.offDistinct)} değer · {fmtNum(s.offSpans)} span</Badge>
+          <div className="my-2 flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">biçime uyan: {fmtNum(s.okDistinct)} değer · {fmtNum(s.okSpans)} span</Badge>
+            {s.offDistinct > 0
+              ? <StatusBadge status="warn">biçim dışı: {fmtNum(s.offDistinct)} değer · {fmtNum(s.offSpans)} span</StatusBadge>
+              : <Badge variant="secondary">biçim dışı: {fmtNum(s.offDistinct)} değer · {fmtNum(s.offSpans)} span</Badge>}
             <span className="field-hint">kaynak {data.source} · farklı değer sayısı yaklaşık (uniq)</span>
           </div>
           {s.topOff.length > 0 && (

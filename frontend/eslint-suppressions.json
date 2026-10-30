@@ -454,34 +454,9 @@
       "count": 1
     }
   },
-  "src/pages/settings/AiBudgetPanel.tsx": {
-    "ui/no-raw-element": {
-      "count": 3
-    }
-  },
-  "src/pages/settings/AiChatRetentionPanel.tsx": {
-    "ui/no-raw-element": {
-      "count": 1
-    }
-  },
-  "src/pages/settings/AiGeneralQuestionsPanel.tsx": {
-    "ui/no-raw-element": {
-      "count": 2
-    }
-  },
-  "src/pages/settings/AiProfilesPanel.tsx": {
-    "ui/no-raw-element": {
-      "count": 14
-    }
-  },
   "src/pages/settings/AiSreTab.tsx": {
     "ui/no-raw-element": {
       "count": 2
-    }
-  },
-  "src/pages/settings/AiTab.tsx": {
-    "ui/no-raw-element": {
-      "count": 11
     }
   },
   "src/pages/settings/AnomalyTab.tsx": {
