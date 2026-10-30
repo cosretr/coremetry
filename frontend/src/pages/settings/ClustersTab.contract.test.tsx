@@ -22,6 +22,7 @@
 //     istemcide yakalanır: PUT GİTMEZ, özet role=alert, madde alana götürür;
 //   - önizleme kaydedilecek biçimi ve notlarını gösterir; pairGroup ipucu
 //     "Bu grupta: …" diğer kayıtları sayar; sunucu hatası yedek metin kalır.
+import '@/test/radixJsdom'; // Faz 2 dilim 1 R7: Radix Checkbox/Popper jsdom eksikleri
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -86,9 +87,11 @@ afterEach(() => {
 });
 const tick = async () => { await act(async () => { await new Promise(r => setTimeout(r, 20)); }); };
 
-// Field atomu label[for] → input/textarea bağını kurar; i. satırın alanı.
+// Field bileşiği label[for] → input/textarea bağını kurar; i. satırın alanı.
+// Faz 2 dilim 1 R7: ui `.field-label` sınıfı yerine coremetry/Field'in
+// label[for]'u (bağ aynı: etiket kimliğe işaret eder).
 function fieldByLabel(el: HTMLElement, label: string, i: number): HTMLInputElement | HTMLTextAreaElement {
-  const labels = [...el.querySelectorAll('label.field-label')].filter(l => l.textContent?.startsWith(label));
+  const labels = [...el.querySelectorAll('label[for]')].filter(l => l.textContent?.startsWith(label));
   const lab = labels[i] as HTMLLabelElement | undefined;
   if (!lab) throw new Error(`"${label}" etiketli alan #${i} yok`);
   const ctl = el.ownerDocument.getElementById(lab.htmlFor);
@@ -215,10 +218,12 @@ describe('ClustersTab — Argo CD eşlemesi (v0.10.974)', () => {
     await tick();
     expect(getArgoCDSettings).toHaveBeenCalledTimes(1);
     const a = card(el, 'cluster-a');
-    const badge = [...a.querySelectorAll('.badge')].find(b => b.textContent?.trim() === 'Argo hub');
+    const badge = [...a.querySelectorAll('[data-slot="badge"]')].find(b => b.textContent?.trim() === 'Argo hub');
     expect(badge, 'Argo hub rozeti').toBeTruthy();
-    // Nötr: öznitelik, sapma değil (b-gray; yeşil/kırmızı yok).
-    expect(badge!.className).toContain('b-gray');
+    // Nötr: öznitelik, sapma değil (R7: shadcn Badge `secondary`; durum
+    // rozeti DEĞİL — data-status yok, yeşil/kırmızı yok).
+    expect(badge!.getAttribute('data-variant')).toBe('secondary');
+    expect(badge!.hasAttribute('data-status')).toBe(false);
     expect(badge!.querySelector('svg')).toBeTruthy();
     const link = a.querySelector<HTMLAnchorElement>('a[href="/settings/argocd"]');
     expect(link?.textContent).toBe('Ayarlar › Argo CD');
@@ -226,7 +231,8 @@ describe('ClustersTab — Argo CD eşlemesi (v0.10.974)', () => {
     expect(note.textContent).toBe("Argo CD hub'ı (2 instance): kaldırır ya da kapatırsanız Argo CD ayarı bir sonraki kayıtta reddedilir. Hub seçimi ve küme etiketi kararı Ayarlar › Argo CD sekmesinde; burada değiştirilemez.");
     expect(note.id).not.toBe('');
     const name = a.querySelector<HTMLInputElement>('input[placeholder="prod-ist"]')!;
-    const enabled = a.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+    // R7: Radix Checkbox (`<button role="checkbox">`, Q-IA7).
+    const enabled = a.querySelector<HTMLElement>('[role="checkbox"]')!;
     const remove = [...a.querySelectorAll('button')].find(b => b.textContent?.trim() === 'Remove')!;
     for (const ctl of [name, enabled, remove]) expect(ctl.getAttribute('aria-describedby')).toBe(note.id);
     // Uyarır, engellemez: Remove etkin, kayıt kaldırılabilir.

@@ -18,8 +18,8 @@ const SRC = resolve(__dirname, '..');
 
 // Taban: R6 commit'inde ölçüldü.
 const CEILINGS: Record<Page, number> = {
-  Settings: 1182, // 63 dosya
-  RemoteCluster: 50, // 2 dosya (Settings alt kümesi)
+  Settings: 1132, // 63 dosya — Faz 2 dilim 1 R7: 1182 → 1132 (Remote Cluster 50 → 0)
+  RemoteCluster: 0, // 2 dosya (Settings alt kümesi) — Faz 2 dilim 1 R7: 50 → 0, MIGRATED
   Logs: 94, // 14
   Trace: 150, // 17
   Traces: 103, // 13
@@ -27,8 +27,8 @@ const CEILINGS: Record<Page, number> = {
   Metrics: 50, // 3
   Shell: 43, // 5
 };
-const TOTAL = 5259; // 449 dosya (plan §3.2 v0.10.1604 ölçümü 5,244; aradaki sürümler +15)
-const MIGRATED: Page[] = [];
+const TOTAL = 5209; // 449 dosya (plan §3.2 v0.10.1604 ölçümü 5,244; aradaki sürümler +15) — Faz 2 dilim 1 R7: 5259 → 5209
+const MIGRATED: Page[] = ['RemoteCluster']; // Faz 2 dilim 1 R7 — pilot
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const e of readdirSync(dir)) {

@@ -11,6 +11,7 @@
 //
 // NEDEN GERÇEK QueryClient: "tazeleme düştü ama data eski yanıtı tutuyor"
 // hâli ancak gerçek önbellekle kurulur (isError + data birlikte).
+import '@/test/radixJsdom'; // Faz 2 dilim 1 R7: Radix Checkbox/Popper jsdom eksikleri
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';

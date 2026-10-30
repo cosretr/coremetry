@@ -79,15 +79,15 @@ export function atomsImported(src: string, file: string): Set<string> {
 // DisclosureButton +1 taşınan PageControls'ten). R9: 902 → 904 (coremetry/
 // DataTable sarmalayıcısının iki dosyası ui/DataTable'ı içe aktarıyor).
 const CEILINGS: Record<string, number> = {
-  Button: 209,
+  Button: 207, // Faz 2 dilim 1 R7: 209 → 207 (Remote Cluster)
   // v0.10.1617 (R9): 126 → 128 — coremetry/DataTable dondurulmuş API'nin Faz 1
   // gövdesi ui/DataTable'ı SARIYOR (plan §6: "thin wrapper over today's
   // code"): DataTable.tsx (gövde) + types.ts (bugünkü tiplerin yeniden dışa
   // aktarımı). Benimseme değil, halef; gövde Traces diliminde değişince düşer.
-  DataTable: 128,
-  Badge: 63,
+  DataTable: 127, // Faz 2 dilim 1 R7: 128 → 127 (SpanClusterValuesPanel)
+  Badge: 61, // R7: 63 → 61
   IconButton: 50,
-  Field: 37,
+  Field: 36, // R7: 37 → 36
   Chip: 36,
   ConfirmDialog: 35,
   SegmentedControl: 35,
@@ -97,9 +97,9 @@ const CEILINGS: Record<string, number> = {
   // Düğmeyi shadcn'e çevirmek görünür değişiklik olur — PageControls'ü
   // geçiren dilimin işi; o commit bunu 31'e indirir.
   DisclosureButton: 32,
-  LinkButton: 31,
+  LinkButton: 30, // R7: 31 → 30
   Modal: 23,
-  Stack: 23,
+  Stack: 21, // R7: 23 → 21
   Card: 19,
   TabStrip: 17,
   Drawer: 15,

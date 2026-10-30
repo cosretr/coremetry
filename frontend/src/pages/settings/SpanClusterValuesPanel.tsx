@@ -6,8 +6,13 @@
 // sunucu reddeder, bağlı kayıt gösterilir.
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Row, Badge } from '@/components/ui';
-import { DataTableState, type DataTableStateStaticProps } from '@/components/ui/DataTable';
+import { Badge } from '@/components/shadcn/badge';
+import { Button } from '@/components/shadcn/button';
+import { NativeSelect, NativeSelectOption } from '@/components/shadcn/native-select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/shadcn/table';
+import { CheckboxField } from '@/components/coremetry/Field';
+import { StatusBadge } from '@/components/coremetry/StatusBadge';
+import { DataTableStateRow, type DataTableStateStaticProps } from '@/components/coremetry/DataTable';
 import { api } from '@/lib/api';
 import { fmtDateTime } from '@/lib/utils';
 import { humanize } from './shared';
@@ -50,8 +55,12 @@ export function SpanClusterValuesPanel({ clusters, onAssigned }: {
     q.isPending ? { kind: 'loading' }
     : q.error ? { kind: 'error', message: `Span cluster değerleri yüklenemedi: ${humanize(q.error)}` }
     : { kind: 'empty', message: "Span verisinde cluster değeri yok — span'ler k8s.cluster.name / openshift.cluster.name / cluster taşımıyor." };
+  // Faz 2 dilim 1 R7 (shadcn pilotu): inline stil yok; statik tablo shadcn
+  // Table (T1 gerekçesi aynı: satır başına seçici + Assign, düzenlenebilir
+  // eşleme listesi); durum satırı coremetry DataTableStateRow; kolonlar ve
+  // sıraları aynı.
   return (
-    <div className="card" style={{ marginTop: 16 }}>
+    <div className="card mt-4">
       <div className="ov-card-h">
         <h3>Span cluster values</h3>
         <span className="ov-sub">
@@ -61,45 +70,47 @@ export function SpanClusterValuesPanel({ clusters, onAssigned }: {
       <div className="ov-card-b">
         {/* v0.10.954 — geriye dönük tarama anahtarı yalnız atanacak satır varken anlamlı (eskisi gibi). */}
         {showRows && (
-          <Row gap={2} wrap>
-            <label className="field-hint" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <input type="checkbox" checked={backfill} onChange={e => setBackfill(e.target.checked)} />
-              atamada son 24 saati geriye dönük tara (pod/servis entity'leri)
-            </label>
-          </Row>
+          <CheckboxField className="mb-2" checked={backfill} onCheckedChange={setBackfill}
+            label="atamada son 24 saati geriye dönük tara (pod/servis entity'leri)" />
         )}
         {/* v0.10.942 — statik tablo: satır başına kayıt seçici + Assign, düzenlenebilir eşleme listesi (T1). */}
-        <table>
-          <thead><tr><th>Value</th><th className="num">Spans</th><th>First seen</th><th>Last seen</th><th>Bound to</th><th></th></tr></thead>
-          <tbody>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Value</TableHead><TableHead className="num">Spans</TableHead><TableHead>First seen</TableHead>
+              <TableHead>Last seen</TableHead><TableHead>Bound to</TableHead><TableHead />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {/* v0.10.967 (P-2) — statik tablonun durum satırı; colSpan = thead'deki 6 <th>. */}
-            {!showRows ? <DataTableState colSpan={6} {...state} /> : rows.map(r => (
-              <tr key={r.value}>
-                <td className="mono">{r.value}</td>
-                <td className="num">{r.spans.toLocaleString()}</td>
-                <td className="mono">{fmtDateTime(new Date(r.firstSeen))}</td>
-                <td className="mono">{fmtDateTime(new Date(r.lastSeen))}</td>
-                <td>
+            {!showRows ? <DataTableStateRow colSpan={6} {...state} /> : rows.map(r => (
+              <TableRow key={r.value}>
+                <TableCell className="font-mono">{r.value}</TableCell>
+                <TableCell className="num">{r.spans.toLocaleString()}</TableCell>
+                <TableCell className="font-mono">{fmtDateTime(new Date(r.firstSeen))}</TableCell>
+                <TableCell className="font-mono">{fmtDateTime(new Date(r.lastSeen))}</TableCell>
+                <TableCell>
                   {r.ownerName
-                    ? <Badge title={r.ownerId}>{r.ownerName}</Badge>
-                    : <Badge tone="warning" title="Hiçbir Remote Cluster kaydı bu değeri taşımıyor">unmapped</Badge>}
-                </td>
-                <td>
+                    ? <Badge variant="outline" title={r.ownerId}>{r.ownerName}</Badge>
+                    : <StatusBadge status="warn" title="Hiçbir Remote Cluster kaydı bu değeri taşımıyor">unmapped</StatusBadge>}
+                </TableCell>
+                <TableCell>
                   {!r.ownerName && (
-                    <Row gap={2}>
-                      <select value={pick[r.value] ?? ''} onChange={e => setPick(p => ({ ...p, [r.value]: e.target.value }))}>
-                        <option value="">— cluster —</option>
-                        {clusters.filter(c => c.id).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                      </select>
-                      <Button type="button" variant="primary" size="xs" disabled={!pick[r.value]} onClick={() => assign(r.value)}>Assign</Button>
-                      {msg[r.value] && <span className="field-hint">{msg[r.value]}</span>}
-                    </Row>
+                    <div className="flex items-center gap-2">
+                      <NativeSelect size="sm" aria-label={`${r.value} için kayıt`} value={pick[r.value] ?? ''}
+                        onChange={e => setPick(p => ({ ...p, [r.value]: e.target.value }))}>
+                        <NativeSelectOption value="">— cluster —</NativeSelectOption>
+                        {clusters.filter(c => c.id).map(c => <NativeSelectOption key={c.id} value={c.id}>{c.name}</NativeSelectOption>)}
+                      </NativeSelect>
+                      <Button size="xs" disabled={!pick[r.value]} onClick={() => assign(r.value)}>Assign</Button>
+                      {msg[r.value] && <span className="text-[length:var(--fs-xs)] text-(--text3)">{msg[r.value]}</span>}
+                    </div>
                   )}
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
     </div>
   );

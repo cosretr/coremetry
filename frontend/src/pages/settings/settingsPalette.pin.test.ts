@@ -95,7 +95,8 @@ describe('Settings sade palet — K5 artıkları (v0.10.929)', () => {
     for (const f of ['MetricsBackendTab.tsx', 'TempoTab.tsx', 'ElasticTab.tsx', 'ClustersTab.tsx', 'DevOpsTab.tsx', 'OracleTab.tsx']) {
       const markers = read(f).split('\n').filter(l => /· (stored|saklı|kayıtlı)</.test(l));
       expect(markers.length, f).toBeGreaterThan(0);
-      for (const l of markers) expect(l, f).toContain("color: 'var(--text3)'");
+      // Faz 2 dilim 1 R7: geçirilen sayfada aynı token Tailwind utility'siyle (`text-(--text3)`).
+      for (const l of markers) expect(l, f).toMatch(/color: 'var\(--text3\)'|\btext-\(--text3\)/);
     }
     expect(read('OracleTab.tsx')).not.toMatch(/\bis-ok\b/);
   });

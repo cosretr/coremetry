@@ -534,11 +534,6 @@
       "count": 29
     }
   },
-  "src/pages/settings/ClustersTab.tsx": {
-    "ui/no-raw-element": {
-      "count": 9
-    }
-  },
   "src/pages/settings/ContextPackPanel.tsx": {
     "ui/no-raw-element": {
       "count": 2
@@ -642,11 +637,6 @@
   "src/pages/settings/SmtpTab.tsx": {
     "ui/no-raw-element": {
       "count": 9
-    }
-  },
-  "src/pages/settings/SpanClusterValuesPanel.tsx": {
-    "ui/no-raw-element": {
-      "count": 2
     }
   },
   "src/pages/settings/SsoTab.tsx": {

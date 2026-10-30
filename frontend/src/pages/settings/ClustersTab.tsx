@@ -1,11 +1,16 @@
-import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { GitBranch } from 'lucide-react';
 import { fmtDateTime } from '@/lib/utils';
 import { SpanClusterValuesPanel } from './SpanClusterValuesPanel';
 import { Combobox } from '@/components/Combobox';
 import { Spinner } from '@/components/Spinner';
-import { Badge, Button, Field, LinkButton, Row, Stack, TextareaField } from '@/components/ui';
+import { Badge } from '@/components/shadcn/badge';
+import { Button } from '@/components/shadcn/button';
+import { Field, SelectField, TextareaField, CheckboxField } from '@/components/coremetry/Field';
+import { StatusBadge } from '@/components/coremetry/StatusBadge';
+import { ActionRow } from '@/components/coremetry/ActionRow';
+import { cn } from '@/lib/cn';
 import { api } from '@/lib/api';
 import { useSettingsLoad, SettingsLoadError, FlashBox, humanize } from './shared';
 import { useClusters } from '@/lib/queries';
@@ -138,9 +143,13 @@ interface CheckItem { id: string; label: string; text: string }
 // gibi GERÇEK bir h3 (ekran okuyucu başlık gezinmesi) ve cümle düzeninde: 12px
 // / 600 / --text, yanında 11px --text3 açıklama, taban çizgisinde hizalı.
 // SectionHead'in büyük harfli .dtl-sech dili detay sayfası ayırıcısıdır.
-const ARGO_HEAD_ROW: CSSProperties = { alignItems: 'baseline' };
-const ARGO_H3: CSSProperties = { margin: 0, fontSize: 'var(--fs-sm)', fontWeight: 600, color: 'var(--text)' };
-const ARGO_H3_META: CSSProperties = { fontSize: 'var(--fs-xs)', color: 'var(--text3)' };
+//
+// Faz 2 dilim 1 R7 (shadcn pilotu): inline stil YOK — Tailwind utility'leri
+// (pages/settings @source, R1), coremetry/Field ailesi, shadcn Button/Badge,
+// coremetry/StatusBadge, coremetry/ActionRow. Alan sırası, metinler, secret
+// sözleşmesi ve kaydetme gövdesi değişmedi (ClustersTab.secret.test.tsx).
+const CODE = 'mx-1 rounded-sm bg-(--bg0) px-[5px] py-px font-mono text-[length:var(--fs-sm)]';
+const HINT = 'text-[length:var(--fs-xs)] leading-snug text-(--text3)';
 
 export function ClustersTab() {
   const [rows, setRows] = useState<EditRow[]>([]);
@@ -293,23 +302,22 @@ export function ClustersTab() {
   if (!loaded) return <Spinner />;
 
   return (
-    <div style={{ maxWidth: 760 }}>
-      <h2 style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Remote clusters (Thanos)</h2>
-      <p style={{ color: 'var(--text2)', fontSize: 13, marginBottom: 16 }}>
+    <div className="max-w-[760px]">
+      <h2 className="mb-1.5 text-[length:var(--fs-lg)] font-semibold">Remote clusters (Thanos)</h2>
+      <p className="mb-4 text-[length:var(--fs-md)] text-(--text2)">
         Each entry points at an OpenShift cluster's Thanos Querier route.
         The <strong>/clusters</strong> page pulls per-pod CPU + memory from
         every enabled entry. Service pages pivot into a cluster when its <strong>name</strong> matches the
-        <code style={{ background: 'var(--bg0)', padding: '1px 5px', borderRadius: 3, margin: '0 4px' }}>k8s.cluster.name</code>
+        <code className={CODE}>k8s.cluster.name</code>
         value the telemetry reports — <em>or</em> when the span values are mapped to it (Detect label / assign values below, v0.10.139-141).
         Typical auth: a ServiceAccount token bound to the
-        <code style={{ background: 'var(--bg0)', padding: '1px 5px', borderRadius: 3, margin: '0 4px' }}>cluster-monitoring-view</code>
+        <code className={CODE}>cluster-monitoring-view</code>
         ClusterRole. Read-only — Coremetry never writes to Thanos.
       </p>
 
       <form onSubmit={save}>
         {rows.length === 0 && (
-          <div style={{ padding: 14, fontSize: 12, color: 'var(--text3)',
-            border: '1px dashed var(--border)', borderRadius: 8, marginBottom: 12 }}>
+          <div className="mb-3 rounded-lg border border-dashed border-(--border) p-3.5 text-[length:var(--fs-sm)] text-(--text3)">
             No clusters yet — add the first one below.
           </div>
         )}
@@ -324,252 +332,194 @@ export function ClustersTab() {
           const chk = checks[i];
           const apiId = fieldId('api', i);
           const apiDesc = chk.preview.length > 0 ? `${apiId}-n ${apiId}-p` : `${apiId}-n`;
+          const ref = r.id || r.name.trim();
           return (
-            <div key={i} role="group" aria-label={`${r.name.trim() || `#${i + 1}`} kaydı`} style={{
-              marginBottom: 12, padding: 14, borderRadius: 8,
-              background: 'var(--bg2)', border: '1px solid var(--border)',
-              opacity: r.enabled ? 1 : 0.65,
-            }}>
-              <div style={{ display: 'flex', gap: 10, marginBottom: hubNoteId ? 6 : 10, alignItems: 'flex-end' }}>
-                <label style={{ flex: 1 }}>
-                  <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>
-                    Cluster name (join key)
-                    {r.id && (
-                      <span className="badge mono" style={{ marginLeft: 8 }}
-                        title="Opaque, immutable cluster id — the root of the entity hierarchy. Renaming the cluster keeps it.">
-                        {r.id}
-                      </span>
-                    )}
-                    {hubNoteId && (
-                      <>{' '}<Badge tone="neutral"><GitBranch size={11} aria-hidden="true" />Argo hub</Badge></>
-                    )}
-                    {!nameKnown && (
-                      <span className="badge b-warn" style={{ marginLeft: 8 }}
-                        title="Name not seen in the last 24h of telemetry — Thanos data will not match service pages. The warning clears once the cluster starts reporting.">
-                        not in telemetry
-                      </span>
-                    )}
-                  </div>
-                  <DescribedBy id={hubNoteId}>
-                    <Combobox value={r.name} onChange={v => patch(i, { name: v })}
-                      options={observedNames} placeholder="prod-ist" width="100%" />
-                  </DescribedBy>
-                </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 6, paddingBottom: 6 }}>
-                  <input type="checkbox" checked={r.enabled} aria-describedby={hubNoteId}
-                    onChange={e => patch(i, { enabled: e.target.checked })} />
-                  <span style={{ fontSize: 12 }}>Enabled</span>
-                </label>
-                <Button type="button" variant="ghost" size="sm" aria-describedby={hubNoteId}
-                  onClick={() => setRows(rs => rs.filter((_, j) => j !== i))}>
-                  Remove
-                </Button>
-              </div>
-              {hubNoteId && (
-                <div id={hubNoteId} className="field-hint">
-                  Argo CD hub'ı ({hubCount} instance): kaldırır ya da kapatırsanız Argo CD ayarı bir sonraki kayıtta reddedilir. Hub seçimi ve küme etiketi kararı <Link to="/settings/argocd">Ayarlar › Argo CD</Link> sekmesinde; burada değiştirilemez.
-                </div>
-              )}
-              <label style={{ display: 'block', marginBottom: 10, marginTop: hubNoteId ? 10 : undefined }}>
-                <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>Thanos Querier URL</div>
-                <input value={r.url} required={r.enabled}
-                  onChange={e => patch(i, { url: e.target.value })}
-                  placeholder="https://thanos-querier-openshift-monitoring.apps.prod-ist.example.com"
-                  style={{ width: '100%' }} />
-              </label>
-              <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
-                <label style={{ width: 180 }}>
-                  <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>Auth</div>
-                  <select value={r.authType}
-                    onChange={e => patch(i, { authType: e.target.value as ThanosAuthType })}
-                    style={{ width: '100%' }}>
-                    <option value="bearer">Bearer token</option>
-                    <option value="none">None (in-mesh / mTLS)</option>
-                  </select>
-                </label>
-                {r.authType === 'bearer' && (
-                  <label style={{ flex: 1 }}>
-                    <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>
-                      Token
-                      {r.hasToken && <span style={{ color: 'var(--text3)', marginLeft: 8 }}>· stored</span>}
+            <div key={i} role="group" aria-label={`${r.name.trim() || `#${i + 1}`} kaydı`}
+              className={cn('mb-3 flex flex-col gap-2.5 rounded-lg border border-(--border) bg-(--bg2) p-3.5', !r.enabled && 'opacity-65')}>
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-end gap-2.5">
+                  <label className="min-w-0 flex-1">
+                    <div className="mb-1 flex flex-wrap items-center gap-2 text-[length:var(--fs-sm)] text-(--text2)">
+                      Cluster name (join key)
+                      {r.id && (
+                        <Badge variant="outline" className="font-mono"
+                          title="Opaque, immutable cluster id — the root of the entity hierarchy. Renaming the cluster keeps it.">
+                          {r.id}
+                        </Badge>
+                      )}
+                      {hubNoteId && <Badge variant="secondary"><GitBranch aria-hidden="true" />Argo hub</Badge>}
+                      {!nameKnown && (
+                        <StatusBadge status="warn"
+                          title="Name not seen in the last 24h of telemetry — Thanos data will not match service pages. The warning clears once the cluster starts reporting.">
+                          not in telemetry
+                        </StatusBadge>
+                      )}
                     </div>
-                    <input type="password" value={r.token}
-                      onChange={e => patch(i, { token: e.target.value })}
-                      placeholder={r.hasToken ? '(leave empty to keep stored value)' : 'paste ServiceAccount token…'}
-                      style={{ width: '100%' }} />
+                    <DescribedBy id={hubNoteId}>
+                      <Combobox value={r.name} onChange={v => patch(i, { name: v })}
+                        options={observedNames} placeholder="prod-ist" width="100%" />
+                    </DescribedBy>
                   </label>
+                  <CheckboxField label="Enabled" checked={r.enabled} aria-describedby={hubNoteId}
+                    onCheckedChange={v => patch(i, { enabled: v })} className="pb-2" />
+                  <Button variant="ghost" size="sm" aria-describedby={hubNoteId}
+                    onClick={() => setRows(rs => rs.filter((_, j) => j !== i))}>
+                    Remove
+                  </Button>
+                </div>
+                {hubNoteId && (
+                  <div id={hubNoteId} className={HINT}>
+                    Argo CD hub'ı ({hubCount} instance): kaldırır ya da kapatırsanız Argo CD ayarı bir sonraki kayıtta reddedilir. Hub seçimi ve küme etiketi kararı <Link to="/settings/argocd">Ayarlar › Argo CD</Link> sekmesinde; burada değiştirilemez.
+                  </div>
+                )}
+              </div>
+              <Field label="Thanos Querier URL" value={r.url} required={r.enabled}
+                onChange={e => patch(i, { url: e.target.value })}
+                placeholder="https://thanos-querier-openshift-monitoring.apps.prod-ist.example.com" />
+              <div className="flex items-start gap-2.5">
+                <SelectField small label="Auth" value={r.authType}
+                  onChange={e => patch(i, { authType: e.target.value as ThanosAuthType })}>
+                  <option value="bearer">Bearer token</option>
+                  <option value="none">None (in-mesh / mTLS)</option>
+                </SelectField>
+                {r.authType === 'bearer' && (
+                  <Field className="flex-1" label="Token" type="password" value={r.token}
+                    labelAside={r.hasToken ? <span className="text-[length:var(--fs-sm)] text-(--text3)">· stored</span> : undefined}
+                    onChange={e => patch(i, { token: e.target.value })}
+                    placeholder={r.hasToken ? '(leave empty to keep stored value)' : 'paste ServiceAccount token…'} />
                 )}
                 {r.authType === 'bearer' && (
                   /* v0.10.272 — Influx/Tempo deseni: referans doluysa saklı token yerine kullanılır. */
-                  <div style={{ flex: 1 }}>
-                    <Field label="…ya da token referansı" value={r.tokenRef}
-                      onChange={e => patch(i, { tokenRef: e.target.value })}
-                      placeholder="env:COREMETRY_THANOS_TOKEN_PROD  ·  file:/var/run/secrets/thanos/token"
-                      autoComplete="off"
-                      error={r.tokenError || undefined}
-                      hint={r.tokenResolved ? 'Çözüldü ✓' : 'env: Helm extraEnv + existingSecret; file: mount edilmiş Secret (≤30 s)'} />
-                  </div>
+                  <Field className="flex-1" label="…ya da token referansı" value={r.tokenRef}
+                    onChange={e => patch(i, { tokenRef: e.target.value })}
+                    placeholder="env:COREMETRY_THANOS_TOKEN_PROD  ·  file:/var/run/secrets/thanos/token"
+                    autoComplete="off"
+                    error={r.tokenError || undefined}
+                    hint={r.tokenResolved ? 'Çözüldü ✓' : 'env: Helm extraEnv + existingSecret; file: mount edilmiş Secret (≤30 s)'} />
                 )}
               </div>
               {/* v0.10.128 — identity mapping (entity layer). Label name empty = no
                   matcher = one Thanos URL per cluster (the classic model). */}
-              <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
-                <label style={{ width: 200 }}>
-                  <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>Thanos label name</div>
-                  <input value={r.thanosLabelName}
-                    onChange={e => patch(i, { thanosLabelName: e.target.value })}
-                    placeholder='cluster  ·  empty = per-cluster URL'
-                    style={{ width: '100%' }} />
-                </label>
-                <label style={{ flex: 1 }}>
-                  <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>Thanos label value</div>
-                  <input value={r.thanosLabelValue}
-                    onChange={e => patch(i, { thanosLabelValue: e.target.value })}
-                    placeholder={r.name.trim() ? `empty = ${r.name.trim()}` : 'empty = cluster name'}
-                    disabled={!r.thanosLabelName.trim()}
-                    style={{ width: '100%' }} />
-                </label>
-                <label style={{ flex: 1 }}>
-                  <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>
-                    Span cluster values
-                    {r.thanosLabelSource && (
-                      <span className={`badge ${r.thanosLabelSource === 'auto' ? 'b-info' : 'b-gray'}`} style={{ marginLeft: 6 }}
-                        title={r.thanosLabelSource === 'auto' && r.thanosLabelDetectedAt ? `Thanos etiketi otomatik algılandı · ${fmtDateTime(new Date(r.thanosLabelDetectedAt))}` : 'Thanos etiketi elle girildi'}>
-                        label: {r.thanosLabelSource}
-                      </span>
-                    )}
-                  </div>
-                  {/* v0.10.139 — bir kayıt birden çok span değeri taşır (virgülle); bir
-                      değer aynı anda TEK kayda — çakışmayı sunucu reddeder ve bağlı kaydı söyler. */}
-                  <input value={r.spanClusterValues}
-                    onChange={e => patch(i, { spanClusterValues: e.target.value, spanClusterValue: e.target.value.split(',')[0]?.trim() ?? '' })}
-                    placeholder={r.name.trim() ? `empty = ${r.name.trim()} · comma-separated` : 'empty = cluster name · comma-separated'}
-                    style={{ width: '100%' }} />
-                </label>
-                <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', gap: 4, minWidth: 140 }}>
-                  <Button type="button" variant="ghost" size="sm" disabled={!r.id}
+              <div className="flex items-start gap-2.5">
+                <Field className="w-[200px] shrink-0" label="Thanos label name" value={r.thanosLabelName}
+                  onChange={e => patch(i, { thanosLabelName: e.target.value })}
+                  placeholder='cluster  ·  empty = per-cluster URL' />
+                <Field className="flex-1" label="Thanos label value" value={r.thanosLabelValue}
+                  onChange={e => patch(i, { thanosLabelValue: e.target.value })}
+                  placeholder={r.name.trim() ? `empty = ${r.name.trim()}` : 'empty = cluster name'}
+                  disabled={!r.thanosLabelName.trim()} />
+                {/* v0.10.139 — bir kayıt birden çok span değeri taşır (virgülle); bir
+                    değer aynı anda TEK kayda — çakışmayı sunucu reddeder ve bağlı kaydı söyler. */}
+                <Field className="flex-1" label="Span cluster values" value={r.spanClusterValues}
+                  labelAside={r.thanosLabelSource && (
+                    <StatusBadge status={r.thanosLabelSource === 'auto' ? 'info' : 'unknown'}
+                      title={r.thanosLabelSource === 'auto' && r.thanosLabelDetectedAt ? `Thanos etiketi otomatik algılandı · ${fmtDateTime(new Date(r.thanosLabelDetectedAt))}` : 'Thanos etiketi elle girildi'}>
+                      label: {r.thanosLabelSource}
+                    </StatusBadge>
+                  )}
+                  onChange={e => patch(i, { spanClusterValues: e.target.value, spanClusterValue: e.target.value.split(',')[0]?.trim() ?? '' })}
+                  placeholder={r.name.trim() ? `empty = ${r.name.trim()} · comma-separated` : 'empty = cluster name · comma-separated'} />
+                <div className="flex min-w-[140px] flex-col justify-end gap-1 self-end">
+                  <Button variant="ghost" size="sm" disabled={!r.id}
                     title={r.id ? 'Query count(kube_node_info) with this cluster\'s label matcher (saved settings)' : 'Save first'}
                     onClick={() => runProbe(r)}>
                     Test label
                   </Button>
-                  <Button type="button" variant="secondary" size="sm" disabled={!r.id}
+                  <Button variant="outline" size="sm" disabled={!r.id}
                     title={r.id ? 'Thanos external label\'ını enjeksiyonsuz sorguyla algıla ve kaydet (auto)' : 'Save first'}
                     onClick={() => runDetect(r)}>
                     Detect label
                   </Button>
                   {r.labelCheck && !r.labelCheck.ok && (
-                <div style={{ fontSize: 12, color: 'var(--err)', marginTop: 4 }} title={r.labelCheck.checkedAt}>
-                  ⚠ periyodik doğrulama: {r.labelCheck.error || 'etiket eşleşmiyor'} · {fmtDateTime(new Date(r.labelCheck.checkedAt))}
-                </div>
-              )}
-              {detect[r.id || r.name.trim()] && (
-                <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 4 }}>
-                  {detect[r.id || r.name.trim()].text}
-                  {detect[r.id || r.name.trim()].candidates && Object.entries(detect[r.id || r.name.trim()].candidates!).map(([label, vals]) => (
-                    <span key={label} style={{ marginLeft: 8 }}>
-                      {label}: {vals.slice(0, 8).map(v => (
-                        <Button key={v} type="button" variant="ghost" size="xs" title={`Bu değeri seç: ${label}="${v}" (kaydetmeyi unutma)`}
-                          onClick={() => patch(i, { thanosLabelName: label, thanosLabelValue: v })}>{v}</Button>
-                      ))}
-                    </span>
-                  ))}
-                </div>
-              )}
-              {probe[r.id || r.name.trim()] && (
-                    <span style={{ fontSize: 11, color: 'var(--text2)' }}>{probe[r.id || r.name.trim()]}</span>
+                    <div className="mt-1 text-[length:var(--fs-sm)] text-status-critical" title={r.labelCheck.checkedAt}>
+                      ⚠ periyodik doğrulama: {r.labelCheck.error || 'etiket eşleşmiyor'} · {fmtDateTime(new Date(r.labelCheck.checkedAt))}
+                    </div>
                   )}
+                  {detect[ref] && (
+                    <div className="mt-1 text-[length:var(--fs-sm)] text-(--text2)">
+                      {detect[ref].text}
+                      {detect[ref].candidates && Object.entries(detect[ref].candidates!).map(([label, vals]) => (
+                        <span key={label} className="ml-2">
+                          {label}: {vals.slice(0, 8).map(v => (
+                            <Button key={v} variant="ghost" size="xs" title={`Bu değeri seç: ${label}="${v}" (kaydetmeyi unutma)`}
+                              onClick={() => patch(i, { thanosLabelName: label, thanosLabelValue: v })}>{v}</Button>
+                          ))}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {probe[ref] && <span className="text-[length:var(--fs-xs)] text-(--text2)">{probe[ref]}</span>}
                 </div>
               </div>
-              <Stack gap={3}>
-                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
-                  <label style={{ flex: 1 }}>
-                    <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>
-                      Namespace filter (PromQL regex — cardinality shield)
-                    </div>
-                    <input value={r.namespaceFilter}
-                      onChange={e => patch(i, { namespaceFilter: e.target.value })}
-                      placeholder='^(app-|payments-)  ·  empty = all namespaces (top 500 pods)'
-                      style={{ width: '100%' }} />
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, paddingBottom: 6, whiteSpace: 'nowrap' }}>
-                    <input type="checkbox" checked={r.insecureSkipVerify}
-                      onChange={e => patch(i, { insecureSkipVerify: e.target.checked })} />
-                    <span style={{ fontSize: 12 }}>Skip TLS verify</span>
-                  </label>
-                </div>
-                {/* v0.10.956 — Rollouts v2 P1.3 (docs/rollouts/v2-audit.md §3.2, karar 7):
-                    Argo CD eşlemesinin cluster tarafı. P1'de okuyan yok; doğrulama +
-                    normalise + tekillik sunucuda (thanos.ReconcileClusterSettings).
-                    v0.10.974 — alt başlık (h3) + önizleme + istemci denetimi (mockup
-                    ClusterFields.dc.html). */}
-                <div lang="tr" className="row gap-2 row-wrap" style={ARGO_HEAD_ROW}>
-                  <h3 style={ARGO_H3}>Argo CD eşlemesi</h3>
-                  <span style={ARGO_H3_META}>Argo'nun <code>dest_server</code> ve uygulama adı eki bu kümeye nasıl çözülür</span>
-                </div>
-                <div>
-                  <TextareaField id={apiId} label="API server URLs (Argo CD dest_server)" rows={2}
-                    value={r.apiServerUrls}
-                    onChange={e => patch(i, { apiServerUrls: e.target.value, apiServerUrlsKnown: true })}
-                    placeholder="https://api.cluster-a.example.invalid:6443"
-                    autoComplete="off" spellCheck={false}
-                    aria-invalid={chk.apiInvalid ? 'true' : undefined}
-                    aria-describedby={apiDesc}
-                    style={chk.apiInvalid ? { borderColor: 'var(--err)' } : undefined} />
-                  <div id={`${apiId}-n`} className="field-hint">{API_URLS_NOTE}</div>
-                  {chk.preview.length > 0 && (
-                    <div id={`${apiId}-p`} className="field-hint">
-                      <div>{API_URLS_PREVIEW_TITLE}</div>
-                      {chk.preview.map((l, k) => (
-                        <Row key={k} gap={2}>
-                          <span className={l.bad ? 'mono is-err' : 'mono'}>{l.text}</span>
-                          <span className={l.bad ? 'is-err' : undefined}>{l.note}</span>
-                        </Row>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <Row gap={3} wrap>
-                  <div className="row-grow">
-                    <Field id={fieldId('suffix', i)} label="Argo app suffix" value={r.argoSuffix}
-                      onChange={e => patch(i, { argoSuffix: e.target.value })}
-                      placeholder="e.g. ca" autoComplete="off" spellCheck={false}
-                      error={chk.suffixError} hint={SUFFIX_HINT} />
+              <div className="flex items-end gap-2.5">
+                <Field className="flex-1" label="Namespace filter (PromQL regex — cardinality shield)" value={r.namespaceFilter}
+                  onChange={e => patch(i, { namespaceFilter: e.target.value })}
+                  placeholder='^(app-|payments-)  ·  empty = all namespaces (top 500 pods)' />
+                <CheckboxField label="Skip TLS verify" checked={r.insecureSkipVerify} className="whitespace-nowrap pb-2"
+                  onCheckedChange={v => patch(i, { insecureSkipVerify: v })} />
+              </div>
+              {/* v0.10.956 — Rollouts v2 P1.3 (docs/rollouts/v2-audit.md §3.2, karar 7):
+                  Argo CD eşlemesinin cluster tarafı. P1'de okuyan yok; doğrulama +
+                  normalise + tekillik sunucuda (thanos.ReconcileClusterSettings).
+                  v0.10.974 — alt başlık (h3) + önizleme + istemci denetimi (mockup
+                  ClusterFields.dc.html). Faz 2 dilim 1 R7: üst kenar çizgisi grubu ayırır. */}
+              <div lang="tr" className="mt-1 flex flex-wrap items-baseline gap-2 border-t border-(--divider) pt-3">
+                <h3 className="m-0 text-[length:var(--fs-sm)] font-semibold text-(--text)">Argo CD eşlemesi</h3>
+                <span className="text-[length:var(--fs-xs)] text-(--text3)">Argo'nun <code>dest_server</code> ve uygulama adı eki bu kümeye nasıl çözülür</span>
+              </div>
+              <div>
+                <TextareaField id={apiId} label="API server URLs (Argo CD dest_server)" rows={2}
+                  value={r.apiServerUrls}
+                  onChange={e => patch(i, { apiServerUrls: e.target.value, apiServerUrlsKnown: true })}
+                  placeholder="https://api.cluster-a.example.invalid:6443"
+                  autoComplete="off" spellCheck={false}
+                  aria-invalid={chk.apiInvalid ? 'true' : undefined}
+                  aria-describedby={apiDesc} />
+                <div id={`${apiId}-n`} className={HINT}>{API_URLS_NOTE}</div>
+                {chk.preview.length > 0 && (
+                  <div id={`${apiId}-p`} className={HINT}>
+                    <div>{API_URLS_PREVIEW_TITLE}</div>
+                    {chk.preview.map((l, k) => (
+                      <div key={k} className="flex gap-2">
+                        <span className={cn('font-mono', l.bad && 'text-status-critical')}>{l.text}</span>
+                        <span className={l.bad ? 'text-status-critical' : undefined}>{l.note}</span>
+                      </div>
+                    ))}
                   </div>
-                  <div className="row-grow">
-                    <Field label="Pair group" value={r.pairGroup}
-                      onChange={e => patch(i, { pairGroup: e.target.value })}
-                      placeholder="e.g. prod-pair-1" autoComplete="off"
-                      hint={chk.pairHint} />
-                  </div>
-                </Row>
-              </Stack>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <Field className="min-w-[200px] flex-1" id={fieldId('suffix', i)} label="Argo app suffix" value={r.argoSuffix}
+                  onChange={e => patch(i, { argoSuffix: e.target.value })}
+                  placeholder="e.g. ca" autoComplete="off" spellCheck={false}
+                  error={chk.suffixError} hint={SUFFIX_HINT} />
+                <Field className="min-w-[200px] flex-1" label="Pair group" value={r.pairGroup}
+                  onChange={e => patch(i, { pairGroup: e.target.value })}
+                  placeholder="e.g. prod-pair-1" autoComplete="off"
+                  hint={chk.pairHint} />
+              </div>
             </div>
           );
         })}
 
         {/* v0.10.974 — FlashBox: hata role=alert, başarı role=status. İstemci
             denetiminin maddeleri alana götüren bağlantılar (odak eylemle taşınır). */}
-        <Stack gap={3}>
-          {msg && (
-            <FlashBox kind={msg.kind}>
-              {msg.items ? <strong>{msg.text}</strong> : msg.text}
-              {msg.items?.map((it, k) => (
-                <div key={k}>
-                  · <LinkButton onClick={() => focusField(it.id)}>{it.label}</LinkButton>: {it.text}
-                </div>
-              ))}
-            </FlashBox>
-          )}
-          <Row gap={2}>
-            <Button type="button" variant="secondary"
-              onClick={() => setRows(rs => [...rs, { ...EMPTY_ROW }])}>
-              + Add cluster
-            </Button>
-            <Button type="submit" variant="primary" loading={busy}>
-              Save all
-            </Button>
-          </Row>
-        </Stack>
+        {msg && (
+          <FlashBox kind={msg.kind}>
+            {msg.items ? <strong>{msg.text}</strong> : msg.text}
+            {msg.items?.map((it, k) => (
+              <div key={k}>
+                · <Button variant="link" size="xs" className="h-auto p-0" onClick={() => focusField(it.id)}>{it.label}</Button>: {it.text}
+              </div>
+            ))}
+          </FlashBox>
+        )}
+        {/* Faz 2 dilim 1 R7 (D4): eylem satırı sağa yaslı, birincil en sağda. */}
+        <div className="mt-3">
+          <ActionRow
+            secondary={<Button variant="outline" onClick={() => setRows(rs => [...rs, { ...EMPTY_ROW }])}>+ Add cluster</Button>}
+            confirm={<Button type="submit" loading={busy}>Save all</Button>} />
+        </div>
       </form>
       {/* v0.10.141 — span cluster değerleri: eşleşmemişleri bir kayda ata (teklik sunucuda). */}
       <SpanClusterValuesPanel clusters={rows.map(r => ({ id: r.id || undefined, name: r.name }))}
