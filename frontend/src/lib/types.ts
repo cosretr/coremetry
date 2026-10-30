@@ -7428,6 +7428,26 @@ export interface ChatMessage {
 }
 
 /**
+ * v0.10.1618 (CoSRE v2 Faz 2a) — v2 sohbet mesajının metadata'sı
+ * (`UIMessage<CosreMessageMetadata>`, lib/cosre/useCosreChat.ts). İlk dördü
+ * sunucunun `message-metadata` parçası (internal/cosre/uistream); kalanı
+ * istemcinin onFinish sonrası yazdığı durum.
+ */
+export interface CosreMessageMetadata {
+  allowedLinks?: string[];
+  callId?: string;
+  evidenceSpanIds?: string[];
+  exchangeId?: string;
+  turnId?: string;
+  /** Operatör durdurdu (onFinish isAbort) — metin yarım. */
+  partial?: boolean;
+  /** Akış hatayla bitti (onFinish isError) — kalıcılığa girmez. */
+  error?: boolean;
+  /** Kaldırılmış text parçalarının ÖZGÜN sıraları (resetReducer idempotansı). */
+  resetApplied?: number[];
+}
+
+/**
  * ChatExplainAsk — v0.10.1400: context.explainAsk, sohbete yapısal açıklama
  * niyeti (internal/api/chat_explain_turn.go chatExplainAsk). `src` yalnız
  * ölçüm (button | nudge | deeplink | chip | starter).

@@ -3,10 +3,9 @@
 //
 // Vercel AI SDK v5 "UI Message Stream" biçimi: `data: <json>` çerçeve başına bir
 // parça, son satır `data: [DONE]`, yanıt başlığı
-// `x-vercel-ai-ui-message-stream: v1`. `ai` paketi frontend'de HENÜZ yok
-// (bağımlılık eklemek operatör onayı ister); bu dosya v5 dokümanına göre yazıldı.
-// Faz 2'de `ai` pinlendiğinde parça adları node_modules/ai tiplerine karşı
-// doğrulanır ve sürüm burada sabitlenir.
+// `x-vercel-ai-ui-message-stream: v1`. v0.10.1618 (Faz 2a): `ai` 5.0.276 +
+// `@ai-sdk/react` 2.0.279 tam pinli (aiSdkPin.test.ts); paylaşılan fixture'lar
+// gerçek istemciden geçirilerek doğrulanır (useCosreChat.test.tsx).
 //
 // Kapalı kümeler: Go çeviricisi yeni bir parça türü ya da data adı üretirse
 // uiStreamFixture.test.ts (paylaşılan testdata/cosre/*.sse) kırmızıya döner;

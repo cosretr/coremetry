@@ -30,6 +30,9 @@ const BUDGET_KB = Number(process.env.BUNDLE_BUDGET_KB || 347);
 const FORBIDDEN_SOURCES = [
   /node_modules\/(radix-ui|@radix-ui|cmdk|sonner|@floating-ui|react-remove-scroll|aria-hidden|use-sidecar|use-callback-ref|react-style-singleton|get-nonce|detect-node-es)\//,
   /src\/components\/shadcn\//,
+  // v0.10.1618 (CoSRE v2 Faz 2a): AI SDK yalnız v2 sohbetinin tembel
+  // chunk'ında; ilk yüke binmez. Sıra önemli: [1] shadcn sayımında kullanılır.
+  /node_modules\/(ai|@ai-sdk)\//,
 ];
 
 // Eski sınıf adıyla AYNI adı taşıyan Tailwind yardımcıları (R5). utilities
@@ -148,7 +151,7 @@ const out = [];
 out.push(`bundle-budget  dist/index.html  ${rows.length} preloaded JS`);
 for (const r of [...rows].sort((a, b) => b.gz - a.gz)) out.push(`  ${kb(r.gz).padStart(6)} KB gz  ${r.base}`);
 out.push(`initial-load JS gz: ${kb(initialGz)} KB   budget ${BUDGET_KB} KB   main (index-*.js) ${kb(mainGz)} KB gz   ${over ? 'OVER BUDGET' : 'OK'}`);
-out.push(`forbidden in entry: ${offenders.length ? offenders.map((o) => o.base).join(', ') : 'none'} (radix/cmdk/sonner/shadcn)   radix chunk: ${groupChunk('radix')}   toast chunk: ${groupChunk('toast')}   shadcn sources in output: ${shadcnChunks} chunks`);
+out.push(`forbidden in entry: ${offenders.length ? offenders.map((o) => o.base).join(', ') : 'none'} (radix/cmdk/sonner/shadcn/ai)   radix chunk: ${groupChunk('radix')}   toast chunk: ${groupChunk('toast')}   shadcn sources in output: ${shadcnChunks} chunks`);
 for (const o of offenders) {
   out.push(`  ${o.base}:`);
   for (const s of o.bad.slice(0, 5)) out.push(`    ${s}`);
