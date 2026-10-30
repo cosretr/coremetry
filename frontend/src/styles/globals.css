@@ -192,8 +192,8 @@
      iki görünür yüz üretiyordu; her mono kural bunu okur. */
   --font-mono-fallback: ui-monospace, SFMono-Regular, Menlo, monospace;
   /* v0.10.1620 (audit §13) — koyu + açık: paketli JetBrains Mono / Inter
-     (styles/fonts.css), sistem yığını yedek. redhat bloğu ikisini de
-     bugünkü değerine geri çeker (yerel-yalnız Red Hat Text tercihi). */
+     (styles/fonts.css), sistem yığını yedek. v0.10.1623 — redhat de aynı
+     yüzü alır (operatör: tipografi üç temada tek; renkler değişmez). */
   --font-mono: 'JetBrains Mono Variable', var(--font-mono-fallback);
   --font-sans: 'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   /* v0.10.933 (tablo standardı T6) — satır ritmi. Bu RAHAT (varsayılan)
@@ -328,11 +328,6 @@
    local-only font-family preference with clean fallbacks (no
    external font fetch). */
 [data-theme="redhat"] {
-  /* v0.10.1620 (audit §13): redhat paketli Inter/JetBrains Mono'yu ALMAZ —
-     gövde yerel-yalnız Red Hat Text (aşağıdaki body kuralı), diğer yığınlar
-     bugünkü sistem değerleri. */
-  --font-mono: var(--font-mono-fallback);
-  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   --bg0: #f0f0f0;
   --bg1: #ffffff;
   --bg2: #f5f5f5;
@@ -396,9 +391,6 @@
   --radius-lg: 8px;
 
   color-scheme: light;
-}
-[data-theme="redhat"] body {
-  font-family: 'Red Hat Text', 'RedHatText', -apple-system, 'Segoe UI', sans-serif;
 }
 /* OpenShift-console-style dark masthead nav: remap the surface
    tokens INSIDE the sidebar only — every child (nav items, badges,
@@ -3167,7 +3159,6 @@ button.accent.copied {
   pointer-events: auto;
   animation: fadeIn .12s ease-out;
 }
-[data-theme="redhat"] .tip { font-family: 'Red Hat Text', 'RedHatText', -apple-system, 'Segoe UI', sans-serif; }
 .tip.is-measuring { visibility: hidden; left: 0; top: 0; }
 /* Yapışkan hücre/başlık (sticky + z-index) kendi yığın bağlamını kurar;
    içindeki .tip'in z'si yalnız o bağlamda sayılır ve sonraki satırın sabit

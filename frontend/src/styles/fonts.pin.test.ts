@@ -52,17 +52,18 @@ describe('yazı tipleri', () => {
     expect(read('index.html')).not.toMatch(/as=["']font["']/);
   });
 
-  it('yığınlar: koyu/açık paketli yüz, redhat bugünkü tercihi', () => {
+  it('yığınlar: paketli yüz üç temada (v0.10.1623 redhat de)', () => {
     const g = read('src/styles/globals.css');
     expect(g).toContain("--font-mono: 'JetBrains Mono Variable', var(--font-mono-fallback);");
     expect(g).toContain("--font-sans: 'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;");
     expect(g).toMatch(/body \{\n {2}background: var\(--bg0\); color: var\(--text\);\n {2}font: 13px\/1\.5 var\(--font-sans\);/);
+    // v0.10.1623 — redhat yazı tipini geri çekmez: tema bloğunda font token'ı yok,
+    // yerel Red Hat Text kuralı (body / .tip) yok.
     const redhat = /\[data-theme="redhat"\] \{([\s\S]*?)\n\}/.exec(g)![1];
-    expect(redhat).toContain('--font-mono: var(--font-mono-fallback);');
-    expect(redhat.replace(/\/\*[\s\S]*?\*\//g, '')).not.toMatch(/Inter|JetBrains/);
-    expect(g).toContain(`[data-theme="redhat"] body {\n  font-family: 'Red Hat Text', 'RedHatText', -apple-system, 'Segoe UI', sans-serif;\n}`);
-    // Çıplak sistem sans yığını yalnız token'larda ve redhat Red Hat Text satırlarında.
-    const bare = g.split('\n').filter(l => /-apple-system/.test(l) && !/--font-sans:|Red Hat Text/.test(l));
+    expect(redhat.replace(/\/\*[\s\S]*?\*\//g, '')).not.toMatch(/--font-(mono|sans)\s*:/);
+    expect(g.replace(/\/\*[\s\S]*?\*\//g, '')).not.toMatch(/Red Hat Text|RedHatText/);
+    // Çıplak sistem sans yığını yalnız --font-sans token'ında.
+    const bare = g.split('\n').filter(l => /-apple-system/.test(l) && !/--font-sans:/.test(l));
     expect(bare).toEqual([]);
   });
 

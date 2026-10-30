@@ -7,8 +7,8 @@
    dosyalarına; fonts.pin.test.ts ölçüyor ve unicode-range'leri paketin
    CSS'iyle eşit tutuyor). Tarayıcı unicode-range'e göre yalnız sayfadaki
    karakterin alt kümesini indirir; Türkçe ğ/ş/İ latin-ext'te.
-   Yüzü kullanan: globals.css `--font-sans` / `--font-mono` (koyu + açık);
-   redhat kendi yerel-yalnız Red Hat Text tercihini korur. */
+   Yüzü kullanan: globals.css `--font-sans` / `--font-mono` — üç temada
+   (v0.10.1623: redhat de; yerel Red Hat Text tercihi kaldırıldı). */
 @font-face {
   font-family: 'Inter Variable';
   font-style: normal;
