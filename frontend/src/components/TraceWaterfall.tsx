@@ -10,6 +10,7 @@ import { collectSubtreeIds, groupParentOf, clusterBadge, ancestorChain, expandFo
 import { resolveResource } from '@/lib/otel/semconv';
 import { fmtNs, displaySpanName } from '@/lib/utils';
 import { inkOn } from '@/lib/chartFmt';
+import { wfLabelPlacement, wfOutsideRightLeft } from './traceWaterfall.label';
 import { nameColWidth, NAME_MIN, NAME_MAX, INDENT_PX } from '@/lib/traceNameCol';
 
 // v0.10.278 — sanal satır eşiği ve harita eşiği (ölçüm: 1000-1500 satır arası
@@ -30,11 +31,6 @@ function fmtClock(ns: number): string {
 }
 
 const TICKS = [0, 0.25, 0.5, 0.75, 1];
-// v0.8.536 — clearance an outside duration label needs to render fully.
-// fmtNs tops out around 7 monospace chars ("123.45ms") ≈ 48px at 10px,
-// plus the 4px gap, plus slack. Used to decide which SIDE of the bar the
-// label goes on, never whether it renders.
-const OUTSIDE_LABEL_MIN_PX = 60;
 
 interface Row {
   span: SpanRow;
@@ -804,31 +800,20 @@ export function TraceWaterfall({
           excLeftPct = Math.min(((clamped - minT) / totalNs) * 100, 99);
         }
 
-        // Decide whether the duration label fits inside the bar (Tempo
-        // does this — short bars get the label outside-right). 60px is
-        // roughly the width of "10.5ms" at the row's font size.
-        const labelInside = parseFloat(widthPct) > 6;
-
-        // v0.8.536 — an outside label is pinned to the bar's right, so
-        // every span sitting near the end of the trace (the last, short
-        // operation — nearly every trace has one) pushed its label past
-        // #wf-outer's overflow:hidden and lost it. Flip to the left only
-        // when the right is genuinely tight AND the left is genuinely
-        // roomier, so the label can never end up worse off than before.
-        //
-        // .wf-row-bar's pixel width is exactly containerWidth - colWidth:
-        // box-sizing is border-box globally, .wf-row-name's width already
-        // contains its 1px border, and neither .wf-row nor .wf-row-bar
-        // adds padding. containerWidth is 0 until the ResizeObserver
-        // first fires, which lands both spaces on 0 and keeps the old
-        // right-hand placement for that paint.
-        const barAreaWidth = Math.max(0, containerWidth - colWidth);
-        const endFrac = (parseFloat(startPct) + parseFloat(widthPct)) / 100;
-        const spaceRightPx = barAreaWidth * Math.max(0, 1 - endFrac);
-        const spaceLeftPx = barAreaWidth * (parseFloat(startPct) / 100);
-        const labelLeft = !labelInside
-          && spaceRightPx < OUTSIDE_LABEL_MIN_PX
-          && spaceLeftPx > spaceRightPx + OUTSIDE_LABEL_MIN_PX;
+        // v0.10.1643 — duration label: inside only when it fits in the
+        // bar's PAINTED pixels; otherwise fully beside it (right, or left
+        // when the track's right edge is tight — v0.8.536). Pure fn of
+        // track px + bar % + label length; no per-row measuring.
+        // .wf-row-bar's pixel width is exactly containerWidth - colWidth
+        // (border-box globally, no padding on .wf-row/.wf-row-bar);
+        // containerWidth is 0 until the ResizeObserver first fires.
+        const durLabel = fmtNs(dur);
+        const placement = wfLabelPlacement({
+          barAreaPx: Math.max(0, containerWidth - colWidth),
+          startPct: parseFloat(startPct), widthPct: parseFloat(widthPct), label: durLabel,
+        });
+        const labelInside = placement === 'inside';
+        const labelLeft = placement === 'left';
 
         // data-span-id (v0.9.477): seekRow (derin bağlantı / harita tıklaması)
         // bu satırı bulup görünüme kaydırır. v0.10.1033 — AI çekmecesinin span
@@ -992,7 +977,7 @@ export function TraceWaterfall({
                   // v0.10.920 — mürekkep bar rengine göre (inkOn); açık seri renklerinde beyaz okunmazdı.
                   <span className="wf-bar-label"
                     style={ink === '#ffffff' ? undefined : { color: ink, textShadow: 'none' }}>
-                    {fmtNs(dur)}
+                    {durLabel}
                   </span>
                 )}
               </div>
@@ -1004,8 +989,8 @@ export function TraceWaterfall({
                 <span className={`wf-bar-label-outside${labelLeft ? ' wf-bar-label-outside-left' : ''}`}
                       style={{ left: labelLeft
                         ? `calc(${startPct}% - 4px)`
-                        : `calc(${startPct}% + ${widthPct}% + 4px)` }}>
-                  {fmtNs(dur)}
+                        : wfOutsideRightLeft(startPct, widthPct) }}>
+                  {durLabel}
                 </span>
               )}
             </div>
