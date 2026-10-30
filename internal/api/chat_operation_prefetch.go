@@ -335,6 +335,26 @@ func opPctDelta(cur, prev float64) string {
 	return fmt.Sprintf("%+.0f%%", (cur-prev)/prev*100)
 }
 
+// seededTools — v0.10.1678: künyenin ön-getirme kaynakları (yürütme sırası).
+// Yalnız modele VERİ olarak giden adımlar: özet her zaman; Exceptions grubu,
+// kırılım ve küme kıyası yalnız doluysa. nil → yok.
+func (p *opPrefetch) seededTools() []string {
+	if p == nil {
+		return nil
+	}
+	out := []string{opPrefetchTool}
+	if p.exceptionsPromptTR() != "" {
+		out = append(out, opExceptionsTool)
+	}
+	if p.Drill != "" {
+		out = append(out, opDrillTool)
+	}
+	if p.clusterText != "" {
+		out = append(out, opClusterTool)
+	}
+	return out
+}
+
 // summary — SAF: modele giden kompakt özet (ham trace değil).
 func (p *opPrefetch) summary() string {
 	var b strings.Builder

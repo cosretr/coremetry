@@ -1166,7 +1166,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			// v0.10.1324 — yineleme/yankı süzgeci + düşüş, sanitizeAnswerLinks'ten ÖNCE.
 			answerText := finalAnswerText(turn, loopPrompt, round)
 			finalText = appendCharts(sanitizeAnswerLinks(answerText, loopLinks, s.publicBaseURL(), chatToolNameSet(toolSchemas))) + traceFollowUpNumericWarning(isTraceFollowUp, answerText, fuEvidence.String()) +
-				traceFollowUpSourceNoteTR(fuHadExplain, calledTools, chatSourceNoteTR(calledTools))
+				loopSourceNoteTR(fuHadExplain, opPre.seededTools(), calledTools, executedN+skippedN)
 			// v0.9.709 (operatör-bildirimi) — cevaptaki request_id'ler log
 			// köprüsü çipi olur; altyapı (links + ChatBubble çipleri)
 			// v0.9.419'dan beri hazırdı, yalnız guided yayınlıyordu.
@@ -1510,7 +1510,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 				// v0.10.1324 — iki çıkış tek sözleşme: süzgeç + düşüş burada da (tavan prompt'uyla).
 				answerText := finalAnswerText(turn2, capPrompt, round)
 				finalText = appendCharts(sanitizeAnswerLinks(answerText, loopLinks, s.publicBaseURL(), chatToolNameSet(toolSchemas))) + traceFollowUpNumericWarning(isTraceFollowUp, answerText, fuEvidence.String()) +
-					traceFollowUpSourceNoteTR(fuHadExplain, calledTools, chatSourceNoteTR(calledTools))
+					loopSourceNoteTR(fuHadExplain, opPre.seededTools(), calledTools, executedN+skippedN)
 				// v0.9.709 (operatör-bildirimi) — cevaptaki request_id'ler log
 				// köprüsü çipi olur. v0.9.1228 — tool köprüleri de burada:
 				// tur-tavanı cevabı da döngünün kanıt linklerini taşır.

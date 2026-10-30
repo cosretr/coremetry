@@ -29,7 +29,7 @@ import (
 func TestBothAnswerPathsCarryTheSourceNote(t *testing.T) {
 	src := readSourceFile(t, "copilot_chat.go")
 
-	if n := strings.Count(src, "chatSourceNoteTR(calledTools)"); n != 2 {
+	if n := strings.Count(src, "loopSourceNoteTR(fuHadExplain, opPre.seededTools(), calledTools, executedN+skippedN)"); n != 2 {
 		t.Errorf("künye %d yerde ekleniyor, 2 olmalı (normal yol + tur tavanı) — "+
 			"eksik olan yol, EN ÇOK araç çağıran ve atıfın en anlamlı olduğu yoldur", n)
 	}

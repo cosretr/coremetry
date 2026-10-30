@@ -93,3 +93,27 @@ func dedupePreserveOrder(in []string) []string {
 	}
 	return out
 }
+
+// ── v0.10.1678 (operatör-bildirimi) — ÖN-GETİRME KÜNYEDE YOKTU ─────────────
+//
+// HTTP endpoint sorusu: chatOperationPrefetch döngüden önce araç adımları
+// (operation_prefetch, operation_exceptions, trace_drill, cluster_compare…)
+// yürüttü ve verisini konuşmaya sentetik tool çifti olarak tohumladı; model
+// döngüde araç çağırmadan bu veriyle cevap yazdı. Künye yalnız DÖNGÜDE veri
+// döndüren araçları sayıyordu (calledTools) → operatör 11 adım görürken cevabın
+// altında "hiçbir telemetri aracı çağrılmadı". İkinci yanlış dal: döngüde araç
+// çağrıldı ama hiçbiri veri döndürmedi → yine "hiç çağrılmadı".
+
+// loopSourceNoteTR — SAF: serbest döngünün iki çıkışının (normal + tur tavanı)
+// TEK künye kararı. prefetched: sunucunun döngüden önce tohumladığı, veri
+// taşıyan adımlar (opPrefetch.seededTools); dataTools: döngüde veri döndüren
+// araçlar; attempted: döngüde istenen (yürüyen + atlanan) çağrı sayısı.
+func loopSourceNoteTR(isFollowUp bool, prefetched, dataTools []string, attempted int) string {
+	tools := make([]string, 0, len(prefetched)+len(dataTools))
+	tools = append(append(tools, prefetched...), dataTools...)
+	if len(dedupePreserveOrder(tools)) == 0 && attempted > 0 {
+		return fmt.Sprintf("\n\n⚠ Kaynak: %d araç çağrısı yapıldı ama hiçbiri kullanılabilir "+
+			"veri döndürmedi — bu cevap canlı veriye dayanmıyor.", attempted)
+	}
+	return traceFollowUpSourceNoteTR(isFollowUp, tools, chatSourceNoteTR(tools))
+}

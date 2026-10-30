@@ -117,7 +117,7 @@ func TestChatWiresSourceNote(t *testing.T) {
 	for _, must := range []string{
 		"var calledTools []string",
 		"calledTools = append(calledTools, tc.Name)",
-		"chatSourceNoteTR(calledTools)",
+		"loopSourceNoteTR(fuHadExplain, opPre.seededTools(), calledTools, executedN+skippedN)", // v0.10.1678
 	} {
 		if !strings.Contains(src, must) {
 			t.Errorf("künye kablolanmamış, kayıp: %s", must)
