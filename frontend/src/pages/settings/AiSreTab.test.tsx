@@ -3,6 +3,7 @@
 // basılır, aralık dışı değer alanın altında hata + PUT GİTMEZ, düzeltilince
 // PUT gövdesi tam ve doğru; okuma düşerse form çizilmez (useSettingsLoad
 // kapısı — boş formu kaydetmek saklı ayarın üstüne yazardı).
+import '@/test/radixJsdom';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -50,8 +51,13 @@ const inputByLabel = (el: HTMLElement, label: string) => {
   const l = Array.from(el.querySelectorAll('label')).find(x => x.textContent?.trim() === label);
   return document.getElementById(l!.htmlFor) as HTMLInputElement;
 };
-const checkbox = (el: HTMLElement, text: string) =>
-  Array.from(el.querySelectorAll('label')).find(x => x.textContent?.startsWith(text))!.querySelector('input')!;
+// Faz 2 dilim 1 R12: Radix Checkbox `<button role="checkbox">` — etiket
+// `label[for]` ile bağlı (sarmalamıyor), durum aria-checked'te.
+const checkbox = (el: HTMLElement, text: string) => {
+  const l = Array.from(el.querySelectorAll('label')).find(x => x.textContent?.startsWith(text))!;
+  return document.getElementById(l.htmlFor) as HTMLButtonElement;
+};
+const isChecked = (b: HTMLElement) => b.getAttribute('aria-checked') === 'true';
 
 async function type(input: HTMLInputElement, v: string) {
   const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!;
@@ -71,8 +77,8 @@ describe('AiSreTab', () => {
     expect(q.value).toBe('500');
     expect(q.placeholder).toBe('200');
     expect(el.textContent).toContain('varsayılan 200 · 10–1000');
-    expect(checkbox(el, 'P1').checked).toBe(true);
-    expect(checkbox(el, 'P3').checked).toBe(false);
+    expect(isChecked(checkbox(el, 'P1'))).toBe(true);
+    expect(isChecked(checkbox(el, 'P3'))).toBe(false);
     expect(el.textContent).toContain('Canlı durum');
   });
 

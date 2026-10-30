@@ -21,13 +21,13 @@ import ts from 'typescript';
 // Serbest (bilgi): checkbox 129 + radio 7 = 136, file 7, range 1, color 1.
 // R2 (Faz 2 dilim 1): checkbox serbest kümeden çıktı → MAX_RAW_CHECKBOX 129,
 // eslint-suppressions.json toplamı 544 → 673.
-const MAX_RAW_INPUT = 236; // Faz 2 dilim 1 R11 (CoSRE): 255 → 236; Faz 2 dilim 1 R10 (erişim): 289 → 255; Faz 2 dilim 1 R7: 350 → 344 (Remote Cluster); etkileşim P2: 344 → 341 (⌘K cmdk); R8: 341 → 322; R9: 322 → 289
+const MAX_RAW_INPUT = 223; // Faz 2 dilim 1 R12 (AI SRE + Knowledge): 236 → 223; Faz 2 dilim 1 R11 (CoSRE): 255 → 236; Faz 2 dilim 1 R10 (erişim): 289 → 255; Faz 2 dilim 1 R7: 350 → 344 (Remote Cluster); etkileşim P2: 344 → 341 (⌘K cmdk); R8: 341 → 322; R9: 322 → 289
 const MAX_RAW_SELECT = 141; // Faz 2 dilim 1 R11 (CoSRE): 143 → 141; Faz 2 dilim 1 R10 (erişim): 148 → 143; R7: 161 → 159; R8: 159 → 152; R9: 152 → 148
-const MAX_RAW_TEXTAREA = 27; // Faz 2 dilim 1 R11 (CoSRE): 28 → 27; Faz 2 dilim 1 R10 (erişim): 31 → 28; R9: 33 → 31
+const MAX_RAW_TEXTAREA = 24; // Faz 2 dilim 1 R12 (AI SRE + Knowledge): 27 → 24; Faz 2 dilim 1 R11 (CoSRE): 28 → 27; Faz 2 dilim 1 R10 (erişim): 31 → 28; R9: 33 → 31
 // Faz 2 dilim 1 R2 (G10, operatör Q-IA7): shadcn checkbox kuruldu, `checkbox`
 // serbest kümeden çıktı. Ham kutuların AYRI tavanı (MAX_RAW_INPUT hiç
 // yükselmez); ölçüldü: R2 commit'i. Yalnız aşağı iner.
-const MAX_RAW_CHECKBOX = 83; // Faz 2 dilim 1 R11 (CoSRE): 92 → 83; Faz 2 dilim 1 R10 (erişim): 110 → 92; R7: 129 → 126; R8: 126 → 117; R9: 117 → 110
+const MAX_RAW_CHECKBOX = 75; // Faz 2 dilim 1 R12 (AI SRE + Knowledge): 83 → 75; Faz 2 dilim 1 R11 (CoSRE): 92 → 83; Faz 2 dilim 1 R10 (erişim): 110 → 92; R7: 129 → 126; R8: 126 → 117; R9: 117 → 110
 
 const SRC = resolve(__dirname, '..');
 const FE = resolve(SRC, '..');

@@ -197,7 +197,9 @@ describe('Kapı B — yıkıcı dosyalarda kırmızı dil', () => {
       // v0.10.1558 — `<MenuItem danger>` de kırmızı dil: taşma menüsündeki
       // yıkıcı satırın atomu (ui/Menu.tsx; Users satır menüsü). Button
       // varyantı aramak menüye taşınan Delete'i yanlış yere düşürüyordu.
-      .filter(f => !/variant=["'{]?\s*(["'])?(ghost-)?danger|<MenuItem\b[^>]*\bdanger\b/.test(f.src))
+      // Faz 2 dilim 1 R12: shadcn Button `variant="destructive"` de kırmızı dil
+      // (bg-destructive) — shadcn'e geçen sayfalar bu yazımı kullanır.
+      .filter(f => !/variant=["'{]?\s*(["'])?((ghost-)?danger|destructive)\b|<MenuItem\b[^>]*\bdanger\b/.test(f.src))
       .map(f => f.rel);
     expect(bad, 'kalıcı silme yolu `secondary`/`ghost` ile Edit’le eş ağırlıkta duramaz').toEqual([]);
   });

@@ -1,10 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Spinner } from '@/components/Spinner';
-import { Button, SegmentedControl, useConfirm } from '@/components/ui';
+import { Button } from '@/components/shadcn/button';
+import { Field, TextareaField, CheckboxField } from '@/components/coremetry/Field';
+import { StatusBadge } from '@/components/coremetry/StatusBadge';
+import { SegmentedControl } from '@/components/coremetry/SegmentedControl';
+import { ActionRow } from '@/components/coremetry/ActionRow';
+import { useConfirm } from '@/components/coremetry/Confirm';
 import { api } from '@/lib/api';
 import { tsLong } from '@/lib/utils';
+import { cn } from '@/lib/cn';
 import type { WikiConfigView, WikiMode, WikiSyncStatus } from '@/lib/types';
-import { Field2, FlashBox, Row } from './shared';
+import { FlashBox } from './shared';
 import {
   contextCharsError, effectiveMode, listText, searchLabel, skippedReasonText, skippedSummary, syncPending,
   WIKI_CONTEXT_MAX, WIKI_CONTEXT_MIN, WIKI_MODES, wikiBody, wikiReadingFields, wikiStatusSummary,
@@ -23,6 +29,14 @@ import { WikiTestSearch } from './WikiTestSearch';
 // "Aramayı test et" tanısı (yönetici) ve indeksteki sayfalar listesi.
 
 const POLL_MS = 10_000;
+
+// Faz 2 dilim 1 R12 — inline stil → Tailwind utility; Field2/Row → coremetry
+// Field ailesi + flex (Field2 düzeni: geniş flex 1 / min 200, small 0 1 180 /
+// min 140). Ton hâli sınıfla (yalnız sapma renklenir — settingsPalette.pin).
+const WIDE = 'min-w-[200px] flex-1';
+const SMALL = 'min-w-[140px] flex-[0_1_180px]';
+const ROW = 'flex flex-wrap items-start gap-3';
+const TONE_CLASS = { err: 'text-(--err)', warn: 'text-(--warn)' } as const;
 
 export function WikiKnowledgeSection({ canEdit = true }: { canEdit?: boolean }) {
   const [view, setView] = useState<WikiConfigView | null | undefined>(undefined);
@@ -133,22 +147,22 @@ export function WikiKnowledgeSection({ canEdit = true }: { canEdit?: boolean }) 
   const skippedTotal = (status?.skippedEmpty ?? 0) + (status?.skippedLarge ?? 0);
   const modeHelp = WIKI_MODES.find(m => m.value === mode)?.help ?? '';
   // Ayar hâli NÖTR (settingsPalette.pin, v0.10.929): yalnız sapma renklenir.
-  const toneColor = summary.tone === 'err' ? 'var(--err)' : summary.tone === 'warn' ? 'var(--warn)' : 'var(--text2)';
+  const toneClass = summary.tone === 'err' || summary.tone === 'warn' ? TONE_CLASS[summary.tone] : 'text-(--text2)';
   const defInterval = view.defaults?.intervalMin ?? 60;
   const minInterval = view.defaults?.minIntervalMin ?? 15;
   const defPages = view.defaults?.maxPages ?? 5000;
 
   return (
-    <section aria-label="Azure DevOps Wiki" style={{ marginTop: 16 }}>
-      <h3 style={{ fontSize: 13, fontWeight: 600, margin: '0 0 6px' }}>
+    <section aria-label="Azure DevOps Wiki" className="mt-4">
+      <h3 className="mb-1.5 flex flex-wrap items-center gap-2 text-[length:var(--fs-md)] font-semibold">
         Azure DevOps Wiki
         {!view.config?.enabled
-          ? <span className="badge b-gray" style={{ marginLeft: 8 }}>kapalı</span>
+          ? <StatusBadge status="unknown">kapalı</StatusBadge>
           : view.embedding
-            ? <span className="badge b-gray" style={{ marginLeft: 8 }}>aktif · hibrit</span>
-            : <span className="badge b-gray" style={{ marginLeft: 8 }}>aktif · keyword</span>}
+            ? <StatusBadge status="unknown">aktif · hibrit</StatusBadge>
+            : <StatusBadge status="unknown">aktif · keyword</StatusBadge>}
       </h3>
-      <p style={{ fontSize: 12, color: 'var(--text2)', margin: '0 0 8px' }}>
+      <p className="mb-2 text-[length:var(--fs-sm)] text-(--text2)">
         Kurumun on-prem Azure DevOps wiki'leri Coremetry içine indekslenir; CoSRE runbook,
         nasıl yapılır, mimari ve sahiplik sorularını bu sayfalardan <b>kaynak bağlantılı</b> cevaplar.
         Bağlantı ve PAT <b>Kod entegrasyonu</b> ayarından gelir (PAT kapsamı: <code>Wiki (Read)</code>;
@@ -158,116 +172,104 @@ export function WikiKnowledgeSection({ canEdit = true }: { canEdit?: boolean }) 
         <FlashBox kind="err">Azure DevOps bağlantısı yapılandırılmamış — önce Ayarlar → Kod entegrasyonu.</FlashBox>
       )}
 
-      <Row>
-        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, marginTop: 8 }}>
-          <input type="checkbox" checked={enabled} disabled={!canEdit}
-                 onChange={e => setEnabled(e.target.checked)} />
-          Wiki bilgisi aktif
-        </label>
-      </Row>
-      <div style={{ marginTop: 8 }}>
-        <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Mod</div>
+      <CheckboxField className="mt-2" label="Wiki bilgisi aktif" checked={enabled} disabled={!canEdit}
+        onCheckedChange={setEnabled} />
+      <div className="mt-2">
+        <div className="mb-1 text-[length:var(--fs-sm)] font-semibold">Mod</div>
         <SegmentedControl<WikiMode> aria-label="Wiki modu" value={mode} activation="manual"
           onChange={v => { if (canEdit) setMode(v); }}
           options={WIKI_MODES.map(m => ({ value: m.value, label: m.label, disabled: !canEdit }))} />
-        <p data-testid="wiki-mode-help" style={{ fontSize: 12, color: 'var(--text2)', margin: '4px 0 0' }}>{modeHelp}</p>
+        <p data-testid="wiki-mode-help" className="mt-1 text-[length:var(--fs-sm)] text-(--text2)">{modeHelp}</p>
       </div>
-      <Row>
-        <Field2 label="Projeler (izin listesi)" hint="satır başına bir proje; boş = PAT'in gördüğü tümü">
-          <textarea value={projects} rows={3} disabled={!canEdit} spellCheck={false}
-                    onChange={e => setProjects(e.target.value)} style={{ width: 260 }} />
-        </Field2>
-        <Field2 label="Wiki'ler (izin listesi)" hint="WikiAdı ya da Proje/WikiAdı; boş = tümü">
-          <textarea value={wikis} rows={3} disabled={!canEdit} spellCheck={false}
-                    onChange={e => setWikis(e.target.value)} style={{ width: 260 }} />
-        </Field2>
-      </Row>
-      <Row>
-        <Field2 label="Senkron aralığı (dk)" small hint={`boş = ${defInterval}; en az ${minInterval}`}>
-          <input type="number" min={minInterval} value={interval} disabled={!canEdit}
-                 placeholder={String(defInterval)} onChange={e => setIntervalText(e.target.value)} style={{ width: '100%' }} />
-        </Field2>
-        <Field2 label="Sayfa tavanı" small hint={`boş = ${defPages}`}>
-          <input type="number" min={1} value={maxPages} disabled={!canEdit}
-                 placeholder={String(defPages)} onChange={e => setMaxPages(e.target.value)} style={{ width: '100%' }} />
-        </Field2>
-        <Field2 label="Wiki bağlam boyutu (karakter)" small
-          hint={`boş = otomatik (modelden; şu an ${view.defaults?.contextCharsAuto ?? '—'}); ${ctxMin}–${ctxMax}; model penceresi biliniyorsa onunla kapaklanır`}>
-          <input type="number" min={ctxMin} max={ctxMax} step={1000} value={contextChars} disabled={!canEdit}
-                 data-testid="wiki-context-chars" aria-invalid={!!ctxErr}
-                 placeholder="otomatik" onChange={e => setContextChars(e.target.value)} style={{ width: '100%' }} />
-        </Field2>
-      </Row>
-      {!!ctxErr && <p data-testid="wiki-context-chars-error" style={{ fontSize: 12, color: 'var(--err)', margin: '4px 0 0' }}>{ctxErr}</p>}
-      <Row>
-        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, marginTop: 8 }}
-               title="Model önce aday sayfaların başlık ve kısa kesitlerinden okunacak 1–5 sayfayı seçer, sonra yalnız onları tam okur. Bir ek AI çağrısı (~1–3 sn); başarısızsa skor sırası kullanılır.">
-          <input type="checkbox" checked={pageSelect} disabled={!canEdit} data-testid="wiki-page-select"
-                 onChange={e => setPageSelect(e.target.checked)} />
-          İki aşamalı okuma (sayfa seçimi)
-          <span style={{ fontSize: 12, color: 'var(--text3)' }}>— bir ek AI çağrısı, ~1–3 sn</span>
-        </label>
-      </Row>
+      <div className={cn(ROW, 'mt-3')}>
+        <TextareaField className={WIDE} controlClassName="w-[260px] max-w-full" label="Projeler (izin listesi)"
+          hint="satır başına bir proje; boş = PAT'in gördüğü tümü"
+          value={projects} rows={3} disabled={!canEdit} spellCheck={false}
+          onChange={e => setProjects(e.target.value)} />
+        <TextareaField className={WIDE} controlClassName="w-[260px] max-w-full" label="Wiki'ler (izin listesi)"
+          hint="WikiAdı ya da Proje/WikiAdı; boş = tümü"
+          value={wikis} rows={3} disabled={!canEdit} spellCheck={false}
+          onChange={e => setWikis(e.target.value)} />
+      </div>
+      <div className={cn(ROW, 'mt-3')}>
+        <Field className={SMALL} label="Senkron aralığı (dk)" hint={`boş = ${defInterval}; en az ${minInterval}`}
+          type="number" min={minInterval} value={interval} disabled={!canEdit}
+          placeholder={String(defInterval)} onChange={e => setIntervalText(e.target.value)} />
+        <Field className={SMALL} label="Sayfa tavanı" hint={`boş = ${defPages}`}
+          type="number" min={1} value={maxPages} disabled={!canEdit}
+          placeholder={String(defPages)} onChange={e => setMaxPages(e.target.value)} />
+        <Field className={SMALL} label="Wiki bağlam boyutu (karakter)"
+          hint={`boş = otomatik (modelden; şu an ${view.defaults?.contextCharsAuto ?? '—'}); ${ctxMin}–${ctxMax}; model penceresi biliniyorsa onunla kapaklanır`}
+          type="number" min={ctxMin} max={ctxMax} step={1000} value={contextChars} disabled={!canEdit}
+          data-testid="wiki-context-chars" aria-invalid={!!ctxErr}
+          placeholder="otomatik" onChange={e => setContextChars(e.target.value)} />
+      </div>
+      {!!ctxErr && <p data-testid="wiki-context-chars-error" className="mt-1 text-[length:var(--fs-sm)] text-(--err)">{ctxErr}</p>}
+      <div data-testid="wiki-page-select" className="mt-2"
+        title="Model önce aday sayfaların başlık ve kısa kesitlerinden okunacak 1–5 sayfayı seçer, sonra yalnız onları tam okur. Bir ek AI çağrısı (~1–3 sn); başarısızsa skor sırası kullanılır.">
+        <CheckboxField checked={pageSelect} disabled={!canEdit} onCheckedChange={setPageSelect}
+          label={<>İki aşamalı okuma (sayfa seçimi) <span className="text-[length:var(--fs-sm)] text-(--text3)">— bir ek AI çağrısı, ~1–3 sn</span></>} />
+      </div>
       {canEdit && (
-        <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
-          <Button variant="primary" size="sm" type="button" loading={busy} onClick={() => { void save(); }}>
-            Kaydet
-          </Button>
-          <Button variant="secondary" size="sm" type="button"
-            disabled={busy || !view.config?.enabled || !view.devopsConfigured || syncPending(status) || savedMode === 'live'}
-            title="Lider pod'a senkron isteği gönder (değişmeyen sayfalar yeniden okunmaz)"
-            onClick={() => { void syncNow(); }}>
-            ⟳ Şimdi senkronize et
-          </Button>
-          <Button variant="danger" size="sm" type="button" disabled={busy || !status?.indexedPages}
-            title="İndeksteki tüm wiki sayfalarını ve parçalarını sil"
-            onClick={() => { void purge(); }}>
-            İndeksi temizle
-          </Button>
-        </div>
+        <ActionRow
+          destructive={
+            <Button variant="destructive" size="sm" disabled={busy || !status?.indexedPages}
+              title="İndeksteki tüm wiki sayfalarını ve parçalarını sil"
+              onClick={() => { void purge(); }}>
+              İndeksi temizle
+            </Button>}
+          secondary={
+            <Button variant="outline" size="sm"
+              disabled={busy || !view.config?.enabled || !view.devopsConfigured || syncPending(status) || savedMode === 'live'}
+              title="Lider pod'a senkron isteği gönder (değişmeyen sayfalar yeniden okunmaz)"
+              onClick={() => { void syncNow(); }}>
+              ⟳ Şimdi senkronize et
+            </Button>}
+          confirm={
+            <Button size="sm" loading={busy} onClick={() => { void save(); }}>
+              Kaydet
+            </Button>} />
       )}
       {savedMode === 'live' && !!status?.indexedPages && (
-        <p data-testid="wiki-live-leftover" style={{ fontSize: 12, color: 'var(--text2)', margin: '6px 0 0' }}>
+        <p data-testid="wiki-live-leftover" className="mt-1.5 text-[length:var(--fs-sm)] text-(--text2)">
           Canlı modda yeni içerik yazılmaz, ama daha önce indekslenen {status.indexedPages} sayfa siz
           temizleyene dek Coremetry'de kalır ("İndeksi temizle").
         </p>
       )}
 
-      <div data-testid="wiki-status" style={{
-        marginTop: 10, padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12,
-      }}>
-        <div style={{ color: toneColor, fontWeight: 600 }}>{summary.text}</div>
+      <div data-testid="wiki-status" className="mt-2.5 rounded-md border border-(--border) px-2.5 py-2 text-[length:var(--fs-sm)]">
+        <div className={cn('font-semibold', toneClass)}>{summary.text}</div>
         {savedMode !== 'live' && !!status?.lastFinishedAt && (
-          <div style={{ color: 'var(--text3)', marginTop: 2 }}>
+          <div className="mt-0.5 text-(--text3)">
             Son senkron: {tsLong(status.lastFinishedAt * 1e6)}
             {status.durationMs ? ` · ${(status.durationMs / 1000).toFixed(1)} sn` : ''}
             {` · ${status.projects} proje · ${status.wikis} wiki`}
           </div>
         )}
         {syncPending(status) && (
-          <div style={{ color: 'var(--text3)', marginTop: 2 }}>
+          <div className="mt-0.5 text-(--text3)">
             Senkron istendi{status?.requestedBy ? ` (${status.requestedBy})` : ''} — lider pod bekleniyor…
           </div>
         )}
-        <div style={{ color: 'var(--text3)', marginTop: 2 }}>{searchLabel(status?.search, status?.searchLast, savedMode)}</div>
+        <div className="mt-0.5 text-(--text3)">{searchLabel(status?.search, status?.searchLast, savedMode)}</div>
         {!!view.modeWarning && (
-          <div data-testid="wiki-mode-warning" style={{ color: 'var(--warn)', marginTop: 2 }}>{view.modeWarning}</div>
+          <div data-testid="wiki-mode-warning" className="mt-0.5 text-(--warn)">{view.modeWarning}</div>
         )}
         {/* v0.10.1129 — atlanan sayfalar hata DEĞİL: nötr gri satır + açılır liste (≤5). */}
         {!!skipped && (
-          <details data-testid="wiki-skipped" style={{ color: 'var(--text3)', marginTop: 4 }}>
-            <summary style={{ cursor: 'pointer' }}>{skipped}</summary>
-            <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
+          <details data-testid="wiki-skipped" className="mt-1 text-(--text3)">
+            <summary className="cursor-pointer">{skipped}</summary>
+            <ul className="mt-1 mb-0 pl-[18px]">
               {skippedList.slice(0, 5).map((s, i) => (
-                <li key={i} style={{ wordBreak: 'break-word' }}>{s.page} — {skippedReasonText(s.reason)}</li>
+                <li key={i} className="[word-break:break-word]">{s.page} — {skippedReasonText(s.reason)}</li>
               ))}
               {skippedTotal > Math.min(5, skippedList.length) && <li>… {skippedTotal - Math.min(5, skippedList.length)} sayfa daha</li>}
             </ul>
           </details>
         )}
         {!!status?.errors?.length && (
-          <ul style={{ margin: '6px 0 0', paddingLeft: 18, color: 'var(--err)' }}>
-            {status.errors.slice(0, 5).map((e, i) => <li key={i} style={{ wordBreak: 'break-word' }}>{e}</li>)}
+          <ul className="mt-1.5 mb-0 pl-[18px] text-(--err)">
+            {status.errors.slice(0, 5).map((e, i) => <li key={i} className="[word-break:break-word]">{e}</li>)}
             {status.errors.length > 5 && <li>… {status.errors.length - 5} hata daha</li>}
           </ul>
         )}

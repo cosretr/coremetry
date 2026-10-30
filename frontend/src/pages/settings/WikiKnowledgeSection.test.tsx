@@ -7,11 +7,12 @@
 //   • kaydet gövdesi izin listelerini satır/virgülden ayrıştırır, boş sayı = 0 (varsayılan);
 //   • durum kartı indeks sayılarını ve hataları gösterir; bağlantı yoksa uyarı;
 //   • "Şimdi senkronize et" POST eder ve "istendi" durumunu gösterir.
+import '@/test/radixJsdom';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
-import { ConfirmProvider } from '@/components/ui/ConfirmDialog';
+import { ConfirmGate } from '@/components/coremetry/Confirm';
 import type { WikiConfig, WikiConfigView, WikiPagesPage, WikiSkippedPage, WikiSyncStatus, WikiTestSearchResult } from '@/lib/types';
 
 const h = vi.hoisted(() => ({
@@ -64,7 +65,7 @@ async function mount(v: WikiConfigView): Promise<HTMLElement> {
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
-  await act(async () => { root!.render(<MemoryRouter><ConfirmProvider><WikiKnowledgeSection /></ConfirmProvider></MemoryRouter>); });
+  await act(async () => { root!.render(<MemoryRouter><ConfirmGate><WikiKnowledgeSection /></ConfirmGate></MemoryRouter>); });
   await act(async () => { await new Promise(r => setTimeout(r, 0)); });
   return host;
 }
@@ -168,11 +169,11 @@ describe('WikiKnowledgeSection', () => {
     const box = card.querySelector('[data-testid="wiki-skipped"]') as HTMLDetailsElement;
     expect(box).not.toBeNull();
     expect(box.querySelector('summary')!.textContent).toBe('Atlanan: 7 içeriksiz klasör, 1 çok büyük sayfa');
-    expect(box.style.color).toBe('var(--text3)');
+    expect(box.className).toContain('text-(--text3)'); // R12: ton inline stil yerine utility
     expect(box.querySelectorAll('li')).toHaveLength(6); // ≤5 ad + "… daha"
     expect(box.textContent).toContain('… 3 sayfa daha');
     expect(box.textContent).not.toContain('http 500');
-    const errList = card.querySelector('ul[style*="--err"]')!;
+    const errList = card.querySelector('ul[class*="--err"]')!;
     expect(errList.textContent).toContain('http 500');
     expect(errList.textContent).not.toContain('klasör');
     // Özet satırı hata sayısını atlananlarla şişirmez.
@@ -207,10 +208,10 @@ describe('WikiKnowledgeSection', () => {
     h.put.mockImplementation(async c => ({ ...VIEW, config: c }));
     const el = await mount({ ...VIEW, defaults: { ...VIEW.defaults!, contextCharsMin: 4000, contextCharsMax: 48000, contextCharsAuto: 24000 } });
     const input = el.querySelector<HTMLInputElement>('[data-testid="wiki-context-chars"]')!;
-    const toggle = el.querySelector<HTMLInputElement>('[data-testid="wiki-page-select"]')!;
+    const toggle = el.querySelector<HTMLButtonElement>('[data-testid="wiki-page-select"] [role="checkbox"]')!;
     expect(input.value).toBe('');
     expect(el.textContent).toContain('şu an 24000');
-    expect(toggle.checked).toBe(true);
+    expect(toggle.getAttribute('aria-checked')).toBe('true');
     // Aralık dışı → hata, PUT yok.
     await act(async () => { setInputValue(input, '1000'); });
     expect(el.querySelector('[data-testid="wiki-context-chars-error"]')).toBeTruthy();
@@ -230,7 +231,7 @@ describe('WikiKnowledgeSection', () => {
     const el = await mount({ ...VIEW, config: { ...VIEW.config!, contextChars: 20000, disablePageSelect: true } });
     const input = el.querySelector<HTMLInputElement>('[data-testid="wiki-context-chars"]')!;
     expect(input.value).toBe('20000');
-    expect(el.querySelector<HTMLInputElement>('[data-testid="wiki-page-select"]')!.checked).toBe(false);
+    expect(el.querySelector('[data-testid="wiki-page-select"] [role="checkbox"]')!.getAttribute('aria-checked')).toBe('false');
     await act(async () => { setInputValue(input, ''); });
     await act(async () => { button(el, 'Kaydet').click(); });
     await act(async () => { await new Promise(r => setTimeout(r, 0)); });
@@ -358,6 +359,10 @@ describe('WikiKnowledgeSection', () => {
     const el = await mount({ ...VIEW, mode: 'live', config: { ...VIEW.config!, mode: 'live' } });
     expect(el.querySelector('[data-testid="wiki-live-leftover"]')!.textContent).toContain('119 sayfa');
     await act(async () => { button(el, 'İndeksi temizle').click(); });
+    // R12: coremetry ConfirmGate çiziciyi tembel çeker (lazy chunk) — diyalog gelene dek bekle.
+    for (let i = 0; i < 200 && !document.querySelector('[role="alertdialog"]'); i++) {
+      await act(async () => { await new Promise(r => setTimeout(r, 10)); });
+    }
     expect(h.purge).not.toHaveBeenCalled();
     const ok = Array.from(document.body.querySelectorAll('button')).find(b => b.textContent?.trim() === 'Temizle');
     expect(ok, 'onay diyaloğu').toBeTruthy();

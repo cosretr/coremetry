@@ -2,6 +2,7 @@
 // ContextPackPanel.test.tsx — Context Pack bölümü: saklı ayar forma basılır,
 // PUT gövdesi tam; aralık dışı → alan hatası + PUT yok; okuma düşerse form yok;
 // admin olmayan salt okunur (alanlar disabled, Kaydet yok, PUT yok).
+import '@/test/radixJsdom';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -39,8 +40,13 @@ const inputByLabel = (el: HTMLElement, label: string) => {
   const l = Array.from(el.querySelectorAll('label')).find(x => x.textContent?.trim() === label);
   return document.getElementById(l!.htmlFor) as HTMLInputElement;
 };
-const checkbox = (el: HTMLElement, text: string) =>
-  Array.from(el.querySelectorAll('label')).find(x => x.textContent?.startsWith(text))!.querySelector('input')!;
+// Faz 2 dilim 1 R12: Radix Checkbox `<button role="checkbox">` — etiket
+// `label[for]` ile bağlı (sarmalamıyor), durum aria-checked'te.
+const checkbox = (el: HTMLElement, text: string) => {
+  const l = Array.from(el.querySelectorAll('label')).find(x => x.textContent?.startsWith(text))!;
+  return document.getElementById(l.htmlFor) as HTMLButtonElement;
+};
+const isChecked = (b: HTMLElement) => b.getAttribute('aria-checked') === 'true';
 async function type(input: HTMLInputElement, v: string) {
   const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!;
   await act(async () => { setter.call(input, v); input.dispatchEvent(new Event('input', { bubbles: true })); });
@@ -58,10 +64,10 @@ describe('ContextPackPanel', () => {
     const el = await render(true);
     expect(el.textContent).toContain('hipotez skoru bu paketi hiç okumaz');
     expect(el.textContent).toContain('Henüz kaydedilmedi');
-    expect(checkbox(el, "Context Pack'i etkinleştir").checked).toBe(false);
+    expect(isChecked(checkbox(el, "Context Pack'i etkinleştir"))).toBe(false);
     expect(inputByLabel(el, 'Token tavanı').value).toBe('2000');
-    expect(checkbox(el, 'Önceki pencere').checked).toBe(true);
-    expect(checkbox(el, 'Dün aynı saat').checked).toBe(false);
+    expect(isChecked(checkbox(el, 'Önceki pencere'))).toBe(true);
+    expect(isChecked(checkbox(el, 'Dün aynı saat'))).toBe(false);
 
     await click(checkbox(el, "Context Pack'i etkinleştir"));
     await type(inputByLabel(el, 'Token tavanı'), '4000');
@@ -97,7 +103,7 @@ describe('ContextPackPanel', () => {
     m.get = () => Promise.resolve({ ...stored, enabled: true });
     const el = await render(false);
     expect(el.querySelector('[data-context-pack]')).not.toBeNull();
-    expect(checkbox(el, "Context Pack'i etkinleştir").checked).toBe(true);
+    expect(isChecked(checkbox(el, "Context Pack'i etkinleştir"))).toBe(true);
     expect(checkbox(el, "Context Pack'i etkinleştir").disabled).toBe(true);
     expect(inputByLabel(el, 'Token tavanı').disabled).toBe(true);
     expect(checkbox(el, 'Önceki pencere').disabled).toBe(true);

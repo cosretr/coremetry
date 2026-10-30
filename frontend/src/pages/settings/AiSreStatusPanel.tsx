@@ -63,7 +63,7 @@ function StatusBody({ s }: { s: SREStatus }) {
           ),
         }))} />
       ) : (
-        <div className="field-hint">Taze kalp atışı olan SRE pod'u yok.</div>
+        <div className="text-[length:var(--fs-xs)] text-(--text3)">Taze kalp atışı olan SRE pod'u yok.</div>
       )}
     </>
   );

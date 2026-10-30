@@ -9,7 +9,9 @@
 import { useId, useMemo, useState, type FormEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Spinner } from '@/components/Spinner';
-import { Button, Field } from '@/components/ui';
+import { Button } from '@/components/shadcn/button';
+import { Field, CheckboxField } from '@/components/coremetry/Field';
+import { ActionRow } from '@/components/coremetry/ActionRow';
 import { api } from '@/lib/api';
 import { keys } from '@/lib/queries';
 import { agoTR, tsLong } from '@/lib/utils';
@@ -22,6 +24,12 @@ import {
   sreToForm, togglePriority, validateSREForm, type SREForm, type SRENumKey,
 } from './sreSettingsForm';
 import { ConfigStatusBanner, FlashBox, SectionTitle, SettingsLoadError, SettingsSection, humanize, useSettingsLoad } from './shared';
+
+// Faz 2 dilim 1 R12 — .sre-* / .sso-* sınıfları yerine Tailwind utility'leri
+// (D1 alan anatomisi, D4 eylem satırı sağa yaslı, D13 Radix onay kutuları).
+const HINT = 'text-[length:var(--fs-xs)] leading-snug text-(--text3)';
+const FIELDSET = 'm-0 min-w-0 border-0 p-0';
+const LEGEND = 'mb-1.5 text-[length:var(--fs-sm)] text-(--text2)';
 
 const PRIORITY_HINT: Record<string, string> = {
   P1: 'şimdi',
@@ -70,8 +78,8 @@ export function AiSreTab() {
 
   const header = (
     <>
-      <h2 className="sso-title">AI SRE</h2>
-      <p className="sso-note">
+      <h2 className="mb-1.5 text-[length:var(--fs-lg)] font-semibold">AI SRE</h2>
+      <p className="mb-3 text-[length:var(--fs-md)] text-(--text2)">
         Açık problemleri deterministik okumalarla araştıran ajan. Yalnız öneri üretir —
         problem, öncelik ya da kök neden tablolarına yazmaz. Kuyruğu
         COREMETRY_MODE=sre (ya da all) rolü tüketir.
@@ -83,7 +91,7 @@ export function AiSreTab() {
   if (!loaded) return <Spinner label="Ayar okunuyor…" />;
 
   return (
-    <div className="settings-pane">
+    <div className="max-w-[820px]">
       {header}
       <AiSreStatusPanel />
       <ConfigStatusBanner label={form.enabled ? 'AÇIK' : 'KAPALI'}>
@@ -95,32 +103,27 @@ export function AiSreTab() {
       </ConfigStatusBanner>
       <form onSubmit={save} noValidate>
         <SettingsSection>
-          <label className="sre-check">
-            <input type="checkbox" checked={form.enabled} disabled={busy}
-              onChange={e => setForm(f => ({ ...f, enabled: e.target.checked }))} />
-            <span>
-              <span>AI SRE ajanını etkinleştir</span>
-              <span className="field-hint">Varsayılan: açık. Kapatmak mevcut kayıtları silmez.</span>
-            </span>
-          </label>
+          <CheckboxField className="mb-3" label="AI SRE ajanını etkinleştir" checked={form.enabled} disabled={busy}
+            hint="Varsayılan: açık. Kapatmak mevcut kayıtları silmez."
+            onCheckedChange={v => setForm(f => ({ ...f, enabled: v }))} />
 
           <SectionTitle>Otomatik kuyruk</SectionTitle>
-          <fieldset className="sso-fieldset" aria-describedby={prioHintId}>
-            <legend className="field-label">Otomatik araştırılan öncelikler</legend>
-            {SRE_PRIORITIES.map(p => (
-              <label key={p} className="sre-check is-inline">
-                <input type="checkbox" checked={form.priorities.includes(p)} disabled={busy}
-                  onChange={() => setForm(f => ({ ...f, priorities: togglePriority(f.priorities, p) }))} />
-                <span>{p} <span className="field-hint">({PRIORITY_HINT[p]})</span></span>
-              </label>
-            ))}
-            <div id={prioHintId} className="field-hint">
+          <fieldset className={FIELDSET} aria-describedby={prioHintId}>
+            <legend className={LEGEND}>Otomatik araştırılan öncelikler</legend>
+            <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-2">
+              {SRE_PRIORITIES.map(p => (
+                <CheckboxField key={p} checked={form.priorities.includes(p)} disabled={busy}
+                  label={<>{p} <span className={HINT}>({PRIORITY_HINT[p]})</span></>}
+                  onCheckedChange={() => setForm(f => ({ ...f, priorities: togglePriority(f.priorities, p) }))} />
+              ))}
+            </div>
+            <div id={prioHintId} className={HINT}>
               Varsayılan: P1, P2. Hiçbiri seçili değilse otomatik kuyruk kapalı — elle "Araştır" yine çalışır.
             </div>
           </fieldset>
 
           <SectionTitle>Tavanlar</SectionTitle>
-          <div className="grid-2 sre-grid">
+          <div className="grid-2 gap-3">
             {SRE_NUM_BOUNDS.map(b => (
               <Field key={b.key} label={b.label} inputMode="numeric" value={form.nums[b.key]}
                 onChange={setNum(b.key)} disabled={busy} placeholder={String(b.def)}
@@ -129,16 +132,15 @@ export function AiSreTab() {
             ))}
           </div>
 
-          <div className="sre-actions">
-            <Button type="submit" variant="primary" loading={busy}>Kaydet</Button>
-            {meta.updatedAt ? (
-              <span className="field-hint" title={tsLong(meta.updatedAt)}>
+          <ActionRow
+            secondary={meta.updatedAt ? (
+              <span className={HINT} title={tsLong(meta.updatedAt)}>
                 Son değişiklik{meta.updatedBy ? ` ${meta.updatedBy}` : ''} · {agoTR(meta.updatedAt)}
               </span>
             ) : (
-              <span className="field-hint">Henüz kaydedilmedi — varsayılanlar geçerli.</span>
+              <span className={HINT}>Henüz kaydedilmedi — varsayılanlar geçerli.</span>
             )}
-          </div>
+            confirm={<Button type="submit" loading={busy}>Kaydet</Button>} />
           {flash && <FlashBox kind={flash.kind}>{flash.text}</FlashBox>}
         </SettingsSection>
       </form>

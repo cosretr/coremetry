@@ -1,6 +1,8 @@
 import { useState } from 'react';
-import { Button } from '@/components/ui';
+import { Button } from '@/components/shadcn/button';
+import { Input } from '@/components/shadcn/input';
 import { api } from '@/lib/api';
+import { cn } from '@/lib/cn';
 import type { WikiSyncStatus, WikiTestHit, WikiTestSearchResult } from '@/lib/types';
 import { FlashBox } from './shared';
 import { liveOutcomeText } from './wikiKnowledge';
@@ -11,23 +13,26 @@ import { liveOutcomeText } from './wikiKnowledge';
 // gösterir. Oturumluk: sonuç kaydedilmez; sunucu sorgu METNİNİ audit'e yazmaz.
 // İçerik yok — isabet başına ≤160 karakter kesit.
 
+// Faz 2 dilim 1 R12 — inline stil → Tailwind utility (D11 tip ölçeği).
+const MUTED = 'text-(--text3)';
+
 function HitList({ title, hits }: { title: string; hits: WikiTestHit[] }) {
   return (
-    <div style={{ marginTop: 6 }}>
-      <div style={{ fontWeight: 600 }}>{title} ({hits.length})</div>
+    <div className="mt-1.5">
+      <div className="font-semibold">{title} ({hits.length})</div>
       {hits.length === 0
-        ? <div style={{ color: 'var(--text3)' }}>yok</div>
+        ? <div className={MUTED}>yok</div>
         : (
-          <ol style={{ margin: '2px 0 0', paddingLeft: 18 }}>
+          <ol className="mt-0.5 mb-0 pl-[18px]">
             {hits.map((h, i) => (
-              <li key={`${h.project}/${h.wiki}/${h.path}/${i}`} style={{ wordBreak: 'break-word' }}>
+              <li key={`${h.project}/${h.wiki}/${h.path}/${i}`} className="[word-break:break-word]">
                 <span className="mono">{h.score.toFixed(2)}</span>{' '}
                 {h.title || h.path}
-                <span style={{ color: 'var(--text3)' }}> · {h.project}/{h.wiki}{h.live ? ' · canlı' : ''}</span>
+                <span className={MUTED}> · {h.project}/{h.wiki}{h.live ? ' · canlı' : ''}</span>
                 {!h.passesWikiTier
-                  ? <span style={{ color: 'var(--warn)' }}> · iki tabanın da altında</span>
-                  : !h.passesRag ? <span style={{ color: 'var(--text3)' }}> · yalnız açık wiki sorusunda</span> : null}
-                {h.snippet && <div style={{ color: 'var(--text3)' }}>{h.snippet}</div>}
+                  ? <span className="text-(--warn)"> · iki tabanın da altında</span>
+                  : !h.passesRag ? <span className={MUTED}> · yalnız açık wiki sorusunda</span> : null}
+                {h.snippet && <div className={MUTED}>{h.snippet}</div>}
               </li>
             ))}
           </ol>
@@ -57,26 +62,26 @@ export function WikiTestSearch({ onStatus }: { onStatus?: (st: WikiSyncStatus) =
   };
 
   return (
-    <div data-testid="wiki-test-search" style={{ marginTop: 10, fontSize: 12 }}>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        <input type="text" value={q} maxLength={300} placeholder="ör. svc-orders nasıl yeniden başlatılır"
+    <div data-testid="wiki-test-search" className="mt-2.5 text-[length:var(--fs-sm)]">
+      <div className="flex flex-wrap items-center gap-2">
+        <Input type="text" value={q} maxLength={300} placeholder="ör. svc-orders nasıl yeniden başlatılır"
                aria-label="Test sorgusu" onChange={e => setQ(e.target.value)}
                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void run(); } }}
-               style={{ width: 320 }} />
-        <Button variant="secondary" size="sm" type="button" loading={busy} disabled={!q.trim()} onClick={() => { void run(); }}>
+               className="h-8 w-[320px] max-w-full bg-field border-(--border-control) text-[length:var(--fs-sm)] md:text-[length:var(--fs-sm)] dark:bg-field" />
+        <Button variant="outline" size="sm" loading={busy} disabled={!q.trim()} onClick={() => { void run(); }}>
           Aramayı test et
         </Button>
       </div>
       {err && <FlashBox kind="err">{err}</FlashBox>}
       {res && (
-        <div style={{ marginTop: 8, padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 6 }}>
-          <div style={{ fontWeight: 600 }}>{res.verdict}</div>
-          <div style={{ color: 'var(--text3)', marginTop: 2 }}>
+        <div className="mt-2 rounded-md border border-(--border) px-2.5 py-2">
+          <div className="font-semibold">{res.verdict}</div>
+          <div className={cn('mt-0.5', MUTED)}>
             Terimler: <span className="mono">{res.terms.join(' ')}</span>
             {res.liveQueries?.length ? <> · canlı sorgu: <span className="mono">{res.liveQueries.join('  |  ')}</span></> : null}
             {res.stale ? ' · yerel indeks boş/bayat' : ''}
           </div>
-          <div style={{ marginTop: 2 }} data-testid="wiki-test-live">{liveOutcomeText(res)}</div>
+          <div className="mt-0.5" data-testid="wiki-test-live">{liveOutcomeText(res)}</div>
           <HitList title="Yerel isabetler" hits={res.local} />
           <HitList title={`Son liste (RAG tabanı ${res.floors.rag}, açık wiki sorusu tabanı ${res.floors.wikiTier})`} hits={res.final} />
         </div>

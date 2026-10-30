@@ -9,7 +9,9 @@
 // SettingsLoadError (boş formu kaydetmek saklı ayarın üstüne yazardı).
 import { useId, useMemo, useState, type FormEvent } from 'react';
 import { Spinner } from '@/components/Spinner';
-import { Button, Field } from '@/components/ui';
+import { Button } from '@/components/shadcn/button';
+import { Field, CheckboxField } from '@/components/coremetry/Field';
+import { ActionRow } from '@/components/coremetry/ActionRow';
 import { api } from '@/lib/api';
 import { agoTR, tsLong } from '@/lib/utils';
 import type { SREContextPackSettings } from '@/lib/types';
@@ -18,6 +20,11 @@ import {
   packToForm, toggleBaseline, validatePackForm, type PackForm,
 } from './contextPackForm';
 import { FlashBox, SectionTitle, SettingsLoadError, SettingsSection, humanize, useSettingsLoad } from './shared';
+
+// Faz 2 dilim 1 R12 — .sre-* / .sso-* sınıfları yerine Tailwind utility'leri
+// (AiSreTab ile aynı ölçüler: D1, D4, D13).
+const HINT = 'text-[length:var(--fs-xs)] leading-snug text-(--text3)';
+const ERR = 'text-[length:var(--fs-xs)] leading-snug text-status-critical';
 
 export function ContextPackPanel({ canEdit }: { canEdit: boolean }) {
   const [form, setForm] = useState<PackForm>(packDefaultForm);
@@ -59,16 +66,11 @@ export function ContextPackPanel({ canEdit }: { canEdit: boolean }) {
     : (
       <form onSubmit={save} noValidate data-context-pack>
         <SettingsSection>
-          <label className="sre-check">
-            <input type="checkbox" checked={form.enabled} disabled={ro}
-              onChange={e => setForm(f => ({ ...f, enabled: e.target.checked }))} />
-            <span>
-              <span>Context Pack'i etkinleştir</span>
-              <span className="field-hint">Varsayılan: kapalı. Kapalıyken anlatım girdisi bugünkü 4 KB kesimidir.</span>
-            </span>
-          </label>
+          <CheckboxField className="mb-3" label="Context Pack'i etkinleştir" checked={form.enabled} disabled={ro}
+            hint="Varsayılan: kapalı. Kapalıyken anlatım girdisi bugünkü 4 KB kesimidir."
+            onCheckedChange={v => setForm(f => ({ ...f, enabled: v }))} />
 
-          <div className="grid-2 sre-grid">
+          <div className="grid-2 mb-3 gap-3">
             <Field label="Token tavanı" inputMode="numeric" value={form.maxTokens} disabled={ro}
               placeholder={String(PACK_MAX_TOKENS.def)} error={errors.maxTokens}
               onChange={e => setForm(f => ({ ...f, maxTokens: e.target.value }))}
@@ -79,32 +81,32 @@ export function ContextPackPanel({ canEdit }: { canEdit: boolean }) {
               hint={`öznenin skor sıralı ilk N anomalisi · varsayılan ${PACK_TOP_ANOMALIES.def} · ${PACK_TOP_ANOMALIES.min}–${PACK_TOP_ANOMALIES.max}`} />
           </div>
 
-          <fieldset className="sso-fieldset" aria-describedby={blHintId} aria-invalid={errors.baselines ? 'true' : undefined}>
-            <legend className="field-label">Taban referansları</legend>
-            {PACK_BASELINES.map(b => (
-              <label key={b.value} className="sre-check is-inline">
-                <input type="checkbox" checked={form.baselines.includes(b.value)} disabled={ro}
-                  onChange={() => setForm(f => ({ ...f, baselines: toggleBaseline(f.baselines, b.value) }))} />
-                <span>{b.label} <span className="field-hint">({b.hint})</span></span>
-              </label>
-            ))}
-            <div id={blHintId} className={errors.baselines ? 'field-error' : 'field-hint'}>
+          <fieldset className="m-0 min-w-0 border-0 p-0" aria-describedby={blHintId} aria-invalid={errors.baselines ? 'true' : undefined}>
+            <legend className="mb-1.5 text-[length:var(--fs-sm)] text-(--text2)">Taban referansları</legend>
+            <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-2">
+              {PACK_BASELINES.map(b => (
+                <CheckboxField key={b.value} checked={form.baselines.includes(b.value)} disabled={ro}
+                  label={<>{b.label} <span className={HINT}>({b.hint})</span></>}
+                  onCheckedChange={() => setForm(f => ({ ...f, baselines: toggleBaseline(f.baselines, b.value) }))} />
+              ))}
+            </div>
+            <div id={blHintId} className={errors.baselines ? ERR : HINT}>
               {errors.baselines ?? 'Varsayılan: önceki pencere + geçen hafta. Her referans RED karşılaştırma satırı ekler.'}
             </div>
           </fieldset>
 
-          <div className="sre-actions">
-            {canEdit
-              ? <Button type="submit" variant="primary" loading={busy}>Kaydet</Button>
-              : <span className="field-hint">Salt okunur — yalnız admin değiştirebilir.</span>}
-            {meta.updatedAt ? (
-              <span className="field-hint" title={tsLong(meta.updatedAt)}>
-                Son değişiklik{meta.updatedBy ? ` ${meta.updatedBy}` : ''} · {agoTR(meta.updatedAt)}
-              </span>
-            ) : (
-              <span className="field-hint">Henüz kaydedilmedi — varsayılanlar geçerli (kapalı).</span>
-            )}
-          </div>
+          <ActionRow
+            secondary={<>
+              {meta.updatedAt ? (
+                <span className={HINT} title={tsLong(meta.updatedAt)}>
+                  Son değişiklik{meta.updatedBy ? ` ${meta.updatedBy}` : ''} · {agoTR(meta.updatedAt)}
+                </span>
+              ) : (
+                <span className={HINT}>Henüz kaydedilmedi — varsayılanlar geçerli (kapalı).</span>
+              )}
+              {!canEdit && <span className={HINT}>Salt okunur — yalnız admin değiştirebilir.</span>}
+            </>}
+            confirm={canEdit ? <Button type="submit" loading={busy}>Kaydet</Button> : undefined} />
           {flash && <FlashBox kind={flash.kind}>{flash.text}</FlashBox>}
         </SettingsSection>
       </form>
@@ -113,7 +115,7 @@ export function ContextPackPanel({ canEdit }: { canEdit: boolean }) {
   return (
     <section aria-label="Context Pack">
       <SectionTitle>Context Pack</SectionTitle>
-      <p className="sso-note">
+      <p className="mb-3 text-[length:var(--fs-md)] text-(--text2)">
         Araştırma anlatımına giden deterministik bağlamı zenginleştirir: seçili taban
         referanslarıyla RED karşılaştırması, öznenin en yüksek skorlu anomalileri, hata özeti
         ve deploy etkisi — token tavanına öncelik sırasıyla kırpılarak. Yalnız modelin okuduğu
