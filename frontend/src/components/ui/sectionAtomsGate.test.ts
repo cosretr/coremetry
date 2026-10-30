@@ -35,7 +35,7 @@ const SRC = resolve(__dirname, '../..');
  * Liste büyüdükçe kapı kendiliğinden genişler; yeni bir atom terfi
  * ettiğinde tek satır eklenir.
  */
-const ATOMS: { name: string; home: string; since: string }[] = [
+const ATOMS: { name: string; home: string; since: string; successor?: string }[] = [
   {
     name: 'SectionUnavailable',
     home: 'components/ui/SectionUnavailable.tsx',
@@ -60,6 +60,10 @@ const ATOMS: { name: string; home: string; since: string }[] = [
     home: 'components/ui/Tooltip.tsx',
     since: 'v0.10.919 — kanonik tooltip yoktu (skill K7: 7 DOM uygulaması); '
       + 'ikinci bir yerel kopya doğmasın.',
+    // v0.10.1615 (shadcn Faz 1 R7) — Faz 2 halefi: Radix tabanlı, Esc yığınına
+    // bağlı sarmalayıcı. ui/Tooltip sayfalar geçtikçe silinir; ÜÇÜNCÜ bir
+    // tanım yine kırmızı.
+    successor: 'components/coremetry/overlay/Tooltip.tsx',
   },
 ];
 
@@ -132,7 +136,7 @@ describe('sectionAtomsGate', () => {
       expect(files).toContain(atom.home);
       const strays: string[] = [];
       for (const f of files) {
-        if (f === atom.home) continue;
+        if (f === atom.home || f === atom.successor) continue;
         // v0.10.1613 (shadcn Faz 1 R5) — components/shadcn ÜRETİLMİŞ kayıt
         // defteri kodu (shadcn@4.21.5; Tooltip, ButtonGroup orada da var).
         // Yerel kopya değil, ui/ atomunun Faz 2'deki halefi; elle

@@ -127,6 +127,28 @@ export default tseslint.config(
     rules: { 'ui/no-raw-element': 'error' },
   },
   {
+    // v0.10.1615 — shadcn Faz 1 R7 (plan §7.2, karar d): Radix overlay'leri
+    // YALNIZ components/coremetry/overlay sarmalayıcılarıyla — onlar Esc'i
+    // lib/escLayer yığınına bağlar (escBridge.ts). Çıplak shadcn overlay
+    // dosyası ya da radix-ui importu Esc'i yığının dışında kapatır
+    // (escLayer.ts :4-10 hata #1/#2). shadcn/ (üretilen) ve ai-elements/
+    // (karar 8) muaf. Kabuk dosyaları aşağıdaki DAHA SIKI blokla eşleşir
+    // (flat config: sonraki blok aynı kuralı ezer).
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['src/components/coremetry/**', 'src/components/shadcn/**', 'src/components/ai-elements/**'],
+    rules: {
+      'no-restricted-imports': ['error', {
+        patterns: [{
+          group: [
+            ...['dialog', 'sheet', 'popover', 'dropdown-menu', 'context-menu', 'tooltip', 'command', 'select'].map((n) => `**/shadcn/${n}`),
+            'radix-ui', 'radix-ui/**', '@radix-ui/*',
+          ],
+          message: 'Radix overlays only via @/components/coremetry/overlay (Esc stack, lib/escLayer.ts) — Radix katmanları yalnız coremetry/overlay sarmalayıcılarıyla.',
+        }],
+      }],
+    },
+  },
+  {
     // v0.10.1609 — shadcn Faz 1 R2 (plan §1.2): kabuk (bugünkü eager
     // closure) Radix'e statik bağlanamaz; bağlanırsa Radix/cmdk/sonner
     // index.html modulepreload'ına biner. Bugün no-op (kabuk yalnız
