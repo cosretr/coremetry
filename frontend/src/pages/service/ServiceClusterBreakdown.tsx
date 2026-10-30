@@ -139,7 +139,7 @@ export function ServiceClusterBreakdown({ service, range }: {
                   <td className="num">{fmtNum(c.spanCount)}</td>
                   <td>{c.series && c.series.length > 1
                     ? <Sparkline values={c.series} width={120} height={18} title="çağrı / kova (service_env_summary_5m)" />
-                    : <span className="is-quiet" title="seri yalnız MV yolunda">—</span>}</td>
+                    : <span className="cell-faint" title="seri yalnız MV yolunda">—</span>}</td>
                   <td className="num">
                     <span className={`badge b-${errCls}`}>{c.errorRate.toFixed(2)}%</span>
                   </td>

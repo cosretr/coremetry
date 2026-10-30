@@ -489,11 +489,6 @@
       "count": 2
     }
   },
-  "src/pages/settings/OracleTab.tsx": {
-    "ui/no-raw-element": {
-      "count": 6
-    }
-  },
   "src/pages/settings/REDSourceSubsection.tsx": {
     "ui/no-raw-element": {
       "count": 3
