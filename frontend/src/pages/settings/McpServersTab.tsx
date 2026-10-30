@@ -1,10 +1,15 @@
 import { useState } from 'react';
 import { parseEnvText } from './mcpEnv';
 import { Spinner } from '@/components/Spinner';
-import { Button } from '@/components/ui';
+import { Button } from '@/components/shadcn/button';
+import { Input } from '@/components/shadcn/input';
+import { NativeSelect } from '@/components/shadcn/native-select';
+import { Field, TextareaField, CheckboxField } from '@/components/coremetry/Field';
+import { ActionRow } from '@/components/coremetry/ActionRow';
+import { cn } from '@/lib/cn';
 import { api } from '@/lib/api';
 import type { McpServerInput, McpServerStatus, McpServerTestResult } from '@/lib/types';
-import { SettingRow, SettingsLoadError, useSettingsLoad, ConfigStatusBanner } from './shared';
+import { SettingsLoadError, useSettingsLoad, ConfigStatusBanner, FlashBox } from './shared';
 
 // McpServersTab — dış MCP sunucu listesi (v0.10.87, MCP istemci dilim ②).
 //
@@ -18,6 +23,12 @@ import { SettingRow, SettingsLoadError, useSettingsLoad, ConfigStatusBanner } fr
 // kimlikleri ve erişilebilirliği ondan bağımsız oturtur.
 
 const SECRET_KEPT = '********';
+
+// Faz 2 dilim 1 R13 — inline stil → Tailwind utility; SettingRow → coremetry
+// Field ailesi; ui/Button → shadcn. Satır başı denetimleri (ad / taşıma)
+// etiketsiz olduğundan aria-label taşır. Token sentineli, gövde ve alan
+// sırası aynı (McpServersTab.secret.test).
+const CTL = 'h-8 bg-field border-(--border-control) text-[length:var(--fs-sm)] md:text-[length:var(--fs-sm)] dark:bg-field';
 
 interface Row extends McpServerInput {
   hasToken: boolean;
@@ -104,9 +115,9 @@ export function McpServersTab() {
   const enabledCount = rows.filter(r => r.enabled).length;
 
   return (
-    <div style={{ maxWidth: 720 }}>
-      <h2 style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>MCP sunucuları</h2>
-      <p style={{ color: 'var(--text2)', fontSize: 13, marginBottom: 16 }}>
+    <div className="max-w-[720px]">
+      <h2 className="mb-1.5 text-[length:var(--fs-lg)] font-semibold">MCP sunucuları</h2>
+      <p className="mb-4 text-[length:var(--fs-md)] text-(--text2)">
         Sohbet asistanının çağırabileceği <b>dış</b> MCP sunucuları — izin
         listesi. Tool'lar sohbete <code>{'<sunucu>__<tool>'}</code> adıyla
         girer; yalnız burada tanımlı sunuculara bağlanılır. stdio taşıması
@@ -124,24 +135,20 @@ export function McpServersTab() {
         const st = status.find(s => s.server === r.name.toLowerCase().replace(/[^a-z0-9-]+/g, '-'));
         const tr = testRes[i];
         return (
-          <div key={i} style={{
-            marginTop: 14, padding: 14, borderRadius: 8,
-            background: 'var(--bg2)', border: '1px solid var(--border)',
-          }}>
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 10 }}>
-              <input value={r.name} placeholder="ad (ör. runbook-kb)"
+          <div key={i} role="group" aria-label={`MCP sunucusu ${i + 1}`}
+            className="mt-3.5 flex flex-col gap-3 rounded-lg border border-(--border) bg-(--bg2) p-3.5">
+            <div className="flex items-center gap-2.5">
+              <Input value={r.name} placeholder="ad (ör. runbook-kb)" aria-label="Sunucu adı"
                 onChange={e => upd(i, { name: e.target.value })}
-                style={{ flex: 1 }} />
-              <select value={r.transport}
-                onChange={e => upd(i, { transport: e.target.value })}>
+                className={cn(CTL, 'flex-1')} />
+              <NativeSelect size="sm" value={r.transport} aria-label="Taşıma"
+                onChange={e => upd(i, { transport: e.target.value })}
+                className={CTL}>
                 <option value="http">http</option>
                 <option value="stdio">stdio</option>
-              </select>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
-                <input type="checkbox" checked={r.enabled}
-                  onChange={e => upd(i, { enabled: e.target.checked })} />
-                etkin
-              </label>
+              </NativeSelect>
+              <CheckboxField label="etkin" checked={r.enabled}
+                onCheckedChange={v => upd(i, { enabled: v })} />
               <Button variant="ghost" size="sm"
                 onClick={() => setRows(rs => rs.filter((_, j) => j !== i))}>
                 Sil
@@ -150,60 +157,49 @@ export function McpServersTab() {
 
             {r.transport === 'http' ? (
               <>
-                <SettingRow label="URL">
-                  <input value={r.url} placeholder="https://mcp.internal/endpoint"
-                    onChange={e => upd(i, { url: e.target.value })}
-                    style={{ width: '100%' }} />
-                </SettingRow>
-                <SettingRow
-                  label="Token"
+                <Field label="URL" value={r.url} placeholder="https://mcp.internal/endpoint"
+                  onChange={e => upd(i, { url: e.target.value })} />
+                <Field label="Token" type="password" value={r.token}
+                  placeholder={r.hasToken ? SECRET_KEPT : ''}
+                  onChange={e => upd(i, { token: e.target.value })}
                   hint={r.hasToken
                     ? <>Kayıtlı bir token var — boş bırakmak ya da {SECRET_KEPT} korur.</>
-                    : <>Opsiyonel; Authorization: Bearer olarak gider.</>}>
-                  <input type="password" value={r.token}
-                    placeholder={r.hasToken ? SECRET_KEPT : ''}
-                    onChange={e => upd(i, { token: e.target.value })}
-                    style={{ width: '100%' }} />
-                </SettingRow>
+                    : <>Opsiyonel; Authorization: Bearer olarak gider.</>} />
               </>
             ) : (
-              <SettingRow label="Komut"
-                hint={<>Alt süreç yolu + argümanlar (boşlukla). Yalnız buraya yazılan komut çalıştırılır.</>}>
-                <input value={[r.command, ...(r.args || [])].filter(Boolean).join(' ')}
-                  placeholder="/opt/mcp/fs-server --root /data"
-                  onChange={e => {
-                    const parts = e.target.value.split(/\s+/).filter(Boolean);
-                    upd(i, { command: parts[0] || '', args: parts.slice(1) });
-                  }}
-                  style={{ width: '100%' }} />
-              </SettingRow>
+              <Field label="Komut"
+                value={[r.command, ...(r.args || [])].filter(Boolean).join(' ')}
+                placeholder="/opt/mcp/fs-server --root /data"
+                onChange={e => {
+                  const parts = e.target.value.split(/\s+/).filter(Boolean);
+                  upd(i, { command: parts[0] || '', args: parts.slice(1) });
+                }}
+                hint={<>Alt süreç yolu + argümanlar (boşlukla). Yalnız buraya yazılan komut çalıştırılır.</>} />
             )}
             {r.transport === 'stdio' && (
               /* v0.10.803 — alt süreç Coremetry'nin ortamını miras almaz; yalnız
                  PATH/HOME/LANG/TZ + buradakiler. Değerler saklı (******** korur). */
-              <SettingRow label="Ortam"
-                hint={<>Satır başına <code>KEY=VALUE</code>. Alt süreç yalnız PATH/HOME/LANG/TZ ve buradakileri görür; Coremetry'nin kendi ortamı (anahtarlar, kimlikler) geçmez. Kayıtlı değer {SECRET_KEPT} olarak görünür, aynen bırakmak korur.</>}>
-                <textarea value={r.envText} rows={3} spellCheck={false}
-                  placeholder={'API_KEY=…\nMCP_ROOT=/data'}
-                  onChange={e => upd(i, { envText: e.target.value })}
-                  className="mono" style={{ width: '100%' }} />
-              </SettingRow>
+              <TextareaField label="Ortam" value={r.envText} rows={3} spellCheck={false}
+                placeholder={'API_KEY=…\nMCP_ROOT=/data'}
+                onChange={e => upd(i, { envText: e.target.value })}
+                controlClassName="font-mono"
+                hint={<>Satır başına <code>KEY=VALUE</code>. Alt süreç yalnız PATH/HOME/LANG/TZ ve buradakileri görür; Coremetry'nin kendi ortamı (anahtarlar, kimlikler) geçmez. Kayıtlı değer {SECRET_KEPT} olarak görünür, aynen bırakmak korur.</>} />
             )}
 
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-              <Button variant="secondary" size="sm" loading={testing === i}
-                onClick={() => test(i)}>
+            <div className="flex items-center gap-2.5">
+              <Button variant="outline" size="sm" loading={testing === i}
+                onClick={() => { void test(i); }}>
                 Sına
               </Button>
               {tr && (
-                <span style={{ fontSize: 12, color: tr.ok ? 'var(--ok)' : 'var(--err)' }}>
+                <span className={cn('text-[length:var(--fs-sm)]', tr.ok ? 'text-(--ok)' : 'text-(--err)')}>
                   {tr.ok
                     ? `✓ bağlandı — ${tr.tools} tool${tr.truncated ? ' (katalog kesildi)' : ''}`
                     : `✗ ${tr.error || 'bağlanamadı'}`}
                 </span>
               )}
               {!tr && st && (
-                <span style={{ fontSize: 12, color: st.err ? 'var(--warn)' : 'var(--text3)' }}>
+                <span className={cn('text-[length:var(--fs-sm)] tabular-nums', st.err ? 'text-(--warn)' : 'text-(--text3)')}>
                   {st.err ? `son durum: ${st.err}` : `katalog: ${st.tools} tool`}
                 </span>
               )}
@@ -212,19 +208,16 @@ export function McpServersTab() {
         );
       })}
 
-      <div style={{ marginTop: 14, display: 'flex', gap: 10, alignItems: 'center' }}>
-        <Button variant="secondary" onClick={() => setRows(rs => [...rs, emptyRow()])}
-          disabled={rows.length >= 8}>
-          + Sunucu ekle
-        </Button>
-        <Button variant="primary" loading={busy} onClick={save}>
-          Kaydet
-        </Button>
-        {msg && (
-          <span style={{ fontSize: 12, color: msg.kind === 'ok' ? 'var(--ok)' : 'var(--err)' }}>
-            {msg.text}
-          </span>
-        )}
+      <div className="mt-3.5">
+        <ActionRow
+          secondary={
+            <Button variant="outline" onClick={() => setRows(rs => [...rs, emptyRow()])}
+              disabled={rows.length >= 8}>
+              + Sunucu ekle
+            </Button>
+          }
+          confirm={<Button loading={busy} onClick={() => { void save(); }}>Kaydet</Button>} />
+        {msg && <FlashBox kind={msg.kind}>{msg.text}</FlashBox>}
       </div>
     </div>
   );

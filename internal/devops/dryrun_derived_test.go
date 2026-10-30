@@ -74,7 +74,7 @@ func TestFrontendRendersThreeStates(t *testing.T) {
 		t.Fatalf("DevOpsTab okunamadı: %v", err)
 	}
 	src := strings.Join(strings.Fields(string(b)), " ")
-	if !strings.Contains(src, "st.derived ? 'info' : st.ok ? 'success' : 'danger'") {
+	if !strings.Contains(src, "st.derived ? 'info' : st.ok ? 'ok' : 'critical'") {
 		t.Error("rozet üç durumu ayırt etmiyor — türetilmiş adım yine yeşil çıkar")
 	}
 }

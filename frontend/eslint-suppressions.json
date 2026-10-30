@@ -494,19 +494,9 @@
       "count": 1
     }
   },
-  "src/pages/settings/DevOpsTab.tsx": {
-    "ui/no-raw-element": {
-      "count": 16
-    }
-  },
   "src/pages/settings/ErrorRampSubsection.tsx": {
     "ui/no-raw-element": {
       "count": 2
-    }
-  },
-  "src/pages/settings/McpServersTab.tsx": {
-    "ui/no-raw-element": {
-      "count": 7
     }
   },
   "src/pages/settings/OracleTab.tsx": {

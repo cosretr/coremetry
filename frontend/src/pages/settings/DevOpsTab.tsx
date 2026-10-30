@@ -1,6 +1,12 @@
 import { useState, type FormEvent } from 'react';
 import { Spinner } from '@/components/Spinner';
-import { Badge, Button, Field, useConfirm } from '@/components/ui';
+import { Button } from '@/components/shadcn/button';
+import { Badge } from '@/components/shadcn/badge';
+import { Field, SelectField, TextareaField, CheckboxField } from '@/components/coremetry/Field';
+import { StatusBadge } from '@/components/coremetry/StatusBadge';
+import { ActionRow } from '@/components/coremetry/ActionRow';
+import { useConfirm } from '@/components/coremetry/Confirm';
+import { cn } from '@/lib/cn';
 import { api } from '@/lib/api';
 import { useSettingsLoad, SettingsLoadError, ConfigStatusBanner } from './shared';
 import { fmtDateTime } from '@/lib/utils';
@@ -20,6 +26,16 @@ import type { DevOpsFlavor, DevOpsResolveDryRun, DevOpsTestResult, SchemaCatalog
 // operatör çözücünün gerçekte neyi soyduğunu ekranda görür.
 // splitList — "svc-, svc-" → ['svc-','svc-']. Boş girdi [] döner ve
 // sunucu onu nil'e çevirip varsayılana düşer (cleanConventionList).
+// Faz 2 dilim 1 R13 — inline stil → Tailwind utility; elle yazılmış
+// <label><div/><input/></label> → coremetry Field ailesi; ui/ atomları →
+// shadcn/coremetry. Alan sırası, metinler, gövde ve PAT sözleşmesi aynı
+// (DevOpsTab.secret.test). Kart = D3 (bg2 + border + radius 8 + p-4).
+const CARD = 'mt-[18px] rounded-lg border border-(--border) bg-(--bg2) p-4';
+const H2 = 'mb-1.5 text-[length:var(--fs-lg)] font-semibold';
+const H3 = 'mb-1.5 text-[length:var(--fs-md)] font-semibold';
+const ASIDE = 'text-[length:var(--fs-sm)] text-(--text3)';
+const NUM = 'w-[120px] tabular-nums';
+
 function splitList(s: string): string[] {
   return s.split(',').map(x => x.trim()).filter(Boolean);
 }
@@ -233,14 +249,12 @@ export function DevOpsTab() {
     f === 'tfs' ? 'TFS' : f === 'azure-devops-server' ? 'Azure DevOps Server' : 'Auto';
 
   return (
-    <div style={{ maxWidth: 640 }}>
-      <h2 style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>
-        Kod entegrasyonu (Azure DevOps / TFS)
-      </h2>
-      <p style={{ color: 'var(--text2)', fontSize: 13, marginBottom: 16 }}>
+    <div className="max-w-[640px]">
+      <h2 className={H2}>Kod entegrasyonu (Azure DevOps / TFS)</h2>
+      <p className="mb-4 text-[length:var(--fs-md)] text-(--text2)">
         Şirket içi Azure DevOps Server / TFS koleksiyonuna okuma bağlantısı.
         Yapılandırıldığında CoSRE, exception ve trace açıklamalarında
-        stack trace’teki uygulama satırlarının <strong style={{ color: 'var(--text)' }}>
+        stack trace’teki uygulama satırlarının <strong className="text-(--text)">
         kaynak kodunu</strong> da okuyabilir (AI çekmecesindeki
         “Kodu da incele” kutusu). Kod yalnız modele gider; AI çağrı
         kaydına kod gövdesi değil, yalnız <code>dosya:aralık</code> özeti yazılır.
@@ -253,230 +267,140 @@ export function DevOpsTab() {
           : 'Sunucu adresi girilmedi.'}
       </ConfigStatusBanner>
 
-      <form onSubmit={save} style={{
-        marginTop: 18, padding: 16, borderRadius: 8,
-        background: 'var(--bg2)', border: '1px solid var(--border)',
-      }}>
-        <label style={{ display: 'block', marginBottom: 12 }}>
-          <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>Sunucu URL</div>
-          <input value={baseUrl}
-            onChange={e => setBaseUrl(e.target.value)}
-            placeholder="https://devops.sirket.local/tfs"
-            style={{ width: '100%' }} />
-          <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
-            Sondaki eğik çizgi serbest. Çağrı:
-            <code style={{ marginLeft: 4 }}>{'{url}/{collection}/_apis/projects'}</code>
-          </div>
-        </label>
+      <form onSubmit={save} className={cn(CARD, 'flex flex-col gap-3')}>
+        <Field label="Sunucu URL" value={baseUrl}
+          onChange={e => setBaseUrl(e.target.value)}
+          placeholder="https://devops.sirket.local/tfs"
+          hint={<>Sondaki eğik çizgi serbest. Çağrı:{' '}
+            <code>{'{url}/{collection}/_apis/projects'}</code></>} />
 
-        <label style={{ display: 'block', marginBottom: 12 }}>
-          <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>Collection</div>
-          <input value={collection}
-            onChange={e => setCollection(e.target.value)}
-            placeholder="DefaultCollection"
-            style={{ width: '100%' }} />
-          <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
-            Koleksiyonu sunucu URL’sine dahil ettiyseniz boş bırakın.
-          </div>
-        </label>
+        <Field label="Collection" value={collection}
+          onChange={e => setCollection(e.target.value)}
+          placeholder="DefaultCollection"
+          hint="Koleksiyonu sunucu URL’sine dahil ettiyseniz boş bırakın." />
 
-        <label style={{ display: 'block', marginBottom: 12 }}>
-          <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>
-            Project <span style={{ color: 'var(--text3)' }}>(opsiyonel)</span>
-          </div>
-          <input value={project}
-            onChange={e => setProject(e.target.value)}
-            placeholder="boş bırakılırsa servis önekinden türetilir (svc- → SVC)"
-            style={{ width: '100%' }} />
-          {/* v0.9.1183 — boş Project'in ARTIK iki anlamı var ve ikisi de
-              burada yazılı olmalı: bağlantı testi hâlâ yalnız koleksiyonu
-              doğrular, ama kod çekimi artık servis önekinden proje türetiyor.
-              Yazılmazsa operatör türetmenin varlığını hiç öğrenemez —
-              tam da bu alan boş kaldığı için kod bağlamı sessizce
-              çalışmıyordu. */}
-          <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
-            Bağlantı testi boşken yalnız koleksiyonu doğrular. <b>Kod çekiminde</b> boş
+        {/* v0.9.1183 — boş Project'in ARTIK iki anlamı var ve ikisi de
+            burada yazılı olmalı: bağlantı testi hâlâ yalnız koleksiyonu
+            doğrular, ama kod çekimi artık servis önekinden proje türetiyor.
+            Yazılmazsa operatör türetmenin varlığını hiç öğrenemez —
+            tam da bu alan boş kaldığı için kod bağlamı sessizce
+            çalışmıyordu. */}
+        <Field label="Project" labelAside={<span className={ASIDE}>(opsiyonel)</span>}
+          value={project}
+          onChange={e => setProject(e.target.value)}
+          placeholder="boş bırakılırsa servis önekinden türetilir (svc- → SVC)"
+          hint={<>Bağlantı testi boşken yalnız koleksiyonu doğrular. <b>Kod çekiminde</b> boş
             bırakılırsa proje, servis adının eşleşen önekinden türetilir
-            (<code>svc-…</code> → <code>SVC</code>). Buraya yazılan değer türetmeyi ezer.
-          </div>
-        </label>
+            (<code>svc-…</code> → <code>SVC</code>). Buraya yazılan değer türetmeyi ezer.</>} />
 
-        <label style={{ display: 'block', marginBottom: 12 }}>
-          <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>
-            Kullanıcı adı <span style={{ color: 'var(--text3)' }}>(opsiyonel)</span>
-          </div>
-          <input value={username}
-            onChange={e => setUsername(e.target.value)}
-            placeholder="PAT kullanıyorsanız boş bırakın"
-            style={{ width: '100%' }} />
-          <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
-            PAT’ta kullanıcı adı boş olağandır; eski TFS/NTLM kurulumları
-            hesap adı isteyebilir.
-          </div>
-        </label>
+        <Field label="Kullanıcı adı" labelAside={<span className={ASIDE}>(opsiyonel)</span>}
+          value={username}
+          onChange={e => setUsername(e.target.value)}
+          placeholder="PAT kullanıyorsanız boş bırakın"
+          hint="PAT’ta kullanıcı adı boş olağandır; eski TFS/NTLM kurulumları hesap adı isteyebilir." />
 
-        <label style={{ display: 'block', marginBottom: 12 }}>
-          <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>
-            Personal Access Token (PAT)
-            {hasPat && <span style={{ color: 'var(--text3)', marginLeft: 8 }}>· kayıtlı</span>}
-          </div>
-          <input type="password" value={pat}
-            onChange={e => setPat(e.target.value)}
-            placeholder={hasPat ? '(boş bırak = saklı değer korunur)' : 'PAT yapıştır…'}
-            style={{ width: '100%' }} />
-          <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
-            Yeterli yetki: <strong>Code (Read)</strong>. Token hiçbir zaman geri
-            gösterilmez; değiştirmek için yenisini yapıştırın.
-          </div>
-        </label>
+        <Field label="Personal Access Token (PAT)"
+          labelAside={hasPat ? <span className="text-[length:var(--fs-sm)] text-(--text3)">· kayıtlı</span> : undefined}
+          type="password" value={pat}
+          onChange={e => setPat(e.target.value)}
+          placeholder={hasPat ? '(boş bırak = saklı değer korunur)' : 'PAT yapıştır…'}
+          hint={<>Yeterli yetki: <strong>Code (Read)</strong>. Token hiçbir zaman geri
+            gösterilmez; değiştirmek için yenisini yapıştırın.</>} />
 
-        <label style={{ display: 'block', marginBottom: 12 }}>
-          <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>Sürüm (flavor)</div>
-          <select value={flavor}
-            onChange={e => setFlavor(e.target.value as DevOpsFlavor)}
-            style={{ width: '100%' }}>
-            <option value="auto">Auto (URL şeklinden tahmin + ping ile doğrula)</option>
-            <option value="azure-devops-server">Azure DevOps Server (api-version 6.0)</option>
-            <option value="tfs">TFS (api-version 4.1)</option>
-          </select>
-          <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
-            Auto her açılışta yeniden tespit eder — sonuç ayara yazılmaz, böylece
+        <SelectField label="Sürüm (flavor)" value={flavor}
+          onChange={e => setFlavor(e.target.value as DevOpsFlavor)}
+          hint={<>Auto her açılışta yeniden tespit eder — sonuç ayara yazılmaz, böylece
             sunucu yükseltildiğinde eski tahmin yalan söylemez.
             {detected.flavor && (
               <> Son tespit: <strong>{flavorLabel(detected.flavor)}</strong>
                 {detected.apiVersion ? ` · api-version ${detected.apiVersion}` : ''}.</>
-            )}
-          </div>
-        </label>
+            )}</>}>
+          <option value="auto">Auto (URL şeklinden tahmin + ping ile doğrula)</option>
+          <option value="azure-devops-server">Azure DevOps Server (api-version 6.0)</option>
+          <option value="tfs">TFS (api-version 4.1)</option>
+        </SelectField>
 
-        <label style={{ display: 'block', marginBottom: 12 }}>
-          <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>
-            Servis adı önekleri <span style={{ color: 'var(--text3)' }}>(virgülle)</span>
-          </div>
-          <input value={repoPrefixes}
-            onChange={e => setRepoPrefixes(e.target.value)}
-            placeholder="svc-"
-            style={{ width: '100%' }} />
-          <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
-            Servis adından depo adı türetilirken soyulur; ortam eki
+        <Field label="Servis adı önekleri" labelAside={<span className={ASIDE}>(virgülle)</span>}
+          value={repoPrefixes}
+          onChange={e => setRepoPrefixes(e.target.value)}
+          placeholder="svc-"
+          hint={<>Servis adından depo adı türetilirken soyulur; ortam eki
             (<code>-prod/-int/-uat/-prep</code>) her hâlükârda soyulur.
             Örnek: <code>shop-payment-service-prod</code> → <code>payment-service</code>.
             Katalogdaki <strong>Repository</strong> alanı doluysa O kazanır —
-            elle pin konvansiyonu ezer.
-          </div>
-        </label>
+            elle pin konvansiyonu ezer.</>} />
 
         {/* v0.10.112 — UYGULAMA PAKET ÖNEKLERİ + DENEME TAVANI.
             Kurum-içi çerçeve sınıfları (RestFilter, BasicDispatcher…) JDK/
             Spring listesinde olmadığı için uygulama sayılıyor ve stack'te
             iş sınıfından önce geldikleri için tavanı önce onlar yiyordu.
             Önek listesi iş sınıflarını başa alır; tavan ayarlanabilir. */}
-        <label style={{ display: 'block', marginBottom: 12 }}>
-          <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>
-            Uygulama paket önekleri <span style={{ color: 'var(--text3)' }}>(virgülle)</span>
-          </div>
-          <input value={appPrefixes}
-            onChange={e => setAppPrefixes(e.target.value)}
-            placeholder="com.shop.payment., com.shop.cards."
-            style={{ width: '100%' }} />
-          <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
-            Bu öneklerle başlayan stack frame'leri <strong>önce</strong> denenir;
+        <Field label="Uygulama paket önekleri" labelAside={<span className={ASIDE}>(virgülle)</span>}
+          value={appPrefixes}
+          onChange={e => setAppPrefixes(e.target.value)}
+          placeholder="com.shop.payment., com.shop.cards."
+          hint={<>Bu öneklerle başlayan stack frame'leri <strong>önce</strong> denenir;
             kurum-içi çerçeve ve kütüphane sınıfları (ör. <code>com.banka.core.rest.*</code>)
-            arkaya düşer, atılmaz. Boş = stack sırası (yalnız JDK/Spring/JBoss elenir).
-          </div>
-        </label>
+            arkaya düşer, atılmaz. Boş = stack sırası (yalnız JDK/Spring/JBoss elenir).</>} />
 
-        <label style={{ display: 'block', marginBottom: 12 }}>
-          <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>
-            Kod çekme deneme tavanı <span style={{ color: 'var(--text3)' }}>(1–30, boş = varsayılan)</span>
-          </div>
-          <input value={lookupLimit} inputMode="numeric"
-            onChange={e => setLookupLimit(e.target.value.replace(/[^0-9]/g, ''))}
-            placeholder={String(effectiveLimit)}
-            style={{ width: 120 }} />
-          <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
-            Bir açıklama için en fazla kaç dosya çekilir. Ağaçta bulunamayan frame
-            ve aynı dosyanın başka satırı tavandan düşmez. Yürürlükte: <strong>{effectiveLimit}</strong>.
-          </div>
-        </label>
+        <Field label="Kod çekme deneme tavanı" labelAside={<span className={ASIDE}>(1–30, boş = varsayılan)</span>}
+          value={lookupLimit} inputMode="numeric"
+          onChange={e => setLookupLimit(e.target.value.replace(/[^0-9]/g, ''))}
+          placeholder={String(effectiveLimit)}
+          controlClassName={NUM}
+          hint={<>Bir açıklama için en fazla kaç dosya çekilir. Ağaçta bulunamayan frame
+            ve aynı dosyanın başka satırı tavandan düşmez. Yürürlükte: <strong>{effectiveLimit}</strong>.</>} />
 
         {/* v0.10.353 (operatör: "arama tavanını yükseltelim") — organizasyon
             geneli kod araması kaç frame / hata-kodu için denenir; eski sabit 2. */}
-        <label style={{ display: 'block', marginBottom: 12 }}>
-          <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>
-            Kod araması tavanı <span style={{ color: 'var(--text3)' }}>(1–20, boş = varsayılan 6)</span>
-          </div>
-          <input value={searchLimit} inputMode="numeric"
-            onChange={e => setSearchLimit(e.target.value.replace(/[^0-9]/g, ''))}
-            placeholder="6"
-            style={{ width: 120 }} />
-          <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
-            Depo ağacında bulunamayan frame'ler ve hata-kodu token'ları için organizasyon
+        <Field label="Kod araması tavanı" labelAside={<span className={ASIDE}>(1–20, boş = varsayılan 6)</span>}
+          value={searchLimit} inputMode="numeric"
+          onChange={e => setSearchLimit(e.target.value.replace(/[^0-9]/g, ''))}
+          placeholder="6"
+          controlClassName={NUM}
+          hint={<>Depo ağacında bulunamayan frame'ler ve hata-kodu token'ları için organizasyon
             genelinde en fazla kaç arama yapılır (her biri ayrı bir DevOps çağrısı). Yalnız
             "Organizasyon geneli kod araması" açıkken etkili; tavana takılan frame'ler
-            açıklamada "eşleşmeyen" olarak listelenir.
-          </div>
-        </label>
+            açıklamada "eşleşmeyen" olarak listelenir.</>} />
 
         {/* v0.10.1038 — kod bütçesi (operatör: "default 10k gibi"). Eskiden sabit
             4000'di ve "1 pencere düştü" notu rutindi. Çekilen dosya sayısını
             değiştirmez; yalnız modele giden kodu kırpar. */}
-        <div style={{ marginBottom: 12 }}>
-          <Field label="Kod bütçesi (karakter)" type="number" inputMode="numeric"
-            min={CODE_BUDGET_MIN} max={CODE_BUDGET_MAX}
-            value={codeBudget}
-            onChange={e => setCodeBudget(e.target.value.replace(/[^0-9]/g, ''))}
-            placeholder={String(CODE_BUDGET_DEFAULT)}
-            style={{ width: 120 }}
-            hint={<>Modele gönderilen kaynak kod miktarı. Küçük bağlamlı modellerde cevap
-              kesiliyorsa düşürün. {CODE_BUDGET_MIN}–{CODE_BUDGET_MAX}, boş = varsayılan;
-              yürürlükte: <strong>{effectiveBudget}</strong>.</>} />
-        </div>
+        <Field label="Kod bütçesi (karakter)" type="number" inputMode="numeric"
+          min={CODE_BUDGET_MIN} max={CODE_BUDGET_MAX}
+          value={codeBudget}
+          onChange={e => setCodeBudget(e.target.value.replace(/[^0-9]/g, ''))}
+          placeholder={String(CODE_BUDGET_DEFAULT)}
+          controlClassName={NUM}
+          hint={<>Modele gönderilen kaynak kod miktarı. Küçük bağlamlı modellerde cevap
+            kesiliyorsa düşürün. {CODE_BUDGET_MIN}–{CODE_BUDGET_MAX}, boş = varsayılan;
+            yürürlükte: <strong>{effectiveBudget}</strong>.</>} />
 
-        <label style={{ display: 'block', marginBottom: 12 }}>
-          <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>
-            Branş sırası <span style={{ color: 'var(--text3)' }}>(virgülle)</span>
-          </div>
-          <input value={branchOrder}
-            onChange={e => setBranchOrder(e.target.value)}
-            placeholder="release, master"
-            style={{ width: '100%' }} />
-          <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
-            İlk <strong>var olan</strong> branş kullanılır. Hiçbiri yoksa deponun
-            kendi varsayılan branşına düşülür.
-          </div>
-        </label>
+        <Field label="Branş sırası" labelAside={<span className={ASIDE}>(virgülle)</span>}
+          value={branchOrder}
+          onChange={e => setBranchOrder(e.target.value)}
+          placeholder="release, master"
+          hint={<>İlk <strong>var olan</strong> branş kullanılır. Hiçbiri yoksa deponun
+            kendi varsayılan branşına düşülür.</>} />
 
         {/* v0.10.590 — olay anındaki sürümü VCS ref'ine bağlayan desen. */}
-        <label style={{ display: 'block', marginBottom: 12 }}>
-          <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>
-            Sürüm → ref deseni <span style={{ color: 'var(--text3)' }}>(versionRef)</span>
-          </div>
-          <input value={versionRef}
-            onChange={e => setVersionRef(e.target.value)}
-            placeholder="tags/{version}"
-            style={{ width: '100%' }} />
-          <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
-            Stack frame linkleri olay anındaki sürüme (image tag / service.version) göre bu
+        <Field label="Sürüm → ref deseni" labelAside={<span className={ASIDE}>(versionRef)</span>}
+          value={versionRef}
+          onChange={e => setVersionRef(e.target.value)}
+          placeholder="tags/{version}"
+          hint={<>Stack frame linkleri olay anındaki sürüme (image tag / service.version) göre bu
             ref'e bağlanır: ref bulunursa link ve dosya yolu o commit'ten gider, bulunmazsa branş
             ucu + uyarı. <code>{'{version}'}</code> zorunlu; <code>tags/</code> ya da
             <code>heads/</code> ile başlar. Boş = <code>tags/{'{version}'}</code>.
             {/* v0.10.1047 — mono-repo: {service} = önek ve ortam eki soyulmuş servis adı. */}
             {' '}Aynı depoda birden çok servis varsa <code>{'{service}'}</code> kullanın,
-            ör. <code>tags/{'{service}'}-{'{version}'}</code>.
-          </div>
-        </label>
+            ör. <code>tags/{'{service}'}-{'{version}'}</code>.</>} />
 
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-          <input type="checkbox" checked={insecure}
-            onChange={e => setInsecure(e.target.checked)} />
-          <span style={{ fontSize: 13 }}>
-            TLS doğrulamasını atla
-            <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--text3)', fontStyle: 'italic' }}>
+        <CheckboxField checked={insecure} onCheckedChange={setInsecure}
+          label={<>TLS doğrulamasını atla{' '}
+            <span className="text-[length:var(--fs-xs)] italic text-(--text3)">
               (kendinden imzalı / iç CA sertifikaları — POC)
-            </span>
-          </span>
-        </label>
+            </span></>} />
 
         {/* v0.10.75 — ORGANİZASYON KOD ARAMASI.
             Depo servis adından konvansiyonla çözülüyor; hatanın atıldığı
@@ -484,14 +408,12 @@ export function DevOpsTab() {
             Arama o boşluğu kapatıyor ama AYRI bir uzantı ve PAT kapsamı
             istiyor — o yüzden varsayılan kapalı ve ne yaptığı burada
             yazılı. */}
-        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}>
-          <input type="checkbox" checked={codeSearch} style={{ marginTop: 3 }}
-            onChange={e => setCodeSearch(e.target.checked)} />
-          <span style={{ fontSize: 13 }}>
-            Organizasyon geneli kod araması
-            <span style={{ display: 'block', marginTop: 2, fontSize: 11, color: 'var(--text3)', fontStyle: 'italic' }}>
+        <CheckboxField checked={codeSearch} onCheckedChange={setCodeSearch}
+          label="Organizasyon geneli kod araması"
+          hint={<>
+            <span className="block italic">
               Depo ağacında bulunamayan stack frame'leri için tüm organizasyonda
-              <code style={{ margin: '0 4px' }}>Sınıf.metot</code>
+              {' '}<code>Sınıf.metot</code>{' '}
               aranır ve bulunan deponun kendisinden çekilir. Azure DevOps
               <b> Code Search</b> uzantısı ve PAT'te <b>Code (Read)</b> kapsamı
               gerekir; yoksa açıklama yine üretilir, künyeye “kod araması
@@ -499,20 +421,17 @@ export function DevOpsTab() {
             </span>
             {/* v0.10.1362 — v0.10.1349'dan beri stacktrace'siz trace'in kod
                 incelemesi de bu aramaya dayanıyor; açıklama bunu söylemiyordu. */}
-            <span style={{ display: 'block', marginTop: 2, fontSize: 11, color: 'var(--text3)', fontStyle: 'italic' }}>
+            <span className="mt-0.5 block italic">
               Stacktrace'i olmayan trace'lerin kod incelemesi de bu aramayı kullanır:
               trace'in ana operasyonunun adı depoda aranır ve o operasyonun
               kodu okunur. Kapalıysa bu trace'ler kodsuz incelenir.
             </span>
-          </span>
-        </label>
+          </>} />
 
         {test && (
-          <div style={{
-            marginBottom: 12, fontSize: 12, padding: '8px 10px', borderRadius: 6,
-            background: 'var(--bg0)', border: '1px solid var(--border)',
-            color: test.ok ? 'var(--ok)' : 'var(--err)',
-          }}>
+          <div role="status" className={cn(
+            'rounded-md border border-(--border) bg-(--bg0) px-2.5 py-2 text-[length:var(--fs-sm)]',
+            test.ok ? 'text-(--ok)' : 'text-(--err)')}>
             {test.ok ? (
               <>
                 ✓ {test.projectCount} proje
@@ -527,24 +446,24 @@ export function DevOpsTab() {
         )}
 
         {msg && (
-          <div style={{ marginBottom: 12, fontSize: 12,
-            color: msg.kind === 'ok' ? 'var(--ok)' : 'var(--err)' }}>
+          <div className={cn('text-[length:var(--fs-sm)]', msg.kind === 'ok' ? 'text-(--ok)' : 'text-(--err)')}>
             {msg.text}
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: 8 }}>
-          <Button type="button" variant="secondary" disabled={!configured}
-            onClick={runTest} loading={busy}>
-            Bağlantıyı test et
-          </Button>
-          <Button type="submit" variant="primary" loading={busy}>
-            Kaydet
-          </Button>
-        </div>
-        <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 8 }}>
-          Test kaydetmez — formdaki değerlerle dener. PAT alanı boşsa saklı
-          token kullanılır.
+        <div>
+          <ActionRow
+            secondary={
+              <Button type="button" variant="outline" disabled={!configured}
+                onClick={() => { void runTest(); }} loading={busy}>
+                Bağlantıyı test et
+              </Button>
+            }
+            confirm={<Button type="submit" loading={busy}>Kaydet</Button>} />
+          <div className="mt-2 text-[length:var(--fs-xs)] text-(--text3)">
+            Test kaydetmez — formdaki değerlerle dener. PAT alanı boşsa saklı
+            token kullanılır.
+          </div>
         </div>
       </form>
 
@@ -552,13 +471,10 @@ export function DevOpsTab() {
           İÇİNDE olsaydı servis adı kutusunda Enter'a basmak ayarları
           kaydederdi. Zincir KAYITLI ayarlarla koşar, o yüzden de
           burada — kaydetmeden denemek başka bir sorunun cevabı. */}
-      <form onSubmit={runDryRun} style={{
-        marginTop: 18, padding: 16, borderRadius: 8,
-        background: 'var(--bg2)', border: '1px solid var(--border)',
-      }}>
-        <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Çözümü dene</h3>
-        <p style={{ color: 'var(--text2)', fontSize: 12, marginBottom: 12 }}>
-          Bir servis adı yazın; <strong style={{ color: 'var(--text)' }}>aynı çözüm
+      <form onSubmit={runDryRun} className={CARD}>
+        <h3 className={H3}>Çözümü dene</h3>
+        <p className="mb-3 text-[length:var(--fs-sm)] text-(--text2)">
+          Bir servis adı yazın; <strong className="text-(--text)">aynı çözüm
           zinciri</strong> (katalog pini → depo adı → proje → branş → depo ağacı)
           AI’a hiç uğramadan koşar. Konvansiyonu denemek için artık gerçek bir
           exception ve tam bir LLM turu gerekmiyor. Salt okuma: hiçbir şey
@@ -570,30 +486,32 @@ export function DevOpsTab() {
           hint={configured
             ? 'Kayıtlı ayarlarla denenir — kaydetmediğiniz değişiklikler hesaba katılmaz.'
             : 'Önce sunucu adresini girip kaydedin.'} />
-        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-          <Button type="submit" variant="secondary"
-            disabled={!configured || !dryService.trim()} loading={dryBusy}>
-            Çözümü dene
-          </Button>
+        <div className="mt-2">
+          <ActionRow confirm={
+            <Button type="submit" variant="outline"
+              disabled={!configured || !dryService.trim()} loading={dryBusy}>
+              Çözümü dene
+            </Button>
+          } />
         </div>
 
-        {dryBusy && <div style={{ marginTop: 12 }}><Spinner /></div>}
+        {dryBusy && <div className="mt-3"><Spinner /></div>}
 
         {!dryBusy && dryErr && (
-          <div style={{ marginTop: 12, fontSize: 12, color: 'var(--err)' }}>✗ {dryErr}</div>
+          <div role="alert" className="mt-3 text-[length:var(--fs-sm)] text-(--err)">✗ {dryErr}</div>
         )}
 
         {!dryBusy && !dryErr && dry && (
-          <div style={{ marginTop: 12 }}>
+          <div className="mt-3">
             {/* Özet satırı — adımlardan türer, çözülemeyen alan hiç yazılmaz. */}
-            <div style={{ fontSize: 12, marginBottom: 8, color: 'var(--text2)' }}>
-              <Badge tone={dry.ok ? 'success' : 'danger'}>
+            <div className="mb-2 flex flex-wrap items-center gap-2 text-[length:var(--fs-sm)] text-(--text2)">
+              <StatusBadge status={dry.ok ? 'ok' : 'critical'}>
                 {dry.ok ? 'ÇÖZÜLDÜ' : 'ÇÖZÜLEMEDİ'}
-              </Badge>
-              <span style={{ marginLeft: 8 }}>
+              </StatusBadge>
+              <span>
                 {dry.repo
                   ? <>
-                      <strong style={{ color: 'var(--text)' }}>{dry.repo}</strong>
+                      <strong className="text-(--text)">{dry.repo}</strong>
                       {dry.branch ? ` @ ${dry.branch}` : ''}
                       {dry.project ? ` · proje ${dry.project}` : ''}
                       {dry.fileCount ? ` · ${dry.fileCount} dosya` : ''}
@@ -601,11 +519,10 @@ export function DevOpsTab() {
                   : `“${dry.service}” için depo adı üretilemedi.`}
               </span>
             </div>
-            <ol style={{ listStyle: 'none', padding: 0, margin: 0,
-              display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <ol className="m-0 flex list-none flex-col gap-1.5 p-0">
               {(dry.steps || []).map((st, i) => (
                 <li key={`${st.key}-${i}`}
-                  style={{ display: 'flex', gap: 8, alignItems: 'baseline', fontSize: 12 }}>
+                  className="flex items-baseline gap-2 text-[length:var(--fs-sm)]">
                   {/* v0.10.58 — ÜÇ DURUM. "Depo adı" ve "Proje" adımları
                       DevOps'a sorulmadan, saf türetmeyle üretiliyor; onlara
                       yeşil tik vermek operatöre "doğrulandı" der ve tam da
@@ -613,21 +530,21 @@ export function DevOpsTab() {
                       cevaplamış gibi yapar. Operatör bildirdi: "Kodu incele
                       dediğimde doğru repoyu bulmuyor" — ekranda iki yeşil
                       tik dururken. */}
-                  <Badge tone={st.derived ? 'info' : st.ok ? 'success' : 'danger'}>
+                  <StatusBadge status={st.derived ? 'info' : st.ok ? 'ok' : 'critical'}>
                     {st.derived ? '~' : st.ok ? '✓' : '✗'}
-                  </Badge>
-                  <span style={{ minWidth: 110, color: 'var(--text2)' }}>{st.label}</span>
+                  </StatusBadge>
+                  <span className="min-w-[110px] text-(--text2)">{st.label}</span>
                   {/* Uzun gerekçe (çıkmaz cümleleri üç kaynağı birden
                       anlatıyor) kırpılmaz: kesilen bir teşhis, teşhis
                       değildir. */}
-                  <span style={{ color: st.derived ? 'var(--text2)' : st.ok ? 'var(--text)' : 'var(--err)',
-                    wordBreak: 'break-word' }}>{st.detail}</span>
+                  <span className={cn('break-words',
+                    st.derived ? 'text-(--text2)' : st.ok ? 'text-(--text)' : 'text-(--err)')}>{st.detail}</span>
                 </li>
               ))}
             </ol>
             {/* Zincir ilk kırmızıda durur; koşmamış adımlar listede YOK. */}
             {!dry.ok && (
-              <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 8 }}>
+              <div className="mt-2 text-[length:var(--fs-xs)] text-(--text3)">
                 Zincir ilk hatada durdu — sonraki adımlar hiç çalıştırılmadı.
               </div>
             )}
@@ -640,52 +557,53 @@ export function DevOpsTab() {
           ("muhtemelen telefon numarası"). Katalog SALT-OKUNUR bir anlık
           görüntü: operatör aşağıdaki SELECT'i kendi tarafında koşturur,
           CSV'yi yükler. Canlı DB bağlantısı yok — sürücü, kimlik, ağ yok. */}
-      <form onSubmit={importSchema} style={{
-        marginTop: 18, padding: 16, borderRadius: 8,
-        background: 'var(--bg2)', border: '1px solid var(--border)',
-      }}>
-        <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Şema kataloğu (SQL hataları için)</h3>
-        <p style={{ color: 'var(--text2)', fontSize: 12, marginBottom: 10 }}>
+      <form onSubmit={importSchema} className={CARD}>
+        <h3 className={H3}>Şema kataloğu (SQL hataları için)</h3>
+        <p className="mb-2.5 text-[length:var(--fs-sm)] text-(--text2)">
           <code>SQLCODE</code>/<code>SQLSTATE</code>/<code>ORA-</code> taşıyan hatalarda AI,
-          hedef tablonun <strong style={{ color: 'var(--text)' }}>kolon tanımlarını</strong>
+          hedef tablonun <strong className="text-(--text)">kolon tanımlarını</strong>
           (tip, uzunluk, NULL) kanıt olarak alır. Aşağıdaki salt-okunur sorguyu DB
           tarafında koşturup CSV çıktısını yükleyin; katalog Coremetry'de saklanır,
           DB'ye bağlantı kurulmaz.
         </p>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
-          {schema && schema.importedAt > 0 ? (
-            <Badge>{schema.tables} tablo · {schema.columns} kolon · {fmtDateTime(new Date(schema.importedAt))}{schema.flavor ? ` · ${schema.flavor}` : ''}</Badge>
-          ) : (
-            <Badge>katalog yüklü değil</Badge>
-          )}
-          <label style={{ fontSize: 12, color: 'var(--text2)' }}>
-            Veritabanı{' '}
-            <select value={schemaFlavor} onChange={e => setSchemaFlavor(e.target.value)}>
-              {['db2', 'oracle', 'postgres', 'mysql', 'mssql'].map(f => <option key={f} value={f}>{f}</option>)}
-            </select>
-          </label>
+        <div className="mb-2 flex flex-wrap items-end gap-2">
+          <SelectField small label="Veritabanı" value={schemaFlavor} onChange={e => setSchemaFlavor(e.target.value)}>
+            {['db2', 'oracle', 'postgres', 'mysql', 'mssql'].map(f => <option key={f} value={f}>{f}</option>)}
+          </SelectField>
+          <div className="pb-1.5">
+            {schema && schema.importedAt > 0 ? (
+              <Badge variant="secondary" className="tabular-nums">{schema.tables} tablo · {schema.columns} kolon · {fmtDateTime(new Date(schema.importedAt))}{schema.flavor ? ` · ${schema.flavor}` : ''}</Badge>
+            ) : (
+              <Badge variant="secondary">katalog yüklü değil</Badge>
+            )}
+          </div>
         </div>
-        <details style={{ marginBottom: 8 }}>
-          <summary style={{ fontSize: 12, color: 'var(--text2)', cursor: 'pointer' }}>Katalog sorgusu ({schemaFlavor}) — DB tarafında koşturun, çıktıyı CSV alın</summary>
-          <pre style={{ fontSize: 11, marginTop: 6, padding: 8, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, overflowX: 'auto', whiteSpace: 'pre-wrap' }}>
+        <details className="mb-2">
+          <summary className="cursor-pointer text-[length:var(--fs-sm)] text-(--text2)">Katalog sorgusu ({schemaFlavor}) — DB tarafında koşturun, çıktıyı CSV alın</summary>
+          <pre className="mt-1.5 overflow-x-auto whitespace-pre-wrap rounded-md border border-(--border) bg-(--bg) p-2 text-[length:var(--fs-xs)]">
             {schema?.snapshotSql?.[schemaFlavor] || '—'}
           </pre>
         </details>
-        <label style={{ display: 'block', marginBottom: 8 }}>
-          <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>
-            CSV (başlık satırlı; virgül / noktalı virgül / sekme) — yapıştırın ya da dosya seçin
+        <TextareaField label="CSV (başlık satırlı; virgül / noktalı virgül / sekme) — yapıştırın ya da dosya seçin"
+          value={schemaCsv} onChange={e => setSchemaCsv(e.target.value)} rows={5}
+          placeholder={'TABSCHEMA,TABNAME,COLNAME,TYPENAME,LENGTH,SCALE,NULLS\nSHOP,ORDER_PHONE,PHONE,VARCHAR,10,0,N'}
+          controlClassName="font-mono" />
+        {/* Yerel dosya girdisi bilinçli olarak native (plan Q3). */}
+        <input type="file" accept=".csv,.txt,text/csv" aria-label="CSV dosyası seç"
+          className="mt-1.5 mb-2 block text-[length:var(--fs-sm)]"
+          onChange={e => readCsvFile(e.target.files?.[0])} />
+        <ActionRow
+          destructive={
+            <Button type="button" variant="destructive" disabled={!schema || schema.importedAt === 0 || schemaBusy}
+              onClick={() => { void clearSchema(); }}>Kataloğu sil</Button>
+          }
+          confirm={<Button type="submit" disabled={!schemaCsv.trim()} loading={schemaBusy}>Kataloğu yükle</Button>} />
+        {schemaMsg && (
+          <div role={schemaMsg.kind === 'err' ? 'alert' : 'status'}
+            className={cn('mt-2 text-[length:var(--fs-sm)]', schemaMsg.kind === 'ok' ? 'text-(--ok)' : 'text-(--err)')}>
+            {schemaMsg.text}
           </div>
-          <textarea value={schemaCsv} onChange={e => setSchemaCsv(e.target.value)} rows={5}
-            placeholder={'TABSCHEMA,TABNAME,COLNAME,TYPENAME,LENGTH,SCALE,NULLS\nSHOP,ORDER_PHONE,PHONE,VARCHAR,10,0,N'}
-            className="mono" style={{ width: '100%' }} />
-          <input type="file" accept=".csv,.txt,text/csv" style={{ marginTop: 6, fontSize: 12 }}
-            onChange={e => readCsvFile(e.target.files?.[0])} />
-        </label>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <Button type="submit" variant="primary" disabled={!schemaCsv.trim()} loading={schemaBusy}>Kataloğu yükle</Button>
-          <Button type="button" variant="danger" disabled={!schema || schema.importedAt === 0 || schemaBusy} onClick={clearSchema}>Kataloğu sil</Button>
-          {schemaMsg && <span style={{ fontSize: 12, color: schemaMsg.kind === 'ok' ? 'var(--ok)' : 'var(--err)' }}>{schemaMsg.text}</span>}
-        </div>
+        )}
       </form>
       <FunctionCodeShapePanel />
     </div>

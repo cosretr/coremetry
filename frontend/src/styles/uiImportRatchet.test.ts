@@ -79,17 +79,17 @@ export function atomsImported(src: string, file: string): Set<string> {
 // DisclosureButton +1 taşınan PageControls'ten). R9: 902 → 904 (coremetry/
 // DataTable sarmalayıcısının iki dosyası ui/DataTable'ı içe aktarıyor).
 const CEILINGS: Record<string, number> = {
-  Button: 171, // Faz 2 dilim 1 R12 (AI SRE + Knowledge): 177 → 171; Faz 2 dilim 1 R11 (CoSRE): 184 → 177; Faz 2 dilim 1 R10 (erişim): 191 → 184; Faz 2 dilim 1 R7: 209 → 207 (Remote Cluster); etkileşim P2: 207 → 206 (⌘K); R8: 206 → 197; R9: 197 → 191
+  Button: 169, // Faz 2 dilim 1 R13 (DevOps + MCP): 171 → 169; Faz 2 dilim 1 R12 (AI SRE + Knowledge): 177 → 171; Faz 2 dilim 1 R11 (CoSRE): 184 → 177; Faz 2 dilim 1 R10 (erişim): 191 → 184; Faz 2 dilim 1 R7: 209 → 207 (Remote Cluster); etkileşim P2: 207 → 206 (⌘K); R8: 206 → 197; R9: 197 → 191
   // v0.10.1617 (R9): 126 → 128 — coremetry/DataTable dondurulmuş API'nin Faz 1
   // gövdesi ui/DataTable'ı SARIYOR (plan §6: "thin wrapper over today's
   // code"): DataTable.tsx (gövde) + types.ts (bugünkü tiplerin yeniden dışa
   // aktarımı). Benimseme değil, halef; gövde Traces diliminde değişince düşer.
   DataTable: 111, // R9 artığı (ChannelsTab → coremetry/DataTable renderHeader): 112 → 111; Faz 2 dilim 1 R12 (AI SRE + Knowledge): 114 → 112; Faz 2 dilim 1 R11 (CoSRE): 117 → 114; Faz 2 dilim 1 R10 (erişim): 121 → 117; Faz 2 dilim 1 R7: 128 → 127 (SpanClusterValuesPanel); R8: 127 → 124; R9: 124 → 121
-  Badge: 54, // Faz 2 dilim 1 R11 (CoSRE): 58 → 54; R7: 63 → 61; CoSRE 2b B1: 61 → 60 (CosreV2StatusLine → coremetry Field); R8: 60 → 58
+  Badge: 53, // Faz 2 dilim 1 R13 (DevOps + MCP): 54 → 53; Faz 2 dilim 1 R11 (CoSRE): 58 → 54; R7: 63 → 61; CoSRE 2b B1: 61 → 60 (CosreV2StatusLine → coremetry Field); R8: 60 → 58
   IconButton: 50,
-  Field: 25, // Faz 2 dilim 1 R12 (AI SRE + Knowledge): 27 → 25; Faz 2 dilim 1 R11 (CoSRE): 29 → 27; Faz 2 dilim 1 R10 (erişim): 30 → 29; R7: 37 → 36; R8: 36 → 31; R9: 31 → 30
+  Field: 24, // Faz 2 dilim 1 R13 (DevOps + MCP): 25 → 24; Faz 2 dilim 1 R12 (AI SRE + Knowledge): 27 → 25; Faz 2 dilim 1 R11 (CoSRE): 29 → 27; Faz 2 dilim 1 R10 (erişim): 30 → 29; R7: 37 → 36; R8: 36 → 31; R9: 31 → 30
   Chip: 35, // Faz 2 dilim 1 R11 (CoSRE): 36 → 35
-  ConfirmDialog: 23, // Faz 2 dilim 1 R12 (AI SRE + Knowledge): 25 → 23; Faz 2 dilim 1 R11 (CoSRE): 28 → 25; Faz 2 dilim 1 R10 (erişim): 31 → 28; R8: 35 → 34; R9: 34 → 31
+  ConfirmDialog: 22, // Faz 2 dilim 1 R13 (DevOps + MCP): 23 → 22; Faz 2 dilim 1 R12 (AI SRE + Knowledge): 25 → 23; Faz 2 dilim 1 R11 (CoSRE): 28 → 25; Faz 2 dilim 1 R10 (erişim): 31 → 28; R8: 35 → 34; R9: 34 → 31
   SegmentedControl: 33, // Faz 2 dilim 1 R12 (AI SRE + Knowledge): 34 → 33; Faz 2 dilim 1 R11 (CoSRE): 35 → 34
   // v0.10.1616 (R8): 31 → 32 — ARTIŞ değil TAŞIMA: coremetry/PageControls
   // (ui/'den değişmeden taşındı, karar k) dar ekran "Filtreler (N)"

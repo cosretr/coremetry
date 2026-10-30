@@ -65,13 +65,14 @@ describe('Settings sade palet — K5 artıkları (v0.10.929)', () => {
       // v0.10.929 (K5, lider kararı) — JSX özniteliği dışındaki yollar da:
       // `return 'success'` (EntitiesTab statusTone'un eski 'ok' kolu),
       // `tone={x ? 'success' : …}`. Tek muafiyet DevOps (aşağıda sayılı).
-      if (f !== 'DevOpsTab.tsx') expect(src, f).not.toMatch(/['"`]success['"`]/);
+      expect(src, f).not.toMatch(/['"`]success['"`]/);
     }
-    // Tek 'success': DevOps dry-run sonucu (kullanıcının az önce koşturduğu).
+    // Tek yeşil: DevOps dry-run sonucu (kullanıcının az önce koşturduğu).
+    // Faz 2 dilim 1 R13 (D7): ui Badge tonu → StatusBadge durumu; anlam aynı
+    // (success→ok, danger→critical), muafiyet artık 'success' yazımı değil.
     const devops = read('DevOpsTab.tsx');
-    expect(devops.match(/['"`]success['"`]/g)?.length).toBe(2);
-    expect(devops.match(/'success'/g)?.length).toBe(2);
-    expect(devops).toContain("<Badge tone={dry.ok ? 'success' : 'danger'}>");
+    expect(devops).toContain("<StatusBadge status={dry.ok ? 'ok' : 'critical'}>");
+    expect(devops.match(/st\.ok \? 'ok'/g)?.length).toBe(1);
   });
 
   it("EntitiesTab senkron koşusu: 'ok' nötr, yalnız partial/failed renkli", () => {

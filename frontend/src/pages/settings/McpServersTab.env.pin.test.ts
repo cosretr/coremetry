@@ -13,7 +13,7 @@ describe('v0.10.803 — MCP stdio env', () => {
     const src = readFileSync(resolve(__dirname, './McpServersTab.tsx'), 'utf8');
     expect(src).toContain("envText: (sv.envKeys || []).map(k => `${k}=${SECRET_KEPT}`).join('\\n')");
     expect(src).toContain("env: r.transport === 'stdio' && r.envText.trim() ? parseEnvText(r.envText) : undefined");
-    expect(src).toContain('<SettingRow label="Ortam"');
+    expect(src).toContain('<TextareaField label="Ortam"');
   });
   it('types: envKeys on snapshot, env on input', () => {
     const t = readFileSync(resolve(__dirname, '../../lib/types.ts'), 'utf8');

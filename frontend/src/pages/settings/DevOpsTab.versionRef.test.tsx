@@ -4,6 +4,7 @@
 // aynı depoda birden çok servis varsa, başka servisin etiketi bu servisin
 // sürümü sanılabiliyor." Sürüm → ref deseni ikinci yer tutucu {service}'i
 // tanıyor (yeni alan yok); ipucu varsayılanı ve mono-repo örneğini söyler.
+import '@/test/radixJsdom';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -22,7 +23,7 @@ vi.mock('@/lib/api', () => ({
   },
 }));
 
-import { ConfirmProvider } from '@/components/ui';
+import { ConfirmGate as ConfirmProvider } from '@/components/coremetry/Confirm';
 import { DevOpsTab } from './DevOpsTab';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -53,10 +54,12 @@ describe('DevOpsTab — sürüm → ref deseni ipucu (v0.10.1047)', () => {
     const label = Array.from(host.querySelectorAll('label'))
       .find(l => (l.textContent || '').startsWith('Sürüm → ref deseni'));
     expect(label, 'sürüm → ref deseni alanı yok').toBeTruthy();
-    const input = label!.querySelector('input')!;
+    // Faz 2 dilim 1 R13 — coremetry Field: etiket denetimi sarmaz; htmlFor +
+    // aria-describedby ile bağlı (sorgu çevirisi, sözleşme aynı).
+    const input = document.getElementById(label!.htmlFor) as HTMLInputElement;
     expect(input.value).toBe('tags/{service}-{version}'); // kayıtlı desen kutuda
     expect(input.placeholder).toBe('tags/{version}');
-    const hint = label!.querySelector('div:last-child')!.textContent || '';
+    const hint = document.getElementById(input.getAttribute('aria-describedby') || '')?.textContent || '';
     expect(hint).toContain(
       'Boş = tags/{version}. Aynı depoda birden çok servis varsa {service} kullanın, ör. tags/{service}-{version}.',
     );

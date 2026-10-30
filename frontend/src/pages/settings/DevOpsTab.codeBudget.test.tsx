@@ -9,6 +9,7 @@
 //     gövdeye girmez (boş PAT = saklı değer korunur);
 //   • boş kutu 0 gönderir = varsayılan (10000);
 //   • sunucu sıkıştırdıysa (500 → 2000) kayıttan sonra kutu kaydedileni gösterir.
+import '@/test/radixJsdom';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -28,7 +29,7 @@ vi.mock('@/lib/api', () => ({
   },
 }));
 
-import { ConfirmProvider } from '@/components/ui';
+import { ConfirmGate as ConfirmProvider } from '@/components/coremetry/Confirm';
 import { DevOpsTab } from './DevOpsTab';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
