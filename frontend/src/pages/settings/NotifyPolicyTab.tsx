@@ -1,9 +1,11 @@
-import { useState } from 'react';
-import { Button, useConfirm } from '@/components/ui';
+import { useState, type ReactNode } from 'react';
 import { Spinner } from '@/components/Spinner';
-import { Field, SelectField } from '@/components/ui/Field';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState } from '@/components/ui/DataTable';
-import type { DataTableColumn } from '@/lib/dataTable';
+import { Button } from '@/components/shadcn/button';
+import { Badge } from '@/components/shadcn/badge';
+import { Field, SelectField } from '@/components/coremetry/Field';
+import { StatusBadge } from '@/components/coremetry/StatusBadge';
+import { useConfirm } from '@/components/coremetry/Confirm';
+import { DataTable, type ColumnDef } from '@/components/coremetry/DataTable';
 import { api } from '@/lib/api';
 import type { NotifyPolicy, NotifyReplayFamily, NotifyReplayReport, NotifyDigestItem } from '@/lib/types';
 import { enforceReadiness, holdLabel, parseDigestTimes, reductionPct } from '@/lib/notifyPolicyForm';
@@ -36,7 +38,14 @@ const FAMILY_TR: Record<string, string> = {
   cluster: 'Küme', rule: 'Kural',
 };
 
-const FAMILY_COLS: DataTableColumn<NotifyReplayFamily>[] = [
+// Faz 2 dilim 1 R9 (shadcn): inline stil yok; `.np-*` sayfa sınıfları Tailwind
+// utility'ye indi (globals.css'ten silindi); coremetry/Field + DataTable,
+// shadcn Button/Badge, StatusBadge. Alanlar, kolonlar ve kaydetme gövdesi aynı.
+const GRID = 'grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-x-4 gap-y-3';
+const LIST = 'mt-1.5 mb-0 pl-[18px] text-[length:var(--fs-sm)]';
+const ACTIONS = 'flex flex-wrap items-center gap-2.5';
+
+const FAMILY_COLS: ColumnDef<NotifyReplayFamily>[] = [
   { id: 'family', label: 'Aile', sortValue: f => FAMILY_TR[f.family] ?? f.family, naturalDir: 'asc', flex: true, minWidth: 120, priority: 1 },
   { id: 'opened', label: 'Açılış', sortValue: f => f.opened, numeric: true, width: 90, minWidth: 80, priority: 1 },
   { id: 'sentBefore', label: 'Bugün giden', sortValue: f => f.sentBefore, numeric: true, width: 110, minWidth: 96, priority: 1 },
@@ -45,6 +54,31 @@ const FAMILY_COLS: DataTableColumn<NotifyReplayFamily>[] = [
   { id: 'holds', label: 'Tutma nedenleri', width: 300, minWidth: 200, priority: 2 },
   { id: 'noiseMarked', label: '“Problem değil”', sortValue: f => f.noiseMarked, numeric: true, width: 120, minWidth: 100, priority: 3 },
 ];
+
+// Hücre içeriği (eski DataTableCell `value`ları aynen): boş azalma "—",
+// tutma nedenleri tam listesi title'da.
+function familyCell(f: NotifyReplayFamily, col: ColumnDef<NotifyReplayFamily>): ReactNode {
+  switch (col.id) {
+    case 'family': return FAMILY_TR[f.family] ?? f.family;
+    case 'reduction': {
+      const red = reductionPct(f.sentBefore, f.wouldSendAfter);
+      return red == null ? <span className="cell-empty">—</span> : `%${red}`;
+    }
+    case 'holds': {
+      const holds = Object.entries(f.holds ?? {}).sort((a, b) => b[1] - a[1]);
+      if (holds.length === 0) return <span className="cell-empty">—</span>;
+      return (
+        <span title={holds.map(([k, n]) => `${k}: ${n}`).join('\n')}>
+          {holds.map(([k, n]) => `${holdLabel(k)} ${n}`).join(' · ')}
+        </span>
+      );
+    }
+    default: return col.sortValue?.(f) ?? <span className="cell-empty">—</span>;
+  }
+}
+
+const recallTitle = (r: NotifyReplayReport) =>
+  r.recall.cases.map(c => `${c.headline} → ${holdLabel(c.hold)}`).join('\n') || undefined;
 
 export function NotifyPolicyTab() {
   const confirm = useConfirm();
@@ -61,11 +95,6 @@ export function NotifyPolicyTab() {
     setPol(p);
     setDigestRaw((p.digestTimes ?? []).join(', '));
     api.notifyDigest().then(setDigest).catch(() => setDigest(null));
-  });
-
-  const famDt = useDataTable<NotifyReplayFamily>({
-    storageKey: 'notify-replay-families', columns: FAMILY_COLS, rows: replay?.families ?? [],
-    initialSort: { id: 'sentBefore', dir: 'desc' },
   });
 
   if (loadErr) return <SettingsLoadError error={loadErr} onRetry={retry} />;
@@ -118,10 +147,10 @@ export function NotifyPolicyTab() {
   );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div className="flex flex-col gap-5">
       <SettingsSection title="Bildirim politikası"
         description="Problem standardı (D2–D10): bildirim önceliği = görünüm önceliği; düşük güven bildirilmez; etki tabanları; tekrar ve “problem değil” pencereleri. Enforce’a geçiş yöneticinin kararı — önce replay ile recall’u doğrulayın (D8).">
-        <div className="np-grid">
+        <div className={GRID}>
           <SelectField label="Kip" value={pol.mode} hint={MODE_HINT[pol.mode]}
             onChange={e => set('mode', e.target.value as NotifyPolicy['mode'])}>
             <option value="off">off — ölçme</option>
@@ -153,8 +182,8 @@ export function NotifyPolicyTab() {
           {num('“Problem değil” susturması (sa)', pol.noiseMuteHours, v => set('noiseMuteHours', Number(v)),
             'D5: işaret bildirimi bu süre susturur (varsayılan 168 = 7 gün); kalıcı gizleme yönetici işaretinde.')}
         </div>
-        <h3 className="np-sub">Etki tabanları (D6 — “asla yalnız yüzde”)</h3>
-        <div className="np-grid">
+        <h3 className="mt-4 mb-2 text-[length:var(--fs-md)] font-semibold">Etki tabanları (D6 — “asla yalnız yüzde”)</h3>
+        <div className={GRID}>
           {num('Hata: başarısız / 5 dk', pol.impactFloors.errorFailed5m, v => setFloor('errorFailed5m', v))}
           {num('Hata: oran (%)', pol.impactFloors.errorPct, v => setFloor('errorPct', v), 'Yüzde kolu yalnız çağrı tabanı geçilmişken.')}
           {num('Çağrı tabanı / 5 dk', pol.impactFloors.minCalls5m, v => setFloor('minCalls5m', v))}
@@ -162,8 +191,8 @@ export function NotifyPolicyTab() {
           {num('Trafik düşüşü (%)', pol.impactFloors.trafficDropPct, v => setFloor('trafficDropPct', v))}
           {num('Trafik: taban çağrı / 5 dk', pol.impactFloors.trafficMinBaselineCalls5m, v => setFloor('trafficMinBaselineCalls5m', v))}
         </div>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 12, flexWrap: 'wrap' }}>
-          <Button variant="primary" onClick={() => { void save(); }} loading={busy}>Kaydet</Button>
+        <div className={`mt-3 ${ACTIONS}`}>
+          <Button onClick={() => { void save(); }} loading={busy}>Kaydet</Button>
           {pol.updatedBy && <span className="field-hint">Son değişiklik: {pol.updatedBy}{pol.updatedAt ? ` · ${tsCompact(pol.updatedAt)}` : ''}</span>}
         </div>
         {msg && <FlashBox kind={msg.kind}>{msg.text}</FlashBox>}
@@ -171,48 +200,29 @@ export function NotifyPolicyTab() {
 
       <SettingsSection title="Replay — son 14 gün"
         description="Geçmiş bildirimler yeni barla yeniden oynatılır: aile başına bugün giden ve yeni barla gidecek açılışlar, tutma nedenleri ve recall (D8).">
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
-          <Button variant="secondary" onClick={() => { void runReplay(); }} loading={replayBusy}>
+        <div className={`mb-2.5 ${ACTIONS}`}>
+          <Button variant="outline" onClick={() => { void runReplay(); }} loading={replayBusy}>
             {replay ? 'Yeniden çalıştır' : 'Replay’i çalıştır'}
           </Button>
-          {replay && (
-            <span className={ready.ok ? 'badge b-gray' : 'badge b-warn'} title={replay.recall.cases.map(c => `${c.headline} → ${holdLabel(c.hold)}`).join('\n') || undefined}>
-              {ready.text}
-            </span>
-          )}
+          {replay && (ready.ok
+            ? <Badge variant="secondary" title={recallTitle(replay)}>{ready.text}</Badge>
+            : <StatusBadge status="warn" title={recallTitle(replay)}>{ready.text}</StatusBadge>)}
         </div>
         {replayErr && <FlashBox kind="err">{replayErr}</FlashBox>}
         {replay && (
           <>
             <div className="table-wrap">
-              <table {...famDt.tableProps}>
-                <DataTableColgroup dt={famDt} />
-                <DataTableHead dt={famDt} />
-                <tbody>
-                  {famDt.sortedRows.length === 0 ? <DataTableState dt={famDt} kind="empty" message="Bu pencerede bildirim yok" /> : famDt.sortedRows.map((f, i) => {
-                    const red = reductionPct(f.sentBefore, f.wouldSendAfter);
-                    const holds = Object.entries(f.holds ?? {}).sort((a, b) => b[1] - a[1]);
-                    return (
-                      <tr key={f.family} {...famDt.rowProps(i)}>
-                        <DataTableCell dt={famDt} col="family" row={f} value={FAMILY_TR[f.family] ?? f.family} />
-                        <DataTableCell dt={famDt} col="opened" row={f} value={f.opened} />
-                        <DataTableCell dt={famDt} col="sentBefore" row={f} value={f.sentBefore} />
-                        <DataTableCell dt={famDt} col="wouldSendAfter" row={f} value={f.wouldSendAfter} />
-                        <DataTableCell dt={famDt} col="reduction" row={f} value={red == null ? '' : `%${red}`} />
-                        <DataTableCell dt={famDt} col="holds" row={f}
-                          value={holds.map(([k, n]) => `${holdLabel(k)} ${n}`).join(' · ')}
-                          title={holds.map(([k, n]) => `${k}: ${n}`).join('\n') || undefined} />
-                        <DataTableCell dt={famDt} col="noiseMarked" row={f} value={f.noiseMarked} />
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+              <DataTable<NotifyReplayFamily>
+                storageKey="notify-replay-families" columns={FAMILY_COLS} rows={replay.families ?? []}
+                sort={{ initial: { id: 'sentBefore', dir: 'desc' } }}
+                getRowKey={f => f.family}
+                state={{ kind: 'empty', message: 'Bu pencerede bildirim yok' }}
+                renderCell={familyCell} />
             </div>
             {replay.recall.held > 0 && (
-              <div className="np-recall" role="alert">
+              <div className="mt-2.5 text-[length:var(--fs-sm)] text-(--text)" role="alert">
                 <b>Yeni barın tutacağı gerçek olaylar:</b>
-                <ul>
+                <ul className={LIST}>
                   {replay.recall.cases.slice(0, 20).map(c => (
                     <li key={c.id}>{c.headline} — {c.priority} · {holdLabel(c.hold)}{c.reason === 'confirmed_case' ? ' · onaylı vaka' : ' · “Gerçek problem” işareti'}</li>
                   ))}
@@ -231,7 +241,7 @@ export function NotifyPolicyTab() {
             : (
               <>
                 <div className="field-hint">{digest.items.length} bekleyen kalem{digest.lastSlot ? ` · son özet ${digest.lastSlot}` : ''}</div>
-                <ul className="np-digest">
+                <ul className={LIST}>
                   {digest.items.slice(0, 20).map(it => (
                     <li key={it.signature}>{it.headline} — {it.impact}{it.count > 1 ? ` (×${it.count})` : ''}</li>
                   ))}

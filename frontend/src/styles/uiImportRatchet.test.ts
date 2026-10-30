@@ -79,17 +79,17 @@ export function atomsImported(src: string, file: string): Set<string> {
 // DisclosureButton +1 taşınan PageControls'ten). R9: 902 → 904 (coremetry/
 // DataTable sarmalayıcısının iki dosyası ui/DataTable'ı içe aktarıyor).
 const CEILINGS: Record<string, number> = {
-  Button: 197, // Faz 2 dilim 1 R7: 209 → 207 (Remote Cluster); etkileşim P2: 207 → 206 (⌘K); R8: 206 → 197
+  Button: 191, // Faz 2 dilim 1 R7: 209 → 207 (Remote Cluster); etkileşim P2: 207 → 206 (⌘K); R8: 206 → 197; R9: 197 → 191
   // v0.10.1617 (R9): 126 → 128 — coremetry/DataTable dondurulmuş API'nin Faz 1
   // gövdesi ui/DataTable'ı SARIYOR (plan §6: "thin wrapper over today's
   // code"): DataTable.tsx (gövde) + types.ts (bugünkü tiplerin yeniden dışa
   // aktarımı). Benimseme değil, halef; gövde Traces diliminde değişince düşer.
-  DataTable: 124, // Faz 2 dilim 1 R7: 128 → 127 (SpanClusterValuesPanel); R8: 127 → 124
+  DataTable: 121, // Faz 2 dilim 1 R7: 128 → 127 (SpanClusterValuesPanel); R8: 127 → 124; R9: 124 → 121
   Badge: 58, // R7: 63 → 61; CoSRE 2b B1: 61 → 60 (CosreV2StatusLine → coremetry Field); R8: 60 → 58
   IconButton: 50,
-  Field: 31, // R7: 37 → 36; R8: 36 → 31
+  Field: 30, // R7: 37 → 36; R8: 36 → 31; R9: 31 → 30
   Chip: 36,
-  ConfirmDialog: 34, // R8: 35 → 34
+  ConfirmDialog: 31, // R8: 35 → 34; R9: 34 → 31
   SegmentedControl: 35,
   // v0.10.1616 (R8): 31 → 32 — ARTIŞ değil TAŞIMA: coremetry/PageControls
   // (ui/'den değişmeden taşındı, karar k) dar ekran "Filtreler (N)"
@@ -110,7 +110,7 @@ const CEILINGS: Record<string, number> = {
   SearchField: 11,
   PanelTitle: 10,
   PriorityBadge: 8,
-  ButtonGroup: 7,
+  ButtonGroup: 6, // Faz 2 dilim 1 R9: 7 → 6
   Tooltip: 6,
   OptionRow: 4,
   EnterHint: 3,

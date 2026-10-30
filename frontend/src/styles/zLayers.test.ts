@@ -80,7 +80,8 @@ describe('MK2 — z merdiveni', () => {
   });
 
   it('iç içe modal dıştakinin üstünde', () => {
-    // ZoomChannelPicker, ChannelModal'ın İÇİNDE açılıyor.
+    // Diyalog içindeki seçici listesi (`.pick-pop[data-layer="over"]`) bu
+    // rung'da. (ZoomChannelPicker/ChannelModal R9'dan beri portal sırasıyla.)
     expect(z('modal-nested')).toBeGreaterThan(z('modal'));
   });
 
@@ -238,10 +239,20 @@ describe('MK2 — yüzey ikili sıraları (kaynak-seviyesi matris)', () => {
   });
 
   it('İç içe modal: ZoomChannelPicker, ChannelModal\'ın ÜSTÜNDE', () => {
-    // Picker fiilen ChannelModal'ın İÇİNDE açılıyor; eşit rung'da olsalar
-    // sıra DOM kumarına kalırdı.
-    above(['pages/settings/ZoomChannelPicker.tsx', 'position: \'fixed\''],
-      ['pages/settings/ChannelModal.tsx', 'position: \'fixed\'']);
+    // Picker fiilen ChannelModal'ın İÇİNDE açılıyor. Faz 2 dilim 1 R9: ikisi
+    // de portal edilmiş coremetry/overlay Dialog — z-index rung'u yok, üst
+    // üste binme PORTAL SIRASIYLA, Esc LIFO. Davranış çivisi
+    // pages/settings/ChannelModal.nested.test.tsx'te (iç diyalog body'de
+    // sonra, ilk Esc yalnız içtekini kapatır); burada iki yüzeyin hâlâ aynı
+    // overlay ailesinde olduğu (biri elle perdeye dönerse sıra yine DOM
+    // kumarına kalır) ve davranış çivisinin yerinde durduğu.
+    for (const f of ['pages/settings/ZoomChannelPicker.tsx', 'pages/settings/ChannelModal.tsx']) {
+      const src = stripTsComments(readFileSync(join(SRC, f), 'utf8'));
+      expect(src, `${f} coremetry/overlay Dialog'u kullanmıyor`).toMatch(/from '@\/components\/coremetry\/overlay'/);
+      expect(src, `${f} elle sabit perde`).not.toMatch(/position:\s*'fixed'/);
+    }
+    const nested = readFileSync(join(SRC, 'pages/settings/ChannelModal.nested.test.tsx'), 'utf8');
+    expect(nested).toContain('DOCUMENT_POSITION_FOLLOWING');
   });
 
   it('CoSRE sohbeti (backdrop=false) zaman-aralığı panelinin ALTINDA', () => {

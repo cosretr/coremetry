@@ -3265,6 +3265,9 @@ button.cosre-cap__row > .row { align-items: flex-start; min-width: 0; }
   font-size: var(--fs-md); text-align: left; user-select: none;
 }
 .pick-pop[data-layer="over"] { z-index: var(--z-modal-nested); }
+/* Faz 2 dilim 1 R9: Radix modal Dialog body'ye pointer-events:none basar;
+   portal'lı Combobox listesi, picker-host diyaloğu açıkken tıklanabilir kalır. */
+:root:has([data-cm-picker-host]) .pick-pop { pointer-events: auto; }
 .pick-head {
   flex: none; padding: var(--sp-1) var(--sp-3) var(--sp-3);
   color: var(--text3); font-size: var(--fs-xs); font-variant-numeric: tabular-nums;
@@ -6275,13 +6278,6 @@ a.idchip__val:hover { color: var(--accent2); text-decoration: underline; }
 .nr-pop { display: flex; flex-direction: column; gap: 10px; padding: 10px 12px; }
 .nr-reasons { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .nr-reason { display: flex; align-items: baseline; gap: 6px; font-size: 12px; cursor: pointer; }
-
-/* v0.10.1533 (Problem standardı R5) — Settings → Bildirim politikası
-   (pages/settings/NotifyPolicyTab.tsx). */
-.np-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px 16px; }
-.np-sub { font-size: 13px; font-weight: 600; margin: 16px 0 8px; }
-.np-recall { margin-top: 10px; font-size: 12px; color: var(--text); }
-.np-recall ul, .np-digest { margin: 6px 0 0; padding-left: 18px; font-size: 12px; }
 
 /* v0.10.1535 (operatör-raporlu: "Yeşil olabilir, online user statüsü yeşildi
    gri oldu, beğenmedim") — kullanıcı varlığı (Users "● online") K5 nötr

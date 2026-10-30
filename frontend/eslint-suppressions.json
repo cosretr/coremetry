@@ -524,11 +524,6 @@
       "count": 6
     }
   },
-  "src/pages/settings/ChannelModal.tsx": {
-    "ui/no-raw-element": {
-      "count": 29
-    }
-  },
   "src/pages/settings/ContextPackPanel.tsx": {
     "ui/no-raw-element": {
       "count": 2
@@ -599,19 +594,9 @@
       "count": 2
     }
   },
-  "src/pages/settings/SmtpTab.tsx": {
-    "ui/no-raw-element": {
-      "count": 9
-    }
-  },
   "src/pages/settings/SsoTab.tsx": {
     "ui/no-raw-element": {
       "count": 10
-    }
-  },
-  "src/pages/settings/TeamRoutingTab.tsx": {
-    "ui/no-raw-element": {
-      "count": 7
     }
   },
   "src/pages/settings/WikiKnowledgeSection.tsx": {
@@ -620,11 +605,6 @@
     }
   },
   "src/pages/settings/WikiTestSearch.tsx": {
-    "ui/no-raw-element": {
-      "count": 1
-    }
-  },
-  "src/pages/settings/ZoomChannelPicker.tsx": {
     "ui/no-raw-element": {
       "count": 1
     }

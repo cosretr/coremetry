@@ -1,7 +1,10 @@
 import { useRef, useState } from 'react';
 import { rowActivation } from '@/lib/a11y'; // v0.10.455 (dış denetim D3 dilim 3)
-import { Button } from '@/components/ui';
-import { DataTableState, type DataTableStateStaticProps } from '@/components/ui/DataTable';
+import { Button } from '@/components/shadcn/button';
+import { Input } from '@/components/shadcn/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/shadcn/table';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/coremetry/overlay';
+import { DataTableStateRow, type DataTableStateStaticProps } from '@/components/coremetry/DataTable';
 
 // ZoomChannel mirrors the backend ZoomChannel struct.
 interface ZoomChannelRow {
@@ -18,6 +21,16 @@ interface ZoomChannelRow {
 // hundreds of channels, so the modal includes an inline search
 // box that filters by name / id / JID as the operator types.
 // Click a row to inject the JID into the form.
+//
+// Faz 2 dilim 1 R9 (D8): elle yazılmış sabit perdeli kutu → coremetry/
+// overlay Dialog (role=dialog + başlık, odak tuzağı, Esc lib/escLayer
+// yığınından). ChannelModal'ın İÇİNDE açılır; iki diyalog da body portalı,
+// üst üste binme PORTAL SIRASIYLA (sonra açılan üstte) ve Esc LIFO —
+// içteki kapanır, dıştaki açık kalır (ChannelModal.nested.test.tsx).
+// Satır içi stil yok; mevcut "Close" düğmesi başlıkta kaldığı için
+// üretilen × basılmaz (iki kapat düğmesi olmasın).
+const BARE_INPUT = 'h-8 bg-field border-(--border-control) text-[length:var(--fs-md)] md:text-[length:var(--fs-md)] dark:bg-field';
+
 export function ZoomChannelPicker({
   existingChannelId,
   accountId, clientId, clientSecret,
@@ -133,100 +146,87 @@ export function ZoomChannelPicker({
 
   return (
     <>
-      <Button variant="secondary"
+      <Button variant="outline"
         disabled={!canFetch}
         title={canFetch
           ? 'List channels via the configured S2S OAuth app'
           : 'Enter Account ID / Client ID / Client Secret (or save first), then try again'}
         onClick={onOpen}
-        style={{ whiteSpace: 'nowrap' }}>
+        className="whitespace-nowrap">
         List my channels…
       </Button>
-      {open && (
-        <div onClick={() => setOpen(false)} style={{
-          position: 'fixed', inset: 0, background: 'var(--backdrop)',
-          display: 'grid', placeItems: 'center', zIndex: 'var(--z-modal-nested)',
-        }}>
-          {/* v0.10.933 (tablo standardı T2) — diyalog yüzeyi bg2 değil bg1
-              (.modal-dialog ile aynı modal yüzeyi): paylaşılan satır hover'ı
-              bg2, bg2 zeminde görünmüyordu. */}
-          <div onClick={e => e.stopPropagation()} style={{
-            width: 720, maxWidth: '94vw', maxHeight: '82vh',
-            display: 'flex', flexDirection: 'column',
-            padding: 18, borderRadius: 8,
-            background: 'var(--bg1)', border: '1px solid var(--border)',
-          }}>
-            <div style={{
-              display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 10,
-            }}>
-              <div style={{ fontSize: 14, fontWeight: 700 }}>
-                Pick a Zoom channel
-              </div>
-              <span style={{ fontSize: 11, color: 'var(--text3)' }}>
-                {rows ? `${filtered.length} of ${rows.length}` : ''}
-              </span>
-              <span style={{ marginLeft: 'auto' }}>
-                <Button variant="secondary" size="sm" disabled={busy}
-                  onClick={load} style={{ marginRight: 8 }}>
-                  Refresh
-                </Button>
-                <Button variant="secondary" onClick={() => setOpen(false)}>Close</Button>
-              </span>
+      <Dialog open={open} onOpenChange={setOpen}>
+        {/* v0.10.933 (tablo standardı T2) — diyalog yüzeyi bg2 değil bg1
+            (.modal-dialog ile aynı modal yüzeyi): paylaşılan satır hover'ı
+            bg2, bg2 zeminde görünmüyordu. */}
+        <DialogContent showCloseButton={false} aria-describedby={undefined}
+          className="flex max-h-[82vh] w-[720px] max-w-[94vw] flex-col gap-0 rounded-lg border-(--border) bg-(--bg1) p-[18px] sm:max-w-[94vw]">
+          <DialogHeader className="mb-2.5 flex-row items-baseline gap-2">
+            <DialogTitle className="text-[length:var(--fs-lg)] font-bold">
+              Pick a Zoom channel
+            </DialogTitle>
+            <span className="text-[length:var(--fs-xs)] text-(--text3)">
+              {rows ? `${filtered.length} of ${rows.length}` : ''}
+            </span>
+            <span className="ml-auto flex gap-2">
+              <Button variant="outline" size="sm" disabled={busy} onClick={load}>
+                Refresh
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setOpen(false)}>Close</Button>
+            </span>
+          </DialogHeader>
+
+          <Input ref={searchRef} value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Filter by name, ID, or JID…" aria-label="Filter channels"
+            autoFocus
+            className={`mb-2.5 ${BARE_INPUT}`} />
+
+          {busy && showRows && <div className="text-[length:var(--fs-sm)] text-(--text3)">Loading channels…</div>}
+          {err && hasRows && (
+            <div className="mb-2 rounded-sm border border-status-critical-border bg-status-critical-bg px-2 py-1.5 text-[length:var(--fs-xs)] text-status-critical">
+              {err}
             </div>
+          )}
 
-            <input ref={searchRef} value={search} onChange={e => setSearch(e.target.value)}
-              placeholder="Filter by name, ID, or JID…"
-              autoFocus
-              style={{ marginBottom: 10, fontSize: 13 }} />
-
-            {busy && showRows && <div style={{ fontSize: 12, color: 'var(--text3)' }}>Loading channels…</div>}
-            {err && hasRows && (
-              <div style={{
-                fontSize: 11, color: 'var(--err)', padding: '6px 8px',
-                borderRadius: 4, marginBottom: 8,
-                background: 'color-mix(in srgb, var(--err) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--err) 30%, transparent)',
-              }}>{err}</div>
-            )}
-
-            {/* v0.10.977 — tablo standardı T10: iç kaydırmalı kap paylaşılan
-                `table-wrap is-scroll` (tek çerçeve; yapışkan başlık, opak zemini ve
-                alt çizgisi `thead th` kuralından). Elle çizilen kenarlık ve satır
-                içi yapışkan başlık düştü. Yükseklik yine diyaloğun flex sütunundan
-                (maxHeight 82vh): `flex: 1` kalır, maxHeight yok. */}
-            <div className="table-wrap is-scroll" style={{ flex: 1 }}>
-              {/* v0.10.942 — statik tablo: seçici liste, satır tıkı JID'i forma yazar (T1). */}
-              <table>
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Type</th>
-                    <th>JID</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {/* v0.10.967 (P-2) — statik tablonun durum satırı; colSpan = thead'deki 3 <th>. */}
-                  {!showRows ? <DataTableState colSpan={3} {...listState} /> : filtered.map(r => (
-                    <tr key={r.id || r.jid}
-                      {...rowActivation(() => { onPick(r.jid); setOpen(false); })}
-                      className={filtered.length > 100 ? 'cv-row' : undefined}>
-                      <td className="cell-strong">{r.name || '(unnamed)'}</td>
-                      <td className="mono cell-faint">{channelType(r.type)}</td>
-                      <td className="mono cell-muted">{r.jid}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 8 }}>
-              The bot user behind your S2S OAuth app must be a member of a channel
-              for it to appear in this list. If a channel is missing, add the bot
-              from the Zoom web UI (channel settings → People → Add) and click
-              Refresh.
-            </div>
+          {/* v0.10.977 — tablo standardı T10: iç kaydırmalı kap paylaşılan
+              `table-wrap is-scroll` (tek çerçeve; yapışkan başlık, opak zemini ve
+              alt çizgisi `thead th` kuralından). Yükseklik diyaloğun flex
+              sütunundan (max-h 82vh): `flex-1`, maxHeight yok. R9: shadcn
+              Table'ın kendi kabı kaydırma kabı OLMASIN (overflow-visible) —
+              yoksa yapışkan başlık kaymayan iç kaba bağlanırdı. */}
+          <div className="table-wrap is-scroll min-h-0 flex-1 [&>div]:overflow-visible">
+            {/* v0.10.942 — statik tablo: seçici liste, satır tıkı JID'i forma yazar (T1). */}
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>JID</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {/* v0.10.967 (P-2) — statik tablonun durum satırı; colSpan = thead'deki 3 <th>. */}
+                {!showRows ? <DataTableStateRow colSpan={3} {...listState} /> : filtered.map(r => (
+                  <TableRow key={r.id || r.jid}
+                    {...rowActivation(() => { onPick(r.jid); setOpen(false); })}
+                    className={filtered.length > 100 ? 'cv-row' : undefined}>
+                    <TableCell className="cell-strong">{r.name || '(unnamed)'}</TableCell>
+                    <TableCell className="mono cell-faint">{channelType(r.type)}</TableCell>
+                    <TableCell className="mono cell-muted">{r.jid}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </div>
-        </div>
-      )}
+
+          <div className="mt-2 text-[length:var(--fs-xs)] text-(--text3)">
+            The bot user behind your S2S OAuth app must be a member of a channel
+            for it to appear in this list. If a channel is missing, add the bot
+            from the Zoom web UI (channel settings → People → Add) and click
+            Refresh.
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

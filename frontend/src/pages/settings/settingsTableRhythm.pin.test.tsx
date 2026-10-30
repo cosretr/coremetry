@@ -72,13 +72,16 @@ describe('ayar tabloları taban ritminde (v0.10.977)', () => {
 
   it('ZoomChannelPicker: kap table-wrap is-scroll (flex: 1), <thead> ve <th> satır içi stil taşımaz', () => {
     const src = read('ZoomChannelPicker.tsx');
-    expect(src).toContain('<div className="table-wrap is-scroll" style={{ flex: 1 }}>');
+    // Faz 2 dilim 1 R9: `flex: 1` satır içi stil → `flex-1` utility; tablo
+    // shadcn Table (TableHeader/TableHead), satır içi stil yok.
+    expect(src).toMatch(/<div className="table-wrap is-scroll [^"]*\bflex-1\b[^"]*">/);
     expect(withStyle(src, 'thead').map(t => t.line)).toEqual([]);
     expect(withStyle(src, 'th').map(t => t.line)).toEqual([]);
+    expect(withStyle(src, 'TableHeader').map(t => t.line)).toEqual([]);
+    expect(withStyle(src, 'TableHead').map(t => t.line)).toEqual([]);
     expect(src).not.toMatch(/overflowY:\s*'auto'/);
-    // zLayers çivisi: modal perdesi hâlâ `position: 'fixed'` (sınıfa devredilen
-    // başlık yapışkanlığı onu değiştirmez).
-    expect(src).toContain("position: 'fixed'");
+    // zLayers çivisi R9'da portal sırasına geçti (ChannelModal.nested.test).
+    expect(src).toMatch(/from '@\/components\/coremetry\/overlay'/);
   });
 });
 
@@ -165,11 +168,14 @@ describe('ZoomChannelPicker — liste kabı tek çerçeve (DOM)', () => {
     });
     await flush();
 
-    const table = el.querySelector('table')!;
-    const wrap = table.parentElement!;
+    // R9: seçici portal edilmiş Dialog (tablo body'de); shadcn Table kendi
+    // kabını bastığı için çerçeve tablonun en yakın `.table-wrap` atası.
+    void el;
+    const table = document.body.querySelector('[role="dialog"] table')!;
+    const wrap = table.closest<HTMLElement>('.table-wrap')!;
     expect(wrap.classList.contains('table-wrap')).toBe(true);
     expect(wrap.classList.contains('is-scroll')).toBe(true);
-    expect(wrap.style.flex, 'yükseklik flex sütunundan').not.toBe('');
+    expect(wrap.classList.contains('flex-1'), 'yükseklik flex sütunundan').toBe(true);
     expect(wrap.style.border, 'elle kenarlık').toBe('');
     expect(table.querySelector('thead')!.getAttribute('style')).toBeNull();
     for (const th of Array.from(table.querySelectorAll('thead th'))) expect(th.getAttribute('style')).toBeNull();

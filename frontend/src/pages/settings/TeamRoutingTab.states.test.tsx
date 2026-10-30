@@ -16,7 +16,8 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { ConfirmProvider } from '@/components/ui/ConfirmDialog';
+import '@/test/radixJsdom'; // R9: Radix Checkbox (ResizeObserver)
+import { ConfirmGate } from '@/components/coremetry/Confirm'; // R9: sekme coremetry useConfirm
 import type { TeamContacts } from '@/lib/types';
 
 interface FakeCatalog {
@@ -58,7 +59,7 @@ async function mount(): Promise<HTMLElement> {
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
-  await act(async () => { root!.render(<ConfirmProvider><TeamRoutingTab /></ConfirmProvider>); });
+  await act(async () => { root!.render(<ConfirmGate><TeamRoutingTab /></ConfirmGate>); });
   await act(async () => { await new Promise(r => setTimeout(r, 0)); });
   return host;
 }
@@ -157,6 +158,6 @@ describe('TeamRoutingTab — boş hâl tablonun içinde (P-2)', () => {
   it('kaynak: statik durum satırı DataTableState, elle yazılmış data-dt-state yok', () => {
     const src = readFileSync(resolve(__dirname, './TeamRoutingTab.tsx'), 'utf8');
     expect(src).not.toMatch(/data-dt-state=/);
-    expect(src.match(/<DataTableState colSpan=\{2\}/g) ?? []).toHaveLength(1);
+    expect(src.match(/<DataTableStateRow colSpan=\{2\}/g) ?? []).toHaveLength(1); // R9: coremetry DataTableStateRow (aynı statik durum satırı)
   });
 });

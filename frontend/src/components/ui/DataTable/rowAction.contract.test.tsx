@@ -119,7 +119,9 @@ describe('T2 — satır yardımcıları işaret basar', () => {
      zeminli diyalogda görünmez. Kanal seçici modal yüzeyi bg1. */
   it('ZoomChannelPicker diyalog yüzeyi bg1 (satır hover görünür)', () => {
     const src = readFileSync(resolve(__dirname, '../../../pages/settings/ZoomChannelPicker.tsx'), 'utf8');
-    expect(src).toContain("background: 'var(--bg1)', border: '1px solid var(--border)'");
+    // Faz 2 dilim 1 R9: yüzey coremetry Dialog'un DialogContent'i, renk utility'de.
+    expect(src).toMatch(/<DialogContent[^>]*className="[^"]*\bbg-\(--bg1\)/);
+    expect(src).not.toContain('bg-(--bg2)');
     expect(src).not.toContain("background: 'var(--bg2)'");
   });
 

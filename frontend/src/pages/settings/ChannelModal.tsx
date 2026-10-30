@@ -1,19 +1,52 @@
-import { useMemo, useState, type FormEvent } from 'react';
-import { Button } from '@/components/ui';
+import { useId, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { Button } from '@/components/shadcn/button';
 import { Combobox } from '@/components/Combobox';
+import { Field, SelectField, TextareaField, CheckboxField } from '@/components/coremetry/Field';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/coremetry/overlay';
 import { api } from '@/lib/api';
 import type { NotificationChannel, ChannelType, NotifyKind } from '@/lib/types';
 import { NOTIFY_KIND_OPTIONS, normalizeKinds, toggleKind } from '@/lib/notifyKinds';
-import { Field, Row, FlashBox, humanize } from './shared';
+import { FlashBox, humanize } from './shared';
 import { ZoomChannelPicker } from './ZoomChannelPicker';
 import { useServicesMetadata } from '@/lib/queries';
 import { teamOptionsCI } from '@/lib/teamOptions';
+
+// Faz 2 dilim 1 R9 (D8): elle yazılmış sabit perdeli kutu → coremetry/overlay
+// Dialog — role=dialog + başlık, × kapat, odak tuzağı, kaydırma kilidi, Esc
+// lib/escLayer yığınından (iç içe ZoomChannelPicker önce kapanır). Ortada
+// diyalog + aynı alan sırası (plan Q-IA3); coremetry/Field ailesi, inline
+// stil yok. Secret sözleşmesi: ChannelModal.secret.test.tsx.
+//
+// Combobox'ın öneri listesi (PickerPopover) body'ye PORTAL edilir, yani
+// Radix'in gözünde diyaloğun DIŞI: (1) o listeye basmak "dışarı tık" sayılıp
+// diyaloğu kapatmasın diye dışarı-etkileşimi `.pick-pop` için yutuyoruz;
+// (2) modal diyalog body'ye pointer-events:none basar → bu diyalog açıkken
+// `.pick-pop` pointer-events:auto alır (globals.css `data-cm-picker-host` kuralı).
+const ROW = 'mb-3 flex flex-wrap items-start gap-3';
+const LABEL = 'mb-1 text-[length:var(--fs-sm)] leading-tight text-(--text2)';
+const NOTE = 'mt-1 text-[length:var(--fs-xs)] leading-normal text-(--text3)';
+const CODE = 'font-mono';
+
+function keepPickerClicks(e: { target: EventTarget | null; preventDefault(): void }) {
+  if (e.target instanceof Element && e.target.closest('.pick-pop')) e.preventDefault();
+}
+
+/** Combobox atomu id almıyor: R7 emsali, etiket onu SARAR (label ↔ girdi bağı). */
+function LabeledCombobox({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label className="mb-3 block">
+      <div className={LABEL}>{label}</div>
+      {children}
+    </label>
+  );
+}
 
 export function ChannelModal({ initial, onClose, onSaved }: {
   initial: NotificationChannel | null;
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const kindsLabelId = useId();
   const [name, setName] = useState(initial?.name ?? '');
   const [type, setType] = useState<ChannelType>(initial?.type ?? 'email');
   const [recipients, setRecipients] = useState((initial?.config.recipients ?? []).join(', '));
@@ -160,182 +193,124 @@ export function ChannelModal({ initial, onClose, onSaved }: {
   };
 
   return (
-    <div onClick={onClose} style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
-      display: 'grid', placeItems: 'center', zIndex: 'var(--z-modal)',
-    }}>
+    <Dialog open onOpenChange={o => { if (!o) onClose(); }}>
       {/* v0.9.988 (D6.2) — görüntü alanına kelepçeli genişlik + dikey
           taşma. Kanal formu en uzun diyalog (tip seçimi yeni alanlar
           açıyor); telefonda hem yanlardan taşıyor hem alt kısmı
           erişilemez kalıyordu. */}
-      <div onClick={e => e.stopPropagation()} style={{
-        width: 'min(460px, calc(100vw - 32px))', maxHeight: 'calc(100vh - 32px)', overflow: 'auto',
-        padding: 24, borderRadius: 8,
-        background: 'var(--bg2)', border: '1px solid var(--border)',
-      }}>
-        <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 14 }}>
-          {initial ? `Edit channel — ${initial.name}` : 'New channel'}
-        </div>
+      <DialogContent aria-describedby={undefined}
+        onPointerDownOutside={keepPickerClicks} onInteractOutside={keepPickerClicks}
+        className="block max-h-[calc(100vh-32px)] w-[min(460px,calc(100vw-32px))] max-w-none overflow-auto rounded-lg border-(--border) bg-(--bg2) p-6 sm:max-w-none" data-cm-picker-host="">
+        <DialogHeader className="mb-3.5 pr-6">
+          <DialogTitle className="text-[length:var(--fs-lg)] font-semibold">
+            {initial ? `Edit channel — ${initial.name}` : 'New channel'}
+          </DialogTitle>
+        </DialogHeader>
         <form onSubmit={submit}>
-          <Field label="Name">
-            <input required autoFocus value={name}
-              onChange={e => setName(e.target.value)} style={{ width: '100%' }} />
-          </Field>
-          <Row>
-            <Field label="Type" flex={1}>
-              <select value={type} onChange={e => setType(e.target.value as ChannelType)}>
-                <option value="email">Email</option>
-                <option value="slack">Slack</option>
-                <option value="mattermost">Mattermost</option>
-                <option value="teams">Microsoft Teams</option>
-                <option value="zoomchat">Zoom Chat</option>
-                <option value="webhook">Webhook (generic JSON POST)</option>
-                <option value="whatsapp">WhatsApp (via Twilio)</option>
-              </select>
-            </Field>
-            <Field label="Min severity" flex={1}>
-              <select value={minSeverity}
-                onChange={e => setMinSeverity(e.target.value as 'info' | 'warning' | 'critical')}>
-                <option value="info">Info (every problem)</option>
-                <option value="warning">Warning</option>
-                <option value="critical">Critical only</option>
-              </select>
-            </Field>
-          </Row>
+          <Field className="mb-3" label="Name" required autoFocus value={name}
+            onChange={e => setName(e.target.value)} />
+          <div className={ROW}>
+            <SelectField className="flex-1" label="Type" value={type} onChange={e => setType(e.target.value as ChannelType)}>
+              <option value="email">Email</option>
+              <option value="slack">Slack</option>
+              <option value="mattermost">Mattermost</option>
+              <option value="teams">Microsoft Teams</option>
+              <option value="zoomchat">Zoom Chat</option>
+              <option value="webhook">Webhook (generic JSON POST)</option>
+              <option value="whatsapp">WhatsApp (via Twilio)</option>
+            </SelectField>
+            <SelectField className="flex-1" label="Min severity" value={minSeverity}
+              onChange={e => setMinSeverity(e.target.value as 'info' | 'warning' | 'critical')}>
+              <option value="info">Info (every problem)</option>
+              <option value="warning">Warning</option>
+              <option value="critical">Critical only</option>
+            </SelectField>
+          </div>
 
           {type === 'email' && (
-            <Field label="Recipients (comma-separated)">
-              <input required value={recipients} placeholder="oncall@acme.com, sre@acme.com"
-                onChange={e => setRecipients(e.target.value)} style={{ width: '100%' }} />
-            </Field>
+            <Field className="mb-3" label="Recipients (comma-separated)" required value={recipients}
+              placeholder="oncall@acme.com, sre@acme.com" onChange={e => setRecipients(e.target.value)} />
           )}
           {type === 'slack' && (
-            <Field label="Slack incoming webhook URL">
-              <input required value={webhookUrl} placeholder="https://hooks.slack.com/services/T.../B.../..."
-                onChange={e => setWebhookUrl(e.target.value)} style={{ width: '100%' }} />
-            </Field>
+            <Field className="mb-3" label="Slack incoming webhook URL" required value={webhookUrl}
+              placeholder="https://hooks.slack.com/services/T.../B.../..." onChange={e => setWebhookUrl(e.target.value)} />
           )}
           {type === 'mattermost' && (
-            <Field label="Mattermost incoming webhook URL">
-              <input required value={webhookUrl} placeholder="https://your-mattermost.example.com/hooks/..."
-                onChange={e => setWebhookUrl(e.target.value)} style={{ width: '100%' }} />
-            </Field>
+            <Field className="mb-3" label="Mattermost incoming webhook URL" required value={webhookUrl}
+              placeholder="https://your-mattermost.example.com/hooks/..." onChange={e => setWebhookUrl(e.target.value)} />
           )}
           {type === 'teams' && (
-            <Field label="Microsoft Teams incoming webhook URL">
-              <input required value={webhookUrl}
-                placeholder="https://outlook.office.com/webhook/..."
-                onChange={e => setWebhookUrl(e.target.value)} style={{ width: '100%' }} />
-            </Field>
+            <Field className="mb-3" label="Microsoft Teams incoming webhook URL" required value={webhookUrl}
+              placeholder="https://outlook.office.com/webhook/..." onChange={e => setWebhookUrl(e.target.value)} />
           )}
           {type === 'zoomchat' && (
             <>
-              <div style={{
-                fontSize: 11, color: 'var(--text2)', lineHeight: 1.6,
-                padding: '8px 10px', borderRadius: 4,
-                background: 'var(--bg2)', border: '1px solid var(--border)',
-                marginBottom: 8,
-              }}>
+              <div className="mb-2 rounded-sm border border-(--border) bg-(--bg2) px-2.5 py-2 text-[length:var(--fs-xs)] leading-relaxed text-(--text2)">
                 Server-to-Server OAuth flow. Create a "Server-to-Server OAuth" app in the
                 Zoom App Marketplace with the <code>chat_message:write:admin</code> scope,
                 then paste its credentials below. Coremetry exchanges them for an access
                 token (~1h cache) and posts to Zoom's REST API.
               </div>
-              <Row>
-                <Field label="Account ID" flex={1}>
-                  <input required value={zoomAccountId}
-                    placeholder="ABC1234d-XYZ..."
-                    onChange={e => setZoomAccountId(e.target.value)} style={{ width: '100%' }} />
-                </Field>
-                <Field label="Client ID" flex={1}>
-                  <input required value={zoomClientId}
-                    placeholder="from the S2S OAuth app"
-                    onChange={e => setZoomClientId(e.target.value)} style={{ width: '100%' }} />
-                </Field>
-              </Row>
-              <Field label={initial
-                  ? 'Client Secret (leave empty to keep saved value)'
-                  : 'Client Secret'}>
-                <input required={!initial} value={zoomClientSecret} type="password"
-                  placeholder={initial ? '•••••••• (unchanged)' : 'never echoed back after save'}
-                  onChange={e => setZoomClientSecret(e.target.value)}
-                  style={{ width: '100%' }} />
-              </Field>
-              <Field label="Channel ID (JID) — target chat channel">
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <input value={zoomChannelId}
-                    placeholder='e.g. "1234567890abcdef@xmpp.zoom.us" — copy from Zoom channel info'
-                    onChange={e => setZoomChannelId(e.target.value)} style={{ flex: 1 }} />
-                  <ZoomChannelPicker
-                    existingChannelId={initial?.id}
-                    accountId={zoomAccountId}
-                    clientId={zoomClientId}
-                    clientSecret={zoomClientSecret}
-                    oauthBaseUrl={zoomOAuthBaseURL}
-                    apiBaseUrl={zoomAPIBaseURL}
-                    insecureSkipVerify={zoomSkipVerify}
-                    onPick={jid => setZoomChannelId(jid)} />
-                </div>
-              </Field>
-              <Field label="Or DM contact email (fallback if Channel ID is empty)">
-                <input value={zoomToContact} type="email"
-                  placeholder="oncall@example.com"
-                  onChange={e => setZoomToContact(e.target.value)} style={{ width: '100%' }} />
-              </Field>
+              <div className={ROW}>
+                <Field className="flex-1" label="Account ID" required value={zoomAccountId}
+                  placeholder="ABC1234d-XYZ..." onChange={e => setZoomAccountId(e.target.value)} />
+                <Field className="flex-1" label="Client ID" required value={zoomClientId}
+                  placeholder="from the S2S OAuth app" onChange={e => setZoomClientId(e.target.value)} />
+              </div>
+              <Field className="mb-3"
+                label={initial ? 'Client Secret (leave empty to keep saved value)' : 'Client Secret'}
+                required={!initial} value={zoomClientSecret} type="password"
+                placeholder={initial ? '•••••••• (unchanged)' : 'never echoed back after save'}
+                onChange={e => setZoomClientSecret(e.target.value)} />
+              <div className="mb-3 flex items-end gap-1.5">
+                <Field className="min-w-0 flex-1" label="Channel ID (JID) — target chat channel" value={zoomChannelId}
+                  placeholder='e.g. "1234567890abcdef@xmpp.zoom.us" — copy from Zoom channel info'
+                  onChange={e => setZoomChannelId(e.target.value)} />
+                <ZoomChannelPicker
+                  existingChannelId={initial?.id}
+                  accountId={zoomAccountId}
+                  clientId={zoomClientId}
+                  clientSecret={zoomClientSecret}
+                  oauthBaseUrl={zoomOAuthBaseURL}
+                  apiBaseUrl={zoomAPIBaseURL}
+                  insecureSkipVerify={zoomSkipVerify}
+                  onPick={jid => setZoomChannelId(jid)} />
+              </div>
+              <Field className="mb-3" label="Or DM contact email (fallback if Channel ID is empty)" value={zoomToContact} type="email"
+                placeholder="oncall@example.com" onChange={e => setZoomToContact(e.target.value)} />
               {/* Optional API + OAuth host overrides — proxy /
                   sandbox use cases. Leave empty for public Zoom. */}
-              <details style={{ marginTop: 4 }}>
-                <summary style={{ cursor: 'pointer', fontSize: 12, color: 'var(--text2)' }}>
+              <details className="mt-1">
+                <summary className="cursor-pointer text-[length:var(--fs-sm)] text-(--text2)">
                   Advanced: proxy / sandbox host overrides
                 </summary>
-                <div style={{ paddingTop: 8 }}>
-                  <Row>
-                    <Field label="API base URL (chat messages)" flex={1}>
-                      <input value={zoomAPIBaseURL}
-                        placeholder="https://api.zoom.us (default)"
-                        onChange={e => setZoomAPIBaseURL(e.target.value)} style={{ width: '100%' }} />
-                    </Field>
-                    <Field label="OAuth base URL (token exchange)" flex={1}>
-                      <input value={zoomOAuthBaseURL}
-                        placeholder="https://zoom.us (default)"
-                        onChange={e => setZoomOAuthBaseURL(e.target.value)} style={{ width: '100%' }} />
-                    </Field>
-                  </Row>
-                  <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4, lineHeight: 1.5 }}>
+                <div className="pt-2">
+                  <div className={ROW}>
+                    <Field className="flex-1" label="API base URL (chat messages)" value={zoomAPIBaseURL}
+                      placeholder="https://api.zoom.us (default)" onChange={e => setZoomAPIBaseURL(e.target.value)} />
+                    <Field className="flex-1" label="OAuth base URL (token exchange)" value={zoomOAuthBaseURL}
+                      placeholder="https://zoom.us (default)" onChange={e => setZoomOAuthBaseURL(e.target.value)} />
+                  </div>
+                  <div className={NOTE}>
                     Banks routing outbound traffic through a corporate gateway can point both
                     fields at their proxy. Endpoint paths stay the same
                     (<code>/v2/chat/users/me/messages</code> and <code>/oauth/token</code>) —
                     only the host changes. Leave empty to hit Zoom's public hosts.
                   </div>
-                  <label style={{
-                    display: 'flex', alignItems: 'flex-start', gap: 8,
-                    marginTop: 12, fontSize: 12, cursor: 'pointer',
-                  }}>
-                    <input type="checkbox"
-                      checked={zoomSkipVerify}
-                      onChange={e => setZoomSkipVerify(e.target.checked)}
-                      style={{ marginTop: 2 }} />
-                    <span>
-                      <span style={{ fontWeight: 600 }}>Skip TLS certificate verification</span>
-                      <span style={{ display: 'block', color: 'var(--text3)', fontSize: 11, marginTop: 2, lineHeight: 1.5 }}>
-                        Disables certificate trust checks on the OAuth + chat calls. Turn this on
-                        only when the corporate proxy fronting <code>api.zoom.us</code> terminates
-                        TLS with a private CA the pod doesn't trust. Equivalent to <code>curl -k</code> —
-                        public Zoom hosts should leave it off.
-                      </span>
-                    </span>
-                  </label>
+                  <CheckboxField className="mt-3" checked={zoomSkipVerify} onCheckedChange={setZoomSkipVerify}
+                    label={<span className="font-semibold">Skip TLS certificate verification</span>}
+                    hint={<>
+                      Disables certificate trust checks on the OAuth + chat calls. Turn this on
+                      only when the corporate proxy fronting <code>api.zoom.us</code> terminates
+                      TLS with a private CA the pod doesn't trust. Equivalent to <code>curl -k</code> —
+                      public Zoom hosts should leave it off.
+                    </>} />
                 </div>
               </details>
               {/* Legacy webhook nudge — surfaces when editing a
                   channel that still carries the pre-v0.4.78 shape. */}
               {initial?.config.webhookUrl && !initial?.config.accountId && (
-                <div style={{
-                  fontSize: 11, color: 'var(--warn)', padding: '6px 10px',
-                  borderRadius: 4, background: 'rgba(245,158,11,0.10)',
-                  border: '1px solid rgba(245,158,11,0.30)',
-                  marginTop: 4,
-                }}>
+                <div className="mt-1 rounded-sm border border-status-warn-border bg-status-warn-bg px-2.5 py-1.5 text-[length:var(--fs-xs)] text-status-warn">
                   ⚠ This channel still uses the legacy webhook URL. Fill the fields
                   above and save to migrate; the webhook URL will be cleared.
                 </div>
@@ -344,47 +319,33 @@ export function ChannelModal({ initial, onClose, onSaved }: {
           )}
           {type === 'webhook' && (
             <>
-              <Field label="Webhook URL (raw Problem JSON is POSTed here)">
-                <input required value={url} placeholder="https://your-receiver.example.com/incidents"
-                  onChange={e => setUrl(e.target.value)} style={{ width: '100%' }} />
-              </Field>
-              <Field label="Headers (opsiyonel — satır başına 'Ad: değer'; auth key'ler burada)">
-                <textarea rows={2} value={webhookHeaders}
-                  placeholder={initial ? 'kayıtlı — boş bırakırsan korunur' : 'Authorization: Bearer sk-…'}
-                  onChange={e => setWebhookHeaders(e.target.value)}
-                  spellCheck={false}
-                  className="mono" style={{ width: '100%' }} />
-              </Field>
-              <Field label={'Gövde şablonu (opsiyonel Go template — boş = varsayılan {problem, coremetryUrl} JSON)'}>
-                <textarea rows={4} value={webhookTemplate}
-                  placeholder={'{"service":"{{.Problem.Service}}","severity":"{{.Problem.Severity}}","url":"{{.CoremetryURL}}"}'}
-                  onChange={e => setWebhookTemplate(e.target.value)}
-                  spellCheck={false}
-                  className="mono" style={{ width: '100%' }} />
-              </Field>
+              <Field className="mb-3" label="Webhook URL (raw Problem JSON is POSTed here)" required value={url}
+                placeholder="https://your-receiver.example.com/incidents" onChange={e => setUrl(e.target.value)} />
+              <TextareaField className="mb-3" controlClassName={CODE}
+                label="Headers (opsiyonel — satır başına 'Ad: değer'; auth key'ler burada)"
+                rows={2} value={webhookHeaders}
+                placeholder={initial ? 'kayıtlı — boş bırakırsan korunur' : 'Authorization: Bearer sk-…'}
+                onChange={e => setWebhookHeaders(e.target.value)} spellCheck={false} />
+              <TextareaField className="mb-3" controlClassName={CODE}
+                label={'Gövde şablonu (opsiyonel Go template — boş = varsayılan {problem, coremetryUrl} JSON)'}
+                rows={4} value={webhookTemplate}
+                placeholder={'{"service":"{{.Problem.Service}}","severity":"{{.Problem.Severity}}","url":"{{.CoremetryURL}}"}'}
+                onChange={e => setWebhookTemplate(e.target.value)} spellCheck={false} />
             </>
           )}
           {type === 'whatsapp' && (
             <>
-              <Row>
-                <Field label="Twilio Account SID" flex={1}>
-                  <input required value={twilioSid} placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                    onChange={e => setTwilioSid(e.target.value)} style={{ width: '100%' }} />
-                </Field>
-                <Field label="Auth Token" flex={1}>
-                  <input required type="password" value={twilioToken} placeholder="32-char Auth Token"
-                    onChange={e => setTwilioToken(e.target.value)} style={{ width: '100%' }} />
-                </Field>
-              </Row>
-              <Field label="Sender number (with whatsapp: prefix)">
-                <input required value={waFrom} placeholder="whatsapp:+14155238886 (Twilio sandbox) or your approved number"
-                  onChange={e => setWaFrom(e.target.value)} style={{ width: '100%' }} />
-              </Field>
-              <Field label="Recipient numbers (comma-separated, E.164)">
-                <input required value={waTo} placeholder="+905XXXXXXXXX, +1XXXXXXXXXX"
-                  onChange={e => setWaTo(e.target.value)} style={{ width: '100%' }} />
-              </Field>
-              <p style={{ fontSize: 11, color: 'var(--text3)', marginTop: -4 }}>
+              <div className={ROW}>
+                <Field className="flex-1" label="Twilio Account SID" required value={twilioSid}
+                  placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" onChange={e => setTwilioSid(e.target.value)} />
+                <Field className="flex-1" label="Auth Token" required type="password" value={twilioToken}
+                  placeholder="32-char Auth Token" onChange={e => setTwilioToken(e.target.value)} />
+              </div>
+              <Field className="mb-3" label="Sender number (with whatsapp: prefix)" required value={waFrom}
+                placeholder="whatsapp:+14155238886 (Twilio sandbox) or your approved number" onChange={e => setWaFrom(e.target.value)} />
+              <Field className="mb-3" label="Recipient numbers (comma-separated, E.164)" required value={waTo}
+                placeholder="+905XXXXXXXXX, +1XXXXXXXXXX" onChange={e => setWaTo(e.target.value)} />
+              <p className="-mt-1 text-[length:var(--fs-xs)] text-(--text3)">
                 Twilio is the de-facto WhatsApp Business API broker. The sandbox lets you test for free
                 (recipients must opt in by texting the join code). Production usage requires a Twilio-approved sender.
               </p>
@@ -398,17 +359,13 @@ export function ChannelModal({ initial, onClose, onSaved }: {
               channel can pin to a specific team's Zoom Chat
               while a "default" channel without rules still
               fires for everything. */}
-          <details style={{ marginTop: 16, fontSize: 12, color: 'var(--text2)' }}>
-            <summary style={{ cursor: 'pointer', fontWeight: 600 }}>
+          <details className="mt-4 text-[length:var(--fs-sm)] text-(--text2)">
+            <summary className="cursor-pointer font-semibold">
               Routing rules (leave empty for catch-all)
             </summary>
-            <div style={{ marginTop: 8 }}>
-              <Field label="Match services (comma-separated)">
-                <input value={matchServices}
-                  placeholder="payments, order-service"
-                  onChange={e => setMatchServices(e.target.value)}
-                  style={{ width: '100%' }} />
-              </Field>
+            <div className="mt-2">
+              <Field className="mb-3" label="Match services (comma-separated)" value={matchServices}
+                placeholder="payments, order-service" onChange={e => setMatchServices(e.target.value)} />
               {/* v0.9.828 — takım alanları ZATEN çalışıyordu (sunucu
                   tarafında ChannelMatchRules.SRETeams/OwnerTeams +
                   MatchesProblem); eksik olan GÖRÜNÜRLÜKTÜ: operatör
@@ -422,36 +379,23 @@ export function ChannelModal({ initial, onClose, onSaved }: {
                   ile gezilebiliyordu, Firefox/Safari'de ok tuşları
                   listeyi açmıyordu bile. Serbest metin KORUNUYOR —
                   eşleşme yoksa yazılan değer olduğu gibi kalır. */}
-              <Field label="Match SRE teams (comma-separated)">
+              <LabeledCombobox label="Match SRE teams (comma-separated)">
                 <Combobox value={matchSREs} onChange={setMatchSREs}
                   options={teamOptions}
                   placeholder="platform, sre-storefront" width="100%" />
-              </Field>
-              <Field label="Match owner teams (comma-separated)">
+              </LabeledCombobox>
+              <LabeledCombobox label="Match owner teams (comma-separated)">
                 <Combobox value={matchOwners} onChange={setMatchOwners}
                   options={teamOptions}
                   placeholder="payments, ml" width="100%" />
-              </Field>
-              <Field label="Match k8s/openshift clusters (comma-separated)">
-                <input value={matchClusters}
-                  placeholder="prod-eu-west, prod-eu-central"
-                  onChange={e => setMatchClusters(e.target.value)}
-                  style={{ width: '100%' }} />
-              </Field>
-              <div className="grid-2" style={{ display: 'grid',
-                            gap: 8 }}>
-                <Field label="Quiet hours (HH:MM-HH:MM, may cross midnight)">
-                  <input value={matchQuietHours}
-                    placeholder="22:00-07:00"
-                    onChange={e => setMatchQuietHours(e.target.value)}
-                    style={{ width: '100%' }} />
-                </Field>
-                <Field label="Quiet hours timezone (IANA, default UTC)">
-                  <input value={matchQuietHoursTz}
-                    placeholder="Europe/Istanbul"
-                    onChange={e => setMatchQuietHoursTz(e.target.value)}
-                    style={{ width: '100%' }} />
-                </Field>
+              </LabeledCombobox>
+              <Field className="mb-3" label="Match k8s/openshift clusters (comma-separated)" value={matchClusters}
+                placeholder="prod-eu-west, prod-eu-central" onChange={e => setMatchClusters(e.target.value)} />
+              <div className="grid-2 mb-3 grid gap-2">
+                <Field label="Quiet hours (HH:MM-HH:MM, may cross midnight)" value={matchQuietHours}
+                  placeholder="22:00-07:00" onChange={e => setMatchQuietHours(e.target.value)} />
+                <Field label="Quiet hours timezone (IANA, default UTC)" value={matchQuietHoursTz}
+                  placeholder="Europe/Istanbul" onChange={e => setMatchQuietHoursTz(e.target.value)} />
               </div>
               {/* v0.9.828 — triyaj basamağı kapısı. minSeverity'nin
                   YANINDA, yerine değil: ciddiyet "ne kadar kötü",
@@ -459,17 +403,18 @@ export function ChannelModal({ initial, onClose, onSaved }: {
               {/* v0.10.747 — olay türü süzgeci (operatör: "anomali, incident ve
                   problems ayrı ayrı gelsin"). Hiçbiri işaretli değilse hepsi.
                   Incident üreticisi v0.10.748. */}
-              <Field label="Olay türleri (boş = hepsi)">
-                <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 12 }}>
+              <div className="mb-3" role="group" aria-labelledby={kindsLabelId}>
+                <div id={kindsLabelId} className={LABEL}>Olay türleri (boş = hepsi)</div>
+                <div className="flex flex-wrap gap-3.5">
                   {NOTIFY_KIND_OPTIONS.map(o => (
-                    <label key={o.value} title={o.hint} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                      <input type="checkbox" checked={matchKinds.includes(o.value)}
-                        onChange={() => setMatchKinds(k => toggleKind(k, o.value))} />
-                      {o.label}
-                    </label>
+                    <span key={o.value} title={o.hint}>
+                      <CheckboxField checked={matchKinds.includes(o.value)}
+                        onCheckedChange={() => setMatchKinds(k => toggleKind(k, o.value))}
+                        label={o.label} />
+                    </span>
                   ))}
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4, lineHeight: 1.5 }}>
+                <div className={NOTE}>
                   <b>Problem</b> = operatör kuralları (alert rule, builtin, SLO, DB,
                   runtime, watcher). <b>Anomali</b> = anomali motoru (metrik anomalisi,
                   service silent, dış tarayıcı, exception fırtınası / paylaşılan
@@ -478,24 +423,23 @@ export function ChannelModal({ initial, onClose, onSaved }: {
                   ayırmak için her kanalda tek tür işaretleyin; hiçbiri işaretli değilse
                   kanal hepsini alır.
                 </div>
-              </Field>
-              <Field label="En düşük öncelik (triyaj basamağı)">
-                <select value={matchMinPriority}
-                  onChange={e => setMatchMinPriority(e.target.value as '' | 'P1' | 'P2' | 'P3')}
-                  style={{ width: '100%' }}>
+              </div>
+              <div className="mb-3">
+                <SelectField label="En düşük öncelik (triyaj basamağı)" value={matchMinPriority}
+                  onChange={e => setMatchMinPriority(e.target.value as '' | 'P1' | 'P2' | 'P3')}>
                   <option value="">Hepsi (süzgeç yok)</option>
                   <option value="P1">Yalnız P1 — şimdi</option>
                   <option value="P2">P2 ve üstü — bugün</option>
                   <option value="P3">P3 ve üstü — hepsi</option>
-                </select>
-                <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4, lineHeight: 1.5 }}>
+                </SelectField>
+                <div className={NOTE}>
                   Kanal yalnız bu basamak <b>ve üstündeki</b> problemleri alır. Ciddiyet
                   süzgecinden ayrıdır: <b>ciddiyet</b> ne kadar kötü olduğunu,
                   <b> öncelik</b> ne kadar acil olduğunu söyler &mdash; bir critical
                   problem P2 olabilir, tamamen erişilemez bir monitör ise P1&apos;dir.
                   {/* DÜRÜSTLÜK NOTU — bu iki sınır gerçek ve operatör
                       kanal kurarken bilmeli; keşifte açıkça saptandı. */}
-                  <div style={{ marginTop: 6 }}>
+                  <div className="mt-1.5">
                     <b>Bilmeniz gereken iki sınır:</b>
                     <br />
                     &bull; Öncelik <b>bildirim anında</b> hesaplanır. Açılış anında bir
@@ -509,8 +453,8 @@ export function ChannelModal({ initial, onClose, onSaved }: {
                     problemi sonradan da almaz.
                   </div>
                 </div>
-              </Field>
-              <p style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6 }}>
+              </div>
+              <p className="mt-1.5 text-[length:var(--fs-xs)] text-(--text3)">
                 Predicates AND together — every non-empty rule must match.
                 e.g. services=<code>payments</code> +
                 clusters=<code>prod-eu-west</code> +
@@ -524,22 +468,17 @@ export function ChannelModal({ initial, onClose, onSaved }: {
             </div>
           </details>
 
-          <label style={{ display: 'flex', gap: 6, alignItems: 'center',
-                          color: 'var(--text2)', fontSize: 12, marginTop: 6 }}>
-            <input type="checkbox" checked={enabled}
-              onChange={e => setEnabled(e.target.checked)} />
-            Enabled
-          </label>
+          <CheckboxField className="mt-1.5" checked={enabled} onCheckedChange={setEnabled} label="Enabled" />
 
           {error && <FlashBox kind="err">{error}</FlashBox>}
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 18 }}>
-            <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
-            <Button type="submit" variant="primary" disabled={busy}>
+          <DialogFooter className="mt-[18px]">
+            <Button variant="outline" onClick={onClose}>Cancel</Button>
+            <Button type="submit" disabled={busy}>
               {busy ? 'Saving…' : initial ? 'Update' : 'Create'}
             </Button>
-          </div>
+          </DialogFooter>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

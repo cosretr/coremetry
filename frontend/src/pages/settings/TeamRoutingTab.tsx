@@ -1,13 +1,26 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useId, useMemo, useState, type FormEvent } from 'react';
 import { Spinner, Empty } from '@/components/Spinner';
-import { Button, useConfirm } from '@/components/ui';
-import { DataTableState, type DataTableStateStaticProps } from '@/components/ui/DataTable';
+import { Button } from '@/components/shadcn/button';
+import { Input } from '@/components/shadcn/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/shadcn/table';
+import { Field, SelectField, CheckboxField } from '@/components/coremetry/Field';
+import { StatusBadge } from '@/components/coremetry/StatusBadge';
+import { ActionRow } from '@/components/coremetry/ActionRow';
+import { useConfirm } from '@/components/coremetry/Confirm';
+import { DataTableStateRow, type DataTableStateStaticProps } from '@/components/coremetry/DataTable';
 import { api } from '@/lib/api';
 import { useServicesMetadata } from '@/lib/queries';
 import { teamOptionsCI } from '@/lib/teamOptions';
 import type { TeamContacts } from '@/lib/types';
 import { NOTIFY_KIND_OPTIONS, normalizeKinds, toggleKind } from '@/lib/notifyKinds'; // v0.10.814
-import { Field, FlashBox, humanize } from './shared';
+import { FlashBox, humanize } from './shared';
+
+// Faz 2 dilim 1 R9 (shadcn): inline stil yok (Tailwind utility); coremetry/
+// Field ailesi, shadcn Button/Input/Table, StatusBadge, ActionRow. Alan
+// sırası, metinler, kolonlar ve kaydetme gövdesi aynı.
+const LABEL = 'mb-1 text-[length:var(--fs-sm)] leading-tight text-(--text2)';
+// Etiketsiz satır-içi girdi (tablo hücresi, alias formu): Field'ın denetim zemini.
+const BARE_INPUT = 'h-8 bg-field border-(--border-control) text-[length:var(--fs-sm)] md:text-[length:var(--fs-sm)] dark:bg-field';
 
 // ── Team routing tab (v0.8.429) ─────────────────────────────────────────────
 // Operator ask: "yeni bir problem ilk defa geldiğinde ilgili sy ve ug
@@ -27,6 +40,7 @@ export function TeamRoutingTab() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   const [extraTeam, setExtraTeam] = useState('');
+  const kindsLabelId = useId();
 
   const load = () => {
     setTc(undefined);
@@ -108,8 +122,8 @@ export function TeamRoutingTab() {
 
   return (
     <>
-    <form onSubmit={save} style={{ maxWidth: 720 }}>
-      <p style={{ color: 'var(--text2)', fontSize: 13, marginBottom: 16 }}>
+    <form onSubmit={save} className="max-w-[720px]">
+      <p className="mb-4 text-[length:var(--fs-md)] text-(--text2)">
         Yeni bir problem <b>ilk kez</b> açıldığında, servisin katalogdaki owner
         (ug) ve SRE (sy) takımlarına otomatik e-posta gönderilir — problem
         başına bir kez, SMTP ayarları üzerinden. Adresler virgülle
@@ -123,10 +137,7 @@ export function TeamRoutingTab() {
           göre yönlendirme yeteneği BAŞKA bir yerde ve ZATEN ÇALIŞIYOR
           (kanal kurallarındaki "Match SRE/owner teams" alanları). Eksik
           olan yetenek değil, o yeteneğin görünürlüğüydü. */}
-      <p style={{
-        color: 'var(--text2)', fontSize: 12, marginBottom: 16, lineHeight: 1.55,
-        padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 4,
-      }}>
+      <p className="mb-4 rounded-sm border border-(--border) px-2.5 py-2 text-[length:var(--fs-sm)] leading-[1.55] text-(--text2)">
         <b>Kapsam:</b> bu kart yalnız <b>e-posta</b> gönderir. Slack, Teams, Zoom
         Chat veya webhook&apos;u takıma göre yönlendirmek için
         <b> Bildirim kanalları</b>&apos;nda kanalı düzenleyip <b>Match SRE teams</b> /
@@ -135,24 +146,20 @@ export function TeamRoutingTab() {
         bağımsızdır.
       </p>
 
-      <div style={{ display: 'flex', gap: 16, alignItems: 'center', marginBottom: 14 }}>
-        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
-          <input type="checkbox" checked={tc.enabled}
-            onChange={e => setTc({ ...tc, enabled: e.target.checked })} />
-          Team routing aktif
-        </label>
-        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
-          Minimum severity:
-          <select value={tc.minSeverity ?? 'warning'}
-            onChange={e => setTc({ ...tc, minSeverity: e.target.value as TeamContacts['minSeverity'] })}>
-            <option value="info">info</option>
-            <option value="warning">warning</option>
-            <option value="critical">critical</option>
-          </select>
-        </label>
+      <div className="mb-3.5 flex flex-wrap items-end gap-4">
+        <CheckboxField className="pb-2" checked={tc.enabled}
+          onCheckedChange={v => setTc({ ...tc, enabled: v })} label="Team routing aktif" />
+        <SelectField small label="Minimum severity:" value={tc.minSeverity ?? 'warning'}
+          onChange={e => setTc({ ...tc, minSeverity: e.target.value as TeamContacts['minSeverity'] })}>
+          <option value="info">info</option>
+          <option value="warning">warning</option>
+          <option value="critical">critical</option>
+        </SelectField>
         {missing > 0 && (
-          <span className="badge b-warn" title="Bu takımlar problem açılışında maillenmez — adres girin.">
-            {missing} takımın e-postası eksik
+          <span className="pb-2">
+            <StatusBadge status="warn" title="Bu takımlar problem açılışında maillenmez — adres girin.">
+              {missing} takımın e-postası eksik
+            </StatusBadge>
           </span>
         )}
       </div>
@@ -161,18 +168,17 @@ export function TeamRoutingTab() {
           ekip maili kanal süzgecinden BAĞIMSIZ gidiyordu; kanalda Anomali tiki
           kaldırılsa da owner/SRE mail alıyordu. Aynı gramer, boş = hepsi.
           Exception grupları bu yola hiç girmez (kanal işi), o yüzden seçenekte yok. */}
-      <div style={{ marginBottom: 14 }}>
-        <Field label="Olay türleri (boş = hepsi)">
-          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 12 }}>
-            {NOTIFY_KIND_OPTIONS.filter(o => o.value !== 'exception').map(o => (
-              <label key={o.value} title={o.hint} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                <input type="checkbox" checked={normalizeKinds(tc.kinds).includes(o.value)}
-                  onChange={() => setTc({ ...tc, kinds: toggleKind(normalizeKinds(tc.kinds), o.value) })} />
-                {o.label}
-              </label>
-            ))}
-          </div>
-        </Field>
+      <div className="mb-3.5" role="group" aria-labelledby={kindsLabelId}>
+        <div id={kindsLabelId} className={LABEL}>Olay türleri (boş = hepsi)</div>
+        <div className="flex flex-wrap gap-3.5">
+          {NOTIFY_KIND_OPTIONS.filter(o => o.value !== 'exception').map(o => (
+            <span key={o.value} title={o.hint}>
+              <CheckboxField checked={normalizeKinds(tc.kinds).includes(o.value)}
+                onCheckedChange={() => setTc({ ...tc, kinds: toggleKind(normalizeKinds(tc.kinds), o.value) })}
+                label={o.label} />
+            </span>
+          ))}
+        </div>
       </div>
 
       {/* v0.10.967 — katalog düştü ama kayıtlı takımlar var: liste EKSİK, tam
@@ -185,49 +191,47 @@ export function TeamRoutingTab() {
             : `Servis kataloğu tazelenemedi (${humanize(catalogQ.error)}) — katalog takımları son okumadan.`}
         </div>
       )}
-      <div className="table-wrap" style={{ marginBottom: 14 }}>
+      <div className="table-wrap mb-3.5">
         {/* v0.10.942 — statik tablo: düzenlenebilir eşleme listesi, satır başına adres girişi (T1). */}
-        <table>
-          <thead>
-            <tr><th>Takım</th><th>E-posta adres(ler)i</th></tr>
-          </thead>
-          <tbody>
+        <Table>
+          <TableHeader>
+            <TableRow><TableHead>Takım</TableHead><TableHead>E-posta adres(ler)i</TableHead></TableRow>
+          </TableHeader>
+          <TableBody>
             {/* v0.10.967 (tablo standardı dilim 5, P-2) — statik tablonun durum satırı; colSpan = thead'deki 2 <th>.
                 Kayıtlı adres okumasının yükleniyor / hatası sekmenin kapısı (form ona bağlı) — dışarıda;
                 katalog okumasının yükleniyor / hatası bu satırda (routingState). */}
             {rows.length === 0 ? (
-              <DataTableState colSpan={2} {...routingState} />
+              <DataTableStateRow colSpan={2} {...routingState} />
             ) : rows.map(team => {
               const v = contactFor(team);
               return (
-                <tr key={team.toLowerCase()}>
-                  <td className="mono">
+                <TableRow key={team.toLowerCase()}>
+                  <TableCell className="mono">
                     {team}
                     {v.trim() === '' && (
-                      <span className="badge b-warn" style={{ marginLeft: 8, fontSize: 9 }}>eksik</span>
+                      <span className="ml-2"><StatusBadge status="warn" size="sm">eksik</StatusBadge></span>
                     )}
-                  </td>
-                  <td>
-                    <input value={v}
+                  </TableCell>
+                  <TableCell className="w-full">
+                    <Input value={v}
                       onChange={e => setContact(team, e.target.value)}
                       placeholder="team@example.com, oncall@example.com"
                       aria-label={`${team} e-posta`}
-                      style={{ width: '100%', fontSize: 12 }} />
-                  </td>
-                </tr>
+                      className={BARE_INPUT} />
+                  </TableCell>
+                </TableRow>
               );
             })}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
 
       {/* Katalog dışı takım ekleme — ör. henüz derive edilmemiş bir takım. */}
-      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', marginBottom: 14 }}>
-        <Field label="Katalog dışı takım ekle">
-          <input value={extraTeam} onChange={e => setExtraTeam(e.target.value)}
-            placeholder="takım adı" style={{ width: 220 }} />
-        </Field>
-        <Button variant="secondary" size="sm" type="button"
+      <div className="mb-3.5 flex items-end gap-2">
+        <Field className="w-[220px]" label="Katalog dışı takım ekle" value={extraTeam}
+          onChange={e => setExtraTeam(e.target.value)} placeholder="takım adı" />
+        <Button variant="outline" size="sm"
           disabled={!extraTeam.trim()}
           onClick={() => {
             const t = extraTeam.trim();
@@ -242,7 +246,8 @@ export function TeamRoutingTab() {
       </div>
 
       {msg && <FlashBox kind={msg.kind}>{msg.text}</FlashBox>}
-      <Button variant="primary" type="submit" loading={busy}>Save</Button>
+      {/* R9 (D4): kaydetme satırı sağa yaslı, birincil en sağda. */}
+      <ActionRow confirm={<Button type="submit" loading={busy}>Save</Button>} />
     </form>
     {/* v0.9.427 — takım alias tablosu, routing'in doğal komşusu. */}
     <TeamAliasesCard />
@@ -290,7 +295,7 @@ export function TeamAliasesCard() {
   };
 
   return (
-    <div className="card" style={{ marginTop: 16 }}>
+    <div className="card mt-4">
       <div className="ov-card-h">
         <h3>Takım eşleştirme (alias)</h3>
         <span className="ov-sub">LDAP adı ↔ telemetri adı — "dijitalsy" → "SY-Dijital Altyapı"</span>
@@ -301,15 +306,15 @@ export function TeamAliasesCard() {
         {ta && (
           <>
             {Object.keys(ta.aliases).length === 0 && (
-              <div style={{ color: 'var(--text3)', fontSize: 12, marginBottom: 10 }}>
+              <div className="mb-2.5 text-[length:var(--fs-sm)] text-(--text3)">
                 Henüz eşleme yok. Telemetrideki takım adını kanonik (LDAP) ada bağla.
               </div>
             )}
             {Object.entries(ta.aliases).map(([alias, canon]) => (
-              <div key={alias} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
-                <span className="mono" style={{ fontSize: 12, minWidth: 180 }}>{alias}</span>
-                <span style={{ color: 'var(--text3)' }}>→</span>
-                <span className="mono" style={{ fontSize: 12, flex: 1 }}>{canon}</span>
+              <div key={alias} className="mb-1.5 flex items-center gap-2">
+                <span className="mono min-w-[180px] text-[length:var(--fs-sm)]">{alias}</span>
+                <span className="text-(--text3)">→</span>
+                <span className="mono flex-1 text-[length:var(--fs-sm)]">{canon}</span>
                 {/* v0.9.1010 (C4 + O10) — burası ONAYSIZ ve `ghost`tu:
                     tıklama ANINDA persist ediyordu (`void save(next)`),
                     yani tıkla-ve-gitti. Hem onay hem kırmızı dil geldi. */}
@@ -330,16 +335,14 @@ export function TeamAliasesCard() {
                   }}>Sil</Button>
               </div>
             ))}
-            <form onSubmit={add} style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-              <input value={newAlias} onChange={e => setNewAlias(e.target.value)}
-                placeholder="telemetri adı (örn. orionsy)" disabled={busy}
-                style={{ flex: 1, padding: '6px 9px', fontSize: 12, background: 'var(--field-bg)',
-                  color: 'var(--text)', border: '1px solid var(--border)', borderRadius: 6 }} />
-              <input value={newCanon} onChange={e => setNewCanon(e.target.value)}
-                placeholder="kanonik ad (örn. SY-Ortak Servisler)" disabled={busy}
-                style={{ flex: 1, padding: '6px 9px', fontSize: 12, background: 'var(--field-bg)',
-                  color: 'var(--text)', border: '1px solid var(--border)', borderRadius: 6 }} />
-              <Button variant="primary" type="submit" disabled={busy || !newAlias.trim() || !newCanon.trim()}>Ekle</Button>
+            <form onSubmit={add} className="mt-2.5 flex gap-2">
+              <Input value={newAlias} onChange={e => setNewAlias(e.target.value)}
+                placeholder="telemetri adı (örn. orionsy)" aria-label="telemetri adı" disabled={busy}
+                className={`flex-1 ${BARE_INPUT}`} />
+              <Input value={newCanon} onChange={e => setNewCanon(e.target.value)}
+                placeholder="kanonik ad (örn. SY-Ortak Servisler)" aria-label="kanonik ad" disabled={busy}
+                className={`flex-1 ${BARE_INPUT}`} />
+              <Button type="submit" disabled={busy || !newAlias.trim() || !newCanon.trim()}>Ekle</Button>
             </form>
             {msg && <FlashBox kind={msg.kind}>{msg.text}</FlashBox>}
           </>

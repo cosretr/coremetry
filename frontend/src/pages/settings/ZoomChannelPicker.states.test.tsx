@@ -48,7 +48,8 @@ async function openPicker(): Promise<HTMLElement> {
   });
   await act(async () => { buttonByText(host!, /List my channels/)!.click(); });
   await flush();
-  return host;
+  // R9: seçici artık portal edilmiş Radix Dialog — tablo body'de, host'ta değil.
+  return document.body.querySelector<HTMLElement>('[role="dialog"]')!;
 }
 const flush = () => act(async () => { await new Promise(r => setTimeout(r, 0)); });
 
@@ -76,7 +77,8 @@ const stateRows = (el: HTMLElement) => el.querySelectorAll('tbody tr[data-dt-sta
 const dataRows = (el: HTMLElement) => Array.from(el.querySelectorAll('tbody tr')).filter(tr => !tr.hasAttribute('data-dt-state'));
 // Tablonun ÜSTÜNDEKİ şerit: tablo kabından önce gelen, hata metnini taşıyan blok.
 const bannerAbove = (el: HTMLElement, text: string) => {
-  const wrap = el.querySelector('table')!.parentElement!;
+  // R9: shadcn Table kendi kabını basar; şerit `.table-wrap` kabından önce gelir.
+  const wrap = el.querySelector('table')!.closest('.table-wrap')!;
   let n = wrap.previousElementSibling;
   while (n) { if (n.textContent?.includes(text)) return n; n = n.previousElementSibling; }
   return null;

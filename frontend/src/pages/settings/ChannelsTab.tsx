@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, ButtonGroup, useConfirm } from '@/components/ui';
+import { Button } from '@/components/shadcn/button';
+import { ButtonGroup } from '@/components/shadcn/button-group';
+import { Badge } from '@/components/shadcn/badge';
+import { StatusBadge } from '@/components/coremetry/StatusBadge';
+import { useConfirm } from '@/components/coremetry/Confirm';
 import { api } from '@/lib/api';
 import type { ChannelHealthRow, NotificationChannel } from '@/lib/types';
 import { FlashBox, humanize } from './shared';
@@ -9,6 +13,7 @@ import { readState } from '@/lib/readState';
 import { fmtAgoNs } from '@/lib/utils';
 import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef, type DataTableStateProps } from '@/components/ui/DataTable';
 import { kindsSummary } from '@/lib/notifyKinds'; // v0.10.747
+import type { Status } from '@/lib/statusTone';
 
 // v0.9.875 (tutarlılık denetimi BT16) — bildirim kanalları paylaşılan
 // primitife. Severity sıralaması SEVİYEYE göre (rozet sırası), alfabetik
@@ -128,11 +133,13 @@ export function ChannelsTab() {
 
   return (
     <div>
-      <div className="controls" style={{ marginBottom: 12 }}>
-        <p style={{ color: 'var(--text2)', fontSize: 13, margin: 0 }}>
+      {/* Faz 2 dilim 1 R9 (D5): ham `.controls` araç çubuğu düz flex satırı;
+          görünümün TEK birincil eylemi (+ New channel) sağda kalır. */}
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <p className="m-0 text-[length:var(--fs-md)] text-(--text2)">
           Channels receive Problem alerts whenever the evaluator or anomaly detector opens a new incident.
         </p>
-        <Button variant="primary" onClick={() => setEditing('new')} style={{ marginLeft: 'auto' }}>+ New channel</Button>
+        <Button className="ml-auto" onClick={() => setEditing('new')}>+ New channel</Button>
       </div>
 
       {msg && <FlashBox kind={msg.kind}>{msg.text}</FlashBox>}
@@ -158,13 +165,12 @@ export function ChannelsTab() {
                 <DataTableCell dt={dt} col="name" row={c}><b>{c.name}</b></DataTableCell>
                 <DataTableCell dt={dt} col="type" row={c} value={c.type} className="mono" />
                 <DataTableCell dt={dt} col="target" row={c} value={summarizeChannel(c)} />
-                <DataTableCell dt={dt} col="sev" row={c}><SeverityBadge s={c.minSeverity} /></DataTableCell>
+                <DataTableCell dt={dt} col="sev" row={c}><StatusBadge status={severityStatus(c.minSeverity)}>{c.minSeverity.toUpperCase()}</StatusBadge></DataTableCell>
                 <DataTableCell dt={dt} col="kinds" row={c} value={kindsSummary(c.matchRules?.kinds)}
                   title="Kanalın aldığı olay türleri (boş = hepsi)" />
                 {/* v0.10.929 (K5) — açık/kapalı bir ayar durumu: iki uç da nötr. */}
-                <DataTableCell dt={dt} col="status" row={c}>{c.enabled
-                  ? <span className="badge b-gray">ON</span>
-                  : <span className="badge b-gray">OFF</span>}
+                <DataTableCell dt={dt} col="status" row={c}>
+                  <Badge variant="secondary">{c.enabled ? 'ON' : 'OFF'}</Badge>
                 </DataTableCell>
                 <DataTableCell dt={dt} col="health" row={c}>
                   <HealthCell
@@ -173,10 +179,11 @@ export function ChannelsTab() {
                   />
                 </DataTableCell>
                 <DataTableCell dt={dt} col="actions" row={c}>
-                  <ButtonGroup aria-label={`${c.name} actions`} size="sm">
-                    <Button variant="secondary" onClick={() => onTest(c)}>Test</Button>
-                    <Button variant="secondary" onClick={() => setEditing(c)}>Edit</Button>
-                    <Button variant="danger" onClick={() => onDelete(c)}>Delete</Button>
+                  {/* R9 (D5): satır eylemleri ghost `sm`, aynı üç eylem aynı sırada. */}
+                  <ButtonGroup aria-label={`${c.name} actions`} className="ml-auto">
+                    <Button variant="ghost" size="sm" onClick={() => onTest(c)}>Test</Button>
+                    <Button variant="ghost" size="sm" onClick={() => setEditing(c)}>Edit</Button>
+                    <Button variant="ghost-danger" size="sm" onClick={() => onDelete(c)}>Delete</Button>
                   </ButtonGroup>
                 </DataTableCell>
               </tr>
@@ -223,13 +230,13 @@ function summarizeChannel(c: NotificationChannel): string {
 // metni). Sağlık okunamadıysa sessizce '—' — kanal listesi okunabilmiş
 // durumda ve sekmeyi ikinci bir hata kutusuyla boğmuyoruz.
 function HealthCell({ h, state }: { h?: ChannelHealthRow; state: 'loading' | 'error' | 'ready' }) {
-  if (state === 'error') return <span style={{ color: 'var(--text2)' }} title="Kanal sağlığı okunamadı">—</span>;
-  if (state === 'loading') return <span style={{ color: 'var(--text2)' }}>…</span>;
+  if (state === 'error') return <span className="text-(--text2)" title="Kanal sağlığı okunamadı">—</span>;
+  if (state === 'loading') return <span className="text-(--text2)">…</span>;
   if (!h) {
     return (
-      <span className="badge b-gray" title="Son 30 günde bu kanal üzerinden hiç gönderim kaydı yok. “Test” ile doğrulayın.">
+      <Badge variant="secondary" title="Son 30 günde bu kanal üzerinden hiç gönderim kaydı yok. “Test” ile doğrulayın.">
         hiç gönderim yok
-      </span>
+      </Badge>
     );
   }
   const when = fmtAgoNs(h.lastAt);
@@ -238,22 +245,26 @@ function HealthCell({ h, state }: { h?: ChannelHealthRow; state: 'loading' | 'er
     // v0.10.929 (K5) — sağlıklı kanal nötr; renk yalnız HATA ×N'de.
     return (
       <span title={`Son başarılı gönderim: ${when}${cappedNote}`}>
-        <span className="badge b-gray">OK</span>
+        <Badge variant="secondary">OK</Badge>
         {' '}
-        <span style={{ color: 'var(--text2)', fontSize: 12 }}>{when}</span>
+        <span className={WHEN}>{when}</span>
       </span>
     );
   }
   return (
     <span title={`Son hata (${when}): ${h.lastError || '(hata metni yok)'}${cappedNote}`}>
-      <span className="badge b-err">HATA ×{h.consecFails}</span>
+      <StatusBadge status="critical">HATA ×{h.consecFails}</StatusBadge>
       {' '}
-      <span style={{ color: 'var(--text2)', fontSize: 12 }}>{when}</span>
+      <span className={WHEN}>{when}</span>
     </span>
   );
 }
 
-function SeverityBadge({ s }: { s: string }) {
-  const cls = s === 'critical' ? 'b-err' : s === 'warning' ? 'b-warn' : 'b-info';
-  return <span className={`badge ${cls}`}>{s.toUpperCase()}</span>;
+const WHEN = 'text-[length:var(--fs-sm)] text-(--text2)';
+
+// Faz 2 dilim 1 R9 (D7): yerel `SeverityBadge` kopyası (denetim §4.3)
+// silindi; rozet StatusBadge, eşleme aynı (critical → kırmızı, warning →
+// sarı, geri kalan → bilgi).
+function severityStatus(s: string): Status {
+  return s === 'critical' ? 'critical' : s === 'warning' ? 'warn' : 'info';
 }

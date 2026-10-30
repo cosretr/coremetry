@@ -5,7 +5,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { ConfirmProvider } from '@/components/ui/ConfirmDialog';
+import { ConfirmGate } from '@/components/coremetry/Confirm'; // R9: sekme coremetry useConfirm
 import { MemoryRouter } from 'react-router-dom';
 import type { NotifyPolicy } from '@/lib/types';
 
@@ -38,7 +38,7 @@ describe('NotifyPolicyTab', () => {
     host = document.createElement('div');
     document.body.appendChild(host);
     root = createRoot(host);
-    await act(async () => { root!.render(<MemoryRouter><ConfirmProvider><NotifyPolicyTab /></ConfirmProvider></MemoryRouter>); });
+    await act(async () => { root!.render(<MemoryRouter><ConfirmGate><NotifyPolicyTab /></ConfirmGate></MemoryRouter>); });
     await settle();
     const mode = host.querySelector('select') as HTMLSelectElement;
     expect(mode.value).toBe('shadow');
@@ -51,7 +51,8 @@ describe('NotifyPolicyTab', () => {
     });
     const save = [...host.querySelectorAll('button')].find(b => b.textContent === 'Kaydet')!;
     await act(async () => { save.click(); });
-    await settle();
+    // R9: coremetry ConfirmGate onay diyaloğunu tembel yükler — görünene dek bekle.
+    for (let i = 0; i < 50 && !document.querySelector('[role="dialog"], [role="alertdialog"]'); i++) await settle();
     const dlg = document.querySelector('[role="dialog"], [role="alertdialog"]');
     expect(dlg?.textContent).toContain('Replay sonucu yok');
     expect(m.put).not.toHaveBeenCalled();
