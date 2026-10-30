@@ -1,8 +1,17 @@
 import { useState, type FormEvent } from 'react';
 import { Spinner } from '@/components/Spinner';
-import { Button } from '@/components/ui';
+import { Button } from '@/components/shadcn/button';
+import { Field } from '@/components/coremetry/Field';
+import { ActionRow } from '@/components/coremetry/ActionRow';
+import { cn } from '@/lib/cn';
 import { api } from '@/lib/api';
-import { SettingRow, SettingsLoadError, useSettingsLoad, ConfigStatusBanner } from './shared';
+import { SettingsLoadError, useSettingsLoad, ConfigStatusBanner } from './shared';
+
+// Faz 2 dilim 1 R8 — inline stil yerine Tailwind utility (token değişkenleri).
+const H2 = 'mb-1.5 text-[length:var(--fs-lg)] font-semibold';
+const LEAD = 'mb-4 text-[length:var(--fs-md)] text-(--text2)';
+const CARD = 'mt-[18px] flex flex-col gap-3 rounded-lg border border-(--border) bg-(--bg2) p-4';
+const NOTE = 'text-[length:var(--fs-xs)] text-(--text3)';
 
 // LogBridgeTab — dış log sistemine köprü şablonları (v0.9.657).
 //
@@ -75,9 +84,9 @@ export function LogBridgeTab() {
   const configured = Object.values(tpls).filter(v => v.trim() !== '').length;
 
   return (
-    <div style={{ maxWidth: 720 }}>
-      <h2 style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Log sistemi köprüsü</h2>
-      <p style={{ color: 'var(--text2)', fontSize: 13, marginBottom: 16 }}>
+    <div className="max-w-[720px]">
+      <h2 className={H2}>Log sistemi köprüsü</h2>
+      <p className={LEAD}>
         CoSRE bir analizde örnek <code>request_id</code> bulduğunda, bu
         şablonlarla dış log arayüzünüze tıklanabilir bir link üretir.
         Coremetry log sisteminize proxy yapmaz; yalnız linki kurar.
@@ -90,29 +99,24 @@ export function LogBridgeTab() {
           : 'Kapalı — cevaplarda log linki çizilmiyor.'}
       </ConfigStatusBanner>
 
-      <form onSubmit={save} style={{
-        marginTop: 18, padding: 16, borderRadius: 8,
-        background: 'var(--bg2)', border: '1px solid var(--border)',
-      }}>
-        <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 14 }}>
+      {/* Faz 2 dilim 1 R8: SettingRow + ham input → coremetry/Field (D1), kart aynı (D3). */}
+      <form onSubmit={save} className={CARD}>
+        <div className="text-[length:var(--fs-sm)] text-(--text2)">
           Şablon <code>{placeholder}</code> yer tutucusunu taşımak zorunda —
           request_id oraya yazılır (URL-encode edilerek). Örnek şekil:{' '}
-          <code style={{ whiteSpace: 'nowrap' }}>
+          <code className="whitespace-nowrap">
             https://log-host/path?requestId={placeholder}
           </code>
         </div>
 
         {ENV_ROWS.map(({ key, label, hint }) => (
-          <SettingRow key={key} label={label} hint={hint}>
-            <input
-              value={tpls[key] ?? ''}
-              onChange={e => setTpls(t => ({ ...t, [key]: e.target.value }))}
-              placeholder={`https://…?requestId=${placeholder}`}
-              style={{ width: '100%' }} />
-          </SettingRow>
+          <Field key={key} label={label} hint={hint}
+            value={tpls[key] ?? ''}
+            onChange={e => setTpls(t => ({ ...t, [key]: e.target.value }))}
+            placeholder={`https://…?requestId=${placeholder}`} />
         ))}
 
-        <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 12 }}>
+        <div className={NOTE}>
           Boş bırakılan ortam kapalıdır. Bir ortamın şablonu yoksa prod
           şablonuna düşülür; o da yoksa link çizilmez.
         </div>
@@ -121,7 +125,7 @@ export function LogBridgeTab() {
             taşıyor; şablona zaman yer tutucusu koyulursa link doğru
             aralıkta açılır. Liste sunucudan geliyor. */}
         {timePh.length > 0 && (
-          <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 12 }}>
+          <div className={NOTE}>
             Opsiyonel zaman yer tutucuları:{' '}
             {timePh.map((p, i) => (
               <span key={p}>{i > 0 && ' · '}<code>{p}</code></span>
@@ -135,26 +139,20 @@ export function LogBridgeTab() {
           </div>
         )}
 
-        <SettingRow
-          label="Kimlik saat dilimi"
-          hint={`Request kimliğinin İÇİNDEKİ saatin dilimi (IANA adı). Boş = ${tzDefault || 'varsayılan'}. Yanlış dilim ±10dk'lık arama penceresini tamamen ıskalar.`}>
-          <input
-            value={tz}
-            onChange={e => setTz(e.target.value)}
-            placeholder={tzDefault}
-            style={{ width: '100%' }} />
-        </SettingRow>
+        <Field label="Kimlik saat dilimi"
+          hint={`Request kimliğinin İÇİNDEKİ saatin dilimi (IANA adı). Boş = ${tzDefault || 'varsayılan'}. Yanlış dilim ±10dk'lık arama penceresini tamamen ıskalar.`}
+          value={tz}
+          onChange={e => setTz(e.target.value)}
+          placeholder={tzDefault} />
 
         {msg && (
-          <div style={{ marginBottom: 12, fontSize: 12,
-            color: msg.kind === 'ok' ? 'var(--ok)' : 'var(--err)' }}>
+          <div className={cn('text-[length:var(--fs-sm)]', msg.kind === 'ok' ? 'text-(--ok)' : 'text-(--err)')}>
             {msg.text}
           </div>
         )}
 
-        <Button type="submit" variant="primary" loading={busy}>
-          Kaydet
-        </Button>
+        {/* D4: eylem satırı sağa yaslı. */}
+        <ActionRow confirm={<Button type="submit" loading={busy}>Kaydet</Button>} />
       </form>
     </div>
   );

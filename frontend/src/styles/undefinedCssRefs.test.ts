@@ -113,8 +113,8 @@ describe('undefinedCssRefs — sessizce düşen token/sınıf referansları', ()
       // Stilleri satır içinde; sınıf yalnız DOM\'da bulunmak için var.
       ['tsp-tooltip',        'JS kancası — TimeSeriesPanel.tsx:223,572,789 querySelector ile buluyor'],
       ['tsp-ypill',          'JS kancası — TimeSeriesPanel.tsx:573 querySelector ile buluyor'],
-      /* v0.10.933 (tablo standardı T2) — `.tf-row:hover td` silindi (TraceFacetsTab satırı tıklanmaz); sınıf test kancası kalır. */
-      ['tf-row',             'test kancası — TraceFacetsTab.contract.test.tsx `tr.tf-row` ile buluyor'],
+      // (`tf-row` — Faz 2 dilim 1 R8'de KAPANDI: TraceFacetsTab coremetry/DataTable'a
+      //  geçti, kanca sınıfı ve `.tf-add/.tf-remove` kuralı silindi; test rol/metinle bulur.)
       // ── Öksüz süs sınıfları: ne CSS ne JS tüketicisi var. Zararsız ama
       // yanıltıcı; hiçbir dalgada sahiplenilmedi, Dalga 0 kapsamı değil.
       ['fgb',                'öksüz — FilterGroupBuilder.tsx:77, tüketicisi yok (2026-08-10 tarandı)'],

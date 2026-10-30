@@ -75,9 +75,11 @@ describe('Settings sade palet — K5 artıkları (v0.10.929)', () => {
 
   it("EntitiesTab senkron koşusu: 'ok' nötr, yalnız partial/failed renkli", () => {
     const fn = read('EntitiesTab.tsx').match(/function statusTone\([\s\S]*?\n}\n/)?.[0] ?? '';
-    expect(fn).toContain("if (s === 'failed') return 'danger';");
-    expect(fn).toContain("if (s === 'partial') return 'warning';");
-    expect(fn).toContain("return 'neutral';");
+    // Faz 2 dilim 1 R8 (D7): ui Badge tonu → StatusBadge durumu; anlam aynı
+    // (danger→critical, warning→warn, neutral→unknown).
+    expect(fn).toContain("if (s === 'failed') return 'critical';");
+    expect(fn).toContain("if (s === 'partial') return 'warn';");
+    expect(fn).toContain("return 'unknown';");
     expect(fn).not.toMatch(/'ok'/);
   });
 

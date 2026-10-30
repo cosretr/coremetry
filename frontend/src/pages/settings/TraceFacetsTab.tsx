@@ -6,14 +6,17 @@
 // kurulumda DDL boot/PUT'ta kendisi, dış Distributed prod'da üretilen SQL
 // elle (0013 emsali). Durum sütunları BU pod'un gördüğüdür ("kolon VAR ≠
 // DOLU": routed = probe doğruladı, filtre kolona gidiyor).
-import { useState } from 'react';
-import { Button } from '@/components/ui/Button';
-import { Field } from '@/components/ui/Field';
-import { Stack, Row } from '@/components/ui';
-import { Badge } from '@/components/ui/Badge';
+//
+// Faz 2 dilim 1 R8 — shadcn/coremetry: coremetry/DataTable (aynı kolonlar,
+// aynı storageKey), coremetry/Field + SelectField, shadcn Button,
+// StatusBadge (D7); Stack/Row → flex utility; inline stil yok.
+import { useState, type ReactNode } from 'react';
+import { Button } from '@/components/shadcn/button';
+import { Field, SelectField } from '@/components/coremetry/Field';
+import { StatusBadge } from '@/components/coremetry/StatusBadge';
+import { DataTable, type ColumnDef } from '@/components/coremetry/DataTable';
 import { Spinner } from '@/components/Spinner';
 import { CopyButton } from '@/components/CopyButton';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef } from '@/components/ui/DataTable';
 import { api } from '@/lib/api';
 import type { TraceFacet, TraceFacetStatus, TraceFacetsResponse } from '@/lib/types';
 import { FlashBox, humanize, useSettingsLoad, SettingsLoadError } from './shared';
@@ -22,13 +25,16 @@ type FacetRow = TraceFacet & { status?: TraceFacetStatus };
 
 // v0.10.942 (tablo standardı dilim 3) — `act` sahte sıralanabilir değil,
 // eylem kolonu (T3/T8); 11px kod hücreleri `mono` + `tone: muted` (S3).
+// R8: Durum kolonu `numeric` bayrağını bıraktı — bayrak yalnız sıralama
+// yönü içindi (rozet hücresi `num` almıyordu, başlık sağa yaslıydı);
+// sıralama değeri sayı olduğundan karşılaştırma ve ilk yön (desc) aynı.
 const COLS: ColumnDef<FacetRow>[] = [
   { id: 'key', label: 'Attribute', sortValue: r => r.key, naturalDir: 'asc', width: 180, mono: true },
   { id: 'spellings', label: 'Yazımlar', sortValue: r => (r.spellings ?? []).join(','), naturalDir: 'asc', flex: true, mono: true, tone: () => 'muted' },
   { id: 'scope', label: 'Kapsam', sortValue: r => r.scope ?? 'span', naturalDir: 'asc', width: 90 },
   { id: 'type', label: 'Tip', sortValue: r => r.type ?? 'lc', naturalDir: 'asc', width: 70 },
   { id: 'column', label: 'Kolon', sortValue: r => r.status?.column ?? '', naturalDir: 'asc', width: 170, mono: true, tone: () => 'muted' },
-  { id: 'state', label: 'Durum (bu pod)', sortValue: r => (r.status?.routed ? 2 : r.status?.columnExists ? 1 : 0), numeric: true, width: 150 },
+  { id: 'state', label: 'Durum (bu pod)', sortValue: r => (r.status?.routed ? 2 : r.status?.columnExists ? 1 : 0), width: 150 },
   { id: 'act', label: 'Eylemler', kind: 'actions', width: 60 },
 ];
 
@@ -39,6 +45,8 @@ export function facetStateLabel(st?: TraceFacetStatus): { text: string; tone: 'w
   if (st.columnExists) return { text: st.indexExists ? 'kolon var · doğrulanmadı' : 'kolon var · indeks yok', tone: 'warning' };
   return { text: 'kolon yok', tone: 'warning' };
 }
+
+const EMPTY = <span className="cell-empty">—</span>;
 
 export function TraceFacetsTab() {
   const [facets, setFacets] = useState<TraceFacet[]>([]);
@@ -57,7 +65,6 @@ export function TraceFacetsTab() {
   const { loaded, error: loadErr, retry } = useSettingsLoad(() => api.getTraceFacets(), apply);
 
   const rows: FacetRow[] = facets.map(f => ({ ...f, status: status.find(s => s.key === f.key) }));
-  const dt = useDataTable<FacetRow>({ storageKey: 'trace-facets', columns: COLS, rows, initialSort: { id: 'key', dir: 'asc' } });
 
   const save = async (next: TraceFacet[]) => {
     setBusy(true); setMsg(null);
@@ -78,10 +85,29 @@ export function TraceFacetsTab() {
   };
   const remove = (key: string) => void save(facets.filter(f => f.key !== key));
 
+  const renderCell = (r: FacetRow, col: ColumnDef<FacetRow>): ReactNode => {
+    switch (col.id) {
+      case 'key': return r.key;
+      case 'spellings': return (r.spellings ?? [r.key]).join(', ');
+      case 'scope': return r.scope ?? 'span';
+      case 'type': return r.type ?? 'lc';
+      case 'column': return r.status?.column || EMPTY;
+      case 'state': {
+        const st = facetStateLabel(r.status);
+        return <StatusBadge status={st.tone === 'warning' ? 'warn' : 'unknown'}>{st.text}</StatusBadge>;
+      }
+      case 'act': return (
+        <Button variant="ghost" size="xs" disabled={busy} onClick={() => remove(r.key)}
+          title="Kaydı sil (kolon/indeks ClickHouse'ta kalır; rollback SQL'i elle)">Sil</Button>
+      );
+      default: return null;
+    }
+  };
+
   if (loadErr) return <SettingsLoadError error={loadErr} onRetry={retry} />;
   if (!loaded) return <Spinner />;
   return (
-    <Stack gap={4}>
+    <div className="flex flex-col gap-4">
       <p className="field-hint">
         Yaygın değerli attribute'lar (channel, tenant, region…) için terfi kolonu + <code>set(0)</code> indeksi — Datadog "facet" karşılığı.
         Nadir değerler (id, txn_ref) zaten hash indeksiyle (attr_kvh) hızlı; buraya yalnız her span'de görülen anahtarları ekleyin.
@@ -91,64 +117,41 @@ export function TraceFacetsTab() {
       </p>
       {msg && <FlashBox kind={msg.kind}>{msg.text}</FlashBox>}
       {note && !msg && <FlashBox kind="ok">{note}</FlashBox>}
-      <Row gap={4} wrap>
-        <Field label="Attribute anahtarı" value={draft.key} placeholder="tenant" autoComplete="off"
+      <div className="flex flex-wrap items-end gap-4">
+        <Field className="w-auto" label="Attribute anahtarı" value={draft.key} placeholder="tenant" autoComplete="off"
           onChange={e => setDraft(d => ({ ...d, key: e.target.value }))} />
-        <Field label="Ek yazımlar (virgülle)" hint="aynı anahtarın büyük harf / eski adları" value={draft.spellings} placeholder="TENANT_ID, tenantId" autoComplete="off"
+        <Field className="w-auto" label="Ek yazımlar (virgülle)" hint="aynı anahtarın büyük harf / eski adları" value={draft.spellings} placeholder="TENANT_ID, tenantId" autoComplete="off"
           onChange={e => setDraft(d => ({ ...d, spellings: e.target.value }))} />
-        <label className="field" style={{ minWidth: 120 }}>
-          <span>Kapsam</span>
-          <select value={draft.scope} onChange={e => setDraft(d => ({ ...d, scope: e.target.value as 'span' | 'resource' }))}>
-            <option value="span">span</option>
-            <option value="resource">resource</option>
-          </select>
-        </label>
-        <label className="field" style={{ minWidth: 120 }}>
-          <span>Tip</span>
-          <select value={draft.type} onChange={e => setDraft(d => ({ ...d, type: e.target.value as 'lc' | 'string' }))}>
-            <option value="lc">LowCardinality (≤10k değer)</option>
-            <option value="string">String</option>
-          </select>
-        </label>
-        <Button variant="primary" type="button" disabled={busy || !draft.key.trim()} onClick={add} className="tf-add">Facet ekle</Button>
-      </Row>
+        <SelectField className="w-auto min-w-[120px]" label="Kapsam" value={draft.scope}
+          onChange={e => setDraft(d => ({ ...d, scope: e.target.value as 'span' | 'resource' }))}>
+          <option value="span">span</option>
+          <option value="resource">resource</option>
+        </SelectField>
+        <SelectField className="w-auto min-w-[120px]" label="Tip" value={draft.type}
+          onChange={e => setDraft(d => ({ ...d, type: e.target.value as 'lc' | 'string' }))}>
+          <option value="lc">LowCardinality (≤10k değer)</option>
+          <option value="string">String</option>
+        </SelectField>
+        <Button disabled={busy || !draft.key.trim()} onClick={add}>Facet ekle</Button>
+      </div>
       {/* v0.10.954 — tablo standardı T12: boş durum tablonun İÇİNDE, başlık
           durur (ayar yükleme kapısı yukarıda kalır). */}
       <div className="table-wrap">
-        <table {...dt.tableProps}>
-          <DataTableColgroup dt={dt} />
-          <DataTableHead dt={dt} />
-          <tbody>
-            {dt.sortedRows.length === 0 ? (
-              <DataTableState dt={dt} kind="empty"
-                message="Kayıtlı facet yok — yerleşik terfi kolonları (channel_code, function_code, k8s.*) kodda; burası operatörün eklediği ek facet'ler." />
-            ) : dt.sortedRows.map(r => {
-              const st = facetStateLabel(r.status);
-              return (
-                <tr key={r.key} className="tf-row">
-                  <DataTableCell dt={dt} col="key" row={r} value={r.key} />
-                  <DataTableCell dt={dt} col="spellings" row={r} value={(r.spellings ?? [r.key]).join(', ')} />
-                  <DataTableCell dt={dt} col="scope" row={r} value={r.scope ?? 'span'} />
-                  <DataTableCell dt={dt} col="type" row={r} value={r.type ?? 'lc'} />
-                  <DataTableCell dt={dt} col="column" row={r} value={r.status?.column} />
-                  {/* v0.10.942 — `numeric` yalnız sıralama yönü için: rozet hücresi `num` almaz, solda kalır. */}
-                  <td><Badge tone={st.tone}>{st.text}</Badge></td>
-                  <DataTableCell dt={dt} col="act" row={r}><Button variant="secondary" size="xs" className="tf-remove" disabled={busy} onClick={() => remove(r.key)} title="Kaydı sil (kolon/indeks ClickHouse'ta kalır; rollback SQL'i elle)">Sil</Button></DataTableCell>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <DataTable<FacetRow> storageKey="trace-facets" columns={COLS} rows={rows}
+          sort={{ initial: { id: 'key', dir: 'asc' } }}
+          getRowKey={r => r.key}
+          renderCell={renderCell}
+          state={{ kind: 'empty', message: 'Kayıtlı facet yok — yerleşik terfi kolonları (channel_code, function_code, k8s.*) kodda; burası operatörün eklediği ek facet\'ler.' }} />
       </div>
-      <Row gap={4}>
-        <Button variant="secondary" type="button" onClick={() => setShowSql(v => !v)} aria-expanded={showSql}>
+      <div className="flex items-center gap-4">
+        <Button variant="secondary" onClick={() => setShowSql(v => !v)} aria-expanded={showSql}>
           {showSql ? 'SQL\'i gizle' : 'Prod SQL\'ini göster'}
         </Button>
         {showSql && <CopyButton value={sql} title="SQL'i kopyala" />}
-      </Row>
+      </div>
       {showSql && (
-        <pre style={{ margin: 0, padding: 10, fontSize: 11, background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 6, overflowX: 'auto', whiteSpace: 'pre' }}>{sql}</pre>
+        <pre className="m-0 overflow-x-auto whitespace-pre rounded-md border border-(--border) bg-(--bg2) p-2.5 text-[length:var(--fs-xs)]">{sql}</pre>
       )}
-    </Stack>
+    </div>
   );
 }

@@ -1,9 +1,19 @@
 import { useState, type FormEvent } from 'react';
 import { Spinner } from '@/components/Spinner';
-import { Button } from '@/components/ui';
+import { Button } from '@/components/shadcn/button';
+import { Field, SelectField, CheckboxField } from '@/components/coremetry/Field';
+import { ActionRow } from '@/components/coremetry/ActionRow';
+import { cn } from '@/lib/cn';
 import { api } from '@/lib/api';
 import { useSettingsLoad, SettingsLoadError, ConfigStatusBanner } from './shared';
 import type { ESLogstoreInput, ESLogstoreSnapshot } from '@/lib/types';
+
+// Faz 2 dilim 1 R8 — inline stil yerine Tailwind utility (token değişkenleri).
+const H2 = 'mb-1.5 text-[length:var(--fs-lg)] font-semibold';
+const LEAD = 'mb-4 text-[length:var(--fs-md)] text-(--text2)';
+const CARD = 'mt-[18px] grid gap-3 rounded-lg border border-(--border) bg-(--bg2) p-4';
+const ASIDE = 'ml-1.5 text-[length:var(--fs-xs)] italic text-(--text3)';
+const NOTE = 'mt-1.5 text-[length:var(--fs-xs)] text-(--text3)';
 
 // ElasticTab — UI-managed logs read backend (v0.8.232,
 // operator-requested: configure ES from the UI and SEE the error when
@@ -131,16 +141,13 @@ export function ElasticTab() {
 
   const es = backend === 'elasticsearch';
   const fieldRow = (label: string, val: string, set: (v: string) => void, ph: string) => (
-    <label style={{ display: 'block' }}>
-      <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>{label}</div>
-      <input value={val} onChange={e => set(e.target.value)} placeholder={ph} style={{ width: '100%' }} />
-    </label>
+    <Field label={label} value={val} onChange={e => set(e.target.value)} placeholder={ph} />
   );
 
   return (
-    <div style={{ maxWidth: 640 }}>
-      <h2 style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Logs read backend</h2>
-      <p style={{ color: 'var(--text2)', fontSize: 13, marginBottom: 16 }}>
+    <div className="max-w-[640px]">
+      <h2 className={H2}>Logs read backend</h2>
+      <p className={LEAD}>
         Ingest always writes to ClickHouse; this selects where /logs
         <em> reads</em> from. Point it at an external Elasticsearch cluster to
         query the indices your existing pipeline ships to. Saved config
@@ -153,7 +160,7 @@ export function ElasticTab() {
         // v0.10.929 (K5) — seçili log backend'i bir ayar durumu: nötr bant (ES yeşil / CH amber değil).
         <ConfigStatusBanner label={snap.backend.toUpperCase()}
           aside={
-            <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text3)' }}>
+            <span className="ml-auto text-[length:var(--fs-xs)] text-(--text3)">
               source: {snap.source === 'ui' ? 'UI override' : 'env / YAML'}
             </span>
           }>
@@ -163,79 +170,49 @@ export function ElasticTab() {
         </ConfigStatusBanner>
       )}
 
-      <form onSubmit={save} style={{
-        marginTop: 18, padding: 16, borderRadius: 8,
-        background: 'var(--bg2)', border: '1px solid var(--border)',
-        display: 'grid', gap: 12,
-      }}>
-        <label style={{ display: 'block' }}>
-          <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>Backend</div>
-          <select value={backend}
-            onChange={e => setBackend(e.target.value as 'clickhouse' | 'elasticsearch')}
-            style={{ width: '100%' }}>
-            <option value="clickhouse">ClickHouse (built-in logs table)</option>
-            <option value="elasticsearch">Elasticsearch (external cluster, read-only)</option>
-          </select>
-        </label>
+      {/* Faz 2 dilim 1 R8: elle yazılmış <label><div/><input/></label> alanları
+          coremetry/Field ailesine (D1), kart aynı (D3). */}
+      <form onSubmit={save} className={CARD}>
+        <SelectField label="Backend" value={backend}
+          onChange={e => setBackend(e.target.value as 'clickhouse' | 'elasticsearch')}>
+          <option value="clickhouse">ClickHouse (built-in logs table)</option>
+          <option value="elasticsearch">Elasticsearch (external cluster, read-only)</option>
+        </SelectField>
 
         {es && (
           <>
-            <label style={{ display: 'block' }}>
-              <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>Addresses</div>
-              <input value={addresses} onChange={e => setAddresses(e.target.value)}
-                placeholder="https://es-0:9200, https://es-1:9200" style={{ width: '100%' }} />
-              <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>Comma-separated.</div>
-            </label>
+            <Field label="Addresses" value={addresses} onChange={e => setAddresses(e.target.value)}
+              placeholder="https://es-0:9200, https://es-1:9200" hint="Comma-separated." />
 
-            <label style={{ display: 'block' }}>
-              <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>
-                API key
-                {snap?.hasApiKey && <span style={{ color: 'var(--text3)', marginLeft: 8 }}>· stored</span>}
-              </div>
-              <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)}
-                placeholder={snap?.hasApiKey ? '(leave empty to keep stored value)' : 'base64 id:api_key — takes precedence over basic auth'}
-                style={{ width: '100%' }} />
-            </label>
+            <Field label="API key" type="password" value={apiKey} onChange={e => setApiKey(e.target.value)}
+              labelAside={snap?.hasApiKey ? <span className="text-[length:var(--fs-sm)] text-(--text3)">· stored</span> : undefined}
+              placeholder={snap?.hasApiKey ? '(leave empty to keep stored value)' : 'base64 id:api_key — takes precedence over basic auth'} />
 
-            <div className="grid-2" style={{ display: 'grid', gap: 12 }}>
-              <label style={{ display: 'block' }}>
-                <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>Username (basic auth)</div>
-                <input value={username} onChange={e => setUsername(e.target.value)}
-                  placeholder="unused when an API key is set" style={{ width: '100%' }} />
-              </label>
-              <label style={{ display: 'block' }}>
-                <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>
-                  Password
-                  {snap?.hasPassword && <span style={{ color: 'var(--text3)', marginLeft: 8 }}>· stored</span>}
-                </div>
-                <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-                  placeholder={snap?.hasPassword ? '(keep stored)' : ''} style={{ width: '100%' }} />
-              </label>
+            <div className="grid-2 gap-3">
+              <Field label="Username (basic auth)" value={username} onChange={e => setUsername(e.target.value)}
+                placeholder="unused when an API key is set" />
+              <Field label="Password" type="password" value={password} onChange={e => setPassword(e.target.value)}
+                labelAside={snap?.hasPassword ? <span className="text-[length:var(--fs-sm)] text-(--text3)">· stored</span> : undefined}
+                placeholder={snap?.hasPassword ? '(keep stored)' : ''} />
             </div>
 
-            <div className="grid-2" style={{ display: 'grid', gap: 12 }}>
-              <label style={{ display: 'block' }}>
-                <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>Index pattern</div>
-                <input value={index} onChange={e => setIndex(e.target.value)}
-                  placeholder="app-*" style={{ width: '100%' }} />
-              </label>
-              <label style={{ display: 'block' }}>
-                <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>Index template (per-service)</div>
-                <input value={indexTemplate} onChange={e => setIndexTemplate(e.target.value)}
-                  placeholder="app-{service}.{namespace}" style={{ width: '100%' }} />
-                <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
+            <div className="grid-2 gap-3">
+              <Field label="Index pattern" value={index} onChange={e => setIndex(e.target.value)}
+                placeholder="app-*" />
+              <Field label="Index template (per-service)" value={indexTemplate} onChange={e => setIndexTemplate(e.target.value)}
+                placeholder="app-{service}.{namespace}"
+                hint={<>
                   Service-filtered queries hit the resolved index instead of the
                   pattern. <code>{'{namespace}'}</code> comes from span resource
                   attributes; unresolved → <code>*</code>.
-                </div>
-              </label>
+                </>} />
             </div>
 
             <details>
-              <summary style={{ fontSize: 12, color: 'var(--text2)', cursor: 'pointer' }}>
+              <summary className="cursor-pointer text-[length:var(--fs-sm)] text-(--text2)">
                 Document field map (leave empty for OTel/ECS defaults)
               </summary>
-              <div className="grid-2" style={{ display: 'grid', gap: 12, marginTop: 10 }}>
+              <div className="grid-2 mt-2.5 gap-3">
                 {fieldRow('Timestamp', fTimestamp, setFTimestamp, '@timestamp')}
                 {fieldRow('Message body', fBody, setFBody, 'message')}
                 {fieldRow('Trace ID', fTraceId, setFTraceId, 'trace.id')}
@@ -250,13 +227,13 @@ export function ElasticTab() {
                 {fieldRow('Version', fVersion, setFVersion, 'empty = self-discover')}
                 {fieldRow('Team field', fTeam, setFTeam, 'empty = off')}
               </div>
-              <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6 }}>
+              <div className={NOTE}>
                 Environment backs the global env picker on /logs. Left empty,
                 Coremetry discovers the field from the index mapping
                 (deployment.environment[.name] and friends) and /logs shows an
                 honest chip when none resolves.
               </div>
-              <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6 }}>
+              <div className={NOTE}>
                 Cluster / namespace / pod / version back CoSRE’s cross-source
                 matching (trace ↔ logs filters). Left empty, Coremetry tries its
                 candidate fields (k8s.cluster.name, kubernetes.namespace.name,
@@ -264,7 +241,7 @@ export function ElasticTab() {
                 a filter it cannot map is reported as partial, never silently
                 dropped. Set one only when your pipeline uses another path.
               </div>
-              <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6 }}>
+              <div className={NOTE}>
                 Team field turns on CoSRE’s recent-log check in team answers
                 (“how are my team’s services?”): the document path that carries
                 the team label, e.g. a Kubernetes pod label such
@@ -275,33 +252,21 @@ export function ElasticTab() {
               </div>
             </details>
 
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <input type="checkbox" checked={insecure} onChange={e => setInsecure(e.target.checked)} />
-              <span style={{ fontSize: 13 }}>
-                Skip TLS verification
-                <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--text3)', fontStyle: 'italic' }}>
-                  (self-signed certs / POC only)
-                </span>
-              </span>
-            </label>
+            <CheckboxField checked={insecure} onCheckedChange={setInsecure}
+              label={<>Skip TLS verification<span className={ASIDE}>(self-signed certs / POC only)</span></>} />
           </>
         )}
 
         {msg && (
-          <div style={{ fontSize: 12, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-            color: msg.kind === 'ok' ? 'var(--ok)' : 'var(--err)' }}>
+          <div className={cn('whitespace-pre-wrap break-words text-[length:var(--fs-sm)]', msg.kind === 'ok' ? 'text-(--ok)' : 'text-(--err)')}>
             {msg.text}
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: 8 }}>
-          <Button type="button" variant="secondary" loading={busy} onClick={test}>
-            Test connection
-          </Button>
-          <Button type="submit" variant="primary" loading={busy}>
-            Save &amp; apply
-          </Button>
-        </div>
+        {/* D4: eylem satırı sağa yaslı, birincil en sağda. */}
+        <ActionRow
+          secondary={<Button variant="secondary" loading={busy} onClick={test}>Test connection</Button>}
+          confirm={<Button type="submit" loading={busy}>Save &amp; apply</Button>} />
       </form>
     </div>
   );

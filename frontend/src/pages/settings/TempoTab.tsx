@@ -1,9 +1,20 @@
 import { useState, type FormEvent } from 'react';
 import { Spinner } from '@/components/Spinner';
-import { Button, Field, useConfirm } from '@/components/ui';
+import { Button } from '@/components/shadcn/button';
+import { Field, SelectField, CheckboxField } from '@/components/coremetry/Field';
+import { ActionRow } from '@/components/coremetry/ActionRow';
+import { useConfirm } from '@/components/coremetry/Confirm';
+import { cn } from '@/lib/cn';
 import { api } from '@/lib/api';
 import { useSettingsLoad, SettingsLoadError, ConfigStatusBanner } from './shared';
 import type { TempoAuthType } from '@/lib/types';
+
+// Faz 2 dilim 1 R8 — inline stil yerine Tailwind utility (token değişkenleri).
+const H2 = 'mb-1.5 text-[length:var(--fs-lg)] font-semibold';
+const LEAD = 'mb-4 text-[length:var(--fs-md)] text-(--text2)';
+const CARD = 'mt-[18px] flex flex-col gap-3 rounded-lg border border-(--border) bg-(--bg2) p-4';
+const CODE = 'mx-1 rounded-sm bg-(--bg0) px-[5px] py-px font-mono text-[length:var(--fs-sm)]';
+const ASIDE = 'ml-1.5 text-[length:var(--fs-xs)] italic text-(--text3)';
 
 // TempoTab — external Grafana Tempo backend (v0.5.208). When
 // configured, /api/traces/{id} falls back to Tempo on a CH miss,
@@ -105,13 +116,13 @@ export function TempoTab() {
   const ready = enabled && baseUrl.trim().length > 0;
 
   return (
-    <div style={{ maxWidth: 640 }}>
-      <h2 style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>External Tempo backend</h2>
-      <p style={{ color: 'var(--text2)', fontSize: 13, marginBottom: 16 }}>
+    <div className="max-w-[640px]">
+      <h2 className={H2}>External Tempo backend</h2>
+      <p className={LEAD}>
         Use case: Coremetry at low sampling (e.g. 5%) for fast hot-path
         observability + an external Grafana Tempo cluster at 100% retention
         for forensics. When a trace ID isn't in Coremetry's store,
-        <code style={{ background: 'var(--bg0)', padding: '1px 5px', borderRadius: 3, margin: '0 4px' }}>/trace?id=…</code>
+        <code className={CODE}>/trace?id=…</code>
         silently falls back to Tempo. The trace renders in the same
         waterfall with a small banner so it's clear where the data came from.
         Trace-by-id only — search / aggregations / topology still hit Coremetry.
@@ -124,113 +135,70 @@ export function TempoTab() {
           : 'Disabled — CH misses return empty without trying Tempo.'}
       </ConfigStatusBanner>
 
-      <form onSubmit={save} style={{
-        marginTop: 18, padding: 16, borderRadius: 8,
-        background: 'var(--bg2)', border: '1px solid var(--border)',
-      }}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-          <input type="checkbox" checked={enabled}
-            onChange={e => setEnabled(e.target.checked)} />
-          <span style={{ fontSize: 13 }}>Enable Tempo fallback</span>
-        </label>
+      {/* Faz 2 dilim 1 R8: alanlar coremetry/Field ailesi (D1), kart aynı (D3). */}
+      <form onSubmit={save} className={CARD}>
+        <CheckboxField label="Enable Tempo fallback" checked={enabled} onCheckedChange={setEnabled} />
 
-        <label style={{ display: 'block', marginBottom: 12 }}>
-          <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>Base URL</div>
-          <input value={baseUrl}
-            onChange={e => setBaseUrl(e.target.value)}
-            placeholder="https://tempo.example.com  ·  Grafana Cloud: https://tempo-prod-XX.grafana.net/tempo"
-            style={{ width: '100%' }} />
-          <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
+        <Field label="Base URL" value={baseUrl}
+          onChange={e => setBaseUrl(e.target.value)}
+          placeholder="https://tempo.example.com  ·  Grafana Cloud: https://tempo-prod-XX.grafana.net/tempo"
+          hint={<>
             Trailing slash optional. We call <code>{`{baseUrl}/api/traces/{id}`}</code> with
-            <code style={{ marginLeft: 4 }}>Accept: application/json</code>.
-          </div>
-        </label>
+            <code className="ml-1">Accept: application/json</code>.
+          </>} />
 
-        <label style={{ display: 'block', marginBottom: 12 }}>
-          <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>Auth</div>
-          <select value={authType}
-            onChange={e => setAuthType(e.target.value as TempoAuthType)}
-            style={{ width: '100%' }}>
-            <option value="none">None (open Tempo behind VPN / mTLS)</option>
-            <option value="bearer">Bearer token (Grafana Cloud API key)</option>
-            <option value="basic">Basic auth (self-hosted + nginx htpasswd)</option>
-          </select>
-        </label>
+        <SelectField label="Auth" value={authType}
+          onChange={e => setAuthType(e.target.value as TempoAuthType)}>
+          <option value="none">None (open Tempo behind VPN / mTLS)</option>
+          <option value="bearer">Bearer token (Grafana Cloud API key)</option>
+          <option value="basic">Basic auth (self-hosted + nginx htpasswd)</option>
+        </SelectField>
 
         {authType === 'basic' && (
-          <label style={{ display: 'block', marginBottom: 12 }}>
-            <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>Username</div>
-            <input value={username}
-              onChange={e => setUsername(e.target.value)}
-              style={{ width: '100%' }} />
-          </label>
+          <Field label="Username" value={username}
+            onChange={e => setUsername(e.target.value)} />
         )}
 
         {(authType === 'bearer' || authType === 'basic') && (
-          <label style={{ display: 'block', marginBottom: 12 }}>
-            <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>
-              {authType === 'bearer' ? 'Bearer token' : 'Password'}
-              {hasToken && <span style={{ color: 'var(--text3)', marginLeft: 8 }}>· stored</span>}
-            </div>
-            <input type="password" value={token}
-              onChange={e => setToken(e.target.value)}
-              placeholder={hasToken ? '(leave empty to keep stored value)' : 'paste token…'}
-              style={{ width: '100%' }} />
-          </label>
+          <Field label={authType === 'bearer' ? 'Bearer token' : 'Password'} type="password" value={token}
+            labelAside={hasToken ? <span className="text-[length:var(--fs-sm)] text-(--text3)">· stored</span> : undefined}
+            onChange={e => setToken(e.target.value)}
+            placeholder={hasToken ? '(leave empty to keep stored value)' : 'paste token…'} />
         )}
 
         {(authType === 'bearer' || authType === 'basic') && (
           /* v0.10.271 — InfluxTab deseni: referans doluysa saklı token yerine kullanılır. */
-          <div style={{ marginBottom: 12 }}>
-            <Field label="…ya da token referansı" value={tokenRef}
-              onChange={e => setTokenRef(e.target.value)}
-              placeholder="env:COREMETRY_TEMPO_TOKEN  ·  file:/var/run/secrets/tempo/token"
-              autoComplete="off"
-              error={tokenError || undefined}
-              hint={tokenResolved
-                ? 'Çözüldü ✓ — saklı token yerine bu kullanılıyor'
-                : 'Doluysa saklı token yerine bu kullanılır. env: Helm extraEnv + existingSecret (pod restart); file: mount edilmiş Secret (≤30 s). Kaydedince çözüm durumu burada görünür.'} />
-          </div>
+          <Field label="…ya da token referansı" value={tokenRef}
+            onChange={e => setTokenRef(e.target.value)}
+            placeholder="env:COREMETRY_TEMPO_TOKEN  ·  file:/var/run/secrets/tempo/token"
+            autoComplete="off"
+            error={tokenError || undefined}
+            hint={tokenResolved
+              ? 'Çözüldü ✓ — saklı token yerine bu kullanılıyor'
+              : 'Doluysa saklı token yerine bu kullanılır. env: Helm extraEnv + existingSecret (pod restart); file: mount edilmiş Secret (≤30 s). Kaydedince çözüm durumu burada görünür.'} />
         )}
 
-        <label style={{ display: 'block', marginBottom: 12 }}>
-          <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>
-            X-Scope-OrgID (multi-tenant Tempo / Grafana Cloud)
-          </div>
-          <input value={orgId}
-            onChange={e => setOrgId(e.target.value)}
-            placeholder="leave empty for single-tenant"
-            style={{ width: '100%' }} />
-        </label>
+        <Field label="X-Scope-OrgID (multi-tenant Tempo / Grafana Cloud)" value={orgId}
+          onChange={e => setOrgId(e.target.value)}
+          placeholder="leave empty for single-tenant" />
 
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-          <input type="checkbox" checked={insecureSkipVerify}
-            onChange={e => setInsecureSkipVerify(e.target.checked)} />
-          <span style={{ fontSize: 13 }}>
-            Skip TLS verification
-            <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--text3)', fontStyle: 'italic' }}>
-              (self-signed certs / POC only)
-            </span>
-          </span>
-        </label>
+        <CheckboxField checked={insecureSkipVerify} onCheckedChange={setInsecureSkipVerify}
+          label={<>Skip TLS verification<span className={ASIDE}>(self-signed certs / POC only)</span></>} />
 
         {msg && (
-          <div style={{ marginBottom: 12, fontSize: 12,
-            color: msg.kind === 'ok' ? 'var(--ok)' : 'var(--err)' }}>
+          <div className={cn('text-[length:var(--fs-sm)]', msg.kind === 'ok' ? 'text-(--ok)' : 'text-(--err)')}>
             {msg.text}
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: 8 }}>
-          <Button type="submit" variant="primary" loading={busy}>
-            Save
-          </Button>
-          {hasToken && authType !== 'none' && (
-            <Button type="button" variant="ghost-danger" disabled={busy} onClick={() => void clearToken()}>
+        {/* D4: eylem satırı sağa yaslı, birincil en sağda, yıkıcı en solda. */}
+        <ActionRow
+          destructive={hasToken && authType !== 'none' && (
+            <Button variant="ghost-danger" disabled={busy} onClick={() => void clearToken()}>
               Disable auth
             </Button>
           )}
-        </div>
+          confirm={<Button type="submit" loading={busy}>Save</Button>} />
       </form>
     </div>
   );

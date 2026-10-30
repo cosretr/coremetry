@@ -4919,11 +4919,6 @@ tr:hover .row-kiosk, .row-kiosk:focus-visible { opacity: 1; }
    taşır ve ortak `tbody tr[role="button"]:hover` bg2'sini alır; sorgusuz
    (tıklanamaz) satır hover almaz. */
 
-/* v0.10.303 — Settings → Trace facets: satır/eylem kancaları (test + hover) */
-/* v0.10.933 (tablo standardı T2) — `.tf-row:hover td` silindi: TraceFacetsTab
-   satırı tıklanmaz (eylem yalnız ekle/kaldır düğmesinde); sınıf test kancası kalır. */
-.tf-add, .tf-remove { white-space: nowrap; }
-
 /* v0.10.330 — tablo hücresinde tek satır + üç nokta (K8s kolonları: pod/node
    adı 40+ karakter; çip kalkınca satır tek yükseklikte kalsın). */
 .cell-ellipsis { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }

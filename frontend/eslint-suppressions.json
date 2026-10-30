@@ -544,24 +544,9 @@
       "count": 16
     }
   },
-  "src/pages/settings/ElasticTab.tsx": {
-    "ui/no-raw-element": {
-      "count": 9
-    }
-  },
-  "src/pages/settings/EntitiesTab.tsx": {
-    "ui/no-raw-element": {
-      "count": 1
-    }
-  },
   "src/pages/settings/ErrorRampSubsection.tsx": {
     "ui/no-raw-element": {
       "count": 2
-    }
-  },
-  "src/pages/settings/KibanaTab.tsx": {
-    "ui/no-raw-element": {
-      "count": 3
     }
   },
   "src/pages/settings/KnowledgeTab.tsx": {
@@ -579,11 +564,6 @@
       "count": 2
     }
   },
-  "src/pages/settings/LogBridgeTab.tsx": {
-    "ui/no-raw-element": {
-      "count": 2
-    }
-  },
   "src/pages/settings/MaintenanceTab.tsx": {
     "ui/no-raw-element": {
       "count": 6
@@ -592,11 +572,6 @@
   "src/pages/settings/McpServersTab.tsx": {
     "ui/no-raw-element": {
       "count": 7
-    }
-  },
-  "src/pages/settings/MetricsBackendTab.tsx": {
-    "ui/no-raw-element": {
-      "count": 9
     }
   },
   "src/pages/settings/OracleTab.tsx": {
@@ -612,11 +587,6 @@
   "src/pages/settings/REDSourceSubsection.tsx": {
     "ui/no-raw-element": {
       "count": 3
-    }
-  },
-  "src/pages/settings/RetentionTab.tsx": {
-    "ui/no-raw-element": {
-      "count": 2
     }
   },
   "src/pages/settings/RolesTab.tsx": {
@@ -642,16 +612,6 @@
   "src/pages/settings/TeamRoutingTab.tsx": {
     "ui/no-raw-element": {
       "count": 7
-    }
-  },
-  "src/pages/settings/TempoTab.tsx": {
-    "ui/no-raw-element": {
-      "count": 7
-    }
-  },
-  "src/pages/settings/TraceFacetsTab.tsx": {
-    "ui/no-raw-element": {
-      "count": 2
     }
   },
   "src/pages/settings/WikiKnowledgeSection.tsx": {

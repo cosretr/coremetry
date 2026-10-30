@@ -8,12 +8,19 @@
 // v0.10.566 — `group`: aynı gruptaki linklerden yalnız ÇÖZÜLEN İLK link trace
 // sayfasında çizilir. Operatörün iki yolu (birincil request_id, yedek
 // function_id + channel_code) tek düğmede toplanır.
-import { useEffect, useState } from 'react';
-import { Button } from '@/components/ui/Button';
-import { Field } from '@/components/ui/Field';
-import { Stack, Row } from '@/components/ui';
+//
+// Faz 2 dilim 1 R8 — shadcn/coremetry: statik tablo shadcn Table (T1
+// gerekçesi aynı, kolon seti ve sırası aynı), durum satırı coremetry
+// DataTableStateRow, coremetry/Field, shadcn Button; Stack/Row → flex
+// utility. Kullanıcının girdiği renk inline stil yerine CSS değişkeniyle
+// (`Swatch`, ref üstünden `--swatch`).
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Button } from '@/components/shadcn/button';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/shadcn/table';
+import { Field } from '@/components/coremetry/Field';
+import { DataTableStateRow, type DataTableStateStaticProps } from '@/components/coremetry/DataTable';
 import { CopyButton } from '@/components/CopyButton';
-import { DataTableState, type DataTableStateStaticProps } from '@/components/ui/DataTable';
+import { cn } from '@/lib/cn';
 import { api } from '@/lib/api';
 import type { ExternalLink } from '@/lib/types';
 import { renderExternalLink } from '@/lib/externalLinks';
@@ -38,6 +45,17 @@ const PREVIEW_CTX = {
   // v0.10.567 — önizleme de kurumun dilimini gösterir (gerçekte reqid.timezone).
   tz: 'Europe/Istanbul',
 };
+
+const MONO_12 = 'font-mono text-[length:var(--fs-sm)]';
+
+/** Operatörün girdiği düğme rengi (serbest metin) — değer CSS değişkeniyle
+ *  taşınır, inline stil yok (inlineStyleRatchet; coremetry/DataTable menü
+ *  çapasıyla aynı yol). */
+function Swatch({ color, className }: { color: string; className: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => { ref.current?.style.setProperty('--swatch', color); }, [color]);
+  return <span ref={ref} aria-hidden className={cn('inline-block rounded-[3px] bg-(--swatch)', className)} />;
+}
 
 export function ExternalLinksTab() {
   const [links, setLinks] = useState<ExternalLink[]>([]);
@@ -77,7 +95,7 @@ export function ExternalLinksTab() {
     : readErr !== null ? { kind: 'error', ...(readErr ? { message: `Linkler okunamadı: ${readErr}` } : {}) }
     : { kind: 'empty', message: 'Henüz link yok' };
   return (
-    <Stack gap={4}>
+    <div className="flex flex-col gap-4">
       <div className="field-hint">
         Trace sayfasında "CoSRE’ye sor" yanında düğme olarak görünür; şablondaki attribute'lar trace'in
         span'lerinde çözülürse etkin, çözülmezse eksikleri söyleyerek pasif. Değişkenler:{' '}
@@ -93,36 +111,42 @@ export function ExternalLinksTab() {
       </div>
       {msg && <FlashBox kind={msg.kind}>{msg.text}</FlashBox>}
       {/* v0.10.942 — statik tablo: düzenlenebilir liste; sıra anlamlı (grupta ilk çözülen çizilir), sıralanmaz (T1).
-          v0.10.967 (P-2) — durum satırı DataTableState colSpan = thead'deki 6 <th>; boşken başlık kalır (S6). */}
-      <table>
-        <thead><tr><th style={{ textAlign: 'left' }}>Etiket</th><th style={{ textAlign: 'left' }}>Şablon</th><th style={{ textAlign: 'left' }}>Grup</th><th style={{ textAlign: 'left' }}>Gerekli</th><th style={{ textAlign: 'left' }}>Renk</th><th></th></tr></thead>
-        <tbody>
-          {!showRows ? <DataTableState colSpan={6} {...linksState} /> : links.map((l, i) => (
-            <tr key={l.label}>
-              <td>{l.label}</td>
-              <td className="mono cell-wrap">{l.urlTemplate} <CopyButton value={l.urlTemplate} title="Şablonu kopyala" /></td>
-              <td>{l.group?.trim()
-                ? <span className="mono" style={{ fontSize: 12 }}>{l.group.trim()}</span>
-                : <span className="field-hint">tek başına</span>}</td>
-              <td className="field-hint">{(l.requires ?? []).join(', ') || '—'}</td>
-              <td>{l.color
-                ? <span className="mono" style={{ fontSize: 12 }}><span aria-hidden style={{ display: 'inline-block', width: 12, height: 12, borderRadius: 3, background: l.color, verticalAlign: 'middle', marginRight: 4 }} />{l.color}</span>
-                : <span className="field-hint">ikincil</span>}</td>
-              <td><Button variant="ghost-danger" size="sm" disabled={busy} onClick={() => save(links.filter((_, j) => j !== i))}>Sil</Button></td>
-            </tr>
+          v0.10.967 (P-2) — durum satırı DataTableStateRow colSpan = thead'deki 6 <th>; boşken başlık kalır (S6).
+          R8: shadcn Table; kolonlar ve sıraları aynı. */}
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Etiket</TableHead><TableHead>Şablon</TableHead><TableHead>Grup</TableHead>
+            <TableHead>Gerekli</TableHead><TableHead>Renk</TableHead><TableHead />
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {!showRows ? <DataTableStateRow colSpan={6} {...linksState} /> : links.map((l, i) => (
+            <TableRow key={l.label}>
+              <TableCell>{l.label}</TableCell>
+              <TableCell className="whitespace-normal font-mono [overflow-wrap:anywhere]">{l.urlTemplate} <CopyButton value={l.urlTemplate} title="Şablonu kopyala" /></TableCell>
+              <TableCell>{l.group?.trim()
+                ? <span className={MONO_12}>{l.group.trim()}</span>
+                : <span className="field-hint">tek başına</span>}</TableCell>
+              <TableCell className="field-hint">{(l.requires ?? []).join(', ') || '—'}</TableCell>
+              <TableCell>{l.color
+                ? <span className={MONO_12}><Swatch color={l.color} className="mr-1 size-3 align-middle" />{l.color}</span>
+                : <span className="field-hint">ikincil</span>}</TableCell>
+              <TableCell><Button variant="ghost-danger" size="sm" disabled={busy} onClick={() => save(links.filter((_, j) => j !== i))}>Sil</Button></TableCell>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
-      <Row gap={3} wrap style={{ alignItems: 'flex-end' }}>
-        <Field label="Etiket" value={draft.label} onChange={e => setDraft({ ...draft, label: e.target.value })} placeholder="Log İzleme" style={{ width: 180 }} />
-        <Field label="URL şablonu" value={draft.urlTemplate} onChange={e => setDraft({ ...draft, urlTemplate: e.target.value })} placeholder={EXAMPLE} className="mono" style={{ width: 620 }} />
+        </TableBody>
+      </Table>
+      <div className="flex flex-wrap items-end gap-3">
+        <Field className="w-[180px]" label="Etiket" value={draft.label} onChange={e => setDraft({ ...draft, label: e.target.value })} placeholder="Log İzleme" />
+        <Field className="w-[620px] max-w-full" controlClassName="font-mono" label="URL şablonu" value={draft.urlTemplate} onChange={e => setDraft({ ...draft, urlTemplate: e.target.value })} placeholder={EXAMPLE} />
         {/* v0.10.346 — düğme dolgu rengi (aracın marka rengi); boş = ikincil düğme. */}
-        <Field label="Renk (#rrggbb)" value={draft.color} onChange={e => setDraft({ ...draft, color: e.target.value })} placeholder="#d32f2f" className="mono" style={{ width: 110 }}
-          hint={draft.color ? <span aria-hidden style={{ display: 'inline-block', width: 40, height: 10, borderRadius: 3, background: draft.color }} /> : 'boş = gri'} />
+        <Field className="w-[110px]" controlClassName="font-mono" label="Renk (#rrggbb)" value={draft.color} onChange={e => setDraft({ ...draft, color: e.target.value })} placeholder="#d32f2f"
+          hint={draft.color ? <Swatch color={draft.color} className="h-2.5 w-10" /> : 'boş = gri'} />
         {/* v0.10.566 — grup: aynı gruptan yalnız çözülen ilk link çizilir; boş = tek başına. */}
-        <Field label="Grup" value={draft.group} onChange={e => setDraft({ ...draft, group: e.target.value })} placeholder={EXAMPLE_GROUP} className="mono" style={{ width: 150 }}
+        <Field className="w-[150px]" controlClassName="font-mono" label="Grup" value={draft.group} onChange={e => setDraft({ ...draft, group: e.target.value })} placeholder={EXAMPLE_GROUP}
           hint="aynı gruptan yalnız çözülen ilk link çizilir; boş = tek başına" />
-        <Button variant="primary" size="sm" disabled={busy || !draft.label.trim() || !draft.urlTemplate.trim() || (preview?.missing.length ?? 0) > 0}
+        <Button size="sm" disabled={busy || !draft.label.trim() || !draft.urlTemplate.trim() || (preview?.missing.length ?? 0) > 0}
           onClick={() => save([...links, { label: draft.label.trim(), urlTemplate: draft.urlTemplate.trim(), color: draft.color.trim() || undefined, group: draft.group.trim() || undefined }]).then(() => setDraft({ label: '', urlTemplate: '', color: '', group: '' }))}>
           Ekle
         </Button>
@@ -133,15 +157,15 @@ export function ExternalLinksTab() {
         <Button variant="secondary" size="sm" onClick={() => setDraft({ ...draft, label: draft.label || 'Log İzleme (functionId)', urlTemplate: EXAMPLE, group: EXAMPLE_GROUP })}>
           Örnek: functionId (yedek)
         </Button>
-      </Row>
+      </div>
       {preview && (
         <div className="field-hint">
           Önizleme (örnek değerlerle):{' '}
           {preview.url
-            ? <span className="mono" style={{ wordBreak: 'break-all' }}>{preview.url}</span>
-            : <span style={{ color: 'var(--err)' }}>çözülemedi — eksik: {preview.missing.join(', ')}</span>}
+            ? <span className="font-mono break-all">{preview.url}</span>
+            : <span className="text-(--err)">çözülemedi — eksik: {preview.missing.join(', ')}</span>}
         </div>
       )}
-    </Stack>
+    </div>
   );
 }

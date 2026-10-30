@@ -10,6 +10,7 @@
 //   (3) VM etiket adı MetricsQL dilbilgisine uymuyorsa kutu uyarır (karar yine
 //       sunucuda: LabelMapProblem → 400).
 // Adlar sentetik (cluster-a, prod). Ağ mock.
+import '@/test/radixJsdom'; // Faz 2 dilim 1 R8: Radix Checkbox (ResizeObserver) jsdom eksiği
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';

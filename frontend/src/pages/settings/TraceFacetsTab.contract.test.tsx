@@ -35,12 +35,17 @@ function setInput(el: HTMLInputElement, text: string) {
   setter.call(el, text); el.dispatchEvent(new Event('input', { bubbles: true }));
 }
 const tick = async () => { await act(async () => { await new Promise(r => setTimeout(r, 20)); }); };
+// Faz 2 dilim 1 R8: `tr.tf-row` / `.tf-add` / `.tf-remove` kancaları kalktı
+// (coremetry/DataTable satır sınıfı almaz) — aynı hedefler rol/metinle:
+// veri satırı = gövdede durum satırı olmayan <tr>, düğme = görünür metni.
+const dataRows = (el: Element) => Array.from(el.querySelectorAll('tbody tr')).filter(tr => !tr.hasAttribute('data-dt-state'));
+const btn = (el: Element, text: string) => Array.from(el.querySelectorAll('button')).find(b => b.textContent?.trim() === text) as HTMLButtonElement;
 
 describe('TraceFacetsTab', () => {
   it('kayıtlı facet\'leri durumlarıyla listeler', async () => {
     const el = render(<TraceFacetsTab />);
     await tick();
-    const rows = el.querySelectorAll('tr.tf-row');
+    const rows = dataRows(el);
     expect(rows.length).toBe(2);
     expect(el.textContent).toContain('kolona yönleniyor');
     expect(el.textContent).toContain('kolon yok');
@@ -52,16 +57,16 @@ describe('TraceFacetsTab', () => {
     const inputs = el.querySelectorAll('input');
     act(() => { setInput(inputs[0] as HTMLInputElement, 'channel'); });
     act(() => { setInput(inputs[1] as HTMLInputElement, 'CHANNEL, ch'); });
-    act(() => { (el.querySelector('.tf-add') as HTMLButtonElement).click(); });
+    act(() => { btn(el, 'Facet ekle').click(); });
     await tick();
     expect(putTraceFacets).toHaveBeenCalledTimes(1);
     const sent = putTraceFacets.mock.calls[0][0] as { key: string; spellings?: string[] }[];
     expect(sent.map(f => f.key)).toEqual(['tenant', 'region', 'channel']);
     expect(sent[2].spellings).toEqual(['CHANNEL', 'ch']);
-    expect(el.querySelectorAll('tr.tf-row').length).toBe(3);
+    expect(dataRows(el).length).toBe(3);
     // Satırlar anahtara göre sıralı (channel, region, tenant) — tenant satırının Sil'i.
-    const tenantRow = Array.from(el.querySelectorAll('tr.tf-row')).find(r => r.querySelector('td')?.textContent === 'tenant')!;
-    act(() => { (tenantRow.querySelector('.tf-remove') as HTMLButtonElement).click(); });
+    const tenantRow = dataRows(el).find(r => r.querySelector('td')?.textContent === 'tenant')!;
+    act(() => { btn(tenantRow, 'Sil').click(); });
     await tick();
     const after = putTraceFacets.mock.calls[1][0] as { key: string }[];
     expect(after.length).toBe(2);

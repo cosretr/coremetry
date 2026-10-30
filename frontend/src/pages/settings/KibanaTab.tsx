@@ -1,9 +1,17 @@
 import { useState, type FormEvent } from 'react';
 import { Spinner } from '@/components/Spinner';
-import { Button } from '@/components/ui';
+import { Button } from '@/components/shadcn/button';
+import { Field, CheckboxField } from '@/components/coremetry/Field';
+import { ActionRow } from '@/components/coremetry/ActionRow';
+import { cn } from '@/lib/cn';
 import { api } from '@/lib/api';
 import type { KibanaSettings } from '@/lib/types';
-import { SettingRow, SettingsLoadError, useSettingsLoad, ConfigStatusBanner } from './shared';
+import { SettingsLoadError, useSettingsLoad, ConfigStatusBanner } from './shared';
+
+// Faz 2 dilim 1 R8 — inline stil yerine Tailwind utility (token değişkenleri).
+const H2 = 'mb-1.5 text-[length:var(--fs-lg)] font-semibold';
+const LEAD = 'mb-4 text-[length:var(--fs-md)] text-(--text2)';
+const CARD = 'mt-[18px] flex flex-col gap-3 rounded-lg border border-(--border) bg-(--bg2) p-4';
 
 // KibanaTab — external Kibana deep-link config (v0.5.236).
 // Operator pastes the base URL of their Kibana install; the
@@ -52,9 +60,9 @@ export function KibanaTab() {
   const ready = enabled && baseUrl.trim() !== '';
 
   return (
-    <div style={{ maxWidth: 640 }}>
-      <h2 style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Kibana deep-link</h2>
-      <p style={{ color: 'var(--text2)', fontSize: 13, marginBottom: 16 }}>
+    <div className="max-w-[640px]">
+      <h2 className={H2}>Kibana deep-link</h2>
+      <p className={LEAD}>
         Operators who use Kibana alongside Coremetry can jump out
         to Kibana Discover with the current Logs filter pre-applied
         — same pattern as OpenShift's "Discover in Kibana" affordance.
@@ -68,66 +76,52 @@ export function KibanaTab() {
           : 'Disabled — no Kibana link rendered on the Logs page.'}
       </ConfigStatusBanner>
 
-      <form onSubmit={save} style={{
-        marginTop: 18, padding: 16, borderRadius: 8,
-        background: 'var(--bg2)', border: '1px solid var(--border)',
-      }}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-          <input type="checkbox" checked={enabled}
-            onChange={e => setEnabled(e.target.checked)} />
-          <span style={{ fontSize: 13 }}>Show "Open in Kibana" link on Logs</span>
-        </label>
+      {/* Faz 2 dilim 1 R8: SettingRow + ham input → coremetry/Field (D1), kart aynı (D3). */}
+      <form onSubmit={save} className={CARD}>
+        <CheckboxField label={'Show "Open in Kibana" link on Logs'} checked={enabled} onCheckedChange={setEnabled} />
 
-        <SettingRow
-          label="Kibana base URL"
+        <Field label="Kibana base URL" value={baseUrl}
+          onChange={e => setBaseUrl(e.target.value)}
+          placeholder="https://kibana.example.com  (no trailing /app/...)"
           hint={<>
             Just the host (or host + path prefix if Kibana lives under one,
             e.g. <code>https://openshift-console.example.com/monitoring/kibana</code>).
             Coremetry appends <code>/app/discover#/?…</code>.
-          </>}>
-          <input value={baseUrl}
-            onChange={e => setBaseUrl(e.target.value)}
-            placeholder="https://kibana.example.com  (no trailing /app/...)"
-            style={{ width: '100%' }} />
-        </SettingRow>
+          </>} />
 
-        <SettingRow
-          label={<>Data view ID <span style={{ color: 'var(--text3)' }}>(optional)</span></>}
-          hint={<>
-            The Kibana data view <b>ID (UUID)</b> — find it in Kibana →
-            Stack Management → Data Views (the id in the URL), or in the
-            fallback toast Kibana shows. An index <i>pattern</i> like{' '}
-            <code>app-*</code> is NOT accepted by Kibana 8 here: Discover
-            then warns &quot;not a configured data view ID&quot; on every
-            open and falls back to the default view. Empty = Kibana picks
-            the default (fine for single-pattern installs).
-          </>}>
-          <input value={dataView}
+        <div>
+          <Field label={<>Data view ID <span className="text-(--text3)">(optional)</span></>} value={dataView}
             onChange={e => setDataView(e.target.value)}
             placeholder="e.g. 8b9b3260-019d-11ec-a24c-8d8ee9abad6f"
-            style={{ width: '100%' }} />
+            hint={<>
+              The Kibana data view <b>ID (UUID)</b> — find it in Kibana →
+              Stack Management → Data Views (the id in the URL), or in the
+              fallback toast Kibana shows. An index <i>pattern</i> like{' '}
+              <code>app-*</code> is NOT accepted by Kibana 8 here: Discover
+              then warns &quot;not a configured data view ID&quot; on every
+              open and falls back to the default view. Empty = Kibana picks
+              the default (fine for single-pattern installs).
+            </>} />
           {/* v0.9.1093 (operatör foto): desen girilmişse toast'ın SEBEBİNİ
               kaynağında söyle — kaydetmeyi engelleme (Kibana 7 kurulumları
               deseni tolere edebiliyor), yalnız uyar. */}
           {dataView.includes('*') && (
-            <div style={{ marginTop: 6, fontSize: 11, color: 'var(--warn)' }}>
+            <div className="mt-1.5 text-[length:var(--fs-xs)] text-(--warn)">
               ⚠ Bu bir index deseni görünüyor — Kibana 8 burada data view
               ID (UUID) bekler; Discover her açılışta &quot;not a configured
               data view ID&quot; uyarısı basıp varsayılana düşer.
             </div>
           )}
-        </SettingRow>
+        </div>
 
         {msg && (
-          <div style={{ marginBottom: 12, fontSize: 12,
-            color: msg.kind === 'ok' ? 'var(--ok)' : 'var(--err)' }}>
+          <div className={cn('text-[length:var(--fs-sm)]', msg.kind === 'ok' ? 'text-(--ok)' : 'text-(--err)')}>
             {msg.text}
           </div>
         )}
 
-        <Button type="submit" variant="primary" loading={busy}>
-          Save
-        </Button>
+        {/* D4: eylem satırı sağa yaslı. */}
+        <ActionRow confirm={<Button type="submit" loading={busy}>Save</Button>} />
       </form>
     </div>
   );
