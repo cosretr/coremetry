@@ -5,13 +5,19 @@
 // Reset columns varsayılana döner ve `cols=` URL'den düşer; aday listesi
 // YÜKLENMİŞ alanlardan gelir (yeni istek yok). Doc viewer Table/JSON sekmesi
 // tarayıcıda hatırlanır.
+import '@/test/pageJsdom'; // statik sayfa import'undan ÖNCE (matchMedia modül kapsamında)
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
 import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ConfirmProvider } from '@/components/ui/ConfirmDialog';
+import { settleUntil } from '@/test/actWait';
 import type { LogRow, LogsResponse } from '@/lib/types';
+// Sayfa modülü STATİK (v0.10.1707): test gövdesindeki dinamik import ilk
+// testin 5 s bütçesinden ödeniyordu — tam paket yükünde zaman aşımı +
+// sızan mount ile ardışık düşüş. Toplama aşamasının süre tavanı yok.
+import Logs from '../Logs';
 
 const m = vi.hoisted(() => ({ prefPuts: 0, fields: 0, other: [] as string[] }));
 const row = (id: number, body: string): LogRow => ({
@@ -51,12 +57,13 @@ let root: Root | null = null; let host: HTMLDivElement | null = null;
 const settle = () => act(async () => { await new Promise(r => setTimeout(r, 30)); });
 async function mountLogs(url: string) {
   window.history.replaceState(null, '', url);
-  const Logs = (await import('../Logs')).default;
   host = document.createElement('div'); document.body.appendChild(host); root = createRoot(host);
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   await act(async () => {
     root!.render(<QueryClientProvider client={qc}><BrowserRouter><ConfirmProvider><Logs /></ConfirmProvider></BrowserRouter></QueryClientProvider>);
   });
+  // Sabit uyku değil: sorgular yerleşene dek.
+  await settleUntil(() => qc.isFetching() === 0, 'logs sorguları yerleşti');
   await settle();
 }
 beforeEach(() => {

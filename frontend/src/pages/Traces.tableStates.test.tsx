@@ -13,12 +13,18 @@
 //      anahtar önerisi düğmesi;
 //   3. başarısız bir yenilemede eski satırlar hatanın üstünde KALMAZ;
 //   4. Pager / sayı etiketleri yalnız satır varken.
+import '@/test/pageJsdom'; // statik sayfa import'undan ÖNCE (matchMedia modül kapsamında)
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
 import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ConfirmProvider } from '@/components/ui/ConfirmDialog';
+import { settleUntil } from '@/test/actWait';
+// Sayfa modülü STATİK (v0.10.1707): test gövdesindeki dinamik import ilk
+// testin 5 s bütçesinden ödeniyordu — tam paket yükünde zaman aşımı +
+// sızan mount ile ardışık düşüş. Toplama aşamasının süre tavanı yok.
+import Traces from './Traces';
 
 const m = vi.hoisted(() => ({
   list: 'rows' as 'rows' | 'empty' | 'error' | 'pending',
@@ -84,7 +90,6 @@ const settle = () => act(async () => { await new Promise(r => setTimeout(r, 30))
 
 async function mountTraces(url: string) {
   window.history.replaceState(null, '', url);
-  const Traces = (await import('./Traces')).default;
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
@@ -96,6 +101,9 @@ async function mountTraces(url: string) {
       </QueryClientProvider>,
     );
   });
+  // Sabit uyku değil: sorgular yerleşene dek (asılı 'pending' sahtesi hariç).
+  const hanging = (m.list === 'pending' ? 1 : 0) + (m.agg === 'pending' ? 1 : 0);
+  await settleUntil(() => qc.isFetching() <= hanging, 'trace sorguları yerleşti');
   await settle();
 }
 

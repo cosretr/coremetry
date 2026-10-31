@@ -5,6 +5,7 @@
 // sahte): düğme sayfanın tek dolu birincilidir, tıklanınca `?ai=endpoint:…`
 // adrese yazılır (servis + rota + fiil + memo'lu pencere); RPC girişinde
 // (entry=rpc — `/`-yolu olmayan span adı, sunucu endpoint olarak çözemez) gizli.
+import '@/test/pageJsdom'; // statik sayfa import'undan ÖNCE (matchMedia modül kapsamında)
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
@@ -13,6 +14,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ConfirmProvider } from '@/components/ui/ConfirmDialog';
 import { parseAiParam } from '@/lib/aiSubject';
 import type { EndpointRow } from '@/lib/types';
+// Sayfa modülü STATİK (v0.10.1707): test gövdesindeki dinamik import ilk
+// testin 5 s bütçesinden ödeniyordu — tam paket yükünde zaman aşımı +
+// sızan mount ile ardışık düşüş. Toplama aşamasının süre tavanı yok.
+import Page from '../EndpointDetail';
 
 const SVC = 'bsa-web';
 const ROUTE = '/BSAWEB/application/{id}';
@@ -54,7 +59,6 @@ const settle = () => act(async () => { await new Promise(r => setTimeout(r, 30))
 
 async function mount(extra = '') {
   window.history.replaceState(null, '', `/endpoint?service=${SVC}&path=${encodeURIComponent(ROUTE)}&range=custom:1790000000000-1790003600000&src=span${extra}`);
-  const Page = (await import('../EndpointDetail')).default;
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);

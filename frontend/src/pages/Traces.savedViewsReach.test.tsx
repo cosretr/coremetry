@@ -11,6 +11,7 @@
 //      "Saved ▾" düğmesinde (Reset / CSV yanında). Liste, 1-9 kısayolu,
 //      "＋ Save current view…" ve "● modified" ≤ 1 tık. Aggregated
 //      görünümünde (grafik başlığı yok) aynı küme filtre şeridinde.
+import '@/test/pageJsdom'; // statik sayfa import'undan ÖNCE (matchMedia modül kapsamında)
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
@@ -18,6 +19,10 @@ import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ConfirmProvider } from '@/components/ui/ConfirmDialog';
 import type { SavedView } from '@/lib/types';
+// Sayfa modülü STATİK (v0.10.1707): test gövdesindeki dinamik import ilk
+// testin 5 s bütçesinden ödeniyordu — tam paket yükünde zaman aşımı +
+// sızan mount ile ardışık düşüş. Toplama aşamasının süre tavanı yok.
+import Traces from './Traces';
 
 const m = vi.hoisted(() => ({
   views: [] as SavedView[],
@@ -68,7 +73,6 @@ const settle = (ms = 30) => act(async () => { await new Promise(r => setTimeout(
 
 async function mountTraces(url: string) {
   window.history.replaceState(null, '', url);
-  const Traces = (await import('./Traces')).default;
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);

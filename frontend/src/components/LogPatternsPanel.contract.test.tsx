@@ -25,6 +25,7 @@ const { logsPatterns, logsTemplates } = vi.hoisted(() => ({
 vi.mock('@/lib/api', () => ({ api: { logsPatterns, logsTemplates } }));
 
 import { LogPatternsPanel, agoLabel, templatesSinceRung } from './LogPatternsPanel';
+import { settleUntil } from '@/test/actWait';
 
 let host: HTMLDivElement | null = null; let root: Root | null = null;
 // v0.10.954 — testler yenilemeyi (refetch) elle tetikleyebilsin diye dışarıda.
@@ -36,6 +37,13 @@ function render(node: ReactNode): HTMLElement {
   act(() => { root!.render(<MemoryRouter><QueryClientProvider client={qc}>{node}</QueryClientProvider></MemoryRouter>); });
   return host;
 }
+// v0.10.1707 — sabit 30 ms uyku yerine: sorgular bitene dek bekle, sonra bir
+// tur daha boşalt (React Query bildirimi setTimeout(0) ile React'a ulaşır).
+// Tam paket yükünde 30 ms yetmiyordu; tavan 4 s, koşulun adıyla düşer.
+async function settled() {
+  await settleUntil(() => qc.isFetching() === 0, 'sorgular bitti');
+  await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+}
 afterEach(() => {
   act(() => { root?.unmount(); }); host?.remove(); root = null; host = null;
   logsPatterns.mockClear(); logsTemplates.mockClear();
@@ -46,7 +54,7 @@ describe('LogPatternsPanel', () => {
   it('açıkken satırları ve dürüst altbilgiyi çizer; Ara türetilmiş sorguyu verir', async () => {
     const onSearch = vi.fn();
     const el = render(<LogPatternsPanel params={{ service: 'api', from: 1, to: 2 }} open onSearch={onSearch} />);
-    await act(async () => { await new Promise(r => setTimeout(r, 30)); });
+    await settled();
     expect(logsPatterns).toHaveBeenCalledTimes(1);
     expect(el.querySelectorAll('tr.lp-row').length).toBe(2);
     // Sayı biçimi test ortamının yereline bağlı (2.000 / 2,000) — yalnız şekil.
@@ -66,7 +74,7 @@ describe('LogPatternsPanel', () => {
   });
   it('kapalıyken hiç fetch etmez ve DOM boş', async () => {
     const el = render(<LogPatternsPanel params={{ from: 1, to: 2 }} open={false} onSearch={() => {}} />);
-    await act(async () => { await new Promise(r => setTimeout(r, 20)); });
+    await settled();
     expect(logsPatterns).not.toHaveBeenCalled();
     expect(el.querySelector('.lp-panel')).toBeNull();
   });
@@ -74,11 +82,11 @@ describe('LogPatternsPanel', () => {
     const onSearch = vi.fn();
     const now = Date.now();
     const el = render(<LogPatternsPanel params={{ service: 'svc', from: (now - 5 * 3600 * 1000) * 1e6, to: now * 1e6 }} open onSearch={onSearch} />);
-    await act(async () => { await new Promise(r => setTimeout(r, 30)); });
+    await settled();
     expect(logsTemplates).not.toHaveBeenCalled();
     const tabBtn = Array.from(el.querySelectorAll('.tab-strip button')).find(b => b.textContent === 'Şablonlar') as HTMLButtonElement;
     act(() => { tabBtn.click(); });
-    await act(async () => { await new Promise(r => setTimeout(r, 30)); });
+    await settled();
     expect(logsTemplates).toHaveBeenCalledTimes(1);
     expect(logsTemplates.mock.calls[0][0]).toMatchObject({ since: '6h', limit: 200, sort: 'last_seen', service: 'svc' });
     expect(el.querySelectorAll('tr.lp-row').length).toBe(1);
@@ -90,7 +98,7 @@ describe('LogPatternsPanel', () => {
     // Desenler sekmesine dönüş: fetch tekrar etmez (cache), satırlar desenler.
     const backBtn = Array.from(el.querySelectorAll('.tab-strip button')).find(b => b.textContent === 'Desenler') as HTMLButtonElement;
     act(() => { backBtn.click(); });
-    await act(async () => { await new Promise(r => setTimeout(r, 30)); });
+    await settled();
     expect(el.querySelectorAll('tr.lp-row').length).toBe(2);
   });
   // v0.10.954 — yenileme hatası BAYAT satırların altında saklanmaz: eski
@@ -98,10 +106,10 @@ describe('LogPatternsPanel', () => {
   // tabloya koymuştu. Hata artık eldeki satırların YERİNE geçer.
   it('desenler: başarılı yüklemeden sonra yenileme hatası satırların yerine geçer', async () => {
     const el = render(<LogPatternsPanel params={{ service: 'api', from: 1, to: 2 }} open onSearch={() => {}} />);
-    await act(async () => { await new Promise(r => setTimeout(r, 30)); });
+    await settled();
     expect(el.querySelectorAll('tr.lp-row').length).toBe(2);
     logsPatterns.mockRejectedValueOnce(new Error('boom'));
-    await act(async () => { await qc.refetchQueries({ queryKey: ['logs', 'patterns'] }); await new Promise(r => setTimeout(r, 30)); });
+    await act(async () => { await qc.refetchQueries({ queryKey: ['logs', 'patterns'] }); }); await settled();
     const err = el.querySelector('tr[data-dt-state="error"]');
     expect(err?.textContent).toContain('Desenler alınamadı: boom');
     expect(el.querySelectorAll('tr.lp-row').length).toBe(0);
@@ -111,11 +119,11 @@ describe('LogPatternsPanel', () => {
   it('şablonlar: başarılı yüklemeden sonra yenileme hatası satırların yerine geçer', async () => {
     const now = Date.now();
     const el = render(<LogPatternsPanel params={{ service: 'svc', from: (now - 5 * 3600 * 1000) * 1e6, to: now * 1e6 }} tab="templates" open onSearch={() => {}} />);
-    await act(async () => { await new Promise(r => setTimeout(r, 30)); });
+    await settled();
     expect(el.querySelectorAll('tr.lp-row').length).toBe(1);
     expect(el.textContent).toContain('1 kalıcı şablon');
     logsTemplates.mockRejectedValueOnce(new Error('boom'));
-    await act(async () => { await qc.refetchQueries({ queryKey: ['logs', 'templates'] }); await new Promise(r => setTimeout(r, 30)); });
+    await act(async () => { await qc.refetchQueries({ queryKey: ['logs', 'templates'] }); }); await settled();
     const err = el.querySelector('tr[data-dt-state="error"]');
     expect(err?.textContent).toContain('Şablonlar alınamadı: boom');
     expect(el.querySelectorAll('tr.lp-row').length).toBe(0);
@@ -130,14 +138,14 @@ describe('LogPatternsPanel', () => {
     logsTemplates.mockRejectedValueOnce(new Error('boom'));
     const now = Date.now();
     const el = render(<LogPatternsPanel params={{ service: 'svc', from: (now - 5 * 3600 * 1000) * 1e6, to: now * 1e6 }} tab="templates" open onSearch={() => {}} />);
-    await act(async () => { await new Promise(r => setTimeout(r, 30)); });
+    await settled();
     expect(el.querySelector('tr[data-dt-state="error"]')?.textContent).toContain('Şablonlar alınamadı: boom');
     expect(el.textContent).not.toMatch(/kalıcı şablon/);
   });
   it('mesajsız hata öznesini kaybetmez', async () => {
     logsPatterns.mockRejectedValueOnce(new Error(''));
     const el = render(<LogPatternsPanel params={{ service: 'api', from: 1, to: 2 }} open onSearch={() => {}} />);
-    await act(async () => { await new Promise(r => setTimeout(r, 30)); });
+    await settled();
     expect(el.querySelector('tr[data-dt-state="error"]')?.textContent).toContain('Desenler alınamadı');
   });
   it('templatesSinceRung basamakları', () => {
@@ -160,13 +168,13 @@ describe('LogPatternsPanel', () => {
 
   it('v0.10.1342 — Trend açık/kapalı durumu ikincil + active (tint + aria-pressed), dolu birincil değil', async () => {
     const el = render(<LogPatternsPanel params={{ service: 'api', from: 1, to: 2 }} open onSearch={() => {}} />);
-    await act(async () => { await new Promise(r => setTimeout(r, 30)); });
+    await settled();
     const trend = () => [...el.querySelectorAll('button')].find(b => b.textContent?.trim() === 'Trend') as HTMLButtonElement;
     expect(trend()).toBeTruthy();
     expect(trend().getAttribute('aria-pressed')).toBe('false');
     expect(trend().className).toContain('sec');
     expect(trend().className).not.toContain('is-active');
-    await act(async () => { trend().click(); await new Promise(r => setTimeout(r, 30)); });
+    await act(async () => { trend().click(); }); await settled();
     expect(trend().getAttribute('aria-pressed')).toBe('true');
     // Açıkken de ikincil kalır (`sec`), yalnız `.is-active` tint'i eklenir.
     expect(trend().className).toContain('sec');
@@ -180,7 +188,7 @@ describe('LogPatternsPanel', () => {
     const el = render(<LogPatternsPanel embedded tab="templates" open onSearch={() => {}}
       params={{ service: 'svc', from: (now - 5 * 3600 * 1000) * 1e6, to: now * 1e6 }}
       toolbar={<span data-testid="tb">✨</span>} aside={<div data-testid="aside">AI</div>} />);
-    await act(async () => { await new Promise(r => setTimeout(r, 30)); });
+    await settled();
     expect(el.querySelector('.tab-strip')).toBeNull();
     expect(el.querySelector('.lp-panel.lp-embedded')).not.toBeNull();
     expect(el.querySelector('.lp-toolbar [data-testid="tb"]')).not.toBeNull();

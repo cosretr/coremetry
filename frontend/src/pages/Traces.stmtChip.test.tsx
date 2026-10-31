@@ -6,12 +6,17 @@
 // Pinlenen: çip ham 20 haneyi değil "statement #<kısa id>" etiketini gösterir;
 // liste isteği ise HAM kimliği taşır (görünüm ≠ süzgeç); Errors pivotunda
 // hata şeridi listeyle aynı parametreleri alır (v0.10.1082 paritesi).
+import '@/test/pageJsdom'; // statik sayfa import'undan ÖNCE (matchMedia modül kapsamında)
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
 import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ConfirmProvider } from '@/components/ui/ConfirmDialog';
+// Sayfa modülü STATİK (v0.10.1707): test gövdesindeki dinamik import ilk
+// testin 5 s bütçesinden ödeniyordu — tam paket yükünde zaman aşımı +
+// sızan mount ile ardışık düşüş. Toplama aşamasının süre tavanı yok.
+import Traces from './Traces';
 
 const m = vi.hoisted(() => ({
   listParams: [] as Record<string, unknown>[],
@@ -63,7 +68,6 @@ const settle = () => act(async () => { await new Promise(r => setTimeout(r, 30))
 
 async function mountTraces(url: string) {
   window.history.replaceState(null, '', url);
-  const Traces = (await import('./Traces')).default;
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);

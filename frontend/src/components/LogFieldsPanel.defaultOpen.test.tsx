@@ -9,6 +9,7 @@
 //   • ES-maliyet kilidi: /logs paneli AÇIK bağlanınca alan istatistiği
 //     (logsFieldStats) HİÇ çağrılmaz (yalnız akordeon açılınca) ve alan
 //     listesi (logsFields) TAM BİR kez okunur.
+import '@/test/pageJsdom'; // statik sayfa import'undan ÖNCE (matchMedia modül kapsamında)
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -39,6 +40,10 @@ vi.mock('@/components/AuthProvider', () => ({
 }));
 
 import { LogFieldsPanel, fieldsPanelOpen } from './LogFieldsPanel';
+// Sayfa modülü STATİK (v0.10.1707): test gövdesindeki dinamik import ilk
+// testin 5 s bütçesinden ödeniyordu — tam paket yükünde zaman aşımı +
+// sızan mount ile ardışık düşüş. Toplama aşamasının süre tavanı yok.
+import Logs from '@/pages/Logs';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 class NoopResizeObserver { observe() {} unobserve() {} disconnect() {} }
@@ -125,7 +130,6 @@ describe('ES-maliyet kilidi — /logs paneli açık bağlanır', () => {
   it('0 logsFieldStats, tam 1 logsFields', async () => {
     setWide(true);
     window.history.replaceState(null, '', '/logs?range=custom:1759494780000-1759497240000');
-    const Logs = (await import('@/pages/Logs')).default;
     mount(<Logs />);
     await settle(); await settle();
     expect(isOpen()).toBe(true);

@@ -8,6 +8,7 @@
 // `pattern` parametresi olarak taşır — sunucu dedektörün yüklemini uygular.
 // Çivilenen: çip render, kutu boş, okumalar pattern taşır, × deseni kaldırır
 // (URL'den de), yazılan sorgu desenle birlikte gider (AND sunucuda).
+import '@/test/pageJsdom'; // statik sayfa import'undan ÖNCE (matchMedia modül kapsamında)
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
@@ -15,6 +16,10 @@ import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ConfirmProvider } from '@/components/ui/ConfirmDialog';
 import type { LogsResponse } from '@/lib/types';
+// Sayfa modülü STATİK (v0.10.1707): test gövdesindeki dinamik import ilk
+// testin 5 s bütçesinden ödeniyordu — tam paket yükünde zaman aşımı +
+// sızan mount ile ardışık düşüş. Toplama aşamasının süre tavanı yok.
+import Logs from './Logs';
 
 const m = vi.hoisted(() => ({
   logsCalls: [] as Record<string, unknown>[],
@@ -61,7 +66,6 @@ const settle = () => act(async () => { await new Promise(r => setTimeout(r, 30))
 
 async function mountLogs(url: string) {
   window.history.replaceState(null, '', url);
-  const Logs = (await import('./Logs')).default;
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);

@@ -25,12 +25,17 @@
 // kolon>` paylaşılan sıralama linkini sessizce ÖLDÜRÜYOR — tablo hiçbir
 // başlıkta aktif sıralama göstermiyorken sunucu kendi sırasıyla (time desc)
 // çekiyor. Doğrulama artık paylaşılan primitifte (useDataTable).
+import '@/test/pageJsdom'; // statik sayfa import'undan ÖNCE (matchMedia modül kapsamında)
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
 import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ConfirmProvider } from '@/components/ui/ConfirmDialog';
+// Sayfa modülü STATİK (v0.10.1707): test gövdesindeki dinamik import ilk
+// testin 5 s bütçesinden ödeniyordu — tam paket yükünde zaman aşımı +
+// sızan mount ile ardışık düşüş. Toplama aşamasının süre tavanı yok.
+import Traces from './Traces';
 
 // Sayım yanıtı testten testE DEĞİŞİYOR: tavanlı (prod hâli, kesin son sayfa
 // TÜRETİLEMEZ) ve kesin+küçük (lastReachablePage çizilir) iki ayrı dal.
@@ -82,7 +87,6 @@ let host: HTMLDivElement | null = null;
 
 async function mountTraces(url: string) {
   window.history.replaceState(null, '', url);
-  const Traces = (await import('./Traces')).default;
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);

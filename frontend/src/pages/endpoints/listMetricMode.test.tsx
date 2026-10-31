@@ -7,6 +7,7 @@
 // servis ZORUNLU, satır = (method, route), detay linki ?method= taşır, şekil
 // gruplaması metrik kipinde devre dışı. GERÇEK sayfa monte edilir (yalnız
 // `@/lib/api` sahte — metricMode.test.tsx emsali).
+import '@/test/pageJsdom'; // statik sayfa import'undan ÖNCE (matchMedia modül kapsamında)
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
@@ -15,6 +16,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ConfirmProvider } from '@/components/ui/ConfirmDialog';
 import { removeRaw, STORAGE_KEYS } from '@/lib/storage';
 import type { SpanMetricSeries } from '@/lib/types';
+// Sayfa modülü STATİK (v0.10.1707): test gövdesindeki dinamik import ilk
+// testin 5 s bütçesinden ödeniyordu — tam paket yükünde zaman aşımı +
+// sızan mount ile ardışık düşüş. Toplama aşamasının süre tavanı yok.
+import Page from '../Endpoints';
 
 type PromCall = { query: string; instant?: '1' };
 const m = vi.hoisted(() => ({
@@ -83,7 +88,6 @@ const settle = () => act(async () => { await new Promise(r => setTimeout(r, 30))
 async function mount(url: string) {
   m.prom = []; m.endpoints = 0;
   window.history.replaceState(null, '', url);
-  const Page = (await import('../Endpoints')).default;
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);

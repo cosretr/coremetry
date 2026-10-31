@@ -9,6 +9,7 @@
 // Karar: sekmenin AYNI PromQL'i (/api/metrics/promql?metricsrc=vm) route'a
 // süzülü. GERÇEK sayfa monte edilir (yalnız `@/lib/api` sahte, grafik
 // bileşeni lejant basan bir taslak).
+import '@/test/pageJsdom'; // statik sayfa import'undan ÖNCE (matchMedia modül kapsamında)
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
@@ -18,6 +19,10 @@ import { ConfirmProvider } from '@/components/ui/ConfirmDialog';
 import { removeRaw, STORAGE_KEYS } from '@/lib/storage';
 import { fmtSmart } from '@/lib/chartFmt';
 import type { EndpointRow, SpanMetricSeries } from '@/lib/types';
+// Sayfa modülü STATİK (v0.10.1707): test gövdesindeki dinamik import ilk
+// testin 5 s bütçesinden ödeniyordu — tam paket yükünde zaman aşımı +
+// sızan mount ile ardışık düşüş. Toplama aşamasının süre tavanı yok.
+import Page from '../EndpointDetail';
 
 type PromCall = { query: string; from: number; to: number; maxDataPoints: number; instant?: '1' };
 const m = vi.hoisted(() => ({
@@ -91,7 +96,6 @@ const settle = () => act(async () => { await new Promise(r => setTimeout(r, 30))
 async function mount(extra = '') {
   m.prom = []; m.endpoints = 0;
   window.history.replaceState(null, '', `/endpoint?service=${SVC}&path=${encodeURIComponent(ROUTE)}&range=3h${extra}`);
-  const Page = (await import('../EndpointDetail')).default;
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
