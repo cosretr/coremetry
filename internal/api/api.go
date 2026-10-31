@@ -5925,6 +5925,7 @@ func (s *Server) loginViaLDAP(ctx context.Context, email, password string, exist
 		// the O(1) join key to the LDAP group snapshot. Email stays the
 		// canonical identity. Store omits it when the column is absent.
 		LdapUsername: strings.ToLower(strings.TrimSpace(res.User.Username)),
+		Directory:    directoryJSON(res.User.Directory), // v0.10.1732 — user_detail.go
 	}
 	firstLogin := existing == nil
 	if existing != nil {
@@ -5950,8 +5951,7 @@ func (s *Server) loginViaLDAP(ctx context.Context, email, password string, exist
 	} else if existing != nil && existing.Role != role {
 		log.Printf("[auth] LDAP login refreshed role for %q: %s → %s", finalEmail, existing.Role, role)
 	}
-	// Re-read so callers get the canonical row (CreatedAt set by CH on
-	// first insert via DEFAULT now()).
+	// Re-read so callers get the canonical row (CreatedAt set by CH via DEFAULT now()).
 	saved, err := s.store.GetUserByEmail(ctx, finalEmail)
 	if err != nil || saved == nil {
 		return &u, nil

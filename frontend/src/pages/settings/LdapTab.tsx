@@ -10,7 +10,7 @@ import { SectionHead } from '@/components/coremetry/SectionHead';
 import { ActionRow } from '@/components/coremetry/ActionRow';
 import { cn } from '@/lib/cn';
 import { api } from '@/lib/api';
-import type { LDAPConfig, LDAPGroupRoleMapping, LDAPGroupSyncConfig, LDAPGroupSyncPreview, LDAPGroupSyncSummary, Role } from '@/lib/types';
+import type { LDAPConfig, LDAPDirectoryAttrs, LDAPGroupRoleMapping, LDAPGroupSyncConfig, LDAPGroupSyncPreview, LDAPGroupSyncSummary, Role } from '@/lib/types';
 import { tsLong } from '@/lib/utils';
 import { FlashBox, useSettingsLoad, SettingsLoadError } from './shared';
 import { LDAPUserPicker } from './LdapUserPicker';
@@ -206,6 +206,9 @@ export function LDAPTab() {
             department'ta tutuyor; alt ekibin HANGİ attribute'ta olduğunu
             görmek için bir kullanıcının tüm directory attribute'larını dök. */}
         <InspectPanel onPick={(attr, pattern) => update({ teamAttribute: attr, teamRegex: pattern })} />
+
+        {/* v0.10.1732 — kullanıcı detay sayfasının dizin öznitelikleri. */}
+        <DirectoryAttrsSection value={cfg.directoryAttrs} onChange={v => update({ directoryAttrs: v })} />
 
         {/* ── Section 3: Groups ──────────────────────────────────────── */}
         <SectionHead title="Group lookup (optional)" description={<>
@@ -624,5 +627,46 @@ function InspectPanel({ onPick }: { onPick: (attr: string, pattern: string) => v
         </>
       )}
     </div>
+  );
+}
+
+// DirectoryAttrsSection — v0.10.1732 (kullanıcı detay sayfası S2): Users ›
+// kullanıcı detayının İletişim / Kuruluş kartlarını dolduran dizin öznitelik
+// adları. Virgül = geri-düşme listesi; boş alan o bilgiyi okumaz. Sunucu boş
+// blob'a AD varsayılanlarını koyar (internal/ldap/directory.go).
+const DIRECTORY_FIELDS: { key: keyof LDAPDirectoryAttrs; label: string; placeholder: string }[] = [
+  { key: 'title', label: 'Ünvan', placeholder: 'title' },
+  { key: 'department', label: 'Departman', placeholder: 'department' },
+  { key: 'division', label: 'Müdürlük', placeholder: 'division' },
+  { key: 'level', label: 'Seviye', placeholder: 'boş = gösterme' },
+  { key: 'employeeId', label: 'Sicil no', placeholder: 'employeeID,employeeNumber' },
+  { key: 'mobile', label: 'Telefon', placeholder: 'mobile,telephoneNumber' },
+  { key: 'office', label: 'Ofis', placeholder: 'physicalDeliveryOfficeName' },
+  { key: 'manager', label: 'Yönetici (DN)', placeholder: 'manager' },
+];
+const EMPTY_DIRECTORY_ATTRS: LDAPDirectoryAttrs = {
+  title: '', department: '', division: '', employeeId: '', mobile: '', office: '', manager: '', level: '',
+};
+
+function DirectoryAttrsSection({ value, onChange }: {
+  value?: LDAPDirectoryAttrs;
+  onChange: (v: LDAPDirectoryAttrs) => void;
+}) {
+  const v = value ?? EMPTY_DIRECTORY_ATTRS;
+  return (
+    <>
+      <SectionHead title="Dizin öznitelikleri (kullanıcı detayı)" description={<>
+        Users › kullanıcı detayındaki ünvan, departman, sicil, telefon, ofis ve yönetici alanları
+        her LDAP girişinde bu özniteliklerden okunur. Virgül geri-düşme listesidir
+        (<code>employeeID,employeeNumber</code>); boş alan okunmaz.
+      </>} />
+      <div className={ROW}>
+        {DIRECTORY_FIELDS.map(f => (
+          <Field key={f.key} label={f.label} small controlClassName="font-mono"
+            value={v[f.key] ?? ''} placeholder={f.placeholder}
+            onChange={e => onChange({ ...v, [f.key]: e.target.value })} />
+        ))}
+      </div>
+    </>
   );
 }

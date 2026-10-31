@@ -320,6 +320,8 @@ type Store struct {
 	// hasRoleLockedCol — users.role_locked (v0.10.1731) indi mi; aynı
 	// sözleşme (auth-kritik INSERT kolon listesi probe'a bağlı).
 	hasRoleLockedCol bool
+	// hasDirectoryCol — users.directory (v0.10.1732), aynı sözleşme.
+	hasDirectoryCol bool
 
 	// hasProblemCmpCol — `problems` tablosunda comparator kolonu var mı
 	// (v0.9.976). hasLdapUsernameCol ile AYNI sınıf: `problems` Coremetry'nin
@@ -2283,6 +2285,9 @@ func canonicalTables(sd, ld, md int) []string {
 			-- v0.10.1731 — 1 = admin bu LDAP hesabının rolünü elle verdi;
 			-- giriş yolu AD grup eşlemesiyle EZMEZ (hasRoleLockedCol).
 			role_locked   UInt8 DEFAULT 0,
+			-- v0.10.1732 — LDAP dizin öznitelikleri (ünvan, departman, sicil,
+			-- telefon, ofis, yönetici DN …) tek JSON; '' = okunmadı.
+			directory     String DEFAULT '',
 			version       UInt64 DEFAULT toUnixTimestamp64Nano(now64(9))
 		) ENGINE = ReplacingMergeTree(version)
 		ORDER BY id`,
@@ -4059,6 +4064,9 @@ func (s *Store) migrate(ctx context.Context) error {
 		// sınıfı; hasRoleLockedCol probe'u kolon inene dek INSERT/SELECT'ten
 		// düşürür (iki-boot sözleşmesi: kolonu ekleyen boot false okuyabilir).
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS role_locked UInt8 DEFAULT 0`,
+		// v0.10.1732 — dizin öznitelikleri JSON'u (kullanıcı detay sayfası S2);
+		// hasDirectoryCol probe'u, aynı iki-boot sözleşmesi.
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS directory String DEFAULT ''`,
 		// v0.5.254 — Problem AI auto-explain. The background
 		// problemExplainer goroutine fills these for open critical
 		// problems within ~30s of opening; the UI surfaces the
@@ -4523,6 +4531,14 @@ func (s *Store) migrate(ctx context.Context) error {
 	s.hasRoleLockedCol = rlErr == nil
 	if !s.hasRoleLockedCol {
 		log.Printf("[chstore] `role_locked` column not present on users (%v) — role lock omitted until it lands", rlErr)
+	}
+
+	// directory probe (v0.10.1732) — role_locked ile aynı şekil.
+	drRows, drErr := s.conn.Query(ctx, `SELECT directory FROM users LIMIT 1 SETTINGS max_execution_time = 3`)
+	maybeCloseRows(drRows, drErr)
+	s.hasDirectoryCol = drErr == nil
+	if !s.hasDirectoryCol {
+		log.Printf("[chstore] `directory` column not present on users (%v) — directory attributes omitted until it lands", drErr)
 	}
 
 	// comparator probe (v0.9.976) — ldap_username ile birebir aynı şekil.

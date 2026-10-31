@@ -120,6 +120,11 @@ type Config struct {
 	// in-scope groups and, per group, chain-searches their effective
 	// members, persisting the result to ClickHouse for O(1) authz.
 	GroupSync GroupSyncConfig `json:"groupSync"`
+
+	// DirectoryAttrs (v0.10.1732) — kullanıcı detay sayfasının dizin
+	// öznitelikleri (ünvan, departman, sicil, telefon, ofis, yönetici …);
+	// directory.go. Boş blob AD varsayılanlarını alır.
+	DirectoryAttrs DirectoryAttrConfig `json:"directoryAttrs"`
 }
 
 type GroupRoleMapping struct {
@@ -231,6 +236,7 @@ func (c *Config) Normalize() {
 		c.DefaultRole = "viewer"
 	}
 	c.GroupSync.normalize()
+	c.DirectoryAttrs.normalize()
 }
 
 // Group-sync defaults (v0.8.526).
@@ -367,6 +373,9 @@ type LDAPUser struct {
 	// not ship images; the login path persists it to the users row and
 	// the photo endpoints serve it from there.
 	Photo []byte `json:"-"`
+	// Directory — v0.10.1732: DirectoryAttrs eşlemesiyle okunan kurumsal
+	// öznitelikler (users.directory JSON kolonuna yazılır).
+	Directory DirectoryInfo `json:"directory,omitempty"`
 }
 
 // maxPhotoBytes caps what we take from the directory. AD's
@@ -773,6 +782,7 @@ func findUser(conn *goldap.Conn, c Config, username string) (*LDAPUser, error) {
 	if extra := teamAttrForFetch(c); extra != "" {
 		attrs = append(attrs, extra)
 	}
+	attrs = append(attrs, directoryFetchAttrs(c.DirectoryAttrs)...) // v0.10.1732
 	log.Printf("[ldap] user search baseDN=%q filter=%s attrs=%v", c.BaseDN, filter, attrs)
 	req := goldap.NewSearchRequest(
 		c.BaseDN, goldap.ScopeWholeSubtree, goldap.NeverDerefAliases,
@@ -820,6 +830,7 @@ func findUser(conn *goldap.Conn, c Config, username string) (*LDAPUser, error) {
 		Company:     dirText(e, "company", "o"),
 		Photo:       photoFromEntry(e),
 		Groups:      groups,
+		Directory:   directoryFromEntry(e, c.DirectoryAttrs),
 	}, nil
 }
 

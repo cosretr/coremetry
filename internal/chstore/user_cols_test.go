@@ -36,10 +36,11 @@ func (c *countScanner) Scan(dst ...any) error {
 func TestUserColsAlignAcrossProbes(t *testing.T) {
 	combos := []userCols{
 		{}, {ldap: true}, {roleLocked: true}, {ldap: true, roleLocked: true},
+		{directory: true}, {ldap: true, directory: true}, {ldap: true, roleLocked: true, directory: true},
 	}
 	for _, c := range combos {
 		ins := strings.Split(userInsertColumns(c), ",")
-		args := userInsertArgs(User{ID: "u1", Role: "viewer", RoleLocked: true}, c)
+		args := userInsertArgs(User{ID: "u1", Role: "viewer", RoleLocked: true, Directory: []byte(`{"title":"x"}`)}, c)
 		if len(ins) != len(args) {
 			t.Errorf("%+v: INSERT %d kolon, %d değer", c, len(ins), len(args))
 		}
@@ -55,7 +56,10 @@ func TestUserColsAlignAcrossProbes(t *testing.T) {
 		if hasRL != c.roleLocked {
 			t.Errorf("%+v: role_locked INSERT'te=%v", c, hasRL)
 		}
-		if c.roleLocked && args[len(args)-1] != uint8(1) {
+		if c.directory && args[len(args)-1] != `{"title":"x"}` {
+			t.Errorf("%+v: Directory son değer olmalı, %v", c, args[len(args)-1])
+		}
+		if c.roleLocked && !c.directory && args[len(args)-1] != uint8(1) {
 			t.Errorf("%+v: RoleLocked=true 1 yazılmalı, %v", c, args[len(args)-1])
 		}
 	}

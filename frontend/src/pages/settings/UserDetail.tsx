@@ -16,7 +16,7 @@ import { CopyButton } from '@/components/CopyButton';
 import { useAuth } from '@/components/AuthProvider';
 import { keys, useCustomRoles, useUserAudit, useUserDetail } from '@/lib/queries';
 import { api, type UserRow } from '@/lib/api';
-import type { AuditEntry, UserDetailUser, UserLdapGroup } from '@/lib/types';
+import type { AuditEntry, UserDetailUser, UserDirectory, UserLdapGroup } from '@/lib/types';
 import { cn } from '@/lib/cn';
 import { tsLong, tsRel } from '@/lib/utils';
 import { CustomRoleEditor, RoleEditor, TeamEditor } from '../Users';
@@ -131,6 +131,7 @@ export default function UserDetailPage() {
   const isMe = me?.id === u.id;
   const st = userStatus(u);
   const isLdap = u.authProvider === 'ldap';
+  const dir: UserDirectory = u.directory ?? {};
   const teamCount = groups.length + (u.team ? 1 : 0);
   const teamSuggestions = Array.from(new Set(
     (qc.getQueryData<UserRow[]>(keys.users.list) ?? []).map(x => x.team).filter(Boolean))).sort();
@@ -174,12 +175,17 @@ export default function UserDetailPage() {
                 {u.fullName || u.email}{u.org ? <span className="font-normal text-(--text2)"> ({u.org})</span> : null}
               </h1>
               <div className="flex flex-wrap items-center gap-2 text-[13px] text-(--text2)">
+                {u.directory?.employeeId && <>
+                  <span className="font-mono font-medium text-(--text)" title="Sicil no">{u.directory.employeeId}</span>
+                  <CopyButton value={u.directory.employeeId} title="Sicil no kopyala" copiedTitle="Kopyalandı" />·
+                </>}
                 <span>{u.email}</span><CopyButton value={u.email} title="E-postayı kopyala" copiedTitle="Kopyalandı" />
                 {u.ldapUsername && <span className="font-mono text-(--text)" title="Dizin kullanıcı adı">{u.ldapUsername}</span>}
               </div>
               <div className="flex flex-wrap gap-1.5">
                 <Badge variant="secondary" className="font-mono">{u.role}</Badge>
                 {u.customRole && <Badge variant="outline" title="Özel rol">{u.customRole}</Badge>}
+                {u.directory?.title && <Badge variant="outline" title="Ünvan (dizin)">{u.directory.title}</Badge>}
                 <StatusBadge status={st.status}>{st.label}</StatusBadge>
                 <Badge variant="outline">{userSourceLabel(u.authProvider)}</Badge>
                 {u.roleLocked && <StatusBadge status="warn" title="Rol elle verildi; LDAP girişi AD eşlemesiyle ezmez">Rol kilitli</StatusBadge>}
@@ -220,6 +226,12 @@ export default function UserDetailPage() {
                 <Card title="İletişim">
                   <KeyValue items={[
                     { k: 'E-posta', v: u.email, actions: <CopyButton value={u.email} title="E-postayı kopyala" copiedTitle="Kopyalandı" /> },
+                    ...(isLdap ? [
+                      { k: 'Sicil no', v: dir.employeeId, mono: true,
+                        actions: dir.employeeId ? <CopyButton value={dir.employeeId} title="Sicil no kopyala" copiedTitle="Kopyalandı" /> : undefined },
+                      { k: 'Telefon', v: dir.mobile, mono: true },
+                      { k: 'Ofis', v: dir.office },
+                    ] : []),
                   ]} />
                 </Card>
                 {isLdap && (
@@ -248,6 +260,13 @@ export default function UserDetailPage() {
                   <KeyValue items={[
                     { k: 'Birincil takım', v: editing ? <TeamEditor user={row} suggestions={teamSuggestions} onChanged={refresh} /> : u.team, mono: !editing },
                     { k: 'Şirket', v: u.org },
+                    ...(isLdap ? [
+                      { k: 'Ünvan', v: dir.title },
+                      { k: 'Departman', v: dir.department },
+                      { k: 'Müdürlük', v: dir.division },
+                      ...(dir.level ? [{ k: 'Seviye', v: dir.level }] : []),
+                      { k: 'Bağlı olduğu yönetici', v: dir.managerName || dir.managerDn, title: dir.managerDn },
+                    ] : []),
                   ]} />
                 </Card>
               </div>

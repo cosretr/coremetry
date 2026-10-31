@@ -2,6 +2,7 @@ package chstore
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 )
@@ -63,6 +64,11 @@ type User struct {
 	// ver" (DELETE /api/users/{id}/role-lock) temizler. Whole-row replace:
 	// her RMW taşır. Yalnız Store.hasRoleLockedCol iken yazılır/okunur.
 	RoleLocked bool `json:"roleLocked,omitempty"`
+	// Directory — v0.10.1732: LDAP dizin öznitelikleri, ham JSON
+	// (ldap.DirectoryInfo şekli; chstore ldap'a bağımlı değil). Girişte
+	// yenilenir, dizin boş dönerse saklı değer kalır. Whole-row replace: her
+	// RMW taşır. Yalnız Store.hasDirectoryCol iken yazılır/okunur.
+	Directory json.RawMessage `json:"directory,omitempty"`
 }
 
 // userCols — users tablosunun probe'lu (isteğe bağlı) kolonları. Okuma
@@ -71,10 +77,11 @@ type User struct {
 type userCols struct {
 	ldap       bool // ldap_username (v0.8.526)
 	roleLocked bool // role_locked (v0.10.1731)
+	directory  bool // directory (v0.10.1732)
 }
 
 func (s *Store) userCols() userCols {
-	return userCols{ldap: s.hasLdapUsernameCol, roleLocked: s.hasRoleLockedCol}
+	return userCols{ldap: s.hasLdapUsernameCol, roleLocked: s.hasRoleLockedCol, directory: s.hasDirectoryCol}
 }
 
 // userInsertColumns — SAF: UpsertUser'ın kolon listesi. userInsertArgs ile
@@ -86,6 +93,9 @@ func userInsertColumns(c userCols) string {
 	}
 	if c.roleLocked {
 		cols += ", role_locked"
+	}
+	if c.directory {
+		cols += ", directory"
 	}
 	return cols
 }
@@ -115,6 +125,9 @@ func userInsertArgs(u User, c userCols) []any {
 		}
 		args = append(args, rl)
 	}
+	if c.directory {
+		args = append(args, string(u.Directory))
+	}
 	return args
 }
 
@@ -134,6 +147,9 @@ func userSelectExprFor(c userCols) string {
 	if c.roleLocked {
 		expr += `, role_locked`
 	}
+	if c.directory {
+		expr += `, directory`
+	}
 	return expr
 }
 
@@ -142,7 +158,7 @@ func userSelectExprFor(c userCols) string {
 func scanUserRow(sc interface{ Scan(...any) error }, c userCols) (*User, error) {
 	var u User
 	var disabled, roleLocked uint8
-	var photo string
+	var photo, directory string
 	dst := []any{&u.ID, &u.Email, &u.PasswordHash, &u.Role, &disabled, &u.AuthProvider,
 		&u.Team, &u.CustomRole, &u.CreatedAt, &photo, &u.FullName, &u.Org, &u.LastLoginAt}
 	if c.ldap {
@@ -151,12 +167,18 @@ func scanUserRow(sc interface{ Scan(...any) error }, c userCols) (*User, error) 
 	if c.roleLocked {
 		dst = append(dst, &roleLocked)
 	}
+	if c.directory {
+		dst = append(dst, &directory)
+	}
 	if err := sc.Scan(dst...); err != nil {
 		return nil, err
 	}
 	u.Disabled = disabled != 0
 	u.Blocked = disabled == userBlocked
 	u.RoleLocked = roleLocked != 0
+	if directory != "" {
+		u.Directory = json.RawMessage(directory)
+	}
 	u.Photo, u.HasPhoto = []byte(photo), photo != ""
 	return &u, nil
 }

@@ -187,5 +187,23 @@ func carryLdapLoginRow(existing *chstore.User, u chstore.User) chstore.User {
 	if u.LdapUsername == "" {
 		u.LdapUsername = existing.LdapUsername
 	}
+	// v0.10.1732 — dizin öznitelikleri: dolu okuma bütünüyle yeniler, boş
+	// okuma (öznitelik yok / eşleme boş) saklı değeri SİLMEZ.
+	if len(u.Directory) == 0 {
+		u.Directory = existing.Directory
+	}
 	return u
+}
+
+// directoryJSON — SAF: okunan dizin özniteliklerinin users.directory JSON'u;
+// hiçbir öznitelik okunmadıysa nil (carryLdapLoginRow saklıyı korur).
+func directoryJSON(d ldap.DirectoryInfo) json.RawMessage {
+	if d.Empty() {
+		return nil
+	}
+	b, err := json.Marshal(d)
+	if err != nil {
+		return nil
+	}
+	return b
 }

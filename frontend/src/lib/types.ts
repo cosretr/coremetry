@@ -2960,6 +2960,19 @@ export interface LDAPConfig {
   groupRoleMap: LDAPGroupRoleMapping[];
   // v0.8.527 — periyodik AD grup→üye senkronu yapılandırması.
   groupSync?: LDAPGroupSyncConfig;
+  // v0.10.1732 — kullanıcı detay sayfasının dizin öznitelik ADLARI; her alan
+  // virgüllü geri-düşme listesi ("employeeID,employeeNumber"), boş = okunmaz.
+  directoryAttrs?: LDAPDirectoryAttrs;
+}
+export interface LDAPDirectoryAttrs {
+  title: string;
+  department: string;
+  division: string;
+  employeeId: string;
+  mobile: string;
+  office: string;
+  manager: string;
+  level: string;
 }
 // v0.8.527 — LDAP/AD grup senkron ayarları (mevcut ldap blob'unun içinde).
 export interface LDAPGroupSyncConfig {
@@ -6521,6 +6534,21 @@ export interface UserDetailUser {
   ldapUsername?: string;
   // Admin bu LDAP hesabının rolünü elle verdi; giriş AD eşlemesiyle ezmez.
   roleLocked?: boolean;
+  // v0.10.1732 — LDAP dizin öznitelikleri (Go ldap.DirectoryInfo); yerel/OIDC
+  // hesapta ya da hiç okunmadıysa yok.
+  directory?: UserDirectory;
+}
+// v0.10.1732 — users.directory JSON'u. Boş alan gelmez (omitempty).
+export interface UserDirectory {
+  title?: string;
+  department?: string;
+  division?: string;
+  employeeId?: string;
+  mobile?: string;
+  office?: string;
+  managerDn?: string;
+  managerName?: string;
+  level?: string;
 }
 export interface UserLdapGroup {
   cn: string;
