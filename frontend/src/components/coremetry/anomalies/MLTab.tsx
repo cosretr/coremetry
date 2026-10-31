@@ -4,6 +4,7 @@
 // satır başına «gerçek / değil» + not (anomaly_verdicts 'ml:' önekli) ve
 // üstte dedektör karnesi (30 gün isabet + örnek). Tablo: coremetry DataTable.
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { DataTable } from '@/components/coremetry/DataTable';
 import type { ColumnDef } from '@/components/coremetry/DataTable';
@@ -13,6 +14,8 @@ import { api } from '@/lib/api';
 import { keys, useMLEvents, useMLScorecard } from '@/lib/queries';
 import { fmtDateTime } from '@/lib/utils';
 import type { MLEvent, MLDetectorScore, MLGate } from '@/lib/types';
+import { MLReplaySheet } from './MLReplaySheet';
+import { MLPeriodReplay } from './MLPeriodReplay';
 
 export const ML_DETECTOR_TR: Record<string, string> = {
   log_volume: 'Log hacmi', error_rate: 'Hata oranı', service_silent: 'Servis sustu',
@@ -88,6 +91,14 @@ export function MLTab({ signal = '', onSignal }: { signal?: MLSignal; onSignal?:
   const sc = useMLScorecard();
   const [busyId, setBusyId] = useState<string | null>(null);
   const rows = ev.data?.items ?? [];
+  // Replay seçimi URL'de (paylaşılabilir; replace:true).
+  const [params, setParams] = useSearchParams();
+  const replayId = params.get('replay');
+  const setReplay = (id: string | null) => setParams(p => {
+    const n = new URLSearchParams(p);
+    if (id) n.set('replay', id); else n.delete('replay');
+    return n;
+  }, { replace: true });
 
   const verdict = async (e: MLEvent, v: 'anomaly' | 'not_anomaly') => {
     const note = v === 'not_anomaly' ? (window.prompt('Not (isteğe bağlı): neden anomali değil?') ?? '') : '';
@@ -151,15 +162,18 @@ export function MLTab({ signal = '', onSignal }: { signal?: MLSignal; onSignal?:
         sort={{ initial: { id: 'last', dir: 'desc' } }}
         getRowKey={e => e.id} renderCell={renderCell}
         rowActions={{
-          label: 'Geri bildirim',
+          label: 'Eylemler',
           triggerLabel: e => `${e.service} geri bildirim`,
           isDisabled: e => busyId === e.id,
           items: e => [
+            { id: 'replay', label: 'Replay', onSelect: () => setReplay(e.id) },
             { id: 'real', label: 'Gerçek anomali', onSelect: () => { void verdict(e, 'anomaly'); }, disabled: e.verdict === 'anomaly' },
             { id: 'not', label: 'Anomali değil (not ile)', onSelect: () => { void verdict(e, 'not_anomaly'); }, disabled: e.verdict === 'not_anomaly' },
           ],
         }} />
       {ev.data?.truncated && <p className="text-xs text-muted-foreground">Liste 200 satırda kesildi.</p>}
+      <MLPeriodReplay signal={signal} />
+      <MLReplaySheet id={replayId} onClose={() => setReplay(null)} />
     </div>
   );
 }

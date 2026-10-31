@@ -1620,7 +1620,8 @@ export const api = {
     }),
   mlReplay: (id: string) => get<import('./types').MLReplay>(`/api/ml/${encodeURIComponent(id)}/replay`),
   // Kalite çerçevesi backtest / what-if (v0.10.1751): salt hesap, yazmaz.
-  mlBacktest: (body: { signal: string; service: string; from?: number; to?: number; config?: import('./types').MLConfig }) =>
+  mlBacktest: (body: { signal: string; service: string; from?: number; to?: number; config?: import('./types').MLConfig;
+    overrides?: { criticalZ?: number; dwellBuckets?: number; impactMinRel?: number } }) =>
     request<import('./types').MLBacktestResult>(`/api/ml/backtest`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     }),

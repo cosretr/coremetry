@@ -7,7 +7,7 @@ package api
 //   GET /api/ml/scorecard                                   — her rol (30 g)
 //   PUT /api/ml/{id}/verdict  {verdict, note?, detector, service} — editor+
 //   GET /api/ml/{id}/replay                                 — her rol (kayıt + servisin diğer olayları)
-//   POST /api/ml/backtest {signal, service, from, to, config?} — editor+ (salt hesap)
+//   POST /api/ml/backtest {signal, service, from, to, config?, overrides?} — editor+ (salt hesap)
 //   GET /api/admin/ml                                       — admin
 //   PUT /api/admin/ml                                       — admin (audit)
 //
@@ -127,6 +127,13 @@ func (s *Server) postMLBacktest(w http.ResponseWriter, r *http.Request) {
 		From    int64             `json:"from"` // unix sn
 		To      int64             `json:"to"`
 		Config  *chstore.MLConfig `json:"config,omitempty"`
+		// Overrides — what-if: kayıtlı ayarın üstüne yalnız bu eşikler
+		// (editor tam blob'u göremez; GET /api/admin/ml admin-only).
+		Overrides *struct {
+			CriticalZ    *float64 `json:"criticalZ,omitempty"`
+			DwellBuckets *int     `json:"dwellBuckets,omitempty"`
+			ImpactMinRel *float64 `json:"impactMinRel,omitempty"`
+		} `json:"overrides,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "geçersiz JSON: "+err.Error())
@@ -148,6 +155,18 @@ func (s *Server) postMLBacktest(w http.ResponseWriter, r *http.Request) {
 	cfg := s.store.GetMLConfig(r.Context())
 	if body.Config != nil {
 		cfg = chstore.NormalizeMLConfig(*body.Config)
+	}
+	if o := body.Overrides; o != nil {
+		if o.CriticalZ != nil {
+			cfg.CriticalZ = *o.CriticalZ
+		}
+		if o.DwellBuckets != nil {
+			cfg.DwellBuckets = *o.DwellBuckets
+		}
+		if o.ImpactMinRel != nil {
+			cfg.Quality.ImpactMinRel = *o.ImpactMinRel
+		}
+		cfg = chstore.NormalizeMLConfig(cfg)
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
