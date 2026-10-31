@@ -231,6 +231,7 @@ type MLProfileRequest struct {
 	Signal     string
 	Parts      []string // tam parça adları; boşsa PartPrefix
 	PartPrefix string
+	PartSuffix string // ek süzgeç (trace kırılması: "|p95"); "" = yok
 	Dates      []string
 	Slots      []int // istenen dilimler (≤ 288)
 	TargetSec  int
@@ -250,10 +251,7 @@ func (s *Store) MLSeasonalProfile(ctx context.Context, req MLProfileRequest) (ma
 	if tz == "" {
 		tz = "UTC"
 	}
-	partCond, partArg := "startsWith(part, ?)", any(req.PartPrefix)
-	if len(req.Parts) > 0 {
-		partCond, partArg = "part IN (?)", any(req.Parts)
-	}
+	partCond, partArg := mlPartCond(req.Parts, req.PartPrefix, req.PartSuffix)
 	rows, err := s.conn.Query(ctx, `
 		SELECT service, part, intDiv(toUInt32(toHour(bucket, ?)) * 3600 + toUInt32(toMinute(bucket, ?)) * 60, ?) AS slot,
 		       quantiles(0.25, 0.5, 0.75)(count * ? / bucket_sec) AS q
@@ -292,11 +290,8 @@ func (s *Store) MLSeasonalProfile(ctx context.Context, req MLProfileRequest) (ma
 
 // MLSeriesRecent — tüm servislerin parçalarının [since, ∞) noktaları
 // (CUSUM penceresi), hedef kovaya normalize; yalnız hedef kova çözünürlüğü.
-func (s *Store) MLSeriesRecent(ctx context.Context, signal string, parts []string, partPrefix string, since time.Time, targetSec int) (map[string][]MLPoint, error) {
-	partCond, partArg := "startsWith(part, ?)", any(partPrefix)
-	if len(parts) > 0 {
-		partCond, partArg = "part IN (?)", any(parts)
-	}
+func (s *Store) MLSeriesRecent(ctx context.Context, signal string, parts []string, partPrefix, partSuffix string, since time.Time, targetSec int) (map[string][]MLPoint, error) {
+	partCond, partArg := mlPartCond(parts, partPrefix, partSuffix)
 	rows, err := s.conn.Query(ctx, `
 		SELECT service, part, toUnixTimestamp(bucket) AS t, max(count) AS v
 		FROM ml_series
@@ -321,4 +316,15 @@ func (s *Store) MLSeriesRecent(ctx context.Context, signal string, parts []strin
 		out[k] = append(out[k], MLPoint{T: int64(t), V: v})
 	}
 	return out, rows.Err()
+}
+
+// mlPartCond — SAF: parça süzgeci; tek bağ argümanı (tam liste | önek | sonek).
+func mlPartCond(parts []string, prefix, suffix string) (string, any) {
+	switch {
+	case len(parts) > 0:
+		return "part IN (?)", parts
+	case suffix != "":
+		return "endsWith(part, ?)", suffix
+	}
+	return "startsWith(part, ?)", prefix
 }

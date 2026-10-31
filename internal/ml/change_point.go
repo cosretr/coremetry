@@ -116,6 +116,7 @@ type cpTarget struct {
 	signal   string
 	parts    []string
 	prefix   string
+	suffix   string
 	detector string
 	// partOf — olay kimliği/Code/Level için parça → (level, code).
 	fields func(part string) (level, code string)
@@ -142,11 +143,11 @@ func runChangePoint(ctx context.Context, deps Deps, cfg chstore.MLConfig, now ti
 		}
 	}
 	t0 := time.Now()
-	recent, err := deps.Store.MLSeriesRecent(ctx, tg.signal, tg.parts, tg.prefix, since, cfg.BucketSec)
+	recent, err := deps.Store.MLSeriesRecent(ctx, tg.signal, tg.parts, tg.prefix, tg.suffix, since, cfg.BucketSec)
 	if err != nil {
 		return nil, err
 	}
-	prof, err := deps.Store.MLSeasonalProfile(ctx, chstore.MLProfileRequest{Signal: tg.signal, Parts: tg.parts, PartPrefix: tg.prefix,
+	prof, err := deps.Store.MLSeasonalProfile(ctx, chstore.MLProfileRequest{Signal: tg.signal, Parts: tg.parts, PartPrefix: tg.prefix, PartSuffix: tg.suffix,
 		Dates: dates, Slots: slots, TargetSec: cfg.BucketSec, TZ: loc.String()})
 	global.lastCHMs.Store(time.Since(t0).Milliseconds())
 	if err != nil {

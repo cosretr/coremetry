@@ -28,6 +28,10 @@ func eventPart(ev chstore.MLEvent) string {
 		switch ev.Detector {
 		case detDependencyLatency:
 			return depPartPrefix + ev.Code + "|p95"
+		case detTraceChangePoint:
+			return tracePart(ev.Code, "p95")
+		case detTracePodOutlier:
+			return "" // kesitsel karar: pod serisi tutulmaz
 		case detOpLatency:
 			return tracePart(ev.Code, "p95")
 		case detOpErrorRate:
