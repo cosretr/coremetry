@@ -145,3 +145,7 @@ Ortak etiket seti `chstore.MLLabels` (ML kararları × olay penceresi; sinyal fa
 ## 18. Trace T3 (v0.10.1759): pod aykırısı + kırılma
 
 **Kaynak (operatör kararı 2026-10-31):** `trace_pod_outlier` VM server RED aileleri (T1 pinleri) + keşfedilen pod etiketi (k8s_pod_name, pod, …); `spanmetrics_1m` pod kolonu örneklenmiş span'den türediği için KULLANILMAZ. Dwell penceresi üzerinde aile başına 3 anlık sorgu (istek artışı, hata artışı, p95); hata oranında log dilim 3'ün `podOutliers` kuralı, p95'te pod'lar arası medyan+effMAD, ≥3 pod, ≥1.5× medyan. Pod serisi tutulmaz (replay serisiz, kanıt sayılarıyla). `trace_change_point`: `change_point.go` çekirdeği trace ml_series `|p95` serilerinde (`endsWith`), rollout ±15 dk eşlemesi aynı. Etiket yoksa sessiz + `lastError`.
+
+## 19. Dilim 5 (v0.10.1760): CoSRE v2 araçları
+
+`internal/mcptools/v2_ml.go`, yalnız v2 sohbet kataloğu (`registerV2Subset`; v1 kataloğu ve dış MCP `tools/list` değişmez, altında yalnız `*/v2` anahtarları). `get_log_anomalies` (signal log varsayılan | trace | metric, service, detector, range_s ≤7 g, ≤20 satır, ≤2 KB): gölge olaylar + teyit + karar; "Problem değil" açıkça. `explain_ml_event(id)`: replay kaydından olgular (takvim sınıfı, taban medyan/MAD, kritik/etkin z, tetiklenen kova sayısı, seri tepe/taban özeti, teyit, servisin diğer sinyalleri, rollout, exception/Oracle/BubbleUp referansları, ≤3 örnek trace, Replay page_url); ham seri dönmez, gövde ≤2 KB. Viewer düzeyi, salt okuma.

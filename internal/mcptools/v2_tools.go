@@ -54,7 +54,7 @@ const (
 
 // registerV2Subset — yalnız v2 sohbet kataloğuna eklenen araçlar (sıra = modelin gördüğü sıra).
 func registerV2Subset(d Deps) []mcp.Tool {
-	return []mcp.Tool{listMyServicesTool(d), openProblemsTool(d), findTracesTool(d), cosreSearchLogsTool(d), explainTraceTool(d), endpointMetricsTool(d)}
+	return []mcp.Tool{listMyServicesTool(d), openProblemsTool(d), findTracesTool(d), cosreSearchLogsTool(d), explainTraceTool(d), endpointMetricsTool(d), getLogAnomaliesTool(d), explainMLEventTool(d)}
 }
 
 // V2MergeTools — SAF (dilim 3): v2 kataloğu = taban katalog + v2 araçları;
