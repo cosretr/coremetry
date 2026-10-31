@@ -185,6 +185,10 @@ type chatRequest struct {
 		// anomaly, service-health, runbook, log; chat_explain_registry.go) +
 		// `subject` (`?ai=` kodeği). Yokken her yol bayt bayt eski.
 		ExplainAsk *chatExplainAsk `json:"explainAsk,omitempty"`
+		// BriefingID / BriefingLine (v0.10.1716, cosre_briefing_ask.go) — soru
+		// brifing kartının satırından ("Sor"); yalnız v2 döngüsü okur.
+		BriefingID   string `json:"briefingId,omitempty"`
+		BriefingLine *int   `json:"briefingLine,omitempty"`
 	} `json:"context,omitempty"`
 	// Approvals — agent-core S5 (chat_approval_resume.go): v2 onay kartının
 	// cevabı; dolu istek onay bekleyen alışverişin DEVAMIDIR (kademeler atlanır,
@@ -1035,7 +1039,8 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			evm.OnScope(us)
 		}
 		emit(chatScopeEventKind, us.event())
-		v2p := &v2LoopPlan{Scope: us, Addendum: userScopeAddendum(us, req.Messages),
+		v2p := &v2LoopPlan{Scope: us, Addendum: userScopeAddendum(us, req.Messages) +
+			s.briefingAskAddendum(ctx, us, req.Context.Env, req.Context.BriefingID, req.Context.BriefingLine),
 			Budget: narrowLoopBudget(chstore.CurrentAILoopBudget(), v2LoopCeilings(dm, exchangeMax))} // dilim 4
 		if v2p.Addendum != "" {
 			echoPhrases = chatEchoPhrases(append(chatLoopPreambles(screenCtx, pageCtx, pinnedCtx, cst.ctx),

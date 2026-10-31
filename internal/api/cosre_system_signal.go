@@ -81,7 +81,15 @@ func (s *Server) recordLatencyOwner(ctx context.Context, ev latencyOwnerEvent) {
 		log.Printf("cosre prefix_corrected action=%s exchange=%s trace=%s target=%q computed=%q model=%q",
 			ev.Action, xid, ev.TraceID, ev.Target, ev.Computed, ev.ModelLine)
 	}
-	sigs := latencyOwnerSignals(xid, ev)
+	s.writeSystemSignals(ctx, xid, latencyOwnerSignals(xid, ev))
+}
+
+// writeSystemSignals — fire-and-forget yazım (isteğin iptalinden ayrı,
+// zaman aşımlı); hata yalnız log satırı.
+func (s *Server) writeSystemSignals(ctx context.Context, xid string, sigs []chstore.CosreSignal) {
+	if len(sigs) == 0 {
+		return
+	}
 	write := func(c context.Context, g chstore.CosreSignal) error { return s.store.InsertCosreSignal(c, g) }
 	if p := systemSignalWriterSeam.Load(); p != nil {
 		write = *p

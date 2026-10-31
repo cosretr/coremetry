@@ -2941,6 +2941,32 @@ tüm servislerde kapsamsız çalış ve cevapta bunu bir kez belirt.`
 // ChatUserScopeUnscopedAddendum — kapsamsız alışveriş, takım daha önce soruldu.
 func ChatUserScopeUnscopedAddendum() string { return chatUserScopeUnscopedAddendum }
 
+// ─── CoSRE Login Briefing dilim 7 (v0.10.1716): "Sor" satır bağlamı ───
+//
+// Soru brifing kartının bir satırından geldi (context.briefingId). Ek SAYI
+// TAŞIMAZ: yalnız kalem + özne adları; satırın sayıları kullanıcının
+// mesajında, doğrulaması araçlarla aynı pencerede.
+
+const chatBriefingLineAddendumTmpl = `
+
+BRİFİNG SATIRI: Bu soru giriş brifingindeki %q kaleminin satırından geldi
+(özneler: %s). Satırdaki sayıları kanıt sayma: önce ilgili aracı bu
+özneler ve brifing penceresiyle çağır, cevaptaki her sayıyı araç
+sonucundan al. Araç farklı bir değer dönerse bunu açıkça söyle.`
+
+// ChatBriefingLineAddendum — brifing satırından gelen sorunun döngü eki.
+func ChatBriefingLineAddendum(item string, subjects []string) string {
+	subj := "belirtilmedi"
+	if len(subjects) > 0 {
+		q := make([]string, len(subjects))
+		for i, s := range subjects {
+			q[i] = fmt.Sprintf("%q", s)
+		}
+		subj = strings.Join(q, ", ")
+	}
+	return fmt.Sprintf(chatBriefingLineAddendumTmpl, item, subj)
+}
+
 // ChatUserScopeAskMarker — "takım soruldu mu" sezgisinin aradığı ifade
 // (asistan turunda, katlanmış küçük harf). Ask ekinin istediği cümleyle aynı.
 const ChatUserScopeAskMarker = "hangi takım"

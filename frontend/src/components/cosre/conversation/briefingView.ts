@@ -64,7 +64,7 @@ export function briefingParts(text: string, service?: string): BriefingPart[] {
   return out;
 }
 
-function feedLine(l: CosreBriefingLine, i: number): BriefingFeedLine {
+function feedLine(l: CosreBriefingLine, i: number, briefingId: string): BriefingFeedLine {
   const href = l.page_url && isSafeAppPath(l.page_url) ? l.page_url : '';
   return {
     id: `${l.item}-${i}`,
@@ -72,6 +72,7 @@ function feedLine(l: CosreBriefingLine, i: number): BriefingFeedLine {
     severity: SEVERITY[l.item] ?? 'muted',
     parts: briefingParts(l.text, l.rows[0]?.service),
     ask: t('cosre.welcome.briefing.askPrompt').replace('{text}', l.text),
+    ...(briefingId ? { ref: { briefingId, line: i } } : {}),
     ...(href ? { pivot: { label: t(`cosre.welcome.briefing.pivot.${l.item}`), href } } : {}),
   };
 }
@@ -93,5 +94,5 @@ export function briefingView(resp: CosreBriefingResponse | null | undefined, pic
   if (b.silence || b.lines.length === 0) {
     return { state: 'silence', windowLabel, agoLabel, team: b.team, serviceCount: b.services };
   }
-  return { state: 'findings', windowLabel, agoLabel, lines: b.lines.map(feedLine) };
+  return { state: 'findings', windowLabel, agoLabel, lines: b.lines.map((l, i) => feedLine(l, i, b.id)) };
 }

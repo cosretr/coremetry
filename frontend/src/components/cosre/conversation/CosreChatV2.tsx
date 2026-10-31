@@ -74,6 +74,7 @@ import { ChatHistoryPanel, CosreComposerForm, CosreHeaderContext, deleteConversa
 import { CosreTeamScopeChip, CosreWelcomeV2 } from './CosreWelcomeV2';
 import { useCosreTeamScope } from './useCosreTeamScope';
 import { briefingView } from './briefingView';
+import type { BriefingLineRef } from './BriefingFeed';
 import { Button } from '@/components/shadcn/button';
 import { CosreSheet } from './CosreSheet';
 import { MessageList } from './MessageList';
@@ -138,11 +139,17 @@ export function CosreChatV2({ defaultOpen = false }: CosreChatV2Props) {
     return cosreRequestContext({ ...c.ask.reqCtx, ...scope }, { profile: c.ask.profile, deep: c.ask.deep, code: c.ask.code }, q, so, c.codeLocked,
       { conversation: c.conv.idRef.current, wikiRefs: prevWikiRefs(base), explain, subject });
   };
+  // v0.10.1716 (brifing dilim 7) — "Sor" satırının ref'i; YALNIZ sonraki
+  // gönderim taşır (context.briefingId + briefingLine), sonra düşer.
+  const briefingAsk = useRef<BriefingLineRef | null>(null);
   const send = (text: string, so?: ChatSendOpts) => {
     const c = live.current;
     const q = text.trim();
     if (!q) return;
-    const context = contextFor(q, so, c.turns);
+    const bref = briefingAsk.current;
+    briefingAsk.current = null;
+    const base = contextFor(q, so, c.turns);
+    const context = bref ? { ...base, briefingId: bref.briefingId, briefingLine: bref.line } : base;
     // Kullanıcı turu niyeti `fresh`SİZ saklar (v1 v0.10.1406) + sabit pencere.
     const metadata = {
       ...(so?.explainAsk ? { explainAsk: withoutFresh(so.explainAsk) } : {}),
@@ -371,7 +378,7 @@ export function CosreChatV2({ defaultOpen = false }: CosreChatV2Props) {
               <div className="cm-thread__col">
                 {messages.length === 0 ? (
                   <CosreWelcomeV2 firstName={ask.user?.firstName} scope={teamScope} wiki={ask.wikiOn} ctxStarter={ask.ctxStarter}
-                    briefing={briefing} onPrefill={composer.prefill} onAsk={askChip} onAskExplain={askExplain} />
+                    briefing={briefing} onPrefill={composer.prefill} onAskBriefingLine={r => { briefingAsk.current = r ?? null; }} onAsk={askChip} onAskExplain={askExplain} />
                 ) : (
                   <MessageList messages={messages} visibleParts={visibleParts} status={status} error={error}
                     onAsk={askChip} onRetry={retry} onApproval={approve} />

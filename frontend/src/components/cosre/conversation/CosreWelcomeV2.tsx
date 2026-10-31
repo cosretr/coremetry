@@ -30,7 +30,7 @@ import type { ChatSendOpts } from '@/components/ai/useChatThread';
 import {
   operationErrorQuestion, serviceHealthQuestion, splitCaret, tCosre as t, teamPickQuestion,
 } from '@/components/ai/capabilityHints';
-import { BriefingFeed, type BriefingFeedLine, type BriefingView } from './BriefingFeed';
+import { BriefingFeed, type BriefingFeedLine, type BriefingLineRef, type BriefingView } from './BriefingFeed';
 import { CosreScopeSearch } from './CosreScopeSearch';
 import type { CosreTeamScope } from './useCosreTeamScope';
 import { welcomeTabs, type WelcomeSuggestion, type WelcomeTabId } from './welcomeSuggestions';
@@ -43,6 +43,8 @@ export interface CosreWelcomeV2Props {
   /** Brifing görünümü; null = veri kaynağı yok (yuva çizilmez). */
   briefing: BriefingView | null;
   onPrefill: (text: string, caret: number) => void;
+  /** v0.10.1716 — brifing satırı "Sor": composer doldurulur, sonraki gönderim ref'i taşır. */
+  onAskBriefingLine?: (ref: BriefingLineRef | undefined) => void;
   onAsk: (text: string, so?: ChatSendOpts) => void;
   onAskExplain: (a: ChatExplainAsk) => void;
 }
@@ -82,7 +84,7 @@ function SuggestionChip({ s, onRun, onPick }: {
   );
 }
 
-export function CosreWelcomeV2({ firstName, scope, wiki, ctxStarter, briefing, onPrefill, onAsk, onAskExplain }: CosreWelcomeV2Props) {
+export function CosreWelcomeV2({ firstName, scope, wiki, ctxStarter, briefing, onPrefill, onAskBriefingLine, onAsk, onAskExplain }: CosreWelcomeV2Props) {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const tabs = welcomeTabs({ team: scope.team, wiki, ctxStarter });
@@ -114,7 +116,7 @@ export function CosreWelcomeV2({ firstName, scope, wiki, ctxStarter, briefing, o
   const pick = (kind: 'service' | 'operation', name: string) =>
     onAsk(kind === 'service' ? serviceHealthQuestion(name) : operationErrorQuestion(name));
   const chooseTeam = (name: string) => { scope.choose(name); onAsk(teamPickQuestion(name)); };
-  const askLine = (l: BriefingFeedLine) => onPrefill(l.ask, l.ask.length);
+  const askLine = (l: BriefingFeedLine) => { onAskBriefingLine?.(l.ref); onPrefill(l.ask, l.ask.length); };
 
   const view: BriefingView | null = scope.unknown ? { state: 'unknownTeam' } : briefing;
   const lead = view?.state === 'unknownTeam' ? t('cosre.welcome.lead.noTeam')

@@ -35,7 +35,15 @@ export interface BriefingFeedLine {
   parts: readonly BriefingPart[];
   /** Satıra tıklanınca composer'a dolan soru. */
   ask: string;
+  /** v0.10.1716 (dilim 7) — "Sor" isteğinin context.briefingId + briefingLine'ı. */
+  ref?: BriefingLineRef;
   pivot?: { label: string; href: string };
+}
+
+/** Kartın kimliği (ULID) + satırın sırası — sunucu satırı kart yükünden yeniden okur. */
+export interface BriefingLineRef {
+  briefingId: string;
+  line: number;
 }
 
 export type BriefingView =

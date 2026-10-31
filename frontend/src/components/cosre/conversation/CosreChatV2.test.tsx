@@ -384,6 +384,10 @@ describe('CosreChatV2 × v1 paylaşılan karşılama + composer (plan §10)', ()
     await tick();
     expect(textarea()!.value).toBe('orders-api hata oranı %2.1 (önceki %0.4, 5.2×) — neden? Kanıtıyla açıkla.');
     expect(calls).toHaveLength(0);
+    // v0.10.1716 (dilim 7) — gönderim satırın kimliğini taşır; sonraki tur taşımaz.
+    await act(async () => { textarea()!.closest('form')!.requestSubmit(); });
+    await tick();
+    expect(calls[0].body.context).toMatchObject({ briefingId: 'b1', briefingLine: 0 });
   });
 
   // v0.10.1697 — karşılama v2'nin kendisi (mockup B, operatör onayı 2026-10-31):

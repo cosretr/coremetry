@@ -65,10 +65,16 @@ var ClientSignalKinds = map[string]bool{
 const (
 	SigPrefixApplied   = "prefix_applied"
 	SigPrefixCorrected = "prefix_corrected"
+	// SigBriefingAsk — v0.10.1716 (Login Briefing dilim 7): soru brifing
+	// satırının "Sor"undan geldi. exchange_id = briefing ULID (tasarım §8:
+	// cosre_briefings.briefing_id ile birleşir), ayrıntı "exchange=<sohbet
+	// alışverişi> line=<n> item=<kalem> matched=0|1" — sohbetin kendi
+	// sinyalleri (👍/👎, link) alışveriş kimliğiyle o satıra bağlanır.
+	SigBriefingAsk = "briefing_ask"
 )
 
 // SystemSignalKinds — sunucunun yazabileceği kapalı küme.
-var SystemSignalKinds = map[string]bool{SigPrefixApplied: true, SigPrefixCorrected: true}
+var SystemSignalKinds = map[string]bool{SigPrefixApplied: true, SigPrefixCorrected: true, SigBriefingAsk: true}
 
 // SystemSignalActor — sistem sinyallerinin user_email değeri (kullanıcı değil).
 const SystemSignalActor = "system:cosre"
