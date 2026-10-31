@@ -13,7 +13,7 @@ import (
 // son 64 örnekten p95; bellek sayacı yalnız bilgi amaçlı.
 type stats struct {
 	ticks, skipped, lastUnix, lastMs, lastESMs, esQueries, events, series, lastCHMs atomic.Int64
-	supImpact, supFeedback, supRegime, vmQueries                                    atomic.Int64
+	supImpact, supFeedback, supRegime, vmQueries, promoted                          atomic.Int64
 	mu                                                                              sync.Mutex
 	esSamples                                                                       []int64
 	lastErr                                                                         string
@@ -83,7 +83,7 @@ func (s *stats) snapshot(placement string, enabled, leader, tableReady bool) chs
 		Ticks: s.ticks.Load(), Skipped: s.skipped.Load(), LastUnix: s.lastUnix.Load(),
 		LastDurationMs: s.lastMs.Load(), LastESMs: s.lastESMs.Load(), ESP95Ms: p95,
 		ESQueries: s.esQueries.Load(), Events: s.events.Load(), SeriesInMemory: s.series.Load(), LastCHMs: s.lastCHMs.Load(),
-		VMQueries: s.vmQueries.Load(), SuppressedImpact: s.supImpact.Load(), SuppressedFeedback: s.supFeedback.Load(), SuppressedRegime: s.supRegime.Load(),
+		VMQueries: s.vmQueries.Load(), Promoted: s.promoted.Load(), SuppressedImpact: s.supImpact.Load(), SuppressedFeedback: s.supFeedback.Load(), SuppressedRegime: s.supRegime.Load(),
 		LastError: lastErr,
 	}
 }

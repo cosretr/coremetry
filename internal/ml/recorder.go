@@ -160,6 +160,10 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	if _, serr := r.writeSnapshots(tctx, deps, cfg, kept, start, esLeft); serr != nil && firstErr == nil {
 		firstErr = serr
 	}
+	// terfi (K4): yalnız terfi anahtarı açık dedektör varsa okuma yapar
+	if perr := r.promote(tctx, cfg, kept); perr != nil && firstErr == nil {
+		firstErr = perr
+	}
 	global.events.Add(written)
 	global.setError(firstErr)
 	global.tickDone(start)

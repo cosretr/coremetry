@@ -149,3 +149,7 @@ Ortak etiket seti `chstore.MLLabels` (ML kararları × olay penceresi; sinyal fa
 ## 19. Dilim 5 (v0.10.1760): CoSRE v2 araçları
 
 `internal/mcptools/v2_ml.go`, yalnız v2 sohbet kataloğu (`registerV2Subset`; v1 kataloğu ve dış MCP `tools/list` değişmez, altında yalnız `*/v2` anahtarları). `get_log_anomalies` (signal log varsayılan | trace | metric, service, detector, range_s ≤7 g, ≤20 satır, ≤2 KB): gölge olaylar + teyit + karar; "Problem değil" açıkça. `explain_ml_event(id)`: replay kaydından olgular (takvim sınıfı, taban medyan/MAD, kritik/etkin z, tetiklenen kova sayısı, seri tepe/taban özeti, teyit, servisin diğer sinyalleri, rollout, exception/Oracle/BubbleUp referansları, ≤3 örnek trace, Replay page_url); ham seri dönmez, gövde ≤2 KB. Viewer düzeyi, salt okuma.
+
+## 20. Terfi kopya yolu (v0.10.1761, K4)
+
+`internal/ml/promote.go`: `PromotionGate` geçen gölge olay `anomaly_events`'e kopya satır (kind `ml:<dedektör>`, aynı id, pattern = seri parçası); ml_events satırı `stage=promoted`. Aynı servis + çakışan pencerede `elastic_ml` satırı varsa terfi yok, `dup_of` doldurulur. Terfi anahtarı açık dedektör yoksa tik başına SIFIR ek okuma (varsayılan). Açılınca tik başına +3 okuma (karne 2 + anomaly_events 1). Ölçülmedi: `ml:*` türünün fusion/Problem yolunda nasıl göründüğü (terfi açılmadan önce bir dedektörle denenmeli). Self-obs `promoted`.
