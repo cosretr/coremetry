@@ -13,6 +13,7 @@ import (
 // son 64 örnekten p95; bellek sayacı yalnız bilgi amaçlı.
 type stats struct {
 	ticks, skipped, lastUnix, lastMs, lastESMs, esQueries, events, series, lastCHMs atomic.Int64
+	supImpact, supFeedback, supRegime                                               atomic.Int64
 	mu                                                                              sync.Mutex
 	esSamples                                                                       []int64
 	lastErr                                                                         string
@@ -29,6 +30,13 @@ func (s *stats) observeES(ms int64) {
 		s.esSamples = s.esSamples[len(s.esSamples)-esSampleCap:]
 	}
 	s.mu.Unlock()
+}
+
+// observeSuppression — kalite süzgeci bastırma sayaçları (kümülatif).
+func (s *stats) observeSuppression(sup suppression) {
+	s.supImpact.Add(sup.Impact)
+	s.supFeedback.Add(sup.Feedback)
+	s.supRegime.Add(sup.Regime)
 }
 
 func (s *stats) setError(err error) {
@@ -64,6 +72,7 @@ func (s *stats) snapshot(placement string, enabled, leader, tableReady bool) chs
 		Ticks: s.ticks.Load(), Skipped: s.skipped.Load(), LastUnix: s.lastUnix.Load(),
 		LastDurationMs: s.lastMs.Load(), LastESMs: s.lastESMs.Load(), ESP95Ms: p95,
 		ESQueries: s.esQueries.Load(), Events: s.events.Load(), SeriesInMemory: s.series.Load(), LastCHMs: s.lastCHMs.Load(),
+		SuppressedImpact: s.supImpact.Load(), SuppressedFeedback: s.supFeedback.Load(), SuppressedRegime: s.supRegime.Load(),
 		LastError: lastErr,
 	}
 }

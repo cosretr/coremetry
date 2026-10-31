@@ -6,6 +6,7 @@ package api
 //   GET /api/ml/events?since=24h&signal=&detector=&service=&stage= — her rol
 //   GET /api/ml/scorecard                                   — her rol (30 g)
 //   PUT /api/ml/{id}/verdict  {verdict, note?, detector, service} — editor+
+//   POST /api/ml/backtest {signal, service, from, to, config?} — editor+ (salt hesap)
 //   GET /api/admin/ml                                       — admin
 //   PUT /api/admin/ml                                       — admin (audit)
 //
@@ -41,6 +42,7 @@ func (s *Server) registerMLRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/ml/events", auth.RequireAnyRole(mlReadRoles, s.getMLEvents))
 	mux.HandleFunc("GET /api/ml/scorecard", auth.RequireAnyRole(mlReadRoles, s.getMLScorecard))
 	mux.HandleFunc("PUT /api/ml/{id}/verdict", auth.RequireAnyRole(editorRoles, s.putMLVerdict))
+	mux.HandleFunc("POST /api/ml/backtest", auth.RequireAnyRole(editorRoles, s.postMLBacktest))
 	mux.HandleFunc("GET /api/admin/ml", auth.RequireRole(auth.RoleAdmin, s.getMLConfig))
 	mux.HandleFunc("PUT /api/admin/ml", auth.RequireRole(auth.RoleAdmin, s.putMLConfig))
 }
@@ -65,7 +67,7 @@ func (s *Server) getMLEvents(w http.ResponseWriter, r *http.Request) {
 		since = d
 	}
 	signal, detector, service, stage := strings.TrimSpace(q.Get("signal")), strings.TrimSpace(q.Get("detector")), strings.TrimSpace(q.Get("service")), strings.TrimSpace(q.Get("stage"))
-	if signal != "" && signal != chstore.MLSignalLog && signal != chstore.MLSignalTrace {
+	if signal != "" && signal != chstore.MLSignalLog && signal != chstore.MLSignalTrace && signal != chstore.MLSignalMetric {
 		signal = ""
 	}
 	key := mlEventsKey(int64(since.Seconds()), signal, detector, service, stage)
@@ -83,7 +85,7 @@ func (s *Server) getMLEvents(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getMLScorecard(w http.ResponseWriter, r *http.Request) {
-	s.serveCached(w, r, "ml:scorecard:v1:30d", mlScorecardTTL, func(ctx context.Context) (any, error) {
+	s.serveCached(w, r, "ml:scorecard:v2:30d", mlScorecardTTL, func(ctx context.Context) (any, error) {
 		rows, err := s.store.MLScorecard(ctx, time.Now().Add(-mlScoreWindow))
 		if err != nil {
 			return nil, err
@@ -96,8 +98,63 @@ func (s *Server) getMLScorecard(w http.ResponseWriter, r *http.Request) {
 		for _, n := range chstore.MLDetectorNames {
 			signals[n] = chstore.MLDetectorSignal(n)
 		}
-		return map[string]any{"windowDays": 30, "detectors": rows, "promotion": cfg.Promotion, "signals": signals}, nil
+		// terfi kapısı: olay görmemiş dedektör de gerekçesiyle listelenir
+		tz := s.store.AnomalySensitivityForDetectors().Calendar.Timezone
+		byDet := map[string]chstore.MLDetectorScore{}
+		for _, r := range rows {
+			byDet[r.Detector] = r
+		}
+		gates := map[string]chstore.MLGate{}
+		for _, n := range chstore.MLDetectorNames {
+			gates[n] = cfg.PromotionGate(n, byDet[n], tz)
+		}
+		return map[string]any{"windowDays": 30, "detectors": rows, "bySignal": chstore.MLSignalScores(rows),
+			"promotion": cfg.Promotion, "gates": gates, "signals": signals}, nil
 	})
+}
+
+// postMLBacktest — kalite çerçevesi backtest'i / what-if: kayıtlı ml_series
+// üzerinde canlı dedektör kararını yeniden koşar, ortak etiket setiyle
+// isabet/yakalama döner. Hiçbir şey YAZMAZ (audit yok; "bu ayarı uygula"
+// admin PUT'undan geçer). config verilirse what-if (normalize edilir), yoksa
+// kayıtlı ayar. Servis zorunlu, aralık ≤ 14 gün. Cache yok: POST + gövde.
+func (s *Server) postMLBacktest(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Signal  string            `json:"signal"`
+		Service string            `json:"service"`
+		From    int64             `json:"from"` // unix sn
+		To      int64             `json:"to"`
+		Config  *chstore.MLConfig `json:"config,omitempty"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "geçersiz JSON: "+err.Error())
+		return
+	}
+	body.Service = strings.TrimSpace(body.Service)
+	if body.Service == "" || (body.Signal != chstore.MLSignalLog && body.Signal != chstore.MLSignalTrace && body.Signal != chstore.MLSignalMetric) {
+		writeJSONError(w, http.StatusBadRequest, "signal (log|trace|metric) ve service zorunlu")
+		return
+	}
+	to := time.Now()
+	if body.To > 0 && body.To < to.Unix() {
+		to = time.Unix(body.To, 0)
+	}
+	from := to.Add(-24 * time.Hour)
+	if body.From > 0 && body.From < to.Unix() {
+		from = time.Unix(body.From, 0)
+	}
+	cfg := s.store.GetMLConfig(r.Context())
+	if body.Config != nil {
+		cfg = chstore.NormalizeMLConfig(*body.Config)
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+	res, err := ml.Backtest(ctx, s.store, body.Signal, body.Service, from, to, cfg)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, res)
 }
 
 func (s *Server) putMLVerdict(w http.ResponseWriter, r *http.Request) {

@@ -12,7 +12,7 @@ import { Badge } from '@/components/shadcn/badge';
 import { api } from '@/lib/api';
 import { keys, useMLEvents, useMLScorecard } from '@/lib/queries';
 import { fmtDateTime } from '@/lib/utils';
-import type { MLEvent, MLDetectorScore } from '@/lib/types';
+import type { MLEvent, MLDetectorScore, MLGate } from '@/lib/types';
 
 export const ML_DETECTOR_TR: Record<string, string> = {
   log_volume: 'Log hacmi', error_rate: 'Hata oranı', service_silent: 'Servis sustu',
@@ -33,6 +33,22 @@ export function scoreLabel(s: MLDetectorScore): string {
   const name = ML_DETECTOR_TR[s.detector] ?? s.detector;
   if (s.samples <= 0) return `${name}: ${s.events} olay · karar yok`;
   return `${name}: ${s.events} olay · %${Math.round(s.hitRate * 100)} isabet (${s.samples} karar)`;
+}
+
+const SIGNAL_TR: Record<string, string> = { log: 'Log', trace: 'Trace', metric: 'Metrik' };
+
+/** Sinyal karnesi satırı — SAF (test). */
+export function signalScoreLabel(s: MLDetectorScore): string {
+  const name = SIGNAL_TR[s.detector] ?? s.detector;
+  if (s.samples <= 0) return `${name}: ${s.events} olay · karar yok`;
+  return `${name}: %${Math.round(s.hitRate * 100)} isabet (${s.samples} karar / ${s.events} olay)`;
+}
+
+/** Terfi kapısı metni — SAF (test): geçemediği koşullar sırayla. */
+export function gateLabel(g: MLGate | undefined): string {
+  if (!g) return '';
+  if (g.ok) return 'terfi kapısı geçildi';
+  return `terfi kapısı: ${(g.reasons ?? []).join(' · ')}`;
 }
 
 export type AnomaliesTab = 'detectors' | 'ml';
@@ -117,9 +133,16 @@ export function MLTab({ signal = '', onSignal }: { signal?: MLSignal; onSignal?:
         <b>Dedektör karnesi · son {sc.data?.windowDays ?? 30} gün</b>
         {sc.isLoading && <span> · yükleniyor…</span>}
         {sc.data && sc.data.detectors.length === 0 && <span> · henüz olay yok</span>}
+        {sc.data && (sc.data.bySignal?.length ?? 0) > 0 && (
+          <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-1" data-testid="ml-signal-score">
+            {(sc.data.bySignal ?? []).filter(s => !signal || s.detector === signal).map(s => <li key={s.detector}><b>{signalScoreLabel(s)}</b></li>)}
+          </ul>
+        )}
         {sc.data && sc.data.detectors.length > 0 && (
           <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
-            {sc.data.detectors.filter((s: MLDetectorScore) => !signal || (sc.data?.signals[s.detector] ?? 'log') === signal).map((s: MLDetectorScore) => <li key={s.detector}>{scoreLabel(s)}{sc.data?.promotion[s.detector]?.enabled ? ' · terfi açık' : ''}</li>)}
+            {sc.data.detectors.filter((s: MLDetectorScore) => !signal || (sc.data?.signals[s.detector] ?? 'log') === signal).map((s: MLDetectorScore) => (
+              <li key={s.detector} title={gateLabel(sc.data?.gates?.[s.detector])}>{scoreLabel(s)}{sc.data?.promotion[s.detector]?.enabled ? ' · terfi açık' : ''}</li>
+            ))}
           </ul>
         )}
       </div>

@@ -34,6 +34,8 @@ type Deps struct {
 	VM anomaly.REDVM
 	// ObserveES — her ES isteğinin süresi (self-obs p95).
 	ObserveES func(d time.Duration)
+	// Labels — ortak etiket seti (taban hijyeni, geri bildirim); nil güvenli.
+	Labels *Labels
 }
 
 // Recorder — alt sistemin döngüsü. Kendi goroutine'i, kendi context +
@@ -46,6 +48,7 @@ type Recorder struct {
 	leader    *cache.LeaderHolder
 	placement string
 	detectors []Detector
+	runs      *tracker
 }
 
 // New — placement etiketi /admin/stats için ("sre" | "worker").
@@ -53,7 +56,7 @@ func New(store *chstore.Store, logs logstore.Store, vm anomaly.REDVM, lock cache
 	if lock == nil {
 		_, lock = cache.NewNoop()
 	}
-	return &Recorder{store: store, logs: logs, vm: vm, placement: placement, detectors: detectors,
+	return &Recorder{store: store, logs: logs, vm: vm, placement: placement, detectors: detectors, runs: newTracker(),
 		leader: cache.NewLeaderHolder(lock, lockKey, 3*time.Minute)}
 }
 
@@ -106,9 +109,16 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	budget := time.Duration(cfg.TimeoutMs)*time.Millisecond*time.Duration(1+len(r.detectors)) + 10*time.Second
 	tctx, tcancel := context.WithTimeout(ctx, budget)
 	defer tcancel()
-	deps := Deps{Store: r.store, Logs: r.logs, VM: r.vm, ObserveES: func(d time.Duration) { global.observeES(d.Milliseconds()) }}
+	// ortak etiket seti: 30 g kararlar (hijyen + geri bildirim); hata = etiketsiz devam
+	labels, lerr := r.store.MLLabels(tctx, start.Add(-30*24*time.Hour))
+	if lerr != nil {
+		log.Printf("[ml] labels read failed: %v (etiketsiz devam)", lerr)
+	}
+	lb := NewLabels(labels)
+	deps := Deps{Store: r.store, Logs: r.logs, VM: r.vm, Labels: lb, ObserveES: func(d time.Duration) { global.observeES(d.Milliseconds()) }}
 	var firstErr error
 	var written int64
+	var all []chstore.MLEvent
 	active := 0
 	for _, det := range r.detectors {
 		if !det.Enabled(cfg) {
@@ -121,18 +131,24 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 		}
 		for _, ev := range evs {
 			ev.Signal = chstore.MLDetectorSignal(ev.Detector)
-			if werr := r.store.UpsertMLEvent(tctx, ev); werr != nil {
-				if firstErr == nil {
-					firstErr = werr
-				}
-				continue
-			}
-			written++
+			all = append(all, ev)
 		}
+	}
+	kept, sup := qualityFilter(all, cfg, lb, r.runs, start)
+	global.observeSuppression(sup)
+	r.runs.gc(start)
+	for _, ev := range kept {
+		if werr := r.store.UpsertMLEvent(tctx, ev); werr != nil {
+			if firstErr == nil {
+				firstErr = werr
+			}
+			continue
+		}
+		written++
 	}
 	global.events.Add(written)
 	global.setError(firstErr)
 	global.tickDone(start)
-	log.Printf("[ml] tick placement=%s detectors=%d events=%d dur=%dms es_p95=%dms err=%v",
-		r.placement, active, written, time.Since(start).Milliseconds(), Observability().ESP95Ms, firstErr)
+	log.Printf("[ml] tick placement=%s detectors=%d events=%d suppressed=impact:%d,feedback:%d,regime:%d labels=%d dur=%dms es_p95=%dms err=%v",
+		r.placement, active, written, sup.Impact, sup.Feedback, sup.Regime, len(labels), time.Since(start).Milliseconds(), Observability().ESP95Ms, firstErr)
 }

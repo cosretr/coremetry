@@ -117,10 +117,6 @@ func (s *Store) ListMLEvents(ctx context.Context, f MLEventsFilter) ([]MLEvent, 
 		where = append(where, "signal = ?")
 		args = append(args, f.Signal)
 	}
-	if f.Signal != "" {
-		where = append(where, "signal = ?")
-		args = append(args, f.Signal)
-	}
 	if f.Service != "" {
 		where = append(where, "service = ?")
 		args = append(args, f.Service)
@@ -173,6 +169,7 @@ func (s *Store) ListMLEvents(ctx context.Context, f MLEventsFilter) ([]MLEvent, 
 // MLDetectorScore — dedektör karnesi satırı.
 type MLDetectorScore struct {
 	Detector string  `json:"detector"`
+	Signal   string  `json:"signal"`
 	Events   int64   `json:"events"`  // penceredeki olay sayısı
 	Samples  int64   `json:"samples"` // karar verilmiş olay sayısı
 	Hits     int64   `json:"hits"`    // verdict = anomaly
@@ -194,7 +191,7 @@ func MLScorecardFromRows(events map[string]string, verdicts map[string]string) [
 	for id, det := range events {
 		r, ok := acc[det]
 		if !ok {
-			r = &MLDetectorScore{Detector: det}
+			r = &MLDetectorScore{Detector: det, Signal: MLDetectorSignal(det)}
 			acc[det] = r
 		}
 		r.Events++
@@ -211,6 +208,34 @@ func MLScorecardFromRows(events map[string]string, verdicts map[string]string) [
 		out = append(out, *r)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Detector < out[j].Detector })
+	return out
+}
+
+// MLSignalScores — SAF: dedektör satırlarından sinyal başına karne (log,
+// trace, metric; olay yoksa satır yok).
+func MLSignalScores(rows []MLDetectorScore) []MLDetectorScore {
+	acc := map[string]*MLDetectorScore{}
+	for _, r := range rows {
+		sig := r.Signal
+		if sig == "" {
+			sig = MLDetectorSignal(r.Detector)
+		}
+		a := acc[sig]
+		if a == nil {
+			a = &MLDetectorScore{Detector: sig, Signal: sig}
+			acc[sig] = a
+		}
+		a.Events += r.Events
+		a.Samples += r.Samples
+		a.Hits += r.Hits
+	}
+	out := make([]MLDetectorScore, 0, len(acc))
+	for _, sig := range []string{MLSignalLog, MLSignalTrace, MLSignalMetric} {
+		if a := acc[sig]; a != nil {
+			a.HitRate = MLScorecardRate(a.Hits, a.Samples)
+			out = append(out, *a)
+		}
+	}
 	return out
 }
 

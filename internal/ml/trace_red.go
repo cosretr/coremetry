@@ -255,16 +255,17 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 	h := last.In(loc).Hour()
 	hf, ht := max(h-1, 0), min(h+1, 23)
 	t0 := time.Now()
-	base, err := deps.Store.MLBaseline(ctx, chstore.MLBaselineRequest{Signal: chstore.MLSignalTrace, Dates: dates, HourFrom: hf, HourTo: ht, TargetSec: cfg.BucketSec, TZ: loc.String()})
+	base, err := deps.Store.MLBaseline(ctx, chstore.MLBaselineRequest{Signal: chstore.MLSignalTrace, Dates: dates, HourFrom: hf, HourTo: ht, TargetSec: cfg.BucketSec, TZ: loc.String(), Exclude: deps.Labels.Exclude(cfg)})
 	global.lastCHMs.Store(time.Since(t0).Milliseconds())
 	if err != nil {
 		return nil, err
 	}
 	dwellStart := last.Add(-time.Duration(cfg.DwellBuckets-1) * bucket).Unix()
+	// eksik veri: VM'de nokta yok (scrape boşluğu) ≠ 0 → kovası eksik seri değerlendirilmez
 	curOf := func(k string) []float64 {
-		var cur []float64
-		for b := dwellStart; b <= last.Unix(); b += int64(cfg.BucketSec) {
-			cur = append(cur, series[k][b])
+		cur, ok := dwellWindow(series[k], dwellStart, last.Unix(), int64(cfg.BucketSec), false)
+		if !ok {
+			return nil
 		}
 		return cur
 	}

@@ -11662,7 +11662,19 @@ export interface MLEvent {
   evidence?: string; dupOf?: string;
   verdict?: 'anomaly' | 'not_anomaly'; verdictBy?: string; verdictAt?: number; note?: string;
 }
-export interface MLDetectorScore { detector: string; events: number; samples: number; hits: number; hitRate: number }
+export interface MLDetectorScore { detector: string; signal?: string; events: number; samples: number; hits: number; hitRate: number }
+/** Kalite çerçevesi (v0.10.1751, üç sinyal ortak). *Off bool'ları ters adlı: eksik = açık. */
+export interface MLQuality {
+  impactMinRel: number; impactMinAbs: number; hygieneOff: boolean; regimeHours: number; confirmWindowMin: number;
+  feedbackOff: boolean; feedbackMinNegatives: number; feedbackZStep: number; feedbackMaxBoost: number;
+}
+export interface MLGate { ok: boolean; reasons?: string[] }
+export interface MLBacktestDetector { detector: string; fired: number; tp: number; fp: number; unlabeled: number; positives: number; covered: number; precision: number; recall: number }
+export interface MLBacktestHit { detector: string; part: string; from: number; to: number; peakZ: number; label?: string }
+export interface MLBacktestResult {
+  signal: string; service: string; from: number; to: number; series: number; buckets: number; configHash: string;
+  detectors: MLBacktestDetector[]; hits: MLBacktestHit[]; truncated: boolean;
+}
 export interface MLPromotion { enabled: boolean; minHitRate: number; minSamples: number }
 export interface MLConfig {
   enabled: boolean;
@@ -11672,6 +11684,10 @@ export interface MLConfig {
   baselineDays: number; minBaselineRate: number; dwellBuckets: number; dailyEventCap: number;
   ingestLagSec: number; minBaselineSamples: number; criticalZ: number; influencerField: string; errorLevels: string[];
   metricFamilies: Record<string, MLMetricExpr[]>;
+  quality: MLQuality;
 }
 export interface MLMetricExpr { id: string; label: string; expr: string; direction: 'up' | 'down' | 'both'; unit?: string }
-export interface MLScorecard { windowDays: number; detectors: MLDetectorScore[]; promotion: Record<string, MLPromotion>; signals: Record<string, string> }
+export interface MLScorecard {
+  windowDays: number; detectors: MLDetectorScore[]; bySignal?: MLDetectorScore[];
+  promotion: Record<string, MLPromotion>; gates?: Record<string, MLGate>; signals: Record<string, string>;
+}

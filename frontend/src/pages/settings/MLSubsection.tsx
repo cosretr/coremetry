@@ -9,7 +9,7 @@ import { Button } from '@/components/shadcn/button';
 import { Field, CheckboxField } from '@/components/coremetry/Field';
 import { ActionRow } from '@/components/coremetry/ActionRow';
 import { api } from '@/lib/api';
-import type { MLConfig } from '@/lib/types';
+import type { MLConfig, MLQuality } from '@/lib/types';
 import { FlashBox, humanize } from './shared';
 
 export const ML_LOG_DETECTORS: { id: string; label: string; hint: string }[] = [
@@ -67,6 +67,12 @@ export function MLSubsection() {
     <Field type="number" label={label} hint={hint} controlClassName="max-w-[180px]" step={step}
       value={String(cfg[key] as number)}
       onChange={e => setCfg({ ...cfg, [key]: Number(e.target.value) })} />
+  );
+
+  const qnum = (label: string, key: keyof MLQuality, hint: string, step = 1) => cfg && (
+    <Field type="number" label={label} hint={hint} controlClassName="max-w-[180px]" step={step}
+      value={String(cfg.quality?.[key] as number)}
+      onChange={e => setCfg({ ...cfg, quality: { ...cfg.quality, [key]: Number(e.target.value) } })} />
   );
 
   return (
@@ -136,6 +142,24 @@ export function MLSubsection() {
             <Field label="Influencer alanı (kanal kodu)" hint="ES keyword alanı; boş = adaylardan keşfet" controlClassName="max-w-[260px]"
               value={cfg.influencerField ?? ''} onChange={e => setCfg({ ...cfg, influencerField: e.target.value })} />
           </div>
+
+          <h3 className={H3}>Kalite çerçevesi</h3>
+          <p className={NOTE}>Log, trace ve metrik için ortak. Olay yazılmadan önce etki eşiği, geri bildirim ve rejim kapılarından geçer; bastırılanlar /admin/stats › ml sayaçlarında. Aynı servisin başka sinyaldeki olayı teyit sayılır.</p>
+          <div className="grid gap-3 md:grid-cols-2" data-testid="ml-quality">
+            {qnum('Etki eşiği (göreli)', 'impactMinRel', '|gözlenen − taban| / taban en az (0.2 = %20)', 0.05)}
+            {qnum('Etki eşiği (mutlak)', 'impactMinAbs', 'Serinin biriminde en az fark (0 = yok)', 1)}
+            {qnum('Rejim değişimi (saat)', 'regimeHours', 'Bu kadar kesintisiz süren sapma yeni normal sayılır, uzatılmaz (1–168)')}
+            {qnum('Teyit penceresi (dk)', 'confirmWindowMin', 'Aynı servisin başka dedektör/sinyal olayı ± bu sürede (1–120)')}
+            {qnum('Geri bildirim: asgari "değil"', 'feedbackMinNegatives', 'Dedektör × servis bu kadar "değil" kararından sonra eşik yükselir (1–100)')}
+            {qnum('Geri bildirim: z adımı', 'feedbackZStep', 'Net "değil" kararı başına z artışı (0–5)', 0.1)}
+            {qnum('Geri bildirim: z tavanı', 'feedbackMaxBoost', 'Toplam z artışı en çok (0–20)', 0.5)}
+          </div>
+          <CheckboxField className="mt-2" checked={!cfg.quality?.hygieneOff}
+            onCheckedChange={v => setCfg({ ...cfg, quality: { ...cfg.quality, hygieneOff: !v } })}
+            label="Taban hijyeni" hint="Gerçek anomali diye işaretlenen kovalar tabana girmez" />
+          <CheckboxField className="mt-2" checked={!cfg.quality?.feedbackOff}
+            onCheckedChange={v => setCfg({ ...cfg, quality: { ...cfg.quality, feedbackOff: !v } })}
+            label="Geri bildirim ayarı" hint={'"Değil" kararları o dedektör × servis için eşiği yükseltir'} />
 
           <div className="mt-[18px]">
             <ActionRow confirm={<Button onClick={save} loading={busy}>Save</Button>} />

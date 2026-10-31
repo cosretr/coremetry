@@ -33,24 +33,24 @@ func TestMLConfigDefaultsOff(t *testing.T) {
 func TestMLPromotionAllowed(t *testing.T) {
 	c := DefaultMLConfig()
 	sc := MLDetectorScore{Detector: "log_volume", Samples: 50, Hits: 45, HitRate: 0.9}
-	if c.PromotionAllowed("log_volume", sc) {
+	if c.PromotionAllowed("log_volume", sc, "Europe/Istanbul") {
 		t.Fatal("kapalı anahtar terfi etmemeli")
 	}
 	c.Promotion["log_volume"] = MLPromotion{Enabled: true, MinHitRate: 0.8, MinSamples: 20}
-	if c.PromotionAllowed("log_volume", sc) {
+	if c.PromotionAllowed("log_volume", sc, "Europe/Istanbul") {
 		t.Fatal("ana anahtar/dedektör kapalıyken terfi olmamalı")
 	}
 	c.Enabled, c.Detectors["log_volume"] = true, true
-	if !c.PromotionAllowed("log_volume", sc) {
+	if !c.PromotionAllowed("log_volume", sc, "Europe/Istanbul") {
 		t.Fatal("eşik geçildi, terfi açık olmalı")
 	}
-	if c.PromotionAllowed("log_volume", MLDetectorScore{Samples: 5, Hits: 5, HitRate: 1}) {
+	if c.PromotionAllowed("log_volume", MLDetectorScore{Samples: 5, Hits: 5, HitRate: 1}, "Europe/Istanbul") {
 		t.Fatal("asgari örnek altında terfi olmamalı")
 	}
-	if c.PromotionAllowed("log_volume", MLDetectorScore{Samples: 40, Hits: 20, HitRate: 0.5}) {
+	if c.PromotionAllowed("log_volume", MLDetectorScore{Samples: 40, Hits: 20, HitRate: 0.5}, "Europe/Istanbul") {
 		t.Fatal("isabet eşiği altında terfi olmamalı")
 	}
-	if c.PromotionAllowed("unknown", sc) {
+	if c.PromotionAllowed("unknown", sc, "Europe/Istanbul") {
 		t.Fatal("bilinmeyen dedektör terfi etmemeli")
 	}
 }
@@ -89,5 +89,55 @@ func TestMLScorecardFromRows(t *testing.T) {
 	}
 	if out[0].Events != 1 || out[0].Samples != 0 || out[0].HitRate != 0 {
 		t.Fatalf("error_rate kararsız: %+v", out[0])
+	}
+}
+
+// Kalite çerçevesi (v0.10.1751): takvim dilimi olmadan terfi kapısı kapalı,
+// her koşul ayrı gerekçe; eski blob (quality alanı yok) varsayılanla açılır.
+func TestMLPromotionGateReasonsAndQualityDefaults(t *testing.T) {
+	c := DefaultMLConfig()
+	c.Enabled, c.Detectors["op_latency"] = true, true
+	c.Promotion["op_latency"] = MLPromotion{Enabled: true, MinHitRate: 0.8, MinSamples: 20}
+	sc := MLDetectorScore{Samples: 50, Hits: 45, HitRate: 0.9}
+	if g := c.PromotionGate("op_latency", sc, ""); g.OK || len(g.Reasons) != 1 {
+		t.Fatalf("takvimsiz kapı kapalı + tek gerekçe olmalı: %+v", g)
+	}
+	if g := DefaultMLConfig().PromotionGate("op_latency", MLDetectorScore{}, ""); len(g.Reasons) != 5 {
+		t.Fatalf("varsayılan: 5 gerekçe (ana, dedektör, terfi, örnek, takvim), got %+v", g)
+	}
+	n := NormalizeMLConfig(MLConfig{})
+	if n.Quality != DefaultMLQuality() {
+		t.Fatalf("eksik quality = varsayılan, got %+v", n.Quality)
+	}
+	if NormalizeMLConfig(MLConfig{Quality: MLQuality{ImpactMinRel: 99, RegimeHours: 999}}).Quality.RegimeHours != 6 {
+		t.Fatal("sınır dışı rejim saati varsayılana dönmeli")
+	}
+	if c.ConfigHash() == DefaultMLConfig().ConfigHash() {
+		t.Fatal("farklı ayar farklı hash vermeli")
+	}
+}
+
+// Ortak etiket seti: karar × olay penceresi; olayı düşmüş karar etiket değil,
+// 'ml:' önekli olmayan karar yok sayılır.
+func TestMLLabelsFromRows(t *testing.T) {
+	ev := map[string]MLEvent{"a": {ID: "a", Detector: "log_volume", Signal: "log", Service: "pay", StartedAt: 100e9, LastSeen: 400e9}}
+	got := MLLabelsFromRows(map[string]string{"ml:a": VerdictAnomaly, "ml:gone": VerdictNotAnomaly, "x": VerdictAnomaly}, ev)
+	if len(got) != 1 || !got[0].Positive || got[0].From != 100 || got[0].To != 400 || got[0].Service != "pay" {
+		t.Fatalf("got %+v", got)
+	}
+	if !MLExcluded([][2]int64{{100, 400}}, 300) || MLExcluded([][2]int64{{100, 400}}, 401) {
+		t.Fatal("MLExcluded pencere sınırı")
+	}
+}
+
+// Karne sinyal başına (v0.10.1751): dedektör satırları log/trace/metric toplamına.
+func TestMLSignalScores(t *testing.T) {
+	rows := MLScorecardFromRows(
+		map[string]string{"a": "log_volume", "b": "error_rate", "c": "op_latency", "d": "metric_jvm"},
+		map[string]string{"ml:a": VerdictAnomaly, "ml:b": VerdictNotAnomaly, "ml:c": VerdictAnomaly})
+	got := MLSignalScores(rows)
+	if len(got) != 3 || got[0].Signal != "log" || got[0].Events != 2 || got[0].Samples != 2 || got[0].HitRate != 0.5 ||
+		got[1].Signal != "trace" || got[1].HitRate != 1 || got[2].Signal != "metric" || got[2].Samples != 0 {
+		t.Fatalf("got %+v", got)
 	}
 }

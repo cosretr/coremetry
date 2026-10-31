@@ -93,16 +93,22 @@ type Judgement struct {
 // judge — SAF. cur: son dwell kova (oran, hedef kovaya normalize), base: taban
 // örnekleri. upOnly: yalnız yukarı. minRate: taban bu kadar altında ise sessiz.
 func judge(cur, base []float64, cfg chstore.MLConfig, upOnly bool) Judgement {
+	med, mad := medianMAD(base)
+	return judgeMM(cur, med, mad, len(base), cfg, upOnly)
+}
+
+// judgeMM — SAF: judge'ın medyan/MAD'ı önceden hesaplanmış hali (backtest
+// aynı saat sınıfı için bir kez hesaplar). n = taban örnek sayısı.
+func judgeMM(cur []float64, med, mad float64, n int, cfg chstore.MLConfig, upOnly bool) Judgement {
 	j := Judgement{}
 	if len(cur) < cfg.DwellBuckets {
 		j.Reason = "dwell: yeterli kova yok"
 		return j
 	}
-	if len(base) < cfg.MinBaselineSamples {
-		j.Reason = fmt.Sprintf("eksik veri: taban %d < %d", len(base), cfg.MinBaselineSamples)
+	if n < cfg.MinBaselineSamples {
+		j.Reason = fmt.Sprintf("eksik veri: taban %d < %d", n, cfg.MinBaselineSamples)
 		return j
 	}
-	med, mad := medianMAD(base)
 	j.Median = med
 	j.Observed = cur[len(cur)-1]
 	if med < cfg.MinBaselineRate {
@@ -291,7 +297,7 @@ func (d *LogRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, now 
 	if ht > 23 {
 		ht = 23
 	}
-	base, err := deps.Store.MLBaseline(ctx, chstore.MLBaselineRequest{Signal: chstore.MLSignalLog, Dates: dates, HourFrom: hf, HourTo: ht, TargetSec: cfg.BucketSec, TZ: loc.String()})
+	base, err := deps.Store.MLBaseline(ctx, chstore.MLBaselineRequest{Signal: chstore.MLSignalLog, Dates: dates, HourFrom: hf, HourTo: ht, TargetSec: cfg.BucketSec, TZ: loc.String(), Exclude: deps.Labels.Exclude(cfg)})
 	if err != nil {
 		return nil, err
 	}

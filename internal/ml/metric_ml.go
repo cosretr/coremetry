@@ -132,7 +132,7 @@ func (d *MetricML) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 	dates, class := baselineDates(last, cfg.BaselineDays, sens.Calendar, loc)
 	h := last.In(loc).Hour()
 	t0 := time.Now()
-	base, err := deps.Store.MLBaseline(ctx, chstore.MLBaselineRequest{Signal: chstore.MLSignalMetric, Dates: dates, HourFrom: max(h-1, 0), HourTo: min(h+1, 23), TargetSec: cfg.BucketSec, TZ: loc.String()})
+	base, err := deps.Store.MLBaseline(ctx, chstore.MLBaselineRequest{Signal: chstore.MLSignalMetric, Dates: dates, HourFrom: max(h-1, 0), HourTo: min(h+1, 23), TargetSec: cfg.BucketSec, TZ: loc.String(), Exclude: deps.Labels.Exclude(cfg)})
 	global.lastCHMs.Store(time.Since(t0).Milliseconds())
 	if err != nil {
 		return nil, err
@@ -145,17 +145,8 @@ func (d *MetricML) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 	for k := range series {
 		svc, part, _ := strings.Cut(k, "\x00")
 		fam, _, _ := strings.Cut(part, "|")
-		var cur []float64
-		missing := false
-		for b := dwellStart; b <= last.Unix(); b += int64(cfg.BucketSec) {
-			v, ok := series[k][b]
-			if !ok {
-				missing = true // scrape boşluğu: eksik veri → değerlendirme yok
-				break
-			}
-			cur = append(cur, v)
-		}
-		if missing {
+		cur, ok := dwellWindow(series[k], dwellStart, last.Unix(), int64(cfg.BucketSec), false)
+		if !ok { // scrape boşluğu: eksik veri → değerlendirme yok
 			continue
 		}
 		dir := dirOf[part]

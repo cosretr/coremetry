@@ -45,6 +45,20 @@ type MLBaselineRequest struct {
 	HourTo    int
 	TargetSec int // normalize hedefi (ör. 300)
 	TZ        string
+	// Exclude — taban hijyeni (kalite çerçevesi): servis → [başlangıç, bitiş]
+	// unix sn pencereleri (gerçek anomali diye etiketlenmiş olaylar); bu
+	// kovalar tabana GİRMEZ, olay normali kirletmez. nil = süzme yok.
+	Exclude map[string][][2]int64
+}
+
+// MLExcluded — SAF: ts (unix sn) servisin dışlama pencerelerinden birinde mi.
+func MLExcluded(windows [][2]int64, ts int64) bool {
+	for _, w := range windows {
+		if ts >= w[0] && ts <= w[1] {
+			return true
+		}
+	}
+	return false
 }
 
 // MLBaselineSeries — anahtar → normalize edilmiş oran örnekleri.
@@ -63,7 +77,7 @@ func (s *Store) MLBaseline(ctx context.Context, req MLBaselineRequest) (MLBaseli
 		tz = "UTC"
 	}
 	rows, err := s.conn.Query(ctx, `
-		SELECT service, part, groupArray(count * ? / bucket_sec) AS xs
+		SELECT service, part, groupArray(toUnixTimestamp(bucket)) AS ts, groupArray(count * ? / bucket_sec) AS xs
 		FROM ml_series
 		WHERE signal = ?
 		  AND toDate(bucket, ?) IN (?)
@@ -81,11 +95,61 @@ func (s *Store) MLBaseline(ctx context.Context, req MLBaselineRequest) (MLBaseli
 	out := MLBaselineSeries{}
 	for rows.Next() {
 		var svc, part string
+		var ts []uint32
 		var xs []float64
-		if err := rows.Scan(&svc, &part, &xs); err != nil {
+		if err := rows.Scan(&svc, &part, &ts, &xs); err != nil {
 			return nil, err
 		}
+		if win := req.Exclude[svc]; len(win) > 0 && len(ts) == len(xs) {
+			kept := xs[:0]
+			for i, v := range xs {
+				if !MLExcluded(win, int64(ts[i])) {
+					kept = append(kept, v)
+				}
+			}
+			xs = kept
+		}
 		out[MLSeriesKey(svc, part)] = xs
+	}
+	return out, rows.Err()
+}
+
+// MLPoint — zaman damgalı seri noktası (backtest / replay).
+type MLPoint struct {
+	T int64   `json:"t"` // unix sn (kova başı)
+	V float64 `json:"v"` // hedef kovaya normalize
+}
+
+// MLSeriesRange — bir servisin [from, to) aralığındaki tüm parçaları,
+// hedef kovaya normalize (backtest motoru). Servis zorunlu: tek servis ×
+// ≤ 6 hafta, tavan 400k nokta. FINAL yok: çift satır aynı (t, v) iki kez
+// gelir, çağıran t ile tekilleştirir.
+func (s *Store) MLSeriesRange(ctx context.Context, signal, service string, from, to time.Time, targetSec int) (map[string][]MLPoint, error) {
+	rows, err := s.conn.Query(ctx, `
+		SELECT part, toUnixTimestamp(bucket) AS t, count * ? / bucket_sec AS v
+		FROM ml_series
+		WHERE signal = ? AND service = ? AND bucket >= ? AND bucket < ?
+		ORDER BY part, t
+		LIMIT 400000
+		SETTINGS max_execution_time = 10`,
+		float64(targetSec), signal, service, from.UTC(), to.UTC()) // DateTime kolon: DateTime64 bind YOK
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string][]MLPoint{}
+	for rows.Next() {
+		var part string
+		var t uint32
+		var v float64
+		if err := rows.Scan(&part, &t, &v); err != nil {
+			return nil, err
+		}
+		pts := out[part]
+		if n := len(pts); n > 0 && pts[n-1].T == int64(t) {
+			continue
+		}
+		out[part] = append(pts, MLPoint{T: int64(t), V: v})
 	}
 	return out, rows.Err()
 }

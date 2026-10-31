@@ -11,6 +11,8 @@ package chstore
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"hash/fnv"
 )
 
 const mlSettingsKey = "ml"
@@ -93,6 +95,64 @@ type MLPromotion struct {
 	MinSamples int     `json:"minSamples"`
 }
 
+// MLQuality — kalite çerçevesi (üç sinyal ortak; operatör 2026-10-31).
+// Dedektör olayı yazılmadan önce recorder bu kapılardan geçirir; bastırılan
+// olay sayacı self-obs'ta (sebep başına). Bool'lar ters adlı: eksik blob
+// alanı = açık (sıfır değer = varsayılan).
+type MLQuality struct {
+	// ImpactMinRel — etki eşiği: |gözlenen − taban| / taban en az bu (0..10, varsayılan 0.2).
+	ImpactMinRel float64 `json:"impactMinRel"`
+	// ImpactMinAbs — etki eşiği mutlak fark (birim serinin birimi; 0 = yok).
+	ImpactMinAbs float64 `json:"impactMinAbs"`
+	// HygieneOff — true: etiketli gerçek anomali kovaları tabandan DIŞLANMAZ.
+	HygieneOff bool `json:"hygieneOff"`
+	// RegimeHours — aynı olay bu kadar saat kesintisiz sürerse rejim değişimi
+	// sayılır: yeni normal, olay uzatılmaz (1..168, varsayılan 6).
+	RegimeHours int `json:"regimeHours"`
+	// ConfirmWindowMin — teyit penceresi: aynı servisin başka dedektör/sinyal
+	// olayı ± bu kadar dakikadaysa teyit (1..120, varsayılan 10).
+	ConfirmWindowMin int `json:"confirmWindowMin"`
+	// FeedbackOff — true: "değil" kararları eşiği yükseltmez.
+	FeedbackOff bool `json:"feedbackOff"`
+	// FeedbackMinNegatives — dedektör × servis için en az bu kadar "değil"
+	// kararından sonra eşik yükselir (1..100, varsayılan 3).
+	FeedbackMinNegatives int `json:"feedbackMinNegatives"`
+	// FeedbackZStep — net "değil" kararı başına z artışı (0..5, varsayılan 0.5).
+	FeedbackZStep float64 `json:"feedbackZStep"`
+	// FeedbackMaxBoost — z artışı tavanı (0..20, varsayılan 4).
+	FeedbackMaxBoost float64 `json:"feedbackMaxBoost"`
+}
+
+// DefaultMLQuality — makul varsayılanlar.
+func DefaultMLQuality() MLQuality {
+	return MLQuality{ImpactMinRel: 0.2, RegimeHours: 6, ConfirmWindowMin: 10,
+		FeedbackMinNegatives: 3, FeedbackZStep: 0.5, FeedbackMaxBoost: 4}
+}
+
+// NormalizeMLQuality — SAF: sınır dışı = varsayılan.
+func NormalizeMLQuality(q MLQuality) MLQuality {
+	d := DefaultMLQuality()
+	if q == (MLQuality{}) { // eski blob: quality alanı yok
+		return d
+	}
+	if q.ImpactMinRel < 0 || q.ImpactMinRel > 10 {
+		q.ImpactMinRel = d.ImpactMinRel
+	}
+	if q.ImpactMinAbs < 0 || q.ImpactMinAbs > 1e12 {
+		q.ImpactMinAbs = 0
+	}
+	q.RegimeHours = clampInt(q.RegimeHours, 1, 168, d.RegimeHours)
+	q.ConfirmWindowMin = clampInt(q.ConfirmWindowMin, 1, 120, d.ConfirmWindowMin)
+	q.FeedbackMinNegatives = clampInt(q.FeedbackMinNegatives, 1, 100, d.FeedbackMinNegatives)
+	if q.FeedbackZStep < 0 || q.FeedbackZStep > 5 {
+		q.FeedbackZStep = d.FeedbackZStep
+	}
+	if q.FeedbackMaxBoost < 0 || q.FeedbackMaxBoost > 20 {
+		q.FeedbackMaxBoost = d.FeedbackMaxBoost
+	}
+	return q
+}
+
 // MLConfig — blob.
 type MLConfig struct {
 	// Enabled — ana anahtar. false: tik yalnız sayaç günceller, ES'e sorgu yok.
@@ -133,6 +193,8 @@ type MLConfig struct {
 	ErrorLevels []string `json:"errorLevels"`
 	// MetricFamilies — aile (dedektör adı) → MetricsQL serileri (M1; varsayılan + düzenlenebilir).
 	MetricFamilies map[string][]MLMetricExpr `json:"metricFamilies"`
+	// Quality — kalite çerçevesi (etki, hijyen, rejim, teyit, geri bildirim).
+	Quality MLQuality `json:"quality"`
 }
 
 // DefaultMLConfig — her şey kapalı, eşikler makul.
@@ -146,7 +208,7 @@ func DefaultMLConfig() MLConfig {
 	return MLConfig{Enabled: false, Detectors: d, Promotion: p,
 		BucketSec: 300, TickSec: 300, TimeoutMs: 10000, MaxServices: 500, MaxESQueriesPerTick: 1,
 		BaselineDays: 7, MinBaselineRate: 5, DwellBuckets: 2, DailyEventCap: 200,
-		IngestLagSec: 120, MinBaselineSamples: 20, CriticalZ: 4, MetricFamilies: DefaultMLMetricFamilies(),
+		IngestLagSec: 120, MinBaselineSamples: 20, CriticalZ: 4, MetricFamilies: DefaultMLMetricFamilies(), Quality: DefaultMLQuality(),
 		ErrorLevels: []string{"error", "err", "fatal", "critical", "severe", "emerg", "alert"}}
 }
 
@@ -170,6 +232,7 @@ func NormalizeMLConfig(c MLConfig) MLConfig {
 	c.DailyEventCap = clampInt(c.DailyEventCap, 10, 10000, d.DailyEventCap)
 	c.IngestLagSec = clampInt(c.IngestLagSec, 0, 3600, d.IngestLagSec)
 	c.MinBaselineSamples = clampInt(c.MinBaselineSamples, 5, 500, d.MinBaselineSamples)
+	c.Quality = NormalizeMLQuality(c.Quality)
 	if c.CriticalZ < 1 || c.CriticalZ > 20 {
 		c.CriticalZ = d.CriticalZ
 	}
@@ -244,17 +307,53 @@ func NormalizeMLConfig(c MLConfig) MLConfig {
 // DetectorOn — SAF: ana anahtar VE dedektör anahtarı.
 func (c MLConfig) DetectorOn(name string) bool { return c.Enabled && c.Detectors[name] }
 
-// PromotionAllowed — SAF: dedektör terfi edebilir mi? Ana anahtar + dedektör
-// + terfi anahtarı açık VE karne eşiği geçilmiş (kararsız satır paydada yok).
-func (c MLConfig) PromotionAllowed(detector string, score MLDetectorScore) bool {
-	if !c.DetectorOn(detector) {
-		return false
+// MLGate — terfi kapısı sonucu: geçemediği her koşul ayrı gerekçe.
+type MLGate struct {
+	OK      bool     `json:"ok"`
+	Reasons []string `json:"reasons,omitempty"`
+}
+
+// PromotionGate — SAF terfi kapısı (kalite çerçevesi): ana anahtar, dedektör
+// ve terfi anahtarı açık; karne örneği + isabet eşiği (kararsız satır
+// paydada yok, S4); takvim dilimi tanımlı (tatil/ay sonu sınıfı olmadan taban
+// yanlış güne bakar — operatör: takvim terfiden önce). Gerekçeler karnede
+// gösterilir; geçen dedektör bile bu sürümde Problem'e KOPYALANMAZ.
+func (c MLConfig) PromotionGate(detector string, score MLDetectorScore, calendarTZ string) MLGate {
+	var r []string
+	if !c.Enabled {
+		r = append(r, "ana anahtar kapalı")
+	}
+	if !c.Detectors[detector] {
+		r = append(r, "dedektör kapalı")
 	}
 	p, ok := c.Promotion[detector]
 	if !ok || !p.Enabled {
-		return false
+		r = append(r, "terfi anahtarı kapalı")
 	}
-	return score.Samples >= int64(p.MinSamples) && score.HitRate >= p.MinHitRate
+	if score.Samples < int64(p.MinSamples) {
+		r = append(r, fmt.Sprintf("karar örneği %d < %d", score.Samples, p.MinSamples))
+	}
+	if score.Samples > 0 && score.HitRate < p.MinHitRate {
+		r = append(r, fmt.Sprintf("isabet %%%.0f < %%%.0f", score.HitRate*100, p.MinHitRate*100))
+	}
+	if calendarTZ == "" {
+		r = append(r, "takvim dilimi tanımlı değil")
+	}
+	return MLGate{OK: len(r) == 0, Reasons: r}
+}
+
+// PromotionAllowed — SAF: PromotionGate geçildi mi (takvim dilimi çağıranda).
+func (c MLConfig) PromotionAllowed(detector string, score MLDetectorScore, calendarTZ string) bool {
+	return c.PromotionGate(detector, score, calendarTZ).OK
+}
+
+// ConfigHash — SAF: normalize blob'un FNV-64 özeti (olay kanıtı + backtest:
+// hangi ayarla üretildi; replay/what-if karşılaştırması).
+func (c MLConfig) ConfigHash() string {
+	raw, _ := json.Marshal(NormalizeMLConfig(c))
+	h := fnv.New64a()
+	_, _ = h.Write(raw)
+	return fmt.Sprintf("%016x", h.Sum64())
 }
 
 // GetMLConfig — kayıtlı blob ya da varsayılan (CH hatasında varsayılan =
@@ -298,5 +397,9 @@ type MLStats struct {
 	LastCHMs       int64  `json:"lastChMs"` // taban CH sorgusu (trace T1)
 	Events         int64  `json:"events"`
 	SeriesInMemory int64  `json:"seriesInMemory"`
-	LastError      string `json:"lastError,omitempty"`
+	// Kalite süzgeci bastırmaları (kümülatif, süreç-içi).
+	SuppressedImpact   int64  `json:"suppressedImpact"`
+	SuppressedFeedback int64  `json:"suppressedFeedback"`
+	SuppressedRegime   int64  `json:"suppressedRegime"`
+	LastError          string `json:"lastError,omitempty"`
 }
