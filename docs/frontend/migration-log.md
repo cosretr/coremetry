@@ -100,3 +100,4 @@ measured initial load exceeds 347 KB gz does not ship.
 | v0.10.1744 (ML genelleştirme) | `components/coremetry/anomalies/MLTab.tsx` (LogMLTab → MLTab, Log/Trace süzgeci, ?signal=) + `pages/settings/MLSubsection.tsx` (Log/Trace grupları) + `lib/queries/ml.ts`; sekme `?tab=ml` | — | — | — | — | — |
 | v0.10.1746 (Settings › Anomaly › Yerleşik dedektörler) | `pages/settings/NativeDetectorsSubsection.tsx` (yeni) + `AnomalyTab.tsx` bağlantı; `lib/api.ts` | — | — | — | — | — |
 | v0.10.1747 (Settings › Anomaly › ML eşikleri) | `pages/settings/MLSubsection.tsx` (+ingest payı, asgari taban, kritik z, influencer alanı) | — | — | — | — | — |
+| v0.10.1749 (Settings › ML metrik aileleri) | `pages/settings/MLSubsection.tsx` (Metrik grubu + MetricsQL düzenleyici) + `coremetry/anomalies/MLTab.tsx` (Metrik süzgeci) | — | — | — | — | — |

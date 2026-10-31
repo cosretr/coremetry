@@ -26,7 +26,9 @@ const mlSettingsKey = "ml"
 var (
 	MLLogDetectorNames   = []string{"log_volume", "error_rate", "service_silent", "template_spike", "rare_template", "rare_error_code", "pod_outlier", "change_point"}
 	MLTraceDetectorNames = []string{"op_latency", "op_error_rate", "throughput_drop", "dependency_latency", "trace_pod_outlier", "trace_change_point"}
-	MLDetectorNames      = append(append([]string{}, MLLogDetectorNames...), MLTraceDetectorNames...)
+	// Metrik aileleri = dedektörler (M1): her aile ayrı anahtar + ayrı terfi.
+	MLMetricDetectorNames = []string{"metric_jvm", "metric_pool", "metric_kafka", "metric_http_client", "metric_k8s"}
+	MLDetectorNames       = append(append(append([]string{}, MLLogDetectorNames...), MLTraceDetectorNames...), MLMetricDetectorNames...)
 )
 
 // MLDetectorSignal — SAF: dedektör → 'log' | 'trace' (bilinmeyen → 'log').
@@ -36,7 +38,52 @@ func MLDetectorSignal(detector string) string {
 			return MLSignalTrace
 		}
 	}
+	for _, n := range MLMetricDetectorNames {
+		if n == detector {
+			return MLSignalMetric
+		}
+	}
 	return MLSignalLog
+}
+
+// MLMetricExpr — bir ailenin bir serisi. Expr MetricsQL; `{svc}` servis etiketi
+// (VM LabelMap'ten), `{win}` kova penceresi ile değiştirilir. Pod etiketi
+// ifadede servis düzeyine toplanır (sum/avg/max by ({svc})); counter'lar
+// rate/increase ile (reset güvenli). Direction: up | down | both.
+type MLMetricExpr struct {
+	ID        string `json:"id"`
+	Label     string `json:"label"`
+	Expr      string `json:"expr"`
+	Direction string `json:"direction"`
+	Unit      string `json:"unit,omitempty"`
+}
+
+// DefaultMLMetricFamilies — OTel/Prometheus yaygın adlar; operatör Settings'ten düzenler.
+func DefaultMLMetricFamilies() map[string][]MLMetricExpr {
+	return map[string][]MLMetricExpr{
+		"metric_jvm": {
+			{ID: "heap_used", Label: "Heap kullanımı", Expr: "avg by ({svc}) (jvm_memory_used_bytes{jvm_memory_type=\"heap\"})", Direction: "up", Unit: "bytes"},
+			{ID: "gc_time", Label: "GC süresi", Expr: "sum by ({svc}) (rate(jvm_gc_duration_seconds_sum[{win}]))", Direction: "up", Unit: "s/s"},
+			{ID: "threads", Label: "Thread sayısı", Expr: "avg by ({svc}) (jvm_thread_count)", Direction: "up"},
+		},
+		"metric_pool": {
+			{ID: "pool_used", Label: "Havuz kullanımı", Expr: "avg by ({svc}) (db_client_connection_count{state=\"used\"})", Direction: "up"},
+			{ID: "pool_wait", Label: "Bağlantı bekleme", Expr: "sum by ({svc}) (rate(db_client_connection_wait_time_sum[{win}]))", Direction: "up", Unit: "s/s"},
+		},
+		"metric_kafka": {
+			{ID: "consumer_lag", Label: "Consumer lag", Expr: "max by ({svc}) (kafka_consumer_records_lag_max)", Direction: "up"},
+			{ID: "fetch_throttle", Label: "Fetch throttle", Expr: "max by ({svc}) (kafka_consumer_fetch_throttle_time_max)", Direction: "up", Unit: "ms"},
+		},
+		"metric_http_client": {
+			{ID: "client_p95", Label: "HTTP client p95", Expr: "histogram_quantile(0.95, sum by ({svc}, le) (rate(http_client_request_duration_seconds_bucket[{win}])))", Direction: "up", Unit: "s"},
+			{ID: "client_5xx", Label: "HTTP client 5xx oranı", Expr: "sum by ({svc}) (rate(http_client_request_duration_seconds_count{http_response_status_code=~\"5..\"}[{win}])) / sum by ({svc}) (rate(http_client_request_duration_seconds_count[{win}]))", Direction: "up"},
+		},
+		"metric_k8s": {
+			{ID: "cpu", Label: "CPU kullanımı", Expr: "sum by ({svc}) (rate(container_cpu_usage_seconds_total[{win}]))", Direction: "up", Unit: "core"},
+			{ID: "memory", Label: "Bellek (working set)", Expr: "sum by ({svc}) (container_memory_working_set_bytes)", Direction: "up", Unit: "bytes"},
+			{ID: "restarts", Label: "Pod restart", Expr: "sum by ({svc}) (increase(kube_pod_container_status_restarts_total[{win}]))", Direction: "up"},
+		},
+	}
 }
 
 // MLPromotion — dedektör başına terfi kuralı.
@@ -84,6 +131,8 @@ type MLConfig struct {
 	InfluencerField string `json:"influencerField"`
 	// ErrorLevels — hata sayılan seviye değerleri (küçük harf).
 	ErrorLevels []string `json:"errorLevels"`
+	// MetricFamilies — aile (dedektör adı) → MetricsQL serileri (M1; varsayılan + düzenlenebilir).
+	MetricFamilies map[string][]MLMetricExpr `json:"metricFamilies"`
 }
 
 // DefaultMLConfig — her şey kapalı, eşikler makul.
@@ -97,7 +146,7 @@ func DefaultMLConfig() MLConfig {
 	return MLConfig{Enabled: false, Detectors: d, Promotion: p,
 		BucketSec: 300, TickSec: 300, TimeoutMs: 10000, MaxServices: 500, MaxESQueriesPerTick: 1,
 		BaselineDays: 7, MinBaselineRate: 5, DwellBuckets: 2, DailyEventCap: 200,
-		IngestLagSec: 120, MinBaselineSamples: 20, CriticalZ: 4,
+		IngestLagSec: 120, MinBaselineSamples: 20, CriticalZ: 4, MetricFamilies: DefaultMLMetricFamilies(),
 		ErrorLevels: []string{"error", "err", "fatal", "critical", "severe", "emerg", "alert"}}
 }
 
@@ -126,6 +175,31 @@ func NormalizeMLConfig(c MLConfig) MLConfig {
 	}
 	if len(c.ErrorLevels) == 0 {
 		c.ErrorLevels = d.ErrorLevels
+	}
+	if c.MetricFamilies == nil {
+		c.MetricFamilies = map[string][]MLMetricExpr{}
+	}
+	for fam, def := range d.MetricFamilies {
+		if _, ok := c.MetricFamilies[fam]; !ok {
+			c.MetricFamilies[fam] = def
+		}
+	}
+	for fam, list := range c.MetricFamilies {
+		if _, ok := d.MetricFamilies[fam]; !ok {
+			delete(c.MetricFamilies, fam)
+			continue
+		}
+		kept := list[:0]
+		for _, e := range list {
+			if e.ID == "" || e.Expr == "" {
+				continue
+			}
+			if e.Direction != "up" && e.Direction != "down" && e.Direction != "both" {
+				e.Direction = "up"
+			}
+			kept = append(kept, e)
+		}
+		c.MetricFamilies[fam] = kept
 	}
 	if c.MinBaselineRate < 0 || c.MinBaselineRate > 1e6 {
 		c.MinBaselineRate = d.MinBaselineRate

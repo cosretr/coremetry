@@ -30,6 +30,13 @@ export const ML_TRACE_DETECTORS: { id: string; label: string; hint: string }[] =
   { id: 'trace_pod_outlier', label: 'Aykırı pod (trace)', hint: 'Pod\'lar arasında hata/gecikme sapması' },
   { id: 'trace_change_point', label: 'Kırılma (trace)', hint: 'CUSUM + rollout eşleştirmesi' },
 ];
+export const ML_METRIC_DETECTORS: { id: string; label: string; hint: string }[] = [
+  { id: 'metric_jvm', label: 'JVM', hint: 'Heap, GC, thread (VM, servis düzeyi)' },
+  { id: 'metric_pool', label: 'Connection pool', hint: 'Havuz kullanımı, bekleme' },
+  { id: 'metric_kafka', label: 'Kafka', hint: 'Consumer lag, throttle' },
+  { id: 'metric_http_client', label: 'HTTP client', hint: 'Dış çağrı p95, 5xx oranı' },
+  { id: 'metric_k8s', label: 'Kubernetes', hint: 'CPU, bellek, restart (pod → servis toplanır)' },
+];
 
 const H3 = 'mt-4 mb-1 text-[length:var(--fs-md)] font-semibold';
 const NOTE = 'text-[length:var(--fs-xs)] leading-normal text-(--text3)';
@@ -81,7 +88,7 @@ export function MLSubsection() {
             hint="Kapalı: tik yalnız sayaç günceller, Elasticsearch'e sorgu yok." />
 
           <p className={NOTE}>Soldaki anahtar dedektörü açar (gölge). Sağdaki &quot;terfi&quot; anahtarı karne eşiğini geçen olayı Problem&apos;e kopyalar.</p>
-          {([['Log dedektörleri', ML_LOG_DETECTORS], ['Trace dedektörleri', ML_TRACE_DETECTORS]] as const).map(([title, list]) => (<div key={title}>
+          {([['Log dedektörleri', ML_LOG_DETECTORS], ['Trace dedektörleri', ML_TRACE_DETECTORS], ['Metrik aileleri', ML_METRIC_DETECTORS]] as const).map(([title, list]) => (<div key={title}>
           <h3 className={H3}>{title}</h3>
           <div className="mt-2 grid gap-2">
             {list.map(d => {
@@ -103,6 +110,15 @@ export function MLSubsection() {
             })}
           </div>
           </div>))}
+
+          <h3 className={H3}>Metrik MetricsQL ifadeleri</h3>
+          <p className={NOTE}>Varsayılanlar OTel/Prometheus adlarıdır; kendi metrik adlarınla düzenle. <code>{'{svc}'}</code> servis etiketi, <code>{'{win}'}</code> kova penceresi. Pod etiketi ifadede servis düzeyine toplanır.</p>
+          <div className="mt-2 grid gap-2">
+            {ML_METRIC_DETECTORS.map(f => (cfg.metricFamilies?.[f.id] ?? []).map((e, i) => (
+              <Field key={`${f.id}:${e.id}`} label={`${f.label} · ${e.label || e.id}`} hint={`yön: ${e.direction}${e.unit ? ` · ${e.unit}` : ''}`} small
+                value={e.expr} onChange={ev => setCfg({ ...cfg, metricFamilies: { ...cfg.metricFamilies, [f.id]: cfg.metricFamilies[f.id].map((x, j) => (j === i ? { ...x, expr: ev.target.value } : x)) } })} />
+            )))}
+          </div>
 
           <h3 className={H3}>Eşikler</h3>
           <div className="grid gap-3 md:grid-cols-2">

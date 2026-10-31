@@ -11668,5 +11668,7 @@ export interface MLConfig {
   bucketSec: number; tickSec: number; timeoutMs: number; maxServices: number; maxEsQueriesPerTick: number;
   baselineDays: number; minBaselineRate: number; dwellBuckets: number; dailyEventCap: number;
   ingestLagSec: number; minBaselineSamples: number; criticalZ: number; influencerField: string; errorLevels: string[];
+  metricFamilies: Record<string, MLMetricExpr[]>;
 }
+export interface MLMetricExpr { id: string; label: string; expr: string; direction: 'up' | 'down' | 'both'; unit?: string }
 export interface MLScorecard { windowDays: number; detectors: MLDetectorScore[]; promotion: Record<string, MLPromotion>; signals: Record<string, string> }

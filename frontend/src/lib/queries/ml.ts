@@ -5,7 +5,7 @@ import { api } from '@/lib/api';
 import { keys } from './keys';
 import type { MLEvent, MLScorecard } from '@/lib/types';
 
-export function useMLEvents(signal: '' | 'log' | 'trace' = '', enabled = true) {
+export function useMLEvents(signal: '' | 'log' | 'trace' | 'metric' = '', enabled = true) {
   return useQuery<{ items: MLEvent[]; truncated: boolean }>({
     queryKey: [...keys.anomalies.ml, signal],
     queryFn: async () => (await api.mlEvents({ signal })) ?? { items: [], truncated: false },

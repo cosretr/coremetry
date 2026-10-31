@@ -19,6 +19,7 @@ import (
 const (
 	MLSignalLog    = "log"
 	MLSignalTrace  = "trace"
+	MLSignalMetric = "metric"
 	MLStageShadow  = "shadow"
 	MLStagePromote = "promoted"
 	mlVerdictPref  = "ml:"

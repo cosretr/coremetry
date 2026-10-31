@@ -5,7 +5,10 @@ import (
 	"testing"
 
 	"github.com/cilcenk/coremetry/internal/anomaly"
+	"github.com/cilcenk/coremetry/internal/chstore"
 )
+
+func chstoreDefault() chstore.MLConfig { return chstore.DefaultMLConfig() }
 
 // v0.10.1748 — trace T1 saf parçalar: etiket seçimi, PromQL pinleri (gruplu,
 // topk yok, kova penceresi), GroupKey çözümü, part ayrıştırma.
@@ -38,5 +41,22 @@ func TestTraceQueriesAndLabels(t *testing.T) {
 	r, m := splitTracePart(tracePart("/a|b", "p95"))
 	if r != "/a|b" || m != "p95" {
 		t.Fatalf("part: %s %s", r, m)
+	}
+}
+
+// v0.10.1749 — metrik M1: yer tutucu işleme ve aile anahtarı.
+func TestMetricRenderAndEnabled(t *testing.T) {
+	got := renderExpr("sum by ({svc}) (rate(x_total[{win}]))", "service_name", 300)
+	if got != "sum by (service_name) (rate(x_total[300s]))" {
+		t.Fatalf("render: %s", got)
+	}
+	cfg := chstoreDefault()
+	d := NewMetricML()
+	if d.Enabled(cfg) {
+		t.Fatal("varsayılan kapalı")
+	}
+	cfg.Enabled, cfg.Detectors["metric_kafka"] = true, true
+	if !d.Enabled(cfg) {
+		t.Fatal("aile açıkken açık")
 	}
 }

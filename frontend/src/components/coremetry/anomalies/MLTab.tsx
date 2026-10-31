@@ -19,12 +19,13 @@ export const ML_DETECTOR_TR: Record<string, string> = {
   template_spike: 'Şablon spike', rare_template: 'Nadir şablon', rare_error_code: 'Nadir hata kodu',
   pod_outlier: 'Aykırı pod', change_point: 'Kırılma',
   op_latency: 'Endpoint gecikmesi', op_error_rate: 'Endpoint hata oranı', throughput_drop: 'Trafik düşüşü',
+  metric_jvm: 'JVM', metric_pool: 'Connection pool', metric_kafka: 'Kafka', metric_http_client: 'HTTP client', metric_k8s: 'Kubernetes',
   dependency_latency: 'Bağımlılık gecikmesi', trace_pod_outlier: 'Aykırı pod (trace)', trace_change_point: 'Kırılma (trace)',
 };
-export type MLSignal = '' | 'log' | 'trace';
+export type MLSignal = '' | 'log' | 'trace' | 'metric';
 /** SAF: ?signal= çözümü; bilinmeyen → hepsi. */
 export function resolveMLSignal(raw: string | null): MLSignal {
-  return raw === 'log' || raw === 'trace' ? raw : '';
+  return raw === 'log' || raw === 'trace' || raw === 'metric' ? raw : '';
 }
 
 /** Karne satırı metni — SAF (test): örnek yoksa isabet yazılmaz (S4). */
@@ -85,7 +86,7 @@ export function MLTab({ signal = '', onSignal }: { signal?: MLSignal; onSignal?:
 
   const renderCell = (e: MLEvent, col: ColumnDef<MLEvent>) => {
     switch (col.id) {
-      case 'signal': return e.signal === 'trace' ? 'Trace' : 'Log';
+      case 'signal': return e.signal === 'trace' ? 'Trace' : e.signal === 'metric' ? 'Metrik' : 'Log';
       case 'detector': return ML_DETECTOR_TR[e.detector] ?? e.detector;
       case 'service': return <span className="font-mono" title={e.service}>{e.service}</span>;
       case 'part': return <span className="font-mono">{e.level || e.pod || e.code || '—'}</span>;
@@ -110,7 +111,7 @@ export function MLTab({ signal = '', onSignal }: { signal?: MLSignal; onSignal?:
     <div data-testid="ml-tab" className="flex flex-col gap-3">
       {onSignal && (
         <SegmentedControl<MLSignal> value={signal} onChange={onSignal} aria-label="Sinyal" size="sm"
-          options={[{ value: '', label: 'Hepsi' }, { value: 'log', label: 'Log' }, { value: 'trace', label: 'Trace' }]} />
+          options={[{ value: '', label: 'Hepsi' }, { value: 'log', label: 'Log' }, { value: 'trace', label: 'Trace' }, { value: 'metric', label: 'Metrik' }]} />
       )}
       <div className="text-sm text-muted-foreground">
         <b>Dedektör karnesi · son {sc.data?.windowDays ?? 30} gün</b>

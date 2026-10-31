@@ -69,6 +69,9 @@ func TestMLScorecardRateAndIDs(t *testing.T) {
 	if MLEventID("log_volume", "orders-api", "error") == MLEventID("error_rate", "orders-api", "error") {
 		t.Fatal("dedektör id'ye girmeli")
 	}
+	if MLDetectorSignal("metric_jvm") != MLSignalMetric || len(DefaultMLConfig().MetricFamilies) != 5 {
+		t.Fatal("metrik aileleri")
+	}
 	if MLDetectorSignal("op_latency") != MLSignalTrace || MLDetectorSignal("log_volume") != MLSignalLog || MLDetectorSignal("x") != MLSignalLog {
 		t.Fatal("dedektör → sinyal eşlemesi")
 	}
