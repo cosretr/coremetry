@@ -378,7 +378,7 @@ export function CosreChatV2({ defaultOpen = false }: CosreChatV2Props) {
           <Button variant="ghost" size="sm" className="cm-head-btn" onClick={() => setShowHistory(h => !h)}
             aria-expanded={showHistory} title={T.historyTitle}>{T.history}</Button>
           {messages.length > 0 && (
-            <Button variant="secondary" size="sm" onClick={clear} title={T.clearTitle}>{T.clear}</Button>
+            <Button variant="ghost" size="sm" className="cm-head-btn" onClick={clear} title={T.clearTitle}>{T.clear}</Button>
           )}
         </>}>
         <SheetResizeHandle width={width} onWidth={setDragW}
@@ -407,7 +407,8 @@ export function CosreChatV2({ defaultOpen = false }: CosreChatV2Props) {
               </div>
             </div>
             {!atBottom && messages.length > 0 && (
-              <Button variant="secondary" size="sm" className="cm-jump" onClick={pinBottom}
+              // v0.10.1729 (mockup A) — ortada küçük gölgeli hap (cosre-jump-pill, globals.css).
+              <Button variant="outline" size="xs" className="cm-jump cosre-jump-pill border-border bg-card" onClick={pinBottom}
                 title={T.jumpBottomTitle} aria-label={T.jumpBottomLabel}>{T.jumpBottom}</Button>
             )}
           </div>

@@ -6202,3 +6202,33 @@ tr:hover .ps-attr-act, .ps-attr-act:focus-visible { opacity: 1; }
 .mtp-kafka-compact-head { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
 .mtp-kafka--compact .mtp-kafka-stats { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
 .mtp-kafka--compact .mtp-kafka-grid { grid-template-columns: 1fr; }
+
+/* ── v0.10.1729 — CoSRE v2 çekmecesi görünüm turu A (operatör onayı, mockup
+   "CoSRE sohbet shadcn"): yalnız GÖRÜNÜM, davranış aynı. Kapsam
+   [data-cosre-v2] (CosreSheet içeriği): v1 çekmecesi de .cosre-root--drawer
+   taşır, ona dokunulmaz. Renkler yalnız token (üç tema). */
+[data-cosre-v2] > [data-slot="sheet-close"] {
+  top: var(--sp-5); right: var(--sp-4); padding: var(--sp-2); border-radius: var(--radius-sm);
+  background: transparent; color: var(--muted-foreground); opacity: 1;
+}
+[data-cosre-v2] > [data-slot="sheet-close"]:hover { background: var(--muted); color: var(--text); }
+[data-cosre-v2] .cosre-root--drawer .ai-ctx { gap: var(--sp-3); padding: var(--sp-4) var(--cosre-s4); border-bottom-color: var(--border); background: transparent; }
+[data-cosre-v2] .cosre-root--drawer .ai-ctx .chip {
+  gap: var(--sp-2); padding: 1px var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: transparent; color: var(--muted-foreground); font-size: var(--cosre-fs-small);
+}
+[data-cosre-v2] .cosre-root--drawer .ai-ctx .chip .k { color: var(--muted-foreground); }
+[data-cosre-v2] .cosre-root--drawer .ai-ctx .chip b { color: var(--text); font-weight: 500; font-family: var(--cosre-font-mono); }
+[data-cosre-v2] .cosre-root--drawer .cm-msg-user {
+  background: var(--muted); border-color: transparent; border-radius: 12px 12px 2px 12px;
+}
+[data-cosre-v2] .cosre-root--drawer .cx-verdict {
+  border-left: 2px solid var(--primary); background: var(--muted);
+  border-radius: 0 var(--radius) var(--radius) 0; padding: var(--sp-4) var(--sp-5); font-weight: 400;
+}
+[data-cosre-v2] .cosre-root--drawer .cx-verdict-k { color: var(--muted-foreground); font-weight: 600; }
+[data-cosre-v2] .cosre-root--drawer .cm-msg-actions { opacity: 1; gap: var(--sp-1); }
+[data-cosre-v2] .cosre-root--drawer .cosre-jump-pill {
+  width: auto; padding: var(--sp-2) var(--sp-6); border-radius: 999px;
+  font-size: var(--cosre-fs-small); color: var(--muted-foreground); box-shadow: var(--shadow-md);
+}

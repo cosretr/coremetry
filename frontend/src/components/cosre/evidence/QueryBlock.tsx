@@ -19,7 +19,7 @@ export function QueryBlock({ query, queryKind, source }: { query: string; queryK
     }
   };
   return (
-    <Collapsible data-cosre-query="">
+    <Collapsible data-cosre-query="" className="data-[state=open]:basis-full">
       <CollapsibleTrigger asChild>
         <Button variant="link" size="xs" className="h-auto px-0 text-muted-foreground">{T.queryShow(queryKindLabel(queryKind))}</Button>
       </CollapsibleTrigger>

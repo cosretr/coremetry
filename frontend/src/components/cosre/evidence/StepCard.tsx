@@ -24,7 +24,7 @@ import { RelevanceToggle } from '@/components/ai/EvidenceRelevance';
 
 function RawOutput({ raw }: { raw: string }) {
   return (
-    <Collapsible data-cosre-raw="">
+    <Collapsible data-cosre-raw="" className="data-[state=open]:basis-full">
       <CollapsibleTrigger asChild>
         <Button variant="link" size="xs" className="h-auto px-0 text-muted-foreground">{T.rawToggle}</Button>
       </CollapsibleTrigger>
@@ -110,11 +110,6 @@ export function StepCard({ v, exchangeId }: { v: StepView; exchangeId?: string }
               <Badge key={t.label} variant="outline" className={cn('font-normal text-muted-foreground', t.warn && 'border-status-warn-border text-status-warn')}>{t.label}</Badge>
             ))}
           </div>
-          {v.inputs && (
-            <p className="min-w-0 text-xs break-all text-muted-foreground" data-cosre-inputs="">
-              {T.inputsPrefix} <span className="font-mono">{v.inputs}</span>
-            </p>
-          )}
           {v.kind === 'skipped' && v.reason && <p className="text-muted-foreground">{T.reasonPrefix} {v.reason}</p>}
           {v.kind === 'error' && (
             <p className="rounded-md bg-status-critical-bg px-2 py-1.5 text-status-critical" role="alert">
@@ -122,8 +117,14 @@ export function StepCard({ v, exchangeId }: { v: StepView; exchangeId?: string }
             </p>
           )}
           {v.preview && <Preview p={v.preview} />}
-          {(v.query || v.raw) && (
-            <div className="flex flex-col gap-1">
+          {/* v0.10.1729 (mockup A) — Girdiler · Sorgu · Ham çıktı tek satır; açılan blok satırı tam genişlikte alır. */}
+          {(v.inputs || v.query || v.raw) && (
+            <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1 text-xs text-muted-foreground" data-cosre-step-io="">
+              {v.inputs && (
+                <span className="min-w-0 break-all" data-cosre-inputs="">
+                  {T.inputsPrefix} <span className="font-mono text-foreground">{v.inputs}</span>
+                </span>
+              )}
               {v.query && <QueryBlock query={v.query} queryKind={v.queryKind} source={v.source} />}
               {v.raw && <RawOutput raw={v.raw} />}
             </div>

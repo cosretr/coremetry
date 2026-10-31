@@ -140,6 +140,23 @@ describe('MessageList × paylaşılan fixture (gerçek SDK)', () => {
     await p;
   });
 
+  // v0.10.1729 (görünüm turu A) — AYNI cevap: akarken adımlar açık, bitince tek
+  // çerçeveli özet satırına kapanır (kullanıcı dokunmadıysa).
+  it('görünüm A (1729): adımlar akarken açık → cevap bitince kapalı', async () => {
+    const f = sseFetch(cosreFixture('ui-stream-v1'), fr => fr.includes('"toolCallId":"s2","toolName":"get_service_health","type":"tool-input-available"'));
+    const core = createCosreChat({ fetch: f.fetch });
+    const p = core.chat.sendMessage({ text: 'q' });
+    await vi.waitFor(() => expect(core.chat.messages.at(-1)?.parts.some(x => x.type === 'dynamic-tool')).toBe(true));
+    let el = await draw(core, 'streaming');
+    expect(el.querySelector('[data-cosre-steps]')?.getAttribute('data-open')).toBe('true');
+    f.release();
+    await p;
+    el = await draw(core, 'ready');
+    const list = el.querySelector('[data-cosre-steps]')!;
+    expect(list.getAttribute('data-open')).toBeNull();
+    expect(list.className).toContain('border-border');
+  });
+
   // v0.10.1659 (B4) → v0.10.1710: İlgili / İlgisiz kartın altında; sinyal yükü aynı.
   it('ui-stream-v1 (B4, kartta): İlgili/İlgisiz s2 sinyali (iki durumlu), Not 512 bayta kırpılır; 👍/👎 yok', async () => {
     const calls: unknown[] = [];

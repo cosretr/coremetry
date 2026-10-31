@@ -11,7 +11,12 @@ import { EVIDENCE_STRINGS as T } from './strings';
 import { scopeView, type ScopeTone } from './scopeView';
 
 const DOT: Record<ScopeTone, string> = { ok: 'bg-status-ok', warn: 'bg-status-warn', err: 'bg-status-critical' };
-const RING: Record<ScopeTone, string> = { ok: '', warn: 'border-status-warn-border bg-status-warn-bg', err: 'border-status-critical-border bg-status-critical-bg' };
+// v0.10.1729 (mockup A) — yumuşak renkli rozet: durum rengi token'dan, sert kenar yok.
+const TINT: Record<ScopeTone, string> = {
+  ok: 'bg-status-ok-bg text-status-ok hover:bg-status-ok-bg hover:text-status-ok',
+  warn: 'bg-status-warn-bg text-status-warn hover:bg-status-warn-bg hover:text-status-warn',
+  err: 'bg-status-critical-bg text-status-critical hover:bg-status-critical-bg hover:text-status-critical',
+};
 
 export function ScopeBadge({ scope }: { scope: CosreScope }) {
   const [open, setOpen] = useState(false);
@@ -19,7 +24,7 @@ export function ScopeBadge({ scope }: { scope: CosreScope }) {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="xs" className={cn('min-w-0 rounded-full border-border font-normal', RING[v.tone])}
+        <Button variant="ghost" size="xs" className={cn('min-w-0 rounded-full font-normal', TINT[v.tone])}
           aria-label={`${T.scopeAria}: ${v.label}`} data-cosre-scope={scope.reason} data-tone={v.tone}>
           <span className={cn('size-1.5 shrink-0 rounded-full', DOT[v.tone])} aria-hidden />
           <span className="truncate">{v.label}</span>
