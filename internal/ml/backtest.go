@@ -91,6 +91,12 @@ func rulesFor(signal, part string, cfg chstore.MLConfig) (seriesRule, bool) {
 		}
 	case chstore.MLSignalTrace:
 		route, m := splitTracePart(part)
+		if strings.HasPrefix(part, depPartPrefix) {
+			if m != "p95" {
+				return seriesRule{}, false
+			}
+			return seriesRule{detector: detDependencyLatency, upOnly: true, trafficPart: route + "|count"}, true
+		}
 		tp := tracePart(route, "count")
 		switch m {
 		case "count":

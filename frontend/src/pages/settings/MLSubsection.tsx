@@ -26,8 +26,8 @@ export const ML_TRACE_DETECTORS: { id: string; label: string; hint: string }[] =
   { id: 'op_latency', label: 'Endpoint gecikmesi', hint: 'Servis × endpoint p95/p99, mevsimsel, yukarı (rollup, ham span yok)' },
   { id: 'op_error_rate', label: 'Endpoint hata oranı', hint: 'Servis × endpoint hata oranı, yukarı' },
   { id: 'throughput_drop', label: 'Trafik düşüşü', hint: 'Endpoint çağrı sayısı tabanın altına düştü' },
-  { id: 'dependency_latency', label: 'Bağımlılık gecikmesi', hint: 'Client span: DB/HTTP/Kafka hedefi bazında' },
-  { id: 'trace_pod_outlier', label: 'Aykırı pod (trace)', hint: 'Pod\'lar arasında hata/gecikme sapması' },
+  { id: 'dependency_latency', label: 'Bağımlılık gecikmesi', hint: 'VM client histogramları: HTTP/DB/messaging hedefi bazında p95 (rollup yok — tail sampling)' },
+  { id: 'trace_pod_outlier', label: 'Aykırı pod (trace)', hint: 'VM server RED, pod etiketi varsa: pod\'lar arasında hata oranı / p95 sapması' },
   { id: 'trace_change_point', label: 'Kırılma (trace)', hint: 'CUSUM + rollout eşleştirmesi' },
 ];
 export const ML_METRIC_DETECTORS: { id: string; label: string; hint: string }[] = [

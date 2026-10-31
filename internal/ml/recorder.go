@@ -32,8 +32,10 @@ type Deps struct {
 	Logs  logstore.Store
 	// VM — trace sinyali kaynağı (tail sampling: rollup yerine VM RED); nil = yok.
 	VM anomaly.REDVM
-	// ObserveES — her ES isteğinin süresi (self-obs p95).
+	// ObserveES — her ES isteğinin süresi (self-obs p95) + ES tik bütçesi.
 	ObserveES func(d time.Duration)
+	// ObserveVM — VM sorgu süresi; ES bütçesini tüketmez.
+	ObserveVM func(d time.Duration)
 	// Labels — ortak etiket seti (taban hijyeni, geri bildirim); nil güvenli.
 	Labels *Labels
 	// ESLeft — tik ES bütçesinin kalanı (maxEsQueriesPerTick − bu tikte atılan); nil = sınırsız.
@@ -119,7 +121,8 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	lb := NewLabels(labels)
 	esAtStart := global.esQueries.Load()
 	deps := Deps{Store: r.store, Logs: r.logs, VM: r.vm, Labels: lb, ObserveES: func(d time.Duration) { global.observeES(d.Milliseconds()) },
-		ESLeft: func() int { return cfg.MaxESQueriesPerTick - int(global.esQueries.Load()-esAtStart) }}
+		ObserveVM: func(d time.Duration) { global.observeVM(d.Milliseconds()) },
+		ESLeft:    func() int { return cfg.MaxESQueriesPerTick - int(global.esQueries.Load()-esAtStart) }}
 	var firstErr error
 	var written int64
 	var all []chstore.MLEvent

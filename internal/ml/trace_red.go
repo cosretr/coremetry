@@ -189,7 +189,7 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 		for _, x := range []q{{cq, "count"}, {eq, "err"}, {pq, "p95"}} {
 			t0 := time.Now()
 			rows, err := deps.VM.QueryPromQLRange(ctx, x.expr, from, to, cfg.BucketSec, cfg.DwellBuckets+3)
-			deps.ObserveES(time.Since(t0))
+			deps.ObserveVM(time.Since(t0))
 			if err != nil {
 				return nil, fmt.Errorf("vm %s/%s: %w", pin.ID, x.measure, err)
 			}

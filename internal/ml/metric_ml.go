@@ -85,7 +85,7 @@ func (d *MetricML) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 		for _, e := range cfg.MetricFamilies[fam] {
 			t0 := time.Now()
 			rows, err := deps.VM.QueryPromQLRange(ctx, renderExpr(e.Expr, svcLabel, cfg.BucketSec), from, to, cfg.BucketSec, cfg.DwellBuckets+3)
-			deps.ObserveES(time.Since(t0))
+			deps.ObserveVM(time.Since(t0))
 			if err != nil {
 				return nil, fmt.Errorf("vm %s/%s: %w", fam, e.ID, err)
 			}

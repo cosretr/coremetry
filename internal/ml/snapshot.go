@@ -26,6 +26,8 @@ func eventPart(ev chstore.MLEvent) string {
 	switch ev.Signal {
 	case chstore.MLSignalTrace:
 		switch ev.Detector {
+		case detDependencyLatency:
+			return depPartPrefix + ev.Code + "|p95"
 		case detOpLatency:
 			return tracePart(ev.Code, "p95")
 		case detOpErrorRate:

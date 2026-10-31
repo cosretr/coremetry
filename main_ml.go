@@ -27,5 +27,5 @@ func startML(ctx context.Context, mode runMode, cfg *config.Config, store *chsto
 		return
 	}
 	log.Printf("[ml] alt sistem başlıyor placement=%s dedektörler=log_red(log_volume,error_rate,service_silent) trace_red(op_latency,op_error_rate,throughput_drop; VM configured=%v)", label, vm != nil && vm.Configured())
-	ml.New(store, logs, vm, lock, label, ml.NewLogRED(), ml.NewLogTemplates(), ml.NewLogBreakdown(), ml.NewLogChangePoint(), ml.NewTraceRED(), ml.NewMetricML()).Start(chstore.WithQueryTag(ctx, "ml:recorder"))
+	ml.New(store, logs, vm, lock, label, ml.NewLogRED(), ml.NewLogTemplates(), ml.NewLogBreakdown(), ml.NewLogChangePoint(), ml.NewTraceRED(), ml.NewDependency(), ml.NewMetricML()).Start(chstore.WithQueryTag(ctx, "ml:recorder"))
 }
