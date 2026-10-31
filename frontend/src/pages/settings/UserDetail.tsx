@@ -16,12 +16,12 @@ import { CopyButton } from '@/components/CopyButton';
 import { useAuth } from '@/components/AuthProvider';
 import { keys, useCustomRoles, useUserAudit, useUserDetail, useUserDirectory, useUserOrg, useUserAccess, useAvailablePages } from '@/lib/queries';
 import { api, type UserRow } from '@/lib/api';
-import type { AuditEntry, UserDetailUser, UserDirectory, UserDirectoryCheck, UserLdapGroup, UserOrgPerson } from '@/lib/types';
+import type { AuditEntry, UserDetail as UserDetailT, UserDetailUser, UserDirectory, UserDirectoryCheck, UserLdapGroup, UserOrgPerson } from '@/lib/types';
 import { cn } from '@/lib/cn';
 import { useT } from '@/lib/i18n';
 import { tsLong, tsRel } from '@/lib/utils';
 import { CustomRoleEditor, RoleEditor, TeamEditor } from '../Users';
-import { directoryAttributeRows, orgRows, userSourceLabel, userStatus, userDetailTabFromParam, type UserDetailTab } from './userDetailModel';
+import { directoryAttributeRows, managerLabel, orgRows, userSourceLabel, userStatus, userDetailTabFromParam, withDirectoryCheck, type UserDetailTab } from './userDetailModel';
 
 // UserDetail — v0.10.1731 (operatör onayı 2026-10-31, mockup "Kullanıcı
 // detayı"): Settings › Users satırından açılan kullanıcı sayfası. Başlık
@@ -260,6 +260,12 @@ function CheckResult({ r, onClose }: { r: UserDirectoryCheck; onClose: () => voi
           <KeyValue items={r.diff.map(d => ({ id: d.field, k: d.label, v: `${d.before || '—'} → ${d.after || '—'}` }))} />
         </>
       )}
+      {!r.directoryStored && (
+        <p role="alert" className="my-1.5 text-[13px] text-(--warn)">
+          Dizin öznitelikleri okundu ama bu sunucuda saklanamadı (users.directory kolonu henüz görünmüyor); birkaç dakika
+          sonra yeniden dene.
+        </p>
+      )}
       <div className="py-1.5"><Button variant="ghost" size="sm" onClick={onClose}>Kapat</Button></div>
     </Card>
   );
@@ -368,6 +374,8 @@ export default function UserDetailPage() {
     try {
       const r = await api.checkUserDirectory(u.id);
       setCheck(r);
+      // v0.10.1741 — kartlar yazılan satırı hemen gösterir, sonra tazelenir.
+      qc.setQueryData<UserDetailT>(keys.users.detail(u.id), old => withDirectoryCheck(old, r));
       if (r.written) refresh();
     } catch (e) {
       setCheckErr(errText(e));
@@ -506,7 +514,7 @@ export default function UserDetailPage() {
                       { k: 'Departman', v: dir.department },
                       { k: 'Müdürlük', v: dir.division },
                       ...(dir.level ? [{ k: 'Seviye', v: dir.level }] : []),
-                      { k: 'Bağlı olduğu yönetici', v: dir.managerName || dir.managerDn, title: dir.managerDn },
+                      { k: 'Bağlı olduğu yönetici', v: managerLabel(q.data.manager, dir) },
                     ] : []),
                   ]} />
                 </Card>

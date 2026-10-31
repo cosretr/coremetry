@@ -1,6 +1,21 @@
 // userDetailModel — v0.10.1731: kullanıcı detay sayfasının saf yardımcıları
 // (bileşen dosyası yalnız bileşen dışa aktarsın — react-refresh).
-import type { UserDetailUser } from '@/lib/types';
+import type { UserDetail, UserDetailUser, UserDirectory, UserDirectoryCheck, UserManager } from '@/lib/types';
+
+/** v0.10.1741 — "AD ile denetle" cevabı detay önbelleğine: `after` sunucunun
+ *  YAZDIĞI satır (yeniden okuma), kartlar refetch beklemeden onu gösterir. */
+export function withDirectoryCheck(old: UserDetail | undefined, r: UserDirectoryCheck): UserDetail | undefined {
+  if (!old || !r.written || old.user.id !== r.after.id) return old;
+  return { ...old, user: r.after };
+}
+
+/** v0.10.1741 — Kuruluş kartının yöneticisi: çözülmüş görünen ad (+ sicil),
+ *  yoksa saklı ad (DN'nin CN'i). Ham DN ASLA (yalnız Dizin sekmesinde). */
+export function managerLabel(manager: UserManager | undefined, dir: UserDirectory): string | undefined {
+  const name = manager?.name || dir.managerName;
+  if (!name) return undefined;
+  return manager?.employeeId ? `${name} · ${manager.employeeId}` : name;
+}
 
 export type UserDetailTab = 'overview' | 'teams' | 'notifications' | 'permissions' | 'changes' | 'directory';
 

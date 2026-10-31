@@ -61,10 +61,17 @@ type DirectoryInfo struct {
 	ManagerDN   string `json:"managerDn,omitempty"`
 	ManagerName string `json:"managerName,omitempty"` // DN'nin ilk CN'i
 	Level       string `json:"level,omitempty"`
+	// SyncedAt — v0.10.1741: dizinden son okuma anı (unix ns; giriş, denetim,
+	// detay otomatik doldurması damgalar). Öznitelik değildir: Empty saymaz.
+	SyncedAt int64 `json:"syncedAt,omitempty"`
 }
 
 // Empty — hiçbir öznitelik okunmadı mı (seyrek giriş saklı değeri silmez).
-func (d DirectoryInfo) Empty() bool { return d == (DirectoryInfo{}) }
+// SyncedAt öznitelik değildir, sayılmaz.
+func (d DirectoryInfo) Empty() bool {
+	d.SyncedAt = 0
+	return d == (DirectoryInfo{})
+}
 
 // attrList — "a, b ,c" → [a b c] (boşlar atılır).
 func attrList(spec string) []string {

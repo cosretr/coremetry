@@ -175,6 +175,44 @@ func walkManagerChain(selfDN, start string, maxUp int, fetch func(dn string) (Di
 	return out, nil
 }
 
+// readPersonDN — tek düğümün base-scope okuması (+ o düğümün yönetici DN'i).
+func readPersonDN(conn *goldap.Conn, c Config, attrs []string, dn string) (DirectoryPerson, string, error) {
+	req := goldap.NewSearchRequest(dn, goldap.ScopeBaseObject, goldap.NeverDerefAliases,
+		1, 15, false, "(objectClass=*)", attrs, nil)
+	res, err := conn.Search(req)
+	if err != nil {
+		return DirectoryPerson{}, "", fmt.Errorf("manager read %q: %w", dn, err)
+	}
+	if len(res.Entries) == 0 {
+		return DirectoryPerson{}, "", fmt.Errorf("manager %q not found", dn)
+	}
+	p, next := personFromEntry(res.Entries[0], c)
+	return p, next, nil
+}
+
+// PersonByDN — v0.10.1741: tek dizin düğümü DN ile (Kuruluş kartının
+// yöneticisi: görünen ad + sicil). Tek bağlantı, admin bind, 1 base-scope
+// okuma; çağıran önbelleğe alır.
+func (s *Service) PersonByDN(ctx context.Context, dn string) (DirectoryPerson, error) {
+	c := s.rawConfig()
+	if !c.Enabled {
+		return DirectoryPerson{}, errors.New("ldap disabled")
+	}
+	if strings.TrimSpace(dn) == "" {
+		return DirectoryPerson{}, errors.New("empty dn")
+	}
+	conn, err := bindAdmin(c)
+	if err != nil {
+		return DirectoryPerson{}, err
+	}
+	defer conn.Close()
+	p, _, err := readPersonDN(conn, c, personAttrs(c), dn)
+	return p, err
+}
+
+// CNFromDN — DN'nin ilk cn= değeri ("CN=Doe\, Jane,OU=…" → "Doe, Jane"); yoksa "".
+func CNFromDN(dn string) string { return cnFromDN(dn) }
+
 // OrgChart — kullanıcının yönetici zinciri + doğrudan bağlıları.
 func (s *Service) OrgChart(ctx context.Context, username string) (*OrgChart, error) {
 	c := s.rawConfig()
@@ -196,19 +234,7 @@ func (s *Service) OrgChart(ctx context.Context, username string) (*OrgChart, err
 	}
 	self, mgrDN := personFromEntry(e, c)
 	attrs := personAttrs(c)
-	fetch := func(dn string) (DirectoryPerson, string, error) {
-		req := goldap.NewSearchRequest(dn, goldap.ScopeBaseObject, goldap.NeverDerefAliases,
-			1, 15, false, "(objectClass=*)", attrs, nil)
-		res, err := conn.Search(req)
-		if err != nil {
-			return DirectoryPerson{}, "", fmt.Errorf("manager read %q: %w", dn, err)
-		}
-		if len(res.Entries) == 0 {
-			return DirectoryPerson{}, "", fmt.Errorf("manager %q not found", dn)
-		}
-		p, next := personFromEntry(res.Entries[0], c)
-		return p, next, nil
-	}
+	fetch := func(dn string) (DirectoryPerson, string, error) { return readPersonDN(conn, c, attrs, dn) }
 	managers, chainErr := walkManagerChain(e.DN, mgrDN, OrgMaxManagers, fetch)
 	out := &OrgChart{Self: self, Managers: managers, Reports: []DirectoryPerson{}}
 	// Doğrudan bağlılar: eşlenen İLK yönetici özniteliği = <kullanıcı DN>.

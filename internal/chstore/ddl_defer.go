@@ -172,8 +172,11 @@ func (s *Store) reprobePromotedAttrs() {
 		// v0.10.1080 — anomaly_events.verified_ratio: bayrak false kaldıkça
 		// desen doğrulama oranı yazılmaz (grafik notu yok).
 		verifiedDone := s.reprobeAnomalyVerifiedCol(ctx)
+		// v0.10.1741 — users.directory: bayrak false kaldıkça UpsertUser dizin
+		// özniteliklerini düşürür (kullanıcı detayı kartları "—").
+		dirDone := s.reprobeUserDirectoryCol(ctx)
 		cancel()
-		if attrsDone && episodeDone && snapDone && verifiedDone {
+		if attrsDone && episodeDone && snapDone && verifiedDone && dirDone {
 			return
 		}
 	}
@@ -185,6 +188,9 @@ func (s *Store) reprobePromotedAttrs() {
 	}
 	if !s.hasAnomalyVerifiedCol.Load() {
 		log.Printf("[chstore] anomaly_events.verified_ratio hâlâ doğrulanamadı — desen doğrulama oranı yazılmıyor, sonraki boot yeniden deneyecek")
+	}
+	if !s.hasDirectoryCol.Load() {
+		log.Printf("[chstore] users.directory hâlâ doğrulanamadı — dizin öznitelikleri yazılmıyor, istek üzerine / sonraki boot yeniden denenecek")
 	}
 	if !s.hasExResolveSnapCol.Load() {
 		log.Printf("[chstore] exception_groups.occurrences_at_resolve hâlâ doğrulanamadı — resolve anlık görüntüsü yazılmıyor (regressed P2'de kalır), sonraki boot yeniden deneyecek")

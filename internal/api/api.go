@@ -5925,7 +5925,7 @@ func (s *Server) loginViaLDAP(ctx context.Context, email, password string, exist
 		// the O(1) join key to the LDAP group snapshot. Email stays the
 		// canonical identity. Store omits it when the column is absent.
 		LdapUsername: strings.ToLower(strings.TrimSpace(res.User.Username)),
-		Directory:    directoryJSON(res.User.Directory), // v0.10.1732 — user_detail.go
+		Directory:    directoryJSONAt(res.User.Directory, time.Now()), // v0.10.1732; damga v0.10.1741 — user_detail.go
 	}
 	firstLogin := existing == nil
 	if existing != nil {

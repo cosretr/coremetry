@@ -117,6 +117,12 @@ type userFieldDiff struct {
 // uygular. loginViaLDAP ile aynı kural: boş dizin değeri saklıyı silmez;
 // foto dizindekini izler. Rol, e-posta, kilit, özel rol dokunulmaz.
 func applyDirectoryRead(u chstore.User, d ldap.LDAPUser) chstore.User {
+	return applyDirectoryReadAt(u, d, time.Time{})
+}
+
+// applyDirectoryReadAt — applyDirectoryRead + dizin JSON'una okuma damgası
+// (v0.10.1741; sıfır an = damgasız).
+func applyDirectoryReadAt(u chstore.User, d ldap.LDAPUser, now time.Time) chstore.User {
 	if v := strings.TrimSpace(d.DisplayName); v != "" {
 		u.FullName = v
 	}
@@ -131,10 +137,21 @@ func applyDirectoryRead(u chstore.User, d ldap.LDAPUser) chstore.User {
 	}
 	u.Photo = d.Photo
 	u.HasPhoto = len(d.Photo) > 0
-	if dj := directoryJSON(d.Directory); dj != nil {
+	if dj := directoryJSONAt(d.Directory, now); dj != nil {
 		u.Directory = dj
 	}
 	return u
+}
+
+// directoryStaleAfter — saklı dizin bu süreden eskiyse detay açılışı yeniden
+// okur (operatör: varsayılan dolu gelsin; giriş yenilemesi aynen).
+const directoryStaleAfter = 24 * time.Hour
+
+// directoryFresh — SAF: saklı dizin dolu ve son 24 saatte okunmuş mu.
+// Damgasız (v0.10.1741 öncesi) satır taze sayılmaz.
+func directoryFresh(raw json.RawMessage, now time.Time) bool {
+	d := parseDirectory(raw)
+	return !d.Empty() && d.SyncedAt > 0 && now.Sub(time.Unix(0, d.SyncedAt)) < directoryStaleAfter
 }
 
 func parseDirectory(raw json.RawMessage) ldap.DirectoryInfo {
@@ -183,6 +200,41 @@ type directoryCheckResp struct {
 	After   chstore.User    `json:"after"`
 	Diff    []userFieldDiff `json:"diff"`
 	Written bool            `json:"written"`
+	// DirectoryStored — v0.10.1741: okunan dizin öznitelikleri satıra gerçekten
+	// yazıldı mı (yeniden okumada var mı). false + dolu fark = sunucu dizini
+	// saklayamıyor (users.directory kolonu henüz görünmüyor).
+	DirectoryStored bool `json:"directoryStored"`
+}
+
+// runDirectoryCheck — denetimin çekirdeği (okuma → fark → yazım → yeniden
+// okuma). v0.10.1741 (operator-reported): cevabın After'ı YAZILAN satırdır
+// (yeniden okuma), hesaplanan değil — users.directory kolonu görünmüyorken
+// UpsertUser kolonu sessizce düşürür; eskiden cevap okunanı "yazıldı" diye
+// döndürüyor, kartlar "—" kalıyordu. Fark yoksa da damgasız / eski dizin
+// tazelenir (detay otomatik doldurması 24 saat bir daha okumasın).
+func runDirectoryCheck(before chstore.User, rd ldap.LDAPUser, now time.Time,
+	upsert func(chstore.User) error, reread func() (*chstore.User, error)) (directoryCheckResp, error) {
+	after := applyDirectoryReadAt(before, rd, now)
+	diff := userDirectoryDiff(before, after)
+	resp := directoryCheckResp{Before: before, After: before, Diff: diff,
+		DirectoryStored: rd.Directory.Empty() || len(before.Directory) > 0}
+	if len(diff) == 0 && (rd.Directory.Empty() || directoryFresh(before.Directory, now)) {
+		return resp, nil
+	}
+	if err := upsert(after); err != nil {
+		return resp, err
+	}
+	resp.Written = true
+	saved, err := reread()
+	if err != nil {
+		return resp, err
+	}
+	if saved == nil {
+		return resp, fmt.Errorf("%w: kullanıcı yazımdan sonra okunamadı", errNotFound)
+	}
+	resp.After = *saved
+	resp.DirectoryStored = rd.Directory.Empty() || len(saved.Directory) > 0
+	return resp, nil
 }
 
 func (s *Server) checkUserDirectory(w http.ResponseWriter, r *http.Request) {
@@ -195,19 +247,20 @@ func (s *Server) checkUserDirectory(w http.ResponseWriter, r *http.Request) {
 		writeLdapErr(w, err)
 		return
 	}
-	after := applyDirectoryRead(*u, rd.User)
-	diff := userDirectoryDiff(*u, after)
-	resp := directoryCheckResp{Before: *u, After: after, Diff: diff}
-	if len(diff) > 0 {
-		if err := s.store.UpsertUser(r.Context(), after); err != nil {
-			writeErr(w, err)
-			return
-		}
-		s.meUsers.clear()
-		resp.Written = true
+	ctx := r.Context()
+	s.store.ReprobeUserDirectoryCol(ctx) // v0.10.1741 — kolon görünmüyorsa yazmadan önce yeniden yokla
+	resp, err := runDirectoryCheck(*u, rd.User, time.Now(),
+		func(nu chstore.User) error { return s.store.UpsertUser(ctx, nu) },
+		func() (*chstore.User, error) { return s.store.GetUserByID(ctx, u.ID) })
+	if err != nil {
+		writeErr(w, err)
+		return
 	}
-	fields := make([]string, 0, len(diff))
-	for _, d := range diff {
+	if resp.Written {
+		s.meUsers.clear()
+	}
+	fields := make([]string, 0, len(resp.Diff))
+	for _, d := range resp.Diff {
 		fields = append(fields, d.Field)
 	}
 	details, _ := json.Marshal(map[string]any{"email": u.Email, "changed": fields})

@@ -52,6 +52,8 @@ type userDetailResp struct {
 	// (< 5 dk). Damga yoksa lastSeenAt yok, online false.
 	LastSeenAt int64 `json:"lastSeenAt,omitempty"`
 	Online     bool  `json:"online"`
+	// Manager — v0.10.1741: saklı managerDn'in görünen adı + sicili (Kuruluş).
+	Manager *userManager `json:"manager,omitempty"`
 }
 
 func (s *Server) getUserDetail(w http.ResponseWriter, r *http.Request) {
@@ -68,7 +70,12 @@ func (s *Server) getUserDetail(w http.ResponseWriter, r *http.Request) {
 	if u.AuthProvider == "" {
 		u.AuthProvider = "local"
 	}
-	resp := userDetailResp{User: *u, Groups: []userLdapGroup{}}
+	// v0.10.1741 — boş / bayat dizin satır içi doldurulur (≤2 sn, hata 10 dk
+	// hatırlanır); yönetici DN'i görünen ad + sicile çözülür.
+	if nu := s.autofillUserDirectory(r.Context(), u); nu != nil {
+		u = nu
+	}
+	resp := userDetailResp{User: *u, Groups: []userLdapGroup{}, Manager: s.userDirectoryManager(r.Context(), u)}
 	if s.presence != nil {
 		if ns, ok := s.presence.lastSeen(r.Context(), []string{u.ID})[u.ID]; ok {
 			resp.LastSeenAt, resp.Online = ns, presenceOnline(ns, time.Now().UnixNano())
@@ -208,8 +215,18 @@ func carryLdapLoginRow(existing *chstore.User, u chstore.User) chstore.User {
 // directoryJSON — SAF: okunan dizin özniteliklerinin users.directory JSON'u;
 // hiçbir öznitelik okunmadıysa nil (carryLdapLoginRow saklıyı korur).
 func directoryJSON(d ldap.DirectoryInfo) json.RawMessage {
+	return directoryJSONAt(d, time.Time{})
+}
+
+// directoryJSONAt — directoryJSON + okuma damgası (v0.10.1741: giriş, denetim
+// ve detay otomatik doldurması damgalar; sıfır an = damgasız).
+func directoryJSONAt(d ldap.DirectoryInfo, now time.Time) json.RawMessage {
 	if d.Empty() {
 		return nil
+	}
+	d.SyncedAt = 0
+	if !now.IsZero() {
+		d.SyncedAt = now.UnixNano()
 	}
 	b, err := json.Marshal(d)
 	if err != nil {

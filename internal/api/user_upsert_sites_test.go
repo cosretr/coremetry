@@ -33,6 +33,9 @@ var upsertUserSites = map[string]int{
 	"user_detail.go": 1,
 	// checkUserDirectory: applyDirectoryRead(GetUserByID satırı).
 	"user_directory.go": 1,
+	// v0.10.1741 detay otomatik doldurması: applyDirectoryReadAt(GetUserByIDAnyState
+	// satırı) + takım taşınır.
+	"user_directory_autofill.go": 1,
 }
 
 func TestUpsertUserCallSitesAccounted(t *testing.T) {

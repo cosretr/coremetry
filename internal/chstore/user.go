@@ -81,7 +81,7 @@ type userCols struct {
 }
 
 func (s *Store) userCols() userCols {
-	return userCols{ldap: s.hasLdapUsernameCol, roleLocked: s.hasRoleLockedCol, directory: s.hasDirectoryCol}
+	return userCols{ldap: s.hasLdapUsernameCol, roleLocked: s.hasRoleLockedCol, directory: s.hasDirectoryCol.Load()}
 }
 
 // userInsertColumns — SAF: UpsertUser'ın kolon listesi. userInsertArgs ile

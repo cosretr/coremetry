@@ -321,7 +321,12 @@ type Store struct {
 	// sözleşme (auth-kritik INSERT kolon listesi probe'a bağlı).
 	hasRoleLockedCol bool
 	// hasDirectoryCol — users.directory (v0.10.1732), aynı sözleşme.
-	hasDirectoryCol bool
+	// v0.10.1741 — atomic: küme kipinde ALTER ertelenir, boot probe'u false
+	// okur; reprobeUserDirectoryCol (ertelenen DDL sonrası + istek üzerine)
+	// restart'sız açar. Açılana dek UpsertUser kolonu sessizce düşürüyordu.
+	hasDirectoryCol atomic.Bool
+	// dirReprobeAt — istek üzerine yeniden probe'un son denemesi (unix ns).
+	dirReprobeAt atomic.Int64
 
 	// hasProblemCmpCol — `problems` tablosunda comparator kolonu var mı
 	// (v0.9.976). hasLdapUsernameCol ile AYNI sınıf: `problems` Coremetry'nin
@@ -4536,8 +4541,8 @@ func (s *Store) migrate(ctx context.Context) error {
 	// directory probe (v0.10.1732) — role_locked ile aynı şekil.
 	drRows, drErr := s.conn.Query(ctx, `SELECT directory FROM users LIMIT 1 SETTINGS max_execution_time = 3`)
 	maybeCloseRows(drRows, drErr)
-	s.hasDirectoryCol = drErr == nil
-	if !s.hasDirectoryCol {
+	s.hasDirectoryCol.Store(drErr == nil)
+	if !s.hasDirectoryCol.Load() {
 		log.Printf("[chstore] `directory` column not present on users (%v) — directory attributes omitted until it lands", drErr)
 	}
 

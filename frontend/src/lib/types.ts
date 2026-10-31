@@ -6549,6 +6549,7 @@ export interface UserDirectory {
   managerDn?: string;
   managerName?: string;
   level?: string;
+  syncedAt?: number;   // v0.10.1741 — dizinden son okuma (unix ns)
 }
 export interface UserLdapGroup {
   cn: string;
@@ -6596,7 +6597,10 @@ export interface UserDirectoryCheck {
   before: UserDetailUser;
   after: UserDetailUser;
   diff: UserFieldDiff[];
-  written: boolean;  // fark vardı ve satır yazıldı
+  written: boolean;  // satır yazıldı (fark ya da bayat dizin tazelendi)
+  // v0.10.1741 — after = YAZILAN satır (yeniden okuma). false = okunan dizin
+  // öznitelikleri saklanamadı (sunucuda users.directory henüz görünmüyor).
+  directoryStored: boolean;
 }
 // v0.10.1733 — GET /api/users/{id}/directory (Dizin sekmesi): ham
 // öznitelikler; ikili değerler "[N bytes]" özeti.
@@ -6640,6 +6644,13 @@ export interface UserDetail {
   // (< 5 dk; Users listesinin "online" rozetiyle aynı eşik).
   lastSeenAt?: number;
   online: boolean;
+  // v0.10.1741 — saklı managerDn'in görünen adı + sicili (Kuruluş kartı;
+  // ham DN yalnız Dizin sekmesinde). Yönetici yoksa alan yok.
+  manager?: UserManager;
+}
+export interface UserManager {
+  name: string;
+  employeeId?: string;
 }
 
 // AuditEntry — append-only audit row consumed by /admin/audit.
