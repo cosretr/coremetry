@@ -54,3 +54,21 @@ func TestBriefingOracleRows(t *testing.T) {
 		t.Fatal("kaynaksız satır uyduruldu")
 	}
 }
+
+// v0.10.1718 (Q6) — çözülmemiş özneler: sentetik `oracle:<ad>` servisi kümesiyle
+// aynı satır kurucusu filo satırlarını üretir; kaynak kimliği trace okuması için taşınır.
+func TestBriefingOracleRowsUnresolvedFleet(t *testing.T) {
+	const src = "o-0000aaaa"
+	fallback := chstore.OracleGroupFallbackService("core-db")
+	sources := []briefingOracleSource{{ID: src, Cur: []chstore.OracleGroupAgg{{Code: "ORA-00060", Op: "ORDER_SAVE", Weight: 12}}}}
+	groups := []chstore.ExceptionGroup{
+		{Fingerprint: chstore.OracleGroupFingerprint(src, "ORA-00060", "ORDER_SAVE"), Service: fallback},
+	}
+	rows := briefingOracleRows(sources, groups, []string{fallback})
+	if len(rows) != 1 || rows[0].Service != fallback || rows[0].SourceID != src || rows[0].Cur != 12 {
+		t.Fatalf("filo satırı: %+v", rows)
+	}
+	if len(briefingOracleRows(sources, groups, []string{"orders-api"})) != 0 {
+		t.Fatal("çözülmemiş özne takım satırına girdi")
+	}
+}

@@ -3,7 +3,7 @@
 // internal/cosre/briefing/items.go ile aynı biçimde fikstür).
 import { describe, it, expect } from 'vitest';
 import type { CosreBriefing, CosreBriefingLine, CosreBriefingResponse } from '@/lib/types';
-import { briefingParts, briefingView, briefingWindowLabel } from './briefingView';
+import { briefingParts, briefingTraceHref, briefingView, briefingWindowLabel } from './briefingView';
 
 const NOW = 1_800_000_000_000;
 const line = (item: CosreBriefingLine['item'], text: string, service?: string, page_url = '/service?name=orders-api'): CosreBriefingLine => ({
@@ -84,5 +84,32 @@ describe('briefingView', () => {
   it('tarayıcıda başka takım seçildiyse kart gösterilmez; aynı takım (büyük/küçük harf) gösterilir', () => {
     expect(briefingView(ready(card()), 'orders-platform', NOW)).toBeNull();
     expect(briefingView(ready(card()), 'Payments-Core', NOW)?.state).toBe('silence');
+  });
+});
+
+// v0.10.1718 — kalem 5: Oracle satırının trace çipi yalnız 32 hex kimlikte;
+// filo satırı (Q6) takım satırının yanında ayrı satır olarak çizilir.
+describe('briefing trace çipi', () => {
+  const ora = (trace_id?: string, scope?: 'fleet'): CosreBriefingLine => ({
+    item: 'oracle', text: 'orders-api Oracle ORA-00060 · ORDER_SAVE: 40 hata (önceki 10, 4.0×)', page_url: '/problems?exception=ora%3Aab', total: 1,
+    ...(scope ? { scope } : {}),
+    rows: [{ item: 'oracle', kind: 'code_up', service: 'orders-api', now: 40, prev: 10, score: 4, text: '', page_url: '', ...(trace_id ? { trace_id } : {}) }],
+  });
+  const cases: Array<[string, string | undefined, string]> = [
+    ['geçerli', '4bf92f3577b34da6a3ce929d0e0e4736', '/trace?id=4bf92f3577b34da6a3ce929d0e0e4736'],
+    ['yok', undefined, ''],
+    ['kısa', '4bf92f35', ''],
+    ['büyük harf (sunucu küçültür)', '4BF92F3577B34DA6A3CE929D0E0E4736', ''],
+    ['yol enjeksiyonu', '/\\evil.com/0000000000000000000000', ''],
+  ];
+  it.each(cases)('%s', (_n, id, want) => {
+    expect(briefingTraceHref(ora(id))).toBe(want);
+    const v = briefingView(ready(card({ silence: false, lines: [ora(id)] })), '', NOW);
+    const l = v?.state === 'findings' ? v.lines[0] : undefined;
+    expect(l?.trace?.href ?? '').toBe(want);
+  });
+  it('filo satırı ayrı satır', () => {
+    const v = briefingView(ready(card({ silence: false, lines: [ora(), ora(undefined, 'fleet')] })), '', NOW);
+    expect(v?.state === 'findings' ? v.lines.map(l => l.kind) : []).toEqual(['ORACLE', 'ORACLE']);
   });
 });

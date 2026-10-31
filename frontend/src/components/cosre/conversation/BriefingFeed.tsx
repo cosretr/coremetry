@@ -38,6 +38,8 @@ export interface BriefingFeedLine {
   /** v0.10.1716 (dilim 7) — "Sor" isteğinin context.briefingId + briefingLine'ı. */
   ref?: BriefingLineRef;
   pivot?: { label: string; href: string };
+  /** v0.10.1718 — örnek trace çipi (yalnız güvenli uygulama yolu). */
+  trace?: { label: string; href: string };
 }
 
 /** Kartın kimliği (ULID) + satırın sırası — sunucu satırı kart yükünden yeniden okur. */
@@ -101,6 +103,11 @@ function FeedLine({ line, onAsk }: { line: BriefingFeedLine; onAsk: (l: Briefing
         onClick={() => onAsk(line)}>
         <span><LineText line={line} /></span>
       </Button>
+      {line.trace && (
+        <Button asChild variant="ghost" size="xs" className="shrink-0 text-muted-foreground" data-briefing-trace="">
+          <Link to={line.trace.href} title={line.trace.label}>{line.trace.label}<ArrowUpRight aria-hidden="true" /></Link>
+        </Button>
+      )}
       {line.pivot && (
         <Button asChild variant="ghost" size="xs" className="shrink-0 text-muted-foreground">
           <Link to={line.pivot.href} title={line.pivot.label}>{line.pivot.label}<ArrowUpRight aria-hidden="true" /></Link>

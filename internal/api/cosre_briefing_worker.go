@@ -192,9 +192,9 @@ type briefingFleet struct {
 	Oracle     briefingOracleFleet // v0.10.1713 kalem 5
 }
 
-func (s *Server) readBriefingFleet(ctx context.Context, windowS int, now time.Time) briefingFleet {
-	deps, err := s.store.GetRecentDeploys(ctx, time.Duration(windowS)*time.Second, briefingFleetDeployMax)
-	return briefingFleet{Deploys: deps, DeploysErr: err, Oracle: s.readBriefingOracleFleet(ctx, windowS, now)}
+func (s *Server) readBriefingFleet(ctx context.Context, cfg briefing.Config, now time.Time) briefingFleet {
+	deps, err := s.store.GetRecentDeploys(ctx, time.Duration(cfg.WindowS)*time.Second, briefingFleetDeployMax)
+	return briefingFleet{Deploys: deps, DeploysErr: err, Oracle: s.readBriefingOracleFleet(ctx, cfg, now)}
 }
 
 // briefingLogs — kalem 4 okuması (takım başına bir kez; env'ler paylaşır).
@@ -304,7 +304,14 @@ func (s *Server) buildBriefing(ctx context.Context, t briefingTeam, env string, 
 		partial = append(partial, briefing.ItemOracle)
 		fallthrough
 	default:
-		findings = append(findings, briefing.OracleFindings(o.Rows, th)...)
+		findings = append(findings, s.withOracleTrace(ctx, o.Rows, briefing.OracleFindings(o.Rows, th), from, to)...)
+	}
+	// 5b — Q6 filo satırı (tik başına okunmuş; takım satırından ayrı).
+	if fleet.Oracle.State != "skipped" {
+		if fleet.Oracle.UnresolvedFailed {
+			partial = append(partial, briefing.ItemOracle)
+		}
+		findings = append(findings, fleet.Oracle.Unresolved...)
 	}
 
 	// 7 — rollout etkisi.
@@ -376,7 +383,7 @@ func (s *Server) runBriefingTick(ctx context.Context, cfg briefing.Config, now t
 		return
 	}
 	ta := s.teamAliasesCtx(ctx)
-	fleet := s.readBriefingFleet(ctx, cfg.WindowS, now)
+	fleet := s.readBriefingFleet(ctx, cfg, now)
 	n := 0
 	for _, t := range briefingTeamsFrom(users, ta) {
 		t = s.briefingTeamScope(ta, mds, t)

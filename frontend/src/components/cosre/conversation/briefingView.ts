@@ -9,6 +9,7 @@
 // Renk YALNIZ sapan sayıda: sunucu şablonundaki (internal/cosre/briefing
 // items.go) ilk birimli değer — parantez DIŞINDA (parantez içi "önceki …").
 import { isSafeAppPath } from '@/lib/safeAppPath';
+import { traceHref } from '@/lib/traceHref';
 import { agoTR } from '@/lib/utils';
 import type { CosreBriefingItem, CosreBriefingLine, CosreBriefingResponse } from '@/lib/types';
 import { tCosre as t } from '@/components/ai/capabilityHints';
@@ -64,8 +65,19 @@ export function briefingParts(text: string, service?: string): BriefingPart[] {
   return out;
 }
 
+const TRACE_ID_RE = /^[0-9a-f]{32}$/;
+
+/** SAF — v0.10.1718: satırın örnek trace çipi (üst bulgu; 32 hex + güvenli yol). */
+export function briefingTraceHref(l: CosreBriefingLine): string {
+  const id = l.rows[0]?.trace_id ?? '';
+  if (!TRACE_ID_RE.test(id)) return '';
+  const href = traceHref(id);
+  return isSafeAppPath(href) ? href : '';
+}
+
 function feedLine(l: CosreBriefingLine, i: number, briefingId: string): BriefingFeedLine {
   const href = l.page_url && isSafeAppPath(l.page_url) ? l.page_url : '';
+  const traceHref = briefingTraceHref(l);
   return {
     id: `${l.item}-${i}`,
     kind: KIND[l.item] ?? l.item.toUpperCase(),
@@ -74,6 +86,7 @@ function feedLine(l: CosreBriefingLine, i: number, briefingId: string): Briefing
     ask: t('cosre.welcome.briefing.askPrompt').replace('{text}', l.text),
     ...(briefingId ? { ref: { briefingId, line: i } } : {}),
     ...(href ? { pivot: { label: t(`cosre.welcome.briefing.pivot.${l.item}`), href } } : {}),
+    ...(traceHref ? { trace: { label: t('cosre.welcome.briefing.trace'), href: traceHref } } : {}),
   };
 }
 

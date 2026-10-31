@@ -8232,6 +8232,10 @@ export interface CosreBriefingFinding {
   score: number;
   text: string;
   page_url: string;
+  /** v0.10.1718 — 'fleet' = takım dışı filo bulgusu (Q6 çözülmemiş Oracle öznesi). */
+  scope?: 'fleet';
+  /** v0.10.1718 — örnek trace (32 hex; Oracle satırının üst bulgusu). */
+  trace_id?: string;
 }
 
 /** briefing.Line — kalem başına bir satır; rows ≤ 3, total kalemdeki tüm bulgu. */
@@ -8241,6 +8245,8 @@ export interface CosreBriefingLine {
   page_url: string;
   total: number;
   rows: CosreBriefingFinding[];
+  /** v0.10.1718 — 'fleet' = takım satırından ayrı filo satırı (Q6). */
+  scope?: 'fleet';
 }
 
 /** briefing.Briefing — takım × env kartı (cosre_briefings.payload). */

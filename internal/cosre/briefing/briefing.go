@@ -221,7 +221,16 @@ type Finding struct {
 	Score   float64 `json:"score"`
 	Text    string  `json:"text"`
 	PageURL string  `json:"page_url"`
+	// Scope — v0.10.1718: "" = takımın bulgusu, ScopeFleet = filo satırı
+	// (Q6: çözülmemiş Oracle özneleri, takım satırlarından AYRI satır).
+	Scope string `json:"scope,omitempty"`
+	// TraceID — v0.10.1718: örnek trace (32 hex; yalnız Oracle satırının
+	// üst bulgusu) → kartın trace çipi.
+	TraceID string `json:"trace_id,omitempty"`
 }
+
+// ScopeFleet — takım kapsamı dışındaki filo satırı.
+const ScopeFleet = "fleet"
 
 // Line — kartın bir kalem satırı.
 type Line struct {
@@ -230,41 +239,66 @@ type Line struct {
 	PageURL string    `json:"page_url"`
 	Total   int       `json:"total"` // kalemdeki bulgu sayısı (gösterilen ≤ MaxRowsPerLine)
 	Rows    []Finding `json:"rows"`
+	Scope   string    `json:"scope,omitempty"` // ScopeFleet = filo satırı
 }
 
-// Lines — SAF: bulgular → satırlar. Kalem başına bir satır, sıra ItemOrder;
-// satır içi Score azalan, eşitlikte servis+etiket (deterministik).
+// findingLess — satır içi sıra: Score azalan, eşitlikte servis + etiket.
+func findingLess(a, b Finding) bool {
+	if a.Score != b.Score {
+		return a.Score > b.Score
+	}
+	if a.Service != b.Service {
+		return a.Service < b.Service
+	}
+	return a.Label < b.Label
+}
+
+// TopFinding — SAF: satırın baş bulgusunun sırası (Lines ile aynı kural);
+// boş → -1. Okuma katmanı yalnız bu bulgu için ek okuma yapar (trace çipi).
+func TopFinding(fs []Finding) int {
+	top := -1
+	for i := range fs {
+		if top < 0 || findingLess(fs[i], fs[top]) {
+			top = i
+		}
+	}
+	return top
+}
+
+// Lines — SAF: bulgular → satırlar. Kalem başına bir takım satırı (+ varsa
+// hemen ardından bir filo satırı), sıra ItemOrder; satır içi Score azalan,
+// eşitlikte servis+etiket (deterministik).
 func Lines(fs []Finding) []Line {
-	by := map[string][]Finding{}
+	type key struct{ item, scope string }
+	by := map[key][]Finding{}
 	for _, f := range fs {
-		by[f.Item] = append(by[f.Item], f)
+		scope := ""
+		if f.Scope == ScopeFleet {
+			scope = ScopeFleet
+		}
+		by[key{f.Item, scope}] = append(by[key{f.Item, scope}], f)
 	}
 	var out []Line
 	for _, item := range ItemOrder {
-		rows := by[item]
-		if len(rows) == 0 {
-			continue
-		}
-		sort.SliceStable(rows, func(i, j int) bool {
-			if rows[i].Score != rows[j].Score {
-				return rows[i].Score > rows[j].Score
+		for _, scope := range []string{"", ScopeFleet} {
+			rows := by[key{item, scope}]
+			if len(rows) == 0 {
+				continue
 			}
-			if rows[i].Service != rows[j].Service {
-				return rows[i].Service < rows[j].Service
+			sort.SliceStable(rows, func(i, j int) bool { return findingLess(rows[i], rows[j]) })
+			total := len(rows)
+			if len(rows) > MaxRowsPerLine {
+				rows = rows[:MaxRowsPerLine]
 			}
-			return rows[i].Label < rows[j].Label
-		})
-		total := len(rows)
-		if len(rows) > MaxRowsPerLine {
-			rows = rows[:MaxRowsPerLine]
-		}
-		text := rows[0].Text
-		if total > 1 {
-			text += fmt.Sprintf(" (+%d daha)", total-1)
-		}
-		out = append(out, Line{Item: item, Text: text, PageURL: rows[0].PageURL, Total: total, Rows: append([]Finding(nil), rows...)})
-		if len(out) >= MaxLines {
-			break
+			text := rows[0].Text
+			if total > 1 {
+				text += fmt.Sprintf(" (+%d daha)", total-1)
+			}
+			out = append(out, Line{Item: item, Text: text, PageURL: rows[0].PageURL, Total: total,
+				Rows: append([]Finding(nil), rows...), Scope: scope})
+			if len(out) >= MaxLines {
+				return out
+			}
 		}
 	}
 	return out

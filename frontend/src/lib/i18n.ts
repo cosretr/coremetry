@@ -305,6 +305,7 @@ const EN: Catalog = {
   'cosre.welcome.briefing.pivot.oracle': 'Oracle',
   'cosre.welcome.briefing.pivot.problem': 'Problem',
   'cosre.welcome.briefing.pivot.rollout': 'Rollouts',
+  'cosre.welcome.briefing.trace': 'Trace',
 
   // v0.10.1119 — kök-neden paneli: ayrı bubbleUp isteği düştü (≠ "ayrışma yok").
   'rootCause.bubbleUnavailable': 'Attribute comparison unavailable — the span scan failed or timed out. This does not mean no dimension stood out.',
@@ -926,6 +927,7 @@ const TR: Catalog = {
   'cosre.welcome.briefing.pivot.oracle': 'Oracle',
   'cosre.welcome.briefing.pivot.problem': 'Problem',
   'cosre.welcome.briefing.pivot.rollout': 'Rollouts',
+  'cosre.welcome.briefing.trace': 'Trace',
 
   'rootCause.bubbleUnavailable': 'Attribute kıyası okunamadı — span taraması düştü ya da zaman aşımına uğradı. Bu, "ayrışan boyut yok" demek değildir.',
 
