@@ -296,6 +296,15 @@ const EN: Catalog = {
   'cosre.welcome.briefing.silence': 'In the {window}, nothing stands out in',
   'cosre.welcome.briefing.silenceTail': 'services.',
   'cosre.welcome.briefing.watched': '· {n} services watched',
+  'cosre.welcome.briefing.window':  'Last {n}',
+  'cosre.welcome.briefing.askPrompt': '{text} — why? Explain with evidence.',
+  'cosre.welcome.briefing.pivot.red': 'Service',
+  'cosre.welcome.briefing.pivot.client': 'Service',
+  'cosre.welcome.briefing.pivot.exception': 'Exceptions',
+  'cosre.welcome.briefing.pivot.log': 'Logs',
+  'cosre.welcome.briefing.pivot.oracle': 'Oracle',
+  'cosre.welcome.briefing.pivot.problem': 'Problem',
+  'cosre.welcome.briefing.pivot.rollout': 'Rollouts',
 
   // v0.10.1119 — kök-neden paneli: ayrı bubbleUp isteği düştü (≠ "ayrışma yok").
   'rootCause.bubbleUnavailable': 'Attribute comparison unavailable — the span scan failed or timed out. This does not mean no dimension stood out.',
@@ -908,6 +917,15 @@ const TR: Catalog = {
   'cosre.welcome.briefing.silence': '{window} içinde',
   'cosre.welcome.briefing.silenceTail': 'servislerinde dikkat çeken bir şey yok.',
   'cosre.welcome.briefing.watched': '· {n} servis izlendi',
+  'cosre.welcome.briefing.window':  'Son {n}',
+  'cosre.welcome.briefing.askPrompt': '{text} — neden? Kanıtıyla açıkla.',
+  'cosre.welcome.briefing.pivot.red': 'Servis',
+  'cosre.welcome.briefing.pivot.client': 'Servis',
+  'cosre.welcome.briefing.pivot.exception': 'Exceptions',
+  'cosre.welcome.briefing.pivot.log': 'Loglar',
+  'cosre.welcome.briefing.pivot.oracle': 'Oracle',
+  'cosre.welcome.briefing.pivot.problem': 'Problem',
+  'cosre.welcome.briefing.pivot.rollout': 'Rollouts',
 
   'rootCause.bubbleUnavailable': 'Attribute kıyası okunamadı — span taraması düştü ya da zaman aşımına uğradı. Bu, "ayrışan boyut yok" demek değildir.',
 

@@ -358,6 +358,34 @@ describe('CosreChatV2 B6: kalıcılık, ?chat=, Geçmiş, tutamak', () => {
 describe('CosreChatV2 × v1 paylaşılan karşılama + composer (plan §10)', () => {
   const URL = '/service?name=orders-api';
 
+  // v0.10.1700 — brifing kartı Faz 1 ucundan: karşılamada akış çizilir, satır
+  // composer'ı DOLDURUR (göndermez), sohbet başlayınca istek yeniden atılmaz.
+  it('brifing: GET /api/cosre/v2/briefing → akış; satır tıklaması composer\'ı doldurur', async () => {
+    const spy = vi.spyOn(api, 'copilotStarters').mockResolvedValue({ groups: [], team: 'payments-core' } as never);
+    const brief = vi.spyOn(api, 'cosreBriefing').mockResolvedValue({
+      status: 'ready', env: '', ttl_s: 600,
+      briefing: {
+        id: 'b1', team: 'payments-core', team_key: 'payments-core', env: '', window_s: 10800,
+        generated_at_ms: Date.now() - 60_000, scope_hash: 'h', services: 12, trimmed: 0, silence: false,
+        summary: '', phrasing: 'template',
+        lines: [{ item: 'red', text: 'orders-api hata oranı %2.1 (önceki %0.4, 5.2×)', page_url: '/service?name=orders-api', total: 1,
+          rows: [{ item: 'red', kind: 'err', service: 'orders-api', now: 2.1, prev: 0.4, score: 5, text: '', page_url: '' }] }],
+      },
+    });
+    await render({ defaultOpen: true }, URL);
+    await vi.waitFor(() => expect(sheet()!.querySelector('[data-briefing="findings"]')).not.toBeNull());
+    expect(brief).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalled();
+    const el = sheet()!;
+    expect(el.textContent).toContain('Brifing · Son 3 sa · 1 bulgu');
+    expect(el.textContent).toContain('Son 3 sa özeti, payments-core kapsamında.');
+    expect(el.querySelector('[data-team-scope]')?.textContent).toContain('payments-core');
+    await act(async () => { el.querySelector<HTMLButtonElement>('[data-briefing-line] button')!.click(); });
+    await tick();
+    expect(textarea()!.value).toBe('orders-api hata oranı %2.1 (önceki %0.4, 5.2×) — neden? Kanıtıyla açıkla.');
+    expect(calls).toHaveLength(0);
+  });
+
   // v0.10.1697 — karşılama v2'nin kendisi (mockup B, operatör onayı 2026-10-31):
   // hata hapı ve satır içi seçiciler yok, niyet sekmeleri var. Composer v1 ile AYNI.
   it('v2 karşılaması mockup B; composer v1 ile AYNI (Derin/Aa/model, bağlam şeridi)', async () => {

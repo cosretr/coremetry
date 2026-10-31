@@ -41,6 +41,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { mergeOpenHref } from '@/lib/openHref';
 import { isSafeAppPath } from '@/lib/safeAppPath';
 import { useOpenCriticalCount } from '@/lib/queries';
+import { useCosreBriefing } from '@/lib/queries/copilot';
 import { AI_CODE_PARAM, AI_SRC_PARAM, formatAiParam } from '@/lib/aiSubject';
 import { takeMetricPanelAsk } from '@/lib/pageContextOverlay';
 import { toChatTurns } from '@/lib/cosre/toChatTurn';
@@ -72,6 +73,7 @@ import type { ChatSendOpts } from '@/components/ai/useChatThread';
 import { ChatHistoryPanel, CosreComposerForm, CosreHeaderContext, deleteConversation } from '@/components/CopilotChat';
 import { CosreTeamScopeChip, CosreWelcomeV2 } from './CosreWelcomeV2';
 import { useCosreTeamScope } from './useCosreTeamScope';
+import { briefingView } from './briefingView';
 import { Button } from '@/components/shadcn/button';
 import { CosreSheet } from './CosreSheet';
 import { MessageList } from './MessageList';
@@ -105,8 +107,12 @@ export function CosreChatV2({ defaultOpen = false }: CosreChatV2Props) {
   // v0.10.1664 (B6) — taslak konuşmanın yuvasında (v1 ile aynı anahtar).
   const composer = useCosreComposerInput(conv.conversationId, ask.page, ask.chipTrace);
   // v2 karşılaması (mockup B, 2026-10-31): hata hapı yok → selam isteği de yok; takım tek kapsam.
-  const welcome = useCosreWelcomeData(ask.enabled === true && open && messages.length === 0, ask.env, { greeting: false });
+  const welcomeActive = ask.enabled === true && open && messages.length === 0;
+  const welcome = useCosreWelcomeData(welcomeActive, ask.env, { greeting: false });
   const teamScope = useCosreTeamScope(welcome.team, welcome.teamSettled);
+  // v0.10.1700 — brifing kartı (Faz 1 ucu); yalnız karşılama ekrandayken, kendi poll'u yok.
+  const briefingQ = useCosreBriefing(welcomeActive, ask.env);
+  const briefing = useMemo(() => briefingView(briefingQ.data, teamScope.picked), [briefingQ.data, teamScope.picked]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { pin: pinBottom, atBottom } = useStickToBottomState(scrollRef, [messages, open]);
 
@@ -361,7 +367,7 @@ export function CosreChatV2({ defaultOpen = false }: CosreChatV2Props) {
               <div className="cm-thread__col">
                 {messages.length === 0 ? (
                   <CosreWelcomeV2 firstName={ask.user?.firstName} scope={teamScope} wiki={ask.wikiOn} ctxStarter={ask.ctxStarter}
-                    briefing={null} onPrefill={composer.prefill} onAsk={askChip} onAskExplain={askExplain} />
+                    briefing={briefing} onPrefill={composer.prefill} onAsk={askChip} onAskExplain={askExplain} />
                 ) : (
                   <MessageList messages={messages} visibleParts={visibleParts} status={status} error={error}
                     onAsk={askChip} onRetry={retry} onApproval={approve} />

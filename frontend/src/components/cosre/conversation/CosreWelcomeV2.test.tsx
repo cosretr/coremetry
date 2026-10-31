@@ -34,7 +34,7 @@ async function mount(node: ReactNode) {
   });
   return host;
 }
-const scopeOf = (team: string, unknown = false): CosreTeamScope => ({ team, unknown, choose: vi.fn(), clear: vi.fn() });
+const scopeOf = (team: string, unknown = false): CosreTeamScope => ({ team, picked: '', unknown, choose: vi.fn(), clear: vi.fn() });
 const tabsOf = (el: HTMLElement) => [...el.querySelectorAll<HTMLElement>('[data-welcome-tab]')].map(b => b.dataset.welcomeTab);
 const chip = (el: HTMLElement, id: string) => el.querySelector<HTMLButtonElement>(`[data-welcome-suggestion="${id}"]`)!;
 

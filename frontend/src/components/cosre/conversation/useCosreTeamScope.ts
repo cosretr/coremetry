@@ -11,6 +11,8 @@ import { readStoredTeam, writeStoredTeam } from '@/components/ai/capabilityHints
 
 export interface CosreTeamScope {
   team: string;
+  /** Bu tarayıcıda seçilen takım ('' = seçim yok ya da kaldırıldı). */
+  picked: string;
   unknown: boolean;
   choose(name: string): void;
   clear(): void;
@@ -22,6 +24,7 @@ export function useCosreTeamScope(serverTeam: string, settled: boolean): CosreTe
   const team = (picked ?? serverTeam).trim();
   return {
     team,
+    picked: (picked ?? '').trim(),
     unknown: settled && picked === null && serverTeam.trim() === '',
     choose: (name: string) => { const n = name.trim(); setPicked(n); writeStoredTeam(n); },
     clear: () => { setPicked(''); writeStoredTeam(''); },

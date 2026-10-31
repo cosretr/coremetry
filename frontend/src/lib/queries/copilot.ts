@@ -26,6 +26,22 @@ export function useCopilotStarters(enabled: boolean, env = ''): { team: string; 
   return { team: q.data?.team ?? '', settled: q.isFetched || q.isError };
 }
 
+// v0.10.1700 — CoSRE v2 karşılamasının brifing kartı (GET /api/cosre/v2/briefing,
+// sunucu serveCached 30 s; kart worker'da ttl_s ile tazelenir). YALNIZ karşılama
+// ekrandayken (aç-üzerine-getir); kendi poll'u YOK, global saate de girmez (rota
+// verisi değil, from/to anahtarı yok): staleTime 60 s ≥ sunucu TTL, açılışta tazelenir.
+export const COSRE_BRIEFING_KEY = ['cosre', 'briefing'] as const;
+
+export function useCosreBriefing(enabled: boolean, env: string) {
+  return useQuery({
+    queryKey: [...COSRE_BRIEFING_KEY, env],
+    queryFn: ({ signal }) => api.cosreBriefing(env, signal),
+    enabled,
+    staleTime: 60_000,
+    retry: false,
+  });
+}
+
 // v0.10.1289 — CoSRE operatör kuralları (GET /api/ai/rules, her rol). Yalnız
 // panel / modal açıkken (enabled); sunucu önbelleği yok, staleTime 30 s
 // (süreç-içi yenileme aralığı). Yazımdan sonra çağıran anahtarı geçersizler.

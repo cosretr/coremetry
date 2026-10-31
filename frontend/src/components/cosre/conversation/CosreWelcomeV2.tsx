@@ -117,9 +117,9 @@ export function CosreWelcomeV2({ firstName, scope, wiki, ctxStarter, briefing, o
   const askLine = (l: BriefingFeedLine) => onPrefill(l.ask, l.ask.length);
 
   const view: BriefingView | null = scope.unknown ? { state: 'unknownTeam' } : briefing;
-  const lead = scope.unknown ? t('cosre.welcome.lead.noTeam')
-    : briefing && briefing.state !== 'unknownTeam' && scope.team
-      ? t('cosre.welcome.lead.briefing').replace('{window}', briefing.windowLabel).replace('{team}', scope.team)
+  const lead = view?.state === 'unknownTeam' ? t('cosre.welcome.lead.noTeam')
+    : view && scope.team
+      ? t('cosre.welcome.lead.briefing').replace('{window}', view.windowLabel).replace('{team}', scope.team)
       : t('cosre.welcome.lead.default');
 
   return (
