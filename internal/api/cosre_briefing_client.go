@@ -5,9 +5,9 @@ package api
 //
 // Faz 1 kapsamı (Q11): giden HTTP istemci metrikleri YOK (Faz 2); okunan:
 //   - HTTP / gRPC SUNUCU ailesi — v0.10.1719: takımın TÜM servisleri (≤ 20,
-//     span azalan) TEK sorgu kümesinde, by (svc) (cosre_briefing_http_group.go;
-//     Service → HTTP/GRPC sekmesinin aynı ifadeleri, aile en yoğun servisten).
-//     R9: takım × env ≤ 6 VM (HTTP ≤ 3 + Kafka 2). Range sorgusu
+//     span azalan) by (svc) (cosre_briefing_http_group.go); v0.10.1727: tür
+//     (HTTP / gRPC) servis başına katalogdan, var olan tür başına bir küme ×
+//     2 sorgu. R9: takım × env ≤ 6 VM (2 tür × 2 + Kafka 2). Range sorgusu
 //     [prev başı, to) — noktalar pencere sınırında ikiye bölünür.
 //   - Kafka istemcisi — runKafkaQuestions (Infra Kafka panelinin Go yolu, Q9)
 //     iki soru: gönderim hatası/sn ve tüketici lag maks., takım servis kümesi

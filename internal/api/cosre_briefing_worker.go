@@ -31,7 +31,8 @@ package api
 //                 kod tek başına satır değil. Kaynak yok → `skipped`.
 //
 // Maliyet (R9): takım × env başına 2 MV + 1 inbox + ≤3×2 deploy okuması
-// + ≤ 5 VM (kalem 2: 1 servis × 3 grafik + 2 Kafka sorusu).
+// + 1 katalog (kalem 2 tür ayrımı, spanmetrics_1m) + ≤ 6 VM (kalem 2:
+// tür başına 2 sorgu × ≤ 2 tür + 2 Kafka sorusu; v0.10.1727).
 // Tek takımın okuma hatası diğerlerini durdurmaz; okunamayan kalem `partial`.
 
 import (
