@@ -37,7 +37,7 @@ export function SearchCommand({
   'data-search': dataSearch, selected, selectedLabel, meta, disabled = false,
 }: SearchCommandProps) {
   return (
-    <Command shouldFilter={false} data-search-command={dataSearch ?? ''} className={className ?? 'rounded-md border'}>
+    <Command shouldFilter={false} data-search-command={dataSearch ?? ''} className={className ?? 'rounded-md border border-border'}>
       <CommandInput value={query} onValueChange={onQueryChange} placeholder={placeholder} aria-label={placeholder} autoFocus={autoFocus} disabled={disabled} />
       <CommandList>
         {items.length === 0 ? (

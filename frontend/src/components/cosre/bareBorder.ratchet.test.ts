@@ -10,13 +10,17 @@ import { resolve, join, relative } from 'node:path';
 
 const SRC = resolve(__dirname, '..', '..');
 const ROOTS = ['components/cosre', 'components/coremetry/overlay'];
+// v0.10.1726 — coremetry/SearchCommand* (CoSRE karşılama + "Takımını seç"
+// kartının listesi) da kapsamda. Tüm coremetry/ değil: DetailSheet'in
+// renksiz kenarlarını tokens.css `.cm-detail-sheet` kuralı boyuyor.
+const FILE_ROOTS: Array<[string, RegExp]> = [['components/coremetry', /^SearchCommand/]];
 const TEST_MARK = '.' + 'test' + '.';
 
-function walk(dir: string, out: string[]): string[] {
+function walk(dir: string, out: string[], only?: RegExp): string[] {
   for (const n of readdirSync(dir)) {
     const p = join(dir, n);
-    if (statSync(p).isDirectory()) walk(p, out);
-    else if (/\.tsx?$/.test(n) && !n.includes(TEST_MARK)) out.push(p);
+    if (!only && statSync(p).isDirectory()) walk(p, out);
+    else if (/\.tsx?$/.test(n) && !n.includes(TEST_MARK) && (!only || only.test(n))) out.push(p);
   }
   return out;
 }
@@ -62,8 +66,13 @@ describe('cosre + overlay: renksiz kenar sınıfı yok (tavan 0)', () => {
   it('her renksiz kenar aynı dizgide bir kenar rengi taşır', () => {
     const offenders: string[] = [];
     let scanned = 0;
-    for (const root of ROOTS) {
-      for (const f of walk(join(SRC, root), [])) {
+    const files = [
+      ...ROOTS.flatMap(root => walk(join(SRC, root), [])),
+      ...FILE_ROOTS.flatMap(([dir, re]) => walk(join(SRC, dir), [], re)),
+    ];
+    expect(files.some(f => f.endsWith('SearchCommand.tsx'))).toBe(true);
+    {
+      for (const f of files) {
         scanned++;
         for (const lit of literals(readFileSync(f, 'utf8'))) {
           if (hasBareBorder(lit)) offenders.push(`${relative(SRC, f)}: "${lit}"`);
