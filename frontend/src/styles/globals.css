@@ -5488,6 +5488,8 @@ tbody td.tpm-more-cell { color: var(--text2); }
 .cosre-root .cm-msg-ai .cm-md-h4 { font-size: var(--cosre-fs-h4); }
 .cosre-root .cm-msg-ai .cm-md-list { margin-bottom: var(--cosre-s3); }
 .cosre-root .cm-msg-ai .cm-md-list li { margin: var(--cosre-s1) 0; }
+/* v0.10.1720 — liste maddesi "Etiket: değer": etiket yarı-kalın, olağan metin rengi (listLabel.ts). */
+.cosre-root .cm-msg-ai .cm-li-label { font-weight: var(--cosre-fw-semibold); color: var(--text); }
 .cosre-root .cm-md-quote, .cosre-root .cm-md-dl, .cosre-root .cm-md-details { margin-bottom: var(--cosre-s3); }
 .cosre-root .cm-msg-ai code { font-size: .87em; }
 /* v0.10.1567 — otomatik vurgu (autoHighlight.ts): hata parçaları (HTTP 5xx, …Exception, MCA-00029) kırmızı çip; kod konumları olağan mavi çip. */

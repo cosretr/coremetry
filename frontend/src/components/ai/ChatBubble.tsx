@@ -44,6 +44,7 @@ import { ctxAppliedLabel, stepEvidenceItems } from './evidenceChip'; // v0.10.12
 import { phaseTrail } from './phaseTrail'; // v0.10.1273 — Metrik → Log → Trace kırıntısı
 import { MdTable } from './MdTable'; // v0.10.1357 — paylaşılan markdown tablosu (RenderedMarkdown da çizer)
 import { highlightParts } from './autoHighlight'; // v0.10.1567
+import { splitListLabel } from './listLabel'; // v0.10.1720
 import { AiThinking } from './AiThinking'; // v0.10.1384 — tek tip "düşünüyor" göstergesi
 import { useTypewriter } from './useTypewriter'; // v0.10.1384 — büyük parçada hızlı yazma efekti
 import { ExplainBody } from './ExplainBody'; // v0.10.1400 — açıklama turu ✨ Explain anatomisiyle
@@ -208,6 +209,16 @@ function MdInline({ text }: { text: string }) {
   const ctx = useContext(ChatMdContext);
   const nodes = useMemo(() => parseInline(text), [text]);
   return <span>{renderNodes(nodes, ctx, 'i')}</span>;
+}
+
+// MdListText — v0.10.1720: liste maddesinin baştaki "Etiket:" kısmı
+// (listLabel.ts) ayrı span'de; yalnız vurgu açık (asistan cevabı) bağlamda.
+// Stil .cosre-root altında — başka yüzeylerde görünüm değişmez.
+function MdListText({ text }: { text: string }) {
+  const ctx = useContext(ChatMdContext);
+  const split = ctx.hl ? splitListLabel(text) : null;
+  if (!split) return <MdInline text={text} />;
+  return <><span className="cm-li-label"><MdInline text={split.label} /></span><MdInline text={split.rest} /></>;
 }
 
 // CodeBlock (v0.9.1148; v0.10.1137 dosya bloğu) — ``` fence'inin çizimi.
@@ -392,7 +403,7 @@ function renderBlocks(blocks: readonly ChatBlock[], streaming: boolean, typedCha
                   <input type="checkbox" className="cm-task" checked={!!b.tasks[k]} readOnly disabled
                     aria-label={b.tasks[k] ? 'tamamlandı' : 'yapılacak'} />
                 )}
-                <MdInline text={it} />
+                <MdListText text={it} />
                 {b.nested?.[k] && renderBlocks(b.nested[k] as ChatBlock[], streaming, typedCharts, false, `${i}.${k}.`)}
               </li>
             ))}
