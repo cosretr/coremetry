@@ -1,13 +1,13 @@
 // v0.10.1743 — log ML dilim 0 pinleri: sekme çözümü ve karne etiketi (S4:
 // kararsız satır isabet yazdırmaz).
 import { describe, it, expect } from 'vitest';
-import { resolveAnomaliesTab, scoreLabel } from '@/components/coremetry/anomalies/LogMLTab';
+import { resolveAnomaliesTab, resolveMLSignal, scoreLabel } from '@/components/coremetry/anomalies/MLTab';
 
 describe('log ml slice 0', () => {
   it('tab resolves unknown to detectors', () => {
     expect(resolveAnomaliesTab(null)).toBe('detectors');
     expect(resolveAnomaliesTab('x')).toBe('detectors');
-    expect(resolveAnomaliesTab('logml')).toBe('logml');
+    expect(resolveAnomaliesTab('ml')).toBe('ml');
   });
   it('score label omits hit rate without samples', () => {
     expect(scoreLabel({ detector: 'log_volume', events: 3, samples: 0, hits: 0, hitRate: 0 })).toBe('Log hacmi: 3 olay · karar yok');

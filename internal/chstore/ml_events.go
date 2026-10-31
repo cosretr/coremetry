@@ -1,10 +1,10 @@
 package chstore
 
-// log_ml_events.go — ES log ML katmanı dilim 0 (docs/audits/log-ml-audit.md).
-// Tablo store.go `log_ml_events` (RMT(version), ORDER BY id, FINAL).
+// ml_events.go — ES log ML katmanı dilim 0 (docs/audits/ml-audit.md).
+// Tablo store.go `ml_events` (RMT(version), ORDER BY id, FINAL).
 // anomaly_events'ten AYRI: hiçbir eski okuyucu (Inbox, fusion, rootcause,
 // terfi) bu satırları görmez (K1). Geri bildirim mevcut anomaly_verdicts
-// tablosunda, event_id = LogMLVerdictID(id) ("logml:" öneki) — ayrı tablo
+// tablosunda, event_id = MLVerdictID(id) ("ml:" öneki) — ayrı tablo
 // açılmadı (operatör: mevcut altyapı varsa onu kullan). Karne = bu iki
 // tablonun 30 günlük birleşimi, dedektör başına.
 
@@ -17,27 +17,28 @@ import (
 )
 
 const (
-	LogMLSourceName   = "log_ml"
-	LogMLStageShadow  = "shadow"
-	LogMLStagePromote = "promoted"
-	logMLVerdictPref  = "logml:"
-	// LogMLListCap — liste ucu tavanı (events ucuyla aynı: 200).
-	LogMLListCap = 200
+	MLSignalLog    = "log"
+	MLSignalTrace  = "trace"
+	MLStageShadow  = "shadow"
+	MLStagePromote = "promoted"
+	mlVerdictPref  = "ml:"
+	// MLListCap — liste ucu tavanı (events ucuyla aynı: 200).
+	MLListCap = 200
 )
 
-// LogMLVerdictID — anomaly_verdicts.event_id anahtarı. Önek, eski
+// MLVerdictID — anomaly_verdicts.event_id anahtarı. Önek, eski
 // anomali kararlarıyla çakışmayı (aynı sha1 türevi) keser.
-func LogMLVerdictID(eventID string) string { return logMLVerdictPref + eventID }
+func MLVerdictID(eventID string) string { return mlVerdictPref + eventID }
 
-// IsLogMLVerdictID — SAF; karne SQL'i LIKE ile aynı öneki süzer.
-func IsLogMLVerdictID(id string) bool { return strings.HasPrefix(id, logMLVerdictPref) }
+// IsMLVerdictID — SAF; karne SQL'i LIKE ile aynı öneki süzer.
+func IsMLVerdictID(id string) bool { return strings.HasPrefix(id, mlVerdictPref) }
 
-// LogMLEvent — bir dedektör olayı (servis × pencere). Evidence JSON:
+// MLEvent — bir dedektör olayı (servis × pencere). Evidence JSON:
 // dedektöre özgü (influencer, taban kovaları…); şema sabit değil.
-type LogMLEvent struct {
+type MLEvent struct {
 	ID        string  `json:"id"`
 	Detector  string  `json:"detector"`
-	Source    string  `json:"source"`
+	Signal    string  `json:"signal"` // log | trace
 	Stage     string  `json:"stage"`
 	Service   string  `json:"service"`
 	Level     string  `json:"level,omitempty"`
@@ -59,47 +60,48 @@ type LogMLEvent struct {
 	Note      string `json:"note,omitempty"`
 }
 
-// LogMLEventID — SAF: dedektör × servis × bölüm (level/pod/code) parmak izi.
+// MLEventID — SAF: dedektör × servis × bölüm (level/pod/code) parmak izi.
 // Aynı sürekli olay her tikte aynı id'ye yazar → RMT tek satır tutar.
-func LogMLEventID(detector, service, part string) string {
-	return FingerprintAnomaly("log_ml:"+detector, part, service)
+func MLEventID(detector, service, part string) string {
+	return FingerprintAnomaly("ml:"+detector, part, service)
 }
 
-// UpsertLogMLEvent — tam satır yazımı (RMT: tüm alanlar taşınır).
-func (s *Store) UpsertLogMLEvent(ctx context.Context, e LogMLEvent) error {
-	if e.Source == "" {
-		e.Source = LogMLSourceName
+// UpsertMLEvent — tam satır yazımı (RMT: tüm alanlar taşınır).
+func (s *Store) UpsertMLEvent(ctx context.Context, e MLEvent) error {
+	if e.Signal == "" {
+		e.Signal = MLDetectorSignal(e.Detector)
 	}
 	if e.Stage == "" {
-		e.Stage = LogMLStageShadow
+		e.Stage = MLStageShadow
 	}
 	if e.Direction == "" {
 		e.Direction = "up"
 	}
-	batch, err := s.conn.PrepareBatch(ctx, `INSERT INTO log_ml_events (id, detector, source, stage, service, level, pod, code, started_at, last_seen, window_sec, baseline, observed, score, direction, evidence, dup_of)`)
+	batch, err := s.conn.PrepareBatch(ctx, `INSERT INTO ml_events (id, detector, signal, stage, service, level, pod, code, started_at, last_seen, window_sec, baseline, observed, score, direction, evidence, dup_of)`)
 	if err != nil {
 		return err
 	}
-	if err := batch.Append(e.ID, e.Detector, e.Source, e.Stage, e.Service, e.Level, e.Pod, e.Code,
+	if err := batch.Append(e.ID, e.Detector, e.Signal, e.Stage, e.Service, e.Level, e.Pod, e.Code,
 		time.Unix(0, e.StartedAt), time.Unix(0, e.LastSeen), e.WindowSec, e.Baseline, e.Observed, e.Score, e.Direction, e.Evidence, e.DupOf); err != nil {
 		return err
 	}
 	return batch.Send()
 }
 
-// LogMLEventsFilter — liste süzgeci; boş alan = süzme yok.
-type LogMLEventsFilter struct {
+// MLEventsFilter — liste süzgeci; boş alan = süzme yok.
+type MLEventsFilter struct {
 	Since    time.Time
 	Detector string
+	Signal   string
 	Service  string
 	Stage    string
 	Limit    int
 }
 
-// ListLogMLEvents — son olaylar (FINAL), last_seen DESC; kararlar eklenir.
-func (s *Store) ListLogMLEvents(ctx context.Context, f LogMLEventsFilter) ([]LogMLEvent, error) {
-	if f.Limit <= 0 || f.Limit > LogMLListCap {
-		f.Limit = LogMLListCap
+// ListMLEvents — son olaylar (FINAL), last_seen DESC; kararlar eklenir.
+func (s *Store) ListMLEvents(ctx context.Context, f MLEventsFilter) ([]MLEvent, error) {
+	if f.Limit <= 0 || f.Limit > MLListCap {
+		f.Limit = MLListCap
 	}
 	if f.Since.IsZero() {
 		f.Since = time.Now().Add(-24 * time.Hour)
@@ -109,6 +111,14 @@ func (s *Store) ListLogMLEvents(ctx context.Context, f LogMLEventsFilter) ([]Log
 	if f.Detector != "" {
 		where = append(where, "detector = ?")
 		args = append(args, f.Detector)
+	}
+	if f.Signal != "" {
+		where = append(where, "signal = ?")
+		args = append(args, f.Signal)
+	}
+	if f.Signal != "" {
+		where = append(where, "signal = ?")
+		args = append(args, f.Signal)
 	}
 	if f.Service != "" {
 		where = append(where, "service = ?")
@@ -120,9 +130,9 @@ func (s *Store) ListLogMLEvents(ctx context.Context, f LogMLEventsFilter) ([]Log
 	}
 	args = append(args, f.Limit)
 	rows, err := s.conn.Query(ctx, fmt.Sprintf(`
-		SELECT id, detector, source, stage, service, level, pod, code, started_at, last_seen,
+		SELECT id, detector, signal, stage, service, level, pod, code, started_at, last_seen,
 		       window_sec, baseline, observed, score, direction, evidence, dup_of
-		FROM log_ml_events FINAL
+		FROM ml_events FINAL
 		WHERE %s
 		ORDER BY last_seen DESC
 		LIMIT ?
@@ -131,18 +141,18 @@ func (s *Store) ListLogMLEvents(ctx context.Context, f LogMLEventsFilter) ([]Log
 		return nil, err
 	}
 	defer rows.Close()
-	var out []LogMLEvent
+	var out []MLEvent
 	var ids []string
 	for rows.Next() {
-		var e LogMLEvent
+		var e MLEvent
 		var st, ls time.Time
-		if err := rows.Scan(&e.ID, &e.Detector, &e.Source, &e.Stage, &e.Service, &e.Level, &e.Pod, &e.Code, &st, &ls,
+		if err := rows.Scan(&e.ID, &e.Detector, &e.Signal, &e.Stage, &e.Service, &e.Level, &e.Pod, &e.Code, &st, &ls,
 			&e.WindowSec, &e.Baseline, &e.Observed, &e.Score, &e.Direction, &e.Evidence, &e.DupOf); err != nil {
 			return nil, err
 		}
 		e.StartedAt, e.LastSeen = st.UnixNano(), ls.UnixNano()
 		out = append(out, e)
-		ids = append(ids, LogMLVerdictID(e.ID))
+		ids = append(ids, MLVerdictID(e.ID))
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -150,7 +160,7 @@ func (s *Store) ListLogMLEvents(ctx context.Context, f LogMLEventsFilter) ([]Log
 	if len(ids) > 0 {
 		if vs, verr := s.ListAnomalyVerdicts(ctx, ids); verr == nil {
 			for i := range out {
-				if v, ok := vs[LogMLVerdictID(out[i].ID)]; ok {
+				if v, ok := vs[MLVerdictID(out[i].ID)]; ok {
 					out[i].Verdict, out[i].VerdictBy, out[i].VerdictAt, out[i].Note = v.Verdict, v.CreatedBy, v.CreatedAt, v.Note
 				}
 			}
@@ -159,8 +169,8 @@ func (s *Store) ListLogMLEvents(ctx context.Context, f LogMLEventsFilter) ([]Log
 	return out, nil
 }
 
-// LogMLDetectorScore — dedektör karnesi satırı.
-type LogMLDetectorScore struct {
+// MLDetectorScore — dedektör karnesi satırı.
+type MLDetectorScore struct {
 	Detector string  `json:"detector"`
 	Events   int64   `json:"events"`  // penceredeki olay sayısı
 	Samples  int64   `json:"samples"` // karar verilmiş olay sayısı
@@ -168,48 +178,48 @@ type LogMLDetectorScore struct {
 	HitRate  float64 `json:"hitRate"` // Hits / Samples (Samples=0 → 0)
 }
 
-// LogMLScorecardRate — SAF: karar girilmemiş satırlar paydaya GİRMEZ (S4).
-func LogMLScorecardRate(hits, samples int64) float64 {
+// MLScorecardRate — SAF: karar girilmemiş satırlar paydaya GİRMEZ (S4).
+func MLScorecardRate(hits, samples int64) float64 {
 	if samples <= 0 {
 		return 0
 	}
 	return float64(hits) / float64(samples)
 }
 
-// LogMLScorecardFromRows — SAF: olay (id→detector) × karar (verdict id→verdict)
+// MLScorecardFromRows — SAF: olay (id→detector) × karar (verdict id→verdict)
 // → dedektör başına olay / karar / isabet. Kararsız satır paydaya girmez (S4).
-func LogMLScorecardFromRows(events map[string]string, verdicts map[string]string) []LogMLDetectorScore {
-	acc := map[string]*LogMLDetectorScore{}
+func MLScorecardFromRows(events map[string]string, verdicts map[string]string) []MLDetectorScore {
+	acc := map[string]*MLDetectorScore{}
 	for id, det := range events {
 		r, ok := acc[det]
 		if !ok {
-			r = &LogMLDetectorScore{Detector: det}
+			r = &MLDetectorScore{Detector: det}
 			acc[det] = r
 		}
 		r.Events++
-		if v, ok := verdicts[LogMLVerdictID(id)]; ok && v != "" {
+		if v, ok := verdicts[MLVerdictID(id)]; ok && v != "" {
 			r.Samples++
 			if v == VerdictAnomaly {
 				r.Hits++
 			}
 		}
 	}
-	out := make([]LogMLDetectorScore, 0, len(acc))
+	out := make([]MLDetectorScore, 0, len(acc))
 	for _, r := range acc {
-		r.HitRate = LogMLScorecardRate(r.Hits, r.Samples)
+		r.HitRate = MLScorecardRate(r.Hits, r.Samples)
 		out = append(out, *r)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Detector < out[j].Detector })
 	return out
 }
 
-// LogMLScorecard — son `since`'den beri dedektör başına olay / karar /
+// MLScorecard — son `since`'den beri dedektör başına olay / karar /
 // isabet. İki ayrı okuma (JOIN/alt sorgu yok: audit 5/5b, dağıtık-güvenli),
-// birleştirme Go'da (LogMLScorecardFromRows). Olay tavanı 5000 (30 g × gün
-// tavanı), karar okuması 'logml:' önekiyle sınırlı.
-func (s *Store) LogMLScorecard(ctx context.Context, since time.Time) ([]LogMLDetectorScore, error) {
+// birleştirme Go'da (MLScorecardFromRows). Olay tavanı 5000 (30 g × gün
+// tavanı), karar okuması 'ml:' önekiyle sınırlı.
+func (s *Store) MLScorecard(ctx context.Context, since time.Time) ([]MLDetectorScore, error) {
 	rows, err := s.conn.Query(ctx, `
-		SELECT id, detector FROM log_ml_events FINAL
+		SELECT id, detector FROM ml_events FINAL
 		WHERE last_seen >= ?
 		LIMIT 5000
 		SETTINGS max_execution_time = 5`, chDateTime64Arg(since))
@@ -231,7 +241,7 @@ func (s *Store) LogMLScorecard(ctx context.Context, since time.Time) ([]LogMLDet
 	}
 	vrows, err := s.conn.Query(ctx, `
 		SELECT event_id, verdict FROM anomaly_verdicts FINAL
-		WHERE event_id LIKE 'logml:%' AND created_at >= ?
+		WHERE event_id LIKE 'ml:%' AND created_at >= ?
 		LIMIT 10000
 		SETTINGS max_execution_time = 5`, chDateTime64Arg(since))
 	if err != nil {
@@ -249,11 +259,11 @@ func (s *Store) LogMLScorecard(ctx context.Context, since time.Time) ([]LogMLDet
 	if err := vrows.Err(); err != nil {
 		return nil, err
 	}
-	return LogMLScorecardFromRows(events, verdicts), nil
+	return MLScorecardFromRows(events, verdicts), nil
 }
 
-// LogMLTableReady — sre pod'u DDL koşmaz (v0.10.1282); tablo api/worker
+// MLTableReady — sre pod'u DDL koşmaz (v0.10.1282); tablo api/worker
 // boot'unda iner. Lider tik öncesi bunu yoklar, yoksa bekler (çökmez).
-func (s *Store) LogMLTableReady(ctx context.Context) (bool, error) {
-	return s.tableExists(ctx, "log_ml_events")
+func (s *Store) MLTableReady(ctx context.Context) (bool, error) {
+	return s.tableExists(ctx, "ml_events")
 }

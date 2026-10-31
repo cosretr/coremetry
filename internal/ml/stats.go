@@ -1,4 +1,4 @@
-package logml
+package ml
 
 import (
 	"sort"
@@ -48,7 +48,7 @@ func (s *stats) tickDone(start time.Time) {
 }
 
 // snapshot — /admin/stats görüntüsü. p95 = sıralı örneklerin 0.95 indeksi.
-func (s *stats) snapshot(placement string, enabled, leader, tableReady bool) chstore.LogMLStats {
+func (s *stats) snapshot(placement string, enabled, leader, tableReady bool) chstore.MLStats {
 	s.mu.Lock()
 	var p95 int64
 	if n := len(s.esSamples); n > 0 {
@@ -59,7 +59,7 @@ func (s *stats) snapshot(placement string, enabled, leader, tableReady bool) chs
 	}
 	lastErr := s.lastErr
 	s.mu.Unlock()
-	return chstore.LogMLStats{
+	return chstore.MLStats{
 		Placement: placement, Enabled: enabled, Leader: leader, TableReady: tableReady,
 		Ticks: s.ticks.Load(), Skipped: s.skipped.Load(), LastUnix: s.lastUnix.Load(),
 		LastDurationMs: s.lastMs.Load(), LastESMs: s.lastESMs.Load(), ESP95Ms: p95,
@@ -84,9 +84,9 @@ func setMeta(placement string, enabled, leader, tableReady bool) {
 	globalMeta.mu.Unlock()
 }
 
-// Observability — /admin/stats `logMl` bloğu. Alt sistem bu pod'da
+// Observability — /admin/stats `ml` bloğu. Alt sistem bu pod'da
 // koşmuyorsa placement "off" ve sayaçlar sıfır (doğru cevap).
-func Observability() chstore.LogMLStats {
+func Observability() chstore.MLStats {
 	globalMeta.mu.Lock()
 	p, e, l, t := globalMeta.placement, globalMeta.enabled, globalMeta.leader, globalMeta.tableReady
 	globalMeta.mu.Unlock()

@@ -1,4 +1,4 @@
-package logml
+package ml
 
 import "testing"
 

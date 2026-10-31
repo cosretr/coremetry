@@ -11649,23 +11649,23 @@ export interface NotifyDigestItem {
   headline: string; impact: string; confidence: string; startedAt: number; queuedAt: number; count: number;
 }
 
-// ── Log ML (ES log ML katmanı, dilim 0; docs/audits/log-ml-audit.md) ──────
+// ── Log ML (ES log ML katmanı, dilim 0; docs/audits/ml-audit.md) ──────
 // anomaly_events'ten AYRI tablo; stage=shadow Problem üretmez.
-export interface LogMLEvent {
-  id: string; detector: string; source: string; stage: 'shadow' | 'promoted' | string;
+export interface MLEvent {
+  id: string; detector: string; signal: 'log' | 'trace' | string; stage: 'shadow' | 'promoted' | string;
   service: string; level?: string; pod?: string; code?: string;
   startedAt: number; lastSeen: number; windowSec: number;
   baseline: number; observed: number; score: number; direction: 'up' | 'down' | string;
   evidence?: string; dupOf?: string;
   verdict?: 'anomaly' | 'not_anomaly'; verdictBy?: string; verdictAt?: number; note?: string;
 }
-export interface LogMLDetectorScore { detector: string; events: number; samples: number; hits: number; hitRate: number }
-export interface LogMLPromotion { enabled: boolean; minHitRate: number; minSamples: number }
-export interface LogMLConfig {
+export interface MLDetectorScore { detector: string; events: number; samples: number; hits: number; hitRate: number }
+export interface MLPromotion { enabled: boolean; minHitRate: number; minSamples: number }
+export interface MLConfig {
   enabled: boolean;
   detectors: Record<string, boolean>;
-  promotion: Record<string, LogMLPromotion>;
+  promotion: Record<string, MLPromotion>;
   bucketSec: number; tickSec: number; timeoutMs: number; maxServices: number; maxEsQueriesPerTick: number;
   baselineDays: number; minBaselineRate: number; dwellBuckets: number; dailyEventCap: number;
 }
-export interface LogMLScorecard { windowDays: number; detectors: LogMLDetectorScore[]; promotion: Record<string, LogMLPromotion> }
+export interface MLScorecard { windowDays: number; detectors: MLDetectorScore[]; promotion: Record<string, MLPromotion>; signals: Record<string, string> }

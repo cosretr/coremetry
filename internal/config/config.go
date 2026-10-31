@@ -85,12 +85,12 @@ type BackgroundConfig struct {
 	// when the operator doesn't want log-based anomalies. Metric
 	// anomaly detection (CH-backed) is unaffected.
 	LogAnomalyEnabled bool `yaml:"log_anomaly_enabled"`
-	// LogMLEnabled / LogMLRole — ES log ML katmanı (docs/audits/log-ml-audit.md).
-	// Alt sistem yalnız `LogMLRole` rolünü taşıyan pod'da başlar: "sre"
+	// MLEnabled / MLRole — ES log ML katmanı (docs/audits/ml-audit.md).
+	// Alt sistem yalnız `MLRole` rolünü taşıyan pod'da başlar: "sre"
 	// (varsayılan, operatör 2026-10-31) ya da "worker" (geri alma bayrağı).
-	// Env: COREMETRY_LOG_ML_ENABLED (true/false), COREMETRY_LOG_ML_ROLE.
-	LogMLEnabled bool   `yaml:"log_ml_enabled"`
-	LogMLRole    string `yaml:"log_ml_role"`
+	// Env: COREMETRY_ML_ENABLED (true/false), COREMETRY_ML_ROLE.
+	MLEnabled bool   `yaml:"ml_enabled"`
+	MLRole    string `yaml:"ml_role"`
 }
 
 // AIConfig wires the optional AI Copilot. Three providers supported:
@@ -549,8 +549,8 @@ var defaults = Config{
 		SMTPCacheTTL:          30 * time.Second,
 		StatusProbeTimeout:    5 * time.Second,
 		LogAnomalyEnabled:     true,
-		LogMLEnabled:          true,
-		LogMLRole:             "sre",
+		MLEnabled:             true,
+		MLRole:                "sre",
 	},
 	// v0.8.328 — exemplars without trace context are dropped by default;
 	// yaml merges over this so only an explicit false disables the gate.
@@ -585,8 +585,8 @@ func applyBackgroundDefaults(b *BackgroundConfig) {
 // log-pattern recorder + Drain templater (the periodic logstore/ES
 // traffic). Anything else — unset, "true", "1", or garbage — leaves
 // the current value untouched, so the default stays on.
-// resolveLogMLRole — SAF: "sre" | "worker" kabul; boş → current; başka → "sre".
-func resolveLogMLRole(env, current string) string {
+// resolveMLRole — SAF: "sre" | "worker" kabul; boş → current; başka → "sre".
+func resolveMLRole(env, current string) string {
 	switch strings.ToLower(strings.TrimSpace(env)) {
 	case "":
 		if current == "worker" {
@@ -870,9 +870,9 @@ func Load(path string) (*Config, error) {
 	cfg.Background.LogAnomalyEnabled = resolveLogAnomalyEnabled(
 		os.Getenv("COREMETRY_LOG_ANOMALY_ENABLED"), cfg.Background.LogAnomalyEnabled)
 	// log ML dilim 0 — aynı bool kuralı; rol yalnız sre|worker, başkası → sre.
-	cfg.Background.LogMLEnabled = resolveLogAnomalyEnabled(
-		os.Getenv("COREMETRY_LOG_ML_ENABLED"), cfg.Background.LogMLEnabled)
-	cfg.Background.LogMLRole = resolveLogMLRole(os.Getenv("COREMETRY_LOG_ML_ROLE"), cfg.Background.LogMLRole)
+	cfg.Background.MLEnabled = resolveLogAnomalyEnabled(
+		os.Getenv("COREMETRY_ML_ENABLED"), cfg.Background.MLEnabled)
+	cfg.Background.MLRole = resolveMLRole(os.Getenv("COREMETRY_ML_ROLE"), cfg.Background.MLRole)
 	if v := os.Getenv("COREMETRY_REDIS_URL"); v != "" {
 		cfg.Redis.URL = v
 	}

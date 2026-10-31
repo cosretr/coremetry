@@ -1,7 +1,7 @@
-// LogMLTab — /anomalies "Log ML" sekmesi (log ML dilim 0). components/coremetry
+// MLTab — /anomalies "Log ML" sekmesi (log ML dilim 0). components/coremetry
 // altında çünkü Tailwind sınıfları yalnız burada üretiliyor (features/ değil).
-// Eski dedektörler kendi sekmesinde; burada yalnız log_ml_events (gölge) +
-// satır başına «gerçek / değil» + not (anomaly_verdicts 'logml:' önekli) ve
+// Eski dedektörler kendi sekmesinde; burada yalnız ml_events (gölge) +
+// satır başına «gerçek / değil» + not (anomaly_verdicts 'ml:' önekli) ve
 // üstte dedektör karnesi (30 gün isabet + örnek). Tablo: coremetry DataTable.
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -10,34 +10,41 @@ import type { ColumnDef } from '@/components/coremetry/DataTable';
 import { SegmentedControl } from '@/components/coremetry/SegmentedControl';
 import { Badge } from '@/components/shadcn/badge';
 import { api } from '@/lib/api';
-import { keys, useLogMLEvents, useLogMLScorecard } from '@/lib/queries';
+import { keys, useMLEvents, useMLScorecard } from '@/lib/queries';
 import { fmtDateTime } from '@/lib/utils';
-import type { LogMLEvent, LogMLDetectorScore } from '@/lib/types';
+import type { MLEvent, MLDetectorScore } from '@/lib/types';
 
-export const LOG_ML_DETECTOR_TR: Record<string, string> = {
+export const ML_DETECTOR_TR: Record<string, string> = {
   log_volume: 'Log hacmi', error_rate: 'Hata oranı', service_silent: 'Servis sustu',
   template_spike: 'Şablon spike', rare_template: 'Nadir şablon', rare_error_code: 'Nadir hata kodu',
   pod_outlier: 'Aykırı pod', change_point: 'Kırılma',
+  op_latency: 'Endpoint gecikmesi', op_error_rate: 'Endpoint hata oranı', throughput_drop: 'Trafik düşüşü',
+  dependency_latency: 'Bağımlılık gecikmesi', rare_exception: 'Nadir exception', trace_pod_outlier: 'Aykırı pod (trace)', trace_change_point: 'Kırılma (trace)',
 };
+export type MLSignal = '' | 'log' | 'trace';
+/** SAF: ?signal= çözümü; bilinmeyen → hepsi. */
+export function resolveMLSignal(raw: string | null): MLSignal {
+  return raw === 'log' || raw === 'trace' ? raw : '';
+}
 
 /** Karne satırı metni — SAF (test): örnek yoksa isabet yazılmaz (S4). */
-export function scoreLabel(s: LogMLDetectorScore): string {
-  const name = LOG_ML_DETECTOR_TR[s.detector] ?? s.detector;
+export function scoreLabel(s: MLDetectorScore): string {
+  const name = ML_DETECTOR_TR[s.detector] ?? s.detector;
   if (s.samples <= 0) return `${name}: ${s.events} olay · karar yok`;
   return `${name}: ${s.events} olay · %${Math.round(s.hitRate * 100)} isabet (${s.samples} karar)`;
 }
 
-export type AnomaliesTab = 'detectors' | 'logml';
+export type AnomaliesTab = 'detectors' | 'ml';
 /** SAF: bilinmeyen değer → detectors (eski linkler bozulmaz). */
 export function resolveAnomaliesTab(raw: string | null): AnomaliesTab {
-  return raw === 'logml' ? 'logml' : 'detectors';
+  return raw === 'ml' ? 'ml' : 'detectors';
 }
 
 export function AnomaliesTabBar({ value, onChange }: { value: AnomaliesTab; onChange: (t: AnomaliesTab) => void }) {
   return (
     <div className="mb-3">
       <SegmentedControl<AnomaliesTab> value={value} onChange={onChange} aria-label="Anomali kaynağı"
-        options={[{ value: 'detectors', label: 'Dedektörler' }, { value: 'logml', label: 'Log ML' }]} />
+        options={[{ value: 'detectors', label: 'Dedektörler' }, { value: 'ml', label: 'Log ML' }]} />
     </div>
   );
 }
@@ -45,8 +52,9 @@ export function AnomaliesTabBar({ value, onChange }: { value: AnomaliesTab; onCh
 const fmtNum = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(2));
 const fmtTs = (ns: number) => fmtDateTime(new Date(ns / 1e6));
 
-const COLS: ColumnDef<LogMLEvent>[] = [
-  { id: 'detector', label: 'Dedektör', width: 130, sortValue: e => e.detector, naturalDir: 'asc' },
+const COLS: ColumnDef<MLEvent>[] = [
+  { id: 'signal', label: 'Sinyal', width: 70, sortValue: e => e.signal, naturalDir: 'asc' },
+  { id: 'detector', label: 'Dedektör', width: 150, sortValue: e => e.detector, naturalDir: 'asc' },
   { id: 'service', label: 'Servis', width: 200, sortValue: e => e.service, naturalDir: 'asc' },
   { id: 'part', label: 'Bölüm', width: 160, sortValue: e => e.level || e.pod || e.code || '' },
   { id: 'observed', label: 'Gözlenen / taban', width: 150, numeric: true, sortValue: e => e.observed },
@@ -57,27 +65,28 @@ const COLS: ColumnDef<LogMLEvent>[] = [
   { id: 'fb', label: 'Geri bildirim', width: 200, sortValue: e => (e.verdict === 'anomaly' ? 2 : e.verdict ? 1 : 0) },
 ];
 
-export function LogMLTab() {
+export function MLTab({ signal = '', onSignal }: { signal?: MLSignal; onSignal?: (s: MLSignal) => void }) {
   const qc = useQueryClient();
-  const ev = useLogMLEvents();
-  const sc = useLogMLScorecard();
+  const ev = useMLEvents(signal);
+  const sc = useMLScorecard();
   const [busyId, setBusyId] = useState<string | null>(null);
   const rows = ev.data?.items ?? [];
 
-  const verdict = async (e: LogMLEvent, v: 'anomaly' | 'not_anomaly') => {
+  const verdict = async (e: MLEvent, v: 'anomaly' | 'not_anomaly') => {
     const note = v === 'not_anomaly' ? (window.prompt('Not (isteğe bağlı): neden anomali değil?') ?? '') : '';
     setBusyId(e.id);
     try {
-      await api.putLogMlVerdict(e.id, { verdict: v, note, detector: e.detector, service: e.service });
-      await qc.invalidateQueries({ queryKey: keys.anomalies.logMl });
+      await api.putMlVerdict(e.id, { verdict: v, note, detector: e.detector, service: e.service });
+      await qc.invalidateQueries({ queryKey: keys.anomalies.ml });
     } finally {
       setBusyId(null);
     }
   };
 
-  const renderCell = (e: LogMLEvent, col: ColumnDef<LogMLEvent>) => {
+  const renderCell = (e: MLEvent, col: ColumnDef<MLEvent>) => {
     switch (col.id) {
-      case 'detector': return LOG_ML_DETECTOR_TR[e.detector] ?? e.detector;
+      case 'signal': return e.signal === 'trace' ? 'Trace' : 'Log';
+      case 'detector': return ML_DETECTOR_TR[e.detector] ?? e.detector;
       case 'service': return <span className="font-mono" title={e.service}>{e.service}</span>;
       case 'part': return <span className="font-mono">{e.level || e.pod || e.code || '—'}</span>;
       case 'observed': return `${fmtNum(e.observed)} / ${fmtNum(e.baseline)} ${e.direction === 'down' ? '↓' : '↑'}`;
@@ -94,23 +103,27 @@ export function LogMLTab() {
   };
 
   const state = ev.isLoading ? { kind: 'loading' as const }
-    : ev.error ? { kind: 'error' as const, message: 'Log ML olayları okunamadı' }
+    : ev.error ? { kind: 'error' as const, message: 'ML olayları okunamadı' }
       : { kind: 'empty' as const, message: 'Log ML olayı yok — dedektörler Settings › Anomaly › Log ML\'den açılır; olaylar gölge olarak buraya düşer, Problem üretmez.' };
 
   return (
-    <div data-testid="logml-tab" className="flex flex-col gap-3">
+    <div data-testid="ml-tab" className="flex flex-col gap-3">
+      {onSignal && (
+        <SegmentedControl<MLSignal> value={signal} onChange={onSignal} aria-label="Sinyal" size="sm"
+          options={[{ value: '', label: 'Hepsi' }, { value: 'log', label: 'Log' }, { value: 'trace', label: 'Trace' }]} />
+      )}
       <div className="text-sm text-muted-foreground">
         <b>Dedektör karnesi · son {sc.data?.windowDays ?? 30} gün</b>
         {sc.isLoading && <span> · yükleniyor…</span>}
         {sc.data && sc.data.detectors.length === 0 && <span> · henüz olay yok</span>}
         {sc.data && sc.data.detectors.length > 0 && (
           <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
-            {sc.data.detectors.map(s => <li key={s.detector}>{scoreLabel(s)}{sc.data?.promotion[s.detector]?.enabled ? ' · terfi açık' : ''}</li>)}
+            {sc.data.detectors.filter((s: MLDetectorScore) => !signal || (sc.data?.signals[s.detector] ?? 'log') === signal).map((s: MLDetectorScore) => <li key={s.detector}>{scoreLabel(s)}{sc.data?.promotion[s.detector]?.enabled ? ' · terfi açık' : ''}</li>)}
           </ul>
         )}
       </div>
-      <DataTable<LogMLEvent>
-        storageKey="anomalies-logml" columns={COLS} rows={rows} state={state}
+      <DataTable<MLEvent>
+        storageKey="anomalies-ml" columns={COLS} rows={rows} state={state}
         sort={{ initial: { id: 'last', dir: 'desc' } }}
         getRowKey={e => e.id} renderCell={renderCell}
         rowActions={{

@@ -1,4 +1,4 @@
-// LogMLSubsection — Settings › Anomaly › "Log ML" (dilim 0; operatör
+// MLSubsection — Settings › Anomaly › "Log ML" (dilim 0; operatör
 // 2026-10-31). Ana anahtar (kapalıyken ES'e sorgu yok), dedektör başına
 // anahtar, dedektör başına ayrı "Problem'e terfi" anahtarı, temel eşikler.
 // Hepsi varsayılan KAPALI. Blob bir sonraki tikte okunur (restart yok);
@@ -9,38 +9,47 @@ import { Button } from '@/components/shadcn/button';
 import { Field, CheckboxField } from '@/components/coremetry/Field';
 import { ActionRow } from '@/components/coremetry/ActionRow';
 import { api } from '@/lib/api';
-import type { LogMLConfig } from '@/lib/types';
+import type { MLConfig } from '@/lib/types';
 import { FlashBox, humanize } from './shared';
 
-export const LOG_ML_DETECTORS: { id: string; label: string; hint: string }[] = [
+export const ML_LOG_DETECTORS: { id: string; label: string; hint: string }[] = [
   { id: 'log_volume', label: 'Log hacmi', hint: 'Servis × seviye hacmi, mevsimsel median+MAD, iki yönlü' },
   { id: 'error_rate', label: 'Hata oranı', hint: 'Error seviyesi sayısı, yalnız yukarı, mevsimsel' },
   { id: 'service_silent', label: 'Servis sustu', hint: 'Beklenen hacim varken log gelmiyor' },
   { id: 'template_spike', label: 'Şablon spike', hint: 'Bir şablonun sayısı kendi tabanının üstüne çıktı' },
-  { id: 'rare_template', label: 'Nadir şablon', hint: 'Daha önce görülmemiş şablon (log_ml kaynağıyla)' },
+  { id: 'rare_template', label: 'Nadir şablon', hint: 'Daha önce görülmemiş şablon (ML kaynağıyla)' },
   { id: 'rare_error_code', label: 'Nadir hata kodu', hint: 'Serviste 14 gündür görülmemiş kod' },
   { id: 'pod_outlier', label: 'Aykırı pod', hint: 'Aynı servisin pod\'ları arasında hata sayısı sapması' },
   { id: 'change_point', label: 'Kırılma noktası', hint: 'CUSUM; ±15 dk içinde rollout varsa eşlenir' },
+];
+export const ML_TRACE_DETECTORS: { id: string; label: string; hint: string }[] = [
+  { id: 'op_latency', label: 'Endpoint gecikmesi', hint: 'Servis × endpoint p95/p99, mevsimsel, yukarı (rollup, ham span yok)' },
+  { id: 'op_error_rate', label: 'Endpoint hata oranı', hint: 'Servis × endpoint hata oranı, yukarı' },
+  { id: 'throughput_drop', label: 'Trafik düşüşü', hint: 'Endpoint çağrı sayısı tabanın altına düştü' },
+  { id: 'dependency_latency', label: 'Bağımlılık gecikmesi', hint: 'Client span: DB/HTTP/Kafka hedefi bazında' },
+  { id: 'rare_exception', label: 'Nadir exception', hint: 'Serviste 14 gündür görülmemiş exception' },
+  { id: 'trace_pod_outlier', label: 'Aykırı pod (trace)', hint: 'Pod\'lar arasında hata/gecikme sapması' },
+  { id: 'trace_change_point', label: 'Kırılma (trace)', hint: 'CUSUM + rollout eşleştirmesi' },
 ];
 
 const H3 = 'mt-4 mb-1 text-[length:var(--fs-md)] font-semibold';
 const NOTE = 'text-[length:var(--fs-xs)] leading-normal text-(--text3)';
 
-export function LogMLSubsection() {
-  const [cfg, setCfg] = useState<LogMLConfig | null>(null);
+export function MLSubsection() {
+  const [cfg, setCfg] = useState<MLConfig | null>(null);
   const [busy, setBusy] = useState(false);
   const [flash, setFlash] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
   useEffect(() => {
-    api.getLogMl().then(setCfg).catch(err => setFlash({ kind: 'err', text: humanize(err) }));
+    api.getMl().then(setCfg).catch(err => setFlash({ kind: 'err', text: humanize(err) }));
   }, []);
 
   const save = async () => {
     if (!cfg) return;
     setBusy(true); setFlash(null);
     try {
-      setCfg(await api.putLogMl(cfg));
-      setFlash({ kind: 'ok', text: 'Kaydedildi — bir sonraki Log ML tikinde geçerli, restart gerekmez.' });
+      setCfg(await api.putMl(cfg));
+      setFlash({ kind: 'ok', text: 'Kaydedildi — bir sonraki ML tikinde geçerli, restart gerekmez.' });
     } catch (err) {
       setFlash({ kind: 'err', text: humanize(err) });
     } finally {
@@ -48,18 +57,19 @@ export function LogMLSubsection() {
     }
   };
 
-  const num = (label: string, key: keyof LogMLConfig, hint: string, step = 1) => cfg && (
+  const num = (label: string, key: keyof MLConfig, hint: string, step = 1) => cfg && (
     <Field type="number" label={label} hint={hint} controlClassName="max-w-[180px]" step={step}
       value={String(cfg[key] as number)}
       onChange={e => setCfg({ ...cfg, [key]: Number(e.target.value) })} />
   );
 
   return (
-    <div data-testid="logml-settings">
-      <h2 className="mb-1.5 text-[length:var(--fs-lg)] font-semibold">Log ML</h2>
+    <div data-testid="ml-settings">
+      <h2 className="mb-1.5 text-[length:var(--fs-lg)] font-semibold">ML</h2>
       <p className="mb-[18px] text-[length:var(--fs-sm)] leading-[1.55] text-(--text2)">
-        Elasticsearch log anomalileri (hacim, hata oranı, şablon, nadir kod, pod, kırılma). Olaylar
-        /anomalies › Log ML sekmesine <b>gölge</b> olarak düşer; Problem üretmez. Terfi dedektör
+        ML dedektörleri: log sinyali (Elasticsearch: hacim, hata oranı, şablon, nadir kod, pod, kırılma) ve
+        trace sinyali (rollup: endpoint gecikmesi/hata/trafik, bağımlılık, exception, pod, kırılma). Olaylar
+        /anomalies › ML sekmesine <b>gölge</b> olarak düşer; Problem üretmez. Terfi dedektör
         başına ayrı anahtar ve karne eşiğiyle açılır. Ana anahtar kapalıyken ES&apos;e hiç sorgu atılmaz.
       </p>
       {!cfg ? (
@@ -68,13 +78,14 @@ export function LogMLSubsection() {
         <>
           <CheckboxField className="mb-3" checked={cfg.enabled}
             onCheckedChange={v => setCfg({ ...cfg, enabled: v })}
-            label="Log ML açık (ana anahtar)"
+            label="ML açık (ana anahtar)"
             hint="Kapalı: tik yalnız sayaç günceller, Elasticsearch'e sorgu yok." />
 
-          <h3 className={H3}>Dedektörler</h3>
           <p className={NOTE}>Soldaki anahtar dedektörü açar (gölge). Sağdaki &quot;terfi&quot; anahtarı karne eşiğini geçen olayı Problem&apos;e kopyalar.</p>
+          {([['Log dedektörleri', ML_LOG_DETECTORS], ['Trace dedektörleri', ML_TRACE_DETECTORS]] as const).map(([title, list]) => (<div key={title}>
+          <h3 className={H3}>{title}</h3>
           <div className="mt-2 grid gap-2">
-            {LOG_ML_DETECTORS.map(d => {
+            {list.map(d => {
               const p = cfg.promotion[d.id] ?? { enabled: false, minHitRate: 0.8, minSamples: 20 };
               return (
                 <div key={d.id} className="grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_120px_120px] md:items-start">
@@ -92,6 +103,7 @@ export function LogMLSubsection() {
               );
             })}
           </div>
+          </div>))}
 
           <h3 className={H3}>Eşikler</h3>
           <div className="grid gap-3 md:grid-cols-2">

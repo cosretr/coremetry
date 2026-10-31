@@ -80,3 +80,13 @@ Ayrı alt sistem: kendi goroutine'i, kendi `cache.Lock`'u, tik bütçesi (`conte
 | 3 | Nadir hata kodu (`terms code` nadir eşik) + aykırı pod (`terms pod` MAD) — tik başına +2 sorgu, tavanlı | ~yarım gün |
 | 4 | Change point (CUSUM, `log_ml_series`) + rollout eşlemesi (`rollout_causes` deseni) | ~yarım gün |
 | 5 | CoSRE v2 tool `log_ml_recent(service)`: özet + kanıt id'leri | ~2 saat |
+
+## 5. Genelleştirme + Trace ML (operatör 2026-10-31, v0.10.1744)
+
+Tek tablo `ml_events` (`signal='log'|'trace'`), sekme "ML" (Hepsi/Log/Trace), karne · geri bildirim · terfi · Settings › Anomaly › ML ortak; dedektör anahtarları sinyal başına gruplu. Mevcut trace dedektörlerine (trace_ops, op_latency, error_ramp, exception_storm, rootcause_bubbleup) dokunulmaz; ML trace dedektör adları ayrı ad alanı.
+
+**Rollup yeterliliği (T1):** `rollup_spans_wide_1m` (0002, 1m→5m→1h): boyut service_name × span_kind × status_code × endpoint × channel_code × function_code; `span_count`, `error_count`, `q_state` TDigest(0.5, 0.95, 0.99). op_latency (p95/p99), op_error_rate, throughput_drop **buradan okunur, ham span yok**; trafik tabanı `span_count` ile. `rollup_spans_narrow_10s` endpoint taşımaz (servis düzeyi). **T2:** client span'lerde `endpoint` hedef operasyon; DB hedefi `db_summary_1m` (7 g TTL), HTTP/Kafka peer `topology_edges_5m`; `rare_exception` exception_groups. **T3:** pod boyutu wide ailede YOK → `spanmetrics_1m` pod kolonu varsa oradan, yoksa pod_outlier yalnız exception/heap kaynaklı (audit'te açık).
+
+**Tik tahmini (5.000 servis × endpoint, 5 dk kova):** güncel pencere okuması wide_5m `FINAL`siz AggregatingMergeTree merge: 5.000 anahtar × 2 dwell kova ≈ 10k satır → <1 sn. Taban: aynı sınıf 7 gün × ±1 saat (3 kova) × 5.000 = ~105k durum birleşimi, `groupArray` ile Go'da median/MAD → prod'da 2–4 sn (ölçülecek, self-obs `chQueryMs`). Toplam tik < 10 sn hedef; aşarsa taban CH'de önceden toplanır (`ml_series` gece işi).
+
+**Açık (operatör 2026-10-31, onay bekler):** native dedektör anahtarları (bu sürümde hepsi kapalı; alarm kuralları, Influx/Oracle akışları, Elastic ML poller hariç), ML › Metrik grubu (JVM, connection pool, Kafka, HTTP client, k8s aileleri; MetricsQL varsayılan + düzenlenebilir), Türkiye takvim ön ayarı (anomaly/calendar.go altyapısı; yarım gün saat desteği audit'e yazılacak).

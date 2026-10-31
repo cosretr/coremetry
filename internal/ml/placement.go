@@ -1,9 +1,9 @@
-// Package logml — ES log ML katmanı (docs/audits/log-ml-audit.md).
+// Package logml — ES log ML katmanı (docs/audits/ml-audit.md).
 // Elastic ML job'larının karşılığı: ayrı alt sistem, kendi goroutine'i,
 // kendi Redis kilidi, kendi tik bütçesi; evaluator/notifier/LLM drain'i
 // ile aynı süreçte olsa da onları bloklamaz. Dilim 0: iskelet + self-obs;
 // dedektörler sonraki dilimlerde Detector arayüzüyle takılır.
-package logml
+package ml
 
 // Roles — pod'un taşıdığı rol bayrakları (main.go runMode'un ilgili kısmı;
 // main.go tipi dışarı çıkmaz, döngü yok).

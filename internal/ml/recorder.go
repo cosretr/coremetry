@@ -1,4 +1,4 @@
-package logml
+package ml
 
 import (
 	"context"
@@ -12,14 +12,14 @@ import (
 
 // lockKey — kendi anahtarı: sre pod'u lider yarışlarına girmez (v0.10.1282),
 // bu alt sistem kilidi kendisi alır; sre replikası >1 olsa da tek yazıcı.
-const lockKey = "coremetry:lock:log-ml"
+const lockKey = "coremetry:lock:ml"
 
 // Detector — dilim 1+ dedektör sözleşmesi. Tick, pencere sonu `now` için
 // olayları döner; ES/CH okumalarını Deps üzerinden yapar ve ctx bütçesine
 // uyar. Dilim 0'da kayıtlı dedektör YOK.
 type Detector interface {
 	Name() string
-	Tick(ctx context.Context, d Deps, cfg chstore.LogMLConfig, now time.Time) ([]chstore.LogMLEvent, error)
+	Tick(ctx context.Context, d Deps, cfg chstore.MLConfig, now time.Time) ([]chstore.MLEvent, error)
 }
 
 // Deps — dedektörlerin gördüğü bağımlılıklar.
@@ -61,7 +61,7 @@ func (r *Recorder) run(ctx context.Context) {
 	setMeta(r.placement, false, false, false)
 	time.Sleep(15 * time.Second) // boot sırasında CH/ES hazır olsun
 	for {
-		cfg := r.store.GetLogMLConfig(ctx)
+		cfg := r.store.GetMLConfig(ctx)
 		r.tick(ctx, cfg)
 		select {
 		case <-ctx.Done():
@@ -71,10 +71,10 @@ func (r *Recorder) run(ctx context.Context) {
 	}
 }
 
-func (r *Recorder) tick(ctx context.Context, cfg chstore.LogMLConfig) {
+func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	leader := r.leader.IsLeader()
 	probe, cancel := context.WithTimeout(ctx, 5*time.Second)
-	ready, err := r.store.LogMLTableReady(probe)
+	ready, err := r.store.MLTableReady(probe)
 	cancel()
 	setMeta(r.placement, cfg.Enabled, leader, ready)
 	if !cfg.Enabled { // ana anahtar kapalı: ES'e HİÇ sorgu yok
@@ -85,9 +85,9 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.LogMLConfig) {
 		global.skipped.Add(1)
 		if err != nil {
 			global.setError(err)
-			log.Printf("[logml] table probe failed: %v (tik atlandı)", err)
+			log.Printf("[ml] table probe failed: %v (tik atlandı)", err)
 		} else {
-			log.Printf("[logml] log_ml_events tablosu yok — api/worker boot'u DDL'i indirene dek bekleniyor")
+			log.Printf("[ml] ml_events tablosu yok — api/worker boot'u DDL'i indirene dek bekleniyor")
 		}
 		return
 	}
@@ -113,7 +113,8 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.LogMLConfig) {
 			firstErr = derr
 		}
 		for _, ev := range evs {
-			if werr := r.store.UpsertLogMLEvent(tctx, ev); werr != nil {
+			ev.Signal = chstore.MLDetectorSignal(ev.Detector)
+			if werr := r.store.UpsertMLEvent(tctx, ev); werr != nil {
 				if firstErr == nil {
 					firstErr = werr
 				}
@@ -125,6 +126,6 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.LogMLConfig) {
 	global.events.Add(written)
 	global.setError(firstErr)
 	global.tickDone(start)
-	log.Printf("[logml] tick placement=%s detectors=%d events=%d dur=%dms es_p95=%dms err=%v",
+	log.Printf("[ml] tick placement=%s detectors=%d events=%d dur=%dms es_p95=%dms err=%v",
 		r.placement, active, written, time.Since(start).Milliseconds(), Observability().ESP95Ms, firstErr)
 }

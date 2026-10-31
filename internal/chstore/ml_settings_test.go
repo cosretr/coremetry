@@ -4,15 +4,15 @@ import "testing"
 
 // v0.10.1743 — log ML dilim 0: terfi varsayılan KAPALI; eşik + örnek kapısı;
 // karne paydasına kararsız satır girmez (S4); karar anahtarı önekli.
-func TestLogMLConfigDefaultsOff(t *testing.T) {
-	c := NormalizeLogMLConfig(LogMLConfig{})
+func TestMLConfigDefaultsOff(t *testing.T) {
+	c := NormalizeMLConfig(MLConfig{})
 	if c.BucketSec != 300 || c.TickSec != 300 || c.TimeoutMs != 10000 || c.MaxServices != 500 {
 		t.Fatalf("defaults: %+v", c)
 	}
 	if c.Enabled {
 		t.Fatal("ana anahtar varsayılan kapalı")
 	}
-	for _, d := range LogMLDetectorNames {
+	for _, d := range MLDetectorNames {
 		if c.Detectors[d] {
 			t.Fatalf("%s: dedektör varsayılan kapalı", d)
 		}
@@ -21,7 +21,7 @@ func TestLogMLConfigDefaultsOff(t *testing.T) {
 			t.Fatalf("%s: terfi varsayılan kapalı olmalı: %+v ok=%v", d, p, ok)
 		}
 	}
-	c2 := NormalizeLogMLConfig(LogMLConfig{BucketSec: 1, TickSec: 99999, Promotion: map[string]LogMLPromotion{"bogus": {Enabled: true}}})
+	c2 := NormalizeMLConfig(MLConfig{BucketSec: 1, TickSec: 99999, Promotion: map[string]MLPromotion{"bogus": {Enabled: true}}})
 	if c2.BucketSec != 300 || c2.TickSec != 300 {
 		t.Fatalf("sınır dışı değerler varsayılana dönmeli: %+v", c2)
 	}
@@ -30,13 +30,13 @@ func TestLogMLConfigDefaultsOff(t *testing.T) {
 	}
 }
 
-func TestLogMLPromotionAllowed(t *testing.T) {
-	c := DefaultLogMLConfig()
-	sc := LogMLDetectorScore{Detector: "log_volume", Samples: 50, Hits: 45, HitRate: 0.9}
+func TestMLPromotionAllowed(t *testing.T) {
+	c := DefaultMLConfig()
+	sc := MLDetectorScore{Detector: "log_volume", Samples: 50, Hits: 45, HitRate: 0.9}
 	if c.PromotionAllowed("log_volume", sc) {
 		t.Fatal("kapalı anahtar terfi etmemeli")
 	}
-	c.Promotion["log_volume"] = LogMLPromotion{Enabled: true, MinHitRate: 0.8, MinSamples: 20}
+	c.Promotion["log_volume"] = MLPromotion{Enabled: true, MinHitRate: 0.8, MinSamples: 20}
 	if c.PromotionAllowed("log_volume", sc) {
 		t.Fatal("ana anahtar/dedektör kapalıyken terfi olmamalı")
 	}
@@ -44,10 +44,10 @@ func TestLogMLPromotionAllowed(t *testing.T) {
 	if !c.PromotionAllowed("log_volume", sc) {
 		t.Fatal("eşik geçildi, terfi açık olmalı")
 	}
-	if c.PromotionAllowed("log_volume", LogMLDetectorScore{Samples: 5, Hits: 5, HitRate: 1}) {
+	if c.PromotionAllowed("log_volume", MLDetectorScore{Samples: 5, Hits: 5, HitRate: 1}) {
 		t.Fatal("asgari örnek altında terfi olmamalı")
 	}
-	if c.PromotionAllowed("log_volume", LogMLDetectorScore{Samples: 40, Hits: 20, HitRate: 0.5}) {
+	if c.PromotionAllowed("log_volume", MLDetectorScore{Samples: 40, Hits: 20, HitRate: 0.5}) {
 		t.Fatal("isabet eşiği altında terfi olmamalı")
 	}
 	if c.PromotionAllowed("unknown", sc) {
@@ -55,26 +55,29 @@ func TestLogMLPromotionAllowed(t *testing.T) {
 	}
 }
 
-func TestLogMLScorecardRateAndIDs(t *testing.T) {
-	if r := LogMLScorecardRate(3, 0); r != 0 {
+func TestMLScorecardRateAndIDs(t *testing.T) {
+	if r := MLScorecardRate(3, 0); r != 0 {
 		t.Fatalf("samples=0 → 0, got %v", r)
 	}
-	if r := LogMLScorecardRate(3, 4); r != 0.75 {
+	if r := MLScorecardRate(3, 4); r != 0.75 {
 		t.Fatalf("3/4 = %v", r)
 	}
-	id := LogMLVerdictID("abc")
-	if id != "logml:abc" || !IsLogMLVerdictID(id) || IsLogMLVerdictID("abc") {
+	id := MLVerdictID("abc")
+	if id != "ml:abc" || !IsMLVerdictID(id) || IsMLVerdictID("abc") {
 		t.Fatalf("verdict id öneki: %q", id)
 	}
-	if LogMLEventID("log_volume", "orders-api", "error") == LogMLEventID("error_rate", "orders-api", "error") {
+	if MLEventID("log_volume", "orders-api", "error") == MLEventID("error_rate", "orders-api", "error") {
 		t.Fatal("dedektör id'ye girmeli")
+	}
+	if MLDetectorSignal("op_latency") != MLSignalTrace || MLDetectorSignal("log_volume") != MLSignalLog || MLDetectorSignal("x") != MLSignalLog {
+		t.Fatal("dedektör → sinyal eşlemesi")
 	}
 }
 
-func TestLogMLScorecardFromRows(t *testing.T) {
+func TestMLScorecardFromRows(t *testing.T) {
 	ev := map[string]string{"a": "log_volume", "b": "log_volume", "c": "error_rate"}
-	vd := map[string]string{"logml:a": "anomaly", "logml:b": "not_anomaly", "logml:zzz": "anomaly"}
-	out := LogMLScorecardFromRows(ev, vd)
+	vd := map[string]string{"ml:a": "anomaly", "ml:b": "not_anomaly", "ml:zzz": "anomaly"}
+	out := MLScorecardFromRows(ev, vd)
 	if len(out) != 2 || out[0].Detector != "error_rate" || out[1].Detector != "log_volume" {
 		t.Fatalf("sıra/dedektör: %+v", out)
 	}

@@ -84,9 +84,9 @@ type SystemStats struct {
 	// maliyeti (son tik + süreç başından toplamlar). Behavior ile AYNI kablo:
 	// API handler'ı süreç-içi sayaçtan doldurur; GetSystemStats sıfır bırakır.
 	Briefing briefing.CostStats `json:"briefing"`
-	// LogML (log ML dilim 0) — alt sistemin tik/ES/bellek ölçümü; Behavior
+	// ML (log ML dilim 0) — alt sistemin tik/ES/bellek ölçümü; Behavior
 	// ile aynı kablo (süreç-içi, lider dışı sıfır). Tip log_ml_settings.go.
-	LogML LogMLStats `json:"logMl"`
+	ML MLStats `json:"ml"`
 }
 
 // BehaviorDetectorStats — davranış motorunun /admin/stats görüntüsü.

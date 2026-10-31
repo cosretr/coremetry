@@ -3096,8 +3096,8 @@ func canonicalTables(sd, ld, md int) []string {
 		ORDER BY (team_key, env)
 		TTL toDateTime(generated_at) + INTERVAL 1 HOUR`,
 
-		// log_ml_events — ES log ML katmanı dilim 0 (docs/audits/log-ml-audit.md
-		// K1): anomaly_events'ten AYRI tablo. ListAnomalyEvents tür süzgeci
+		// ml_events — ES log ML katmanı dilim 0 (docs/audits/ml-audit.md
+		// genelleştirme: tek tablo, signal='log'|'trace'). anomaly_events'ten AYRI tablo. ListAnomalyEvents tür süzgeci
 		// taşımadığı için aynı tabloya shadow satırı Inbox/fusion/terfiye
 		// sızardı; burada hiçbir eski okuyucu yok. source/stage kolonları
 		// operatörün ayrım kararı: stage=shadow Problem üretmez, promoted =
@@ -3105,10 +3105,10 @@ func canonicalTables(sd, ld, md int) []string {
 		// (FingerprintAnomaly türevi), partition YOK (P1), 30 g TTL (karne
 		// penceresiyle aynı). Yazıcı yalnız log_ml lideri (sre pod'u); DDL
 		// bu listede → api/worker boot'unda iner, sre pod'u tabloyu bekler.
-		`CREATE TABLE IF NOT EXISTS log_ml_events (
+		`CREATE TABLE IF NOT EXISTS ml_events (
 			id            String,
 			detector      LowCardinality(String),
-			source        LowCardinality(String) DEFAULT 'log_ml',
+			signal        LowCardinality(String) DEFAULT 'log',
 			stage         LowCardinality(String) DEFAULT 'shadow',
 			service       LowCardinality(String),
 			level         LowCardinality(String) DEFAULT '',

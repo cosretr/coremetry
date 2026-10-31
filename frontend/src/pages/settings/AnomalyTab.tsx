@@ -14,7 +14,7 @@ import { REDSourceSubsection } from './REDSourceSubsection'; // v0.10.1478
 import { CalendarSubsection } from './CalendarSubsection'; // v0.10.1483
 import { ErrorRampSubsection } from './ErrorRampSubsection';
 import { errorRampErrors, withErrorRampDefaults } from './errorRamp';
-import { LogMLSubsection } from './LogMLSubsection'; // log ML dilim 0
+import { MLSubsection } from './MLSubsection'; // log ML dilim 0
 
 // Faz 2 dilim 1 R17 — elle yazılmış `<Field><input/><div hint/></Field>`
 // (shared.tsx) → coremetry Field ailesi (`hint`), ham onay kutuları →
@@ -210,7 +210,7 @@ export function AnomalyPromotionTab() {
       <ProblemPrioritySection />
 
       <hr className={HR} />
-      <LogMLSubsection />
+      <MLSubsection />
     </div>
   );
 }

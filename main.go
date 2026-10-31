@@ -982,7 +982,7 @@ func main() {
 	// which api pods read from. Splitting the write side off the
 	// read fleet means an api-pod hot-reload doesn't blink the
 	// detector clock.
-	startLogML(ctx, mode, cfg, store, logsStore, lockImpl) // log ML dilim 0 — main_logml.go (yerleşim config'ten, varsayılan sre)
+	startML(ctx, mode, cfg, store, logsStore, lockImpl) // log ML dilim 0 — main_ml.go (yerleşim config'ten, varsayılan sre)
 	// v0.8.227 — the log-anomaly side (recorder + Drain templater) is the
 	// only worker job that QUERIES the logstore on a tick. At billion-doc ES
 	// scale those curated-pattern _msearch / significant_text / sample pulls
