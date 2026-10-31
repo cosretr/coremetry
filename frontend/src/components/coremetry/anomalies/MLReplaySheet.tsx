@@ -20,7 +20,7 @@ import { keys } from '@/lib/queries/keys';
 import { logsHref } from '@/lib/logsUrl';
 import { traceHref } from '@/lib/traceHref';
 import { fmtDateTime } from '@/lib/utils';
-import { dayClassLabel, parseObj, replayChart, replaySamples, whatIfWindow } from '@/lib/mlReplay';
+import { dayClassLabel, exceptionGroupHref, parseObj, replayChart, replayContext, replaySamples, whatIfWindow } from '@/lib/mlReplay';
 import type { MLBacktestResult, MLSnapshot } from '@/lib/types';
 import { ML_DETECTOR_TR } from './MLTab';
 
@@ -106,6 +106,7 @@ export function MLReplaySheet({ id, onClose }: { id: string | null; onClose: () 
   const ch = snap ? replayChart(snap) : null;
   const thr = snap ? parseObj(snap.thresholds) : {};
   const samples = snap ? replaySamples(snap) : [];
+  const ctx = snap ? replayContext(snap.evidence) : null;
   const det = snap ? ML_DETECTOR_TR[snap.detector] ?? snap.detector : '';
 
   return (
@@ -147,6 +148,23 @@ export function MLReplaySheet({ id, onClose }: { id: string | null; onClose: () 
                     <li key={r.eventId}>{r.signal} · {ML_DETECTOR_TR[r.detector] ?? r.detector} · <span className="font-mono">{r.part}</span> · {fmtTs(r.detectedAt)}</li>
                   ))}
                 </ul>
+              )}
+              {ctx && (ctx.exceptions.length > 0 || ctx.oracle.length > 0 || ctx.bubbleUp || ctx.bubbleUnreadable) && (
+                <section data-testid="ml-replay-context">
+                  <h3 className="mt-4 mb-1 font-semibold">Bağlam (±5 dk, referans)</h3>
+                  <ul className="text-sm">
+                    {ctx.exceptions.map(x => (
+                      <li key={x.fingerprint}>Exception: <Link to={exceptionGroupHref(x.fingerprint)}>{x.type}</Link> · {x.count}</li>
+                    ))}
+                    {ctx.oracle.map(o => (
+                      <li key={`${o.traceId}:${o.code}`}>Oracle: <span className="font-mono">{o.code}</span>{o.operation ? ` · ${o.operation}` : ''} · {o.sourceId} · <Link to={traceHref(o.traceId)}>{o.traceId.slice(0, 16)}</Link></li>
+                    ))}
+                    {(ctx.bubbleUp ?? []).map(b => (
+                      <li key={`${b.key}=${b.value}`}>BubbleUp: <span className="font-mono">{b.key}={b.value}</span> · %{Math.round(b.selPct)} (taban %{Math.round(b.basePct)})</li>
+                    ))}
+                    {ctx.bubbleUnreadable && <li className="text-muted-foreground">BubbleUp okunamadı.</li>}
+                  </ul>
+                </section>
               )}
               <h3 className="mt-4 mb-1 font-semibold">Ham örnek</h3>
               <div className="flex flex-wrap gap-3 text-sm">

@@ -138,6 +138,8 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	kept, sup := qualityFilter(all, cfg, lb, r.runs, start)
 	global.observeSuppression(sup)
 	r.runs.gc(start)
+	// T1b: trace olaylarına exception / Oracle / BubbleUp referansı (koşu başına bir kez)
+	r.enrichTraceContext(tctx, deps, cfg, kept, cfg.MaxESQueriesPerTick-int(global.esQueries.Load()-esAtStart))
 	for _, ev := range kept {
 		if werr := r.store.UpsertMLEvent(tctx, ev); werr != nil {
 			if firstErr == nil {

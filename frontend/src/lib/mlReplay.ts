@@ -78,3 +78,27 @@ export function whatIfWindow(detectedAtNs: number, nowMs = Date.now()): { from: 
   const det = Math.floor(detectedAtNs / 1e9);
   return { from: det - 24 * 3600, to: Math.min(det + 2 * 3600, Math.floor(nowMs / 1000)) };
 }
+
+export interface ReplayContext {
+  exceptions: { fingerprint: string; type: string; count: number }[];
+  oracle: { traceId: string; sourceId: string; code: string; operation?: string; t: number }[];
+  bubbleUp: { key: string; value: string; selPct: number; basePct: number }[] | null;
+  bubbleUnreadable: boolean;
+}
+
+/** SAF: T1b bağlam referansları (kanıt JSON'undan; yoksa boş). v0.10.1754 */
+export function replayContext(evidence: string): ReplayContext {
+  const e = parseObj(evidence);
+  const arr = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
+  return {
+    exceptions: arr(e.exceptions),
+    oracle: arr(e.oracle),
+    bubbleUp: Array.isArray(e.bubbleUp) ? (e.bubbleUp as ReplayContext['bubbleUp']) : null,
+    bubbleUnreadable: typeof e.bubbleUp === 'string',
+  };
+}
+
+/** SAF: exception grubu pivotu (Inbox ile aynı yol, lib/inboxHref.ts). */
+export function exceptionGroupHref(fp: string): string {
+  return `/problems?exc=${encodeURIComponent(fp)}`;
+}

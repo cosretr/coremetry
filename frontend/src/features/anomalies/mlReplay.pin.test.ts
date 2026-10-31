@@ -2,7 +2,7 @@
 // effMAD, sunucuyla aynı), tetik kovaları bölge, rollout işareti; what-if
 // penceresi şimdiyi aşmaz; dönem replay gün çözümü; backtest satırı.
 import { describe, it, expect } from 'vitest';
-import { effMAD, replayChart, whatIfWindow, dayClassLabel } from '@/lib/mlReplay';
+import { effMAD, replayChart, whatIfWindow, dayClassLabel, replayContext, exceptionGroupHref } from '@/lib/mlReplay';
 import { resolveBacktestDays } from '@/components/coremetry/anomalies/MLPeriodReplay';
 import { backtestLine } from '@/components/coremetry/anomalies/MLReplaySheet';
 import type { MLSnapshot } from '@/lib/types';
@@ -46,5 +46,14 @@ describe('ml replay', () => {
     expect(backtestLine({ signal: 'trace', service: 'p', from: 0, to: 1, series: 1, buckets: 1, configHash: '', truncated: false, hits: [],
       detectors: [{ detector: 'op_latency', fired: 3, tp: 1, fp: 1, unlabeled: 1, positives: 1, covered: 1, precision: 0.5, recall: 1 }] }, 'op_latency'))
       .toBe('3 isabet (1 gerçek, 1 değil, 1 etiketsiz) · isabet %50');
+  });
+  // v0.10.1754 — T1b bağlam referansları.
+  it('context refs from evidence', () => {
+    const c = replayContext(JSON.stringify({ exceptions: [{ fingerprint: 'f1', type: 'NPE', count: 3 }], oracle: [], bubbleUp: 'okunamadı' }));
+    expect(c.exceptions[0].fingerprint).toBe('f1');
+    expect(c.bubbleUp).toBeNull();
+    expect(c.bubbleUnreadable).toBe(true);
+    expect(replayContext('').exceptions).toEqual([]);
+    expect(exceptionGroupHref('a b')).toBe('/problems?exc=a%20b');
   });
 });

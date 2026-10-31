@@ -166,6 +166,43 @@ func collectSamples(ctx context.Context, deps Deps, ev chstore.MLEvent, cfg chst
 type snapshotState struct {
 	pre, done bool
 	samples   string
+	// extra — T1b bağlam referansları (koşu başına bir kez; her tik kanıta eklenir).
+	extra map[string]any
+}
+
+// enrichTraceContext — T1b: yeni koşunun bağlamını bir kez hesaplar
+// (BubbleUp bütçesi bittiyse sonraki tikte yeniden dener), her tik olay
+// kanıtına ekler. Örnekler burada toplanırsa replay ön kaydı aynısını kullanır.
+func (r *Recorder) enrichTraceContext(ctx context.Context, deps Deps, cfg chstore.MLConfig, kept []chstore.MLEvent, esLeft int) {
+	bubbleLeft := traceCtxBubblePerTick
+	for i := range kept {
+		ex, bub := needsTraceContext(kept[i].Detector)
+		if !ex && !bub {
+			continue
+		}
+		st := r.runs.snap(kept[i].ID)
+		if st == nil {
+			continue
+		}
+		if st.extra == nil {
+			if st.samples == "" {
+				st.samples = collectSamples(ctx, deps, kept[i], cfg, esLeft > 0)
+				esLeft--
+			}
+			var samples []chstore.MLSample
+			_ = json.Unmarshal([]byte(st.samples), &samples)
+			x := traceContext(ctx, deps, kept[i], samples, &bubbleLeft)
+			if _, ok := x["bubbleUp"]; ok || !bub {
+				st.extra = x
+			} else {
+				kept[i].Evidence = mergeEvidence(kept[i].Evidence, x)
+			}
+		}
+		if st.extra != nil {
+			kept[i].Evidence = mergeEvidence(kept[i].Evidence, st.extra)
+		}
+		r.runs.setEvent(kept[i])
+	}
 }
 
 // writeSnapshots — recorder tik sonu: yeni koşulara ön kayıt, +2 sa dolmuş
@@ -179,8 +216,10 @@ func (r *Recorder) writeSnapshots(ctx context.Context, deps Deps, cfg chstore.ML
 		if st == nil || st.pre {
 			continue
 		}
-		st.samples = collectSamples(ctx, deps, ev, cfg, esLeft > 0)
-		esLeft--
+		if st.samples == "" {
+			st.samples = collectSamples(ctx, deps, ev, cfg, esLeft > 0)
+			esLeft--
+		}
 		if err := deps.Store.UpsertMLSnapshot(ctx, buildSnapshot(ctx, deps, ev, cfg, now, false, st.samples)); err != nil {
 			if firstErr == nil {
 				firstErr = err
