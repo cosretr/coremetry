@@ -79,7 +79,7 @@ export function WikiPagesTable({ status, mode }: { status?: WikiSyncStatus; mode
       case 'title': {
         const expanded = open === key(r);
         return (
-          <span className="inline-flex min-w-0 items-center gap-1" title={r.path}>
+          <span className="inline-flex min-w-0 max-w-full items-center gap-1" title={r.path}>
             {preview && (
               <Button variant="ghost" size="icon-xs" aria-expanded={expanded} aria-label={`${r.title} önizlemesi`}
                 onClick={() => setOpen(expanded ? null : key(r))}>
@@ -87,8 +87,8 @@ export function WikiPagesTable({ status, mode }: { status?: WikiSyncStatus; mode
               </Button>
             )}
             {r.url && appLinkKind(r.url) === 'external' /* v0.10.1315 — tek kapı */
-              ? <a href={r.url} target="_blank" rel="noopener noreferrer" className="truncate">{r.title || r.path}</a>
-              : <span className="truncate">{r.title || r.path}</span>}
+              ? <a href={r.url} target="_blank" rel="noopener noreferrer" className="dt-trunc" title={r.title || r.path}>{r.title || r.path}</a>
+              : <span className="dt-trunc" title={r.title || r.path}>{r.title || r.path}</span>}
           </span>
         );
       }
@@ -126,6 +126,10 @@ export function WikiPagesTable({ status, mode }: { status?: WikiSyncStatus; mode
           renderCell={cell}
           detail={{
             isOpen: r => preview && open === key(r),
+            // v0.10.1705 — sınıfsız ayrıntı <td>'si genel `tbody td` kuralını
+            // (nowrap + max-width 320px + overflow hidden) alıyordu: tüm satıra
+            // yayılan önizleme 320px'te kesiliyordu. cell-wrap sınırı kaldırır.
+            cellClassName: () => 'cell-wrap',
             render: r => (
               <pre data-testid="wiki-page-preview" className="my-1 max-h-[260px] overflow-auto text-[length:var(--fs-sm)] whitespace-pre-wrap">
                 {r.preview || '(boş sayfa)'}
