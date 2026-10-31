@@ -156,12 +156,12 @@ func judgeMM(cur []float64, med, mad float64, n int, cfg chstore.MLConfig, upOnl
 // baselineDates — SAF: son `days` gün içinde `at` ile aynı takvim sınıfındaki
 // günler; sınıf eşleşmesi 3'ün altındaysa (nadir sınıf, ör. tatil) tüm günler.
 func baselineDates(at time.Time, days int, cal chstore.AnomalyCalendarConfig, loc *time.Location) (dates []string, class string) {
-	class = anomaly.CalendarDayClass(at.In(loc), cal)
+	class = mlDayClass(at.In(loc), cal)
 	var all []string
 	for i := 1; i <= days; i++ {
 		d := at.In(loc).AddDate(0, 0, -i)
 		all = append(all, d.Format("2006-01-02"))
-		if anomaly.CalendarDayClass(d, cal) == class {
+		if mlDayClass(d, cal) == class {
 			dates = append(dates, d.Format("2006-01-02"))
 		}
 	}
@@ -169,6 +169,26 @@ func baselineDates(at time.Time, days int, cal chstore.AnomalyCalendarConfig, lo
 		return all, class
 	}
 	return dates, class
+}
+
+// halfDayCutoffHour — yarım gün saat desteği (v0.10.1762, operatör 2026-10-31:
+// "13:00 sonrası tatil sınıfı"): yarım günün sabahı sıradan iş günüdür.
+const halfDayCutoffHour = 13
+
+// mlDayClass — SAF: takvim sınıfı, yarım gün saatle (yerel saat t). Yalnız ML;
+// yerleşik dedektörlerin gün düzeyi sınıfı değişmez.
+func mlDayClass(t time.Time, cal chstore.AnomalyCalendarConfig) string {
+	c := anomaly.CalendarDayClass(t, cal)
+	if c == "half_day" && t.Hour() < halfDayCutoffHour {
+		switch t.Weekday() {
+		case time.Saturday:
+			return "saturday"
+		case time.Sunday:
+			return "sunday"
+		}
+		return "weekday"
+	}
+	return c
 }
 
 // isOffDay — tatil/yarım gün/pazar sınıfı: düşüş ve susma aday olmaz.

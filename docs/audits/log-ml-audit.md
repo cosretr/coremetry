@@ -111,7 +111,7 @@ Tek tablo `ml_events` (`signal='log'|'trace'`), sekme "ML" (Hepsi/Log/Trace), ka
 
 ## 10. Türkiye takvimi (v0.10.1750)
 
-Mevcut `anomaly/calendar.go` altyapısı üstüne, yeni takvim motoru YOK. `AnomalyCalendarConfig.FixedHolidaysTR` (sabit resmi tatiller her yıl: 1 Oca, 23 Nis, 1 May, 19 May, 15 Tem, 30 Ağu, 29 Eki; 28 Eki yarım gün) `SpecialKindOn` içinde; `AutoRules` (ayın 15'i, ayın son iş günü, yıl sonu, tatil öncesi son iş günü; her biri ayrı anahtar) `calendarDayKind` içinde "ay sonu benzeri" sınıf verir. Dini bayramlar yıla bağlı → özel gün listesi (2027 ön ayarda; Settings "Türkiye ön ayarını yükle": Europe/Istanbul + bayrak + 2027 günleri + dört kural; gelecek yıl girdisi yoksa uyarı). ML dedektörleri takvim sınıfını `anomaly.CalendarDayClass` ile kullanır (taban aynı sınıf günler; tatil/yarım gün/pazar'da düşüş ve susma aday değil, hata oranı/gecikme değerlendirilir). **Yarım gün saat desteği YOK:** sınıf gün düzeyinde; 28 Ekim ve arifeler bütün gün yarım gün sayılır (13:00 sonrası slot ayrımı yapılmadı — kabul edilen sapma; gerekirse `half_day` için saat eşiği ayrı dilim).
+Mevcut `anomaly/calendar.go` altyapısı üstüne, yeni takvim motoru YOK. `AnomalyCalendarConfig.FixedHolidaysTR` (sabit resmi tatiller her yıl: 1 Oca, 23 Nis, 1 May, 19 May, 15 Tem, 30 Ağu, 29 Eki; 28 Eki yarım gün) `SpecialKindOn` içinde; `AutoRules` (ayın 15'i, ayın son iş günü, yıl sonu, tatil öncesi son iş günü; her biri ayrı anahtar) `calendarDayKind` içinde "ay sonu benzeri" sınıf verir. Dini bayramlar yıla bağlı → özel gün listesi (2027 ön ayarda; Settings "Türkiye ön ayarını yükle": Europe/Istanbul + bayrak + 2027 günleri + dört kural; gelecek yıl girdisi yoksa uyarı). ML dedektörleri takvim sınıfını `anomaly.CalendarDayClass` ile kullanır (taban aynı sınıf günler; tatil/yarım gün/pazar'da düşüş ve susma aday değil, hata oranı/gecikme değerlendirilir). **Yarım gün saat desteği YOK:** sınıf gün düzeyinde; 28 Ekim ve arifeler bütün gün yarım gün sayılır (13:00 sonrası slot ayrımı yapılmadı — v0.10.1762 ML tarafında kapandı, aşağıda).
 
 ## 11. Kalite çerçevesi (v0.10.1751, üç sinyal ortak)
 
@@ -153,3 +153,7 @@ Ortak etiket seti `chstore.MLLabels` (ML kararları × olay penceresi; sinyal fa
 ## 20. Terfi kopya yolu (v0.10.1761, K4)
 
 `internal/ml/promote.go`: `PromotionGate` geçen gölge olay `anomaly_events`'e kopya satır (kind `ml:<dedektör>`, aynı id, pattern = seri parçası); ml_events satırı `stage=promoted`. Aynı servis + çakışan pencerede `elastic_ml` satırı varsa terfi yok, `dup_of` doldurulur. Terfi anahtarı açık dedektör yoksa tik başına SIFIR ek okuma (varsayılan). Açılınca tik başına +3 okuma (karne 2 + anomaly_events 1). Ölçülmedi: `ml:*` türünün fusion/Problem yolunda nasıl göründüğü (terfi açılmadan önce bir dedektörle denenmeli). Self-obs `promoted`.
+
+## 21. Yarım gün saati (v0.10.1762)
+
+ML dedektörleri `mlDayClass` kullanır: yarım günün 13:00 öncesi sıradan gün sınıfı (taban o güne göre, düşüş/susma aday), 13:00 ve sonrası `half_day` (off-day kuralı). Yerleşik dedektörlerin gün düzeyi sınıfı DEĞİŞMEDİ; saat sabit (13), ayar yok.
