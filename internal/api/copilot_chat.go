@@ -1039,7 +1039,11 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			evm.OnScope(us)
 		}
 		emit(chatScopeEventKind, us.event())
-		v2p := &v2LoopPlan{Scope: us, Addendum: userScopeAddendum(us, req.Messages) +
+		// v0.10.1723 — çapalı (trace/servis/açıklama) soruda takım istenmez.
+		tsc := teamScopeCtxFrom(req.Context.Trace, req.Context.Service,
+			req.Context.Explain != "" || req.Context.Subject != "" || req.Context.ExplainAsk != nil,
+			req.Context.BriefingID, req.Context.Page, req.Context.PinnedPage)
+		v2p := &v2LoopPlan{Scope: us, Addendum: scopeAddendumFor(us, req.Messages, needsTeamScope(tsc, lastUserText(req.Messages))) +
 			s.briefingAskAddendum(ctx, us, req.Context.Env, req.Context.BriefingID, req.Context.BriefingLine),
 			Budget: narrowLoopBudget(chstore.CurrentAILoopBudget(), v2LoopCeilings(dm, exchangeMax))} // dilim 4
 		if v2p.Addendum != "" {

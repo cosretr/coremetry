@@ -2941,6 +2941,18 @@ tüm servislerde kapsamsız çalış ve cevapta bunu bir kez belirt.`
 // ChatUserScopeUnscopedAddendum — kapsamsız alışveriş, takım daha önce soruldu.
 func ChatUserScopeUnscopedAddendum() string { return chatUserScopeUnscopedAddendum }
 
+// v0.10.1723 (operatör: trace/servis bağlamlı soruda model "Hangi
+// takımdasınız?" diye durup takım listesi döktü) — kapsamsız ama çapalı
+// alışveriş (api needsTeamScope=false): takım SORULMAZ.
+const chatUserScopeAnchoredAddendum = `
+
+KULLANICI KAPSAMI GEREKMİYOR: Soru bağlamdaki belirli bir trace, servis ya
+da açıklama üzerine. Kullanıcının takımını SORMA, list_teams çağırma, takım
+listesi yazma; doğrudan bu trace / servis üzerinden araçlarla cevapla.`
+
+// ChatUserScopeAnchoredAddendum — kapsamsız alışveriş, soru çapalı (takım gerekmez).
+func ChatUserScopeAnchoredAddendum() string { return chatUserScopeAnchoredAddendum }
+
 // ─── CoSRE Login Briefing dilim 7 (v0.10.1716): "Sor" satır bağlamı ───
 //
 // Soru brifing kartının bir satırından geldi (context.briefingId). Ek SAYI

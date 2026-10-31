@@ -78,6 +78,7 @@ var promptVersionRegistry = map[string]string{
 	"chatUserScopeAddendumTmpl":     chatUserScopeAddendumTmpl,
 	"chatUserScopeAskTeamAddendum":  chatUserScopeAskTeamAddendum,
 	"chatUserScopeUnscopedAddendum": chatUserScopeUnscopedAddendum,
+	"chatUserScopeAnchoredAddendum": chatUserScopeAnchoredAddendum, // v0.10.1723 — çapalı soru: takım sorma
 	"chatBriefingLineAddendumTmpl":  chatBriefingLineAddendumTmpl,
 	"ChatUserScopeAskMarker":        ChatUserScopeAskMarker, // "bir kez sor" sezgisinin işareti
 	"chatDeepAddendum":              chatDeepAddendum,       // v0.10.1150 — Derin düşün üslubu
