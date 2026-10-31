@@ -1,5 +1,5 @@
 import type {
-OracleLogsResponse, CopilotScopeNames,
+OracleLogsResponse, CopilotScopeNames, CosreRouteRED,
   McpServersSnapshot, McpServerInput, McpServerTestResult,
   PurgeResult,
   Service, ServiceEdge, TracesResponse, TracesExtrasResponse, TraceDetailResponse, TraceBundleResponse,
@@ -2346,6 +2346,9 @@ export const api = {
   // olmayacak — o yüzey admin'e özel getAISettings.
   copilotConfig:         () => get<{ enabled: boolean; model?: string; wiki?: boolean; profiles?: import('./types').CopilotProfileOption[]; defaultProfile?: string; codeRead?: import('./types').CopilotCodeRead }>(`/api/copilot/config`),
   // v0.10.1138 — composer `@team:` tamamlaması (sunucu araması, ≤20).
+  // v0.10.1738 — CoSRE v2 rota incelemesi grafikleri (VM varsa VM, yoksa route MV).
+  cosreRouteRED: (params: { service: string; route: string; method?: string; env?: string; from: number; to: number }, signal?: AbortSignal) =>
+    get<CosreRouteRED>(`/api/cosre/v2/route-red?${qs(params)}`, signal),
   copilotScopeNames:     (kind: 'team', q: string) =>
     get<CopilotScopeNames>(`/api/copilot/scope-names?kind=${kind}&q=${encodeURIComponent(q)}`),
   // v0.10.702 — boş sohbetin veri çipleri (takımın en kötü servisi + yolu).

@@ -127,7 +127,7 @@ export function serviceReportChartToPanel(service: string, c: { title: string; q
 /** cosreSpecToPanel — span spec-chart → spanmetric paneli; metrik kaynaklı (VM /metric-red) çevrilmez. */
 export function cosreSpecToPanel(spec: CosreChartSpecLike, origin?: ChatPanelOrigin): Panel | null {
   if (!spec || typeof spec.service !== 'string' || !spec.service || typeof spec.agg !== 'string' || !spec.agg) return null;
-  if (spec.source === 'metric') return null;
+  if (spec.source === 'metric' || spec.source === 'route') return null; // v0.10.1738 — rota RED uçtan, panel tipi yok
   const filters: FilterExpr[] = [{ k: 'service.name', op: '=', v: [spec.service] }];
   if (spec.operation) filters.push({ k: 'name', op: '=', v: [spec.operation] });
   const unit = spec.unit ?? SPAN_AGG_UNIT[spec.agg];

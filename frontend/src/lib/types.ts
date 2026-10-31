@@ -8129,7 +8129,25 @@ export interface ChatTopologyPayload {
   note?: string;
 }
 /** chart bloğunun gövdesi — components/cosreChartSpec.ts CosreChartSpec ile aynı alanlar (Go guidedChartSpec). */
-export interface CosreChartSpecLike { title?: string; service: string; operation?: string; agg: string; unit?: string; rangeS?: number; groupBy?: string; fromNs?: number; toNs?: number; compare?: { kind?: string; shiftS: number }; source?: 'span' | 'metric' }
+export interface CosreChartSpecLike { title?: string; service: string; operation?: string; agg: string; unit?: string; rangeS?: number; groupBy?: string; fromNs?: number; toNs?: number; compare?: { kind?: string; shiftS: number }; source?: 'span' | 'metric' | 'route';
+  /** v0.10.1738 — source 'route': rota RED grafiği (GET /api/cosre/v2/route-red); src okunan kaynağın etiketi. */
+  route?: string; method?: string; env?: string; src?: 'VM' | 'CH' }
+
+/** v0.10.1738 — tek çizgi (lejant adı + nokta, zaman unix ns). */
+export interface CosreRouteREDLine { name: string; points: { time: number; value: number }[] }
+
+/** v0.10.1738 — GET /api/cosre/v2/route-red (api cosre_route_red.go). */
+export interface CosreRouteRED {
+  source: 'VM' | 'CH';
+  stepS: number;
+  /** "toplam" + "5xx" req/s. */
+  throughput: CosreRouteREDLine[] | null;
+  /** "p50" + "p95" ms. */
+  latency: CosreRouteREDLine[] | null;
+  notes?: string[];
+  /** Çizilemez gerekçesi (VM'de rota etiketi yok, gRPC ailesi…). */
+  skip?: string;
+}
 export interface ChatTypedBlock { id: string; type: ChatBlockType; seq: number; final: boolean; payload: unknown }
 // ChatTraceListPayload — v0.10.688: `trace_list` bloğu (internal/api/
 // endpoint_traces.go traceListPayload). Deterministik trace tablosu (D6):

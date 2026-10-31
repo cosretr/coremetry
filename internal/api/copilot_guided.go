@@ -3622,6 +3622,12 @@ type guidedChartSpec struct {
 	// ve kaynak ("metric" = metrik deposu / VM; boş = span rollup).
 	Compare *guidedChartCompare `json:"compare,omitempty"`
 	Source  string              `json:"source,omitempty"`
+	// v0.10.1738 — Source "route" (cosre_route_red.go): rota RED grafiği;
+	// veri /api/cosre/v2/route-red'den, Src okunan kaynağın etiketi (VM / CH).
+	Route  string `json:"route,omitempty"`
+	Method string `json:"method,omitempty"`
+	Env    string `json:"env,omitempty"`
+	Src    string `json:"src,omitempty"`
 }
 
 type guidedChartCompare struct {

@@ -316,6 +316,10 @@ func TestTelemetryReadConnCallSurface(t *testing.T) {
 		// Trace-level NOT HAS — SAF telemetri: MV yolunun aday probu, tek FROM'u
 		// spans (trace_id IN aday listesi, zaman sınırlı). State okumaz.
 		"trace_exclude.go": true,
+		// v0.10.1738 — SAF telemetri: CoSRE rota RED grafiği (VM yokken), tek
+		// FROM'u spanmetrics_1m (zaman sınırlı, LIMIT). SlowestCallees
+		// topology_edges_5m FINAL'i ana bağlantıdan okur (telemetryReadConn DEĞİL).
+		"route_red.go": true,
 		// TAŞINMAZ ÜÇÜNCÜ SINIF: sysstats.go + cluster.go system.* okuyor.
 		// Bunlar NODE-LOKAL tablolar; RoundRobin'e verilirse disk/utilizasyon
 		// panelleri her çağrıda BAŞKA node'u raporlar (SQL konsolunun in-order

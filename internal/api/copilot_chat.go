@@ -590,7 +590,22 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// v0.10.1737 — v2 "Endpoint seç" kartı (chat_endpoint_pick.go): tek servisi
 	// anıp rota / operasyon söylemeyen açık uçlu soru → tek cümle + data-pick
 	// (LLM'siz netleştirme). Kart gerekmiyorsa akış aşağıda bayt bayt eski.
-	if opPre == nil && !ct.On && !apCont.on && evm == nil && cosreV2Marked(ctx) {
+	// v0.10.1738 — v2 rota incelemesi (cosre_route_red.go): soru (ya da kartın
+	// İncele turu) servis + route taşıyorsa cevap serbest döngüden, iki rota
+	// grafiği + rota eki + çiplerle; guided / orta kademeler bu turu almaz.
+	var rtPlan *routeTurnPlan
+	if !ct.On && !apCont.on && evm == nil && cosreV2Marked(ctx) {
+		rtSvc := req.Context.Service
+		if rtSvc == "" && req.Context.Page != nil {
+			rtSvc = req.Context.Page.Service
+		}
+		rtRange := int64(0) // sorunun penceresi, yoksa son 1 saat; kartın İncele turu kartın penceresini taşır
+		if req.Context.SkipEndpointPick {
+			rtRange = req.Context.RangeS
+		}
+		rtPlan, _ = s.planRouteTurn(ctx, lastUserText(req.Messages), rtSvc, req.Context.Env, rtRange, anchorTo)
+	}
+	if rtPlan == nil && opPre == nil && !ct.On && !apCont.on && evm == nil && cosreV2Marked(ctx) {
 		pick := endpointPickCtx{Service: req.Context.Service, Operation: req.Context.Operation, Trace: req.Context.Trace,
 			Explain: req.Context.Explain != "" || req.Context.Subject != "", Skip: req.Context.SkipEndpointPick}
 		if pick.Service == "" && req.Context.Page != nil {
@@ -607,7 +622,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	}
 	if opPre == nil && !ct.On { // v0.10.1461 — kod turu guided'ı atlar (chat_code_turn.go)
 		handled, gok := false, false
-		if !evm.skipGuided() && !apCont.on { // v0.10.1476 — değerlendirme döngü sondası da atlar (chat_eval_mode.go); S5 onay devamı da
+		if !evm.skipGuided() && !apCont.on && rtPlan == nil { // v0.10.1738 rota turu da; v0.10.1476 — değerlendirme döngü sondası da atlar (chat_eval_mode.go); S5 onay devamı da
 			handled, gok = s.copilotChatGuided(ctx, emit, req.Messages, req.Context.Service, req.Context.Operation, req.Context.Explain, req.Context.RangeS, req.Context.Trace, req.Context.Env, anchorTo, req.Context.TzOffsetMin, req.Context.Tz)
 		}
 		if handled {
@@ -649,7 +664,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	}
 	traceSubj, isTraceFollowUp := drawerTraceFollowUp(req.Context.Explain, req.Context.Subject, pageTraceID)
 	if !isTraceFollowUp && !ct.On && opPre == nil { // v0.10.1461 — kod turu da orta kademeleri atlar
-		if !apCont.on { // agent-core S5 — onay devamı orta kademeleri de atlar
+		if !apCont.on && rtPlan == nil { // agent-core S5 — onay devamı orta kademeleri de atlar; v0.10.1738 rota turu da
 			// v0.10.1571 — kaynak sorusu (chat_clarify.go): telemetri şekilli soru
 			// guided'a oturmadı ve wiki gerçek bir alternatif → yalnız "Coremetry
 			// verisinde mi, wikide mi?" sorulur (düz metin, LLM'siz). Kapı kapalıysa
@@ -1056,6 +1071,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// araç seti dilim 2 (chat_user_scope.go) — YALNIZ v2: kullanıcı kapsamı bir
 	// kez çözülür, data-scope olarak söylenir ve döngü planına (prepareStep) iner.
 	// v1'de işaret yok → dal koşmaz, akış bayt bayt eski.
+	var routeChips []chatFollowup // v0.10.1738 — rota turunun takip çipleri (cevaba önce girer)
 	if cosreV2Marked(ctx) {
 		// v0.10.1725 — "Takımını seç" kartının seçimi (context.userTeam) evalset
 		// fikstürü gibi users okumasının yerine geçer; fikstür önceliklidir.
@@ -1076,6 +1092,13 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 		v2p := &v2LoopPlan{Scope: us, Addendum: scopeAddendumFor(us, req.Messages, need, req.Context.Unscoped) +
 			s.briefingAskAddendum(ctx, us, req.Context.Env, req.Context.BriefingID, req.Context.BriefingLine),
 			Budget: narrowLoopBudget(chstore.CurrentAILoopBudget(), v2LoopCeilings(dm, exchangeMax))} // dilim 4
+		if rtPlan != nil { // v0.10.1738 — rota grafikleri (CosreChart source=route) + ek + çipler
+			for _, sp := range rtPlan.Specs {
+				emit("block", blockSeq.Next(blocks.TypeChart, sp))
+			}
+			v2p.Addendum += rtPlan.Addendum
+			routeChips = rtPlan.Chips
+		}
 		if v2p.Addendum != "" {
 			echoPhrases = chatEchoPhrases(append(chatLoopPreambles(screenCtx, pageCtx, pinnedCtx, cst.ctx),
 				copilot.ChatRoundCapAddendum(), copilot.ChatDegenRetryAddendum(), v2p.Addendum)...)
@@ -1307,7 +1330,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			}
 			xch.noteFinalCall(loopCallID) // v0.10.1280 — answer.callId
 			emit("answer", withAnswerFollowups(withAnswerEvidence(chatAnswerEvent(finalText, exchangeID, links,
-				answerOpenHref(lastUserText(req.Messages), loopOpen)), loopEvidence), s.chatLoopFollowups(ctx, fuFacts, req.Messages, pageCtx))) // v0.10.1291
+				answerOpenHref(lastUserText(req.Messages), loopOpen)), loopEvidence), withRouteChips(routeChips, s.chatLoopFollowups(ctx, fuFacts, req.Messages, pageCtx)))) // v0.10.1291
 			exitReason = stopAnswered
 			break
 		}
@@ -1685,7 +1708,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 				}
 				xch.noteFinalCall(loopCallID) // v0.10.1280 — answer.callId
 				emit("answer", withAnswerFollowups(withAnswerEvidence(chatAnswerEvent(finalText, exchangeID, links,
-					answerOpenHref(lastUserText(req.Messages), loopOpen)), loopEvidence), s.chatLoopFollowups(ctx, fuFacts, req.Messages, pageCtx))) // v0.10.1291
+					answerOpenHref(lastUserText(req.Messages), loopOpen)), loopEvidence), withRouteChips(routeChips, s.chatLoopFollowups(ctx, fuFacts, req.Messages, pageCtx)))) // v0.10.1291
 			}
 			exitReason = reason // tavan; tavan turu alışveriş tavanına dayandıysa deadline
 			if err2 != nil {

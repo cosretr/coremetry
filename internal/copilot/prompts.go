@@ -2954,6 +2954,32 @@ listesi yazma; doğrudan bu trace / servis üzerinden araçlarla cevapla.`
 // ChatUserScopeAnchoredAddendum — kapsamsız alışveriş, soru çapalı (takım gerekmez).
 func ChatUserScopeAnchoredAddendum() string { return chatUserScopeAnchoredAddendum }
 
+// v0.10.1738 (operatör onayı, mockup "Endpoint seç" ikinci adım) — v2 rota
+// incelemesi (api cosre_route_red.go): iki grafik (Throughput, Response time)
+// sunucudan çizilir; model değişimi SAYIYLA söyler ve KARAR kutusuyla biter.
+// Biçim: servis, operasyon ("POST /yol"), pencere, kaynak, servis, http_route.
+const chatRouteInvestigationAddendumTmpl = `
+
+ROTA İNCELEMESİ: Soru %s servisinin %s endpoint'i hakkında (%s). Cevabın
+altında bu rotanın iki grafiği arayüzde ZATEN çiziliyor (Throughput: toplam +
+5xx req/s; Response time: p50 + p95; kaynak: %s) — render_chart çağırma,
+grafiği metinle yeniden çizme.
+- Rakamları endpoint_metrics aracıyla oku (service=%q, route=%q); pencerenin
+  başını sonuyla kıyasla ve değişimi SAYIYLA yaz ("p95 420 ms → 1,9 sn",
+  "hata oranı %%0,2 → %%4,8", "trafik aynı kaldı"). Değişim yoksa "değişmedi"
+  de; sayı UYDURMA, okuyamadığın değeri yazma.
+- Gecikme ve hata birlikte arttı, trafik sabitse aşağı bağımlılığa bak (en
+  yavaş çağrı); trafik de arttıysa yükü söyle.
+- Cevabı şu kutuyla bitir:
+> [!IMPORTANT] KARAR
+> Tek cümle: ne oldu, en olası neden ya da sonraki adım.`
+
+// ChatRouteInvestigationAddendum — v2 rota incelemesi eki (op: "POST /yol" ya da
+// "/yol"; route: http_route; rangeLabel: "son 1 saatte").
+func ChatRouteInvestigationAddendum(service, op, route, src, rangeLabel string) string {
+	return fmt.Sprintf(chatRouteInvestigationAddendumTmpl, service, op, rangeLabel, src, service, route)
+}
+
 // ─── CoSRE Login Briefing dilim 7 (v0.10.1716): "Sor" satır bağlamı ───
 //
 // Soru brifing kartının bir satırından geldi (context.briefingId). Ek SAYI

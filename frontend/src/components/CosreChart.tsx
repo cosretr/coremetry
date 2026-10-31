@@ -24,6 +24,9 @@ import type { SpanMetricSeries } from '@/lib/types';
 const CorePanelMulti = lazy(() =>
   import('@/components/chart/corePanelEntry').then(m => ({ default: m.CorePanelMulti })));
 
+// v0.10.1738 — rota RED grafiği (CoSRE v2 rota incelemesi) ayrı, tembel parça.
+const CosreRouteChart = lazy(() => import('@/components/cosre/CosreRouteChart').then(m => ({ default: m.CosreRouteChart })));
+
 export type { CosreChartSpec } from './cosreChartSpec';
 import type { CosreChartSpec } from './cosreChartSpec';
 
@@ -42,6 +45,12 @@ export interface CosreChartPresentation {
 }
 
 export function CosreChart({ spec, presentation }: { spec: CosreChartSpec; presentation?: CosreChartPresentation }) {
+  // v0.10.1738 — rota RED grafiği (CoSRE v2 rota incelemesi): veri ayrı uçtan.
+  if (spec.source === 'route') return <Suspense fallback={<Spinner />}><CosreRouteChart spec={spec} /></Suspense>;
+  return <CosreSpanChart spec={spec} presentation={presentation} />;
+}
+
+function CosreSpanChart({ spec, presentation }: { spec: CosreChartSpec; presentation?: CosreChartPresentation }) {
   const rangeS = spec.rangeS && spec.rangeS > 0 ? spec.rangeS : 1800;
   // Mutlak pencere doluysa RangeS'i EZER. Guided/insight yolları olayın
   // penceresini zaten biliyor; "son 30dk" onların cevabını kaydırırdı.

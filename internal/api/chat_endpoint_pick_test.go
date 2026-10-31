@@ -178,7 +178,7 @@ func TestEndpointPickTierWiredBeforeGuided(t *testing.T) {
 	if i < 0 || g < 0 || i > g {
 		t.Fatalf("kademe guided'dan önce değil (pick=%d guided=%d)", i, g)
 	}
-	gate := src[strings.LastIndex(src[:i], "if opPre == nil"):i]
+	gate := src[strings.LastIndex(src[:i], "\n\tif "):i]
 	if !strings.Contains(gate, "cosreV2Marked(ctx)") || !strings.Contains(gate, "SkipEndpointPick") {
 		t.Fatalf("kademe kapısı v2 / skip bayrağı taşımıyor: %s", gate)
 	}

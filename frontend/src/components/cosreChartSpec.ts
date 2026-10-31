@@ -8,7 +8,7 @@
 // düşer (v0.9.187'nin dersi) ve tavan yanlışsa operatör eksik bir kırılıma
 // "evren bu" diye bakar.
 
-import type { ServiceMetricRED, SpanMetricSeries } from '@/lib/types';
+import type { CosreRouteRED, ServiceMetricRED, SpanMetricSeries } from '@/lib/types';
 import type { CorePanelMultiItem } from '@/components/chart/corePanelEntry';
 
 export interface CosreChartSpec {
@@ -31,7 +31,14 @@ export interface CosreChartSpec {
   // ikinci seri ("dün aynı saat"); source: 'metric' = metrik deposu (VM) /metric-red,
   // boş/'span' = span rollup (spanMetricBatch). Operatör kararı: karşılaştırma VM'den.
   compare?: { kind?: string; shiftS: number };
-  source?: 'span' | 'metric';
+  source?: 'span' | 'metric' | 'route';
+  // v0.10.1738 — source 'route': CoSRE v2 rota incelemesi (GET /api/cosre/v2/route-red).
+  // agg 'rate' = Throughput (toplam + 5xx req/s), 'p95' = Response time (p50 + p95 ms);
+  // src = okunan kaynağın etiketi (VM / CH), sunucu yazar.
+  route?: string;
+  method?: string;
+  env?: string;
+  src?: 'VM' | 'CH';
   // Mutlak pencere (unix ns). Doluysa rangeS'i EZER — guided/insight
   // yolları olayın penceresini zaten biliyor, "son 30dk" cevabı kaydırırdı.
   fromNs?: number;
@@ -185,4 +192,40 @@ export function metricRedSeries(resp: ServiceMetricRED | null | undefined, agg: 
 export function metricRedUnit(resp: ServiceMetricRED | null | undefined, agg: CosreChartSpec['agg']): string {
   if ((agg === 'p50' || agg === 'p95' || agg === 'p99') && resp?.latencyUnitKnown && resp.latencyUnit) return resp.latencyUnit;
   return AGG_UNIT[agg] ?? '';
+}
+
+// ── v0.10.1738 — rota RED grafikleri (source 'route') ──────────────────
+
+/** Rota grafiğinin türü: agg 'rate' → Throughput, gecikme agg'leri → Response time. */
+export function routeChartKind(spec: Pick<CosreChartSpec, 'agg'>): 'throughput' | 'latency' {
+  return spec.agg === 'rate' ? 'throughput' : 'latency';
+}
+
+/** Başlık SPEC'TEN DEĞİL (v0.10.43 kuralı): tür + kaynak etiketi (cevap > spec). */
+export function routeChartTitle(spec: CosreChartSpec, source?: string): string {
+  const t = routeChartKind(spec) === 'throughput' ? 'Throughput' : 'Response time';
+  const src = source === 'VM' || source === 'CH' ? source : spec.src;
+  return src ? `${t} · ${src}` : t;
+}
+
+/** Birim türden (model ya da spec belirlemez). */
+export function routeChartUnit(spec: Pick<CosreChartSpec, 'agg'>): string {
+  return routeChartKind(spec) === 'throughput' ? 'req/s' : 'ms';
+}
+
+/** Cevap → çizgiler (5xx çizgisi hata rolünde). Boş/biçimsiz çizgi düşer. */
+export function routeChartItems(resp: CosreRouteRED | null | undefined, spec: Pick<CosreChartSpec, 'agg'>): CorePanelMultiItem[] {
+  const lines = (routeChartKind(spec) === 'throughput' ? resp?.throughput : resp?.latency) ?? [];
+  return lines
+    .filter(l => l && typeof l.name === 'string' && Array.isArray(l.points) && l.points.length > 0)
+    .map(l => ({ series: [{ groupKey: [l.name], points: l.points }], name: l.name, role: l.name === '5xx' ? 'error' as const : 'data' as const }));
+}
+
+/** Uç çağrısının parametreleri (mutlak pencere; yoksa son rangeS — çağıran tıklama/sorgu anında). */
+export function routeChartParams(spec: CosreChartSpec, nowNs: number): { service: string; route: string; method?: string; env?: string; from: number; to: number } {
+  const abs = !!(spec.fromNs && spec.toNs && spec.toNs > spec.fromNs);
+  const to = abs ? spec.toNs! : nowNs;
+  const from = abs ? spec.fromNs! : to - (spec.rangeS && spec.rangeS > 0 ? spec.rangeS : 3600) * 1e9;
+  return { service: spec.service, route: spec.route ?? '', from, to,
+    ...(spec.method ? { method: spec.method } : {}), ...(spec.env ? { env: spec.env } : {}) };
 }
