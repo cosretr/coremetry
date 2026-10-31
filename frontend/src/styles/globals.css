@@ -5488,6 +5488,8 @@ tbody td.tpm-more-cell { color: var(--text2); }
 .cosre-root .cm-msg-ai .cm-md-h4 { font-size: var(--cosre-fs-h4); }
 .cosre-root .cm-msg-ai .cm-md-list { margin-bottom: var(--cosre-s3); }
 .cosre-root .cm-msg-ai .cm-md-list li { margin: var(--cosre-s1) 0; }
+/* v0.10.1722 — v2 "düşünüyor" satırı (MessageList) thread içinde yatay ortalı; v1 .cm-wait-center paritesi. */
+.cosre-root .cm-msg--ai.cm-wait-row { align-items: center; }
 /* v0.10.1720 — liste maddesi "Etiket: değer": etiket yarı-kalın, olağan metin rengi (listLabel.ts). */
 .cosre-root .cm-msg-ai .cm-li-label { font-weight: var(--cosre-fw-semibold); color: var(--text); }
 .cosre-root .cm-md-quote, .cosre-root .cm-md-dl, .cosre-root .cm-md-details { margin-bottom: var(--cosre-s3); }

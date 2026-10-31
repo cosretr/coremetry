@@ -264,6 +264,8 @@ describe('MessageList × paylaşılan fixture (gerçek SDK)', () => {
     core.chat.messages = [{ id: 'u', role: 'user', parts: [{ type: 'text', text: 'q' }] }];
     const el = await draw(core, 'submitted');
     expect(el.querySelector('[data-cosre-thinking]')).not.toBeNull();
+    // v0.10.1722 (operatör): bekleyiş satırı ortalı — sınıf .cosre-root altında align-items:center.
+    expect(el.querySelector('[data-cosre-thinking]')!.classList.contains('cm-wait-row')).toBe(true);
     await act(async () => {
       root!.render(<MemoryRouter><MessageList status="ready" visibleParts={m => m.parts} messages={[
         { id: 'a', role: 'assistant', parts: [{ type: 'data-unknown', data: {} }, { type: 'dynamic-tool', toolName: 'x', toolCallId: 's1', state: 'input-available', input: {} }, { type: 'text', text: 'tamam' }] },

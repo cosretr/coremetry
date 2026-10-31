@@ -78,7 +78,7 @@ export function MessageList({ messages, visibleParts, status, error, onAsk, onRe
       {busy && last?.role !== 'assistant' && (last?.metadata?.explainAsk
         // v0.10.1672 (B7) — açıklama turu: v1 gibi baştan künyeli bekleyen balon (ExplainBody yükleniyor).
         ? <ChatBubble turn={{ role: 'assistant', text: '', pending: true, explain: { kind: last.metadata.explainAsk.kind, id: last.metadata.explainAsk.id } }} />
-        : <div className="cm-msg cm-msg--ai" data-cosre-thinking=""><AiThinking /></div>
+        : <div className="cm-msg cm-msg--ai cm-wait-row" data-cosre-thinking=""><AiThinking /></div>
       )}
       {/* Asistan mesajı oluşmadan gelen hata: balon yok, v1 dilinde satır. */}
       {errText && last?.role !== 'assistant' && <ErrorLine message={errText} onRetry={onRetry} />}
@@ -119,7 +119,7 @@ function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, ex
   const showFu = !!followups && !turn.error && !!turn.text;
   // Açıklama turu baştan ExplainBody çizer (v1: bekleyen künye, kendi yükleniyor'u).
   if (live && !turn.text && !turn.steps?.length && !turn.explain) {
-    return <div className="cm-msg cm-msg--ai" data-cosre-thinking=""><AiThinking /></div>;
+    return <div className="cm-msg cm-msg--ai cm-wait-row" data-cosre-thinking=""><AiThinking /></div>;
   }
   return (
     <div data-cosre-message={m.id} className="contents">
