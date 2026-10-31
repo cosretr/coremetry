@@ -5,6 +5,8 @@
 import type { ComponentProps, ReactNode } from 'react';
 import { XIcon } from 'lucide-react';
 import * as S from '@/components/shadcn/dialog';
+import { cn } from '@/lib/cn';
+import { OVERLAY_SURFACE } from './surface';
 import { Button } from '@/components/shadcn/button';
 import { CM_STRINGS } from '../strings';
 import { EscBridgeProvider, useEscapeKeyDown, useOverlayEsc } from './escBridge';
@@ -32,9 +34,9 @@ const CLOSE_CLASS = "absolute top-4 right-4 rounded-xs opacity-70 ring-offset-ba
 
 export type DialogContentProps = ComponentProps<typeof S.DialogContent> & { closeLabel?: string };
 
-export function DialogContent({ onEscapeKeyDown, showCloseButton = true, closeLabel = CM_STRINGS.close, children, ...props }: DialogContentProps) {
+export function DialogContent({ onEscapeKeyDown, showCloseButton = true, closeLabel = CM_STRINGS.close, className, children, ...props }: DialogContentProps) {
   return (
-    <S.DialogContent {...props} showCloseButton={false} onEscapeKeyDown={useEscapeKeyDown(onEscapeKeyDown)}>
+    <S.DialogContent {...props} className={cn(OVERLAY_SURFACE, className)} showCloseButton={false} onEscapeKeyDown={useEscapeKeyDown(onEscapeKeyDown)}>
       {children}
       {showCloseButton && (
         <S.DialogClose className={CLOSE_CLASS}>

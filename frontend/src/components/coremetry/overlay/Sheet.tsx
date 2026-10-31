@@ -3,6 +3,8 @@
 import type { ComponentProps, ReactNode } from 'react';
 import { XIcon } from 'lucide-react';
 import * as S from '@/components/shadcn/sheet';
+import { cn } from '@/lib/cn';
+import { OVERLAY_SURFACE } from './surface';
 import { CM_STRINGS } from '../strings';
 import { EscBridgeProvider, useEscapeKeyDown, useOverlayEsc } from './escBridge';
 
@@ -28,9 +30,9 @@ const CLOSE_CLASS = 'absolute top-4 right-4 rounded-xs opacity-70 ring-offset-ba
 
 export type SheetContentProps = ComponentProps<typeof S.SheetContent> & { closeLabel?: string };
 
-export function SheetContent({ onEscapeKeyDown, showCloseButton = true, closeLabel = CM_STRINGS.close, children, ...props }: SheetContentProps) {
+export function SheetContent({ onEscapeKeyDown, showCloseButton = true, closeLabel = CM_STRINGS.close, className, children, ...props }: SheetContentProps) {
   return (
-    <S.SheetContent {...props} showCloseButton={false} onEscapeKeyDown={useEscapeKeyDown(onEscapeKeyDown)}>
+    <S.SheetContent {...props} className={cn(OVERLAY_SURFACE, className)} showCloseButton={false} onEscapeKeyDown={useEscapeKeyDown(onEscapeKeyDown)}>
       {children}
       {showCloseButton && (
         <S.SheetClose className={CLOSE_CLASS}>

@@ -5,6 +5,8 @@
 // odağı Cancel'a verir (Enter'a hazır parmak yıkıcı yolu seçmesin).
 import type { ComponentProps, ReactNode } from 'react';
 import * as S from '@/components/shadcn/alert-dialog';
+import { cn } from '@/lib/cn';
+import { OVERLAY_SURFACE } from './surface';
 import { EscBridgeProvider, useEscapeKeyDown, useOverlayEsc } from './escBridge';
 
 export interface AlertDialogProps {
@@ -24,8 +26,8 @@ export function AlertDialog({ open, onOpenChange, children }: AlertDialogProps) 
 
 export type AlertDialogContentProps = ComponentProps<typeof S.AlertDialogContent>;
 
-export function AlertDialogContent({ onEscapeKeyDown, ...props }: AlertDialogContentProps) {
-  return <S.AlertDialogContent {...props} onEscapeKeyDown={useEscapeKeyDown(onEscapeKeyDown)} />;
+export function AlertDialogContent({ onEscapeKeyDown, className, ...props }: AlertDialogContentProps) {
+  return <S.AlertDialogContent {...props} className={cn(OVERLAY_SURFACE, className)} onEscapeKeyDown={useEscapeKeyDown(onEscapeKeyDown)} />;
 }
 
 export {
