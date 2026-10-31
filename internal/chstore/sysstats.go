@@ -3,6 +3,7 @@ package chstore
 import (
 	"context"
 	"fmt"
+	"github.com/cilcenk/coremetry/internal/cosre/briefing"
 	"log"
 	"strings"
 	"time"
@@ -79,6 +80,10 @@ type SystemStats struct {
 	// dönmesi dağıtık kipte verinin indiği anlamına GELMEZ; bu tablo
 	// olmadan 3.5 saatlik ölü ingest tüm ekranlarda yeşil görünüyordu.
 	DistributionQueue *DistributionQueue `json:"distributionQueue,omitempty"`
+	// Briefing (v0.10.1728) — CoSRE Login Briefing üreticisinin tik
+	// maliyeti (son tik + süreç başından toplamlar). Behavior ile AYNI kablo:
+	// API handler'ı süreç-içi sayaçtan doldurur; GetSystemStats sıfır bırakır.
+	Briefing briefing.CostStats `json:"briefing"`
 }
 
 // BehaviorDetectorStats — davranış motorunun /admin/stats görüntüsü.

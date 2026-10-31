@@ -57,7 +57,7 @@ type briefingOracleFleet struct {
 }
 
 // readBriefingOracleFleet — etkin kaynaklar × (cur, prev) + Q6 filo satırı.
-func (s *Server) readBriefingOracleFleet(ctx context.Context, cfg briefing.Config, now time.Time) briefingOracleFleet {
+func (s *Server) readBriefingOracleFleet(ctx context.Context, cfg briefing.Config, now time.Time, cost *briefing.Cost) briefingOracleFleet {
 	if s.oracle == nil || s.store == nil {
 		return briefingOracleFleet{State: "skipped"}
 	}
@@ -74,6 +74,7 @@ func (s *Server) readBriefingOracleFleet(ctx context.Context, cfg briefing.Confi
 		fallbacks = append(fallbacks, chstore.OracleGroupFallbackService(src.Name))
 		cur, errC := s.store.OracleGroupAggregates(ctx, src.ID, from, to)
 		prev, errP := s.store.OracleGroupAggregates(ctx, src.ID, pFrom, pTo)
+		cost.AddCH(2)
 		if errC != nil || errP != nil || len(cur) >= chstore.OracleGroupAggLimit || len(prev) >= chstore.OracleGroupAggLimit {
 			out.State = "partial"
 			if errC != nil || errP != nil {
@@ -88,19 +89,20 @@ func (s *Server) readBriefingOracleFleet(ctx context.Context, cfg briefing.Confi
 	groups, err := s.store.ListExceptionGroups(ctx, chstore.ExceptionGroupFilter{
 		Oracle: "only", Services: fallbacks, ActiveFromNs: pFrom.UnixNano(), ActiveToNs: to.UnixNano(), Limit: briefingOracleGroupLimit,
 	})
+	cost.AddCH(1)
 	if err != nil {
 		out.UnresolvedFailed = true
 		return out
 	}
 	out.UnresolvedFailed = len(groups) >= briefingOracleGroupLimit
 	rows := briefingOracleRows(out.Sources, groups, fallbacks)
-	out.Unresolved = s.withOracleTrace(ctx, rows, briefing.OracleFleetFindings(rows, cfg.Thresholds), from, to)
+	out.Unresolved = s.withOracleTrace(ctx, rows, briefing.OracleFleetFindings(rows, cfg.Thresholds), from, to, cost)
 	return out
 }
 
 // withOracleTrace — satırın ÜST bulgusuna (briefing.TopFinding, Lines ile aynı
 // sıra) bir örnek trace kimliği ekler; okuma hatası / trace yok → çipsiz.
-func (s *Server) withOracleTrace(ctx context.Context, rows []briefing.OracleRow, fs []briefing.Finding, from, to time.Time) []briefing.Finding {
+func (s *Server) withOracleTrace(ctx context.Context, rows []briefing.OracleRow, fs []briefing.Finding, from, to time.Time, cost *briefing.Cost) []briefing.Finding {
 	top := briefing.TopFinding(fs)
 	if top < 0 {
 		return fs
@@ -110,6 +112,7 @@ func (s *Server) withOracleTrace(ctx context.Context, rows []briefing.OracleRow,
 		return fs
 	}
 	errs, err := s.store.OracleErrorsByOpCode(ctx, r.SourceID, r.Op, r.Code, from, to, briefingOracleTraceScan)
+	cost.AddCH(1)
 	if err != nil {
 		return fs
 	}
@@ -128,7 +131,7 @@ type briefingOracleTeam struct {
 }
 
 // readBriefingOracleTeam — takımın Oracle grupları → satırlar.
-func (s *Server) readBriefingOracleTeam(ctx context.Context, fleet briefingOracleFleet, svcs []string, windowS int, now time.Time) briefingOracleTeam {
+func (s *Server) readBriefingOracleTeam(ctx context.Context, fleet briefingOracleFleet, svcs []string, windowS int, now time.Time, cost *briefing.Cost) briefingOracleTeam {
 	if fleet.State == "skipped" {
 		return briefingOracleTeam{State: "skipped"}
 	}
@@ -137,6 +140,7 @@ func (s *Server) readBriefingOracleTeam(ctx context.Context, fleet briefingOracl
 	groups, err := s.store.ListExceptionGroups(ctx, chstore.ExceptionGroupFilter{
 		Oracle: "only", Services: svcs, ActiveFromNs: pFrom.UnixNano(), ActiveToNs: to.UnixNano(), Limit: briefingOracleGroupLimit,
 	})
+	cost.AddCH(1)
 	if err != nil {
 		return briefingOracleTeam{State: "partial"}
 	}

@@ -33,6 +33,8 @@ package api
 // Maliyet (R9): takım × env başına 2 MV + 1 inbox + ≤3×2 deploy okuması
 // + 1 katalog (kalem 2 tür ayrımı, spanmetrics_1m) + ≤ 6 VM (kalem 2:
 // tür başına 2 sorgu × ≤ 2 tür + 2 Kafka sorusu; v0.10.1727).
+// Ölçüm (v0.10.1728): briefing.Cost çağrı noktalarında; /admin/stats
+// `briefing` + tik başına `[briefing] tick …` satırı (cosre_briefing_cost.go).
 // Tek takımın okuma hatası diğerlerini durdurmaz; okunamayan kalem `partial`.
 
 import (
@@ -193,9 +195,10 @@ type briefingFleet struct {
 	Oracle     briefingOracleFleet // v0.10.1713 kalem 5
 }
 
-func (s *Server) readBriefingFleet(ctx context.Context, cfg briefing.Config, now time.Time) briefingFleet {
+func (s *Server) readBriefingFleet(ctx context.Context, cfg briefing.Config, now time.Time, cost *briefing.Cost) briefingFleet {
 	deps, err := s.store.GetRecentDeploys(ctx, time.Duration(cfg.WindowS)*time.Second, briefingFleetDeployMax)
-	return briefingFleet{Deploys: deps, DeploysErr: err, Oracle: s.readBriefingOracleFleet(ctx, cfg, now)}
+	cost.AddCH(1)
+	return briefingFleet{Deploys: deps, DeploysErr: err, Oracle: s.readBriefingOracleFleet(ctx, cfg, now, cost)}
 }
 
 // briefingLogs — kalem 4 okuması (takım başına bir kez; env'ler paylaşır).
@@ -206,7 +209,7 @@ type briefingLogs struct {
 }
 
 // readBriefingLogs — cur + prior pencere, ≤60 dk dilimler; dilimler readTeamLogs'tan.
-func (s *Server) readBriefingLogs(ctx context.Context, team string, windowS int, now time.Time) briefingLogs {
+func (s *Server) readBriefingLogs(ctx context.Context, team string, windowS int, now time.Time, cost *briefing.Cost) briefingLogs {
 	fields := s.teamLogFields()
 	if len(fields) == 0 || s.logs == nil {
 		return briefingLogs{State: teamLogsUnsupported}
@@ -219,6 +222,13 @@ func (s *Server) readBriefingLogs(ctx context.Context, team string, windowS int,
 	sum := func(a, b time.Time, dst *int64) bool {
 		for _, sl := range briefing.LogSlices(a.Unix(), b.Unix()) {
 			o := s.readTeamLogs(ctx, cfgDigest, fields, values, time.Unix(sl[0], 0), time.Unix(sl[1], 0))
+			if o.issued {
+				if s.logs.Backend() == "elasticsearch" {
+					cost.AddES(1)
+				} else {
+					cost.AddCH(1)
+				}
+			}
 			if o.State == teamLogsUnsupported {
 				out.State = teamLogsUnsupported
 				return false
@@ -244,7 +254,7 @@ func briefingLogsURL(team string, windowS int) string {
 }
 
 // buildBriefing — tek takım × env kartı (okumalar + saf derleme).
-func (s *Server) buildBriefing(ctx context.Context, t briefingTeam, env string, cfg briefing.Config, fleet briefingFleet, logs briefingLogs, now time.Time) briefing.Briefing {
+func (s *Server) buildBriefing(ctx context.Context, t briefingTeam, env string, cfg briefing.Config, fleet briefingFleet, logs briefingLogs, now time.Time, cost *briefing.Cost) briefing.Briefing {
 	d := s.mcpDeps()
 	th := cfg.Thresholds
 	from, to := briefingWindow(now, cfg.WindowS)
@@ -260,6 +270,7 @@ func (s *Server) buildBriefing(ctx context.Context, t briefingTeam, env string, 
 	}
 	cur, _, errC := mcptools.ReadTeamServicesREDEnv(ctx, d, t.Services, redEnv, from, to)
 	prev, _, errP := mcptools.ReadTeamServicesREDEnv(ctx, d, t.Services, redEnv, pFrom, pTo)
+	cost.AddCH(2)
 	if errC != nil || errP != nil {
 		partial = append(partial, briefing.ItemRED)
 	} else {
@@ -268,7 +279,7 @@ func (s *Server) buildBriefing(ctx context.Context, t briefingTeam, env string, 
 
 	// 2 — istemci / sunucu-ailesi metrikleri (VM + Kafka).
 	var skipped []string
-	switch rows, state := s.readBriefingClient(ctx, t.Services, cur, env, pFrom, from, to); state {
+	switch rows, state := s.readBriefingClient(ctx, t.Services, cur, env, pFrom, from, to, cost); state {
 	case "skipped":
 		skipped = append(skipped, briefing.ItemClient)
 	case "partial":
@@ -279,7 +290,9 @@ func (s *Server) buildBriefing(ctx context.Context, t briefingTeam, env string, 
 	}
 
 	// 3 + 6 — tek Inbox okuması (şerit kümesi, takım birleşimi).
-	if res, _, err := mcptools.ReadInboxOpen(ctx, d, t.Label, t.Services, env, mcptools.InboxOpenScan); err != nil {
+	res, _, err := mcptools.ReadInboxOpen(ctx, d, t.Label, t.Services, env, mcptools.InboxOpenScan)
+	cost.AddCH(1)
+	if err != nil {
 		partial = append(partial, briefing.ItemException, briefing.ItemProblem)
 	} else {
 		ex, rest := splitInboxRows(res.Rows, from.Unix())
@@ -298,14 +311,14 @@ func (s *Server) buildBriefing(ctx context.Context, t briefingTeam, env string, 
 	}
 
 	// 5 — Oracle hata kodları (env'siz; çözülmüş ora: grupları).
-	switch o := s.readBriefingOracleTeam(ctx, fleet.Oracle, t.Services, cfg.WindowS, now); o.State {
+	switch o := s.readBriefingOracleTeam(ctx, fleet.Oracle, t.Services, cfg.WindowS, now, cost); o.State {
 	case "skipped":
 		skipped = append(skipped, briefing.ItemOracle)
 	case "partial":
 		partial = append(partial, briefing.ItemOracle)
 		fallthrough
 	default:
-		findings = append(findings, s.withOracleTrace(ctx, o.Rows, briefing.OracleFindings(o.Rows, th), from, to)...)
+		findings = append(findings, s.withOracleTrace(ctx, o.Rows, briefing.OracleFindings(o.Rows, th), from, to, cost)...)
 	}
 	// 5b — Q6 filo satırı (tik başına okunmuş; takım satırından ayrı).
 	if fleet.Oracle.State != "skipped" {
@@ -323,6 +336,7 @@ func (s *Server) buildBriefing(ctx context.Context, t briefingTeam, env string, 
 		failed := false
 		for _, c := range rolloutCandidates(fleet.Deploys, t.Services, from, briefingRolloutsMax) {
 			svcDeps, err := s.store.GetServiceDeploys(ctx, c.Service, from.Add(-24*time.Hour), to)
+			cost.AddCH(1)
 			if err != nil {
 				failed = true
 				continue
@@ -332,6 +346,7 @@ func (s *Server) buildBriefing(ctx context.Context, t briefingTeam, env string, 
 				continue // Overview işaretlerinde yok → kartta da yok (aynı kaynak)
 			}
 			imp, err := s.store.ComputeDeployImpact(ctx, c.Service, c.Version, at, briefingImpactWindowS)
+			cost.AddCH(1)
 			if err != nil || imp == nil {
 				failed = true
 				continue
@@ -373,35 +388,46 @@ func (s *Server) briefingTeamScope(ta chstore.TeamAliases, mds map[string]chstor
 
 // runBriefingTick — bütün takımlar × env (lider).
 func (s *Server) runBriefingTick(ctx context.Context, cfg briefing.Config, now time.Time) {
+	cost := &briefing.Cost{}
+	teams := 0
+	defer func() {
+		tk := cost.Tick(now.Unix(), teams, time.Since(now).Milliseconds())
+		recordBriefingTick(tk)
+		log.Print(briefing.TickLogLine(tk))
+	}()
 	users, err := s.store.ListUsers(ctx)
+	cost.AddCH(1)
 	if err != nil {
 		log.Printf("[briefing] kullanıcılar okunamadı: %v", err)
 		return
 	}
 	mds, err := s.store.ListServiceMetadata(ctx)
+	cost.AddCH(1)
 	if err != nil {
 		log.Printf("[briefing] katalog okunamadı: %v", err)
 		return
 	}
 	ta := s.teamAliasesCtx(ctx)
-	fleet := s.readBriefingFleet(ctx, cfg, now)
+	fleet := s.readBriefingFleet(ctx, cfg, now, cost)
 	n := 0
 	for _, t := range briefingTeamsFrom(users, ta) {
 		t = s.briefingTeamScope(ta, mds, t)
 		if len(t.Services) == 0 {
 			continue
 		}
+		teams++
 		lctx, lcancel := context.WithTimeout(ctx, briefingTeamTimeout)
-		logs := s.readBriefingLogs(lctx, t.Label, cfg.WindowS, now)
+		logs := s.readBriefingLogs(lctx, t.Label, cfg.WindowS, now, cost)
 		lcancel()
 		for _, env := range cfg.Envs {
 			if ctx.Err() != nil {
 				return
 			}
 			tctx, cancel := context.WithTimeout(ctx, briefingTeamTimeout)
-			b := s.buildBriefing(tctx, t, env, cfg, fleet, logs, now)
+			b := s.buildBriefing(tctx, t, env, cfg, fleet, logs, now, cost)
 			s.phraseBriefing(tctx, &b, cfg)
 			err := s.storeBriefing(tctx, b)
+			cost.AddCH(1)
 			cancel()
 			if err != nil {
 				log.Printf("[briefing] %s/%q yazılamadı: %v", t.Key, env, err)

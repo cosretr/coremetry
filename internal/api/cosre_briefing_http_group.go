@@ -300,12 +300,13 @@ func briefingGroupsQueries(groups []briefingKindGroup, svcLabel, envMatcher stri
 // readBriefingHTTPGroup — takımın HTTP/gRPC sunucu aileleri, tür başına bir
 // sorgu kümesi. failed = okuma hatası (etiket keşfi ya da bir sorgu); seri
 // yok ≠ hata. Katalog okuması hatası failed SAYILMAZ (iki türe de düşülür).
-func (s *Server) readBriefingHTTPGroup(ctx context.Context, rd redFamilyReader, cands []string, env string, pFrom, from, to time.Time) (rows []briefing.ClientRow, failed bool) {
+func (s *Server) readBriefingHTTPGroup(ctx context.Context, rd redFamilyReader, cands []string, env string, pFrom, from, to time.Time, cost *briefing.Cost) (rows []briefing.ClientRow, failed bool) {
 	cands = briefingHTTPGroupServices(append([]string(nil), cands...))
 	if len(cands) == 0 {
 		return nil, false
 	}
 	calls, cerr := s.store.ServerEntryKinds(ctx, cands, pFrom, to)
+	cost.AddCH(1)
 	httpSvcs, grpcSvcs := briefingSplitKinds(cands, calls, cerr == nil && len(calls) > 0)
 	groups := briefingKindGroups(httpSvcs, grpcSvcs)
 	if len(groups) == 0 {

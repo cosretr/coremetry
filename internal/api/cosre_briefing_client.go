@@ -103,7 +103,7 @@ func briefingKafkaRows(blocks map[string]kafkaMetricBlock, fromMs int64) (rows [
 }
 
 // readBriefingClient — kalem 2 okuması (takım × env). state: ok | skipped | partial.
-func (s *Server) readBriefingClient(ctx context.Context, svcs []string, cur []chstore.ServiceSummary, env string, pFrom, from, to time.Time) ([]briefing.ClientRow, string) {
+func (s *Server) readBriefingClient(ctx context.Context, svcs []string, cur []chstore.ServiceSummary, env string, pFrom, from, to time.Time, cost *briefing.Cost) ([]briefing.ClientRow, string) {
 	var rows []briefing.ClientRow
 	failed, read := false, false
 	fromMs := from.UnixMilli()
@@ -111,7 +111,7 @@ func (s *Server) readBriefingClient(ctx context.Context, svcs []string, cur []ch
 	if rd0, isVM := s.metricChartReaderFor(); isVM {
 		if rd, ok := rd0.(redFamilyReader); ok {
 			read = true
-			r, f := s.readBriefingHTTPGroup(ctx, rd, briefingHTTPCandidates(cur, len(cur)), env, pFrom, from, to)
+			r, f := s.readBriefingHTTPGroup(ctx, countingRED(rd, cost), briefingHTTPCandidates(cur, len(cur)), env, pFrom, from, to, cost)
 			rows, failed = append(rows, r...), failed || f
 		}
 	}
@@ -121,7 +121,7 @@ func (s *Server) readBriefingClient(ctx context.Context, svcs []string, cur []ch
 		scopeFor := func(vmetrics.KafkaMetric) *vmetrics.KafkaScope {
 			return &vmetrics.KafkaScope{Services: svcs, From: pFrom, To: to}
 		}
-		blocks, _, _ := runKafkaQuestions(ctx, src, briefingKafkaQuestions(), env, scopeFor)
+		blocks, _, _ := runKafkaQuestions(ctx, countingSrc(src, cost), briefingKafkaQuestions(), env, scopeFor)
 		r, f := briefingKafkaRows(blocks, fromMs)
 		rows, failed = append(rows, r...), failed || f
 	}

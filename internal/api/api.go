@@ -2137,7 +2137,7 @@ func (s *Server) getSystemStats(w http.ResponseWriter, r *http.Request) {
 		if diag, ok := logstore.Unwrap(s.logs).(logstore.Diagnoser); ok {
 			st.Health.ESQueryErrors = diag.Diagnostics().QueryErrors
 		}
-		return st, nil
+		return withBriefingCost(st), nil // v0.10.1728 — briefing tik maliyeti
 	})
 }
 

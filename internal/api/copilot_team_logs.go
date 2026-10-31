@@ -73,6 +73,9 @@ type teamLogsOutcome struct {
 	FromMs int64                    `json:"fromMs"`
 	ToMs   int64                    `json:"toMs"`
 	DurMs  int64                    `json:"durMs"`
+	// issued — v0.10.1728: bu çağrı logstore'a gitti (önbellek isabeti değil);
+	// briefing tik maliyeti ES/CH sayımı. JSON'a girmez.
+	issued bool
 }
 
 // teamLogsPending — başlamış okuma: sonuç kanalı + bekleme sınırı.
@@ -218,7 +221,7 @@ func (s *Server) readTeamLogs(ctx context.Context, cfg string, fields, values []
 	}
 	t0 := time.Now()
 	res, err := s.logs.TeamRecentLogs(ctx, logstore.TeamLogsQuery{Values: values, From: from, To: to})
-	o.DurMs = time.Since(t0).Milliseconds()
+	o.DurMs, o.issued = time.Since(t0).Milliseconds(), true
 	switch {
 	case errors.Is(err, logstore.ErrTeamLogsUnsupported), errors.Is(err, logstore.ErrTeamLogsDisabled):
 		o.State = teamLogsUnsupported
