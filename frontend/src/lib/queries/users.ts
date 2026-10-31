@@ -13,6 +13,26 @@ export function useUsers() {
   });
 }
 
+// v0.10.1731 — /users/:id detay sayfası.
+export function useUserDetail(id: string) {
+  return useQuery({
+    queryKey: keys.users.detail(id),
+    queryFn: () => api.getUser(id),
+    enabled: !!id,
+  });
+}
+
+// v0.10.1731 — Değişiklikler sekmesi: bu kullanıcıyı HEDEF alan audit
+// kayıtları, sunucuda süzülür (target=user&targetId=id), en yeni önce, ≤100.
+// Yalnız sekme açıkken çekilir.
+export function useUserAudit(id: string, enabled: boolean) {
+  return useQuery({
+    queryKey: keys.users.audit(id),
+    queryFn: async () => (await api.auditLog('8760h', { target: 'user', targetId: id, limit: 100 })) ?? [],
+    enabled: enabled && !!id,
+  });
+}
+
 // Custom-role catalog — drives the per-row picker on /users. Fetched
 // alongside the user list, refreshed on every change so a role added
 // in Settings → Roles appears here without a hard reload.

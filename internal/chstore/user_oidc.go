@@ -26,7 +26,7 @@ func (s *Store) GetActiveUsersByLdapUsername(ctx context.Context, username strin
 	defer rows.Close()
 	var out []User
 	for rows.Next() {
-		u, err := scanUserRow(rows, s.hasLdapUsernameCol)
+		u, err := scanUserRow(rows, s.userCols())
 		if err != nil {
 			return nil, err
 		}

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, FormEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import { Topbar } from '@/components/Topbar';
 import { Empty } from '@/components/Spinner';
 import { readState } from '@/lib/readState';
@@ -223,7 +224,10 @@ export default function UsersPage() {
                           verticalAlign: 'middle', marginRight: 8,
                         }}>{u.email[0]}</span>
                       )}
-                      <span style={{ fontWeight: 600 }}>{u.email}</span>
+                      {/* v0.10.1731 — kimlik hücresi detay sayfasına link (satırın
+                          kendisi değil: satır içi rol/takım editörleri tıklanır). */}
+                      <Link to={`/users/${encodeURIComponent(u.id)}`} style={{ fontWeight: 600 }}
+                        title="Kullanıcı detayını aç">{u.email}</Link>
                       {u.blocked && (
                         <span className="badge b-err" style={{ marginLeft: 8 }}
                           title="Giriş yapamaz — engeli Actions sütunundan kaldırılır">Engelli</span>
@@ -544,7 +548,7 @@ function humanize(err: unknown): string {
 // just surface the API error verbatim in an alert. Confirm step
 // kept short so a misclick on the dropdown doesn't immediately
 // silently demote someone.
-function RoleEditor({ user, isMe, onChanged }: {
+export function RoleEditor({ user, isMe, onChanged }: {
   user: UserRow;
   isMe: boolean;
   onChanged: () => void;
@@ -608,7 +612,7 @@ function RoleEditor({ user, isMe, onChanged }: {
 // catalog also hides the picker — there's nothing to pick. The
 // dropdown's first option is the "no custom role" sentinel; picking
 // it clears the pointer server-side via api.setUserCustomRole('').
-function CustomRoleEditor({ user, catalog, onChanged }: {
+export function CustomRoleEditor({ user, catalog, onChanged }: {
   user: UserRow;
   catalog: CustomRole[];
   onChanged: () => void;
@@ -662,7 +666,7 @@ function CustomRoleEditor({ user, catalog, onChanged }: {
 // (back to "Unassigned"). datalist suggestions help admins
 // pick a consistent team name across users rather than
 // fat-fingering variants of the same team.
-function TeamEditor({ user, suggestions, onChanged }: {
+export function TeamEditor({ user, suggestions, onChanged }: {
   user: UserRow;
   suggestions: string[];
   onChanged: () => void;

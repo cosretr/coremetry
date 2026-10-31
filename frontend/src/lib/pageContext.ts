@@ -46,7 +46,7 @@ export const ROUTE_PAGES: Record<string, PageId> = {
   '/runbooks': 'runbooks', '/runbook': 'runbook', '/runbook-exec': 'runbook-exec',
   '/shift': 'shift', '/status': 'status', '/system': 'system', '/system/:tab': 'system',
   '/admin/:tab': 'admin', '/ai': 'ai', '/settings': 'settings', '/settings/:section': 'settings',
-  '/users': 'users', '/profile': 'profile', '/login': 'login',
+  '/users': 'users', '/users/:id': 'users', '/profile': 'profile', '/login': 'login',
   '/public/trace': 'public-trace', '/public-status': 'public-status',
   '/design': 'design', // v0.10.919 — yalnız geliştirme kataloğu
   '/cosre': 'cosre', // v0.10.1125 — bağımsız CoSRE sohbet sayfası (bağlamsız: filo geneli)

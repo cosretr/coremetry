@@ -317,6 +317,9 @@ type Store struct {
 	// entirely. When false the INSERT/SELECT omit the column (LdapUsername
 	// stays "") and the identity-overlap read falls back to email-only.
 	hasLdapUsernameCol bool
+	// hasRoleLockedCol — users.role_locked (v0.10.1731) indi mi; aynı
+	// sözleşme (auth-kritik INSERT kolon listesi probe'a bağlı).
+	hasRoleLockedCol bool
 
 	// hasProblemCmpCol — `problems` tablosunda comparator kolonu var mı
 	// (v0.9.976). hasLdapUsernameCol ile AYNI sınıf: `problems` Coremetry'nin
@@ -2277,6 +2280,9 @@ func canonicalTables(sd, ld, md int) []string {
 			-- user in O(1). Email stays the canonical identity; empty for
 			-- local/OIDC accounts. See hasLdapUsernameCol on the Store.
 			ldap_username LowCardinality(String) DEFAULT '',
+			-- v0.10.1731 — 1 = admin bu LDAP hesabının rolünü elle verdi;
+			-- giriş yolu AD grup eşlemesiyle EZMEZ (hasRoleLockedCol).
+			role_locked   UInt8 DEFAULT 0,
 			version       UInt64 DEFAULT toUnixTimestamp64Nano(now64(9))
 		) ENGINE = ReplacingMergeTree(version)
 		ORDER BY id`,
@@ -4049,6 +4055,10 @@ func (s *Store) migrate(ctx context.Context) error {
 		// branch is N/A here). The hasLdapUsernameCol probe below then
 		// keeps the auth-critical INSERT column list honest regardless.
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS ldap_username LowCardinality(String) DEFAULT ''`,
+		// v0.10.1731 — rol kilidi (kullanıcı detay sayfası). Aynı state-tablo
+		// sınıfı; hasRoleLockedCol probe'u kolon inene dek INSERT/SELECT'ten
+		// düşürür (iki-boot sözleşmesi: kolonu ekleyen boot false okuyabilir).
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS role_locked UInt8 DEFAULT 0`,
 		// v0.5.254 — Problem AI auto-explain. The background
 		// problemExplainer goroutine fills these for open critical
 		// problems within ~30s of opening; the UI surfaces the
@@ -4504,6 +4514,15 @@ func (s *Store) migrate(ctx context.Context) error {
 	s.hasLdapUsernameCol = luErr == nil
 	if !s.hasLdapUsernameCol {
 		log.Printf("[chstore] `ldap_username` column not present on users (%v) — INSERT/SELECT omit it, LDAP group-sync identity overlap falls back to email-only", luErr)
+	}
+
+	// role_locked probe (v0.10.1731) — ldap_username ile birebir aynı şekil:
+	// false iken UpsertUser/okumalar kolonu atlar, girişler kırılmaz.
+	rlRows, rlErr := s.conn.Query(ctx, `SELECT role_locked FROM users LIMIT 1 SETTINGS max_execution_time = 3`)
+	maybeCloseRows(rlRows, rlErr)
+	s.hasRoleLockedCol = rlErr == nil
+	if !s.hasRoleLockedCol {
+		log.Printf("[chstore] `role_locked` column not present on users (%v) — role lock omitted until it lands", rlErr)
 	}
 
 	// comparator probe (v0.9.976) — ldap_username ile birebir aynı şekil.

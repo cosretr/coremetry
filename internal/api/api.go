@@ -5845,7 +5845,8 @@ func resolveLdapLoginRole(existing *chstore.User, groupRole string, roleFromGrou
 	case existing == nil:
 		// first-time login — role already holds groupRole
 	case existing.AuthProvider == "ldap" && existing.Role != "":
-		if !roleFromGroup {
+		// v0.10.1731 — RoleLocked: admin elle verdi, AD eşlemesi ezmez.
+		if !roleFromGroup || existing.RoleLocked {
 			role = existing.Role
 		}
 	case existing.AuthProvider != "ldap" && existing.Role != "":
@@ -5927,30 +5928,7 @@ func (s *Server) loginViaLDAP(ctx context.Context, email, password string, exist
 	}
 	firstLogin := existing == nil
 	if existing != nil {
-		u.ID = existing.ID
-		u.CreatedAt = existing.CreatedAt
-		// v0.8.238 — ReplacingMergeTree replaces the WHOLE row: carry
-		// the admin-managed fields forward or this login would silently
-		// wipe them (latent bug: every LDAP re-login cleared team +
-		// custom role + any stored password hash).
-		u.Team = existing.Team
-		u.CustomRole = existing.CustomRole
-		u.PasswordHash = existing.PasswordHash
-		u.LastLoginAt = existing.LastLoginAt // v0.8.450 — whole-row carry
-		// Directory values refresh on every login but never WIPE a
-		// stored value when the attribute is absent — an admin's
-		// manual fill survives a sparse directory entry.
-		if u.FullName == "" {
-			u.FullName = existing.FullName
-		}
-		if u.Org == "" {
-			u.Org = existing.Org
-		}
-		// v0.8.526 — never WIPE a stored ldap_username on a sparse
-		// re-login (whole-row replace); a present directory value refreshes.
-		if u.LdapUsername == "" {
-			u.LdapUsername = existing.LdapUsername
-		}
+		u = carryLdapLoginRow(existing, u) // whole-row carry — user_detail.go
 	} else {
 		idBytes := make([]byte, 8)
 		_, _ = rand.Read(idBytes)
@@ -6127,13 +6105,11 @@ func (s *Server) provisionLDAPUser(w http.ResponseWriter, r *http.Request) {
 		AuthProvider: "ldap",
 	}
 	if existing != nil {
-		u.ID = existing.ID
-		u.CreatedAt = existing.CreatedAt
-		// Preserve any password hash on a converting user — they may
-		// have been local before. After a successful LDAP login the
-		// hash becomes irrelevant but keeping it costs nothing.
-		u.PasswordHash = existing.PasswordHash
-		u.LastLoginAt = existing.LastLoginAt // v0.8.450 — whole-row carry
+		// v0.10.1731 — whole-row replace: TÜM satır taşınır (takım, özel rol,
+		// foto, dizin kimliği, rol kilidi); önceden yalnız 4 alan taşınıp
+		// gerisi siliniyordu. Şifre özeti de kalır (dönüşen yerel hesap).
+		u = *existing
+		u.Role, u.AuthProvider = body.Role, "ldap"
 	} else {
 		idBytes := make([]byte, 8)
 		_, _ = rand.Read(idBytes)
@@ -7123,6 +7099,7 @@ func (s *Server) setUserRole(w http.ResponseWriter, r *http.Request) {
 	}
 	prevRole := target.Role
 	target.Role = role
+	target.RoleLocked = target.RoleLocked || target.AuthProvider == "ldap" // v0.10.1731
 	if err := s.store.UpsertUser(r.Context(), *target); err != nil {
 		writeErr(w, err)
 		return

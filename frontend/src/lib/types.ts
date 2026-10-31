@@ -6501,6 +6501,38 @@ export interface AnomalySilence {
   active: boolean;
 }
 
+// v0.10.1731 — GET /api/users/{id} (internal/api/user_detail.go). `user` Go
+// chstore.User'ın JSON'u; UserRow ile yapısal olarak uyumlu (satır editörleri
+// ikisini de alır). Şifre özeti ve foto baytları hiç gelmez.
+export interface UserDetailUser {
+  id: string;
+  email: string;
+  role: string;
+  disabled: boolean;
+  blocked?: boolean;
+  authProvider: string;      // local | ldap | oidc | trusted
+  team: string;
+  customRole?: string;
+  createdAt: number;         // unix ns
+  hasPhoto: boolean;
+  fullName?: string;
+  org?: string;
+  lastLoginAt: number;       // unix ns, 0 = hiç
+  ldapUsername?: string;
+  // Admin bu LDAP hesabının rolünü elle verdi; giriş AD eşlemesiyle ezmez.
+  roleLocked?: boolean;
+}
+export interface UserLdapGroup {
+  cn: string;
+  dn: string;
+}
+export interface UserDetail {
+  user: UserDetailUser;
+  groups: UserLdapGroup[];
+  groupSyncEnabled: boolean;
+  groupsSyncedAt?: number;   // unix ns
+}
+
 // AuditEntry — append-only audit row consumed by /admin/audit.
 export interface AuditEntry {
   id: string;

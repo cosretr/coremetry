@@ -83,6 +83,7 @@ const CoSREShared       = lazy(() => import('./pages/CoSREShared'));
 const Profile           = lazy(() => import('./pages/Profile'));
 const Settings          = lazy(() => import('./pages/Settings'));
 const Users             = lazy(() => import('./pages/Users'));
+const UserDetail        = lazy(() => import('./pages/settings/UserDetail')); // v0.10.1731
 const PublicStatus      = lazy(() => import('./pages/PublicStatus'));
 const PublicTrace       = lazy(() => import('./pages/PublicTrace'));
 // v0.8.9 — the ten /admin/* pages are consolidated into one System area
@@ -228,6 +229,7 @@ export default function App() {
             <Route path="/settings"          element={<Navigate to="/settings/smtp" replace />} />
             <Route path="/settings/:section" element={<Settings />} />
             <Route path="/users"          element={<Users />} />
+            <Route path="/users/:id"      element={<UserDetail />} />
             {/* v0.8.482 — /errors eski linkleri tek atlamada /problems'a iner
                 (önceden 13 satırlık Spinner'lı redirect sayfası + ayrı chunk'tı;
                 /status v457 emsali). */}

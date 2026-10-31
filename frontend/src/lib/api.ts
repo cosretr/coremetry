@@ -1077,7 +1077,7 @@ export const api = {
     }),
 
   // Audit log (admin-only read).
-  auditLog: (since: GoDuration = '24h', filters: { actor?: string; action?: string; target?: string; targetId?: string } = {}) =>
+  auditLog: (since: GoDuration = '24h', filters: { actor?: string; action?: string; target?: string; targetId?: string; limit?: number } = {}) =>
     get<import('./types').AuditEntry[]>(`/api/admin/audit?${qs({ since, ...filters })}`),
   // Alert-tuning noisy-rules report (v0.5.131). Cached server-
   // side 5 min so a burst of operators viewing it during morning
@@ -3632,6 +3632,13 @@ export const api = {
 
   // ── User management (admin) ──────────────────────────────────────────────
   listUsers: () => get<UserRow[] | null>('/api/users'),
+  // v0.10.1731 — kullanıcı detay sayfası (admin): satır + LDAP grupları.
+  getUser: (id: string) =>
+    get<import('./types').UserDetail>(`/api/users/${encodeURIComponent(id)}`),
+  // v0.10.1731 — "Rolü AD'ye geri ver": rol kilidi kalkar, sonraki LDAP
+  // girişinde rol yine AD grup eşlemesinden gelir (audit: user.role_unlock).
+  clearUserRoleLock: (id: string) =>
+    request<{ id: string; roleLocked: boolean }>(`/api/users/${encodeURIComponent(id)}/role-lock`, { method: 'DELETE' }),
   // List active users whose team matches. Returns a slim
   // directory shape (no password hash, no auth provider) and
   // is open to any authenticated user (not admin-gated).

@@ -189,6 +189,9 @@ export const keys = {
     // Users page's single `invalidateQueries(keys.users.all)` after
     // a mutation refreshes both the list and the role picker.
     customRoles: ['users', 'custom-roles'] as const,
+    // v0.10.1731 — detay sayfası; users.all altında (aynı invalidate tazeler).
+    detail:      (id: string) => ['users', 'detail', id] as const,
+    audit:       (id: string) => ['users', 'audit', id] as const,
   },
 
   // Explore v2 multi-query builder (Phase 2). `sig` is the stable

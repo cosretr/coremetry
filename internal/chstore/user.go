@@ -57,38 +57,106 @@ type User struct {
 	// it forward (whole-row replace). Only persisted/read when the store
 	// probed the column present (Store.hasLdapUsernameCol).
 	LdapUsername string `json:"ldapUsername,omitempty"`
+	// RoleLocked — v0.10.1731 (kullanıcı detay sayfası, "Rol kilitli"): admin
+	// bir LDAP hesabının rolünü elle değiştirince true olur; loginViaLDAP AD
+	// grup eşlemesiyle bu rolü EZMEZ (resolveLdapLoginRole). "Rolü AD'ye geri
+	// ver" (DELETE /api/users/{id}/role-lock) temizler. Whole-row replace:
+	// her RMW taşır. Yalnız Store.hasRoleLockedCol iken yazılır/okunur.
+	RoleLocked bool `json:"roleLocked,omitempty"`
+}
+
+// userCols — users tablosunun probe'lu (isteğe bağlı) kolonları. Okuma
+// projeksiyonu, tarama hedefleri ve INSERT kolon listesi AYNI değerden
+// türer; biri kolonu adlayıp diğeri adlamazsa satır kayar (v0.10.1731).
+type userCols struct {
+	ldap       bool // ldap_username (v0.8.526)
+	roleLocked bool // role_locked (v0.10.1731)
+}
+
+func (s *Store) userCols() userCols {
+	return userCols{ldap: s.hasLdapUsernameCol, roleLocked: s.hasRoleLockedCol}
+}
+
+// userInsertColumns — SAF: UpsertUser'ın kolon listesi. userInsertArgs ile
+// aynı sırada büyür (user_cols_test.go pinler).
+func userInsertColumns(c userCols) string {
+	cols := "id, email, password_hash, role, disabled, auth_provider, team, custom_role, photo, full_name, org, last_login_at"
+	if c.ldap {
+		cols += ", ldap_username"
+	}
+	if c.roleLocked {
+		cols += ", role_locked"
+	}
+	return cols
+}
+
+// userInsertArgs — SAF: userInsertColumns sırasıyla değerler.
+func userInsertArgs(u User, c userCols) []any {
+	provider := u.AuthProvider
+	if provider == "" {
+		provider = "local"
+	}
+	// Custom role only applies when base role is viewer; defensively
+	// clear it for admin/editor so a stale assignment doesn't surface
+	// after a role promotion.
+	custom := u.CustomRole
+	if u.Role != "viewer" {
+		custom = ""
+	}
+	args := []any{u.ID, u.Email, u.PasswordHash, u.Role, userDisabledCode(u), provider, u.Team, custom,
+		string(u.Photo), u.FullName, u.Org, time.Unix(0, u.LastLoginAt).UTC()}
+	if c.ldap {
+		args = append(args, u.LdapUsername)
+	}
+	if c.roleLocked {
+		var rl uint8
+		if u.RoleLocked {
+			rl = 1
+		}
+		args = append(args, rl)
+	}
+	return args
 }
 
 // userSelectExpr is the shared column list for the single-row user
-// reads. ldap_username (v0.8.526) is appended only when the store probed
-// the column present, so an install that pre-dates it (or a transient
-// mid-deploy skew) still reads users cleanly.
-func (s *Store) userSelectExpr() string {
+// reads. Probed columns (ldap_username v0.8.526, role_locked v0.10.1731)
+// are appended only when the store probed them present, so an install
+// that pre-dates them (or a transient mid-deploy skew) still reads users.
+func (s *Store) userSelectExpr() string { return userSelectExprFor(s.userCols()) }
+
+func userSelectExprFor(c userCols) string {
 	expr := `id, email, password_hash, role, disabled, auth_provider, team, custom_role,
 	       toUnixTimestamp64Nano(created_at), photo, full_name, org,
 	       toUnixTimestamp64Nano(last_login_at)`
-	if s.hasLdapUsernameCol {
+	if c.ldap {
 		expr += `, ldap_username`
+	}
+	if c.roleLocked {
+		expr += `, role_locked`
 	}
 	return expr
 }
 
-// scanUserRow scans one user row produced by userSelectExpr. hasLdap must
-// match the flag used to build the projection.
-func scanUserRow(sc interface{ Scan(...any) error }, hasLdap bool) (*User, error) {
+// scanUserRow scans one user row produced by userSelectExprFor(c); c must
+// match the flags used to build the projection.
+func scanUserRow(sc interface{ Scan(...any) error }, c userCols) (*User, error) {
 	var u User
-	var disabled uint8
+	var disabled, roleLocked uint8
 	var photo string
 	dst := []any{&u.ID, &u.Email, &u.PasswordHash, &u.Role, &disabled, &u.AuthProvider,
 		&u.Team, &u.CustomRole, &u.CreatedAt, &photo, &u.FullName, &u.Org, &u.LastLoginAt}
-	if hasLdap {
+	if c.ldap {
 		dst = append(dst, &u.LdapUsername)
+	}
+	if c.roleLocked {
+		dst = append(dst, &roleLocked)
 	}
 	if err := sc.Scan(dst...); err != nil {
 		return nil, err
 	}
 	u.Disabled = disabled != 0
 	u.Blocked = disabled == userBlocked
+	u.RoleLocked = roleLocked != 0
 	u.Photo, u.HasPhoto = []byte(photo), photo != ""
 	return &u, nil
 }
@@ -101,7 +169,7 @@ func (s *Store) GetUserByEmail(ctx context.Context, email string) (*User, error)
 		FROM users FINAL
 		WHERE email = ? AND disabled = 0
 		LIMIT 1`, email)
-	u, err := scanUserRow(row, s.hasLdapUsernameCol)
+	u, err := scanUserRow(row, s.userCols())
 	if err != nil {
 		// clickhouse-go returns sql.ErrNoRows analogue; surface as nil/nil.
 		if err.Error() == "sql: no rows in result set" {
@@ -126,7 +194,7 @@ func (s *Store) GetUserByEmailAnyState(ctx context.Context, email string) (*User
 		ORDER BY disabled ASC, created_at DESC
 		LIMIT 1
 		SETTINGS max_execution_time = 5`, email)
-	u, err := scanUserRow(row, s.hasLdapUsernameCol)
+	u, err := scanUserRow(row, s.userCols())
 	if err != nil {
 		if err.Error() == "sql: no rows in result set" {
 			return nil, nil
@@ -155,7 +223,7 @@ func (s *Store) GetUserByLdapUsername(ctx context.Context, username string) (*Us
 		ORDER BY disabled ASC, created_at DESC
 		LIMIT 1
 		SETTINGS max_execution_time = 5`, username)
-	u, err := scanUserRow(row, s.hasLdapUsernameCol)
+	u, err := scanUserRow(row, s.userCols())
 	if err != nil {
 		if err.Error() == "sql: no rows in result set" {
 			return nil, nil
@@ -171,7 +239,7 @@ func (s *Store) GetUserByID(ctx context.Context, id string) (*User, error) {
 		FROM users FINAL
 		WHERE id = ? AND disabled = 0
 		LIMIT 1`, id)
-	u, err := scanUserRow(row, s.hasLdapUsernameCol)
+	u, err := scanUserRow(row, s.userCols())
 	if err != nil {
 		if err.Error() == "sql: no rows in result set" {
 			return nil, nil
@@ -205,36 +273,17 @@ func (s *Store) TouchUserLogin(ctx context.Context, userID string) error {
 }
 
 func (s *Store) UpsertUser(ctx context.Context, u User) error {
-	// ldap_username joins the column list only when the store probed it
-	// present. This is the auth-critical guard: UpsertUser runs on EVERY
-	// login via TouchUserLogin, so a naked column list that named an
-	// absent column would break all logins (the v0.8.186 code-16 hazard
-	// class, applied to the write path that matters most).
-	cols := "id, email, password_hash, role, disabled, auth_provider, team, custom_role, photo, full_name, org, last_login_at"
-	if s.hasLdapUsernameCol {
-		cols += ", ldap_username"
-	}
-	batch, err := s.conn.PrepareBatch(ctx, "INSERT INTO users ("+cols+")")
+	// Probed columns join the list only when the store saw them present.
+	// This is the auth-critical guard: UpsertUser runs on EVERY login via
+	// TouchUserLogin, so a naked column list that named an absent column
+	// would break all logins (the v0.8.186 code-16 hazard class, applied
+	// to the write path that matters most).
+	c := s.userCols()
+	batch, err := s.conn.PrepareBatch(ctx, "INSERT INTO users ("+userInsertColumns(c)+")")
 	if err != nil {
 		return fmt.Errorf("prepare users: %w", err)
 	}
-	dis := userDisabledCode(u)
-	provider := u.AuthProvider
-	if provider == "" {
-		provider = "local"
-	}
-	// Custom role only applies when base role is viewer; defensively
-	// clear it for admin/editor so a stale assignment doesn't surface
-	// after a role promotion.
-	custom := u.CustomRole
-	if u.Role != "viewer" {
-		custom = ""
-	}
-	args := []any{u.ID, u.Email, u.PasswordHash, u.Role, dis, provider, u.Team, custom,
-		string(u.Photo), u.FullName, u.Org, time.Unix(0, u.LastLoginAt).UTC()}
-	if s.hasLdapUsernameCol {
-		args = append(args, u.LdapUsername)
-	}
+	args := userInsertArgs(u, c)
 	if err := batch.Append(args...); err != nil {
 		return fmt.Errorf("append user: %w", err)
 	}
@@ -382,7 +431,7 @@ func (s *Store) GetUserByIDAnyState(ctx context.Context, id string) (*User, erro
 		FROM users FINAL
 		WHERE id = ?
 		LIMIT 1`, id)
-	u, err := scanUserRow(row, s.hasLdapUsernameCol)
+	u, err := scanUserRow(row, s.userCols())
 	if err != nil {
 		if err.Error() == "sql: no rows in result set" {
 			return nil, nil

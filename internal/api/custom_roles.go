@@ -93,9 +93,15 @@ func (s *Server) deleteCustomRole(w http.ResponseWriter, r *http.Request) {
 			if users[i].CustomRole != name {
 				continue
 			}
-			u := users[i]
+			// v0.10.1731 — ListUsers foto/ldap_username/rol kilidi taşımaz;
+			// liste satırını yazmak whole-row replace'te onları siliyordu.
+			// Tam satır yeniden okunur.
+			u, gerr := s.store.GetUserByIDAnyState(r.Context(), users[i].ID)
+			if gerr != nil || u == nil {
+				continue
+			}
 			u.CustomRole = ""
-			_ = s.store.UpsertUser(r.Context(), u)
+			_ = s.store.UpsertUser(r.Context(), *u)
 			s.meUsers.clear() // v0.8.519
 		}
 	}
