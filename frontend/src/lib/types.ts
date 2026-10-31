@@ -8189,6 +8189,14 @@ export interface CosreScope {
   team?: string;
   services?: string[];
   trimmed?: number;
+  /** v0.10.1725 — sunucu "Takımını seç" kartını istiyor (no_team + takım biçimli soru). */
+  teamPick?: boolean;
+}
+
+/** GET /api/copilot/scope-names?kind=team — services[i] names[i]'nin servis sayısı (v0.10.1725). */
+export interface CopilotScopeNames {
+  names: string[];
+  services?: number[];
 }
 
 /** CoSRE v2 araç seti dilim 2 — system_settings `ai.userScope` (GET /api/ai/user-scope; PUT admin). */

@@ -73,6 +73,7 @@ import type { ChatSendOpts } from '@/components/ai/useChatThread';
 import { ChatHistoryPanel, CosreComposerForm, CosreHeaderContext, deleteConversation } from '@/components/CopilotChat';
 import { CosreTeamScopeChip, CosreWelcomeV2 } from './CosreWelcomeV2';
 import { useCosreTeamScope } from './useCosreTeamScope';
+import { withTeamPick, type TeamPickResend } from './teamPick';
 import { briefingView } from './briefingView';
 import type { BriefingLineRef } from './BriefingFeed';
 import { Button } from '@/components/shadcn/button';
@@ -130,14 +131,16 @@ export function CosreChatV2({ defaultOpen = false }: CosreChatV2Props) {
     turns, ctxExcluded: ask.ctxExcluded, setCtxExcluded: ask.setCtxExcluded,
     baseCtxItems: ask.baseCtxItems, conversationId: conv.conversationId,
   });
-  const live = useRef({ ask, codeLocked, busy, sendMessage, stop, pinBottom, prefill: composer.prefill, turns, explainCtx, conv });
-  live.current = { ask, codeLocked, busy, sendMessage, stop, pinBottom, prefill: composer.prefill, turns, explainCtx, conv };
+  const live = useRef({ ask, codeLocked, busy, sendMessage, stop, pinBottom, prefill: composer.prefill, turns, explainCtx, conv, teamScope });
+  live.current = { ask, codeLocked, busy, sendMessage, stop, pinBottom, prefill: composer.prefill, turns, explainCtx, conv, teamScope };
   /** Gönderimin `context`i — v1 useChatThread.send ile aynı katmanlar. */
   const contextFor = (q: string, so: ChatSendOpts | undefined, base: readonly ChatTurn[]) => {
     const c = live.current;
     const { explain, subject, ...scope } = c.explainCtx.resolve(base);
-    return cosreRequestContext({ ...c.ask.reqCtx, ...scope }, { profile: c.ask.profile, deep: c.ask.deep, code: c.ask.code }, q, so, c.codeLocked,
-      { conversation: c.conv.idRef.current, wikiRefs: prevWikiRefs(base), explain, subject });
+    // v0.10.1725 — bu tarayıcıda seçilen takım (karşılama / "Takımını seç" deposu) sunucu kapsamını çözer.
+    const picked = c.teamScope.picked;
+    return withTeamPick(cosreRequestContext({ ...c.ask.reqCtx, ...scope }, { profile: c.ask.profile, deep: c.ask.deep, code: c.ask.code }, q, so, c.codeLocked,
+      { conversation: c.conv.idRef.current, wikiRefs: prevWikiRefs(base), explain, subject }), picked ? { userTeam: picked } : undefined);
   };
   // v0.10.1716 (brifing dilim 7) — "Sor" satırının ref'i; YALNIZ sonraki
   // gönderim taşır (context.briefingId + briefingLine), sonra düşer.
@@ -181,6 +184,24 @@ export function CosreChatV2({ defaultOpen = false }: CosreChatV2Props) {
     const context = ut ? contextFor(ut.text ?? '', ut.window ? { window: ut.window } : undefined, c.turns.slice(0, idx)) : undefined;
     pinBottom();
     void answerApproval(a, context);
+  };
+  // v0.10.1725 — "Takımını seç" kartı: son kullanıcı turu aynı soruyla yeniden
+  // sorulur (SDK regenerate, retry gibi) — seçilen takımla ya da açık kapsamsız bayrağıyla.
+  const resendTeamPick = (r: TeamPickResend) => {
+    const c = live.current;
+    if (c.busy) return;
+    const idx = c.turns.map(t => t.role).lastIndexOf('user');
+    if (idx < 0) return;
+    const ut = c.turns[idx];
+    const so: ChatSendOpts = { ...(ut.explainAsk ? { explainAsk: ut.explainAsk } : {}), ...(ut.window ? { window: ut.window } : {}) };
+    const context = withTeamPick(contextFor(ut.text ?? '', so, c.turns.slice(0, idx)), r);
+    pinBottom();
+    void regenerate(context ? { body: { context } } : undefined);
+  };
+  const teamPick = {
+    initial: teamScope.picked,
+    onPick: (name: string) => { teamScope.choose(name); resendTeamPick({ userTeam: name }); },
+    onUnscoped: () => resendTeamPick({ unscoped: true }),
   };
   const sendRef = useRef(send);
   sendRef.current = send;
@@ -381,7 +402,7 @@ export function CosreChatV2({ defaultOpen = false }: CosreChatV2Props) {
                     briefing={briefing} onPrefill={composer.prefill} onAskBriefingLine={r => { briefingAsk.current = r ?? null; }} onAsk={askChip} onAskExplain={askExplain} />
                 ) : (
                   <MessageList messages={messages} visibleParts={visibleParts} status={status} error={error}
-                    onAsk={askChip} onRetry={retry} onApproval={approve} />
+                    onAsk={askChip} onRetry={retry} onApproval={approve} teamPick={teamPick} />
                 )}
               </div>
             </div>

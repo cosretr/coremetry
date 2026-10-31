@@ -35,7 +35,9 @@ import type { CosreUIMessage } from '@/lib/cosre/resetReducer';
 import type { ChatExplainAsk, ChatTurn, CosreApprovalAnswer } from '@/lib/types';
 import { approvalAnswer, approvalViews } from '@/lib/cosre/approval';
 import { ApprovalCard } from './ApprovalCard';
-import { StepList, scopeChangeNotes, stepsView, stopBadges } from '../evidence';
+import { StepList, scopeChangeNotes, scopeOf, stepsView, stopBadges } from '../evidence';
+import { TeamPickCard } from './TeamPickCard';
+import { showTeamPick } from './teamPick';
 
 /** useChat durumu (ai ChatStatus ile aynı küme; tip importu katalogdan bağımsız). */
 export type CosreChatStatus = 'submitted' | 'streaming' | 'ready' | 'error';
@@ -54,9 +56,11 @@ export interface MessageListProps {
   onRetry?: () => void;
   /** agent-core S5 — onay kartı cevabı (son mesaj, akış yokken). Yoksa kart salt-okur. */
   onApproval?: (a: CosreApprovalAnswer) => void;
+  /** v0.10.1725 — "Takımını seç" kartı (son cevap, data-scope teamPick, akış yokken). Yoksa kart çizilmez. */
+  teamPick?: { initial?: string; onPick(team: string): void; onUnscoped(): void };
 }
 
-export function MessageList({ messages, visibleParts, status, error, onAsk, onRetry, onApproval }: MessageListProps) {
+export function MessageList({ messages, visibleParts, status, error, onAsk, onRetry, onApproval, teamPick }: MessageListProps) {
   const busy = status === 'submitted' || status === 'streaming';
   const last = messages.at(-1);
   const errText = status === 'error' && error ? error.message : undefined;
@@ -72,7 +76,7 @@ export function MessageList({ messages, visibleParts, status, error, onAsk, onRe
         return <AssistantMessage key={m.id} m={m} visibleParts={visibleParts} live={isLast && busy} error={isLast ? errText : undefined}
           explainAsk={prev?.role === 'user' ? prev.metadata?.explainAsk : undefined} scopeNote={scopeNotes.get(m.id)}
           followups={isLast && status === 'ready' ? onAsk : undefined} onRetry={isLast && errText ? onRetry : undefined}
-          onApproval={isLast && !busy ? onApproval : undefined} />;
+          onApproval={isLast && !busy ? onApproval : undefined} teamPick={isLast && !busy ? teamPick : undefined} />;
       })}
       {/* İlk parça gelmeden (yalnız soru gitti): v1 bekleyiş göstergesi. */}
       {busy && last?.role !== 'assistant' && (last?.metadata?.explainAsk
@@ -91,7 +95,7 @@ function UserMessage({ m }: { m: CosreUIMessage }) {
   return <ChatBubble turn={turn} />;
 }
 
-function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, explainAsk, onApproval, scopeNote }: {
+function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, explainAsk, onApproval, scopeNote, teamPick }: {
   m: CosreUIMessage; visibleParts: (m: CosreUIMessage) => Part[]; live: boolean; error?: string;
   /** araç seti dilim 5 — kapsam değişimi notu (önceki cevaptan farklıysa). */
   scopeNote?: string;
@@ -102,6 +106,7 @@ function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, ex
   explainAsk?: ChatExplainAsk;
   /** agent-core S5 — onay kartı cevabı; yoksa kart düğmesiz. */
   onApproval?: (a: CosreApprovalAnswer) => void;
+  teamPick?: MessageListProps['teamPick'];
 }) {
   const approvals = useMemo(() => approvalViews(m), [m]);
   // araç seti dilim 5 (G4) — adım kartları cevabın ÜSTÜNDE (data-tool-result / data-stop).
@@ -132,6 +137,9 @@ function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, ex
         <ApprovalCard key={v.approval.toolCallId} view={v} disabled={!onApproval}
           onAnswer={onApproval ? ok => onApproval(approvalAnswer(v, ok)) : undefined} />
       ))}
+      {teamPick && showTeamPick(scopeOf(m.parts)) && (
+        <TeamPickCard initial={teamPick.initial} onPick={teamPick.onPick} onUnscoped={teamPick.onUnscoped} />
+      )}
       {showFu && (
         <div className="cm-followups" data-cosre-followups="">
           <FollowupChips followups={turn.followups} suggestions={turn.suggestions} fallback={FOLLOWUPS}

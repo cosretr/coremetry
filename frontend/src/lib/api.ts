@@ -1,5 +1,5 @@
 import type {
-OracleLogsResponse,
+OracleLogsResponse, CopilotScopeNames,
   McpServersSnapshot, McpServerInput, McpServerTestResult,
   PurgeResult,
   Service, ServiceEdge, TracesResponse, TracesExtrasResponse, TraceDetailResponse, TraceBundleResponse,
@@ -2347,7 +2347,7 @@ export const api = {
   copilotConfig:         () => get<{ enabled: boolean; model?: string; wiki?: boolean; profiles?: import('./types').CopilotProfileOption[]; defaultProfile?: string; codeRead?: import('./types').CopilotCodeRead }>(`/api/copilot/config`),
   // v0.10.1138 — composer `@team:` tamamlaması (sunucu araması, ≤20).
   copilotScopeNames:     (kind: 'team', q: string) =>
-    get<{ names: string[] }>(`/api/copilot/scope-names?kind=${kind}&q=${encodeURIComponent(q)}`),
+    get<CopilotScopeNames>(`/api/copilot/scope-names?kind=${kind}&q=${encodeURIComponent(q)}`),
   // v0.10.702 — boş sohbetin veri çipleri (takımın en kötü servisi + yolu).
   // v0.10.1382 — gruplu seçenekler + env (yalnız P1'e uygulanır). `?` eksikti:
   // qs önek koymaz, URL "/api/copilot/startersrange_s=…" oluyordu.

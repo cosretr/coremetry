@@ -120,7 +120,7 @@ func requestScopeEscape(scope *chatScope, command string) bool {
 	return chatScopeActive(scope, command)
 }
 
-// resolveUserScope — okumalar + karar. teamOverride (yalnız evalset fikstürü,
+// resolveUserScope — okumalar + karar. teamOverride (evalset fikstürü ya da v0.10.1725 "Takımını seç" kartının context.userTeam seçimi;
 // chatEvalMode.UserTeam) doluysa users okunmaz.
 func (s *Server) resolveUserScope(ctx context.Context, escape bool, teamOverride string) userScope {
 	in := userScopeInput{Enabled: s.aiUserScopeEnabled(ctx), Escape: escape}

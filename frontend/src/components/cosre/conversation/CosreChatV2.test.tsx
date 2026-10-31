@@ -462,6 +462,66 @@ describe('CosreChatV2 × v1 paylaşılan karşılama + composer (plan §10)', ()
     expect(calls[2].body.messages).toEqual(calls[1].body.messages);
   });
 
+  // v0.10.1725 — "Takımını seç" kartı (operatör onayı, mockup): data-scope
+  // no_team + teamPick → kart; seçim karşılama deposuna yazılır ve aynı soru
+  // context.userTeam ile; "Kapsamsız devam et" context.unscoped ile yeniden sorulur.
+  const TEAM_SCOPE = '{"count":2,"reason":"team","services":["billing-api","orders-api"],"team":"acme-team","unscoped":false}';
+  const PICK_SCOPE = '{"count":0,"reason":"no_team","teamPick":true,"unscoped":true}';
+  const pickCard = () => vi.waitFor(() => {
+    const c = sheet()!.querySelector<HTMLElement>('[data-cosre-teampick]');
+    if (!c) throw new Error('kart yok');
+    return c;
+  });
+  const btnIn = (scope: ParentNode, sel: string) => scope.querySelector<HTMLButtonElement>(sel)!;
+
+  it('Takımını seç: satır seç → depo + aynı soru userTeam ile', async () => {
+    const names = vi.spyOn(api, 'copilotScopeNames').mockResolvedValue({ names: ['payments', 'orders'], services: [12, 7] });
+    v2Body = cosreFixture('ui-stream-v1').replace(TEAM_SCOPE, PICK_SCOPE);
+    await render({ defaultOpen: true }, '/');
+    await typeAndSend('servislerim nasıl?');
+    const card = await pickCard();
+    const row = await vi.waitFor(() => {
+      const r = card.querySelector<HTMLElement>('[data-item="payments"]');
+      if (!r) throw new Error('satır yok');
+      return r;
+    });
+    expect(row.textContent).toContain('12 servis');
+    expect(names).toHaveBeenCalled();
+    expect(btnIn(card, '[data-teampick-submit]').disabled).toBe(true);
+    await act(async () => { row.click(); });
+    expect(card.querySelector('[data-item="payments"]')!.hasAttribute('data-picked')).toBe(true);
+    v2Body = cosreFixture('ui-stream-v1').replace('01M62F9N000000000000000000', '01M62F9N000000000000000001');
+    await act(async () => { btnIn(card, '[data-teampick-submit]').click(); });
+    await vi.waitFor(() => expect(calls).toHaveLength(2));
+    expect(store.get('coremetry.cosre.team')).toBe('payments');
+    expect(calls[1].body.context).toMatchObject({ userTeam: 'payments' });
+    expect(calls[1].body.context?.unscoped).toBeUndefined();
+    expect(calls[1].body.messages).toEqual(calls[0].body.messages);
+  });
+
+  it('Takımını seç: Kapsamsız devam et → aynı soru unscoped bayrağıyla, takım yazılmaz', async () => {
+    vi.spyOn(api, 'copilotScopeNames').mockResolvedValue({ names: ['payments'], services: [12] });
+    v2Body = cosreFixture('ui-stream-v1').replace(TEAM_SCOPE, PICK_SCOPE);
+    await render({ defaultOpen: true }, '/');
+    await typeAndSend('ekibimde hata var mı?');
+    const card = await pickCard();
+    v2Body = cosreFixture('ui-stream-v1').replace('01M62F9N000000000000000000', '01M62F9N000000000000000001');
+    await act(async () => { btnIn(card, '[data-teampick-unscoped]').click(); });
+    await vi.waitFor(() => expect(calls).toHaveLength(2));
+    expect(calls[1].body.context).toMatchObject({ unscoped: true });
+    expect(calls[1].body.context?.userTeam).toBeUndefined();
+    expect(store.has('coremetry.cosre.team')).toBe(false);
+    expect(calls[1].body.messages).toEqual(calls[0].body.messages);
+  });
+
+  it('teamPick işareti yoksa (çapalı soru / kapsamlı) kart çizilmez', async () => {
+    await render({ defaultOpen: true }, '/');
+    v2Body = cosreFixture('ui-stream-v1');
+    await typeAndSend('q');
+    await vi.waitFor(() => expect(sheet()!.querySelector('.cm-msg-ai')).not.toBeNull());
+    expect(sheet()!.querySelector('[data-cosre-teampick]')).toBeNull();
+  });
+
   it('akarken Durdur → yarım cevap + not', async () => {
     let release = () => {};
     const gate = sseFetch(cosreFixture('ui-stream-v1-reset'), fr => fr.includes('"delta":"Düzeltilmiş tam metin."'));

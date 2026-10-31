@@ -90,12 +90,48 @@ func teamScopeCtxFrom(trace, service string, explain bool, briefingID string, pa
 }
 
 // scopeAddendumFor — SAF: v2 döngüsünün kapsam eki. Kapsamsız alışverişte
-// takım gerekmiyorsa (çapalı soru) "takım sorma" eki; aksi halde
-// userScopeAddendum aynen (kapsamlı / kaçış / kapalı / sorulmuş dalları).
-func scopeAddendumFor(u userScope, msgs []copilot.ChatMessage, need bool) string {
+// takım gerekmiyorsa (çapalı soru) "takım sorma" eki; kullanıcı "Kapsamsız
+// devam et" dediyse (v0.10.1725, declined) "bir daha sorma, tüm servislerde
+// kapsamsız çalış" eki; aksi halde userScopeAddendum aynen (kapsamlı /
+// kaçış / kapalı / sorulmuş dalları).
+func scopeAddendumFor(u userScope, msgs []copilot.ChatMessage, need, declined bool) string {
 	base := userScopeAddendum(u, msgs)
-	if !u.Unscoped || base == "" || need {
+	switch {
+	case !u.Unscoped || base == "":
 		return base
+	case !need:
+		return copilot.ChatUserScopeAnchoredAddendum()
+	case declined:
+		return copilot.ChatUserScopeUnscopedAddendum()
 	}
-	return copilot.ChatUserScopeAnchoredAddendum()
+	return base
+}
+
+// offerTeamPick — SAF (v0.10.1725): v2 "Takımını seç" kartı bu cevabın
+// altında çizilsin mi. Yalnız takım biçimli / çapasız soru (need), neden
+// no_team ve kullanıcı kapsamsız devamı seçmemişse.
+func offerTeamPick(u userScope, need, declined bool) bool {
+	return u.Unscoped && u.Reason == scopeReasonNoTeam && need && !declined
+}
+
+// scopeEventFor — SAF: data-scope yükü + kart işareti (teamPick).
+func scopeEventFor(u userScope, need, declined bool) map[string]any {
+	ev := u.event()
+	if offerTeamPick(u, need, declined) {
+		ev["teamPick"] = true
+	}
+	return ev
+}
+
+// requestUserTeamMax — istemcinin bildirdiği takım adının tavanı (scope-names
+// sorgusuyla aynı 80 bayt).
+const requestUserTeamMax = 80
+
+// requestUserTeam — SAF: context.userTeam'in temizlenmiş hali ("" = yok).
+func requestUserTeam(s string) string {
+	s = strings.TrimSpace(s)
+	if len(s) > requestUserTeamMax {
+		return ""
+	}
+	return s
 }

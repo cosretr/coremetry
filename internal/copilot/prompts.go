@@ -2925,9 +2925,10 @@ const chatUserScopeAskTeamAddendum = `
 
 KULLANICI KAPSAMI YOK: Kullanıcının takımı çözülemedi. Soru kullanıcının
 KENDİ servislerini gerektiriyorsa ("benim servislerim", "takımım") araç
-çağırmadan önce tek cümleyle "Hangi takım?" diye sor; takım UYDURMA
-(list_teams adları verir). Soru belirli bir servisi ya da tüm sistemi
-soruyorsa sormadan kapsamsız devam et.`
+çağırmadan önce tek cümleyle "Hangi takım?" diye sor ve dur; takım UYDURMA.
+Arayüz cevabın altında aramalı bir takım seçici gösterir: list_teams çağırma,
+takım listesi yazma, örnek takım adı sayma. Soru belirli bir servisi ya da
+tüm sistemi soruyorsa sormadan kapsamsız devam et.`
 
 // ChatUserScopeAskTeamAddendum — kapsamsız alışveriş, takım henüz sorulmadı.
 func ChatUserScopeAskTeamAddendum() string { return chatUserScopeAskTeamAddendum }

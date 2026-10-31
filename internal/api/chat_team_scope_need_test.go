@@ -72,7 +72,7 @@ func TestScopeAddendumFor(t *testing.T) {
 		{"kapsamlı → kapsam eki aynen", userScope{Reason: scopeReasonTeam, Team: "payments", Services: []string{"a"}}, false, copilot.ChatUserScopeAddendum("payments", 1)},
 	}
 	for _, c := range cases {
-		if got := scopeAddendumFor(c.u, nil, c.need); got != c.want {
+		if got := scopeAddendumFor(c.u, nil, c.need, false); got != c.want {
 			t.Errorf("%s: got %q, want %q", c.name, got, c.want)
 		}
 	}

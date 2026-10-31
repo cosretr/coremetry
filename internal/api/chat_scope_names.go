@@ -51,5 +51,37 @@ func (s *Server) copilotScopeNames(w http.ResponseWriter, r *http.Request) {
 	if len(q) > 80 {
 		q = q[:80]
 	}
-	writeJSON(w, map[string]any{"names": filterScopeNames(s.guidedTeamNames(r.Context()), q, scopeNamesLimit)})
+	cat := s.guidedTeamCatalogue(r.Context())
+	rows := make([]teamCountRow, 0, len(cat))
+	for _, e := range cat {
+		rows = append(rows, teamCountRow{Team: e.Team, Services: e.Services})
+	}
+	names, svcs := filterScopeTeams(rows, q, scopeNamesLimit)
+	writeJSON(w, map[string]any{"names": names, "services": svcs})
+}
+
+// teamCountRow — takım + servis sayısı (katalog sırası).
+type teamCountRow struct {
+	Team     string
+	Services int
+}
+
+// filterScopeTeams — SAF (v0.10.1725, v2 "Takımını seç" kartı): adlar
+// filterScopeNames ile AYNI sıra/tavan; services[i] names[i]'nin servis
+// sayısı (katalogdaki aynı satır).
+func filterScopeTeams(rows []teamCountRow, q string, n int) ([]string, []int) {
+	all := make([]string, len(rows))
+	count := make(map[string]int, len(rows))
+	for i, r := range rows {
+		all[i] = r.Team
+		if _, dup := count[r.Team]; !dup {
+			count[r.Team] = r.Services
+		}
+	}
+	names := filterScopeNames(all, q, n)
+	svcs := make([]int, len(names))
+	for i, name := range names {
+		svcs[i] = count[name]
+	}
+	return names, svcs
 }

@@ -27,6 +27,17 @@ export const COSRE_V2_STRINGS = {
   approvalDenied: 'Yürütülmedi',
   approvalExpired: 'Süresi doldu — yürütülmedi',
   approvalExpiresIn: 'Geçerlilik sonu',
+  // v0.10.1725 — "Takımını seç" kartı (TeamPickCard).
+  teamPickTitle: 'Takımını seç',
+  teamPickSubtitle: 'Seçimin hatırlanır, karşılama ekranındaki takımla aynıdır',
+  teamPickSearch: 'Takım ara…',
+  teamPickLoading: 'Aranıyor…',
+  teamPickError: 'Takımlar okunamadı',
+  teamPickEmpty: 'Eşleşme yok',
+  teamPickUnscoped: 'Kapsamsız devam et',
+  teamPickSubmit: 'Seç ve yeniden sor',
+  teamPickSelected: '(seçili)',
+  teamPickHeading: 'Takımlar',
 } as const;
 
 /** agent-core S5 — onay-kapılı araçların operatör dilindeki adı (yoksa ham ad). */

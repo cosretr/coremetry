@@ -189,6 +189,12 @@ type chatRequest struct {
 		// brifing kartının satırından ("Sor"); yalnız v2 döngüsü okur.
 		BriefingID   string `json:"briefingId,omitempty"`
 		BriefingLine *int   `json:"briefingLine,omitempty"`
+		// UserTeam / Unscoped (v0.10.1725, chat_team_scope_need.go) — v2
+		// "Takımını seç" kartı: tarayıcıda seçilen takım (karşılama seçicisiyle
+		// aynı depo) kullanıcı kapsamını çözer; Unscoped = "Kapsamsız devam et"
+		// (takım bir daha sorulmaz). Yalnız v2 döngüsü okur.
+		UserTeam string `json:"userTeam,omitempty"`
+		Unscoped bool   `json:"unscoped,omitempty"`
 	} `json:"context,omitempty"`
 	// Approvals — agent-core S5 (chat_approval_resume.go): v2 onay kartının
 	// cevabı; dolu istek onay bekleyen alışverişin DEVAMIDIR (kademeler atlanır,
@@ -1030,20 +1036,23 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// kez çözülür, data-scope olarak söylenir ve döngü planına (prepareStep) iner.
 	// v1'de işaret yok → dal koşmaz, akış bayt bayt eski.
 	if cosreV2Marked(ctx) {
-		teamOverride := ""
-		if evm != nil {
+		// v0.10.1725 — "Takımını seç" kartının seçimi (context.userTeam) evalset
+		// fikstürü gibi users okumasının yerine geçer; fikstür önceliklidir.
+		teamOverride := requestUserTeam(req.Context.UserTeam)
+		if evm != nil && evm.UserTeam != "" {
 			teamOverride = evm.UserTeam
 		}
 		us := s.resolveUserScope(ctx, requestScopeEscape(req.Context.Scope, req.Context.Command), teamOverride)
 		if evm != nil && evm.OnScope != nil {
 			evm.OnScope(us)
 		}
-		emit(chatScopeEventKind, us.event())
 		// v0.10.1723 — çapalı (trace/servis/açıklama) soruda takım istenmez.
 		tsc := teamScopeCtxFrom(req.Context.Trace, req.Context.Service,
 			req.Context.Explain != "" || req.Context.Subject != "" || req.Context.ExplainAsk != nil,
 			req.Context.BriefingID, req.Context.Page, req.Context.PinnedPage)
-		v2p := &v2LoopPlan{Scope: us, Addendum: scopeAddendumFor(us, req.Messages, needsTeamScope(tsc, lastUserText(req.Messages))) +
+		need := needsTeamScope(tsc, lastUserText(req.Messages))
+		emit(chatScopeEventKind, scopeEventFor(us, need, req.Context.Unscoped)) // v0.10.1725 teamPick
+		v2p := &v2LoopPlan{Scope: us, Addendum: scopeAddendumFor(us, req.Messages, need, req.Context.Unscoped) +
 			s.briefingAskAddendum(ctx, us, req.Context.Env, req.Context.BriefingID, req.Context.BriefingLine),
 			Budget: narrowLoopBudget(chstore.CurrentAILoopBudget(), v2LoopCeilings(dm, exchangeMax))} // dilim 4
 		if v2p.Addendum != "" {

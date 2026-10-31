@@ -134,6 +134,7 @@ export function parseDataScope(p: { type: string; data?: unknown }): CosreScope 
   }
   const tr = finiteNum(trimmed);
   if (tr !== undefined && tr > 0) out.trimmed = tr;
+  if (p.data.teamPick === true && reason === 'no_team') out.teamPick = true; // v0.10.1725
   return out;
 }
 
