@@ -55,7 +55,20 @@ Durum: taban = son 7 gün aynı saat-sınıfı (takvim), `medianMAD`, `DwellBuck
 **Kararlar (onay):** K1 ayrı tablo. K2 `log_ml_series` ile taban CH'de (ES yükü sabit). K3 terfi varsayılan KAPALI, dedektör başına `anomaly_promotion.logML[detector]={enabled, minHitRate, minSamples}`. K4 Problem'e giden tek yol kopya satır, yerinde stage değişimi yok.
 **Sorular:** S1 ES seviye alanı: `severityTx` keyword mi (`s.fields.SeverityTx`), yoksa sayısal `SeverityNo` üzerinden mi gruplanacak? S2 Susma için "beklenen hacim > 0" eşiği servis başına mı, `anomaly_tracked` listesi mi? S3 `/anomalies` sayfasında bugün sekmeler inbox/acknowledged/ignored/resolved — "Log ML" beşinci sekme mi, yoksa `?view=logml` ayrı tablo mu? S4 Karne 30 gün isabeti, verdict girilmeyen satırlar paydaya girsin mi (öneri: hayır)?
 
-## 4. Dilim planı (her biri kendi v0.10.X)
+## 3b. Yerleşim (operatör ek kararı 2026-10-31)
+
+Ayrı alt sistem: kendi goroutine'i, kendi `cache.Lock`'u, tik bütçesi (`context.WithTimeout`), bellek sınırı (servis × seviye × bucket tavanı config'te); evaluator (`main.go:690`, 60 sn) ve notifier (`:647`) ile aynı goroutine'i paylaşmaz, onları geciktiremez. Başlatma bayrağa bağlı: `COREMETRY_LOG_ML_ENABLED` + `COREMETRY_LOG_ML_ROLE=worker|sre|ml` (yalnız config).
+
+| Soru | Bulgu |
+|---|---|
+| Worker'ın bugünkü tik yükü | 60 sn `Recorder` (`_msearch` + CH trace_ops + op_latency, 30 sn log timeout, `recorder.go:104`), 60 sn evaluator, 5 dk templater (1000 doc), 5 dk elasticml, 5 dk topology, rollout/argo/explainer döngüleri. Hepsi `mode.worker` kapısında (`main.go:992-1001`); log tarafı `COREMETRY_LOG_ANOMALY_ENABLED` ile kapatılabilir |
+| sreOnly init dedektör bağımlılıklarını kuruyor mu | **Evet:** CH `store`, Redis cache + lock (`main.go:560-630`, Noop fallback), ES `logsStore` (`:940`, moda bağlı değil), settings `LoadPersisted` (`:569,:943`). Kurmadığı: lider yarışları (`:1664`), TTL DDL (`:863`), preset (`:852`), HTTP API (`:1776`) |
+| sre replikasında tek yazıcı | Chart `sre.replicas: 1` (`values.yaml:107`); >1 olursa garanti yalnız `cache.Lock` (Redis). Redis yoksa `Noop` lock = always-leader → **iki yazıcı**. Kural: LogML kendi kilidini alır (`log_ml_leader`), Redis yoksa yalnız worker yerleşimi (`lockDegraded` bayrağı `/admin/stats`'ta) |
+| Self-obs | `SystemStats` bloğu `logML` (`sysstats.go:49-52 Behavior/Heap deseni`): son/toplam tik süresi, ES sorgu süresi + sayısı, satır sayısı, bellek (servis×seviye seri sayısı), atlanan tik; log satırı `[logml] tick …` (1728 brifing deseni) |
+
+**Başlangıç önerisi: worker.** Gerekçe: tek-yazıcı kilidi ve `lockDegraded` zaten worker'da; ek ES yükü tik başına 1 agregasyon. **sre'ye taşıma kriteri:** worker tik p95 > 20 sn ya da `logML` tik süresi > 5 sn 3 gün üst üste. **Ayrı `COREMETRY_MODE=ml` kriteri:** dilim 3-4 sonrası ES süresi > 10 sn/tik ya da bellek > 256 MiB; o zaman chart'a `ml` Deployment (replicas 1, leader-elected, `deployment-distributed.yaml` sre bloğu deseni) eklenir. Kod yerleşimi: `internal/logml/` paketi, main.go'da tek `if mode.runsLogML() { logml.New(...).Start(ctx) }`.
+
+## 4. Dilim planı (her biri kendi v0.10.X) — **hiçbir dedektör 0. dilimden önce açılmaz**
 
 | # | İş | Tahmin |
 |---|---|---|
