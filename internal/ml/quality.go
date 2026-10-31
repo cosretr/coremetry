@@ -232,7 +232,10 @@ func qualityFilter(evs []chstore.MLEvent, cfg chstore.MLConfig, lb *Labels, tr *
 			sup.Regime++
 			continue
 		}
-		ev.StartedAt = first.UnixNano()
+		// koşu başı; dedektör daha erken bir an verdiyse (kırılma noktası) o kalır
+		if ev.StartedAt == 0 || first.UnixNano() < ev.StartedAt {
+			ev.StartedAt = first.UnixNano()
+		}
 		kept = append(kept, ev)
 	}
 	hash := cfg.ConfigHash()

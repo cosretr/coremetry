@@ -224,3 +224,101 @@ func (s *Store) MLSeriesFirstSeen(ctx context.Context, signal, prefix string, si
 	}
 	return out, rows.Err()
 }
+
+// MLProfileRequest — mevsimsel profil: aynı takvim sınıfı günlerin gün-içi
+// dilim (slot = gün saniyesi / TargetSec) başına çeyreklikleri.
+type MLProfileRequest struct {
+	Signal     string
+	Parts      []string // tam parça adları; boşsa PartPrefix
+	PartPrefix string
+	Dates      []string
+	Slots      []int // istenen dilimler (≤ 288)
+	TargetSec  int
+	TZ         string
+}
+
+// MLProfileStat — dilim çeyreklikleri (normalize).
+type MLProfileStat struct{ Q25, Q50, Q75 float64 }
+
+// MLSeasonalProfile — tek okuma: anahtar → dilim → çeyreklik (CUSUM referansı).
+func (s *Store) MLSeasonalProfile(ctx context.Context, req MLProfileRequest) (map[string]map[int]MLProfileStat, error) {
+	out := map[string]map[int]MLProfileStat{}
+	if len(req.Dates) == 0 || len(req.Slots) == 0 || req.TargetSec <= 0 {
+		return out, nil
+	}
+	tz := req.TZ
+	if tz == "" {
+		tz = "UTC"
+	}
+	partCond, partArg := "startsWith(part, ?)", any(req.PartPrefix)
+	if len(req.Parts) > 0 {
+		partCond, partArg = "part IN (?)", any(req.Parts)
+	}
+	rows, err := s.conn.Query(ctx, `
+		SELECT service, part, intDiv(toUInt32(toHour(bucket, ?)) * 3600 + toUInt32(toMinute(bucket, ?)) * 60, ?) AS slot,
+		       quantiles(0.25, 0.5, 0.75)(count * ? / bucket_sec) AS q
+		FROM ml_series
+		WHERE signal = ? AND `+partCond+`
+		  AND toDate(bucket, ?) IN (?)
+		  AND bucket >= ?
+		GROUP BY service, part, slot
+		HAVING slot IN (?)
+		LIMIT 400000
+		SETTINGS max_execution_time = 10`,
+		tz, tz, req.TargetSec, float64(req.TargetSec), req.Signal, partArg, tz, req.Dates,
+		time.Now().Add(-35*24*time.Hour).UTC(), req.Slots) // bucket DateTime: DateTime64 bind YOK
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var svc, part string
+		var slot uint32
+		var q []float64
+		if err := rows.Scan(&svc, &part, &slot, &q); err != nil {
+			return nil, err
+		}
+		if len(q) != 3 {
+			continue
+		}
+		k := MLSeriesKey(svc, part)
+		if out[k] == nil {
+			out[k] = map[int]MLProfileStat{}
+		}
+		out[k][int(slot)] = MLProfileStat{Q25: q[0], Q50: q[1], Q75: q[2]}
+	}
+	return out, rows.Err()
+}
+
+// MLSeriesRecent — tüm servislerin parçalarının [since, ∞) noktaları
+// (CUSUM penceresi), hedef kovaya normalize; yalnız hedef kova çözünürlüğü.
+func (s *Store) MLSeriesRecent(ctx context.Context, signal string, parts []string, partPrefix string, since time.Time, targetSec int) (map[string][]MLPoint, error) {
+	partCond, partArg := "startsWith(part, ?)", any(partPrefix)
+	if len(parts) > 0 {
+		partCond, partArg = "part IN (?)", any(parts)
+	}
+	rows, err := s.conn.Query(ctx, `
+		SELECT service, part, toUnixTimestamp(bucket) AS t, max(count) AS v
+		FROM ml_series
+		WHERE signal = ? AND `+partCond+` AND bucket >= ? AND bucket_sec = ?
+		GROUP BY service, part, t
+		ORDER BY service, part, t
+		LIMIT 400000
+		SETTINGS max_execution_time = 10`, signal, partArg, since.UTC(), uint32(targetSec))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string][]MLPoint{}
+	for rows.Next() {
+		var svc, part string
+		var t uint32
+		var v float64
+		if err := rows.Scan(&svc, &part, &t, &v); err != nil {
+			return nil, err
+		}
+		k := MLSeriesKey(svc, part)
+		out[k] = append(out[k], MLPoint{T: int64(t), V: v})
+	}
+	return out, rows.Err()
+}
