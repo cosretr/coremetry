@@ -54,7 +54,7 @@ const (
 // DefaultErrorRamp — varsayılanlar (muhafazakâr: 30 dk, 2×, %0.2, 1 hata/sn).
 func DefaultErrorRamp() ErrorRampConfig {
 	return ErrorRampConfig{
-		Enabled:         boolPtr(true),
+		Enabled:         boolPtr(true), // v0.10.1746: metric_anomaly anahtarı (native_detectors) scan()'ı keser; bu bayrak dedektör içi
 		WindowBuckets:   errRampWindowDef,
 		RatioFactor:     errRampFactorDef,
 		MinRatioPct:     errRampRatioDef,

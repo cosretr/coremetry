@@ -1603,7 +1603,13 @@ export const api = {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(c),
     }),
-  // Log ML dilim 0 — ayrı tablo, ayrı uçlar (internal/api/log_ml.go).
+  // v0.10.1746 — yerleşik dedektör anahtarları (internal/api/native_detectors.go).
+  getNativeDetectors: () => get<{ names: string[]; detectors: Record<string, boolean> }>(`/api/admin/native-detectors`),
+  putNativeDetectors: (c: { detectors: Record<string, boolean> }) =>
+    request<{ names: string[]; detectors: Record<string, boolean> }>(`/api/admin/native-detectors`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(c),
+    }),
+  // ML dilim 0 — ayrı tablo, ayrı uçlar (internal/api/ml.go).
   mlEvents: (p: { since?: GoDuration; signal?: string; detector?: string; service?: string; stage?: string } = {}) =>
     get<{ items: import('./types').MLEvent[]; truncated: boolean }>(
       `/api/ml/events?since=${p.since ?? '24h'}&signal=${encodeURIComponent(p.signal ?? '')}&detector=${encodeURIComponent(p.detector ?? '')}&service=${encodeURIComponent(p.service ?? '')}&stage=${encodeURIComponent(p.stage ?? '')}`),

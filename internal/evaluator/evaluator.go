@@ -621,23 +621,33 @@ func (e *Evaluator) evaluateAll(ctx context.Context) int {
 	// resolves Problems deduped per (instance, check) on this same
 	// leader-locked tick, riding the existing notify / incident-attach
 	// pipeline like every other Problem.
-	e.evaluateDBCapacity(ctx)
-	e.evaluateDBSlowStatements(ctx) // v0.10.325 — yavaş SQL → Problem (Kind=db → sahibi + SRE maili)
+	if e.store.NativeDetectorOn(ctx, chstore.NativeDBCapacity) { // v0.10.1746 — Settings anahtarı (varsayılan kapalı)
+		e.evaluateDBCapacity(ctx)
+	}
+	if e.store.NativeDetectorOn(ctx, chstore.NativeDBSlowStatement) { // v0.10.1746 — Settings anahtarı (varsayılan kapalı)
+		e.evaluateDBSlowStatements(ctx) // v0.10.325 — yavaş SQL → Problem (Kind=db → sahibi + SRE maili)
+	}
 	// v0.10.1073 — veritabanı SAĞLIĞI (db-health): db hata % / p99, ≥2 çağıran,
 	// 2 ardışık kova. Yavaş ifadeden SONRA (db_health_test.go sırayı pinler).
 	// v0.10.1562 — kendi log_comment etiketi: prod query_log maliyet ölçümü
 	// worker:evaluator içinden bu dedektörü ayırabilsin (WithQueryTag üzerine yazar).
-	e.evaluateDBHealth(chstore.WithQueryTag(ctx, "worker:evaluator:db-health"))
+	if e.store.NativeDetectorOn(ctx, chstore.NativeDBHealth) { // v0.10.1746 — Settings anahtarı (varsayılan kapalı)
+		e.evaluateDBHealth(chstore.WithQueryTag(ctx, "worker:evaluator:db-health"))
+	}
 	// v0.10.1091 — yaygın yavaşlama hızlı yolu (svc-slowdown): tek kovada ≥ 3
 	// operasyon p99 ≥ 5 s VE ≥ 20× taban → servis üzerinde critical (P1).
 	// Eskalasyon ve bayat süpürmeden ÖNCE (açık satırlar her tik tazelenir).
-	e.evaluateServiceSlowdown(chstore.WithQueryTag(ctx, "worker:evaluator:svc-slowdown")) // v0.10.1562 — log_comment
+	if e.store.NativeDetectorOn(ctx, chstore.NativeServiceSlowdown) { // v0.10.1746 — Settings anahtarı (varsayılan kapalı)
+		e.evaluateServiceSlowdown(chstore.WithQueryTag(ctx, "worker:evaluator:svc-slowdown")) // v0.10.1562 — log_comment
+	}
 
 	// Runtime pod detector (v0.9.90) — JVM heap saturation + GC pause per
 	// pod. Overview's Runtime panel only SHOWS these; this pass makes them
 	// PAGEABLE. MetricExists-gated so a non-JVM install (local included)
 	// never sees spurious Problems; same leader-lock / notify / dedup path.
-	e.evaluateRuntimePods(ctx)
+	if e.store.NativeDetectorOn(ctx, chstore.NativeRuntimePods) { // v0.10.1746 — Settings anahtarı (varsayılan kapalı)
+		e.evaluateRuntimePods(ctx)
+	}
 
 	// v0.9.572 — paylaşılan bağımlılık patlaması. Operatör raporu:
 	// on beşten fazla servis aynı saniyede aynı ORA-18730 hatasını aldı
@@ -699,7 +709,9 @@ func (e *Evaluator) evaluateAll(ctx context.Context) int {
 	// so noise stays in /anomalies; only the patterns the
 	// detector keeps re-firing with a real ratio become
 	// pageable.
-	e.promoteStrongAnomalies(ctx)
+	if e.store.NativeDetectorOn(ctx, chstore.NativeMetricAnomaly) { // v0.10.1746 — Settings anahtarı (varsayılan kapalı)
+		e.promoteStrongAnomalies(ctx)
+	}
 
 	return evaluated
 }

@@ -111,6 +111,9 @@ func BehaviorObservability() BehaviorStats {
 // kuralı, aynı karar; VM'in zaman tabanı vmIngestLag geride), kalanlar span.
 // Aday kaynağı olay ayrıntısında (`source`).
 func (d *Detector) scanBehavior(ctx context.Context, now time.Time, cfg chstore.AnomalySensitivityConfig, red *vmREDView) {
+	if !d.store.NativeDetectorOn(ctx, chstore.NativeBehavior) { // v0.10.1746
+		return
+	}
 	b := cfg.Behavior
 	if !b.IsEnabled() {
 		return

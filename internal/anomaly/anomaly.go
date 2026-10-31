@@ -497,6 +497,9 @@ func (d *Detector) runIfLeader(ctx context.Context) {
 }
 
 func (d *Detector) scan(ctx context.Context) {
+	if !d.store.NativeDetectorOn(ctx, chstore.NativeMetricAnomaly) { // v0.10.1746 — Settings anahtarı (varsayılan kapalı)
+		return
+	}
 	// v0.8.506: yalnız isim listesi gerekiyor — MV'den (bkz.
 	// ListActiveServiceNames); ham spans 24h taraması kalktı.
 	services, err := d.store.ListActiveServiceNames(ctx, 24*time.Hour)

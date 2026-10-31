@@ -101,48 +101,50 @@ func (r *Recorder) tick(ctx context.Context) {
 	// deadline (the rest of the tick is CH work that self-caps). Stops a
 	// slow significant_text/_msearch on the worker pod hanging against
 	// the process-lifetime ctx and double-loading the ES cluster.
-	logCtx, logCancel := context.WithTimeout(ctx, 30*time.Second)
-	// v0.10.1586 (Davis paritesi FAZ 0.5 / C) — olay yazan yol sürdürmeli:
-	// desen ardışık logPatternDwellBuckets (vars. 2) pencerede eşiği geçmeli;
-	// olayı aktif desenler muaf (tek okuma, yalnız dwell ≥ 2).
-	lpDwell := r.store.AnomalySensitivityForDetectors().LogPatternDwell()
-	logHits, err := DetectLogPatternsSustained(logCtx, r.logs, r.window, lpDwell, logPatternActiveSet(ctx, r.store, lpDwell))
-	logCancel()
-	if err != nil {
-		log.Printf("[anomaly-recorder] log patterns: %v", err)
-	}
-	for _, a := range logHits {
-		ev := chstore.AnomalyEvent{
-			ID:           chstore.FingerprintAnomaly("log_pattern", a.Pattern, a.Service),
-			Kind:         "log_pattern",
-			Pattern:      a.Pattern,
-			Service:      a.Service,
-			StartedAt:    now.UnixNano(),
-			LastSeen:     a.LastSeenNs,
-			CurrentRatio: a.Ratio,
-			CurrentCount: a.CurrentCount,
-			Sample:       a.Sample,
-			// v0.10.1080 — ES örneklem doğrulaması (0 = örneklenmedi / CH).
-			VerifiedRatio: a.VerifiedRatio,
+	if r.store.NativeDetectorOn(ctx, chstore.NativeLogPattern) { // v0.10.1746 — Settings anahtarı (varsayılan kapalı)
+		logCtx, logCancel := context.WithTimeout(ctx, 30*time.Second)
+		// v0.10.1586 (Davis paritesi FAZ 0.5 / C) — olay yazan yol sürdürmeli:
+		// desen ardışık logPatternDwellBuckets (vars. 2) pencerede eşiği geçmeli;
+		// olayı aktif desenler muaf (tek okuma, yalnız dwell ≥ 2).
+		lpDwell := r.store.AnomalySensitivityForDetectors().LogPatternDwell()
+		logHits, err := DetectLogPatternsSustained(logCtx, r.logs, r.window, lpDwell, logPatternActiveSet(ctx, r.store, lpDwell))
+		logCancel()
+		if err != nil {
+			log.Printf("[anomaly-recorder] log patterns: %v", err)
 		}
-		if err := r.store.UpsertAnomalyEvent(ctx, ev); err != nil {
-			log.Printf("[anomaly-recorder] upsert log-pattern %s: %v", a.Pattern, err)
+		for _, a := range logHits {
+			ev := chstore.AnomalyEvent{
+				ID:           chstore.FingerprintAnomaly("log_pattern", a.Pattern, a.Service),
+				Kind:         "log_pattern",
+				Pattern:      a.Pattern,
+				Service:      a.Service,
+				StartedAt:    now.UnixNano(),
+				LastSeen:     a.LastSeenNs,
+				CurrentRatio: a.Ratio,
+				CurrentCount: a.CurrentCount,
+				Sample:       a.Sample,
+				// v0.10.1080 — ES örneklem doğrulaması (0 = örneklenmedi / CH).
+				VerifiedRatio: a.VerifiedRatio,
+			}
+			if err := r.store.UpsertAnomalyEvent(ctx, ev); err != nil {
+				log.Printf("[anomaly-recorder] upsert log-pattern %s: %v", a.Pattern, err)
+			}
 		}
-	}
 
-	// ── New-template anomalies (v0.6.27) ────────────────────
-	// Drain templater publishes shapes it's never seen before;
-	// surface them as anomalies so operators get a feed of
-	// "what new log line shape just appeared" — complements the
-	// curated-regex detector (log_pattern) which only catches
-	// known failure shapes. Window is 2× the recorder window
-	// to absorb any drift between templater + recorder cadences.
-	//
-	// v0.10.1061 — varsayılan KAPALI (anomaly_sensitivity.logTemplateNew;
-	// operatör onaylı: "Bu log anomalileri de false pozitif geliyor").
-	// Anahtar tik başına atomic'ten (CH okuması yok); kapalıyken adım
-	// dedektörü HİÇ çağırmaz. Yukarıdaki log_pattern adımı anahtara bağlı
-	// DEĞİL; templater kendi döngüsünde yazmaya devam eder.
+		// ── New-template anomalies (v0.6.27) ────────────────────
+		// Drain templater publishes shapes it's never seen before;
+		// surface them as anomalies so operators get a feed of
+		// "what new log line shape just appeared" — complements the
+		// curated-regex detector (log_pattern) which only catches
+		// known failure shapes. Window is 2× the recorder window
+		// to absorb any drift between templater + recorder cadences.
+		//
+		// v0.10.1061 — varsayılan KAPALI (anomaly_sensitivity.logTemplateNew;
+		// operatör onaylı: "Bu log anomalileri de false pozitif geliyor").
+		// Anahtar tik başına atomic'ten (CH okuması yok); kapalıyken adım
+		// dedektörü HİÇ çağırmaz. Yukarıdaki log_pattern adımı anahtara bağlı
+		// DEĞİL; templater kendi döngüsünde yazmaya devam eder.
+	}
 	recordNewLogTemplates(ctx, r.store.AnomalySensitivityForDetectors().LogTemplateNewOn(),
 		func(ctx context.Context) ([]LogTemplateAnomaly, error) {
 			return DetectNewLogTemplates(ctx, r.store, 2*r.window)
@@ -151,39 +153,41 @@ func (r *Recorder) tick(ctx context.Context) {
 
 	// ── Trace-op anomalies ────────────────────────────────────
 	// v0.10.1586 — sürdürmeli yol (traceOpDwellBuckets, vars. 2; aktif olay muaf).
-	traceHits, err := DetectTraceOpAnomaliesSustained(ctx, r.store, r.window)
-	if err != nil {
-		log.Printf("[anomaly-recorder] trace ops: %v", err)
-	}
-	for _, a := range traceHits {
-		ev := chstore.AnomalyEvent{
-			ID:           chstore.FingerprintAnomaly("trace_op", a.Operation, a.Service),
-			Kind:         "trace_op",
-			Pattern:      a.Operation,
-			Service:      a.Service,
-			StartedAt:    now.UnixNano(),
-			LastSeen:     a.LastSeenNs,
-			CurrentRatio: a.Ratio,
-			CurrentCount: a.CurrentErrors,
-			Sample:       a.SampleTraceID,
+	if r.store.NativeDetectorOn(ctx, chstore.NativeTraceOp) { // v0.10.1746
+		traceHits, err := DetectTraceOpAnomaliesSustained(ctx, r.store, r.window)
+		if err != nil {
+			log.Printf("[anomaly-recorder] trace ops: %v", err)
 		}
-		if err := r.store.UpsertAnomalyEvent(ctx, ev); err != nil {
-			log.Printf("[anomaly-recorder] upsert trace-op %s/%s: %v", a.Service, a.Operation, err)
+		for _, a := range traceHits {
+			ev := chstore.AnomalyEvent{
+				ID:           chstore.FingerprintAnomaly("trace_op", a.Operation, a.Service),
+				Kind:         "trace_op",
+				Pattern:      a.Operation,
+				Service:      a.Service,
+				StartedAt:    now.UnixNano(),
+				LastSeen:     a.LastSeenNs,
+				CurrentRatio: a.Ratio,
+				CurrentCount: a.CurrentErrors,
+				Sample:       a.SampleTraceID,
+			}
+			if err := r.store.UpsertAnomalyEvent(ctx, ev); err != nil {
+				log.Printf("[anomaly-recorder] upsert trace-op %s/%s: %v", a.Service, a.Operation, err)
+			}
 		}
-	}
 
-	// ── Operasyon-gecikme anomalileri (v0.9.1064, Faz 2.3 / G5) ──────
-	// trace_ops yalnız hata sayar; bu dedektör p99 sıçramasını yakalar
-	// ("hangi endpoint yavaşladı" bugüne dek cevapsızdı). Ratio = p99
-	// oranı; CurrentCount = cari çağrı hacmi (terfi kapılarının hacim
-	// sezgisiyle uyumlu); Sample = en yavaş cari span'in trace'i.
-	//
-	// v0.10.1056 — anahtar (anomaly_sensitivity.opLatency; operatör: "Trace op
-	// latency false pozitif geliyor, gerek yok gelmelerine bence.").
-	// Anahtar tik başına atomic'ten (CH okuması yok); kapalıyken adım dedektörü
-	// HİÇ çağırmaz. v0.10.1085 — varsayılan yeniden AÇIK, ama yalnız sürdürme
-	// kuralıyla (ardışık opLatencyDwellBuckets kova, vars. 2 — dedektörde);
-	// olay şekli değişmedi.
+		// ── Operasyon-gecikme anomalileri (v0.9.1064, Faz 2.3 / G5) ──────
+		// trace_ops yalnız hata sayar; bu dedektör p99 sıçramasını yakalar
+		// ("hangi endpoint yavaşladı" bugüne dek cevapsızdı). Ratio = p99
+		// oranı; CurrentCount = cari çağrı hacmi (terfi kapılarının hacim
+		// sezgisiyle uyumlu); Sample = en yavaş cari span'in trace'i.
+		//
+		// v0.10.1056 — anahtar (anomaly_sensitivity.opLatency; operatör: "Trace op
+		// latency false pozitif geliyor, gerek yok gelmelerine bence.").
+		// Anahtar tik başına atomic'ten (CH okuması yok); kapalıyken adım dedektörü
+		// HİÇ çağırmaz. v0.10.1085 — varsayılan yeniden AÇIK, ama yalnız sürdürme
+		// kuralıyla (ardışık opLatencyDwellBuckets kova, vars. 2 — dedektörde);
+		// olay şekli değişmedi.
+	}
 	recordOpLatency(ctx, r.store.AnomalySensitivityForDetectors().OpLatencyOn(), now,
 		func(ctx context.Context) ([]OpLatencyAnomaly, error) {
 			return DetectOpLatencyAnomalies(ctx, r.store, r.window)
