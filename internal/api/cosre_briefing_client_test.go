@@ -4,14 +4,12 @@ package api
 // (client_metrics_diff): okuma sonucu → satır dönüşümleri. Nötr fikstür.
 
 import (
-	"errors"
 	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/cosre/briefing"
-	"github.com/cilcenk/coremetry/internal/mcptools"
 )
 
 func TestBriefingKafkaQuestionsSubset(t *testing.T) {
@@ -38,57 +36,6 @@ func TestBriefingHTTPCandidates(t *testing.T) {
 		if got := strings.Join(briefingHTTPCandidates(cur, c.k), ","); got != c.want {
 			t.Fatalf("k=%d got %q want %q", c.k, got, c.want)
 		}
-	}
-}
-
-func TestBriefingHTTPRows(t *testing.T) {
-	const from = 3_000_000 // ms
-	pts := func(prev, cur float64) [][2]float64 { return [][2]float64{{from - 1000, prev}, {from, cur}} }
-	chart := func(kind string, ss ...mcptools.EvChartSeries) svcHTTPREDChart {
-		return svcHTTPREDChart{svcHTTPREDQuery: svcHTTPREDQuery{Kind: kind}, Series: ss}
-	}
-	full := svcHTTPREDResult{UseVM: true, Family: redKindGRPC, Charts: []svcHTTPREDChart{
-		chart(svcHTTPREDRate, mcptools.EvChartSeries{Name: "req/s", Points: pts(1, 2)}),
-		chart(svcHTTPRED5xx, mcptools.EvChartSeries{Name: "hata %", Points: pts(0.5, 3)}),
-		chart(svcHTTPREDLatency, mcptools.EvChartSeries{Name: "p95", Points: pts(0.1, 0.4)}, mcptools.EvChartSeries{Name: "p99", Points: pts(1, 2)}),
-	}}
-	cases := []struct {
-		name       string
-		res        svcHTTPREDResult
-		wantRows   int
-		wantFailed bool
-		check      func(t *testing.T, rows []briefing.ClientRow)
-	}{
-		{"histogram yok → satır yok, hata değil", svcHTTPREDResult{UseVM: false, Reason: "yok"}, 0, false, nil},
-		{"etiket okuması başarısız → failed", svcHTTPREDResult{UseVM: false, ReadFailed: true}, 0, true, nil},
-		{"tam okuma (gRPC, p99 alınmaz)", full, 2, false, func(t *testing.T, rows []briefing.ClientRow) {
-			e, l := rows[0], rows[1]
-			if e.Family != briefing.FamilyGRPC || e.Metric != briefing.ClientErrPct || e.Now != 3 || e.Prev != 0.5 || e.VolNow != 2*10800 || e.VolPrev != 10800 {
-				t.Fatalf("err satırı %+v", e)
-			}
-			if l.Metric != briefing.ClientLatency || l.Now != 0.4 || l.Prev != 0.1 {
-				t.Fatalf("gecikme satırı %+v", l)
-			}
-		}},
-		{"istek hızı okunmadı → oran kıyası kapalı", svcHTTPREDResult{UseVM: true, Charts: []svcHTTPREDChart{
-			{svcHTTPREDQuery: svcHTTPREDQuery{Kind: svcHTTPREDRate}, Err: errors.New("zaman aşımı")},
-			chart(svcHTTPRED5xx, mcptools.EvChartSeries{Points: pts(0.5, 3)}),
-		}}, 1, true, func(t *testing.T, rows []briefing.ClientRow) {
-			if rows[0].HasNow || rows[0].HasPrev || rows[0].Family != briefing.FamilyHTTP {
-				t.Fatalf("hacimsiz oran kıyaslanmamalı: %+v", rows[0])
-			}
-		}},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			rows, failed := briefingHTTPRows(c.res, "orders-api", from, 10800)
-			if len(rows) != c.wantRows || failed != c.wantFailed {
-				t.Fatalf("rows=%d failed=%v: %+v", len(rows), failed, rows)
-			}
-			if c.check != nil {
-				c.check(t, rows)
-			}
-		})
 	}
 }
 

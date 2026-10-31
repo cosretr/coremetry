@@ -86,12 +86,21 @@ func svcHTTPREDQueries(service, svcLabel, envMatcher, statusLabel string, winS i
 // değişen yalnız __name__ (ailenin tam VM tabanı), hata kümesi (ErrMatch) ve
 // ms ailesinde gecikmenin /1000 ölçeği (birim s kalır — karo/eşik aynı).
 func svcREDFamilyQueries(fam redFamily, service, svcLabel, envMatcher, statusLabel string, winS int) []svcHTTPREDQuery {
+	return svcREDFamilyQueriesIn(fam, service, metricChartQueryInput{Service: service, SvcLabel: svcLabel, EnvMatcher: envMatcher, StatusLabel: statusLabel, WinS: winS})
+}
+
+// svcREDFamilyQueriesIn — SAF: aynı üç ifade, verilen kapsam girdisiyle
+// (tek servis ya da v0.10.1719 servis kümesi + by (svc)). statusLabel boşsa 5xx yok.
+func svcREDFamilyQueriesIn(fam redFamily, service string, base metricChartQueryInput) []svcHTTPREDQuery {
+	statusLabel := base.StatusLabel
 	rps, _ := metricChartTemplateByID(mcHTTPRPS)
 	fiveXX, _ := metricChartTemplateByID(mcHTTP5xx)
 	p99, _ := metricChartTemplateByID(mcHTTPP99)
 	in := func(v metricChartVariant) metricChartQueryInput {
 		v.Probe, v.Names = fam.Probe, []string{fam.names()}
-		return metricChartQueryInput{Variant: v, Service: service, SvcLabel: svcLabel, EnvMatcher: envMatcher, StatusLabel: statusLabel, ErrMatch: fam.ServerErr, WinS: winS}
+		out := base
+		out.Variant, out.ErrMatch = v, fam.ServerErr
+		return out
 	}
 	errTitle, errName := fam.Label+" 5xx oranı", "5xx %"
 	if fam.Kind == redKindGRPC {
@@ -184,10 +193,6 @@ type svcHTTPREDResult struct {
 	Family   string
 	FamilyID string
 	Both     bool
-	// ReadFailed — v0.10.1712: UseVM=false bir OKUMA hatasından (etiket /
-	// istek hızı sorgusu); briefing kalem 2 bunu "okunamadı" (partial) sayar,
-	// histogram yokluğunu değil.
-	ReadFailed bool
 	// v0.10.1481 — çözülmüş girdiler (sorumlu operasyonun rota grafikleri aynı
 	// histogramı aynı süzgeçlerle okur; copilot_service_route_red.go).
 	svcLabel, envMatcher, statusLabel string
@@ -214,7 +219,6 @@ func (s *Server) readServiceHTTPRED(ctx context.Context, rd redFamilyReader, isV
 	probe := svcHTTPREDProbe{VM: isVM && rd != nil, GRPCChecked: true}
 	fallback := func() svcHTTPREDResult {
 		res.UseVM, res.Reason = pickServiceChartSource(probe)
-		res.ReadFailed = probe.LabelErr != nil || probe.RateErr != nil
 		res.Charts = nil
 		return res
 	}

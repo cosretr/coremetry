@@ -267,7 +267,7 @@ func (s *Server) buildBriefing(ctx context.Context, t briefingTeam, env string, 
 
 	// 2 — istemci / sunucu-ailesi metrikleri (VM + Kafka).
 	var skipped []string
-	switch rows, state := s.readBriefingClient(ctx, t.Services, cur, env, cfg.WindowS, pFrom, from, to); state {
+	switch rows, state := s.readBriefingClient(ctx, t.Services, cur, env, pFrom, from, to); state {
 	case "skipped":
 		skipped = append(skipped, briefing.ItemClient)
 	case "partial":

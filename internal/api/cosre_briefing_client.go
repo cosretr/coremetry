@@ -4,10 +4,10 @@ package api
 // (client_metrics_diff; briefing-audit "Tasarım önerisi", Q9 + Q11).
 //
 // Faz 1 kapsamı (Q11): giden HTTP istemci metrikleri YOK (Faz 2); okunan:
-//   - HTTP / gRPC SUNUCU ailesi — readServiceHTTPRED (Service → HTTP/GRPC
-//     sekmesinin VM okuması; aynı aile çözümü, aynı sorgu önbelleği),
-//     takımın kur penceresinde EN YOĞUN briefingClientHTTPMax servisi için
-//     (R9 bütçesi: takım × env başına ≤ 6 VM sorgusu). Tek range sorgusu
+//   - HTTP / gRPC SUNUCU ailesi — v0.10.1719: takımın TÜM servisleri (≤ 20,
+//     span azalan) TEK sorgu kümesinde, by (svc) (cosre_briefing_http_group.go;
+//     Service → HTTP/GRPC sekmesinin aynı ifadeleri, aile en yoğun servisten).
+//     R9: takım × env ≤ 6 VM (HTTP ≤ 3 + Kafka 2). Range sorgusu
 //     [prev başı, to) — noktalar pencere sınırında ikiye bölünür.
 //   - Kafka istemcisi — runKafkaQuestions (Infra Kafka panelinin Go yolu, Q9)
 //     iki soru: gönderim hatası/sn ve tüketici lag maks., takım servis kümesi
@@ -23,9 +23,6 @@ import (
 	"github.com/cilcenk/coremetry/internal/cosre/briefing"
 	"github.com/cilcenk/coremetry/internal/vmetrics"
 )
-
-// briefingClientHTTPMax — HTTP/gRPC sunucu ailesi okunan servis tavanı (R9).
-const briefingClientHTTPMax = 1
 
 // briefingKafkaQuestionKeys — kalem 2'nin Kafka soruları (KafkaServiceQuestions alt kümesi).
 var briefingKafkaQuestionKeys = map[string]string{
@@ -67,56 +64,6 @@ func briefingHTTPCandidates(cur []chstore.ServiceSummary, k int) []string {
 	return out
 }
 
-// briefingHTTPRows — SAF: tek servisin readServiceHTTPRED sonucu → kalem 2
-// satırları. UseVM=false: ReadFailed ise failed, değilse (histogram / seri
-// yok) satır yok. Grafik hatası → failed (diğer grafikler yine okunur).
-func briefingHTTPRows(res svcHTTPREDResult, service string, fromMs int64, windowS int) (rows []briefing.ClientRow, failed bool) {
-	if !res.UseVM {
-		return nil, res.ReadFailed
-	}
-	fam := briefing.FamilyHTTP
-	if res.Family == redKindGRPC {
-		fam = briefing.FamilyGRPC
-	}
-	var volNow, volPrev float64
-	var volOK bool
-	for _, c := range res.Charts {
-		if c.Err != nil {
-			failed = true
-			continue
-		}
-		switch c.Kind {
-		case svcHTTPREDRate:
-			if len(c.Series) > 0 {
-				rn, rp, hn, hp := briefing.SplitMeans(c.Series[0].Points, fromMs)
-				volNow, volPrev, volOK = rn*float64(windowS), rp*float64(windowS), hn && hp
-			}
-		case svcHTTPRED5xx:
-			if len(c.Series) > 0 {
-				n, p, hn, hp := briefing.SplitMeans(c.Series[0].Points, fromMs)
-				rows = append(rows, briefing.ClientRow{Service: service, Family: fam, Metric: briefing.ClientErrPct, Now: n, Prev: p, HasNow: hn, HasPrev: hp})
-			}
-		case svcHTTPREDLatency:
-			for _, s := range c.Series {
-				if s.Name != "p95" {
-					continue
-				}
-				n, p, hn, hp := briefing.SplitMeans(s.Points, fromMs)
-				rows = append(rows, briefing.ClientRow{Service: service, Family: fam, Metric: briefing.ClientLatency, Now: n, Prev: p, HasNow: hn, HasPrev: hp})
-			}
-		}
-	}
-	for i := range rows {
-		if rows[i].Metric == briefing.ClientErrPct {
-			if !volOK {
-				rows[i].HasNow, rows[i].HasPrev = false, false // hacim okunmadı → oran kıyası yok
-			}
-			rows[i].VolNow, rows[i].VolPrev = volNow, volPrev
-		}
-	}
-	return rows, failed
-}
-
 // briefingKafkaRows — SAF: runKafkaQuestions blokları → kalem 2 satırları
 // (GroupKey = service.name, topic). Blok hatası → failed.
 func briefingKafkaRows(blocks map[string]kafkaMetricBlock, fromMs int64) (rows []briefing.ClientRow, failed bool) {
@@ -156,7 +103,7 @@ func briefingKafkaRows(blocks map[string]kafkaMetricBlock, fromMs int64) (rows [
 }
 
 // readBriefingClient — kalem 2 okuması (takım × env). state: ok | skipped | partial.
-func (s *Server) readBriefingClient(ctx context.Context, svcs []string, cur []chstore.ServiceSummary, env string, windowS int, pFrom, from, to time.Time) ([]briefing.ClientRow, string) {
+func (s *Server) readBriefingClient(ctx context.Context, svcs []string, cur []chstore.ServiceSummary, env string, pFrom, from, to time.Time) ([]briefing.ClientRow, string) {
 	var rows []briefing.ClientRow
 	failed, read := false, false
 	fromMs := from.UnixMilli()
@@ -164,13 +111,8 @@ func (s *Server) readBriefingClient(ctx context.Context, svcs []string, cur []ch
 	if rd0, isVM := s.metricChartReaderFor(); isVM {
 		if rd, ok := rd0.(redFamilyReader); ok {
 			read = true
-			for _, svc := range briefingHTTPCandidates(cur, briefingClientHTTPMax) {
-				vctx, cancel := context.WithTimeout(ctx, svcHTTPREDBudget)
-				res := s.readServiceHTTPRED(vctx, rd, true, svc, env, pFrom, to, int64(to.Sub(pFrom).Seconds()))
-				cancel()
-				r, f := briefingHTTPRows(res, svc, fromMs, windowS)
-				rows, failed = append(rows, r...), failed || f
-			}
+			r, f := s.readBriefingHTTPGroup(ctx, rd, briefingHTTPCandidates(cur, len(cur)), env, pFrom, from, to)
+			rows, failed = append(rows, r...), failed || f
 		}
 	}
 

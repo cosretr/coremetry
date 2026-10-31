@@ -194,13 +194,24 @@ type metricChartQueryInput struct {
 	// (red_family.go grpcServerFaultMatch).
 	ErrMatch string
 	WinS     int
+	// SvcValues — v0.10.1719 (briefing kalem 2): servis KÜMESİ süzgeci
+	// `svc=~"a|b"` (vmetrics.EnvMatcher: QuoteMeta + dize kaçışı); dolu iken
+	// Service yok sayılır. GroupedNoTopK: By kırılımı topk(20) ile SARILMAZ
+	// (çağıran seri sayısını küme tavanıyla sınırlar; topk aralık sorgusunda
+	// nokta başına seçer, servis serisi delikli gelirdi).
+	SvcValues     []string
+	GroupedNoTopK bool
 }
 
 // metricChartSelector — SAF: `{__name__…, svc="…", env…, sabit}`.
 func metricChartSelector(in metricChartQueryInput, extra string) string {
 	v := in.Variant
 	parts := []string{vmetrics.NameSelector(vmetrics.NameCandidates(v.Kind, v.Names...))}
-	if !v.Fleet && in.Service != "" && in.SvcLabel != "" {
+	switch {
+	case v.Fleet || in.SvcLabel == "":
+	case len(in.SvcValues) > 0:
+		parts = append(parts, vmetrics.EnvMatcher(in.SvcLabel, in.SvcValues))
+	case in.Service != "":
 		parts = append(parts, in.SvcLabel+"="+vmetrics.PromStrTS(in.Service))
 	}
 	if m := strings.TrimSpace(in.EnvMatcher); m != "" {
@@ -238,7 +249,7 @@ func buildMetricChartPromQL(in metricChartQueryInput) string {
 		"{by}", by,
 		"{win}", fmt.Sprintf("%ds", in.WinS),
 	).Replace(in.Variant.Expr)
-	if len(in.By) > 0 {
+	if len(in.By) > 0 && !in.GroupedNoTopK {
 		q = fmt.Sprintf("topk(%d, %s)", metricChartMaxSeries, q)
 	}
 	return q
