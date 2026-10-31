@@ -716,10 +716,12 @@ export interface CosreComposerFormProps {
   /** v2 karşılaması (mockup B, 2026-10-31) — metin kutusunun ÜSTÜNDE kapsam satırı
    *  (takım çipi); v1 vermez. */
   scopeRow?: ReactNode;
+  /** v0.10.1730 — v2 görünüm B: tek kart + Aa/Derin/Code ToggleGroup (ChatComposer segmented); v1 vermez. */
+  segmented?: boolean;
 }
 
 /** Composer: metin + Derin/Kod/model + gönder/durdur, bağlam şeridi, kapsam çipleri. */
-export function CosreComposerForm({ input: composer, ask, busy, stop, codeLocked, ctxItems, onRemoveCtx, submit, scopeRow }: CosreComposerFormProps) {
+export function CosreComposerForm({ input: composer, ask, busy, stop, codeLocked, ctxItems, onRemoveCtx, submit, scopeRow, segmented }: CosreComposerFormProps) {
   const { input, setInput, setCaret, textareaRef, completion, composerChips, acceptCompletion } = composer;
   const { profiles, defaultProfile, profile, setProfile, activeModel, deep, setDeep, codePill, setCodePill, codeRead } = ask;
   return (
@@ -742,7 +744,7 @@ export function CosreComposerForm({ input: composer, ask, busy, stop, codeLocked
         autoFocus
         placeholder="CoSRE'ye sor… (Shift+Enter: yeni satır · @ kapsam · / komutlar)"
         ariaLabel="CoSRE'ye mesaj"
-        deep={deep} onDeepChange={setDeep} deepDisabled={busy}
+        deep={deep} onDeepChange={setDeep} deepDisabled={busy} segmented={segmented}
         {...(codeRead || codeLocked ? { code: codePill, onCodeChange: setCodePill, codeDisabled: busy, codeReason: codeRead?.available ? undefined : (codeRead?.reason || 'kapalı'), codeLocked } : {})}
         comboboxProps={{
           'aria-autocomplete': 'list',

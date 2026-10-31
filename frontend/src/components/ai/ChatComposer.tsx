@@ -6,6 +6,7 @@ import { Bold, Brain, Code, FileCode, Eye, Italic, Link as LinkIcon, List, ListO
 import { IconButton } from '@/components/ui/IconButton';
 import { Button } from '@/components/ui/Button';
 import { LinkButton } from '@/components/ui/LinkButton';
+import { ToggleGroup, ToggleGroupItem } from '@/components/shadcn/toggle-group';
 import { useAuthUserId } from '@/components/AuthProvider';
 import { chatInputSubmitKey, autoGrowTextarea, CHAT_INPUT_MAX_PX } from './chatInputKey';
 import { ChatMarkdown } from './ChatBubble';
@@ -104,13 +105,18 @@ export interface ChatComposerProps {
    * yerel modelde kalır; yeni konuşma için Temizle). Gerekçeden önce gelir.
    */
   codeLocked?: boolean;
+  /**
+   * v0.10.1730 (CoSRE v2 görünüm B) — Aa / Derin / Code tek ToggleGroup'ta ve
+   * kutu tek kart (cm-composer__box--card). Yalnız v2 verir; v1 hapları aynı.
+   */
+  segmented?: boolean;
 }
 
 export function ChatComposer({
   value, onChange, onSubmit, onCaret, onBeforeKey, popup, actions,
   placeholder, ariaLabel, textareaRef, autoFocus, comboboxProps,
   deep, onDeepChange, deepDisabled,
-  code, onCodeChange, codeDisabled, codeReason, codeLocked,
+  code, onCodeChange, codeDisabled, codeReason, codeLocked, segmented,
 }: ChatComposerProps) {
   const innerRef = useRef<HTMLTextAreaElement>(null);
   const ref = textareaRef ?? innerRef;
@@ -309,7 +315,7 @@ export function ChatComposer({
   const selState: EditState = { value, start: sel.start, end: sel.end };
 
   return (
-    <div className={`cm-composer__box${toolsOn ? ' has-tools' : ''}`}>
+    <div className={`cm-composer__box${toolsOn ? ' has-tools' : ''}${segmented ? ' cm-composer__box--card' : ''}`}>
       {toolsOn && (
         <div id={toolsId} className="cm-composer__tools" role="toolbar" aria-label="Biçimlendirme"
           onKeyDown={onToolsKey}
@@ -365,6 +371,10 @@ export function ChatComposer({
         )}
       </div>
       <div className="cm-composer__actions">
+        {segmented ? (
+          <ModeGroup toolsOn={toolsOn} toggleTools={toggleTools} deep={deep} onDeepChange={onDeepChange} deepDisabled={deepDisabled}
+            code={code} onCodeChange={onCodeChange} codeDisabled={codeDisabled} codeReason={codeReason} codeLocked={codeLocked} />
+        ) : (<>
         <IconButton size="sm" variant="ghost" className="cm-composer__aa" icon="Aa"
           aria-label="Biçimlendirme araçları" aria-controls={toolsOn ? toolsId : undefined}
           active={toolsOn}
@@ -383,6 +393,7 @@ export function ChatComposer({
         {onCodeChange && (
           <CodePill on={!!code} onChange={onCodeChange} disabled={codeDisabled} reason={codeReason} locked={codeLocked} />
         )}
+        </>)}
         {actions}
       </div>
       {liveNote && (
@@ -394,6 +405,50 @@ export function ChatComposer({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * v0.10.1730 — v2 kip grubu: Aa / Derin / Code tek ToggleGroup (type multiple).
+ * Durumlar ve gerekçeler hap sürümüyle AYNI (biçim araçları, Derin kilidi, Kod
+ * gerekçesi / kilidi); yalnız görünüm. Odak metin kutusunda kalır (mousedown).
+ */
+function ModeGroup({ toolsOn, toggleTools, deep, onDeepChange, deepDisabled, code, onCodeChange, codeDisabled, codeReason, codeLocked }: {
+  toolsOn: boolean; toggleTools: () => void;
+  deep?: boolean; onDeepChange?: (on: boolean) => void; deepDisabled?: boolean;
+  code?: boolean; onCodeChange?: (on: boolean) => void; codeDisabled?: boolean; codeReason?: string; codeLocked?: boolean;
+}) {
+  const tr = useT();
+  const codeClosed = !!codeReason;
+  const codeOn = !!codeLocked || (!!code && !codeClosed);
+  const value = [toolsOn && 'aa', deep && 'deep', codeOn && 'code'].filter((v): v is string => !!v);
+  const codeTitle = codeLocked
+    ? (codeClosed ? `${tr('ai.codeTurnLocked')} — ${codeReason}` : tr('ai.codeTurnLocked'))
+    : codeClosed ? `${tr('ai.codeTurnUnavailable')} — ${codeReason}` : tr('ai.codeTurnHint');
+  const keep = (e: React.MouseEvent) => e.preventDefault();
+  return (
+    <ToggleGroup type="multiple" variant="outline" size="sm" className="cm-mode-group" aria-label="Kip" value={value}
+      onValueChange={next => {
+        if (next.includes('aa') !== toolsOn) toggleTools();
+        if (onDeepChange && next.includes('deep') !== !!deep) onDeepChange(!deep);
+        if (onCodeChange && next.includes('code') !== codeOn) onCodeChange(!code);
+      }}>
+      <ToggleGroupItem value="aa" className="cm-composer__aa" aria-label="Biçimlendirme araçları"
+        title={toolsOn ? 'Biçimlendirme araçlarını gizle' : 'Biçimlendirme araçlarını göster'} onMouseDown={keep}>Aa</ToggleGroupItem>
+      {onDeepChange && (
+        <ToggleGroupItem value="deep" className="cm-deep-pill" aria-label="Derin düşün" disabled={deepDisabled}
+          title={DEEP_THINK_TOOLTIP} onMouseDown={keep}>
+          <Brain size={14} strokeWidth={2} aria-hidden="true" />Derin
+        </ToggleGroupItem>
+      )}
+      {onCodeChange && (
+        <ToggleGroupItem value="code" className="cm-deep-pill cm-code-pill" aria-label={tr('ai.codeTurn')}
+          disabled={codeDisabled || codeClosed || codeLocked} data-locked={codeLocked ? '' : undefined}
+          title={codeTitle} onMouseDown={keep}>
+          <FileCode size={14} strokeWidth={2} aria-hidden="true" />{tr('ai.codeTurn')}
+        </ToggleGroupItem>
+      )}
+    </ToggleGroup>
   );
 }
 

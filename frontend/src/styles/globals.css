@@ -6232,3 +6232,25 @@ tr:hover .ps-attr-act, .ps-attr-act:focus-visible { opacity: 1; }
   width: auto; padding: var(--sp-2) var(--sp-6); border-radius: 999px;
   font-size: var(--cosre-fs-small); color: var(--muted-foreground); box-shadow: var(--shadow-md);
 }
+
+/* ── v0.10.1730 — CoSRE v2 çekmecesi görünüm turu B (composer; operatör onayı,
+   aynı mockup). Tek kart: --border, 12px köşe, odakta halka (:focus-within);
+   Aa / Derin / Code tek ToggleGroup (.cm-mode-group); model seçimi sessiz;
+   gönder yuvarlak primary (.cm-send, mevcut). Kapsam yine [data-cosre-v2]. */
+[data-cosre-v2] .cosre-root--drawer .cm-composer__box--card {
+  border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--card);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--text) 4%, transparent);
+}
+[data-cosre-v2] .cosre-root--drawer .cm-composer__box--card:focus-within {
+  border-color: var(--ring); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 25%, transparent);
+}
+[data-cosre-v2] .cosre-root--drawer .cm-mode-group { margin-right: auto; }
+[data-cosre-v2] .cosre-root--drawer .cm-mode-group [data-slot="toggle-group-item"] {
+  height: auto; padding: var(--sp-1) var(--sp-4); font-size: var(--cosre-fs-small); font-weight: 400; color: var(--muted-foreground); border-color: var(--border);
+}
+[data-cosre-v2] .cosre-root--drawer .cm-mode-group [data-slot="toggle-group-item"][data-state="on"] { background: var(--muted); color: var(--text); }
+[data-cosre-v2] .cosre-root--drawer .cm-composer__box--card .cm-model-pill {
+  background: transparent; border-color: transparent; box-shadow: none;
+  color: var(--muted-foreground); font-family: var(--cosre-font-mono);
+}
+[data-cosre-v2] .cosre-root--drawer .cm-composer__box--card .cm-model-pill:hover:not(:disabled) { background: var(--muted); color: var(--text); }

@@ -413,7 +413,7 @@ export function CosreChatV2({ defaultOpen = false }: CosreChatV2Props) {
             )}
           </div>
           <CosreComposerForm input={composer} ask={ask} busy={busy} stop={() => void stop()} codeLocked={codeLocked}
-            ctxItems={explainCtx.ctxItems} onRemoveCtx={explainCtx.removeCtx} submit={submit}
+            ctxItems={explainCtx.ctxItems} onRemoveCtx={explainCtx.removeCtx} submit={submit} segmented
             scopeRow={messages.length === 0 ? <CosreTeamScopeChip scope={teamScope} /> : undefined} />
         </div>
       </CosreSheet>
