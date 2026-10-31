@@ -111,6 +111,8 @@ export const keys = {
 
   anomalies: {
     all:         ['anomalies'] as const,
+    logMl:       ['anomalies', 'log-ml'] as const,          // log ML dilim 0
+    logMlScore:  ['anomalies', 'log-ml', 'scorecard'] as const,
     logPatterns: ['anomalies', 'log-patterns'] as const,
     traceOps:    ['anomalies', 'trace-ops'] as const,
     metrics:     ['anomalies', 'metrics'] as const,

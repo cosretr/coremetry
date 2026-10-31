@@ -1603,6 +1603,20 @@ export const api = {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(c),
     }),
+  // Log ML dilim 0 — ayrı tablo, ayrı uçlar (internal/api/log_ml.go).
+  logMlEvents: (p: { since?: GoDuration; detector?: string; service?: string; stage?: string } = {}) =>
+    get<{ items: import('./types').LogMLEvent[]; truncated: boolean }>(
+      `/api/log-ml/events?since=${p.since ?? '24h'}&detector=${encodeURIComponent(p.detector ?? '')}&service=${encodeURIComponent(p.service ?? '')}&stage=${encodeURIComponent(p.stage ?? '')}`),
+  logMlScorecard: () => get<import('./types').LogMLScorecard>(`/api/log-ml/scorecard`),
+  putLogMlVerdict: (id: string, body: { verdict: 'anomaly' | 'not_anomaly'; note?: string; detector: string; service: string }) =>
+    request<unknown>(`/api/log-ml/${encodeURIComponent(id)}/verdict`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    }),
+  getLogMl: () => get<import('./types').LogMLConfig>(`/api/admin/log-ml`),
+  putLogMl: (c: import('./types').LogMLConfig) =>
+    request<import('./types').LogMLConfig>(`/api/admin/log-ml`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(c),
+    }),
   putAnomalyPromotion: (c: AnomalyPromotionConfig) =>
     request<AnomalyPromotionConfig>(`/api/settings/anomaly-promotion`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },

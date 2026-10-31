@@ -11648,3 +11648,24 @@ export interface NotifyDigestItem {
   signature: string; problemId: string; service: string; severity: string; priority: string; kind: string;
   headline: string; impact: string; confidence: string; startedAt: number; queuedAt: number; count: number;
 }
+
+// ── Log ML (ES log ML katmanı, dilim 0; docs/audits/log-ml-audit.md) ──────
+// anomaly_events'ten AYRI tablo; stage=shadow Problem üretmez.
+export interface LogMLEvent {
+  id: string; detector: string; source: string; stage: 'shadow' | 'promoted' | string;
+  service: string; level?: string; pod?: string; code?: string;
+  startedAt: number; lastSeen: number; windowSec: number;
+  baseline: number; observed: number; score: number; direction: 'up' | 'down' | string;
+  evidence?: string; dupOf?: string;
+  verdict?: 'anomaly' | 'not_anomaly'; verdictBy?: string; verdictAt?: number; note?: string;
+}
+export interface LogMLDetectorScore { detector: string; events: number; samples: number; hits: number; hitRate: number }
+export interface LogMLPromotion { enabled: boolean; minHitRate: number; minSamples: number }
+export interface LogMLConfig {
+  enabled: boolean;
+  detectors: Record<string, boolean>;
+  promotion: Record<string, LogMLPromotion>;
+  bucketSec: number; tickSec: number; timeoutMs: number; maxServices: number; maxEsQueriesPerTick: number;
+  baselineDays: number; minBaselineRate: number; dwellBuckets: number; dailyEventCap: number;
+}
+export interface LogMLScorecard { windowDays: number; detectors: LogMLDetectorScore[]; promotion: Record<string, LogMLPromotion> }

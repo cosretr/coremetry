@@ -1,0 +1,116 @@
+// LogMLSubsection — Settings › Anomaly › "Log ML" (dilim 0; operatör
+// 2026-10-31). Ana anahtar (kapalıyken ES'e sorgu yok), dedektör başına
+// anahtar, dedektör başına ayrı "Problem'e terfi" anahtarı, temel eşikler.
+// Hepsi varsayılan KAPALI. Blob bir sonraki tikte okunur (restart yok);
+// PUT audit'e eski/yeni değerle düşer (sunucu).
+import { useEffect, useState } from 'react';
+import { Spinner } from '@/components/Spinner';
+import { Button } from '@/components/shadcn/button';
+import { Field, CheckboxField } from '@/components/coremetry/Field';
+import { ActionRow } from '@/components/coremetry/ActionRow';
+import { api } from '@/lib/api';
+import type { LogMLConfig } from '@/lib/types';
+import { FlashBox, humanize } from './shared';
+
+export const LOG_ML_DETECTORS: { id: string; label: string; hint: string }[] = [
+  { id: 'log_volume', label: 'Log hacmi', hint: 'Servis × seviye hacmi, mevsimsel median+MAD, iki yönlü' },
+  { id: 'error_rate', label: 'Hata oranı', hint: 'Error seviyesi sayısı, yalnız yukarı, mevsimsel' },
+  { id: 'service_silent', label: 'Servis sustu', hint: 'Beklenen hacim varken log gelmiyor' },
+  { id: 'template_spike', label: 'Şablon spike', hint: 'Bir şablonun sayısı kendi tabanının üstüne çıktı' },
+  { id: 'rare_template', label: 'Nadir şablon', hint: 'Daha önce görülmemiş şablon (log_ml kaynağıyla)' },
+  { id: 'rare_error_code', label: 'Nadir hata kodu', hint: 'Serviste 14 gündür görülmemiş kod' },
+  { id: 'pod_outlier', label: 'Aykırı pod', hint: 'Aynı servisin pod\'ları arasında hata sayısı sapması' },
+  { id: 'change_point', label: 'Kırılma noktası', hint: 'CUSUM; ±15 dk içinde rollout varsa eşlenir' },
+];
+
+const H3 = 'mt-4 mb-1 text-[length:var(--fs-md)] font-semibold';
+const NOTE = 'text-[length:var(--fs-xs)] leading-normal text-(--text3)';
+
+export function LogMLSubsection() {
+  const [cfg, setCfg] = useState<LogMLConfig | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [flash, setFlash] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+
+  useEffect(() => {
+    api.getLogMl().then(setCfg).catch(err => setFlash({ kind: 'err', text: humanize(err) }));
+  }, []);
+
+  const save = async () => {
+    if (!cfg) return;
+    setBusy(true); setFlash(null);
+    try {
+      setCfg(await api.putLogMl(cfg));
+      setFlash({ kind: 'ok', text: 'Kaydedildi — bir sonraki Log ML tikinde geçerli, restart gerekmez.' });
+    } catch (err) {
+      setFlash({ kind: 'err', text: humanize(err) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const num = (label: string, key: keyof LogMLConfig, hint: string, step = 1) => cfg && (
+    <Field type="number" label={label} hint={hint} controlClassName="max-w-[180px]" step={step}
+      value={String(cfg[key] as number)}
+      onChange={e => setCfg({ ...cfg, [key]: Number(e.target.value) })} />
+  );
+
+  return (
+    <div data-testid="logml-settings">
+      <h2 className="mb-1.5 text-[length:var(--fs-lg)] font-semibold">Log ML</h2>
+      <p className="mb-[18px] text-[length:var(--fs-sm)] leading-[1.55] text-(--text2)">
+        Elasticsearch log anomalileri (hacim, hata oranı, şablon, nadir kod, pod, kırılma). Olaylar
+        /anomalies › Log ML sekmesine <b>gölge</b> olarak düşer; Problem üretmez. Terfi dedektör
+        başına ayrı anahtar ve karne eşiğiyle açılır. Ana anahtar kapalıyken ES&apos;e hiç sorgu atılmaz.
+      </p>
+      {!cfg ? (
+        flash ? <FlashBox kind={flash.kind}>{flash.text}</FlashBox> : <Spinner />
+      ) : (
+        <>
+          <CheckboxField className="mb-3" checked={cfg.enabled}
+            onCheckedChange={v => setCfg({ ...cfg, enabled: v })}
+            label="Log ML açık (ana anahtar)"
+            hint="Kapalı: tik yalnız sayaç günceller, Elasticsearch'e sorgu yok." />
+
+          <h3 className={H3}>Dedektörler</h3>
+          <p className={NOTE}>Soldaki anahtar dedektörü açar (gölge). Sağdaki &quot;terfi&quot; anahtarı karne eşiğini geçen olayı Problem&apos;e kopyalar.</p>
+          <div className="mt-2 grid gap-2">
+            {LOG_ML_DETECTORS.map(d => {
+              const p = cfg.promotion[d.id] ?? { enabled: false, minHitRate: 0.8, minSamples: 20 };
+              return (
+                <div key={d.id} className="grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_120px_120px] md:items-start">
+                  <CheckboxField checked={cfg.detectors[d.id] === true} disabled={!cfg.enabled}
+                    onCheckedChange={v => setCfg({ ...cfg, detectors: { ...cfg.detectors, [d.id]: v } })}
+                    label={d.label} hint={d.hint} />
+                  <CheckboxField checked={p.enabled} disabled={!cfg.enabled || cfg.detectors[d.id] !== true}
+                    onCheckedChange={v => setCfg({ ...cfg, promotion: { ...cfg.promotion, [d.id]: { ...p, enabled: v } } })}
+                    label="Problem'e terfi" hint="Varsayılan kapalı; eşik + asgari örnek şart" />
+                  <Field type="number" label="Min isabet" step={0.05} value={String(p.minHitRate)} small
+                    onChange={e => setCfg({ ...cfg, promotion: { ...cfg.promotion, [d.id]: { ...p, minHitRate: Number(e.target.value) } } })} />
+                  <Field type="number" label="Min örnek" value={String(p.minSamples)} small
+                    onChange={e => setCfg({ ...cfg, promotion: { ...cfg.promotion, [d.id]: { ...p, minSamples: Number(e.target.value) } } })} />
+                </div>
+              );
+            })}
+          </div>
+
+          <h3 className={H3}>Eşikler</h3>
+          <div className="grid gap-3 md:grid-cols-2">
+            {num('Taban (gün)', 'baselineDays', 'Mevsimsel taban için geriye bakış (3–28)')}
+            {num('Hacim tabanı (satır/kova)', 'minBaselineRate', 'Tabanı bunun altında kalan servis için hacim/susma sessiz', 1)}
+            {num('Dwell (kova)', 'dwellBuckets', 'Olay açılmadan art arda sapmalı kova (1–12)')}
+            {num('Günlük tavan', 'dailyEventCap', 'Dedektör başına günlük yeni olay (10–10000)')}
+            {num('ES tik tavanı', 'maxEsQueriesPerTick', 'Tik başına en çok ES sorgusu (1–20)')}
+            {num('Kova (sn)', 'bucketSec', 'date_histogram kovası (60–3600)')}
+            {num('Tik (sn)', 'tickSec', 'Alt sistem tiki (60–3600)')}
+            {num('ES zaman aşımı (ms)', 'timeoutMs', 'Tik içi istek (1000–60000)')}
+          </div>
+
+          <div className="mt-[18px]">
+            <ActionRow confirm={<Button onClick={save} loading={busy}>Save</Button>} />
+            {flash && <FlashBox kind={flash.kind}>{flash.text}</FlashBox>}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}

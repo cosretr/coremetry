@@ -3096,6 +3096,38 @@ func canonicalTables(sd, ld, md int) []string {
 		ORDER BY (team_key, env)
 		TTL toDateTime(generated_at) + INTERVAL 1 HOUR`,
 
+		// log_ml_events — ES log ML katmanı dilim 0 (docs/audits/log-ml-audit.md
+		// K1): anomaly_events'ten AYRI tablo. ListAnomalyEvents tür süzgeci
+		// taşımadığı için aynı tabloya shadow satırı Inbox/fusion/terfiye
+		// sızardı; burada hiçbir eski okuyucu yok. source/stage kolonları
+		// operatörün ayrım kararı: stage=shadow Problem üretmez, promoted =
+		// anomaly_events'e kopyalandı. RMT(version) + FINAL, ORDER BY id
+		// (FingerprintAnomaly türevi), partition YOK (P1), 30 g TTL (karne
+		// penceresiyle aynı). Yazıcı yalnız log_ml lideri (sre pod'u); DDL
+		// bu listede → api/worker boot'unda iner, sre pod'u tabloyu bekler.
+		`CREATE TABLE IF NOT EXISTS log_ml_events (
+			id            String,
+			detector      LowCardinality(String),
+			source        LowCardinality(String) DEFAULT 'log_ml',
+			stage         LowCardinality(String) DEFAULT 'shadow',
+			service       LowCardinality(String),
+			level         LowCardinality(String) DEFAULT '',
+			pod           String DEFAULT '',
+			code          String DEFAULT '',
+			started_at    DateTime64(9),
+			last_seen     DateTime64(9),
+			window_sec    UInt32 DEFAULT 300,
+			baseline      Float64 DEFAULT 0,
+			observed      Float64 DEFAULT 0,
+			score         Float64 DEFAULT 0,
+			direction     LowCardinality(String) DEFAULT 'up',
+			evidence      String DEFAULT '' CODEC(ZSTD(3)),
+			dup_of        String DEFAULT '',
+			version       UInt64 DEFAULT toUnixTimestamp64Nano(now64(9))
+		) ENGINE = ReplacingMergeTree(version)
+		ORDER BY id
+		TTL toDate(started_at) + INTERVAL 30 DAY`,
+
 		// cosre_answer_grounding — CoSRE öğrenme Faz 4: çevrimdışı öz-
 		// değerlendirme. Gece örneklenen cevabın her iddiası, turda okunan
 		// tool çıktılarına karşı self-hosted modelle etiketlenir. Yeniden

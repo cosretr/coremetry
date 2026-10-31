@@ -12,6 +12,7 @@ export {
   useCreateAnomalySilence, usePutAnomalyVerdict, useDeleteAnomalySilence,
   useBulkDeleteAnomalySilences,
 } from './anomalies';
+export { useLogMLEvents, useLogMLScorecard } from './logml'; // log ML dilim 0
 export {
   useServices, useServiceMap,
   useServiceInfra, useServiceNeighbors, useServiceRuntime,
