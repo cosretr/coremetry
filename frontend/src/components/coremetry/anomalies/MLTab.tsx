@@ -19,7 +19,7 @@ export const ML_DETECTOR_TR: Record<string, string> = {
   template_spike: 'Şablon spike', rare_template: 'Nadir şablon', rare_error_code: 'Nadir hata kodu',
   pod_outlier: 'Aykırı pod', change_point: 'Kırılma',
   op_latency: 'Endpoint gecikmesi', op_error_rate: 'Endpoint hata oranı', throughput_drop: 'Trafik düşüşü',
-  dependency_latency: 'Bağımlılık gecikmesi', rare_exception: 'Nadir exception', trace_pod_outlier: 'Aykırı pod (trace)', trace_change_point: 'Kırılma (trace)',
+  dependency_latency: 'Bağımlılık gecikmesi', trace_pod_outlier: 'Aykırı pod (trace)', trace_change_point: 'Kırılma (trace)',
 };
 export type MLSignal = '' | 'log' | 'trace';
 /** SAF: ?signal= çözümü; bilinmeyen → hepsi. */

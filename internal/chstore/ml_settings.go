@@ -19,9 +19,13 @@ const mlSettingsKey = "ml"
 // Hepsi varsayılan kapalı; kod dilimlerle gelir, ad burada hazır. Trace
 // adları mevcut anomaly dedektörleriyle (trace_ops, op_latency, error_ramp,
 // exception_storm) ÇAKIŞMAZ: ml_events ayrı ad alanı, eski kod dokunulmaz.
+// SAHİPLİK (operatör 2026-10-31): exception sinyalinin sahibi mevcut exception
+// akışı; trace ML'de rare_exception YOK. op_error_rate olayı aynı servis ±5 dk'da
+// exception kaydı bulursa en sık 3 tip + Oracle bağlamı KANITA ID ile bağlanır,
+// veri kopyalanmaz (T1).
 var (
 	MLLogDetectorNames   = []string{"log_volume", "error_rate", "service_silent", "template_spike", "rare_template", "rare_error_code", "pod_outlier", "change_point"}
-	MLTraceDetectorNames = []string{"op_latency", "op_error_rate", "throughput_drop", "dependency_latency", "rare_exception", "trace_pod_outlier", "trace_change_point"}
+	MLTraceDetectorNames = []string{"op_latency", "op_error_rate", "throughput_drop", "dependency_latency", "trace_pod_outlier", "trace_change_point"}
 	MLDetectorNames      = append(append([]string{}, MLLogDetectorNames...), MLTraceDetectorNames...)
 )
 
