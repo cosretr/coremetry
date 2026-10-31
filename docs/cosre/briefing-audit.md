@@ -270,3 +270,4 @@ Streaming'e geçilirse: v1 olay `briefing` → `data-briefing{id:"briefing"}` + 
 - 2026-10-30: Q1–Q12 öneriler olduğu gibi onaylandı; Faz 1 başladı (v0.10.1690).
 - Q10 operatör 2026-10-31 geri aldı: satır geri bildirimi yok (cosre_signals'a briefing kinds eklenmez).
 - 2026-10-31: kalem 6 / `open_problems` kaynağı problems tablosu değil, Service şeridiyle aynı Inbox boru hattı (`inboxView`; v0.10.1691).
+- 2026-10-31 (v0.10.1712): kalem 2 `client_metrics_diff` — Q11'e göre Faz 1 = VM HTTP/gRPC **sunucu** ailesi (`readServiceHTTPRED`, takımın en yoğun 1 servisi; R9 ≤ 6 VM) + Kafka (`runKafkaQuestions`, gönderim hatası + lag, takım kümesi tek sorgu, servis × topic). Giden HTTP istemcisi Faz 2. Eşik `thresholds.client_x`; okunamadı → `partial`, kaynak yok → `skipped`.

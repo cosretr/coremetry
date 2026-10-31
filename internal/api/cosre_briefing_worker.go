@@ -22,10 +22,15 @@ package api
 //   7 rollout   — GetRecentDeploys (tik başına TEK filo okuması) adayları →
 //                 servis başına GetServiceDeploys (Overview deploy işaretleri)
 //                 + ComputeDeployImpact (deploy etki paneli), takım başına ≤3
-// Kalem 2 + 5 (istemci metrikleri, Oracle) sonraki dilimde;
-// kart bunları `skipped` ile söyler (sessizce "yok" değil).
+//   2 istemci   — v0.10.1712, cosre_briefing_client.go: VM HTTP/gRPC sunucu
+//                 ailesi (readServiceHTTPRED, en yoğun servis) + Kafka
+//                 (runKafkaQuestions, takım kümesi tek sorgu); Q11 → giden
+//                 HTTP istemcisi Faz 2
+// Kalem 5 (Oracle) sonraki dilimde; kart onu `skipped` ile söyler
+// (sessizce "yok" değil).
 //
-// Maliyet (R9): takım × env başına 2 MV + 1 inbox + ≤3×2 deploy okuması.
+// Maliyet (R9): takım × env başına 2 MV + 1 inbox + ≤3×2 deploy okuması
+// + ≤ 5 VM (kalem 2: 1 servis × 3 grafik + 2 Kafka sorusu).
 // Tek takımın okuma hatası diğerlerini durdurmaz; okunamayan kalem `partial`.
 
 import (
@@ -53,7 +58,7 @@ const (
 )
 
 // pendingItems — bu dilimde henüz okunmayan kalemler (kartta `skipped`).
-var briefingPendingItems = []string{briefing.ItemClient, briefing.ItemOracle}
+var briefingPendingItems = []string{briefing.ItemOracle}
 
 // briefingTeam — üretim birimi: kanonik anahtar + gösterim adı + kapsam.
 type briefingTeam struct {
@@ -261,6 +266,18 @@ func (s *Server) buildBriefing(ctx context.Context, t briefingTeam, env string, 
 		findings = append(findings, briefing.REDFindings(toREDRows(cur), toREDRows(prev), th, env, cfg.WindowS)...)
 	}
 
+	// 2 — istemci / sunucu-ailesi metrikleri (VM + Kafka).
+	skipped := append([]string(nil), briefingPendingItems...)
+	switch rows, state := s.readBriefingClient(ctx, t.Services, cur, env, cfg.WindowS, pFrom, from, to); state {
+	case "skipped":
+		skipped = append(skipped, briefing.ItemClient)
+	case "partial":
+		partial = append(partial, briefing.ItemClient)
+		fallthrough
+	default:
+		findings = append(findings, briefing.ClientFindings(rows, th, env, cfg.WindowS)...)
+	}
+
 	// 3 + 6 — tek Inbox okuması (şerit kümesi, takım birleşimi).
 	if res, _, err := mcptools.ReadInboxOpen(ctx, d, t.Label, t.Services, env, mcptools.InboxOpenScan); err != nil {
 		partial = append(partial, briefing.ItemException, briefing.ItemProblem)
@@ -271,7 +288,6 @@ func (s *Server) buildBriefing(ctx context.Context, t briefingTeam, env string, 
 	}
 
 	// 4 — takım ERROR logları.
-	skipped := append([]string(nil), briefingPendingItems...)
 	switch logs.State {
 	case teamLogsOK:
 		findings = append(findings, briefing.LogFindings(t.Label, logs.Cur, logs.Prev, logs.LowerBound, th, briefingLogsURL(t.Label, cfg.WindowS))...)

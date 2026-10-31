@@ -184,6 +184,10 @@ type svcHTTPREDResult struct {
 	Family   string
 	FamilyID string
 	Both     bool
+	// ReadFailed — v0.10.1712: UseVM=false bir OKUMA hatasından (etiket /
+	// istek hızı sorgusu); briefing kalem 2 bunu "okunamadı" (partial) sayar,
+	// histogram yokluğunu değil.
+	ReadFailed bool
 	// v0.10.1481 — çözülmüş girdiler (sorumlu operasyonun rota grafikleri aynı
 	// histogramı aynı süzgeçlerle okur; copilot_service_route_red.go).
 	svcLabel, envMatcher, statusLabel string
@@ -210,6 +214,7 @@ func (s *Server) readServiceHTTPRED(ctx context.Context, rd redFamilyReader, isV
 	probe := svcHTTPREDProbe{VM: isVM && rd != nil, GRPCChecked: true}
 	fallback := func() svcHTTPREDResult {
 		res.UseVM, res.Reason = pickServiceChartSource(probe)
+		res.ReadFailed = probe.LabelErr != nil || probe.RateErr != nil
 		res.Charts = nil
 		return res
 	}
