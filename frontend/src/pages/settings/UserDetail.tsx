@@ -333,7 +333,7 @@ export default function UserDetailPage() {
     );
   }
 
-  const { user: u, groups, groupSyncEnabled, groupsSyncedAt } = q.data;
+  const { user: u, groups, groupSyncEnabled, groupsSyncedAt, online, lastSeenAt } = q.data;
   const row: UserRow = u;
   const isMe = me?.id === u.id;
   const st = userStatus(u);
@@ -411,9 +411,16 @@ export default function UserDetailPage() {
                 <Badge variant="outline">{userSourceLabel(u.authProvider)}</Badge>
                 {u.roleLocked && <StatusBadge status="warn" title="Rol elle verildi; LDAP girişi AD eşlemesiyle ezmez">Rol kilitli</StatusBadge>}
                 {isMe && <Badge variant="outline">sen</Badge>}
+                {/* v0.10.1735 — varlık; yeşil = Users "online" rozetinin operatör istisnası (v0.10.1535). */}
+                {online && lastSeenAt ? (
+                  <span className="badge b-online" title={`Son kimlikli istek: ${tsLong(lastSeenAt)}`}>
+                    ● Çevrimiçi · son istek {tsRel(lastSeenAt)}
+                  </span>
+                ) : null}
               </div>
               <div className="text-[13px] text-(--text2)">
                 Son giriş: {u.lastLoginAt ? <>{tsRel(u.lastLoginAt)} · {tsLong(u.lastLoginAt)}</> : 'hiç'}
+                {!online && lastSeenAt ? <> · son görülme <span title={tsLong(lastSeenAt)}>{tsRel(lastSeenAt)}</span></> : null}
               </div>
             </div>
             <div className="flex gap-2 self-start">
@@ -452,6 +459,7 @@ export default function UserDetailPage() {
                     { k: 'Rol', v: editing ? <RoleEditor user={row} isMe={isMe} onChanged={refresh} /> : u.role, mono: !editing },
                     { k: 'Özel rol', v: editing ? <CustomRoleEditor user={row} catalog={rolesQ.data ?? []} onChanged={refresh} /> : u.customRole },
                     { k: 'Son giriş', v: when(u.lastLoginAt) },
+                    { k: 'Son istek', v: when(lastSeenAt), title: 'Son kimlikli API isteği (varlık damgası, 24 sa saklanır)' },
                     { k: 'Oluşturulma', v: u.createdAt ? tsLong(u.createdAt) : null },
                     { k: 'Dizin kullanıcı adı', v: u.ldapUsername, mono: true },
                   ]} />

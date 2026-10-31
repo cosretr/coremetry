@@ -164,7 +164,39 @@ func (p *presenceTracker) lastSeen(ctx context.Context, userIDs []string) map[st
 			}
 		}
 	}
+	return mergePresence(out, p.localStamps(userIDs), p.now().UnixNano())
+}
+
+// localStamps — bu pod'un throttle haritasındaki son damgalar (v0.10.1735).
+// Redis yokken (Noop önbellek: MGet her şeyi boş döner) ya da bir Redis
+// kesintisinde varlık bu haritadan okunur: tek pod'lu kurulumda tam, çok
+// pod'luda en azından bu pod'a gelen istekler.
+func (p *presenceTracker) localStamps(userIDs []string) map[string]int64 {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	out := make(map[string]int64, len(userIDs))
+	for _, id := range userIDs {
+		if t, ok := p.last[id]; ok {
+			out[id] = t.UnixNano()
+		}
+	}
 	return out
+}
+
+// mergePresence — SAF (v0.10.1735): Redis damgaları + yerel geri-düşme;
+// kullanıcı başına EN YENİ damga kazanır. presenceTTL'den eski yerel damga
+// alınmaz (Redis anahtarı o yaşta zaten düşmüş olurdu — iki kaynak aynı
+// "son görülme" ufkunu taşısın).
+func mergePresence(redis, local map[string]int64, nowNs int64) map[string]int64 {
+	for id, ns := range local {
+		if ns <= 0 || nowNs-ns >= presenceTTL.Nanoseconds() {
+			continue
+		}
+		if ns > redis[id] {
+			redis[id] = ns
+		}
+	}
+	return redis
 }
 
 // presenceOnline is the pure stamp→flag mapping: a positive stamp

@@ -6627,6 +6627,10 @@ export interface UserDetail {
   groups: UserLdapGroup[];
   groupSyncEnabled: boolean;
   groupsSyncedAt?: number;   // unix ns
+  // v0.10.1735 — varlık: son kimlikli API isteği (unix ns) + çevrimiçi
+  // (< 5 dk; Users listesinin "online" rozetiyle aynı eşik).
+  lastSeenAt?: number;
+  online: boolean;
 }
 
 // AuditEntry — append-only audit row consumed by /admin/audit.

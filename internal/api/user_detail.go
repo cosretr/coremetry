@@ -21,6 +21,7 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/cilcenk/coremetry/internal/auth"
 	"github.com/cilcenk/coremetry/internal/chstore"
@@ -47,6 +48,10 @@ type userDetailResp struct {
 	Groups           []userLdapGroup `json:"groups"`
 	GroupSyncEnabled bool            `json:"groupSyncEnabled"`
 	GroupsSyncedAt   int64           `json:"groupsSyncedAt,omitempty"` // unix ns
+	// v0.10.1735 — varlık (presence.go): son kimlikli istek + çevrimiçi
+	// (< 5 dk). Damga yoksa lastSeenAt yok, online false.
+	LastSeenAt int64 `json:"lastSeenAt,omitempty"`
+	Online     bool  `json:"online"`
 }
 
 func (s *Server) getUserDetail(w http.ResponseWriter, r *http.Request) {
@@ -64,6 +69,11 @@ func (s *Server) getUserDetail(w http.ResponseWriter, r *http.Request) {
 		u.AuthProvider = "local"
 	}
 	resp := userDetailResp{User: *u, Groups: []userLdapGroup{}}
+	if s.presence != nil {
+		if ns, ok := s.presence.lastSeen(r.Context(), []string{u.ID})[u.ID]; ok {
+			resp.LastSeenAt, resp.Online = ns, presenceOnline(ns, time.Now().UnixNano())
+		}
+	}
 	if s.ldapGroupSync != nil {
 		resp.GroupSyncEnabled = s.ldapGroupSync.Enabled()
 		if snap := s.ldapGroupSync.Snapshot(); snap != nil {
