@@ -217,6 +217,7 @@ export function explainEvidence(meta: ChatExplainMeta | undefined): ExplainEvide
     spans: meta.evidenceSpanIds?.length ?? 0,
     traces: meta.evidenceTraceIds?.length ?? 0,
     oracle: meta.oracleRows ?? 0,
+    ...(meta.logs ? { logs: meta.logs } : {}), // v0.10.1742
   };
 }
 

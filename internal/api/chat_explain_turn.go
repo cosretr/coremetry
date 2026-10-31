@@ -115,6 +115,8 @@ type chatExplainMeta struct {
 	EvidenceSpanIDs  []string            `json:"evidenceSpanIds,omitempty"`
 	EvidenceTraceIDs []string            `json:"evidenceTraceIds,omitempty"`
 	OracleRows       int                 `json:"oracleRows,omitempty"`
+	// Logs — v0.10.1742: trace açıklamasının log okuması (Kanıt satırı).
+	Logs *traceLogOutcome `json:"logs,omitempty"`
 }
 
 // normalizeExplainAsk — SAF: tür beyaz listesi + kimlik biçimi. trace 32-hex
@@ -384,7 +386,8 @@ func (s *Server) emitTraceExplainTurn(ctx context.Context, emit func(string, any
 	links = append(links, s.answerRequestIDLinks(ctx, text, in.RootService)...)
 	meta := chatExplainMeta{Kind: explainAskTrace, ID: traceID, Surface: aisurface.ExplainTraceChat,
 		Cached: res.Cached, CachedAtMs: res.CachedAtMs,
-		EvidenceSpanIDs: clampExplainIDs(in.Evidence), OracleRows: in.OracleRows, Code: code}
+		EvidenceSpanIDs: clampExplainIDs(in.Evidence), OracleRows: in.OracleRows, Code: code,
+		Logs: sanitizeTraceLogOutcome(&in.Logs)} // v0.10.1742
 	ans := map[string]any{
 		"text": text, "exchangeId": res.Xid,
 		"suggestions":     guidedSuggestions(route),

@@ -22,9 +22,12 @@ import type { IdLink } from '@/components/ai/inlineIdLinks';
 import { verdictLine, hoistCodeQuotes, dropVerdictSentence } from './explainAnatomy';
 import { normalizeMathEscapes } from '@/components/mathEscapes'; // v0.10.1396
 import { useTypewriter } from './useTypewriter'; // v0.10.1384 — tüm cevap tek seferde gelince hızlı yazma
+import { traceLogEvidence } from '@/lib/explainLogEvidence'; // v0.10.1742
+import type { TraceLogOutcome } from '@/lib/types';
 
 // oracle — v0.10.921 (Kademe A): Explain'e giren Oracle hata satırı sayısı.
-export interface ExplainEvidence { spans: number; traces: number; oracle?: number }
+// logs — v0.10.1742: trace log okumasının sonucu (N satır / log yok / okunamadı).
+export interface ExplainEvidence { spans: number; traces: number; oracle?: number; logs?: TraceLogOutcome }
 
 // evidenceHint — Kanıt satırının ipucu; yalnız DOĞRU olanı söyler.
 // v0.10.1033 (operatör: "Kanıt span'lere gerek yok") — span kimlikleri artık
@@ -68,7 +71,8 @@ export function ExplainBody({ text: rawText, busy, links, evidence, verdict: wan
     const h = hoistCodeQuotes(text);
     return verdict ? { quotes: h.quotes, rest: dropVerdictSentence(h.rest, verdict) } : h;
   }, [busy, text, verdict]);
-  const ev = evidence && (evidence.spans > 0 || evidence.traces > 0 || (evidence.oracle ?? 0) > 0) ? evidence : null;
+  const logPart = traceLogEvidence(evidence?.logs);
+  const ev = evidence && (evidence.spans > 0 || evidence.traces > 0 || (evidence.oracle ?? 0) > 0 || logPart) ? evidence : null;
   const hint = ev ? evidenceHint(ev) : '';
   const tw = useTypewriter(hoisted.rest, revealAt != null && !busy ? { at: revealAt, from: 0 } : undefined);
   return (
@@ -82,6 +86,7 @@ export function ExplainBody({ text: rawText, busy, links, evidence, verdict: wan
             ev.spans > 0 ? `${ev.spans} span` : '',
             ev.traces > 0 ? `${ev.traces} trace` : '',
             (ev.oracle ?? 0) > 0 ? `${ev.oracle} Oracle satırı` : '',
+            logPart,
           ].filter(Boolean).join(' · ')}
           {hint && <span className="field-hint"> · {hint}</span>}
         </div>

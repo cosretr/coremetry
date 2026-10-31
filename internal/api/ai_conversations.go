@@ -156,6 +156,7 @@ func sanitizeChatExplain(in *chatExplainMeta) *chatExplainMeta {
 	if in.OracleRows > 0 {
 		out.OracleRows = in.OracleRows
 	}
+	out.Logs = sanitizeTraceLogOutcome(in.Logs) // v0.10.1742
 	return &out
 }
 

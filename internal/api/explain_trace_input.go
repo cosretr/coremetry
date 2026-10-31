@@ -140,6 +140,9 @@ type traceExplainInput struct {
 	// OracleRows — v0.10.921 (Kademe A): prompt'a giren Oracle hata satırı
 	// sayısı (UI kanıt satırı için); 0 = Oracle kapalı / satır yok.
 	OracleRows int
+	// Logs — v0.10.1742: trace log okumasının sonucu (UI Kanıt satırı için;
+	// prompt'a girmez): rows (N satır) | none (0 satır) | failed (+ neden).
+	Logs traceLogOutcome
 	// MainOperation / OtherOperations / OperationSource — v0.10.1329
 	// (operatör-bildirimli, dikiş): trace'in ana operasyonu KESİN kaynaktan
 	// (pickMainOperation: bu trace'in Oracle satırları → span attribute'u;
@@ -318,11 +321,14 @@ func (s *Server) buildTraceExplainInput(ctx context.Context, id string) (traceEx
 			}
 		}()
 	}
+	logOutcome := classifyTraceLogRead(false, nil, nil) // v0.10.1742 — depo yok
 	if s.logs != nil {
 		from := time.Unix(0, minT).Add(-time.Minute)
 		to := time.Unix(0, maxT).Add(time.Minute)
 		lctx, cancel := context.WithTimeout(ctx, 6*time.Second)
-		if page, lerr := logstore.LogsForTrace(lctx, s.logs, id, from, to, 30); lerr == nil && page != nil && len(page.Logs) > 0 {
+		page, lerr := logstore.LogsForTrace(lctx, s.logs, id, from, to, 30)
+		logOutcome = classifyTraceLogRead(true, page, lerr)
+		if lerr == nil && page != nil && len(page.Logs) > 0 {
 			type liteLog struct {
 				Sev    string `json:"sev,omitempty"`
 				Svc    string `json:"svc,omitempty"`
@@ -434,6 +440,7 @@ func (s *Server) buildTraceExplainInput(ctx context.Context, id string) (traceEx
 		ChainBlock:      strings.TrimSpace(chainBlock),                                                                 // v0.10.1572
 		LogsBlock:       tail,
 		OracleRows:      oracleRows,
+		Logs:            logOutcome, // v0.10.1742
 		Stack:           rawStack,
 		StackService:    stackService,
 		StackVersion:    anomaly.StackVersion(allSpans, stackService, stackSpanID, stackRes),

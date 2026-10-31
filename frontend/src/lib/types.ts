@@ -7801,6 +7801,16 @@ export interface ChatExplainMeta {
   evidenceSpanIds?: string[];
   evidenceTraceIds?: string[];
   oracleRows?: number;
+  /** v0.10.1742 — trace açıklamasının log okuması (Kanıt satırı). */
+  logs?: TraceLogOutcome;
+}
+
+/** v0.10.1742 — "Bu trace'i açıkla" log okumasının sonucu: rows (N satır) ·
+ *  none (depo 0 satır döndü) · failed (+ neden; okunamama "log yok" değildir). */
+export interface TraceLogOutcome {
+  state: 'rows' | 'none' | 'failed';
+  rows?: number;
+  reason?: 'timeout' | 'error' | 'nostore';
 }
 
 /**

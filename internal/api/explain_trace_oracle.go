@@ -163,9 +163,13 @@ func traceExplainExtra(in traceExplainInput, cc devops.CodeContext, includeCode 
 			code.OtherOperations, code.OperationCandidates = cc.OperationUnread, cc.OperationCandidates
 		}
 	}
-	return map[string]any{
+	extra := map[string]any{
 		"evidenceSpanIds": in.Evidence,
 		"code":            code,
 		"oracleRows":      in.OracleRows,
 	}
+	if lo := sanitizeTraceLogOutcome(&in.Logs); lo != nil { // v0.10.1742 — Kanıt satırı
+		extra["logs"] = lo
+	}
+	return extra
 }
