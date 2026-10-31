@@ -32,6 +32,7 @@ export const EVIDENCE_STRINGS = {
   badgeIntent: 'niyet',
   badgeIntentTitle: 'Serbest soru tek JSON çağrısıyla kılavuz niyetine sınıflandırıldı; kanıt sunucuda toplandı (v0.10.172)',
   badgeDeadline: '⏱ bütçe aşıldı',
+  badgeBudget: 'bütçe doldu',
   scopeNote: (label: string) => `Kapsam değişti: ${label}`,
   scopeAria: 'Sohbet kapsamı',
   scopeTrimmed: (n: number) => `+${n}`,

@@ -8,7 +8,7 @@
 // v1 ChatBubble / toChatTurn'e dokunmaz; parçalar protocol.ts ayrıştırıcılarından.
 // Önizleme satırları yalnız bilinen v2 araçlarının JSON gövdesinden (≤3);
 // page_url yoksa satırın href'i YOK (tıklanmaz görünür).
-import type { ChatTurn, CosreStop, CosreToolResult, CosreToolResultKind } from '@/lib/types';
+import type { ChatTurn, CosreStop, CosreStopReason, CosreToolResult, CosreToolResultKind } from '@/lib/types';
 import { isDeadlineError, summarizeSteps } from '@/components/ai/toolSteps';
 import { parseDataStop, parseDataToolResult } from '@/lib/cosre/protocol';
 import { stepIndex } from '@/lib/cosre/toChatTurn';
@@ -83,6 +83,8 @@ export function inputsLine(args: Rec, argsText: string | undefined): string | un
   return argsText && argsText !== '{}' ? argsText : undefined;
 }
 
+const BUDGET_STOP_REASONS: ReadonlySet<CosreStopReason> = new Set<CosreStopReason>(['round_cap', 'call_cap', 'token_budget']);
+
 export interface StopBadge { label: string; title: string; warn?: boolean }
 
 /**
@@ -90,12 +92,15 @@ export interface StopBadge { label: string; title: string; warn?: boolean }
  * bütçe aşıldı) data-stop satırına: aynı kural (toolSteps.summarizeSteps
  * yalnız ARAÇ adımlarında, isDeadlineError).
  */
-export function stopBadges(turn: Pick<ChatTurn, 'stepDetails' | 'error' | 'pending'>): StopBadge[] {
+export function stopBadges(turn: Pick<ChatTurn, 'stepDetails' | 'error' | 'pending'>, stop?: CosreStop): StopBadge[] {
   const tools = (turn.stepDetails ?? []).filter(d => !!d.tool);
   const sum = summarizeSteps(tools, !turn.pending);
   const out: StopBadge[] = [];
   if (sum.guided) out.push({ label: T.badgeGuided, title: T.badgeGuidedTitle });
   if (sum.intent) out.push({ label: T.badgeIntent, title: T.badgeIntentTitle });
+  // v0.10.1711 — v1 balonunun "bütçe doldu" rozeti (budget.exhausted) hideSteps
+  // ile gitmişti; yalnız tavan/bütçe nedenli durmada (deadline ayrı rozette).
+  if (stop && BUDGET_STOP_REASONS.has(stop.reason)) out.push({ label: T.badgeBudget, title: STOP_LABELS[stop.reason], warn: true });
   if (isDeadlineError(turn.error)) out.push({ label: T.badgeDeadline, title: turn.error ?? '', warn: true });
   return out;
 }

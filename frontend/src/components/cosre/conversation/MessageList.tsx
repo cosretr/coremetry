@@ -114,7 +114,7 @@ function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, ex
     hideSteps: true,
     actionsExtra: <MessageNote exchangeId={xid} />,
   }), [xid]);
-  const badges = useMemo(() => stopBadges(turn), [turn]);
+  const badges = useMemo(() => stopBadges(turn, steps.stop), [turn, steps.stop]);
   // v1 showFollowups: bitmiş, hatasız, metinli son cevap.
   const showFu = !!followups && !turn.error && !!turn.text;
   // Açıklama turu baştan ExplainBody çizer (v1: bekleyen künye, kendi yükleniyor'u).

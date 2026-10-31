@@ -4,6 +4,7 @@
 // (7 neden) ve kapsam değişimi notu.
 import { describe, expect, it } from 'vitest';
 import type { CosreUIMessage } from '@/lib/cosre/resetReducer';
+import type { CosreStop, CosreStopReason } from '@/lib/types';
 import { SCOPE_REASONS, STOP_REASONS } from '@/lib/cosre/protocol';
 import { errorMessage, inputsLine, previewFor, queryKindLabel, stepsView, stopBadges, stopLine } from './stepView';
 import { latestScope, scopeChangeNotes, scopeOf, scopeView } from './scopeView';
@@ -189,5 +190,18 @@ describe('stepView 1710: girdiler / ham çıktı / durdurma rozetleri', () => {
     ['başka hata rozet değil', { error: 'bağlantı koptu' }, []],
   ])('stopBadges: %s', (_n, turn, want) => {
     expect(stopBadges(turn).map(b => b.label)).toEqual(want);
+  });
+
+  // v0.10.1711 — "bütçe doldu" yalnız tavan/bütçe nedeninde (hideSteps v1 rozetini götürmüştü).
+  const st = (reason: CosreStopReason): CosreStop => ({ reason, calls: 3, rounds: 2, elapsed_ms: 900 });
+  it.each([
+    ['call_cap', st('call_cap'), ['bütçe doldu']],
+    ['round_cap', st('round_cap'), ['bütçe doldu']],
+    ['token_budget', st('token_budget'), ['bütçe doldu']],
+    ['stop', st('stop'), []],
+    ['deadline (ayrı rozet)', st('deadline'), []],
+    ['data-stop yok', undefined, []],
+  ] as const)('stopBadges stop=%s', (_n, stop, want) => {
+    expect(stopBadges({ stepDetails: [d(1)] }, stop).map(b => b.label)).toEqual(want);
   });
 });
