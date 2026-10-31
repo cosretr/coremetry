@@ -6222,11 +6222,9 @@ tr:hover .ps-attr-act, .ps-attr-act:focus-visible { opacity: 1; }
 [data-cosre-v2] .cosre-root--drawer .cm-msg-user {
   background: var(--muted); border-color: transparent; border-radius: 12px 12px 2px 12px;
 }
-[data-cosre-v2] .cosre-root--drawer .cx-verdict {
-  border-left: 2px solid var(--primary); background: var(--muted);
-  border-radius: 0 var(--radius) var(--radius) 0; padding: var(--sp-4) var(--sp-5); font-weight: 400;
-}
-[data-cosre-v2] .cosre-root--drawer .cx-verdict-k { color: var(--muted-foreground); font-weight: 600; }
+/* v0.10.1740 (operator-reported) — KARAR bloğu (.cx-verdict) burada ezilmez:
+   --muted dolgu sayfa yüzeyinden ayırt edilmiyordu; 1729 öncesi mavi
+   (--accent tonlu) çağrı kutusu temel kuraldan gelir. */
 [data-cosre-v2] .cosre-root--drawer .cm-msg-actions { opacity: 1; gap: var(--sp-1); }
 [data-cosre-v2] .cosre-root--drawer .cosre-jump-pill {
   width: auto; padding: var(--sp-2) var(--sp-6); border-radius: 999px;
