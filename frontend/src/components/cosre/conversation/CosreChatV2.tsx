@@ -51,7 +51,7 @@ import { prevWikiRefs } from '@/components/ai/chatWikiRefs';
 import { TraceContextStrip } from '@/components/ai/TraceContextStrip';
 import { getRaw } from '@/lib/storage';
 import { syncChatParam } from '@/lib/chatUrl';
-import type { AiConversationSummary, ChatTurn, CosreApprovalAnswer } from '@/lib/types';
+import type { AiConversationSummary, ChatTurn, CosreApprovalAnswer, CosreEndpointPick } from '@/lib/types';
 import { useChatHistory } from '@/components/ai/useChatHistory';
 import { cosreFullPageHref } from '@/components/ai/drawerFullPage';
 import { useConversation } from './useConversation';
@@ -74,6 +74,7 @@ import { ChatHistoryPanel, CosreComposerForm, CosreHeaderContext, deleteConversa
 import { CosreTeamScopeChip, CosreWelcomeV2 } from './CosreWelcomeV2';
 import { useCosreTeamScope } from './useCosreTeamScope';
 import { withTeamPick, type TeamPickResend } from './teamPick';
+import { endpointInspectText, withEndpointInspect, withEndpointSummarize } from './endpointPick';
 import { briefingView } from './briefingView';
 import type { BriefingLineRef } from './BriefingFeed';
 import { Button } from '@/components/shadcn/button';
@@ -145,14 +146,16 @@ export function CosreChatV2({ defaultOpen = false }: CosreChatV2Props) {
   // v0.10.1716 (brifing dilim 7) — "Sor" satırının ref'i; YALNIZ sonraki
   // gönderim taşır (context.briefingId + briefingLine), sonra düşer.
   const briefingAsk = useRef<BriefingLineRef | null>(null);
-  const send = (text: string, so?: ChatSendOpts) => {
+  // v0.10.1737 — `decorate`: kart gönderimi bağlamı (ör. "Endpoint seç" İncele) son katman olarak ekler.
+  const send = (text: string, so?: ChatSendOpts, decorate?: (c: Record<string, unknown> | undefined) => Record<string, unknown> | undefined) => {
     const c = live.current;
     const q = text.trim();
     if (!q) return;
     const bref = briefingAsk.current;
     briefingAsk.current = null;
     const base = contextFor(q, so, c.turns);
-    const context = bref ? { ...base, briefingId: bref.briefingId, briefingLine: bref.line } : base;
+    const ctx0 = bref ? { ...base, briefingId: bref.briefingId, briefingLine: bref.line } : base;
+    const context = decorate ? decorate(ctx0) : ctx0;
     // Kullanıcı turu niyeti `fresh`SİZ saklar (v1 v0.10.1406) + sabit pencere.
     const metadata = {
       ...(so?.explainAsk ? { explainAsk: withoutFresh(so.explainAsk) } : {}),
@@ -202,6 +205,27 @@ export function CosreChatV2({ defaultOpen = false }: CosreChatV2Props) {
     initial: teamScope.picked,
     onPick: (name: string) => { teamScope.choose(name); resendTeamPick({ userTeam: name }); },
     onUnscoped: () => resendTeamPick({ unscoped: true }),
+  };
+  // v0.10.1737 — "Endpoint seç" kartı: İncele → seçilen route aynı sohbette YENİ
+  // tur (servis + env + kartın penceresi); Hepsini özetle → son soru kart atlanarak
+  // yeniden sorulur (regenerate, teamPick gibi).
+  const endpointPick = {
+    onInspect: (p: CosreEndpointPick, route: string) => {
+      if (live.current.busy) return;
+      pinBottom();
+      send(endpointInspectText(p, route), undefined, b => withEndpointInspect(b, p));
+    },
+    onSummarize: () => {
+      const c = live.current;
+      if (c.busy) return;
+      const idx = c.turns.map(t => t.role).lastIndexOf('user');
+      if (idx < 0) return;
+      const ut = c.turns[idx];
+      const so: ChatSendOpts = { ...(ut.explainAsk ? { explainAsk: ut.explainAsk } : {}), ...(ut.window ? { window: ut.window } : {}) };
+      const context = withEndpointSummarize(contextFor(ut.text ?? '', so, c.turns.slice(0, idx)));
+      pinBottom();
+      void regenerate({ body: { context } });
+    },
   };
   const sendRef = useRef(send);
   sendRef.current = send;
@@ -402,7 +426,7 @@ export function CosreChatV2({ defaultOpen = false }: CosreChatV2Props) {
                     briefing={briefing} onPrefill={composer.prefill} onAskBriefingLine={r => { briefingAsk.current = r ?? null; }} onAsk={askChip} onAskExplain={askExplain} />
                 ) : (
                   <MessageList messages={messages} visibleParts={visibleParts} status={status} error={error}
-                    onAsk={askChip} onRetry={retry} onApproval={approve} teamPick={teamPick} />
+                    onAsk={askChip} onRetry={retry} onApproval={approve} teamPick={teamPick} endpointPick={endpointPick} />
                 )}
               </div>
             </div>

@@ -13,7 +13,8 @@ export interface SearchCommandProps {
   query: string;
   onQueryChange(q: string): void;
   placeholder: string;
-  heading: string;
+  /** v0.10.1737 — düğüm de olabilir (ör. sütun başlığı satırı). */
+  heading: ReactNode;
   items: readonly string[];
   /** Sonuç yokken gösterilen durum ("Aranıyor…", "Eşleşme yok", hata). */
   stateText: string;

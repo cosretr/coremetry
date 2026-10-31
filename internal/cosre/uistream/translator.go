@@ -65,6 +65,10 @@ func (t *Translator) Translate(kind string, payload any) []Part {
 		// araç seti dilim 2 (tools-audit §3, Q1/Q2) — alışverişin kullanıcı
 		// kapsamı: {unscoped, reason, team?, services?, count, trimmed?}; tek parça.
 		out = append(out, Part{"type": "data-scope", "id": "scope", "data": m})
+	case "pick":
+		// v0.10.1737 — seçici kart (api chat_endpoint_pick.go): {kind:"endpoint",
+		// service, env?, rangeS, total, capped?, items[]}; tek parça.
+		out = append(out, Part{"type": "data-pick", "id": "pick", "data": m})
 	case "code-lock":
 		out = append(out, Part{"type": "data-code-lock", "id": "code-lock", "data": m})
 	case "error":

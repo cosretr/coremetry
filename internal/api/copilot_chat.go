@@ -195,6 +195,9 @@ type chatRequest struct {
 		// (takım bir daha sorulmaz). Yalnız v2 döngüsü okur.
 		UserTeam string `json:"userTeam,omitempty"`
 		Unscoped bool   `json:"unscoped,omitempty"`
+		// SkipEndpointPick (v0.10.1737, chat_endpoint_pick.go) — v2 "Endpoint
+		// seç" kartının "Hepsini özetle"si: kart atlanır, bugünkü servis özeti.
+		SkipEndpointPick bool `json:"skipEndpointPick,omitempty"`
 	} `json:"context,omitempty"`
 	// Approvals — agent-core S5 (chat_approval_resume.go): v2 onay kartının
 	// cevabı; dolu istek onay bekleyen alışverişin DEVAMIDIR (kademeler atlanır,
@@ -581,6 +584,24 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 		if handled, eok := s.opExceptionExplainInChat(ctx, emit, opPre, chatLocationNamed(req.Context.Tz, req.Context.TzOffsetMin)); handled {
 			cspan.tier("operation", eok)
 			emit("done", map[string]bool{"ok": eok})
+			return
+		}
+	}
+	// v0.10.1737 — v2 "Endpoint seç" kartı (chat_endpoint_pick.go): tek servisi
+	// anıp rota / operasyon söylemeyen açık uçlu soru → tek cümle + data-pick
+	// (LLM'siz netleştirme). Kart gerekmiyorsa akış aşağıda bayt bayt eski.
+	if opPre == nil && !ct.On && !apCont.on && evm == nil && cosreV2Marked(ctx) {
+		pick := endpointPickCtx{Service: req.Context.Service, Operation: req.Context.Operation, Trace: req.Context.Trace,
+			Explain: req.Context.Explain != "" || req.Context.Subject != "", Skip: req.Context.SkipEndpointPick}
+		if pick.Service == "" && req.Context.Page != nil {
+			pick.Service = req.Context.Page.Service
+		}
+		if pick.Trace == "" {
+			pick.Trace = pageTID
+		}
+		if s.chatEndpointPickTier(ctx, emit, endpointPickTierReq{Msgs: req.Messages, Pick: pick, Env: req.Context.Env, AnchorTo: anchorTo}) {
+			cspan.tier("clarify", true)
+			emit("done", map[string]bool{"ok": true})
 			return
 		}
 	}

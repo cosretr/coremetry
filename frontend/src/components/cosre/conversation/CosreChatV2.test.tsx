@@ -522,6 +522,94 @@ describe('CosreChatV2 × v1 paylaşılan karşılama + composer (plan §10)', ()
     expect(sheet()!.querySelector('[data-cosre-teampick]')).toBeNull();
   });
 
+  // v0.10.1737 — "Endpoint seç" kartı (operatör onayı, mockup): data-pick
+  // kind=endpoint → kart; İncele seçilen route'u yeni turda servis + env +
+  // pencereyle gönderir; Hepsini özetle aynı soruyu skipEndpointPick ile sorar.
+  const PICK = JSON.stringify({ kind: 'endpoint', service: 'orders-api', env: 'prod', rangeS: 3600, total: 14, items: [
+    { route: 'POST /v1/orders', rps: 42.1, p95Ms: 1900, errPct: 4.8 },
+    { route: '/v1/orders/{id}', rps: 118, p95Ms: 210, errPct: 0.1 },
+    { route: '/v1/orders/{id}/status', rps: 9.4, p95Ms: 340, errPct: 0.3 },
+    { route: '/v1/orders', rps: 31.7, p95Ms: 480, errPct: 0 },
+  ] });
+  const withPick = () => cosreFixture('ui-stream-v1').replace(
+    `"id":"scope","type":"data-scope"}`, `"id":"scope","type":"data-scope"}\n\ndata: {"data":${PICK},"id":"pick","type":"data-pick"}`);
+  const epCard = () => vi.waitFor(() => {
+    const c = sheet()!.querySelector<HTMLElement>('[data-cosre-endpointpick]');
+    if (!c) throw new Error('kart yok');
+    return c;
+  });
+
+  it('Endpoint seç: kart data-pick yükünden çizilir (4 satır, sütunlar, +N daha, yalnız sapan renkli)', async () => {
+    const eps = vi.spyOn(api, 'endpoints');
+    v2Body = withPick();
+    await render({ defaultOpen: true }, '/');
+    await typeAndSend("orders-api'de ne oluyor?");
+    const card = await epCard();
+    expect(card.querySelectorAll('[data-item]')).toHaveLength(4);
+    expect(card.querySelector('[data-eppick-header]')!.textContent).toContain('req/s');
+    const first = card.querySelector<HTMLElement>('[data-item="POST /v1/orders"]')!;
+    expect(first.hasAttribute('data-picked')).toBe(true);
+    expect(first.textContent).toContain('42,1');
+    expect(first.textContent).toContain('1,9 sn');
+    expect(first.textContent).toContain('%4,8');
+    expect(first.querySelectorAll('[data-bad]')).toHaveLength(2);
+    expect(card.querySelector('[data-item="/v1/orders"]')!.querySelectorAll('[data-bad]')).toHaveLength(0);
+    expect(card.querySelector('[data-eppick-more]')!.textContent).toContain('+10 endpoint daha');
+    expect(eps).not.toHaveBeenCalled(); // boş sorgu: katalog çekilmez
+  });
+
+  it('Endpoint seç: İncele → seçilen route yeni turda servis + env + pencereyle', async () => {
+    v2Body = withPick();
+    await render({ defaultOpen: true }, '/');
+    await typeAndSend("orders-api'de ne oluyor?");
+    const card = await epCard();
+    await act(async () => { card.querySelector<HTMLElement>('[data-item="/v1/orders/{id}"]')!.click(); });
+    v2Body = cosreFixture('ui-stream-v1').replace('01M62F9N000000000000000000', '01M62F9N000000000000000001');
+    await act(async () => { btnIn(card, '[data-eppick-submit]').click(); });
+    await vi.waitFor(() => expect(calls).toHaveLength(2));
+    expect(calls[1].body.context).toMatchObject({ service: 'orders-api', env: 'prod', rangeS: 3600, skipEndpointPick: true });
+    expect(JSON.stringify(calls[1].body.messages)).toContain('orders-api /v1/orders/{id}');
+    expect((calls[1].body.messages as unknown[]).length).toBeGreaterThan((calls[0].body.messages as unknown[]).length);
+  });
+
+  it('Endpoint seç: Hepsini özetle → aynı soru skipEndpointPick ile', async () => {
+    v2Body = withPick();
+    await render({ defaultOpen: true }, '/');
+    await typeAndSend("orders-api'de ne oluyor?");
+    const card = await epCard();
+    v2Body = cosreFixture('ui-stream-v1').replace('01M62F9N000000000000000000', '01M62F9N000000000000000001');
+    await act(async () => { btnIn(card, '[data-eppick-summarize]').click(); });
+    await vi.waitFor(() => expect(calls).toHaveLength(2));
+    expect(calls[1].body.context).toMatchObject({ skipEndpointPick: true });
+    expect(calls[1].body.messages).toEqual(calls[0].body.messages);
+  });
+
+  it('Endpoint seç: yazınca arama sunucuda (/api/endpoints search + servis + env)', async () => {
+    const eps = vi.spyOn(api, 'endpoints').mockResolvedValue({ rows: [
+      { service: 'orders-api', path: '/v1/carts', calls: 7200, errors: 0, errorRate: 0, avgMs: 10, p99Ms: 50, p95Ms: 40 },
+    ] } as never);
+    v2Body = withPick();
+    await render({ defaultOpen: true }, '/');
+    await typeAndSend("orders-api'de ne oluyor?");
+    const card = await epCard();
+    const input = card.querySelector<HTMLInputElement>('input')!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, 'carts');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await vi.waitFor(() => expect(card.querySelector('[data-item="/v1/carts"]')).not.toBeNull());
+    expect(eps).toHaveBeenCalledWith(expect.objectContaining({ service: 'orders-api', env: 'prod', search: 'carts' }));
+    expect(card.querySelector('[data-item="/v1/carts"]')!.textContent).toContain('2,0');
+  });
+
+  it('data-pick yoksa endpoint kartı çizilmez', async () => {
+    await render({ defaultOpen: true }, '/');
+    v2Body = cosreFixture('ui-stream-v1');
+    await typeAndSend('q');
+    await vi.waitFor(() => expect(sheet()!.querySelector('.cm-msg-ai')).not.toBeNull());
+    expect(sheet()!.querySelector('[data-cosre-endpointpick]')).toBeNull();
+  });
+
   it('akarken Durdur → yarım cevap + not', async () => {
     let release = () => {};
     const gate = sseFetch(cosreFixture('ui-stream-v1-reset'), fr => fr.includes('"delta":"Düzeltilmiş tam metin."'));

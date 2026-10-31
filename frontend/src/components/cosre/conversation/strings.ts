@@ -38,6 +38,20 @@ export const COSRE_V2_STRINGS = {
   teamPickSubmit: 'Seç ve yeniden sor',
   teamPickSelected: '(seçili)',
   teamPickHeading: 'Takımlar',
+  // v0.10.1737 — "Endpoint seç" kartı (EndpointPickCard).
+  endpointPickTitle: 'Endpoint seç',
+  endpointPickSubtitle: 'Hata oranı ve p95\'e göre sıralı. Arama sunucuda.',
+  endpointPickSearch: 'Route ara…',
+  endpointPickLoading: 'Aranıyor…',
+  endpointPickError: "Endpoint'ler okunamadı",
+  endpointPickEmpty: 'Eşleşme yok',
+  endpointPickColRoute: 'Route',
+  endpointPickColRps: 'req/s',
+  endpointPickColP95: 'p95',
+  endpointPickColErr: 'hata',
+  endpointPickSummarize: 'Hepsini özetle',
+  endpointPickSubmit: 'İncele',
+  endpointPickSelected: '(seçili)',
 } as const;
 
 /** agent-core S5 — onay-kapılı araçların operatör dilindeki adı (yoksa ham ad). */

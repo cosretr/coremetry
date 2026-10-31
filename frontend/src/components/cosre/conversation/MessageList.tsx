@@ -32,12 +32,14 @@ import { Button } from '@/components/shadcn/button';
 import { chatErrorText } from '@/components/ai/chatErrorText';
 import { toChatTurn, userTurn } from '@/lib/cosre/toChatTurn';
 import type { CosreUIMessage } from '@/lib/cosre/resetReducer';
-import type { ChatExplainAsk, ChatTurn, CosreApprovalAnswer } from '@/lib/types';
+import type { ChatExplainAsk, ChatTurn, CosreApprovalAnswer, CosreEndpointPick } from '@/lib/types';
 import { approvalAnswer, approvalViews } from '@/lib/cosre/approval';
 import { ApprovalCard } from './ApprovalCard';
 import { StepList, scopeChangeNotes, scopeOf, stepsView, stopBadges } from '../evidence';
 import { TeamPickCard } from './TeamPickCard';
 import { showTeamPick } from './teamPick';
+import { EndpointPickCard } from './EndpointPickCard';
+import { pickOf, showEndpointPick } from './endpointPick';
 
 /** useChat durumu (ai ChatStatus ile aynı küme; tip importu katalogdan bağımsız). */
 export type CosreChatStatus = 'submitted' | 'streaming' | 'ready' | 'error';
@@ -58,9 +60,11 @@ export interface MessageListProps {
   onApproval?: (a: CosreApprovalAnswer) => void;
   /** v0.10.1725 — "Takımını seç" kartı (son cevap, data-scope teamPick, akış yokken). Yoksa kart çizilmez. */
   teamPick?: { initial?: string; onPick(team: string): void; onUnscoped(): void };
+  /** v0.10.1737 — "Endpoint seç" kartı (son cevap, data-pick, akış yokken). Yoksa kart çizilmez. */
+  endpointPick?: { onInspect(pick: CosreEndpointPick, route: string): void; onSummarize(): void };
 }
 
-export function MessageList({ messages, visibleParts, status, error, onAsk, onRetry, onApproval, teamPick }: MessageListProps) {
+export function MessageList({ messages, visibleParts, status, error, onAsk, onRetry, onApproval, teamPick, endpointPick }: MessageListProps) {
   const busy = status === 'submitted' || status === 'streaming';
   const last = messages.at(-1);
   const errText = status === 'error' && error ? error.message : undefined;
@@ -76,7 +80,8 @@ export function MessageList({ messages, visibleParts, status, error, onAsk, onRe
         return <AssistantMessage key={m.id} m={m} visibleParts={visibleParts} live={isLast && busy} error={isLast ? errText : undefined}
           explainAsk={prev?.role === 'user' ? prev.metadata?.explainAsk : undefined} scopeNote={scopeNotes.get(m.id)}
           followups={isLast && status === 'ready' ? onAsk : undefined} onRetry={isLast && errText ? onRetry : undefined}
-          onApproval={isLast && !busy ? onApproval : undefined} teamPick={isLast && !busy ? teamPick : undefined} />;
+          onApproval={isLast && !busy ? onApproval : undefined} teamPick={isLast && !busy ? teamPick : undefined}
+          endpointPick={isLast && !busy ? endpointPick : undefined} />;
       })}
       {/* İlk parça gelmeden (yalnız soru gitti): v1 bekleyiş göstergesi. */}
       {busy && last?.role !== 'assistant' && (last?.metadata?.explainAsk
@@ -95,7 +100,7 @@ function UserMessage({ m }: { m: CosreUIMessage }) {
   return <ChatBubble turn={turn} />;
 }
 
-function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, explainAsk, onApproval, scopeNote, teamPick }: {
+function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, explainAsk, onApproval, scopeNote, teamPick, endpointPick }: {
   m: CosreUIMessage; visibleParts: (m: CosreUIMessage) => Part[]; live: boolean; error?: string;
   /** araç seti dilim 5 — kapsam değişimi notu (önceki cevaptan farklıysa). */
   scopeNote?: string;
@@ -107,8 +112,10 @@ function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, ex
   /** agent-core S5 — onay kartı cevabı; yoksa kart düğmesiz. */
   onApproval?: (a: CosreApprovalAnswer) => void;
   teamPick?: MessageListProps['teamPick'];
+  endpointPick?: MessageListProps['endpointPick'];
 }) {
   const approvals = useMemo(() => approvalViews(m), [m]);
+  const epPick = useMemo(() => pickOf(m.parts), [m.parts]); // v0.10.1737
   // araç seti dilim 5 (G4) — adım kartları cevabın ÜSTÜNDE (data-tool-result / data-stop).
   const steps = useMemo(() => stepsView(visibleParts(m)), [m, visibleParts]);
   // SDK akışta son mesajı her parçada yeni nesneyle değiştirir; bitmiş
@@ -139,6 +146,9 @@ function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, ex
       ))}
       {teamPick && showTeamPick(scopeOf(m.parts)) && (
         <TeamPickCard initial={teamPick.initial} onPick={teamPick.onPick} onUnscoped={teamPick.onUnscoped} />
+      )}
+      {endpointPick && showEndpointPick(epPick) && (
+        <EndpointPickCard pick={epPick} onInspect={route => endpointPick.onInspect(epPick, route)} onSummarize={endpointPick.onSummarize} />
       )}
       {showFu && (
         <div className="cm-followups" data-cosre-followups="">

@@ -8334,6 +8334,30 @@ export interface CosreScope {
   teamPick?: boolean;
 }
 
+/** v0.10.1737 — CoSRE v2 "Endpoint seç" kartının satırı (data-pick items[]). */
+export interface CosreEndpointPickItem {
+  /** http_route ("/v1/orders/{id}"); fiil biliniyorsa "POST /v1/orders". */
+  route: string;
+  rps: number;
+  p95Ms: number;
+  /** Hata yüzdesi (0–100). */
+  errPct: number;
+}
+
+/** v0.10.1737 — data-pick yükü (kind=endpoint; api chat_endpoint_pick.go). */
+export interface CosreEndpointPick {
+  kind: 'endpoint';
+  service: string;
+  env?: string;
+  rangeS: number;
+  /** Servisin pencerede trafikli endpoint sayısı. */
+  total: number;
+  /** total sıralama evreninin tavanına takıldı ("200+"). */
+  capped?: boolean;
+  /** Hata % sonra p95'e göre sıralı ilk satırlar (kart aramasızken). */
+  items: CosreEndpointPickItem[];
+}
+
 /** GET /api/copilot/scope-names?kind=team — services[i] names[i]'nin servis sayısı (v0.10.1725). */
 export interface CopilotScopeNames {
   names: string[];

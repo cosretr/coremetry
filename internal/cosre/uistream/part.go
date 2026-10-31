@@ -14,6 +14,8 @@ var KnownKinds = map[string]bool{
 	"stop": true,
 	// araç seti dilim 2 — kullanıcı kapsamı (data-scope); v1 yazıcısı düşürür.
 	"scope": true,
+	// v0.10.1737 — v2 seçici kartı (data-pick; kind=endpoint); v1 yazıcısı düşürür.
+	"pick": true,
 }
 
 // StopReasons — data-stop `reason` kapalı kümesi (api chat_stop_event.go

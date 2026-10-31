@@ -11,7 +11,7 @@
 // uiStreamFixture.test.ts (paylaşılan testdata/cosre/*.sse) kırmızıya döner;
 // fixture yenilendiği commit'te bu dosya da güncellenir.
 
-import type { CosreApproval, CosreScope, CosreScopeReason, CosreStop, CosreStopReason, CosreToolResult, CosreToolResultKind } from '@/lib/types';
+import type { CosreApproval, CosreEndpointPick, CosreEndpointPickItem, CosreScope, CosreScopeReason, CosreStop, CosreStopReason, CosreToolResult, CosreToolResultKind } from '@/lib/types';
 
 export const PROTOCOL_VERSION = 'v1';
 export const PROTOCOL_HEADER = 'x-vercel-ai-ui-message-stream';
@@ -48,6 +48,8 @@ export const DATA_PART_NAMES = [
   'tool-result', 'stop',
   // araç seti dilim 2 (tools-audit §3, Q1/Q2) — alışverişin kullanıcı kapsamı.
   'scope',
+  // v0.10.1737 — v2 seçici kartı (kind=endpoint): "Endpoint seç".
+  'pick',
   ...BLOCK_TYPES.map(t => `block-${t}` as const),
 ] as const;
 
@@ -181,4 +183,22 @@ export function parseDataReset(p: UIStreamPart): DataResetPart | null {
   const textId = (d as { textId?: unknown }).textId;
   if (keys.length !== 1 || typeof textId !== 'string' || textId === '') return null;
   return { type: 'data-reset', data: { textId }, transient: true };
+}
+
+/** v0.10.1737 — data-pick → CosreEndpointPick; bilinmeyen kind, boş servis,
+ *  sayı olmayan alan ya da biçimsiz satır null (kart çizilmez). */
+export function parseDataPick(p: { type: string; data?: unknown }): CosreEndpointPick | null {
+  if (p.type !== 'data-pick' || !isRecord(p.data)) return null;
+  const { kind, service, env, rangeS, total, capped, items } = p.data;
+  const rs = finiteNum(rangeS), tot = finiteNum(total);
+  if (kind !== 'endpoint' || typeof service !== 'string' || !service || rs === undefined || rs <= 0 || tot === undefined || !Array.isArray(items)) return null;
+  const rows: CosreEndpointPickItem[] = [];
+  for (const it of items) {
+    if (!isRecord(it) || typeof it.route !== 'string' || !it.route) return null;
+    const rps = finiteNum(it.rps), p95 = finiteNum(it.p95Ms), err = finiteNum(it.errPct);
+    if (rps === undefined || p95 === undefined || err === undefined) return null;
+    rows.push({ route: it.route, rps, p95Ms: p95, errPct: err });
+  }
+  return { kind, service, rangeS: rs, total: tot, items: rows,
+    ...(typeof env === 'string' && env ? { env } : {}), ...(capped === true ? { capped: true } : {}) };
 }
