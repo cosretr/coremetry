@@ -75,6 +75,18 @@ export function useAvailablePages(enabled: boolean) {
   });
 }
 
+// v0.10.1736 — "Kim çevrimiçi" (kenar çubuğu kullanıcı menüsü, her rol).
+// Yalnız menü/liste açıkken çekilir; poll YOK — staleTime 30 sn içinde
+// yeniden açmak sunucuya gitmez.
+export function usePresenceOnline(enabled: boolean) {
+  return useQuery({
+    queryKey: keys.users.online,
+    queryFn: async () => (await api.presenceOnline()) ?? [],
+    enabled,
+    staleTime: 30_000,
+  });
+}
+
 // Custom-role catalog — drives the per-row picker on /users. Fetched
 // alongside the user list, refreshed on every change so a role added
 // in Settings → Roles appears here without a hard reload.

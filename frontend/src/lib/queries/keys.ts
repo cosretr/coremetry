@@ -198,6 +198,8 @@ export const keys = {
     // v0.10.1734 — Yetkiler / Bildirimler sekmeleri + sayfa kataloğu.
     access:      (id: string) => ['users', 'access', id] as const,
     pages:       ['users', 'available-pages'] as const,
+    // v0.10.1736 — kim çevrimiçi (her rol); users.all altında.
+    online:      ['users', 'presence-online'] as const,
   },
 
   // Explore v2 multi-query builder (Phase 2). `sig` is the stable

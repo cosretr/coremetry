@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useEffect, useRef, useState } from 'react';
-import { useHealth, useInboxCount } from '@/lib/queries';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { useHealth, useInboxCount, usePresenceOnline } from '@/lib/queries';
 import { useUrlEnv } from '@/lib/useUrlEnv';
 import { useT } from '@/lib/i18n';
 import { getRaw, setRaw, getItem, setItem, STORAGE_KEYS } from '@/lib/storage';
@@ -19,6 +19,10 @@ import { applyTheme, currentTheme, THEMES, THEME_LABEL } from '@/lib/theme';
 import { Wordmark } from './Wordmark';
 import { MenuItem, IconButton, DisclosureButton } from '@/components/ui';
 import { requestTourRestart } from '@/features/tour/restart'; // v0.10.1334
+
+// v0.10.1736 — "Kim çevrimiçi" listesi tembel: kabuk coremetry/overlay'i
+// statik import edemez (eslint kabuk bloğu; Radix ilk yüke binerdi).
+const OnlineUsersSheet = lazy(() => import('./coremetry/OnlineUsersSheet'));
 
 // adminOnly entries are hidden from non-admin users in the
 // sidebar. The pages themselves still enforce admin-role at
@@ -224,6 +228,10 @@ export function Sidebar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [themeOpen, setThemeOpen] = useState(false); // v0.10.1182 — tema yan menüsü
   const [showChangePw, setShowChangePw] = useState(false);
+  // v0.10.1736 — kim çevrimiçi (her rol): sayı yalnız menü açıkken çekilir,
+  // staleTime 30 sn; poll yok. Liste aynı sorgu anahtarını paylaşır.
+  const [onlineOpen, setOnlineOpen] = useState(false);
+  const onlineQ = usePresenceOnline(menuOpen || onlineOpen);
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Width + collapsed state hydrate from localStorage on mount only;
@@ -510,6 +518,9 @@ export function Sidebar() {
                 borderRadius: 6, boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
                 padding: 4, zIndex: 'var(--z-dropdown)',
               }}>
+                <MenuItem icon="●" onClick={() => { setMenuOpen(false); setOnlineOpen(true); }}>
+                  {t('user.online')} · {onlineQ.data ? onlineQ.data.length : onlineQ.isError ? '—' : '…'}
+                </MenuItem>
                 {user.role === 'admin' && (
                   <>
                     <MenuItem icon="◯" onClick={() => { setMenuOpen(false); navigate('/users'); }}>
@@ -574,6 +585,11 @@ export function Sidebar() {
 
         {showChangePw && (
           <ChangePasswordModal onClose={() => setShowChangePw(false)} />
+        )}
+        {onlineOpen && user && (
+          <Suspense fallback={null}>
+            <OnlineUsersSheet open={onlineOpen} onOpenChange={setOnlineOpen} isAdmin={user.role === 'admin'} />
+          </Suspense>
         )}
       </nav>
     </>

@@ -139,6 +139,7 @@ const EN: Catalog = {
 
   // User menu
   'user.signOut':         'Sign out',
+  'user.online':          'Online',
   'user.changePassword':  'Change password',
   'user.manageUsers':     'Manage users',
   'user.settings':        'Settings',
@@ -764,6 +765,7 @@ const TR: Catalog = {
 
   // User menu
   'user.signOut':        'Çıkış yap',
+  'user.online':         'Çevrimiçi',
   'user.changePassword': 'Parolayı değiştir',
   'user.manageUsers':    'Kullanıcıları yönet',
   'user.settings':       'Ayarlar',

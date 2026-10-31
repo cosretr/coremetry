@@ -3650,6 +3650,8 @@ export const api = {
     get<import('./types').UserOrgChart>(`/api/users/${encodeURIComponent(id)}/org`),
   clearUserRoleLock: (id: string) =>
     request<{ id: string; roleLocked: boolean }>(`/api/users/${encodeURIComponent(id)}/role-lock`, { method: 'DELETE' }),
+  // v0.10.1736 — "Kim çevrimiçi" (her rol; 15 sn paylaşılan sunucu önbelleği).
+  presenceOnline: () => get<import('./types').OnlineUser[] | null>('/api/presence/online'),
   // List active users whose team matches. Returns a slim
   // directory shape (no password hash, no auth provider) and
   // is open to any authenticated user (not admin-gated).

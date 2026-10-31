@@ -6604,6 +6604,15 @@ export interface UserDirectoryAttributes {
   dn: string;
   attributes: Record<string, string[]>;
 }
+// v0.10.1736 — GET /api/presence/online (her rol): son 5 dk'da görülen
+// kullanıcılar. Dar satır — e-posta / rol / dizin alanı YOK; `name` =
+// fullName, yoksa e-postanın yerel kısmı. Ada göre sıralı, ≤200.
+export interface OnlineUser {
+  id: string;
+  name: string;
+  team?: string;
+  lastSeenAt: number;  // unix ns
+}
 // v0.10.1733 — GET /api/users/{id}/org (Organizasyon kartı).
 export interface UserOrgPerson {
   dn: string;
