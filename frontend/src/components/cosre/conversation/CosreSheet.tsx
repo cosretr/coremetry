@@ -78,7 +78,9 @@ export function CosreSheet({ open, onOpenChange, width, contentProps, headerCont
           if (a && a !== document.body && a.isConnected) return;
           requestAnimationFrame(() => document.querySelector<HTMLElement>('.cm-ai-fab')?.focus());
         }}
-        className="w-full gap-0 p-0 sm:w-(--cosre-sheet-w) sm:max-w-none"
+        // v0.10.1714 — bg-card (= --bg1, v1 Drawer ile aynı): shadcn bg-background
+        // = --bg0 SAYFA zemini, panel sayfaya karışıyordu (bgZeroIsPageOnly kuralı).
+        className="w-full gap-0 bg-card p-0 sm:w-(--cosre-sheet-w) sm:max-w-none"
         {...contentProps}>
         <SheetHeader className="cosre-head flex-row items-center gap-3 border-b px-4 py-3 pr-12">
           <AiMark size={20} />
