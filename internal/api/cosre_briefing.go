@@ -162,7 +162,7 @@ func (s *Server) refreshCosreBriefing(w http.ResponseWriter, r *http.Request) {
 	tctx, cancel := context.WithTimeout(ctx, briefingRefreshTO)
 	defer cancel()
 	t := briefingTeam{Key: teamKey, Label: u.Team, Services: u.Services, Trimmed: u.Trimmed}
-	b := s.buildBriefing(tctx, t, env, cfg, s.readBriefingFleet(tctx, cfg.WindowS), s.readBriefingLogs(tctx, u.Team, cfg.WindowS, now), now)
+	b := s.buildBriefing(tctx, t, env, cfg, s.readBriefingFleet(tctx, cfg.WindowS, now), s.readBriefingLogs(tctx, u.Team, cfg.WindowS, now), now)
 	s.phraseBriefing(tctx, &b, cfg)
 	if err := s.storeBriefing(tctx, b); err != nil {
 		writeErr(w, err)

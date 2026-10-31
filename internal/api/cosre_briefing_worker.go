@@ -26,8 +26,9 @@ package api
 //                 ailesi (readServiceHTTPRED, en yoğun servis) + Kafka
 //                 (runKafkaQuestions, takım kümesi tek sorgu); Q11 → giden
 //                 HTTP istemcisi Faz 2
-// Kalem 5 (Oracle) sonraki dilimde; kart onu `skipped` ile söyler
-// (sessizce "yok" değil).
+//   5 Oracle    — v0.10.1713, cosre_briefing_oracle.go: OracleGroupAggregates
+//                 (filo, tik başına) + takımın çözülmüş ora: grupları; jenerik
+//                 kod tek başına satır değil. Kaynak yok → `skipped`.
 //
 // Maliyet (R9): takım × env başına 2 MV + 1 inbox + ≤3×2 deploy okuması
 // + ≤ 5 VM (kalem 2: 1 servis × 3 grafik + 2 Kafka sorusu).
@@ -56,9 +57,6 @@ const (
 	briefingImpactWindowS  = 600
 	briefingFleetDeployMax = 500
 )
-
-// pendingItems — bu dilimde henüz okunmayan kalemler (kartta `skipped`).
-var briefingPendingItems = []string{briefing.ItemOracle}
 
 // briefingTeam — üretim birimi: kanonik anahtar + gösterim adı + kapsam.
 type briefingTeam struct {
@@ -191,11 +189,12 @@ func previousVersion(deps []chstore.Deploy, version string) (prev string, at int
 type briefingFleet struct {
 	Deploys    []chstore.RecentDeployEntry
 	DeploysErr error
+	Oracle     briefingOracleFleet // v0.10.1713 kalem 5
 }
 
-func (s *Server) readBriefingFleet(ctx context.Context, windowS int) briefingFleet {
+func (s *Server) readBriefingFleet(ctx context.Context, windowS int, now time.Time) briefingFleet {
 	deps, err := s.store.GetRecentDeploys(ctx, time.Duration(windowS)*time.Second, briefingFleetDeployMax)
-	return briefingFleet{Deploys: deps, DeploysErr: err}
+	return briefingFleet{Deploys: deps, DeploysErr: err, Oracle: s.readBriefingOracleFleet(ctx, windowS, now)}
 }
 
 // briefingLogs — kalem 4 okuması (takım başına bir kez; env'ler paylaşır).
@@ -267,7 +266,7 @@ func (s *Server) buildBriefing(ctx context.Context, t briefingTeam, env string, 
 	}
 
 	// 2 — istemci / sunucu-ailesi metrikleri (VM + Kafka).
-	skipped := append([]string(nil), briefingPendingItems...)
+	var skipped []string
 	switch rows, state := s.readBriefingClient(ctx, t.Services, cur, env, cfg.WindowS, pFrom, from, to); state {
 	case "skipped":
 		skipped = append(skipped, briefing.ItemClient)
@@ -295,6 +294,17 @@ func (s *Server) buildBriefing(ctx context.Context, t briefingTeam, env string, 
 		skipped = append(skipped, briefing.ItemLog)
 	default:
 		partial = append(partial, briefing.ItemLog)
+	}
+
+	// 5 — Oracle hata kodları (env'siz; çözülmüş ora: grupları).
+	switch o := s.readBriefingOracleTeam(ctx, fleet.Oracle, t.Services, cfg.WindowS, now); o.State {
+	case "skipped":
+		skipped = append(skipped, briefing.ItemOracle)
+	case "partial":
+		partial = append(partial, briefing.ItemOracle)
+		fallthrough
+	default:
+		findings = append(findings, briefing.OracleFindings(o.Rows, th)...)
 	}
 
 	// 7 — rollout etkisi.
@@ -366,7 +376,7 @@ func (s *Server) runBriefingTick(ctx context.Context, cfg briefing.Config, now t
 		return
 	}
 	ta := s.teamAliasesCtx(ctx)
-	fleet := s.readBriefingFleet(ctx, cfg.WindowS)
+	fleet := s.readBriefingFleet(ctx, cfg.WindowS, now)
 	n := 0
 	for _, t := range briefingTeamsFrom(users, ta) {
 		t = s.briefingTeamScope(ta, mds, t)
