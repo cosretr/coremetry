@@ -16,8 +16,8 @@ export const ML_LOG_DETECTORS: { id: string; label: string; hint: string }[] = [
   { id: 'log_volume', label: 'Log hacmi', hint: 'Servis × seviye hacmi, mevsimsel median+MAD, iki yönlü' },
   { id: 'error_rate', label: 'Hata oranı', hint: 'Error seviyesi sayısı, yalnız yukarı, mevsimsel' },
   { id: 'service_silent', label: 'Servis sustu', hint: 'Beklenen hacim varken log gelmiyor' },
-  { id: 'template_spike', label: 'Şablon spike', hint: 'Bir şablonun sayısı kendi tabanının üstüne çıktı' },
-  { id: 'rare_template', label: 'Nadir şablon', hint: 'Daha önce görülmemiş şablon (ML kaynağıyla)' },
+  { id: 'template_spike', label: 'Şablon spike', hint: 'Şablon ailesinin ES\'te gerçek sayımı kendi tabanının üstüne çıktı (tik başına 1 istek, ≤100 aile)' },
+  { id: 'rare_template', label: 'Nadir şablon', hint: 'Taban günlerinde hiç görülmeyen şablon ailesi belirdi (yeni aileye bir kez geçmiş sayımı)' },
   { id: 'rare_error_code', label: 'Nadir hata kodu', hint: 'Serviste 14 gündür görülmemiş kod' },
   { id: 'pod_outlier', label: 'Aykırı pod', hint: 'Aynı servisin pod\'ları arasında hata sayısı sapması' },
   { id: 'change_point', label: 'Kırılma noktası', hint: 'CUSUM; ±15 dk içinde rollout varsa eşlenir' },
@@ -132,7 +132,7 @@ export function MLSubsection() {
             {num('Hacim tabanı (satır/kova)', 'minBaselineRate', 'Tabanı bunun altında kalan servis için hacim/susma sessiz', 1)}
             {num('Dwell (kova)', 'dwellBuckets', 'Olay açılmadan art arda sapmalı kova (1–12)')}
             {num('Günlük tavan', 'dailyEventCap', 'Dedektör başına günlük yeni olay (10–10000)')}
-            {num('ES tik tavanı', 'maxEsQueriesPerTick', 'Tik başına en çok ES sorgusu (1–20)')}
+            {num('ES tik tavanı', 'maxEsQueriesPerTick', 'Tik başına en çok ES sorgusu (1–20); log RED 1 + şablon 1 + yeni aile geçmişi 1 = 3')}
             {num('Kova (sn)', 'bucketSec', 'date_histogram kovası (60–3600)')}
             {num('Tik (sn)', 'tickSec', 'Alt sistem tiki (60–3600)')}
             {num('ES zaman aşımı (ms)', 'timeoutMs', 'Tik içi istek (1000–60000)')}

@@ -36,6 +36,8 @@ type Deps struct {
 	ObserveES func(d time.Duration)
 	// Labels — ortak etiket seti (taban hijyeni, geri bildirim); nil güvenli.
 	Labels *Labels
+	// ESLeft — tik ES bütçesinin kalanı (maxEsQueriesPerTick − bu tikte atılan); nil = sınırsız.
+	ESLeft func() int
 }
 
 // Recorder — alt sistemin döngüsü. Kendi goroutine'i, kendi context +
@@ -116,7 +118,8 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	}
 	lb := NewLabels(labels)
 	esAtStart := global.esQueries.Load()
-	deps := Deps{Store: r.store, Logs: r.logs, VM: r.vm, Labels: lb, ObserveES: func(d time.Duration) { global.observeES(d.Milliseconds()) }}
+	deps := Deps{Store: r.store, Logs: r.logs, VM: r.vm, Labels: lb, ObserveES: func(d time.Duration) { global.observeES(d.Milliseconds()) },
+		ESLeft: func() int { return cfg.MaxESQueriesPerTick - int(global.esQueries.Load()-esAtStart) }}
 	var firstErr error
 	var written int64
 	var all []chstore.MLEvent

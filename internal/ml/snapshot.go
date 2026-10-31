@@ -36,6 +36,9 @@ func eventPart(ev chstore.MLEvent) string {
 	case chstore.MLSignalMetric:
 		return ev.Code
 	}
+	if ev.Detector == detTemplateSpike || ev.Detector == detRareTemplate {
+		return tplPartPrefix + ev.Code
+	}
 	if ev.Level == "error" {
 		return partError
 	}

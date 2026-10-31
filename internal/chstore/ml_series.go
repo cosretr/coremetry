@@ -172,3 +172,29 @@ func (s *Store) MLSeriesOldest(ctx context.Context, signal string) (time.Time, e
 	}
 	return t, rows.Err()
 }
+
+// MLSeriesKeyRow — bir seri anahtarı.
+type MLSeriesKeyRow struct{ Service, Part string }
+
+// MLSeriesParts — `since`'den beri yazılmış, öneki tutan seri anahtarları
+// (log dilim 2: izlenen şablon aileleri restart sonrası geri yüklenir).
+func (s *Store) MLSeriesParts(ctx context.Context, signal, prefix string, since time.Time) ([]MLSeriesKeyRow, error) {
+	rows, err := s.conn.Query(ctx, `
+		SELECT DISTINCT service, part FROM ml_series
+		WHERE signal = ? AND startsWith(part, ?) AND bucket >= ?
+		LIMIT 2000
+		SETTINGS max_execution_time = 5`, signal, prefix, since.UTC()) // DateTime kolon: DateTime64 bind YOK
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []MLSeriesKeyRow
+	for rows.Next() {
+		var r MLSeriesKeyRow
+		if err := rows.Scan(&r.Service, &r.Part); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}

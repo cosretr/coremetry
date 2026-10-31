@@ -86,6 +86,9 @@ func rulesFor(signal, part string, cfg chstore.MLConfig) (seriesRule, bool) {
 		case partError:
 			return seriesRule{detector: detErrorRate, upOnly: true, missingIsZero: true}, true
 		}
+		if strings.HasPrefix(part, tplPartPrefix) { // nadir şablon backtest'te yok (taban sıfır kuralı ayrı)
+			return seriesRule{detector: detTemplateSpike, upOnly: true, noRateFloor: true, missingIsZero: true}, true
+		}
 	case chstore.MLSignalTrace:
 		route, m := splitTracePart(part)
 		tp := tracePart(route, "count")

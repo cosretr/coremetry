@@ -169,7 +169,8 @@ type MLConfig struct {
 	TimeoutMs int `json:"timeoutMs"`
 	// MaxServices — tek agregasyonun terms tavanı (10..5000, varsayılan 500).
 	MaxServices int `json:"maxServices"`
-	// MaxESQueriesPerTick — ES tik tavanı (1..20, varsayılan 1: dilim 1 tek agregasyon).
+	// MaxESQueriesPerTick — ES tik tavanı (1..20, varsayılan 3: log RED 1 +
+	// şablon sayımı 1 + yeni aile backfill'i 1 — v0.10.1755, operatör kararı C).
 	MaxESQueriesPerTick int `json:"maxEsQueriesPerTick"`
 	// BaselineDays — hacim/hata tabanı için geriye bakış (3..28, varsayılan 7).
 	BaselineDays int `json:"baselineDays"`
@@ -206,7 +207,7 @@ func DefaultMLConfig() MLConfig {
 		p[n] = MLPromotion{Enabled: false, MinHitRate: 0.8, MinSamples: 20}
 	}
 	return MLConfig{Enabled: false, Detectors: d, Promotion: p,
-		BucketSec: 300, TickSec: 300, TimeoutMs: 10000, MaxServices: 500, MaxESQueriesPerTick: 1,
+		BucketSec: 300, TickSec: 300, TimeoutMs: 10000, MaxServices: 500, MaxESQueriesPerTick: 3,
 		BaselineDays: 7, MinBaselineRate: 5, DwellBuckets: 2, DailyEventCap: 200,
 		IngestLagSec: 120, MinBaselineSamples: 20, CriticalZ: 4, MetricFamilies: DefaultMLMetricFamilies(), Quality: DefaultMLQuality(),
 		ErrorLevels: []string{"error", "err", "fatal", "critical", "severe", "emerg", "alert"}}
