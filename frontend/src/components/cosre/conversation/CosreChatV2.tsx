@@ -77,6 +77,7 @@ import { briefingView } from './briefingView';
 import { Button } from '@/components/shadcn/button';
 import { CosreSheet } from './CosreSheet';
 import { MessageList } from './MessageList';
+import { ScopeBadge, latestScope } from '../evidence';
 import { cosreRequestContext } from './requestContext';
 import { COSRE_V2_STRINGS as T } from './strings';
 
@@ -104,6 +105,8 @@ export function CosreChatV2({ defaultOpen = false }: CosreChatV2Props) {
   const busyRef = useRef(busy);
   busyRef.current = busy;
   const codeLocked = useMemo(() => messages.some(hasCodeLock), [messages]);
+  // araç seti dilim 5 — başlık rozeti: son cevabın data-scope'u (yoksa rozet yok).
+  const scope = useMemo(() => latestScope(messages), [messages]);
   // v0.10.1664 (B6) — taslak konuşmanın yuvasında (v1 ile aynı anahtar).
   const composer = useCosreComposerInput(conv.conversationId, ask.page, ask.chipTrace);
   // v2 karşılaması (mockup B, 2026-10-31): hata hapı yok → selam isteği de yok; takım tek kapsam.
@@ -338,6 +341,7 @@ export function CosreChatV2({ defaultOpen = false }: CosreChatV2Props) {
         open={open}
         onOpenChange={setOpen}
         width={width}
+        headerBadge={scope ? <ScopeBadge scope={scope} /> : undefined}
         headerContext={<CosreHeaderContext currentService={ask.currentService} env={ask.env} pinned={ask.pinned} setPinned={ask.setPinned} page={ask.page} />}
         headerActions={<>
           <Link to={cosreFullPageHref(messages.length > 0 ? conv.conversationId : null)} className="cosre-page__home cm-fullpage"

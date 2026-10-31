@@ -29,11 +29,13 @@ export interface CosreSheetProps {
   headerContext?: ReactNode;
   /** Başlık eylemleri (Tam sayfada aç, Temizle). */
   headerActions?: ReactNode;
+  /** araç seti dilim 5 — başlıktaki kapsam rozeti (evidence/ScopeBadge); yoksa çizilmez. */
+  headerBadge?: ReactNode;
   /** Gövde (karşılama / mesajlar + composer). */
   children?: ReactNode;
 }
 
-export function CosreSheet({ open, onOpenChange, width, contentProps, headerContext, headerActions, children }: CosreSheetProps) {
+export function CosreSheet({ open, onOpenChange, width, contentProps, headerContext, headerActions, headerBadge, children }: CosreSheetProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const setPanel = useCallback((el: HTMLDivElement | null) => {
     panelRef.current = el;
@@ -82,6 +84,7 @@ export function CosreSheet({ open, onOpenChange, width, contentProps, headerCont
           <AiMark size={20} />
           <SheetTitle>{T.title}</SheetTitle>
           <SheetDescription className="sr-only">{T.description}</SheetDescription>
+          {headerBadge}
           {headerContext ?? <span className="flex-1" />}
           {headerActions}
         </SheetHeader>

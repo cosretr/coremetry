@@ -266,3 +266,20 @@ describe('MessageList × paylaşılan fixture (gerçek SDK)', () => {
     expect(bodyText(host!.querySelector('.cm-msg-ai')!)).toBe('tamam');
   });
 });
+
+// araç seti dilim 5 (G4) — adım kartları cevabın ÜSTÜNDE, gerçek SDK + fixture.
+describe('MessageList × adım kartları (dilim 5)', () => {
+  it('ui-stream-v1: liste balondan önce; bitince katlı, kart türleri ve durdurma satırı', async () => {
+    const core = createCosreChat({ fetch: sseFetch(cosreFixture('ui-stream-v1')).fetch });
+    await core.chat.sendMessage({ text: 'orders-api neden yavaş?' });
+    const el = await draw(core, 'ready');
+    const list = el.querySelector('[data-cosre-steps]')!;
+    const bubble = el.querySelector('.cm-msg-ai')!;
+    expect(list).not.toBeNull();
+    expect(list.compareDocumentPosition(bubble) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(list.querySelectorAll('[data-cosre-step]')).toHaveLength(0); // bitti → katlı
+    await act(async () => { (list.querySelector('button') as HTMLElement).click(); });
+    expect([...list.querySelectorAll('[data-cosre-step]')].map(s => s.getAttribute('data-kind'))).toEqual(['text', 'skipped']);
+    expect(list.querySelector('[data-cosre-stop="call_cap"]')?.textContent).toContain('çağrı tavanı · 2 çağrı · 1 tur');
+  });
+});

@@ -32,6 +32,7 @@ import type { CosreUIMessage } from '@/lib/cosre/resetReducer';
 import type { ChatExplainAsk, ChatTurn, CosreApprovalAnswer } from '@/lib/types';
 import { approvalAnswer, approvalViews } from '@/lib/cosre/approval';
 import { ApprovalCard } from './ApprovalCard';
+import { StepList, scopeChangeNotes, stepsView } from '../evidence';
 
 /** useChat durumu (ai ChatStatus ile aynı küme; tip importu katalogdan bağımsız). */
 export type CosreChatStatus = 'submitted' | 'streaming' | 'ready' | 'error';
@@ -56,6 +57,8 @@ export function MessageList({ messages, visibleParts, status, error, onAsk, onRe
   const busy = status === 'submitted' || status === 'streaming';
   const last = messages.at(-1);
   const errText = status === 'error' && error ? error.message : undefined;
+  // araç seti dilim 5 — kapsam önceki cevaptan farklıysa mesajın üstünde tek satır.
+  const scopeNotes = useMemo(() => scopeChangeNotes(messages), [messages]);
   return (
     <>
       {messages.map((m, i) => {
@@ -64,7 +67,7 @@ export function MessageList({ messages, visibleParts, status, error, onAsk, onRe
         const isLast = i === messages.length - 1;
         const prev = messages[i - 1];
         return <AssistantMessage key={m.id} m={m} visibleParts={visibleParts} live={isLast && busy} error={isLast ? errText : undefined}
-          explainAsk={prev?.role === 'user' ? prev.metadata?.explainAsk : undefined}
+          explainAsk={prev?.role === 'user' ? prev.metadata?.explainAsk : undefined} scopeNote={scopeNotes.get(m.id)}
           followups={isLast && status === 'ready' ? onAsk : undefined} onRetry={isLast && errText ? onRetry : undefined}
           onApproval={isLast && !busy ? onApproval : undefined} />;
       })}
@@ -85,8 +88,10 @@ function UserMessage({ m }: { m: CosreUIMessage }) {
   return <ChatBubble turn={turn} />;
 }
 
-function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, explainAsk, onApproval }: {
+function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, explainAsk, onApproval, scopeNote }: {
   m: CosreUIMessage; visibleParts: (m: CosreUIMessage) => Part[]; live: boolean; error?: string;
+  /** araç seti dilim 5 — kapsam değişimi notu (önceki cevaptan farklıysa). */
+  scopeNote?: string;
   /** Son, bitmiş cevap: takip çiplerinin sahibi (v1 showFollowups). */
   followups?: (text: string, opts?: ChatSendOpts) => void;
   onRetry?: () => void;
@@ -96,6 +101,8 @@ function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, ex
   onApproval?: (a: CosreApprovalAnswer) => void;
 }) {
   const approvals = useMemo(() => approvalViews(m), [m]);
+  // araç seti dilim 5 (G4) — adım kartları cevabın ÜSTÜNDE (data-tool-result / data-stop).
+  const steps = useMemo(() => stepsView(visibleParts(m)), [m, visibleParts]);
   // SDK akışta son mesajı her parçada yeni nesneyle değiştirir; bitmiş
   // mesajlar kimliğini korur → ChatBubble (memo) yalnız akan balonu çizer.
   const turn = useMemo(() => toChatTurn(m, visibleParts(m), { pending: live, error, explainAsk }), [m, visibleParts, live, error, explainAsk]);
@@ -112,6 +119,8 @@ function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, ex
   }
   return (
     <div data-cosre-message={m.id} className="contents">
+      {scopeNote && <div className="cm-msg-note text-muted-foreground" data-cosre-scope-note="">{scopeNote}</div>}
+      <StepList view={steps} live={live} />
       <ChatBubbleSlotsContext.Provider value={slots}>
         <ChatBubble turn={turn} onRetry={onRetry} shownFollowups={showFu ? turn.followups : undefined} />
       </ChatBubbleSlotsContext.Provider>
