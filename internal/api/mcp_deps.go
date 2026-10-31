@@ -47,6 +47,8 @@ func (s *Server) mcpDeps() mcptools.Deps {
 		// ile AYNI çözümleyici (tek karar noktası).
 		MetricRouter:     router,
 		ServiceMetricRED: s.mcpServiceMetricRED, // v0.10.1271 — Overview metrik kipi RED
+		// dilim 3b — endpoint_metrics (copilot_endpoint_metrics.go; VM, servis RED çözümü).
+		EndpointMetricRED: s.mcpEndpointMetricRED,
 		// JVM heap VM birincil backend'ini İKİ yolda da izler (eskiden yalnız
 		// main.go'nun dış literalinde vardı; sohbet CH-only okuyordu).
 		// v0.10.1270 — VM/CH seçimi metricsrc çözümleyicisinde (tek karar noktası).

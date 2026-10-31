@@ -159,6 +159,8 @@ func toolResultDeepLink(tool, content string) (guidedAnswerLink, bool) {
 		label, prefix = "Traces'te aç", "/traces?"
 	case mcptools.ExplainTraceName: // dilim 3
 		label, prefix = "Trace'i aç", "/trace/"
+	case mcptools.EndpointMetricsName: // dilim 3b — skipped gövdede page_url yok → link yok
+		label, prefix = "Endpoints'te aç", "/endpoints?"
 	default:
 		return guidedAnswerLink{}, false
 	}

@@ -25,6 +25,7 @@ import (
 	"time"
 
 	agenttools "github.com/cilcenk/coremetry/internal/ai/agent/tools"
+	"github.com/cilcenk/coremetry/internal/mcptools"
 )
 
 // Yürütülmeyen çağrının nedeni (step-result `reason`). Executor'ın Kind
@@ -46,6 +47,15 @@ func skippedStepResult(i int, tool, content, reason string) map[string]any {
 	return map[string]any{
 		"i": i, "tool": tool, "ok": false, "skipped": true, "reason": reason,
 		"preview": preview, "truncated": truncated, "bytes": len(content),
+	}
+}
+
+// markV2Skipped — SAF (dilim 3b): v2 aracı "okunmadı" gövdesi döndüyse
+// (endpoint_metrics: VM yok / gRPC / rota etiketi yok) adım sonucu skipped +
+// gerekçe olur (data-tool-result kind skipped; skippedStepResult gibi ok:false).
+func markV2Skipped(stepEv map[string]any, tool, content string) {
+	if r := mcptools.V2SkipReason(tool, content); r != "" {
+		stepEv["ok"], stepEv["skipped"], stepEv["reason"] = false, true, r
 	}
 }
 

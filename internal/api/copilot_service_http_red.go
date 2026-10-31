@@ -216,66 +216,17 @@ func (s *Server) readServiceHTTPRED(ctx context.Context, rd redFamilyReader, isV
 	if !probe.VM || service == "" {
 		return fallback()
 	}
-	terms := map[string]string{}
-	if env != "" {
-		terms[vmetrics.RoleEnv] = env
+	in, ok := s.resolveSvcREDInputs(ctx, rd, service, env, qTo, &probe)
+	if in.famResolved {
+		res.Family, res.FamilyID, res.Both = in.fam.Kind, in.fam.ID, in.both
 	}
-	fr, ferr := s.resolveServiceREDFamily(ctx, rd, service, terms, qTo)
-	if probe.LabelErr = ferr; ferr != nil {
+	res.Notes = append(res.Notes, in.notes...)
+	if !ok {
 		return fallback()
 	}
-	fam, pres := fr.primaryFamily()
-	if pres == nil {
-		// Hiçbir ailenin bu servise ait serisi yok: histogram hiç yoksa onu,
-		// varsa "servisin serisi yok"u söyle (ikisi farklı eylem ister).
-		probe.MetricPresent = fr.anyMetricPresent()
-		probe.SvcLabelOK, probe.RateSeries = true, 0
-		return fallback()
-	}
-	probe.MetricPresent, probe.SvcLabelOK = true, true
-	res.Family, res.FamilyID, res.Both = fam.Kind, fam.ID, fr.Both
-	// v0.10.1689 — etiket kümesi SERVİSE kapsanır (aile çözücüsüyle aynı okuma
-	// + aynı önbellek anahtarı): kapsamsız metricChartLabelSet filonun 24 sa'ini
-	// taradı, prod VM'de zaman aşımı → sayfa çizerken CoSRE "çizemedi" dedi.
-	lm := rd.MetricLabelMap().Normalized()
-	labels, err := s.redFamilyLabelSet(ctx, rd, fam.Probe, redFamilySvcLabel(lm), service, qTo)
-	if probe.LabelErr = err; err != nil {
-		return fallback()
-	}
-	sr := vmetrics.ResolveLabelRole(vmetrics.RoleService, lm, labels, true)
-	if probe.SvcLabelOK = sr.Applied(); !probe.SvcLabelOK {
-		return fallback()
-	}
-	envMatcher := ""
-	if env != "" {
-		sc := pres.EnvScope
-		switch {
-		case sc == nil || sc.Failed:
-			reason := "ortam etiketi okunamadı"
-			if sc != nil {
-				reason = sc.Reason
-			}
-			res.Notes = append(res.Notes, fmt.Sprintf("ortam %q süzgeci UYGULANMADI (%s) — seriler TÜM ortamları kapsıyor", env, reason))
-		case !sc.Applied:
-			res.Notes = append(res.Notes, fmt.Sprintf("ortam %q süzgeci UYGULANMADI (%s) — seriler TÜM ortamları kapsıyor", env, sc.Reason))
-		case !labels[sc.Label]:
-			res.Notes = append(res.Notes, fmt.Sprintf("ortam %q süzgeci UYGULANMADI (histogram %s etiketini taşımıyor) — seriler TÜM ortamları kapsıyor", env, sc.Label))
-		default:
-			envMatcher, res.Env = sc.Matcher, env
-		}
-	}
-	status := redFamilyStatusLabel(fam, labels)
-	if status == "" {
-		if fam.Kind == redKindGRPC {
-			res.Notes = append(res.Notes, fmt.Sprintf("gRPC histogramında durum kodu etiketi yok (%s) — hata oranı ölçülemez, grafiği YOK (0 sanılmasın)", strings.Join(fam.StatusLabels, " / ")))
-		} else {
-			res.Notes = append(res.Notes, fmt.Sprintf("HTTP histogramında durum kodu etiketi yok (%s) — 5xx oranı ölçülemez, grafiği YOK (0 sanılmasın)", strings.Join(mcStatusLabels, " / ")))
-		}
-	}
-	if fr.Both {
-		res.Notes = append(res.Notes, "servis gRPC sunucu histogramı da yazıyor ("+redFamilies[1].Label+" RED'i HTTP ile TOPLANMADI; HTTP çizildi — gRPC bölümü Service → HTTP/GRPC sekmesinde)")
-	}
-	qs := svcREDFamilyQueries(fam, service, sr.Label, envMatcher, status, metricChartWinS(step))
+	res.Env = in.env
+	fam, envMatcher, status := in.fam, in.envMatcher, in.statusLabel
+	qs := svcREDFamilyQueries(fam, service, in.svcLabel, envMatcher, status, metricChartWinS(step))
 	run := func(q svcHTTPREDQuery) svcHTTPREDChart {
 		return s.svcHTTPREDRunQuery(ctx, rd, q, service, envMatcher, qFrom, qTo, step)
 	}
@@ -296,9 +247,90 @@ func (s *Server) readServiceHTTPRED(ctx context.Context, rd redFamilyReader, isV
 	}
 	wg.Wait()
 	res.UseVM, res.Charts = true, charts
-	res.svcLabel, res.envMatcher, res.statusLabel = sr.Label, envMatcher, status
-	res.routeLabelOK, res.methodLabelOK = labels[fam.RouteLabel], labels[fam.MethodLabel]
+	res.svcLabel, res.envMatcher, res.statusLabel = in.svcLabel, envMatcher, status
+	res.routeLabelOK, res.methodLabelOK = in.routeLabelOK, in.methodLabelOK
 	return res
+}
+
+// svcREDInputs — servis RED'inin çözülmüş girdileri (aile, etiketler, ortam
+// eşleyicisi, durum etiketi, notlar). readServiceHTTPRED ve endpoint_metrics
+// (dilim 3b) AYNI çözümü okur.
+type svcREDInputs struct {
+	fam                               redFamily
+	famResolved, both                 bool
+	svcLabel, envMatcher, statusLabel string
+	env                               string // uygulanan ortam
+	notes                             []string
+	routeLabelOK, methodLabelOK       bool
+}
+
+// resolveSvcREDInputs — aile çözümü (red_family.go) + servise kapsanmış etiket
+// keşfi + ortam/durum çözümü. Grafik sorgusu koşmaz; probe kaynak kararının
+// girdilerini (okuma sırasıyla) doldurur. ok=false → çizilemez
+// (pickServiceChartSource(probe) gerekçeyi söyler).
+func (s *Server) resolveSvcREDInputs(ctx context.Context, rd redFamilyReader, service, env string, qTo time.Time, probe *svcHTTPREDProbe) (svcREDInputs, bool) {
+	var in svcREDInputs
+	terms := map[string]string{}
+	if env != "" {
+		terms[vmetrics.RoleEnv] = env
+	}
+	fr, ferr := s.resolveServiceREDFamily(ctx, rd, service, terms, qTo)
+	if probe.LabelErr = ferr; ferr != nil {
+		return in, false
+	}
+	fam, pres := fr.primaryFamily()
+	if pres == nil {
+		// Hiçbir ailenin bu servise ait serisi yok: histogram hiç yoksa onu,
+		// varsa "servisin serisi yok"u söyle (ikisi farklı eylem ister).
+		probe.MetricPresent = fr.anyMetricPresent()
+		probe.SvcLabelOK, probe.RateSeries = true, 0
+		return in, false
+	}
+	probe.MetricPresent, probe.SvcLabelOK = true, true
+	in.fam, in.famResolved, in.both = fam, true, fr.Both
+	// v0.10.1689 — etiket kümesi SERVİSE kapsanır (aile çözücüsüyle aynı okuma
+	// + aynı önbellek anahtarı): kapsamsız metricChartLabelSet filonun 24 sa'ini
+	// taradı, prod VM'de zaman aşımı → sayfa çizerken CoSRE "çizemedi" dedi.
+	lm := rd.MetricLabelMap().Normalized()
+	labels, err := s.redFamilyLabelSet(ctx, rd, fam.Probe, redFamilySvcLabel(lm), service, qTo)
+	if probe.LabelErr = err; err != nil {
+		return in, false
+	}
+	sr := vmetrics.ResolveLabelRole(vmetrics.RoleService, lm, labels, true)
+	if probe.SvcLabelOK = sr.Applied(); !probe.SvcLabelOK {
+		return in, false
+	}
+	in.svcLabel = sr.Label
+	if env != "" {
+		sc := pres.EnvScope
+		switch {
+		case sc == nil || sc.Failed:
+			reason := "ortam etiketi okunamadı"
+			if sc != nil {
+				reason = sc.Reason
+			}
+			in.notes = append(in.notes, fmt.Sprintf("ortam %q süzgeci UYGULANMADI (%s) — seriler TÜM ortamları kapsıyor", env, reason))
+		case !sc.Applied:
+			in.notes = append(in.notes, fmt.Sprintf("ortam %q süzgeci UYGULANMADI (%s) — seriler TÜM ortamları kapsıyor", env, sc.Reason))
+		case !labels[sc.Label]:
+			in.notes = append(in.notes, fmt.Sprintf("ortam %q süzgeci UYGULANMADI (histogram %s etiketini taşımıyor) — seriler TÜM ortamları kapsıyor", env, sc.Label))
+		default:
+			in.envMatcher, in.env = sc.Matcher, env
+		}
+	}
+	in.statusLabel = redFamilyStatusLabel(fam, labels)
+	if in.statusLabel == "" {
+		if fam.Kind == redKindGRPC {
+			in.notes = append(in.notes, fmt.Sprintf("gRPC histogramında durum kodu etiketi yok (%s) — hata oranı ölçülemez, grafiği YOK (0 sanılmasın)", strings.Join(fam.StatusLabels, " / ")))
+		} else {
+			in.notes = append(in.notes, fmt.Sprintf("HTTP histogramında durum kodu etiketi yok (%s) — 5xx oranı ölçülemez, grafiği YOK (0 sanılmasın)", strings.Join(mcStatusLabels, " / ")))
+		}
+	}
+	if fr.Both {
+		in.notes = append(in.notes, "servis gRPC sunucu histogramı da yazıyor ("+redFamilies[1].Label+" RED'i HTTP ile TOPLANMADI; HTTP çizildi — gRPC bölümü Service → HTTP/GRPC sekmesinde)")
+	}
+	in.routeLabelOK, in.methodLabelOK = labels[fam.RouteLabel], labels[fam.MethodLabel]
+	return in, true
 }
 
 // svcHTTPREDRunQuery — tek grafik: 60 sn önbellek, yoksa TEK range sorgusu

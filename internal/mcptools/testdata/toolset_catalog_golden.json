@@ -397,8 +397,8 @@
     ]
   },
   "conditional/v2": {
-    "count": 74,
-    "sha256": "6c81673557bf0d58ae2cfeb5083a0cbb041a44131c6b80d0db934f5963b6e007",
+    "count": 75,
+    "sha256": "c6a60fd1edeb1c0c02bcdd4d6e9afe1e58e723087ba98370d310ce05c8fe3943",
     "names": [
       "list_services",
       "list_teams",
@@ -473,7 +473,8 @@
       "list_my_services",
       "open_problems",
       "find_traces",
-      "explain_trace"
+      "explain_trace",
+      "endpoint_metrics"
     ]
   },
   "zero/chat": {
@@ -854,8 +855,8 @@
     ]
   },
   "zero/v2": {
-    "count": 69,
-    "sha256": "11b96ecc35a4276ba40879288c51bd115b4d13c4cb5e7d152d22848f1e34af70",
+    "count": 70,
+    "sha256": "2d08b2148d59bb45035cf567a25c18742e867063192e863a92da6a5c62ffc1c5",
     "names": [
       "list_services",
       "list_teams",
@@ -925,7 +926,8 @@
       "list_my_services",
       "open_problems",
       "find_traces",
-      "explain_trace"
+      "explain_trace",
+      "endpoint_metrics"
     ]
   }
 }

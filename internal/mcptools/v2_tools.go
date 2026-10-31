@@ -54,7 +54,7 @@ const (
 
 // registerV2Subset — yalnız v2 sohbet kataloğuna eklenen araçlar (sıra = modelin gördüğü sıra).
 func registerV2Subset(d Deps) []mcp.Tool {
-	return []mcp.Tool{listMyServicesTool(d), openProblemsTool(d), findTracesTool(d), cosreSearchLogsTool(d), explainTraceTool(d)}
+	return []mcp.Tool{listMyServicesTool(d), openProblemsTool(d), findTracesTool(d), cosreSearchLogsTool(d), explainTraceTool(d), endpointMetricsTool(d)}
 }
 
 // V2MergeTools — SAF (dilim 3): v2 kataloğu = taban katalog + v2 araçları;
@@ -84,7 +84,7 @@ func V2MergeTools(base, v2 []mcp.Tool) []mcp.Tool {
 
 // v2PageURLTools — sonucu kök-göreli `page_url` taşıyan v2 araçları (adım
 // sonucunun href'i buradan; v1 search_logs çıktısında page_url yok).
-var v2PageURLTools = map[string]bool{ListMyServicesName: true, OpenProblemsName: true, FindTracesName: true, SearchLogsV2Name: true, ExplainTraceName: true}
+var v2PageURLTools = map[string]bool{ListMyServicesName: true, OpenProblemsName: true, FindTracesName: true, SearchLogsV2Name: true, ExplainTraceName: true, EndpointMetricsName: true}
 
 // V2PageURL — SAF: v2 aracının JSON sonucundaki kök-göreli page_url ("" = yok).
 func V2PageURL(tool, content string) string {

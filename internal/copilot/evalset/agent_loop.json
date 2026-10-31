@@ -276,6 +276,30 @@
         "maxLatencyMs": 180000,
         "expectTier": "loop"
       }
+    },
+    {
+      "id": "agent-v2-endpoint-metrics",
+      "surface": "ChatLoop",
+      "mode": "agent",
+      "userTeam": "acme-orders",
+      "why": "CoSRE v2 araç seti dilim 3b (docs/cosre/tools-audit.md §9): uç nokta RED'i sorusunda ajan endpoint_metrics'i (VictoriaMetrics http_route, örneklenmemiş) seçmeli; VM yok / gRPC / rota etiketi yok → skipped gerekçesi cevapta söylenir, span'den sayı uydurulmaz.",
+      "note": "Araç seti dilim 3b: DÖNGÜ SONDASI (expectTier loop) v2 döngüsünde (userTeam); servis soruda açıkça adlandırılır (çok servisli kapsamda araç 'hangi servis?' der). Kurulumda VM ya da servis yoksa araç skipped / boş döner — ölçülen aracın SEÇİMİ.",
+      "user": "orders-api servisinin son 1 saatte en yoğun endpoint'leri hangileri, 5xx oranları ne?",
+      "expect": {
+        "anyOfTools": [
+          "endpoint_metrics"
+        ],
+        "maxToolCalls": 6,
+        "mustContain": [
+          "orders-api"
+        ],
+        "mustNotContain": [
+          "kubectl delete"
+        ],
+        "maxTokens": 60000,
+        "maxLatencyMs": 180000,
+        "expectTier": "loop"
+      }
     }
   ]
 }

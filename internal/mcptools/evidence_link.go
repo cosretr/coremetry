@@ -79,7 +79,8 @@ type ChatEvidence struct {
 }
 
 // evidenceTools — kanıt zarfı taşıyan araçlar (adım 2'nin üçü).
-var evidenceTools = map[string]bool{queryMetricsName: true, queryTracesName: true, queryLogsName: true}
+// dilim 3b — endpoint_metrics (v2): VM PromQL kanıtı; href page_url'den (EvidenceHref "").
+var evidenceTools = map[string]bool{queryMetricsName: true, queryTracesName: true, queryLogsName: true, EndpointMetricsName: true}
 
 // compositeEvidenceTools — v0.10.1275: hop başına kanıt LİSTESİ (`evidences`)
 // taşıyan bileşik araçlar.

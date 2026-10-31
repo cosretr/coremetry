@@ -1500,6 +1500,9 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 					emit("block", blockSeq.Next(b.Type, b.Payload))
 				}
 			}
+			if !tr.IsError {
+				markV2Skipped(stepEv, tc.Name, tr.Content) // dilim 3b — okunmadı → kind skipped
+			}
 			emit("step-result", stepEv)
 			// v0.9.1230 — MODEL tarafındaki bütçe, çipten SONRA uygulanır:
 			// önizleme ve `bytes` kırpılmamış GERÇEK boyu göstermeye devam

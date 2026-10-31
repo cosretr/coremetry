@@ -262,6 +262,9 @@ type Deps struct {
 	// query_metrics red/latency/throughput/errors aileleri metricsrc VM derken
 	// bunu okur; nil = yok → ClickHouse span RED.
 	ServiceMetricRED ServiceMetricREDReader
+	// dilim 3b (CoSRE v2) — endpoint_metrics okuması (api/copilot_endpoint_metrics.go;
+	// servis RED çözümü + v0.10.1481 rota sorguları). nil = VM yok → araç skipped.
+	EndpointMetricRED EndpointMetricREDReader
 	// v0.10.1133 — resolve_oracle_operation çözümleyicisi (oracle_operation.go;
 	// api/oracle_op_resolve.go doldurur). nil ya da Enabled()=false = etkin
 	// Oracle kaynağı yok → sohbete SUNULMAZ; dış MCP'de araç dürüst enabled=false döner.

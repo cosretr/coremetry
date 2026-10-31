@@ -177,6 +177,7 @@ func emitStepEvidence(emit func(string, any), i int, tool, text string, err erro
 				ev["href"] = u
 			}
 		}
+		markV2Skipped(ev, tool, text) // dilim 3b — okunmadı → kind skipped
 	}
 	emit("step-result", ev)
 }
