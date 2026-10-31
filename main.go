@@ -1064,6 +1064,12 @@ func main() {
 		log.Printf("[tool-approval] load persisted settings: %v", err)
 	}
 	cfgRefresh.Add("ai-tool-approval", store.LoadAIToolApproval)
+	// CoSRE v2 araç seti dilim 4 — v2 döngü bütçesi (system_settings
+	// ai.loopBudget); yüklenemezse sabitler (ayar yalnız daraltır).
+	if err := store.LoadAILoopBudget(ctx); err != nil {
+		log.Printf("[loop-budget] load persisted settings: %v", err)
+	}
+	cfgRefresh.Add("ai-loop-budget", store.LoadAILoopBudget)
 	// v0.10.1458 — konu dışı sorulara genel cevap anahtarı (system_settings
 	// ai.generalQuestions) HER rolde (sohbet api'de); yüklenemezse varsayılan
 	// AÇIK (operatör kararı 2026-10-23).

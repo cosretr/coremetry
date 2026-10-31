@@ -193,6 +193,9 @@ func cosreV2Marked(ctx context.Context) bool {
 type v2LoopPlan struct {
 	Scope    userScope
 	Addendum string
+	// Budget — araç seti dilim 4 (ai_loop_budget_settings.go): `ai.loopBudget`
+	// ile daraltılmış alışveriş bütçesi. Sıfır değer = sabitler (eski yol).
+	Budget loopBudget
 }
 
 func withV2LoopPlan(ctx context.Context, p *v2LoopPlan) context.Context {

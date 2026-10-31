@@ -15,6 +15,7 @@ import (
 	"github.com/cilcenk/coremetry/internal/ai/assemble"
 	"github.com/cilcenk/coremetry/internal/ai/modelcaps"
 	"github.com/cilcenk/coremetry/internal/auth"
+	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/copilot"
 	"github.com/cilcenk/coremetry/internal/mcp"
 	"github.com/cilcenk/coremetry/internal/mcptools"
@@ -308,6 +309,11 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// SAYISIydı; tool bağlamı bu ctx'ten türediği için tek deadline
 	// hepsini kapatıyor (chat_deadline.go).
 	exchangeMax := chatExchangeTimeout(s.copilot.ClientTimeout())
+	if cosreV2Marked(r.Context()) {
+		// araç seti dilim 4 (ai_loop_budget_settings.go) — v2: `ai.loopBudget.maxSeconds`
+		// alışveriş tavanını yalnız daraltır; v1 aynen.
+		exchangeMax = narrowLoopBudget(chstore.CurrentAILoopBudget(), loopBudget{MaxTime: exchangeMax}).MaxTime
+	}
 	dctx, cancelExchange := context.WithTimeout(r.Context(), exchangeMax)
 	defer cancelExchange()
 	callMeta := copilot.CallMeta{
@@ -1029,7 +1035,8 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			evm.OnScope(us)
 		}
 		emit(chatScopeEventKind, us.event())
-		v2p := &v2LoopPlan{Scope: us, Addendum: userScopeAddendum(us, req.Messages)}
+		v2p := &v2LoopPlan{Scope: us, Addendum: userScopeAddendum(us, req.Messages),
+			Budget: narrowLoopBudget(chstore.CurrentAILoopBudget(), v2LoopCeilings(dm, exchangeMax))} // dilim 4
 		if v2p.Addendum != "" {
 			echoPhrases = chatEchoPhrases(append(chatLoopPreambles(screenCtx, pageCtx, pinnedCtx, cst.ctx),
 				copilot.ChatRoundCapAddendum(), copilot.ChatDegenRetryAddendum(), v2p.Addendum)...)
@@ -1103,8 +1110,16 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	loopCallID := copilot.NewCallID()
 	// v0.10.1150 — tavanlar deepMode'dan: kapalıyken chatMaxToolCalls/Rounds.
 	maxCalls, maxRounds := dm.toolCalls(), dm.toolRounds()
+	v2Plan := v2LoopPlanFrom(ctx)
+	if v2Plan != nil {
+		// araç seti dilim 4 — v2 bütçesi prepareStep girdisindeki planla (stepInput.V2) aynı.
+		maxCalls, maxRounds = v2Plan.Budget.MaxCalls, v2Plan.Budget.MaxRounds
+	}
 	callsLeft := maxCalls
 	loopStop := defaultStop(maxRounds) // agent-core S1 (chat_stop.go)
+	if v2Plan != nil && v2Plan.Budget.MaxTokens > 0 {
+		loopStop = stopAny(loopStop, stopAtTokens(v2Plan.Budget.MaxTokens)) // dilim 4 — token tavanı tavan turuna
+	}
 	// v0.10.948 — hak ≠ iş: bilinmeyen/tekrar/kapsam reddi hak yer ama yürümez;
 	// bütçe notu yürütülen ve alışveriş boyunca yürütülmeyen çağrıyı ayrı sayar.
 	executedN, skippedN := 0, 0
@@ -1497,7 +1512,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			// turu ile onun ToolResults turu ikizdir, birini düşürmek
 			// sağlayıcıda sahipsiz tool sonucu bırakır. Kaynağı burada
 			// kesmek doğru yer.
-			tr.Content, _ = clampToolResultForModel(tr.Content)
+			tr.Content, _ = clampToolResultForLoop(v2Plan, tr.Content) // dilim 4 — v2 bayt tavanı
 			results = append(results, tr)
 		}
 		if len(over) > 0 {

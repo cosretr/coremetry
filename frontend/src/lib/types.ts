@@ -8196,6 +8196,27 @@ export interface AIUserScopeSetting {
   enabled: boolean;
 }
 
+/** CoSRE v2 araç seti dilim 4 — system_settings `ai.loopBudget`; 0 = koddaki sabit (ayar yalnız daraltır). */
+export interface AILoopBudget {
+  maxCalls: number;
+  maxRounds: number;
+  /** 0 = token tavanı kapalı. */
+  maxTokens: number;
+  maxSeconds: number;
+  toolTextBytes: number;
+  updatedBy?: string;
+  updatedAt?: string;
+}
+
+/** GET /api/ai/loop-budget — kayıtlı ayar + tavanlar (Derin kapalı; maxTokens 0 = sabit yok). */
+export interface AILoopBudgetResponse {
+  setting: AILoopBudget;
+  ceilings: Pick<AILoopBudget, 'maxCalls' | 'maxRounds' | 'maxTokens' | 'maxSeconds' | 'toolTextBytes'>;
+}
+
+/** PUT /api/ai/loop-budget — gönderilmeyen alan mevcut değeri korur. */
+export type AILoopBudgetPut = Partial<Pick<AILoopBudget, 'maxCalls' | 'maxRounds' | 'maxTokens' | 'maxSeconds' | 'toolTextBytes'>>;
+
 /** CoSRE Login Briefing Faz 1 — kalem kimliği (Go internal/cosre/briefing ItemOrder; kart sırası). */
 export type CosreBriefingItem = 'red' | 'client' | 'exception' | 'log' | 'oracle' | 'problem' | 'rollout';
 

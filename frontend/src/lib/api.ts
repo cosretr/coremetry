@@ -1334,6 +1334,12 @@ export const api = {
     request<import('./types').AIUserScopeSetting>(`/api/ai/user-scope`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     }),
+  // CoSRE v2 araç seti dilim 4 — v2 döngü bütçesi (GET her rol; PUT admin + audit).
+  aiLoopBudget: () => get<import('./types').AILoopBudgetResponse>(`/api/ai/loop-budget`),
+  putAILoopBudget: (body: import('./types').AILoopBudgetPut) =>
+    request<import('./types').AILoopBudget>(`/api/ai/loop-budget`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    }),
   // CoSRE Login Briefing Faz 1 — kullanıcının takım kartı (GET her rol, 30 s cache;
   // refresh editor+ + audit). Kart UI'ı Faz 2 (welcome mockup + shadcn).
   cosreBriefing: (env: string, signal?: AbortSignal) =>

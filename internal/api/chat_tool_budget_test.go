@@ -108,15 +108,17 @@ func TestChatLoopWiresCatalogAndResultBudget(t *testing.T) {
 	if strings.Contains(src, "Description: t.Description") {
 		t.Error("tam İngilizce açıklama hâlâ spec'e giriyor — her tur ~24 KB")
 	}
-	if !strings.Contains(src, "clampToolResultForModel(tr.Content)") {
-		t.Error("tool sonucu MODEL bütçesine indirilmiyor — " +
-			"clampToolResultForModel(tr.Content) bekleniyor")
+	// araç seti dilim 4 — kapı clampToolResultForLoop: v1 sabit rune yolu
+	// (clampToolResultForModel), v2 `ai.loopBudget` bayt tavanı.
+	const clampCall = "clampToolResultForLoop(v2Plan, tr.Content)"
+	if !strings.Contains(src, clampCall) {
+		t.Fatal("tool sonucu MODEL bütçesine indirilmiyor — " + clampCall + " bekleniyor")
 	}
 	// Sıra sözleşmesi: klamp step-result yayınından SONRA gelmeli, yoksa
 	// çipin `bytes`/önizlemesi kırpılmış boyu gösterir ve operatörün
 	// "ne kadarını görmüyorum" sorusu cevapsız kalır.
 	idxEmit := strings.Index(src, `emit("step-result", stepEv)`)
-	idxClamp := strings.Index(src, "clampToolResultForModel(tr.Content)")
+	idxClamp := strings.Index(src, clampCall)
 	if idxEmit < 0 || idxClamp < 0 || idxClamp < idxEmit {
 		t.Error("klamp, step-result yayınından SONRA uygulanmalı (çip gerçek boyu göstermeli)")
 	}
