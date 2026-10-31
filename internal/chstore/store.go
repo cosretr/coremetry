@@ -3128,6 +3128,22 @@ func canonicalTables(sd, ld, md int) []string {
 		ORDER BY id
 		TTL toDate(started_at) + INTERVAL 30 DAY`,
 
+		// ml_series — ML dilim 1 (audit K2): servis × bölüm × kova sayım serisi,
+		// taban CH'den (ES'e yalnız son pencere). RMT(version) idempotent yazım,
+		// ORDER BY tam anahtar, partition YOK, TTL 28 g (taban 7 g + takvim sınıfı
+		// seyrekliği için pay). Yazıcı yalnız ML lideri; DDL api/worker boot'unda.
+		`CREATE TABLE IF NOT EXISTS ml_series (
+			signal     LowCardinality(String),
+			service    LowCardinality(String),
+			part       String DEFAULT '',
+			bucket     DateTime,
+			bucket_sec UInt32 DEFAULT 300,
+			count      Float64 DEFAULT 0,
+			version    UInt64 DEFAULT toUnixTimestamp64Nano(now64(9))
+		) ENGINE = ReplacingMergeTree(version)
+		ORDER BY (signal, service, part, bucket, bucket_sec)
+		TTL bucket + INTERVAL 28 DAY`,
+
 		// cosre_answer_grounding — CoSRE öğrenme Faz 4: çevrimdışı öz-
 		// değerlendirme. Gece örneklenen cevabın her iddiası, turda okunan
 		// tool çıktılarına karşı self-hosted modelle etiketlenir. Yeniden

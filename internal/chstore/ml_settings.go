@@ -73,6 +73,17 @@ type MLConfig struct {
 	DwellBuckets int `json:"dwellBuckets"`
 	// DailyEventCap — dedektör başına günlük yeni olay tavanı (10..10000, varsayılan 200).
 	DailyEventCap int `json:"dailyEventCap"`
+	// IngestLagSec — ES ingest gecikme payı (0..3600, varsayılan 120): son kova
+	// ancak kova sonu + pay geçince değerlendirilir (kalite çerçevesi, log).
+	IngestLagSec int `json:"ingestLagSec"`
+	// MinBaselineSamples — eksik veri kuralı: taban örneği bundan azsa sessiz (5..500, varsayılan 20).
+	MinBaselineSamples int `json:"minBaselineSamples"`
+	// CriticalZ — robust z eşiği (1..20, varsayılan 4).
+	CriticalZ float64 `json:"criticalZ"`
+	// InfluencerField — kanal kodu alanı (ES keyword); boş = adaylardan keşfet.
+	InfluencerField string `json:"influencerField"`
+	// ErrorLevels — hata sayılan seviye değerleri (küçük harf).
+	ErrorLevels []string `json:"errorLevels"`
 }
 
 // DefaultMLConfig — her şey kapalı, eşikler makul.
@@ -85,7 +96,9 @@ func DefaultMLConfig() MLConfig {
 	}
 	return MLConfig{Enabled: false, Detectors: d, Promotion: p,
 		BucketSec: 300, TickSec: 300, TimeoutMs: 10000, MaxServices: 500, MaxESQueriesPerTick: 1,
-		BaselineDays: 7, MinBaselineRate: 5, DwellBuckets: 2, DailyEventCap: 200}
+		BaselineDays: 7, MinBaselineRate: 5, DwellBuckets: 2, DailyEventCap: 200,
+		IngestLagSec: 120, MinBaselineSamples: 20, CriticalZ: 4,
+		ErrorLevels: []string{"error", "err", "fatal", "critical", "severe", "emerg", "alert"}}
 }
 
 func clampInt(v, lo, hi, def int) int {
@@ -106,6 +119,14 @@ func NormalizeMLConfig(c MLConfig) MLConfig {
 	c.BaselineDays = clampInt(c.BaselineDays, 3, 28, d.BaselineDays)
 	c.DwellBuckets = clampInt(c.DwellBuckets, 1, 12, d.DwellBuckets)
 	c.DailyEventCap = clampInt(c.DailyEventCap, 10, 10000, d.DailyEventCap)
+	c.IngestLagSec = clampInt(c.IngestLagSec, 0, 3600, d.IngestLagSec)
+	c.MinBaselineSamples = clampInt(c.MinBaselineSamples, 5, 500, d.MinBaselineSamples)
+	if c.CriticalZ < 1 || c.CriticalZ > 20 {
+		c.CriticalZ = d.CriticalZ
+	}
+	if len(c.ErrorLevels) == 0 {
+		c.ErrorLevels = d.ErrorLevels
+	}
 	if c.MinBaselineRate < 0 || c.MinBaselineRate > 1e6 {
 		c.MinBaselineRate = d.MinBaselineRate
 	}

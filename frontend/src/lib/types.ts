@@ -11667,5 +11667,6 @@ export interface MLConfig {
   promotion: Record<string, MLPromotion>;
   bucketSec: number; tickSec: number; timeoutMs: number; maxServices: number; maxEsQueriesPerTick: number;
   baselineDays: number; minBaselineRate: number; dwellBuckets: number; dailyEventCap: number;
+  ingestLagSec: number; minBaselineSamples: number; criticalZ: number; influencerField: string; errorLevels: string[];
 }
 export interface MLScorecard { windowDays: number; detectors: MLDetectorScore[]; promotion: Record<string, MLPromotion>; signals: Record<string, string> }

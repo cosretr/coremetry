@@ -19,6 +19,9 @@ const lockKey = "coremetry:lock:ml"
 // uyar. Dilim 0'da kayıtlı dedektör YOK.
 type Detector interface {
 	Name() string
+	// Enabled — bileşik dedektörler birden çok anahtarı temsil eder (log RED:
+	// log_volume + error_rate + service_silent); tik yalnız açık olanı çağırır.
+	Enabled(cfg chstore.MLConfig) bool
 	Tick(ctx context.Context, d Deps, cfg chstore.MLConfig, now time.Time) ([]chstore.MLEvent, error)
 }
 
@@ -104,7 +107,7 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	var written int64
 	active := 0
 	for _, det := range r.detectors {
-		if !cfg.DetectorOn(det.Name()) {
+		if !det.Enabled(cfg) {
 			continue
 		}
 		active++

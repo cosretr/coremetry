@@ -25,6 +25,6 @@ func startML(ctx context.Context, mode runMode, cfg *config.Config, store *chsto
 		}
 		return
 	}
-	log.Printf("[ml] alt sistem başlıyor placement=%s (dedektör yok — dilim 0 iskeleti)", label)
-	ml.New(store, logs, lock, label).Start(chstore.WithQueryTag(ctx, "ml:recorder"))
+	log.Printf("[ml] alt sistem başlıyor placement=%s dedektör=log_red(log_volume,error_rate,service_silent)", label)
+	ml.New(store, logs, lock, label, ml.NewLogRED()).Start(chstore.WithQueryTag(ctx, "ml:recorder"))
 }

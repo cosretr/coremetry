@@ -114,6 +114,11 @@ export function MLSubsection() {
             {num('Kova (sn)', 'bucketSec', 'date_histogram kovası (60–3600)')}
             {num('Tik (sn)', 'tickSec', 'Alt sistem tiki (60–3600)')}
             {num('ES zaman aşımı (ms)', 'timeoutMs', 'Tik içi istek (1000–60000)')}
+            {num('ES ingest gecikme payı (sn)', 'ingestLagSec', 'Son kova ancak kova sonu + bu pay geçince değerlendirilir (0–3600)')}
+            {num('Asgari taban örneği', 'minBaselineSamples', 'Eksik veri kuralı: taban örneği bundan azsa sessiz (5–500)')}
+            {num('Kritik z', 'criticalZ', 'Robust z eşiği (1–20)', 0.5)}
+            <Field label="Influencer alanı (kanal kodu)" hint="ES keyword alanı; boş = adaylardan keşfet" controlClassName="max-w-[260px]"
+              value={cfg.influencerField ?? ''} onChange={e => setCfg({ ...cfg, influencerField: e.target.value })} />
           </div>
 
           <div className="mt-[18px]">
