@@ -1958,6 +1958,10 @@ a.dep-prob-mark:hover { text-decoration: none; }
 .wf-header { display: flex; position: sticky; top: 0; z-index: var(--z-handle); background: var(--bg2); border-bottom: 2px solid var(--border); height: 42px; user-select: none; }
 .wf-col-name { flex-shrink: 0; padding: 0 10px; display: flex; align-items: center; border-right: 1px solid var(--divider); font-size: var(--fs-xs); font-weight: 600; color: var(--text2); } /* v0.10.928 — Y3 düz başlık (`thead th` ile aynı), Y2 kolon ayracı */
 .wf-col-bar { flex: 1; position: relative; overflow: hidden; }
+/* v0.10.1724 (operatör) — zaman ölçeğinin sağ boşluğu: iz süresinin %100'ü (iz − boşluk)'a
+   düşer; cetvel ve satır çubuk alanı aynı boşlukla hizalı (traceWaterfall.label WF_TRACK_INSET_PX). */
+#wf-outer { --wf-track-inset: var(--sp-6); }
+.wf-col-bar, .wf-row-bar { margin-right: var(--wf-track-inset); }
 .wf-resizer {
   width: 6px; flex-shrink: 0; cursor: col-resize;
   background: transparent; position: relative; z-index: var(--z-sticky-bar);

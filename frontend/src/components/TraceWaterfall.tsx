@@ -10,7 +10,7 @@ import { collectSubtreeIds, groupParentOf, clusterBadge, ancestorChain, expandFo
 import { resolveResource } from '@/lib/otel/semconv';
 import { fmtNs, displaySpanName } from '@/lib/utils';
 import { inkOn } from '@/lib/chartFmt';
-import { wfLabelPlacement, wfOutsideRightLeft } from './traceWaterfall.label';
+import { wfBarAreaPx, wfLabelPlacement, wfOutsideRightLeft } from './traceWaterfall.label';
 import { nameColWidth, NAME_MIN, NAME_MAX, INDENT_PX } from '@/lib/traceNameCol';
 
 // v0.10.278 — sanal satır eşiği ve harita eşiği (ölçüm: 1000-1500 satır arası
@@ -809,7 +809,7 @@ export function TraceWaterfall({
         // containerWidth is 0 until the ResizeObserver first fires.
         const durLabel = fmtNs(dur);
         const placement = wfLabelPlacement({
-          barAreaPx: Math.max(0, containerWidth - colWidth),
+          barAreaPx: wfBarAreaPx(containerWidth, colWidth), // v0.10.1724 — sağ boşluk düşülür
           startPct: parseFloat(startPct), widthPct: parseFloat(widthPct), label: durLabel,
         });
         const labelInside = placement === 'inside';

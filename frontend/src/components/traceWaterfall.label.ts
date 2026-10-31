@@ -36,3 +36,16 @@ export function wfLabelPlacement(p: {
 export function wfOutsideRightLeft(startPct: string, widthPct: string): string {
   return `calc(${startPct}% + max(${widthPct}%, ${2 * WF_BAR_PAD_PX}px) + ${WF_LABEL_GAP_PX}px)`;
 }
+
+/** v0.10.1724 (operatör: iz sonuna yakın biten span'ın çubuğu sayfanın sağ
+ *  kenarına yapışıyordu) — zaman ölçeğinin sağ boşluğu. CSS'te
+ *  `--wf-track-inset: var(--sp-6)` (globals.css) .wf-col-bar + .wf-row-bar
+ *  margin-right'ı: iz süresinin %100'ü (iz genişliği − boşluk)'a düşer;
+ *  cetvel, dikey çizgiler, çubuklar ve etiketler aynı kutuda hizalı kalır. */
+export const WF_TRACK_INSET_PX = 12;
+
+/** Çubuk alanının piksel genişliği: kap − ad sütunu − sağ boşluk (≥0; ölçülmemiş kap → 0). */
+export function wfBarAreaPx(containerWidth: number, colWidth: number): number {
+  if (containerWidth <= 0) return 0;
+  return Math.max(0, containerWidth - colWidth - WF_TRACK_INSET_PX);
+}
