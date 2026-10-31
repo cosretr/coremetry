@@ -132,7 +132,7 @@ export function MLSubsection() {
             {num('Hacim tabanı (satır/kova)', 'minBaselineRate', 'Tabanı bunun altında kalan servis için hacim/susma sessiz', 1)}
             {num('Dwell (kova)', 'dwellBuckets', 'Olay açılmadan art arda sapmalı kova (1–12)')}
             {num('Günlük tavan', 'dailyEventCap', 'Dedektör başına günlük yeni olay (10–10000)')}
-            {num('ES tik tavanı', 'maxEsQueriesPerTick', 'Tik başına en çok ES sorgusu (1–20); log RED 1 + şablon 1 + yeni aile geçmişi 1 = 3')}
+            {num('ES tik tavanı', 'maxEsQueriesPerTick', 'Tik başına en çok ES sorgusu (1–20); log RED 1 + şablon 1 + kod/pod 1 + seyrek geçmiş 1 = 4')}
             {num('Kova (sn)', 'bucketSec', 'date_histogram kovası (60–3600)')}
             {num('Tik (sn)', 'tickSec', 'Alt sistem tiki (60–3600)')}
             {num('ES zaman aşımı (ms)', 'timeoutMs', 'Tik içi istek (1000–60000)')}

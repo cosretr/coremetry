@@ -198,3 +198,29 @@ func (s *Store) MLSeriesParts(ctx context.Context, signal, prefix string, since 
 	}
 	return out, rows.Err()
 }
+
+// MLSeriesFirstSeen — öneki tutan anahtarların [since, before) içindeki ilk
+// kovası (log dilim 3: nadir hata kodu "kod bu serviste görülmüş mü" +
+// servisin kod geçmişi ne kadar eski). Anahtar MLSeriesKey(service, part).
+func (s *Store) MLSeriesFirstSeen(ctx context.Context, signal, prefix string, since, before time.Time) (map[string]time.Time, error) {
+	rows, err := s.conn.Query(ctx, `
+		SELECT service, part, min(bucket) FROM ml_series
+		WHERE signal = ? AND startsWith(part, ?) AND bucket >= ? AND bucket < ? AND count > 0
+		GROUP BY service, part
+		LIMIT 50000
+		SETTINGS max_execution_time = 5`, signal, prefix, since.UTC(), before.UTC()) // DateTime kolon: DateTime64 bind YOK
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]time.Time{}
+	for rows.Next() {
+		var svc, part string
+		var t time.Time
+		if err := rows.Scan(&svc, &part, &t); err != nil {
+			return nil, err
+		}
+		out[MLSeriesKey(svc, part)] = t
+	}
+	return out, rows.Err()
+}
