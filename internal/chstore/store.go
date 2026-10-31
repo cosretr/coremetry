@@ -3144,6 +3144,38 @@ func canonicalTables(sd, ld, md int) []string {
 		ORDER BY (signal, service, part, bucket, bucket_sec)
 		TTL bucket + INTERVAL 28 DAY`,
 
+		// ml_event_snapshots — ML replay (v0.10.1752, operatör 2026-10-31):
+		// tespit anının kendine yeten kaydı; replay ES/rollup'a BAĞIMLI DEĞİL.
+		// Olay başına bir satır (RMT(version), ORDER BY event_id): tespitte
+		// ön kayıt (−2 sa seri + ham örnek), +2 sa sonra tam kayıt aynı satırı
+		// değiştirir. TTL 120 g (≥90 g; ml_events 30 g'de düşse de replay
+		// kalır). JSON alanlar ZSTD; yazıcı yalnız ML lideri.
+		`CREATE TABLE IF NOT EXISTS ml_event_snapshots (
+			event_id     String,
+			detector     LowCardinality(String),
+			signal       LowCardinality(String),
+			service      LowCardinality(String),
+			part         String DEFAULT '',
+			detected_at  DateTime64(9),
+			last_seen    DateTime64(9),
+			bucket_sec   UInt32 DEFAULT 300,
+			series       String DEFAULT '' CODEC(ZSTD(3)),
+			baseline_med Float64 DEFAULT 0,
+			baseline_mad Float64 DEFAULT 0,
+			thresholds   String DEFAULT '' CODEC(ZSTD(3)),
+			config_hash  String DEFAULT '',
+			day_class    LowCardinality(String) DEFAULT '',
+			dwell        String DEFAULT '',
+			confirm_ids  Array(String),
+			evidence     String DEFAULT '' CODEC(ZSTD(3)),
+			samples      String DEFAULT '' CODEC(ZSTD(3)),
+			deploys      String DEFAULT '' CODEC(ZSTD(3)),
+			complete     UInt8 DEFAULT 0,
+			version      UInt64 DEFAULT toUnixTimestamp64Nano(now64(9))
+		) ENGINE = ReplacingMergeTree(version)
+		ORDER BY event_id
+		TTL toDate(detected_at) + INTERVAL 120 DAY`,
+
 		// cosre_answer_grounding — CoSRE öğrenme Faz 4: çevrimdışı öz-
 		// değerlendirme. Gece örneklenen cevabın her iddiası, turda okunan
 		// tool çıktılarına karşı self-hosted modelle etiketlenir. Yeniden

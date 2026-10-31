@@ -6,6 +6,7 @@ package api
 //   GET /api/ml/events?since=24h&signal=&detector=&service=&stage= — her rol
 //   GET /api/ml/scorecard                                   — her rol (30 g)
 //   PUT /api/ml/{id}/verdict  {verdict, note?, detector, service} — editor+
+//   GET /api/ml/{id}/replay                                 — her rol (kayıt + servisin diğer olayları)
 //   POST /api/ml/backtest {signal, service, from, to, config?} — editor+ (salt hesap)
 //   GET /api/admin/ml                                       — admin
 //   PUT /api/admin/ml                                       — admin (audit)
@@ -42,6 +43,7 @@ func (s *Server) registerMLRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/ml/events", auth.RequireAnyRole(mlReadRoles, s.getMLEvents))
 	mux.HandleFunc("GET /api/ml/scorecard", auth.RequireAnyRole(mlReadRoles, s.getMLScorecard))
 	mux.HandleFunc("PUT /api/ml/{id}/verdict", auth.RequireAnyRole(editorRoles, s.putMLVerdict))
+	mux.HandleFunc("GET /api/ml/{id}/replay", auth.RequireAnyRole(mlReadRoles, s.getMLReplay))
 	mux.HandleFunc("POST /api/ml/backtest", auth.RequireAnyRole(editorRoles, s.postMLBacktest))
 	mux.HandleFunc("GET /api/admin/ml", auth.RequireRole(auth.RoleAdmin, s.getMLConfig))
 	mux.HandleFunc("PUT /api/admin/ml", auth.RequireRole(auth.RoleAdmin, s.putMLConfig))
@@ -211,4 +213,38 @@ func (s *Server) putMLConfig(w http.ResponseWriter, r *http.Request) {
 	details, _ := json.Marshal(map[string]any{"before": before, "after": c})
 	s.audit(r, "ml.config", "settings", "ml", string(details))
 	writeJSON(w, c)
+}
+
+// getMLReplay — olay replay kaydı (ml_event_snapshots) + aynı servisin ±2 sa
+// içindeki diğer ML olay kayıtları. Kayıt yoksa 404 (olay replay'den önce
+// yazılmış ya da TTL'le düşmüş). ES/rollup okuması YOK.
+func (s *Server) getMLReplay(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimSpace(r.PathValue("id"))
+	if id == "" {
+		writeJSONError(w, http.StatusBadRequest, "id zorunlu")
+		return
+	}
+	snap, ok, err := s.store.GetMLSnapshot(r.Context(), id)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	if !ok {
+		writeJSONError(w, http.StatusNotFound, "bu olay için replay kaydı yok")
+		return
+	}
+	s.serveCached(w, r, "ml:replay:v1:"+id+fmt.Sprintf(":%t", snap.Complete), mlScorecardTTL, func(ctx context.Context) (any, error) {
+		det := time.Unix(0, snap.DetectedAt)
+		related, err := s.store.ListMLSnapshotsForService(ctx, snap.Service, det.Add(-2*time.Hour), det.Add(2*time.Hour))
+		if err != nil {
+			return nil, err
+		}
+		others := []chstore.MLSnapshot{}
+		for _, x := range related {
+			if x.EventID != id {
+				others = append(others, x)
+			}
+		}
+		return map[string]any{"snapshot": snap, "related": others}, nil
+	})
 }

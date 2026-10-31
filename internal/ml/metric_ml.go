@@ -157,7 +157,7 @@ func (d *MetricML) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 		if !d.dayCap(fam, cfg, now) {
 			continue
 		}
-		raw, _ := json.Marshal(map[string]any{"source": "vm", "expr": part, "dayClass": class, "dwell": cfg.DwellBuckets, "bucketSec": cfg.BucketSec})
+		raw, _ := json.Marshal(map[string]any{"source": "vm", "expr": part, "dayClass": class, "mad": j.MAD, "dwell": cfg.DwellBuckets, "bucketSec": cfg.BucketSec})
 		evs = append(evs, chstore.MLEvent{
 			ID: chstore.MLEventID(fam, svc, part), Detector: fam, Signal: chstore.MLSignalMetric, Stage: chstore.MLStageShadow,
 			Service: svc, Code: part, StartedAt: last.UnixNano(), LastSeen: last.Add(bucket).UnixNano(), WindowSec: uint32(cfg.BucketSec),

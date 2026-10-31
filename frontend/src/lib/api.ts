@@ -1618,6 +1618,7 @@ export const api = {
     request<unknown>(`/api/ml/${encodeURIComponent(id)}/verdict`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     }),
+  mlReplay: (id: string) => get<import('./types').MLReplay>(`/api/ml/${encodeURIComponent(id)}/replay`),
   // Kalite çerçevesi backtest / what-if (v0.10.1751): salt hesap, yazmaz.
   mlBacktest: (body: { signal: string; service: string; from?: number; to?: number; config?: import('./types').MLConfig }) =>
     request<import('./types').MLBacktestResult>(`/api/ml/backtest`, {

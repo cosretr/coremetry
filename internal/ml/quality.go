@@ -115,6 +115,8 @@ type runInfo struct {
 	service     string
 	detector    string
 	signal      string
+	ev          chstore.MLEvent // son yazılan hal (replay tam kaydı için)
+	snap        snapshotState
 }
 
 // tracker — süreç-içi koşu durumu (rejim + teyit + started_at). Lider
@@ -156,6 +158,40 @@ func (t *tracker) confirmers(ev chstore.MLEvent, now time.Time, win time.Duratio
 	}
 	sort.Strings(ids)
 	return ids, len(sig)
+}
+
+// setEvent — süzgeçten geçen olayın son hali.
+func (t *tracker) setEvent(ev chstore.MLEvent) {
+	t.mu.Lock()
+	if r := t.runs[ev.ID]; r != nil {
+		r.ev = ev
+	}
+	t.mu.Unlock()
+}
+
+// snap — koşunun replay durumu (yoksa nil). İşaretçi: yalnız lider
+// goroutine'i yazar (recorder tek döngü).
+func (t *tracker) snap(id string) *snapshotState {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if r := t.runs[id]; r != nil {
+		return &r.snap
+	}
+	return nil
+}
+
+// dueComplete — ön kaydı yazılmış, başından `span` geçmiş, tam kaydı yazılmamış koşular.
+func (t *tracker) dueComplete(now time.Time, span time.Duration) []chstore.MLEvent {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	var out []chstore.MLEvent
+	for _, r := range t.runs {
+		if r.snap.pre && !r.snap.done && now.Sub(r.first) >= span {
+			out = append(out, r.ev)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
 }
 
 // gc — 1 günden eski koşular.
@@ -205,6 +241,7 @@ func qualityFilter(evs []chstore.MLEvent, cfg chstore.MLConfig, lb *Labels, tr *
 		ids, sigs := tr.confirmers(kept[i], now, win)
 		kept[i].Evidence = mergeEvidence(kept[i].Evidence, map[string]any{
 			"confirmScore": len(ids), "confirmSignals": sigs, "confirmedBy": firstN(ids, 5), "configHash": hash})
+		tr.setEvent(kept[i])
 	}
 	return kept, sup
 }

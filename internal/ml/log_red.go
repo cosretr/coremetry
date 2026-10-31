@@ -85,6 +85,7 @@ type Judgement struct {
 	Direction string  // up | down
 	Z         float64 // son kovanın robust z'si
 	Median    float64
+	MAD       float64 // ham MAD (replay bandı effMAD ile)
 	Observed  float64 // son kovanın değeri
 	Silent    bool    // tüm dwell kovaları 0 ve taban anlamlı
 	Reason    string  // sessizlik gerekçesi (fire=false)
@@ -96,6 +97,10 @@ func judge(cur, base []float64, cfg chstore.MLConfig, upOnly bool) Judgement {
 	med, mad := medianMAD(base)
 	return judgeMM(cur, med, mad, len(base), cfg, upOnly)
 }
+
+// effMAD — SAF: ölçekli MAD tabanı; düz seyreden seride MAD≈0 tuzağı
+// (anomaly.go effectiveMAD ile aynı fikir). Replay bandı da bunu kullanır.
+func effMAD(med, mad float64) float64 { return math.Max(mad*1.4826, math.Max(0.1*med, 1)) }
 
 // judgeMM — SAF: judge'ın medyan/MAD'ı önceden hesaplanmış hali (backtest
 // aynı saat sınıfı için bir kez hesaplar). n = taban örnek sayısı.
@@ -115,8 +120,8 @@ func judgeMM(cur []float64, med, mad float64, n int, cfg chstore.MLConfig, upOnl
 		j.Reason = "taban hacmi eşiğin altında"
 		return j
 	}
-	// MAD tabanı: düz seyreden seride MAD≈0 tuzağı (anomaly.go effectiveMAD ile aynı fikir).
-	eff := math.Max(mad*1.4826, math.Max(0.1*med, 1))
+	j.MAD = mad
+	eff := effMAD(med, mad)
 	allZero := true
 	dir := ""
 	for _, v := range cur {
@@ -357,7 +362,7 @@ func (d *LogRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, now 
 }
 
 func (d *LogRED) event(det, svc, part string, j Judgement, last time.Time, cfg chstore.MLConfig, class string, lagMs int64, inf []logstore.MLLogInfluencer) chstore.MLEvent {
-	ev := map[string]any{"dayClass": class, "ingestLagMs": lagMs, "dwell": cfg.DwellBuckets, "bucketSec": cfg.BucketSec, "baselineDays": cfg.BaselineDays}
+	ev := map[string]any{"dayClass": class, "ingestLagMs": lagMs, "mad": j.MAD, "dwell": cfg.DwellBuckets, "bucketSec": cfg.BucketSec, "baselineDays": cfg.BaselineDays}
 	if len(inf) > 0 {
 		ev["influencers"] = inf
 	}

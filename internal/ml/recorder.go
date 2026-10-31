@@ -115,6 +115,7 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 		log.Printf("[ml] labels read failed: %v (etiketsiz devam)", lerr)
 	}
 	lb := NewLabels(labels)
+	esAtStart := global.esQueries.Load()
 	deps := Deps{Store: r.store, Logs: r.logs, VM: r.vm, Labels: lb, ObserveES: func(d time.Duration) { global.observeES(d.Milliseconds()) }}
 	var firstErr error
 	var written int64
@@ -145,6 +146,11 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 			continue
 		}
 		written++
+	}
+	// replay kayıtları: ES bütçesinin kalanı log örneğine
+	esLeft := cfg.MaxESQueriesPerTick - int(global.esQueries.Load()-esAtStart)
+	if _, serr := r.writeSnapshots(tctx, deps, cfg, kept, start, esLeft); serr != nil && firstErr == nil {
+		firstErr = serr
 	}
 	global.events.Add(written)
 	global.setError(firstErr)

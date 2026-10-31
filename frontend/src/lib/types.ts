@@ -11668,6 +11668,15 @@ export interface MLQuality {
   impactMinRel: number; impactMinAbs: number; hygieneOff: boolean; regimeHours: number; confirmWindowMin: number;
   feedbackOff: boolean; feedbackMinNegatives: number; feedbackZStep: number; feedbackMaxBoost: number;
 }
+/** Replay kaydı (v0.10.1752, ml_event_snapshots): JSON alanlar ham string. */
+export interface MLSnapshot {
+  eventId: string; detector: string; signal: string; service: string; part: string;
+  detectedAt: number; lastSeen: number; bucketSec: number; series: string;
+  baselineMed: number; baselineMad: number; thresholds: string; configHash: string; dayClass: string;
+  dwell: string; confirmIds: string[] | null; evidence: string; samples: string; deploys: string; complete: boolean;
+}
+export interface MLSample { t: number; traceId?: string; body?: string; kind: 'span' | 'log' | string }
+export interface MLReplay { snapshot: MLSnapshot; related: MLSnapshot[] }
 export interface MLGate { ok: boolean; reasons?: string[] }
 export interface MLBacktestDetector { detector: string; fired: number; tp: number; fp: number; unlabeled: number; positives: number; covered: number; precision: number; recall: number }
 export interface MLBacktestHit { detector: string; part: string; from: number; to: number; peakZ: number; label?: string }

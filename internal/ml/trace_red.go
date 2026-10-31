@@ -307,7 +307,7 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 }
 
 func (d *TraceRED) event(det, svc, route string, j Judgement, last time.Time, cfg chstore.MLConfig, class string) chstore.MLEvent {
-	raw, _ := json.Marshal(map[string]any{"source": "vm", "route": route, "dayClass": class, "dwell": cfg.DwellBuckets, "bucketSec": cfg.BucketSec, "baselineDays": cfg.BaselineDays})
+	raw, _ := json.Marshal(map[string]any{"source": "vm", "route": route, "dayClass": class, "mad": j.MAD, "dwell": cfg.DwellBuckets, "bucketSec": cfg.BucketSec, "baselineDays": cfg.BaselineDays})
 	return chstore.MLEvent{
 		ID: chstore.MLEventID(det, svc, route), Detector: det, Signal: chstore.MLSignalTrace, Stage: chstore.MLStageShadow,
 		Service: svc, Code: route, StartedAt: last.UnixNano(), LastSeen: last.Add(time.Duration(cfg.BucketSec) * time.Second).UnixNano(),
