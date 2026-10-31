@@ -85,7 +85,58 @@ func calendarDayKind(t time.Time, cal chstore.AnomalyCalendarConfig) string {
 	if cal.MonthEndAuto && isAutoMonthEnd(t, cal.MonthEndBusinessDays, cal) {
 		return chstore.CalendarMonthEnd
 	}
+	if autoRuleOn(t, cal) { // v0.10.1750 — ay sonu benzeri otomatik kurallar (ayrı anahtarlar)
+		return chstore.CalendarMonthEnd
+	}
 	return ""
+}
+
+// nextBusinessDayFrom — SAF: d dahil ilk iş günü (en çok 14 gün bakar).
+func nextBusinessDayFrom(d time.Time, cal chstore.AnomalyCalendarConfig) time.Time {
+	for i := 0; i < 14; i++ {
+		if isBusinessDay(d, cal) {
+			return d
+		}
+		d = d.AddDate(0, 0, 1)
+	}
+	return d
+}
+
+// autoRuleOn — SAF (tablo testli): ayın 15'i (iş günü değilse sonraki iş günü),
+// ayın son iş günü, yılın son iş günü, tatil öncesi son iş günü.
+func autoRuleOn(t time.Time, cal chstore.AnomalyCalendarConfig) bool {
+	r := cal.AutoRules
+	if !r.Mid15 && !r.LastBusinessDay && !r.YearEnd && !r.PreHolidayLastBusinessDay {
+		return false
+	}
+	loc := cal.Location()
+	day := t.In(loc)
+	day = time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, loc)
+	if !isBusinessDay(day, cal) {
+		return false
+	}
+	if r.Mid15 && nextBusinessDayFrom(time.Date(day.Year(), day.Month(), 15, 0, 0, 0, 0, loc), cal).Equal(day) {
+		return true
+	}
+	if r.LastBusinessDay && isAutoMonthEnd(day, 1, cal) {
+		return true
+	}
+	if r.YearEnd && day.Month() == time.December && isAutoMonthEnd(day, 1, cal) {
+		return true
+	}
+	if r.PreHolidayLastBusinessDay {
+		// yarından sonraki ilk iş gününe kadar bir tatil (holiday/half-day) varsa
+		for d := day.AddDate(0, 0, 1); d.Sub(day) <= 14*24*time.Hour; d = d.AddDate(0, 0, 1) {
+			k := cal.SpecialKindOn(d)
+			if k == chstore.CalendarHoliday || k == chstore.CalendarHalfDay {
+				return true
+			}
+			if isBusinessDay(d, cal) {
+				break
+			}
+		}
+	}
+	return false
 }
 
 // dayClassCal — SAF: takvimli gün sınıfı. Takvim boşsa dayClass ile aynı.

@@ -9911,6 +9911,9 @@ export interface AnomalyCalendarConfig {
   monthEndBusinessDays: number;
   // v0.10.1490 — özel günlerin yerel günü (IANA adı); boş/yok = UTC.
   timezone?: string;
+  // v0.10.1750 — Türkiye ön ayarı: sabit resmi tatiller her yıl otomatik; ay sonu benzeri otomatik kurallar.
+  fixedHolidaysTR?: boolean;
+  autoRules?: { mid15: boolean; lastBusinessDay: boolean; yearEnd: boolean; preHolidayLastBusinessDay: boolean };
 }
 
 // Anomali terfi ayarları (GET/PUT /api/settings/anomaly-promotion).

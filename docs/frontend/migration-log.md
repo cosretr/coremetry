@@ -101,3 +101,4 @@ measured initial load exceeds 347 KB gz does not ship.
 | v0.10.1746 (Settings › Anomaly › Yerleşik dedektörler) | `pages/settings/NativeDetectorsSubsection.tsx` (yeni) + `AnomalyTab.tsx` bağlantı; `lib/api.ts` | — | — | — | — | — |
 | v0.10.1747 (Settings › Anomaly › ML eşikleri) | `pages/settings/MLSubsection.tsx` (+ingest payı, asgari taban, kritik z, influencer alanı) | — | — | — | — | — |
 | v0.10.1749 (Settings › ML metrik aileleri) | `pages/settings/MLSubsection.tsx` (Metrik grubu + MetricsQL düzenleyici) + `coremetry/anomalies/MLTab.tsx` (Metrik süzgeci) | — | — | — | — | — |
+| v0.10.1750 (Settings › Anomaly › Takvim: Türkiye ön ayarı) | `pages/settings/CalendarSubsection.tsx` (+ön ayar düğmesi, sabit tatil anahtarı, 4 otomatik kural, gelecek yıl uyarısı) + `calendarPresets.ts` (yeni, saf) | — | — | — | — | — |

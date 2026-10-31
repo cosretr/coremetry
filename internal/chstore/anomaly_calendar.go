@@ -62,7 +62,31 @@ type AnomalyCalendarConfig struct {
 	// adı, ör. "Europe/Istanbul"). Boş = UTC: eski kurulumlar bayt bayt eski
 	// davranışta kalır; UI tarayıcının dilimini ÖNERİR, kendiliğinden yazmaz.
 	Timezone string `json:"timezone,omitempty"`
+	// FixedHolidaysTR — v0.10.1750 (operatör, Türkiye ön ayarı): sabit resmi
+	// tatiller HER YIL otomatik (1 Oca, 23 Nis, 1 May, 19 May, 15 Tem, 30 Ağu,
+	// 29 Eki) + 28 Eki yarım gün. Dini bayramlar yıla bağlı → Days listesi.
+	FixedHolidaysTR bool `json:"fixedHolidaysTR,omitempty"`
+	// AutoRules — "ay sonu benzeri" otomatik sınıflar, her biri ayrı anahtar.
+	AutoRules CalendarAutoRules `json:"autoRules"`
 }
+
+// CalendarAutoRules — ay sonu benzeri otomatik günler (anomaly/calendar.go uygular).
+type CalendarAutoRules struct {
+	Mid15                     bool `json:"mid15"`                     // ayın 15'i (iş günü değilse sonraki iş günü)
+	LastBusinessDay           bool `json:"lastBusinessDay"`           // ayın son iş günü
+	YearEnd                   bool `json:"yearEnd"`                   // yılın son iş günü
+	PreHolidayLastBusinessDay bool `json:"preHolidayLastBusinessDay"` // tatil/bayram öncesi son iş günü
+}
+
+// trFixedHolidays — ay-gün → tür. 28 Ekim yarım gün (13:00'ten; saat sınıfı yok,
+// bütün gün yarım gün sayılır — audit §10).
+var trFixedHolidays = map[string]string{
+	"01-01": CalendarHoliday, "04-23": CalendarHoliday, "05-01": CalendarHoliday, "05-19": CalendarHoliday,
+	"07-15": CalendarHoliday, "08-30": CalendarHoliday, "10-29": CalendarHoliday, "10-28": CalendarHalfDay,
+}
+
+// TRFixedHolidayKind — SAF: yıl bağımsız sabit Türkiye tatili türü ("" = değil).
+func TRFixedHolidayKind(t time.Time) string { return trFixedHolidays[t.Format("01-02")] }
 
 // ValidateCalendarTimezone — SAF: PUT kapısı. Boş = UTC (geçerli); "Local"
 // sunucuya bağlı olduğu için reddedilir; aksi time.LoadLocation (tzdata
@@ -193,6 +217,11 @@ func (c AnomalyCalendarConfig) SpecialKindOn(t time.Time) string {
 		}
 		if day >= d.From && day <= to && rank[d.Kind] > rank[best] {
 			best = d.Kind
+		}
+	}
+	if c.FixedHolidaysTR {
+		if k := TRFixedHolidayKind(t.In(c.Location())); rank[k] > rank[best] {
+			best = k
 		}
 	}
 	return best

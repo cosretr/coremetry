@@ -7,6 +7,7 @@ import { cn } from '@/lib/cn';
 import { useMemo } from 'react';
 import { Combobox } from '@/components/Combobox';
 import { browserTz } from '@/lib/browserTz';
+import { applyTurkeyPreset, religiousWarning } from './calendarPresets'; // v0.10.1750
 
 // CalendarSubsection — v0.10.1483: mevsimsel baseline'ların takvim etkileri
 // (anomaly_sensitivity.calendar; Dedektör hassasiyeti bölümü, aynı Kaydet).
@@ -114,6 +115,21 @@ export function CalendarSubsection({ value, onChange }: {
         <div>
           <Button size="sm" variant="outline" onClick={addDay}>Özel gün ekle</Button>
         </div>
+      </div>
+      {/* v0.10.1750 — Türkiye ön ayarı + otomatik kurallar (her biri ayrı anahtar) */}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <Button size="sm" variant="outline" onClick={() => onChange(applyTurkeyPreset(v))}>Türkiye ön ayarını yükle</Button>
+        <span className={NOTE}>Europe/Istanbul · sabit tatiller her yıl otomatik · 2027 dini bayramlar · ay sonu benzeri kurallar</span>
+      </div>
+      {religiousWarning(v.days, new Date()) && <div className={cn(NOTE, 'mt-1 text-(--warn)')} role="status">{religiousWarning(v.days, new Date())}</div>}
+      <CheckboxField className="mt-2" aria-label="Türkiye sabit resmi tatilleri" checked={v.fixedHolidaysTR === true}
+        onCheckedChange={c => onChange({ ...v, fixedHolidaysTR: c })}
+        label="Türkiye sabit resmi tatilleri (her yıl otomatik)" hint="1 Oca, 23 Nis, 1 May, 19 May, 15 Tem, 30 Ağu, 29 Eki tatil; 28 Eki yarım gün" />
+      <div className="mt-2 grid gap-1 md:grid-cols-2">
+        {([['mid15', "Ayın 15'i"], ['lastBusinessDay', 'Ayın son iş günü'], ['yearEnd', 'Yıl sonu (son iş günü)'], ['preHolidayLastBusinessDay', 'Bayram/tatil öncesi son iş günü']] as const).map(([k, label]) => (
+          <CheckboxField key={k} aria-label={label} checked={v.autoRules?.[k] === true} label={label} hint="ay sonu benzeri sınıf"
+            onCheckedChange={c => onChange({ ...v, autoRules: { mid15: false, lastBusinessDay: false, yearEnd: false, preHolidayLastBusinessDay: false, ...v.autoRules, [k]: c } })} />
+        ))}
       </div>
       <CheckboxField className="mt-3" aria-label="Otomatik ay sonu sınıfı"
         checked={v.monthEndAuto} onCheckedChange={c => onChange({ ...v, monthEndAuto: c })}
