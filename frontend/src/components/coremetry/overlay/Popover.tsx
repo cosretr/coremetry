@@ -2,6 +2,8 @@
 // Denetimli; Esc lib/escLayer yığınına ait (escBridge).
 import type { ComponentProps, ReactNode } from 'react';
 import * as S from '@/components/shadcn/popover';
+import { cn } from '@/lib/cn';
+import { OVERLAY_BORDER } from './surface';
 import { EscBridgeProvider, useEscapeKeyDown, useOverlayEsc } from './escBridge';
 
 export interface PopoverProps {
@@ -20,8 +22,8 @@ export function Popover({ open, onOpenChange, modal, children }: PopoverProps) {
   );
 }
 
-export function PopoverContent({ onEscapeKeyDown, ...props }: ComponentProps<typeof S.PopoverContent>) {
-  return <S.PopoverContent {...props} onEscapeKeyDown={useEscapeKeyDown(onEscapeKeyDown)} />;
+export function PopoverContent({ onEscapeKeyDown, className, ...props }: ComponentProps<typeof S.PopoverContent>) {
+  return <S.PopoverContent {...props} className={cn(OVERLAY_BORDER, className)} onEscapeKeyDown={useEscapeKeyDown(onEscapeKeyDown)} />;
 }
 
 export { PopoverTrigger, PopoverAnchor, PopoverHeader, PopoverTitle, PopoverDescription } from '@/components/shadcn/popover';

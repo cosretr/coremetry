@@ -19,7 +19,7 @@ export function ScopeBadge({ scope }: { scope: CosreScope }) {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="xs" className={cn('min-w-0 rounded-full font-normal', RING[v.tone])}
+        <Button variant="outline" size="xs" className={cn('min-w-0 rounded-full border-border font-normal', RING[v.tone])}
           aria-label={`${T.scopeAria}: ${v.label}`} data-cosre-scope={scope.reason} data-tone={v.tone}>
           <span className={cn('size-1.5 shrink-0 rounded-full', DOT[v.tone])} aria-hidden />
           <span className="truncate">{v.label}</span>

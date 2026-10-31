@@ -80,9 +80,10 @@ export function CosreSheet({ open, onOpenChange, width, contentProps, headerCont
         }}
         // v0.10.1714 — bg-card (= --bg1, v1 Drawer ile aynı): shadcn bg-background
         // = --bg0 SAYFA zemini, panel sayfaya karışıyordu (bgZeroIsPageOnly kuralı).
-        className="w-full gap-0 bg-card p-0 sm:w-(--cosre-sheet-w) sm:max-w-none"
+        // v0.10.1721 — border-border: preflight yok, renksiz border-l currentColor (siyah çerçeve).
+        className="w-full gap-0 border-border bg-card p-0 sm:w-(--cosre-sheet-w) sm:max-w-none"
         {...contentProps}>
-        <SheetHeader className="cosre-head flex-row items-center gap-3 border-b px-4 py-3 pr-12">
+        <SheetHeader className="cosre-head flex-row items-center gap-3 border-b border-border px-4 py-3 pr-12">
           <AiMark size={20} />
           <SheetTitle>{T.title}</SheetTitle>
           <SheetDescription className="sr-only">{T.description}</SheetDescription>

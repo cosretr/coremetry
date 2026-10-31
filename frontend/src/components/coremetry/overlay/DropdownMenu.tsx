@@ -4,6 +4,8 @@
 // preventDefault ediyor — köprüsüz o da yığını atlardı.
 import type { ComponentProps, ReactNode } from 'react';
 import * as S from '@/components/shadcn/dropdown-menu';
+import { cn } from '@/lib/cn';
+import { OVERLAY_BORDER } from './surface';
 import { EscBridgeProvider, useEscapeKeyDown, useOverlayEsc } from './escBridge';
 
 export interface DropdownMenuProps {
@@ -22,12 +24,12 @@ export function DropdownMenu({ open, onOpenChange, modal, children }: DropdownMe
   );
 }
 
-export function DropdownMenuContent({ onEscapeKeyDown, ...props }: ComponentProps<typeof S.DropdownMenuContent>) {
-  return <S.DropdownMenuContent {...props} onEscapeKeyDown={useEscapeKeyDown(onEscapeKeyDown)} />;
+export function DropdownMenuContent({ onEscapeKeyDown, className, ...props }: ComponentProps<typeof S.DropdownMenuContent>) {
+  return <S.DropdownMenuContent {...props} className={cn(OVERLAY_BORDER, className)} onEscapeKeyDown={useEscapeKeyDown(onEscapeKeyDown)} />;
 }
 
-export function DropdownMenuSubContent({ onEscapeKeyDown, ...props }: ComponentProps<typeof S.DropdownMenuSubContent>) {
-  return <S.DropdownMenuSubContent {...props} onEscapeKeyDown={useEscapeKeyDown(onEscapeKeyDown)} />;
+export function DropdownMenuSubContent({ onEscapeKeyDown, className, ...props }: ComponentProps<typeof S.DropdownMenuSubContent>) {
+  return <S.DropdownMenuSubContent {...props} className={cn(OVERLAY_BORDER, className)} onEscapeKeyDown={useEscapeKeyDown(onEscapeKeyDown)} />;
 }
 
 export {

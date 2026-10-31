@@ -3,6 +3,8 @@
 // yığınına ait (escBridge). Alt menü içeriği de köprüye bağlı.
 import type { ComponentProps, ReactNode } from 'react';
 import * as S from '@/components/shadcn/context-menu';
+import { cn } from '@/lib/cn';
+import { OVERLAY_BORDER } from './surface';
 import { EscBridgeProvider, useEscapeKeyDown, useOverlayEsc } from './escBridge';
 
 export interface ContextMenuProps {
@@ -21,12 +23,12 @@ export function ContextMenu({ open, onOpenChange, modal, children }: ContextMenu
   );
 }
 
-export function ContextMenuContent({ onEscapeKeyDown, ...props }: ComponentProps<typeof S.ContextMenuContent>) {
-  return <S.ContextMenuContent {...props} onEscapeKeyDown={useEscapeKeyDown(onEscapeKeyDown)} />;
+export function ContextMenuContent({ onEscapeKeyDown, className, ...props }: ComponentProps<typeof S.ContextMenuContent>) {
+  return <S.ContextMenuContent {...props} className={cn(OVERLAY_BORDER, className)} onEscapeKeyDown={useEscapeKeyDown(onEscapeKeyDown)} />;
 }
 
-export function ContextMenuSubContent({ onEscapeKeyDown, ...props }: ComponentProps<typeof S.ContextMenuSubContent>) {
-  return <S.ContextMenuSubContent {...props} onEscapeKeyDown={useEscapeKeyDown(onEscapeKeyDown)} />;
+export function ContextMenuSubContent({ onEscapeKeyDown, className, ...props }: ComponentProps<typeof S.ContextMenuSubContent>) {
+  return <S.ContextMenuSubContent {...props} className={cn(OVERLAY_BORDER, className)} onEscapeKeyDown={useEscapeKeyDown(onEscapeKeyDown)} />;
 }
 
 export {

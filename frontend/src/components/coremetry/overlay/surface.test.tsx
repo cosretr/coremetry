@@ -53,6 +53,16 @@ describe('overlay zemini bg-card (v0.10.1715)', () => {
     expect(cls).toContain('bg-card');
     expect(cls).not.toContain('bg-background');
   });
+  // v0.10.1721 — operatör: CoSRE v2 çekmecesinde siyah "resim çerçevesi".
+  // Preflight yok → renksiz border currentColor; kenar rengi token'dan.
+  it.each(cases)('%s: border-border var (renksiz kenar currentColor olmaz)', (_n, mk) => {
+    expect(classesOf(mk())).toContain('border-border');
+  });
+  it.each(cases)('%s: çağıranın kenar rengi kazanır', (_n, mk) => {
+    const cls = classesOf(mk('border-destructive'));
+    expect(cls).toContain('border-destructive');
+    expect(cls).not.toContain('border-border');
+  });
   it.each(cases)('%s: çağıranın bg sınıfı kazanır', (_n, mk) => {
     const cls = classesOf(mk('bg-muted'));
     expect(cls).toContain('bg-muted');

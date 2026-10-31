@@ -49,7 +49,7 @@ export interface CosreWelcomeV2Props {
   onAskExplain: (a: ChatExplainAsk) => void;
 }
 
-const chipClass = 'h-7 max-w-full rounded-full px-2.5 text-[12.5px] font-normal';
+const chipClass = 'h-7 max-w-full rounded-full border-border px-2.5 text-[12.5px] font-normal';
 
 function SuggestionChip({ s, onRun, onPick }: {
   s: WelcomeSuggestion;
@@ -167,7 +167,7 @@ export function CosreTeamScopeChip({ scope }: { scope: CosreTeamScope }) {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="xs" className="h-6 rounded-full border-dashed font-normal text-muted-foreground"
+        <Button variant="outline" size="xs" className="h-6 rounded-full border-dashed border-border font-normal text-muted-foreground"
           data-team-scope="">
           <Users aria-hidden="true" />{t('cosre.welcome.scope.teamPick')}
         </Button>

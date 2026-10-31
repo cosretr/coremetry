@@ -27,7 +27,7 @@ export function QueryBlock({ query, queryKind, source }: { query: string; queryK
         <pre className="mt-1 overflow-x-auto rounded-md border border-border bg-muted p-2 font-mono text-xs leading-relaxed whitespace-pre">{query}</pre>
         <div className="mt-1 flex items-center justify-between gap-2 text-xs text-muted-foreground">
           <span>{T.queryReadOnly}{source ? ` · ${T.querySource(source)}` : ''}</span>
-          <Button variant="outline" size="xs" onClick={() => void copy()}>{copied ? T.copied : T.copy}</Button>
+          <Button variant="outline" size="xs" className="border-border" onClick={() => void copy()}>{copied ? T.copied : T.copy}</Button>
         </div>
       </CollapsibleContent>
     </Collapsible>
