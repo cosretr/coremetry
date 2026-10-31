@@ -3637,6 +3637,9 @@ export const api = {
     get<import('./types').UserDetail>(`/api/users/${encodeURIComponent(id)}`),
   // v0.10.1731 — "Rolü AD'ye geri ver": rol kilidi kalkar, sonraki LDAP
   // girişinde rol yine AD grup eşlemesinden gelir (audit: user.role_unlock).
+  // v0.10.1734 — Yetkiler + Bildirimler sekmeleri (admin).
+  getUserAccess: (id: string) =>
+    get<import('./types').UserAccess>(`/api/users/${encodeURIComponent(id)}/access`),
   // v0.10.1733 — "AD ile denetle" (admin bind ile yeniden oku, fark, audit).
   checkUserDirectory: (id: string) =>
     request<import('./types').UserDirectoryCheck>(`/api/users/${encodeURIComponent(id)}/directory-check`, { method: 'POST' }),

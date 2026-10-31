@@ -2,9 +2,9 @@
 // (bileşen dosyası yalnız bileşen dışa aktarsın — react-refresh).
 import type { UserDetailUser } from '@/lib/types';
 
-export type UserDetailTab = 'overview' | 'teams' | 'changes' | 'directory';
+export type UserDetailTab = 'overview' | 'teams' | 'notifications' | 'permissions' | 'changes' | 'directory';
 
-const TABS: readonly UserDetailTab[] = ['overview', 'teams', 'changes', 'directory'];
+const TABS: readonly UserDetailTab[] = ['overview', 'teams', 'notifications', 'permissions', 'changes', 'directory'];
 
 /** URL ?tab= → sekme; bilinmeyen/boş değer Genel Bakış. */
 export function userDetailTabFromParam(v: string | null): UserDetailTab {

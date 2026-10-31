@@ -56,6 +56,25 @@ export function useUserOrg(id: string, enabled: boolean) {
   });
 }
 
+// v0.10.1734 — Yetkiler / Bildirimler sekmeleri (yalnız sekme açıkken).
+export function useUserAccess(id: string, enabled: boolean) {
+  return useQuery({
+    queryKey: keys.users.access(id),
+    queryFn: () => api.getUserAccess(id),
+    enabled: enabled && !!id,
+  });
+}
+
+// v0.10.1734 — sayfa kataloğu (Yetkiler sekmesinde rota → etiket).
+export function useAvailablePages(enabled: boolean) {
+  return useQuery({
+    queryKey: keys.users.pages,
+    queryFn: async () => (await api.listAvailablePages()).pages ?? [],
+    enabled,
+    staleTime: 10 * 60_000,
+  });
+}
+
 // Custom-role catalog — drives the per-row picker on /users. Fetched
 // alongside the user list, refreshed on every change so a role added
 // in Settings → Roles appears here without a hard reload.

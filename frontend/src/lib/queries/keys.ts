@@ -195,6 +195,9 @@ export const keys = {
     // v0.10.1733 — LDAP okumaları (yalnız sekme/kart açılınca).
     directory:   (id: string) => ['users', 'directory', id] as const,
     org:         (id: string) => ['users', 'org', id] as const,
+    // v0.10.1734 — Yetkiler / Bildirimler sekmeleri + sayfa kataloğu.
+    access:      (id: string) => ['users', 'access', id] as const,
+    pages:       ['users', 'available-pages'] as const,
   },
 
   // Explore v2 multi-query builder (Phase 2). `sig` is the stable

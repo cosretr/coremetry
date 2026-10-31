@@ -11,6 +11,8 @@ describe('userDetailModel', () => {
   });
   it('dizin sekmesi ve organizasyon satırları (v0.10.1733)', () => {
     expect(userDetailTabFromParam('directory')).toBe('directory');
+    expect(userDetailTabFromParam('permissions')).toBe('permissions');
+    expect(userDetailTabFromParam('notifications')).toBe('notifications');
     expect(directoryAttributeRows({ title: ['Müdür'], Department: ['Teknoloji'], memberOf: ['a', 'b'] }))
       .toEqual([{ k: 'Department', v: 'Teknoloji' }, { k: 'memberOf', v: 'a\nb' }, { k: 'title', v: 'Müdür' }]);
     const rows = orgRows({ self: 'me', managers: ['m1', 'm2'], reports: ['r1'] });

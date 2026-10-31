@@ -6554,6 +6554,37 @@ export interface UserLdapGroup {
   cn: string;
   dn: string;
 }
+// v0.10.1734 — GET /api/users/{id}/access (Yetkiler + Bildirimler sekmeleri).
+export interface UserPermissions {
+  role: string;
+  customRole?: string;
+  // all = tüm izinler (admin/editor) · viewer = tüm sayfalar salt-okunur ·
+  // pages = yalnız `pages` (özel rol) · missing = özel rol katalogda yok.
+  scope: 'all' | 'viewer' | 'pages' | 'missing';
+  pages: string[];   // sidebar rota yolları (AvailablePage.id)
+}
+export interface UserNotifyChannel {
+  id: string;
+  name: string;
+  type: string;
+  enabled: boolean;
+  minSeverity?: string;
+}
+export interface UserTeamRoute {
+  team: string;
+  addresses: string[];
+  direct: boolean;   // adres listesinde bu e-posta var; false = birincil takım
+}
+export interface UserAccess {
+  permissions: UserPermissions;
+  notifications: {
+    channels: UserNotifyChannel[];
+    teamRoutes: UserTeamRoute[];
+    teamRoutingEnabled: boolean;
+    teamMinSeverity?: string;
+  };
+}
+
 // v0.10.1733 — POST /api/users/{id}/directory-check ("AD ile denetle").
 export interface UserFieldDiff {
   field: string;     // fullName | team | directory.title …

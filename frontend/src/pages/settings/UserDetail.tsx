@@ -14,10 +14,11 @@ import { Button } from '@/components/shadcn/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/shadcn/tabs';
 import { CopyButton } from '@/components/CopyButton';
 import { useAuth } from '@/components/AuthProvider';
-import { keys, useCustomRoles, useUserAudit, useUserDetail, useUserDirectory, useUserOrg } from '@/lib/queries';
+import { keys, useCustomRoles, useUserAudit, useUserDetail, useUserDirectory, useUserOrg, useUserAccess, useAvailablePages } from '@/lib/queries';
 import { api, type UserRow } from '@/lib/api';
 import type { AuditEntry, UserDetailUser, UserDirectory, UserDirectoryCheck, UserLdapGroup, UserOrgPerson } from '@/lib/types';
 import { cn } from '@/lib/cn';
+import { useT } from '@/lib/i18n';
 import { tsLong, tsRel } from '@/lib/utils';
 import { CustomRoleEditor, RoleEditor, TeamEditor } from '../Users';
 import { directoryAttributeRows, orgRows, userSourceLabel, userStatus, userDetailTabFromParam, type UserDetailTab } from './userDetailModel';
@@ -92,6 +93,102 @@ function DirectoryTab({ id }: { id: string }) {
       </p>
       <KeyValue labelWidth="wide" items={rows.map(r => ({ id: r.k, k: r.k, v: r.v, mono: true }))} />
     </Card>
+  );
+}
+
+const SCOPE_TEXT: Record<'all' | 'viewer', string> = {
+  all: 'Tüm izinler — rol kısıtı yok (admin: ayarlar ve yıkıcı işlemler dahil; editor: kural, preset ve durum düzenleme).',
+  viewer: 'Tüm sayfalar, salt-okunur — özel rol atanmamış.',
+};
+
+// v0.10.1734 — Yetkiler sekmesi: rolün çözülmüş hâli. Özel rollü viewer'da
+// sayfa listesi, etiketler sayfa kataloğundan (/api/admin/pages).
+function PermissionsTab({ id }: { id: string }) {
+  const q = useUserAccess(id, true);
+  const perms = q.data?.permissions;
+  const pagesQ = useAvailablePages(perms?.scope === 'pages');
+  const t = useT();
+  if (q.isPending) return <Spinner label="Yetkiler okunuyor" />;
+  if (q.isError) {
+    return (
+      <Empty icon="⚠" title="Yetkiler okunamadı"
+        action={<Button variant="outline" size="sm" onClick={() => void q.refetch()}>Yeniden dene</Button>}>
+        {errText(q.error)}
+      </Empty>
+    );
+  }
+  const p = q.data.permissions;
+  const labelOf = new Map((pagesQ.data ?? []).map(x => [x.id, t(x.label)]));
+  return (
+    <Card title="Yetkiler" count={p.scope === 'pages' ? p.pages.length : undefined}>
+      <div className="flex flex-col gap-2 py-1.5 text-[13px]">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Badge variant="secondary" className="font-mono">{p.role}</Badge>
+          {p.customRole && <Badge variant="outline">{p.customRole}</Badge>}
+        </div>
+        {(p.scope === 'all' || p.scope === 'viewer') && <p className="m-0 text-(--text2)">{SCOPE_TEXT[p.scope]}</p>}
+        {p.scope === 'missing' && (
+          <p className="m-0 text-(--warn)">
+            Özel rol <b>{p.customRole}</b> katalogda yok (silinmiş olabilir) — kullanıcı kısıtsız viewer gibi davranır.
+          </p>
+        )}
+        {p.scope === 'pages' && (p.pages.length === 0
+          ? <p className="m-0 text-(--text2)">Bu özel rol hiçbir sayfaya izin vermiyor.</p>
+          : (
+            <>
+              <p className="m-0 text-(--text2)">Yalnız bu sayfalar, salt-okunur:</p>
+              <ul className="m-0 flex list-none flex-wrap gap-1.5 p-0">
+                {p.pages.map(pg => (
+                  <li key={pg}><Badge variant="outline" title={pg}>{labelOf.get(pg) ?? pg}</Badge></li>
+                ))}
+              </ul>
+            </>
+          ))}
+      </div>
+    </Card>
+  );
+}
+
+// v0.10.1734 — Bildirimler sekmesi. Kişi başına abonelik yok: bu kullanıcıya
+// ulaşan e-posta kanalları + ekip yönlendirme yolları gösterilir.
+function NotificationsTab({ id }: { id: string }) {
+  const q = useUserAccess(id, true);
+  if (q.isPending) return <Spinner label="Bildirim yolları okunuyor" />;
+  if (q.isError) {
+    return (
+      <Empty icon="⚠" title="Bildirim yolları okunamadı"
+        action={<Button variant="outline" size="sm" onClick={() => void q.refetch()}>Yeniden dene</Button>}>
+        {errText(q.error)}
+      </Empty>
+    );
+  }
+  const n = q.data.notifications;
+  return (
+    <div className="flex flex-col gap-3.5">
+      <p className="m-0 text-[13px] text-(--text2)">
+        Coremetry'de kişi başına bildirim aboneliği yok. Bu kullanıcıya ulaşan yollar: alıcı listesinde
+        e-postası olan kanallar ve ekip yönlendirmesi (Settings › Team routing).
+      </p>
+      <Card title="E-posta kanalları" count={n.channels.length}>
+        {n.channels.length === 0
+          ? <p className="my-1.5 text-[13px] text-(--text2)">Hiçbir e-posta kanalının alıcı listesinde değil.</p>
+          : <KeyValue items={n.channels.map(c => ({
+            id: c.id, k: c.name,
+            v: `${c.enabled ? 'etkin' : 'kapalı'}${c.minSeverity ? ` · en az ${c.minSeverity}` : ''}`,
+          }))} />}
+      </Card>
+      <Card title="Ekip yönlendirme" count={n.teamRoutes.length}>
+        {!n.teamRoutingEnabled && (
+          <p className="mt-1.5 mb-1 text-[13px] text-(--warn)">Ekip yönlendirme maili kapalı — aşağıdaki yollar şu an mail göndermez.</p>
+        )}
+        {n.teamRoutes.length === 0
+          ? <p className="my-1.5 text-[13px] text-(--text2)">Birincil takımın ekip adresi yok ve hiçbir ekip adresinde bu e-posta geçmiyor.</p>
+          : <KeyValue items={n.teamRoutes.map(r => ({
+            id: r.team, k: r.team,
+            v: <>{r.addresses.join(', ') || '—'} <Badge variant="outline">{r.direct ? 'adres listesinde' : 'birincil takım'}</Badge></>,
+          }))} />}
+      </Card>
+    </div>
   );
 }
 
@@ -338,6 +435,8 @@ export default function UserDetailPage() {
             <TabsList variant="line" aria-label="Kullanıcı sekmeleri" className="mb-3">
               <TabsTrigger value="overview">Genel Bakış</TabsTrigger>
               <TabsTrigger value="teams">Takımlar <Badge variant="secondary">{teamCount}</Badge></TabsTrigger>
+              <TabsTrigger value="notifications">Bildirimler</TabsTrigger>
+              <TabsTrigger value="permissions">Yetkiler</TabsTrigger>
               <TabsTrigger value="changes">
                 Değişiklikler{audit.data ? <Badge variant="secondary">{audit.data.length}</Badge> : null}
               </TabsTrigger>
@@ -427,6 +526,13 @@ export default function UserDetailPage() {
                 <DirectoryTab id={u.id} />
               </TabsContent>
             )}
+
+            <TabsContent value="notifications">
+              <NotificationsTab id={u.id} />
+            </TabsContent>
+            <TabsContent value="permissions">
+              <PermissionsTab id={u.id} />
+            </TabsContent>
 
             <TabsContent value="changes">
               <Card title="Bu kullanıcıyı hedef alan değişiklikler">
