@@ -8,7 +8,8 @@
 // v1 ChatBubble / toChatTurn'e dokunmaz; parçalar protocol.ts ayrıştırıcılarından.
 // Önizleme satırları yalnız bilinen v2 araçlarının JSON gövdesinden (≤3);
 // page_url yoksa satırın href'i YOK (tıklanmaz görünür).
-import type { CosreStop, CosreToolResult, CosreToolResultKind } from '@/lib/types';
+import type { ChatTurn, CosreStop, CosreToolResult, CosreToolResultKind } from '@/lib/types';
+import { isDeadlineError, summarizeSteps } from '@/components/ai/toolSteps';
 import { parseDataStop, parseDataToolResult } from '@/lib/cosre/protocol';
 import { stepIndex } from '@/lib/cosre/toChatTurn';
 import type { CosreUIMessage } from '@/lib/cosre/resetReducer';
@@ -47,6 +48,10 @@ export interface StepView {
   pageUrl?: string;
   pageLabel?: string;
   preview?: StepPreview;
+  /** v0.10.1710 — araç argümanları tek satır ("Girdiler"); boş argüman → yok. */
+  inputs?: string;
+  /** v0.10.1710 — sunucunun ham önizlemesi ("Ham çıktı", kapalı, salt okunur). */
+  raw?: string;
 }
 
 export interface StepsView {
@@ -69,6 +74,30 @@ export function fmtMsTR(ms: number): string {
 /** data-stop → listenin altındaki tek satır (neden · çağrı · tur · süre). */
 export function stopLine(s: CosreStop): string {
   return `${STOP_LABELS[s.reason]} · ${T.calls(s.calls)} · ${T.rounds(s.rounds)} · ${fmtMsTR(s.elapsed_ms)}`;
+}
+
+/** v0.10.1710 — args nesnesi → `k=v · k=v` (string olduğu gibi, gerisi JSON); yoksa argsText. */
+export function inputsLine(args: Rec, argsText: string | undefined): string | undefined {
+  const keys = Object.keys(args);
+  if (keys.length > 0) return keys.map(k => `${k}=${typeof args[k] === 'string' ? args[k] : JSON.stringify(args[k])}`).join(' · ');
+  return argsText && argsText !== '{}' ? argsText : undefined;
+}
+
+export interface StopBadge { label: string; title: string; warn?: boolean }
+
+/**
+ * v0.10.1710 — v1 şeffaflık panelinin özet rozetleri (ön-yükleme / niyet /
+ * bütçe aşıldı) data-stop satırına: aynı kural (toolSteps.summarizeSteps
+ * yalnız ARAÇ adımlarında, isDeadlineError).
+ */
+export function stopBadges(turn: Pick<ChatTurn, 'stepDetails' | 'error' | 'pending'>): StopBadge[] {
+  const tools = (turn.stepDetails ?? []).filter(d => !!d.tool);
+  const sum = summarizeSteps(tools, !turn.pending);
+  const out: StopBadge[] = [];
+  if (sum.guided) out.push({ label: T.badgeGuided, title: T.badgeGuidedTitle });
+  if (sum.intent) out.push({ label: T.badgeIntent, title: T.badgeIntentTitle });
+  if (isDeadlineError(turn.error)) out.push({ label: T.badgeDeadline, title: turn.error ?? '', warn: true });
+  return out;
 }
 
 /** Kaynak etiketi: tool-result source (kanıt zarfı) olduğu gibi; "vm" kısaltması açılır. */
@@ -265,6 +294,10 @@ export function stepsView(parts: readonly Part[]): StepsView {
       ...(durationMs !== undefined ? { durationMs } : {}),
       ...(pageUrl ? { pageUrl, pageLabel: PAGE_LABELS[t.toolName] ?? PAGE_LABEL_DEFAULT } : {}),
     };
+    const inputs = inputsLine(args, str(input.argsText));
+    if (inputs) view.inputs = inputs;
+    const raw = str(out.preview);
+    if (raw) view.raw = raw;
     const sub = kind === 'skipped' ? T.skippedTitle : subtitleFor(t.toolName, args, body);
     if (sub) view.subtitle = sub;
     if (kind === 'skipped') view.reason = skipReasonText(tr?.reason ?? str(out.reason));

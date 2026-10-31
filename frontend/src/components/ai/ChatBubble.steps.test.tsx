@@ -7,7 +7,7 @@
 import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
-import { ChatBubble, ToolStepsPanel } from './ChatBubble';
+import { ChatBubble, ChatBubbleSlotsContext, ToolStepsPanel } from './ChatBubble';
 import type { ChatTurn, ChatStepDetail } from '@/lib/types';
 
 // v0.10.1137 — adımlar "Nasıl cevapladım" açılırında; statik render tıklayamaz → `stepsOpen` dikişi.
@@ -127,5 +127,25 @@ describe('dürüst ilerleme (v0.10.944)', () => {
     expect(unknown).not.toContain('>ok<');
     // kırpılmamış ve durum taşımayan sonuç eskisi gibi nötr ok
     expect(panel([d(1)])).toContain('>ok<');
+  });
+});
+
+// v0.10.1710 — `hideSteps` yalnız v2 yuvası: yuvasız (v1) balon adım açılırını
+// aynen çizer; yuva verilince açılır yok, cevap metni duruyor.
+describe('ChatBubbleSlots.hideSteps (v0.10.1710)', () => {
+  const turn: ChatTurn = { role: 'assistant', text: 'cevap', steps: ['get_service_health'],
+    stepDetails: [{ i: 1, tool: 'get_service_health', args: '{"service":"a"}', preview: '{}', ok: true, durationMs: 5 }] };
+  it('v1 (yuva yok): Nasıl cevapladım + çip + panel çizilir', () => {
+    const h = html(turn);
+    expect(h).toContain('cm-how');
+    expect(h).toContain('Nasıl cevapladım');
+    expect(h).toContain('cm-steps-sum');
+  });
+  it('v2 (hideSteps): adım açılırı yok, metin var', () => {
+    const h = renderToStaticMarkup(<MemoryRouter><ChatBubbleSlotsContext.Provider value={{ hideSteps: true }}>
+      <ChatBubble turn={turn} stepsOpen /></ChatBubbleSlotsContext.Provider></MemoryRouter>);
+    expect(h).not.toContain('cm-how');
+    expect(h).not.toContain('cm-steps');
+    expect(h).toContain('cevap');
   });
 });

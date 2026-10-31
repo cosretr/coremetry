@@ -5,6 +5,9 @@
 //     önizleme, sorgu açılırı (Q6), page_url varsa alt bağlantı + satırlar
 //     tıklanır; yoksa satırlar tıklanmaz görünür.
 //   • skipped: gri, gerekçeyle. error: kırmızı kutu, "okunamadı ≠ yok".
+//   • v0.10.1710 (mockup A): "Girdiler" satırı (araç argümanları), "Ham çıktı"
+//     kapalı açılırı (sunucu önizlemesi, salt okunur), altta İlgili / İlgisiz
+//     (aynı cosre_signals kaydı: detail "s<i>", cevabın exchangeId'si).
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Check, ChevronRight, Loader2, Minus, X } from 'lucide-react';
@@ -17,6 +20,20 @@ import { isPlainLeftClick } from '@/lib/a11y';
 import { EVIDENCE_STRINGS as T } from './strings';
 import { fmtMsTR, type StepPreview, type StepView } from './stepView';
 import { QueryBlock } from './QueryBlock';
+import { RelevanceToggle } from '@/components/ai/EvidenceRelevance';
+
+function RawOutput({ raw }: { raw: string }) {
+  return (
+    <Collapsible data-cosre-raw="">
+      <CollapsibleTrigger asChild>
+        <Button variant="link" size="xs" className="h-auto px-0 text-muted-foreground">{T.rawToggle}</Button>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <pre className="mt-1 max-h-56 overflow-auto rounded-md border border-border bg-muted p-2 font-mono text-xs leading-relaxed break-words whitespace-pre-wrap">{raw}</pre>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
 
 function StatusIcon({ kind }: { kind: StepView['kind'] }) {
   switch (kind) {
@@ -68,7 +85,7 @@ function Preview({ p }: { p: StepPreview }) {
   );
 }
 
-export function StepCard({ v }: { v: StepView }) {
+export function StepCard({ v, exchangeId }: { v: StepView; exchangeId?: string }) {
   const [open, setOpen] = useState(false);
   const muted = v.kind === 'skipped';
   return (
@@ -93,6 +110,11 @@ export function StepCard({ v }: { v: StepView }) {
               <Badge key={t.label} variant="outline" className={cn('font-normal text-muted-foreground', t.warn && 'border-status-warn-border text-status-warn')}>{t.label}</Badge>
             ))}
           </div>
+          {v.inputs && (
+            <p className="min-w-0 text-xs break-all text-muted-foreground" data-cosre-inputs="">
+              {T.inputsPrefix} <span className="font-mono">{v.inputs}</span>
+            </p>
+          )}
           {v.kind === 'skipped' && v.reason && <p className="text-muted-foreground">{T.reasonPrefix} {v.reason}</p>}
           {v.kind === 'error' && (
             <p className="rounded-md bg-status-critical-bg px-2 py-1.5 text-status-critical" role="alert">
@@ -100,10 +122,19 @@ export function StepCard({ v }: { v: StepView }) {
             </p>
           )}
           {v.preview && <Preview p={v.preview} />}
-          {v.query && <QueryBlock query={v.query} queryKind={v.queryKind} source={v.source} />}
+          {(v.query || v.raw) && (
+            <div className="flex flex-col gap-1">
+              {v.query && <QueryBlock query={v.query} queryKind={v.queryKind} source={v.source} />}
+              {v.raw && <RawOutput raw={v.raw} />}
+            </div>
+          )}
           {v.pageUrl && (
             <Link to={v.pageUrl} className="text-xs text-primary hover:underline" data-cosre-page-url="">{v.pageLabel} ↗</Link>
           )}
+          <div className="flex flex-wrap items-center gap-1.5 border-t border-border pt-1.5 text-xs text-muted-foreground">
+            <span>{T.relevancePrompt}</span>
+            <RelevanceToggle exchangeId={exchangeId} stepId={`s${v.i}`} />
+          </div>
         </div>
       </CollapsibleContent>
     </Collapsible>

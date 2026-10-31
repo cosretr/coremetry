@@ -88,12 +88,14 @@ const EvidenceBlocksContext = createContext<ReadonlyMap<string, EvidenceBlockVie
 
 /**
  * v0.10.1659 (CoSRE v2 B4) — balona dışarıdan eklenen yuvalar. v1 vermez
- * (balon aynı); v2 MessageList araç kanıtının altına İlgili/İlgisiz,
- * eylem satırına Not koyar.
+ * (balon aynı); v2 MessageList eylem satırına Not koyar.
+ * v0.10.1710 — v2 adımları kendi kartlarında çizer (components/cosre/evidence):
+ * `hideSteps` balonun "Nasıl cevapladım" açılırını (çipler + şeffaflık paneli)
+ * çizmez; İlgili/İlgisiz kartın altına taşındı.
  */
 export interface ChatBubbleSlots {
-  /** Açılan araç kanıtının (ToolEvidence) altı; yalnız araç satırları. */
-  stepExtra?: (d: ChatStepDetail) => ReactNode;
+  /** v2: adım açılırı balonda çizilmez (kartlar tek kaynak). */
+  hideSteps?: boolean;
   /** Tamamlanmış cevabın eylem satırı (Kopyala'nın yanı). */
   actionsExtra?: ReactNode;
 }
@@ -599,7 +601,6 @@ function ToolChips({ steps, details, hasText, turnDone, evId, setEvId }: {
 function ToolEvidence({ d }: { d: ChatStepDetail }) {
   const view = parseStepPreview(d.preview ?? '', d.truncated);
   const evBlocks = useContext(EvidenceBlocksContext);
-  const slots = useContext(ChatBubbleSlotsContext); // v0.10.1659
   return (
     <div style={{
       marginTop: 6, padding: '6px 8px', borderRadius: 6,
@@ -661,7 +662,6 @@ function ToolEvidence({ d }: { d: ChatStepDetail }) {
           fontSize: 10, color: 'var(--text2)',
         }}>{view.text || '(boş)'}</pre>
       )}
-      {d.tool && slots.stepExtra?.(d)}
     </div>
   );
 }
@@ -970,7 +970,7 @@ function ChatBubbleView({ turn, onRetry, stepsOpen, onRegenerate, busy, versions
   // CoSRE öğrenme Faz 2 — örtük olumlu sinyal (kopya, link, kanıt, not);
   // balon başına tür başına bir kez (tekrar tık ağırlığı şişirmesin).
   const signal = useCosreSignal(turn.exchangeId);
-  const { actionsExtra } = useContext(ChatBubbleSlotsContext); // v0.10.1659
+  const { actionsExtra, hideSteps } = useContext(ChatBubbleSlotsContext); // v0.10.1659 · v0.10.1710
   // v0.10.1384 — yazma efekti: yalnız canlı turun BÜYÜK parçası (arrivedAt;
   // arşiv/geri yükleme taşımaz). Kartlar, kopya, takip çipleri TAM metinle
   // (turn.*) hemen çizilir; yalnız gövde metni açılır. Dibe yapışma: balon.
@@ -1075,7 +1075,7 @@ function ChatBubbleView({ turn, onRetry, stepsOpen, onRegenerate, busy, versions
       )}
       <div onClick={onBodyClick} className="cm-msg-ai" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
         {/* v0.10.1137 — adımlar tek açılırda (akarken açık, bitince kapanır). */}
-        {hasSteps && <StepsDisclosure turn={turn} evId={evId} setEvId={openEvidence} initialOpen={stepsOpen} />}
+        {hasSteps && !hideSteps && <StepsDisclosure turn={turn} evId={evId} setEvId={openEvidence} initialOpen={stepsOpen} />}
         {/* v0.10.1273 — evre kırıntısı (Metrik → Log → Trace), cevabın üstünde, canlı. */}
         <PhaseTrail details={turn.stepDetails} />
         {turn.text ? (

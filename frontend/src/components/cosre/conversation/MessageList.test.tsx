@@ -111,50 +111,37 @@ describe('MessageList × paylaşılan fixture (gerçek SDK)', () => {
     expect(el.querySelector('.cm-msg-ai .cm-msg-note')?.textContent?.trim()).toBe('⏹ Durduruldu — bu cevap yarım kaldı.');
   });
 
-  // v0.10.1656 (B3) — adım açılırı v1'inki: akarken açık, bitince kapalı özet.
-  it('ui-stream-v1 (B3): "Nasıl cevapladım · 4 adım" kapalı + bütçe özeti + doldu rozeti; açınca 2 araç satırı', async () => {
+  // v0.10.1710 — v2'de adımlar YALNIZ kartlarda: balonda "Nasıl cevapladım" yok.
+  it('ui-stream-v1 (1710): balonda adım listesi yok (çip / şeffaflık paneli / bütçe özeti); kartlar + data-stop satırı var', async () => {
     const core = createCosreChat({ fetch: sseFetch(cosreFixture('ui-stream-v1')).fetch });
     await core.chat.sendMessage({ text: 'q' });
     const el = await draw(core);
-    const how = el.querySelector<HTMLButtonElement>('.cm-how__btn')!;
-    expect(how.textContent).toContain('Nasıl cevapladım · 4 adım');
-    expect(how.getAttribute('aria-expanded')).toBe('false');
-    expect(el.querySelector('[data-cosre-budget]')?.textContent).toBe('1/2 çağrı · 1/5 tur');
-    expect(el.querySelector('[data-cosre-budget-exhausted]')?.textContent).toBe('bütçe doldu');
-    await act(async () => { how.click(); });
-    const sum = el.querySelector('.cm-steps-sum')?.textContent ?? '';
-    expect(sum).toContain('2 araç');
-    expect(sum).toContain('1 yürütülmedi');
-    expect(el.textContent).toContain('get_service_health');
-    expect(el.textContent).toContain('query_metrics');
+    const bubble = el.querySelector('.cm-msg-ai')!;
+    expect(bubble.querySelector('.cm-how, .cm-steps, .cm-steps-sum')).toBeNull();
+    expect(el.textContent).not.toContain('Nasıl cevapladım');
+    expect(el.querySelector('[data-cosre-budget]')).toBeNull();
+    const list = el.querySelector('[data-cosre-steps]')!;
+    expect(list.getAttribute('data-open')).toBeNull(); // bitti → kapalı özet
+    await act(async () => { list.querySelector<HTMLButtonElement>('button')!.click(); });
+    expect([...el.querySelectorAll('[data-cosre-step]')].map(n => n.getAttribute('data-cosre-step'))).toEqual(['s2', 's3']);
+    expect(el.querySelector('[data-cosre-stop]')?.textContent).toContain('çağrı tavanı · 2 çağrı · 1 tur');
   });
 
-  it('akış ortası (B3): adım açılırı AÇIK ve "sürüyor"; araç çipi çalışıyor', async () => {
+  it('akış ortası (1710): adım kartları açık, araç kartı çalışıyor; balonda adım açılırı yok', async () => {
     const f = sseFetch(cosreFixture('ui-stream-v1'), fr => fr.includes('"toolCallId":"s2","toolName":"get_service_health","type":"tool-input-available"'));
     const core = createCosreChat({ fetch: f.fetch });
     const p = core.chat.sendMessage({ text: 'q' });
     await vi.waitFor(() => expect(core.chat.messages.at(-1)?.parts.some(x => x.type === 'dynamic-tool')).toBe(true));
     const el = await draw(core, 'streaming');
-    const how = el.querySelector('.cm-how__btn')!;
-    expect(how.getAttribute('aria-expanded')).toBe('true');
-    expect(how.textContent).toContain('sürüyor');
-    expect(el.textContent).toContain('get_service_health · çalışıyor…');
+    expect(el.querySelector('.cm-how')).toBeNull();
+    expect(el.querySelector('[data-cosre-steps]')?.getAttribute('data-open')).toBe('true');
+    expect(el.querySelector('[data-cosre-step="s2"]')?.getAttribute('data-kind')).toBe('running');
     f.release();
     await p;
   });
 
-  it('closed (B3): etiket adımı çipte görünür', async () => {
-    const core = createCosreChat({ fetch: sseFetch(cosreFixture('ui-stream-v1-closed')).fetch });
-    await core.chat.sendMessage({ text: 'q' });
-    const el = await draw(core);
-    const how = el.querySelector<HTMLButtonElement>('.cm-how__btn')!;
-    expect(how.textContent).toContain('1 adım');
-    await act(async () => { how.click(); });
-    expect(el.querySelector('.cm-how__body')?.textContent).toContain('araştırma bütçesi: 6 araç · 5 tur');
-  });
-
-  // v0.10.1659 (B4) — kanıt başına İlgili/İlgisiz + mesaj notu → /api/ai/signal.
-  it('ui-stream-v1 (B4): İlgili/İlgisiz s2 sinyali (iki durumlu), Not 512 bayta kırpılır; 👍/👎 yok', async () => {
+  // v0.10.1659 (B4) → v0.10.1710: İlgili / İlgisiz kartın altında; sinyal yükü aynı.
+  it('ui-stream-v1 (B4, kartta): İlgili/İlgisiz s2 sinyali (iki durumlu), Not 512 bayta kırpılır; 👍/👎 yok', async () => {
     const calls: unknown[] = [];
     const spy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (_u, init) => {
       calls.push(JSON.parse(String(init?.body)));
@@ -165,9 +152,11 @@ describe('MessageList × paylaşılan fixture (gerçek SDK)', () => {
       await core.chat.sendMessage({ text: 'q' });
       const el = await draw(core);
       const btn = (t: string) => [...el.querySelectorAll('button')].find(b => b.textContent?.includes(t))!;
-      await act(async () => { btn('Nasıl cevapladım').click(); });
-      await act(async () => { btn('get_service_health').click(); });
-      const rel = el.querySelector('[data-cosre-relevance="s2"]')!;
+      await act(async () => { el.querySelector<HTMLButtonElement>('[data-cosre-steps] button')!.click(); });
+      await act(async () => { el.querySelector<HTMLButtonElement>('[data-cosre-step="s2"] button')!.click(); });
+      const card = el.querySelector('[data-cosre-step="s2"]')!;
+      expect(card.querySelector('[data-cosre-inputs]')?.textContent).toBe('Girdiler: service=orders-api');
+      const rel = card.querySelector('[data-cosre-relevance="s2"]')!;
       expect(rel).not.toBeNull();
       const [yes, no] = [...rel.querySelectorAll('button')];
       await act(async () => { yes.click(); });
@@ -175,10 +164,7 @@ describe('MessageList × paylaşılan fixture (gerçek SDK)', () => {
       expect(yes.getAttribute('aria-pressed')).toBe('true');
       await act(async () => { no.click(); });
       expect(no.getAttribute('aria-pressed')).toBe('true');
-      // v1'in kendi örtük sinyali (çip açma = evidence_click) ayrı; burada B4 türleri.
-      const b4 = () => calls.filter(c => (c as { kind: string }).kind !== 'evidence_click');
-      expect(calls).toContainEqual({ exchangeId: 'golden-xid', kind: 'evidence_click' });
-      expect(b4()).toEqual([
+      expect(calls).toEqual([
         { exchangeId: 'golden-xid', kind: 'evidence_relevant', detail: 's2' },
         { exchangeId: 'golden-xid', kind: 'evidence_irrelevant', detail: 's2' },
       ]);
@@ -189,7 +175,7 @@ describe('MessageList × paylaşılan fixture (gerçek SDK)', () => {
         ta.dispatchEvent(new Event('input', { bubbles: true }));
       });
       await act(async () => { btn('Kaydet').click(); });
-      const note = b4()[2] as { kind: string; detail: string };
+      const note = calls[2] as { kind: string; detail: string };
       expect(note.kind).toBe('note');
       expect(new TextEncoder().encode(note.detail).length).toBe(512);
       expect(el.querySelector('[data-cosre-note-sent]')).not.toBeNull();
@@ -199,21 +185,41 @@ describe('MessageList × paylaşılan fixture (gerçek SDK)', () => {
     }
   });
 
-  it('B4: akış sürerken (exchangeId yok) İlgili/İlgisiz devre dışı', async () => {
+  it('B4 (kartta): akış sürerken (exchangeId yok) İlgili/İlgisiz devre dışı; Ham çıktı kapalı', async () => {
     await act(async () => {
       if (!host) { host = document.createElement('div'); document.body.appendChild(host); root = createRoot(host); }
       root!.render(<MemoryRouter><MessageList status="streaming" visibleParts={m => m.parts} messages={[
         { id: 'a', role: 'assistant', parts: [
-          { type: 'dynamic-tool', toolName: 'get_logs', toolCallId: 's3', state: 'output-available', input: { argsText: 'a' }, output: { ok: true, preview: '{}' } },
+          { type: 'dynamic-tool', toolName: 'get_logs', toolCallId: 's3', state: 'output-available', input: { argsText: 'a' }, output: { ok: true, preview: '{"n":1}' } },
           { type: 'text', text: 'akıyor' },
         ] },
       ]} /></MemoryRouter>);
     });
-    const chip = [...host!.querySelectorAll('button')].find(b => b.textContent?.includes('get_logs'))!;
-    await act(async () => { chip.click(); });
+    await act(async () => { host!.querySelector<HTMLButtonElement>('[data-cosre-step="s3"] button')!.click(); });
     const btns = [...host!.querySelectorAll('[data-cosre-relevance="s3"] button')];
     expect(btns).toHaveLength(2);
     expect(btns.every(b => (b as HTMLButtonElement).disabled)).toBe(true);
+    const raw = host!.querySelector('[data-cosre-step="s3"] [data-cosre-raw]')!;
+    expect(raw.querySelector('pre')).toBeNull();
+    await act(async () => { raw.querySelector<HTMLButtonElement>('button')!.click(); });
+    expect(raw.querySelector('pre')?.textContent).toBe('{"n":1}');
+  });
+
+  it('1710: bütçe aşımı (süre tavanı) rozeti data-stop satırında, balonda değil', async () => {
+    await act(async () => {
+      if (!host) { host = document.createElement('div'); document.body.appendChild(host); root = createRoot(host); }
+      root!.render(<MemoryRouter><MessageList status="error" error={new Error('yanıt süre tavanına dayandı (180 sn)')} visibleParts={m => m.parts} messages={[
+        { id: 'a', role: 'assistant', parts: [
+          { type: 'dynamic-tool', toolName: 'find_traces', toolCallId: 's2', state: 'output-available', input: { args: { service: 'orders-api' } }, output: { ok: true, preview: '{}' } },
+          { type: 'data-stop', id: 'stop', data: { reason: 'deadline', calls: 1, rounds: 1, elapsed_ms: 180000 } },
+          { type: 'text', text: 'yarım' },
+        ] },
+      ]} /></MemoryRouter>);
+    });
+    await act(async () => { host!.querySelector<HTMLButtonElement>('[data-cosre-steps] button')!.click(); });
+    const stop = host!.querySelector('[data-cosre-stop]')!;
+    expect([...stop.querySelectorAll('[data-cosre-stop-badge]')].map(b => b.textContent)).toEqual(['⏱ bütçe aşıldı']);
+    expect(host!.querySelector('.cm-msg-ai')?.textContent).not.toContain('bütçe aşıldı');
   });
 
   // v0.10.1660 (B5) — veri blokları / linkler / kaynaklar / takipler v1 çizicileriyle.

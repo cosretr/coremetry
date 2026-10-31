@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import type { CosreUIMessage } from '@/lib/cosre/resetReducer';
 import { SCOPE_REASONS, STOP_REASONS } from '@/lib/cosre/protocol';
-import { errorMessage, previewFor, queryKindLabel, stepsView, stopLine } from './stepView';
+import { errorMessage, inputsLine, previewFor, queryKindLabel, stepsView, stopBadges, stopLine } from './stepView';
 import { latestScope, scopeChangeNotes, scopeOf, scopeView } from './scopeView';
 
 type Part = CosreUIMessage['parts'][number];
@@ -156,5 +156,38 @@ describe('scopeView — 7 neden', () => {
     expect(notes.get('a3')).toBe('Kapsam değişti: Tüm servisler · bu soru');
     expect(scopeOf([P({ type: 'data-scope', data: { reason: 'team', unscoped: true, count: 1 } })])).toBeNull(); // çelişki
     expect(latestScope([msg('u', 'user', [])])).toBeNull();
+  });
+});
+
+// v0.10.1710 — mockup A: Girdiler satırı, Ham çıktı kaynağı, data-stop rozetleri.
+describe('stepView 1710: girdiler / ham çıktı / durdurma rozetleri', () => {
+  it.each([
+    [{ service: 'orders-api', window_s: 3600 }, undefined, 'service=orders-api · window_s=3600'],
+    [{ services: ['a', 'b'] }, undefined, 'services=["a","b"]'],
+    [{}, 'service=orders-api', 'service=orders-api'],
+    [{}, '{}', undefined],
+    [{}, undefined, undefined],
+  ])('inputsLine(%j, %j) → %j', (args, text, want) => {
+    expect(inputsLine(args, text)).toBe(want);
+  });
+
+  it('kart görünümü girdileri ve ham önizlemeyi taşır; önizleme yoksa raw yok', () => {
+    const v = stepsView([tool(2, 'find_traces', { service: 'x' }, { ok: true, preview: '{"traces":[]}' }), tool(3, 'search_logs', {})]);
+    expect(v.steps[0].inputs).toBe('service=x');
+    expect(v.steps[0].raw).toBe('{"traces":[]}');
+    expect(v.steps[1].inputs).toBeUndefined();
+    expect(v.steps[1].raw).toBeUndefined();
+  });
+
+  const d = (i: number, origin?: string) => ({ i, tool: 't', preview: '{}', ...(origin ? { origin } : {}) });
+  it.each([
+    ['rozet yok', { stepDetails: [d(1)] }, []],
+    ['ön-yükleme: tüm araç adımları guided', { stepDetails: [d(1, 'guided'), d(2, 'guided')] }, ['ön-yükleme']],
+    ['niyet: intent + guided', { stepDetails: [d(1, 'intent'), d(2, 'guided')] }, ['niyet']],
+    ['etiket adımı (tool boş) sayılmaz', { stepDetails: [d(1, 'guided'), { i: 2, tool: '', label: 'x' }] }, ['ön-yükleme']],
+    ['süre tavanı hatası', { stepDetails: [d(1)], error: 'yanıt süre tavanına dayandı' }, ['⏱ bütçe aşıldı']],
+    ['başka hata rozet değil', { error: 'bağlantı koptu' }, []],
+  ])('stopBadges: %s', (_n, turn, want) => {
+    expect(stopBadges(turn).map(b => b.label)).toEqual(want);
   });
 });

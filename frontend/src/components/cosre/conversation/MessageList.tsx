@@ -10,6 +10,9 @@
 //   • v0.10.1659 (B4): exchangeId + cevabın kanıt çipleri (data-evidence-summary);
 //     açılan her araç kanıtının altında İlgili / İlgisiz, eylem satırında Not
 //     (components/ai/EvidenceRelevance → cosre_signals). 👍/👎 yok.
+//   • v0.10.1710: adımlar YALNIZ kartlarda (StepList) — balonun "Nasıl
+//     cevapladım" açılırı hideSteps ile çizilmez; İlgili / İlgisiz kartın
+//     altında (aynı s<i>, aynı exchangeId), rozetler data-stop satırında.
 //   • v0.10.1660 (B5): veri blokları (data-block-* 13 tür → v1 kartları), Aç →
 //     link çipleri (data-links + link blokları), Kaynaklar listesi (source-*),
 //     kod kilidi (codeRead), takip çipleri (v1 FollowupChips, son cevap),
@@ -20,7 +23,7 @@
 // Sunumsal: Chat örneği yok (katalog ve testler statik mesajla da çizer).
 import { useMemo } from 'react';
 import { ChatBubble, ChatBubbleSlotsContext, type ChatBubbleSlots } from '@/components/ai/ChatBubble';
-import { MessageNote, RelevanceToggle } from '@/components/ai/EvidenceRelevance';
+import { MessageNote } from '@/components/ai/EvidenceRelevance';
 import { AiThinking } from '@/components/ai/AiThinking';
 import { FollowupChips } from '@/components/ai/FollowupChips';
 import type { ChatSendOpts } from '@/components/ai/useChatThread';
@@ -32,7 +35,7 @@ import type { CosreUIMessage } from '@/lib/cosre/resetReducer';
 import type { ChatExplainAsk, ChatTurn, CosreApprovalAnswer } from '@/lib/types';
 import { approvalAnswer, approvalViews } from '@/lib/cosre/approval';
 import { ApprovalCard } from './ApprovalCard';
-import { StepList, scopeChangeNotes, stepsView } from '../evidence';
+import { StepList, scopeChangeNotes, stepsView, stopBadges } from '../evidence';
 
 /** useChat durumu (ai ChatStatus ile aynı küme; tip importu katalogdan bağımsız). */
 export type CosreChatStatus = 'submitted' | 'streaming' | 'ready' | 'error';
@@ -108,9 +111,10 @@ function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, ex
   const turn = useMemo(() => toChatTurn(m, visibleParts(m), { pending: live, error, explainAsk }), [m, visibleParts, live, error, explainAsk]);
   const xid = live ? undefined : turn.exchangeId;
   const slots = useMemo<ChatBubbleSlots>(() => ({
-    stepExtra: d => <RelevanceToggle exchangeId={xid} stepId={`s${d.i}`} />,
+    hideSteps: true,
     actionsExtra: <MessageNote exchangeId={xid} />,
   }), [xid]);
+  const badges = useMemo(() => stopBadges(turn), [turn]);
   // v1 showFollowups: bitmiş, hatasız, metinli son cevap.
   const showFu = !!followups && !turn.error && !!turn.text;
   // Açıklama turu baştan ExplainBody çizer (v1: bekleyen künye, kendi yükleniyor'u).
@@ -120,7 +124,7 @@ function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, ex
   return (
     <div data-cosre-message={m.id} className="contents">
       {scopeNote && <div className="cm-msg-note text-muted-foreground" data-cosre-scope-note="">{scopeNote}</div>}
-      <StepList view={steps} live={live} />
+      <StepList view={steps} live={live} exchangeId={xid} badges={badges} />
       <ChatBubbleSlotsContext.Provider value={slots}>
         <ChatBubble turn={turn} onRetry={onRetry} shownFollowups={showFu ? turn.followups : undefined} />
       </ChatBubbleSlotsContext.Provider>
