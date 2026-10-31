@@ -3637,6 +3637,14 @@ export const api = {
     get<import('./types').UserDetail>(`/api/users/${encodeURIComponent(id)}`),
   // v0.10.1731 — "Rolü AD'ye geri ver": rol kilidi kalkar, sonraki LDAP
   // girişinde rol yine AD grup eşlemesinden gelir (audit: user.role_unlock).
+  // v0.10.1733 — "AD ile denetle" (admin bind ile yeniden oku, fark, audit).
+  checkUserDirectory: (id: string) =>
+    request<import('./types').UserDirectoryCheck>(`/api/users/${encodeURIComponent(id)}/directory-check`, { method: 'POST' }),
+  // v0.10.1733 — Dizin sekmesi (60 sn sunucu önbelleği) ve Organizasyon (10 dk).
+  getUserDirectory: (id: string) =>
+    get<import('./types').UserDirectoryAttributes>(`/api/users/${encodeURIComponent(id)}/directory`),
+  getUserOrg: (id: string) =>
+    get<import('./types').UserOrgChart>(`/api/users/${encodeURIComponent(id)}/org`),
   clearUserRoleLock: (id: string) =>
     request<{ id: string; roleLocked: boolean }>(`/api/users/${encodeURIComponent(id)}/role-lock`, { method: 'DELETE' }),
   // List active users whose team matches. Returns a slim

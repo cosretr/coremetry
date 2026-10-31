@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { userDetailTabFromParam, userSourceLabel, userStatus } from './userDetailModel';
+import { directoryAttributeRows, orgRows, userDetailTabFromParam, userSourceLabel, userStatus } from './userDetailModel';
 
 // v0.10.1731 — kullanıcı detay sayfası saf yardımcıları.
 describe('userDetailModel', () => {
@@ -8,6 +8,15 @@ describe('userDetailModel', () => {
     expect(userDetailTabFromParam('teams')).toBe('teams');
     expect(userDetailTabFromParam('changes')).toBe('changes');
     expect(userDetailTabFromParam('bogus')).toBe('overview');
+  });
+  it('dizin sekmesi ve organizasyon satırları (v0.10.1733)', () => {
+    expect(userDetailTabFromParam('directory')).toBe('directory');
+    expect(directoryAttributeRows({ title: ['Müdür'], Department: ['Teknoloji'], memberOf: ['a', 'b'] }))
+      .toEqual([{ k: 'Department', v: 'Teknoloji' }, { k: 'memberOf', v: 'a\nb' }, { k: 'title', v: 'Müdür' }]);
+    const rows = orgRows({ self: 'me', managers: ['m1', 'm2'], reports: ['r1'] });
+    expect(rows.map(r => [r.p, r.depth, r.role])).toEqual([
+      ['m2', 0, 'manager'], ['m1', 1, 'manager'], ['me', 2, 'self'], ['r1', 3, 'report'],
+    ]);
   });
   it('hesap kaynağı', () => {
     expect(userSourceLabel('ldap')).toBe('AD (LDAP)');

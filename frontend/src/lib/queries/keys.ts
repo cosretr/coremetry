@@ -192,6 +192,9 @@ export const keys = {
     // v0.10.1731 — detay sayfası; users.all altında (aynı invalidate tazeler).
     detail:      (id: string) => ['users', 'detail', id] as const,
     audit:       (id: string) => ['users', 'audit', id] as const,
+    // v0.10.1733 — LDAP okumaları (yalnız sekme/kart açılınca).
+    directory:   (id: string) => ['users', 'directory', id] as const,
+    org:         (id: string) => ['users', 'org', id] as const,
   },
 
   // Explore v2 multi-query builder (Phase 2). `sig` is the stable

@@ -31,7 +31,6 @@ import (
 	"time"
 
 	goldap "github.com/go-ldap/ldap/v3"
-	"unicode/utf8"
 )
 
 // Config is the persisted LDAP connection + mapping definition.
@@ -954,19 +953,7 @@ func (s *Service) InspectUser(ctx context.Context, username string) (*InspectRes
 			len(res.Entries), username, filter)
 	}
 	e := res.Entries[0]
-	attrs := make(map[string][]string, len(e.Attributes))
-	for _, a := range e.Attributes {
-		vals := make([]string, 0, len(a.Values))
-		for i, v := range a.Values {
-			// Binary heuristics: known photo attrs OR non-UTF8 content.
-			if a.Name == "thumbnailPhoto" || a.Name == "jpegPhoto" || !utf8.ValidString(v) {
-				vals = append(vals, fmt.Sprintf("[%d bytes]", len(a.ByteValues[i])))
-				continue
-			}
-			vals = append(vals, v)
-		}
-		attrs[a.Name] = vals
-	}
+	attrs := entryAttributes(e) // v0.10.1733 — orgchart.go ile ortak
 	// v0.8.523 — uygun (tek-değerli-vari, metin) attribute'lar için
 	// tıkla-seç ekip adayları üret.
 	cands := map[string][]TeamCandidate{}

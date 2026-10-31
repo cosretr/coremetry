@@ -31,6 +31,8 @@ var upsertUserSites = map[string]int{
 	"custom_roles.go": 2,
 	// clearUserRoleLock (GetUserByID).
 	"user_detail.go": 1,
+	// checkUserDirectory: applyDirectoryRead(GetUserByID satırı).
+	"user_directory.go": 1,
 }
 
 func TestUpsertUserCallSitesAccounted(t *testing.T) {

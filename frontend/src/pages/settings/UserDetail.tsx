@@ -14,13 +14,13 @@ import { Button } from '@/components/shadcn/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/shadcn/tabs';
 import { CopyButton } from '@/components/CopyButton';
 import { useAuth } from '@/components/AuthProvider';
-import { keys, useCustomRoles, useUserAudit, useUserDetail } from '@/lib/queries';
+import { keys, useCustomRoles, useUserAudit, useUserDetail, useUserDirectory, useUserOrg } from '@/lib/queries';
 import { api, type UserRow } from '@/lib/api';
-import type { AuditEntry, UserDetailUser, UserDirectory, UserLdapGroup } from '@/lib/types';
+import type { AuditEntry, UserDetailUser, UserDirectory, UserDirectoryCheck, UserLdapGroup, UserOrgPerson } from '@/lib/types';
 import { cn } from '@/lib/cn';
 import { tsLong, tsRel } from '@/lib/utils';
 import { CustomRoleEditor, RoleEditor, TeamEditor } from '../Users';
-import { userSourceLabel, userStatus, userDetailTabFromParam, type UserDetailTab } from './userDetailModel';
+import { directoryAttributeRows, orgRows, userSourceLabel, userStatus, userDetailTabFromParam, type UserDetailTab } from './userDetailModel';
 
 // UserDetail — v0.10.1731 (operatör onayı 2026-10-31, mockup "Kullanıcı
 // detayı"): Settings › Users satırından açılan kullanıcı sayfası. Başlık
@@ -61,6 +61,113 @@ function Avatar({ u }: { u: UserDetailUser }) {
   );
 }
 
+function errText(e: unknown): string {
+  const msg = e instanceof Error ? e.message : String(e);
+  const body = msg.replace(/^HTTP \d+:\s*/, '');
+  try {
+    const j = JSON.parse(body) as { error?: unknown };
+    if (typeof j.error === 'string') return j.error;
+  } catch { /* düz metin */ }
+  return body || msg;
+}
+
+// v0.10.1733 — Dizin (AD) sekmesi: sekme açılınca (Radix içeriği yalnız etkin
+// sekmede bağlar) servis hesabıyla okunan ham öznitelikler.
+function DirectoryTab({ id }: { id: string }) {
+  const q = useUserDirectory(id, true);
+  if (q.isPending) return <Spinner label="Dizin okunuyor" />;
+  if (q.isError) {
+    return (
+      <Empty icon="⚠" title="Dizin okunamadı"
+        action={<Button variant="outline" size="sm" onClick={() => void q.refetch()}>Yeniden dene</Button>}>
+        {errText(q.error)}
+      </Empty>
+    );
+  }
+  const rows = directoryAttributeRows(q.data.attributes ?? {});
+  return (
+    <Card title="Dizin öznitelikleri" count={rows.length}>
+      <p className="mt-0 mb-2 text-xs text-(--text3)">
+        Servis hesabıyla okunan ham değerler (ikili değerler boyut özeti). DN: <span className="font-mono">{q.data.dn}</span>
+      </p>
+      <KeyValue labelWidth="wide" items={rows.map(r => ({ id: r.k, k: r.k, v: r.v, mono: true }))} />
+    </Card>
+  );
+}
+
+const ORG_INDENT = ['pl-0', 'pl-4', 'pl-8', 'pl-12', 'pl-16', 'pl-20'];
+
+function OrgName({ p }: { p: UserOrgPerson }) {
+  return p.accountId
+    ? <Link to={`/users/${encodeURIComponent(p.accountId)}`} title="Coremetry hesabını aç">{p.name}</Link>
+    : <span>{p.name}</span>;
+}
+
+// v0.10.1733 — Organizasyon kartı: yönetici zinciri (≤4 üst) + doğrudan
+// bağlılar (≤50). Kapalı başlar; "Göster" ile LDAP'tan okunur (10 dk sunucu
+// önbelleği). Coremetry hesabı olan adlar o hesabın detayına link.
+function OrgCard({ id }: { id: string }) {
+  const [open, setOpen] = useState(false);
+  const q = useUserOrg(id, open);
+  let body: ReactNode;
+  if (!open) {
+    body = (
+      <div className="flex flex-wrap items-center gap-2 py-1.5 text-[13px] text-(--text2)">
+        Yönetici zinciri ve doğrudan bağlılar dizinden okunur.
+        <Button variant="outline" size="sm" onClick={() => setOpen(true)}>Organizasyonu göster</Button>
+      </div>
+    );
+  } else if (q.isPending) {
+    body = <Spinner label="Organizasyon okunuyor" />;
+  } else if (q.isError) {
+    body = (
+      <Empty compact icon="⚠" title="Organizasyon okunamadı"
+        action={<Button variant="outline" size="sm" onClick={() => void q.refetch()}>Yeniden dene</Button>}>
+        {errText(q.error)}
+      </Empty>
+    );
+  } else {
+    const rows = orgRows(q.data);
+    body = (
+      <>
+        <ol className="m-0 flex list-none flex-col p-0 py-1 text-[13px]">
+          {rows.map(r => (
+            <li key={`${r.role}:${r.p.dn}`}
+              className={cn('flex items-center gap-2 py-1', ORG_INDENT[Math.min(r.depth, ORG_INDENT.length - 1)], r.role === 'self' && 'font-semibold')}>
+              <span aria-hidden="true" className={cn('size-2 shrink-0 rounded-full', r.role === 'self' ? 'bg-(--text)' : 'bg-(--border)')} />
+              <OrgName p={r.p} />
+              <span className="font-normal text-(--text3)">
+                {[r.p.title, r.p.employeeId].filter(Boolean).join(' · ')}
+              </span>
+            </li>
+          ))}
+        </ol>
+        {q.data.reports.length === 0 && <p className="m-0 pb-1 text-xs text-(--text3)">Doğrudan bağlı yok.</p>}
+        {q.data.reportsTruncated && <p className="m-0 pb-1 text-xs text-(--text3)">İlk 50 doğrudan bağlı gösteriliyor.</p>}
+        {q.data.chainError && <p className="m-0 pb-1 text-xs text-(--warn)">Zincir kesildi: {q.data.chainError}</p>}
+      </>
+    );
+  }
+  return <Card title="Organizasyon" wide>{body}</Card>;
+}
+
+// v0.10.1733 — "AD ile denetle" sonucu: alan alan önce → sonra.
+function CheckResult({ r, onClose }: { r: UserDirectoryCheck; onClose: () => void }) {
+  return (
+    <Card title="AD ile denetim sonucu" count={r.diff.length}>
+      {r.diff.length === 0 ? (
+        <p className="my-1.5 text-[13px] text-(--text2)">Fark yok — kayıt dizinle aynı.</p>
+      ) : (
+        <>
+          <p className="mt-1 mb-2 text-xs text-(--text3)">Kayıt dizinden yenilendi (rol değişmez). Önce → sonra:</p>
+          <KeyValue items={r.diff.map(d => ({ id: d.field, k: d.label, v: `${d.before || '—'} → ${d.after || '—'}` }))} />
+        </>
+      )}
+      <div className="py-1.5"><Button variant="ghost" size="sm" onClick={onClose}>Kapat</Button></div>
+    </Card>
+  );
+}
+
 const GROUP_COLS: ColumnDef<UserLdapGroup>[] = [
   { id: 'cn', label: 'Grup', sortValue: g => g.cn, naturalDir: 'asc', width: 240 },
   { id: 'dn', label: 'DN', sortValue: g => g.dn, naturalDir: 'asc', flex: true, mono: true },
@@ -93,6 +200,9 @@ export default function UserDetailPage() {
   const [editing, setEditing] = useState(false);
   const [lockBusy, setLockBusy] = useState(false);
   const [lockErr, setLockErr] = useState<string | null>(null);
+  const [check, setCheck] = useState<UserDirectoryCheck | null>(null);
+  const [checkBusy, setCheckBusy] = useState(false);
+  const [checkErr, setCheckErr] = useState<string | null>(null);
   const refresh = () => { void qc.invalidateQueries({ queryKey: keys.users.all }); };
 
   if (me && me.role !== 'admin') {
@@ -155,6 +265,20 @@ export default function UserDetailPage() {
     }
   };
 
+  const runCheck = async () => {
+    setCheckErr(null);
+    setCheckBusy(true);
+    try {
+      const r = await api.checkUserDirectory(u.id);
+      setCheck(r);
+      if (r.written) refresh();
+    } catch (e) {
+      setCheckErr(errText(e));
+    } finally {
+      setCheckBusy(false);
+    }
+  };
+
   const groupsState: DataTableStateInput<UserLdapGroup> = groupSyncEnabled
     ? { kind: 'empty', message: 'Bu kullanıcı eşitlenen hiçbir LDAP grubunda üye değil.' }
     : { kind: 'empty', message: 'LDAP grup eşitlemesi kapalı (Settings › LDAP) — grup üyelikleri bilinmiyor.' };
@@ -196,10 +320,19 @@ export default function UserDetailPage() {
               </div>
             </div>
             <div className="flex gap-2 self-start">
+              {isLdap && (
+                <Button variant="outline" loading={checkBusy} onClick={() => void runCheck()}
+                  title="Kullanıcıyı servis hesabıyla dizinden yeniden oku, farkı göster ve kaydı yenile">
+                  AD ile denetle
+                </Button>
+              )}
               <Button variant={editing ? 'default' : 'outline'} onClick={() => setEditing(e => !e)}
                 aria-pressed={editing}>{editing ? 'Bitti' : 'Düzenle'}</Button>
             </div>
           </header>
+
+          {checkErr && <p role="alert" className="m-0 text-[13px] text-(--err)">AD denetimi başarısız: {checkErr}</p>}
+          {check && <CheckResult r={check} onClose={() => setCheck(null)} />}
 
           <Tabs value={tab} onValueChange={v => setTab(userDetailTabFromParam(v))}>
             <TabsList variant="line" aria-label="Kullanıcı sekmeleri" className="mb-3">
@@ -208,6 +341,7 @@ export default function UserDetailPage() {
               <TabsTrigger value="changes">
                 Değişiklikler{audit.data ? <Badge variant="secondary">{audit.data.length}</Badge> : null}
               </TabsTrigger>
+              {isLdap && <TabsTrigger value="directory">Dizin (AD)</TabsTrigger>}
             </TabsList>
 
             <TabsContent value="overview">
@@ -243,7 +377,7 @@ export default function UserDetailPage() {
                           Sistem rolü elle <b className="font-mono">{u.role}</b> yapıldı; LDAP girişinde AD grup
                           eşlemesi bunun üzerine yazmaz.
                         </p>
-                        <Button variant="outline" size="sm" disabled={lockBusy} onClick={() => void unlock()}>
+                        <Button variant="outline" size="sm" loading={lockBusy} onClick={() => void unlock()}>
                           Rolü AD'ye geri ver
                         </Button>
                         {lockErr && <p role="alert" className="m-0 text-(--err)">{lockErr}</p>}
@@ -269,6 +403,7 @@ export default function UserDetailPage() {
                     ] : []),
                   ]} />
                 </Card>
+                {isLdap && <OrgCard id={u.id} />}
               </div>
             </TabsContent>
 
@@ -286,6 +421,12 @@ export default function UserDetailPage() {
                 </Card>
               </div>
             </TabsContent>
+
+            {isLdap && (
+              <TabsContent value="directory">
+                <DirectoryTab id={u.id} />
+              </TabsContent>
+            )}
 
             <TabsContent value="changes">
               <Card title="Bu kullanıcıyı hedef alan değişiklikler">

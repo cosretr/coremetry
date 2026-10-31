@@ -6554,6 +6554,43 @@ export interface UserLdapGroup {
   cn: string;
   dn: string;
 }
+// v0.10.1733 — POST /api/users/{id}/directory-check ("AD ile denetle").
+export interface UserFieldDiff {
+  field: string;     // fullName | team | directory.title …
+  label: string;     // Türkçe alan adı (sunucu)
+  before: string;
+  after: string;
+}
+export interface UserDirectoryCheck {
+  before: UserDetailUser;
+  after: UserDetailUser;
+  diff: UserFieldDiff[];
+  written: boolean;  // fark vardı ve satır yazıldı
+}
+// v0.10.1733 — GET /api/users/{id}/directory (Dizin sekmesi): ham
+// öznitelikler; ikili değerler "[N bytes]" özeti.
+export interface UserDirectoryAttributes {
+  dn: string;
+  attributes: Record<string, string[]>;
+}
+// v0.10.1733 — GET /api/users/{id}/org (Organizasyon kartı).
+export interface UserOrgPerson {
+  dn: string;
+  name: string;
+  title?: string;
+  department?: string;
+  email?: string;
+  username?: string;
+  employeeId?: string;
+  accountId?: string;  // eşleşen Coremetry hesabı → /users/:accountId
+}
+export interface UserOrgChart {
+  self: UserOrgPerson;
+  managers: UserOrgPerson[];   // en yakın önce, ≤4
+  reports: UserOrgPerson[];    // ≤50
+  reportsTruncated?: boolean;
+  chainError?: string;
+}
 export interface UserDetail {
   user: UserDetailUser;
   groups: UserLdapGroup[];

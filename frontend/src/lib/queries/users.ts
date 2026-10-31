@@ -33,6 +33,29 @@ export function useUserAudit(id: string, enabled: boolean) {
   });
 }
 
+// v0.10.1733 — Dizin sekmesi / Organizasyon kartı: LDAP okuması, yalnız
+// açılınca; staleTime sunucu önbelleği kadar (aynı oturumda yeniden açmak
+// dizine yeniden gitmez).
+export function useUserDirectory(id: string, enabled: boolean) {
+  return useQuery({
+    queryKey: keys.users.directory(id),
+    queryFn: () => api.getUserDirectory(id),
+    enabled: enabled && !!id,
+    staleTime: 60_000,
+    retry: false,
+  });
+}
+
+export function useUserOrg(id: string, enabled: boolean) {
+  return useQuery({
+    queryKey: keys.users.org(id),
+    queryFn: () => api.getUserOrg(id),
+    enabled: enabled && !!id,
+    staleTime: 10 * 60_000,
+    retry: false,
+  });
+}
+
 // Custom-role catalog — drives the per-row picker on /users. Fetched
 // alongside the user list, refreshed on every change so a role added
 // in Settings → Roles appears here without a hard reload.

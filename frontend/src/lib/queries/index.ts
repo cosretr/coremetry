@@ -60,7 +60,7 @@ export { useEventStream } from './eventStream';
 export { useExemplar, useExemplarFetcher } from './spans';
 export { useTraceBundle, useTraceColumnValues } from './trace'; // v0.10.672 — kiosk bundle; v0.10.1511 column filter
 export { useTracePodMetricsChunks } from './tracePodMetrics'; // v0.10.968 — Trace › Metrics toplu uç
-export { useUsers, useCustomRoles, useUserDetail, useUserAudit } from './users';
+export { useUsers, useCustomRoles, useUserDetail, useUserAudit, useUserDirectory, useUserOrg } from './users';
 export { useOperatorEvents, useDeleteOperatorEvent, useNotificationLog } from './events';
 export { useInbox, useInboxCount } from './inbox';
 export { useProfiles, useProfileHotspots } from './profiles';
