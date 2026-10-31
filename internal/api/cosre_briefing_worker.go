@@ -366,6 +366,7 @@ func (s *Server) runBriefingTick(ctx context.Context, cfg briefing.Config, now t
 			}
 			tctx, cancel := context.WithTimeout(ctx, briefingTeamTimeout)
 			b := s.buildBriefing(tctx, t, env, cfg, fleet, logs, now)
+			s.phraseBriefing(tctx, &b, cfg)
 			err := s.storeBriefing(tctx, b)
 			cancel()
 			if err != nil {

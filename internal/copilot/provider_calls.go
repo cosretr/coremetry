@@ -62,6 +62,9 @@ func (s *Service) callSnapshot(ctx context.Context) (cfg provider.Config, req pr
 		maxTok = p.MaxTokens
 	}
 	maxTok = deepMaxTokensFor(ctx, maxTok, model) // v0.10.1150 — Derin kapalıyken aynen
+	// v0.10.1699 — WithMaxTokensCap Explain yolunda da tavan (briefing başlığı
+	// ~300 tok). Tavan yoksa aynen; sohbet yolu ayrıca uygular (min, idempotent).
+	maxTok = cappedMaxTokens(ctx, maxTok)
 	req = provider.Request{
 		Model:     model,
 		MaxTokens: maxTok,

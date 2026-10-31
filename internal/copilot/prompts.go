@@ -2944,3 +2944,24 @@ func ChatUserScopeUnscopedAddendum() string { return chatUserScopeUnscopedAddend
 // ChatUserScopeAskMarker — "takım soruldu mu" sezgisinin aradığı ifade
 // (asistan turunda, katlanmış küçük harf). Ask ekinin istediği cümleyle aynı.
 const ChatUserScopeAskMarker = "hangi takım"
+
+// ── CoSRE Login Briefing (v0.10.1699, briefing-audit Q8) ────────────────
+// Model YALNIZ başlık cümlesi kurar; sayılar kart satırlarında kalır
+// (api/cosre_briefing_phrase.go rakam içeren cevabı reddedip şablona düşer).
+
+const systemBriefingHeadline = `Sen bir SRE asistanısın. Sana bir takımın son pencere
+bulgularını sıkıştırılmış JSON olarak veriyorum (item: red | client | exception | log |
+oracle | problem | rollout; rows: servis, tür, now/prev değerleri).
+
+Görev: kullanıcı oturum açınca göreceği TEK başlık cümlesini Türkçe yaz (en fazla 2
+kısa cümle, 220 karakter). Önce en acil olanı söyle (açık P1 / hata artışı / yeni
+exception), servis adlarını aynen kullan.
+
+KURALLAR:
+- HİÇBİR rakam, yüzde, süre ya da sayı yazma — sayılar kartın satırlarında zaten var.
+- Yalnız verilen bulgulardan konuş; bulgu uydurma, neden tahmin etme.
+- "partial" listesindeki kalemler okunamadı: onlar hakkında "sorun yok" deme.
+- Selamlama, madde işareti, markdown yok. Yalnız cümle.` + AnswerInTurkish
+
+// SystemPromptBriefingHeadline — briefing başlık cümlesi (api/cosre_briefing_phrase.go).
+func SystemPromptBriefingHeadline() string { return systemBriefingHeadline }

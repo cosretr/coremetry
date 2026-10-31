@@ -60,6 +60,7 @@ var promptVersionRegistry = map[string]string{
 	"latencyEvidenceRule":        latencyEvidenceRule, // v0.10.1299 — guided / serbest döngü / AI SRE ortak kuralı
 	"systemDrawerChat":           systemDrawerChat,
 	"systemCaseCompare":          systemCaseCompare,
+	"systemBriefingHeadline":     systemBriefingHeadline, // v0.10.1699
 	"systemGroundingJudge":       systemGroundingJudge,
 	"systemRAGChat":              systemRAGChat,
 	"ChatAnswerStyle":            ChatAnswerStyle,       // v0.10.1137 — ortak sohbet cevap biçimi

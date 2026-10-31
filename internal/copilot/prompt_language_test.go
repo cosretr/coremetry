@@ -53,6 +53,7 @@ func promptRegistry() map[string]promptClass {
 		"ExceptionWithCode": classDirective,
 		"OracleException":   classDirective,  // v0.10.1100 — Oracle hata grubu (span değil)
 		"CaseCompare":       classStructured, // CoSRE öğrenme Faz 3 — ilk kelime EVET/HAYIR/KISMEN parse edilir
+		"BriefingHeadline":  classDirective,  // v0.10.1699 — Login Briefing başlık cümlesi
 		"GroundingJudge":    classStructured, // CoSRE öğrenme Faz 4 — iddia JSON'u parse edilir
 		"Incident":          classDirective,
 		"Anomaly":           classDirective,
@@ -152,7 +153,7 @@ func promptTexts() map[string]string {
 		"Postmortem":       SystemPromptPostmortem(), "RunbookUpdate": SystemPromptRunbookUpdate(),
 		"NLToQuery": SystemPromptNLToQuery(), "CHQueryOptimize": SystemPromptCHQueryOptimize(),
 		"ServiceTags": SystemPromptServiceTags(), "OracleException": SystemPromptOracleException(),
-		"CaseCompare": SystemPromptCaseCompare(), "GroundingJudge": SystemPromptGroundingJudge(),
+		"CaseCompare": SystemPromptCaseCompare(), "BriefingHeadline": SystemPromptBriefingHeadline(), "GroundingJudge": SystemPromptGroundingJudge(),
 
 		// v0.10.1330 — stack yok, ana operasyonun kodu.
 		"TraceWithOperationCode": SystemPromptTraceWithOperationCode(),
