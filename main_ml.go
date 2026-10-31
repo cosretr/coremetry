@@ -10,6 +10,7 @@ import (
 	"context"
 	"log"
 
+	"github.com/cilcenk/coremetry/internal/anomaly"
 	"github.com/cilcenk/coremetry/internal/cache"
 	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/config"
@@ -17,7 +18,7 @@ import (
 	"github.com/cilcenk/coremetry/internal/ml"
 )
 
-func startML(ctx context.Context, mode runMode, cfg *config.Config, store *chstore.Store, logs logstore.Store, lock cache.Lock) {
+func startML(ctx context.Context, mode runMode, cfg *config.Config, store *chstore.Store, logs logstore.Store, vm anomaly.REDVM, lock cache.Lock) {
 	run, label := ml.Placement(cfg.Background.MLEnabled, cfg.Background.MLRole, ml.Roles{Worker: mode.worker, Sre: mode.sre})
 	if !run {
 		if cfg.Background.MLEnabled && (mode.worker || mode.sre) {
@@ -25,6 +26,6 @@ func startML(ctx context.Context, mode runMode, cfg *config.Config, store *chsto
 		}
 		return
 	}
-	log.Printf("[ml] alt sistem başlıyor placement=%s dedektör=log_red(log_volume,error_rate,service_silent)", label)
-	ml.New(store, logs, lock, label, ml.NewLogRED()).Start(chstore.WithQueryTag(ctx, "ml:recorder"))
+	log.Printf("[ml] alt sistem başlıyor placement=%s dedektörler=log_red(log_volume,error_rate,service_silent) trace_red(op_latency,op_error_rate,throughput_drop; VM configured=%v)", label, vm != nil && vm.Configured())
+	ml.New(store, logs, vm, lock, label, ml.NewLogRED(), ml.NewTraceRED()).Start(chstore.WithQueryTag(ctx, "ml:recorder"))
 }

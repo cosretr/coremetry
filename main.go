@@ -982,7 +982,6 @@ func main() {
 	// which api pods read from. Splitting the write side off the
 	// read fleet means an api-pod hot-reload doesn't blink the
 	// detector clock.
-	startML(ctx, mode, cfg, store, logsStore, lockImpl) // log ML dilim 0 — main_ml.go (yerleşim config'ten, varsayılan sre)
 	// v0.8.227 — the log-anomaly side (recorder + Drain templater) is the
 	// only worker job that QUERIES the logstore on a tick. At billion-doc ES
 	// scale those curated-pattern _msearch / significant_text / sample pulls
@@ -1418,7 +1417,8 @@ func main() {
 	// YALNIZ vmetrics yapılandırılmışken, VM'den okuyarak değerlendirir
 	// (SetLogs geç-bağlama emsali; runtime_vm.go başlığı).
 	evalr.SetVMetrics(vmSvc)
-	alertVM.SetVM(vmSvc) // v0.10.1489 — yapılandırılmamışsa Configured()=false → span
+	alertVM.SetVM(vmSvc)                                       // v0.10.1489 — yapılandırılmamışsa Configured()=false → span
+	startML(ctx, mode, cfg, store, logsStore, vmSvc, lockImpl) // ML alt sistemi — main_ml.go (yerleşim config'ten, varsayılan sre; VM = trace kaynağı)
 	// v0.10.293 (VM tek metrik deposu Dilim 1b) — OTLP metrik gövdesinin
 	// VM'e HAM iletimi: ayrı, bayt bütçeli kuyruk (ingest yolunda ikinci ağ
 	// çağrısı ASLA senkron — audit R5). Yazım kapalıyken ingester kopya bile

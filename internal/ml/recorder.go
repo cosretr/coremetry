@@ -5,6 +5,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/cilcenk/coremetry/internal/anomaly"
 	"github.com/cilcenk/coremetry/internal/cache"
 	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/logstore"
@@ -29,6 +30,8 @@ type Detector interface {
 type Deps struct {
 	Store *chstore.Store
 	Logs  logstore.Store
+	// VM — trace sinyali kaynağı (tail sampling: rollup yerine VM RED); nil = yok.
+	VM anomaly.REDVM
 	// ObserveES — her ES isteğinin süresi (self-obs p95).
 	ObserveES func(d time.Duration)
 }
@@ -39,17 +42,18 @@ type Deps struct {
 type Recorder struct {
 	store     *chstore.Store
 	logs      logstore.Store
+	vm        anomaly.REDVM
 	leader    *cache.LeaderHolder
 	placement string
 	detectors []Detector
 }
 
 // New — placement etiketi /admin/stats için ("sre" | "worker").
-func New(store *chstore.Store, logs logstore.Store, lock cache.Lock, placement string, detectors ...Detector) *Recorder {
+func New(store *chstore.Store, logs logstore.Store, vm anomaly.REDVM, lock cache.Lock, placement string, detectors ...Detector) *Recorder {
 	if lock == nil {
 		_, lock = cache.NewNoop()
 	}
-	return &Recorder{store: store, logs: logs, placement: placement, detectors: detectors,
+	return &Recorder{store: store, logs: logs, vm: vm, placement: placement, detectors: detectors,
 		leader: cache.NewLeaderHolder(lock, lockKey, 3*time.Minute)}
 }
 
@@ -102,7 +106,7 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	budget := time.Duration(cfg.TimeoutMs)*time.Millisecond*time.Duration(1+len(r.detectors)) + 10*time.Second
 	tctx, tcancel := context.WithTimeout(ctx, budget)
 	defer tcancel()
-	deps := Deps{Store: r.store, Logs: r.logs, ObserveES: func(d time.Duration) { global.observeES(d.Milliseconds()) }}
+	deps := Deps{Store: r.store, Logs: r.logs, VM: r.vm, ObserveES: func(d time.Duration) { global.observeES(d.Milliseconds()) }}
 	var firstErr error
 	var written int64
 	active := 0

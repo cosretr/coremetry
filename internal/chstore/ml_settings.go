@@ -221,6 +221,7 @@ type MLStats struct {
 	LastESMs       int64  `json:"lastEsMs"`
 	ESP95Ms        int64  `json:"esP95Ms"`
 	ESQueries      int64  `json:"esQueries"`
+	LastCHMs       int64  `json:"lastChMs"` // taban CH sorgusu (trace T1)
 	Events         int64  `json:"events"`
 	SeriesInMemory int64  `json:"seriesInMemory"`
 	LastError      string `json:"lastError,omitempty"`

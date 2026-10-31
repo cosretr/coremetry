@@ -12,10 +12,10 @@ import (
 // stats — süreç-içi self-obs (Behavior motoruyla aynı kablo). ES süreleri
 // son 64 örnekten p95; bellek sayacı yalnız bilgi amaçlı.
 type stats struct {
-	ticks, skipped, lastUnix, lastMs, lastESMs, esQueries, events, series atomic.Int64
-	mu                                                                    sync.Mutex
-	esSamples                                                             []int64
-	lastErr                                                               string
+	ticks, skipped, lastUnix, lastMs, lastESMs, esQueries, events, series, lastCHMs atomic.Int64
+	mu                                                                              sync.Mutex
+	esSamples                                                                       []int64
+	lastErr                                                                         string
 }
 
 const esSampleCap = 64
@@ -63,7 +63,7 @@ func (s *stats) snapshot(placement string, enabled, leader, tableReady bool) chs
 		Placement: placement, Enabled: enabled, Leader: leader, TableReady: tableReady,
 		Ticks: s.ticks.Load(), Skipped: s.skipped.Load(), LastUnix: s.lastUnix.Load(),
 		LastDurationMs: s.lastMs.Load(), LastESMs: s.lastESMs.Load(), ESP95Ms: p95,
-		ESQueries: s.esQueries.Load(), Events: s.events.Load(), SeriesInMemory: s.series.Load(),
+		ESQueries: s.esQueries.Load(), Events: s.events.Load(), SeriesInMemory: s.series.Load(), LastCHMs: s.lastCHMs.Load(),
 		LastError: lastErr,
 	}
 }
