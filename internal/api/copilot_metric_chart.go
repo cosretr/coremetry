@@ -512,6 +512,7 @@ func metricChartLabelsKey(metric string, to time.Time) string {
 // karşılar; testler sahte okuyucu verir). Hepsi okuma.
 type metricChartReader interface {
 	httpEnvLabelReader
+	redFamilyLabelReader // v0.10.1704 — servise kapsanmış etiket keşfi (metricLabelSetFor)
 	MetricLabelNamesIn(ctx context.Context, metric string, from, to time.Time) ([]string, bool, error)
 	QueryPromQLRange(ctx context.Context, query string, from, to time.Time, stepSeconds, maxDataPoints int) ([]chstore.SpanMetricSeries, error)
 }
@@ -575,6 +576,20 @@ func (s *Server) metricChartLabelSet(ctx context.Context, rd metricChartReader, 
 	return set, nil
 }
 
+// metricLabelSetFor — v0.10.1704 (v0.10.1689'un ikinci yarısı: prod'da
+// kapsamsız /api/v1/labels match[]={__name__=~…} filonun 24 sa'ini tarayıp
+// "context deadline exceeded" veriyordu). service != "" → redFamilyLabelSet
+// ({__name__=~…, <servis etiketi>="<servis>"}, aile çözücüsüyle aynı anahtar);
+// service == "" → hedef GERÇEKTEN filo geneli (servissiz grafik, Fleet
+// varyantı, servissiz pod/workload JVM'i): metricChartLabelSet — tek metrik
+// adı match[], 24 sa pencere, 2 sn bütçe, 5 dk önbellek ile sınırlı.
+func (s *Server) metricLabelSetFor(ctx context.Context, rd metricChartReader, metric, service string, to time.Time) (map[string]bool, error) {
+	if strings.TrimSpace(service) == "" {
+		return s.metricChartLabelSet(ctx, rd, metric, to)
+	}
+	return s.redFamilyLabelSet(ctx, rd, metric, redFamilySvcLabel(rd.MetricLabelMap().Normalized()), service, to)
+}
+
 // guidedMetricChartBundle — metric_chart rotasının kanıtı. Hiçbir okuma
 // hatası demeti düşürmez (serbest döngüye bırakmaz): dürüst metin döner.
 func (s *Server) guidedMetricChartBundle(ctx context.Context, emit func(string, any), route *guidedRoute, from, to time.Time, rangeS int64, loc *time.Location) (string, string, error) {
@@ -626,7 +641,13 @@ func (s *Server) metricChartRun(ctx context.Context, emit func(string, any), rou
 		if _, seen := present[v.Probe]; seen {
 			continue
 		}
-		set, err := s.metricChartLabelSet(ctx, rd, v.Probe, qTo)
+		// v0.10.1704 — servis biliniyorsa etiket keşfi SERVİSE kapsanır
+		// (metricLabelSetFor); Fleet varyantı servis etiketi taşımaz → filo.
+		svc := route.Service
+		if v.Fleet {
+			svc = ""
+		}
+		set, err := s.metricLabelSetFor(ctx, rd, v.Probe, svc, qTo)
 		if err != nil {
 			readErr = err
 			continue

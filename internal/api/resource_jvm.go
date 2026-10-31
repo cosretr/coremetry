@@ -311,6 +311,23 @@ func resJVMScopeFor(route *guidedRoute, lm vmetrics.LabelMap, set map[string]boo
 	return sc, ""
 }
 
+// resJVMLabelService — SAF (v0.10.1704): JVM etiket keşfinin servis kapsamı.
+// Servis kipi: route.Service, yoksa hedef (resJVMScopeFor ile aynı). Pod kipi:
+// route.Service (biliniyorsa sorgu da servise süzülür). Workload kipi: pod
+// regex'iyle süzülür, eşitlik kapsamı yok → "" (filo geneli, sınırlı okuma).
+func resJVMLabelService(route *guidedRoute) string {
+	switch route.ResKind {
+	case resKindWorkload:
+		return ""
+	case resKindPod:
+		return route.Service
+	}
+	if route.Service != "" {
+		return route.Service
+	}
+	return route.ResTarget
+}
+
 // resGCThresholds — SAF: RuntimeAlertConfig → GC payı eşikleri (nil = varsayılan).
 func resGCThresholds(c *chstore.RuntimeAlertConfig) (warn, crit float64) {
 	warn, crit = resourceThresholds.GCShareWarn, resourceThresholds.GCShareCrit
@@ -602,10 +619,14 @@ type resJVMOutcome struct {
 
 // resJVMProber — tek koşu boyunca etiket yoklaması belleği (metricChartLabelSet
 // zaten 5 dk önbellekli; bu, aynı koşudaki tekrarları keser).
+//
+// v0.10.1704 — svc = etiket keşfinin servis kapsamı (resJVMLabelService);
+// boş = filo geneli (metricLabelSetFor).
 type resJVMProber struct {
 	s   *Server
 	rd  metricChartReader
 	to  time.Time
+	svc string
 	mu  sync.Mutex
 	got map[string]map[string]bool
 	err map[string]error
@@ -619,7 +640,7 @@ func (p *resJVMProber) set(ctx context.Context, name string) (map[string]bool, e
 		return set, err
 	}
 	p.mu.Unlock()
-	set, err := p.s.metricChartLabelSet(ctx, p.rd, name, p.to)
+	set, err := p.s.metricLabelSetFor(ctx, p.rd, name, p.svc, p.to)
 	p.mu.Lock()
 	p.got[name], p.err[name] = set, err
 	p.mu.Unlock()
@@ -802,7 +823,7 @@ func (s *Server) resourceJVMStage(ctx context.Context, emit func(string, any), r
 	if !d.IsVM || d.VM == nil {
 		return stats, []string{"JVM/GC: VictoriaMetrics yapılandırılmamış — JVM/GC metrikleri OKUNAMADI (yok demek değil) — JVM/GC yorumu YAPMA."}, ""
 	}
-	p := &resJVMProber{s: s, rd: d.VM, to: to, got: map[string]map[string]bool{}, err: map[string]error{}}
+	p := &resJVMProber{s: s, rd: d.VM, to: to, svc: resJVMLabelService(route), got: map[string]map[string]bool{}, err: map[string]error{}}
 	pctx, cancel := context.WithTimeout(ctx, resQueryTimeout)
 	present, scopeWhy, perr := s.resourceJVMPresence(pctx, p, route)
 	cancel()

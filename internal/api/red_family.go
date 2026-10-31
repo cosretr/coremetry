@@ -257,7 +257,7 @@ type redFamilyLabelReader interface {
 // sayısında bütçe yetmiyordu. Burada aynı pencere ve bütçe, ama
 // {__name__=~…, <servis etiketi>="<servis>"} — tek servisin serileri.
 // Önbellek anahtarı servisi ve etiketi taşır (tüm girdiler).
-func (s *Server) redFamilyLabelSet(ctx context.Context, rd redFamilyReader, metric, svcLabel, service string, to time.Time) (map[string]bool, error) {
+func (s *Server) redFamilyLabelSet(ctx context.Context, rd redFamilyLabelReader, metric, svcLabel, service string, to time.Time) (map[string]bool, error) {
 	key := "red-family-labels:v1:" + fnvStr(metric, svcLabel, service,
 		fmt.Sprint(to.Truncate(httpEnvValuesSnap).Unix()), fmt.Sprint(int64(metricChartLabelsLookbk/time.Second)))
 	var names []string

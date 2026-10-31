@@ -651,7 +651,7 @@ func TestResourceJVMDrillGate(t *testing.T) {
 // Salt-okur + tek çağrı yeri + bütçe sabitleri kaynakta.
 func TestResourceJVMSourcePins(t *testing.T) {
 	src := stripGoCommentsAPI(readSourceFile(t, "resource_jvm.go"))
-	for w, n := range map[string]int{".QueryPromQLRange(": 1, "s.metricChartLabelSet(": 1, "s.store.GetRuntimeAlerts(ctx)": 1} {
+	for w, n := range map[string]int{".QueryPromQLRange(": 1, "p.s.metricLabelSetFor(ctx, p.rd, name, p.svc, p.to)": 1, "s.metricChartLabelSet(": 0, "s.store.GetRuntimeAlerts(ctx)": 1} {
 		if got := strings.Count(src, w); got != n {
 			t.Errorf("%s çağrı yeri %d, want %d", w, got, n)
 		}
