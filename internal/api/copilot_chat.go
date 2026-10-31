@@ -521,6 +521,20 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// ya da kanıt yoksa aşağıdaki zincir AYNEN. /telemetri komutu tablo / wiki
 	// kademelerini atlatır.
 	skipDocs := forcedChatSource(ctx) == srcTelemetry || apCont.on // S5 — onay devamı doküman kademelerini atlar
+	// v0.10.1739 (operator-reported) — v2 endpoint kartına aday tur ("<servis>
+	// endpointleri") doküman / keşif / wiki kademelerine girmez: kart aşağıda
+	// (opPre / rota planından sonra) çıkar, belge kaynağı eklenmez.
+	if !skipDocs && !ct.On && evm == nil && cosreV2Marked(ctx) {
+		early := endpointPickCtx{Service: req.Context.Service, Operation: req.Context.Operation, Trace: req.Context.Trace,
+			Explain: req.Context.Explain != "" || req.Context.Subject != "", Skip: req.Context.SkipEndpointPick}
+		if early.Service == "" && req.Context.Page != nil {
+			early.Service = req.Context.Page.Service
+		}
+		if early.Trace == "" {
+			early.Trace = pageTID
+		}
+		skipDocs = s.endpointPickPending(ctx, req.Messages, early)
+	}
 	// v0.10.1576 (operator-reported) — çıplak takım / servis adı yüklü tabloda da
 	// eşleşiyorsa doküman kademeleri kendiliğinden cevaplamaz: düz metin soru
 	// (chat_clarify_entity.go). Çıplak varlık değil / eşleşme yok → akış aynen.

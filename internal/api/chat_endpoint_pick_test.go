@@ -25,6 +25,19 @@ func TestNeedsEndpointPick(t *testing.T) {
 		{"servis, yavaş mı", svc, "orders-api yavaş mı", true},
 		{"servis, İngilizce", svc, "what's going on with orders-api", true},
 		{"başka endpoint seç", svc, "orders-api için başka endpoint seç", true},
+		// v0.10.1739 (operator-reported) — "<servis> endpointleri" kartı almadı
+		// (entity netleştirmesi + belge kaynağı geldi): liste sözcükleri güçlü
+		// seçim niyetidir.
+		{"endpointleri", endpointPickCtx{Service: "orders-api-prod"}, "orders-api-prod endpointleri", true},
+		{"endpoint'leri", svc, "orders-api endpoint'leri", true},
+		{"endpointler", svc, "orders-api endpointler", true},
+		{"Endpointleri büyük harf", svc, "Orders-API Endpointleri", true},
+		{"rotaları", svc, "orders-api rotaları", true},
+		{"operasyonları", svc, "orders-api operasyonları", true},
+		{"uçları", svc, "orders-api uçları", true},
+		{"İngilizce endpoints", svc, "orders-api endpoints", true},
+		{"liste + rota yine rota", svc, "orders-api endpointleri GET /v1/orders", false},
+		{"liste + log vetosu", svc, "orders-api endpoint logları", false},
 		{"rota soruda", svc, "orders-api POST /v1/orders yavaş mı", false},
 		{"çıplak rota", svc, "/v1/orders/{id} ne oluyor", false},
 		{"trace kimliği", svc, "4bf92f3577b34da6a3ce929d0e0e4736 ne oluyor", false},
@@ -181,5 +194,65 @@ func TestEndpointPickTierWiredBeforeGuided(t *testing.T) {
 	gate := src[strings.LastIndex(src[:i], "\n\tif "):i]
 	if !strings.Contains(gate, "cosreV2Marked(ctx)") || !strings.Contains(gate, "SkipEndpointPick") {
 		t.Fatalf("kademe kapısı v2 / skip bayrağı taşımıyor: %s", gate)
+	}
+}
+
+// v0.10.1739 (operator-reported) — "orders-api-prod endpointleri": sorudaki
+// tam servis adı kartın servisi olur (bağlam çipi boşken de), kart gerekir.
+func TestResolveEndpointPickExactServiceInQuestion(t *testing.T) {
+	names := []string{"orders-api", "orders-api-prod", "orders-apps-prod", "orders-api-test"}
+	cases := []struct {
+		q, ctxSvc, wantSvc string
+		want               bool
+	}{
+		{"orders-api-prod endpointleri", "", "orders-api-prod", true},
+		{"orders-apps-prod rotaları", "orders-api", "orders-apps-prod", true},
+		{"endpointleri", "orders-api", "orders-api", true}, // bağlam çipi
+		{"endpointleri", "", "", false},                    // servis yok
+		{"orders-api-prod hata oranı nedir", "", "orders-api-prod", false},
+	}
+	for _, c := range cases {
+		pc, ok := resolveEndpointPick(c.q, endpointPickCtx{Service: c.ctxSvc}, names, nil)
+		if ok != c.want || (c.want && pc.Service != c.wantSvc) {
+			t.Errorf("resolveEndpointPick(%q, ctx=%q) = (%q, %v), want (%q, %v)", c.q, c.ctxSvc, pc.Service, ok, c.wantSvc, c.want)
+		}
+	}
+}
+
+// v0.10.1739 — kart cevabı kaynak taşımaz: v2 çevirisinde source-* parçası yok.
+func TestEndpointPickAnswerHasNoSources(t *testing.T) {
+	p, _ := buildEndpointPick("orders-api", "", 3600, []endpointPickItem{{Route: "/a"}, {Route: "/b"}}, false)
+	ans := endpointPickAnswer(p)
+	if src, ok := ans["sources"].([]any); !ok || len(src) != 0 {
+		t.Fatalf("sources açık boş liste olmalı: %#v", ans["sources"])
+	}
+	for _, part := range uistream.NewTranslator().Translate("answer", ans) {
+		if typ, _ := part["type"].(string); strings.HasPrefix(typ, "source-") {
+			t.Fatalf("kart cevabında kaynak parçası: %v", part)
+		}
+	}
+}
+
+// v0.10.1739 — kart adayı tur doküman / keşif / wiki kademelerinden ÖNCE
+// işaretlenir (skipDocs); kademe çağrıları ön-kontrolden sonra gelir.
+func TestEndpointPickPendingSkipsDocTiers(t *testing.T) {
+	b, err := os.ReadFile("copilot_chat.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(b)
+	pend := strings.Index(src, "skipDocs = s.endpointPickPending(")
+	if pend < 0 {
+		t.Fatal("ön-kontrol skipDocs'a bağlanmamış")
+	}
+	gate := src[strings.LastIndex(src[:pend], "\n\tif "):pend]
+	if !strings.Contains(gate, "cosreV2Marked(ctx)") || !strings.Contains(gate, "SkipEndpointPick") {
+		t.Fatalf("ön-kontrol kapısı v2 / skip bayrağı taşımıyor: %s", gate)
+	}
+	for _, call := range []string{"s.chatDocOrEntityAskTier(", "s.chatSourceDiscoveryTier(", "s.docRowsAnswer(", "s.wikiChatAnswer(", "s.armDisambigRescue(", "s.ragChatAnswer(", "s.chatEndpointPickTier("} {
+		i := strings.Index(src, call)
+		if i < 0 || i < pend {
+			t.Errorf("%s ön-kontrolden önce (ya da yok): call=%d pending=%d", call, i, pend)
+		}
 	}
 }

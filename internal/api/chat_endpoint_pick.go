@@ -67,6 +67,11 @@ var endpointPickCueStems = []string{
 	"nasıl", "nasil", "slow", "issue", "health", "investigate", "check",
 }
 
+// endpointPickListStems — v0.10.1739 (operator-reported): "endpointleri /
+// endpoint'leri / rotaları / operasyonları / uçları" GÜÇLÜ seçim niyetidir
+// (liste sorusu); "endpoint" öneki endpointler / endpoints'i de kapsar.
+var endpointPickListStems = []string{"endpoint", "rotalar", "operasyonlar", "uçlar", "routes", "operations"}
+
 // endpointPickVetoStems — belirli bir boyut soran soru (log, pod, deploy…)
 // endpoint seçimine çekilmez; bugünkü yolu korur.
 var endpointPickVetoStems = []string{
@@ -85,7 +90,8 @@ func endpointPickCue(q string) bool {
 			return true
 		}
 	}
-	return tokenHasPrefix(guidedTokens(f), endpointPickCueStems...)
+	toks := guidedTokens(f)
+	return tokenHasPrefix(toks, endpointPickCueStems...) || tokenHasPrefix(toks, endpointPickListStems...)
 }
 
 // questionNamesRoute — SAF: soru bir rota / "FİİL /yol" / 32-hex trace taşıyor mu.
@@ -227,6 +233,13 @@ func endpointPickText(p endpointPickPayload) string {
 	return fmt.Sprintf("%s %s trafiği olan %s endpoint'i var. Hangisini inceleyeyim?", trGenitive(p.Service), trRangeLocative(p.RangeS), n)
 }
 
+// endpointPickAnswer — SAF: kartın cevap olayı. Netleştirme kademesi kaynak
+// taşımaz (v0.10.1739: açık boş liste — sarmalayıcı / v2 çevirici belge
+// kaynağı eklemez; chat_clarify.go emsali).
+func endpointPickAnswer(p endpointPickPayload) map[string]any {
+	return map[string]any{"text": endpointPickText(p), "sources": []any{}}
+}
+
 // endpointPickRangeS — SAF: sorunun açık penceresi, yoksa son 1 saat.
 func endpointPickRangeS(question string) int64 {
 	if v, ok := guidedRangeSExplicit(normalizeGuidedMsg(question)); ok && v > 0 {
@@ -264,6 +277,40 @@ func (s *Server) endpointPickRows(ctx context.Context, service, env string, from
 	return rows, nil
 }
 
+// resolveEndpointPick — SAF: soru + bağlam + canlı ad listeleri → kartın
+// servisi ve kart gerekip gerekmediği. Sorudaki servis adı bağlam çipini ezer.
+func resolveEndpointPick(q string, pc endpointPickCtx, svcNames, envNames []string) (endpointPickCtx, bool) {
+	q = strings.TrimSpace(q)
+	if q == "" || pc.Skip || !endpointPickCue(q) {
+		return pc, false
+	}
+	if svc := extractServiceEntity(normalizeGuidedMsg(q), svcNames, envNames); svc != "" {
+		pc.Service = svc
+	}
+	return pc, needsEndpointPick(pc, q)
+}
+
+// endpointPickPlan — kademe ve ön-kontrolün ortak kararı. Ucuz ön kapı
+// (endpointPickCue) ad listeleri okunmadan; listeler 60 sn önbellekli.
+func (s *Server) endpointPickPlan(ctx context.Context, msgs []copilot.ChatMessage, pick endpointPickCtx) (string, endpointPickCtx, bool) {
+	q := strings.TrimSpace(lastUserText(msgs))
+	if q == "" || pick.Skip || !endpointPickCue(q) {
+		return q, pick, false
+	}
+	pc, ok := resolveEndpointPick(q, pick, s.guidedServiceNames(ctx), s.guidedEnvNames(ctx))
+	return q, pc, ok
+}
+
+// endpointPickPending — v0.10.1739 (operator-reported): bu v2 turu endpoint
+// kartına adaysa doküman / keşif / wiki kademeleri (kartın kademesinden ÖNCE
+// koşarlar) atlanır — "<servis> endpointleri" belge kaynağıyla dönmüştü. Kart
+// sonunda çıkmazsa (≤1 endpoint, okuma hatası, operasyon ön-getirmesi) tur
+// telemetri yolunda sürer; soru zaten bir servis + seçim niyeti taşıyor.
+func (s *Server) endpointPickPending(ctx context.Context, msgs []copilot.ChatMessage, pick endpointPickCtx) bool {
+	_, _, ok := s.endpointPickPlan(ctx, msgs, pick)
+	return ok
+}
+
 // endpointPickTierReq — kademenin istek alanları.
 type endpointPickTierReq struct {
 	Msgs     []copilot.ChatMessage
@@ -275,15 +322,8 @@ type endpointPickTierReq struct {
 // chatEndpointPickTier — v2: kart gerekiyorsa tek cümle + data-pick yayınlar
 // (handled=true). Gerekmiyorsa / okunamadıysa handled=false, akış aynen.
 func (s *Server) chatEndpointPickTier(ctx context.Context, emit func(string, any), rq endpointPickTierReq) bool {
-	q := strings.TrimSpace(lastUserText(rq.Msgs))
-	if q == "" || rq.Pick.Skip || !endpointPickCue(q) { // ucuz ön kapı: katalog okunmadan
-		return false
-	}
-	pc := rq.Pick
-	if svc := extractServiceEntity(normalizeGuidedMsg(q), s.guidedServiceNames(ctx), s.guidedEnvNames(ctx)); svc != "" {
-		pc.Service = svc
-	}
-	if !needsEndpointPick(pc, q) {
+	q, pc, ok := s.endpointPickPlan(ctx, rq.Msgs, rq.Pick)
+	if !ok {
 		return false
 	}
 	rangeS := endpointPickRangeS(q)
@@ -301,7 +341,7 @@ func (s *Server) chatEndpointPickTier(ctx context.Context, emit func(string, any
 	if !ok {
 		return false
 	}
-	emit("answer", map[string]any{"text": endpointPickText(p)})
+	emit("answer", endpointPickAnswer(p))
 	emit("pick", p)
 	return true
 }

@@ -94,6 +94,12 @@ func ResolveEntities(text string, idx EntityCatalogIndex, max int) []EntityCandi
 	if len(q) < 3 || max <= 0 {
 		return nil
 	}
+	if ex := exactServiceTokens(q, idx.Services); len(ex) > 0 {
+		if len(ex) > max {
+			ex = ex[:max]
+		}
+		return ex
+	}
 	qt := NameTokens(q)
 	var out []EntityCandidate
 	add := func(c EntityCandidate) {
@@ -146,6 +152,40 @@ func ResolveEntities(text string, idx EntityCatalogIndex, max int) []EntityCandi
 	}
 	if len(out) > max {
 		out = out[:max]
+	}
+	return out
+}
+
+// exactServiceTokens — SAF, v0.10.1739 (operator-reported): çok jetonlu
+// metinde (boşlukla ayrık; kesme eki "orders-api'nin" ve kenar noktalaması
+// atılır) bütün bir jeton bir servis adına birebir eşitse (büyük/küçük harf
+// duyarsız) çapa odur — önek / bulanık kardeşler arasında netleştirme yok.
+// Birden çok tam ad → hepsi (metin sırasıyla). Tek jetonlu metin eski
+// merdivende kalır (orada tam eş zaten yalnız tam eşleri döndürür).
+func exactServiceTokens(q string, services []string) []EntityCandidate {
+	fields := strings.Fields(q)
+	if len(fields) < 2 || len(services) == 0 {
+		return nil
+	}
+	byLower := make(map[string]string, len(services))
+	for _, s := range services {
+		if _, dup := byLower[strings.ToLower(s)]; !dup {
+			byLower[strings.ToLower(s)] = s
+		}
+	}
+	var out []EntityCandidate
+	seen := map[string]bool{}
+	for _, f := range fields {
+		if i := strings.IndexAny(f, "'’"); i > 0 {
+			f = f[:i]
+		}
+		f = strings.Trim(f, ".,;:!?()[]{}\"`")
+		name, ok := byLower[f]
+		if !ok || seen[name] {
+			continue
+		}
+		seen[name] = true
+		out = append(out, EntityCandidate{Kind: entity.TypeService, Name: name, ID: entity.ServiceID(name), Score: 100, Match: "exact"})
 	}
 	return out
 }
