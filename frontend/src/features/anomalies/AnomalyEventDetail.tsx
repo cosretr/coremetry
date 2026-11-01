@@ -16,6 +16,7 @@ import { ProblemVerdictActions } from '@/components/ProblemVerdictActions';
 import { ProblemStandardHeader } from './ProblemStandardHeader'; // v0.10.1529
 import { api } from '@/lib/api';
 import { keys, useAnomalyEventByID, useLogPatternSeries } from '@/lib/queries';
+import { anomalyPlainHeadline, anomalyPlainSummary } from '@/lib/anomalyNarrative';
 import { useEscLayer } from '@/lib/escLayer';
 import { DEFAULT_DURATIONS } from '@/lib/actions';
 import { anomalyEventSilenceBody } from '@/lib/inboxDrawer';
@@ -207,6 +208,9 @@ export function AnomalyEventDetail({ event, isAdmin, onBack }: {
           desen olduğu hemen altında (sayı değil, kimlik). */}
       {/* v0.10.1529 (Problem standardı R2) — standart başlık; yüklenene ya da
           bulunamayana dek önceki özet (fallback). Desen kimliği başlığın altında. */}
+      {/* C3 (v0.10.1771) — insan diliyle başlık + tek satır özet, jargon yok. */}
+      <h2 className="mt-2 text-[length:var(--fs-lg)] font-semibold" data-testid="anomaly-headline">{anomalyPlainHeadline(event)}</h2>
+      <p className="mb-2 text-sm text-muted-foreground">{anomalyPlainSummary(event)}</p>
       <ProblemStandardHeader stdRef={`anomaly:${event.id}`}
         fallback={<DetailSummary sentence={sentence} when={when}
           detail={isLog && event.pattern ? event.pattern : undefined} />} />

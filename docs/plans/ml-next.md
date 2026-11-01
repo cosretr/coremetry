@@ -12,19 +12,19 @@ Prod gözlemi (v0.10.1762) sonrası kodlanmayan maddeler; sıra operatörün. Ge
 
 **7) Varsayılanlar.** BaselineDays 7 → 21 (7 günde tek cumartesi; baselineDates tüm günlere düşüyor, cumartesi sahte düşüş). MaxServices (500) Settings › ML › Eşikler'de (10–5000); karnede "izlenen N / toplam M servis".
 
-## B2) ML op_latency kronik desen
+## B2) ML op_latency kronik desen — GEMİDE v0.10.1769
 Prod örneği: bsa-investment-securities-fund-prod, mobil5.prod publish — p99 ~20 ms, birkaç dakikada bir tek istek Kafka timeout'u ile 4–6 sn; eski dedektör 102 kez "normalin 164×" açtı. Yeni ML: kaynak VM örnekleme öncesi histogram; bucket başına asgari istek; p99 yerine yavaş istek oranı + mutlak etkilenen istek eşiği; dwell; son 7 günde ≥ K epizot → olay yerine tek "kronik" kaydı. Test: sentetik seri ile olay yok / kronik var.
 
-## B3) Epizot modeli
+## B3) Epizot modeli — GEMİDE v0.10.1768
 Açık → kapandı (art arda 3 normal bucket), `ended_at`; 30 dk içinde tekrar → aynı epizot. `MLEventID` zamansız, tekrar eden olaylar üzerine yazıyor; kimlik epizot başlangıcını içersin (migrate). Madde 6 bununla birleşir: bölüm farklıysa hata değil.
 
-## C1) Tam sayfa detay
+## C1) Tam sayfa detay — GEMİDE v0.10.1770
 Listede tıklayınca drawer yerine `/anomalies/:id` ve `/anomalies/ml/:id`; gerçek `<a href>`; geri dönüşte filtre/scroll korunur; eski `?event=`, `?replay=`, `/inbox?anomaly=` linkleri yönlenir.
 
-## C2) Replay
+## C2) Replay — GEMİDE v0.10.1771
 Pencere başlangıç − 1 sa → bitiş + 1 sa; kayıt epizot kapanınca tamamlanır; bucket başına mevsimsel beklenen bant; gölgeli anomali bölgesi; ilk sapma/tespit/tepe/bitiş işaretleri; rollout/takvim; diğer ML sinyalleri.
 
-## C3) Minimalist anlatım
+## C3) Minimalist anlatım — ML sayfası GEMİDE v0.10.1771; eski anomali sayfasında yalnız başlık+özet, tam düzen geçişi AÇIK
 İnsan diliyle başlık ("Kafka'ya yazma yavaşladı"), durum + süre; tek satır özet "normal → şimdi" birimli + etkilenen sayı/pay ("normalin N×" yok); tek grafik; "Ne değişti" en fazla 3 kanıtlı madde; eylemler tek satır + "Gerçek mi? Evet/Hayır"; kronik uyarısı tek satır; güven/kaynak/skor/eşik/baseline/bağlam/sonraki adım → katlanır "Teknik detay"; jargon yok; listede Durum ve Süre sütunları. Başlık/özet üretimi saf fonksiyon + test. Eski anomali sayfası da aynı düzene geçsin.
 
 ## Açık not

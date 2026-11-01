@@ -24,7 +24,8 @@ describe('ml replay', () => {
     expect(c.z).toBe(5);
     expect(c.upper[0]).toBe(150);
     expect(c.lower[0]).toBe(50);
-    expect(c.regions).toEqual([{ fromSec: 300, toSec: 600, label: 'tetik' }, { fromSec: 600, toSec: 900, label: 'tetik' }]);
+    expect(c.regions[0].label).toBe('anomali'); // C2: gölgeli anomali bölgesi
+    expect(c.regions.slice(1)).toEqual([{ fromSec: 300, toSec: 600, label: 'tetik' }, { fromSec: 600, toSec: 900, label: 'tetik' }]);
     expect(c.deploys).toEqual([450]);
   });
   it('chart tolerates broken JSON', () => {
@@ -55,5 +56,41 @@ describe('ml replay', () => {
     expect(c.bubbleUnreadable).toBe(true);
     expect(replayContext('').exceptions).toEqual([]);
     expect(exceptionGroupHref('a b')).toBe('/problems?exc=a%20b');
+  });
+});
+
+// v0.10.1771 (C2/C3) — bant, işaretler, anlatım saf fonksiyonları.
+import { mlHeadline, mlStatusLine, mlSummary, mlWhatChanged, parseBand, replayMarkers, snapNarrative } from '@/lib/mlReplay';
+import { anomalyPlainHeadline, anomalyPlainSummary } from '@/lib/anomalyNarrative';
+
+describe('ml narrative', () => {
+  const s = snap({ detector: 'op_latency', part: '/pay|slow', baselineMed: 0.002, baselineMad: 0.001,
+    series: JSON.stringify([{ t: 0, v: 0.002 }, { t: 300, v: 0.3 }, { t: 600, v: 0.5 }]), dwell: '[300,600]',
+    thresholds: JSON.stringify({ criticalZ: 4, band: [[0, 0.001, 0.002, 0.003], [300, 0.001, 0.002, 0.003]] }),
+    evidence: JSON.stringify({ affected: 120, rollouts: [{ version: 'v2.3' }], episodes7d: 6 }), complete: true, lastSeen: 1_800_000_600e9 });
+  it('headline and summary without "normalin N×"', () => {
+    const n = snapNarrative(s);
+    expect(n.code).toBe('/pay');
+    expect(mlHeadline(n)).toBe('pay /pay yavaşladı');
+    expect(mlSummary(n)).toBe('Normalde %0.2, şimdi %50 · 120 istek etkilendi');
+    expect(mlSummary(n)).not.toMatch(/×/);
+    expect(mlHeadline({ detector: 'log_volume', service: 'a', direction: 'down', observed: 1, baseline: 9 })).toBe('a çok daha az log üretiyor');
+    expect(mlSummary({ detector: 'log_volume', service: 'a', observed: 900, baseline: 100 })).toBe('Normalde 100 / 5 dk, şimdi 900 / 5 dk · 800 fazla satır');
+  });
+  it('status, markers, what changed, band', () => {
+    expect(mlStatusLine('closed', 0, 25 * 60e9)).toBe('Bitti · 25 dk sürdü');
+    expect(mlStatusLine('shadow', 1000e9, 0, 1000e3 + 90 * 60e3)).toBe('Sürüyor · 1 sa 30 dk');
+    const m = replayMarkers(s);
+    expect(m.first).toBe(300);
+    expect(m.peak).toEqual({ t: 600, v: 0.5 });
+    expect(m.end).toBe(1_800_000_600);
+    expect(mlWhatChanged(s.evidence, ['x'], [{ signal: 'log', detector: 'error_rate' }])).toEqual(['±15 dk içinde rollout: v2.3', 'Aynı serviste 1 başka sinyal (log)']);
+    expect(parseBand(s.thresholds).get(300)).toEqual({ lo: 0.001, med: 0.002, hi: 0.003 });
+    expect(parseBand('{').size).toBe(0);
+  });
+  it('old anomaly plain headline', () => {
+    const e = { id: 'a', kind: 'op_latency', pattern: 'POST /pay', service: 'pay', startedAt: 0, lastSeen: 0, peakRatio: 164, currentRatio: 100, currentCount: 3, sample: '', status: 'active' } as unknown as import('@/lib/types').AnomalyEvent;
+    expect(anomalyPlainHeadline(e)).toBe('pay POST /pay yavaşladı');
+    expect(anomalyPlainSummary(e)).toBe('3 olay, normalin üstünde · sürüyor');
   });
 });

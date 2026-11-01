@@ -84,16 +84,23 @@ func truncRunes(s string, n int) string {
 
 // buildSnapshot — olay kaydı. complete=false: ön kayıt (seri tespite kadar).
 func buildSnapshot(ctx context.Context, deps Deps, ev chstore.MLEvent, cfg chstore.MLConfig, now time.Time, complete bool, samples string) chstore.MLSnapshot {
+	// C2 (v0.10.1771): pencere başlangıç − 1 sa → bitiş + 1 sa; tam kayıt epizot kapanınca.
 	det := time.Unix(0, ev.StartedAt)
-	to := det.Add(snapshotSpan)
-	if !complete || to.After(now) {
-		to = now
+	from := det.Add(-time.Hour)
+	to := now
+	if complete {
+		if end := time.Unix(0, ev.LastSeen).Add(time.Hour); end.Before(now) {
+			to = end
+		}
 	}
 	part := eventPart(ev)
 	pts := []chstore.MLPoint{}
-	if all, err := deps.Store.MLSeriesRange(ctx, ev.Signal, ev.Service, det.Add(-snapshotSpan), to, cfg.BucketSec); err == nil && all[part] != nil {
-		pts = all[part]
+	if part != "" {
+		if all, err := deps.Store.MLSeriesRange(ctx, ev.Signal, ev.Service, from, to, cfg.BucketSec); err == nil && all[part] != nil {
+			pts = all[part]
+		}
 	}
+	band := seasonalBand(ctx, deps, cfg, ev.Signal, part, from, to, det)
 	evm := evidenceMap(ev.Evidence)
 	mad, _ := evm["mad"].(float64)
 	class, _ := evm["dayClass"].(string)
@@ -110,7 +117,8 @@ func buildSnapshot(ctx context.Context, deps Deps, ev chstore.MLEvent, cfg chsto
 	q := cfg.Quality
 	thr, _ := json.Marshal(map[string]any{"criticalZ": cfg.CriticalZ, "effectiveZ": feedbackZ(cfg.CriticalZ, neg, pos, q),
 		"dwellBuckets": cfg.DwellBuckets, "baselineDays": cfg.BaselineDays, "minBaselineSamples": cfg.MinBaselineSamples,
-		"minBaselineRate": cfg.MinBaselineRate, "impactMinRel": q.ImpactMinRel, "impactMinAbs": q.ImpactMinAbs, "regimeHours": q.RegimeHours})
+		"minBaselineRate": cfg.MinBaselineRate, "impactMinRel": q.ImpactMinRel, "impactMinAbs": q.ImpactMinAbs, "regimeHours": q.RegimeHours,
+		"band": band})
 	step := int64(cfg.BucketSec)
 	dwell := triggeredBuckets(pts, ev.Baseline, mad, cfg.CriticalZ, det.Unix()-int64(cfg.DwellBuckets-1)*step, ev.LastSeen/1e9, ev.Direction)
 	series, _ := json.Marshal(pts)
@@ -238,7 +246,7 @@ func (r *Recorder) writeSnapshots(ctx context.Context, deps Deps, cfg chstore.ML
 		st.pre = true
 		n++
 	}
-	for _, ev := range r.runs.dueComplete(now, snapshotSpan) {
+	for _, ev := range r.runs.dueComplete(now, 24*time.Hour) { // C2: epizot kapanınca (B3) ya da 24 sa
 		if n >= snapshotPerTik {
 			break
 		}
@@ -253,4 +261,43 @@ func (r *Recorder) writeSnapshots(ctx context.Context, deps Deps, cfg chstore.ML
 		n++
 	}
 	return n, firstErr
+}
+
+// seasonalBand — C2: kova başına mevsimsel beklenen bant [t, q25, q50, q75]
+// (aynı takvim sınıfı günlerin aynı gün-içi dilimi; MLSeasonalProfile, tek
+// okuma). Profil yoksa boş liste (FE sabit banda düşer).
+func seasonalBand(ctx context.Context, deps Deps, cfg chstore.MLConfig, signal, part string, from, to, at time.Time) [][4]float64 {
+	out := [][4]float64{}
+	if part == "" {
+		return out
+	}
+	cal, loc := calendarFor(deps.Store.AnomalySensitivityForDetectors())
+	dates, _ := baselineDates(at, cfg.BaselineDays, cal, loc)
+	step := int64(cfg.BucketSec)
+	slotOf := func(t int64) int {
+		lt := time.Unix(t, 0).In(loc)
+		return (lt.Hour()*3600 + lt.Minute()*60) / cfg.BucketSec
+	}
+	var slots []int
+	seen := map[int]bool{}
+	for t := from.Unix() - from.Unix()%step; t < to.Unix(); t += step {
+		if s := slotOf(t); !seen[s] {
+			seen[s] = true
+			slots = append(slots, s)
+		}
+	}
+	prof, err := deps.Store.MLSeasonalProfile(ctx, chstore.MLProfileRequest{Signal: signal, Parts: []string{part}, Dates: dates, Slots: slots, TargetSec: cfg.BucketSec, TZ: loc.String()})
+	if err != nil {
+		return out
+	}
+	// profil anahtarı servis içerir; tek parça istendi → ilk eşleşen anahtar
+	for _, m := range prof {
+		for t := from.Unix() - from.Unix()%step; t < to.Unix(); t += step {
+			if st, ok := m[slotOf(t)]; ok {
+				out = append(out, [4]float64{float64(t), st.Q25, st.Q50, st.Q75})
+			}
+		}
+		break
+	}
+	return out
 }
