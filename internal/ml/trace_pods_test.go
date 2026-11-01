@@ -45,3 +45,12 @@ func TestTracePodQueriesAndParts(t *testing.T) {
 		t.Fatalf("pod part=%s", p)
 	}
 }
+
+// v0.10.1767 (madde 6): sapma iki tik sürünce aynı kimlik → RMT tek satır.
+func TestPodOutlierIDStableAcrossTicks(t *testing.T) {
+	a := chstore.MLEventID(detTracePodOutlier, "svc", "pod|svc-7|err_ratio")
+	b := chstore.MLEventID(detTracePodOutlier, "svc", "pod|svc-7|err_ratio")
+	if a != b || a == chstore.MLEventID(detTracePodOutlier, "svc", "pod|svc-7|p95") {
+		t.Fatal("kimlik zamansız ve ölçüye bağlı olmalı")
+	}
+}

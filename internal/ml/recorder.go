@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/cilcenk/coremetry/internal/anomaly"
@@ -126,7 +127,10 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 		log.Printf("[ml] labels read failed: %v (etiketsiz devam)", lerr)
 	}
 	lb := NewLabels(labels)
+	steps := map[string]int64{"labelsMs": time.Since(start).Milliseconds()}
+	signals := map[string]chstore.MLSignalTick{}
 	esAtStart := global.esQueries.Load()
+	vmAtStart := global.vmQueries.Load()
 	deps := Deps{Store: r.store, Logs: r.logs, VM: r.vm, Labels: lb, Background: ctx, Backoff: r.backoff, ObserveES: func(d time.Duration) { global.observeES(d.Milliseconds()) },
 		ObserveVM: func(d time.Duration) { global.observeVM(d.Milliseconds()) },
 		ESLeft:    func() int { return cfg.MaxESQueriesPerTick - int(global.esQueries.Load()-esAtStart) }}
@@ -139,11 +143,18 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 			continue
 		}
 		active++
+		d0 := time.Now()
 		evs, derr := det.Tick(tctx, deps, cfg, start)
+		st := chstore.MLSignalTick{Ran: true, SourceMs: time.Since(d0).Milliseconds(), Candidates: len(evs), Services: distinctServices(evs)}
 		if errors.Is(derr, logstore.ErrESPartial) {
 			global.partial.Add(1)
 			partialN++
+			st.Partial = 1
 		}
+		if derr != nil {
+			st.Error = truncRunes(derr.Error(), 200)
+		}
+		signals[det.Name()] = st
 		if derr != nil && firstErr == nil {
 			firstErr = derr
 		}
@@ -152,7 +163,9 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 			all = append(all, ev)
 		}
 	}
+	steps["detectorsMs"] = time.Since(start).Milliseconds() - steps["labelsMs"]
 	kept, sup := qualityFilter(all, cfg, lb, r.runs, start)
+	w0 := time.Now()
 	global.observeSuppression(sup)
 	r.runs.gc(start)
 	// T1b: trace olaylarına exception / Oracle / BubbleUp referansı (koşu başına bir kez)
@@ -166,11 +179,22 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 		}
 		written++
 	}
+	steps["writeMs"] = time.Since(w0).Milliseconds()
+	for _, ev := range kept {
+		for name, st := range signals {
+			if signalOfDetector(r.detectors, name) == ev.Signal {
+				st.Written++
+				signals[name] = st
+			}
+		}
+	}
+	s0 := time.Now()
 	// replay kayıtları: ES bütçesinin kalanı log örneğine
 	esLeft := cfg.MaxESQueriesPerTick - int(global.esQueries.Load()-esAtStart)
 	if _, serr := r.writeSnapshots(tctx, deps, cfg, kept, start, esLeft); serr != nil && firstErr == nil {
 		firstErr = serr
 	}
+	steps["snapshotMs"] = time.Since(s0).Milliseconds()
 	// terfi (K4): yalnız terfi anahtarı açık dedektör varsa okuma yapar
 	if perr := r.promote(tctx, cfg, kept); perr != nil && firstErr == nil {
 		firstErr = perr
@@ -180,7 +204,7 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	global.tickDone(start)
 	// tik durumu: api pod'u karnede okur (süreç-içi sayaç bu pod'da kalır)
 	status := chstore.MLTickStatus{At: start.Unix(), DurationMs: time.Since(start).Milliseconds(), Events: written, Backoff: r.backoff.snapshot(start),
-		Partial: int64(partialN), Docs: global.docs.Load()}
+		Partial: int64(partialN), Docs: global.docs.Load(), Steps: steps, Signals: signals}
 	if firstErr != nil {
 		status.LastError = truncRunes(firstErr.Error(), 300)
 	}
@@ -191,7 +215,32 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	scancel()
 	log.Printf("[ml] tick placement=%s detectors=%d events=%d suppressed=impact:%d,feedback:%d,regime:%d labels=%d dur=%dms es_p95=%dms err=%v",
 		r.placement, active, written, sup.Impact, sup.Feedback, sup.Regime, len(labels), time.Since(start).Milliseconds(), Observability().ESP95Ms, firstErr)
-	if partialN > 0 {
-		log.Printf("[ml] tick partial=%d docs=%d (kısmi ES sonucu seriye yazılmadı)", partialN, global.docs.Load())
+	log.Printf("[ml] tick steps labels=%dms detectors=%dms write=%dms snapshot=%dms es_queries=%d vm_queries=%d partial=%d docs=%d",
+		steps["labelsMs"], steps["detectorsMs"], steps["writeMs"], steps["snapshotMs"], global.esQueries.Load()-esAtStart, global.vmQueries.Load()-vmAtStart, partialN, global.docs.Load())
+	for name, st := range signals {
+		log.Printf("[ml] tick %s ran=%v services=%d source=%dms candidates=%d written=%d partial=%d err=%s", name, st.Ran, st.Services, st.SourceMs, st.Candidates, st.Written, st.Partial, st.Error)
 	}
+}
+
+// distinctServices — SAF.
+func distinctServices(evs []chstore.MLEvent) int {
+	seen := map[string]bool{}
+	for _, e := range evs {
+		seen[e.Service] = true
+	}
+	return len(seen)
+}
+
+// signalOfDetector — SAF: dedektör adı → sinyali (ilk olayın sinyali yoksa adından).
+func signalOfDetector(dets []Detector, name string) string {
+	switch {
+	case strings.HasPrefix(name, "log"):
+		return chstore.MLSignalLog
+	case strings.HasPrefix(name, "trace"), name == "dependency":
+		return chstore.MLSignalTrace
+	case strings.HasPrefix(name, "metric"):
+		return chstore.MLSignalMetric
+	}
+	_ = dets
+	return ""
 }

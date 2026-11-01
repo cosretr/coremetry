@@ -2,7 +2,7 @@
 
 Prod gözlemi (v0.10.1762) sonrası kodlanmayan maddeler; sıra operatörün. Gemide: 1763 backfill, 1764 VM bütçesi, 1765 ES kısmi sonuç, 1766 A3 eski dedektör anahtarları.
 
-## Önceki listeden kalanlar
+## Önceki listeden kalanlar (4, 5, 7 ve 6-kanıt v0.10.1767 ile GEMİDE; 6-tekilleştirme B3'te)
 
 **4) field_caps önbelleği.** `logstore-es` çözümlemesi (service.name → .keyword, log.level, channel) her tikte tekrarlanıyor. `termsAggField` 10 dk TTL'li ve yalnız `len(fields)==1` sonucu önbellekliyor; `MLResolveField` adayları sırayla deniyor, boş dönen aday önbelleğe girmiyor → her tik field_caps. Çözüm: boş sonucu da (negatif) 1 sa TTL ile tut; `groupFieldTTL` ML yolunda 1 sa.
 

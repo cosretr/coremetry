@@ -173,7 +173,9 @@ type MLConfig struct {
 	// şablon sayımı 1 + yeni aile backfill'i 1 (v0.10.1755, kararı C) + kod/pod
 	// kırılımı 1 (v0.10.1756); backfill'ler seyrek, çoğu tik 3).
 	MaxESQueriesPerTick int `json:"maxEsQueriesPerTick"`
-	// BaselineDays — hacim/hata tabanı için geriye bakış (3..28, varsayılan 7).
+	// BaselineDays — hacim/hata tabanı için geriye bakış (3..28, varsayılan 21;
+	// v0.10.1767: 7 günde tek cumartesi → sınıf eşleşmesi <3, taban tüm günlere
+	// düşüyordu, cumartesi sahte düşüş üretirdi).
 	BaselineDays int `json:"baselineDays"`
 	// MinBaselineRate — tabanı bu kadar satır/kova altında olan servis için
 	// hacim/susma dedektörü sessiz (0..1e6, varsayılan 5).
@@ -217,7 +219,7 @@ func DefaultMLConfig() MLConfig {
 	}
 	return MLConfig{Enabled: false, Detectors: d, Promotion: p,
 		BucketSec: 300, TickSec: 300, TimeoutMs: 10000, MaxServices: 500, MaxESQueriesPerTick: 4,
-		BaselineDays: 7, MinBaselineRate: 5, DwellBuckets: 2, DailyEventCap: 200,
+		BaselineDays: 21, MinBaselineRate: 5, DwellBuckets: 2, DailyEventCap: 200,
 		IngestLagSec: 120, BackfillTimeoutMs: 30000, BackfillIntervalMs: 2000, VMTargetCardinality: 20, VMServiceBatch: 50, MinBaselineSamples: 20, CriticalZ: 4, MetricFamilies: DefaultMLMetricFamilies(), Quality: DefaultMLQuality(),
 		ErrorLevels: []string{"error", "err", "fatal", "critical", "severe", "emerg", "alert"}}
 }

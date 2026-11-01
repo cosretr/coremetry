@@ -128,7 +128,8 @@ export function MLSubsection() {
 
           <h3 className={H3}>Eşikler</h3>
           <div className="grid gap-3 md:grid-cols-2">
-            {num('Taban (gün)', 'baselineDays', 'Mevsimsel taban için geriye bakış (3–28)')}
+            {num('Taban (gün)', 'baselineDays', 'Mevsimsel taban için geriye bakış (3–28); 21 = her takvim sınıfından ≥3 gün')}
+            {num('Servis tavanı', 'maxServices', 'ES servis terms tavanı; bundan fazlası izlenmez (10–5000)')}
             {num('Hacim tabanı (satır/kova)', 'minBaselineRate', 'Tabanı bunun altında kalan servis için hacim/susma sessiz', 1)}
             {num('Dwell (kova)', 'dwellBuckets', 'Olay açılmadan art arda sapmalı kova (1–12)')}
             {num('Günlük tavan', 'dailyEventCap', 'Dedektör başına günlük yeni olay (10–10000)')}

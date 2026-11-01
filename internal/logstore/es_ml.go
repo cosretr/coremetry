@@ -11,6 +11,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
+	"sync"
 	"time"
 )
 
@@ -148,7 +150,29 @@ func parseMLLogAgg(aggs json.RawMessage) (*MLLogAggResult, error) {
 	return out, nil
 }
 
+// mlFieldCache — MLResolveField sonucu (boş dahil) 1 sa (v0.10.1767; prod: her
+// tikte field_caps tekrarlanıyordu — termsAggField yalnız bulunan alanı
+// önbellekliyor, bulunamayan aday her tik yeniden soruluyordu).
+var mlFieldCache sync.Map // key = adaylar → mlFieldEntry
+
+type mlFieldEntry struct {
+	v   string
+	exp time.Time
+}
+
+const mlFieldTTL = time.Hour
+
 func (s *ESStore) MLResolveField(ctx context.Context, candidates []string) string {
+	key := strings.Join(candidates, "\x00")
+	if e, ok := mlFieldCache.Load(key); ok && time.Now().Before(e.(mlFieldEntry).exp) {
+		return e.(mlFieldEntry).v
+	}
+	v := s.mlResolveFieldUncached(ctx, candidates)
+	mlFieldCache.Store(key, mlFieldEntry{v: v, exp: time.Now().Add(mlFieldTTL)})
+	return v
+}
+
+func (s *ESStore) mlResolveFieldUncached(ctx context.Context, candidates []string) string {
 	for _, c := range candidates {
 		if c == "" {
 			continue

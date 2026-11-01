@@ -13,7 +13,7 @@ import { Badge } from '@/components/shadcn/badge';
 import { api } from '@/lib/api';
 import { keys, useMLEvents, useMLScorecard } from '@/lib/queries';
 import { fmtDateTime } from '@/lib/utils';
-import type { MLEvent, MLDetectorScore, MLGate, MLBackfillProgress, MLTickStatus } from '@/lib/types';
+import type { MLEvent, MLDetectorScore, MLGate, MLBackfillProgress, MLTickStatus, MLSignalTick } from '@/lib/types';
 import { MLReplaySheet } from './MLReplaySheet';
 import { MLPeriodReplay } from './MLPeriodReplay';
 
@@ -74,6 +74,15 @@ export function tickLabel(t: MLTickStatus | undefined, nowSec: number): string {
   if (t.backoff.length) parts.push(`VM bekleme: ${t.backoff.map(b => `${b.family} (${Math.max(1, Math.round((b.until - nowSec) / 60))} dk)`).join(', ')}`);
   if (t.lastError) parts.push(`hata: ${t.lastError}`);
   return parts.join(' · ');
+}
+
+/** Dedektör başına son tik satırı — SAF (test): "0 olay" ile "çalışmadı" ayrımı. */
+export function signalTickLabel(name: string, s: MLSignalTick): string {
+  if (!s.ran) return `${name}: çalışmadı`;
+  const bits = [`${s.services} servis`, `${s.candidates} aday`, `${s.written} yazıldı`, `${(s.sourceMs / 1000).toFixed(1)} sn`];
+  if (s.partial) bits.push('kısmi ES');
+  if (s.error) bits.push(`hata: ${s.error}`);
+  return `${name}: ${bits.join(' · ')}`;
 }
 
 export type AnomaliesTab = 'detectors' | 'ml';
@@ -168,6 +177,11 @@ export function MLTab({ signal = '', onSignal }: { signal?: MLSignal; onSignal?:
         {sc.data && sc.data.detectors.length === 0 && <span> · henüz olay yok</span>}
         {(sc.data?.backfill ?? []).filter(b => !signal || b.signal === signal).map(b => <span key={b.signal} data-testid="ml-backfill"> · {backfillLabel(b)}</span>)}
         {sc.data && <div className="mt-1" data-testid="ml-tick" title={sc.data.tick?.lastError}>{tickLabel(sc.data.tick, Math.floor(Date.now() / 1000))}</div>}
+        {sc.data?.tick?.signals && (
+          <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-1 font-mono text-xs" data-testid="ml-tick-signals">
+            {Object.entries(sc.data.tick.signals).sort(([a], [b]) => a.localeCompare(b)).map(([n, s]) => <li key={n} title={s.error}>{signalTickLabel(n, s)}</li>)}
+          </ul>
+        )}
         {sc.data && (sc.data.bySignal?.length ?? 0) > 0 && (
           <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-1" data-testid="ml-signal-score">
             {(sc.data.bySignal ?? []).filter(s => !signal || s.detector === signal).map(s => <li key={s.detector}><b>{signalScoreLabel(s)}</b></li>)}

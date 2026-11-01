@@ -156,6 +156,7 @@ func (d *TracePods) pods(ctx context.Context, deps Deps, cfg chstore.MLConfig, n
 			scale = 1000
 		}
 		vals := [3]map[[2]string]float64{{}, {}, {}}
+		var sampleTs int64 // VM'in döndürdüğü örnek damgası (bayat seri teşhisi)
 		for i, q := range []string{tq, eq, pq} {
 			t0 := time.Now()
 			rows, err := deps.VM.QueryPromQLInstant(ctx, q, to)
@@ -170,6 +171,7 @@ func (d *TracePods) pods(ctx context.Context, deps Deps, cfg chstore.MLConfig, n
 					continue
 				}
 				vals[i][k] = r.Points[0].Value
+				sampleTs = max(sampleTs, r.Points[0].Time/1e9)
 			}
 		}
 		rowsBy := map[string][]logstore.MLPodRow{}
@@ -188,7 +190,8 @@ func (d *TracePods) pods(ctx context.Context, deps Deps, cfg chstore.MLConfig, n
 				Signal: chstore.MLSignalTrace, Stage: chstore.MLStageShadow, Service: svc, Pod: p.Pod, Code: measure,
 				StartedAt: last.UnixNano(), LastSeen: to.UnixNano(), WindowSec: uint32(cfg.BucketSec), Baseline: p.Median, Observed: p.Ratio,
 				Score: p.Z, Direction: "up", Evidence: mergeEvidence("", map[string]any{"source": "vm", "family": pin.ID, "measure": measure,
-					"pods": p.Pods, "errors": p.Errors, "total": p.Total, "windowSec": win})})
+					"pods": p.Pods, "errors": p.Errors, "total": p.Total, "windowSec": win,
+					"queryAt": to.Unix(), "sampleTs": sampleTs, "tickAt": now.Unix()})})
 		}
 		for svc, rows := range rowsBy {
 			for _, p := range podOutliers(rows, cfg) {
