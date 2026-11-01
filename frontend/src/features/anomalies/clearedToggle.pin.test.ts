@@ -15,15 +15,7 @@ import { resolve } from 'node:path';
 const streams = readFileSync(resolve(__dirname, 'streams.tsx'), 'utf8');
 const logs = readFileSync(resolve(__dirname, '../../pages/Logs.tsx'), 'utf8');
 
-describe('v0.10.925 — Cleared grubu aç/kapa', () => {
-  it('kullanıcı seçimi varsayılanı ezer; tık mevcut görünür hâli tersler', () => {
-    expect(streams).toContain('useState<boolean | null>(null)');
-    expect(streams).toContain('const expanded = showCleared ?? defaultExpanded;');
-    expect(streams).toContain('onClick={() => setShowCleared(!expanded)}');
-    expect(streams).not.toContain('showCleared || defaultExpanded');
-  });
-});
-
+// v0.10.1773 — Cleared aç/kapa pini kaldırıldı: anomali geçmişi tek tablo (operatör mockup A).
 describe('v0.10.925 — Logs seviye çipi yeniden bağlanmaz', () => {
   it('render içi bileşen yok; render fonksiyonu anahtarlı Chip döndürür', () => {
     expect(logs).not.toMatch(/const LevelChip\s*=/);

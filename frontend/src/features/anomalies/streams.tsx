@@ -31,8 +31,9 @@ import {
 } from '@/lib/queries';
 import { fmtNum, tsCompact, tsLong } from '@/lib/utils';
 import { logsLinkForPattern } from './patternLogsLink'; // v0.10.1071 — saf modüle taşındı
-import { AnomalyDetailDrawer } from './AnomalyDetailDrawer';
 import { anomalyEventHref } from '@/lib/anomalyHref';
+import { anomalyPlainHeadline } from '@/lib/anomalyNarrative';
+import { durationLabel } from '@/components/coremetry/anomalies/MLTab';
 import { RecurringMarker } from './RecurringMarker'; // v0.10.1049
 import { SnoozeButton } from './SnoozeButton';
 import { serviceHref, inboxItemWindow, pointEventWindow, eventLifespanWindow } from '@/lib/serviceHref';
@@ -299,90 +300,23 @@ function HistorySection({ items, meta, error = false }: {
   // Row click ↔ ?event= move together (the v0.8.256 URL-param
   // class) so a copied link opens the same drawer; the existing
   // scroll+flash deep-link now also opens the detail.
-  const openDetail = (id: string | null) => {
-    setSearchParams(prev => {
-      const p = new URLSearchParams(prev);
-      if (id) p.set('event', id); else p.delete('event');
-      return p;
-    }, { replace: true });
-  };
-  const inList = highlight ? (items ?? []).find(e => e.id === highlight) ?? null : null;
-  // v0.9.465 (dürüstlük A9) — deep-link kurtarma: ?event= hedefi 200'lük
-  // pencerenin dışına düştüyse tek-event ucundan çek; drawer yine açılır
-  // (satıra scroll edilemez — satır listede yok, drawer bunu söyler).
-  const rescueQ = useQuery({
-    queryKey: ['anomaly-event-rescue', highlight],
-    queryFn: () => api.anomalyEvent(highlight),
-    enabled: !!highlight && items !== undefined && !inList,
-    staleTime: 60_000,
-  });
-  const detailEvent = inList ?? (rescueQ.data ?? null);
-
-  // v0.5.279 — split active vs cleared. Operator-reported:
-  // "çok fazla anomali gözüküyor aktif/cleared birlikte" —
-  // the mixed list buried the firing rows under cleared
-  // history. Now active rows render in a dedicated section
-  // (always visible, loud red badges); cleared rows go into
-  // a collapsible "Cleared" group that defaults to collapsed
-  // when there are >10 of them.
-  // v0.10.925 — null = kullanıcı henüz seçmedi (varsayılan kural geçerli).
-  // Eskiden seçim ile varsayılan VEYA'lanıyordu: ≤10 satırda grup zorla
-  // açıktı ve başlık tıkı hiçbir şey yapmıyordu.
-  const [showCleared, setShowCleared] = useState<boolean | null>(null);
-  // v0.10.967 — tablo standardı T12 (dilim 5). Yükleniyor ve sağlıklı-boş
-  // bölümü hâlâ gizler (AnomalyShell kararı). HATA gizlemez: eskiden
-  // ilk okuma hatası bölümü sessizce yok ediyor, yenileme hatası ise bayat
-  // satırları güncel gibi bırakıyordu. Hata artık Active tablosunun içinde;
-  // bayat satırlar, bayat sayılar ve Cleared grubu hatayla birlikte çizilmez.
+  // v0.10.1773 (operatör mockup A): Active/Cleared iki tablo yerine TEK tablo;
+  // Durum sütunu sıralı (aktif önce), sunucu sırası korunur. Drawer yok (C1).
   if (!error && (items === undefined || items.length === 0)) return null;
   const live = error ? [] : (items ?? []);
-  const active  = live.filter(e => e.status === 'active');
-  const cleared = live.filter(e => e.status === 'cleared');
-  // Default expanded when the cleared set is small enough to
-  // glance at; collapsed when it's noisy.
-  const defaultExpanded = cleared.length <= 10;
-  const expanded = showCleared ?? defaultExpanded;
-  // v0.10.929 (K5) — "aktif anomali yok" sağlıklı durum: nötr, yeşil yok.
-  // v0.10.967 — eski nötr kutu artık Active tablosunun boş satırı.
-  const activeState: Omit<DataTableStateProps<AnomalyEvent>, 'dt' | 'leading' | 'trailing'> = error
+  const activeN = live.filter(e => e.status === 'active').length;
+  const state: Omit<DataTableStateProps<AnomalyEvent>, 'dt' | 'leading' | 'trailing'> = error
     ? { kind: 'error' }
-    : { kind: 'empty', message: `Son 24 saatte aktif anomali yok${cleared.length > 0 ? ` — aşağıda ${cleared.length} cleared olay var` : ''}` };
+    : { kind: 'empty', message: 'Son 24 saatte anomali yok' };
   return (
     <AnomalyShell
       title="Anomaly history (last 24h)"
-      hint={error ? '' : `${meta?.activeTotal ?? active.length} active · ${meta?.clearedTotal ?? cleared.length} cleared${meta?.truncated ? ` · ilk ${live.length} satır yüklendi` : ''}`}
+      hint={error ? '' : `${meta?.activeTotal ?? activeN} active · ${meta?.clearedTotal ?? live.length - activeN} cleared${meta?.truncated ? ` · ilk ${live.length} satır yüklendi` : ''}`}
       count={live.length} error={error}>
-      {detailEvent && (
-        <AnomalyDetailDrawer event={detailEvent} onClose={() => openDetail(null)} />
-      )}
-      <AnomalyTable rows={active}
-        storageKey="anomaly-history-active"
+      <AnomalyTable rows={live}
+        storageKey="anomaly-history"
         rowRefs={rowRefs} highlight={highlight}
-        onOpen={openDetail}
-        title={error ? 'Active' : `Active (${active.length})`}
-        state={activeState} />
-      {cleared.length > 0 && (
-        <div style={{ marginTop: 14 }}>
-          {/* v0.10.924 — buton bütünlüğü Faz 2: `all: unset` başlık →
-              DisclosureButton (aria-expanded + ev ▸/▾ glifi). */}
-          <DisclosureButton expanded={expanded}
-            onClick={() => setShowCleared(!expanded)}
-            style={{ fontSize: 12, fontWeight: 600, padding: '6px 0', gap: 6 }}>
-            Cleared ({cleared.length})
-            <span style={{ color: 'var(--text3)', fontWeight: 400, marginLeft: 4 }}>
-              — resolved anomalies, kept for forensics
-            </span>
-          </DisclosureButton>
-          {expanded && (
-            <div style={{ marginTop: 6, opacity: 0.85 }}>
-              <AnomalyTable rows={cleared}
-                storageKey="anomaly-history-cleared"
-                rowRefs={rowRefs} highlight={highlight}
-                onOpen={openDetail} />
-            </div>
-          )}
-        </div>
-      )}
+        state={state} />
     </AnomalyShell>
   );
 }
@@ -429,7 +363,7 @@ const ANOMALY_HISTORY_COLS: ColumnDef<AnomalyEvent>[] = [
 // cleared groups share one render path (v0.5.279). Same
 // columns / styling as before; only the title row above the
 // table is optional now.
-function AnomalyTable({ rows, storageKey, rowRefs, highlight, onOpen, title, state }: {
+function AnomalyTable({ rows, storageKey, rowRefs, highlight, title, state }: {
   rows: AnomalyEvent[];
   // İKİ örnek render ediliyor (Active + Cleared). Ayrı anahtarlar şart:
   // tek anahtar iki tablonun sırasını ve sürüklenen genişliklerini
@@ -437,10 +371,6 @@ function AnomalyTable({ rows, storageKey, rowRefs, highlight, onOpen, title, sta
   storageKey: string;
   rowRefs: React.MutableRefObject<Record<string, HTMLTableRowElement | null>>;
   highlight: string;
-  // Row click → detail drawer (v0.8.267). Clicks on interactive
-  // children (links, buttons, the AI/ribbon cells) are ignored so
-  // the existing affordances keep working unchanged.
-  onOpen: (id: string) => void;
   title?: string;
   /** v0.10.967 (T12) — satır yokken tablonun içindeki durum; verilmezse düz boş. */
   state?: Omit<DataTableStateProps<AnomalyEvent>, 'dt' | 'leading' | 'trailing'>;
@@ -484,7 +414,6 @@ function AnomalyTable({ rows, storageKey, rowRefs, highlight, onOpen, title, sta
                   // Interactive children keep their own behaviour —
                   // only a plain row click opens the drawer.
                   if ((ev.target as HTMLElement).closest('a,button')) return;
-                  void onOpen;
                   navigate(anomalyEventHref(e.id));
                 }}
                 // content-visibility skips off-screen rows on paint (.cv-row) —
@@ -498,12 +427,16 @@ function AnomalyTable({ rows, storageKey, rowRefs, highlight, onOpen, title, sta
                   outline: '1px solid var(--accent2)',
                 } : undefined}>
                 <td>
-                  {/* v0.10.929 (K5) — ACTIVE normal durum (STATUS_TONE active → nötr); CLEARED geçiş, yeşil kalır. */}
+                  {/* v0.10.929 (K5) — aktif nötr; bitti geçiş, yeşil kalır. */}
                   <span className={`badge ${e.status === 'active' ? 'b-gray' : 'b-ok'}`}>
-                    {e.status === 'active' ? 'ACTIVE' : 'CLEARED'}
+                    {e.status === 'active' ? 'Sürüyor' : 'Bitti'}
                   </span>
                 </td>
-                <td className="cell-strong" title={e.pattern}>{e.pattern}</td>
+                <td className="num cell-faint">{durationLabel(e.lastSeen - e.startedAt)}</td>
+                <td className="cell-strong" title={e.pattern}>
+                  {/* gerçek link: orta tık / yeni sekme / klavye çalışır (C1) */}
+                  <Link to={anomalyEventHref(e.id)} data-testid="anomaly-row-link">{anomalyPlainHeadline(e)}</Link>
+                </td>
                 <td>
                   {/* v0.9.966 — anomalinin gözlem aralığı. CLEARED bir
                       satırda pencere GEÇMİŞTE kalıyor; onsuz link "şimdi"yi
@@ -528,7 +461,7 @@ function AnomalyTable({ rows, storageKey, rowRefs, highlight, onOpen, title, sta
                     {anomalyKindLabel(e.kind)}
                   </span>
                 </td>
-                <td className="num" style={{ fontWeight: 700 }}>{e.peakRatio.toFixed(1)}</td>
+                <td className="num">{e.currentCount}</td>
                 {/* v0.10.739 — tarih damgası 13 px (.ib-when). */}
                 <td className="mono ib-when cell-faint" title={tsLong(e.startedAt)}>
                   {tsCompact(e.startedAt)}

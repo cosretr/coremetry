@@ -95,53 +95,42 @@ afterEach(() => {
 });
 
 describe('Anomaly history — durumlar tablonun içinde (v0.10.967)', () => {
-  it('aktif yok, cleared var: Active tablosu başlığıyla boş satır; Cleared tablosu satırlarla', async () => {
-    m.events = [ev('c1', 'cleared'), ev('c2', 'cleared')];
+  // v0.10.1773 — tek tablo (mockup A): aktif + bitti aynı tabloda, Durum sütunu.
+  it('tek tablo: aktif ve bitti satırlar birlikte, satır gerçek link', async () => {
+    m.events = [ev('c1', 'cleared'), ev('a1', 'active'), ev('c2', 'cleared')];
     const el = await mount();
-    const [active, cleared] = tables(el);
-    expect(active.querySelectorAll('thead th').length).toBeGreaterThan(0);
-    const row = stateRow(active);
-    expect(row?.dataset.dtState).toBe('empty');
-    expect(row?.textContent).toBe('Son 24 saatte aktif anomali yok — aşağıda 2 cleared olay var');
-    // colSpan = 7 yönetilen kolon + AI (trailing).
-    expect(row!.querySelector('td')!.colSpan).toBe(8);
-    expect(el.textContent).toContain('Active (0)');
-    expect(cleared).toBeDefined();
-    expect(stateRow(cleared)).toBeNull();
-    expect(dataRows(cleared)).toBe(2);
+    const ts = tables(el);
+    expect(ts.length).toBe(1);
+    expect(stateRow(ts[0])).toBeNull();
+    expect(dataRows(ts[0])).toBe(3);
+    expect(el.textContent).toContain('1 active · 2 cleared');
+    const links = [...el.querySelectorAll<HTMLAnchorElement>('[data-testid="anomaly-row-link"]')].map(a => a.getAttribute('href'));
+    expect(links.sort()).toEqual(['/anomalies/a1', '/anomalies/c1', '/anomalies/c2']);
+    expect(el.textContent).not.toContain('Active (');
+    expect(el.textContent).not.toContain('Cleared (');
   });
 
-  it('aktif var: satırlar, durum satırı yok', async () => {
-    m.events = [ev('a1', 'active')];
-    const el = await mount();
-    const [active] = tables(el);
-    expect(stateRow(active)).toBeNull();
-    expect(dataRows(active)).toBe(1);
-  });
-
-  it('ilk okuma hatası: bölüm görünür, Active tablosunda hata satırı', async () => {
+  it('ilk okuma hatası: bölüm görünür, tabloda hata satırı (colSpan tüm kolonlar)', async () => {
     m.fail = true;
     const el = await mount();
     expect(el.textContent).toContain('Anomaly history (last 24h)');
-    const [active] = tables(el);
-    expect(stateRow(active)?.dataset.dtState).toBe('error');
-    expect(tables(el).length).toBe(1);
+    const ts = tables(el);
+    expect(ts.length).toBe(1);
+    const row = stateRow(ts[0]);
+    expect(row?.dataset.dtState).toBe('error');
+    expect(row!.querySelector('td')!.colSpan).toBeGreaterThanOrEqual(8);
   });
 
-  it('yenileme hatası: bayat satırlar, bayat sayım ve Cleared grubu gizlenir; hata satırı görünür', async () => {
+  it('yenileme hatası: bayat satırlar ve bayat sayım gizlenir; hata satırı görünür', async () => {
     m.events = [ev('a1', 'active'), ev('c1', 'cleared')];
     const el = await mount();
     expect(dataRows(el)).toBe(2);
-    expect(el.textContent).toContain('1 active · 1 cleared');
     m.fail = true;
     await act(async () => { await qc.refetchQueries({ queryKey: ['anomalies', 'events'] }); });
     await settle();
-    const ts = tables(el);
-    expect(ts.length, 'Cleared grubu bayat veriyle çizildi').toBe(1);
-    expect(stateRow(ts[0])?.dataset.dtState, 'bayat satırlar hatayı gizledi').toBe('error');
+    expect(stateRow(tables(el)[0])?.dataset.dtState).toBe('error');
     expect(dataRows(el)).toBe(0);
     expect(el.textContent).not.toContain('1 active · 1 cleared');
-    expect(el.textContent).not.toContain('Cleared (1)');
   });
 
   it('yükleniyor ve sağlıklı-boş: bölüm gizli (AnomalyShell kararı korunur)', async () => {
