@@ -110,8 +110,12 @@ func (s *Server) getMLScorecard(w http.ResponseWriter, r *http.Request) {
 		for _, n := range chstore.MLDetectorNames {
 			gates[n] = cfg.PromotionGate(n, byDet[n], tz)
 		}
-		return map[string]any{"windowDays": 30, "detectors": rows, "bySignal": chstore.MLSignalScores(rows),
-			"promotion": cfg.Promotion, "gates": gates, "signals": signals}, nil
+		out := map[string]any{"windowDays": 30, "detectors": rows, "bySignal": chstore.MLSignalScores(rows),
+			"promotion": cfg.Promotion, "gates": gates, "signals": signals}
+		if bp, ok, _ := s.store.GetMLBackfillProgress(ctx, chstore.MLSignalLog); ok {
+			out["backfill"] = []chstore.MLBackfillProgress{bp}
+		}
+		return out, nil
 	})
 }
 

@@ -74,9 +74,12 @@ func TestLastCompleteBucketAndBackfill(t *testing.T) {
 	if got := lastCompleteBucket(now, 300, 600); !got.Equal(time.Date(2026, 10, 31, 11, 50, 0, 0, time.UTC)) {
 		t.Fatalf("lag 600: %v", got)
 	}
-	plan := backfillPlan(now, 21)
-	if len(plan) != 21 || !plan[0][0].Equal(now.Truncate(time.Hour).Add(-21*24*time.Hour)) || plan[20][1] != now.Truncate(time.Hour) {
+	plan := backfillHours(now, 21, 0)
+	if len(plan) != 504 || !plan[0][0].Equal(now.Truncate(time.Hour).Add(-21*24*time.Hour)) || plan[503][1] != now.Truncate(time.Hour) {
 		t.Fatalf("plan: %d %v", len(plan), plan[0])
+	}
+	if rest := backfillHours(now, 21, plan[99][0].Unix()); len(rest) != 404 || rest[0][0] != plan[100][0] {
+		t.Fatalf("resume: %d", len(rest))
 	}
 }
 

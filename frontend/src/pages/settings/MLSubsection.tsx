@@ -136,6 +136,8 @@ export function MLSubsection() {
             {num('Kova (sn)', 'bucketSec', 'date_histogram kovası (60–3600)')}
             {num('Tik (sn)', 'tickSec', 'Alt sistem tiki (60–3600)')}
             {num('ES zaman aşımı (ms)', 'timeoutMs', 'Tik içi istek (1000–60000)')}
+            {num('Geçmiş doldurma zaman aşımı (ms)', 'backfillTimeoutMs', 'Saatlik geçmiş isteği için ES zaman aşımı (5000–120000)')}
+            {num('Geçmiş doldurma aralığı (ms)', 'backfillIntervalMs', 'İki geçmiş isteği arası bekleme (200–60000)')}
             {num('ES ingest gecikme payı (sn)', 'ingestLagSec', 'Son kova ancak kova sonu + bu pay geçince değerlendirilir (0–3600)')}
             {num('Asgari taban örneği', 'minBaselineSamples', 'Eksik veri kuralı: taban örneği bundan azsa sessiz (5–500)')}
             {num('Kritik z', 'criticalZ', 'Robust z eşiği (1–20)', 0.5)}

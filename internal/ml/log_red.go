@@ -13,7 +13,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"math"
 	"sort"
 	"strings"
@@ -38,13 +37,12 @@ var influencerCandidates = []string{"channel", "channel_code", "channelCode", "k
 
 // LogRED — bileşik dedektör.
 type LogRED struct {
-	mu          sync.Mutex
-	backfilled  bool
-	backfillRun bool
-	infField    string
-	infAt       time.Time
-	daily       map[string]int // detector → bugün açılan olay
-	dailyDay    string
+	mu       sync.Mutex
+	backfill *backfillRunner
+	infField string
+	infAt    time.Time
+	daily    map[string]int // detector → bugün açılan olay
+	dailyDay string
 }
 
 func NewLogRED() *LogRED { return &LogRED{daily: map[string]int{}} }
@@ -206,17 +204,6 @@ func lastCompleteBucket(now time.Time, bucketSec, lagSec int) time.Time {
 	return t.Add(-time.Duration(bucketSec) * time.Second)
 }
 
-// backfillPlan — SAF: günlük istekler (saatlik kova), eskiden yeniye.
-func backfillPlan(now time.Time, days int) [][2]time.Time {
-	var out [][2]time.Time
-	end := now.Truncate(time.Hour)
-	for i := days; i >= 1; i-- {
-		from := end.Add(-time.Duration(i) * 24 * time.Hour)
-		out = append(out, [2]time.Time{from, from.Add(24 * time.Hour)})
-	}
-	return out
-}
-
 func isErrorLevel(level string, errLevels []string) bool {
 	l := strings.ToLower(level)
 	for _, e := range errLevels {
@@ -303,7 +290,13 @@ func (d *LogRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, now 
 		return nil, err
 	}
 	global.series.Store(int64(len(series)))
-	d.maybeBackfill(ctx, deps, cfg, agg, now)
+	d.mu.Lock()
+	if d.backfill == nil {
+		d.backfill = newBackfillRunner(chstore.MLSignalLog, backfillDays)
+	}
+	bf := d.backfill
+	d.mu.Unlock()
+	bf.maybeStart(deps, cfg, agg, now)
 
 	// taban: takvim sınıfı + saat penceresi (yerel dilim)
 	sens := deps.Store.AnomalySensitivityForDetectors()
@@ -396,54 +389,4 @@ func (d *LogRED) event(det, svc, part string, j Judgement, last time.Time, cfg c
 		Service: svc, Level: level, StartedAt: last.UnixNano(), LastSeen: last.Add(time.Duration(cfg.BucketSec) * time.Second).UnixNano(),
 		WindowSec: uint32(cfg.BucketSec), Baseline: j.Median, Observed: j.Observed, Score: math.Abs(j.Z), Direction: j.Direction, Evidence: string(raw),
 	}
-}
-
-// maybeBackfill — ilk tikte seri 21 günü kapsamıyorsa arka planda doldur.
-func (d *LogRED) maybeBackfill(ctx context.Context, deps Deps, cfg chstore.MLConfig, agg logstore.MLLogAggregator, now time.Time) {
-	d.mu.Lock()
-	if d.backfilled || d.backfillRun {
-		d.mu.Unlock()
-		return
-	}
-	d.backfillRun = true
-	d.mu.Unlock()
-	oldest, err := deps.Store.MLSeriesOldest(ctx, chstore.MLSignalLog)
-	if err == nil && !oldest.IsZero() && now.Sub(oldest) >= time.Duration(backfillDays-1)*24*time.Hour {
-		d.mu.Lock()
-		d.backfilled = true
-		d.mu.Unlock()
-		return
-	}
-	go func() {
-		plan := backfillPlan(now, backfillDays)
-		log.Printf("[ml] log backfill başlıyor: %d gün, saatlik kova, 1 istek/sn", len(plan))
-		for _, w := range plan {
-			if ctx.Err() != nil {
-				return
-			}
-			bctx, cancel := context.WithTimeout(ctx, 60*time.Second)
-			t0 := time.Now()
-			res, err := agg.MLLogAggregate(bctx, logstore.MLLogAggRequest{From: w[0], To: w[1], BucketSec: 3600, MaxServices: cfg.MaxServices, ErrorLevels: cfg.ErrorLevels})
-			deps.ObserveES(time.Since(t0))
-			if err == nil {
-				var rows []chstore.MLSeriesRow
-				for k, byB := range seriesFromRows(res.Rows, cfg.ErrorLevels) {
-					svc, part, _ := strings.Cut(k, "\x00")
-					for b, c := range byB {
-						rows = append(rows, chstore.MLSeriesRow{Signal: chstore.MLSignalLog, Service: svc, Part: part, Bucket: time.Unix(b, 0), BucketSec: 3600, Count: c})
-					}
-				}
-				err = deps.Store.InsertMLSeries(bctx, rows)
-			}
-			cancel()
-			if err != nil {
-				log.Printf("[ml] log backfill %s: %v", w[0].Format("2006-01-02"), err)
-			}
-			time.Sleep(time.Second)
-		}
-		d.mu.Lock()
-		d.backfilled = true
-		d.mu.Unlock()
-		log.Printf("[ml] log backfill bitti")
-	}()
 }

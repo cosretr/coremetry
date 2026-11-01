@@ -185,6 +185,10 @@ type MLConfig struct {
 	// IngestLagSec — ES ingest gecikme payı (0..3600, varsayılan 120): son kova
 	// ancak kova sonu + pay geçince değerlendirilir (kalite çerçevesi, log).
 	IngestLagSec int `json:"ingestLagSec"`
+	// BackfillTimeoutMs — geçmiş doldurma isteği zaman aşımı (5000..120000, varsayılan 30000; v0.10.1763).
+	BackfillTimeoutMs int `json:"backfillTimeoutMs"`
+	// BackfillIntervalMs — geçmiş doldurma istekleri arası bekleme (200..60000, varsayılan 2000).
+	BackfillIntervalMs int `json:"backfillIntervalMs"`
 	// MinBaselineSamples — eksik veri kuralı: taban örneği bundan azsa sessiz (5..500, varsayılan 20).
 	MinBaselineSamples int `json:"minBaselineSamples"`
 	// CriticalZ — robust z eşiği (1..20, varsayılan 4).
@@ -210,7 +214,7 @@ func DefaultMLConfig() MLConfig {
 	return MLConfig{Enabled: false, Detectors: d, Promotion: p,
 		BucketSec: 300, TickSec: 300, TimeoutMs: 10000, MaxServices: 500, MaxESQueriesPerTick: 4,
 		BaselineDays: 7, MinBaselineRate: 5, DwellBuckets: 2, DailyEventCap: 200,
-		IngestLagSec: 120, MinBaselineSamples: 20, CriticalZ: 4, MetricFamilies: DefaultMLMetricFamilies(), Quality: DefaultMLQuality(),
+		IngestLagSec: 120, BackfillTimeoutMs: 30000, BackfillIntervalMs: 2000, MinBaselineSamples: 20, CriticalZ: 4, MetricFamilies: DefaultMLMetricFamilies(), Quality: DefaultMLQuality(),
 		ErrorLevels: []string{"error", "err", "fatal", "critical", "severe", "emerg", "alert"}}
 }
 
@@ -233,6 +237,8 @@ func NormalizeMLConfig(c MLConfig) MLConfig {
 	c.DwellBuckets = clampInt(c.DwellBuckets, 1, 12, d.DwellBuckets)
 	c.DailyEventCap = clampInt(c.DailyEventCap, 10, 10000, d.DailyEventCap)
 	c.IngestLagSec = clampInt(c.IngestLagSec, 0, 3600, d.IngestLagSec)
+	c.BackfillTimeoutMs = clampInt(c.BackfillTimeoutMs, 5000, 120000, d.BackfillTimeoutMs)
+	c.BackfillIntervalMs = clampInt(c.BackfillIntervalMs, 200, 60000, d.BackfillIntervalMs)
 	c.MinBaselineSamples = clampInt(c.MinBaselineSamples, 5, 500, d.MinBaselineSamples)
 	c.Quality = NormalizeMLQuality(c.Quality)
 	if c.CriticalZ < 1 || c.CriticalZ > 20 {

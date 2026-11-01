@@ -13,7 +13,7 @@ import { Badge } from '@/components/shadcn/badge';
 import { api } from '@/lib/api';
 import { keys, useMLEvents, useMLScorecard } from '@/lib/queries';
 import { fmtDateTime } from '@/lib/utils';
-import type { MLEvent, MLDetectorScore, MLGate } from '@/lib/types';
+import type { MLEvent, MLDetectorScore, MLGate, MLBackfillProgress } from '@/lib/types';
 import { MLReplaySheet } from './MLReplaySheet';
 import { MLPeriodReplay } from './MLPeriodReplay';
 
@@ -52,6 +52,16 @@ export function gateLabel(g: MLGate | undefined): string {
   if (!g) return '';
   if (g.ok) return 'terfi kapısı geçildi';
   return `terfi kapısı: ${(g.reasons ?? []).join(' · ')}`;
+}
+
+/** Backfill satırı — SAF (test). */
+export function backfillLabel(b: MLBackfillProgress): string {
+  const miss = b.missing?.length ?? 0;
+  const head = `${SIGNAL_TR[b.signal] ?? b.signal} geçmişi: ${b.done + miss}/${b.total} saat`;
+  const tail = miss ? ` · ${miss} eksik` : '';
+  if (b.complete) return `${head}${tail} · tamam`;
+  if (b.running) return `${head}${tail} · sürüyor`;
+  return `${head}${tail} · duraklı${b.lastError ? ` (${b.lastError})` : ''}`;
 }
 
 export type AnomaliesTab = 'detectors' | 'ml';
@@ -144,6 +154,7 @@ export function MLTab({ signal = '', onSignal }: { signal?: MLSignal; onSignal?:
         <b>Dedektör karnesi · son {sc.data?.windowDays ?? 30} gün</b>
         {sc.isLoading && <span> · yükleniyor…</span>}
         {sc.data && sc.data.detectors.length === 0 && <span> · henüz olay yok</span>}
+        {(sc.data?.backfill ?? []).filter(b => !signal || b.signal === signal).map(b => <span key={b.signal} data-testid="ml-backfill"> · {backfillLabel(b)}</span>)}
         {sc.data && (sc.data.bySignal?.length ?? 0) > 0 && (
           <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-1" data-testid="ml-signal-score">
             {(sc.data.bySignal ?? []).filter(s => !signal || s.detector === signal).map(s => <li key={s.detector}><b>{signalScoreLabel(s)}</b></li>)}

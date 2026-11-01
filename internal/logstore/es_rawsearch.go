@@ -311,9 +311,16 @@ func (s *ESStore) watcherIndices(indicesIn []string) []string {
 // silent-zero guards (0-shards, unmapped-timestamp probe), and the
 // response decode — total plus the raw aggregations subtree.
 func (s *ESStore) rawCountSearch(ctx context.Context, indicesIn []string, body json.RawMessage, trackTotalCap int, wantAggs bool) (int64, json.RawMessage, error) {
+	n, aggs, _, err := s.rawCountSearchEnv(ctx, indicesIn, body, trackTotalCap, wantAggs)
+	return n, aggs, err
+}
+
+// rawCountSearchEnv — rawCountSearch + yanıt zarfı (timed_out / _shards):
+// ML okumaları (v0.10.1763) kısmi sonucu seriye YAZMAZ, eksik veri sayar.
+func (s *ESStore) rawCountSearchEnv(ctx context.Context, indicesIn []string, body json.RawMessage, trackTotalCap int, wantAggs bool) (int64, json.RawMessage, esSearchEnvelope, error) {
 	guarded, injectedWindow, err := injectRawSearchGuards(body, s.fields.Timestamp, esTimeoutFromEnv("10s"), trackTotalCap)
 	if err != nil {
-		return 0, nil, err
+		return 0, nil, esSearchEnvelope{}, err
 	}
 	idx := s.watcherIndices(indicesIn)
 
@@ -339,11 +346,11 @@ func (s *ESStore) rawCountSearch(ctx context.Context, indicesIn []string, body j
 	}
 	res, err := req.Do(ctx, s.cli)
 	if err != nil {
-		return 0, nil, s.recordQueryError("watcher raw search", idx, guarded, 0, fmt.Errorf("ES raw search: %w", err))
+		return 0, nil, esSearchEnvelope{}, s.recordQueryError("watcher raw search", idx, guarded, 0, fmt.Errorf("ES raw search: %w", err))
 	}
 	defer res.Body.Close()
 	if res.IsError() {
-		return 0, nil, s.recordQueryError("watcher raw search", idx, guarded, res.StatusCode,
+		return 0, nil, esSearchEnvelope{}, s.recordQueryError("watcher raw search", idx, guarded, res.StatusCode,
 			parseESError("watcher raw search", res, strings.Join(idx, ",")))
 	}
 	// v0.9.202 review-fix — yanıt tavanı: operatör body'sindeki dev
@@ -353,10 +360,10 @@ func (s *ESStore) rawCountSearch(ctx context.Context, indicesIn []string, body j
 	const rawSearchMaxResp = 8 << 20
 	respBody, rerr := io.ReadAll(io.LimitReader(res.Body, rawSearchMaxResp+1))
 	if rerr != nil {
-		return 0, nil, fmt.Errorf("read ES raw search response: %w", rerr)
+		return 0, nil, esSearchEnvelope{}, fmt.Errorf("read ES raw search response: %w", rerr)
 	}
 	if len(respBody) > rawSearchMaxResp {
-		return 0, nil, s.recordQueryError("watcher raw search", idx, guarded, res.StatusCode,
+		return 0, nil, esSearchEnvelope{}, s.recordQueryError("watcher raw search", idx, guarded, res.StatusCode,
 			fmt.Errorf("ES response exceeds the 8MB watcher cap (aggregations too large) — shrink the watch's aggregation (e.g. terms size)"))
 	}
 	// v0.10.413 (A5) — ortak zarf; eski elle yazılmış `_shards` alanı
@@ -372,13 +379,13 @@ func (s *ESStore) rawCountSearch(ctx context.Context, indicesIn []string, body j
 		Aggregations json.RawMessage `json:"aggregations"`
 	}
 	if err := json.Unmarshal(respBody, &raw); err != nil {
-		return 0, nil, fmt.Errorf("decode ES raw search response: %w", err)
+		return 0, nil, esSearchEnvelope{}, fmt.Errorf("decode ES raw search response: %w", err)
 	}
 	if d := raw.describe(); d != "" {
 		log.Printf("[logstore-es] PARTIAL watcher raw search (%s) — count/aggs are a subset (idx=%v)", d, idx)
 	}
 	if raw.Shards.Total == 0 {
-		return 0, nil, s.recordQueryError("watcher raw search", idx, guarded, res.StatusCode,
+		return 0, nil, esSearchEnvelope{}, s.recordQueryError("watcher raw search", idx, guarded, res.StatusCode,
 			fmt.Errorf("no authorized or existing index matched %v (0 shards searched) — check the ES credential grants read on the watch's indices", idx))
 	}
 	if injectedWindow && raw.Hits.Total.Value == 0 {
@@ -390,12 +397,12 @@ func (s *ESStore) rawCountSearch(ctx context.Context, indicesIn []string, body j
 		// worth a duplicate helper.)
 		if caps, capErr := s.fieldCaps(ctx, idx, []string{s.fields.Timestamp}); capErr == nil {
 			if _, mapped := caps[s.fields.Timestamp]; !mapped {
-				return 0, nil, s.recordQueryError("watcher raw search", idx, guarded, res.StatusCode,
+				return 0, nil, esSearchEnvelope{}, s.recordQueryError("watcher raw search", idx, guarded, res.StatusCode,
 					fmt.Errorf("injected 24h window filters on timestamp field %q, which is not mapped in %v — the watch can never match; fix the ES field map (Settings) or add an explicit range clause to the watch body", s.fields.Timestamp, idx))
 			}
 		}
 	}
-	return raw.Hits.Total.Value, raw.Aggregations, nil
+	return raw.Hits.Total.Value, raw.Aggregations, raw.esSearchEnvelope, nil
 }
 
 // RawSearchSamples fetches up to n (clamped ≤5) matching documents

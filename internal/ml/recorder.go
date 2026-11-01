@@ -38,6 +38,9 @@ type Deps struct {
 	ObserveVM func(d time.Duration)
 	// Labels — ortak etiket seti (taban hijyeni, geri bildirim); nil güvenli.
 	Labels *Labels
+	// Background — alt sistemin ömrüne bağlı context (tik context'i DEĞİL):
+	// backfill gibi tikten uzun işler buna bağlanır (v0.10.1763).
+	Background context.Context
 	// ESLeft — tik ES bütçesinin kalanı (maxEsQueriesPerTick − bu tikte atılan); nil = sınırsız.
 	ESLeft func() int
 }
@@ -120,7 +123,7 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	}
 	lb := NewLabels(labels)
 	esAtStart := global.esQueries.Load()
-	deps := Deps{Store: r.store, Logs: r.logs, VM: r.vm, Labels: lb, ObserveES: func(d time.Duration) { global.observeES(d.Milliseconds()) },
+	deps := Deps{Store: r.store, Logs: r.logs, VM: r.vm, Labels: lb, Background: ctx, ObserveES: func(d time.Duration) { global.observeES(d.Milliseconds()) },
 		ObserveVM: func(d time.Duration) { global.observeVM(d.Milliseconds()) },
 		ESLeft:    func() int { return cfg.MaxESQueriesPerTick - int(global.esQueries.Load()-esAtStart) }}
 	var firstErr error

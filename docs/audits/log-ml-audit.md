@@ -157,3 +157,7 @@ Ortak etiket seti `chstore.MLLabels` (ML kararları × olay penceresi; sinyal fa
 ## 21. Yarım gün saati (v0.10.1762)
 
 ML dedektörleri `mlDayClass` kullanır: yarım günün 13:00 öncesi sıradan gün sınıfı (taban o güne göre, düşüş/susma aday), 13:00 ve sonrası `half_day` (off-day kuralı). Yerleşik dedektörlerin gün düzeyi sınıfı DEĞİŞMEDİ; saat sabit (13), ayar yok.
+
+## 22. Prod gözlemi 01.11.2026 — düzeltmeler
+
+**v0.10.1763 log backfill.** Gözlem: 06:48 "backfill başlıyor" → ilk gün sorgusu "context canceled", sonra sessizlik. Kök neden: goroutine tik context'ine (`tctx`, ~34 sn bütçe) bağlıydı; tik bitince iptal, `backfillRun` bayrağı yüzünden tekrar yok → log tabanı hiç oluşmadı. Düzeltme (`internal/ml/backfill.go`): `Deps.Background` (alt sistem ömrü); saatlik pencereler (504 istek), `backfillTimeoutMs` (30 sn) ve `backfillIntervalMs` (2 sn) Settings'te; kısmi sonuç (`timed_out` / `_shards.failed`, `rawCountSearchEnv`) ya da hata → iki yarı (bucket_sec 1800), yarı da düşerse saat eksik; ilerleme `system_settings ml_backfill:log` (DoneUntil, Missing), restart'ta devam; log gün başına "N/504 saat (eksik K)", karnede "Log geçmişi: N/504 saat". Hata "bitti" değil; tamamlanan plan 48 sa içinde yeniden koşmaz. Test: tik iptali sonrası sürer, resume, yarıya bölme.

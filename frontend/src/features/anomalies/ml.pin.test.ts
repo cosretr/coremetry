@@ -1,7 +1,7 @@
 // v0.10.1743 — log ML dilim 0 pinleri: sekme çözümü ve karne etiketi (S4:
 // kararsız satır isabet yazdırmaz).
 import { describe, it, expect } from 'vitest';
-import { gateLabel, resolveAnomaliesTab, resolveMLSignal, scoreLabel, signalScoreLabel } from '@/components/coremetry/anomalies/MLTab';
+import { backfillLabel, gateLabel, resolveAnomaliesTab, resolveMLSignal, scoreLabel, signalScoreLabel } from '@/components/coremetry/anomalies/MLTab';
 
 describe('log ml slice 0', () => {
   it('tab resolves unknown to detectors', () => {
@@ -20,5 +20,12 @@ describe('log ml slice 0', () => {
     expect(gateLabel({ ok: false, reasons: ['ana anahtar kapalı', 'takvim dilimi tanımlı değil'] })).toBe('terfi kapısı: ana anahtar kapalı · takvim dilimi tanımlı değil');
     expect(gateLabel({ ok: true })).toBe('terfi kapısı geçildi');
     expect(gateLabel(undefined)).toBe('');
+  });
+  // v0.10.1763 — backfill ilerleme satırı: "0 olay" ile "çalışmıyor" ayrımı.
+  it('backfill label', () => {
+    const b = { signal: 'log', total: 504, done: 312, missing: [1, 2], doneUntil: 0, planEnd: 0, complete: false, running: true, startedAt: 0, updatedAt: 0 };
+    expect(backfillLabel(b)).toBe('Log geçmişi: 314/504 saat · 2 eksik · sürüyor');
+    expect(backfillLabel({ ...b, done: 502, complete: true, running: false })).toBe('Log geçmişi: 504/504 saat · 2 eksik · tamam');
+    expect(backfillLabel({ ...b, missing: null, running: false, lastError: 'timeout' })).toBe('Log geçmişi: 312/504 saat · duraklı (timeout)');
   });
 });

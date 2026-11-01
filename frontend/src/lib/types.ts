@@ -11692,11 +11692,17 @@ export interface MLConfig {
   bucketSec: number; tickSec: number; timeoutMs: number; maxServices: number; maxEsQueriesPerTick: number;
   baselineDays: number; minBaselineRate: number; dwellBuckets: number; dailyEventCap: number;
   ingestLagSec: number; minBaselineSamples: number; criticalZ: number; influencerField: string; errorLevels: string[];
+  backfillTimeoutMs: number; backfillIntervalMs: number;
   metricFamilies: Record<string, MLMetricExpr[]>;
   quality: MLQuality;
 }
 export interface MLMetricExpr { id: string; label: string; expr: string; direction: 'up' | 'down' | 'both'; unit?: string }
+/** Geçmiş doldurma ilerlemesi (v0.10.1763, system_settings ml_backfill:<signal>). */
+export interface MLBackfillProgress {
+  signal: string; total: number; done: number; missing: number[] | null; doneUntil: number; planEnd: number;
+  complete: boolean; running: boolean; startedAt: number; updatedAt: number; lastError?: string;
+}
 export interface MLScorecard {
-  windowDays: number; detectors: MLDetectorScore[]; bySignal?: MLDetectorScore[];
+  windowDays: number; detectors: MLDetectorScore[]; bySignal?: MLDetectorScore[]; backfill?: MLBackfillProgress[];
   promotion: Record<string, MLPromotion>; gates?: Record<string, MLGate>; signals: Record<string, string>;
 }

@@ -19,6 +19,8 @@ type MLLogAggRequest struct {
 	MaxServices     int
 	InfluencerField string // keyword alan; boş = yok
 	ErrorLevels     []string
+	// Timeout — ES gövde zaman aşımı (backfill kendi süresini verir); 0 = tik varsayılanı.
+	Timeout time.Duration
 }
 
 type MLLogRow struct {
@@ -36,6 +38,9 @@ type MLLogAggResult struct {
 	Rows        []MLLogRow
 	Influencers []MLLogInfluencer
 	LatestDocMs int64 // penceredeki en yeni belge (ingest gecikmesi için); 0 = yok
+	// Partial — timed_out ya da _shards.failed > 0: sayımlar alt küme (v0.10.1763).
+	Partial       bool
+	PartialReason string
 }
 
 // MLLogAggregator — isteğe bağlı arayüz; yalnız ES depo uygular. Çağıran
@@ -165,10 +170,19 @@ func (s *ESStore) MLLogAggregate(ctx context.Context, req MLLogAggRequest) (*MLL
 	if lvlField == "" {
 		return nil, fmt.Errorf("ml: seviye alanı toplanabilir değil")
 	}
-	body := mlLogAggBody(s.fields.Timestamp, svcField, lvlField, req, esTimeseriesTimeoutFromEnv("10s"))
-	_, aggs, err := s.rawCountSearch(ctx, nil, body, 0, true)
+	timeout := esTimeseriesTimeoutFromEnv("10s")
+	if req.Timeout > 0 {
+		timeout = fmt.Sprintf("%dms", req.Timeout.Milliseconds())
+	}
+	body := mlLogAggBody(s.fields.Timestamp, svcField, lvlField, req, timeout)
+	_, aggs, env, err := s.rawCountSearchEnv(ctx, nil, body, 0, true)
 	if err != nil {
 		return nil, err
 	}
-	return parseMLLogAgg(aggs)
+	res, err := parseMLLogAgg(aggs)
+	if err != nil {
+		return nil, err
+	}
+	res.Partial, res.PartialReason = env.partial(), env.describe()
+	return res, nil
 }
