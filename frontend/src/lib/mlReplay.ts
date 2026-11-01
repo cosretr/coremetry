@@ -243,8 +243,15 @@ export function snapNarrative(s: MLSnapshot): MLNarrativeInput {
   const pts = parseArr<ReplayPoint>(s.series);
   const dwell = new Set(parseArr<number>(s.dwell));
   const hit = pts.filter(p => dwell.has(p.t));
-  const observed = hit.length ? hit[hit.length - 1].v : (pts.length ? pts[pts.length - 1].v : 0);
+  const ev = parseObj(s.evidence);
+  // serisiz olay (pod aykırısı): kanıt değerleri (v0.10.1775)
+  const evObserved = typeof ev.observed === 'number' ? ev.observed : undefined;
+  const observed = hit.length ? hit[hit.length - 1].v : (evObserved ?? (pts.length ? pts[pts.length - 1].v : 0));
   const seg = s.part.split('|');
-  const code = s.signal === 'trace' && seg.length >= 2 ? seg.slice(0, -1).join('|').replace(/^dep\|[a-z]+\|/, '') : (s.signal === 'log' && s.part.startsWith('tpl|') ? s.part.slice(4) : s.part.startsWith('code|') ? s.part.slice(5) : '');
-  return { detector: s.detector, service: s.service, part: s.part, code, direction: snapDirection(s), observed, baseline: s.baselineMed, evidence: s.evidence };
+  const derived = s.signal === 'trace' && seg.length >= 2 ? seg.slice(0, -1).join('|').replace(/^dep\|[a-z]+\|/, '') : (s.signal === 'log' && s.part.startsWith('tpl|') ? s.part.slice(4) : s.part.startsWith('code|') ? s.part.slice(5) : '');
+  const code = typeof ev.code === 'string' && ev.code ? ev.code : derived;
+  const pod = typeof ev.pod === 'string' ? ev.pod : undefined;
+  const direction = typeof ev.direction === 'string' ? ev.direction : snapDirection(s);
+  const baseline = typeof ev.baseline === 'number' && !pts.length ? ev.baseline : s.baselineMed;
+  return { detector: s.detector, service: s.service, part: s.part, code, pod, direction, observed, baseline, evidence: s.evidence };
 }

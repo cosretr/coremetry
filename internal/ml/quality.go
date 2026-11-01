@@ -318,7 +318,9 @@ func qualityFilter(evs []chstore.MLEvent, cfg chstore.MLConfig, lb *Labels, tr *
 	for i := range kept {
 		ids, sigs := tr.confirmers(kept[i], now, win)
 		kept[i].Evidence = mergeEvidence(kept[i].Evidence, map[string]any{
-			"confirmScore": len(ids), "confirmSignals": sigs, "confirmedBy": firstN(ids, 5), "configHash": hash})
+			"confirmScore": len(ids), "confirmSignals": sigs, "confirmedBy": firstN(ids, 5), "configHash": hash,
+			// replay kaydı serisiz olaylarda (pod aykırısı) anlatım için (v0.10.1775)
+			"observed": kept[i].Observed, "baseline": kept[i].Baseline, "pod": kept[i].Pod, "code": kept[i].Code, "direction": kept[i].Direction})
 		tr.setEvent(kept[i])
 	}
 	return kept, sup

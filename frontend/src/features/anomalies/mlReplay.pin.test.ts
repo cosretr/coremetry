@@ -88,6 +88,13 @@ describe('ml narrative', () => {
     expect(parseBand(s.thresholds).get(300)).toEqual({ lo: 0.001, med: 0.002, hi: 0.003 });
     expect(parseBand('{').size).toBe(0);
   });
+  it('pod outlier without series: evidence drives narrative (v0.10.1775)', () => {
+    const p = snap({ detector: 'trace_pod_outlier', part: '', series: '[]', dwell: '[]', baselineMed: 4.83,
+      evidence: JSON.stringify({ measure: 'p95', code: 'p95', pod: 'acc-frzzp', observed: 21.25, baseline: 4.83, pods: 12 }) });
+    const n = snapNarrative(p);
+    expect(mlHeadline(n)).toBe('pay: acc-frzzp diğerlerinden yavaş');
+    expect(mlSummary(n)).toBe('Normalde 5 ms, şimdi 21 ms · 12 pod\'dan biri');
+  });
   it('old anomaly plain headline', () => {
     const e = { id: 'a', kind: 'op_latency', pattern: 'POST /pay', service: 'pay', startedAt: 0, lastSeen: 25 * 60e9, peakRatio: 164, currentRatio: 100, currentCount: 3, sample: '', status: 'active' } as unknown as import('@/lib/types').AnomalyEvent;
     expect(anomalyPlainHeadline(e)).toBe('pay POST /pay yavaşladı');

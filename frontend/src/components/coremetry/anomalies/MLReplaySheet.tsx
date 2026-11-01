@@ -132,7 +132,7 @@ export function MLReplayContent({ id }: { id: string }) {
             { key: 'hi', label: 'beklenen üst', data: ch.upper, color: 'var(--text3)', type: 'line', width: 1 },
             { key: 'lo', label: 'beklenen alt', data: ch.lower, color: 'var(--text3)', type: 'line', width: 1 },
           ]} />
-      ) : <p className="text-sm text-muted-foreground">Seri boş (ml_series bu pencereyi taşımıyor).</p>}
+      ) : snap.part ? <p className="text-sm text-muted-foreground">Seri boş (ml_series bu pencereyi taşımıyor).</p> : null}
       <KeyValue items={[
         { k: 'İlk sapma', v: markers.first ? fmtDateTime(new Date(markers.first * 1000)) : '—' },
         { k: 'Tespit', v: fmtTs(snap.detectedAt) },
