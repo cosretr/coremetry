@@ -89,8 +89,9 @@ describe('ml narrative', () => {
     expect(parseBand('{').size).toBe(0);
   });
   it('old anomaly plain headline', () => {
-    const e = { id: 'a', kind: 'op_latency', pattern: 'POST /pay', service: 'pay', startedAt: 0, lastSeen: 0, peakRatio: 164, currentRatio: 100, currentCount: 3, sample: '', status: 'active' } as unknown as import('@/lib/types').AnomalyEvent;
+    const e = { id: 'a', kind: 'op_latency', pattern: 'POST /pay', service: 'pay', startedAt: 0, lastSeen: 25 * 60e9, peakRatio: 164, currentRatio: 100, currentCount: 3, sample: '', status: 'active' } as unknown as import('@/lib/types').AnomalyEvent;
     expect(anomalyPlainHeadline(e)).toBe('pay POST /pay yavaşladı');
-    expect(anomalyPlainSummary(e)).toBe('3 olay, normalin üstünde · sürüyor');
+    expect(anomalyPlainSummary(e, 40 * 60e3)).toBe('Sürüyor · 40 dk · 3 olay, normalin üstünde');
+    expect(anomalyPlainSummary({ ...e, status: 'cleared' })).toBe('Bitti · 25 dk · 3 olay, normalin üstünde');
   });
 });

@@ -18,10 +18,13 @@ export function anomalyPlainHeadline(e: AnomalyEvent): string {
   return `${e.service}: ${e.pattern || e.kind}`;
 }
 
-/** Oranlı türlerde sayım bilinmez: "normalin N×" yerine mevcut sayı + yön. */
-export function anomalyPlainSummary(e: AnomalyEvent): string {
-  const now = e.currentCount ? `${e.currentCount} olay` : 'olay sürüyor';
+/** Durum + süre + sayı; "normalin N×" yok (C3). nowMs: açık olayın süresi için. */
+export function anomalyPlainSummary(e: AnomalyEvent, nowMs = Date.now()): string {
+  const open = e.status === 'active';
+  const endNs = open ? nowMs * 1e6 : e.lastSeen;
+  const m = Math.max(1, Math.round((endNs - e.startedAt) / 60e9));
+  const dur = m < 60 ? `${m} dk` : `${Math.floor(m / 60)} sa ${m % 60} dk`;
+  const now = e.currentCount ? `${e.currentCount} olay` : 'olay';
   const dir = e.currentRatio >= 1 ? 'normalin üstünde' : 'normalin altında';
-  const when = e.status === 'active' ? 'sürüyor' : 'bitti';
-  return `${now}, ${dir} · ${when}`;
+  return `${open ? 'Sürüyor' : 'Bitti'} · ${dur} · ${now}, ${dir}`;
 }
