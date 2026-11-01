@@ -1,7 +1,7 @@
 // v0.10.1743 — log ML dilim 0 pinleri: sekme çözümü ve karne etiketi (S4:
 // kararsız satır isabet yazdırmaz).
 import { describe, it, expect } from 'vitest';
-import { backfillLabel, gateLabel, signalTickLabel, tickLabel, resolveAnomaliesTab, resolveMLSignal, scoreLabel, signalScoreLabel } from '@/components/coremetry/anomalies/MLTab';
+import { backfillLabel, durationLabel, gateLabel, stageLabel, signalTickLabel, tickLabel, resolveAnomaliesTab, resolveMLSignal, scoreLabel, signalScoreLabel } from '@/components/coremetry/anomalies/MLTab';
 
 describe('log ml slice 0', () => {
   it('tab resolves unknown to detectors', () => {
@@ -40,5 +40,13 @@ describe('log ml slice 0', () => {
   it('signal tick label', () => {
     expect(signalTickLabel('log_red', { ran: false, services: 0, sourceMs: 0, candidates: 0, suppressed: 0, written: 0, partial: 0 })).toBe('log_red: çalışmadı');
     expect(signalTickLabel('log_red', { ran: true, services: 420, sourceMs: 12300, candidates: 5, suppressed: 0, written: 2, partial: 1 })).toBe('log_red: 420 servis · 5 aday · 2 yazıldı · 12.3 sn · kısmi ES');
+  });
+  // v0.10.1768 — B3 epizot: Durum ve Süre sütunları.
+  it('stage and duration labels', () => {
+    expect(stageLabel('shadow')).toBe('açık');
+    expect(stageLabel('closed')).toBe('kapandı');
+    expect(durationLabel(25 * 60e9)).toBe('25 dk');
+    expect(durationLabel(130 * 60e9)).toBe('2 sa 10 dk');
+    expect(durationLabel(72 * 3600e9)).toBe('3 g');
   });
 });

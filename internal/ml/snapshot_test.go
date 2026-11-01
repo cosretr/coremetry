@@ -44,19 +44,20 @@ func TestDueCompleteOnce(t *testing.T) {
 	tr := newTracker()
 	t0 := time.Unix(1_800_000_000, 0)
 	ev := chstore.MLEvent{ID: "a", Detector: "log_volume", Service: "pay"}
-	tr.observe(ev, t0, 5*time.Minute)
+	_, ep := tr.observe(ev, t0, 5*time.Minute)
+	ev.ID = ep
 	tr.setEvent(ev)
 	if len(tr.dueComplete(t0.Add(3*time.Hour), 2*time.Hour)) != 0 {
 		t.Fatal("ön kayıt yokken tam kayıt yok")
 	}
-	tr.snap("a").pre = true
+	tr.snap(ep).pre = true
 	if len(tr.dueComplete(t0.Add(time.Hour), 2*time.Hour)) != 0 {
 		t.Fatal("+2 sa dolmadan tam kayıt yok")
 	}
-	if got := tr.dueComplete(t0.Add(2*time.Hour), 2*time.Hour); len(got) != 1 || got[0].ID != "a" {
+	if got := tr.dueComplete(t0.Add(2*time.Hour), 2*time.Hour); len(got) != 1 || got[0].ID != ep {
 		t.Fatalf("got %+v", got)
 	}
-	tr.snap("a").done = true
+	tr.snap(ep).done = true
 	if len(tr.dueComplete(t0.Add(3*time.Hour), 2*time.Hour)) != 0 {
 		t.Fatal("tam kayıt bir kez")
 	}

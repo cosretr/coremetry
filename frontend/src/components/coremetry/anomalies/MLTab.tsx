@@ -85,6 +85,18 @@ export function signalTickLabel(name: string, s: MLSignalTick): string {
   return `${name}: ${bits.join(' · ')}`;
 }
 
+/** Durum etiketi — SAF (test). B3: closed = epizot kapandı. */
+export function stageLabel(stage: string): string {
+  return stage === 'promoted' ? 'terfi' : stage === 'closed' ? 'kapandı' : stage === 'chronic' ? 'kronik' : 'açık';
+}
+/** Süre (ns) → kısa metin — SAF (test). */
+export function durationLabel(ns: number): string {
+  const m = Math.max(0, Math.round(ns / 60e9));
+  if (m < 60) return `${m} dk`;
+  const h = Math.floor(m / 60);
+  return h < 48 ? `${h} sa ${m % 60} dk` : `${Math.round(h / 24)} g`;
+}
+
 export type AnomaliesTab = 'detectors' | 'ml';
 /** SAF: bilinmeyen değer → detectors (eski linkler bozulmaz). */
 export function resolveAnomaliesTab(raw: string | null): AnomaliesTab {
@@ -112,7 +124,8 @@ const COLS: ColumnDef<MLEvent>[] = [
   { id: 'score', label: 'Skor', width: 80, numeric: true, sortValue: e => e.score },
   { id: 'started', label: 'Başlangıç', width: 150, sortValue: e => e.startedAt },
   { id: 'last', label: 'Son görülme', width: 150, sortValue: e => e.lastSeen },
-  { id: 'stage', label: 'Aşama', width: 90, sortValue: e => e.stage },
+  { id: 'stage', label: 'Durum', width: 90, sortValue: e => e.stage },
+  { id: 'duration', label: 'Süre', width: 80, numeric: true, sortValue: e => e.lastSeen - e.startedAt },
   { id: 'fb', label: 'Geri bildirim', width: 200, sortValue: e => (e.verdict === 'anomaly' ? 2 : e.verdict ? 1 : 0) },
 ];
 
@@ -152,7 +165,8 @@ export function MLTab({ signal = '', onSignal }: { signal?: MLSignal; onSignal?:
       case 'score': return e.score.toFixed(1);
       case 'started': return <span className="font-mono">{fmtTs(e.startedAt)}</span>;
       case 'last': return <span className="font-mono">{fmtTs(e.lastSeen)}</span>;
-      case 'stage': return <Badge variant="outline">{e.stage === 'promoted' ? 'terfi' : 'gölge'}</Badge>;
+      case 'stage': return <Badge variant="outline">{stageLabel(e.stage)}</Badge>;
+      case 'duration': return durationLabel(e.lastSeen - e.startedAt);
       case 'fb':
         if (e.verdict === 'anomaly') return <Badge variant="outline" title={`${e.verdictBy ?? ''}${e.verdictAt ? ` · ${fmtTs(e.verdictAt)}` : ''}`}>gerçek ✓</Badge>;
         if (e.verdict === 'not_anomaly') return <Badge variant="outline" title={`${e.verdictBy ?? ''}${e.note ? ` · ${e.note}` : ''}`}>değil ✗</Badge>;

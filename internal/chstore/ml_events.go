@@ -12,6 +12,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -22,6 +23,7 @@ const (
 	MLSignalMetric = "metric"
 	MLStageShadow  = "shadow"
 	MLStagePromote = "promoted"
+	MLStageClosed  = "closed" // epizot kapandı (B3, v0.10.1768); last_seen = bitiş
 	mlVerdictPref  = "ml:"
 	// MLListCap — liste ucu tavanı (events ucuyla aynı: 200).
 	MLListCap = 200
@@ -65,6 +67,13 @@ type MLEvent struct {
 // Aynı sürekli olay her tikte aynı id'ye yazar → RMT tek satır tutar.
 func MLEventID(detector, service, part string) string {
 	return FingerprintAnomaly("ml:"+detector, part, service)
+}
+
+// MLEpisodeID — SAF: taban kimlik (MLEventID) + epizot başlangıcı → epizot
+// kimliği. Taban kimlik zamansızdı ve tekrar eden olayları üstüne yazıyordu
+// (B3); her epizot kendi satırı, karar/karne/replay epizot başına.
+func MLEpisodeID(baseID string, start time.Time) string {
+	return FingerprintAnomaly("ml-ep", baseID, strconv.FormatInt(start.Unix(), 10))
 }
 
 // UpsertMLEvent — tam satır yazımı (RMT: tüm alanlar taşınır).
