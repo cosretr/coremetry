@@ -255,3 +255,10 @@ export function snapNarrative(s: MLSnapshot): MLNarrativeInput {
   const baseline = typeof ev.baseline === 'number' && !pts.length ? ev.baseline : s.baselineMed;
   return { detector: s.detector, service: s.service, part: s.part, code, pod, direction, observed, baseline, evidence: s.evidence };
 }
+
+/** SAF (test): "gözlenen / taban" birimli (v0.10.1779 ML sekmesi). */
+export function mlValuePair(n: MLNarrativeInput, bucketSec = 300): string {
+  const u = unitOf(n), m = Math.round(bucketSec / 60);
+  const f = (v: number) => (u === 'count' ? String(Math.round(v)) : fmtUnit(v, u, m));
+  return `${f(n.observed)} / ${f(n.baseline)}${n.direction === 'down' ? ' ↓' : ' ↑'}`;
+}

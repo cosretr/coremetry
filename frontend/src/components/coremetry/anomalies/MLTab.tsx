@@ -12,7 +12,9 @@ import { Badge } from '@/components/shadcn/badge';
 import { api } from '@/lib/api';
 import { keys, useMLEvents, useMLScorecard } from '@/lib/queries';
 import { fmtDateTime } from '@/lib/utils';
-import type { MLEvent, MLDetectorScore, MLGate, MLBackfillProgress, MLTickStatus, MLSignalTick } from '@/lib/types';
+import type { MLEvent, MLDetectorScore, MLGate, MLBackfillProgress, MLTickStatus, MLSignalTick, MLScorecard } from '@/lib/types';
+import { Link } from 'react-router-dom';
+import { mlHeadline, mlValuePair } from '@/lib/mlReplay';
 import { MLPeriodReplay } from './MLPeriodReplay';
 import { mlEventHref } from '@/lib/anomalyHref';
 
@@ -96,6 +98,64 @@ export function durationLabel(ns: number): string {
   return h < 48 ? `${h} sa ${m % 60} dk` : `${Math.round(h / 24)} g`;
 }
 
+/** Dedektör → recorder dedektör grubu (tik özeti anahtarı) — SAF. */
+export function detectorGroup(d: string): string {
+  if (d.startsWith('metric_')) return 'metric_ml';
+  switch (d) {
+    case 'log_volume': case 'error_rate': case 'service_silent': return 'log_red';
+    case 'template_spike': case 'rare_template': return 'log_templates';
+    case 'rare_error_code': case 'pod_outlier': return 'log_breakdown';
+    case 'change_point': return 'log_change_point';
+    case 'op_latency': case 'op_error_rate': case 'throughput_drop': return 'trace_red';
+    case 'dependency_latency': return 'dependency';
+    default: return 'trace_pods';
+  }
+}
+
+export interface DetectorRow { detector: string; signal: string; enabled: boolean; events: number; samples: number; hitRate: number; tick?: MLSignalTick; gate?: MLGate }
+
+/** Karne satırları — SAF (test): tüm dedektörler, olay yoksa 0; kapalı = kapı gerekçesinden. */
+export function detectorRows(sc: MLScorecard, signal: MLSignal): DetectorRow[] {
+  const byDet = new Map(sc.detectors.map(d => [d.detector, d]));
+  return Object.keys(sc.signals ?? {}).filter(d => !signal || sc.signals[d] === signal).map(d => {
+    const sc1 = byDet.get(d);
+    const gate = sc.gates?.[d];
+    const reasons = gate?.reasons ?? [];
+    return { detector: d, signal: sc.signals[d], enabled: !reasons.includes('dedektör kapalı') && !reasons.includes('ana anahtar kapalı'),
+      events: sc1?.events ?? 0, samples: sc1?.samples ?? 0, hitRate: sc1?.hitRate ?? 0, tick: sc.tick?.signals?.[detectorGroup(d)], gate };
+  });
+}
+
+/** Durum kutuları — SAF (test). */
+export function statusTiles(sc: MLScorecard, signal: MLSignal, nowSec: number): { k: string; v: string; s: string; warn?: boolean }[] {
+  const t = sc.tick;
+  const ago = t ? Math.max(0, Math.round((nowSec - t.at) / 60)) : null;
+  const bf = (sc.backfill ?? []).find(b => !signal || b.signal === signal);
+  const miss = bf?.missing?.length ?? 0;
+  const events = (sc.bySignal ?? []).filter(s => !signal || s.detector === signal).reduce((a, s) => a + s.events, 0);
+  const samples = (sc.bySignal ?? []).filter(s => !signal || s.detector === signal).reduce((a, s) => a + s.samples, 0);
+  const bo = t?.backoff ?? [];
+  return [
+    { k: 'Son tik', v: t ? `${ago} dk önce` : 'yok', s: t ? `${Math.round(t.durationMs / 1000)} sn · ${t.events} olay${t.docs ? ` · ${t.docs.toLocaleString('tr-TR')} belge` : ''}${t.partial ? ` · ${t.partial} kısmi` : ''}` : 'tik yok', warn: !!t?.lastError },
+    { k: 'Log geçmişi', v: bf ? `${bf.done + miss} / ${bf.total} sa` : '—', s: bf ? (bf.complete ? 'tamam' : bf.running ? 'sürüyor' : 'duraklı') + (miss ? ` · eksik ${miss}` : '') : 'kayıt yok' },
+    { k: 'Olay · 30 gün', v: String(events), s: samples ? `${samples} karar` : 'karar yok · terfi kapalı' },
+    { k: 'VM bekleme', v: bo.length ? `${bo.length} aile` : 'yok', s: bo.map(b => `${b.family} · ${Math.max(1, Math.round((b.until - nowSec) / 60))} dk`).join(', ') || 'tüm aileler açık', warn: bo.length > 0 },
+  ];
+}
+
+const DCOLS: ColumnDef<DetectorRow>[] = [
+  { id: 'detector', label: 'Dedektör', width: 170, sortValue: r => r.detector, naturalDir: 'asc' },
+  { id: 'signal', label: 'Sinyal', width: 70, sortValue: r => r.signal, naturalDir: 'asc' },
+  { id: 'state', label: 'Durum', width: 80, sortValue: r => (r.enabled ? 1 : 0) },
+  { id: 'tick', label: 'Son tik', width: 80, numeric: true, sortValue: r => r.tick?.sourceMs ?? -1 },
+  { id: 'services', label: 'Servis', width: 70, numeric: true, sortValue: r => r.tick?.services ?? -1 },
+  { id: 'candidates', label: 'Aday', width: 60, numeric: true, sortValue: r => r.tick?.candidates ?? -1 },
+  { id: 'written', label: 'Yazıldı', width: 70, numeric: true, sortValue: r => r.tick?.written ?? -1 },
+  { id: 'events', label: 'Olay 30g', width: 80, numeric: true, sortValue: r => r.events },
+  { id: 'hit', label: 'İsabet', width: 100, numeric: true, sortValue: r => r.hitRate },
+  { id: 'gate', label: 'Terfi kapısı', flex: true, minWidth: 180, sortValue: r => (r.gate?.ok ? 0 : 1) },
+];
+
 export type AnomaliesTab = 'detectors' | 'ml';
 /** SAF: bilinmeyen değer → detectors (eski linkler bozulmaz). */
 export function resolveAnomaliesTab(raw: string | null): AnomaliesTab {
@@ -106,7 +166,7 @@ export function AnomaliesTabBar({ value, onChange }: { value: AnomaliesTab; onCh
   return (
     <div className="mb-3">
       <SegmentedControl<AnomaliesTab> value={value} onChange={onChange} aria-label="Anomali kaynağı"
-        options={[{ value: 'detectors', label: 'Dedektörler' }, { value: 'ml', label: 'Log ML' }]} />
+        options={[{ value: 'detectors', label: 'Dedektörler' }, { value: 'ml', label: 'ML' }]} />
     </div>
   );
 }
@@ -115,18 +175,18 @@ const fmtNum = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(2));
 const fmtTs = (ns: number) => fmtDateTime(new Date(ns / 1e6));
 
 const COLS: ColumnDef<MLEvent>[] = [
-  { id: 'signal', label: 'Sinyal', width: 70, sortValue: e => e.signal, naturalDir: 'asc' },
-  { id: 'detector', label: 'Dedektör', width: 150, sortValue: e => e.detector, naturalDir: 'asc' },
+  // v0.10.1779 (operatör mockup): Durum, Süre, insan dili Olay (gerçek link), Servis, Dedektör, birimli değer.
+  { id: 'stage', label: 'Durum', width: 90, sortValue: e => e.stage, naturalDir: 'asc' },
+  { id: 'duration', label: 'Süre', width: 80, numeric: true, sortValue: e => e.lastSeen - e.startedAt },
+  { id: 'headline', label: 'Olay', flex: true, minWidth: 240, sortValue: e => mlHeadline(e) , naturalDir: 'asc' },
   { id: 'service', label: 'Servis', width: 200, sortValue: e => e.service, naturalDir: 'asc' },
-  { id: 'part', label: 'Bölüm', width: 160, sortValue: e => e.level || e.pod || e.code || '' },
+  { id: 'detector', label: 'Dedektör', width: 150, sortValue: e => e.detector, naturalDir: 'asc' },
   { id: 'observed', label: 'Gözlenen / taban', width: 150, numeric: true, sortValue: e => e.observed },
-  { id: 'score', label: 'Skor', width: 80, numeric: true, sortValue: e => e.score },
   { id: 'started', label: 'Başlangıç', width: 150, sortValue: e => e.startedAt },
   { id: 'last', label: 'Son görülme', width: 150, sortValue: e => e.lastSeen },
-  { id: 'stage', label: 'Durum', width: 90, sortValue: e => e.stage },
-  { id: 'duration', label: 'Süre', width: 80, numeric: true, sortValue: e => e.lastSeen - e.startedAt },
-  { id: 'fb', label: 'Geri bildirim', width: 200, sortValue: e => (e.verdict === 'anomaly' ? 2 : e.verdict ? 1 : 0) },
+  { id: 'fb', label: 'Geri bildirim', width: 130, sortValue: e => (e.verdict === 'anomaly' ? 2 : e.verdict ? 1 : 0) },
 ];
+
 
 export function MLTab({ signal = '', onSignal }: { signal?: MLSignal; onSignal?: (s: MLSignal) => void }) {
   const qc = useQueryClient();
@@ -148,16 +208,14 @@ export function MLTab({ signal = '', onSignal }: { signal?: MLSignal; onSignal?:
 
   const renderCell = (e: MLEvent, col: ColumnDef<MLEvent>) => {
     switch (col.id) {
-      case 'signal': return e.signal === 'trace' ? 'Trace' : e.signal === 'metric' ? 'Metrik' : 'Log';
-      case 'detector': return ML_DETECTOR_TR[e.detector] ?? e.detector;
-      case 'service': return <span className="font-mono" title={e.service}>{e.service}</span>;
-      case 'part': return <span className="font-mono">{e.level || e.pod || e.code || '—'}</span>;
-      case 'observed': return `${fmtNum(e.observed)} / ${fmtNum(e.baseline)} ${e.direction === 'down' ? '↓' : '↑'}`;
-      case 'score': return e.score.toFixed(1);
-      case 'started': return <span className="font-mono">{fmtTs(e.startedAt)}</span>;
-      case 'last': return <span className="font-mono">{fmtTs(e.lastSeen)}</span>;
       case 'stage': return <Badge variant="outline">{stageLabel(e.stage)}</Badge>;
       case 'duration': return durationLabel(e.lastSeen - e.startedAt);
+      case 'headline': return <Link to={mlEventHref(e.id)} className="font-semibold" title={e.level || e.pod || e.code || ''}>{mlHeadline(e)}</Link>;
+      case 'service': return <span className="font-mono" title={e.service}>{e.service}</span>;
+      case 'detector': return ML_DETECTOR_TR[e.detector] ?? e.detector;
+      case 'observed': return mlValuePair(e, e.windowSec || 300);
+      case 'started': return <span className="font-mono">{fmtTs(e.startedAt)}</span>;
+      case 'last': return <span className="font-mono">{fmtTs(e.lastSeen)}</span>;
       case 'fb':
         if (e.verdict === 'anomaly') return <Badge variant="outline" title={`${e.verdictBy ?? ''}${e.verdictAt ? ` · ${fmtTs(e.verdictAt)}` : ''}`}>gerçek ✓</Badge>;
         if (e.verdict === 'not_anomaly') return <Badge variant="outline" title={`${e.verdictBy ?? ''}${e.note ? ` · ${e.note}` : ''}`}>değil ✗</Badge>;
@@ -176,30 +234,39 @@ export function MLTab({ signal = '', onSignal }: { signal?: MLSignal; onSignal?:
         <SegmentedControl<MLSignal> value={signal} onChange={onSignal} aria-label="Sinyal" size="sm"
           options={[{ value: '', label: 'Hepsi' }, { value: 'log', label: 'Log' }, { value: 'trace', label: 'Trace' }, { value: 'metric', label: 'Metrik' }]} />
       )}
-      <div className="text-sm text-muted-foreground">
-        <b>Dedektör karnesi · son {sc.data?.windowDays ?? 30} gün</b>
-        {sc.isLoading && <span> · yükleniyor…</span>}
-        {sc.data && sc.data.detectors.length === 0 && <span> · henüz olay yok</span>}
-        {(sc.data?.backfill ?? []).filter(b => !signal || b.signal === signal).map(b => <span key={b.signal} data-testid="ml-backfill"> · {backfillLabel(b)}</span>)}
-        {sc.data && <div className="mt-1" data-testid="ml-tick" title={sc.data.tick?.lastError}>{tickLabel(sc.data.tick, Math.floor(Date.now() / 1000))}</div>}
-        {sc.data?.tick?.signals && (
-          <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-1 font-mono text-xs" data-testid="ml-tick-signals">
-            {Object.entries(sc.data.tick.signals).sort(([a], [b]) => a.localeCompare(b)).map(([n, s]) => <li key={n} title={s.error}>{signalTickLabel(n, s)}</li>)}
-          </ul>
-        )}
-        {sc.data && (sc.data.bySignal?.length ?? 0) > 0 && (
-          <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-1" data-testid="ml-signal-score">
-            {(sc.data.bySignal ?? []).filter(s => !signal || s.detector === signal).map(s => <li key={s.detector}><b>{signalScoreLabel(s)}</b></li>)}
-          </ul>
-        )}
-        {sc.data && sc.data.detectors.length > 0 && (
-          <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
-            {sc.data.detectors.filter((s: MLDetectorScore) => !signal || (sc.data?.signals[s.detector] ?? 'log') === signal).map((s: MLDetectorScore) => (
-              <li key={s.detector} title={gateLabel(sc.data?.gates?.[s.detector])}>{scoreLabel(s)}{sc.data?.promotion[s.detector]?.enabled ? ' · terfi açık' : ''}</li>
-            ))}
-          </ul>
-        )}
-      </div>
+      {sc.data && (
+        <div className="grid gap-2 md:grid-cols-4" data-testid="ml-status-tiles">
+          {statusTiles(sc.data, signal, Math.floor(Date.now() / 1000)).map(t => (
+            <div key={t.k} className="rounded-md border border-border bg-card px-3 py-2">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{t.k}</div>
+              <div className={`text-lg font-semibold ${t.warn ? 'text-[color:var(--warn)]' : ''}`}>{t.v}</div>
+              <div className="text-xs text-muted-foreground">{t.s}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      {sc.data && (
+        <DataTable<DetectorRow>
+          storageKey="anomalies-ml-detectors" columns={DCOLS} rows={detectorRows(sc.data, signal)}
+          state={{ kind: 'empty', message: 'Dedektör yok' }} sort={{ initial: { id: 'events', dir: 'desc' } }}
+          getRowKey={r => r.detector}
+          renderCell={(r, c) => {
+            switch (c.id) {
+              case 'detector': return ML_DETECTOR_TR[r.detector] ?? r.detector;
+              case 'signal': return SIGNAL_TR[r.signal] ?? r.signal;
+              case 'state': return <Badge variant="outline">{r.enabled ? 'açık' : 'kapalı'}</Badge>;
+              case 'tick': return r.tick ? `${(r.tick.sourceMs / 1000).toFixed(1)} sn` : '—';
+              case 'services': return r.tick ? r.tick.services : '—';
+              case 'candidates': return r.tick ? r.tick.candidates : '—';
+              case 'written': return r.tick ? r.tick.written : '—';
+              case 'events': return r.events;
+              case 'hit': return r.samples > 0 ? `%${Math.round(r.hitRate * 100)} (${r.samples})` : 'karar yok';
+              case 'gate': return r.gate?.ok ? 'geçildi' : (r.gate?.reasons ?? []).join(' · ') || '—';
+              default: return null;
+            }
+          }} />
+      )}
+      <h3 className="mt-2 font-semibold">Olaylar · son 24 saat</h3>
       <DataTable<MLEvent>
         storageKey="anomalies-ml" columns={COLS} rows={rows} state={state}
         getRowHref={e => mlEventHref(e.id)}

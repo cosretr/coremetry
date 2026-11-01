@@ -2,7 +2,7 @@
 // kararsız satır isabet yazdırmaz).
 import { describe, it, expect } from 'vitest';
 import { anomalyEventHref, legacyAnomalyRedirect, mlEventHref } from '@/lib/anomalyHref';
-import { backfillLabel, durationLabel, gateLabel, stageLabel, signalTickLabel, tickLabel, resolveAnomaliesTab, resolveMLSignal, scoreLabel, signalScoreLabel } from '@/components/coremetry/anomalies/MLTab';
+import { detectorGroup, detectorRows, statusTiles, backfillLabel, durationLabel, gateLabel, stageLabel, signalTickLabel, tickLabel, resolveAnomaliesTab, resolveMLSignal, scoreLabel, signalScoreLabel } from '@/components/coremetry/anomalies/MLTab';
 
 describe('log ml slice 0', () => {
   it('tab resolves unknown to detectors', () => {
@@ -57,5 +57,22 @@ describe('log ml slice 0', () => {
     expect(legacyAnomalyRedirect(new URLSearchParams('event=e1'))).toBe('/anomalies/e1');
     expect(legacyAnomalyRedirect(new URLSearchParams('tab=ml&replay=r1'))).toBe('/anomalies/ml/r1');
     expect(legacyAnomalyRedirect(new URLSearchParams('tab=ml'))).toBeNull();
+  });
+  // v0.10.1779 — ML sekmesi düzeni (mockup): durum kutuları + dedektör karnesi tablosu.
+  it('detector rows and status tiles', () => {
+    const sc = { windowDays: 30, detectors: [{ detector: 'trace_pod_outlier', events: 3, samples: 0, hits: 0, hitRate: 0 }],
+      bySignal: [{ detector: 'trace', events: 3, samples: 0, hits: 0, hitRate: 0 }], promotion: {},
+      gates: { log_volume: { ok: false, reasons: ['dedektör kapalı'] }, trace_pod_outlier: { ok: false, reasons: ['terfi anahtarı kapalı', 'karar örneği 0 < 20'] } },
+      signals: { log_volume: 'log', trace_pod_outlier: 'trace' },
+      tick: { at: 1000 - 180, durationMs: 2000, events: 1, backoff: [{ family: 'dep:http', until: 1000 + 1320, failures: 2 }], signals: { trace_pods: { ran: true, services: 1, sourceMs: 400, candidates: 1, suppressed: 0, written: 1, partial: 0 } } },
+      backfill: [{ signal: 'log', total: 504, done: 92, missing: [], doneUntil: 0, planEnd: 0, complete: false, running: true, startedAt: 0, updatedAt: 0 }] };
+    expect(detectorGroup('trace_pod_outlier')).toBe('trace_pods');
+    expect(detectorGroup('metric_jvm')).toBe('metric_ml');
+    const rows = detectorRows(sc, '');
+    expect(rows.map(r => `${r.detector}:${r.enabled}:${r.events}:${r.tick?.written ?? '-'}`)).toEqual(['log_volume:false:0:-', 'trace_pod_outlier:true:3:1']);
+    expect(detectorRows(sc, 'log').length).toBe(1);
+    const tiles = statusTiles(sc, '', 1000);
+    expect(tiles.map(t => t.v)).toEqual(['3 dk önce', '92 / 504 sa', '3', '1 aile']);
+    expect(tiles[3].s).toBe('dep:http · 22 dk');
   });
 });

@@ -60,7 +60,7 @@ describe('ml replay', () => {
 });
 
 // v0.10.1771 (C2/C3) — bant, işaretler, anlatım saf fonksiyonları.
-import { mlHeadline, mlStatusLine, mlSummary, mlWhatChanged, parseBand, replayMarkers, snapNarrative } from '@/lib/mlReplay';
+import { mlHeadline, mlStatusLine, mlSummary, mlValuePair, mlWhatChanged, parseBand, replayMarkers, snapNarrative } from '@/lib/mlReplay';
 import { anomalyPlainHeadline, anomalyPlainSummary } from '@/lib/anomalyNarrative';
 
 describe('ml narrative', () => {
@@ -100,5 +100,9 @@ describe('ml narrative', () => {
     expect(anomalyPlainHeadline(e)).toBe('pay POST /pay yavaşladı');
     expect(anomalyPlainSummary(e, 40 * 60e3)).toBe('Sürüyor · 40 dk · 3 olay, normalin üstünde');
     expect(anomalyPlainSummary({ ...e, status: 'cleared' })).toBe('Bitti · 25 dk · 3 olay, normalin üstünde');
+  });
+  it('value pair with unit', () => {
+    expect(mlValuePair({ detector: 'trace_pod_outlier', service: 'a', code: 'p95', observed: 21.25, baseline: 4.83, direction: 'up' })).toBe('21 ms / 5 ms ↑');
+    expect(mlValuePair({ detector: 'log_volume', service: 'a', observed: 900, baseline: 100, direction: 'down' })).toBe('900 / 100 ↓');
   });
 });
