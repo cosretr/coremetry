@@ -409,7 +409,9 @@ type MLStats struct {
 	ESP95Ms        int64  `json:"esP95Ms"`
 	ESQueries      int64  `json:"esQueries"`
 	VMQueries      int64  `json:"vmQueries"`
-	Promoted       int64  `json:"promoted"` // v0.10.1761: anomaly_events'e kopyalanan olay (kümülatif) // v0.10.1758: VM sorguları ES bütçesinden ayrı
+	Promoted       int64  `json:"promoted"`
+	Partial        int64  `json:"partial"`  // v0.10.1765: kısmi ES sonucuyla atlanan dedektör tiki (kümülatif)
+	LastDocs       int64  `json:"lastDocs"` // son log RED penceresinde toplanan belge // v0.10.1761: anomaly_events'e kopyalanan olay (kümülatif) // v0.10.1758: VM sorguları ES bütçesinden ayrı
 	LastCHMs       int64  `json:"lastChMs"` // taban CH sorgusu (trace T1)
 	Events         int64  `json:"events"`
 	SeriesInMemory int64  `json:"seriesInMemory"`

@@ -2,6 +2,7 @@ package ml
 
 import (
 	"context"
+	"errors"
 	"log"
 	"time"
 
@@ -132,13 +133,17 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	var firstErr error
 	var written int64
 	var all []chstore.MLEvent
-	active := 0
+	active, partialN := 0, 0
 	for _, det := range r.detectors {
 		if !det.Enabled(cfg) {
 			continue
 		}
 		active++
 		evs, derr := det.Tick(tctx, deps, cfg, start)
+		if errors.Is(derr, logstore.ErrESPartial) {
+			global.partial.Add(1)
+			partialN++
+		}
 		if derr != nil && firstErr == nil {
 			firstErr = derr
 		}
@@ -174,7 +179,8 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	global.setError(firstErr)
 	global.tickDone(start)
 	// tik durumu: api pod'u karnede okur (süreç-içi sayaç bu pod'da kalır)
-	status := chstore.MLTickStatus{At: start.Unix(), DurationMs: time.Since(start).Milliseconds(), Events: written, Backoff: r.backoff.snapshot(start)}
+	status := chstore.MLTickStatus{At: start.Unix(), DurationMs: time.Since(start).Milliseconds(), Events: written, Backoff: r.backoff.snapshot(start),
+		Partial: int64(partialN), Docs: global.docs.Load()}
 	if firstErr != nil {
 		status.LastError = truncRunes(firstErr.Error(), 300)
 	}
@@ -185,4 +191,7 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	scancel()
 	log.Printf("[ml] tick placement=%s detectors=%d events=%d suppressed=impact:%d,feedback:%d,regime:%d labels=%d dur=%dms es_p95=%dms err=%v",
 		r.placement, active, written, sup.Impact, sup.Feedback, sup.Regime, len(labels), time.Since(start).Milliseconds(), Observability().ESP95Ms, firstErr)
+	if partialN > 0 {
+		log.Printf("[ml] tick partial=%d docs=%d (kısmi ES sonucu seriye yazılmadı)", partialN, global.docs.Load())
+	}
 }

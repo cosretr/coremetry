@@ -40,6 +40,8 @@ type MLTickStatus struct {
 	Steps      map[string]int64        `json:"steps,omitempty"` // adım → ms
 	Signals    map[string]MLSignalTick `json:"signals,omitempty"`
 	Backoff    []MLBackoffEntry        `json:"backoff"`
+	Partial    int64                   `json:"partial"` // bu tikte kısmi ES sonucu alan dedektör
+	Docs       int64                   `json:"docs"`    // log RED penceresinde toplanan belge
 	LastError  string                  `json:"lastError,omitempty"`
 }
 

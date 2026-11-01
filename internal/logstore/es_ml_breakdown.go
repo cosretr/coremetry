@@ -142,9 +142,12 @@ func (s *ESStore) MLLogBreakdown(ctx context.Context, req MLBreakdownRequest) (*
 		return nil, fmt.Errorf("ml: seviye alanı toplanabilir değil")
 	}
 	body := mlBreakdownBody(s.fields.Timestamp, svcField, lvlField, req, esTimeseriesTimeoutFromEnv("10s"))
-	_, aggs, err := s.rawCountSearch(ctx, nil, body, 0, true)
+	_, aggs, env, err := s.rawCountSearchEnv(ctx, nil, body, 0, true)
 	if err != nil {
 		return nil, err
+	}
+	if env.partial() {
+		return nil, fmt.Errorf("%w: %s", ErrESPartial, env.describe())
 	}
 	return parseMLBreakdown(aggs)
 }

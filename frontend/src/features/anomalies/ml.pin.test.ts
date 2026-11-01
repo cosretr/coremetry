@@ -32,6 +32,7 @@ describe('log ml slice 0', () => {
   it('tick label', () => {
     expect(tickLabel(undefined, 0)).toBe('son tik yok');
     expect(tickLabel({ at: 1000 - 300, durationMs: 34000, events: 2, backoff: [] }, 1000)).toBe('son tik 5 dk önce · 34 sn · 2 olay');
+    expect(tickLabel({ at: 1000, durationMs: 1000, events: 0, backoff: [], docs: 1500, partial: 1 }, 1000)).toBe('son tik 0 dk önce · 1 sn · 0 olay · 1.500 belge · 1 kısmi ES sonucu (yazılmadı)');
     expect(tickLabel({ at: 1000, durationMs: 1000, events: 0, backoff: [{ family: 'dep:http', until: 1000 + 1200, failures: 3 }], lastError: 'x' }, 1000))
       .toBe('son tik 0 dk önce · 1 sn · 0 olay · VM bekleme: dep:http (20 dk) · hata: x');
   });

@@ -69,6 +69,8 @@ export function tickLabel(t: MLTickStatus | undefined, nowSec: number): string {
   if (!t) return 'son tik yok';
   const ago = Math.max(0, Math.round((nowSec - t.at) / 60));
   const parts = [`son tik ${ago} dk önce · ${Math.round(t.durationMs / 1000)} sn · ${t.events} olay`];
+  if (t.docs) parts.push(`${t.docs.toLocaleString('tr-TR')} belge`);
+  if (t.partial) parts.push(`${t.partial} kısmi ES sonucu (yazılmadı)`);
   if (t.backoff.length) parts.push(`VM bekleme: ${t.backoff.map(b => `${b.family} (${Math.max(1, Math.round((b.until - nowSec) / 60))} dk)`).join(', ')}`);
   if (t.lastError) parts.push(`hata: ${t.lastError}`);
   return parts.join(' · ');

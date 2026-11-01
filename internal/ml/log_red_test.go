@@ -106,3 +106,12 @@ func TestLogREDEnabled(t *testing.T) {
 		t.Fatal("error_rate açıkken bileşik açık")
 	}
 }
+
+// v0.10.1765 — canlı pencere yalnız son tam kova + bir öncekisi.
+func TestLiveWindow(t *testing.T) {
+	last := time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
+	from, to := liveWindow(last, 5*time.Minute)
+	if !from.Equal(last.Add(-5*time.Minute)) || !to.Equal(last.Add(5*time.Minute)) {
+		t.Fatalf("%v %v", from, to)
+	}
+}

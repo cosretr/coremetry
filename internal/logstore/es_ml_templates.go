@@ -113,9 +113,12 @@ func (s *ESStore) MLTemplateCounts(ctx context.Context, req MLTemplateCountReque
 		return nil, fmt.Errorf("ml: servis alanı toplanabilir değil (%q)", s.fields.Service)
 	}
 	body := mlTemplateBody(s.fields.Timestamp, svcField, s.fields.Body, req, esTimeseriesTimeoutFromEnv("10s"))
-	_, aggs, err := s.rawCountSearch(ctx, nil, body, 0, true)
+	_, aggs, env, err := s.rawCountSearchEnv(ctx, nil, body, 0, true)
 	if err != nil {
 		return nil, err
+	}
+	if env.partial() {
+		return nil, fmt.Errorf("%w: %s", ErrESPartial, env.describe())
 	}
 	return parseMLTemplateAgg(aggs)
 }

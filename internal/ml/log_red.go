@@ -198,6 +198,12 @@ func isOffDay(class string) bool {
 	return false
 }
 
+// liveWindow — SAF: canlı tik ES penceresi = son tam kova + bir öncekisi
+// (v0.10.1765; 4 kova yerine 2: ES maliyeti, dwell geçmişi CH'den).
+func liveWindow(last time.Time, bucket time.Duration) (from, to time.Time) {
+	return last.Add(-bucket), last.Add(bucket)
+}
+
 // lastCompleteBucket — SAF: ingest gecikme payını geçmiş son tam kova başlangıcı.
 func lastCompleteBucket(now time.Time, bucketSec, lagSec int) time.Time {
 	t := now.Add(-time.Duration(lagSec) * time.Second).Truncate(time.Duration(bucketSec) * time.Second)
@@ -268,8 +274,7 @@ func (d *LogRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, now 
 
 	bucket := time.Duration(cfg.BucketSec) * time.Second
 	last := lastCompleteBucket(now, cfg.BucketSec, cfg.IngestLagSec)
-	from := last.Add(-time.Duration(cfg.DwellBuckets+1) * bucket)
-	to := last.Add(bucket)
+	from, to := liveWindow(last, bucket) // yalnız son tam kova + bir öncekisi (geç log); dwell geçmişi CH'den
 	t0 := time.Now()
 	res, err := agg.MLLogAggregate(ctx, logstore.MLLogAggRequest{From: from, To: to, BucketSec: cfg.BucketSec,
 		MaxServices: cfg.MaxServices, InfluencerField: inf, ErrorLevels: cfg.ErrorLevels})
@@ -277,7 +282,21 @@ func (d *LogRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, now 
 	if err != nil {
 		return nil, err
 	}
+	if res.Partial {
+		return nil, fmt.Errorf("%w: %s — seri yazılmadı, kova eksik veri sayıldı", logstore.ErrESPartial, res.PartialReason)
+	}
+	var docs int64
+	for _, r := range res.Rows {
+		docs += r.Count
+	}
+	global.docs.Store(docs)
 	series := seriesFromRows(res.Rows, cfg.ErrorLevels)
+	if cfg.DwellBuckets > 2 {
+		dwellFrom := last.Add(-time.Duration(cfg.DwellBuckets-1) * bucket)
+		if hist, herr := deps.Store.MLSeriesRecent(ctx, chstore.MLSignalLog, nil, "", "", dwellFrom, cfg.BucketSec); herr == nil {
+			mergeHistory(series, hist, dwellFrom.Unix(), from.Unix())
+		}
+	}
 	// seri yazımı (backfill ile aynı tablo)
 	var srows []chstore.MLSeriesRow
 	for k, byB := range series {

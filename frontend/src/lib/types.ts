@@ -11707,7 +11707,7 @@ export interface MLSignalTick { ran: boolean; services: number; sourceMs: number
 /** Son tik durumu (v0.10.1764, system_settings ml_tick_status). */
 export interface MLTickStatus {
   at: number; durationMs: number; events: number; steps?: Record<string, number>; signals?: Record<string, MLSignalTick>;
-  backoff: MLBackoffEntry[]; lastError?: string;
+  backoff: MLBackoffEntry[]; partial?: number; docs?: number; lastError?: string;
 }
 export interface MLScorecard {
   tick?: MLTickStatus;

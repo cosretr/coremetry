@@ -9,9 +9,14 @@ package logstore
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 )
+
+// ErrESPartial — ML okuması kısmi (timed_out / _shards.failed > 0): sonuç
+// seriye YAZILMAZ, kova eksik veri sayılır (v0.10.1765). Çağıran errors.Is ile tanır.
+var ErrESPartial = errors.New("ES kısmi sonuç")
 
 type MLLogAggRequest struct {
 	From, To        time.Time
