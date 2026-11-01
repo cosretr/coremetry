@@ -91,9 +91,12 @@ type opLatPair = chstore.OpPair
 // opLatBatchGate — classifyOpLatency'nin batch kapısı (v0.10.1046). Sıfır
 // değer = kural kapalı (bugünkü davranış).
 type opLatBatchGate struct {
-	isBatch    func(service string) bool // nil = kapı yok
-	curBuckets uint64                    // cari penceredeki 5 dk kova sayısı (recorder: 1)
-	exempt     map[opLatPair]bool        // olayı AKTİF çiftler — kapı uygulanmaz
+	// minAffected — v0.10.1776: p99 ≈ en yavaş %1; calls/100 < minAffected
+	// ise sıçrama tek tek isteklerdir, olay açılmaz (0 = kapı yok).
+	minAffected int
+	isBatch     func(service string) bool // nil = kapı yok
+	curBuckets  uint64                    // cari penceredeki 5 dk kova sayısı (recorder: 1)
+	exempt      map[opLatPair]bool        // olayı AKTİF çiftler — kapı uygulanmaz
 }
 
 // opLatBatchPlan — bir tikin batch kapısı planı: SQL koşulu + argümanları,
@@ -171,6 +174,9 @@ func classifyOpLatency(rows []opLatencyBucket, dwell int, gate opLatBatchGate) [
 			continue
 		}
 		if r.BaseP99Ms <= 0 || r.CurP99Ms < opLatencyMinP99Ms {
+			continue
+		}
+		if !opLatencyAffectedOK(r.CurCalls, gate.minAffected) {
 			continue
 		}
 		ratio := r.CurP99Ms / r.BaseP99Ms
@@ -251,6 +257,12 @@ func opLatencyUnderLoad(r opLatencyBucket, dwell int, curBuckets uint64) bool {
 		}
 	}
 	return true
+}
+
+// opLatencyAffectedOK — SAF: kovadaki çağrının %1'i (p99'un temsil ettiği
+// en yavaş dilim) en az minAffected istek etmeli; 0 = kapı yok.
+func opLatencyAffectedOK(calls uint64, minAffected int) bool {
+	return minAffected <= 0 || float64(calls)/100 >= float64(minAffected)
 }
 
 // opLatencySustained — v0.10.1085: en yeni kovadan önceki dwell−1 kovanın HER
@@ -452,6 +464,7 @@ func DetectOpLatencyAnomalies(ctx context.Context, store *chstore.Store, window 
 		buckets = append(buckets, opLatencyBucketOf(r, activeSet[opLatPair{Service: r.Service, Operation: r.Operation}]))
 	}
 
+	plan.gate.minAffected = sens.OpLatencyAffected()
 	out := classifyOpLatency(buckets, dwell, plan.gate)
 	if len(out) == 0 {
 		return out, nil

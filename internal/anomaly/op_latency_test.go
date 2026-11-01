@@ -55,3 +55,20 @@ func TestClassifyOpLatency(t *testing.T) {
 		}
 	})
 }
+
+// v0.10.1776 — etkilenen istek kapısı: 100 çağrılık kovada p99 tek istek →
+// olay yok; 800 çağrıda aynı sıçrama olay.
+func TestOpLatencyAffectedGate(t *testing.T) {
+	if opLatencyAffectedOK(100, 5) || !opLatencyAffectedOK(500, 5) || !opLatencyAffectedOK(10, 0) {
+		t.Fatal("kapı: calls/100 >= minAffected; 0 = kapı yok")
+	}
+	mk := func(calls uint64) opLatencyBucket {
+		return opLatencyBucket{Service: "pay", Operation: "/x", CurP99Ms: 3000, BaseP99Ms: 250, CurCalls: calls, BaseCalls: 1000, Active: true}
+	}
+	if got := classifyOpLatency([]opLatencyBucket{mk(100)}, 1, opLatBatchGate{minAffected: 5}); len(got) != 0 {
+		t.Fatalf("düşük hacim: olay olmamalı: %+v", got)
+	}
+	if got := classifyOpLatency([]opLatencyBucket{mk(800)}, 1, opLatBatchGate{minAffected: 5}); len(got) != 1 {
+		t.Fatalf("yeterli hacim: olay bekleniyordu: %+v", got)
+	}
+}

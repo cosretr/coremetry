@@ -577,6 +577,15 @@ function SensitivitySection() {
                   varsayılan 2 ({(cfg.opLatencyDwellBuckets ?? 2) * 5} dakika). 1 = eski
                   davranış: tek kovalık sıçrama da anomali açar.
                 </>} />
+              <Num label="Operasyon gecikmesi: en az etkilenen istek (kova başına)" min={1} max={1000} step={1}
+                aria-label="Operasyon gecikmesi en az etkilenen istek"
+                disabled={cfg.opLatency === false}
+                value={cfg.opLatencyMinAffected ?? 5}
+                onChange={e => setCfg({ ...cfg, opLatencyMinAffected: Number(e.target.value) })}
+                hint={<>
+                  p99 en yavaş %1&apos;i temsil eder; kovadaki çağrının %1&apos;i bu sayının altındaysa
+                  sıçrama tek tek isteklerdir, olay açılmaz. Varsayılan 5 (≈ en az 500 çağrı / 5 dk).
+                </>} />
             </div>
           </div>
           {/* v0.10.1586 — trace_op / log_pattern sürdürme (Davis paritesi FAZ 0.5 / C):

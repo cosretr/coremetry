@@ -130,6 +130,11 @@ type AnomalySensitivityConfig struct {
 	// Normalize her zaman 1–6 yazar, alanın varlığı göçün "bu blob yeni
 	// sürümde kaydedildi" işaretidir.
 	OpLatencyDwellBuckets int `json:"opLatencyDwellBuckets"`
+	// OpLatencyMinAffected — v0.10.1776 (operatör, prod: işlem adedi düşük
+	// operasyonda tek yavaş istek p99'u 3× yapıp 234 kez olay açtı): p99 en
+	// iyi ihtimalle isteklerin %1'ini temsil eder; kovada calls/100 < bu
+	// sayı ise olay AÇILMAZ. 1..1000, varsayılan 5 (≈ ≥500 çağrı/kova).
+	OpLatencyMinAffected int `json:"opLatencyMinAffected"`
 	// TraceOpDwellBuckets — v0.10.1586 (Davis paritesi FAZ 0.5 / C, operatör
 	// onayı 2026-10-29): trace_op olayının (error_spike VE new_error) AÇILMASI
 	// için ardışık tamamlanmış kova sayısı; her önceki kova aynı tabanları
@@ -226,7 +231,13 @@ const (
 	opLatencyDwellMin     = 1
 	opLatencyDwellMax     = 6
 	opLatencyDwellDefault = 2
+	opLatencyAffectedDef  = 5
 )
+
+// OpLatencyAffected — nil-güvenli: aralık dışı / eksik → 5.
+func (c AnomalySensitivityConfig) OpLatencyAffected() int {
+	return clampRangeI(c.OpLatencyMinAffected, 1, 1000, opLatencyAffectedDef)
+}
 
 // OpLatencyDwell — nil-güvenli okuma: aralık dışı (eski blobun 0'ı dahil) →
 // varsayılan 2.
@@ -619,6 +630,7 @@ func DefaultAnomalySensitivity() AnomalySensitivityConfig {
 		// geri alındı).
 		OpLatency:             boolPtr(true),
 		OpLatencyDwellBuckets: opLatencyDwellDefault,
+		OpLatencyMinAffected:  opLatencyAffectedDef,
 		// v0.10.1586 — trace_op / log_pattern iki ardışık pencere (operatör onayı).
 		TraceOpDwellBuckets:    traceOpDwellDefault,
 		LogPatternDwellBuckets: logPatternDwellDefault,
@@ -675,6 +687,7 @@ func NormalizeAnomalySensitivity(c AnomalySensitivityConfig) AnomalySensitivityC
 		// v0.10.1085 — sürdürme kova sayısı; kopyalanmazsa PUT'ta düşerdi.
 		// Aralık dışı / eksik → 2.
 		OpLatencyDwellBuckets: c.OpLatencyDwell(),
+		OpLatencyMinAffected:  c.OpLatencyAffected(),
 		// v0.10.1586 — kopyalanmazsa PUT'ta düşerdi; aralık dışı / eksik → 2.
 		TraceOpDwellBuckets:    c.TraceOpDwell(),
 		LogPatternDwellBuckets: c.LogPatternDwell(),
