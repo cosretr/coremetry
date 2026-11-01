@@ -392,9 +392,11 @@ func ratioText(r float64) string {
 	return fmt.Sprintf("%.2f×", r)
 }
 
+// orDash — boş değer "—" (v0.10.1780; "?" operatöre "bilinmiyor mu, yok mu"
+// sorusu doğuruyordu: endpoint seç belirsizleştirme tablosu cluster/namespace).
 func orDash(s string) string {
 	if s == "" {
-		return "?"
+		return "—"
 	}
 	return s
 }
