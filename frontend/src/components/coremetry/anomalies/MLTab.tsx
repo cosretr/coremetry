@@ -13,7 +13,7 @@ import { Badge } from '@/components/shadcn/badge';
 import { api } from '@/lib/api';
 import { keys, useMLEvents, useMLScorecard } from '@/lib/queries';
 import { fmtDateTime } from '@/lib/utils';
-import type { MLEvent, MLDetectorScore, MLGate, MLBackfillProgress } from '@/lib/types';
+import type { MLEvent, MLDetectorScore, MLGate, MLBackfillProgress, MLTickStatus } from '@/lib/types';
 import { MLReplaySheet } from './MLReplaySheet';
 import { MLPeriodReplay } from './MLPeriodReplay';
 
@@ -62,6 +62,16 @@ export function backfillLabel(b: MLBackfillProgress): string {
   if (b.complete) return `${head}${tail} · tamam`;
   if (b.running) return `${head}${tail} · sürüyor`;
   return `${head}${tail} · duraklı${b.lastError ? ` (${b.lastError})` : ''}`;
+}
+
+/** Son tik + VM bekleme satırı — SAF (test). nowSec: şimdi (unix sn). */
+export function tickLabel(t: MLTickStatus | undefined, nowSec: number): string {
+  if (!t) return 'son tik yok';
+  const ago = Math.max(0, Math.round((nowSec - t.at) / 60));
+  const parts = [`son tik ${ago} dk önce · ${Math.round(t.durationMs / 1000)} sn · ${t.events} olay`];
+  if (t.backoff.length) parts.push(`VM bekleme: ${t.backoff.map(b => `${b.family} (${Math.max(1, Math.round((b.until - nowSec) / 60))} dk)`).join(', ')}`);
+  if (t.lastError) parts.push(`hata: ${t.lastError}`);
+  return parts.join(' · ');
 }
 
 export type AnomaliesTab = 'detectors' | 'ml';
@@ -155,6 +165,7 @@ export function MLTab({ signal = '', onSignal }: { signal?: MLSignal; onSignal?:
         {sc.isLoading && <span> · yükleniyor…</span>}
         {sc.data && sc.data.detectors.length === 0 && <span> · henüz olay yok</span>}
         {(sc.data?.backfill ?? []).filter(b => !signal || b.signal === signal).map(b => <span key={b.signal} data-testid="ml-backfill"> · {backfillLabel(b)}</span>)}
+        {sc.data && <div className="mt-1" data-testid="ml-tick" title={sc.data.tick?.lastError}>{tickLabel(sc.data.tick, Math.floor(Date.now() / 1000))}</div>}
         {sc.data && (sc.data.bySignal?.length ?? 0) > 0 && (
           <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-1" data-testid="ml-signal-score">
             {(sc.data.bySignal ?? []).filter(s => !signal || s.detector === signal).map(s => <li key={s.detector}><b>{signalScoreLabel(s)}</b></li>)}

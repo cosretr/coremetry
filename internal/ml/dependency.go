@@ -116,41 +116,59 @@ func (d *Dependency) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, 
 		series[k][t] = v
 	}
 	fams := 0
+	win := fmt.Sprintf("%ds", cfg.BucketSec)
+	var waiting []string
 	for _, f := range depFamilies {
 		l := d.famLabels(ctx, deps, f, from, to)
 		if !l.ok {
 			continue
 		}
 		fams++
-		cq, pq := depQueries(f, l.svc, l.target, cfg.BucketSec)
-		for _, x := range []struct{ expr, measure string }{{cq, "count"}, {pq, "p95"}} {
-			t0 := time.Now()
-			rows, err := deps.VM.QueryPromQLRange(ctx, x.expr, from, to, cfg.BucketSec, cfg.DwellBuckets+3)
-			deps.ObserveVM(time.Since(t0))
+		// A: servis başına en çok K hedef — count serisi ucuz (le yok)
+		cq := fmt.Sprintf("topk by (%s) (%d, sum by (%s, %s) (rate(%s_count[%s])))", l.svc, cfg.VMTargetCardinality, l.svc, l.target, f.Metric, win)
+		rows, skip, err := vmInstant(ctx, deps, "dep:"+f.ID, cq, to, now)
+		if skip {
+			waiting = append(waiting, f.ID)
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("vm dep %s/count: %w", f.ID, err)
+		}
+		bySvc := map[string][]string{}
+		for _, r := range rows {
+			lb := groupKeyLabels(r.GroupKey)
+			svc, tgt := lb[l.svc], lb[l.target]
+			if v, ok := instantValue(r); ok && svc != "" && tgt != "" {
+				put(svc, depPart(f.ID, tgt, "count"), last.Unix(), v)
+				bySvc[svc] = append(bySvc[svc], tgt)
+			}
+		}
+		// B: p95 servis grupları halinde, yalnız seçili hedefler (ham bucket taraması sınırlı)
+		for _, bt := range svcBatches(bySvc, cfg.VMServiceBatch) {
+			pq := fmt.Sprintf("histogram_quantile(0.95, sum by (%s, %s, le) (rate(%s_bucket{%s=~%q, %s=~%q}[%s])))",
+				l.svc, l.target, f.Metric, l.svc, bt.svcRe, l.target, bt.tgtRe, win)
+			rows, skip, err := vmInstant(ctx, deps, "dep:"+f.ID, pq, to, now)
+			if skip {
+				waiting = append(waiting, f.ID)
+				break
+			}
 			if err != nil {
-				return nil, fmt.Errorf("vm dep %s/%s: %w", f.ID, x.measure, err)
+				return nil, fmt.Errorf("vm dep %s/p95: %w", f.ID, err)
 			}
 			for _, r := range rows {
 				lb := groupKeyLabels(r.GroupKey)
 				svc, tgt := lb[l.svc], lb[l.target]
-				if svc == "" || tgt == "" {
-					continue
-				}
-				for _, p := range r.Points {
-					if math.IsNaN(p.Value) || math.IsInf(p.Value, 0) {
-						continue
-					}
-					v := p.Value
-					if x.measure == "p95" {
-						v *= f.Scale
-					}
-					put(svc, depPart(f.ID, tgt, x.measure), p.Time/1e9, v)
+				if v, ok := instantValue(r); ok && bt.allowed[svc][tgt] {
+					put(svc, depPart(f.ID, tgt, "p95"), last.Unix(), v*f.Scale)
 				}
 			}
 		}
 	}
 	if fams == 0 {
 		return nil, fmt.Errorf("VM'de client histogram ailesi/etiketi yok (http/db/messaging client duration)")
+	}
+	if len(waiting) > 0 && len(series) == 0 {
+		return nil, fmt.Errorf("VM aileleri beklemede (backoff): %v", waiting)
 	}
 	var srows []chstore.MLSeriesRow
 	for k, byB := range series {
@@ -173,6 +191,10 @@ func (d *Dependency) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, 
 		return nil, err
 	}
 	dwellStart := last.Add(-time.Duration(cfg.DwellBuckets-1) * bucket).Unix()
+	// dwell geçmişi CH'den (instant sorgu yalnız son kovayı verir)
+	if hist, herr := deps.Store.MLSeriesRecent(ctx, chstore.MLSignalTrace, nil, depPartPrefix, "", time.Unix(dwellStart, 0), cfg.BucketSec); herr == nil {
+		mergeHistory(series, hist, dwellStart, last.Unix())
+	}
 	var evs []chstore.MLEvent
 	for k := range series {
 		svc, part := splitKey(k)

@@ -1,7 +1,7 @@
 // v0.10.1743 — log ML dilim 0 pinleri: sekme çözümü ve karne etiketi (S4:
 // kararsız satır isabet yazdırmaz).
 import { describe, it, expect } from 'vitest';
-import { backfillLabel, gateLabel, resolveAnomaliesTab, resolveMLSignal, scoreLabel, signalScoreLabel } from '@/components/coremetry/anomalies/MLTab';
+import { backfillLabel, gateLabel, tickLabel, resolveAnomaliesTab, resolveMLSignal, scoreLabel, signalScoreLabel } from '@/components/coremetry/anomalies/MLTab';
 
 describe('log ml slice 0', () => {
   it('tab resolves unknown to detectors', () => {
@@ -27,5 +27,12 @@ describe('log ml slice 0', () => {
     expect(backfillLabel(b)).toBe('Log geçmişi: 314/504 saat · 2 eksik · sürüyor');
     expect(backfillLabel({ ...b, done: 502, complete: true, running: false })).toBe('Log geçmişi: 504/504 saat · 2 eksik · tamam');
     expect(backfillLabel({ ...b, missing: null, running: false, lastError: 'timeout' })).toBe('Log geçmişi: 312/504 saat · duraklı (timeout)');
+  });
+  // v0.10.1764 — son tik + VM bekleme satırı.
+  it('tick label', () => {
+    expect(tickLabel(undefined, 0)).toBe('son tik yok');
+    expect(tickLabel({ at: 1000 - 300, durationMs: 34000, events: 2, backoff: [] }, 1000)).toBe('son tik 5 dk önce · 34 sn · 2 olay');
+    expect(tickLabel({ at: 1000, durationMs: 1000, events: 0, backoff: [{ family: 'dep:http', until: 1000 + 1200, failures: 3 }], lastError: 'x' }, 1000))
+      .toBe('son tik 0 dk önce · 1 sn · 0 olay · VM bekleme: dep:http (20 dk) · hata: x');
   });
 });

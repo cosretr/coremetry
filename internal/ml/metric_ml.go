@@ -74,42 +74,45 @@ func (d *MetricML) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 	}
 	bucket := time.Duration(cfg.BucketSec) * time.Second
 	last := lastCompleteBucket(now, cfg.BucketSec, cfg.IngestLagSec)
-	from := last.Add(-time.Duration(cfg.DwellBuckets+1) * bucket)
 	to := last.Add(bucket)
 	series := map[string]map[int64]float64{}
 	dirOf := map[string]string{} // part → direction
-	for _, fam := range chstore.MLMetricDetectorNames {
-		if !cfg.DetectorOn(fam) {
+	var waiting []string
+	for _, pe := range metricExprs(cfg, svcLabel, cfg.BucketSec) {
+		rows, skip, err := vmInstant(ctx, deps, "metric:"+pe.family, pe.expr, to, now)
+		if skip {
+			if len(waiting) == 0 || waiting[len(waiting)-1] != pe.family {
+				waiting = append(waiting, pe.family)
+			}
 			continue
 		}
-		for _, e := range cfg.MetricFamilies[fam] {
-			t0 := time.Now()
-			rows, err := deps.VM.QueryPromQLRange(ctx, renderExpr(e.Expr, svcLabel, cfg.BucketSec), from, to, cfg.BucketSec, cfg.DwellBuckets+3)
-			deps.ObserveVM(time.Since(t0))
-			if err != nil {
-				return nil, fmt.Errorf("vm %s/%s: %w", fam, e.ID, err)
-			}
-			part := metricPart(fam, e.ID)
-			dirOf[part] = e.Direction
-			for _, r := range rows {
-				svc := groupKeyLabels(r.GroupKey)[svcLabel]
-				if svc == "" {
-					continue
-				}
-				k := chstore.MLSeriesKey(svc, part)
-				if series[k] == nil {
-					if len(series) >= metricSeriesCap {
-						break
-					}
-					series[k] = map[int64]float64{}
-				}
-				for _, p := range r.Points {
-					if !math.IsNaN(p.Value) && !math.IsInf(p.Value, 0) {
-						series[k][p.Time/1e9] = p.Value
-					}
-				}
-			}
+		if err != nil {
+			return nil, fmt.Errorf("vm %s/%s: %w", pe.family, pe.id, err)
 		}
+		part := metricPart(pe.family, pe.id)
+		dirOf[part] = pe.direction
+		for _, r := range rows {
+			svc := groupKeyLabels(r.GroupKey)[svcLabel]
+			v, ok := instantValue(r)
+			if svc == "" || !ok {
+				continue
+			}
+			k := chstore.MLSeriesKey(svc, part)
+			if series[k] == nil {
+				if len(series) >= metricSeriesCap {
+					break
+				}
+				series[k] = map[int64]float64{}
+			}
+			series[k][last.Unix()] = v
+		}
+	}
+	if len(waiting) > 0 && len(series) == 0 {
+		return nil, fmt.Errorf("VM metrik aileleri beklemede (backoff): %v", waiting)
+	}
+	dwellFrom := last.Add(-time.Duration(cfg.DwellBuckets-1) * bucket)
+	if hist, herr := deps.Store.MLSeriesRecent(ctx, chstore.MLSignalMetric, nil, "", "", dwellFrom, cfg.BucketSec); herr == nil {
+		mergeHistory(series, hist, dwellFrom.Unix(), last.Unix())
 	}
 	var srows []chstore.MLSeriesRow
 	for k, byB := range series {

@@ -11692,7 +11692,7 @@ export interface MLConfig {
   bucketSec: number; tickSec: number; timeoutMs: number; maxServices: number; maxEsQueriesPerTick: number;
   baselineDays: number; minBaselineRate: number; dwellBuckets: number; dailyEventCap: number;
   ingestLagSec: number; minBaselineSamples: number; criticalZ: number; influencerField: string; errorLevels: string[];
-  backfillTimeoutMs: number; backfillIntervalMs: number;
+  backfillTimeoutMs: number; backfillIntervalMs: number; vmTargetCardinality: number; vmServiceBatch: number;
   metricFamilies: Record<string, MLMetricExpr[]>;
   quality: MLQuality;
 }
@@ -11702,7 +11702,15 @@ export interface MLBackfillProgress {
   signal: string; total: number; done: number; missing: number[] | null; doneUntil: number; planEnd: number;
   complete: boolean; running: boolean; startedAt: number; updatedAt: number; lastError?: string;
 }
+export interface MLBackoffEntry { family: string; until: number; failures: number; lastError?: string }
+export interface MLSignalTick { ran: boolean; services: number; sourceMs: number; candidates: number; suppressed: number; written: number; partial: number; error?: string }
+/** Son tik durumu (v0.10.1764, system_settings ml_tick_status). */
+export interface MLTickStatus {
+  at: number; durationMs: number; events: number; steps?: Record<string, number>; signals?: Record<string, MLSignalTick>;
+  backoff: MLBackoffEntry[]; lastError?: string;
+}
 export interface MLScorecard {
+  tick?: MLTickStatus;
   windowDays: number; detectors: MLDetectorScore[]; bySignal?: MLDetectorScore[]; backfill?: MLBackfillProgress[];
   promotion: Record<string, MLPromotion>; gates?: Record<string, MLGate>; signals: Record<string, string>;
 }

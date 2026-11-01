@@ -112,6 +112,9 @@ func (s *Server) getMLScorecard(w http.ResponseWriter, r *http.Request) {
 		}
 		out := map[string]any{"windowDays": 30, "detectors": rows, "bySignal": chstore.MLSignalScores(rows),
 			"promotion": cfg.Promotion, "gates": gates, "signals": signals}
+		if ts, ok, _ := s.store.GetMLTickStatus(ctx); ok {
+			out["tick"] = ts
+		}
 		if bp, ok, _ := s.store.GetMLBackfillProgress(ctx, chstore.MLSignalLog); ok {
 			out["backfill"] = []chstore.MLBackfillProgress{bp}
 		}

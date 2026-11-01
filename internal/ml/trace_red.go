@@ -187,28 +187,24 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 		}
 		type q struct{ expr, measure string }
 		for _, x := range []q{{cq, "count"}, {eq, "err"}, {pq, "p95"}} {
-			t0 := time.Now()
-			rows, err := deps.VM.QueryPromQLRange(ctx, x.expr, from, to, cfg.BucketSec, cfg.DwellBuckets+3)
-			deps.ObserveVM(time.Since(t0))
+			rows, skip, err := vmInstant(ctx, deps, "trace:"+pin.ID, x.expr, to, now)
+			if skip {
+				break
+			}
 			if err != nil {
 				return nil, fmt.Errorf("vm %s/%s: %w", pin.ID, x.measure, err)
 			}
 			for _, r := range rows {
 				lb := groupKeyLabels(r.GroupKey)
 				svc, route := lb[fl.svc], lb[fl.route]
-				if svc == "" || route == "" {
+				v, ok := instantValue(r)
+				if svc == "" || route == "" || !ok {
 					continue
 				}
-				for _, p := range r.Points {
-					if math.IsNaN(p.Value) {
-						continue
-					}
-					v := p.Value
-					if x.measure == "p95" {
-						v *= scale
-					}
-					put(svc, tracePart(route, x.measure), p.Time/1e9, v)
+				if x.measure == "p95" {
+					v *= scale
 				}
+				put(svc, tracePart(route, x.measure), last.Unix(), v)
 			}
 		}
 	}
@@ -243,6 +239,12 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 		return nil, err
 	}
 	global.series.Add(int64(len(series)))
+	// dwell geçmişi CH'den (instant sorgu yalnız son kovayı verir)
+	if dwellFrom := last.Add(-time.Duration(cfg.DwellBuckets-1) * bucket); true {
+		if hist, herr := deps.Store.MLSeriesRecent(ctx, chstore.MLSignalTrace, nil, "", "", dwellFrom, cfg.BucketSec); herr == nil {
+			mergeHistory(series, hist, dwellFrom.Unix(), last.Unix())
+		}
+	}
 
 	sens := deps.Store.AnomalySensitivityForDetectors()
 	loc := time.UTC

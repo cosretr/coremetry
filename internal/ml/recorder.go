@@ -38,6 +38,8 @@ type Deps struct {
 	ObserveVM func(d time.Duration)
 	// Labels — ortak etiket seti (taban hijyeni, geri bildirim); nil güvenli.
 	Labels *Labels
+	// Backoff — VM aile backoff'u (vm_budget.go); nil güvenli.
+	Backoff *vmBackoff
 	// Background — alt sistemin ömrüne bağlı context (tik context'i DEĞİL):
 	// backfill gibi tikten uzun işler buna bağlanır (v0.10.1763).
 	Background context.Context
@@ -56,6 +58,7 @@ type Recorder struct {
 	placement string
 	detectors []Detector
 	runs      *tracker
+	backoff   *vmBackoff
 }
 
 // New — placement etiketi /admin/stats için ("sre" | "worker").
@@ -63,7 +66,7 @@ func New(store *chstore.Store, logs logstore.Store, vm anomaly.REDVM, lock cache
 	if lock == nil {
 		_, lock = cache.NewNoop()
 	}
-	return &Recorder{store: store, logs: logs, vm: vm, placement: placement, detectors: detectors, runs: newTracker(),
+	return &Recorder{store: store, logs: logs, vm: vm, placement: placement, detectors: detectors, runs: newTracker(), backoff: newVMBackoff(),
 		leader: cache.NewLeaderHolder(lock, lockKey, 3*time.Minute)}
 }
 
@@ -123,7 +126,7 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	}
 	lb := NewLabels(labels)
 	esAtStart := global.esQueries.Load()
-	deps := Deps{Store: r.store, Logs: r.logs, VM: r.vm, Labels: lb, Background: ctx, ObserveES: func(d time.Duration) { global.observeES(d.Milliseconds()) },
+	deps := Deps{Store: r.store, Logs: r.logs, VM: r.vm, Labels: lb, Background: ctx, Backoff: r.backoff, ObserveES: func(d time.Duration) { global.observeES(d.Milliseconds()) },
 		ObserveVM: func(d time.Duration) { global.observeVM(d.Milliseconds()) },
 		ESLeft:    func() int { return cfg.MaxESQueriesPerTick - int(global.esQueries.Load()-esAtStart) }}
 	var firstErr error
@@ -170,6 +173,16 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	global.events.Add(written)
 	global.setError(firstErr)
 	global.tickDone(start)
+	// tik durumu: api pod'u karnede okur (süreç-içi sayaç bu pod'da kalır)
+	status := chstore.MLTickStatus{At: start.Unix(), DurationMs: time.Since(start).Milliseconds(), Events: written, Backoff: r.backoff.snapshot(start)}
+	if firstErr != nil {
+		status.LastError = truncRunes(firstErr.Error(), 300)
+	}
+	sctx, scancel := context.WithTimeout(ctx, 5*time.Second)
+	if serr := r.store.SaveMLTickStatus(sctx, status); serr != nil {
+		log.Printf("[ml] tik durumu yazılamadı: %v", serr)
+	}
+	scancel()
 	log.Printf("[ml] tick placement=%s detectors=%d events=%d suppressed=impact:%d,feedback:%d,regime:%d labels=%d dur=%dms es_p95=%dms err=%v",
 		r.placement, active, written, sup.Impact, sup.Feedback, sup.Regime, len(labels), time.Since(start).Milliseconds(), Observability().ESP95Ms, firstErr)
 }

@@ -136,6 +136,8 @@ export function MLSubsection() {
             {num('Kova (sn)', 'bucketSec', 'date_histogram kovası (60–3600)')}
             {num('Tik (sn)', 'tickSec', 'Alt sistem tiki (60–3600)')}
             {num('ES zaman aşımı (ms)', 'timeoutMs', 'Tik içi istek (1000–60000)')}
+            {num('VM hedef tavanı (servis başına)', 'vmTargetCardinality', 'Bağımlılık gecikmesi: servis başına en çok K hedef, topk (1–200)')}
+            {num('VM servis grubu', 'vmServiceBatch', 'Ham histogram sorgusunda bir gruptaki servis sayısı (5–500)')}
             {num('Geçmiş doldurma zaman aşımı (ms)', 'backfillTimeoutMs', 'Saatlik geçmiş isteği için ES zaman aşımı (5000–120000)')}
             {num('Geçmiş doldurma aralığı (ms)', 'backfillIntervalMs', 'İki geçmiş isteği arası bekleme (200–60000)')}
             {num('ES ingest gecikme payı (sn)', 'ingestLagSec', 'Son kova ancak kova sonu + bu pay geçince değerlendirilir (0–3600)')}

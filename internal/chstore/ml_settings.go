@@ -185,6 +185,10 @@ type MLConfig struct {
 	// IngestLagSec — ES ingest gecikme payı (0..3600, varsayılan 120): son kova
 	// ancak kova sonu + pay geçince değerlendirilir (kalite çerçevesi, log).
 	IngestLagSec int `json:"ingestLagSec"`
+	// VMTargetCardinality — bağımlılık: servis başına en çok K hedef (topk; 1..200, varsayılan 20; v0.10.1764).
+	VMTargetCardinality int `json:"vmTargetCardinality"`
+	// VMServiceBatch — ham histogram sorgusunda bir gruptaki servis sayısı (5..500, varsayılan 50).
+	VMServiceBatch int `json:"vmServiceBatch"`
 	// BackfillTimeoutMs — geçmiş doldurma isteği zaman aşımı (5000..120000, varsayılan 30000; v0.10.1763).
 	BackfillTimeoutMs int `json:"backfillTimeoutMs"`
 	// BackfillIntervalMs — geçmiş doldurma istekleri arası bekleme (200..60000, varsayılan 2000).
@@ -214,7 +218,7 @@ func DefaultMLConfig() MLConfig {
 	return MLConfig{Enabled: false, Detectors: d, Promotion: p,
 		BucketSec: 300, TickSec: 300, TimeoutMs: 10000, MaxServices: 500, MaxESQueriesPerTick: 4,
 		BaselineDays: 7, MinBaselineRate: 5, DwellBuckets: 2, DailyEventCap: 200,
-		IngestLagSec: 120, BackfillTimeoutMs: 30000, BackfillIntervalMs: 2000, MinBaselineSamples: 20, CriticalZ: 4, MetricFamilies: DefaultMLMetricFamilies(), Quality: DefaultMLQuality(),
+		IngestLagSec: 120, BackfillTimeoutMs: 30000, BackfillIntervalMs: 2000, VMTargetCardinality: 20, VMServiceBatch: 50, MinBaselineSamples: 20, CriticalZ: 4, MetricFamilies: DefaultMLMetricFamilies(), Quality: DefaultMLQuality(),
 		ErrorLevels: []string{"error", "err", "fatal", "critical", "severe", "emerg", "alert"}}
 }
 
@@ -237,6 +241,8 @@ func NormalizeMLConfig(c MLConfig) MLConfig {
 	c.DwellBuckets = clampInt(c.DwellBuckets, 1, 12, d.DwellBuckets)
 	c.DailyEventCap = clampInt(c.DailyEventCap, 10, 10000, d.DailyEventCap)
 	c.IngestLagSec = clampInt(c.IngestLagSec, 0, 3600, d.IngestLagSec)
+	c.VMTargetCardinality = clampInt(c.VMTargetCardinality, 1, 200, d.VMTargetCardinality)
+	c.VMServiceBatch = clampInt(c.VMServiceBatch, 5, 500, d.VMServiceBatch)
 	c.BackfillTimeoutMs = clampInt(c.BackfillTimeoutMs, 5000, 120000, d.BackfillTimeoutMs)
 	c.BackfillIntervalMs = clampInt(c.BackfillIntervalMs, 200, 60000, d.BackfillIntervalMs)
 	c.MinBaselineSamples = clampInt(c.MinBaselineSamples, 5, 500, d.MinBaselineSamples)
