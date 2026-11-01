@@ -101,8 +101,8 @@ func rulesFor(signal, part string, cfg chstore.MLConfig) (seriesRule, bool) {
 		switch m {
 		case "count":
 			return seriesRule{detector: detThroughputDrop, downOnly: true, trafficPart: tp}, true
-		case "p95":
-			return seriesRule{detector: detOpLatency, upOnly: true, trafficPart: tp}, true
+		case "slow":
+			return seriesRule{detector: detOpLatency, upOnly: true, noRateFloor: true, trafficPart: tp}, true
 		case "err_ratio":
 			return seriesRule{detector: detOpErrorRate, upOnly: true, noRateFloor: true, minObserved: 0.01, trafficPart: tp}, true
 		}

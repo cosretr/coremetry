@@ -288,6 +288,10 @@ func qualityFilter(evs []chstore.MLEvent, cfg chstore.MLConfig, lb *Labels, tr *
 	var sup suppression
 	kept := evs[:0]
 	for _, ev := range evs {
+		if ev.Stage == chstore.MLStageChronic { // kronik kayıt: tek satır, epizot/teyit yok
+			kept = append(kept, ev)
+			continue
+		}
 		if !impactOK(ev.Baseline, ev.Observed, q) {
 			sup.Impact++
 			continue

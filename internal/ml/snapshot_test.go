@@ -17,7 +17,7 @@ func TestEventPart(t *testing.T) {
 	}{
 		{chstore.MLEvent{Signal: "log", Detector: "log_volume"}, partTotal},
 		{chstore.MLEvent{Signal: "log", Detector: "error_rate", Level: "error"}, partError},
-		{chstore.MLEvent{Signal: "trace", Detector: "op_latency", Code: "/pay"}, "/pay|p95"},
+		{chstore.MLEvent{Signal: "trace", Detector: "op_latency", Code: "/pay"}, "/pay|slow"},
 		{chstore.MLEvent{Signal: "trace", Detector: "op_error_rate", Code: "/pay"}, "/pay|err_ratio"},
 		{chstore.MLEvent{Signal: "trace", Detector: "throughput_drop", Code: "/pay"}, "/pay|count"},
 		{chstore.MLEvent{Signal: "metric", Detector: "metric_jvm", Code: "metric_jvm|heap_used"}, "metric_jvm|heap_used"},

@@ -23,7 +23,8 @@ const (
 	MLSignalMetric = "metric"
 	MLStageShadow  = "shadow"
 	MLStagePromote = "promoted"
-	MLStageClosed  = "closed" // epizot kapandı (B3, v0.10.1768); last_seen = bitiş
+	MLStageClosed  = "closed"
+	MLStageChronic = "chronic" // B2: tekrarlayan desen tek kayıt (epizot açmaz) // epizot kapandı (B3, v0.10.1768); last_seen = bitiş
 	mlVerdictPref  = "ml:"
 	// MLListCap — liste ucu tavanı (events ucuyla aynı: 200).
 	MLListCap = 200
@@ -301,4 +302,29 @@ func (s *Store) MLScorecard(ctx context.Context, since time.Time) ([]MLDetectorS
 // boot'unda iner. Lider tik öncesi bunu yoklar, yoksa bekler (çökmez).
 func (s *Store) MLTableReady(ctx context.Context) (bool, error) {
 	return s.tableExists(ctx, "ml_events")
+}
+
+// MLEpisodeCounts — dedektörün servis × bölüm (code) başına epizot sayısı
+// (`since`'den beri başlayan satırlar; FINAL). B2 kronik kararı.
+func (s *Store) MLEpisodeCounts(ctx context.Context, detector string, since time.Time) (map[string]int, error) {
+	rows, err := s.conn.Query(ctx, `
+		SELECT service, code, count() FROM ml_events FINAL
+		WHERE detector = ? AND started_at >= ? AND stage != 'chronic'
+		GROUP BY service, code
+		LIMIT 20000
+		SETTINGS max_execution_time = 5`, detector, chDateTime64Arg(since))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]int{}
+	for rows.Next() {
+		var svc, code string
+		var n uint64
+		if err := rows.Scan(&svc, &code, &n); err != nil {
+			return nil, err
+		}
+		out[MLSeriesKey(svc, code)] = int(n)
+	}
+	return out, rows.Err()
 }

@@ -98,7 +98,15 @@ func judge(cur, base []float64, cfg chstore.MLConfig, upOnly bool) Judgement {
 
 // effMAD — SAF: ölçekli MAD tabanı; düz seyreden seride MAD≈0 tuzağı
 // (anomaly.go effectiveMAD ile aynı fikir). Replay bandı da bunu kullanır.
-func effMAD(med, mad float64) float64 { return math.Max(mad*1.4826, math.Max(0.1*med, 1)) }
+// Mutlak taban: sayım/ms serisinde 1; ORAN serisinde (medyan < 1: err_ratio,
+// slow) 0.005 — sabit 1 tabanı oran serisini hiç tetiklemiyordu (v0.10.1769).
+func effMAD(med, mad float64) float64 {
+	floor := 1.0
+	if med < 1 {
+		floor = 0.005
+	}
+	return math.Max(mad*1.4826, math.Max(0.1*med, floor))
+}
 
 // judgeMM — SAF: judge'ın medyan/MAD'ı önceden hesaplanmış hali (backtest
 // aynı saat sınıfı için bir kez hesaplar). n = taban örnek sayısı.

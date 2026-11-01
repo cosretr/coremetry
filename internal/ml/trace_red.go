@@ -89,6 +89,24 @@ func traceQueries(pin anomaly.REDFamilyPin, svc, route, status string, winSec in
 	return
 }
 
+// slowShareQuery — SAF (B2): isteklerin ≤ slow eşiğinde kalan payı
+// (MetricsQL histogram_share; VM kaynağı). slow_ratio = 1 − pay.
+func slowShareQuery(pin anomaly.REDFamilyPin, svc, route string, winSec int, slowSec float64) string {
+	thr := slowSec
+	if pin.Unit == "ms" {
+		thr = slowSec * 1000
+	}
+	return fmt.Sprintf("histogram_share(%g, sum by (%s, %s, le) (rate(%s_bucket[%ds])))", thr, svc, route, pin.Names, winSec)
+}
+
+// slowAffected — SAF: kovada etkilenen istek ≈ oran × istek/sn × kova sn.
+func slowAffected(ratio, ratePerSec float64, bucketSec int) float64 {
+	return ratio * ratePerSec * float64(bucketSec)
+}
+
+// isChronic — SAF: son 7 günde ≥ K epizot → kronik.
+func isChronic(episodes, k int) bool { return k > 0 && episodes >= k }
+
 // groupKeyLabels — SAF: vmetrics GroupKey ("k=\"v\"" sıralı) → map.
 func groupKeyLabels(gk []string) map[string]string {
 	out := make(map[string]string, len(gk))
@@ -186,7 +204,8 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 			scale = 1000
 		}
 		type q struct{ expr, measure string }
-		for _, x := range []q{{cq, "count"}, {eq, "err"}, {pq, "p95"}} {
+		sq := slowShareQuery(pin, fl.svc, fl.route, cfg.BucketSec, cfg.SlowRequestSec)
+		for _, x := range []q{{cq, "count"}, {eq, "err"}, {pq, "p95"}, {sq, "slow"}} {
 			rows, skip, err := vmInstant(ctx, deps, "trace:"+pin.ID, x.expr, to, now)
 			if skip {
 				break
@@ -203,6 +222,9 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 				}
 				if x.measure == "p95" {
 					v *= scale
+				}
+				if x.measure == "slow" {
+					v = math.Max(0, 1-v) // pay → yavaş istek oranı
 				}
 				put(svc, tracePart(route, x.measure), last.Unix(), v)
 			}
@@ -272,6 +294,12 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 		return cur
 	}
 	off := isOffDay(class)
+	episodes := map[string]int{}
+	if cfg.DetectorOn(detOpLatency) {
+		if ec, eerr := deps.Store.MLEpisodeCounts(ctx, detOpLatency, now.Add(-7*24*time.Hour)); eerr == nil {
+			episodes = ec
+		}
+	}
 	var evs []chstore.MLEvent
 	for k := range series {
 		svc, part, _ := strings.Cut(k, "\x00")
@@ -290,9 +318,21 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 			}
 		}
 		if cfg.DetectorOn(detOpLatency) {
-			pk := chstore.MLSeriesKey(svc, tracePart(route, "p95"))
-			if j := judge(curOf(pk), base[pk], cfg, true); j.Fire && d.dayCap(detOpLatency, cfg, now) {
-				evs = append(evs, d.event(detOpLatency, svc, route, j, last, cfg, class))
+			// B2: p99/p95 yerine yavaş istek oranı + mutlak etkilenen istek eşiği;
+			// kronik desen (≥K epizot / 7 g) yeni olay değil tek kayıt.
+			sk := chstore.MLSeriesKey(svc, tracePart(route, "slow"))
+			c2 := cfg
+			c2.MinBaselineRate = 0
+			j := judge(curOf(sk), base[sk], c2, true)
+			affected := slowAffected(j.Observed, series[k][last.Unix()], cfg.BucketSec)
+			if j.Fire && affected >= float64(cfg.MinAffectedRequests) && d.dayCap(detOpLatency, cfg, now) {
+				ev := d.event(detOpLatency, svc, route, j, last, cfg, class)
+				ev.Evidence = mergeEvidence(ev.Evidence, map[string]any{"measure": "slow_ratio", "slowSec": cfg.SlowRequestSec, "affected": math.Round(affected),
+					"p95Ms": series[chstore.MLSeriesKey(svc, tracePart(route, "p95"))][last.Unix()], "episodes7d": episodes[chstore.MLSeriesKey(svc, route)]})
+				if isChronic(episodes[chstore.MLSeriesKey(svc, route)], cfg.ChronicEpisodes) {
+					ev.ID, ev.Stage = chstore.MLEventID("chronic:"+detOpLatency, svc, route), chstore.MLStageChronic
+				}
+				evs = append(evs, ev)
 			}
 		}
 		if cfg.DetectorOn(detOpErrorRate) {

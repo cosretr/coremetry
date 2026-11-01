@@ -146,7 +146,7 @@ func TestRulesFor(t *testing.T) {
 		ok             bool
 	}{
 		{"log", "_total", detLogVolume, true}, {"log", "_error", detErrorRate, true}, {"log", "warn", "", false},
-		{"trace", "/pay|count", detThroughputDrop, true}, {"trace", "/pay|p95", detOpLatency, true},
+		{"trace", "/pay|count", detThroughputDrop, true}, {"trace", "/pay|slow", detOpLatency, true}, {"trace", "/pay|p95", "", false},
 		{"trace", "/pay|err_ratio", detOpErrorRate, true}, {"trace", "/pay|err", "", false},
 		{"metric", "metric_jvm|heap_used", "metric_jvm", true}, {"metric", "metric_jvm|nope", "", false},
 	}

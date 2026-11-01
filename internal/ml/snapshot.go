@@ -33,7 +33,7 @@ func eventPart(ev chstore.MLEvent) string {
 		case detTracePodOutlier:
 			return "" // kesitsel karar: pod serisi tutulmaz
 		case detOpLatency:
-			return tracePart(ev.Code, "p95")
+			return tracePart(ev.Code, "slow")
 		case detOpErrorRate:
 			return tracePart(ev.Code, "err_ratio")
 		default:

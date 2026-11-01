@@ -27,7 +27,8 @@ export function parseObj(raw: string | undefined | null): Record<string, unknown
 
 /** SAF: sunucu effMAD ile aynı (internal/ml/log_red.go). */
 export function effMAD(med: number, mad: number): number {
-  return Math.max(mad * 1.4826, Math.max(0.1 * med, 1));
+  const floor = med < 1 ? 0.005 : 1; // oran serisi (v0.10.1769)
+  return Math.max(mad * 1.4826, Math.max(0.1 * med, floor));
 }
 
 export interface ReplayChart {

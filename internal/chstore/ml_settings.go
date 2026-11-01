@@ -187,6 +187,13 @@ type MLConfig struct {
 	// IngestLagSec — ES ingest gecikme payı (0..3600, varsayılan 120): son kova
 	// ancak kova sonu + pay geçince değerlendirilir (kalite çerçevesi, log).
 	IngestLagSec int `json:"ingestLagSec"`
+	// SlowRequestSec — op_latency (B2, v0.10.1769): "yavaş istek" eşiği, saniye
+	// (0.05..60, varsayılan 1). p99 yerine yavaş istek ORANI değerlendirilir.
+	SlowRequestSec float64 `json:"slowRequestSec"`
+	// MinAffectedRequests — kovada etkilenen istek sayısı bundan azsa olay yok (1..10000, varsayılan 5).
+	MinAffectedRequests int `json:"minAffectedRequests"`
+	// ChronicEpisodes — son 7 günde ≥ bu kadar epizot → yeni olay yerine tek "kronik" kaydı (2..100, varsayılan 5).
+	ChronicEpisodes int `json:"chronicEpisodes"`
 	// VMTargetCardinality — bağımlılık: servis başına en çok K hedef (topk; 1..200, varsayılan 20; v0.10.1764).
 	VMTargetCardinality int `json:"vmTargetCardinality"`
 	// VMServiceBatch — ham histogram sorgusunda bir gruptaki servis sayısı (5..500, varsayılan 50).
@@ -220,7 +227,7 @@ func DefaultMLConfig() MLConfig {
 	return MLConfig{Enabled: false, Detectors: d, Promotion: p,
 		BucketSec: 300, TickSec: 300, TimeoutMs: 10000, MaxServices: 500, MaxESQueriesPerTick: 4,
 		BaselineDays: 21, MinBaselineRate: 5, DwellBuckets: 2, DailyEventCap: 200,
-		IngestLagSec: 120, BackfillTimeoutMs: 30000, BackfillIntervalMs: 2000, VMTargetCardinality: 20, VMServiceBatch: 50, MinBaselineSamples: 20, CriticalZ: 4, MetricFamilies: DefaultMLMetricFamilies(), Quality: DefaultMLQuality(),
+		IngestLagSec: 120, BackfillTimeoutMs: 30000, BackfillIntervalMs: 2000, VMTargetCardinality: 20, VMServiceBatch: 50, SlowRequestSec: 1, MinAffectedRequests: 5, ChronicEpisodes: 5, MinBaselineSamples: 20, CriticalZ: 4, MetricFamilies: DefaultMLMetricFamilies(), Quality: DefaultMLQuality(),
 		ErrorLevels: []string{"error", "err", "fatal", "critical", "severe", "emerg", "alert"}}
 }
 
@@ -243,6 +250,11 @@ func NormalizeMLConfig(c MLConfig) MLConfig {
 	c.DwellBuckets = clampInt(c.DwellBuckets, 1, 12, d.DwellBuckets)
 	c.DailyEventCap = clampInt(c.DailyEventCap, 10, 10000, d.DailyEventCap)
 	c.IngestLagSec = clampInt(c.IngestLagSec, 0, 3600, d.IngestLagSec)
+	if c.SlowRequestSec < 0.05 || c.SlowRequestSec > 60 {
+		c.SlowRequestSec = d.SlowRequestSec
+	}
+	c.MinAffectedRequests = clampInt(c.MinAffectedRequests, 1, 10000, d.MinAffectedRequests)
+	c.ChronicEpisodes = clampInt(c.ChronicEpisodes, 2, 100, d.ChronicEpisodes)
 	c.VMTargetCardinality = clampInt(c.VMTargetCardinality, 1, 200, d.VMTargetCardinality)
 	c.VMServiceBatch = clampInt(c.VMServiceBatch, 5, 500, d.VMServiceBatch)
 	c.BackfillTimeoutMs = clampInt(c.BackfillTimeoutMs, 5000, 120000, d.BackfillTimeoutMs)

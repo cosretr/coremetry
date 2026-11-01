@@ -11696,6 +11696,7 @@ export interface MLConfig {
   baselineDays: number; minBaselineRate: number; dwellBuckets: number; dailyEventCap: number;
   ingestLagSec: number; minBaselineSamples: number; criticalZ: number; influencerField: string; errorLevels: string[];
   backfillTimeoutMs: number; backfillIntervalMs: number; vmTargetCardinality: number; vmServiceBatch: number;
+  slowRequestSec: number; minAffectedRequests: number; chronicEpisodes: number;
   metricFamilies: Record<string, MLMetricExpr[]>;
   quality: MLQuality;
 }
