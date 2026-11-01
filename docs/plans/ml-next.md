@@ -29,3 +29,10 @@ Pencere başlangıç − 1 sa → bitiş + 1 sa; kayıt epizot kapanınca tamaml
 
 ## Açık not
 "Heap bandı" için anomaly_sensitivity'de ayrı anahtar bulunamadı (grep HeapBand/heapBand boş); runtime_pods (runtime_vm GC) yerleşik anahtarı altında olabilir — A3'te yalnız op_latency + log_template_new eklendi.
+
+## Operatör notu 01.11.2026 — JVM / heap / GC kaynağı Thanos
+Heap, JVM ve GC metrikleri VictoriaMetrics'te DEĞİL; uzak cluster'ların Thanos'unda (`internal/chstore/thanos.go`, clusters katmanı). Sonuçlar:
+- `metric_jvm` ailesi (M1) VM'de boş döner → bugünkü hâliyle prod'da sessiz kalır; kaynak seçimi gerekir: aile başına kaynak (VM | Thanos cluster(ları)), Thanos için cluster × servis gezme (multicluster-first).
+- Eski heap bandı dedektörü (`anomaly/heap_source.go`, metricsrc CH|VM) da aynı kaynak sorununu taşır; A3'te ayrı anahtar bulunamadı — Thanos kaynağıyla birlikte ele alınır.
+- Backoff / bütçe aynı mantıkla Thanos sorgularına uygulanır (Thanos query_range maliyeti VM'den yüksek).
+Karar operatörde; kodlanmadı.
