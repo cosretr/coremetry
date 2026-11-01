@@ -2661,6 +2661,15 @@ export const api = {
     request<import('./types').ProblemVerdictsResponse>(`/api/problem-verdicts/policy`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ muteNotifications }),
     }),
+  // v0.10.1777 — Inbox toplu kapat (editor+) / kalıcı sil (admin).
+  resolveProblemsBulk: (b: { ids: string[]; fingerprints: string[] }) =>
+    request<{ resolvedProblems: number; resolvedExceptions: number }>(`/api/problems/resolve`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b),
+    }),
+  deleteProblemsBulk: (b: { ids: string[]; fingerprints: string[] }) =>
+    request<{ deletedProblems: number; deletedExceptions: number }>(`/api/problems/delete`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b),
+    }),
   acknowledgeProblems: (ids: string[]) =>
     request<{ acknowledged: number }>(`/api/problems/acknowledge`, {
       method: 'POST',

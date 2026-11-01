@@ -4,6 +4,7 @@ import { stopRowClick } from '@/lib/a11y'; // v0.10.455 (dış denetim D3 dilim 
 import { PriorityBadge } from '@/components/ui/PriorityBadge';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/coremetry/overlay';
 import { Button, Chip, SearchField } from '@/components/ui';
 import { Link, useLocation, useNavigate, useSearchParams, Navigate } from 'react-router-dom';
 import { Users, Shield } from 'lucide-react';
@@ -283,6 +284,7 @@ export default function InboxPage() {
   // shared link should reproduce the VIEW, not a half-finished
   // multi-select someone else is about to act on. Named `picked` to
   // stay clear of `selected`, which is the DRAWER's row (?item=).
+  const [delOpen, setDelOpen] = useState(false); // v0.10.1777 kalıcı sil onayı
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkNote, setBulkNote] = useState<string | null>(null);
@@ -725,6 +727,37 @@ export default function InboxPage() {
     return next;
   });
 
+  // v0.10.1777 — toplu kapat (editor+) / kalıcı sil (admin, onay + audit).
+  const bulkIds = { ids: ackProblemIds, fingerprints: ackExceptionFps };
+  const bulkCloseable = ackProblemIds.length + ackExceptionFps.length;
+  const bulkResolve = async () => {
+    setBulkBusy(true); setBulkNote(null);
+    try {
+      const r = await api.resolveProblemsBulk(bulkIds);
+      setBulkNote(`${r.resolvedProblems + r.resolvedExceptions} kayıt kapatıldı`);
+      setPicked(new Set());
+      qc.invalidateQueries({ queryKey: ['inbox'] });
+    } catch (e) {
+      setBulkNote(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+  const bulkDelete = async () => {
+    setDelOpen(false);
+    setBulkBusy(true); setBulkNote(null);
+    try {
+      const r = await api.deleteProblemsBulk(bulkIds);
+      setBulkNote(`${r.deletedProblems + r.deletedExceptions} kayıt silindi`);
+      setPicked(new Set());
+      qc.invalidateQueries({ queryKey: ['inbox'] });
+    } catch (e) {
+      setBulkNote(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
   const bulkAcknowledge = async () => {
     setBulkBusy(true); setBulkNote(null);
     // Both calls go out before either result is inspected: they hit
@@ -1092,6 +1125,30 @@ export default function InboxPage() {
                     onConfirm={c => { void bulkVerdict('noise', c); }} />
                 </>
               )}
+              {isAdmin && (
+                <Button variant="secondary" size="sm" disabled={bulkCloseable === 0 || bulkBusy}
+                  onClick={() => { void bulkResolve(); }} data-testid="bulk-resolve">
+                  {`Kapat (${bulkCloseable})`}
+                </Button>
+              )}
+              {user?.role === 'admin' && (
+                <Button variant="danger" size="sm" disabled={bulkCloseable === 0 || bulkBusy}
+                  onClick={() => setDelOpen(true)} data-testid="bulk-delete">
+                  {`Kalıcı sil (${bulkCloseable})`}
+                </Button>
+              )}
+              <AlertDialog open={delOpen} onOpenChange={setDelOpen}>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>{`${bulkCloseable} kayıt kalıcı olarak silinsin mi?`}</AlertDialogTitle>
+                    <AlertDialogDescription>Problem ve exception grubu satırları veritabanından silinir; geri alınamaz. Aynı imza yeniden oluşursa yeni kayıt olarak döner. İşlem audit&apos;e düşer.</AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Vazgeç</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => { void bulkDelete(); }} data-testid="bulk-delete-confirm">Kalıcı sil</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
               <Button variant="secondary" size="sm" disabled={bulkBusy}
                 onClick={() => { setPicked(new Set()); setBulkNote(null); }}>
                 Seçimi temizle
