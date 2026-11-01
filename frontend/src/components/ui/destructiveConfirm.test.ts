@@ -146,6 +146,9 @@ const CONFIRM_EXEMPT: Record<string, string> = {
   // kapsam listesi (Deleted/Kept) → type-to-confirm → uçuşta Cancel de
   // kilitli. Atoma indirmek koruma seviyesini DÜŞÜRÜRDÜ.
   'pages/settings/DangerZoneTab.tsx': 'type-to-confirm, confirm()ten güçlü',
+  // v0.10.1778 — toplu kalıcı sil: onay coremetry AlertDialog (odak Vazgeç'te,
+  // dış tık kapatmaz), `confirm(` atomu değil; ui/ import tavanı (uiImportRatchet).
+  'pages/Inbox.tsx': 'coremetry AlertDialog onayı (bulk-delete-confirm)',
 };
 
 describe('Kapı A — yıkıcı sunucu çağrısı ONAY taşıyor', () => {
@@ -209,6 +212,12 @@ describe('Kapı B — yıkıcı dosyalarda kırmızı dil', () => {
   it('DangerZone muafiyeti hâlâ type-to-confirm’e dayanıyor', () => {
     const dz = FILES.find(f => f.rel === 'pages/settings/DangerZoneTab.tsx')!;
     expect(dz.src).toMatch(/phrase\.trim\(\)\s*!==\s*CONFIRM/);
+  });
+
+  it('Inbox muafiyeti hâlâ AlertDialog onayına dayanıyor (v0.10.1778)', () => {
+    const ib = FILES.find(f => f.rel === 'pages/Inbox.tsx')!;
+    expect(ib.src).toMatch(/<AlertDialogAction[^>]*onClick=\{\(\) => \{ void bulkDelete\(\); \}\}/);
+    expect(ib.src).toContain("deleteProblemsBulk");
   });
 
   it('Dashboards muafiyeti hâlâ YALNIZ deleteSavedView’a dayanıyor', () => {
