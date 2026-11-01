@@ -24,7 +24,7 @@ export const isSloProblem = (it: InboxItem): boolean =>
 // çekmecesiydi; servis dikkat şeridi, "Open source" ve /anomalies
 // çekmecesinin "Tam detay →" bağlantısı artık hep bu adrese iner.
 export function anomalyDetailHref(id: string): string {
-  return `/inbox?anomaly=${encodeURIComponent(id)}`;
+  return `/anomalies/${encodeURIComponent(id)}`; // C1 (v0.10.1770): tam sayfa
 }
 
 // serviceInboxHref — v0.10.1508 (operator-reported, prod): servis sayfası
@@ -90,7 +90,7 @@ export function inboxRowOpen(it: InboxItem): InboxRowOpen {
   const href = inboxItemHref(it);
   if (isInboxExcFamily(it) && href) return { to: 'page', href };
   if (it.kind === 'problem' && it.problem?.id) return { to: 'detail', param: 'problem', id: it.problem.id };
-  if (it.kind === 'anomaly' && it.anomaly?.id) return { to: 'detail', param: 'anomaly', id: it.anomaly.id };
+  if (it.kind === 'anomaly' && it.anomaly?.id) return { to: 'page', href: anomalyDetailHref(it.anomaly.id) }; // C1: tam sayfa
   if (it.kind === 'incident' && it.incident?.id && href) return { to: 'page', href };
   return inboxItemIdTarget(it.id);
 }
@@ -107,7 +107,7 @@ export function inboxItemIdTarget(itemId: string | null | undefined): InboxRowOp
   if (!id) return { to: 'none' };
   switch (kind) {
     case 'problem': return { to: 'detail', param: 'problem', id };
-    case 'anomaly': return { to: 'detail', param: 'anomaly', id };
+    case 'anomaly': return { to: 'page', href: anomalyDetailHref(id) }; // C1
     case 'incident': return { to: 'page', href: `/incident?id=${encodeURIComponent(id)}` };
     case 'exception':
     case 'httperror': return { to: 'page', href: `/problems?exc=${encodeURIComponent(id)}` };

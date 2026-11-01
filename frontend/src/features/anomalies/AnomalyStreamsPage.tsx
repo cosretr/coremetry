@@ -2,7 +2,8 @@
 // URL kaynak (?tab=detectors|logml). Eski dedektörler "Dedektörler"
 // sekmesinde olduğu gibi; "Log ML" sekmesi ayrı tablo (ml_events),
 // karışmaz (docs/audits/ml-audit.md K1).
-import { useSearchParams } from 'react-router-dom';
+import { Navigate, useSearchParams } from 'react-router-dom';
+import { legacyAnomalyRedirect } from '@/lib/anomalyHref';
 import { Topbar } from '@/components/Topbar';
 import { SavedViewsBar } from '@/components/SavedViewsBar';
 import { TriageCrumb } from '@/components/TriageCrumb';
@@ -25,6 +26,8 @@ export default function AnomalyStreamsPage() {
     if (t === 'detectors') next.delete('tab'); else next.set('tab', t);
     setSp(next, { replace: true });
   };
+  const legacy = legacyAnomalyRedirect(sp);
+  if (legacy) return <Navigate to={legacy} replace />; // C1: ?event= / ?replay= → tam sayfa
   return (
     <>
       <Topbar title="Anomalies" />

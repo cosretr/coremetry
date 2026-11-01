@@ -1,6 +1,7 @@
 // v0.10.1743 — log ML dilim 0 pinleri: sekme çözümü ve karne etiketi (S4:
 // kararsız satır isabet yazdırmaz).
 import { describe, it, expect } from 'vitest';
+import { anomalyEventHref, legacyAnomalyRedirect, mlEventHref } from '@/lib/anomalyHref';
 import { backfillLabel, durationLabel, gateLabel, stageLabel, signalTickLabel, tickLabel, resolveAnomaliesTab, resolveMLSignal, scoreLabel, signalScoreLabel } from '@/components/coremetry/anomalies/MLTab';
 
 describe('log ml slice 0', () => {
@@ -48,5 +49,13 @@ describe('log ml slice 0', () => {
     expect(durationLabel(25 * 60e9)).toBe('25 dk');
     expect(durationLabel(130 * 60e9)).toBe('2 sa 10 dk');
     expect(durationLabel(72 * 3600e9)).toBe('3 g');
+  });
+  // v0.10.1770 (C1) — tam sayfa adresleri ve eski link yönlendirmesi.
+  it('full page hrefs and legacy redirect', () => {
+    expect(anomalyEventHref('a b')).toBe('/anomalies/a%20b');
+    expect(mlEventHref('x')).toBe('/anomalies/ml/x');
+    expect(legacyAnomalyRedirect(new URLSearchParams('event=e1'))).toBe('/anomalies/e1');
+    expect(legacyAnomalyRedirect(new URLSearchParams('tab=ml&replay=r1'))).toBe('/anomalies/ml/r1');
+    expect(legacyAnomalyRedirect(new URLSearchParams('tab=ml'))).toBeNull();
   });
 });

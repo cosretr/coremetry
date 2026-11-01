@@ -5,8 +5,9 @@ import { PriorityBadge } from '@/components/ui/PriorityBadge';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Button, Chip, SearchField } from '@/components/ui';
-import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams, Navigate } from 'react-router-dom';
 import { Users, Shield } from 'lucide-react';
+import { anomalyEventHref } from '@/lib/anomalyHref';
 import { Topbar } from '@/components/Topbar';
 import { useInbox, useServicesMetadata } from '@/lib/queries';
 import { tsCompact, tsLong, fmtFixed, fmtAgoNs, rowClickHandlers } from '@/lib/utils';
@@ -36,7 +37,6 @@ import { ProblemsSection, AlertProblemHost } from '@/features/anomalies/Problems
 import { TriageStatusBadge } from '@/features/anomalies/ProblemDetail';
 // v0.10.1032 — anomali olayının tam sayfa detayı (?anomaly=<id>), ProblemsSection
 // gibi modül yolundan (barrel AnomaliesPage'i bu parçaya sürüklerdi).
-import { AnomalyEventHost } from '@/features/anomalies/AnomalyEventDetail';
 import { RecurringMarker } from '@/features/anomalies/RecurringMarker'; // v0.10.1049
 import { promotedRecurrence } from '@/features/anomalies/detailSummary'; // v0.10.1054
 import { useAuth } from '@/components/AuthProvider';
@@ -1398,15 +1398,7 @@ export default function InboxPage() {
           onBack={() => openDetail('problem', null)}
         />
       )}
-      {anomalyParam && (
-        <AnomalyEventHost
-          key={anomalyParam}
-          id={anomalyParam}
-          isAdmin={isAdmin}
-          backLabel="← Problems"
-          onBack={() => openDetail('anomaly', null)}
-        />
-      )}
+      {anomalyParam && <Navigate to={anomalyEventHref(anomalyParam)} replace />}
     </>
   );
 }

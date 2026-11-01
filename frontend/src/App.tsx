@@ -64,6 +64,8 @@ const Incident          = lazy(() => import('./pages/Incident'));
 // observation-only page (live streams + 24h history).
 const Problems          = lazy(() => import('./features/anomalies'));
 const Anomalies         = lazy(() => import('./features/anomalies/AnomalyStreamsPage'));
+const AnomalyEventPage  = lazy(() => import('./features/anomalies/AnomalyEventPage'));
+const MLReplayPage      = lazy(() => import('./components/coremetry/anomalies/MLReplayPage'));
 const Rollouts          = lazy(() => import('./pages/Rollouts')); // v0.10.201 — Deployment Report → Rollouts
 const Inbox             = lazy(() => import('./pages/Inbox'));
 const Shift             = lazy(() => import('./pages/Shift'));
@@ -212,6 +214,8 @@ export default function App() {
             <Route path="/shift"          element={<Shift />} />
             <Route path="/problems"       element={<Problems />} />
             <Route path="/anomalies"      element={<Anomalies />} />
+            <Route path="/anomalies/ml/:id" element={<MLReplayPage />} />
+            <Route path="/anomalies/:id"  element={<AnomalyEventPage />} />
             <Route path="/rollouts"          element={<Rollouts />} />
             <Route path="/deployment-report" element={<DeploymentReportRedirect />} />
             <Route path="/exceptions"     element={<QueryRedirect to="/problems" />} />

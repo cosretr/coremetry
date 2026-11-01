@@ -115,6 +115,7 @@ async function mount(url = '/inbox?prio=P1,P2,P3'): Promise<HTMLElement> {
               <Route path="/inbox" element={<><Inbox /><Loc /></>} />
               <Route path="/problems" element={<Loc />} />
               <Route path="/incident" element={<Loc />} />
+              <Route path="/anomalies/:id" element={<Loc />} />
             </Routes>
           </ConfirmProvider>
         </MemoryRouter>
@@ -154,38 +155,24 @@ describe('Problems kuyruğu — satır tıkı nereye açılır', () => {
     expect(row(el, 'High error rate')).toBeTruthy(); // gizli ama DOM'da
   });
 
-  it('anomali satırı: ?anomaly= yerinde tam sayfa; "← Problems" kuyruğa döner', async () => {
+  it('anomali satırı: /anomalies/:id tam sayfaya gider (C1, v0.10.1770)', async () => {
     const el = await mount();
     act(() => { row(el, 'POST /pay').click(); });
     await settle();
-    expect(params(el).get('anomaly')).toBe('e1');
-    expect(el.querySelector('[data-host="anomaly"]')?.getAttribute('data-id')).toBe('e1');
-    expect(el.querySelector('[data-host="problem"]')).toBeNull();
-    expect(queueHidden(el)).toBe(true);
-    act(() => { (el.querySelector('[data-host="anomaly"] button') as HTMLButtonElement).click(); });
-    await settle();
-    expect(params(el).has('anomaly')).toBe(false);
-    expect(params(el).get('prio')).toBe('P1,P2,P3');
-    expect(queueHidden(el)).toBe(false);
-    expect(el.querySelector('[data-host]')).toBeNull();
+    expect(loc(el).split('?')[0]).toBe('/anomalies/e1');
   });
-
-  // v0.10.1414 (tablo satırları gerçek link) — satır artık role=button değil:
-  // klavye durağı başlık hücresindeki gerçek <a>; Enter = tarayıcının bağlantı
-  // etkinleştirmesi (a.click()). j/k + Enter (useTableNav) aşağıdaki düzenekte.
   it('klavye: Tab durağı başlık linki, Enter (link etkinleştirme) fare tıkıyla AYNI yere açar', async () => {
     const el = await mount();
     const r = row(el, 'POST /pay');
     expect(r.getAttribute('role')).toBeNull();
     expect(r.hasAttribute('tabindex')).toBe(false);
-    const a = r.querySelector('td a[href*="anomaly=e1"]') as HTMLAnchorElement;
+    const a = r.querySelector('td a[href="/anomalies/e1"]') as HTMLAnchorElement;
     expect(a).not.toBeNull();
     a.focus();
     expect(document.activeElement).toBe(a);
     act(() => { a.click(); });
     await settle();
-    expect(params(el).get('anomaly')).toBe('e1');
-    expect(params(el).get('prio')).toBe('P1,P2,P3');
+    expect(loc(el).split('?')[0]).toBe('/anomalies/e1');
   });
 
   it('incident satırı: çekmece YOK — incident tam sayfasına gezinir, geri bağlantı kuyruğa', async () => {
@@ -256,12 +243,10 @@ describe('Problems kuyruğu — satır tıkı nereye açılır', () => {
     expect(params(el).get('problem')).toBe('p1');
   });
   it('detay açıkken j + Enter gizli kuyruktan satır AÇMAZ', async () => {
+    // eski ?anomaly= linki tam sayfaya yönlenir (C1)
     const el = await mount('/inbox?prio=P1,P2,P3&anomaly=e1');
-    press('j'); press('Enter');
     await settle();
-    expect(params(el).get('anomaly')).toBe('e1');
-    expect(params(el).has('problem')).toBe(false);
-    expect(el.querySelector('[data-host="anomaly"]')).not.toBeNull();
+    expect(loc(el).split('?')[0]).toBe('/anomalies/e1');
   });
 });
 
@@ -280,11 +265,11 @@ describe('eski ?item= linki — tam sayfaya yönlendirme', () => {
     const el = await mount('/inbox?item=incident:i1');
     expect(loc(el)).toBe('/incident?id=i1');
   });
-  it('anomaly → ?anomaly=; listede olmayan satır için de (kimlikten çözülür)', async () => {
+  it('anomaly → /anomalies/:id; listede olmayan satır için de (kimlikten çözülür)', async () => {
     m.items = [];
     const el = await mount('/inbox?item=anomaly:zz9');
-    expect(params(el).get('anomaly')).toBe('zz9');
-    expect(params(el).has('item')).toBe(false);
+    await settle();
+    expect(loc(el).split('?')[0]).toBe('/anomalies/zz9');
   });
   it('exception → /problems?exc=', async () => {
     const el = await mount('/inbox?item=exception:fp1');

@@ -11,7 +11,7 @@
 
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { ArrowDownToLine } from 'lucide-react';
 import { Badge, Button, Card, DisclosureButton, Row, useConfirm } from '@/components/ui';
 import { useDataTable, DataTableHead, DataTableColgroup, DataTableState, type ColumnDef, type DataTableStateProps } from '@/components/ui/DataTable';
@@ -32,6 +32,7 @@ import {
 import { fmtNum, tsCompact, tsLong } from '@/lib/utils';
 import { logsLinkForPattern } from './patternLogsLink'; // v0.10.1071 — saf modüle taşındı
 import { AnomalyDetailDrawer } from './AnomalyDetailDrawer';
+import { anomalyEventHref } from '@/lib/anomalyHref';
 import { RecurringMarker } from './RecurringMarker'; // v0.10.1049
 import { SnoozeButton } from './SnoozeButton';
 import { serviceHref, inboxItemWindow, pointEventWindow, eventLifespanWindow } from '@/lib/serviceHref';
@@ -446,6 +447,7 @@ function AnomalyTable({ rows, storageKey, rowRefs, highlight, onOpen, title, sta
 }) {
   // Varsayılan sıra sunucununkiyle birebir: handler `status = 'active' DESC,
   // last_seen DESC` döndürüyor ve sayfa zaten active/cleared olarak ayırıyor.
+  const navigate = useNavigate(); // C1: drawer yerine /anomalies/:id
   const tr = useT(); // v0.10.1338
   const askCosreName = `${tr('ai.askCosre')} · anomaly`;
   const dt = useDataTable<AnomalyEvent>({
@@ -482,7 +484,8 @@ function AnomalyTable({ rows, storageKey, rowRefs, highlight, onOpen, title, sta
                   // Interactive children keep their own behaviour —
                   // only a plain row click opens the drawer.
                   if ((ev.target as HTMLElement).closest('a,button')) return;
-                  onOpen(e.id);
+                  void onOpen;
+                  navigate(anomalyEventHref(e.id));
                 }}
                 // content-visibility skips off-screen rows on paint (.cv-row) —
                 // the 24h history can run long. Not virtualized: the ?event=<id>

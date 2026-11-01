@@ -36,8 +36,8 @@ describe('inboxItemHref', () => {
     // (560px çekmece). Anomali olayının artık tam sayfa detayı var ve
     // Problems kuyruğunun içinde açılıyor; servis dikkat şeridi + "Open
     // source" oraya iner.
-    expect(inboxItemHref(anom('e1'))).toBe('/inbox?anomaly=e1');
-    expect(inboxItemHref(anom('e/1 x'))).toBe('/inbox?anomaly=e%2F1%20x');
+    expect(inboxItemHref(anom('e1'))).toBe('/anomalies/e1');
+    expect(inboxItemHref(anom('e/1 x'))).toBe('/anomalies/e%2F1%20x');
     expect(inboxItemHref(inc('i1'))).toBe('/incident?id=i1');
   });
   it('returns null when the payload lacks the native id', () => {
@@ -46,7 +46,7 @@ describe('inboxItemHref', () => {
     expect(inboxItemHref(item({ kind: 'anomaly' }))).toBeNull();
   });
   it('anomalyDetailHref — tek kurucu (çekmecenin "Tam detay →" linki de bunu kullanır)', () => {
-    expect(anomalyDetailHref('abc')).toBe('/inbox?anomaly=abc');
+    expect(anomalyDetailHref('abc')).toBe('/anomalies/abc');
     expect(anomalyDetailHref(anom('e1').anomaly!.id)).toBe(inboxItemHref(anom('e1')));
   });
 });
@@ -60,14 +60,14 @@ describe('inboxRowOpen — Problems kuyruğunda satır nereye açılır', () => 
     // alarm kuralı: çekmece DEĞİL, yerinde tam sayfa (?problem=, AlertProblemHost).
     ['problem', prob('p 1'), { to: 'detail', param: 'problem', id: 'p 1' }],
     // anomali: çekmece DEĞİL, yerinde tam sayfa (?anomaly=, AnomalyEventHost).
-    ['anomaly', anom('e1'), { to: 'detail', param: 'anomaly', id: 'e1' }],
+    ['anomaly', anom('e1'), { to: 'page', href: '/anomalies/e1' }],
     // v0.10.1081 (operatör: "Drawer çıkmasın …") — incident: çekmece DEĞİL,
     // tam sayfa (/incident?id=).
     ['incident', inc('i 1'), { to: 'page', href: '/incident?id=i%201' }],
     // yükü / doğal kimliği eksik satır: çekmece yok — kimlikten aynı hedef.
     ['problem, payload yok', item({ id: 'problem:x', kind: 'problem' }), { to: 'detail', param: 'problem', id: 'x' }],
     ['problem, boş id', item({ id: 'problem:', kind: 'problem', problem: { id: '', ruleId: 'r', metric: 'm', value: 1, threshold: 1 } }), { to: 'none' }],
-    ['anomaly, payload yok', item({ id: 'anomaly:x', kind: 'anomaly' }), { to: 'detail', param: 'anomaly', id: 'x' }],
+    ['anomaly, payload yok', item({ id: 'anomaly:x', kind: 'anomaly' }), { to: 'page', href: '/anomalies/x' }],
     ['exception, payload yok', item({ id: 'exception:x', kind: 'exception' }), { to: 'page', href: '/problems?exc=x' }],
     ['incident, payload yok', item({ id: 'incident:i9', kind: 'incident' }), { to: 'page', href: '/incident?id=i9' }],
     ['tanınmayan kimlik', item({ id: 'garbage', kind: 'problem' }), { to: 'none' }],
@@ -86,7 +86,7 @@ describe('inboxItemIdTarget — eski ?item= linkinin hedefi', () => {
   it.each<[string | null, ReturnType<typeof inboxItemIdTarget>]>([
     ['problem:p1', { to: 'detail', param: 'problem', id: 'p1' }],
     ['problem:runtime:jvm-gc:svc-a:pod-1', { to: 'detail', param: 'problem', id: 'runtime:jvm-gc:svc-a:pod-1' }],
-    ['anomaly:e1', { to: 'detail', param: 'anomaly', id: 'e1' }],
+    ['anomaly:e1', { to: 'page', href: '/anomalies/e1' }],
     ['incident:i 1', { to: 'page', href: '/incident?id=i%201' }],
     ['exception:fp/1', { to: 'page', href: '/problems?exc=fp%2F1' }],
     ['httperror:404', { to: 'page', href: '/problems?exc=404' }],
@@ -153,10 +153,10 @@ describe('withInboxDetail / readInboxDetail — ?problem= ve ?anomaly= karşıl�
     expect(readInboxDetail(sp('problem=&anomaly=e1'))).toEqual({ param: 'anomaly', id: 'e1' });
   });
   it('satır tıkının yazdığı URL tek bir detay okur (uçtan uca)', () => {
-    const o = inboxRowOpen(anom('e9'));
+    const o = inboxRowOpen(prob('p9', 'r'));
     if (o.to !== 'detail') throw new Error('detail bekleniyordu');
-    const next = withInboxDetail(sp('problem=p1&item=x'), o.param, o.id);
-    expect(readInboxDetail(next)).toEqual({ param: 'anomaly', id: 'e9' });
+    const next = withInboxDetail(sp('anomaly=e1&item=x'), o.param, o.id);
+    expect(readInboxDetail(next)).toEqual({ param: 'problem', id: 'p9' });
   });
 });
 

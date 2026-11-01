@@ -7,7 +7,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/coremetry/overlay/Sheet';
 import { TimeChart } from '@/components/charts/TimeChart';
 import { Button } from '@/components/shadcn/button';
 import { Badge } from '@/components/shadcn/badge';
@@ -96,7 +95,7 @@ function WhatIf({ snap }: { snap: MLSnapshot }) {
   );
 }
 
-export function MLReplaySheet({ id, onClose }: { id: string | null; onClose: () => void }) {
+export function MLReplayContent({ id }: { id: string }) {
   const q = useQuery({
     queryKey: [...keys.anomalies.ml, 'replay', id ?? ''],
     queryFn: () => api.mlReplay(id ?? ''),
@@ -110,13 +109,10 @@ export function MLReplaySheet({ id, onClose }: { id: string | null; onClose: () 
   const det = snap ? ML_DETECTOR_TR[snap.detector] ?? snap.detector : '';
 
   return (
-    <Sheet open={!!id} onOpenChange={o => { if (!o) onClose(); }}>
-      <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-[760px]">
-        <SheetHeader>
-          <SheetTitle>Replay{snap ? ` · ${det} · ${snap.service}` : ''}</SheetTitle>
-          <SheetDescription>Tespit anının kaydı; Elasticsearch ya da rollup okunmaz.</SheetDescription>
-        </SheetHeader>
-        <div className="px-4 pb-6" data-testid="ml-replay">
+    <div data-testid="ml-replay">
+      <h2 className="mb-1 text-[length:var(--fs-lg)] font-semibold">Replay{snap ? ` · ${det} · ${snap.service}` : ''}</h2>
+      <p className="mb-3 text-sm text-muted-foreground">Tespit anının kaydı; Elasticsearch ya da rollup okunmaz.</p>
+      <div className="px-4 pb-6" data-testid="ml-replay">
           {q.isLoading && <Spinner />}
           {q.error && <p className="text-sm">Bu olay için replay kaydı yok (kayıt v0.10.1752 sonrası açılan olaylarda oluşur).</p>}
           {snap && ch && (
@@ -184,8 +180,7 @@ export function MLReplaySheet({ id, onClose }: { id: string | null; onClose: () 
               <WhatIf snap={snap} />
             </>
           )}
-        </div>
-      </SheetContent>
-    </Sheet>
+      </div>
+    </div>
   );
 }
