@@ -132,3 +132,33 @@ func (s *Store) NativeDetectorOn(ctx context.Context, name string) bool {
 	nativeCache.cfg, nativeCache.at, nativeCache.ok = c, time.Now(), true
 	return c.On(name)
 }
+
+// ── Kendi bölümünden yönetilen eski dedektörler (v0.10.1766, A3) ──────────
+// Prod gözlemi 01.11.2026: yerleşik liste kapatıldığı hâlde op_latency ve
+// log_template_new (anomaly_sensitivity anahtarları) açık kaldı, yeni olay
+// üretti. Aynı ekranda anahtar + "hepsini kapat" için ortak görünüm.
+
+// NativeOwnSwitches — anomaly_sensitivity içindeki eski dedektör anahtarları.
+type NativeOwnSwitches struct {
+	OpLatency      bool `json:"opLatency"`
+	LogTemplateNew bool `json:"logTemplateNew"`
+}
+
+// OwnSwitchesFrom — SAF.
+func OwnSwitchesFrom(c AnomalySensitivityConfig) NativeOwnSwitches {
+	return NativeOwnSwitches{OpLatency: c.OpLatencyOn(), LogTemplateNew: c.LogTemplateNewOn()}
+}
+
+// ApplyOwnSwitches — SAF: yalnız bu iki alan yazılır, blobun kalanı korunur.
+func ApplyOwnSwitches(c AnomalySensitivityConfig, own NativeOwnSwitches) AnomalySensitivityConfig {
+	o, l := own.OpLatency, own.LogTemplateNew
+	c.OpLatency, c.LogTemplateNew = &o, &l
+	return c
+}
+
+// AllNativeOff — SAF: "eski dedektörlerin hepsini kapat" (kalanlar: alarm
+// kuralları, exception akışı, Oracle/Influx, Elastic ML, slo_burn, heartbeat,
+// self-health — bu listede değiller).
+func AllNativeOff(c AnomalySensitivityConfig) (NativeDetectorsConfig, AnomalySensitivityConfig) {
+	return DefaultNativeDetectors(), ApplyOwnSwitches(c, NativeOwnSwitches{})
+}

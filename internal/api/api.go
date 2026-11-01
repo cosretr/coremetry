@@ -9918,7 +9918,7 @@ func (s *Server) getTraceOpAnomalies(w http.ResponseWriter, r *http.Request) {
 	window := parseDuration(r.URL.Query().Get("window"), 5*time.Minute)
 	key := fmt.Sprintf("anomaly:trace-ops:window=%s", window)
 	s.serveCached(w, r, key, 60*time.Second, func(ctx context.Context) (any, error) {
-		hits, err := anomaly.DetectTraceOpAnomalies(ctx, s.store, window)
+		hits, err := s.traceOpHits(ctx, window) // A3: yerleşik trace_op kapalıyken kart boş
 		if err != nil {
 			return nil, err
 		}

@@ -11663,6 +11663,9 @@ export interface MLEvent {
   verdict?: 'anomaly' | 'not_anomaly'; verdictBy?: string; verdictAt?: number; note?: string;
 }
 export interface MLDetectorScore { detector: string; signal?: string; events: number; samples: number; hits: number; hitRate: number }
+/** Yerleşik dedektörler görünümü (v0.10.1766): own = anomaly_sensitivity içindeki eski anahtarlar. */
+export interface NativeOwnSwitches { opLatency: boolean; logTemplateNew: boolean }
+export interface NativeDetectorsView { names: string[]; detectors: Record<string, boolean>; own?: NativeOwnSwitches }
 /** Kalite çerçevesi (v0.10.1751, üç sinyal ortak). *Off bool'ları ters adlı: eksik = açık. */
 export interface MLQuality {
   impactMinRel: number; impactMinAbs: number; hygieneOff: boolean; regimeHours: number; confirmWindowMin: number;

@@ -1,4 +1,5 @@
 import type {
+  NativeDetectorsView, NativeOwnSwitches,
 OracleLogsResponse, CopilotScopeNames, CosreRouteRED,
   McpServersSnapshot, McpServerInput, McpServerTestResult,
   PurgeResult,
@@ -1604,11 +1605,13 @@ export const api = {
       body: JSON.stringify(c),
     }),
   // v0.10.1746 — yerleşik dedektör anahtarları (internal/api/native_detectors.go).
-  getNativeDetectors: () => get<{ names: string[]; detectors: Record<string, boolean> }>(`/api/admin/native-detectors`),
-  putNativeDetectors: (c: { detectors: Record<string, boolean> }) =>
-    request<{ names: string[]; detectors: Record<string, boolean> }>(`/api/admin/native-detectors`, {
+  getNativeDetectors: () => get<NativeDetectorsView>(`/api/admin/native-detectors`),
+  putNativeDetectors: (c: { detectors: Record<string, boolean>; own?: NativeOwnSwitches }) =>
+    request<NativeDetectorsView>(`/api/admin/native-detectors`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(c),
     }),
+  // A3 (v0.10.1766): eski dedektörlerin hepsi kapalı (yerleşik + op_latency + log_template_new).
+  offAllNativeDetectors: () => request<NativeDetectorsView>(`/api/admin/native-detectors/off-all`, { method: 'POST' }),
   // ML dilim 0 — ayrı tablo, ayrı uçlar (internal/api/ml.go).
   mlEvents: (p: { since?: GoDuration; signal?: string; detector?: string; service?: string; stage?: string } = {}) =>
     get<{ items: import('./types').MLEvent[]; truncated: boolean }>(
