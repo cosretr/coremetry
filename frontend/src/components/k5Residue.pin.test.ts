@@ -88,7 +88,7 @@ describe('v0.10.929 — sağlıklı durum nötr (yeşil yok)', () => {
     expect(s).not.toContain('var(--ok)');
     // v0.10.967 — tablo standardı T12 (dilim 5): eski nötr kutu artık Active
     // tablosunun BOŞ satırı (DataTableState kind 'empty' — ton yok, yeşil yok).
-    expect(s).toMatch(/kind: 'empty', message: `Son 24 saatte aktif anomali yok/);
+    expect(s).toMatch(/kind: 'empty', message: 'Son 24 saatte anomali yok'/); // v0.10.1773 tek tablo
   });
 
   it('ChatBubble araç adımı ok → gri', () => {

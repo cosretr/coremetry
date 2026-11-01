@@ -26,7 +26,7 @@ export const ROUTE_PAGES: Record<string, PageId> = {
   '/': 'home',
   '/trace': 'trace', '/trace/compare': 'trace-compare', '/traces': 'traces',
   '/service': 'service', '/service/backtrace': 'service-backtrace', '/services': 'services',
-  '/problems': 'problems', '/anomalies': 'anomalies', '/inbox': 'inbox',
+  '/problems': 'problems', '/anomalies': 'anomalies', '/anomalies/ml/:id': 'anomalies', '/anomalies/:id': 'anomalies', '/inbox': 'inbox', // v0.10.1770 tam sayfa
   '/exceptions': 'exceptions', '/errors': 'errors',
   '/logs': 'logs', '/explore': 'explore', '/metrics': 'metrics',
   '/clusters': 'clusters', '/pod': 'pod', '/entity': 'entity', '/hosts': 'hosts',

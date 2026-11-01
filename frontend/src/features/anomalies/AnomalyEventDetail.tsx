@@ -209,8 +209,8 @@ export function AnomalyEventDetail({ event, isAdmin, onBack }: {
       {/* v0.10.1529 (Problem standardı R2) — standart başlık; yüklenene ya da
           bulunamayana dek önceki özet (fallback). Desen kimliği başlığın altında. */}
       {/* C3 (v0.10.1771) — insan diliyle başlık + tek satır özet, jargon yok. */}
-      <h2 className="mt-2 text-[length:var(--fs-lg)] font-semibold" data-testid="anomaly-headline">{anomalyPlainHeadline(event)}</h2>
-      <p className="mb-2 text-sm text-muted-foreground">{anomalyPlainSummary(event)}</p>
+      <h2 style={{ margin: '8px 0 2px', fontSize: 'var(--fs-lg)', fontWeight: 600 }} data-testid="anomaly-headline">{anomalyPlainHeadline(event)}</h2>
+      <p style={{ margin: '0 0 8px', fontSize: 13, color: 'var(--text3)' }}>{anomalyPlainSummary(event)}</p>
       <ProblemStandardHeader stdRef={`anomaly:${event.id}`}
         fallback={<DetailSummary sentence={sentence} when={when}
           detail={isLog && event.pattern ? event.pattern : undefined} />} />
