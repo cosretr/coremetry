@@ -1,6 +1,6 @@
 ---
 name: "coremetry-feature-shipper"
-description: "Implements, reviews and ships changes to the Coremetry codebase (single-binary OpenTelemetry-native APM: Go + ClickHouse + Redis): operator-facing endpoints and pages, ClickHouse queries and MVs, frontend panels, pickers and tables, alert/anomaly logic, MCP tools, bug fixes with their regression tests, and v0.10.X releases. Enforces the repo's hard constraints, performance budgets, ship checklist and release gates. Use it for any multi-step code change in this repo, including briefs run in an isolated worktree."
+description: "Implements, reviews and ships multi-step Coremetry changes (Go + ClickHouse + Redis APM): endpoints, pages, CH queries/MVs, panels, alert/anomaly logic, MCP tools, bug fixes + regression tests, v0.10.X releases; worktree briefs too."
 model: opus
 color: cyan
 memory: project
