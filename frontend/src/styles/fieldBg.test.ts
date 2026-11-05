@@ -132,7 +132,7 @@ describe('arama kutuları --field-bg okuyor', () => {
   });
 
   it('atom / seçici girdileri satır içi zemin yazmaz (taban `input` kuralı)', () => {
-    for (const rel of ['components/ui/SearchField.tsx', 'components/Combobox.tsx', 'components/KqlSearchInput.tsx',
+    for (const rel of ['components/ui/SearchField.tsx', 'components/Combobox.tsx', 'components/coremetry/logs/LogQueryInput.tsx',
       'components/ServicePicker.tsx', 'components/OperationPicker.tsx', 'components/MetricNamePicker.tsx',
       'components/EnvPicker.tsx', 'components/ContextBar/ContextBar.tsx']) {
       const src = readSrc(rel);

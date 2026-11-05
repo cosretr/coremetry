@@ -1115,10 +1115,11 @@ export const api = {
   // ES backend prefix-scanned every index in retention on every
   // keystroke. Server clamps to 7d and snaps the window to the hour, so
   // passing the page's own range here is a hint, not a contract.
-  logsFieldValues: (field: string, q: string, limit = 20, since?: string) =>
+  // v0.10.1821 — signal: sorgu çubuğu yeni tuşta önceki öneri isteğini iptal eder.
+  logsFieldValues: (field: string, q: string, limit = 20, since?: string, signal?: AbortSignal) =>
     get<{ values: string[] }>(
       `/api/logs/field-values?field=${encodeURIComponent(field)}&q=${encodeURIComponent(q)}&limit=${limit}` +
-      (since ? `&since=${encodeURIComponent(since)}` : '')),
+      (since ? `&since=${encodeURIComponent(since)}` : ''), signal),
   // ES index inventory for /admin/elastic — per-index name, doc
   // count, size, health, ILM phase/policy. CH backend returns
   // empty indices list (page shows "not Elasticsearch" state).

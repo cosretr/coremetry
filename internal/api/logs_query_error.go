@@ -34,6 +34,9 @@ type logQueryErrorBody struct {
 	Pos    *int   `json:"pos,omitempty"`
 	Detail string `json:"detail,omitempty"`
 	Raw    string `json:"raw,omitempty"`
+	// Stage — v0.10.1821: "precheck" = sorgu arka uca HİÇ gitmedi (Go
+	// ayrıştırıcı/Lint reddi); "backend" = arka ucun kendi reddi.
+	Stage string `json:"stage,omitempty"`
 }
 
 // logQueryErr — ErrBadQuery'yi kullanıcının sorgu metniyle sarar ki konum
@@ -60,7 +63,7 @@ func esQueryErrorBody(err error, admin bool) logQueryErrorBody {
 	if errors.As(err, &lq) {
 		search = lq.search
 	}
-	b := logQueryErrorBody{Detail: logstore.QueryErrorReason(err)}
+	b := logQueryErrorBody{Detail: logstore.QueryErrorReason(err), Stage: "backend"}
 	if pos, ok := logstore.QueryErrorPos(err, search); ok {
 		b.Pos = &pos
 		b.Error = fmt.Sprintf("Sorgu sözdizimi hatalı (%d. karakter). Elasticsearch sorguyu ayrıştıramadı.", pos+1)
@@ -76,7 +79,7 @@ func esQueryErrorBody(err error, admin bool) logQueryErrorBody {
 // parseErrorBody — SAF: Go ayrıştırıcı reddi → gövde. ParseError.Pos bayt
 // ofsetidir; istemci karakter indeksi bekler.
 func parseErrorBody(err error, search string) logQueryErrorBody {
-	b := logQueryErrorBody{Error: err.Error()}
+	b := logQueryErrorBody{Error: err.Error(), Stage: "precheck"}
 	var pe *logql.ParseError
 	if errors.As(err, &pe) {
 		p := pe.Pos

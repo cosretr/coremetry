@@ -29,11 +29,6 @@
       "count": 1
     }
   },
-  "src/components/KqlSearchInput.tsx": {
-    "ui/no-raw-element": {
-      "count": 1
-    }
-  },
   "src/components/LogFieldsPanel.tsx": {
     "ui/no-raw-element": {
       "count": 1
@@ -415,11 +410,6 @@
     }
   },
   "src/pages/logs/LogsColumnPicker.tsx": {
-    "ui/no-raw-element": {
-      "count": 1
-    }
-  },
-  "src/pages/logs/LogsQueryBar.tsx": {
     "ui/no-raw-element": {
       "count": 1
     }

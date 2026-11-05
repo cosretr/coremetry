@@ -191,10 +191,13 @@ describe('K5/K3 — açık kip seçim dilinde (.live-on, v0.10.1318)', () => {
     expect(dot).not.toMatch(/--(err|warn|ok)(-solid|-bg)?\b/);
   });
 
-  it('renk Button `active`ten gelir: /logs canlı kuyruk `active={p.live}`', () => {
+  it('renk seçim tintinden gelir: /logs canlı kuyruk `pressed={p.live}`', () => {
     // v0.10.1498 — Live düğmesi sorgu çubuğuna (pages/logs/LogsQueryBar.tsx).
+    // v0.10.1821 (Logs shadcn dilimi) — ui Button `active` → shadcn Toggle
+    // `pressed` (data-state=on seçim tinti, aria-pressed); koşullu birincil yok.
     const logs = readFileSync(resolve(__dirname, '../pages/logs/LogsQueryBar.tsx'), 'utf8');
-    expect(logs).toContain('active={p.live}');
+    expect(logs).toContain('pressed={p.live}');
+    expect(logs).toContain("'live-on");
     expect(logs).not.toMatch(/variant=\{p?\.?live \?/);
     expect(readFileSync(resolve(__dirname, '../pages/Logs.tsx'), 'utf8')).toContain('live={live} onToggleLive={toggleLive}');
     const tint = bodyOf('button.sec.is-active');

@@ -375,6 +375,19 @@ function LogsInner() {
   // v0.10.1819 (Log Search Faz 1 dilim 1.3) — `?lang=lucene`: arama ES'e
   // aynen (zorla Lucene). Görünüm parametresi; süzgeç imzasına girmez.
   const lang = parseLogsLang(searchParams.get('lang'));
+  // v0.10.1821 (dilim 1.5) — dil rozeti tıkı: otomatik ⇄ zorla Lucene
+  // (`?lang=lucene`, replace:true; süzgeç imzası değişmez). Sayfalama
+  // sıfırlanır: aynı metin farklı ES sorgusu → farklı satır kümesi.
+  const toggleLang = () => {
+    setSearchParams(prev => {
+      const n = new URLSearchParams(prev);
+      if (lang) n.delete('lang'); else n.set('lang', 'lucene');
+      return n;
+    }, { replace: true });
+    resetPaging();
+  };
+  // İstemci sözdizimi denetimi (kqlLint, Enter'da) — çubuğun altındaki satır.
+  const [queryLint, setQueryLint] = useState<string | null>(null);
   useEffect(() => {
     if (urlAsc !== asc) { setAsc(urlAsc); resetPaging(); }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- yalnız URL değişiminde
@@ -1160,6 +1173,10 @@ function LogsInner() {
           draft={draft} onDraft={setDraft}
           clusters={clusters} autocompleteSince={autocompleteSince}
           fields={fields} fieldsTotal={fieldsTotal} history={historyTexts}
+          queryLang={lang === 'lucene' ? 'lucene' : (staticQ.data?.queryLang ?? 'kql')}
+          forcedLucene={lang === 'lucene'} onToggleLang={toggleLang}
+          queryError={staticQ.isError ? queryErr : null} sentQuery={compiledSearch}
+          lint={queryLint} onLint={setQueryLint}
           onApply={apply} onRefresh={refresh} dirty={draftDirty} to={to}
           live={live} onToggleLive={toggleLive} liveGap={liveGap}
           addFilter={(

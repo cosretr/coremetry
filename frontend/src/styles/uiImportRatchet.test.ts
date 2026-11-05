@@ -79,7 +79,7 @@ export function atomsImported(src: string, file: string): Set<string> {
 // DisclosureButton +1 taşınan PageControls'ten). R9: 902 → 904 (coremetry/
 // DataTable sarmalayıcısının iki dosyası ui/DataTable'ı içe aktarıyor).
 const CEILINGS: Record<string, number> = {
-  Button: 156, // Faz 2 dilim 1 R15 (Argo CD): 162 → 156; Faz 2 dilim 1 R17 (Anomaly): 164 → 162; Faz 2 dilim 1 R16 (Oracle): 165 → 164; Faz 2 dilim 1 R14 (işletim): 169 → 165; Faz 2 dilim 1 R13 (DevOps + MCP): 171 → 169; Faz 2 dilim 1 R12 (AI SRE + Knowledge): 177 → 171; Faz 2 dilim 1 R11 (CoSRE): 184 → 177; Faz 2 dilim 1 R10 (erişim): 191 → 184; Faz 2 dilim 1 R7: 209 → 207 (Remote Cluster); etkileşim P2: 207 → 206 (⌘K); R8: 206 → 197; R9: 197 → 191
+  Button: 155, // v0.10.1821 (Logs sorgu çubuğu): 156 → 155; Faz 2 dilim 1 R15 (Argo CD): 162 → 156; Faz 2 dilim 1 R17 (Anomaly): 164 → 162; Faz 2 dilim 1 R16 (Oracle): 165 → 164; Faz 2 dilim 1 R14 (işletim): 169 → 165; Faz 2 dilim 1 R13 (DevOps + MCP): 171 → 169; Faz 2 dilim 1 R12 (AI SRE + Knowledge): 177 → 171; Faz 2 dilim 1 R11 (CoSRE): 184 → 177; Faz 2 dilim 1 R10 (erişim): 191 → 184; Faz 2 dilim 1 R7: 209 → 207 (Remote Cluster); etkileşim P2: 207 → 206 (⌘K); R8: 206 → 197; R9: 197 → 191
   // v0.10.1617 (R9): 126 → 128 — coremetry/DataTable dondurulmuş API'nin Faz 1
   // gövdesi ui/DataTable'ı SARIYOR (plan §6: "thin wrapper over today's
   // code"): DataTable.tsx (gövde) + types.ts (bugünkü tiplerin yeniden dışa
@@ -113,7 +113,7 @@ const CEILINGS: Record<string, number> = {
   ButtonGroup: 3, // Faz 2 dilim 1 R14 (işletim): 4 → 3; Faz 2 dilim 1 R11 (CoSRE): 5 → 4; Faz 2 dilim 1 R10 (erişim): 6 → 5; Faz 2 dilim 1 R9: 7 → 6
   Tooltip: 6,
   OptionRow: 4,
-  EnterHint: 3,
+  EnterHint: 2, // v0.10.1821 (Logs sorgu çubuğu): 3 → 2
   MethodBadge: 3,
   SectionUnavailable: 3,
   ColumnsPicker: 2,

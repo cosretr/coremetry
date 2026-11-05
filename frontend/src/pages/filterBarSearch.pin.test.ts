@@ -114,14 +114,20 @@ describe('v0.10.1332 — Traces', () => {
 // (docs/DECISIONS.md). Çubukta yalnız sorgu: Service · Cluster · KQL ·
 // Search/↻ (tek birincil, md, Enter ipucu, telefonda pinli); sağ küme
 // PageControls `actions` yuvasında: + Filter ▾ · Live tail · menüler.
-describe('v0.10.1498 — Logs sorgu çubuğu (Discover taslağı)', () => {
+// v0.10.1821 (Log Search Faz 1 dilim 1.5) — aynı sıra ve sözleşme, shadcn
+// dilimi: çubuk coremetry/FilterBar (PageControls bileşimi), sorgu kutusu
+// coremetry/logs/LogQueryInput, birincil = shadcn Button varsayılan varyantı
+// (md), Enter ipucu `.kbd`.
+describe('v0.10.1498 / v0.10.1821 — Logs sorgu çubuğu (Discover taslağı, shadcn)', () => {
   const src = stripComments(read('pages/logs/LogsQueryBar.tsx'));
-  const seg = bar(src);
+  const a0 = src.indexOf('<FilterBar');
+  const seg = src.slice(a0, src.indexOf('</FilterBar>', a0));
   const kids = seg.slice(at(seg, '<ServicePicker'));
   const actions = seg.slice(0, at(seg, '<ServicePicker'));
 
   it('çubuk sırası: Service → Cluster → KQL → Search/↻; başka filtre yok', () => {
-    const order = ['<ServicePicker', 'All clusters', '<KqlSearchInput', '<span className="search-go" data-pc-pin>']
+    expect(a0, 'FilterBar bulunamadı').toBeGreaterThanOrEqual(0);
+    const order = ['<ServicePicker', 'All clusters', '<LogQueryInput', '<span className="search-go" data-pc-pin>']
       .map(n => at(kids, n));
     expect(order).toEqual([...order].sort((x, y) => x - y));
     for (const n of ['Filter logs by trace ID', 'With trace', '>Reset<', '<ShareButton', 'Live tail', 'SavedViewsBar']) {
@@ -129,11 +135,11 @@ describe('v0.10.1498 — Logs sorgu çubuğu (Discover taslağı)', () => {
     }
   });
 
-  it('Search md + ipucu; ↻ aynı yuvada, ikisi de tek birincil', () => {
-    expect(searchTag(kids)).not.toMatch(/size="sm"/);
-    expect(kids).toMatch(/<span className="search-go" data-pc-pin>\s*\{refreshMode \? \(\s*<Button variant="primary" aria-label="Yenile"/);
-    expect(kids).toMatch(/: \(\s*<Button variant="primary" onClick=\{p\.onApply\}>Search<\/Button>\s*\)\}\s*<EnterHint /);
-    expect((kids.match(/variant="primary"/g) ?? []).length).toBe(2);
+  it('Search md + ipucu; ↻ aynı yuvada, ikisi de tek birincil (varyant/boy yazılmaz)', () => {
+    expect(kids).toMatch(/<span className="search-go" data-pc-pin>\s*\{refreshMode \? \(\s*<Button aria-label="Yenile"/);
+    expect(kids).toMatch(/: \(\s*<Button onClick=\{p\.onApply\}>Search<\/Button>\s*\)\}\s*<kbd className="kbd"/);
+    expect((kids.match(/<Button\b/g) ?? []).length).toBe(2);
+    expect(kids).not.toMatch(/<Button[^>]*\b(variant|size)=/);
   });
 
   it('sağ küme actions yuvasında: + Filter → Live tail → menüler', () => {

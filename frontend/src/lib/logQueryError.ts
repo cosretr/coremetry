@@ -21,6 +21,7 @@ export function parseLogQueryError(err: unknown): LogQueryError | null {
   if (typeof r.pos === 'number' && Number.isInteger(r.pos) && r.pos >= 0) out.pos = r.pos;
   if (typeof r.detail === 'string' && r.detail) out.detail = r.detail;
   if (typeof r.raw === 'string' && r.raw) out.raw = r.raw;
+  if (r.stage === 'precheck' || r.stage === 'backend') out.stage = r.stage;
   return out;
 }
 

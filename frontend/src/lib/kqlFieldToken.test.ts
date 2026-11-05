@@ -10,7 +10,10 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { detectFieldNameToken, rankFieldNames, applyFieldName, fieldNameHint } from './kqlFieldToken';
+import {
+  detectFieldNameToken, rankFieldNames, applyFieldName, fieldNameHint,
+  detectFieldValueToken, quoteKqlValue, applyFieldValue, applyOperator,
+} from './kqlFieldToken';
 
 describe('detectFieldNameToken — konum tespiti', () => {
   it('yazılmakta olan sözcüğü yakalar', () => {
@@ -153,7 +156,9 @@ describe('fieldNameHint — katalog kırpıklığı dürüstlüğü', () => {
 
 describe('kablolama — SIFIR ek ES maliyeti (v0.9.955)', () => {
   const SRC = join(__dirname, '..');
-  const kql = readFileSync(join(SRC, 'components/KqlSearchInput.tsx'), 'utf8');
+  // v0.10.1821 — sorgu kutusu coremetry/logs/LogQueryInput'a taşındı
+  // (KqlSearchInput silindi); pinler aynı sözleşmeyi yeni dosyada tutar.
+  const kql = readFileSync(join(SRC, 'components/coremetry/logs/LogQueryInput.tsx'), 'utf8');
   const logs = readFileSync(join(SRC, 'pages/Logs.tsx'), 'utf8');
 
   it('alan listesi PROP olarak gelir — kutu kendi fetch’ini AÇMAZ', () => {
@@ -169,7 +174,7 @@ describe('kablolama — SIFIR ek ES maliyeti (v0.9.955)', () => {
   });
 
   it('iki öneri kaynağı ÇAKIŞMAZ — değer token’ı varken ad önerilmez', () => {
-    expect(kql).toMatch(/token \? null : detectFieldNameToken\(value, cursor\)/);
+    expect(kql).toMatch(/valueTok \? null : detectFieldNameToken\(value, cursor\)/);
   });
 
   // v0.9.970 — kırpıklık uyarısının ULAŞILABİLİR olduğunu çivile.
@@ -182,6 +187,34 @@ describe('kablolama — SIFIR ek ES maliyeti (v0.9.955)', () => {
     // ama söylenecek söz VAR" hâli. Guard yeniden `items.length > 0`e
     // dönerse uyarı sessizce ölür ve kusur geri gelir; klavye guard'ı
     // ayrı satırda ve bilerek dar kalıyor (boşken seçim yapılamaz).
-    expect(kql).toContain('open && (items.length > 0 || hintOnly)');
+    expect(kql).toContain("itemCount > 0 || hint.kind === 'clipped-no-match'");
+  });
+});
+
+// v0.10.1821 — KqlSearchInput'tan taşınan değer-token çekirdeği (davranış aynı).
+describe('detectFieldValueToken / quoteKqlValue / applyFieldValue / applyOperator', () => {
+  it('değer konumu: alan + önek + aralık', () => {
+    expect(detectFieldValueToken('level:er', 8)).toEqual({ field: 'level', valuePrefix: 'er', valueStart: 6, valueEnd: 8 });
+    expect(detectFieldValueToken('a AND service.name:orders', 25)).toEqual({ field: 'service.name', valuePrefix: 'orders', valueStart: 19, valueEnd: 25 });
+    // Açık tırnaklı değer bugün (taşımadan önce de) değer konumu SAYILMAZ:
+    // geri yürüyüş tırnağın içinde kalır. Davranış bilerek aynen taşındı.
+    expect(detectFieldValueToken('service.name:"orders', 20)).toBeNull();
+  });
+  it('serbest metin / boşluk / parantez zinciri keser', () => {
+    expect(detectFieldValueToken('connection refused', 18)).toBeNull();
+    expect(detectFieldValueToken('level:error and x', 17)).toBeNull();
+    expect(detectFieldValueToken('', 0)).toBeNull();
+  });
+  it('tırnaklama', () => {
+    expect(quoteKqlValue('MOBILE')).toBe('MOBILE');
+    expect(quoteKqlValue('orders api')).toBe('"orders api"');
+    expect(quoteKqlValue('a"b c')).toBe('"a\\"b c"');
+    expect(quoteKqlValue('')).toBe('""');
+  });
+  it('yerleştirme + operatör', () => {
+    const t = detectFieldValueToken('level:er rest', 8)!;
+    expect(applyFieldValue('level:er rest', t, 'error')).toEqual({ text: 'level:error rest', cursor: 11 });
+    const n = detectFieldNameToken('level:error an', 14)!;
+    expect(applyOperator('level:error an', n, 'AND')).toEqual({ text: 'level:error AND ', cursor: 16 });
   });
 });

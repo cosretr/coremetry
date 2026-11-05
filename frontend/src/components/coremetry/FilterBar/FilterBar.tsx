@@ -30,11 +30,13 @@ export interface FilterBarProps {
   children?: ReactNode;
   /** Çip kaldırma düğmesinin erişilebilir adı (çipin metni sona eklenir). */
   removeLabel?: string;
+  /** v0.10.1821 (Logs dilimi) — PageControls kök sınıfı (sayfa yerleşim kancası, ör. `.ld-qbar`). */
+  className?: string;
 }
 
-export function FilterBar({ chips, onChange, query, saved, sticky, actions, children, removeLabel = CM_STRINGS.removeFilter }: FilterBarProps) {
+export function FilterBar({ chips, onChange, query, saved, sticky, actions, children, removeLabel = CM_STRINGS.removeFilter, className }: FilterBarProps) {
   return (
-    <PageControls sticky={sticky} actions={actions}>
+    <PageControls sticky={sticky} actions={actions} className={className}>
       {query && (
         <Input className="h-8 w-64 bg-field" value={query.value} placeholder={query.placeholder}
           aria-label={query.placeholder ?? CM_STRINGS.filter} onChange={(e) => query.onChange(e.target.value)} />

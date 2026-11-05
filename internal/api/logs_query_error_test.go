@@ -61,6 +61,9 @@ func TestESQueryErrorBody(t *testing.T) {
 		if !strings.HasPrefix(b.Error, "Sorgu sözdizimi hatalı") {
 			t.Errorf("%s: error %q", c.name, b.Error)
 		}
+		if b.Stage != "backend" { // v0.10.1821 — arka ucun reddi
+			t.Errorf("%s: stage %q", c.name, b.Stage)
+		}
 	}
 }
 
@@ -109,7 +112,7 @@ func TestCHSyntaxRejectCarriesPos(t *testing.T) {
 	var b logQueryErrorBody
 	_ = json.Unmarshal(w.Body.Bytes(), &b)
 	// v0.10.1819 — error düz Türkçe cümle (logql.Lint), detail konumlu teknik metin.
-	if b.Pos == nil || *b.Pos != 0 || b.Error != "\" kapatılmamış. Sonuna \" ekleyin." || !strings.Contains(b.Detail, "konum") {
+	if b.Pos == nil || *b.Pos != 0 || b.Error != "\" kapatılmamış. Sonuna \" ekleyin." || !strings.Contains(b.Detail, "konum") || b.Stage != "precheck" {
 		t.Fatalf("CH reddi konumlu olmalı: %s", w.Body.String())
 	}
 }

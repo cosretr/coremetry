@@ -111,7 +111,7 @@ describe('K3 — durum birincil dolgu değil (v0.10.1318)', () => {
     for (const [rel, needle] of [
       ['pages/logs/LogsTableToolbar.tsx', 'active={p.wrap}'],
       ['pages/logs/LogsActionsMenus.tsx', 'active={p.hasTrace}'],
-      ['pages/logs/LogsQueryBar.tsx', 'active={p.live}'],
+      ['pages/logs/LogsQueryBar.tsx', 'pressed={p.live}'], // v0.10.1821 — shadcn Toggle
     ] as const) {
       const f = FILES.find(x => x.rel === rel);
       expect(f, rel).toBeDefined();

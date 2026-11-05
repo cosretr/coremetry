@@ -12274,3 +12274,11 @@ Operatör "Log Mockup iyi, devam" (2026-11-05). `/logs` yerinde evrilir; dilimle
   UYGULANAN arama, tekil (yeniden uygulanan öne gelir), en yeni önde; okuma/yazma `lib/storage` üzerinden (özel pencere /
   kota hatası sessiz). Sunucuya gitmez, paylaşılmaz (paylaşılan arama = `saved_views`). Bu dilimde kutu boş + odaklıyken
   "Geçmiş" listesi; seçim yalnız metni yerleştirir, aramayı Enter başlatır. Tek listede Değerler/Alanlar ile birleşmesi 1.5.
+- **v0.10.1821 — sorgu çubuğu FilterBar + command listesi; konumlu hata satırı (1.5).** `LogsQueryBar` artık
+  `coremetry/FilterBar` (PageControls bileşimi; `className` geçişi eklendi) + yeni `coremetry/logs/LogQueryInput`
+  (shadcn Input + cmdk; tek liste Değerler / Alanlar / Geçmiş; değerler sunucu `_terms_enum`, 180 ms + iptal; alanlar
+  sayfanın mevcut `/api/logs/fields` listesi) + `LogQueryErrorLine` (çubuğun ALTINDA akışta, role=alert, `konum N` + ^).
+  Açılır liste portalsız, kutunun kendi kabında. cmdk girdisi `aria-expanded`'ı hep true bastığı için düz Input kullanıldı;
+  `aria-activedescendant` cmdk'nin seçili öğesinden (DOM gözlemi). Dil rozeti girdinin solunda (mockup): tık `?lang=lucene`
+  ⇄ otomatik. 400 gövdesine `stage` (precheck / backend) eklendi. KqlSearchInput silindi (tek tüketici); Live tail shadcn
+  Toggle (`pressed`). Servis Logs sekmesi bu çubuğu ALMADI (kendi ince kabuğu; dilim sonrası kompakt kip).

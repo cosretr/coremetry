@@ -3981,6 +3981,8 @@ export interface LogQueryError {
   pos?: number;
   detail?: string;
   raw?: string;
+  // v0.10.1821 — 'precheck' = sorgu arka uca hiç gitmedi; 'backend' = arka ucun reddi.
+  stage?: 'precheck' | 'backend';
 }
 
 // v0.10.1477 — /api/logs/my-team (internal/api/logs_team.go logsMyTeamPayload).

@@ -16,7 +16,7 @@ export const PAGE_FILES: Record<Page, readonly string[]> = {
   Logs: [
     'pages/Logs.tsx', 'pages/logs/', 'components/LogTable.tsx', 'components/LogsHistogram.tsx',
     'components/LogFieldsPanel.tsx', 'components/LogPatternsPanel.tsx', 'components/LogPillEditor.tsx',
-    'components/LogContextModal.tsx', 'components/KqlSearchInput.tsx',
+    'components/LogContextModal.tsx', 'components/coremetry/logs/', // v0.10.1821 — KqlSearchInput → coremetry/logs/LogQueryInput
   ],
   Trace: [
     'pages/Trace.tsx', 'pages/trace/', 'components/TraceWaterfall.tsx', 'components/SpanDetail.tsx',

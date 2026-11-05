@@ -159,3 +159,65 @@ export function mergeOperatorSuggestions(ranked: string[], prefix: string): stri
   if (ops.length === 0) return ranked;
   return [...ops, ...ranked.filter(f => !(KQL_OPERATORS as readonly string[]).includes(f))];
 }
+
+/**
+ * v0.10.1821 (Log Search Faz 1 dilim 1.5) — DEĞER konumu tespiti
+ * (eski KqlSearchInput.tsx'ten değişmeden taşındı; sorgu çubuğu
+ * coremetry/logs/LogQueryInput'a geçti). İmleçten geriye en yakın tırnak
+ * dışı ':' bulunur; öncesi alan adı, sonrası değer öneki. Boşluk / parantez
+ * zinciri keser (serbest metin konumu → null). SAF.
+ */
+export interface FieldValueToken {
+  field: string;
+  valuePrefix: string;
+  /** Yerleştirmede değiştirilecek aralık — [valueStart, valueEnd). */
+  valueStart: number;
+  valueEnd: number;
+}
+
+export function detectFieldValueToken(text: string, cursor: number): FieldValueToken | null {
+  if (cursor <= 0) return null;
+  let inQuotes = false;
+  let colonAt = -1;
+  for (let i = cursor - 1; i >= 0; i--) {
+    const c = text[i];
+    if (c === '"') { inQuotes = !inQuotes; continue; }
+    if (inQuotes) continue;
+    if (c === ':' && text[i - 1] !== '\\') { colonAt = i; break; }
+    if (c === ' ' || c === '\t' || c === '(' || c === ')') return null;
+  }
+  if (colonAt < 0) return null;
+  let nameStart = colonAt;
+  for (let i = colonAt - 1; i >= 0; i--) {
+    const c = text[i];
+    if (c === ' ' || c === '\t' || c === '(') break;
+    nameStart = i;
+  }
+  const field = text.slice(nameStart, colonAt);
+  if (!field) return null;
+  const rawValue = text.slice(colonAt + 1, cursor);
+  const valuePrefix = rawValue.startsWith('"') ? rawValue.slice(1) : rawValue;
+  return { field, valuePrefix, valueStart: colonAt + 1, valueEnd: cursor };
+}
+
+/** Değer query_string sözdizimi taşıyorsa (boşluk, operatör, ayraç…) tırnakla. SAF. */
+export function quoteKqlValue(v: string): string {
+  if (!v) return '""';
+  if (/[\s+\-=&|!(){}[\]^"~*?:\\/]/.test(v)) {
+    return `"${v.replace(/"/g, '\\"')}"`;
+  }
+  return v;
+}
+
+/** Değer token'ına seçilen değeri yerleştirir; yeni metin + imleç. SAF. */
+export function applyFieldValue(text: string, token: FieldValueToken, value: string): { text: string; cursor: number } {
+  const before = text.slice(0, token.valueStart);
+  const quoted = quoteKqlValue(value);
+  return { text: before + quoted + text.slice(token.valueEnd), cursor: before.length + quoted.length };
+}
+
+/** Operatör seçimi: alan-adı token'ının yerine `OP ` (büyük harf + boşluk). SAF. */
+export function applyOperator(text: string, token: FieldNameToken, op: string): { text: string; cursor: number } {
+  const next = text.slice(0, token.start) + op + ' ' + text.slice(token.end);
+  return { text: next, cursor: token.start + op.length + 1 };
+}

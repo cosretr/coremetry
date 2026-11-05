@@ -27,3 +27,4 @@ export { SegmentedControl } from './SegmentedControl';
 export type { SegmentedControlProps, SegmentedOption } from './SegmentedControl';
 export { SearchCommand } from './SearchCommand';
 export type { SearchCommandProps } from './SearchCommand';
+export * from './logs';
