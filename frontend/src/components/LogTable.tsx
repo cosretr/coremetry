@@ -9,7 +9,7 @@ import {
 import { highlightSegments } from '@/lib/logFilters';
 import { podOfLog, podEntryOfLog } from '@/lib/logPod';
 import { clusterEntryOfLog } from '@/lib/logCluster'; // v0.10.501 (B4)
-import { tsLong, sevName, sevClass } from '@/lib/utils';
+import { tsLong, sevName, sevClass, isoStampLocal } from '@/lib/utils';
 import type { DataTableColumn } from '@/lib/dataTable';
 import type { LogRow } from '@/lib/types';
 import { traceHref } from '@/lib/traceHref';
@@ -108,9 +108,11 @@ function KvRow({ k, v, onAdd, onExclude, onToggleCol, isCol }: {
   // the list tidy when the operator is just reading.
   const canFilter = !!(onAdd || onExclude || onToggleCol);
   // Değerler öznitelikler olduğu gibi (tam doğruluk) — eski `.kv-table`
-  // değer hücresi gibi monospace.
+  // değer hücresi gibi monospace. v0.10.1794 — ISO/UTC damga yerel saatte
+  // gösterilir, ham dize title'da ve süzgeç eylemlerinde kalır.
+  const local = isoStampLocal(v);
   return (
-    <KeyValueRow k={k} v={v} mono actions={canFilter ? (
+    <KeyValueRow k={k} v={local ?? v} title={local ? v : undefined} mono actions={canFilter ? (
       <>
         {onAdd && (
           <IconButton variant="bare" size="xs" className="ib-add"

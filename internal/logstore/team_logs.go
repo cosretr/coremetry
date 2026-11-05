@@ -241,7 +241,7 @@ func buildTeamLogsBody(fields ESFieldMap, teamFields, values []string, svcAggFie
 			"lte": to.UTC().Format(time.RFC3339Nano),
 		}}},
 		teamValueClause(teamFields, values),
-		severityBandClause(errorBand(), severityCandidateKeywordFields(fields.SeverityTx), fields.SeverityNo),
+		severityBandClause(errorBand(), severityCandidateKeywordFields(fields.SeverityTx), fields.SeverityNo, fields.Body),
 	}
 	aggs := map[string]any{
 		"newest": map[string]any{

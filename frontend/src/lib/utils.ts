@@ -243,6 +243,20 @@ export function tsDateTime(ns: number): string {
 // and (b) isn't the operator's gün.ay.yıl convention. Manual format so
 // it's locale-stable regardless of the browser/container locale.
 // v0.9.879 — body moved to fmtDateTime so ms/Date callers share it.
+// v0.10.1794 — Operator-reported (prod Service › Logs detayı): `timestamp` /
+// `event.es_ingested` öznitelikleri ES'in ham UTC dizesi ("…T07:23:41Z")
+// olarak basılıyordu; tablo 10:23 derken detay 07:23 "3 saat geri" okundu.
+// ISO-8601 + dilim (Z / ±hh:mm / ±hhmm) biçimindeki dizgeyi tarayıcı yerel
+// saatinde "dd.mm.yyyy HH:mm:ss.mmm" verir; başka her şey için null (ham
+// değer olduğu gibi kalır — tam doğruluk).
+const ISO_STAMP_RE = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:[.,]\d+)?(?:Z|[+-]\d\d:?\d\d)$/;
+export function isoStampLocal(v: string): string | null {
+  if (!ISO_STAMP_RE.test(v)) return null;
+  const ms = Date.parse(v.replace(',', '.').replace(/([+-]\d\d)(\d\d)$/, '$1:$2'));
+  if (Number.isNaN(ms)) return null;
+  return fmtDateTime(ms) + '.' + String(new Date(ms).getMilliseconds()).padStart(3, '0');
+}
+
 export function tsLong(ns: number): string {
   if (!ns) return '—';
   return fmtDateTime(ns / 1e6);

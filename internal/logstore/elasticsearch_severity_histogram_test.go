@@ -142,7 +142,7 @@ func TestBuildSeverityHistogramBody_Bands(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			body := buildSeverityHistogramBody(
 				map[string]any{"match_all": map[string]any{}},
-				"@timestamp", cands, tc.severityNo, 30, "10s")
+				"@timestamp", cands, tc.severityNo, "", 30, "10s")
 			bands := bandFiltersOf(t, body)
 
 			if len(bands) != len(wantBandPrefixes) {
@@ -219,7 +219,7 @@ func TestBuildSeverityHistogramBody_CostGuards(t *testing.T) {
 	body := buildSeverityHistogramBody(
 		map[string]any{"match_all": map[string]any{}},
 		"@timestamp", severityCandidateKeywordFields("log.level"),
-		"severity_number", 300, "10s")
+		"severity_number", "", 300, "10s")
 
 	if got := body["timeout"]; got != "10s" {
 		t.Errorf("timeout = %v, want 10s (ES soft-timeout missing → unbounded coordinator hold)", got)

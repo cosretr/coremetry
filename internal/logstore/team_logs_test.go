@@ -110,7 +110,7 @@ func TestBuildTeamLogsBody_CostGuards(t *testing.T) {
 		}
 	}
 	// Seviye yan tümcesi şerit histogramının ERROR bandıyla AYNI.
-	want, _ := json.Marshal(severityBandClause(errorBand(), severityCandidateKeywordFields("log.level"), ""))
+	want, _ := json.Marshal(severityBandClause(errorBand(), severityCandidateKeywordFields("log.level"), "", "message"))
 	if !strings.Contains(s, string(want)) {
 		t.Error("seviye yüklemi histogramın ERROR bandından ayrıştı")
 	}

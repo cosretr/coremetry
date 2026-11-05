@@ -1986,11 +1986,11 @@ func severityCandidateKeywordFields(severityTx string) []string {
 // OTHER now captures genuinely unrecognised levels (e.g. "notice",
 // custom vocabularies) plus docs with no severity field at all.
 // PURE — unit-tested in elasticsearch_severity_histogram_test.go.
-func buildSeverityHistogramBody(query any, timestampField string, candidateFields []string, severityNoField string, bucketSec int, esTimeout string) map[string]any {
+func buildSeverityHistogramBody(query any, timestampField string, candidateFields []string, severityNoField, bodyField string, bucketSec int, esTimeout string) map[string]any {
 	dateAgg := histogramDateAgg(timestampField, bucketSec)
 	bandFilters := make(map[string]any, len(severityBands))
 	for _, b := range severityBands {
-		bandFilters[b.Name] = severityBandClause(b, candidateFields, severityNoField)
+		bandFilters[b.Name] = severityBandClause(b, candidateFields, severityNoField, bodyField)
 	}
 	return map[string]any{
 		"size":  0,
@@ -2013,8 +2013,10 @@ func buildSeverityHistogramBody(query any, timestampField string, candidateField
 // histogramından ÇIKARILDI (gövde bayt-bayt aynı): takım son-log kontrolü
 // (team_logs.go) "hata seviyesi" için AYNI ERROR bandını kullanır — iki
 // yüzeyin "hata logu" tanımı ayrışmasın. SAF.
-func severityBandClause(b severityBandDef, candidateFields []string, severityNoField string) map[string]any {
-	should := make([]any, 0, len(candidateFields)*len(b.Prefixes)+1)
+// v0.10.1794 — bodyField != "" ise bant öneki gövde JSON'unda da aranır
+// (bodyLevelPhraseClause; operatör: level yalnız message içinde).
+func severityBandClause(b severityBandDef, candidateFields []string, severityNoField, bodyField string) map[string]any {
+	should := make([]any, 0, (len(candidateFields)+1)*len(b.Prefixes)+1)
 	for _, field := range candidateFields {
 		for _, p := range b.Prefixes {
 			should = append(should, map[string]any{
@@ -2022,6 +2024,11 @@ func severityBandClause(b severityBandDef, candidateFields []string, severityNoF
 					field: map[string]any{"value": p, "case_insensitive": true},
 				},
 			})
+		}
+	}
+	if bodyField != "" {
+		for _, p := range b.Prefixes {
+			should = append(should, bodyLevelPhraseClause(bodyField, p))
 		}
 	}
 	if severityNoField != "" {
@@ -2067,7 +2074,7 @@ func (s *ESStore) Histogram(ctx context.Context, f Filter, bucketSec int, groupB
 		bodyMap = buildSeverityHistogramBody(
 			s.buildQuery(f), s.fields.Timestamp,
 			severityCandidateKeywordFields(s.fields.SeverityTx),
-			s.fields.SeverityNo, bucketSec,
+			s.fields.SeverityNo, s.fields.Body, bucketSec,
 			esTimeseriesTimeoutFromEnv("10s"),
 		)
 	} else if len(multiFields) > 0 {
@@ -3018,6 +3025,12 @@ func (s *ESStore) expandShorthand(q string) string {
 			seen[f] = struct{}{}
 			parts = append(parts, f+":"+val)
 		}
+		// v0.10.1794 — level yalnız gövde JSON'undaysa kısayol da onu bulsun.
+		if key == "level" || key == "severity" {
+			if bp := bodyLevelQueryStringPart(s.fields.Body, val); bp != "" {
+				parts = append(parts, bp)
+			}
+		}
 		if len(parts) == 0 {
 			return m
 		}
@@ -3090,6 +3103,9 @@ func (s *ESStore) mapHit(id string, src map[string]any, dv map[string]any, expec
 		"message", "Body", "body", "log.message", "log")
 	r.SeverityText = readPathAny(src, s.fields.SeverityTx,
 		"log.level", "level", "severity", "severity_text", "SeverityText")
+	if r.SeverityText == "" {
+		r.SeverityText = jsonBodyLevel(r.Body) // v0.10.1794 — gövde JSON seviyesi
+	}
 
 	if s.fields.SeverityNo != "" {
 		if v := readPath(src, s.fields.SeverityNo); v != "" {

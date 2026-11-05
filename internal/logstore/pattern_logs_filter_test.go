@@ -97,7 +97,7 @@ func TestPatternFilter_ES_SameClauseAsChartAndDetector(t *testing.T) {
 			// Bayt düzeyinde: aynı JSON parçası histogram gövdesinde.
 			cj, _ := json.Marshal(chart)
 			hist, _ := json.Marshal(buildSeverityHistogramBody(q, s.fields.Timestamp,
-				severityCandidateKeywordFields(s.fields.SeverityTx), s.fields.SeverityNo, 60, "10s"))
+				severityCandidateKeywordFields(s.fields.SeverityTx), s.fields.SeverityNo, s.fields.Body, 60, "10s"))
 			if !strings.Contains(string(hist), string(cj)) {
 				t.Fatalf("Logs histogram gövdesi grafiğin yan tümcesini taşımıyor:\n%s\n%s", hist, cj)
 			}
