@@ -7,6 +7,7 @@ package chstore
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -60,7 +61,9 @@ func TestNormalizeAnomalySubjects(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			got := NormalizeAnomalySubjects(AnomalySubjectsConfig{Endpoint: c.in, DB: c.in, Queue: c.in})
-			if got.Endpoint != c.want || got.DB != c.want || got.Queue != c.want {
+			wantQ := c.want
+			wantQ.LagMinRecords = 1000 // v0.10.1802 — yalnız queue taşır
+			if got.Endpoint != c.want || got.DB != c.want || got.Queue != wantQ {
 				t.Errorf("got %+v, want %+v", got, c.want)
 			}
 		})
@@ -173,5 +176,23 @@ func TestSubjectPromotionThresholds(t *testing.T) {
 		if n.PromotionMinSustainedSec != c.wantSec || n.PromotionMinRatio != c.wantRatio {
 			t.Errorf("(%d, %v) → (%d, %v), want (%d, %v)", c.sec, c.ratio, n.PromotionMinSustainedSec, n.PromotionMinRatio, c.wantSec, c.wantRatio)
 		}
+	}
+}
+
+// TestQueueLagMinRecords — v0.10.1802 (Davis dilim 3): queue.lagMinRecords
+// varsayılan 1000, aralık dışı → 1000, endpoint / db'de hep 0 (JSON'a yazılmaz).
+func TestQueueLagMinRecords(t *testing.T) {
+	if d := DefaultAnomalySubjects(); d.Queue.LagMinRecords != 1000 || d.Endpoint.LagMinRecords != 0 || d.DB.LagMinRecords != 0 {
+		t.Errorf("varsayılan: %+v", d)
+	}
+	for in, want := range map[int]int{0: 1000, -5: 1000, 1: 1, 250: 250, 1_000_000_000: 1_000_000_000, 1_000_000_001: 1000} {
+		got := NormalizeAnomalySubjects(AnomalySubjectsConfig{Queue: AnomalySubjectKindConfig{LagMinRecords: in}, DB: AnomalySubjectKindConfig{LagMinRecords: in}})
+		if got.Queue.LagMinRecords != want || got.DB.LagMinRecords != 0 {
+			t.Errorf("lagMinRecords %d → queue %d db %d, want %d / 0", in, got.Queue.LagMinRecords, got.DB.LagMinRecords, want)
+		}
+	}
+	raw, _ := json.Marshal(DefaultAnomalySubjects())
+	if s := string(raw); !strings.Contains(s, `"queue":{"enabled":false,"topN":20,"maxSeriesPerTick":2000,"lagMinRecords":1000}`) || strings.Count(s, "lagMinRecords") != 1 {
+		t.Errorf("JSON şekli: %s", s)
 	}
 }

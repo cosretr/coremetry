@@ -19,7 +19,10 @@ import (
 
 // SubjectKindStats — bir özne türünün son tik + süreç toplamı.
 type SubjectKindStats struct {
-	Kind     string `json:"kind"`
+	Kind string `json:"kind"`
+	// Source — v0.10.1802: "" = türün asıl kaynağı; "vm_kafka_lag" = queue'nun
+	// VM consumer lag kaynağı (ayrı satır, ayrı sayaç).
+	Source   string `json:"source,omitempty"`
 	Enabled  bool   `json:"enabled"`
 	Series   int    `json:"series"`   // son tik: seçilen özne sayısı (-1 = bilinmiyor)
 	Subjects int    `json:"subjects"` // son tik: serisi kurulan özne sayısı
@@ -88,21 +91,25 @@ func (d *Detector) scanSubjects(ctx context.Context, now time.Time, sens chstore
 	reqs := subjectKindsOrdered(sens.Subjects)
 	stats := make([]SubjectKindStats, 0, len(reqs))
 	vmLeft := vmMaxQueriesPerTick - vmUsed
-	for _, r := range reqs {
-		st := SubjectKindStats{Kind: r.Kind, Enabled: r.Cfg.Enabled, Series: -1}
+	// v0.10.1802 — tik başı plan: endpoint payı lag'in en az payını ayırır.
+	plans := planSubjectBudget(reqs, vmLeft)
+	for i, r := range reqs {
+		st := SubjectKindStats{Kind: r.Kind, Source: r.Source, Enabled: r.Cfg.Enabled, Series: -1}
 		if !r.Cfg.Enabled {
 			stats = append(stats, st)
 			continue
 		}
 		before := countSubjects(out, r.Kind)
-		switch r.Kind {
-		case chstore.AnomalySubjectEndpoint:
-			d.collectEndpoints(ctx, now, sens, tracked, days, neighbor, r, &vmLeft, out, &st)
+		switch {
+		case r.Source == subjectSourceKafkaLag:
+			d.collectKafkaLag(ctx, now, sens, days, neighbor, r, &vmLeft, out, &st)
+		case r.Kind == chstore.AnomalySubjectEndpoint:
+			d.collectEndpoints(ctx, now, sens, tracked, days, neighbor, plans[i], &vmLeft, out, &st)
 		default:
 			d.collectCHKind(ctx, now, sens, tracked, days, neighbor, loc, r, out, &st)
 		}
 		st.Subjects = countSubjects(out, r.Kind) - before
-		st.SkipCount = noteSubjectSkip(r.Kind, st.Reason)
+		st.SkipCount = noteSubjectSkip(r.Kind+r.Source, st.Reason)
 		stats = append(stats, st)
 	}
 	subjectObs.Store(&SubjectStats{LastUnix: time.Now().Unix(), SeasonalTimezone: seasonalTZLiteral(loc), Kinds: stats})
@@ -111,18 +118,19 @@ func (d *Detector) scanSubjects(ctx context.Context, now time.Time, sens chstore
 
 // collectEndpoints — VM endpoint kaynağı; bütçe planlayıcısının kararıyla.
 func (d *Detector) collectEndpoints(ctx context.Context, now time.Time, sens chstore.AnomalySensitivityConfig,
-	tracked []string, days, neighbor int, r subjectKindReq, vmLeft *int, out subjectTick, st *SubjectKindStats) {
+	tracked []string, days, neighbor int, plan subjectKindPlan, vmLeft *int, out subjectTick, st *SubjectKindStats) {
 	if d.redEndpoints == nil {
 		st.Skipped, st.Reason = true, subjectSkipNoSource
 		return
 	}
-	plan := planSubjectBudget([]subjectKindReq{r}, *vmLeft)[0]
+	// v0.10.1802 — plan tik başında (planSubjectBudget, lag payı ayrılmış).
+	cfg := sens.Subjects.Endpoint
 	if plan.Skipped {
 		st.Skipped, st.Reason = true, plan.Reason
 		return
 	}
 	src := d.redEndpoints
-	src.topN, src.maxSeries = r.Cfg.TopN, r.Cfg.MaxSeriesPerTick
+	src.topN, src.maxSeries = cfg.TopN, cfg.MaxSeriesPerTick
 	src.queryCap = plan.VMBudget - 1 // seçim sorgusuna bir pay
 	v := src.prepare(ctx, now, sens, days, neighbor)
 	*vmLeft -= v.queries

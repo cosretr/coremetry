@@ -29,6 +29,11 @@ type AnomalySubjectKindConfig struct {
 	// filo tabanı "hangi servis eksik" sorusunu cevapsız bırakırdı) ve
 	// self-obs sayacı artar.
 	MaxSeriesPerTick int `json:"maxSeriesPerTick"`
+	// LagMinRecords — v0.10.1802 (Davis dilim 3, Kafka consumer lag): YALNIZ
+	// queue türünde anlamlı. consumer_lag olayı cari lag bu kayıt sayısının
+	// ALTINDAYSA üretilmez (düşük mutlak lag gürültüsü: 3 → 40 kayıt 13× ama
+	// kimseyi ilgilendirmez). Varsayılan 1000; endpoint / db'de 0 (yazılmaz).
+	LagMinRecords int `json:"lagMinRecords,omitempty"`
 }
 
 // AnomalySubjectsConfig — üç özne türü. Servis düzeyi her zaman açık ve
@@ -74,6 +79,10 @@ const (
 	subjectPromotionMinRatioMin         = 1.0
 	subjectPromotionMinRatioMax         = 1000.0
 
+	// v0.10.1802 — queue.lagMinRecords varsayılanı + aralığı.
+	subjectLagMinRecordsDefault = 1000
+	subjectLagMinRecordsMax     = 1_000_000_000
+
 	// DefaultSeasonalTimezone — karar 3: gün sınıfı operatör diliminde.
 	DefaultSeasonalTimezone = "Europe/Istanbul"
 )
@@ -81,7 +90,9 @@ const (
 // DefaultAnomalySubjects — üç tür kapalı, tavanlar varsayılan.
 func DefaultAnomalySubjects() AnomalySubjectsConfig {
 	k := AnomalySubjectKindConfig{TopN: anomalySubjectTopNDefault, MaxSeriesPerTick: anomalySubjectMaxSeriesDefault}
-	return AnomalySubjectsConfig{Endpoint: k, DB: k, Queue: k, PromotionMode: SubjectPromotionOff,
+	q := k
+	q.LagMinRecords = subjectLagMinRecordsDefault
+	return AnomalySubjectsConfig{Endpoint: k, DB: k, Queue: q, PromotionMode: SubjectPromotionOff,
 		PromotionMinSustainedSec: subjectPromotionMinSustainedDefault, PromotionMinRatio: subjectPromotionMinRatioDefault}
 }
 
@@ -89,10 +100,13 @@ func DefaultAnomalySubjects() AnomalySubjectsConfig {
 // döner; Enabled aynen. Eski blob (bölüm yok) sıfır değerdir → üçü kapalı +
 // varsayılan tavanlar.
 func NormalizeAnomalySubjects(c AnomalySubjectsConfig) AnomalySubjectsConfig {
+	q := normalizeSubjectKind(c.Queue)
+	// v0.10.1802 — lag tabanı yalnız queue'da; 0 / aralık dışı → 1000.
+	q.LagMinRecords = clampRangeI(c.Queue.LagMinRecords, 1, subjectLagMinRecordsMax, subjectLagMinRecordsDefault)
 	return AnomalySubjectsConfig{
 		Endpoint: normalizeSubjectKind(c.Endpoint),
 		DB:       normalizeSubjectKind(c.DB),
-		Queue:    normalizeSubjectKind(c.Queue),
+		Queue:    q,
 		// v0.10.1797 — bilinmeyen / boş kip KAPALI (güvenli yön: elle
 		// bozulmuş blob Problem açmaz).
 		PromotionMode: normalizeSubjectPromotionMode(c.PromotionMode),

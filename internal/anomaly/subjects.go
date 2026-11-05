@@ -133,11 +133,15 @@ type subjectKindReq struct {
 	Series    int  // seçilen seri sayısı (seçim okumasından); -1 = bilinmiyor
 	VM        bool // VM bütçesinden mi yer (endpoint)
 	VMNeedMin int  // VM türünün bu tik koşabilmesi için gereken en az sorgu
+	// Source — v0.10.1802: aynı türün ikinci kaynağı ("" = türün asıl
+	// kaynağı; subjectSourceKafkaLag = queue'nun VM consumer lag'i).
+	Source string
 }
 
 // subjectKindPlan — planlayıcının kararı.
 type subjectKindPlan struct {
 	Kind     string `json:"kind"`
+	Source   string `json:"source,omitempty"` // v0.10.1802
 	Enabled  bool   `json:"enabled"`
 	Series   int    `json:"series"`
 	VMBudget int    `json:"vmBudget,omitempty"` // endpoint: bu tik harcanabilecek VM sorgusu
@@ -155,31 +159,51 @@ const (
 // planSubjectBudget — SAF: türleri sırayla değerlendirir. vmLeft = servis
 // yolundan kalan VM sorgu payı (vmMaxQueriesPerTick − servis yolunun bu tik
 // harcadığı). Kapalı tür Skipped=false, Enabled=false döner (sayaç artmaz).
+//
+// v0.10.1802 — iki VM türü (endpoint, queue/consumer lag): VM türü kalan payı
+// SONRAKİ açık VM türlerinin en az payını (VMNeedMin) ayırarak kullanır —
+// endpoint ısınması tüm payı yiyip lag'i her tik "VM bütçesi"yle aç bırakmasın.
 func planSubjectBudget(reqs []subjectKindReq, vmLeft int) []subjectKindPlan {
 	out := make([]subjectKindPlan, 0, len(reqs))
-	for _, r := range reqs {
-		p := subjectKindPlan{Kind: r.Kind, Enabled: r.Cfg.Enabled, Series: r.Series}
+	for i, r := range reqs {
+		p := subjectKindPlan{Kind: r.Kind, Source: r.Source, Enabled: r.Cfg.Enabled, Series: r.Series}
 		switch {
 		case !r.Cfg.Enabled:
 		case r.Series > r.Cfg.MaxSeriesPerTick:
 			p.Skipped, p.Reason = true, subjectSkipSeriesCap
-		case r.VM && vmLeft < r.VMNeedMin:
-			p.Skipped, p.Reason = true, subjectSkipVMBudget
 		case r.VM:
-			p.VMBudget = vmLeft
-			vmLeft = 0 // VM türü kalan payın tamamını kullanabilir (tek VM türü)
+			avail := vmLeft - subjectVMReserveAfter(reqs, i)
+			if avail < r.VMNeedMin {
+				p.Skipped, p.Reason = true, subjectSkipVMBudget
+				break
+			}
+			p.VMBudget = avail
+			vmLeft -= avail
 		}
 		out = append(out, p)
 	}
 	return out
 }
 
-// subjectKindsOrdered — SAF: ayardan sıralı istek iskeleti (endpoint, db, queue).
+// subjectVMReserveAfter — SAF: i'den sonraki açık VM türlerinin en az payı.
+func subjectVMReserveAfter(reqs []subjectKindReq, i int) int {
+	n := 0
+	for _, r := range reqs[i+1:] {
+		if r.VM && r.Cfg.Enabled {
+			n += r.VMNeedMin
+		}
+	}
+	return n
+}
+
+// subjectKindsOrdered — SAF: ayardan sıralı istek iskeleti (endpoint, db,
+// queue, queue/consumer lag — v0.10.1802: queue açıkken VM'den Kafka lag'i de).
 func subjectKindsOrdered(c chstore.AnomalySubjectsConfig) []subjectKindReq {
 	return []subjectKindReq{
 		{Kind: chstore.AnomalySubjectEndpoint, Cfg: c.Endpoint, Series: -1, VM: true, VMNeedMin: endpointVMMinQueries},
 		{Kind: chstore.AnomalySubjectDB, Cfg: c.DB, Series: -1},
 		{Kind: chstore.AnomalySubjectQueue, Cfg: c.Queue, Series: -1},
+		{Kind: chstore.AnomalySubjectQueue, Source: subjectSourceKafkaLag, Cfg: c.Queue, Series: -1, VM: true, VMNeedMin: kafkaLagVMMinQueries},
 	}
 }
 

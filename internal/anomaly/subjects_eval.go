@@ -24,8 +24,11 @@ import (
 
 // subjectEventPattern — SAF: olayın deseni. Endpoint'te rota desende (aynı
 // servisin rotaları ayrı parmak izi alır); db/queue'da özne zaten Service.
+// v0.10.1802 — sahibi kimliğinden ayrı özne (Kafka lag: sahip tüketici
+// servis, kimlik queue:kafka@<topic>) da kimliği desende taşır: aynı servisin
+// iki topic'i aynı parmak izine çökmesin.
 func subjectEventPattern(k subjectKey, metric string) string {
-	if k.Kind == chstore.AnomalySubjectEndpoint {
+	if k.Kind == chstore.AnomalySubjectEndpoint || k.Owner != k.ID {
 		return metric + " @ " + k.ID
 	}
 	return metric
@@ -43,6 +46,16 @@ func subjectAnomalyEvent(k subjectKey, metric string, oc anomalyOutcome, ser sub
 	if n := len(ser.Rates); n > 0 && ser.Rates[n-1] > 0 {
 		count = uint64(ser.Rates[n-1]*float64(bucketSeconds) + 0.5)
 	}
+	sample := fmt.Sprintf("%s %s: %.2f%s, taban %.2f%s (%s, z=%.1f, %d kova)",
+		displayMetric(metric), k.ID, oc.Current, unitOf(metric), oc.Median, unitOf(metric), oc.EventBaselineKind(), oc.Z, oc.Dwell)
+	if metric == subjectMetricConsumerLag {
+		// v0.10.1802 — hacim serisi gözlem göstergesi; sayım = cari lag (kayıt).
+		count = 0
+		if oc.Current > 0 {
+			count = uint64(oc.Current + 0.5)
+		}
+		sample = consumerLagSample(k, oc)
+	}
 	return chstore.AnomalyEvent{
 		ID:        chstore.FingerprintAnomaly(chstore.SubjectAnomalyKind, pattern, k.Owner),
 		Kind:      chstore.SubjectAnomalyKind,
@@ -53,11 +66,10 @@ func subjectAnomalyEvent(k subjectKey, metric string, oc anomalyOutcome, ser sub
 		// v0.10.1797 (FAZ 3 dilim 1) — tepe de doldurulur: yazım
 		// MergeAnomalyCarry'den geçince bölüm maksimumu olur, ama olay
 		// yazılmadan okunan (saf kapı / gölge sayımı) her yol 0 görürdü.
-		PeakRatio:    ratio,
-		CurrentRatio: ratio,
-		CurrentCount: count,
-		Sample: fmt.Sprintf("%s %s: %.2f%s, taban %.2f%s (%s, z=%.1f, %d kova)",
-			displayMetric(metric), k.ID, oc.Current, unitOf(metric), oc.Median, unitOf(metric), oc.EventBaselineKind(), oc.Z, oc.Dwell),
+		PeakRatio:     ratio,
+		CurrentRatio:  ratio,
+		CurrentCount:  count,
+		Sample:        sample,
 		Direction:     oc.EventDirection(),
 		BaselineValue: oc.Median,
 		BaselineKind:  oc.EventBaselineKind(),
@@ -100,6 +112,10 @@ func decideSubjects(tick subjectTick, sens chstore.AnomalySensitivityConfig, min
 			}
 			oc := evaluateAnomaly(m, ser.Values, ser.Seasonal, ser.Rates, minSamples, false, bl, sens)
 			if oc.Action != "open" {
+				continue
+			}
+			// v0.10.1802 — Kafka lag: yalnız artış + mutlak taban (lagMinRecords).
+			if m == subjectMetricConsumerLag && !consumerLagEventAllowed(oc, lagMinRecordsOf(sens.Subjects)) {
 				continue
 			}
 			out = append(out, subjectAnomalyEvent(k, m, oc, ser, now))

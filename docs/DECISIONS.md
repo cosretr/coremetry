@@ -12178,3 +12178,8 @@ satırı, açık satırın vurgusu + satır tıkıyla aç/kapa, satır içi form
 - `promotionMode=live`: aday Problem açar (aç / tazele `anomalyPromotionStep`; tazelemede rota listesi yenilenir, bildirim yok), açılışta `AttachProblemToIncident` (vida `anomaly_promotion.attachToIncident`) + `SendProblemAlert`; açılış üyelerine `promotion='live'`. Şiddet tepe ≥ `criticalPeakRatio` → critical, yaş tabanına kelepçeli.
 - db/queue Problem'i de (`anomaly-auto:<fp>`) özne süpürmesinde açılır/tazelenir; genel terfi döngüsü `subject_red` olaylarını hiç işlemez (genel gövde özne gövdesini ezerdi).
 - Çözülme: `anomaly-auto:subject:` grubu, aktif + susturulmamış + kötüleşen üyesi kalmayınca "anomaly cleared"; kip off / okuma hatası → dokunulmaz, bayat süpürme kapatır. Varsayılan kip hâlâ off; canlıya geçiş gölge + eval sonrası operatörde.
+
+## 2026-11-05 — v0.10.1802 — Kafka consumer lag özne metriği (Davis dilim 3)
+- Queue öznesine VM kaynaklı `consumer_lag`: `max by (svc, topic) (max_over_time(kafka.consumer.records_lag_max[5m]))`, özne `QueueSubjectID("kafka", topic)`, SAHİP tüketici servis (db/queue'nun "sahip = kimlik" kuralından bilinçli sapma — Problem servis sahibine düşer; desen `consumer_lag @ <kimlik>` iki topic'i ayırır). messaging_summary_5m metrikleri aynen.
+- Üst-N hacme değil son 1 sa ORTALAMA lag'e göre (`topk … @ çapa`, endpoint seçiminin ikizi); kova belleği / koşu planı endpoint yolunun saf parçaları. Bütçe: endpoint türü lag'in en az payını (2) ayırır.
+- Karar yalnız artış + cari lag ≥ `subjects.queue.lagMinRecords` (vars. 1000). Terfi p99 ile aynı kapı; tabansız (medyan 0) lag terfi ETMEZ — sayım kolu yalnız error_rate. Açık soru: sağlıklı tüketicide lag tabanı sık sık 0; bu sınıf bu sürümde Problem açmaz (canlı veriyle ölçülecek).

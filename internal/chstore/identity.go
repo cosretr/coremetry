@@ -190,6 +190,21 @@ func QueueSubjectID(system, destination string) string {
 	return ""
 }
 
+// ParseQueueSubjectID — v0.10.1802: QueueSubjectID'nin tersi (ParseDBSubjectID
+// ikizi; önek sözlükten, ayırıcı İLK '@' — sistem '@' taşımaz). ok=false: kuyruk
+// öznesi değil. Kafka lag başlığı / örnek cümlesi topic adını buradan okur.
+func ParseQueueSubjectID(id string) (system, destination string, ok bool) {
+	kind, rest := TopologyNodeIdentity(id)
+	if kind != NodeKindQueue {
+		return "", "", false
+	}
+	at := strings.Index(rest, "@")
+	if at <= 0 || at == len(rest)-1 {
+		return "", "", false
+	}
+	return rest[:at], rest[at+1:], true
+}
+
 // ParseDBSubjectID — DBSubjectID'nin tersi. ok=false: bu dizgi bir db
 // öznesi DEĞİL (öneksiz, ya da '@' taşımıyor, ya da bir yarısı boş).
 //

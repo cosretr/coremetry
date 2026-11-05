@@ -37,6 +37,10 @@ const subjectGroupDetailTop = 5
 // sınıflandırıcıları öneke baktığı için yeni önek tüketicisi gerekmez.
 const promoteSubjectRulePrefix = promoteAnomalyRuleID + "subject:"
 
+// subjectMetricConsumerLag — anomaly.subjectMetricConsumerLag'ın ikizi (paket
+// dışa açmıyor; TestSubjectConsumerLagMetricName pinler).
+const subjectMetricConsumerLag = "consumer_lag"
+
 // subjectEventMetric — SAF: özne olayının metriği. Endpoint deseni
 // "metrik @ rota", db/queue deseni yalnız metrik (subjectEventPattern).
 func subjectEventMetric(ev chstore.AnomalyEvent) string {
@@ -62,9 +66,13 @@ func subjectEventRoute(ev chstore.AnomalyEvent) string {
 // gecikme ARTIŞI kötüleşmedir; istek hızı hiçbir yönde terfi etmez (düşüş
 // FAZ 3 kapsamı dışında — sessiz servis / takvim yollarının işi; artış yük
 // sinyali, Problem değil). Yön bilinmiyorsa ("" — eski satır) terfi yok.
+//
+// v0.10.1802 — Kafka consumer_lag ARTIŞI da kötüleşmedir (aynı sürdürme /
+// oran eşikleri; tabansız lag'in sayım kolu YOK — subjectCountOnly yalnız
+// error_rate).
 func subjectWorsening(metric, direction string) bool {
 	switch metric {
-	case "error_rate", "p95_ms", "p99_ms":
+	case "error_rate", "p95_ms", "p99_ms", subjectMetricConsumerLag:
 		return direction == chstore.AnomalyDirectionUp
 	}
 	return false
@@ -190,6 +198,8 @@ func subjectMetricLabel(metric string) string {
 		return "p95"
 	case "error_rate":
 		return "hata oranı"
+	case subjectMetricConsumerLag:
+		return "consumer lag"
 	}
 	return metric
 }
@@ -242,6 +252,14 @@ func subjectGroupTitle(k subjectGroupKey, mem []chstore.AnomalyEvent, now time.T
 	dur := formatDurationTR(now.Sub(time.Unix(0, started)))
 	var what string
 	single := len(mem) == 1 && mem[0].SubjectKind != chstore.AnomalySubjectEndpoint
+	if single && k.Metric == subjectMetricConsumerLag {
+		// v0.10.1802 — orders-consumer: orders topic'inde consumer lag 40,0× taban (15 dk)
+		ratio := "taban yok"
+		if peak > 0 {
+			ratio = formatRatioTR(peak) + " taban"
+		}
+		return k.Service + ": " + subjectQueueTopic(mem[0].SubjectID) + " topic'inde consumer lag " + ratio + " (" + dur + ")"
+	}
 	switch {
 	case single && k.Metric == "error_rate":
 		// db / queue öznesi: özne zaten servis alanında (db:… / queue:…).
@@ -269,6 +287,15 @@ func subjectGroupTitle(k subjectGroupKey, mem []chstore.AnomalyEvent, now time.T
 		paren = subjectMetricLabel(k.Metric) + " " + formatRatioTR(peak) + " taban, " + dur
 	}
 	return k.Service + ": " + what + " (" + paren + ")"
+}
+
+// subjectQueueTopic — SAF: kuyruk öznesi kimliğinden hedef (topic) adı;
+// çözülemezse kimliğin kendisi.
+func subjectQueueTopic(id string) string {
+	if _, dest, ok := chstore.ParseQueueSubjectID(id); ok {
+		return dest
+	}
+	return id
 }
 
 // subjectGroupDescription — SAF: detay — rotalar orana göre ilk 5 + "ve N

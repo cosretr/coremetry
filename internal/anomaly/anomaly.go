@@ -147,6 +147,15 @@ var metricDirections = map[string]string{
 	"request_rate": "both", // drop AND spike both matter
 }
 
+// subjectMetricDirections — v0.10.1802 (Davis dilim 3): yalnız ÖZNE
+// dedektörünün bildiği metrikler. metricDirections'tan AYRI: o harita
+// operatörün izlenen-metrik listesiyle eşit tutulur
+// (TestTrackedMetricSetMatchesDetectorKnowledge); consumer_lag oraya ait
+// değil (servis düzeyinde serisi yok, queue öznesi açılınca koşar).
+var subjectMetricDirections = map[string]string{
+	subjectMetricConsumerLag: "up", // lag düşüşü = tüketici yetişiyor (iyileşme)
+}
+
 // directionFor — metriğin yönü; bilinmeyen metrik simetrik davranır.
 func directionFor(metric string) string {
 	// v0.10.228 — dış (Influx) seriler hata SAYISIDIR: yalnız yükseliş
@@ -155,6 +164,9 @@ func directionFor(metric string) string {
 		return "up"
 	}
 	if d, ok := metricDirections[metric]; ok {
+		return d
+	}
+	if d, ok := subjectMetricDirections[metric]; ok {
 		return d
 	}
 	return "both"
@@ -421,6 +433,9 @@ type Detector struct {
 	// v0.10.1791 (Davis F1.3) — endpoint öznelerinin VM kaynağı (aynı kablo,
 	// endpoint kipi; subjects_scan.go). Özneler kapalıyken hiç koşmaz.
 	redEndpoints *vmREDSource
+	// v0.10.1802 (Davis dilim 3) — queue öznesinin Kafka consumer lag kaynağı
+	// (d.red'in VM kablosunu okur; subjects_kafka_lag.go). Queue kapalıyken boşta.
+	kafkaLag *kafkaLagSource
 }
 
 // sensitivityLogLine — hassasiyet ayarının tek satırlık, KARARLI özeti.
@@ -463,6 +478,7 @@ func New(store *chstore.Store, interval time.Duration, lock cache.Lock, notifier
 		red:      newVMREDSource(),
 		// v0.10.1791 — endpoint öznelerinin VM kaynağı (özneler kapalıyken boşta).
 		redEndpoints: newVMEndpointSource(),
+		kafkaLag:     newKafkaLagSource(), // v0.10.1802
 	}
 }
 
@@ -1833,6 +1849,8 @@ func displayMetric(m string) string {
 		return "Error rate"
 	case "request_rate":
 		return "Request rate"
+	case subjectMetricConsumerLag: // v0.10.1802
+		return "Consumer lag"
 	}
 	return m
 }
@@ -1848,6 +1866,9 @@ func unitOf(m string) string {
 	}
 	if m == "request_rate" {
 		return "/s"
+	}
+	if m == subjectMetricConsumerLag { // v0.10.1802 — Kafka kayıt sayısı
+		return "kayıt"
 	}
 	return ""
 }
