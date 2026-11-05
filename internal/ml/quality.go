@@ -175,16 +175,6 @@ func (t *tracker) byEpisode(epID string) *runInfo {
 	return nil
 }
 
-// episodeOf — taban kimliğin güncel epizot kimliği (test).
-func (t *tracker) episodeOf(baseID string) string {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	if r := t.runs[baseID]; r != nil {
-		return r.epID
-	}
-	return ""
-}
-
 // closeStale — bu tikte görülmeyen açık koşuların kaçırma sayısı artar;
 // episodeCloseMisses'e ulaşan kapanır ve kapanış satırı (stage=closed,
 // last_seen = son görülme) döner.
