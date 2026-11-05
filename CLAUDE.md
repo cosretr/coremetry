@@ -86,6 +86,7 @@ never `s.copilot.Explain` direct (/ai attribution).
 
 - `kuyruk` = show prioritised queue, end with "Hangisi?". `devam` = continue current item.
 - Operator-reported bugs = NEW priority, ship as `v0.10.X+1` immediately, never batch.
+- ≥1000 satırlık dosya (liste `docs/claude/large-files.md`) bütün okunmaz: sembolü grep'le, ±80 satır oku; DECISIONS/INCIDENTS'ta başlık grep'i; testdata golden dosyaları asla.
 
 **Release — every functional change:**
 ```
