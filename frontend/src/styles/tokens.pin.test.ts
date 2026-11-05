@@ -163,6 +163,15 @@ describe('§12 Q4: uPlot/CorePanel kuralları katmansız chart.css\'te', () => {
   });
 });
 
+describe('v0.10.1781: shadcn düğmeleri UA kabuğuna düşmez (preflight yok)', () => {
+  it('tokens.css base katmanı button[data-slot] için appearance/zemin/kenar/yazı tipi sıfırlar', () => {
+    const base = TOKENS.slice(TOKENS.indexOf('@layer base {'));
+    expect(base).toContain('button[data-slot] {');
+    for (const d of ['appearance: none;', 'background: transparent;', 'border: 0;', 'padding: 0;', 'font: inherit;', 'cursor: pointer;']) expect(base, d).toContain(d);
+    expect(base).toContain('button[data-slot]:disabled { cursor: default; }');
+  });
+});
+
 describe('§7.1 öğe kuralları data-slot taşıyan (shadcn) öğeleri dışarıda bırakır', () => {
   const G = ':where(:not([data-slot]))';
   it('input/select, textarea, button kuralları korumalı; korumasız eşi yok', () => {

@@ -175,3 +175,20 @@
   .cm-detail-sheet[data-modal="false"] { z-index: var(--z-nav); }
   .cm-detail-sheet { background: var(--bg); border-color: var(--border); box-shadow: var(--shadow-pop); }
 }
+
+/* v0.10.1781 (operatör) — CoSRE başlığındaki "🕘 Geçmiş" / "Temizle" (shadcn
+   Button, ghost) tarayıcının VARSAYILAN düğme kabuğuyla çiziliyordu: gri
+   bevel, UA gölgesi, sistem yazı tipi. Neden: preflight yok (index.css) ve
+   legacy `button` kuralı `:where(:not([data-slot]))` ile shadcn düğmelerini
+   bilerek dışarıda bırakır; zemin/kenar YAZMAYAN varyantlar (ghost, link) ve
+   data-slot taşıyan her düğme (toggle, tabs-trigger, select-trigger …) UA
+   stiline düşüyordu. base katmanı: utilities (bg-primary, border, px-*,
+   text-sm, font-medium) yener; legacy katmanına dokunmaz. */
+@layer base {
+  button[data-slot] {
+    appearance: none; -webkit-appearance: none;
+    background: transparent; border: 0; padding: 0; margin: 0;
+    font: inherit; color: inherit; line-height: inherit; cursor: pointer;
+  }
+  button[data-slot]:disabled { cursor: default; }
+}
