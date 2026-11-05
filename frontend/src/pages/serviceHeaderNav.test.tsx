@@ -209,4 +209,9 @@ describe('v0.10.1320 — CSS', () => {
     expect(rules).toMatch(/\.svc-head__nav \{[^}]*margin-left: auto;[^}]*flex-wrap: wrap;/);
     expect(rules).toMatch(/@media \(max-width: 640px\) \{\s*\.svc-head__nav \{ margin-left: 0; flex-basis: 100%;/);
   });
+  // v0.10.1824 — operatör: düğmeler gri sayfa zemininde seçilmiyordu.
+  it('başlık gezinme düğmeleri kart yüzeyinde ve belirgin kenarlı', () => {
+    expect(rules).toMatch(/\.svc-head__nav a\.sec \{\s*background: var\(--bg1\); border-color: var\(--border-strong\);\s*font-weight: 500; box-shadow: var\(--shadow-sm\);/);
+    expect(rules).toMatch(/\.svc-head__nav a\.sec:hover, \.svc-head__nav a\.sec:focus-visible \{\s*background: var\(--accent-bg\); border-color: var\(--accent\);/);
+  });
 });

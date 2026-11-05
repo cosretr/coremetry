@@ -3905,6 +3905,18 @@ td > .cell-actions.end { justify-content: flex-end; }
 .svc-head__crumbs a:hover { color: var(--text2); text-decoration: underline; text-underline-offset: 2px; }
 .svc-head__crumbs .crumbs__cur { font-weight: 400; }
 .svc-head__nav { margin-left: auto; display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-3); }
+/* v0.10.1824 (operatör: "gri arka planla belli olmuyor") — başlık gezinme
+   düğmeleri sayfa zemininde (--bg0) dolgusuz + ince gri kenarlıydı; düğme
+   gibi okunmuyordu. Kart yüzeyi + belirgin kenar + orta kalınlık + hafif
+   gölge; üzerine gelince accent zemin/kenar. YALNIZ bu şerit: `a.sec`in
+   genel dolgusuz hâli (kart içi pivotlar) değişmez. */
+.svc-head__nav a.sec {
+  background: var(--bg1); border-color: var(--border-strong);
+  font-weight: 500; box-shadow: var(--shadow-sm);
+}
+.svc-head__nav a.sec:hover, .svc-head__nav a.sec:focus-visible {
+  background: var(--accent-bg); border-color: var(--accent);
+}
 @media (max-width: 640px) {
   .svc-head__nav { margin-left: 0; flex-basis: 100%; justify-content: flex-start; }
   .svc-head__nav a.sec { min-height: 28px; }
