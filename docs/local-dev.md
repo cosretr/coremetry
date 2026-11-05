@@ -84,7 +84,7 @@ reload burada; Go tarafı değişince `make build-go && ./coremetry` (ya da
 `make docker-up`). Üretim derlemesi `npm run build` (tsc + Vite);
 `npm run build:analyze` chunk haritası.
 
-Kurallar `/frontend-conventions` ve `/frontend-design-system` skill'lerinde
+Kurallar `/frontend-design-system` skill'inde
 (uPlot dışı grafik kütüphanesi yok, her tablo `useDataTable`, URL = state).
 
 ## 5. Demo trafiği
@@ -230,7 +230,7 @@ benzersiz tag. Rollout sonrası collector "zero addresses" ile takılırsa
 - İlk değişiklik: küçük, kendi `v0.10.X` tag'i, kapılar yeşil
   ([CONTRIBUTING §2-4](../CONTRIBUTING.md)).
 - Yeni `/api/*` ucu → `/api-route`; CH → `/clickhouse-schema`; UI →
-  `/frontend-conventions`; chart → `/helm-chart-coremetry`.
+  `/frontend-design-system`; chart → `/helm-chart-coremetry`.
 - Olay hikâyeleri [docs/INCIDENTS.md](INCIDENTS.md) — pitfall'ların çoğu
   oradan gelir; kararlar [docs/DECISIONS.md](DECISIONS.md).
 - Veri hijyeni: müşteri adı / iç host / gerçek tablo adı hiçbir yere

@@ -61,9 +61,9 @@ edit → scripts/gate.sh all   (fe: tsc → eslint → vitest → bundle:check;
 
 **Skills (`.claude/skills/`) — run BEFORE the matching change:**
 - `/release`, `/bugfix`, `/spec` (3+ files), `/kuyruk`, `/tdd` (new backend feature / pure helper), `/review-changes` (pre-commit diff review; before `/release` on non-trivial work), `/where-is` ("X nerede").
-- `/clickhouse-schema` (any CH table/query/MV) · `/api-route` (add/move any `/api/*` route) · `/mcp-tools` (MCP server) · `/otel-conventions` (OTel-shaped data) · `/otlp-converter` (`internal/otlp/`; golden-test obligation) · `/helm-chart-coremetry` (`charts/coremetry/`).
+- `/clickhouse-schema` (any CH table/query/MV) · `/api-route` (add/move any `/api/*` route) · `/mcp-tools` (MCP server) · `/otel-conventions` (OTel-shaped data, `internal/otlp/` converter; golden-test obligation) · `/helm-chart-coremetry` (`charts/coremetry/`).
 - `/aiops` (detector, rule-id, priority/escalation, incident attach, hypothesis score, exception ladder, any loop writing problems/anomaly_events/root_cause_hypotheses) · `/copilot-surface` (new AI ✨ Explain).
-- `/frontend-conventions` (component/table/filter/drawer/theme/polling) · `/frontend-design-system` (any UI part — find the existing primitive first; `ui/` barrel is incomplete) · `/frontend-dashboard-panel` (new panel type).
+- `/frontend-design-system` (any UI part: component/table/filter/drawer/theme/polling — find the existing primitive first; `ui/` barrel is incomplete) · `/frontend-dashboard-panel` (new panel type).
 - `/perf-triage` (ONE slow surface → measured root cause) · `/scale-audit` (quarterly whole-repo sweep).
 
 ## Pitfall rules — full stories in [docs/INCIDENTS.md](docs/INCIDENTS.md)

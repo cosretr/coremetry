@@ -60,7 +60,7 @@ Bütün bölümler dolu; §7'deki sorular cevaplanmadan B1 kesilmez.
   source-document, source-url, links, followups+suggestions, evidence-summary,
   message-metadata), `-reset`, `-reset2` (çift), `-error` (class deadline), `-closed`
   (class closed). Hepsi nötr (orders-api, com.acme).
-- Skills: `/frontend-conventions`, `/frontend-design-system`, `/copilot-surface`
+- Skills: `/frontend-design-system`, `/copilot-surface`
   (yalnız atıf: 2b yeni AI ucu/prompt eklemez).
 
 **Taban.** `origin/main` @ v0.10.1639. Faz 1 R1–R8 (1592–1607) ve 2a (1618) gemide.

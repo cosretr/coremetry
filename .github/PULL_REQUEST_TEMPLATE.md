@@ -27,7 +27,7 @@
 - [ ] Bug fix ise regresyon testi var ve başlığı **vX.Y.Z**'yi anıyor (kanonik: `internal/api/cache_key_test.go`); mutasyon ölçüldü
 - [ ] ClickHouse şeması / SQL değiştiyse `/clickhouse-schema` okundu; migration + `chsmoke` güncel
 - [ ] `charts/coremetry/` değiştiyse `Chart.yaml` version/appVersion bump + `helm lint` + `helm template` (mono + distributed)
-- [ ] OTel alan adı değiştiyse `/otel-conventions` + `/otlp-converter` golden payload
+- [ ] OTel alan adı değiştiyse `/otel-conventions` (dönüştürücü kontrol listesi) golden payload
 - [ ] Yeni `/api/*` route → kendi `internal/api/<domain>.go` (`registerRoutesExtra`), `api.go` büyümedi
 - [ ] Müşteri/kurum adı, hostname, IP, şema/tablo adı, gerçek iş yükü adı YOK (sentetik: shop, prod-eu, TEST-NET)
 

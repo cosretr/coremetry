@@ -123,7 +123,7 @@ git diff <prod-tag>..HEAD | grep -E '^\+.*(ALTER|CREATE|DROP|MATERIALIZED)'
 
    Aynı taramada şablon yazımlarını da çevir (bunlar çalıştırılabilir
    değil, ama reçetedir ve uygulanır): `.claude/skills/bugfix/SKILL.md`,
-   `kuyruk/SKILL.md`, `api-route/SKILL.md`, `otlp-converter/SKILL.md`,
+   `kuyruk/SKILL.md`, `api-route/SKILL.md`, `otel-conventions/SKILL.md`,
    ve `.claude/agents/coremetry-feature-shipper.md` (bu sonuncusu ayrıca
    `v0.5.X` ve `make docker-up` diyor — iki kat bayat).
 

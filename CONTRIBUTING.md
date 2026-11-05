@@ -32,10 +32,10 @@ kararlar [docs/DECISIONS.md](docs/DECISIONS.md), hazırlık denetimi
 2. Kural dosyaları iş türüne göre: yeni `/api/*` ucu → [api-route](.claude/skills/api-route/SKILL.md)
    (`internal/api/api.go` BÜYÜMEZ, `registerRoutesExtra` ile kendi dosyası);
    ClickHouse tablo/MV/sorgu → [clickhouse-schema](.claude/skills/clickhouse-schema/SKILL.md);
-   frontend bileşen/tablo/grafik → [frontend-conventions](.claude/skills/frontend-conventions/SKILL.md)
+   frontend bileşen/tablo/grafik → [frontend-design-system](.claude/skills/frontend-design-system/SKILL.md)
    ve [frontend-design-system](.claude/skills/frontend-design-system/SKILL.md)
    (önce mevcut primitifi ara); chart → helm-chart-coremetry; OTLP alanı →
-   otel-conventions + otlp-converter.
+   otel-conventions (dönüştürücü kontrol listesi dahil).
 3. Bug fix = regresyon testi: saf fonksiyon, tablo-testli, başlıkta düzelttiği
    `vX.Y.Z` (kanonik: `internal/api/cache_key_test.go`). Testin gerçekten
    ısırdığını bir mutasyonla göster (satırı geri al → test düşmeli).
