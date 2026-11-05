@@ -648,6 +648,7 @@ select option { background: var(--field-bg); }
 /* textarea'nın taban kuralı yoktu (UA zemini); yalnız zemin + metin rengi
    alanlarla hizalanır — dolgu/kenar/yazı tipi çağıranlarda kalır. */
 textarea:where(:not([data-slot])) { background: var(--field-bg); color: var(--text); }
+textarea:where(:not([data-slot])):focus { border-color: var(--focus); outline: none; } /* v0.10.1782 — metin girişi odağı kenar rengiyle */
 button:where(:not([data-slot])) {
   background: var(--accent); color: var(--on-accent); border: none;
   border-radius: var(--radius-sm); padding: 5px 14px; font-size: 13px; cursor: pointer;
@@ -678,9 +679,17 @@ button:where(:not([data-slot])).is-loading > .spinner { position: absolute; inse
    mouse click — so pointer users see no extra chrome. */
 button:focus-visible,
 a:focus-visible,
-input:focus-visible,
+/* v0.10.1782 (operatör) — METİN girişleri dış çizgi almaz: odak göstergesi
+   kenar rengidir (input:focus → --focus, textarea:focus → --focus) ya da
+   sarmalayıcının focus-within halkası (CoSRE kompozer kartı, .sf-wrap). Yazarken
+   beliren 2px çizgi bu kutularda İKİNCİ bir çerçeve çiziyordu. Yalnız kenarsız
+   girişler (onay kutusu / radyo / aralık / dosya / renk) dış çizgiyi korur. */
+input[type="checkbox"]:focus-visible,
+input[type="radio"]:focus-visible,
+input[type="range"]:focus-visible,
+input[type="file"]:focus-visible,
+input[type="color"]:focus-visible,
 select:focus-visible,
-textarea:focus-visible,
 summary:focus-visible,
 [role="button"]:focus-visible,
 [role="tab"]:focus-visible,
