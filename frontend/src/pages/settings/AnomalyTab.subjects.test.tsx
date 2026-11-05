@@ -181,4 +181,32 @@ describe('Özneler bölümü (v0.10.1790 Davis F1.2)', () => {
     expect(sj.promotionMode).toBe('shadow');
     expect(sj.endpoint.enabled).toBe(false);
   });
+
+  // v0.10.1798 (dilim 2) — eşikler: yok → 600 sn / 2; kip kapalıyken kilitli.
+  it('terfi eşikleri: varsayılan 600 sn / 2×, kip kapalıyken kilitli, değişiklik gider', async () => {
+    m.sens = baseSens({ subjects: {
+      endpoint: { enabled: true, topN: 20, maxSeriesPerTick: 2000 },
+      db: { enabled: false, topN: 20, maxSeriesPerTick: 2000 },
+      queue: { enabled: false, topN: 20, maxSeriesPerTick: 2000 },
+      promotionMode: 'shadow',
+    } });
+    const el = await mount();
+    const sec = numInput(el, 'Özne terfi: en az süre');
+    const ratio = numInput(el, 'Özne terfi: tabanın en az katı');
+    expect(sec.value).toBe('600');
+    expect(ratio.value).toBe('2');
+    expect(sec.disabled).toBe(false);
+    await type(ratio, '3');
+    await act(async () => { sensitivitySave(el).click(); });
+    await settle();
+    const sj = m.puts[0].subjects as { promotionMinRatio: number; promotionMinSustainedSec: number };
+    expect(sj.promotionMinRatio).toBe(3);
+    expect(sj.promotionMinSustainedSec).toBe(600);
+  });
+
+  it('terfi eşikleri: kip kapalıyken alanlar kilitli', async () => {
+    const el = await mount();
+    expect(numInput(el, 'Özne terfi: en az süre').disabled).toBe(true);
+    expect(numInput(el, 'Özne terfi: tabanın en az katı').disabled).toBe(true);
+  });
 });

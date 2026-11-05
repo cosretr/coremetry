@@ -9962,6 +9962,10 @@ export interface AnomalySubjectsConfig {
   /** v0.10.1797 (Davis FAZ 3) — özne olayının Problem'e terfi kipi. Yok /
    *  bilinmeyen = 'off'; sunucu bilinmeyeni PUT'ta reddeder. */
   promotionMode?: SubjectPromotionMode;
+  /** v0.10.1798 — terfi kapısı: en az sürme (sn, 60–86400, varsayılan 600)
+   *  ve bölüm tepesinin tabana oranı (1–1000, varsayılan 2). */
+  promotionMinSustainedSec?: number;
+  promotionMinRatio?: number;
 }
 
 /** v0.10.1797 — chstore.SubjectPromotion*: off (terfi yok) | shadow (Problem

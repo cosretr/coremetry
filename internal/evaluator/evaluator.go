@@ -1538,7 +1538,10 @@ func anomalyPromotionStep(active, muted, gateOK bool, hasOpen func() bool) promo
 // (chstore.MergeAnomalyCarry) ve bu kapı yeniden 300 sn bekler.
 func promotionGate(ev chstore.AnomalyEvent, cfg chstore.AnomalyPromotionConfig, now time.Time) bool {
 	// v0.10.1792 (Davis F1.4, karar 8) — özne tabanı olayları iç sinyal
-	// katmanıdır: FAZ 1'de Problem'e terfi etmez (gruplama FAZ 3).
+	// katmanıdır: bu GENEL kapıdan hiç geçmez. v0.10.1798 (FAZ 3) — özne
+	// kolu ayrı: subjectPromotionGate (yön + sürdürme + oran, eşikler
+	// anomaly_sensitivity.subjects) + endpoint gruplaması groupSubjectEvents
+	// (anomaly_subject_group.go).
 	if chstore.IsSubjectAnomaly(ev) {
 		return false
 	}

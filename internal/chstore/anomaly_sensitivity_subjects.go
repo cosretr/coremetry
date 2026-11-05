@@ -43,6 +43,14 @@ type AnomalySubjectsConfig struct {
 	// iz düşer (karar 6: önce gölge); "live" = Problem açılır. Bilinmeyen /
 	// boş → off (NormalizeAnomalySubjects); PUT bilinmeyeni REDDEDER.
 	PromotionMode string `json:"promotionMode"`
+	// PromotionMinSustainedSec / PromotionMinRatio — v0.10.1798 (FAZ 3
+	// dilim 2): özne terfi kapısının eşikleri (spec adları subjectMin*;
+	// özne bölümünde yaşadıkları için önek promotion). Olay en az bu kadar
+	// sürmüş VE bölüm tepesi tabanın en az bu katı olmalı. Tabansız
+	// error_rate (oran yok) oran yerine anomaly_promotion.countOnlyMinCount
+	// sayım tabanını kullanır. 0 / aralık dışı → varsayılan (600 sn, 2,0).
+	PromotionMinSustainedSec int     `json:"promotionMinSustainedSec"`
+	PromotionMinRatio        float64 `json:"promotionMinRatio"`
 }
 
 // Özne terfi kipleri (PromotionMode).
@@ -58,6 +66,14 @@ const (
 	anomalySubjectMaxSeriesDefault = 2000
 	anomalySubjectMaxSeriesMax     = 50000
 
+	// v0.10.1798 — özne terfi kapısı varsayılanları + aralıkları.
+	subjectPromotionMinSustainedDefault = 600
+	subjectPromotionMinSustainedMin     = 60
+	subjectPromotionMinSustainedMax     = 86400
+	subjectPromotionMinRatioDefault     = 2.0
+	subjectPromotionMinRatioMin         = 1.0
+	subjectPromotionMinRatioMax         = 1000.0
+
 	// DefaultSeasonalTimezone — karar 3: gün sınıfı operatör diliminde.
 	DefaultSeasonalTimezone = "Europe/Istanbul"
 )
@@ -65,7 +81,8 @@ const (
 // DefaultAnomalySubjects — üç tür kapalı, tavanlar varsayılan.
 func DefaultAnomalySubjects() AnomalySubjectsConfig {
 	k := AnomalySubjectKindConfig{TopN: anomalySubjectTopNDefault, MaxSeriesPerTick: anomalySubjectMaxSeriesDefault}
-	return AnomalySubjectsConfig{Endpoint: k, DB: k, Queue: k, PromotionMode: SubjectPromotionOff}
+	return AnomalySubjectsConfig{Endpoint: k, DB: k, Queue: k, PromotionMode: SubjectPromotionOff,
+		PromotionMinSustainedSec: subjectPromotionMinSustainedDefault, PromotionMinRatio: subjectPromotionMinRatioDefault}
 }
 
 // NormalizeAnomalySubjects — SAF: aralık dışı / eksik (0) tavan varsayılana
@@ -79,6 +96,10 @@ func NormalizeAnomalySubjects(c AnomalySubjectsConfig) AnomalySubjectsConfig {
 		// v0.10.1797 — bilinmeyen / boş kip KAPALI (güvenli yön: elle
 		// bozulmuş blob Problem açmaz).
 		PromotionMode: normalizeSubjectPromotionMode(c.PromotionMode),
+		PromotionMinSustainedSec: clampRangeI(c.PromotionMinSustainedSec,
+			subjectPromotionMinSustainedMin, subjectPromotionMinSustainedMax, subjectPromotionMinSustainedDefault),
+		PromotionMinRatio: clampRangeF(c.PromotionMinRatio,
+			subjectPromotionMinRatioMin, subjectPromotionMinRatioMax, subjectPromotionMinRatioDefault),
 	}
 }
 

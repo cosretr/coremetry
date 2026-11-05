@@ -147,3 +147,31 @@ func TestSubjectPromotionMode(t *testing.T) {
 		t.Errorf("eski blob kip %q, want off", got)
 	}
 }
+
+// v0.10.1798 (FAZ 3 dilim 2) — özne terfi eşikleri: varsayılan 600 sn / 2,0;
+// 0 ve aralık dışı varsayılana, sınırlar dahil.
+func TestSubjectPromotionThresholds(t *testing.T) {
+	d := DefaultAnomalySubjects()
+	if d.PromotionMinSustainedSec != 600 || d.PromotionMinRatio != 2.0 {
+		t.Fatalf("varsayılan = %d / %v, want 600 / 2", d.PromotionMinSustainedSec, d.PromotionMinRatio)
+	}
+	cases := []struct {
+		sec       int
+		ratio     float64
+		wantSec   int
+		wantRatio float64
+	}{
+		{0, 0, 600, 2},
+		{60, 1, 60, 1},
+		{86400, 1000, 86400, 1000},
+		{59, 0.99, 600, 2},
+		{86401, 1001, 600, 2},
+		{900, 3.5, 900, 3.5},
+	}
+	for _, c := range cases {
+		n := NormalizeAnomalySubjects(AnomalySubjectsConfig{PromotionMinSustainedSec: c.sec, PromotionMinRatio: c.ratio})
+		if n.PromotionMinSustainedSec != c.wantSec || n.PromotionMinRatio != c.wantRatio {
+			t.Errorf("(%d, %v) → (%d, %v), want (%d, %v)", c.sec, c.ratio, n.PromotionMinSustainedSec, n.PromotionMinRatio, c.wantSec, c.wantRatio)
+		}
+	}
+}

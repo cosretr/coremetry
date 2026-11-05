@@ -44,6 +44,8 @@ export function withSubjectDefaults(v?: Partial<AnomalySubjectsConfig>): Anomaly
     db: { ...SUBJECT_DEFAULT, ...v?.db },
     queue: { ...SUBJECT_DEFAULT, ...v?.queue },
     promotionMode: normalizePromotionMode(v?.promotionMode),
+    promotionMinSustainedSec: v?.promotionMinSustainedSec || 600,
+    promotionMinRatio: v?.promotionMinRatio || 2,
   };
 }
 
@@ -97,6 +99,20 @@ export function SubjectsSubsection({ value, timezone, onChange, onTimezoneChange
           </>}>
           {PROMOTION_MODES.map(m => <option key={m.v} value={m.v}>{m.label}</option>)}
         </SelectField>
+        <div className="mt-2 flex flex-wrap gap-4">
+          <Field type="number" className="w-auto" controlClassName="max-w-[140px]"
+            label="En az süre (sn)" min={60} max={86400} step={60}
+            aria-label="Özne terfi: en az süre" disabled={v.promotionMode === 'off'}
+            value={v.promotionMinSustainedSec} onChange={e => onChange({ ...v, promotionMinSustainedSec: Number(e.target.value) })} />
+          <Field type="number" className="w-auto" controlClassName="max-w-[140px]"
+            label="Tabanın en az katı" min={1} max={1000} step={0.5}
+            aria-label="Özne terfi: tabanın en az katı" disabled={v.promotionMode === 'off'}
+            value={v.promotionMinRatio} onChange={e => onChange({ ...v, promotionMinRatio: Number(e.target.value) })} />
+        </div>
+        <div className={NOTE}>
+          Yalnız kötüleşme terfi eder: hata oranı ve gecikme artışı. İstek hızı düşüşü bu yoldan
+          Problem açmaz. Tabanı olmayan hata oranı, oran yerine anomali terfisinin sayım tabanını kullanır.
+        </div>
       </div>
       <div className="mt-3 max-w-[420px]">
         <SelectField label="Mevsimsel taban saat dilimi" aria-label="Mevsimsel taban saat dilimi"
