@@ -172,11 +172,14 @@ func (s *Store) reprobePromotedAttrs() {
 		// v0.10.1080 — anomaly_events.verified_ratio: bayrak false kaldıkça
 		// desen doğrulama oranı yazılmaz (grafik notu yok).
 		verifiedDone := s.reprobeAnomalyVerifiedCol(ctx)
+		// v0.10.1789 — anomaly_events FAZ 1 kolonları: bayrak false kaldıkça
+		// yön/taban/özne yazılmaz (DEFAULT: bilinmiyor / service).
+		subjectDone := s.reprobeAnomalySubjectCols(ctx)
 		// v0.10.1741 — users.directory: bayrak false kaldıkça UpsertUser dizin
 		// özniteliklerini düşürür (kullanıcı detayı kartları "—").
 		dirDone := s.reprobeUserDirectoryCol(ctx)
 		cancel()
-		if attrsDone && episodeDone && snapDone && verifiedDone && dirDone {
+		if attrsDone && episodeDone && snapDone && verifiedDone && subjectDone && dirDone {
 			return
 		}
 	}
@@ -188,6 +191,9 @@ func (s *Store) reprobePromotedAttrs() {
 	}
 	if !s.hasAnomalyVerifiedCol.Load() {
 		log.Printf("[chstore] anomaly_events.verified_ratio hâlâ doğrulanamadı — desen doğrulama oranı yazılmıyor, sonraki boot yeniden deneyecek")
+	}
+	if !s.hasAnomalySubjectCols.Load() {
+		log.Printf("[chstore] anomaly_events direction/baseline_*/subject_* hâlâ doğrulanamadı — yön/taban/özne yazılmıyor, sonraki boot yeniden deneyecek")
 	}
 	if !s.hasDirectoryCol.Load() {
 		log.Printf("[chstore] users.directory hâlâ doğrulanamadı — dizin öznitelikleri yazılmıyor, istek üzerine / sonraki boot yeniden denenecek")

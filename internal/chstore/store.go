@@ -275,6 +275,15 @@ type Store struct {
 	// kaybolur). Ertelenen DDL inince reprobePromotedAttrs bayrağı çevirir.
 	hasAnomalyVerifiedCol atomic.Bool
 
+	// hasAnomalySubjectCols — anomaly_events FAZ 1 kolonları (direction,
+	// baseline_value, baseline_kind, subject_kind, subject_id) taşıyor mu
+	// (v0.10.1789, Davis paritesi). hasAnomalyVerifiedCol ile AYNI sınıf ve
+	// iki-boot sözleşmesi. false ⇒ okuma/INSERT beş kolonu ATLAR: yön/taban
+	// "bilinmiyor" (""), özne 'service' okunur — eski satırla aynı yorum,
+	// ratio=0 kodlaması geçerli kalır (güvenli yön). Ertelenen DDL inince
+	// reprobePromotedAttrs bayrağı çevirir.
+	hasAnomalySubjectCols atomic.Bool
+
 	// hasDBStmtHashCol records whether the spans table actually carries the
 	// `db_stmt_hash` column (v0.8.375, Stage-2 D1 — persistent DB-statement
 	// identity). Unlike op_group / series_fingerprint the column is
@@ -4213,6 +4222,21 @@ func (s *Store) migrate(ctx context.Context) error {
 		// girmez; CREATE TABLE'a bilinçli EKLENMEDİ (episode emsali). Probe
 		// hasAnomalyVerifiedCol (iki-boot).
 		`ALTER TABLE anomaly_events ADD COLUMN IF NOT EXISTS verified_ratio Float64 DEFAULT 0`,
+		// v0.10.1789 — Davis paritesi FAZ 1.1: yönlü olay + özne anahtarı.
+		// direction up/down, baseline_kind seasonal/consecutive/none — iki
+		// LowCardinality de KAPALI küme (≤3 değer); subject_kind kapalı küme
+		// (service/endpoint/db/queue). subject_id düz String: rota / db
+		// instance / kuyruk adı serbest ve kardinalitesi ölçülmedi
+		// (/clickhouse-schema C2-C3). DEFAULT'lar "bilinmiyor = bugünkü
+		// yorum": eski satır yön '' / taban '' (ratio=0 kodlaması geçerli),
+		// özne 'service' + '' (özne = service kolonu). ORDER BY / TTL'e
+		// girmez; CREATE TABLE'a bilinçli EKLENMEDİ (episode emsali). Probe
+		// hasAnomalySubjectCols (iki-boot).
+		`ALTER TABLE anomaly_events ADD COLUMN IF NOT EXISTS direction LowCardinality(String) DEFAULT ''`,
+		`ALTER TABLE anomaly_events ADD COLUMN IF NOT EXISTS baseline_value Float64 DEFAULT 0`,
+		`ALTER TABLE anomaly_events ADD COLUMN IF NOT EXISTS baseline_kind LowCardinality(String) DEFAULT ''`,
+		`ALTER TABLE anomaly_events ADD COLUMN IF NOT EXISTS subject_kind LowCardinality(String) DEFAULT 'service'`,
+		`ALTER TABLE anomaly_events ADD COLUMN IF NOT EXISTS subject_id String DEFAULT ''`,
 		// v0.9.415 — P1 exception gruplarına proaktif kök-sebep özeti
 		// (ExceptionExplainer, problems ai_summary'nin exception ikizi).
 		`ALTER TABLE exception_groups ADD COLUMN IF NOT EXISTS ai_summary String DEFAULT ''`,
@@ -4685,6 +4709,13 @@ func (s *Store) migrate(ctx context.Context) error {
 	s.hasAnomalyVerifiedCol.Store(vrOK)
 	if !vrOK {
 		log.Printf("[chstore] `verified_ratio` column not present on anomaly_events (err=%v) — read/INSERT omit it; log-pattern verification ratio reads 0 (no chart note; detector suppression/scaling unaffected) until the deferred-DDL re-probe or the next boot", vrErr)
+	}
+
+	// anomaly_events FAZ 1 kolonları probe'u (v0.10.1789) — aynı şekil.
+	sjOK, sjErr := s.probeAnomalySubjectCols(ctx)
+	s.hasAnomalySubjectCols.Store(sjOK)
+	if !sjOK {
+		log.Printf("[chstore] `direction`/`baseline_*`/`subject_*` columns not present on anomaly_events (err=%v) — read/INSERT omit them; direction/baseline read as unknown and subject as service (pre-v0.10.1789 behaviour) until the deferred-DDL re-probe or the next boot", sjErr)
 	}
 
 	// exception_groups.occurrences_at_resolve probe'u (v0.10.1072) — bölüm
