@@ -68,9 +68,11 @@ func oracleGroupStats(g chstore.ExceptionGroup) (oracle.GroupStats, bool) {
 // MUAF — durgun bir akışın ömür toplamı birkaç saatte her eşiği geçer, grup
 // kalıcı P1 olurdu ("kazanılmış P1 düşmez" ilkesinden bilinçli sapma; DECISIONS).
 //
-//	P1  son 1 sa ≥ oracleP1MinOccurrences VE ≥ 3 × önceki 1 sa (patlama)
-//	P1  grup YENİ (ilk görülme P1 penceresinde) VE son 1 sa ≥ eşik
+//	P1  son 1 sa > oracleP1MinOccurrences (v0.10.1803, operatör 2026-11-05:
+//	    "30'dan fazla hata olursa P1 olsun"; varsayılan 30). Patlama
+//	    (≥ 3 × önceki 1 sa) / yeni grup bilgisi yalnız gerekçeye eklenir, şart değil.
 //	P2  son 1 sa ≥ 100 VE (taze — son görülme P1 penceresinde — ya da regressed)
+//	    (eşik ≥ 100 seçildiğinde erişilir)
 //	P3  "sürekli akış (<etiket>)"
 //
 // now: kapanmış dakika gecikmesi kadar geriye çekilmiş "şimdi" (çağıran).
@@ -84,11 +86,14 @@ func oraclePriorityAt(g chstore.ExceptionGroup, cfg chstore.ExceptionTriageConfi
 	fresh := time.Duration(now.UnixNano()-g.LastSeen) <= win
 	isNew := time.Duration(now.UnixNano()-g.FirstSeen) <= win
 	last, prev := fmtThousands(lastHour), fmtThousands(prevHour)
-	if lastHour >= thr && lastHour >= oracleBurstFactor*prevHour {
-		return "P1", fmt.Sprintf("%s patlaması: son 1 sa %s (önceki 1 sa %s; eşik %s, ≥%d×)", label, last, prev, fmtThousands(thr), oracleBurstFactor)
-	}
-	if isNew && lastHour >= thr {
-		return "P1", fmt.Sprintf("yeni %s grubu: son 1 sa %s (eşik %s)", label, last, fmtThousands(thr))
+	if lastHour > thr {
+		switch {
+		case lastHour >= oracleBurstFactor*prevHour:
+			return "P1", fmt.Sprintf("%s patlaması: son 1 sa %s > eşik %s (önceki 1 sa %s, ≥%d×)", label, last, fmtThousands(thr), prev, oracleBurstFactor)
+		case isNew:
+			return "P1", fmt.Sprintf("yeni %s grubu: son 1 sa %s > eşik %s", label, last, fmtThousands(thr))
+		}
+		return "P1", fmt.Sprintf("%s: son 1 sa %s > eşik %s (önceki 1 sa %s)", label, last, fmtThousands(thr), prev)
 	}
 	if lastHour >= oracleP2MinLastHour && (fresh || exceptionIsRegressed(g.State)) {
 		if exceptionIsRegressed(g.State) {

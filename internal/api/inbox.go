@@ -630,6 +630,32 @@ func (s *Server) inboxView(q url.Values) (string, func(ctx context.Context) (any
 				skippedCounts["httperror"] = int(n)
 			}
 		}
+		// v0.10.1803 (operatör 2026-11-05: "Oracle P1 problemse Problems'a
+		// dönsün") — Exceptions çipi kapalıyken (v0.10.1796 varsayılanı)
+		// Oracle grubunun P1'i Problems kovasında görünür
+		// (inboxRowInProblemBucket). Yalnız Oracle grupları çekilir (`ora:`
+		// SQL süzgeci, aynı tavan) ve yalnız P1'ler tutulur: P2/P3 Oracle
+		// satırları öncelik çiplerini şişirmesin. Exception çipi COUNT'tan
+		// (skippedCounts) geldiğinden çip sayıları değişmez.
+		if !teamIsEmpty && !excOn && kindOn["problem"] && statusFilter != "ignored" {
+			oraGroups, err := s.store.ListExceptionGroups(ctx, chstore.ExceptionGroupFilter{
+				State: pickExceptionState(statusFilter), Limit: excLimit,
+				MinOccurrences: minOcc, Services: teamServices,
+				FloorExempt: floorExempt, FloorExemptRegressed: floorDefault,
+				HTTPErrors: "exclude", Oracle: "only", Search: search,
+			})
+			if err != nil {
+				return nil, err
+			}
+			if len(oraGroups) >= excLimit {
+				scanCapped = true
+			}
+			for _, g := range oraGroups {
+				if it := exceptionToInbox(g); inboxRowInProblemBucket(it) {
+					items = append(items, it)
+				}
+			}
+		}
 		if !teamIsEmpty && (excOn || httpOn) {
 			httpFilter := ""
 			switch {
@@ -1414,11 +1440,25 @@ func applyInboxFacets(items []InboxItem, kinds, prios []string) []InboxItem {
 	}
 	kept := items[:0]
 	for _, it := range items {
-		if keepKind[it.Kind] && keepPrio[it.Priority] {
+		if !keepPrio[it.Priority] {
+			continue
+		}
+		// v0.10.1803 — Oracle P1 exception satırı "problem" kovasına da girer
+		// (exception çipi kapalı olsa da); FE rowInProblemBucket ile AYNI kural.
+		if keepKind[it.Kind] || (keepKind["problem"] && inboxRowInProblemBucket(it)) {
 			kept = append(kept, it)
 		}
 	}
 	return kept
+}
+
+// inboxRowInProblemBucket — SAF, v0.10.1803 (operatör 2026-11-05: "Oracle P1
+// problemse Problems'a dönsün"): Oracle hata tablosu grubunun (`ora:`) P1
+// exception satırı, tür süzgecinde "problem" seçiliyken Exceptions çipi kapalı
+// olsa da görünür. FE lib/inboxBuckets.ts rowInProblemBucket aynı kural.
+func inboxRowInProblemBucket(it InboxItem) bool {
+	return it.Kind == "exception" && it.Priority == "P1" && it.Exception != nil &&
+		chstore.IsOracleGroup(it.Exception.Fingerprint)
 }
 
 // inboxDerivedCategory — v0.10.706: problem olmayan satırların sınıfı.

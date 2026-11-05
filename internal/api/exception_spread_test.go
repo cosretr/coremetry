@@ -303,8 +303,8 @@ func TestRegressedSameSourceAsPriority(t *testing.T) {
 // aynı yüklemi kullanır; yanıt keptRegressed'i taşır.
 func TestRegressedFloorExemptWiring(t *testing.T) {
 	src := readSrc(t, "inbox.go")
-	if n := strings.Count(src, "FloorExemptRegressed: floorDefault,"); n != 3 {
-		t.Errorf("inbox.go FloorExemptRegressed: floorDefault %d kez, want 3 (2 chip sayımı + üst çekim)", n)
+	if n := strings.Count(src, "FloorExemptRegressed: floorDefault,"); n != 4 { // v0.10.1803 + Oracle P1 kova çekimi
+		t.Errorf("inbox.go FloorExemptRegressed: floorDefault %d kez, want 4 (2 chip sayımı + üst çekim + Oracle kova çekimi)", n)
 	}
 	below := strings.Index(src, "MaxOccurrences: minOcc")
 	if below < 0 {

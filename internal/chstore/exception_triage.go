@@ -106,9 +106,9 @@ type ExceptionTriageConfig struct {
 	// Exceptions gibi görünsün"): Oracle hata tablosu gruplarının (`ora:`)
 	// SON 1 SAATLİK hacim eşiği. Oracle satırları DURGUN bir akış (dakikada
 	// binlerce); span merdiveninin yapışkan hacim P1'i (ömür boyu ≥500) ilk
-	// saatte her grubu kalıcı P1 yapardı. Oracle grubunda P1 YALNIZ: son 1 sa
-	// ≥ bu eşik VE ≥ 3× önceki 1 sa (patlama) ya da grup yeni (ilk görülme P1
-	// penceresinde) ve son 1 sa ≥ bu eşik — api.oraclePriorityAt. Varsayılan 5000.
+	// saatte her grubu kalıcı P1 yapardı. v0.10.1803 (operatör 2026-11-05:
+	// "30'dan fazla hata olursa P1 olsun"): Oracle grubunda P1 = son 1 sa >
+	// bu eşik — api.oraclePriorityAt. Varsayılan 30 (önceden 5000 + patlama/yeni şartı).
 	OracleP1MinOccurrences int `json:"oracleP1MinOccurrences"`
 
 	// ── v0.10.1588 — incident bağlama (Davis paritesi FAZ 0.5 / D, operatör
@@ -132,6 +132,10 @@ func (c ExceptionTriageConfig) StormAttachesToIncident() bool {
 func (c ExceptionTriageConfig) SingleGroupJoinsIncident() bool {
 	return c.SingleGroupJoinIncident == nil || *c.SingleGroupJoinIncident
 }
+
+// legacyOracleP1Default — v0.10.1092..1802 kod varsayılanı; Normalize onu
+// yeni varsayılana taşır (v0.10.1803).
+const legacyOracleP1Default = 5000
 
 // DefaultExceptionTriage — v0.9.775'in gemiye giren davranışı.
 func DefaultExceptionTriage() ExceptionTriageConfig {
@@ -159,7 +163,7 @@ func DefaultExceptionTriage() ExceptionTriageConfig {
 		// değil, arkasındaki PENCERE (5dk → P1FreshHours).
 		P1MinOccurrences: 500,
 		// v0.10.1092 — Oracle grupları için ayrı hacim eşiği.
-		OracleP1MinOccurrences: 5000,
+		OracleP1MinOccurrences: 30, // v0.10.1803 (önceden 5000)
 	}
 }
 
@@ -225,7 +229,10 @@ func NormalizeExceptionTriage(c ExceptionTriageConfig) ExceptionTriageConfig {
 	if c.StormMinServices <= 0 {
 		c.StormMinServices = d.StormMinServices
 	}
-	if c.OracleP1MinOccurrences <= 0 { // v0.10.1092 — eski blob (alan yok) varsayılana
+	// v0.10.1092 — eski blob (alan yok) varsayılana. v0.10.1803 — 5000 eski
+	// KOD varsayılanıydı (Settings PUT 0'ı 5000 olarak yazıyordu), operatör
+	// seçimi değil: kayıtlı 5000 de yeni varsayılana (30) taşınır.
+	if c.OracleP1MinOccurrences <= 0 || c.OracleP1MinOccurrences == legacyOracleP1Default {
 		c.OracleP1MinOccurrences = d.OracleP1MinOccurrences
 	}
 	return c

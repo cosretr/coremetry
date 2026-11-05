@@ -4,8 +4,8 @@ package notify
 // teknik hataları notifikasyon da gönderilmiş olur").
 //
 // Oracle grubunun P1'i (api.oraclePriorityAt) yapışkan değil, saatlik
-// toplamlardan doğan bir OLAY: patlama (son 1 sa ≥ eşik ve ≥ 3× önceki saat) ya
-// da P1 penceresinde yeni grup. (kaynak, kod, operasyon) grupları kalıcı
+// toplamlardan doğan bir OLAY: v0.10.1803'ten beri son 1 sa > eşik (varsayılan
+// 30; önceden patlama ya da yeni grup + ≥ 5000). (kaynak, kod, operasyon) grupları kalıcı
 // olduğundan patlama hemen her zaman günler önce doğmuş bir grupta olur; span
 // grubunun tazelik kapısı (`new` yalnız ilk 15 dk) onu hiç geçirmiyordu.
 //

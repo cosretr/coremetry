@@ -9754,8 +9754,8 @@ export interface ExceptionTriageConfig {
   stormWindowMinutes: number;
   stormMinServices: number;
   // v0.10.1092 — Oracle hata tablosu gruplarının (ora:) hacim P1 eşiği
-  // (p1MinOccurrences'ın Oracle ikizi; patlamanın hacim tabanı da bu).
-  // Varsayılan 5000 — durgun akış ilk gün tüm Exceptions'ı P1 yapmasın.
+  // (p1MinOccurrences'ın Oracle ikizi). v0.10.1803: son 1 sa > eşik = P1;
+  // varsayılan 30 (önceden 5000 + patlama/yeni şartı).
   oracleP1MinOccurrences?: number;
   // v0.10.1588 — incident bağlama; yok = AÇIK (`!== false`). Fırtına bağlanır
   // (yoksa kendi incident'ı); tekil (ölümcül / paylaşılan) yalnız AÇIK

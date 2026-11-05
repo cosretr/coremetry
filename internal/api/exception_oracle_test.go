@@ -18,9 +18,14 @@ import (
 	"github.com/cilcenk/coremetry/internal/oracle"
 )
 
+// v0.10.1803 (operatör 2026-11-05: "Oracle P1 problemse Problems'a dönsün;
+// ama 30'dan fazla hata olursa P1 olsun") — eski kural P1'i patlama (≥3×
+// önceki saat) ya da yeni grup + son 1 sa ≥ 5000'e bağlıyordu: dakikada
+// onlarca hata akan grup hiç P1 olmuyordu. Yeni kural: son 1 sa > eşik
+// (varsayılan 30) tek başına P1; P2/P3 kolları aynen.
 func TestOraclePriorityAt(t *testing.T) {
 	now := time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)
-	cfg := chstore.DefaultExceptionTriage() // oracleP1MinOccurrences 5000, P1 penceresi 4 sa
+	cfg := chstore.DefaultExceptionTriage() // oracleP1MinOccurrences 30, P1 penceresi 4 sa
 	ora := chstore.OracleGroupFingerprint("o-11111111", "APP_ERR_001", "OP_A")
 	mk := func(state string, occ uint64, firstAgo, lastAgo time.Duration) chstore.ExceptionGroup {
 		return chstore.ExceptionGroup{Fingerprint: ora, Type: "APP_ERR_001", Message: "OP_A", State: state,
@@ -33,18 +38,18 @@ func TestOraclePriorityAt(t *testing.T) {
 		last, prev uint64
 		want, why  string
 	}{
-		{"patlama: 9000 vs 2000 (≥3×, ≥eşik)", mk("new", 900000, old, 0), 9000, 2000, "P1", "Teknik hata patlaması"},
-		{"durgun büyük akış: 9000 vs 8000 → P2 (ömür toplamı 900K yapışkan P1 YAPMAZ)", mk("new", 900000, old, 0), 9000, 8000, "P2", "son 1 sa"},
-		{"önceki saat yoksa (0) ve ≥eşik → patlama", mk("new", 6000, old, 0), 6000, 0, "P1", "Teknik hata patlaması"},
-		{"yeni grup + son 1 sa ≥ eşik (önceki saat de büyük)", mk("new", 12000, 90*time.Minute, 0), 6000, 6000, "P1", "yeni Teknik hata grubu"},
-		{"yeni grup ama son 1 sa < eşik → P2", mk("new", 1200, 30*time.Minute, 0), 1200, 0, "P2", "son 1 sa"},
-		{"regressed, ömür 900K, yeniden açılıştan beri çok → P1 DEĞİL (muaf)", func() chstore.ExceptionGroup {
+		{"31 > 30 durgun akış → P1", mk("new", 900000, old, 0), 31, 31, "P1", "Teknik hata: son 1 sa 31 > eşik 30"},
+		{"30 = eşik → P1 DEĞİL (taze, < 100 → P3)", mk("new", 900000, old, 0), 30, 30, "P3", "sürekli akış (Teknik hata)"},
+		{"durgun büyük akış 9000 vs 8000 → P1 (patlama şartı yok)", mk("new", 900000, old, 0), 9000, 8000, "P1", "> eşik 30 (önceki 1 sa 8,000)"},
+		{"patlama bilgisi gerekçeye eklenir", mk("new", 900000, old, 0), 9000, 2000, "P1", "Teknik hata patlaması"},
+		{"yeni grup bilgisi gerekçeye eklenir", mk("new", 12000, 90*time.Minute, 0), 6000, 6000, "P1", "yeni Teknik hata grubu"},
+		{"regressed ama son 1 sa > eşik → P1", func() chstore.ExceptionGroup {
 			g := mk("regressed", 900000, old, 0)
 			g.OccurrencesAtResolve = 100
 			return g
-		}(), 300, 280, "P2", "regressed"},
-		{"bayat (son görülme > 4 sa) + az → P3", mk("new", 50000, old, 6*time.Hour), 0, 0, "P3", "sürekli akış (Teknik hata)"},
-		{"taze ama son 1 sa < 100 → P3", mk("acknowledged", 40000, old, 0), 60, 70, "P3", "sürekli akış (Teknik hata)"},
+		}(), 300, 280, "P1", "> eşik 30"},
+		{"bayat (son görülme > 4 sa) + son 1 sa 0 → P3", mk("new", 50000, old, 6*time.Hour), 0, 0, "P3", "sürekli akış (Teknik hata)"},
+		{"taze ama son 1 sa ≤ eşik → P3", mk("acknowledged", 40000, old, 0), 20, 70, "P3", "sürekli akış (Teknik hata)"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -54,11 +59,22 @@ func TestOraclePriorityAt(t *testing.T) {
 			}
 		})
 	}
-	// Vida: eşik 1000'e inerse 2000 vs 500 patlama P1.
-	low := cfg
-	low.OracleP1MinOccurrences = 1000
-	if got, _ := oraclePriorityAt(mk("new", 90000, old, 0), low, now, 2000, 500, chstore.DefaultOracleGroupLabel); got != "P1" {
-		t.Fatalf("vida: %s", got)
+	// P2 kolu aynen: eşik ≥ 100 seçildiğinde 100 ≤ son 1 sa ≤ eşik + taze → P2.
+	hi := cfg
+	hi.OracleP1MinOccurrences = 7000
+	if got, reason := oraclePriorityAt(mk("new", 900000, old, 0), hi, now, 6000, 5000, chstore.DefaultOracleGroupLabel); got != "P2" || !strings.Contains(reason, "son 1 sa") {
+		t.Fatalf("P2 kolu: %s (%q)", got, reason)
+	}
+	if got, _ := oraclePriorityAt(mk("new", 900000, old, 0), hi, now, 7001, 7000, chstore.DefaultOracleGroupLabel); got != "P1" {
+		t.Fatalf("7001 > 7000: %s", got)
+	}
+	// Eşik migrasyonu: kayıtlı 5000 (eski kod varsayılanı) ve 0 → 30.
+	for _, thr := range []int{5000, 0} {
+		m := cfg
+		m.OracleP1MinOccurrences = thr
+		if got, _ := oraclePriorityAt(mk("new", 900000, old, 0), m, now, 31, 31, chstore.DefaultOracleGroupLabel); got != "P1" {
+			t.Errorf("eşik %d → 30 taşınmalı; 31 → %s", thr, got)
+		}
 	}
 	// v0.10.1108 — gerekçedeki ad branding etiketinden; "Oracle" kelimesi yok.
 	if _, reason := oraclePriorityAt(mk("new", 900000, old, 0), cfg, now, 9000, 2000, "DB hatası"); !strings.HasPrefix(reason, "DB hatası patlaması") || strings.Contains(reason, "Oracle") {
@@ -75,7 +91,8 @@ func TestExceptionPriorityWrapperOracle(t *testing.T) {
 	SetOracleGroupStats(func(g chstore.ExceptionGroup) (oracle.GroupStats, bool) {
 		return oracle.GroupStats{Lag: 16 * time.Minute, LastHour: 400, PrevHour: 380, BlobOK: true}, true
 	})
-	if p, reason := exceptionPriority(ora); p != "P2" || !strings.Contains(reason, "son 1 sa 400") {
+	// v0.10.1803 — 400 > varsayılan eşik 30 → P1 (eskiden P2).
+	if p, reason := exceptionPriority(ora); p != "P1" || !strings.Contains(reason, "son 1 sa 400") {
 		t.Fatalf("Oracle sarmalayıcı: %s %q", p, reason)
 	}
 	// İstatistik yok → saatlik 0 → P3 (span merdivenine düşmez: 900K yapışkan P1 yok).

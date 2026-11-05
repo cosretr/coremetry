@@ -60,6 +60,7 @@ import {
   stdConfidenceTone, stdConfidenceRank, stdGateTitle, STD_CONFIDENCE_LABEL,
 } from '@/lib/problemStandardView'; // v0.10.1529 — Problem standardı R2
 import { verdictOf, countNoise, filterByVerdictView, parseVerdictView, inboxVerdictSubject, type VerdictView } from '@/lib/problemVerdict';
+import { rowPassesKindFacet } from '@/lib/inboxBuckets'; // v0.10.1803 — Oracle P1 problem kovasında
 
 // Facet vocab + defaults (v0.8.291) — both defaults are what the URL codec
 // omits so a fresh link stays clean.
@@ -639,7 +640,7 @@ export default function InboxPage() {
     if (!data) return data;
     const facet = data.filter(it =>
       prioSet.has(it.priority) &&
-      kindSet.has(it.kind) &&
+      rowPassesKindFacet(it, kindSet) &&
       catSet.has(it.category ?? 'CUSTOM')); // v0.10.706
     return filterByVerdictView(facet, verdicts, verdictView);
   }, [data, prioSet, kindSet, catSet, verdicts, verdictView]);

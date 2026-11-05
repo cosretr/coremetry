@@ -142,7 +142,7 @@ func (s *Server) putExceptionTriage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "stormWindowMinutes must be between 1 and 1440", http.StatusBadRequest)
 		return
 	}
-	// v0.10.1092 — 0 = alanı bilmeyen eski istemci → varsayılan (5000).
+	// v0.10.1092 — 0 = alanı bilmeyen eski istemci → varsayılan (v0.10.1803: 30).
 	if c.OracleP1MinOccurrences < 0 || c.OracleP1MinOccurrences > 10000000 {
 		http.Error(w, "oracleP1MinOccurrences must be between 1 and 10000000 (0 = default)", http.StatusBadRequest)
 		return
