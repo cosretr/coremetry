@@ -80,6 +80,11 @@ var endpointPickVetoStems = []string{
 	"bağımlı", "bagimli", "dependen", "runbook", "wiki", "jvm", "heap", "thread", "oracle",
 	"veritaban", "database", "kuyruk", "queue", "host", "container", "konteyner",
 	"sürüm", "versiyon", "version",
+	// v0.10.1795 (operator-reported) — bağlam çipi servis sabitken
+	// "<X> takımının servisleri nasıl?" / "En yavaş servisler?" kart aldı:
+	// takım ve çoğul-servis sorusu bu servisin endpoint'i değildir, guided
+	// (guidedTeamServices / guidedMyServices) yoluna kalır.
+	"takım", "takim", "ekip", "team", "servisler", "services",
 }
 
 // endpointPickCue — SAF: soru açık uçlu bir servis sorusu mu (katlanmış metin).

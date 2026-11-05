@@ -38,6 +38,14 @@ func TestNeedsEndpointPick(t *testing.T) {
 		{"İngilizce endpoints", svc, "orders-api endpoints", true},
 		{"liste + rota yine rota", svc, "orders-api endpointleri GET /v1/orders", false},
 		{"liste + log vetosu", svc, "orders-api endpoint logları", false},
+		// v0.10.1795 (operator-reported) — bağlam çipi servis sabitken takım /
+		// çoğul-servis sorusu kart almaz (guided takım yolu).
+		{"takım sorusu, bağlam servisi", svc, "PlatformSRE takımının servisleri nasıl?", false},
+		{"takımımın servisleri", svc, "Takımımın servisleri nasıl?", false},
+		{"ekip", svc, "ekibimin servisleri ne durumda", false},
+		{"İngilizce team", svc, "how is my team's services", false},
+		{"en yavaş servisler", svc, "En yavaş servisler?", false},
+		{"tekil servis yine kart", svc, "orders-api servisi nasıl?", true},
 		{"rota soruda", svc, "orders-api POST /v1/orders yavaş mı", false},
 		{"çıplak rota", svc, "/v1/orders/{id} ne oluyor", false},
 		{"trace kimliği", svc, "4bf92f3577b34da6a3ce929d0e0e4736 ne oluyor", false},
