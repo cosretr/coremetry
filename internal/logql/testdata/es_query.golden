@@ -1,0 +1,65 @@
+timeout	→	timeout	kql
+connection refused	→	connection refused	kql
+"connection refused"	→	"connection refused"	kql
+"connection refused: timeout"	→	"connection refused: timeout"	kql
+service.name:"checkout"	→	service.name:"checkout"	kql
+level:error	→	level:error	kql
+a and b or not c	→	a AND b OR NOT c	kql
+a OR b AND c	→	a OR b AND c	kql
+NOT a AND b	→	NOT a AND b	kql
+NOT (a OR b)	→	NOT (a OR b)	kql
+NOT NOT a	→	NOT NOT a	kql
+-level:debug body	→	-level:debug body	kql
+!a b	→	!a b	kql
+k8s-pod-7f	→	k8s-pod-7f	kql
+((a OR b) AND (c OR d))	→	((a OR b) AND (c OR d))	kql
+service.name:"db" AND (disk OR memory)	→	service.name:"db" AND (disk OR memory)	kql
+_exists_:trace_id	→	_exists_:trace_id	kql
+NOT _exists_:k8s.pod.name	→	NOT _exists_:k8s.pod.name	kql
+error.type:*	→	error.type:*	kql
+channel:("MOBILE" OR "WEB")	→	channel:("MOBILE" OR "WEB")	kql
+NOT channel:("MOBILE" OR "WEB")	→	NOT channel:("MOBILE" OR "WEB")	kql
+level:(error AND NOT warn)	→	level:(error AND NOT warn)	kql
+http.status:>="500"	→	http.status:>="500"	kql
+duration_ms:<=250	→	duration_ms:<=250	kql
+a:>1 b:<2	→	a:>1 b:<2	kql
+status:[400 TO 499]	→	status:[400 TO 499]	kql
+ts:{* TO 2026-09-01}	→	ts:{* TO 2026-09-01}	kql
+n:[1 TO 5}	→	n:[1 TO 5}	kql
+pod:api-*	→	pod:api-*	kql
+host:node?	→	host:node?	kql
+msg:"say \"hi\""	→	msg:"say \"hi\""	kql
+path:"C:\\tmp"	→	path:"C:\\tmp"	kql
+12:30 restart	→	12:30 restart	kql
+ERROR: boom	→	ERROR: boom	kql
+http://host/x	→	http://host/x	kql
+a && b || c	→	a && b || c	kql
+@timestamp:>=x k8s-label:v	→	@timestamp:>=x k8s-label:v	kql
+kubernetes.labels.app:api	→	kubernetes.labels.app:api	kql
+AND:x	→	AND:x	kql
+service.name:"checkout" AND (disk OR memory) AND NOT level:debug	→	service.name:"checkout" AND (disk OR memory) AND NOT level:debug	kql
+channel:("MOBILE" OR "WEB") AND http.status:>="500"	→	channel:("MOBILE" OR "WEB") AND http.status:>="500"	kql
+status:[400 TO 499] OR _exists_:error.type	→	status:[400 TO 499] OR _exists_:error.type	kql
+msg:"say \"hi\"" pod:api-*	→	msg:"say \"hi\"" pod:api-*	kql
+disk 90%	→	disk 90%	kql
+4BF92F3577B34DA6A3CE929D0E0E4736	→	4BF92F3577B34DA6A3CE929D0E0E4736	kql
+Order*	→	Order*	kql
+service:"checkout"	→	service:"checkout"	kql
+service:check*	→	service:check*	kql
+trace_id:ABCDEF	→	trace_id:ABCDEF	kql
+message:"disk full"	→	message:"disk full"	kql
+severity_num:17	→	severity_num:17	kql
+severity_num:>=17	→	severity_num:>=17	kql
+http.status:"500"	→	http.status:"500"	kql
+http.status:>=500	→	http.status:>=500	kql
+region:<"eu"	→	region:<"eu"	kql
+_exists_:error.type	→	_exists_:error.type	kql
+_exists_:service	→	_exists_:service	kql
+NOT level:debug	→	NOT level:debug	kql
+severity_num:[9 TO 12]	→	severity_num:[9 TO 12]	kql
+severity_num:{5 TO *]	→	severity_num:{5 TO *]	kql
+service:"db" AND NOT _exists_:trace_id AND (disk OR memory)	→	service:"db" AND NOT _exists_:trace_id AND (disk OR memory)	kql
+service:a_b%*	→	service:a_b%*	kql
+level:error AND service.name:"checkout"	→	level:error AND service.name:"checkout"	kql
+legacy-alias	→	legacy-alias	kql
+boom	→	boom	kql

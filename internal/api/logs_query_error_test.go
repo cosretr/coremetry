@@ -108,7 +108,8 @@ func TestCHSyntaxRejectCarriesPos(t *testing.T) {
 	}
 	var b logQueryErrorBody
 	_ = json.Unmarshal(w.Body.Bytes(), &b)
-	if b.Pos == nil || *b.Pos != 0 || !strings.Contains(b.Error, "konum") || b.Detail == "" {
+	// v0.10.1819 — error düz Türkçe cümle (logql.Lint), detail konumlu teknik metin.
+	if b.Pos == nil || *b.Pos != 0 || b.Error != "\" kapatılmamış. Sonuna \" ekleyin." || !strings.Contains(b.Detail, "konum") {
 		t.Fatalf("CH reddi konumlu olmalı: %s", w.Body.String())
 	}
 }

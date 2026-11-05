@@ -3954,7 +3954,15 @@ export interface LogsResponse {
   // (logstore.Page.UnappliedFilters): 'team' = takım alanı yapılandırılmamış
   // ya da CH backend'i; sonuçlar o boyutta SÜZÜLMEMİŞTİR.
   unappliedFilters?: string[];
+  // v0.10.1819 (Log Search Faz 1 dilim 1.3) — aramanın ES'te çalıştığı dil:
+  // 'kql' = KQL yazımları kanonik Lucene'e çevrildi; 'lucene' = metin aynen
+  // gitti (Lucene'e özgü sözdizimi ya da URL `lang=lucene`). CH backend'i
+  // her zaman 'kql'. Arama boşsa yok.
+  queryLang?: LogsQueryLang;
 }
+
+// v0.10.1819 — sorgu çubuğu dil rozeti (KQL / Lucene).
+export type LogsQueryLang = 'kql' | 'lucene';
 
 // v0.10.1818 (Log Search Faz 1 dilim 1.2) — log sorgusu sözdizimi reddinin
 // 400 gövdesi (internal/api/logs_query_error.go logQueryErrorBody). pos =

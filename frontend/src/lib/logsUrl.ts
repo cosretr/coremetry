@@ -285,6 +285,14 @@ export interface LogsPivot {
 
 export type LogsPanel = 'patterns' | 'templates';
 
+/** v0.10.1819 (Log Search Faz 1 dilim 1.3) — `lang` görünüm parametresi:
+ *  yalnız 'lucene' (zorla Lucene geçişi) anlamlı; diğer her değer '' =
+ *  otomatik (sunucu KQL'i çevirir, Lucene'e özgü yazımı aynen geçirir).
+ *  `panel`/`asc` gibi LogsUrlFilter DIŞINDA — sig ve altın liste değişmez. */
+export function parseLogsLang(v: string | null | undefined): 'lucene' | '' {
+  return v?.trim().toLowerCase() === 'lucene' ? 'lucene' : '';
+}
+
 /** parseLogsPanel — parseBreakdown ikizi: bilinmeyen/boş → null (kapalı). */
 export function parseLogsPanel(v: string | null | undefined): LogsPanel | null {
   return v === 'patterns' || v === 'templates' ? v : null;

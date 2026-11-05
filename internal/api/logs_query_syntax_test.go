@@ -41,7 +41,7 @@ func TestBothLogHandlersRejectSyntax(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n := strings.Count(string(b), "s.rejectLogQuerySyntax(w, f.Search)"); n != 2 {
+	if n := strings.Count(string(b), "s.rejectLogQuerySyntax(w, f.Search, f.SearchLang)"); n != 2 {
 		t.Errorf("rejectLogQuerySyntax %d yerde; serveLogsSearch + getLogsTimeseries = 2 bekleniyor", n)
 	}
 }

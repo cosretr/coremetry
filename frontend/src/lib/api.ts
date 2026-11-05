@@ -898,6 +898,7 @@ export const api = {
     hasTrace?: boolean; // v0.8.406 — trace-only filter
     bucketSec?: number;
     groupBy?: string;
+    lang?: 'lucene'; // v0.10.1819 — zorla Lucene geçişi (liste ile aynı)
   }) =>
     get<{ name: string; points: { t: number; v: number }[] }[]>(
       `/api/logs/timeseries?${qs(params)}`),
@@ -945,6 +946,7 @@ export const api = {
     team?: string; // v0.10.1477 — takım süzgeci (sunucu ham yazımlara açar)
     size?: number; // v0.9.1223 — yalnız 5|20 basamakları (sunucu kıskacı)
     errorLift?: 1; // v0.10.509 (C5) — hata seçimi vs taban lift'i (iki fieldstats)
+    lang?: 'lucene'; // v0.10.1819 — zorla Lucene geçişi (liste ile aynı)
   }) =>
     get<LogFieldStats>(`/api/logs/fieldstats?${qs(params)}`),
 
@@ -4421,6 +4423,9 @@ export interface LogsTemplatesParams {
 
 export interface LogsParams {
   service?: string;
+  // lang (v0.10.1819) — 'lucene' = arama metni ES'e AYNEN (KQL çevirisi
+  // yok). Verilmezse otomatik. URL `lang=lucene` (lib/logsUrl parseLogsLang).
+  lang?: 'lucene';
   cluster?: string;  // v0.5.471 — k8s/openshift cluster name
   env?: string;      // v0.8.400 — global ?env= deployment-environment filter
   search?: string;

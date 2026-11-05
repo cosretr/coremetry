@@ -61,6 +61,7 @@ func tailFilterKey(f logstore.Filter) string {
 		strconv.FormatBool(f.HasTrace), // v0.8.406 — trace-only filter
 		logstore.PatternKey(f.Pattern), // v0.10.1071 — desen süzgeci (pattern=)
 		logsTeamKey(f),                 // v0.10.1477 — takım süzgeci (team=)
+		logsLangKey(f),                 // v0.10.1819 — lang=lucene
 	} {
 		h.Write([]byte(s))
 		h.Write([]byte{0}) // field separator so ("ab","c") != ("a","bc")

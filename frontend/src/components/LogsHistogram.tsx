@@ -56,6 +56,8 @@ type Filter = {
   // already spreads the value in; only the type and the request were
   // missing it.
   hasTrace?: boolean;
+  // v0.10.1819 — 'lucene' = arama ES'e aynen (liste ile aynı süzgeç).
+  lang?: 'lucene';
 };
 
 type Series = { name: string; points: { t: number; v: number }[] };
@@ -186,6 +188,7 @@ export function LogsHistogram({ range, filter, onRangeSelect, onZoomReset, onSer
       severity: filter.severity > 0 ? filter.severity : undefined,
       traceId: filter.traceId || undefined,
       hasTrace: filter.hasTrace || undefined, // v0.9.287
+      lang: filter.lang || undefined, // v0.10.1819
       groupBy: bd,
       bucketSec: pickBucket(range),
     })
@@ -213,7 +216,7 @@ export function LogsHistogram({ range, filter, onRangeSelect, onZoomReset, onSer
         if (bd === 'severity') onSeriesRef.current?.(null);
       });
     return () => { alive = false; };
-  }, [range.from, range.to, filter.service, filter.cluster, filter.env, filter.search, filter.pattern, filter.team, filter.severity, filter.traceId, filter.hasTrace, bd, paused]);
+  }, [range.from, range.to, filter.service, filter.cluster, filter.env, filter.search, filter.pattern, filter.team, filter.severity, filter.traceId, filter.hasTrace, filter.lang, bd, paused]);
 
   const { times, series, totals } = useMemo(
     // v0.9.1250 — seviye DIŞINDAKİ her eksen grup katlamasını kullanır

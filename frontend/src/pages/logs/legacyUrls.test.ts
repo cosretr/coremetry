@@ -10,7 +10,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   logsUrlSig, readLogsParams, writeLogsParams, readLogsUrlState, parseLogsPanel, parseDocParam,
-  logsUrlHasFilterState,
+  logsUrlHasFilterState, parseLogsLang,
 } from '@/lib/logsUrl';
 import { parseBreakdown } from '@/components/LogsHistogram';
 
@@ -294,5 +294,22 @@ describe('/logs q verbatim — KQL/Lucene yazımları URL katmanında dönüşme
         },
       ]
     `);
+  });
+});
+
+// v0.10.1819 (dilim 1.3) — `lang` EKLENEN görünüm parametresi: altın listedeki
+// hiçbir URL onu taşımaz → hepsi otomatik (''); yalnız açık `lang=lucene`
+// zorla geçiş. Süzgeç imzasına girmez (yukarıdaki snapshot değişmedi) ve
+// yazma onu yabancı parametre olarak korur.
+describe('/logs lang parametresi — yalnız eklenir (v0.10.1819)', () => {
+  it('eski linkler otomatik; lang=lucene yalnız açıkken', () => {
+    for (const u of GOLDEN) expect(parseLogsLang(sp(u).get('lang')), u).toBe('');
+    expect(parseLogsLang('lucene')).toBe('lucene');
+    expect(parseLogsLang('LUCENE')).toBe('lucene');
+    expect(parseLogsLang('kql')).toBe('');
+    const p = sp('/logs?q=a+and+b&lang=lucene');
+    const st = readLogsUrlState(p);
+    expect(st.sig).toBe(readLogsUrlState(sp('/logs?q=a+and+b')).sig);
+    expect(writeLogsParams(p, st.filter, st.filtersRaw, st.colsRaw).get('lang')).toBe('lucene');
   });
 });

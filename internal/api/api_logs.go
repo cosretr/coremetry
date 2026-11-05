@@ -118,6 +118,7 @@ func (s *Server) streamLogs(w http.ResponseWriter, r *http.Request) {
 		Cluster:     q.Get("cluster"),
 		Env:         strings.TrimSpace(q.Get("env")), // v0.8.400 — env-separation Phase 4
 		Search:      q.Get("search"),
+		SearchLang:  logsLangParam(q), // v0.10.1819 — `lang=lucene` zorla geçiş
 		SeverityMin: uint8(sev),
 		TraceID:     q.Get("traceId"),
 		SpanID:      q.Get("spanId"),
@@ -223,7 +224,7 @@ func logsFieldStatsKeyLift(field string, f logstore.Filter, fromRaw, toRaw strin
 	// v0.10.1477 — takım (team=) parçası sonda; takımsız anahtar bayt-bayt aynı.
 	return fmt.Sprintf("logs-fieldstats:f=%s:svc=%s:cl=%s:env=%s:sev=%d:trace=%s:span=%s:from=%s:to=%s:q=%s:pat=%s:n=%d:lift=%t",
 		field, f.Service, f.Cluster, f.Env, f.SeverityMin, f.TraceID, f.SpanID,
-		fromRaw, toRaw, f.Search, logstore.PatternKey(f.Pattern), size, lift) + logsTeamKey(f)
+		fromRaw, toRaw, f.Search, logstore.PatternKey(f.Pattern), size, lift) + logsTeamKey(f) + logsLangKey(f)
 }
 
 // logsErrorLiftSeverity — hata seçimi eşiği (OTel ERROR = 17); sayfada
@@ -245,7 +246,7 @@ func logsErrorLiftSelection(f logstore.Filter) logstore.Filter {
 func logsTimeseriesKey(f logstore.Filter, fromRaw, toRaw string, bucketSec int, groupBy string) string {
 	return fmt.Sprintf("logs-ts:svc=%s:clu=%s:env=%s:sev=%d:trace=%s:ht=%t:from=%s:to=%s:b=%d:g=%s:q=%s:pat=%s",
 		f.Service, f.Cluster, f.Env, f.SeverityMin, f.TraceID, f.HasTrace, fromRaw, toRaw,
-		bucketSec, groupBy, f.Search, logstore.PatternKey(f.Pattern)) + logsTeamKey(f) // v0.10.1477
+		bucketSec, groupBy, f.Search, logstore.PatternKey(f.Pattern)) + logsTeamKey(f) + logsLangKey(f) // v0.10.1477; v0.10.1819 lang
 }
 
 // logsSearchKey builds the /api/logs cache key. Pure + extracted
@@ -300,7 +301,8 @@ func logsSearchKey(f logstore.Filter, fromRaw, toRaw string) string {
 	return fmt.Sprintf("logs:svc=%s:clu=%s:env=%s:sev=%d:trace=%s:span=%s:ht=%t:from=%s:to=%s:lim=%d:off=%d:cur=%s:pg=%t:asc=%t:q=%s:pat=%s",
 		f.Service, f.Cluster, f.Env, f.SeverityMin, f.TraceID, f.SpanID, f.HasTrace,
 		fromRaw, toRaw, f.Limit, f.Offset, f.Cursor, f.WantCursor, f.Ascending, f.Search, logstore.PatternKey(f.Pattern)) +
-		logsTeamKey(f) // v0.10.1477 — team= (takımsız anahtar değişmez)
+		logsTeamKey(f) + // v0.10.1477 — team= (takımsız anahtar değişmez)
+		logsLangKey(f) // v0.10.1819 — lang=lucene (otomatikte anahtar değişmez)
 }
 
 func (s *Server) getLogs(w http.ResponseWriter, r *http.Request) {
@@ -395,6 +397,7 @@ func (s *Server) serveLogsSearch(w http.ResponseWriter, r *http.Request, q url.V
 		Cluster:     q.Get("cluster"),
 		Env:         strings.TrimSpace(q.Get("env")), // v0.8.400 — env-separation Phase 4
 		Search:      q.Get("search"),
+		SearchLang:  logsLangParam(q), // v0.10.1819 — `lang=lucene` zorla geçiş
 		From:        parseTime(q.Get("from")),
 		To:          parseTime(q.Get("to")),
 		SeverityMin: uint8(sev),
@@ -430,7 +433,7 @@ func (s *Server) serveLogsSearch(w http.ResponseWriter, r *http.Request, q url.V
 	// (operator asked to ease ES request pressure).
 	// v0.10.280 — CH arka ucunda ayrışmayan arama metni 400 (mesaj
 	// operatöre); sessiz alt-dize düşüşü yalnız derin katmanda kalır.
-	if s.rejectLogQuerySyntax(w, f.Search) {
+	if s.rejectLogQuerySyntax(w, f.Search, f.SearchLang) {
 		return
 	}
 	if !applyLogsPatternParam(w, q, &f) { // v0.10.1071 — /logs?pattern=
@@ -484,6 +487,9 @@ func (s *Server) serveLogsSearch(w http.ResponseWriter, r *http.Request, q url.V
 				return nil, logsQueryErr(err, f.Search) // v0.10.1818 — 400 + konum
 			}
 			out := logsSearchPayload(page)
+			if ql := logsQueryLang(s.logs.Backend(), f); ql != "" {
+				out["queryLang"] = ql // v0.10.1819 — KQL / Lucene rozeti
+			}
 			if derived {
 				// Dürüstlük: istemci pencere göndermedi, sunucu trace'in penceresini kullandı.
 				out["traceWindow"] = map[string]int64{"fromNs": f.From.UnixNano(), "toNs": f.To.UnixNano()}
@@ -518,7 +524,11 @@ func (s *Server) serveLogsSearch(w http.ResponseWriter, r *http.Request, q url.V
 				s.logs.Backend(), f.Service, f.TraceID, err)
 			return nil, logsQueryErr(err, f.Search) // v0.10.1818 — 400 + konum
 		}
-		return logsSearchPayload(page), nil
+		out := logsSearchPayload(page)
+		if ql := logsQueryLang(s.logs.Backend(), f); ql != "" {
+			out["queryLang"] = ql // v0.10.1819 — KQL / Lucene rozeti
+		}
+		return out, nil
 	})
 }
 
@@ -990,6 +1000,7 @@ func (s *Server) getLogsFieldStats(w http.ResponseWriter, r *http.Request) {
 		Cluster:     q.Get("cluster"),
 		Env:         strings.TrimSpace(q.Get("env")), // v0.8.400 — env-separation Phase 4
 		Search:      q.Get("search"),
+		SearchLang:  logsLangParam(q), // v0.10.1819 — `lang=lucene` zorla geçiş
 		From:        parseTime(q.Get("from")),
 		To:          parseTime(q.Get("to")),
 		SeverityMin: uint8(sev),
@@ -1094,13 +1105,14 @@ func (s *Server) getLogsTimeseries(w http.ResponseWriter, r *http.Request) {
 		Cluster:     q.Get("cluster"),
 		Env:         strings.TrimSpace(q.Get("env")), // v0.8.400 — env-separation Phase 4
 		Search:      q.Get("search"),
+		SearchLang:  logsLangParam(q), // v0.10.1819 — `lang=lucene` zorla geçiş
 		From:        parseTime(q.Get("from")),
 		To:          parseTime(q.Get("to")),
 		SeverityMin: uint8(sev),
 		TraceID:     q.Get("traceId"),
 		HasTrace:    parseBoolParam(q.Get("hasTrace")), // v0.8.406 — trace-only filter
 	}
-	if s.rejectLogQuerySyntax(w, f.Search) { // v0.10.280
+	if s.rejectLogQuerySyntax(w, f.Search, f.SearchLang) { // v0.10.280
 		return
 	}
 	if !applyLogsPatternParam(w, q, &f) { // v0.10.1071 — /logs?pattern=

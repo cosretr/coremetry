@@ -117,6 +117,11 @@ type token struct {
 	// raw — çıplak terimde kaçışsız ham metin; joker tespiti için
 	// (kaçışlı `\*` joker DEĞİLDİR).
 	wild bool
+	// end — v0.10.1819: kaynakta token'ın bittiği bayt (yeniden yazım,
+	// lucene.go). tField'da ':' ve KQL boşluğu DAHİL.
+	end int
+	// spaced — v0.10.1819: KQL `alan: değer` (iki noktadan sonra boşluk).
+	spaced bool
 }
 
 func isSpace(c byte) bool { return c == ' ' || c == '\t' || c == '\n' || c == '\r' }
@@ -150,6 +155,54 @@ func fieldPrefixLen(s string, i int) int {
 	return j - i
 }
 
+// kqlSpacedFieldLen — v0.10.1819 (Log Search Faz 1 dilim 1.3): KQL
+// `alan: değer` yazımı (iki noktadan sonra boşluk). Lucene'in kendisi de
+// bunu alan sorgusu sayar; ama düz metinde `ERROR: boom` / `Caused by: x`
+// gibi kalıplar çok yaygın ve CH'de bugüne kadar gövde aramasıydı. Bu yüzden
+// yalnız AÇIKÇA alan adı olan biçim kabul edilir: içinde `.`, `_` ya da `@`
+// geçen ad, ya da kısayol anahtarları (level, service, trace…). Dönüş: ad
+// uzunluğu ve değerin başladığı bayt; değilse (0, 0).
+func kqlSpacedFieldLen(s string, i int) (int, int) {
+	if i >= len(s) || !isIdentStart(s[i]) {
+		return 0, 0
+	}
+	j := i + 1
+	for j < len(s) && isIdentChar(s[j]) {
+		j++
+	}
+	if j >= len(s) || s[j] != ':' || j+1 >= len(s) || !isSpace(s[j+1]) {
+		return 0, 0
+	}
+	name := s[i:j]
+	if !strings.ContainsAny(name, "._@") && !kqlShorthandKeys[strings.ToLower(name)] {
+		return 0, 0
+	}
+	k := j + 1
+	for k < len(s) && isSpace(s[k]) {
+		k++
+	}
+	if k >= len(s) {
+		return 0, 0
+	}
+	// `level: AND x` gibi: değer yerine operatör → alan değil (eski karar).
+	rest := s[k:]
+	for _, op := range []string{"AND", "OR", "NOT", "TO"} {
+		if len(rest) >= len(op) && strings.EqualFold(rest[:len(op)], op) &&
+			(len(rest) == len(op) || isSpace(rest[len(op)]) || rest[len(op)] == '(') {
+			return 0, 0
+		}
+	}
+	return j - i, k
+}
+
+// kqlShorthandKeys — boşluklu KQL alan yazımını kabul eden kısa adlar (ES
+// expandShorthand anahtarlarıyla aynı küme + env/status).
+var kqlShorthandKeys = map[string]bool{
+	"level": true, "severity": true, "service": true, "trace": true, "span": true,
+	"message": true, "body": true, "pod": true, "container": true, "deployment": true,
+	"namespace": true, "cluster": true, "host": true, "env": true, "status": true,
+}
+
 func lex(s string) ([]token, error) {
 	var out []token
 	i := 0
@@ -160,27 +213,27 @@ func lex(s string) ([]token, error) {
 			i++
 			continue
 		case c == '(':
-			out = append(out, token{kind: tLParen, pos: i})
+			out = append(out, token{kind: tLParen, pos: i, end: i + 1})
 			i++
 			continue
 		case c == ')':
-			out = append(out, token{kind: tRParen, pos: i})
+			out = append(out, token{kind: tRParen, pos: i, end: i + 1})
 			i++
 			continue
 		case c == '[':
-			out = append(out, token{kind: tLBracket, pos: i})
+			out = append(out, token{kind: tLBracket, pos: i, end: i + 1})
 			i++
 			continue
 		case c == '{':
-			out = append(out, token{kind: tLBrace, pos: i})
+			out = append(out, token{kind: tLBrace, pos: i, end: i + 1})
 			i++
 			continue
 		case c == ']':
-			out = append(out, token{kind: tRBracket, pos: i})
+			out = append(out, token{kind: tRBracket, pos: i, end: i + 1})
 			i++
 			continue
 		case c == '}':
-			out = append(out, token{kind: tRBrace, pos: i})
+			out = append(out, token{kind: tRBrace, pos: i, end: i + 1})
 			i++
 			continue
 		case c == '"':
@@ -203,40 +256,45 @@ func lex(s string) ([]token, error) {
 			if !closed {
 				return nil, &ParseError{Pos: i, Msg: "kapanmamış tırnak"}
 			}
-			out = append(out, token{kind: tPhrase, text: b.String(), pos: i})
+			out = append(out, token{kind: tPhrase, text: b.String(), pos: i, end: j + 1})
 			i = j + 1
 			continue
 		case c == '>' || c == '<':
 			if i+1 < len(s) && s[i+1] == '=' {
-				out = append(out, token{kind: tCmp, text: s[i : i+2], pos: i})
+				out = append(out, token{kind: tCmp, text: s[i : i+2], pos: i, end: i + 2})
 				i += 2
 			} else {
-				out = append(out, token{kind: tCmp, text: s[i : i+1], pos: i})
+				out = append(out, token{kind: tCmp, text: s[i : i+1], pos: i, end: i + 1})
 				i++
 			}
 			continue
 		case c == '&' && i+1 < len(s) && s[i+1] == '&':
-			out = append(out, token{kind: tAnd, text: "&&", pos: i})
+			out = append(out, token{kind: tAnd, text: "&&", pos: i, end: i + 2})
 			i += 2
 			continue
 		case c == '|' && i+1 < len(s) && s[i+1] == '|':
-			out = append(out, token{kind: tOr, text: "||", pos: i})
+			out = append(out, token{kind: tOr, text: "||", pos: i, end: i + 2})
 			i += 2
 			continue
 		case c == '!' && i+1 < len(s) && !isSpace(s[i+1]):
-			out = append(out, token{kind: tNot, text: "!", pos: i})
+			out = append(out, token{kind: tNot, text: "!", pos: i, end: i + 1})
 			i++
 			continue
 		case c == '-' && i+1 < len(s) && !isSpace(s[i+1]) && (i == 0 || isSpace(s[i-1]) || s[i-1] == '('):
 			// Lucene `-term` = NOT term. Terim içindeki `-` (k8s-pod) buraya
 			// düşmez: yalnız sorgu/parantez başında ya da boşluktan sonra.
-			out = append(out, token{kind: tNot, text: "-", pos: i})
+			out = append(out, token{kind: tNot, text: "-", pos: i, end: i + 1})
 			i++
 			continue
 		}
 		if n := fieldPrefixLen(s, i); n > 0 {
-			out = append(out, token{kind: tField, text: s[i : i+n], pos: i})
+			out = append(out, token{kind: tField, text: s[i : i+n], pos: i, end: i + n + 1})
 			i += n + 1 // ':' atla
+			continue
+		}
+		if n, k := kqlSpacedFieldLen(s, i); n > 0 { // v0.10.1819 — KQL `alan: değer`
+			out = append(out, token{kind: tField, text: s[i : i+n], pos: i, end: k, spaced: true})
+			i = k
 			continue
 		}
 		// Çıplak terim: boşluk / parantez / köşeli-süslü / tırnak'a kadar;
@@ -267,19 +325,19 @@ func lex(s string) ([]token, error) {
 		up := strings.ToUpper(text)
 		switch {
 		case up == "AND":
-			out = append(out, token{kind: tAnd, text: text, pos: i})
+			out = append(out, token{kind: tAnd, text: text, pos: i, end: j})
 		case up == "OR":
-			out = append(out, token{kind: tOr, text: text, pos: i})
+			out = append(out, token{kind: tOr, text: text, pos: i, end: j})
 		case up == "NOT":
-			out = append(out, token{kind: tNot, text: text, pos: i})
+			out = append(out, token{kind: tNot, text: text, pos: i, end: j})
 		case up == "TO":
-			out = append(out, token{kind: tTo, text: text, pos: i})
+			out = append(out, token{kind: tTo, text: text, pos: i, end: j})
 		default:
-			out = append(out, token{kind: tTerm, text: text, pos: i, wild: wild})
+			out = append(out, token{kind: tTerm, text: text, pos: i, wild: wild, end: j})
 		}
 		i = j
 	}
-	out = append(out, token{kind: tEOF, pos: len(s)})
+	out = append(out, token{kind: tEOF, pos: len(s), end: len(s)})
 	return out, nil
 }
 
@@ -423,6 +481,19 @@ func (p *parser) parsePrimary(field string) (*Expr, error) {
 		}
 		return e, nil
 	case tTerm:
+		// v0.10.1819 — KQL karşılaştırması `alan >= 5` (boşluklu): çıplak
+		// tanımlayıcı + karşılaştırma işleci + değer. Önceden ayrıştırma
+		// hatasıydı ("beklenmeyen '>='"), yani hiçbir eski sorgunun anlamı
+		// değişmez. Yazım Lucene'e `alan:>=5` olarak gider (lucene.go).
+		if field == "" && p.peek().kind == tCmp && isIdentToken(t) {
+			cmp := p.next()
+			v := p.next()
+			if v.kind != tTerm && v.kind != tPhrase {
+				return nil, &ParseError{Pos: v.pos, Msg: "'" + cmp.text + "' sonrasında değer bekleniyordu"}
+			}
+			op := map[string]Op{">": OpGt, ">=": OpGte, "<": OpLt, "<=": OpLte}[cmp.text]
+			return &Expr{Kind: KindClause, Field: t.text, Op: op, Value: v.text, Phrase: v.kind == tPhrase}, nil
+		}
 		if field == "" && t.text == "*" {
 			return nil, &ParseError{Pos: t.pos, Msg: "tek başına '*' anlamsız"}
 		}
@@ -441,6 +512,20 @@ func (p *parser) parsePrimary(field string) (*Expr, error) {
 		return nil, &ParseError{Pos: t.pos, Msg: "ifade bekleniyordu, sorgu bitti"}
 	}
 	return nil, &ParseError{Pos: t.pos, Msg: "beklenmeyen " + tokDesc(t)}
+}
+
+// isIdentToken — çıplak terim bir alan adı mı (KQL `alan >= n` için):
+// harf/altçizgi ile başlar, yalnız alan karakterleri, joker yok.
+func isIdentToken(t token) bool {
+	if t.kind != tTerm || t.wild || t.text == "" || !isIdentStart(t.text[0]) {
+		return false
+	}
+	for i := 1; i < len(t.text); i++ {
+		if !isIdentChar(t.text[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // parseFieldValue — `key:` sonrası: değer / tırnak / (…) / karşılaştırma /

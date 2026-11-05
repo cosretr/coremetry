@@ -60,7 +60,7 @@ func logsPatternsKey(f logstore.Filter, fromRaw, toRaw string, limit, sample int
 	// v0.10.1071 — desen (pattern=) anahtarda (v0.5.187 sınıfı).
 	return fmt.Sprintf("logs-patterns:v3:svc=%s:clu=%s:env=%s:sev=%d:trace=%s:span=%s:ht=%t:from=%s:to=%s:q=%s:pat=%s:lim=%d:smp=%d:base=%t",
 		f.Service, f.Cluster, f.Env, f.SeverityMin, f.TraceID, f.SpanID, f.HasTrace,
-		fromRaw, toRaw, f.Search, logstore.PatternKey(f.Pattern), limit, sample, baseline) + logsTeamKey(f) // v0.10.1477
+		fromRaw, toRaw, f.Search, logstore.PatternKey(f.Pattern), limit, sample, baseline) + logsTeamKey(f) + logsLangKey(f) // v0.10.1477; v0.10.1819 lang
 }
 
 // logsPatternsBaselineWindow — v0.10.508 (C6) SAF: tabanın penceresi =
@@ -88,6 +88,7 @@ func (s *Server) getLogsPatterns(w http.ResponseWriter, r *http.Request) {
 		Cluster:     q.Get("cluster"),
 		Env:         strings.TrimSpace(q.Get("env")),
 		Search:      q.Get("search"),
+		SearchLang:  logsLangParam(q), // v0.10.1819 — `lang=lucene` zorla geçiş
 		From:        parseTime(q.Get("from")),
 		To:          parseTime(q.Get("to")),
 		SeverityMin: uint8(sev),
@@ -99,7 +100,7 @@ func (s *Server) getLogsPatterns(w http.ResponseWriter, r *http.Request) {
 		f.To = time.Now()
 		f.From = f.To.Add(-time.Hour)
 	}
-	if s.rejectLogQuerySyntax(w, f.Search) { // v0.10.280 sözleşmesi
+	if s.rejectLogQuerySyntax(w, f.Search, f.SearchLang) { // v0.10.280 sözleşmesi
 		return
 	}
 	if !applyLogsPatternParam(w, q, &f) { // v0.10.1071 — /logs?pattern= (panel listeyle aynı kümeyi örnekler)

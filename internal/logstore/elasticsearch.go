@@ -22,6 +22,7 @@ import (
 	"github.com/elastic/go-elasticsearch/v8"
 	"github.com/elastic/go-elasticsearch/v8/esapi"
 
+	"github.com/cilcenk/coremetry/internal/logql"
 	"github.com/cilcenk/coremetry/internal/servertiming"
 	"github.com/cilcenk/coremetry/internal/sourcestate"
 )
@@ -2928,9 +2929,18 @@ func (s *ESStore) buildQuery(f Filter) map[string]any {
 		// the shorthand expander above multi-shapes through
 		// "level" / "severity_text" etc, one of which usually
 		// matches the indexed casing.
+		// v0.10.1819 — KQL yazımları kanonik Lucene'e (logql.ToES): küçük
+		// harf and/or/not → büyük, `alan: değer` / `alan >= n` → Lucene
+		// yazımı; Lucene'e özgü sözdizimi ve `lang=lucene` AYNEN. Yapısal
+		// kırık handler'da 400 olur; buraya ulaşırsa (araç çağrısı) ham
+		// metin gider ve ES'in reddi BadQueryError olur (eski davranış).
+		qs := f.Search
+		if tr, pe := logql.ToES(f.Search, f.SearchLang == string(logql.LangLucene)); pe == nil {
+			qs = tr.Query
+		}
 		must = append(must, map[string]any{
 			"query_string": map[string]any{
-				"query":                  s.expandShorthand(f.Search),
+				"query":                  s.expandShorthand(qs),
 				"default_field":          s.fields.Body,
 				"default_operator":       "AND",
 				"allow_leading_wildcard": false,

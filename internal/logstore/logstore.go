@@ -37,6 +37,11 @@ const logsTailMax = LogsTailMax
 // (with a log line).
 type Filter struct {
 	Service string
+	// SearchLang — v0.10.1819 (Log Search Faz 1 dilim 1.3): "lucene" = URL
+	// `lang=lucene`, arama metni ES'e AYNEN gider (KQL çevirisi yok). Boş =
+	// otomatik (logql.ToES: ayrışan KQL kanonik Lucene'e, Lucene'e özgü
+	// sözdizimi aynen). CH backend'i Lucene çalıştıramaz; alanı yok sayar.
+	SearchLang string
 	// Services — v0.10.1684 (CoSRE v2 dilim 3): servis KÜMESİ, herhangi biri
 	// (OR). Service doluysa yok sayılır; sıralı + tekil + ≤100
 	// (chstore.LogServicesSet). ES: aday alanlar × `terms`; CH: IN.

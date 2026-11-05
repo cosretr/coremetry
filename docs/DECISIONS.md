@@ -12261,3 +12261,12 @@ Operatör "Log Mockup iyi, devam" (2026-11-05). `/logs` yerinde evrilir; dilimle
   reddi aynı gövdeye `pos` + `detail` ekler (`error` metni aynen). ES `limit > 1000` artık 1000 (eskiden 100; CH 1000).
   `/api/logs` `hasTraceUnapplied` / `unappliedFilters`'ı yalnız set iken yazar. Servis Logs sekmesine hata dalı eklendi
   (reddedilen arama "log yok" diye okunuyordu) — paylaşılan `lib/logQueryError.ts`.
+- **v0.10.1819 — KQL yazımları → kanonik Lucene; Lucene geçiş kipi (1.3, §3.3 B).** `logql.ToES`: ayrışan sorguda ES'e
+  KAYNAK METİN gider, yalnız Lucene'in farklı okuyacağı KQL yazımları düzeltilir (küçük harf `and/or/not/to` → büyük,
+  `alan: değer` → `alan:değer`, `alan >= n` → `alan:>=n`). AST'den yeniden yazım BİLİNÇLİ YOK: Lucene klasik ayrıştırıcısı
+  karışık AND/OR'u öncelikle okumaz; String()'in açık parantezleri bugün çalışan ES sorgularının anlamını değiştirirdi —
+  altın test: eski her sorgu aynı ES metni (tek istisna küçük harf operatör). Boşluklu KQL alanı yalnız `.`/`_`/`@` içeren
+  ya da kısayol adlarında (`ERROR: boom`, `Caused by: x` düz metin kalır). Lucene'e özgü (`~ ^ /re/ +`) ya da ayrışmayan
+  ama yapısal sağlam → "Lucene" kipi, metin aynen; `lang=lucene` (yeni URL paramı, süzgeç imzası DIŞI) zorlar ve kapıyı
+  atlar. Yapısal kırık iki backend'de ES'e gitmeden 400 + düz Türkçe (`logql.Lint`). Yanıt `queryLang`; `lang` önbellek
+  anahtarlarında. `/api/search` (planLogSearch) kapısı değişmedi (CH-only).

@@ -41,6 +41,7 @@ export interface FieldStatsScope {
   severity?: number;
   traceId?: string;
   spanId?: string;
+  lang?: 'lucene'; // v0.10.1819 — zorla Lucene geçişi (liste ile aynı)
 }
 
 function FieldAccordion({ field, scope, isColumn, onToggleColumn, onPillAdd, onPillExclude, onExists, windowTotal, lift }: {

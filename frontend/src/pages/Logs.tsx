@@ -45,7 +45,7 @@ import {
   extractHighlightTerms, toggleExistsFilter, replaceFilterAt,
 } from '@/lib/logFilters';
 import type { LogFilter } from '@/lib/logFilters';
-import { logsUrlSig, writeLogsParams, readLogsUrlState, buildDocPermalink, parseDocParam, logsUrlHasFilterState } from '@/lib/logsUrl';
+import { logsUrlSig, writeLogsParams, readLogsUrlState, buildDocPermalink, parseDocParam, logsUrlHasFilterState, parseLogsLang } from '@/lib/logsUrl';
 import { decideTeamAutoApply, isSameTeam, readTeamOptOut, writeTeamOptOut } from '@/lib/logsTeam';
 import { useAuth } from '@/components/AuthProvider';
 import { useT } from '@/lib/i18n';
@@ -366,6 +366,9 @@ function LogsInner() {
   // v0.10.1220 — dış URL değişimi (geri/ileri, kayıtlı görünüm) yönü de
   // içe alır; toggleAsc state'i ve URL'i birlikte yazdığı için yankı no-op.
   const urlAsc = searchParams.get('asc') === '1';
+  // v0.10.1819 (Log Search Faz 1 dilim 1.3) — `?lang=lucene`: arama ES'e
+  // aynen (zorla Lucene). Görünüm parametresi; süzgeç imzasına girmez.
+  const lang = parseLogsLang(searchParams.get('lang'));
   useEffect(() => {
     if (urlAsc !== asc) { setAsc(urlAsc); resetPaging(); }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- yalnız URL değişiminde
@@ -541,7 +544,8 @@ function LogsInner() {
     severity: filter.severity > 0 ? filter.severity : undefined,
     traceId: filter.traceId || undefined,
     spanId: filter.spanId || undefined,
-  }), [from, to, filter.service, filter.cluster, env, compiledSearch, filter.pattern, filter.team, filter.severity, filter.traceId, filter.spanId]);
+    lang: lang || undefined, // v0.10.1819
+  }), [from, to, filter.service, filter.cluster, env, compiledSearch, filter.pattern, filter.team, filter.severity, filter.traceId, filter.spanId, lang]);
   const staticQ = useLogs({
     limit: 100, after: cursor || undefined, from, to,
     service: filter.service || undefined,
@@ -555,6 +559,7 @@ function LogsInner() {
     spanId:  filter.spanId  || undefined,
     hasTrace: filter.hasTrace || undefined, // v0.8.406 — trace-only filter
     asc: asc || undefined, // v0.9.295 — oldest-first
+    lang: lang || undefined, // v0.10.1819 — zorla Lucene
   }, { enabled: logsListEnabled(view, live, teamGate) }); // v0.10.420 — canlıyken statik sorgu koşmaz; v0.10.1477 — takım kararı beklenirken de; v0.10.1499 — desen görünümünde de (tablo çizilmez)
 
   // Level-facet counts. A per-severity timeseries query feeds the
@@ -596,7 +601,7 @@ function LogsInner() {
   const volumeQ = useQuery({
     // v0.9.216 — cluster joins the key AND the request: without it the chips
     // counted every cluster while the table below showed one.
-    queryKey: ['logs', 'sev-volume', from, to, filter.service, filter.cluster, env, compiledSearch, filter.pattern, filter.team, filter.traceId, filter.hasTrace, volumeBucket],
+    queryKey: ['logs', 'sev-volume', from, to, filter.service, filter.cluster, env, compiledSearch, filter.pattern, filter.team, filter.traceId, filter.hasTrace, volumeBucket, lang],
     queryFn: () => api.logsTimeseries({
       from, to,
       service: filter.service || undefined,
@@ -609,6 +614,7 @@ function LogsInner() {
       hasTrace: filter.hasTrace || undefined, // v0.8.406 — trace-only filter
       groupBy: 'severity',
       bucketSec: volumeBucket,
+      lang: lang || undefined, // v0.10.1819
     }),
     enabled: volumeEnabled && !chipsFromHistogram && !teamGate,
     staleTime: 30_000,
@@ -1220,7 +1226,7 @@ function LogsInner() {
             empty data. */}
         {/* v0.9.431 — brush/çift-tık hook üzerinden; ns→sn çeviri burada
             (LogsHistogram sınır sözleşmesi ns, hook saniye alır). */}
-        <LogsHistogram range={{ from, to }} filter={{ ...filter, env, search: compiledSearch }}
+        <LogsHistogram range={{ from, to }} filter={{ ...filter, env, search: compiledSearch, lang: lang || undefined }}
           onRangeSelect={(fromNs, toNs) => handleZoom(fromNs / 1e9, toNs / 1e9)}
           onZoomReset={handleZoomReset}
           breakdown={breakdown} onBreakdown={setBreakdown}
@@ -1252,7 +1258,7 @@ function LogsInner() {
         </div>
         {view !== 'logs' ? (
           <LogPatternsPanel embedded open={!teamGate} onSearch={searchFromPattern} tab={view}
-            params={{ ...filter, env, search: compiledSearch, from: from ?? undefined, to: to ?? undefined }}
+            params={{ ...filter, env, search: compiledSearch, lang: lang || undefined, from: from ?? undefined, to: to ?? undefined }}
             toolbar={(
               /* v0.9.1100 (F3.5) — ✨ desen anlatımı; fetch YALNIZ tıkla (ES-maliyet disiplini). */
               <Button variant="secondary" size="sm" disabled={aiPat.busy}
