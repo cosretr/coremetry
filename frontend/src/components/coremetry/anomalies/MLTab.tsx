@@ -72,6 +72,7 @@ export function tickLabel(t: MLTickStatus | undefined, nowSec: number): string {
   const parts = [`son tik ${ago} dk önce · ${Math.round(t.durationMs / 1000)} sn · ${t.events} olay`];
   if (t.docs) parts.push(`${t.docs.toLocaleString('tr-TR')} belge`);
   if (t.partial) parts.push(`${t.partial} kısmi ES sonucu (yazılmadı)`);
+  if (t.batchCut) parts.push(`batch kuralı ${t.batchCut} adayı kesti`);
   if (t.backoff.length) parts.push(`VM bekleme: ${t.backoff.map(b => `${b.family} (${Math.max(1, Math.round((b.until - nowSec) / 60))} dk)`).join(', ')}`);
   if (t.lastError) parts.push(`hata: ${t.lastError}`);
   return parts.join(' · ');
@@ -81,6 +82,7 @@ export function tickLabel(t: MLTickStatus | undefined, nowSec: number): string {
 export function signalTickLabel(name: string, s: MLSignalTick): string {
   if (!s.ran) return `${name}: çalışmadı`;
   const bits = [`${s.services} servis`, `${s.candidates} aday`, `${s.written} yazıldı`, `${(s.sourceMs / 1000).toFixed(1)} sn`];
+  if (s.batchCut) bits.push(`${s.batchCut} batch kesildi`);
   if (s.partial) bits.push('kısmi ES');
   if (s.error) bits.push(`hata: ${s.error}`);
   return `${name}: ${bits.join(' · ')}`;

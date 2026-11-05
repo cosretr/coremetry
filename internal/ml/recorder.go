@@ -82,6 +82,10 @@ func (r *Recorder) run(ctx context.Context) {
 	r.leader.Start(ctx)
 	setMeta(r.placement, false, false, false)
 	time.Sleep(15 * time.Second) // boot sırasında CH/ES hazır olsun
+	// v0.10.1811 — batch kalıpları anomaly_sensitivity atomic'inden; sre
+	// pod'unda API sunucusu da hidrate ediyor ama sıralamaya güvenmeden ilk
+	// tikten önce bir kez burada (anomaly recorder emsali).
+	r.store.LoadAnomalySensitivity(ctx)
 	for {
 		cfg := r.store.GetMLConfig(ctx)
 		r.tick(ctx, cfg)
@@ -138,6 +142,11 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	var written int64
 	var all []chstore.MLEvent
 	active, partialN := 0, 0
+	// v0.10.1811 — batch kuralı (batch.go): tek yüklem, tik başına bir kez;
+	// doğrulanmamış ayarda kalıp listesi boş = kural kapalı.
+	sens := r.store.AnomalySensitivityForDetectors()
+	isBatch, loadParts := sens.IsBatchService, metricLoadParts(cfg)
+	batchCut := 0
 	for _, det := range r.detectors {
 		if !det.Enabled(cfg) {
 			continue
@@ -146,6 +155,14 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 		d0 := time.Now()
 		evs, derr := det.Tick(tctx, deps, cfg, start)
 		st := chstore.MLSignalTick{Ran: true, SourceMs: time.Since(d0).Milliseconds(), Candidates: len(evs), Services: distinctServices(evs)}
+		evs, cut := batchFilter(evs, isBatch, loadParts)
+		if rf, ok := det.(capRefunder); ok {
+			for _, c := range cut {
+				rf.refundCap(c.Detector)
+			}
+		}
+		st.BatchCut = len(cut)
+		batchCut += st.BatchCut
 		if errors.Is(derr, logstore.ErrESPartial) {
 			global.partial.Add(1)
 			partialN++
@@ -167,6 +184,7 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	kept, sup := qualityFilter(all, cfg, lb, r.runs, start)
 	w0 := time.Now()
 	global.observeSuppression(sup)
+	global.supBatch.Add(int64(batchCut))
 	// epizot kapanışı: 3 tik görülmeyen koşu stage=closed yazılır (B3)
 	for _, ev := range r.runs.closeStale(start) {
 		if werr := r.store.UpsertMLEvent(tctx, ev); werr != nil && firstErr == nil {
@@ -210,7 +228,7 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	global.tickDone(start)
 	// tik durumu: api pod'u karnede okur (süreç-içi sayaç bu pod'da kalır)
 	status := chstore.MLTickStatus{At: start.Unix(), DurationMs: time.Since(start).Milliseconds(), Events: written, Backoff: r.backoff.snapshot(start),
-		Partial: int64(partialN), Docs: global.docs.Load(), Steps: steps, Signals: signals}
+		Partial: int64(partialN), Docs: global.docs.Load(), Steps: steps, Signals: signals, BatchCut: int64(batchCut)}
 	if firstErr != nil {
 		status.LastError = truncRunes(firstErr.Error(), 300)
 	}
@@ -219,12 +237,12 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 		log.Printf("[ml] tik durumu yazılamadı: %v", serr)
 	}
 	scancel()
-	log.Printf("[ml] tick placement=%s detectors=%d events=%d suppressed=impact:%d,feedback:%d,regime:%d labels=%d dur=%dms es_p95=%dms err=%v",
-		r.placement, active, written, sup.Impact, sup.Feedback, sup.Regime, len(labels), time.Since(start).Milliseconds(), Observability().ESP95Ms, firstErr)
+	log.Printf("[ml] tick placement=%s detectors=%d events=%d suppressed=impact:%d,feedback:%d,regime:%d,batch:%d labels=%d dur=%dms es_p95=%dms err=%v",
+		r.placement, active, written, sup.Impact, sup.Feedback, sup.Regime, batchCut, len(labels), time.Since(start).Milliseconds(), Observability().ESP95Ms, firstErr)
 	log.Printf("[ml] tick steps labels=%dms detectors=%dms write=%dms snapshot=%dms es_queries=%d vm_queries=%d partial=%d docs=%d",
 		steps["labelsMs"], steps["detectorsMs"], steps["writeMs"], steps["snapshotMs"], global.esQueries.Load()-esAtStart, global.vmQueries.Load()-vmAtStart, partialN, global.docs.Load())
 	for name, st := range signals {
-		log.Printf("[ml] tick %s ran=%v services=%d source=%dms candidates=%d written=%d partial=%d err=%s", name, st.Ran, st.Services, st.SourceMs, st.Candidates, st.Written, st.Partial, st.Error)
+		log.Printf("[ml] tick %s ran=%v services=%d source=%dms candidates=%d batch_cut=%d written=%d partial=%d err=%s", name, st.Ran, st.Services, st.SourceMs, st.Candidates, st.BatchCut, st.Written, st.Partial, st.Error)
 	}
 }
 

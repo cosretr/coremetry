@@ -12195,3 +12195,13 @@ satırı, açık satırın vurgusu + satır tıkıyla aç/kapa, satır içi form
 ## 2026-11-05 — v0.10.1809 — Pipeline metrik drop kuralı okuma tarafında: ad listeleri gizlenir
 - Yalnız ADLA karar verilebilen etkin metrics/drop kuralları (`metric`/`name`/`metric.name` koşulları; `pipeline.Engine.MetricNameDropper`) keşif yüzeylerinde uygulanır: `/api/metrics/names` (iki zarf, CH+VM), MCP `list_metric_names`; gizli adın `/api/metrics/labels` + `attr-keys`'i backend'e inmeden `[]`. Etiket/servis koşullu kural adı gizlemez. Ad anahtarı kural kümesinin FNV özetini taşır (`:nd=`); labels/attr-keys anahtarı değişmez (gizli ad cache'e inmez).
 - Açık sorgular (`/api/metrics/query`, PromQL, dashboard, compare) SÜZÜLMEZ — operatör eski veriyi adıyla incelemeye devam eder. Bilinen boşluklar: sayfalı aramada sayfa kısa gelebilir (hasMore ham sayfadan); VM'in Prometheus yazımlı adlarını OTLP yazımlı `=` kuralı gizlemez, `=~` gizler.
+
+## 2026-11-05 — Öğrenme döngüsü Faz 1 (audit `docs/anomaly/learning-loop-audit.md`)
+
+- **v0.10.1811 — ML hattı batch kuralı (D8).** Tek yüklem `IsBatchService`, tek karar noktası recorder (`internal/ml/batch.go`
+  `batchFilter`, kalite süzgecinden önce; kesilen aday satır üretmez, `MLTickStatus.batchCut`). Klasiğin aynası: yük iki yönde
+  kesilir (log_volume, service_silent, log change_point `_total`, throughput_drop, `load` işaretli metrik serisi); log hata
+  SAYISI yalnız pay ≥ 3× (`anomaly.BatchErrorShareFactor`) ise kalır, pay bilinmiyorsa kalır; oran/gecikme/yapı aynen.
+  Aynalanmayan: v0.10.1046 "yük ≥ 2× iken gecikme açılmaz" (karar noktasında hacim okuması yok → olumlu kanıt yok → kalır).
+  Varsayılan metrik serilerinin hiçbiri `load` değil (CPU/heap/lag yükün sonucu; klasik de susturmuyor).
+  Kesilen aday dedektörün günlük olay tavanını geri verir (`capRefunder`) — yoksa uzun batch işleri tavanı bitirirdi.

@@ -1,6 +1,9 @@
 package chstore
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 // v0.10.1743 — log ML dilim 0: terfi varsayılan KAPALI; eşik + örnek kapısı;
 // karne paydasına kararsız satır girmez (S4); karar anahtarı önekli.
@@ -139,5 +142,22 @@ func TestMLSignalScores(t *testing.T) {
 	if len(got) != 3 || got[0].Signal != "log" || got[0].Events != 2 || got[0].Samples != 2 || got[0].HitRate != 0.5 ||
 		got[1].Signal != "trace" || got[1].HitRate != 1 || got[2].Signal != "metric" || got[2].Samples != 0 {
 		t.Fatalf("got %+v", got)
+	}
+}
+
+// v0.10.1811 — metrik serisi Load bayrağı normalize + JSON turunda kaybolmaz
+// (batch kuralı; düşerse operatörün işaretlediği yük serisi sessizce kalkar).
+func TestMLMetricExprLoadRoundTrip(t *testing.T) {
+	c := NormalizeMLConfig(MLConfig{MetricFamilies: map[string][]MLMetricExpr{
+		"metric_kafka": {{ID: "msg_rate", Expr: "sum by ({svc}) (rate(x[{win}]))", Direction: "up", Load: true}},
+	}})
+	raw, _ := json.Marshal(c)
+	var back MLConfig
+	if err := json.Unmarshal(raw, &back); err != nil {
+		t.Fatal(err)
+	}
+	back = NormalizeMLConfig(back)
+	if l := back.MetricFamilies["metric_kafka"]; len(l) != 1 || !l[0].Load {
+		t.Fatalf("Load düştü: %+v", l)
 	}
 }

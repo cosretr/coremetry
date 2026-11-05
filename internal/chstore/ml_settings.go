@@ -58,6 +58,10 @@ type MLMetricExpr struct {
 	Expr      string `json:"expr"`
 	Direction string `json:"direction"`
 	Unit      string `json:"unit,omitempty"`
+	// Load — v0.10.1811: seri servisin YÜKÜNÜ ölçer (istek/mesaj hızı); batch
+	// kalıbına giren serviste değerlendirilmez (klasik request_rate kuralının
+	// aynası, internal/ml/batch.go). Varsayılan serilerin hiçbiri yük değil.
+	Load bool `json:"load,omitempty"`
 }
 
 // DefaultMLMetricFamilies — OTel/Prometheus yaygın adlar; operatör Settings'ten düzenler.
@@ -433,5 +437,6 @@ type MLStats struct {
 	SuppressedImpact   int64  `json:"suppressedImpact"`
 	SuppressedFeedback int64  `json:"suppressedFeedback"`
 	SuppressedRegime   int64  `json:"suppressedRegime"`
+	SuppressedBatch    int64  `json:"suppressedBatch"` // v0.10.1811: batch kuralının kestiği aday (kümülatif)
 	LastError          string `json:"lastError,omitempty"`
 }

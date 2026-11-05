@@ -36,11 +36,14 @@ describe('log ml slice 0', () => {
     expect(tickLabel({ at: 1000, durationMs: 1000, events: 0, backoff: [], docs: 1500, partial: 1 }, 1000)).toBe('son tik 0 dk önce · 1 sn · 0 olay · 1.500 belge · 1 kısmi ES sonucu (yazılmadı)');
     expect(tickLabel({ at: 1000, durationMs: 1000, events: 0, backoff: [{ family: 'dep:http', until: 1000 + 1200, failures: 3 }], lastError: 'x' }, 1000))
       .toBe('son tik 0 dk önce · 1 sn · 0 olay · VM bekleme: dep:http (20 dk) · hata: x');
+    // v0.10.1811 — batch kuralı kesimi görünür.
+    expect(tickLabel({ at: 1000, durationMs: 1000, events: 1, backoff: [], batchCut: 3 }, 1000)).toBe('son tik 0 dk önce · 1 sn · 1 olay · batch kuralı 3 adayı kesti');
   });
   // v0.10.1767 — dedektör başına son tik satırı.
   it('signal tick label', () => {
     expect(signalTickLabel('log_red', { ran: false, services: 0, sourceMs: 0, candidates: 0, suppressed: 0, written: 0, partial: 0 })).toBe('log_red: çalışmadı');
     expect(signalTickLabel('log_red', { ran: true, services: 420, sourceMs: 12300, candidates: 5, suppressed: 0, written: 2, partial: 1 })).toBe('log_red: 420 servis · 5 aday · 2 yazıldı · 12.3 sn · kısmi ES');
+    expect(signalTickLabel('log_red', { ran: true, services: 3, sourceMs: 1000, candidates: 4, suppressed: 0, written: 2, partial: 0, batchCut: 2 })).toBe('log_red: 3 servis · 4 aday · 2 yazıldı · 1.0 sn · 2 batch kesildi');
   });
   // v0.10.1768 — B3 epizot: Durum ve Süre sütunları.
   it('stage and duration labels', () => {

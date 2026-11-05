@@ -11771,18 +11771,21 @@ export interface MLConfig {
   metricFamilies: Record<string, MLMetricExpr[]>;
   quality: MLQuality;
 }
-export interface MLMetricExpr { id: string; label: string; expr: string; direction: 'up' | 'down' | 'both'; unit?: string }
+/** load (v0.10.1811): seri servisin yükünü ölçer; batch kalıbına giren serviste değerlendirilmez. */
+export interface MLMetricExpr { id: string; label: string; expr: string; direction: 'up' | 'down' | 'both'; unit?: string; load?: boolean }
 /** Geçmiş doldurma ilerlemesi (v0.10.1763, system_settings ml_backfill:<signal>). */
 export interface MLBackfillProgress {
   signal: string; total: number; done: number; missing: number[] | null; doneUntil: number; planEnd: number;
   complete: boolean; running: boolean; startedAt: number; updatedAt: number; lastError?: string;
 }
 export interface MLBackoffEntry { family: string; until: number; failures: number; lastError?: string }
-export interface MLSignalTick { ran: boolean; services: number; sourceMs: number; candidates: number; suppressed: number; written: number; partial: number; error?: string }
+export interface MLSignalTick { ran: boolean; services: number; sourceMs: number; candidates: number; suppressed: number; written: number; partial: number; batchCut?: number; error?: string }
 /** Son tik durumu (v0.10.1764, system_settings ml_tick_status). */
 export interface MLTickStatus {
   at: number; durationMs: number; events: number; steps?: Record<string, number>; signals?: Record<string, MLSignalTick>;
   backoff: MLBackoffEntry[]; partial?: number; docs?: number; lastError?: string;
+  /** v0.10.1811: batch kuralının bu tikte kestiği aday (ml_events'e yazılmadı). */
+  batchCut?: number;
 }
 export interface MLScorecard {
   tick?: MLTickStatus;

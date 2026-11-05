@@ -395,7 +395,15 @@ func (d *LogRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, now 
 			if !j.Fire || !d.dayCap(detErrorRate, cfg, now) {
 				continue
 			}
-			evs = append(evs, d.event(detErrorRate, svc, part, j, last, cfg, class, ingestLagMs, infBySvc[svc]))
+			ev := d.event(detErrorRate, svc, part, j, last, cfg, class, ingestLagMs, infBySvc[svc])
+			// v0.10.1811: hata PAYI kanıtı (batch kuralı, batch.go) — aynı
+			// pencerenin _total serisi ve tabanından; ek okuma yok.
+			tk := chstore.MLSeriesKey(svc, partTotal)
+			baseTotMed, _ := medianMAD(base[tk])
+			if sh := errShareEvidence(j.Observed, series[tk][last.Unix()], j.Median, baseTotMed); sh != nil {
+				ev.Evidence = mergeEvidence(ev.Evidence, sh)
+			}
+			evs = append(evs, ev)
 		}
 	}
 	return evs, nil

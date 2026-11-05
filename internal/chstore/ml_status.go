@@ -29,6 +29,7 @@ type MLSignalTick struct {
 	Suppressed int    `json:"suppressed"`
 	Written    int    `json:"written"`
 	Partial    int    `json:"partial"`
+	BatchCut   int    `json:"batchCut,omitempty"` // v0.10.1811: batch kuralının kestiği aday
 	Error      string `json:"error,omitempty"`
 }
 
@@ -40,8 +41,9 @@ type MLTickStatus struct {
 	Steps      map[string]int64        `json:"steps,omitempty"` // adım → ms
 	Signals    map[string]MLSignalTick `json:"signals,omitempty"`
 	Backoff    []MLBackoffEntry        `json:"backoff"`
-	Partial    int64                   `json:"partial"` // bu tikte kısmi ES sonucu alan dedektör
-	Docs       int64                   `json:"docs"`    // log RED penceresinde toplanan belge
+	Partial    int64                   `json:"partial"`            // bu tikte kısmi ES sonucu alan dedektör
+	Docs       int64                   `json:"docs"`               // log RED penceresinde toplanan belge
+	BatchCut   int64                   `json:"batchCut,omitempty"` // v0.10.1811: batch kuralının kestiği aday
 	LastError  string                  `json:"lastError,omitempty"`
 }
 

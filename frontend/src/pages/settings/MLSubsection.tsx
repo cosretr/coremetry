@@ -121,8 +121,14 @@ export function MLSubsection() {
           <p className={NOTE}>Varsayılanlar OTel/Prometheus adlarıdır; kendi metrik adlarınla düzenle. <code>{'{svc}'}</code> servis etiketi, <code>{'{win}'}</code> kova penceresi. Pod etiketi ifadede servis düzeyine toplanır.</p>
           <div className="mt-2 grid gap-2">
             {ML_METRIC_DETECTORS.map(f => (cfg.metricFamilies?.[f.id] ?? []).map((e, i) => (
-              <Field key={`${f.id}:${e.id}`} label={`${f.label} · ${e.label || e.id}`} hint={`yön: ${e.direction}${e.unit ? ` · ${e.unit}` : ''}`} small
-                value={e.expr} onChange={ev => setCfg({ ...cfg, metricFamilies: { ...cfg.metricFamilies, [f.id]: cfg.metricFamilies[f.id].map((x, j) => (j === i ? { ...x, expr: ev.target.value } : x)) } })} />
+              <div key={`${f.id}:${e.id}`}>
+                <Field label={`${f.label} · ${e.label || e.id}`} hint={`yön: ${e.direction}${e.unit ? ` · ${e.unit}` : ''}`} small
+                  value={e.expr} onChange={ev => setCfg({ ...cfg, metricFamilies: { ...cfg.metricFamilies, [f.id]: cfg.metricFamilies[f.id].map((x, j) => (j === i ? { ...x, expr: ev.target.value } : x)) } })} />
+                <CheckboxField className="mt-1" checked={!!e.load}
+                  onCheckedChange={v => setCfg({ ...cfg, metricFamilies: { ...cfg.metricFamilies, [f.id]: cfg.metricFamilies[f.id].map((x, j) => (j === i ? { ...x, load: v } : x)) } })}
+                  label="Yük serisi"
+                  hint="İstek/mesaj hızı gibi servisin yükünü ölçer; adı batch kalıbına giren serviste değerlendirilmez (Settings › Anomaly › Batch servis ad kalıpları)." />
+              </div>
             )))}
           </div>
 
