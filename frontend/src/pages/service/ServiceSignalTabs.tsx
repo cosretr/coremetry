@@ -6,6 +6,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '@/lib/api';
 import { encodeRange } from '@/lib/urlState';
 import { logsHref } from '@/lib/logsUrl';
+import { logQueryErrorMessage } from '@/lib/logQueryError';
 import { timeRangeToNs, fmtNum, isMessagingDep } from '@/lib/utils';
 import type { TimeRange, LogRow, ServiceMap } from '@/lib/types';
 import { Spinner } from '@/components/Spinner';
@@ -213,6 +214,14 @@ export function ServiceLogsTab({ service, range, windowNs, onZoom, onZoomReset }
   const showRows = !q.isLoading && !q.data?.degraded && rows.length > 0;
   const logsState: Omit<DataTableStateProps<LogRow>, 'dt' | 'leading' | 'trailing'> =
     q.isLoading ? { kind: 'loading', skeletonRows: 10 }
+    // v0.10.1818 — sorgu reddi (400 {error, pos, detail}) ya da arka uç
+    // hatası: "log yok" DEĞİL. Önceden hata dalı yoktu ve reddedilen arama
+    // "Bu pencerede … log yok" diye okunuyordu.
+    : q.isError ? {
+        kind: 'error',
+        message: logQueryErrorMessage(q.error, 'Log sorgusu çalışmadı — log backend sorguyu reddetti ya da zamanında cevap vermedi.'),
+        onRetry: () => void q.refetch(),
+      }
     : q.data?.degraded ? {
         kind: 'error',
         message: `Log backend'i yanıt veremedi — ${q.data.reason || 'Elasticsearch yavaş ya da erişilemez — pencerede log olmadığı anlamına gelmez.'}`,

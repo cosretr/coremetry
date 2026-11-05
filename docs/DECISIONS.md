@@ -12254,3 +12254,10 @@ Operatör "Log Mockup iyi, devam" (2026-11-05). `/logs` yerinde evrilir; dilimle
   `es` = ES transport'unda yanıt başlığına kadar geçen süre (`internal/servertiming`); CH backend'inde yalnız cache + total.
   Başlık serveCached'te basılır, diğer uçlar değişmez. Üç perfcheck noktası eşiği audit hedefi, ölçülmedi. Servis Logs sekmesi
   (paylaşılan LogsHistogram/LogTable) pin testiyle çivilendi — Faz 1 paylaşılan parçalarda yapılır, Logs'a özel çatal yok.
+- **v0.10.1818 — sorgu hatası 400 + konum; unappliedFilters yanıtta (1.2).** ES sözdizimi reddi (`query_shard_exception` /
+  `parse_exception` …) `logstore.BadQueryError` (gerekçe cümlesi, ES yankısı, satır/sütun; `Error()` metni aynen) →
+  serveCached hata yolunda 400 `{error, pos, detail}`; `pos` = kullanıcı sorgusunda 0 tabanlı KARAKTER, yalnız ES'in yankısı
+  kullanıcının metniyle aynıysa (kısayol açılımı metni değiştirdiyse konum yok). Ham ES metni yalnız admin'e (`raw`). CH Go
+  reddi aynı gövdeye `pos` + `detail` ekler (`error` metni aynen). ES `limit > 1000` artık 1000 (eskiden 100; CH 1000).
+  `/api/logs` `hasTraceUnapplied` / `unappliedFilters`'ı yalnız set iken yazar. Servis Logs sekmesine hata dalı eklendi
+  (reddedilen arama "log yok" diye okunuyordu) — paylaşılan `lib/logQueryError.ts`.

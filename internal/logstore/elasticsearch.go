@@ -1369,10 +1369,7 @@ func (s *ESStore) Search(ctx context.Context, f Filter) (*Page, error) {
 		}
 		return page, err
 	}
-	limit := f.Limit
-	if limit <= 0 || limit > 1000 {
-		limit = 100
-	}
+	limit := esSearchLimit(f.Limit)
 	from := f.Offset
 	if from < 0 {
 		from = 0
@@ -3466,7 +3463,9 @@ func parseESError(op string, res *esapi.Response, configuredIndex string) error 
 			}
 			err := fmt.Errorf("ES %s %d: %s", op, res.StatusCode, msg)
 			if res.StatusCode == 400 && badQuery {
-				return fmt.Errorf("%w: %w", err, ErrBadQuery)
+				// v0.10.1818 — tipli + yapısal (gerekçe, yankı, satır/sütun);
+				// Error() metni öncekiyle aynı, errors.Is(ErrBadQuery) doğru.
+				return NewBadQueryError(fmt.Errorf("%w: %w", err, ErrBadQuery).Error(), body)
 			}
 			return err
 		}
@@ -3527,6 +3526,20 @@ func ensureConventionalFields(out []string, seen map[string]struct{}) []string {
 		out = append(out, f)
 	}
 	return out
+}
+
+// esSearchLimit — v0.10.1818 (audit yan bulgusu): sayfa boyu. Boş/negatif →
+// 100 (varsayılan); 1000'in üstü 1000'e KIRPILIR. Önceden >1000 da 100'e
+// düşüyordu: limit=2000 isteyen 100 satır alıyor, CH backend'i (logsMaxLimit)
+// ise 1000 döndürüyordu — iki backend aynı istekte farklı sayfa. Saf.
+func esSearchLimit(n int) int {
+	switch {
+	case n <= 0:
+		return 100
+	case n > 1000:
+		return 1000
+	}
+	return n
 }
 
 // esTrackTotalHits — v0.10.414 (log arama denetimi A7): çağıran Page.Total'ı

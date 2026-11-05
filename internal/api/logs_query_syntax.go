@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"net/http"
 	"strings"
 
@@ -41,8 +40,10 @@ func (s *Server) rejectLogQuerySyntax(w http.ResponseWriter, search string) bool
 	if !bad {
 		return false
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusBadRequest)
-	json.NewEncoder(w).Encode(map[string]string{"error": msg})
+	// v0.10.1818 — gövde {error, pos, detail} (logs_query_error.go); `error`
+	// metni öncekiyle aynı, pos = 0 tabanlı karakter.
+	b := parseErrorBody(chstore.LogQuerySyntaxError(search), search)
+	b.Error = msg
+	writeLogQueryErrorBody(w, b)
 	return true
 }

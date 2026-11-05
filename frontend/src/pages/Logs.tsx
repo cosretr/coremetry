@@ -52,6 +52,7 @@ import { useT } from '@/lib/i18n';
 import type { LogsResponse, LogRow, TimeRange } from '@/lib/types';
 import { PageShell } from '@/components/coremetry/PageShell';
 import { LogsQueryBar } from './logs/LogsQueryBar';
+import { parseLogQueryError, logQueryErrorMessage } from '@/lib/logQueryError';
 import { LogsFilterRow } from './logs/LogsFilterRow';
 import { LogsNotices } from './logs/LogsNotices';
 import { LogsAddFilterMenu, LogsShareMenu, LogsMoreMenu } from './logs/LogsActionsMenus';
@@ -941,6 +942,7 @@ function LogsInner() {
   // metni / KQL örneği / span filtresini kaldır bağlantısı / system stats
   // linki `detail` yuvasında. Yavaş backend bandı (rozet) tablonun üstünde
   // kalır; boş satırı artık hata türü (⚠ + Retry, "boş sonuç değil").
+  const queryErr = parseLogQueryError(staticQ.error); // v0.10.1818
   const logsState: Omit<DataTableStateProps<LogRow>, 'dt' | 'leading' | 'trailing'> =
     data === undefined ? { kind: 'loading', skeletonRows: 12 }
     // v0.9.215 — the error leg of the tri-state used to render NOTHING:
@@ -949,7 +951,9 @@ function LogsInner() {
     // The operator reads that as "no logs", not "your query didn't run".
     : data === null ? {
       kind: 'error',
-      message: 'Log sorgusu çalışmadı — log backend sorguyu reddetti ya da zamanında cevap vermedi.',
+      // v0.10.1818 — sözdizimi reddi artık 400 {error, pos, detail}: başlık
+      // operatör cümlesi, kutuda arka ucun gerekçe cümlesi (ham JSON değil).
+      message: logQueryErrorMessage(staticQ.error, 'Log sorgusu çalışmadı — log backend sorguyu reddetti ya da zamanında cevap vermedi.'),
       onRetry: () => void staticQ.refetch(),
       detail: (
         <div style={{ color: 'var(--text2)' }}>
@@ -960,7 +964,7 @@ function LogsInner() {
               borderRadius: 6, color: 'var(--err)', whiteSpace: 'pre-wrap',
               overflowWrap: 'anywhere',
             }}>
-              {staticQ.error.message}
+              {queryErr ? [queryErr.detail, queryErr.raw].filter(Boolean).join('\n') || queryErr.error : staticQ.error.message}
             </div>
           )}
           <div style={{ marginTop: 8 }}>

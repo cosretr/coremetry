@@ -3956,6 +3956,17 @@ export interface LogsResponse {
   unappliedFilters?: string[];
 }
 
+// v0.10.1818 (Log Search Faz 1 dilim 1.2) — log sorgusu sözdizimi reddinin
+// 400 gövdesi (internal/api/logs_query_error.go logQueryErrorBody). pos =
+// kullanıcının yazdığı sorguda 0 tabanlı KARAKTER indeksi; yalnız güvenilirken
+// gelir. detail = arka ucun gerekçe cümlesi; raw yalnız admin'e.
+export interface LogQueryError {
+  error: string;
+  pos?: number;
+  detail?: string;
+  raw?: string;
+}
+
 // v0.10.1477 — /api/logs/my-team (internal/api/logs_team.go logsMyTeamPayload).
 // team '' = kullanıcının takımı yok / kimliksiz; available = takım alanı
 // yapılandırılmış VE log backend'i Elasticsearch (otomatik varsayılan yalnız o

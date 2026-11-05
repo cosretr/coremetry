@@ -19,6 +19,7 @@ import { ServiceLogsTab } from './ServiceSignalTabs';
 const m = vi.hoisted(() => ({
   logsCalls: [] as Record<string, unknown>[],
   tsCalls: [] as Record<string, unknown>[],
+  logsReject: null as Error | null,
 }));
 
 vi.mock('@/lib/api', () => {
@@ -26,6 +27,7 @@ vi.mock('@/lib/api', () => {
   const stub: Record<string, (...a: unknown[]) => Promise<unknown>> = {
     logs: (p: unknown) => {
       m.logsCalls.push(p as Record<string, unknown>);
+      if (m.logsReject) return Promise.reject(m.logsReject);
       return Promise.resolve({
         total: 1,
         logs: [{
@@ -62,14 +64,41 @@ let root: Root | null = null;
 let host: HTMLDivElement | null = null;
 const settle = () => act(async () => { await new Promise(r => setTimeout(r, 30)); });
 
-beforeEach(() => { m.logsCalls = []; m.tsCalls = []; });
+beforeEach(() => { m.logsCalls = []; m.tsCalls = []; m.logsReject = null; });
 afterEach(() => {
   act(() => { root?.unmount(); });
   host?.remove();
   root = null; host = null;
 });
 
+async function mountTab() {
+  host = document.createElement('div');
+  document.body.appendChild(host);
+  root = createRoot(host);
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  await act(async () => {
+    root!.render(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter initialEntries={['/services/orders-api?tab=logs']}>
+          <ServiceLogsTab service="orders-api" range={{ preset: '1h' }}
+            windowNs={{ from: 1759494780000000000, to: 1759497240000000000 }} />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+  });
+  await settle();
+}
+
 describe('servis Logs sekmesi — paylaşılan log parçaları çivisi (v0.10.1817)', () => {
+  // v0.10.1818 — 400 {error, pos, detail}: sekme "log yok" demez, sunucunun
+  // konumlu cümlesini tablonun hata durumunda gösterir.
+  it('sorgu reddi (400) → konumlu cümle, "log yok" değil', async () => {
+    m.logsReject = new Error('HTTP 400: {"error":"Sorgu sözdizimi hatalı (17. karakter).","pos":16,"detail":"Cannot parse"}');
+    await mountTab();
+    expect(host!.textContent).toContain('Sorgu sözdizimi hatalı (17. karakter).');
+    expect(host!.textContent).not.toContain('için log yok');
+  });
+
   it('histogram + tablo çizilir; liste ve histogram service süzgecini taşır', async () => {
     host = document.createElement('div');
     document.body.appendChild(host);

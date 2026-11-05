@@ -223,6 +223,9 @@ func (s *Server) serveCached(w http.ResponseWriter, r *http.Request, key string,
 	body, tier, err := s.cachedJSON(r.Context(), key, ttl, r.URL.Query().Get("refresh") == "1", tagged)
 	if err != nil {
 		setServerTiming(w, r, start, "")
+		if writeBadQueryErr(w, r, err) { // v0.10.1818 — log sorgusu sözdizimi reddi 400 + konum
+			return
+		}
 		writeErr(w, err)
 		return
 	}

@@ -481,7 +481,7 @@ func (s *Server) serveLogsSearch(w http.ResponseWriter, r *http.Request, q url.V
 				}
 				log.Printf("[logs] search failed (backend=%s, service=%q, trace=%q): %v",
 					s.logs.Backend(), f.Service, f.TraceID, err)
-				return nil, err
+				return nil, logsQueryErr(err, f.Search) // v0.10.1818 — 400 + konum
 			}
 			out := logsSearchPayload(page)
 			if derived {
@@ -516,7 +516,7 @@ func (s *Server) serveLogsSearch(w http.ResponseWriter, r *http.Request, q url.V
 			// response.
 			log.Printf("[logs] search failed (backend=%s, service=%q, trace=%q): %v",
 				s.logs.Backend(), f.Service, f.TraceID, err)
-			return nil, err
+			return nil, logsQueryErr(err, f.Search) // v0.10.1818 — 400 + konum
 		}
 		return logsSearchPayload(page), nil
 	})
@@ -548,6 +548,17 @@ func logsSearchPayload(page *logstore.Page) map[string]interface{} {
 	}
 	if page.TotalIsLowerBound {
 		out["totalIsLowerBound"] = true
+	}
+	// v0.10.1818 (audit §2 yan bulgu) — backend'in "uygulayamadım"
+	// itirafları sayfaya taşınmıyordu: Page alanları vardı, LogsNotices
+	// okuyordu, ama tel şeklinde yoktu → "with trace" / "takım" uyarı
+	// rozetleri hiç görünmüyordu (sessiz süzgeçsiz sonuç). envUnapplied
+	// gibi yalnız set iken yazılır; tam cevap aynı baytlar kalır.
+	if page.HasTraceUnapplied {
+		out["hasTraceUnapplied"] = true
+	}
+	if len(page.UnappliedFilters) > 0 {
+		out["unappliedFilters"] = page.UnappliedFilters
 	}
 	return out
 }
@@ -1039,7 +1050,7 @@ func (s *Server) getLogsFieldStats(w http.ResponseWriter, r *http.Request) {
 					"reason":   "log backend slow/unreachable",
 				}, nil
 			}
-			return nil, err
+			return nil, logsQueryErr(err, f.Search) // v0.10.1818 — 400 + konum
 		}
 		return res, nil
 	})
@@ -1144,7 +1155,7 @@ func (s *Server) getLogsTimeseries(w http.ResponseWriter, r *http.Request) {
 					s.logs.Backend(), f.Service, err)
 				return []logstore.LogSeries{}, nil
 			}
-			return nil, err
+			return nil, logsQueryErr(err, f.Search) // v0.10.1818 — 400 + konum
 		}
 		return series, nil
 	})
