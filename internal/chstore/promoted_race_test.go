@@ -46,7 +46,7 @@ func TestPromotedColsSafeUnderConcurrentReprobe(t *testing.T) {
 				default:
 				}
 				_, _, _ = FilterExpr{Key: "channel_code", Op: "=", Values: []string{"030101"}}.SQL()
-				_, _ = traceExtrasProjection([]string{"channel_code"})
+				_, _ = traceExtrasProjection([]string{"channel_code"}, "")
 				_, _ = businessDimExpr("CHANNEL_CODE")
 			}
 		}()

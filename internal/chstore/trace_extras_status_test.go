@@ -15,8 +15,8 @@ import (
 
 func TestTraceExtrasStatusReadsOnlySpansWithStatus(t *testing.T) {
 	for _, key := range []string{"http.status_code", "http.response.status_code"} {
-		sel, args := traceExtrasProjection([]string{key})
-		want := ", anyIf(toString(http_status), http_status != 0) AS extra_0"
+		sel, args := traceExtrasProjection([]string{key}, "")
+		want := ", argMinIf(toString(http_status), " + traceExtrasNoSvcRank + ", http_status != 0) AS extra_0"
 		if sel != want {
 			t.Errorf("%s: got %q want %q", key, sel, want)
 		}
@@ -28,7 +28,7 @@ func TestTraceExtrasStatusReadsOnlySpansWithStatus(t *testing.T) {
 		}
 	}
 	// Other structured columns are untouched.
-	if sel, _ := traceExtrasProjection([]string{"http.method"}); sel != ", any(http_method) AS extra_0" {
+	if sel, _ := traceExtrasProjection([]string{"http.method"}, ""); sel != ", argMinIf(http_method, "+traceExtrasNoSvcRank+", http_method != '') AS extra_0" {
 		t.Errorf("http.method projection changed: %q", sel)
 	}
 }

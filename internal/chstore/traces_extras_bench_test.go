@@ -126,7 +126,7 @@ func TestBenchTracesExtras7d(t *testing.T) {
 		presentCols[c] = true
 	}
 	runExtras := func(label string) []string {
-		sql, projArgs := traceExtrasSQL(len(ids), benchDefaultAttrs)
+		sql, projArgs := traceExtrasSQL(len(ids), benchDefaultAttrs, "")
 		args := append([]any{}, projArgs...)
 		args = append(args, from, to.Add(5*time.Minute))
 		for _, id := range ids {

@@ -2525,7 +2525,7 @@ func (s *Store) GetTraces(ctx context.Context, f TraceFilter) (gtRows []TraceRow
 				// FAZ 2 — phase-2 failure is now a hard error: the raw path
 				// no longer inlines the projection, so falling through would
 				// only re-run the SAME bounded phase-2 query and fail again.
-				if ferr := s.fillTraceExtras(ctx, out, f.ExtraAttrs); ferr != nil {
+				if ferr := s.fillTraceExtras(ctx, out, f.ExtraAttrs, traceExtrasService(f)); ferr != nil {
 					return nil, 0, false, fmt.Errorf("trace extras: %w", ferr)
 				}
 			}
@@ -3109,7 +3109,7 @@ func (s *Store) GetTraces(ctx context.Context, f TraceFilter) (gtRows []TraceRow
 	// within the export's list window, so the phase-2 scan is window-bounded
 	// (audit §8) while pruning as tightly as the rows allow.
 	if len(f.ExtraAttrs) > 0 {
-		if err := s.fillTraceExtras(ctx, out, f.ExtraAttrs); err != nil {
+		if err := s.fillTraceExtras(ctx, out, f.ExtraAttrs, traceExtrasService(f)); err != nil {
 			return nil, 0, false, fmt.Errorf("trace extras: %w", err)
 		}
 	}
@@ -3470,13 +3470,18 @@ func registerTraceAttrMaterialized(cols map[string]string) {
 }
 
 // traceExtrasProjection builds the extras SELECT fragment for the requested
-// attribute keys plus its bind args. Resolution order per key:
-//  1. traceAttrMaterialized — promoted native column (cheapest; anyIf skips
-//     empty values so the "first non-empty across the trace's spans"
-//     semantics match the array path exactly),
+// attribute keys plus its bind args. Column resolution order per key:
+//  1. traceAttrMaterialized — promoted native column (cheapest),
 //  2. WellKnownTraceCol — semconv key with a dedicated structured column,
 //  3. attr_values[indexOf(attr_keys, ?)] with res_values fallback — the
 //     generic (4-fat-array-column) path.
+//
+// v0.10.1805 (operator-reported) — WHICH span's value is shown is
+// deterministic: argMinIf(value, traceExtrasRankKey, value-present). The
+// root span wins, then the filtered service's entry span (server/consumer;
+// rank omitted when service == ""), then the earliest span with a value.
+// any()/anyIf() picked an arbitrary span, so the same trace showed a
+// different value on every load.
 //
 // Keys flow as `?` parameters; HTTP-layer sanitisation (isSafeAttrKey)
 // already rejected anything outside [a-zA-Z0-9._-]. Pure — table-tested.
@@ -3489,18 +3494,44 @@ var clusterAliasKeys = map[string]bool{
 	"resource.cluster": true, "resource.k8s.cluster.name": true, "resource.openshift.cluster.name": true,
 }
 
-// traceExtrasStatusAny — status column read from spans that carry one
-// (v0.10.1519; see traceExtrasProjection).
-const traceExtrasStatusAny = "anyIf(toString(http_status), http_status != 0)"
+// traceExtrasStatusValue — status value, read only from spans that carry one
+// (v0.10.1519 predicate traceExtrasStatusHas; see traceExtrasProjection).
+const traceExtrasStatusValue = "toString(http_status)"
 
-var traceExtraStatusExpr = map[string]string{
-	"http.status_code":          traceExtrasStatusAny,
-	"http.response.status_code": traceExtrasStatusAny,
+// traceExtrasStatusHas — the value-present predicate of the status keys.
+const traceExtrasStatusHas = "http_status != 0"
+
+// traceExtrasService — the service whose entry span is extras rank 1:
+// the single Service filter, unless RequireServices took precedence (then
+// Service is dropped by GetTraces' contract, so it must not rank either).
+// Pure — table-tested.
+func traceExtrasService(f TraceFilter) string {
+	if len(f.RequireServices) > 0 {
+		return ""
+	}
+	return f.Service
 }
 
-func traceExtrasProjection(attrs []string) (string, []any) {
+// traceExtrasRankKey is the argMinIf ordering key of the phase-2 projection
+// (v0.10.1805): (rank, time) — rank 0 root span, 1 entry span of the
+// filtered service (only when service != ""), 2 everything else; ties
+// broken by the earliest start. Returns the bind args it consumes.
+func traceExtrasRankKey(service string) (string, []any) {
+	if service == "" {
+		return "(multiIf(" + rootSpanPredicate + ", 0, 2), time)", nil
+	}
+	return "(multiIf(" + rootSpanPredicate + ", 0, kind IN ('server', 'consumer') AND service_name = ?, 1, 2), time)", []any{service}
+}
+
+var traceExtraStatusExpr = map[string]string{
+	"http.status_code":          traceExtrasStatusValue,
+	"http.response.status_code": traceExtrasStatusValue,
+}
+
+func traceExtrasProjection(attrs []string, service string) (string, []any) {
 	sel := ""
 	args := []any{}
+	rank, rankArgs := traceExtrasRankKey(service)
 	for i, key := range attrs {
 		// v0.10.143 — `cluster` kolon anahtarı spans'in terfi `cluster`
 		// kolonuna (k8s.cluster.name / openshift.cluster.name / cluster
@@ -3513,11 +3544,13 @@ func traceExtrasProjection(attrs []string) (string, []any) {
 		// query_log medyanı). Aynı kolon, aynı değer: clusterDeriveExpr'in
 		// kendisi bu anahtarları coalesce ediyor (k8s.cluster.name önce).
 		if clusterAliasKeys[key] {
-			sel += fmt.Sprintf(", anyIf(cluster, cluster != '') AS extra_%d", i)
+			sel += fmt.Sprintf(", argMinIf(cluster, %s, cluster != '') AS extra_%d", rank, i)
+			args = append(args, rankArgs...)
 			continue
 		}
 		if col, ok := promotedCols()[key]; ok {
-			sel += fmt.Sprintf(", anyIf(%s, %s != '') AS extra_%d", col, col, i)
+			sel += fmt.Sprintf(", argMinIf(%s, %s, %s != '') AS extra_%d", col, rank, col, i)
+			args = append(args, rankArgs...)
 			continue
 		}
 		// v0.10.1519 (operator-reported): http_status is UInt16 DEFAULT 0, so
@@ -3528,19 +3561,26 @@ func traceExtrasProjection(attrs []string) (string, []any) {
 		// none → '' (UI: "—", "yanıt yok / HTTP dışı span"). Filters keep the
 		// raw column, so `http.status_code = 0` still means what it did.
 		if expr, ok := traceExtraStatusExpr[key]; ok {
-			sel += fmt.Sprintf(", %s AS extra_%d", expr, i)
+			sel += fmt.Sprintf(", argMinIf(%s, %s, %s) AS extra_%d", expr, rank, traceExtrasStatusHas, i)
+			args = append(args, rankArgs...)
 			continue
 		}
 		if col, ok := WellKnownTraceCol[key]; ok {
-			sel += fmt.Sprintf(", any(%s) AS extra_%d", col, i)
+			sel += fmt.Sprintf(", argMinIf(%s, %s, %s != '') AS extra_%d", col, rank, col, i)
+			args = append(args, rankArgs...)
 			continue
 		}
+		// Value is non-Nullable (last coalesce arm is a plain String) so
+		// argMinIf never meets NULL; the predicate admits only spans whose
+		// value is non-empty — same "first non-empty" set the old anyIf saw.
 		sel += fmt.Sprintf(
-			", anyIf(coalesce("+
-				"nullIf(attr_values[indexOf(attr_keys, ?)], ''),"+
-				"nullIf(res_values[indexOf(res_keys, ?)], '')"+
-				"), has(attr_keys, ?) OR has(res_keys, ?)) AS extra_%d", i)
-		args = append(args, key, key, key, key)
+			", argMinIf(coalesce("+
+				"nullIf(attr_values[indexOf(attr_keys, ?)], ''), "+
+				"res_values[indexOf(res_keys, ?)]), %s, "+
+				"(attr_values[indexOf(attr_keys, ?)] != '' OR res_values[indexOf(res_keys, ?)] != '')) AS extra_%d", rank, i)
+		args = append(args, key, key)
+		args = append(args, rankArgs...)
+		args = append(args, key, key)
 	}
 	return sel, args
 }
@@ -3556,8 +3596,8 @@ func traceExtrasProjection(attrs []string) (string, []any) {
 //
 // Placeholder order: projection args (SELECT) → from, to → ids.
 // Pure — table-tested.
-func traceExtrasSQL(nIDs int, attrs []string) (string, []any) {
-	sel, projArgs := traceExtrasProjection(attrs)
+func traceExtrasSQL(nIDs int, attrs []string, service string) (string, []any) {
+	sel, projArgs := traceExtrasProjection(attrs, service)
 	holders := strings.TrimSuffix(strings.Repeat("?,", nIDs), ",")
 	sql := "SELECT trace_id" + sel +
 		" FROM spans WHERE time >= ? AND time <= ? AND trace_id IN (" + holders + ")" +
@@ -3615,7 +3655,7 @@ const traceExtrasChunkIDs = 5000
 // paths reach it through fillTraceExtras (bounds derived from the page
 // rows), and the /api/traces?traceIds= enrichment path calls it directly
 // (bounds supplied by the client from the visible rows).
-func (s *Store) TraceExtras(ctx context.Context, ids, attrs []string, from, to time.Time) (map[string]map[string]string, error) {
+func (s *Store) TraceExtras(ctx context.Context, ids, attrs []string, service string, from, to time.Time) (map[string]map[string]string, error) {
 	out := make(map[string]map[string]string, len(ids))
 	if len(ids) == 0 || len(attrs) == 0 {
 		return out, nil
@@ -3626,7 +3666,7 @@ func (s *Store) TraceExtras(ctx context.Context, ids, attrs []string, from, to t
 		if end > len(ids) {
 			end = len(ids)
 		}
-		if err := s.traceExtrasChunk(ctx, ids[start:end], attrs, from, to, out); err != nil {
+		if err := s.traceExtrasChunk(ctx, ids[start:end], attrs, service, from, to, out); err != nil {
 			return nil, err
 		}
 	}
@@ -3635,8 +3675,8 @@ func (s *Store) TraceExtras(ctx context.Context, ids, attrs []string, from, to t
 
 // traceExtrasChunk runs one bounded phase-2 query for ≤ traceExtrasChunkIDs
 // ids and merges the rows into out.
-func (s *Store) traceExtrasChunk(ctx context.Context, ids, attrs []string, from, to time.Time, out map[string]map[string]string) error {
-	sql, projArgs := traceExtrasSQL(len(ids), attrs)
+func (s *Store) traceExtrasChunk(ctx context.Context, ids, attrs []string, service string, from, to time.Time, out map[string]map[string]string) error {
+	sql, projArgs := traceExtrasSQL(len(ids), attrs, service)
 	args := append([]any{}, projArgs...)
 	args = append(args, from, to)
 	for _, id := range ids {
@@ -3673,7 +3713,7 @@ func (s *Store) traceExtrasChunk(ctx context.Context, ids, attrs []string, from,
 // REAL min/max timestamps (traceExtrasBounds), so even a 30-day list window
 // scans only the partitions the page actually touches; the id IN-list rides
 // the idx_trace bloom skip index within them. (v0.8.77, rebounded FAZ 2.)
-func (s *Store) fillTraceExtras(ctx context.Context, rows []TraceRow, attrs []string) error {
+func (s *Store) fillTraceExtras(ctx context.Context, rows []TraceRow, attrs []string, service string) error {
 	if len(rows) == 0 || len(attrs) == 0 {
 		return nil
 	}
@@ -3682,7 +3722,7 @@ func (s *Store) fillTraceExtras(ctx context.Context, rows []TraceRow, attrs []st
 		ids[i] = r.TraceID
 	}
 	from, to := traceExtrasBounds(rows)
-	byID, err := s.TraceExtras(ctx, ids, attrs, from, to)
+	byID, err := s.TraceExtras(ctx, ids, attrs, service, from, to)
 	if err != nil {
 		return err
 	}

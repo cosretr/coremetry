@@ -42,7 +42,7 @@ func TestBuildGetTracesListSQL_NoInlineExtras(t *testing.T) {
 // (2) The phase-2 extras query must carry a time-bounded WHERE + LIMIT
 // (the pre-FAZ-2 shape had neither — the CLAUDE.md spans-rule violation).
 func TestTraceExtrasSQL_TimeBoundAndLimit(t *testing.T) {
-	sql, projArgs := traceExtrasSQL(3, []string{"CHANNEL_CODE", "FUNCTION_CODE"})
+	sql, projArgs := traceExtrasSQL(3, []string{"CHANNEL_CODE", "FUNCTION_CODE"}, "")
 
 	if !strings.Contains(sql, "time >= ? AND time <= ?") {
 		t.Fatalf("FAZ 2 regression: phase-2 lost its time bound; got:\n%s", sql)
@@ -67,7 +67,7 @@ func TestTraceExtrasSQL_TimeBoundAndLimit(t *testing.T) {
 // structured column via WellKnownTraceCol, array access otherwise.
 func TestTraceExtrasProjection_MaterializedVsArray(t *testing.T) {
 	// Empty map (the shipped state) → custom key uses the array path.
-	sel, args := traceExtrasProjection([]string{"CHANNEL_CODE"})
+	sel, args := traceExtrasProjection([]string{"CHANNEL_CODE"}, "")
 	if !strings.Contains(sel, "attr_values[indexOf(attr_keys, ?)]") {
 		t.Fatalf("custom key without a materialized column should use the array path; got:\n%s", sel)
 	}
@@ -76,8 +76,8 @@ func TestTraceExtrasProjection_MaterializedVsArray(t *testing.T) {
 	}
 
 	// Well-known semconv key → its dedicated structured column, no arrays.
-	sel, args = traceExtrasProjection([]string{"http.method"})
-	if !strings.Contains(sel, "any(http_method)") || strings.Contains(sel, "attr_values") {
+	sel, args = traceExtrasProjection([]string{"http.method"}, "")
+	if !strings.Contains(sel, "argMinIf(http_method, ") || strings.Contains(sel, "attr_values") {
 		t.Fatalf("semconv key should read the structured column only; got:\n%s", sel)
 	}
 	if len(args) != 0 {
@@ -87,8 +87,8 @@ func TestTraceExtrasProjection_MaterializedVsArray(t *testing.T) {
 	// Materialized map populated (FAZ 2C applied) → native column wins,
 	// no array access, no binds. Restore the package map afterwards.
 	withPromoted(t, "CHANNEL_CODE", "attr_channel_code")
-	sel, args = traceExtrasProjection([]string{"CHANNEL_CODE", "FUNCTION_CODE"})
-	if !strings.Contains(sel, "anyIf(attr_channel_code, attr_channel_code != '') AS extra_0") {
+	sel, args = traceExtrasProjection([]string{"CHANNEL_CODE", "FUNCTION_CODE"}, "")
+	if !strings.Contains(sel, "argMinIf(attr_channel_code, "+traceExtrasNoSvcRank+", attr_channel_code != '') AS extra_0") {
 		t.Fatalf("materialized key should read its native column; got:\n%s", sel)
 	}
 	if strings.Contains(sel, "indexOf(attr_keys, ?)], ''),nullIf(res_values") &&
@@ -150,8 +150,8 @@ func TestTraceExtrasBounds_AndSlack(t *testing.T) {
 // anahtar eklenip burası unutulursa o yazım sessizce şişman yola düşer.
 func TestTraceExtrasProjection_ClusterAliasesReadTheColumn(t *testing.T) {
 	for _, key := range []string{"cluster", "k8s.cluster.name", "openshift.cluster.name", "resource.k8s.cluster.name", "resource.openshift.cluster.name"} {
-		sel, args := traceExtrasProjection([]string{key})
-		if !strings.Contains(sel, "anyIf(cluster, cluster != '') AS extra_0") || strings.Contains(sel, "attr_values") {
+		sel, args := traceExtrasProjection([]string{key}, "")
+		if !strings.Contains(sel, "argMinIf(cluster, "+traceExtrasNoSvcRank+", cluster != '') AS extra_0") || strings.Contains(sel, "attr_values") {
 			t.Fatalf("%s must read the promoted cluster column; got:\n%s", key, sel)
 		}
 		if len(args) != 0 {
@@ -167,7 +167,7 @@ func TestTraceExtrasProjection_ClusterAliasesReadTheColumn(t *testing.T) {
 		}
 	}
 	// Kolon adına benzeyen ama zincirde OLMAYAN anahtar dizi yolunda kalır.
-	sel, _ := traceExtrasProjection([]string{"cluster_name"})
+	sel, _ := traceExtrasProjection([]string{"cluster_name"}, "")
 	if !strings.Contains(sel, "attr_values") {
 		t.Fatalf("unrelated key must stay on the array path; got:\n%s", sel)
 	}

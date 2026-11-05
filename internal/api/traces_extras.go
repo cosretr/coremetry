@@ -12,7 +12,7 @@
 //
 // Contract:
 //
-//	GET /api/traces?traceIds=<id,id,…>&extraAttrs=<k,k…>&from=<ns>&to=<ns>
+//	GET /api/traces?traceIds=<id,id,…>&extraAttrs=<k,k…>&from=<ns>&to=<ns>[&service=<name>]
 //	→ 200 {"extras": {"<traceId>": {"<key>": "<value>", …}, …}}
 //
 // When traceIds is present, phase-1 (the list query) is SKIPPED entirely:
@@ -22,6 +22,10 @@
 // store pads `to` by the +5m slack. Without traceIds the request falls
 // through to the normal getTraces flow, so the existing API contract
 // (optional extraAttrs, extras inside each TraceRow) is unchanged.
+//
+// v0.10.1805 — optional `service`: the list's service filter; its entry
+// span (server/consumer) is rank 1 of the deterministic value pick (root >
+// service entry > earliest). Absent → rank 1 is skipped.
 package api
 
 import (
@@ -85,8 +89,9 @@ func isTraceIDHex(s string) bool {
 // and attr set fold in via a SORTED + FNV-64a digest with NUL separators
 // (the v0.5.187 rule — never a length-only digest: two different id sets of
 // equal size must never collide), plus the raw from/to strings so a window
-// shift misses. Every input the handler reads is in the key.
-func tracesExtrasKey(ids, attrs []string, from, to string) string {
+// shift misses, plus service (v0.10.1805 — it changes which span's value
+// wins). Every input the handler reads is in the key.
+func tracesExtrasKey(ids, attrs []string, from, to, service string) string {
 	h := fnv.New64a()
 	sortedIDs := append([]string(nil), ids...)
 	sort.Strings(sortedIDs)
@@ -101,6 +106,8 @@ func tracesExtrasKey(ids, attrs []string, from, to string) string {
 		h.Write([]byte(a))
 		h.Write([]byte{0})
 	}
+	h.Write([]byte{1})
+	h.Write([]byte(service))
 	return fmt.Sprintf("traces-extras:%x:%s:%s", h.Sum64(), from, to)
 }
 
@@ -149,9 +156,10 @@ func (s *Server) serveTracesExtras(w http.ResponseWriter, r *http.Request) bool 
 	}
 	// Short TTL matching the trace-list cache: concurrent operators (or a
 	// re-render) asking for the same page+columns coalesce via singleflight.
-	key := tracesExtrasKey(ids, attrs, q.Get("from"), q.Get("to"))
+	service := strings.TrimSpace(q.Get("service"))
+	key := tracesExtrasKey(ids, attrs, q.Get("from"), q.Get("to"), service)
 	s.serveCached(w, r, key, 20*time.Second, func(ctx context.Context) (any, error) {
-		extras, err := s.store.TraceExtras(ctx, ids, attrs, from, to)
+		extras, err := s.store.TraceExtras(ctx, ids, attrs, service, from, to)
 		if err != nil {
 			return nil, err
 		}

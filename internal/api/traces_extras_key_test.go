@@ -16,22 +16,26 @@ func TestTracesExtrasKey_HashesAllInputs(t *testing.T) {
 	idsB := []string{"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "cccccccccccccccccccccccccccccccc"}
 	attrs := []string{"CHANNEL_CODE", "FUNCTION_CODE"}
 
-	base := tracesExtrasKey(idsA, attrs, "1", "2")
+	base := tracesExtrasKey(idsA, attrs, "1", "2", "")
 
 	// v0.5.187 class: same length, different membership → MUST differ.
-	if got := tracesExtrasKey(idsB, attrs, "1", "2"); got == base {
+	if got := tracesExtrasKey(idsB, attrs, "1", "2", ""); got == base {
 		t.Fatalf("length-only collision: %q == %q for different id sets", got, base)
 	}
 	// Order-insensitive: the digest sorts, so a reshuffled set is a HIT.
-	if got := tracesExtrasKey([]string{idsA[1], idsA[0]}, attrs, "1", "2"); got != base {
+	if got := tracesExtrasKey([]string{idsA[1], idsA[0]}, attrs, "1", "2", ""); got != base {
 		t.Fatalf("id order changed the key: %q != %q", got, base)
 	}
 	// Attr set and window both ride the key.
-	if got := tracesExtrasKey(idsA, []string{"CHANNEL_CODE"}, "1", "2"); got == base {
+	if got := tracesExtrasKey(idsA, []string{"CHANNEL_CODE"}, "1", "2", ""); got == base {
 		t.Fatalf("attr set not in key")
 	}
-	if got := tracesExtrasKey(idsA, attrs, "1", "3"); got == base {
+	if got := tracesExtrasKey(idsA, attrs, "1", "3", ""); got == base {
 		t.Fatalf("time window not in key")
+	}
+	// v0.10.1805 — service changes which span's value wins (rank 1).
+	if got := tracesExtrasKey(idsA, attrs, "1", "2", "orders-api"); got == base {
+		t.Fatalf("service not in key")
 	}
 }
 

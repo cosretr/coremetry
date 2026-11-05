@@ -11,8 +11,8 @@ import (
 // openshift.cluster.name kurulumlarında boş dönerdi (inceleme). Bind arg
 // üretmez (kolon adı sabit).
 func TestTraceExtrasProjectionClusterColumn(t *testing.T) {
-	sel, args := traceExtrasProjection([]string{"cluster", "user.id"})
-	if !strings.Contains(sel, "anyIf(cluster, cluster != '') AS extra_0") {
+	sel, args := traceExtrasProjection([]string{"cluster", "user.id"}, "")
+	if !strings.Contains(sel, "argMinIf(cluster, "+traceExtrasNoSvcRank+", cluster != '') AS extra_0") {
 		t.Fatalf("cluster terfi kolonundan okunmalı: %s", sel)
 	}
 	if strings.Contains(sel, "indexOf(attr_keys, ?)], ''),nullIf(res_values[indexOf(res_keys, ?)], '')), has(attr_keys, ?) OR has(res_keys, ?)) AS extra_0") {

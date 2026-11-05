@@ -101,7 +101,7 @@ func TestRowRepairWiring(t *testing.T) {
 		t.Fatal(err)
 	}
 	src := string(repo)
-	i, j := strings.Index(src, "s.repairSpanScopedRows(ctx, out, f)"), strings.Index(src, "if err := s.fillTraceExtras(ctx, out, f.ExtraAttrs)")
+	i, j := strings.Index(src, "s.repairSpanScopedRows(ctx, out, f)"), strings.Index(src, "if err := s.fillTraceExtras(ctx, out, f.ExtraAttrs, ")
 	if i < 0 || j < 0 || i > j {
 		t.Fatalf("onarım GetTraces'te extras'tan önce çağrılmalı (i=%d j=%d)", i, j)
 	}

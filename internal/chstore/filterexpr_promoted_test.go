@@ -125,7 +125,7 @@ func TestPromotedTakesPrecedenceOverWellKnown(t *testing.T) {
 	}
 
 	// Aynı öncelik gösterim yolunda da geçerli mi (iki yer, tek kural)?
-	proj, _ := traceExtrasProjection([]string{"http.method"})
+	proj, _ := traceExtrasProjection([]string{"http.method"}, "")
 	if !strings.Contains(proj, "attr_promoted_probe") {
 		t.Fatalf("gösterim yolu farklı sıra kullanıyor — iki yer iki kural: %s", proj)
 	}
