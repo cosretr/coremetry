@@ -22,7 +22,7 @@ var traceExtrasNoSvcRank = "(multiIf(" + rootSpanPredicate + ", 0, 2), time)"
 
 func TestTraceExtrasProjection_DeterministicPriority(t *testing.T) {
 	rankNoSvc := traceExtrasNoSvcRank
-	rankSvc := "(multiIf(" + rootSpanPredicate + ", 0, kind IN ('server', 'consumer') AND service_name = ?, 1, 2), time)"
+	rankSvc := "(multiIf(service_name = ? AND kind IN ('server', 'consumer'), 0, service_name = ?, 1, " + rootSpanPredicate + ", 2, 3), time)"
 	arrVal := "coalesce(nullIf(attr_values[indexOf(attr_keys, ?)], ''), res_values[indexOf(res_keys, ?)])"
 	arrHas := "(attr_values[indexOf(attr_keys, ?)] != '' OR res_values[indexOf(res_keys, ?)] != '')"
 
@@ -36,17 +36,17 @@ func TestTraceExtrasProjection_DeterministicPriority(t *testing.T) {
 		{"well-known, no service", "http.route", "",
 			", argMinIf(http_route, " + rankNoSvc + ", http_route != '') AS extra_0", nil},
 		{"well-known, service", "deployment.environment", "orders-api",
-			", argMinIf(deploy_env, " + rankSvc + ", deploy_env != '') AS extra_0", []any{"orders-api"}},
+			", argMinIf(deploy_env, " + rankSvc + ", deploy_env != '') AS extra_0", []any{"orders-api", "orders-api"}},
 		{"cluster alias, no service", "k8s.cluster.name", "",
 			", argMinIf(cluster, " + rankNoSvc + ", cluster != '') AS extra_0", nil},
 		{"status, service", "http.status_code", "acme-gateway",
-			", argMinIf(toString(http_status), " + rankSvc + ", http_status != 0) AS extra_0", []any{"acme-gateway"}},
+			", argMinIf(toString(http_status), " + rankSvc + ", http_status != 0) AS extra_0", []any{"acme-gateway", "acme-gateway"}},
 		{"array key, no service", "order.id", "",
 			", argMinIf(" + arrVal + ", " + rankNoSvc + ", " + arrHas + ") AS extra_0",
 			[]any{"order.id", "order.id", "order.id", "order.id"}},
 		{"array key, service", "order.id", "orders-api",
 			", argMinIf(" + arrVal + ", " + rankSvc + ", " + arrHas + ") AS extra_0",
-			[]any{"order.id", "order.id", "orders-api", "order.id", "order.id"}},
+			[]any{"order.id", "order.id", "orders-api", "orders-api", "order.id", "order.id"}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -80,7 +80,7 @@ func TestTraceExtrasSQL_PriorityKeepsBounds(t *testing.T) {
 	withPromoted(t, "order.channel", "attr_order_channel")
 	sql, args := traceExtrasSQL(2, []string{"order.channel", "http.route"}, "orders-api")
 	for _, want := range []string{
-		"argMinIf(attr_order_channel, (multiIf(" + rootSpanPredicate + ", 0, kind IN ('server', 'consumer') AND service_name = ?, 1, 2), time), attr_order_channel != '') AS extra_0",
+		"argMinIf(attr_order_channel, (multiIf(service_name = ? AND kind IN ('server', 'consumer'), 0, service_name = ?, 1, " + rootSpanPredicate + ", 2, 3), time), attr_order_channel != '') AS extra_0",
 		"argMinIf(http_route, ",
 		"time >= ? AND time <= ? AND trace_id IN (?,?)",
 		"GROUP BY trace_id",
@@ -91,8 +91,8 @@ func TestTraceExtrasSQL_PriorityKeepsBounds(t *testing.T) {
 			t.Fatalf("missing %q in:\n%s", want, sql)
 		}
 	}
-	if len(args) != 2 || args[0] != "orders-api" || args[1] != "orders-api" {
-		t.Fatalf("one service bind per key expected, got %v", args)
+	if len(args) != 4 || args[0] != "orders-api" || args[3] != "orders-api" {
+		t.Fatalf("two service binds per key expected, got %v", args)
 	}
 }
 

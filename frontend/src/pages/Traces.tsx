@@ -681,6 +681,10 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
       // rounded `from` could land a hair above the true earliest span.
       from: Math.floor(from - 1e6),
       to: Math.ceil(to),
+      // v0.10.1806 — the list's service filter: the server ranks that
+      // service's entry span right after the root (v0.10.1805 rule
+      // root > service entry > earliest); without it rank 2 never applies.
+      service: filter.service || undefined,
     }).then(res => {
       if (cancelled) return;
       setData(d => d ? { ...d, traces: mergeTraceExtras(d.traces, missing, res.extras ?? {}, requestedIds) } : d);
@@ -688,7 +692,7 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
       // Non-fatal: cells keep their "—" placeholder; the next list load retries.
     });
     return () => { cancelled = true; };
-  }, [view, data, extraCols]);
+  }, [view, data, extraCols, filter.service]);
 
 
   // v0.8.72 — TRUE span volume over the selected window (not the 50-row table

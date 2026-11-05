@@ -3477,9 +3477,10 @@ func registerTraceAttrMaterialized(cols map[string]string) {
 //     generic (4-fat-array-column) path.
 //
 // v0.10.1805 (operator-reported) — WHICH span's value is shown is
-// deterministic: argMinIf(value, traceExtrasRankKey, value-present). The
-// root span wins, then the filtered service's entry span (server/consumer;
-// rank omitted when service == ""), then the earliest span with a value.
+// deterministic: argMinIf(value, traceExtrasRankKey, value-present). With a
+// service filter the filtered service's own span wins (entry kind first,
+// v0.10.1806), then the root span, then the earliest span with a value;
+// without a filter: root, then earliest.
 // any()/anyIf() picked an arbitrary span, so the same trace showed a
 // different value on every load.
 //
@@ -3513,14 +3514,16 @@ func traceExtrasService(f TraceFilter) string {
 }
 
 // traceExtrasRankKey is the argMinIf ordering key of the phase-2 projection
-// (v0.10.1805): (rank, time) — rank 0 root span, 1 entry span of the
-// filtered service (only when service != ""), 2 everything else; ties
-// broken by the earliest start. Returns the bind args it consumes.
+// (v0.10.1805, order revised v0.10.1806 — operator: "the filtered service's
+// own route, not the gateway's"): (rank, time). With a service filter:
+// 0 the service's entry span (server/consumer), 1 any span of the service,
+// 2 the root span, 3 everything else. Without one: 0 root, 2 the rest.
+// Ties broken by the earliest start. Returns the bind args it consumes.
 func traceExtrasRankKey(service string) (string, []any) {
 	if service == "" {
 		return "(multiIf(" + rootSpanPredicate + ", 0, 2), time)", nil
 	}
-	return "(multiIf(" + rootSpanPredicate + ", 0, kind IN ('server', 'consumer') AND service_name = ?, 1, 2), time)", []any{service}
+	return "(multiIf(service_name = ? AND kind IN ('server', 'consumer'), 0, service_name = ?, 1, " + rootSpanPredicate + ", 2, 3), time)", []any{service, service}
 }
 
 var traceExtraStatusExpr = map[string]string{

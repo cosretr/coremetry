@@ -12186,4 +12186,5 @@ satırı, açık satırın vurgusu + satır tıkıyla aç/kapa, satır içi form
 
 ## 2026-11-05 — v0.10.1805 — Traces ek kolon değeri: kök > servis giriş span'i > en erken
 - /traces ek kolonları (`traceExtrasProjection`) her anahtar için `argMinIf(değer, (rank, time), değer-dolu)`: rank 0 kök span, 1 süzgeçteki servisin giriş span'i (server/consumer; servis süzgeci yoksa rank yok), 2 diğerleri; eşitlikte en erken başlayan. any()/anyIf() keyfi span seçiyordu → aynı trace her yüklemede farklı değer.
-- Servis kaynağı `TraceFilter.Service` (RequireServices varsa boş); `?traceIds=` zenginleştirme yolu isteğe bağlı `service` parametresi alır (cache anahtarında). FE bugün göndermiyor → sayfada rank 1 yok, kök + en erken kuralı geçerli.
+- Servis kaynağı `TraceFilter.Service` (RequireServices varsa boş); `?traceIds=` zenginleştirme yolu isteğe bağlı `service` parametresi alır (cache anahtarında).
+- **v0.10.1806 sıra değişti (operatör):** servis süzgeci varken önce **o servisin** span'i (giriş kind'ı önce, sonra servisin herhangi span'i), sonra kök, sonra en erken — gateway'in değil bakılan servisin rotası. FE `tracesExtras` isteği `service` gönderir (Traces.tsx). Süzgeçsiz: kök > en erken.

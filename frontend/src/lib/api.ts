@@ -776,7 +776,7 @@ export const api = {
   // endpoint; the traceIds param makes the server skip phase-1 entirely and
   // switch the response shape to { extras }. Deliberately a separate method
   // (not a TracesParams field) so the response type stays honest.
-  tracesExtras: (p: { traceIds: string; extraAttrs: string; from: number; to: number }) =>
+  tracesExtras: (p: { traceIds: string; extraAttrs: string; from: number; to: number; service?: string }) =>
     get<TracesExtrasResponse>(`/api/traces?${qs(p)}`),
   // v0.10.1511 — /traces header column filter: top values of one list column in
   // the current window + filters, server-side `q` search (trace_column_values.go).
