@@ -66,6 +66,12 @@ edit → scripts/gate.sh all   (fe: tsc → eslint → vitest → bundle:check;
 - `/frontend-design-system` (any UI part: component/table/filter/drawer/theme/polling — find the existing primitive first; `ui/` barrel is incomplete) · `/frontend-dashboard-panel` (new panel type).
 - `/perf-triage` (ONE slow surface → measured root cause) · `/scale-audit` (quarterly whole-repo sweep).
 
+## Model kademeleri
+- **Sonnet 5.5 (basit):** dosya okuma/keşif, grep, test çalıştırma ve özetleme, mekanik düzenleme, migration-log girişi, küçük bug fix. → `repo-explorer` ve `implementer` ajanları.
+- **Opus 5.5 (orta, varsayılan ana oturum):** onaylı audit'e göre dilim uygulama, çok dosyalı değişiklik, test yazma, refactor.
+- **Fable 5.1 (ileri):** Faz 0 audit'leri, mimari kararlar, ClickHouse şema/rollup tasarımı, Davis parity / ML algoritmaları, CoSRE investigation loop tasarımı, zor performans sorunları. → `architect` ajanı.
+- Ana oturum işi kademesine göre ajana devreder; Fable'a yalnız iş gerçekten "ileri" kademedeyse gidilir.
+
 ## Pitfall rules — full stories in [docs/INCIDENTS.md](docs/INCIDENTS.md)
 CH (value+unit/toDate, combined-MV drop, TDigest state, unqualified tables, toDateTime64 args) → `/clickhouse-schema` · ES + Drain → `/aiops` · table-layout clip → `/frontend-design-system` · `maxUnavailable: 0` → `/helm-chart-coremetry`.
 
