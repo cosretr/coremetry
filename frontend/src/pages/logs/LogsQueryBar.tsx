@@ -41,6 +41,8 @@ export interface LogsQueryBarProps {
   addFilter: ReactNode;
   /** Saved ▾ · Share ▾ · ⋯ — Live'ın sağında. */
   menus: ReactNode;
+  /** v0.10.1820 — yerel sorgu geçmişi (en yeni önde). */
+  history?: string[];
 }
 
 export function LogsQueryBar(p: LogsQueryBarProps) {
@@ -94,6 +96,7 @@ export function LogsQueryBar(p: LogsQueryBarProps) {
         // on the surface on phones (PageControls lead mark).
         shortcutSearch
         data-pc-lead
+        history={p.history}
         value={draft.search}
         onChange={v => p.onDraft({ ...draft, search: v })}
         onSubmit={p.onApply}

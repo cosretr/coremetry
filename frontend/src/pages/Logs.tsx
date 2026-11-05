@@ -49,10 +49,11 @@ import { logsUrlSig, writeLogsParams, readLogsUrlState, buildDocPermalink, parse
 import { decideTeamAutoApply, isSameTeam, readTeamOptOut, writeTeamOptOut } from '@/lib/logsTeam';
 import { useAuth } from '@/components/AuthProvider';
 import { useT } from '@/lib/i18n';
-import type { LogsResponse, LogRow, TimeRange } from '@/lib/types';
+import type { LogsResponse, LogRow, TimeRange, LogsQueryHistoryEntry } from '@/lib/types';
 import { PageShell } from '@/components/coremetry/PageShell';
 import { LogsQueryBar } from './logs/LogsQueryBar';
 import { parseLogQueryError, logQueryErrorMessage } from '@/lib/logQueryError';
+import { readLogsQueryHistory, recordLogsQuery } from '@/lib/logsQueryHistory';
 import { LogsFilterRow } from './logs/LogsFilterRow';
 import { LogsNotices } from './logs/LogsNotices';
 import { LogsAddFilterMenu, LogsShareMenu, LogsMoreMenu } from './logs/LogsActionsMenus';
@@ -207,6 +208,11 @@ function LogsInner() {
   // isteği atıp hemen takımlısıyla değiştirmek ES-maliyet disiplinini bozardı.
   const tr = useT();
   const userId = useAuth().user?.id;
+  // v0.10.1820 (Log Search Faz 1 dilim 1.4) — yerel sorgu geçmişi (kullanıcı +
+  // tarayıcı başına son 20; lib/logsQueryHistory). Kimlik gelince yeniden okunur.
+  const [queryHistory, setQueryHistory] = useState<LogsQueryHistoryEntry[]>(() => readLogsQueryHistory(userId));
+  useEffect(() => { setQueryHistory(readLogsQueryHistory(userId)); }, [userId]);
+  const historyTexts = useMemo(() => queryHistory.map(e => e.q), [queryHistory]);
   const myTeamQ = useLogsMyTeam();
   const myTeam = myTeamQ.isError ? null : myTeamQ.data;
   const [urlHadFilters] = useState(() => logsUrlHasFilterState(searchParams));
@@ -785,6 +791,8 @@ function LogsInner() {
   // pencereyi şimdiye taşır (özel aralıkta refetch); maliyet tık başına
   // bir sorgu — otomatik aralık yok.
   const apply = () => {
+    // v0.10.1820 — uygulanan arama yerel geçmişe (son 20, tekil).
+    if (draft.search.trim()) setQueryHistory(recordLogsQuery(userId, draft.search));
     resetPaging(); setFilter(draft); writeUrl(draft, filters);
     if (range.preset === 'custom') void staticQ.refetch(); else setNowTick(t => t + 1);
   };
@@ -1151,7 +1159,7 @@ function LogsInner() {
         <LogsQueryBar
           draft={draft} onDraft={setDraft}
           clusters={clusters} autocompleteSince={autocompleteSince}
-          fields={fields} fieldsTotal={fieldsTotal}
+          fields={fields} fieldsTotal={fieldsTotal} history={historyTexts}
           onApply={apply} onRefresh={refresh} dirty={draftDirty} to={to}
           live={live} onToggleLive={toggleLive} liveGap={liveGap}
           addFilter={(

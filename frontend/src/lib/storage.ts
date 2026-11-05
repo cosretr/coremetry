@@ -82,10 +82,18 @@ export const STORAGE_KEYS = {
   // = sessionStorage: sekme oturumu başına en çok bir oto-başlatma.
   tourSeen:             'coremetry.tour.seen',
   tourAutoStarted:      'cm.tour.autoStarted',
+  // v0.10.1820 (Log Search Faz 1 dilim 1.4) — /logs sorgu geçmişi ÖNEK (tam
+  // anahtar logsQueryHistoryKey(uid)): kullanıcı + tarayıcı başına son 20
+  // uygulanan arama (lib/logsQueryHistory.ts). Paylaşılan/ekip durumu DEĞİL.
+  logsQueryHistory:     'coremetry.logsQueryHistory',
 } as const;
 
 /** v0.10.1334 — kullanıcı-kapsamlı tur flaş bekçisi: `coremetry.tour.seen.<uid>`. */
 export const tourSeenKey = (uid: string) => `${STORAGE_KEYS.tourSeen}.${uid}`;
+
+/** v0.10.1820 — kullanıcı-kapsamlı log sorgu geçmişi: `coremetry.logsQueryHistory.<uid>`
+ *  (kimliksiz → `.anon`). */
+export const logsQueryHistoryKey = (uid: string) => `${STORAGE_KEYS.logsQueryHistory}.${uid || 'anon'}`;
 
 /** DataTable persistence family: sort + column widths per table. */
 export const dtSortKey = (storageKey: string) => `dt.${storageKey}.sort`;

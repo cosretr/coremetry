@@ -74,6 +74,11 @@ interface KqlSearchInputProps {
   // açıkça bildirilmek zorunda. Inputa da basılıyor ki işaret DOM'da
   // görülebilsin (hata ayıklama + gelecekteki CSS kancası).
   'data-pc-lead'?: boolean;
+  // v0.10.1820 (Log Search Faz 1 dilim 1.4) — yerel sorgu geçmişi (en yeni
+  // önde, lib/logsQueryHistory). Kutu BOŞ ve odaklıyken "Geçmiş" listesi
+  // açılır; seçim metni yerleştirir, aramayı Enter başlatır. Verilmezse
+  // davranış bayt bayt eski.
+  history?: string[];
 }
 
 interface TokenInfo {
@@ -134,7 +139,7 @@ function quoteIfNeeded(v: string): string {
 
 export function KqlSearchInput({
   value, onChange, onSubmit, placeholder, title, width = 380, since, fields,
-  fieldsTotal, shortcutSearch, 'data-pc-lead': pcLead, className,
+  fieldsTotal, shortcutSearch, 'data-pc-lead': pcLead, className, history,
 }: KqlSearchInputProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [cursor, setCursor] = useState(0);
@@ -177,7 +182,13 @@ export function KqlSearchInput({
   // Açık liste HANGİ kaynaktan? Değer önerileri ağ turu ister ve
   // gecikmelidir; alan adları elde HAZIR, o yüzden anında açılır.
   const nameMode = nameSuggestions.length > 0 || hintOnly;
-  const items = nameMode ? nameSuggestions : values;
+  // v0.10.1820 — "Geçmiş": yalnız kutu boş + odaklı + Esc ile kapatılmamış.
+  const [focused, setFocused] = useState(false);
+  const [historyDismissed, setHistoryDismissed] = useState(false);
+  const historyItems = useMemo(() => (history ?? []).slice(0, 8), [history]);
+  const historyMode = focused && !historyDismissed && !nameMode && !token && value.trim() === '' && historyItems.length > 0;
+  const items = historyMode ? historyItems : nameMode ? nameSuggestions : values;
+  const listOpen = historyMode || open;
 
   // v0.9.955 (F4/Ö16) — alan adı listesi AĞ TURU BEKLEMEZ: liste elde
   // hazır olduğu için açılış anında. Değer listesinin `open`ı fetch
@@ -280,6 +291,17 @@ export function KqlSearchInput({
   };
 
   const pick = (i: number) => {
+    if (historyMode) {
+      const q = historyItems[i];
+      onChange(q);
+      setHistoryDismissed(true);
+      requestAnimationFrame(() => {
+        inputRef.current?.focus();
+        inputRef.current?.setSelectionRange(q.length, q.length);
+        setCursor(q.length);
+      });
+      return;
+    }
     if (nameMode) {
       const s = nameSuggestions[i];
       if ((KQL_OPERATORS as readonly string[]).includes(s)) insertOperator(s);
@@ -288,7 +310,7 @@ export function KqlSearchInput({
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (open && items.length > 0) {
+    if (listOpen && items.length > 0) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
         setHighlight(h => Math.min(items.length - 1, h + 1));
@@ -307,6 +329,7 @@ export function KqlSearchInput({
       if (e.key === 'Escape') {
         e.preventDefault();
         setOpen(false);
+        setHistoryDismissed(true);
         return;
       }
       if (e.key === 'Tab') {
@@ -354,11 +377,12 @@ export function KqlSearchInput({
         {...(shortcutSearch ? { 'data-shortcut-search': '' } : {})}
         {...(pcLead ? { 'data-pc-lead': '' } : {})}
         value={value}
-        onChange={e => { onChange(e.target.value); setLintMsg(null); setCursor(e.target.selectionStart ?? e.target.value.length); }}
+        onChange={e => { onChange(e.target.value); setLintMsg(null); setHistoryDismissed(false); setCursor(e.target.selectionStart ?? e.target.value.length); }}
         onSelect={onSelect}
         onClick={onSelect}
         onKeyDown={onKeyDown}
-        onBlur={() => setTimeout(() => setOpen(false), 120)}
+        onFocus={() => { setFocused(true); setHistoryDismissed(false); setHighlight(0); }}
+        onBlur={() => setTimeout(() => { setOpen(false); setFocused(false); }, 120)}
         placeholder={placeholder}
         title={title}
         spellCheck={false}
@@ -369,7 +393,7 @@ export function KqlSearchInput({
           kendisi atoma DÖNÜŞMÜYOR — ref, tuş işleyicileri ve açılır
           panel bu bileşenin; yalnız görsel sözleşme paylaşılıyor. */}
       {shortcutSearch && <kbd className="sf-hint">/</kbd>}
-      {open && (items.length > 0 || hintOnly) && (
+      {(historyMode || open && (items.length > 0 || hintOnly)) && (
         <div style={{
           position: 'absolute', top: '100%', left: 0,
           width: '100%', minWidth: 260,
@@ -392,7 +416,7 @@ export function KqlSearchInput({
                 pekâlâ 500'ün dışında kalabilir; sessiz bir boş liste
                 "böyle alan yok" diye okunurdu, doğrusu "katalog oraya
                 kadar uzanmıyor". */}
-            {nameMode
+            {historyMode ? 'Geçmiş · bu tarayıcıda son uygulanan aramalar' : nameMode
               ? (hint.kind === 'clipped-no-match'
                 ? `bu önekle eşleşme yok · katalog ilk ${hint.shown.toLocaleString()}/${hint.total.toLocaleString()} alan`
                 : hint.kind === 'clipped'

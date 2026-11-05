@@ -12270,3 +12270,7 @@ Operatör "Log Mockup iyi, devam" (2026-11-05). `/logs` yerinde evrilir; dilimle
   ama yapısal sağlam → "Lucene" kipi, metin aynen; `lang=lucene` (yeni URL paramı, süzgeç imzası DIŞI) zorlar ve kapıyı
   atlar. Yapısal kırık iki backend'de ES'e gitmeden 400 + düz Türkçe (`logql.Lint`). Yanıt `queryLang`; `lang` önbellek
   anahtarlarında. `/api/search` (planLogSearch) kapısı değişmedi (CH-only).
+- **v0.10.1820 — sorgu geçmişi (1.4).** Yerel (localStorage `coremetry.logsQueryHistory.<uid>`, kimliksiz `.anon`), son 20
+  UYGULANAN arama, tekil (yeniden uygulanan öne gelir), en yeni önde; okuma/yazma `lib/storage` üzerinden (özel pencere /
+  kota hatası sessiz). Sunucuya gitmez, paylaşılmaz (paylaşılan arama = `saved_views`). Bu dilimde kutu boş + odaklıyken
+  "Geçmiş" listesi; seçim yalnız metni yerleştirir, aramayı Enter başlatır. Tek listede Değerler/Alanlar ile birleşmesi 1.5.

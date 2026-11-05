@@ -3964,6 +3964,14 @@ export interface LogsResponse {
 // v0.10.1819 — sorgu çubuğu dil rozeti (KQL / Lucene).
 export type LogsQueryLang = 'kql' | 'lucene';
 
+// v0.10.1820 (Log Search Faz 1 dilim 1.4) — /logs yerel sorgu geçmişi girdisi
+// (lib/logsQueryHistory.ts; localStorage, kullanıcı + tarayıcı başına son 20).
+export interface LogsQueryHistoryEntry {
+  q: string;
+  /** Son uygulanma anı (unix ms). */
+  at: number;
+}
+
 // v0.10.1818 (Log Search Faz 1 dilim 1.2) — log sorgusu sözdizimi reddinin
 // 400 gövdesi (internal/api/logs_query_error.go logQueryErrorBody). pos =
 // kullanıcının yazdığı sorguda 0 tabanlı KARAKTER indeksi; yalnız güvenilirken
