@@ -12216,3 +12216,13 @@ satırı, açık satırın vurgusu + satır tıkıyla aç/kapa, satır içi form
   `source` kolonu (S1 = `ml_series`) ORDER BY'ın SONUNDA (§4.1 öneki aynen; ikinci besleyici çakışmaz); `class` anahtarda
   DEĞİL (yeniden sınıflandırma satırı değiştirir); TTL `DELETE WHERE class='normal'` 70 g + genel 400 g. Küme kipinde
   `_local` + Distributed DEĞİL, state tablosu (tek replikasyon grubu) — ML tablolarının ev deseni (`ml_series` gibi).
+- **v0.10.1814 — Günlük baseline işi (dilim 1.3, §4.2), kapalı gelir.** `ml.baseline.enabled` (blob `ml.baseline`, işaretçi →
+  ConfigHash'e GİRMEZ; varsayılan hash 1813 ile aynı, testte çivili). ML lider kilidi, 30 sn yoklama, 03:00 yerel (takvim dilimi
+  `calendarFor`) sonrası dün; kaçırılan en yeni 7 gün eskiden yeniye (ilk koşu da 7 gün — yalnız CH okur). Okuma 16 dilim akış,
+  `ml_series FINAL` sıralı (`MLSeriesDaySlice`), `max_execution_time` 25 (audit 60 diyordu; havuz ReadTimeout'u 30 sn,
+  60 tetiklenemez — `query_budget_test`). Saatte en ince tane; 86400 sn'lik kod geçmişi yok sayılır; sayım parçası
+  normalize, oran/gauge olduğu gibi; kuantil Hyndman–Fan tip 7. Trace `_calls` = route `|count` toplamı (servis trafik serisi,
+  profil girdisi). Tamamı dışlanan saat buckets=0 yazılır (yeniden koşu ezer). Sapma: durum/kontrol `ml_tick_status`'ta DEĞİL
+  ayrı anahtarlarda (`ml_baseline_status` tek yazıcı lider, `ml_baseline_control` admin) — tik blobu her tikte baştan yazılıyor;
+  ikisi de /api/ml/scorecard'da. Elle koşu `POST /api/ml/baseline/run` isteği kontrol blobuna yazar, lider koşar (202). Backtest
+  aynı `batchKeep`'i çağırır (`backtestBatchEvent`).

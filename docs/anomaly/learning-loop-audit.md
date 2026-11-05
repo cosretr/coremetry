@@ -492,3 +492,10 @@ Operatör: "Benden beklediğin kararda önerini yapalım." S1–S10 **önerilen 
 | D8 | ML hattı `-batch` kalıbını UYGULAMIYOR | `internal/ml` içinde kullanım yok | Operatör kuralına aykırı (batch yükü anomali değil). Faz 1'in ilk dilimi olarak kapatılır |
 | D9 | Isı haritası canvas; çizgi katmanı desteği YOK | `FE/components/LatencyHeatmap.tsx:108,174` | Faz 2'de `overlayLines` prop'u eklenir; yeni kütüphane gerekmez |
 | D10 | Maliyet sayıları hâlâ tahmin | — | Faz 1.1 ölçümü kapatır |
+
+## 14. Uygulama düzeltmeleri
+Faz 1 uygulanırken bu dokümandaki üç ifadenin yanlış/eksik olduğu görüldü (koddan):
+
+- **(a) ML tabloları state deseni, `_local` + Distributed çifti YOK.** §4.1 "Dağıtık" satırı yanlıştı. `ml_baseline_obs` (v0.10.1813) `ml_series` / `ml_events` gibi state tablosu: küme kipinde tek replikasyon grubu, yazıcı yalnız ML lideri; shard'a bölünmüş çift kurulmaz. Sonraki ML tabloları (`ml_learned`) aynı desen.
+- **(b) İki ES terms tavanı aynı servis kümesini görür; düşen sayılar TOPLANMAZ.** Log RED agregasyonu ve kod/pod kırılımı aynı `MaxServices` terms tavanıyla aynı doc_count sırasını görür; tik ölçümünde (v0.10.1812) tavan dışı servis sayısı iki isteğin MAKSİMUMU alınır, toplamı değil.
+- **(c) Log `error_rate` bir hata SAYISIDIR, oran değil.** `_error` parçası hata seviyesindeki satır sayısı; batch kuralı (v0.10.1811) bu yüzden onu "hata sayısı" sınıfında değerlendirir ve pay kanıtı (`_error` / `_total`) ister.

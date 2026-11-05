@@ -67,6 +67,8 @@ type Recorder struct {
 	detectors []Detector
 	runs      *tracker
 	backoff   *vmBackoff
+	// bjob — v0.10.1814 günlük baseline işi (baseline_job.go); aynı lider kilidi.
+	bjob baselineJob
 }
 
 // New — placement etiketi /admin/stats için ("sre" | "worker").
@@ -92,6 +94,7 @@ func (r *Recorder) run(ctx context.Context) {
 	// pod'unda API sunucusu da hidrate ediyor ama sıralamaya güvenmeden ilk
 	// tikten önce bir kez burada (anomaly recorder emsali).
 	r.store.LoadAnomalySensitivity(ctx)
+	go r.baselineLoop(ctx) // v0.10.1814: günlük baseline (kapalı gelir; lider + anahtar kapısı içeride)
 	for {
 		cfg := r.store.GetMLConfig(ctx)
 		r.tick(ctx, cfg)

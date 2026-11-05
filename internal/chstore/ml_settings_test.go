@@ -161,3 +161,37 @@ func TestMLMetricExprLoadRoundTrip(t *testing.T) {
 		t.Fatalf("Load düştü: %+v", l)
 	}
 }
+
+// v0.10.1814 — `ml.baseline.enabled` varsayılan kapalı, ana anahtara bağlı;
+// ConfigHash'e girmez (olay kanıtındaki hash 1813 ile bayt bayt aynı).
+func TestMLBaselineSettingOffAndOutOfHash(t *testing.T) {
+	d := DefaultMLConfig()
+	if d.BaselineOn() {
+		t.Fatal("baseline varsayılan kapalı olmalı")
+	}
+	on := d
+	on.Baseline = &MLBaselineSettings{Enabled: true}
+	if on.BaselineOn() {
+		t.Fatal("ana anahtar kapalıyken baseline koşmamalı")
+	}
+	on.Enabled = true
+	if !on.BaselineOn() {
+		t.Fatal("iki anahtar açıkken koşmalı")
+	}
+	d.Enabled = true
+	if d.ConfigHash() != on.ConfigHash() {
+		t.Fatal("baseline anahtarı ConfigHash'i değiştirmemeli")
+	}
+	if got := DefaultMLConfig().ConfigHash(); got != mlDefaultHash1813 {
+		t.Fatalf("varsayılan ConfigHash 1813'ten farklı: %s", got)
+	}
+	raw, _ := json.Marshal(NormalizeMLConfig(on))
+	var back MLConfig
+	if err := json.Unmarshal(raw, &back); err != nil || !NormalizeMLConfig(back).BaselineOn() {
+		t.Fatalf("baseline anahtarı gidiş-dönüşte kayboldu: %s", raw)
+	}
+}
+
+// mlDefaultHash1813 — v0.10.1813 HEAD'de DefaultMLConfig().ConfigHash()
+// (ölçüldü): 1814 baseline anahtarı varsayılan hash'i değiştirmemeli.
+const mlDefaultHash1813 = "66df3eb38772bb64"

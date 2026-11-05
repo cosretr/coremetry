@@ -2,7 +2,7 @@
 // kararsız satır isabet yazdırmaz).
 import { describe, it, expect } from 'vitest';
 import { anomalyEventHref, legacyAnomalyRedirect, mlEventHref } from '@/lib/anomalyHref';
-import { detectorGroup, detectorRows, statusTiles, backfillLabel, durationLabel, gateLabel, stageLabel, signalTickLabel, tickLabel, kindTickLines, resolveAnomaliesTab, resolveMLSignal, scoreLabel, signalScoreLabel } from '@/components/coremetry/anomalies/MLTab';
+import { detectorGroup, detectorRows, statusTiles, backfillLabel, durationLabel, gateLabel, stageLabel, signalTickLabel, tickLabel, kindTickLines, baselineStatusLine, resolveAnomaliesTab, resolveMLSignal, scoreLabel, signalScoreLabel } from '@/components/coremetry/anomalies/MLTab';
 
 describe('log ml slice 0', () => {
   it('tab resolves unknown to detectors', () => {
@@ -92,5 +92,22 @@ describe('log ml slice 0', () => {
     expect(tiles[3].s).toBe('dep:http · 22 dk');
     // v0.10.1811 kesimi görünür kutuda (tickLabel artık çizilmiyor — 1812'de düzeltildi)
     expect(statusTiles({ ...sc, tick: { ...sc.tick!, batchCut: 4 } }, '', 1000)[0].s).toBe('2 sn · 1 olay · batch kuralı 4 adayı kesti');
+  });
+});
+
+// v0.10.1814 — günlük baseline işi: "Baseline: son gün, satır, süre" satırı (render: MLTab ml-baseline-line).
+describe('baselineStatusLine', () => {
+  it('son gün, satır, süre; hata uyarı rengi', () => {
+    const l = baselineStatusLine({ lastDay: '2026-11-04', last: { day: '2026-11-04', trigger: 'auto', rows: 12345, series: 10, slices: 16, durationMs: 42000, at: 1 } });
+    expect(l?.text).toContain('son gün 2026-11-04');
+    expect(l?.text).toContain('42.0 sn');
+    expect(l?.warn).toBe(false);
+    const e = baselineStatusLine({ last: { day: '2026-11-04', trigger: 'auto', rows: 0, series: 0, slices: 3, durationMs: 100, at: 1, error: 'timeout' } });
+    expect(e?.warn).toBe(true);
+    expect(e?.text).toContain('2026-11-04 hatalı: timeout');
+  });
+  it('kayıt yoksa satır yok; boş kayıt = henüz gün yok', () => {
+    expect(baselineStatusLine(undefined)).toBeNull();
+    expect(baselineStatusLine({})?.text).toBe('Baseline · henüz işlenmiş gün yok');
   });
 });

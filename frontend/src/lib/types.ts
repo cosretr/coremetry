@@ -11770,6 +11770,8 @@ export interface MLConfig {
   slowRequestSec: number; minAffectedRequests: number; chronicEpisodes: number;
   metricFamilies: Record<string, MLMetricExpr[]>;
   quality: MLQuality;
+  /** v0.10.1814: günlük baseline gözlem işi (`ml.baseline.enabled`); yok = kapalı. */
+  baseline?: { enabled: boolean };
 }
 /** load (v0.10.1811): seri servisin yükünü ölçer; batch kalıbına giren serviste değerlendirilmez. */
 export interface MLMetricExpr { id: string; label: string; expr: string; direction: 'up' | 'down' | 'both'; unit?: string; load?: boolean }
@@ -11792,8 +11794,19 @@ export interface MLTickStatus {
 }
 /** Sinyal türünün son tik ölçümü (v0.10.1812, audit §10 dilim 1.1). dropped = ES terms tavanı dışında kalan servis (yalnız log). */
 export interface MLKindTick { services: number; series: number; seriesRows: number; es: number; vm: number; ch: number; dropped: number; durationMs: number }
+/** Baseline günü koşusu (v0.10.1814, Go chstore.MLBaselineRun). */
+export interface MLBaselineRun {
+  day: string; trigger: 'auto' | 'manual'; rows: number; series: number; slices: number; truncated?: number;
+  durationMs: number; error?: string; at: number;
+}
+/** Günlük baseline işinin durumu (v0.10.1814, system_settings ml_baseline_status; Go chstore.MLBaselineStatus). */
+export interface MLBaselineStatus {
+  lastDay?: string; running?: string; last?: MLBaselineRun; manual?: MLBaselineRun; updatedAt?: number;
+}
 export interface MLScorecard {
   tick?: MLTickStatus;
+  /** v0.10.1814: günlük baseline işi durumu. */
+  baseline?: MLBaselineStatus;
   windowDays: number; detectors: MLDetectorScore[]; bySignal?: MLDetectorScore[]; backfill?: MLBackfillProgress[];
   promotion: Record<string, MLPromotion>; gates?: Record<string, MLGate>; signals: Record<string, string>;
 }

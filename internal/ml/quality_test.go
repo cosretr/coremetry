@@ -114,7 +114,7 @@ func TestRunBacktestLogSpike(t *testing.T) {
 	}
 	labels := []chstore.MLLabel{{Service: "pay", Signal: "trace", Detector: "op_latency", From: spikeFrom, To: spikeFrom + 900, Positive: true}}
 	from, to := day0.Add(7*24*time.Hour), day0.Add(8*24*time.Hour)
-	res := RunBacktest(chstore.MLSignalLog, "pay", from, to, map[string][]chstore.MLPoint{partTotal: pts}, cfg, chstore.AnomalyCalendarConfig{}, time.UTC, labels)
+	res := RunBacktest(chstore.MLSignalLog, "pay", from, to, map[string][]chstore.MLPoint{partTotal: pts}, cfg, chstore.AnomalyCalendarConfig{}, time.UTC, labels, nil)
 	if res.Series != 1 || len(res.Detectors) != 1 {
 		t.Fatalf("res=%+v", res)
 	}
@@ -127,13 +127,13 @@ func TestRunBacktestLogSpike(t *testing.T) {
 	}
 	// "değil" etiketi → FP, precision 0
 	labels[0].Positive = false
-	res = RunBacktest(chstore.MLSignalLog, "pay", from, to, map[string][]chstore.MLPoint{partTotal: pts}, cfg, chstore.AnomalyCalendarConfig{}, time.UTC, labels)
+	res = RunBacktest(chstore.MLSignalLog, "pay", from, to, map[string][]chstore.MLPoint{partTotal: pts}, cfg, chstore.AnomalyCalendarConfig{}, time.UTC, labels, nil)
 	if d := res.Detectors[0]; d.FP != 1 || d.Precision != 0 || d.Positives != 0 {
 		t.Fatalf("FP bekleniyordu: %+v", d)
 	}
 	// what-if: etki eşiği ×10 → 5 katlık sıçrama olay değil
 	cfg.Quality.ImpactMinRel = 10
-	res = RunBacktest(chstore.MLSignalLog, "pay", from, to, map[string][]chstore.MLPoint{partTotal: pts}, cfg, chstore.AnomalyCalendarConfig{}, time.UTC, nil)
+	res = RunBacktest(chstore.MLSignalLog, "pay", from, to, map[string][]chstore.MLPoint{partTotal: pts}, cfg, chstore.AnomalyCalendarConfig{}, time.UTC, nil, nil)
 	if len(res.Hits) != 0 {
 		t.Fatalf("etki eşiği 10'da isabet olmamalı: %+v", res.Hits)
 	}

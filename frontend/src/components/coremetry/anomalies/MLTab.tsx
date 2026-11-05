@@ -12,7 +12,7 @@ import { Badge } from '@/components/shadcn/badge';
 import { api } from '@/lib/api';
 import { keys, useMLEvents, useMLScorecard } from '@/lib/queries';
 import { fmtDateTime } from '@/lib/utils';
-import type { MLEvent, MLDetectorScore, MLGate, MLBackfillProgress, MLTickStatus, MLSignalTick, MLScorecard, MLKindTick } from '@/lib/types';
+import type { MLEvent, MLDetectorScore, MLGate, MLBackfillProgress, MLTickStatus, MLSignalTick, MLScorecard, MLKindTick, MLBaselineStatus } from '@/lib/types';
 import { Link } from 'react-router-dom';
 import { mlHeadline, mlValuePair } from '@/lib/mlReplay';
 import { MLPeriodReplay } from './MLPeriodReplay';
@@ -161,6 +161,21 @@ export function kindTickLines(t: MLTickStatus | undefined, signal: MLSignal): { 
     });
 }
 
+/** Günlük baseline işinin tek satırı — SAF (test). v0.10.1814, audit §4.2. null = durum kaydı yok (iş hiç koşmadı / kapalı). */
+export function baselineStatusLine(st: MLBaselineStatus | undefined): { text: string; warn: boolean } | null {
+  if (!st) return null;
+  const n = (v: number) => v.toLocaleString('tr-TR');
+  const run = st.last;
+  const bits: string[] = [];
+  if (st.lastDay) bits.push(`son gün ${st.lastDay}`);
+  if (run) bits.push(`${n(run.rows)} satır`, `${(run.durationMs / 1000).toFixed(1)} sn`);
+  if (st.running) bits.push(`işleniyor: ${st.running}`);
+  if (run?.error) bits.push(`${run.day} hatalı: ${run.error}`);
+  if (st.manual) bits.push(`elle ${st.manual.day}: ${st.manual.error ? `hata — ${st.manual.error}` : `${n(st.manual.rows)} satır`}`);
+  if (!bits.length) bits.push('henüz işlenmiş gün yok');
+  return { text: `Baseline · ${bits.join(' · ')}`, warn: !!run?.error || !!st.manual?.error };
+}
+
 const DCOLS: ColumnDef<DetectorRow>[] = [
   { id: 'detector', label: 'Dedektör', width: 170, sortValue: r => r.detector, naturalDir: 'asc' },
   { id: 'signal', label: 'Sinyal', width: 70, sortValue: r => r.signal, naturalDir: 'asc' },
@@ -263,11 +278,15 @@ export function MLTab({ signal = '', onSignal }: { signal?: MLSignal; onSignal?:
           ))}
         </div>
       )}
-      {sc.data?.tick?.kinds && (
+      {(sc.data?.tick?.kinds || sc.data?.baseline) && (
         <div className="flex flex-col gap-0.5 text-xs text-muted-foreground" data-testid="ml-kind-ticks">
-          {kindTickLines(sc.data.tick, signal).map(l => (
+          {kindTickLines(sc.data?.tick, signal).map(l => (
             <div key={l.kind} className={l.warn ? 'text-[color:var(--warn)]' : ''}>{l.text}</div>
           ))}
+          {(() => {
+            const b = baselineStatusLine(sc.data?.baseline);
+            return b && <div data-testid="ml-baseline-line" className={b.warn ? 'text-[color:var(--warn)]' : ''}>{b.text}</div>;
+          })()}
         </div>
       )}
       {sc.data && (

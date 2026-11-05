@@ -92,6 +92,10 @@ export function MLSubsection() {
             onCheckedChange={v => setCfg({ ...cfg, enabled: v })}
             label="ML açık (ana anahtar)"
             hint="Kapalı: tik yalnız sayaç günceller, Elasticsearch'e sorgu yok." />
+          <CheckboxField className="mb-3" checked={cfg.baseline?.enabled === true} disabled={!cfg.enabled}
+            onCheckedChange={v => setCfg({ ...cfg, baseline: { enabled: v } })}
+            label="Baseline gözlem işi (günlük)"
+            hint="03:00 sonrası dünün ml_series kovalarından saatlik bant gözlemi yazar (ml_baseline_obs). Tespit bu sürümde değişmez; yalnız CH okur." />
 
           <p className={NOTE}>Soldaki anahtar dedektörü açar (gölge). Sağdaki &quot;terfi&quot; anahtarı karne eşiğini geçen olayı Problem&apos;e kopyalar.</p>
           {([['Log dedektörleri', ML_LOG_DETECTORS], ['Trace dedektörleri', ML_TRACE_DETECTORS], ['Metrik aileleri', ML_METRIC_DETECTORS]] as const).map(([title, list]) => (<div key={title}>

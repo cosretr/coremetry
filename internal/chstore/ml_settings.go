@@ -218,7 +218,20 @@ type MLConfig struct {
 	MetricFamilies map[string][]MLMetricExpr `json:"metricFamilies"`
 	// Quality — kalite çerçevesi (etki, hijyen, rejim, teyit, geri bildirim).
 	Quality MLQuality `json:"quality"`
+	// Baseline — v0.10.1814 (öğrenme döngüsü Faz 1, audit §4.2): günlük
+	// baseline gözlem işi `ml.baseline.enabled`. nil = kapalı (varsayılan).
+	// İşaretçi + omitempty: ConfigHash'e girmez (olay kanıtındaki hash bu
+	// anahtarla değişmez — tespit davranışı aynı).
+	Baseline *MLBaselineSettings `json:"baseline,omitempty"`
 }
+
+// MLBaselineSettings — günlük baseline işi ayarı (system_settings `ml.baseline`).
+type MLBaselineSettings struct {
+	Enabled bool `json:"enabled"`
+}
+
+// BaselineOn — SAF: ana anahtar VE baseline anahtarı.
+func (c MLConfig) BaselineOn() bool { return c.Enabled && c.Baseline != nil && c.Baseline.Enabled }
 
 // DefaultMLConfig — her şey kapalı, eşikler makul.
 func DefaultMLConfig() MLConfig {
@@ -382,7 +395,9 @@ func (c MLConfig) PromotionAllowed(detector string, score MLDetectorScore, calen
 // ConfigHash — SAF: normalize blob'un FNV-64 özeti (olay kanıtı + backtest:
 // hangi ayarla üretildi; replay/what-if karşılaştırması).
 func (c MLConfig) ConfigHash() string {
-	raw, _ := json.Marshal(NormalizeMLConfig(c))
+	n := NormalizeMLConfig(c)
+	n.Baseline = nil // v0.10.1814: gözlem işi tespit ayarı değil
+	raw, _ := json.Marshal(n)
 	h := fnv.New64a()
 	_, _ = h.Write(raw)
 	return fmt.Sprintf("%016x", h.Sum64())

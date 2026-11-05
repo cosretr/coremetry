@@ -12,6 +12,7 @@ package ml
 
 import (
 	"context"
+	"encoding/json"
 	"math"
 	"sort"
 	"strings"
@@ -142,8 +143,10 @@ func buildIndex(pts []chstore.MLPoint, loc *time.Location, exclude [][2]int64) b
 }
 
 // RunBacktest — SAF. pts: parça → noktalar (from − BaselineDays'ten to'ya).
+// isBatch — v0.10.1814: canlı tikle aynı batch kuralı (batch.go batchKeep,
+// tek karar işlevi); nil = kural kapalı.
 func RunBacktest(signal, service string, from, to time.Time, pts map[string][]chstore.MLPoint, cfg chstore.MLConfig,
-	cal chstore.AnomalyCalendarConfig, loc *time.Location, labels []chstore.MLLabel) BacktestResult {
+	cal chstore.AnomalyCalendarConfig, loc *time.Location, labels []chstore.MLLabel, isBatch func(string) bool) BacktestResult {
 	if loc == nil {
 		loc = time.UTC
 	}
@@ -203,6 +206,7 @@ func RunBacktest(signal, service string, from, to time.Time, pts map[string][]ch
 		return s
 	}
 
+	loadParts := metricLoadParts(cfg)
 	parts := make([]string, 0, len(pts))
 	for p := range pts {
 		parts = append(parts, p)
@@ -260,6 +264,17 @@ func RunBacktest(signal, service string, from, to time.Time, pts map[string][]ch
 					if j.Silent && rule.silentAlt != "" {
 						fired = rule.silentAlt
 					}
+					// v0.10.1814: batch kuralı canlıdaki karar noktasıyla aynı işlevden
+					if fired != "" && isBatch != nil {
+						var share map[string]any
+						if fired == detErrorRate {
+							tot := statAt(partTotal, t)
+							share = errShareEvidence(j.Observed, totalAt(pts[partTotal], t), j.Median, tot.med)
+						}
+						if !batchKeep(backtestBatchEvent(signal, service, part, fired, share), isBatch, loadParts) {
+							fired = ""
+						}
+					}
 				}
 			}
 			for det := range open {
@@ -290,6 +305,37 @@ func RunBacktest(signal, service string, from, to time.Time, pts map[string][]ch
 		res.Hits, res.Truncated = res.Hits[:backtestHitCap], true
 	}
 	return res
+}
+
+// backtestBatchEvent — SAF: backtest isabetini canlı olayın batch kuralının
+// okuduğu alanlarla kurar (dedektör, sinyal, servis; log hata sayısında
+// Level=error + pay kanıtı; metrikte Code=part — log_red.go / metric_ml.go
+// olay kurucularıyla aynı).
+func backtestBatchEvent(signal, service, part, detector string, share map[string]any) chstore.MLEvent {
+	ev := chstore.MLEvent{Detector: detector, Signal: signal, Service: service}
+	switch signal {
+	case chstore.MLSignalLog:
+		if part == partError {
+			ev.Level = "error"
+		}
+		if share != nil {
+			raw, _ := json.Marshal(share)
+			ev.Evidence = string(raw)
+		}
+	case chstore.MLSignalMetric:
+		ev.Code = part
+	}
+	return ev
+}
+
+// totalAt — SAF: t kovasındaki değer (yoksa 0).
+func totalAt(pts []chstore.MLPoint, t int64) float64 {
+	for _, p := range pts {
+		if p.T == t {
+			return p.V
+		}
+	}
+	return 0
 }
 
 // scoreHits — SAF: isabetleri etiketle eşle (± pay). Gerçek etiket örtüşmesi
@@ -382,5 +428,6 @@ func Backtest(ctx context.Context, store *chstore.Store, signal, service string,
 		return BacktestResult{}, err
 	}
 	cal, loc := calendarFor(store.AnomalySensitivityForDetectors())
-	return RunBacktest(signal, service, from, to, pts, cfg, cal, loc, labels), nil
+	sens := store.AnomalySensitivityForDetectors()
+	return RunBacktest(signal, service, from, to, pts, cfg, cal, loc, labels, sens.IsBatchService), nil
 }

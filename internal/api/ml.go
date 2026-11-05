@@ -115,6 +115,9 @@ func (s *Server) getMLScorecard(w http.ResponseWriter, r *http.Request) {
 		if ts, ok, _ := s.store.GetMLTickStatus(ctx); ok {
 			out["tick"] = ts
 		}
+		if bs, ok, _ := s.store.GetMLBaselineStatus(ctx); ok { // v0.10.1814: günlük baseline işi
+			out["baseline"] = bs
+		}
 		if bp, ok, _ := s.store.GetMLBackfillProgress(ctx, chstore.MLSignalLog); ok {
 			out["backfill"] = []chstore.MLBackfillProgress{bp}
 		}
