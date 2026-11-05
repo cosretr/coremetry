@@ -388,6 +388,7 @@ func logsBodyToValues(body map[string]any) url.Values {
 }
 
 func (s *Server) serveLogsSearch(w http.ResponseWriter, r *http.Request, q url.Values) {
+	r = withServerTiming(r) // v0.10.1817 — Server-Timing (server_timing.go)
 	sev, _ := strconv.Atoi(q.Get("severity"))
 	f := logstore.Filter{
 		Service:     q.Get("service"),
@@ -965,6 +966,7 @@ func (s *Server) getLogsContext(w http.ResponseWriter, r *http.Request) {
 // the CH backend. Reuses s.logs — the same ES client + API-key auth
 // as every other logs query; no new connection/credential config.
 func (s *Server) getLogsFieldStats(w http.ResponseWriter, r *http.Request) {
+	r = withServerTiming(r) // v0.10.1817 — Server-Timing (server_timing.go)
 	q := r.URL.Query()
 	field := strings.TrimSpace(q.Get("field"))
 	if field == "" {
@@ -1069,6 +1071,7 @@ func normalizeLogsGroupBy(groupBy string) string {
 }
 
 func (s *Server) getLogsTimeseries(w http.ResponseWriter, r *http.Request) {
+	r = withServerTiming(r) // v0.10.1817 — Server-Timing (server_timing.go)
 	q := r.URL.Query()
 	sev, _ := strconv.Atoi(q.Get("severity"))
 	f := logstore.Filter{

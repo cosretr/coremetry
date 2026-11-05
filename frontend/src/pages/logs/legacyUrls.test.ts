@@ -223,3 +223,76 @@ describe('/logs eski URL altın listesi — dört dilim boyunca bayt bayt', () =
     }
   });
 });
+
+// v0.10.1817 (Log Search Faz 1 dilim 1.1 — sözleşme çivisi). KQL / Lucene
+// yazımları URL katmanında VERBATIM taşınır: `q` ne yazıldıysa sig'e ve
+// yazılan URL'ye bayt bayt aynı girer. Dilim 1.3 (KQL → kanonik Lucene)
+// çeviriyi SUNUCUDA yapar; bu liste URL'nin o çeviriden etkilenmediğini
+// çiviler. Yeni parametreler (ör. `lang=lucene`) yalnız EKLENİR — buradaki
+// hiçbir satırın çıktısı değişmez.
+const GOLDEN_QUERIES = [
+  'level: error',
+  'service.name:(orders-api or payments-mobile)',
+  'latency_ms >= 500',
+  'not level:debug and message:"connection refused"',
+  'k8s.pod.name:branch-teller-* AND NOT (level:info OR level:debug)',
+  'trace.id:*',
+  '(level:error OR',
+  'body:/time.?out/ AND foo~2 AND bar^3',
+] as const;
+
+describe('/logs q verbatim — KQL/Lucene yazımları URL katmanında dönüşmez (v0.10.1817)', () => {
+  it('her yazım sig + yazılan URL + geri okumada aynı', () => {
+    const rows = GOLDEN_QUERIES.map(q => {
+      const p = new URLSearchParams({ q, service: 'orders-api' });
+      const st = readLogsUrlState(p);
+      const written = writeLogsParams(new URLSearchParams(), st.filter, st.filtersRaw, st.colsRaw);
+      expect(readLogsParams(written).search, q).toBe(q);
+      return { q, sig: st.sig, written: written.toString() };
+    });
+    expect(rows).toMatchInlineSnapshot(`
+      [
+        {
+          "q": "level: error",
+          "sig": "["orders-api","","level: error",0,"","",false,"","","",""]",
+          "written": "service=orders-api&q=level%3A+error",
+        },
+        {
+          "q": "service.name:(orders-api or payments-mobile)",
+          "sig": "["orders-api","","service.name:(orders-api or payments-mobile)",0,"","",false,"","","",""]",
+          "written": "service=orders-api&q=service.name%3A%28orders-api+or+payments-mobile%29",
+        },
+        {
+          "q": "latency_ms >= 500",
+          "sig": "["orders-api","","latency_ms >= 500",0,"","",false,"","","",""]",
+          "written": "service=orders-api&q=latency_ms+%3E%3D+500",
+        },
+        {
+          "q": "not level:debug and message:"connection refused"",
+          "sig": "["orders-api","","not level:debug and message:\\"connection refused\\"",0,"","",false,"","","",""]",
+          "written": "service=orders-api&q=not+level%3Adebug+and+message%3A%22connection+refused%22",
+        },
+        {
+          "q": "k8s.pod.name:branch-teller-* AND NOT (level:info OR level:debug)",
+          "sig": "["orders-api","","k8s.pod.name:branch-teller-* AND NOT (level:info OR level:debug)",0,"","",false,"","","",""]",
+          "written": "service=orders-api&q=k8s.pod.name%3Abranch-teller-*+AND+NOT+%28level%3Ainfo+OR+level%3Adebug%29",
+        },
+        {
+          "q": "trace.id:*",
+          "sig": "["orders-api","","trace.id:*",0,"","",false,"","","",""]",
+          "written": "service=orders-api&q=trace.id%3A*",
+        },
+        {
+          "q": "(level:error OR",
+          "sig": "["orders-api","","(level:error OR",0,"","",false,"","","",""]",
+          "written": "service=orders-api&q=%28level%3Aerror+OR",
+        },
+        {
+          "q": "body:/time.?out/ AND foo~2 AND bar^3",
+          "sig": "["orders-api","","body:/time.?out/ AND foo~2 AND bar^3",0,"","",false,"","","",""]",
+          "written": "service=orders-api&q=body%3A%2Ftime.%3Fout%2F+AND+foo%7E2+AND+bar%5E3",
+        },
+      ]
+    `);
+  });
+});

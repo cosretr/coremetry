@@ -1,0 +1,873 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Log Search Mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Token değerleri frontend/src/styles/globals.css + tokens.css'ten (üç tema). Statik mockup; ürün kodu değildir. */
+:root{
+  --font-sans:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+  --font-mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  /* light */
+  --bg0:#f4f6f8;--bg1:#ffffff;--bg2:#f0f3f6;--bg3:#e4e8ed;
+  --border:#dde2e9;--divider:#e6e9ef;--border-control:#b2b7be;--border-strong:#8d939a;
+  --text:#212429;--text2:#474c54;--text3:#62676f;--text-faint:#888e95;
+  --accent:#2572de;--accent2:#1263cd;--accent-hover:#1364ce;--on-accent:#ffffff;--focus:#2572de;
+  --accent-bg:#ebf2fc;--accent-border:#b3cef3;
+  --ok:#047735;--warn:#8f5c04;--warn-solid:#b98206;--err:#c42a28;--err-solid:#c42a28;--info:#1263cd;
+  --ok-bg:#e8f3ed;--warn-bg:#f5f0e8;--err-bg:#faecec;--info-bg:#ebf2fc;
+  --purple:#8250df;--orange:#bc4c00;--teal:#137775;
+  --shadow-sm:0 1px 2px rgba(20,30,45,.05);--shadow-pop:0 8px 24px rgba(20,30,45,.14);--backdrop:rgba(20,30,45,.35);
+  --radius-xs:4px;--radius-sm:6px;--radius:8px;--radius-lg:12px;
+  --nav-bg:#ffffff;--nav-text:#212429;--nav-text2:#474c54;--nav-border:#dde2e9;--nav-hover:#f0f3f6;--nav-active:#1263cd;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg0:#09090b;--bg1:#18181b;--bg2:#212125;--bg3:#27272a;
+    --border:#3f3f46;--divider:#2c2c31;--border-control:#52525b;--border-strong:#71717a;
+    --text:#fafafa;--text2:#d4d4d8;--text3:#a6a6ae;--text-faint:#71717a;
+    --accent:#2d73d8;--accent2:#6ba6fb;--accent-hover:#1d65c9;--on-accent:#ffffff;--focus:#6ba6fb;
+    --accent-bg:#253040;--accent-border:#294d82;
+    --ok:#4db96b;--warn:#f3b94c;--warn-solid:#f3b94c;--err:#fe7f73;--err-solid:#cc4740;--info:#6ba6fb;
+    --ok-bg:#293933;--warn-bg:#3d392f;--err-bg:#3e3234;--info-bg:#253040;
+    --purple:#a371f7;--orange:#d76f04;--teal:#39c5cf;
+    --shadow-sm:0 1px 2px rgba(0,0,0,.25);--shadow-pop:0 8px 24px rgba(0,0,0,.45);--backdrop:rgba(0,0,0,.55);
+    --radius-xs:4px;--radius-sm:6px;--radius:8px;--radius-lg:12px;
+    --nav-bg:#18181b;--nav-text:#fafafa;--nav-text2:#d4d4d8;--nav-border:#3f3f46;--nav-hover:#212125;--nav-active:#6ba6fb;color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg0:#09090b;--bg1:#18181b;--bg2:#212125;--bg3:#27272a;
+  --border:#3f3f46;--divider:#2c2c31;--border-control:#52525b;--border-strong:#71717a;
+  --text:#fafafa;--text2:#d4d4d8;--text3:#a6a6ae;--text-faint:#71717a;
+  --accent:#2d73d8;--accent2:#6ba6fb;--accent-hover:#1d65c9;--on-accent:#ffffff;--focus:#6ba6fb;
+  --accent-bg:#253040;--accent-border:#294d82;
+  --ok:#4db96b;--warn:#f3b94c;--warn-solid:#f3b94c;--err:#fe7f73;--err-solid:#cc4740;--info:#6ba6fb;
+  --ok-bg:#293933;--warn-bg:#3d392f;--err-bg:#3e3234;--info-bg:#253040;
+  --purple:#a371f7;--orange:#d76f04;--teal:#39c5cf;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.25);--shadow-pop:0 8px 24px rgba(0,0,0,.45);--backdrop:rgba(0,0,0,.55);
+  --radius-xs:4px;--radius-sm:6px;--radius:8px;--radius-lg:12px;
+  --nav-bg:#18181b;--nav-text:#fafafa;--nav-text2:#d4d4d8;--nav-border:#3f3f46;--nav-hover:#212125;--nav-active:#6ba6fb;color-scheme:dark;
+}
+:root[data-theme="redhat"]{
+  --bg0:#f4f4f5;--bg1:#ffffff;--bg2:#fafafa;--bg3:#ececee;
+  --border:#e4e4e7;--divider:#ebebed;--border-control:#a1a1aa;--border-strong:#71717a;
+  --text:#09090b;--text2:#52525b;--text3:#63636b;--text-faint:#8b8b93;
+  --accent:#0066cc;--accent2:#0066cc;--accent-hover:#004080;--on-accent:#ffffff;--focus:#0066cc;
+  --accent-bg:#e7f1fa;--accent-border:#bee1f4;
+  --ok:#317928;--warn:#795600;--warn-solid:#b08307;--err:#c9190b;--err-solid:#c9190b;--info:#0066cc;
+  --ok-bg:#eef4ed;--warn-bg:#fdf5e0;--err-bg:#fbefee;--info-bg:#e7f1fa;
+  --purple:#8476d1;--orange:#ec7a08;--teal:#009596;
+  --shadow-sm:0 1px 2px rgba(21,21,21,.08);--shadow-pop:0 8px 24px rgba(21,21,21,.16);--backdrop:rgba(21,21,21,.4);
+  --radius-xs:3px;--radius-sm:4px;--radius:6px;--radius-lg:8px;
+  /* Red Hat temasında kenar çubuğu koyu kalır (kapsamlı token remap). */
+  --nav-bg:#18181b;--nav-text:#fafafa;--nav-text2:#d4d4d8;--nav-border:#3f3f46;--nav-hover:#212125;--nav-active:#73bcf7;color-scheme:light;
+}
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg0);color:var(--text);font:13px/1.5 var(--font-sans);overflow-x:hidden}
+a{color:var(--accent2);text-decoration:none}
+button{font:inherit;color:inherit}
+.mono{font-family:var(--font-mono);font-size:12px}
+.muted{color:var(--text3)} .t2{color:var(--text2)}
+.num{font-variant-numeric:tabular-nums;text-align:right}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+
+/* ---- mockup gezinme kromu (ürün arayüzü değil) ---- */
+.mk{margin:12px 16px;padding:10px 12px;border:1px dashed var(--border-strong);border-radius:var(--radius);background:var(--bg1);display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center}
+.mk-tag{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--warn);border:1px dashed var(--warn);border-radius:var(--radius-xs);padding:1px 6px;white-space:nowrap}
+.mk-sp{flex:1 1 20px}
+.mk-note{margin:8px 0 0;padding:6px 10px;border-left:3px dashed var(--warn);color:var(--text2);font-size:12px;background:var(--bg1)}
+
+/* ---- shadcn tarzı bileşenler ---- */
+.btn{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;border-radius:var(--radius-sm);border:1px solid transparent;background:transparent;cursor:pointer;white-space:nowrap;font-size:13px;font-weight:500}
+.btn.primary{background:var(--accent);color:var(--on-accent)} .btn.primary:hover{background:var(--accent-hover)}
+.btn.sec{border-color:var(--border-control);background:var(--bg1)} .btn.sec:hover{background:var(--bg2)}
+.btn.ghost:hover{background:var(--bg2)}
+.btn.sm{height:24px;padding:0 8px;font-size:12px}
+.btn.icon{width:24px;height:24px;padding:0;justify-content:center;font-size:12px}
+.badge{display:inline-flex;align-items:center;gap:4px;padding:1px 7px;border-radius:var(--radius-sm);font-size:11px;font-weight:600;white-space:nowrap;border:1px solid var(--border);background:var(--bg2);color:var(--text2)}
+.badge.err{background:var(--err-bg);color:var(--err);border-color:transparent}
+.badge.warn{background:var(--warn-bg);color:var(--warn);border-color:transparent}
+.badge.ok{background:var(--ok-bg);color:var(--ok);border-color:transparent}
+.badge.info{background:var(--info-bg);color:var(--info);border-color:transparent}
+.badge.solid-err{background:var(--err-solid);color:var(--on-accent);border-color:transparent}
+.badge.outline{background:transparent}
+.seg{display:inline-flex;border:1px solid var(--border-control);border-radius:var(--radius-sm);overflow:hidden;background:var(--bg1)}
+.seg button{height:26px;padding:0 10px;border:0;border-right:1px solid var(--border);background:transparent;cursor:pointer;font-size:12px;font-weight:500;color:var(--text2);white-space:nowrap}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--accent-bg);color:var(--accent2);font-weight:600;box-shadow:inset 0 -2px 0 var(--accent)}
+.input{height:30px;padding:0 10px;border:1px solid var(--border-control);border-radius:var(--radius-sm);background:var(--bg1);color:var(--text);font:13px var(--font-sans);min-width:0}
+.input:focus{outline:none;border-color:var(--focus)}
+.kbd{font:600 11px var(--font-mono);padding:0 5px;border:1px solid var(--border-control);border-bottom-width:2px;border-radius:var(--radius-xs);background:var(--bg2);color:var(--text2)}
+.card{background:var(--bg1);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm)}
+.pop{position:absolute;z-index:20;background:var(--bg1);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-pop);padding:6px;max-width:calc(100vw - 32px)}
+.pop h6{margin:6px 8px 4px;font-size:11px;font-weight:600;color:var(--text3);text-transform:none}
+.opt{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:var(--radius-xs);cursor:pointer;font-size:12px}
+.opt:hover,.opt.on{background:var(--bg2)}
+.opt .r{margin-left:auto;color:var(--text3);font-size:11px;white-space:nowrap}
+.sw{display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;border:0;background:transparent;padding:0}
+.sw i{width:28px;height:16px;border-radius:10px;background:var(--border-control);position:relative;display:inline-block;flex:none}
+.sw i::after{content:"";position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:var(--on-accent)}
+.sw[aria-checked="true"] i{background:var(--accent)} .sw[aria-checked="true"] i::after{left:14px}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex:none}
+.dot.ok{background:var(--ok)} .dot.warn{background:var(--warn-solid)} .dot.err{background:var(--err-solid)}
+
+/* ---- uygulama kabuğu ---- */
+.shell{display:grid;grid-template-columns:184px minmax(0,1fr);margin:0 16px 24px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--bg0)}
+.nav{background:var(--nav-bg);color:var(--nav-text);border-right:1px solid var(--nav-border);padding:12px 0}
+.nav b{display:block;padding:0 16px 10px;font-size:14px}
+.nav a{display:block;padding:7px 16px;color:var(--nav-text2);border-left:2px solid transparent}
+.nav a:hover{background:var(--nav-hover)}
+.nav a.on{color:var(--nav-active);border-left-color:var(--accent);background:var(--nav-hover);font-weight:600}
+.main{min-width:0;padding:0 16px 16px}
+.ctx{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--border);margin-bottom:12px}
+.ctx h1{font-size:18px;margin:0 8px 0 0;font-weight:600}
+.ctx .sp{flex:1 1 8px}
+.view{display:none} .view.on{display:block}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.rel{position:relative}
+
+/* sorgu çubuğu */
+.qbar{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start;margin-bottom:8px}
+.qwrap{position:relative;flex:1 1 320px;min-width:0;display:flex;flex-wrap:wrap}
+.qwrap .lang{position:absolute;left:8px;top:6px;font:600 10px var(--font-mono);color:var(--accent2);border:1px solid var(--accent-border);background:var(--accent-bg);border-radius:var(--radius-xs);padding:0 4px;line-height:16px}
+.qwrap .q{flex:1;padding-left:44px;font-family:var(--font-mono);font-size:12px}
+#ac{position:static;flex:1 1 100%;margin-top:4px;max-width:560px}
+#svcpop{top:34px;left:0;width:300px}
+.alert{display:flex;gap:8px;align-items:flex-start;padding:6px 10px;border:1px solid var(--err);background:var(--err-bg);color:var(--text);border-radius:var(--radius-sm);font-size:12px;margin-bottom:8px}
+.alert b{color:var(--err)}
+.pill{display:inline-flex;align-items:center;height:24px;border:1px solid var(--border-control);border-radius:var(--radius-sm);background:var(--bg1);font-size:12px;overflow:hidden}
+.pill .k{padding:0 4px 0 8px;color:var(--text2)} .pill .v{padding:0 8px 0 0;font-family:var(--font-mono);font-weight:500}
+.pill .tag{padding:0 6px;font-size:10px;font-weight:700;align-self:stretch;display:inline-flex;align-items:center;border-right:1px solid var(--border)}
+.pill button{border:0;border-left:1px solid var(--border);background:transparent;height:100%;padding:0 6px;cursor:pointer;color:var(--text3);font-size:11px}
+.pill.neg{border-color:var(--err)} .pill.neg .tag{background:var(--err-bg);color:var(--err)}
+.pill.off{border-style:dashed;background:transparent} .pill.off .k,.pill.off .v{text-decoration:line-through;color:var(--text-faint)} .pill.off .tag{color:var(--text3)}
+.pill.pin .tag{background:var(--accent-bg);color:var(--accent2)}
+
+/* histogram (üründe CorePanel viz=stacked-bars) */
+.hist{padding:10px 12px;margin:10px 0}
+.hist-head{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:12px;margin-bottom:8px}
+.lg{display:inline-flex;align-items:center;gap:5px;color:var(--text2)} .lg i{width:10px;height:10px;border-radius:2px;display:inline-block}
+.plot{position:relative;height:146px;border-bottom:1px solid var(--border);overflow:hidden}
+.bars{position:absolute;inset:22px 0 0 0;display:flex;align-items:flex-end;gap:2px}
+.bars .b{flex:1;display:flex;flex-direction:column-reverse;min-width:2px}
+.bars .b i{display:block}
+.s-err{background:var(--err-solid)} .s-warn{background:var(--warn-solid)} .s-info{background:var(--accent)} .s-dbg{background:var(--border-strong)}
+.mark{position:absolute;top:0;bottom:0;width:0;border-left:2px dashed var(--purple);cursor:pointer}
+.mark span{position:absolute;top:0;left:3px;font-size:10px;font-weight:600;white-space:nowrap;padding:0 4px;border-radius:var(--radius-xs);background:var(--bg1);border:1px solid currentColor;color:var(--purple)}
+.mark.an{border-left-color:var(--orange)} .mark.an span{color:var(--orange)}
+.mark.pr{border-left-color:var(--err)} .mark.pr span{color:var(--err);left:auto;right:3px}
+.brush{position:absolute;top:22px;bottom:0;left:60%;width:13%;background:color-mix(in srgb,var(--accent) 18%,transparent);border-left:1px solid var(--accent);border-right:1px solid var(--accent)}
+.brush span{position:absolute;bottom:4px;left:4px;font-size:10px;background:var(--bg1);border:1px solid var(--accent-border);border-radius:var(--radius-xs);padding:0 4px;white-space:nowrap;color:var(--text)}
+.axis{display:flex;justify-content:space-between;font-size:10px;color:var(--text3);margin-top:3px;font-variant-numeric:tabular-nums}
+
+/* gövde: alan kenar çubuğu + tablo */
+.body2{display:grid;grid-template-columns:252px minmax(0,1fr);gap:12px;align-items:start}
+.side{padding:8px}
+.side h5{margin:10px 4px 4px;font-size:11px;font-weight:600;color:var(--text3)}
+.fld{display:flex;align-items:center;gap:6px;padding:4px 6px;border-radius:var(--radius-xs);font-size:12px;cursor:pointer}
+.fld:hover{background:var(--bg2)}
+.fld .ty{width:16px;text-align:center;font:600 10px var(--font-mono);color:var(--text3);border:1px solid var(--border);border-radius:3px;flex:none}
+.fld .nm{font-family:var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fld .r{margin-left:auto;color:var(--text3);font-size:11px}
+.fvals{margin:2px 0 8px 6px;padding:6px 8px;border-left:2px solid var(--accent-border);background:var(--bg2);border-radius:0 var(--radius-xs) var(--radius-xs) 0}
+.fv{display:grid;grid-template-columns:minmax(0,1fr) 44px 48px;gap:6px;align-items:center;font-size:12px;padding:2px 0}
+.fv .bar{grid-column:1/-1;height:3px;background:var(--bg3);border-radius:2px;margin-top:-1px}
+.fv .bar i{display:block;height:100%;background:var(--accent);border-radius:2px}
+.tcard{position:relative;min-width:0}
+.tbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--border);position:relative}
+.tbar .sp{flex:1 1 8px}
+.stream{display:flex;flex-wrap:wrap;gap:4px 12px;padding:5px 10px;border-bottom:1px solid var(--divider);font-size:11px;color:var(--text2);background:var(--bg2)}
+.spin{display:inline-block;width:10px;height:10px;border:2px solid var(--border-control);border-top-color:var(--accent);border-radius:50%;animation:sp 1s linear infinite;vertical-align:-1px}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation:none}}
+.sx{overflow-x:auto}
+table.dt{border-collapse:collapse;width:100%;font-size:12px}
+.dt th{text-align:left;font-size:11px;font-weight:600;color:var(--text2);padding:7px 10px;border-bottom:1px solid var(--border);white-space:nowrap;background:var(--bg1)}
+.dt th .so{color:var(--accent2);font-weight:700}
+.dt td{padding:6px 10px;border-bottom:1px solid var(--divider);vertical-align:top}
+.dt tr:last-child td{border-bottom:0}
+.dt tbody tr.click:hover{background:var(--bg2);cursor:pointer}
+.dt tr.focus td:first-child{box-shadow:inset 3px 0 0 var(--accent)} .dt tr.focus{background:var(--accent-bg)}
+.dt[data-den="compact"] td{padding:3px 8px} .dt[data-den="expanded"] td{padding:10px 12px}
+.dt .ts{font-family:var(--font-mono);white-space:nowrap;color:var(--text2)}
+.dt .msg{font-family:var(--font-mono);min-width:340px}
+.dt .msg .clamp{display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden;-webkit-line-clamp:2;word-break:break-word}
+.dt[data-rh="1"] .msg .clamp{-webkit-line-clamp:1} .dt[data-rh="3"] .msg .clamp{-webkit-line-clamp:3} .dt[data-rh="auto"] .msg .clamp{-webkit-line-clamp:unset}
+.lvl{font-weight:600;white-space:nowrap} .lvl.e{color:var(--err)} .lvl.w{color:var(--warn)} .lvl.i{color:var(--info)} .lvl.d{color:var(--text3)}
+mark{background:var(--warn-bg);color:inherit;border-bottom:1px solid var(--warn-solid);padding:0 1px}
+.stack{margin:4px 0 0;padding:4px 8px;border-left:2px solid var(--err);background:var(--bg2);border-radius:0 var(--radius-xs) var(--radius-xs) 0;font:12px/1.55 var(--font-mono);white-space:pre-wrap;word-break:break-word}
+.stack .app{color:var(--text);font-weight:600} .stack .fw{color:var(--text-faint)}
+.more{border:0;background:transparent;color:var(--accent2);cursor:pointer;padding:2px 0;font:500 11px var(--font-sans)}
+.tchip{display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 7px;border:1px solid var(--border-control);border-radius:11px;background:var(--bg1);font:500 11px var(--font-mono);cursor:pointer;white-space:nowrap}
+.tchip.bad{border-color:var(--err);color:var(--err)} .tchip.good{color:var(--ok)}
+.tchip.samp{border-style:dashed;color:var(--text3);cursor:default}
+.tchip.hover{box-shadow:0 0 0 2px var(--accent-border)}
+#hov{position:static;margin:8px 10px 8px auto;max-width:420px}
+#hov dl{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;margin:6px 8px;font-size:12px} #hov dt{color:var(--text3)} #hov dd{margin:0}
+#disp{right:10px;top:40px;width:330px;padding:10px 12px}
+#disp .f{margin-bottom:10px} #disp label{display:block;font-size:11px;color:var(--text3);margin-bottom:4px}
+.grp td{background:var(--bg2);font-weight:500}
+.pager{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 10px;border-top:1px solid var(--border);font-size:12px}
+.keys{display:flex;flex-wrap:wrap;gap:4px 14px;padding:6px 10px;border-top:1px solid var(--divider);font-size:11px;color:var(--text3)}
+
+/* satır detayı (DetailSheet) */
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,640px);gap:0;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.back{background:var(--backdrop);padding:12px;min-width:0} .back .card{opacity:.55}
+.sheet{background:var(--bg1);border-left:1px solid var(--border);box-shadow:var(--shadow-pop);min-width:0}
+.sh-head{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:12px 14px;border-bottom:1px solid var(--border)}
+.sh-head h2{margin:0;font-size:14px;font-weight:600}
+.sh-body{padding:12px 14px}
+.lead{font-size:14px;line-height:1.5;margin:0 0 10px}
+.sect{margin-top:14px} .sect>h3{font-size:12px;font-weight:600;margin:0 0 6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.kv{display:grid;grid-template-columns:minmax(120px,34%) minmax(0,1fr) auto;font-size:12px;border:1px solid var(--border);border-radius:var(--radius-sm)}
+.kv>div{padding:5px 8px;border-bottom:1px solid var(--divider);min-width:0;word-break:break-word}
+.kv>div:nth-last-child(-n+3){border-bottom:0}
+.kv .k{color:var(--text2);font-family:var(--font-mono)} .kv .v{font-family:var(--font-mono)} .kv .a{display:flex;gap:2px}
+pre.json{margin:0;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg2);font:12px/1.5 var(--font-mono);overflow-x:auto}
+.ctxl{border:1px solid var(--border);border-radius:var(--radius-sm);font:12px/1.5 var(--font-mono)}
+.ctxl div{display:grid;grid-template-columns:88px 52px minmax(0,1fr);gap:8px;padding:3px 8px;border-bottom:1px solid var(--divider)}
+.ctxl div:last-child{border-bottom:0}
+.ctxl .pivot{background:var(--accent-bg);box-shadow:inset 3px 0 0 var(--accent)}
+.ctxl span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+details.ev{border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 10px;margin-top:14px}
+details.ev summary{cursor:pointer;font-weight:600;font-size:12px}
+
+/* trace + log birleşik */
+.wf{min-width:760px;font-size:12px}
+.wf-h,.wf-r{display:grid;grid-template-columns:minmax(240px,34%) minmax(0,1fr) 76px;align-items:center;gap:8px;padding:4px 10px;border-bottom:1px solid var(--divider)}
+.wf-h{font-size:11px;font-weight:600;color:var(--text2);border-bottom-color:var(--border)}
+.wf-r .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wf-r .nm b{font-weight:600}
+.lane{position:relative;height:14px;background:var(--bg2);border-radius:2px}
+.lane i{position:absolute;top:2px;bottom:2px;border-radius:2px;background:var(--accent)}
+.lane i.er{background:var(--err-solid)} .lane i.out{background:var(--border-strong)}
+.wf-l{display:grid;grid-template-columns:76px 58px minmax(0,1fr) auto;gap:8px;padding:2px 10px;border-bottom:1px solid var(--divider);background:var(--bg2);font:12px/1.6 var(--font-mono);align-items:baseline}
+.wf-l .tx{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.empty{padding:22px 16px;text-align:center}
+.empty .ic{font-size:22px;color:var(--text3)} .empty h4{margin:6px 0 4px;font-size:14px}
+.empty p{margin:0 auto 10px;max-width:520px;color:var(--text2)}
+
+/* desenler + karşılaştırma */
+.sum{padding:8px 12px;margin:10px 0;font-size:13px}
+.cmp{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.cmp h4{margin:0;padding:8px 10px;font-size:12px;border-bottom:1px solid var(--border);display:flex;gap:6px;align-items:center}
+.tpl{font-family:var(--font-mono);min-width:260px;word-break:break-word}
+.tpl em{font-style:normal;color:var(--text-faint)}
+svg.spark{width:84px;height:20px;display:block} svg.spark polyline{fill:none;stroke:var(--accent);stroke-width:1.5}
+svg.spark.up polyline{stroke:var(--err)}
+
+@media (max-width:980px){
+  .shell{grid-template-columns:minmax(0,1fr)} .nav{display:none}
+  .body2{grid-template-columns:minmax(0,1fr)}
+  .split{grid-template-columns:minmax(0,1fr)} .back{display:none} .sheet{border-left:0}
+  .cmp{grid-template-columns:minmax(0,1fr)}
+  #hov{position:static;width:auto;margin:8px 10px}
+  #disp{left:10px;right:10px;width:auto}
+}
+@media (max-width:560px){
+  .mk{margin:12px 16px} .shell{margin:0 16px 24px} .main{padding:0 10px 12px}
+  .kv{grid-template-columns:minmax(0,1fr)} .kv>div{border-bottom:0;padding:3px 8px} .kv .a{border-bottom:1px solid var(--divider);padding-bottom:6px}
+  .ctxl div{grid-template-columns:80px minmax(0,1fr)} .ctxl div span:nth-child(2){display:none}
+}
+</style>
+</head>
+<body>
+
+<!-- ============ MOCKUP GEZİNME (ürün arayüzü değil) ============ -->
+<div class="mk" role="region" aria-label="Mockup gezinme">
+  <span class="mk-tag">Mockup gezinme · ürün arayüzü değil</span>
+  <div class="seg" role="tablist" aria-label="Görünüm" id="viewseg">
+    <button class="on" data-view="v1">1 · Ana ekran</button>
+    <button data-view="v2">2 · Satır detayı</button>
+    <button data-view="v3">3 · Trace + log</button>
+    <button data-view="v4">4 · Desenler</button>
+  </div>
+  <span class="mk-sp"></span>
+  <span class="muted">Tema</span>
+  <div class="seg" role="group" aria-label="Tema" id="themeseg">
+    <button data-th="light">Light</button>
+    <button data-th="dark">Dark</button>
+    <button data-th="redhat">Red Hat</button>
+  </div>
+</div>
+
+<div class="shell">
+  <nav class="nav" aria-label="Ürün gezinme">
+    <b>Coremetry</b>
+    <a href="#">Services</a><a href="#">Traces</a><a href="#" class="on">Logs</a>
+    <a href="#">Problems</a><a href="#">Anomalies</a><a href="#">Rollouts</a><a href="#">Settings</a>
+  </nav>
+
+  <main class="main">
+    <!-- ContextBar: Env → kapsam → (boşluk) → yenile → zaman seçici en sağda -->
+    <div class="ctx">
+      <h1>Logs</h1>
+      <span class="badge outline">Env: prod</span>
+      <span class="badge info" title="users.team → sahip olunan servisler">Kapsam: Servislerim (12)</span>
+      <span class="sp"></span>
+      <button class="btn sec sm" title="Yenile">↻ 14:36</button>
+      <button class="btn sec" aria-haspopup="dialog">Son 15 dk ▾</button>
+    </div>
+
+    <!-- ================= GÖRÜNÜM 1: ANA EKRAN ================= -->
+    <section class="view on" id="v1" aria-label="Ana ekran">
+
+      <div class="qbar">
+        <div class="rel">
+          <button class="btn sec" data-toggle="#svcpop" aria-expanded="false"><span class="dot ok"></span>orders-api <span class="muted">· sağlıklı</span> ▾</button>
+          <div class="pop" id="svcpop" hidden>
+            <input class="input" style="width:100%" placeholder="Servis ara… (sunucu aramalı)" aria-label="Servis ara">
+            <h6>Servislerim · sağlık son 5 dk</h6>
+            <div class="opt on"><span class="dot ok"></span>orders-api<span class="r">sağlıklı · %0,2 hata</span></div>
+            <div class="opt"><span class="dot warn"></span>payments-mobile<span class="r">bozulmuş · %3,1 hata</span></div>
+            <div class="opt"><span class="dot ok"></span>branch-teller<span class="r">sağlıklı · %0,0 hata</span></div>
+            <div class="opt"><span class="dot err"></span>notify-gateway<span class="r">sorunlu · 1 açık Problem</span></div>
+            <h6>Kapsam dışı — yalnız aranınca gelir, sağlık gösterilmez</h6>
+            <div class="opt muted">inventory-core<span class="r">kapsam dışı</span></div>
+          </div>
+        </div>
+        <div class="qwrap">
+          <span class="lang">KQL</span>
+          <input class="input q" value="level:error and CHANNEL_CODE:mo" aria-label="Sorgu" data-toggle-focus="#ac">
+          <div class="pop" id="ac" role="listbox" aria-label="Otomatik tamamlama">
+            <h6>Değerler · CHANNEL_CODE <span class="muted">(son 15 dk, _terms_enum)</span></h6>
+            <div class="opt on"><span class="mono">MOBILE</span><span class="r">%62</span></div>
+            <div class="opt"><span class="mono">MOBILE_WEB</span><span class="r">%4</span></div>
+            <h6>Alanlar</h6>
+            <div class="opt"><span class="fld" style="padding:0"><span class="ty">k</span></span><span class="mono">CHANNEL_CODE</span><span class="r">keyword · iş alanı</span></div>
+            <div class="opt"><span class="fld" style="padding:0"><span class="ty">t</span></span><span class="mono">message</span><span class="r">text</span></div>
+            <h6>Geçmiş</h6>
+            <div class="opt"><span class="mono">level:error and FUNCTION_CODE:ORD_CREATE</span><span class="r">dün 16:02</span></div>
+            <div class="opt"><span class="mono">"Connection is not available"</span><span class="r">3 gün önce</span></div>
+            <div class="keys" style="border-top:1px solid var(--divider);margin-top:4px">
+              <span><span class="kbd">↑</span> <span class="kbd">↓</span> seç</span><span><span class="kbd">Tab</span> tamamla</span><span><span class="kbd">Enter</span> ara</span>
+              <button class="more" data-toggle="#ac">Esc · kapat</button>
+            </div>
+          </div>
+        </div>
+        <button class="btn primary">Ara</button>
+        <button class="btn sec">Kaydedilenler ▾</button>
+        <button class="btn sec">Paylaş ▾</button>
+      </div>
+
+      <div class="alert" role="alert">
+        <span class="mk-tag">örnek durum</span>
+        <span><b>Sorgu sözdizimi (konum 17):</b> <span class="mono">level:error and (service:orders-api</span> — "(" kapatılmamış. Sonuna ")" ekleyin. Sorgu Elasticsearch'e gönderilmedi.</span>
+      </div>
+
+      <!-- filtre hapları: sabit / ters / kapalı -->
+      <div class="row" style="margin-bottom:6px">
+        <span class="pill pin"><span class="tag" title="Sabitlendi: servis/sorgu değişince kalır">⊙ sabit</span><span class="k">level:</span><span class="v">ERROR</span><button title="Düzenle">✎</button><button title="Ters çevir">≠</button><button title="Kapat/aç">◐</button><button title="Sil">✕</button></span>
+        <span class="pill neg"><span class="tag">DEĞİL</span><span class="k">CHANNEL_CODE:</span><span class="v">WEB</span><button title="Düzenle">✎</button><button title="Ters çevir">≠</button><button title="Kapat/aç">◐</button><button title="Sabitle">⊙</button><button title="Sil">✕</button></span>
+        <span class="pill off"><span class="tag">kapalı</span><span class="k">pod:</span><span class="v">orders-api-7d9f6-x2k4p</span><button title="Düzenle">✎</button><button title="Ters çevir">≠</button><button title="Kapat/aç">◐</button><button title="Sabitle">⊙</button><button title="Sil">✕</button></span>
+        <button class="btn ghost sm">+ Süzgeç</button>
+        <button class="sw" role="switch" aria-checked="false" data-sw><i></i>Yalnız kritik hatalar</button>
+        <button class="btn ghost sm">Tümünü temizle</button>
+      </div>
+
+      <div class="row" style="justify-content:space-between">
+        <div class="seg" role="tablist" aria-label="Görünüm (?panel=)">
+          <button class="on">Logs</button><button>Desenler</button><button>Şablonlar</button>
+        </div>
+        <span class="muted" style="font-size:12px">Uygulanan arama: <span class="mono">level:error AND NOT CHANNEL_CODE:"WEB"</span></span>
+      </div>
+
+      <!-- histogram -->
+      <div class="card hist">
+        <div class="hist-head">
+          <b>≥ 12.480 kayıt</b><span class="muted">kova 20 sn</span>
+          <span class="lg"><i class="s-err"></i>ERROR</span><span class="lg"><i class="s-warn"></i>WARN</span><span class="lg"><i class="s-info"></i>INFO</span><span class="lg"><i class="s-dbg"></i>DEBUG</span>
+          <span class="muted">·</span>
+          <span class="lg" style="color:var(--purple)">▼ Rollout</span><span class="lg" style="color:var(--orange)">◆ Anomali</span><span class="lg" style="color:var(--err)">● Problem</span>
+          <span class="muted">sürükle = zaman seç · işarete tıkla = o pencereye daral · çift tık = geri</span>
+        </div>
+        <div class="plot" id="plot">
+          <div class="bars" id="bars" aria-hidden="true"></div>
+          <div class="mark" style="left:38%" title="Rollout: orders-api v2.41.0 → v2.42.0"><span>▼ Rollout v2.42.0</span></div>
+          <div class="mark an" style="left:57%" title="Anomali: hata oranı"><span>◆ Anomali · hata oranı</span></div>
+          <div class="mark pr" style="left:80%" title="Problem P2 açıldı"><span>● Problem P2</span></div>
+          <div class="brush"><span>14:30:00 – 14:32:00 · bırak = daralt</span></div>
+        </div>
+        <div class="axis"><span>14:21</span><span>14:24</span><span>14:27</span><span>14:30</span><span>14:33</span><span>14:36</span></div>
+      </div>
+
+      <div class="body2">
+        <!-- alan kenar çubuğu -->
+        <aside class="card side" aria-label="Alanlar">
+          <input class="input" style="width:100%" placeholder="Alan ara…" aria-label="Alan ara">
+          <h5>İş alanları (sabit, en üstte)</h5>
+          <div class="fld" data-toggle="#fv1"><span class="ty">k</span><span class="nm">CHANNEL_CODE</span><span class="r">4 ▾</span></div>
+          <div class="fvals" id="fv1">
+            <div class="fv"><span class="mono">MOBILE</span><span class="num">%62</span><span><button class="btn icon sec" title="Filtrele">+</button> <button class="btn icon sec" title="Hariç tut">−</button></span><span class="bar"><i style="width:62%"></i></span></div>
+            <div class="fv"><span class="mono">BRANCH</span><span class="num">%21</span><span><button class="btn icon sec" title="Filtrele">+</button> <button class="btn icon sec" title="Hariç tut">−</button></span><span class="bar"><i style="width:21%"></i></span></div>
+            <div class="fv"><span class="mono">WEB</span><span class="num">%13</span><span><button class="btn icon sec" title="Filtrele">+</button> <button class="btn icon sec" title="Hariç tut">−</button></span><span class="bar"><i style="width:13%"></i></span></div>
+            <div class="fv"><span class="mono">API</span><span class="num">%4</span><span><button class="btn icon sec" title="Filtrele">+</button> <button class="btn icon sec" title="Hariç tut">−</button></span><span class="bar"><i style="width:4%"></i></span></div>
+            <div class="row" style="margin-top:6px;justify-content:space-between">
+              <span class="muted" style="font-size:11px">~ örneklenmiş (%5) · 4 değer</span>
+              <button class="btn sec sm">Kolon ekle</button>
+            </div>
+          </div>
+          <div class="fld"><span class="ty">k</span><span class="nm">FUNCTION_CODE</span><span class="r">17 ▸</span></div>
+          <div class="fld"><span class="ty">k</span><span class="nm">operation</span><span class="r">42 ▸</span></div>
+          <h5>Seçili alanlar</h5>
+          <div class="fld"><span class="ty">d</span><span class="nm">@timestamp</span></div>
+          <div class="fld"><span class="ty">k</span><span class="nm">level</span></div>
+          <div class="fld"><span class="ty">k</span><span class="nm">service.name</span></div>
+          <div class="fld"><span class="ty">t</span><span class="nm">message</span></div>
+          <div class="fld"><span class="ty">k</span><span class="nm">trace.id</span></div>
+          <h5>Mevcut alanlar (38)</h5>
+          <div class="fld"><span class="ty">k</span><span class="nm">kubernetes.pod_name</span><span class="r">▸</span></div>
+          <div class="fld"><span class="ty">k</span><span class="nm">logger_name</span><span class="r">▸</span></div>
+          <div class="fld"><span class="ty">k</span><span class="nm">thread_name</span><span class="r">▸</span></div>
+          <div class="fld"><span class="ty">#</span><span class="nm">http.status</span><span class="r">▸</span></div>
+          <div class="fld"><span class="ty">k</span><span class="nm">span.id</span><span class="r">▸</span></div>
+          <div class="fld muted"><span class="nm">… 33 alan daha</span></div>
+        </aside>
+
+        <!-- doküman tablosu -->
+        <div class="card tcard">
+          <div class="tbar">
+            <b>500 satır yüklendi</b><span class="muted">en yeni önce</span>
+            <span class="badge outline" title="Çoklu alan sıralama">Sıra: Zaman ↓ · service ↑</span>
+            <span class="sp"></span>
+            <button class="sw" role="switch" aria-checked="false" data-sw data-group><i></i>Trace'e göre grupla</button>
+            <button class="btn sec sm">Sütunlar ▾</button>
+            <button class="btn sec sm" data-toggle="#disp" aria-expanded="false">Görünüm ▾</button>
+            <div class="pop" id="disp" hidden role="dialog" aria-label="Görünüm seçenekleri">
+              <div class="f"><label>Satır yüksekliği · gövde (satır sayısı)</label>
+                <div class="seg"><button data-set="rh:1">1</button><button class="on" data-set="rh:2">2</button><button data-set="rh:3">3</button><button data-set="rh:auto">Otomatik</button></div></div>
+              <div class="f"><label>Satır yüksekliği · başlık</label>
+                <div class="seg"><button class="on">1</button><button>2</button><button>3</button><button>Otomatik</button></div></div>
+              <div class="f"><label>Yoğunluk</label>
+                <div class="seg"><button data-set="den:compact">Sıkı</button><button class="on" data-set="den:normal">Normal</button><button data-set="den:expanded">Geniş</button></div></div>
+              <div class="f"><label>Örnek boyutu (10 – 2.000; üst sınır Settings › Logs)</label>
+                <input class="input" style="width:110px" value="500" inputmode="numeric" aria-label="Örnek boyutu"></div>
+              <div class="f"><label>Sayfa başına satır</label>
+                <div class="seg"><button>50</button><button class="on">100</button><button>250</button><button>500</button></div></div>
+              <div class="muted" style="font-size:11px">Tercih kullanıcıya kaydedilir ve kaydedilmiş aramaya yazılır.</div>
+            </div>
+          </div>
+          <div class="stream" aria-live="polite">
+            <span>✓ Satırlar 0,4 sn</span><span>✓ Histogram 0,9 sn</span><span>✓ Trace önizleme 0,2 sn</span>
+            <span><span class="spin" aria-hidden="true"></span> Alan istatistikleri yükleniyor…</span>
+            <button class="more">Sorguyu iptal et</button>
+          </div>
+
+          <div class="sx">
+            <table class="dt" id="doc" data-rh="2" data-den="normal" style="min-width:860px">
+              <thead><tr>
+                <th style="width:28px"></th><th>Zaman <span class="so">↓1</span></th><th>Seviye</th><th>Servis <span class="so">↑2</span></th><th>CHANNEL_CODE</th><th>Mesaj</th><th>Trace</th>
+              </tr></thead>
+
+              <!-- düz liste -->
+              <tbody id="flat">
+                <tr class="click focus">
+                  <td><button class="btn icon ghost" title="Detay (Enter)">⤢</button></td>
+                  <td class="ts">14:35:12.482</td><td><span class="lvl e">✕ ERROR</span></td><td>orders-api</td><td class="mono">MOBILE</td>
+                  <td class="msg">
+                    <span class="badge solid-err" title="Kaynak tükenmesi">▲ OutOfMemoryError · kaynak tükenmesi</span>
+                    <div class="clamp">java.lang.<mark>OutOfMemoryError</mark>: Java heap space while serializing cart for customer TCKN *********** (FUNCTION_CODE=ORD_CREATE)</div>
+                    <div class="stack" id="st1"><span class="app">  at com.acme.orders.cart.CartSerializer.write(CartSerializer.java:118)</span>
+<span class="app">  at com.acme.orders.api.OrderResource.create(OrderResource.java:64)</span><span id="st1more" hidden>
+<span class="fw">  at org.jboss.resteasy.core.MethodInjectorImpl.invoke(MethodInjectorImpl.java:170)
+  at org.jboss.resteasy.core.ResourceMethodInvoker.invokeOnTarget(ResourceMethodInvoker.java:644)
+  at io.undertow.servlet.handlers.ServletHandler.handleRequest(ServletHandler.java:74)
+  … 28 framework çerçevesi</span>
+<span class="app">Caused by: java.lang.OutOfMemoryError: Java heap space</span>
+<span class="app">  at com.acme.orders.cart.CartBuffer.grow(CartBuffer.java:41)</span></span></div>
+                    <button class="more" data-toggle="#st1more" aria-expanded="false">▸ 38 çerçeve daha (31 framework) — aç/kapat</button>
+                  </td>
+                  <td><span class="tchip bad hover" title="Hata var">✕ 9c1d07aa…</span></td>
+                </tr>
+                <tr class="click">
+                  <td><button class="btn icon ghost" title="Detay">⤢</button></td>
+                  <td class="ts">14:35:12.101</td><td><span class="lvl e">✕ ERROR</span></td><td>orders-api</td><td class="mono">MOBILE</td>
+                  <td class="msg"><span class="badge err">NullPointerException</span>
+                    <div class="clamp">Cannot invoke "Customer.getSegment()" because "customer" is null — order ORD-88213 rejected</div>
+                    <button class="more">▸ 22 çerçeve (3 uygulama)</button></td>
+                  <td><span class="tchip good" title="Hata yok">✓ 4bf92f35…</span></td>
+                </tr>
+                <tr class="click">
+                  <td><button class="btn icon ghost" title="Detay">⤢</button></td>
+                  <td class="ts">14:35:11.870</td><td><span class="lvl e">✕ ERROR</span></td><td>payments-mobile</td><td class="mono">MOBILE</td>
+                  <td class="msg"><span class="badge solid-err" title="Kaynak tükenmesi">▲ Bağlantı havuzu · kaynak tükenmesi</span>
+                    <div class="clamp">HikariPool-1 - Connection is not available, request timed out after 30000ms (active=20, idle=0, waiting=37)</div></td>
+                  <td><span class="tchip samp" title="Trace ClickHouse'ta yok: örneklenmiş (sampling Collector'da)">○ 77e0b1c2… örneklenmiş</span></td>
+                </tr>
+                <tr class="click">
+                  <td><button class="btn icon ghost" title="Detay">⤢</button></td>
+                  <td class="ts">14:35:10.954</td><td><span class="lvl e">✕ ERROR</span></td><td>branch-teller</td><td class="mono">BRANCH</td>
+                  <td class="msg"><span class="badge err">System.InvalidOperationException</span>
+                    <div class="clamp">Sequence contains no elements — at Acme.Teller.Queue.TicketService.Next() in TicketService.cs:line 87</div>
+                    <button class="more">▸ 14 çerçeve (2 uygulama)</button></td>
+                  <td><span class="tchip bad" title="Hata var">✕ e02a6b19…</span></td>
+                </tr>
+                <tr class="click">
+                  <td><button class="btn icon ghost" title="Detay">⤢</button></td>
+                  <td class="ts">14:35:10.220</td><td><span class="lvl e">✕ ERROR</span></td><td>orders-api</td><td class="mono">API</td>
+                  <td class="msg"><div class="clamp">Order validation failed: FUNCTION_CODE=ORD_CANCEL reason=ALREADY_SHIPPED orderId=ORD-88197 musteri=C-104233</div></td>
+                  <td><span class="muted">—</span></td>
+                </tr>
+                <tr class="click">
+                  <td><button class="btn icon ghost" title="Detay">⤢</button></td>
+                  <td class="ts">14:35:09.731</td><td><span class="lvl e">✕ ERROR</span></td><td>orders-api</td><td class="mono">MOBILE</td>
+                  <td class="msg"><span class="badge err">PaymentAuthException</span>
+                    <div class="clamp">Upstream payments-mobile returned 504 after 3 retries (FUNCTION_CODE=PAY_AUTH)</div></td>
+                  <td><span class="tchip bad" title="Hata var">✕ 9c1d07aa…</span></td>
+                </tr>
+              </tbody>
+
+              <!-- trace'e göre gruplu (yüklenen örnek içinde) -->
+              <tbody id="grouped" hidden>
+                <tr class="grp"><td>▾</td><td colspan="6"><span class="tchip bad">✕ 9c1d07aa…</span> &nbsp; 5 servis · 1,84 sn · <span class="lvl e">✕ hata var</span> · kök <span class="mono">POST /api/orders</span> · 2 log (bu örnekte)</td></tr>
+                <tr class="click"><td></td><td class="ts">14:35:12.482</td><td><span class="lvl e">✕ ERROR</span></td><td>orders-api</td><td class="mono">MOBILE</td><td class="msg"><div class="clamp">java.lang.OutOfMemoryError: Java heap space while serializing cart…</div></td><td></td></tr>
+                <tr class="click"><td></td><td class="ts">14:35:09.731</td><td><span class="lvl e">✕ ERROR</span></td><td>orders-api</td><td class="mono">MOBILE</td><td class="msg"><div class="clamp">Upstream payments-mobile returned 504 after 3 retries</div></td><td></td></tr>
+                <tr class="grp"><td>▾</td><td colspan="6"><span class="tchip good">✓ 4bf92f35…</span> &nbsp; 2 servis · 212 ms · ✓ hata yok · kök <span class="mono">POST /api/orders</span> · 1 log</td></tr>
+                <tr class="click"><td></td><td class="ts">14:35:12.101</td><td><span class="lvl e">✕ ERROR</span></td><td>orders-api</td><td class="mono">MOBILE</td><td class="msg"><div class="clamp">Cannot invoke "Customer.getSegment()" because "customer" is null</div></td><td></td></tr>
+                <tr class="grp"><td>▾</td><td colspan="6"><span class="tchip samp">○ 77e0b1c2… örneklenmiş</span> &nbsp; trace ClickHouse'ta yok (sampling Collector'da) · 1 log</td></tr>
+                <tr class="click"><td></td><td class="ts">14:35:11.870</td><td><span class="lvl e">✕ ERROR</span></td><td>payments-mobile</td><td class="mono">MOBILE</td><td class="msg"><div class="clamp">HikariPool-1 - Connection is not available, request timed out after 30000ms</div></td><td></td></tr>
+                <tr class="grp"><td>▸</td><td colspan="6"><span class="muted">trace_id yok</span> · 1 log</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- trace çipi hover önizlemesi + çip menüsü -->
+          <div class="pop" id="hov" role="tooltip">
+            <div class="row" style="padding:4px 8px"><b class="mono">9c1d07aa…e41f</b><span class="badge err">✕ hata var</span><span class="mk-tag">hover: çipin üzerine gelince</span></div>
+            <dl><dt>Servis</dt><dd>5 servis · 23 span</dd><dt>Süre</dt><dd>1,84 sn</dd><dt>Kök span</dt><dd class="mono">POST /api/orders</dd><dt>Başlangıç</dt><dd>14:35:10.640</dd></dl>
+            <div style="border-top:1px solid var(--divider);margin-top:4px;padding-top:4px">
+              <div class="opt">Bu trace'e filtrele<span class="r"><span class="kbd">f</span></span></div>
+              <div class="opt">Trace görünümünde aç<span class="r"><span class="kbd">t</span></span></div>
+              <div class="opt">trace_id kopyala</div>
+            </div>
+          </div>
+
+          <div class="pager">
+            <span>Sayfa <b>5</b> / 5 · 100 satır/sayfa</span>
+            <button class="btn sec sm">‹ Önceki</button><button class="btn sec sm" disabled>Sonraki ›</button>
+            <span class="sp" style="flex:1"></span>
+            <button class="btn sec sm">Daha fazla yükle (sonraki 500)</button>
+          </div>
+          <div class="keys" aria-label="Klavye kısayolları">
+            <span><span class="kbd">/</span> sorguya odak</span><span><span class="kbd">j</span> <span class="kbd">k</span> satırlar</span><span><span class="kbd">Enter</span> detay</span>
+            <span><span class="kbd">f</span> filtrele</span><span><span class="kbd">e</span> hariç tut</span><span><span class="kbd">t</span> trace'e git</span>
+          </div>
+        </div>
+      </div>
+      <p class="mk-note">Histogram üründe <span class="mono">CorePanel</span> (uPlot, <span class="mono">viz="stacked-bars"</span>, <span class="mono">regions</span>, <span class="mono">onZoom</span>) ile çizilir; buradaki çubuklar yalnız yerleşimi gösterir. Açılır katmanlar (otomatik tamamlama, hover kartı) mockup'ta açık ve sayfa akışında gösterilir; üründe içeriğin üstünde açılır.</p>
+    </section>
+
+    <!-- ================= GÖRÜNÜM 2: SATIR DETAYI ================= -->
+    <section class="view" id="v2" aria-label="Satır detayı">
+      <div class="split">
+        <div class="back" aria-hidden="true">
+          <div class="card" style="padding:10px"><div class="mono muted">14:35:12.482 ✕ ERROR orders-api java.lang.OutOfMemoryError: Java heap space…<br>14:35:12.101 ✕ ERROR orders-api Cannot invoke "Customer.getSegment()"…<br>14:35:11.870 ✕ ERROR payments-mobile HikariPool-1 - Connection is not available…<br>14:35:10.954 ✕ ERROR branch-teller Sequence contains no elements…</div></div>
+        </div>
+        <div class="sheet" role="dialog" aria-label="Log kaydı detayı">
+          <div class="sh-head">
+            <h2>Log kaydı · 14:35:12.482</h2>
+            <span class="badge err">✕ ERROR</span><span class="badge solid-err">▲ OutOfMemoryError</span>
+            <span style="flex:1"></span>
+            <button class="btn sec sm" title="Önceki (k)">↑</button><button class="btn sec sm" title="Sonraki (j)">↓</button>
+            <button class="btn ghost sm" title="Kapat (Esc)">✕</button>
+          </div>
+          <div class="sh-body">
+            <p class="lead"><b>orders-api</b>, <span class="mono">POST /api/orders</span> işlenirken Java heap alanı tükendi (OutOfMemoryError). Aynı pod'da son 5 dakikada 14 kez görüldü; ilk kez 14:30:42'de, rollout v2.42.0'dan 38 saniye sonra.</p>
+            <div class="row">
+              <button class="btn primary sm">Trace + loglar (t)</button>
+              <button class="btn sec sm">Bu değere filtrele (f)</button>
+              <button class="btn sec sm">Hariç tut (e)</button>
+              <button class="btn sec sm">Bağlantıyı kopyala</button>
+              <button class="btn sec sm">✦ Bu satırı açıkla</button>
+            </div>
+
+            <div class="sect">
+              <h3>Exception
+                <span class="badge solid-err">▲ kaynak tükenmesi</span>
+                <span class="muted" style="font-weight:400">uygulama çerçeveleri vurgulu · framework çerçeveleri soluk</span></h3>
+              <div class="stack"><span class="app">java.lang.OutOfMemoryError: Java heap space</span>
+<span class="app">  at com.acme.orders.cart.CartSerializer.write(CartSerializer.java:118)</span>
+<span class="app">  at com.acme.orders.api.OrderResource.create(OrderResource.java:64)</span>
+<span class="fw">  at org.jboss.resteasy.core.MethodInjectorImpl.invoke(MethodInjectorImpl.java:170)
+  at org.jboss.resteasy.core.ResourceMethodInvoker.invokeOnTarget(ResourceMethodInvoker.java:644)
+  at io.undertow.servlet.handlers.ServletHandler.handleRequest(ServletHandler.java:74)</span><span id="st2more" hidden>
+<span class="fw">  at io.undertow.server.Connectors.executeRootHandler(Connectors.java:393)
+  at org.jboss.threads.ContextClassLoaderSavingRunnable.run(ContextClassLoaderSavingRunnable.java:35)
+  … 26 framework çerçevesi</span></span>
+<span class="app">Caused by: java.lang.OutOfMemoryError: Java heap space</span>
+<span class="app">  at com.acme.orders.cart.CartBuffer.grow(CartBuffer.java:41)</span></div>
+              <button class="more" data-toggle="#st2more" aria-expanded="false">▸ 28 framework çerçevesi gizli — aç/kapat</button>
+            </div>
+
+            <div class="sect">
+              <h3>Alanlar
+                <span class="seg" role="tablist" aria-label="Tablo/JSON"><button class="on" data-tab="kvt">Tablo</button><button data-tab="jsn">JSON</button></span>
+                <input class="input" style="height:24px;width:150px;font-size:12px" placeholder="Alan süz…" aria-label="Alan süz"></h3>
+              <div class="kv" id="kvt">
+                <div class="k">@timestamp</div><div class="v">2026-11-05 14:35:12.482</div><div class="a"></div>
+                <div class="k">service.name</div><div class="v">orders-api</div><div class="a"><button class="btn icon sec" title="Filtrele">+</button><button class="btn icon sec" title="Hariç tut">−</button><button class="btn icon sec" title="Kolon ekle">▥</button></div>
+                <div class="k">CHANNEL_CODE</div><div class="v">MOBILE</div><div class="a"><button class="btn icon sec" title="Filtrele">+</button><button class="btn icon sec" title="Hariç tut">−</button><button class="btn icon sec" title="Kolon ekle">▥</button></div>
+                <div class="k">FUNCTION_CODE</div><div class="v">ORD_CREATE</div><div class="a"><button class="btn icon sec" title="Filtrele">+</button><button class="btn icon sec" title="Hariç tut">−</button><button class="btn icon sec" title="Kolon ekle">▥</button></div>
+                <div class="k">operation</div><div class="v">POST /api/orders</div><div class="a"><button class="btn icon sec" title="Filtrele">+</button><button class="btn icon sec" title="Hariç tut">−</button><button class="btn icon sec" title="Kolon ekle">▥</button></div>
+                <div class="k">trace.id</div><div class="v"><span class="tchip bad">✕ 9c1d07aa5b3e4f0a8d217c66f201e41f</span></div><div class="a"><button class="btn icon sec" title="Filtrele">+</button><button class="btn icon sec" title="Kopyala">⧉</button></div>
+                <div class="k">span.id</div><div class="v">5f1c22e09ab47d10</div><div class="a"><button class="btn icon sec" title="Filtrele">+</button><button class="btn icon sec" title="Kopyala">⧉</button></div>
+                <div class="k">kubernetes.pod_name</div><div class="v">orders-api-7d9f6-x2k4p</div><div class="a"><button class="btn icon sec" title="Filtrele">+</button><button class="btn icon sec" title="Hariç tut">−</button><button class="btn icon sec" title="Kolon ekle">▥</button></div>
+                <div class="k">logger_name</div><div class="v">com.acme.orders.cart.CartSerializer</div><div class="a"><button class="btn icon sec" title="Filtrele">+</button><button class="btn icon sec" title="Hariç tut">−</button><button class="btn icon sec" title="Kolon ekle">▥</button></div>
+              </div>
+              <pre class="json" id="jsn" hidden>{
+  "@timestamp": "2026-11-05T14:35:12.482+03:00",
+  "level": "ERROR",
+  "service": { "name": "orders-api" },
+  "message": "java.lang.OutOfMemoryError: Java heap space while serializing cart for customer TCKN *********** (FUNCTION_CODE=ORD_CREATE)",
+  "trace": { "id": "9c1d07aa5b3e4f0a8d217c66f201e41f" },
+  "span": { "id": "5f1c22e09ab47d10" },
+  "attributes": { "CHANNEL_CODE": "MOBILE", "FUNCTION_CODE": "ORD_CREATE", "operation": "POST /api/orders" },
+  "kubernetes": { "pod_name": "orders-api-7d9f6-x2k4p", "namespace_name": "acme-prod" },
+  "logger_name": "com.acme.orders.cart.CartSerializer",
+  "thread_name": "default task-41"
+}</pre>
+            </div>
+
+            <div class="sect">
+              <h3>Çevre loglar
+                <span class="seg" role="group" aria-label="Kapsam"><button class="on">Aynı pod</button><button>Aynı servis</button></span>
+                <span class="muted" style="font-weight:400">±5 gösteriliyor</span></h3>
+              <div class="ctxl">
+                <div><span>14:35:12.310</span><span class="lvl i">● INFO</span><span>Cart loaded items=412 sizeBytes=18.4MB</span></div>
+                <div><span>14:35:12.395</span><span class="lvl w">▲ WARN</span><span>GC overhead: 92% of last 10s spent in old-gen collection</span></div>
+                <div><span>14:35:12.441</span><span class="lvl i">● INFO</span><span>Serializing cart for order ORD-88214</span></div>
+                <div class="pivot"><span>14:35:12.482</span><span class="lvl e">✕ ERROR</span><span>java.lang.OutOfMemoryError: Java heap space while serializing cart…</span></div>
+                <div><span>14:35:12.497</span><span class="lvl e">✕ ERROR</span><span>Request failed with 500 POST /api/orders</span></div>
+                <div><span>14:35:12.560</span><span class="lvl w">▲ WARN</span><span>Readiness probe failed: heap usage 99%</span></div>
+                <div><span>14:35:13.004</span><span class="lvl i">● INFO</span><span>Shutting down: SIGTERM received</span></div>
+              </div>
+              <div class="row" style="margin-top:6px"><button class="btn sec sm">↑ 50 önceki</button><button class="btn sec sm">↓ 50 sonraki</button><button class="btn ghost sm">Bu pencereyi Logs'ta aç</button></div>
+            </div>
+
+            <details class="ev">
+              <summary>Teknik kanıt (kapalı başlar): kaynak öznitelikleri, indeks, doküman kimliği</summary>
+              <div class="kv" style="margin-top:8px">
+                <div class="k">_index</div><div class="v">app-orders-api.acme-prod-2026.11.05</div><div class="a"></div>
+                <div class="k">kubernetes.namespace_name</div><div class="v">acme-prod</div><div class="a"></div>
+                <div class="k">host.name</div><div class="v">node-a-17</div><div class="a"></div>
+              </div>
+            </details>
+          </div>
+        </div>
+      </div>
+      <p class="mk-note">Üründe <span class="mono">coremetry/DetailSheet</span> (<span class="mono">useSheetParam('doc')</span>, sol tutamakla genişler, ≤640px tam genişlik). Önce düz cümle; teknik kanıt kapalı. Gösterilen veri maskesizdir — maskeleme yalnız LLM'e giden metne uygulanır.</p>
+    </section>
+
+    <!-- ================= GÖRÜNÜM 3: TRACE + LOG ================= -->
+    <section class="view" id="v3" aria-label="Trace ve log birleşik görünüm">
+      <div class="row" style="margin-bottom:8px">
+        <div class="seg" role="tablist" aria-label="Görünüm (?panel=)"><button>Logs</button><button>Desenler</button><button>Şablonlar</button><button class="on">Trace</button></div>
+        <span class="pill pin"><span class="tag">trace</span><span class="v" style="padding-left:8px">9c1d07aa5b3e4f0a8d217c66f201e41f</span><button title="Kopyala">⧉</button><button title="Kaldır">✕</button></span>
+        <span style="flex:1"></span>
+        <button class="btn sec sm">✦ Bu trace'te ne oldu?</button>
+        <button class="btn sec sm">Trace sayfasında aç ↗</button>
+      </div>
+
+      <div class="card">
+        <div class="tbar">
+          <span class="badge err">✕ hata var</span>
+          <b>5 servis · 23 span · 1,84 sn</b><span class="muted">kök <span class="mono">POST /api/orders</span> · 14:35:10.640</span>
+          <span class="sp"></span>
+          <button class="sw" role="switch" aria-checked="true" data-sw><i></i>Yalnız loglu span'ler</button>
+          <button class="sw" role="switch" aria-checked="false" data-sw><i></i>Yalnız hatalar</button>
+        </div>
+        <div class="stream">
+          <span>ⓘ Kapsam bu trace için genişletildi: trace'in geçtiği 5 servisin logları getirildi; <b>2 servis kapsamınız dışında</b> ve etiketlendi. 9 log · 7'si span'e bağlı.</span>
+        </div>
+        <div class="sx">
+          <div class="wf">
+            <div class="wf-h"><span>Span / servis</span><span>0 ms ───────────────────────── 1.840 ms</span><span class="num">Süre</span></div>
+
+            <div class="wf-r"><span class="nm">▾ <b>orders-api</b> <span class="mono">POST /api/orders</span> <span class="lvl e">✕</span></span><span class="lane"><i class="er" style="left:0;width:100%"></i></span><span class="num">1,84 sn</span></div>
+            <div class="wf-l"><span class="muted">+2 ms</span><span class="lvl i">● INFO</span><span class="tx">Order request received CHANNEL_CODE=MOBILE FUNCTION_CODE=ORD_CREATE</span><span></span></div>
+
+            <div class="wf-r"><span class="nm" style="padding-left:16px">▾ <b>orders-api</b> <span class="mono">CartService.load</span></span><span class="lane"><i style="left:1%;width:18%"></i></span><span class="num">331 ms</span></div>
+            <div class="wf-l"><span class="muted">+330 ms</span><span class="lvl i">● INFO</span><span class="tx">Cart loaded items=412 sizeBytes=18.4MB</span><span></span></div>
+
+            <div class="wf-r"><span class="nm" style="padding-left:16px">▾ <b>inventory-core</b> <span class="mono">GET /stock/reserve</span> <span class="badge outline">kapsam dışı</span></span><span class="lane"><i class="out" style="left:20%;width:24%"></i></span><span class="num">442 ms</span></div>
+            <div class="wf-l"><span class="muted">+790 ms</span><span class="lvl w">▲ WARN</span><span class="tx">Stock reservation slow: 402 ms for 412 items</span><span class="badge outline">kapsam dışı</span></div>
+
+            <div class="wf-r"><span class="nm" style="padding-left:16px">▾ <b>payments-mobile</b> <span class="mono">POST /authorize</span> <span class="lvl e">✕</span></span><span class="lane"><i class="er" style="left:45%;width:42%"></i></span><span class="num">773 ms</span></div>
+            <div class="wf-l"><span class="muted">+905 ms</span><span class="lvl e">✕ ERROR</span><span class="tx"><span class="badge solid-err">▲ Bağlantı havuzu</span> HikariPool-1 - Connection is not available, request timed out after 30000ms</span><span></span></div>
+            <div class="wf-l"><span class="muted">+1.612 ms</span><span class="lvl e">✕ ERROR</span><span class="tx"><span class="badge err">PaymentAuthException</span> upstream timeout, retries=3</span><span></span></div>
+
+            <div class="wf-r"><span class="nm" style="padding-left:32px">· <b>ledger-db</b> <span class="mono">SELECT accounts</span> <span class="badge outline">kapsam dışı</span></span><span class="lane"><i class="out" style="left:49%;width:36%"></i></span><span class="num">660 ms</span></div>
+
+            <div class="wf-r"><span class="nm" style="padding-left:16px">▾ <b>orders-api</b> <span class="mono">CartSerializer.write</span> <span class="lvl e">✕</span></span><span class="lane"><i class="er" style="left:89%;width:10%"></i></span><span class="num">180 ms</span></div>
+            <div class="wf-l"><span class="muted">+1.790 ms</span><span class="lvl w">▲ WARN</span><span class="tx">GC overhead: 92% of last 10s spent in old-gen collection</span><span></span></div>
+            <div class="wf-l"><span class="muted">+1.842 ms</span><span class="lvl e">✕ ERROR</span><span class="tx"><span class="badge solid-err">▲ OutOfMemoryError</span> java.lang.OutOfMemoryError: Java heap space while serializing cart…</span><span></span></div>
+
+            <div class="wf-r"><span class="nm">· <b>notify-gateway</b> <span class="mono">publish order.failed</span></span><span class="lane"><i style="left:97%;width:3%"></i></span><span class="num">41 ms</span></div>
+
+            <div class="wf-r" style="background:var(--bg2)"><span class="nm">▾ <b>Span'e bağlanamayan loglar (2)</b> <span class="muted">span_id yok — zaman sırasıyla</span></span><span></span><span></span></div>
+            <div class="wf-l"><span class="muted">+1.857 ms</span><span class="lvl e">✕ ERROR</span><span class="tx">orders-api · Request failed with 500 POST /api/orders</span><span></span></div>
+            <div class="wf-l"><span class="muted">+1.920 ms</span><span class="lvl w">▲ WARN</span><span class="tx">orders-api · Readiness probe failed: heap usage 99%</span><span></span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ikinci küçük panel: örneklenmiş trace boş durumu -->
+      <div class="card" style="margin-top:12px">
+        <div class="tbar"><span class="mk-tag">ikinci durum</span><b class="mono">77e0b1c2…</b><span class="muted">log'da trace_id var, ClickHouse'ta trace yok</span></div>
+        <div class="empty">
+          <div class="ic" aria-hidden="true">○</div>
+          <h4>Trace örneklenmiş (sampling Collector'da)</h4>
+          <p>Bu trace_id loglarda geçiyor ama trace ClickHouse'a yazılmamış: Collector'daki örnekleme bu trace'i dışarıda bırakmış. Şelale çizilemez; loglar aşağıda zaman sırasıyla listelenir. Kapsam genişletilmedi (servis listesi bilinmiyor).</p>
+          <div class="row" style="justify-content:center">
+            <button class="btn primary sm">Bu trace_id'nin logları (3)</button>
+            <button class="btn sec sm">Tüm servislerde ara (±5 dk)</button>
+            <button class="btn sec sm">Tempo'da ara</button>
+          </div>
+        </div>
+        <div class="wf-l"><span class="muted">14:35:11.870</span><span class="lvl e">✕ ERROR</span><span class="tx">payments-mobile · HikariPool-1 - Connection is not available, request timed out after 30000ms</span><span></span></div>
+        <div class="wf-l"><span class="muted">14:35:11.871</span><span class="lvl e">✕ ERROR</span><span class="tx">payments-mobile · PaymentAuthException: no connection</span><span></span></div>
+        <div class="wf-l"><span class="muted">14:35:11.902</span><span class="lvl w">▲ WARN</span><span class="tx">payments-mobile · Returning 503 to caller</span><span></span></div>
+      </div>
+      <p class="mk-note">Şelale üründe mevcut <span class="mono">TraceWaterfall</span> bileşenidir; log satırları yeni <span class="mono">logRows</span> prop'u ile span satırının altına yerleşir. Veri tek istekte gelir (<span class="mono">/api/traces/{id}/bundle</span>).</p>
+    </section>
+
+    <!-- ================= GÖRÜNÜM 4: DESENLER ================= -->
+    <section class="view" id="v4" aria-label="Desenler">
+      <div class="row" style="justify-content:space-between;margin-bottom:8px">
+        <div class="seg" role="tablist" aria-label="Görünüm (?panel=)"><button>Logs</button><button class="on">Desenler</button><button>Şablonlar</button></div>
+        <div class="row"><button class="btn sec sm">✦ Desenleri anlat</button>
+          <div class="seg" role="group" aria-label="Kip"><button class="on" data-pane="pat">Desenler</button><button data-pane="cmpw">İki aralığı karşılaştır</button></div></div>
+      </div>
+
+      <div id="pat">
+        <div class="card sum">Son 15 dk: <b>2.000 satır örneklendi</b> (14:28–14:36 kapsandı, ≥ 12.480 eşleşme) · <b>38 desen</b> · <span class="badge warn">3 yeni</span> · taban: önceki 15 dk. Sayılar örneklem içidir; ilk 20 desenin sayımı doğrulandı.</div>
+        <div class="card">
+          <div class="sx">
+            <table class="dt" style="min-width:980px">
+              <thead><tr><th>Desen</th><th class="num">Sayı</th><th>Eğilim</th><th>Tabana oran</th><th>İlk görülme</th><th>Son görülme</th><th>Seviye</th><th>Servisler</th><th>Eylem</th></tr></thead>
+              <tbody>
+                <tr><td class="tpl">java.lang.OutOfMemoryError: Java heap space while serializing cart for customer <em>&lt;x&gt;</em></td><td class="num">412</td>
+                  <td><svg class="spark up" viewBox="0 0 84 20" aria-label="artıyor"><polyline points="0,19 12,19 24,19 36,18 48,12 60,6 72,3 84,2"/></svg></td>
+                  <td><span class="badge solid-err">● İlk kez görüldü</span><div class="muted">normalde hiç görülmez</div></td><td class="ts">14:30:42</td><td class="ts">14:35:12</td><td><span class="lvl e">✕ ERROR</span></td><td>orders-api</td>
+                  <td><button class="btn sec sm">Ara</button> <button class="btn icon sec" title="AND ekle">+</button> <button class="btn icon sec" title="Hariç tut">−</button></td></tr>
+                <tr><td class="tpl">HikariPool-<em>&lt;x&gt;</em> - Connection is not available, request timed out after <em>&lt;x&gt;</em>ms</td><td class="num">297</td>
+                  <td><svg class="spark up" viewBox="0 0 84 20" aria-label="artıyor"><polyline points="0,17 12,17 24,16 36,15 48,10 60,7 72,5 84,4"/></svg></td>
+                  <td><span class="badge err">▲ yaklaşık 6 kat</span></td><td class="ts">son 7 günde var</td><td class="ts">14:35:11</td><td><span class="lvl e">✕ ERROR</span></td><td>payments-mobile</td>
+                  <td><button class="btn sec sm">Ara</button> <button class="btn icon sec" title="AND ekle">+</button> <button class="btn icon sec" title="Hariç tut">−</button></td></tr>
+                <tr><td class="tpl">Upstream <em>&lt;x&gt;</em> returned <em>&lt;x&gt;</em> after <em>&lt;x&gt;</em> retries</td><td class="num">188</td>
+                  <td><svg class="spark up" viewBox="0 0 84 20" aria-label="artıyor"><polyline points="0,16 12,15 24,16 36,14 48,11 60,9 72,8 84,7"/></svg></td>
+                  <td><span class="badge warn">▲ yaklaşık 2 kat</span></td><td class="ts">son 7 günde var</td><td class="ts">14:35:09</td><td><span class="lvl e">✕ ERROR</span></td><td>orders-api</td>
+                  <td><button class="btn sec sm">Ara</button> <button class="btn icon sec" title="AND ekle">+</button> <button class="btn icon sec" title="Hariç tut">−</button></td></tr>
+                <tr><td class="tpl">Cannot invoke "<em>&lt;x&gt;</em>" because "<em>&lt;x&gt;</em>" is null — order <em>&lt;x&gt;</em> rejected</td><td class="num">96</td>
+                  <td><svg class="spark" viewBox="0 0 84 20" aria-label="yeni"><polyline points="0,19 12,19 24,19 36,19 48,14 60,12 72,12 84,11"/></svg></td>
+                  <td><span class="badge warn">● Önceki pencerede yok</span><div class="muted">7 günde görülmüş</div></td><td class="ts">son 7 günde var</td><td class="ts">14:35:12</td><td><span class="lvl e">✕ ERROR</span></td><td>orders-api</td>
+                  <td><button class="btn sec sm">Ara</button> <button class="btn icon sec" title="AND ekle">+</button> <button class="btn icon sec" title="Hariç tut">−</button></td></tr>
+                <tr><td class="tpl">Order validation failed: FUNCTION_CODE=<em>&lt;x&gt;</em> reason=<em>&lt;x&gt;</em> orderId=<em>&lt;x&gt;</em></td><td class="num">604</td>
+                  <td><svg class="spark" viewBox="0 0 84 20" aria-label="sabit"><polyline points="0,9 12,10 24,8 36,10 48,9 60,10 72,9 84,9"/></svg></td>
+                  <td><span class="muted">≈ aynı</span></td><td class="ts">son 7 günde var</td><td class="ts">14:35:10</td><td><span class="lvl e">✕ ERROR</span></td><td>orders-api +2</td>
+                  <td><button class="btn sec sm">Ara</button> <button class="btn icon sec" title="AND ekle">+</button> <button class="btn icon sec" title="Hariç tut">−</button></td></tr>
+                <tr><td class="tpl">Sequence contains no elements — at Acme.Teller.Queue.TicketService.Next() in <em>&lt;x&gt;</em></td><td class="num">41</td>
+                  <td><svg class="spark" viewBox="0 0 84 20" aria-label="azalıyor"><polyline points="0,6 12,7 24,8 36,10 48,12 60,13 72,15 84,16"/></svg></td>
+                  <td><span class="badge ok">▼ yarıya indi</span></td><td class="ts">son 7 günde var</td><td class="ts">14:35:10</td><td><span class="lvl e">✕ ERROR</span></td><td>branch-teller</td>
+                  <td><button class="btn sec sm">Ara</button> <button class="btn icon sec" title="AND ekle">+</button> <button class="btn icon sec" title="Hariç tut">−</button></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="pager"><span class="muted">38 desenin 6'sı · sıralama: tabana oran ↓</span><span style="flex:1"></span><button class="btn sec sm">Örneklemi 2.000'e çıkar</button></div>
+        </div>
+      </div>
+
+      <!-- iki aralığı karşılaştır -->
+      <div id="cmpw" hidden>
+        <div class="card sum">
+          <div class="row">
+            <b>A</b><button class="btn sec sm">Rollout öncesi · 13:50–14:20 ▾</button>
+            <span class="muted">karşı</span>
+            <b>B</b><button class="btn sec sm">Rollout sonrası · 14:20–14:50 ▾</button>
+            <span class="muted">Hazır:</span>
+            <div class="seg" role="group" aria-label="Hazır karşılaştırma"><button class="on">Rollout öncesi / sonrası</button><button>Dün aynı saat / şimdi</button><button>Özel</button></div>
+          </div>
+          <div class="muted" style="margin-top:6px;font-size:12px">Her aralıktan 2.000 satır örneklendi; "yeni" ve "kaybolan" hükmü gerçek sayımla doğrulandı (örneklemde yokluk kanıt sayılmaz).</div>
+        </div>
+        <div class="cmp">
+          <div class="card">
+            <h4><span class="badge solid-err">● Yeni</span> B'de var, A'da yok <span class="muted">· 3</span></h4>
+            <div class="sx"><table class="dt" style="min-width:320px"><thead><tr><th>Desen</th><th class="num">B</th></tr></thead><tbody>
+              <tr><td class="tpl" style="min-width:0">java.lang.OutOfMemoryError: Java heap space while serializing cart…</td><td class="num">412</td></tr>
+              <tr><td class="tpl" style="min-width:0">GC overhead: <em>&lt;x&gt;</em>% of last <em>&lt;x&gt;</em>s spent in old-gen collection</td><td class="num">188</td></tr>
+              <tr><td class="tpl" style="min-width:0">Readiness probe failed: heap usage <em>&lt;x&gt;</em>%</td><td class="num">57</td></tr>
+            </tbody></table></div>
+          </div>
+          <div class="card">
+            <h4><span class="badge err">▲ Artan</span> oran ≥ 1,8 kat <span class="muted">· 2</span></h4>
+            <div class="sx"><table class="dt" style="min-width:320px"><thead><tr><th>Desen</th><th class="num">A</th><th class="num">B</th><th>Oran</th></tr></thead><tbody>
+              <tr><td class="tpl" style="min-width:0">HikariPool-<em>&lt;x&gt;</em> - Connection is not available…</td><td class="num">48</td><td class="num">297</td><td>yaklaşık 6 kat</td></tr>
+              <tr><td class="tpl" style="min-width:0">Upstream <em>&lt;x&gt;</em> returned <em>&lt;x&gt;</em> after <em>&lt;x&gt;</em> retries</td><td class="num">90</td><td class="num">188</td><td>yaklaşık 2 kat</td></tr>
+            </tbody></table></div>
+          </div>
+          <div class="card">
+            <h4><span class="badge ok">▼ Kaybolan</span> A'da var, B'de yok <span class="muted">· 1</span></h4>
+            <div class="sx"><table class="dt" style="min-width:320px"><thead><tr><th>Desen</th><th class="num">A</th></tr></thead><tbody>
+              <tr><td class="tpl" style="min-width:0">Cart cache warm-up finished in <em>&lt;x&gt;</em> ms</td><td class="num">120</td></tr>
+            </tbody></table></div>
+          </div>
+        </div>
+      </div>
+      <p class="mk-note">Desen kimliği ve taban mantığı Log-ML ile ortaktır. "İlk kez görüldü" = geriye 7 günde hiç yok; "Önceki pencerede yok" ayrı bir etikettir. Oran ifadeleri sade dil kuralını izler ("yaklaşık N kat", "normalde hiç görülmez").</p>
+    </section>
+  </main>
+</div>
+
+<script>
+(function(){
+  var root=document.documentElement;
+  function setOn(group,btn){ group.querySelectorAll('button').forEach(function(b){b.classList.toggle('on',b===btn);}); }
+  // tema
+  var ts=document.getElementById('themeseg');
+  ts.addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;root.setAttribute('data-theme',b.dataset.th);setOn(ts,b);});
+  var dark=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;
+  var cur=root.getAttribute('data-theme');
+  setOn(ts,ts.querySelector('[data-th="'+(cur||(dark?'dark':'light'))+'"]'));
+  // görünüm
+  var vs=document.getElementById('viewseg');
+  vs.addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;setOn(vs,b);
+    document.querySelectorAll('.view').forEach(function(v){v.classList.toggle('on',v.id===b.dataset.view);});});
+  // genel: aç/kapat, segment, anahtar
+  document.addEventListener('click',function(e){
+    var t=e.target.closest('[data-toggle]');
+    if(t){var el=document.querySelector(t.dataset.toggle);if(el){el.hidden=!el.hidden;t.setAttribute('aria-expanded',String(!el.hidden));}return;}
+    var sw=e.target.closest('[data-sw]');
+    if(sw){var on=sw.getAttribute('aria-checked')!=='true';sw.setAttribute('aria-checked',String(on));
+      if(sw.hasAttribute('data-group')){document.getElementById('flat').hidden=on;document.getElementById('grouped').hidden=!on;document.getElementById('hov').hidden=on;}
+      return;}
+    var s=e.target.closest('.seg button');
+    if(s&&!s.dataset.view&&!s.dataset.th){setOn(s.parentNode,s);
+      if(s.dataset.set){var p=s.dataset.set.split(':');document.getElementById('doc').setAttribute('data-'+p[0],p[1]);}
+      if(s.dataset.tab){['kvt','jsn'].forEach(function(id){document.getElementById(id).hidden=(id!==s.dataset.tab);});}
+      if(s.dataset.pane){['pat','cmpw'].forEach(function(id){document.getElementById(id).hidden=(id!==s.dataset.pane);});}
+    }
+  });
+  var q=document.querySelector('[data-toggle-focus]');
+  if(q){q.addEventListener('focus',function(){document.querySelector(q.dataset.toggleFocus).hidden=false;});
+    q.addEventListener('keydown',function(e){if(e.key==='Escape'){document.querySelector(q.dataset.toggleFocus).hidden=true;}});}
+  // histogram çubukları (sahte veri)
+  var bars=document.getElementById('bars'),h='';
+  for(var i=0;i<45;i++){
+    var burst=(i>=17&&i<=38);
+    var er=burst?14+((i*7)%5)*5+(i>26&&i<32?16:0):1+(i%3), wa=3+((i*5)%7)+(burst?4:0), inf=22+((i*11)%9)*2, db=5+((i*3)%5);
+    var k=124/110;
+    h+='<div class="b"><i class="s-err" style="height:'+Math.round(er*k)+'px"></i><i class="s-warn" style="height:'+Math.round(wa*k)+'px"></i><i class="s-info" style="height:'+Math.round(inf*k)+'px"></i><i class="s-dbg" style="height:'+Math.round(db*k)+'px"></i></div>';
+  }
+  bars.innerHTML=h;
+})();
+</script>
+</body>
+</html>

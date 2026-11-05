@@ -217,13 +217,16 @@ func (s *Server) serveCached(w http.ResponseWriter, r *http.Request, key string,
 	// v0.10.254 (perf §7 madde 8) — her CH sorgusuna log_comment =
 	// route:<pattern>. fn sarmalanır ki SWR arka-plan tazelemesi (kendi
 	// Background ctx'i) de etiketi taşısın.
+	start := time.Now() // v0.10.1817 — Server-Timing total (yalnız kaydedicili uçlarda basılır)
 	tag := chstore.RouteQueryTag(r.Pattern, r.URL.Path)
 	tagged := func(ctx context.Context) (any, error) { return fn(chstore.WithQueryTag(ctx, tag)) }
 	body, tier, err := s.cachedJSON(r.Context(), key, ttl, r.URL.Query().Get("refresh") == "1", tagged)
 	if err != nil {
+		setServerTiming(w, r, start, "")
 		writeErr(w, err)
 		return
 	}
+	setServerTiming(w, r, start, tier)
 	writeCacheHit(w, tier, body)
 }
 

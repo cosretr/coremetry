@@ -12245,3 +12245,12 @@ satırı, açık satırın vurgusu + satır tıkıyla aç/kapa, satır içi form
   da olsa "bilinmiyor". Koşu: son işlenen günün haftası değerlendirilmemişse (pazartesi işlenince). Sapma: pin yolu
   `/api/ml/profiles/{name}/pin` — `{name}` çıplak hali `PUT /api/ml/{id}/verdict` ile mux'ta çakışıyordu (TestMuxRoutePatterns).
   Tablo sunucu-sayfalı → resize-only: kolonlarda `sortValue` YOK (verilse başlık tıklanır ama yalnız bir sayfa sıralanırdı).
+
+## 2026-11-05 — Log Search Faz 1 (audit `docs/logs/log-search-audit.md`, mockup `docs/frontend/mockups/log-search.html`)
+
+Operatör "Log Mockup iyi, devam" (2026-11-05). `/logs` yerinde evrilir; dilimler 1.1–1.6 v0.10.1817–1822.
+- **v0.10.1817 — sözleşme çivisi + Server-Timing + perfcheck (1.1).** `Server-Timing` yalnız kaydedici bağlayan uçlarda
+  (`/api/logs`, `/api/logs/search`, `/timeseries`, `/fieldstats`, `/patterns`): `cache;desc=<X-Cache>, es;dur=…, total;dur=…`.
+  `es` = ES transport'unda yanıt başlığına kadar geçen süre (`internal/servertiming`); CH backend'inde yalnız cache + total.
+  Başlık serveCached'te basılır, diğer uçlar değişmez. Üç perfcheck noktası eşiği audit hedefi, ölçülmedi. Servis Logs sekmesi
+  (paylaşılan LogsHistogram/LogTable) pin testiyle çivilendi — Faz 1 paylaşılan parçalarda yapılır, Logs'a özel çatal yok.

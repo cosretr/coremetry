@@ -80,6 +80,7 @@ func logsPatternsBaselineWindow(from, to time.Time) (bFrom, bTo time.Time, ok bo
 const logsPatternsBaselineSample = 500
 
 func (s *Server) getLogsPatterns(w http.ResponseWriter, r *http.Request) {
+	r = withServerTiming(r) // v0.10.1817 — Server-Timing (server_timing.go)
 	q := r.URL.Query()
 	sev, _ := strconv.Atoi(q.Get("severity"))
 	f := logstore.Filter{

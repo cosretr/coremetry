@@ -251,7 +251,7 @@ export function LogsHistogram({ range, filter, onRangeSelect, onZoomReset, onSer
   );
 
   return (
-    <div style={{
+    <div data-testid="logs-histogram" style={{
       background: 'var(--bg1)', border: '1px solid var(--border)',
       borderRadius: 6, padding: 8, marginBottom: 10,
     }}>

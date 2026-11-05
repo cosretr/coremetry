@@ -22,6 +22,7 @@ import (
 	"github.com/elastic/go-elasticsearch/v8"
 	"github.com/elastic/go-elasticsearch/v8/esapi"
 
+	"github.com/cilcenk/coremetry/internal/servertiming"
 	"github.com/cilcenk/coremetry/internal/sourcestate"
 )
 
@@ -477,7 +478,10 @@ func NewES(cfg ESConfig) (*ESStore, error) {
 		Username:  username,
 		Password:  password,
 		APIKey:    apiKey,
-		Transport: transport,
+		// v0.10.1817 — Server-Timing `es;dur=`: istek bağlamında kaydedici
+		// varsa (yalnız /api/logs* uçları bağlar) yanıt başlığına kadar
+		// geçen süre toplanır; yoksa saydam geçiş.
+		Transport: servertiming.Transport("es", transport),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create ES client: %w", err)

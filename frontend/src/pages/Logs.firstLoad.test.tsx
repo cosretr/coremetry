@@ -175,6 +175,55 @@ describe('/logs ilk yükleme süzgeçsiz istek atmaz (v0.10.1076)', () => {
     expect(m.logsCalls[0].search).toBe('boom');
   });
 
+  // v0.10.1817 (Log Search Faz 1 dilim 1.1 — sözleşme çivisi). Derin linkin
+  // İLK liste ve histogram istek nesneleri TAM pinli: Faz 1 dilimleri (sorgu
+  // çubuğu, KQL, histogram CorePanel'e, iptal sinyali) istek şeklini yalnız
+  // EKLEYEREK değiştirebilir — bu snapshot'ın meşru güncellemesi yalnız yeni
+  // satır ekler; mevcut bir anahtarın adı ya da değeri değişirse sözleşme
+  // bozulmuştur. Arama kutusu q'yu verbatim gösterir.
+  it('derin link: ilk liste + histogram istek nesneleri tam pinli; kutu q verbatim', async () => {
+    await mountLogs(`/logs?q=${encodeURIComponent('service.name:(orders-api or payments-mobile) and level: error')}`
+      + `&service=orders-api&severity=17&asc=1&breakdown=service&range=${RANGE}`);
+    expect(searchBoxValue()).toBe('service.name:(orders-api or payments-mobile) and level: error');
+    expect({ logs: m.logsCalls[0], histogram: m.tsCalls[0] }).toMatchInlineSnapshot(`
+      {
+        "histogram": {
+          "bucketSec": 60,
+          "cluster": undefined,
+          "env": undefined,
+          "from": 1759494780000000000,
+          "groupBy": "service",
+          "hasTrace": undefined,
+          "pattern": undefined,
+          "search": "service.name:(orders-api or payments-mobile) and level: error",
+          "service": "orders-api",
+          "severity": 17,
+          "team": undefined,
+          "to": 1759497240000000000,
+          "traceId": undefined,
+        },
+        "logs": {
+          "after": undefined,
+          "asc": true,
+          "cluster": undefined,
+          "env": undefined,
+          "from": 1759494780000000000,
+          "hasTrace": undefined,
+          "limit": 100,
+          "paging": true,
+          "pattern": undefined,
+          "search": "service.name:(orders-api or payments-mobile) and level: error",
+          "service": "orders-api",
+          "severity": 17,
+          "spanId": undefined,
+          "team": undefined,
+          "to": 1759497240000000000,
+          "traceId": undefined,
+        },
+      }
+    `);
+  });
+
   it('çıplak /logs: varsayılan liste ve histogram istekleri BİR kez', async () => {
     await mountLogs('/logs');
     expect(m.logsCalls).toHaveLength(1);

@@ -41,6 +41,24 @@
       "path": "/api/problems",
       "budget": { "achievableMs": 2500, "aspirationalMs": 200 },
       "note": "P6 — KAPANDI v0.10.144: FINAL 13–100 ms (7k satır); gecikme lokal CH CPU kuyruğu (query_log OSCPUWait 1.4–4.4 s vs CPU 60–290 ms), FINAL'sız okuma daha yavaş ölçüldü → kod değişikliği yok; perfcheck taban p50 0.78–1.54 s oynak; sıcak yol 15 s cache"
+    },
+    {
+      "name": "GET /api/logs", "scenario": "first-rows-15m-service", "window": "15m", "cold": true,
+      "path": "/api/logs?service={service}&limit=100&paging=1&from={from}&to={to}",
+      "budget": { "achievableMs": 1000, "aspirationalMs": 500 },
+      "note": "L1 — v0.10.1817 (Log Search Faz 1 dilim 1.1, audit §5): son 15 dk tek servis ilk satırlar < 1 s. Eşik = audit hedefi, taban koşusu YOK (ölçülmedi). Lokal CH log backend'i ölçer; ES süresi prod'da Server-Timing es;dur= ile (audit §10-P)"
+    },
+    {
+      "name": "GET /api/logs", "scenario": "first-rows-24h-service", "window": "24h", "cold": true,
+      "path": "/api/logs?service={service}&limit=100&paging=1&from={from}&to={to}",
+      "budget": { "achievableMs": 3000, "aspirationalMs": 1000 },
+      "note": "L2 — v0.10.1817: son 24 sa tek servis ilk satırlar < 3 s (audit §5). Eşik = hedef, ölçülmedi"
+    },
+    {
+      "name": "GET /api/logs/patterns", "scenario": "patterns-1h-service", "window": "1h", "cold": true,
+      "path": "/api/logs/patterns?service={service}&limit=50&from={from}&to={to}",
+      "budget": { "achievableMs": 2000, "aspirationalMs": 1000 },
+      "note": "L3 — v0.10.1817: CLAUDE.md bütçesi /api/logs/patterns < 2 s (örneklem 500, 10 s iç bütçe). Eşik = bütçe, ölçülmedi"
     }
   ]
 }
