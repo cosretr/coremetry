@@ -22,6 +22,9 @@ describe('Tailwind kaynak listesi kilitli', () => {
       "'../components/cosre'",
       // Faz 2 dilim 1 R1 (G11): geçirilen sayfa dizinleri, birer satır.
       "'../pages/settings'",
+      // v0.10.1821/1822 (Log Search Faz 1): geçirilen /logs dizini (sorgu
+      // çubuğu); kalan Logs dosyaları geçtikçe eklenir.
+      "'../pages/logs'",
     ]);
   });
 

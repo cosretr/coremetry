@@ -141,7 +141,9 @@ export function ServiceLogsTab({ service, range, windowNs, onZoom, onZoomReset }
   const minSev = lvl === 'all' ? undefined : (LVL_MIN_SEV[lvl] || undefined);
   const q = useQuery({
     queryKey: ['service-tab-logs', service, from, to, search, minSev ?? 0, envParam ?? ''],
-    queryFn: () => api.logs({ limit: 200, from, to, service, search: search || undefined, severity: minSev, env: envParam }),
+    // v0.10.1822 — RQ sinyali: arama/pencere değişince ya da sekmeden çıkışta
+    // uçuştaki ES araması iptal edilir (paylaşılan log parçaları sözleşmesi).
+    queryFn: ({ signal }) => api.logs({ limit: 200, from, to, service, search: search || undefined, severity: minSev, env: envParam }, signal),
     enabled: !!service,
     staleTime: 15_000,
     // v0.8.3 (operator-reported ES incident) — /api/logs is uncached and
@@ -158,25 +160,34 @@ export function ServiceLogsTab({ service, range, windowNs, onZoom, onZoomReset }
   const [pagingBusy, setPagingBusy] = useState(false);
   const [pagingDone, setPagingDone] = useState(false);
   const cursorRef = useRef<string>('');
+  // v0.10.1822 — "200 satır daha" istekleri de iptal edilebilir: süzgeç
+  // değişimi ya da sekmeden çıkış uçuştaki sayfayı keser (bayat sayfa
+  // yeni süzgecin birikimine karışmaz).
+  const pagingCtl = useRef<AbortController | null>(null);
   useEffect(() => {
+    pagingCtl.current?.abort(); pagingCtl.current = null;
     setExtraRows([]); setPagingDone(false); cursorRef.current = '';
   }, [service, from, to, search, minSev, envParam]);
+  useEffect(() => () => pagingCtl.current?.abort(), []);
   const loadMore = async () => {
     if (pagingBusy || pagingDone) return;
     setPagingBusy(true);
+    const ctl = new AbortController();
+    pagingCtl.current = ctl;
     try {
       const base = { limit: 200, from, to, service, search: search || undefined, severity: minSev, env: envParam } as const;
       if (!cursorRef.current) {
-        const first = await api.logs({ ...base, paging: true });
+        const first = await api.logs({ ...base, paging: true }, ctl.signal);
         cursorRef.current = first?.nextCursor ?? '';
         if (!cursorRef.current) { setPagingDone(true); return; }
       }
-      const next = await api.logs({ ...base, after: cursorRef.current, paging: true });
+      const next = await api.logs({ ...base, after: cursorRef.current, paging: true }, ctl.signal);
+      if (ctl.signal.aborted) return;
       setExtraRows(r => [...r, ...(next?.logs ?? [])]);
       cursorRef.current = next?.nextCursor ?? '';
       if (!cursorRef.current || (next?.logs ?? []).length === 0) setPagingDone(true);
     } catch {
-      setPagingDone(true); // hata = sessiz sonsuz-retry yok; sayaç zaten dürüst
+      if (!ctl.signal.aborted) setPagingDone(true); // hata = sessiz sonsuz-retry yok; sayaç zaten dürüst
     } finally {
       setPagingBusy(false);
     }

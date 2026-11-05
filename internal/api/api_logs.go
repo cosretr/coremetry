@@ -482,8 +482,10 @@ func (s *Server) serveLogsSearch(w http.ResponseWriter, r *http.Request, q url.V
 						"reason":   "log backend slow/unreachable",
 					}, nil
 				}
-				log.Printf("[logs] search failed (backend=%s, service=%q, trace=%q): %v",
-					s.logs.Backend(), f.Service, f.TraceID, err)
+				if !errors.Is(err, context.Canceled) { // v0.10.1822 — istemci iptali gürültü değil
+					log.Printf("[logs] search failed (backend=%s, service=%q, trace=%q): %v",
+						s.logs.Backend(), f.Service, f.TraceID, err)
+				}
 				return nil, logsQueryErr(err, f.Search) // v0.10.1818 — 400 + konum
 			}
 			out := logsSearchPayload(page)
@@ -520,8 +522,10 @@ func (s *Server) serveLogsSearch(w http.ResponseWriter, r *http.Request, q url.V
 			// in the response body via res.String()) in the pod log so the
 			// operator can grep "[logs]" instead of only seeing it in the API
 			// response.
-			log.Printf("[logs] search failed (backend=%s, service=%q, trace=%q): %v",
-				s.logs.Backend(), f.Service, f.TraceID, err)
+			if !errors.Is(err, context.Canceled) { // v0.10.1822 — istemci iptali (yeni arama / çıkış) gürültü değil
+				log.Printf("[logs] search failed (backend=%s, service=%q, trace=%q): %v",
+					s.logs.Backend(), f.Service, f.TraceID, err)
+			}
 			return nil, logsQueryErr(err, f.Search) // v0.10.1818 — 400 + konum
 		}
 		out := logsSearchPayload(page)
@@ -1061,7 +1065,7 @@ func (s *Server) getLogsFieldStats(w http.ResponseWriter, r *http.Request) {
 					"reason":   "log backend slow/unreachable",
 				}, nil
 			}
-			return nil, logsQueryErr(err, f.Search) // v0.10.1818 — 400 + konum
+			return nil, logsQueryErr(logstore.MapBackendSlow(err, tctx, ctx), f.Search) // v0.10.1818 — 400 + konum; v0.10.1822 — istemci iptali 499 (MapBackendSlow sarar)
 		}
 		return res, nil
 	})
@@ -1167,7 +1171,7 @@ func (s *Server) getLogsTimeseries(w http.ResponseWriter, r *http.Request) {
 					s.logs.Backend(), f.Service, err)
 				return []logstore.LogSeries{}, nil
 			}
-			return nil, logsQueryErr(err, f.Search) // v0.10.1818 — 400 + konum
+			return nil, logsQueryErr(logstore.MapBackendSlow(err, tctx, ctx), f.Search) // v0.10.1818 — 400 + konum; v0.10.1822 — istemci iptali 499 (MapBackendSlow sarar)
 		}
 		return series, nil
 	})

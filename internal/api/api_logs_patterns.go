@@ -129,7 +129,7 @@ func (s *Server) getLogsPatterns(w http.ResponseWriter, r *http.Request) {
 					"degraded": true, "reason": "log backend slow/unreachable",
 				}, nil
 			}
-			return nil, logsQueryErr(err, f.Search) // v0.10.1818 — 400 + konum
+			return nil, logsQueryErr(logstore.MapBackendSlow(err, tctx, ctx), f.Search) // v0.10.1818 — 400 + konum; v0.10.1822 — istemci iptali 499 (MapBackendSlow sarar)
 		}
 		if res.Groups == nil {
 			res.Groups = []logstore.SignatureGroup{}

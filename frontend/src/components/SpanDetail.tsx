@@ -185,12 +185,16 @@ export function SpanDetail({ span, onClose, logsFrom, logsTo, serviceLinks = tru
   // bir daha sorulmadan açılmaz (memory: davranış değişikliğinde önce sor).
   useEffect(() => {
     if (!span.traceId) { setSpanLogs([]); setSpanLogsMeta({}); return; }
-    api.logs({ traceId: span.traceId, from: logsFromBound, to: logsToBound, limit: 50 })
+    // v0.10.1822 — span değişince / çekmece kapanınca uçuştaki istek iptal.
+    const ctl = new AbortController();
+    api.logs({ traceId: span.traceId, from: logsFromBound, to: logsToBound, limit: 50 }, ctl.signal)
       .then(r => {
+        if (ctl.signal.aborted) return;
         setSpanLogs(r.logs ?? []);
         setSpanLogsMeta({ degraded: r.degraded ? (r.reason || 'log backend slow/unreachable') : undefined, total: r.total });
       })
-      .catch(() => { setSpanLogs([]); setSpanLogsMeta({ failed: true }); });
+      .catch(() => { if (!ctl.signal.aborted) { setSpanLogs([]); setSpanLogsMeta({ failed: true }); } });
+    return () => ctl.abort();
   }, [span.traceId, logsFromBound, logsToBound]);
 
   // Baseline p50 — the 24h leading up to this span, for the same

@@ -177,6 +177,11 @@ export function LogsHistogram({ range, filter, onRangeSelect, onZoomReset, onSer
       return;
     }
     let alive = true;
+    // v0.10.1822 (Log Search Faz 1 dilim 1.6) — iptal sinyali: süzgeç /
+    // pencere değişimi ya da sayfadan çıkış uçuştaki isteği İPTAL eder;
+    // sunucu bağlantı kapanınca bağlamı iptal eder ve ES araması kesilir
+    // (bayat-yanıt korkuluğu `alive` aynen kalır).
+    const ctl = new AbortController();
     api.logsTimeseries({
       from: range.from, to: range.to,
       service: filter.service || undefined,
@@ -191,7 +196,7 @@ export function LogsHistogram({ range, filter, onRangeSelect, onZoomReset, onSer
       lang: filter.lang || undefined, // v0.10.1819
       groupBy: bd,
       bucketSec: pickBucket(range),
-    })
+    }, ctl.signal)
       .then(d => {
         // v0.9.1220 review — bayat-yanıt korkuluğu: dep değişimiyle aşılmış
         // bir istek geç çözülünce ne grafiği (kırılım değişmişse seviye
@@ -215,7 +220,7 @@ export function LogsHistogram({ range, filter, onRangeSelect, onZoomReset, onSer
         // '·' yerine rozet gösterebilsin (v0.9.215 sınıfı).
         if (bd === 'severity') onSeriesRef.current?.(null);
       });
-    return () => { alive = false; };
+    return () => { alive = false; ctl.abort(); };
   }, [range.from, range.to, filter.service, filter.cluster, filter.env, filter.search, filter.pattern, filter.team, filter.severity, filter.traceId, filter.hasTrace, filter.lang, bd, paused]);
 
   const { times, series, totals } = useMemo(

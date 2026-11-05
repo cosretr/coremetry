@@ -50,7 +50,8 @@ export function PodLogsSection({ pod, from, to, service, cluster, logsLink }: {
   const minSev = POD_LOG_MIN_SEV[lvl];
   const q = useQuery({
     queryKey: ['pod-logs', pod, from, to, search, minSev ?? 0, service ?? '', cluster ?? ''],
-    queryFn: () => api.logs({ limit: POD_LOG_LIMIT, from, to, search, severity: minSev, service: service || undefined, cluster: cluster || undefined }),
+    // v0.10.1822 — RQ sinyali: süzgeç değişince / çıkışta ES işi iptal.
+    queryFn: ({ signal }) => api.logs({ limit: POD_LOG_LIMIT, from, to, search, severity: minSev, service: service || undefined, cluster: cluster || undefined }, signal),
     enabled: open && !!pod,
     staleTime: 15_000,
     refetchOnWindowFocus: false, // /api/logs önbelleksiz; ES PIT açar (servis sekmesi gerekçesi)

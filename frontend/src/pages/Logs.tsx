@@ -621,7 +621,8 @@ function LogsInner() {
     // v0.9.216 — cluster joins the key AND the request: without it the chips
     // counted every cluster while the table below showed one.
     queryKey: ['logs', 'sev-volume', from, to, filter.service, filter.cluster, env, compiledSearch, filter.pattern, filter.team, filter.traceId, filter.hasTrace, volumeBucket, lang],
-    queryFn: () => api.logsTimeseries({
+    // v0.10.1822 — RQ sinyali: anahtar değişince / çıkışta ES işi iptal.
+    queryFn: ({ signal }) => api.logsTimeseries({
       from, to,
       service: filter.service || undefined,
       cluster: filter.cluster || undefined,
@@ -634,7 +635,7 @@ function LogsInner() {
       groupBy: 'severity',
       bucketSec: volumeBucket,
       lang: lang || undefined, // v0.10.1819
-    }),
+    }, signal),
     enabled: volumeEnabled && !chipsFromHistogram && !teamGate,
     staleTime: 30_000,
   });

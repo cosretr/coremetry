@@ -791,6 +791,16 @@ func MapBackendSlow(err error, opCtx, parent context.Context) error {
 	if err == nil {
 		return nil
 	}
+	// v0.10.1822 (Log Search Faz 1 dilim 1.6) — İSTEMCİ iptal etti (yeni
+	// arama / sayfadan çıkış: tarayıcı isteği kesti, r.Context() iptal).
+	// Bu "arka uç yavaş" DEĞİLDİR: degraded 200 dönseydi serveCached o boş
+	// cevabı 15–60 sn önbelleğe yazardı ve sonraki gerçek istek "log backend
+	// yavaş" görürdü. İptal, kesilen ES çağrısının hata biçiminden bağımsız
+	// olarak (dial sırasında *net.OpError da olabilir) context.Canceled ile
+	// sarılır → writeErr 499, hiçbir katmana yazılmaz.
+	if errors.Is(parent.Err(), context.Canceled) {
+		return fmt.Errorf("%w: %v", context.Canceled, err)
+	}
 	if isBackendSlow(err) || (opCtx.Err() == context.DeadlineExceeded && parent.Err() == nil) {
 		return fmt.Errorf("%w: %v", ErrBackendSlow, err)
 	}

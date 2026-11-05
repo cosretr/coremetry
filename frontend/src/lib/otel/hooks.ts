@@ -90,8 +90,9 @@ export function useCorrelatedLogs(
   const to = opts?.to;
   return useQuery<CorrelatedLogsResult>({
     queryKey: ['otel', 'correlated-logs', traceId ?? '', spanId ?? '', limit, from ?? 0, to ?? 0],
-    queryFn: async () => {
-      const res = await api.logs({ traceId: traceId!, spanId, limit, from, to });
+    // v0.10.1822 — RQ sinyali: sekme kapanınca / trace değişince ES işi iptal.
+    queryFn: async ({ signal }) => {
+      const res = await api.logs({ traceId: traceId!, spanId, limit, from, to }, signal);
       return { logs: res?.logs ?? [], total: res?.total, degraded: res?.degraded, reason: res?.reason };
     },
     enabled: !!traceId,

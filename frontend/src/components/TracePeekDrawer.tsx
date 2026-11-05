@@ -64,7 +64,9 @@ export function TracePeekDrawer({
     api.trace(traceId)
       .then(r => { if (!cancelled) setTrace(r ?? null); })
       .catch(() => { if (!cancelled) setTrace(null); });
-    api.logs({ traceId, limit: 500 })
+    // v0.10.1822 — çekmece kapanınca / trace değişince log isteği iptal.
+    const logsCtl = new AbortController();
+    api.logs({ traceId, limit: 500 }, logsCtl.signal)
       .then(r => {
         if (cancelled) return;
         setLogs(r?.logs ?? []);
@@ -73,7 +75,7 @@ export function TracePeekDrawer({
         setLogsDegraded(r?.degraded ? (r?.reason || 'log backend slow/unreachable') : null);
       })
       .catch(() => { if (!cancelled) setLogs(null); });
-    return () => { cancelled = true; };
+    return () => { cancelled = true; logsCtl.abort(); };
   }, [traceId]);
 
   // Derive trace-level scalars from the spans payload (root span +

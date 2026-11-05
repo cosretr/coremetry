@@ -66,7 +66,8 @@ function FieldAccordion({ field, scope, isColumn, onToggleColumn, onPillAdd, onP
   const [size, setSize] = useState<5 | 20>(5);
   const q = useQuery({
     queryKey: ['logs', 'fieldstats', field, scope, size, lift],
-    queryFn: () => api.logsFieldStats({ field, ...scope, ...(size !== 5 ? { size } : {}), ...(lift ? { errorLift: 1 as const } : {}) }),
+    // v0.10.1822 — RQ sinyali: alan kapanınca / süzgeç değişince ES terms agg iptal.
+    queryFn: ({ signal }) => api.logsFieldStats({ field, ...scope, ...(size !== 5 ? { size } : {}), ...(lift ? { errorLift: 1 as const } : {}) }, signal),
     staleTime: 60_000, // matches the server-side cache TTL
     retry: 1,
   });

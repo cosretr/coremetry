@@ -30,6 +30,7 @@ vi.mock('@/lib/api', () => {
     clusters: () => Promise.resolve({ clusters: [] }),
     logsFields: () => Promise.resolve({ fields: [], total: 0, types: {} }),
     savedViews: () => Promise.resolve([]),
+    serviceNames: () => Promise.resolve({ names: [], total: 0 }),
   };
   return {
     api: new Proxy({}, { get: (_t, k: string) => stub[k] ?? (() => Promise.resolve({})) }),

@@ -20,13 +20,16 @@ const m = vi.hoisted(() => ({
   logsCalls: [] as Record<string, unknown>[],
   tsCalls: [] as Record<string, unknown>[],
   logsReject: null as Error | null,
+  core: null as Record<string, unknown> | null,
+  logsSignal: undefined as AbortSignal | undefined,
 }));
 
 vi.mock('@/lib/api', () => {
   const T0 = 1759494780000000000;
   const stub: Record<string, (...a: unknown[]) => Promise<unknown>> = {
-    logs: (p: unknown) => {
+    logs: (p: unknown, signal?: unknown) => {
       m.logsCalls.push(p as Record<string, unknown>);
+      m.logsSignal = signal as AbortSignal | undefined;
       if (m.logsReject) return Promise.reject(m.logsReject);
       return Promise.resolve({
         total: 1,
@@ -54,7 +57,11 @@ vi.mock('@/components/AuthProvider', () => ({
 }));
 // Grafik motoru jsdom'da canvas istemez; çivi KABUĞU (histogram kartı)
 // sayar, çizimi değil.
-vi.mock('@/components/charts/TimeChart', () => ({ TimeChart: () => null }));
+// v0.10.1822 — histogram motoru DEĞİŞMEDİ (TimeChart); çizim prop'ları
+// yakalanır ki hata-oranı çizgisinin (v0.9.218) sekmede durduğu çivilensin.
+vi.mock('@/components/charts/TimeChart', () => ({
+  TimeChart: (props: Record<string, unknown>) => { m.core = props; return null; },
+}));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 class NoopResizeObserver { observe() {} unobserve() {} disconnect() {} }
@@ -64,7 +71,7 @@ let root: Root | null = null;
 let host: HTMLDivElement | null = null;
 const settle = () => act(async () => { await new Promise(r => setTimeout(r, 30)); });
 
-beforeEach(() => { m.logsCalls = []; m.tsCalls = []; m.logsReject = null; });
+beforeEach(() => { m.logsCalls = []; m.tsCalls = []; m.logsReject = null; m.core = null; m.logsSignal = undefined; });
 afterEach(() => {
   act(() => { root?.unmount(); });
   host?.remove();
@@ -122,6 +129,11 @@ describe('servis Logs sekmesi — paylaşılan log parçaları çivisi (v0.10.18
     expect(m.tsCalls[0]).toMatchObject({ service: 'orders-api', groupBy: 'severity', from: 1759494780000000000 });
 
     expect(host.querySelector('[data-testid="logs-histogram"]'), 'histogram kartı').not.toBeNull();
+    // v0.10.1822 — histogram bugünkü gibi: hata-oranı çizgisi sağ eksende;
+    // liste isteği iptal sinyali taşır.
+    const series = (m.core?.series ?? []) as { key: string; axis: string }[];
+    expect(series.find(sr => sr.key === 'rate')?.axis).toBe('right');
+    expect(m.logsSignal).toBeInstanceOf(AbortSignal);
     expect(host.textContent).toContain('payment declined for branch-teller');
     expect(host.textContent).toContain('Log volume');
   });

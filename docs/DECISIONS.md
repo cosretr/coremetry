@@ -12282,3 +12282,9 @@ Operatör "Log Mockup iyi, devam" (2026-11-05). `/logs` yerinde evrilir; dilimle
   `aria-activedescendant` cmdk'nin seçili öğesinden (DOM gözlemi). Dil rozeti girdinin solunda (mockup): tık `?lang=lucene`
   ⇄ otomatik. 400 gövdesine `stage` (precheck / backend) eklendi. KqlSearchInput silindi (tek tüketici); Live tail shadcn
   Toggle (`pressed`). Servis Logs sekmesi bu çubuğu ALMADI (kendi ince kabuğu; dilim sonrası kompakt kip).
+- **v0.10.1822 — tüm isteklere iptal sinyali; iptal edilen ES çağrısı önbelleğe alınmaz (1.6).** Liste, histogram, seviye
+  çipleri, alan istatistiği, desenler, servis sekmesi (+ "200 satır daha"), pod / trace / span / Explore log okumaları sinyal
+  taşır. Sunucu: istemci iptali `MapBackendSlow`'da `context.Canceled` — önceden iptal edilen ES dial'i (*net.OpError)
+  "yavaş" sayılıp boş 200 {degraded} olarak 15–60 sn önbellekte kalabiliyordu; histogram / alan / desen dalları eşlenmiş
+  hatayı döner → 499, hiçbir katmana yazılmaz. Histogram → CorePanel ERTELENDİ: CorePanel ikinci y ekseni kazanana ya da
+  operatör v0.9.218 hata-oranı çizgisinin düşmesini onaylayana dek seviye histogramı TimeChart'ta (çizgi pinli).

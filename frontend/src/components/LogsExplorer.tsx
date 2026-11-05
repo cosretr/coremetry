@@ -54,6 +54,8 @@ export function LogsExplorer({ range, viz, compare }: {
     const auto = Math.max(1, Math.min(1800, Math.round(windowSec / 60)));
     const bs = bucketSec > 0 ? bucketSec : auto;
 
+    // v0.10.1822 — girdi değişince / çıkışta iki istek de iptal.
+    const ctl = new AbortController();
     const fetchOne = (fromNs: number, toNs: number) => api.logsTimeseries({
       service: service || undefined,
       search: committedSearch || undefined,
@@ -61,7 +63,7 @@ export function LogsExplorer({ range, viz, compare }: {
       from: fromNs,
       to: toNs,
       bucketSec: bs,
-    });
+    }, ctl.signal);
 
     Promise.all([
       fetchOne(from, to),
@@ -80,8 +82,9 @@ export function LogsExplorer({ range, viz, compare }: {
           points: s.points.map(p => ({ t: p.t + shift, v: p.v })),
         }));
       }
-      setSeries(out);
-    }).catch(() => setSeries(null));
+      if (!ctl.signal.aborted) setSeries(out);
+    }).catch(() => { if (!ctl.signal.aborted) setSeries(null); });
+    return () => ctl.abort();
   }, [range, service, committedSearch, groupBy, bucketSec, compare]);
 
   return (

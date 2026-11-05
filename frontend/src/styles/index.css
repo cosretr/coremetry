@@ -35,3 +35,6 @@
    satır. pages/settings legacy sınıf adları (gap-3/gap-6 …) bundle-budget
    çakışma kapısından geçer; değerler --spacing: 4px ile eşit. */
 @source '../pages/settings';
+/* v0.10.1821/1822 (Log Search Faz 1 — Logs sayfa dilimi): geçirilen /logs
+   dizini (sorgu çubuğu); kalan Logs dosyaları geçtikçe eklenir. */
+@source '../pages/logs';

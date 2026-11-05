@@ -899,9 +899,9 @@ export const api = {
     bucketSec?: number;
     groupBy?: string;
     lang?: 'lucene'; // v0.10.1819 — zorla Lucene geçişi (liste ile aynı)
-  }) =>
+  }, signal?: AbortSignal) => // v0.10.1822 — yeni arama / çıkış uçuştaki ES işini iptal eder
     get<{ name: string; points: { t: number; v: number }[] }[]>(
-      `/api/logs/timeseries?${qs(params)}`),
+      `/api/logs/timeseries?${qs(params)}`, signal),
 
   // Sent-notification log (v0.8.247 backend / v0.8.263 UI) — the
   // /events Notifications tab. from/to are unix-ns strings like the
@@ -947,8 +947,8 @@ export const api = {
     size?: number; // v0.9.1223 — yalnız 5|20 basamakları (sunucu kıskacı)
     errorLift?: 1; // v0.10.509 (C5) — hata seçimi vs taban lift'i (iki fieldstats)
     lang?: 'lucene'; // v0.10.1819 — zorla Lucene geçişi (liste ile aynı)
-  }) =>
-    get<LogFieldStats>(`/api/logs/fieldstats?${qs(params)}`),
+  }, signal?: AbortSignal) => // v0.10.1822 — alan kapanınca / süzgeç değişince iptal
+    get<LogFieldStats>(`/api/logs/fieldstats?${qs(params)}`, signal),
 
   health: ()                         => get<HealthInfo>(`/api/health`),
   status: ()                         => get<SystemStatus>(`/api/status`),
