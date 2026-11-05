@@ -6221,21 +6221,21 @@ tr:hover .ps-attr-act, .ps-attr-act:focus-visible { opacity: 1; }
   background: transparent; color: var(--muted-foreground); opacity: 1;
 }
 [data-cosre-v2] > [data-slot="sheet-close"]:hover { background: var(--muted); color: var(--text); }
-[data-cosre-v2] .cosre-root--drawer .ai-ctx { gap: var(--sp-3); padding: var(--sp-4) var(--cosre-s4); border-bottom-color: var(--border); background: transparent; }
-[data-cosre-v2] .cosre-root--drawer .ai-ctx .chip {
+[data-cosre-v2] .cosre-root--drawer .ai-ctx, [data-cosre-v2].cosre-root--page .ai-ctx { gap: var(--sp-3); padding: var(--sp-4) var(--cosre-s4); border-bottom-color: var(--border); background: transparent; }
+[data-cosre-v2] .cosre-root--drawer .ai-ctx .chip, [data-cosre-v2].cosre-root--page .ai-ctx .chip {
   gap: var(--sp-2); padding: 1px var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius-sm);
   background: transparent; color: var(--muted-foreground); font-size: var(--cosre-fs-small);
 }
-[data-cosre-v2] .cosre-root--drawer .ai-ctx .chip .k { color: var(--muted-foreground); }
-[data-cosre-v2] .cosre-root--drawer .ai-ctx .chip b { color: var(--text); font-weight: 500; font-family: var(--cosre-font-mono); }
-[data-cosre-v2] .cosre-root--drawer .cm-msg-user {
+[data-cosre-v2] .cosre-root--drawer .ai-ctx .chip .k, [data-cosre-v2].cosre-root--page .ai-ctx .chip .k { color: var(--muted-foreground); }
+[data-cosre-v2] .cosre-root--drawer .ai-ctx .chip b, [data-cosre-v2].cosre-root--page .ai-ctx .chip b { color: var(--text); font-weight: 500; font-family: var(--cosre-font-mono); }
+[data-cosre-v2] .cosre-root--drawer .cm-msg-user, [data-cosre-v2].cosre-root--page .cm-msg-user {
   background: var(--muted); border-color: transparent; border-radius: 12px 12px 2px 12px;
 }
 /* v0.10.1740 (operator-reported) — KARAR bloğu (.cx-verdict) burada ezilmez:
    --muted dolgu sayfa yüzeyinden ayırt edilmiyordu; 1729 öncesi mavi
    (--accent tonlu) çağrı kutusu temel kuraldan gelir. */
-[data-cosre-v2] .cosre-root--drawer .cm-msg-actions { opacity: 1; gap: var(--sp-1); }
-[data-cosre-v2] .cosre-root--drawer .cosre-jump-pill {
+[data-cosre-v2] .cosre-root--drawer .cm-msg-actions, [data-cosre-v2].cosre-root--page .cm-msg-actions { opacity: 1; gap: var(--sp-1); }
+[data-cosre-v2] .cosre-root--drawer .cosre-jump-pill, [data-cosre-v2].cosre-root--page .cosre-jump-pill {
   width: auto; padding: var(--sp-2) var(--sp-6); border-radius: 999px;
   font-size: var(--cosre-fs-small); color: var(--muted-foreground); box-shadow: var(--shadow-md);
 }
@@ -6244,20 +6244,46 @@ tr:hover .ps-attr-act, .ps-attr-act:focus-visible { opacity: 1; }
    aynı mockup). Tek kart: --border, 12px köşe, odakta halka (:focus-within);
    Aa / Derin / Code tek ToggleGroup (.cm-mode-group); model seçimi sessiz;
    gönder yuvarlak primary (.cm-send, mevcut). Kapsam yine [data-cosre-v2]. */
-[data-cosre-v2] .cosre-root--drawer .cm-composer__box--card {
+[data-cosre-v2] .cosre-root--drawer .cm-composer__box--card, [data-cosre-v2].cosre-root--page .cm-composer__box--card {
   border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--card);
   box-shadow: 0 1px 2px color-mix(in srgb, var(--text) 4%, transparent);
 }
-[data-cosre-v2] .cosre-root--drawer .cm-composer__box--card:focus-within {
+[data-cosre-v2] .cosre-root--drawer .cm-composer__box--card:focus-within, [data-cosre-v2].cosre-root--page .cm-composer__box--card:focus-within {
   border-color: var(--ring); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 25%, transparent);
 }
-[data-cosre-v2] .cosre-root--drawer .cm-mode-group { margin-right: auto; }
-[data-cosre-v2] .cosre-root--drawer .cm-mode-group [data-slot="toggle-group-item"] {
+[data-cosre-v2] .cosre-root--drawer .cm-mode-group, [data-cosre-v2].cosre-root--page .cm-mode-group { margin-right: auto; }
+[data-cosre-v2] .cosre-root--drawer .cm-mode-group [data-slot="toggle-group-item"], [data-cosre-v2].cosre-root--page .cm-mode-group [data-slot="toggle-group-item"] {
   height: auto; padding: var(--sp-1) var(--sp-4); font-size: var(--cosre-fs-small); font-weight: 400; color: var(--muted-foreground); border-color: var(--border);
 }
-[data-cosre-v2] .cosre-root--drawer .cm-mode-group [data-slot="toggle-group-item"][data-state="on"] { background: var(--muted); color: var(--text); }
-[data-cosre-v2] .cosre-root--drawer .cm-composer__box--card .cm-model-pill {
+[data-cosre-v2] .cosre-root--drawer .cm-mode-group [data-slot="toggle-group-item"][data-state="on"], [data-cosre-v2].cosre-root--page .cm-mode-group [data-slot="toggle-group-item"][data-state="on"] { background: var(--muted); color: var(--text); }
+[data-cosre-v2] .cosre-root--drawer .cm-composer__box--card .cm-model-pill, [data-cosre-v2].cosre-root--page .cm-composer__box--card .cm-model-pill {
   background: transparent; border-color: transparent; box-shadow: none;
   color: var(--muted-foreground); font-family: var(--cosre-font-mono);
 }
-[data-cosre-v2] .cosre-root--drawer .cm-composer__box--card .cm-model-pill:hover:not(:disabled) { background: var(--muted); color: var(--text); }
+[data-cosre-v2] .cosre-root--drawer .cm-composer__box--card .cm-model-pill:hover:not(:disabled), [data-cosre-v2].cosre-root--page .cm-composer__box--card .cm-model-pill:hover:not(:disabled) { background: var(--muted); color: var(--text); }
+
+/* ── v0.10.1786 — CoSRE v2 TAM SAYFASI düzeni (mockup A, operatör onayı
+   2026-11-05). Kapsam [data-cosre-v2].cosre-root--page (CosrePageLayout kökü):
+   v1 sayfası (.cosre-root--page, data-cosre-v2 YOK) ve v2 Sheet'i
+   (.cosre-root--drawer) etkilenmez. Yukarıdaki çekmece turu A/B kuralları
+   sayfaya seçici listesiyle genellendi; burada yalnız sayfaya özgü olan:
+   ortalı 620px okuma kolonu (mesajlar + çipler + composer aynı hizada),
+   kullanıcı balonu yuvarlak --muted, cevap balonsuz düz metin, composer
+   yuvarlak (18px) kart ve gövdenin altında (flex; sticky şerit değil),
+   üst şerit sayfa içi (sticky değil) ve sade. Renkler yalnız token. */
+[data-cosre-v2].cosre-root--page {
+  --cosre-page-col: 620px;
+}
+[data-cosre-v2].cosre-root--page .cosre-page__head {
+  gap: var(--sp-4); background: var(--bg); border-bottom-color: var(--divider);
+}
+[data-cosre-v2].cosre-root--page .cosre-page__head .cosre-page__menu { margin-right: 0; }
+[data-cosre-v2].cosre-root--page .cm-thread__col,
+[data-cosre-v2].cosre-root--page .cm-followups,
+[data-cosre-v2].cosre-root--page .cm-composer__box,
+[data-cosre-v2].cosre-root--page .cm-composer__scope {
+  max-width: var(--cosre-page-col); margin-left: auto; margin-right: auto;
+}
+[data-cosre-v2].cosre-root--page .cm-composer { width: 100%; box-sizing: border-box; }
+[data-cosre-v2].cosre-root--page .cm-msg-user { border-radius: 18px; }
+[data-cosre-v2].cosre-root--page .cm-composer__box--card { border-radius: 18px; }
