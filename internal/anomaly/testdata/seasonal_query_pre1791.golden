@@ -1,0 +1,84 @@
+=== error_rate all
+
+		SELECT service_name, toUnixTimestamp(time_bucket) AS t, countMerge(error_count_state) / nullIf(countMerge(span_count_state), 0) * 100 AS v,
+		       countMerge(span_count_state) / 300.0 AS rate
+		FROM service_summary_5m
+		WHERE time_bucket >= ?
+		  AND time_bucket < ?
+		  AND multiIf(toDayOfWeek(time_bucket, 0, 'UTC') = 6, 'saturday', toDayOfWeek(time_bucket, 0, 'UTC') = 7, 'sunday', 'weekday') = ?
+		  AND least(abs((toHour(time_bucket, 'UTC') * 3600 + toMinute(time_bucket, 'UTC') * 60) - ?), 86400 - abs((toHour(time_bucket, 'UTC') * 3600 + toMinute(time_bucket, 'UTC') * 60) - ?)) <= ?
+		GROUP BY service_name, t
+		ORDER BY service_name, t
+		LIMIT 700 BY service_name
+		LIMIT 14000000
+		SETTINGS max_execution_time = 25
+=== error_rate cal2
+
+		SELECT service_name, toUnixTimestamp(time_bucket) AS t, countMerge(error_count_state) / nullIf(countMerge(span_count_state), 0) * 100 AS v,
+		       countMerge(span_count_state) / 300.0 AS rate
+		FROM service_summary_5m
+		WHERE time_bucket >= ?
+		  AND time_bucket < ?
+		  AND ((time_bucket >= ? AND time_bucket < ?) OR (time_bucket >= ? AND time_bucket < ?))
+		  AND least(abs((toHour(time_bucket, 'UTC') * 3600 + toMinute(time_bucket, 'UTC') * 60) - ?), 86400 - abs((toHour(time_bucket, 'UTC') * 3600 + toMinute(time_bucket, 'UTC') * 60) - ?)) <= ?
+		GROUP BY service_name, t
+		ORDER BY service_name, t
+		LIMIT 700 BY service_name
+		LIMIT 14000000
+		SETTINGS max_execution_time = 25
+=== p99_ms all
+
+		SELECT service_name, toUnixTimestamp(time_bucket) AS t, quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state)[3] / 1e6 AS v,
+		       countMerge(span_count_state) / 300.0 AS rate
+		FROM service_summary_5m
+		WHERE time_bucket >= ?
+		  AND time_bucket < ?
+		  AND multiIf(toDayOfWeek(time_bucket, 0, 'UTC') = 6, 'saturday', toDayOfWeek(time_bucket, 0, 'UTC') = 7, 'sunday', 'weekday') = ?
+		  AND least(abs((toHour(time_bucket, 'UTC') * 3600 + toMinute(time_bucket, 'UTC') * 60) - ?), 86400 - abs((toHour(time_bucket, 'UTC') * 3600 + toMinute(time_bucket, 'UTC') * 60) - ?)) <= ?
+		GROUP BY service_name, t
+		ORDER BY service_name, t
+		LIMIT 700 BY service_name
+		LIMIT 14000000
+		SETTINGS max_execution_time = 25
+=== p99_ms cal2
+
+		SELECT service_name, toUnixTimestamp(time_bucket) AS t, quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state)[3] / 1e6 AS v,
+		       countMerge(span_count_state) / 300.0 AS rate
+		FROM service_summary_5m
+		WHERE time_bucket >= ?
+		  AND time_bucket < ?
+		  AND ((time_bucket >= ? AND time_bucket < ?) OR (time_bucket >= ? AND time_bucket < ?))
+		  AND least(abs((toHour(time_bucket, 'UTC') * 3600 + toMinute(time_bucket, 'UTC') * 60) - ?), 86400 - abs((toHour(time_bucket, 'UTC') * 3600 + toMinute(time_bucket, 'UTC') * 60) - ?)) <= ?
+		GROUP BY service_name, t
+		ORDER BY service_name, t
+		LIMIT 700 BY service_name
+		LIMIT 14000000
+		SETTINGS max_execution_time = 25
+=== request_rate all
+
+		SELECT service_name, toUnixTimestamp(time_bucket) AS t, countMerge(span_count_state) / 300.0 AS v,
+		       countMerge(span_count_state) / 300.0 AS rate
+		FROM service_summary_5m
+		WHERE time_bucket >= ?
+		  AND time_bucket < ?
+		  AND multiIf(toDayOfWeek(time_bucket, 0, 'UTC') = 6, 'saturday', toDayOfWeek(time_bucket, 0, 'UTC') = 7, 'sunday', 'weekday') = ?
+		  AND least(abs((toHour(time_bucket, 'UTC') * 3600 + toMinute(time_bucket, 'UTC') * 60) - ?), 86400 - abs((toHour(time_bucket, 'UTC') * 3600 + toMinute(time_bucket, 'UTC') * 60) - ?)) <= ?
+		GROUP BY service_name, t
+		ORDER BY service_name, t
+		LIMIT 700 BY service_name
+		LIMIT 14000000
+		SETTINGS max_execution_time = 25
+=== request_rate cal2
+
+		SELECT service_name, toUnixTimestamp(time_bucket) AS t, countMerge(span_count_state) / 300.0 AS v,
+		       countMerge(span_count_state) / 300.0 AS rate
+		FROM service_summary_5m
+		WHERE time_bucket >= ?
+		  AND time_bucket < ?
+		  AND ((time_bucket >= ? AND time_bucket < ?) OR (time_bucket >= ? AND time_bucket < ?))
+		  AND least(abs((toHour(time_bucket, 'UTC') * 3600 + toMinute(time_bucket, 'UTC') * 60) - ?), 86400 - abs((toHour(time_bucket, 'UTC') * 3600 + toMinute(time_bucket, 'UTC') * 60) - ?)) <= ?
+		GROUP BY service_name, t
+		ORDER BY service_name, t
+		LIMIT 700 BY service_name
+		LIMIT 14000000
+		SETTINGS max_execution_time = 25

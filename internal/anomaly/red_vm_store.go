@@ -209,7 +209,7 @@ func vmConsecutiveBuckets(now time.Time) []int64 {
 // fetchAllSeasonal ile AYNI bağlar): cutoff = at−days, üst = at−(radius+5dk),
 // sınıf = dayClass(at), dairesel saniye-of-day uzaklığı ≤ radius. UTC (v0.8.323).
 func vmSeasonalBuckets(at time.Time, days, neighborBuckets int) []int64 {
-	out, _ := vmSeasonalBucketsCal(at, days, neighborBuckets, chstore.AnomalyCalendarConfig{})
+	out, _ := vmSeasonalBucketsCal(at, days, neighborBuckets, chstore.AnomalyCalendarConfig{}, time.UTC)
 	return out
 }
 
@@ -218,12 +218,16 @@ func vmSeasonalBuckets(at time.Time, days, neighborBuckets int) []int64 {
 // günün sınıfı): önceki özel günlerin örnekleri CH yolunda 90 günden okunur,
 // VM deposu yalnız mevsimsel pencereyi tutar. Takvim boşsa vmSeasonalBuckets
 // ile bayt bayt aynı küme. Dönen sınıf gün çeşitliliği eşiğinin girdisi.
-func vmSeasonalBucketsCal(at time.Time, days, neighborBuckets int, cal chstore.AnomalyCalendarConfig) ([]int64, string) {
-	cutoff, upper, _, target, radius := seasonalBinds(at, days, neighborBuckets)
-	class := calendarFallbackClass(dayClassCal(at.UTC(), cal), at.UTC())
+//
+// v0.10.1791 — loc: buildAllSeasonalQueryTZ'nin dilimi (seasonalTimezone);
+// time.UTC ile küme eskisiyle bayt bayt aynı.
+func vmSeasonalBucketsCal(at time.Time, days, neighborBuckets int, cal chstore.AnomalyCalendarConfig, loc *time.Location) ([]int64, string) {
+	loc = seasonalLocOrUTC(loc)
+	cutoff, upper, _, target, radius := seasonalBinds(at, days, neighborBuckets, loc)
+	class := calendarFallbackClass(dayClassCal(at.In(loc), cal), at.In(loc))
 	var out []int64
 	for _, b := range vmBucketsBetween(cutoff.Unix(), upper.Unix()) {
-		t := time.Unix(b, 0).UTC()
+		t := time.Unix(b, 0).In(loc)
 		if dayClass(t) != class {
 			continue
 		}

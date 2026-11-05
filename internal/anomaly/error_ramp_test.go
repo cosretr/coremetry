@@ -97,7 +97,7 @@ func (sc gwScenario) rows(upTo time.Time) map[int64]spanRow {
 // verdictAt — dedektörün `now` anındaki kararı (span ikiziyle aynı kova kümeleri).
 func verdictAt(rows map[int64]spanRow, now time.Time, hasOpen bool, sens chstore.AnomalySensitivityConfig) anomalyOutcome {
 	vals, rates := spanConsecutiveAt(rows, now, sens.DwellBuckets)
-	seas := spanSeasonalAt(rows, now, seasonalDays, seasonalNeighborBuckets, sens.Calendar)
+	seas := spanSeasonalAt(rows, now, seasonalDays, seasonalNeighborBuckets, sens.Calendar, seasonalLocation(sens.SeasonalTimezone))
 	return evaluateAnomaly(errorRampMetric, vals, seas, rates, seasonalMinSamples, hasOpen, batchLatSeries{}, sens)
 }
 

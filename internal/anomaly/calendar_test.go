@@ -177,11 +177,11 @@ func TestDropCalendarBaselineRows(t *testing.T) {
 func TestVMSeasonalBucketsCalendar(t *testing.T) {
 	at := day("2031-01-01 10:02") // çarşamba, takvimde tatil
 	plain := vmSeasonalBuckets(at, seasonalDays, seasonalNeighborBuckets)
-	same, cls := vmSeasonalBucketsCal(at, seasonalDays, seasonalNeighborBuckets, chstore.AnomalyCalendarConfig{})
+	same, cls := vmSeasonalBucketsCal(at, seasonalDays, seasonalNeighborBuckets, chstore.AnomalyCalendarConfig{}, time.UTC)
 	if cls != "weekday" || len(same) != len(plain) || len(plain) == 0 {
 		t.Fatalf("takvimsiz: %s %d/%d", cls, len(same), len(plain))
 	}
-	hol, cls := vmSeasonalBucketsCal(at, seasonalDays, seasonalNeighborBuckets, testCal())
+	hol, cls := vmSeasonalBucketsCal(at, seasonalDays, seasonalNeighborBuckets, testCal(), time.UTC)
 	if cls != "sunday" || len(hol) == 0 {
 		t.Fatalf("tatil: sınıf %s, %d kova", cls, len(hol))
 	}

@@ -208,7 +208,7 @@ func TestVMSeasonalBucketsMatchSQLPredicate(t *testing.T) {
 		time.Date(2026, 10, 22, 14, 31, 0, 0, time.UTC), // Perşembe
 	} {
 		got := vmSeasonalBuckets(at, seasonalDays, seasonalNeighborBuckets)
-		cutoff, upper, class, target, radius := seasonalBinds(at, seasonalDays, seasonalNeighborBuckets)
+		cutoff, upper, class, target, radius := seasonalBinds(at, seasonalDays, seasonalNeighborBuckets, time.UTC)
 		var want []int64
 		for tb := cutoff.Unix() - cutoff.Unix()%300; tb < upper.Unix(); tb += 300 {
 			if sqlSeasonalPredicate(tb, cutoff.Unix(), upper.Unix(), class, target, radius) {

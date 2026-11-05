@@ -130,6 +130,28 @@ type vmQueryScope struct {
 	SvcLabel     string   // servis etiketi (LabelMap.Service / service_name / keşif)
 	EnvMatcher   string   // "" = ortam süzgeci yok
 	StatusLabels []string // kümede BULUNAN durum etiketleri (ailenin sırasıyla)
+	// RouteLabel / Select — v0.10.1791 (Davis F1.3, endpoint özneleri):
+	// RouteLabel doluysa gruplama `by (svc, route)` olur ve her ifade Select
+	// (servis başına üst-N rota seçimi, vmEndpointSelectExpr) ile `and on`
+	// süzülür. İkisi boşken (servis düzeyi) ifadeler bayt bayt eski.
+	RouteLabel string
+	Select     string
+}
+
+// vmByLabels — SAF: gruplama etiketleri (servis; endpoint kipinde + rota).
+func vmByLabels(sc vmQueryScope) string {
+	if sc.RouteLabel == "" {
+		return sc.SvcLabel
+	}
+	return sc.SvcLabel + ", " + sc.RouteLabel
+}
+
+// vmWithSelect — SAF: endpoint kipinde ifadeyi seçimle süzer; aksi aynen.
+func vmWithSelect(e string, sc vmQueryScope) string {
+	if sc.RouteLabel == "" || sc.Select == "" {
+		return e
+	}
+	return "(" + e + ") and on (" + vmByLabels(sc) + ") (" + sc.Select + ")"
 }
 
 // vmSelector — SAF: {__name__ adayları, env, ek}.
@@ -156,10 +178,10 @@ func vmOffsetSuffix(off int64) string {
 // kapsamda ölçülemez (ör. durum etiketi yok → hata sayısı YOK; 0 sanılmasın).
 func vmREDExpr(f vmREDFamily, k vmREDKind, sc vmQueryScope, off int64) (string, bool) {
 	win := fmt.Sprintf("[%ds]%s", vmStepS, vmOffsetSuffix(off))
-	by := sc.SvcLabel
+	by := vmByLabels(sc) // v0.10.1791 — endpoint kipinde (svc, route)
 	switch k {
 	case vmKindCount:
-		return "sum by (" + by + ") (increase(" + vmSelector(f, "count", sc, "") + win + "))", true
+		return vmWithSelect("sum by ("+by+") (increase("+vmSelector(f, "count", sc, "")+win+"))", sc), true
 	case vmKindErr:
 		if len(sc.StatusLabels) == 0 {
 			return "", false
@@ -170,15 +192,58 @@ func vmREDExpr(f vmREDFamily, k vmREDKind, sc vmQueryScope, off int64) (string, 
 		}
 		// `or`: aynı servis iki yazımı birden taşıyorsa (semconv geçişi) sol
 		// kazanır — iki kez sayılmaz.
-		return "(" + strings.Join(parts, " or ") + ")", true
+		return vmWithSelect("("+strings.Join(parts, " or ")+")", sc), true
 	case vmKindP99:
 		q := "histogram_quantile(0.99, sum by (" + by + ", le) (increase(" + vmSelector(f, "bucket", sc, "") + win + ")))"
 		if f.Unit != "ms" {
 			q = "(" + q + ") * 1000" // s → ms (p99_ms birimi)
 		}
-		return q, true
+		return vmWithSelect(q, sc), true
 	}
 	return "", false
+}
+
+// vmEndpointSelectExpr — SAF (v0.10.1791, karar 1-2): servis başına en
+// yoğun topN rota, `anchor` anındaki 1 sa'lik istek artışına göre. `@ anchor`
+// SEÇİMİ SABİTLER: aralık sorgusunun her adımında ve her ofsetinde aynı küme
+// (adım başına topk üyeliği kayar, mevsimsel ofsette geçmişin üst-N'i olurdu).
+// Rota etiketi boş seriler dışarıda — rotasız servis servis düzeyinde kalır.
+func vmEndpointSelectExpr(f vmREDFamily, sc vmQueryScope, topN int, anchor int64) string {
+	if topN < 1 {
+		topN = 1
+	}
+	inner := vmSelector(f, "count", sc, sc.RouteLabel+`!=""`)
+	return "topk by (" + sc.SvcLabel + ") (" + strconv.Itoa(topN) + ", sum by (" + sc.SvcLabel + ", " + sc.RouteLabel +
+		") (increase(" + inner + "[1h] @ " + strconv.FormatInt(anchor, 10) + ")))"
+}
+
+// vmRouteLabels — SAF: OTel http.route'un VM yazımı adayları (tercih sırası).
+var vmRouteLabels = []string{"http_route", "route"}
+
+// vmParseGroupKeyRoute — SAF: endpoint kipinde grup anahtarı → depo anahtarı
+// (endpointStoreKey: servis + ayraç + rota) + ofset. Rota boş → ok=false.
+func vmParseGroupKeyRoute(key []string, svcLabel, routeLabel string) (string, int64, bool) {
+	svc, off, ok := vmParseGroupKey(key, svcLabel)
+	if !ok {
+		return "", 0, false
+	}
+	route := ""
+	for _, kv := range key {
+		i := strings.IndexByte(kv, '=')
+		if i <= 0 || kv[:i] != routeLabel {
+			continue
+		}
+		raw := kv[i+1:]
+		v, err := strconv.Unquote(raw)
+		if err != nil {
+			v = strings.Trim(raw, `"`)
+		}
+		route = v
+	}
+	if route == "" {
+		return "", 0, false
+	}
+	return endpointStoreKey(svc, route), off, true
 }
 
 // vmREDQuery — SAF: ofsetlerin birleşik sorgusu. Her alt ifade cm_off ile

@@ -39,6 +39,9 @@ func (s *Server) registerAnomalyREDSourceRoutes(mux *http.ServeMux) {
 type redSourceStatusResponse struct {
 	anomaly.REDSourceStats
 	Alert anomaly.AlertVMStats `json:"alert"`
+	// Subjects — v0.10.1791 (Davis F1.3): özne türlerinin son tiki + atlanma
+	// sayaçları (seri tavanı / VM bütçesi).
+	Subjects anomaly.SubjectStats `json:"subjects"`
 }
 
 func (s *Server) getAnomalyREDSourceStatus(w http.ResponseWriter, _ *http.Request) {
@@ -50,7 +53,7 @@ func (s *Server) getAnomalyREDSourceStatus(w http.ResponseWriter, _ *http.Reques
 	if al.Families == nil {
 		al.Families = []anomaly.AlertVMFamilyStats{}
 	}
-	writeJSON(w, redSourceStatusResponse{REDSourceStats: st, Alert: al})
+	writeJSON(w, redSourceStatusResponse{REDSourceStats: st, Alert: al, Subjects: anomaly.SubjectObservability()})
 }
 
 // anomalyREDSourceAuditDetail — SAF: kaynak ya da ortam kapsamı değiştiyse

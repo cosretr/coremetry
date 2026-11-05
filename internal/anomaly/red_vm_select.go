@@ -47,6 +47,9 @@ const (
 	redReasonWarming       = "VictoriaMetrics geçmişi ısınıyor"
 	redReasonNoStatus      = "durum kodu etiketi yok — hata oranı VM'den ölçülemez"
 	redReasonShort         = "VictoriaMetrics serisi yetersiz (taban + dwell kovası yok)"
+	// v0.10.1791 — endpoint kipi.
+	redReasonNoRoute     = "HTTP rota etiketi (http_route) yok — endpoint tabanı kurulamaz"
+	redReasonNoSelection = "endpoint seçimi okunamadı"
 )
 
 // vmStrictMetric — VM'de serisi olan serviste örneklenmiş span'in HİÇ karar
@@ -171,14 +174,19 @@ type vmREDView struct {
 	consec        []int64
 	seasonal      []int64
 	seasonalClass string
-	behavior      []int64
-	readyDet      [vmFamN][vmKindN]bool
+	// seasonalDayKey — v0.10.1791: gün çeşitliliğinin gün anahtarı (nil = UTC
+	// günü b/86400; seasonalDayKey).
+	seasonalDayKey func(int64) int64
+	behavior       []int64
+	readyDet       [vmFamN][vmKindN]bool
 	// readyConsec — yalnız ardışık 24 sa kovaları hazır (mevsimsel eksik
 	// olabilir). vmStrictMetric bununla VM'de kalır: mevsimsel taban yoksa VM'in
 	// ardışık penceresi kullanılır, span'inki DEĞİL.
 	readyConsec [vmFamN][vmKindN]bool
 	readyBeh    [vmFamN][vmKindN]bool
 	failed      [vmFamN][vmKindN]bool // son okuma hata verdi (geri çekilme sürüyor)
+	// selected — v0.10.1791 endpoint kipi: seçilen (servis, rota) sayısı.
+	selected int
 	// ölçüm
 	queries, queryErrs, bucketsFetched, pending int
 	lastErr                                     string
@@ -317,7 +325,7 @@ func (v *vmREDView) metricOK(fi int, service, metric string) (bool, string) {
 		if m.statusSvc == nil {
 			return false, redReasonVMError + ": durum etiketi kümesi"
 		}
-		if !m.statusSvc[service] {
+		if !m.statusSvc[subjectOwner(service)] { // v0.10.1791 — endpoint anahtarı → servis
 			return false, redReasonNoStatus
 		}
 		need = append(need, vmKindErr)
@@ -433,7 +441,7 @@ func (v *vmREDView) buildSeries(fi int, service, metric string, dwell int) vmSer
 		}
 		seas = append(seas, val)
 		seasRates = append(seasRates, rate)
-		days[b/86400] = struct{}{}
+		days[seasonalDay(b, v.seasonalDayKey)] = struct{}{}
 	}
 	if len(days) >= seasonalMinDaysFor(v.seasonalClass) && v.seasonalReady(fi, metric) {
 		s.Seasonal, s.SeasonalRates = seas, seasRates

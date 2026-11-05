@@ -238,7 +238,7 @@ func explainRun(ctx context.Context, vm REDVM, reader spanRowsReader, beh behavi
 		default:
 			st.Source, st.SourceReason = redSourceSpan, shownSourceReason(u.Reason)
 			vals, rates = spanConsecutiveAt(rows, now, sens.DwellBuckets)
-			seas = spanSeasonalAt(rows, now, days, neighbor, sens.Calendar)
+			seas = spanSeasonalAt(rows, now, days, neighbor, sens.Calendar, seasonalLocation(sens.SeasonalTimezone))
 		}
 		if len(rates) > 0 {
 			st.Rate = rates[len(rates)-1]
@@ -318,8 +318,11 @@ func spanConsecutiveAt(rows map[int64]spanRow, now time.Time, dwell int) ([]floa
 
 // spanSeasonalAt — SAF: fetchAllSeasonal'ın tek servis ikizi (aynı kova
 // kümesi + gün çeşitliliği budaması; takvim özel günü yedek sınıfla).
-func spanSeasonalAt(rows map[int64]spanRow, now time.Time, days, neighbor int, cal chstore.AnomalyCalendarConfig) []float64 {
-	set, class := vmSeasonalBucketsCal(now, days, neighbor, cal)
+//
+// v0.10.1791 — loc: seasonalTimezone (dedektörle aynı dilim; gün anahtarı da).
+func spanSeasonalAt(rows map[int64]spanRow, now time.Time, days, neighbor int, cal chstore.AnomalyCalendarConfig, loc *time.Location) []float64 {
+	set, class := vmSeasonalBucketsCal(now, days, neighbor, cal, loc)
+	dayKey := seasonalDayKey(loc)
 	var out []float64
 	seen := map[int64]struct{}{}
 	for _, b := range set {
@@ -328,7 +331,7 @@ func spanSeasonalAt(rows map[int64]spanRow, now time.Time, days, neighbor int, c
 			continue
 		}
 		out = append(out, r.v)
-		seen[b/86400] = struct{}{}
+		seen[seasonalDay(b, dayKey)] = struct{}{}
 	}
 	if len(seen) < seasonalMinDaysFor(class) {
 		return nil
@@ -467,7 +470,7 @@ func newExplainVM(ctx context.Context, vm REDVM, service string, sens chstore.An
 	req := map[int64]bool{}
 	for _, now := range steps {
 		vnow := now.Add(-vmIngestLag)
-		seas, _ := vmSeasonalBucketsCal(vnow, days, neighbor, sens.Calendar)
+		seas, _ := vmSeasonalBucketsCal(vnow, days, neighbor, sens.Calendar, seasonalLocation(sens.SeasonalTimezone))
 		for _, b := range append(vmConsecutiveBuckets(vnow), seas...) {
 			req[b] = true
 		}
@@ -621,7 +624,8 @@ func (x *explainVM) viewAt(now time.Time, sens chstore.AnomalySensitivityConfig,
 	vnow := now.Add(-vmIngestLag)
 	v.vnow, v.upper = vnow, lastCompleteBucketStart(vnow).Unix()
 	v.consec = vmConsecutiveBuckets(vnow)
-	v.seasonal, v.seasonalClass = vmSeasonalBucketsCal(vnow, days, neighbor, sens.Calendar)
+	v.seasonal, v.seasonalClass = vmSeasonalBucketsCal(vnow, days, neighbor, sens.Calendar, seasonalLocation(sens.SeasonalTimezone))
+	v.seasonalDayKey = seasonalDayKey(seasonalLocation(sens.SeasonalTimezone))
 	if x.behavior {
 		v.behavior = vmBehaviorBuckets(vnow)
 	}

@@ -418,6 +418,9 @@ type Detector struct {
 	// v0.10.1478 — RED serisi kaynağı: VM (örneklenmemiş) okuyucusu + lider
 	// kova belleği (red_vm_*.go). Kablo atomik (SetREDSource, Start sonrası da).
 	red *vmREDSource
+	// v0.10.1791 (Davis F1.3) — endpoint öznelerinin VM kaynağı (aynı kablo,
+	// endpoint kipi; subjects_scan.go). Özneler kapalıyken hiç koşmaz.
+	redEndpoints *vmREDSource
 }
 
 // sensitivityLogLine — hassasiyet ayarının tek satırlık, KARARLI özeti.
@@ -458,6 +461,8 @@ func New(store *chstore.Store, interval time.Duration, lock cache.Lock, notifier
 		leader:   cache.NewLeaderHolder(lock, lockKey, cache.LeaderTTL(interval)),
 		notifier: notifier,
 		red:      newVMREDSource(),
+		// v0.10.1791 — endpoint öznelerinin VM kaynağı (özneler kapalıyken boşta).
+		redEndpoints: newVMEndpointSource(),
 	}
 }
 
@@ -558,8 +563,10 @@ func (d *Detector) scan(ctx context.Context) {
 	// sözleşmesi (hata = metriğin mevsimseli yok) aynen: hata dalında harita
 	// yazılmaz, kapı o metrikte hacmi bilinmiyor sayar.
 	seasonalRatesByMetric := make(map[string]map[string][]float64, len(tracked))
+	// v0.10.1791 — mevsimsel gün sınıfının dilimi (karar 3), tik başına bir kez.
+	seasonalLoc := seasonalLocation(sens.SeasonalTimezone)
 	fetchSeasonal := func(m string) (map[string][]float64, error) {
-		vals, rates, err := d.fetchAllSeasonal(ctx, m, now, days, neighbor, sens.Calendar, minSamples)
+		vals, rates, err := d.fetchAllSeasonal(ctx, m, now, days, neighbor, sens.Calendar, minSamples, seasonalLoc)
 		if err == nil {
 			seasonalRatesByMetric[m] = rates
 		}
@@ -772,6 +779,10 @@ func (d *Detector) scan(ctx context.Context) {
 	// SONRASI (pending'e girmez, RED kümesi bastıramaz), davranış motoru
 	// ÖNCESİ; kendi içinde soft-fail. Kip off'ta hiç koşmaz.
 	d.scanHeap(ctx, now, snap, sens)
+
+	// v0.10.1791 (Davis F1.3) — ÖZNE serileri (endpoint / db / queue). Kapalıyken
+	// (varsayılan) ilk satırda döner: okuma yok. Karar + olay yazımı F1.4.
+	d.scanSubjects(ctx, now, sens, tracked, days, neighbor, redView.queries)
 
 	d.scanBehavior(ctx, now, sens, redView)
 
@@ -1474,6 +1485,16 @@ func seasonalParams(cfg chstore.AnomalyPromotionConfig) (days, minSamples, neigh
 // `?` placeholders bind, in order: cutoff, dayClass, targetSecondsOfDay (twice),
 // radius.
 func buildAllSeasonalQuery(vexpr string) string {
+	return buildAllSeasonalQueryTZ(vexpr, seasonalUTC)
+}
+
+// buildAllSeasonalQueryTZ — v0.10.1791 (Davis F1.3, karar 3): saat/gün
+// ifadeleri `tz` dilimine sabitli. tz Go tarafının seasonalBinds'e verdiği
+// *time.Location'ın adı olmalı (iki taraf aynı saati görür — v0.8.323
+// kuralı); "UTC" ile metin v0.10.1790'a bayt bayt eşit
+// (testdata/seasonal_query_pre1791.golden). tz yalnız seasonalTZLiteral'dan
+// gelir (ayarda doğrulanmış IANA adı, tırnak süzülmüş).
+func buildAllSeasonalQueryTZ(vexpr, tz string) string {
 	// sodExpr — the bucket's seconds-of-day on the same 5-min grid as targetSod
 	// (buckets are 5-min aligned, so toSecond is 0; included for correctness).
 	// v0.8.323 — pinned to UTC: the Go side derives slot/class from at.UTC(),
@@ -1482,9 +1503,9 @@ func buildAllSeasonalQuery(vexpr string) string {
 	// CH UTC) silently matched the wrong time-of-day slot — day-peak history
 	// against a night "now" — reintroducing the diurnal false positives this
 	// seasonal feature exists to kill.
-	const sodExpr = "(toHour(time_bucket, 'UTC') * 3600 + toMinute(time_bucket, 'UTC') * 60)"
+	sodExpr := "(toHour(time_bucket, '" + tz + "') * 3600 + toMinute(time_bucket, '" + tz + "') * 60)"
 	// classExpr — three-way bank day class. toDayOfWeek mode 0: 1=Mon … 6=Sat, 7=Sun.
-	const classExpr = "multiIf(toDayOfWeek(time_bucket, 0, 'UTC') = 6, 'saturday', toDayOfWeek(time_bucket, 0, 'UTC') = 7, 'sunday', 'weekday')"
+	classExpr := seasonalClassExpr(tz)
 
 	// least(|sod-target|, 86400-|sod-target|) is the circular (midnight-wrap)
 	// distance in seconds; <= radius keeps the ±neighborBuckets slots of the
@@ -1532,12 +1553,24 @@ const calendarLookbackDays = 90
 // saati görmeli). Geri kalan her şey (slot penceresi, üst sınır, LIMIT'ler,
 // max_execution_time) aynı sorgu metni.
 func buildCalendarSeasonalQuery(vexpr string, nWindows int) string {
-	const classPred = "multiIf(toDayOfWeek(time_bucket, 0, 'UTC') = 6, 'saturday', toDayOfWeek(time_bucket, 0, 'UTC') = 7, 'sunday', 'weekday') = ?"
+	return buildCalendarSeasonalQueryTZ(vexpr, nWindows, seasonalUTC)
+}
+
+// buildCalendarSeasonalQueryTZ — v0.10.1791: slot ifadesi `tz` dilimine
+// sabitli (gün sınıfı yüklemi pencerelerle değiştirildiği için sınıfın
+// dilimi burada önemsiz). "UTC" ile metin v0.10.1790'a bayt bayt eşit.
+func buildCalendarSeasonalQueryTZ(vexpr string, nWindows int, tz string) string {
+	classPred := seasonalClassExpr(tz) + " = ?"
 	if nWindows < 1 {
 		nWindows = 1
 	}
 	ph := strings.TrimSuffix(strings.Repeat("(time_bucket >= ? AND time_bucket < ?) OR ", nWindows), " OR ")
-	return strings.Replace(buildAllSeasonalQuery(vexpr), classPred, "("+ph+")", 1)
+	return strings.Replace(buildAllSeasonalQueryTZ(vexpr, tz), classPred, "("+ph+")", 1)
+}
+
+// seasonalClassExpr — SAF: üç sınıflı gün ifadesi, `tz` diliminde.
+func seasonalClassExpr(tz string) string {
+	return "multiIf(toDayOfWeek(time_bucket, 0, '" + tz + "') = 6, 'saturday', toDayOfWeek(time_bucket, 0, '" + tz + "') = 7, 'sunday', 'weekday')"
 }
 
 // calendarSeasonalArgs — SAF (v0.10.1490): buildCalendarSeasonalQuery'nin bağ
@@ -1569,24 +1602,25 @@ func calendarSeasonalArgs(ws []calendarWindow, upper time.Time, targetSod, radiu
 // serisiyle hizalı, aynı gün-çeşitliliği budaması). YALNIZ p99_ms için
 // biriktirilir (tek tüketen batch gecikme kapısı); diğer metriklerde nil →
 // kapı orada zaten koşmaz, koşsaydı da "bilinmiyor → susturma yok".
-func (d *Detector) fetchAllSeasonal(ctx context.Context, metric string, at time.Time, days, neighborBuckets int, cal chstore.AnomalyCalendarConfig, minSamples int) (map[string][]float64, map[string][]float64, error) {
+func (d *Detector) fetchAllSeasonal(ctx context.Context, metric string, at time.Time, days, neighborBuckets int, cal chstore.AnomalyCalendarConfig, minSamples int, loc *time.Location) (map[string][]float64, map[string][]float64, error) {
 	vexpr, err := metricValueExpr(metric)
 	if err != nil {
 		return nil, nil, err
 	}
-	// v0.8.323 — slot + day class derive from UTC so they match the SQL's
-	// UTC-pinned toHour/toDayOfWeek (see buildAllSeasonalQuery). With no DST
-	// in TR, a constant offset keeps slot-matching consistent either way —
-	// but only when BOTH sides share one clock.
-	cutoff, upper, _, targetSod, radius := seasonalBinds(at, days, neighborBuckets)
-	at = at.UTC()
+	// v0.8.323 — slot + day class derive from the SAME clock the SQL pins
+	// toHour/toDayOfWeek to (see buildAllSeasonalQueryTZ). v0.10.1791 — o
+	// saat artık ayarın dilimi (seasonalTimezone, karar 3); UTC eski davranış.
+	loc = seasonalLocOrUTC(loc)
+	tz := seasonalTZLiteral(loc)
+	cutoff, upper, _, targetSod, radius := seasonalBinds(at, days, neighborBuckets, loc)
+	at = at.In(loc)
 	// v0.10.1483 — takvimli sınıf: özel gün (holiday / half-day /
 	// month-end-like) SQL'e yedek sınıfıyla gider; özel sınıfın kendi
 	// örnekleri aşağıda tarih listesiyle ayrıca okunur (calendar.go).
 	class := dayClassCal(at, cal)
 	sqlClass := calendarFallbackClass(class, at)
 
-	out, rates, err := d.querySeasonal(ctx, metric, buildAllSeasonalQuery(vexpr), []any{cutoff, upper, sqlClass, targetSod, targetSod, radius}, seasonalMinDaysFor(sqlClass), nil)
+	out, rates, err := d.querySeasonal(ctx, metric, buildAllSeasonalQueryTZ(vexpr, tz), []any{cutoff, upper, sqlClass, targetSod, targetSod, radius}, seasonalMinDaysFor(sqlClass), seasonalDayKey(loc))
 	if err != nil || class == sqlClass {
 		return out, rates, err
 	}
@@ -1596,7 +1630,7 @@ func (d *Detector) fetchAllSeasonal(ctx context.Context, metric string, at time.
 	if len(ws) == 0 {
 		return out, rates, nil
 	}
-	sp, spRates, serr := d.querySeasonal(ctx, metric, buildCalendarSeasonalQuery(vexpr, len(ws)), calendarSeasonalArgs(ws, upper, targetSod, radius), calendarMinDays, calendarLocalDayKey(cal.Location()))
+	sp, spRates, serr := d.querySeasonal(ctx, metric, buildCalendarSeasonalQueryTZ(vexpr, len(ws), tz), calendarSeasonalArgs(ws, upper, targetSod, radius), calendarMinDays, calendarLocalDayKey(cal.Location()))
 	if serr != nil {
 		// Soft-fail: yedek sınıfın (pazar / cumartesi) tabanı kalır.
 		log.Printf("[anomaly] takvim mevsimseli (%s, %d gün): %v — yedek sınıf %s", class, len(dates), serr, sqlClass)
@@ -1664,8 +1698,11 @@ func (d *Detector) querySeasonal(ctx context.Context, metric, q string, args []a
 // seasonalBinds — SAF (v0.10.1478'de fetchAllSeasonal'dan ayrıldı): mevsimsel
 // okumanın bağları. VM kaynağı (vmSeasonalBuckets) AYNI bağlardan kova kümesi
 // kurar — iki kaynağın tabanı aynı kovalardan olsun.
-func seasonalBinds(at time.Time, days, neighborBuckets int) (cutoff, upper time.Time, class string, targetSod, radius int) {
-	at = at.UTC()
+//
+// v0.10.1791 — loc: slot ve gün sınıfının saati (seasonalTimezone; nil = UTC,
+// eski davranış). cutoff/upper mutlak anlardır, dilimden bağımsız.
+func seasonalBinds(at time.Time, days, neighborBuckets int, loc *time.Location) (cutoff, upper time.Time, class string, targetSod, radius int) {
+	at = at.In(seasonalLocOrUTC(loc))
 	cutoff = at.Add(-time.Duration(days) * 24 * time.Hour)
 	targetSod = slotSecondsOfDay(at)         // 5-min-aligned centre of the window
 	radius = neighborBuckets * bucketSeconds // ±window half-width in seconds

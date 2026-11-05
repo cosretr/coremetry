@@ -173,6 +173,23 @@ func DBSubjectID(system, instance string) string {
 	return dbNodePrefix() + system + "@" + instance
 }
 
+// QueueSubjectID — v0.10.1791 (Davis F1.3): kuyruk öznesinin kimliği,
+// DBSubjectID'nin ikizi: `queue:` öneki (sözlükten) + küçük harf sistem + "@"
+// + hedef adı. Boş bileşen → "" (kodlanamaz; çağıran özneyi atlar).
+func QueueSubjectID(system, destination string) string {
+	system = strings.ToLower(strings.TrimSpace(system))
+	destination = strings.TrimSpace(destination)
+	if system == "" || destination == "" {
+		return ""
+	}
+	for _, p := range TopologyNodeIDPrefixes {
+		if p.Kind == NodeKindQueue {
+			return p.Prefix + system + "@" + destination
+		}
+	}
+	return ""
+}
+
 // ParseDBSubjectID — DBSubjectID'nin tersi. ok=false: bu dizgi bir db
 // öznesi DEĞİL (öneksiz, ya da '@' taşımıyor, ya da bir yarısı boş).
 //

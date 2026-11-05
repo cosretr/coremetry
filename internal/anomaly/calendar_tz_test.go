@@ -200,10 +200,10 @@ func TestDropCalendarBaselineRowsTimezone(t *testing.T) {
 // (pazar) iner: İstanbul'da UTC 22:00 (31 Aralık salı) yerel yılbaşıdır.
 func TestVMSeasonalBucketsCalendarTimezone(t *testing.T) {
 	at := utcAt("2030-12-31T22:02:00Z")
-	if _, cls := vmSeasonalBucketsCal(at, seasonalDays, seasonalNeighborBuckets, tzCal("Europe/Istanbul")); cls != "sunday" {
+	if _, cls := vmSeasonalBucketsCal(at, seasonalDays, seasonalNeighborBuckets, tzCal("Europe/Istanbul"), time.UTC); cls != "sunday" {
 		t.Errorf("İstanbul yerel tatil: %s", cls)
 	}
-	if _, cls := vmSeasonalBucketsCal(at, seasonalDays, seasonalNeighborBuckets, tzCal("")); cls != "weekday" {
+	if _, cls := vmSeasonalBucketsCal(at, seasonalDays, seasonalNeighborBuckets, tzCal(""), time.UTC); cls != "weekday" {
 		t.Errorf("UTC eski davranış: %s", cls)
 	}
 }

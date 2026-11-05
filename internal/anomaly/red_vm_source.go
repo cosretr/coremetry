@@ -112,10 +112,37 @@ type vmREDSource struct {
 	runLen  map[[2]int]int
 	envKey  string
 	lastLog string
+
+	// v0.10.1791 (Davis F1.3) — ENDPOINT kipi. routes=true olan ikinci bir
+	// kaynak (Detector.redEndpoints) aynı kova belleği / planlama / bütçe
+	// mantığını (svc, route) anahtarıyla koşar: yalnız HTTP ailesi, rota
+	// etiketi zorunlu, servis başına üst-N rota seçimi (sel) ve tik başına
+	// sorgu tavanı queryCap (servis yolundan kalan pay). routes=false iken
+	// bu alanlar okunmaz — servis yolu bayt bayt eski.
+	routes    bool
+	topN      int
+	maxSeries int
+	queryCap  int // 0 = vmMaxQueriesPerTick
+	sel       vmEndpointSel
+}
+
+// vmEndpointSel — endpoint kipinin seçim durumu.
+type vmEndpointSel struct {
+	at     time.Time
+	anchor int64
+	topN   int
+	keys   map[string]bool
 }
 
 func newVMREDSource() *vmREDSource {
 	return &vmREDSource{store: newVMREDStore(), meta: make([]vmFamMeta, len(vmREDFamilies)), backoff: map[[2]int]time.Time{}, runLen: map[[2]int]int{}}
+}
+
+// newVMEndpointSource — v0.10.1791: endpoint kipindeki kaynak.
+func newVMEndpointSource() *vmREDSource {
+	s := newVMREDSource()
+	s.routes = true
+	return s
 }
 
 // SetREDSource — main.go: anomDet.SetREDSource(vmSvc). nil = VM yok.
@@ -125,9 +152,15 @@ func (d *Detector) SetREDSource(vm REDVM) {
 	}
 	if vm == nil {
 		d.red.wire.Store(nil)
+		if d.redEndpoints != nil {
+			d.redEndpoints.wire.Store(nil)
+		}
 		return
 	}
 	d.red.wire.Store(&vmREDBox{vm: vm})
+	if d.redEndpoints != nil { // v0.10.1791 — endpoint özneleri aynı VM'i okur
+		d.redEndpoints.wire.Store(&vmREDBox{vm: vm})
+	}
 }
 
 // vmPlanned — planlanmış tek sorgu.
@@ -159,8 +192,11 @@ func (s *vmREDSource) prepare(ctx context.Context, now time.Time, sens chstore.A
 	v.upper = lastCompleteBucketStart(vnow).Unix()
 	v.vnow = vnow
 	v.consec = vmConsecutiveBuckets(vnow)
-	v.seasonal, v.seasonalClass = vmSeasonalBucketsCal(vnow, days, neighbor, sens.Calendar) // v0.10.1483 — takvim yedek sınıfı
-	if sens.Behavior.IsEnabled() {
+	// v0.10.1791 — mevsimsel dilim (seasonalTimezone, karar 3): CH yoluyla aynı.
+	sloc := seasonalLocation(sens.SeasonalTimezone)
+	v.seasonal, v.seasonalClass = vmSeasonalBucketsCal(vnow, days, neighbor, sens.Calendar, sloc) // v0.10.1483 — takvim yedek sınıfı
+	v.seasonalDayKey = seasonalDayKey(sloc)
+	if sens.Behavior.IsEnabled() && !s.routes { // endpoint kipinde davranış motoru yok
 		v.behavior = vmBehaviorBuckets(vnow)
 	}
 	req := vmRequiredSet(v.consec, v.seasonal, v.behavior)
@@ -178,7 +214,25 @@ func (s *vmREDSource) prepare(ctx context.Context, now time.Time, sens chstore.A
 		s.envKey = key
 	}
 	for fi := range vmREDFamilies {
+		if s.routes && fi != 0 {
+			continue // v0.10.1791 — rota yalnız HTTP ailesinde (karar 2)
+		}
 		s.refreshMeta(bctx, vm, fi, lm, env, vnow)
+	}
+	if s.routes {
+		// v0.10.1791 — üst-N rota seçimi; tavan aşılırsa tür bu tik atlanır
+		// (okuma yok, bellek korunur).
+		q, n := s.refreshSelection(bctx, vm, vnow)
+		v.queries += q
+		v.selected = n
+		if n < 0 {
+			v.reason = redReasonNoSelection
+			return v
+		}
+		if n > s.maxSeries {
+			v.reason = subjectSkipSeriesCap
+			return v
+		}
 	}
 	required := make([]int64, 0, len(req))
 	for b := range req {
@@ -187,7 +241,9 @@ func (s *vmREDSource) prepare(ctx context.Context, now time.Time, sens chstore.A
 	sort.Slice(required, func(i, j int) bool { return required[i] > required[j] })
 
 	plan := s.plan(required, vnow)
-	v.queries, v.queryErrs, v.bucketsFetched, v.lastErr = s.execute(bctx, vm, plan, vnow)
+	var execQ int
+	execQ, v.queryErrs, v.bucketsFetched, v.lastErr = s.execute(bctx, vm, plan, vnow)
+	v.queries += execQ
 	for fi := range vmREDFamilies {
 		v.queries += s.refreshStatus(bctx, vm, fi, vnow)
 	}
@@ -252,6 +308,21 @@ func (s *vmREDSource) refreshMeta(ctx context.Context, vm REDVM, fi int, lm vmet
 			sc.StatusLabels = append(sc.StatusLabels, l)
 		}
 	}
+	if s.routes {
+		// v0.10.1791 — rota etiketi yoksa endpoint tabanı kurulamaz; servisler
+		// servis düzeyinde kalır.
+		for _, l := range vmRouteLabels {
+			if set[l] {
+				sc.RouteLabel = l
+				break
+			}
+		}
+		if sc.RouteLabel == "" {
+			next.reason = redReasonNoRoute
+			s.setMeta(fi, next)
+			return
+		}
+	}
 	if env != "" {
 		matcher, reason, err := s.resolveEnv(ctx, vm, f, lm, env, from, vnow)
 		if err != nil {
@@ -271,6 +342,12 @@ func (s *vmREDSource) refreshMeta(ctx context.Context, vm REDVM, fi int, lm vmet
 	}
 	next.ok, next.scope = true, sc
 	next.scopeKey = sc.SvcLabel + "|" + strings.Join(sc.StatusLabels, ",") + "|" + sc.EnvMatcher
+	if sc.RouteLabel != "" {
+		next.scopeKey += "|" + sc.RouteLabel
+		if next.scopeKey == m.scopeKey {
+			next.scope.Select = m.scope.Select // seçim kapsamla birlikte yaşar
+		}
+	}
 	s.setMeta(fi, next)
 }
 
@@ -279,6 +356,9 @@ func (s *vmREDSource) setMeta(fi int, next vmFamMeta) {
 	if next.scopeKey != s.meta[fi].scopeKey {
 		s.store.flushFamily(fi)
 		next.statusAt, next.statusSvc = time.Time{}, nil
+		if s.routes {
+			s.sel = vmEndpointSel{} // kapsam değişti: seçim yeniden
+		}
 	}
 	s.meta[fi] = next
 }
@@ -379,10 +459,69 @@ func (s *vmREDSource) plan(required []int64, vnow time.Time) []vmPlanned {
 		}
 		return out[i].kind < out[j].kind
 	})
-	if len(out) > vmMaxQueriesPerTick {
-		out = out[:vmMaxQueriesPerTick]
+	limit := vmMaxQueriesPerTick
+	if s.queryCap > 0 { // v0.10.1791 — endpoint kipi: servis yolundan kalan pay
+		limit = s.queryCap
+	}
+	if len(out) > limit {
+		out = out[:limit]
 	}
 	return out
+}
+
+// refreshSelection — v0.10.1791 endpoint kipi: servis başına üst-N rota
+// (vmEndpointSelectExpr, vmStatusTTL'de bir). Küme DEĞİŞİRSE çapa yeni anı
+// alır, ifadeler yeni seçime geçer ve ailenin kovaları atılır (yeni rotanın
+// geçmişi yeniden okunur — eski kovalar yalnız eski kümeyi taşır). Küme aynıysa
+// çapa korunur (sorgu metni ve bellek değişmez). Döner: sorgu sayısı, seçilen
+// seri sayısı (-1 = seçim yok/okunamadı).
+func (s *vmREDSource) refreshSelection(ctx context.Context, vm REDVM, vnow time.Time) (int, int) {
+	m := &s.meta[0]
+	if !m.ok || m.scope.RouteLabel == "" {
+		return 0, -1
+	}
+	if s.sel.keys != nil && s.sel.topN == s.topN && m.scope.Select != "" && vnow.Sub(s.sel.at) < vmStatusTTL {
+		return 0, len(s.sel.keys)
+	}
+	base := m.scope
+	base.Select = ""
+	anchor := vnow.Unix()
+	qctx, cancel := context.WithTimeout(ctx, vmQueryTimeout)
+	defer cancel()
+	ser, err := vm.QueryPromQLInstant(qctx, vmEndpointSelectExpr(vmREDFamilies[0], base, s.topN, anchor), vnow)
+	if err != nil {
+		if s.sel.keys != nil && m.scope.Select != "" && vnow.Sub(s.sel.at) < vmMetaStale {
+			return 1, len(s.sel.keys) // eski seçim geçerli
+		}
+		s.sel, m.scope.Select = vmEndpointSel{}, ""
+		return 1, -1
+	}
+	keys := make(map[string]bool, len(ser))
+	for _, sr := range ser {
+		if k, _, ok := vmParseGroupKeyRoute(sr.GroupKey, base.SvcLabel, base.RouteLabel); ok {
+			keys[k] = true
+		}
+	}
+	if !sameKeySet(keys, s.sel.keys) || s.sel.topN != s.topN || m.scope.Select == "" {
+		s.sel.anchor = anchor
+		m.scope.Select = vmEndpointSelectExpr(vmREDFamilies[0], base, s.topN, anchor)
+		s.store.flushFamily(0)
+	}
+	s.sel.keys, s.sel.at, s.sel.topN = keys, vnow, s.topN
+	return 1, len(keys)
+}
+
+// sameKeySet — SAF: iki küme eşit mi (nil = boş değil, "yok").
+func sameKeySet(a, b map[string]bool) bool {
+	if a == nil || b == nil || len(a) != len(b) {
+		return false
+	}
+	for k := range a {
+		if !b[k] {
+			return false
+		}
+	}
+	return true
 }
 
 // runLenFor — (aile, tür) koşu uzunluğu (varsayılan vmMaxRunBuckets).
@@ -453,7 +592,7 @@ func (s *vmREDSource) execute(ctx context.Context, vm REDVM, plan []vmPlanned, v
 		}
 		key := [2]int{r.p.fam, int(r.p.kind)}
 		s.runLen[key] = vmNextRunLen(s.runLenFor(r.p.fam, r.p.kind), true)
-		applyVMResult(s.store, r.p, r.ser, s.meta[r.p.fam].scope.SvcLabel)
+		applyVMResult(s.store, r.p, r.ser, s.meta[r.p.fam].scope)
 		fetched += r.p.group.Len * len(r.p.group.Offsets)
 	}
 	return len(plan), errs, fetched, lastErr
@@ -461,7 +600,10 @@ func (s *vmREDSource) execute(ctx context.Context, vm REDVM, plan []vmPlanned, v
 
 // applyVMResult — SAF-ımsı (yalnız bellek): sorgu sonucunu kovalara yazar ve
 // sorgulanan kovaları "okundu" işaretler. Pencere dışı nokta yazılmaz.
-func applyVMResult(st *vmREDStore, p vmPlanned, ser []chstore.SpanMetricSeries, svcLabel string) {
+//
+// v0.10.1791 — scope: endpoint kipinde (RouteLabel dolu) anahtar servis +
+// ayraç + rota (endpointStoreKey); servis kipinde servis adı (eski davranış).
+func applyVMResult(st *vmREDStore, p vmPlanned, ser []chstore.SpanMetricSeries, sc vmQueryScope) {
 	want := map[int64]bool{}
 	var buckets []int64
 	for _, off := range p.group.Offsets {
@@ -472,7 +614,10 @@ func applyVMResult(st *vmREDStore, p vmPlanned, ser []chstore.SpanMetricSeries, 
 		}
 	}
 	for _, sr := range ser {
-		svc, off, ok := vmParseGroupKey(sr.GroupKey, svcLabel)
+		svc, off, ok := vmParseGroupKey(sr.GroupKey, sc.SvcLabel)
+		if sc.RouteLabel != "" {
+			svc, off, ok = vmParseGroupKeyRoute(sr.GroupKey, sc.SvcLabel, sc.RouteLabel)
+		}
 		if !ok {
 			continue
 		}
@@ -562,6 +707,9 @@ func kindsReady(r [vmKindN]bool) string {
 
 // publish — tik ölçümünü yayınlar + DEĞİŞİNCE (ya da sorgu koştuysa) log.
 func (s *vmREDSource) publish(v *vmREDView, took time.Duration) {
+	if s.routes {
+		return // v0.10.1791 — endpoint kipi kendi ölçümünü yazar (SubjectObservability)
+	}
 	st := REDSourceStats{Mode: v.mode, Configured: v.configured, Reason: v.reason, LastUnix: time.Now().Unix(), LastMs: took.Milliseconds(),
 		LastQueries: v.queries, LastQueryErrs: v.queryErrs, LastFetched: v.bucketsFetched, PendingBuckets: v.pending,
 		Frames: len(s.store.frames), Services: len(s.store.names), Dropped: s.store.dropped, LastError: v.lastErr}

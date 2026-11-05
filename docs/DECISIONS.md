@@ -12154,3 +12154,9 @@ satırı, açık satırın vurgusu + satır tıkıyla aç/kapa, satır içi form
 - `anomaly_sensitivity.seasonalTimezone` (varsayılan `Europe/Istanbul`, alan yoksa da) mevsimsel tabanın hafta içi / cumartesi / pazar sınıfını yerel güne göre ayırır; tüketen yol v0.10.1791 (F1.3). Bilinmeyen ad PUT'ta 400 (kelepçe değil).
 - Geçişte taban BİR KEZ kayar: UTC 21:00–24:00 kovaları ertesi yerel güne geçer (Cuma 21:00 UTC = Cumartesi yerel). TR'de yaz saati yok → saat-of-day eşlemesi değişmez, yalnız gün sınıfı sınırı. Geri alma: dilimi `UTC` seç.
 - `anomaly_sensitivity.subjects{endpoint,db,queue}` üçü varsayılan KAPALI; FAZ 1.5 eval kapısı geçmeden açılmaz.
+
+## 2026-11-05 — v0.10.1791 — Özne tabanı (Davis F1.3)
+- Mevsimsel taban artık `seasonalTimezone` diliminde (CH + VM + açıklama yolu aynı dilim; gün çeşitliliği yerel günle). UTC seçilirse SQL metni v0.10.1790'la bayt bayt aynı (golden). Davranış motorunun haftanın-saati kovası UTC'de kalır (sabit ofsette dairesel uzaklık değişmez).
+- Özne serileri: endpoint = VM `http_route` (yalnız HTTP ailesi), `sum by (svc, route)`, servis başına üst-N rota `topk … @ çapa` ile SABİT seçim (küme değişince çapa yenilenir + kovalar atılır, aynıysa korunur); db/queue = `db_summary_5m` / `messaging_summary_5m`, sistem başına üst-N, `(sistem, kimlik) IN` bağlı değer listesi. Özne kimliği db `DBSubjectID`, kuyruk `QueueSubjectID`.
+- Bütçe: endpoint VM sorguları servis yolunun bu tik kullandığından KALAN payı (24 − servis) aşamaz; pay < 2 → tür atlanır. Seçim > `maxSeriesPerTick` → tür o tik atlanır (kesilmez). Sayaç `/api/settings/anomaly-red-source/status` `subjects` (api.go büyümesin diye /admin/stats yerine).
+- Bu sürüm serileri kurar; karar + `anomaly_events` yazımı v0.10.1792. Özneler varsayılan kapalı.
