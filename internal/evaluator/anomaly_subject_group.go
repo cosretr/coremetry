@@ -241,18 +241,23 @@ func subjectGroupTitle(k subjectGroupKey, mem []chstore.AnomalyEvent, now time.T
 	peak, started := subjectGroupStats(mem)
 	dur := formatDurationTR(now.Sub(time.Unix(0, started)))
 	var what string
-	if k.Metric == "error_rate" {
+	single := len(mem) == 1 && mem[0].SubjectKind != chstore.AnomalySubjectEndpoint
+	switch {
+	case single && k.Metric == "error_rate":
+		// db / queue öznesi: özne zaten servis alanında (db:… / queue:…).
+		what = "hata oranı arttı"
+	case single:
+		what = "yavaşladı"
+	case k.Metric == "error_rate":
 		if len(mem) == 1 {
 			what = subjectEventRoute(mem[0]) + " rotasında hata oranı arttı"
 		} else {
 			what = strconv.Itoa(len(mem)) + " rotada hata oranı arttı"
 		}
-	} else {
-		if len(mem) == 1 {
-			what = subjectEventRoute(mem[0]) + " yavaşladı"
-		} else {
-			what = strconv.Itoa(len(mem)) + " rota yavaşladı"
-		}
+	case len(mem) == 1:
+		what = subjectEventRoute(mem[0]) + " yavaşladı"
+	default:
+		what = strconv.Itoa(len(mem)) + " rota yavaşladı"
 	}
 	var paren string
 	switch {
@@ -269,6 +274,18 @@ func subjectGroupTitle(k subjectGroupKey, mem []chstore.AnomalyEvent, now time.T
 // subjectGroupDescription — SAF: detay — rotalar orana göre ilk 5 + "ve N
 // rota daha". Üyeler groupSubjectEvents sırasında (oran azalan) gelir.
 func subjectGroupDescription(k subjectGroupKey, mem []chstore.AnomalyEvent) string {
+	if len(mem) == 1 && mem[0].SubjectKind != chstore.AnomalySubjectEndpoint {
+		// v0.10.1800 — db / queue öznesi: rota listesi yok, tek cümle.
+		r := "taban yok"
+		if x := subjectEventRatio(mem[0]); x > 0 {
+			r = "tabanın " + formatRatioTR(x)
+		}
+		out := subjectMetricLabel(k.Metric) + ": " + r
+		if mem[0].Sample != "" {
+			out += " (" + mem[0].Sample + ")"
+		}
+		return out + "."
+	}
 	var b strings.Builder
 	b.WriteString("Etkilenen rotalar (")
 	b.WriteString(subjectMetricLabel(k.Metric))
@@ -341,4 +358,44 @@ func subjectGroupProblem(c subjectCandidate, open *chstore.Problem, scfg chstore
 		carryProblemOperatorState(&p, open)
 	}
 	return p
+}
+
+// subjectSingleCandidate — SAF (v0.10.1800): db / queue olayının adayı.
+// Gruplanmaz; rule_id mevcut yolun `anomaly-auto:<fp>`'si (spec), kapı aynı.
+func subjectSingleCandidate(ev chstore.AnomalyEvent, gateOK bool) subjectCandidate {
+	c := subjectCandidate{
+		Key:     subjectGroupKey{Service: ev.Service, Metric: subjectEventMetric(ev), Direction: ev.Direction},
+		RuleID:  promoteAnomalyRuleID + ev.ID,
+		Members: []chstore.AnomalyEvent{ev},
+	}
+	if gateOK {
+		c.Opening = c.Members
+	}
+	return c
+}
+
+// subjectLiveCandidates — SAF (v0.10.1800): canlı kipin bütün adayları —
+// endpoint grupları + aktif, susturulmamış, kötüleşen db / queue olayları
+// (kapı geçmese de: açık Problem'i tazelenebilsin; Opening boşsa yeni açmaz).
+func subjectLiveCandidates(events []chstore.AnomalyEvent, muted map[string]bool, gate func(chstore.AnomalyEvent) bool) []subjectCandidate {
+	out := groupSubjectEvents(events, muted, gate)
+	for _, ev := range events {
+		if !chstore.IsSubjectAnomaly(ev) || ev.SubjectKind == chstore.AnomalySubjectEndpoint ||
+			ev.Status != "active" || muted[ev.ID] || !subjectWorsening(subjectEventMetric(ev), ev.Direction) {
+			continue
+		}
+		out = append(out, subjectSingleCandidate(ev, gate(ev)))
+	}
+	return out
+}
+
+// activeSubjectGroupRules — SAF (v0.10.1800): en az bir aktif, susturulmamış,
+// kötüleşen rotası olan endpoint adaylarının rule_id'leri. Çözülme geçişi
+// `anomaly-auto:subject:` Problem'ini bu kümede yoksa kapatır.
+func activeSubjectGroupRules(events []chstore.AnomalyEvent, muted map[string]bool) map[string]bool {
+	out := map[string]bool{}
+	for _, c := range groupSubjectEvents(events, muted, func(chstore.AnomalyEvent) bool { return false }) {
+		out[c.RuleID] = true
+	}
+	return out
 }

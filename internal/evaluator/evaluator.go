@@ -1386,6 +1386,13 @@ func (e *Evaluator) promoteStrongAnomalies(ctx context.Context) {
 	lazy := e.store.LazyOpenSnapshot()
 	snapWarned := false
 	for _, ev := range events {
+		// v0.10.1800 (Davis FAZ 3) — özne olayları (subject_red) bu genel
+		// döngüye HİÇ girmez: açılış da tazeleme de promoteSubjectAnomalies'te
+		// (db/queue'nun anomaly-auto:<fp> Problem'i dahil). Burada tazelenseydi
+		// genel gövde ("Anomaly · …") özne gövdesini her tik ezerdi.
+		if chstore.IsSubjectAnomaly(ev) {
+			continue
+		}
 		ruleID := promoteAnomalyRuleID + ev.ID
 		// Re-use the existing open Problem row when one is
 		// in flight for the same fingerprint — keeps the
@@ -1481,8 +1488,8 @@ func (e *Evaluator) promoteStrongAnomalies(ctx context.Context) {
 		}
 	}
 	// v0.10.1799 (Davis FAZ 3) — özne olayları ayrı süpürme (kip ayardan).
-	e.promoteSubjectAnomalies(ctx, cfg, muted, now)
-	e.resolveClearedAnomalyPromotions(ctx, muted)
+	activeGroups := e.promoteSubjectAnomalies(ctx, cfg, muted, now)
+	e.resolveClearedAnomalyPromotions(ctx, muted, activeGroups)
 }
 
 // promotionStep — terfi süpürmesinin olay başına sonucu.
@@ -1621,7 +1628,12 @@ func carryProblemOperatorState(p *chstore.Problem, open *chstore.Problem) {
 //
 // Soft-fail her iki okumada: aktif seti alınamazsa HİÇBİR ŞEY
 // kapatılmaz (kör resolve, kaçırılmış alarmdan beterdir).
-func (e *Evaluator) resolveClearedAnomalyPromotions(ctx context.Context, muted map[string]bool) {
+//
+// v0.10.1800 — activeGroups: aktif endpoint adaylarının rule_id'leri
+// (promoteSubjectAnomalies). `anomaly-auto:subject:` Problem'i bu kümede
+// yoksa "anomaly cleared" ile kapanır; nil = bilinmiyor (kip off / okuma
+// hatası) → bu Problem'lere dokunulmaz (bayat süpürme kapatır).
+func (e *Evaluator) resolveClearedAnomalyPromotions(ctx context.Context, muted map[string]bool, activeGroups map[string]bool) {
 	events, err := e.store.ListAnomalyEvents(ctx, chstore.ListAnomalyEventsFilter{
 		ActiveOnly: true,
 		SinceNs:    time.Now().Add(-1 * time.Hour).UnixNano(),
@@ -1645,14 +1657,9 @@ func (e *Evaluator) resolveClearedAnomalyPromotions(ctx context.Context, muted m
 		if !strings.HasPrefix(p.RuleID, promoteAnomalyRuleID) {
 			continue
 		}
-		fp := strings.TrimPrefix(p.RuleID, promoteAnomalyRuleID)
-		isMuted := muted[fp]
-		if active[fp] && !isMuted {
+		reason, ok := promotedResolveReason(p.RuleID, active, muted, activeGroups)
+		if !ok {
 			continue
-		}
-		reason := "anomaly cleared"
-		if isMuted {
-			reason = "anomaly muted"
 		}
 		q := *p
 		chstore.MarkResolved(&q, time.Now().UnixNano())
@@ -1667,6 +1674,31 @@ func (e *Evaluator) resolveClearedAnomalyPromotions(ctx context.Context, muted m
 	if resolved > 0 {
 		log.Printf("[evaluator] anomaly resolve pass: closed %d promoted problem(s)", resolved)
 	}
+}
+
+// promotedResolveReason — SAF (v0.10.1800'de döngüden ayrıldı): açık bir
+// `anomaly-auto:` Problem'i bu geçişte kapanmalı mı, gerekçesiyle.
+//
+//	anomaly-auto:<fp>       — olay aktif değil → "anomaly cleared";
+//	                          susturulmuş → "anomaly muted"; aksi açık kalır.
+//	anomaly-auto:subject:…  — parmak izi yok: activeGroups'ta yoksa
+//	                          "anomaly cleared" (üye susturması gruptan
+//	                          düşürür); activeGroups nil = bilinmiyor → kalır.
+func promotedResolveReason(ruleID string, active, muted, activeGroups map[string]bool) (string, bool) {
+	if strings.HasPrefix(ruleID, promoteSubjectRulePrefix) {
+		if activeGroups == nil || activeGroups[ruleID] {
+			return "", false
+		}
+		return "anomaly cleared", true
+	}
+	fp := strings.TrimPrefix(ruleID, promoteAnomalyRuleID)
+	if muted[fp] {
+		return "anomaly muted", true
+	}
+	if active[fp] {
+		return "", false
+	}
+	return "anomaly cleared", true
 }
 
 // appendResolveSuffix — appendStaleSuffix'in gerekçeli genellemesi.
