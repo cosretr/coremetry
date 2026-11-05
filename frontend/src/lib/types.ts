@@ -8031,6 +8031,8 @@ export interface ChatOperationPayload {
   endpointExceptionsChecked?: boolean;
   /** ≥3× kuralıyla geri planda kalan servisler. */
   alternatives?: ChatOperationAlternative[];
+  /** v0.10.1783 — v2 endpoint turunda RED değişiminin deterministik cümlesi (Go endpointDeltaTR); cevabın üstünde çizilir. */
+  deltaText?: string;
 }
 /** v0.10.1343 — Go opEndpointException. */
 export interface ChatOperationEndpointException { type: string; message?: string; count: number; lastSeenNs: number; href: string }

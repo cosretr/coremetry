@@ -78,6 +78,12 @@ export function operationBlocks(blocks: ChatTypedBlock[] | undefined): ChatOpera
     .filter(p => p && typeof p.operation === 'string' && typeof p.tracesHref === 'string' && isSafeAppPath(p.tracesHref) && p.current != null);
 }
 
+/** v0.10.1783 — endpoint turunun deterministik değişim cümleleri (Go endpointDeltaTR):
+ *  operasyon kartının deltaText'i; cevabın ÜSTÜNDE çizilir (modelden bağımsız). SAF. */
+export function operationDeltaTexts(blocks: ChatTypedBlock[] | undefined): string[] {
+  return operationBlocks(blocks).map(p => (typeof p.deltaText === 'string' ? p.deltaText.trim() : '')).filter(t => t !== '');
+}
+
 /** v0.10.1337 — servis raporu kartı (copilot_service_report.go). Şekil doğrulanır;
  *  HER href isSafeAppPath'ten geçer: güvensiz link çipi düşer, güvensiz exception
  *  linki satırdan silinir (satır kalır, link olmaz). Trace linkleri traceHref'le

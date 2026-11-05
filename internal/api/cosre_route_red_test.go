@@ -209,7 +209,7 @@ func TestRouteREDKeyHashesAllInputs(t *testing.T) {
 
 func TestRouteInvestigationAddendum(t *testing.T) {
 	a := copilot.ChatRouteInvestigationAddendum("orders-api", "POST /v1/orders", "/v1/orders", "VM", "son 1 saatte")
-	for _, want := range []string{"orders-api", "POST /v1/orders", `route="/v1/orders"`, "kaynak: VM", "son 1 saatte", "endpoint_metrics", "→", "> [!IMPORTANT] KARAR", "%0,2"} {
+	for _, want := range []string{"orders-api", "POST /v1/orders", `route="/v1/orders"`, "kaynak: VM", "son 1 saatte", "endpoint_metrics", "→", "> [!IMPORTANT] KARAR", "%0,2", "KARAR kutusu yanıt süresi değişimini sayıyla", `"yanıt süresi değişmedi"`} {
 		if !strings.Contains(a, want) {
 			t.Errorf("ek %q taşımıyor:\n%s", want, a)
 		}
@@ -238,5 +238,44 @@ func TestRouteTurnWiring(t *testing.T) {
 	}
 	if !strings.Contains(src, "emit(\"block\", blockSeq.Next(blocks.TypeChart, sp))") {
 		t.Error("rota grafik blokları yayınlanmıyor")
+	}
+}
+
+// v0.10.1783 (operator-reported: endpoint ✨ Açıkla turunda rota grafikleri
+// sayfanın 6 saatine değil varsayılan son 1 saate bakıyordu — rtRange yalnız
+// SkipEndpointPick'te ctx.RangeS alıyordu). ✨ sorusu "… endpointine bak" ile
+// biter; o tur ve kartın İncele turu sayfanın penceresini taşır.
+func TestRouteTurnRangeS(t *testing.T) {
+	const ask = "Ne oluyor, ne zamandan beri, en yavaş trace'lerde süre nereye gidiyor, hangi hatalar var? bsa-loan-web POST /api/x endpointine bak"
+	cases := []struct {
+		name string
+		q    string
+		ctx  int64
+		skip bool
+		want int64
+	}{
+		{"✨ endpoint turu 6 sa", ask, 6 * 3600, false, 6 * 3600},
+		{"✨ endpoint turu 24 sa", ask, 86400, false, 86400},
+		{"✨ endpoint turu pencere yok", ask, 0, false, 0},
+		{"kart İncele turu", "orders-api POST /v1/orders incele", 3600 * 3, true, 3600 * 3},
+		{"kart İncele turu pencere yok", "orders-api POST /v1/orders incele", 0, true, 0},
+		{"serbest rota sorusu ekran aralığını almaz", "orders-api POST /v1/orders neden yavaş", 6 * 3600, false, 0},
+		{"ek ortada değil sonda olmalı", "endpointine bak orders-api POST /v1/orders yavaş mı", 6 * 3600, false, 0},
+	}
+	for _, c := range cases {
+		if got := routeTurnRangeS(c.q, c.ctx, c.skip); got != c.want {
+			t.Errorf("%s: routeTurnRangeS = %d, want %d", c.name, got, c.want)
+		}
+	}
+}
+
+// v0.10.1783 — kablolama: rota planının penceresi routeTurnRangeS'ten.
+func TestRouteTurnRangeWiring(t *testing.T) {
+	b, err := os.ReadFile("copilot_chat.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), "rtRange := routeTurnRangeS(lastUserText(req.Messages), req.Context.RangeS, req.Context.SkipEndpointPick)") {
+		t.Error("rota turu penceresi routeTurnRangeS'ten gelmiyor")
 	}
 }

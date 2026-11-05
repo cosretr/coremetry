@@ -1,7 +1,7 @@
 import { Component, Fragment, createContext, memo, useContext, useEffect, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from 'react';
 import { chatErrorText } from './chatErrorText';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { chartBlocks, mergeBlockLinks, traceListBlocks, operationBlocks, serviceReportBlocks, topologyBlocks, evidenceBlocksByRef, chartsSignalsBlock, logSpikeBlock, metricPanelBlock, type EvidenceBlockView } from '@/lib/chatBlocks';
+import { chartBlocks, mergeBlockLinks, traceListBlocks, operationBlocks, operationDeltaTexts, serviceReportBlocks, topologyBlocks, evidenceBlocksByRef, chartsSignalsBlock, logSpikeBlock, metricPanelBlock, type EvidenceBlockView } from '@/lib/chatBlocks';
 import { ChatTraceList } from './ChatTraceList'; // v0.10.688 — trace_list bloğu
 import { evidenceBlocks } from '@/lib/chatEvidence'; // v0.10.558
 import { EvidenceCard } from './EvidenceCard';
@@ -1099,6 +1099,10 @@ function ChatBubbleView({ turn, onRetry, stepsOpen, onRegenerate, busy, versions
                 Arşiv anlık görüntüsü{turn.blocksAt ? ` · ${agoTR(turn.blocksAt * 1e6)}` : ''}{turn.blocksDropped?.length ? ` · ${turn.blocksDropped.length} kart sığmadı` : ''}
               </div>
             )}
+            {/* v0.10.1783 — endpoint turu: ölçülen RED değişimi cevabın ÜSTÜNDE (Go endpointDeltaTR; modelden bağımsız). */}
+            {operationDeltaTexts(turn.blocks).map((t, i) => (
+              <p key={`opd-${i}`} className="cm-md-p" data-op-delta="" style={{ fontWeight: 600 }}>{t}</p>
+            ))}
             {/* v0.10.1400 — açıklama turu: önbellek etiketi + ✨ Explain gövdesi + kanıt trace'leri. */}
             {ex?.cached && !turn.pending && (
               <div className="cm-msg-note" data-explain-cached="">

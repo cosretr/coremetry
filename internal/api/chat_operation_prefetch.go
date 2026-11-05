@@ -251,7 +251,10 @@ type opPrefetch struct {
 	// ClusterCompare — v0.10.1374: ≥2 ortam anan endpoint sorusunda ortam başına
 	// RED + en yavaş trace şekli (nil = kıyas yok; omitempty → yük bayt bayt eski).
 	// Metni (clusterText) summary()'ye GİRMEZ, seed()'in üçüncü sentetik çifti.
-	ClusterCompare  *clusterCompareEvidence `json:"clusterCompare,omitempty"`
+	ClusterCompare *clusterCompareEvidence `json:"clusterCompare,omitempty"`
+	// DeltaText — v0.10.1783: v2 endpoint turunda RED değişiminin deterministik
+	// cümlesi (endpointDeltaTR); FE cevabın üstünde çizer. omitempty: v1 eski.
+	DeltaText       string `json:"deltaText,omitempty"`
 	clusterText     string
 	clusterArgsJSON string
 	// Drill — v0.10.1343: en yavaş 1–2 trace'in kritik yolu + logları; summary()'ye
@@ -794,6 +797,9 @@ func (s *Server) opPrefetchForTarget(pctx context.Context, emit func(string, any
 	cc.finish(emit, p) // v0.10.1374 — nil → no-op
 	// Faz 3 — sohbet kartı (metrikler, hatalı trace'ler, Oracle kodları,
 	// filtreli Traces linki). seq yüksek: döngünün kendi blokları (b1…) önce.
+	if p.endpoint && cosreV2Marked(pctx) { // v0.10.1783 — deterministik değişim satırı (chat_endpoint_delta.go); v1 bayt bayt eski
+		p.DeltaText, _ = endpointDeltaTR(p.Current, p.Previous, rangeS)
+	}
 	emit("block", map[string]any{"id": "op-prefetch", "type": blocks.TypeOperation, "seq": 1000, "final": true, "payload": p})
 	return p
 }

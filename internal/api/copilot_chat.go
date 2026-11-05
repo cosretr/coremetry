@@ -613,10 +613,9 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 		if rtSvc == "" && req.Context.Page != nil {
 			rtSvc = req.Context.Page.Service
 		}
-		rtRange := int64(0) // sorunun penceresi, yoksa son 1 saat; kartın İncele turu kartın penceresini taşır
-		if req.Context.SkipEndpointPick {
-			rtRange = req.Context.RangeS
-		}
+		// sorunun penceresi, yoksa son 1 saat; kartın İncele turu ve endpoint ✨
+		// turu sayfanın penceresini taşır (v0.10.1783, chat_endpoint_delta.go)
+		rtRange := routeTurnRangeS(lastUserText(req.Messages), req.Context.RangeS, req.Context.SkipEndpointPick)
 		rtPlan, _ = s.planRouteTurn(ctx, lastUserText(req.Messages), rtSvc, req.Context.Env, rtRange, anchorTo)
 	}
 	if rtPlan == nil && opPre == nil && !ct.On && !apCont.on && evm == nil && cosreV2Marked(ctx) {

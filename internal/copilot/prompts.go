@@ -2970,6 +2970,8 @@ grafiği metinle yeniden çizme.
   de; sayı UYDURMA, okuyamadığın değeri yazma.
 - Gecikme ve hata birlikte arttı, trafik sabitse aşağı bağımlılığa bak (en
   yavaş çağrı); trafik de arttıysa yükü söyle.
+- KARAR kutusu yanıt süresi değişimini sayıyla söyler
+  (değişmediyse "yanıt süresi değişmedi").
 - Cevabı şu kutuyla bitir:
 > [!IMPORTANT] KARAR
 > Tek cümle: ne oldu, en olası neden ya da sonraki adım.`

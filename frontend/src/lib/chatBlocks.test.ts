@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { appendChatBlock, chartBlocks, evidenceBlocksByRef, mergeBlockLinks, operationBlocks, traceListBlocks } from './chatBlocks';
+import { appendChatBlock, chartBlocks, evidenceBlocksByRef, mergeBlockLinks, operationBlocks, operationDeltaTexts, traceListBlocks } from './chatBlocks';
 import type { ChatTypedBlock } from './types';
 
 // v0.10.541 — blok biriktirme: id tekil (son kazanır), seq sıralı; chart süzgeci
@@ -51,5 +51,24 @@ describe('chatBlocks — güvensiz uygulama yolu (v0.10.1314)', () => {
     const op = (tracesHref: string) => ({ operation: 'X', tracesHref, current: { calls: 1, errors: 0, p99Ms: 1, measured: true } });
     expect(operationBlocks([mk('b1', 1, 'operation', op('/\\evil.com'))])).toEqual([]);
     expect(operationBlocks([mk('b1', 1, 'operation', op('/traces?operation=X'))])).toHaveLength(1);
+  });
+});
+
+// v0.10.1783 (operator-reported: endpoint ✨ açıklaması yanıt süresi artışını
+// söylemiyordu) — operasyon kartının deltaText'i cevabın üstünde çizilir.
+describe('operationDeltaTexts (v0.10.1783)', () => {
+  const op = (deltaText?: unknown, tracesHref = '/traces?operation=X') =>
+    ({ operation: 'X', tracesHref, current: { calls: 1, errors: 0, p99Ms: 1, measured: true }, deltaText });
+  it('dolu deltaText döner', () => {
+    expect(operationDeltaTexts([mk('b1', 1, 'operation', op('Son 1 saatte yanıt süresi p99 420 ms → 1,9 sn (+%352)'))]))
+      .toEqual(['Son 1 saatte yanıt süresi p99 420 ms → 1,9 sn (+%352)']);
+  });
+  it('yok / boş / dize değil → düşer', () => {
+    expect(operationDeltaTexts([mk('b1', 1, 'operation', op())])).toEqual([]);
+    expect(operationDeltaTexts([mk('b1', 1, 'operation', op('  '))])).toEqual([]);
+    expect(operationDeltaTexts([mk('b1', 1, 'operation', op(42))])).toEqual([]);
+  });
+  it('güvensiz tracesHref ile kart düşerse satır da düşer', () => {
+    expect(operationDeltaTexts([mk('b1', 1, 'operation', op('x', '/\\evil.com'))])).toEqual([]);
   });
 });
