@@ -113,10 +113,28 @@ const DELTA_COL: DataTableColumn<GroupRow> = {
   numeric: true, width: 100,
 };
 
-export function groupTableCols(hasCompare: boolean): DataTableColumn<GroupRow>[] {
-  if (!hasCompare) return BASE_COLS;
+// v0.10.1823 (operatör) — Toplam sütunu da Δ gibi KOŞULLU: hiçbir satır
+// toplanabilir birimde değilse (ör. avg(süre) sorgusu) sütun baştan aşağı
+// "—" basan ölü bir sütundu. `hasAdditive` verilmezse eski davranış (hep var).
+export function groupTableCols(hasCompare: boolean, hasAdditive = true): DataTableColumn<GroupRow>[] {
+  const base = hasAdditive ? BASE_COLS : BASE_COLS.filter(c => c.id !== 'sum');
+  if (!hasCompare) return base;
   // Δ, karşılaştırdığı sayıların (Ort / Toplam) HEMEN SAĞINDA.
-  return [...BASE_COLS.slice(0, -1), DELTA_COL, BASE_COLS[BASE_COLS.length - 1]];
+  return [...base.slice(0, -1), DELTA_COL, base[base.length - 1]];
+}
+
+// v0.10.1823 (operatör: "neden burada A A A yazıyor") — sorgu harfi rozeti
+// yalnız satırlar BİRDEN ÇOK sorgudan/formülden geliyorsa bilgi taşır. Tek
+// sorguda her satırda aynı harf gürültüydü. SAF.
+export function showLetterBadge(rows: Pick<GroupRow, 'letter'>[]): boolean {
+  return new Set(rows.map(r => r.letter)).size > 1;
+}
+
+// v0.10.1823 — boş etiket değeri okunur basılır: "route=" → "route=(boş)".
+// YALNIZ gösterim; rowKey / renk / Δ eşleşmesi ham `label` ile kalır. SAF.
+export function displaySeriesLabel(label: string): string {
+  if (label === '') return '(boş)';
+  return label.replace(/(^|[,\s])([^=,\s]+)=(?=$|,)/g, '$1$2=(boş)');
 }
 
 export function buildGroupRows(panels: PanelData[]): GroupRow[] {
@@ -320,7 +338,9 @@ export function GroupTable({ panels, hiddenKeys, onToggleHidden, onIsolate, onFo
   // hayalet düşmüşse (çözünürlük uyuşmazlığı / önceki dönemde veri yok)
   // sütun da çıkmaz — panel şeridi sebebini zaten söylüyor.
   const hasCompare = useMemo(() => panels.some(p => p.ghosts?.length), [panels]);
-  const columns = useMemo(() => groupTableCols(hasCompare), [hasCompare]);
+  const hasAdditive = useMemo(() => rows.some(r => r.additive), [rows]);
+  const withLetter = useMemo(() => showLetterBadge(rows), [rows]);
+  const columns = useMemo(() => groupTableCols(hasCompare, hasAdditive), [hasCompare, hasAdditive]);
 
   // v0.9.930 — satır "açmak" = KAYNAĞA GİTMEK. Bu tablonun düz tıkı zaten
   // izole ediyor, yani Enter'ın satırı "genişletmesi" diye bir şey yok;
@@ -406,13 +426,15 @@ export function GroupTable({ panels, hiddenKeys, onToggleHidden, onIsolate, onFo
                       marginRight: 4, fontSize: 11, flexShrink: 0,
                       color: hidden ? 'var(--text3)' : r.color,
                     }}>{hidden ? '○' : '◉'}</span>
-                    <span style={{
-                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                      width: 16, height: 16, borderRadius: 3, marginRight: 4, flexShrink: 0,
-                      background: r.isFormula ? 'var(--bg3)' : 'var(--accent2)',
-                      color: r.isFormula ? 'var(--text2)' : 'var(--bg)',
-                      fontSize: 10, fontWeight: 700,
-                    }}>{r.letter}</span>
+                    {withLetter && (
+                      <span data-testid="group-letter" style={{
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                        width: 16, height: 16, borderRadius: 3, marginRight: 4, flexShrink: 0,
+                        background: r.isFormula ? 'var(--bg3)' : 'var(--accent2)',
+                        color: r.isFormula ? 'var(--text2)' : 'var(--bg)',
+                        fontSize: 10, fontWeight: 700,
+                      }}>{r.letter}</span>
+                    )}
                     {onPivot && r.pivot && (
                       <PivotButtons pivot={r.pivot}
                         onPivot={(pairs, mode) => onPivot(r.letter, pairs, mode)} />
@@ -424,7 +446,7 @@ export function GroupTable({ panels, hiddenKeys, onToggleHidden, onIsolate, onFo
                     <b title={r.label} style={{
                       marginLeft: 4, minWidth: 0,
                       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    }}>{r.label}</b>
+                    }}>{displaySeriesLabel(r.label)}</b>
                   </div>
                 </td>
                 <td className="num" style={{ color: cursorSec == null ? 'var(--text3)' : 'var(--accent2)' }}>
@@ -437,11 +459,13 @@ export function GroupTable({ panels, hiddenKeys, onToggleHidden, onIsolate, onFo
                 {/* Toplam yalnız TOPLANABİLİR birimde. ms/%/latency'de
                     pod'lar arası toplam anlamsız bir sayı olurdu — "—"
                     basıp neden olduğunu title'da söylüyoruz. */}
-                <td className="num"
-                  title={r.additive ? undefined
-                    : `Toplam bu birimde anlamlı değil (${r.unit || 'birimsiz'})`}>
-                  {r.additive ? fmtSmart(r.sum, r.unit) : '—'}
-                </td>
+                {hasAdditive && (
+                  <td className="num"
+                    title={r.additive ? undefined
+                      : `Toplam bu birimde anlamlı değil (${r.unit || 'birimsiz'})`}>
+                    {r.additive ? fmtSmart(r.sum, r.unit) : '—'}
+                  </td>
+                )}
                 {/* v0.9.824 — Δ %: artış KIRMIZI değil NÖTR renk ailesinde
                     kalır. "Daha çok istek" iyi, "daha çok gecikme" kötü;
                     tabloda hangi yönün iyi olduğunu bilen tek şey birim

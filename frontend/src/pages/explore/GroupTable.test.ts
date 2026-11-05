@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildGroupRows, deltaPct, groupTableCols } from './GroupTable';
+import { buildGroupRows, deltaPct, displaySeriesLabel, groupTableCols, showLetterBadge } from './GroupTable';
 import type { PanelData } from './PanelStack';
 import { seriesColor } from '@/lib/chartFmt';
 
@@ -257,5 +257,31 @@ describe('groupTableCols — Δ sütunu koşullu', () => {
     const col = groupTableCols(true).find(c => c.id === 'delta')!;
     expect(col.sortValue!({ deltaPct: null } as never)).toBeNull();
     expect(col.sortValue!({ deltaPct: -12.5 } as never)).toBe(-12.5);
+  });
+});
+
+// v0.10.1823 — operatör: tek sorguda her satırda "A" rozeti, baştan aşağı
+// "—" basan Toplam sütunu ve "route=" boş etiketi.
+describe('GroupTable sadeleştirme (v0.10.1823)', () => {
+  it('harf rozeti yalnız birden çok sorgu/formül varken', () => {
+    expect(showLetterBadge([{ letter: 'A' }, { letter: 'A' }, { letter: 'A' }])).toBe(false);
+    expect(showLetterBadge([{ letter: 'A' }, { letter: 'B' }])).toBe(true);
+    expect(showLetterBadge([{ letter: 'A' }, { letter: 'F1' }])).toBe(true);
+    expect(showLetterBadge([])).toBe(false);
+  });
+  it('Toplam sütunu toplanabilir satır yokken çıkmaz; Δ ve Bucket sırası korunur', () => {
+    expect(groupTableCols(false, false).map(c => c.id)).toEqual(['series', 'cursor', 'last', 'min', 'max', 'avg', 'buckets']);
+    expect(groupTableCols(true, false).map(c => c.id)).toEqual(['series', 'cursor', 'last', 'min', 'max', 'avg', 'delta', 'buckets']);
+    expect(groupTableCols(false, true).map(c => c.id)).toContain('sum');
+    expect(groupTableCols(false).map(c => c.id)).toContain('sum'); // varsayılan: eski davranış
+  });
+  it('boş etiket değeri okunur basılır, dolu değerler aynen kalır', () => {
+    expect(displaySeriesLabel('route=')).toBe('route=(boş)');
+    expect(displaySeriesLabel('route=/api/orders')).toBe('route=/api/orders');
+    expect(displaySeriesLabel('route=, method=GET')).toBe('route=(boş), method=GET');
+    expect(displaySeriesLabel('method=GET, route=')).toBe('method=GET, route=(boş)');
+    expect(displaySeriesLabel('q=a=b')).toBe('q=a=b');
+    expect(displaySeriesLabel('')).toBe('(boş)');
+    expect(displaySeriesLabel('orders-api')).toBe('orders-api');
   });
 });
