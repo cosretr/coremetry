@@ -11786,7 +11786,12 @@ export interface MLTickStatus {
   backoff: MLBackoffEntry[]; partial?: number; docs?: number; lastError?: string;
   /** v0.10.1811: batch kuralının bu tikte kestiği aday (ml_events'e yazılmadı). */
   batchCut?: number;
+  /** v0.10.1812: sinyal türü başına ölçüm + tik toplam sorgu sayıları. */
+  kinds?: Record<string, MLKindTick>;
+  es?: number; vm?: number; ch?: number;
 }
+/** Sinyal türünün son tik ölçümü (v0.10.1812, audit §10 dilim 1.1). dropped = ES terms tavanı dışında kalan servis (yalnız log). */
+export interface MLKindTick { services: number; series: number; seriesRows: number; es: number; vm: number; ch: number; dropped: number; durationMs: number }
 export interface MLScorecard {
   tick?: MLTickStatus;
   windowDays: number; detectors: MLDetectorScore[]; bySignal?: MLDetectorScore[]; backfill?: MLBackfillProgress[];

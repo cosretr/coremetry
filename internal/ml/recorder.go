@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/cilcenk/coremetry/internal/anomaly"
@@ -47,7 +48,12 @@ type Deps struct {
 	Background context.Context
 	// ESLeft — tik ES bütçesinin kalanı (maxEsQueriesPerTick − bu tikte atılan); nil = sınırsız.
 	ESLeft func() int
+	// meter — v0.10.1812 tik ölçümü (tick_meter.go); nil güvenli.
+	meter *tickMeter
 }
+
+// observeDropped — ES servis terms tavanı dışında kalan servis (tik ölçümü).
+func (d Deps) observeDropped(n int) { d.meter.observeDropped(n) }
 
 // Recorder — alt sistemin döngüsü. Kendi goroutine'i, kendi context +
 // timeout'u; aynı süreçteki LLM drain'i ya da evaluator ile paylaşılan
@@ -125,6 +131,9 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	budget := time.Duration(cfg.TimeoutMs)*time.Millisecond*time.Duration(1+len(r.detectors)) + 10*time.Second
 	tctx, tcancel := context.WithTimeout(ctx, budget)
 	defer tcancel()
+	// v0.10.1812 — tikin CH sorguları (tracedConn kapısında sayılır)
+	var chQueries atomic.Int64
+	tctx = chstore.WithQueryCounter(tctx, &chQueries)
 	// ortak etiket seti: 30 g kararlar (hijyen + geri bildirim); hata = etiketsiz devam
 	labels, lerr := r.store.MLLabels(tctx, start.Add(-30*24*time.Hour))
 	if lerr != nil {
@@ -147,14 +156,19 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	sens := r.store.AnomalySensitivityForDetectors()
 	isBatch, loadParts := sens.IsBatchService, metricLoadParts(cfg)
 	batchCut := 0
+	var samples []kindSample
 	for _, det := range r.detectors {
 		if !det.Enabled(cfg) {
 			continue
 		}
 		active++
 		d0 := time.Now()
+		es0, vm0, ch0 := global.esQueries.Load(), global.vmQueries.Load(), chQueries.Load()
+		deps.meter = newTickMeter()
 		evs, derr := det.Tick(tctx, deps, cfg, start)
 		st := chstore.MLSignalTick{Ran: true, SourceMs: time.Since(d0).Milliseconds(), Candidates: len(evs), Services: distinctServices(evs)}
+		samples = append(samples, sampleOf(signalOfDetector(r.detectors, det.Name()), deps.meter, evs,
+			int(global.esQueries.Load()-es0), int(global.vmQueries.Load()-vm0), int(chQueries.Load()-ch0), st.SourceMs))
 		evs, cut := batchFilter(evs, isBatch, loadParts)
 		if rf, ok := det.(capRefunder); ok {
 			for _, c := range cut {
@@ -180,6 +194,7 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 			all = append(all, ev)
 		}
 	}
+	deps.meter = nil // tik sonrası yazımlar dedektör ölçümüne girmez
 	steps["detectorsMs"] = time.Since(start).Milliseconds() - steps["labelsMs"]
 	kept, sup := qualityFilter(all, cfg, lb, r.runs, start)
 	w0 := time.Now()
@@ -228,7 +243,9 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	global.tickDone(start)
 	// tik durumu: api pod'u karnede okur (süreç-içi sayaç bu pod'da kalır)
 	status := chstore.MLTickStatus{At: start.Unix(), DurationMs: time.Since(start).Milliseconds(), Events: written, Backoff: r.backoff.snapshot(start),
-		Partial: int64(partialN), Docs: global.docs.Load(), Steps: steps, Signals: signals, BatchCut: int64(batchCut)}
+		Partial: int64(partialN), Docs: global.docs.Load(), Steps: steps, Signals: signals, BatchCut: int64(batchCut),
+		Kinds: foldKindTicks(samples), ES: global.esQueries.Load() - esAtStart, VM: global.vmQueries.Load() - vmAtStart, CH: chQueries.Load()}
+	global.setLastKinds(status.Kinds)
 	if firstErr != nil {
 		status.LastError = truncRunes(firstErr.Error(), 300)
 	}
@@ -241,6 +258,9 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 		r.placement, active, written, sup.Impact, sup.Feedback, sup.Regime, batchCut, len(labels), time.Since(start).Milliseconds(), Observability().ESP95Ms, firstErr)
 	log.Printf("[ml] tick steps labels=%dms detectors=%dms write=%dms snapshot=%dms es_queries=%d vm_queries=%d partial=%d docs=%d",
 		steps["labelsMs"], steps["detectorsMs"], steps["writeMs"], steps["snapshotMs"], global.esQueries.Load()-esAtStart, global.vmQueries.Load()-vmAtStart, partialN, global.docs.Load())
+	for _, line := range kindTickLines(status.Kinds) {
+		log.Print(line)
+	}
 	for name, st := range signals {
 		log.Printf("[ml] tick %s ran=%v services=%d source=%dms candidates=%d batch_cut=%d written=%d partial=%d err=%s", name, st.Ran, st.Services, st.SourceMs, st.Candidates, st.BatchCut, st.Written, st.Partial, st.Error)
 	}

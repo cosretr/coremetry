@@ -285,11 +285,12 @@ func (d *LogRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, now 
 	from, to := liveWindow(last, bucket) // yalnız son tam kova + bir öncekisi (geç log); dwell geçmişi CH'den
 	t0 := time.Now()
 	res, err := agg.MLLogAggregate(ctx, logstore.MLLogAggRequest{From: from, To: to, BucketSec: cfg.BucketSec,
-		MaxServices: cfg.MaxServices, InfluencerField: inf, ErrorLevels: cfg.ErrorLevels})
+		MaxServices: cfg.MaxServices, InfluencerField: inf, ErrorLevels: cfg.ErrorLevels, CountServices: true})
 	deps.ObserveES(time.Since(t0))
 	if err != nil {
 		return nil, err
 	}
+	deps.observeDropped(res.DroppedServices) // v0.10.1812: tavan dışı servis (tik ölçümü)
 	if res.Partial {
 		return nil, fmt.Errorf("%w: %s — seri yazılmadı, kova eksik veri sayıldı", logstore.ErrESPartial, res.PartialReason)
 	}
@@ -313,7 +314,7 @@ func (d *LogRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, now 
 			srows = append(srows, chstore.MLSeriesRow{Signal: chstore.MLSignalLog, Service: svc, Part: part, Bucket: time.Unix(b, 0), BucketSec: uint32(cfg.BucketSec), Count: c})
 		}
 	}
-	if err := deps.Store.InsertMLSeries(ctx, srows); err != nil {
+	if err := deps.insertSeries(ctx, srows); err != nil {
 		return nil, err
 	}
 	global.series.Store(int64(len(series)))

@@ -434,9 +434,11 @@ type MLStats struct {
 	Events         int64  `json:"events"`
 	SeriesInMemory int64  `json:"seriesInMemory"`
 	// Kalite süzgeci bastırmaları (kümülatif, süreç-içi).
-	SuppressedImpact   int64  `json:"suppressedImpact"`
-	SuppressedFeedback int64  `json:"suppressedFeedback"`
-	SuppressedRegime   int64  `json:"suppressedRegime"`
-	SuppressedBatch    int64  `json:"suppressedBatch"` // v0.10.1811: batch kuralının kestiği aday (kümülatif)
-	LastError          string `json:"lastError,omitempty"`
+	SuppressedImpact   int64 `json:"suppressedImpact"`
+	SuppressedFeedback int64 `json:"suppressedFeedback"`
+	SuppressedRegime   int64 `json:"suppressedRegime"`
+	SuppressedBatch    int64 `json:"suppressedBatch"` // v0.10.1811: batch kuralının kestiği aday (kümülatif)
+	// LastKinds — v0.10.1812: son tikin sinyal türü ölçümü (lider pod belleği).
+	LastKinds map[string]MLKindTick `json:"lastKinds,omitempty"`
+	LastError string                `json:"lastError,omitempty"`
 }

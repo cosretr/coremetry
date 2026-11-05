@@ -28,6 +28,9 @@ type MLLogAggRequest struct {
 	ErrorLevels     []string
 	// Timeout — ES gövde zaman aşımı (backfill kendi süresini verir); 0 = tik varsayılanı.
 	Timeout time.Duration
+	// CountServices — v0.10.1812: kardeş cardinality agregasyonu (tavan dışı
+	// servis sayısı, es_ml_truncation.go); yalnız tik isteği.
+	CountServices bool
 }
 
 type MLLogRow struct {
@@ -48,6 +51,9 @@ type MLLogAggResult struct {
 	// Partial — timed_out ya da _shards.failed > 0: sayımlar alt küme (v0.10.1763).
 	Partial       bool
 	PartialReason string
+	// DroppedServices — v0.10.1812: MaxServices tavanı dışında kalan servis
+	// (MLDroppedServices); 0 = kesilme yok.
+	DroppedServices int
 }
 
 // MLLogAggregator — isteğe bağlı arayüz; yalnız ES depo uygular. Çağıran
@@ -80,6 +86,9 @@ func mlLogAggBody(tsField, svcField, lvlField string, req MLLogAggRequest, timeo
 			"svc":    map[string]any{"terms": map[string]any{"field": svcField, "size": req.MaxServices}, "aggs": svcAggs},
 			"latest": map[string]any{"max": map[string]any{"field": tsField}},
 		},
+	}
+	if req.CountServices {
+		body["aggs"].(map[string]any)["svc_n"] = mlServiceCardinalityAgg(svcField, req.MaxServices)
 	}
 	b, _ := json.Marshal(body)
 	return b
@@ -120,7 +129,13 @@ func rawKeyString(k json.RawMessage) string {
 // parseMLLogAgg — SAF: aggregations JSON → satırlar.
 func parseMLLogAgg(aggs json.RawMessage) (*MLLogAggResult, error) {
 	var a struct {
-		Svc    struct{ Buckets []esBucket } `json:"svc"`
+		Svc struct {
+			Buckets  []esBucket
+			SumOther int64 `json:"sum_other_doc_count"`
+		} `json:"svc"`
+		SvcN *struct {
+			Value int64 `json:"value"`
+		} `json:"svc_n"`
 		Latest struct {
 			Value *float64 `json:"value"`
 		} `json:"latest"`
@@ -129,6 +144,11 @@ func parseMLLogAgg(aggs json.RawMessage) (*MLLogAggResult, error) {
 		return nil, err
 	}
 	out := &MLLogAggResult{}
+	var distinct int64
+	if a.SvcN != nil {
+		distinct = a.SvcN.Value
+	}
+	out.DroppedServices = MLDroppedServices(len(a.Svc.Buckets), a.Svc.SumOther, distinct, a.SvcN != nil)
 	if a.Latest.Value != nil {
 		out.LatestDocMs = int64(*a.Latest.Value)
 	}

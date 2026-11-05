@@ -12,7 +12,7 @@ import { Badge } from '@/components/shadcn/badge';
 import { api } from '@/lib/api';
 import { keys, useMLEvents, useMLScorecard } from '@/lib/queries';
 import { fmtDateTime } from '@/lib/utils';
-import type { MLEvent, MLDetectorScore, MLGate, MLBackfillProgress, MLTickStatus, MLSignalTick, MLScorecard } from '@/lib/types';
+import type { MLEvent, MLDetectorScore, MLGate, MLBackfillProgress, MLTickStatus, MLSignalTick, MLScorecard, MLKindTick } from '@/lib/types';
 import { Link } from 'react-router-dom';
 import { mlHeadline, mlValuePair } from '@/lib/mlReplay';
 import { MLPeriodReplay } from './MLPeriodReplay';
@@ -138,11 +138,27 @@ export function statusTiles(sc: MLScorecard, signal: MLSignal, nowSec: number): 
   const samples = (sc.bySignal ?? []).filter(s => !signal || s.detector === signal).reduce((a, s) => a + s.samples, 0);
   const bo = t?.backoff ?? [];
   return [
-    { k: 'Son tik', v: t ? `${ago} dk önce` : 'yok', s: t ? `${Math.round(t.durationMs / 1000)} sn · ${t.events} olay${t.docs ? ` · ${t.docs.toLocaleString('tr-TR')} belge` : ''}${t.partial ? ` · ${t.partial} kısmi` : ''}` : 'tik yok', warn: !!t?.lastError },
+    { k: 'Son tik', v: t ? `${ago} dk önce` : 'yok', s: t ? `${Math.round(t.durationMs / 1000)} sn · ${t.events} olay${t.docs ? ` · ${t.docs.toLocaleString('tr-TR')} belge` : ''}${t.partial ? ` · ${t.partial} kısmi` : ''}${t.batchCut ? ` · batch kuralı ${t.batchCut} adayı kesti` : ''}` : 'tik yok', warn: !!t?.lastError },
     { k: 'Log geçmişi', v: bf ? `${bf.done + miss} / ${bf.total} sa` : '—', s: bf ? (bf.complete ? 'tamam' : bf.running ? 'sürüyor' : 'duraklı') + (miss ? ` · eksik ${miss}` : '') : 'kayıt yok' },
     { k: 'Olay · 30 gün', v: String(events), s: samples ? `${samples} karar` : 'karar yok · terfi kapalı' },
     { k: 'VM bekleme', v: bo.length ? `${bo.length} aile` : 'yok', s: bo.map(b => `${b.family} · ${Math.max(1, Math.round((b.until - nowSec) / 60))} dk`).join(', ') || 'tüm aileler açık', warn: bo.length > 0 },
   ];
+}
+
+const KIND_ORDER = ['log', 'trace', 'metric'];
+
+/** Sinyal türü başına son tik ölçümü — SAF (test). v0.10.1812, audit §10 dilim 1.1. */
+export function kindTickLines(t: MLTickStatus | undefined, signal: MLSignal): { kind: string; text: string; warn: boolean }[] {
+  const kinds = t?.kinds ?? {};
+  return Object.keys(kinds).filter(k => !signal || k === signal)
+    .sort((a, b) => (KIND_ORDER.indexOf(a) + 1 || 99) - (KIND_ORDER.indexOf(b) + 1 || 99) || a.localeCompare(b))
+    .map(kind => {
+      const k: MLKindTick = kinds[kind];
+      const n = (v: number) => v.toLocaleString('tr-TR');
+      const bits = [`${n(k.services)} servis`, `${n(k.series)} seri (${n(k.seriesRows)} satır)`, `sorgu ES ${k.es} · VM ${k.vm} · CH ${k.ch}`, `${(k.durationMs / 1000).toFixed(1)} sn`];
+      if (k.dropped) bits.push(`${SIGNAL_TR[kind]?.toLowerCase() ?? kind} sinyalinde ${n(k.dropped)} servis tavan dışında kaldı`);
+      return { kind, text: `${SIGNAL_TR[kind] ?? kind} · ${bits.join(' · ')}`, warn: k.dropped > 0 };
+    });
 }
 
 const DCOLS: ColumnDef<DetectorRow>[] = [
@@ -244,6 +260,13 @@ export function MLTab({ signal = '', onSignal }: { signal?: MLSignal; onSignal?:
               <div className={`text-lg font-semibold ${t.warn ? 'text-[color:var(--warn)]' : ''}`}>{t.v}</div>
               <div className="text-xs text-muted-foreground">{t.s}</div>
             </div>
+          ))}
+        </div>
+      )}
+      {sc.data?.tick?.kinds && (
+        <div className="flex flex-col gap-0.5 text-xs text-muted-foreground" data-testid="ml-kind-ticks">
+          {kindTickLines(sc.data.tick, signal).map(l => (
+            <div key={l.kind} className={l.warn ? 'text-[color:var(--warn)]' : ''}>{l.text}</div>
           ))}
         </div>
       )}

@@ -25,6 +25,8 @@ type MLBreakdownRequest struct {
 	PodField    string // keyword; "" = pod kolu yok
 	// DailyCodes — backfill: kod kolu altında 1 günlük histogram.
 	DailyCodes bool
+	// CountServices — v0.10.1812: tavan dışı servis sayısı (es_ml_truncation.go).
+	CountServices bool
 }
 
 type MLCodeRow struct {
@@ -41,6 +43,8 @@ type MLPodRow struct {
 type MLBreakdownResult struct {
 	Codes []MLCodeRow
 	Pods  []MLPodRow
+	// DroppedServices — v0.10.1812: MaxServices tavanı dışında kalan servis.
+	DroppedServices int
 }
 
 type MLLogBreakdowner interface {
@@ -67,6 +71,9 @@ func mlBreakdownBody(tsField, svcField, lvlField string, req MLBreakdownRequest,
 		"query": map[string]any{"bool": map[string]any{"filter": []any{map[string]any{"range": map[string]any{
 			tsField: map[string]any{"gte": req.From.UTC().Format(time.RFC3339Nano), "lt": req.To.UTC().Format(time.RFC3339Nano)}}}}}},
 		"aggs": map[string]any{"svc": map[string]any{"terms": map[string]any{"field": svcField, "size": req.MaxServices}, "aggs": svcAggs}},
+	}
+	if req.CountServices {
+		body["aggs"].(map[string]any)["svc_n"] = mlServiceCardinalityAgg(svcField, req.MaxServices)
 	}
 	b, _ := json.Marshal(body)
 	return b
@@ -96,12 +103,21 @@ func parseMLBreakdown(aggs json.RawMessage) (*MLBreakdownResult, error) {
 				} `json:"err"`
 				Pod *struct{ Buckets []kb } `json:"pod"`
 			} `json:"buckets"`
+			SumOther int64 `json:"sum_other_doc_count"`
 		} `json:"svc"`
+		SvcN *struct {
+			Value int64 `json:"value"`
+		} `json:"svc_n"`
 	}
 	if err := json.Unmarshal(aggs, &a); err != nil {
 		return nil, err
 	}
 	out := &MLBreakdownResult{}
+	var distinct int64
+	if a.SvcN != nil {
+		distinct = a.SvcN.Value
+	}
+	out.DroppedServices = MLDroppedServices(len(a.Svc.Buckets), a.Svc.SumOther, distinct, a.SvcN != nil)
 	for _, s := range a.Svc.Buckets {
 		svc := rawKeyString(s.Key)
 		if s.Err != nil {

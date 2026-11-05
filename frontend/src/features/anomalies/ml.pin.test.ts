@@ -2,7 +2,7 @@
 // kararsız satır isabet yazdırmaz).
 import { describe, it, expect } from 'vitest';
 import { anomalyEventHref, legacyAnomalyRedirect, mlEventHref } from '@/lib/anomalyHref';
-import { detectorGroup, detectorRows, statusTiles, backfillLabel, durationLabel, gateLabel, stageLabel, signalTickLabel, tickLabel, resolveAnomaliesTab, resolveMLSignal, scoreLabel, signalScoreLabel } from '@/components/coremetry/anomalies/MLTab';
+import { detectorGroup, detectorRows, statusTiles, backfillLabel, durationLabel, gateLabel, stageLabel, signalTickLabel, tickLabel, kindTickLines, resolveAnomaliesTab, resolveMLSignal, scoreLabel, signalScoreLabel } from '@/components/coremetry/anomalies/MLTab';
 
 describe('log ml slice 0', () => {
   it('tab resolves unknown to detectors', () => {
@@ -38,6 +38,19 @@ describe('log ml slice 0', () => {
       .toBe('son tik 0 dk önce · 1 sn · 0 olay · VM bekleme: dep:http (20 dk) · hata: x');
     // v0.10.1811 — batch kuralı kesimi görünür.
     expect(tickLabel({ at: 1000, durationMs: 1000, events: 1, backoff: [], batchCut: 3 }, 1000)).toBe('son tik 0 dk önce · 1 sn · 1 olay · batch kuralı 3 adayı kesti');
+  });
+  // v0.10.1812 — sinyal türü başına tik ölçümü + tavan dışı servis (audit §13 D3).
+  it('kind tick lines', () => {
+    const t = { at: 1, durationMs: 1, events: 0, backoff: [], kinds: {
+      metric: { services: 3, series: 9, seriesRows: 9, es: 0, vm: 4, ch: 2, dropped: 0, durationMs: 800 },
+      log: { services: 500, series: 1000, seriesRows: 2000, es: 2, vm: 0, ch: 6, dropped: 17, durationMs: 2100 },
+    } };
+    const all = kindTickLines(t, '');
+    expect(all.map(l => l.kind)).toEqual(['log', 'metric']);
+    expect(all[0]).toEqual({ kind: 'log', warn: true, text: 'Log · 500 servis · 1.000 seri (2.000 satır) · sorgu ES 2 · VM 0 · CH 6 · 2.1 sn · log sinyalinde 17 servis tavan dışında kaldı' });
+    expect(all[1].warn).toBe(false);
+    expect(kindTickLines(t, 'trace')).toEqual([]);
+    expect(kindTickLines(undefined, '')).toEqual([]);
   });
   // v0.10.1767 — dedektör başına son tik satırı.
   it('signal tick label', () => {
@@ -77,5 +90,7 @@ describe('log ml slice 0', () => {
     const tiles = statusTiles(sc, '', 1000);
     expect(tiles.map(t => t.v)).toEqual(['3 dk önce', '92 / 504 sa', '3', '1 aile']);
     expect(tiles[3].s).toBe('dep:http · 22 dk');
+    // v0.10.1811 kesimi görünür kutuda (tickLabel artık çizilmiyor — 1812'de düzeltildi)
+    expect(statusTiles({ ...sc, tick: { ...sc.tick!, batchCut: 4 } }, '', 1000)[0].s).toBe('2 sn · 1 olay · batch kuralı 4 adayı kesti');
   });
 });

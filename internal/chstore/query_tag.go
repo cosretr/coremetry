@@ -87,6 +87,7 @@ func WithQuerySettings(ctx context.Context, settings clickhouse.Settings) contex
 // applyQueryTag — tracedConn girişi: etiket varsa ayarlara log_comment
 // eklenmiş yeni ctx; yoksa aynen. Var olan ayarlar korunur.
 func applyQueryTag(ctx context.Context) context.Context {
+	countQuery(ctx) // v0.10.1812 — ML tik ölçümü (query_counter.go)
 	tag := QueryTag(ctx)
 	if tag == "" {
 		return ctx

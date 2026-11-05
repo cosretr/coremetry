@@ -177,7 +177,7 @@ func (d *Dependency) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, 
 			srows = append(srows, chstore.MLSeriesRow{Signal: chstore.MLSignalTrace, Service: svc, Part: part, Bucket: time.Unix(b, 0), BucketSec: uint32(cfg.BucketSec), Count: v})
 		}
 	}
-	if err := deps.Store.InsertMLSeries(ctx, srows); err != nil {
+	if err := deps.insertSeries(ctx, srows); err != nil {
 		return nil, err
 	}
 	cal, loc := calendarFor(deps.Store.AnomalySensitivityForDetectors())

@@ -12205,3 +12205,8 @@ satırı, açık satırın vurgusu + satır tıkıyla aç/kapa, satır içi form
   Aynalanmayan: v0.10.1046 "yük ≥ 2× iken gecikme açılmaz" (karar noktasında hacim okuması yok → olumlu kanıt yok → kalır).
   Varsayılan metrik serilerinin hiçbiri `load` değil (CPU/heap/lag yükün sonucu; klasik de susturmuyor).
   Kesilen aday dedektörün günlük olay tavanını geri verir (`capRefunder`) — yoksa uzun batch işleri tavanı bitirirdi.
+- **v0.10.1812 — ML tik ölçümü (dilim 1.1, D3).** Tik başına sinyal türü (log/trace/metric) için servis, seri, `ml_series`
+  satırı, ES/VM/CH sorgu sayısı, süre ve ES terms tavanı dışında kalan servis: `ml_tick_status.kinds` + `/admin/stats ml.lastKinds`
+  + `[ml] tick kind=…` log satırı. Tavan sinyali: `sum_other_doc_count > 0` (bedava, kesin) + kardeş `cardinality` (yalnız tik
+  isteği; sayı = kardinalite − dönen kova, HLL eksik sayarsa "en az 1"). CH sayımı tracedConn kapısında ctx sayacı. Gösterim
+  `/anomalies?tab=ml` durum kutularının altında (ML durumu Settings'te değil orada gösteriliyor; viewer görür).

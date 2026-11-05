@@ -33,6 +33,20 @@ type MLSignalTick struct {
 	Error      string `json:"error,omitempty"`
 }
 
+// MLKindTick — v0.10.1812 (audit §10 dilim 1.1, §13 D3): bir sinyal türünün
+// (log | trace | metric) son tikteki ölçümü. Dedektör fazı; tik sonrası
+// zenginleştirme/replay sorguları yalnız tik toplamında (MLTickStatus.ES…).
+type MLKindTick struct {
+	Services   int   `json:"services"`   // seri yazılan ∪ aday üreten servis
+	Series     int   `json:"series"`     // bu tik ml_series'e yazılan ayrı (servis, part)
+	SeriesRows int   `json:"seriesRows"` // ml_series satırı
+	ES         int   `json:"es"`
+	VM         int   `json:"vm"`
+	CH         int   `json:"ch"`
+	Dropped    int   `json:"dropped"` // ES servis terms tavanı dışında kalan servis (yalnız log)
+	DurationMs int64 `json:"durationMs"`
+}
+
 // MLTickStatus — son tik.
 type MLTickStatus struct {
 	At         int64                   `json:"at"` // unix sn
@@ -44,7 +58,12 @@ type MLTickStatus struct {
 	Partial    int64                   `json:"partial"`            // bu tikte kısmi ES sonucu alan dedektör
 	Docs       int64                   `json:"docs"`               // log RED penceresinde toplanan belge
 	BatchCut   int64                   `json:"batchCut,omitempty"` // v0.10.1811: batch kuralının kestiği aday
-	LastError  string                  `json:"lastError,omitempty"`
+	// v0.10.1812 — sinyal türü başına ölçüm + tik toplam sorgu sayıları.
+	Kinds     map[string]MLKindTick `json:"kinds,omitempty"`
+	ES        int64                 `json:"es"`
+	VM        int64                 `json:"vm"`
+	CH        int64                 `json:"ch"`
+	LastError string                `json:"lastError,omitempty"`
 }
 
 func (s *Store) GetMLTickStatus(ctx context.Context) (MLTickStatus, bool, error) {

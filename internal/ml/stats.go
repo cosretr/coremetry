@@ -16,6 +16,7 @@ type stats struct {
 	supImpact, supFeedback, supRegime, supBatch, vmQueries, promoted, partial, docs atomic.Int64
 	mu                                                                              sync.Mutex
 	esSamples                                                                       []int64
+	lastKinds                                                                       map[string]chstore.MLKindTick // v0.10.1812: son tik ölçümü
 	lastErr                                                                         string
 }
 
@@ -60,6 +61,12 @@ func (s *stats) setError(err error) {
 	s.mu.Unlock()
 }
 
+func (s *stats) setLastKinds(k map[string]chstore.MLKindTick) {
+	s.mu.Lock()
+	s.lastKinds = k
+	s.mu.Unlock()
+}
+
 func (s *stats) tickDone(start time.Time) {
 	s.ticks.Add(1)
 	s.lastUnix.Store(start.Unix())
@@ -77,6 +84,7 @@ func (s *stats) snapshot(placement string, enabled, leader, tableReady bool) chs
 		p95 = cp[idx]
 	}
 	lastErr := s.lastErr
+	lastKinds := s.lastKinds
 	s.mu.Unlock()
 	return chstore.MLStats{
 		Placement: placement, Enabled: enabled, Leader: leader, TableReady: tableReady,
@@ -84,7 +92,7 @@ func (s *stats) snapshot(placement string, enabled, leader, tableReady bool) chs
 		LastDurationMs: s.lastMs.Load(), LastESMs: s.lastESMs.Load(), ESP95Ms: p95,
 		ESQueries: s.esQueries.Load(), Events: s.events.Load(), SeriesInMemory: s.series.Load(), LastCHMs: s.lastCHMs.Load(),
 		VMQueries: s.vmQueries.Load(), Promoted: s.promoted.Load(), Partial: s.partial.Load(), LastDocs: s.docs.Load(), SuppressedImpact: s.supImpact.Load(), SuppressedFeedback: s.supFeedback.Load(), SuppressedRegime: s.supRegime.Load(), SuppressedBatch: s.supBatch.Load(),
-		LastError: lastErr,
+		LastError: lastErr, LastKinds: lastKinds,
 	}
 }
 

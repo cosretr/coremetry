@@ -145,7 +145,7 @@ func (d *LogBreakdown) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig
 	bucket := time.Duration(cfg.BucketSec) * time.Second
 	last := lastCompleteBucket(now, cfg.BucketSec, cfg.IngestLagSec)
 	from, to := last.Add(-time.Duration(cfg.DwellBuckets-1)*bucket), last.Add(bucket)
-	req := logstore.MLBreakdownRequest{From: from, To: to, MaxServices: cfg.MaxServices, ErrorLevels: cfg.ErrorLevels}
+	req := logstore.MLBreakdownRequest{From: from, To: to, MaxServices: cfg.MaxServices, ErrorLevels: cfg.ErrorLevels, CountServices: true}
 	if wantCode {
 		req.CodeField = d.codeField
 	}
@@ -158,6 +158,7 @@ func (d *LogBreakdown) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig
 	if err != nil {
 		return nil, err
 	}
+	deps.observeDropped(res.DroppedServices) // v0.10.1812
 	var evs []chstore.MLEvent
 	if wantPod {
 		bySvc := map[string][]logstore.MLPodRow{}
@@ -214,7 +215,7 @@ func (d *LogBreakdown) codes(ctx context.Context, deps Deps, cfg chstore.MLConfi
 				Score: cfg.CriticalZ, Direction: "up", Evidence: ev})
 		}
 	}
-	return evs, deps.Store.InsertMLSeries(ctx, srows)
+	return evs, deps.insertSeries(ctx, srows)
 }
 
 // backfill — ilk kez: 14 günlük kod geçmişi, günlük kova (1 istek).
@@ -230,7 +231,7 @@ func (d *LogBreakdown) backfill(ctx context.Context, deps Deps, cfg chstore.MLCo
 	for _, r := range res.Codes {
 		srows = append(srows, chstore.MLSeriesRow{Signal: chstore.MLSignalLog, Service: r.Service, Part: codePartPrefix + r.Code, Bucket: time.Unix(r.Day, 0), BucketSec: 86400, Count: float64(r.Count)})
 	}
-	if deps.Store.InsertMLSeries(ctx, srows) == nil {
+	if deps.insertSeries(ctx, srows) == nil {
 		d.backfilled = true
 	}
 }

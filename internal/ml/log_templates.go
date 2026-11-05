@@ -241,7 +241,7 @@ func (d *LogTemplates) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig
 		series[k][c.Bucket] = float64(c.Count)
 		srows = append(srows, chstore.MLSeriesRow{Signal: chstore.MLSignalLog, Service: f.service, Part: f.part(), Bucket: time.Unix(c.Bucket, 0), BucketSec: uint32(cfg.BucketSec), Count: float64(c.Count)})
 	}
-	if err := deps.Store.InsertMLSeries(ctx, srows); err != nil {
+	if err := deps.insertSeries(ctx, srows); err != nil {
 		return nil, err
 	}
 	d.backfill(ctx, deps, cfg, counter, now)
@@ -307,7 +307,7 @@ func (d *LogTemplates) backfill(ctx context.Context, deps Deps, cfg chstore.MLCo
 		f := batch[c.Index]
 		srows = append(srows, chstore.MLSeriesRow{Signal: chstore.MLSignalLog, Service: f.service, Part: f.part(), Bucket: time.Unix(c.Bucket, 0), BucketSec: 3600, Count: float64(c.Count)})
 	}
-	if deps.Store.InsertMLSeries(ctx, srows) == nil {
+	if deps.insertSeries(ctx, srows) == nil {
 		d.pending = d.pending[n:]
 	}
 }
