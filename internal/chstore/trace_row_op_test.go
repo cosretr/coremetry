@@ -22,7 +22,7 @@ func TestTraceRowOpSQL(t *testing.T) {
 	}{
 		{"with service", "orders-api",
 			"(multiIf(service_name = ? AND kind IN ('server', 'consumer'), 0, service_name = ?, 1, " + rootSpanPredicate + ", 2, 3), time, span_id)",
-			[]any{"orders-api", "orders-api", "orders-api", "orders-api"}},
+			[]any{"orders-api", "orders-api", "orders-api", "orders-api", "orders-api", "orders-api"}},
 		{"without service", "",
 			"(multiIf(" + rootSpanPredicate + ", 0, 2), time, span_id)", []any{}},
 	}
@@ -32,6 +32,7 @@ func TestTraceRowOpSQL(t *testing.T) {
 			for _, want := range []string{
 				"argMinIf(name, " + c.wantKey + ", name != '') AS op_name",
 				"argMinIf(http_route, " + c.wantKey + ", name != '') AS op_route",
+				"argMinIf(service_name, " + c.wantKey + ", name != '') AS op_service",
 				"FROM spans WHERE time >= ? AND time <= ? AND trace_id IN (?,?,?)",
 				"GROUP BY trace_id LIMIT 3", "SETTINGS max_execution_time = 15",
 			} {
@@ -74,24 +75,24 @@ func TestTraceRowOpRankSharesExtrasRule(t *testing.T) {
 
 func TestMergeTraceRowOps(t *testing.T) {
 	rows := []TraceRow{
-		{TraceID: "a", RootName: "GET /api/v1/login", RootRoute: "/api/v1/login"}, // gateway root
+		{TraceID: "a", ServiceName: "acme-gateway", RootName: "GET /api/v1/login", RootRoute: "/api/v1/login"}, // gateway root
 		{TraceID: "b", RootName: ""},                         // no root (MV)
 		{TraceID: "c", RootName: "keep", RootRoute: "/keep"}, // read found nothing
 		{TraceID: "d", RootName: "keep2"},                    // read found no named span
 	}
 	mergeTraceRowOps(rows, map[string]traceRowOp{
-		"a": {"POST", "/api/orders"},
-		"b": {"POST", "/api/orders"},
-		"d": {"", ""},
+		"a": {"POST", "/api/orders", "orders-api"},
+		"b": {"POST", "/api/orders", ""},
+		"d": {"", "", ""},
 	})
 	want := []TraceRow{
-		{TraceID: "a", RootName: "POST", RootRoute: "/api/orders"},
+		{TraceID: "a", ServiceName: "orders-api", RootName: "POST", RootRoute: "/api/orders"}, // v0.10.1808 Service follows
 		{TraceID: "b", RootName: "POST", RootRoute: "/api/orders"},
 		{TraceID: "c", RootName: "keep", RootRoute: "/keep"},
 		{TraceID: "d", RootName: "keep2"},
 	}
 	for i := range want {
-		if rows[i].RootName != want[i].RootName || rows[i].RootRoute != want[i].RootRoute {
+		if rows[i].RootName != want[i].RootName || rows[i].RootRoute != want[i].RootRoute || rows[i].ServiceName != want[i].ServiceName {
 			t.Fatalf("row %d = %+v, want %+v", i, rows[i], want[i])
 		}
 	}

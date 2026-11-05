@@ -52,18 +52,22 @@ func traceRowOpSQL(nIDs int, service string) (string, []any) {
 	sql := "SELECT trace_id" +
 		", argMinIf(name, " + rank + ", name != '') AS op_name" +
 		", argMinIf(http_route, " + rank + ", name != '') AS op_route" +
+		// v0.10.1808 — Service kolonu da AYNI span'den (MV yolu kök/giriş
+		// servisini gösteriyordu: "acme-gateway · POST /api/orders").
+		", argMinIf(service_name, " + rank + ", name != '') AS op_service" +
 		" FROM spans WHERE time >= ? AND time <= ? AND trace_id IN (" + holders + ")" +
 		" GROUP BY trace_id" +
 		fmt.Sprintf(" LIMIT %d", nIDs) +
 		" SETTINGS max_execution_time = 15"
-	args := make([]any, 0, 2*len(rankArgs))
+	args := make([]any, 0, 3*len(rankArgs))
+	args = append(args, rankArgs...)
 	args = append(args, rankArgs...)
 	args = append(args, rankArgs...)
 	return sql, args
 }
 
 // traceRowOp — bir trace için seçilen span'in adı ve route'u.
-type traceRowOp struct{ name, route string }
+type traceRowOp struct{ name, route, service string }
 
 // mergeTraceRowOps — SAF (tablo testli): seçilen ad/route'u satırlara yazar.
 // Ad boşsa (adı olan span yok / okuma o trace'i bulamadı) satır olduğu gibi
@@ -75,6 +79,9 @@ func mergeTraceRowOps(rows []TraceRow, ops map[string]traceRowOp) {
 			continue
 		}
 		rows[i].RootName, rows[i].RootRoute = op.name, op.route
+		if op.service != "" {
+			rows[i].ServiceName = op.service // v0.10.1808
+		}
 	}
 }
 
@@ -116,7 +123,7 @@ func (s *Store) readTraceRowOps(ctx context.Context, sql string, args []any, ops
 	for qrows.Next() {
 		var id string
 		var op traceRowOp
-		if err := qrows.Scan(&id, &op.name, &op.route); err != nil {
+		if err := qrows.Scan(&id, &op.name, &op.route, &op.service); err != nil {
 			return n, err
 		}
 		ops[id] = op
