@@ -138,6 +138,9 @@ var configPreserveTables = []string{
 	// senkronlanan içerik; purge onu silerse sohbet bir sonraki senkrona dek
 	// (≥15 dk) wiki'siz kalır.
 	"wiki_pages", "wiki_chunks",
+	// v0.10.1816 — ML öğrenilmiş ayar revizyonları (servis profili; admin
+	// sabitlemesi operatör içeriği, revizyon geçmişi yeniden doğmaz).
+	"ml_learned",
 }
 
 // PurgeTelemetry empties every observability-DATA table (telemetryPurgeTables),

@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { keys } from './keys';
-import type { MLEvent, MLScorecard, MLBaselineBackfillView } from '@/lib/types';
+import type { MLEvent, MLScorecard, MLBaselineBackfillView, MLServiceProfilePage } from '@/lib/types';
 
 export function useMLEvents(signal: '' | 'log' | 'trace' | 'metric' = '', enabled = true) {
   return useQuery<{ items: MLEvent[]; truncated: boolean }>({
@@ -37,4 +37,13 @@ export function backfillActive(v: MLBaselineBackfillView | undefined): boolean {
   if (!v?.request || v.request.cancel) return false;
   const st = v.status;
   return !st || st.id !== v.request.id || (!st.complete && !st.cancelled);
+}
+
+/** v0.10.1816 — servis profilleri sayfası; anahtar tüm girdileri taşır, staleTime = sunucu TTL'i (30 sn), yoklama yok. */
+export function useMLProfiles(p: { q: string; profile: string; offset: number; limit: number }) {
+  return useQuery<MLServiceProfilePage>({
+    queryKey: [...keys.anomalies.mlProfiles, p.q, p.profile, p.offset, p.limit],
+    queryFn: async () => (await api.mlProfiles(p)) ?? { items: [], total: 0, offset: p.offset, limit: p.limit },
+    staleTime: 30_000, placeholderData: prev => prev,
+  });
 }

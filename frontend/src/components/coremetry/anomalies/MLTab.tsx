@@ -172,8 +172,9 @@ export function baselineStatusLine(st: MLBaselineStatus | undefined): { text: st
   if (st.running) bits.push(`işleniyor: ${st.running}`);
   if (run?.error) bits.push(`${run.day} hatalı: ${run.error}`);
   if (st.manual) bits.push(`elle ${st.manual.day}: ${st.manual.error ? `hata — ${st.manual.error}` : `${n(st.manual.rows)} satır`}`);
+  if (st.profiles) bits.push(st.profiles.error ? `profil haftası ${st.profiles.week} hatalı: ${st.profiles.error}` : `profil haftası ${st.profiles.week}: ${n(st.profiles.services)} servis, ${n(st.profiles.changed)} değişim`);
   if (!bits.length) bits.push('henüz işlenmiş gün yok');
-  return { text: `Baseline · ${bits.join(' · ')}`, warn: !!run?.error || !!st.manual?.error };
+  return { text: `Baseline · ${bits.join(' · ')}`, warn: !!run?.error || !!st.manual?.error || !!st.profiles?.error };
 }
 
 const DCOLS: ColumnDef<DetectorRow>[] = [

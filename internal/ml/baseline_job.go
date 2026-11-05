@@ -144,6 +144,14 @@ func (r *Recorder) baselinePoll(ctx context.Context) {
 	now := time.Now()
 	work := planBaselineWork(st, ctl, now, loc, r.bjob.nextRetry.Load())
 	if len(work) == 0 {
+		// v0.10.1816: hafta başı (pazartesi) işlendiyse o haftanın profil koşusu
+		if week, due := profileDueWeek(st.LastDay, st.ProfileWeek, loc); due && now.Unix() >= r.bjob.nextRetry.Load() {
+			r.bjob.running.Store(true)
+			go func() {
+				defer r.bjob.running.Store(false)
+				r.runProfileWeek(ctx, st, week)
+			}()
+		}
 		return
 	}
 	r.bjob.running.Store(true)
@@ -221,4 +229,23 @@ func (r *Recorder) saveBaselineStatus(ctx context.Context, st chstore.MLBaseline
 	if err := r.store.SaveMLBaselineStatus(sctx, st); err != nil {
 		log.Printf("[ml] baseline durumu yazılamadı: %v", err)
 	}
+}
+
+// runProfileWeek — v0.10.1816: haftalık profil sınıflandırması (profile_run.go).
+func (r *Recorder) runProfileWeek(ctx context.Context, st chstore.MLBaselineStatus, week time.Time) {
+	pctx, cancel := context.WithTimeout(chstore.WithQueryTag(ctx, "ml:profiles"), baselineDayTimeout)
+	defer cancel()
+	isBatch := r.store.AnomalySensitivityForDetectors().IsBatchService
+	res, err := runProfiles(pctx, r.store, week, isBatch, time.Now())
+	run := &chstore.MLProfileRun{Week: week.Format("2006-01-02"), Services: res.Services, Changed: res.Changed,
+		DurationMs: res.Duration.Milliseconds(), At: time.Now().Unix()}
+	if err != nil {
+		run.Error = truncRunes(err.Error(), 300)
+		r.bjob.nextRetry.Store(time.Now().Add(baselineRetryAfter).Unix())
+	} else {
+		st.ProfileWeek = run.Week
+	}
+	st.Profiles, st.UpdatedAt = run, time.Now().Unix()
+	r.saveBaselineStatus(ctx, st)
+	log.Printf("[ml] profiles week=%s services=%d changed=%d dur=%dms err=%v", run.Week, res.Services, res.Changed, run.DurationMs, err)
 }

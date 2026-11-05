@@ -12235,3 +12235,13 @@ satırı, açık satırın vurgusu + satır tıkıyla aç/kapa, satır içi form
   paylaşıldı, süresi değişmedi); VM backoff'u AYRI örnek (geçmiş 422'si canlı aileyi susturmasın), canlı aile beklemedeyse
   geçmiş durur ve 5 dk sonra sürer; ES/VM süre örneği alınır ama tik bütçe sayaçları artmaz; günler en yeni önce; kapalı
   dedektörün sinyali ve tpl|/code|/dep|/pod serileri doldurulmaz (planda gerekçeli).
+- **v0.10.1816 — Servis profilleri + `ml_learned` (dilim 1.5, §4.4/§6.7).** `ml_learned` RMT(version), ORDER BY (kind, key,
+  rev), partition/TTL yok, state tablosu (çift yok), purge'da KORUNUR. Etkin revizyon: §6.7'nin `learning.activeRev` işaretçisi
+  aday kümeleri (Faz 5) için; profil anahtar başına tek değer ve hiçbir dedektör okumuyor → en küçük güvenli seçim = anahtarın en
+  büyük rev'i, rev = yazım ms'i (iki yazıcı çakışmaz). Trafik serisi = trace `_calls` (1814; log hacmi çağrı değil, yedek YOK).
+  Mesai ayarı yok → 08:30–18:00 yerel sabit, saat dilimi ortası (hh:30) içindeyse mesai; holiday günü mesai/dışı hesabına girmez,
+  half_day öğleden sonrası mesai dışı; "boş kova" SAATLİK gözlem (5 dk sayımı gözlemde yok); gözlenen haftada satırsız saat = 0.
+  Histerezis durumsuz: [W−4h, W) ve [W−5h, W−1h) aynı sınıfı verirse (ilk atama dahil) yazılır. Pencerede satır yoksa batch adı
+  da olsa "bilinmiyor". Koşu: son işlenen günün haftası değerlendirilmemişse (pazartesi işlenince). Sapma: pin yolu
+  `/api/ml/profiles/{name}/pin` — `{name}` çıplak hali `PUT /api/ml/{id}/verdict` ile mux'ta çakışıyordu (TestMuxRoutePatterns).
+  Tablo sunucu-sayfalı → resize-only: kolonlarda `sortValue` YOK (verilse başlık tıklanır ama yalnız bir sayfa sıralanırdı).

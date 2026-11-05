@@ -3225,6 +3225,28 @@ func canonicalTables(sd, ld, md int) []string {
 		TTL week_start + INTERVAL 70 DAY DELETE WHERE class = 'normal',
 		    week_start + INTERVAL 400 DAY`,
 
+		// ml_learned — v0.10.1816, öğrenme döngüsü Faz 1.5 (audit
+		// docs/anomaly/learning-loop-audit.md §6.7): sürümlü öğrenilmiş
+		// ayarlar (profile; ileride sig_param / pair / regime). Satır = bir
+		// revizyon; geri alma = eski revizyona dönen yeni revizyon.
+		// RMT(version), ORDER BY = dedup anahtarı (kind, key, rev); partition
+		// YOK (P1), TTL YOK (revizyon geçmişi küçük, profil haftada en çok
+		// bir kez değişir). rev = yazım anının unix ms'i (iki yazıcı çakışmaz).
+		// Küme kipinde ML tablolarının ev deseni: state tablosu, `_local` +
+		// Distributed çifti YOK. Yazıcılar: ML lideri (sınıflandırıcı) +
+		// admin sabitleme ucu.
+		`CREATE TABLE IF NOT EXISTS ml_learned (
+			kind       LowCardinality(String),
+			key        String,
+			rev        UInt64,
+			params     String DEFAULT '' CODEC(ZSTD(3)),
+			stats      String DEFAULT '' CODEC(ZSTD(3)),
+			created_at DateTime64(3) DEFAULT now64(3),
+			created_by String DEFAULT '',
+			version    UInt64 DEFAULT toUnixTimestamp64Nano(now64(9))
+		) ENGINE = ReplacingMergeTree(version)
+		ORDER BY (kind, key, rev)`,
+
 		// cosre_answer_grounding — CoSRE öğrenme Faz 4: çevrimdışı öz-
 		// değerlendirme. Gece örneklenen cevabın her iddiası, turda okunan
 		// tool çıktılarına karşı self-hosted modelle etiketlenir. Yeniden

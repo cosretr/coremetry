@@ -11802,6 +11802,8 @@ export interface MLBaselineRun {
 /** Günlük baseline işinin durumu (v0.10.1814, system_settings ml_baseline_status; Go chstore.MLBaselineStatus). */
 export interface MLBaselineStatus {
   lastDay?: string; running?: string; last?: MLBaselineRun; manual?: MLBaselineRun; updatedAt?: number;
+  /** v0.10.1816: haftalık profil koşusu. */
+  profileWeek?: string; profiles?: MLProfileRun;
 }
 /** Baseline geçmiş doldurma planı (v0.10.1815, Go ml.BaselineBackfillPlan; ?estimate=1). */
 export interface MLBaselineBackfillPlan {
@@ -11820,6 +11822,16 @@ export interface MLBaselineBackfillStatus {
   perSignal: Record<string, MLBaselineBackfillSignal>;
 }
 export interface MLBaselineBackfillRequest { id: string; days: number; signals: string[]; by?: string; at: number; cancel?: boolean }
+/** Profil kanıtı (v0.10.1816, Go ml.ProfileEvidence): kuralın kullandığı sayılar; tanımsız oran yok. */
+export interface MLProfileEvidence { dailyMedianCalls: number; emptyBizShare: number; offOnRatio?: number; weekendRatio?: number; weeks: number }
+/** Servis profili (v0.10.1816, Go ml.ServiceProfile; ml_learned kind=profile etkin revizyonu). */
+export interface MLServiceProfile {
+  service: string; profile: string; pinned: boolean; reason?: string; source: 'auto' | 'manual'; by?: string;
+  changedAt: number; rev: number; auto?: string; evidence?: MLProfileEvidence;
+}
+export interface MLServiceProfilePage { items: MLServiceProfile[]; total: number; offset: number; limit: number }
+/** Haftalık profil koşusu özeti (Go chstore.MLProfileRun). */
+export interface MLProfileRun { week: string; services: number; changed: number; durationMs: number; error?: string; at: number }
 /** GET /api/ml/baseline/backfill yanıtı. */
 export interface MLBaselineBackfillView { status: MLBaselineBackfillStatus | null; request: MLBaselineBackfillRequest | null }
 export interface MLScorecard {

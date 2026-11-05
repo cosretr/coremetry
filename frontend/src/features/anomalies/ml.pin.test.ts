@@ -106,6 +106,11 @@ describe('baselineStatusLine', () => {
     expect(e?.warn).toBe(true);
     expect(e?.text).toContain('2026-11-04 hatalı: timeout');
   });
+  it('v0.10.1816: haftalık profil koşusu aynı satırda', () => {
+    const l = baselineStatusLine({ lastDay: '2026-11-02', profiles: { week: '2026-11-02', services: 1400, changed: 12, durationMs: 900, at: 1 } });
+    expect(l?.text).toContain('profil haftası 2026-11-02: 1.400 servis, 12 değişim');
+    expect(baselineStatusLine({ profiles: { week: '2026-11-02', services: 0, changed: 0, durationMs: 1, at: 1, error: 'timeout' } })?.warn).toBe(true);
+  });
   it('kayıt yoksa satır yok; boş kayıt = henüz gün yok', () => {
     expect(baselineStatusLine(undefined)).toBeNull();
     expect(baselineStatusLine({})?.text).toBe('Baseline · henüz işlenmiş gün yok');

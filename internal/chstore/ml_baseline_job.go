@@ -86,6 +86,19 @@ type MLBaselineStatus struct {
 	Manual     *MLBaselineRun `json:"manual,omitempty"`     // son elle koşu
 	ManualDone string         `json:"manualDone,omitempty"` // işlenmiş son elle istek kimliği
 	UpdatedAt  int64          `json:"updatedAt,omitempty"`
+	// v0.10.1816 — haftalık profil sınıflandırması (son değerlendirilen hafta + özet).
+	ProfileWeek string        `json:"profileWeek,omitempty"`
+	Profiles    *MLProfileRun `json:"profiles,omitempty"`
+}
+
+// MLProfileRun — haftalık profil koşusu özeti.
+type MLProfileRun struct {
+	Week       string `json:"week"` // pencere sonu (pazartesi)
+	Services   int    `json:"services"`
+	Changed    int    `json:"changed"`
+	DurationMs int64  `json:"durationMs"`
+	Error      string `json:"error,omitempty"`
+	At         int64  `json:"at"`
 }
 
 // MLBaselineRunRequest — admin elle koşu isteği.
