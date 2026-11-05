@@ -34,6 +34,7 @@ import (
 	"time"
 
 	"github.com/cilcenk/coremetry/internal/auth"
+	"github.com/cilcenk/coremetry/internal/chstore"
 )
 
 func init() { registerRoutesExtra("auth-session", (*Server).registerAuthSessionRoutes) }
@@ -75,6 +76,7 @@ func (s *Server) meUserPayload(ctx context.Context, c *auth.Claims) map[string]a
 		// will simply not apply this round.
 		return map[string]any{
 			"id": c.UserID, "email": c.Email, "role": c.Role,
+			"features": shellFeatures(chstore.IncidentsEnabled()), // v0.10.1826
 		}
 	}
 	s.meUsers.put(c.UserID, u, time.Now())

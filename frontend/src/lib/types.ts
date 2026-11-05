@@ -9964,6 +9964,19 @@ export interface AnomalyCalendarConfig {
   autoRules?: { mid15: boolean; lastBusinessDay: boolean; yearEnd: boolean; preHolidayLastBusinessDay: boolean };
 }
 
+// v0.10.1826 — Incidents emekliliği (operatör kararı 2026-11-05). Go
+// api.shellFeatures aynası: /api/auth/session · /api/auth/me kullanıcı
+// gövdesinin `features` alanı (kabuk bir kez yükler, polling yok).
+export interface ShellFeatures {
+  /** Eski Incidents akışı açık mı (system_settings incidents.enabled; varsayılan kapalı). */
+  incidents?: boolean;
+}
+
+// v0.10.1826 — GET/PUT /api/settings/incidents (admin) — Go chstore.IncidentsSettings.
+export interface IncidentsSettings {
+  enabled: boolean;
+}
+
 // Anomali terfi ayarları (GET/PUT /api/settings/anomaly-promotion).
 // v0.10.1587 — countOnlyMinCount: tabanı olmayan (yalnız sayım) olayların
 // (operasyonda yeni hata, yeni log deseni) terfi sayım tabanı; yok = 20.

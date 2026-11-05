@@ -17,7 +17,7 @@ func TestIncidentLifecycleNotifies(t *testing.T) {
 		"created": true, "resolved": true, "severity_raised": true, // v0.10.802
 		"ack": false, "note": false, "problem_attached": false, "problem_resolved": false, "": false,
 	} {
-		if got := incidentLifecycleNotifies(kind); got != want {
+		if got := incidentLifecycleNotifies(kind, true); got != want {
 			t.Errorf("kind=%q → %v, istenen %v", kind, got, want)
 		}
 	}

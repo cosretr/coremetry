@@ -12288,3 +12288,13 @@ Operatör "Log Mockup iyi, devam" (2026-11-05). `/logs` yerinde evrilir; dilimle
   "yavaş" sayılıp boş 200 {degraded} olarak 15–60 sn önbellekte kalabiliyordu; histogram / alan / desen dalları eşlenmiş
   hatayı döner → 499, hiçbir katmana yazılmaz. Histogram → CorePanel ERTELENDİ: CorePanel ikinci y ekseni kazanana ya da
   operatör v0.9.218 hata-oranı çizgisinin düşmesini onaylayana dek seviye histogramı TimeChart'ta (çizgi pinli).
+
+## 2026-11-05 — Incidents emekliliği
+
+Operatör: "Incident sekmesi yerine Anomalies olsun; eski incident'lar devre dışı kalsın" + "şu anki incidents akışı zaten
+sağlıklı çalışmıyor; anomaliler oluşsun, gerekirse Problem'e terfi olurlar". Plan `docs/anomaly/learning-loop-audit.md` §16.1.
+- **v0.10.1826 — tek ana anahtar `incidents.enabled` (system_settings `incidents`, varsayılan KAPALI).** Kapalıyken iki
+  otomatik kapı (`AttachProblemToIncidentWith`, `JoinOpenIncidentWith`) CH'ye dokunmadan "incident yok" döner (18 + 1 çağıran
+  sonucu zaten atıyor), yaşam döngüsü bildirimi hiç gitmez, `POST /api/incidents` 410; arşiv hijyeni (PUT/ack/resolve/not,
+  kademeli kapanış) açık ve sessiz. Durum FE'ye kabuk gövdesinden (`user.features.incidents`), polling yok. Anahtar TEK geri
+  dönüş dikişi; yüzey başına ikinci anahtar yok. `/api/incidents` rotaları api.go'dan api_incidents.go'ya taşındı.

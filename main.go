@@ -1044,6 +1044,14 @@ func main() {
 		log.Printf("[cosre-rules] load persisted rules: %v", err)
 	}
 	cfgRefresh.Add("cosre-rules", store.LoadCosreRules)
+	// v0.10.1826 — Incidents ana anahtarı (system_settings incidents,
+	// varsayılan KAPALI) HER rolde: otomatik kapılar + bildirim kancası
+	// (worker), elle ilan 410 + Problems listesi + kabuk bayrağı (api).
+	// Yüklenemezse kapalı kalır (emekli varsayılan).
+	if err := store.LoadIncidentsSettings(ctx); err != nil {
+		log.Printf("[incidents] load persisted settings: %v", err)
+	}
+	cfgRefresh.Add("incidents", store.LoadIncidentsSettings)
 	// v0.10.1434 — AI araç setleri (system_settings ai.toolsets) HER rolde:
 	// sohbet kataloğu + dış MCP çağrı kapısı (api) ve drain (sre/all) aynı
 	// mcpDeps kurucusundan okur; yüklenemezse hepsi açık (bugünkü davranış).

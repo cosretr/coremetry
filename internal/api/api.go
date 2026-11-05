@@ -1214,17 +1214,6 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	// /api/copilot/* uçları → ai_routes.go (v0.9.1117, Faz 0.1).
 	mux.HandleFunc("GET    /api/shift", s.getShiftSummary) // v0.9.1071 — vardiya özeti (AI DEĞİL, veri ucu)
 
-	// ── Incident management ───────────────────────────────────────
-	mux.HandleFunc("GET    /api/incidents", s.listIncidents)
-	mux.HandleFunc("POST   /api/incidents", auth.RequireAnyRole(editorRoles, s.createIncident))
-	mux.HandleFunc("GET    /api/incidents/{id}", s.getIncident)
-	mux.HandleFunc("PUT    /api/incidents/{id}", auth.RequireAnyRole(editorRoles, s.updateIncident))
-	mux.HandleFunc("POST   /api/incidents/{id}/ack", auth.RequireAnyRole(editorRoles, s.ackIncident))
-	mux.HandleFunc("POST   /api/incidents/{id}/resolve", auth.RequireAnyRole(editorRoles, s.resolveIncident))
-	mux.HandleFunc("POST   /api/incidents/{id}/note", auth.RequireAnyRole(editorRoles, s.addIncidentNote))
-	mux.HandleFunc("GET    /api/incidents/{id}/timeline", s.incidentTimeline)
-	mux.HandleFunc("GET    /api/incidents/{id}/problems", s.incidentProblems)
-
 	// ── Synthetic monitoring ───────────────────────────────────────
 	mux.HandleFunc("GET    /api/monitors", s.listMonitors)
 	mux.HandleFunc("POST   /api/monitors", auth.RequireAnyRole(editorRoles, s.createMonitor))
@@ -5740,6 +5729,7 @@ func (s *Server) userPayload(u *chstore.User) map[string]any {
 		// v0.8.238 — lets the SPA skip the guaranteed-404 <img> request
 		// for local/OIDC accounts and render the initials fallback.
 		"hasPhoto": u.HasPhoto,
+		"features": shellFeatures(chstore.IncidentsEnabled()), // v0.10.1826 — kabuk bayrakları
 	}
 	// v0.8.266 — directory identity for the sidebar/profile chrome.
 	// Omitted (not empty-stringed) when unset so the SPA's ?? chains

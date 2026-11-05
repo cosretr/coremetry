@@ -499,3 +499,41 @@ Faz 1 uygulanırken bu dokümandaki üç ifadenin yanlış/eksik olduğu görül
 - **(a) ML tabloları state deseni, `_local` + Distributed çifti YOK.** §4.1 "Dağıtık" satırı yanlıştı. `ml_baseline_obs` (v0.10.1813) `ml_series` / `ml_events` gibi state tablosu: küme kipinde tek replikasyon grubu, yazıcı yalnız ML lideri; shard'a bölünmüş çift kurulmaz. Sonraki ML tabloları (`ml_learned`) aynı desen.
 - **(b) İki ES terms tavanı aynı servis kümesini görür; düşen sayılar TOPLANMAZ.** Log RED agregasyonu ve kod/pod kırılımı aynı `MaxServices` terms tavanıyla aynı doc_count sırasını görür; tik ölçümünde (v0.10.1812) tavan dışı servis sayısı iki isteğin MAKSİMUMU alınır, toplamı değil.
 - **(c) Log `error_rate` bir hata SAYISIDIR, oran değil.** `_error` parçası hata seviyesindeki satır sayısı; batch kuralı (v0.10.1811) bu yüzden onu "hata sayısı" sınıfında değerlendirir ve pay kanıtı (`_error` / `_total`) ister.
+
+## 15. Operatör düzeltmesi — "replay" (2026-11-05)
+Operatör: "Replay raporu istemiyorum; bir anomali olduğunda oynat tuşu gibi gösterim için istemiştim."
+- **Replay = olayın kendi gösterimi.** Anomali detayında olay anı kaydı (`ml_event_snapshots`, `/anomalies/ml/:id`, `FE/components/coremetry/anomalies/MLReplaySheet.tsx`) seri + beklenen bant + anomali penceresi + işaretlerle oynatılır/gösterilir. Faz 2'nin konusu budur.
+- **Kalkanlar:** dilim 1.8 (28 günlük replay raporu); Faz 1 ve Faz 5 başlıklarındaki "+ replay doğrulaması"; §6'daki "etkinleştirmeden önce 28 günlük replay raporu" kapısı; dilim 1.6 kabulündeki "eski/yeni fark raporu".
+- **Yerine kalan güvenlik:** öğrenilen her ayar revizyonlu ve tek tıkla geri alınır; yeni karar çekirdeği ve öğrenilen ayarlar önce gölgede çalışır (yalnız sayaç: eski karar / yeni karar farkı tik durumunda); bastırılanların %10'u görünür kalır; etkinleştirme için asgari etiket sayısı şartı sürer.
+
+## 16. Operatör kararı — Incidents yerine Anomalies (2026-11-05)
+Operatör (mockup'ı gördükten sonra): "Incident sekmesi yerine Anomalies olsun; eski incident'lar artık devre dışı kalsın, bu yeniler gelsin."
+- S2 kararı değişti: mevcut `incidents` yüzeyi "Problem-sonrası katman olarak kalır" DEĞİL; **emekli edilir**. Yerine Anomalies (anomali grupları) gelir.
+- Mockup yönü (play tuşlu detay + anomali grubu) kabul edildi sayılır; ayrıntı soruları §Faz 2 uygulamasında önerilen varsayılanlarla.
+- Emeklilik planı ayrı bir dilim setidir (envanter → gizle/kapat → bağlantıları yönlendir → veri silinmez). Kapsam envanterden sonra bu bölüme yazılır.
+
+## 17. Faz 2 mockup kararları (2026-11-05, operatör: "Karar isteyen noktalarda önerini yapalım")
+Mockup `docs/frontend/mockups/anomaly-detail.html` ONAYLI. Önerilen varsayılanlar karara bağlandı:
+- Bölüm sırası: başlık çipleri → kalın özet → kart → grafik + play → **eylemler** → kanıt → bağlam → katlı teknik detay.
+- Play: durağan hâlde imleç "şimdi/bitiş"te; listedeki ▶ detayı açıp oynatır (satır içi mini oynatma yok); ilk sapmadan 6 dk önce başlar, kova başına ~0,25 sn, döngü/hız seçici yok; hareket azaltma açıksa adımlar arası atlar.
+- Log grafiği varsayılanı mesaj kalıbına göre yığılır; "Seviye" ikinci seçenek.
+- Az çağrılan serviste ısı haritasının yerini nokta grafiği alır (ikisi birlikte gösterilmez).
+- Sinyal renkleri ayrı üç token (`--sig-metric/-trace/-log`), üç temada kontrast ölçülerek; her yerde ikon + metinle.
+- Bastırılan imzadan örnek satır aynı listede soluk + rozetli (ayrı sekme yok).
+- "Sorun değil" gerekçeleri: yanlış tespit / batch işi / tatil-takvim / bakım penceresi / yeni normal / diğer; süre isteğe bağlı, bastırma doğuran gerekçelerde varsayılan 30 gün.
+- Model "Değerlendirme" kutusu yalnız ≥2 sinyal türü olan grupta ve copilot açıkken; tek anomali detayında hiç görünmez.
+
+### 16.1 Incidents emeklilik planı (envanter: 2026-11-05, koddan)
+Envanter özeti: nav + `/incidents` liste + `/incident?id=` detay (`FE/components/Sidebar.tsx:90`, `FE/App.tsx:211-212`); tablolar `incidents`, `incident_events`, `incident_problems` (`chstore/store.go:2819-2856`); ~20 otomatik yazıcı tek kapıdan geçer (`chstore/incident.go:381 AttachProblemToIncidentWith`, `:742 JoinOpenIncidentWith`), yarısının anahtarı yok; bildirim tek kanca (`main.go:652` → `chstore/incident_lifecycle.go:35,43`); Problems listesinde incident satırı + altındaki Problem'leri katlama (`internal/api/inbox.go:769-795`, `inbox_incident_fold.go`); elle "Declare incident", postmortem taslağı, durum sayfasında yayınlama (`internal/api/api_incidents.go`, `postmortem_draft.go`, `api.go:7901`). `incident_cases` AYRI kavramdır (CoSRE vaka belleği) ve KALIR.
+
+| Adım | Ne yapılır | Not |
+|---|---|---|
+| E1 | Tek ana anahtar `incidents.enabled` (`system_settings`, **varsayılan kapalı**). Kapalıyken: otomatik bağlama/oluşturma durur (iki kapıda erken dönüş), yaşam döngüsü bildirimi gitmez, elle oluşturma 410 döner | Tek commit; anahtar açılırsa eski davranış aynen döner |
+| E2 | Problems listesi: `incident` türü varsayılandan ve çiplerden çıkar; katlama kalkar, Problem'ler tek tek görünür | Anomali grupları gelene kadar satır sayısı artabilir |
+| E3 | Menü, komut paleti, kısayol, sayfa kaydı: "Incidents" kalkar; `/incidents` → `/anomalies`'e yönlenir. `/incident?id=` **salt-okunur arşiv** olarak doğrudan linkle açılır (eski bildirim linkleri ölmesin) | Veri silinmez |
+| E4 | Açık eski incident'lar: mevcut otomatik kapanış sessizce (bildirimsiz) sürer | — |
+| E5 | Bildirim türü listesinden ve Anomaly sekmesindeki "incident'a bağla" kutularından `incident` kalkar; CoSRE/MCP metinleri ve `build_link` hedefi güncellenir | Altın testler güncellenir |
+| E6 | Anomalies'e üçüncü segment "Gruplar" (Faz 3 ile dolar); o zamana dek boş durum metni | `FE/components/coremetry/anomalies/MLTab.tsx:193-203` |
+| E7 | "Kaçırılan" etiketi artık "Declare incident" değil: Anomalies'te **elle anomali grubu oluştur** + Problem'e terfi (S7'nin yerine) | Faz 4 |
+
+Kaybolan işlevler (operatöre söylendi): elle incident ilanı, postmortem taslağı, durum sayfasında "geçmiş incident" yayınlama. Öneri: postmortem ve yayınlama, terfi edilen Problem'e Faz 4'te taşınır; o zamana dek arşiv sayfasında salt-okunur.

@@ -32,9 +32,21 @@ func (s *Store) SetIncidentLifecycleHook(h IncidentLifecycleHook) {
 // P1 olarak sayfaya düşmeli; dedup şiddet artışını geçirir). ack / note /
 // problem_attached / problem_resolved üretmez: ack zaten "biri baktı"
 // demek, diğerleri kanal gürültüsü.
-func incidentLifecycleNotifies(kind string) bool {
+//
+// v0.10.1826 — `enabled` = ana anahtar incidents.enabled. Kapalıyken HİÇBİR
+// olay bildirmez (Incidents emekli): arşiv hijyeni (elle ack/resolve/not,
+// eski açık incident'ların otomatik kademeli kapanışı) sessiz sürer.
+func incidentLifecycleNotifies(kind string, enabled bool) bool {
+	if !enabled {
+		return false
+	}
 	return kind == "created" || kind == "resolved" || kind == "severity_raised"
 }
+
+// incidentDoorsOpen — SAF (v0.10.1826): iki otomatik kapı
+// (AttachProblemToIncidentWith, JoinOpenIncidentWith) CH'ye gider mi.
+// Kapalı ana anahtar = "incident yok" erken dönüşü.
+func incidentDoorsOpen(enabled bool) bool { return enabled }
 
 // AppendIncidentLifecycle — olayı yazar, sonra kancayı çağırır. Olay
 // satırının yazım HATASI kancayı ENGELLEMEZ: incident satırı bu noktada
@@ -45,7 +57,7 @@ func (s *Store) AppendIncidentLifecycle(ctx context.Context, inc Incident, ev In
 		ev.IncidentID = inc.ID
 	}
 	err := s.AppendIncidentEvent(ctx, ev)
-	if h := s.incidentLifecycle; h != nil && incidentLifecycleNotifies(ev.Kind) {
+	if h := s.incidentLifecycle; h != nil && incidentLifecycleNotifies(ev.Kind, IncidentsEnabled()) {
 		h(ctx, inc, ev)
 	}
 	return err

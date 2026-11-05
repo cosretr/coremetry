@@ -25,6 +25,7 @@ func (n staticNeighbors) Neighbors(s string) []string { return n[s] }
 
 func TestAttachMatchesActiveLongRunningIncident(t *testing.T) {
 	st := smokeStore(t)
+	withIncidentsEnabled(t, true) // v0.10.1826 — ana anahtar varsayılan kapalı
 	ctx := context.Background()
 	run := time.Now().UnixNano()
 

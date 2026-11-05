@@ -4,14 +4,36 @@ package api
 // organisation (behaviour-preserving). The actorOf() helper stays
 // in api.go because putRetention + acknowledgeProblems use it too.
 
+//
+// v0.10.1826 — rotalar api.go'dan buraya taşındı (registerRoutesExtra;
+// TestApiGoDoesNotGrow, kayıt satırları birebir). Incidents emekliyken
+// (chstore.IncidentsEnabled() false) elle ilan 410; PUT / ack / resolve /
+// note eski kayıtlar için (arşiv hijyeni) açık kalır ve hiçbiri bildirim
+// üretmez (yaşam döngüsü kancası chstore'da kapılı).
+
 import (
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
 
+	"github.com/cilcenk/coremetry/internal/auth"
 	"github.com/cilcenk/coremetry/internal/chstore"
 )
+
+func init() { registerRoutesExtra("incidents", (*Server).registerIncidentRoutes) }
+
+func (s *Server) registerIncidentRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET    /api/incidents", s.listIncidents)
+	mux.HandleFunc("POST   /api/incidents", auth.RequireAnyRole(editorRoles, s.createIncident))
+	mux.HandleFunc("GET    /api/incidents/{id}", s.getIncident)
+	mux.HandleFunc("PUT    /api/incidents/{id}", auth.RequireAnyRole(editorRoles, s.updateIncident))
+	mux.HandleFunc("POST   /api/incidents/{id}/ack", auth.RequireAnyRole(editorRoles, s.ackIncident))
+	mux.HandleFunc("POST   /api/incidents/{id}/resolve", auth.RequireAnyRole(editorRoles, s.resolveIncident))
+	mux.HandleFunc("POST   /api/incidents/{id}/note", auth.RequireAnyRole(editorRoles, s.addIncidentNote))
+	mux.HandleFunc("GET    /api/incidents/{id}/timeline", s.incidentTimeline)
+	mux.HandleFunc("GET    /api/incidents/{id}/problems", s.incidentProblems)
+}
 
 func (s *Server) listIncidents(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
@@ -63,6 +85,10 @@ func (s *Server) getIncident(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) createIncident(w http.ResponseWriter, r *http.Request) {
+	if !createIncidentAllowed(chstore.IncidentsEnabled()) {
+		writeJSONError(w, http.StatusGone, incidentsRetiredMsg) // v0.10.1826
+		return
+	}
 	var inc chstore.Incident
 	if err := json.NewDecoder(r.Body).Decode(&inc); err != nil {
 		http.Error(w, "invalid JSON: "+err.Error(), http.StatusBadRequest)

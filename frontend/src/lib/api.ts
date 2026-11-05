@@ -1,5 +1,5 @@
 import type {
-  NativeDetectorsView, NativeOwnSwitches,
+  NativeDetectorsView, NativeOwnSwitches, ShellFeatures, IncidentsSettings,
 OracleLogsResponse, CopilotScopeNames, CosreRouteRED,
   McpServersSnapshot, McpServerInput, McpServerTestResult,
   PurgeResult,
@@ -1523,6 +1523,14 @@ export const api = {
   // pre-tunable behaviour.
   getAnomalyPromotion: () =>
     get<AnomalyPromotionConfig>(`/api/settings/anomaly-promotion`),
+  // v0.10.1826 — eski Incidents akışının ana anahtarı (admin; audit incidents.settings).
+  getIncidentsSettings: () =>
+    get<IncidentsSettings>(`/api/settings/incidents`),
+  putIncidentsSettings: (c: IncidentsSettings) =>
+    request<IncidentsSettings>(`/api/settings/incidents`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: c.enabled }),
+    }),
   // v0.9.248 — age-based escalation (escalateStaleProblems). Separate
   // key from anomaly promotion because it applies to EVERY Problem,
   // not just promoted anomalies.
@@ -4224,6 +4232,9 @@ export interface AuthUser {
   // ham hâli karşılamada kullanılamaz. Absent = güvenle ad
   // çıkarılamadı; isimsiz karşılamaya düşülür.
   firstName?: string;
+  // v0.10.1826 — kabuk bayrakları (Go api.shellFeatures). Yalnız oturum
+  // gövdelerinde (session / me / login); yoksa hepsi kapalı sayılır.
+  features?: ShellFeatures;
 }
 export interface UserRow extends AuthUser {
   disabled: boolean;

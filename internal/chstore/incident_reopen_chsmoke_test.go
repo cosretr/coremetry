@@ -22,6 +22,7 @@ import (
 
 func TestAttachReopenedProblemSkipsResolvedIncident(t *testing.T) {
 	st := smokeStore(t)
+	withIncidentsEnabled(t, true) // v0.10.1826 — ana anahtar varsayılan kapalı
 	ctx := context.Background()
 	run := time.Now().UnixNano()
 

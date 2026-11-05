@@ -379,6 +379,12 @@ func (s *Store) AttachProblemToIncident(ctx context.Context, p Problem) (*Incide
 // untouched. The base AttachProblemToIncident calls this with
 // nil for the provider.
 func (s *Store) AttachProblemToIncidentWith(ctx context.Context, p Problem, np NeighborProvider) (*Incident, error) {
+	// v0.10.1826 — Incidents emekli (ana anahtar incidents.enabled, varsayılan
+	// kapalı): CH'ye dokunmadan "incident yok". Çağıranların hepsi sonucu
+	// atar (`_, err :=`); Problem aynen açılır ve bildirilir.
+	if !incidentDoorsOpen(IncidentsEnabled()) {
+		return nil, nil
+	}
 
 	// Already attached?
 	row := s.conn.QueryRow(ctx,
@@ -740,6 +746,10 @@ func (s *Store) JoinOpenIncident(ctx context.Context, p Problem, services []stri
 
 // JoinOpenIncidentWith — komşu sağlayıcısı enjekte edilebilir hâli (test).
 func (s *Store) JoinOpenIncidentWith(ctx context.Context, p Problem, services []string, np NeighborProvider) (*Incident, bool, error) {
+	// v0.10.1826 — Incidents emekli: katılacak incident yok (joined=false).
+	if !incidentDoorsOpen(IncidentsEnabled()) {
+		return nil, false, nil
+	}
 	selves := dedupNonEmpty(services)
 	if len(selves) == 0 {
 		return nil, false, nil
