@@ -282,11 +282,16 @@ type ExceptionRow struct {
 }
 
 type TraceRow struct {
-	TraceID  string `json:"traceId"`
+	TraceID string `json:"traceId"`
+	// RootName / RootRoute — satırın etiketi. Süzgeçsiz: kök span, yoksa adı
+	// olan en erken span (MV yolu kök yoksa ''). v0.10.1807: SERVİS
+	// SÜZGECİ varken (traceExtrasService) bu iki alan o servisin giriş
+	// span'ini taşır, kökü DEĞİL — trace_row_op.go. Adlar FE uyumu için
+	// korundu.
 	RootName string `json:"rootName"`
-	// RootRoute (v0.10.756) — kök span'ın http_route'u (ham: anyIf; MV:
-	// entry_route_state). Çıplak fiil adı ("POST") için FE gösterim adı
-	// "POST /route"; ham `name` OTel'e sadık kalır.
+	// RootRoute (v0.10.756) — yukarıdaki span'in http_route'u (ham:
+	// argMinIf; MV: entry_route_state). Çıplak fiil adı ("POST") için FE
+	// gösterim adı "POST /route"; ham `name` OTel'e sadık kalır.
 	RootRoute   string  `json:"rootRoute,omitempty"`
 	ServiceName string  `json:"serviceName"`
 	StartTime   int64   `json:"startTime"`

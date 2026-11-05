@@ -1033,6 +1033,8 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
   // görüntülenen satırlar artık her zaman sunucunun döndürdükleri.
   const displayRows = traces;
   const visibleMax = useMemo(() => displayRows.reduce((m, t) => Math.max(m, t.durationMs), 0), [displayRows]);
+  // v0.10.1807 — tek servis süzgeci: sunucu rootName'e o servisin giriş span'ini yazar.
+  const serviceScoped = !!filter.service && filter.requireServices.length === 0;
 
   // Header RED stats over the live filtered rows (the stat group right of the
   // Volume|Latency toggle). Replaces the deleted standalone RED panel — the
@@ -1756,7 +1758,7 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
                       // v0.10.330 — K8s hücreleri artık düz metin (kendi <a>'sı yok) → satır
                       // linkine diğer hücreler gibi sarılır; ölü hücre kalmaz.
                       const ownLink = false;
-                      const cell = renderTraceCell(id, t, visibleMax, k8sOn ? { clusters: entityClusters, range } : undefined, filter.op);
+                      const cell = renderTraceCell(id, t, visibleMax, k8sOn ? { clusters: entityClusters, range } : undefined, filter.op, serviceScoped);
                       // v0.10.723 — sola sabit hücre: sınıf + kümülatif left (Endpoints deseni).
                       const stickyL = leftOffs[id];
                       return (
@@ -1962,7 +1964,7 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
 // Per-column cell content for a trace row. k8s: v0.10.143 — entity katmanı
 // açıkken Kubernetes kolonları entity sayfalarına link (traceK8sLinks).
 // op (v0.10.752) — seçili operasyon; Name hücresi onu yazar (opPick.ts).
-function renderTraceCell(id: string, t: TraceRow, visibleMax: number, k8s?: { clusters: EntityClusterInfo[]; range: TimeRange }, op = '') {
+function renderTraceCell(id: string, t: TraceRow, visibleMax: number, k8s?: { clusters: EntityClusterInfo[]; range: TimeRange }, op = '', serviceScoped = false) {
   if (k8s && isTraceK8sCol(id)) {
     const v = t.extras?.[id] ?? '';
     if (!v) return <span className="mono" style={{ color: 'var(--text3)' }}>—</span>;
@@ -1979,7 +1981,7 @@ function renderTraceCell(id: string, t: TraceRow, visibleMax: number, k8s?: { cl
     case 'time':      return <span className="mono">{tsDateTime(t.startTime)}</span>;
     case 'service':   return <SvcBadge name={t.serviceName} />;
     // v0.10.658 (operatör): diğer hücrelerle AYNI yazı tipi (.mono 12 px) — sınıfsız span orantılı yazıyla büyük görünüyordu.
-    case 'operation': return <span className="mono cell-ellipsis" title={opCellTitle(op, opDisplayName(t.rootName, t.rootRoute))}>{opCellText(op, opDisplayName(t.rootName, t.rootRoute))}</span>;
+    case 'operation': return <span className="mono cell-ellipsis" title={opCellTitle(op, opDisplayName(t.rootName, t.rootRoute), serviceScoped)}>{opCellText(op, opDisplayName(t.rootName, t.rootRoute))}</span>;
     case 'duration':  return <DurationBar ms={t.durationMs} err={t.hasError} max={visibleMax} />;
     case 'spans':     return <>{t.spanCount}</>;
     // v0.10.218 (D3) — hata rozetinin yanında hatalı span SAYISI (Dynatrace

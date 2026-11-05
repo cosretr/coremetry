@@ -26,8 +26,14 @@ export function opCellText(op: string, rootName: string | undefined): string {
   return op || rootName || '—';
 }
 
-/** Name hücresinin ipucu: operasyon seçiliyken kök farklıysa kökü söyler. */
-export function opCellTitle(op: string, rootName: string | undefined): string {
-  if (op) return rootName && rootName !== op ? `Kök: ${rootName}` : op;
+/**
+ * Name hücresinin ipucu: operasyon seçiliyken satır etiketi farklıysa onu
+ * söyler. v0.10.1807 — servis süzgeci varken (tek `service`, `services`
+ * yok) sunucu rootName'e o servisin GİRİŞ span'ini yazar, kökü değil;
+ * etiket buna göre.
+ */
+export function opCellTitle(op: string, rootName: string | undefined, serviceScoped = false): string {
+  const label = serviceScoped ? "Servis giriş span'i" : 'Kök';
+  if (op) return rootName && rootName !== op ? `${label}: ${rootName}` : op;
   return rootName ?? '';
 }

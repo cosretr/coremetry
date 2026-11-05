@@ -2521,6 +2521,7 @@ func (s *Store) GetTraces(ctx context.Context, f TraceFilter) (gtRows []TraceRow
 		f.Explain.note("path=mv (search/filters/env/cluster yok, pencere ≥ 5m)")
 		out, total, hasMore, err := s.getTracesFromMV(ctx, f)
 		if err == nil {
+			s.fillServiceRowOps(ctx, out, f) // v0.10.1807 — Name = servisin giriş span'i
 			if len(f.ExtraAttrs) > 0 {
 				// FAZ 2 — phase-2 failure is now a hard error: the raw path
 				// no longer inlines the projection, so falling through would
@@ -3103,6 +3104,9 @@ func (s *Store) GetTraces(ctx context.Context, f TraceFilter) (gtRows []TraceRow
 	// (trace_row_repair.go). Extras'tan ÖNCE: onun zaman aralığı satırların
 	// gerçek başlangıç/süresinden türer.
 	s.repairSpanScopedRows(ctx, out, f)
+	// v0.10.1807 — servis süzgeci varken Name/route = servisin giriş span'i
+	// (trace_row_op.go). Onarımdan SONRA: onarım satırı kök kuralıyla kurar.
+	s.fillServiceRowOps(ctx, out, f)
 	// Common phase-2: extras for the trimmed page only (≤ Limit ids), bounded
 	// by the page rows' real min/max timestamps. Also serves the CSV export
 	// path — there the id list is up to 50k rows, but the derived bounds stay
@@ -3121,6 +3125,10 @@ func (s *Store) GetTraces(ctx context.Context, f TraceFilter) (gtRows []TraceRow
 // list never touches attr_values/res_values") cannot silently regress.
 //
 // Note: use if() not ternary ? : — ClickHouse treats ? as a param placeholder
+// v0.10.1807 — root_name/root_route = the root span, else the EARLIEST
+// span with a name (argMinIf over traceRowOpRankKey; was any(name), a
+// different label on every load). Under a service filter GetTraces then
+// overwrites both with the service's entry span (trace_row_op.go).
 // v0.5.351 — root_name/root_svc fallback. When the WHERE
 // filter (service / name search) excludes the real root
 // span (because it lives in a different service or has a
@@ -3141,15 +3149,12 @@ func buildGetTracesListSQLWith(whereSQL, havingSQL, sortCol, order, extraSetting
 	}
 	return `
 		SELECT trace_id,
-		       coalesce(
-		         nullIf(anyIf(name, (parent_id = '' OR parent_id = '0000000000000000')), ''),
-		         any(name)
-		       )                                       AS root_name,
+		       argMinIf(name, ` + traceRowOpRankKeyNoService + `, name != '') AS root_name,
 		       coalesce(
 		         nullIf(anyIf(service_name, (parent_id = '' OR parent_id = '0000000000000000')), ''),
 		         any(service_name)
 		       )                                       AS root_svc,
-		       anyIf(http_route, (parent_id = '' OR parent_id = '0000000000000000') AND name != '') AS root_route,
+		       argMinIf(http_route, ` + traceRowOpRankKeyNoService + `, name != '') AS root_route,
 		       min(time)                               AS trace_start,
 		       (max(toUnixTimestamp64Nano(time) + duration) -
 		        toUnixTimestamp64Nano(min(time))) / 1e6 AS dur_ms,
@@ -3520,10 +3525,20 @@ func traceExtrasService(f TraceFilter) string {
 // 2 the root span, 3 everything else. Without one: 0 root, 2 the rest.
 // Ties broken by the earliest start. Returns the bind args it consumes.
 func traceExtrasRankKey(service string) (string, []any) {
+	rank, args := traceSpanRank(service)
+	return "(" + rank + ", time)", args
+}
+
+// traceSpanRank — the ONE body of the "which span speaks for the trace"
+// rule (v0.10.1805/1806; reused by the row Name/route, v0.10.1807). Lower
+// wins. With a service filter: 0 the service's entry span (server/consumer),
+// 1 any span of the service, 2 the root span, 3 everything else. Without
+// one: 0 root, 2 the rest. Pure — table-tested.
+func traceSpanRank(service string) (string, []any) {
 	if service == "" {
-		return "(multiIf(" + rootSpanPredicate + ", 0, 2), time)", nil
+		return "multiIf(" + rootSpanPredicate + ", 0, 2)", nil
 	}
-	return "(multiIf(service_name = ? AND kind IN ('server', 'consumer'), 0, service_name = ?, 1, " + rootSpanPredicate + ", 2, 3), time)", []any{service, service}
+	return "multiIf(service_name = ? AND kind IN ('server', 'consumer'), 0, service_name = ?, 1, " + rootSpanPredicate + ", 2, 3)", []any{service, service}
 }
 
 var traceExtraStatusExpr = map[string]string{

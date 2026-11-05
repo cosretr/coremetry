@@ -18,6 +18,11 @@ describe('opPick — saf', () => {
     expect(opCellTitle('SELECT x', 'SELECT x')).toBe('SELECT x');
     expect(opCellTitle('', 'root-op')).toBe('root-op');
   });
+  it('v0.10.1807 — servis süzgeci varken etiket servisin giriş span\'i, kök değil', () => {
+    expect(opCellTitle('SELECT x', 'POST /api/orders', true)).toBe("Servis giriş span'i: POST /api/orders");
+    expect(opCellTitle('SELECT x', 'SELECT x', true)).toBe('SELECT x');
+    expect(opCellText('', 'POST /api/orders')).toBe('POST /api/orders');
+  });
 });
 
 describe('opPick — kablolama', () => {
@@ -36,7 +41,8 @@ describe('opPick — kablolama', () => {
     expect((traces.match(/filtersEff: advFiltersEff/g) ?? []).length).toBe(2);
     expect(traces).toContain('[...advFiltersEff]');
     expect(traces).toContain('opCellText(op, opDisplayName(t.rootName, t.rootRoute))'); // v0.10.756 gösterim adı
-    expect(traces).toContain(', filter.op);'); // çağrı yeri seçili operasyonu geçirir
+    expect(traces).toContain(', filter.op, serviceScoped);');
+    expect(traces).toContain('const serviceScoped = !!filter.service && filter.requireServices.length === 0;'); // çağrı yeri seçili operasyonu + servis kapsamını geçirir (1807)
   });
   it('Service kolonu varsayılanı genişledi (operatör: "alan dar")', () => {
     const m = traces.match(/service: (\d+), operation: 210/);

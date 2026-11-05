@@ -320,6 +320,9 @@ func TestTelemetryReadConnCallSurface(t *testing.T) {
 		// FROM'u spanmetrics_1m (zaman sınırlı, LIMIT). SlowestCallees
 		// topology_edges_5m FINAL'i ana bağlantıdan okur (telemetryReadConn DEĞİL).
 		"route_red.go": true,
+		// v0.10.1807 — SAF telemetri: servis süzgeçli /traces satırının
+		// Name/route'u, tek FROM'u spans (trace_id IN sayfa, zaman sınırlı).
+		"trace_row_op.go": true,
 		// TAŞINMAZ ÜÇÜNCÜ SINIF: sysstats.go + cluster.go system.* okuyor.
 		// Bunlar NODE-LOKAL tablolar; RoundRobin'e verilirse disk/utilizasyon
 		// panelleri her çağrıda BAŞKA node'u raporlar (SQL konsolunun in-order

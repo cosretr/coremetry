@@ -17,8 +17,18 @@ func TestRawListSelectCarriesRootRoute(t *testing.T) {
 	if i < 0 || j < 0 || k < 0 || !(i < j && j < k) {
 		t.Fatalf("root_route root_svc'den sonra, trace_start'tan önce olmalı (svc=%d route=%d start=%d)", i, j, k)
 	}
-	if !strings.Contains(q, "anyIf(http_route, (parent_id = '' OR parent_id = '0000000000000000') AND name != '')") {
-		t.Fatalf("ham root_route kök yüklemiyle anyIf olmalı:\n%s", q)
+	// v0.10.1807 — kök > adı olan en erken span; ad ve route AYNI anahtarla.
+	key := "(multiIf((parent_id = '' OR parent_id = '0000000000000000'), 0, 2), time, span_id)"
+	for _, want := range []string{
+		"argMinIf(name, " + key + ", name != '') AS root_name",
+		"argMinIf(http_route, " + key + ", name != '') AS root_route",
+	} {
+		if !strings.Contains(q, want) {
+			t.Fatalf("ham liste %q taşımalı:\n%s", want, q)
+		}
+	}
+	if strings.Contains(q, "any(name)") {
+		t.Fatalf("any(name) keyfi span seçer (v0.10.1807):\n%s", q)
 	}
 }
 
