@@ -79,6 +79,7 @@ import { briefingView } from './briefingView';
 import type { BriefingLineRef } from './BriefingFeed';
 import { Button } from '@/components/shadcn/button';
 import { CosreSheet } from './CosreSheet';
+import { CosrePageLayout } from '../page/CosrePageLayout';
 import { MessageList } from './MessageList';
 import { ScopeBadge, latestScope } from '../evidence';
 import { cosreRequestContext } from './requestContext';
@@ -86,10 +87,15 @@ import { COSRE_V2_STRINGS as T } from './strings';
 
 export interface CosreChatV2Props {
   defaultOpen?: boolean;
+  /** v0.10.1785 — 'page': /cosre tam sayfası (CosrePageLayout: kenar çubuğu +
+   *  gövde, Sheet / FAB / tutamak yok, hep açık). Varsayılan 'sheet' bugünkü yol. */
+  variant?: 'sheet' | 'page';
 }
 
-export function CosreChatV2({ defaultOpen = false }: CosreChatV2Props) {
-  const [open, setOpen] = useState(defaultOpen);
+export function CosreChatV2({ defaultOpen = false, variant = 'sheet' }: CosreChatV2Props) {
+  const isPage = variant === 'page';
+  const [openState, setOpen] = useState(defaultOpen);
+  const open = isPage || openState; // v0.10.1785 — sayfa kipinde hep açık (v1 isPage ile aynı)
   const [sp] = useSearchParams();
 
   // Adres niyeti render sırasında (türetilmiş state; kapı deseni).
@@ -285,7 +291,9 @@ export function CosreChatV2({ defaultOpen = false }: CosreChatV2Props) {
 
   // ── Geçmiş (v1 paneli + kancası; liste yalnız açılışta) ──
   const [showHistory, setShowHistory] = useState(false);
-  const history = useChatHistory(open && showHistory);
+  // v0.10.1785 — sayfada liste hep görünür (kenar çubuğu): v1 sayfa kipi gibi
+  // konuşma kimliği değişince bir kez yenilenir, yenilerken eski liste kalır.
+  const history = useChatHistory(open && (isPage || showHistory), isPage ? (conv.conversationId ?? '') : '', isPage);
   const openThread = async (t: AiConversationSummary) => {
     try {
       await openConversation(t.id);
@@ -311,9 +319,11 @@ export function CosreChatV2({ defaultOpen = false }: CosreChatV2Props) {
     // v0.10.1672 (B7) — v1 onOpen ile aynı: isSafeAppPath kapısı + aynı sayfada
     // parametre birleştirme (mergeOpenHref), replace (hedef ?ai= ise AYNI Sheet'te tur).
     if (!isSafeAppPath(to)) return;
+    // v0.10.1785 — tam sayfada başka sayfaya gezinme yok (v1 isPage kuralı): sohbet sayfası kalır.
+    if (isPage && to.split('?')[0] !== window.location.pathname) return;
     const href = mergeOpenHref(to, window.location.pathname, window.location.search);
     if (href) navigate(href, { replace: true });
-  }, [status, lastMsg, navigate]);
+  }, [status, lastMsg, navigate, isPage]);
 
   // v0.10.1672 (B7) — `?ai=<özne>` TEK SEFERLİK niyet (v1 v0.10.1400/1405/1407 ile
   // aynı): Sheet açılır, açıklama sohbet turu olarak gider, `?ai=` + `?aicode=`
@@ -385,6 +395,52 @@ export function CosreChatV2({ defaultOpen = false }: CosreChatV2Props) {
   );
   const width = dragW ?? storedW;
 
+  // v0.10.1785 — gövde TEK yerde; Sheet ve /cosre sayfası aynı düğümleri sarar.
+  const bodyNode = (<>
+      {/* v0.10.1672 (B7) — etkin açıklama turu bir trace ve sayfa canlı bağlamını
+          yayınlıyorsa şerit (v1 ile aynı yer: başlığın altı). */}
+      {explainCtx.activeExplain?.meta.kind === 'trace' && explainCtx.liveTraceCtx && (
+        <TraceContextStrip traceId={explainCtx.activeExplain.meta.id} ctx={explainCtx.liveTraceCtx} />
+      )}
+      {showHistory && (
+        <ChatHistoryPanel history={history} activeId={conv.conversationId}
+          onNew={() => { clear(); setShowHistory(false); }}
+          onOpen={t => void openThread(t)} onDelete={t => void removeThread(t)} />
+      )}
+      <div className="cm-thread-wrap">
+        <div ref={scrollRef} className="cm-thread flex-1 overflow-y-auto" role="log" aria-live="polite" aria-busy={busy} aria-label={T.threadLabel}>
+          <div className="cm-thread__col">
+            {messages.length === 0 ? (
+              <CosreWelcomeV2 firstName={ask.user?.firstName} scope={teamScope} wiki={ask.wikiOn} ctxStarter={ask.ctxStarter}
+                briefing={briefing} onPrefill={composer.prefill} onAskBriefingLine={r => { briefingAsk.current = r ?? null; }} onAsk={askChip} onAskExplain={askExplain} />
+            ) : (
+              <MessageList messages={messages} visibleParts={visibleParts} status={status} error={error}
+                onAsk={askChip} onRetry={retry} onApproval={approve} teamPick={teamPick} endpointPick={endpointPick} />
+            )}
+          </div>
+        </div>
+        {!atBottom && messages.length > 0 && (
+          // v0.10.1729 (mockup A) — ortada küçük gölgeli hap (cosre-jump-pill, globals.css).
+          <Button variant="outline" size="xs" className="cm-jump cosre-jump-pill border-border bg-card" onClick={pinBottom}
+            title={T.jumpBottomTitle} aria-label={T.jumpBottomLabel}>{T.jumpBottom}</Button>
+        )}
+      </div>
+      <CosreComposerForm input={composer} ask={ask} busy={busy} stop={() => void stop()} codeLocked={codeLocked}
+        ctxItems={explainCtx.ctxItems} onRemoveCtx={explainCtx.removeCtx} submit={submit} segmented
+        scopeRow={messages.length === 0 ? <CosreTeamScopeChip scope={teamScope} /> : undefined} />
+  </>);
+
+  if (isPage) {
+    return (
+      <CosrePageLayout
+        headerBadge={scope ? <ScopeBadge scope={scope} /> : undefined}
+        history={history} activeId={conv.conversationId}
+        onNew={clear} onOpen={t => void openThread(t)} onDelete={t => void removeThread(t)}>
+        {bodyNode}
+      </CosrePageLayout>
+    );
+  }
+
   return (
     <>
       {!open && <TraceExplainNudge />}
@@ -408,37 +464,7 @@ export function CosreChatV2({ defaultOpen = false }: CosreChatV2Props) {
         <SheetResizeHandle width={width} onWidth={setDragW}
           onReset={() => setDragW(cosreSheetWidth(null, AI_DRAWER_WIDTH, window.innerWidth))} />
         <div className="cosre-root cosre-root--drawer" data-cosre-body="">
-          {/* v0.10.1672 (B7) — etkin açıklama turu bir trace ve sayfa canlı bağlamını
-              yayınlıyorsa şerit (v1 ile aynı yer: başlığın altı). */}
-          {explainCtx.activeExplain?.meta.kind === 'trace' && explainCtx.liveTraceCtx && (
-            <TraceContextStrip traceId={explainCtx.activeExplain.meta.id} ctx={explainCtx.liveTraceCtx} />
-          )}
-          {showHistory && (
-            <ChatHistoryPanel history={history} activeId={conv.conversationId}
-              onNew={() => { clear(); setShowHistory(false); }}
-              onOpen={t => void openThread(t)} onDelete={t => void removeThread(t)} />
-          )}
-          <div className="cm-thread-wrap">
-            <div ref={scrollRef} className="cm-thread flex-1 overflow-y-auto" role="log" aria-live="polite" aria-busy={busy} aria-label={T.threadLabel}>
-              <div className="cm-thread__col">
-                {messages.length === 0 ? (
-                  <CosreWelcomeV2 firstName={ask.user?.firstName} scope={teamScope} wiki={ask.wikiOn} ctxStarter={ask.ctxStarter}
-                    briefing={briefing} onPrefill={composer.prefill} onAskBriefingLine={r => { briefingAsk.current = r ?? null; }} onAsk={askChip} onAskExplain={askExplain} />
-                ) : (
-                  <MessageList messages={messages} visibleParts={visibleParts} status={status} error={error}
-                    onAsk={askChip} onRetry={retry} onApproval={approve} teamPick={teamPick} endpointPick={endpointPick} />
-                )}
-              </div>
-            </div>
-            {!atBottom && messages.length > 0 && (
-              // v0.10.1729 (mockup A) — ortada küçük gölgeli hap (cosre-jump-pill, globals.css).
-              <Button variant="outline" size="xs" className="cm-jump cosre-jump-pill border-border bg-card" onClick={pinBottom}
-                title={T.jumpBottomTitle} aria-label={T.jumpBottomLabel}>{T.jumpBottom}</Button>
-            )}
-          </div>
-          <CosreComposerForm input={composer} ask={ask} busy={busy} stop={() => void stop()} codeLocked={codeLocked}
-            ctxItems={explainCtx.ctxItems} onRemoveCtx={explainCtx.removeCtx} submit={submit} segmented
-            scopeRow={messages.length === 0 ? <CosreTeamScopeChip scope={teamScope} /> : undefined} />
+          {bodyNode}
         </div>
       </CosreSheet>
     </>

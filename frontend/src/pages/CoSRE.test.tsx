@@ -198,6 +198,39 @@ describe('/cosre bağımsız sohbet sayfası', () => {
   });
 });
 
+// v0.10.1785 — CoSRE v2 tam sayfası (mockup A): bayrak açık → v2 kabuğu
+// (CosreChatV2 variant="page"), kapalı → v1 CopilotChat birebir.
+describe('/cosre bayrak: v1 / v2 sayfası', () => {
+  it('cosreV2 kapalı → v1 sayfası (data-cosre-v2 yok, v1 kenar çubuğu)', async () => {
+    vi.spyOn(api, 'me').mockResolvedValue({ id: 'u1', email: 'op@example.test', role: 'viewer' } as never);
+    await renderAt('/cosre');
+    await tick();
+    expect(document.querySelector('[data-cosre-v2]')).toBeNull();
+    expect(document.querySelector('.cosre-root--page .cosre-page__body textarea')).not.toBeNull();
+    expect(document.getElementById('cosre-side')?.textContent).toContain('Yeni sohbet');
+  });
+
+  it('cosreV2 açık → v2 sayfası: kenar çubuğu + Sheet\'siz gövde, ?chat= konuşmayı açar', async () => {
+    vi.spyOn(api, 'me').mockResolvedValue({ id: 'u1', email: 'op@example.test', role: 'viewer' } as never);
+    vi.spyOn(api, 'copilotConfig').mockResolvedValue({ enabled: true, model: 'model-x', cosreV2: true } as never);
+    const load = vi.spyOn(api, 'aiConversation').mockResolvedValue({
+      id: 'c1', title: 't', messages: [{ role: 'user', text: 'eski soru' }, { role: 'assistant', text: 'eski cevap', exchangeId: 'x0' }],
+    } as never);
+    await renderAt('/cosre?chat=c1');
+    await vi.waitFor(() => expect(document.querySelector('[data-cosre-v2].cosre-root--page')).not.toBeNull());
+    expect(document.querySelector('[role="dialog"]'), 'Sheet değil, sayfa').toBeNull();
+    expect(document.querySelector('.cm-ai-fab'), 'FAB yok').toBeNull();
+    expect(document.getElementById('cosre-side')?.textContent).toContain('Yeni sohbet');
+    const head = document.querySelector('[data-cosre-v2] .cosre-page__head');
+    expect(head?.textContent).toContain('CoSRE');
+    expect(head?.textContent).not.toContain('Tam sayfada aç');
+    await vi.waitFor(() => expect(document.querySelector('.cosre-page__body')?.textContent).toContain('eski cevap'));
+    expect(load).toHaveBeenCalledWith('c1');
+    expect(here).toBe('/cosre?chat=c1');
+    expect(document.title).toBe('CoSRE');
+  });
+});
+
 describe('cevap linkleri: /cosre\'de yeni sekme', () => {
   const tid = 'a'.repeat(32);
   const turn: ChatTurn = {
