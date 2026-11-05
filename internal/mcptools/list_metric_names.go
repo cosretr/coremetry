@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/mcp"
 )
 
@@ -66,7 +67,28 @@ func listMetricNamesTool(d Deps) mcp.Tool {
 			if err != nil {
 				return nil, err
 			}
+			// v0.10.1809 — Pipeline drop kuralıyla gizli adlar çıkar; total
+			// düşenler kadar azalır ki has_more son sayfada yalan söylemesin.
+			before := len(names)
+			names = dropHiddenMetricNames(names, d.MetricNameHidden)
+			total -= before - len(names)
+
 			return map[string]any{"metrics": names, "count": len(names), "total": total, "has_more": total > len(names)}, nil // v0.10.407 — sayfa doluysa "hepsi bu" değil (CoSRE denetimi M3)
 		},
 	}
+}
+
+// dropHiddenMetricNames — v0.10.1809: Pipeline drop kuralıyla gizli adları
+// çıkarır (api/metric_name_drop.go ile aynı karar). hidden nil = aynen.
+func dropHiddenMetricNames(names []chstore.MetricInfo, hidden func(string) bool) []chstore.MetricInfo {
+	if hidden == nil {
+		return names
+	}
+	out := names[:0:0]
+	for _, n := range names {
+		if !hidden(n.Name) {
+			out = append(out, n)
+		}
+	}
+	return out
 }

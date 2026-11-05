@@ -4711,34 +4711,28 @@ func (s *Server) getMetricNames(w http.ResponseWriter, r *http.Request) {
 	// Redis'teki eski gövdeler TTL boyunca (60s / 30s) yeni alanları
 	// EKSİK döner ve arayüz "Son veri: —" gösterip sanki metrik
 	// susmuş gibi yalan söyler. Zarf değişti = anahtar değişti.
+	drop, dropTag := s.metricNameDrop() // v0.10.1809 — pipeline drop kuralı okuma tarafı (metric_name_drop.go)
 	if pattern == "" && limit == 0 && offset == 0 {
-		s.serveCached(w, r, "metric-names:v3:src="+src.Name()+":svc="+svc, 60*time.Second, func(ctx context.Context) (any, error) {
+		s.serveCached(w, r, "metric-names:v3:src="+src.Name()+":svc="+svc+dropTag, 60*time.Second, func(ctx context.Context) (any, error) {
 			// GetMetricNames, ListMetricNames(svc, "", 0, 0)'ın ta kendisi
 			// (repo.go:4342) — seam'de ayrı bir metot tutmamak için doğrudan
 			// o çağrı yapılıyor. CH tarafında SQL bayt-bayt aynı.
 			names, _, err := src.ListMetricNames(ctx, svc, "", 0, 0)
-			return names, err
+			return filterDroppedMetricNames(names, drop), err
 		})
 		return
 	}
 	if limit > 1000 {
 		limit = 1000
 	}
-	key := fmt.Sprintf("metric-names:v3:src=%s:svc=%s:q=%s:limit=%d:offset=%d",
-		src.Name(), svc, pattern, limit, offset)
+	key := fmt.Sprintf("metric-names:v3:src=%s:svc=%s:q=%s:limit=%d:offset=%d%s",
+		src.Name(), svc, pattern, limit, offset, dropTag)
 	s.serveCached(w, r, key, 30*time.Second, func(ctx context.Context) (any, error) {
 		names, total, err := src.ListMetricNames(ctx, svc, pattern, limit, offset)
 		if err != nil {
 			return nil, err
 		}
-		return map[string]any{
-			"names":   names,
-			"total":   total,
-			"hasMore": offset+len(names) < total,
-			// source: hangi store cevapladı. Gövdeyle BİRLİKTE gidiyor,
-			// yani rozet her zaman ekrandaki satırların kaynağını gösterir.
-			"source": src.Name(),
-		}, nil
+		return metricNamesPage(names, total, offset, src.Name(), drop), nil // zarf + kısa-sayfa notu: metric_name_drop.go
 	})
 }
 
@@ -4979,6 +4973,9 @@ func (s *Server) getMetricLabelValues(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
+	if s.serveHiddenMetricEmpty(w, metric) { // v0.10.1809 — drop kuralıyla gizli ad: backend'e inmeden []
+		return
+	}
 	// v0.9.1159 — etiket keşfi de aday alternation'ıyla kapsamlanıyor, yani
 	// VM'de dönen liste değişti; damga yalnız VM tarafına (CH'nin DISTINCT
 	// taraması bu anahtarın var olma sebebi, boşuna ısıtılmaz).
@@ -5010,6 +5007,9 @@ func (s *Server) getMetricAttrKeys(w http.ResponseWriter, r *http.Request) {
 	src, err := s.metricSourceFor(r)
 	if err != nil {
 		writeErr(w, err)
+		return
+	}
+	if s.serveHiddenMetricEmpty(w, metric) { // v0.10.1809 — aynı kapı (metric_name_drop.go)
 		return
 	}
 	// v0.9.1159 — aynı gerekçe getMetricLabelValues'takiyle.

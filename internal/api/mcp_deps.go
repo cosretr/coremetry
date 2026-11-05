@@ -94,6 +94,8 @@ func (s *Server) mcpDeps() mcptools.Deps {
 		// redeploy_older); /rollouts listesiyle AYNI sarmalayıcı (Argo ayar kapısı +
 		// chstore.AttachRolloutOriginWith) → SRE DeployFacts da görür.
 		RolloutOrigin: s.attachRolloutOrigin,
+		// v0.10.1809 — list_metric_names, /api/metrics/names ile aynı drop süzgeci.
+		MetricNameHidden: s.metricNameHidden,
 		// v0.10.1297 — build_link mutlak `url`'i yalnız PUBLIC_URL doluyken (host uydurulmaz).
 		PublicURL: s.publicBaseURL,
 		// v0.10.1434 (CoSRE araştırma PR 1) — operatörün kapattığı toolset'ler

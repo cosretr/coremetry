@@ -320,6 +320,11 @@ type Deps struct {
 	// list_deployments (→ SRE deploy adımı DeployFacts) okur; nil = ek yok,
 	// çıktı bayt bayt eski. Hata yutulur (sarmalayıcı loglar), liste döner.
 	RolloutOrigin func(ctx context.Context, rows []chstore.RolloutRow)
+	// MetricNameHidden — v0.10.1809: Pipeline metrik DROP kuralıyla gizlenen
+	// ad (api metricNameHidden; /api/metrics/names ile AYNI karar).
+	// list_metric_names süzer; query_metric SÜZMEZ (açık sorgu çalışır).
+	// nil = süzgeç yok.
+	MetricNameHidden func(name string) bool
 }
 
 // ArgoAppStatus — v0.10.1293: Deps.ArgoApps satırı (uygulama + durum + iş

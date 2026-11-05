@@ -514,6 +514,14 @@ function PipelineRuleModal({ existing, prefill, onClose, onSaved }: {
                   </div>
                 </>
               )}
+              {/* v0.10.1809 — metrik ad drop kuralı okuma tarafında da
+                  uygulanıyor (api/metric_name_drop.go); açık sorgu süzülmez. */}
+              {signal === 'metrics' && kind === 'drop' && (
+                <div className="mt-1.5">
+                  Düşürülen metrik adları metrik listelerinde de gizlenir; açık
+                  sorgular çalışmaya devam eder.
+                </div>
+              )}
             </div>
           </div>
 
