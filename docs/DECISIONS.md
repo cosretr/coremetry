@@ -12149,3 +12149,8 @@ satırı, açık satırın vurgusu + satır tıkıyla aç/kapa, satır içi form
 - Mockup A (Vercel sohbet düzeni): ortalı 620px kolon, kullanıcı balonu / cevap düz, yuvarlak altta composer, adımlar katlı tek satır, ray gün grupları (Bugün / Dün / tarih, operatör saat diliminde).
 - CSS yalnız `[data-cosre-v2].cosre-root--page`; Sheet kuralları seçici listesine sayfa eklenerek genellendi (`cosrePageLook.pin`).
 - Sapmalar: ⌘K ipucu yok (/cosre kromsuz, palet mount edilmez); mobil çekmece eşiği mevcut 640px (v1 ile ortak bileşen); başarılı cevapta "Yeniden dene" eklenmedi (v2'de yok); üst şeritte "Coremetry'yi aç" + tema düğmesi kaldı.
+
+## 2026-11-05 — v0.10.1790 — Mevsimsel gün sınıfı operatör diliminde (Davis karar 3)
+- `anomaly_sensitivity.seasonalTimezone` (varsayılan `Europe/Istanbul`, alan yoksa da) mevsimsel tabanın hafta içi / cumartesi / pazar sınıfını yerel güne göre ayırır; tüketen yol v0.10.1791 (F1.3). Bilinmeyen ad PUT'ta 400 (kelepçe değil).
+- Geçişte taban BİR KEZ kayar: UTC 21:00–24:00 kovaları ertesi yerel güne geçer (Cuma 21:00 UTC = Cumartesi yerel). TR'de yaz saati yok → saat-of-day eşlemesi değişmez, yalnız gün sınıfı sınırı. Geri alma: dilimi `UTC` seç.
+- `anomaly_sensitivity.subjects{endpoint,db,queue}` üçü varsayılan KAPALI; FAZ 1.5 eval kapısı geçmeden açılmaz.

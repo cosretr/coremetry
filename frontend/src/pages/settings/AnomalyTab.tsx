@@ -12,6 +12,7 @@ import { droppedPatternCount, formatBatchPatterns, parseBatchPatterns } from './
 import { ServiceSlowdownSubsection } from './ServiceSlowdownSubsection'; // v0.10.1091
 import { REDSourceSubsection } from './REDSourceSubsection'; // v0.10.1478
 import { CalendarSubsection } from './CalendarSubsection'; // v0.10.1483
+import { SubjectsSubsection } from './SubjectsSubsection'; // v0.10.1790 Davis F1.2
 import { ErrorRampSubsection } from './ErrorRampSubsection';
 import { errorRampErrors, withErrorRampDefaults } from './errorRamp';
 import { MLSubsection } from './MLSubsection';
@@ -622,6 +623,10 @@ function SensitivitySection() {
               tatil/yarım günde istek hızı düşüşü terfisini değiştirir; aynı Kaydet. */}
           <CalendarSubsection value={cfg.calendar}
             onChange={calendar => setCfg({ ...cfg, calendar })} />
+          {/* v0.10.1790 — Davis F1.2: özne türleri + mevsimsel dilim; aynı Kaydet. */}
+          <SubjectsSubsection value={cfg.subjects} timezone={cfg.seasonalTimezone}
+            onChange={subjects => setCfg({ ...cfg, subjects })}
+            onTimezoneChange={seasonalTimezone => setCfg({ ...cfg, seasonalTimezone })} />
           {/* v0.10.1061 — log_template_new dedektörü: VARSAYILAN KAPALI (operatör
               onaylı: "Bu log anomalileri de false pozitif geliyor"). Alan yoksa
               kapalı okunur; kayıt açık boolean gönderir. log_pattern etkilenmez. */}

@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"reflect"
 	"time"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
@@ -104,6 +105,11 @@ func (s *Server) putAnomalySensitivity(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	// v0.10.1790 — mevsimsel dilim aynı istisna: bilinmeyen ad reddedilir.
+	if err := chstore.ValidateSeasonalTimezone(in.SeasonalTimezone); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	cfg := chstore.NormalizeAnomalySensitivity(in)
 	// v0.10.1478 — RED kaynağı değişikliği ayrı denetim satırı alır (geri alma
 	// = redSource span); önceki değer KAYITLI blobdan, okunamazsa yayınlanandan.
@@ -125,6 +131,33 @@ func (s *Server) putAnomalySensitivity(w http.ResponseWriter, r *http.Request) {
 	if d, changed := alertSourceAuditDetail(prev, cfg); changed {
 		s.audit(r, "alert.source", "anomaly_sensitivity", "alertSource", d)
 	}
+	// v0.10.1790 — özne türleri / mevsimsel dilim: önce/sonra ayrı satır.
+	if d, changed := anomalySubjectsAuditDetail(prev, cfg); changed {
+		s.audit(r, "anomaly.subjects", "anomaly_sensitivity", "subjects", d)
+	}
 	log.Printf("[settings] anomaly_sensitivity: dwell=%d criticalZ=%.1f", cfg.DwellBuckets, cfg.CriticalZ)
 	writeJSON(w, cfg)
+}
+
+// anomalySubjectsAuditDetail — SAF (v0.10.1790): Subjects ya da
+// SeasonalTimezone değiştiyse {"from":…,"to":…} denetim gövdesi. Değişmeyen
+// PUT ek satır yazmaz.
+func anomalySubjectsAuditDetail(prev, next chstore.AnomalySensitivityConfig) (string, bool) {
+	type snap struct {
+		Subjects         chstore.AnomalySubjectsConfig `json:"subjects"`
+		SeasonalTimezone string                        `json:"seasonalTimezone"`
+	}
+	p := snap{prev.Subjects, prev.SeasonalTimezone}
+	n := snap{next.Subjects, next.SeasonalTimezone}
+	if reflect.DeepEqual(p, n) {
+		return "", false
+	}
+	b, err := json.Marshal(struct {
+		From snap `json:"from"`
+		To   snap `json:"to"`
+	}{p, n})
+	if err != nil {
+		return "", false
+	}
+	return string(b), true
 }

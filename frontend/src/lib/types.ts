@@ -9932,6 +9932,22 @@ export interface AnomalyPromotionConfig {
   attachToIncident?: boolean;
 }
 
+/** v0.10.1790 — chstore.AnomalySubjectKindConfig: tek özne türünün vidaları. */
+export interface AnomalySubjectKindConfig {
+  enabled: boolean;
+  /** Servis başına en çok özne (trafiğe göre üst-N). 1–200, varsayılan 20. */
+  topN: number;
+  /** Tik başına toplam seri tavanı; aşımda tür o tik atlanır. 1–50000, varsayılan 2000. */
+  maxSeriesPerTick: number;
+}
+
+/** v0.10.1790 — chstore.AnomalySubjectsConfig. */
+export interface AnomalySubjectsConfig {
+  endpoint: AnomalySubjectKindConfig;
+  db: AnomalySubjectKindConfig;
+  queue: AnomalySubjectKindConfig;
+}
+
 export interface AnomalySensitivityConfig {
   metrics: Record<string, AnomalyMetricSensitivity>;
   // Açılmak için üst üste ateşlemesi gereken 5-dk bucket sayısı.
@@ -9998,6 +10014,12 @@ export interface AnomalySensitivityConfig {
   // dahil) = VM varsa ve servisin HTTP/gRPC sunucu histogramı varsa örneklenmemiş
   // pencere, yoksa span; 'span' = eski davranış (geri alma). Okuma `=== 'span'`.
   alertSource?: 'auto' | 'span';
+  // v0.10.1790 — Davis FAZ 1.2: endpoint / db / queue özne tabanları. Bölüm
+  // yoksa (eski backend) üçü kapalı; enabled okuması `=== true`.
+  subjects?: AnomalySubjectsConfig;
+  // v0.10.1790 — mevsimsel gün sınıfının IANA dilimi; yoksa Europe/Istanbul
+  // (karar 3). Bilinmeyen ad PUT'ta 400.
+  seasonalTimezone?: string;
   /** v0.10.890 (paritesi #4 dilim 2) — JVM heap bandı → Problem vidaları
    *  (chstore.AnomalyRuntimeConfig). heapMode varsayılan 'off'; 'on' Problem'i
    *  v0.10.892'den itibaren açar (öncesinde gölge gibi). */

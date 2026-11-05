@@ -192,6 +192,14 @@ type AnomalySensitivityConfig struct {
 	// kolunun z + %1 mutlak tabanının göremediği saatlik rampa
 	// (anomaly_sensitivity_error_ramp.go). Eksik bölüm = varsayılan (açık).
 	ErrorRamp ErrorRampConfig `json:"errorRamp"`
+	// Subjects — v0.10.1790 (Davis FAZ 1.2): endpoint / db / queue özne
+	// tabanları (anomaly_sensitivity_subjects.go). Eksik bölüm (eski blob) =
+	// üçü kapalı, davranış bayt bayt eski.
+	Subjects AnomalySubjectsConfig `json:"subjects"`
+	// SeasonalTimezone — v0.10.1790 (karar 3): mevsimsel gün sınıfının IANA
+	// dilimi. Eksik = DefaultSeasonalTimezone (Europe/Istanbul). Tüketen yol
+	// v0.10.1791 (F1.3).
+	SeasonalTimezone string `json:"seasonalTimezone,omitempty"`
 }
 
 const (
@@ -644,6 +652,9 @@ func DefaultAnomalySensitivity() AnomalySensitivityConfig {
 		Calendar: NormalizeAnomalyCalendar(AnomalyCalendarConfig{}),
 		// v0.10.1489 — alarm kuralları da VM varsa örneklenmemiş pencereden (auto).
 		AlertSource: AnomalyREDSourceAuto,
+		// v0.10.1790 — özneler kapalı (F1.5 eval kapısı), dilim İstanbul (karar 3).
+		Subjects:         DefaultAnomalySubjects(),
+		SeasonalTimezone: DefaultSeasonalTimezone,
 	}
 }
 
@@ -705,6 +716,10 @@ func NormalizeAnomalySensitivity(c AnomalySensitivityConfig) AnomalySensitivityC
 		Calendar: NormalizeAnomalyCalendar(c.Calendar),
 		// Sürekli teknik hata yükselişi — kopyalanmazsa PUT'ta düşerdi.
 		ErrorRamp: NormalizeErrorRamp(c.ErrorRamp),
+		// v0.10.1790 — kopyalanmazsa PUT'ta düşerdi (açılan özne her kayıtta
+		// kapanır, dilim her kayıtta varsayılana döner).
+		Subjects:         NormalizeAnomalySubjects(c.Subjects),
+		SeasonalTimezone: normalizeSeasonalTimezone(c.SeasonalTimezone),
 	}
 	for _, m := range AnomalySensitivityMetrics {
 		def := d.Metrics[m]
