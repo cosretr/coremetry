@@ -217,14 +217,17 @@ export function volumeEmptyNote(unit: string, hasError: boolean, listNonEmpty: b
 }
 
 /** errorStripUnit — v0.10.1082: Errors şeridinin birimi sunucu kipinden. SAF. */
-export function errorStripUnit(mode: 'span' | 'trace'): string {
-  return mode === 'trace' ? 'traces' : 'spans';
+export function errorStripUnit(mode: 'span' | 'trace' | 'chip'): string {
+  return mode === 'span' ? 'spans' : 'traces';
 }
 
 /** errorStripHint — v0.10.1082: Errors şeridinin neyi saydığı (başlık ipucu). SAF.
  *  v0.10.1101 — scopeOnly: çipsiz Errors (yalnız servis / ortam / küme). */
-export function errorStripHint(mode: 'span' | 'trace', capped: boolean, scopeOnly = false): string {
-  const base = scopeOnly
+export function errorStripHint(mode: 'span' | 'trace' | 'chip', capped: boolean, scopeOnly = false): string {
+  // v0.10.1801 — ④: Errors kapalı, servis + ≥2 çip.
+  const base = mode === 'chip'
+    ? "Liste ile aynı küme (çipler trace düzeyinde): çipler aynı trace'in farklı span'lerinde olabilir; şerit listenin trace'lerini başlangıç zamanına göre sayar."
+    : scopeOnly
     ? "Errors: kapsamdaki TÜM hatalı span'ler sayılır (giriş, istemci, iç) — listenin yüklemiyle aynı (liste bu span'leri taşıyan trace'leri gösterir; liste tavanlıysa yalnız en yeni trace'leri)."
     : mode === 'trace'
       ? "Errors + çip: çipe uyan span'ler hatasız, hata aynı trace'in başka span'inde — liste trace düzeyinde eşleşir; şerit listenin trace'lerini başlangıç zamanına göre sayar."

@@ -10,9 +10,10 @@
 // ayrıştırıcıdan (parseTraceFilter) geçirir. SAF; vitest'li.
 
 import type { TracesParams } from '@/lib/api';
-import type { FilterExpr } from '@/lib/types';
+import type { FilterExpr, FilterGroup } from '@/lib/types';
 import { effectiveTraceSearch } from '@/lib/traceSearchTerm';
 import { decodeFilters, decodeFilterGroup } from '@/lib/urlState';
+import { stripScope } from '@/components/traces/volumeSeries';
 
 export interface TraceScopeInput {
   filter: {
@@ -76,6 +77,39 @@ export function errorStripEligible(p: TraceScopeParams): boolean {
   if (p.services && p.services.length) return false;
   if (p.filters || p.filterGroup) return true;
   return !p.rootOnly;
+}
+
+/**
+ * chipStripEligible — SAF (v0.10.1801; Go `traceChipTraceEligible` aynası).
+ *
+ * Operator-reported (test ortamı): servis + `http.route` + `channel_code`,
+ * 24 sa → liste dolu, şerit "0 SPANS · No traces in view to bucket". Liste
+ * servisli özel çipi trace düzeyinde keser (çipler farklı span'lerde
+ * olabilir); metric-batch iki çipi AYNI span'de AND'liyordu. Errors kapalı +
+ * servis + ≥2 çip + spans kapsamı (en az biri giriş-span anahtarı değil) →
+ * şerit listenin kümesini /api/traces/histogram'dan (④ çip-trace) okur.
+ * Arama / trace id / süre / services / NOT HAS yok. Giriş kapsamı (yalnız
+ * http.* / k8s.* …) metric-batch'te kalır: aynı span, tavansız sayım.
+ */
+export function chipStripEligible(p: TraceScopeParams): boolean {
+  if (p.hasError || !p.service) return false;
+  if (p.search || p.traceId) return false;
+  if (p.minMs || p.maxMs) return false;
+  if (p.services && p.services.length) return false;
+  if (scopeHasTraceExclude(p)) return false;
+  const leaves = scopeChipLeaves(p);
+  return leaves.length >= 2 && stripScope(leaves, '') === 'spans';
+}
+
+/** scopeChipLeaves — SAF: düz çipler ya da (gruplu kipte) grubun TÜM yaprakları. */
+function scopeChipLeaves(p: TraceScopeParams): FilterExpr[] {
+  if (p.filterGroup) {
+    const g = decodeFilterGroup(p.filterGroup);
+    if (!g) return [];
+    const walk = (x: FilterGroup): FilterExpr[] => [...x.filters, ...(x.groups ?? []).flatMap(walk)];
+    return walk(g);
+  }
+  return decodeFilters(p.filters);
 }
 
 /** scopeHasTraceExclude — SAF: does the scope carry a trace-level NOT HAS chip? */

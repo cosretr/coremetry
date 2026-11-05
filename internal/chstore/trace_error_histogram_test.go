@@ -112,7 +112,8 @@ func TestTraceErrHistTraceSQLGolden(t *testing.T) {
 		SELECT trace_id,
 		       toUnixTimestamp64Nano(min(time)) AS t0,
 		       (max(toUnixTimestamp64Nano(time) + duration) -
-		        toUnixTimestamp64Nano(min(time))) / 1e6 AS dur_ms
+		        toUnixTimestamp64Nano(min(time))) / 1e6 AS dur_ms,
+		       countIf(status_code = 'error') > 0 AS has_err
 		FROM spans PREWHERE trace_id IN (?,?) WHERE time >= ? AND time <= ?
 		GROUP BY trace_id
 		LIMIT ?
@@ -192,12 +193,12 @@ func TestBucketTraceStarts(t *testing.T) {
 		wantRT    []float64
 	}{
 		{"boş → seri yok", nil, nil, nil, nil},
-		{"tek trace", []traceStartRow{{"t1", from + 10, 40}}, []int64{b0}, []float64{1}, []float64{40}},
+		{"tek trace", []traceStartRow{{"t1", from + 10, 40, false}}, []int64{b0}, []float64{1}, []float64{40}},
 		{"pencere başından önce başlayan ilk kovaya katlanır (toplam liste kadar)",
-			[]traceStartRow{{"t0", from - 4*int64(time.Minute), 10}, {"t1", from + 1, 30}},
+			[]traceStartRow{{"t0", from - 4*int64(time.Minute), 10, false}, {"t1", from + 1, 30, false}},
 			[]int64{b0}, []float64{2}, []float64{20}},
 		{"iki kova, sıralı; medyan doğrusal",
-			[]traceStartRow{{"a", b0 + stepNs + 5, 100}, {"b", from, 10}, {"c", b0 + stepNs + 9, 300}, {"d", from + 2, 20}, {"e", from + 3, 30}},
+			[]traceStartRow{{"a", b0 + stepNs + 5, 100, false}, {"b", from, 10, false}, {"c", b0 + stepNs + 9, 300, false}, {"d", from + 2, 20, false}, {"e", from + 3, 30, false}},
 			[]int64{b0, b0 + stepNs}, []float64{3, 2}, []float64{20, 200}},
 	}
 	for _, c := range cases {
@@ -213,7 +214,7 @@ func TestBucketTraceStarts(t *testing.T) {
 			t.Errorf("%s: zaman %v sayı %v rt %v", c.name, gt, gc, gr)
 		}
 	}
-	if cnt, _ := bucketTraceStarts([]traceStartRow{{"a", from, 1}}, from, 0, 0.5); cnt != nil {
+	if cnt, _ := bucketTraceStarts([]traceStartRow{{"a", from, 1, false}}, from, 0, 0.5); cnt != nil {
 		t.Error("step 0 → seri yok")
 	}
 }

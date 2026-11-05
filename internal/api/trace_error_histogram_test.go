@@ -129,3 +129,26 @@ func TestTraceErrorHistogramPayload(t *testing.T) {
 		t.Fatalf("boş seri [] olmalı: %s", b)
 	}
 }
+
+// v0.10.1801 — Operator-reported (test ortamı): servis + http.route +
+// channel_code, Errors kapalı → liste dolu, şerit 0. Bu sorgu dizesi (FE
+// chipStripEligible) ④ çip-trace kipine uygun olmalı ve genel yol
+// /api/traces/histogram aynı işleyiciye bağlı olmalı (eski yol kalır).
+func TestTraceHistogramChipRoute(t *testing.T) {
+	qs := `service=orders-api&filters=` + url.QueryEscape(`[{"k":"http.route","op":"=","v":["/api/v1/orders"]},{"k":"channel_code","op":"=","v":["MOBILE"]}]`) + `&from=1700000000000000000&to=1700086400000000000`
+	v, _ := url.ParseQuery(qs)
+	f, err := parseTraceFilter(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !chstore.TraceErrorHistogramEligible(f) {
+		t.Fatalf("servis + iki çip (Errors kapalı) uygun olmalı: %+v", f)
+	}
+	mux := http.NewServeMux()
+	(&Server{}).registerTraceErrorHistogramRoutes(mux)
+	for _, p := range []string{"/api/traces/histogram", "/api/traces/error-histogram"} {
+		if _, pat := mux.Handler(httptest.NewRequest(http.MethodGet, p+"?"+qs, nil)); pat == "" {
+			t.Errorf("%s kayıtlı değil", p)
+		}
+	}
+}

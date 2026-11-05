@@ -240,6 +240,10 @@ describe('stripScope', () => {
   it('Errors şeridi: birim ve ipucu sunucu kipinden', () => {
     expect(errorStripUnit('span')).toBe('spans');
     expect(errorStripUnit('trace')).toBe('traces');
+    // v0.10.1801 — ④ çip-trace: listenin trace'leri.
+    expect(errorStripUnit('chip')).toBe('traces');
+    expect(errorStripHint('chip', false)).toContain('trace düzeyinde');
+    expect(errorStripHint('chip', true)).toContain('tavana');
     expect(errorStripHint('trace', false)).toContain('başlangıç');
     expect(errorStripHint('span', false)).toContain("hatalı span'ler");
     expect(errorStripHint('trace', true)).toContain('tavana');

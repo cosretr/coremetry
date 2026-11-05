@@ -61,7 +61,7 @@ import (
 )
 
 // TraceErrorHistogram — şerit cevabı. Seri şekli metric-batch'inkiyle aynı
-// (SpanMetricPoint, ns kova başı); Mode "span" | "trace".
+// (SpanMetricPoint, ns kova başı); Mode "span" | "trace" | "chip" (v0.10.1801 ④).
 type TraceErrorHistogram struct {
 	Mode   string
 	Step   int
@@ -87,6 +87,9 @@ func TraceErrorHistogramEligible(f TraceFilter) bool {
 	if traceErrScopeOnlyEligible(f) {
 		return true
 	}
+	if traceChipTraceEligible(f) {
+		return true
+	}
 	return traceLevelErrorEligible(f) && f.MinMs == 0 && f.MaxMs == 0 && len(f.RequireServices) == 0
 }
 
@@ -100,6 +103,128 @@ func traceErrScopeOnlyEligible(f TraceFilter) bool {
 	return f.HasError && len(f.Filters) == 0 && (f.FilterRoot == nil || !f.FilterRoot.hasPredicate()) &&
 		f.Search == "" && f.TraceID == "" && len(f.TraceIDs) == 0 && len(f.CandidateIDs) == 0 &&
 		f.MinMs == 0 && f.MaxMs == 0 && len(f.RequireServices) == 0 && !f.RootOnly
+}
+
+// v0.10.1801 — ④ çip-trace kipi (Errors KAPALI).
+//
+// Operator-reported (test ortamı): servis + `http.route = …` +
+// `channel_code = …`, 24 sa → liste dolu, şerit "0 SPANS · No traces in view
+// to bucket". Kök neden: liste servisli özel çipi trace düzeyinde yarı-
+// birleşimle keser (splitServiceChips + semiJoinChain, v0.10.1155/1158) —
+// http.route servisin span'inde, channel_code başka span'de olabilir; şerit
+// metric-batch'te iki çipi AYNI span'de AND'liyordu → 0 (v0.10.323 / 730 /
+// 1006 / 1082 sınıfının dördüncü ikizi).
+//
+// Çözüm: bu sınıfta şerit listenin KENDİ WHERE'inin (buildGetTracesWhere —
+// GetTraces ham yolunun çağrısı; yeni zincir kopyası YOK) en yeni trace
+// id'lerini alır (≤ traceStage2MaxIDs) ve ② yolundan trace başlangıcına
+// kovalar. Errors serisi = kovadaki hatalı (has_err) trace sayısı.
+const traceErrModeChip = "chip"
+
+// traceFilterChipCount — SAF: düz çip sayısı ya da (gruplu kipte) yaprak sayısı.
+func traceFilterChipCount(f TraceFilter) int {
+	if f.FilterRoot == nil {
+		return len(f.Filters)
+	}
+	var leaves func(g FilterGroup) int
+	leaves = func(g FilterGroup) int {
+		n := len(g.Filters)
+		for _, sg := range g.Groups {
+			n += leaves(sg)
+		}
+		return n
+	}
+	return leaves(*f.FilterRoot)
+}
+
+// traceChipTraceEligible — SAF (v0.10.1801, frontend chipStripEligible
+// aynası): Errors KAPALI + servis + ≥2 çip; arama / trace id / süre /
+// services / NOT HAS yok. Servissiz ya da tek çipte liste ile metric-batch
+// aynı span-düzeyi yüklemi taşır (ayrışma yok, tavansız sayım korunur).
+func traceChipTraceEligible(f TraceFilter) bool {
+	return !f.HasError && f.Service != "" && traceFilterChipCount(f) >= 2 &&
+		f.Search == "" && f.TraceID == "" && len(f.TraceIDs) == 0 && len(f.CandidateIDs) == 0 &&
+		f.MinMs == 0 && f.MaxMs == 0 && len(f.RequireServices) == 0 && len(f.Services) == 0 &&
+		!traceFilterHasExcludes(f)
+}
+
+// traceChipTraceIDsSQL — SAF: ④ adayları — listenin WHERE'ine uyan en yeni
+// span'lerin trace id'leri; tekilleme Go'da. Yer tutucu: WHERE, LIMIT.
+func traceChipTraceIDsSQL(whereSQL string) string {
+	return `
+		SELECT trace_id
+		FROM spans ` + whereSQL + `
+		ORDER BY time DESC
+		LIMIT ?
+		SETTINGS max_execution_time = 15,
+		         distributed_product_mode = 'global'`
+}
+
+// traceChipTraceCandidates — ④: listenin kümesinin en yeni ≤ traceStage2MaxIDs
+// trace'i. capped = tavana çarptı (ya da satır bütçesi doldu).
+func (s *Store) traceChipTraceCandidates(ctx context.Context, f TraceFilter) ([]string, bool, error) {
+	wc := buildGetTracesWhere(f, s.clusterExpr())
+	limit := traceStage2MaxIDs * errorFirstOverfetch
+	args := append(append([]any{}, wc.args...), limit)
+	rows, err := s.telemetryReadConn().Query(ctx, traceChipTraceIDsSQL(wc.sql()), args...)
+	if err != nil {
+		return nil, false, fmt.Errorf("trace histogram (chip): %w", err)
+	}
+	defer rows.Close()
+	seen := make(map[string]struct{}, 256)
+	ids := make([]string, 0, 256)
+	n := 0
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, false, err
+		}
+		n++
+		if _, dup := seen[id]; dup {
+			continue
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+		if len(ids) >= traceStage2MaxIDs {
+			break
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, false, err
+	}
+	return ids, len(ids) >= traceStage2MaxIDs || n >= limit, nil
+}
+
+// bucketTraceErrors — SAF (v0.10.1801): bucketTraceStarts'ın kova kuralıyla
+// hatalı (has_err) trace sayısı; trace olan her kova için nokta (0 dahil).
+func bucketTraceErrors(rows []traceStartRow, fromNs int64, stepSec int) []SpanMetricPoint {
+	if stepSec <= 0 || len(rows) == 0 {
+		return nil
+	}
+	stepNs := int64(stepSec) * int64(time.Second)
+	by := map[int64]float64{}
+	for _, r := range rows {
+		t := r.startNs
+		if t < fromNs {
+			t = fromNs
+		}
+		b := (t / stepNs) * stepNs
+		v := by[b]
+		if r.hasErr {
+			v++
+		}
+		by[b] = v
+	}
+	keys := make([]int64, 0, len(by))
+	for k := range by {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
+	out := make([]SpanMetricPoint, 0, len(keys))
+	for _, k := range keys {
+		out = append(out, SpanMetricPoint{Time: k, Value: by[k]})
+	}
+	return out
 }
 
 // traceErrScopeWhere — SAF (v0.10.1101): ③ kapsam kipinin WHERE'i = listenin
@@ -252,7 +377,8 @@ func traceErrHistTraceSQL(n int, whereSQL string) string {
 		SELECT trace_id,
 		       toUnixTimestamp64Nano(min(time)) AS t0,
 		       (max(toUnixTimestamp64Nano(time) + duration) -
-		        toUnixTimestamp64Nano(min(time))) / 1e6 AS dur_ms
+		        toUnixTimestamp64Nano(min(time))) / 1e6 AS dur_ms,
+		       countIf(status_code = 'error') > 0 AS has_err
 		FROM spans ` + stage2PrewhereSQL(n) + whereSQL + `
 		GROUP BY trace_id
 		LIMIT ?
@@ -264,6 +390,7 @@ type traceStartRow struct {
 	id      string
 	startNs int64
 	durMs   float64
+	hasErr  bool // v0.10.1801 — ④ Errors serisi; ② / ③ kullanmaz
 }
 
 // bucketTraceStarts — SAF (tablo testli): trace'leri başlangıç kovasına sayar;
@@ -325,7 +452,11 @@ func quantileLinear(xs []float64, q float64) float64 {
 func (s *Store) TraceErrorHistogram(ctx context.Context, f TraceFilter, stepSec int, q float64) (TraceErrorHistogram, error) {
 	out := TraceErrorHistogram{Step: clampSpanMetricStep(stepSec, f.From, f.To, 0), Source: "spans"}
 	if !TraceErrorHistogramEligible(f) {
-		return out, fmt.Errorf("trace error histogram: süzgeç uygun değil (Errors + span-düzeyi çip ya da yalnız servis / ortam / küme; arama / süre / services yok)")
+		return out, fmt.Errorf("trace error histogram: süzgeç uygun değil (Errors + span-düzeyi çip, Errors + yalnız servis / ortam / küme ya da servis + ≥2 çip; arama / süre / services yok)")
+	}
+	var ranked int
+	if f.RankedWithin == nil {
+		f.RankedWithin = &ranked
 	}
 	f = s.rankServiceChips(ctx, f) // v0.10.1158 — listeyle aynı zincir sırası
 	stepNs := int64(out.Step) * int64(time.Second)
@@ -346,6 +477,28 @@ func (s *Store) TraceErrorHistogram(ctx context.Context, f TraceFilter, stepSec 
 			return out, err
 		}
 		out.Count, out.RT, out.Errors = count, rt, count
+		return out, nil
+	}
+	if traceChipTraceEligible(f) {
+		// ④ — v0.10.1801: Errors kapalı, servis + ≥2 çip; listenin WHERE'i.
+		out.Mode = traceErrModeChip
+		ids, capped, err := s.traceChipTraceCandidates(ctx, f)
+		if err != nil {
+			return out, err
+		}
+		out.Capped = capped || *f.RankedWithin > 0
+		if len(ids) == 0 {
+			return out, nil
+		}
+		tr, err := s.traceErrHistTraceRows(ctx, f, ids)
+		if err != nil {
+			return out, err
+		}
+		if tr, err = s.keepRootTraces(ctx, f, tr); err != nil {
+			return out, err
+		}
+		out.Count, out.RT = bucketTraceStarts(tr, fromNs, out.Step, q)
+		out.Errors = bucketTraceErrors(tr, fromNs, out.Step)
 		return out, nil
 	}
 	// Liste ile AYNI kip kararı (aynı fonksiyon, aynı prob).
@@ -375,6 +528,18 @@ func (s *Store) TraceErrorHistogram(ctx context.Context, f TraceFilter, stepSec 
 	if err != nil {
 		return out, err
 	}
+	if tr, err = s.keepRootTraces(ctx, f, tr); err != nil {
+		return out, err
+	}
+	out.Count, out.RT = bucketTraceStarts(tr, fromNs, out.Step, q)
+	// ② kümesindeki her trace hatalıdır (aday = hata-doğrulanmış).
+	out.Errors = out.Count
+	return out, nil
+}
+
+// keepRootTraces — RootOnly iken yalnız kökü pencerede olan adaylar kalır
+// (② ve ④ ortak; listenin rootPostFilter → filterRootTracesAt çağrısı).
+func (s *Store) keepRootTraces(ctx context.Context, f TraceFilter, tr []traceStartRow) ([]traceStartRow, error) {
 	if f.RootOnly && len(tr) > 0 {
 		// Liste ② kipinde kökü adaylar üstünde doğrular (rootPostFilter →
 		// filterRootTracesAt); şerit aynı çağrıyla aynı kümeyi bırakır.
@@ -384,7 +549,7 @@ func (s *Store) TraceErrorHistogram(ctx context.Context, f TraceFilter, stepSec 
 		}
 		hasRoot, err := s.filterRootTracesAt(ctx, cands, f.From, f.To, s.TraceMVGap(ctx, f.From, f.To))
 		if err != nil {
-			return out, err
+			return nil, err
 		}
 		kept := tr[:0]
 		for _, r := range tr {
@@ -394,10 +559,7 @@ func (s *Store) TraceErrorHistogram(ctx context.Context, f TraceFilter, stepSec 
 		}
 		tr = kept
 	}
-	out.Count, out.RT = bucketTraceStarts(tr, fromNs, out.Step, q)
-	// ② kümesindeki her trace hatalıdır (aday = hata-doğrulanmış).
-	out.Errors = out.Count
-	return out, nil
+	return tr, nil
 }
 
 // traceErrHistSpanRows — span kipi okuması (① ve ③ ham): verilen WHERE'e
@@ -451,7 +613,7 @@ func (s *Store) traceErrHistTraceRows(ctx context.Context, f TraceFilter, ids []
 	out := make([]traceStartRow, 0, len(ids))
 	for rows.Next() {
 		var r traceStartRow
-		if err := rows.Scan(&r.id, &r.startNs, &r.durMs); err != nil {
+		if err := rows.Scan(&r.id, &r.startNs, &r.durMs, &r.hasErr); err != nil {
 			return nil, err
 		}
 		out = append(out, r)

@@ -5,7 +5,8 @@
 
 import { describe, expect, it } from 'vitest';
 import type { FilterExpr } from '@/lib/types';
-import { traceScopeParams, errorStripEligible, errorStripScopeOnly, type TraceScopeInput } from './scopeParams';
+import { traceScopeParams, errorStripEligible, errorStripScopeOnly, chipStripEligible, type TraceScopeInput } from './scopeParams';
+import { encodeFilterGroup } from '@/lib/urlState';
 
 const fc: FilterExpr = { k: 'function_code', op: '=', v: ['KYC0001'] };
 const pod: FilterExpr = { k: 'k8s.pod.name', op: '=', v: ['svc-a-7d9f-x2'] };
@@ -78,5 +79,41 @@ describe('errorStripScopeOnly — v0.10.1101 çipsiz Errors (ipucu metni)', () =
     ['uygun değil (Root)', input({ rootOnly: true }, { filtersEff: [] }), false],
   ] as const)('%s → %s', (_n, i, want) => {
     expect(errorStripScopeOnly(traceScopeParams(i))).toBe(want);
+  });
+});
+
+// v0.10.1801 — Operator-reported (test ortamı): /traces?range=24h&service=X&
+// filters=[http.route =, channel_code =] → liste 15+ satır, şerit "0 SPANS ·
+// No traces in view to bucket" (Errors kapalı). Liste çipleri trace düzeyinde
+// keser; metric-batch aynı span'de AND'liyordu. Bu şekil ④ çip-trace yoluna.
+describe('chipStripEligible — Go traceChipTraceEligible aynası', () => {
+  const route: FilterExpr = { k: 'http.route', op: '=', v: ['/api/v1/orders'] };
+  const channel: FilterExpr = { k: 'channel_code', op: '=', v: ['MOBILE'] };
+  const method: FilterExpr = { k: 'http.method', op: '=', v: ['POST'] };
+  const p = (over: Partial<TraceScopeInput['filter']> = {}, rest: Partial<Omit<TraceScopeInput, 'filter'>> = {}) =>
+    traceScopeParams(input({ service: 'orders-api', hasError: false, ...over }, { filtersEff: [route, channel], ...rest }));
+
+  it('operatör URL şekli: servis + http.route + channel_code, Errors kapalı → çip yolu', () => {
+    expect(chipStripEligible(p())).toBe(true);
+    expect(errorStripEligible(p())).toBe(false);
+  });
+  it('Root serbest', () => expect(chipStripEligible(p({ rootOnly: true }))).toBe(true));
+  it('tek çip → metric-batch', () => expect(chipStripEligible(p({}, { filtersEff: [channel] }))).toBe(false));
+  it('yalnız giriş anahtarları (entry kapsamı) → metric-batch', () =>
+    expect(chipStripEligible(p({}, { filtersEff: [route, method] }))).toBe(false));
+  it('servissiz → metric-batch', () => expect(chipStripEligible(p({ service: '' }))).toBe(false));
+  it('Errors açık → eski error-histogram kararı (çip yolu değil)', () => {
+    expect(chipStripEligible(p({ hasError: true }))).toBe(false);
+    expect(errorStripEligible(p({ hasError: true }))).toBe(true);
+  });
+  it('arama / süre / services / NOT HAS → metric-batch', () => {
+    expect(chipStripEligible(p({ search: 'x' }))).toBe(false);
+    expect(chipStripEligible(p({ minMs: '5' }))).toBe(false);
+    expect(chipStripEligible(p({ requireServices: ['a', 'b'] }))).toBe(false);
+    expect(chipStripEligible(p({}, { filtersEff: [route, channel, { k: 'peer.service', op: 'NOT HAS', v: ['cache'] }] }))).toBe(false);
+  });
+  it('gruplu kök: yapraklar sayılır', () => {
+    const g = encodeFilterGroup({ join: 'OR', filters: [route], groups: [{ join: 'AND', filters: [channel] }] });
+    expect(chipStripEligible(p({}, { groupParam: g }))).toBe(true);
   });
 });

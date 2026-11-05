@@ -9694,7 +9694,8 @@ export interface TraceCountResponse {
 export interface TraceErrorHistogramResponse {
   series: { count: SpanMetricSeries[]; errors: SpanMetricSeries[]; rt: SpanMetricSeries[] };
   stepSeconds: number;
-  mode: 'span' | 'trace';
+  /** v0.10.1801 — 'chip': Errors kapalı, servis + ≥2 çip; listenin trace'leri. */
+  mode: 'span' | 'trace' | 'chip';
   capped: boolean;
   /** v0.10.1101 — "rollup" (dar rollup) | "spans" (ham); teşhis. */
   source?: 'rollup' | 'spans';

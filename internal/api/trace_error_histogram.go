@@ -42,6 +42,9 @@ func init() {
 
 func (s *Server) registerTraceErrorHistogramRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/traces/error-histogram", s.getTraceErrorHistogram)
+	// v0.10.1801 — ④ çip-trace kipi Errors'suz da bu uçta; genel ad. Eski
+	// yol aynı işleyiciyle kalır (önbellek anahtarı yoldan bağımsız).
+	mux.HandleFunc("GET /api/traces/histogram", s.getTraceErrorHistogram)
 }
 
 // traceErrorHistogramQuantile — SAF: şerit istatistiği beyaz listesi
@@ -94,7 +97,7 @@ func (s *Server) getTraceErrorHistogram(w http.ResponseWriter, r *http.Request) 
 	}
 	if !chstore.TraceErrorHistogramEligible(f) {
 		writeJSONError(w, http.StatusBadRequest,
-			"error-histogram yalnız Errors + span-düzeyi çip ya da Errors + yalnız servis / ortam / küme içindir (arama / süre / services / traceId yok; çipsizken Root yok); diğer hâller /api/spans/metric-batch")
+			"traces histogram yalnız Errors + span-düzeyi çip, Errors + yalnız servis / ortam / küme ya da servis + ≥2 çip (Errors kapalı) içindir (arama / süre / services / traceId / NOT HAS yok; çipsiz Errors'ta Root yok); diğer hâller /api/spans/metric-batch")
 		return
 	}
 	step := parseInt(q.Get("step"), 0)

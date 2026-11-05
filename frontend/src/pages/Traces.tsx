@@ -85,7 +85,7 @@ import { traceHref } from '@/lib/traceHref';
 import { VolumeChart } from '@/components/traces/VolumeChart';
 import { STRIP_STATS, STRIP_STAT_DEFAULT, parseStripStat, stripStatHeaderLabel, type StripStat } from '@/components/traces/stripStat';
 import { stripScope, stripRootOnly, volumeEmptyNote, volumeUnitFor, stripHeaderStats, errorStripUnit, errorStripHint } from '@/components/traces/volumeSeries';
-import { traceScopeParams, errorStripEligible, errorStripScopeOnly } from './traces/scopeParams'; // v0.10.1082; v0.10.1101 çipsiz
+import { traceScopeParams, errorStripEligible, errorStripScopeOnly, chipStripEligible } from './traces/scopeParams'; // v0.10.1082; v0.10.1101 çipsiz; v0.10.1801 çip-trace
 import { groupLeaves } from '@/lib/urlState';
 import { LatencyScatter } from '@/components/traces/LatencyScatter';
 import { ShapesView } from '@/components/traces/ShapesView';
@@ -702,7 +702,7 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
     rt: SpanMetricSeries[] | null;
     // v0.10.1082 — Errors şeridi (error-histogram) cevabının kipi; yoksa metric-batch.
     // v0.10.1101 — scopeOnly: çipsiz Errors (yalnız servis / ortam / küme).
-    errStrip?: { mode: 'span' | 'trace'; capped: boolean; scopeOnly: boolean };
+    errStrip?: { mode: 'span' | 'trace' | 'chip'; capped: boolean; scopeOnly: boolean };
   } | null>(null);
   useEffect(() => {
     if (view !== 'list') return;
@@ -725,7 +725,11 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
     // metric-batch giriş span'lerinin hatasını sayıyordu (kind kısıtı), liste
     // herhangi bir span'i hatalı trace'leri; başlık sayıları da bu cevaptan.
     const scopeP = traceScopeParams({ filter, env, cluster: clusterScope, filtersEff: advFiltersEff, groupParam: advGroupParam });
-    if (errorStripEligible(scopeP)) {
+    // v0.10.1801 (operator-reported: servis + http.route + channel_code → liste
+    // dolu, şerit 0) — Errors kapalı + servis + ≥2 çip (spans kapsamı): liste
+    // çipleri trace düzeyinde keser, metric-batch aynı span'de AND'liyordu.
+    // Şerit listenin kümesini aynı uçtan okur (④ çip-trace, birim traces).
+    if (errorStripEligible(scopeP) || chipStripEligible(scopeP)) {
       let cancelledE = false;
       const ctlE = new AbortController();
       const scopeOnly = errorStripScopeOnly(scopeP);
