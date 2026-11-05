@@ -24,6 +24,7 @@ Pull from three places:
   outstanding decisions.
 - **Recent git log** — `git log --oneline -8` to anchor "what just
   shipped" so the queue feels continuous with the prior release.
+- memory `project-closed-work-index.md`'yi oku; orada kapalı olan işi kuyruğa alma.
 
 If running in a session where TodoWrite is empty AND no parked
 items in memory, ask the user to seed the queue rather than
