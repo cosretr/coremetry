@@ -433,3 +433,29 @@ describe('AnomalyEventDetail — Triyaj', () => {
     expect(el.querySelector('.pd-triage')?.textContent).toContain('işaretlenmedi');
   });
 });
+
+// v0.10.1792 — Davis F1.4: tek sade "Yön · taban" satırı; eski satır (alanlar
+// yok) "bilinmiyor"; tabansız olayın tepe oranı "×0.0" değil "taban yok".
+describe('AnomalyEventDetail — yön · taban satırı', () => {
+  const line = (el: HTMLElement) => el.querySelector('[data-testid="anomaly-direction-baseline"]')?.textContent;
+
+  it('eski satır (alan yok) → "bilinmiyor"', async () => {
+    const el = await mount('a1');
+    expect(line(el)).toBe('Yön · taban: bilinmiyor');
+  });
+
+  it('yönlü olay → yön + taban türü + değer', async () => {
+    m.events.a1 = ev({ direction: 'down', baselineKind: 'seasonal', baselineValue: 120.456 });
+    const el = await mount('a1');
+    expect(line(el)).toBe('Yön · taban: düşüş · mevsimsel taban (haftanın aynı günü, aynı saat) 120.46');
+  });
+
+  it('tabansız olay → satır "taban yok", tepe oranı "taban yok"', async () => {
+    m.events.a1 = ev({ peakRatio: 0, currentRatio: 0, direction: 'up', baselineKind: 'none' });
+    const el = await mount('a1');
+    expect(line(el)).toBe('Yön · taban: artış · taban yok (ilk görülme)');
+    act(() => { byText(el, 'button', 'Teknik ayrıntı')!.click(); });
+    expect(el.textContent).toContain('taban yok');
+    expect(el.textContent).not.toContain('×0.0');
+  });
+});

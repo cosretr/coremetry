@@ -65,10 +65,13 @@ func TestRecordNewLogTemplatesSwitch(t *testing.T) {
 		want := []chstore.AnomalyEvent{
 			{ID: chstore.FingerprintAnomaly("log_template_new", "tpl-1", "svc-a"), Kind: "log_template_new",
 				Pattern: "user <*> logged in", Service: "svc-a", StartedAt: 10, LastSeen: 42,
-				CurrentRatio: 0, CurrentCount: 7, Sample: "user 7 logged in"},
+				CurrentRatio: 0, CurrentCount: 7, Sample: "user 7 logged in",
+				// v0.10.1792 — ilk görülme: taban yok (newTemplateEvent).
+				Direction: "up", BaselineKind: "none", SubjectKind: "service"},
 			{ID: chstore.FingerprintAnomaly("log_template_new", "tpl-2", "svc-b"), Kind: "log_template_new",
 				Pattern: "queue <*> drained", Service: "svc-b", StartedAt: 11, LastSeen: 43,
-				CurrentRatio: 0, CurrentCount: 4, Sample: "queue q1 drained"},
+				CurrentRatio: 0, CurrentCount: 4, Sample: "queue q1 drained",
+				Direction: "up", BaselineKind: "none", SubjectKind: "service"},
 		}
 		if !reflect.DeepEqual(got, want) {
 			t.Fatalf("olaylar:\n got %+v\nwant %+v", got, want)

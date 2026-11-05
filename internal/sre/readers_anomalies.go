@@ -37,6 +37,12 @@ type AnomalyRow struct {
 	StartedAt    int64   `json:"startedAt"`
 	LastSeen     int64   `json:"lastSeen"`
 	Rank         float64 `json:"rank"`
+	// Direction / BaselineKind — v0.10.1792 (Davis F1.4): olayın yönü
+	// (up/down) ve taban türü (seasonal/consecutive/none). Boş = eski satır
+	// (bilinmiyor). Sıralama (Rank) bunları okumaz; anlatım "0×" yerine
+	// "taban yok" diyebilsin diye taşınır.
+	Direction    string `json:"direction,omitempty"`
+	BaselineKind string `json:"baselineKind,omitempty"`
 }
 
 // NeighborAnomaly — komşu servisin eşzamanlı anomali özeti.
@@ -80,7 +86,8 @@ func rankAnomalies(evs []chstore.AnomalyEvent, at time.Time) []AnomalyRow {
 	out := make([]AnomalyRow, 0, len(evs))
 	for _, e := range evs {
 		out = append(out, AnomalyRow{Kind: e.Kind, Pattern: truncRunes(e.Pattern, 120), PeakRatio: round2(e.PeakRatio), CurrentRatio: round2(e.CurrentRatio),
-			StartedAt: e.StartedAt, LastSeen: e.LastSeen, Rank: anomalyRank(e, at)})
+			StartedAt: e.StartedAt, LastSeen: e.LastSeen, Rank: anomalyRank(e, at),
+			Direction: e.Direction, BaselineKind: anomalyRowBaselineKind(e)})
 	}
 	sort.SliceStable(out, func(i, j int) bool {
 		a, b := out[i], out[j]
@@ -177,4 +184,17 @@ func runAnomalies(ctx context.Context, rd readers, req anomaliesRequest) stepOut
 		st.Summary = "veri yok: pencerede öznede ve komşularda anomali olayı yok"
 	}
 	return stepOutcome{step: st, facts: &Facts{Anomalies: af}}
+}
+
+// anomalyRowBaselineKind — SAF (v0.10.1792): satırın taban türü; eski satırda
+// (baseline_kind ”) tabansızlık eski yorumla (ratio 0) "none" yazılır,
+// aksi boş (bilinmiyor).
+func anomalyRowBaselineKind(e chstore.AnomalyEvent) string {
+	if e.BaselineKind != "" {
+		return e.BaselineKind
+	}
+	if chstore.AnomalyBaselineless(e) {
+		return chstore.AnomalyBaselineNone
+	}
+	return ""
 }

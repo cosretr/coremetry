@@ -2481,6 +2481,12 @@ func anomalyPriority(e chstore.AnomalyEvent) (string, string) {
 	if e.Status == "cleared" {
 		return "P3", "cleared"
 	}
+	// v0.10.1792 (Davis F1.4) — tabansız olay baseline_kind'den okunur (eski
+	// satır: ratio=0); "sinyal yok" değil "taban yok" — sayım-yalnız olayın
+	// kendi kapısı terfide (IsCountOnlyAnomaly).
+	if chstore.AnomalyBaselineless(e) {
+		return "P3", "no baseline"
+	}
 	if math.IsNaN(e.PeakRatio) || e.PeakRatio <= 0 {
 		return "P3", "no signal"
 	}

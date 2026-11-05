@@ -113,19 +113,7 @@ func (r *Recorder) tick(ctx context.Context) {
 			log.Printf("[anomaly-recorder] log patterns: %v", err)
 		}
 		for _, a := range logHits {
-			ev := chstore.AnomalyEvent{
-				ID:           chstore.FingerprintAnomaly("log_pattern", a.Pattern, a.Service),
-				Kind:         "log_pattern",
-				Pattern:      a.Pattern,
-				Service:      a.Service,
-				StartedAt:    now.UnixNano(),
-				LastSeen:     a.LastSeenNs,
-				CurrentRatio: a.Ratio,
-				CurrentCount: a.CurrentCount,
-				Sample:       a.Sample,
-				// v0.10.1080 — ES örneklem doğrulaması (0 = örneklenmedi / CH).
-				VerifiedRatio: a.VerifiedRatio,
-			}
+			ev := logPatternEvent(a, now)
 			if err := r.store.UpsertAnomalyEvent(ctx, ev); err != nil {
 				log.Printf("[anomaly-recorder] upsert log-pattern %s: %v", a.Pattern, err)
 			}
@@ -159,17 +147,7 @@ func (r *Recorder) tick(ctx context.Context) {
 			log.Printf("[anomaly-recorder] trace ops: %v", err)
 		}
 		for _, a := range traceHits {
-			ev := chstore.AnomalyEvent{
-				ID:           chstore.FingerprintAnomaly("trace_op", a.Operation, a.Service),
-				Kind:         "trace_op",
-				Pattern:      a.Operation,
-				Service:      a.Service,
-				StartedAt:    now.UnixNano(),
-				LastSeen:     a.LastSeenNs,
-				CurrentRatio: a.Ratio,
-				CurrentCount: a.CurrentErrors,
-				Sample:       a.SampleTraceID,
-			}
+			ev := traceOpEvent(a, now)
 			if err := r.store.UpsertAnomalyEvent(ctx, ev); err != nil {
 				log.Printf("[anomaly-recorder] upsert trace-op %s/%s: %v", a.Service, a.Operation, err)
 			}
@@ -211,20 +189,7 @@ func recordNewLogTemplates(ctx context.Context, on bool,
 		log.Printf("[anomaly-recorder] new log templates: %v", err)
 	}
 	for _, a := range newTemplateHits {
-		ev := chstore.AnomalyEvent{
-			// Fingerprint on the stable template ID (Drain hash),
-			// NOT the rendered pattern text — the same template
-			// keeps the same row across recorder ticks.
-			ID:           chstore.FingerprintAnomaly("log_template_new", a.TemplateID, a.Service),
-			Kind:         "log_template_new",
-			Pattern:      a.Template,
-			Service:      a.Service,
-			StartedAt:    a.FirstSeenNs,
-			LastSeen:     a.LastSeenNs,
-			CurrentRatio: 0, // "first appearance" — no ratio over baseline
-			CurrentCount: a.TotalCount,
-			Sample:       a.Sample,
-		}
+		ev := newTemplateEvent(a)
 		if err := upsert(ctx, ev); err != nil {
 			log.Printf("[anomaly-recorder] upsert new log template %s: %v", a.TemplateID, err)
 		}
@@ -247,17 +212,7 @@ func recordOpLatency(ctx context.Context, on bool, now time.Time,
 		log.Printf("[anomaly-recorder] op latency: %v", err)
 	}
 	for _, a := range latHits {
-		ev := chstore.AnomalyEvent{
-			ID:           chstore.FingerprintAnomaly(opLatencyKind, a.Operation, a.Service),
-			Kind:         opLatencyKind,
-			Pattern:      a.Operation,
-			Service:      a.Service,
-			StartedAt:    now.UnixNano(),
-			LastSeen:     a.LastSeenNs,
-			CurrentRatio: a.Ratio,
-			CurrentCount: a.CurCalls,
-			Sample:       a.SampleTraceID,
-		}
+		ev := opLatencyEvent(a, now)
 		if err := upsert(ctx, ev); err != nil {
 			log.Printf("[anomaly-recorder] upsert op-latency %s/%s: %v", a.Service, a.Operation, err)
 		}
@@ -285,4 +240,96 @@ func logPatternActiveSet(ctx context.Context, store *chstore.Store, dwell int) m
 		out[chstore.FingerprintAnomaly("log_pattern", k.Pattern, k.Service)] = true
 	}
 	return out
+}
+
+// ── Olay kurucuları (v0.10.1792, Davis F1.4) ─────────────────────────────
+//
+// Recorder'ın dört yazımı SAF kuruculardan geçer ki yön / taban kolonları
+// her yolda pinlenebilsin (recorder_events_test.go). Bu dedektörler yalnız
+// ARTIŞ yakalar (direction up). Taban ardışık penceredir (consecutive);
+// oran yazılamayan (ilk görülme, taban 0'a yuvarlanan) olay "none"
+// (chstore.CountOnlyRatio ile birlikte — eski okuyucular ratio=0'ı okur).
+
+// recorderBaselineKind — SAF: oran 0 (sayım-yalnız) → none, aksi consecutive.
+func recorderBaselineKind(ratio float64) string {
+	if ratio == chstore.CountOnlyRatio {
+		return chstore.AnomalyBaselineNone
+	}
+	return chstore.AnomalyBaselineConsecutive
+}
+
+func logPatternEvent(a LogPatternAnomaly, now time.Time) chstore.AnomalyEvent {
+	return chstore.AnomalyEvent{
+		ID:           chstore.FingerprintAnomaly("log_pattern", a.Pattern, a.Service),
+		Kind:         "log_pattern",
+		Pattern:      a.Pattern,
+		Service:      a.Service,
+		StartedAt:    now.UnixNano(),
+		LastSeen:     a.LastSeenNs,
+		CurrentRatio: a.Ratio,
+		CurrentCount: a.CurrentCount,
+		Sample:       a.Sample,
+		// v0.10.1080 — ES örneklem doğrulaması (0 = örneklenmedi / CH).
+		VerifiedRatio: a.VerifiedRatio,
+		Direction:     chstore.AnomalyDirectionUp,
+		BaselineValue: float64(a.BaselineCount),
+		BaselineKind:  recorderBaselineKind(a.Ratio),
+		SubjectKind:   chstore.AnomalySubjectService,
+	}
+}
+
+func traceOpEvent(a TraceOpAnomaly, now time.Time) chstore.AnomalyEvent {
+	return chstore.AnomalyEvent{
+		ID:            chstore.FingerprintAnomaly("trace_op", a.Operation, a.Service),
+		Kind:          "trace_op",
+		Pattern:       a.Operation,
+		Service:       a.Service,
+		StartedAt:     now.UnixNano(),
+		LastSeen:      a.LastSeenNs,
+		CurrentRatio:  a.Ratio,
+		CurrentCount:  a.CurrentErrors,
+		Sample:        a.SampleTraceID,
+		Direction:     chstore.AnomalyDirectionUp,
+		BaselineValue: float64(a.BaselineErrors),
+		BaselineKind:  recorderBaselineKind(a.Ratio),
+		SubjectKind:   chstore.AnomalySubjectService,
+	}
+}
+
+func opLatencyEvent(a OpLatencyAnomaly, now time.Time) chstore.AnomalyEvent {
+	return chstore.AnomalyEvent{
+		ID:            chstore.FingerprintAnomaly(opLatencyKind, a.Operation, a.Service),
+		Kind:          opLatencyKind,
+		Pattern:       a.Operation,
+		Service:       a.Service,
+		StartedAt:     now.UnixNano(),
+		LastSeen:      a.LastSeenNs,
+		CurrentRatio:  a.Ratio,
+		CurrentCount:  a.CurCalls,
+		Sample:        a.SampleTraceID,
+		Direction:     chstore.AnomalyDirectionUp,
+		BaselineValue: a.BaseP99Ms,
+		BaselineKind:  recorderBaselineKind(a.Ratio),
+		SubjectKind:   chstore.AnomalySubjectService,
+	}
+}
+
+func newTemplateEvent(a LogTemplateAnomaly) chstore.AnomalyEvent {
+	return chstore.AnomalyEvent{
+		// Fingerprint on the stable template ID (Drain hash),
+		// NOT the rendered pattern text — the same template
+		// keeps the same row across recorder ticks.
+		ID:           chstore.FingerprintAnomaly("log_template_new", a.TemplateID, a.Service),
+		Kind:         "log_template_new",
+		Pattern:      a.Template,
+		Service:      a.Service,
+		StartedAt:    a.FirstSeenNs,
+		LastSeen:     a.LastSeenNs,
+		CurrentRatio: 0, // "first appearance" — no ratio over baseline
+		CurrentCount: a.TotalCount,
+		Sample:       a.Sample,
+		Direction:    chstore.AnomalyDirectionUp,
+		BaselineKind: chstore.AnomalyBaselineNone,
+		SubjectKind:  chstore.AnomalySubjectService,
+	}
 }

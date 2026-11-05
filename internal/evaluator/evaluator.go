@@ -1537,6 +1537,11 @@ func anomalyPromotionStep(active, muted, gateOK bool, hasOpen func() bool) promo
 // açılıyordu. Artık yeni bölüm started_at'i sıfırdan alır
 // (chstore.MergeAnomalyCarry) ve bu kapı yeniden 300 sn bekler.
 func promotionGate(ev chstore.AnomalyEvent, cfg chstore.AnomalyPromotionConfig, now time.Time) bool {
+	// v0.10.1792 (Davis F1.4, karar 8) — özne tabanı olayları iç sinyal
+	// katmanıdır: FAZ 1'de Problem'e terfi etmez (gruplama FAZ 3).
+	if chstore.IsSubjectAnomaly(ev) {
+		return false
+	}
 	// v0.10.1587 (Davis paritesi FAZ 0.5 / B) — sayım-yalnız olay (taban yok,
 	// oran 0) oran kapısı yerine SAYIM kapısından geçer (CountOnlyMinCount ≥
 	// MinCount, Normalize garanti eder); sürdürme aynı.

@@ -11,6 +11,7 @@ import { Badge, LinkButton } from '@/components/ui';
 import { useDataTable, DataTableHead, DataTableColgroup, type ColumnDef } from '@/components/ui/DataTable';
 import { fmtDateTime } from '@/lib/utils';
 import { ANOMALY_KIND_COLOR, ANOMALY_KIND_TR, silenceKey } from '@/lib/anomalyRegions';
+import { anomalyRatioLabel } from '@/lib/anomalyBaseline'; // v0.10.1792
 import { SnoozeButton } from './SnoozeButton';
 import type { AnomalyEvent, AnomalySilence } from '@/lib/types';
 
@@ -61,7 +62,7 @@ export function AnomalyWindowTable({ events, silences, canEdit, onOpen, onMute, 
                 <td className="mono" title={e.pattern}>{e.pattern}</td>
                 <td className="mono">{fmtDateTime(new Date(e.startedAt / 1e6))}</td>
                 <td className="mono">{fmtDateTime(new Date(e.lastSeen / 1e6))}</td>
-                <td className="num">×{e.peakRatio.toFixed(1)}</td>
+                <td className="num">{anomalyRatioLabel(e)}</td>
                 {/* v0.10.929 (K5) — active normal durum → nötr; cleared geçiş → yeşil (streams/çekmece ile tek kural). */}
                 <td>{e.status === 'active' ? <Badge tone="neutral">active</Badge> : <Badge tone="success">cleared</Badge>}</td>
                 <td>

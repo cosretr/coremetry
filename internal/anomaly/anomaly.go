@@ -781,8 +781,10 @@ func (d *Detector) scan(ctx context.Context) {
 	d.scanHeap(ctx, now, snap, sens)
 
 	// v0.10.1791 (Davis F1.3) — ÖZNE serileri (endpoint / db / queue). Kapalıyken
-	// (varsayılan) ilk satırda döner: okuma yok. Karar + olay yazımı F1.4.
-	d.scanSubjects(ctx, now, sens, tracked, days, neighbor, redView.queries)
+	// (varsayılan) ilk satırda döner: okuma yok. v0.10.1792 (F1.4) — karar +
+	// yönlü anomaly_events yazımı (Problem değil; terfi etmez).
+	subjects := d.scanSubjects(ctx, now, sens, tracked, days, neighbor, redView.queries)
+	d.applySubjects(ctx, subjects, sens, minSamples, now)
 
 	d.scanBehavior(ctx, now, sens, redView)
 
@@ -913,7 +915,7 @@ func (d *Detector) applyOutcome(ctx context.Context, service, metric string, oc 
 		// bildirim/incident yok). Açık Problem'in tazelenmesi aynen sürer.
 		if !hasOpen {
 			if kind := calendarDayKind(time.Now(), cfg.Calendar); calendarSuppressesDropPromotion(kind, metric, oc.Direction) {
-				if err := d.store.UpsertAnomalyEvent(ctx, calendarDropEvent(service, kind, current, median, time.Now())); err != nil {
+				if err := d.store.UpsertAnomalyEvent(ctx, calendarDropEvent(service, kind, current, median, oc.BaselineKind, time.Now())); err != nil {
 					log.Printf("[anomaly] takvim düşüşü kaydı %s: %v", ruleID, err)
 				}
 				log.Printf("[anomaly] SUPPRESSED (takvim %s) %s · %s = %.2f%s (med=%.2f z=%.1f) — Problem açılmadı", kind, service, metric, current, unitOf(metric), median, z)

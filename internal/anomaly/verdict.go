@@ -242,3 +242,32 @@ func windowBlocker(metric string, median, mad float64, window []float64, pol met
 	}
 	return ""
 }
+
+// EventDirection — v0.10.1792 (Davis F1.4): kararın anomaly_events yönü
+// (chstore "up" | "down"). Kararın kendi yönü ("spiked"/"dropped") varsa
+// ondan; yoksa (açılmamış karar) cari değerin tabana göre tarafı. Taban ve
+// cari eşitse "up" (oran 1 = artış tarafı, AnomalyDirectionOfRatio ile aynı).
+func (o anomalyOutcome) EventDirection() string {
+	switch o.Direction {
+	case "spiked":
+		return chstore.AnomalyDirectionUp
+	case "dropped":
+		return chstore.AnomalyDirectionDown
+	}
+	if o.Current < o.Median {
+		return chstore.AnomalyDirectionDown
+	}
+	return chstore.AnomalyDirectionUp
+}
+
+// EventBaselineKind — v0.10.1792: kararın taban türü (chstore sabitleri).
+// Örneksiz taban (BaselineN 0 — skip dalı) "none".
+func (o anomalyOutcome) EventBaselineKind() string {
+	if o.BaselineN == 0 {
+		return chstore.AnomalyBaselineNone
+	}
+	if o.BaselineKind == "seasonal" {
+		return chstore.AnomalyBaselineSeasonal
+	}
+	return chstore.AnomalyBaselineConsecutive
+}

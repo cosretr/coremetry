@@ -3,6 +3,7 @@ import { LogsHistogram } from '@/components/LogsHistogram';
 import { fmtNum, tsLong } from '@/lib/utils';
 import type { AnomalyEvent, BehaviorChangeDetails } from '@/lib/types';
 import { fmtDurationNs } from './problemTime';
+import { anomalyRatioLabel } from '@/lib/anomalyBaseline';
 import { ANOMALY_CHART_EMPTY, anomalyDurationNs, hourOfWeekLabel } from './anomalyDetail';
 
 // anomalyDetailParts — anomali olayı detayının görsel parçaları (v0.10.1032).
@@ -46,7 +47,8 @@ export function SpikeFacts({ event }: { event: AnomalyEvent }) {
       <Fact k="Süre" v={event.status === 'active'
         ? `${fmtDurationNs(durationNs)} · sürüyor`
         : fmtDurationNs(durationNs)} />
-      <Fact k="En yüksek artış" v={`×${event.peakRatio.toFixed(1)}`}
+      {/* v0.10.1792 — tabansız olayda "×0.0" değil "taban yok" (Davis F1.4). */}
+      <Fact k="En yüksek artış" v={anomalyRatioLabel(event)}
         title="Tepe sayım / spike öncesi taban penceresi" />
       {event.currentRatio > 0 && (
         <Fact k="Şimdiki artış" v={`×${event.currentRatio.toFixed(1)}`} />

@@ -6717,7 +6717,9 @@ export interface AnomalyEvent {
   // birleşimde yoktu (tablo rengi/etiketi boş kalırdı).
   // v0.10.1483 — `calendar_traffic_drop`: takvim günü (tatil / yarım gün)
   // bastırılan istek hızı düşüşü; Problem açılmadı, bildirim gitmedi.
-  kind: 'log_pattern' | 'trace_op' | 'trace_op_latency' | 'elastic_ml' | 'log_template_new' | 'behavior_change' | 'calendar_traffic_drop';
+  // v0.10.1792 — `subject_red`: özne tabanı (endpoint / db / queue, Davis F1.4);
+  // iç sinyal, Problem'e terfi etmez.
+  kind: 'log_pattern' | 'trace_op' | 'trace_op_latency' | 'elastic_ml' | 'log_template_new' | 'behavior_change' | 'calendar_traffic_drop' | 'subject_red';
   pattern: string;
   service: string;
   startedAt: number;     // unix ns — first observation of the CURRENT episode (v0.10.1045)
@@ -6738,6 +6740,14 @@ export interface AnomalyEvent {
   // karşı doğrulanma oranı (0 < r ≤ 1). Yok / 0 = örneklenmedi (CH sayımı
   // regex'i zaten içerir). r < 1 → grafik alt başlığında not.
   verifiedRatio?: number;
+  // v0.10.1792 — Davis F1.4 yönlü olay. Yok = eski satır (bilinmiyor);
+  // baselineKind 'none' = taban yok (ilk görülme / yalnız sayım — peakRatio 0
+  // bir oran DEĞİL). Eski satırda tabansızlık peakRatio 0'dan okunur.
+  direction?: 'up' | 'down';
+  baselineValue?: number;
+  baselineKind?: 'seasonal' | 'consecutive' | 'none';
+  subjectKind?: 'service' | 'endpoint' | 'db' | 'queue';
+  subjectId?: string;
   // v0.10.1049 — yalnız deploy raporu / rollout çekmecesinin "deploy sonrası
   // anomaliler" satırında: anomali o deploy'dan önce de DÜZENLİ görülüyordu
   // (chstore.AnomalyPredatesDeploy). Satır listede kalır, "yinelenen" işaretli.

@@ -210,6 +210,11 @@ func (c AnomalyPromotionConfig) AttachesToIncident() bool {
 // peak_ratio'ya CountOnlyRatio (0) yazar. Yalnız bu iki tür: oransız başka
 // türler (log_template_new, davranış…) bugün olduğu gibi hiç terfi etmez —
 // sayım kapısı onları AÇMAZ.
+//
+// v0.10.1792 (Davis F1.4) — tabansızlık AnomalyBaselineless'tan okunur
+// (baseline_kind 'none'; eski satır ” → eski ratio=0 yorumu). Oran yine 0
+// olmalı: aynı bölümde önce oranlı sonra sayım-yalnız tik gelirse tepe oran
+// gerçek kalır ve olay oran kapısından geçer.
 func IsCountOnlyAnomaly(ev AnomalyEvent) bool {
-	return ev.PeakRatio == CountOnlyRatio && (ev.Kind == "trace_op" || ev.Kind == "log_pattern")
+	return ev.PeakRatio == CountOnlyRatio && AnomalyBaselineless(ev) && (ev.Kind == "trace_op" || ev.Kind == "log_pattern")
 }

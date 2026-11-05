@@ -110,6 +110,7 @@ describe('tür sınıfları ve etiketler', () => {
       log_pattern: 'Log deseni', log_template_new: 'Yeni log biçimi', trace_op: 'Operasyon hatası',
       trace_op_latency: 'Operasyon gecikmesi', behavior_change: 'Davranış değişimi', elastic_ml: 'Elastic ML',
       calendar_traffic_drop: 'Takvim günü düşüşü', // v0.10.1483
+      subject_red: 'Özne sapması', // v0.10.1792 — Davis F1.4
     });
   });
 });

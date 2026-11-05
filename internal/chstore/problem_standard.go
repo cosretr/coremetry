@@ -972,6 +972,18 @@ func exceptionMagnitude(g ExceptionGroup, f StdFacts) float64 {
 	return 0
 }
 
+// subjectAnomalyFamily — SAF (v0.10.1792): özne olayının ailesi metrikten
+// (Pattern "metrik" ya da "metrik @ rota").
+func subjectAnomalyFamily(pattern string) string {
+	switch {
+	case strings.HasPrefix(pattern, "p99_ms"):
+		return StdFamilyLatency
+	case strings.HasPrefix(pattern, "error_rate"):
+		return StdFamilyError
+	}
+	return StdFamilyRule
+}
+
 // StandardizeAnomalyEvent — SAF: anomaly_events satırı (Problem değil; R1'de
 // bildirim hunisine girmez — replay "huni dışı" diye ayrı sayar).
 func StandardizeAnomalyEvent(e AnomalyEvent, f StdFacts) ProblemStandard {
@@ -989,18 +1001,27 @@ func StandardizeAnomalyEvent(e AnomalyEvent, f StdFacts) ProblemStandard {
 		fam, label = StdFamilyRule, "davranış değişti"
 	case "new_template", "log_template_new":
 		fam, label = StdFamilyError, "yeni log şablonu"
+	case SubjectAnomalyKind: // v0.10.1792 — özne tabanı (endpoint / db / queue)
+		fam, label = subjectAnomalyFamily(e.Pattern), "özne sapması"
 	}
 	std := ProblemStandard{Family: fam, Kind: "anomaly_event." + e.Kind, Subject: e.Service, Operation: e.Pattern}
 	h := subjectPrefix(e.Service) + label
 	if e.Pattern != "" {
 		h += " — " + e.Pattern
 	}
-	if e.PeakRatio > 0 && !math.IsNaN(e.PeakRatio) {
+	// v0.10.1792 — oran yalnız tabanı bilinen satırda (AnomalyRatioKnown);
+	// tabansız satır "taban yok" der, "0×" değil (1587 tuzağı).
+	known := AnomalyRatioKnown(e)
+	if known {
 		h += " (" + trRatio(e.PeakRatio) + ")"
 	}
 	std.Headline = clipHeadline(h)
-	std.Impact = StdImpact{Primary: StdMeasure{Text: "normalin " + trRatio(e.PeakRatio), Value: e.CurrentRatio, Ratio: e.PeakRatio},
-		Known: e.PeakRatio > 0, Callers: f.VerifiedCallers}
+	impactText := "normalin " + trRatio(e.PeakRatio)
+	if AnomalyBaselineless(e) {
+		impactText = "taban yok (ilk görülme)"
+	}
+	std.Impact = StdImpact{Primary: StdMeasure{Text: impactText, Value: e.CurrentRatio, Ratio: e.PeakRatio},
+		Known: known, Callers: f.VerifiedCallers}
 	std.Since = StdSince{StartedAt: e.StartedAt, LastSeen: e.LastSeen, Ongoing: e.Status != "cleared", Episode: e.EpisodeCount}
 	end := now.UnixNano()
 	if e.LastSeen > 0 && e.LastSeen < end {

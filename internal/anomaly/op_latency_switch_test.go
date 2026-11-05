@@ -66,10 +66,13 @@ func TestRecordOpLatencySwitch(t *testing.T) {
 		want := []chstore.AnomalyEvent{
 			{ID: chstore.FingerprintAnomaly("trace_op_latency", "GET /x", "svc-a"), Kind: "trace_op_latency",
 				Pattern: "GET /x", Service: "svc-a", StartedAt: now.UnixNano(), LastSeen: 42,
-				CurrentRatio: 9, CurrentCount: 500, Sample: "t1"},
+				CurrentRatio: 9, CurrentCount: 500, Sample: "t1",
+				// v0.10.1792 — yön / taban / özne (opLatencyEvent).
+				Direction: "up", BaselineValue: 100, BaselineKind: "consecutive", SubjectKind: "service"},
 			{ID: chstore.FingerprintAnomaly("trace_op_latency", "POST /y", "svc-b"), Kind: "trace_op_latency",
 				Pattern: "POST /y", Service: "svc-b", StartedAt: now.UnixNano(), LastSeen: 43,
-				CurrentRatio: 4, CurrentCount: 80, Sample: "t2"},
+				CurrentRatio: 4, CurrentCount: 80, Sample: "t2",
+				Direction: "up", BaselineValue: 150, BaselineKind: "consecutive", SubjectKind: "service"},
 		}
 		if !reflect.DeepEqual(got, want) {
 			t.Fatalf("olaylar:\n got %+v\nwant %+v", got, want)

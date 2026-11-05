@@ -331,7 +331,22 @@ func behaviorEvent(c behaviorCandidate, now time.Time) chstore.AnomalyEvent {
 		CurrentRatio: c.Ratio,
 		CurrentCount: c.Spans,
 		Sample:       encodeBehaviorDetails(c),
+		// v0.10.1792 (Davis F1.4) — yön adayın kendi kararı; taban haftanın-
+		// saati kovası (mevsimsel sinyal) ya da kalıcı kayma (rejim → son
+		// pencerenin tabanı, consecutive).
+		Direction:     c.Direction,
+		BaselineValue: c.Baseline,
+		BaselineKind:  behaviorBaselineKind(c.Signal),
+		SubjectKind:   chstore.AnomalySubjectService,
 	}
+}
+
+// behaviorBaselineKind — SAF: davranış sinyali → taban türü.
+func behaviorBaselineKind(signal string) string {
+	if signal == "regime" {
+		return chstore.AnomalyBaselineConsecutive
+	}
+	return chstore.AnomalyBaselineSeasonal
 }
 
 // fetchBehaviorBuckets — TEK toplu sorgu, servis başına satır dizisi.

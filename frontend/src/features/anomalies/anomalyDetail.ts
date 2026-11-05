@@ -27,6 +27,7 @@ export const ANOMALY_KIND_LABEL: Record<AnomalyKind, string> = {
   log_template_new: 'NEW LOG SHAPE',
   behavior_change: 'BEHAVIOR',
   calendar_traffic_drop: 'CALENDAR DROP', // v0.10.1483
+  subject_red: 'SUBJECT', // v0.10.1792 — Davis F1.4 özne tabanı
 };
 
 // v0.10.1032 (operatör: "Anlaşılır olsun") — tam sayfanın tür rozeti düz
@@ -40,7 +41,30 @@ export const ANOMALY_KIND_PLAIN: Record<AnomalyKind, string> = {
   behavior_change: 'Davranış değişimi',
   calendar_traffic_drop: 'Takvim günü düşüşü', // v0.10.1483
   elastic_ml: 'Elastic ML',
+  subject_red: 'Özne sapması', // v0.10.1792 — endpoint / veritabanı / kuyruk
 };
+
+// ── Yön · taban (v0.10.1792, Davis F1.4) ────────────────────────────────
+// Detay sayfasında TEK sade satır (operatör: detay sayfaları sade). Eski satır
+// (alanlar yok) → "bilinmiyor"; tabansız olayda oran yazılmaz ("×0.0" değil).
+
+const DIRECTION_TR: Record<'up' | 'down', string> = { up: 'artış', down: 'düşüş' };
+const BASELINE_TR: Record<'seasonal' | 'consecutive' | 'none', string> = {
+  seasonal: 'mevsimsel taban (haftanın aynı günü, aynı saat)',
+  consecutive: 'son 24 saatin tabanı',
+  none: 'taban yok (ilk görülme)',
+};
+
+/** "artış · mevsimsel taban (…) 120.5" — iki parça da yoksa "bilinmiyor". */
+export function anomalyDirectionBaselineLine(e: Pick<AnomalyEvent, 'direction' | 'baselineKind' | 'baselineValue'>): string {
+  const dir = e.direction ? DIRECTION_TR[e.direction] : '';
+  let base = e.baselineKind ? BASELINE_TR[e.baselineKind] : '';
+  if (base && e.baselineKind !== 'none' && e.baselineValue != null && Number.isFinite(e.baselineValue)) {
+    base += ` ${Math.round(e.baselineValue * 100) / 100}`;
+  }
+  if (!dir && !base) return 'bilinmiyor';
+  return [dir || 'yön bilinmiyor', base || 'taban bilinmiyor'].join(' · ');
+}
 
 /** Log biçimli türler: grafik servisin log hacmidir (tek sınırlı /api/logs/timeseries). */
 export function isLogAnomalyKind(kind: string): boolean {

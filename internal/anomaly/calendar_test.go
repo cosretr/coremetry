@@ -138,7 +138,7 @@ func TestCalendarSuppressesDropPromotion(t *testing.T) {
 			t.Errorf("%+v: %v", c, got)
 		}
 	}
-	ev := calendarDropEvent("orders-api", chstore.CalendarHoliday, 2, 10, day("2031-01-01 10:00"))
+	ev := calendarDropEvent("orders-api", chstore.CalendarHoliday, 2, 10, "seasonal", day("2031-01-01 10:00"))
 	if ev.Kind != calendarTrafficDropKind || ev.CurrentRatio != 0.2 || ev.Service != "orders-api" || ev.ID == "" || !strings.Contains(ev.Sample, "Problem açılmadı") {
 		t.Errorf("olay: %+v", ev)
 	}

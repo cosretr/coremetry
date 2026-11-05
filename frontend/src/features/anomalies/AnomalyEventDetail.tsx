@@ -27,7 +27,7 @@ import { Sect, SignalLink, DeployBox, DetailSummary } from './detailSections';
 import { anomalySummary, anomalyWhenLine } from './detailSummary';
 import {
   ANOMALY_CHART_EMPTY, ANOMALY_KIND_PLAIN, anomalyChart, anomalyChartWindow, anomalySignalHrefs,
-  behaviorDetailsOf, findAnomalyEventInCache, isLogAnomalyKind, sampleTraceHref,
+  anomalyDirectionBaselineLine, behaviorDetailsOf, findAnomalyEventInCache, isLogAnomalyKind, sampleTraceHref,
 } from './anomalyDetail';
 import { AnomalyLogVolume, AnomalySample, BehaviorDetailsBox, SpikeFacts } from './anomalyDetailParts';
 import { hasLogPatternSeries, logPatternSeriesArgs, patternLogsPivot } from './logPatternSeries';
@@ -211,6 +211,10 @@ export function AnomalyEventDetail({ event, isAdmin, onBack }: {
       {/* C3 (v0.10.1771) — insan diliyle başlık + tek satır özet, jargon yok. */}
       <h2 style={{ margin: '8px 0 2px', fontSize: 'var(--fs-lg)', fontWeight: 600 }} data-testid="anomaly-headline">{anomalyPlainHeadline(event)}</h2>
       <p style={{ margin: '0 0 8px', fontSize: 13, color: 'var(--text3)' }}>{anomalyPlainSummary(event)}</p>
+      {/* v0.10.1792 (Davis F1.4) — tek sade satır: yön + taban türü (eski satır "bilinmiyor"). */}
+      <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--text3)' }} data-testid="anomaly-direction-baseline">
+        Yön · taban: {anomalyDirectionBaselineLine(event)}
+      </p>
       <ProblemStandardHeader stdRef={`anomaly:${event.id}`}
         fallback={<DetailSummary sentence={sentence} when={when}
           detail={isLog && event.pattern ? event.pattern : undefined} />} />

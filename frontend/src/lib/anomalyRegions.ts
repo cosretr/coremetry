@@ -13,6 +13,7 @@
 //   - etiket «▮ tür ×tepe» (peakRatio VAR; güven puanı YOK — çizilmez).
 import type { AnomalyEvent, AnomalySilence } from '@/lib/types';
 import type { ChartTimeRegion } from '@/lib/chart/overlays';
+import { anomalyRatioLabel } from '@/lib/anomalyBaseline';
 
 export const ANOMALY_KIND_COLOR: Record<AnomalyEvent['kind'], string> = {
   trace_op: 'var(--orange)',
@@ -22,6 +23,7 @@ export const ANOMALY_KIND_COLOR: Record<AnomalyEvent['kind'], string> = {
   elastic_ml: 'var(--warn)',
   behavior_change: 'var(--teal)',
   calendar_traffic_drop: 'var(--text3)', // v0.10.1483 — bastırılmış, sayfa açmaz
+  subject_red: 'var(--teal)', // v0.10.1792 — özne tabanı (iç sinyal)
 };
 
 export const ANOMALY_KIND_TR: Record<AnomalyEvent['kind'], string> = {
@@ -32,6 +34,7 @@ export const ANOMALY_KIND_TR: Record<AnomalyEvent['kind'], string> = {
   elastic_ml: 'elastic ML',
   behavior_change: 'davranış',
   calendar_traffic_drop: 'takvim düşüşü', // v0.10.1483
+  subject_red: 'özne', // v0.10.1792
 };
 
 /** Pencereyle kesişen, bu servise ait olaylar; başlangıca göre artan. */
@@ -75,7 +78,7 @@ export function anomalyRegions(events: AnomalyEvent[], silenced: Set<string>, fr
       endSec: e.lastSeen / 1e9, // v0.10.182 — tooltip «son/süre» GERÇEK bitişten (toSec şişirilmiş olabilir)
       color: muted ? 'var(--text3)' : ANOMALY_KIND_COLOR[e.kind] ?? 'var(--warn)',
       // ▮ öneki YOK: drawTimeRegions kendisi ekler (overlays.ts fitLabel('▮ ' + label)).
-      label: sil ? 'sessiz' : notAnomaly ? 'değil' : `${ANOMALY_KIND_TR[e.kind] ?? e.kind} ×${e.peakRatio.toFixed(1)}`,
+      label: sil ? 'sessiz' : notAnomaly ? 'değil' : `${ANOMALY_KIND_TR[e.kind] ?? e.kind} ${anomalyRatioLabel(e)}`, // v0.10.1792 — tabansızda "taban yok"
     };
   });
 }

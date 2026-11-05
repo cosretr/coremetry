@@ -257,7 +257,13 @@ func calendarSuppressesDropPromotion(kind, metric, direction string) bool {
 
 // calendarDropEvent — SAF: bastırılan düşüşün anomaly_events satırı. Oran
 // < 1 olduğu için terfi kapısını (MinPeakRatio) hiçbir zaman geçmez.
-func calendarDropEvent(service, kind string, current, median float64, now time.Time) chstore.AnomalyEvent {
+//
+// v0.10.1792 — bkind: kararın kullandığı taban (anomalyOutcome.BaselineKind,
+// "seasonal" | "consecutive"); boşsa mevsimsel varsayılır.
+func calendarDropEvent(service, kind string, current, median float64, bkind string, now time.Time) chstore.AnomalyEvent {
+	if bkind == "" {
+		bkind = chstore.AnomalyBaselineSeasonal
+	}
 	ratio := 0.0
 	if median > 0 {
 		ratio = current / median
@@ -271,6 +277,11 @@ func calendarDropEvent(service, kind string, current, median float64, now time.T
 		LastSeen:     now.UnixNano(),
 		CurrentRatio: ratio,
 		Sample:       "Takvim günü (" + kind + "): request_rate düşüşü kaydedildi, Problem açılmadı ve bildirim gitmedi.",
+		// v0.10.1792 (Davis F1.4) — düşüş; taban kararın tabanı.
+		Direction:     chstore.AnomalyDirectionDown,
+		BaselineValue: median,
+		BaselineKind:  bkind,
+		SubjectKind:   chstore.AnomalySubjectService,
 	}
 }
 
