@@ -120,7 +120,7 @@ func (r *Recorder) baselineLoop(ctx context.Context) {
 }
 
 func (r *Recorder) baselinePoll(ctx context.Context) {
-	if r.bjob.running.Load() || !r.leader.IsLeader() {
+	if !r.leader.IsLeader() {
 		return
 	}
 	cfg := r.store.GetMLConfig(ctx)
@@ -129,12 +129,18 @@ func (r *Recorder) baselinePoll(ctx context.Context) {
 	}
 	pctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
+	ctl, _, cerr := r.store.GetMLBaselineControl(pctx)
+	_, loc := calendarFor(r.store.AnomalySensitivityForDetectors())
+	if cerr == nil {
+		r.maybeBackfill(ctx, cfg, ctl, loc) // v0.10.1815: elle geçmiş doldurma (ayrı goroutine)
+	}
+	if r.bjob.running.Load() {
+		return
+	}
 	st, _, err := r.store.GetMLBaselineStatus(pctx)
 	if err != nil {
 		return // durum okunamadı: kör koşma (son gün bilinmiyor)
 	}
-	ctl, _, _ := r.store.GetMLBaselineControl(pctx)
-	_, loc := calendarFor(r.store.AnomalySensitivityForDetectors())
 	now := time.Now()
 	work := planBaselineWork(st, ctl, now, loc, r.bjob.nextRetry.Load())
 	if len(work) == 0 {

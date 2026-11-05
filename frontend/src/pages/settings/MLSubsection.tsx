@@ -11,6 +11,7 @@ import { ActionRow } from '@/components/coremetry/ActionRow';
 import { api } from '@/lib/api';
 import type { MLConfig, MLQuality } from '@/lib/types';
 import { FlashBox, humanize } from './shared';
+import { MLBaselineSections } from './MLBaselineSections';
 
 export const ML_LOG_DETECTORS: { id: string; label: string; hint: string }[] = [
   { id: 'log_volume', label: 'Log hacmi', hint: 'Servis × seviye hacmi, mevsimsel median+MAD, iki yönlü' },
@@ -185,6 +186,7 @@ export function MLSubsection() {
           </div>
         </>
       )}
+      <MLBaselineSections />
     </div>
   );
 }

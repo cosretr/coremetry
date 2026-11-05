@@ -98,7 +98,8 @@ type MLBaselineRunRequest struct {
 
 // MLBaselineControl — admin istekleri (lider yoklar).
 type MLBaselineControl struct {
-	Run *MLBaselineRunRequest `json:"run,omitempty"`
+	Run      *MLBaselineRunRequest      `json:"run,omitempty"`
+	Backfill *MLBaselineBackfillRequest `json:"backfill,omitempty"` // v0.10.1815
 }
 
 func (s *Store) getJSONSetting(ctx context.Context, key string, v any) (bool, error) {
@@ -138,4 +139,56 @@ func (s *Store) GetMLBaselineControl(ctx context.Context) (MLBaselineControl, bo
 
 func (s *Store) SaveMLBaselineControl(ctx context.Context, c MLBaselineControl) error {
 	return s.putJSONSetting(ctx, mlBaselineControlKey, c)
+}
+
+// ── v0.10.1815: baseline geçmiş doldurma (dilim 1.4) ─────────
+
+const mlBaselineBackfillKey = "ml_baseline_backfill"
+
+// MLBaselineBackfillRequest — admin isteği (kontrol blobu). Cancel = DELETE.
+type MLBaselineBackfillRequest struct {
+	ID      string   `json:"id"`
+	Days    int      `json:"days"`
+	Signals []string `json:"signals"`
+	By      string   `json:"by,omitempty"`
+	At      int64    `json:"at"`
+	Cancel  bool     `json:"cancel,omitempty"`
+}
+
+// MLBaselineBackfillSignal — sinyal başına ilerleme; Done = biten günler
+// (yeniden başlayınca atlanır).
+type MLBaselineBackfillSignal struct {
+	DaysTotal int      `json:"daysTotal"`
+	DaysDone  int      `json:"daysDone"`
+	Rows      int      `json:"rows"`
+	Errors    int      `json:"errors"`
+	LastError string   `json:"lastError,omitempty"`
+	Skipped   string   `json:"skipped,omitempty"`
+	Done      []string `json:"done,omitempty"`
+}
+
+// MLBaselineBackfillStatus — koşu durumu (tek yazıcı: ML lideri).
+type MLBaselineBackfillStatus struct {
+	ID        string                               `json:"id"`
+	Days      int                                  `json:"days"`
+	Signals   []string                             `json:"signals"`
+	PlanDays  []string                             `json:"planDays"`
+	By        string                               `json:"by,omitempty"`
+	StartedAt int64                                `json:"startedAt"`
+	UpdatedAt int64                                `json:"updatedAt"`
+	Running   bool                                 `json:"running"`
+	Complete  bool                                 `json:"complete"`
+	Cancelled bool                                 `json:"cancelled"`
+	Stopped   string                               `json:"stopped,omitempty"`
+	PerSignal map[string]*MLBaselineBackfillSignal `json:"perSignal"`
+}
+
+func (s *Store) GetMLBaselineBackfill(ctx context.Context) (MLBaselineBackfillStatus, bool, error) {
+	var st MLBaselineBackfillStatus
+	ok, err := s.getJSONSetting(ctx, mlBaselineBackfillKey, &st)
+	return st, ok, err
+}
+
+func (s *Store) SaveMLBaselineBackfill(ctx context.Context, st MLBaselineBackfillStatus) error {
+	return s.putJSONSetting(ctx, mlBaselineBackfillKey, st)
 }

@@ -1629,6 +1629,17 @@ export const api = {
     request<import('./types').MLBacktestResult>(`/api/ml/backtest`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     }),
+  // v0.10.1815 — baseline geçmiş doldurma (elle; tahmin → onay → başlat → ilerleme / iptal)
+  mlBaselineBackfill: () => get<import('./types').MLBaselineBackfillView>(`/api/ml/baseline/backfill`),
+  mlBaselineBackfillEstimate: (body: { days: number; signals: string[] }) =>
+    request<{ plan: import('./types').MLBaselineBackfillPlan }>(`/api/ml/baseline/backfill?estimate=1`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    }),
+  mlBaselineBackfillStart: (body: { days: number; signals: string[] }) =>
+    request<{ queued: boolean; requestId: string; plan: import('./types').MLBaselineBackfillPlan }>(`/api/ml/baseline/backfill`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    }),
+  mlBaselineBackfillCancel: () => request<{ cancelled: boolean }>(`/api/ml/baseline/backfill`, { method: 'DELETE' }),
   getMl: () => get<import('./types').MLConfig>(`/api/admin/ml`),
   putMl: (c: import('./types').MLConfig) =>
     request<import('./types').MLConfig>(`/api/admin/ml`, {

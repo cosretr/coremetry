@@ -48,6 +48,8 @@ const REFETCH_FILES = [
   'lib/queries/inbox.ts',
   'lib/queries/incidents.ts',
   // v0.10.1557 — lib/queries/messaging.ts çıktı (Kafka istemcileri sekmesi sorgusu kaldırıldı).
+  // v0.10.1815 — ML baseline geçmiş doldurma ilerlemesi (yalnız koşu sürerken 10 s).
+  'lib/queries/ml.ts',
   'lib/queries/monitors.ts',
   'lib/queries/problems.ts',
   'lib/queries/rollouts.ts',

@@ -11803,6 +11803,25 @@ export interface MLBaselineRun {
 export interface MLBaselineStatus {
   lastDay?: string; running?: string; last?: MLBaselineRun; manual?: MLBaselineRun; updatedAt?: number;
 }
+/** Baseline geçmiş doldurma planı (v0.10.1815, Go ml.BaselineBackfillPlan; ?estimate=1). */
+export interface MLBaselineBackfillPlan {
+  days: number; signals: string[]; es: number; vm: number; ch: number; intervalMs: number; timeoutMs: number; estimatedSec: number;
+  perSignal: Record<string, { days: number; es: number; vm: number; skipped?: string }>;
+  notCovered: string[];
+}
+/** Sinyal başına ilerleme (Go chstore.MLBaselineBackfillSignal). */
+export interface MLBaselineBackfillSignal {
+  daysTotal: number; daysDone: number; rows: number; errors: number; lastError?: string; skipped?: string; done?: string[];
+}
+/** Geçmiş doldurma durumu (system_settings ml_baseline_backfill; Go chstore.MLBaselineBackfillStatus). */
+export interface MLBaselineBackfillStatus {
+  id: string; days: number; signals: string[]; planDays: string[]; by?: string; startedAt: number; updatedAt: number;
+  running: boolean; complete: boolean; cancelled: boolean; stopped?: string;
+  perSignal: Record<string, MLBaselineBackfillSignal>;
+}
+export interface MLBaselineBackfillRequest { id: string; days: number; signals: string[]; by?: string; at: number; cancel?: boolean }
+/** GET /api/ml/baseline/backfill yanıtı. */
+export interface MLBaselineBackfillView { status: MLBaselineBackfillStatus | null; request: MLBaselineBackfillRequest | null }
 export interface MLScorecard {
   tick?: MLTickStatus;
   /** v0.10.1814: günlük baseline işi durumu. */

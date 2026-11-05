@@ -12226,3 +12226,12 @@ satırı, açık satırın vurgusu + satır tıkıyla aç/kapa, satır içi form
   ayrı anahtarlarda (`ml_baseline_status` tek yazıcı lider, `ml_baseline_control` admin) — tik blobu her tikte baştan yazılıyor;
   ikisi de /api/ml/scorecard'da. Elle koşu `POST /api/ml/baseline/run` isteği kontrol blobuna yazar, lider koşar (202). Backtest
   aynı `batchKeep`'i çağırır (`backtestBatchEvent`).
+- **v0.10.1815 — Baseline geçmiş doldurma (dilim 1.4), yalnız elle.** `POST /api/ml/baseline/backfill` (admin, audit
+  `ml.baseline.backfill`; `?estimate=1` kuru plan: ES = gün×24, VM = gün×aile×5 trace + gün×ifade metrik, CH = 1 etiket okuması,
+  süre = sorgu×(aralık+p95|1 sn)), `GET` her rol, `DELETE` iptal. Lider koşar (kontrol blobu), ilerleme `ml_baseline_backfill`
+  (sinyal × gün, biten gün atlanır), birim sınırında durur (anahtar/liderlik/iptal). Kaynak canlı dedektörün kaynağı: log ES
+  saatlik (kova 5 dk, düşerse yarım saat; kardinalite kapalı), trace/metrik VM `query_range` günlük (ağır hata → yarım gün).
+  Sapmalar: ml_series'e YAZMAZ (28 g TTL + canlı taban değişirdi), 21 günlük log backfill'i aynen kalır (saat/yarılama mantığı
+  paylaşıldı, süresi değişmedi); VM backoff'u AYRI örnek (geçmiş 422'si canlı aileyi susturmasın), canlı aile beklemedeyse
+  geçmiş durur ve 5 dk sonra sürer; ES/VM süre örneği alınır ama tik bütçe sayaçları artmaz; günler en yeni önce; kapalı
+  dedektörün sinyali ve tpl|/code|/dep|/pod serileri doldurulmaz (planda gerekçeli).

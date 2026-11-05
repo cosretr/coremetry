@@ -150,6 +150,17 @@ func (d *TraceRED) dayCap(det string, cfg chstore.MLConfig, now time.Time) bool 
 	return true
 }
 
+// pickTraceLabels — SAF: keşfedilen etiket adlarından servis/route/durum
+// etiketi (canlı tik ve v0.10.1815 baseline geçmiş doldurma ortak).
+func pickTraceLabels(names []string, svcLabel string, pin anomaly.REDFamilyPin) traceFamilyLabels {
+	fl := traceFamilyLabels{at: time.Now()}
+	fl.svc = pickLabel(names, append([]string{svcLabel}, svcLabelCandidates...))
+	fl.route = pickLabel(names, routeLabelCandidates)
+	fl.status = pickLabel(names, pin.StatusLabels)
+	fl.ok = fl.svc != "" && fl.route != "" && fl.status != ""
+	return fl
+}
+
 func (d *TraceRED) familyLabels(ctx context.Context, vm anomaly.REDVM, pin anomaly.REDFamilyPin, from, to time.Time) traceFamilyLabels {
 	d.mu.Lock()
 	fl, ok := d.labels[pin.ID]
@@ -160,11 +171,7 @@ func (d *TraceRED) familyLabels(ctx context.Context, vm anomaly.REDVM, pin anoma
 	names, _, err := vm.MetricLabelNamesIn(ctx, pin.Names+"_count", from, to)
 	fl = traceFamilyLabels{at: time.Now()}
 	if err == nil {
-		lm := vm.MetricLabelMap()
-		fl.svc = pickLabel(names, append([]string{lm.Service}, svcLabelCandidates...))
-		fl.route = pickLabel(names, routeLabelCandidates)
-		fl.status = pickLabel(names, pin.StatusLabels)
-		fl.ok = fl.svc != "" && fl.route != "" && fl.status != ""
+		fl = pickTraceLabels(names, vm.MetricLabelMap().Service, pin)
 	}
 	d.mu.Lock()
 	d.labels[pin.ID] = fl

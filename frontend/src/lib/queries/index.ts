@@ -12,7 +12,7 @@ export {
   useCreateAnomalySilence, usePutAnomalyVerdict, useDeleteAnomalySilence,
   useBulkDeleteAnomalySilences,
 } from './anomalies';
-export { useMLEvents, useMLScorecard } from './ml'; // log ML dilim 0
+export { useMLEvents, useMLScorecard, useMLBaselineBackfill, backfillActive } from './ml'; // log ML dilim 0; v0.10.1815 geçmiş doldurma
 export {
   useServices, useServiceMap,
   useServiceInfra, useServiceNeighbors, useServiceRuntime,

@@ -27,6 +27,8 @@ const m = vi.hoisted(() => {
     puts: [] as Record<string, unknown>[],
   };
 });
+// v0.10.1815 — öğrenme döngüsü bölümleri React Query + onay kapısı ister; bu test başka bölümü sınar.
+vi.mock('./MLBaselineSections', () => ({ MLBaselineSections: () => null }));
 vi.mock('@/lib/api', () => {
   const stub: Record<string, (...a: unknown[]) => Promise<unknown>> = {
     getAnomalyPromotion: async () => ({ enabled: true, minPeakRatio: 15, criticalPeakRatio: 20, minSustainedSec: 1800, minCount: 1000 }),

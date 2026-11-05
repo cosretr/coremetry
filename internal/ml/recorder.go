@@ -69,6 +69,8 @@ type Recorder struct {
 	backoff   *vmBackoff
 	// bjob — v0.10.1814 günlük baseline işi (baseline_job.go); aynı lider kilidi.
 	bjob baselineJob
+	// bf — v0.10.1815 baseline geçmiş doldurma (baseline_backfill.go).
+	bf backfillJob
 }
 
 // New — placement etiketi /admin/stats için ("sre" | "worker").
@@ -77,6 +79,7 @@ func New(store *chstore.Store, logs logstore.Store, vm anomaly.REDVM, lock cache
 		_, lock = cache.NewNoop()
 	}
 	return &Recorder{store: store, logs: logs, vm: vm, placement: placement, detectors: detectors, runs: newTracker(), backoff: newVMBackoff(),
+		bf:     backfillJob{own: newVMBackoff()},
 		leader: cache.NewLeaderHolder(lock, lockKey, 3*time.Minute)}
 }
 
