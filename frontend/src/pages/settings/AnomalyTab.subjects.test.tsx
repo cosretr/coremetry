@@ -162,6 +162,25 @@ describe('Özneler bölümü (v0.10.1790 Davis F1.2)', () => {
     expect(m.puts[0].dwellBuckets).toBe(3);
   });
 
+  // v0.10.1804 (Davis dilim 3) — Kafka consumer lag tabanı yalnız kuyrukta;
+  // kuyruk kapalıyken kilitli, kayıtlı değer gidiş-dönüş, değişiklik gider.
+  it('kuyruk: en az consumer lag alanı yalnız kuyrukta, varsayılan 1000, değişiklik gider', async () => {
+    const el = await mount();
+    expect(el.querySelector(`input[aria-label="${EP}: en az consumer lag"]`)).toBeNull();
+    expect(el.querySelector(`input[aria-label="${DB}: en az consumer lag"]`)).toBeNull();
+    const lag = numInput(el, `${Q}: en az consumer lag`);
+    expect(lag.value).toBe('1000');
+    expect(lag.disabled).toBe(true);
+    await act(async () => { toggle(el, Q).click(); });
+    expect(numInput(el, `${Q}: en az consumer lag`).disabled).toBe(false);
+    await type(numInput(el, `${Q}: en az consumer lag`), '5000');
+    await act(async () => { sensitivitySave(el).click(); });
+    await settle();
+    const sj = m.puts[0].subjects as Record<string, { enabled: boolean; lagMinRecords?: number }>;
+    expect(sj.queue).toMatchObject({ enabled: true, lagMinRecords: 5000 });
+    expect(sj.db.lagMinRecords).toBeUndefined();
+  });
+
   // v0.10.1797 (Davis FAZ 3 dilim 1) — terfi kipi: yok → off; seçilen kip gövdeye gider.
   it('terfi kipi: alan yok → Kapalı; Gölge seçilince bölümle birlikte gider', async () => {
     const el = await mount();

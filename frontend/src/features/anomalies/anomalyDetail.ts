@@ -11,6 +11,7 @@
 // Bileşen parçaları (Fact, BehaviorDetailsBox, …) kardeş anomalyDetailParts.tsx'te.
 
 import type { AnomalyEvent, BehaviorChangeDetails } from '@/lib/types';
+import { SUBJECT_METRIC_TR, subjectMetricOf } from '@/lib/anomalySubjectMetric';
 import type { CosreChartSpec } from '@/components/cosreChartSpec';
 import { logsHref } from '@/lib/logsUrl';
 import { tracesPivotHref, operationTracesHref } from '@/lib/pivotHref';
@@ -55,12 +56,17 @@ const BASELINE_TR: Record<'seasonal' | 'consecutive' | 'none', string> = {
   none: 'taban yok (ilk görülme)',
 };
 
-/** "artış · mevsimsel taban (…) 120.5" — iki parça da yoksa "bilinmiyor". */
-export function anomalyDirectionBaselineLine(e: Pick<AnomalyEvent, 'direction' | 'baselineKind' | 'baselineValue'>): string {
+/** "artış · mevsimsel taban (…) 120.5" — iki parça da yoksa "bilinmiyor".
+ *  v0.10.1804 — özne metriği biliniyorsa taban değeri birimiyle ("1200 kayıt"). */
+export function anomalyDirectionBaselineLine(
+  e: Pick<AnomalyEvent, 'direction' | 'baselineKind' | 'baselineValue'> & Partial<Pick<AnomalyEvent, 'kind' | 'pattern'>>,
+): string {
   const dir = e.direction ? DIRECTION_TR[e.direction] : '';
   let base = e.baselineKind ? BASELINE_TR[e.baselineKind] : '';
   if (base && e.baselineKind !== 'none' && e.baselineValue != null && Number.isFinite(e.baselineValue)) {
     base += ` ${Math.round(e.baselineValue * 100) / 100}`;
+    const sm = e.kind && e.pattern != null ? subjectMetricOf({ kind: e.kind, pattern: e.pattern }) : null;
+    if (sm) base += ` ${SUBJECT_METRIC_TR[sm].unit}`;
   }
   if (!dir && !base) return 'bilinmiyor';
   return [dir || 'yön bilinmiyor', base || 'taban bilinmiyor'].join(' · ');

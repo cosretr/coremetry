@@ -15,6 +15,15 @@ import type { AnomalyEvent, AnomalySilence } from '@/lib/types';
 import type { ChartTimeRegion } from '@/lib/chart/overlays';
 import { anomalyRatioLabel } from '@/lib/anomalyBaseline';
 
+import { SUBJECT_METRIC_TR, subjectMetricOf } from '@/lib/anomalySubjectMetric';
+
+/** v0.10.1804 — Kafka consumer lag özne olayının bandı "consumer lag" (ham "özne"
+ *  yerine; operatörün aradığı ad). Diğer özne metrikleri bugünkü gibi "özne". */
+function regionKindLabel(e: Pick<AnomalyEvent, 'kind' | 'pattern'>): string {
+  if (subjectMetricOf(e) === 'consumer_lag') return SUBJECT_METRIC_TR.consumer_lag.label;
+  return ANOMALY_KIND_TR[e.kind] ?? e.kind;
+}
+
 export const ANOMALY_KIND_COLOR: Record<AnomalyEvent['kind'], string> = {
   trace_op: 'var(--orange)',
   trace_op_latency: 'var(--orange)',
@@ -78,7 +87,7 @@ export function anomalyRegions(events: AnomalyEvent[], silenced: Set<string>, fr
       endSec: e.lastSeen / 1e9, // v0.10.182 — tooltip «son/süre» GERÇEK bitişten (toSec şişirilmiş olabilir)
       color: muted ? 'var(--text3)' : ANOMALY_KIND_COLOR[e.kind] ?? 'var(--warn)',
       // ▮ öneki YOK: drawTimeRegions kendisi ekler (overlays.ts fitLabel('▮ ' + label)).
-      label: sil ? 'sessiz' : notAnomaly ? 'değil' : `${ANOMALY_KIND_TR[e.kind] ?? e.kind} ${anomalyRatioLabel(e)}`, // v0.10.1792 — tabansızda "taban yok"
+      label: sil ? 'sessiz' : notAnomaly ? 'değil' : `${regionKindLabel(e)} ${anomalyRatioLabel(e)}`, // v0.10.1792 — tabansızda "taban yok"
     };
   });
 }

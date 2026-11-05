@@ -9956,7 +9956,14 @@ export interface AnomalySubjectKindConfig {
   topN: number;
   /** Tik başına toplam seri tavanı; aşımda tür o tik atlanır. 1–50000, varsayılan 2000. */
   maxSeriesPerTick: number;
+  /** v0.10.1804 — YALNIZ queue: Kafka consumer lag olayının mutlak tabanı
+   *  (kayıt). Cari lag altındaysa olay yok. 1–1e9, varsayılan 1000. */
+  lagMinRecords?: number;
 }
+
+/** v0.10.1804 — özne olayının metriği (`pattern` = metrik ya da "metrik @ kimlik").
+ *  consumer_lag: queue öznesinin VM Kafka lag'i (kayıt). */
+export type SubjectMetric = 'error_rate' | 'p95_ms' | 'p99_ms' | 'request_rate' | 'consumer_lag';
 
 /** v0.10.1790 — chstore.AnomalySubjectsConfig. */
 export interface AnomalySubjectsConfig {

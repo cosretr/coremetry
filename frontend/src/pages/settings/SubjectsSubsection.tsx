@@ -15,6 +15,8 @@ const NOTE = 'mt-1 text-[length:var(--fs-xs)] leading-normal text-(--text3)';
 
 export const SUBJECT_DEFAULT: AnomalySubjectKindConfig = { enabled: false, topN: 20, maxSeriesPerTick: 2000 };
 export const SEASONAL_TZ_DEFAULT = 'Europe/Istanbul';
+/** v0.10.1804 — queue: Kafka consumer lag olayının mutlak tabanı (kayıt). */
+export const LAG_MIN_RECORDS_DEFAULT = 1000;
 
 type SubjectKindKey = 'endpoint' | 'db' | 'queue';
 
@@ -35,14 +37,14 @@ const KINDS: { k: SubjectKindKey; label: string; help: string }[] = [
   { k: 'db', label: 'Veritabanı instance',
     help: 'Mevcut veritabanı özetlerinden servis başına en yoğun instance’lar.' },
   { k: 'queue', label: 'Kuyruk',
-    help: 'Mevcut mesajlaşma özetlerinden servis başına en yoğun kuyruklar.' },
+    help: 'Mevcut mesajlaşma özetlerinden servis başına en yoğun kuyruklar; VictoriaMetrics varsa Kafka consumer lag’i en yüksek topic’ler de (lag artışı).' },
 ];
 
 export function withSubjectDefaults(v?: Partial<AnomalySubjectsConfig>): AnomalySubjectsConfig {
   return {
     endpoint: { ...SUBJECT_DEFAULT, ...v?.endpoint },
     db: { ...SUBJECT_DEFAULT, ...v?.db },
-    queue: { ...SUBJECT_DEFAULT, ...v?.queue },
+    queue: { ...SUBJECT_DEFAULT, ...v?.queue, lagMinRecords: v?.queue?.lagMinRecords || LAG_MIN_RECORDS_DEFAULT },
     promotionMode: normalizePromotionMode(v?.promotionMode),
     promotionMinSustainedSec: v?.promotionMinSustainedSec || 600,
     promotionMinRatio: v?.promotionMinRatio || 2,
@@ -85,6 +87,15 @@ export function SubjectsSubsection({ value, timezone, onChange, onTimezoneChange
                   label="Tik başına seri tavanı" min={1} max={50000} step={100}
                   aria-label={`${label}: tik başına seri tavanı`} disabled={!kv.enabled}
                   value={kv.maxSeriesPerTick} onChange={e => set(k, { maxSeriesPerTick: Number(e.target.value) })} />
+                {/* v0.10.1804 (Davis dilim 3) — Kafka lag'in mutlak tabanı; yalnız kuyrukta. */}
+                {k === 'queue' && (
+                  <Field type="number" className="w-auto" controlClassName="max-w-[140px]"
+                    label="En az lag (kayıt)" min={1} max={1000000000} step={100}
+                    aria-label={`${label}: en az consumer lag`} disabled={!kv.enabled}
+                    hint="Bunun altındaki consumer lag artışı olay sayılmaz."
+                    value={kv.lagMinRecords ?? LAG_MIN_RECORDS_DEFAULT}
+                    onChange={e => set(k, { lagMinRecords: Number(e.target.value) })} />
+                )}
               </div>
             </div>
           );
