@@ -1091,7 +1091,7 @@ func inboxBadgeQuery(env string) url.Values {
 	q.Set("limit", strconv.Itoa(inboxDefaultPageLimit))
 	q.Set("sort", "firstSeen")
 	q.Set("dir", "desc")
-	q.Set("kind", strings.Join(inboxKindsAll, ","))
+	q.Set("kind", strings.Join(inboxKindsDefault, ",")) // v0.10.1796 — sayfa varsayılanıyla aynı
 	q.Set("prio", "P1")
 	if env != "" {
 		q.Set("env", env)
@@ -1280,6 +1280,12 @@ func (s *Server) invalidateInboxCaches(r *http.Request) {
 // "Queue clear" over 2,144 items: the top 300 by priority were all Incidents,
 // and the page then kept only exceptions out of those 300.
 var inboxKindsAll = []string{"problem", "exception", "httperror", "anomaly", "incident"}
+
+// inboxKindsDefault — v0.10.1796 (operatör: "Problems'ta sürekli exception
+// görüyorum; gerçek problemler ve anomaliler görünsün"). Sayfanın parametresiz
+// açılışı (Inbox.tsx KIND_DEFAULT) ve rozet (inboxBadgeQuery) AYNI küme:
+// exception / httperror çipleri sayılarıyla kalır, tek tıkla açılır.
+var inboxKindsDefault = []string{"problem", "anomaly", "incident"}
 var inboxPriosAll = []string{"P1", "P2", "P3"}
 
 // v0.9.1342 — ÖZNE şeridi. `kind` (satırın kaynağı) ile KARIŞTIRILMAZ:

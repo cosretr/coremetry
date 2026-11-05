@@ -52,9 +52,11 @@ describe('Problems varsayılan görünümü', () => {
     expect(src).toContain('persistSort: false,');
   });
 
-  it('tür varsayılanı: hepsi (problem, exception, HTTP hatası, anomali, olay)', () => {
-    expect(arr('KIND_DEFAULT')).toEqual(['problem', 'exception', 'httperror', 'anomaly', 'incident']);
-    expect(arr('KIND_DEFAULT')).toEqual(arr('KIND_ALL'));
+  // v0.10.1796 — operatör: exception'lar Problems'ı boğuyor; varsayılan
+  // problem + anomaly + incident. Exception / HTTP hatası çipleri kalır.
+  it('tür varsayılanı: problem, anomali, olay (exception ve HTTP hatası çipte)', () => {
+    expect(arr('KIND_DEFAULT')).toEqual(['problem', 'anomaly', 'incident']);
+    expect(arr('KIND_ALL')).toEqual(['problem', 'exception', 'httperror', 'anomaly', 'incident']);
   });
 
   // Ekrandaki açıklama sabit "P1" yazıyordu; varsayılan değişince YALAN

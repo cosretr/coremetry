@@ -35,11 +35,14 @@ export function anomalyDetailHref(id: string): string {
 // ve localStorage'daki yapışkan ?env= (useUrlEnv; sunucu "son 1 saatte o
 // env'de koşan servis" kümesine daraltır). Link artık şeridin kapsamını AÇIK
 // yazar: tüm öncelikler + açık-boş `env=` ("tüm ortamlar", resolveEnv
-// yapışkan seçimi DİRİLTMEZ). status varsayılanı zaten open; kind varsayılanı
-// zaten hepsi. Gidiş-dönüş testi: inboxHref.serviceLink.test.ts.
+// yapışkan seçimi DİRİLTMEZ). status varsayılanı zaten open.
+// v0.10.1796 — Inbox tür varsayılanı artık problem+anomaly+incident (exception
+// kalabalığı); şerit exception'ları da sayar, link türleri de AÇIK yazar.
+// Gidiş-dönüş testi: inboxHref.serviceLink.test.ts.
 export const SERVICE_INBOX_PRIO = 'P1,P2,P3';
+export const SERVICE_INBOX_KIND = 'problem,exception,httperror,anomaly,incident';
 export function serviceInboxHref(service: string): string {
-  return `/inbox?service=${encodeURIComponent(service)}&prio=${SERVICE_INBOX_PRIO}&env=`;
+  return `/inbox?service=${encodeURIComponent(service)}&prio=${SERVICE_INBOX_PRIO}&kind=${SERVICE_INBOX_KIND}&env=`;
 }
 
 export function inboxItemHref(it: InboxItem): string | null {

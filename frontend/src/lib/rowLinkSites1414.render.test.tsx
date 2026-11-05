@@ -278,7 +278,7 @@ const SITES: Site[] = [
   {
     name: 'Inbox → exception satırı (tam sayfa)',
     el: () => <Inbox />,
-    start: '/inbox?prio=P1,P2,P3', rowText: 'SocketTimeout', primary: 2, text: 'SocketTimeout', blankCell: 4,
+    start: '/inbox?prio=P1,P2,P3&kind=problem,exception,httperror,anomaly,incident', rowText: 'SocketTimeout', primary: 2, text: 'SocketTimeout', blankCell: 4,
     href: () => '/problems?exc=fp1',
   },
 ];

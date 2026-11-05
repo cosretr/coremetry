@@ -101,7 +101,7 @@ let host: HTMLDivElement | null = null;
 let root: Root | null = null;
 const settle = () => act(async () => { await new Promise(r => setTimeout(r, 30)); });
 
-async function mount(url = '/inbox?prio=P1,P2,P3'): Promise<HTMLElement> {
+async function mount(url = '/inbox?prio=P1,P2,P3&kind=problem,exception,httperror,anomaly,incident'): Promise<HTMLElement> {
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
@@ -180,7 +180,7 @@ describe('Problems kuyruğu — satır tıkı nereye açılır', () => {
     act(() => { row(el, 'Checkout outage').click(); });
     await settle();
     expect(loc(el)).toBe('/incident?id=i1');
-    expect(back(el)).toBe('/inbox?prio=P1,P2,P3');
+    expect(back(el)).toBe('/inbox?prio=P1,P2,P3&kind=problem,exception,httperror,anomaly,incident');
     expect(anyDrawer(el)).toBeNull();
   });
 
@@ -191,7 +191,7 @@ describe('Problems kuyruğu — satır tıkı nereye açılır', () => {
     act(() => { a.click(); });
     await settle();
     expect(loc(el)).toBe('/incident?id=i1');
-    expect(back(el)).toBe('/inbox?prio=P1,P2,P3');
+    expect(back(el)).toBe('/inbox?prio=P1,P2,P3&kind=problem,exception,httperror,anomaly,incident');
   });
 
   it('incident satırı düz cümleyi gösterir, "Declared incident" gerekçesini değil', async () => {

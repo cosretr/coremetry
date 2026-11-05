@@ -118,7 +118,11 @@ const KIND_ALL: readonly InboxKind[] = ['problem', 'exception', 'httperror', 'an
 // sure a landing default can never hide something urgent.
 // v0.10.1014 — tüm türler (yukarıdaki PRIO_DEFAULT notu). Dizi BİLEREK açık
 // yazıldı (KIND_ALL'a atıf değil): inboxDefaults testi sabiti metinden okur.
-const KIND_DEFAULT: readonly InboxKind[] = ['problem', 'exception', 'httperror', 'anomaly', 'incident'];
+// v0.10.1796 — operatör: "Problems'ta sürekli exception görüyorum; gerçek
+// problemler ve anomaliler görünsün." Varsayılan tür = problem + anomaly +
+// incident; exception ve httperror çipleri sayılarıyla ekranda kalır, tek
+// tıkla açılır ve ?kind= ile linke biner (v0.9.417 görünürlük ruhu).
+const KIND_DEFAULT: readonly InboxKind[] = ['problem', 'anomaly', 'incident'];
 // v0.9.443 — 'httperror': error.type fallback'inin ürettiği çıplak
 // durum-kodu grupları ("404"). Varsayılan facet'te KAPALI (KIND_DEFAULT
 // değişmedi) — bankada beklenen istemci hataları triage'ı boğmasın;
@@ -891,8 +895,8 @@ export default function InboxPage() {
         <p style={{ color: 'var(--text2)', fontSize: 13, marginBottom: 14 }}>
           Everything needing a human — Problems (alert rules), open Exception
           groups, and active Anomaly detections. Default view:{' '}
-          <b>{PRIO_DEFAULT.join(' + ')}</b> only, all kinds, newest first seen
-          first. Click any row to open its detail page.
+          <b>{PRIO_DEFAULT.join(' + ')}</b> only, {KIND_DEFAULT.map(k => KIND_LABEL[k]).join(' + ')},
+          newest first seen first. Click any row to open its detail page.
         </p>
 
         {/* One grouped facet bar (v0.8.38) — status pivot + priority + kind

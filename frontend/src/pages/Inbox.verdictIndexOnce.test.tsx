@@ -95,7 +95,7 @@ async function mount(): Promise<HTMLElement> {
   await act(async () => {
     root!.render(
       <QueryClientProvider client={qc}>
-        <MemoryRouter initialEntries={['/inbox']}><ConfirmProvider><Inbox /></ConfirmProvider></MemoryRouter>
+        <MemoryRouter initialEntries={['/inbox?kind=problem,exception,httperror,anomaly,incident']}><ConfirmProvider><Inbox /></ConfirmProvider></MemoryRouter>
       </QueryClientProvider>,
     );
   });

@@ -75,7 +75,7 @@ let root: Root | null = null;
 let qc: QueryClient;
 const settle = () => act(async () => { await new Promise(r => setTimeout(r, 30)); });
 
-async function mount(url = '/inbox'): Promise<HTMLElement> {
+async function mount(url = '/inbox?kind=problem,exception,httperror,anomaly,incident'): Promise<HTMLElement> {
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
@@ -221,7 +221,7 @@ describe('Inbox varsayılan şerit — dış kaynak satırı (v0.10.1026)', () =
     m.items = [extProblem(), item('a')];
     // v0.10.1081 — dış kaynak satırı P3; varsayılan artık yalnız P1, şerit
     // davranışı tüm önceliklerle ölçülür.
-    const el = await mount('/inbox?prio=P1,P2,P3');
+    const el = await mount(`/inbox?${ALL_FACETS}`);
     expect(dataRows(el)).toBe(2);
 
     const ext = rowOf(el, 'OP_TRANSFER elapsed above band');

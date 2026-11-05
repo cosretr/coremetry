@@ -102,8 +102,10 @@ func inboxDefaultViewRows(t *testing.T, items []InboxItem, attached map[string][
 func TestInboxBadgeEqualsDefaultListRows(t *testing.T) {
 	items, attached := badgeMixedFixture()
 	rows, total := inboxDefaultViewRows(t, items, attached, inboxBadgeQuery(""))
-	if total != 2 {
-		t.Fatalf("rozet (total) = %d, want 2 (katlanmış incident + P1 exception)", total)
+	// v0.10.1796 — varsayılan tür problem+anomaly+incident: P1 exception
+	// varsayılan görünümde (ve rozette) YOK, Exceptions çipiyle gelir.
+	if total != 1 {
+		t.Fatalf("rozet (total) = %d, want 1 (katlanmış incident; exception çipte)", total)
 	}
 	if len(rows) != total {
 		t.Fatalf("liste satırı %d ≠ rozet %d — rozet ekrandaki satır sayısı olmalı", len(rows), total)
@@ -115,8 +117,15 @@ func TestInboxBadgeEqualsDefaultListRows(t *testing.T) {
 			t.Errorf("%s önceliği %s — varsayılan görünüm yalnız P1", r.ID, r.Priority)
 		}
 	}
-	if !got["incident:inc-1"] || !got["exception:fp-demo-1"] {
-		t.Errorf("beklenen satırlar incident:inc-1 + exception:fp-demo-1, gelen %v", got)
+	if !got["incident:inc-1"] || got["exception:fp-demo-1"] {
+		t.Errorf("beklenen satır yalnız incident:inc-1 (exception varsayılanda yok), gelen %v", got)
+	}
+	// Exceptions çipi açılınca P1 exception satırı yerinde.
+	withExc := inboxBadgeQuery("")
+	withExc.Set("kind", "problem,exception,httperror,anomaly,incident")
+	rowsExc, totalExc := inboxDefaultViewRows(t, items, attached, withExc)
+	if totalExc != 2 || len(rowsExc) != 2 {
+		t.Errorf("tüm türler görünümü = %d satır / %d toplam, want 2", len(rowsExc), totalExc)
 	}
 	for _, r := range rows {
 		if r.ID == "incident:inc-1" && (r.Incident == nil || r.Incident.ProblemCount != 2) {
@@ -131,7 +140,7 @@ func TestInboxBadgeSharesDefaultListKey(t *testing.T) {
 	s := &Server{}
 	page := url.Values{
 		"status": {"open"}, "limit": {"300"}, "sort": {"firstSeen"}, "dir": {"desc"},
-		"kind": {"problem,exception,httperror,anomaly,incident"}, "prio": {"P1"}, "subject": {"service"},
+		"kind": {"problem,anomaly,incident"}, "prio": {"P1"}, "subject": {"service"}, // v0.10.1796 KIND_DEFAULT
 	}
 	pageKey, _ := s.inboxView(page)
 	badgeKey, _ := s.inboxView(inboxBadgeQuery(""))
@@ -161,7 +170,7 @@ func TestInboxBadgeQueryMatchesPageDefaults(t *testing.T) {
 	for _, want := range []string{
 		"const PRIO_DEFAULT = ['P1'] as const;",
 		"const SORT_DEFAULT = { id: 'firstSeen', dir: 'desc' as const };",
-		"const KIND_DEFAULT: readonly InboxKind[] = ['problem', 'exception', 'httperror', 'anomaly', 'incident'];",
+		"const KIND_DEFAULT: readonly InboxKind[] = ['problem', 'anomaly', 'incident'];", // v0.10.1796
 		"limit: 300,",
 	} {
 		if !strings.Contains(src, want) {

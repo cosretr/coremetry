@@ -47,7 +47,15 @@ func TestInboxDefaultViewKeepsOracleP1(t *testing.T) {
 	if hidden != 0 {
 		t.Fatalf("oluşum tabanı Oracle satırı gizledi: %d", hidden)
 	}
-	rows, _ := inboxDefaultViewRows(t, items, nil, inboxBadgeQuery(""))
+	// v0.10.1796 — varsayılan tür kümesi problem+anomaly+incident oldu;
+	// Oracle grubu bir exception satırıdır, Exceptions çipi açıkken (P1 +
+	// ilk görülme sıralı) aynı pin geçerli.
+	q := inboxBadgeQuery("")
+	q.Set("kind", "problem,exception,httperror,anomaly,incident")
+	rows, _ := inboxDefaultViewRows(t, items, nil, q)
+	if def, _ := inboxDefaultViewRows(t, items, nil, inboxBadgeQuery("")); len(def) != 0 {
+		t.Errorf("parametresiz varsayılan görünümde exception satırı olmamalı: %+v", def)
+	}
 
 	byID := map[string]InboxItem{}
 	for _, r := range rows {
