@@ -127,3 +127,48 @@ func TestReprobeAnomalyPromotionCol(t *testing.T) {
 		t.Fatal("kolon indikten sonra yeniden probe bayrağı çevirmedi")
 	}
 }
+
+// v0.10.1799 (dilim 3) — gölge okumaları: rozet sayımı ve durum sayacı
+// kolon yokken HİÇ sorgu atmaz; sorgular sınırlı (max_execution_time) ve
+// bind sayısı argümanlarla aynı; Kind süzgeci LIMIT'ten önce SQL'de.
+func TestSubjectPromotionReads(t *testing.T) {
+	ev := AnomalyEvent{Kind: SubjectAnomalyKind, Service: "orders-api", Pattern: "p99_ms @ GET /cart",
+		Direction: AnomalyDirectionUp, SubjectKind: AnomalySubjectEndpoint, Promotion: AnomalyPromotionShadow, StartedAt: 1}
+	var qs []string
+	var app [][]any
+	cols := uint64(3)
+	st := &Store{conn: episodeFakeConn{queries: &qs, appended: &app, colCount: &cols}}
+	if n, err := st.CountSubjectPromotionGroup(context.Background(), ev, time.Minute); err != nil || n != 0 || len(qs) != 0 {
+		t.Fatalf("kolon yokken sorgu atıldı: n=%d err=%v qs=%v", n, err, qs)
+	}
+	if c, err := st.SubjectPromotionCounts(context.Background(), time.Hour); err != nil || c.Measured || len(qs) != 0 {
+		t.Fatalf("kolon yokken sayaç sorgusu: %+v %v %v", c, err, qs)
+	}
+	st.hasAnomalyPromotionCol.Store(true)
+	noTrace := ev
+	noTrace.Promotion = ""
+	if n, _ := st.CountSubjectPromotionGroup(context.Background(), noTrace, time.Minute); n != 0 || len(qs) != 0 {
+		t.Fatal("izsiz olay için sorgu atıldı")
+	}
+	if n, err := st.CountSubjectPromotionGroup(context.Background(), ev, time.Minute); err != nil || n != 3 {
+		t.Fatalf("rozet sayımı = %d %v, want 3", n, err)
+	}
+	for _, q := range []string{subjectPromotionGroupSQL(), subjectPromotionCountsSQL()} {
+		if !strings.Contains(q, "max_execution_time") || !strings.Contains(q, "FINAL") {
+			t.Errorf("sınırsız sorgu: %s", q)
+		}
+	}
+	if got := strings.Count(subjectPromotionGroupSQL(), "?"); got != 9 {
+		t.Errorf("rozet sorgusu %d bind, want 9", got)
+	}
+	if got := strings.Count(subjectPromotionCountsSQL(), "?"); got != 2 {
+		t.Errorf("sayaç sorgusu %d bind, want 2", got)
+	}
+	qs = nil
+	if _, err := st.ListAnomalyEvents(context.Background(), ListAnomalyEventsFilter{Kind: SubjectAnomalyKind, ActiveOnly: true}); err != nil {
+		t.Fatal(err)
+	}
+	if len(qs) != 1 || !strings.Contains(qs[0], "AND kind = ?") || strings.Index(qs[0], "AND kind = ?") > strings.Index(qs[0], "LIMIT ?") {
+		t.Errorf("Kind süzgeci LIMIT'ten önce SQL'de değil: %v", qs)
+	}
+}

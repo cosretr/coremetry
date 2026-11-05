@@ -27,7 +27,7 @@ import { Sect, SignalLink, DeployBox, DetailSummary } from './detailSections';
 import { anomalySummary, anomalyWhenLine } from './detailSummary';
 import {
   ANOMALY_CHART_EMPTY, ANOMALY_KIND_PLAIN, anomalyChart, anomalyChartWindow, anomalySignalHrefs,
-  anomalyDirectionBaselineLine, behaviorDetailsOf, findAnomalyEventInCache, isLogAnomalyKind, sampleTraceHref,
+  anomalyDirectionBaselineLine, anomalyPromotionBadge, behaviorDetailsOf, findAnomalyEventInCache, isLogAnomalyKind, sampleTraceHref,
 } from './anomalyDetail';
 import { AnomalyLogVolume, AnomalySample, BehaviorDetailsBox, SpikeFacts } from './anomalyDetailParts';
 import { hasLogPatternSeries, logPatternSeriesArgs, patternLogsPivot } from './logPatternSeries';
@@ -186,6 +186,7 @@ export function AnomalyEventDetail({ event, isAdmin, onBack }: {
   // türer: chstore GetAnomalyEvent). v0.10.1049 — yinelenen olayda satırın
   // sonunda tek ek: "yinelenen · bu N. kez · ilk kez <tarih>" (yeni bölüm yok).
   const when = anomalyWhenLine(event);
+  const promotionBadge = anomalyPromotionBadge(event); // v0.10.1799
 
   return (
     <PageShell>
@@ -215,6 +216,12 @@ export function AnomalyEventDetail({ event, isAdmin, onBack }: {
       <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--text3)' }} data-testid="anomaly-direction-baseline">
         Yön · taban: {anomalyDirectionBaselineLine(event)}
       </p>
+      {/* v0.10.1799 (Davis FAZ 3) — terfi izi rozeti; izsiz olayda hiçbir şey. */}
+      {promotionBadge && (
+        <p style={{ margin: '0 0 8px' }} data-testid="anomaly-promotion">
+          <Badge tone={event.promotion === 'live' ? 'warning' : 'info'}>{promotionBadge}</Badge>
+        </p>
+      )}
       <ProblemStandardHeader stdRef={`anomaly:${event.id}`}
         fallback={<DetailSummary sentence={sentence} when={when}
           detail={isLog && event.pattern ? event.pattern : undefined} />} />

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 )
 
@@ -64,6 +65,11 @@ type AnomalyEvent struct {
 	// işareti) o yazılır; YENİ bölüm sıfırdan (MergeAnomalyCarry). Kolon (probe
 	// hasAnomalyPromotionCol) yokken '' okunur ve yazılmaz.
 	Promotion string `json:"promotion,omitempty"`
+	// PromotionGroupSize — v0.10.1799, SAKLANMAZ: terfi izi taşıyan endpoint
+	// olayının detay okumasında (GET /api/anomalies/event) aynı adaydaki rota
+	// sayısı (CountSubjectPromotionGroup) — "Gölge: Problem açılırdı (3
+	// rota)". 0 = sayılmadı / tek özne.
+	PromotionGroupSize int `json:"promotionGroupSize,omitempty"`
 	// PredatesDeploy — v0.10.1049, SAKLANMAZ: yalnız deploy raporu / rollout
 	// çekmecesinin "deploy sonrası anomaliler" satırında, o deploy'a göre
 	// AnomalyPredatesDeploy true ise (düzenli yinelenen olay) dolar. Satır
@@ -881,6 +887,10 @@ type ListAnomalyEventsFilter struct {
 	// CountActiveAnomalyEvents aynı yüklemi (anomalyExcludeIDsSQL) kullanır
 	// ki rozet ile liste aynı kümeyi saysın.
 	ExcludeIDs []string
+	// Kind (v0.10.1799, Davis FAZ 3) — yalnız bu olay türü, SQL'de (LIMIT
+	// türe düşsün: özne terfi süpürmesi subject_red satırlarını diğer
+	// türlerin bütçesinden ayrı okur). Boş = kısıt yok.
+	Kind string
 }
 
 // anomalyExcludeIDsSQL — ExcludeIDs'in TEK SQL karşılığı (v0.10.1042). Liste
@@ -989,6 +999,10 @@ func (s *Store) ListAnomalyEvents(ctx context.Context, f ListAnomalyEventsFilter
 	}
 	// v0.10.1042 — susturulmuş olaylar LIMIT'ten ÖNCE elenir (ExcludeIDs).
 	exclSQL, exclArgs := anomalyExcludeIDsSQL(f.ExcludeIDs)
+	kindSQL := ""
+	if f.Kind != "" {
+		kindSQL = " AND kind = ?"
+	}
 	args := []any{int64(f.ActiveAge.Seconds()), since}
 	if f.ActiveOnly {
 		args = append(args, int64(f.ActiveAge.Seconds()))
@@ -1001,6 +1015,9 @@ func (s *Store) ListAnomalyEvents(ctx context.Context, f ListAnomalyEventsFilter
 		args = append(args, f.ToNs)
 	}
 	args = append(args, exclArgs...)
+	if f.Kind != "" {
+		args = append(args, f.Kind)
+	}
 	args = append(args, f.Limit)
 	ep := s.hasAnomalyEpisodeCols.Load()  // v0.10.1049 — liste ve hedefler aynı anlık görüntüden
 	vr := s.hasAnomalyVerifiedCol.Load()  // v0.10.1080 — verified_ratio, aynı kural
@@ -1010,7 +1027,7 @@ func (s *Store) ListAnomalyEvents(ctx context.Context, f ListAnomalyEventsFilter
 		SELECT `+anomalyEventSelectExpr(ep, vr, sj, pr)+`,
 		       if(last_seen >= now64() - INTERVAL ? SECOND, 'active', 'cleared') AS status
 		FROM anomaly_events FINAL
-		WHERE toUnixTimestamp64Nano(last_seen) >= ?`+activeSQL+svcSQL+winSQL+exclSQL+`
+		WHERE toUnixTimestamp64Nano(last_seen) >= ?`+activeSQL+svcSQL+winSQL+exclSQL+kindSQL+`
 		-- v0.9.326 — this used to order by the status STRING descending,
 		-- which puts CLEARED FIRST.
 		-- ClickHouse compares these lexically and 'active' < 'cleared', so
@@ -1038,4 +1055,81 @@ func (s *Store) ListAnomalyEvents(ctx context.Context, f ListAnomalyEventsFilter
 		out = append(out, e)
 	}
 	return out, rows.Err()
+}
+
+// subjectPromotionGroupSQL — CountSubjectPromotionGroup'un SAF sorgusu: aynı
+// servis + metrik + yön + terfi izi taşıyan, başlangıcı ±pencere içindeki
+// endpoint özne olayları. Binds: kind, service, promotion, direction, metrik
+// öneki ("metrik @ %"), started_at (ns), pencere (ns), started_at, pencere.
+func subjectPromotionGroupSQL() string {
+	return `SELECT count() FROM anomaly_events FINAL
+		WHERE kind = ? AND service = ? AND promotion = ? AND direction = ?
+		  AND subject_kind = 'endpoint' AND pattern LIKE ?
+		  AND toUnixTimestamp64Nano(started_at) >= ? - ?
+		  AND toUnixTimestamp64Nano(started_at) <= ? + ?
+		SETTINGS max_execution_time = 3`
+}
+
+// CountSubjectPromotionGroup — v0.10.1799 (FAZ 3 dilim 3): terfi izi taşıyan
+// endpoint olayının adayındaki rota sayısı (detay rozeti "(3 rota)").
+// Evaluator gruplaması (servis, metrik, yön) + açılış penceresi ±window;
+// burada da aynı anahtar ve olayın kendi başlangıcına ±window — açılıştaki
+// çapa (kapıyı ilk geçen rota) yeniden kurulamadığı için yaklaşık, olayın
+// kendisi her zaman dahil. Kolon yok / iz yok / endpoint değil → 0, okuma yok.
+func (s *Store) CountSubjectPromotionGroup(ctx context.Context, ev AnomalyEvent, window time.Duration) (int, error) {
+	if ev.Promotion == "" || ev.SubjectKind != AnomalySubjectEndpoint || !s.hasAnomalyPromotionCol.Load() {
+		return 0, nil
+	}
+	metric := ev.Pattern
+	if i := strings.Index(metric, " @ "); i >= 0 {
+		metric = metric[:i]
+	}
+	var n uint64
+	err := s.conn.QueryRow(ctx, subjectPromotionGroupSQL(),
+		ev.Kind, ev.Service, ev.Promotion, ev.Direction, likeEscape(metric)+" @ %",
+		ev.StartedAt, int64(window), ev.StartedAt, int64(window)).Scan(&n)
+	if err != nil {
+		return 0, err
+	}
+	return int(n), nil
+}
+
+// SubjectPromotionCounts — v0.10.1799: /api/settings/anomaly-red-source/status
+// `subjects.promotion` bloğu. Son `since` içinde iz taşıyan aday sayısı
+// (endpoint: servis + metrik + yön başına bir aday; db/queue: olay başına
+// bir aday) ve son izin last_seen'i (unix sn).
+type SubjectPromotionCounts struct {
+	ShadowCandidates uint64 `json:"shadowCandidates"`
+	LiveOpened       uint64 `json:"liveOpened"`
+	LastUnix         int64  `json:"lastUnix"`
+	// Measured — false: kolon bu süreçte görülmedi (sayılar 0 "yok" değil "bilinmiyor").
+	Measured bool `json:"measured"`
+}
+
+// subjectPromotionCountsSQL — SAF. Binds: kind, since (ns).
+func subjectPromotionCountsSQL() string {
+	return `SELECT
+		  uniqExactIf(tuple(service, splitByString(' @ ', pattern)[1], direction, if(subject_kind = 'endpoint', '', id)), promotion = 'shadow'),
+		  uniqExactIf(tuple(service, splitByString(' @ ', pattern)[1], direction, if(subject_kind = 'endpoint', '', id)), promotion = 'live'),
+		  toUnixTimestamp(max(last_seen))
+		FROM anomaly_events FINAL
+		WHERE kind = ? AND promotion != '' AND toUnixTimestamp64Nano(last_seen) >= ?
+		SETTINGS max_execution_time = 5`
+}
+
+// SubjectPromotionCounts — bkz. tip. Kolon yoksa okuma yok, Measured=false.
+func (s *Store) SubjectPromotionCounts(ctx context.Context, since time.Duration) (SubjectPromotionCounts, error) {
+	var out SubjectPromotionCounts
+	if !s.hasAnomalyPromotionCol.Load() {
+		return out, nil
+	}
+	var last uint32
+	err := s.conn.QueryRow(ctx, subjectPromotionCountsSQL(), SubjectAnomalyKind, time.Now().Add(-since).UnixNano()).
+		Scan(&out.ShadowCandidates, &out.LiveOpened, &last)
+	if err != nil {
+		return SubjectPromotionCounts{}, err
+	}
+	out.LastUnix = int64(last)
+	out.Measured = true
+	return out, nil
 }

@@ -459,3 +459,34 @@ describe('AnomalyEventDetail — yön · taban satırı', () => {
     expect(el.textContent).not.toContain('×0.0');
   });
 });
+
+// v0.10.1799 — Davis FAZ 3 dilim 3: gölge rozeti "Yön · taban" satırının altında.
+describe('AnomalyEventDetail — terfi izi rozeti', () => {
+  const badge = (el: HTMLElement) => el.querySelector('[data-testid="anomaly-promotion"]')?.textContent ?? null;
+
+  it('izsiz olay → rozet yok', async () => {
+    const el = await mount('a1');
+    expect(badge(el)).toBeNull();
+  });
+
+  it('gölge izli endpoint olayı → "Gölge: Problem açılırdı (3 rota)"', async () => {
+    m.events.a1 = ev({ promotion: 'shadow', promotionGroupSize: 3, subjectKind: 'endpoint', direction: 'up', baselineKind: 'seasonal' });
+    const el = await mount('a1');
+    expect(badge(el)).toBe('Gölge: Problem açılırdı (3 rota)');
+    const dir = el.querySelector('[data-testid="anomaly-direction-baseline"]')!;
+    const b = el.querySelector('[data-testid="anomaly-promotion"]')!;
+    expect(dir.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('db öznesi → sayı yazılmaz; canlı iz → "Problem açıldı"', async () => {
+    m.events.a1 = ev({ promotion: 'shadow', promotionGroupSize: 4, subjectKind: 'db' });
+    let el = await mount('a1');
+    expect(badge(el)).toBe('Gölge: Problem açılırdı');
+    act(() => { root?.unmount(); });
+    host?.remove();
+    m.events.a1 = ev({ promotion: 'live', promotionGroupSize: 2, subjectKind: 'endpoint' });
+    el = await mount('a1');
+    expect(badge(el)).toBe('Problem açıldı (2 rota)');
+  });
+});
+

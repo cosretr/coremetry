@@ -66,6 +66,19 @@ export function anomalyDirectionBaselineLine(e: Pick<AnomalyEvent, 'direction' |
   return [dir || 'yön bilinmiyor', base || 'taban bilinmiyor'].join(' · ');
 }
 
+// ── Terfi izi (v0.10.1799, Davis FAZ 3) ─────────────────────────────────
+// Özne olayının terfi kapısı izi: 'shadow' = gölge kipinde kapıyı geçti
+// (Problem açılmadı), 'live' = Problem açtı. Endpoint adayında rota sayısı
+// okuma anında (promotionGroupSize); db / queue tek özne, sayı yazılmaz.
+
+/** "Gölge: Problem açılırdı (3 rota)" | "Problem açıldı (3 rota)" | null. */
+export function anomalyPromotionBadge(e: Pick<AnomalyEvent, 'promotion' | 'promotionGroupSize' | 'subjectKind'>): string | null {
+  if (e.promotion !== 'shadow' && e.promotion !== 'live') return null;
+  const n = e.subjectKind === 'endpoint' && e.promotionGroupSize && e.promotionGroupSize > 0
+    ? ` (${e.promotionGroupSize} rota)` : '';
+  return e.promotion === 'shadow' ? `Gölge: Problem açılırdı${n}` : `Problem açıldı${n}`;
+}
+
 /** Log biçimli türler: grafik servisin log hacmidir (tek sınırlı /api/logs/timeseries). */
 export function isLogAnomalyKind(kind: string): boolean {
   return kind === 'log_pattern' || kind === 'log_template_new' || kind === 'elastic_ml';

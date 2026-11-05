@@ -48,6 +48,11 @@ type EvalCase struct {
 	Phase05Opened *bool `json:"phase05Opened,omitempty"`
 	// Series — sentetik / dışa aktarılmış seri; doluysa okuma yapılmaz.
 	Series *EvalSeries `json:"series,omitempty"`
+	// ShadowCandidate — v0.10.1799 (Davis FAZ 3 dilim 3): vakanın olayı özne
+	// terfi kapısını gölgede geçti mi (anomaly_events.promotion 'shadow' /
+	// 'live'). nil = ölçülmedi (özne değil ya da iz okunmadı). Replay'den
+	// bağımsız bir kolon: gölgenin "Problem açılırdı" kararının precision'ı.
+	ShadowCandidate *bool `json:"shadowCandidate,omitempty"`
 }
 
 // EvalSeries — karar çekirdeğinin girdisi (fetchAllBuckets / fetchAllSeasonal ikizi).
@@ -176,6 +181,9 @@ type EvalRow struct {
 	P05FPRate, P05Recall float64
 	EndpointCaught       int // gerçek + endpoint öznesi + yakalandı
 	EndpointReal         int
+	// Gölge terfi kolonu (v0.10.1799) — yalnız ShadowCandidate dolu vakalar.
+	ShadowCases, ShadowTP, ShadowFP, ShadowFN int
+	ShadowPrecision, ShadowRecall             float64
 }
 
 // EvalTable — aileler (ada göre sıralı) + toplam.
@@ -202,6 +210,12 @@ func ScoreEval(cases []EvalCase, outs []EvalOutcome) EvalTable {
 		}
 		for _, row := range []*EvalRow{r, total} {
 			row.Cases++
+			// Gölge kolonu replay'den bağımsız: olay satırının izi.
+			if c.ShadowCandidate != nil {
+				row.ShadowCases++
+				var tn int
+				countConfusion(&row.ShadowTP, &row.ShadowFP, &row.ShadowFN, &tn, c.Real, *c.ShadowCandidate)
+			}
 			o, ok := byID[c.ID]
 			if !ok || o.Err != "" {
 				row.Unmeasured++
@@ -246,6 +260,8 @@ func finishEvalRow(r EvalRow) EvalRow {
 	r.Recall = ratioOrNaN(r.TP, r.TP+r.FN)
 	r.P05FPRate = ratioOrNaN(r.P05FP, r.P05FP+r.P05TN)
 	r.P05Recall = ratioOrNaN(r.P05TP, r.P05TP+r.P05FN)
+	r.ShadowPrecision = ratioOrNaN(r.ShadowTP, r.ShadowTP+r.ShadowFP)
+	r.ShadowRecall = ratioOrNaN(r.ShadowTP, r.ShadowTP+r.ShadowFN)
 	return r
 }
 
@@ -305,6 +321,15 @@ func RenderEvalMarkdown(t EvalTable) string {
 		fmt.Fprintf(&b, "| %s | %d | %d | %d | %d | %d | %d | %s | %s | %s | %s | %d/%d |\n",
 			r.Family, r.Cases, r.Unmeasured, r.TP, r.FP, r.FN, r.TN,
 			fmtRate(r.FPRate), fmtRate(r.Recall), fmtRate(r.P05FPRate), fmtRate(r.P05Recall), r.EndpointCaught, r.EndpointReal)
+	}
+	// v0.10.1799 — gölge terfi precision satırı (karar 6: canlıya geçiş kanıtı).
+	tot := t.Total
+	if tot.ShadowCases == 0 {
+		b.WriteString("\nGölge terfi: " + EvalVerdictUnmeasured + " (gölge izi taşıyan vaka yok)\n")
+	} else {
+		fmt.Fprintf(&b, "\nGölge terfi: %d vaka, %d aday (TP %d, FP %d), kaçan gerçek %d — precision %s, recall %s\n",
+			tot.ShadowCases, tot.ShadowTP+tot.ShadowFP, tot.ShadowTP, tot.ShadowFP, tot.ShadowFN,
+			fmtRate(tot.ShadowPrecision), fmtRate(tot.ShadowRecall))
 	}
 	v, why := EvalGate(t)
 	b.WriteString("\nKapı: **" + v + "**")

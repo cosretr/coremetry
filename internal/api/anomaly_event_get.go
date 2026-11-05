@@ -64,6 +64,11 @@ func enrichAnomalyEvents(ctx context.Context, st anomalyEventEnricher, rows []ch
 // tek satırlık dilim liste ucunun zincirinden geçer (yukarıda). Önbelleksiz:
 // kimlikle PK okuması + dört küçük zenginleştirme okuması, sayfa açılışı
 // başına bir kez (istemci staleTime 30 s, yoklama yok).
+// subjectPromotionBadgeWindow — rozet sayımının penceresi; evaluator
+// gruplamasının açılış penceresiyle aynı değer (anomaly_subject_group.go
+// subjectGroupWindow, 15 dk).
+const subjectPromotionBadgeWindow = 15 * time.Minute
+
 func (s *Server) getAnomalyEvent(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	ev, err := s.store.GetAnomalyEvent(ctx, r.URL.Query().Get("id"), 0)
@@ -74,6 +79,12 @@ func (s *Server) getAnomalyEvent(w http.ResponseWriter, r *http.Request) {
 	if ev == nil {
 		http.Error(w, "anomaly not found", http.StatusNotFound)
 		return
+	}
+	// v0.10.1799 (Davis FAZ 3) — terfi izli endpoint olayı: adaydaki rota
+	// sayısı ("Gölge: Problem açılırdı (3 rota)"). Yumuşak hata: sayı yoksa
+	// rozet sayısız çizilir.
+	if n, cerr := s.store.CountSubjectPromotionGroup(ctx, *ev, subjectPromotionBadgeWindow); cerr == nil {
+		ev.PromotionGroupSize = n
 	}
 	rows := enrichAnomalyEvents(ctx, s.store, []chstore.AnomalyEvent{*ev})
 	if len(rows) == 0 {

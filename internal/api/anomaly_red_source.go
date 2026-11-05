@@ -22,6 +22,7 @@ package api
 import (
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/cilcenk/coremetry/internal/anomaly"
 	"github.com/cilcenk/coremetry/internal/auth"
@@ -41,10 +42,20 @@ type redSourceStatusResponse struct {
 	Alert anomaly.AlertVMStats `json:"alert"`
 	// Subjects — v0.10.1791 (Davis F1.3): özne türlerinin son tiki + atlanma
 	// sayaçları (seri tavanı / VM bütçesi).
-	Subjects anomaly.SubjectStats `json:"subjects"`
+	Subjects subjectsStatus `json:"subjects"`
 }
 
-func (s *Server) getAnomalyREDSourceStatus(w http.ResponseWriter, _ *http.Request) {
+// subjectsStatus — v0.10.1799 (Davis FAZ 3): özne tiki + terfi sayacı
+// (`subjects.promotion`). Sayaç CH'den (son 24 sa iz taşıyan aday) — süreç-
+// içi değil: evaluator lideri ile isteği karşılayan pod farklı olabilir.
+type subjectsStatus struct {
+	anomaly.SubjectStats
+	Promotion chstore.SubjectPromotionCounts `json:"promotion"`
+	// PromotionError — sayaç okunamadıysa (sayılar "bilinmiyor").
+	PromotionError string `json:"promotionError,omitempty"`
+}
+
+func (s *Server) getAnomalyREDSourceStatus(w http.ResponseWriter, r *http.Request) {
 	st := anomaly.REDSourceObservability()
 	if st.Families == nil {
 		st.Families = []anomaly.REDSourceFamilyStats{}
@@ -53,7 +64,15 @@ func (s *Server) getAnomalyREDSourceStatus(w http.ResponseWriter, _ *http.Reques
 	if al.Families == nil {
 		al.Families = []anomaly.AlertVMFamilyStats{}
 	}
-	writeJSON(w, redSourceStatusResponse{REDSourceStats: st, Alert: al, Subjects: anomaly.SubjectObservability()})
+	sj := subjectsStatus{SubjectStats: anomaly.SubjectObservability()}
+	if s.store != nil {
+		pc, err := s.store.SubjectPromotionCounts(r.Context(), 24*time.Hour)
+		if err != nil {
+			sj.PromotionError = err.Error()
+		}
+		sj.Promotion = pc
+	}
+	writeJSON(w, redSourceStatusResponse{REDSourceStats: st, Alert: al, Subjects: sj})
 }
 
 // anomalyREDSourceAuditDetail — SAF: kaynak ya da ortam kapsamı değiştiyse

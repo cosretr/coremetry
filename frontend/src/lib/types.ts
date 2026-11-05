@@ -6751,6 +6751,9 @@ export interface AnomalyEvent {
   // v0.10.1797 — Davis FAZ 3 terfi izi: 'shadow' = gölge kipinde kapıyı
   // geçti (Problem açılmadı), 'live' = Problem açtı. Yok = değerlendirilmedi.
   promotion?: 'shadow' | 'live';
+  // v0.10.1799 — SAKLANMAZ: terfi izli endpoint olayının adayındaki rota
+  // sayısı (yalnız GET /api/anomalies/event doldurur).
+  promotionGroupSize?: number;
   // v0.10.1049 — yalnız deploy raporu / rollout çekmecesinin "deploy sonrası
   // anomaliler" satırında: anomali o deploy'dan önce de DÜZENLİ görülüyordu
   // (chstore.AnomalyPredatesDeploy). Satır listede kalır, "yinelenen" işaretli.
@@ -11642,6 +11645,17 @@ export interface AnomalyREDSourceStats {
   sources?: Record<string, Record<string, number>>;
   /** v0.10.1489 — alarm kuralı okuyucusunun son evaluator tiki (Go: anomaly.AlertVMStats). */
   alert?: AlertVMSourceStats;
+  /** v0.10.1799 — özne bloğunun terfi sayacı (Go: api.subjectsStatus; diğer alanlar okunmuyor). */
+  subjects?: { promotion?: SubjectPromotionCounts; promotionError?: string };
+}
+
+/** v0.10.1799 — chstore.SubjectPromotionCounts: son 24 sa iz taşıyan aday sayısı. */
+export interface SubjectPromotionCounts {
+  shadowCandidates: number;
+  liveOpened: number;
+  lastUnix: number;
+  /** false: kolon görülmedi — sayılar "bilinmiyor". */
+  measured: boolean;
 }
 export interface AlertVMSourceStats {
   mode: string;

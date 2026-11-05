@@ -1480,6 +1480,8 @@ func (e *Evaluator) promoteStrongAnomalies(ctx context.Context) {
 			}
 		}
 	}
+	// v0.10.1799 (Davis FAZ 3) — özne olayları ayrı süpürme (kip ayardan).
+	e.promoteSubjectAnomalies(ctx, cfg, muted, now)
 	e.resolveClearedAnomalyPromotions(ctx, muted)
 }
 

@@ -122,3 +122,33 @@ func TestEvalGateVerdicts(t *testing.T) {
 		}
 	}
 }
+
+// v0.10.1799 (Davis FAZ 3 dilim 3) — gölge terfi kolonu: yalnız iz taşıyan
+// vakalardan, replay'den bağımsız; precision = TP/(TP+FP), recall kaçan
+// gerçek vakayı sayar; hiç yoksa satır ÖLÇÜLMEDİ der (sayı uydurulmaz).
+func TestScoreEvalShadowColumn(t *testing.T) {
+	yes, no := true, false
+	cases := []EvalCase{
+		{ID: "1", Family: "subject", Real: true, ShadowCandidate: &yes},
+		{ID: "2", Family: "subject", Real: true, ShadowCandidate: &yes},
+		{ID: "3", Family: "subject", Real: false, ShadowCandidate: &yes},
+		{ID: "4", Family: "subject", Real: true, ShadowCandidate: &no},
+		{ID: "5", Family: "subject", Real: false, ShadowCandidate: &no},
+		{ID: "6", Family: "metric", Real: true}, // iz yok → kolona girmez
+	}
+	tab := ScoreEval(cases, nil) // replay sonucu yok: gölge kolonu yine sayılır
+	tot := tab.Total
+	if tot.ShadowCases != 5 || tot.ShadowTP != 2 || tot.ShadowFP != 1 || tot.ShadowFN != 1 {
+		t.Fatalf("gölge sayımı: %+v", tot)
+	}
+	if math.Abs(tot.ShadowPrecision-2.0/3) > 1e-9 || math.Abs(tot.ShadowRecall-2.0/3) > 1e-9 {
+		t.Errorf("precision/recall = %v / %v", tot.ShadowPrecision, tot.ShadowRecall)
+	}
+	md := RenderEvalMarkdown(tab)
+	if !strings.Contains(md, "Gölge terfi: 5 vaka, 3 aday (TP 2, FP 1), kaçan gerçek 1 — precision 0.667, recall 0.667") {
+		t.Errorf("gölge satırı yok:\n%s", md)
+	}
+	if md := RenderEvalMarkdown(ScoreEval(cases[5:], nil)); !strings.Contains(md, "Gölge terfi: ÖLÇÜLMEDİ") {
+		t.Errorf("izsiz sette ÖLÇÜLMEDİ yazılmadı:\n%s", md)
+	}
+}
