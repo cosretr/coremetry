@@ -471,6 +471,12 @@ Boyut: kalem başına 1-2 sürüm, S.
 - Boyut: M-L (3-5 sürüm). Çıkış: eval seti üzerinde FP ≤ FAZ 0.5 sonucu, recall ≥ mevcut; endpoint
   düzeyi en az bir onaylı vaka yakalanır.
 
+**FAZ 1 durum (2026-11-05):** F1.1–F1.5 gemide v0.10.1789–1793 (şema, ayar, özne tabanı + mevsimsel dilim, yönlü olay, eval aracı). Özneler varsayılan KAPALI.
+
+| Kapı (F1.5) | Sonuç | Kanıt |
+|---|---|---|
+| FP ≤ FAZ 0.5 · recall ≥ FAZ 0.5 · endpoint ≥ 1 onaylı vaka | **ÖLÇÜLMEDİ (eval seti bekleniyor)** | `make eval-anomaly` yalnız 8 satırlık SENTETİK fikstürle koştu (`internal/anomaly/testdata/eval/anomaly_cases.sample.jsonl`); gerçek set (karar 11, aile başına ≥ 50) + Sorgu A sonucu operatörde. Gerçek set: `COREMETRY_ANOMALY_EVAL=… COREMETRY_ANOMALY_EVAL_BASE_URL=… COREMETRY_ANOMALY_EVAL_TOKEN=… make eval-anomaly` (serisiz vakalar canlı `anomaly-red-source/explain` ile; endpoint/db/queue vakaları için canlı replay ucu yok — seri taşımalı). |
+
 ### FAZ 2 — topoloji grafı (entity / entity_edge, yol API)
 
 - Yeniden kullanım: `topology_edges_5m` + `WriteTopologyBucket` (kenar üretimi), 0011 `entities` /

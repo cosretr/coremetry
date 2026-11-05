@@ -1,4 +1,4 @@
-.PHONY: build build-ui build-go build-demo test test-race lint run dev-ui clean docker-up docker-up-demo docker-down docker-distributed-up docker-distributed-down minikube-up minikube-down audit evalset evalset-diff
+.PHONY: build build-ui build-go build-demo test test-race lint run dev-ui clean docker-up docker-up-demo docker-down docker-distributed-up docker-distributed-down minikube-up minikube-down audit evalset evalset-diff eval-anomaly
 
 # VERSION is auto-derived from `git describe` so local builds
 # show something like "v0.4.48-3-gabcdef" instead of literal
@@ -67,6 +67,14 @@ evalset:
 	@COREMETRY_EVAL_OUT=$(EVAL_OUT) go test -tags evalset ./internal/api/ -run TestEvalsetReplay -v -count=1
 evalset-diff:
 	@go run ./cmd/evalsetdiff -latest $(EVAL_OUT)
+
+# v0.10.1793 — Davis F1.5 anomali eval kapısı (CI DIŞI). Etiketli vakaları
+# replay eder, aile başına FP / recall + FAZ 0.5 kıyas tablosu basar.
+#   COREMETRY_ANOMALY_EVAL=vakalar.jsonl COREMETRY_ANOMALY_EVAL_BASE_URL=https://… \
+#   COREMETRY_ANOMALY_EVAL_TOKEN=cmk_… COREMETRY_ANOMALY_EVAL_OUT=eval.md make eval-anomaly
+# Dosya verilmezse sentetik fikstür (testdata/eval/anomaly_cases.sample.jsonl).
+eval-anomaly:
+	@go test -tags evalset ./internal/anomaly/ -run TestAnomalyEvalSet -v -count=1
 
 # Docker build picks up VERSION from the env block above and
 # tags two images: a precise per-version `coremetry:vX.Y.Z`
