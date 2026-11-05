@@ -56,6 +56,14 @@ type AnomalyEvent struct {
 	BaselineKind  string  `json:"baselineKind,omitempty"`
 	SubjectKind   string  `json:"subjectKind,omitempty"`
 	SubjectID     string  `json:"subjectId,omitempty"`
+	// Promotion — v0.10.1797 (Davis paritesi FAZ 3): bu olayın terfi kapısı
+	// kararının izi. '' = terfi değerlendirilmedi / geçmedi, "shadow" = gölge
+	// kipinde kapıyı geçti (Problem AÇILMADI, açılırdı), "live" = canlı kipte
+	// Problem açtı. Sabitler AnomalyPromotion*. Taşıma: AYNI bölümde gelen
+	// yazım boşsa (dedektör tiki) saklı değer korunur, doluysa (evaluator
+	// işareti) o yazılır; YENİ bölüm sıfırdan (MergeAnomalyCarry). Kolon (probe
+	// hasAnomalyPromotionCol) yokken '' okunur ve yazılmaz.
+	Promotion string `json:"promotion,omitempty"`
 	// PredatesDeploy — v0.10.1049, SAKLANMAZ: yalnız deploy raporu / rollout
 	// çekmecesinin "deploy sonrası anomaliler" satırında, o deploy'a göre
 	// AnomalyPredatesDeploy true ise (düzenli yinelenen olay) dolar. Satır
@@ -128,6 +136,10 @@ const (
 	AnomalySubjectEndpoint = "endpoint"
 	AnomalySubjectDB       = "db"
 	AnomalySubjectQueue    = "queue"
+
+	// v0.10.1797 (FAZ 3) — anomaly_events.promotion değer kümesi ('' dahil üç).
+	AnomalyPromotionShadow = "shadow"
+	AnomalyPromotionLive   = "live"
 )
 
 // anomalySubjectKindOrDefault — yazımda boş özne türü kolonun DEFAULT'una
@@ -325,6 +337,11 @@ func MergeAnomalyCarry(e, stored AnomalyEvent, exists bool) AnomalyEvent {
 	if stored.LastSeen > out.LastSeen {
 		out.LastSeen = stored.LastSeen
 	}
+	// v0.10.1797 — terfi izi bölüm içinde yapışkan: dedektörün işaretsiz
+	// tiki evaluator'ün "shadow"/"live" işaretini silmez.
+	if out.Promotion == "" {
+		out.Promotion = stored.Promotion
+	}
 	return out
 }
 
@@ -500,6 +517,35 @@ func (s *Store) reprobeAnomalySubjectCols(ctx context.Context) bool {
 	return s.hasAnomalySubjectCols.Load()
 }
 
+// probeAnomalyPromotionCol — anomaly_events.promotion var mı (v0.10.1797,
+// Davis FAZ 3). AYRI probe: kolon FAZ 1 beşlisinden sonraki sürümde geldi;
+// beşli olup bu kolonu olmayan tablo olağan ara durum (verified emsali) ve
+// beşlinin okuması bu kolon yüzünden kapanmamalı.
+func (s *Store) probeAnomalyPromotionCol(ctx context.Context) (bool, error) {
+	var n uint64
+	err := s.conn.QueryRow(ctx,
+		`SELECT count() FROM system.columns
+		 WHERE database = currentDatabase() AND table = 'anomaly_events'
+		   AND name = 'promotion'
+		 SETTINGS max_execution_time = 5`).Scan(&n)
+	if err != nil {
+		return false, err
+	}
+	return n == 1, nil
+}
+
+// reprobeAnomalyPromotionCol — ertelenen DDL sonrası yeniden deneme; bayrak
+// yalnız false → true döner, geçiş BİR KEZ loglanır. Dönüş: bayrağın son hâli.
+func (s *Store) reprobeAnomalyPromotionCol(ctx context.Context) bool {
+	if s.hasAnomalyPromotionCol.Load() {
+		return true
+	}
+	if ok, _ := s.probeAnomalyPromotionCol(ctx); ok && s.hasAnomalyPromotionCol.CompareAndSwap(false, true) {
+		log.Printf("[chstore] anomaly_events.promotion ertelenen DDL sonrası görüldü — terfi izi yazımı ve okuması devrede (restart gerekmedi)")
+	}
+	return s.hasAnomalyPromotionCol.Load()
+}
+
 // anomalyEventSelectExpr — GetAnomalyEvent / ListAnomalyEvents'in ortak satır
 // listesi (status ayrı, çağıran ekler). episode = store'un probe'u
 // (hasAnomalyEpisodeCols): küme kipinde kolonu ekleyen boot DDL'i arka plana
@@ -508,7 +554,8 @@ func (s *Store) reprobeAnomalySubjectCols(ctx context.Context) bool {
 // (pozisyonel Scan); ikisi AYNI bool'dan türer.
 // v0.10.1080 — verified = hasAnomalyVerifiedCol (verified_ratio, aynı sınıf).
 // v0.10.1789 — subject = hasAnomalySubjectCols (FAZ 1 beş kolonu, aynı sınıf).
-func anomalyEventSelectExpr(episode, verified, subject bool) string {
+// v0.10.1797 — promotion = hasAnomalyPromotionCol (FAZ 3 terfi izi, aynı sınıf).
+func anomalyEventSelectExpr(episode, verified, subject, promotion bool) string {
 	expr := `id, kind, pattern, service,
 		       toUnixTimestamp64Nano(started_at),
 		       toUnixTimestamp64Nano(last_seen),
@@ -525,11 +572,15 @@ func anomalyEventSelectExpr(episode, verified, subject bool) string {
 		expr += `,
 		       direction, baseline_value, baseline_kind, subject_kind, subject_id`
 	}
+	if promotion {
+		expr += `,
+		       promotion`
+	}
 	return expr
 }
 
 // anomalyEventScanDest — anomalyEventSelectExpr'in hedefleri, aynı sırayla.
-func anomalyEventScanDest(e *AnomalyEvent, episode, verified, subject bool) []any {
+func anomalyEventScanDest(e *AnomalyEvent, episode, verified, subject, promotion bool) []any {
 	dst := []any{
 		&e.ID, &e.Kind, &e.Pattern, &e.Service,
 		&e.StartedAt, &e.LastSeen,
@@ -544,14 +595,21 @@ func anomalyEventScanDest(e *AnomalyEvent, episode, verified, subject bool) []an
 	if subject {
 		dst = append(dst, &e.Direction, &e.BaselineValue, &e.BaselineKind, &e.SubjectKind, &e.SubjectID)
 	}
+	if promotion {
+		dst = append(dst, &e.Promotion)
+	}
 	return dst
 }
 
 // anomalyCarrySelectSQL — UpsertAnomalyEvents'in taşıma okuması (n id).
-func anomalyCarrySelectSQL(n int, episode bool) string {
+// v0.10.1797 — promotion: terfi izi bölüm içinde taşınır (MergeAnomalyCarry).
+func anomalyCarrySelectSQL(n int, episode, promotion bool) string {
 	cols := `id, toUnixTimestamp64Nano(started_at), toUnixTimestamp64Nano(last_seen), peak_ratio`
 	if episode {
 		cols += `, episode_count, toUnixTimestamp64Nano(first_started_at)`
+	}
+	if promotion {
+		cols += `, promotion`
 	}
 	return `SELECT ` + cols + `
 		 FROM anomaly_events FINAL
@@ -559,10 +617,13 @@ func anomalyCarrySelectSQL(n int, episode bool) string {
 }
 
 // anomalyCarryScanDest — anomalyCarrySelectSQL'in hedefleri, aynı sırayla.
-func anomalyCarryScanDest(id *string, p *AnomalyEvent, episode bool) []any {
+func anomalyCarryScanDest(id *string, p *AnomalyEvent, episode, promotion bool) []any {
 	dst := []any{id, &p.StartedAt, &p.LastSeen, &p.PeakRatio}
 	if episode {
 		dst = append(dst, &p.EpisodeCount, &p.FirstStartedAt)
+	}
+	if promotion {
+		dst = append(dst, &p.Promotion)
 	}
 	return dst
 }
@@ -575,7 +636,8 @@ func anomalyCarryScanDest(id *string, p *AnomalyEvent, episode bool) []any {
 // "örneklenmedi"; not çizilmez — güvenli yön).
 // v0.10.1789 — subject=false iken FAZ 1 beş kolonu listeden düşer (DEFAULT:
 // yön/taban bilinmiyor, özne 'service' — eski satırla aynı okuma).
-func anomalyInsertSQL(episode, verified, subject bool) string {
+// v0.10.1797 — promotion=false iken terfi izi listeden düşer (DEFAULT boş dize).
+func anomalyInsertSQL(episode, verified, subject, promotion bool) string {
 	cols := `id, kind, pattern, service, started_at, last_seen,
 		 peak_ratio, current_ratio, current_count, sample`
 	if episode {
@@ -590,11 +652,15 @@ func anomalyInsertSQL(episode, verified, subject bool) string {
 		cols += `,
 		 direction, baseline_value, baseline_kind, subject_kind, subject_id`
 	}
+	if promotion {
+		cols += `,
+		 promotion`
+	}
 	return `INSERT INTO anomaly_events
 		(` + cols + `)`
 }
 
-func anomalyInsertRow(w AnomalyEvent, episode, verified, subject bool) []any {
+func anomalyInsertRow(w AnomalyEvent, episode, verified, subject, promotion bool) []any {
 	row := []any{
 		w.ID, w.Kind, w.Pattern, w.Service,
 		time.Unix(0, w.StartedAt),
@@ -610,6 +676,9 @@ func anomalyInsertRow(w AnomalyEvent, episode, verified, subject bool) []any {
 	if subject {
 		row = append(row, w.Direction, w.BaselineValue, w.BaselineKind,
 			anomalySubjectKindOrDefault(w.SubjectKind), w.SubjectID)
+	}
+	if promotion {
+		row = append(row, w.Promotion)
 	}
 	return row
 }
@@ -673,11 +742,12 @@ func (s *Store) UpsertAnomalyEvents(ctx context.Context, evs []AnomalyEvent) err
 	// kurulur — yeniden probe (ddl_defer.go) çağrının ortasında bayrağı
 	// çevirse bile bir çağrı ya baştan sona kolonlu ya kolonsuz.
 	ep := s.hasAnomalyEpisodeCols.Load()
-	vr := s.hasAnomalyVerifiedCol.Load() // v0.10.1080 — aynı anlık görüntü kuralı
-	sj := s.hasAnomalySubjectCols.Load() // v0.10.1789 — aynı anlık görüntü kuralı
+	vr := s.hasAnomalyVerifiedCol.Load()  // v0.10.1080 — aynı anlık görüntü kuralı
+	sj := s.hasAnomalySubjectCols.Load()  // v0.10.1789 — aynı anlık görüntü kuralı
+	pr := s.hasAnomalyPromotionCol.Load() // v0.10.1797 — aynı anlık görüntü kuralı
 	prev := make(map[string]AnomalyEvent, len(evs))
 	ids := uniqueAnomalyIDs(evs)
-	rows, err := s.conn.Query(ctx, anomalyCarrySelectSQL(len(ids), ep), toAnySlice(ids)...)
+	rows, err := s.conn.Query(ctx, anomalyCarrySelectSQL(len(ids), ep, pr), toAnySlice(ids)...)
 	if err != nil {
 		// v0.10.1045 — okuma hatasında YAZMA YOK (yumuşak-hata yönü
 		// bilinçli ters çevrildi). Eskiden prev boş bırakılıp her olay
@@ -692,7 +762,7 @@ func (s *Store) UpsertAnomalyEvents(ctx context.Context, evs []AnomalyEvent) err
 	for rows.Next() {
 		var id string
 		var p AnomalyEvent
-		if err := rows.Scan(anomalyCarryScanDest(&id, &p, ep)...); err != nil {
+		if err := rows.Scan(anomalyCarryScanDest(&id, &p, ep, pr)...); err != nil {
 			rows.Close()
 			return err
 		}
@@ -717,14 +787,14 @@ func (s *Store) UpsertAnomalyEvents(ctx context.Context, evs []AnomalyEvent) err
 	// semantiği (aynı id için en son sürüm kazanır) korunur.
 	// v0.10.1049 — liste ve satır anomalyInsertSQL/anomalyInsertRow'dan, aynı
 	// `ep` ile (arite şekil testi: anomaly_episode_test.go).
-	batch, err := s.conn.PrepareBatch(ctx, anomalyInsertSQL(ep, vr, sj))
+	batch, err := s.conn.PrepareBatch(ctx, anomalyInsertSQL(ep, vr, sj, pr))
 	if err != nil {
 		return err
 	}
 	for _, e := range evs {
 		p, exists := prev[e.ID]
 		w := MergeAnomalyCarry(e, p, exists)
-		if err := batch.Append(anomalyInsertRow(w, ep, vr, sj)...); err != nil {
+		if err := batch.Append(anomalyInsertRow(w, ep, vr, sj, pr)...); err != nil {
 			return err
 		}
 	}
@@ -744,11 +814,12 @@ func (s *Store) GetAnomalyEvent(ctx context.Context, id string, activeAge time.D
 		activeAge = anomalyActiveAge
 	}
 	var e AnomalyEvent
-	ep := s.hasAnomalyEpisodeCols.Load() // v0.10.1049 — liste ve hedefler aynı anlık görüntüden
-	vr := s.hasAnomalyVerifiedCol.Load() // v0.10.1080 — verified_ratio, aynı kural
-	sj := s.hasAnomalySubjectCols.Load() // v0.10.1789 — FAZ 1 kolonları, aynı kural
+	ep := s.hasAnomalyEpisodeCols.Load()  // v0.10.1049 — liste ve hedefler aynı anlık görüntüden
+	vr := s.hasAnomalyVerifiedCol.Load()  // v0.10.1080 — verified_ratio, aynı kural
+	sj := s.hasAnomalySubjectCols.Load()  // v0.10.1789 — FAZ 1 kolonları, aynı kural
+	pr := s.hasAnomalyPromotionCol.Load() // v0.10.1797 — FAZ 3 terfi izi, aynı kural
 	row := s.conn.QueryRow(ctx, `
-		SELECT `+anomalyEventSelectExpr(ep, vr, sj)+`,
+		SELECT `+anomalyEventSelectExpr(ep, vr, sj, pr)+`,
 		       if(last_seen >= now64() - INTERVAL ? SECOND, 'active', 'cleared') AS status
 		FROM anomaly_events FINAL
 		WHERE id = ?
@@ -756,7 +827,7 @@ func (s *Store) GetAnomalyEvent(ctx context.Context, id string, activeAge time.D
 		int64(activeAge.Seconds()),
 		id,
 	)
-	if err := row.Scan(append(anomalyEventScanDest(&e, ep, vr, sj), &e.Status)...); err != nil {
+	if err := row.Scan(append(anomalyEventScanDest(&e, ep, vr, sj, pr), &e.Status)...); err != nil {
 		// clickhouse-go's QueryRow surfaces an empty result as this exact
 		// string (no typed sentinel) — the same no-rows idiom the other
 		// by-id reads use (dashboard.go, monitor.go). Soft "not found".
@@ -931,11 +1002,12 @@ func (s *Store) ListAnomalyEvents(ctx context.Context, f ListAnomalyEventsFilter
 	}
 	args = append(args, exclArgs...)
 	args = append(args, f.Limit)
-	ep := s.hasAnomalyEpisodeCols.Load() // v0.10.1049 — liste ve hedefler aynı anlık görüntüden
-	vr := s.hasAnomalyVerifiedCol.Load() // v0.10.1080 — verified_ratio, aynı kural
-	sj := s.hasAnomalySubjectCols.Load() // v0.10.1789 — FAZ 1 kolonları, aynı kural
+	ep := s.hasAnomalyEpisodeCols.Load()  // v0.10.1049 — liste ve hedefler aynı anlık görüntüden
+	vr := s.hasAnomalyVerifiedCol.Load()  // v0.10.1080 — verified_ratio, aynı kural
+	sj := s.hasAnomalySubjectCols.Load()  // v0.10.1789 — FAZ 1 kolonları, aynı kural
+	pr := s.hasAnomalyPromotionCol.Load() // v0.10.1797 — FAZ 3 terfi izi, aynı kural
 	rows, err := s.conn.Query(ctx, `
-		SELECT `+anomalyEventSelectExpr(ep, vr, sj)+`,
+		SELECT `+anomalyEventSelectExpr(ep, vr, sj, pr)+`,
 		       if(last_seen >= now64() - INTERVAL ? SECOND, 'active', 'cleared') AS status
 		FROM anomaly_events FINAL
 		WHERE toUnixTimestamp64Nano(last_seen) >= ?`+activeSQL+svcSQL+winSQL+exclSQL+`
@@ -960,7 +1032,7 @@ func (s *Store) ListAnomalyEvents(ctx context.Context, f ListAnomalyEventsFilter
 	var out []AnomalyEvent
 	for rows.Next() {
 		var e AnomalyEvent
-		if err := rows.Scan(append(anomalyEventScanDest(&e, ep, vr, sj), &e.Status)...); err != nil {
+		if err := rows.Scan(append(anomalyEventScanDest(&e, ep, vr, sj, pr), &e.Status)...); err != nil {
 			return nil, err
 		}
 		out = append(out, e)

@@ -366,44 +366,53 @@ func TestAnomalyEventColumnArity(t *testing.T) {
 	for _, ep := range []bool{false, true} {
 		for _, vr := range []bool{false, true} {
 			for _, sj := range []bool{false, true} {
-				ins := anomalyInsertSQL(ep, vr, sj)
-				if got, want := sqlColumnCount(insertColumnList(t, ins)), len(anomalyInsertRow(AnomalyEvent{}, ep, vr, sj)); got != want {
-					t.Errorf("ep=%v vr=%v sj=%v: INSERT %d kolon, satır %d değer", ep, vr, sj, got, want)
-				}
-				var e AnomalyEvent
-				if got, want := sqlColumnCount(anomalyEventSelectExpr(ep, vr, sj)), len(anomalyEventScanDest(&e, ep, vr, sj)); got != want {
-					t.Errorf("ep=%v vr=%v sj=%v: okuma listesi %d kolon, Scan %d hedef", ep, vr, sj, got, want)
-				}
-				var id string
-				carry := anomalyCarrySelectSQL(3, ep)
-				if got, want := sqlColumnCount(selectColumnList(t, carry)), len(anomalyCarryScanDest(&id, &e, ep)); got != want {
-					t.Errorf("ep=%v: taşıma okuması %d kolon, Scan %d hedef", ep, got, want)
-				}
-				for _, q := range []string{ins, anomalyEventSelectExpr(ep, vr, sj), carry} {
-					has := strings.Contains(q, "episode_count") || strings.Contains(q, "first_started_at")
-					if has != ep {
-						t.Errorf("ep=%v ama liste bölüm kolonu anıyor=%v: %q", ep, has, q)
+				for _, pr := range []bool{false, true} {
+					ins := anomalyInsertSQL(ep, vr, sj, pr)
+					if got, want := sqlColumnCount(insertColumnList(t, ins)), len(anomalyInsertRow(AnomalyEvent{}, ep, vr, sj, pr)); got != want {
+						t.Errorf("ep=%v vr=%v sj=%v: INSERT %d kolon, satır %d değer", ep, vr, sj, got, want)
 					}
-				}
-				// Oran taşınmaz (her yazım son tikin oranı): taşıma okuması onu
-				// HİÇ anmaz; INSERT/okuma yalnız probe true iken.
-				for _, q := range []string{ins, anomalyEventSelectExpr(ep, vr, sj)} {
-					if has := strings.Contains(q, "verified_ratio"); has != vr {
-						t.Errorf("vr=%v ama liste verified_ratio anıyor=%v: %q", vr, has, q)
+					var e AnomalyEvent
+					if got, want := sqlColumnCount(anomalyEventSelectExpr(ep, vr, sj, pr)), len(anomalyEventScanDest(&e, ep, vr, sj, pr)); got != want {
+						t.Errorf("ep=%v vr=%v sj=%v: okuma listesi %d kolon, Scan %d hedef", ep, vr, sj, got, want)
 					}
-					// FAZ 1 beşlisi: her biri yalnız probe true iken, hepsi birlikte.
-					for _, c := range subjectCols {
-						if has := strings.Contains(q, c); has != sj {
-							t.Errorf("sj=%v ama liste %s anıyor=%v: %q", sj, c, has, q)
+					var id string
+					carry := anomalyCarrySelectSQL(3, ep, pr)
+					if got, want := sqlColumnCount(selectColumnList(t, carry)), len(anomalyCarryScanDest(&id, &e, ep, pr)); got != want {
+						t.Errorf("ep=%v: taşıma okuması %d kolon, Scan %d hedef", ep, got, want)
+					}
+					for _, q := range []string{ins, anomalyEventSelectExpr(ep, vr, sj, pr), carry} {
+						has := strings.Contains(q, "episode_count") || strings.Contains(q, "first_started_at")
+						if has != ep {
+							t.Errorf("ep=%v ama liste bölüm kolonu anıyor=%v: %q", ep, has, q)
 						}
 					}
-				}
-				if strings.Contains(carry, "verified_ratio") {
-					t.Errorf("taşıma okuması verified_ratio anmamalı: %q", carry)
-				}
-				for _, c := range subjectCols {
-					if strings.Contains(carry, c) {
-						t.Errorf("taşıma okuması %s anmamalı (yön/taban her tikte yeniden yazılır): %q", c, carry)
+					// Oran taşınmaz (her yazım son tikin oranı): taşıma okuması onu
+					// HİÇ anmaz; INSERT/okuma yalnız probe true iken.
+					for _, q := range []string{ins, anomalyEventSelectExpr(ep, vr, sj, pr)} {
+						if has := strings.Contains(q, "verified_ratio"); has != vr {
+							t.Errorf("vr=%v ama liste verified_ratio anıyor=%v: %q", vr, has, q)
+						}
+						// FAZ 1 beşlisi: her biri yalnız probe true iken, hepsi birlikte.
+						for _, c := range subjectCols {
+							if has := strings.Contains(q, c); has != sj {
+								t.Errorf("sj=%v ama liste %s anıyor=%v: %q", sj, c, has, q)
+							}
+						}
+					}
+					if strings.Contains(carry, "verified_ratio") {
+						t.Errorf("taşıma okuması verified_ratio anmamalı: %q", carry)
+					}
+					for _, c := range subjectCols {
+						if strings.Contains(carry, c) {
+							t.Errorf("taşıma okuması %s anmamalı (yön/taban her tikte yeniden yazılır): %q", c, carry)
+						}
+					}
+					// v0.10.1797 — terfi izi: INSERT, okuma VE taşıma okuması (bölüm
+					// içinde yapışkan) yalnız probe true iken anar.
+					for _, q := range []string{ins, anomalyEventSelectExpr(ep, vr, sj, pr), carry} {
+						if has := strings.Contains(q, "promotion"); has != pr {
+							t.Errorf("pr=%v ama liste promotion anıyor=%v: %q", pr, has, q)
+						}
 					}
 				}
 			}
@@ -412,13 +421,13 @@ func TestAnomalyEventColumnArity(t *testing.T) {
 	// Probe false hâli bugünkü (v0.10.1045) listelerin birebir aynısı: 10 + 10 + 4.
 	var e AnomalyEvent
 	var id string
-	if n := len(anomalyInsertRow(AnomalyEvent{}, false, false, false)); n != 10 {
+	if n := len(anomalyInsertRow(AnomalyEvent{}, false, false, false, false)); n != 10 {
 		t.Errorf("probe false INSERT %d değer, want 10", n)
 	}
-	if n := len(anomalyEventScanDest(&e, false, false, false)); n != 10 {
+	if n := len(anomalyEventScanDest(&e, false, false, false, false)); n != 10 {
 		t.Errorf("probe false okuma %d hedef, want 10", n)
 	}
-	if n := len(anomalyCarryScanDest(&id, &e, false)); n != 4 {
+	if n := len(anomalyCarryScanDest(&id, &e, false, false)); n != 4 {
 		t.Errorf("probe false taşıma %d hedef, want 4", n)
 	}
 	// Üç yazım/okuma yeri listeleri ELLE değil kuruculardan alıyor.
@@ -427,12 +436,12 @@ func TestAnomalyEventColumnArity(t *testing.T) {
 		s string
 		n int
 	}{
-		{"anomalyCarrySelectSQL(len(ids), ep)", 1},
-		{"anomalyCarryScanDest(&id, &p, ep)", 1},
-		{"anomalyInsertSQL(ep, vr, sj)", 1},
-		{"anomalyInsertRow(w, ep, vr, sj)", 1},
-		{"SELECT `+anomalyEventSelectExpr(ep, vr, sj)+`", 2},
-		{"anomalyEventScanDest(&e, ep, vr, sj), &e.Status", 2},
+		{"anomalyCarrySelectSQL(len(ids), ep, pr)", 1},
+		{"anomalyCarryScanDest(&id, &p, ep, pr)", 1},
+		{"anomalyInsertSQL(ep, vr, sj, pr)", 1},
+		{"anomalyInsertRow(w, ep, vr, sj, pr)", 1},
+		{"SELECT `+anomalyEventSelectExpr(ep, vr, sj, pr)+`", 2},
+		{"anomalyEventScanDest(&e, ep, vr, sj, pr), &e.Status", 2},
 	} {
 		if got := strings.Count(src, pin.s); got != pin.n {
 			t.Errorf("anomaly_event.go'da %q %d kez, want %d", pin.s, got, pin.n)

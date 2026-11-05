@@ -44,12 +44,16 @@ func subjectAnomalyEvent(k subjectKey, metric string, oc anomalyOutcome, ser sub
 		count = uint64(ser.Rates[n-1]*float64(bucketSeconds) + 0.5)
 	}
 	return chstore.AnomalyEvent{
-		ID:           chstore.FingerprintAnomaly(chstore.SubjectAnomalyKind, pattern, k.Owner),
-		Kind:         chstore.SubjectAnomalyKind,
-		Pattern:      pattern,
-		Service:      k.Owner,
-		StartedAt:    now.UnixNano(),
-		LastSeen:     now.UnixNano(),
+		ID:        chstore.FingerprintAnomaly(chstore.SubjectAnomalyKind, pattern, k.Owner),
+		Kind:      chstore.SubjectAnomalyKind,
+		Pattern:   pattern,
+		Service:   k.Owner,
+		StartedAt: now.UnixNano(),
+		LastSeen:  now.UnixNano(),
+		// v0.10.1797 (FAZ 3 dilim 1) — tepe de doldurulur: yazım
+		// MergeAnomalyCarry'den geçince bölüm maksimumu olur, ama olay
+		// yazılmadan okunan (saf kapı / gölge sayımı) her yol 0 görürdü.
+		PeakRatio:    ratio,
 		CurrentRatio: ratio,
 		CurrentCount: count,
 		Sample: fmt.Sprintf("%s %s: %.2f%s, taban %.2f%s (%s, z=%.1f, %d kova)",

@@ -96,7 +96,7 @@ func TestSubjectAnomalyEvent(t *testing.T) {
 	ep := subjectAnomalyEvent(subjectKey{Kind: "endpoint", Owner: "checkout", ID: "GET /cart"}, "p99_ms", oc, ser, now)
 	if ep.Kind != chstore.SubjectAnomalyKind || ep.Service != "checkout" || ep.Pattern != "p99_ms @ GET /cart" ||
 		ep.SubjectKind != "endpoint" || ep.SubjectID != "GET /cart" || ep.Direction != "up" || ep.BaselineKind != "seasonal" ||
-		ep.BaselineValue != 100 || ep.CurrentRatio != 9 || ep.CurrentCount != 900 {
+		ep.BaselineValue != 100 || ep.CurrentRatio != 9 || ep.CurrentCount != 900 || ep.PeakRatio != 9 {
 		t.Errorf("endpoint olayı: %+v", ep)
 	}
 	if ep.ID != chstore.FingerprintAnomaly(chstore.SubjectAnomalyKind, "p99_ms @ GET /cart", "checkout") {

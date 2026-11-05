@@ -37,7 +37,20 @@ type AnomalySubjectsConfig struct {
 	Endpoint AnomalySubjectKindConfig `json:"endpoint"`
 	DB       AnomalySubjectKindConfig `json:"db"`
 	Queue    AnomalySubjectKindConfig `json:"queue"`
+	// PromotionMode — v0.10.1797 (Davis FAZ 3, spec-davis-faz3.md): özne
+	// olaylarının Problem'e terfi kipi. "off" (varsayılan) = terfi yok (FAZ 1
+	// davranışı); "shadow" = kapıyı geçen aday Problem AÇMAZ, olay satırına
+	// iz düşer (karar 6: önce gölge); "live" = Problem açılır. Bilinmeyen /
+	// boş → off (NormalizeAnomalySubjects); PUT bilinmeyeni REDDEDER.
+	PromotionMode string `json:"promotionMode"`
 }
+
+// Özne terfi kipleri (PromotionMode).
+const (
+	SubjectPromotionOff    = "off"
+	SubjectPromotionShadow = "shadow"
+	SubjectPromotionLive   = "live"
+)
 
 const (
 	anomalySubjectTopNDefault      = 20
@@ -52,7 +65,7 @@ const (
 // DefaultAnomalySubjects — üç tür kapalı, tavanlar varsayılan.
 func DefaultAnomalySubjects() AnomalySubjectsConfig {
 	k := AnomalySubjectKindConfig{TopN: anomalySubjectTopNDefault, MaxSeriesPerTick: anomalySubjectMaxSeriesDefault}
-	return AnomalySubjectsConfig{Endpoint: k, DB: k, Queue: k}
+	return AnomalySubjectsConfig{Endpoint: k, DB: k, Queue: k, PromotionMode: SubjectPromotionOff}
 }
 
 // NormalizeAnomalySubjects — SAF: aralık dışı / eksik (0) tavan varsayılana
@@ -63,7 +76,30 @@ func NormalizeAnomalySubjects(c AnomalySubjectsConfig) AnomalySubjectsConfig {
 		Endpoint: normalizeSubjectKind(c.Endpoint),
 		DB:       normalizeSubjectKind(c.DB),
 		Queue:    normalizeSubjectKind(c.Queue),
+		// v0.10.1797 — bilinmeyen / boş kip KAPALI (güvenli yön: elle
+		// bozulmuş blob Problem açmaz).
+		PromotionMode: normalizeSubjectPromotionMode(c.PromotionMode),
 	}
+}
+
+// normalizeSubjectPromotionMode — SAF: üç kipten biri, aksi "off".
+func normalizeSubjectPromotionMode(m string) string {
+	switch m = strings.TrimSpace(m); m {
+	case SubjectPromotionShadow, SubjectPromotionLive:
+		return m
+	}
+	return SubjectPromotionOff
+}
+
+// ValidateSubjectPromotionMode — SAF: PUT kapısı. Boş geçerli (= off,
+// alanı göndermeyen eski istemci); bilinmeyen değer RED — "liv" yazımı
+// sessizce off'a dönseydi operatör canlıyı açtığını sanırdı.
+func ValidateSubjectPromotionMode(m string) error {
+	switch strings.TrimSpace(m) {
+	case "", SubjectPromotionOff, SubjectPromotionShadow, SubjectPromotionLive:
+		return nil
+	}
+	return fmt.Errorf("subjects.promotionMode must be off|shadow|live, got %q", m)
 }
 
 func normalizeSubjectKind(k AnomalySubjectKindConfig) AnomalySubjectKindConfig {

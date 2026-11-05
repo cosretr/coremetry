@@ -110,3 +110,40 @@ func TestSeasonalTimezoneValidateNormalize(t *testing.T) {
 		}
 	}
 }
+
+// v0.10.1797 (Davis FAZ 3 dilim 1) — özne terfi kipi: varsayılan off,
+// bilinmeyen/boş → off (normalize), PUT kapısı bilinmeyeni reddeder.
+func TestSubjectPromotionMode(t *testing.T) {
+	if got := DefaultAnomalySubjects().PromotionMode; got != SubjectPromotionOff {
+		t.Errorf("varsayılan kip %q, want off", got)
+	}
+	cases := []struct {
+		in, norm string
+		valid    bool
+	}{
+		{"", "off", true},
+		{"off", "off", true},
+		{"shadow", "shadow", true},
+		{"live", "live", true},
+		{" live ", "live", true},
+		{"LIVE", "off", false},
+		{"liv", "off", false},
+	}
+	for _, c := range cases {
+		n := NormalizeAnomalySubjects(AnomalySubjectsConfig{PromotionMode: c.in})
+		if n.PromotionMode != c.norm {
+			t.Errorf("normalize(%q) = %q, want %q", c.in, n.PromotionMode, c.norm)
+		}
+		if err := ValidateSubjectPromotionMode(c.in); (err == nil) != c.valid {
+			t.Errorf("validate(%q) err=%v, want valid=%v", c.in, err, c.valid)
+		}
+	}
+	// Eski blob (alan yok) kapalı okunur.
+	var c AnomalySensitivityConfig
+	if err := json.Unmarshal([]byte(`{"subjects":{"endpoint":{"enabled":true}}}`), &c); err != nil {
+		t.Fatal(err)
+	}
+	if got := NormalizeAnomalySensitivity(c).Subjects.PromotionMode; got != SubjectPromotionOff {
+		t.Errorf("eski blob kip %q, want off", got)
+	}
+}

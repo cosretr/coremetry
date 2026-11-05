@@ -110,6 +110,11 @@ func (s *Server) putAnomalySensitivity(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	// v0.10.1797 — özne terfi kipi aynı istisna: bilinmeyen kip reddedilir.
+	if err := chstore.ValidateSubjectPromotionMode(in.Subjects.PromotionMode); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	cfg := chstore.NormalizeAnomalySensitivity(in)
 	// v0.10.1478 — RED kaynağı değişikliği ayrı denetim satırı alır (geri alma
 	// = redSource span); önceki değer KAYITLI blobdan, okunamazsa yayınlanandan.

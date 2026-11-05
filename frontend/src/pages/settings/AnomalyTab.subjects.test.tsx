@@ -161,4 +161,24 @@ describe('Özneler bölümü (v0.10.1790 Davis F1.2)', () => {
     expect(m.puts[0].seasonalTimezone).toBe('UTC');
     expect(m.puts[0].dwellBuckets).toBe(3);
   });
+
+  // v0.10.1797 (Davis FAZ 3 dilim 1) — terfi kipi: yok → off; seçilen kip gövdeye gider.
+  it('terfi kipi: alan yok → Kapalı; Gölge seçilince bölümle birlikte gider', async () => {
+    const el = await mount();
+    const sel = el.querySelector<HTMLSelectElement>('select[aria-label="Özne terfi kipi"]');
+    if (!sel) throw new Error('terfi kipi seçicisi yok');
+    expect(sel.value).toBe('off');
+    expect([...sel.options].map(o => o.value)).toEqual(['off', 'shadow', 'live']);
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')!.set!;
+      setter.call(sel, 'shadow');
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await act(async () => { sensitivitySave(el).click(); });
+    await settle();
+    expect(m.puts).toHaveLength(1);
+    const sj = m.puts[0].subjects as { promotionMode: string; endpoint: { enabled: boolean } };
+    expect(sj.promotionMode).toBe('shadow');
+    expect(sj.endpoint.enabled).toBe(false);
+  });
 });

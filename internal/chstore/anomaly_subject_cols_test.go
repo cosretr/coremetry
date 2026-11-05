@@ -113,8 +113,8 @@ func TestAnomalyEventSubjectRoundTrip(t *testing.T) {
 	for _, ep := range []bool{false, true} {
 		for _, vr := range []bool{false, true} {
 			for _, sj := range []bool{false, true} {
-				cols := splitTopLevel(insertColumnList(t, anomalyInsertSQL(ep, vr, sj)))
-				vals := anomalyInsertRow(in, ep, vr, sj)
+				cols := splitTopLevel(insertColumnList(t, anomalyInsertSQL(ep, vr, sj, false)))
+				vals := anomalyInsertRow(in, ep, vr, sj, false)
 				byName := map[string]any{}
 				for i, c := range cols {
 					v := vals[i]
@@ -124,8 +124,8 @@ func TestAnomalyEventSubjectRoundTrip(t *testing.T) {
 					byName[c] = v
 				}
 				var out AnomalyEvent
-				sel := splitTopLevel(anomalyEventSelectExpr(ep, vr, sj))
-				dst := anomalyEventScanDest(&out, ep, vr, sj)
+				sel := splitTopLevel(anomalyEventSelectExpr(ep, vr, sj, false))
+				dst := anomalyEventScanDest(&out, ep, vr, sj, false)
 				for i, expr := range sel {
 					name := expr
 					if m := regexp.MustCompile(`^toUnixTimestamp64Nano\((\w+)\)$`).FindStringSubmatch(expr); m != nil {
@@ -153,7 +153,7 @@ func TestAnomalyEventSubjectRoundTrip(t *testing.T) {
 	}
 	// Boş özne türü kolon DEFAULT'una ('service') eşitlenir; kolon listede
 	// olduğu için CH DEFAULT'u devreye girmez.
-	row := anomalyInsertRow(AnomalyEvent{}, false, false, true)
+	row := anomalyInsertRow(AnomalyEvent{}, false, false, true, false)
 	if row[13] != AnomalySubjectService {
 		t.Errorf("boş SubjectKind yazımda %v, want %q", row[13], AnomalySubjectService)
 	}

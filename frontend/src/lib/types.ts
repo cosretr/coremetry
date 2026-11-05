@@ -6748,6 +6748,9 @@ export interface AnomalyEvent {
   baselineKind?: 'seasonal' | 'consecutive' | 'none';
   subjectKind?: 'service' | 'endpoint' | 'db' | 'queue';
   subjectId?: string;
+  // v0.10.1797 — Davis FAZ 3 terfi izi: 'shadow' = gölge kipinde kapıyı
+  // geçti (Problem açılmadı), 'live' = Problem açtı. Yok = değerlendirilmedi.
+  promotion?: 'shadow' | 'live';
   // v0.10.1049 — yalnız deploy raporu / rollout çekmecesinin "deploy sonrası
   // anomaliler" satırında: anomali o deploy'dan önce de DÜZENLİ görülüyordu
   // (chstore.AnomalyPredatesDeploy). Satır listede kalır, "yinelenen" işaretli.
@@ -9956,7 +9959,14 @@ export interface AnomalySubjectsConfig {
   endpoint: AnomalySubjectKindConfig;
   db: AnomalySubjectKindConfig;
   queue: AnomalySubjectKindConfig;
+  /** v0.10.1797 (Davis FAZ 3) — özne olayının Problem'e terfi kipi. Yok /
+   *  bilinmeyen = 'off'; sunucu bilinmeyeni PUT'ta reddeder. */
+  promotionMode?: SubjectPromotionMode;
 }
+
+/** v0.10.1797 — chstore.SubjectPromotion*: off (terfi yok) | shadow (Problem
+ *  açılmaz, olaya iz düşer) | live (Problem açılır). */
+export type SubjectPromotionMode = 'off' | 'shadow' | 'live';
 
 export interface AnomalySensitivityConfig {
   metrics: Record<string, AnomalyMetricSensitivity>;

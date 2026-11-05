@@ -1,4 +1,4 @@
-import type { AnomalySubjectKindConfig, AnomalySubjectsConfig } from '@/lib/types';
+import type { AnomalySubjectKindConfig, AnomalySubjectsConfig, SubjectPromotionMode } from '@/lib/types';
 import { Field, SelectField, CheckboxField } from '@/components/coremetry/Field';
 import { cn } from '@/lib/cn';
 
@@ -16,7 +16,20 @@ const NOTE = 'mt-1 text-[length:var(--fs-xs)] leading-normal text-(--text3)';
 export const SUBJECT_DEFAULT: AnomalySubjectKindConfig = { enabled: false, topN: 20, maxSeriesPerTick: 2000 };
 export const SEASONAL_TZ_DEFAULT = 'Europe/Istanbul';
 
-const KINDS: { k: keyof AnomalySubjectsConfig; label: string; help: string }[] = [
+type SubjectKindKey = 'endpoint' | 'db' | 'queue';
+
+// v0.10.1797 (Davis FAZ 3) — terfi kipi seçenekleri; sıra = açılış sırası.
+const PROMOTION_MODES: { v: SubjectPromotionMode; label: string }[] = [
+  { v: 'off', label: 'Kapalı — Problem açılmaz' },
+  { v: 'shadow', label: 'Gölge — Problem açılmaz, Anomalies’te “açılırdı” işareti' },
+  { v: 'live', label: 'Canlı — Problem açılır' },
+];
+
+function normalizePromotionMode(m?: string): SubjectPromotionMode {
+  return m === 'shadow' || m === 'live' ? m : 'off';
+}
+
+const KINDS: { k: SubjectKindKey; label: string; help: string }[] = [
   { k: 'endpoint', label: 'Endpoint (HTTP rota)',
     help: 'VictoriaMetrics http_route histogramından servis başına en yoğun rotalar. Rota etiketi olmayan servis servis düzeyinde kalır.' },
   { k: 'db', label: 'Veritabanı instance',
@@ -30,6 +43,7 @@ export function withSubjectDefaults(v?: Partial<AnomalySubjectsConfig>): Anomaly
     endpoint: { ...SUBJECT_DEFAULT, ...v?.endpoint },
     db: { ...SUBJECT_DEFAULT, ...v?.db },
     queue: { ...SUBJECT_DEFAULT, ...v?.queue },
+    promotionMode: normalizePromotionMode(v?.promotionMode),
   };
 }
 
@@ -43,7 +57,7 @@ export function SubjectsSubsection({ value, timezone, onChange, onTimezoneChange
   const tz = timezone?.trim() || SEASONAL_TZ_DEFAULT;
   const zones = [SEASONAL_TZ_DEFAULT, 'UTC'];
   if (!zones.includes(tz)) zones.push(tz);
-  const set = (k: keyof AnomalySubjectsConfig, patch: Partial<AnomalySubjectKindConfig>) =>
+  const set = (k: SubjectKindKey, patch: Partial<AnomalySubjectKindConfig>) =>
     onChange({ ...v, [k]: { ...v[k], ...patch } });
   return (
     <div className={SEP}>
@@ -73,6 +87,16 @@ export function SubjectsSubsection({ value, timezone, onChange, onTimezoneChange
             </div>
           );
         })}
+      </div>
+      <div className="mt-3 max-w-[420px]">
+        <SelectField label="Problem'e terfi" aria-label="Özne terfi kipi"
+          value={v.promotionMode} onChange={e => onChange({ ...v, promotionMode: normalizePromotionMode(e.target.value) })}
+          hint={<>
+            Aynı serviste aynı metrikte kötüleşen rotalar tek Problem olur (veritabanı / kuyruk
+            kendi Problem’i). Önce gölgede ölçülür; canlıya geçiş operatör kararıdır.
+          </>}>
+          {PROMOTION_MODES.map(m => <option key={m.v} value={m.v}>{m.label}</option>)}
+        </SelectField>
       </div>
       <div className="mt-3 max-w-[420px]">
         <SelectField label="Mevsimsel taban saat dilimi" aria-label="Mevsimsel taban saat dilimi"

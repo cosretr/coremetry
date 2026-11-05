@@ -44,6 +44,7 @@ func TestAnomalySubjectsAuditDetail(t *testing.T) {
 		"db topN":         func(c *chstore.AnomalySensitivityConfig) { c.Subjects.DB.TopN = 3 },
 		"queue tavanı":    func(c *chstore.AnomalySensitivityConfig) { c.Subjects.Queue.MaxSeriesPerTick = 10 },
 		"dilim":           func(c *chstore.AnomalySensitivityConfig) { c.SeasonalTimezone = "UTC" },
+		"terfi kipi":      func(c *chstore.AnomalySensitivityConfig) { c.Subjects.PromotionMode = chstore.SubjectPromotionShadow },
 	} {
 		next := prev
 		mut(&next)
@@ -64,6 +65,21 @@ func TestAnomalySubjectsAuditDetail(t *testing.T) {
 		if got.From.Subjects != prev.Subjects || got.To.Subjects != next.Subjects ||
 			got.From.SeasonalTimezone != prev.SeasonalTimezone || got.To.SeasonalTimezone != next.SeasonalTimezone {
 			t.Errorf("%s: önce/sonra yanlış: %s", name, d)
+		}
+	}
+}
+
+// v0.10.1797 (Davis FAZ 3 dilim 1) — bilinmeyen terfi kipi 400, mağazadan önce.
+func TestPutAnomalySensitivityRejectsUnknownPromotionMode(t *testing.T) {
+	s := &Server{}
+	for _, m := range []string{"liv", "LIVE", "on"} {
+		body := `{"dwellBuckets":3,"criticalZ":6,"subjects":{"promotionMode":"` + m + `"}}`
+		req := httptest.NewRequest("PUT", "/api/settings/anomaly-sensitivity", strings.NewReader(body))
+		req = req.WithContext(auth.ContextWithClaims(req.Context(), &auth.Claims{UserID: "u1", Role: auth.RoleAdmin}))
+		rec := httptest.NewRecorder()
+		s.putAnomalySensitivity(rec, req)
+		if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "promotionMode") {
+			t.Errorf("%s: %d %q", m, rec.Code, rec.Body.String())
 		}
 	}
 }

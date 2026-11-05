@@ -284,6 +284,11 @@ type Store struct {
 	// reprobePromotedAttrs bayrağı çevirir.
 	hasAnomalySubjectCols atomic.Bool
 
+	// hasAnomalyPromotionCol — anomaly_events.promotion (v0.10.1797, Davis
+	// FAZ 3 terfi izi) var mı. Aynı sınıf ve iki-boot sözleşmesi; false ⇒
+	// okuma/INSERT/taşıma kolonu ATLAR ('' okunur: gölge rozeti çizilmez).
+	hasAnomalyPromotionCol atomic.Bool
+
 	// hasDBStmtHashCol records whether the spans table actually carries the
 	// `db_stmt_hash` column (v0.8.375, Stage-2 D1 — persistent DB-statement
 	// identity). Unlike op_group / series_fingerprint the column is
@@ -4237,6 +4242,12 @@ func (s *Store) migrate(ctx context.Context) error {
 		`ALTER TABLE anomaly_events ADD COLUMN IF NOT EXISTS baseline_kind LowCardinality(String) DEFAULT ''`,
 		`ALTER TABLE anomaly_events ADD COLUMN IF NOT EXISTS subject_kind LowCardinality(String) DEFAULT 'service'`,
 		`ALTER TABLE anomaly_events ADD COLUMN IF NOT EXISTS subject_id String DEFAULT ''`,
+		// v0.10.1797 — Davis paritesi FAZ 3: terfi kapısının izi ('' | shadow |
+		// live). KAPALI üç değerli küme → LowCardinality (C2-C3). DEFAULT ''
+		// = "değerlendirilmedi" (eski satır). ORDER BY / TTL'e girmez; CREATE
+		// TABLE'a bilinçli EKLENMEDİ (episode emsali). Probe
+		// hasAnomalyPromotionCol (iki-boot).
+		`ALTER TABLE anomaly_events ADD COLUMN IF NOT EXISTS promotion LowCardinality(String) DEFAULT ''`,
 		// v0.9.415 — P1 exception gruplarına proaktif kök-sebep özeti
 		// (ExceptionExplainer, problems ai_summary'nin exception ikizi).
 		`ALTER TABLE exception_groups ADD COLUMN IF NOT EXISTS ai_summary String DEFAULT ''`,
@@ -4716,6 +4727,13 @@ func (s *Store) migrate(ctx context.Context) error {
 	s.hasAnomalySubjectCols.Store(sjOK)
 	if !sjOK {
 		log.Printf("[chstore] `direction`/`baseline_*`/`subject_*` columns not present on anomaly_events (err=%v) — read/INSERT omit them; direction/baseline read as unknown and subject as service (pre-v0.10.1789 behaviour) until the deferred-DDL re-probe or the next boot", sjErr)
+	}
+
+	// anomaly_events.promotion probe'u (v0.10.1797) — aynı şekil.
+	prOK, prErr := s.probeAnomalyPromotionCol(ctx)
+	s.hasAnomalyPromotionCol.Store(prOK)
+	if !prOK {
+		log.Printf("[chstore] `promotion` column not present on anomaly_events (err=%v) — read/INSERT/carry omit it; promotion trace reads empty (no shadow badge) until the deferred-DDL re-probe or the next boot", prErr)
 	}
 
 	// exception_groups.occurrences_at_resolve probe'u (v0.10.1072) — bölüm
