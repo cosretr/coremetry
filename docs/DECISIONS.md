@@ -12210,3 +12210,9 @@ satırı, açık satırın vurgusu + satır tıkıyla aç/kapa, satır içi form
   + `[ml] tick kind=…` log satırı. Tavan sinyali: `sum_other_doc_count > 0` (bedava, kesin) + kardeş `cardinality` (yalnız tik
   isteği; sayı = kardinalite − dönen kova, HLL eksik sayarsa "en az 1"). CH sayımı tracedConn kapısında ctx sayacı. Gösterim
   `/anomalies?tab=ml` durum kutularının altında (ML durumu Settings'te değil orada gösteriliyor; viewer görür).
+- **v0.10.1813 — `ml_baseline_obs` (dilim 1.2, §4.1).** Tablo + `InsertMLBaselineObs` + sınırlı `MLBaselineBand` okuması +
+  saf `ml.BaselineBand` (son 4–8 haftanın medyanı, asgari 4 hafta, haftalık q50 MAD'ı). İş/dedektör/UI YOK. §4.1'in açık
+  bıraktığı noktalarda en küçük güvenli seçim: slot = (ISO gün − 1) × 24 + yerel saat, `week_start` yerel pazartesi (Date);
+  `source` kolonu (S1 = `ml_series`) ORDER BY'ın SONUNDA (§4.1 öneki aynen; ikinci besleyici çakışmaz); `class` anahtarda
+  DEĞİL (yeniden sınıflandırma satırı değiştirir); TTL `DELETE WHERE class='normal'` 70 g + genel 400 g. Küme kipinde
+  `_local` + Distributed DEĞİL, state tablosu (tek replikasyon grubu) — ML tablolarının ev deseni (`ml_series` gibi).

@@ -3190,6 +3190,41 @@ func canonicalTables(sd, ld, md int) []string {
 		ORDER BY event_id
 		TTL toDate(detected_at) + INTERVAL 120 DAY`,
 
+		// ml_baseline_obs — v0.10.1813, öğrenme döngüsü Faz 1.2 (audit
+		// docs/anomaly/learning-loop-audit.md §4.1): seri × haftanın saati ×
+		// ISO hafta gözlemi (q10/q50/q90/q99/vmax + çağrı + kova sayısı).
+		// Bant okuma anında Go'da (ml.BaselineBand: son 4–8 haftanın medyanı).
+		// Kaynak S1 = dedektörün kendi serisi ml_series (source); S9 = yalnız
+		// servis düzeyi. slot = (ISO gün − 1) × 24 + saat, takvim diliminde
+		// (MLBaselineSlot). RMT(version): aynı anahtar = idempotent yeniden
+		// yazım; PARTITION BY week_start ORDER BY'da ve yeniden yazımda
+		// değişmez (P1 güvenli). TTL sınıfa göre: normal 70 g, özel günler
+		// (holiday/half_day/month_end) 400 g — tatil yılda birkaç kez gelir.
+		// Küme kipinde state tablosu (tek replikasyon grubu, ml_series gibi);
+		// yazıcı yalnız ML lideri.
+		`CREATE TABLE IF NOT EXISTS ml_baseline_obs (
+			signal     LowCardinality(String),
+			service    LowCardinality(String),
+			part       String DEFAULT '',
+			slot       UInt8,
+			week_start Date,
+			source     LowCardinality(String) DEFAULT 'ml_series',
+			class      LowCardinality(String) DEFAULT 'normal',
+			q10        Float32 DEFAULT 0,
+			q50        Float32 DEFAULT 0,
+			q90        Float32 DEFAULT 0,
+			q99        Float32 DEFAULT 0,
+			vmax       Float32 DEFAULT 0,
+			calls      UInt32 DEFAULT 0,
+			buckets    UInt8 DEFAULT 0,
+			cfg_hash   String DEFAULT '',
+			version    UInt64 DEFAULT toUnixTimestamp64Nano(now64(9))
+		) ENGINE = ReplacingMergeTree(version)
+		PARTITION BY week_start
+		ORDER BY (signal, service, part, slot, week_start, source)
+		TTL week_start + INTERVAL 70 DAY DELETE WHERE class = 'normal',
+		    week_start + INTERVAL 400 DAY`,
+
 		// cosre_answer_grounding — CoSRE öğrenme Faz 4: çevrimdışı öz-
 		// değerlendirme. Gece örneklenen cevabın her iddiası, turda okunan
 		// tool çıktılarına karşı self-hosted modelle etiketlenir. Yeniden
