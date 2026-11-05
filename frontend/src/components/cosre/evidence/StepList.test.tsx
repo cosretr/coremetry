@@ -71,6 +71,21 @@ describe('StepList', () => {
     expect(el.querySelectorAll('[data-cosre-step]')).toHaveLength(4);
   });
 
+  // v0.10.1787 — /cosre v2 tam sayfası (mockup A): katlı tek satır "<N> adım · <T> ▸".
+  it('compact: bitince çerçevesiz tek satır "4 adım · 4,2 sn", tık aynı kartları açar', async () => {
+    const el = await draw(<StepList view={VIEW} live={false} compact />);
+    const box = el.querySelector('[data-cosre-steps]');
+    expect(box?.hasAttribute('data-compact')).toBe(true);
+    expect(box?.className).not.toContain('border');
+    expect(el.querySelectorAll('[data-cosre-step]')).toHaveLength(0);
+    const head = el.querySelector('[data-cosre-steps] > button');
+    expect(head?.textContent).toBe('4 adım · 4,2 sn');
+    expect(head?.getAttribute('aria-expanded')).toBe('false');
+    await click(head);
+    expect(el.querySelectorAll('[data-cosre-step]')).toHaveLength(4);
+    expect(el.querySelector('[data-cosre-stop]')?.textContent).toContain('çağrı tavanı');
+  });
+
   it('kartlar kapalı; açılan evidence kartı etiket, önizleme, kapalı sorgu, bağlantı taşır', async () => {
     const el = await draw(<StepList view={VIEW} live />);
     const card = el.querySelector('[data-cosre-step="s1"]')!;

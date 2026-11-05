@@ -62,9 +62,11 @@ export interface MessageListProps {
   teamPick?: { initial?: string; onPick(team: string): void; onUnscoped(): void };
   /** v0.10.1737 — "Endpoint seç" kartı (son cevap, data-pick, akış yokken). Yoksa kart çizilmez. */
   endpointPick?: { onInspect(pick: CosreEndpointPick, route: string): void; onSummarize(): void };
+  /** v0.10.1787 — /cosre v2 tam sayfası: adımlar katlı tek satır (StepList compact). Sheet vermez. */
+  compactSteps?: boolean;
 }
 
-export function MessageList({ messages, visibleParts, status, error, onAsk, onRetry, onApproval, teamPick, endpointPick }: MessageListProps) {
+export function MessageList({ messages, visibleParts, status, error, onAsk, onRetry, onApproval, teamPick, endpointPick, compactSteps }: MessageListProps) {
   const busy = status === 'submitted' || status === 'streaming';
   const last = messages.at(-1);
   const errText = status === 'error' && error ? error.message : undefined;
@@ -81,7 +83,7 @@ export function MessageList({ messages, visibleParts, status, error, onAsk, onRe
           explainAsk={prev?.role === 'user' ? prev.metadata?.explainAsk : undefined} scopeNote={scopeNotes.get(m.id)}
           followups={isLast && status === 'ready' ? onAsk : undefined} onRetry={isLast && errText ? onRetry : undefined}
           onApproval={isLast && !busy ? onApproval : undefined} teamPick={isLast && !busy ? teamPick : undefined}
-          endpointPick={isLast && !busy ? endpointPick : undefined} />;
+          endpointPick={isLast && !busy ? endpointPick : undefined} compactSteps={compactSteps} />;
       })}
       {/* İlk parça gelmeden (yalnız soru gitti): v1 bekleyiş göstergesi. */}
       {busy && last?.role !== 'assistant' && (last?.metadata?.explainAsk
@@ -100,7 +102,7 @@ function UserMessage({ m }: { m: CosreUIMessage }) {
   return <ChatBubble turn={turn} />;
 }
 
-function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, explainAsk, onApproval, scopeNote, teamPick, endpointPick }: {
+function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, explainAsk, onApproval, scopeNote, teamPick, endpointPick, compactSteps }: {
   m: CosreUIMessage; visibleParts: (m: CosreUIMessage) => Part[]; live: boolean; error?: string;
   /** araç seti dilim 5 — kapsam değişimi notu (önceki cevaptan farklıysa). */
   scopeNote?: string;
@@ -113,6 +115,7 @@ function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, ex
   onApproval?: (a: CosreApprovalAnswer) => void;
   teamPick?: MessageListProps['teamPick'];
   endpointPick?: MessageListProps['endpointPick'];
+  compactSteps?: boolean;
 }) {
   const approvals = useMemo(() => approvalViews(m), [m]);
   const epPick = useMemo(() => pickOf(m.parts), [m.parts]); // v0.10.1737
@@ -136,7 +139,7 @@ function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, ex
   return (
     <div data-cosre-message={m.id} className="contents">
       {scopeNote && <div className="cm-msg-note text-muted-foreground" data-cosre-scope-note="">{scopeNote}</div>}
-      <StepList view={steps} live={live} exchangeId={xid} badges={badges} />
+      <StepList view={steps} live={live} exchangeId={xid} badges={badges} compact={compactSteps} />
       <ChatBubbleSlotsContext.Provider value={slots}>
         <ChatBubble turn={turn} onRetry={onRetry} shownFollowups={showFu ? turn.followups : undefined} />
       </ChatBubbleSlotsContext.Provider>

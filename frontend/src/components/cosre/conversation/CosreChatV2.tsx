@@ -415,7 +415,8 @@ export function CosreChatV2({ defaultOpen = false, variant = 'sheet' }: CosreCha
                 briefing={briefing} onPrefill={composer.prefill} onAskBriefingLine={r => { briefingAsk.current = r ?? null; }} onAsk={askChip} onAskExplain={askExplain} />
             ) : (
               <MessageList messages={messages} visibleParts={visibleParts} status={status} error={error}
-                onAsk={askChip} onRetry={retry} onApproval={approve} teamPick={teamPick} endpointPick={endpointPick} />
+                onAsk={askChip} onRetry={retry} onApproval={approve} teamPick={teamPick} endpointPick={endpointPick}
+                compactSteps={isPage || undefined} />
             )}
           </div>
         </div>

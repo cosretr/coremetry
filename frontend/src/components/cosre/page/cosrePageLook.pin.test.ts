@@ -52,4 +52,11 @@ describe('CoSRE v2 tam sayfası düzeni (1786)', () => {
     expect(read('components/cosre/page/CosrePageLayout.tsx')).toMatch(/className="cosre-page cosre-root cosre-root--page" data-cosre-v2=""/);
     expect(read('components/CopilotChat.tsx')).not.toContain('data-cosre-v2');
   });
+
+  // v0.10.1787 — adımlar katlı tek satır YALNIZ sayfada; Sheet eski özet başlığını korur.
+  it('adımlar: compactSteps yalnız sayfa kipinde (isPage)', () => {
+    const chat = read('components/cosre/conversation/CosreChatV2.tsx');
+    expect(chat).toMatch(/compactSteps=\{isPage \|\| undefined\}/);
+    expect(chat.match(/compactSteps=/g)).toHaveLength(1);
+  });
 });

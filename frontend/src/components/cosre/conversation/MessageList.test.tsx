@@ -25,7 +25,7 @@ afterEach(async () => {
   root = null; host = null;
 });
 
-async function draw(core: CosreChatCore, status?: CosreChatStatus) {
+async function draw(core: CosreChatCore, status?: CosreChatStatus, compactSteps?: boolean) {
   if (!host) {
     host = document.createElement('div');
     document.body.appendChild(host);
@@ -33,7 +33,7 @@ async function draw(core: CosreChatCore, status?: CosreChatStatus) {
   }
   const st = status ?? (core.chat.status as CosreChatStatus);
   await act(async () => {
-    root!.render(<MemoryRouter><MessageList messages={core.chat.messages} visibleParts={core.visibleParts} status={st} error={core.chat.error} /></MemoryRouter>);
+    root!.render(<MemoryRouter><MessageList messages={core.chat.messages} visibleParts={core.visibleParts} status={st} error={core.chat.error} compactSteps={compactSteps} /></MemoryRouter>);
   });
   return host!;
 }
@@ -125,6 +125,22 @@ describe('MessageList × paylaşılan fixture (gerçek SDK)', () => {
     await act(async () => { list.querySelector<HTMLButtonElement>('button')!.click(); });
     expect([...el.querySelectorAll('[data-cosre-step]')].map(n => n.getAttribute('data-cosre-step'))).toEqual(['s2', 's3']);
     expect(el.querySelector('[data-cosre-stop]')?.textContent).toContain('çağrı tavanı · 2 çağrı · 1 tur');
+  });
+
+  // v0.10.1787 — /cosre v2 tam sayfası: compactSteps → katlı tek satır; yoksa (Sheet) eski özet.
+  it('compactSteps (1787): adımlar "N adım · T" tek satır, Sheet varsayılanı eski başlık', async () => {
+    const core = createCosreChat({ fetch: sseFetch(cosreFixture('ui-stream-v1')).fetch });
+    await core.chat.sendMessage({ text: 'q' });
+    let el = await draw(core, undefined, true);
+    let list = el.querySelector('[data-cosre-steps]')!;
+    expect(list.hasAttribute('data-compact')).toBe(true);
+    expect(list.querySelector('button')?.textContent).toMatch(/^2 adım/);
+    await act(async () => { list.querySelector<HTMLButtonElement>('button')!.click(); });
+    expect(el.querySelectorAll('[data-cosre-step]')).toHaveLength(2);
+    el = await draw(core);
+    list = el.querySelector('[data-cosre-steps]')!;
+    expect(list.hasAttribute('data-compact')).toBe(false);
+    expect(list.querySelector('button')?.textContent).toContain('Adımlar · 2 çağrı');
   });
 
   it('akış ortası (1710): adım kartları açık, araç kartı çalışıyor; balonda adım açılırı yok', async () => {

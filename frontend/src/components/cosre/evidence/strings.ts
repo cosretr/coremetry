@@ -4,6 +4,8 @@ import type { CosreScopeReason, CosreStopReason } from '@/lib/types';
 export const EVIDENCE_STRINGS = {
   stepsTitle: 'Adımlar',
   calls: (n: number) => `${n} çağrı`,
+  /** v0.10.1787 — sayfadaki katlı tek satır: "3 adım · 4,2 sn" (süre yoksa yalnız adım). */
+  stepsLine: (n: number, took: string) => (took ? `${n} adım · ${took}` : `${n} adım`),
   rounds: (n: number) => `${n} tur`,
   stepsListLabel: 'Adımlar',
   skippedTitle: 'çalıştırılmadı',

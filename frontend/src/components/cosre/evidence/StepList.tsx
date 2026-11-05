@@ -14,17 +14,49 @@ import { EVIDENCE_STRINGS as T, STOP_LABELS } from './strings';
 import { fmtMsTR, stopLine, type StepsView, type StopBadge } from './stepView';
 import { StepCard } from './StepCard';
 
-export function StepList({ view, live, exchangeId, badges = [] }: {
+export function StepList({ view, live, exchangeId, badges = [], compact = false }: {
   view: StepsView; live: boolean;
   /** Bitmiş cevabın kimliği; yoksa (akış / arşiv) İlgili / İlgisiz devre dışı. */
   exchangeId?: string;
   badges?: readonly StopBadge[];
+  /** v0.10.1787 — /cosre v2 tam sayfası (mockup A): çerçevesiz tek satır
+   *  "<N> adım · <T> ▸"; tık aynı kartları açar. Sheet vermez (görünüm aynen). */
+  compact?: boolean;
 }) {
   // null = kullanıcı dokunmadı: akarken açık, bitince kapalı.
   const [touched, setTouched] = useState<boolean | null>(null);
   const open = touched ?? live;
   if (view.steps.length === 0 && !view.stop) return null;
   const elapsed = view.stop?.elapsed_ms ?? view.totalMs;
+  const cards = (<>
+    <div role="list" aria-label={T.stepsListLabel}>
+      {view.steps.map(s => <StepCard key={s.id} v={s} exchangeId={exchangeId} />)}
+    </div>
+    {(view.stop || badges.length > 0) && (
+      <div className="flex flex-wrap items-center gap-1.5 border-t border-border px-3 py-2 text-xs text-muted-foreground" role="status" data-cosre-stop={view.stop?.reason ?? ''}>
+        {view.stop && <><span>{T.stopPrefix}</span><span>{stopLine(view.stop)}</span></>}
+        {badges.map(b => (
+          <Badge key={b.label} variant="outline" title={b.title} data-cosre-stop-badge=""
+            className={cn('font-normal text-muted-foreground', b.warn && 'border-status-warn-border text-status-warn')}>{b.label}</Badge>
+        ))}
+      </div>
+    )}
+  </>);
+  if (compact) {
+    return (
+      <Collapsible open={open} onOpenChange={setTouched} data-cosre-steps="" data-compact="" data-open={open || undefined}
+        className="cm-msg cm-msg--ai gap-1">
+        <CollapsibleTrigger asChild>
+          <Button variant="ghost" size="xs" aria-expanded={open}
+            className="h-auto gap-1 self-start px-1 font-normal text-muted-foreground tabular-nums">
+            <span>{T.stepsLine(view.steps.length, elapsed > 0 ? fmtMsTR(elapsed) : '')}</span>
+            <ChevronRight className={cn('size-3 transition-transform', open && 'rotate-90')} aria-hidden />
+          </Button>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="rounded-md border border-border">{cards}</CollapsibleContent>
+      </Collapsible>
+    );
+  }
   return (
     <Collapsible open={open} onOpenChange={setTouched} data-cosre-steps="" data-open={open || undefined}
       className="cm-msg cm-msg--ai rounded-md border border-border">
@@ -39,20 +71,7 @@ export function StepList({ view, live, exchangeId, badges = [] }: {
           <span className="ml-auto text-xs text-muted-foreground tabular-nums">{elapsed > 0 ? fmtMsTR(elapsed) : ''}</span>
         </Button>
       </CollapsibleTrigger>
-      <CollapsibleContent>
-        <div role="list" aria-label={T.stepsListLabel}>
-          {view.steps.map(s => <StepCard key={s.id} v={s} exchangeId={exchangeId} />)}
-        </div>
-        {(view.stop || badges.length > 0) && (
-          <div className="flex flex-wrap items-center gap-1.5 border-t border-border px-3 py-2 text-xs text-muted-foreground" role="status" data-cosre-stop={view.stop?.reason ?? ''}>
-            {view.stop && <><span>{T.stopPrefix}</span><span>{stopLine(view.stop)}</span></>}
-            {badges.map(b => (
-              <Badge key={b.label} variant="outline" title={b.title} data-cosre-stop-badge=""
-                className={cn('font-normal text-muted-foreground', b.warn && 'border-status-warn-border text-status-warn')}>{b.label}</Badge>
-            ))}
-          </div>
-        )}
-      </CollapsibleContent>
+      <CollapsibleContent>{cards}</CollapsibleContent>
     </Collapsible>
   );
 }
