@@ -1,6 +1,6 @@
 ---
 name: frontend-dashboard-panel
-description: Add a new panel TYPE to Coremetry's dashboard system — the PanelType union in lib/types.ts, the *PanelConfig interface, PanelRenderer dispatch, the editor form, variable substitution, bundle-fetch and zoom-sync touchpoints. Use ONLY when introducing a genuinely new panel kind under frontend/src/components/dashboard/; read /frontend-design-system alongside it, since panels still obey the Button/Field atoms, useDataTable and uPlot-only rules. Do NOT use for editing an existing panel's behaviour, for dashboard CRUD/layout/variable work, or for charts outside the dashboard system.
+description: 'Add a new dashboard panel TYPE (PanelType, *PanelConfig, PanelRenderer, editor). WHEN: a genuinely new panel kind under components/dashboard/. WHEN NOT: existing panel behaviour, dashboard CRUD/layout/variables.'
 ---
 
 # /frontend-dashboard-panel — add a new dashboard panel type

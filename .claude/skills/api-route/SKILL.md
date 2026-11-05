@@ -1,6 +1,6 @@
 ---
 name: api-route
-description: Add a new HTTP endpoint to Coremetry — ALWAYS in its own internal/api/<domain>.go file that registers itself from init() via registerRoutesExtra (route_registry.go); api.go does not grow at all (TestApiGoDoesNotGrow fails on a single added line). Covers route/auth/audit/serveCached/writeErr conventions, the four frontend touchpoints, and the silent-failure list (an unregistered route answers HTTP 200 with a blank page, never 404). Use BEFORE adding, moving or deleting any /api/* route, and whenever someone proposes editing api.go to add an endpoint. Do NOT use for MCP tools (use /mcp-tools), AI explain surfaces (/copilot-surface), or ClickHouse query design (/clickhouse-schema).
+description: 'Add/move/delete an /api/* route in its own internal/api/<domain>.go via registerRoutesExtra (api.go never grows). WHEN: any route change or api.go edit proposal. WHEN NOT: MCP tools, AI explain (/copilot-surface), CH query design.'
 ---
 
 # /api-route — yeni endpoint, kendi dosyasında

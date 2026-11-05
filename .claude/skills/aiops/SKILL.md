@@ -1,6 +1,6 @@
 ---
 name: aiops
-description: Code map + decision trees for Coremetry's AIOps layer — anomaly detectors, alert evaluator, Problem model/priority/lifecycle, incidents, correlation + root-cause synthesis, RCA verdict shields, exception groups/storms, self-health problems, behaviour engine, the notify hand-off and the AI-explain prompt builders. Use BEFORE adding or changing a detector, a rule id, a priority/escalation rule, an incident-attach path, a hypothesis score, an exception ladder step, or any background loop that writes problems/anomaly_events/root_cause_hypotheses. Do NOT use for notification channel details (internal/notify templates), for CH schema design (/clickhouse-schema), for copilot surfaces outside problems/exceptions (/copilot-surface) or for MCP tool wiring (/mcp-tools).
+description: 'AIOps map: detectors, evaluator, Problem priority/lifecycle, incidents, RCA, exceptions. WHEN: adding/changing a detector, rule id, priority/escalation or a loop writing problems. WHEN NOT: notify templates, CH schema, copilot UI, MCP tools.'
 ---
 
 # /aiops — dedektörden bildirime, tek harita

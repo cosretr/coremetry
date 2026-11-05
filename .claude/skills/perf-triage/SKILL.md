@@ -1,6 +1,6 @@
 ---
 name: perf-triage
-description: Diagnose ONE concrete Coremetry slowness complaint ("X sayfası yavaş", "bu uç 3 saniye") with measurements instead of guesses — split backend vs frontend by TTFB + X-Cache, then EXPLAIN indexes=1 + system.query_log read_rows/read_bytes on the ClickHouse side, then the known frontend slowness classes, ending in a report with a before/after measurement contract. Use when the operator reports one slow surface and the cause is unknown. Do NOT use for a whole-repo sweep (that is /scale-audit), for a slowness whose root cause is already named (go straight to /bugfix), or to propose an optimisation you have not measured.
+description: 'Measure ONE slow Coremetry surface: TTFB + X-Cache split, EXPLAIN + query_log, frontend slowness classes. WHEN: one slow page/endpoint, cause unknown. WHEN NOT: whole-repo sweep (/scale-audit), cause already named (/bugfix).'
 ---
 
 # /perf-triage — tek şikâyet, ölçülmüş teşhis

@@ -1,6 +1,6 @@
 ---
 name: kuyruk
-description: Render the operator's prioritised DEVELOPMENT queue — in-progress and pending items grouped bugs > scale > features > polish, a short pick-list with effort estimates, ending in the literal prompt "Hangisi?" so the operator picks rather than reading analysis. Use when the operator types "kuyruk" or asks what to work on next. Do NOT use for the P1/P2/P3 triage of live Problem rows on Inbox/Topology (incident priority is a different surface), and never invent queue items the operator did not raise.
+description: 'Operator''s prioritised DEVELOPMENT queue (bugs > scale > features > polish) ending in "Hangisi?". WHEN: operator types "kuyruk" or asks what next. WHEN NOT: P1/P2/P3 triage of live Problems; never invent items.'
 ---
 
 # /kuyruk — prioritised work queue

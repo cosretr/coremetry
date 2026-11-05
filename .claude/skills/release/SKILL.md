@@ -1,6 +1,6 @@
 ---
 name: release
-description: Cut a Coremetry release — compute the next v0.10.X tag from git tags, run every gate, stage explicit paths, commit in the CLAUDE.md format, annotate the tag, push, then rebuild the image in the background with `make image` (never `make docker-up` — v0.9.210). Use when the operator explicitly asks to release / ship / tag the current change. All gates CI runs block the tag — frontend `npx tsc --noEmit && npx eslint src && TZ=UTC npx vitest run`, `go build ./... && go vet ./...`, `go test ./...`, and `make audit` (🔴 critical stops the tag, 🟡 goes to the operator). On a non-trivial diff run /review-changes first. Do NOT use for a bare "commit this" with no tag, and never fold unrelated changes into one release.
+description: 'Cut a v0.10.X release: tag from git, scripts/gate.sh + make audit, explicit git add, commit, tag, push, background make image; ship checklist. WHEN: operator asks to release/ship/tag. WHEN NOT: a bare commit without tag.'
 ---
 
 # /release — ship a Coremetry change

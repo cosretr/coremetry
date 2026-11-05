@@ -1,6 +1,6 @@
 ---
 name: scale-audit
-description: Periodic regression catcher for Coremetry's production scale — surveys frontend pickers, tables, polling, cache keys, CH bounds, render traps, permission gating AND the architectural invariants (MV reads, system_settings hydration, logstore routing, ai_calls attribution) against the 1000s-services / 10000s-ops / 1B-spans-day constraints in CLAUDE.md. Use when the operator asks for a "scale audit" or a quarterly health sweep across the WHOLE repo; it produces a report only, and 🔴 findings then flow into /kuyruk as scale items, or /bugfix when something is already breaking. Do NOT use for reviewing the current working-tree diff (use /review-changes) or for one known slow endpoint (measure that one directly).
+description: 'Whole-repo scale sweep (pickers, tables, polling, cache keys, CH bounds, invariants) → report only. WHEN: operator asks for a scale audit / quarterly sweep. WHEN NOT: current diff (/review-changes), one slow endpoint (/perf-triage).'
 ---
 
 # /scale-audit — production-scale regression catcher

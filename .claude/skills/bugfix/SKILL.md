@@ -1,6 +1,6 @@
 ---
 name: bugfix
-description: Coremetry production bug → repro → one-sentence root cause → minimal fix + regression test → shipped as its own v0.10.X+1 via /release. Use when the operator reports a defect they OBSERVED in the running product ("operator-reported X", "X sayfası boş geliyor", "bu grafik yanlış sayı gösteriyor") — the bug becomes the new priority and in-flight feature work is parked. Starts by reading MEMORY.md + feedback-*.md, and verifies the fix against live ClickHouse / curl / the loaded page before tagging. Do NOT use for build, type, lint or test errors coming from your own uncommitted edits, for "why does this code do X" reading questions, or for anything outside this repo.
+description: 'Operator-observed product bug → repro → root cause → minimal fix + regression test → own v0.10.X+1. WHEN: operator reports a defect in the running product. WHEN NOT: your own build/type/lint/test errors, "why does X" questions.'
 ---
 
 # /bugfix — production bug → fix → release

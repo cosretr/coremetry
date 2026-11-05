@@ -1,6 +1,6 @@
 ---
 name: where-is
-description: Locate where a concept lives in the Coremetry codebase — delegates the search to an Explore subagent and returns a short ranked list of file:line pointers with a one-line summary each, so the main session's context is never spent on grep+read cycles. Use when the operator asks "X kodu nerede" / "where is X handled" and the target is a fuzzy concept (the SLO burn-rate evaluator, the ingest pipeline drop rules, system_settings hydration) rather than a name you could grep in one shot. Do NOT use when the user already gave you the symbol or file name (just grep it), and do NOT use for "how does X work" explanations — this skill returns pointers only, never prose, never edits.
+description: 'Locate a fuzzy concept via an Explore subagent; returns ranked file:line pointers only. WHEN: "X nerede" for a concept you can''t grep in one shot. WHEN NOT: symbol/file already known (just grep), "how does X work", any edit.'
 ---
 
 # /where-is — codebase concept lookup

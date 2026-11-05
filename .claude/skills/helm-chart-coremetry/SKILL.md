@@ -1,6 +1,6 @@
 ---
 name: helm-chart-coremetry
-description: Coremetry Helm chart guardrails — OpenShift restricted-v2 SCC compatibility, global.imageRegistry air-gapped rewrite, external ClickHouse/Redis wiring, monolithic vs distributed deployment.mode, MCP/SSE session affinity, the reset-schema hook, Route vs Ingress, and how CI stamps Chart.yaml version/appVersion from the tag. Use BEFORE any change under charts/coremetry/ or examples/openshift/; chart changes ship with the app tag via /release (CI publishes the chart at the tag version). Do NOT use for local minikube deploys of an unchanged chart (helm upgrade is poisonous there — use kubectl set image) or for generic Kubernetes/Helm questions unrelated to this chart.
+description: 'Helm chart guardrails: OpenShift SCC, imageRegistry, external CH/Redis, deployment.mode, affinity, maxUnavailable. WHEN: any change under charts/coremetry/ or examples/openshift/. WHEN NOT: minikube deploys (kubectl set image).'
 ---
 
 # /helm-chart-coremetry — Coremetry chart guardrails

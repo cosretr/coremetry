@@ -1,6 +1,6 @@
 ---
 name: codebase-tour
-description: Coremetry dizin → amaç haritası + hangi skill. WHEN: repoya ilk bakış, "bu dizin ne yapar". WHEN NOT: belirli bir kavramın file:line yeri (/where-is), iş yapmak (ilgili skill).
+description: 'Coremetry dizin → amaç haritası + hangi skill. WHEN: repoya ilk bakış, "bu dizin ne yapar". WHEN NOT: belirli bir kavramın file:line yeri (/where-is), iş yapmak (ilgili skill).'
 ---
 
 # /codebase-tour — dizin indeksi

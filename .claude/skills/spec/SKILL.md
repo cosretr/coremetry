@@ -1,6 +1,6 @@
 ---
 name: spec
-description: Turn a vague Coremetry feature request into a one-page implementation spec the operator approves BEFORE any code is written — files to touch in CLAUDE.md order, API surface, CH schema/migration, cache-key + auth + audit gates, UX surface, risk, effort estimate. Use when the operator describes WHAT they want in a sentence or two AND the obvious implementation spans 3+ files (new endpoint, new admin surface, new CH column, new AI explain surface); after approval, backend work continues under /tdd and ships via /release. Do NOT use for single-file edits, CSS/copy tweaks, a bug whose root cause is already known (use /bugfix), or open-ended discussion with no intent to build.
+description: 'Turn a vague feature request into a one-page spec the operator approves before code. WHEN: request spans 3+ files (endpoint, admin surface, CH column, AI surface). WHEN NOT: single-file edits, copy/CSS, known-cause bugs (/bugfix).'
 ---
 
 # /spec — idea → implementation plan, then ship

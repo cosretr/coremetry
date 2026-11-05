@@ -1,6 +1,6 @@
 ---
 name: mcp-tools
-description: Add a tool, resource or prompt to Coremetry's OWN MCP server (internal/mcptools/) — the Deps closure, the range_s convention instead of nanosecond timestamps, clampLimit caps, contract-style tool descriptions, auth gating and audit on writes. Use BEFORE editing internal/mcptools/ or exposing a Coremetry surface that an external LLM will call. Do NOT use for configuring or consuming third-party MCP servers, for MCP client work, or for adding a plain HTTP route (that is internal/api/).
+description: 'Add a tool/resource/prompt to Coremetry''s OWN MCP server (internal/mcptools/): Deps, range_s, clampLimit, auth, audit. WHEN: editing internal/mcptools/. WHEN NOT: third-party MCP servers, MCP client, plain HTTP routes.'
 ---
 
 # /mcp-tools — add a Model Context Protocol tool

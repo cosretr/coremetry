@@ -1,6 +1,6 @@
 ---
 name: frontend-design-system
-description: Coremetry UI contract + house rules (ex /frontend-conventions): primitives, buttons, tables, pickers, URL state, tokens, polling, uPlot. WHEN: adding/restructuring anything in frontend/src/. WHEN NOT: backend, pure copy, slow page (/perf-triage).
+description: 'Coremetry UI contract + house rules (ex /frontend-conventions): primitives, buttons, tables, pickers, URL state, tokens, polling, uPlot. WHEN: adding/restructuring anything in frontend/src/. WHEN NOT: backend, pure copy, slow page (/perf-triage).'
 ---
 
 # /frontend-design-system — önce ara, sonra yaz

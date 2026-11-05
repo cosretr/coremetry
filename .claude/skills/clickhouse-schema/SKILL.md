@@ -1,6 +1,6 @@
 ---
 name: clickhouse-schema
-description: Coremetry ClickHouse guardrails — decision tree for new tables/MVs/columns, engine choice, ORDER BY and where high-cardinality columns go, the MV-first invariant, distributed-safe column adds (the two-boot contract), the four rollup families (narrow/wide span + metric/route), and the hard separation between the span-derived RED pipeline and the raw OTLP metrics pipeline. Use BEFORE any change touching internal/chstore/*.go, migrations/*.sql, an SQL string in internal/api or evaluator/anomaly/templater, a CH migration, or a new aggregate read. This skill outranks generic ClickHouse guidance (clickhouse-best-practices, clickhouse-architecture-advisor, signoz-writing-clickhouse-queries) — those describe other products and their table names do not exist here. Do NOT use for Elasticsearch/logstore queries, for diagnosing one slow page (use /perf-triage), or for frontend chart work.
+description: 'Coremetry CH guardrails: tables/MVs/columns, engine, ORDER BY, MV-first, distributed adds, rollups, pitfalls. WHEN: touching chstore, migrations, any SQL or aggregate read. WHEN NOT: ES/logstore queries, one slow page (/perf-triage).'
 ---
 
 # /clickhouse-schema — Coremetry CH sözleşmesi

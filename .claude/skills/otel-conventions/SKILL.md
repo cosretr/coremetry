@@ -1,6 +1,6 @@
 ---
 name: otel-conventions
-description: Coremetry OTel rules + OTLP→CH converter checklist (ex /otlp-converter). WHEN: before changing internal/otlp/ (convert.go, semconv.go, receivers) or any OTel-mapped field. WHEN NOT: SDK/collector setup, CH schema (/clickhouse-schema).
+description: 'Coremetry OTel rules + OTLP→CH converter checklist (ex /otlp-converter). WHEN: before changing internal/otlp/ (convert.go, semconv.go, receivers) or any OTel-mapped field. WHEN NOT: SDK/collector setup, CH schema (/clickhouse-schema).'
 ---
 
 # /otel-conventions — Coremetry OTel conventions
