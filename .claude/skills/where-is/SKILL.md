@@ -135,3 +135,31 @@ the file — but that's a different call.
   but burns main-session context. The whole reason the
   skill exists is that delegation. If you find yourself
   doing the lookup manually, you're using the wrong tool.
+
+## What goes WHERE (CLAUDE.md'den taşındı, 2026-11-05)
+
+| Domain | Path |
+|---|---|
+| Demo generators (Go synthetic / JBoss) | `cmd/demo/`, `jboss-demo/` |
+| OTLP ingest | `internal/otlp/` |
+| CH writes (spans/metrics/logs) | `internal/chstore/` |
+| ES log read backend | `internal/logstore/` |
+| Tempo trace fallback | `internal/tempo/` |
+| HTTP API + cache wrapper | `internal/api/` |
+| Alert evaluator / anomaly / templater | `internal/evaluator/`, `internal/anomaly/`, `internal/templater/` |
+| Notifications | `internal/notify/` |
+| Auth (local + LDAP + OIDC) | `internal/auth/`, `internal/ldap/` |
+| Copilot (ALL system prompts: `internal/copilot/prompts.go`) | `internal/copilot/` |
+| Topology correlator | `internal/topology/` |
+| CH schema (app-owned: `store.go` `migrate()`; operator-owned: `migrations/*.sql`) · single-node→cluster copy | `internal/chstore/`, `migrations/` · `internal/chmigrate/` |
+| Frontend pages / components / types+client / routes / sidebar | `frontend/src/pages/`, `components/`, `lib/{types,api}.ts`, `App.tsx`, `components/Sidebar.tsx` |
+
+**Demo realism:** Go + JBoss demos share one load model (diurnal,
+incidents, log-normal latency, correlated errors, real histogram
+buckets, saturation) — [docs/DEMO-REALISM.md](docs/DEMO-REALISM.md).
+New demo scenario/metric reads the load model (`L` / `DemoLoad`), never
+its own fixed probability or uniform latency.
+
+**Self-observability:** `/admin/stats` reads `GetSystemStats(ctx)`; AI
+usage → `ai_calls` → `/ai`. New ingest path or expensive endpoint =
+register a counter.

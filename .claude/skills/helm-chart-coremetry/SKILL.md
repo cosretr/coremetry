@@ -361,3 +361,7 @@ Spot-check that:
   Banks must mirror EVERY image; sub-chart dependencies obscure
   this and break air-gapped installs. Bundle the manifests
   inline.
+
+## Pitfall rule (CLAUDE.md'den taşındı, 2026-11-05)
+
+- Coremetry Deployment keeps `maxUnavailable: 0` or the OTel collector wedges on rollout ("zero addresses"); pre-fix: restart collector.

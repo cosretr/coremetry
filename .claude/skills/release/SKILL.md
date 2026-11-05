@@ -186,3 +186,24 @@ Example confirmation:
 - **Don't `make image` while another rebuild is in flight.**
   BuildKit serialises layer cache; concurrent rebuilds fight and
   one of the resulting images will be broken.
+
+## Ship checklist — every new operator-facing surface (CLAUDE.md'den taşındı, 2026-11-05)
+
+1. Handler hits the right MV; 2. `s.serveCached` with hash-all-inputs
+key; 3. auth gate + 4. audit entry if it writes; 5. settings via
+`system_settings` if configurable; 6. type in `lib/types.ts`;
+7. client method in `lib/api.ts`; 8. loading/error/empty states
+(`<Spinner/>`, `<Empty/>`); 9. fe gate: `npx tsc --noEmit` +
+`npx eslint src` + `TZ=UTC npx vitest run`; 10. `go build ./...` +
+`go vet ./...`; 11. bug-fix release = regression test (pure-function,
+table-driven, header cites the vX.Y.Z; canonical:
+`internal/api/cache_key_test.go`) + `go test ./...`.
+
+AI explain affordances route through `s.copilotExplain(r, ...)`,
+never `s.copilot.Explain` direct (/ai attribution).
+
+## Sürüm kimliği (CLAUDE.md Tech stack'ten taşındı)
+
+Runtime: ldflag > `/app/VERSION` > `"dev"` = **build** kimliği; `COREMETRY_VERSION`
+env yalnız GÖSTERİLENİ değiştirir; `/api/version` ikisini + `overridden`
+döndürür (docs/INCIDENTS.md, v0.5.394).

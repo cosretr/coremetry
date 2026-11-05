@@ -624,3 +624,10 @@ v0.10.1072 — inbox istisna listesi taşıdığı için).
 - 8 ayar anahtarı = `internal/chstore/{anomaly_tracked,anomaly_sensitivity,anomaly_promotion,problem_priority,problem_escalation,exception_triage,selfhealth,notify_policy}.go` içindeki `const *Key`.
 - 12 state tablosu = `store.go`'da problems|anomaly_*|root_cause_hypotheses|rca_verdicts|incident*|exception_groups|events|notification_log CREATE'leri.
 - Kaynak: `docs/DECISIONS.md:385-436` (Anomali/Problems kararları), `docs/INCIDENTS.md:285-299`, planlar `docs/plans/spec-anomaly-clustering.md`, `anomaly-rootcause.md`.
+
+## CLAUDE.md'den taşınan kurallar (2026-11-05)
+
+- ES: no `case_insensitive` on `query_string` (8.x rejects); `_msearch` over per-pattern `_search`; `significant_text` needs `background_filter` + `sampler`.
+- Drain templating is sample-based (1000/5min), never full-scan.
+- **Logstore plurality:** detectors go through `logstore.Store.CountPatterns(...)` batched (ES `_msearch` / CH tokenbf) — never call ES directly from a detector.
+- **Triage:** P1 = now (critical + ayarlanabilir eşik katı (varsayılan 2×) / tamamen kayıp / ayarlanabilir açık-saat (varsayılan 4h) / exception fırtınası (≥N servis aynı pencerede yeni grup; vida: `exception_triage`); vida: `problem_priority` blobu), P2 = today, P3 = convenient. Exception'da kazanılmış P1 zamanla düşmez (operatör): patlama ya da `p1MinOccurrences`'ı aşmış grup resolve/ignore edilene dek P1; `regressed` dalı P2 ama yeniden açıldıktan sonra ≥`p1MinOccurrences` oluşumda P1; inbox'ta exception dışı türler P3, istisna listesi `problem_priority.inboxKeepSourcePriority` kaynak önceliğini korur. Deploy bilgisi görünür ama önceliğe karışmaz — `fresh deploy` tetikleyicisi yok, geri ekleme. Reason string ships with every Problem. Ayrıntı: `/aiops`.

@@ -459,3 +459,11 @@ bir kayıt düşürülmüş nesnenin CREATE'ini elerdi.
 3. ~~**`root_cause_hypotheses`** Kural P1 ihlali~~ — **KAPANDI** v0.9.1304
    (PARTITION BY söküldü; DDL `ORDER BY (anchor_kind, anchor_id)`, partition yok).
 4. ~~`alters` içindeki 5 CREATE TABLE~~ — **KAPANDI** v0.9.1301 (taşıma) + v0.9.1302 (eleme dilimden bağımsızlaştı).
+
+## Pitfall rules (CLAUDE.md'den taşındı, 2026-11-05) — hikâyeler docs/INCIDENTS.md
+
+- Value+unit templates (Nh/Nd, ms/s): test EVERY unit; never `toDate()` around sub-day math (`retention_test.go`).
+- Combined-MV drop: inner table first with `max_table_size_to_drop=0` (`dropCombinedMV`).
+- MV state columns use `quantilesTDigestState`, never reservoir `quantilesState`; MV type changes cause a rolling-deploy read-error window — roll fast or dual-column.
+- SQL references telemetry tables UNQUALIFIED (no `coremetry.` prefix).
+- `toDateTime64(?)` bind args must be tz-less (no trailing `Z`) — `chDateTime64Arg`.
