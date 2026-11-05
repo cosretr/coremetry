@@ -1,7 +1,7 @@
 package otlp
 
 // convert_counters.go — v0.10.388 (dış skill denetimi B2/B5): dönüştürücünün
-// SESSİZ degrade dalları sayılır. /otlp-converter §3 kuralı: desteklenmeyen
+// SESSİZ degrade dalları sayılır. /otel-conventions dönüştürücü §3 (eski /otlp-converter) kuralı: desteklenmeyen
 // bir dal ya taşınır, ya sayaçla degrade edilir, ya sayaçla düşürülür —
 // sessiz kalamaz. Eskiden exponential histogram dört koşulda boş kova
 // bırakıyor (yüzdelik sessizce avg'a düşüyor) ve bilinmeyen AnyValue tipi

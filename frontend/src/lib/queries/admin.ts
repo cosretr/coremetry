@@ -61,7 +61,7 @@ export function useCHCoordinators(windowS: number) {
 }
 
 /** v0.9.613 — DDL kuyruğu teşhisi. 20s stale: sunucu 15s cache'li,
- *  staleTime ≥ sunucu TTL kuralı (frontend-conventions §6). */
+ *  staleTime ≥ sunucu TTL kuralı (frontend-design-system §6 (eski frontend-conventions)). */
 export function useDDLQueueHealth() {
   return useQuery({
     // 'admin' öneki: kardeş hook'ların ad alanı — öneksiz anahtar,

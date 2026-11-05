@@ -646,7 +646,7 @@ export function MetricQueryEditor({ range }: { range: TimeRange }) {
     return () => clearTimeout(t);
   }, [promqlText]);
 
-  // v0.10.1306 — PromQL sekmesi ⇄ URL (/frontend-conventions §4). Yazım:
+  // v0.10.1306 — PromQL sekmesi ⇄ URL (/frontend-design-system §4 (eski /frontend-conventions)). Yazım:
   // debounce'lu sorgu + sekme + kaynak + cluster, replace:true, yabancı
   // paramlar korunur; yazılan imza önceden saklanır ki içe aktarma kendi
   // yazımımızı no-op saysın. İçe aktarma İMZA-KORUMALI (Logs.tsx

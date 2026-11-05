@@ -61,7 +61,7 @@ export function KioskSpanPanel({ span, traceStartNs, logs, eventRows, onClose }:
       </div>
       {/* Tempo'nun span başlık satırı: Service · Duration · Start Time (trace
           başına göre +offset ve mutlak) · Kind · Status · Library. Trace state
-          saklanmıyor (otlp-converter §1: kayıp), çizilmez. */}
+          saklanmıyor (otel-conventions dönüştürücü §1 (eski otlp-converter): kayıp), çizilmez. */}
       <div className="kiosk-span__facts">
         <span><b>Service:</b> {span.serviceName}</span>
         <span><b>Duration:</b> {fmtNs(durNs)}</span>

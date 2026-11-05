@@ -556,8 +556,8 @@ export default function ProblemsPage() {
             hint="/"
             placeholder="Search type/message…" width={260} />
           {/* Owner (ug-team) / SRE (sy-team) team filter — plain <select>
-              for these small catalog-derived sets (frontend-conventions
-              §3), resolved server-side so the narrowing is correct across
+              for these small catalog-derived sets (frontend-design-system
+              §3, eski frontend-conventions), resolved server-side so the narrowing is correct across
               the whole paginated inbox, not just the loaded page. */}
           <select value={ownerTeam} onChange={e => setTeam('owner', e.target.value)}
             aria-label="Filter by owner team" style={{ minWidth: 130 }}>

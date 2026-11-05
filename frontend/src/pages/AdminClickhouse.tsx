@@ -1188,7 +1188,7 @@ function RollupWizardPanel() {
         <label style={{ display: 'grid', gap: 4, fontSize: 11, color: 'var(--text3)' }}>
           Küme
           {/* Sabit ve küçük küme (genelde 1-2 ad) → düz select
-              (frontend-conventions §3). Elle yazdırmıyoruz: yanlış ad
+              (frontend-design-system §3 (eski frontend-conventions)). Elle yazdırmıyoruz: yanlış ad
               DDL'i kuyrukta süresiz bekletir. */}
           <select value={cluster} onChange={e => setCluster(e.target.value)}
                   disabled={!pre || pre.clusters.length === 0}>

@@ -54,7 +54,7 @@ export function useRefreshSettings(): RefreshSettings {
   const absolute = currentRange(search).preset === 'custom';
   const paused: RefreshPause = holds.length > 0 ? holds[0] : absolute ? 'absolute' : null;
 
-  // URL (replace:true, prev copied — frontend-conventions §4) + localStorage
+  // URL (replace:true, prev copied — frontend-design-system §4 (eski frontend-conventions)) + localStorage
   // mirror, the useUrlEnv shape: the pick follows the operator across pages
   // and a share link reproduces it.
   const setSec = useCallback((next: number) => {

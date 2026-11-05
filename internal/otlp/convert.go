@@ -566,7 +566,7 @@ func anyValStr(v *commonpb.AnyValue) string {
 		return "" // değer hiç set edilmemiş — boş, bilinmeyen değil
 	}
 	// v0.10.388 — yeni proto tipi: anahtar kalır, değer boşalır; sessiz
-	// kalmasın (/otlp-converter §3 "sessiz return \"\" kabul edilmez").
+	// kalmasın (/otel-conventions dönüştürücü §3 (eski /otlp-converter) "sessiz return \"\" kabul edilmez").
 	convertDegrades.anyValUnknown.Add(1)
 	return ""
 }
@@ -583,7 +583,7 @@ func attrStr(attrs []*commonpb.KeyValue, key, def string) string {
 // attrInt — v0.10.379 (dış skill denetimi A4): IntValue yanında string
 // ("503") ve double (503.0) de kabul edilir. Bazı enstrümantasyonlar
 // http.status_code'u string basar; eskiden sessizce 0 → 5xx sınıflaması
-// ve endpoint hata sayıları eksikti (/otlp-converter §3 "tanınan ama
+// ve endpoint hata sayıları eksikti (/otel-conventions dönüştürücü §3 (eski /otlp-converter) "tanınan ama
 // beklenmedik tip → sessiz + yanıltıcı").
 func attrInt(attrs []*commonpb.KeyValue, key string, def int64) int64 {
 	for _, kv := range attrs {

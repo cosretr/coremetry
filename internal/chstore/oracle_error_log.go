@@ -122,7 +122,7 @@ const oracleErrorLogDDL = `CREATE TABLE IF NOT EXISTS oracle_error_log (
 
 // oracleErrorLogColumns — INSERT kolon listesi; `version` DEFAULT'a bırakılır.
 // Sıra Append ile BİREBİR (aynı-tipli komşu takası hiçbir testi kırmaz —
-// /otlp-converter §6 uyarısı; oracle_error_log_test.go sırayı pinler).
+// /otel-conventions dönüştürücü §6 (eski /otlp-converter) uyarısı; oracle_error_log_test.go sırayı pinler).
 const oracleErrorLogColumns = "source_id, time, row_id, severity_num, severity_text, body, trace_id, span_id, " +
 	"host_name, instance_id, operation_code, error_code, external_code, error_type, channel_code, task_code, " +
 	"request_id, customer_id, teller_id, location, attr_keys, attr_values"

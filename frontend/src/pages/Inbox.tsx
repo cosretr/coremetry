@@ -1003,7 +1003,7 @@ export default function InboxPage() {
             onToggle={toggleCat} onSolo={soloCat} onAll={allCat} />
 
           {/* v0.9.525 — first-seen penceresi. Küçük sabit küme → düz
-              <select> (frontend-conventions: ≤10 değer picker istemez). */}
+              <select> (frontend-design-system, eski frontend-conventions: ≤10 değer picker istemez). */}
           <select
             value={sinceFilter}
             onChange={e => setParam('since', e.target.value || null)}

@@ -14,7 +14,7 @@ import (
 )
 
 // v0.10.553 — messaging.* golden testi (docs/audit/messaging-kafka-metrics
-// -2026-09-08.md Faz 4, /otlp-converter §2.6/§5). TAM-struct karşılaştırma:
+// -2026-09-08.md Faz 4, /otel-conventions dönüştürücü §2.6/§5, eski /otlp-converter). TAM-struct karşılaştırma:
 // yeni bir Span alanı eklendiğinde bu test KIRILMAK ZORUNDA.
 //
 // Sözleşme (bugünkü dönüşüm, bilerek):

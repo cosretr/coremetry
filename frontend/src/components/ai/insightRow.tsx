@@ -191,7 +191,7 @@ export function useInsightRow(kind: InsightKind): InsightRowState {
     ), { replace: true });
     // replace:true — triyaj sırasında açılıp kapanan kartlar history'ye
     // durak yığmamalı; "geri" operatörü listeye değil bir önceki SAYFAYA
-    // götürmeli (ev kuralı, frontend-conventions §4).
+    // götürmeli (ev kuralı, frontend-design-system §4 (eski frontend-conventions)).
   }, [setSearchParams, kind]);
 
   const close = useCallback(() => write(null), [write]);

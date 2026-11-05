@@ -24,7 +24,7 @@ export const EVAL_URL_PARAMS = ['run', 'case', 'cmp'] as const;
 
 /** v0.10.940 — `prev`in KOPYASINA yamayı uygular (null = sil). Yabancı
  *  parametreler (tablo sıralaması `s_*`, `tab`) korunur — ev kuralı "prev'i
- *  kopyala, sorgu dizgesini sıfırdan kurma" (frontend-conventions §4). */
+ *  kopyala, sorgu dizgesini sıfırdan kurma" (frontend-design-system §4 (eski frontend-conventions)). */
 export function withEvalParams(prev: URLSearchParams, patch: Record<string, string | null>): URLSearchParams {
   const p = new URLSearchParams(prev);
   for (const [k, v] of Object.entries(patch)) {

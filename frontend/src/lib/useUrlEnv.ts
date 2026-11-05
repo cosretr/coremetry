@@ -16,7 +16,7 @@ import { getRaw, setRaw, removeRaw, STORAGE_KEYS } from './storage';
 //   3. ''                  — all environments (the default)
 //
 // Writes use { replace: true } and copy `prev` so foreign params
-// survive (frontend-conventions §4). '' clears BOTH the param and the
+// survive (frontend-design-system §4 (eski frontend-conventions)). '' clears BOTH the param and the
 // stored pick — "All environments" is the absence of a filter, not a
 // value.
 //

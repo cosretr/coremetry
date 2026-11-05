@@ -342,7 +342,7 @@ function AdminAIObservabilityPage() {
               (shortcutSearchTarget.test.ts başlığı) ikinci tekrarı. */}
           {/* v0.10.940 — Kaynak ilk sırada: diğer süzgeçlerden farklı
               olarak yalnız tabloyu değil KPI + grafiği de kapsar. İki değer →
-              düz select (frontend-conventions §3, ≤10 sabit değer). Boyut
+              düz select (frontend-design-system §3 (eski frontend-conventions), ≤10 sabit değer). Boyut
               `.ai-filter-select`te, satır içinde değil: satır içi 12px
               yoğunluk kurallarını ve telefondaki iOS 16px kuralını ezerdi;
               sağlayıcı / durum seçicileri de aynı sınıfa geçti. */}

@@ -7,7 +7,7 @@
 //   /metrics?editor=1&tab=promql&promql=<ifade>&src=vm|ch|thanos
 //            &cluster=<id|ad>&range=custom:<fromMs>-<toMs>
 //
-// URL = gerçeğin kaynağı (/frontend-conventions §4): editör bu dört
+// URL = gerçeğin kaynağı (/frontend-design-system §4 (eski /frontend-conventions)): editör bu dört
 // parametreyi URL'den TOHUMLAR, operatörün değişikliğini replace:true ile
 // GERİ yazar (applyPromqlParams) ve içe aktarma promqlSig ile imza-korumalıdır
 // — ilgisiz bir URL yazımı (range) yazılan sorguyu silmez (v0.8.253 sınıfı).

@@ -263,7 +263,7 @@ export function LogsHistogram({ range, filter, onRangeSelect, onZoomReset, onSer
       }}>
         {headerLeft && <div className="lh-left">{headerLeft}{onBreakdown && breakdownSelect}</div>}
         {/* v0.9.1220 — kırılım seçicisi (Kibana "Break down by"). Sabit
-            küçük küme → düz select (frontend-conventions §3); v0.9.1250'de
+            küçük küme → düz select (frontend-design-system §3 (eski frontend-conventions)); v0.9.1250'de
             4 eksene çıktı, hâlâ picker eşiğinin altında. */}
         {!headerLeft && onBreakdown && breakdownSelect}
         {/* The hand-drawn version's only hint that it was draggable was a

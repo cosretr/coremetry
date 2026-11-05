@@ -7,7 +7,7 @@
 // YOK; Koş tek tık. Çağrılar /ai'da `evalset-*` yüzeyiyle ayrı etiketlenir
 // (K2) — üretim sayılarını şişirmez; link aşağıda (?source=evalset).
 //
-// URL tek doğruluk kaynağı (frontend-conventions §4): `?tab=eval` AiTab'ın,
+// URL tek doğruluk kaynağı (frontend-design-system §4 (eski frontend-conventions)): `?tab=eval` AiTab'ın,
 // `?run=` seçili koşu, `?case=` vaka çekmecesi, `?cmp=` karşılaştırma
 // tabanı — hepsi replace ile yazılır ve DOĞRUDAN URL'den türetilir (yerel
 // kopya yok → içe aktarma efekti ve imza koruması da gereksiz). Yerel state

@@ -9,7 +9,7 @@
 // EnvPicker + yapışkan seçim — useUrlEnv sahibi; Environment facet'i de
 // AYNI paramı onun üzerinden yazar), `ai` (CoSRE çekmecesi) ve sayfanın
 // bilmediği her şey. Yazıcı daima `prev`i kopyalar, sorgu dizesini sıfırdan
-// kurmaz (frontend-conventions §4).
+// kurmaz (frontend-design-system §4 (eski frontend-conventions)).
 //
 // sel = `<type>:<encodeURIComponent(id)>` — kimlik ':' ya da endpoint'in
 // \x1f ayracını taşıyabilir; tür öneki ilk ':'a kadardır.

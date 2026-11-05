@@ -1,6 +1,6 @@
 // traceMetricsUrl.ts — v0.10.968 — Trace › Metrics URL durumu (SAF okuma + yazma).
 //
-// v0.10.968 — URL görünümün tek kaynağı (frontend-conventions §4): seçim
+// v0.10.968 — URL görünümün tek kaynağı (frontend-design-system §4 (eski frontend-conventions)): seçim
 // (mpod), pencere (mwin), süzgeç (mf), arama (mq), gruplama (mgrp), kardeş
 // çizgileri (msib), odak görünümü (mview). Hepsi replace:true ile yazılır.
 //

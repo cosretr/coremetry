@@ -481,7 +481,7 @@ export function ProblemsSection({ serviceFilter, navDisabled = false }: {
         })}
         {/* Owner / SRE team filters (v0.8.290) — mirror the Services
             page. Plain <select> for these small catalog-derived sets
-            (frontend-conventions §3 permits <select> for ≤~10 fixed
+            (frontend-design-system §3 (eski frontend-conventions) permits <select> for ≤~10 fixed
             values). Server resolves the pick with the same EqualFold
             / empty-means-all filter the inbox uses, so the narrowing
             is correct across the whole result, not just the loaded

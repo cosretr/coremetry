@@ -4,7 +4,7 @@
 // operatör cevap geldikten sonra başka sayfaya geçtiyse düğme görünmez
 // (etiket "bu sayfada" der, başka sayfaya götürmez). Uygulama mergeOpenHref
 // ile URL birleşimi + replace:true navigate: yeni sekme yok, sayfa URL'yi
-// kaynak-of-truth olarak yeniden okur (frontend-conventions §4).
+// kaynak-of-truth olarak yeniden okur (frontend-design-system §4 (eski frontend-conventions)).
 import { mergeOpenHref } from './openHref';
 import { isSafeAppPath } from './safeAppPath';
 import type { CosreRuleScope, CosreRuleScopeKind, SREHypothesisKind } from './types';
