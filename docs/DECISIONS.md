@@ -12143,3 +12143,9 @@ satırı, açık satırın vurgusu + satır tıkıyla aç/kapa, satır içi form
 - Davranış: ⋯ menüsü kapanınca odak düğmeye YALNIZ odak `<body>`'deyse döner; öğenin eylemi odağı başka yere
   koyduysa (⋯ → Düzenle → formun ad alanı) o kalır. Bugün prod'da rowActions tüketicisi yoktu.
 - `virtual` kipinde pinnedRows / openRow / ariaLabel çizilmez (rowActions / detail ile aynı Faz 1 sınırı).
+
+## 2026-11-05 — v0.10.1785–1788 — /cosre tam sayfası CoSRE v2 ile (mockup A, operatör onayı)
+- `cosreV2 === true` (ve copilot açık) → `/cosre` = `CosreChatV2 variant="page"` (`components/cosre/page/`); bayrak kapalı → v1 `CopilotChat variant="page"` DOKUNULMADI; Sheet görünümü aynen.
+- Mockup A (Vercel sohbet düzeni): ortalı 620px kolon, kullanıcı balonu / cevap düz, yuvarlak altta composer, adımlar katlı tek satır, ray gün grupları (Bugün / Dün / tarih, operatör saat diliminde).
+- CSS yalnız `[data-cosre-v2].cosre-root--page`; Sheet kuralları seçici listesine sayfa eklenerek genellendi (`cosrePageLook.pin`).
+- Sapmalar: ⌘K ipucu yok (/cosre kromsuz, palet mount edilmez); mobil çekmece eşiği mevcut 640px (v1 ile ortak bileşen); başarılı cevapta "Yeniden dene" eklenmedi (v2'de yok); üst şeritte "Coremetry'yi aç" + tema düğmesi kaldı.

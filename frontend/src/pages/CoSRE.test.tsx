@@ -36,6 +36,7 @@ import { isPublicPath } from '@/lib/auth-paths';
 import { oidcStartHref, peekPostLoginRedirect, sanitizeRedirect } from '@/lib/postLoginRedirect';
 import type { ChatTurn } from '@/lib/types';
 import CoSRE from './CoSRE';
+import '@/test/radixJsdom'; // v0.10.1788 — v2 karşılaması (cmdk) ResizeObserver ister
 
 let host: HTMLDivElement;
 let root: Root;
@@ -228,6 +229,20 @@ describe('/cosre bayrak: v1 / v2 sayfası', () => {
     expect(load).toHaveBeenCalledWith('c1');
     expect(here).toBe('/cosre?chat=c1');
     expect(document.title).toBe('CoSRE');
+  });
+
+  // v0.10.1788 — v2 kenar çubuğu gün gruplu (Bugün / Dün / tarih); v1 kovaları ("Son 7 gün") değil.
+  it('cosreV2 açık → kenar çubuğu gün grupları', async () => {
+    vi.spyOn(api, 'me').mockResolvedValue({ id: 'u1', email: 'op@example.test', role: 'viewer' } as never);
+    vi.spyOn(api, 'copilotConfig').mockResolvedValue({ enabled: true, model: 'model-x', cosreV2: true } as never);
+    vi.spyOn(api, 'aiConversations').mockResolvedValue([
+      { id: 'c3', title: 'üç gün önce', updatedAt: (Date.now() - 3 * 86_400_000) * 1e6, messages: 2 },
+    ] as never);
+    await renderAt('/cosre');
+    await vi.waitFor(() => expect(document.querySelector('[data-cosre-v2] #cosre-side h2')).not.toBeNull());
+    const h = document.querySelector('[data-cosre-v2] #cosre-side h2')!.textContent ?? '';
+    expect(h).not.toBe('Son 7 gün');
+    expect(h).toMatch(/^\d{1,2} \S+/);
   });
 });
 

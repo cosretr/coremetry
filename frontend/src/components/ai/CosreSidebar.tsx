@@ -6,7 +6,7 @@ import { SearchField } from '@/components/ui/SearchField';
 import { Modal } from '@/components/ui/Modal';
 import { Empty, Spinner } from '@/components/Spinner';
 import { useAuthRole } from '@/components/AuthProvider';
-import { groupConversations, sidebarTitle } from './chatHistoryGroups';
+import { groupConversations, groupConversationsByDay, sidebarTitle } from './chatHistoryGroups';
 import { CosreRulesPanel } from './CosreRulesPanel';
 
 // CosreSidebar — v0.10.1137 (operatör: "geçmiş Claude'daki gibi solda"): /cosre
@@ -26,7 +26,7 @@ import { CosreRulesPanel } from './CosreRulesPanel';
 // kaydırırken yapışkan, satır yüksekliği --cosre-row-h (38px). Kurallar
 // globals.css "CoSRE tip ölçeği" bölümünde.
 export function CosreSidebar({
-  threads, error, activeId, collapsed, mobileOpen, onNew, onOpen, onDelete, onShare, onCloseMobile, nowMs,
+  threads, error, activeId, collapsed, mobileOpen, onNew, onOpen, onDelete, onShare, onCloseMobile, nowMs, groupBy = 'recency', timeZone,
 }: {
   threads: AiConversationSummary[] | undefined;
   error?: string;
@@ -41,6 +41,10 @@ export function CosreSidebar({
   onCloseMobile: () => void;
   /** test dikişi — gruplamanın "şimdi"si */
   nowMs?: number;
+  /** v0.10.1788 — 'day': Bugün / Dün / tarih (CoSRE v2 sayfası); varsayılan v1 kovaları. */
+  groupBy?: 'recency' | 'day';
+  /** test dikişi — gün grubunun saat dilimi (varsayılan tarayıcı = operatör dilimi). */
+  timeZone?: string;
 }) {
   const [q, setQ] = useState('');
   // v0.10.1289 — "Kurallar" modalı (her rol; viewer salt-okunur). Panel ve
@@ -48,7 +52,10 @@ export function CosreSidebar({
   const [rulesOpen, setRulesOpen] = useState(false);
   const role = useAuthRole();
   const canEditRules = role === 'admin' || role === 'editor';
-  const groups = useMemo(() => groupConversations(threads, nowMs ?? Date.now(), q), [threads, nowMs, q]);
+  const groups = useMemo(() => {
+    const now = nowMs ?? Date.now();
+    return groupBy === 'day' ? groupConversationsByDay(threads, now, q, timeZone) : groupConversations(threads, now, q);
+  }, [threads, nowMs, q, groupBy, timeZone]);
   const cls = ['cosre-side', collapsed ? 'is-collapsed' : '', mobileOpen ? 'is-open' : ''].filter(Boolean).join(' ');
   return (
     <>

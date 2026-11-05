@@ -59,7 +59,7 @@ export function CosrePageLayout({ headerBadge, history, activeId, onNew, onOpen,
         </header>
         <div className="cosre-page__main">
           <CosreSidebar threads={history.threads} error={history.error} activeId={activeId}
-            collapsed={collapsed} mobileOpen={mobileOpen}
+            collapsed={collapsed} mobileOpen={mobileOpen} groupBy="day"
             onNew={() => { onNew(); setMobileOpen(false); }}
             onOpen={t => { setMobileOpen(false); onOpen(t); }}
             onDelete={onDelete}
