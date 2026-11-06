@@ -313,7 +313,7 @@ function cosreRuleHeaders(rev?: number): Record<string, string> {
   return h;
 }
 
-async function request<T>(path: string, init?: RequestInit & { timeoutMs?: number }): Promise<T> {
+async function request<T>(path: string, init?: RequestInit & { timeoutMs?: number; onServerTiming?: (header: string | null) => void }): Promise<T> {
   const timeoutMs = init?.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
   // v0.9.603 (traces D2) — çağıranın signal'i ile timeout BİRLİKTE çalışır.
   //
@@ -342,6 +342,8 @@ async function request<T>(path: string, init?: RequestInit & { timeoutMs?: numbe
       throw new UnauthorizedError(await r.text().catch(() => 'unauthorized'));
     }
     if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
+    // v0.10.1834 — akışlı yükleme göstergesi: Server-Timing yalnız isteyene.
+    init?.onServerTiming?.(r.headers.get('Server-Timing'));
     // 204 / empty bodies → undefined
     const ct = r.headers.get('content-type') ?? '';
     if (!ct.includes('application/json')) return undefined as unknown as T;
@@ -865,12 +867,13 @@ export const api = {
   // KB'larca olabilir; GET URL'si prod ingress sınırını aşıp "Failed to
   // fetch" ile ölüyordu (Load more'un ilk sayfada değil 2. sayfada
   // patlamasının sebebi). Gövde, qs() ile aynı param adlarını taşır.
-  logs:      (params: LogsParams, signal?: AbortSignal) =>
+  logs:      (params: LogsParams, signal?: AbortSignal, onServerTiming?: (header: string | null) => void) =>
     request<LogsResponse>('/api/logs/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(params),
       signal,
+      onServerTiming, // v0.10.1834
     }),
 
   metricNames: (service: string)     => get<MetricInfo[] | null>(withMetricSource(`/api/metrics/names${service ? '?service=' + encodeURIComponent(service) : ''}`)),
@@ -900,9 +903,9 @@ export const api = {
     bucketSec?: number;
     groupBy?: string;
     lang?: 'lucene'; // v0.10.1819 — zorla Lucene geçişi (liste ile aynı)
-  }, signal?: AbortSignal) => // v0.10.1822 — yeni arama / çıkış uçuştaki ES işini iptal eder
-    get<{ name: string; points: { t: number; v: number }[] }[]>(
-      `/api/logs/timeseries?${qs(params)}`, signal),
+  }, signal?: AbortSignal, onServerTiming?: (header: string | null) => void) => // v0.10.1822 — yeni arama / çıkış uçuştaki ES işini iptal eder
+    request<{ name: string; points: { t: number; v: number }[] }[]>(
+      `/api/logs/timeseries?${qs(params)}`, { signal, onServerTiming }), // v0.10.1834 — Server-Timing
 
   // Sent-notification log (v0.8.247 backend / v0.8.263 UI) — the
   // /events Notifications tab. from/to are unix-ns strings like the

@@ -18,6 +18,7 @@ import { ServiceLogsTab } from './ServiceSignalTabs';
 
 const m = vi.hoisted(() => ({
   displayPrefCalls: 0, // v0.10.1832
+  tsArity: 0, // v0.10.1834
   logsCalls: [] as Record<string, unknown>[],
   tsCalls: [] as Record<string, unknown>[],
   logsReject: null as Error | null,
@@ -40,8 +41,9 @@ vi.mock('@/lib/api', () => {
         }],
       } as unknown as LogsResponse);
     },
-    logsTimeseries: (p: unknown) => {
+    logsTimeseries: (p: unknown, ...rest: unknown[]) => {
       m.tsCalls.push(p as Record<string, unknown>);
+      m.tsArity = 1 + rest.length; // v0.10.1834 — gözlemcisiz çağrı (params, signal)
       return Promise.resolve([
         { name: 'ERROR', points: [{ t: T0, v: 3 }, { t: T0 + 60e9, v: 1 }] },
         { name: 'INFO', points: [{ t: T0, v: 40 }, { t: T0 + 60e9, v: 22 }] },
@@ -136,6 +138,9 @@ describe('servis Logs sekmesi — paylaşılan log parçaları çivisi (v0.10.18
     expect(m.logsCalls[0].sort).toBeUndefined();
     expect(document.querySelector('thead .lt-sort')).toBeNull();
     expect(document.querySelector('thead th[draggable]')).toBeNull();
+    // v0.10.1834 — akışlı yükleme göstergesi sekmeye gelmez; histogram isteği eski imza.
+    expect(document.querySelector('[data-testid="logs-load-status"]')).toBeNull();
+    expect(m.tsArity).toBe(2);
     expect(m.tsCalls).toHaveLength(1);
     expect(m.tsCalls[0]).toMatchObject({ service: 'orders-api', groupBy: 'severity', from: 1759494780000000000 });
 

@@ -2,6 +2,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import type { LogsParams, LogsTemplatesParams } from '@/lib/api';
 import type { LogsResponse, LogsMyTeam, LogPatternsResult, LogTemplate, LogsSearchSettings, LogRow } from '@/lib/types';
+import { parseServerTiming } from '@/lib/serverTiming';
 
 // /api/logs query — keyed on the full filter object so a
 // pagination click or filter change caches separately.
@@ -29,7 +30,15 @@ export function useLogs(params: LogsParams, opts?: { enabled?: boolean }) {
   const pagingParams: LogsParams = { ...params, paging: true };
   return useQuery<LogsResponse>({
     queryKey: ['logs', 'list', pagingParams],
-    queryFn: ({ signal }) => api.logs(pagingParams, signal),
+    // v0.10.1834 — akışlı yükleme göstergesi: yanıtın Server-Timing'i + tarayıcı
+    // süresi yanıta iliştirilir (loadTiming; yalnız istemci alanı).
+    queryFn: async ({ signal }) => {
+      const t0 = performance.now();
+      let header: string | null = null;
+      const r = await api.logs(pagingParams, signal, h => { header = h; });
+      if (!r) return r;
+      return { ...r, loadTiming: { ...parseServerTiming(header), clientMs: performance.now() - t0 } };
+    },
     enabled: opts?.enabled ?? true,
     staleTime: 15_000,
     refetchOnWindowFocus: false,

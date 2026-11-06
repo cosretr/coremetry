@@ -29,6 +29,9 @@ export interface LogsTableToolbarProps {
   onColumns: (next: string[]) => void;
   /** Görünüm ▾ (coremetry/logs/DisplayOptions) — Columns'ın sağında. */
   display: ReactNode;
+  /** v0.10.1834 — akışlı yükleme göstergesi (coremetry/logs/LoadStatus);
+   *  sağ grubun başında: çip genişliği değişse de düğmeler yerinde kalır. */
+  status?: ReactNode;
   live: boolean;
   asc: boolean;
   onToggleAsc: () => void;
@@ -60,6 +63,7 @@ export function LogsTableToolbar(p: LogsTableToolbarProps) {
         </>
       )}
       <span className="ld-tbar-right">
+        {p.status}
         <LogsColumnPicker columns={p.columns} fields={p.fields} onChange={p.onColumns} />
         {p.display}
         {/* v0.9.295 — sort direction; hidden in live tail (the stream is by

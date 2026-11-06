@@ -8,6 +8,8 @@ import { useThemeTick } from '@/lib/useThemeTick';
 import { AIExplainButton } from '@/components/ai/AIExplainButton';
 import { IconSparkles } from '@/components/icons';
 import type { AISubject } from '@/lib/aiSubject';
+import type { LoadPhase } from '@/lib/types';
+import { parseServerTiming } from '@/lib/serverTiming';
 import { useT } from '@/lib/i18n'; // v0.10.1338
 
 // LogsHistogram — log volume over time for /logs, the service Logs tab and
@@ -117,7 +119,7 @@ export function histogramFeedsChips(bd: LogsBreakdown, severityFloor: number): b
   return severityFloor === 0 && bd === 'severity';
 }
 
-export function LogsHistogram({ range, filter, onRangeSelect, onZoomReset, onSeries, breakdown, onBreakdown, onSeriesPick, spikeSubject, paused, height = 140, headerLeft }: {
+export function LogsHistogram({ range, filter, onRangeSelect, onZoomReset, onSeries, breakdown, onBreakdown, onSeriesPick, spikeSubject, paused, height = 140, headerLeft, onPhase, cancelToken = 0 }: {
   range: { from?: number; to?: number };
   filter: Filter;
   // Drag-select a horizontal span → called with the selection as unix-ns
@@ -154,8 +156,19 @@ export function LogsHistogram({ range, filter, onRangeSelect, onZoomReset, onSer
   // seviye satırı kalktı). Verilirse başlık yüklenirken de çizilir — çipler
   // ilk fetch'i beklerken kaybolmaz (gövde yer tutucu kalır).
   headerLeft?: ReactNode;
+  // v0.10.1834 (Log Search Faz 1 dilim 1.11) — akışlı yükleme göstergesi:
+  // fetch evresi (yükleniyor / tamam + Server-Timing / hata / iptal). Yalnız
+  // /logs geçirir; verilmezse istek ve görünüm bayt bayt eski.
+  onPhase?: (p: LoadPhase) => void;
+  // v0.10.1834 — "Sorguyu iptal et": değer değişince uçuştaki fetch iptal
+  // edilir ve gövde "histogram iptal edildi" der (yeni süzgeç yeniden çeker).
+  cancelToken?: number;
 }) {
   const [data, setData] = useState<Series[] | null | undefined>(undefined);
+  const [canceled, setCanceled] = useState(false);
+  const onPhaseRef = useRef(onPhase); onPhaseRef.current = onPhase;
+  const ctlRef = useRef<AbortController | null>(null);
+  const cancelRef = useRef(cancelToken);
   // v0.9.358 — the per-band series this chart ALREADY fetches, exposed to the
   // parent so chip counts can be honest without a second request. Ref'd (the
   // onZoomRef pattern) so a per-render callback identity doesn't re-run the
@@ -165,8 +178,17 @@ export function LogsHistogram({ range, filter, onRangeSelect, onZoomReset, onSer
   const themeTick = useThemeTick(); // v0.10.510 (D7) — kırılım renkleri paletten; tema değişince yeniden kur
   const bd: LogsBreakdown = breakdown ?? 'severity';
 
+  // v0.10.1834 — iptal: yalnız uçuştaki isteği keser (bitmiş grafik kalır).
+  useEffect(() => {
+    if (cancelRef.current === cancelToken) return;
+    cancelRef.current = cancelToken;
+    const ctl = ctlRef.current;
+    if (ctl && !ctl.signal.aborted) { setCanceled(true); ctl.abort(); }
+  }, [cancelToken]);
+
   useEffect(() => {
     setData(undefined);
+    setCanceled(false);
     // v0.10.1477 — ebeveyn süzgeç kararını bekliyor ("Takımım" varsayılanı
     // çözülüyor): süzgeçsiz bir ES isteği atılıp hemen çöpe gitmesin.
     if (paused) return;
@@ -182,7 +204,12 @@ export function LogsHistogram({ range, filter, onRangeSelect, onZoomReset, onSer
     // sunucu bağlantı kapanınca bağlamı iptal eder ve ES araması kesilir
     // (bayat-yanıt korkuluğu `alive` aynen kalır).
     const ctl = new AbortController();
-    api.logsTimeseries({
+    ctlRef.current = ctl;
+    const report = onPhaseRef.current;
+    const t0 = performance.now();
+    let header: string | null = null;
+    report?.({ state: 'loading' });
+    const params = {
       from: range.from, to: range.to,
       service: filter.service || undefined,
       cluster: filter.cluster || undefined, // v0.9.216
@@ -196,7 +223,9 @@ export function LogsHistogram({ range, filter, onRangeSelect, onZoomReset, onSer
       lang: filter.lang || undefined, // v0.10.1819
       groupBy: bd,
       bucketSec: pickBucket(range),
-    }, ctl.signal)
+    };
+    // Gözlemcisiz çağrı imzası eskisiyle aynı (servis sekmesi / anomali çekmecesi).
+    (report ? api.logsTimeseries(params, ctl.signal, h => { header = h; }) : api.logsTimeseries(params, ctl.signal))
       .then(d => {
         // v0.9.1220 review — bayat-yanıt korkuluğu: dep değişimiyle aşılmış
         // bir istek geç çözülünce ne grafiği (kırılım değişmişse seviye
@@ -204,6 +233,7 @@ export function LogsHistogram({ range, filter, onRangeSelect, onZoomReset, onSer
         // tabanının alt-küme toplamları All sayımı olarak kalırdı) ezebilir.
         if (!alive) return;
         setData(d ?? []);
+        report?.({ state: 'done', timing: { ...parseServerTiming(header), clientMs: performance.now() - t0 } });
         // Seviye sözleşmesi (v0.9.358): servis kırılımında sessiz kal —
         // ebeveynin çip sayaçları o zaman kendi seviye sorgusuna döner.
         if (bd === 'severity') {
@@ -216,6 +246,7 @@ export function LogsHistogram({ range, filter, onRangeSelect, onZoomReset, onSer
       .catch(() => {
         if (!alive) return;
         setData(null);
+        report?.({ state: ctl.signal.aborted ? 'canceled' : 'error' });
         // v0.9.1220 — hata da bir sonuçtur: fold modundaki ebeveyn sonsuz
         // '·' yerine rozet gösterebilsin (v0.9.215 sınıfı).
         if (bd === 'severity') onSeriesRef.current?.(null);
@@ -242,7 +273,7 @@ export function LogsHistogram({ range, filter, onRangeSelect, onZoomReset, onSer
   // seçicisiz kullanımlar (servis sekmesi, anomali çekmecesi) eski
   // davranışta (hiç çizme).
   const degraded = data === undefined ? 'yükleniyor…'
-    : data === null ? 'histogram yüklenemedi'
+    : data === null ? (canceled ? 'histogram iptal edildi' : 'histogram yüklenemedi')
     : times.length === 0 ? 'bu pencerede seri yok' : '';
   if (degraded && !onBreakdown) return null;
 

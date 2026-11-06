@@ -3975,6 +3975,9 @@ export interface LogsResponse {
   // gitti (Lucene'e özgü sözdizimi ya da URL `lang=lucene`). CH backend'i
   // her zaman 'kql'. Arama boşsa yok.
   queryLang?: LogsQueryLang;
+  // v0.10.1834 — İSTEMCİ doldurur (useLogs queryFn): bu yanıtın Server-Timing'i
+  // + tarayıcı ölçümü. Sunucu göndermez.
+  loadTiming?: LoadTiming;
 }
 
 // v0.10.1819 — sorgu çubuğu dil rozeti (KQL / Lucene).
@@ -3999,6 +4002,19 @@ export interface LogsDisplay {
   headerLines: LogsLines;
   density: LogsDensity;
   pageSize: LogsPageSize;
+}
+
+// v0.10.1834 — akışlı yükleme göstergesi (lib/serverTiming.ts): sunucunun
+// Server-Timing'i (total / es / cache — v0.10.1817) + tarayıcı ölçümü.
+export interface LoadTiming {
+  totalMs?: number;
+  esMs?: number;
+  cache?: string;
+  clientMs: number;
+}
+export interface LoadPhase {
+  state: 'loading' | 'done' | 'error' | 'canceled';
+  timing?: LoadTiming;
 }
 
 // v0.10.1833 — /logs çoklu alan sıralama anahtarı (URL `sort`; lib/logsSort.ts).

@@ -4,7 +4,7 @@ import { DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useSearchParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useIsFetching } from '@tanstack/react-query';
 import { Topbar } from '@/components/Topbar';
 import { SavedViewsBar } from '@/components/SavedViewsBar';
 import { Spinner } from '@/components/Spinner';
@@ -53,13 +53,13 @@ import { logsUrlSig, writeLogsParams, readLogsUrlState, buildDocPermalink, parse
 import { decideTeamAutoApply, isSameTeam, readTeamOptOut, writeTeamOptOut } from '@/lib/logsTeam';
 import { useAuth } from '@/components/AuthProvider';
 import { useT } from '@/lib/i18n';
-import type { LogsResponse, LogRow, TimeRange, LogsQueryHistoryEntry, LogsDisplay } from '@/lib/types';
+import type { LogsResponse, LogRow, TimeRange, LogsQueryHistoryEntry, LogsDisplay, LoadPhase } from '@/lib/types';
 import { PageShell } from '@/components/coremetry/PageShell';
 import { LogsQueryBar } from './logs/LogsQueryBar';
 import { parseLogQueryError, logQueryErrorMessage } from '@/lib/logQueryError';
 import { readLogsQueryHistory, recordLogsQuery } from '@/lib/logsQueryHistory';
 import { LOGS_DEFAULT_DISPLAY, readLogsDisplay, writeLogsDisplay, pageSlice } from '@/lib/logsDisplay';
-import { DisplayOptions } from '@/components/coremetry/logs';
+import { DisplayOptions, LoadStatus } from '@/components/coremetry/logs';
 import { LogsFilterRow } from './logs/LogsFilterRow';
 import { LogsNotices } from './logs/LogsNotices';
 import { LogsAddFilterMenu, LogsShareMenu, LogsMoreMenu } from './logs/LogsActionsMenus';
@@ -796,8 +796,41 @@ function LogsInner() {
   // When live, the table renders the SSE buffer; otherwise the static
   // windowed query. Live has no loading/error gate — rows fill in as they
   // arrive (an empty buffer shows the "waiting" empty state).
+  // v0.10.1834 (dilim 1.11) — akışlı yükleme: satırlar / histogram / alan
+  // istatistikleri ayrı evreler; "Sorguyu iptal et" uçuştaki her isteği keser.
+  const [rowsCanceled, setRowsCanceled] = useState(false);
+  useEffect(() => { if (staticQ.isFetching) setRowsCanceled(false); }, [staticQ.isFetching]);
+  const [histPhase, setHistPhase] = useState<LoadPhase | null>(null);
+  const [histCancel, setHistCancel] = useState(0);
+  const fieldStatsFetching = useIsFetching({ queryKey: ['logs', 'fieldstats'] });
+  const [fieldsPhase, setFieldsPhase] = useState<LoadPhase | null>(null);
+  const fieldsT0 = useRef<number | null>(null);
+  useEffect(() => {
+    if (fieldStatsFetching > 0) {
+      if (fieldsT0.current === null) fieldsT0.current = performance.now();
+      setFieldsPhase({ state: 'loading' });
+    } else if (fieldsT0.current !== null) {
+      const ms = performance.now() - fieldsT0.current;
+      fieldsT0.current = null;
+      setFieldsPhase(p => (p?.state === 'canceled' ? p : { state: 'done', timing: { clientMs: ms } }));
+    }
+  }, [fieldStatsFetching]);
+  const rowsPhase: LoadPhase | null = live || view !== 'logs' ? null
+    : rowsCanceled ? { state: 'canceled' }
+    : staticQ.isFetching ? { state: 'loading' }
+    : staticQ.isError ? { state: 'error' }
+    : staticQ.data && !staticQ.isPlaceholderData ? { state: 'done', timing: staticQ.data.loadTiming }
+    : null;
+  const cancelAll = () => {
+    if (staticQ.isFetching && !cursor) { setRowsCanceled(true); resetPaging(); }
+    if (fieldStatsFetching > 0) setFieldsPhase({ state: 'canceled' });
+    setHistCancel(n => n + 1);
+    void qc.cancelQueries({ queryKey: ['logs'] });
+  };
+
   const data: LogsResponse | undefined | null = live
     ? { total: liveBuffer.length, logs: liveBuffer, nextCursor: '' }
+    : rowsCanceled ? undefined // v0.10.1834 — iptal: eski (placeholder) satırlar yeni süzgeç altında gösterilmez
     : staticQ.isLoading ? undefined
     : staticQ.isError ? null
     : staticQ.data;
@@ -1067,7 +1100,12 @@ function LogsInner() {
   // kalır; boş satırı artık hata türü (⚠ + Retry, "boş sonuç değil").
   const queryErr = parseLogQueryError(staticQ.error); // v0.10.1818
   const logsState: Omit<DataTableStateProps<LogRow>, 'dt' | 'leading' | 'trailing'> =
-    data === undefined ? { kind: 'loading', skeletonRows: 12 }
+    !live && rowsCanceled ? {
+      kind: 'error',
+      message: 'Sorgu iptal edildi — satırlar yüklenmedi.',
+      onRetry: () => { setRowsCanceled(false); void staticQ.refetch(); },
+    }
+    : data === undefined ? { kind: 'loading', skeletonRows: 12 }
     // v0.9.215 — the error leg of the tri-state used to render NOTHING:
     // data===null fell through every branch, so a rejected query (malformed
     // KQL, ES timeout, backend down) left a blank page under the toolbar.
@@ -1362,6 +1400,7 @@ function LogsInner() {
           onZoomReset={handleZoomReset}
           breakdown={breakdown} onBreakdown={setBreakdown}
           onSeries={setHistTotals}
+          onPhase={setHistPhase} cancelToken={histCancel} /* v0.10.1834 — akışlı yükleme */
           onSeriesPick={addFromRow} /* v0.10.503 (B8) — lejant ⊕ → pill */
           spikeSubject={spikeSubject} /* v0.10.1284 — ✨ Artışı açıkla */
           paused={teamGate} /* v0.10.1477 — takım kararı beklenirken fetch yok */
@@ -1436,6 +1475,13 @@ function LogsInner() {
               displayPref.save(viewToPref(display, n)); // v0.10.1832
             } }} />}
           live={live} asc={asc} onToggleAsc={toggleAsc}
+          status={live ? undefined : (
+            <LoadStatus onCancel={cancelAll} items={[
+              { key: 'rows', label: 'Satırlar', phase: rowsPhase },
+              { key: 'histogram', label: 'Histogram', phase: histPhase },
+              { key: 'fields', label: 'Alan istatistikleri', phase: fieldsPhase },
+            ]} />
+          )}
           onExport={exportLoaded} />
         {/* v0.10.967 — tablo HER durumda (başlık kalır); durum satırı
             logsState'ten. Pager eskisi gibi yalnız satır varken. */}

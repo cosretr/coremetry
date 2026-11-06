@@ -12364,3 +12364,15 @@ sağlıklı çalışmıyor; anomaliler oluşsun, gerekirse Problem'e terfi olurl
   yok sayılır (primitif onları sabit bilmiyor; ui/ dondurulmuş); ⋯ "Sütun sırasını sıfırla" hep pasif (sıfırlama
   Columns ▾ "Reset columns"). Doğrulanmadı: gerçek ES'te çok indeksli tip çakışması (son okunan kazanır), text alanında
   eşleme yokken ES reddinin metni, CH'de büyük pencerede sıralı sorgu süresi.
+- **v0.10.1834 — akışlı yükleme göstergesi (1.11).** Yeni `coremetry/logs/LoadStatus` (tablo araç satırının sağ grubunun
+  başında; servis sekmesi kompakt kipte aynısını bağlayacak): Satırlar / Histogram / Alan istatistikleri ayrı çip —
+  "◌ … " → "✓ Satırlar 0,4 sn" / "⚠ … hata" / "⊘ … iptal". Süre Server-Timing `total` (v0.10.1817; ipucunda ES + önbellek +
+  tarayıcı), başlık yoksa tarayıcı ölçümü; alan istatistikleri yalnız tarayıcı ölçümü (alan paneli dokunulmadı, çip yalnız
+  bir alan açılınca). Satırlar histogramı beklemez (zaten bağımsızdı; testle pinlendi). "Sorguyu iptal et":
+  `cancelQueries(['logs'])` (liste / seviye sayımı / alan istatistikleri — v0.10.1822 sinyalleri) + histogramın
+  `cancelToken`ı; iptal edilen ilk sayfa eski (placeholder) satırları göstermez, tablo "Sorgu iptal edildi" + ↻. Düzen
+  kaymaz: çipler sabit en küçük genişlik, düğme boşta `invisible` (yer tutar, odak/okuyucu dışı); `role=status`
+  `aria-live=polite`. `api.logs` / `api.logsTimeseries` opsiyonel Server-Timing gözlemcisi alır — gözlemcisiz çağrı
+  imzası aynı (servis sekmesi / anomali çekmecesi pinli). Sapmalar: "Daha fazla yükle" sayfasının iptali satırları
+  korur, aynı sayfayı yeniden istemek için yeni arama gerekir; alan istatistikleri çipi aramalar arasında son değeri
+  tutar. Doğrulanmadı: prod ingress'in Server-Timing başlığını geçirip geçirmediği (geçirmezse tarayıcı süresi).
