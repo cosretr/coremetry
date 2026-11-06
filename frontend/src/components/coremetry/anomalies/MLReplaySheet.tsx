@@ -31,10 +31,11 @@ import {
   dayClassLabel, exceptionGroupHref, parseObj,
   replayChart, replayContext, replayDeploys, replayMarkers, replaySamples, whatIfWindow,
 } from '@/lib/mlReplay';
-import type { ExplainCard, ExplainLink, MLBacktestResult, MLReplayVerdict, MLSample, MLSnapshot, RecentDeployEntry } from '@/lib/types';
+import type { TraceCourse, ExplainCard, ExplainLink, MLBacktestResult, MLReplayVerdict, MLSample, MLSnapshot, RecentDeployEntry } from '@/lib/types';
 import { ML_DETECTOR_TR } from './MLTab';
 import { MLEventPlayer } from './MLEventPlayer';
 import { MLTraceHeatmap } from './MLTraceHeatmap';
+import { MLTraceDots } from './MLTraceDots';
 import { MLLogPlayer } from './MLLogPlayer';
 
 const fmtTs = (ns: number) => fmtDateTime(new Date(ns / 1e6));
@@ -165,8 +166,8 @@ export function MLReplayContent({ id, autoPlay = false }: { id: string; autoPlay
       <Section id="ml-course" title="Olayın seyri" sub={snap ? `${Math.round((snap.bucketSec || 300) / 60)} dakikalık kova · olay anı kaydı` : undefined}>
         <div className="rounded-md border border-border bg-card px-3 py-2.5">
           {snap && lc ? <MLLogPlayer snap={snap} play={card.play} autoPlay={autoPlay} lc={lc} />
-            : snap ? <MLEventPlayer snap={snap} play={card.play} autoPlay={autoPlay} above={tc ? c => <MLTraceHeatmap tc={tc} cursorSec={c} /> : undefined} /> : <>
-            {tc && <MLTraceHeatmap tc={tc} cursorSec={null} />}
+            : snap ? <MLEventPlayer snap={snap} play={card.play} autoPlay={autoPlay} above={tc ? c => <MLTraceCourse tc={tc} cursorSec={c} /> : undefined} /> : <>
+            {tc && <MLTraceCourse tc={tc} cursorSec={null} />}
             <p className="text-sm text-muted-foreground">Bu olay için grafik kaydı yok (olay anı kaydı yazılmadan önce açılmış ya da süresi dolmuş).</p>
           </>}
           {snap && <p className="mt-2 text-xs text-muted-foreground">Grafik dedektörün kullandığı aynı kayıtla çizilir; sayfa yeniden sorgu atmaz.</p>}
@@ -187,6 +188,11 @@ export function MLReplayContent({ id, autoPlay = false }: { id: string; autoPlay
       </details>
     </div>
   );
+}
+
+// v0.10.1872 — az çağrılan serviste ısı haritasının YERİNE nokta grafiği (§17: ikisi birlikte gösterilmez).
+function MLTraceCourse({ tc, cursorSec }: { tc: TraceCourse; cursorSec: number | null }) {
+  return tc.view === 'dots' ? <MLTraceDots tc={tc} cursorSec={cursorSec} /> : <MLTraceHeatmap tc={tc} cursorSec={cursorSec} />;
 }
 
 function MLEventActions({ id, card, verdict }: { id: string; card: ExplainCard; verdict: MLReplayVerdict | null }) {

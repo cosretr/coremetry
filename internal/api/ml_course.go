@@ -13,6 +13,10 @@ package api
 // v0.10.1871 — log olayında (taban `_error` / `_total`) AYNI tek okuma:
 // servisin mesaj kalıbı aileleri + seviye serileri (ml_series, CH). ES'e
 // gitmez. Okunamazsa yığın tek katman ("hata satırları") kalır.
+//
+// v0.10.1872 — az çağrılan serviste (profil low_traffic / kanıt lowTraffic)
+// +1 CH: penceredeki giriş çağrıları (ham spans, LIMIT 500, zaman sınırlı,
+// max_execution_time 5) — nokta grafiği; ısı haritası o olayda istenmez.
 
 import (
 	"context"
@@ -34,5 +38,13 @@ func (s *Server) mlCourse(ctx context.Context, in ml.CardInput, cfg chstore.MLCo
 			series = x
 		}
 	}
-	return ml.ExplainCourse{Trace: ml.BuildTraceCourse(in, series), Log: ml.BuildLogCourse(in, series)}
+	var calls ml.CourseCalls
+	if ml.CourseCallsNeeded(in) {
+		from, to := ml.CourseWindow(in)
+		cctx, cancel := context.WithTimeout(ctx, mlCourseReadBudget)
+		defer cancel()
+		pts, err := s.store.MLCallPoints(cctx, in.Service, ml.CourseCallRoute(in), from, to, chstore.MLCallPointsLimit)
+		calls = ml.CourseCalls{Points: pts, OK: err == nil}
+	}
+	return ml.ExplainCourse{Trace: ml.BuildTraceCourse(in, series, calls), Log: ml.BuildLogCourse(in, series)}
 }

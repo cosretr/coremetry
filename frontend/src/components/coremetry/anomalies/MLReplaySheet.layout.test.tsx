@@ -109,6 +109,19 @@ describe('ML olay sayfası düzeni', () => {
     const player = el.querySelector('[data-testid="ml-player"]')!;
     expect(player.contains(hm)).toBe(true);
   });
+  it('v0.10.1872: az çağrılan serviste ısı haritasının YERİNE nokta grafiği (ikisi birlikte yok)', async () => {
+    const tc = {
+      view: 'dots', service: 'branch-teller', fromNs: 1, toNs: 2, onsetNs: 1, endNs: 2,
+      line: { ms: 1200, label: "alışılmış üst sınır ≈ 1,2 sn (normalde 10 çağrıdan 1'i aşar)" },
+      dots: [{ t: 1000, ms: 600 }, { t: 2000, ms: 2400 }], dotsSummary: 'özet sunucudan',
+    };
+    const el = await render({ snapshot: snap, related: [], card, course: { trace: tc } });
+    const dots = el.querySelector('[data-testid="ml-course"] [data-testid="ml-trace-dots"]');
+    expect(dots).not.toBeNull();
+    expect(el.querySelector('[data-testid="ml-trace-dots-summary"]')!.textContent).toBe('özet sunucudan');
+    expect(dots!.textContent).toContain('alışılmış üst sınır ≈ 1,2 sn');
+    expect(el.querySelector('[data-testid="ml-trace-heatmap"]')).toBeNull();
+  });
   it('v0.10.1871: log olayında yığılı çubuk lejantı (mesaj kalıbı varsayılan, Seviye seçeneği)', async () => {
     const t0 = 1_800_000_000;
     const s3 = { ...snap, series: JSON.stringify([{ t: t0, v: 5 }, { t: t0 + 300, v: 60 }]) };

@@ -99,6 +99,46 @@ func TestBuildLogCourse(t *testing.T) {
 	}
 }
 
+// v0.10.1872 — az çağrılan servis: ısı haritasının YERİNE noktalar; çizgi
+// kanıttaki alışılmış üst sınır (T90) önce, yoksa olay öncesi p95; okuma
+// hatası "yok" sayılmaz.
+func TestBuildTraceCourseDots(t *testing.T) {
+	in := playFixture() // 14:30 başladı, açık, şimdi 14:44
+	in.Profile = ProfileLowTraffic
+	if !CourseCallsNeeded(in) || CourseCallRoute(in) != "/notify/order-status" {
+		t.Fatal("az çağrılan endpoint'li trace olayı çağrı okuması ister")
+	}
+	ms := func(h, m int) int64 { return at(h, m).UnixMilli() }
+	calls := CourseCalls{OK: true, Points: []chstore.MLCallPoint{
+		{T: ms(14, 20), Ms: 3000}, // olaydan önce: sayılmaz
+		{T: ms(14, 35), Ms: 1500}, {T: ms(14, 36), Ms: 700}, {T: ms(14, 40), Ms: 2000, Err: true},
+	}}
+	in.LowTraffic = &CardLowTraffic{N: 10, K: 6, LimitMs: 1200}
+	tc := BuildTraceCourse(in, nil, calls)
+	eq(t, "view", tc.View, "dots")
+	eq(t, "çizgi", tc.Line.Label, "alışılmış üst sınır ≈ 1,2 sn (normalde 10 çağrıdan 1'i aşar)")
+	eq(t, "özet", tc.DotsSummary, "Olay penceresindeki 3 çağrının 2'si alışılmış üst sınırın üstünde.")
+	if len(tc.Dots) != 4 || tc.DotsCapped || tc.DotsUnread {
+		t.Errorf("noktalar: %+v", tc)
+	}
+
+	p95 := playFixture()
+	p95.Profile = ProfileLowTraffic
+	series := map[string][]chstore.MLPoint{tracePart(p95.Code, "p95"): {{T: at(14, 0).Unix(), V: 620}}}
+	x := BuildTraceCourse(p95, series, calls)
+	eq(t, "p95 çizgisi", x.Line.Label, "olay öncesi p95 ≈ 620 ms")
+	eq(t, "p95 özeti", x.DotsSummary, "Olay penceresindeki 3 çağrının 3'ü çizginin üstünde.")
+
+	if u := BuildTraceCourse(p95, series, CourseCalls{}); u.View != "dots" || !u.DotsUnread || u.Dots != nil || u.DotsSummary != "" {
+		t.Errorf("okunamadı ≠ yok: %+v", u)
+	}
+	busy := playFixture()
+	busy.Profile = ProfileAlwaysOn
+	if CourseCallsNeeded(busy) || BuildTraceCourse(busy, series, calls).View != "heatmap" {
+		t.Error("yoğun serviste ısı haritası kalır, çağrı okuması yok")
+	}
+}
+
 func TestCourseReadWindow(t *testing.T) {
 	in, _ := logCourseFixture()
 	from, to := CourseReadWindow(in)
@@ -134,7 +174,7 @@ func TestBuildTraceCourse(t *testing.T) {
 		p95 = append(p95, chstore.MLPoint{T: at(14, 10).Add(time.Duration(i) * 5 * time.Minute).Unix(), V: v})
 	}
 	series := map[string][]chstore.MLPoint{tracePart(in.Code, "p95"): p95}
-	tc := BuildTraceCourse(in, series)
+	tc := BuildTraceCourse(in, series, CourseCalls{})
 	if tc == nil {
 		t.Fatal("trace katmanı yok")
 	}
@@ -149,28 +189,28 @@ func TestBuildTraceCourse(t *testing.T) {
 	}
 
 	slow := map[string][]chstore.MLPoint{tracePart(in.Code, "p95"): {{T: at(14, 0).Unix(), V: 1100}}}
-	eq(t, "saniye ölçeği", BuildTraceCourse(in, slow).Line.Label, "olay öncesi p95 ≈ 1,1 sn")
+	eq(t, "saniye ölçeği", BuildTraceCourse(in, slow, CourseCalls{}).Line.Label, "olay öncesi p95 ≈ 1,1 sn")
 
-	if tc := BuildTraceCourse(in, nil); tc == nil || tc.Line != nil {
+	if tc := BuildTraceCourse(in, nil, CourseCalls{}); tc == nil || tc.Line != nil {
 		t.Errorf("seri yoksa katman var, çizgi yok: %+v", tc)
 	}
 
 	rpc := playFixture()
 	rpc.Code = "orders.v1.Orders/Create"
-	if tc := BuildTraceCourse(rpc, nil); tc == nil || tc.Route != "" {
+	if tc := BuildTraceCourse(rpc, nil, CourseCalls{}); tc == nil || tc.Route != "" {
 		t.Errorf("rpc etiketi http.route süzgecine girmez: %+v", tc)
 	}
 
 	for _, det := range []string{"dependency_latency", "trace_pod_outlier"} {
 		x := playFixture()
 		x.Detector = det
-		if BuildTraceCourse(x, series) != nil || CourseSeriesNeeded(x) {
+		if BuildTraceCourse(x, series, CourseCalls{}) != nil || CourseSeriesNeeded(x) {
 			t.Errorf("%s: endpoint'siz dedektörde ısı haritası yok", det)
 		}
 	}
 	lg := playFixture()
 	lg.Signal, lg.Detector = chstore.MLSignalLog, "error_rate"
-	if BuildTraceCourse(lg, series) != nil {
+	if BuildTraceCourse(lg, series, CourseCalls{}) != nil {
 		t.Error("log olayında trace katmanı yok")
 	}
 }

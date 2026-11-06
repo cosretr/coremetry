@@ -12024,9 +12024,13 @@ export interface MLReplayVerdict { verdict: 'anomaly' | 'not_anomaly' | string; 
 export interface CourseLine { ms: number; label: string }
 /** v0.10.1870 — endpoint'li trace olayının ısı haritası penceresi (ns) ve süzgeci (ml.TraceCourse). */
 export interface TraceCourse {
-  view: 'heatmap' | string; service: string; route?: string;
+  view: 'heatmap' | 'dots' | string; service: string; route?: string;
   fromNs: number; toNs: number; onsetNs: number; endNs: number; line?: CourseLine;
+  /** v0.10.1872 — az çağrılan servis: ısı haritası yerine tek tek çağrılar (view 'dots'). */
+  dots?: CallPoint[]; dotsCapped?: boolean; dotsUnread?: boolean; dotsSummary?: string;
 }
+/** v0.10.1872 — chstore.MLCallPoint: tek giriş çağrısı (t unix ms, süre ms). */
+export interface CallPoint { t: number; ms: number; err?: boolean; traceId?: string }
 /** v0.10.1871 — yığılı çubuk katmanı (ml.LogStack); values times ile hizalı, etiket sunucudan. */
 export interface LogStack { key: string; label: string; new?: boolean; values: number[] }
 /** v0.10.1871 — log olayının yığılı grafiği (ml.LogCourse): times = olay anı kaydının kovaları; shadow = beklenen üst (null = bantsız kova). */

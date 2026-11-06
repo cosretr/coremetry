@@ -118,6 +118,53 @@ func (s *Store) ListMLSnapshotsForService(ctx context.Context, service string, f
 	return out, rows.Err()
 }
 
+// MLCallPoint — az çağrılan servisin tek bir giriş çağrısı (nokta grafiği).
+type MLCallPoint struct {
+	T       int64   `json:"t"`  // unix ms
+	Ms      float64 `json:"ms"` // süre
+	Err     bool    `json:"err,omitempty"`
+	TraceID string  `json:"traceId,omitempty"`
+}
+
+// MLCallPointsLimit — nokta grafiği tavanı (az çağrılan serviste pencere
+// onlarca çağrı; tavan dolarsa çağıran "ilk N" der).
+const MLCallPointsLimit = 500
+
+// MLCallPoints — v0.10.1872: az çağrılan servisin [from, to) giriş span'leri
+// (server + consumer), route verilirse yalnız o http_route. AGREGA DEĞİL —
+// tek tek çağrı listesi (MV'de karşılığı yok); ham spans ama zaman sınırı
+// (ORDER BY anahtarı service_name, time) + LIMIT + max_execution_time.
+func (s *Store) MLCallPoints(ctx context.Context, service, route string, from, to time.Time, limit int) ([]MLCallPoint, error) {
+	if limit <= 0 || limit > MLCallPointsLimit {
+		limit = MLCallPointsLimit
+	}
+	q := `SELECT toUnixTimestamp64Milli(time), toFloat64(duration) / 1e6, toUInt8(status_code = 'error'), trace_id FROM spans
+		WHERE service_name = ? AND time >= ? AND time < ? AND kind IN ('server', 'consumer')`
+	args := []any{service, chDateTime64Arg(from), chDateTime64Arg(to)}
+	if route != "" {
+		q += ` AND http_route = ?`
+		args = append(args, route)
+	}
+	q += ` ORDER BY time LIMIT ? SETTINGS max_execution_time = 5`
+	args = append(args, limit)
+	rows, err := s.conn.Query(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []MLCallPoint{}
+	for rows.Next() {
+		var x MLCallPoint
+		var isErr uint8
+		if err := rows.Scan(&x.T, &x.Ms, &isErr, &x.TraceID); err != nil {
+			return nil, err
+		}
+		x.Err = isErr == 1
+		out = append(out, x)
+	}
+	return out, rows.Err()
+}
+
 // MLSampleTraces — replay ham örneği: servisin pencere içindeki en çok 5
 // trace ID'si (hata dedektörlerinde yalnız error span). Ham spans ama
 // toplam değil örnek: LIMIT + zaman sınırı + max_execution_time.

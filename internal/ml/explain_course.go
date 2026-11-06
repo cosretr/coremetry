@@ -19,8 +19,14 @@ package ml
 //   "diğer"), ikinci seçenek seviye (`_error` + `_total − _error`). Gölge =
 //   kova bandının üstü (q75; kart ve oynatma cümlesiyle aynı bant). ES'e
 //   gitmez: aileler zaten ml_series'te (CH).
+// v0.10.1872 — az çağrılan servis (profil low_traffic ya da kanıtta
+//   lowTraffic): ısı haritasının YERİNE nokta grafiği (§17: ikisi birlikte
+//   gösterilmez). Noktalar = penceredeki giriş çağrıları (ham span, LIMIT'li);
+//   çizgi = kanıttaki alışılmış üst sınır (T90) varsa o, yoksa olay öncesi
+//   p95. Özet cümlesi burada (FE cümle kurmaz).
 
 import (
+	"fmt"
 	"math"
 	"sort"
 	"strings"
@@ -37,7 +43,7 @@ type CourseLine struct {
 
 // TraceCourse — trace olayının ısı haritası katmanı.
 type TraceCourse struct {
-	View    string `json:"view"` // heatmap
+	View    string `json:"view"` // heatmap | dots
 	Service string `json:"service"`
 	// Route — http.route süzgeci ("/" ile başlayan değer); boş = servisin
 	// tüm giriş span'leri (rpc/diğer etiket span kolonuna eşlenemez).
@@ -47,6 +53,11 @@ type TraceCourse struct {
 	OnsetNs int64       `json:"onsetNs"`
 	EndNs   int64       `json:"endNs"`
 	Line    *CourseLine `json:"line,omitempty"`
+	// v0.10.1872 — nokta görünümü (View == "dots").
+	Dots        []chstore.MLCallPoint `json:"dots,omitempty"`
+	DotsCapped  bool                  `json:"dotsCapped,omitempty"`
+	DotsUnread  bool                  `json:"dotsUnread,omitempty"` // çağrı okuması başarısız (yok ≠ okunamadı)
+	DotsSummary string                `json:"dotsSummary,omitempty"`
 }
 
 // ExplainCourse — replay yanıtının `course` alanı; sinyale göre biri dolu.
@@ -151,7 +162,7 @@ func msText(ms float64) string {
 // series = servisin ml_series parçaları (CourseWindow'da okunmuş); nil olur.
 // Endpoint'siz trace dedektörleri (bağımlılık, aykırı pod) için nil: onların
 // kaydı servisin giriş isteklerini anlatmaz.
-func BuildTraceCourse(in CardInput, series map[string][]chstore.MLPoint) *TraceCourse {
+func BuildTraceCourse(in CardInput, series map[string][]chstore.MLPoint, calls CourseCalls) *TraceCourse {
 	route := eventRoute(in)
 	if in.Signal != chstore.MLSignalTrace || route == "" {
 		return nil
@@ -166,7 +177,65 @@ func BuildTraceCourse(in CardInput, series map[string][]chstore.MLPoint) *TraceC
 	if m, ok := preOnsetMedian(series[tracePart(route, "p95")], from, in.StartedAt); ok {
 		tc.Line = &CourseLine{Ms: m, Label: "olay öncesi p95 ≈ " + msText(m)}
 	}
+	if CourseCallsNeeded(in) {
+		applyDots(tc, in, calls)
+	}
 	return tc
+}
+
+// CourseCalls — az çağrılan servisin çağrı okuması (OK=false: okunamadı).
+type CourseCalls struct {
+	Points []chstore.MLCallPoint
+	OK     bool
+}
+
+// CourseCallsNeeded — SAF: endpoint'li trace olayı + az çağrılan servis.
+func CourseCallsNeeded(in CardInput) bool {
+	return in.Signal == chstore.MLSignalTrace && eventRoute(in) != "" &&
+		(in.Profile == ProfileLowTraffic || (in.LowTraffic != nil && in.LowTraffic.N > 0))
+}
+
+// CourseCallRoute — SAF: çağrı okumasının http_route süzgeci (ısı haritasıyla aynı kural).
+func CourseCallRoute(in CardInput) string {
+	if r := eventRoute(in); strings.HasPrefix(r, "/") {
+		return r
+	}
+	return ""
+}
+
+// applyDots — SAF: nokta görünümü + çizgi + özet. Çizgi: kanıttaki
+// alışılmış üst sınır (T90) önce; yoksa olay öncesi p95 (zaten tc.Line).
+func applyDots(tc *TraceCourse, in CardInput, calls CourseCalls) {
+	tc.View = "dots"
+	if lt := in.LowTraffic; lt != nil && lt.LimitMs > 0 {
+		tc.Line = &CourseLine{Ms: lt.LimitMs, Label: "alışılmış üst sınır ≈ " + msText(lt.LimitMs) + " (normalde 10 çağrıdan 1'i aşar)"}
+	}
+	if !calls.OK {
+		tc.DotsUnread = true
+		return
+	}
+	tc.Dots = calls.Points
+	tc.DotsCapped = len(calls.Points) >= chstore.MLCallPointsLimit
+	if tc.Line == nil {
+		return
+	}
+	n, k := 0, 0
+	for _, c := range calls.Points {
+		if c.T >= in.StartedAt.UnixMilli() && c.T <= tc.EndNs/1e6 {
+			n++
+			if c.Ms > tc.Line.Ms {
+				k++
+			}
+		}
+	}
+	if n == 0 {
+		return
+	}
+	ref := "çizginin"
+	if in.LowTraffic != nil && in.LowTraffic.LimitMs > 0 {
+		ref = "alışılmış üst sınırın"
+	}
+	tc.DotsSummary = fmt.Sprintf("Olay penceresindeki %d çağrının %s %s üstünde.", n, numSfx(int64(k), sfxPoss3), ref)
 }
 
 // logCourseTopPatterns — yığında adıyla gösterilen aile sayısı (mockup: 2 + diğer).

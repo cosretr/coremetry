@@ -12806,3 +12806,12 @@ görünüm 1–4. Parti A'nın (1842–1846) üstüne; ana grafik (olay anı kay
   görür, tooltip/lejant HAM değer; `lib/chart/timeStack.ts`) ve `faint` (daha geniş, ≈%26 opak, arkada). Seçim URL'de
   (`?stack=level`, replace). Ek okuma: 1870'deki tek ml_series okuması log olayında da (+1 CH, taban `_error`/`_total`);
   ES/VM 0.
+- **v0.10.1872 — az çağrılan servis: ısı haritasının YERİNE nokta grafiği.** Koşul: endpoint'li trace olayı VE (servis profili
+  `low_traffic` YA DA kanıtta `lowTraffic{n,k,limitMs}`); o zaman `course.trace.view = "dots"` ve ısı haritası İSTENMEZ (§17:
+  ikisi birlikte gösterilmez). Noktalar = penceredeki giriş çağrıları (`chstore.MLCallPoints`: ham spans, server+consumer,
+  `http_route` süzgeci ısı haritasıyla aynı kural, zaman sınırlı ORDER BY anahtarında, LIMIT 500, max_execution_time 5 —
+  AGREGA DEĞİL, tek tek çağrı listesi; MV'de karşılığı yok). Çizgi: kanıttaki alışılmış üst sınır (T90, mockup metni) önce;
+  bugün hiçbir dedektör `lowTraffic` yazmıyor (binom kuralı Faz 5) → pratikte olay öncesi p95 (1870 çizgisi), etiket bunu
+  söyler. Özet cümlesi Go'da ("Olay penceresindeki N çağrının K'sı … üstünde."). Okuma hatası "çağrı yok" sayılmaz
+  (`dotsUnread`). TimeChart'a ADDITIVE `points` seri türü (çizgisiz, `hollow` = içi boş; dolu nokta = çizginin üstü).
+  Ek okuma: az çağrılan olayda +1 CH (spans, LIMIT 500) ve ısı haritası isteği −1 → net 0; ES/VM 0.

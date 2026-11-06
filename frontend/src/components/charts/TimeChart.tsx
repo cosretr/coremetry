@@ -43,7 +43,9 @@ export interface TimeChartSeries {
   // 0 basıp çizgiyi tabana çakmak yerine gerçek boşluk gösterir.
   data: (number | null)[];
   color: string;           // a CSS var() token, resolved at draw time
-  type: 'bar' | 'line' | 'area';
+  // v0.10.1872 — 'points': çizgisiz nokta serisi (az çağrılan servisin tek
+  // tek çağrıları); null nokta çizilmez.
+  type: 'bar' | 'line' | 'area' | 'points';
   axis?: 'left' | 'right'; // default 'left'
   width?: number;          // line width (line/area)
   // v0.9.73 — line/area üzerinde nokta göster (seyrek serilerde her
@@ -56,6 +58,8 @@ export interface TimeChartSeries {
   // v0.10.1871 — soluk (gölge) çubuk: daha geniş, düşük opaklık, arkada
   // (beklenen değer). Yalnız 'bar'.
   faint?: boolean;
+  // v0.10.1872 — 'points' kipinde içi boş nokta (zemin dolgu, renkli kenar).
+  hollow?: boolean;
 }
 
 interface Props {
@@ -365,6 +369,13 @@ export function TimeChart({
               return { label: s.label, scale, stroke: c, fill: c, width: 0, paths: faintPath, points: { show: false } } as uPlot.Series;
             }
             return { label: s.label, scale, stroke: colors[i], fill: colors[i], width: 0, paths: s.stack ? stackPath : barPath, points: { show: false } } as uPlot.Series;
+          }
+          if (s.type === 'points') {
+            // v0.10.1872 — çizgisiz nokta: path yok, her dolu örnek bir nokta.
+            const fill = s.hollow ? resolveVar('var(--bg1)') : colors[i];
+            // SERİ noktası (imleç noktası değil — cursor.points tuzağı ayrı, timeChartCursorPoints.test).
+            const dot: uPlot.Series.Points = { show: true, size: 9, width: 1.5, stroke: colors[i], fill };
+            return { label: s.label, scale, stroke: colors[i], width: 1.5, paths: () => null, points: dot } as uPlot.Series;
           }
           const base: uPlot.Series = {
             label: s.label, scale, stroke: colors[i], width: s.width ?? 1.8,
