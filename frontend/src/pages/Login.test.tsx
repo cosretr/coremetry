@@ -6,7 +6,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { AuthConfigResponse } from '@/lib/api';
+import type { LoginSummary } from '@/lib/types';
 
 const m = vi.hoisted(() => ({
   cfg: null as unknown,
@@ -14,6 +16,9 @@ const m = vi.hoisted(() => ({
   version: '' as string,
   login: vi.fn(),
   brand: {} as Record<string, string>,
+  summary: { enabled: true, ready: false } as LoginSummary,
+  summaryFail: false,
+  summaryCalls: 0,
 }));
 vi.mock('@/lib/api', async (importOriginal) => {
   const mod = await importOriginal<Record<string, unknown>>();
@@ -23,6 +28,10 @@ vi.mock('@/lib/api', async (importOriginal) => {
       ...(mod.api as Record<string, unknown>),
       authConfig: () => (m.cfgFail ? Promise.reject(new Error('down')) : Promise.resolve(m.cfg)),
       version: () => Promise.resolve({ version: m.version }),
+      loginSummary: () => {
+        m.summaryCalls++;
+        return m.summaryFail ? Promise.reject(new Error('HTTP 429')) : Promise.resolve(m.summary);
+      },
     },
   };
 });
@@ -47,7 +56,10 @@ async function mount(): Promise<HTMLElement> {
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
-  await act(async () => { root!.render(<LoginPage />); });
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  await act(async () => {
+    root!.render(<QueryClientProvider client={qc}><LoginPage /></QueryClientProvider>);
+  });
   await wait();
   return host;
 }
@@ -71,6 +83,8 @@ function memoryStorage(): Storage {
 beforeEach(() => {
   vi.stubGlobal('localStorage', memoryStorage());
   m.cfg = base; m.cfgFail = false; m.version = ''; m.brand = {};
+  m.summary = { enabled: true, ready: false }; m.summaryFail = false; m.summaryCalls = 0;
+  vi.stubGlobal('matchMedia', undefined);
   m.login = vi.fn(() => Promise.resolve());
   window.history.replaceState({}, '', '/login');
   setUserLang('en');
@@ -266,5 +280,89 @@ describe('Login — marka ve sürüm', () => {
     const tr = [...h.querySelectorAll('button')].find(b => b.textContent === 'TR')!;
     await act(async () => { tr.click(); });
     expect(h.querySelector('button[type="submit"]')?.textContent).toBe('Giriş yap');
+  });
+});
+
+// ── v0.10.1907 — özet sütunu (dilim 2.2) ─────────────────────────────────────
+const READY: LoginSummary = {
+  enabled: true, ready: true, generated_at: Date.now(),
+  spans_today: 1_214_000_000, traces_today: 48_200_000, services_monitored: 2148,
+  activity_24h: { rollouts_tracked: 3, logins: 47, cosre_questions: 61, traces_viewed: 12_400 },
+  components: { state: 'ok', checked_at: Date.UTC(2026, 10, 6, 20, 34), clickhouse_uncompressed_bytes: 4.2 * 1024 ** 4 },
+};
+function stubWide(wide: boolean) {
+  vi.stubGlobal('matchMedia', (q: string) => ({
+    matches: wide && q.includes('1100px'), media: q, onchange: null,
+    addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, dispatchEvent: () => false,
+  }));
+}
+const settle = async () => { await wait(); await wait(); };
+
+describe('Login — özet sütunu', () => {
+  it('geniş ekran + hazır özet: iki sütun, KPI + aktivite + bileşen satırı', async () => {
+    stubWide(true);
+    m.summary = READY;
+    const h = await mount(); await settle();
+    const aside = h.querySelector('aside');
+    expect(aside).not.toBeNull();
+    expect(aside!.textContent).toContain('1,214M');
+    expect(aside!.textContent).toContain('48.2M');
+    expect(aside!.textContent).toContain('2,148');
+    expect(aside!.textContent).toContain('3 rollouts tracked');
+    expect(aside!.textContent).toContain('12.4K traces inspected');
+    expect(aside!.textContent).toContain('All components running · ClickHouse 4.20 TiB');
+    expect(h.innerHTML).toContain('grid-cols-[480px_1fr]');
+  });
+
+  it('dar ekran: özet çağrısı YOK, tek sütun', async () => {
+    stubWide(false);
+    m.summary = READY;
+    const h = await mount(); await settle();
+    expect(m.summaryCalls).toBe(0);
+    expect(h.querySelector('aside')).toBeNull();
+    expect(h.innerHTML).toContain('w-[min(340px,100%)]');
+  });
+
+  it('marka loginSummary=off: çağrı YOK', async () => {
+    stubWide(true);
+    m.brand = { loginSummary: 'off' };
+    const h = await mount(); await settle();
+    expect(m.summaryCalls).toBe(0);
+    expect(h.querySelector('aside')).toBeNull();
+  });
+
+  it.each([
+    ['ready:false', { enabled: true, ready: false } as LoginSummary, false],
+    ['enabled:false', { enabled: false, ready: false } as LoginSummary, false],
+    ['hata / 429', READY, true],
+  ])('%s → tek sütun', async (_n, summary, fail) => {
+    stubWide(true);
+    m.summary = summary; m.summaryFail = fail;
+    const h = await mount(); await settle();
+    expect(m.summaryCalls).toBe(1);
+    expect(h.querySelector('aside')).toBeNull();
+    expect(h.querySelector('#login-username')).not.toBeNull();
+  });
+
+  it('eksik bölüm yalnız kendini gizler (aktivite + bileşen yok → KPI kalır)', async () => {
+    stubWide(true);
+    m.summary = { enabled: true, ready: true, spans_today: 5_000_000 };
+    const h = await mount(); await settle();
+    const aside = h.querySelector('aside')!;
+    expect(aside.textContent).toContain('5.0M');
+    expect(aside.textContent).not.toContain('Last 24 hours');
+    expect(aside.textContent).not.toContain('components');
+  });
+
+  it('TR dilinde başlık/etiketler Türkçe, isimli topoloji alt başlığı', async () => {
+    setUserLang('tr');
+    stubWide(true);
+    m.summary = { ...READY, topology: { window_s: 900, named: true, nodes: [], edges: [] } };
+    const h = await mount(); await settle();
+    const aside = h.querySelector('aside')!;
+    expect(aside.textContent).toContain('Coremetry bugün');
+    expect(aside.textContent).toContain('Toplam span (bugün)');
+    expect(aside.textContent).toContain('Anonim özet · hatalar ve ayrıntılar giriş sonrasında');
+    expect(aside.textContent).toContain('3 rollout izlendi');
   });
 });

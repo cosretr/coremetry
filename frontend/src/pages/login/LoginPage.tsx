@@ -1,4 +1,5 @@
-import { useEffect, useState, FormEvent } from 'react';
+import { lazy, Suspense, useEffect, useState, FormEvent } from 'react';
+import { cn } from 'cn';
 import { useAuth } from '@/components/AuthProvider';
 import { TelescopeIcon } from '@/components/TelescopeIcon';
 import { Wordmark } from '@/components/Wordmark';
@@ -9,7 +10,14 @@ import { api, type AuthConfigResponse } from '@/lib/api';
 import { useBranding } from '@/lib/branding';
 import { oidcStartHref } from '@/lib/postLoginRedirect';
 import { useT } from '@/lib/i18n';
+import { LOGIN_WIDE_QUERY, shouldFetchSummary, summaryUsable } from '@/lib/loginSummary';
+import { useLoginSummary } from '@/lib/queries/loginSummary';
+import { useMediaQuery } from '@/lib/useMediaQuery';
 import { LoginTopBar } from './LoginTopBar';
+import { LoginSummarySkeleton } from './SummaryShell';
+
+// Özet sütunu lazy: ilk boyama yalnız form; chunk yalnız ≥ 1100 px ve özet hazırken iner.
+const LoginSummary = lazy(() => import('./LoginSummary'));
 
 // v0.10.1906 — Login yeniden tasarımı dilim 2.1 (audit §3, §6.1, §6.4). Dosya
 // `pages/login/` altında: Tailwind yalnız index.css `@source` dizinlerini tarar
@@ -19,6 +27,8 @@ import { LoginTopBar } from './LoginTopBar';
 // metinler i18n anahtarına bağlı. Davranış envanteri (audit §3) bire bir aynı:
 // auth config + demo oto-giriş, SSO, LDAP bandı, hata paneli, marka alanları,
 // sürüm satırı. Başarı sonrası yönlendirme Login'de DEĞİL AuthProvider'da.
+// v0.10.1907 (dilim 2.2): ≥ 1100 px'te kart iki sütun (480px form + özet); özet
+// kapalı/hatalı/429/`ready:false` ya da dar ekranda tek sütun ve özet çağrısı YOK.
 
 /** Hata durumu: 401 metni dile bağlı çizilir (`invalid`), ham mesaj olduğu gibi. */
 interface LoginError { text: string; invalid?: boolean }
@@ -116,6 +126,13 @@ export default function LoginPage() {
       });
   }, []);
 
+  // v0.10.1907 — özet sütunu. Dar ekranda sorgu hiç kurulmaz (enabled:false).
+  const wide = useMediaQuery(LOGIN_WIDE_QUERY);
+  const sumOn = shouldFetchSummary(wide, brand.loginSummary);
+  const summary = useLoginSummary(sumOn);
+  const sumData = summaryUsable(summary.data) ? summary.data : null;
+  const showSide = sumOn && (summary.isPending || !!sumData);
+
   const invalidMsg = t('login.invalid');
   const ldapParts = t('login.ldapNote').split('{account}');
 
@@ -129,8 +146,13 @@ export default function LoginPage() {
       <LoginTopBar />
       {/* 340px SABİTTİ: 320px'lik viewport'ta form yatay taşıyordu. Tavan aynı,
           taban akışkan. */}
-      <div className="w-[min(340px,100%)] rounded-lg border border-border bg-card shadow-pop">
-        <form onSubmit={onSubmit} className="p-8">
+      <div className={cn(
+        'border border-border bg-card shadow-pop',
+        showSide
+          ? 'grid w-[min(1120px,calc(100vw-48px))] grid-cols-[480px_1fr] overflow-hidden rounded-2xl'
+          : 'w-[min(340px,100%)] rounded-lg',
+      )}>
+        <form onSubmit={onSubmit} className={showSide ? 'px-12 pb-9 pt-11' : 'p-8'}>
           <div className="mb-6 text-center">
             <h1 className="m-0 flex items-center justify-center gap-2 text-[length:var(--fs-xl)] font-bold tracking-tight">
               <Wordmark name={brand.appName} />
@@ -236,6 +258,11 @@ export default function LoginPage() {
             </div>
           )}
         </form>
+        {showSide && (
+          <Suspense fallback={<LoginSummarySkeleton />}>
+            {sumData ? <LoginSummary data={sumData} /> : <LoginSummarySkeleton />}
+          </Suspense>
+        )}
       </div>
     </div>
   );

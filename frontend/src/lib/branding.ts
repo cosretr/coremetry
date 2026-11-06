@@ -26,6 +26,13 @@ export interface BrandingSettings {
   // v0.10.1334 — rehberli turun yeni kullanıcıya oto-açılışı: ''|'on' = açık
   // (varsayılan), 'off' = kapalı (chstore.BrandingSettings.OnboardingTour).
   onboardingTour?: '' | 'on' | 'off';
+  // v0.10.1907 — Login sayfası (chstore.BrandingSettings): kurum adı (kart
+  // başlığı, ≤ 60) + üç ayar. Boş = varsayılan (özet açık, söz açık, topoloji
+  // isimsiz). Sunucu doğrular; istemci yalnız 'off' / 'named' anlamlarını okur.
+  orgName?: string;
+  loginSummary?: '' | 'on' | 'off';
+  loginQuote?: '' | 'on' | 'off';
+  loginTopology?: '' | 'off' | 'anonymous' | 'named';
 }
 
 /** v0.10.1108 — chstore.DefaultOracleGroupLabel / OracleGroupLabelMaxRunes ile aynı. */
@@ -55,6 +62,10 @@ export const DEFAULT_BRANDING: Required<BrandingSettings> = {
   language:          'en',
   oracleGroupLabel:  DEFAULT_ORACLE_GROUP_LABEL,
   onboardingTour:    'on', // v0.10.1334 — varsayılan açık
+  orgName:           '',
+  loginSummary:      'on',
+  loginQuote:        'on',
+  loginTopology:     'anonymous',
 };
 
 // Resolve fills empty fields with defaults so consumers never
@@ -77,6 +88,10 @@ export function resolveBranding(b: BrandingSettings | null | undefined): Require
   if (b.language === 'tr' || b.language === 'en') r.language = b.language;
   r.oracleGroupLabel = oracleGroupLabelOf(b);
   if (b.onboardingTour === 'off') r.onboardingTour = 'off'; // v0.10.1334 — yalnız 'off' kapatır
+  r.orgName = (b.orgName ?? '').trim();
+  if (b.loginSummary === 'off') r.loginSummary = 'off';
+  if (b.loginQuote === 'off') r.loginQuote = 'off';
+  if (b.loginTopology === 'off' || b.loginTopology === 'named') r.loginTopology = b.loginTopology;
   return r;
 }
 

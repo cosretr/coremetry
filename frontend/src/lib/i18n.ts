@@ -144,6 +144,22 @@ const EN: Catalog = {
   'login.failed':      'Login failed',
   'login.demoFailed':  'Demo login failed',
   'login.language':    'Language',
+  // v0.10.1907 — Login özet sütunu (audit §6.1, §7). `{n}` / `{app}` `.replace` ile doldurulur.
+  'login.sum.title':    '{app} today',
+  'login.sum.lead':     'Anonymous summary · service names and errors after sign-in',
+  'login.sum.leadNamed': 'Anonymous summary · errors and details after sign-in',
+  'login.sum.spans':    'Total spans (today)',
+  'login.sum.traces.total': 'Total traces (today)',
+  'login.sum.services': 'Services monitored',
+  'login.sum.live':     'live',
+  'login.sum.last24':   'Last 24 hours',
+  'login.sum.rollouts': '{n} rollouts tracked',
+  'login.sum.logins':   '{n} sign-ins',
+  'login.sum.cosre':    'CoSRE answered {n} questions',
+  'login.sum.traces':   '{n} traces inspected',
+  'login.sum.allOk':    'All components running',
+  'login.sum.degraded': 'Some components have issues · details after sign-in',
+  'login.sum.checked':  'last check',
 
   // v0.10.1426 — the generic btn.* / state.* / label.* / sev.* keys were
   // removed: no surface ever read them (every button / label / badge carries
@@ -785,6 +801,22 @@ const TR: Catalog = {
   'login.failed':      'Giriş başarısız',
   'login.demoFailed':  'Demo girişi başarısız',
   'login.language':    'Dil',
+  // v0.10.1907 — Login özet sütunu.
+  'login.sum.title':    '{app} bugün',
+  'login.sum.lead':     'Anonim özet · servis adları ve hatalar giriş sonrasında',
+  'login.sum.leadNamed': 'Anonim özet · hatalar ve ayrıntılar giriş sonrasında',
+  'login.sum.spans':    'Toplam span (bugün)',
+  'login.sum.traces.total': 'Toplam trace (bugün)',
+  'login.sum.services': 'İzlenen servis',
+  'login.sum.live':     'canlı',
+  'login.sum.last24':   'Son 24 saatte',
+  'login.sum.rollouts': '{n} rollout izlendi',
+  'login.sum.logins':   '{n} giriş yapıldı',
+  'login.sum.cosre':    'CoSRE {n} soru yanıtladı',
+  'login.sum.traces':   '{n} trace incelendi',
+  'login.sum.allOk':    'Tüm bileşenler çalışıyor',
+  'login.sum.degraded': 'Bazı bileşenler sorunlu · ayrıntı giriş sonrasında',
+  'login.sum.checked':  'son kontrol',
 
   // User menu
   'user.signOut':        'Çıkış yap',

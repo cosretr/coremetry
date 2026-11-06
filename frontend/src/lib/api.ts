@@ -44,7 +44,7 @@ OracleLogsResponse, CopilotScopeNames, CosreRouteRED,
   ExceptionTriageConfig, ProblemPriorityConfig, FailureSLOConfig, MetricExclusions, AnomalyTrackedConfig,
   InsightKind, InsightResponse, InsightSignal, InsightLink, InsightChartSpec,
   AnomalyPromotionConfig, AnomalySensitivityConfig, AnomalyREDSourceStats, TailPoint, LogPatternsResult, LogTemplate, TraceFacet, TraceFacetsResponse, DBSlowQueryConfig, StatementSearchRow,
-  CopilotStartersResponse,
+  CopilotStartersResponse, LoginSummary,
 } from './types';
 import { encodeMetricQuery, type MetricQuery } from './metricQuery';
 // withMetricSource — v0.9.1151 deneme modu. Sayfa URL'sindeki
@@ -3707,6 +3707,8 @@ export const api = {
 
   // ── Auth ─────────────────────────────────────────────────────────────────
   authConfig: () => get<AuthConfigResponse>('/api/auth/config'),
+  // v0.10.1907 — kimliksiz Login özeti (anlık görüntü; istek CH/VM'ye gitmez).
+  loginSummary: (signal?: AbortSignal) => get<LoginSummary>('/api/public/login-summary', signal),
   login: (email: string, password: string) =>
     request<LoginResponse>('/api/auth/login', {
       method: 'POST',

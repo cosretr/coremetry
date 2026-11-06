@@ -12281,3 +12281,33 @@ export interface MLScorecard {
   windowDays: number; detectors: MLDetectorScore[]; bySignal?: MLDetectorScore[]; backfill?: MLBackfillProgress[];
   promotion: Record<string, MLPromotion>; gates?: Record<string, MLGate>; signals: Record<string, string>;
 }
+
+// ── Login özeti (v0.10.1907) — GET /api/public/login-summary (kimliksiz; Go
+// internal/loginsummary.Response). Özet kapalıyken {enabled:false,ready:false};
+// anlık görüntü yok/eski iken {enabled:true,ready:false}. Seri zamanları unix ns.
+export interface LoginSummaryHttpSummary {
+  now_rps: number; peak_rps: number; peak_at: number; // peak_at unix ms
+  avg_now_s?: number; p95_now_s?: number;
+}
+export interface LoginSummaryHttp {
+  from: number; to: number; step_s: number; // from/to unix ms
+  status: SpanMetricSeries[];               // groupKey = ["200"]
+  avg?: SpanMetricSeries; p95?: SpanMetricSeries; // saniye; p95 yalnız sunucu ayarı açıksa
+  summary: LoginSummaryHttpSummary;
+}
+export interface LoginSummaryActivity {
+  rollouts_tracked?: number; logins: number; cosre_questions: number; traces_viewed: number;
+}
+export interface LoginSummaryNode { id: string; tier: 'gw' | 'bff' | 'svc' | 'db'; weight: number; name?: string }
+export interface LoginSummaryEdge { from: string; to: string; weight: number }
+export interface LoginSummaryTopology { window_s: number; named: boolean; nodes: LoginSummaryNode[]; edges: LoginSummaryEdge[] }
+export interface LoginSummaryComponents { state: 'ok' | 'degraded' | string; checked_at: number; clickhouse_uncompressed_bytes?: number }
+export interface LoginSummary {
+  enabled: boolean; ready: boolean;
+  generated_at?: number; // unix ms
+  spans_today?: number; traces_today?: number; services_monitored?: number;
+  http_24h?: LoginSummaryHttp;
+  activity_24h?: LoginSummaryActivity;
+  topology?: LoginSummaryTopology;
+  components?: LoginSummaryComponents;
+}

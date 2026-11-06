@@ -50,6 +50,7 @@ const REFETCH_FILES = [
   'lib/queries/incidents.ts',
   // v0.10.1557 — lib/queries/messaging.ts çıktı (Kafka istemcileri sekmesi sorgusu kaldırıldı).
   // v0.10.1815 — ML baseline geçmiş doldurma ilerlemesi (yalnız koşu sürerken 10 s).
+  'lib/queries/loginSummary.ts', // v0.10.1907 — Login özeti (kimliksiz, 60 sn, gizli sekmede durur, retry yok)
   'lib/queries/ml.ts',
   'lib/queries/monitors.ts',
   'lib/queries/problems.ts',
