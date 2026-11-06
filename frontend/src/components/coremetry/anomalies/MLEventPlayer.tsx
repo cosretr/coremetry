@@ -8,7 +8,7 @@
 // yok); hareket azaltma açıksa adımlar arası animasyonsuz atlar; sekme
 // gizlenince duraklar. Cümleler sunucuda (card.play.frames) — burada seçilir.
 // Zamanlayıcı setTimeout zinciri (yoklama değil; ağ isteği yok).
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Pause, Play } from 'lucide-react';
 import { TimeChart } from '@/components/charts/TimeChart';
 import { Button } from '@/components/shadcn/button';
@@ -27,7 +27,11 @@ function prefersReducedMotion(): boolean {
   }
 }
 
-export function MLEventPlayer({ snap, play, autoPlay = false }: { snap: MLSnapshot; play?: ExplainPlay | null; autoPlay?: boolean }) {
+// above (v0.10.1870): ana grafiğin ÜSTÜNE çizilen sinyal katmanı (trace ısı
+// haritası); imleç zamanını (unix sn) alır — oynatma iki görselde aynı anda.
+export function MLEventPlayer({ snap, play, autoPlay = false, above }: {
+  snap: MLSnapshot; play?: ExplainPlay | null; autoPlay?: boolean; above?: (cursorSec: number | null) => ReactNode;
+}) {
   const ch = useMemo(() => replayChart(snap), [snap]);
   const times = ch.times;
   const last = Math.max(0, times.length - 1);
@@ -75,6 +79,7 @@ export function MLEventPlayer({ snap, play, autoPlay = false }: { snap: MLSnapsh
   const cursorSec = times[i];
   return (
     <div data-testid="ml-player">
+      {above?.(cursorSec ?? null)}
       {times.length > 0 ? (
         <TimeChart height={220} times={times} deployMarkers={ch.deploys}
           regions={ch.regions.map(r => ({ ...r, color: r.label === 'anomali' ? 'var(--err)' : 'var(--warn)' }))}

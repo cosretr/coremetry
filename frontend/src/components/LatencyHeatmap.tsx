@@ -10,6 +10,8 @@ import { DEFAULT_RAMP_TOKENS, densityRamp, heatmapTimeLabel, type RampTokens } f
 // örneklerini senkronlar), o yüzden imleç izi bu otobüsten geliyor.
 import { useCursorTime } from '@/lib/chart/cursorBus';
 import { heatmapCursorCol, heatmapCursorX } from '@/lib/chart/heatmapCursor';
+import type { HeatmapOverlay } from '@/lib/chart/heatmapOverlay';
+import { HeatmapOverlayLayer } from '@/components/coremetry/HeatmapOverlayLayer';
 
 // LatencyHeatmap — Honeycomb-style 2D density visualisation.
 // X = time (left → right), Y = log-scale latency
@@ -107,7 +109,7 @@ function computeHeatmapStats(data: Heatmap): HeatmapStats {
   return { mean, stddev, outliers };
 }
 
-export function LatencyHeatmap({ data, height = 220, onCellClick, onBoxSelect }: {
+export function LatencyHeatmap({ data, height = 220, onCellClick, onBoxSelect, overlay }: {
   data: Heatmap;
   height?: number;
   // v0.5.260 — operator-clickable cells for trace exemplars.
@@ -123,6 +125,11 @@ export function LatencyHeatmap({ data, height = 220, onCellClick, onBoxSelect }:
   // rows. When provided, drag = box-select and a single click still falls
   // through to onCellClick.
   onBoxSelect?: (box: { timeFromNs: number; timeToNs: number; lowDurMs: number; highDurMs: number; count: number }) => void;
+  // v0.10.1870 (ADDITIVE; öğrenme döngüsü Faz 2 parti B, audit §7.2) — ML
+  // trace olayı katmanı: referans çizgisi (kesikli), anomali penceresi
+  // gölgesi, oynatma imleci. Canvas'a DOKUNMAZ: mutlak konumlu div'ler
+  // (paylaşılan imleç izinin emsali), imleç her karede canvas boyatmaz.
+  overlay?: HeatmapOverlay;
 }) {
   const themeTick = useThemeTick(); // v0.10.505 (D8) — tema değişiminde rampa yeniden çözülür
   const containerRef = useRef<HTMLDivElement>(null);
@@ -137,6 +144,7 @@ export function LatencyHeatmap({ data, height = 220, onCellClick, onBoxSelect }:
   // konumlu 1px'lik bir div. 60fps yolu canvas'a hiç dokunmuyor.
   const sharedCursorSec = useCursorTime();
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [wrapW, setWrapW] = useState(0);
   const [hover, setHover] = useState<{
     x: number; y: number;
     time: number; durMs: number; count: number; row: number;
@@ -165,6 +173,7 @@ export function LatencyHeatmap({ data, height = 220, onCellClick, onBoxSelect }:
     const draw = () => {
       const w = wrap.clientWidth;
       if (!w) return;
+      setWrapW(w); // v0.10.1870 — overlay div'leri genişliği state'ten okur (ilk çizimde ref 0)
       // High-DPR sharp canvas: backing store is dpr× the
       // CSS size; we draw in CSS units after a context
       // scale. Skips the blurry render on retina screens.
@@ -503,6 +512,11 @@ export function LatencyHeatmap({ data, height = 220, onCellClick, onBoxSelect }:
               onPointerUp={onMouseUp}
               onPointerCancel={onMouseUp}
               onClick={onClickCell} />
+      {/* v0.10.1870 — ML trace olayı katmanı (gölge → çizgi → imleç); PAD_* çizim döngüsüyle aynı. */}
+      {overlay && wrapW > 0 && (
+        <HeatmapOverlayLayer times={data.times} bins={data.durationBins} overlay={overlay}
+          grid={{ width: wrapW, height, padL: PAD_L, padR: PAD_R, padT: PAD_T, padB: PAD_B }} />
+      )}
       {/* Rubber-band rectangle while dragging a box (Phase 4.2). Rendered as
           an absolutely-positioned div over the canvas — same cell math as the
           draw loop, so the box snaps to the cell grid the operator sees. */}

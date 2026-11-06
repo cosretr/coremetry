@@ -272,6 +272,8 @@ func (s *Server) putMLConfig(w http.ResponseWriter, r *http.Request) {
 // eşikler) + servis profilinden + son 24 sa yayınlarından kurulur. Kayıt
 // yoksa (eski olay / TTL) kart yine döner, snapshot null; ikisi de yoksa 404.
 // ES/rollup okuması YOK; yayınlar servis MV'sinden (GetServiceDeploys).
+// v0.10.1870: `course` (ml_course.go) — endpoint'li trace olayında +1
+// ml_series okuması (CH).
 func (s *Server) getMLReplay(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimSpace(r.PathValue("id"))
 	if id == "" {
@@ -331,7 +333,8 @@ func (s *Server) getMLReplay(w http.ResponseWriter, r *http.Request) {
 			src.Profile = ml.ServiceProfileFromRow(row).Profile
 		}
 		in, _ := ml.AssembleCardInput(src)
-		return map[string]any{"snapshot": snapOut, "related": others, "card": ml.BuildExplainCard(in), "verdict": mlReplayVerdict(src.Event)}, nil
+		return map[string]any{"snapshot": snapOut, "related": others, "card": ml.BuildExplainCard(in), "verdict": mlReplayVerdict(src.Event),
+			"course": s.mlCourse(ctx, in, src.Config)}, nil
 	})
 }
 
@@ -351,9 +354,9 @@ func mlReplayVerdict(ev *chstore.MLEvent) map[string]any {
 }
 
 // mlReplayKey — SAF: girdiler = olay id + kart saatlerinin dilimi. v2:
-// yanıt `card` taşır, snapshot null olabilir.
+// yanıt `card` taşır, snapshot null olabilir. v3 (v0.10.1870): `course`.
 func mlReplayKey(id, tz string) string {
-	return fmt.Sprintf("ml:replay:v2:id=%s:tz=%s", id, tz)
+	return fmt.Sprintf("ml:replay:v3:id=%s:tz=%s", id, tz)
 }
 
 // mlEventPath — SAF: ML olay detayı (FE lib/anomalyHref.ts mlEventHref ikizi).

@@ -12778,3 +12778,19 @@ Kaynak: `docs/metrics/metrics-explore-dashboards-audit.md` §7 Faz 2 (onaylı, �
   ClickHouse'un gerçek durumunu yansıtmaz (host yeniden kurulursa yanlış atlar).
 - Boot logu: `[chstore] saklama süresi açılış denetimi: N ALTER atlandı (TTL zaten güncel), M uygulandı`.
 - Doğrulanmadı: canlı küme (lokal küme askıda); ClickHouse sürümünün `create_table_query` biçimi.
+
+## 2026-11-06 — Öğrenme döngüsü Faz 2 (parti B)
+
+Kaynak: `docs/anomaly/learning-loop-audit.md` §7.1–§7.3, §17; onaylı mockup `docs/frontend/mockups/anomaly-detail.html`
+görünüm 1–4. Parti A'nın (1842–1846) üstüne; ana grafik (olay anı kaydı + oynatma) aynen kalır, sinyale göre katman eklenir.
+- **v0.10.1870 — trace: ısı haritası üstüne çizgi katmanı.** Replay yanıtı `course.trace` taşır (`ml.BuildTraceCourse`,
+  `internal/ml/explain_course.go`; okuma `internal/api/ml_course.go`): pencere kayıtla aynı (başlangıç − 1 sa … bitiş + 1 sa,
+  şimdiyi aşmaz, ≤ 6 sa — `/api/spans/heatmap` bütçesi), süzgeç servis + giriş span'leri + yalnız "/" ile başlayan endpoint
+  (`http.route`; rpc etiketi span kolonuna eşlenmez → servisin tüm giriş istekleri). Isı haritası mevcut `LatencyHeatmap`
+  canvas'ı + yeni `overlay` prop'u (mutlak konumlu div: kesikli çizgi, anomali penceresi gölgesi, oynatma imleci — canvas her
+  karede boyanmaz); oynatıcının `above` yuvasında, imleç ana grafikle aynı anda yürür. Sapma (mockup "normalde en yavaş
+  istekler (p99)"): çizgi = ml_series `<route>|p95` (VM RED, örneklenmemiş) serisinin OLAY ÖNCESİ kovalarının medyanı,
+  etiket "olay öncesi p95 ≈ …" — p99 serisi ve q10–q90 bandı yok (bant `ml_baseline_obs` 1.6 ile gelir); seri yoksa çizgi
+  çizilmez. Endpoint'siz trace dedektörleri (bağımlılık, aykırı pod) katmansız: kayıtları servisin giriş isteklerini
+  anlatmaz. Ek okuma: replay başına +1 CH (ml_series, yalnız endpoint'li trace olayı) + FE'den +1 CH (`/api/spans/heatmap`,
+  ham span örneklemeli, kendi 30 sn cache'i); ES/VM 0. Replay anahtarı v3 (yanıt şekli).

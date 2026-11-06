@@ -79,6 +79,7 @@ describe('ML olay sayfası düzeni', () => {
     expect(el.querySelector('[data-testid="ml-header"]')!.textContent).toContain('Sürüyor · 13 dk');
     expect((el.querySelector('[data-testid="ml-technical"]') as HTMLDetailsElement).open).toBe(false);
     expect(el.querySelector('[data-testid="ml-evidence"]')!.textContent).toContain('abcdef0123456789');
+    expect(el.querySelector('[data-testid="ml-trace-heatmap"]')).toBeNull(); // course yok → katman yok
   });
   it('viewer etiketi görür, düğmeler devre dışı', async () => {
     m.role = 'viewer';
@@ -95,6 +96,16 @@ describe('ML olay sayfası düzeni', () => {
     expect(el.querySelector('[data-testid="ml-course"]')!.textContent).toContain('grafik kaydı yok');
     const btns = [...el.querySelectorAll('[data-testid="ml-actions"] button')] as HTMLButtonElement[];
     expect(btns.some(b => b.disabled)).toBe(false);
+  });
+  it('v0.10.1870: endpoint\'li trace olayında ısı haritası katmanı olayın seyrinde, oynatıcının üstünde', async () => {
+    const tc = { view: 'heatmap', service: 'notify-gateway', route: '/notify/order-status', fromNs: 1, toNs: 2, onsetNs: 1, endNs: 2, line: { ms: 620, label: 'olay öncesi p95 ≈ 620 ms' } };
+    const el = await render({ snapshot: snap, related: [], card, course: { trace: tc } });
+    const hm = el.querySelector('[data-testid="ml-course"] [data-testid="ml-trace-heatmap"]');
+    expect(hm).not.toBeNull();
+    expect(hm!.textContent).toContain('olay öncesi p95 ≈ 620 ms');
+    expect(hm!.textContent).toContain("örneklenmiş span'ler");
+    const player = el.querySelector('[data-testid="ml-player"]')!;
+    expect(player.contains(hm)).toBe(true);
   });
   it('bağlam satırları: aynı servis kayıtları + yayınlar zaman sıralı', () => {
     const s2 = { ...snap, deploys: JSON.stringify([{ service: 'orders-api', version: 'v2', firstSeenNs: 1_799_999_000e9, spanCount: 1 }]) };

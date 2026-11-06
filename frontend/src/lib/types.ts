@@ -12020,7 +12020,16 @@ export interface MLSample { t: number; traceId?: string; body?: string; kind: 's
 /** v0.10.1843 — snapshot null: kayıt yok/düşmüş, kart canlı olay satırından. */
 /** v0.10.1845 — olay satırının etiketi (anomaly_verdicts 'ml:'); yoksa null. */
 export interface MLReplayVerdict { verdict: 'anomaly' | 'not_anomaly' | string; by?: string; at?: number; note?: string }
-export interface MLReplay { snapshot: MLSnapshot | null; related: MLSnapshot[]; card: ExplainCard; verdict?: MLReplayVerdict | null }
+/** v0.10.1870 — "Olayın seyri" ek katmanı: referans çizgisi (ms) + Go'da kurulmuş etiket. */
+export interface CourseLine { ms: number; label: string }
+/** v0.10.1870 — endpoint'li trace olayının ısı haritası penceresi (ns) ve süzgeci (ml.TraceCourse). */
+export interface TraceCourse {
+  view: 'heatmap' | string; service: string; route?: string;
+  fromNs: number; toNs: number; onsetNs: number; endNs: number; line?: CourseLine;
+}
+/** v0.10.1870 — replay yanıtının `course` alanı (ml.ExplainCourse); sinyale göre biri dolu. */
+export interface ExplainCourse { trace?: TraceCourse }
+export interface MLReplay { snapshot: MLSnapshot | null; related: MLSnapshot[]; card: ExplainCard; verdict?: MLReplayVerdict | null; course?: ExplainCourse }
 export interface MLGate { ok: boolean; reasons?: string[] }
 export interface MLBacktestDetector { detector: string; fired: number; tp: number; fp: number; unlabeled: number; positives: number; covered: number; precision: number; recall: number }
 export interface MLBacktestHit { detector: string; part: string; from: number; to: number; peakZ: number; label?: string }

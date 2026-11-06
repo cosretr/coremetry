@@ -61,6 +61,14 @@ func TestMLHandlersReturnCardAndSummary(t *testing.T) {
 	if !regexp.MustCompile(`"card":\s*ml\.BuildExplainCard\(in\)`).MatchString(body("getMLReplay")) {
 		t.Error("getMLReplay kartı döndürmüyor")
 	}
+	// v0.10.1870 — "Olayın seyri" ek katmanı yanıtta (ml_course.go); şekil
+	// değişti → anahtar v3.
+	if !regexp.MustCompile(`"course":\s*s\.mlCourse\(ctx, in, src\.Config\)`).MatchString(body("getMLReplay")) {
+		t.Error("getMLReplay course katmanını döndürmüyor")
+	}
+	if !strings.Contains(mlReplayKey("a", "UTC"), "ml:replay:v3:") {
+		t.Error("replay yanıt şekli değişti, anahtar sürümü v3 olmalı")
+	}
 }
 
 func TestMLEventRowsCarrySummary(t *testing.T) {

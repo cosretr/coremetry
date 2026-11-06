@@ -34,6 +34,7 @@ import {
 import type { ExplainCard, ExplainLink, MLBacktestResult, MLReplayVerdict, MLSample, MLSnapshot, RecentDeployEntry } from '@/lib/types';
 import { ML_DETECTOR_TR } from './MLTab';
 import { MLEventPlayer } from './MLEventPlayer';
+import { MLTraceHeatmap } from './MLTraceHeatmap';
 
 const fmtTs = (ns: number) => fmtDateTime(new Date(ns / 1e6));
 const fmtNum = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(3));
@@ -134,6 +135,7 @@ export function MLReplayContent({ id, autoPlay = false }: { id: string; autoPlay
     return <Empty icon={<SearchX size={28} strokeWidth={1.5} />} title="Bu olay bulunamadı">Olay kaydı 30, olay anı kaydı 120 gün saklanır; daha eski olaylar listeden de düşer.</Empty>;
   }
   const h = card.header;
+  const tc = q.data?.course?.trace; // v0.10.1870 — endpoint'li trace olayı: ısı haritası katmanı
   const ev = snap ? parseObj(snap.evidence) : {};
   const episodes = typeof ev.episodes7d === 'number' ? ev.episodes7d : 0;
   return (
@@ -160,7 +162,10 @@ export function MLReplayContent({ id, autoPlay = false }: { id: string; autoPlay
       </div>
       <Section id="ml-course" title="Olayın seyri" sub={snap ? `${Math.round((snap.bucketSec || 300) / 60)} dakikalık kova · olay anı kaydı` : undefined}>
         <div className="rounded-md border border-border bg-card px-3 py-2.5">
-          {snap ? <MLEventPlayer snap={snap} play={card.play} autoPlay={autoPlay} /> : <p className="text-sm text-muted-foreground">Bu olay için grafik kaydı yok (olay anı kaydı yazılmadan önce açılmış ya da süresi dolmuş).</p>}
+          {snap ? <MLEventPlayer snap={snap} play={card.play} autoPlay={autoPlay} above={tc ? c => <MLTraceHeatmap tc={tc} cursorSec={c} /> : undefined} /> : <>
+            {tc && <MLTraceHeatmap tc={tc} cursorSec={null} />}
+            <p className="text-sm text-muted-foreground">Bu olay için grafik kaydı yok (olay anı kaydı yazılmadan önce açılmış ya da süresi dolmuş).</p>
+          </>}
           {snap && <p className="mt-2 text-xs text-muted-foreground">Grafik dedektörün kullandığı aynı kayıtla çizilir; sayfa yeniden sorgu atmaz.</p>}
         </div>
       </Section>
