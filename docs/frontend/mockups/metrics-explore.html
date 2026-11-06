@@ -1,0 +1,1066 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Metrics Explorer Mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Token blokları ve taban bileşen sınıfları log-search.html ile aynıdır (kaynak: frontend/src/styles/globals.css + tokens.css). Statik mockup; ürün kodu değildir. */
+:root{
+  --font-sans:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+  --font-mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  /* light */
+  --bg0:#f4f6f8;--bg1:#ffffff;--bg2:#f0f3f6;--bg3:#e4e8ed;
+  --border:#dde2e9;--divider:#e6e9ef;--border-control:#b2b7be;--border-strong:#8d939a;
+  --text:#212429;--text2:#474c54;--text3:#62676f;--text-faint:#888e95;
+  --accent:#2572de;--accent2:#1263cd;--accent-hover:#1364ce;--on-accent:#ffffff;--focus:#2572de;
+  --accent-bg:#ebf2fc;--accent-border:#b3cef3;
+  --ok:#047735;--warn:#8f5c04;--warn-solid:#b98206;--err:#c42a28;--err-solid:#c42a28;--info:#1263cd;
+  --ok-bg:#e8f3ed;--warn-bg:#f5f0e8;--err-bg:#faecec;--info-bg:#ebf2fc;
+  --purple:#8250df;--orange:#bc4c00;--teal:#137775;
+  --shadow-sm:0 1px 2px rgba(20,30,45,.05);--shadow-pop:0 8px 24px rgba(20,30,45,.14);--backdrop:rgba(20,30,45,.35);
+  --radius-xs:4px;--radius-sm:6px;--radius:8px;--radius-lg:12px;
+  --nav-bg:#ffffff;--nav-text:#212429;--nav-text2:#474c54;--nav-border:#dde2e9;--nav-hover:#f0f3f6;--nav-active:#1263cd;
+  /* sinyal türü: tür başına tek ton; her yerde ikon + metin ile birlikte */
+  --sig-metric:#137775;--sig-trace:#8250df;--sig-log:#bc4c00;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg0:#09090b;--bg1:#18181b;--bg2:#212125;--bg3:#27272a;
+    --border:#3f3f46;--divider:#2c2c31;--border-control:#52525b;--border-strong:#71717a;
+    --text:#fafafa;--text2:#d4d4d8;--text3:#a6a6ae;--text-faint:#71717a;
+    --accent:#2d73d8;--accent2:#6ba6fb;--accent-hover:#1d65c9;--on-accent:#ffffff;--focus:#6ba6fb;
+    --accent-bg:#253040;--accent-border:#294d82;
+    --ok:#4db96b;--warn:#f3b94c;--warn-solid:#f3b94c;--err:#fe7f73;--err-solid:#cc4740;--info:#6ba6fb;
+    --ok-bg:#293933;--warn-bg:#3d392f;--err-bg:#3e3234;--info-bg:#253040;
+    --purple:#a371f7;--orange:#d76f04;--teal:#39c5cf;
+    --shadow-sm:0 1px 2px rgba(0,0,0,.25);--shadow-pop:0 8px 24px rgba(0,0,0,.45);--backdrop:rgba(0,0,0,.55);
+    --radius-xs:4px;--radius-sm:6px;--radius:8px;--radius-lg:12px;
+    --nav-bg:#18181b;--nav-text:#fafafa;--nav-text2:#d4d4d8;--nav-border:#3f3f46;--nav-hover:#212125;--nav-active:#6ba6fb;color-scheme:dark;
+    --sig-metric:#39c5cf;--sig-trace:#b48cf9;--sig-log:#f0903a;
+  }
+}
+:root[data-theme="dark"]{
+  --bg0:#09090b;--bg1:#18181b;--bg2:#212125;--bg3:#27272a;
+  --border:#3f3f46;--divider:#2c2c31;--border-control:#52525b;--border-strong:#71717a;
+  --text:#fafafa;--text2:#d4d4d8;--text3:#a6a6ae;--text-faint:#71717a;
+  --accent:#2d73d8;--accent2:#6ba6fb;--accent-hover:#1d65c9;--on-accent:#ffffff;--focus:#6ba6fb;
+  --accent-bg:#253040;--accent-border:#294d82;
+  --ok:#4db96b;--warn:#f3b94c;--warn-solid:#f3b94c;--err:#fe7f73;--err-solid:#cc4740;--info:#6ba6fb;
+  --ok-bg:#293933;--warn-bg:#3d392f;--err-bg:#3e3234;--info-bg:#253040;
+  --purple:#a371f7;--orange:#d76f04;--teal:#39c5cf;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.25);--shadow-pop:0 8px 24px rgba(0,0,0,.45);--backdrop:rgba(0,0,0,.55);
+  --radius-xs:4px;--radius-sm:6px;--radius:8px;--radius-lg:12px;
+  --nav-bg:#18181b;--nav-text:#fafafa;--nav-text2:#d4d4d8;--nav-border:#3f3f46;--nav-hover:#212125;--nav-active:#6ba6fb;color-scheme:dark;
+  --sig-metric:#39c5cf;--sig-trace:#b48cf9;--sig-log:#f0903a;
+}
+:root[data-theme="redhat"]{
+  --bg0:#f4f4f5;--bg1:#ffffff;--bg2:#fafafa;--bg3:#ececee;
+  --border:#e4e4e7;--divider:#ebebed;--border-control:#a1a1aa;--border-strong:#71717a;
+  --text:#09090b;--text2:#52525b;--text3:#63636b;--text-faint:#8b8b93;
+  --accent:#0066cc;--accent2:#0066cc;--accent-hover:#004080;--on-accent:#ffffff;--focus:#0066cc;
+  --accent-bg:#e7f1fa;--accent-border:#bee1f4;
+  --ok:#317928;--warn:#795600;--warn-solid:#b08307;--err:#c9190b;--err-solid:#c9190b;--info:#0066cc;
+  --ok-bg:#eef4ed;--warn-bg:#fdf5e0;--err-bg:#fbefee;--info-bg:#e7f1fa;
+  --purple:#8476d1;--orange:#ec7a08;--teal:#009596;
+  --shadow-sm:0 1px 2px rgba(21,21,21,.08);--shadow-pop:0 8px 24px rgba(21,21,21,.16);--backdrop:rgba(21,21,21,.4);
+  --radius-xs:3px;--radius-sm:4px;--radius:6px;--radius-lg:8px;
+  /* Red Hat temasında kenar çubuğu koyu kalır (kapsamlı token remap). */
+  --nav-bg:#18181b;--nav-text:#fafafa;--nav-text2:#d4d4d8;--nav-border:#3f3f46;--nav-hover:#212125;--nav-active:#73bcf7;color-scheme:light;
+  --sig-metric:#00777a;--sig-trace:#5e4fb3;--sig-log:#b35200;
+}
+/* kategorik seri paleti: üründeki --series-1..8 ile aynı değerler (frontend/src/styles/tokens.css); aynı blok sırası */
+:root{--series-1:#045c93;--series-2:#0c9999;--series-3:#921545;--series-4:#898905;--series-5:#567cd3;--series-6:#d46e07;--series-7:#7b489e;--series-8:#bf68ae}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){--series-1:#288dd4;--series-2:#06d8d9;--series-3:#cb4f73;--series-4:#b5b614;--series-5:#95b6fe;--series-6:#d76f04;--series-7:#ac78d2;--series-8:#fca0e8}
+}
+:root[data-theme="dark"]{--series-1:#288dd4;--series-2:#06d8d9;--series-3:#cb4f73;--series-4:#b5b614;--series-5:#95b6fe;--series-6:#d76f04;--series-7:#ac78d2;--series-8:#fca0e8}
+:root[data-theme="redhat"]{--series-1:#045c93;--series-2:#0c9999;--series-3:#921545;--series-4:#898905;--series-5:#567cd3;--series-6:#d46e07;--series-7:#7b489e;--series-8:#bf68ae}
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg0);color:var(--text);font:13px/1.5 var(--font-sans);overflow-x:hidden}
+a{color:var(--accent2);text-decoration:none}
+button{font:inherit;color:inherit}
+.mono{font-family:var(--font-mono);font-size:12px}
+.muted{color:var(--text3)} .t2{color:var(--text2)}
+.num{font-variant-numeric:tabular-nums;text-align:right}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+
+/* ---- mockup gezinme kromu (ürün arayüzü değil) ---- */
+.mk{margin:12px 16px;padding:10px 12px;border:1px dashed var(--border-strong);border-radius:var(--radius);background:var(--bg1);display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center}
+.mk-tag{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--warn);border:1px dashed var(--warn);border-radius:var(--radius-xs);padding:1px 6px;white-space:nowrap}
+.mk-sp{flex:1 1 20px}
+.mk-note{margin:8px 0 0;padding:6px 10px;border-left:3px dashed var(--warn);color:var(--text2);font-size:12px;background:var(--bg1)}
+
+/* ---- shadcn tarzı bileşenler (log-search.html ile aynı) ---- */
+.btn{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;border-radius:var(--radius-sm);border:1px solid transparent;background:transparent;cursor:pointer;white-space:nowrap;font-size:13px;font-weight:500}
+.btn.primary{background:var(--accent);color:var(--on-accent)} .btn.primary:hover{background:var(--accent-hover)}
+.btn.sec{border-color:var(--border-control);background:var(--bg1)} .btn.sec:hover{background:var(--bg2)}
+.btn.ghost:hover{background:var(--bg2)}
+.btn.sm{height:24px;padding:0 8px;font-size:12px}
+.badge{display:inline-flex;align-items:center;gap:4px;padding:1px 7px;border-radius:var(--radius-sm);font-size:11px;font-weight:600;white-space:nowrap;border:1px solid var(--border);background:var(--bg2);color:var(--text2)}
+.badge.err{background:var(--err-bg);color:var(--err);border-color:transparent}
+.badge.warn{background:var(--warn-bg);color:var(--warn);border-color:transparent}
+.badge.ok{background:var(--ok-bg);color:var(--ok);border-color:transparent}
+.badge.info{background:var(--info-bg);color:var(--info);border-color:transparent}
+.badge.outline{background:transparent}
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--border-control);border-radius:var(--radius-sm);overflow:hidden;background:var(--bg1)}
+.seg button{height:26px;padding:0 10px;border:0;border-right:1px solid var(--border);background:transparent;cursor:pointer;font-size:12px;font-weight:500;color:var(--text2);white-space:nowrap}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--accent-bg);color:var(--accent2);font-weight:600;box-shadow:inset 0 -2px 0 var(--accent)}
+.input{height:30px;padding:0 10px;border:1px solid var(--border-control);border-radius:var(--radius-sm);background:var(--bg1);color:var(--text);font:13px var(--font-sans);min-width:0}
+.input:focus{outline:none;border-color:var(--focus)}
+.card{background:var(--bg1);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm)}
+
+/* ---- uygulama kabuğu ---- */
+.shell{display:grid;grid-template-columns:184px minmax(0,1fr);margin:0 16px 24px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--bg0)}
+.nav{background:var(--nav-bg);color:var(--nav-text);border-right:1px solid var(--nav-border);padding:12px 0}
+.nav b{display:block;padding:0 16px 10px;font-size:14px}
+.nav a{display:block;padding:7px 16px;color:var(--nav-text2);border-left:2px solid transparent}
+.nav a:hover{background:var(--nav-hover)}
+.nav a.on{color:var(--nav-active);border-left-color:var(--accent);background:var(--nav-hover);font-weight:600}
+.main{min-width:0;padding:0 16px 16px}
+.ctx{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--border);margin-bottom:12px}
+.ctx h1{font-size:18px;margin:0 8px 0 0;font-weight:600}
+.ctx .sp{flex:1 1 8px}
+.view{display:none} .view.on{display:block}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.lg{display:inline-flex;align-items:center;gap:5px;color:var(--text2)} .lg i{width:10px;height:10px;border-radius:2px;display:inline-block}
+.sx{overflow-x:auto}
+table.dt{border-collapse:collapse;width:100%;font-size:12px}
+.dt th{text-align:left;font-size:11px;font-weight:600;color:var(--text2);padding:7px 10px;border-bottom:1px solid var(--border);white-space:nowrap;background:var(--bg1)}
+.dt td{padding:6px 10px;border-bottom:1px solid var(--divider);vertical-align:top}
+.dt tr:last-child td{border-bottom:0}
+.dt tbody tr.click:hover{background:var(--bg2);cursor:pointer}
+.tchip{display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 7px;border:1px solid var(--border-control);border-radius:11px;background:var(--bg1);font:500 11px var(--font-mono);cursor:pointer;white-space:nowrap}
+.tchip.bad{border-color:var(--err);color:var(--err)}
+.lead{font-size:14px;line-height:1.5;margin:0 0 10px}
+.sect{margin-top:14px} .sect>h3{font-size:12px;font-weight:600;margin:0 0 6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+details.ev{border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 10px;margin-top:14px;background:var(--bg1)}
+details.ev summary{cursor:pointer;font-weight:600;font-size:12px}
+.tpl{font-family:var(--font-mono);min-width:260px;word-break:break-word}
+.tpl em{font-style:normal;color:var(--text-faint)}
+
+/* ---- anomaly-detail.html'den aynen alınan grafik sınıfları ---- */
+.chip{display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 8px;border:1px solid var(--accent-border);border-radius:11px;background:var(--accent-bg);font-size:11px;font-weight:500;white-space:nowrap}
+.ch{padding:10px 12px}
+.ch-head{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:12px;margin-bottom:6px}
+.ch svg.big,.ch svg.mid{display:block;width:100%;min-width:560px;height:auto}
+svg text{font:10px var(--font-mono);fill:var(--text3);font-variant-numeric:tabular-nums}
+.gl{stroke:var(--divider);stroke-width:1}
+.h1{fill:color-mix(in srgb,var(--accent) 18%,transparent)} .h2{fill:color-mix(in srgb,var(--accent) 40%,transparent)} .h3{fill:color-mix(in srgb,var(--accent) 65%,transparent)}
+.h4{fill:color-mix(in srgb,var(--warn-solid) 80%,transparent)} .h5{fill:color-mix(in srgb,var(--err) 90%,transparent)}
+.g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.g2{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:10px;align-items:start}
+pre.q{margin:8px 0 0;padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg2);font:12px/1.5 var(--font-mono);overflow-x:auto}
+
+/* ---- log-search.html'den aynen alınan sorgu sınıfları ---- */
+.btn.icon{width:24px;height:24px;padding:0;justify-content:center;font-size:12px}
+.kbd{font:600 11px var(--font-mono);padding:0 5px;border:1px solid var(--border-control);border-bottom-width:2px;border-radius:var(--radius-xs);background:var(--bg2);color:var(--text2)}
+.pop{position:absolute;z-index:20;background:var(--bg1);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-pop);padding:6px;max-width:calc(100vw - 32px)}
+.pop h6{margin:6px 8px 4px;font-size:11px;font-weight:600;color:var(--text3);text-transform:none}
+.opt{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:var(--radius-xs);cursor:pointer;font-size:12px}
+.opt:hover,.opt.on{background:var(--bg2)}
+.opt .r{margin-left:auto;color:var(--text3);font-size:11px;white-space:nowrap}
+.sw{display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;border:0;background:transparent;padding:0}
+.sw i{width:28px;height:16px;border-radius:10px;background:var(--border-control);position:relative;display:inline-block;flex:none}
+.sw i::after{content:"";position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:var(--on-accent)}
+.sw[aria-checked="true"] i{background:var(--accent)} .sw[aria-checked="true"] i::after{left:14px}
+.alert{display:flex;gap:8px;align-items:flex-start;padding:6px 10px;border:1px solid var(--err);background:var(--err-bg);color:var(--text);border-radius:var(--radius-sm);font-size:12px;margin-bottom:8px}
+.alert b{color:var(--err)}
+.pill{display:inline-flex;align-items:center;height:24px;border:1px solid var(--border-control);border-radius:var(--radius-sm);background:var(--bg1);font-size:12px;overflow:hidden}
+.pill .k{padding:0 4px 0 8px;color:var(--text2)} .pill .v{padding:0 8px 0 0;font-family:var(--font-mono);font-weight:500}
+.pill .tag{padding:0 6px;font-size:10px;font-weight:700;align-self:stretch;display:inline-flex;align-items:center;border-right:1px solid var(--border)}
+.pill button{border:0;border-left:1px solid var(--border);background:transparent;height:100%;padding:0 6px;cursor:pointer;color:var(--text3);font-size:11px}
+.pill.pin .tag{background:var(--accent-bg);color:var(--accent2)}
+.more{border:0;background:transparent;color:var(--accent2);cursor:pointer;padding:2px 0;font:500 11px var(--font-sans)}
+
+/* ---- bu mockup'a özgü ---- */
+.sp{flex:1 1 8px} .w100{width:100%}
+.tabs{display:flex;flex-wrap:wrap;gap:0 18px;border-bottom:1px solid var(--border);margin:0 0 12px}
+.tabs button{border:0;border-bottom:2px solid transparent;background:transparent;padding:4px 0 8px;margin-bottom:-1px;cursor:pointer;font-size:13px;font-weight:500;color:var(--text2)}
+.tabs button.on{color:var(--text);font-weight:600;border-bottom-color:var(--accent)}
+.pp{position:relative;display:inline-flex;max-width:100%;min-width:0}
+.pp>.pop{top:100%;left:0;margin-top:4px}
+.pp>.pop.r{left:auto;right:0}
+.pp.col{flex-wrap:wrap}
+.mpop{width:460px} .fpop{width:340px} .spop{width:270px} .pmenu{width:190px}
+button.opt{border:0;background:transparent;width:100%;text-align:left}
+.mopt{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:0 8px;align-items:center;width:100%;padding:6px 8px;border:0;border-radius:var(--radius-xs);background:transparent;cursor:pointer;text-align:left;font-size:12px}
+.mopt:hover,.mopt.on{background:var(--bg2)}
+.mopt .nm{font-family:var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mopt small{grid-column:1/-1;color:var(--text3);font-size:11px}
+.pf{display:flex;flex-wrap:wrap;justify-content:space-between;gap:2px 8px;margin:4px 8px 2px;font-size:11px;color:var(--text3)}
+.qcard{padding:10px 12px;margin-bottom:10px}
+.qrow{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;padding:8px 0;border-top:1px solid var(--divider)}
+.qhead{padding-bottom:8px}
+.ql{width:22px;height:22px;flex:none;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--accent-border);border-radius:var(--radius-xs);background:var(--accent-bg);color:var(--accent2);font:600 11px var(--font-mono)}
+.ql.f{border-color:var(--border);background:var(--bg2);color:var(--text2)}
+.qk{font-size:11px;color:var(--text3);white-space:nowrap}
+.mbtn{display:inline-flex;align-items:center;gap:6px;height:26px;max-width:100%;min-width:0;padding:0 8px;border:1px solid var(--border-control);border-radius:var(--radius-sm);background:var(--bg1);cursor:pointer;font:500 12px var(--font-mono)}
+.mbtn .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.auto{font-size:11px;color:var(--text3);border-bottom:1px dashed var(--border-strong);white-space:nowrap}
+.vdiv{width:1px;height:18px;flex:none;background:var(--border)}
+.lf{height:26px;width:210px;max-width:100%;font:12px var(--font-mono)}
+.fx{display:inline-flex;align-items:center;height:26px;padding:0 8px;border:1px solid var(--border-control);border-radius:var(--radius-sm);background:var(--bg1);font:500 12px var(--font-mono)}
+.warnbar{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;padding:5px 10px;margin-bottom:8px;border:1px solid var(--warn-solid);border-radius:var(--radius-sm);background:var(--warn-bg);font-size:12px}
+.warnbar b{color:var(--warn)}
+.statln{font-size:12px;color:var(--text2);font-variant-numeric:tabular-nums}
+.sub{margin:10px 0 4px;font-size:12px;font-weight:600;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.ln{fill:none;stroke-width:1.6;stroke-linejoin:round}
+.c1{stroke:var(--series-1)} .c2{stroke:var(--series-2)} .c3{stroke:var(--series-3)} .c4{stroke:var(--series-4)}
+.c5{stroke:var(--series-5)} .c6{stroke:var(--series-6)} .c7{stroke:var(--series-7)} .c8{stroke:var(--series-8)}
+.c5,.c6,.c7,.c8{stroke-dasharray:5 3}
+.f1{fill:var(--series-1)} .f2{fill:var(--series-2)} .f3{fill:var(--series-3)} .f4{fill:var(--series-4)}
+.f5{fill:var(--series-5)} .f6{fill:var(--series-6)} .f7{fill:var(--series-7)} .f8{fill:var(--series-8)}
+.ar{stroke:none;opacity:.2} .stk .ar{opacity:.55}
+.ln.dim{opacity:.12} .ar.dim,.stk .ar.dim{opacity:.04}
+.lsw{width:18px;height:6px;vertical-align:middle;margin-right:4px;flex:none}
+tr.off td{color:var(--text-faint)}
+.rest td{color:var(--text3)}
+.empty{padding:28px 12px;text-align:center;color:var(--text2)}
+.empty b{display:block;color:var(--text);font-size:14px;margin-bottom:4px}
+.g4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.tile{padding:10px 12px;min-width:0}
+.stat .lb{display:block;font-size:12px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stat b{display:block;font-size:24px;line-height:1.25;font-weight:600;font-variant-numeric:tabular-nums}
+.stat .dl{font-size:11px;color:var(--text3)}
+.ed{margin:0 0 8px;padding:8px 10px 8px 0;border:1px solid var(--border-control);border-radius:var(--radius-sm);background:var(--bg1);font:12px/1.7 var(--font-mono);overflow-x:auto;white-space:pre;tab-size:2}
+.ed .no{display:inline-block;width:34px;padding-right:10px;text-align:right;color:var(--text-faint);user-select:none}
+.tk-k{color:var(--purple);font-weight:600} .tk-f{color:var(--accent2)} .tk-s{color:var(--ok)} .tk-n{color:var(--orange)} .tk-l{color:var(--teal)} .tk-v{color:var(--warn);font-weight:600}
+.ed .tk-e{display:none} .ed.err .tk-e{display:inline;text-decoration:underline wavy var(--err);text-decoration-skip-ink:none}
+.ed .car{display:none;color:var(--err);font-weight:600} .ed.err .car{display:inline}
+.acp{position:static;margin-top:4px;width:100%;max-width:520px}
+.phead{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
+.editbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 10px;margin-bottom:10px;border:1px dashed var(--accent);border-radius:var(--radius-sm);background:var(--accent-bg);font-size:12px}
+.dg{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:10px}
+.p4{grid-column:span 4} .p6{grid-column:span 6} .p8{grid-column:span 8} .p12{grid-column:span 12}
+.pn{min-width:0}
+.pn-h{display:flex;align-items:center;gap:6px;padding:6px 6px 4px 10px}
+.pn-h b{flex:1 1 auto;min-width:0;font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pn-b{padding:0 10px 10px}
+.grip,.wsel{display:none}
+.dg.editing .grip{display:inline;cursor:grab;color:var(--text3);font-size:14px}
+.dg.editing .wsel{display:inline-flex}
+.dg.editing .pn{border-style:dashed;border-color:var(--border-strong)}
+.addp{display:none;align-items:center;justify-content:center;min-height:56px;border:1px dashed var(--border-strong);border-radius:var(--radius);background:transparent;color:var(--text2);cursor:pointer}
+.dg.editing .addp{display:flex}
+.pv{display:block;width:100%;min-width:420px;height:auto}
+.sp2{display:block;width:120px;height:28px;margin-top:4px}
+.br{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 8px;padding:4px 0;font-size:12px}
+.br .mono{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.br i{grid-column:1/-1;height:6px;border-radius:3px;background:color-mix(in srgb,var(--accent) 55%,transparent)}
+.share{display:inline-block;height:6px;min-width:2px;border-radius:3px;margin-right:6px;vertical-align:middle;background:color-mix(in srgb,var(--accent) 55%,transparent)}
+.tg .card{display:block;width:100%;padding:8px 10px;min-width:0;text-align:left;cursor:pointer}
+.tg b{display:block;font-size:13px;font-weight:600}
+.tg small{display:block;font-size:11px;color:var(--text3)}
+.star{border:0;background:transparent;cursor:pointer;font-size:14px;line-height:1;padding:0 2px;color:var(--text3)}
+.star[aria-pressed="true"]{color:var(--warn-solid)}
+.tchip.sel{border-color:var(--accent);background:var(--accent-bg);color:var(--accent2)}
+.hid td{color:var(--text-faint)}
+.frm{display:grid;grid-template-columns:110px minmax(0,1fr);gap:6px 10px;align-items:center;margin-top:8px;font-size:12px}
+.frm>span{color:var(--text2)}
+.input.s{height:26px;font-size:12px}
+.opts details.ev{margin-top:8px} .opts details.ev:first-child{margin-top:0}
+.pad{padding:10px 12px}
+
+@media (max-width:980px){
+  .shell{grid-template-columns:minmax(0,1fr)} .nav{display:none}
+  .g3,.g2{grid-template-columns:minmax(0,1fr)}
+  .g4{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .p4{grid-column:span 6} .p8{grid-column:span 12}
+}
+@media (max-width:560px){
+  .mk{margin:12px 16px} .shell{margin:0 16px 24px} .main{padding:0 10px 12px}
+  .g4{grid-template-columns:minmax(0,1fr)} .dg>*{grid-column:1/-1}
+  .qrow,.ctx,.ctl{position:relative} .qrow .pp,.ctx .pp,.ctl .pp{position:static}
+  .qrow .pp>.pop,.ctx .pp>.pop,.ctl .pp>.pop{left:0;right:0;width:auto}
+  .frm{grid-template-columns:minmax(0,1fr)}
+}
+</style>
+</head>
+<body>
+
+<!-- ============ MOCKUP GEZİNME (ürün arayüzü değil) ============ -->
+<div class="mk" role="region" aria-label="Mockup gezinme">
+  <span class="mk-tag">Mockup gezinme · ürün arayüzü değil</span>
+  <div class="seg" role="tablist" aria-label="Görünüm" id="viewseg">
+    <button class="on" data-view="v1">1 · Explorer: builder</button>
+    <button data-view="v2">2 · Explorer: kod</button>
+    <button data-view="v3">3 · Keşif / kardinalite</button>
+    <button data-view="v4">4 · Dashboards listesi</button>
+    <button data-view="v5">5 · Dashboard görünümü</button>
+    <button data-view="v6">6 · Panel düzenleyici</button>
+  </div>
+  <span class="mk-sp"></span>
+  <span class="muted">Tema</span>
+  <div class="seg" role="group" aria-label="Tema" id="themeseg">
+    <button data-th="light">Light</button>
+    <button data-th="dark">Dark</button>
+    <button data-th="redhat">Red Hat</button>
+  </div>
+</div>
+
+<div class="shell">
+  <nav class="nav" aria-label="Ürün gezinme">
+    <b>Coremetry</b>
+    <a href="#">Services</a><a href="#">Traces</a><a href="#">Logs</a><a href="#" class="on" data-nav="m">Metrics</a>
+    <a href="#">Explore</a><a href="#" data-nav="d">Dashboards</a><a href="#">Problems</a><a href="#">Settings</a>
+  </nav>
+
+  <main class="main">
+
+    <!-- ================= GÖRÜNÜM 1: METRICS EXPLORER, BUILDER ================= -->
+    <section class="view on" id="v1" aria-label="Metrics Explorer, builder kipi">
+      <!-- ContextBar: başlık → Env → Cluster → (boşluk) → yenile → zaman seçici en sağda -->
+      <div class="ctx">
+        <h1>Metrics</h1>
+        <span class="badge outline">Env: prod</span>
+        <button class="btn sec sm" type="button" aria-haspopup="listbox">Cluster: acme-prod-1 ▾</button>
+        <span class="sp"></span>
+        <button class="btn sec sm" type="button" title="Yenile">↻ 14:44</button>
+        <button class="btn sec" type="button" aria-haspopup="dialog">Son 1 sa ▾</button>
+      </div>
+      <div class="tabs" role="tablist" aria-label="Metrics bölümleri">
+        <button class="on" type="button" role="tab" aria-selected="true">Sorgu</button>
+        <button type="button" role="tab" aria-selected="false" data-go="v3">Keşif</button>
+      </div>
+
+      <div class="card qcard">
+        <div class="row qhead">
+          <div class="seg" role="group" aria-label="Sorgu kipi">
+            <button class="on" type="button">Builder</button>
+            <button type="button" data-go="v2">MetricsQL</button>
+          </div>
+          <span class="sp"></span>
+          <button class="btn sec sm" type="button">Dashboard'a ekle</button>
+          <button class="btn sec sm" type="button">Alarm kuralı oluştur</button>
+          <button class="btn sec sm" type="button">Paylaş</button>
+        </div>
+
+        <!-- Sorgu satırı A: görünüm 6'da aynı düğüm kopyalanır (tek bileşen) -->
+        <div class="qrow" id="qrowA">
+          <span class="ql" title="Sorgu A">A</span>
+          <div class="pp">
+            <button class="mbtn" type="button" data-pop aria-haspopup="listbox" aria-expanded="false"><span class="nm">http_server_request_duration_seconds_count</span><span class="badge">sayaç</span></button>
+            <div class="pop mpop" role="listbox" aria-label="Metrik seç" hidden>
+              <input class="input w100" value="http_server_req" aria-label="Metrik ara">
+              <div class="pf"><span>Sunucu araması · 137 sonuçtan ilk 20</span><span>kapsam: acme-prod-1</span></div>
+              <button class="mopt on" type="button"><span class="nm">http_server_request_duration_seconds_count</span><span class="badge">sayaç</span><span class="muted">istek</span><small>Tamamlanan HTTP isteklerinin sayısı. Tür kaynağı: katalog.</small></button>
+              <button class="mopt" type="button"><span class="nm">http_server_request_duration_seconds_bucket</span><span class="badge">histogram</span><span class="muted">sn</span><small>HTTP istek süresi dağılımı. Yüzdelik ve ısı haritası için bunu seçin.</small></button>
+              <button class="mopt" type="button"><span class="nm">http_server_request_duration_seconds_sum</span><span class="badge">sayaç</span><span class="muted">sn</span><small>Toplam istek süresi. Ortalama için sum / count.</small></button>
+              <button class="mopt" type="button"><span class="nm">http_server_active_requests</span><span class="badge">gösterge</span><span class="muted">istek</span><small>O anda işlenen istek sayısı. Tür kaynağı: tahmini (ad son eki).</small></button>
+              <div class="pf"><span><span class="kbd">↑↓</span> gez · <span class="kbd">↵</span> seç</span><span>Keşif'te ara →</span></div>
+            </div>
+          </div>
+          <span class="pill pin" title="Bağlam çubuğundaki cluster seçiminden gelir"><span class="tag">kapsam</span><span class="k">k8s_cluster_name =</span><span class="v">acme-prod-1</span></span>
+          <span class="pill"><span class="k">http_route !~</span><span class="v">/health.*</span><button type="button" aria-label="Süzgeci kaldır">✕</button></span>
+          <div class="pp">
+            <button class="btn ghost sm" type="button" data-pop aria-haspopup="dialog" aria-expanded="false">+ süzgeç</button>
+            <div class="pop fpop" role="dialog" aria-label="Süzgeç ekle" hidden>
+              <h6>Etiket ve işleç</h6>
+              <div class="row"><input class="input s" value="service_name" aria-label="Etiket ara">
+                <div class="seg" role="group" aria-label="İşleç"><button class="on" type="button">=</button><button type="button">!=</button><button type="button">=~</button><button type="button">!~</button></div></div>
+              <h6>Değer önerileri · bu metrikte, son 24 sa</h6>
+              <button class="opt" type="button"><span class="mono">orders-api</span><span class="r">5 route</span></button>
+              <button class="opt" type="button"><span class="mono">payments-mobile</span><span class="r">3 route</span></button>
+              <button class="opt" type="button"><span class="mono">branch-teller</span><span class="r">2 route</span></button>
+              <button class="opt" type="button"><span class="mono">notify-gateway</span><span class="r">2 route</span></button>
+              <div class="pf"><span>Sunucu araması · 4 değer</span><span><span class="kbd">↵</span> ekle</span></div>
+            </div>
+          </div>
+          <span class="vdiv" aria-hidden="true"></span>
+          <div class="pp">
+            <button class="mbtn" type="button" data-pop aria-haspopup="listbox" aria-expanded="false"><span class="qk">fonksiyon</span>rate ▾</button>
+            <div class="pop spop" role="listbox" aria-label="Fonksiyon seç" hidden>
+              <button class="opt on" type="button"><span class="mono">rate</span><span class="r">saniyelik hız · önerilen</span></button>
+              <button class="opt" type="button"><span class="mono">increase</span><span class="r">aralıktaki artış</span></button>
+              <button class="opt" type="button"><span class="mono">irate</span><span class="r">anlık hız</span></button>
+              <button class="opt" type="button"><span class="mono">ham değer</span><span class="r">önerilmez: sayaç hep artar</span></button>
+            </div>
+          </div>
+          <span class="auto" title="Metrik türü sayaç olduğu için rate kendiliğinden seçildi; değiştirebilirsiniz">sayaç → rate</span>
+          <span class="mbtn"><span class="qk">topla</span>sum ▾</span>
+          <span class="qk">by</span>
+          <span class="tchip">service_name ✕</span><span class="tchip">http_route ✕</span>
+          <button class="btn ghost sm" type="button" aria-label="Gruplama etiketi ekle">+</button>
+          <span class="vdiv" aria-hidden="true"></span>
+          <span class="qk">lejant</span>
+          <input class="input lf" value="{{service_name}} {{http_route}}" aria-label="Lejant biçimi">
+          <span class="sp"></span>
+          <button class="btn icon ghost" type="button" aria-label="Sorguyu grafikte gizle">◉</button>
+          <button class="btn icon ghost" type="button" aria-label="Sorgu menüsü">⋯</button>
+        </div>
+
+        <div class="qrow">
+          <span class="ql" title="Sorgu B">B</span>
+          <span class="mbtn"><span class="nm">http_server_request_duration_seconds_count</span><span class="badge">sayaç</span></span>
+          <span class="pill pin"><span class="tag">kapsam</span><span class="k">k8s_cluster_name =</span><span class="v">acme-prod-1</span></span>
+          <span class="pill"><span class="k">http_response_status_code =~</span><span class="v">5..</span><button type="button" aria-label="Süzgeci kaldır">✕</button></span>
+          <span class="vdiv" aria-hidden="true"></span>
+          <span class="mbtn"><span class="qk">fonksiyon</span>rate ▾</span>
+          <span class="mbtn"><span class="qk">topla</span>sum ▾</span>
+          <span class="qk">by</span><span class="tchip">service_name ✕</span><span class="tchip">http_route ✕</span>
+          <span class="sp"></span>
+          <span class="badge outline">grafikte gizli · yalnız formülde</span>
+          <button class="btn icon ghost" type="button" aria-label="B sorgusunu grafikte göster">◌</button>
+          <button class="btn icon ghost" type="button" aria-label="Sorgu menüsü">⋯</button>
+        </div>
+
+        <div class="qrow">
+          <span class="ql f" title="Formül">ƒ</span>
+          <span class="fx">B / A * 100</span>
+          <span class="qk">birim</span><span class="mbtn">% ▾</span>
+          <span class="qk">lejant</span>
+          <input class="input lf" value="hata % {{service_name}} {{http_route}}" aria-label="Formül lejant biçimi">
+          <span class="sp"></span>
+          <span class="muted">Sunucuda hesaplanır; seriler etiketleriyle eşleşir.</span>
+          <button class="btn icon ghost" type="button" aria-label="Formül menüsü">⋯</button>
+        </div>
+
+        <div class="qrow">
+          <button class="btn ghost sm" type="button">+ Sorgu</button>
+          <button class="btn ghost sm" type="button">+ Formül</button>
+          <span class="sp"></span>
+          <span class="muted">Yazdıkça çalışır. Çalıştır düğmesi yok.</span>
+        </div>
+        <details class="ev">
+          <summary>Üretilen MetricsQL (A)</summary>
+          <pre class="q">sum by (service_name, http_route) (
+  rate(http_server_request_duration_seconds_count{k8s_cluster_name="acme-prod-1", http_route!~"/health.*"}[$__interval])
+)</pre>
+          <p class="row"><button class="more" type="button" data-go="v2">MetricsQL kipinde aç →</button></p>
+        </details>
+      </div>
+      <p class="mk-note">mockup notu: sorgu satırı üründe tek bileşendir (Metrics Explorer, Explore metrik satırı ve panel düzenleyici aynısını kullanır). "Alarm kuralı oluştur" bugün üründe yok; ayrı bir audit ister (alarm kuralında MetricsQL alanı yok).</p>
+
+      <div class="card ch">
+        <div class="ch-head">
+          <div class="seg" role="group" aria-label="Görselleştirme">
+            <button class="on" type="button" data-viz="line">Çizgi</button>
+            <button type="button" data-viz="area">Alan</button>
+            <button type="button" data-viz="stack">Yığın</button>
+            <button type="button" data-viz="heat">Isı haritası</button>
+            <button type="button" data-viz="table">Tablo</button>
+            <button type="button" data-viz="stat">Tek değer</button>
+          </div>
+          <span class="qk">Adım</span>
+          <div class="seg" role="group" aria-label="Adım">
+            <button class="on" type="button" data-step="1 dk (otomatik)">Oto</button>
+            <button type="button" data-step="15 sn (elle)">15 sn</button>
+            <button type="button" data-step="1 dk (elle)">1 dk</button>
+            <button type="button" data-step="5 dk (elle)">5 dk</button>
+            <button type="button" data-step="1 sa (elle)">1 sa</button>
+          </div>
+          <span class="sp"></span>
+          <span class="statln">8 / 12 seri · adım <span id="qstep">1 dk (otomatik)</span> · 142 ms · Kaynak: VictoriaMetrics</span>
+        </div>
+        <div class="warnbar" role="status">
+          <b>12 seriden 8'i gösteriliyor.</b>
+          <span>Sıralama: ortalamaya göre en yüksek 8.</span>
+          <span class="sp"></span>
+          <button class="more" type="button">Tümünü göster (12)</button>
+          <button class="more" type="button">Sınırı değiştir</button>
+        </div>
+        <div class="sx"><svg class="big" id="mainchart" viewBox="0 0 720 220" role="img" aria-label="Sorgu A: istek hızı, servis ve route kırılımında, son 1 saat"></svg></div>
+        <div class="empty" id="heatEmpty" hidden>
+          <b>Isı haritası histogram ister.</b>
+          Bu sorgunun metriği bir sayaç. Süre dağılımı için kova metriğine geçin.
+          <p><button class="btn sec sm" type="button">http_server_request_duration_seconds_bucket metriğine geç</button></p>
+        </div>
+        <div class="g4" id="statGrid" hidden></div>
+        <p class="sub"><span class="ql f">ƒ</span> Hata oranı % <span class="muted">B / A * 100 · aynı 8 seri · ayrı panel (birim farklı)</span></p>
+        <div class="sx"><svg class="mid" id="fchart" viewBox="0 0 720 130" role="img" aria-label="Formül: hata oranı yüzde, aynı seriler"></svg></div>
+        <p class="sub">Seriler <span class="muted">satıra tıklayın: yalnız o seri kalır; yeniden tıklayın: hepsi döner</span></p>
+        <div class="sx">
+          <table class="dt" aria-label="Seri lejantı">
+            <thead><tr><th>Seri (A)</th><th class="num">Son</th><th class="num">Min</th><th class="num">Maks</th><th class="num">Ort (istek/sn)</th></tr></thead>
+            <tbody id="lgBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <p class="mk-note">mockup notu: grafikler üründe CorePanel (uPlot) ile çizilir; seri rengi addan türetilir. Lejant tablosu üründeki PanelLegend'dir. Formül ayrı panelde çünkü grafik katmanında ikinci eksen yok.</p>
+    </section>
+
+    <!-- ================= GÖRÜNÜM 2: METRICS EXPLORER, KOD ================= -->
+    <section class="view" id="v2" aria-label="Metrics Explorer, kod kipi">
+      <div class="ctx">
+        <h1>Metrics</h1>
+        <span class="badge outline">Env: prod</span>
+        <button class="btn sec sm" type="button" aria-haspopup="listbox">Cluster: acme-prod-1 ▾</button>
+        <span class="sp"></span>
+        <button class="btn sec sm" type="button" title="Yenile">↻ 14:44</button>
+        <button class="btn sec" type="button" aria-haspopup="dialog">Son 1 sa ▾</button>
+      </div>
+      <div class="tabs" role="tablist" aria-label="Metrics bölümleri">
+        <button class="on" type="button" role="tab" aria-selected="true">Sorgu</button>
+        <button type="button" role="tab" aria-selected="false" data-go="v3">Keşif</button>
+      </div>
+
+      <div class="card qcard">
+        <div class="row qhead">
+          <div class="seg" role="group" aria-label="Sorgu kipi">
+            <button type="button" data-go="v1">Builder</button>
+            <button class="on" type="button">MetricsQL</button>
+          </div>
+          <span class="badge info">VictoriaMetrics · MetricsQL</span>
+          <span class="pill pin" title="Sorgu metni değişmez; kapsam ayrı uygulanır"><span class="tag">kapsam</span><span class="k">k8s_cluster_name =</span><span class="v">acme-prod-1</span><button type="button" aria-label="Kapsamı kaldır: tüm cluster'lar">✕</button></span>
+          <span class="sp"></span>
+          <button class="btn sec sm" type="button">Parçacık ekle ▾</button>
+          <button class="btn sec sm" type="button">Biçimlendir</button>
+          <button class="btn primary" type="button">Çalıştır <span class="kbd">⌘↵</span></button>
+        </div>
+
+        <pre class="ed" id="ed" aria-label="MetricsQL düzenleyici"><span class="no">1</span><span class="tk-k">WITH</span> (
+<span class="no">2</span>  f = {<span class="tk-l">http_route</span>!~<span class="tk-s">"/health.*"</span>}
+<span class="no">3</span>)
+<span class="no">4</span><span class="tk-f">histogram_quantile</span>(<span class="tk-n">0.95</span>,
+<span class="no">5</span>  <span class="tk-f">sum</span> <span class="tk-k">by</span> (<span class="tk-l">le</span>, <span class="tk-l">service_name</span>) (
+<span class="no">6</span>    <span class="tk-f">rate</span>(http_server_request_duration_seconds_bucket{f}[<span class="tk-v">$__interval</span>])<span class="tk-e">)</span><span class="car">  ← sütun 70</span>
+<span class="no">7</span>  )
+<span class="no">8</span>)</pre>
+
+        <div class="alert" id="errline" role="alert" hidden>
+          <b>Sözdizimi hatası</b>
+          <span>Satır 6, sütun 70: fazladan kapanan <span class="mono">)</span>. Sorgu çalıştırılmadı; son başarılı sonuç aşağıda duruyor.</span>
+        </div>
+
+        <div class="pp col w100">
+          <div class="row w100">
+            <button class="btn ghost sm" type="button" data-pop aria-haspopup="listbox" aria-expanded="true"><span class="kbd">Ctrl Space</span> tamamlama</button>
+            <span class="sp"></span>
+            <button class="btn sec sm" type="button" disabled aria-disabled="true">Builder'a çevir</button>
+            <span class="muted">WITH şablonu builder'da gösterilemez. Şablonu açarsanız çevrilir.</span>
+          </div>
+          <div class="pop acp" role="listbox" aria-label="Tamamlama önerileri">
+            <h6>Metrikler · "http_server_req" · sunucu araması</h6>
+            <button class="mopt on" type="button"><span class="nm">http_server_request_duration_seconds_bucket</span><span class="badge">histogram</span><span class="muted">sn</span><small>HTTP istek süresi dağılımı.</small></button>
+            <button class="mopt" type="button"><span class="nm">http_server_request_duration_seconds_count</span><span class="badge">sayaç</span><span class="muted">istek</span><small>Tamamlanan HTTP isteklerinin sayısı.</small></button>
+            <h6>Fonksiyonlar</h6>
+            <button class="opt" type="button"><span class="mono">rate()</span><span class="r">saniyelik hız</span></button>
+            <button class="opt" type="button"><span class="mono">rollup_rate()</span><span class="r">min / maks / ort hız · MetricsQL</span></button>
+            <div class="pf"><span><span class="kbd">↑↓</span> gez · <span class="kbd">↵</span> seç · <span class="kbd">Esc</span> kapat</span><span>Etiket değerleri de sunucudan gelir</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="mk row">
+        <span class="mk-tag">Mockup denetimi</span>
+        <button class="btn sec sm" type="button" id="errBtn" aria-pressed="false">Hatalı örneği göster / gizle</button>
+        <span class="muted">Hata konumu üründe yanıtın <span class="mono">pos</span> alanından gelir.</span>
+      </div>
+
+      <div class="card ch">
+        <div class="ch-head">
+          <b>Sonuç</b>
+          <span class="sp"></span>
+          <span class="statln">4 seri · adım 1 dk (otomatik) · 318 ms · Kaynak: VictoriaMetrics</span>
+          <button class="btn ghost sm" type="button" title="Yalnız editor ve üstü; önbelleksiz çalışır">Sorgu izi</button>
+        </div>
+        <div class="sx"><svg class="big" id="c2chart" viewBox="0 0 720 200" role="img" aria-label="p95 istek süresi, servis kırılımında"></svg></div>
+        <div class="row" id="c2lg" aria-label="Seriler"></div>
+      </div>
+
+      <div class="sect">
+        <h3>Sorgu geçmişi <span class="muted">kişisel · son 50 · sunucuda saklanır</span></h3>
+        <div class="card sx">
+          <table class="dt">
+            <thead><tr><th>Zaman</th><th>Sorgu</th><th class="num">Seri</th><th class="num">Süre</th><th>Durum</th><th>Eylem</th></tr></thead>
+            <tbody>
+              <tr><td class="num">14:44</td><td class="tpl">histogram_quantile(0.95, sum by (le, service_name) (rate(…_bucket{f}[$__interval])))</td><td class="num">4</td><td class="num">318 ms</td><td>tamam</td><td><button class="more" type="button">Yeniden çalıştır</button></td></tr>
+              <tr><td class="num">14:41</td><td class="tpl">sum by (service_name, http_route) (rate(http_server_request_duration_seconds_count[$__interval]))</td><td class="num">12</td><td class="num">142 ms</td><td>tamam</td><td><button class="more" type="button" data-go="v1">Builder'da aç</button></td></tr>
+              <tr><td class="num">14:38</td><td class="tpl">topk_avg(5, sum by (k8s_pod_name) (rate(process_cpu_seconds_total[$__interval])))</td><td class="num">5</td><td class="num">96 ms</td><td>tamam</td><td><button class="more" type="button">Yeniden çalıştır</button></td></tr>
+              <tr><td class="num">14:35</td><td class="tpl">sum(rate(http_server_request_duration_seconds_bucket[5m])) by (le</td><td class="num">0</td><td class="num">4 ms</td><td><span class="badge err">hata · sütun 66</span></td><td><button class="more" type="button">Düzenle</button></td></tr>
+              <tr><td class="num">14:29</td><td class="tpl">kafka_consumergroup_lag{consumergroup=~"orders.*"}</td><td class="num">18</td><td class="num">61 ms</td><td>tamam <span class="muted">· ilk 8 gösterildi</span></td><td><button class="more" type="button" data-go="v1">Builder'da aç</button></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <p class="mk-note">mockup notu: üründe düzenleyici hafif bir metin alanı + renklendirme katmanıdır (ağır editör kütüphanesi yok). Metrik deposu ClickHouse iken rozet "PromQL (alt küme)" olur ve MetricsQL parçacıkları nedeniyle birlikte kapalı görünür.</p>
+    </section>
+
+    <!-- ================= GÖRÜNÜM 3: KEŞİF / KARDİNALİTE ================= -->
+    <section class="view" id="v3" aria-label="Keşif ve kardinalite">
+      <div class="ctx">
+        <h1>Metrics</h1>
+        <span class="badge outline">Env: prod</span>
+        <button class="btn sec sm" type="button" aria-haspopup="listbox">Cluster: acme-prod-1 ▾</button>
+        <span class="sp"></span>
+        <button class="btn sec sm" type="button" title="Yenile">↻ 14:44</button>
+        <button class="btn sec" type="button" aria-haspopup="dialog">Bugün ▾</button>
+      </div>
+      <div class="tabs" role="tablist" aria-label="Metrics bölümleri">
+        <button type="button" role="tab" aria-selected="false" data-go="v1">Sorgu</button>
+        <button class="on" type="button" role="tab" aria-selected="true">Keşif</button>
+      </div>
+
+      <p class="lead"><b class="num">1,84 M</b> aktif seri · <b class="num">412</b> metrik adı · <b class="num">96</b> etiket <span class="muted">· bugün · 10 dk önbellek · Kaynak: VictoriaMetrics</span></p>
+      <div class="warnbar" role="status">
+        <b>Yüksek kardinalite.</b>
+        <span><span class="mono">http_server_request_duration_seconds_bucket</span> tek başına 1,12 M seri (toplamın %61'i). Neden: <span class="mono">le</span> (14 değer) × <span class="mono">http_route</span> (212 değer).</span>
+        <span class="sp"></span>
+        <button class="more" type="button">Etiket dağılımını aç</button>
+      </div>
+
+      <div class="g2">
+        <div>
+          <div class="row ctl">
+            <input class="input" value="" placeholder="Metrik ara (sunucu araması)" aria-label="Metrik ara">
+            <div class="seg" role="group" aria-label="Tür"><button class="on" type="button">Hepsi</button><button type="button">Sayaç</button><button type="button">Gösterge</button><button type="button">Histogram</button></div>
+            <span class="sp"></span><span class="muted">Seri sayısına göre · ilk 50</span>
+          </div>
+          <div class="card sx sect">
+            <table class="dt" aria-label="Metrikler, seri sayısına göre">
+              <thead><tr><th>Metrik</th><th>Tür</th><th>Birim</th><th class="num">Seri</th><th>Pay</th><th>Açıklama</th></tr></thead>
+              <tbody>
+                <tr class="click" data-go="v1"><td class="mono">http_server_request_duration_seconds_bucket</td><td><span class="badge">histogram</span></td><td>sn</td><td class="num">1.120.000</td><td class="num"><i class="share" style="width:61px"></i>%61</td><td>HTTP istek süresi dağılımı.</td></tr>
+                <tr class="click" data-go="v1"><td class="mono">http_server_request_duration_seconds_count</td><td><span class="badge">sayaç</span></td><td>istek</td><td class="num">80.000</td><td class="num"><i class="share" style="width:4px"></i>%4,3</td><td>Tamamlanan HTTP isteklerinin sayısı.</td></tr>
+                <tr class="click" data-go="v1"><td class="mono">http_server_request_duration_seconds_sum</td><td><span class="badge">sayaç</span></td><td>sn</td><td class="num">80.000</td><td class="num"><i class="share" style="width:4px"></i>%4,3</td><td>Toplam istek süresi.</td></tr>
+                <tr class="click" data-go="v1"><td class="mono">jvm_memory_used_bytes</td><td><span class="badge">gösterge</span></td><td>bayt</td><td class="num">46.200</td><td class="num"><i class="share" style="width:3px"></i>%2,5</td><td>Kullanılan JVM belleği.</td></tr>
+                <tr class="click" data-go="v1"><td class="mono">kafka_consumergroup_lag</td><td><span class="badge">gösterge</span> <span class="muted">tahmini</span></td><td>—</td><td class="num">18.400</td><td class="num"><i class="share" style="width:2px"></i>%1,0</td><td class="muted">Açıklama yok (metadata gelmedi).</td></tr>
+                <tr class="hid"><td class="mono">jvm_buffer_memory_used_bytes</td><td><span class="badge outline">gizli · pipeline kuralı</span></td><td>bayt</td><td class="num">7.680</td><td class="num"><i class="share" style="width:2px"></i>%0,4</td><td>Seçicilerde görünmez; sorgu yine çalışır. <button class="more" type="button">Kuralı aç →</button></td></tr>
+                <tr class="click" data-go="v1"><td class="mono">process_cpu_seconds_total</td><td><span class="badge">sayaç</span></td><td>sn</td><td class="num">2.560</td><td class="num"><i class="share" style="width:2px"></i>%0,1</td><td>Sürecin kullandığı toplam CPU süresi.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="mk-note">mockup notu: gizli satırı yalnız admin görür; diğer roller "1 ad pipeline kuralıyla gizli" sayısını görür. Satıra tıklamak metriği Sorgu sekmesinde açar.</p>
+        </div>
+
+        <div>
+          <div class="card sx">
+            <table class="dt" aria-label="Etikete göre gez">
+              <thead><tr><th>Etiket</th><th class="num">Değer</th><th class="num">Seri</th></tr></thead>
+              <tbody id="labBody">
+                <tr class="click" data-lab="service_name" tabindex="0"><td class="mono">service_name</td><td class="num">38</td><td class="num">1.840.000</td></tr>
+                <tr class="click" data-lab="k8s_pod_name" tabindex="0"><td class="mono">k8s_pod_name <span class="badge warn">yüksek</span></td><td class="num">640</td><td class="num">1.620.000</td></tr>
+                <tr class="click" data-lab="http_route" tabindex="0"><td class="mono">http_route</td><td class="num">212</td><td class="num">1.310.000</td></tr>
+                <tr class="click" data-lab="le" tabindex="0"><td class="mono">le</td><td class="num">14</td><td class="num">1.120.000</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="sect">
+            <h3><span class="mono" id="labTitle">service_name</span> değerleri <span class="muted">seri sayısına göre</span></h3>
+            <div class="card sx">
+              <table class="dt">
+                <thead><tr><th>Değer</th><th class="num">Seri</th><th>Eylem</th></tr></thead>
+                <tbody id="labVals"></tbody>
+              </table>
+            </div>
+            <p class="muted" id="labMore"></p>
+          </div>
+          <details class="ev">
+            <summary>En pahalı sorgular (yalnız admin)</summary>
+            <div class="sx">
+              <table class="dt">
+                <thead><tr><th>Sorgu</th><th class="num">Çağrı</th><th class="num">Ort süre</th></tr></thead>
+                <tbody>
+                  <tr><td class="tpl">histogram_quantile(0.99, sum by (le, http_route) (rate(…_bucket[5m])))</td><td class="num">1.240</td><td class="num">812 ms</td></tr>
+                  <tr><td class="tpl">sum by (k8s_pod_name) (jvm_memory_used_bytes)</td><td class="num">960</td><td class="num">204 ms</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= GÖRÜNÜM 4: DASHBOARDS LİSTESİ ================= -->
+    <section class="view" id="v4" aria-label="Dashboards listesi">
+      <div class="ctx">
+        <h1>Dashboards</h1>
+        <span class="badge outline">Env: prod</span>
+        <span class="sp"></span>
+        <span class="muted">Liste zaman aralığı kullanmaz</span>
+      </div>
+
+      <p class="sub">Şablondan oluştur <span class="muted">MetricsQL panelleri · gereken metrikler önceden denetlenir</span></p>
+      <div class="g4 tg">
+        <button class="card" type="button"><b>Service RED</b><small>7 panel · hız, hata, süre</small><small>Gereken metrikler: var</small></button>
+        <button class="card" type="button"><b>JVM</b><small>8 panel · bellek, GC, iş parçacığı</small><small>Gereken metrikler: var</small></button>
+        <button class="card" type="button"><b>Kafka</b><small>9 panel · gecikme, tüketim, yeniden dengeleme</small><small>Gereken metrikler: var</small></button>
+        <button class="card" type="button"><b>Kubernetes</b><small>12 panel · düğüm, pod, yeniden başlatma</small><small><span class="badge warn">eksik: kube_pod_status_phase</span></small></button>
+      </div>
+
+      <div class="row ctl sect">
+        <input class="input" placeholder="Pano ara (ad, açıklama, etiket)" aria-label="Pano ara">
+        <button class="tchip sel" type="button" data-tag aria-pressed="true">red</button>
+        <button class="tchip" type="button" data-tag aria-pressed="false">kafka</button>
+        <button class="tchip" type="button" data-tag aria-pressed="false">jvm</button>
+        <button class="tchip" type="button" data-tag aria-pressed="false">k8s</button>
+        <button class="tchip" type="button" data-tag aria-pressed="false">ödeme</button>
+        <button class="sw" type="button" role="switch" aria-checked="false"><i></i>Yalnız favoriler</button>
+        <span class="sp"></span>
+        <div class="pp">
+          <button class="btn sec" type="button" data-pop aria-haspopup="menu" aria-expanded="false">İçe aktar ▾</button>
+          <div class="pop r pmenu" role="menu" hidden>
+            <button class="opt" type="button">Coremetry JSON</button>
+            <button class="opt" type="button">Grafana JSON <span class="r">önce rapor</span></button>
+          </div>
+        </div>
+        <button class="btn primary" type="button">Yeni pano</button>
+      </div>
+
+      <div class="card sx sect">
+        <table class="dt" aria-label="Panolar">
+          <thead><tr><th aria-label="Favori"></th><th>Ad</th><th>Etiketler</th><th class="num">Panel</th><th>Son düzenleyen</th><th>Güncellendi</th><th>Son görüntülemeniz</th><th aria-label="Eylemler"></th></tr></thead>
+          <tbody>
+            <tr class="click"><td><button class="star" type="button" aria-pressed="true" aria-label="Favori">★</button></td><td data-go="v5"><b>Service RED</b><div class="muted">Servis başına hız, hata ve süre. Değişken: service.</div></td><td><span class="tchip">red</span> <span class="tchip">servis</span></td><td class="num">7</td><td>editor-1</td><td>2 sa önce</td><td>bugün 14:31</td><td><button class="btn icon ghost" type="button" aria-label="Satır menüsü: aç, çoğalt, dışa aktar, sil">⋯</button></td></tr>
+            <tr class="click"><td><button class="star" type="button" aria-pressed="true" aria-label="Favori">★</button></td><td><b>Kafka: tüketici gecikmesi</b><div class="muted">Tüketici grubu ve topic kırılımı.</div></td><td><span class="tchip">kafka</span></td><td class="num">9</td><td>editor-2</td><td>dün</td><td>bugün 09:12</td><td><button class="btn icon ghost" type="button" aria-label="Satır menüsü">⋯</button></td></tr>
+            <tr class="click"><td><button class="star" type="button" aria-pressed="false" aria-label="Favori">☆</button></td><td><b>payments-mobile: ödeme akışı</b><div class="muted">Ödeme, iade ve bakiye uçları.</div></td><td><span class="tchip">red</span> <span class="tchip">ödeme</span></td><td class="num">6</td><td>editor-2</td><td>3 gün önce</td><td>dün</td><td><button class="btn icon ghost" type="button" aria-label="Satır menüsü">⋯</button></td></tr>
+            <tr class="click"><td><button class="star" type="button" aria-pressed="false" aria-label="Favori">☆</button></td><td><b>branch-teller: şube işlemleri</b><div class="muted">Gişe işlemi ve nakit uçları.</div></td><td><span class="tchip">red</span></td><td class="num">5</td><td>editor-1</td><td>1 hafta önce</td><td>4 gün önce</td><td><button class="btn icon ghost" type="button" aria-label="Satır menüsü">⋯</button></td></tr>
+            <tr class="click"><td><button class="star" type="button" aria-pressed="false" aria-label="Favori">☆</button></td><td><b>JVM: bellek ve GC</b><div class="muted">Hazır şablon.</div></td><td><span class="tchip">jvm</span></td><td class="num">8</td><td class="muted">sistem (şablon)</td><td>12 gün önce</td><td class="muted">hiç</td><td><button class="btn icon ghost" type="button" aria-label="Satır menüsü">⋯</button></td></tr>
+            <tr class="click"><td><button class="star" type="button" aria-pressed="false" aria-label="Favori">☆</button></td><td><b>notify-gateway: gönderim</b><div class="muted">SMS ve anlık bildirim hızı, hata oranı.</div></td><td><span class="tchip">red</span></td><td class="num">4</td><td>editor-1</td><td>3 hafta önce</td><td>2 hafta önce</td><td><button class="btn icon ghost" type="button" aria-label="Satır menüsü">⋯</button></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="mk-note">mockup notu: tablo üründe DataTable + useDataTable (sıralanır, kolon boyutlanır). "Son düzenleyen" kolonu pano tablosunda yok; denetim kaydından türetilir. "Son görüntülemeniz" kişiseldir. Klasör yok: etiket aynı işi görür.</p>
+    </section>
+
+    <!-- ================= GÖRÜNÜM 5: DASHBOARD GÖRÜNÜMÜ ================= -->
+    <section class="view" id="v5" aria-label="Dashboard görünümü">
+      <!-- ContextBar: başlık → Env → Cluster → pano değişkenleri → (boşluk) → yenile → zaman seçici en sağda -->
+      <div class="ctx">
+        <h1>Service RED</h1>
+        <span class="badge outline">Env: prod</span>
+        <div class="pp">
+          <button class="btn sec sm" type="button" data-pop aria-haspopup="listbox" aria-expanded="false">Cluster: acme-prod-1 ▾</button>
+          <div class="pop spop" role="listbox" aria-label="Cluster seç" hidden>
+            <button class="opt on" type="button"><span class="mono">acme-prod-1</span></button>
+            <button class="opt" type="button"><span class="mono">acme-prod-2</span></button>
+            <button class="opt" type="button"><span class="mono">acme-dr-1</span></button>
+            <button class="opt" type="button">Tüm cluster'lar <span class="r">cluster başına seri</span></button>
+          </div>
+        </div>
+        <div class="pp">
+          <button class="btn sec sm" type="button" data-pop aria-haspopup="listbox" aria-expanded="false">service: orders-api ▾</button>
+          <div class="pop spop" role="listbox" aria-label="service değişkeni" hidden>
+            <input class="input s w100" value="" placeholder="Servis ara" aria-label="Servis ara">
+            <button class="opt on" type="button"><span class="mono">orders-api</span></button>
+            <button class="opt" type="button"><span class="mono">payments-mobile</span></button>
+            <button class="opt" type="button"><span class="mono">branch-teller</span></button>
+            <button class="opt" type="button"><span class="mono">notify-gateway</span></button>
+            <div class="pf"><span>Sunucu araması · 38 servisten ilk 20</span></div>
+          </div>
+        </div>
+        <span class="sp"></span>
+        <button class="btn sec sm" type="button" title="Yenileme aralığı">↻ 60 sn ▾</button>
+        <button class="btn sec" type="button" aria-haspopup="dialog">Son 1 sa ▾</button>
+      </div>
+
+      <div class="phead">
+        <span class="tchip">red</span><span class="tchip">servis</span>
+        <span class="muted">Servis başına hız, hata ve süre.</span>
+        <span class="sp"></span>
+        <button class="btn sec sm" type="button" id="editBtn" aria-pressed="false">Düzenle</button>
+        <button class="btn sec sm" type="button" title="Kabuk ve düzenleme gizlenir; Esc ile çıkılır">TV kipi</button>
+        <button class="btn sec sm" type="button">Paylaş</button>
+      </div>
+      <div class="editbar" id="editBar" hidden>
+        <b>Düzenleme kipi.</b>
+        <span>Paneli ⠿ tutamağından sürükleyin; genişliği başlıktan seçin.</span>
+        <span class="sp"></span>
+        <button class="btn sec sm" type="button">Değişkenler</button>
+        <button class="btn sec sm" type="button">Geri al</button>
+        <button class="btn sec sm" type="button" data-editoff>Vazgeç</button>
+        <button class="btn primary sm" type="button" data-editoff>Kaydet</button>
+      </div>
+
+      <div class="dg" id="dgrid">
+        <section class="card pn p4" aria-label="İstek hızı">
+          <div class="pn-h"><span class="grip" aria-hidden="true">⠿</span><b>İstek hızı</b><span class="wsel badge outline">4/12 ▾</span></div>
+          <div class="pn-b stat"><b>653 /sn</b><span class="dl">önceki 1 saate göre %4 yüksek</span><svg class="sp2" viewBox="0 0 120 28" data-v="610,618,630,641,638,650,662,655,648,660,657,653" aria-hidden="true"></svg></div>
+        </section>
+        <section class="card pn p4" aria-label="Hata oranı">
+          <div class="pn-h"><span class="grip" aria-hidden="true">⠿</span><b>Hata oranı</b><span class="wsel badge outline">4/12 ▾</span></div>
+          <div class="pn-b stat"><b>%0,9 <span class="badge warn">eşik %0,5 üstünde</span></b><span class="dl">önceki 1 saatte %0,4</span><svg class="sp2" viewBox="0 0 120 28" data-v="0.4,0.4,0.4,0.5,0.4,0.4,0.5,0.6,0.8,0.9,0.9,0.9" aria-hidden="true"></svg></div>
+        </section>
+        <section class="card pn p4" aria-label="p95 süre">
+          <div class="pn-h"><span class="grip" aria-hidden="true">⠿</span><b>p95 süre</b><span class="wsel badge outline">4/12 ▾</span></div>
+          <div class="pn-b stat"><b>212 ms</b><span class="dl">önceki 1 saate göre 6 ms düşük</span><svg class="sp2" viewBox="0 0 120 28" data-v="220,218,221,216,219,215,214,217,213,215,211,212" aria-hidden="true"></svg></div>
+        </section>
+
+        <section class="card pn p8" aria-label="İstek hızı, route'a göre">
+          <div class="pn-h"><span class="grip" aria-hidden="true">⠿</span><b>İstek hızı: route'a göre</b><span class="wsel badge outline">8/12 ▾</span></div>
+          <div class="pn-b"><div class="sx"><svg class="pv" id="dts" viewBox="0 0 600 200" role="img" aria-label="orders-api istek hızı, 5 route"></svg></div>
+            <div class="row" id="dtslg"></div></div>
+        </section>
+        <section class="card pn p4" aria-label="En yavaş route'lar">
+          <div class="pn-h"><span class="grip" aria-hidden="true">⠿</span><b>En yavaş route'lar (p95)</b><span class="wsel badge outline">4/12 ▾</span></div>
+          <div class="pn-b">
+            <div class="br"><span class="mono">/checkout</span><span class="num">412 ms</span><i style="width:100%"></i></div>
+            <div class="br"><span class="mono">/orders/{id}/items</span><span class="num">268 ms</span><i style="width:65%"></i></div>
+            <div class="br"><span class="mono">/orders</span><span class="num">184 ms</span><i style="width:45%"></i></div>
+            <div class="br"><span class="mono">/cart</span><span class="num">121 ms</span><i style="width:29%"></i></div>
+            <div class="br"><span class="mono">/orders/{id}</span><span class="num">96 ms</span><i style="width:23%"></i></div>
+          </div>
+        </section>
+
+        <section class="card pn p6" aria-label="Süre dağılımı">
+          <div class="pn-h"><span class="grip" aria-hidden="true">⠿</span><b>Süre dağılımı</b><span class="wsel badge outline">6/12 ▾</span></div>
+          <div class="pn-b"><div class="sx"><svg class="pv" id="dheat" viewBox="0 0 480 180" role="img" aria-label="İstek süresi ısı haritası; 14:24'ten sonra yavaş istek kümesi"></svg></div>
+            <div class="row"><span class="lg"><svg class="lsw" viewBox="0 0 18 6" aria-hidden="true"><rect class="h1" width="18" height="6"/></svg>az</span><span class="lg"><svg class="lsw" viewBox="0 0 18 6" aria-hidden="true"><rect class="h3" width="18" height="6"/></svg>orta</span><span class="lg"><svg class="lsw" viewBox="0 0 18 6" aria-hidden="true"><rect class="h5" width="18" height="6"/></svg>yoğun</span></div></div>
+        </section>
+        <section class="card pn p6" aria-label="Route özeti">
+          <div class="pn-h"><span class="grip" aria-hidden="true">⠿</span><b>Route özeti</b><span class="wsel badge outline">6/12 ▾</span></div>
+          <div class="pn-b sx">
+            <table class="dt">
+              <thead><tr><th>Route</th><th class="num">İstek/sn</th><th class="num">Hata %</th><th class="num">p95</th></tr></thead>
+              <tbody>
+                <tr><td class="mono">/orders</td><td class="num">320</td><td class="num">0,3</td><td class="num">184 ms</td></tr>
+                <tr><td class="mono">/checkout</td><td class="num">210</td><td class="num"><span class="badge warn">2,1 · yüksek</span></td><td class="num">412 ms</td></tr>
+                <tr><td class="mono">/orders/{id}</td><td class="num">70</td><td class="num">0,2</td><td class="num">96 ms</td></tr>
+                <tr><td class="mono">/orders/{id}/items</td><td class="num">31</td><td class="num">0,4</td><td class="num">268 ms</td></tr>
+                <tr><td class="mono">/cart</td><td class="num">22</td><td class="num">0,1</td><td class="num">121 ms</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+        <button class="addp p12" type="button">+ Panel ekle</button>
+      </div>
+      <p class="muted">TV kipi: kabuk ve düzenleme düğmeleri gizlenir, pano 60 sn'de bir yenilenir, Esc ile çıkılır. Bağlantıya <span class="mono">?kiosk=1</span> eklenir.</p>
+      <p class="mk-note">mockup notu: 12 kolon akış ızgarası; serbest x/y yerleşim yok, genişlik basamaklıdır. Her panelde tek ⋯ menü vardır. Cluster bağlam çubuğundaki tek seçicidir; pano ikinci bir cluster seçici çizmez. Görünmeyen paneller üründe ekrana girince yüklenir.</p>
+    </section>
+
+    <!-- ================= GÖRÜNÜM 6: PANEL DÜZENLEYİCİ ================= -->
+    <section class="view" id="v6" aria-label="Panel düzenleyici">
+      <div class="ctx">
+        <h1>Panel düzenle</h1>
+        <span class="badge outline">Service RED</span>
+        <span class="badge outline">service: orders-api</span>
+        <span class="sp"></span>
+        <button class="btn sec sm" type="button" title="Yenile">↻ 14:44</button>
+        <button class="btn sec" type="button" aria-haspopup="dialog">Son 1 sa ▾</button>
+      </div>
+      <div class="phead">
+        <input class="input" value="İstek hızı: route'a göre" aria-label="Panel başlığı">
+        <span class="sp"></span>
+        <button class="btn sec" type="button" data-go="v5">Vazgeç</button>
+        <button class="btn primary" type="button" data-go="v5">Kaydet</button>
+      </div>
+
+      <div class="g2">
+        <div>
+          <div class="card ch">
+            <div class="ch-head">
+              <b>Önizleme</b>
+              <span class="sp"></span>
+              <span class="statln">5 / 5 seri · adım 1 dk (otomatik) · 88 ms · Kaynak: VictoriaMetrics</span>
+            </div>
+            <div class="sx"><svg class="big" id="pechart" viewBox="0 0 720 220" role="img" aria-label="Panel önizlemesi: orders-api istek hızı, 5 route"></svg></div>
+          </div>
+          <div class="card qcard sect">
+            <div class="row qhead">
+              <div class="seg" role="group" aria-label="Sorgu kipi"><button class="on" type="button">Builder</button><button type="button">MetricsQL</button></div>
+              <span class="sp"></span>
+              <button class="btn ghost sm" type="button" data-go="v1">Explorer'da aç</button>
+            </div>
+            <div id="peQ"></div>
+            <div class="qrow"><button class="btn ghost sm" type="button">+ Sorgu</button><button class="btn ghost sm" type="button">+ Formül</button></div>
+          </div>
+          <p class="mk-note">mockup notu: yukarıdaki sorgu satırı görünüm 1'deki satırın aynısıdır (aynı düğüm kopyalandı). Üründe süzgeçte <span class="mono">service_name = ${service}</span> pano değişkeni olur.</p>
+        </div>
+
+        <div class="opts">
+          <details class="ev" open>
+            <summary>Görselleştirme</summary>
+            <div class="frm">
+              <span>Tür</span><div class="seg" role="group" aria-label="Görsel türü"><button class="on" type="button">Çizgi</button><button type="button">Alan</button><button type="button">Çubuk</button><button type="button">Tablo</button><button type="button">Tek değer</button></div>
+              <span>Açıklama</span><input class="input s" value="" placeholder="Başlıktaki ⓘ ipucu" aria-label="Açıklama">
+            </div>
+          </details>
+          <details class="ev" open>
+            <summary>Birim ve ondalık</summary>
+            <div class="frm">
+              <span>Birim</span><select class="input s" aria-label="Birim"><option>istek/sn</option><option>ms</option><option>sn</option><option>%</option><option>bayt</option></select>
+              <span>Ondalık</span><select class="input s" aria-label="Ondalık"><option>otomatik</option><option>0</option><option>1</option><option>2</option></select>
+            </div>
+          </details>
+          <details class="ev" open>
+            <summary>Eşikler</summary>
+            <div class="frm">
+              <span>Uyarı</span><div class="row"><input class="input s num" value="400" aria-label="Uyarı eşiği"><span class="muted">istek/sn üstü · kesik çizgi + etiket</span></div>
+              <span></span><button class="more" type="button">+ eşik ekle</button>
+            </div>
+          </details>
+          <details class="ev">
+            <summary>Lejant</summary>
+            <div class="frm">
+              <span>Tablo</span><button class="sw" type="button" role="switch" aria-checked="true"><i></i>Lejant tablosu açık</button>
+              <span>Kolonlar</span><div class="row"><span class="tchip sel">Son</span><span class="tchip sel">Min</span><span class="tchip sel">Maks</span><span class="tchip sel">Ort</span><span class="tchip">Toplam</span></div>
+            </div>
+          </details>
+          <details class="ev">
+            <summary>Yığma</summary>
+            <div class="frm"><span>Kip</span><div class="seg" role="group" aria-label="Yığma"><button class="on" type="button">Yok</button><button type="button">Yığın</button></div></div>
+          </details>
+          <details class="ev" open>
+            <summary>Y ekseni</summary>
+            <div class="frm">
+              <span>Taban</span><button class="sw" type="button" role="switch" aria-checked="true"><i></i>0'dan başlat</button>
+              <span>Ölçek</span><button class="sw" type="button" role="switch" aria-checked="false"><i></i>Logaritmik</button>
+              <span>Min / maks</span><div class="row"><input class="input s" value="" placeholder="otomatik" disabled aria-label="Y min"><input class="input s" value="" placeholder="otomatik" disabled aria-label="Y maks"></div>
+            </div>
+            <p class="mk-note">mockup notu: min / maks kapalı gösterildi; grafik katmanında bu seçenek yok ve bu programın kapsamında değil.</p>
+          </details>
+          <details class="ev">
+            <summary>Boyut ve zaman</summary>
+            <div class="frm">
+              <span>Genişlik</span><div class="seg" role="group" aria-label="Genişlik"><button type="button">4</button><button type="button">6</button><button class="on" type="button">8</button><button type="button">12</button></div>
+              <span>Yükseklik</span><div class="seg" role="group" aria-label="Yükseklik"><button type="button">S</button><button class="on" type="button">M</button><button type="button">L</button></div>
+              <span>Zaman</span><select class="input s" aria-label="Zaman aralığı"><option>Panonun aralığı</option><option>Son 15 dk</option><option>Son 24 sa</option></select>
+            </div>
+          </details>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+(function(){
+  var root=document.documentElement;
+  function $(id){return document.getElementById(id);}
+  function setOn(g,b){g.querySelectorAll('button').forEach(function(x){x.classList.toggle('on',x===b);});}
+  function closePops(){
+    document.querySelectorAll('.pop').forEach(function(p){p.hidden=true;});
+    document.querySelectorAll('[data-pop]').forEach(function(b){b.setAttribute('aria-expanded','false');});
+  }
+
+  // tema
+  var ts=$('themeseg');
+  ts.addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;root.setAttribute('data-theme',b.dataset.th);setOn(ts,b);});
+  var dark=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches,cur=root.getAttribute('data-theme');
+  setOn(ts,ts.querySelector('[data-th="'+(cur||(dark?'dark':'light'))+'"]'));
+
+  // görünüm
+  var vs=$('viewseg');
+  function show(id){
+    closePops();
+    document.querySelectorAll('.view').forEach(function(v){v.classList.toggle('on',v.id===id);});
+    setOn(vs,vs.querySelector('[data-view="'+id+'"]'));
+    var d=id>'v3';
+    document.querySelectorAll('.nav a').forEach(function(a){a.classList.toggle('on',a.dataset.nav===(d?'d':'m'));});
+    window.scrollTo(0,0);
+  }
+  vs.addEventListener('click',function(e){var b=e.target.closest('button');if(b)show(b.dataset.view);});
+
+  // ---- grafik yardımcıları ----
+  var N=61;
+  function tm(i){var t=13*60+44+i,m=t%60;return Math.floor(t/60)+':'+(m<10?'0':'')+m;}
+  function fn(v){return v>=100?String(Math.round(v)):v>=10?v.toFixed(1).replace('.',','):v.toFixed(2).replace('.',',');}
+  function ft(v){return v===0?'0':v>=10?String(Math.round(v)):String(+v.toFixed(2)).replace('.',',');}
+  function gen(b,a,ph,bump){var v=[];for(var i=0;i<N;i++){var x=b*(1+a*Math.sin(i/7+ph)+0.035*Math.sin(i*1.9+ph*3));if(bump&&i>40)x+=bump*Math.min(1,(i-40)/6);v.push(x);}return v;}
+  function nice(m){var p=Math.pow(10,Math.floor(Math.log(m)/Math.LN10)),f=m/p;return(f<=1?1:f<=2?2:f<=4?4:f<=5?5:10)*p;}
+  function draw(svg,S,o){
+    var W=o.W||720,H=o.H||220,PL=46,PR=14,T=12,B=H-20,n=S[0].v.length,mode=o.mode||'line',mx=0,h='',i,k,cum=[];
+    function X(i){return PL+(W-PL-PR)*i/(n-1);}
+    for(i=0;i<n;i++)cum.push(0);
+    if(mode==='stack'){for(i=0;i<n;i++){var t=0;S.forEach(function(s){t+=s.v[i];});mx=Math.max(mx,t);}}
+    else S.forEach(function(s){mx=Math.max(mx,Math.max.apply(null,s.v));});
+    mx=nice(mx*1.05);
+    function Y(v){return B-(v/mx)*(B-T);}
+    for(k=0;k<=4;k++){var y=Y(mx*k/4).toFixed(1);h+='<line class="gl" x1="'+PL+'" x2="'+(W-PR)+'" y1="'+y+'" y2="'+y+'"/><text x="'+(PL-5)+'" y="'+(+y+3)+'" text-anchor="end">'+ft(mx*k/4)+'</text>';}
+    [0,15,30,45,60].forEach(function(q){h+='<text x="'+X(q).toFixed(1)+'" y="'+(B+14)+'" text-anchor="'+(q===60?'end':q?'middle':'start')+'">'+tm(q)+'</text>';});
+    S.forEach(function(s){var top=[],bot=[];
+      for(i=0;i<n;i++){var b0=mode==='stack'?cum[i]:0,v1=b0+s.v[i];top.push(X(i).toFixed(1)+','+Y(v1).toFixed(1));bot.push(X(i).toFixed(1)+','+Y(b0).toFixed(1));if(mode==='stack')cum[i]=v1;}
+      if(mode!=='line')h+='<polygon class="ar f'+s.c+'" data-s="'+s.id+'" points="'+top.join(' ')+' '+bot.reverse().join(' ')+'"/>';
+      h+='<polyline class="ln c'+s.c+'" data-s="'+s.id+'" points="'+top.join(' ')+'"/>';});
+    if(o.unit)h+='<text x="'+(W-PR)+'" y="9" text-anchor="end">'+o.unit+'</text>';
+    svg.classList.toggle('stk',mode==='stack');
+    svg.innerHTML=h;
+  }
+  function swatch(c){return '<svg class="lsw" viewBox="0 0 18 6" aria-hidden="true"><line class="ln c'+c+'" x1="0" x2="18" y1="3" y2="3"/></svg>';}
+  function series(rows,pre){return rows.map(function(d,j){return{id:pre+j,c:j+1,n:d[0],v:gen(d[1],d[2],d[3],d[4])};});}
+
+  // ---- görünüm 1: sorgu A (8 / 12 seri) + formül ----
+  var A=series([['orders-api /orders',320,.10,0],['payments-mobile /pay',260,.12,1.1],['orders-api /checkout',210,.09,2.0],['payments-mobile /balance',180,.14,.6],
+    ['branch-teller /teller/tx',140,.16,2.7],['notify-gateway /sms',95,.20,1.7],['orders-api /orders/{id}',70,.11,3.3],['branch-teller /cash',48,.18,.3]],'s');
+  var EB=[.3,.4,.6,.2,.5,.3,.2,.4];
+  var F=A.map(function(s,j){return{id:s.id,c:s.c,n:s.n,v:gen(EB[j],.25,j*1.3,j===2?1.5:0)};});
+  var iso=null,viz='line';
+  function applyIso(){document.querySelectorAll('#v1 [data-s]').forEach(function(el){var off=iso!==null&&el.dataset.s!==iso;el.classList.toggle(el.tagName==='TR'?'off':'dim',off);});}
+  function setViz(v){viz=v;var ch=v==='line'||v==='area'||v==='stack';
+    $('mainchart').parentNode.hidden=!ch;$('heatEmpty').hidden=v!=='heat';$('statGrid').hidden=v!=='stat';
+    if(ch){draw($('mainchart'),A,{mode:v,unit:'istek/sn'});applyIso();}}
+  function stats(v){var mn=Infinity,mx=-Infinity,su=0;v.forEach(function(x){mn=Math.min(mn,x);mx=Math.max(mx,x);su+=x;});return[v[v.length-1],mn,mx,su/v.length];}
+  $('lgBody').innerHTML=A.map(function(s){return '<tr class="click" data-s="'+s.id+'" tabindex="0"><td>'+swatch(s.c)+'<span class="mono">'+s.n+'</span></td>'+
+    stats(s.v).map(function(x){return '<td class="num">'+fn(x)+'</td>';}).join('')+'</tr>';}).join('')+
+    '<tr class="rest"><td colspan="5">Gösterilmeyen 4 seri: orders-api /orders/{id}/items · orders-api /cart · payments-mobile /refund · notify-gateway /push</td></tr>';
+  $('statGrid').innerHTML=A.slice(0,4).map(function(s){return '<div class="card tile stat"><span class="lb mono">'+s.n+'</span><b>'+fn(s.v[N-1])+'</b><span class="dl">istek/sn · son değer</span></div>';}).join('');
+  setViz('line');
+  draw($('fchart'),F,{H:130,unit:'%'});
+
+  // ---- görünüm 2: p95, servis kırılımı ----
+  var P=series([['orders-api',.21,.12,0],['payments-mobile',.34,.10,1],['branch-teller',.52,.08,2],['notify-gateway',.12,.15,3]],'p');
+  draw($('c2chart'),P,{H:200,unit:'sn'});
+  $('c2lg').innerHTML=P.map(function(s){return '<span class="lg">'+swatch(s.c)+'<span class="mono">'+s.n+'</span> · son '+fn(s.v[N-1])+' sn</span>';}).join('');
+
+  // ---- görünüm 3: etiket değerleri ----
+  var LAB={
+    service_name:[[['orders-api','412.600'],['payments-mobile','388.900'],['branch-teller','241.300'],['notify-gateway','196.200']],'+34 değer daha · arayın'],
+    k8s_pod_name:[[['orders-api-7c9d4-x2kq','3.120'],['payments-mobile-5b8f6-m4tz','2.980'],['branch-teller-6d7c9-p8wn','2.640'],['notify-gateway-84f5b-q1rs','2.410']],'+636 değer daha · bu etiketle gruplama önerilmez'],
+    http_route:[[['/orders','96.400'],['/pay','88.200'],['/checkout','71.300'],['/teller/tx','54.900']],'+208 değer daha · arayın'],
+    le:[[['+Inf','80.000'],['0.005','80.000'],['0.01','80.000'],['0.025','80.000']],'+10 değer daha · her kova 80.000 seri']
+  };
+  function setLab(k){var d=LAB[k];$('labTitle').textContent=k;$('labMore').textContent=d[1];
+    $('labVals').innerHTML=d[0].map(function(r){return '<tr><td class="mono">'+r[0]+'</td><td class="num">'+r[1]+'</td><td><button class="more" type="button" data-go="v1">Sorguda kullan</button></td></tr>';}).join('');}
+  setLab('service_name');
+
+  // ---- görünüm 5 ve 6: pano panelleri ----
+  var D=series([['/orders',320,.10,0],['/checkout',210,.09,2.0],['/orders/{id}',70,.11,3.3],['/orders/{id}/items',31,.15,1.2],['/cart',22,.20,.5]],'d');
+  draw($('dts'),D,{W:600,H:200,unit:'istek/sn'});
+  $('dtslg').innerHTML=D.map(function(s){return '<span class="lg">'+swatch(s.c)+'<span class="mono">'+s.n+'</span></span>';}).join('');
+  draw($('pechart'),D,{unit:'istek/sn'});
+  (function(){var W=480,H=180,PL=46,PR=10,T=8,B=H-20,C=30,R=8,cw=(W-PL-PR)/C,rh=(B-T)/R,L=['5 ms','25 ms','100 ms','250 ms','500 ms','1 sn','2,5 sn','5 sn'],h='',c,r;
+    for(c=0;c<C;c++)for(r=0;r<R;r++){var g=c>19?Math.min(1,(c-19)/4):0,n=60*Math.exp(-Math.pow(r-2.4,2)/1.4)*(1-.3*g)+g*34*Math.exp(-Math.pow(r-4.6,2)/1.2)+((c*7+r*13)%5)-2;
+      if(n<2)continue;var t=Math.log(n+1)/Math.log(63);
+      h+='<rect class="'+(t<.35?'h1':t<.55?'h2':t<.75?'h3':t<.9?'h4':'h5')+'" x="'+(PL+c*cw+.5).toFixed(1)+'" y="'+(B-(r+1)*rh+.5).toFixed(1)+'" width="'+(cw-1).toFixed(1)+'" height="'+(rh-1).toFixed(1)+'"/>';}
+    for(r=0;r<R;r+=2)h+='<text x="'+(PL-5)+'" y="'+(B-(r+.5)*rh+3).toFixed(1)+'" text-anchor="end">'+L[r]+'</text>';
+    h+='<text x="'+PL+'" y="'+(B+14)+'">13:44</text><text x="'+((PL+W-PR)/2)+'" y="'+(B+14)+'" text-anchor="middle">14:14</text><text x="'+(W-PR)+'" y="'+(B+14)+'" text-anchor="end">14:44</text>';
+    $('dheat').innerHTML=h;})();
+  document.querySelectorAll('svg.sp2').forEach(function(s){var v=s.dataset.v.split(',').map(Number),m=Math.max.apply(null,v);
+    s.innerHTML='<polyline class="ln c1" points="'+v.map(function(q,i){return(2+116*i/(v.length-1)).toFixed(1)+','+(26-(q/m)*22).toFixed(1);}).join(' ')+'"/>';});
+  var MENU='<div class="pp"><button class="btn icon ghost" type="button" data-pop aria-haspopup="menu" aria-expanded="false" aria-label="Panel menüsü">⋯</button>'+
+    '<div class="pop r pmenu" role="menu" hidden><button class="opt" type="button" data-go="v6">Düzenle</button><button class="opt" type="button">Tam ekran</button>'+
+    '<button class="opt" type="button" data-go="v1">Explorer\'da aç</button><button class="opt" type="button">Kopyala</button><button class="opt" type="button">CSV indir</button></div></div>';
+  document.querySelectorAll('#dgrid .pn-h').forEach(function(h){h.insertAdjacentHTML('beforeend',MENU);});
+  var qc=$('qrowA').cloneNode(true);qc.removeAttribute('id');$('peQ').appendChild(qc);
+
+  // ---- etkileşim ----
+  $('editBtn').addEventListener('click',function(){var on=$('dgrid').classList.toggle('editing');$('editBar').hidden=!on;this.textContent=on?'Düzenlemeyi bitir':'Düzenle';this.setAttribute('aria-pressed',String(on));});
+  $('errBtn').addEventListener('click',function(){var on=$('ed').classList.toggle('err');$('errline').hidden=!on;this.setAttribute('aria-pressed',String(on));});
+  document.addEventListener('keydown',function(e){
+    if(e.key==='Escape'){closePops();return;}
+    if(e.key==='Enter'&&e.target.matches&&e.target.matches('tr[tabindex]')){e.target.click();}
+  });
+  document.addEventListener('click',function(e){
+    var t=e.target,g=t.closest('[data-go]');
+    if(g){e.preventDefault();show(g.dataset.go);return;}
+    var pb=t.closest('[data-pop]');
+    if(pb){var p=pb.closest('.pp').querySelector('.pop'),was=p.hidden;closePops();p.hidden=!was;pb.setAttribute('aria-expanded',String(was));return;}
+    if(!t.closest('.pop'))closePops();
+    if(t.closest('[data-editoff]')){$('editBtn').click();return;}
+    var sw=t.closest('[role="switch"]');
+    if(sw){sw.setAttribute('aria-checked',String(sw.getAttribute('aria-checked')!=='true'));return;}
+    var st=t.closest('.star');
+    if(st){var on=st.getAttribute('aria-pressed')!=='true';st.setAttribute('aria-pressed',String(on));st.textContent=on?'★':'☆';return;}
+    var tc=t.closest('[data-tag]');
+    if(tc){tc.setAttribute('aria-pressed',String(tc.classList.toggle('sel')));return;}
+    var lr=t.closest('#lgBody tr[data-s]');
+    if(lr){iso=iso===lr.dataset.s?null:lr.dataset.s;applyIso();return;}
+    var lb=t.closest('#labBody tr[data-lab]');
+    if(lb){setLab(lb.dataset.lab);return;}
+    var s=t.closest('.seg button');
+    if(s&&!s.dataset.view&&!s.dataset.th){setOn(s.parentNode,s);
+      if(s.dataset.viz)setViz(s.dataset.viz);
+      if(s.dataset.step)$('qstep').textContent=s.dataset.step;}
+  });
+})();
+</script>
+</body>
+</html>

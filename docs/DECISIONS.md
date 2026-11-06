@@ -12376,3 +12376,13 @@ sağlıklı çalışmıyor; anomaliler oluşsun, gerekirse Problem'e terfi olurl
   imzası aynı (servis sekmesi / anomali çekmecesi pinli). Sapmalar: "Daha fazla yükle" sayfasının iptali satırları
   korur, aynı sayfayı yeniden istemek için yeni arama gerekir; alan istatistikleri çipi aramalar arasında son değeri
   tutar. Doğrulanmadı: prod ingress'in Server-Timing başlığını geçirip geçirmediği (geçirmezse tarayıcı süresi).
+## 2026-11-06 — Metrics Explorer Faz 1 (backend sözleşmesi)
+
+Kaynak: `docs/metrics/metrics-explore-dashboards-audit.md` (onaylı, §11) · mockup `docs/frontend/mockups/metrics-explore.html`.
+
+- **v0.10.1835 — meta zarfı (1.1).** `/api/metrics/query`, `/histogram`, bundle metric slot'u ve `/promql?meta=1` artık
+  `meta{source vm|clickhouse, executed, tookMs, seriesTotal?, seriesShown, truncated, partial, stepSec?, note?}` taşır;
+  eski alanlar bayt-aynı (golden). VM bayrakları `vmetrics.ResultRecorder` (ctx) ile — seam imzaları değişmedi. `/promql`
+  gövdesi çıplak DİZİ olduğu için zarf opt-in (`?meta=1`, anahtarda). CH: `executed` yalnız PromQL'de (builder SQL'i
+  store içinde kurulur), `stepSec` noktalardan gözlenir. Cache anahtarları değişmedi (meta istemcide isteğe bağlı).
+  `/api/metrics` ailesinin 6 handler'ı + 8 rotası api.go'dan `metrics_handlers.go` / `metrics_routes.go`'ya taşındı.

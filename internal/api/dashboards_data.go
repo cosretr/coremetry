@@ -111,6 +111,11 @@ type bundleSlot struct {
 	// Notu tekil uca koyup burada atlamak, aynı yüzdeliğin Explore'da
 	// SEBEBİYLE, dashboard panelinde SESSİZCE boş görünmesi demekti.
 	Note string `json:"note,omitempty"`
+	// Meta (v0.10.1835) — tekil /api/metrics/query'nin meta zarfının AYNISI
+	// (metric_meta.go); yalnız metric slot'unda. spanMetric slot'unda yok:
+	// orada kırpılan kuyruk Tail ile "others" çizgisine katlanıyor, yani
+	// "truncated" sözcüğü yanlış bir şey söylerdi.
+	Meta *metricMeta `json:"meta,omitempty"`
 }
 
 // dashPanelKey — SAF: panel isteğinin cache anahtarı. Regresyon testi
@@ -281,6 +286,7 @@ func (s *Server) bundleSlot(ctx context.Context, metricSrc metricSource, req bun
 		// jvm.memory.type="heap" filtresi uygulanmayınca panel heap +
 		// non-heap toplamını "heap" diye çiziyordu — yanlış ama makul
 		// görünen sayı, boş panelden tehlikelidir).
+		ctx, mrun := beginMetricMeta(ctx, metricSrc) // v0.10.1835
 		series, note, err := queryMetricNoted(ctx, metricSrc, chstore.MetricQueryFilter{
 			Name:        req.Name,
 			Service:     req.Service,
@@ -297,6 +303,7 @@ func (s *Server) bundleSlot(ctx context.Context, metricSrc metricSource, req bun
 		slot.Series = series
 		slot.RowsCapped = chstore.SeriesRowsCapped(series)
 		slot.Note = note
+		slot.Meta = mrun.finish(len(series), chMetaHints{Truncated: slot.RowsCapped, StepSec: observedStepSec(series)}, note)
 	case "spanMetric":
 		filters, ferr := parseFiltersAndDSL(string(req.Filters), req.DSL)
 		if ferr != nil {

@@ -479,7 +479,7 @@ func TestDashboardBundleHonoursTheParam(t *testing.T) {
 // settings-driven callers live elsewhere (mcp_deps.go, deliberately — MCP
 // tools take no query param).
 func TestMetricHandlersResolveSourcePerRequest(t *testing.T) {
-	raw, err := os.ReadFile("api.go")
+	raw, err := readMetricHandlerSources()
 	if err != nil {
 		t.Fatal(err)
 	}

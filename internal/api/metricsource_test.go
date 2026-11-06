@@ -66,7 +66,7 @@ var metricStoreMethods = []string{
 }
 
 func TestMetricHandlersGoThroughTheSourceSeam(t *testing.T) {
-	raw, err := os.ReadFile("api.go")
+	raw, err := readMetricHandlerSources()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ func TestMetricHandlersGoThroughTheSourceSeam(t *testing.T) {
 // by their literal prefixes so a renamed key fails loudly rather than
 // dropping out of the scan.
 func TestMetricCacheKeysCarryTheBackendMarker(t *testing.T) {
-	raw, err := os.ReadFile("api.go")
+	raw, err := readMetricHandlerSources()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +182,7 @@ func TestMetricCacheKeysCarryTheBackendMarker(t *testing.T) {
 // which renders as the silent empty chart the note exists to prevent
 // (v0.9.443/458 lesson).
 func TestMetricQueryKeyVersionMatchesTheEnvelope(t *testing.T) {
-	raw, err := os.ReadFile("api.go")
+	raw, err := readMetricHandlerSources()
 	if err != nil {
 		t.Fatal(err)
 	}

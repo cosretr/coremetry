@@ -27,7 +27,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -100,7 +99,7 @@ func TestPromQLCHKeyIsPinned(t *testing.T) {
 // panel, it was heap+non-heap summed and LABELLED heap. Nobody questions a
 // plausible number.
 func TestHistogramHandlerThreadsEveryFilterField(t *testing.T) {
-	raw, err := os.ReadFile("api.go")
+	raw, err := readMetricHandlerSources()
 	if err != nil {
 		t.Fatal(err)
 	}

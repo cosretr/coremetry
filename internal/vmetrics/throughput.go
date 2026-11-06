@@ -106,6 +106,8 @@ func (s *Service) runRangeQueryDetailed(ctx context.Context, cfg Settings, q str
 	if err != nil {
 		return QueryDetail{}, err
 	}
+	recordResult(ctx, ResultRecord{Kind: ResultRange, Query: q, StepSec: step,
+		Total: res.Total, Truncated: res.Truncated, Partial: res.IsPartial}) // v0.10.1835 — HTTP meta zarfı
 	return QueryDetail{
 		Series:      rangeSeries(res.Series, f, step),
 		Step:        step,

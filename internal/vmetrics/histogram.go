@@ -97,11 +97,15 @@ func (s *Service) QueryMetricHistogram(ctx context.Context, f chstore.MetricQuer
 		"step":  {strconv.Itoa(step) + "s"},
 	}
 	recordQuery(ctx, q) // v0.10.1271 — kanıt çipi
-	series, err := promapi.QuerySeries(ctx, s.request("/api/v1/query_range", params, cfg))
+	// v0.10.1835 — QuerySeriesMeta (DecodeSeries'in kendi gövdesi): seriler
+	// bayt-aynı, ek olarak tavan/kısmi bayrakları HTTP meta zarfına gider.
+	res, err := promapi.QuerySeriesMeta(ctx, s.request("/api/v1/query_range", params, cfg))
 	if err != nil {
 		return nil, err
 	}
-	return assembleHistogram(series, bucketNameCandidates(f.Name), f.From, f.To, step)
+	recordResult(ctx, ResultRecord{Kind: ResultHistogram, Query: q, StepSec: step,
+		Total: res.Total, Truncated: res.Truncated, Partial: res.IsPartial})
+	return assembleHistogram(res.Series, bucketNameCandidates(f.Name), f.From, f.To, step)
 }
 
 // buildHistogramPromQL renders the heatmap's bucket query and the step it was
@@ -366,13 +370,15 @@ func (s *Service) QueryPromQLRange(ctx context.Context, query string, from, to t
 		"step":  {strconv.Itoa(step) + "s"},
 	}
 	recordQuery(ctx, q) // v0.10.1271 — kanıt çipi
-	series, err := promapi.QuerySeries(ctx, s.request("/api/v1/query_range", params, cfg))
+	res, err := promapi.QuerySeriesMeta(ctx, s.request("/api/v1/query_range", params, cfg))
 	if err != nil {
 		return nil, err
 	}
-	out := make([]chstore.SpanMetricSeries, 0, len(series))
+	recordResult(ctx, ResultRecord{Kind: ResultRange, Query: q, StepSec: step,
+		Total: res.Total, Truncated: res.Truncated, Partial: res.IsPartial}) // v0.10.1835
+	out := make([]chstore.SpanMetricSeries, 0, len(res.Series))
 	startSec := float64(from.Unix())
-	for _, sr := range series {
+	for _, sr := range res.Series {
 		row := chstore.SpanMetricSeries{GroupKey: labelSetGroupKey(sr.Metric)}
 		for _, raw := range sr.Values {
 			ts, v, ok := promapi.Sample(raw)
@@ -414,12 +420,14 @@ func (s *Service) QueryPromQLInstant(ctx context.Context, query string, at time.
 	if at.IsZero() {
 		at = time.Now()
 	}
-	series, err := promapi.QuerySeries(ctx, s.request("/api/v1/query", url.Values{"query": {q}, "time": {promTime(at)}}, cfg))
+	res, err := promapi.QuerySeriesMeta(ctx, s.request("/api/v1/query", url.Values{"query": {q}, "time": {promTime(at)}}, cfg))
 	if err != nil {
 		return nil, err
 	}
-	out := make([]chstore.SpanMetricSeries, 0, len(series))
-	for _, sr := range series {
+	recordResult(ctx, ResultRecord{Kind: ResultInstant, Query: q,
+		Total: res.Total, Truncated: res.Truncated, Partial: res.IsPartial}) // v0.10.1835
+	out := make([]chstore.SpanMetricSeries, 0, len(res.Series))
+	for _, sr := range res.Series {
 		row := chstore.SpanMetricSeries{GroupKey: labelSetGroupKey(sr.Metric)}
 		if _, v, ok := promapi.Sample(sr.Value); ok {
 			row.Points = []chstore.SpanMetricPoint{{Time: at.UnixNano(), Value: v}}

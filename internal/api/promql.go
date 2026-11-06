@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/cilcenk/coremetry/internal/chstore"
 )
 
 // maxPromQLQueryLen caps the raw query length before parsing (review CRITICAL,
@@ -95,6 +97,14 @@ func (s *Server) queryPromQL(w http.ResponseWriter, r *http.Request) {
 		from = to.Add(-1 * time.Hour)
 	}
 
+	// v0.10.1835 — ?meta=1: {series, meta} zarfı (metric_meta.go). Param
+	// yokken gövde bayt-aynı eski DİZİ; anahtar yalnız param varken değişir.
+	withMeta := q.Get("meta") == "1"
+	metaTag := ""
+	if withMeta {
+		metaTag = ":meta=1"
+	}
+
 	// v0.10.1248 — ?instant=1: anlık sorgu (`to` anında), yalnız VM kaynağı.
 	if q.Get("instant") == "1" {
 		vm, ok := src.(vmMetricSource)
@@ -102,15 +112,24 @@ func (s *Server) queryPromQL(w http.ResponseWriter, r *http.Request) {
 			writePromQLError(w, http.StatusBadRequest, "instant=1 yalnız VictoriaMetrics kaynağında (metricsrc=vm)")
 			return
 		}
-		ikey := fmt.Sprintf("promql-instant:src=%s:q=%s:at=%d", src.Name(), query, to.Unix()/30)
+		ikey := fmt.Sprintf("promql-instant:src=%s:q=%s:at=%d%s", src.Name(), query, to.Unix()/30, metaTag)
 		s.serveCached(w, r, ikey, 30*time.Second, func(ctx context.Context) (any, error) {
-			return vm.QueryPromQLInstant(ctx, query, to)
+			if !withMeta {
+				return vm.QueryPromQLInstant(ctx, query, to)
+			}
+			ctx, mrun := beginMetricMeta(ctx, src)
+			res, err := vm.QueryPromQLInstant(ctx, query, to)
+			if err != nil {
+				return nil, err
+			}
+			return promqlEnvelope{Series: nonNilSeries(res), Meta: mrun.finish(len(res), chMetaHints{}, "")}, nil
 		})
 		return
 	}
-	key := fmt.Sprintf("promql:src=%s:q=%s:step=%d:mdp=%d:from=%d:to=%d",
-		src.Name(), query, step, maxDP, from.Unix()/60, to.Unix()/60)
+	key := fmt.Sprintf("promql:src=%s:q=%s:step=%d:mdp=%d:from=%d:to=%d%s",
+		src.Name(), query, step, maxDP, from.Unix()/60, to.Unix()/60, metaTag)
 	s.serveCached(w, r, key, 30*time.Second, func(ctx context.Context) (any, error) {
+		ctx, mrun := beginMetricMeta(ctx, src)
 		res, err := src.QueryPromQLRange(ctx, query, from, to, step, maxDP)
 		// v0.9.1158 — CH değerlendiricisinin SORGU-ŞEKLİ hataları
 		// ("promql:" önekli: desteklenmeyen fonksiyon, subquery, seri
@@ -122,8 +141,21 @@ func (s *Server) queryPromQL(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return nil, classifyPromQLEvalErr(err)
 		}
-		return res, nil
+		if !withMeta {
+			return res, nil
+		}
+		// CH: the operator's own text IS what the evaluator ran.
+		return promqlEnvelope{Series: nonNilSeries(res), Meta: mrun.finish(len(res),
+			chMetaHints{Executed: query, StepSec: observedStepSec(res)}, "")}, nil
 	})
+}
+
+// nonNilSeries — `[]` instead of `null` inside the opt-in envelope.
+func nonNilSeries(s []chstore.SpanMetricSeries) []chstore.SpanMetricSeries {
+	if s == nil {
+		return []chstore.SpanMetricSeries{}
+	}
+	return s
 }
 
 // classifyPromQLEvalErr — değerlendirici hatasının sınıfı. Önek

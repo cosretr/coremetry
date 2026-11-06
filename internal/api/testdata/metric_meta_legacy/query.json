@@ -1,0 +1,1 @@
+{"rowsCapped":false,"series":[{"groupKey":["j000"],"points":[{"time":1700000000000000000,"value":1},{"time":1700000060000000000,"value":1}]},{"groupKey":["j001"],"points":[{"time":1700000000000000000,"value":2},{"time":1700000060000000000,"value":2}]},{"groupKey":["j002"],"points":[{"time":1700000000000000000,"value":3},{"time":1700000060000000000,"value":3}]}]}
