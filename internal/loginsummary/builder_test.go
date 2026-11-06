@@ -1,0 +1,518 @@
+package loginsummary
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/cilcenk/coremetry/internal/chstore"
+)
+
+// ── sahteler: gerçeğin kurallarını uygular ──────────────────────────────
+
+// fakeVM — yalnız Queries(family)'nin ÜÇ sabit ifadesini kabul eder; bilinmeyen
+// ifadeyi hata ile reddeder (gerçek VM'in "kötü sorgu" davranışı).
+type fakeVM struct {
+	mu         sync.Mutex
+	configured bool
+	allowP95   bool
+	fail       map[string]bool // "q1" | "q2" | "q3" → hata
+	calls      map[string]int
+	windows    []time.Duration
+	unknown    []string
+}
+
+func newFakeVM() *fakeVM {
+	return &fakeVM{configured: true, fail: map[string]bool{}, calls: map[string]int{}}
+}
+func (f *fakeVM) Configured() bool                 { return f.configured }
+func (f *fakeVM) AllowUnfilteredPercentiles() bool { return f.allowP95 }
+func (f *fakeVM) QueryPromQLRange(ctx context.Context, q string, from, to time.Time, step, maxPts int) ([]chstore.SpanMetricSeries, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if _, has := ctx.Deadline(); !has {
+		return nil, errors.New("fakeVM: bağlamda zaman aşımı yok")
+	}
+	q1, q2, q3 := Queries(HTTPFamily)
+	var name string
+	switch q {
+	case q1:
+		name = "q1"
+	case q2:
+		name = "q2"
+	case q3:
+		name = "q3"
+	default:
+		f.unknown = append(f.unknown, q)
+		return nil, fmt.Errorf("fakeVM: bilinmeyen ifade %q", q)
+	}
+	f.calls[name]++
+	f.windows = append(f.windows, to.Sub(from))
+	if step != 300 {
+		return nil, fmt.Errorf("fakeVM: adım 300 olmalı, got %d", step)
+	}
+	if f.fail[name] {
+		return nil, errors.New("fakeVM: " + name + " arızası")
+	}
+	mk := func(key []string, base float64) chstore.SpanMetricSeries {
+		s := chstore.SpanMetricSeries{GroupKey: key}
+		for t := from.Unix() - from.Unix()%300; t <= to.Unix(); t += 300 {
+			s.Points = append(s.Points, chstore.SpanMetricPoint{Time: t * 1e9, Value: base})
+		}
+		return s
+	}
+	switch name {
+	case "q1":
+		return []chstore.SpanMetricSeries{mk([]string{"200"}, 50), mk([]string{"500"}, 1)}, nil
+	case "q2":
+		return []chstore.SpanMetricSeries{mk(nil, 25.5)}, nil
+	default:
+		return []chstore.SpanMetricSeries{mk(nil, 0.3)}, nil
+	}
+}
+
+type fakeStore struct {
+	countsErr, cosreErr, actErr, bytesErr, topoErr error
+	counts                                         chstore.LoginCounts
+	cosre                                          uint64
+	act                                            chstore.SelfActivityTotals
+	bytes                                          uint64
+	edges                                          []chstore.ServiceTopologyEdge
+	topoWindow                                     time.Duration
+	topoLimit                                      int
+	topoCalls, countsCalls                         int
+}
+
+func (f *fakeStore) LoginSummaryCounts(ctx context.Context) (chstore.LoginCounts, error) {
+	f.countsCalls++
+	// gerçek Store gibi: kısmi sayılar + ilk hata birlikte döner.
+	return f.counts, f.countsErr
+}
+func (f *fakeStore) CountCosreQuestions(ctx context.Context, since time.Time) (uint64, error) {
+	return f.cosre, f.cosreErr
+}
+func (f *fakeStore) ReadSelfActivityTotals(ctx context.Context, from, to time.Time) (chstore.SelfActivityTotals, error) {
+	return f.act, f.actErr
+}
+func (f *fakeStore) TotalUncompressedBytes(ctx context.Context) (uint64, error) {
+	return f.bytes, f.bytesErr
+}
+func (f *fakeStore) ReadServiceTopologyAgg(ctx context.Context, from, to time.Time, limit int) ([]chstore.ServiceTopologyEdge, error) {
+	f.topoCalls++
+	f.topoWindow, f.topoLimit = to.Sub(from), limit
+	return f.edges, f.topoErr
+}
+
+// fakeRedis — Publish/Load'u gerçek gibi JSON gidiş-dönüşüyle taşır (Redis'e
+// serileştirilebilir olmayan bir anlık görüntü yayınlanamaz).
+type fakeRedis struct {
+	blob []byte
+	n    int
+}
+
+func (r *fakeRedis) publish(t *testing.T) func(*Snapshot) {
+	return func(s *Snapshot) {
+		b, err := json.Marshal(s)
+		if err != nil {
+			t.Fatalf("anlık görüntü serileştirilemiyor: %v", err)
+		}
+		r.blob, r.n = b, r.n+1
+	}
+}
+func (r *fakeRedis) load() *Snapshot {
+	if r.blob == nil {
+		return nil
+	}
+	var s Snapshot
+	if err := json.Unmarshal(r.blob, &s); err != nil {
+		return nil
+	}
+	return &s
+}
+
+type clock struct{ t time.Time }
+
+func (c *clock) now() time.Time { return c.t }
+
+type harness struct {
+	st    *fakeStore
+	vm    *fakeVM
+	redis *fakeRedis
+	clk   *clock
+	logs  []string
+	b     *Builder
+}
+
+func newHarness(t *testing.T) *harness {
+	h := &harness{
+		st:    &fakeStore{edges: fixtureEdges(), bytes: 1 << 40, cosre: 5, act: chstore.SelfActivityTotals{Logins: 12, TracesViewed: 34}},
+		vm:    newFakeVM(),
+		redis: &fakeRedis{},
+		clk:   &clock{t: time.Date(2026, 11, 6, 12, 0, 0, 0, time.UTC)},
+	}
+	h.st.counts = chstore.LoginCounts{Spans: u64(5000), Traces: u64(900), Services: u64(5)}
+	h.b = New(Deps{
+		Store: h.st, VM: h.vm, Now: h.clk.now, Load: h.redis.load, Publish: h.redis.publish(t),
+		Logf:     func(f string, a ...any) { h.logs = append(h.logs, fmt.Sprintf(f, a...)) },
+		Rollouts: func(ctx context.Context, from, to time.Time) (uint64, bool, error) { return 7, true, nil },
+	})
+	return h
+}
+
+func (h *harness) step() *Snapshot {
+	h.b.Step(context.Background())
+	return h.redis.load()
+}
+
+func (h *harness) advance(d time.Duration) { h.clk.t = h.clk.t.Add(d) }
+
+// ── testler ─────────────────────────────────────────────────────────────
+
+func TestBuilderFirstStepPublishesFullSnapshot(t *testing.T) {
+	h := newHarness(t)
+	snap := h.step()
+	if snap == nil {
+		t.Fatal("yayın yok")
+	}
+	if snap.V != SnapshotVersion || snap.GeneratedAt != h.clk.t.UnixMilli() || snap.Salt == "" {
+		t.Errorf("başlık: %+v", snap)
+	}
+	if snap.SpansToday == nil || *snap.SpansToday != 5000 || *snap.Services != 5 {
+		t.Errorf("sayılar: %+v", snap)
+	}
+	if snap.Activity == nil || snap.Activity.Logins != 12 || snap.Activity.CosreQuestions != 5 || snap.Activity.Rollouts == nil || *snap.Activity.Rollouts != 7 {
+		t.Errorf("aktivite: %+v", snap.Activity)
+	}
+	if snap.CHBytes == nil || *snap.CHBytes != 1<<40 || snap.Topo == nil || snap.Ring == nil {
+		t.Errorf("yavaş tur çıktıları: bytes=%v topo=%v ring=%v", snap.CHBytes, snap.Topo != nil, snap.Ring != nil)
+	}
+	if snap.State != StateOK {
+		t.Errorf("durum ok beklenir: %s", snap.State)
+	}
+	if h.st.topoWindow != 15*time.Minute || h.st.topoLimit != 5000 {
+		t.Errorf("topoloji penceresi 15 dk / limit 5000: %v %d", h.st.topoWindow, h.st.topoLimit)
+	}
+	if len(h.vm.unknown) != 0 {
+		t.Errorf("VM'e yalnız üç sabit ifade gider: %v", h.vm.unknown)
+	}
+	resp := Project(snap, Flags{Enabled: true, Now: h.clk.t})
+	if !resp.Ready || resp.HTTP24h == nil {
+		t.Fatalf("yayınlanan anlık görüntü Project'ten hazır geçmeli: %+v", resp)
+	}
+	if len(h.logs) != 1 || !strings.HasPrefix(h.logs[0], "[login-summary] state=ok") || !strings.Contains(h.logs[0], "vm_q1=") || !strings.Contains(h.logs[0], "counts=") {
+		t.Errorf("süre günlüğü: %v", h.logs)
+	}
+}
+
+// p95 yalnız VM ayarı açıkken sorgulanır (koruma delinmez).
+func TestBuilderP95OnlyWhenAllowed(t *testing.T) {
+	h := newHarness(t)
+	h.step()
+	if h.vm.calls["q3"] != 0 {
+		t.Errorf("AllowUnfilteredPercentiles kapalıyken Q3 sorgulanmaz: %d", h.vm.calls["q3"])
+	}
+	h2 := newHarness(t)
+	h2.vm.allowP95 = true
+	snap := h2.step()
+	if h2.vm.calls["q3"] == 0 {
+		t.Error("ayar açıkken Q3 sorgulanır")
+	}
+	if snap.Ring.B[len(snap.Ring.B)-1].P95 == nil {
+		t.Error("p95 halkada")
+	}
+	// ayar kapanınca halkadaki eski p95'ler silinir
+	h2.vm.allowP95 = false
+	h2.advance(6 * time.Minute)
+	snap = h2.step()
+	for _, b := range snap.Ring.B {
+		if b.P95 != nil {
+			t.Fatal("ayar kapanınca p95 halkadan düşer")
+		}
+	}
+}
+
+// Tuz kararlıdır: sonraki turlarda ve lider değişiminde (yeni Builder + Load) aynı.
+func TestBuilderSaltStableAcrossRoundsAndLeaderChange(t *testing.T) {
+	h := newHarness(t)
+	s1 := h.step()
+	h.advance(6 * time.Minute)
+	s2 := h.step()
+	if s1.Salt != s2.Salt {
+		t.Fatal("tuz turlar arasında değişmemeli")
+	}
+	// yeni lider: aynı Redis'ten devralır
+	b2 := New(Deps{Store: h.st, VM: h.vm, Now: h.clk.now, Load: h.redis.load, Publish: h.redis.publish(t), Logf: func(string, ...any) {}})
+	h.advance(time.Minute)
+	b2.Step(context.Background())
+	s3 := h.redis.load()
+	if s3.Salt != s1.Salt {
+		t.Fatal("lider değişiminde tuz devralınmalı")
+	}
+	ids := func(s *Snapshot) string {
+		var out []string
+		for _, n := range s.Topo.Nodes {
+			out = append(out, n.ID)
+		}
+		return strings.Join(out, ",")
+	}
+	if ids(s1) != ids(s3) {
+		t.Error("düğüm id'leri lider değişiminde sabit kalmalı")
+	}
+	// halka da devralınır: yeni lider 24 saati sıfırdan kurmaz
+	if len(s3.Ring.B) < len(s1.Ring.B) {
+		t.Errorf("halka devralınmalı: %d < %d", len(s3.Ring.B), len(s1.Ring.B))
+	}
+	// Reset sonrası aynı Builder yeniden yükler
+	h.b.Reset()
+	h.advance(time.Minute)
+	if s := h.step(); s.Salt != s1.Salt {
+		t.Error("Reset sonrası tuz Redis'ten gelir")
+	}
+}
+
+func TestBuilderGapFillBoundedAndFinite(t *testing.T) {
+	h := newHarness(t)
+	h.step()
+	// ilk tur: 1 yakın pencere + 4 boşluk parçası, her biri Q1+Q2
+	if h.vm.calls["q1"] != 5 || h.vm.calls["q2"] != 5 {
+		t.Errorf("ilk tur 5 pencere (1+4): q1=%d q2=%d", h.vm.calls["q1"], h.vm.calls["q2"])
+	}
+	rounds := 1
+	for i := 0; i < 10; i++ {
+		h.advance(5 * time.Minute)
+		before := h.vm.calls["q1"]
+		h.step()
+		rounds++
+		if got := h.vm.calls["q1"] - before; got > 5 {
+			t.Errorf("tur başına en çok 1+4 pencere, got %d", got)
+		}
+	}
+	// 24 parçanın hepsi ~6 turda dolar; sonra yalnız yakın pencere
+	before := h.vm.calls["q1"]
+	h.advance(5 * time.Minute)
+	h.step()
+	if got := h.vm.calls["q1"] - before; got != 1 {
+		t.Errorf("soğuk başlangıç bitince tur başına 1 pencere, got %d", got)
+	}
+}
+
+func TestBuilderSlowRoundCadence(t *testing.T) {
+	h := newHarness(t)
+	h.step()
+	topo, vmq := h.st.topoCalls, h.vm.calls["q1"]
+	h.advance(time.Minute)
+	h.step()
+	h.advance(time.Minute)
+	h.step()
+	if h.st.topoCalls != topo || h.vm.calls["q1"] != vmq {
+		t.Error("5 dk dolmadan VM/topoloji turu yok")
+	}
+	if h.st.countsCalls != 3 {
+		t.Errorf("CH sayıları her tur: %d", h.st.countsCalls)
+	}
+	h.advance(4 * time.Minute)
+	h.step()
+	if h.st.topoCalls != topo+1 {
+		t.Error("5 dk dolunca yavaş tur")
+	}
+}
+
+func TestBuilderBreakerSkipsAfterThreeFailuresFor30Min(t *testing.T) {
+	h := newHarness(t)
+	h.vm.fail["q1"] = true
+	for i := 0; i < 3; i++ {
+		snap := h.step()
+		if snap.State != StateDegraded {
+			t.Fatalf("Q1 düşünce durum degraded: %s", snap.State)
+		}
+		h.advance(5 * time.Minute)
+	}
+	if h.vm.calls["q1"] != 3 {
+		t.Fatalf("3 deneme: %d", h.vm.calls["q1"])
+	}
+	// 3. hatadan sonra 30 dk atlanır
+	for i := 0; i < 4; i++ { // 20 dk
+		h.step()
+		h.advance(5 * time.Minute)
+	}
+	if h.vm.calls["q1"] != 3 {
+		t.Errorf("30 dk atlanmalı, VM çağrısı arttı: %d", h.vm.calls["q1"])
+	}
+	// 30 dk geçince yeniden denenir (hâlâ bozuk → 1 deneme daha)
+	h.advance(15 * time.Minute)
+	h.step()
+	if h.vm.calls["q1"] != 4 {
+		t.Errorf("30 dk sonra yeniden denenmeli: %d", h.vm.calls["q1"])
+	}
+	// iyileşince durum ok
+	h.vm.fail["q1"] = false
+	h.advance(31 * time.Minute)
+	if s := h.step(); s.State != StateOK {
+		t.Errorf("VM iyileşince ok: %s", s.State)
+	}
+}
+
+func TestBuilderBreakerNeedsConsecutiveFailures(t *testing.T) {
+	h := newHarness(t)
+	h.vm.fail["q1"] = true
+	h.step()
+	h.advance(5 * time.Minute)
+	h.step()
+	h.vm.fail["q1"] = false
+	h.advance(5 * time.Minute)
+	h.step() // başarı sayacı sıfırlar
+	h.vm.fail["q1"] = true
+	h.advance(5 * time.Minute)
+	h.step()
+	h.advance(5 * time.Minute)
+	before := h.vm.calls["q1"]
+	h.step()
+	if h.vm.calls["q1"] == before {
+		t.Error("araya giren başarı sayacı sıfırlar: art arda 3 olmadığı için atlanmamalı")
+	}
+}
+
+func TestBuilderVMDisabledHidesHTTPAndKeepsOK(t *testing.T) {
+	h := newHarness(t)
+	h.vm.configured = false
+	snap := h.step()
+	if snap.Ring != nil {
+		t.Error("VM kapalıyken halka yok")
+	}
+	if snap.State != StateOK {
+		t.Errorf("VM kapalı + CH ok → ok: %s", snap.State)
+	}
+	if h.vm.calls["q1"] != 0 {
+		t.Error("VM kapalıyken sorgu yok")
+	}
+	if resp := Project(snap, Flags{Enabled: true, Now: h.clk.t}); resp.HTTP24h != nil {
+		t.Error("kart gizli")
+	}
+	// nil VM de çalışır
+	h2 := newHarness(t)
+	h2.b = New(Deps{Store: h2.st, Now: h2.clk.now, Publish: h2.redis.publish(t), Logf: func(string, ...any) {}})
+	if s := h2.step(); s.Ring != nil || s.State != StateOK {
+		t.Errorf("nil VM: %+v", s)
+	}
+}
+
+func TestBuilderFamilyAbsentHidesCardButNotDegraded(t *testing.T) {
+	h := newHarness(t)
+	empty := &emptyVM{fakeVM: h.vm}
+	h.b = New(Deps{Store: h.st, VM: empty, Now: h.clk.now, Publish: h.redis.publish(t), Logf: func(string, ...any) {}})
+	snap := h.step()
+	if snap.State != StateOK {
+		t.Errorf("aile yok ≠ arıza: %s", snap.State)
+	}
+	if resp := Project(snap, Flags{Enabled: true, Now: h.clk.t}); resp.HTTP24h != nil {
+		t.Error("Q1 boşsa http_24h yok")
+	}
+	if h.vm.calls["q2"] != 0 {
+		t.Error("Q1 boşken Q2 sorgulanmaz")
+	}
+}
+
+type emptyVM struct{ *fakeVM }
+
+func (e *emptyVM) QueryPromQLRange(ctx context.Context, q string, from, to time.Time, step, maxPts int) ([]chstore.SpanMetricSeries, error) {
+	e.fakeVM.mu.Lock()
+	e.fakeVM.calls["q1"]++
+	e.fakeVM.mu.Unlock()
+	return nil, nil
+}
+
+func TestBuilderCHFailuresDegradeAndDropFields(t *testing.T) {
+	h := newHarness(t)
+	h.st.countsErr = errors.New("ch: timeout")
+	h.st.counts = chstore.LoginCounts{}
+	snap := h.step()
+	if snap.State != StateDegraded || snap.SpansToday != nil {
+		t.Errorf("sayılar düşünce degraded ve alan yok: %+v", snap)
+	}
+	// kısmi: yalnız servis sorgusu düşer
+	h2 := newHarness(t)
+	h2.st.countsErr = errors.New("kısmi")
+	h2.st.counts = chstore.LoginCounts{Spans: u64(1), Traces: u64(2)}
+	s2 := h2.step()
+	if s2.SpansToday == nil || s2.Services != nil || s2.State != StateDegraded {
+		t.Errorf("kısmi sayılar korunur: %+v", s2)
+	}
+}
+
+func TestBuilderActivityNeedsBothSourcesAndRolloutsOptional(t *testing.T) {
+	h := newHarness(t)
+	h.st.cosreErr = errors.New("cosre")
+	if s := h.step(); s.Activity != nil {
+		t.Error("cosre okunamadıysa aktivite yok")
+	}
+	h2 := newHarness(t)
+	h2.st.actErr = errors.New("act")
+	if s := h2.step(); s.Activity != nil {
+		t.Error("sayaç okunamadıysa aktivite yok")
+	}
+	h3 := newHarness(t)
+	h3.b = New(Deps{Store: h3.st, VM: h3.vm, Now: h3.clk.now, Publish: h3.redis.publish(t), Logf: func(string, ...any) {},
+		Rollouts: func(context.Context, time.Time, time.Time) (uint64, bool, error) { return 0, false, nil }})
+	if s := h3.step(); s.Activity == nil || s.Activity.Rollouts != nil {
+		t.Errorf("rollout izleme kapalı → alan yok: %+v", s.Activity)
+	}
+	h4 := newHarness(t)
+	h4.b = New(Deps{Store: h4.st, VM: h4.vm, Now: h4.clk.now, Publish: h4.redis.publish(t), Logf: func(string, ...any) {}})
+	if s := h4.step(); s.Activity == nil || s.Activity.Rollouts != nil {
+		t.Errorf("rollout okuyucu yok → alan yok: %+v", s.Activity)
+	}
+}
+
+// Birikimli yapılar (topoloji, boyut) hata turunda son iyi hâlini korur.
+func TestBuilderSlowItemsKeepLastGoodOnFailure(t *testing.T) {
+	h := newHarness(t)
+	s1 := h.step()
+	h.st.topoErr, h.st.bytesErr = errors.New("topo"), errors.New("bytes")
+	h.advance(6 * time.Minute)
+	s2 := h.step()
+	if s2.Topo == nil || s2.CHBytes == nil || *s2.CHBytes != *s1.CHBytes {
+		t.Errorf("son iyi hâl korunmalı: %+v", s2)
+	}
+}
+
+func TestBuilderPublishedSnapshotIsIsolatedFromWorkingState(t *testing.T) {
+	h := newHarness(t)
+	var pubs []*Snapshot
+	h.b = New(Deps{Store: h.st, VM: h.vm, Now: h.clk.now, Logf: func(string, ...any) {},
+		Publish: func(s *Snapshot) { pubs = append(pubs, s) }})
+	h.b.Step(context.Background())
+	first := pubs[0]
+	n := len(first.Ring.B)
+	h.advance(6 * time.Minute)
+	h.b.Step(context.Background())
+	if len(first.Ring.B) != n {
+		t.Error("yayınlanmış anlık görüntü sonraki turdan etkilenmemeli (uç eşzamanlı okur)")
+	}
+}
+
+func TestBuilderRunStopsOnContextAndResetsWhenNotLeader(t *testing.T) {
+	h := newHarness(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	leader := false
+	done := make(chan struct{})
+	h.b.d.FastEvery = 10 * time.Millisecond
+	go func() { h.b.Run(ctx, func() bool { return leader }); close(done) }()
+	time.Sleep(40 * time.Millisecond)
+	if h.redis.n != 0 {
+		t.Error("lider değilken yayın yok")
+	}
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Run ctx ile durmalı")
+	}
+}

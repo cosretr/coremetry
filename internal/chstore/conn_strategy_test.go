@@ -148,6 +148,7 @@ func TestTelemetryReadConnCallSurface(t *testing.T) {
 		"repo.go":                 true, // spans / logs / metric_points / trace_*_5m / topology_edges_5m
 		"logs_sort.go":            true, // v0.10.1833 — logs (kullanıcı sıralamalı liste), state yok
 		"self_es_series.go":       true, // v0.10.1878 — metric_points (ES istek sayacı serisi), state yok
+		"login_summary.go":        true, // v0.10.1903 — service_summary_5m / trace_summary_1d (MV); cosre_interactions + system.parts ana bağlantıda (s.conn)
 		"self_activity_series.go": true, // v0.10.1902 — metric_points (giriş / trace görüntüleme sayacı), state yok
 		"topology.go":             true, // topology_*_5m / service_summary_5m / spans / root_traces
 		"dependencies.go":         true, // db_*_summary_5m / messaging_*_summary_5m / metric_points / spans
@@ -409,6 +410,7 @@ func TestTelemetryReadFilesTouchNoStateTables(t *testing.T) {
 		"logs_sort.go",
 		"self_es_series.go",
 		"self_activity_series.go",
+		"login_summary.go",
 	} {
 		b, err := os.ReadFile(f)
 		if err != nil {

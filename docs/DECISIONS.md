@@ -13253,3 +13253,9 @@ JSON sözleşmesi ve kararlar ana oturumda. Backend dilimleri v0.10.1902–1905.
   (`kind=login|trace_view`, `pod`); ES istek sayacının eşi. `logins` toplamdır (tekil kişi değil). `traces_viewed`:
   `X-Coremetry-Purpose: prefetch` sayılmaz; `(kullanıcı, trace)` 10 dk tekilleştirme, en çok 20 000 girdi, pod-yerel
   (iki pod'a düşen kullanıcı çift sayılabilir). `api.go` iki `TouchUserLogin` bloğu tek `s.noteLogin` satırı oldu.
+- **v0.10.1903 — Özet çekirdeği:** `internal/loginsummary` (types/topology/ring/project/builder) + `chstore/login_summary.go`
+  (bugünün span/trace/servis sayısı MV'den, `cosre_interactions` sayısı, `system.parts` toplam boyutu; ham `spans` yok). `Project`
+  tek boğum: isimsiz kipte ad yok, `ext:`/`node:`/db instance/host hiçbir kipte yok, db/kuyrukta yalnız sistem adı. Anlık görüntü
+  tuzu kararlı (Redis'ten devralınır). Hata kuralı: sayılar düşerse alan cevaptan düşer (`degraded`); halka/topoloji/boyut son iyi
+  hâlini korur. VM: üç sabit ifade, p95 yalnız `AllowUnfilteredPercentiles`, sorgu başına 5 sn, art arda 3 hatada 30 dk atla.
+  Henüz `main.go`'ya bağlı değil (1905).
