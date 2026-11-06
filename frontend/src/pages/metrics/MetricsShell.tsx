@@ -10,7 +10,7 @@
 // okunur ve URL'den silinir (replace) — `?mq=`, `?tab=promql&promql=`
 // (CoSRE kanıt çipi), `?metric=` (Overview kapısı; S3: artık burada açılır),
 // `?editor=0` (Keşif).
-import { useEffect, useMemo, type ReactNode } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Topbar } from '@/components/Topbar';
@@ -25,6 +25,7 @@ import type { ContextDim } from '@/lib/contextParams';
 import { decodeMx, defaultMxModel, encodeMx, MX_PARAM, type MxModel } from '@/lib/metricsExplorer/model';
 import { applyMxImport, importLegacyMetricsUrl } from '@/lib/metricsExplorer/legacy';
 import { QueryTab } from './QueryTab';
+import { DiscoverTab } from './DiscoverTab';
 
 const CTX_DIMS: ContextDim[] = ['range', 'cluster'];
 const CTX_HIDDEN: ContextDim[] = ['service', 'namespace', 'compare'];
@@ -34,7 +35,7 @@ function canEditRole(role: string | undefined): boolean {
   return role === undefined || role === 'admin' || role === 'editor';
 }
 
-export function MetricsShell({ discover }: { discover: ReactNode }) {
+export function MetricsShell() {
   const [sp, setSearchParams] = useSearchParams();
   const ctx = useContextParams({ defaultPreset: DEFAULT_RANGE_PRESET, applies: CTX_DIMS });
   const canEdit = canEditRole(useAuthRole());
@@ -82,7 +83,9 @@ export function MetricsShell({ discover }: { discover: ReactNode }) {
             <QueryTab model={model} onModel={setModel} from={ctx.windowNs.from} to={ctx.windowNs.to}
               cluster={ctx.params.cluster} caps={capsQ.data} canEdit={canEdit} />
           </TabsContent>
-          <TabsContent value="discover">{discover}</TabsContent>
+          <TabsContent value="discover">
+            <DiscoverTab cluster={ctx.params.cluster} caps={capsQ.data} canEdit={canEdit} />
+          </TabsContent>
         </Tabs>
       </PageShell>
     </>

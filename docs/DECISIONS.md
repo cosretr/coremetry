@@ -12710,3 +12710,18 @@ Kaynak: `docs/metrics/metrics-explore-dashboards-audit.md` §7 Faz 2 (onaylı, �
   yazılır (yenileme saati yazmaz); aynı metni yeniden Çalıştır önbellek yerine taze koşar. Rol: her kimlikli kullanıcı
   (viewer dahil; kişisel durum), audit yok (konsol kararı 2). "Sorgu izi" düğmesi görünür ama kapalı:
   `capabilities.features.queryTrace` nedeni (sunucuda `trace=1` yok — bu programın dilim listesinde değil).
+- **v0.10.1865 — Keşif sekmesi (2.5; S3 + S10, Explore v2 P5 aşıldı).** `pages/metrics/DiscoverTab` (mockup görünüm 3):
+  özet satırı (aktif seri · metrik adı · etiket-değer çifti · tarih · 10 dk önbellek · kaynak · kapsam), "Yüksek
+  kardinalite." şeridi (tek metrik ≥ %30; "Etiket dağılımını aç" → `{__name__="…"}` süzgeci). Metrikler: kardinalite
+  (`discover/cardinality?topN=50&match=`) omurga, ad zarfı (`/api/metrics/names?limit=50`) tür/birim/açıklama ekler;
+  arama SUNUCUDA (`match[]` `__name__=~".*q.*"`, regex kaçışlı), tür süzgeci istemcide; satır GERÇEK bağlantı →
+  Sorgu sekmesi, tür varsayılanlı builder sorgusu A (S3). Etikete göre gez (değer sayısı ≥ 500 "yüksek") → odak
+  etiketin değerleri (`focusLabel`) → "Bu değerle süz". En pahalı sorgular admin/editor'a, `<details>` açılınca okunur;
+  viewer gerekçeyi okur (S10). CH'de kardinalite `supported:false` → neden + metrik listesi ad aramasıyla sürer +
+  Sistem › Cardinality bağlantısı. URL: `dq`, `dkind`, `dmatch`, `dlabel`, `dsvc`. Eski katalog kodu (`Metrics.tsx`
+  gövdesi, `pages/metricsCatalog.ts` + test) silindi; `Metrics.tsx` yalnız kabuğu çizer (inline stil 11 → 0). Pinler:
+  errorLeg girdisi yeni eve (DiscoverTab), Pager / SearchField benimseme ve rowKeyboard / navBoundary listelerinden
+  Metrics düştü (katalog sayfalaması ve satır klavye yardımcısı yok; DataTable `getRowHref`). Sapmalar: liste ilk 50
+  (sayfalama yok — tavan `cardinalityTopNMax`); "gizli · pipeline kuralı" satırı yok (ad zarfı gizli adları
+  `includeHidden=1` ile yalnız admin'e verir, istemci bu bayrağı henüz göndermiyor); zaman seçici gün seçmez (kardinalite
+  bugünün; sunucu `date` ≤ bugün).

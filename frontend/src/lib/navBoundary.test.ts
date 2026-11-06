@@ -93,7 +93,8 @@ describe('sınır kanalı BAĞLI mı', () => {
     // Orada "sonraki sayfa" listenin sonuna EKLEME yapar; odağı ilk
     // satıra atmak operatörü okuduğu yerden koparıp listenin en
     // başına fırlatırdı. Sınır kanalı sayfa TAKASI için var.
-    for (const f of ['pages/Logs.tsx', 'pages/Metrics.tsx', 'pages/service/ServiceSignalTabs.tsx']) {
+    // v0.10.1865 — pages/Metrics.tsx düştü (katalog sayfalaması kalktı, Keşif ilk 50).
+    for (const f of ['pages/Logs.tsx', 'pages/service/ServiceSignalTabs.tsx']) {
       expect(read(f), `${f} birikimli — onPageBoundary anlamsız`)
         .not.toMatch(/onPageBoundary/);
     }

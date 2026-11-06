@@ -21,8 +21,9 @@ const SRC = resolve(__dirname, '..', '..');
 const read = (rel: string) => stripTsComments(readFileSync(join(SRC, rel), 'utf8'));
 
 // v0.9.1012'de dönüştürülen yüzeyler.
+// v0.10.1865 — 'pages/Metrics.tsx' düştü: katalog Keşif sekmesine geçti
+// (shadcn Input, components/ui DONUK — yeni importçu yok).
 const ADOPTED = [
-  'pages/Metrics.tsx',
   'pages/Inbox.tsx',
   'pages/Dashboards.tsx',
   'pages/Endpoints.tsx',

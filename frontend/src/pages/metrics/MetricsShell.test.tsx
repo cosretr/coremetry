@@ -45,6 +45,8 @@ vi.mock('@/lib/api', async (importOriginal) => {
         return Promise.resolve({ series, meta: { source: 'vm', tookMs: 142, seriesShown: 8, seriesTotal: m.total, truncated: true, partial: false, stepSec: 15, limit: 8, rank: 'avg' } });
       },
       clusters: () => Promise.resolve([]),
+      metricsDiscoverCardinality: () => Promise.resolve({ supported: false, reason: 'Yalnız VictoriaMetrics' }),
+      metricNamesSearch: () => Promise.resolve({ names: [], total: 0, hasMore: false }),
     },
   };
 });
@@ -72,7 +74,7 @@ async function mount(url: string) {
     root!.render(
       <QueryClientProvider client={qc}>
         <MemoryRouter initialEntries={[url]}>
-          <MetricsShell discover={<div>katalog</div>} />
+          <MetricsShell />
           <Loc />
         </MemoryRouter>
       </QueryClientProvider>);
@@ -120,7 +122,7 @@ describe('MetricsShell', () => {
   it('?tab=discover Keşif içeriğini gösterir; ?editor=0 oraya taşınır', async () => {
     await mount('/metrics?editor=0');
     expect(new URLSearchParams(loc).get('tab')).toBe('discover');
-    expect(document.body.textContent).toContain('katalog');
+    expect(document.body.textContent).toContain('Kardinalite yok: Yalnız VictoriaMetrics');
   });
 
   it('kod kipi (2.4): Çalıştır → istek + geçmişe bir kez yazılır; hata konumu operatörün metnine', async () => {

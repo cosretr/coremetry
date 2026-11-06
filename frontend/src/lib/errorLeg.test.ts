@@ -43,7 +43,8 @@ const CONVERTED: Array<[file: string, release: string, what: string]> = [
   ['pages/Alerts.tsx',                       'v0.9.858', '"No alert rules" + "+ New rule" CTA'],
   ['pages/Slos.tsx',                         'v0.9.858', '"No SLOs defined"'],
   ['pages/Monitors.tsx',                     'v0.9.858', '"No monitors yet"'],
-  ['pages/Metrics.tsx',                      'v0.9.858', 'metrik kataloğu "No metrics match"'],
+  // v0.10.1865 — /metrics kataloğu Keşif sekmesine taşındı; sözleşme yeni evinde.
+  ['pages/metrics/DiscoverTab.tsx',          'v0.9.858', 'metrik kataloğu "No metrics match"'],
   ['pages/Traces.tsx',                       'v0.9.858', 'aggregate: BOŞ EKRAN (spinner yok, mesaj yok)'],
   ['pages/Service.tsx',                      'v0.9.858', 'sayfanın sessizce soyulması'],
   ['pages/settings/ChannelsTab.tsx',         'v0.9.858', '"No channels yet"'],

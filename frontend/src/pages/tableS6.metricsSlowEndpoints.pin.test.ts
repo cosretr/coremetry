@@ -15,15 +15,14 @@ const tdWith = (src: string, needle: string) => {
   return hits[0].tag;
 };
 
-describe('Metrics — Services hücresi `num` (T4)', () => {
-  const src = read('./Metrics.tsx');
-  it('sayı hücresi num sınıfıyla, satır içi tabular-nums yok', () => {
-    const td = tdWith(src, 'm.serviceCount');
-    expect(td).toContain('className="num"');
-    expect(td).not.toMatch(/\sstyle=\{/);
-  });
-  it('kolon numeric kalır (başlık ve hücre aynı hizada)', () => {
-    expect(src).toMatch(/id: 'svcs', label: 'Services',[^\n]*numeric: true/);
+// v0.10.1865 — Metrics kataloğu Keşif sekmesine (pages/metrics/DiscoverTab)
+// geçti: sayı kolonları coremetry DataTable `numeric` (hizayı primitif basar).
+describe('Metrics Keşif — sayı kolonları numeric (T4)', () => {
+  const src = read('./metrics/DiscoverTab.tsx');
+  it('Seri / Pay / Değer kolonları numeric', () => {
+    expect(src).toMatch(/id: 'series', label: 'Seri',[^\n]*numeric: true/);
+    expect(src).toMatch(/id: 'share', label: 'Pay',[^\n]*numeric: true/);
+    expect(src).toMatch(/id: 'values', label: 'Değer',[^\n]*numeric: true/);
   });
 });
 

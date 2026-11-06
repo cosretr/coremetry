@@ -32,7 +32,8 @@ const OFFSET = [
 ];
 const CURSOR = [
   'pages/Logs.tsx',
-  'pages/Metrics.tsx',
+  // v0.10.1865 — 'pages/Metrics.tsx' düştü: katalog Keşif sekmesine geçti, liste
+  // seri sayısına göre ilk 50 (sunucu kesimi + arama), sayfalama yok.
   'pages/service/ServiceSignalTabs.tsx',
 ];
 const ADOPTED = [...OFFSET, ...CURSOR];

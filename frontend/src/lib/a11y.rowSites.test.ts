@@ -74,7 +74,8 @@ describe('clickable rows use rowActivation (D3)', () => {
     for (const f of ['components/DBQueriesPanel.tsx', 'features/anomalies/AnomaliesPage.tsx', 'pages/AIObservability.tsx', 'pages/AdminElastic.tsx', 'pages/service/ServicePodsTable.tsx', 'pages/Clusters.tsx', 'pages/SlowQueries.tsx', 'components/LogPatternsPanel.tsx']) {
       expect(readFileSync(join(root, f), 'utf8')).toMatch(ROW_ACTIVATION_SPREAD);
     }
-    for (const f of ['components/chart/StatsLegend.tsx', 'components/viz/TimeSeriesPanel.tsx', 'pages/Metrics.tsx']) {
+    // v0.10.1865 — pages/Metrics.tsx düştü: Keşif tablosunun satırı gerçek bağlantı (getRowHref).
+    for (const f of ['components/chart/StatsLegend.tsx', 'components/viz/TimeSeriesPanel.tsx']) {
       expect(readFileSync(join(root, f), 'utf8')).toContain('rowKeyboard(');
     }
   });
@@ -166,8 +167,9 @@ describe('navigating rows are real links (R4, v0.10.1356)', () => {
     expect(offenders).toEqual([]);
     // R4'ün 6 sitesi + TracesResult + OperationsTable + Metrics (9) + v0.10.1414'ün
     // 8'i (TopEndpoints, DetailsEndpoints, Hosts, External, Databases ifade,
-    // DependenciesTable, Clusters pod, Inbox).
-    expect(checked).toBeGreaterThanOrEqual(17);
+    // DependenciesTable, Clusters pod, Inbox). v0.10.1865 — Metrics katalog sitesi
+    // düştü (Keşif tablosu DataTable getRowHref: gerçek bağlantı primitifte) → 16.
+    expect(checked).toBeGreaterThanOrEqual(16);
   });
 
   it('the six R4 sites use rowClickHandlers + a Link guarded by stopRowClick', () => {
