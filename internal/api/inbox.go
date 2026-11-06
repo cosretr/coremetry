@@ -291,7 +291,11 @@ func (s *Server) inboxView(q url.Values) (string, func(ctx context.Context) (any
 	//
 	// This is the same lie the search filter told before v0.9.318, in the one
 	// place that hurts most: the default view.
-	kinds := normalizeInboxSet(q.Get("kind"), inboxKindsAll)
+	// v0.10.1827 — Incidents ana anahtarı istek başına BİR kez okunur; tür
+	// sözlüğü, incident kaynağı, katlama ve önbellek anahtarı aynı değeri
+	// kullanır (inbox_incidents_retired.go).
+	incidentsOn := chstore.IncidentsEnabled()
+	kinds := inboxKindsFromQuery(q.Get("kind"), incidentsOn)
 	prios := normalizeInboxSet(q.Get("prio"), inboxPriosAll)
 	cats := normalizeInboxSet(q.Get("cat"), chstore.ProblemCategories) // v0.10.706
 	// v0.9.525 (operatör isteği: "son 1 gün veya 2 saat seçebilmek
@@ -338,7 +342,7 @@ func (s *Server) inboxView(q url.Values) (string, func(ctx context.Context) (any
 	// empty page.
 	// v0.10.949 — floorDefault anahtarda: varsayılan 5 (istisnalı) ile açık
 	// ?minOcc=5 (istisnasız) AYNI minOcc'u taşır ama farklı satırlar döner.
-	cacheKey := inboxListKey(statusFilter, service, search, ownerTeam, sreTeam, team, env, limit, sortID, sortDir, minOcc, kinds, prios, subject) + ":since=" + since + ":cat=" + strings.Join(cats, ",") + ":floorDefault=" + strconv.FormatBool(floorDefault)
+	cacheKey := inboxListKey(statusFilter, service, search, ownerTeam, sreTeam, team, env, limit, sortID, sortDir, minOcc, kinds, prios, subject) + ":since=" + since + ":cat=" + strings.Join(cats, ",") + ":floorDefault=" + strconv.FormatBool(floorDefault) + ":inc=" + strconv.FormatBool(incidentsOn)
 	// v0.9.228 — 10s → 15s. v0.9.220 gave the inbox list a 30s poll; at a 10s
 	// TTL the SWR window is ttl×staleFactor = 30s and the Redis entry expires
 	// at 30s too, so each poll arrived at age = 30s + previous latency —
@@ -359,7 +363,7 @@ func (s *Server) inboxView(q url.Values) (string, func(ctx context.Context) (any
 	narrowed := service != "" || search != "" || env != "" || ownerTeam != "" || sreTeam != "" ||
 		team != "" ||
 		sortID != inboxSortDefault || sortDir != "desc" ||
-		len(kinds) < len(inboxKindsAll) || len(prios) < len(inboxPriosAll)
+		len(kinds) < len(inboxKindsAllFor(incidentsOn)) || len(prios) < len(inboxPriosAll)
 	srcLimit := inboxSourceLimit(limit, narrowed)
 
 	return cacheKey, func(ctx context.Context) (any, error) {
@@ -772,7 +776,8 @@ func (s *Server) inboxView(q url.Values) (string, func(ctx context.Context) (any
 		// (muting a group is a different verb from resolving an incident).
 		// v0.9.1342 — db şeridinde de atlanır (anomalilerle aynı gerekçe:
 		// incident'ın öznesi servistir).
-		if statusFilter != "ignored" && subject == inboxSubjectService {
+		// v0.10.1827 — Incidents emekliyken kaynak hiç okunmaz.
+		if inboxReadsIncidents(incidentsOn, statusFilter, subject) {
 			incLimit := inboxEffectiveLimit(srcLimit, inboxIncStoreMax)
 			incs, err := s.store.ListIncidents(ctx, chstore.IncidentFilter{
 				NotStatuses: pickExcludedStatuses(statusFilter), Limit: incLimit,
@@ -951,7 +956,10 @@ func (s *Server) inboxView(q url.Values) (string, func(ctx context.Context) (any
 		// satırları incident satırına katlanır: görünüm öncelikleri (yukarıda)
 		// kesinleştikten SONRA (en yükseği taşınsın), sayaçlardan ÖNCE (çipler
 		// gizlenen satırı saymasın). inbox_incident_fold.go.
-		items = s.foldInboxIncidents(ctx, items)
+		// v0.10.1827 — Incidents emekliyken katlama yok: her Problem kendi satırı.
+		if incidentsOn {
+			items = s.foldInboxIncidents(ctx, items)
+		}
 
 		// v0.9.330 — facet counts are computed HERE, over everything that
 		// survived the row-level narrows and BEFORE the kind/priority facets
@@ -1099,7 +1107,14 @@ func (s *Server) inboxCount(w http.ResponseWriter, r *http.Request) {
 // gövde şekli (scanCapped; problems/anomalies/incidents kırılımı kalktı)
 // değişti; kayan dağıtımda eski sürümün toplamı yeni sözleşmeymiş gibi
 // servis edilmesin. Önek "inbox:count" aynen (mutasyon düşürmesi).
-func inboxCountKey(env string) string { return "inbox:count:v2:env=" + env }
+func inboxCountKey(env string) string { return inboxCountKeyFor(env, chstore.IncidentsEnabled()) }
+
+// inboxCountKeyFor — SAF (v0.10.1827): rozet anahtarı Incidents ana
+// anahtarını taşır (rozet varsayılan görünümün total'ı; tür kümesi ve
+// katlama anahtara bağlı). :v3: — şekil aynı, satır kümesi değişti.
+func inboxCountKeyFor(env string, incidentsOn bool) string {
+	return "inbox:count:v3:inc=" + strconv.FormatBool(incidentsOn) + ":env=" + env
+}
 
 // inboxDefaultPageLimit — Problems sayfasının (/inbox) istediği satır tavanı
 // (Inbox.tsx `limit: 300`). Rozet tavandan ÖNCEKİ `total`ı okur; tavan yalnız
@@ -1117,7 +1132,9 @@ func inboxBadgeQuery(env string) url.Values {
 	q.Set("limit", strconv.Itoa(inboxDefaultPageLimit))
 	q.Set("sort", "firstSeen")
 	q.Set("dir", "desc")
-	q.Set("kind", strings.Join(inboxKindsDefault, ",")) // v0.10.1796 — sayfa varsayılanıyla aynı
+	// v0.10.1796 — sayfa varsayılanıyla aynı; v0.10.1827 — Incidents ana
+	// anahtarına göre (kapalıyken problem + anomaly).
+	q.Set("kind", strings.Join(inboxKindsDefaultFor(chstore.IncidentsEnabled()), ","))
 	q.Set("prio", "P1")
 	if env != "" {
 		q.Set("env", env)
@@ -1261,7 +1278,10 @@ func inboxListKey(status, service, search, ownerTeam, sreTeam, team, env string,
 	// aynı kind dizisini üretir. Ayrı bir alan olmasaydı ikisi TEK cache
 	// girdisini paylaşır ve biri diğerinin satırlarını görürdü — v0.5.187
 	// çapraz-zehirlenmesinin birebir şekli.
-	return fmt.Sprintf("inbox:v10:status=%s:svc=%s:q=%s:owner=%s:sre=%s:team=%s:env=%s:limit=%d:sort=%s:dir=%s:minOcc=%d:kind=%s:prio=%s:subject=%s",
+	// :v11: — v0.10.1827 Incidents ana anahtarı satır kümesini (incident
+	// kaynağı + katlama) değiştirir; anahtar durumu çağıranda `:inc=` ekiyle
+	// anahtara girer, sürüm eski girdiyi yeni sözleşmeymiş gibi sunmasın.
+	return fmt.Sprintf("inbox:v11:status=%s:svc=%s:q=%s:owner=%s:sre=%s:team=%s:env=%s:limit=%d:sort=%s:dir=%s:minOcc=%d:kind=%s:prio=%s:subject=%s",
 		status, service, search, ownerTeam, sreTeam, chstore.NormTeamName(team), env, limit, sortID, sortDir, minOcc,
 		strings.Join(sortedCopyOf(kinds), "+"), strings.Join(sortedCopyOf(prios), "+"), subject)
 }

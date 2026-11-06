@@ -21,10 +21,15 @@ const PRIO_ALL = arr('PRIO_ALL');
 const PRIO_DEFAULT = arr('PRIO_DEFAULT');
 const KIND_ALL = arr('KIND_ALL');
 const KIND_DEFAULT = arr('KIND_DEFAULT');
+// v0.10.1827 — Incidents emekliyken Inbox'ın kullandığı sözlük + varsayılan.
+const KIND_ALL_RETIRED = arr('KIND_ALL_RETIRED');
+const KIND_DEFAULT_RETIRED = arr('KIND_DEFAULT_RETIRED');
 
 // Inbox.tsx'in URL → istek çözümü (statusFilter / prioSet / kindSet /
 // serviceFilter / useUrlEnv) — aynı codec'ler, aynı sabitler.
-function inboxScope(href: string, storedEnv: string | null) {
+function inboxScope(href: string, storedEnv: string | null, incidentsOn = true) {
+  const kAll = incidentsOn ? KIND_ALL : KIND_ALL_RETIRED;
+  const kDef = incidentsOn ? KIND_DEFAULT : KIND_DEFAULT_RETIRED;
   const sp = new URL(href, 'http://x').searchParams;
   const st = sp.get('status');
   return {
@@ -32,7 +37,7 @@ function inboxScope(href: string, storedEnv: string | null) {
     status: st === 'all' ? 'all' : st === 'ignored' ? 'ignored' : 'open',
     service: sp.get('service') ?? '',
     prio: decodeCsvSet(sp.get('prio'), PRIO_ALL, PRIO_DEFAULT),
-    kind: decodeCsvSet(sp.get('kind'), KIND_ALL, KIND_DEFAULT),
+    kind: decodeCsvSet(sp.get('kind'), kAll, kDef),
     env: resolveEnv(sp.get('env'), storedEnv),
     q: sp.get('q') ?? '', since: sp.get('since') ?? '', minOcc: sp.get('minOcc'),
   };
@@ -40,9 +45,9 @@ function inboxScope(href: string, storedEnv: string | null) {
 
 // Şeridin isteği: api.inbox({ service, status: 'open', limit: 20 }) — sunucu
 // varsayılanları: tüm öncelikler/türler, env yok, varsayılan taban.
-const stripScope = (service: string) => ({
+const stripScope = (service: string, incidentsOn = true) => ({
   path: '/inbox', status: 'open', service,
-  prio: ['P1', 'P2', 'P3'], kind: [...KIND_ALL], env: '', q: '', since: '', minOcc: null,
+  prio: ['P1', 'P2', 'P3'], kind: [...(incidentsOn ? KIND_ALL : KIND_ALL_RETIRED)], env: '', q: '', since: '', minOcc: null,
 });
 
 describe('serviceInboxHref ↔ Inbox süzgeci gidiş-dönüşü', () => {
@@ -52,8 +57,17 @@ describe('serviceInboxHref ↔ Inbox süzgeci gidiş-dönüşü', () => {
     ['yapışkan env prod', 'production'],
   ])('%s → şeridin kapsamı', (_n, stored) => {
     for (const svc of ['orders-api', 'callcenter-ivr-prod', 'a b/c?d&e']) {
-      expect(inboxScope(serviceInboxHref(svc), stored)).toEqual(stripScope(svc));
+      for (const on of [true, false]) {
+        expect(inboxScope(serviceInboxHref(svc, on), stored, on)).toEqual(stripScope(svc, on));
+      }
     }
+  });
+
+  it('v0.10.1827 — emekliyken link incident türü yazmaz; eski ?kind=incident varsayılana düşer', () => {
+    expect(serviceInboxHref('orders-api', false)).not.toContain('incident');
+    expect(serviceInboxHref('orders-api', true)).toContain('incident');
+    expect(inboxScope('/inbox?kind=incident', null, false).kind).toEqual(KIND_DEFAULT_RETIRED);
+    expect(KIND_DEFAULT_RETIRED).toEqual(['problem', 'anomaly']);
   });
 
   it('eski link (?service=&status=open) bu kapsamı VERMİYORDU — hata sınıfı pinli', () => {
@@ -67,8 +81,8 @@ describe('serviceInboxHref ↔ Inbox süzgeci gidiş-dönüşü', () => {
   it('şerit ve servis haritası çekmecesi linki tek yardımcıdan kurar', () => {
     const strip = readFileSync(resolve(__dirname, '../components/ServiceAttentionStrip.tsx'), 'utf8');
     const drawer = readFileSync(resolve(__dirname, '../components/ServiceMapNodeDrawer.tsx'), 'utf8');
-    expect(strip).toContain('const inboxHref = serviceInboxHref(service);');
-    expect(drawer).toContain('to={serviceInboxHref(service)}');
+    expect(strip).toContain('const inboxHref = serviceInboxHref(service, incidentsOn);');
+    expect(drawer).toContain('to={serviceInboxHref(service, incidentsOn)}');
     expect(strip + drawer).not.toMatch(/`\/inbox\?service=/);
     // Şerit Inbox'ın triage görünümünü uygular (noise imzaları gizli).
     expect(strip).toContain("filterByVerdictView(q.data.items, verdictIndex(verdictsQ.data?.verdicts), 'triage')");

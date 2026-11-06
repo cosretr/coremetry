@@ -46,7 +46,8 @@ vi.mock('@/lib/api', () => {
   };
 });
 vi.mock('@/components/AuthProvider', () => ({
-  useAuth: () => ({ user: { username: 'op', email: 'op@x', role: 'editor' }, loading: false }),
+  // v0.10.1827 — katlanmış incident satırı sınanıyor: Incidents ana anahtarı AÇIK.
+  useAuth: () => ({ user: { username: 'op', email: 'op@x', role: 'editor', features: { incidents: true } }, loading: false }),
 }));
 vi.mock('@/features/anomalies/ProblemsSection', () => ({
   ProblemsSection: () => null,

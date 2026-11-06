@@ -81,14 +81,28 @@ func badgeMixedFixture() ([]InboxItem, map[string][]string) {
 // inbox_scan_test pinleriyle sabit.
 func inboxDefaultViewRows(t *testing.T, items []InboxItem, attached map[string][]string, q url.Values) ([]InboxItem, int) {
 	t.Helper()
-	kinds := normalizeInboxSet(q.Get("kind"), inboxKindsAll)
+	// v0.10.1827 — inboxView ile aynı: tür sözlüğü + katlama Incidents ana
+	// anahtarına bağlı (kapalıyken incident kaynağı da okunmaz → satır yok).
+	incidentsOn := chstore.IncidentsEnabled()
+	kinds := inboxKindsFromQuery(q.Get("kind"), incidentsOn)
 	prios := normalizeInboxSet(q.Get("prio"), inboxPriosAll)
 	cats := normalizeInboxSet(q.Get("cat"), chstore.ProblemCategories)
 	sortID, sortDir := normalizeInboxSort(q.Get("sort"), q.Get("dir"))
 	limit := parseInt(q.Get("limit"), 200)
 
+	if !incidentsOn {
+		kept := items[:0]
+		for _, it := range items {
+			if it.Kind != "incident" {
+				kept = append(kept, it)
+			}
+		}
+		items = kept
+	}
 	forceNonExceptionP3(items)
-	items = foldIncidentProblems(items, attached)
+	if incidentsOn {
+		items = foldIncidentProblems(items, attached)
+	}
 	items = applyInboxFacets(items, kinds, prios)
 	for i := range items {
 		if items[i].Category == "" {
@@ -100,6 +114,7 @@ func inboxDefaultViewRows(t *testing.T, items []InboxItem, attached map[string][
 }
 
 func TestInboxBadgeEqualsDefaultListRows(t *testing.T) {
+	withIncidentsOn(t, true) // v0.10.1827 — açık anahtar: v0.10.1796 davranışı aynen
 	items, attached := badgeMixedFixture()
 	rows, total := inboxDefaultViewRows(t, items, attached, inboxBadgeQuery(""))
 	// v0.10.1796 — varsayılan tür problem+anomaly+incident: P1 exception
@@ -137,10 +152,31 @@ func TestInboxBadgeEqualsDefaultListRows(t *testing.T) {
 // Rozet sayfanın PARAMETRESİZ açılışıyla aynı önbellek girdisini okur:
 // aynı anahtar = aynı derleme = aynı satır kümesi.
 func TestInboxBadgeSharesDefaultListKey(t *testing.T) {
+	for _, on := range []bool{true, false} {
+		t.Run(map[bool]string{true: "incidents-açık", false: "incidents-emekli"}[on], func(t *testing.T) {
+			withIncidentsOn(t, on)
+			kind := "problem,anomaly" // v0.10.1827 KIND_DEFAULT_RETIRED
+			if on {
+				kind = "problem,anomaly,incident" // v0.10.1796 KIND_DEFAULT
+			}
+			badgeSharesDefaultListKey(t, kind)
+		})
+	}
+	withIncidentsOn(t, true)
+	on, _ := (&Server{}).inboxView(inboxBadgeQuery(""))
+	chstore.SetIncidentsEnabled(false)
+	off, _ := (&Server{}).inboxView(inboxBadgeQuery(""))
+	if on == off {
+		t.Fatal("ana anahtarın iki durumu aynı önbellek girdisini paylaşmamalı")
+	}
+}
+
+func badgeSharesDefaultListKey(t *testing.T, kind string) {
+	t.Helper()
 	s := &Server{}
 	page := url.Values{
 		"status": {"open"}, "limit": {"300"}, "sort": {"firstSeen"}, "dir": {"desc"},
-		"kind": {"problem,anomaly,incident"}, "prio": {"P1"}, "subject": {"service"}, // v0.10.1796 KIND_DEFAULT
+		"kind": {kind}, "prio": {"P1"}, "subject": {"service"},
 	}
 	pageKey, _ := s.inboxView(page)
 	badgeKey, _ := s.inboxView(inboxBadgeQuery(""))
@@ -171,6 +207,7 @@ func TestInboxBadgeQueryMatchesPageDefaults(t *testing.T) {
 		"const PRIO_DEFAULT = ['P1'] as const;",
 		"const SORT_DEFAULT = { id: 'firstSeen', dir: 'desc' as const };",
 		"const KIND_DEFAULT: readonly InboxKind[] = ['problem', 'anomaly', 'incident'];", // v0.10.1796
+		"const KIND_DEFAULT_RETIRED: readonly InboxKind[] = ['problem', 'anomaly'];",     // v0.10.1827
 		"limit: 300,",
 	} {
 		if !strings.Contains(src, want) {
@@ -185,10 +222,14 @@ func TestInboxBadgeQueryMatchesPageDefaults(t *testing.T) {
 }
 
 // :v2: — count'un anlamı değişti; önek mutasyon düşürmesi için aynen kalır.
+// :v3: — v0.10.1827 Incidents ana anahtarı anahtarda (iki durum ayrı girdi).
 func TestInboxCountKeyBumpedUnderPrefix(t *testing.T) {
 	k := inboxCountKey("prod")
-	if !strings.HasPrefix(k, "inbox:count:v2:") {
-		t.Fatalf("rozet anahtarı sürümlenmeli (:v2:): %q", k)
+	if !strings.HasPrefix(k, "inbox:count:v3:") {
+		t.Fatalf("rozet anahtarı sürümlenmeli (:v3:): %q", k)
+	}
+	if inboxCountKeyFor("prod", true) == inboxCountKeyFor("prod", false) {
+		t.Fatal("rozet anahtarı Incidents ana anahtarını taşımalı")
 	}
 	if !strings.HasPrefix(k, inboxListCachePrefix) {
 		t.Fatalf("rozet anahtarı önek düşürmesinin dışında: %q", k)

@@ -124,6 +124,12 @@ const KIND_ALL: readonly InboxKind[] = ['problem', 'exception', 'httperror', 'an
 // incident; exception ve httperror çipleri sayılarıyla ekranda kalır, tek
 // tıkla açılır ve ?kind= ile linke biner (v0.9.417 görünürlük ruhu).
 const KIND_DEFAULT: readonly InboxKind[] = ['problem', 'anomaly', 'incident'];
+// v0.10.1827 — Incidents emekliyken (kabuk bayrağı user.features.incidents
+// kapalı; operatör kararı 2026-11-05) `incident` türü sözlükten, çiplerden ve
+// varsayılandan çıkar; eski ?kind=incident linki codec'te varsayılana düşer.
+// Sunucu ikizi inbox_incidents_retired.go (rozet aynı kümeyi sayar).
+const KIND_ALL_RETIRED: readonly InboxKind[] = ['problem', 'exception', 'httperror', 'anomaly'];
+const KIND_DEFAULT_RETIRED: readonly InboxKind[] = ['problem', 'anomaly'];
 // v0.9.443 — 'httperror': error.type fallback'inin ürettiği çıplak
 // durum-kodu grupları ("404"). Varsayılan facet'te KAPALI (KIND_DEFAULT
 // değişmedi) — bankada beklenen istemci hataları triage'ı boğmasın;
@@ -253,6 +259,12 @@ const DEFAULT_MIN_OCC = 5;
 
 export default function InboxPage() {
   const navigate = useNavigate();
+  // v0.10.1827 — tür sözlüğü + varsayılan Incidents ana anahtarına bağlı
+  // (kabuk bayrağı user.features.incidents; yoksa emekli).
+  const { user } = useAuth();
+  const incidentsOn = user?.features?.incidents === true;
+  const kindAll = incidentsOn ? KIND_ALL : KIND_ALL_RETIRED;
+  const kindDefault = incidentsOn ? KIND_DEFAULT : KIND_DEFAULT_RETIRED;
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   // "/" focuses this filter via the shared table keyboard-nav.
@@ -277,8 +289,8 @@ export default function InboxPage() {
   const catSet = useMemo(() => new Set(decodeCsvSet(rawCat, INBOX_CAT_ALL, INBOX_CAT_ALL)), [rawCat]);
   const prioSet = useMemo(() => new Set(decodeCsvSet(rawPrio, PRIO_ALL, PRIO_DEFAULT)), [rawPrio]);
   const kindSet = useMemo(
-    () => new Set(decodeCsvSet(rawKind, KIND_ALL, KIND_DEFAULT) as InboxKind[]),
-    [rawKind]);
+    () => new Set(decodeCsvSet(rawKind, kindAll, kindDefault) as InboxKind[]),
+    [rawKind, kindAll, kindDefault]);
   const serviceFilter = searchParams.get('service') ?? '';
   // v0.9.251 — the search box drives `q` (service + title + source),
   // not `service`. `service` is still read so an older shared link
@@ -392,7 +404,6 @@ export default function InboxPage() {
   const openDetailParam = readInboxDetail(searchParams);
   const problemParam = openDetailParam?.param === 'problem' ? openDetailParam.id : null;
   const anomalyParam = openDetailParam?.param === 'anomaly' ? openDetailParam.id : null;
-  const { user } = useAuth();
   const isAdmin = user?.role === 'admin' || user?.role === 'editor';
 
   // Single URL writer — replace:true + copy prev so foreign params (a future
@@ -419,15 +430,15 @@ export default function InboxPage() {
   const toggleKind = (k: InboxKind) => {
     const next = new Set(kindSet);
     if (next.has(k)) { if (next.size === 1) return; next.delete(k); } else next.add(k);
-    setParam('kind', encodeCsvSet(next, KIND_ALL, KIND_DEFAULT));
+    setParam('kind', encodeCsvSet(next, kindAll, kindDefault));
   };
   // v0.9.356 — "sadece" (1 tıkla izole; lejantların isolate jestiyle aynı)
   // ve grup başına "tümü". Solo, toggle'ın aksine tek değere İNER; tümü,
   // grubun tamamını seçer. İkisi de URL'e aynı codec'le yazar.
   const soloPrio = (p: string) => setParam('prio', encodeCsvSet(new Set([p]), PRIO_ALL, PRIO_DEFAULT));
   const allPrio = () => setParam('prio', encodeCsvSet(new Set(PRIO_ALL), PRIO_ALL, PRIO_DEFAULT));
-  const soloKind = (k: InboxKind) => setParam('kind', encodeCsvSet(new Set([k]), KIND_ALL, KIND_DEFAULT));
-  const allKind = () => setParam('kind', encodeCsvSet(new Set(KIND_ALL), KIND_ALL, KIND_DEFAULT));
+  const soloKind = (k: InboxKind) => setParam('kind', encodeCsvSet(new Set([k]), kindAll, kindDefault));
+  const allKind = () => setParam('kind', encodeCsvSet(new Set(kindAll), kindAll, kindDefault));
   // v0.10.706 — kategori çipi; varsayılan tümü (param silinir).
   const toggleCat = (c: string) => {
     const next = new Set(catSet);
@@ -716,7 +727,7 @@ export default function InboxPage() {
   // Ortam seçicisi pencere gibi genel kapsamdır, süzgeç sayılmaz. Tek bir
   // "hepsini temizle" eylemi yok → onClearFilters yok. Karşılaştırma sözlük
   // BOYUTUNA karşı (v0.9.323: tür listesi büyürken `< 3` literali kalmıştı).
-  const facetNarrowed = prioSet.size < PRIO_ALL.length || kindSet.size < KIND_ALL.length;
+  const facetNarrowed = prioSet.size < PRIO_ALL.length || kindSet.size < kindAll.length;
   const otherNarrowed = !!(serviceFilter || searchFilter || ownerFilter || sreFilter || teamFilter || sinceFilter);
   const inboxState: Omit<DataTableStateProps<InboxItem>, 'dt'> =
     data === undefined ? { kind: 'loading' }
@@ -896,7 +907,7 @@ export default function InboxPage() {
         <p style={{ color: 'var(--text2)', fontSize: 13, marginBottom: 14 }}>
           Everything needing a human — Problems (alert rules), open Exception
           groups, and active Anomaly detections. Default view:{' '}
-          <b>{PRIO_DEFAULT.join(' + ')}</b> only, {KIND_DEFAULT.map(k => KIND_LABEL[k]).join(' + ')},
+          <b>{PRIO_DEFAULT.join(' + ')}</b> only, {kindDefault.map(k => KIND_LABEL[k]).join(' + ')},
           newest first seen first. Click any row to open its detail page.
         </p>
 
@@ -993,7 +1004,7 @@ export default function InboxPage() {
               değiştirmeyen bir kontrol göstermek olurdu. */}
           {subjectLane === 'service' && (
             <FacetMultiSelect label="Tür"
-              options={KIND_ALL.map(k => ({
+              options={kindAll.map(k => ({
                 value: k, label: KIND_LABEL[k], count: counts[k] ?? 0 }))}
               selected={kindSet as Set<string>}
               onToggle={k => toggleKind(k as InboxKind)}

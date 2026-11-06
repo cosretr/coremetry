@@ -189,6 +189,12 @@ describe('attentionRows', () => {
   it('skips rows without a destination', () => {
     expect(attentionRows([item({ kind: 'problem' })]).rows).toHaveLength(0);
   });
+  // v0.10.1827 — Incidents emekliyken şerit incident satırı çizmez; açıkken aynen.
+  it('excludeIncidents drops incident rows only', () => {
+    const inc = item({ id: 'incident:i1', kind: 'incident', incident: { id: 'i1', severity: 'critical', status: 'open' } });
+    expect(attentionRows([inc, exc('f')]).rows.map(x => x.id)).toEqual(['incident:i1', 'exception:f']);
+    expect(attentionRows([inc, exc('f')], { excludeIncidents: true }).rows.map(x => x.id)).toEqual(['exception:f']);
+  });
 });
 
 // v0.10.1414 (tablo satırları gerçek link) — satır kararının bağlantı hâli.

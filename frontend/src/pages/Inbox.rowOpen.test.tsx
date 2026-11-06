@@ -31,7 +31,7 @@ const m = vi.hoisted(() => {
     addListener: () => {}, removeListener: () => {},
     addEventListener: () => {}, removeEventListener: () => {}, dispatchEvent: () => false,
   })) as unknown as typeof window.matchMedia;
-  return { items: [] as unknown[], calls: [] as Record<string, unknown>[] };
+  return { items: [] as unknown[], calls: [] as Record<string, unknown>[], incidents: true };
 });
 vi.mock('@/lib/api', () => {
   const stub: Record<string, (...a: unknown[]) => Promise<unknown>> = {
@@ -52,7 +52,8 @@ vi.mock('@/lib/api', () => {
   };
 });
 vi.mock('@/components/AuthProvider', () => ({
-  useAuth: () => ({ user: { username: 'op', email: 'op@x', role: 'editor' }, loading: false }),
+  // v0.10.1827 — incident satırları sınanıyor: Incidents ana anahtarı AÇIK.
+  useAuth: () => ({ user: { username: 'op', email: 'op@x', role: 'editor', features: { incidents: m.incidents } }, loading: false }),
 }));
 vi.mock('@/features/anomalies/ProblemsSection', () => ({
   ProblemsSection: () => null,
@@ -135,7 +136,7 @@ const queueHidden = (el: HTMLElement) => (el.querySelector('.page-body') as HTML
 // Çekmece kabuğu (ui/Drawer) DOM'da hiç olmamalı.
 const anyDrawer = (el: HTMLElement) => document.querySelector('[role="dialog"]') ?? el.querySelector('.drawer');
 
-beforeEach(() => { m.items = ROWS; m.calls = []; try { localStorage.clear(); } catch { /* jsdom */ } });
+beforeEach(() => { m.items = ROWS; m.calls = []; m.incidents = true; try { localStorage.clear(); } catch { /* jsdom */ } });
 afterEach(() => {
   act(() => { root?.unmount(); });
   host?.remove();
@@ -323,5 +324,26 @@ describe('Problems varsayılan isteği', () => {
     await settle();
     expect(params(el).get('prio')).toBe('P1,P2,P3');
     expect(last().prio).toBe('P1,P2,P3');
+  });
+});
+
+// v0.10.1827 — Incidents emekliyken (operatör kararı 2026-11-05): parametresiz
+// açılış ve eski ?kind=incident linki problem+anomaly ister, Tür süzgecinde
+// "Incidents" seçeneği yok.
+describe('Incidents emekliyken Problems türleri', () => {
+  const last = () => m.calls[m.calls.length - 1];
+  it('parametresiz /inbox → kind=problem,anomaly', async () => {
+    m.incidents = false;
+    await mount('/inbox');
+    expect(last().kind).toBe('problem,anomaly');
+  });
+  it('eski ?kind=incident linki hatasız varsayılana düşer', async () => {
+    m.incidents = false;
+    await mount('/inbox?kind=incident');
+    expect(last().kind).toBe('problem,anomaly');
+  });
+  it('açıkken varsayılan aynen problem,anomaly,incident', async () => {
+    await mount('/inbox');
+    expect(last().kind).toBe('problem,anomaly,incident');
   });
 });

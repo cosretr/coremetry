@@ -45,7 +45,9 @@ vi.mock('@/lib/api', () => ({
 vi.mock('@/components/Topbar', () => ({ Topbar: () => null }));
 vi.mock('@/components/SavedViewsBar', () => ({ SavedViewsBar: () => null }));
 vi.mock('@/components/AuthProvider', () => ({
-  useAuth: () => ({ user: { username: 'op', email: 'op@example.test', role: 'viewer' }, loading: false }),
+  // v0.10.1827 — Inbox incident satırı sınanıyor: Incidents ana anahtarı AÇIK.
+  useAuth: () => ({ user: { username: 'op', email: 'op@example.test', role: 'viewer', features: { incidents: true } }, loading: false }),
+  useIncidentsEnabled: () => true,
 }));
 vi.mock('@/lib/queries/dependencies', () => ({
   useDepTrends: () => ({ isPending: false, data: [] }),

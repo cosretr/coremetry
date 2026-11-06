@@ -130,7 +130,7 @@ func TestServiceAttentionStripQueryPinned(t *testing.T) {
 	if h := mcptools.ServiceInboxHref("orders-api"); h != "/inbox?service=orders-api&prio=P1,P2,P3&env=" {
 		t.Errorf("href %q", h)
 	}
-	if !strings.Contains(string(src), "serviceInboxHref(service)") {
+	if !strings.Contains(string(src), "serviceInboxHref(service, incidentsOn)") { // v0.10.1827
 		t.Error("şeridin bağlantısı değişti: mcptools.ServiceInboxHref'i aynı güncelle")
 	}
 }

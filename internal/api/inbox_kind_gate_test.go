@@ -69,9 +69,19 @@ func TestKindFacetGatesExpensiveSources(t *testing.T) {
 	// (kind kolonları yok). db şeridinde çekilselerdi de o şeritte SIFIR
 	// satır üretirlerdi — yani atlamak sayıyı değiştirmiyor, yalnız iki
 	// gereksiz sorguyu kaldırıyor.
+	// v0.10.1827 — incident kaynağının kapısı inboxReadsIncidents'e taşındı
+	// (Incidents ana anahtarı + aynı özne/ignored koşulu); yazım ikiye ayrıldı,
+	// kapı ikisini de AÇIKÇA sayar.
 	const subjectGate = `if statusFilter != "ignored" && subject == inboxSubjectService {`
-	if n := strings.Count(src, subjectGate); n != 2 {
-		t.Errorf("özne şerit kapısı %d kaynakta var, 2 bekleniyordu (anomaliler + incident'lar) — "+
+	if n := strings.Count(src, subjectGate); n != 1 {
+		t.Errorf("özne şerit kapısı %d kaynakta var, 1 bekleniyordu (anomaliler) — "+
 			"db şeridi servis özneli satırlar çekip atardı", n)
+	}
+	if !strings.Contains(src, "if inboxReadsIncidents(incidentsOn, statusFilter, subject) {") {
+		t.Error("incident kaynağı inboxReadsIncidents kapısından okunmalı")
+	}
+	helper := readSrc(t, "inbox_incidents_retired.go")
+	if !strings.Contains(helper, `return incidentsOn && statusFilter != "ignored" && subject == inboxSubjectService`) {
+		t.Error("inboxReadsIncidents özne şerit kapısını taşımalı")
 	}
 }

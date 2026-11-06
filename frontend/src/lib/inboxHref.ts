@@ -41,8 +41,12 @@ export function anomalyDetailHref(id: string): string {
 // Gidiş-dönüş testi: inboxHref.serviceLink.test.ts.
 export const SERVICE_INBOX_PRIO = 'P1,P2,P3';
 export const SERVICE_INBOX_KIND = 'problem,exception,httperror,anomaly,incident';
-export function serviceInboxHref(service: string): string {
-  return `/inbox?service=${encodeURIComponent(service)}&prio=${SERVICE_INBOX_PRIO}&kind=${SERVICE_INBOX_KIND}&env=`;
+// v0.10.1827 — Incidents emekliyken (kabuk bayrağı kapalı) link incident
+// türünü YAZMAZ: Inbox sözlüğünde yok, şerit de incident satırı göstermez.
+export const SERVICE_INBOX_KIND_RETIRED = 'problem,exception,httperror,anomaly';
+export function serviceInboxHref(service: string, incidentsOn: boolean): string {
+  const kind = incidentsOn ? SERVICE_INBOX_KIND : SERVICE_INBOX_KIND_RETIRED;
+  return `/inbox?service=${encodeURIComponent(service)}&prio=${SERVICE_INBOX_PRIO}&kind=${kind}&env=`;
 }
 
 export function inboxItemHref(it: InboxItem): string | null {
@@ -193,7 +197,8 @@ export const ATTENTION_CAP = 5;
 
 export function attentionRows(
   items: InboxItem[],
-  opts: { includeAnomalies?: boolean; cap?: number } = {},
+  // v0.10.1827 — excludeIncidents: Incidents emekliyken şerit incident satırı çizmez.
+  opts: { includeAnomalies?: boolean; excludeIncidents?: boolean; cap?: number } = {},
 ): AttentionRows {
   const cap = opts.cap ?? ATTENTION_CAP;
   let sloCount = 0;
@@ -201,6 +206,7 @@ export function attentionRows(
   for (const it of items) {
     if (isSloProblem(it)) { sloCount++; continue; }
     if (it.kind === 'anomaly' && !opts.includeAnomalies) continue;
+    if (it.kind === 'incident' && opts.excludeIncidents) continue;
     if (!inboxItemHref(it)) continue;
     kept.push(it);
   }

@@ -24,6 +24,7 @@ import { attentionRows, inboxItemHref, serviceInboxHref } from '@/lib/inboxHref'
 import { useProblemVerdicts } from '@/lib/queries';
 import { verdictIndex, filterByVerdictView } from '@/lib/problemVerdict';
 import { PriorityBadge } from '@/components/ui/PriorityBadge';
+import { useIncidentsEnabled } from '@/components/AuthProvider'; // v0.10.1827
 import type { InboxItem, Problem } from '@/lib/types';
 
 const KIND_LABEL: Record<InboxItem['kind'], string> = {
@@ -108,6 +109,8 @@ export function ServiceAttentionStrip({ service, fallbackProblems }: {
   // linkin açtığı listeden fazla sayardı. Kararlar okunamazsa dizin boş:
   // hiçbir satır gizlenmez (Inbox'la aynı güvenli taraf).
   const verdictsQ = useProblemVerdicts();
+  // v0.10.1827 — Incidents emekliyken incident satırı yok (sunucu da üretmez).
+  const incidentsOn = useIncidentsEnabled();
   if (q.isPending) return null;
 
   // api.inbox 204/boş gövdede null dönebilir — "yok" ile "okunamadı" ayrı.
@@ -115,9 +118,9 @@ export function ServiceAttentionStrip({ service, fallbackProblems }: {
   const items = !q.data
     ? fallbackProblems.filter(p => p.status === 'open').map(problemToItem)
     : filterByVerdictView(q.data.items, verdictIndex(verdictsQ.data?.verdicts), 'triage');
-  const { rows, hidden, sloCount } = attentionRows(items);
+  const { rows, hidden, sloCount } = attentionRows(items, { excludeIncidents: !incidentsOn });
   // v0.10.1508 — şeridin kapsamı linkte AÇIK (tüm öncelikler, tüm ortamlar).
-  const inboxHref = serviceInboxHref(service);
+  const inboxHref = serviceInboxHref(service, incidentsOn);
   const sloNote = sloCount > 0 && (
     <span className="svc-att-slo">
       <span className="svc-att-slo-ico">◉</span>

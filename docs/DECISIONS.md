@@ -12298,3 +12298,7 @@ sağlıklı çalışmıyor; anomaliler oluşsun, gerekirse Problem'e terfi olurl
   sonucu zaten atıyor), yaşam döngüsü bildirimi hiç gitmez, `POST /api/incidents` 410; arşiv hijyeni (PUT/ack/resolve/not,
   kademeli kapanış) açık ve sessiz. Durum FE'ye kabuk gövdesinden (`user.features.incidents`), polling yok. Anahtar TEK geri
   dönüş dikişi; yüzey başına ikinci anahtar yok. `/api/incidents` rotaları api.go'dan api_incidents.go'ya taşındı.
+- **v0.10.1827 — Problems listesi anahtarı izler.** Kapalıyken incident kaynağı okunmaz, katlama koşmaz (her Problem kendi
+  satırı), tür sözlüğü/varsayılanı problem+anomaly (`inbox_incidents_retired.go` + FE `KIND_*_RETIRED`); yalnız
+  `?kind=incident` taşıyan eski link TÜM türlere değil varsayılana düşer. Liste anahtarı `:inc=` + `inbox:v11:`, rozet
+  `inbox:count:v3:inc=`; servis şeridi incident satırı çizmez. Açıkken v0.10.1796 aynen (testler iki durumu pinler).

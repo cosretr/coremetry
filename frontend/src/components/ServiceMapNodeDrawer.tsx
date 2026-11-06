@@ -9,6 +9,7 @@ import { logsHref } from '@/lib/logsUrl';
 import { windowRangeParam } from '@/lib/urlState';
 import { fmtNum, fmtFixed } from '@/lib/utils';
 import { serviceInboxHref } from '@/lib/inboxHref'; // v0.10.1508 — şeritle aynı servis kapsamı
+import { useIncidentsEnabled } from '@/components/AuthProvider'; // v0.10.1827
 import type { TimeRange } from '@/lib/types';
 
 // ServiceMapNodeDrawer — v0.9.1112 (Faz 5 "harita salt görselden giriş
@@ -25,6 +26,7 @@ export function ServiceMapNodeDrawer({ service, range, fromNs, toNs, onClose }: 
   toNs: number;
   onClose: () => void;
 }) {
+  const incidentsOn = useIncidentsEnabled();
   const q = useQuery({
     queryKey: ['servicemap', 'node-red', service, fromNs, toNs],
     // name= substring eşleşmesi — birebir satırı istemci seçer (name'in
@@ -87,7 +89,7 @@ export function ServiceMapNodeDrawer({ service, range, fromNs, toNs, onClose }: 
                   <span style={{ color: 'var(--text3)' }}>Open problems</span>
                   <span>
                     <Link className="badge b-err" style={{ textDecoration: 'none' }}
-                      to={serviceInboxHref(service)}
+                      to={serviceInboxHref(service, incidentsOn)}
                       title="Inbox'ta bu servisin açık problemleri">
                       {s.openProblems}
                     </Link>
