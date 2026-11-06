@@ -170,6 +170,41 @@ export function BrandingTab() {
           placeholder={DEFAULT_BRANDING.oracleGroupLabel} maxLength={ORACLE_GROUP_LABEL_MAX}
           hint='Exceptions/Problems satırlarında, rozetinde, çipinde ve AI satırında "Oracle" kelimesinin yerine görünür.' />
 
+        {/* v0.10.1910 — Login sayfası (yeniden tasarım dilim 4, audit §5.7). Boş değer
+            varsayılandır: özet açık, söz KAPALI, topoloji isimsiz. Üç ayar `SelectField`
+            (repoda Switch yok; emsal: Rehberli tur). Mevcut kaydetme akışı aynı. */}
+        <div className="mt-1 flex flex-col gap-3 border-t border-(--border) pt-3">
+          <h3 className="m-0 text-[length:var(--fs-md)] font-semibold">Login sayfası</h3>
+          <Field label="Kurum adı" value={b.orgName ?? ''} maxLength={60}
+            onChange={e => set('orgName', e.target.value)}
+            placeholder="boşsa kartta ad gösterilmez"
+            hint="Login özet kartının başlığında görünür: “{kurum adı} OpenTelemetry metrikleri · son 24 saat”. En çok 60 karakter." />
+          <div className={ROW}>
+            <SelectField label="Özet paneli" className={WIDE}
+              value={b.loginSummary === 'off' ? 'off' : 'on'}
+              onChange={e => set('loginSummary', e.target.value)}
+              hint="Geniş ekranda giriş kartının yanında anonim günlük özet (span/trace/servis sayısı, HTTP grafiği, aktivite).">
+              <option value="on">Açık (varsayılan)</option>
+              <option value="off">Kapalı</option>
+            </SelectField>
+            <SelectField label="Günün sözü" className={WIDE}
+              value={b.loginQuote === 'on' ? 'on' : 'off'}
+              onChange={e => set('loginQuote', e.target.value)}
+              hint="Giriş kartının altında her gün değişen kısa söz. Varsayılan kapalı.">
+              <option value="off">Kapalı (varsayılan)</option>
+              <option value="on">Açık</option>
+            </SelectField>
+          </div>
+          <SelectField label="Topoloji arka planı" className="max-w-[320px]"
+            value={b.loginTopology === 'off' || b.loginTopology === 'named' ? b.loginTopology : 'anonymous'}
+            onChange={e => set('loginTopology', e.target.value)}
+            hint="İsimli kipte servis adları giriş yapmamış kişilere de görünür; isimsiz kipte yalnız şekil çizilir. Veri yoksa sentetik şekil çizilir.">
+            <option value="anonymous">İsimsiz (varsayılan)</option>
+            <option value="named">İsimli</option>
+            <option value="off">Kapalı</option>
+          </SelectField>
+        </div>
+
         <div className="flex items-end gap-2">
           <Field className="flex-1" label="Primary color (CSS — e.g. #4f46e5, rgb(79,70,229))"
             value={b.primaryColor ?? ''} onChange={e => set('primaryColor', e.target.value)}
