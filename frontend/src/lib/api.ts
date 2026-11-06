@@ -692,9 +692,12 @@ export const api = {
   // v0.10.1309 — `src`: PromQL editörünün ?src=vm|ch seçimi bu isteği de o
   // backend'e sabitler (öneri adları sorgunun koştuğu depodan gelsin); yoksa
   // sayfa URL'inin ?metricsrc= denemesi / kurulum varsayılanı.
-  metricNamesSearch: (service: string, q?: string, limit = 200, offset = 0, src?: import('./metricSource').MetricSourceParam) =>
+  // v0.10.1862 — opts: cluster kapsamı (sunucu VM'de extra_filters[]) +
+  // AbortSignal (Metrics Explorer seçicisi tuş başına önceki isteği iptal eder).
+  metricNamesSearch: (service: string, q?: string, limit = 200, offset = 0, src?: import('./metricSource').MetricSourceParam,
+    opts?: { cluster?: string; signal?: AbortSignal }) =>
     get<MetricNameSearchResult>(withMetricSource(
-      `/api/metrics/names?${qs({ service, q, limit, offset })}`, src)),
+      `/api/metrics/names?${qs({ service, q, limit, offset, cluster: opts?.cluster })}`, src), opts?.signal),
   // v0.10.1837 — Metrics Explorer'ın sayfa başına BİR kez okuduğu yetenek
   // belgesi (backend, dil, keşif bayrakları, tavanlar). Sunucu 30 sn önbellek.
   metricsCapabilities: (src?: import('./metricSource').MetricSourceParam) =>

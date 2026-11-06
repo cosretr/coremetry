@@ -12659,3 +12659,17 @@ Kaynak: `docs/metrics/metrics-explore-dashboards-audit.md` §7 Faz 2 (onaylı, �
   modelde yok); metrik adı çevrilmez (noktalı eski CH adı derlemede `{__name__="…"}`); eski `avg` bir histogram ADINDA
   sunucunun gözlem-ağırlıklı ortalamasıydı, yeni builder'da ham `avg` (VM'de histogram tabanı yok → boş): yer imi aynı
   soruyu açar, o tek durumda sayı aynı değildir. Sayfa henüz kullanmıyor (2.3).
+- **v0.10.1862 — `coremetry/metrics/QueryRow` + parçaları (2.2).** Satır anatomisi mockup `#qrowA` sırasıyla: harf ·
+  `MetricPicker` (sunucu araması `/api/metrics/names?limit=20&cluster=`, tür rozeti + "tahmini", birim, açıklama + tür
+  kaynağı; alt satır "N sonuçtan ilk 20 · kapsam") · kilitli kapsam çipi (✕ = tüm cluster'lar, S6) · süzgeç çipleri
+  (`FilterPopover`: etiket → işleç `= != =~ !~` → değer; öneriler `discover/labels|label-values`, CH'de `supported:false`
+  nedeni yazılır ve elle yazım çalışır) · fonksiyon menüsü (türe göre; "önerilen" ve sayaçta ham değer "önerilmez") ·
+  "sayaç → rate" notu · topla menüsü (yüzdelikte sabit `sum`) + `by` çipleri · lejant `{{etiket}}` · gizle (aria-pressed)
+  · ⋯ (Çoğalt / Sil). `FormulaRow`: ifade, birim, lejant, hata `role=alert`. `lib/metricsExplorer/compile.ts`: satır →
+  MetricsQL (sayaç `rate(x[$__rate_interval])`, increase `[$__interval]`, yüzdelik `histogram_quantile(φ, sum by (le,
+  vmrange, …) (rate(x_bucket[…])))` — sunucu builder'ının `vmrange` dersi, kimlik olmayan ad `{__name__="…"}`), formül
+  harfleri derlenmiş metinle değişir (hesap sunucuda), pencere yer tutucuları istemcide çözülür: `$__interval` = adım,
+  `$__rate_interval` = max(adım, 300 sn) (vmetrics `promLookbehindFloorSec`; VM'in `$__interval` kabulü doğrulanmadı,
+  audit §9 #5). Ortak açılır liste `PickList` (cmdk, 180 ms debounce + AbortSignal `useServerSearch`). `api.metricNamesSearch`
+  `opts{cluster, signal}` aldı. Inline style 0, ham element 0, `components/ui` importu 0 (testte statik tarama). Sayfa
+  henüz kullanmıyor.
