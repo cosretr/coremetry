@@ -331,7 +331,7 @@ func (s *Server) getMLReplay(w http.ResponseWriter, r *http.Request) {
 			src.Profile = ml.ServiceProfileFromRow(row).Profile
 		}
 		in, _ := ml.AssembleCardInput(src)
-		return map[string]any{"snapshot": snapOut, "related": others, "card": ml.BuildExplainCard(in)}, nil
+		return map[string]any{"snapshot": snapOut, "related": others, "card": ml.BuildExplainCard(in), "verdict": mlReplayVerdict(src.Event)}, nil
 	})
 }
 
@@ -340,6 +340,15 @@ const (
 	mlEventTTLWindow     = 31 * 24 * time.Hour // ml_events TTL 30 g
 	mlCardDeployLookback = 24 * time.Hour
 )
+
+// mlReplayVerdict — SAF: olay satırının etiketi (detay eylem kutusu viewer'a
+// da gösterir); etiketsiz ya da satırsız olay → nil (JSON null).
+func mlReplayVerdict(ev *chstore.MLEvent) map[string]any {
+	if ev == nil || ev.Verdict == "" {
+		return nil
+	}
+	return map[string]any{"verdict": ev.Verdict, "by": ev.VerdictBy, "at": ev.VerdictAt, "note": ev.Note}
+}
 
 // mlReplayKey — SAF: girdiler = olay id + kart saatlerinin dilimi. v2:
 // yanıt `card` taşır, snapshot null olabilir.

@@ -11983,7 +11983,9 @@ export interface MLSnapshot {
 }
 export interface MLSample { t: number; traceId?: string; body?: string; kind: 'span' | 'log' | string }
 /** v0.10.1843 — snapshot null: kayıt yok/düşmüş, kart canlı olay satırından. */
-export interface MLReplay { snapshot: MLSnapshot | null; related: MLSnapshot[]; card: ExplainCard }
+/** v0.10.1845 — olay satırının etiketi (anomaly_verdicts 'ml:'); yoksa null. */
+export interface MLReplayVerdict { verdict: 'anomaly' | 'not_anomaly' | string; by?: string; at?: number; note?: string }
+export interface MLReplay { snapshot: MLSnapshot | null; related: MLSnapshot[]; card: ExplainCard; verdict?: MLReplayVerdict | null }
 export interface MLGate { ok: boolean; reasons?: string[] }
 export interface MLBacktestDetector { detector: string; fired: number; tp: number; fp: number; unlabeled: number; positives: number; covered: number; precision: number; recall: number }
 export interface MLBacktestHit { detector: string; part: string; from: number; to: number; peakZ: number; label?: string }

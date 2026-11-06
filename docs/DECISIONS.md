@@ -12453,3 +12453,10 @@ Kaynak: `docs/anomaly/learning-loop-audit.md` §7, §10 Faz 2, §15, §17; onayl
   oturmuyor). Grafik yuvası token'larından (`--teal/--purple/--orange`) ayrı: seri paleti değişirse kimlik kaymaz.
   Dedektör → tür eşlemesi tek yerde (sunucu sözlüğüyle test pinli); rozet her zaman ikon (aria-hidden) + metin. Yalnız ML
   listesi (öncü "Sinyal" sütunu) ve olay sayfası başlığı; CoSRE kartı sonraki parti.
+- **v0.10.1845 — `/anomalies/ml/:id` düzeni mockup görünüm 2–4 sırasında.** Başlık çipleri (sinyal, servis linki, durum +
+  süre, profil, endpoint) → kalın özet → kart (`KeyValue`, mockup etiketleri) → olayın seyri (grafik motoru aynı) →
+  eylemler → kanıt (kayıttaki örnekler `DataTable` + bağlam referansları) → bağlam (aynı servisin ±2 sa kayıtları +
+  kayıttaki yayınlar, `DataTable`) → katlı "Teknik detay". ML olayı için elle terfi yolu YOK (`ml/promote.go` yalnız
+  ayarlı otomatik kopya, kapalı) → "Problem'e terfi ettir" çizilmedi; bugünkü "gerçek / değil" etiketi "Gerçek anomali" /
+  "Sorun değil" adıyla grafiğin altına taşındı, viewer etiketi görür (yanıtta `verdict`), düğmeler devre dışı. Liste:
+  Sinyal · Servis (link) · Ne oluyor · Başladı · süre + durum; satır detayı açar.

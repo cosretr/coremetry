@@ -13,7 +13,7 @@ export default function MLReplayPage() {
     <>
       <Topbar title="ML olayı" />
       <PageShell>
-        <Link to={navHref('/anomalies?tab=ml', search)} className="text-sm">← ML olayları</Link>
+        <Link to={navHref('/anomalies?tab=ml', search)} className="text-sm">‹ Anomaliler</Link>
         <MLReplayContent id={id} />
       </PageShell>
     </>

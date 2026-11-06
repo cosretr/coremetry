@@ -86,6 +86,11 @@ export function replaySamples(s: MLSnapshot): MLSample[] {
   return parseArr<MLSample>(s.samples);
 }
 
+/** SAF: kayıttaki servis yayınları (tam kayıtta dolar; ön kayıtta boş). */
+export function replayDeploys(s: MLSnapshot): RecentDeployEntry[] {
+  return parseArr<RecentDeployEntry>(s.deploys).filter(d => Number.isFinite(d.firstSeenNs) && d.firstSeenNs > 0);
+}
+
 const DAY_CLASS_TR: Record<string, string> = {
   holiday: 'tatil', half_day: 'yarım gün', sunday: 'pazar', saturday: 'cumartesi', weekday: 'iş günü', month_end: 'ay sonu benzeri',
 };

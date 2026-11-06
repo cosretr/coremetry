@@ -88,3 +88,14 @@ func TestMLEventRowsCarrySummary(t *testing.T) {
 		t.Errorf("path %q", p)
 	}
 }
+
+// v0.10.1845 — detay eylem kutusu olay satırının etiketini viewer'a da gösterir.
+func TestMLReplayVerdict(t *testing.T) {
+	if mlReplayVerdict(nil) != nil || mlReplayVerdict(&chstore.MLEvent{}) != nil {
+		t.Error("etiketsiz olay nil olmalı")
+	}
+	v := mlReplayVerdict(&chstore.MLEvent{Verdict: "anomaly", VerdictBy: "op@x", VerdictAt: 5, Note: "n"})
+	if v["verdict"] != "anomaly" || v["by"] != "op@x" || v["note"] != "n" {
+		t.Errorf("%v", v)
+	}
+}

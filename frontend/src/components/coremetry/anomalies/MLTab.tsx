@@ -11,11 +11,12 @@ import { SegmentedControl } from '@/components/coremetry/SegmentedControl';
 import { Badge } from '@/components/shadcn/badge';
 import { api } from '@/lib/api';
 import { keys, useMLEvents, useMLScorecard } from '@/lib/queries';
-import { fmtDateTime } from '@/lib/utils';
+import { fmtClock, fmtDateTime } from '@/lib/utils';
 import type { MLEvent, MLDetectorScore, MLGate, MLBackfillProgress, MLTickStatus, MLSignalTick, MLScorecard, MLKindTick, MLBaselineStatus } from '@/lib/types';
 import { Link } from 'react-router-dom';
 import { MLPeriodReplay } from './MLPeriodReplay';
 import { mlEventHref } from '@/lib/anomalyHref';
+import { serviceHref } from '@/lib/serviceHref';
 import { SIGNAL_KINDS, signalKindOf } from '@/lib/signalKind';
 import { SignalKindBadge } from '@/components/coremetry/SignalKindBadge';
 
@@ -216,18 +217,15 @@ export function mlRowText(e: MLEvent): string {
 const fmtTs = (ns: number) => fmtDateTime(new Date(ns / 1e6));
 
 const COLS: ColumnDef<MLEvent>[] = [
-  // v0.10.1779 (operatör mockup): Durum, Süre, insan dili Olay (gerçek link), Servis, Dedektör, birimli değer.
-  // v0.10.1844 — mockup görünüm 1: öncü "Sinyal" sütunu (ikon + metin + tür rengi).
+  // v0.10.1845 — mockup görünüm 1 sırası: Sinyal · Servis · Ne oluyor · Başladı · süre (+ durum). "Seyir" sparkline,
+  // "Servis tipi" ve "Grup" sonraki partide (liste ucu ≤ 24 nokta / profil / anomali grubu gelince).
   { id: 'signal', label: 'Sinyal', width: 90, sortValue: e => signalKindOf(e.detector, e.signal), naturalDir: 'asc' },
-  { id: 'stage', label: 'Durum', width: 90, sortValue: e => e.stage, naturalDir: 'asc' },
-  { id: 'duration', label: 'Süre', width: 80, numeric: true, sortValue: e => e.lastSeen - e.startedAt },
-  // v0.10.1843 — özet sunucudan (ml.ExplainSummary); "gözlenen / taban" sütunu özetin oran ifadesine katıldı.
+  { id: 'service', label: 'Servis', width: 180, sortValue: e => e.service, naturalDir: 'asc' },
   { id: 'headline', label: 'Ne oluyor', flex: true, minWidth: 280, sortValue: e => mlRowText(e), naturalDir: 'asc' },
-  { id: 'service', label: 'Servis', width: 200, sortValue: e => e.service, naturalDir: 'asc' },
-  { id: 'detector', label: 'Dedektör', width: 150, sortValue: e => e.detector, naturalDir: 'asc' },
-  { id: 'started', label: 'Başlangıç', width: 150, sortValue: e => e.startedAt },
-  { id: 'last', label: 'Son görülme', width: 150, sortValue: e => e.lastSeen },
-  { id: 'fb', label: 'Geri bildirim', width: 130, sortValue: e => (e.verdict === 'anomaly' ? 2 : e.verdict ? 1 : 0) },
+  { id: 'started', label: 'Başladı · süre', width: 170, sortValue: e => e.startedAt },
+  { id: 'detector', label: 'Dedektör', width: 150, priority: 3, sortValue: e => e.detector, naturalDir: 'asc' },
+  { id: 'last', label: 'Son görülme', width: 150, priority: 3, sortValue: e => e.lastSeen },
+  { id: 'fb', label: 'Geri bildirim', width: 120, priority: 2, sortValue: e => (e.verdict === 'anomaly' ? 2 : e.verdict ? 1 : 0) },
 ];
 
 
@@ -252,12 +250,15 @@ export function MLTab({ signal = '', onSignal }: { signal?: MLSignal; onSignal?:
   const renderCell = (e: MLEvent, col: ColumnDef<MLEvent>) => {
     switch (col.id) {
       case 'signal': return <SignalKindBadge kind={signalKindOf(e.detector, e.signal)} />;
-      case 'stage': return <Badge variant="outline">{stageLabel(e.stage)}</Badge>;
-      case 'duration': return durationLabel(e.lastSeen - e.startedAt);
       case 'headline': return <Link to={mlEventHref(e.id)} title={e.level || e.pod || e.code || ''}>{mlRowText(e)}</Link>;
-      case 'service': return <span className="font-mono" title={e.service}>{e.service}</span>;
+      case 'service': return <Link to={serviceHref(e.service)} className="font-mono" title={e.service}>{e.service}</Link>;
       case 'detector': return ML_DETECTOR_TR[e.detector] ?? e.detector;
-      case 'started': return <span className="font-mono">{fmtTs(e.startedAt)}</span>;
+      case 'started': return (
+        <span className="inline-flex flex-wrap items-center gap-1.5">
+          <span className="font-mono" title={fmtTs(e.startedAt)}>{fmtClock(new Date(e.startedAt / 1e6)).slice(0, 5)} · {durationLabel(e.lastSeen - e.startedAt)}</span>
+          <Badge variant="outline" className={e.stage === 'closed' ? '' : 'border-transparent bg-[color:var(--warn-bg)] text-[color:var(--warn)]'}>{stageLabel(e.stage)}</Badge>
+        </span>
+      );
       case 'last': return <span className="font-mono">{fmtTs(e.lastSeen)}</span>;
       case 'fb':
         if (e.verdict === 'anomaly') return <Badge variant="outline" title={`${e.verdictBy ?? ''}${e.verdictAt ? ` · ${fmtTs(e.verdictAt)}` : ''}`}>gerçek ✓</Badge>;
