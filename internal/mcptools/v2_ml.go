@@ -11,6 +11,12 @@ package mcptools
 //     diğer sinyalleri, rollout'lar, exception/Oracle/BubbleUp referansları,
 //     ≤3 örnek trace ID, Replay page_url. Ham seri DÖNMEZ.
 //
+// v0.10.1875 (öğrenme döngüsü Faz 2 parti B, audit §7.3 "çıktı struct'ı
+// API'de, CoSRE aracında ve bildirimde aynen"): satır `summary` (ml.
+// ExplainSummary — liste ve detayla AYNI cümle), explain_ml_event `summary`
+// + `card` (ne oldu / ne kadar / ne zamandan beri / etki; ml.BuildExplainCard).
+// Yeni metin üretici YOK; CoSRE adım kartı bu alanları gösterir.
+//
 // Yalnız v2 sohbet kataloğu (registerV2Subset): v1 kataloğu ve dış MCP
 // tools/list değişmez. Salt okuma, viewer düzeyi (REST eşleri /api/ml/events
 // ve /api/ml/{id}/replay her role açık). Gövde ≤ 2 KB.
@@ -27,6 +33,7 @@ import (
 
 	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/mcp"
+	"github.com/cilcenk/coremetry/internal/ml"
 )
 
 const (
@@ -49,8 +56,9 @@ type explainMLEventArgs struct {
 	ID string `json:"id"`
 }
 
-// mlEventRow — SAF: olay → model satırı (kısa alanlar).
-func mlEventRow(e chstore.MLEvent) map[string]any {
+// mlEventRow — SAF: olay → model satırı (kısa alanlar). summary: sunucunun
+// tek satır özeti (boşsa alan yok).
+func mlEventRow(e chstore.MLEvent, summary string) map[string]any {
 	part := e.Level
 	if e.Code != "" {
 		part = e.Code
@@ -66,6 +74,9 @@ func mlEventRow(e chstore.MLEvent) map[string]any {
 	}
 	if e.Verdict != "" {
 		row["verdict"] = e.Verdict
+	}
+	if summary != "" {
+		row["summary"] = summary
 	}
 	var ev map[string]any
 	if json.Unmarshal([]byte(e.Evidence), &ev) == nil {
@@ -122,7 +133,7 @@ func getLogAnomaliesTool(d Deps) mcp.Tool {
 			if a.RangeS <= 0 {
 				a.RangeS = 86400
 			}
-			from, _ := rangeWindow(ctx, a.RangeS)
+			from, now := rangeWindow(ctx, a.RangeS)
 			limit := clampLimit(a.Limit, mlToolDefaultRows, mlToolMaxRows)
 			evs, err := d.Store.ListMLEvents(ctx, chstore.MLEventsFilter{Since: from, Signal: sig,
 				Service: strings.TrimSpace(a.Service), Detector: strings.TrimSpace(a.Detector), Limit: limit})
@@ -130,8 +141,10 @@ func getLogAnomaliesTool(d Deps) mcp.Tool {
 				return nil, err
 			}
 			rows := make([]map[string]any, 0, len(evs))
+			cfg := d.Store.GetMLConfig(ctx)
+			loc := ml.OperatorLocation(d.Store.AnomalySensitivityForDetectors())
 			for _, e := range evs {
-				rows = append(rows, mlEventRow(e))
+				rows = append(rows, mlEventRow(e, ml.ExplainSummary(ml.SummaryInput(e, cfg, now, loc))))
 			}
 			body := map[string]any{"signal": sig, "window_s": a.RangeS, "total": len(evs), "stage": "shadow (Problem değil, terfi kapalı)",
 				"page_url": "/anomalies?tab=ml&signal=" + url.QueryEscape(sig)}
@@ -140,10 +153,14 @@ func getLogAnomaliesTool(d Deps) mcp.Tool {
 	}
 }
 
+// mlEventPageURL — SAF: ML olay detayı (/anomalies/ml/:id; FE mlEventHref ikizi).
+// v0.10.1875: eski ?replay= çekmece adresi v0.10.1770'te sayfaya taşınmıştı.
+func mlEventPageURL(id string) string { return "/anomalies/ml/" + url.PathEscape(id) }
+
 var errNoMLEventID = errors.New("id zorunlu: get_log_anomalies satırındaki id'yi ver")
 
 // explainMLPayload — SAF: replay kaydı → model olguları (ham seri yok).
-func explainMLPayload(s chstore.MLSnapshot, related []chstore.MLSnapshot) map[string]any {
+func explainMLPayload(s chstore.MLSnapshot, related []chstore.MLSnapshot, card *ml.ExplainCard) map[string]any {
 	var pts []chstore.MLPoint
 	_ = json.Unmarshal([]byte(s.Series), &pts)
 	var dwell []int64
@@ -159,7 +176,15 @@ func explainMLPayload(s chstore.MLSnapshot, related []chstore.MLSnapshot) map[st
 		"detected": time.Unix(0, s.DetectedAt).UTC().Format(time.RFC3339), "last_seen": time.Unix(0, s.LastSeen).UTC().Format(time.RFC3339),
 		"day_class": s.DayClass, "baseline_median": round3(s.BaselineMed), "baseline_mad": round3(s.BaselineMAD),
 		"triggered_buckets": len(dwell), "bucket_sec": s.BucketSec, "complete": s.Complete, "stage": "shadow (Problem değil)",
-		"page_url": "/anomalies?tab=ml&replay=" + url.QueryEscape(s.EventID)}
+		"page_url": mlEventPageURL(s.EventID)}
+	if card != nil {
+		out["summary"] = card.Summary
+		c := map[string]any{"what": card.What, "how_much": card.HowMuch, "since": card.Since}
+		if card.Impact != "" {
+			c["impact"] = card.Impact
+		}
+		out["card"] = c
+	}
 	if len(pts) > 0 {
 		out["series_peak"], out["series_low"], out["series_points"] = round3(peak), round3(low), len(pts)
 	}
@@ -197,7 +222,7 @@ func explainMLPayload(s chstore.MLSnapshot, related []chstore.MLSnapshot) map[st
 		out["sample_trace_ids"] = tids
 	}
 	if raw, _ := json.Marshal(out); len(raw) > mlToolMaxBytes { // kanıt referansları uzunsa en büyükleri düşer
-		for _, k := range []string{"bubbleUp", "influencers", "oracle", "other_signals", "rollouts", "exceptions"} {
+		for _, k := range []string{"bubbleUp", "influencers", "oracle", "other_signals", "rollouts", "exceptions", "card"} {
 			delete(out, k)
 			if raw, _ := json.Marshal(out); len(raw) <= mlToolMaxBytes {
 				break
@@ -242,7 +267,20 @@ func explainMLEventTool(d Deps) mcp.Tool {
 			}
 			det := time.Unix(0, s.DetectedAt)
 			related, _ := d.Store.ListMLSnapshotsForService(ctx, s.Service, det.Add(-2*time.Hour), det.Add(2*time.Hour))
-			return explainMLPayload(s, related), nil
+			// v0.10.1875 — kart: canlı olay satırı (süre/durum güncel) + kayıt;
+			// replay ucuyla aynı kurulum (ml.AssembleCardInput), yayın/profil yok.
+			_, now := rangeWindow(ctx, 0) // çıpa: kartın "şimdi"si aracın penceresiyle aynı an
+			src := ml.CardSources{Snapshot: &s, Related: related, Config: d.Store.GetMLConfig(ctx), Now: now,
+				Loc: ml.OperatorLocation(d.Store.AnomalySensitivityForDetectors()), HrefOf: mlEventPageURL}
+			if evs, err := d.Store.ListMLEvents(ctx, chstore.MLEventsFilter{ID: id, Since: now.Add(-31 * 24 * time.Hour), Limit: 1}); err == nil && len(evs) > 0 {
+				src.Event = &evs[0]
+			}
+			var card *ml.ExplainCard
+			if in, ok := ml.AssembleCardInput(src); ok {
+				c := ml.BuildExplainCard(in)
+				card = &c
+			}
+			return explainMLPayload(s, related, card), nil
 		},
 	}
 }

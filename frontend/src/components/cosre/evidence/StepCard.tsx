@@ -21,6 +21,7 @@ import { EVIDENCE_STRINGS as T } from './strings';
 import { fmtMsTR, type StepPreview, type StepView } from './stepView';
 import { QueryBlock } from './QueryBlock';
 import { RelevanceToggle } from '@/components/ai/EvidenceRelevance';
+import { SignalKindBadge } from '@/components/coremetry/SignalKindBadge';
 
 function RawOutput({ raw }: { raw: string }) {
   return (
@@ -71,7 +72,8 @@ function Preview({ p }: { p: StepPreview }) {
               {r.cells.map((c, j) => (
                 <TableCell key={j} className={cn('max-w-0 truncate px-1.5 py-1', p.columns[j]?.numeric && 'text-right tabular-nums', c.mono && 'font-mono', c.bad && 'font-medium text-status-critical')}
                   title={c.text}>
-                  {j === 0 && r.href ? <Link to={r.href} className="text-inherit no-underline" onClick={e => e.stopPropagation()}>{c.text}</Link> : c.text}
+                  {c.signal ? <SignalKindBadge kind={c.signal} />
+                    : j === r.cells.findIndex(x => !x.signal) && r.href ? <Link to={r.href} className="text-inherit no-underline" onClick={e => e.stopPropagation()}>{c.text}</Link> : c.text}
                 </TableCell>
               ))}
             </TableRow>

@@ -1313,6 +1313,17 @@ func anomalyPromotionDescription(ev chstore.AnomalyEvent) string {
 		"×, count " + formatUint(ev.CurrentCount) + tail + ")"
 }
 
+// promotedRuleText — SAF (v0.10.1875): terfi Problem'inin kural adı +
+// açıklaması. ML olayının kopyası (kind "ml:", Sample = ml.ExplainSummary)
+// kartın özetini taşır: açıklama = özet, ad "ML · <parça>" → manşet ve
+// bildirim konusu bu cümle (chstore.MLPromotedHeadline). Diğer türler aynen.
+func promotedRuleText(ev chstore.AnomalyEvent) (ruleName, desc string) {
+	if strings.HasPrefix(ev.Kind, "ml:") && strings.TrimSpace(ev.Sample) != "" {
+		return chstore.MLPromotedRuleNamePrefix + ev.Pattern, truncate(ev.Sample, 480)
+	}
+	return "Anomaly · " + ev.Pattern, truncate(anomalyPromotionDescription(ev), 480)
+}
+
 // promoteStrongAnomalies converts strong, sustained
 // AnomalyEvents into first-class Problems so the existing
 // notify / incident-attach / SSE wiring picks them up. The
@@ -1428,7 +1439,7 @@ func (e *Evaluator) promoteStrongAnomalies(ctx context.Context) {
 		// operator actually asks for it.
 		// v0.10.1587 — sayım-yalnız olay critical açılmaz (promotedSeverity).
 		sev := promotedSeverity(ev, cfg)
-		desc := truncate(anomalyPromotionDescription(ev), 480)
+		ruleName, desc := promotedRuleText(ev)
 		measure := promotedProblemMeasure(ev, cfg)
 		var startedAt int64
 		var id string
@@ -1448,7 +1459,7 @@ func (e *Evaluator) promoteStrongAnomalies(ctx context.Context) {
 		p := chstore.Problem{
 			ID:          id,
 			RuleID:      ruleID,
-			RuleName:    "Anomaly · " + ev.Pattern,
+			RuleName:    ruleName,
 			Severity:    sev,
 			Service:     ev.Service,
 			Metric:      measure.Metric,

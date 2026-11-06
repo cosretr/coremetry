@@ -14,6 +14,8 @@ import { parseDataStop, parseDataToolResult } from '@/lib/cosre/protocol';
 import { stepIndex } from '@/lib/cosre/toChatTurn';
 import type { CosreUIMessage } from '@/lib/cosre/resetReducer';
 import { serviceHref } from '@/lib/serviceHref';
+import { mlEventHref } from '@/lib/anomalyHref';
+import { SIGNAL_KINDS, signalKindOf, type SignalKind } from '@/lib/signalKind';
 import { EVIDENCE_STRINGS as T, PAGE_LABEL_DEFAULT, PAGE_LABELS, SKIP_REASON_LABELS, STOP_LABELS, TOOL_TITLES } from './strings';
 
 type Part = CosreUIMessage['parts'][number];
@@ -27,7 +29,8 @@ export type StepKind = CosreToolResultKind | 'running';
 
 export interface StepTag { label: string; warn?: boolean }
 export interface PreviewColumn { label: string; numeric?: boolean }
-export interface PreviewCell { text: string; bad?: boolean; mono?: boolean }
+// v0.10.1875 — signal: hücre sinyal türü rozetiyle çizilir (ikon + metin; ML anomali kartı).
+export interface PreviewCell { text: string; bad?: boolean; mono?: boolean; signal?: SignalKind }
 export interface PreviewRow { key: string; cells: PreviewCell[]; href?: string }
 export interface StepPreview { columns: PreviewColumn[]; rows: PreviewRow[]; more: number; moreUnknown?: boolean }
 
@@ -240,6 +243,30 @@ export function previewFor(tool: string, body: Rec | undefined, pageUrl: string 
           ...(pageUrl ? { href: serviceHref(name) } : {}),
         };
       });
+    // v0.10.1875 (öğrenme döngüsü Faz 2 parti B, audit §7.3) — ML anomali
+    // kartı: sinyal rozeti + SUNUCUNUN tek satır özeti (ml.ExplainSummary;
+    // liste/detay/bildirimle aynı cümle; FE cümle kurmaz). Satır olayın
+    // sayfasına gider. Özet yoksa (eski sunucu) servis · dedektör.
+    case 'get_log_anomalies':
+      return make([{ label: 'Sinyal' }, { label: 'Ne oluyor' }], arr(body.events), r => {
+        const id = str(r.id);
+        if (!id) return null;
+        const kind = signalKindOf(str(r.detector) ?? '', str(r.signal));
+        return {
+          key: id,
+          cells: [{ text: SIGNAL_KINDS[kind].label, signal: kind }, { text: str(r.summary) ?? `${str(r.service) ?? ''} · ${str(r.detector) ?? ''}` }],
+          href: mlEventHref(id),
+        };
+      });
+    case 'explain_ml_event': {
+      const id = str(body.id);
+      const summary = str(body.summary);
+      if (!id || !summary) return undefined;
+      const kind = signalKindOf(str(body.detector) ?? '', str(body.signal));
+      return make([{ label: 'Sinyal' }, { label: 'Ne oluyor' }], [body], () => ({
+        key: id, cells: [{ text: SIGNAL_KINDS[kind].label, signal: kind }, { text: summary }], href: mlEventHref(id),
+      }));
+    }
     default:
       return undefined;
   }

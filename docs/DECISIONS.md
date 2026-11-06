@@ -12842,3 +12842,14 @@ görünüm 1–4. Parti A'nın (1842–1846) üstüne; ana grafik (olay anı kay
   (açıkta serinin sonunda) biter; kısa seri bağlamla 24'e tamamlanır, uzun seri 24 eşit gruba ORTALANIR (tepe sönümlenebilir;
   sıralama tepe değerle). FE mevcut SVG `Sparkline` (renk sinyal türü tokenı, `markerAt` = başlangıç). Kaydı olmayan olay
   "—". Servis tipi: profil yoksa `unknown` → "—" (1876 batch adını düzeltir). Ek okuma: liste başına +2 CH; detay 0.
+- **v0.10.1875 — CoSRE kartı + bildirim konusu (sunucu `summary` / `card`'ından; yeni metin üretici yok).**
+  - CoSRE: `get_log_anomalies` satırı `summary` (ml.ExplainSummary — liste/detayla aynı cümle), `explain_ml_event` gövdesi
+    `summary` + `card {what, how_much, since, impact?}` (ml.AssembleCardInput + BuildExplainCard; replay ucuyla aynı kurulum,
+    yayın/profil okuması yok; "şimdi" aracın çıpası — `rangeWindow`). +1 CH (olay satırı) explain başına. Gövde tavanı 2 KB
+    korunur (`card` budanacak listenin sonunda). `explain_ml_event` `page_url` eski `?replay=` çekmece adresinden
+    `/anomalies/ml/:id` sayfasına (v0.10.1770 taşımasının kalan ucu). FE CoSRE adım kartı: iki araç için önizleme satırı
+    (sinyal rozeti `SignalKindBadge` — ikon + metin — ve özet; satır olayın sayfasına), `PreviewCell.signal` ADDITIVE.
+  - Bildirim konusu: ML terfi kopyasının `Sample`'ı = özet (`promotedCopy(ev, summary)`); evaluator `promotedRuleText`
+    ML kopyasında açıklama = özet, kural adı `ML · <parça>`; `chstore.MLPromotedHeadline` `anomaly-auto:` ailesinde bu adı
+    görünce manşeti (= e-posta/sohbet konusu, `trTopic`) özet yapar. RuleID ailesi değişmez (bildirim türü, kategori,
+    süpürme aynı); ML dışı terfiler bayt bayt aynı. ML terfisi varsayılan KAPALI — bugün etkisi yalnız terfi açılınca.

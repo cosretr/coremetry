@@ -4,6 +4,7 @@ package ml
 // yok), kapı geçilince kopya; elastic_ml çakışması dup_of.
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
@@ -34,8 +35,12 @@ func TestPromotionDecision(t *testing.T) {
 	if ok, dup := promotionDecision(ev, cfg, good, "Europe/Istanbul", el); ok || dup != "e1" {
 		t.Fatalf("elastic_ml çakışması: ok=%v dup=%s", ok, dup)
 	}
-	c := promotedCopy(ev)
-	if c.Kind != "ml:error_rate" || c.Pattern != "_error" || c.ID != "a" || c.CurrentCount != 50 {
+	c := promotedCopy(ev, "")
+	if c.Kind != "ml:error_rate" || c.Pattern != "_error" || c.ID != "a" || c.CurrentCount != 50 || !strings.HasPrefix(c.Sample, "ML error_rate") {
 		t.Fatalf("kopya=%+v", c)
+	}
+	// v0.10.1875 — terfi kopyası kartın özetini taşır (bildirim konusu).
+	if c := promotedCopy(ev, "pay: hata logları normalin yaklaşık 9 katı, 15 dakikadır (14:10'dan beri)."); c.Sample != "pay: hata logları normalin yaklaşık 9 katı, 15 dakikadır (14:10'dan beri)." {
+		t.Errorf("özet: %q", c.Sample)
 	}
 }

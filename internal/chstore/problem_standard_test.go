@@ -69,6 +69,9 @@ func TestStandardizeProblemGolden(t *testing.T) {
 	extCap := stdP("ec", "anomaly:ext-cap:ext:extsrc:ext:fail_count", "ext:extsrc", "ext:fail_count", 25, 20)
 	cluster := stdP("cl", "anomaly-cluster:shop-db", "shop-db", "cluster", 4, 3)
 	auto := stdP("au", "anomaly-auto:abc", "cart-svc", "p99_ms", 900, 300)
+	// v0.10.1875 — ML olayının terfi kopyası: manşet = kartın özeti (bildirim konusu).
+	mlAuto := stdP("ml", "anomaly-auto:e9", "orders-api", "anomaly_ratio", 9.4, 2)
+	mlAuto.RuleName, mlAuto.Description = MLPromotedRuleNamePrefix+"_error", "orders-api: hata logları normalin yaklaşık 9 katı, 13 dakikadır (14:31'den beri)."
 	silent := stdP("si", "anomaly:cart-svc:service_silent", "cart-svc", "service_silent", 0, 1)
 	p99 := stdP("p99", "anomaly:payments:p99_ms", "payments", "p99_ms", 1250, 300)
 
@@ -86,6 +89,7 @@ func TestStandardizeProblemGolden(t *testing.T) {
 		{"servis sustu", silent, StdFamilyAvailability, "anomaly.service_silent", "cart-svc: servis sustu — son kovalarda hiç istek yok", "değer 0 (eşik 1)"},
 		{"anomali kümesi", cluster, StdFamilyCluster, "anomaly_cluster", "shop-db: yayılan sorun — 4 sinyal birlikte", "4 sinyal birlikte"},
 		{"terfi anomali", auto, StdFamilyLatency, "anomaly_auto", "cart-svc: yanıt süresi olağandışı — normalin 3×", "değer 900 ms (eşik 300 ms)"},
+		{"ML terfi (özet)", mlAuto, StdFamilyRule, "anomaly_auto", "orders-api: hata logları normalin yaklaşık 9 katı, 13 dakikadır (14:31'den beri).", "değer 9,4 (eşik 2)"},
 		{"dış seri", ext, StdFamilyExternal, "anomaly.ext", "ext:oracle-prod/OP1/E1: dış kaynak hata sayısı arttı — 40, normal 5", "değer 40 (eşik 5)"},
 		{"dış kaynak düştü", extDown, StdFamilyExternal, "anomaly.ext_down", "oracle-prod: dış kaynak erişilemiyor — ardışık sorgu hatası", "değer 3 (eşik 3)"},
 		{"dış tavan özeti", extCap, StdFamilyExternal, "anomaly.ext_cap", "ext:extsrc: dış kaynakta çok sayıda eşzamanlı anomali (özet)", "değer 25 (eşik 20)"},

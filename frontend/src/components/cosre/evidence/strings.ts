@@ -86,6 +86,8 @@ export const TOOL_TITLES: Record<string, string> = {
   list_services: 'Servis listesi',
   get_topology: 'Topoloji',
   compare_periods: 'Dönem karşılaştırması',
+  get_log_anomalies: 'ML anomalileri', // v0.10.1875
+  explain_ml_event: 'ML olayı', // v0.10.1875
 };
 
 /** page_url bağlantısının etiketi (bilinmeyen araç: PAGE_LABEL_DEFAULT). */
@@ -96,6 +98,8 @@ export const PAGE_LABELS: Record<string, string> = {
   search_logs: "Loglar'da aç",
   explain_trace: "Trace'i aç",
   endpoint_metrics: "Endpoints'te aç (kaynak: metrik)",
+  get_log_anomalies: "Anomaliler'de aç", // v0.10.1875
+  explain_ml_event: 'Olayın sayfasını aç', // v0.10.1875
 };
 export const PAGE_LABEL_DEFAULT = 'Sayfada aç';
 

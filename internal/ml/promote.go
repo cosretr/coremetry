@@ -44,12 +44,20 @@ func promotionDecision(ev chstore.MLEvent, cfg chstore.MLConfig, score chstore.M
 	return true, ""
 }
 
-// promotedCopy — SAF: gölge olay → anomaly_events satırı.
-func promotedCopy(ev chstore.MLEvent) chstore.AnomalyEvent {
+// promotedCopy — SAF: gölge olay → anomaly_events satırı. v0.10.1875: Sample
+// = kartın tek satır özeti (ml.ExplainSummary; liste/detay/CoSRE ile AYNI
+// cümle) — terfi Problem'inin manşeti ve bildirim konusu bu olur
+// (evaluator promotedRuleText → chstore MLPromotedRuleNamePrefix). Özet boşsa
+// eski teknik satır.
+func promotedCopy(ev chstore.MLEvent, summary string) chstore.AnomalyEvent {
 	part := eventPart(ev)
+	sample := summary
+	if sample == "" {
+		sample = fmt.Sprintf("ML %s · gözlenen %.3g / taban %.3g · skor %.1f", ev.Detector, ev.Observed, ev.Baseline, ev.Score)
+	}
 	return chstore.AnomalyEvent{ID: ev.ID, Kind: promotedKindPrefix + ev.Detector, Pattern: part, Service: ev.Service,
 		StartedAt: ev.StartedAt, LastSeen: ev.LastSeen, PeakRatio: ev.Score, CurrentRatio: ev.Score, CurrentCount: uint64(max(ev.Observed, 0)),
-		Sample: fmt.Sprintf("ML %s · gözlenen %.3g / taban %.3g · skor %.1f", ev.Detector, ev.Observed, ev.Baseline, ev.Score)}
+		Sample: sample}
 }
 
 // promote — recorder tik sonu. Terfi anahtarı kapalıyken hemen döner.
@@ -65,7 +73,9 @@ func (r *Recorder) promote(ctx context.Context, cfg chstore.MLConfig, kept []chs
 	for _, s := range rows {
 		scores[s.Detector] = s
 	}
-	tz := r.store.AnomalySensitivityForDetectors().Calendar.Timezone
+	sens := r.store.AnomalySensitivityForDetectors()
+	tz := sens.Calendar.Timezone
+	loc, now := OperatorLocation(sens), time.Now()
 	svcSet := map[string]bool{}
 	earliest := kept[0].StartedAt
 	for _, ev := range kept {
@@ -86,7 +96,7 @@ func (r *Recorder) promote(ctx context.Context, cfg chstore.MLConfig, kept []chs
 		if dup != "" {
 			ev.DupOf = dup
 		} else if ok {
-			if err := r.store.UpsertAnomalyEvent(ctx, promotedCopy(ev)); err != nil {
+			if err := r.store.UpsertAnomalyEvent(ctx, promotedCopy(ev, ExplainSummary(SummaryInput(ev, cfg, now, loc)))); err != nil {
 				firstErr = err
 				continue
 			}

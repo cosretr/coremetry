@@ -659,6 +659,20 @@ func guessRuleUnit(m string) string {
 // directionWord — SAF: aşağı yönlü kural mı.
 func isDown(p Problem) bool { return isBelowRule(p.Comparator) }
 
+// MLPromotedRuleNamePrefix — v0.10.1875: ML olayının terfi Problem'inin
+// kural adı öneki (evaluator promotedRuleText yazar). RuleID ailesi
+// değişmez (anomaly-auto:); yalnız manşet kaynağını seçer.
+const MLPromotedRuleNamePrefix = "ML · "
+
+// MLPromotedHeadline — SAF: ML terfi Problem'inde açıklama = kartın özeti.
+func MLPromotedHeadline(p Problem) (string, bool) {
+	if !strings.HasPrefix(p.RuleID, "anomaly-auto:") || !strings.HasPrefix(p.RuleName, MLPromotedRuleNamePrefix) {
+		return "", false
+	}
+	h := strings.TrimSpace(p.Description)
+	return h, h != ""
+}
+
 // problemHeadline — SAF: Türkçe manşet (tavan uygulanmadan).
 func problemHeadline(p Problem, k stdKindInfo, im StdImpact) string {
 	sp := subjectPrefix(k.subject)
@@ -686,6 +700,13 @@ func problemHeadline(p Problem, k stdKindInfo, im StdImpact) string {
 	case "anomaly.service_silent":
 		return sp + "servis sustu — son kovalarda hiç istek yok"
 	case "anomaly.other", "anomaly_auto":
+		// v0.10.1875 — ML olayının terfi kopyası: manşet (bildirim konusu)
+		// kartın tek satır özetidir (ml.ExplainSummary — liste/detay/CoSRE ile
+		// AYNI cümle; özet servis adıyla başlar, önek eklenmez). Yeni metin
+		// üretici yok: evaluator açıklamaya özeti koyar.
+		if h, ok := MLPromotedHeadline(p); ok {
+			return h
+		}
 		r := stdBreachRatio(p)
 		if r > 0 && !math.IsInf(r, 1) {
 			return sp + metricLabelTR(p.Metric) + " olağandışı — normalin " + trRatio(r)

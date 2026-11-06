@@ -67,6 +67,24 @@ describe('stepsView — kind eşlemesi', () => {
     expect(previewFor('unknown_tool', { rows: [1] }, '/x')).toBeUndefined();
   });
 
+  // v0.10.1875 — ML anomali kartı: sinyal rozeti + sunucunun özeti (FE cümle kurmaz), satır olayın sayfasına.
+  it('ML anomalileri: sinyal rozeti + sunucu özeti, olay sayfası', () => {
+    const sum = "orders-api: hata logları normalin yaklaşık 9 katı, 13 dakikadır (14:31'den beri).";
+    const pv = previewFor('get_log_anomalies', { events: [
+      { id: 'e1', signal: 'log', detector: 'error_rate', service: 'orders-api', summary: sum },
+      { id: 'e2', signal: 'trace', detector: 'op_latency', service: 'notify-gateway' },
+    ] }, '/anomalies?tab=ml&signal=log');
+    expect(pv?.columns.map(c => c.label)).toEqual(['Sinyal', 'Ne oluyor']);
+    expect(pv?.rows[0].cells).toEqual([{ text: 'Log', signal: 'log' }, { text: sum }]);
+    expect(pv?.rows[0].href).toBe('/anomalies/ml/e1');
+    expect(pv?.rows[1].cells[0]).toEqual({ text: 'Trace', signal: 'trace' });
+    expect(pv?.rows[1].cells[1].text).toBe('notify-gateway · op_latency');
+    const one = previewFor('explain_ml_event', { id: 'e1', signal: 'log', detector: 'error_rate', summary: sum }, '/anomalies/ml/e1');
+    expect(one?.rows).toHaveLength(1);
+    expect(one?.rows[0].cells[1].text).toBe(sum);
+    expect(previewFor('explain_ml_event', { id: 'e1' }, undefined)).toBeUndefined();
+  });
+
   it('route kipi p95 sütununu taşır; kısaltılmış gövde "daha fazlası" der', () => {
     const pv = previewFor('endpoint_metrics', { mode: 'route', truncated: true, endpoints: [{ route: '/v1/orders', method: 'POST', rps: 1, err5xx_pct: 0, p95_ms: 1900 }] }, undefined);
     expect(pv?.columns.map(c => c.label)).toEqual(['Rota', 'istek/sn', '5xx', 'p95']);
