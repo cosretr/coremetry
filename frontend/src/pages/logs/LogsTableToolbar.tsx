@@ -13,6 +13,7 @@
 import type { ReactNode, RefObject } from 'react';
 import { Button } from '@/components/shadcn/button';
 import { Input } from '@/components/shadcn/input';
+import { Toggle } from '@/components/shadcn/toggle';
 import { LogsColumnPicker } from './LogsColumnPicker';
 import { LogsExportMenu } from './LogsActionsMenus';
 
@@ -24,6 +25,11 @@ export interface LogsTableToolbarProps {
   narrow: string;
   onNarrow: (v: string) => void;
   narrowRef: RefObject<HTMLInputElement | null>;
+  /** v0.10.1882 — "Yalnız kritik hatalar" (yüklenen örnekte; kaynak tükenmesi ya da FATAL). */
+  critOnly?: boolean;
+  /** Örnekte exception özeti var mı (yoksa düğme çizilmez — CH log yolu). */
+  critAvailable?: boolean;
+  onCritOnly?: (v: boolean) => void;
   columns: string[];
   fields: string[];
   onColumns: (next: string[]) => void;
@@ -61,6 +67,18 @@ export function LogsTableToolbar(p: LogsTableToolbarProps) {
           </span>
           <Button variant="ghost" size="sm" onClick={() => p.onNarrow('')}>clear</Button>
         </>
+      )}
+      {p.critAvailable && p.onCritOnly && (
+        <Toggle variant="outline" size="sm" pressed={!!p.critOnly} onPressedChange={p.onCritOnly} className="px-3"
+          data-testid="logs-crit-only"
+          title="Yüklenen satırlardan yalnız kritik hataları göster: kaynak tükenmesi (bellek, bağlantı havuzu, disk…) ya da FATAL. Yeni sorgu atmaz.">
+          Yalnız kritik hatalar
+        </Toggle>
+      )}
+      {p.critOnly && p.loadedCount > 0 && (
+        <span className={p.shownCount === 0 ? 'ld-tbar-note is-warn' : 'ld-tbar-note'} data-testid="logs-crit-note">
+          yüklenen {p.loadedCount.toLocaleString('tr-TR')} satırın {p.shownCount.toLocaleString('tr-TR')}'i kritik
+        </span>
       )}
       <span className="ld-tbar-right">
         {p.status}

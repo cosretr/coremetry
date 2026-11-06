@@ -49,6 +49,10 @@ func (s *ESStore) narrowSourceFields(cols []string) []string {
 		"kubernetes.pod_name", "kubernetes.pod.name", "k8s.pod.name", "resource.k8s.pod.name", "pod_name", "pod",
 		"kubernetes.namespace_name", "openshift.labels.cluster", "kubernetes.cluster.name", "k8s.cluster.name",
 		"kubernetes.container_name", "resource.k8s.namespace.name",
+		// v0.10.1882 — exception özeti (satır rozeti + katlı stack) için stack
+		// alanları (stackparse.FromLog yazımları) + OTel tür/mesaj.
+		"exception.type", "exception.message", "exception.stacktrace", "exception.stack_trace",
+		"error.stack_trace", "error.stacktrace", "stack_trace", "stacktrace", "throwable", "*.throwable",
 	)
 	base = append(base, cols...)
 	seen := make(map[string]struct{}, len(base))

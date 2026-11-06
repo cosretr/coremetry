@@ -221,6 +221,10 @@ type LogRecord struct {
 	// tam dokümanı tek `ids` sorgusuyla geri getirir. Yalnız ES.
 	Partial bool   `json:"partial,omitempty"`
 	DocRef  string `json:"docRef,omitempty"`
+	// Exception — v0.10.1882 (Log Search Faz 3 dilim 3.3): gösterim özeti
+	// (tür, sınıf, uygulama çerçeveleri). Yalnız ES log yolunda API katmanı
+	// doldurur (AttachExceptions); gruplama kimliğine girmez.
+	Exception *ExceptionSummary `json:"exception,omitempty"`
 }
 
 // Page is the result of a Search — total covers the full match count
