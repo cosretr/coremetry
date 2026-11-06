@@ -27,7 +27,7 @@ const HEAVY: { file: string; hooks: string[] }[] = [
   // v0.10.131 — entity pivotları: entity_seen_5m taramaları + Thanos delegasyonu.
   { file: 'entities.ts', hooks: ['api.entityServices(', 'api.servicePods(', 'api.entityMetrics(', 'api.entityContainers(', 'api.entityLatency('] },
   { file: 'rollouts.ts', hooks: ['api.rollouts(', 'api.rolloutStats(', 'api.rolloutRuns(', 'api.rolloutDetail(', 'api.serviceGitOps('] }, // v0.10.201, v0.10.981
-  { file: 'prefs.ts', hooks: ['api.getPreference('] }, // v0.10.248 — kişisel tercih okuma; sekme kapanınca iptal
+  { file: 'prefs.ts', hooks: ['api.getPreference(', 'api.getDisplayPref('] }, // v0.10.248 — kişisel tercih okuma; sekme kapanınca iptal
   { file: 'problems.ts', hooks: ['api.blastRadiusBatch(', 'api.problemInsight(', 'api.problemStandard(', 'api.problemAffected(', 'api.problemSourceEvent(', 'api.problemLogTemplates(', 'api.problemInvestigation(', 'api.sreStatus('] }, // v0.10.260 — inbox toplu blast-radius (MV, ≤200 servis); v0.10.562 insight; v0.10.1106 kaynak olay; v0.10.1113 doğan log şablonları; v0.10.1282 AI SRE kaydı + durum
   // v0.10.581 — stack-frame künyesi. Pahalılığı ClickHouse değil DIŞ
   // sistem: uç, DevOps sunucusuna repo/branş/ağaç çözümü için gidiyor.

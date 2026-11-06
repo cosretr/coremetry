@@ -12335,3 +12335,15 @@ sağlıklı çalışmıyor; anomaliler oluşsun, gerekirse Problem'e terfi olurl
   açılınca `GET /api/logs/doc` (tek `ids` sorgusu, 60 sn önbellek). CH: aynı API, satır tam (partial yok). Önbellek anahtarı
   kolon KÜMESİNİN sıralı özetini + skipTotal'ı taşır. Fikstürde 500 satır 1,12 MB → 345 KB (gerçek ES ölçülmedi).
   Sapma: NDJSON dışa aktarım yüklenen (dar) alanları yazar; tam doküman yalnız açılan satırlarda. Tampon 10.000.
+- **v0.10.1832 — görünüm tercihleri API (1.9).** `GET/PUT /api/preferences/{key}/display` (ayrı dosya
+  `preferences_display.go`, `registerRoutesExtra`): gövde `{v:1, rh?, hh?, den?, pp?, smp?}` (≤4 KiB, değerler URL
+  kümesinden; smp 10 … 5000 sabit tavan, çalışma anı üst sınırı istemcide kırpılır). Depolama yeni şema YOK:
+  `saved_views` satırı `page='table:<key>'`, `name='display'`, id `pref:<uid>:<key>:display` (kolon modeli satırıyla
+  çakışmaz), tam-satır upsert, FINAL nokta okuma; yalnız çağıranın satırı (okumada owner yeniden doğrulanır), claims
+  yoksa 401. Kişisel durum: rol kapısı / audit / serveCached yok (`preferences_routes.go` gerekçesi). Öncelik:
+  URL (paylaşılan link + kayıtlı arama — ikisi de URL) > kullanıcı tercihi > varsayılan; tercihte olup URL'de olmayan
+  anahtarlar açılışta URL'ye yazılır (replace) ki Share/Kaydet gönderenin görünümünü taşısın; tercihsiz kullanıcıda URL'ye
+  dokunulmaz (eski linkler aynen). Liste isteği tercih yerleşene kadar bekler (smp isteği değiştirir; tek istek; GET
+  hatası/401 → null, sayfa kilitlenmez). Görünüm ▾ değişikliği TAM tercihi 800 ms debounce ile PUT eder. Sapma: tercihi
+  olmayan göndericinin linki (rh/den… yok) alıcının kendi tercihiyle açılır — gönderen varsayılandaydı, URL'de kanıt yok;
+  servis Logs sekmesi tercihi okumaz (dilim 3.10'da kompakt mod kendi anahtarıyla karar verir).

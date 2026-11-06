@@ -1,5 +1,5 @@
 import type {
-  LogRow, LogsSearchSettings, // v0.10.1831
+  LogRow, LogsSearchSettings, DisplayPref, // v0.10.1831 / v0.10.1832
   NativeDetectorsView, NativeOwnSwitches, ShellFeatures, IncidentsSettings,
 OracleLogsResponse, CopilotScopeNames, CosreRouteRED,
   McpServersSnapshot, McpServerInput, McpServerTestResult,
@@ -1036,6 +1036,14 @@ export const api = {
 
   // v0.10.248 — kullanıcı-kapsamlı UI tercihi (kalıcı sütun modeli). Kişisel
   // FINAL nokta okuma: serveCached yok, cache'siz; signal ile iptal.
+  // v0.10.1832 — tablo görünüm tercihi (satır yüksekliği, yoğunluk, sayfa boyu,
+  // örnek boyu); kolon modelinden AYRI uç (preferences_display.go).
+  getDisplayPref: (key: string, signal?: AbortSignal) =>
+    get<{ key: string; display: DisplayPref | null; updatedAt?: number }>(`/api/preferences/${encodeURIComponent(key)}/display`, signal),
+  putDisplayPref: (key: string, pref: DisplayPref) =>
+    request<{ ok: boolean }>(`/api/preferences/${encodeURIComponent(key)}/display`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(pref),
+    }),
   getPreference: <M = unknown>(key: string, signal?: AbortSignal) =>
     request<import('./types').PreferenceResponse<M>>(`/api/preferences/${encodeURIComponent(key)}`, { signal }),
   putPreference: (key: string, model: unknown) =>

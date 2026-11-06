@@ -17,6 +17,7 @@ import type { LogsResponse } from '@/lib/types';
 import { ServiceLogsTab } from './ServiceSignalTabs';
 
 const m = vi.hoisted(() => ({
+  displayPrefCalls: 0, // v0.10.1832
   logsCalls: [] as Record<string, unknown>[],
   tsCalls: [] as Record<string, unknown>[],
   logsReject: null as Error | null,
@@ -47,6 +48,7 @@ vi.mock('@/lib/api', () => {
       ]);
     },
   };
+  stub.getDisplayPref = () => { m.displayPrefCalls++; return Promise.resolve({ key: 'logs', display: null }); };
   return {
     api: new Proxy({}, { get: (_t, k: string) => stub[k] ?? (() => Promise.resolve({})) }),
     isCanceled: () => false,
@@ -128,6 +130,8 @@ describe('servis Logs sekmesi — paylaşılan log parçaları çivisi (v0.10.18
     // v0.10.1831 — /logs'un örnek boyu / dar _source / sayımsız isteği sekmeye sızmaz.
     expect(m.logsCalls[0].fields).toBeUndefined();
     expect(m.logsCalls[0].skipTotal).toBeUndefined();
+    // v0.10.1832 — /logs görünüm tercihi sekmeye sızmaz (tercih okunmaz).
+    expect(m.displayPrefCalls).toBe(0);
     expect(m.tsCalls).toHaveLength(1);
     expect(m.tsCalls[0]).toMatchObject({ service: 'orders-api', groupBy: 'severity', from: 1759494780000000000 });
 

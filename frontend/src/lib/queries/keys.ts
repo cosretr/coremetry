@@ -253,6 +253,8 @@ export const keys = {
   prefs: {
     all: ['prefs'] as const,
     get: (key: string) => ['prefs', key] as const,
+    // v0.10.1832 — görünüm tercihi (GET /api/preferences/{key}/display).
+    display: (key: string) => ['prefs', key, 'display'] as const,
   },
   // v0.10.1335 — birleşik arama (search.ts). results: TÜM istek girdileri
   // (sunucu searchCacheKey'in aynası); detail: çekmece gövdesi, YALNIZ

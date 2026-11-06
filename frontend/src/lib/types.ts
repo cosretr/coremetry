@@ -4001,6 +4001,18 @@ export interface LogsDisplay {
   pageSize: LogsPageSize;
 }
 
+// v0.10.1832 — GET/PUT /api/preferences/{key}/display gövdesi
+// (internal/api/preferences_display.go displayPrefBody). Sunucu şekli:
+// değerler URL yazımında (rh/hh "1|2|3|auto"); bilinmeyen değer okumada düşer.
+export interface DisplayPref {
+  v: 1;
+  rh?: string;
+  hh?: string;
+  den?: string;
+  pp?: number;
+  smp?: number;
+}
+
 // v0.10.1818 (Log Search Faz 1 dilim 1.2) — log sorgusu sözdizimi reddinin
 // 400 gövdesi (internal/api/logs_query_error.go logQueryErrorBody). pos =
 // kullanıcının yazdığı sorguda 0 tabanlı KARAKTER indeksi; yalnız güvenilirken

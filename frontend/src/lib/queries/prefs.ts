@@ -14,6 +14,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api';
 import { keys } from './keys';
 import { parseColumnModel, serializeColumnModel, type ColumnModel } from '../columnModel';
+import type { DisplayPref } from '../types';
 
 const PUT_DEBOUNCE_MS = 800;
 const CHANNEL = 'coremetry-prefs';
@@ -100,4 +101,50 @@ export function useTablePrefs(storageKey: string, opts?: { enabled?: boolean }):
     status: q.status,
     save, reset,
   }), [q.status, q.data, save, reset]);
+}
+
+// v0.10.1832 (Log Search Faz 1 dilim 1.9) — tablo görünüm tercihi
+// (satır yüksekliği / yoğunluk / sayfa boyu / örnek boyu). Kolon modelinden
+// ayrı uç ve ayrı cache girdisi. Hata sözleşmesi aynı: GET hatası / 401 →
+// null (sayfa varsayılana düşer, asla kilitlenmez); PUT hatası → yerel kalır.
+export interface DisplayPrefs {
+  /** undefined = sorgu bekliyor; null = tercih yok / hata. */
+  pref: DisplayPref | null | undefined;
+  settled: boolean;
+  /** İyimser: cache'e hemen yazar, 800 ms sonra PUT. */
+  save: (next: DisplayPref) => void;
+}
+
+export function useDisplayPref(key: string): DisplayPrefs {
+  const qc = useQueryClient();
+  const q = useQuery<DisplayPref | null>({
+    queryKey: keys.prefs.display(key),
+    queryFn: ({ signal }) =>
+      api.getDisplayPref(key, signal)
+        .then(r => r?.display ?? null)
+        .catch(() => null),
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pending = useRef<DisplayPref | null>(null);
+  const flush = useCallback(() => {
+    timer.current = null;
+    const p = pending.current;
+    if (!p) return;
+    pending.current = null;
+    api.putDisplayPref(key, p).catch(() => { /* yerel kalır; bir sonraki save yeniden dener */ });
+  }, [key]);
+  const save = useCallback((next: DisplayPref) => {
+    qc.setQueryData(keys.prefs.display(key), next);
+    pending.current = next;
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(flush, PUT_DEBOUNCE_MS);
+  }, [qc, key, flush]);
+  useEffect(() => () => { if (timer.current) { clearTimeout(timer.current); flush(); } }, [flush]);
+  const settled = q.status !== 'pending';
+  return useMemo<DisplayPrefs>(() => ({
+    pref: settled ? (q.data ?? null) : undefined,
+    settled, save,
+  }), [settled, q.data, save]);
 }

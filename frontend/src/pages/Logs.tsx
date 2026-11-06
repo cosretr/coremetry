@@ -32,7 +32,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { readLogsSample, logsSourceFieldsParam, windowCountAtFloor, LOGS_SAMPLE_MAX_FALLBACK, LOGS_SAMPLE_MIN } from '@/lib/logsSample';
 import { usePageZoomRange } from '@/lib/chart/usePageZoomRange';
 import { useUrlEnv } from '@/lib/useUrlEnv';
-import { useTablePrefs } from '@/lib/queries/prefs';
+import { useTablePrefs, useDisplayPref } from '@/lib/queries/prefs';
+import { mergeBase, prefParamsMissingFromUrl, prefToView, viewToPref } from '@/lib/logsDisplayPrefs';
 import { parseColsParam } from '@/lib/columnModel';
 import { getRaw, setRaw } from '@/lib/storage';
 import { useTableNav } from '@/lib/useTableNav';
@@ -247,8 +248,23 @@ function LogsInner() {
   // katıldı (gövde satır yüksekliği Otomatik); eski tarayıcı tercihi URL'de
   // `rh` yokken varsayılanı belirler (sarılı → auto, değilse 1).
   const wrapLines = useMemo(() => getRaw('logs.wrap') === '1', []);
+  // v0.10.1832 (dilim 1.9) — kullanıcı görünüm tercihi (sunucu, saved_views
+  // page='table:logs'). Öncelik: URL > tercih > varsayılan (lib/logsDisplayPrefs).
+  const displayPref = useDisplayPref('logs');
   const displayBase = useMemo<LogsDisplay>(
-    () => ({ ...LOGS_DEFAULT_DISPLAY, rowLines: wrapLines ? 'auto' : 1 }), [wrapLines]);
+    () => mergeBase({ ...LOGS_DEFAULT_DISPLAY, rowLines: wrapLines ? 'auto' : 1 }, displayPref.pref),
+    [wrapLines, displayPref.pref]);
+  // Tercihte olup URL'de olmayan anahtarlar URL'ye yazılır (replace) — Share /
+  // Kaydet gönderenin gördüğü görünümü taşır. Tercih yoksa URL'ye dokunulmaz.
+  useEffect(() => {
+    const missing = prefParamsMissingFromUrl(searchParams, displayPref.pref);
+    if (Object.keys(missing).length === 0) return;
+    setSearchParams(prev => {
+      const p = new URLSearchParams(prev);
+      for (const [k, v] of Object.entries(missing)) if (!p.has(k)) p.set(k, v);
+      return p;
+    }, { replace: true });
+  }, [searchParams, displayPref.pref, setSearchParams]);
   // Görünüm seçenekleri (rh / hh / den / pp) — URL eklenen parametreler;
   // yokken bugünkü görünüm (lib/logsDisplay).
   const display = useMemo(() => readLogsDisplay(searchParams, displayBase).display, [searchParams, displayBase]);
@@ -259,7 +275,12 @@ function LogsInner() {
   // "Load more" sonraki `smp` satırı search_after ile getirir.
   const searchSettingsQ = useLogsSearchSettings();
   const maxSample = searchSettingsQ.data?.maxSample ?? LOGS_SAMPLE_MAX_FALLBACK;
-  const sample = useMemo(() => readLogsSample(searchParams.get('smp'), maxSample).sample, [searchParams, maxSample]);
+  // v0.10.1832 — URL'de smp yoksa tercihin örnek boyu AYNI render'da kullanılır
+  // (URL'ye yazım efektten önce ilk istek 500 ile kaçmasın — tek istek).
+  const prefSample = prefToView(displayPref.pref).sample;
+  const sample = useMemo(
+    () => readLogsSample(searchParams.get('smp') ?? (prefSample !== undefined ? String(prefSample) : null), maxSample).sample,
+    [searchParams, maxSample, prefSample]);
   const qc = useQueryClient();
   // Dar `_source` satırının tam dokümanı (satır açılınca): id → tam satır |
   // 'error' (okunamadı; yüklenen alanlar kalır).
@@ -267,6 +288,7 @@ function LogsInner() {
   const setDisplay = (patch: Partial<LogsDisplay>) => {
     if (patch.pageSize !== undefined) setPage(0);
     setSearchParams(prev => writeLogsDisplay(prev, patch), { replace: true });
+    displayPref.save(viewToPref({ ...display, ...patch }, sample)); // v0.10.1832
   };
   // v0.10.502 (B6) — mode: 'replace' (Ara / satır tıkı, eski davranış) |
   // 'and' (⊕ mevcut metne ekle) | 'not' (⊖ hariç tut, NOT). Ekleme
@@ -610,7 +632,7 @@ function LogsInner() {
     hasTrace: filter.hasTrace || undefined, // v0.8.406 — trace-only filter
     asc: asc || undefined, // v0.9.295 — oldest-first
     lang: lang || undefined, // v0.10.1819 — zorla Lucene
-  }, { enabled: logsListEnabled(view, live, teamGate) }); // v0.10.420 — canlıyken statik sorgu koşmaz; v0.10.1477 — takım kararı beklenirken de; v0.10.1499 — desen görünümünde de (tablo çizilmez)
+  }, { enabled: logsListEnabled(view, live, teamGate) && displayPref.settled }); // v0.10.420 — canlıyken statik sorgu koşmaz; v0.10.1477 — takım kararı beklenirken de; v0.10.1499 — desen görünümünde de (tablo çizilmez)
 
   // Level-facet counts. A per-severity timeseries query feeds the
   // toolbar facet chip badges (the duplicate Logs-local stacked-bar
@@ -1383,6 +1405,7 @@ function LogsInner() {
             sample={{ value: sample, min: LOGS_SAMPLE_MIN, max: maxSample, onChange: n => {
               resetPaging();
               setSearchParams(prev => { const p = new URLSearchParams(prev); p.set('smp', String(n)); return p; }, { replace: true });
+              displayPref.save(viewToPref(display, n)); // v0.10.1832
             } }} />}
           live={live} asc={asc} onToggleAsc={toggleAsc}
           onExport={exportLoaded} />
