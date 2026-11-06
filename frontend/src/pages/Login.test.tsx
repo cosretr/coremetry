@@ -258,6 +258,16 @@ describe('Login — marka ve sürüm', () => {
     expect(h.querySelector('button[type="submit"]')?.textContent).toBe('Sign in');
   });
 
+  // v0.10.1912 (operatör-raporlu) — başlık `flex gap-2`: ürün adı TEK flex
+  // öğesi olmalı; "Core" ile "metry" ayrı öğe olursa araya boşluk girer.
+  it('başlıkta ürün adı tek öğedir ("Core" ve "metry" bölünmez)', async () => {
+    const h = await mount();
+    const h1 = h.querySelector('h1')!;
+    const bareText = [...h1.childNodes].filter(n => n.nodeType === Node.TEXT_NODE && n.textContent?.trim());
+    expect(bareText).toHaveLength(0);
+    expect(h1.firstElementChild?.textContent).toBe('Coremetry');
+  });
+
   it('logo yüklüyse üst çubukta <img> çizilir', async () => {
     m.brand = { logoDataUri: 'data:image/png;base64,AAAA' };
     const h = await mount();
