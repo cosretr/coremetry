@@ -108,4 +108,12 @@ describe('FieldSidebar', () => {
     expect(h.textContent).toContain('üst değerler hesaplanamadı');
     expect(h.textContent).not.toContain('Bu pencerede değer yok');
   });
+
+  it('v0.10.1857 — paused (kapsam kapısı): alan açılınca istek YOK, not görünür', async () => {
+    const h = mount({ paused: true });
+    click(h.querySelector('[data-testid="fs-field-thread_name"]'));
+    await settle();
+    expect(m.calls).toHaveLength(0);
+    expect(h.querySelector('[data-testid="fs-paused"]')).not.toBeNull();
+  });
 });

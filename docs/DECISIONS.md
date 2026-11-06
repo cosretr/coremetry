@@ -12588,3 +12588,18 @@ değişmez).
   gelene dek bekler (ES'e gitmeyen ucuz uç). Akıllı kolonlar görünüm-yereldir: URL'ye ve tercihe YAZILMAZ; operatör
   kolonlara dokunduğu an (ekle / kaldır / sırala) görünen küme açık tercihe dönüşür ve akıllı mod kapanır. Doğrulanmadı:
   prod ES'te iş alanlarının `_source` yolu (alan ES'te iç içe nesne ise satır `attributes` düzleştirmesine bağlı).
+- **v0.10.1857 — klavye `f` / `e` / `t` (2.6).** Seçili satır (j/k, `useTableNav`) üzerinde: `f` = satırın servisine süz
+  (`service:"<ad>"` hapı — KQL kısayol anahtarı `service`, sunucu yapılandırılmış servis alan(lar)ına açar), `e` = aynı
+  servisi hariç tut (`NOT service:…`), `t` = satırın trace'ine git (`traceHref`; trace yoksa no-op). f/e "sağla"
+  anlamında: aynı polaritede hap varsa değişmez (tuş tekrarı güvenli), ters polaritedekini çevirir, kapalıysa açar. Satır
+  seçili değilken no-op, tuş tarayıcıya kalır. Kayıt `useShortcuts` ile sayfa ömrüne bağlı → yalnız /logs kapsamında;
+  `?` yardım ekranı `Logs` grubunda listeler (`shortcutRegistry.test.ts` kaynak pini + `Logs.keys.test.tsx` davranış:
+  bağlıyken var, çıkınca yok). Tablonun altında akışta ipucu satırı (mockup `.keys`; yüzen şerit değil). Karar: mockup
+  `f`/`e`'nin hedef alanını söylemiyordu (trace çipi menüsündeki `f` "bu trace'e filtrele" idi); satır kısayolu servisi
+  seçti — çok servisli `scope=mine` görünümünde en sık pivot "bu servise odaklan / bu gürültülü servisi çıkar";
+  trace'e süzme Faz 3 trace çipi menüsünde kalır.
+- **v0.10.1857 eki — kapsam kapısı alan istatistiği ve canlı kuyruğa da (2.4'ün açığı).** 1855'te "servis seçilmeden
+  sorgu yok" kapısı liste / histogram / seviye sayımı / desenlere bağlıydı; alan kenar çubuğunda bir alan açmak ya da Live
+  tail'i başlatmak servis seçilmeden kapsamsız ES isteği atabiliyordu. `FieldSidebar` opsiyonel `paused` prop'u (değer
+  isteği atılmaz, "Servis seçilince üst değerler gelir" notu) ve canlı kuyruk etkisi `scopeGate`'i okur. Ayrı sürüm
+  açılmadı: rezerve numaralar 1852–1857; düzeltme 2.6 commit'inde, gövdede ayrı madde.

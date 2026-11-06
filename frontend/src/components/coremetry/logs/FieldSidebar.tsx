@@ -74,8 +74,9 @@ interface FieldActions {
   onExists?: (key: string, negated: boolean) => void;
 }
 
-function FieldValues({ field, scope, isColumn, lift, windowTotal, actions }: {
+function FieldValues({ field, scope, isColumn, lift, windowTotal, actions, paused }: {
   field: string;
+  paused?: boolean;
   scope: FieldStatsScope;
   isColumn: boolean;
   lift: boolean;
@@ -92,11 +93,13 @@ function FieldValues({ field, scope, isColumn, lift, windowTotal, actions }: {
     queryFn: ({ signal }) => api.logsFieldStats({ field, ...scope, ...(size !== 5 ? { size } : {}), ...(lift ? { errorLift: 1 as const } : {}), ...(est !== undefined ? { est } : {}) }, signal),
     staleTime: 60_000,
     retry: 1,
+    enabled: !paused, // v0.10.1857 — /logs kapsam kapısı (servis seçilmeden ES isteği yok)
   });
   const d = q.data;
   const sampled = fieldSampleLabel(d);
   return (
     <div className="mx-0.5 mt-0.5 mb-1.5 grid gap-1 rounded-sm border bg-(--bg2) px-2 pt-1.5 pb-2 text-[length:var(--fs-xs)]" data-testid={`fs-values-${field}`}>
+      {paused && <div className="text-(--text3)" data-testid="fs-paused">Servis seçilince üst değerler gelir</div>}
       {q.isLoading && <div className="text-(--text3)">Üst değerler yükleniyor…</div>}
       {q.isError && <div className="text-status-critical">Üst değerler alınamadı</div>}
       {lift && d?.errorLift && (
@@ -185,10 +188,12 @@ export interface FieldSidebarProps extends FieldActions {
   windowTotal?: number;
   /** v0.10.1853 — çözülmüş iş alanları (lib/logBusinessFields); boşsa bölüm gizli. */
   businessFields?: readonly ResolvedBusinessField[];
+  /** v0.10.1857 — sayfa okumaları bekletiliyor (kapsam kapısı): değer isteği atılmaz. */
+  paused?: boolean;
 }
 
 export function FieldSidebar({
-  fields, fieldsTotal, types, columns, scope, windowTotal, businessFields = [],
+  fields, fieldsTotal, types, columns, scope, windowTotal, businessFields = [], paused,
   onToggleColumn, onPillAdd, onPillExclude, onExists,
 }: FieldSidebarProps) {
   const wide = useMediaQuery(WIDE_QUERY);
@@ -249,7 +254,7 @@ export function FieldSidebar({
           {isOpen ? <ChevronDown className="text-(--text3)" /> : <ChevronRight className="text-(--text3)" />}
         </Button>
         {isOpen && (
-          <FieldValues field={f} scope={scope} lift={lift} windowTotal={windowTotal}
+          <FieldValues field={f} scope={scope} lift={lift} windowTotal={windowTotal} paused={paused}
             isColumn={selectedSet.has(f)} actions={actions} />
         )}
       </div>

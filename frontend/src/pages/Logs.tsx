@@ -2,7 +2,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { LOG_SPIKE_QUERY_MAX, type AISubject } from '@/lib/aiSubject';
 import { DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import type { ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useIsFetching } from '@tanstack/react-query';
 import { Topbar } from '@/components/Topbar';
@@ -37,6 +37,8 @@ import { parseLogsSort, serializeLogsSort, logsSortClick } from '@/lib/logsSort'
 import { parseColsParam } from '@/lib/columnModel';
 import { getRaw, setRaw } from '@/lib/storage';
 import { useTableNav } from '@/lib/useTableNav';
+import { useShortcuts } from '@/lib/keyboard';
+import { traceHref } from '@/lib/traceHref';
 import { api } from '@/lib/api';
 import { logsBucketSec } from '@/lib/chartStep';
 import { tsShort, timeRangeToNs, sevName, sevClass, rangeToSince } from '@/lib/utils';
@@ -63,6 +65,8 @@ import { resolveBusinessFields } from '@/lib/logBusinessFields'; // v0.10.1853 (
 import { businessCandidates, requestColumns, smartBusinessColumns, withSmartColumns } from '@/lib/logsSmartColumns'; // v0.10.1856 (dilim 2.5)
 import { LogsFilterRow } from './logs/LogsFilterRow';
 import { LogsNotices, LogsNeedService } from './logs/LogsNotices';
+import { LogsKeyHints } from './logs/LogsKeyHints';
+import { logRowKeyAction } from './logs/logsKeys';
 import { LogsAddFilterMenu, LogsShareMenu, LogsMoreMenu } from './logs/LogsActionsMenus';
 import { isDraftDirty, bareTraceIdOf } from './logs/logsQuery';
 import { LogsTableToolbar } from './logs/LogsTableToolbar';
@@ -788,7 +792,8 @@ function LogsInner() {
   const newestNsRef = useRef(0);
 
   useEffect(() => {
-    if (!live || typeof EventSource === 'undefined') return;
+    // v0.10.1857 — kapsam kapısı canlı kuyruğa da: servis seçilmeden akış açılmaz (risk #2).
+    if (!live || scopeGate || typeof EventSource === 'undefined') return;
     setLiveBuffer([]); setLiveGap(false); newestNsRef.current = 0;
     let es: EventSource | null = null;
     const open = () => {
@@ -835,7 +840,7 @@ function LogsInner() {
       es?.close();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [live, filter.service, filter.cluster, env, compiledSearch, filter.pattern, filter.team, scopeParam, filter.severity, filter.hasTrace, filter.traceId, filter.spanId]); // v0.10.416 — kilit değişince akış yeniden açılır
+  }, [live, filter.service, filter.cluster, env, compiledSearch, filter.pattern, filter.team, scopeParam, scopeGate, filter.severity, filter.hasTrace, filter.traceId, filter.spanId]); // v0.10.416 — kilit değişince akış yeniden açılır
 
   // When live, the table renders the SSE buffer; otherwise the static
   // windowed query. Live has no loading/error gate — rows fill in as they
@@ -1132,6 +1137,23 @@ function LogsInner() {
     onOpen: (l) => toggle(l.id),
     pageId: 'logs',
   });
+  // v0.10.1857 (Log Search Faz 2 dilim 2.6) — seçili satırda f / e / t
+  // (pages/logs/logsKeys.ts). Yalnız /logs bağlıyken kayıtlı (sayfa ömrü);
+  // satır seçili değilse no-op ve tuş tarayıcıya kalır. `?` yardım ekranı
+  // bu kayıtları listeler (lib/keyboard listShortcuts).
+  const navigate = useNavigate();
+  const runRowKey = (key: 'f' | 'e' | 't', e: KeyboardEvent) => {
+    const a = logRowKeyAction(key, tableNav.selectedItem, filters);
+    if (a.kind === 'none') return;
+    e.preventDefault();
+    if (a.kind === 'pills') applyPills(a.next);
+    else navigate(traceHref(a.traceId));
+  };
+  useShortcuts([
+    { keys: 'f', label: 'Seçili satırın servisine süz', group: 'Logs', handler: e => runRowKey('f', e) },
+    { keys: 'e', label: 'Seçili satırın servisini hariç tut', group: 'Logs', handler: e => runRowKey('e', e) },
+    { keys: 't', label: "Seçili satırın trace'ine git", group: 'Logs', handler: e => runRowKey('t', e) },
+  ], [tableNav.selectedItem, filters]);
   // "Filtreleri temizle" (yerel daraltma) kendini kaldırınca odak kutuya döner.
   const narrowRef = useRef<HTMLInputElement>(null);
 
@@ -1422,6 +1444,7 @@ function LogsInner() {
             was here before, unchanged. */}
         <div className="ld-body">
           <FieldSidebar
+            paused={scopeGate} /* v0.10.1857 — servis seçilmeden alan istatistiği yok (risk #2) */
             businessFields={businessFields}
             fields={fields}
             fieldsTotal={fieldsTotal}
@@ -1628,6 +1651,7 @@ function LogsInner() {
               ) : undefined
             } />
         )}
+        {!live && <LogsKeyHints />}
         </>)}
           </div>
         </div>

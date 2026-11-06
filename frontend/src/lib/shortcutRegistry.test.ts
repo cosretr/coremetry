@@ -88,3 +88,24 @@ describe('oto-kaydırma tabloya KAPSAMLI', () => {
     expect(DT).toContain('pageId: storageKey');
   });
 });
+
+// v0.10.1857 (Log Search Faz 2 dilim 2.6) — /logs f / e / t kayıtları. Yardım
+// ekranı listShortcuts'tan okur; kısayollar yalnız Logs bağlıyken kayıtlı
+// (useShortcuts sayfa ömrü — Logs.keys.test.tsx davranışı çiviler). Burada
+// kaynak pini: sayfa üç tuşu 'Logs' grubunda etiketle kaydediyor ve küresel
+// kısayollar (GlobalShortcuts) bu tuşları sahiplenmiyor.
+describe('/logs f / e / t kayıtları', () => {
+  const LOGS = stripComments(readFileSync(resolve(__dirname, '..', 'pages', 'Logs.tsx'), 'utf8'));
+  const GLOBAL = stripComments(readFileSync(resolve(__dirname, '..', 'components', 'GlobalShortcuts.tsx'), 'utf8'));
+  it('Logs sayfası useShortcuts ile f, e, t kaydediyor (etiketli, Logs grubu)', () => {
+    for (const k of ['f', 'e', 't']) {
+      expect(LOGS, k).toMatch(new RegExp(`keys: '${k}', label: '[^']+|keys: '${k}', label: "[^"]+`));
+    }
+    expect((LOGS.match(/group: 'Logs'/g) ?? []).length).toBe(3);
+    expect(LOGS).toContain('useShortcuts([');
+  });
+  it('küresel kısayollar f / e / t bağlamıyor (yalnız Logs kapsamı)', () => {
+    for (const k of ['f', 'e', 't']) expect(GLOBAL.includes(`keys: '${k}'`), k).toBe(false);
+  });
+});
+
