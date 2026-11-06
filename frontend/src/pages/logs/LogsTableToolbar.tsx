@@ -30,6 +30,9 @@ export interface LogsTableToolbarProps {
   /** Örnekte exception özeti var mı (yoksa düğme çizilmez — CH log yolu). */
   critAvailable?: boolean;
   onCritOnly?: (v: boolean) => void;
+  /** v0.10.1882 — "Trace'e göre grupla" (URL `group=trace`; yüklenen örnek içinde). */
+  groupByTrace?: boolean;
+  onGroupByTrace?: (v: boolean) => void;
   columns: string[];
   fields: string[];
   onColumns: (next: string[]) => void;
@@ -79,6 +82,16 @@ export function LogsTableToolbar(p: LogsTableToolbarProps) {
         <span className={p.shownCount === 0 ? 'ld-tbar-note is-warn' : 'ld-tbar-note'} data-testid="logs-crit-note">
           yüklenen {p.loadedCount.toLocaleString('tr-TR')} satırın {p.shownCount.toLocaleString('tr-TR')}'i kritik
         </span>
+      )}
+      {!p.live && p.onGroupByTrace && p.loadedCount > 0 && (
+        <Toggle variant="outline" size="sm" pressed={!!p.groupByTrace} onPressedChange={p.onGroupByTrace} className="px-3"
+          data-testid="logs-group-trace"
+          title="Yüklenen satırları trace'e göre grupla (yeni sorgu yok). Başlıkta süre, hata ve kök span — trace önizlemesinden.">
+          Trace'e göre grupla
+        </Toggle>
+      )}
+      {p.groupByTrace && p.loadedCount > 0 && (
+        <span className="ld-tbar-note" data-testid="logs-group-note">yüklenen {p.loadedCount.toLocaleString('tr-TR')} satır içinde</span>
       )}
       <span className="ld-tbar-right">
         {p.status}

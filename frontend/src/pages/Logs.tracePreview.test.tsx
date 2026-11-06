@@ -97,6 +97,21 @@ describe('/logs trace çipi + önizleme (v0.10.1881)', () => {
   });
 });
 
+describe('/logs trace\'e göre grupla (v0.10.1882)', () => {
+  it('group=trace: başlıklar ilk görülme sırasıyla, trace\'siz en sonda; özet önizlemeden; not', async () => {
+    await mountLogs();
+    await act(async () => { (host!.querySelector('[data-testid="logs-group-trace"]') as HTMLButtonElement).click(); }); await settle();
+    expect(new URLSearchParams(window.location.search).get('group')).toBe('trace');
+    const heads = [...host!.querySelectorAll('[data-testid="log-group-head"]')].map(h => h.textContent ?? '');
+    expect(heads).toHaveLength(3);
+    expect(heads[0]).toContain('1,84 sn · ✕ hata var · kök POST /api/orders · 2 log (bu örnekte)');
+    expect(heads[1]).toContain('örneklenmiş');
+    expect(heads[2]).toBe('trace_id yok · 1 log (bu örnekte)');
+    expect(host!.querySelector('[data-testid="logs-group-note"]')!.textContent).toBe('yüklenen 4 satır içinde');
+    expect(m.previews).toHaveLength(1); // gruplama yeni istek atmaz
+  });
+});
+
 describe('traceChipView', () => {
   it('beş durum + yükleniyor', () => {
     expect(traceChipView(A, undefined).text).toBe('9c1d07aa…');
