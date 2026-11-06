@@ -15,7 +15,7 @@ import {
 import { navHref } from '@/lib/navHref';
 import { useAuth } from './AuthProvider';
 import { ChangePasswordModal } from './ChangePasswordModal';
-import { applyTheme, currentTheme, THEMES, THEME_LABEL } from '@/lib/theme';
+import { applyTheme, currentTheme, SCHEME_LABEL, THEME_GROUPS, THEME_LABEL } from '@/lib/theme';
 import { Wordmark } from './Wordmark';
 import { MenuItem, IconButton, DisclosureButton } from '@/components/ui';
 import { requestTourRestart } from '@/features/tour/restart'; // v0.10.1334
@@ -545,7 +545,7 @@ export function Sidebar() {
                     menüde yalnız tema + çıkış. Tema satırı her rolde. */}
                 {/* v0.10.1182 (operatör: "sürekli basmak gerekiyor, başa dönüyor") —
                     döngü yerine yana açılan seçim: üzerine gelince / tıklayınca
-                    üç tema, geçerli olan işaretli, tek tıkla uygulanır. */}
+                    temalar (v0.10.1849: Açık / Koyu gruplu), geçerli olan işaretli, tek tıkla uygulanır. */}
                 <div style={{ position: 'relative' }}
                   onMouseEnter={() => setThemeOpen(true)} onMouseLeave={() => setThemeOpen(false)}>
                   <MenuItem icon="◐" aria-haspopup="menu" aria-expanded={themeOpen}
@@ -558,12 +558,18 @@ export function Sidebar() {
                       background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 6,
                       boxShadow: '0 8px 24px rgba(0,0,0,0.3)', padding: 4, zIndex: 'var(--z-dropdown)',
                     }}>
-                      {THEMES.map(th => (
-                        <MenuItem key={th} role="menuitemradio" aria-checked={currentTheme() === th}
-                          icon={currentTheme() === th ? '✓' : ''}
-                          onClick={() => { applyTheme(th); setThemeOpen(false); setMenuOpen(false); }}>
-                          {THEME_LABEL[th]}
-                        </MenuItem>
+                      {/* v0.10.1849 — Açık / Koyu grupları, tema kaydından (üst şerit listesiyle aynı). */}
+                      {THEME_GROUPS.map(g => (
+                        <div key={g.scheme} role="group" aria-label={SCHEME_LABEL[g.scheme]}>
+                          <div className="menu-group-label" aria-hidden="true">{SCHEME_LABEL[g.scheme]}</div>
+                          {g.themes.map(th => (
+                            <MenuItem key={th} role="menuitemradio" aria-checked={currentTheme() === th}
+                              icon={currentTheme() === th ? '✓' : ''}
+                              onClick={() => { applyTheme(th); setThemeOpen(false); setMenuOpen(false); }}>
+                              {THEME_LABEL[th]}
+                            </MenuItem>
+                          ))}
+                        </div>
                       ))}
                     </div>
                   )}

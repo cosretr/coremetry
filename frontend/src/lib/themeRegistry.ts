@@ -49,6 +49,8 @@ export const THEME_REGISTRY = [
   { id: 'light', label: 'Light', glyph: '☀', scheme: 'light', contrast: 'aa', series: 'light', themeColor: '#f4f6f8', ciCell: true },
   // v0.10.1178 (operatör): "Red Hat" adı görünmesin; iç anahtar 'redhat' aynı.
   { id: 'redhat', label: 'Kurumsal', glyph: '⬢', scheme: 'light', contrast: 'aa', series: 'light', themeColor: '#f4f4f5', ciCell: true },
+  // v0.10.1849 — Arduvaz: shadcn slate tabanı, mavi vurgu; `dark` seri paletini paylaşır (operatör).
+  { id: 'slate', label: 'Arduvaz', glyph: '◑', scheme: 'dark', contrast: 'aa', series: 'dark', themeColor: '#0f172a', ciCell: false },
 ] as const satisfies readonly ThemeEntryShape[];
 
 export type ThemeEntry = (typeof THEME_REGISTRY)[number];

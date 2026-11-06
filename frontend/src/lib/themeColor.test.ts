@@ -7,7 +7,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { THEME_COLOR, THEME_NEXT, THEMES, DEFAULT_THEME, applyTheme, cycleTheme, syncThemeColor, themeScheme, type Theme } from './theme';
+import { THEME_COLOR, THEMES, DEFAULT_THEME, applyTheme, syncThemeColor, themeScheme, type Theme } from './theme';
 import { renderDefaultTheme } from './themeDefault';
 import { themeBlockBody } from '../styles/themeBlocks';
 
@@ -68,17 +68,12 @@ describe('v0.10.1339 — theme-color', () => {
     expect(meta()!.content).toBe(THEME_COLOR[want]);
   });
 
-  it('applyTheme / cycleTheme meta\'yı ve data-scheme\'yı güncelliyor', () => {
+  it('applyTheme meta\'yı ve data-scheme\'yı güncelliyor (her kayıt teması)', () => {
     document.head.innerHTML = '<meta name="theme-color" content="#f0f0f0">';
-    applyTheme('dark');
-    expect(meta()!.content).toBe(THEME_COLOR.dark);
-    let cur: Theme = 'dark';
-    for (let i = 0; i < THEMES.length; i++) {
-      const next = cycleTheme();
-      expect(next).toBe(THEME_NEXT[cur]);
-      expect(meta()!.content).toBe(THEME_COLOR[next]);
-      expect(document.documentElement.getAttribute('data-scheme')).toBe(themeScheme(next));
-      cur = next;
+    for (const t of THEMES) {
+      applyTheme(t);
+      expect(meta()!.content).toBe(THEME_COLOR[t]);
+      expect(document.documentElement.getAttribute('data-scheme')).toBe(themeScheme(t));
     }
     expect(document.querySelectorAll('meta[name="theme-color"]')).toHaveLength(1);
   });

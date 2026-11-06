@@ -1,8 +1,8 @@
-// theme.ts — v0.10.1177: tema döngüsü (üst çubuk ThemeToggle + kullanıcı menüsü ortak).
+// theme.ts — v0.10.1177: tema seçimi (üst çubuk ThemeToggle + kullanıcı menüsü ortak).
 // v0.10.1847 — tüm haritalar tema kaydından (lib/themeRegistry.ts) türer.
 import { setRaw } from '@/lib/storage';
 import { DEFAULT_THEME, type Theme } from '@/lib/themeDefault';
-import { THEME_IDS, byTheme, isThemeId, themeEntry, type ThemeScheme } from '@/lib/themeRegistry';
+import { THEME_IDS, THEME_REGISTRY, byTheme, isThemeId, themeEntry, type ThemeScheme } from '@/lib/themeRegistry';
 
 // v0.10.1610 (shadcn Faz 1 R3) — tema OKUMANIN tek yeri burası: chartFmt,
 // dataFrame ve gelecek okuyucular currentTheme()/isLightTheme() kullanır;
@@ -11,11 +11,6 @@ export { DEFAULT_THEME, type Theme, type ThemeScheme };
 
 const STORAGE_KEY = 'coremetry-theme';
 
-/** Döngü sırası = kayıt sırası (son temadan ilkine döner). */
-export const THEME_NEXT: Record<Theme, Theme> = byTheme(e => {
-  const i = THEME_IDS.indexOf(e.id);
-  return THEME_IDS[(i + 1) % THEME_IDS.length];
-});
 export const THEME_GLYPH: Record<Theme, string> = byTheme(e => e.glyph);
 
 /** v0.10.1177 — kullanıcı menüsü de aynı döngüyü kullanır (Sidebar). */
@@ -69,15 +64,17 @@ function setThemeOnRoot(t: Theme): void {
   setRaw(STORAGE_KEY, t);
 }
 
-/** Sıradaki temaya geçer, kalıcı yazar; yeni temayı döner. */
-export function cycleTheme(): Theme {
-  const next = THEME_NEXT[currentTheme()];
-  setThemeOnRoot(next);
-  return next;
-}
-
 /** v0.10.1182 — seçilen temayı doğrudan uygular (kullanıcı menüsünün yan menüsü). */
 export const THEMES: readonly Theme[] = THEME_IDS;
 export function applyTheme(t: Theme): void {
   setThemeOnRoot(t);
 }
+
+/** v0.10.1849 — seçici grup başlıkları (themes-proposal §1: "Açık" / "Koyu"). */
+export const SCHEME_LABEL: Record<ThemeScheme, string> = { light: 'Açık', dark: 'Koyu' };
+
+/** v0.10.1849 — seçici grupları (önce Açık, sonra Koyu), grup içi kayıt sırası.
+ *  Üst şerit listesi (coremetry/ThemeMenu) ve kullanıcı menüsü (Sidebar) ortak.
+ *  Döngü (cycleTheme / THEME_NEXT) kalktı: düğme listeyi açar. */
+export const THEME_GROUPS: readonly { scheme: ThemeScheme; themes: readonly Theme[] }[] = (['light', 'dark'] as const)
+  .map(scheme => ({ scheme, themes: THEME_REGISTRY.filter(e => e.scheme === scheme).map(e => e.id) }));

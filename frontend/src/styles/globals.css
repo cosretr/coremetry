@@ -462,6 +462,65 @@
   color-scheme: dark;
 }
 
+/* ── Arduvaz / slate (v0.10.1849, operatör onayı 2026-11-06) ─────────────
+   docs/frontend/themes-proposal.md §4. shadcn slate tabanı + mavi vurgu,
+   bilgi = vurgu ailesi (dark ile aynı yapı); zemin #0f172a zinc-siyahtan
+   açık ve soğuk, uzun oturum için. Seri paleti `dark` ile ortak
+   (tokens.css). Kayıt: lib/themeRegistry.ts; tamlık + kontrast kapıları
+   kayıt üzerinde döner. Radius/geometri :root'tan. */
+[data-theme="slate"] {
+  --bg0: #0f172a;
+  --bg1: #172135;
+  --bg2: #1e293b;
+  --bg3: #273449;
+  --field-bg: var(--bg2);
+  --bg:  #172135;
+  --border: #334155;
+  --divider: #263247;
+  --border-control: #475569;
+  --border-strong: #64748b;
+  --text:  #f1f5f9;
+  --text2: #cbd5e1;
+  --text3: #9ba9bd;
+  --text-faint: #6b7b93;
+  --brand:  #E30613;
+  --brand2: #ff2333;
+  --accent:  #2563eb;
+  --accent2: #60a5fa;
+  --accent-hover: #1d4ed8;
+  --focus:   #60a5fa;
+  --on-accent: #ffffff;
+  --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
+  --accent-bg:     #1c2f52;
+  --accent-border: #2a4a85;
+  --ok:   #4ac98a;
+  --warn: #f5b83d;
+  --warn-solid: #f5b83d;
+  --err:  #fa8080;
+  --err-solid: #dc2626;
+  --fatal: #fa8080;
+  --info: #60a5fa;
+  --ok-bg:   #17352e;
+  --warn-bg: #3a321f;
+  --err-bg:  #3d2630;
+  --info-bg: #1c2f52;
+  --purple: #b197fc;
+  --indigo: #818cf8;
+  --orange: #fb923c;
+  --teal:   #2dd4bf;
+  /* v0.10.1844 sinyal türü tonları — bg0–bg2'de ≥4.5 (7.86 / 6.06 / 6.46). */
+  --sig-metric: #2dd4bf;
+  --sig-trace:  #b197fc;
+  --sig-log:    #fb923c;
+  --shadow-sm:    0 1px 2px rgba(2, 6, 23, .35);
+  --shadow-md:    0 6px 20px rgba(2, 6, 23, .5);
+  --shadow-pop:   0 8px 24px rgba(2, 6, 23, .55);
+  --shadow-modal: 0 20px 60px rgba(2, 6, 23, .6);
+  --backdrop:     rgba(2, 6, 23, .6);
+
+  color-scheme: dark;
+}
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }
 /* v0.10.1363 (operatör onayı, kuyruk) — uygulama kabuğu: sayfa #content'te kayar, kök hiç kaymaz.
@@ -866,6 +925,8 @@ button.xs.copy-btn { min-height: 0; }
    glyph — a menu where only some rows are indented reads as broken. */
 .menuitem-icon { display: inline-flex; justify-content: center; width: 14px; flex-shrink: 0; }
 .menuitem-label { flex: 1; min-width: 0; }
+/* v0.10.1849 — menü içi grup başlığı (kullanıcı menüsü tema listesi: Açık / Koyu). */
+.menu-group-label { padding: var(--sp-3) var(--sp-4) var(--sp-1); font-size: var(--fs-2xs); font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: .04em; }
 
 /* ── LinkButton (v0.9.889) — looks like a link, IS a button ─────────
    Eight sites hand-rolled this in five different looks, none with a

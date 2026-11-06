@@ -9,7 +9,8 @@ screen you build must look like one of its pages.
 
 - No theme provider. Styling comes entirely from `styles.css` (the bound
   copy of `globals.css`): CSS custom properties on `:root` (dark default)
-  and token remaps under `[data-theme="light"]` / `[data-theme="redhat"]`.
+  and token remaps under `[data-theme="<id>"]` for every theme in
+  `frontend/src/lib/themeRegistry.ts` (light, redhat, slate, …).
   Put `data-theme="light"` on a root element only when the user asks for
   light mode; otherwise design on the dark palette.
 - The page ground is `var(--bg)`, text `var(--text)`. Always paint the root

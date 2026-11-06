@@ -69,9 +69,10 @@ describe('--field-bg her temada tanımlı', () => {
     expect(decl(SIDEBAR, '--field-bg')).toBe('var(--bg2)');
   });
 
-  it('--field-bg yalnız tema bloklarında tanımlanır (4 tanım, renk literali yok)', () => {
+  // v0.10.1849 — tanım sayısı kayıttan: tema başına bir + redhat koyu ray remap'i.
+  it('--field-bg yalnız tema bloklarında tanımlanır (tema başına + ray, renk literali yok)', () => {
     const defs = [...CSS.matchAll(/--field-bg\s*:\s*([^;]+);/g)].map(m => m[1].trim());
-    expect(defs).toHaveLength(4);
+    expect(defs).toHaveLength(THEME_IDS.length + 1);
     for (const v of defs) expect(v).toMatch(/^var\(--bg[12]\)$/);
   });
 });

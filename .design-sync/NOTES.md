@@ -8,7 +8,8 @@
   .d.ts girişini `types` alanından bulur; alan yokken `[ZERO_MATCH]` (tokens-only).
 - `useConfirm` hook `componentSrcMap: null` ile dışlandı (bileşen değil).
 - CSS: tek dosya `src/styles/globals.css` (`cssEntry`); dark varsayılan
-  `:root`, `[data-theme="light"|"redhat"]` token yeniden tanımları.
+  `:root`, `[data-theme="<id>"]` token yeniden tanımları (tema listesi:
+  `frontend/src/lib/themeRegistry.ts`).
 - Font: `Red Hat Text` yalnız redhat temasında ve LOKAL kuruluysa
   (fallback zinciri) — `[FONT_MISSING]` uyarısı. Operatör woff2 ekleyeceğini
   söyledi (2026-08-29); dosyalar gelince `cfg.extraFonts` ile taşınacak.

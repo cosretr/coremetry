@@ -63,7 +63,7 @@
   --status-fatal-fg: var(--fatal);
 }
 
-:root, [data-theme="dark"] {
+:root, [data-theme="dark"], [data-theme="slate"] {
   --series-1: #288dd4; --series-2: #06d8d9; --series-3: #cb4f73; --series-4: #b5b614;
   --series-5: #95b6fe; --series-6: #d76f04; --series-7: #ac78d2; --series-8: #fca0e8;
 }
