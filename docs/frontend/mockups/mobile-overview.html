@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="tr"><head><meta charset="utf-8">
+<style>
+:root{--bg0:#f4f6f8;--bg1:#fff;--bg2:#f0f3f6;--bg3:#e4e8ed;--border:#dde2e9;--text:#212429;--text2:#474c54;--text3:#62676f;--accent:#2572de;--accent-bg:#ebf2fc;--accent-border:#b3cef3;--err:#c42a28;--err-bg:#faecec;--warn:#8f5c04;--warn-bg:#f5f0e8;--ok:#047735;--ok-bg:#e8f3ed;--side:#1c1c1f;--side2:#26262a;--side-text:#e4e4e7;--side-muted:#9a9aa3}
+*{box-sizing:border-box}body{margin:0;width:2000px;height:1250px;font-family:-apple-system,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;font-size:15px;color:var(--text);background:var(--bg0);display:flex;overflow:hidden}
+.side{width:306px;background:var(--side);color:var(--side-text);display:flex;flex-direction:column;padding:0 0 16px}
+.logo{display:flex;align-items:center;justify-content:space-between;padding:22px 22px 28px}
+.logo b{font-size:22px;letter-spacing:-.3px}.logo b span{color:#E30613}.logo i{font-style:normal;color:#E30613;margin-right:8px;font-size:22px}
+.col{width:40px;height:40px;border:1px solid #3f3f46;border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--side-muted);font-size:14px}
+.sec{font-weight:700;font-size:15px;letter-spacing:.8px;color:var(--side-muted);padding:16px 26px 8px}
+.sec:before{content:"▾ ";font-size:11px;vertical-align:middle}.sec.c:before{content:"▸ "}
+.nav{display:flex;align-items:center;gap:14px;padding:11px 26px;font-size:17px;color:var(--side-text);position:relative}
+.nav .ic{width:20px;height:20px;border:2px solid var(--side-muted);border-radius:4px;opacity:.8}
+.nav.on{background:var(--side2);color:#7fb3ff}.nav.on:before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--accent)}.nav.on .ic{border-color:#7fb3ff}
+.badge{margin-left:auto;background:#3f3f46;color:#fff;border-radius:10px;padding:1px 9px;font-size:12px}
+.user{margin-top:auto;display:flex;align-items:center;gap:12px;padding:22px 26px;font-size:15px}.user .av{width:34px;height:34px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700}
+.user small{display:block;color:var(--side-muted);font-size:12px}
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+.top{height:76px;background:var(--bg1);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:16px;padding:0 28px}
+.top h1{font-size:22px;margin:0 160px 0 0;font-weight:600}
+.search{flex:1;height:42px;border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;padding:0 14px;color:var(--text3);gap:10px;max-width:700px}.search .k{margin-left:auto;display:flex;gap:6px}.k span{border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-size:12px;font-family:ui-monospace,monospace}
+.sel{height:42px;border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;padding:0 14px;gap:10px;color:var(--text2)}.sel:after{content:"▾";font-size:11px;color:var(--text3)}
+.icbtn{width:42px;height:42px;border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--text3)}
+.content{padding:26px 28px}
+.saved{display:flex;align-items:center;gap:14px;color:var(--text3);font-size:14px;margin-bottom:14px}.saved i{font-style:italic}.saved button{border:1px solid var(--border);background:var(--bg1);border-radius:6px;padding:7px 12px;font-size:14px}
+.tabs{display:flex;gap:30px;border-bottom:1px solid var(--border);margin-bottom:22px}.tabs span{padding:12px 4px;font-size:17px;color:var(--text2)}.tabs span.on{color:var(--accent);border-bottom:3px solid var(--accent);font-weight:600}
+.filters{display:flex;gap:12px;align-items:center;margin-bottom:14px}
+.f{height:42px;border:1px solid var(--border);border-radius:8px;background:var(--bg1);display:flex;align-items:center;padding:0 14px;gap:10px;color:var(--text2);font-size:15px}.f:after{content:"▾";font-size:11px;color:var(--text3)}.f.in:after{content:""}.f.in{color:var(--text3)}
+.f.chk:after{content:""}.f.chk b{width:16px;height:16px;border:1.5px solid var(--accent);background:var(--accent);border-radius:3px;display:inline-block;position:relative}.f.chk b:after{content:"✓";color:#fff;font-size:11px;position:absolute;left:2px;top:-1px}
+.btn{height:42px;border-radius:8px;padding:0 18px;background:var(--accent);color:#fff;border:0;font-size:15px;font-weight:600}.btn.g{background:var(--bg1);color:var(--text);border:1px solid var(--border);font-weight:400}
+.sum{color:var(--text2);font-size:15px;margin:18px 0 12px}.sum b{color:var(--text)}.sum .r{color:var(--err);font-weight:600}
+.card{background:var(--bg1);border:1px solid var(--border);border-radius:8px}
+table{width:100%;border-collapse:collapse}th{text-align:left;font-size:14px;color:var(--text2);padding:14px 18px;border-bottom:1px solid var(--border);font-weight:600}th.r,td.r{text-align:right}
+td{padding:0 18px;height:62px;border-bottom:1px solid var(--border);font-size:16px;vertical-align:middle}tr:last-child td{border-bottom:0}
+tr.on td{background:var(--accent-bg)}tr.on td:first-child{box-shadow:inset 4px 0 var(--accent)}
+.step{font-weight:600}.bar{display:flex;align-items:center;gap:12px}.bar i{display:block;height:16px;border-radius:4px;background:#bdd3f5}.bar.on i{background:var(--accent)}
+.pill{display:inline-block;border-radius:5px;padding:4px 10px;font-weight:600;font-size:14px;background:var(--bg3);color:var(--text)}.pill.err{background:var(--err-bg);color:var(--err)}.pill.warn{background:var(--warn-bg);color:var(--warn)}
+.tr{border:1px solid var(--accent);color:var(--accent);border-radius:6px;padding:5px 12px;font-size:14px;white-space:nowrap}
+.spark{display:inline-block;width:90px;height:22px;vertical-align:middle}
+.grid{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:18px;margin-top:18px}
+.panel{padding:16px 20px}.panel h3{margin:0 0 10px;font-size:16px}.panel ul{margin:0;padding:0;list-style:none}.panel li{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:14px;color:var(--text2)}.panel li:last-child{border:0}.panel li b{color:var(--text);font-weight:600}
+.links{display:flex;gap:18px;margin-top:12px;font-size:14px;color:var(--accent);font-weight:600}
+.mini{display:flex;gap:10px;align-items:flex-end;height:90px;margin-top:6px}.mini div{flex:1;border-radius:3px 3px 0 0;background:#bdd3f5;position:relative}.mini div.b{background:var(--accent)}.mini div span{position:absolute;top:-20px;left:0;right:0;text-align:center;font-size:12px;color:var(--text2)}
+.vs{display:flex;gap:14px;font-size:13px;color:var(--text3);margin-top:8px}.vs i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:middle}
+</style></head><style>
+.kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:14px;margin-bottom:18px}
+.kpi{background:var(--bg1);border:1px solid var(--border);border-radius:8px;padding:14px 16px}.kpi small{display:block;color:var(--text3);font-size:13px;margin-bottom:6px}.kpi b{font-size:24px;font-weight:600}.kpi i{font-style:normal;font-size:13px;margin-left:8px}.up{color:var(--ok)}.dn{color:var(--err)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px}.three{display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px;margin-bottom:18px}
+.chart{background:var(--bg1);border:1px solid var(--border);border-radius:8px;padding:14px 18px}.chart h3{margin:0 0 8px;font-size:15px;font-weight:600}.chart h3 span{float:right;color:var(--text3);font-weight:400;font-size:13px}
+.chart svg{width:100%;height:170px}.leg{display:flex;gap:16px;font-size:12px;color:var(--text3);margin-top:4px}.leg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:middle}
+.tag{display:inline-block;border:1px solid var(--border);border-radius:4px;padding:2px 8px;font-size:12px;font-family:ui-monospace,monospace;color:var(--text2);background:var(--bg2)}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:10px;vertical-align:middle}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:14px}
+.st{display:inline-block;border-radius:4px;padding:3px 8px;font-size:12px;font-weight:600}.st.ok{background:var(--ok-bg);color:var(--ok)}.st.err{background:var(--err-bg);color:var(--err)}.st.warn{background:var(--warn-bg);color:var(--warn)}
+.sub{color:var(--text3);font-size:13px}
+</style></head><body><aside class="side">
+ <div class="logo"><b><i>✦</i>Core<span>metry</span></b><div class="col">«</div></div>
+ <div class="sec">TRIAGE</div>
+ <div class="nav"><span class="ic"></span>Problems</div>
+ <div class="nav"><span class="ic"></span>Exceptions/Errors<span class="badge">1</span></div>
+ <div class="nav"><span class="ic"></span>Incidents</div>
+ <div class="nav"><span class="ic"></span>Deployment/Rollouts</div>
+ <div class="sec">SERVICES</div>
+ <div class="nav"><span class="ic"></span>Services</div>
+ <div class="nav"><span class="ic"></span>Endpoints</div>
+ <div class="nav on"><span class="ic"></span>Mobile</div>
+ <div class="nav"><span class="ic"></span>Clusters</div>
+ <div class="nav"><span class="ic"></span>Databases</div>
+ <div class="nav"><span class="ic"></span>Messaging</div>
+ <div class="nav"><span class="ic"></span>Topology</div>
+ <div class="sec">SIGNALS</div>
+ <div class="nav"><span class="ic"></span>Traces</div>
+ <div class="nav"><span class="ic"></span>Logs</div>
+ <div class="nav"><span class="ic"></span>Metrics</div>
+ <div class="sec c">WORKSPACES</div><div class="sec c">ALERTING</div><div class="sec c">SYSTEM</div>
+ <div class="user"><div class="av">A</div><div>admin@coremetry.local<small>ADMIN</small></div></div>
+</aside>
+<div class="main"><div class="top"><h1>Mobile</h1><div class="search">🔍 Servis, trace ID, sayfa veya ayar ara…<div class="k"><span>/</span><span>⌘K</span></div></div><div class="sel">All environments</div><div class="sel">🕒 Last 24 hours</div><div class="icbtn">⊖</div><div class="icbtn">TR</div><div class="icbtn">≡</div></div><div class="content">
+<div class="saved">Saved: <i>(none yet — Save current view to pin a filter combo)</i><button>+ Save current view</button></div><div class="tabs"><span class="on">Overview</span><span class="">Screens</span><span class="">Network</span><span class="">Crashes</span><span class="">Funnel</span><span class="">Versions</span></div><div class="filters"><div class="f">App: akbank-mobile-android</div><div class="f">Sürüm: All</div><div class="f">OS: All</div><div class="f">Cihaz: All</div><div class="f">Ağ: All</div><div class="f chk"><b></b>Compare vs prior</div><span style="flex:1"></span><button class="btn">Search</button><button class="btn g">Reset</button></div>
+<div class="kpis">
+<div class="kpi"><small>Aktif oturum</small><b>1.84M</b><i class="up">+3.2%</i></div>
+<div class="kpi"><small>Crash-free oturum</small><b>99.61%</b><i class="dn">−0.14</i></div>
+<div class="kpi"><small>ANR oranı</small><b>0.08%</b><i class="up">−0.01</i></div>
+<div class="kpi"><small>Cold start p90</small><b>1.9 s</b><i class="dn">+0.3 s</i></div>
+<div class="kpi"><small>Ağ hata oranı</small><b>1.42%</b><i class="dn">+0.31</i></div>
+<div class="kpi"><small>Açıldı ama bağlanamadı</small><b>0.21%</b><i class="dn">+0.09</i></div>
+</div>
+<div class="two"><div class="chart"><h3>Oturum ve crash<span>son 24 saat</span></h3><svg viewBox="0 0 760 170" preserveAspectRatio="none"><line x1="0" x2="760" y1="30" y2="30" stroke="#eef1f4"/><line x1="0" x2="760" y1="70" y2="70" stroke="#eef1f4"/><line x1="0" x2="760" y1="110" y2="110" stroke="#eef1f4"/><line x1="0" x2="760" y1="150" y2="150" stroke="#eef1f4"/><polygon fill="#ebf2fc" points="0,170 0,120 40,110 80,118 120,95 160,80 200,60 240,52 280,48 320,55 360,40 400,45 440,38 480,50 520,42 560,48 600,70 640,85 680,100 720,112 760,118 760,170"/><polyline fill="none" stroke="#2572de" stroke-width="2" points="0,120 40,110 80,118 120,95 160,80 200,60 240,52 280,48 320,55 360,40 400,45 440,38 480,50 520,42 560,48 600,70 640,85 680,100 720,112 760,118"/><polyline fill="none" stroke="#c42a28" stroke-width="1.8" points="0,150 40,152 80,149 120,151 160,148 200,150 240,147 280,149 320,150 360,148 400,151 440,120 480,95 520,88 560,92 600,110 640,135 680,146 720,150 760,151"/><text x="0" y="166" font-size="11" fill="#9aa0a8">00:00</text><text x="190" y="166" font-size="11" fill="#9aa0a8">06:00</text><text x="380" y="166" font-size="11" fill="#9aa0a8">12:00</text><text x="570" y="166" font-size="11" fill="#9aa0a8">18:00</text><text x="730" y="166" font-size="11" fill="#9aa0a8">24:00</text></svg><div class="leg"><span><i style="background:#2572de"></i>Oturum/dk</span><span><i style="background:#c42a28"></i>Crash</span></div></div><div class="chart"><h3>Cold start p50 / p90<span>ms</span></h3><svg viewBox="0 0 760 170" preserveAspectRatio="none"><line x1="0" x2="760" y1="30" y2="30" stroke="#eef1f4"/><line x1="0" x2="760" y1="70" y2="70" stroke="#eef1f4"/><line x1="0" x2="760" y1="110" y2="110" stroke="#eef1f4"/><line x1="0" x2="760" y1="150" y2="150" stroke="#eef1f4"/><polyline fill="none" stroke="#bdd3f5" stroke-width="2" points="0,125 40,122 80,124 120,118 160,112 200,108 240,105 280,104 320,106 360,100 400,103 440,99 480,104 520,101 560,103 600,110 640,116 680,120 720,124 760,126"/><polyline fill="none" stroke="#2572de" stroke-width="2" points="0,100 40,98 80,101 120,97 160,99 200,96 240,98 280,95 320,97 360,96 400,98 440,70 480,62 520,65 560,68 600,80 640,92 680,96 720,98 760,99"/><line x1="440" x2="440" y1="20" y2="150" stroke="#8250df" stroke-dasharray="4 4"/><text x="446" y="30" font-size="11" fill="#8250df">rollout 5.4.1</text><text x="0" y="166" font-size="11" fill="#9aa0a8">00:00</text><text x="190" y="166" font-size="11" fill="#9aa0a8">06:00</text><text x="380" y="166" font-size="11" fill="#9aa0a8">12:00</text><text x="570" y="166" font-size="11" fill="#9aa0a8">18:00</text><text x="730" y="166" font-size="11" fill="#9aa0a8">24:00</text></svg><div class="leg"><span><i style="background:#bdd3f5"></i>p50</span><span><i style="background:#2572de"></i>p90</span><span><i style="background:#8250df"></i>Rollout</span></div></div></div>
+<div class="three">
+<div class="card panel"><h3>Sürüm sağlığı</h3><ul>
+<li><span><span class="dot" style="background:var(--ok)"></span>5.4.0 · yayılım %61</span><b>crash-free 99.72%</b></li>
+<li><span><span class="dot" style="background:var(--err)"></span>5.4.1 · yayılım %34 <span class="st warn">staged</span></span><b style="color:var(--err)">crash-free 99.41%</b></li>
+<li><span><span class="dot" style="background:var(--ok)"></span>5.3.2 · yayılım %5</span><b>crash-free 99.78%</b></li></ul>
+<div class="links"><span>Versions →</span><span>Rollout'u durdur önerisi →</span></div></div>
+<div class="card panel"><h3>En yavaş ekranlar (p90 yükleme)</h3><ul>
+<li><span>TransferConfirmScreen</span><b>3.4 s</b></li><li><span>CardDetailScreen</span><b>2.8 s</b></li><li><span>PaymentScreen</span><b>2.1 s</b></li><li><span>AccountListScreen</span><b>1.6 s</b></li></ul>
+<div class="links"><span>Screens →</span></div></div>
+<div class="card panel"><h3>Açık Problem'ler ve anomaliler</h3><ul>
+<li><span><span class="st err">P2</span> &nbsp;otp-service gecikme ↑ · funnel −5.4 puan</span><b>03 Kas 10:10</b></li>
+<li><span><span class="st warn">P3</span> &nbsp;5.4.1 crash-free düşüşü (Samsung S23)</span><b>03 Kas 11:40</b></li>
+<li><span><span class="st warn">Anomali</span> &nbsp;/api/payments 5xx oranı · mobil kanal</span><b>bugün 08:15</b></li></ul>
+<div class="links"><span>Problems →</span><span>✨ Explain</span></div></div>
+</div></div></div></body></html>

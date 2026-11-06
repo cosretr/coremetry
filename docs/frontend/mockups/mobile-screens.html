@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="tr"><head><meta charset="utf-8">
+<style>
+:root{--bg0:#f4f6f8;--bg1:#fff;--bg2:#f0f3f6;--bg3:#e4e8ed;--border:#dde2e9;--text:#212429;--text2:#474c54;--text3:#62676f;--accent:#2572de;--accent-bg:#ebf2fc;--accent-border:#b3cef3;--err:#c42a28;--err-bg:#faecec;--warn:#8f5c04;--warn-bg:#f5f0e8;--ok:#047735;--ok-bg:#e8f3ed;--side:#1c1c1f;--side2:#26262a;--side-text:#e4e4e7;--side-muted:#9a9aa3}
+*{box-sizing:border-box}body{margin:0;width:2000px;height:1250px;font-family:-apple-system,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;font-size:15px;color:var(--text);background:var(--bg0);display:flex;overflow:hidden}
+.side{width:306px;background:var(--side);color:var(--side-text);display:flex;flex-direction:column;padding:0 0 16px}
+.logo{display:flex;align-items:center;justify-content:space-between;padding:22px 22px 28px}
+.logo b{font-size:22px;letter-spacing:-.3px}.logo b span{color:#E30613}.logo i{font-style:normal;color:#E30613;margin-right:8px;font-size:22px}
+.col{width:40px;height:40px;border:1px solid #3f3f46;border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--side-muted);font-size:14px}
+.sec{font-weight:700;font-size:15px;letter-spacing:.8px;color:var(--side-muted);padding:16px 26px 8px}
+.sec:before{content:"▾ ";font-size:11px;vertical-align:middle}.sec.c:before{content:"▸ "}
+.nav{display:flex;align-items:center;gap:14px;padding:11px 26px;font-size:17px;color:var(--side-text);position:relative}
+.nav .ic{width:20px;height:20px;border:2px solid var(--side-muted);border-radius:4px;opacity:.8}
+.nav.on{background:var(--side2);color:#7fb3ff}.nav.on:before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--accent)}.nav.on .ic{border-color:#7fb3ff}
+.badge{margin-left:auto;background:#3f3f46;color:#fff;border-radius:10px;padding:1px 9px;font-size:12px}
+.user{margin-top:auto;display:flex;align-items:center;gap:12px;padding:22px 26px;font-size:15px}.user .av{width:34px;height:34px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700}
+.user small{display:block;color:var(--side-muted);font-size:12px}
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+.top{height:76px;background:var(--bg1);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:16px;padding:0 28px}
+.top h1{font-size:22px;margin:0 160px 0 0;font-weight:600}
+.search{flex:1;height:42px;border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;padding:0 14px;color:var(--text3);gap:10px;max-width:700px}.search .k{margin-left:auto;display:flex;gap:6px}.k span{border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-size:12px;font-family:ui-monospace,monospace}
+.sel{height:42px;border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;padding:0 14px;gap:10px;color:var(--text2)}.sel:after{content:"▾";font-size:11px;color:var(--text3)}
+.icbtn{width:42px;height:42px;border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--text3)}
+.content{padding:26px 28px}
+.saved{display:flex;align-items:center;gap:14px;color:var(--text3);font-size:14px;margin-bottom:14px}.saved i{font-style:italic}.saved button{border:1px solid var(--border);background:var(--bg1);border-radius:6px;padding:7px 12px;font-size:14px}
+.tabs{display:flex;gap:30px;border-bottom:1px solid var(--border);margin-bottom:22px}.tabs span{padding:12px 4px;font-size:17px;color:var(--text2)}.tabs span.on{color:var(--accent);border-bottom:3px solid var(--accent);font-weight:600}
+.filters{display:flex;gap:12px;align-items:center;margin-bottom:14px}
+.f{height:42px;border:1px solid var(--border);border-radius:8px;background:var(--bg1);display:flex;align-items:center;padding:0 14px;gap:10px;color:var(--text2);font-size:15px}.f:after{content:"▾";font-size:11px;color:var(--text3)}.f.in:after{content:""}.f.in{color:var(--text3)}
+.f.chk:after{content:""}.f.chk b{width:16px;height:16px;border:1.5px solid var(--accent);background:var(--accent);border-radius:3px;display:inline-block;position:relative}.f.chk b:after{content:"✓";color:#fff;font-size:11px;position:absolute;left:2px;top:-1px}
+.btn{height:42px;border-radius:8px;padding:0 18px;background:var(--accent);color:#fff;border:0;font-size:15px;font-weight:600}.btn.g{background:var(--bg1);color:var(--text);border:1px solid var(--border);font-weight:400}
+.sum{color:var(--text2);font-size:15px;margin:18px 0 12px}.sum b{color:var(--text)}.sum .r{color:var(--err);font-weight:600}
+.card{background:var(--bg1);border:1px solid var(--border);border-radius:8px}
+table{width:100%;border-collapse:collapse}th{text-align:left;font-size:14px;color:var(--text2);padding:14px 18px;border-bottom:1px solid var(--border);font-weight:600}th.r,td.r{text-align:right}
+td{padding:0 18px;height:62px;border-bottom:1px solid var(--border);font-size:16px;vertical-align:middle}tr:last-child td{border-bottom:0}
+tr.on td{background:var(--accent-bg)}tr.on td:first-child{box-shadow:inset 4px 0 var(--accent)}
+.step{font-weight:600}.bar{display:flex;align-items:center;gap:12px}.bar i{display:block;height:16px;border-radius:4px;background:#bdd3f5}.bar.on i{background:var(--accent)}
+.pill{display:inline-block;border-radius:5px;padding:4px 10px;font-weight:600;font-size:14px;background:var(--bg3);color:var(--text)}.pill.err{background:var(--err-bg);color:var(--err)}.pill.warn{background:var(--warn-bg);color:var(--warn)}
+.tr{border:1px solid var(--accent);color:var(--accent);border-radius:6px;padding:5px 12px;font-size:14px;white-space:nowrap}
+.spark{display:inline-block;width:90px;height:22px;vertical-align:middle}
+.grid{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:18px;margin-top:18px}
+.panel{padding:16px 20px}.panel h3{margin:0 0 10px;font-size:16px}.panel ul{margin:0;padding:0;list-style:none}.panel li{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:14px;color:var(--text2)}.panel li:last-child{border:0}.panel li b{color:var(--text);font-weight:600}
+.links{display:flex;gap:18px;margin-top:12px;font-size:14px;color:var(--accent);font-weight:600}
+.mini{display:flex;gap:10px;align-items:flex-end;height:90px;margin-top:6px}.mini div{flex:1;border-radius:3px 3px 0 0;background:#bdd3f5;position:relative}.mini div.b{background:var(--accent)}.mini div span{position:absolute;top:-20px;left:0;right:0;text-align:center;font-size:12px;color:var(--text2)}
+.vs{display:flex;gap:14px;font-size:13px;color:var(--text3);margin-top:8px}.vs i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:middle}
+</style></head><style>
+.kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:14px;margin-bottom:18px}
+.kpi{background:var(--bg1);border:1px solid var(--border);border-radius:8px;padding:14px 16px}.kpi small{display:block;color:var(--text3);font-size:13px;margin-bottom:6px}.kpi b{font-size:24px;font-weight:600}.kpi i{font-style:normal;font-size:13px;margin-left:8px}.up{color:var(--ok)}.dn{color:var(--err)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px}.three{display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px;margin-bottom:18px}
+.chart{background:var(--bg1);border:1px solid var(--border);border-radius:8px;padding:14px 18px}.chart h3{margin:0 0 8px;font-size:15px;font-weight:600}.chart h3 span{float:right;color:var(--text3);font-weight:400;font-size:13px}
+.chart svg{width:100%;height:170px}.leg{display:flex;gap:16px;font-size:12px;color:var(--text3);margin-top:4px}.leg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:middle}
+.tag{display:inline-block;border:1px solid var(--border);border-radius:4px;padding:2px 8px;font-size:12px;font-family:ui-monospace,monospace;color:var(--text2);background:var(--bg2)}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:10px;vertical-align:middle}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:14px}
+.st{display:inline-block;border-radius:4px;padding:3px 8px;font-size:12px;font-weight:600}.st.ok{background:var(--ok-bg);color:var(--ok)}.st.err{background:var(--err-bg);color:var(--err)}.st.warn{background:var(--warn-bg);color:var(--warn)}
+.sub{color:var(--text3);font-size:13px}
+</style></head><body><aside class="side">
+ <div class="logo"><b><i>✦</i>Core<span>metry</span></b><div class="col">«</div></div>
+ <div class="sec">TRIAGE</div>
+ <div class="nav"><span class="ic"></span>Problems</div>
+ <div class="nav"><span class="ic"></span>Exceptions/Errors<span class="badge">1</span></div>
+ <div class="nav"><span class="ic"></span>Incidents</div>
+ <div class="nav"><span class="ic"></span>Deployment/Rollouts</div>
+ <div class="sec">SERVICES</div>
+ <div class="nav"><span class="ic"></span>Services</div>
+ <div class="nav"><span class="ic"></span>Endpoints</div>
+ <div class="nav on"><span class="ic"></span>Mobile</div>
+ <div class="nav"><span class="ic"></span>Clusters</div>
+ <div class="nav"><span class="ic"></span>Databases</div>
+ <div class="nav"><span class="ic"></span>Messaging</div>
+ <div class="nav"><span class="ic"></span>Topology</div>
+ <div class="sec">SIGNALS</div>
+ <div class="nav"><span class="ic"></span>Traces</div>
+ <div class="nav"><span class="ic"></span>Logs</div>
+ <div class="nav"><span class="ic"></span>Metrics</div>
+ <div class="sec c">WORKSPACES</div><div class="sec c">ALERTING</div><div class="sec c">SYSTEM</div>
+ <div class="user"><div class="av">A</div><div>admin@coremetry.local<small>ADMIN</small></div></div>
+</aside>
+<div class="main"><div class="top"><h1>Mobile</h1><div class="search">🔍 Servis, trace ID, sayfa veya ayar ara…<div class="k"><span>/</span><span>⌘K</span></div></div><div class="sel">All environments</div><div class="sel">🕒 Last 24 hours</div><div class="icbtn">⊖</div><div class="icbtn">TR</div><div class="icbtn">≡</div></div><div class="content">
+<div class="saved">Saved: <i>(none yet — Save current view to pin a filter combo)</i><button>+ Save current view</button></div><div class="tabs"><span class="">Overview</span><span class="on">Screens</span><span class="">Network</span><span class="">Crashes</span><span class="">Funnel</span><span class="">Versions</span></div><div class="filters"><div class="f">App: akbank-mobile-android</div><div class="f">Sürüm: All</div><div class="f">OS: All</div><div class="f">Cihaz: All</div><div class="f">Ağ: All</div><div class="f chk"><b></b>Compare vs prior</div><span style="flex:1"></span><button class="btn">Search</button><button class="btn g">Reset</button></div>
+<div class="sum"><b>42</b> ekran · <b>1.84M</b> oturum · yavaş ekran eşiği p90 &gt; 2.0 s · <b>4</b> ekran eşik üstü</div>
+<div class="card"><table>
+<tr><th>Ekran</th><th class="r">▼ Görüntüleme</th><th class="r">Yükleme p50</th><th class="r">Yükleme p90</th><th>Trend</th><th class="r">Donma oranı</th><th class="r">Hata gösterimi</th><th class="r">Kalış p50</th><th class="r">Backend payı</th><th class="r"></th></tr>
+<tr><td class="step">AccountListScreen</td><td class="r">1.62M</td><td class="r">420 ms</td><td class="r">1.6 s</td><td><svg class="spark" viewBox="0 0 90 22"><polyline fill="none" stroke="#8a8f98" stroke-width="1.5" points="0,12 15,11 30,13 45,10 60,12 75,11 90,12"/></svg></td><td class="r">0.3%</td><td class="r">0.1%</td><td class="r">18 s</td><td class="r">61%</td><td class="r"><span class="tr">Traces →</span></td></tr>
+<tr><td class="step">PaymentScreen</td><td class="r">640K</td><td class="r">610 ms</td><td class="r"><span class="pill warn">2.1 s</span></td><td><svg class="spark" viewBox="0 0 90 22"><polyline fill="none" stroke="#8a8f98" stroke-width="1.5" points="0,14 15,13 30,12 45,12 60,9 75,8 90,7"/></svg></td><td class="r">0.8%</td><td class="r">1.9%</td><td class="r">46 s</td><td class="r">78%</td><td class="r"><span class="tr">Traces →</span></td></tr>
+<tr class="on"><td class="step">TransferConfirmScreen</td><td class="r">412K</td><td class="r">980 ms</td><td class="r"><span class="pill err">3.4 s</span></td><td><svg class="spark" viewBox="0 0 90 22"><polyline fill="none" stroke="#c42a28" stroke-width="1.5" points="0,14 15,13 30,14 45,12 60,6 75,4 90,3"/></svg></td><td class="r" style="color:var(--err)">2.4%</td><td class="r" style="color:var(--err)">4.1%</td><td class="r">29 s</td><td class="r"><span class="pill err">88%</span></td><td class="r"><span class="tr">Traces →</span></td></tr>
+<tr><td class="step">CardDetailScreen</td><td class="r">388K</td><td class="r">740 ms</td><td class="r"><span class="pill warn">2.8 s</span></td><td><svg class="spark" viewBox="0 0 90 22"><polyline fill="none" stroke="#8a8f98" stroke-width="1.5" points="0,10 15,11 30,10 45,11 60,10 75,11 90,10"/></svg></td><td class="r">1.1%</td><td class="r">0.6%</td><td class="r">22 s</td><td class="r">42%</td><td class="r"><span class="tr">Traces →</span></td></tr>
+<tr><td class="step">OtpScreen</td><td class="r">301K</td><td class="r">120 ms</td><td class="r">380 ms</td><td><svg class="spark" viewBox="0 0 90 22"><polyline fill="none" stroke="#8a8f98" stroke-width="1.5" points="0,11 15,11 30,12 45,11 60,11 75,12 90,11"/></svg></td><td class="r">0.2%</td><td class="r" style="color:var(--err)">6.8%</td><td class="r">41 s</td><td class="r">12%</td><td class="r"><span class="tr">Traces →</span></td></tr>
+<tr><td class="step">LoginScreen</td><td class="r">1.80M</td><td class="r">210 ms</td><td class="r">690 ms</td><td><svg class="spark" viewBox="0 0 90 22"><polyline fill="none" stroke="#8a8f98" stroke-width="1.5" points="0,11 15,12 30,11 45,12 60,11 75,11 90,12"/></svg></td><td class="r">0.1%</td><td class="r">0.9%</td><td class="r">9 s</td><td class="r">55%</td><td class="r"><span class="tr">Traces →</span></td></tr>
+</table></div>
+<div class="three" style="margin-top:18px">
+<div class="card panel"><h3>TransferConfirmScreen · yükleme süresi dağılımı</h3><div class="mini" style="height:110px"><div style="height:30%"><span>cihaz 0.3 s</span></div><div style="height:12%"><span>ağ 0.1 s</span></div><div class="b" style="height:100%"><span>backend 3.0 s</span></div></div><div class="sub" style="margin-top:8px">Backend payının %88'i transfer-service → Oracle sorgusunda (PMCACOM.TRANSFER_LIMIT).</div><div class="links"><span>transfer-service →</span><span>Örnek trace →</span></div></div>
+<div class="card panel"><h3>Cihaz kırılımı (p90)</h3><ul><li><span>Samsung SM-S918B</span><b>3.1 s</b></li><li><span>Samsung SM-A546B</span><b>4.2 s</b></li><li><span>Xiaomi 2210132G</span><b>3.0 s</b></li><li><span>Google Pixel 8</span><b>2.4 s</b></li></ul></div>
+<div class="card panel"><h3>Ağ kırılımı (p90)</h3><ul><li><span>wifi</span><b>2.6 s</b></li><li><span>cell · 5g</span><b>3.1 s</b></li><li><span>cell · 4g</span><b>3.9 s</b></li><li><span>cell · 3g</span><b style="color:var(--err)">7.8 s</b></li></ul><div class="links"><span>✨ Explain</span></div></div>
+</div></div></div></body></html>

@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="tr"><head><meta charset="utf-8">
+<style>
+:root{--bg0:#f4f6f8;--bg1:#fff;--bg2:#f0f3f6;--bg3:#e4e8ed;--border:#dde2e9;--text:#212429;--text2:#474c54;--text3:#62676f;--accent:#2572de;--accent-bg:#ebf2fc;--accent-border:#b3cef3;--err:#c42a28;--err-bg:#faecec;--warn:#8f5c04;--warn-bg:#f5f0e8;--ok:#047735;--ok-bg:#e8f3ed;--side:#1c1c1f;--side2:#26262a;--side-text:#e4e4e7;--side-muted:#9a9aa3}
+*{box-sizing:border-box}body{margin:0;width:2000px;height:1250px;font-family:-apple-system,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;font-size:15px;color:var(--text);background:var(--bg0);display:flex;overflow:hidden}
+.side{width:306px;background:var(--side);color:var(--side-text);display:flex;flex-direction:column;padding:0 0 16px}
+.logo{display:flex;align-items:center;justify-content:space-between;padding:22px 22px 28px}
+.logo b{font-size:22px;letter-spacing:-.3px}.logo b span{color:#E30613}.logo i{font-style:normal;color:#E30613;margin-right:8px;font-size:22px}
+.col{width:40px;height:40px;border:1px solid #3f3f46;border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--side-muted);font-size:14px}
+.sec{font-weight:700;font-size:15px;letter-spacing:.8px;color:var(--side-muted);padding:16px 26px 8px}
+.sec:before{content:"▾ ";font-size:11px;vertical-align:middle}.sec.c:before{content:"▸ "}
+.nav{display:flex;align-items:center;gap:14px;padding:11px 26px;font-size:17px;color:var(--side-text);position:relative}
+.nav .ic{width:20px;height:20px;border:2px solid var(--side-muted);border-radius:4px;opacity:.8}
+.nav.on{background:var(--side2);color:#7fb3ff}.nav.on:before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--accent)}.nav.on .ic{border-color:#7fb3ff}
+.badge{margin-left:auto;background:#3f3f46;color:#fff;border-radius:10px;padding:1px 9px;font-size:12px}
+.user{margin-top:auto;display:flex;align-items:center;gap:12px;padding:22px 26px;font-size:15px}.user .av{width:34px;height:34px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700}
+.user small{display:block;color:var(--side-muted);font-size:12px}
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+.top{height:76px;background:var(--bg1);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:16px;padding:0 28px}
+.top h1{font-size:22px;margin:0 160px 0 0;font-weight:600}
+.search{flex:1;height:42px;border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;padding:0 14px;color:var(--text3);gap:10px;max-width:700px}.search .k{margin-left:auto;display:flex;gap:6px}.k span{border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-size:12px;font-family:ui-monospace,monospace}
+.sel{height:42px;border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;padding:0 14px;gap:10px;color:var(--text2)}.sel:after{content:"▾";font-size:11px;color:var(--text3)}
+.icbtn{width:42px;height:42px;border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--text3)}
+.content{padding:26px 28px}
+.saved{display:flex;align-items:center;gap:14px;color:var(--text3);font-size:14px;margin-bottom:14px}.saved i{font-style:italic}.saved button{border:1px solid var(--border);background:var(--bg1);border-radius:6px;padding:7px 12px;font-size:14px}
+.tabs{display:flex;gap:30px;border-bottom:1px solid var(--border);margin-bottom:22px}.tabs span{padding:12px 4px;font-size:17px;color:var(--text2)}.tabs span.on{color:var(--accent);border-bottom:3px solid var(--accent);font-weight:600}
+.filters{display:flex;gap:12px;align-items:center;margin-bottom:14px}
+.f{height:42px;border:1px solid var(--border);border-radius:8px;background:var(--bg1);display:flex;align-items:center;padding:0 14px;gap:10px;color:var(--text2);font-size:15px}.f:after{content:"▾";font-size:11px;color:var(--text3)}.f.in:after{content:""}.f.in{color:var(--text3)}
+.f.chk:after{content:""}.f.chk b{width:16px;height:16px;border:1.5px solid var(--accent);background:var(--accent);border-radius:3px;display:inline-block;position:relative}.f.chk b:after{content:"✓";color:#fff;font-size:11px;position:absolute;left:2px;top:-1px}
+.btn{height:42px;border-radius:8px;padding:0 18px;background:var(--accent);color:#fff;border:0;font-size:15px;font-weight:600}.btn.g{background:var(--bg1);color:var(--text);border:1px solid var(--border);font-weight:400}
+.sum{color:var(--text2);font-size:15px;margin:18px 0 12px}.sum b{color:var(--text)}.sum .r{color:var(--err);font-weight:600}
+.card{background:var(--bg1);border:1px solid var(--border);border-radius:8px}
+table{width:100%;border-collapse:collapse}th{text-align:left;font-size:14px;color:var(--text2);padding:14px 18px;border-bottom:1px solid var(--border);font-weight:600}th.r,td.r{text-align:right}
+td{padding:0 18px;height:62px;border-bottom:1px solid var(--border);font-size:16px;vertical-align:middle}tr:last-child td{border-bottom:0}
+tr.on td{background:var(--accent-bg)}tr.on td:first-child{box-shadow:inset 4px 0 var(--accent)}
+.step{font-weight:600}.bar{display:flex;align-items:center;gap:12px}.bar i{display:block;height:16px;border-radius:4px;background:#bdd3f5}.bar.on i{background:var(--accent)}
+.pill{display:inline-block;border-radius:5px;padding:4px 10px;font-weight:600;font-size:14px;background:var(--bg3);color:var(--text)}.pill.err{background:var(--err-bg);color:var(--err)}.pill.warn{background:var(--warn-bg);color:var(--warn)}
+.tr{border:1px solid var(--accent);color:var(--accent);border-radius:6px;padding:5px 12px;font-size:14px;white-space:nowrap}
+.spark{display:inline-block;width:90px;height:22px;vertical-align:middle}
+.grid{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:18px;margin-top:18px}
+.panel{padding:16px 20px}.panel h3{margin:0 0 10px;font-size:16px}.panel ul{margin:0;padding:0;list-style:none}.panel li{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:14px;color:var(--text2)}.panel li:last-child{border:0}.panel li b{color:var(--text);font-weight:600}
+.links{display:flex;gap:18px;margin-top:12px;font-size:14px;color:var(--accent);font-weight:600}
+.mini{display:flex;gap:10px;align-items:flex-end;height:90px;margin-top:6px}.mini div{flex:1;border-radius:3px 3px 0 0;background:#bdd3f5;position:relative}.mini div.b{background:var(--accent)}.mini div span{position:absolute;top:-20px;left:0;right:0;text-align:center;font-size:12px;color:var(--text2)}
+.vs{display:flex;gap:14px;font-size:13px;color:var(--text3);margin-top:8px}.vs i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:middle}
+</style></head><body>
+<aside class="side">
+ <div class="logo"><b><i>✦</i>Core<span>metry</span></b><div class="col">«</div></div>
+ <div class="sec">TRIAGE</div>
+ <div class="nav"><span class="ic"></span>Problems</div>
+ <div class="nav"><span class="ic"></span>Exceptions/Errors<span class="badge">1</span></div>
+ <div class="nav"><span class="ic"></span>Incidents</div>
+ <div class="nav"><span class="ic"></span>Deployment/Rollouts</div>
+ <div class="sec">SERVICES</div>
+ <div class="nav"><span class="ic"></span>Services</div>
+ <div class="nav"><span class="ic"></span>Endpoints</div>
+ <div class="nav on"><span class="ic"></span>Mobile</div>
+ <div class="nav"><span class="ic"></span>Clusters</div>
+ <div class="nav"><span class="ic"></span>Databases</div>
+ <div class="nav"><span class="ic"></span>Messaging</div>
+ <div class="nav"><span class="ic"></span>Topology</div>
+ <div class="sec">SIGNALS</div>
+ <div class="nav"><span class="ic"></span>Traces</div>
+ <div class="nav"><span class="ic"></span>Logs</div>
+ <div class="nav"><span class="ic"></span>Metrics</div>
+ <div class="sec c">WORKSPACES</div><div class="sec c">ALERTING</div><div class="sec c">SYSTEM</div>
+ <div class="user"><div class="av">A</div><div>admin@coremetry.local<small>ADMIN</small></div></div>
+</aside>
+<div class="main">
+ <div class="top"><h1>Mobile</h1><div class="search">🔍 Servis, trace ID, sayfa veya ayar ara…<div class="k"><span>/</span><span>⌘K</span></div></div><div class="sel">All environments</div><div class="sel">🕒 Last 7 days</div><div class="icbtn">⊖</div><div class="icbtn">TR</div><div class="icbtn">≡</div></div>
+ <div class="content">
+  <div class="saved">Saved: <i>(none yet — Save current view to pin a filter combo)</i><button>+ Save current view</button></div>
+  <div class="tabs"><span>Overview</span><span>Screens</span><span>Network</span><span>Crashes</span><span class="on">Funnel</span><span>Versions</span></div>
+  <div class="filters"><div class="f">Yolculuk: transfer</div><div class="f">App: akbank-mobile-android</div><div class="f">Sürüm: 5.4.0, 5.4.1</div><div class="f">OS: All</div><div class="f">Cihaz: All</div><div class="f">Kırılım: sürüm</div><div class="f">Kaynak: event</div><div class="f chk"><b></b>Compare vs prior</div></div>
+  <div class="filters"><div class="f in">Pencere: 15 dk</div><button class="btn">Search</button><span style="font-family:ui-monospace,monospace;font-size:12px;border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--text3)">Enter ↵</span><span style="flex:1"></span><button class="btn g">Reset</button></div>
+  <div class="sum"><b>120.0K</b> oturum · 5 adım · uçtan uca dönüşüm <b>%58.0</b> (önceki 7 gün: %63.4, <span class="r">−5.4 puan</span>) · en büyük düşüş: <b>OTP doğrula</b> <span class="r">−19.1%</span></div>
+  <div class="card"><table>
+   <tr><th>Adım</th><th>▼ Oturum</th><th class="r">Ulaşma</th><th class="r">Δ prior</th><th class="r">Düşüş</th><th>Trend</th><th class="r">Süre p50</th><th class="r">Hata event</th><th class="r">Traces</th></tr>
+   <tr><td class="step">Transfer başlat</td><td><div class="bar"><i style="width:300px"></i>120.0K</div></td><td class="r">100%</td><td class="r" style="color:var(--text3)">—</td><td class="r" style="color:var(--text3)">—</td><td><svg class="spark" viewBox="0 0 90 22"><polyline fill="none" stroke="#8a8f98" stroke-width="1.5" points="0,14 12,12 24,15 36,9 48,11 60,8 72,10 90,7"/></svg></td><td class="r" style="color:var(--text3)">—</td><td class="r" style="color:var(--text3)">—</td><td class="r"><span class="tr">Traces →</span></td></tr>
+   <tr><td class="step">Alıcı seç</td><td><div class="bar"><i style="width:246px"></i>98.4K</div></td><td class="r">82%</td><td class="r" style="color:var(--ok)">+0.8</td><td class="r"><span class="pill err">−18.0%</span></td><td><svg class="spark" viewBox="0 0 90 22"><polyline fill="none" stroke="#8a8f98" stroke-width="1.5" points="0,10 12,11 24,9 36,12 48,10 60,11 72,10 90,9"/></svg></td><td class="r">14 s</td><td class="r">120</td><td class="r"><span class="tr">Traces →</span></td></tr>
+   <tr><td class="step">Tutar gir</td><td><div class="bar"><i style="width:228px"></i>91.2K</div></td><td class="r">76%</td><td class="r" style="color:var(--ok)">+0.3</td><td class="r"><span class="pill">−7.3%</span></td><td><svg class="spark" viewBox="0 0 90 22"><polyline fill="none" stroke="#8a8f98" stroke-width="1.5" points="0,9 12,10 24,8 36,10 48,9 60,10 72,9 90,10"/></svg></td><td class="r">22 s</td><td class="r">310</td><td class="r"><span class="tr">Traces →</span></td></tr>
+   <tr class="on"><td class="step">OTP doğrula</td><td><div class="bar on"><i style="width:185px"></i>73.9K</div></td><td class="r">62%</td><td class="r" style="color:var(--err);font-weight:600">−6.9</td><td class="r"><span class="pill err">−19.1%</span></td><td><svg class="spark" viewBox="0 0 90 22"><polyline fill="none" stroke="#c42a28" stroke-width="1.5" points="0,8 12,8 24,9 36,8 48,9 60,13 72,17 90,19"/></svg></td><td class="r">41 s</td><td class="r" style="color:var(--err);font-weight:600">4.86K</td><td class="r"><span class="tr">Traces →</span></td></tr>
+   <tr><td class="step">Sonuç</td><td><div class="bar"><i style="width:174px"></i>69.6K</div></td><td class="r">58%</td><td class="r" style="color:var(--err)">−5.4</td><td class="r"><span class="pill">−5.8%</span></td><td><svg class="spark" viewBox="0 0 90 22"><polyline fill="none" stroke="#8a8f98" stroke-width="1.5" points="0,8 12,9 24,8 36,9 48,10 60,13 72,16 90,18"/></svg></td><td class="r">3 s</td><td class="r" style="color:var(--err)">1.04K</td><td class="r"><span class="tr">Traces →</span></td></tr>
+  </table></div>
+  <div class="grid">
+   <div class="card panel"><h3>OTP doğrula · düşüş incelemesi (17.3K oturum)</h3><ul>
+    <li><span>Son event: otp.timeout</span><b>61%</b></li><li><span>Son event: ui.error.shown</span><b>24%</b></li><li><span>Son event: app.background</span><b>15%</b></li>
+    <li><span>Hata kodu: BSA_020</span><b>2.9K</b></li><li><span>Hata kodu: BSA_028</span><b>1.1K</b></li></ul>
+    <div class="links"><span>Örnek oturum → trace</span><span>Logs →</span><span>✨ Explain</span></div></div>
+   <div class="card panel"><h3>Kırılım: sürüm (OTP adımı dönüşümü)</h3>
+    <div class="mini"><div style="height:80%"><span>5.4.0 · 84%</span></div><div class="b" style="height:62%"><span>5.4.1 · 77%</span></div></div>
+    <div class="vs"><span><i style="background:#bdd3f5"></i>5.4.0 (önceki)</span><span><i style="background:var(--accent)"></i>5.4.1 (rollout 03 Kas)</span></div>
+    <ul style="margin-top:10px"><li><span>Samsung SM-S918B</span><b>−11 puan</b></li><li><span>Xiaomi 2210132G</span><b>−3 puan</b></li></ul></div>
+   <div class="card panel"><h3>Bağlam</h3><ul>
+    <li><span>Rollout</span><b>akbank-mobile-android 5.4.1 · 03 Kas 09:40</b></li><li><span>Açık Problem</span><b>P2 · OTP servisi gecikme ↑</b></li><li><span>Backend</span><b>otp-service p99 2.4 s (baseline 0.9 s)</b></li><li><span>Anomali</span><b>Funnel dönüşüm −5.4 puan · 03 Kas 10:10</b></li></ul>
+    <div class="links"><span>Problem'e git →</span><span>otp-service →</span></div></div>
+  </div>
+ </div>
+</div>
+</body></html>
