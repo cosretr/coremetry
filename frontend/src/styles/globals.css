@@ -1,3 +1,16 @@
+/* v0.10.1825 (operatör: "search kısmını tıklayınca YİNE siyah çerçeve") —
+   KÖK düzeltme. index.css Tailwind preflight'ını almıyor; Tailwind v4'te
+   renksiz `border` / `border-b` / `border-l` yardımcıları kenar rengini
+   currentColor'dan (≈ siyah metin) alır. Üretilmiş components/shadcn/*
+   dosyalarında onlarca renksiz kenar var (command girdisi, dialog, popover,
+   menüler, sheet); 1721 ve 1726 tek tek yüzeyleri yamadı, aynı sınıf hata
+   komut paletinde geri geldi. Preflight'ın TEK ilgili satırı burada, legacy
+   katmanının başında ve sıfır özgüllükle: rengi belirtilmemiş her kenar
+   --border olur. Kısayolla (`border: 1px solid …`) ya da sınıfla renk veren
+   her legacy kural ve her `border-<renk>` yardımcısı bunu yener; kenar
+   genişliği/stili değişmez. */
+*, ::before, ::after, ::backdrop, ::file-selector-button { border-color: var(--border); }
+
 /* v0.10.1619 (shadcn Faz 1 R10): koyu blok `[data-theme="dark"]` öğesinde
    de bildirilir — /design kataloğunun koyu hücresi (açık/redhat <html>
    altında `<div data-theme="dark">`) değerleri yeniden çözsün. <html>'de
