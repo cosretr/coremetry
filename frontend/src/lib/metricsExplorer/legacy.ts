@@ -8,7 +8,7 @@
 //   1. MQE builder           `/metrics?mq=<json>` (MetricQueryEditor encodeModel)
 //   2. MQE PromQL sekmesi    `/metrics?editor=1&tab=promql&promql=…&src=vm|ch|thanos&cluster=`
 //                             (CoSRE kanıt çipi, internal/mcptools/evidence_link.go)
-//   3. Eski katalog linki    `/metrics?metric=…&service=…&agg=…&by=…&unit=`
+//   3. Eski katalog linki    `/metrics?metric=…&service=…&agg=…&by=…&unit=&mtype=`
 //                             (Servis Overview kapısı; v0.9.561'den beri Explore'a
 //                             yönleniyordu — S3: artık Metrics Explorer'da açılır)
 //   4. Katalog görünümü      `/metrics?editor=0[&service=…]` → Keşif sekmesi
@@ -87,6 +87,12 @@ export function mxFilterFromExpr(f: FilterExpr, verbatim = false): MxFilter | nu
  * Sunucunun /api/metrics/query çevirisiyle aynı anlam (promAggregator):
  * rate/increase = sum(rate/increase), yüzdelik = histogram_quantile(sum by le),
  * last = max(son değer), avg/sum/min/max = o toplama ham değer üstünde.
+ *
+ * v0.10.1887 (operatör-raporlu: Overview'da "Response time · avg" grafiğine
+ * tıklayınca Metrics "Bu aralıkta seri yok" diyor): tür HISTOGRAM ise `avg`
+ * = `mean` (rate(_sum)/rate(_count)). Eski /api/metrics/query yolu histogram
+ * ailesinde avg'yi sunucuda böyle açıyordu; içe aktarma `avg(taban_ad)` üretince
+ * VM'de karşılığı olmayan bir seri soruluyordu.
  */
 export function mxFnAggFromLegacy(agg: string | undefined, name: string, reportedType?: string): { fn: MxFn; agg: MxAgg } {
   switch ((agg ?? '').trim().toLowerCase()) {
@@ -96,7 +102,8 @@ export function mxFnAggFromLegacy(agg: string | undefined, name: string, reporte
     case 'p90': return { fn: 'p90', agg: 'sum' };
     case 'p95': return { fn: 'p95', agg: 'sum' };
     case 'p99': return { fn: 'p99', agg: 'sum' };
-    case 'avg': return { fn: 'raw', agg: 'avg' };
+    case 'avg':
+      return kindOf(name, reportedType).kind === 'histogram' ? { fn: 'mean', agg: 'sum' } : { fn: 'raw', agg: 'avg' };
     case 'sum': return { fn: 'raw', agg: 'sum' };
     case 'min': return { fn: 'raw', agg: 'min' };
     case 'max': return { fn: 'raw', agg: 'max' };
@@ -253,7 +260,7 @@ export interface MxImport {
   warnings: string[];
 }
 
-const LEGACY_KEYS = ['mq', 'editor', 'promql', 'src', 'metric', 'agg', 'by', 'unit'];
+const LEGACY_KEYS = ['mq', 'editor', 'promql', 'src', 'metric', 'agg', 'by', 'unit', 'mtype'];
 
 /**
  * importLegacyMetricsUrl — eski bir /metrics URL'i mi? Değilse null (yeni
@@ -291,12 +298,15 @@ export function importLegacyMetricsUrl(sp: URLSearchParams): MxImport | null {
   if (metric) {
     const service = (sp.get('service') ?? '').trim();
     const unit = (sp.get('unit') ?? '').trim();
-    const { kind, estimated } = kindOf(metric);
+    // v0.10.1887 — kapı metriğin türünü de taşır (`mtype=histogram`): taban
+    // histogram adı son ekten "gösterge · tahmini" sanılmasın.
+    const mtype = (sp.get('mtype') ?? '').trim() || undefined;
+    const { kind, estimated } = kindOf(metric, mtype);
     const q: MxQuery = {
       ...blankMxQuery('A'), metric, metricKind: kind, ...(estimated ? { kindEstimated: true } : {}),
       ...(unit ? { unit } : {}),
       filters: service ? [{ k: 'service_name', op: '=', v: service }] : [],
-      ...mxFnAggFromLegacy(sp.get('agg') ?? undefined, metric),
+      ...mxFnAggFromLegacy(sp.get('agg') ?? undefined, metric, mtype),
       by: (sp.get('by') ?? '').split(',').map(s => s.trim()).filter(Boolean).map(promLabel),
     };
     return { model: { ...defaultMxModel(), queries: [q] }, tab: 'query', consumed: [...consumed, ...(service ? ['service'] : [])], warnings };

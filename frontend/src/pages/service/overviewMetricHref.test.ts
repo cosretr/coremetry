@@ -36,7 +36,7 @@ describe('Overview → Metrics tık hedefi (v0.9.794 + v0.10.370)', () => {
     // v0.10.512 — kapı RED'in bildiği birimi de taşır (unit:); by/metric/agg değişmez.
     // v0.10.1429 — kırılım aileden: HTTP http.route, gRPC rpc.method (routeDim).
     expect(src).toMatch(/const routeDim = famGrpc \? 'rpc\.method' : 'http\.route';/);
-    expect(src).toMatch(/const rtExploreHref = \(\) => metricsHref\(\{\s*by: routeDim, metric: metricName, agg: 'avg',\s*unit: metricRedQ\.data\?\.latencyUnitKnown && metricRedQ\.data\.latencyUnit \? metricRedQ\.data\.latencyUnit : undefined,\s*\}\);/);
+    expect(src).toMatch(/const rtExploreHref = \(\) => metricsHref\(\{\s*by: routeDim, metric: metricName, agg: 'avg', mtype: 'histogram',\s*unit: metricRedQ\.data\?\.latencyUnitKnown && metricRedQ\.data\.latencyUnit \? metricRedQ\.data\.latencyUnit : undefined,\s*\}\);/);
   });
 
   // v0.10.370 — operator-reported: "Overview'daki metrik grafiği artan trend
@@ -47,6 +47,15 @@ describe('Overview → Metrics tık hedefi (v0.9.794 + v0.10.370)', () => {
   it('🔴 Throughput paneli _count adını RATE ile açar, avg ile değil', () => {
     expect(src).toMatch(/const tputExploreHref = \(\) => metricsHref\(\{ by: routeDim, metric: metricTputQ\.data\?\.metric \?\? '', agg: 'rate' \}\);/);
     expect(src).toMatch(/onExpandClick=\{\(\) => navigate\(tputExploreHref\(\)\)\}/);
+  });
+
+  // v0.10.1887 — operator-reported: "grafiğe tıkladığımda yeni Metrics
+  // sayfasında açılamıyor, grafik yok; eskiden açılıyordu". rtMetric histogram
+  // ailesinin TABAN adı; tür taşınmazsa Metrics onu gösterge sanıp VM'de
+  // olmayan `avg(taban)` sorar. Kapı türü de yazar (`mtype=histogram`).
+  it('🔴 Response time kapısı metriğin türünü taşır (mtype=histogram)', () => {
+    expect(src).toMatch(/metricName, agg: 'avg', mtype: 'histogram'/);
+    expect(src).toMatch(/opts\.mtype \? `&mtype=\$\{opts\.mtype\}` : ''/);
   });
 
   it('iki panel AYNI kırılımı taşır', () => {

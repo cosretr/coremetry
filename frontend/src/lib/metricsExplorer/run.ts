@@ -41,10 +41,10 @@ export interface RunPlan {
   src: MxSrc;
 }
 
-/** Sorgunun görüntü birimi: yüzdelik/ham değer metriğin birimi; hız ve artış birimsiz (sayı/sn). */
+/** Sorgunun görüntü birimi: yüzdelik/ortalama/ham değer metriğin birimi; hız ve artış birimsiz (sayı/sn). */
 export function queryUnit(q: MxQuery): string | undefined {
   if (q.kind === 'formula') return q.unit;
-  return q.fn === 'raw' || q.fn.startsWith('p') ? q.unit : undefined;
+  return q.fn === 'raw' || q.fn === 'mean' || q.fn.startsWith('p') ? q.unit : undefined;
 }
 
 export function planRun(model: MxModel, rangeSec: number): RunPlan {

@@ -22,7 +22,7 @@ import {
 import { cn } from '@/lib/cn';
 import type { MetricSourceParam } from '@/lib/metricSource';
 import {
-  defaultFnFor, isPercentileFn, withMetric, MX_AGGS, type MxAgg, type MxFn, type MxQuery,
+  defaultFnFor, isHistogramFn, isPercentileFn, withMetric, MX_AGGS, type MxAgg, type MxFn, type MxQuery,
 } from '@/lib/metricsExplorer/model';
 import { MetricPicker } from './MetricPicker';
 import { FilterPopover } from './FilterPopover';
@@ -84,7 +84,7 @@ export function QueryRow({
   const fnList = fns.includes(q.fn) ? fns : [q.fn, ...fns];
   const aggs = MX_AGGS.filter(a => !aggOptions || aggOptions.includes(a));
   const pct = isPercentileFn(q.fn);
-  const fixedSum = pct || !!fixedSumFns?.includes(q.fn);
+  const fixedSum = isHistogramFn(q.fn) || !!fixedSumFns?.includes(q.fn);
   const autoNote = kind && kind !== 'unknown' && q.metric && q.fn === defaultFnFor(kind) && q.fn !== 'raw'
     ? `${KIND_LABEL[kind]} → ${FN_LABEL[q.fn].text}` : '';
   const set = (p: Partial<MxQuery>) => onChange({ ...q, ...p });

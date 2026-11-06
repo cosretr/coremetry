@@ -102,6 +102,26 @@ describe('importLegacyMetricsUrl — eski yer imleri', () => {
     if (url.includes('cluster=')) expect(next.get('cluster')).toBe('acme-prod-1');
   });
 
+  // v0.10.1887 (operatör-raporlu): Overview "Response time · avg" kapısı
+  // histogram ailesinin TABAN adını taşır. Tür (`mtype=histogram`) ile gelen
+  // avg = mean (rate(_sum)/rate(_count)); türsüz avg (gösterge) aynen kalır.
+  it('Overview response time kapısı: mtype=histogram + avg → histogram ortalaması', () => {
+    const url = 'metric=http_server_request_duration_seconds&service=orders-api&agg=avg&by=http_route&unit=s&mtype=histogram&range=3h';
+    const imp = importLegacyMetricsUrl(sp(url))!;
+    expect(imp.model!.queries).toEqual([{
+      ...blankMxQuery('A'), metric: 'http_server_request_duration_seconds', metricKind: 'histogram', unit: 's',
+      filters: [{ k: 'service_name', op: '=', v: 'orders-api' }], fn: 'mean', agg: 'sum', by: ['http_route'],
+    }]);
+    const next = applyMxImport(sp(url), imp);
+    expect(next.has('mtype')).toBe(false);
+    expect(next.get('range')).toBe('3h');
+  });
+  it('türsüz avg (gösterge) ham değer ortalaması kalır', () => {
+    expect(mxFnAggFromLegacy('avg', 'jvm_memory_used_bytes')).toEqual({ fn: 'raw', agg: 'avg' });
+    expect(mxFnAggFromLegacy('avg', 'http_server_request_duration_seconds', 'histogram')).toEqual({ fn: 'mean', agg: 'sum' });
+    expect(mxFnAggFromLegacy('avg', 'http_server_request_duration_seconds_bucket')).toEqual({ fn: 'mean', agg: 'sum' });
+  });
+
   it('eski katalog linki (Overview kapısı) → builder sorgusu A', () => {
     const url = 'metric=http_server_request_duration_seconds_count&service=orders-api&agg=rate&by=http.route&unit=s&range=1h';
     const imp = importLegacyMetricsUrl(sp(url))!;

@@ -13052,3 +13052,24 @@ karmaşık, sen default kur."
   (terfi, hassasiyet, triyaj…) toplu sadeleştirilmesi — düzen değişikliği, mockup + operatör onayı ister.
 - Doğrulanmadı: tarayıcı; gerçek VM'de ölçüm süresi ve Kafka ifadelerinin prod metrik adlarıyla eşleşmesi (eşleşmezse
   kart "Bulunamadı: Kafka" der ve dedektörü kapatmayı önerir — ifade Gelişmiş ayarlardan düzeltilir).
+
+## 2026-11-06 — v0.10.1887 — Overview → Metrics: response time grafiği histogram ortalamasıyla açılır
+
+Operatör-raporlu (prod): "Service Overview'da grafiğe tıkladığımda yeni Metrics sayfasında açılamıyor. Grafik yok.
+Eskiden açılıyordu." Ekran: sorgu `http_server_request_duration_seconds`, tür "gösterge · tahmini", fonksiyon "ham
+değer", "Bu aralıkta seri yok".
+
+- **Kök neden (v0.10.1861 gerilemesi):** Overview'ın "Response time · avg" kapısı histogram ailesinin TABAN adını
+  (`rtMetric`) + `agg=avg` taşır. Eski yol (/api/metrics/query) histogram ailesinde avg'yi sunucuda
+  `sum(_sum)/sum(_count)`'a açıyordu. Yeni Metrics Explorer sorguyu istemcide derliyor; içe aktarma türü ad son ekinden
+  tahmin edip (son ek yok → "gösterge") `avg by (http_route) (taban_ad{…})` üretti. Taban ad VM'de seri değil (yalnız
+  `_bucket` / `_sum` / `_count` var) → boş sonuç. Throughput kapısı (`_count` + rate) etkilenmedi.
+- **Düzeltme:** (1) Explorer'a histogram ortalaması fonksiyonu `mean` ("ortalama"): `sum by (…) (rate(X_sum[w])) /
+  sum by (…) (rate(X_count[w]))` — Overview grafiğiyle aynı hesap; histogram türünde fonksiyon menüsünde p50–p99'un
+  yanında, toplama sabit `sum`, birim metriğin birimi. (2) Kapı metriğin türünü de taşır (`&mtype=histogram`); içe
+  aktarma türü oradan okur ve histogramda `avg` → `mean` çevirir (MQE `mt` alanı için de aynı kural). Türsüz `avg`
+  (gösterge) aynen `avg(ham değer)` kalır — tahminle histogram sayılmaz.
+- Testler: `compile.test` (mean metni, son ekli adlar), `legacy.test` (mtype + avg → mean; türsüz avg aynen),
+  `overviewMetricHref.test` (kapı `mtype=histogram` yazar). Doğrulanmadı: tarayıcı / gerçek VM.
+- Bilinen sınır: `mtype` taşımayan ESKİ yer imleri (1861–1886 arası kopyalanmış Overview bağlantıları) hâlâ gösterge
+  olarak açılır; fonksiyon menüsünden "ortalama" seçilerek düzeltilir.

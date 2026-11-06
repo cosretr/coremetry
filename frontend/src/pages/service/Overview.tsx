@@ -508,16 +508,22 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
   // saniye") — kapı RED'in BİLDİĞİ birimi de taşır (`unit=s`); Metrics.tsx
   // legacy dalı Explore seed'ine geçirir. VM kataloğu birimsiz olduğundan
   // Explore aksi hâlde ham saniye çiziyordu.
-  const metricsHref = (opts: { by?: string; metric: string; agg: 'rate' | 'avg'; unit?: string }) => {
+  // v0.10.1887 (operatör: "grafiğe tıkladığımda yeni Metrics sayfasında
+  // açılamıyor, grafik yok; eskiden açılıyordu") — kapı metriğin TÜRÜNÜ de
+  // taşır (`mtype=histogram`). Response time `rtMetric` histogram ailesinin
+  // TABAN adıdır; tür olmadan yeni Metrics onu "gösterge" sanıp VM'de
+  // karşılığı olmayan `avg(taban)` soruyordu.
+  const metricsHref = (opts: { by?: string; metric: string; agg: 'rate' | 'avg'; unit?: string; mtype?: 'histogram' }) => {
     const r = searchParams.get('range');
     return `/metrics?metric=${encodeURIComponent(opts.metric)}&service=${encodeURIComponent(service)}`
       + `&agg=${opts.agg}`
       + (opts.by ? `&by=${encodeURIComponent(opts.by)}` : '')
       + (opts.unit ? `&unit=${encodeURIComponent(opts.unit)}` : '')
+      + (opts.mtype ? `&mtype=${opts.mtype}` : '')
       + `&range=${encodeURIComponent(r || encodeRange(range))}`; // v0.10.1233 — sayfa aralığı (URL'de yoksa da)
   };
   const rtExploreHref = () => metricsHref({
-    by: routeDim, metric: metricName, agg: 'avg',
+    by: routeDim, metric: metricName, agg: 'avg', mtype: 'histogram',
     unit: metricRedQ.data?.latencyUnitKnown && metricRedQ.data.latencyUnit ? metricRedQ.data.latencyUnit : undefined,
   });
   const tputExploreHref = () => metricsHref({ by: routeDim, metric: metricTputQ.data?.metric ?? '', agg: 'rate' });

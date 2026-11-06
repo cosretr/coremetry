@@ -101,3 +101,27 @@ describe('unsubstitutePos (hata konumu çözülmüş metinden operatörün metni
   });
   it('yer tutucusuz metin aynen', () => expect(unsubstitutePos('up)', 15, 2)).toBe(2));
 });
+
+// v0.10.1887 (operatör-raporlu: Overview "Response time · avg" → Metrics "Bu
+// aralıkta seri yok"). Histogram ortalaması taban adı DEĞİL parça serilerini
+// okur: rate(_sum) / rate(_count); kırılım iki tarafta da aynı.
+describe('histogram ortalaması (mean)', () => {
+  const base: MxQuery = {
+    ...blankMxQuery('A'), metric: 'http_server_request_duration_seconds', metricKind: 'histogram',
+    filters: [{ k: 'service_name', op: '=', v: 'orders-api' }], fn: 'mean', agg: 'sum', by: ['http_route'],
+  };
+  it('taban addan _sum / _count hızlarının oranı', () => {
+    expect(compileMxQuery(base)).toBe(
+      'sum by (http_route) (rate(http_server_request_duration_seconds_sum{service_name="orders-api"}[$__rate_interval]))'
+      + ' / sum by (http_route) (rate(http_server_request_duration_seconds_count{service_name="orders-api"}[$__rate_interval]))');
+  });
+  it('kırılımsız ve son ekli ad (_count / _bucket / _sum) aynı aileye çözülür', () => {
+    const want = 'sum (rate(rpc_server_duration_milliseconds_sum[$__rate_interval])) / sum (rate(rpc_server_duration_milliseconds_count[$__rate_interval]))';
+    for (const metric of ['rpc_server_duration_milliseconds', 'rpc_server_duration_milliseconds_count', 'rpc_server_duration_milliseconds_bucket', 'rpc_server_duration_milliseconds_sum']) {
+      expect(compileMxQuery({ ...base, metric, filters: [], by: [] })).toBe(want);
+    }
+  });
+  it('taban histogram adı ham değerle sorulmaz (VM\'de böyle bir seri yok)', () => {
+    expect(compileMxQuery(base)).not.toContain('(http_server_request_duration_seconds{');
+  });
+});

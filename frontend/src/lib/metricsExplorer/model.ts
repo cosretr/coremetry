@@ -23,10 +23,13 @@ export interface MxFilter {
 
 /**
  * Seri başına fonksiyon. `raw` = ham değer (gösterge), `rate`/`irate`/
- * `increase` sayaç, `p50…p99` histogram yüzdeliği (histogram_quantile).
+ * `increase` sayaç, `p50…p99` histogram yüzdeliği (histogram_quantile),
+ * `mean` histogram ortalaması (v0.10.1887): rate(_sum) / rate(_count) —
+ * gözlem ağırlıklı ortalama; Servis Overview'daki "Response time · avg" ile
+ * aynı hesap.
  */
-export type MxFn = 'raw' | 'rate' | 'irate' | 'increase' | 'p50' | 'p90' | 'p95' | 'p99';
-export const MX_FNS: MxFn[] = ['raw', 'rate', 'irate', 'increase', 'p50', 'p90', 'p95', 'p99'];
+export type MxFn = 'raw' | 'rate' | 'irate' | 'increase' | 'p50' | 'p90' | 'p95' | 'p99' | 'mean';
+export const MX_FNS: MxFn[] = ['raw', 'rate', 'irate', 'increase', 'p50', 'p90', 'p95', 'p99', 'mean'];
 
 /** Seriler arası toplama; `none` = toplama yok (`by` yok sayılır). */
 export type MxAgg = 'sum' | 'avg' | 'min' | 'max' | 'count' | 'none';
@@ -156,6 +159,11 @@ export function defaultAggFor(kind: MxKind): MxAgg {
 
 export function isPercentileFn(fn: MxFn): boolean {
   return fn === 'p50' || fn === 'p90' || fn === 'p95' || fn === 'p99';
+}
+
+/** Histogramın parça serilerini (_bucket / _sum / _count) okuyan fonksiyon: toplama sabit `sum`. */
+export function isHistogramFn(fn: MxFn): boolean {
+  return fn === 'mean' || isPercentileFn(fn);
 }
 
 /** Metrik seçimi: tür + önerilen fonksiyon/toplama yeni metriğe göre kurulur. */

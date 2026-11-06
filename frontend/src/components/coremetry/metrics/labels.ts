@@ -16,6 +16,7 @@ export const FN_LABEL: Record<MxFn, { text: string; hint: string }> = {
   p90: { text: 'p90', hint: '90. yüzdelik' },
   p95: { text: 'p95', hint: '95. yüzdelik' },
   p99: { text: 'p99', hint: '99. yüzdelik' },
+  mean: { text: 'ortalama', hint: 'toplam süre / gözlem sayısı' },
 };
 
 export const AGG_LABEL: Record<MxAgg, string> = {
@@ -26,7 +27,7 @@ export const AGG_LABEL: Record<MxAgg, string> = {
 export function fnsForKind(kind: MxKind | undefined): MxFn[] {
   switch (kind) {
     case 'counter': return ['rate', 'increase', 'irate', 'raw'];
-    case 'histogram': return ['p50', 'p90', 'p95', 'p99'];
+    case 'histogram': return ['p50', 'p90', 'p95', 'p99', 'mean'];
     case 'gauge': return ['raw'];
     default: return MX_FNS;
   }

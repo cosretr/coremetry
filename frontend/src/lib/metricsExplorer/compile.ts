@@ -40,6 +40,11 @@ export function bucketName(name: string): string {
   return /_bucket$/.test(name) ? name : `${name}_bucket`;
 }
 
+/** Histogram ailesinin taban adı: `_bucket` / `_sum` / `_count` son eki düşer. */
+export function histogramBase(name: string): string {
+  return name.replace(/_(bucket|sum|count)$/, '');
+}
+
 /** `ad{eşleyiciler}`; ad kimlik değilse `{__name__="…", …}`. Ek eşleyiciler sona. */
 export function selectorText(name: string, filters: MxFilter[], extra: MxFilter[] = []): string {
   const ms = [...filters, ...extra].filter(f => f.k).map(matcherText);
@@ -61,6 +66,15 @@ export function compileMxQuery(q: MxQuery): string {
   if (isPercentileFn(q.fn)) {
     const inner = ['le', 'vmrange', ...by.filter(l => l !== 'le' && l !== 'vmrange')];
     return `histogram_quantile(${QUANTILE[q.fn]}, sum by (${inner.join(', ')}) (rate(${selectorText(bucketName(name), q.filters)}[$__rate_interval])))`;
+  }
+  if (q.fn === 'mean') {
+    // v0.10.1887 — histogram ortalaması: toplam süre / gözlem sayısı (ikisi de
+    // hız). Taban adın kendisi VM'de seri DEĞİL (yalnız _bucket/_sum/_count
+    // var); `avg(taban)` boş dönerdi (operatör-raporlu, Overview kapısı).
+    const base = histogramBase(name);
+    const grp = by.length ? ` by (${by.join(', ')})` : '';
+    const part = (suffix: string) => `sum${grp} (rate(${selectorText(`${base}_${suffix}`, q.filters)}[$__rate_interval]))`;
+    return `${part('sum')} / ${part('count')}`;
   }
   const sel = selectorText(name, q.filters);
   let v: string;
