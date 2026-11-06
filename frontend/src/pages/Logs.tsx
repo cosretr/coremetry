@@ -12,7 +12,6 @@ import { Combobox } from '@/components/Combobox';
 import { LogTable, DEFAULT_LOG_COLUMNS } from '@/components/LogTable';
 import type { DataTableStateProps } from '@/components/ui/DataTable';
 import { CorrelationContextDrawer } from '@/components/CorrelationContextDrawer';
-import { LogContextModal } from '@/components/LogContextModal';
 import {
   LogsHistogram, parseBreakdown, histogramFeedsChips, type LogsBreakdown,
 } from '@/components/LogsHistogram';
@@ -50,7 +49,7 @@ import {
   extractHighlightTerms, toggleExistsFilter, encodePillParams, importPills, keepPinned,
 } from '@/lib/logFilters';
 import type { LogFilter } from '@/lib/logFilters';
-import { logsUrlSig, writeLogsParams, readLogsUrlState, buildDocPermalink, parseDocParam, logsUrlHasFilterState, parseLogsLang } from '@/lib/logsUrl';
+import { logsUrlSig, writeLogsParams, readLogsUrlState, buildDocPermalink, parseDocParam, logsUrlHasFilterState, parseLogsLang, logsHref } from '@/lib/logsUrl';
 import { decideLogsScope, parseLogsScope, logsScopeRequestParam, logsScopeGate, scopeHealthLabel } from '@/lib/logsScope'; // v0.10.1855 (dilim 2.4)
 import { useAuth } from '@/components/AuthProvider';
 import { useT } from '@/lib/i18n';
@@ -60,7 +59,7 @@ import { LogsQueryBar } from './logs/LogsQueryBar';
 import { parseLogQueryError, logQueryErrorMessage } from '@/lib/logQueryError';
 import { readLogsQueryHistory, recordLogsQuery } from '@/lib/logsQueryHistory';
 import { LOGS_DEFAULT_DISPLAY, readLogsDisplay, writeLogsDisplay, pageSlice } from '@/lib/logsDisplay';
-import { DisplayOptions, LoadStatus, FieldSidebar, LogDetailSheet } from '@/components/coremetry/logs';
+import { DisplayOptions, LoadStatus, FieldSidebar, LogDetailSheet, LogContextSection } from '@/components/coremetry/logs';
 import { useSheetParam } from '@/components/coremetry/DetailSheet';
 import { AIExplainButton } from '@/components/ai/AIExplainButton';
 import { logLineSubjectOf } from '@/lib/logLineSubject';
@@ -392,11 +391,6 @@ function LogsInner() {
   // logs the old TracePeekDrawer showed, plus the service's RED metrics lens, all
   // joined on the exact trace_id. No page change, page filter/search untouched.
   const [peekTraceId, setPeekTraceId] = useState<string | null>(null);
-  // v0.5.402 — surrounding-context modal state. Clicking "≡ View
-  // ±50 context" on an expanded log row stores the pivot row here;
-  // LogContextModal fetches the before/after halves and renders
-  // the chronological strip.
-  const [contextPivot, setContextPivot] = useState<import('@/lib/types').LogRow | null>(null);
   // v0.9.1248 — kalıcı doküman linki (?doc=<ts>.<id>): mevcut context
   // ucundan tek sınırlı sorguyla çözülür (yeni uç yok); bulunan satır
   // context modalını pivot'lar. Ref sig-guard: aynı değer bir kez
@@ -1628,7 +1622,6 @@ function LogsInner() {
           onFilterExclude={excludeFromRow}
           onToggleColumn={toggleColumn}
           onTracePeek={tid => setPeekTraceId(tid)}
-          onContextOpen={l => setContextPivot(l)}
           permalink={l => buildDocPermalink(l, env)}
           />
         {/* Load more (v0.8.260 — replaced the Back/Next pager;
@@ -1703,16 +1696,13 @@ function LogsInner() {
           <AIExplainButton subject={sheetSubject} size="sm" title={tr('ai.askCosreLogHint')}
             label={<><IconSparkles /> <span>{tr('ai.askCosre')}</span></>} />
         ) : undefined}
+        // v0.10.1879 (dilim 3.2) — çevre loglar çekmecenin içinde (uç değişmez;
+        // kapalı başlar, istek açılınca; ±5 → ±50 → ±200; pod / servis kapsamı).
         context={sheetRow && !sheetRow.origin ? (
-          <section aria-label="Çevre loglar">
-            <Button variant="secondary" size="sm" onClick={() => setContextPivot(sheetRow)}
-              title="Bu kaydın 50 öncesi ve 50 sonrası (aynı servis)">≡ Çevre loglar (±50)</Button>
-          </section>
+          <LogContextSection key={`${sheetRow.timestamp}.${sheetRow.id}`} pivot={sheetRow} env={env}
+            onOpenRow={openRow}
+            onOpenWindow={(fromNs, toNs, service) => navigate(logsHref({ window: { fromNs, toNs: toNs + 1_000_000 }, service }))} />
         ) : undefined} />
-      <LogContextModal pivot={contextPivot}
-        highlightTerms={highlightTerms} search={compiledSearch || undefined}
-        onClose={() => setContextPivot(null)}
-        onTracePeek={tid => { setContextPivot(null); setPeekTraceId(tid); }} />
     </>
   );
 }

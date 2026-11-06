@@ -1240,8 +1240,8 @@ export const api = {
   // sayılmaz); 30-min symmetric window, capped at n=200 per side.
   // v0.9.1249 — pod: bağlamı tek podun satırlarına daraltır (boş =
   // tüm podlar). Sunucu hem ES hem CH tarafında yapısal clause uygular.
-  logsContext: (params: { ts: number; service?: string; env?: string; pod?: string; n?: number; search?: string }) =>
-    get<import('./types').LogsContextResponse>(`/api/logs/context?${qs(params)}`), // v0.10.415 — degraded/reason da telde
+  logsContext: (params: { ts: number; service?: string; env?: string; pod?: string; n?: number; search?: string }, signal?: AbortSignal) =>
+    get<import('./types').LogsContextResponse>(`/api/logs/context?${qs(params)}`, signal), // v0.10.415 — degraded/reason da telde; v0.10.1879 — iptal sinyali
 
 
   // copilotExplainSlowQuery KALDIRILDI — v0.9.1137 (AI Faz 2.4).
