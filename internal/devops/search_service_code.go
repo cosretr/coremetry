@@ -28,8 +28,46 @@ func (s *Service) CodeSearchEnabled() bool {
 	return s != nil && s.Configured() && s.CurrentSettings().CodeSearch
 }
 
-// SearchServiceCode — repo süzgeçli Code Search, ≤top isabet.
-func (s *Service) SearchServiceCode(ctx context.Context, repo, text string, top int) ([]ServiceCodeHit, error) {
+// serviceSearchWideTop — proje bilinmiyorken (süzgeçsiz arama) istenen isabet
+// sayısı: sonuçlar koleksiyon genelinden gelir, depo elemesi yanıtta yapılır.
+const serviceSearchWideTop = 200
+
+// serviceSearchFilters — SAF: depo-içi aramanın `filters` gövdesi.
+//
+// v0.10.1885 (operatör-raporlu): Azure DevOps Code Search, "Repository"
+// süzgecini YALNIZ "Project" süzgeciyle birlikte kabul eder; tek başına
+// gönderilince HTTP 400 "Filter [Repository] is found but filter [Project] is
+// not." döner ve Endpoint / operasyon kod kartı "rota araması başarısız" ile
+// düşerdi. Proje biliniyorsa ikisi birlikte; bilinmiyorsa süzgeç HİÇ
+// gönderilmez (arama koleksiyon geneli, depo elemesi parseServiceCodeHits'te).
+func serviceSearchFilters(project, repo string) map[string]any {
+	if strings.TrimSpace(project) == "" {
+		return nil
+	}
+	return map[string]any{"Project": []string{strings.TrimSpace(project)}, "Repository": []string{repo}}
+}
+
+// serviceSearchTop — SAF: süzgeçsiz aramada depo elemesine malzeme kalsın.
+func serviceSearchTop(project string, top int) int {
+	if strings.TrimSpace(project) == "" && top < serviceSearchWideTop {
+		return serviceSearchWideTop
+	}
+	return top
+}
+
+// EffectiveProject — yürürlükteki DevOps projesi (Ayarlar'daki açık Project
+// kazanır; boşsa öneri — pickProject sırası). Boş = çözülemedi.
+func (s *Service) EffectiveProject(hint ProjectHint) string {
+	if s == nil {
+		return ""
+	}
+	p, _, _ := pickProject(s.CurrentSettings(), hint)
+	return p
+}
+
+// SearchServiceCode — depo içinde Code Search, ≤top isabet. project: deponun
+// DevOps projesi (çağıranın çözdüğü — pickProject); boşsa süzgeçsiz aranır.
+func (s *Service) SearchServiceCode(ctx context.Context, project, repo, text string, top int) ([]ServiceCodeHit, error) {
 	text, repo = strings.TrimSpace(text), strings.TrimSpace(repo)
 	if text == "" || repo == "" {
 		return nil, fmt.Errorf("arama metni ve depo gerekli")
@@ -39,7 +77,7 @@ func (s *Service) SearchServiceCode(ctx context.Context, repo, text string, top 
 	}
 	cfg := s.CurrentSettings()
 	cli := s.clientFor(cfg.InsecureSkipVerify)
-	body, err := json.Marshal(searchCodeBody{SearchText: text, Top: top, Filters: map[string]any{"Repository": []string{repo}}})
+	body, err := json.Marshal(searchCodeBody{SearchText: text, Top: serviceSearchTop(project, top), Filters: serviceSearchFilters(project, repo)})
 	if err != nil {
 		return nil, err
 	}

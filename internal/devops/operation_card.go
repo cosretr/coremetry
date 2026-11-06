@@ -187,8 +187,10 @@ func operationCardCacheKey(cfg Settings, repo string, src RefSpec, req Operation
 var errOpCardCap = errors.New("kart istek tavanı doldu")
 
 type opCardReader struct {
-	s        *Service
-	ctx      context.Context
+	s   *Service
+	ctx context.Context
+	// project — v0.10.1885: deponun DevOps projesi (arama süzgeci onsuz 400 döner).
+	project  string
 	repo     string
 	sc       sourceChainResult
 	searches int
@@ -201,7 +203,7 @@ func (r *opCardReader) search(text string) ([]ServiceCodeHit, error) {
 		return nil, errOpCardCap
 	}
 	r.searches++
-	return r.s.SearchServiceCode(r.ctx, r.repo, text, operationSearchTop)
+	return r.s.SearchServiceCode(r.ctx, r.project, r.repo, text, operationSearchTop)
 }
 
 func (r *opCardReader) fetch(path string) (string, error) {
@@ -364,7 +366,7 @@ func (s *Service) fetchOperationCard(ctx context.Context, req OperationCardReque
 		c.Searches = 0
 		return c
 	}
-	rd := &opCardReader{s: s, ctx: ctx, repo: ch.repo, sc: sc, files: map[string]string{}}
+	rd := &opCardReader{s: s, ctx: ctx, project: cfg.Project, repo: ch.repo, sc: sc, files: map[string]string{}}
 	var notes []string
 	// transient — bir arama/dosya isteği ağ/sunucu hatasıyla düştü: sonuç
 	// önbelleğe YAZILMAZ (geçici bir DevOps arızası 10 dk "bulunamadı"

@@ -384,6 +384,8 @@ type fakeTFS struct {
 	repos []string
 	// hits — uç başına istek sayısı (cache pini için).
 	hits map[string]int
+	// searchFilters — v0.10.1885: gelen her arama isteğinin `filters` gövdesi.
+	searchFilters []map[string][]string
 	// searchHits — kod arama ucunun (codesearchresults) döndüreceği
 	// isabetler (v0.10.85 proje-çıkmazı yedeği testleri).
 	searchHits []CodeSearchHit
@@ -538,12 +540,24 @@ func newFakeTFS(t *testing.T) *fakeTFS {
 			out := struct {
 				Results []wireHit `json:"results"`
 			}{}
+			var body struct {
+				SearchText string              `json:"searchText"`
+				Filters    map[string][]string `json:"filters"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			f.mu.Lock()
+			f.searchFilters = append(f.searchFilters, body.Filters)
+			f.mu.Unlock()
+			// v0.10.1885 — GERÇEK sunucu kuralı (operatör-raporlu 400): depo
+			// süzgeci proje süzgeci olmadan kabul edilmez. Sahte bunu
+			// uygulamadığı için hata prod'a kadar görünmedi.
+			if len(body.Filters["Repository"]) > 0 && len(body.Filters["Project"]) == 0 {
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = w.Write([]byte(`{"$id":"1","innerException":null,"message":"Filter [Repository] is found but filter [Project] is not.","typeName":"InvalidQueryException"}`))
+				return
+			}
 			hitsFor := f.searchHits
 			if f.searchFor != nil {
-				var body struct {
-					SearchText string `json:"searchText"`
-				}
-				_ = json.NewDecoder(r.Body).Decode(&body)
 				hitsFor = f.searchFor(body.SearchText)
 			}
 			for _, h := range hitsFor {

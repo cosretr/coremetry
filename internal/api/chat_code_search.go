@@ -58,7 +58,8 @@ func (s *Server) searchServiceCode(ctx context.Context, service, query string, l
 		out.Outcome, out.Hint = "rate_limited", sourceRateReason(sourceRateSearch, retry)
 		return out, nil
 	}
-	hits, err := s.devops.SearchServiceCode(ctx, res.Repo, query, limit)
+	// v0.10.1885 — proje süzgeci depo süzgeciyle birlikte gitmeli (yoksa 400).
+	hits, err := s.devops.SearchServiceCode(ctx, s.devops.EffectiveProject(res.Project), res.Repo, query, limit)
 	if err != nil {
 		out.Outcome, out.Hint = "error", err.Error()
 		return out, nil

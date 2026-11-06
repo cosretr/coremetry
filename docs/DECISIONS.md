@@ -13001,3 +13001,23 @@ Loglar yalnız ES'te (operatör 2026-11-06): yeni yetenekler ES yolunda; trace/s
   "Trace'e göre grupla" Toggle + "yüklenen N satır içinde" notu. Sapma: mockup başlığı "5 servis" de gösteriyordu —
   servis sayısı MV'de yok (dilim 3.9); başlık göstermez. Önizleme yalnız görünen sayfanın kimliklerini kapsar (sayfa
   başına tek sorgu kuralı); başka sayfadaki grubun başlığı o sayfa açılınca dolar.
+
+## 2026-11-06 — v0.10.1885 — Kod araması: depo süzgeci proje süzgeciyle birlikte (Azure DevOps 400)
+
+Operatör-raporlu (prod, Endpoint sayfası › Code): "rota araması başarısız: kod arama http 400 … Filter [Repository] is
+found but filter [Project] is not … giriş metodu bulunamadı" — oysa kod Azure DevOps'ta bulunabiliyor.
+
+- **Kök neden:** depo-içi arama (`devops.SearchServiceCode`, v0.10.1208) isteğe yalnız `filters.Repository` koyuyordu.
+  Azure DevOps Code Search depo süzgecini YALNIZ proje süzgeciyle birlikte kabul eder; tek başına 400 döner. Çağıranlar
+  projeyi zaten çözüyordu (`pickProject`: Ayarlar'daki Project, yoksa pin / önek önerisi) ama arama fonksiyonu ayarı
+  yeniden okuyup projeyi hiç kullanmıyordu. Üç yüzey birden düşüyordu: Endpoint / operasyon kod kartı (rota, operasyon
+  kodu, RPC araması), operasyon kodu açıklaması, CoSRE `search_code` aracı.
+- **Düzeltme:** `SearchServiceCode(ctx, project, repo, text, top)` — proje biliniyorsa `Project` + `Repository` birlikte
+  gider; bilinmiyorsa süzgeç HİÇ gönderilmez (koleksiyon geneli arama, `$top` 200, depo elemesi yanıtta —
+  `parseServiceCodeHits` zaten yapıyordu). Saf `serviceSearchFilters` / `serviceSearchTop`; API tarafı için
+  `Service.EffectiveProject(hint)`.
+- **Neden testler yakalamadı:** sahte DevOps sunucusu (`fakeTFS`) her süzgeci kabul ediyordu. Artık gerçek kuralı
+  uygular (depo süzgeci projesiz → aynı 400 gövdesi); düzeltmeden önce beş mevcut test kırmızıya döndü. Yeni testler:
+  `TestServiceSearchFiltersNeverRepositoryWithoutProject`, `TestFetchOperationCard_SearchSendsProjectFilter`.
+- Not: aynı satırdaki "çalışan sürüm … depoda bulunamadı, release dalından okundu" bilgisi hata değil — sürüm etiketi
+  depoda yoksa dal ucundan okunur (v0.10.590). Doğrulanmadı: gerçek Azure DevOps Server (yerel sahte sunucuyla sınandı).

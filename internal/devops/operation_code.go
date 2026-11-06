@@ -768,7 +768,7 @@ func (s *Service) fetchOperationCode(ctx context.Context, req OperationCodeReque
 	}
 
 	// 1) TEK arama.
-	hits, err := s.SearchServiceCode(ctx, ch.repo, OperationSearchQuery(op), operationSearchTop)
+	hits, err := s.SearchServiceCode(ctx, cfg.Project, ch.repo, OperationSearchQuery(op), operationSearchTop)
 	if err != nil {
 		return fail(CodeBackendError, "operasyon kodu araması başarısız: "+sanitize(firstLine(err.Error()), cfg)), false
 	}

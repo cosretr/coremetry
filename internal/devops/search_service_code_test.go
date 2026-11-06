@@ -3,7 +3,11 @@ package devops
 // v0.10.1208 — search_code yanıt ayrıştırma: yalnız istenen depo, TFVC yok,
 // satır/parça varsa alınır, parça tek satır ve kırpık, tavan.
 
-import "testing"
+import (
+	"context"
+	"strings"
+	"testing"
+)
 
 func TestParseServiceCodeHits(t *testing.T) {
 	raw := []byte(`{"results":[
@@ -28,5 +32,53 @@ func TestParseServiceCodeHits(t *testing.T) {
 	}
 	if _, err := parseServiceCodeHits([]byte("x"), "r", 5); err == nil {
 		t.Error("bozuk yanıt hata")
+	}
+}
+
+// v0.10.1885 (operatör-raporlu: Endpoint sayfasında "rota araması başarısız:
+// kod arama http 400 … Filter [Repository] is found but filter [Project] is
+// not."). Depo süzgeci proje süzgeci OLMADAN gönderilmez: proje biliniyorsa
+// ikisi birlikte, bilinmiyorsa süzgeçsiz + geniş $top (depo elemesi yanıtta).
+func TestServiceSearchFiltersNeverRepositoryWithoutProject(t *testing.T) {
+	f := serviceSearchFilters("SHOP", "orders-api")
+	if p, _ := f["Project"].([]string); len(p) != 1 || p[0] != "SHOP" {
+		t.Fatalf("proje süzgeci: %+v", f)
+	}
+	if r, _ := f["Repository"].([]string); len(r) != 1 || r[0] != "orders-api" {
+		t.Fatalf("depo süzgeci: %+v", f)
+	}
+	for _, project := range []string{"", "  "} {
+		if got := serviceSearchFilters(project, "orders-api"); got != nil {
+			t.Fatalf("proje yokken süzgeç gönderilmemeli (sunucu 400 döner): %+v", got)
+		}
+		if serviceSearchTop(project, 10) != serviceSearchWideTop {
+			t.Fatal("süzgeçsiz aramada geniş $top")
+		}
+	}
+	if serviceSearchTop("SHOP", 10) != 10 {
+		t.Fatal("süzgeçli aramada $top aynen")
+	}
+}
+
+// Uçtan uca: sahte sunucu gerçek kuralı uygular (depo süzgeci projesiz → 400).
+// Kart araması proje süzgeciyle gider ve başarısızlık notu düşmez.
+func TestFetchOperationCard_SearchSendsProjectFilter(t *testing.T) {
+	f, svc := opCardFixtureTFS(t, true)
+	cc := svc.FetchOperationCard(context.Background(), opCardTestReq())
+	if strings.Contains(cc.Reason, "araması başarısız") {
+		t.Fatalf("arama düşmemeli: %s", cc.Reason)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.searchFilters) == 0 {
+		t.Fatal("arama isteği gitmedi")
+	}
+	for _, fl := range f.searchFilters {
+		if len(fl["Repository"]) > 0 && len(fl["Project"]) == 0 {
+			t.Fatalf("depo süzgeci projesiz gitti: %+v", fl)
+		}
+		if len(fl["Project"]) == 0 {
+			t.Fatalf("proje süzgeci bekleniyordu: %+v", fl)
+		}
 	}
 }
