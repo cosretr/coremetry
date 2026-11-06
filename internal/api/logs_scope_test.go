@@ -10,6 +10,7 @@ import (
 	"context"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -59,7 +60,56 @@ func seedLogsScope(uid string, us userScope) {
 	logsScopeCache.Unlock()
 }
 
+// enableLogsScope — kapsam mantığı testleri yeteneği açarak koşar (prod
+// varsayılanı KAPALI, v0.10.1877).
+func enableLogsScope(t *testing.T) {
+	t.Helper()
+	prev := logsScopeEnabled
+	logsScopeEnabled = true
+	t.Cleanup(func() { logsScopeEnabled = prev })
+}
+
+// TestLogsScopeDisabledByDefault — v0.10.1877 regresyon kapısı.
+//
+// Belirti (operatör, prod): 1876'da Elasticsearch'te aşırı CPU ve bellek;
+// 1851'de yok. En olası neden: /logs'un varsayılan `scope=mine` kapsamı her
+// açılışta ≤100 servislik kümeyi çok değerli `terms` yan tümceleriyle TÜM
+// indekslerde arıyordu. Varsayılan KAPALI kalmalı: ES log yolunda bile uç
+// "yetenek yok" der ve `scope=mine` sorguya servis kümesi EKLEMEZ.
+func TestLogsScopeDisabledByDefault(t *testing.T) {
+	if logsScopeEnabled {
+		t.Fatal("logsScopeEnabled varsayılanı false olmalı (indeks daraltması gelmeden açma)")
+	}
+	const win = "&from=1759489200000000000&to=1759492800000000000"
+	seedLogsScope("scope-off-u1", userScope{Reason: scopeReasonTeam, Team: "orders-team", Services: []string{"payments-mobile", "orders-api"}})
+	es := &esScopeLogStore{}
+	s := &Server{logs: es, cache: &fakeCache{}, l1: newL1Cache(8), stats: newCacheStats()}
+	if s.logsScopeAvailable() {
+		t.Fatal("ES log yolunda yetenek kapalı görünmeli")
+	}
+	// Eski link / istemci scope=mine yollasa da sorgu KAPSAMSIZ gider (400 değil).
+	r := httptest.NewRequest("GET", "/api/logs?scope=mine"+win, nil)
+	r = r.WithContext(auth.ContextWithClaims(context.Background(), &auth.Claims{UserID: "scope-off-u1"}))
+	w := httptest.NewRecorder()
+	s.getLogs(w, r)
+	if w.Code != 200 || es.calls != 1 {
+		t.Fatalf("code=%d calls=%d body=%s", w.Code, es.calls, w.Body.String())
+	}
+	if len(es.got.Services) != 0 {
+		t.Fatalf("kapalıyken Filter.Services dolmamalı: %v", es.got.Services)
+	}
+	// Uç "yetenek yok" der → istemci kapsam parametresi yollamaz, çip çizmez.
+	w2 := httptest.NewRecorder()
+	r2 := httptest.NewRequest("GET", "/api/logs/scope", nil)
+	r2 = r2.WithContext(auth.ContextWithClaims(context.Background(), &auth.Claims{UserID: "scope-off-u1"}))
+	s.getLogsScope(w2, r2)
+	if w2.Code != 200 || !strings.Contains(w2.Body.String(), `"available":false`) {
+		t.Fatalf("code=%d body=%s", w2.Code, w2.Body.String())
+	}
+}
+
 func TestApplyLogsScopeParam(t *testing.T) {
+	enableLogsScope(t)
 	const win = "&from=1759489200000000000&to=1759492800000000000"
 	call := func(st logstore.Store, uid, q string) (*httptest.ResponseRecorder, *Server) {
 		s := &Server{logs: st, cache: &fakeCache{}, l1: newL1Cache(8), stats: newCacheStats()}

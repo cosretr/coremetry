@@ -12861,3 +12861,24 @@ görünüm 1–4. Parti A'nın (1842–1846) üstüne; ana grafik (olay anı kay
   "Servis tipi" sütununda ve detay başlık çipinde "batch"; hesaplanmış ya da elle sabitlenmiş profil ezilmez. Profil
   yönetim listesi (`/api/ml/profiles`) dokunulmadı: SQL profil süzgeciyle çelişmesin, revizyon haftalık koşuyla gelir.
   Regresyon testleri `profile_test.go` (`satır yok ama batch adı → batch`, `TestResolveProfile`), `ml_card_test.go`.
+
+## 2026-11-06 — v0.10.1877 — Logs: "Servislerim" kapsamı kapatıldı (ES aşırı yük)
+- **Olay (operatör, prod).** 1876'da Elasticsearch'te aşırı CPU ve bellek ("unutma, milyarlarca log satırı var"); prod
+  1851'e alınınca düzeldi. Yani neden 1852–1876 arasında; 1851'de de bulunan 500 satırlık liste (1831) ve servis
+  seçilmeden tüm servislerde arama suçlu değil.
+- **En olası neden (kanıtlanmadı).** O aralıkta /logs'un HER açılışta kendiliğinden attığı tek yeni ES yükü 1855'in
+  varsayılan `scope=mine` kapsamı: takımı tanımlı kullanıcıda liste + histogram + seviye sayımı + desen sorguları,
+  ≤100 servislik kümeyi 5 aday alan × 2 biçim `terms` yan tümcesiyle (yan tümce başına ~200 değer) TÜM `app-*`
+  indekslerinde arıyordu. Tek servis yolu TEK indekse çözülür; kapsamda indeks daraltması yoktu (1855'te "sapma" diye
+  yazılmış, maliyeti ölçülmemişti). Aralıktaki diğer ES değişiklikleri isteğe bağlı (alan istatistiği örneklemesi, hap
+  değer önerisi, anomali kanıt bölümü) — sayfa açılışında çalışmıyor.
+- **Kanıt eksiği.** ES `_tasks` çıktısı alınamadı (geri alınca yük gitti). Karar, sürüm aralığı + kod karşılaştırmasına
+  dayanıyor; yanlışsa 1877'de yük sürer ve aralıktaki isteğe bağlı yollar tek tek kapatılarak aranır.
+- **Karar.** Yetenek varsayılan KAPALI (`logsScopeEnabled = false`): `/api/logs/scope` `available:false` döner, istemci
+  mevcut "yetenek yok" yolunu izler (kapsam parametresi yok, çip ve "Servislerim" grubu yok); sunucu `scope=mine`'ı yok
+  sayar (eski linkler kapsamsız açılır, 400 değil). Sayfa prod'da sağlam olduğu bilinen 1851 davranışına döner.
+  1868'in "takımsız kullanıcı" notu da kalkar (karar `off`).
+- **Yeniden açma koşulu.** Kapsam servisleri İNDEKSLERE çözmeli (tek servis yolundaki şablon çözümü gibi) ve çok değerli
+  `terms` tüm indekslere gitmemeli; prod'da ölçülerek. O zamana dek Faz 3 dilim 3.7 (kapsam genişletme) bekler.
+- **Ders.** Varsayılan sayfa açılışına eklenen her ES yan tümcesi 10B+/gün ve binlerce per-servis indekste ölçülmeden
+  açılmaz; "sapma" diye not düşülen maliyet riski operatöre açıkça söylenir ve varsayılan kapalı gelir.

@@ -63,9 +63,35 @@ const (
 	logsScopeResolveTimeout = 3 * time.Second
 )
 
-// logsScopeAvailable — yeni yetenek yalnız ES log yolunda.
+// logsScopeEnabled — v0.10.1877: "Servislerim" kapsamı (scope=mine) KAPALI.
+//
+// Operatör bildirimi (prod, 2026-11-06): 1876'da Elasticsearch'te aşırı CPU ve
+// bellek; 1851'e dönünce düzeldi. İki sürüm arasında /logs'un HER açılışta
+// kendiliğinden attığı tek yeni ES yükü bu kapsamdı (v0.10.1855): takımı
+// tanımlı kullanıcıda liste + histogram + seviye sayımı + desen sorgularının
+// hepsi, 100 servise kadar bir kümeyi 5 aday alan × 2 biçim `terms` yan
+// tümcesiyle (yan tümce başına ~200 değer) TÜM `app-*` indekslerinde arıyordu.
+// Tek servis seçiliyken sorgu o servisin TEK indeksine gider; kapsamda bu
+// daraltma yoktu (1855'in bilinen sapması). Per-servis indeks düzeninde
+// (binlerce indeks, 10B+ log/gün) çok değerli `terms` yan tümcesi her
+// segmentte çalışır.
+//
+// Kök neden ES görev çıktısıyla KANITLANMADI (operatör geri aldı, yük gitti);
+// bu en olası neden ve kapatmak sayfayı prod'da sağlam olduğu bilinen 1851
+// davranışına döndürür. Yetenek kapalıyken uç `available:false` döner ve
+// istemci bugünkü "yetenek yok" yolunu izler (CH log yoluyla aynı): kapsam
+// parametresi gitmez, çip ve "Servislerim" grubu çizilmez, eski `scope=mine`
+// linkleri kapsamsız açılır.
+//
+// Yeniden açma koşulu: kapsam, servisleri İNDEKSLERE çözmeli (tek servis
+// yolundaki şablon çözümü gibi) ve çok değerli `terms` tüm indekslere
+// gitmemeli; prod ölçümüyle. Testler bu değişkeni açarak kapsam mantığını
+// sınamaya devam eder.
+var logsScopeEnabled = false
+
+// logsScopeAvailable — yetenek açıksa ve yalnız ES log yolunda.
 func (s *Server) logsScopeAvailable() bool {
-	return s != nil && s.logs != nil && s.logs.Backend() == "elasticsearch"
+	return logsScopeEnabled && s != nil && s.logs != nil && s.logs.Backend() == "elasticsearch"
 }
 
 // logsScopeParam — SAF: `scope` değeri doğrulaması. "" / "all" → kapsam yok;
