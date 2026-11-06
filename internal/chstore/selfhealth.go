@@ -193,7 +193,8 @@ type IngestWindows struct {
 	// bir "var mı yok mu" sorusu için tam tarama yapmak bug olurdu.
 	SpansCur  uint64
 	SpansPrev uint64
-	// MetricsLastSeenNs — metric_catalog'un maxMerge(last_seen_state)'i.
+	// MetricsLastSeenNs — metric_catalog'un maxMerge(last_seen_state)'i,
+	// binary'nin kendi yazdığı seriler HARİÇ (SelfWrittenMetrics, v0.10.1858).
 	// Metrik tarafında pencere TOPLAMI yok çünkü gerek yok: katalog MV'si
 	// zaten "en taze metrik noktası ne zaman" sorusunu birkaç bin satırlık
 	// anlık taramayla cevaplıyor (v0.8.396'nın picker düzeltmesi). 0 =
@@ -231,11 +232,11 @@ func (s *Store) ReadIngestWindows(ctx context.Context, window time.Duration) (In
 	// Katalog boşsa maxMerge 0 (epoch) döner ve satır YİNE gelir —
 	// GROUP BY'sız agregat her zaman tek satırdır. 0, "hiç metrik
 	// gelmemiş" demektir ve karar katmanı onu iddia OLARAK KULLANMAZ.
-	if err := s.conn.QueryRow(ctx, `
-		SELECT toUnixTimestamp64Nano(maxMerge(last_seen_state)) AS last_seen,
-		       toUnixTimestamp64Nano(now64(9))                  AS now_ns
-		FROM metric_catalog
-		SETTINGS max_execution_time = 5`).
+	// v0.10.1858 — binary'nin KENDİ yazdığı seriler (disk doluluğu, Oracle
+	// sayacı) dışlanır; yoksa katalog hep taze kalır ve alarm kör olur
+	// (bkz. self_written_metrics.go).
+	q, args := ingestMetricLastSeenSQL()
+	if err := s.conn.QueryRow(ctx, q, args...).
 		Scan(&out.MetricsLastSeenNs, &out.NowNs); err != nil {
 		return out, err
 	}

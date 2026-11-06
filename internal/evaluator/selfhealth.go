@@ -324,6 +324,10 @@ func (e *Evaluator) selfIngestStall(ctx context.Context, cfg chstore.SelfHealthC
 	//          "önceki pencerede vardı" demektir.
 	// LastSeen 0 (katalog boş, hiç metrik gelmemiş) her iki dalda da
 	// false: yokluk, iddia değildir.
+	// v0.10.1858 — okuma binary'nin KENDİ yazdığı serileri (selfDiskETA'nın
+	// disk serisi, Oracle sayacı) dışlar; yoksa metricsCur hep true kalır
+	// ve bu alarm hiç açılamaz. Metrikleri ClickHouse'ta tutmayan kurulumda
+	// (ör. yalnız VictoriaMetrics) metrik dalı sessizdir, karar span'lerdedir.
 	metricsCur := w.MetricsLastSeenNs > 0 && w.NowNs-w.MetricsLastSeenNs <= window.Nanoseconds()
 	metricsPrev := w.MetricsLastSeenNs > 0 && w.NowNs-w.MetricsLastSeenNs <= 2*window.Nanoseconds()
 

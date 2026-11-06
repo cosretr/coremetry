@@ -12603,3 +12603,22 @@ değişmez).
   tail'i başlatmak servis seçilmeden kapsamsız ES isteği atabiliyordu. `FieldSidebar` opsiyonel `paused` prop'u (değer
   isteği atılmaz, "Servis seçilince üst değerler gelir" notu) ve canlı kuyruk etkisi `scopeGate`'i okur. Ayrı sürüm
   açılmadı: rezerve numaralar 1852–1857; düzeltme 2.6 commit'inde, gövdede ayrı madde.
+
+## 2026-11-06 — v0.10.1858 — Self-health: "veri almıyor" alarmı kendi serilerine körleşmesin
+- **Belirti.** self-ingest-stall (P1 "Coremetry veri almıyor") span'ler tamamen dursa bile açılamıyordu. Bulunuş: operatör
+  2026-11-06'da "ClickHouse'ta log tutmuyorum, metrikler yalnız VictoriaMetrics'te" deyince ClickHouse'tan doğrudan
+  metrik okuyan yüzeyler tarandı; bu alarm o taramada çıktı ama kök nedeni depo seçiminden bağımsız.
+- **Kök neden.** Kural "span VE metrik sustu" ister; metrik tarafı `metric_catalog`'un en taze noktasından okunur.
+  v0.10.911'den beri evaluator her tikte ClickHouse disk doluluğunu `metric_points`'e yazıyor, Oracle hata sayacı da
+  aynı tabloya yazıyor. İkisi de kataloğu hep taze tuttuğundan "metrik akıyor" dalı hiç susmadı.
+- **Karar.** "Dışarıdan telemetri geliyor mu" sorusuna binary'nin kendi yazdığı seri cevap olamaz. İç yazarların
+  serileri adlandırıldı (`chstore.SelfWrittenMetrics`: disk serisi + Oracle sayacı) ve ingest tazeliği okuması onları
+  dışlar. Alternatif (metrik dalını tamamen kaldırmak) reddedildi: metrikleri ClickHouse'a alan kurulumda "yalnız
+  span'ler durdu" ayrı bir arızadır ve P1 ağırlığını hak etmez (kuralın mevcut gerekçesi). Metrikleri ClickHouse'ta
+  tutmayan kurulumda (yalnız VictoriaMetrics) metrik dalı sessizdir; karar span'lerdedir.
+- **Kapı.** `metric_points`'e yazan çağıranlar listesi çivili (`TestInsertMetricsCallersAreRegistered`): yeni bir iç
+  yazar, seri adı kayda girmeden eklenemez. Oracle sayaç adı kayıtla eşit (oracle paketinde test).
+- **Kapsam dışı (operatör kararı 2026-11-06).** Taramada çıkan diğer yüzeyler (Databases çekmeceleri, Instances kartı,
+  exemplar pivotu vb.) olduğu gibi kalır: "Database metrikleri VictoriaMetrics'te yoktur, şimdilik bu haliyle kalsın;
+  daha sonra span metrikleri de gelirse taşırız."
+- Doğrulanmadı: canlı ClickHouse (lokal küme askıda).
