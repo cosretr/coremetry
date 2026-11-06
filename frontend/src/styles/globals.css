@@ -5111,6 +5111,9 @@ tr:hover .row-kiosk, .row-kiosk:focus-visible { opacity: 1; }
   font-family: var(--font-mono);
 }
 
+/* v0.10.1852 — alan paneli: ES random_sampler örneklem etiketi ("~ örneklenmiş (%5)") */
+.lf-sampled { font-size: var(--fs-xs); color: var(--text3); margin-bottom: var(--sp-3); }
+
 /* v0.10.282 — /logs satırında pod pivotu: hücre üstüne gelince ⊕/⊖ (KvRow
    .kv-actions deseninin hücre-kapsamlı ikizi). */
 .lt-pivot .kv-actions { opacity: 0; }

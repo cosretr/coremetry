@@ -967,6 +967,7 @@ export const api = {
     size?: number; // v0.9.1223 — yalnız 5|20 basamakları (sunucu kıskacı)
     errorLift?: 1; // v0.10.509 (C5) — hata seçimi vs taban lift'i (iki fieldstats)
     lang?: 'lucene'; // v0.10.1819 — zorla Lucene geçişi (liste ile aynı)
+    est?: number; // v0.10.1852 — pencere toplamı (≥200.000) → ES random_sampler basamağı
   }, signal?: AbortSignal) => // v0.10.1822 — alan kapanınca / süzgeç değişince iptal
     get<LogFieldStats>(`/api/logs/fieldstats?${qs(params)}`, signal),
 

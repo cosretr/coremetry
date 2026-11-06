@@ -12499,3 +12499,25 @@ Kaynak: `docs/anomaly/learning-loop-audit.md` §7, §10 Faz 2, §15, §17; onayl
 - `--heat` rol tokenı (ısı haritası düşük ucu, LatencyHeatmap `--accent` yerine okur): her blokta açıkça, varsayılan `var(--accent)`, Kağıt'ta `var(--info)` (operatör). Tamlık listesi 47 → 48 (44 + `--sig-*` + `--heat`); mevcut temalarda değer = `--accent`, görsel fark yok.
 - v0.10.1844 `--sig-*` (mockup'ta yok): metric #0f766e (--teal), trace #7c4fd0 (--purple), log #a84a08 (--orange #c2570a bg0'da 3.89 < 4.5 → koyulaştırıldı); bg0–bg2'de en düşük 4.73 / 4.67 / 4.97.
 - Öneri notu "Stone düzeltme döngüsünde yakınsamadı": gerçek `contrastTokens` ile koşuldu, token çiftlerinin HEPSİ ilk koşuda geçti — token değeri değişmedi. Kırılan tek kapı seri paleti (`seriesPalette` OKLab ≥0.10): 3 #a3245a→#972472 (--err 0.057→0.105), 4 #7d7a08→#7d7e10 (--warn 0.095→0.106); ikisi de bg0-bg2'de ≥3 (6.46 / 3.73).
+
+## 2026-11-06 — Log Search Faz 2
+
+Audit `docs/logs/log-search-audit.md` §8 Faz 2, mockup `docs/frontend/mockups/log-search.html`. Operatör bilgisi
+(2026-11-06): prod'da ClickHouse'ta log YOK, loglar yalnız Elasticsearch'te — Faz 2 yetenekleri yalnız ES yolunda;
+CH log yolu derlenir ve bugünkü davranışında kalır, yeni özellik orada sessizce kapalı (kod silinmez, backend seçimi
+değişmez).
+
+- **v0.10.1852 — alan istatistiğinde ES `random_sampler` (2.1).** `/api/logs/fieldstats` yeni `est` parametresi
+  (istemcinin pencere toplamı — histogramın seviye bantları, aynı süzgeç; sıfır ek ES isteği). Olasılık
+  `min(0.5, 200.000 / est)`, basamaklara yuvarlı (0.5 · 0.2 · 0.1 · 0.05 … 0.0001; hedefi karşılayan en küçük basamak),
+  `est < 200.000` → örneklemesiz. Gövde: terms agg `random_sampler{probability, seed:1852}` altında; sabit tohum ES
+  request_cache tekrarını ücretsiz tutar. Yanıt `sampled` + `probability` (omitempty); sayımlar örnek içi, yüzdeler pay
+  ve payda aynı örnekten (tutarlı) — ölçekleme yapılmaz. Panel "~ örneklenmiş (%p) · N değer" etiketi + yüzdelerde "~";
+  örneklemede "dokümanların %X'inde" kapsama satırı yazılmaz (payda pencere toplamı, pay örnek içi — karşılaştırılamaz).
+  Önbellek anahtarı `est`i değil BASAMAĞI taşır (`:smpP=`), örneklemesiz anahtar bayt-bayt aynı. Geri düşüş (brief):
+  bağlantıda okunan `version.number` < 8.2 (OpenSearch 1.x/2.x dahil) → örneklemesiz; sürüm okunamazsa denenir, ES
+  `random_sampler` gerekçeli reddederse süreç ömrü boyunca kapanır (`pitDenied` emsali) ve istek örneklemesiz tekrarlanır.
+  Sapma: audit "ES < 8.2'de `sampler{shard_size}`" diyordu; brief örneklemesiz yolu istedi — ara yol yok. `errorLift`
+  açıkken örnekleme yok (`est` sayfa penceresinin toplamı, hata seçimininki değil). CH log yolu `FieldStatsSampler`
+  uygulamaz: `est` yok sayılır (pin testi). Doğrulanmadı: gerçek ES sürümü (audit §10-V), `random_sampler`'ın prod
+  kümede lisans/yetki davranışı, örneklemeli terms süresi.

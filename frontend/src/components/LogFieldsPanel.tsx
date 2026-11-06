@@ -8,6 +8,7 @@ import { DisclosureButton } from '@/components/ui/DisclosureButton';
 import { getRaw, setRaw } from '@/lib/storage';
 import { useMediaQuery, WIDE_QUERY } from '@/lib/useMediaQuery'; // v0.10.1501
 import { liftBadge } from '@/lib/logFieldLift'; // v0.10.509 (C5)
+import { fieldStatsEst, fieldSampleLabel } from '@/lib/logFieldSample'; // v0.10.1852 (dilim 2.1)
 import type { CSSProperties } from 'react';
 
 // LogFieldsPanel — Kibana Discover-style left rail on /logs
@@ -64,10 +65,14 @@ function FieldAccordion({ field, scope, isColumn, onToggleColumn, onPillAdd, onP
   // v0.9.1223 — "daha fazla": top-5 → top-20 (sunucu kıskaç tavanı).
   // Yalnız iki basamak — cache-key kardinalitesi sınırlı (v0.8.270).
   const [size, setSize] = useState<5 | 20>(5);
+  // v0.10.1852 (dilim 2.1) — pencere toplamı ≥200.000 ise `est` gider (ES
+  // random_sampler); altında hiç gönderilmez (istek bugünkü gibi). Lift açıkken
+  // sunucu örneklemez — parametre de gitmez.
+  const est = lift ? undefined : fieldStatsEst(windowTotal);
   const q = useQuery({
-    queryKey: ['logs', 'fieldstats', field, scope, size, lift],
+    queryKey: ['logs', 'fieldstats', field, scope, size, lift, est],
     // v0.10.1822 — RQ sinyali: alan kapanınca / süzgeç değişince ES terms agg iptal.
-    queryFn: ({ signal }) => api.logsFieldStats({ field, ...scope, ...(size !== 5 ? { size } : {}), ...(lift ? { errorLift: 1 as const } : {}) }, signal),
+    queryFn: ({ signal }) => api.logsFieldStats({ field, ...scope, ...(size !== 5 ? { size } : {}), ...(lift ? { errorLift: 1 as const } : {}), ...(est !== undefined ? { est } : {}) }, signal),
     staleTime: 60_000, // matches the server-side cache TTL
     retry: 1,
   });
@@ -99,13 +104,21 @@ function FieldAccordion({ field, scope, isColumn, onToggleColumn, onPillAdd, onP
           ⚠ kısmi cevap — üst değerler ve payda alt küme{d.shardsFailed ? ` (${d.shardsFailed} shard cevapsız)` : ''}
         </div>
       )}
+      {/* v0.10.1852 — ES random_sampler: sayımlar örnek içi; "~" yaklaşık demek. */}
+      {fieldSampleLabel(d) && (
+        <div className="lf-sampled" data-testid="lf-sampled"
+          title="Değerler pencerenin rastgele bir alt kümesinden sayıldı (Elasticsearch random_sampler); yüzdeler yaklaşık">
+          {fieldSampleLabel(d)} · {d?.values.length ?? 0} değer
+        </div>
+      )}
       {d && !d.degraded && d.values.length === 0 && (
         <div style={{ fontSize: 11, color: 'var(--text3)' }}>No values in this window</div>
       )}
       {/* v0.9.1217 — kapsama: alanın pencerede eşleşen dokümanların
           yüzde kaçında bulunduğu. Çok-değerli alanlarda terms toplamı
           doküman sayısını aşabilir — 100'e kıstırılır, '~' bunu söyler. */}
-      {d && windowTotal != null && windowTotal > 0 && d.total > 0 && (
+      {/* v0.10.1852 — örneklemede pay örnek içi, payda pencere: kapsama yazılmaz. */}
+      {d && !d.sampled && windowTotal != null && windowTotal > 0 && d.total > 0 && (
         <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 6 }}>
           dokümanların ~%{Math.min(100, (d.total / windowTotal) * 100).toFixed(
             (d.total / windowTotal) * 100 >= 10 ? 0 : 1)}'inde

@@ -4096,6 +4096,9 @@ export interface LogFieldStats {
   /** v0.10.413 — ES kısmi cevap (yumuşak zaman aşımı / kayıp shard): üst değerler ve payda alt küme. */
   partial?: boolean;
   shardsFailed?: number;
+  /** v0.10.1852 — ES random_sampler ile sayıldı (sayımlar örnek içi, yüzdeler tutarlı); CH yolunda hiç gelmez. */
+  sampled?: boolean;
+  probability?: number;
 }
 
 /** v0.10.415 — GET /api/logs/context. degraded: yavaş/erişilemeyen backend → 200 + boş yarılar (api_logs.go). */

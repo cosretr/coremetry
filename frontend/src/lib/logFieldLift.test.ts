@@ -21,7 +21,7 @@ describe('LogFieldsPanel hatalıyı ayıran (v0.10.509)', () => {
   const src = readFileSync(resolve(__dirname, '../components/LogFieldsPanel.tsx'), 'utf8');
   it('errorLift sorgu anahtarında ve parametrede; rozet liftBadge ile', () => {
     expect(src).toContain("...(lift ? { errorLift: 1 as const } : {})");
-    expect(src).toContain("queryKey: ['logs', 'fieldstats', field, scope, size, lift]");
+    expect(src).toContain("queryKey: ['logs', 'fieldstats', field, scope, size, lift, est]"); // v0.10.1852 — est (örnekleme)
     expect(src).toContain('liftBadge(v, !!lift && !!d.errorLift && !d.errorLift.degraded)');
   });
 });

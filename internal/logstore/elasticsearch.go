@@ -344,6 +344,11 @@ type ESStore struct {
 	// on plain paging for the life of the process (openPIT is skipped)
 	// instead of burning a doomed PIT round-trip per search.
 	pitDenied atomic.Bool
+	// esVersion — v0.10.1852: bağlantıda okunan `version.number`
+	// (random_sampler ≥ 8.2 kararı, fieldstats_sample.go). samplerDenied —
+	// ES örneklemli gövdeyi reddettiyse süreç ömrü boyunca örneklemesiz yol.
+	esVersion     string
+	samplerDenied atomic.Bool
 	// sortCache — v0.10.1833: liste sıralaması için eşleme çözümü (es_sort.go).
 	sortCache esSortCache
 	// envField memoises the ?env= filter-field discovery verdict
@@ -556,7 +561,7 @@ func NewES(cfg ESConfig) (*ESStore, error) {
 		cfg.Fields.Body, cfg.Fields.SeverityTx, cfg.Fields.SeverityNo, envFieldLabel,
 		fieldOrDiscover(cfg.Fields.Cluster), fieldOrDiscover(cfg.Fields.Namespace),
 		fieldOrDiscover(cfg.Fields.Pod), fieldOrDiscover(cfg.Fields.Version))
-	return &ESStore{cli: cli, cfg: cfg, fields: cfg.Fields, rawFields: rawFields}, nil
+	return &ESStore{cli: cli, cfg: cfg, fields: cfg.Fields, rawFields: rawFields, esVersion: info.Version.Number}, nil
 }
 
 func (s *ESStore) Backend() string { return "elasticsearch" }
@@ -1110,24 +1115,46 @@ func (s *ESStore) FieldValues(ctx context.Context, field, prefix string, limit i
 // free. This endpoint is expand-triggered + 60s-cached at the API
 // layer — the "don't grow ES usage" contract.
 func buildFieldStatsBody(query any, aggField string, size int, esTimeout string) map[string]any {
-	return map[string]any{
-		"size":  0,
-		"query": query,
-		"aggs": map[string]any{
-			"vals": map[string]any{
-				"terms": map[string]any{
-					"field": aggField,
-					"size":  size,
-					// Enough shard-level headroom that the top-N is
-					// accurate on multi-shard indices without paying
-					// the histogram's 500 (we only render N values).
-					"shard_size": size * 10,
-				},
-			},
+	return buildFieldStatsBodySampled(query, aggField, size, esTimeout, 0)
+}
+
+// buildFieldStatsBodySampled — v0.10.1852 (dilim 2.1): p > 0 ise terms agg
+// `random_sampler{probability:p, seed}` altında (aggs.s.vals); p = 0 gövdesi
+// buildFieldStatsBody ile bayt-bayt aynı (örneklemesiz yol değişmez).
+func buildFieldStatsBodySampled(query any, aggField string, size int, esTimeout string, p float64) map[string]any {
+	vals := map[string]any{
+		"terms": map[string]any{
+			"field": aggField,
+			"size":  size,
+			// Enough shard-level headroom that the top-N is
+			// accurate on multi-shard indices without paying
+			// the histogram's 500 (we only render N values).
+			"shard_size": size * 10,
 		},
+	}
+	aggs := map[string]any{"vals": vals}
+	if p > 0 {
+		aggs = map[string]any{"s": map[string]any{
+			"random_sampler": map[string]any{"probability": p, "seed": fieldStatsSampleSeed},
+			"aggs":           map[string]any{"vals": vals},
+		}}
+	}
+	return map[string]any{
+		"size":             0,
+		"query":            query,
+		"aggs":             aggs,
 		"track_total_hits": false,
 		"timeout":          esTimeout,
 	}
+}
+
+// esFieldStatsTerms — fieldstats terms agg cevabı (düz ve örneklemli gövde).
+type esFieldStatsTerms struct {
+	SumOther int64 `json:"sum_other_doc_count"`
+	Buckets  []struct {
+		Key      any   `json:"key"` // string / number / bool depending on mapping
+		DocCount int64 `json:"doc_count"`
+	} `json:"buckets"`
 }
 
 // FieldStats — top-N values of one field in the filtered window.
@@ -1139,6 +1166,11 @@ func buildFieldStatsBody(query any, aggField string, size int, esTimeout string)
 // numeric / boolean / date mappings). Worst case 2 bounded round
 // trips, and only when the .keyword shape came back empty.
 func (s *ESStore) FieldStats(ctx context.Context, f Filter, field string, limit int) (*FieldStatsResult, error) {
+	return s.fieldStats(ctx, f, field, limit, 0)
+}
+
+// fieldStats — FieldStats gövdesi; p > 0 örneklemli (FieldStatsSampled).
+func (s *ESStore) fieldStats(ctx context.Context, f Filter, field string, limit int, p float64) (*FieldStatsResult, error) {
 	if field == "" {
 		return &FieldStatsResult{Field: field, Values: []FieldValueCount{}}, nil
 	}
@@ -1160,8 +1192,8 @@ func (s *ESStore) FieldStats(ctx context.Context, f Filter, field string, limit 
 	idx := s.queryIndices(ctx, f)
 
 	try := func(aggField string) (*FieldStatsResult, error) {
-		body, err := json.Marshal(buildFieldStatsBody(query, aggField, limit,
-			esTimeseriesTimeoutFromEnv("10s")))
+		body, err := json.Marshal(buildFieldStatsBodySampled(query, aggField, limit,
+			esTimeseriesTimeoutFromEnv("10s"), p))
 		if err != nil {
 			return nil, err
 		}
@@ -1185,17 +1217,18 @@ func (s *ESStore) FieldStats(ctx context.Context, f Filter, field string, limit 
 		var decoded struct {
 			esSearchEnvelope // v0.10.413 (log arama denetimi A5) — kısmi cevap görünür
 			Aggregations     struct {
-				Vals struct {
-					SumOther int64 `json:"sum_other_doc_count"`
-					Buckets  []struct {
-						Key      any   `json:"key"` // string / number / bool depending on mapping
-						DocCount int64 `json:"doc_count"`
-					} `json:"buckets"`
-				} `json:"vals"`
+				Vals esFieldStatsTerms `json:"vals"`
+				// v0.10.1852 — örneklemli gövde: aggs.s.vals.
+				S struct {
+					Vals esFieldStatsTerms `json:"vals"`
+				} `json:"s"`
 			} `json:"aggregations"`
 		}
 		if err := json.NewDecoder(res.Body).Decode(&decoded); err != nil {
 			return nil, err
+		}
+		if p > 0 {
+			decoded.Aggregations.Vals = decoded.Aggregations.S.Vals
 		}
 		// v0.10.413 — kalıbın kardeşleri (Search/Histogram/CountPatterns)
 		// gibi: yumuşak zaman aşımı / kayıp shard üst değerleri ve yüzde
@@ -1205,6 +1238,10 @@ func (s *ESStore) FieldStats(ctx context.Context, f Filter, field string, limit 
 			log.Printf("[logstore-es] PARTIAL fieldstats (%s) — top values and the %% denominator are a subset (field=%q attempt=%q)", d, field, aggField)
 		}
 		out := &FieldStatsResult{Field: field, Values: []FieldValueCount{}, Partial: decoded.partial(), ShardsFailed: decoded.Shards.Failed}
+		if p > 0 {
+			// Sayımlar örnek içidir; yüzdeler (pay ve payda aynı örnek) tutarlı.
+			out.Sampled, out.Probability = true, p
+		}
 		out.Total = decoded.Aggregations.Vals.SumOther
 		for _, b := range decoded.Aggregations.Vals.Buckets {
 			out.Total += b.DocCount

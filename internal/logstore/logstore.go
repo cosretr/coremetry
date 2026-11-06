@@ -726,6 +726,11 @@ type FieldStatsResult struct {
 	ShardsFailed int  `json:"shardsFailed,omitempty"`
 	// ErrorLift — v0.10.509 (C5): yalnız ?errorLift=1 ile dolar.
 	ErrorLift *FieldStatsLift `json:"errorLift,omitempty"`
+	// Sampled / Probability — v0.10.1852 (dilim 2.1): ES random_sampler ile
+	// sayıldı (sayımlar örnek içi, yüzdeler tutarlı; UI "~" etiketi). CH ve
+	// örneklemesiz yol hiç kurmaz (omitempty — tel bayt-bayt aynı).
+	Sampled     bool    `json:"sampled,omitempty"`
+	Probability float64 `json:"probability,omitempty"`
 }
 
 // LogSeries is one bucketed timeseries returned by Histogram. Name

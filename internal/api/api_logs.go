@@ -1035,7 +1035,10 @@ func (s *Server) getLogsFieldStats(w http.ResponseWriter, r *http.Request) {
 	}
 	errorLift := q.Get("errorLift") == "1"                                           // v0.10.509 (C5) — hatalıyı ayıran alan
 	keyFrom, keyTo := snapLogsWindow(&f, q.Get("from"), q.Get("to"), 60*time.Second) // v0.10.446 (A6-V2: TTL kadar)
-	key := logsFieldStatsKeyLift(field, f, keyFrom, keyTo, size, errorLift)
+	// v0.10.1852 (dilim 2.1) — `est` (istemcinin pencere toplamı) → örnekleme
+	// basamağı; yalnız örneklemli backend'de (ES) ve lift kapalıyken.
+	sampleP := s.logsFieldStatsSampleP(q.Get("est"), errorLift)
+	key := logsFieldStatsKeyLift(field, f, keyFrom, keyTo, size, errorLift) + logsFieldStatsSampleKey(sampleP)
 	s.serveCached(w, r, key, 60*time.Second, func(ctx context.Context) (any, error) {
 		tctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 		defer cancel()
@@ -1058,7 +1061,13 @@ func (s *Server) getLogsFieldStats(w http.ResponseWriter, r *http.Request) {
 			}
 			return out, nil
 		}
-		res, err := s.logs.FieldStats(tctx, f, field, size)
+		var res *logstore.FieldStatsResult
+		var err error
+		if sampler, ok := s.logs.(logstore.FieldStatsSampler); ok && sampleP > 0 {
+			res, err = sampler.FieldStatsSampled(tctx, f, field, size, sampleP)
+		} else {
+			res, err = s.logs.FieldStats(tctx, f, field, size)
+		}
 		if err != nil {
 			// v0.8.350 (HA 🟡6) — slow/unreachable backend degrades the
 			// accordion to 200 {degraded:true} + empty values instead of
