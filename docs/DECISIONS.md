@@ -12460,3 +12460,11 @@ Kaynak: `docs/anomaly/learning-loop-audit.md` §7, §10 Faz 2, §15, §17; onayl
   ayarlı otomatik kopya, kapalı) → "Problem'e terfi ettir" çizilmedi; bugünkü "gerçek / değil" etiketi "Gerçek anomali" /
   "Sorun değil" adıyla grafiğin altına taşındı, viewer etiketi görür (yanıtta `verdict`), düğmeler devre dışı. Liste:
   Sinyal · Servis (link) · Ne oluyor · Başladı · süre + durum; satır detayı açar.
+- **v0.10.1846 — olayı oynat (`ml.BuildPlay` + `MLEventPlayer` + TimeChart `playhead`).** Rapor değil, olayın kendi
+  gösterimi (§15). Adımlar (ilk sapma · tespit · tepe · sürüyor | bitiş) ve kova başına cümle SUNUCUDA, kartın oran
+  merdiveni + değer biçimiyle (brief'teki "merdiven tablosu FE'ye veri olarak" yerine: cümle tamamen Go'da kurulur,
+  FE yalnız seçer — sözcük kayması sıfır, mlSingleSource testi aynı kalır). Grafik çizgileri bant varsa beklenen aralık
+  (q25/q75; kart ve cümleyle aynı kaynak) + ayrı "alarm sınırı"; bant yoksa bugünkü eşik bandı. İmleç TimeChart'a ek
+  prop: yapı imzasına girmez, yalnız `redraw(false)`. Zamanlayıcı `setTimeout` zinciri (yoklama değil), gizli sekmede
+  durur; hareket azaltmada adımdan adıma 1,6 sn. Kaydırıcı shadcn Slider (Radix, klavyeyle). Listede "▶ Oynat"
+  `?play=1` ile açar; satır tıkı oynatmaz. Saatler operatör diliminde (sunucu), grafik ekseni tarayıcı diliminde.

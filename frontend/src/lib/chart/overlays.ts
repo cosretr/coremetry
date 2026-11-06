@@ -468,3 +468,51 @@ export function yScaleSoftMin(o: { bars: boolean; zeroBase?: boolean; log: boole
   if (o.bars) return 0;
   return o.zeroBase && !o.log ? 0 : undefined;
 }
+
+// ── Oynatma imleci (v0.10.1846, öğrenme döngüsü Faz 2 "olayı oynat") ──────
+// TimeChart `playhead` prop'u: dikey imleç + geçen kısmın dolgusu. Yeniden
+// kurulum YOK (yapı imzasına girmez); değişince yalnız redraw. Geometri SAF
+// (`playheadGeometry`), çizim ince (`drawPlayhead`).
+
+export interface ChartPlayhead {
+  cursorSec: number;
+  /** Geçen kısım dolgusunun başı (ilk sapma); yoksa dolgu çizilmez. */
+  fromSec?: number;
+}
+
+export interface PlayheadGeometry { x: number; fillX?: number; fillW?: number }
+
+/** SAF: imleç x'i ve dolgu dikdörtgeni (piksel; bbox'a kelepçeli). İmleç alan dışındaysa null. */
+export function playheadGeometry(
+  ph: ChartPlayhead, valToPos: (v: number) => number, bbox: { left: number; width: number },
+): PlayheadGeometry | null {
+  const x = valToPos(ph.cursorSec);
+  if (!Number.isFinite(x) || x < bbox.left - 0.5 || x > bbox.left + bbox.width + 0.5) return null;
+  if (ph.fromSec == null || ph.fromSec >= ph.cursorSec) return { x };
+  const fx = Math.max(bbox.left, valToPos(ph.fromSec));
+  return { x, fillX: fx, fillW: Math.max(0, x - fx) };
+}
+
+export const PLAYHEAD_FILL_ALPHA = 0.16;
+
+/** İnce çizim: dolgu (--err, düşük opaklık) + imleç çizgisi (--text). */
+export function drawPlayhead(u: uPlot, ph: ChartPlayhead): void {
+  const g = playheadGeometry(ph, v => u.valToPos(v, 'x', true), u.bbox);
+  if (!g) return;
+  const dpr = (typeof devicePixelRatio !== 'undefined' ? devicePixelRatio : 1) || 1;
+  const ctx = u.ctx;
+  ctx.save();
+  if (g.fillX != null && g.fillW) {
+    ctx.globalAlpha = PLAYHEAD_FILL_ALPHA;
+    ctx.fillStyle = resolveVar('var(--err)');
+    ctx.fillRect(g.fillX, u.bbox.top, g.fillW, u.bbox.height);
+    ctx.globalAlpha = 1;
+  }
+  ctx.strokeStyle = resolveVar('var(--text)');
+  ctx.lineWidth = 1.5 * dpr;
+  ctx.beginPath();
+  ctx.moveTo(Math.round(g.x), u.bbox.top);
+  ctx.lineTo(Math.round(g.x), u.bbox.top + u.bbox.height);
+  ctx.stroke();
+  ctx.restore();
+}

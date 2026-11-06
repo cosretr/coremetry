@@ -77,6 +77,8 @@ type ExplainCard struct {
 	WhereToLook  []ExplainLink    `json:"whereToLook"`
 	Technical    ExplainTechnical `json:"technical"`
 	Header       ExplainHeader    `json:"header"`
+	// Play — v0.10.1846 olayı oynat (adımlar + kova başına cümle); seri yoksa yok.
+	Play *ExplainPlay `json:"play,omitempty"`
 }
 
 // ── girdi ────────────────────────────────────────────────────────────────
@@ -130,6 +132,7 @@ type CardInput struct {
 	BucketSec                                                             int
 	Observed, Baseline, Score                                             float64
 	Series                                                                []chstore.MLPoint
+	Dwell                                                                 []int64 // tetiklenen kova başları (oynatmanın ilk sapması)
 	Band                                                                  []CardBand
 	SlowSec                                                               float64
 	MetricLabel, MetricUnit                                               string
@@ -781,5 +784,6 @@ func BuildExplainCard(in CardInput) ExplainCard {
 	if c.Header.Profile == "" {
 		c.Header.Profile = ProfileUnknown
 	}
+	c.Play = BuildPlay(in)
 	return c
 }

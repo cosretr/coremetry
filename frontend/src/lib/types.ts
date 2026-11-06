@@ -11961,9 +11961,14 @@ export interface ExplainHeader {
   kind: 'metric' | 'trace' | 'log' | string; detector: string; service: string; serviceHref: string; open: boolean; status: string;
   profile: string; profileLabel?: string; subject?: ExplainLink;
 }
+/** v0.10.1846 — ml.ExplainPlay (internal/ml/explain_play.go): adımlar + kova başına cümle (sunucuda kurulur). */
+export interface PlayStep { key: 'first' | 'detect' | 'peak' | 'end' | 'open' | string; label: string; t: number }
+export interface PlayFrame { t: number; clock: string; text: string }
+export interface ExplainPlay { steps: PlayStep[]; frames: PlayFrame[]; from: number }
 export interface ExplainCard {
   summary: string; what: string; howMuch: string; since: string; impact?: string; whyItMatters: string;
   whatChanged: ExplainItem[]; whereToLook: ExplainLink[]; technical: ExplainTechnical; header: ExplainHeader;
+  play?: ExplainPlay;
 }
 export interface MLDetectorScore { detector: string; signal?: string; events: number; samples: number; hits: number; hitRate: number }
 /** Yerleşik dedektörler görünümü (v0.10.1766): own = anomaly_sensitivity içindeki eski anahtarlar. */

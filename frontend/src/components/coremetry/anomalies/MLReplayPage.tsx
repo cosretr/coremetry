@@ -5,6 +5,7 @@ import { navHref } from '@/lib/navHref';
 import { Topbar } from '@/components/Topbar';
 import { PageShell } from '@/components/coremetry/PageShell';
 import { MLReplayContent } from './MLReplaySheet';
+import { wantsAutoPlay } from '@/lib/mlPlay';
 
 export default function MLReplayPage() {
   const { id = '' } = useParams();
@@ -14,7 +15,7 @@ export default function MLReplayPage() {
       <Topbar title="ML olayı" />
       <PageShell>
         <Link to={navHref('/anomalies?tab=ml', search)} className="text-sm">‹ Anomaliler</Link>
-        <MLReplayContent id={id} />
+        <MLReplayContent id={id} autoPlay={wantsAutoPlay(new URLSearchParams(search))} />
       </PageShell>
     </>
   );

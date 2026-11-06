@@ -33,6 +33,7 @@ import {
 } from '@/lib/mlReplay';
 import type { ExplainCard, ExplainLink, MLBacktestResult, MLReplayVerdict, MLSample, MLSnapshot, RecentDeployEntry } from '@/lib/types';
 import { ML_DETECTOR_TR } from './MLTab';
+import { MLEventPlayer } from './MLEventPlayer';
 
 const fmtTs = (ns: number) => fmtDateTime(new Date(ns / 1e6));
 const fmtNum = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(3));
@@ -124,7 +125,7 @@ function Section({ id, title, sub, children }: { id: string; title: string; sub?
   );
 }
 
-export function MLReplayContent({ id }: { id: string }) {
+export function MLReplayContent({ id, autoPlay = false }: { id: string; autoPlay?: boolean }) {
   const q = useQuery({ queryKey: [...keys.anomalies.ml, 'replay', id], queryFn: () => api.mlReplay(id), enabled: !!id, staleTime: 30_000, retry: false });
   const snap = q.data?.snapshot ?? null;
   const card = q.data?.card;
@@ -159,7 +160,7 @@ export function MLReplayContent({ id }: { id: string }) {
       </div>
       <Section id="ml-course" title="Olayın seyri" sub={snap ? `${Math.round((snap.bucketSec || 300) / 60)} dakikalık kova · olay anı kaydı` : undefined}>
         <div className="rounded-md border border-border bg-card px-3 py-2.5">
-          {snap ? <MLReplayChartBlock snap={snap} /> : <p className="text-sm text-muted-foreground">Bu olay için grafik kaydı yok (olay anı kaydı yazılmadan önce açılmış ya da süresi dolmuş).</p>}
+          {snap ? <MLEventPlayer snap={snap} play={card.play} autoPlay={autoPlay} /> : <p className="text-sm text-muted-foreground">Bu olay için grafik kaydı yok (olay anı kaydı yazılmadan önce açılmış ya da süresi dolmuş).</p>}
           {snap && <p className="mt-2 text-xs text-muted-foreground">Grafik dedektörün kullandığı aynı kayıtla çizilir; sayfa yeniden sorgu atmaz.</p>}
         </div>
       </Section>
@@ -279,30 +280,6 @@ function MLContext({ snap, related }: { snap: MLSnapshot | null; related: MLSnap
           }
         }} />
     </div>
-  );
-}
-
-function MLReplayChartBlock({ snap }: { snap: MLSnapshot }) {
-  const ch = replayChart(snap);
-  const markers = replayMarkers(snap);
-  return (
-    <>
-      {ch.times.length > 0 ? (
-        <TimeChart height={220} times={ch.times} deployMarkers={ch.deploys}
-          regions={ch.regions.map(r => ({ ...r, color: r.label === 'anomali' ? 'var(--err)' : 'var(--warn)' }))}
-          series={[
-            { key: 'v', label: snap.part || 'değer', data: ch.value, color: 'var(--accent)', type: 'line', width: 2 },
-            { key: 'hi', label: 'beklenen üst', data: ch.upper, color: 'var(--text3)', type: 'line', width: 1 },
-            { key: 'lo', label: 'beklenen alt', data: ch.lower, color: 'var(--text3)', type: 'line', width: 1 },
-          ]} />
-      ) : <p className="text-sm text-muted-foreground">{snap.part ? 'Seri boş (ml_series bu pencereyi taşımıyor).' : 'Bu dedektör seri tutmaz (kesitsel karar); kanıt aşağıda.'}</p>}
-      <KeyValue className="mt-2" items={[
-        { k: 'İlk sapma', v: markers.first ? fmtDateTime(new Date(markers.first * 1000)) : '—' },
-        { k: 'Tespit', v: fmtTs(snap.detectedAt) },
-        { k: 'Tepe', v: markers.peak ? `${fmtDateTime(new Date(markers.peak.t * 1000))} (${fmtNum(markers.peak.v)})` : '—' },
-        { k: 'Bitiş', v: snap.complete ? fmtTs(snap.lastSeen) : 'sürüyor' },
-      ]} />
-    </>
   );
 }
 

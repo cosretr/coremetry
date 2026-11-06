@@ -28,6 +28,16 @@ describe('ml replay', () => {
     expect(c.regions.slice(1)).toEqual([{ fromSec: 300, toSec: 600, label: 'tetik' }, { fromSec: 600, toSec: 900, label: 'tetik' }]);
     expect(c.deploys).toEqual([450]);
   });
+  // v0.10.1846 — bant varsa çizgiler beklenen aralık (q25/q75: kart ve oynatma cümlesiyle aynı), eşik ayrı "alarm" çizgisi.
+  it('chart: banded snapshot draws expected range + alarm line', () => {
+    const c = replayChart(snap({ thresholds: JSON.stringify({ criticalZ: 4, band: [[0, 90, 100, 110], [300, 90, 100, 110]] }) }));
+    expect(c.banded).toBe(true);
+    expect(c.upper.slice(0, 2)).toEqual([110, 110]);
+    expect(c.lower.slice(0, 2)).toEqual([90, 90]);
+    expect(c.upper[2]).toBeNull(); // bandı olmayan kova: çizgi boşluk, uydurma yok
+    expect(c.alarm[0]).toBeGreaterThan(110);
+    expect(replayChart(snap()).banded).toBe(false);
+  });
   it('chart tolerates broken JSON', () => {
     const c = replayChart(snap({ series: '{', dwell: 'x', deploys: '', thresholds: '' }));
     expect(c.times).toEqual([]);

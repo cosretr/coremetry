@@ -18,6 +18,7 @@ import { ScrollArea } from '@/components/shadcn/scroll-area';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/shadcn/select';
 import { Separator } from '@/components/shadcn/separator';
 import { Skeleton } from '@/components/shadcn/skeleton';
+import { Slider } from '@/components/shadcn/slider';
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '@/components/shadcn/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger, tabsListVariants } from '@/components/shadcn/tabs';
 import { Textarea } from '@/components/shadcn/textarea';
@@ -487,6 +488,16 @@ function FieldDemo() {
   );
 }
 
+// v0.10.1846 — olayı oynat zaman kaydırıcısı (MLEventPlayer).
+function SliderDemo() {
+  return (
+    <>
+      <Row label="tek değer"><Slider defaultValue={[40]} max={100} step={1} thumbLabel="Örnek konum" /></Row>
+      <Row label="devre dışı"><Slider defaultValue={[60]} max={100} step={1} disabled thumbLabel="Devre dışı konum" /></Row>
+    </>
+  );
+}
+
 function ToggleDemo() {
   return (
     <>
@@ -674,6 +685,7 @@ export const CATALOG: Record<string, (ctx: CatalogCtx) => ReactNode> = {
   'separator': () => <SeparatorDemo />,
   'sheet': (ctx) => <SheetDemo {...ctx} />,
   'skeleton': () => <SkeletonDemo />,
+  'slider': () => <SliderDemo />,
   'table': () => <TableDemo />,
   'tabs': () => <TabsDemo />,
   'textarea': () => <TextareaDemo />,

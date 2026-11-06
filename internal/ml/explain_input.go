@@ -122,6 +122,11 @@ func ApplySnapshot(in *CardInput, snap chstore.MLSnapshot) {
 		in.Series = pts
 	}
 	in.Band = ParseSnapshotBand(snap.Thresholds)
+	var dwell []int64
+	if json.Unmarshal([]byte(snap.Dwell), &dwell) == nil {
+		sort.Slice(dwell, func(i, j int) bool { return dwell[i] < dwell[j] })
+		in.Dwell = dwell
+	}
 	thr := evidenceMap(snap.Thresholds)
 	if v, ok := evNum(thr, "criticalZ"); ok {
 		in.CriticalZ = v

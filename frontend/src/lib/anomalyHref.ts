@@ -7,6 +7,10 @@ export function anomalyEventHref(id: string): string {
 export function mlEventHref(id: string): string {
   return `/anomalies/ml/${encodeURIComponent(id)}`;
 }
+/** v0.10.1846 — listedeki ▶: detayı açar ve oynatmayı başlatır (satır tıkı oynatmaz). */
+export function mlEventPlayHref(id: string): string {
+  return `${mlEventHref(id)}?play=1`;
+}
 /** SAF: eski /anomalies?event= | ?replay= → yeni sayfa; yoksa null. */
 export function legacyAnomalyRedirect(sp: URLSearchParams): string | null {
   const ev = sp.get('event');

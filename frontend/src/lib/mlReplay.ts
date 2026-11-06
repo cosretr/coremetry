@@ -39,6 +39,9 @@ export interface ReplayChart {
   regions: { fromSec: number; toSec: number; label: string }[];
   deploys: number[];
   z: number;
+  /** v0.10.1846 — kova bandı var: upper/lower = beklenen aralık (q75/q25, kart ve oynatma cümlesiyle AYNI), alarm = eşik çizgisi. */
+  banded: boolean;
+  alarm: (number | null)[];
 }
 
 /** SAF: thresholds.band ([t, q25, q50, q75][]) → kova başı → bant. C2 (v0.10.1771). */
@@ -71,11 +74,16 @@ export function replayChart(s: MLSnapshot): ReplayChart {
   const bandAt = (t: number) => band.get(t) ?? band.get(t - (t % step));
   const regions = dwell.map(t => ({ fromSec: t, toSec: t + step, label: 'tetik' }));
   regions.unshift({ fromSec: Math.floor(s.detectedAt / 1e9), toSec: Math.max(Math.floor(s.lastSeen / 1e9), Math.floor(s.detectedAt / 1e9) + step), label: 'anomali' });
+  const banded = band.size > 0;
+  const down = snapDirection(s) === 'down';
   return {
     times: pts.map(p => p.t),
     value: pts.map(p => p.v),
-    upper: pts.map(p => { const b = bandAt(p.t); return b ? b.med + z * effMAD(b.med, (b.hi - b.lo) / 1.349 / 1.4826) : hi; }),
-    lower: pts.map(p => { const b = bandAt(p.t); return b ? Math.max(0, b.med - z * effMAD(b.med, (b.hi - b.lo) / 1.349 / 1.4826)) : lo; }),
+    // bant varsa beklenen aralık (q25–q75) — yoksa bugünkü eşik bandı (medyan ± z·effMAD)
+    upper: pts.map(p => { const b = bandAt(p.t); return banded ? (b ? b.hi : null) : hi; }),
+    lower: pts.map(p => { const b = bandAt(p.t); return banded ? (b ? b.lo : null) : lo; }),
+    alarm: pts.map(p => { const b = bandAt(p.t); if (!banded || !b) return null; const e = z * effMAD(b.med, (b.hi - b.lo) / 1.349 / 1.4826); return down ? Math.max(0, b.med - e) : b.med + e; }),
+    banded,
     regions,
     deploys: parseArr<RecentDeployEntry>(s.deploys).map(d => Math.floor(d.firstSeenNs / 1e9)).filter(Number.isFinite),
     z,

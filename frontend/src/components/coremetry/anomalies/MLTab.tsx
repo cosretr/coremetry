@@ -15,7 +15,8 @@ import { fmtClock, fmtDateTime } from '@/lib/utils';
 import type { MLEvent, MLDetectorScore, MLGate, MLBackfillProgress, MLTickStatus, MLSignalTick, MLScorecard, MLKindTick, MLBaselineStatus } from '@/lib/types';
 import { Link } from 'react-router-dom';
 import { MLPeriodReplay } from './MLPeriodReplay';
-import { mlEventHref } from '@/lib/anomalyHref';
+import { mlEventHref, mlEventPlayHref } from '@/lib/anomalyHref';
+import { buttonVariants } from '@/components/shadcn/button';
 import { serviceHref } from '@/lib/serviceHref';
 import { SIGNAL_KINDS, signalKindOf } from '@/lib/signalKind';
 import { SignalKindBadge } from '@/components/coremetry/SignalKindBadge';
@@ -226,6 +227,8 @@ const COLS: ColumnDef<MLEvent>[] = [
   { id: 'detector', label: 'Dedektör', width: 150, priority: 3, sortValue: e => e.detector, naturalDir: 'asc' },
   { id: 'last', label: 'Son görülme', width: 150, priority: 3, sortValue: e => e.lastSeen },
   { id: 'fb', label: 'Geri bildirim', width: 120, priority: 2, sortValue: e => (e.verdict === 'anomaly' ? 2 : e.verdict ? 1 : 0) },
+  // v0.10.1846 — mockup "Olayı izle": ▶ detayı açıp oynatır; satır tıkı oynatmadan açar.
+  { id: 'play', label: 'Olayı izle', width: 100 },
 ];
 
 
@@ -260,6 +263,7 @@ export function MLTab({ signal = '', onSignal }: { signal?: MLSignal; onSignal?:
         </span>
       );
       case 'last': return <span className="font-mono">{fmtTs(e.lastSeen)}</span>;
+      case 'play': return <Link to={mlEventPlayHref(e.id)} className={buttonVariants({ variant: 'outline', size: 'sm' })} aria-label={`${e.service} olayını oynat`}>▶ Oynat</Link>;
       case 'fb':
         if (e.verdict === 'anomaly') return <Badge variant="outline" title={`${e.verdictBy ?? ''}${e.verdictAt ? ` · ${fmtTs(e.verdictAt)}` : ''}`}>gerçek ✓</Badge>;
         if (e.verdict === 'not_anomaly') return <Badge variant="outline" title={`${e.verdictBy ?? ''}${e.note ? ` · ${e.note}` : ''}`}>değil ✗</Badge>;

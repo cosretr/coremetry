@@ -17,7 +17,7 @@ import { stepGapsRefiner, nearestFilledIdx } from '@/lib/chart/gapPolicy';
 import { sortedTooltipRows, capTooltipRows } from '@/lib/chart/tooltipModel';
 import { decidePinClick, applyPinStyle, clearPinStyle } from '@/lib/chart/tooltipPin';
 import { toggleSeriesVisibility, isolateSeriesVisibility, resetSeriesVisibility } from '@/lib/chart/legendVisibility';
-import { drawThresholds, drawTimeRegions, type ChartThreshold, type ChartTimeRegion } from '@/lib/chart/overlays';
+import { drawPlayhead, drawThresholds, drawTimeRegions, type ChartPlayhead, type ChartThreshold, type ChartTimeRegion } from '@/lib/chart/overlays';
 import { placeTooltip } from '@/lib/chartTooltip';
 import { escapeHTML } from '@/lib/utils';
 
@@ -100,6 +100,10 @@ interface Props {
   // atılır (max 1.1 → "0, 1"; eskiden "0, 0.55, 1.1"). Oran/süre eksenleri
   // dokunulmadan kalır.
   leftInteger?: boolean;
+  // v0.10.1846 (ADDITIVE; öğrenme döngüsü Faz 2 "olayı oynat") — oynatma
+  // imleci: dikey çizgi + [fromSec, cursorSec] dolgusu. Yapı imzasına GİRMEZ
+  // (her kare yeniden kurulum olurdu); değişince yalnız redraw.
+  playhead?: ChartPlayhead | null;
 }
 
 // v0.9.75 (chart-consolidation Adım 0) — cssVar/yRange lib/chart/'a çıkarıldı
@@ -112,7 +116,7 @@ const MAX_BAR_PX = 18;
 export function TimeChart({
   times, series, height = 150, leftUnit = '', rightUnit = '',
   deployMarkers, thresholds, regions, onBrush, onZoomReset, syncKey, fmtLeft, fmtRight, fmtX, xRange, leftInteger = false,
-  legendCollapsed, hideLegend, barSize = 0.86, onSeriesPick, seriesPickable,
+  legendCollapsed, hideLegend, barSize = 0.86, onSeriesPick, seriesPickable, playhead,
 }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const ttRef = useRef<HTMLDivElement>(null);
@@ -125,6 +129,7 @@ export function TimeChart({
   const fmtLeftRef = useRef(fmtLeft); fmtLeftRef.current = fmtLeft;
   const fmtRightRef = useRef(fmtRight); fmtRightRef.current = fmtRight;
   const fmtXRef = useRef(fmtX); fmtXRef.current = fmtX;
+  const playheadRef = useRef(playhead); playheadRef.current = playhead;
   const themeTick = useThemeTick();
 
   // ── Grafana-parite #2: tooltip pin + interaktif lejant (OVC ile aynı) ────
@@ -215,6 +220,7 @@ export function TimeChart({
       hooks: {
         draw: u => {
           if (regions?.length) drawTimeRegions(u, regions);
+          if (playheadRef.current) drawPlayhead(u, playheadRef.current);
           if (thresholds?.length) {
             drawThresholds(u, thresholds.map(th => ({
               value: th.value,
@@ -452,6 +458,9 @@ export function TimeChart({
       }
     },
   }, themeTick);
+
+  // v0.10.1846 — oynatma imleci değişince yalnız yeniden çiz (rebuild yok).
+  useEffect(() => { plotRef.current?.redraw(false); }, [plotRef, playhead?.cursorSec, playhead?.fromSec]);
 
   // Lejant tıkı → görünürlük (Grafana-parite #2, OVC ile aynı sözleşme):
   // düz tık isolate, Ctrl/Cmd toggle — MLC/TSP v0.5.364 + Grafana ile aynı
