@@ -4101,6 +4101,9 @@ td > .cell-actions.end { justify-content: flex-end; }
 /* v0.10.1882 (Log Search Faz 3 dilim 3.3) — mesaj hücresinde exception rozeti + satır içi katlı stack. */
 .logtbl-dense .lt-ex-badge { margin-right: var(--sp-3); }
 .logtbl-dense .lt-ex-stack { display: block; margin-top: var(--sp-2); white-space: normal; }
+/* v0.10.1884 (dilim 3.5) — trace grubu başlık satırı. */
+.logtbl-dense > tbody > tr.lt-group > td { background: var(--bg2); font-family: var(--font-sans, inherit); white-space: normal; }
+.logtbl-dense .lt-group-text { display: inline-flex; align-items: center; flex-wrap: wrap; gap: var(--sp-3); color: var(--text2); font-size: var(--fs-xs); }
 .logtbl-dense.lt-rh-2 .lt-clamp-body { -webkit-line-clamp: 2; line-clamp: 2; }
 .logtbl-dense.lt-rh-3 .lt-clamp-body { -webkit-line-clamp: 3; line-clamp: 3; }
 .logtbl-dense:is(.lt-hh-2, .lt-hh-3, .lt-hh-auto) > thead th { white-space: normal !important; vertical-align: bottom; }

@@ -12992,3 +12992,12 @@ Loglar yalnız ES'te (operatör 2026-11-06): yeni yetenekler ES yolunda; trace/s
   yerine mevcut coremetry Popover (yeni üretilmiş shadcn dosyası + katalog açmadan; hover gecikmeli açılır/kapanır); mockup
   "5 servis" gösterir — servis sayısı MV'de yok (dilim 3.9), çip göstermez. Doğrulanmadı: prod'da sorgu süresi / okunan
   satır (audit §10-B `log_comment LIKE 'route:POST /api/logs/trace-preview%'`).
+- **v0.10.1884 — "Trace'e göre grupla" (3.5).** İstemcide, YÜKLENEN örnek içinde (audit §4): URL `group=trace`
+  (replace; canlı kuyrukta yok sayılır). Saf `lib/logsGroup.groupRowsByTrace`: gruplar ilk satırlarının sırasıyla
+  (sunucu sırası korunur), grup içi sıra aynen, trace'siz satırlar en sonda tek grup; sayfalama gruplanmış dizinin
+  üstünde. `LogTable` opt-in `groupHeader` (yalnız /logs) satırdan önce tam genişlik başlık satırı basar: TraceChip +
+  "süre · ✕ hata var / ✓ hata yok · kök <span> · N log (bu örnekte)" — süre/hata/kök 3.4 önizleme yanıtından (EK İSTEK
+  YOK); örneklenmiş / henüz yazılmadı durumları metinde; trace'siz grup "trace_id yok · N log". Araç satırında
+  "Trace'e göre grupla" Toggle + "yüklenen N satır içinde" notu. Sapma: mockup başlığı "5 servis" de gösteriyordu —
+  servis sayısı MV'de yok (dilim 3.9); başlık göstermez. Önizleme yalnız görünen sayfanın kimliklerini kapsar (sayfa
+  başına tek sorgu kuralı); başka sayfadaki grubun başlığı o sayfa açılınca dolar.

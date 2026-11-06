@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { TabStrip } from '@/components/ui/TabStrip'; // v0.10.456 (D5)
 import { rowActivation } from '@/lib/a11y';
 import { Link } from 'react-router-dom';
@@ -220,7 +220,11 @@ export function LogTable({
   state,
   exceptions = false,
   renderTrace,
+  groupHeader,
 }: {
+  // v0.10.1884 (Log Search Faz 3 dilim 3.5) — grup başlığı: satırdan ÖNCE
+  // tam genişlik başlık satırı (null = yok). Yalnız /logs "Trace'e göre grupla".
+  groupHeader?: (l: LogRow, prev: LogRow | undefined) => React.ReactNode | null;
   // v0.10.1883 (Log Search Faz 3 dilim 3.4) — Trace hücresinin içeriği (yalnız
   // /logs verir: coremetry/logs/TraceChip + önizleme). Verilmezse bugünkü link +
   // kopyala + 👁 — servis sekmesi / pod / trace panelleri değişmez.
@@ -411,7 +415,14 @@ export function LogTable({
           {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...(state ?? { kind: 'empty' })} /> : dt.sortedRows.map((l, idx) => {
             const isExpanded = expanded.has(l.id);
             const isSelected = nav?.selected === idx;
+            const head = groupHeader?.(l, idx > 0 ? dt.sortedRows[idx - 1] : undefined);
             return (
+              <Fragment key={l.id}>
+              {head && (
+                <tr className="lt-group" data-testid="log-group-head">
+                  <td colSpan={cols}>{head}</td>
+                </tr>
+              )}
               <LogRow
                 key={l.id}
                 l={l}
@@ -438,6 +449,7 @@ export function LogTable({
                 exceptions={exceptions}
                 renderTrace={renderTrace}
               />
+              </Fragment>
             );
           })}
         </tbody>

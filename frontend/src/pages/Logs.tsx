@@ -59,11 +59,12 @@ import { LogsQueryBar } from './logs/LogsQueryBar';
 import { parseLogQueryError, logQueryErrorMessage } from '@/lib/logQueryError';
 import { readLogsQueryHistory, recordLogsQuery } from '@/lib/logsQueryHistory';
 import { LOGS_DEFAULT_DISPLAY, readLogsDisplay, writeLogsDisplay, pageSlice } from '@/lib/logsDisplay';
-import { DisplayOptions, LoadStatus, FieldSidebar, LogDetailSheet, LogContextSection, LogExceptionSection, TraceChip } from '@/components/coremetry/logs';
+import { DisplayOptions, LoadStatus, FieldSidebar, LogDetailSheet, LogContextSection, LogExceptionSection, TraceChip, fmtTraceDuration } from '@/components/coremetry/logs';
 import { useSheetParam } from '@/components/coremetry/DetailSheet';
 import { AIExplainButton } from '@/components/ai/AIExplainButton';
 import { logLineSubjectOf } from '@/lib/logLineSubject';
 import { neighborRow } from '@/lib/logDetail'; // v0.10.1880 (dilim 3.1)
+import { groupRowsByTrace, parseLogsGroup, traceGroupSummary, NO_TRACE_GROUP } from '@/lib/logsGroup'; // v0.10.1884 (dilim 3.5)
 import { absoluteShareHref } from '@/lib/shareUrl';
 import { resolveBusinessFields } from '@/lib/logBusinessFields'; // v0.10.1853 (dilim 2.2)
 import { businessCandidates, requestColumns, smartBusinessColumns, withSmartColumns } from '@/lib/logsSmartColumns'; // v0.10.1856 (dilim 2.5)
@@ -1094,10 +1095,20 @@ function LogsInner() {
   // (kaynak tükenmesi ya da FATAL; sunucu özeti `exception.critical`). Yeni sorgu
   // yok — narrow gibi okuma yardımı, URL'ye girmez.
   const [critOnly, setCritOnly] = useState(false);
-  const logs = useMemo(() => {
+  // v0.10.1884 (dilim 3.5) — "Trace'e göre grupla" (URL `group=trace`): yüklenen
+  // örnek içinde, istemcide; canlı kuyrukta yok. Gruplar ilk satır sırasıyla,
+  // trace'siz satırlar en sonda.
+  const groupMode = live ? '' : parseLogsGroup(searchParams.get('group'));
+  const setGroupMode = (on: boolean) => {
+    setPage(0);
+    setSearchParams(prev => { const n = new URLSearchParams(prev); if (on) n.set('group', 'trace'); else n.delete('group'); return n; }, { replace: true });
+  };
+  const grouped = useMemo(() => {
     const n = narrowLoaded(loadedRows, narrow);
-    return critOnly ? n.filter(r => r.exception?.critical) : n;
-  }, [loadedRows, narrow, critOnly]);
+    const f = critOnly ? n.filter(r => r.exception?.critical) : n;
+    return groupMode === 'trace' ? groupRowsByTrace(f) : { rows: f, counts: null };
+  }, [loadedRows, narrow, critOnly, groupMode]);
+  const logs = grouped.rows;
   const hasExceptions = useMemo(() => loadedRows.some(r => r.exception), [loadedRows]);
   loadedRowsRef.current = loadedRows;
   // v0.10.1880 — `?doc=` çözümü liste yerleşince (yüklü satırda istek yok).
@@ -1612,6 +1623,7 @@ function LogsInner() {
           loadedCount={data ? loadedRows.length : 0} shownCount={data ? logs.length : 0}
           narrow={narrow} onNarrow={v => { setNarrow(v); setPage(0); }} narrowRef={narrowRef}
           critOnly={critOnly} critAvailable={hasExceptions || critOnly} onCritOnly={v => { setCritOnly(v); setPage(0); }}
+          groupByTrace={groupMode === 'trace'} onGroupByTrace={setGroupMode}
           columns={viewCols} fields={fields} onColumns={changeCols}
           display={<DisplayOptions value={display} onChange={setDisplay}
             sample={{ value: sample, min: LOGS_SAMPLE_MIN, max: maxSample, onChange: n => {
@@ -1650,6 +1662,19 @@ function LogsInner() {
           onReorderColumns={changeCols}
           highlightTerms={highlightTerms}
           exceptions /* v0.10.1882 — rozet + satır içi katlı stack */
+          groupHeader={grouped.counts ? (l, prev) => {
+            const k = l.traceId || NO_TRACE_GROUP;
+            if (prev && (prev.traceId || NO_TRACE_GROUP) === k) return null;
+            const count = grouped.counts?.get(k) ?? 0;
+            return k === NO_TRACE_GROUP ? (
+              <span className="lt-group-text">trace_id yok · {count.toLocaleString('tr-TR')} log (bu örnekte)</span>
+            ) : (
+              <span className="lt-group-text">
+                <TraceChip traceId={k} preview={tracePreviews?.[k]} onFilter={filterToTrace} onOpen={tid => navigate(traceHref(tid))} />
+                <span>{traceGroupSummary(tracePreviews?.[k], count, fmtTraceDuration)}</span>
+              </span>
+            );
+          } : undefined}
           renderTrace={l => (
             <TraceChip traceId={l.traceId} preview={tracePreviews?.[l.traceId]}
               onFilter={filterToTrace} onOpen={tid => navigate(traceHref(tid))} />
