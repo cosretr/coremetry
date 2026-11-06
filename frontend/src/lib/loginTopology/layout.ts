@@ -1,5 +1,6 @@
 // layout — v0.10.1909 (Login topoloji arka planı, audit §6.3). SAF yerleşim
-// çekirdeği: DOM/canvas yok; tohumlu PRNG ile Fruchterman–Reingold. Aynı
+// çekirdeği: DOM/canvas yok; tohumlu PRNG ile kuvvet yönlendirmeli yerleşim
+// (kısa menzilli itme + kenar yayı + duvar itmesi; v0.10.1914). Aynı
 // (düğüm sırası, kenarlar, tohum) → AYNI yerleşim. Yerleşim sabit MANTIKSAL bir
 // çerçevede (1600×900) bir kez çözülür; canvas boyutuna çizimde ölçeklenir,
 // yeniden boyutlandırma yerleşimi bozmaz.
@@ -94,18 +95,39 @@ export function beginSolve(layout: Layout, steps = 200): Work {
   }) as Work;
 }
 
-/** Bir Fruchterman–Reingold adımı: itme O(n²), kenar çekimi, hafif merkez çekimi, soğuma. */
+/** İtmenin menzili (k katı): bundan uzak düğümler birbirini itmez. */
+const REPULSE_RANGE = 2.5;
+/** Duvar itmesinin gücü (k² katı) ve menzili (k katı). */
+const WALL_FORCE = 1.2;
+const WALL_RANGE = 1.5;
+
+/**
+ * Bir yerleşim adımı: KISA MENZİLLİ itme O(n²), kenar çekimi, duvar itmesi, soğuma.
+ *
+ * v0.10.1914 (operatör-raporlu: "noktalar bir yere öbeklenmiş") — klasik
+ * Fruchterman–Reingold'da itme sınırsız menzilliydi ve sınır SERT kırpmaydı:
+ * bağlantısız / seyrek bağlı düğümler (gerçek topolojide çoğunluk) birbirini
+ * çerçevenin dışına itiyor, kırpma hepsini kenar çizgisine yığıyordu
+ * (ölçüm: düğümlerin %45–100'ü kenar bandında). Şimdi:
+ *  - itme yalnız REPULSE_RANGE·k içinde (uzak düğümler birbirini duvara sürmez;
+ *    tohumlu rastgele başlangıç zaten çerçeveye yayılmıştır),
+ *  - duvarlar düğümü İTER (WALL_RANGE·k içinde, mesafeyle artan), sert kırpma
+ *    yalnız emniyet,
+ *  - merkez çekimi yok (ortayı kart kapatıyor; öbek ortada toplanmasın).
+ */
 export function stepLayout(s: Work): void {
   const { nodes, edges, w, h, dx, dy } = s;
   const n = nodes.length;
   if (n === 0) { s.step++; return; }
   const k = Math.sqrt((w * h) / n) * 0.9;
   const k2 = k * k;
+  const range2 = (REPULSE_RANGE * k) * (REPULSE_RANGE * k);
   dx.fill(0); dy.fill(0);
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
       let ex = nodes[i].x - nodes[j].x, ey = nodes[i].y - nodes[j].y;
       let d2 = ex * ex + ey * ey;
+      if (d2 > range2) continue;
       if (d2 < 0.01) { ex = s.rand() - 0.5; ey = s.rand() - 0.5; d2 = ex * ex + ey * ey + 0.01; }
       const f = k2 / d2; // itme büyüklüğü k²/d, ex/d birim vektörüyle çarpılınca ex·k²/d²
       dx[i] += ex * f; dy[i] += ey * f; dx[j] -= ex * f; dy[j] -= ey * f;
@@ -114,14 +136,19 @@ export function stepLayout(s: Work): void {
   for (const e of edges) {
     const ex = nodes[e.a].x - nodes[e.b].x, ey = nodes[e.a].y - nodes[e.b].y;
     const d = Math.sqrt(ex * ex + ey * ey) + 0.001;
-    const f = (d / k) * (0.6 + 0.8 * e.weight); // (d²/k) / d
+    // Yay bilerek GEVŞEK (0.12–0.32): sıkı yay bağlı grafı ortada tek öbeğe topluyordu
+    // (ortayı kart kapatır). Kenarlar yine rastgele çiftlerden belirgin kısa kalır.
+    const f = (d / k) * (0.12 + 0.2 * e.weight); // (d²/k) / d
     dx[e.a] -= ex * f; dy[e.a] -= ey * f; dx[e.b] += ex * f; dy[e.b] += ey * f;
   }
+  // duvar itmesi: duvara WALL_RANGE·k'den yakın düğüm içeri itilir (k²/mesafe).
+  const wr = WALL_RANGE * k, wf = WALL_FORCE * k2;
+  const wall = (dist: number) => (dist < wr ? wf / Math.max(dist, 1) : 0);
   // soğuma: sıcaklık çerçevenin ~%8'inden 0'a doğrusal
   const temp = Math.max(0.5, (w * 0.08) * (1 - s.step / Math.max(1, s.steps)));
-  const cx = w / 2, cy = h / 2;
   for (let i = 0; i < n; i++) {
-    dx[i] += (cx - nodes[i].x) * 0.015; dy[i] += (cy - nodes[i].y) * 0.015;
+    dx[i] += wall(nodes[i].x) - wall(w - nodes[i].x);
+    dy[i] += wall(nodes[i].y) - wall(h - nodes[i].y);
     const len = Math.sqrt(dx[i] * dx[i] + dy[i] * dy[i]) || 1;
     const m = Math.min(len, temp) / len;
     nodes[i].x = Math.min(w - MARGIN, Math.max(MARGIN, nodes[i].x + dx[i] * m));

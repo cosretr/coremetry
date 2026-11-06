@@ -75,6 +75,60 @@ describe('yerleşim', () => {
   });
 });
 
+// v0.10.1914 (operatör-raporlu: "noktalar bir yere öbeklenmiş") — eski
+// yerleşimde düğümlerin %45–100'ü kenar bandına yığılıyordu (sınırsız itme +
+// sert kırpma). Dört graf şeklinde: kenar bandı yığılmaz, 4×3 ızgaranın her
+// hücresi dolu ve hiçbiri baskın değil, bağlı grafta kenarlar rastgele çiftlerden kısa.
+function sparseGraph(n: number, e: number, seed: number) {
+  const r = mulberry32(seed);
+  const nodes: LoginSummaryNode[] = Array.from({ length: n }, (_, i) => ({
+    id: `n${i}`, tier: i < 6 ? 'gw' : i < 20 ? 'bff' : 'svc', weight: r(),
+  }));
+  const edges: LoginSummaryEdge[] = [];
+  for (let i = 0; i < e; i++) {
+    edges.push({ from: `n${Math.floor(r() * 20)}`, to: `n${20 + Math.floor(r() * (n - 20))}`, weight: r() });
+  }
+  return { nodes, edges };
+}
+
+function spread(g: { nodes: LoginSummaryNode[]; edges: LoginSummaryEdge[] }) {
+  const lay = layoutOf(g.nodes, g.edges, 12345);
+  const n = lay.nodes.length, band = 0.04;
+  let border = 0;
+  const grid = new Array<number>(12).fill(0);
+  for (const p of lay.nodes) {
+    if (p.x < LOGICAL_W * band || p.x > LOGICAL_W * (1 - band) || p.y < LOGICAL_H * band || p.y > LOGICAL_H * (1 - band)) border++;
+    grid[Math.min(3, Math.floor((p.x / LOGICAL_W) * 4)) + 4 * Math.min(2, Math.floor((p.y / LOGICAL_H) * 3))]++;
+  }
+  let edgeSum = 0;
+  for (const e of lay.edges) edgeSum += Math.hypot(lay.nodes[e.a].x - lay.nodes[e.b].x, lay.nodes[e.a].y - lay.nodes[e.b].y);
+  let pairSum = 0, pairs = 0;
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+    pairSum += Math.hypot(lay.nodes[i].x - lay.nodes[j].x, lay.nodes[i].y - lay.nodes[j].y); pairs++;
+  }
+  return {
+    border: border / n, minCell: Math.min(...grid) / n, maxCell: Math.max(...grid) / n,
+    edgeRatio: lay.edges.length ? (edgeSum / lay.edges.length) / (pairSum / pairs) : 0,
+  };
+}
+
+describe('yerleşim yayılımı (kenara / ortaya yığılma yok)', () => {
+  const cases: Array<[string, { nodes: LoginSummaryNode[]; edges: LoginSummaryEdge[] }, boolean]> = [
+    ['sentetik (bağlı, hiyerarşik)', syntheticGraph(), true],
+    ['seyrek: 150 düğüm, 60 kenar', sparseGraph(150, 60, 7), true],
+    ['yoğun: 135 düğüm, 200 kenar', sparseGraph(135, 200, 9), true],
+    ['bağlantısız: 180 düğüm', sparseGraph(180, 0, 3), false],
+  ];
+  it.each(cases)('%s', (_name, g, connected) => {
+    const m = spread(g);
+    // Düzgün dağılımda %4'lük kenar bandının alan payı ≈ %15; yığılma bunu katlar.
+    expect(m.border).toBeLessThanOrEqual(0.25);
+    expect(m.minCell).toBeGreaterThanOrEqual(0.02); // her hücrede düğüm var (düzgün ≈ %8.3)
+    expect(m.maxCell).toBeLessThanOrEqual(0.2);     // hiçbir hücre baskın değil
+    if (connected) expect(m.edgeRatio).toBeLessThan(0.6); // yapı korunur: komşular yakın
+  });
+});
+
 describe('sentetik graf', () => {
   it('deterministik, makul boyut, adsız, geçerli kenarlar, dört kademe', () => {
     const a = syntheticGraph(), b = syntheticGraph(SYNTHETIC_SEED), c = syntheticGraph(1);
