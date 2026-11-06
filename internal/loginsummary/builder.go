@@ -78,6 +78,13 @@ type Deps struct {
 	Publish  func(*Snapshot)
 	NewSalt  func() string
 	Logf     func(format string, args ...any)
+	// Enabled — özet ayarı (branding.loginSummary). false → tur HİÇ koşmaz:
+	// CH/VM sorgusu yok, yayın yok (operatör özelliği kapattıysa arka uç yükü
+	// de kalkar; uç zaten {enabled:false} döner). nil = açık.
+	Enabled func() bool
+	// TopologyOn — branding.loginTopology != off. false → topoloji okunmaz ve
+	// anlık görüntüden düşer. nil = açık.
+	TopologyOn func() bool
 
 	Family    string        // boşsa HTTPFamily
 	FastEvery time.Duration // boşsa 60 sn
@@ -110,8 +117,11 @@ type Builder struct {
 	snap     *Snapshot
 	lastSlow time.Time
 	vmOK     bool // son yavaş turda VM Q1 başarılı mı (VM açıksa)
+	rollouts *uint64
 	br       map[string]*breaker
 	timings  map[string]time.Duration
+	// logState — son günlüğe yazılan durum (günlük: yavaş tur ya da durum değişimi).
+	logState string
 }
 
 // New — Builder kurar.
@@ -144,15 +154,24 @@ func (b *Builder) Reset() {
 	b.lastSlow = time.Time{}
 }
 
-// Run — lider olduğu sürece her FastEvery'de Step; ctx bitene dek.
+// Run — ctx bitene dek; lider olduğu sürece her FastEvery'de Step. Liderlik
+// en çok 5 sn aralıkla yoklanır (edinimden sonra ilk tur FastEvery beklemez).
 func (b *Builder) Run(ctx context.Context, isLeader func() bool) {
-	tick := time.NewTicker(b.d.FastEvery)
+	check := b.d.FastEvery
+	if check > 5*time.Second {
+		check = 5 * time.Second
+	}
+	tick := time.NewTicker(check)
 	defer tick.Stop()
+	var last time.Time
 	for {
-		if isLeader == nil || isLeader() {
-			b.Step(ctx)
-		} else {
+		switch {
+		case isLeader != nil && !isLeader():
 			b.Reset()
+			last = time.Time{}
+		case last.IsZero() || time.Since(last) >= b.d.FastEvery:
+			b.Step(ctx)
+			last = time.Now()
 		}
 		select {
 		case <-ctx.Done():
@@ -168,6 +187,9 @@ func (b *Builder) timed(name string, start time.Time) {
 
 // Step — bir tur: anlık görüntüyü günceller ve yayınlar.
 func (b *Builder) Step(ctx context.Context) {
+	if b.d.Enabled != nil && !b.d.Enabled() {
+		return // özet kapalı: arka uç çağrısı yok, yayın yok
+	}
 	now := b.d.Now()
 	b.timings = map[string]time.Duration{}
 	if b.snap == nil {
@@ -201,20 +223,19 @@ func (b *Builder) Step(ctx context.Context) {
 	cosre, cerr := b.d.Store.CountCosreQuestions(ctx, now.Add(-activityWindow))
 	b.timed("cosre", t0)
 	if aerr == nil && cerr == nil {
-		s.Activity = &SnapActivity{Logins: totals.Logins, TracesViewed: totals.TracesViewed, CosreQuestions: cosre}
-		if b.d.Rollouts != nil {
-			t0 = time.Now()
-			if n, tracked, rerr := b.d.Rollouts(ctx, now.Add(-activityWindow), now); rerr == nil && tracked {
-				s.Activity.Rollouts = &n
-			}
-			b.timed("rollouts", t0)
-		}
+		// rollouts_tracked pahalı (RolloutStats çok sorgu): yavaş turda okunur,
+		// hızlı turlarda son değer taşınır.
+		s.Activity = &SnapActivity{Logins: totals.Logins, TracesViewed: totals.TracesViewed, CosreQuestions: cosre, Rollouts: b.rollouts}
 	}
 
 	// ── yavaş: VM halkası + topoloji + CH boyutu (≈5 dk) ──
-	if b.lastSlow.IsZero() || now.Sub(b.lastSlow) >= b.d.SlowEvery {
+	slow := b.lastSlow.IsZero() || now.Sub(b.lastSlow) >= b.d.SlowEvery
+	if slow {
 		b.lastSlow = now
 		b.slowRound(ctx, s, now)
+		if s.Activity != nil {
+			s.Activity.Rollouts = b.rollouts
+		}
 	}
 
 	state := StateOK
@@ -229,7 +250,12 @@ func (b *Builder) Step(ctx context.Context) {
 	if b.d.Publish != nil {
 		b.d.Publish(&pub)
 	}
-	b.logRound(state)
+	// Günlük: yalnız yavaş turda (≈5 dk) ya da durum değişince — dakikada bir
+	// satır yazmaz.
+	if slow || state != b.logState {
+		b.logState = state
+		b.logRound(state)
+	}
 }
 
 func (b *Builder) slowRound(ctx context.Context, s *Snapshot, now time.Time) {
@@ -259,16 +285,30 @@ func (b *Builder) slowRound(ctx context.Context, s *Snapshot, now time.Time) {
 		b.vmOK = false
 	}
 
-	// topoloji
-	t0 := time.Now()
-	edges, err := b.d.Store.ReadServiceTopologyAgg(ctx, now.Add(-topoWindowS*time.Second), now, topoEdgeLimit)
-	b.timed("topology", t0)
-	if err == nil {
-		s.Topo = BuildTopology(PickSilhouette(edges, topoMaxNodes), s.Salt)
+	// rollout adedi (izleme kapalı ya da hata → alan yok)
+	b.rollouts = nil
+	if b.d.Rollouts != nil {
+		t0 := time.Now()
+		if n, tracked, err := b.d.Rollouts(ctx, now.Add(-activityWindow), now); err == nil && tracked {
+			b.rollouts = &n
+		}
+		b.timed("rollouts", t0)
+	}
+
+	// topoloji (ayar off → okunmaz, anlık görüntüden düşer)
+	if b.d.TopologyOn != nil && !b.d.TopologyOn() {
+		s.Topo = nil
+	} else {
+		t0 := time.Now()
+		edges, err := b.d.Store.ReadServiceTopologyAgg(ctx, now.Add(-topoWindowS*time.Second), now, topoEdgeLimit)
+		b.timed("topology", t0)
+		if err == nil {
+			s.Topo = BuildTopology(PickSilhouette(edges, topoMaxNodes), s.Salt)
+		}
 	}
 
 	// CH boyutu
-	t0 = time.Now()
+	t0 := time.Now()
 	n, berr := b.d.Store.TotalUncompressedBytes(ctx)
 	b.timed("bytes", t0)
 	if berr == nil {

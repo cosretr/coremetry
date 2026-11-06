@@ -516,3 +516,99 @@ func TestBuilderRunStopsOnContextAndResetsWhenNotLeader(t *testing.T) {
 		t.Fatal("Run ctx ile durmalı")
 	}
 }
+
+// rollouts_tracked pahalı: yalnız yavaş turda okunur, hızlı turlarda son değer taşınır.
+func TestBuilderRolloutsReadOnSlowRoundOnly(t *testing.T) {
+	h := newHarness(t)
+	calls := 0
+	h.b = New(Deps{Store: h.st, VM: h.vm, Now: h.clk.now, Publish: h.redis.publish(t), Logf: func(string, ...any) {},
+		Rollouts: func(context.Context, time.Time, time.Time) (uint64, bool, error) {
+			calls++
+			return uint64(10 + calls), true, nil
+		}})
+	s1 := h.step()
+	h.advance(time.Minute)
+	s2 := h.step()
+	h.advance(time.Minute)
+	s3 := h.step()
+	if calls != 1 {
+		t.Errorf("hızlı turlarda rollout okunmaz: %d çağrı", calls)
+	}
+	for i, s := range []*Snapshot{s1, s2, s3} {
+		if s.Activity == nil || s.Activity.Rollouts == nil || *s.Activity.Rollouts != 11 {
+			t.Errorf("tur %d: son değer taşınmalı: %+v", i, s.Activity)
+		}
+	}
+	h.advance(4 * time.Minute)
+	if s := h.step(); calls != 2 || *s.Activity.Rollouts != 12 {
+		t.Errorf("yavaş turda yenilenir: calls=%d", calls)
+	}
+}
+
+func TestVMFromServiceNilIsUnconfigured(t *testing.T) {
+	vm := VMFromService(nil)
+	if vm.Configured() || vm.AllowUnfilteredPercentiles() {
+		t.Error("nil servis: yapılandırılmamış, p95 kapalı")
+	}
+	if _, err := vm.QueryPromQLRange(context.Background(), "x", time.Now(), time.Now(), 300, 0); err == nil {
+		t.Error("nil servis sorgu hatası döner")
+	}
+}
+
+// v0.10.1905 — özet ayardan kapalıyken kurucu arka uca HİÇ gitmez ve yayın
+// yapmaz; yeniden açılınca ilk tur tam koşar.
+func TestBuilderDisabledRunsNoBackendCalls(t *testing.T) {
+	h := newHarness(t)
+	on := false
+	h.b = New(Deps{Store: h.st, VM: h.vm, Now: h.clk.now, Load: h.redis.load, Publish: h.redis.publish(t),
+		Logf: func(string, ...any) {}, Enabled: func() bool { return on }})
+	for i := 0; i < 3; i++ {
+		h.b.Step(context.Background())
+		h.advance(6 * time.Minute)
+	}
+	if h.st.countsCalls != 0 || h.st.topoCalls != 0 || len(h.vm.calls) != 0 || h.redis.n != 0 {
+		t.Fatalf("kapalıyken çağrı/yayın olmamalı: counts=%d topo=%d vm=%v yayın=%d", h.st.countsCalls, h.st.topoCalls, h.vm.calls, h.redis.n)
+	}
+	on = true
+	if snap := h.step(); snap == nil || snap.Topo == nil || h.vm.calls["q1"] == 0 {
+		t.Fatalf("açılınca ilk tur tam koşmalı: %+v vm=%v", snap, h.vm.calls)
+	}
+}
+
+// v0.10.1905 — loginTopology=off: topoloji okunmaz ve anlık görüntüden düşer.
+func TestBuilderTopologyOffSkipsRead(t *testing.T) {
+	h := newHarness(t)
+	topo := true
+	h.b = New(Deps{Store: h.st, VM: h.vm, Now: h.clk.now, Load: h.redis.load, Publish: h.redis.publish(t),
+		Logf: func(string, ...any) {}, TopologyOn: func() bool { return topo }})
+	if snap := h.step(); snap == nil || snap.Topo == nil {
+		t.Fatal("açıkken topoloji dolu olmalı")
+	}
+	topo = false
+	calls := h.st.topoCalls
+	h.advance(6 * time.Minute)
+	snap := h.step()
+	if h.st.topoCalls != calls {
+		t.Errorf("off iken topoloji okunmamalı: %d → %d", calls, h.st.topoCalls)
+	}
+	if snap == nil || snap.Topo != nil {
+		t.Errorf("off iken anlık görüntüde topoloji kalmamalı")
+	}
+}
+
+// v0.10.1905 — günlük dakikada bir yazılmaz: yavaş tur + durum değişimi.
+func TestBuilderLogsOnSlowRoundOrStateChange(t *testing.T) {
+	h := newHarness(t)
+	h.step() // ilk tur yavaş → 1 satır
+	h.advance(time.Minute)
+	h.step() // hızlı, durum aynı → satır yok
+	if len(h.logs) != 1 {
+		t.Fatalf("hızlı turda günlük yok: %v", h.logs)
+	}
+	h.st.countsErr = context.DeadlineExceeded
+	h.advance(time.Minute)
+	h.step() // durum degraded oldu → satır
+	if len(h.logs) != 2 || !strings.Contains(h.logs[1], "state=degraded") {
+		t.Fatalf("durum değişimi günlüğe yazılmalı: %v", h.logs)
+	}
+}

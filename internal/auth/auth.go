@@ -292,6 +292,12 @@ func SkipPath(method, path string) bool {
 	if path == "/api/auth/session" && method == http.MethodGet {
 		return true
 	}
+	// v0.10.1905 — anonim login özeti: giriş sayfası oturumdan ÖNCE okur.
+	// Yalnız GET ve TAM yol; alt yol ve diğer metotlar kimlik ister. Cevap
+	// bellekteki anlık görüntüden (internal/loginsummary.Project) üretilir.
+	if path == "/api/public/login-summary" && method == http.MethodGet {
+		return true
+	}
 	// v0.10.1110 — merkezi login yetki servisi: sunucudan-sunucuya çağrı,
 	// oturum yok. Sınır paylaşılan anahtar başlığı (X-Coremetry-Auth-Key,
 	// sabit-zamanlı karşılaştırma; internal/api/auth_permissions.go).

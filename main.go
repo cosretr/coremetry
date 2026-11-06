@@ -40,6 +40,7 @@ import (
 	"github.com/cilcenk/coremetry/internal/entity"
 	"github.com/cilcenk/coremetry/internal/evaluator"
 	"github.com/cilcenk/coremetry/internal/ldap"
+	"github.com/cilcenk/coremetry/internal/loginsummary"
 	"github.com/cilcenk/coremetry/internal/logstore"
 	"github.com/cilcenk/coremetry/internal/mcp"
 	"github.com/cilcenk/coremetry/internal/mcpclient"
@@ -1422,6 +1423,58 @@ func main() {
 		log.Printf("[vmetrics] load persisted config: %v", err)
 	}
 	cfgRefresh.Add("vmetrics", func(ctx context.Context) error { return vmSvc.LoadPersisted(ctx, store) })
+	// v0.10.1905 — anonim login özeti (docs/frontend/login-redesign.md). Branding
+	// anahtarları (loginSummary/loginTopology) her rolde bellekte tutulur: uç
+	// istek yolunda CH okumaz, ayar ≤ 30 sn gecikmeyle gelir. Henüz hiç
+	// okunmadıysa uç KAPALI cevap verir.
+	loginSummaryBranding := func(ctx context.Context) error {
+		b, err := store.GetBranding(ctx)
+		if err != nil {
+			return err
+		}
+		api.SetLoginSummaryBranding(b)
+		return nil
+	}
+	if err := loginSummaryBranding(ctx); err != nil {
+		log.Printf("[login-summary] branding okunamadı (uç kapalı kalır): %v", err)
+	}
+	cfgRefresh.Add("login-summary", loginSummaryBranding)
+	if mode.api {
+		api.StartLoginSummarySync(ctx, cacheImpl) // her api pod'u 30 sn'de Redis'ten çeker
+	}
+	if mode.worker {
+		// Anlık görüntüyü yalnız LİDER kurar (kendi kilidi, kalıp entity-sync);
+		// Redis'e yazar, tuz + halka lider değişiminde oradan devralınır.
+		lsLeader := cache.NewLeaderHolder(lockImpl, "login-summary", cache.LeaderTTL(time.Minute))
+		lsLeader.Start(chstore.WithQueryTag(ctx, "worker:login-summary"))
+		lsBuilder := loginsummary.New(loginsummary.Deps{
+			Store: store,
+			VM:    loginsummary.VMFromService(vmSvc),
+			// rollouts_tracked: izleme kapalıysa alan yok; kaynak ve namespace
+			// dışlaması GET /api/rollouts/stats ile aynı.
+			Rollouts: func(rctx context.Context, from, to time.Time) (uint64, bool, error) {
+				if !rolloutSettings.Resolved().Enabled {
+					return 0, false, nil
+				}
+				f := chstore.RolloutFilter{ExcludeNamespaces: rollout.EffectiveNamespaceExclude(rolloutSettings.Current().ResolvedExcludeNamespaces(), "")}
+				read := store.RolloutStats
+				if rolloutSettings.ResolvedV2().Source == rollout.SourceV2 {
+					read = store.RolloutV2Stats
+				}
+				st, err := read(rctx, f, from, to, 0)
+				if err != nil {
+					return 0, true, err
+				}
+				return uint64(st.Total), true, nil
+			},
+			// Özet ayardan kapalıysa kurucu hiç sorgu atmaz; topoloji off ise okunmaz.
+			Enabled:    api.LoginSummaryEnabled,
+			TopologyOn: api.LoginSummaryTopologyOn,
+			Load:       func() *loginsummary.Snapshot { return api.LoadLoginSummary(ctx, cacheImpl) },
+			Publish:    func(snap *loginsummary.Snapshot) { api.PublishLoginSummary(ctx, cacheImpl, snap) },
+		})
+		go lsBuilder.Run(chstore.WithQueryTag(ctx, "worker:login-summary"), lsLeader.IsLeader)
+	}
 	// v0.10.1422 — Coremetry'nin kendi metrikleri Ayarlar'daki VM'e: selfobs'un
 	// boot'ta kurulu okuyucusuna hedef GEÇ takılır (Init CH'den önce koşar).
 	// Karar her 30 sn'lik turda vmSvc.SelfMetricsActive() ile okunur.

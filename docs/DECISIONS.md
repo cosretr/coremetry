@@ -13259,7 +13259,17 @@ JSON sözleşmesi ve kararlar ana oturumda. Backend dilimleri v0.10.1902–1905.
   tuzu kararlı (Redis'ten devralınır). Hata kuralı: sayılar düşerse alan cevaptan düşer (`degraded`); halka/topoloji/boyut son iyi
   hâlini korur. VM: üç sabit ifade, p95 yalnız `AllowUnfilteredPercentiles`, sorgu başına 5 sn, art arda 3 hatada 30 dk atla.
   Henüz `main.go`'ya bağlı değil (1905).
-- **v0.10.1904 — Branding alanları:** `orgName` (≤60 rune), `loginSummary` (""/on/off; "" = açık), `loginQuote` (""/on/off; "" = açık),
+- **v0.10.1904 — Branding alanları:** `orgName` (≤60 rune), `loginSummary` (""/on/off; "" = açık), `loginQuote` (""/on/off; "" = KAPALI — operatör kararı: söz Settings'ten açılır),
   `loginTopology` (""/anonymous/named/off; "" = anonymous) `chstore.BrandingSettings` + `NormalizeBranding` (kalıp `OnboardingTour`;
   bilinmeyen değer "" olur). `getBranding`/`putBranding` `api.go`'dan `internal/api/branding.go`'ya taşındı (`api.go` 50 satır kısaldı,
   taban 10242); denetim ayrıntısına dört alan eklendi. Frontend bu commit'te değişmedi.
+- **v0.10.1905 — Uç + sınırlayıcı + bağlama:** `GET /api/public/login-summary` (`internal/api/login_summary.go`): kimliksiz, yalnız GET ve tam yol
+  (`auth.SkipPath`); istek yolu yalnız bellek (anlık görüntü + branding anahtarları → `loginsummary.Project`), CH/VM/Redis/store çağrısı YOK.
+  Branding hiç okunmadıysa uç kapalı döner. IP sınırlayıcı: sabit pencere, anahtar `r.RemoteAddr`'in host kısmı (port atılır), 1800/dk/pod,
+  429 + `Retry-After: 30`; anahtar tavanı 50 000 (aşılırsa yeni anahtar sayılmadan geçer). Yayın: `coremetry:login-summary:v1` (48 sa TTL),
+  her api pod'u 30 sn'de çeker, yalnız daha yeni görüntü belleği ezer. Builder `main.go`'da vmSvc ve rolloutSettings kapsamda olduğu yerde
+  (worker bloğu, kendi kilidi `login-summary`); `rollouts_tracked` yavaş turda (5 dk) okunur. Redis'teki anlık görüntü servis adlarını taşır
+  (iç depo; anonim cevap yalnız `Project`'ten çıkar).
+  Kapılar: `loginSummary=off` iken Builder turu HİÇ koşmaz (CH/VM sorgusu ve yayın yok; özellik kapanınca arka uç yükü de kalkar);
+  `loginTopology=off` iken topoloji okunmaz ve anlık görüntüden düşer. `[login-summary]` günlük satırı yalnız yavaş turda (≈5 dk)
+  ya da durum değişince yazılır.
