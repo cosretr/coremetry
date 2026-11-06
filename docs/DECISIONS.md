@@ -12622,3 +12622,18 @@ değişmez).
   exemplar pivotu vb.) olduğu gibi kalır: "Database metrikleri VictoriaMetrics'te yoktur, şimdilik bu haliyle kalsın;
   daha sonra span metrikleri de gelirse taşırız."
 - Doğrulanmadı: canlı ClickHouse (lokal küme askıda).
+
+## 2026-11-06 — v0.10.1859 — SQL ifadeleri renkli + panoya kopyala
+- **İstek (operatör).** "Databases sayfasında SQL sorgusu düz metin yazıyor; Toad'daki gibi highlight edilmiş
+  gösterilsin" + "SQL statements için clipboard copy de olsun".
+- **Ne.** `coremetry/SqlCode`: sözdizimi renkli SQL bloğu + sağ üstte kopyala (ikon düğmesi, erişilebilir adıyla).
+  Kullanım: ifade detayı (normalize ifade + gerçek örnek) ve servis DB sekmesindeki örnek ifade.
+- **Belirteçleyici.** `lib/sqlHighlight` saf ve KAYIPSIZ (görünen = kopyalanan = girdi); lehçeden bağımsız sözcük
+  sınıflandırıcı, ayrıştırıcı değil. Nitelikli ad (`t.end`) asla anahtar sözcük değil; `::` dökümü yer tutucu değil;
+  20 bin karakter üstü renklendirilmez. Yeni bağımlılık yok (hazır highlighter paketi bundle'a alınmadı).
+- **Renk.** Yeni renk YOK: anahtar sözcük `--accent2` + kalın (renk tek taşıyıcı değil), fonksiyon / metin / sayı
+  `--sig-*` tonları (altı temada metin kontrastı çivili), yorum `--text3` + italik. `--orange/--teal/--purple`
+  seçilmedi: metin olarak ölçülmemişler (Kağıt'ta `--orange` bg0'da 3.89).
+- **Tablolar değişmedi.** Liste hücresindeki tek satır SQL düz kalır (tablo standardı: renk yalnız sapan değerde);
+  renk yalnız tam ifade bloğunda.
+- Doğrulanmadı: tarayıcı.

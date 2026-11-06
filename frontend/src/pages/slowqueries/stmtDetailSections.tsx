@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { SectionUnavailable, StatTile } from '@/components/ui';
 import { Spinner } from '@/components/Spinner';
 import { LazyMount } from '@/components/LazyMount';
+import { SqlCode } from '@/components/coremetry/SqlCode';
 import { TrendDelta } from '@/components/TrendDelta';
 import { msSyncKey } from '@/lib/chart/syncNamespace';
 import {
@@ -52,13 +53,8 @@ export function StmtText({ statement, sample }: { statement: string; sample: str
   return (
     <>
       {statement ? (
-        <pre style={{
-          margin: '0 0 10px',
-          whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-          color: 'var(--text)', maxHeight: 260, overflowY: 'auto',
-          padding: 12, background: 'var(--bg1)',
-          border: '1px solid var(--border)', borderRadius: 6,
-        }}>{statement}</pre>
+        // v0.10.1859 — renkli SQL + kopyala (coremetry/SqlCode); metin aynı.
+        <div style={{ marginBottom: 10 }}><SqlCode sql={statement} /></div>
       ) : (
         <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 10 }}>
           Statement text unavailable — no data for this class in the window.
@@ -70,12 +66,7 @@ export function StmtText({ statement, sample }: { statement: string; sample: str
             textTransform: 'uppercase', letterSpacing: 0.5 }}>
             Real sample (literals shown)
           </summary>
-          <pre style={{
-            margin: '6px 0 0', fontSize: 11,
-            whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-            color: 'var(--text2)', maxHeight: 200, overflowY: 'auto',
-            padding: 8, background: 'var(--bg2)', borderRadius: 4,
-          }}>{sample}</pre>
+          <div style={{ marginTop: 6 }}><SqlCode sql={sample} dense /></div>
         </details>
       )}
     </>

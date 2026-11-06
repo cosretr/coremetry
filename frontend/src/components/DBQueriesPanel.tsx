@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { rowActivation } from '@/lib/a11y'; // v0.10.451 (dış denetim D3 kalan)
 import { Link } from 'react-router-dom';
 import { DisclosureButton } from '@/components/ui';
+import { SqlCode } from '@/components/coremetry/SqlCode';
 import {
   useDataTable, DataTableColgroup, DataTableHead, DataTableCell, DataTableState,
   type ColumnDef, type DataTableStateProps,
@@ -321,17 +322,8 @@ export function DBQueriesPanel({ service, from, to, defaultOpen = false, cluster
                             <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 4 }}>
                               Sample statement (with real literals)
                             </div>
-                            <pre style={{
-                              margin: 0, fontSize: 12, lineHeight: 1.5,
-                              whiteSpace: 'pre-wrap', overflowWrap: 'anywhere',
-                              color: 'var(--text)',
-                              background: 'var(--bg1)',
-                              border: '1px solid var(--border)',
-                              borderRadius: 6,
-                              padding: '10px 12px',
-                            }}>
-                              {r.sampleStatement}
-                            </pre>
+                            {/* v0.10.1859 — renkli SQL + kopyala (coremetry/SqlCode) */}
+                            <SqlCode sql={r.sampleStatement} dense />
                             <div style={{
                               marginTop: 8, display: 'flex', gap: 14,
                               fontSize: 11, color: 'var(--text2)',
