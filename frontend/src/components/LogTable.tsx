@@ -219,7 +219,12 @@ export function LogTable({
   onReorderColumns,
   state,
   exceptions = false,
+  renderTrace,
 }: {
+  // v0.10.1883 (Log Search Faz 3 dilim 3.4) — Trace hücresinin içeriği (yalnız
+  // /logs verir: coremetry/logs/TraceChip + önizleme). Verilmezse bugünkü link +
+  // kopyala + 👁 — servis sekmesi / pod / trace panelleri değişmez.
+  renderTrace?: (l: LogRow) => React.ReactNode;
   // v0.10.1882 (Log Search Faz 3 dilim 3.3) — mesaj hücresinde exception rozeti
   // + satır içi katlı stack (yalnız /logs verir; servis sekmesi / pod / trace
   // panelleri / anomali çekmecesi değişmez).
@@ -431,6 +436,7 @@ export function LogTable({
                 permalink={permalink}
                 rowLines={rowLines}
                 exceptions={exceptions}
+                renderTrace={renderTrace}
               />
             );
           })}
@@ -463,9 +469,10 @@ function LogLineExplain({ l }: { l: LogRow }) {
 
 function LogRow({
   l, idx, tableId, cols, colIds, highlightTerms, hideTraceColumn, selected, expanded, onClick, extraExpanded,
-  onFilterAdd, onFilterExclude, onToggleColumn, onTracePeek, onContextOpen, permalink, rowLines, exceptions = false,
+  onFilterAdd, onFilterExclude, onToggleColumn, onTracePeek, onContextOpen, permalink, rowLines, exceptions = false, renderTrace,
 }: {
   exceptions?: boolean;
+  renderTrace?: (l: LogRow) => React.ReactNode;
   l: LogRow;
   idx: number;
   tableId?: string;
@@ -664,7 +671,7 @@ function LogRow({
         })}
         {!hideTraceColumn && (
           <td className="mono">
-            {l.traceId ? (
+            {renderTrace ? (l.traceId ? renderTrace(l) : '—') : l.traceId ? (
               <>
                 {/* v0.8.332 (pivot Phase 3) — log→trace pivot ?span= ile
                     çekmeceyi açıyordu. v0.10.352 (operatör): "trace açılırken

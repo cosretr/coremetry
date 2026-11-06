@@ -11,6 +11,8 @@ export { FieldSidebar, fieldsPanelOpen } from './FieldSidebar';
 export { LogDetailSheet } from './LogDetailSheet';
 export { LogContextSection, CONTEXT_RUNGS } from './LogContextSection';
 export { StackBlock, ExceptionBadge, LogExceptionSection } from './StackBlock';
+export { TraceChip, traceChipView, fmtTraceDuration } from './TraceChip';
+export type { TraceChipProps } from './TraceChip';
 export type { StackBlockProps } from './StackBlock';
 export type { LogContextSectionProps } from './LogContextSection';
 export type { LogDetailSheetProps } from './LogDetailSheet';
