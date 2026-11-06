@@ -493,7 +493,9 @@ func NewES(cfg ESConfig) (*ESStore, error) {
 		// v0.10.1817 — Server-Timing `es;dur=`: istek bağlamında kaydedici
 		// varsa (yalnız /api/logs* uçları bağlar) yanıt başlığına kadar
 		// geçen süre toplanır; yoksa saydam geçiş.
-		Transport: servertiming.Transport("es", transport),
+		// v0.10.1878 — en dışta istek sayacı (es_meter.go): Coremetry'nin
+		// ES'e gönderdiği her istek tür × yüzey olarak sayılır.
+		Transport: esMeterTransport(servertiming.Transport("es", transport)),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create ES client: %w", err)

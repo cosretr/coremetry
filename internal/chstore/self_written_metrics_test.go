@@ -69,6 +69,7 @@ func TestSelfWrittenMetricsRegistry(t *testing.T) {
 func TestInsertMetricsCallersAreRegistered(t *testing.T) {
 	root := filepath.Join("..", "..")
 	want := []string{
+		"internal/api/es_request_meter.go", // SelfESRequestsMetric / Errors / DurMs (v0.10.1878)
 		"internal/evaluator/selfhealth.go", // SelfDiskUsedMetric
 		"internal/oracle/counter.go",       // OracleErrorCounterMetric
 		"main.go",                          // OTLP alıcısı: dış telemetri, dışlanmaz
@@ -85,7 +86,10 @@ func TestInsertMetricsCallersAreRegistered(t *testing.T) {
 				continue
 			}
 			// çağrı (`x.InsertMetrics(`) ya da metot değeri (`store.InsertMetrics)`)
-			if strings.Contains(trim, ".InsertMetrics(ctx") || strings.Contains(trim, "store.InsertMetrics)") {
+			// v0.10.1878 — ilk hâli yalnız `.InsertMetrics(ctx` arıyordu ve
+			// `sink.InsertMetrics(wctx, …)` biçimli gerçek bir yazarı kaçırdı;
+			// artık argüman adından bağımsız.
+			if strings.Contains(trim, ".InsertMetrics(") || strings.Contains(trim, "store.InsertMetrics)") {
 				rel, _ := filepath.Rel(root, path)
 				got = append(got, filepath.ToSlash(rel))
 				return

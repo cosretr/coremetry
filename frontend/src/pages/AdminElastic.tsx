@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/DataTable';
 import type { TraceContextServiceCoverage, ESQueryError } from '@/lib/types';
 import { esErrorKey } from './admin/esErrorKey';
+import { EsRequestsPanel } from '@/components/coremetry/admin/EsRequestsPanel';
 
 // v0.9.876 (tutarlılık denetimi BT14) — genişlikler eski <colgroup>'tan
 // AYNEN alındı; Error kolonu esner (eski `<col />` genişliksizdi).
@@ -376,6 +377,11 @@ export default function AdminElasticPage() {
             Lossy round-trip: title + KQL query only.
           </span>
         </div>
+
+        {/* v0.10.1878 — Coremetry'nin ES'e gönderdiği istekler (tüm pod'lar;
+            ClickHouse'taki sayaç serisinden). İndeks dökümü hata verse de
+            çizilir: yük artışını aramanın yeri burası. */}
+        {(err || (data && data.backend === 'elasticsearch')) && <EsRequestsPanel />}
 
         {gated && data && (
           <Empty icon="≡" title={`Logs backend is "${data.backend || 'unknown'}", not Elasticsearch`}>

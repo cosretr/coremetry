@@ -39,7 +39,7 @@ OracleLogsResponse, CopilotScopeNames, CosreRouteRED,
   KibanaSettings,
   Role, LDAPConfig, LDAPDirectoryUser,
   FilterExpr,
-  ESQueryError, ESLogstoreSnapshot, ESLogstoreInput,
+  ESQueryError, ESRequestStats, ESLogstoreSnapshot, ESLogstoreInput,
   OtlpExemplar, TraceLinks, TraceCountResponse, TraceErrorHistogramResponse, CorrelationLinkSettings,
   ExceptionTriageConfig, ProblemPriorityConfig, FailureSLOConfig, MetricExclusions, AnomalyTrackedConfig,
   InsightKind, InsightResponse, InsightSignal, InsightLink, InsightChartSpec,
@@ -1195,6 +1195,11 @@ export const api = {
   adminElasticErrors: () =>
     get<{ backend: string; queryErrors: number; recentErrors: ESQueryError[] }>(
       `/api/admin/elastic/errors`),
+  // v0.10.1878 — Coremetry'nin ES'e gönderdiği istekler (tüm pod'lar toplamı;
+  // ClickHouse'taki sayaç serisinden — bu çağrı ES'e gitmez). window: dakika
+  // (60 | 180 | 360 | 1440).
+  adminElasticRequests: (windowMin: number, signal?: AbortSignal) =>
+    get<ESRequestStats>(`/api/admin/elastic/requests?window=${windowMin}`, signal),
   // Trace-context self-discovery (v0.8.348, pivot Phase 1c) — the
   // backend verifies its OWN configured logstore: trace-id field
   // mapping verdict (keyword ✓ / text ⚠ / absent) + % of last-24h

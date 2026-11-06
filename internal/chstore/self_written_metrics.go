@@ -25,7 +25,11 @@ const OracleErrorCounterMetric = "ext:error_count"
 // SelfWrittenMetrics — OTLP alıcısından DEĞİL, binary'nin içinden
 // metric_points'e yazılan serilerin adları.
 func SelfWrittenMetrics() []string {
-	return []string{SelfDiskUsedMetric, OracleErrorCounterMetric}
+	return []string{
+		SelfDiskUsedMetric, OracleErrorCounterMetric,
+		// v0.10.1878 — ES istek sayacı serileri (self_es_series.go).
+		SelfESRequestsMetric, SelfESErrorsMetric, SelfESDurMsMetric,
+	}
 }
 
 // ingestMetricLastSeenSQL — metric_catalog'dan "dışarıdan gelen en taze

@@ -36,6 +36,7 @@ const code = (s: string) => s
   .replace(/^\s*\/\/.*$/gm, '');
 
 const REFETCH_FILES = [
+  'components/coremetry/admin/EsRequestsPanel.tsx', // v0.10.1878 — ES istek sayacı (göreli pencere, 30 sn; ES'e değil CH'ye gider)
   'components/ServiceAttentionStrip.tsx',
   'features/anomalies/ProblemsSection.tsx',
   'lib/queries/admin.ts',

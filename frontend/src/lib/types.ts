@@ -9747,6 +9747,39 @@ export interface ESQueryError {
   error: string;
 }
 
+// v0.10.1878 — Admin → Elasticsearch "giden istekler"
+// (GET /api/admin/elastic/requests; internal/api/es_request_meter.go).
+export interface ESRequestPoint {
+  t: number;       // kova başı, unix saniye
+  count: number;
+  errors: number;
+  avgMs: number;
+}
+export interface ESRequestOp {
+  op: string;      // search | msearch | count | field_caps | mapping | pit | async_search | sql | meta | other
+  count: number;
+}
+export interface ESRequestSurface {
+  surface: string; // route:<kalıp> | worker:<ad> | diğer | diğerleri
+  count: number;
+  errors: number;
+  avgMs: number;
+  recentPerMin: number;
+  basePerMin: number;
+}
+export interface ESRequestStats {
+  windowMin: number;
+  stepSec: number;
+  recentMin: number;
+  total: number;
+  errors: number;
+  recentPerMin: number;
+  basePerMin: number;
+  points: ESRequestPoint[];
+  byOp: ESRequestOp[];
+  bySurface: ESRequestSurface[];
+}
+
 // v0.8.348 — pivot Phase 1c: logstore trace-context SELF-DISCOVERY
 // (GET /api/admin/logstore/trace-context). The system verifies its OWN
 // configured backend: trace-id field mapping verdict + 24h coverage.

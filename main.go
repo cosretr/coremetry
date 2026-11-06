@@ -972,6 +972,10 @@ func main() {
 	}
 	cfgRefresh.Add("logstore-es", func(ctx context.Context) error { return logsMgr.LoadPersisted(ctx, store) })
 	log.Printf("[logs] read backend: %s", logsStore.Backend())
+	// v0.10.1878 — ES istek sayacı: bu pod'un Elasticsearch'e gönderdiği
+	// istekler dakikalık kalıcı seriye (Admin → Elasticsearch).
+	esMeterPod, _ := os.Hostname()
+	go api.StartESRequestMeter(ctx, store, esMeterPod)
 
 	// Wire the log backend into the evaluator so saved-search
 	// log alerts (rules with LogQuery != "") can count matches.

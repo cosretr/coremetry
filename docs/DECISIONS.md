@@ -12882,3 +12882,27 @@ görünüm 1–4. Parti A'nın (1842–1846) üstüne; ana grafik (olay anı kay
   `terms` tüm indekslere gitmemeli; prod'da ölçülerek. O zamana dek Faz 3 dilim 3.7 (kapsam genişletme) bekler.
 - **Ders.** Varsayılan sayfa açılışına eklenen her ES yan tümcesi 10B+/gün ve binlerce per-servis indekste ölçülmeden
   açılmaz; "sapma" diye not düşülen maliyet riski operatöre açıkça söylenir ve varsayılan kapalı gelir.
+
+## 2026-11-06 — v0.10.1878 — Elasticsearch'e giden istek sayacı (Admin → Elasticsearch)
+- **İstek (operatör, ES aşırı yük olayının ardından).** "Elastic'e giden sorgu sayısını takip edeyim ben admin olarak,
+  artarsa anlarım; şu an körüm." 1876 olayında yükün hangi sorgudan geldiği görülemedi; kök neden kanıtlanamadı.
+- **Sayım noktası.** ES istemcisinin taşıma katmanı (`logstore/es_meter.go`): Coremetry'nin ES'e gönderdiği HER HTTP
+  isteği sayılır — hangi kod yolu atarsa atsın, sayacı atlayan yeni bir sorgu yazılamaz. Hücre = dakika × işlem türü
+  (search / msearch / count / field_caps / mapping / pit / … kapalı küme) × yüzey. Yüzey = isteği başlatan yer;
+  ClickHouse `log_comment` etiketiyle aynı (`route:<kalıp>` / `worker:<ad>`), etiketsiz "diğer". Hücrede istek sayısı,
+  hata sayısı, toplam süre (yanıt başlığına kadar).
+- **Neden kalıcı seri (bellek değil).** Kurulum çok pod'lu; bellek sayacı yalnız isteğin düştüğü pod'u gösterirdi ve
+  yeniden başlatmada silinirdi. Her pod dakikalık hücrelerini `metric_points`'e yazar (`coremetry-self/es`; emsal: disk
+  doluluğu serisi v0.10.911); okuma tüm pod'ları toplar. Seriler `SelfWrittenMetrics` kaydında (ingest-stall alarmı onları
+  dış metrik saymaz). Saklama = metrik saklama süresi.
+- **Kardinalite.** İşlem türü kapalı küme; yüzey dakika başına ≤ 64 (fazlası "diğer"); pod başına dakikada en çok
+  birkaç yüz satır. Yazılamayan hücre atılır (birikmez); boşaltılmayan sayaç 180 dakikada kırpılır.
+- **Ekran.** Admin → Elasticsearch'in başında: istek/kova grafiği, "son 15 dk dakikada X · öncesi Y (×Z)" cümlesi, işlem
+  türleri ve isteği atan yüzeyler tablosu (son 15 dk hızına göre sıralı). Renk yalnız sapmada: ≥ 2 kat VE ≥ 1 istek/dk.
+  30 sn'de bir yenilenir; panel ES'e istek atmaz (ClickHouse'tan okur). Pencere 1 / 3 / 6 / 24 saat.
+- **Kapsam dışı (bilerek).** Otomatik alarm yok (operatör izleyecek; istenirse self-health kuralı ayrı iş). ES'in kendi
+  CPU/bellek ölçümü yok — bu sayaç Coremetry'nin GÖNDERDİĞİNİ gösterir, ES'in ne kadar zorlandığını değil. İstek başına
+  ES tarafı maliyeti (taranan shard / doküman) ölçülmez; süre dolaylı göstergedir.
+- **Ders (1877 ile birlikte).** Yeni bir ES sorgu yolu yayınlanırken bu ekranda önce test ortamında sayısı ve süresi
+  görülür; varsayılan açılışa giren yol için bu artık yayın ölçütüdür.
+- Doğrulanmadı: canlı küme (yazım, çok-pod toplamı), tarayıcı.
