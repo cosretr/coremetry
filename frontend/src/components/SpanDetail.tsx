@@ -502,9 +502,15 @@ export function SpanDetail({ span, onClose, logsFrom, logsTo, serviceLinks = tru
             {/* v0.9.853 — ns→ms dönüşümü artık tek üreticide
                 (lib/logsUrl.ts logsRangeParam); bu dosya doğru kopyaydı,
                 Trace.tsx'in hiç yoktu (K3). */}
-            <Link to={logsHref({ window: logsLinkRange || null, q: span.traceId })}
+            {/* v0.10.1890 (Log Search 3.8, audit §4 "Ters yön") — q=<trace>
+                yerine traceId + spanId süzgeçleri: "bu span'in logları".
+                v0.8.521'in gerekçesi (id yalnız gövdede) ES yolunda artık
+                süzgecin içinde: traceTermsAny alan terimlerine EK olarak
+                gövdeyi de eşler (logstore/elasticsearch.go). */}
+            <Link to={logsHref({ window: logsLinkRange || null, traceId: span.traceId, spanId: span.spanId })}
+              title="Bu span'in logları (trace_id + span_id süzgeci)"
               style={{ marginLeft: 8, fontSize: 10, fontWeight: 400, color: 'var(--accent2)' }}>
-              open in Logs ↗
+              bu span'in logları ↗
             </Link>
           </>
         }>

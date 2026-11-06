@@ -24,11 +24,20 @@ export function isDraftDirty(draft: LogsUrlFilter, applied: LogsUrlFilter): bool
 }
 
 const BARE_TRACE_ID = /^(?:0x)?([0-9a-f]{32})$/i;
+// v0.10.1890 (Log Search 3.8, audit §4 "Yapıştırılan trace_id") — tireli UUID
+// de tanınır (tiresiz 32-hex'e çevrilir). 16-hex TANINMAZ: span id ile ayırt
+// edilemez, kutuya yapıştırılan 16-hex bir aramadır.
+const BARE_UUID = /^([0-9a-f]{8})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{12})$/i;
 
-/** Kutudaki metin YALNIZ bir trace id'siyse küçük harfli id, aksi hâlde ''. */
+/** Kutudaki metin YALNIZ bir trace id'siyse (32-hex / `0x` / tireli UUID)
+ *  küçük harfli 32-hex id, aksi hâlde ''. v0.10.1890 — Enter / Search bu
+ *  durumda aramayı DEĞİL birleşik görünümü açar (Logs.tsx apply). */
 export function bareTraceIdOf(search: string): string {
-  const m = BARE_TRACE_ID.exec(search.trim());
-  return m ? m[1].toLowerCase() : '';
+  const s = search.trim();
+  const m = BARE_TRACE_ID.exec(s);
+  if (m) return m[1].toLowerCase();
+  const u = BARE_UUID.exec(s);
+  return u ? u.slice(1).join('').toLowerCase() : '';
 }
 
 const HEX = /^[0-9a-f]+$/;

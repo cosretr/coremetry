@@ -35,6 +35,12 @@ describe('bareTraceIdOf', () => {
     expect(bareTraceIdOf(`  ${id.toUpperCase()} `)).toBe(id);
     expect(bareTraceIdOf(`0x${id}`)).toBe(id);
   });
+  it('v0.10.1890 — tireli UUID → tiresiz 32-hex; bozuk UUID boş', () => {
+    const uuid = `${id.slice(0, 8)}-${id.slice(8, 12)}-${id.slice(12, 16)}-${id.slice(16, 20)}-${id.slice(20)}`;
+    expect(bareTraceIdOf(uuid.toUpperCase())).toBe(id);
+    expect(bareTraceIdOf(uuid.replace('-', ''))).toBe('');
+    expect(bareTraceIdOf(`${uuid} x`)).toBe('');
+  });
   it('KQL, kısa hex, fazladan metin → boş', () => {
     expect(bareTraceIdOf(`trace.id:${id}`)).toBe('');
     expect(bareTraceIdOf(id.slice(0, 16))).toBe('');

@@ -970,7 +970,19 @@ function LogsInner() {
   // hiç istek atmıyordu ("Search" düğmesi aramıyordu). Sayaç göreli
   // pencereyi şimdiye taşır (özel aralıkta refetch); maliyet tık başına
   // bir sorgu — otomatik aralık yok.
+  // v0.10.1890 (Log Search 3.8; operatör kararı §9-8) — kutuda YALNIZ bir
+  // trace_id (32-hex / 0x / tireli UUID) varsa arama ATILMAZ: birleşik
+  // görünüm açılır (geçmişe girer, Geri önceki aramaya döner). Kutu
+  // uygulanan aramaya geri döner; süzgeç / liste / histogram değişmez.
+  const openPastedTrace = (): boolean => {
+    const pasted = bareTraceIdOf(draft.search);
+    if (!pasted) return false;
+    setDraft(d => ({ ...d, search: filter.search }));
+    openTraceView(pasted);
+    return true;
+  };
   const apply = () => {
+    if (openPastedTrace()) return; // v0.10.1890
     // v0.10.1820 — uygulanan arama yerel geçmişe (son 20, tekil).
     if (draft.search.trim()) setQueryHistory(recordLogsQuery(userId, draft.search));
     resetPaging(); setFilter(draft); writeUrl(draft, filters);

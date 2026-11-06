@@ -161,6 +161,33 @@ describe('/logs birleşik trace + log görünümü (v0.10.1889)', () => {
     expect(m.bundleCalls[0].opts.hint).toBeUndefined();
   });
 
+  // v0.10.1890 (dilim 3.8; operatör kararı §9-8) — kutuya yapıştırılan
+  // trace_id + Enter: arama ATILMAZ, birleşik görünüm açılır; kutu uygulanan
+  // aramaya döner; Geri önceki aramaya (panel yok, q=boom) döner.
+  it('yapıştırılan trace_id (tireli UUID) + Enter → birleşik görünüm; Geri önceki arama', async () => {
+    await mountLogs(`/logs?q=boom&range=${RANGE}`);
+    const list0 = m.logsCalls.length, ts0 = m.tsCalls.length;
+    const input = host!.querySelector('input[data-shortcut-search]') as HTMLInputElement;
+    const uuid = `${TID.slice(0, 8)}-${TID.slice(8, 12)}-${TID.slice(12, 16)}-${TID.slice(16, 20)}-${TID.slice(20)}`;
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+    await act(async () => { setter.call(input, uuid); input.dispatchEvent(new Event('input', { bubbles: true })); });
+    await act(async () => { input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); });
+    await settle();
+    const p = new URLSearchParams(window.location.search);
+    expect(p.get('panel')).toBe('trace');
+    expect(p.get('trace')).toBe(TID);
+    expect(p.get('q')).toBe('boom');
+    expect(m.bundleCalls).toHaveLength(1);
+    expect(m.logsCalls.length).toBe(list0);
+    expect(m.tsCalls.length).toBe(ts0);
+    expect((host!.querySelector('input[data-shortcut-search]') as HTMLInputElement).value).toBe('boom');
+    await act(async () => { window.history.back(); });
+    await settle();
+    const back = new URLSearchParams(window.location.search);
+    expect(back.get('panel')).toBeNull();
+    expect(back.get('q')).toBe('boom');
+  });
+
   it('panel=trace geçersiz kimlik: Logs görünümü (liste çekilir, bundle yok)', async () => {
     await mountLogs(`/logs?panel=trace&trace=nope&range=${RANGE}`);
     expect(m.bundleCalls).toHaveLength(0);

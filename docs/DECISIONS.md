@@ -13025,6 +13025,17 @@ Loglar yalnız ES'te (operatör 2026-11-06): yeni yetenekler ES yolunda; trace/s
   satırları şelaleye karışmaz (yalnız ES logları). Log satırı tıklanmaz (detay çekmecesi `?doc=` bağlam okuması = ek ES
   isteği olurdu); tam metin ipucunda. < 2 sn hedefi ÖLÇÜLMEDİ (prod/tarayıcı yok). Sınır: parçaları ipucundan 1 saatten
   uzak ama kenara değmeyen trace dar pencereyle okunur (kademeli yolun 24 sa adımıyla aynı sınıf).
+- **v0.10.1890 — yapıştırılan trace_id → birleşik görünüm; span → logs `spanId` (3.8; OK — §9-8).** Sorgu kutusunda
+  YALNIZ bir trace kimliği varken (32-hex, `0x` önekli ya da tireli UUID — `bareTraceIdOf`; 16-hex tanınmaz, span id
+  ile ayırt edilemez) Enter / Search aramayı ATMAZ: 3.6'nın birleşik görünümünü açar (`panel=trace&trace=`, geçmişe
+  girer); kutu uygulanan aramaya döner, süzgeç / liste / histogram değişmez — Geri önceki aramaya (panel yok, aynı
+  `q`) döner. "⌗ trace olarak süz" çipi yazarken aynen durur (süzgeç yolu isteyen için). Span detayının log bağlantısı
+  `q=<trace_id>` serbest araması yerine `traceId` + `spanId` süzgeçleri taşır ("bu span'in logları ↗"); v0.8.521'in
+  gerekçesi (kimlik yalnız gövdede) ES yolunda süzgecin içinde (`traceTermsAny` alan terimlerine ek olarak gövdeyi
+  eşler). **Davranış değişikliği:** (1) kutuya yapıştırılan trace_id artık `q` araması olarak çalışmaz; (2) span →
+  logs bağlantısı trace'in tüm logları yerine o span'in loglarını açar (trace'in tümü için süzgeçteki spanId hapı
+  kaldırılır); bağlantı metni "open in Logs" → "bu span'in logları". Derin link `?q=<trace_id>` otomatik açılmaz
+  (yalnız operatörün uyguladığı arama).
 
 ## 2026-11-06 — v0.10.1885 — Kod araması: depo süzgeci proje süzgeciyle birlikte (Azure DevOps 400)
 
