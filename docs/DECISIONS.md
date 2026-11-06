@@ -13132,3 +13132,21 @@ yumuşak-katmanlı / Öneri B belirgin-renkli) **B'yi seçti** ("Buton öneri b 
   yerleşim kayması riski); yazı ağırlığı aynı; çipler hap biçimine çevrilmedi (tonlu outline'ı devralırlar). Taşınmamış
   eski sayfalardaki `ui/Button` (`button.sec`) eski görünümde; sayfa dilimleri taşındıkça yenilenir.
 - Tek commit, geri alınabilir. Doğrulanmadı: tarayıcı (altı tema, yoğun ekranlar).
+
+## 2026-11-06 — Log Search Faz 4–5
+
+Operatör 2026-11-06: "3 ve 8 bitir, log turu bitsin." Audit `docs/logs/log-search-audit.md` §8 Faz 4 (4.1, 4.2, 4.4) ve
+Faz 5 (5.1, 5.2). 4.3 (ortak desen kimliği) ve 4.5 (async search) kapsam dışı. ES kuralı (1877 olayı): Logs'un varsayılan
+açılışına ve otomatik yenilemesine yeni Elasticsearch isteği eklenmez.
+
+- **v0.10.1895 — 4.1 Histogram işaretleri.** /logs histogramında aynı servisin rollout'u (↻ Rollout), anomalisi
+  (◈ Anomali) ve Problem açılışı (⚠ Problem) — her tür ayrı simge, ayrı metin, ayrı renk. Kaynak `/api/annotations`
+  (ClickHouse + API, ES isteği yok, sunucu önbelleği 30 sn); istek YALNIZ tek servis seçiliyken ve sayfa başına bir kez
+  (servissiz / çoklu servis seçiminde istek yok — tüm kurulumun olayları histogramda gürültüdür). Grafikte işaret
+  şeridine tık ya da histogramın altındaki işaret düğmesine tık = pencere olayın çevresine daralır (±15 dk; dar
+  pencerede pencerenin 1/8'i, en az 1 dk; mevcut pencereye kırpılır — servis şeridinin ±15 dk emsali). Düğme satırı
+  canvas etiketinin metin karşılığıdır (ekran okuyucu + geniş tık hedefi); işaret yoksa satır çizilmez. Problem
+  çözülmesi ve operatör olayları işaret değil. `TimeChart`'a ADDITIVE `onRegionClick` (CorePanel isabet kuralı: yalnız
+  şerit satırı; verilmezse bayt bayt eski). Test: `lib/logsMarkers.test.ts`, `pages/Logs.markers.test.tsx` (tek servis
+  → 1 annotations isteği, liste + histogram ES isteği 1 + 1 kalır; servissiz → istek yok). Mockup farkı: mockup
+  işaretleri yalnız grafikte çizer; metin satırı ek. Doğrulanmadı: tarayıcı.

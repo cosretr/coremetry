@@ -16,6 +16,8 @@ import {
   LogsHistogram, parseBreakdown, histogramFeedsChips, type LogsBreakdown,
 } from '@/components/LogsHistogram';
 import { LogPatternsPanel } from '@/components/LogPatternsPanel';
+import { useLogsMarkers } from './logs/useLogsMarkers';
+import { logsMarkerZoom } from '@/lib/logsMarkers';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
@@ -58,7 +60,7 @@ import { LogsQueryBar } from './logs/LogsQueryBar';
 import { parseLogQueryError, logQueryErrorMessage } from '@/lib/logQueryError';
 import { readLogsQueryHistory, recordLogsQuery } from '@/lib/logsQueryHistory';
 import { LOGS_DEFAULT_DISPLAY, readLogsDisplay, writeLogsDisplay, pageSlice } from '@/lib/logsDisplay';
-import { DisplayOptions, LoadStatus, FieldSidebar, LogDetailSheet, LogContextSection, LogExceptionSection, TraceChip, TraceLogsView, fmtTraceDuration } from '@/components/coremetry/logs';
+import { DisplayOptions, LoadStatus, FieldSidebar, LogDetailSheet, LogContextSection, LogExceptionSection, TraceChip, TraceLogsView, fmtTraceDuration, HistogramMarkers } from '@/components/coremetry/logs';
 import { useSheetParam } from '@/components/coremetry/DetailSheet';
 import { AIExplainButton } from '@/components/ai/AIExplainButton';
 import { logLineSubjectOf } from '@/lib/logLineSubject';
@@ -662,6 +664,15 @@ function LogsInner() {
       level: filter.severity >= 17 ? 'error' : 'all',
     };
   }, [from, to, filter.traceId, filter.service, filter.severity, zoomDepth, env, compiledSearch]);
+  // v0.10.1895 (Log Search Faz 4 dilim 4.1) — histogram işaretleri (rollout /
+  // anomali / Problem): ClickHouse'tan tek önbellekli istek, yalnız tek servis
+  // seçiliyken; ES isteği eklemez. Tık = pencereyi olayın çevresine daralt.
+  const marks = useLogsMarkers({ service: filter.service, fromNs: from, toNs: to, enabled: !live && !scopeGate && !filter.traceId });
+  const zoomToMarker = (tsNs: number) => {
+    if (!from || !to) return;
+    const [a, b] = logsMarkerZoom(tsNs, from, to);
+    handleZoom(a, b);
+  };
   // <mark> terms for the message cell — the APPLIED free-text
   // query's bare terms + quoted phrases only (field clauses and
   // pills excluded; a level:error clause must not light unrelated
@@ -1582,6 +1593,8 @@ function LogsInner() {
           onSeriesPick={addFromRow} /* v0.10.503 (B8) — lejant ⊕ → pill */
           spikeSubject={spikeSubject} /* v0.10.1284 — ✨ Artışı açıkla */
           paused={scopeGate} /* v0.10.1855 — kapsam kararı beklenirken / servis seçilmeden fetch yok */
+          regions={marks.regions} /* v0.10.1895 — işaretler */
+          onRegionClick={rg => { const mk = marks.markers.find(x => x.key === rg.id); if (mk) zoomToMarker(mk.tsNs); }}
           height={96} /* v0.10.1501 — Discover yoğunluğu; diğer çağıranlar 140 */
           headerLeft={(
             <>
@@ -1589,6 +1602,7 @@ function LogsInner() {
               {levelChips}
             </>
           )} />
+        <HistogramMarkers markers={marks.markers} truncated={marks.truncated} onPick={mk => zoomToMarker(mk.tsNs)} />
 
         {/* v0.10.1499 (Discover dilim 2) — görünüm anahtarı: Logs | Desenler |
             Şablonlar, mevcut `?panel=` üzerinde (yeni param yok, replace:true).

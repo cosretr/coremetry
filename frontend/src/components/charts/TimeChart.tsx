@@ -17,7 +17,7 @@ import { stepGapsRefiner, nearestFilledIdx } from '@/lib/chart/gapPolicy';
 import { sortedTooltipRows, capTooltipRows } from '@/lib/chart/tooltipModel';
 import { decidePinClick, applyPinStyle, clearPinStyle } from '@/lib/chart/tooltipPin';
 import { toggleSeriesVisibility, isolateSeriesVisibility, resetSeriesVisibility } from '@/lib/chart/legendVisibility';
-import { drawPlayhead, drawThresholds, drawTimeRegions, type ChartPlayhead, type ChartThreshold, type ChartTimeRegion } from '@/lib/chart/overlays';
+import { drawPlayhead, drawThresholds, drawTimeRegions, regionAt, type ChartPlayhead, type ChartThreshold, type ChartTimeRegion } from '@/lib/chart/overlays';
 import { placeTooltip } from '@/lib/chartTooltip';
 import { escapeHTML } from '@/lib/utils';
 import { stackMatrix } from '@/lib/chart/timeStack';
@@ -116,6 +116,10 @@ interface Props {
   // imleci: dikey çizgi + [fromSec, cursorSec] dolgusu. Yapı imzasına GİRMEZ
   // (her kare yeniden kurulum olurdu); değişince yalnız redraw.
   playhead?: ChartPlayhead | null;
+  // v0.10.1895 (ADDITIVE; Log Search Faz 4 dilim 4.1) — bölge şeridine düz
+  // tık (CorePanel onRegionClick emsali, aynı isabet: yalnız şerit satırı).
+  // İsabet varsa pin işlenmez; verilmezse davranış bayt bayt eski.
+  onRegionClick?: (region: ChartTimeRegion) => void;
 }
 
 // v0.9.75 (chart-consolidation Adım 0) — cssVar/yRange lib/chart/'a çıkarıldı
@@ -128,7 +132,7 @@ const MAX_BAR_PX = 18;
 export function TimeChart({
   times, series, height = 150, leftUnit = '', rightUnit = '',
   deployMarkers, thresholds, regions, onBrush, onZoomReset, syncKey, fmtLeft, fmtRight, fmtX, xRange, leftInteger = false,
-  legendCollapsed, hideLegend, barSize = 0.86, onSeriesPick, seriesPickable, playhead,
+  legendCollapsed, hideLegend, barSize = 0.86, onSeriesPick, seriesPickable, playhead, onRegionClick,
 }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const ttRef = useRef<HTMLDivElement>(null);
@@ -142,6 +146,8 @@ export function TimeChart({
   const fmtRightRef = useRef(fmtRight); fmtRightRef.current = fmtRight;
   const fmtXRef = useRef(fmtX); fmtXRef.current = fmtX;
   const playheadRef = useRef(playhead); playheadRef.current = playhead;
+  const regionClickRef = useRef(onRegionClick); regionClickRef.current = onRegionClick;
+  const regionsRef = useRef(regions); regionsRef.current = regions;
   const themeTick = useThemeTick();
 
   // ── Grafana-parite #2: tooltip pin + interaktif lejant (OVC ile aynı) ────
@@ -166,6 +172,13 @@ export function TimeChart({
     u.over.addEventListener('mousedown', e => { downX = e.clientX; });
     u.over.addEventListener('dblclick', () => unpinTooltip());
     u.over.addEventListener('click', e => {
+      // v0.10.1895 — bölge şeridine tık (sürükleme değil, tek tık).
+      const onRegion = regionClickRef.current;
+      if (onRegion && e.detail <= 1 && (downX == null || Math.abs(e.clientX - downX) < 2)) {
+        const r0 = u.over.getBoundingClientRect();
+        const hit = regionAt(u, regionsRef.current, 1, e.clientX - r0.left, e.clientY - r0.top);
+        if (hit) { onRegion(hit); return; }
+      }
       const tt = ttRef.current;
       if (!tt) return;
       const d = decidePinClick({

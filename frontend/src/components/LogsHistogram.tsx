@@ -9,6 +9,7 @@ import { AIExplainButton } from '@/components/ai/AIExplainButton';
 import { IconSparkles } from '@/components/icons';
 import type { AISubject } from '@/lib/aiSubject';
 import type { LoadPhase } from '@/lib/types';
+import type { ChartTimeRegion } from '@/lib/chart/overlays';
 import { parseServerTiming } from '@/lib/serverTiming';
 import { useT } from '@/lib/i18n'; // v0.10.1338
 
@@ -121,7 +122,7 @@ export function histogramFeedsChips(bd: LogsBreakdown, severityFloor: number): b
   return severityFloor === 0 && bd === 'severity';
 }
 
-export function LogsHistogram({ range, filter, onRangeSelect, onZoomReset, onSeries, breakdown, onBreakdown, onSeriesPick, spikeSubject, paused, height = 140, headerLeft, onPhase, cancelToken = 0 }: {
+export function LogsHistogram({ range, filter, onRangeSelect, onZoomReset, onSeries, breakdown, onBreakdown, onSeriesPick, spikeSubject, paused, height = 140, headerLeft, onPhase, cancelToken = 0, regions, onRegionClick }: {
   range: { from?: number; to?: number };
   filter: Filter;
   // Drag-select a horizontal span → called with the selection as unix-ns
@@ -165,6 +166,11 @@ export function LogsHistogram({ range, filter, onRangeSelect, onZoomReset, onSer
   // v0.10.1834 — "Sorguyu iptal et": değer değişince uçuştaki fetch iptal
   // edilir ve gövde "histogram iptal edildi" der (yeni süzgeç yeniden çeker).
   cancelToken?: number;
+  // v0.10.1895 (Log Search Faz 4 dilim 4.1) — bağlam işaretleri (rollout /
+  // anomali / Problem) ve şeride tık. Yalnız /logs geçirir; verilmezse
+  // grafik bayt bayt eski.
+  regions?: ChartTimeRegion[];
+  onRegionClick?: (region: ChartTimeRegion) => void;
 }) {
   const [data, setData] = useState<Series[] | null | undefined>(undefined);
   const [canceled, setCanceled] = useState(false);
@@ -364,6 +370,8 @@ export function LogsHistogram({ range, filter, onRangeSelect, onZoomReset, onSer
             ? i => { const sr = series[i]; if (sr && sr.key !== 'rest') onSeriesPick(breakdownPillKey(bd), sr.label); }
             : undefined}
           seriesPickable={i => series[i]?.key !== 'rest'}
+          regions={regions}
+          onRegionClick={onRegionClick}
         />
       )}
     </div>
