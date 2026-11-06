@@ -12941,3 +12941,12 @@ Loglar yalnız ES'te (operatör 2026-11-06): yeni yetenekler ES yolunda; trace/s
   logları, trace logs paneli ve anomali çekmecesi satır içi genişlemeyi korur. Sapma: mockup'taki "son 5 dk'da 14 kez,
   rollout'tan 38 sn sonra" cümlesi ek sayım/olay istekleri ister — bu dilimde yok (uydurulmaz); "Bu değere filtrele"
   servis değerine bağlandı (alan satırlarında her değer için + − ayrıca var).
+- **v0.10.1881 — çevre loglar çekmecenin içinde (3.2).** Yeni `coremetry/logs/LogContextSection` (detay çekmecesinin
+  "Çevre loglar" bölümü; mockup görünüm 2). Uç DEĞİŞMEDİ (`GET /api/logs/context`, iki paralel arama, 15 sn önbellek,
+  n ≤ 200). Bölüm KAPALI başlar — istek yalnız operatör açınca; genişlik basamaklı ±5 → ±50 → ±200 (önbellek anahtarı
+  kardinalitesi sınırlı; ±200 üstü yok); kapsam "Aynı pod" (pod çıkarılamazsa pasif) / "Aynı servis"; React Query
+  sinyali (kapanış / kapsam değişimi uçuştaki aramayı keser; `api.logsContext` opsiyonel `signal` aldı). Pivot satır
+  işaretli (`aria-current`), komşu satıra tık o kaydı çekmecede açar; "Bu pencereyi Logs'ta aç" dönen satırların
+  penceresi + servis ile `/logs`'a gider. /logs artık `LogContextModal` kullanmıyor (modal pod logları yüzeyinde aynen
+  duruyor — davranış değişmedi). Sapma: mockup "↑ 50 önceki / ↓ 50 sonraki" iki yönlü ayrı düğme gösteriyordu; uç tek
+  `n` ile iki yarıyı simetrik okuyor (uç değişmez kuralı) → tek "Daha geniş (±N)" düğmesi.

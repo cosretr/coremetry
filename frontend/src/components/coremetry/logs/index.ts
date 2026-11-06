@@ -9,6 +9,8 @@ export type { DisplayOptionsProps } from './DisplayOptions';
 export { LoadStatus } from './LoadStatus';
 export { FieldSidebar, fieldsPanelOpen } from './FieldSidebar';
 export { LogDetailSheet } from './LogDetailSheet';
+export { LogContextSection, CONTEXT_RUNGS } from './LogContextSection';
+export type { LogContextSectionProps } from './LogContextSection';
 export type { LogDetailSheetProps } from './LogDetailSheet';
 export type { FieldSidebarProps, FieldStatsScope } from './FieldSidebar';
 export type { LoadStatusProps, LoadStatusItem } from './LoadStatus';
