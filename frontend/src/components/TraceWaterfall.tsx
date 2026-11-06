@@ -5,10 +5,10 @@ import { findScrollParent, offsetWithinScrollParent } from '@/lib/scrollParent';
 import { TraceMinimap } from './traces/TraceMinimap';
 import { Chip } from './ui/Chip';
 import { DisclosureButton } from './ui/DisclosureButton';
-import type { SpanRow, TraceAnalysis, TraceNode, TraceServiceSummary } from '@/lib/types';
+import type { LogRow, SpanRow, TraceAnalysis, TraceNode, TraceServiceSummary } from '@/lib/types';
 import { collectSubtreeIds, groupParentOf, clusterBadge, ancestorChain, expandForReveal, findRevealRow } from './traceWaterfall.tree';
 import { resolveResource } from '@/lib/otel/semconv';
-import { fmtNs, displaySpanName } from '@/lib/utils';
+import { fmtNs, displaySpanName, sevClass, sevName } from '@/lib/utils';
 import { inkOn } from '@/lib/chartFmt';
 import { wfBarAreaPx, wfLabelPlacement, wfOutsideRightLeft } from './traceWaterfall.label';
 import { nameColWidth, NAME_MIN, NAME_MAX, INDENT_PX } from '@/lib/traceNameCol';
@@ -202,11 +202,18 @@ export function TraceWaterfall({
   spans, selectedId, onSelect, defaultCollapsed, groupSimilar = false,
   onGroupSimilarChange,
   criticalPathIds, matchIds, focusIds, evidenceIds, logSignals, onLogsClick, linkedSpanIds, analysis, revealSpanId,
-  renderDetail,
+  renderDetail, logRows,
 }: {
   spans: SpanRow[];
   selectedId: string | null;
   onSelect: (id: string) => void;
+  // v0.10.1889 (Log Search 3.6, audit §4 "Birleşik görünüm") — span id →
+  // o span'e bağlı log satırları (zaman sırasıyla; çağıran gruplar —
+  // lib/traceLogRows). Verilirse her satır kendi loglarını satırın içinde,
+  // çubuğun altında "+ofset · seviye · mesaj" olarak çizer (sanal kipte
+  // ölçülen eleman satırın kendisi → yükseklik doğru). Vermeyen çağıranlar
+  // (Trace, kiosk, karşılaştırma) aynen.
+  logRows?: ReadonlyMap<string, LogRow[]>;
   // v0.10.682 (kiosk; operatör: "detay aynı span'ın altında açılsın") —
   // verilirse SEÇİLİ satırın içinde, satır içeriğinin altında çizilir
   // (Tempo düzeni). Ölçülen eleman satırın kendisi olduğu için sanal kipte
@@ -778,6 +785,7 @@ export function TraceWaterfall({
           s.statusCode === 'error' ? 'wf-err' : '',
           sel ? 'wf-sel' : '',
           sel && renderDetail ? 'wf-has-detail' : '',
+          logRows?.get(pickId)?.length ? 'wf-has-logs' : '', // v0.10.1889
           onCritical ? 'wf-critical' : '',
           anyId(evidenceIds) ? 'wf-evidence' : '',
           filterActive && onMatch ? 'wf-match' : '',
@@ -994,6 +1002,23 @@ export function TraceWaterfall({
                 </span>
               )}
             </div>
+            {(() => {
+              // v0.10.1889 — birleşik görünüm: bu span'in logları (grup
+              // satırında temsilcinin). Tık satırı seçmez (kendi kabı).
+              const lr = logRows?.get(pickId);
+              if (!lr || lr.length === 0) return null;
+              return (
+                <div className="wf-row-logs" data-testid="wf-row-logs" onClick={e => e.stopPropagation()}>
+                  {lr.map(l => (
+                    <div key={l.id} className="wf-log" title={l.body}>
+                      <span className="wf-log-off">+{fmtNs(Math.max(0, l.timestamp - minT))}</span>
+                      <span className={sevClass(l.severity)}>{l.severityText || sevName(l.severity)}</span>
+                      <span className="wf-log-msg">{l.body}</span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
             {sel && renderDetail && (
               /* v0.10.682 — satır-içi detay (Tempo): satır sarar, tam genişlik;
                  tık yayılımı kesik (× kapat düğmesi seçimi geri açmasın). */

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 //
 // Logs.keys.test.tsx — v0.10.1857 (Log Search Faz 2 dilim 2.6). /logs'ta seçili
-// satır (j) üzerinde f → service hapı, e → hariç tut, t → trace sayfası; tuşlar
+// satır (j) üzerinde f → service hapı, e → hariç tut, t → birleşik görünüm; tuşlar
 // yardım ekranının kaynağında (listShortcuts) yalnız sayfa bağlıyken var; satır
 // seçili değilken no-op. Tablo altında ipucu satırı.
 import '@/test/pageJsdom';
@@ -14,7 +14,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ConfirmProvider } from '@/components/ui/ConfirmDialog';
 import { listShortcuts } from '@/lib/keyboard';
 import { parseFiltersParam } from '@/lib/logFilters';
-import { traceHref } from '@/lib/traceHref';
+
 import type { LogRow, LogsResponse } from '@/lib/types';
 import Logs from './Logs';
 
@@ -105,10 +105,16 @@ describe('/logs klavye f / e / t (v0.10.1857)', () => {
     expect(pills()).toEqual([{ key: 'service', value: 'orders-api', negated: true, disabled: false }]);
   });
 
-  it('j sonra t → trace sayfası', async () => {
+  // v0.10.1889 (dilim 3.6) — t artık trace sayfası yerine /logs'un birleşik
+  // görünümünü açar (panel=trace; geçmişe girer, süzgeç değişmez).
+  it('j sonra t → birleşik trace + log görünümü', async () => {
     await mountLogs(`/logs?range=${RANGE}`);
     await press('j');
     await press('t');
-    expect(window.location.pathname + window.location.search).toBe(traceHref(TRACE));
+    const p = new URLSearchParams(window.location.search);
+    expect(window.location.pathname).toBe('/logs');
+    expect(p.get('panel')).toBe('trace');
+    expect(p.get('trace')).toBe(TRACE);
+    expect(p.has('traceId')).toBe(false);
   });
 });

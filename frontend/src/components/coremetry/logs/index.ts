@@ -18,3 +18,5 @@ export type { LogContextSectionProps } from './LogContextSection';
 export type { LogDetailSheetProps } from './LogDetailSheet';
 export type { FieldSidebarProps, FieldStatsScope } from './FieldSidebar';
 export type { LoadStatusProps, LoadStatusItem } from './LoadStatus';
+export { TraceLogsView } from './TraceLogsView'; // v0.10.1889 — birleşik trace + log görünümü (3.6)
+export type { TraceLogsViewProps } from './TraceLogsView';

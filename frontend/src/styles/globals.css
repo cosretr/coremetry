@@ -2230,6 +2230,12 @@ a.dep-prob-mark:hover { text-decoration: none; }
 .wf-row.wf-has-detail { flex-wrap: wrap; }
 .wf-row-detail { flex: 0 0 100%; cursor: default; border-top: 1px solid var(--divider); border-left: 3px solid var(--accent); background: var(--bg2); padding: var(--sp-4) var(--sp-5) var(--sp-5) var(--sp-6); }
 .wf-row-detail .kiosk-span { border: 0; border-radius: 0; background: transparent; padding: 0; }
+/* v0.10.1889 (Log Search 3.6) — birleşik görünüm: span satırının altında o span'in logları. */
+.wf-row.wf-has-logs { flex-wrap: wrap; }
+.wf-row-logs { flex: 0 0 100%; cursor: default; display: grid; gap: var(--sp-1); padding: var(--sp-1) var(--sp-4) var(--sp-2) var(--sp-8); border-top: 1px dashed var(--divider); }
+.wf-log { display: grid; grid-template-columns: 72px 56px minmax(0, 1fr); gap: var(--sp-3); align-items: baseline; font-size: var(--fs-xs); }
+.wf-log-off { color: var(--text3); font-variant-numeric: tabular-nums; text-align: right; }
+.wf-log-msg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-family: var(--font-mono); }
 .wf-row.wf-err .wf-name { color: var(--err); }
 /* Error span — whole-row low-opacity red tint (Tempo latest).
    Replaces the previous 1.6px red inset frame around the duration
@@ -6258,6 +6264,15 @@ a.cell-link--block { display: block; overflow: hidden; text-overflow: ellipsis; 
 /* v0.10.1499 (dilim 2) — görünüm anahtarı (Logs | Desenler | Şablonlar) ve
    tablonun yerine oturan gömülü desen paneli (LogPatternsPanel embedded). */
 .ld-viewbar { display: flex; align-items: center; gap: var(--sp-4); margin: 0 0 var(--sp-4); }
+/* v0.10.1889 (Log Search 3.6) — birleşik trace + log görünümü (coremetry/logs/TraceLogsView). */
+.ld-trace-head { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-3); margin: 0 0 var(--sp-4); }
+.ld-trace-pill { display: inline-flex; align-items: center; gap: var(--sp-2); min-width: 0; max-width: 100%; padding: 0 var(--sp-1) 0 var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg2); font-size: var(--fs-sm); }
+.ld-trace-id { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); }
+.ld-trace-tag { color: var(--text3); font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .04em; }
+.ld-trace-bar { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--divider); font-size: var(--fs-sm); }
+.ld-trace-note { margin: 0; padding: var(--sp-2) var(--sp-4); color: var(--text2); font-size: var(--fs-xs); border-bottom: 1px solid var(--divider); }
+.ld-trace-orphans { border-top: 1px solid var(--divider); }
+.ld-trace-orphans h4 { margin: 0; padding: var(--sp-3) var(--sp-4); font-size: var(--fs-sm); font-weight: 600; display: flex; gap: var(--sp-3); align-items: baseline; }
 .lp-panel.lp-embedded { padding: var(--sp-4) var(--sp-5); margin-bottom: var(--sp-4); }
 .lp-toolbar { margin-left: auto; display: inline-flex; align-items: center; gap: var(--sp-3); flex-shrink: 0; }
 /* v0.10.1501 (dilim 3) — alan listesi yapışkan 264px ızgara kolonu (kendi

@@ -583,7 +583,7 @@ func TestLinkParamsAreActuallyReadByTheTargetPages(t *testing.T) {
 			// paramı parseLogsView ile okur, o da daraltıcı parseLogsPanel'e
 			// iner (pages/logs/logsView.ts). İki halka da çivili.
 			src:   "../../../frontend/src/pages/Logs.tsx",
-			reads: []string{`parseLogsView(searchParams.get('panel'))`},
+			reads: []string{`parseLogsView(searchParams.get('panel')`}, // v0.10.1889 — ikinci arg trace=
 			note:  "/logs ?panel= okuyucusu (C8 → görünüm anahtarı)",
 		},
 		{

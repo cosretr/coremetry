@@ -825,7 +825,7 @@ export const api = {
   trace:     (id: string, signal?: AbortSignal) => get<TraceDetailResponse>(`/api/traces/${id}`, signal),
   // v0.10.672 — kiosk modu: span + log + Oracle tek istekte (trace_bundle.go).
   // logLimit varsayılan 500, tavan 1000 (sunucu clamp'ler); qs() boşları atar.
-  traceBundle: (id: string, opts: { logLimit?: number; oracleLimit?: number } = {}, signal?: AbortSignal) => {
+  traceBundle: (id: string, opts: { logLimit?: number; oracleLimit?: number; hint?: number } = {}, signal?: AbortSignal) => {
     const q = qs(opts);
     return get<TraceBundleResponse>(`/api/traces/${id}/bundle${q ? '?' + q : ''}`, signal);
   },

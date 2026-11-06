@@ -12,7 +12,7 @@ describe('Logs ?panel= (C8 → görünüm anahtarı)', () => {
   const view = readFileSync(resolve(__dirname, 'logs/logsView.ts'), 'utf8');
   const url = readFileSync(resolve(__dirname, '../lib/logsUrl.ts'), 'utf8');
   it('reads the param with the narrowing parser; no localStorage fallback', () => {
-    expect(src).toContain("const urlView = parseLogsView(searchParams.get('panel'));");
+    expect(src).toContain("const urlView = parseLogsView(searchParams.get('panel'), searchParams.get('trace'));"); // v0.10.1889 — panel=trace
     expect(view).toContain('return parseLogsPanel(panel) ?? \'logs\';');
     expect(src).not.toContain('logs.patterns.open');
     expect(src).toContain('const view = effectiveLogsView(urlView, live);');

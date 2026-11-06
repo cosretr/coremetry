@@ -3,7 +3,13 @@ package api
 // trace_bundle.go — v0.10.671 (trace kiosk modu, Dilim 1;
 // docs/audit/trace-kiosk-mode-audit-2026-09-11.md §7-§9).
 //
-//   GET /api/traces/{id}/bundle?logLimit=500&oracleLimit=200
+//   GET /api/traces/{id}/bundle?logLimit=500&oracleLimit=200[&hint=<unix sn>]
+//
+// v0.10.1889 (Log Search 3.6, audit §4) — `hint`: /logs birleşik görünümünün
+// log zamanı (unix saniye, dakikaya yuvarlanır). CH pencere araması kademeli
+// yoldan (24 sa → 7 g → 90 g) önce ±1 sa dener; ıskalarsa eski yol. Sonuç
+// ipucundan bağımsız (kenar kuralı, chstore.hintedTraceBound) — ipucu yalnız
+// hız; yine de anahtarda (tüm girdiler, v0.5.187).
 //
 // Tek istekte üç bacak: span (traceDetailPayload — Tempo-önce / ClickHouse,
 // /api/traces/{id} ile AYNI gövde ve alanlar), trace'e bağlı loglar
@@ -36,6 +42,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -59,10 +66,27 @@ const (
 	traceBundleWindowBuffer = time.Minute
 )
 
-// traceBundleKey — SAF: id + iki limit. Limit cevabın uzunluğunu değiştirir;
-// eksik bırakılsaydı 500'lük cevap 1000 isteyene servis edilirdi.
-func traceBundleKey(id string, logLimit, oracleLimit int) string {
-	return fmt.Sprintf("trace-bundle:v2:%s:ll=%d:ol=%d", id, logLimit, oracleLimit)
+// traceBundleKey — SAF: id + iki limit + ipucu dakikası. Limit cevabın
+// uzunluğunu değiştirir; eksik bırakılsaydı 500'lük cevap 1000 isteyene
+// servis edilirdi. v0.10.1889 — v3: ipucu (0 = yok) anahtarda.
+func traceBundleKey(id string, logLimit, oracleLimit int, hintMin int64) string {
+	return fmt.Sprintf("trace-bundle:v3:%s:ll=%d:ol=%d:h=%d", id, logLimit, oracleLimit, hintMin)
+}
+
+// parseBundleHint — SAF: `hint` unix saniye → dakikaya yuvarlı zaman.
+// Boş / çöp / ≤0 / şimdiden 1 günden ileri → sıfır (ipucu yok). Dakikaya
+// yuvarlama önbellek anahtarı kardinalitesini sınırlar (aynı trace'in
+// aynı dakikadaki log satırları tek girdi).
+func parseBundleHint(raw string, now time.Time) time.Time {
+	n, err := strconv.ParseInt(strings.TrimSpace(raw), 10, 64)
+	if err != nil || n <= 0 {
+		return time.Time{}
+	}
+	t := time.Unix(n, 0).Truncate(time.Minute)
+	if t.After(now.Add(24 * time.Hour)) {
+		return time.Time{}
+	}
+	return t
 }
 
 // clampBundleLimit — boş/0/negatif/çöp → varsayılan, tavan üstü → TAVAN
@@ -142,9 +166,14 @@ func (s *Server) getTraceBundle(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	logLimit := clampBundleLimit(q.Get("logLimit"), traceBundleLogDefault, traceBundleLogMax)
 	oracleLimit := clampBundleLimit(q.Get("oracleLimit"), oracleLogsDefaultLimit, oracleLogsMaxLimit)
-	key := traceBundleKey(id, logLimit, oracleLimit)
+	hint := parseBundleHint(q.Get("hint"), time.Now())
+	var hintMin int64
+	if !hint.IsZero() {
+		hintMin = hint.Unix() / 60
+	}
+	key := traceBundleKey(id, logLimit, oracleLimit, hintMin)
 	s.serveCached(w, r, key, traceBundleTTL, func(ctx context.Context) (any, error) {
-		out, spans, err := s.traceDetailPayload(ctx, id)
+		out, spans, err := s.traceDetailPayload(ctx, id, hint)
 		if err != nil {
 			return nil, err
 		}

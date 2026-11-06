@@ -163,8 +163,9 @@ export const keys = {
   // v0.10.672 — kiosk bundle (GET /api/traces/{id}/bundle). Limitler
   // anahtarda: 500'lük cevap 1000 isteyene servis edilmesin.
   traces: {
-    bundle:      (id: string, logLimit: number, oracleLimit: number) =>
-                   ['traces', 'bundle', id, logLimit, oracleLimit] as const,
+    // v0.10.1889 — hint (log zamanı, unix sn; 0 = yok) da girdi.
+    bundle:      (id: string, logLimit: number, oracleLimit: number, hint = 0) =>
+                   ['traces', 'bundle', id, logLimit, oracleLimit, hint] as const,
     // v0.10.968 — Trace › Metrics toplu uç: cluster değeri + pencere + mdp
     // basamağı + dilimin ns/pod listesi (sunucu anahtarıyla aynı girdiler).
     podMetrics:  (cv: string, from: number, to: number, mdp: number, podsParam: string) =>

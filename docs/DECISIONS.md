@@ -13001,6 +13001,30 @@ Loglar yalnız ES'te (operatör 2026-11-06): yeni yetenekler ES yolunda; trace/s
   "Trace'e göre grupla" Toggle + "yüklenen N satır içinde" notu. Sapma: mockup başlığı "5 servis" de gösteriyordu —
   servis sayısı MV'de yok (dilim 3.9); başlık göstermez. Önizleme yalnız görünen sayfanın kimliklerini kapsar (sayfa
   başına tek sorgu kuralı); başka sayfadaki grubun başlığı o sayfa açılınca dolar.
+- **v0.10.1889 — birleşik trace + log görünümü (3.6).** /logs'a `panel=trace` görünümü: URL `trace=<id>` (32-hex,
+  normalize: `0x`, tireli UUID, 16-hex sola sıfır — sunucu `normalizeTraceID` aynası) + `th=<log zamanı, unix sn>`.
+  SÜZGEÇ DEĞİL: `traceId=`'ye yazılmaz → histogram / alan istatistiği / liste anahtarları değişmez, görünüm açılınca
+  o istekler yeniden koşmaz; liste `_search`'ü bu görünümde HİÇ koşmaz (`logsListEnabled`). Açılış GEÇMİŞE girer (push;
+  Geri önceki aramaya döner), satır detayı çekmecesi kapanır. Yeni `coremetry/logs/TraceLogsView`: tek
+  `GET /api/traces/{id}/bundle?hint=` (span + log + Oracle; log penceresi sunucuda span'lerden ±1 dk, ES 3 sn pivot
+  bütçesi, ≤500 log) → başlık (hata rozeti · N span · süre · kök · başlangıç) + "Yalnız loglu span'ler" (loglu span +
+  ataları vurgulu, diğerleri soluk; varsayılan açık) + "Yalnız hatalar" (≥ ERROR, istemcide) Toggle'ları → `TraceWaterfall`
+  yeni opt-in `logRows` prop'u (span id → loglar, satırın içinde çubuğun altında "+ofset · seviye · mesaj"; sanal kipte
+  ölçülen eleman satırın kendisi) → "Span'e bağlanamayan loglar (N)" (`LogTable`, zaman sırası). Saf dağıtım
+  `lib/traceLogRows` (span_id harf duyarsız). Trace CH'de yoksa boş durum (örneklenmiş / henüz gelmedi; aged-out ayrı
+  metin) — sunucu log bacağını koşmaz (pencere span'lerden), ES isteği yok. Sunucu: bundle `hint` (unix sn, dakikaya
+  yuvarlı; çöp / ≤0 / 1 günden ileri = yok) → `resolveTraceSpansNear` → `chstore.GetTraceNear`: kademeli pencere
+  aramasından (24 sa → 7 g → 90 g) ÖNCE `trace_summary_5m`'de ipucunun ±1 saati (tek sorgu, `max_execution_time = 3`);
+  bulunan sınır pencerenin kenarına dayanıyorsa reddedilir ve eski yol koşar (`hintedTraceBound`; ipucu yalnız hız).
+  Önbellek anahtarı `trace-bundle:v3:…:h=<dakika>` (tüm girdiler). Tempo yolu ipucunu kullanmaz. **Davranış
+  değişikliği:** TraceChip menüsü "Trace görünümünde aç (t)", satır kısayolu `t` ve çekmecedeki "Trace + loglar (t)"
+  artık trace SAYFASINA değil bu görünüme gider; trace sayfası görünüm başlığındaki "Trace sayfasında aç ↗" bağlantısında.
+  Sapmalar: mockup "N servis" (3.9), kapsam genişletme + "kapsam dışı" etiketi (3.7), "✦ Bu trace'te ne oldu?" (6.5) ve
+  örneklenmiş trace için "Tüm servislerde ara (±5 dk)" / "Tempo'da ara" düğmeleri (3.7) yok; yerine "Bu trace'e filtrele"
+  (Logs görünümüne `traceId=` süzgeciyle döner — kullanıcı eylemi, mevcut liste isteği). Span event'leri ve Oracle
+  satırları şelaleye karışmaz (yalnız ES logları). Log satırı tıklanmaz (detay çekmecesi `?doc=` bağlam okuması = ek ES
+  isteği olurdu); tam metin ipucunda. < 2 sn hedefi ÖLÇÜLMEDİ (prod/tarayıcı yok). Sınır: parçaları ipucundan 1 saatten
+  uzak ama kenara değmeyen trace dar pencereyle okunur (kademeli yolun 24 sa adımıyla aynı sınıf).
 
 ## 2026-11-06 — v0.10.1885 — Kod araması: depo süzgeci proje süzgeciyle birlikte (Azure DevOps 400)
 

@@ -37,7 +37,6 @@ import { parseColsParam } from '@/lib/columnModel';
 import { getRaw, setRaw } from '@/lib/storage';
 import { useTableNav } from '@/lib/useTableNav';
 import { useShortcuts } from '@/lib/keyboard';
-import { traceHref } from '@/lib/traceHref';
 import { api } from '@/lib/api';
 import { logsBucketSec } from '@/lib/chartStep';
 import { tsShort, timeRangeToNs, sevName, sevClass, rangeToSince } from '@/lib/utils';
@@ -59,7 +58,7 @@ import { LogsQueryBar } from './logs/LogsQueryBar';
 import { parseLogQueryError, logQueryErrorMessage } from '@/lib/logQueryError';
 import { readLogsQueryHistory, recordLogsQuery } from '@/lib/logsQueryHistory';
 import { LOGS_DEFAULT_DISPLAY, readLogsDisplay, writeLogsDisplay, pageSlice } from '@/lib/logsDisplay';
-import { DisplayOptions, LoadStatus, FieldSidebar, LogDetailSheet, LogContextSection, LogExceptionSection, TraceChip, fmtTraceDuration } from '@/components/coremetry/logs';
+import { DisplayOptions, LoadStatus, FieldSidebar, LogDetailSheet, LogContextSection, LogExceptionSection, TraceChip, TraceLogsView, fmtTraceDuration } from '@/components/coremetry/logs';
 import { useSheetParam } from '@/components/coremetry/DetailSheet';
 import { AIExplainButton } from '@/components/ai/AIExplainButton';
 import { logLineSubjectOf } from '@/lib/logLineSubject';
@@ -75,7 +74,7 @@ import { logRowKeyAction } from './logs/logsKeys';
 import { LogsAddFilterMenu, LogsShareMenu, LogsMoreMenu } from './logs/LogsActionsMenus';
 import { isDraftDirty, bareTraceIdOf } from './logs/logsQuery';
 import { LogsTableToolbar } from './logs/LogsTableToolbar';
-import { parseLogsView, effectiveLogsView, writeLogsView, logsListEnabled, type LogsView } from './logs/logsView';
+import { parseLogsView, effectiveLogsView, writeLogsView, writeTraceView, readTraceViewTarget, logsListEnabled, type LogsView } from './logs/logsView';
 
 // v0.10.1498 — Share affordance (Copy link) moved into pages/logs/LogsActionsMenus.tsx (Share ▾).
 
@@ -264,7 +263,9 @@ function LogsInner() {
   // Şablonlar (pages/logs/logsView.ts). URL tek kaynak; yok = Logs. Eski
   // desen paneli açık/kapalı localStorage yedeği KALDIRILDI: param yokken sayfa
   // her zaman satırlarla açılır (paylaşılan link ne gösteriyorsa o).
-  const urlView = parseLogsView(searchParams.get('panel'));
+  // v0.10.1889 (dilim 3.6) — `panel=trace&trace=<id>&th=<sn>`: birleşik görünüm.
+  const urlView = parseLogsView(searchParams.get('panel'), searchParams.get('trace'));
+  const traceTarget = useMemo(() => readTraceViewTarget(searchParams), [searchParams]);
   // v0.10.417 (log arama denetimi B5) — satır sarma; okuma yardımı, URL'e
   // girmez (narrow gibi), kalıcı (localStorage). Varsayılan KAPALI: tek
   // satır + … bugünkü davranış.
@@ -430,6 +431,13 @@ function LogsInner() {
   const toggleLive = () => {
     if (!live && urlView !== 'logs') setSearchParams(prev => writeLogsView(prev, 'logs'), { replace: true });
     setLive(v => !v);
+  };
+  // v0.10.1889 (dilim 3.6) — birleşik görünümü aç: GEÇMİŞE girer (Geri önceki
+  // aramaya döner); süzgeç değişmez (histogram/liste anahtarları aynı kalır).
+  // tsNs = çağıran satırın log zamanı → bundle `hint`.
+  const openTraceView = (tid: string, tsNs?: number) => {
+    setLive(false);
+    setSearchParams(prev => writeTraceView(prev, tid, tsNs) ?? prev);
   };
   // v0.9.294 — "narrow within results". Ephemeral on purpose: it is a
   // reading aid over the current buffer, not part of the query, so it
@@ -1203,9 +1211,11 @@ function LogsInner() {
     previewT0.current = null;
     setTracePhase(previewQ.isError ? { state: 'error' } : { state: 'done', timing: { clientMs: ms } });
   }, [previewQ.isFetching, previewQ.isError]);
-  const filterToTrace = (tid: string) => {
+  // v0.10.1889 — `view` verilirse görünüm aynı URL yazımında değişir
+  // (birleşik görünümden "Bu trace'e filtrele" → Logs).
+  const filterToTrace = (tid: string, view?: LogsView) => {
     const next = { ...filter, traceId: tid, spanId: '' };
-    resetPaging(); setFilter(next); setDraft(d => ({ ...d, traceId: tid, spanId: '' })); writeUrl(next, filters);
+    resetPaging(); setFilter(next); setDraft(d => ({ ...d, traceId: tid, spanId: '' })); writeUrl(next, filters, undefined, view);
   };
   const sheetFull = docRow ? fullDocs[docRow.id] : undefined;
   const sheetRow = sheetFull && sheetFull !== 'error' ? sheetFull : docRow;
@@ -1229,12 +1239,13 @@ function LogsInner() {
     if (a.kind === 'none') return;
     e.preventDefault();
     if (a.kind === 'pills') applyPills(a.next);
-    else navigate(traceHref(a.traceId));
+    // v0.10.1889 (3.6) — t: trace sayfası yerine birleşik görünüm (trace + loglar).
+    else openTraceView(a.traceId, tableNav.selectedItem?.timestamp);
   };
   useShortcuts([
     { keys: 'f', label: 'Seçili satırın servisine süz', group: 'Logs', handler: e => runRowKey('f', e) },
     { keys: 'e', label: 'Seçili satırın servisini hariç tut', group: 'Logs', handler: e => runRowKey('e', e) },
-    { keys: 't', label: "Seçili satırın trace'ine git", group: 'Logs', handler: e => runRowKey('t', e) },
+    { keys: 't', label: "Seçili satırın trace + loglarını aç", group: 'Logs', handler: e => runRowKey('t', e) },
   ], [tableNav.selectedItem, filters]);
   // "Filtreleri temizle" (yerel daraltma) kendini kaldırınca odak kutuya döner.
   const narrowRef = useRef<HTMLInputElement>(null);
@@ -1579,9 +1590,17 @@ function LogsInner() {
               { value: 'logs', label: 'Logs', title: 'Satırlar (tablo)' },
               { value: 'patterns', label: 'Desenler', disabled: live, title: live ? 'Canlı kuyrukta desen görünümü yok — kuyruğu durdur' : 'Penceredeki mesajlar imzaya göre gruplanır (örneklemeli)' },
               { value: 'templates', label: 'Şablonlar', disabled: live, title: live ? 'Canlı kuyrukta şablon görünümü yok — kuyruğu durdur' : "Drain templater'ın kalıcı şablonları (5 dk'da ≤1000 satır örneklenir)" },
+              // v0.10.1889 (3.6) — yalnız bir trace açıkken (URL `trace=`).
+              ...(traceTarget ? [{ value: 'trace' as const, label: 'Trace', title: 'Trace şelalesi + o trace’in logları' }] : []),
             ]} />
         </div>
-        {view !== 'logs' ? (
+        {view === 'trace' ? (
+          traceTarget && (
+            <TraceLogsView traceId={traceTarget.id} hintSec={traceTarget.hintSec}
+              onFilter={tid => filterToTrace(tid, 'logs')}
+              onClose={() => setView('logs')} />
+          )
+        ) : view !== 'logs' ? (
           <LogPatternsPanel embedded open={!scopeGate} onSearch={searchFromPattern} tab={view}
             params={{ ...filter, env, search: compiledSearch, lang: lang || undefined, scope: scopeParam, from: from ?? undefined, to: to ?? undefined }}
             toolbar={(
@@ -1670,14 +1689,14 @@ function LogsInner() {
               <span className="lt-group-text">trace_id yok · {count.toLocaleString('tr-TR')} log (bu örnekte)</span>
             ) : (
               <span className="lt-group-text">
-                <TraceChip traceId={k} preview={tracePreviews?.[k]} onFilter={filterToTrace} onOpen={tid => navigate(traceHref(tid))} />
+                <TraceChip traceId={k} preview={tracePreviews?.[k]} onFilter={tid => filterToTrace(tid)} onOpen={tid => openTraceView(tid, l.timestamp)} />
                 <span>{traceGroupSummary(tracePreviews?.[k], count, fmtTraceDuration)}</span>
               </span>
             );
           } : undefined}
           renderTrace={l => (
             <TraceChip traceId={l.traceId} preview={tracePreviews?.[l.traceId]}
-              onFilter={filterToTrace} onOpen={tid => navigate(traceHref(tid))} />
+              onFilter={tid => filterToTrace(tid)} onOpen={tid => openTraceView(tid, l.timestamp)} />
           )}
           expandedIds={NO_EXPANDED}
           onToggleExpand={id => { const r = shownLogs.find(x => x.id === id); if (r) openRow(r); }}
@@ -1754,7 +1773,7 @@ function LogsInner() {
         columns={viewCols} onFilter={addFromRow} onExclude={excludeFromRow} onToggleColumn={toggleColumn}
         onPrev={() => sheetStep(-1)} onNext={() => sheetStep(1)}
         exception={sheetRow?.exception ? <LogExceptionSection row={sheetRow} /> : undefined}
-        onOpenTrace={tid => navigate(traceHref(tid))}
+        onOpenTrace={tid => openTraceView(tid, sheetRow?.timestamp) /* v0.10.1889 — birleşik görünüm; çekmece kapanır */}
         permalink={sheetRow ? absoluteShareHref(window.location.origin + buildDocPermalink(sheetRow, env), Date.now()) : undefined}
         actions={sheetSubject ? (
           <AIExplainButton subject={sheetSubject} size="sm" title={tr('ai.askCosreLogHint')}

@@ -44,14 +44,15 @@ func TestTraceBundleRouteLivesInOwnFile(t *testing.T) {
 }
 
 func TestTraceBundleKeyDistinctAndStable(t *testing.T) {
-	a := traceBundleKey("abc", 500, 200)
-	if a != traceBundleKey("abc", 500, 200) {
+	a := traceBundleKey("abc", 500, 200, 0)
+	if a != traceBundleKey("abc", 500, 200, 0) {
 		t.Fatalf("aynı girdi farklı anahtar: %q", a)
 	}
 	for _, other := range []string{
-		traceBundleKey("abd", 500, 200),
-		traceBundleKey("abc", 1000, 200),
-		traceBundleKey("abc", 500, 100),
+		traceBundleKey("abd", 500, 200, 0),
+		traceBundleKey("abc", 1000, 200, 0),
+		traceBundleKey("abc", 500, 100, 0),
+		traceBundleKey("abc", 500, 200, 29_000_000), // v0.10.1889 — ipucu da girdi
 	} {
 		if other == a {
 			t.Fatalf("farklı girdi aynı anahtar: %q", other)

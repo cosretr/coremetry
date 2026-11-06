@@ -30,3 +30,18 @@ export function bareTraceIdOf(search: string): string {
   const m = BARE_TRACE_ID.exec(search.trim());
   return m ? m[1].toLowerCase() : '';
 }
+
+const HEX = /^[0-9a-f]+$/;
+
+/** v0.10.1889 (Log Search 3.6) — log'daki trace yazımı → ClickHouse'taki
+ *  32-hex (küçük harf; `0x` öneki atılır; tireli UUID tiresiz; 16-hex sola
+ *  sıfırla). Sunucudaki `normalizeTraceID`'nin (logs_trace_preview.go)
+ *  aynası; tanınmayan biçim ''. */
+export function normalizeTraceId(raw: string): string {
+  let t = raw.trim().toLowerCase();
+  if (t.startsWith('0x')) t = t.slice(2);
+  if (t.length === 36 && t.split('-').length === 5) t = t.replaceAll('-', '');
+  if (t.length === 32 && HEX.test(t)) return t;
+  if (t.length === 16 && HEX.test(t)) return '0'.repeat(16) + t;
+  return '';
+}

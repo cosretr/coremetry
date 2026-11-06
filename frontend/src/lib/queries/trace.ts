@@ -13,13 +13,17 @@ import type { TraceBundleResponse, TraceColumnValue, TraceColumnValuesParams } f
 // penceresi kapanınca ya da limit değişince eski istek CH/ES'te kesilir.
 export function useTraceBundle(
   id: string | undefined,
-  opts: { logLimit?: number; oracleLimit?: number } = {},
+  // v0.10.1889 (Log Search 3.6) — hint: log zamanı (unix sn, dakikaya
+  // yuvarlanır — sunucu anahtarıyla aynı kardinalite); CH pencere aramasını
+  // ±1 sa ile başlatır, sonucu değiştirmez.
+  opts: { logLimit?: number; oracleLimit?: number; hint?: number } = {},
 ) {
   const logLimit = opts.logLimit ?? 0;
   const oracleLimit = opts.oracleLimit ?? 0;
+  const hint = opts.hint && opts.hint > 0 ? Math.floor(opts.hint / 60) * 60 : 0;
   return useQuery<TraceBundleResponse>({
-    queryKey: keys.traces.bundle(id ?? '', logLimit, oracleLimit),
-    queryFn: ({ signal }) => api.traceBundle(id ?? '', opts, signal),
+    queryKey: keys.traces.bundle(id ?? '', logLimit, oracleLimit, hint),
+    queryFn: ({ signal }) => api.traceBundle(id ?? '', { logLimit: opts.logLimit, oracleLimit: opts.oracleLimit, hint: hint || undefined }, signal),
     enabled: !!id,
     staleTime: 15_000,
     refetchOnWindowFocus: false,

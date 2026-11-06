@@ -43,15 +43,17 @@ func (s *Server) getTrace(w http.ResponseWriter, r *http.Request) {
 	// dbName / dbStmtHash); v3 gövdesi linksiz span'ler servis ederdi.
 	key := "trace:v4:" + id
 	s.serveCached(w, r, key, 30*time.Second, func(ctx context.Context) (any, error) {
-		out, _, err := s.traceDetailPayload(ctx, id)
+		out, _, err := s.traceDetailPayload(ctx, id, time.Time{})
 		return out, err
 	})
 }
 
 // traceDetailPayload — GET /api/traces/{id} gövdesi (v0.10.671'de ayrıldı;
 // trace_bundle.go da çağırır). Dönen span dilimi bundle'ın log penceresini
-// kurmak için; map istemciye giden gövdenin kendisi.
-func (s *Server) traceDetailPayload(ctx context.Context, id string) (map[string]any, []chstore.SpanRow, error) {
+// kurmak için; map istemciye giden gövdenin kendisi. v0.10.1889 — `hint`
+// (sıfır = yok): bundle'ın log zamanı ipucu, yalnız CH pencere aramasını
+// hızlandırır (resolveTraceSpansNear).
+func (s *Server) traceDetailPayload(ctx context.Context, id string, hint time.Time) (map[string]any, []chstore.SpanRow, error) {
 	// v0.9.632 — çözümleme TEK yerde (trace_resolve.go) ve sırası
 	// operatör kararıyla ÖNCE TEMPO: elinde bir trace_id varken TAM
 	// trace istenir, Coremetry'nin örneklemesinden sağ kalan
@@ -60,7 +62,7 @@ func (s *Server) traceDetailPayload(ctx context.Context, id string) (map[string]
 	//
 	// Buradaki eski kopya (CH önce, ıskalarsa Tempo) explain'in
 	// Tempo-only bir trace'te 404 vermesinin sebebiydi.
-	spans, src, err := s.resolveTraceSpans(ctx, id)
+	spans, src, err := s.resolveTraceSpansNear(ctx, id, hint)
 	if err != nil {
 		return nil, nil, err
 	}

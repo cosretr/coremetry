@@ -4987,6 +4987,60 @@ func (s *Store) TraceWindow(ctx context.Context, traceID string) (lo, hi time.Ti
 	return time.Time{}, time.Time{}, false
 }
 
+// traceHintHalfSpan — v0.10.1889 (Log Search 3.6, audit §4): bir log
+// zamanı ipucu verildiğinde kademeli aramadan (24 sa → 7 g → 90 g) ÖNCE
+// ipucunun ±1 saati denenir (dar partisyon budaması; /logs'tan açılan
+// trace'in log zamanı elde).
+const traceHintHalfSpan = time.Hour
+
+// hintedTraceBound — SAF. İpucu penceresinde [qLo, qHi] (time_bucket,
+// 5 dk kova) bulunan trace sınırı ancak pencerenin KENARINA DAYANMIYORSA
+// kabul edilir: başlangıç ilk kovadan sonra, bitiş pencere sonundan önce.
+// Kenara dayanan trace pencereden taşıyor olabilir — ok=false ve çağıran
+// eski kademeli yola düşer (ipucu yalnız hız). Kabul edilen sınır
+// traceTimeBound'un aynı ±5 dk marjını taşır. Sınır: parçaları ipucundan
+// 1 saatten uzakta ama kenara değmeyen bir trace (kademeli yolun 24 sa
+// adımıyla aynı sınıf) dar pencereyle okunur.
+func hintedTraceBound(qLo, qHi, start time.Time, endNanos int64) (lo, hi time.Time, ok bool) {
+	lo, hi, ok = traceTimeBound(start, endNanos)
+	if !ok {
+		return time.Time{}, time.Time{}, false
+	}
+	if !start.After(qLo.Add(5*time.Minute)) || !time.Unix(0, endNanos).Before(qHi) {
+		return time.Time{}, time.Time{}, false
+	}
+	return lo, hi, true
+}
+
+// traceWindowNear — v0.10.1889: ipucunun ±1 saatinde TEK sınırlı probe
+// (trace_summary_5m, max_execution_time 3). Iska / kenar / hata = ok=false.
+func (s *Store) traceWindowNear(ctx context.Context, traceID string, hint time.Time) (lo, hi time.Time, ok bool) {
+	if hint.IsZero() {
+		return time.Time{}, time.Time{}, false
+	}
+	qLo, qHi := hint.Add(-traceHintHalfSpan), hint.Add(traceHintHalfSpan)
+	var winStart time.Time
+	var winEndNanos int64
+	err := s.telemetryReadConn().QueryRow(ctx, `
+		SELECT minMerge(trace_start_state), toInt64(maxMerge(trace_end_state))
+		FROM trace_summary_5m
+		WHERE trace_id = ? AND time_bucket >= ? AND time_bucket < ?
+		SETTINGS max_execution_time = 3`,
+		traceID, chDateTimeArg(qLo), chDateTimeArg(qHi)).Scan(&winStart, &winEndNanos)
+	if err != nil {
+		return time.Time{}, time.Time{}, false
+	}
+	return hintedTraceBound(qLo, qHi, winStart, winEndNanos)
+}
+
+// GetTraceNear — v0.10.1889: GetTrace + log zamanı ipucu (sıfır = GetTrace).
+func (s *Store) GetTraceNear(ctx context.Context, traceID string, hint time.Time) ([]SpanRow, error) {
+	if lo, hi, ok := s.traceWindowNear(ctx, traceID, hint); ok {
+		return s.getTraceIn(ctx, traceID, lo, hi, true)
+	}
+	return s.GetTrace(ctx, traceID)
+}
+
 func (s *Store) GetTrace(ctx context.Context, traceID string) ([]SpanRow, error) {
 	// v0.8.210 — derive the trace's time window from trace_summary_5m (the
 	// aggregate, far smaller than raw spans) so the spans scan is time-bounded
@@ -5000,8 +5054,7 @@ func (s *Store) GetTrace(ctx context.Context, traceID string) ([]SpanRow, error)
 	// aggregate. Capped at max_execution_time = 3 (was 10) so the worst case — a
 	// large MV where the scan times out — costs ≤3s before falling back to the
 	// bloom-pruned spans path (spans.idx_trace), instead of up to +10s.
-	where := "trace_id = ?"
-	args := []any{traceID}
+	//
 	// v0.9.578 (operator-reported, prod): pencere araması KADEMELİ ve
 	// ZAMAN SINIRLI.
 	//
@@ -5022,15 +5075,21 @@ func (s *Store) GetTrace(ctx context.Context, traceID string) ([]SpanRow, error)
 	// trace'lerin ezici çoğunluğu tazedir, yani ilk adım pratikte
 	// hemen isabet eder; eski bir trace için ikinci/üçüncü adımın
 	// bedeli yalnız o istekte ödenir.
-	bounded := false
 	// v0.10.690 — pencere probe'u TraceWindow'a ayrıldı: /api/logs/search'ün
 	// penceresiz trace araması da aynı sınırlı yolu kullanır.
-	if lo, hi, ok := s.TraceWindow(ctx, traceID); ok {
+	lo, hi, ok := s.TraceWindow(ctx, traceID)
+	return s.getTraceIn(ctx, traceID, lo, hi, ok)
+}
+
+// getTraceIn — GetTrace'in spans okuması (v0.10.1889: GetTraceNear ile
+// ortak). bounded=false → retention tabanı (son çare, yine sınırlı).
+func (s *Store) getTraceIn(ctx context.Context, traceID string, lo, hi time.Time, bounded bool) ([]SpanRow, error) {
+	where := "trace_id = ?"
+	args := []any{traceID}
+	if bounded {
 		where += " AND time >= ? AND time <= ?"
 		args = append(args, lo, hi)
-		bounded = true
-	}
-	if !bounded {
+	} else {
 		// SON ÇARE — yine de SINIRLI. Pencereyi çözemedik ama spans
 		// taramasının sınırsız kalması kabul edilemez: retention
 		// tavanı en azından niyeti koda yazıyor ve TTL uzarsa sorgu

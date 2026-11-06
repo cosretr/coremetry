@@ -78,6 +78,14 @@ const tempoFirstBudget = 3 * time.Second
 // görecekse onu görür ve bir [tempo] satırı yanlış yapılandırmayı
 // işaret eder.
 func (s *Server) resolveTraceSpans(ctx context.Context, id string) ([]chstore.SpanRow, string, error) {
+	return s.resolveTraceSpansNear(ctx, id, time.Time{})
+}
+
+// resolveTraceSpansNear — v0.10.1889 (Log Search 3.6): aynı sıra; CH
+// yolunda log zamanı ipucu (`hint`, sıfır = yok) kademeli pencere
+// aramasından önce ±1 sa dener (chstore.GetTraceNear). Tempo yolu ipucunu
+// kullanmaz.
+func (s *Server) resolveTraceSpansNear(ctx context.Context, id string, hint time.Time) ([]chstore.SpanRow, string, error) {
 	if s.tempo != nil && s.tempo.Configured() {
 		tctx, cancel := context.WithTimeout(ctx, tempoFirstBudget)
 		tspans, terr := s.tempo.LookupTrace(tctx, id)
@@ -90,7 +98,7 @@ func (s *Server) resolveTraceSpans(ctx context.Context, id string) ([]chstore.Sp
 			return tspans, traceSourceTempo, nil
 		}
 	}
-	spans, err := s.store.GetTrace(ctx, id)
+	spans, err := s.store.GetTraceNear(ctx, id, hint)
 	if err != nil {
 		return nil, "", err
 	}
