@@ -27,6 +27,8 @@ describe('Tailwind kaynak listesi kilitli', () => {
       "'../pages/logs'",
       // v0.10.1863 (Metrics Explorer Faz 2 dilim 2.3): /metrics sayfa modülleri.
       "'../pages/metrics'",
+      // v0.10.1906 (Login yeniden tasarımı): /login sayfa modülleri.
+      "'../pages/login'",
     ]);
   });
 

@@ -164,7 +164,7 @@ describe('peek + oidcStartHref', () => {
   });
 
   it('Login SSO button navigates via oidcStartHref (no bare start URL)', () => {
-    const src = readFileSync(resolve(__dirname, '../pages/Login.tsx'), 'utf8');
+    const src = readFileSync(resolve(__dirname, '../pages/login/LoginPage.tsx'), 'utf8');
     expect(src).toContain('window.location.href = oidcStartHref()');
     expect(src).not.toContain("'/api/auth/oidc/start'");
   });

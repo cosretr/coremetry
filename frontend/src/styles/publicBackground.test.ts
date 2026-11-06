@@ -26,7 +26,7 @@ const SRC = resolve(__dirname, '..');
 // `lib/auth-paths.ts` tek kaynak; sayfa dosyaları elle eşleniyor çünkü
 // rota → dosya haritası App.tsx'te lazy import olarak duruyor.
 const PUBLIC_PAGES = [
-  'pages/Login.tsx',
+  'pages/login/LoginPage.tsx',
   'pages/PublicStatus.tsx',
   'pages/PublicTrace.tsx',
 ];
@@ -45,26 +45,29 @@ describe('D3 — public zemin sıçraması', () => {
       .replace(/\/\*[\s\S]*?\*\//g, m => m.replace(/[^\n]/g, ' '))
       .split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n');
     // `var(--bg0)` / `var(--bg1)` / `var(--bg2)` serbest; çıplak alias yasak.
-    const bad = /var\(--bg\)/.test(src);
+    const bad = /var\(--bg\)|bg-\(--bg\)/.test(src);
     expect(bad, `${file}: var(--bg) redhat'te uygulama zeminiyle UYUŞMUYOR`).toBe(false);
   });
 
   it.each(PUBLIC_PAGES)('%s sayfa zeminini --bg0 ile boyuyor', file => {
     const src = readFileSync(join(SRC, file), 'utf8');
-    expect(src, `${file}: sayfa zemini beyanı kayboldu`).toContain("background: 'var(--bg0)'");
+    // v0.10.1906 — Login Tailwind'e geçti: `bg-(--bg0)`; öbür sayfalar satır içi stilde.
+    expect(src, `${file}: sayfa zemini beyanı kayboldu`)
+      .toMatch(/background: 'var\(--bg0\)'|bg-\(--bg0\)/);
   });
 
   // Login'in mobil kaydırma kaçışı (D3.5). `position: fixed; inset: 0`
   // taşan içeriği ERİŞİLEMEZ yapıyordu: SSO butonu + hata bandı + bilgi
   // bandı aynı anda görünürken alttaki kısma inmenin yolu yoktu.
   it('Login kaydırılabilir ve formu akışkan', () => {
-    const src = readFileSync(join(SRC, 'pages/Login.tsx'), 'utf8');
+    const src = readFileSync(join(SRC, 'pages/login/LoginPage.tsx'), 'utf8');
     expect(src, 'fixed+inset kaydırma kaçışını yine kapatmış')
       .not.toMatch(/position: 'fixed', inset: 0, display: 'grid'/);
-    expect(src).toContain("minHeight: '100dvh'");
-    expect(src).toContain("overflow: 'auto'");
+    // v0.10.1906 — satır içi stil yerine Tailwind sınıfları (aynı değerler).
+    expect(src).toContain('min-h-dvh');
+    expect(src).toContain('overflow-auto');
     expect(src, 'form genişliği yine sabit 340px — 320px viewport\'ta taşar')
-      .toContain("width: 'min(340px, 100%)'");
+      .toContain('w-[min(340px,100%)]');
   });
 
   // D3.2 — depodaki tek satır-içi `#content` ezmesi kalktı.

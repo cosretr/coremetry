@@ -132,6 +132,18 @@ const EN: Catalog = {
   'login.signInToContinue': 'Sign in to continue',
   'login.invalid':     'Invalid username or password',
   'login.invalidHint': 'If you pasted from a document, a hyphen-minus (-) may have been replaced with a similar character (–, —, hidden whitespace). Try typing the password by hand.',
+  // v0.10.1906 — Login: önceden sabit İngilizce olan bantlar/hatalar anahtara bağlı.
+  // Parametre desteği yok: {name}/{e}/{account} `.replace` ile doldurulur.
+  'login.ssoLabel':    'Sign in with {name} (SSO)',
+  'login.ssoNoName':   'Sign in with SSO',
+  'login.ssoFailed':   'SSO sign-in failed: {e}',
+  'login.demoTitle':   'Demo mode',
+  'login.demoBody':    'credentials are pre-filled, just hit Sign in. Anyone with this URL has the same access.',
+  'login.ldapNote':    'Sign in with your {account} (username or email).',
+  'login.ldapAccount': 'domain account',
+  'login.failed':      'Login failed',
+  'login.demoFailed':  'Demo login failed',
+  'login.language':    'Language',
 
   // v0.10.1426 — the generic btn.* / state.* / label.* / sev.* keys were
   // removed: no surface ever read them (every button / label / badge carries
@@ -762,6 +774,17 @@ const TR: Catalog = {
   'login.signInToContinue': 'Devam etmek için giriş yapın',
   'login.invalid':     'Geçersiz kullanıcı adı veya parola',
   'login.invalidHint': 'Parolayı bir dokümandan kopyaladıysanız tire (-) yerine başka bir karakter (–, —, gizli boşluk) yapışmış olabilir; tekrar elle yazıp deneyin.',
+  // v0.10.1906 — Login: önceden sabit İngilizce olan bantlar/hatalar anahtara bağlı.
+  'login.ssoLabel':    '{name} hesabıyla giriş (SSO)',
+  'login.ssoNoName':   'SSO ile giriş',
+  'login.ssoFailed':   'SSO girişi başarısız: {e}',
+  'login.demoTitle':   'Demo kipi',
+  'login.demoBody':    'bilgiler önceden dolduruldu, Giriş yap düğmesine basmanız yeterli. Bu adresi bilen herkes aynı erişime sahiptir.',
+  'login.ldapNote':    '{account} ile giriş yapın (kullanıcı adı veya e-posta).',
+  'login.ldapAccount': 'Etki alanı hesabınız',
+  'login.failed':      'Giriş başarısız',
+  'login.demoFailed':  'Demo girişi başarısız',
+  'login.language':    'Dil',
 
   // User menu
   'user.signOut':        'Çıkış yap',

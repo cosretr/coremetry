@@ -73,7 +73,7 @@ describe('v0.10.929 — sağlıklı durum yeşil almaz (A–M sayfaları)', () =
   const noGreen = [
     'AIObservability.tsx', 'AdminCluster.tsx', 'AdminElastic.tsx', 'AdminK8sCoverage.tsx',
     'AdminStats.tsx', 'AdminStatusPage.tsx', 'Alerts.tsx', 'Endpoints.tsx', 'EntityDetail.tsx',
-    'Events.tsx', 'External.tsx', 'Hosts.tsx', 'Login.tsx', 'MessagingTopic.tsx', 'Monitors.tsx',
+    'Events.tsx', 'External.tsx', 'Hosts.tsx', 'login/LoginPage.tsx', 'MessagingTopic.tsx', 'Monitors.tsx',
   ];
   it.each(noGreen)('%s: b-ok / var(--ok) / --ok-bg / tone="success" yok', f => {
     expect(read(`./${f}`)).not.toMatch(GREEN);
@@ -131,9 +131,10 @@ describe('v0.10.929 — sağlıklı durum yeşil almaz (A–M sayfaları)', () =
   });
 
   it('Login demo notu: yeşil literal yok, nötr token', () => {
-    const src = read('./Login.tsx');
+    const src = read('./login/LoginPage.tsx');
     expect(src).not.toMatch(/rgba\(63,\s*185,\s*80/);
-    expect(src).toContain("<b style={{ color: 'var(--text)' }}>Demo mode</b>");
+    // v0.10.1906 — Tailwind + i18n: başlık nötr `text-foreground`, metin anahtardan.
+    expect(src).toContain("<b className=\"text-foreground\">{t('login.demoTitle')}</b>");
   });
 });
 
