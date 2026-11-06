@@ -4644,6 +4644,11 @@ export type MetricsDiscoverTopQueries = MetricsDiscoverUnsupported | {
   queries: { topByCount: MetricsTopQuery[]; topByAvgDuration: MetricsTopQuery[]; topBySumDuration: MetricsTopQuery[] };
 };
 
+// PromqlErrorBody — v0.10.1841 /api/metrics/promql hata gövdesi (Go
+// promql_error_pos.go). `error` eskisiyle aynı metin; pos 0 tabanlı karakter,
+// line/col 1 tabanlı — yalnız güvenilir konum varsa gelir.
+export interface PromqlErrorBody { error: string; pos?: number; line?: number; col?: number; detail?: string }
+
 // /api/metrics/promql?meta=1 zarfı (v0.10.1835). Param yokken uç eski
 // çıplak SpanMetricSeries[] dizisini döner.
 export interface PromqlResult {

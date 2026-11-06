@@ -77,7 +77,10 @@ func (s *Server) queryPromQL(w http.ResponseWriter, r *http.Request) {
 	// yolunda bu, v0.9.1157 öncesi buradaki promql.Parse + 400'ün ta
 	// kendisi (aynı statü, aynı {"error":…} zarfı); VM yolunda no-op.
 	if verr := src.ValidatePromQL(query); verr != nil {
-		writeErr(w, verr)
+		// v0.10.1841 — {error, pos, line, col, detail}; statü aynı (400).
+		if !writePromQLQueryErr(w, withPromQLQuery(verr, query)) {
+			writeErr(w, verr)
+		}
 		return
 	}
 
@@ -130,7 +133,7 @@ func (s *Server) queryPromQL(w http.ResponseWriter, r *http.Request) {
 			ctx, mrun := beginMetricMeta(cs.withCtx(ctx), src)
 			res, err := vm.QueryPromQLInstant(ctx, query, to)
 			if err != nil {
-				return nil, err
+				return nil, withPromQLQuery(err, query) // v0.10.1841 — konumlu hata gövdesi
 			}
 			// Anlık vektörde her serinin tek noktası var: üç sıralama kipi de
 			// o değere iner, kesim Go'da (VM'e ikinci sorgu yok).
@@ -173,7 +176,7 @@ func (s *Server) queryPromQL(w http.ResponseWriter, r *http.Request) {
 		// TÜM kendi hataları "promql:" ile başlar, store'dan yükselen
 		// okuma hataları başlamaz ve 500/502 sınıfında kalır.
 		if err != nil {
-			return nil, classifyPromQLEvalErr(err)
+			return nil, withPromQLQuery(classifyPromQLEvalErr(err), query) // v0.10.1841 — konumlu hata gövdesi
 		}
 		if !withMeta {
 			return res, nil

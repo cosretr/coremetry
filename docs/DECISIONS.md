@@ -12426,3 +12426,9 @@ Kaynak: `docs/metrics/metrics-explore-dashboards-audit.md` (onaylı, §11) · mo
   hatırlanmaz → 502). Etiket satırlarındaki `valueCount` FIRSATÇI: yalnız kardinalite gövdesi önbellekteyse (soğuk tsdb
   günlük indeks taraması; etiket listesi onun bedelini ödemez). tsdb kapsamı `extra_label` (belgelenen arg), diğerleri
   `extra_filters[]`.
+- **v0.10.1841 — /promql hata gövdesinde konum (1.7).** `{error, pos?, line?, col?, detail?}` (`promql_error_pos.go`,
+  log 1818 emsali); `error` eski metinle bayt-aynı, konum yalnız güvenilirse. CH: "at position N" bayt ofseti → karakter
+  indeksi. VM (biçim BELGESİZ): "line L, col C" → "at position/pos N" → `unparsed data left: "<kuyruk>"` (kuyruk sorgunun
+  soneki ise) → "unexpected end of stream" (sorgu sonu); VM HTTP ≥ 300 gövdesindeki JSON `error` önce açılır; hiçbiri
+  yoksa pos yok. Statü aynı: CH sözdizimi 400, VM reddi 502 KALDI (brief; audit §4 "400 ile 502 ayrı" → VM 4xx'ini
+  400'e eşlemek ayrı karar), yalnız etiketsiz (500) sözdizimi hatası 400. Hook `serveCached` hata yolunda tek satır.

@@ -226,6 +226,9 @@ func (s *Server) serveCached(w http.ResponseWriter, r *http.Request, key string,
 		if writeBadQueryErr(w, r, err) { // v0.10.1818 — log sorgusu sözdizimi reddi 400 + konum
 			return
 		}
+		if writePromQLQueryErr(w, err) { // v0.10.1841 — PromQL/MetricsQL hatası + konum (promql_error_pos.go)
+			return
+		}
 		writeErr(w, err)
 		return
 	}
