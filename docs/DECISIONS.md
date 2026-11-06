@@ -13259,3 +13259,7 @@ JSON sözleşmesi ve kararlar ana oturumda. Backend dilimleri v0.10.1902–1905.
   tuzu kararlı (Redis'ten devralınır). Hata kuralı: sayılar düşerse alan cevaptan düşer (`degraded`); halka/topoloji/boyut son iyi
   hâlini korur. VM: üç sabit ifade, p95 yalnız `AllowUnfilteredPercentiles`, sorgu başına 5 sn, art arda 3 hatada 30 dk atla.
   Henüz `main.go`'ya bağlı değil (1905).
+- **v0.10.1904 — Branding alanları:** `orgName` (≤60 rune), `loginSummary` (""/on/off; "" = açık), `loginQuote` (""/on/off; "" = açık),
+  `loginTopology` (""/anonymous/named/off; "" = anonymous) `chstore.BrandingSettings` + `NormalizeBranding` (kalıp `OnboardingTour`;
+  bilinmeyen değer "" olur). `getBranding`/`putBranding` `api.go`'dan `internal/api/branding.go`'ya taşındı (`api.go` 50 satır kısaldı,
+  taban 10242); denetim ayrıntısına dört alan eklendi. Frontend bu commit'te değişmedi.

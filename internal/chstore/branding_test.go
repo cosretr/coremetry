@@ -110,3 +110,56 @@ func TestBrandingOnboardingTourNormalize(t *testing.T) {
 		}
 	}
 }
+
+// v0.10.1904 — login sayfası alanları: kurum adı kırpılır + 60 rune'a kesilir;
+// anahtarlar kapalı kümeden, bilinmeyen değer "" (varsayılan); boş değer blob'a
+// yazılmaz; varsayılanlar: özet açık, söz açık, topoloji anonymous.
+func TestBrandingLoginFieldsNormalize(t *testing.T) {
+	long := strings.Repeat("ş", 80)
+	cases := []struct {
+		in          BrandingSettings
+		wantOrg     string
+		wantSummary string
+		wantQuote   string
+		wantTopo    string
+		summaryOn   bool
+		quoteOn     bool
+		resolved    string
+	}{
+		{BrandingSettings{}, "", "", "", "", true, false, "anonymous"}, // söz varsayılan KAPALI
+		{BrandingSettings{OrgName: "  Acme  ", LoginSummary: " OFF ", LoginQuote: "On", LoginTopology: " Named "}, "Acme", "off", "on", "named", false, true, "named"},
+		{BrandingSettings{OrgName: long, LoginSummary: "maybe", LoginQuote: "off", LoginTopology: "off"}, strings.Repeat("ş", 60), "", "off", "off", true, false, "off"},
+		{BrandingSettings{LoginTopology: "full", LoginSummary: "1", LoginQuote: "yes"}, "", "", "", "", true, false, "anonymous"},
+		{BrandingSettings{LoginTopology: "ANONYMOUS"}, "", "", "", "anonymous", true, false, "anonymous"},
+	}
+	for i, c := range cases {
+		raw, err := encodeBranding(c.in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := decodeBranding(raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.OrgName != c.wantOrg || got.LoginSummary != c.wantSummary || got.LoginQuote != c.wantQuote || got.LoginTopology != c.wantTopo {
+			t.Errorf("#%d: got %+v", i, got)
+		}
+		if c.in.LoginSummaryEnabled() != c.summaryOn || c.in.LoginQuoteEnabled() != c.quoteOn || c.in.ResolvedLoginTopology() != c.resolved {
+			t.Errorf("#%d: çözümlenmiş değerler: %v %v %s", i, c.in.LoginSummaryEnabled(), c.in.LoginQuoteEnabled(), c.in.ResolvedLoginTopology())
+		}
+		for key, empty := range map[string]bool{"orgName": c.wantOrg == "", "loginSummary": c.wantSummary == "", "loginQuote": c.wantQuote == "", "loginTopology": c.wantTopo == ""} {
+			if empty && strings.Contains(string(raw), key) {
+				t.Errorf("#%d: boş %s blob'a yazılmamalı: %s", i, key, raw)
+			}
+		}
+	}
+	// eski blob (alanlar yok) varsayılanlarla okunur
+	old, err := decodeBranding([]byte(`{"appName":"X","onboardingTour":"off"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Varsayılanlar: özet açık, söz KAPALI (operatör kararı), topoloji isimsiz.
+	if !old.LoginSummaryEnabled() || old.LoginQuoteEnabled() || old.ResolvedLoginTopology() != "anonymous" || old.OrgName != "" {
+		t.Errorf("eski blob varsayılanlar: %+v", old)
+	}
+}

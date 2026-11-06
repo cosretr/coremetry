@@ -49,6 +49,58 @@ type BrandingSettings struct {
 	// "Turu yeniden başlat" ile açabilir — anahtar yalnız oto-başlatmayı
 	// keser. NormalizeBranding bilinmeyen değeri ""ye indirir.
 	OnboardingTour string `json:"onboardingTour,omitempty"`
+	// OrgName — v0.10.1904 (yeni login sayfası, docs/frontend/login-redesign.md
+	// §5.7): giriş kartının kurum başlığı. Ürün adı AppName'dir; bu ayrı bir
+	// alan. Kırpılır, ≤ OrgNameMaxRunes. Boş = başlıkta kurum adı yok.
+	OrgName string `json:"orgName,omitempty"`
+	// LoginSummary — anonim canlı özet sütunu: ""/"on" açık (varsayılan), "off"
+	// kapalı. GET /api/public/login-summary bunu bellekten okur.
+	LoginSummary string `json:"loginSummary,omitempty"`
+	// LoginQuote — günün sözü: yalnız "on" açık; ""/"off" KAPALI (varsayılan
+	// kapalı — operatör kararı 2026-11-06: "Settings'ten açayım").
+	LoginQuote string `json:"loginQuote,omitempty"`
+	// LoginTopology — arka plan topolojisi: ""/"anonymous" (varsayılan; adsız),
+	// "named" (servis adlı), "off" (çizilmez, uç topoloji döndürmez).
+	LoginTopology string `json:"loginTopology,omitempty"`
+}
+
+// v0.10.1904 — login sayfası anahtarlarının kapalı kümeleri (FE lib/branding.ts aynası).
+const (
+	LoginSwitchOn  = "on"
+	LoginSwitchOff = "off"
+
+	LoginTopologyOff       = "off"
+	LoginTopologyAnonymous = "anonymous"
+	LoginTopologyNamed     = "named"
+
+	OrgNameMaxRunes = 60
+)
+
+// LoginSummaryEnabled — ""/"on" açık, yalnız "off" kapalı.
+func (b BrandingSettings) LoginSummaryEnabled() bool {
+	return NormalizeBranding(b).LoginSummary != LoginSwitchOff
+}
+
+// LoginQuoteEnabled — yalnız "on" açık; boş değer KAPALI (varsayılan kapalı).
+func (b BrandingSettings) LoginQuoteEnabled() bool {
+	return NormalizeBranding(b).LoginQuote == LoginSwitchOn
+}
+
+// ResolvedLoginTopology — boş değer "anonymous"a düşer (en dar açık kip).
+func (b BrandingSettings) ResolvedLoginTopology() string {
+	if t := NormalizeBranding(b).LoginTopology; t != "" {
+		return t
+	}
+	return LoginTopologyAnonymous
+}
+
+// normalizeSwitch — "on"/"off" dışı → "" (alanın varsayılanı: özet açık, söz kapalı).
+func normalizeSwitch(v string) string {
+	switch t := strings.ToLower(strings.TrimSpace(v)); t {
+	case LoginSwitchOn, LoginSwitchOff:
+		return t
+	}
+	return ""
 }
 
 // v0.10.1334 — tur anahtarının iki açık değeri (FE lib/branding.ts aynası).
@@ -84,6 +136,21 @@ func NormalizeBranding(b BrandingSettings) BrandingSettings {
 		b.OnboardingTour = t
 	default:
 		b.OnboardingTour = ""
+	}
+	// v0.10.1904 — login sayfası: kurum adı kırp + rune tavanı; anahtarlar
+	// kapalı kümeden, bilinmeyen değer "" (varsayılan).
+	n := strings.TrimSpace(b.OrgName)
+	if r := []rune(n); len(r) > OrgNameMaxRunes {
+		n = strings.TrimSpace(string(r[:OrgNameMaxRunes]))
+	}
+	b.OrgName = n
+	b.LoginSummary = normalizeSwitch(b.LoginSummary)
+	b.LoginQuote = normalizeSwitch(b.LoginQuote)
+	switch t := strings.ToLower(strings.TrimSpace(b.LoginTopology)); t {
+	case LoginTopologyOff, LoginTopologyAnonymous, LoginTopologyNamed:
+		b.LoginTopology = t
+	default:
+		b.LoginTopology = ""
 	}
 	return b
 }

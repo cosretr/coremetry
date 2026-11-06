@@ -941,12 +941,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	// Service endpoints set automatically.
 	mux.HandleFunc("GET /healthz", s.getHealth)
 	mux.HandleFunc("GET /api/version", s.getVersion)
-	// Branding overlay — public GET so the login page can read it
-	// before authentication; PUT is admin-only and capped at 256KB
-	// to keep the logo data URI from bloating the settings table.
 	s.registerAnnouncementRoutes(mux) // v0.8.486 — sayfa-üstü duyuru şeridi (Settings'ten), announcement.go
-	mux.HandleFunc("GET /api/branding", s.getBranding)
-	mux.HandleFunc("PUT /api/branding", auth.RequireRole(auth.RoleAdmin, s.putBranding))
 	mux.HandleFunc("GET /api/anomalies/log-patterns", s.getLogPatternAnomalies)
 	mux.HandleFunc("GET /api/anomalies/trace-ops", s.getTraceOpAnomalies)
 	mux.HandleFunc("GET /api/anomalies/metric", s.getMetricAnomalies)
@@ -9448,51 +9443,6 @@ func isDegraded(depth, cap int) bool {
 // getVersion is the unauthenticated build-tag endpoint the login
 // page calls to render the running release. Returns "dev" when
 // the binary was built without a -X main.Version stamp.
-// getBranding returns the admin-customised branding overlay
-// (logo + strings + primary color). Public — the login page
-// fetches this before the operator has a session so the bank's
-// logo + login title can render on first paint. An empty struct
-// is a valid response (no overrides saved yet); the SPA falls
-// back to the bundled Coremetry defaults in that case.
-func (s *Server) getBranding(w http.ResponseWriter, r *http.Request) {
-	b, err := s.store.GetBranding(r.Context())
-	if err != nil {
-		writeErr(w, err)
-		return
-	}
-	writeJSON(w, b)
-}
-
-// putBranding overwrites the saved overlay. Admin-gated by the
-// mux. Capped at 256 KB to keep a misconfigured logo upload
-// from bloating system_settings — 256 KB is plenty for the
-// ~30 KB PNGs operators typically paste in.
-func (s *Server) putBranding(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 256*1024)
-	var b chstore.BrandingSettings
-	if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
-		http.Error(w, "invalid body (or > 256 KB): "+err.Error(), http.StatusBadRequest)
-		return
-	}
-	if err := s.store.PutBranding(r.Context(), b); err != nil {
-		writeErr(w, err)
-		return
-	}
-	// v0.5.325 — Scale-audit gap: every admin mutation writes an
-	// audit row. Branding edits change customer-visible logos +
-	// link/footer copy, so the compliance trail matters.
-	details, _ := json.Marshal(map[string]any{
-		"appName":      b.AppName,
-		"loginTitle":   b.LoginTitle,
-		"footerText":   b.FooterText,
-		"language":     b.Language,
-		"primaryColor": b.PrimaryColor,
-		"logoBytes":    len(b.LogoDataURI),
-	})
-	s.audit(r, "settings.branding.update", "settings", "branding", string(details))
-	writeJSON(w, b)
-}
-
 func (s *Server) getVersion(w http.ResponseWriter, r *http.Request) {
 	v := s.version
 	if v == "" {
