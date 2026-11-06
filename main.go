@@ -976,6 +976,9 @@ func main() {
 	// istekler dakikalık kalıcı seriye (Admin → Elasticsearch).
 	esMeterPod, _ := os.Hostname()
 	go api.StartESRequestMeter(ctx, store, esMeterPod)
+	// v0.10.1902 — giriş / trace görüntüleme sayacı (login özeti; her pod kendi
+	// olaylarını yazar, okuma tüm pod toplamı).
+	go api.StartActivityMeter(ctx, store, esMeterPod)
 
 	// Wire the log backend into the evaluator so saved-search
 	// log alerts (rules with LogQuery != "") can count matches.

@@ -1074,7 +1074,7 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
   const prefetchTrace = (id: string) => {
     if (prefetched.current.has(id)) return;
     prefetched.current.add(id);
-    api.trace(id).catch(() => {});
+    api.tracePrefetch(id).catch(() => {});
   };
 
   const exportRangeNs = listRangeNs;

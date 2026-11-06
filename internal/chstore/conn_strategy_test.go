@@ -145,12 +145,13 @@ func TestTelemetryReadConnCallSurface(t *testing.T) {
 		"summary.go":                   true, // service_summary_5m / operation_summary_5m / spans (v0.9.496 dilim 1)
 		"service_cluster_mv.go":        true, // v0.10.883 — service_env_summary_5m (telemetri MV), state yok
 		// v0.9.497 dilim 2 — üçü de SAF telemetri (aşağıdaki testle pinli):
-		"repo.go":              true, // spans / logs / metric_points / trace_*_5m / topology_edges_5m
-		"logs_sort.go":         true, // v0.10.1833 — logs (kullanıcı sıralamalı liste), state yok
-		"self_es_series.go":    true, // v0.10.1878 — metric_points (ES istek sayacı serisi), state yok
-		"topology.go":          true, // topology_*_5m / service_summary_5m / spans / root_traces
-		"dependencies.go":      true, // db_*_summary_5m / messaging_*_summary_5m / metric_points / spans
-		"problem_telemetry.go": true, // spans — problem.go'dan ayrılan telemetri yarısı (v0.9.507)
+		"repo.go":                 true, // spans / logs / metric_points / trace_*_5m / topology_edges_5m
+		"logs_sort.go":            true, // v0.10.1833 — logs (kullanıcı sıralamalı liste), state yok
+		"self_es_series.go":       true, // v0.10.1878 — metric_points (ES istek sayacı serisi), state yok
+		"self_activity_series.go": true, // v0.10.1902 — metric_points (giriş / trace görüntüleme sayacı), state yok
+		"topology.go":             true, // topology_*_5m / service_summary_5m / spans / root_traces
+		"dependencies.go":         true, // db_*_summary_5m / messaging_*_summary_5m / metric_points / spans
+		"problem_telemetry.go":    true, // spans — problem.go'dan ayrılan telemetri yarısı (v0.9.507)
 		// v0.9.712 — SAF telemetri: rollup_metrics_* (metric_points'in
 		// AggregatingMergeTree türevi) + coverage min(ts) probu. State yok.
 		"metric_rollup_read.go": true,
@@ -407,6 +408,7 @@ func TestTelemetryReadFilesTouchNoStateTables(t *testing.T) {
 		"endpoints_callers.go", "repeats.go", "service_seen.go", "compare_periods.go",
 		"logs_sort.go",
 		"self_es_series.go",
+		"self_activity_series.go",
 	} {
 		b, err := os.ReadFile(f)
 		if err != nil {

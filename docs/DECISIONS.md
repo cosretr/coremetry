@@ -13242,3 +13242,14 @@ açılışına ve otomatik yenilemesine yeni Elasticsearch isteği eklenmez.
   (`SignatureGroup.Hash`, `NormalizeSignature` + xxhash) ve ES tarafında `PatternSearchQuery`'yi kullandı; Log-ML aile
   ifadesi ve `ml_series` tabanları DEĞİŞMEDİ. 4.3 yapılınca (ortak kimlik) yalnız bu iki yüzeyin eşleştirme anahtarı
   ortak kimliğe döner; ES sorguları ve ayar aynı kalır.
+
+## 2026-11-06 — Login özeti (anonim uç)
+
+Operatör 2026-11-06: yeni login sayfası, sağ sütunda anonim canlı özet. Faz 0: `docs/frontend/login-redesign.md`; bağlayıcı
+JSON sözleşmesi ve kararlar ana oturumda. Backend dilimleri v0.10.1902–1905.
+
+- **v0.10.1902 — Aktivite sayaçları:** giriş ve trace görüntüleme self-obs span'lerinden türetilmez (kök örnekleme %10,
+  başarı ayrımı ve kullanıcı kimliği span'de yok). Pod-yerel dakikalık sayaç, 30 sn'de `metric_points`'e `coremetry.self.activity`
+  (`kind=login|trace_view`, `pod`); ES istek sayacının eşi. `logins` toplamdır (tekil kişi değil). `traces_viewed`:
+  `X-Coremetry-Purpose: prefetch` sayılmaz; `(kullanıcı, trace)` 10 dk tekilleştirme, en çok 20 000 girdi, pod-yerel
+  (iki pod'a düşen kullanıcı çift sayılabilir). `api.go` iki `TouchUserLogin` bloğu tek `s.noteLogin` satırı oldu.

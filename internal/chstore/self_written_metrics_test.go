@@ -69,6 +69,7 @@ func TestSelfWrittenMetricsRegistry(t *testing.T) {
 func TestInsertMetricsCallersAreRegistered(t *testing.T) {
 	root := filepath.Join("..", "..")
 	want := []string{
+		"internal/api/activity_meter.go",   // SelfActivityMetric (v0.10.1902)
 		"internal/api/es_request_meter.go", // SelfESRequestsMetric / Errors / DurMs (v0.10.1878)
 		"internal/evaluator/selfhealth.go", // SelfDiskUsedMetric
 		"internal/oracle/counter.go",       // OracleErrorCounterMetric

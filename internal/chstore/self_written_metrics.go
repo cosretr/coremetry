@@ -29,6 +29,8 @@ func SelfWrittenMetrics() []string {
 		SelfDiskUsedMetric, OracleErrorCounterMetric,
 		// v0.10.1878 — ES istek sayacı serileri (self_es_series.go).
 		SelfESRequestsMetric, SelfESErrorsMetric, SelfESDurMsMetric,
+		// v0.10.1902 — giriş / trace görüntüleme sayacı (self_activity_series.go).
+		SelfActivityMetric,
 	}
 }
 

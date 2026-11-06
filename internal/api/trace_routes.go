@@ -33,6 +33,7 @@ func (s *Server) getTrace(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "trace id required", http.StatusBadRequest)
 		return
 	}
+	s.noteTraceView(r, id) // v0.10.1902 — login özeti sayacı (prefetch başlığı varsa sayılmaz)
 	// 30s cache. A trace is immutable once stored, but a
 	// just-flipped Tempo backend setting should rescue stale
 	// "not found" entries within a short window — hence the

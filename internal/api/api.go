@@ -5322,11 +5322,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	// v0.8.450 — son login damgası (operatör isteği: Users sayfası).
-	// Başarısız damga geçerli girişi asla bloklamaz.
-	if terr := s.store.TouchUserLogin(r.Context(), user.ID); terr != nil {
-		log.Printf("[auth] last-login stamp failed for %q: %v", user.Email, terr)
-	}
+	s.noteLogin(r, user.ID, user.Email, "auth") // v0.8.450 son-login damgası + v0.10.1902 sayaç
 	http.SetCookie(w, &http.Cookie{
 		Name:     auth.CookieName,
 		Value:    tok,
@@ -5882,10 +5878,7 @@ func (s *Server) oidcCallback(w http.ResponseWriter, r *http.Request) {
 		s.oidcFail(w, r, err.Error())
 		return
 	}
-	// v0.8.450 — son login damgası (OIDC yolu da sayılır).
-	if terr := s.store.TouchUserLogin(r.Context(), user.ID); terr != nil {
-		log.Printf("[oidc] last-login stamp failed for %q: %v", user.Email, terr)
-	}
+	s.noteLogin(r, user.ID, user.Email, "oidc") // v0.8.450 son-login damgası (OIDC de) + v0.10.1902 sayaç
 	http.SetCookie(w, &http.Cookie{
 		Name:     auth.CookieName,
 		Value:    tok,
