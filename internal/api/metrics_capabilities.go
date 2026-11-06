@@ -63,6 +63,11 @@ type capLimits struct {
 	LabelValuesMax   int `json:"labelValuesMax"`
 	AttrKeysMax      int `json:"attrKeysMax"`
 	LabelWindowMaxHr int `json:"labelWindowMaxHours"`
+	// v0.10.1840 — discovery ceilings (audit §3.2).
+	DiscoverLabelsMax  int `json:"discoverLabelsMax"`
+	CardinalityTopNMax int `json:"cardinalityTopNMax"`
+	SeriesSampleMax    int `json:"seriesSampleMax"`
+	TopQueriesMax      int `json:"topQueriesMax"`
 }
 
 type metricsCapabilities struct {
@@ -136,9 +141,8 @@ func capabilitiesFor(src string, vmMetadataOK bool) metricsCapabilities {
 		}
 		return capFeature{Reason: capReasonVMOnly}
 	}
-	// Discovery + server-side ranking land in later Faz 1 slices; each flips
-	// its own entry here (1.4 topN, 1.5 clusterScope, 1.6 discovery*).
-	notYet := capFeature{Reason: "Faz 1 sonraki dilim"}
+	// Each Faz 1 slice owns its flag here (1.4 topN, 1.5 clusterScope,
+	// 1.6 discovery*).
 	// v0.10.1838 — both backends rank server-side; VM pushes topk_* down,
 	// ClickHouse ranks its bounded result in Go (metric_topn.go).
 	c.Features["topN"] = capFeature{Supported: true}
@@ -154,11 +158,20 @@ func capabilitiesFor(src string, vmMetadataOK bool) metricsCapabilities {
 	if !vm {
 		c.ClusterScope.Reason = "ClickHouse: yalnız builder sorgusu kapsanır; ad/etiket seçicileri ve PromQL kapsanmaz"
 	}
-	c.Features["discoverLabels"] = notYet
-	c.Features["discoverLabelValues"] = notYet
-	c.Features["cardinality"] = notYet
-	c.Features["seriesSample"] = notYet
-	c.Features["topQueries"] = notYet
+	// v0.10.1840 — discovery (metrics_discovery.go): VictoriaMetrics only. A
+	// VM that turns out not to serve one of these paths answers that endpoint
+	// with {supported:false, reason} at runtime (per-pod probe); this document
+	// states the backend's capability, not the probe's latest outcome.
+	// topQueries is additionally admin/editor (S10).
+	c.Features["discoverLabels"] = vmOnly(vm)
+	c.Features["discoverLabelValues"] = vmOnly(vm)
+	c.Features["cardinality"] = vmOnly(vm)
+	c.Features["seriesSample"] = vmOnly(vm)
+	c.Features["topQueries"] = vmOnly(vm)
+	c.Limits.DiscoverLabelsMax = discLabelsLimitMax
+	c.Limits.CardinalityTopNMax = discTSDBTopNMax
+	c.Limits.SeriesSampleMax = discSeriesLimitMax
+	c.Limits.TopQueriesMax = discTopQueriesTopNMax
 	c.Features["queryTrace"] = capFeature{Reason: "Faz 2 (kod kipi)"}
 	c.Features["instantQuery"] = vmOnly(vm)
 	c.Features["hiddenByRule"] = capFeature{Supported: true}

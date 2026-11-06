@@ -12417,3 +12417,12 @@ Kaynak: `docs/metrics/metrics-explore-dashboards-audit.md` (onaylı, §11) · mo
   belgede yok, yazım başına OR göndermek panelleri boşaltabilirdi. Kapsam ctx üzerinde (`requestCtx`): her VM okuması
   (Test probu hariç) aynı yoldan kurulur. CH: builder okumalarına `cluster =` koşulu (metricClusterExpr coalesce); ad /
   etiket seçicileri ve PromQL kapsanamaz → param yok sayılır, anahtar çatallanmaz, capabilities `clusterScope` söyler.
+- **v0.10.1840 — metrik keşif uçları (1.6).** `metrics_discovery.go` (defter): `discover/labels`, `label-values`,
+  `cardinality` (VM `status/tsdb`), `series-sample` (VM `series`), `top-queries` (VM `status/top_queries`, admin/editor
+  — başka operatörlerin sorgu metnini gösterir; diğerleri herkese, S10). Tavanlar anahtardan ÖNCE kelepçelenir (§3.2):
+  etiket/değer limit ≤ 200, pencere ≤ 24 sa, q < 2 karakter yok sayılır, 60 sn · tsdb topN ≤ 50, tek gün (≤ bugün),
+  10 dk, 15 sn zaman aşımı · seri örneği metrik adı ZORUNLU, ≤ 20, pencere ≤ 1 sa · top-queries topN ≤ 20, maxLifetime
+  ≤ 24 sa. CH ve sunulmayan VM yolu: 200 `{supported:false, reason}`; 404/405/501 pod başına 10 dk hatırlanır (5xx
+  hatırlanmaz → 502). Etiket satırlarındaki `valueCount` FIRSATÇI: yalnız kardinalite gövdesi önbellekteyse (soğuk tsdb
+  günlük indeks taraması; etiket listesi onun bedelini ödemez). tsdb kapsamı `extra_label` (belgelenen arg), diğerleri
+  `extra_filters[]`.

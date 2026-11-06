@@ -699,6 +699,18 @@ export const api = {
   // belgesi (backend, dil, keşif bayrakları, tavanlar). Sunucu 30 sn önbellek.
   metricsCapabilities: (src?: import('./metricSource').MetricSourceParam) =>
     get<import('./types').MetricsCapabilities>(withMetricSource('/api/metrics/capabilities', src)),
+  // v0.10.1840 — metrik keşif uçları (sunucu tavanlı + önbellekli; CH'de
+  // {supported:false}). top-queries admin/editor (sunucu 403).
+  metricsDiscoverLabels: (p: { match?: string; q?: string; limit?: number; since?: string; cluster?: string }, signal?: AbortSignal) =>
+    get<import('./types').MetricsDiscoverLabels>(withMetricSource(`/api/metrics/discover/labels?${qs(p)}`), signal),
+  metricsDiscoverLabelValues: (p: { label: string; match?: string; q?: string; limit?: number; since?: string; cluster?: string }, signal?: AbortSignal) =>
+    get<import('./types').MetricsDiscoverLabelValues>(withMetricSource(`/api/metrics/discover/label-values?${qs(p)}`), signal),
+  metricsDiscoverCardinality: (p: { topN?: number; focusLabel?: string; match?: string; date?: string; cluster?: string }, signal?: AbortSignal) =>
+    get<import('./types').MetricsDiscoverCardinality>(withMetricSource(`/api/metrics/discover/cardinality?${qs(p)}`), signal),
+  metricsDiscoverSeriesSample: (p: { match: string; limit?: number; since?: string; cluster?: string }, signal?: AbortSignal) =>
+    get<import('./types').MetricsDiscoverSeriesSample>(withMetricSource(`/api/metrics/discover/series-sample?${qs(p)}`), signal),
+  metricsDiscoverTopQueries: (p: { topN?: number; maxLifetime?: string }, signal?: AbortSignal) =>
+    get<import('./types').MetricsDiscoverTopQueries>(withMetricSource(`/api/metrics/discover/top-queries?${qs(p)}`), signal),
   // Distinct attribute keys observed on recent spans — drives the
   // FilterBuilder autocomplete so custom attrs (function_code etc.)
   // surface as suggestions in addition to the hardcoded list.

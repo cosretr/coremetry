@@ -4151,6 +4151,8 @@ export interface MetricsCapabilities {
   limits: {
     maxQueryLength: number; maxDataPoints: number; maxSeries?: number; maxRows?: number;
     namesPageMax: number; labelValuesMax: number; attrKeysMax: number; labelWindowMaxHours: number;
+    // v0.10.1840 — keşif tavanları (audit §3.2)
+    discoverLabelsMax: number; cardinalityTopNMax: number; seriesSampleMax: number; topQueriesMax: number;
   };
   /** v0.10.1838 — mode: 'topk' (VM MetricsQL pushdown) | 'post-rank' (CH, Go'da sıralama). */
   topN: { limits: number[]; default: number; max: number; ranks: string[]; mode: 'topk' | 'post-rank' };
@@ -4606,6 +4608,41 @@ export interface MetricResultMeta {
   /** v0.10.1839 — UYGULANAN cluster kapsamı (?cluster=); yoksa kapsamsız. */
   cluster?: string;
 }
+
+// ── Metric discovery (v0.10.1840, Go internal/api/metrics_discovery.go) ────
+// Her uç ClickHouse'ta ve VM API'yi sunmadığında 200 {supported:false, reason}
+// döner; supported:true gövdeleri aşağıdaki alanları taşır.
+export interface MetricsDiscoverUnsupported { supported: false; reason: string }
+export interface MetricsDiscoverLabelRow { name: string; valueCount?: number }
+export type MetricsDiscoverLabels = MetricsDiscoverUnsupported | {
+  supported: true; labels: MetricsDiscoverLabelRow[]; hasMore: boolean; partial: boolean;
+  limit: number; valueCounts: boolean; windowSec: number; cluster?: string;
+};
+export type MetricsDiscoverLabelValues = MetricsDiscoverUnsupported | {
+  supported: true; label: string; values: string[]; hasMore: boolean; partial: boolean;
+  limit: number; windowSec: number; cluster?: string;
+};
+export interface MetricsTSDBEntry { name: string; value: number }
+export interface MetricsTSDBStatus {
+  totalSeries: number; totalLabelValuePairs: number;
+  seriesCountByMetricName: MetricsTSDBEntry[]; seriesCountByLabelName: MetricsTSDBEntry[];
+  seriesCountByFocusLabelValue: MetricsTSDBEntry[]; seriesCountByLabelValuePair: MetricsTSDBEntry[];
+  labelValueCountByLabelName: MetricsTSDBEntry[];
+}
+export type MetricsDiscoverCardinality = MetricsDiscoverUnsupported | {
+  supported: true; stats: MetricsTSDBStatus; topN: number; date: string; focusLabel: string; cluster?: string;
+};
+export type MetricsDiscoverSeriesSample = MetricsDiscoverUnsupported | {
+  supported: true; series: Record<string, string>[]; limit: number; sampleFull: boolean; partial: boolean;
+  windowSec: number; cluster?: string;
+};
+export interface MetricsTopQuery {
+  query: string; timeRangeSeconds: number; count?: number; avgDurationSeconds?: number; sumDurationSeconds?: number;
+}
+export type MetricsDiscoverTopQueries = MetricsDiscoverUnsupported | {
+  supported: true; topN: number; maxLifetime: string;
+  queries: { topByCount: MetricsTopQuery[]; topByAvgDuration: MetricsTopQuery[]; topBySumDuration: MetricsTopQuery[] };
+};
 
 // /api/metrics/promql?meta=1 zarfı (v0.10.1835). Param yokken uç eski
 // çıplak SpanMetricSeries[] dizisini döner.
