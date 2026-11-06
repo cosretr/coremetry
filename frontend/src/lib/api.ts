@@ -1728,6 +1728,8 @@ export const api = {
   mlProfileUnpin: (service: string) =>
     request<import('./types').MLServiceProfile>(`/api/ml/profiles/${encodeURIComponent(service)}/pin`, { method: 'DELETE' }),
   getMl: () => get<import('./types').MLConfig>(`/api/admin/ml`),
+  // v0.10.1886 — önerilen ML kurulumu: VM'de kaynak ölçümü + aç/kapa önerisi (yazmaz).
+  getMlRecommended: () => get<import('./types').MLRecommended>(`/api/admin/ml/recommended`),
   putMl: (c: import('./types').MLConfig) =>
     request<import('./types').MLConfig>(`/api/admin/ml`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(c),

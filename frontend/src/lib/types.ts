@@ -12149,6 +12149,11 @@ export interface MLConfig {
   /** v0.10.1814: günlük baseline gözlem işi (`ml.baseline.enabled`); yok = kapalı. */
   baseline?: { enabled: boolean };
 }
+/** v0.10.1886 — önerilen ML kurulumu (GET /api/admin/ml/recommended; salt-okunur). */
+export interface MLSourceCheck { id: string; label: string; checked: boolean; present: boolean; note?: string }
+/** key: "enabled" (ana anahtar) ya da dedektör adı. */
+export interface MLRecommendChange { key: string; from: boolean; to: boolean; reason: string }
+export interface MLRecommended { vmConfigured: boolean; checks: MLSourceCheck[]; changes: MLRecommendChange[]; config: MLConfig }
 /** load (v0.10.1811): seri servisin yükünü ölçer; batch kalıbına giren serviste değerlendirilmez. */
 export interface MLMetricExpr { id: string; label: string; expr: string; direction: 'up' | 'down' | 'both'; unit?: string; load?: boolean }
 /** Geçmiş doldurma ilerlemesi (v0.10.1763, system_settings ml_backfill:<signal>). */

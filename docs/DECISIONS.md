@@ -13021,3 +13021,34 @@ found but filter [Project] is not … giriş metodu bulunamadı" — oysa kod Az
   `TestServiceSearchFiltersNeverRepositoryWithoutProject`, `TestFetchOperationCard_SearchSendsProjectFilter`.
 - Not: aynı satırdaki "çalışan sürüm … depoda bulunamadı, release dalından okundu" bilgisi hata değil — sürüm etiketi
   depoda yoksa dal ucundan okunur (v0.10.590). Doğrulanmadı: gerçek Azure DevOps Server (yerel sahte sunucuyla sınandı).
+
+## 2026-11-06 — v0.10.1886 — Settings › Anomaly › ML: önerilen kurulum (tek düğme) + gelişmiş ayarlar kapalı
+
+Operatör 2026-11-06: "VM üzerinde HTTP, gRPC ve Kafka metriklerini tutuyorum ama Settings'te anomali ayarları çok
+karmaşık, sen default kur."
+
+- **Karar: varsayılanı kod değil ÖLÇÜM kurar, operatör tek düğmeyle uygular.** Prod'da kayıtlı bir ML ayarı var; kod
+  varsayılanını değiştirmek onu etkilemez, açılışta sessizce üzerine yazmak ise tespiti habersiz değiştirir. Bunun
+  yerine yeni salt-okunur uç `GET /api/admin/ml/recommended` (admin; kendi dosyası `internal/api/ml_recommend.go`):
+  ML dedektörlerini besleyen kaynakları VictoriaMetrics'te ölçer (`ml.SourceChecks`) ve önerilen aç/kapa kurulumunu
+  döner (`chstore.RecommendMLConfig`, saf). Hiçbir şey yazmaz; "Uygula" bildik `PUT /api/admin/ml`'i çağırır (audit
+  eski/yeni değerle orada).
+- **Kural (tek cümle):** verisi VM'de OLAN dedektör açılır, OLMAYAN kapanır (zaten sessiz kalırdı), ölçülemeyene ve
+  Elasticsearch'e sorgu atan log dedektörlerine DOKUNULMAZ. Terfi anahtarları, eşikler, MetricsQL ifadeleri, kalite
+  çerçevesi değişmez. Kapatma kararı yalnız dedektörün TÜM kaynakları ölçüldüyse verilir (ölçülemeyen "yok" sayılmaz).
+  Eşleme: HTTP/gRPC sunucu histogramı → endpoint gecikmesi, endpoint hata oranı, trafik düşüşü, aykırı pod (trace),
+  kırılma (trace); HTTP/DB/mesajlaşma client histogramı → bağımlılık gecikmesi; metrik ailesi (JVM, havuz, Kafka, HTTP
+  client, Kubernetes) → kendi ifadeleri veri döndürüyorsa. Ana anahtar kapalıysa ve açık dedektör kalıyorsa açılır.
+- **Ölçüm maliyeti:** yalnız admin düğmeye basınca; en çok 6 etiket keşfi (son 1 saat; tespitin kullandığı aynı çağrı) +
+  aile ifadesi başına 1 anlık sorgu (varsayılan 12), her biri 5 sn tavanlı, aynı anda en çok 4 istek, toplam 25 sn bütçe
+  (ingress 30 sn sınırının altında; süre dolarsa kalan kaynak "ölçülemedi" — dokunulmaz). Aile backoff'una yazmaz.
+  Elasticsearch isteği YOK. Sayfa açılışında VM'e sorgu YOK.
+- **Ekran:** ML bölümünün başında "Önerilen kurulum" kartı — düz cümle ("Önerilen kurulum 6 dedektörü açar…"), "VM'de
+  var / bulunamadı / ölçülemedi", "açılacak / kapanacak", "Uygula". MetricsQL ifadeleri, eşikler ve kalite çerçevesi
+  kapalı duran "Gelişmiş ayarlar" bölümüne alındı (alanlar bağlı kalır; Save hepsini gönderir). Hiçbir ayar silinmedi.
+- **Bilinçli dışarıda:** (1) eşiklerin varsayılana döndürülmesi — operatörün bilerek değiştirdiği değer (ör. servis
+  tavanı) sessizce geri alınmasın; (2) gRPC CLIENT bağımlılık ailesi (`rpc.client.duration`) — prod VM yazımı
+  doğrulanmadan eklenmedi, gRPC sunucu tarafı mevcut RED ailesiyle kapsanıyor; (3) Anomaly sekmesinin diğer bölümlerinin
+  (terfi, hassasiyet, triyaj…) toplu sadeleştirilmesi — düzen değişikliği, mockup + operatör onayı ister.
+- Doğrulanmadı: tarayıcı; gerçek VM'de ölçüm süresi ve Kafka ifadelerinin prod metrik adlarıyla eşleşmesi (eşleşmezse
+  kart "Bulunamadı: Kafka" der ve dedektörü kapatmayı önerir — ifade Gelişmiş ayarlardan düzeltilir).

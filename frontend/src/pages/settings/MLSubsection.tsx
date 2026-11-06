@@ -12,6 +12,7 @@ import { api } from '@/lib/api';
 import type { MLConfig, MLQuality } from '@/lib/types';
 import { FlashBox, humanize } from './shared';
 import { MLBaselineSections } from './MLBaselineSections';
+import { MLRecommendedCard } from './MLRecommendedCard';
 
 export const ML_LOG_DETECTORS: { id: string; label: string; hint: string }[] = [
   { id: 'log_volume', label: 'Log hacmi', hint: 'Servis × seviye hacmi, mevsimsel median+MAD, iki yönlü' },
@@ -40,6 +41,10 @@ export const ML_METRIC_DETECTORS: { id: string; label: string; hint: string }[] 
 ];
 
 const H3 = 'mt-4 mb-1 text-[length:var(--fs-md)] font-semibold';
+const ML_DETECTOR_LABEL: Record<string, string> = Object.fromEntries(
+  [...ML_LOG_DETECTORS, ...ML_TRACE_DETECTORS, ...ML_METRIC_DETECTORS].map(d => [d.id, d.label]));
+/** Dedektör adı → ekrandaki etiket (bilinmeyen ad aynen). */
+const mlDetectorLabel = (id: string) => ML_DETECTOR_LABEL[id] ?? id;
 const NOTE = 'text-[length:var(--fs-xs)] leading-normal text-(--text3)';
 
 export function MLSubsection() {
@@ -89,6 +94,9 @@ export function MLSubsection() {
         flash ? <FlashBox kind={flash.kind}>{flash.text}</FlashBox> : <Spinner />
       ) : (
         <>
+          {/* v0.10.1886 — tek düğmeyle önerilen kurulum (VM'de verisi olan dedektörler). */}
+          <MLRecommendedCard labelOf={mlDetectorLabel}
+            onApplied={c => { setCfg(c); setFlash(null); }} />
           <CheckboxField className="mb-3" checked={cfg.enabled}
             onCheckedChange={v => setCfg({ ...cfg, enabled: v })}
             label="ML açık (ana anahtar)"
@@ -122,6 +130,14 @@ export function MLSubsection() {
           </div>
           </div>))}
 
+          {/* v0.10.1886 — ifadeler, eşikler ve kalite çerçevesi varsayılan KAPALI
+              tek bölümde: gündelik kurulum yukarıdaki anahtarlarla biter. Alanlar
+              kapalıyken de bağlı kalır (Save hepsini gönderir). */}
+          <details data-testid="ml-advanced" className="mt-4 rounded-md border border-border px-3 py-2">
+          <summary className="cursor-pointer text-[length:var(--fs-sm)] font-semibold text-(--text2)">
+            Gelişmiş ayarlar — MetricsQL ifadeleri, eşikler, kalite çerçevesi
+          </summary>
+          <p className={`${NOTE} mt-2`}>Varsayılanlar çoğu kurulum için yeterlidir; değiştirmeniz gerekmez.</p>
           <h3 className={H3}>Metrik MetricsQL ifadeleri</h3>
           <p className={NOTE}>Varsayılanlar OTel/Prometheus adlarıdır; kendi metrik adlarınla düzenle. <code>{'{svc}'}</code> servis etiketi, <code>{'{win}'}</code> kova penceresi. Pod etiketi ifadede servis düzeyine toplanır.</p>
           <div className="mt-2 grid gap-2">
@@ -179,6 +195,7 @@ export function MLSubsection() {
           <CheckboxField className="mt-2" checked={!cfg.quality?.feedbackOff}
             onCheckedChange={v => setCfg({ ...cfg, quality: { ...cfg.quality, feedbackOff: !v } })}
             label="Geri bildirim ayarı" hint={'"Değil" kararları o dedektör × servis için eşiği yükseltir'} />
+          </details>
 
           <div className="mt-[18px]">
             <ActionRow confirm={<Button onClick={save} loading={busy}>Save</Button>} />
