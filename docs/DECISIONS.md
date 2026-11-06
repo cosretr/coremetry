@@ -12646,3 +12646,16 @@ Kaynak: `docs/metrics/metrics-explore-dashboards-audit.md` §7 Faz 2 (onaylı, �
   sınıfına düşüp operatörü sağlıklı kümeye yönlendiriyordu. Karar tipli hatadan (`promapi.HTTPError.Status`, saf
   `vmQueryRejected`), metinden değil. Bilinçli dar: 401/403 (kimlik), 404 (yanlış taban yol), 408/429 (yük), 5xx ve
   ağ hatası 502 kalır; brief "VM 4xx → 400" diyordu, bu dört 4xx sorgunun değil bağlantının sorunu (sapma).
+- **v0.10.1861 — tek model + tek URL biçimi (2.1).** `lib/metricsExplorer/model.ts`: `MxModel` (kip builder | kod, sorgular
+  A–H + formül F1…, kod metni, görsel, adım, seri sınırı 8/20/50, sıralama, kapsam kapalı, kod kaynağı) ve `?mx=<json>`
+  (kısa anahtar, varsayılanlar yazılmaz; `tab`, `range`, `cluster` ayrı param). Satır: metrik · süzgeç (`= != =~ !~`) ·
+  fonksiyon (`raw rate irate increase p50 p90 p95 p99`) · toplama (`sum avg min max count none`) + `by` · lejant
+  (`{{etiket}}`). Tür → varsayılan: sayaç `rate`/`sum`, histogram `p95`/`sum`, gösterge ham/`avg` (S4); tür seçicinin
+  bildirdiği tipten, yoksa ad son ekinden "tahmini". `legacy.ts` eski biçimleri BİR KEZ içe okur ve siler: MQE `?mq=`,
+  PromQL sekmesi `?tab=promql&promql=&src=` (CoSRE kanıt çipi), eski katalog linki `?metric=&service=&agg=&by=&unit=`
+  (Overview kapısı; S3 gereği artık Explore'a değil Metrics Explorer'a), `?editor=0[&service=]` → Keşif (`dsvc`), Explore
+  `?q=` metrik satırları (yapısal girdi). Çeviri vmetrics ile aynı kural (promLabel, `=~"a|b"`, LIKE `.*v.*`, EXISTS
+  `!=""`). Sapmalar: sayısal süzgeç (`>`, `<`) çevrilmez, uyarıyla düşer; MQE `logScale` / satır rengi taşınmaz (yeni
+  modelde yok); metrik adı çevrilmez (noktalı eski CH adı derlemede `{__name__="…"}`); eski `avg` bir histogram ADINDA
+  sunucunun gözlem-ağırlıklı ortalamasıydı, yeni builder'da ham `avg` (VM'de histogram tabanı yok → boş): yer imi aynı
+  soruyu açar, o tek durumda sayı aynı değildir. Sayfa henüz kullanmıyor (2.3).
