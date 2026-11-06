@@ -13,9 +13,10 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default: "bg-primary text-primary-foreground hover:bg-primary/90",
-        // coremetry: text-destructive-foreground (← --on-accent), not text-white (v0.10.1848)
+        // coremetry: text-destructive-foreground (← --on-accent), not text-white (v0.10.1848);
+        // no dark:bg-destructive/60 — on-accent/err-solid is measured on the SOLID fill (v0.10.1850)
         destructive:
-          "bg-destructive text-destructive-foreground hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:bg-destructive/60 dark:focus-visible:ring-destructive/40",
+          "bg-destructive text-destructive-foreground hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40",
         // /coremetry
         outline:
           "border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",

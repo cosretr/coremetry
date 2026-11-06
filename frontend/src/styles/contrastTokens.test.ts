@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { SERIES_PALETTES } from '../lib/chartFmt';
 import { DEFAULT_RAMP_TOKENS } from '../lib/chart/heatmapRamp';
-import { THEME_IDS, type Theme } from '../lib/themeRegistry';
+import { THEME_IDS, themeEntry, type Theme, type ThemeContrast } from '../lib/themeRegistry';
 import { contrastRatio, hexDecls, themeBlockBody } from './themeBlocks';
 
 // contrastTokens — v0.10.920 (sade palet, operatör onayı 2026-09-25).
@@ -48,27 +48,40 @@ const ratio = contrastRatio;
 const THEMES: readonly Theme[] = THEME_IDS;
 const BGS = ['--bg0', '--bg1', '--bg2', '--bg3'];
 
+// v0.10.1850 — eşik katmanı kayıttaki `contrast` alanından (themes-proposal
+// §4 tablo, "YK" sütunu). 'aa' = repo eşikleri (değişmedi). 'aaa' = Yüksek
+// Kontrast: birincil metin ≥15, tüm okunan metin + durum + vurgu üstü ≥7,
+// devre dışı ≥4.5, çerçeve ≥3 (1.4.11), form kenarı ≥7, ikincil kenar ≥4.5,
+// seri ≥4.5. --divider bandı her katmanda aynı (operatör: güç --border'dan).
+const TIERS = {
+  aa:  { text: 7,  body: 4.5, faint: 3,   borderStrong: 3, borderControl: 2,   border: 0, series: 3 },
+  aaa: { text: 15, body: 7,   faint: 4.5, borderStrong: 7, borderControl: 4.5, border: 3, series: 4.5 },
+} as const satisfies Record<ThemeContrast, Record<string, number>>;
+
 function failures(theme: Theme): string[] {
   const t = (n: string) => tok(theme, n);
+  const T = TIERS[themeEntry(theme).contrast];
   const out: string[] = [];
   const need = (label: string, fg: string, bg: string, min: number) => {
     const r = ratio(fg, bg);
     if (r < min) out.push(`${theme}: ${label} ${fg} / ${bg} = ${r.toFixed(2)} (< ${min})`);
   };
   for (const bg of BGS) {
-    need(`--text on ${bg}`, t('--text'), t(bg), 7);
-    need(`--text2 on ${bg}`, t('--text2'), t(bg), 4.5);
-    need(`--text3 on ${bg}`, t('--text3'), t(bg), 4.5);
-    need(`--accent2 on ${bg}`, t('--accent2'), t(bg), 4.5);
+    need(`--text on ${bg}`, t('--text'), t(bg), T.text);
+    need(`--text2 on ${bg}`, t('--text2'), t(bg), T.body);
+    need(`--text3 on ${bg}`, t('--text3'), t(bg), T.body);
+    need(`--accent2 on ${bg}`, t('--accent2'), t(bg), T.body);
     need(`--focus vs ${bg}`, t('--focus'), t(bg), 3);
-    for (const s of ['--ok', '--warn', '--err', '--info']) need(`${s} on ${bg}`, t(s), t(bg), 4.5);
-    // v0.10.1844 — sinyal türü rozet metni (ikon + metin) bg0–bg2'de normal metin eşiği.
-    if (bg !== '--bg3') for (const s of ['--sig-metric', '--sig-trace', '--sig-log']) need(`${s} on ${bg}`, t(s), t(bg), 4.5);
+    for (const s of ['--ok', '--warn', '--err', '--info']) need(`${s} on ${bg}`, t(s), t(bg), T.body);
+    // v0.10.1844 — sinyal türü rozet metni (ikon + metin) bg0–bg2'de normal metin eşiği
+    // (v0.10.1850: katman eşiği — 'aaa' temada ≥7).
+    if (bg !== '--bg3') for (const s of ['--sig-metric', '--sig-trace', '--sig-log']) need(`${s} on ${bg}`, t(s), t(bg), T.body);
   }
-  need('--text3 on --accent-bg', t('--text3'), t('--accent-bg'), 4.5);
-  need('--accent2 on --accent-bg', t('--accent2'), t('--accent-bg'), 4.5);
-  need('--text-faint on --bg1 (devre dışı)', t('--text-faint'), t('--bg1'), 3);
-  need('--border-strong vs --bg1 (form kenarı)', t('--border-strong'), t('--bg1'), 3);
+  need('--text3 on --accent-bg', t('--text3'), t('--accent-bg'), T.body);
+  need('--accent2 on --accent-bg', t('--accent2'), t('--accent-bg'), T.body);
+  need('--text-faint on --bg1 (devre dışı)', t('--text-faint'), t('--bg1'), T.faint);
+  need('--border-strong vs --bg1 (form kenarı)', t('--border-strong'), t('--bg1'), T.borderStrong);
+  if (T.border) need('--border vs --bg1 (çerçeve, YK)', t('--border'), t('--bg1'), T.border);
   // v0.10.928 (Y2) — iç ayraç BANTTA: görünür ama çerçeveden (--border)
   // yumuşak; bg2 hover satırında/şeritlerinde kaybolmaz. Ayraç dekoratif
   // (1.4.11 muaf) — alt sınır okunurluk, üst sınır "ikinci çerçeve olmasın".
@@ -78,21 +91,21 @@ function failures(theme: Theme): string[] {
   need('--divider vs --bg2 (hover satırı, bg2 şeritleri)', t('--divider'), t('--bg2'), 1.07);
   // v0.10.928 (Y4) — dolgusuz ikincil düğmenin kenarı: düğme şekli yalnız
   // bu çizgiden okunur; hover'daki --border-strong'dan hafif kalmalı.
-  need('--border-control vs --bg1 (ikincil kenarı)', t('--border-control'), t('--bg1'), 2);
+  need('--border-control vs --bg1 (ikincil kenarı)', t('--border-control'), t('--bg1'), T.borderControl);
   need('--border-control vs --bg2 (bg2 yüzeydeki ikincil)', t('--border-control'), t('--bg2'), 1.75);
   if (ratio(t('--border-control'), t('--bg1')) >= ratio(t('--border-strong'), t('--bg1')))
     out.push(`${theme}: --border-control --border-strong'dan hafif değil (hover kademesi kaybolur)`);
-  need('--on-accent on --accent', t('--on-accent'), t('--accent'), 4.5);
-  need('--on-accent on --accent-hover', t('--on-accent'), t('--accent-hover'), 4.5);
-  need('--on-accent on --err-solid', t('--on-accent'), t('--err-solid'), 4.5);
+  need('--on-accent on --accent', t('--on-accent'), t('--accent'), T.body);
+  need('--on-accent on --accent-hover', t('--on-accent'), t('--accent-hover'), T.body);
+  need('--on-accent on --err-solid', t('--on-accent'), t('--err-solid'), T.body);
   for (const bg of ['--bg0', '--bg1', '--bg2']) need(`--warn-solid (dolgu) vs ${bg}`, t('--warn-solid'), t(bg), 3);
   for (const s of ['ok', 'warn', 'err', 'info']) {
-    need(`--${s} on --${s}-bg`, t(`--${s}`), t(`--${s}-bg`), 4.5);
+    need(`--${s} on --${s}-bg`, t(`--${s}`), t(`--${s}-bg`), T.body);
     need(`--text on --${s}-bg`, t('--text'), t(`--${s}-bg`), 7);
-    need(`--text3 on --${s}-bg`, t('--text3'), t(`--${s}-bg`), 4.5);
+    need(`--text3 on --${s}-bg`, t('--text3'), t(`--${s}-bg`), T.body);
   }
   const pal = SERIES_PALETTES[theme];
-  for (const c of pal) for (const bg of ['--bg0', '--bg1', '--bg2']) need(`seri ${c} vs ${bg}`, c, t(bg), 3);
+  for (const c of pal) for (const bg of ['--bg0', '--bg1', '--bg2']) need(`seri ${c} vs ${bg}`, c, t(bg), T.series);
   return out;
 }
 

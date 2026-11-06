@@ -1,5 +1,6 @@
 # design-axe-nightly — v0.10.1619 (shadcn Faz 1 R10, plan §8.2; §12 Q7).
-# /design kataloğunun TAM axe matrisi: 3 tema × 3 yoğunluk = 9 hücre.
+# /design kataloğunun TAM axe matrisi: her kayıt teması × 3 yoğunluk
+# (v0.10.1850: 5 tema = 15 hücre; tema listesi frontend/src/lib/themeRegistry.ts).
 # CI (ci.yml `npx vitest run`) yalnız 3 hücreyi koşar (tema başına bir,
 # varsayılan yoğunluk); yoğunluk hücreleri burada, gece ve el ile.
 # Yerelde: `cd frontend && npm run design:axe:full`.
@@ -16,7 +17,7 @@ concurrency:
 
 jobs:
   axe-full:
-    name: /design axe (9 cells)
+    name: /design axe (all cells)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

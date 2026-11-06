@@ -521,6 +521,67 @@
   color-scheme: dark;
 }
 
+/* ── Yüksek Kontrast / contrast (v0.10.1850, operatör onayı 2026-11-06) ──
+   docs/frontend/themes-proposal.md §4. Siyah zemin, beyaz metin; tüm
+   okunan metin ve durum renkleri AAA (≥7), --border 3:1, form kenarı
+   ≥4.5 (ikincil) / ≥7 (güçlü), BEYAZ odak halkası (operatör: sarı uyarıyla
+   karışır), vurgu üstünde SİYAH yazı (--on-accent; v0.10.1848 sabit
+   beyazları temizledi). --divider repo bandında kalır (operatör): güç
+   --border ve form kenarından. Kontrast kapısı 'aaa' katmanında
+   (kayıt `contrast: 'aaa'`); kendi seri paleti (tokens.css). */
+[data-theme="contrast"] {
+  --bg0: #000000;
+  --bg1: #0a0a0a;
+  --bg2: #141414;
+  --bg3: #1f1f1f;
+  --field-bg: var(--bg2);
+  --bg:  #0a0a0a;
+  --border: #666666;
+  --divider: #202020;
+  --border-control: #7d7d7d;
+  --border-strong: #9e9e9e;
+  --text:  #ffffff;
+  --text2: #e6e6e6;
+  --text3: #c4c4c4;
+  --text-faint: #8f8f8f;
+  --brand:  #E30613;
+  --brand2: #ff2333;
+  --accent:  #6cb6ff;
+  --accent2: #7cc0ff;
+  --accent-hover: #9ccfff;
+  --focus:   #ffffff;
+  --on-accent: #000000;
+  --accent-soft: color-mix(in srgb, var(--accent) 20%, transparent);
+  --accent-bg:     #0b2440;
+  --accent-border: #3d7fc0;
+  --ok:   #5ee08a;
+  --warn: #ffcf40;
+  --warn-solid: #ffcf40;
+  --err:  #ff9489;
+  --err-solid: #ff6b6b;
+  --fatal: #ff9489;
+  --info: #7cc0ff;
+  --ok-bg:   #0c2a18;
+  --warn-bg: #2e2500;
+  --err-bg:  #330f0c;
+  --info-bg: #0b2440;
+  --purple: #c9a6ff;
+  --indigo: #a9b4ff;
+  --orange: #ffa257;
+  --teal:   #4fe0d0;
+  /* v0.10.1844 sinyal türü tonları — 'aaa': bg0–bg2'de ≥7 (11.32 / 9.11 / 9.26). */
+  --sig-metric: #4fe0d0;
+  --sig-trace:  #c9a6ff;
+  --sig-log:    #ffa257;
+  --shadow-sm:    0 1px 2px rgba(0, 0, 0, .6);
+  --shadow-md:    0 6px 20px rgba(0, 0, 0, .75);
+  --shadow-pop:   0 8px 24px rgba(0, 0, 0, .8);
+  --shadow-modal: 0 20px 60px rgba(0, 0, 0, .85);
+  --backdrop:     rgba(0, 0, 0, .75);
+
+  color-scheme: dark;
+}
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }
 /* v0.10.1363 (operatör onayı, kuyruk) — uygulama kabuğu: sayfa #content'te kayar, kök hiç kaymaz.

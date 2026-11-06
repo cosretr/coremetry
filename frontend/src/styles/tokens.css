@@ -71,6 +71,10 @@
   --series-1: #045c93; --series-2: #0c9999; --series-3: #921545; --series-4: #898905;
   --series-5: #567cd3; --series-6: #d46e07; --series-7: #7b489e; --series-8: #bf68ae;
 }
+[data-theme="contrast"] {
+  --series-1: #6cb6ff; --series-2: #4fded8; --series-3: #ff87cb; --series-4: #c6f056;
+  --series-5: #b3c4ff; --series-6: #ffa227; --series-7: #cfa0ff; --series-8: #ffb3ec;
+}
 
 /* `inline`: yardımcı sınıflar değeri (var(--radius-sm) …) GÖMER.
    `reference`: bu bloktaki değişkenler :root'a HİÇ yazılmaz. İkisi birlikte

@@ -23,6 +23,12 @@ export type ThemeContrast = 'aa' | 'aaa';
 export const SERIES_PALETTE_SETS = {
   dark:  ['#288dd4', '#06d8d9', '#cb4f73', '#b5b614', '#95b6fe', '#d76f04', '#ac78d2', '#fca0e8'],
   light: ['#045c93', '#0c9999', '#921545', '#898905', '#567cd3', '#d46e07', '#7b489e', '#bf68ae'],
+  // v0.10.1850 — Yüksek Kontrast: siyah zeminde her yuva ≥4.5 ('aaa' katmanı).
+  // Mockup paletinin dört yuvası durum rengine OKLab < 0.10 idi (seriesPalette
+  // kapısı); en küçük değişiklikle: 2 #4fe0d0→#4fded8 (--ok 0.093→0.107),
+  // 3 #ff8fb3→#ff87cb (--err 0.063→0.106), 4 #e6e04a→#c6f056 (--warn
+  // 0.052→0.105), 6 #ffa257→#ffa227 (--err 0.075→0.107).
+  contrast: ['#6cb6ff', '#4fded8', '#ff87cb', '#c6f056', '#b3c4ff', '#ffa227', '#cfa0ff', '#ffb3ec'],
 } as const;
 export type SeriesPaletteId = keyof typeof SERIES_PALETTE_SETS;
 
@@ -51,6 +57,8 @@ export const THEME_REGISTRY = [
   { id: 'redhat', label: 'Kurumsal', glyph: '⬢', scheme: 'light', contrast: 'aa', series: 'light', themeColor: '#f4f4f5', ciCell: true },
   // v0.10.1849 — Arduvaz: shadcn slate tabanı, mavi vurgu; `dark` seri paletini paylaşır (operatör).
   { id: 'slate', label: 'Arduvaz', glyph: '◑', scheme: 'dark', contrast: 'aa', series: 'dark', themeColor: '#0f172a', ciCell: false },
+  // v0.10.1850 — Yüksek Kontrast: AAA katmanı, kendi paleti; CI axe temsilcisi (öneri §3).
+  { id: 'contrast', label: 'Yüksek Kontrast', glyph: '◐', scheme: 'dark', contrast: 'aaa', series: 'contrast', themeColor: '#000000', ciCell: true },
 ] as const satisfies readonly ThemeEntryShape[];
 
 export type ThemeEntry = (typeof THEME_REGISTRY)[number];
