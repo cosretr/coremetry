@@ -11,7 +11,7 @@ import { podOfLog, podEntryOfLog } from '@/lib/logPod';
 import { clusterEntryOfLog } from '@/lib/logCluster'; // v0.10.501 (B4)
 import { tsLong, sevName, sevClass, isoStampLocal } from '@/lib/utils';
 import type { DataTableColumn } from '@/lib/dataTable';
-import type { LogRow } from '@/lib/types';
+import type { LogRow, LogsLines, LogsDensity } from '@/lib/types';
 import { traceHref } from '@/lib/traceHref';
 import { logLineSubjectOf } from '@/lib/logLineSubject'; // v0.10.1291 — ✨ log satırı
 import { AIExplainButton } from './ai/AIExplainButton';
@@ -210,6 +210,7 @@ export function LogTable({
   onContextOpen,
   permalink,
   wrap = false,
+  display,
   state,
 }: {
   logs: LogRow[];
@@ -217,6 +218,14 @@ export function LogTable({
   // v0.10.417 (log arama denetimi B5) — mesaj hücresi sarılsın mı; varsayılan
   // KAPALI (tek satır + …), yalnız /logs araç çubuğu açar.
   wrap?: boolean;
+  // v0.10.1830 (Log Search Faz 1 dilim 1.7) — görünüm seçenekleri (yalnız
+  // /logs geçirir; servis sekmesi / pod / trace panelleri vermez → bugünkü
+  // görünüm bayt bayt). rowLines: mesaj hücresi 1 (tek satır + …), 2/3
+  // (satır kırpma), 'auto' (tam sarma = eski `wrap`). headerLines: başlık
+  // etiketi aynı ölçek. density: tabloya yerel — compact = data-density
+  // "compact", normal = genel yoğunluk ayarı, expanded = geniş dolgu.
+  // Verilirse `wrap` yok sayılır.
+  display?: { rowLines?: LogsLines; headerLines?: LogsLines; density?: LogsDensity };
   // Dynamic middle columns (Discover revamp step 3). Omitted →
   // DEFAULT_LOG_COLUMNS, which preserves the classic anatomy. Ids
   // are well-known (level/service/cluster/pod) or raw attribute /
@@ -316,15 +325,23 @@ export function LogTable({
   const dt = useDataTable<LogRow>({ storageKey: 'logs', columns: dtColumns, rows: logs });
   // colSpan for the expanded row: Time + (dynamics incl. Message) (+ Trace).
   const cols = 1 + colIds.length + (hideTraceColumn ? 0 : 1);
+  // v0.10.1830 — görünüm: `display` verildiyse satır yüksekliği ondan, yoksa
+  // eski `wrap` anahtarı (tek satır | sarılı).
+  const rowLines: LogsLines = display?.rowLines ?? (wrap ? 'auto' : 1);
+  const headerLines: LogsLines = display?.headerLines ?? 1;
+  const tableCls = [dt.tableProps.className, 'logtbl-dense',
+    display ? `lt-rh-${rowLines}` : '', headerLines !== 1 ? `lt-hh-${headerLines}` : ''].filter(Boolean).join(' ');
+  const label = (c: { label: string }) => (headerLines !== 1 ? <span className="lt-th-label">{c.label}</span> : c.label);
   return (
-    <div className="table-wrap">
-      <table className={[dt.tableProps.className, 'logtbl-dense'].join(' ')}>
+    <div className={display?.density === 'expanded' ? 'table-wrap lt-den-expanded' : 'table-wrap'}
+      data-density={display?.density === 'compact' ? 'compact' : undefined}>
+      <table className={tableCls}>
         <DataTableColgroup dt={dt} />
-        <DataTableHead dt={dt} renderLabel={onRemoveColumn ? (c) => (
-          NON_REMOVABLE_COL_IDS.has(c.id)
-            ? c.label
+        <DataTableHead dt={dt} renderLabel={onRemoveColumn || headerLines !== 1 ? (c) => (
+          !onRemoveColumn || NON_REMOVABLE_COL_IDS.has(c.id)
+            ? label(c)
             : <>
-                {c.label}
+                {label(c)}
                 {/* v0.10.924 — buton bütünlüğü Faz 2: IconButton bare
                     (Explore TracesResult'taki kolon-× ile aynı). `th-remove`
                     yalnız başlık-hover'da belirme (opacity) + boşluk için. */}
@@ -362,7 +379,7 @@ export function LogTable({
                 onTracePeek={onTracePeek}
                 onContextOpen={onContextOpen}
                 permalink={permalink}
-                wrap={wrap}
+                rowLines={rowLines}
               />
             );
           })}
@@ -370,6 +387,13 @@ export function LogTable({
       </table>
     </div>
   );
+}
+
+// MessageBody — v0.10.1830: satır kırpma (2/3) için iç kap; -webkit-line-clamp
+// tablo hücresinin kendisinde çalışmaz (display: table-cell). Kırpma yokken
+// sarmalayıcı yok — DOM bugünküyle aynı.
+function MessageBody({ clamp, children }: { clamp: boolean; children: React.ReactNode }) {
+  return clamp ? <span className="lt-clamp-body">{children}</span> : <>{children}</>;
 }
 
 // LogLineExplain — v0.10.1291: açılan satırın ✨'i; özne kurulamıyorsa
@@ -388,7 +412,7 @@ function LogLineExplain({ l }: { l: LogRow }) {
 
 function LogRow({
   l, idx, tableId, cols, colIds, highlightTerms, hideTraceColumn, selected, expanded, onClick, extraExpanded,
-  onFilterAdd, onFilterExclude, onToggleColumn, onTracePeek, onContextOpen, permalink, wrap,
+  onFilterAdd, onFilterExclude, onToggleColumn, onTracePeek, onContextOpen, permalink, rowLines,
 }: {
   l: LogRow;
   idx: number;
@@ -407,8 +431,11 @@ function LogRow({
   onTracePeek?: (traceId: string) => void;
   onContextOpen?: (pivot: LogRow) => void;
   permalink?: (l: LogRow) => string;
-  wrap?: boolean;
+  // v0.10.1830 — 1 tek satır (+ title), 2/3 kırpma, 'auto' tam sarma.
+  rowLines: LogsLines;
 }) {
+  const wrap = rowLines !== 1;
+  const clamp = rowLines === 2 || rowLines === 3;
   const attrs = Object.entries(l.attributes ?? {});
   const res = Object.entries(l.resourceAttributes ?? {});
   // Doc viewer tab (Discover revamp 7/7). Per-row state — sticky
@@ -485,7 +512,8 @@ function LogRow({
           if (id === 'message') {
             return (
               // v0.10.945 — satır içi maxWidth sabit düzende etkisizdi (genişlik colgroup'ta).
-              <td key={id} className={wrap ? 'lt-wrap' : undefined} title={wrap ? undefined : l.body}>
+              <td key={id} className={clamp ? 'lt-clamp' : wrap ? 'lt-wrap' : undefined} title={wrap ? undefined : l.body}>
+                <MessageBody clamp={clamp}>
                 {/* v0.8.407 — span-event pseudo rows (exceptions / log-bridge
                     records riding the trace's spans) are visibly distinct from
                     backend log rows so the merged trace Logs tab stays honest. */}
@@ -508,6 +536,7 @@ function LogRow({
                   ? highlightSegments(l.body, highlightTerms).map((s, i) =>
                       s.hl ? <mark key={i} className="log-mark">{s.text}</mark> : <span key={i}>{s.text}</span>)
                   : l.body}
+                </MessageBody>
               </td>
             );
           }

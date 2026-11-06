@@ -2,11 +2,17 @@
 // onaylı taslak 2026-10-24).
 //
 // Tablonun hemen üstündeki TEK araç satırı: yerel daraltma kutusu (v0.9.294 —
-// yalnız yüklenmiş satırlar, yeni sorgu YOK) · Columns ▾ · ⤶ sar · sıra ·
+// yalnız yüklenmiş satırlar, yeni sorgu YOK) · Columns ▾ · Görünüm ▾ · sıra ·
 // dışa aktarma ⋯. Hepsi tabloya etki eder, o yüzden tablonun yanında; sayfa
 // düzeyi eylemler sorgu çubuğunda kalır. Saf sunum: durum Logs.tsx'te.
-import type { RefObject } from 'react';
-import { Button } from '@/components/ui/Button';
+//
+// v0.10.1830 (Log Search Faz 1 dilim 1.7) — shadcn dilimi (ui/ importu ve
+// satır içi stil yok). "⤶ sar" anahtarı Görünüm ▾ içindeki gövde satır
+// yüksekliğine katıldı (Otomatik = sarılı; mockup görünüm 1): düğmenin
+// tarayıcı tercihi (`logs.wrap`) URL'de `rh` yokken varsayılanı belirler.
+import type { ReactNode, RefObject } from 'react';
+import { Button } from '@/components/shadcn/button';
+import { Input } from '@/components/shadcn/input';
 import { LogsColumnPicker } from './LogsColumnPicker';
 import { LogsExportMenu } from './LogsActionsMenus';
 
@@ -21,8 +27,8 @@ export interface LogsTableToolbarProps {
   columns: string[];
   fields: string[];
   onColumns: (next: string[]) => void;
-  wrap: boolean;
-  onToggleWrap: () => void;
+  /** Görünüm ▾ (coremetry/logs/DisplayOptions) — Columns'ın sağında. */
+  display: ReactNode;
   live: boolean;
   asc: boolean;
   onToggleAsc: () => void;
@@ -36,10 +42,11 @@ export function LogsTableToolbar(p: LogsTableToolbarProps) {
           because it filters the rows already in the page; it does not
           re-query. At 10B docs/day the cheapest query is the one you don't send. */}
       {p.loadedCount > 0 && (
-        <input
+        <Input
           ref={p.narrowRef}
-          className="ld-narrow"
+          className="ld-narrow h-7"
           value={p.narrow}
+          aria-label="Yüklenen satırlarda süz"
           onChange={e => p.onNarrow(e.target.value)}
           placeholder={`Filter the ${p.loadedCount.toLocaleString()} loaded rows… (no new query)`}
           title="Filters the rows already loaded into this page — body, service, severity and trace id. It does NOT search the rest of the window; widen the query above for that." />
@@ -54,14 +61,7 @@ export function LogsTableToolbar(p: LogsTableToolbarProps) {
       )}
       <span className="ld-tbar-right">
         <LogsColumnPicker columns={p.columns} fields={p.fields} onChange={p.onColumns} />
-        {/* v0.10.417 (B5) — satır sarma; v0.10.1318 (K3) aç/kapa = `active`. */}
-        <Button variant="secondary" size="sm" active={p.wrap}
-          onClick={p.onToggleWrap}
-          title={p.wrap
-            ? 'Mesajlar sarılı. Tıkla: tek satır + … (tam metin hücre başlığında).'
-            : 'Mesajlar tek satır (…). Tıkla: sar — uzun satırlar tam görünür, satır yüksekliği değişir.'}>
-          ⤶ sar
-        </Button>
+        {p.display}
         {/* v0.9.295 — sort direction; hidden in live tail (the stream is by
             definition newest-arriving). Flipping returns to page one — the
             keyset cursor is tied to its direction. */}

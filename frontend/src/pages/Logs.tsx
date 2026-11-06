@@ -49,11 +49,13 @@ import { logsUrlSig, writeLogsParams, readLogsUrlState, buildDocPermalink, parse
 import { decideTeamAutoApply, isSameTeam, readTeamOptOut, writeTeamOptOut } from '@/lib/logsTeam';
 import { useAuth } from '@/components/AuthProvider';
 import { useT } from '@/lib/i18n';
-import type { LogsResponse, LogRow, TimeRange, LogsQueryHistoryEntry } from '@/lib/types';
+import type { LogsResponse, LogRow, TimeRange, LogsQueryHistoryEntry, LogsDisplay } from '@/lib/types';
 import { PageShell } from '@/components/coremetry/PageShell';
 import { LogsQueryBar } from './logs/LogsQueryBar';
 import { parseLogQueryError, logQueryErrorMessage } from '@/lib/logQueryError';
 import { readLogsQueryHistory, recordLogsQuery } from '@/lib/logsQueryHistory';
+import { LOGS_DEFAULT_DISPLAY, readLogsDisplay, writeLogsDisplay, pageSlice } from '@/lib/logsDisplay';
+import { DisplayOptions } from '@/components/coremetry/logs';
 import { LogsFilterRow } from './logs/LogsFilterRow';
 import { LogsNotices } from './logs/LogsNotices';
 import { LogsAddFilterMenu, LogsShareMenu, LogsMoreMenu } from './logs/LogsActionsMenus';
@@ -177,7 +179,7 @@ function LogsInner() {
   // v0.9.292 — how many rows the accumulation cap has dropped off the
   // top in this browsing session. Surfaced, never silent.
   const [accDropped, setAccDropped] = useState(0);
-  const resetPaging = () => { setCursor(''); setAccRows([]); setAccDropped(0); };
+  const resetPaging = () => { setCursor(''); setAccRows([]); setAccDropped(0); setPage(0); };
   // v0.10.440 (log arama denetimi B3) — sayfa-yerel ↻. Göreli preset'in
   // penceresi timeRangeToNs ile SON range değişiminde donuyor ("son 30 dk"
   // bir saat sonra bir saat önceki 30 dakikayı sorguluyordu, ekranda hiçbir
@@ -239,8 +241,21 @@ function LogsInner() {
   // v0.10.417 (log arama denetimi B5) — satır sarma; okuma yardımı, URL'e
   // girmez (narrow gibi), kalıcı (localStorage). Varsayılan KAPALI: tek
   // satır + … bugünkü davranış.
-  const [wrapLines, setWrapLines] = useState<boolean>(() => getRaw('logs.wrap') === '1');
-  const toggleWrap = () => setWrapLines(v => { setRaw('logs.wrap', v ? '0' : '1'); return !v; });
+  // v0.10.1830 (Log Search Faz 1 dilim 1.7) — "⤶ sar" düğmesi Görünüm ▾'e
+  // katıldı (gövde satır yüksekliği Otomatik); eski tarayıcı tercihi URL'de
+  // `rh` yokken varsayılanı belirler (sarılı → auto, değilse 1).
+  const wrapLines = useMemo(() => getRaw('logs.wrap') === '1', []);
+  const displayBase = useMemo<LogsDisplay>(
+    () => ({ ...LOGS_DEFAULT_DISPLAY, rowLines: wrapLines ? 'auto' : 1 }), [wrapLines]);
+  // Görünüm seçenekleri (rh / hh / den / pp) — URL eklenen parametreler;
+  // yokken bugünkü görünüm (lib/logsDisplay).
+  const display = useMemo(() => readLogsDisplay(searchParams, displayBase).display, [searchParams, displayBase]);
+  // İstemci sayfalaması: yüklenen örnek `pp` satırlık sayfalara bölünür.
+  const [page, setPage] = useState(0);
+  const setDisplay = (patch: Partial<LogsDisplay>) => {
+    if (patch.pageSize !== undefined) setPage(0);
+    setSearchParams(prev => writeLogsDisplay(prev, patch), { replace: true });
+  };
   // v0.10.502 (B6) — mode: 'replace' (Ara / satır tıkı, eski davranış) |
   // 'and' (⊕ mevcut metne ekle) | 'not' (⊖ hariç tut, NOT). Ekleme
   // mevcut serbest metni EZMEZ (mergePatternQuery).
@@ -954,7 +969,11 @@ function LogsInner() {
   // Yükleniyor / hata anında boş: başarısız bir yenilemede birikmiş eski
   // satırlar (accRows) hatanın üstünde sessizce kalmaz — eskiden de tablo
   // o anda hiç çizilmiyordu. j/k aynı diziyi gezer (görünmeyen satır seçilmez).
-  const shownLogs = data ? logs : NO_LOGS;
+  // v0.10.1830 — canlı kuyruk sayfalanmaz (kendi kayan tamponu); statik
+  // listede yalnız geçerli sayfa çizilir (j/k da onu gezer).
+  const paged = useMemo(() => pageSlice(data ? logs : NO_LOGS, live ? 0 : page, live ? Number.MAX_SAFE_INTEGER : display.pageSize),
+    [data, logs, live, page, display.pageSize]);
+  const shownLogs = paged.rows;
   const tableNav = useTableNav<LogRow>(shownLogs, {
     onOpen: (l) => toggle(l.id),
     pageId: 'logs',
@@ -1322,15 +1341,15 @@ function LogsInner() {
             Sütun değişikliği tek yoldan (changeCols). */}
         <LogsTableToolbar
           loadedCount={data ? loadedRows.length : 0} shownCount={data ? logs.length : 0}
-          narrow={narrow} onNarrow={setNarrow} narrowRef={narrowRef}
+          narrow={narrow} onNarrow={v => { setNarrow(v); setPage(0); }} narrowRef={narrowRef}
           columns={logCols} fields={fields} onColumns={changeCols}
-          wrap={wrapLines} onToggleWrap={toggleWrap}
+          display={<DisplayOptions value={display} onChange={setDisplay} />}
           live={live} asc={asc} onToggleAsc={toggleAsc}
           onExport={exportLoaded} />
         {/* v0.10.967 — tablo HER durumda (başlık kalır); durum satırı
             logsState'ten. Pager eskisi gibi yalnız satır varken. */}
         <LogTable logs={shownLogs} nav={tableNav} state={logsState}
-          wrap={wrapLines}
+          display={display}
           columns={logCols}
           onRemoveColumn={removeColumn}
           highlightTerms={highlightTerms}
@@ -1364,13 +1383,24 @@ function LogsInner() {
             ES relation "gte" dönüyor. Aynı etiket ClickHouse'ta
             gerçek bir count(). Backend hangisi olduğunu söylüyor;
             artık "+"yı `count` beyanı basıyor. */}
-        {data && logs.length > 0 && !live && (
+        {/* v0.10.1830 (dilim 1.7, mockup görünüm 1) — yüklenen örnek istemcide
+            `pp` satırlık sayfalarda; tek sayfaya sığarken eski "Load more"
+            görünümü aynen (bugünkü ilk açılış). Birden çok sayfada sayfa
+            gezgini; "Load more" SON sayfada ve yeni satırların sayfasına iner. */}
+        {data && logs.length > 0 && !live && paged.pages > 1 && (
+          <Pager mode="offset" count="exact" total={logs.length}
+            page={paged.page} pageSize={display.pageSize}
+            hasMore={paged.page < paged.pages - 1}
+            lastReachablePage={paged.pages - 1}
+            onPage={setPage} />
+        )}
+        {data && logs.length > 0 && !live && paged.page === paged.pages - 1 && (
           <Pager mode="cursor"
             count={staticQ.data?.totalIsLowerBound ? 'capped' : 'exact'}
             total={total}
             loaded={logs.length}
             hasMore={!!data.nextCursor}
-            onMore={() => { if (data.nextCursor) setCursor(data.nextCursor); }}
+            onMore={() => { if (data.nextCursor) { setPage(Math.floor(logs.length / display.pageSize)); setCursor(data.nextCursor); } }}
             loading={staticQ.isFetching}
             extras={
               /* v0.9.292 — the accumulation window slid forward. Rows

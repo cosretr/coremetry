@@ -12,6 +12,7 @@ import {
   logsUrlSig, readLogsParams, writeLogsParams, readLogsUrlState, parseLogsPanel, parseDocParam,
   logsUrlHasFilterState, parseLogsLang,
 } from '@/lib/logsUrl';
+import { readLogsDisplay, LOGS_DEFAULT_DISPLAY } from '@/lib/logsDisplay';
 import { parseBreakdown } from '@/components/LogsHistogram';
 
 const GOLDEN = [
@@ -311,5 +312,22 @@ describe('/logs lang parametresi — yalnız eklenir (v0.10.1819)', () => {
     const st = readLogsUrlState(p);
     expect(st.sig).toBe(readLogsUrlState(sp('/logs?q=a+and+b')).sig);
     expect(writeLogsParams(p, st.filter, st.filtersRaw, st.colsRaw).get('lang')).toBe('lucene');
+  });
+});
+
+// v0.10.1830 (dilim 1.7) — görünüm parametreleri rh / hh / den / pp EKLENİR:
+// altın listedeki hiçbir URL onları taşımaz → bugünkü görünüm (varsayılan),
+// süzgeç imzası değişmez, yazma onları yabancı parametre olarak korur.
+describe('/logs görünüm parametreleri — yalnız eklenir (v0.10.1830)', () => {
+  it('eski linkler bugünkü görünümü açar', () => {
+    for (const u of GOLDEN) expect(readLogsDisplay(sp(u)), u).toEqual({ display: LOGS_DEFAULT_DISPLAY, explicit: [] });
+  });
+  it('rh/hh/den/pp imzaya girmez ve yazmada korunur', () => {
+    const p = sp('/logs?q=boom&rh=3&hh=2&den=compact&pp=250');
+    const st = readLogsUrlState(p);
+    expect(st.sig).toBe(readLogsUrlState(sp('/logs?q=boom')).sig);
+    const out = writeLogsParams(p, st.filter, st.filtersRaw, st.colsRaw);
+    for (const k of ['rh', 'hh', 'den', 'pp']) expect(out.get(k), k).toBe(p.get(k));
+    expect(readLogsDisplay(out).display).toEqual({ rowLines: 3, headerLines: 2, density: 'compact', pageSize: 250 });
   });
 });

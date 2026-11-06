@@ -4,3 +4,5 @@ export { LogQueryInput } from './LogQueryInput';
 export type { LogQueryInputProps } from './LogQueryInput';
 export { LogQueryErrorLine } from './LogQueryErrorLine';
 export type { LogQueryErrorLineProps } from './LogQueryErrorLine';
+export { DisplayOptions } from './DisplayOptions';
+export type { DisplayOptionsProps } from './DisplayOptions';

@@ -3972,6 +3972,19 @@ export interface LogsQueryHistoryEntry {
   at: number;
 }
 
+// v0.10.1830 (Log Search Faz 1 dilim 1.7) — doküman tablosu görünüm seçenekleri
+// (lib/logsDisplay.ts; URL `rh`, `hh`, `den`, `pp`). Satır/başlık yüksekliği
+// satır sayısı (1 = tek satır + …, 2/3 = kırpma, 'auto' = tam sarma).
+export type LogsLines = 1 | 2 | 3 | 'auto';
+export type LogsDensity = 'compact' | 'normal' | 'expanded';
+export type LogsPageSize = 50 | 100 | 250 | 500;
+export interface LogsDisplay {
+  rowLines: LogsLines;
+  headerLines: LogsLines;
+  density: LogsDensity;
+  pageSize: LogsPageSize;
+}
+
 // v0.10.1818 (Log Search Faz 1 dilim 1.2) — log sorgusu sözdizimi reddinin
 // 400 gövdesi (internal/api/logs_query_error.go logQueryErrorBody). pos =
 // kullanıcının yazdığı sorguda 0 tabanlı KARAKTER indeksi; yalnız güvenilirken

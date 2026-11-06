@@ -3885,6 +3885,21 @@ td > .cell-actions.end { justify-content: flex-end; }
    hücresi, yalnız açıkken. .td-full değil (word-break:break-all URL/UUID'yi
    parçalar); telefon kuralı (640px) dokunulmadı. */
 .logtbl-dense > tbody > tr > td.lt-wrap { max-width: none; white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+/* v0.10.1830 (Log Search Faz 1 dilim 1.7) — /logs "Görünüm ▾": mesaj hücresi
+   2/3 satır kırpma (iç kap; line-clamp tablo hücresinde çalışmaz), başlık
+   1/2/3/otomatik (th satır içi nowrap'ı ezilir — DataTableHead stili), tabloya
+   yerel geniş yoğunluk. Yalnız /logs `display` verdiğinde sınıflar basılır. */
+.logtbl-dense > tbody > tr > td.lt-clamp { max-width: none; white-space: normal; overflow: hidden; text-overflow: clip; overflow-wrap: anywhere; }
+.logtbl-dense .lt-clamp-body { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
+.logtbl-dense.lt-rh-2 .lt-clamp-body { -webkit-line-clamp: 2; line-clamp: 2; }
+.logtbl-dense.lt-rh-3 .lt-clamp-body { -webkit-line-clamp: 3; line-clamp: 3; }
+.logtbl-dense:is(.lt-hh-2, .lt-hh-3, .lt-hh-auto) > thead th { white-space: normal !important; vertical-align: bottom; }
+.logtbl-dense:is(.lt-hh-2, .lt-hh-3) .lt-th-label { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.logtbl-dense.lt-hh-2 .lt-th-label { -webkit-line-clamp: 2; line-clamp: 2; }
+.logtbl-dense.lt-hh-3 .lt-th-label { -webkit-line-clamp: 3; line-clamp: 3; }
+.lt-den-expanded { --row-h: 44px; }
+.lt-den-expanded .logtbl-dense > thead th { padding-top: var(--sp-4); padding-bottom: var(--sp-4); }
+.lt-den-expanded .logtbl-dense > tbody > tr > td { padding-top: var(--sp-4); padding-bottom: var(--sp-4); }
 .logtbl-dense > tbody > tr.log-error { background: color-mix(in oklab, var(--err) 7%, transparent); }
 .logtbl-dense > tbody > tr.log-warn  { background: color-mix(in oklab, var(--warn) 6%, transparent); }
 /* v0.10.926 — hover `filter: brightness(1.04)` idi; filter `position: fixed`

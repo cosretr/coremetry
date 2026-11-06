@@ -109,7 +109,9 @@ describe('K3 — durum birincil dolgu değil (v0.10.1318)', () => {
     // ◆ With trace → + Filter ▾ (LogsActionsMenus), Live → LogsQueryBar.
     // İkisi de `active` ile, koşullu birincil yok.
     for (const [rel, needle] of [
-      ['pages/logs/LogsTableToolbar.tsx', 'active={p.wrap}'],
+      // v0.10.1830 — "⤶ sar" Görünüm ▾'e katıldı (gövde satır yüksekliği);
+      // araç satırı shadcn, anahtar kalmadı — koşullu birincil de yok.
+      ['pages/logs/LogsTableToolbar.tsx', 'p.onToggleAsc'],
       ['pages/logs/LogsActionsMenus.tsx', 'active={p.hasTrace}'],
       ['pages/logs/LogsQueryBar.tsx', 'pressed={p.live}'], // v0.10.1821 — shadcn Toggle
     ] as const) {

@@ -414,11 +414,6 @@
       "count": 1
     }
   },
-  "src/pages/logs/LogsTableToolbar.tsx": {
-    "ui/no-raw-element": {
-      "count": 1
-    }
-  },
   "src/pages/pod/PodLogsSection.tsx": {
     "ui/no-raw-element": {
       "count": 1

@@ -135,6 +135,12 @@ describe('servis Logs sekmesi — paylaşılan log parçaları çivisi (v0.10.18
     expect(series.find(sr => sr.key === 'rate')?.axis).toBe('right');
     expect(m.logsSignal).toBeInstanceOf(AbortSignal);
     expect(host.textContent).toContain('payment declined for branch-teller');
+    // v0.10.1830 — /logs görünüm seçenekleri sekmeye SIZMAZ: tablo bugünkü
+    // sınıflarla (satır yüksekliği / yoğunluk sınıfı ve yerel data-density yok).
+    const tbl = host.querySelector('table.logtbl-dense')!;
+    expect(tbl.className).not.toMatch(/lt-rh-|lt-hh-/);
+    expect(tbl.closest('[data-density]')).toBeNull();
+    expect(host.querySelector('.lt-den-expanded')).toBeNull();
     expect(host.textContent).toContain('Log volume');
   });
 });

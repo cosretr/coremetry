@@ -7,22 +7,24 @@ import { resolve } from 'node:path';
 const read = (p: string) => readFileSync(resolve(__dirname, p), 'utf8');
 
 describe('log line wrap toggle (B5)', () => {
-  it('Logs.tsx: kalıcı state + araç çubuğu + prop', () => {
+  // v0.10.1830 (Log Search Faz 1 dilim 1.7) — "⤶ sar" Görünüm ▾'deki gövde
+  // satır yüksekliğine katıldı (Otomatik = sarılı). Tarayıcı tercihi
+  // (`logs.wrap`) URL'de `rh` yokken varsayılanı belirler; araç satırında
+  // ayrı anahtar yok.
+  it('Logs.tsx: kalıcı tercih rh varsayılanı + Görünüm ▾ + display prop', () => {
     const src = read('./Logs.tsx');
     expect(src).toContain("getRaw('logs.wrap') === '1'");
-    expect(src).toContain('wrap={wrapLines}');
-    // v0.10.1318 (K3) — anahtar `active` ile (aria-pressed'i atom basar).
-    // v0.10.1502 — düğme tablo araç satırında (pages/logs/LogsTableToolbar.tsx);
-    // durum Logs.tsx'te, araç satırına prop olarak gider.
-    expect(src).toContain('wrap={wrapLines} onToggleWrap={toggleWrap}');
+    expect(src).toContain("rowLines: wrapLines ? 'auto' : 1");
+    expect(src).toContain('display={<DisplayOptions value={display} onChange={setDisplay} />}');
     const bar = read('./logs/LogsTableToolbar.tsx');
-    expect(bar).toContain('active={p.wrap}');
-    expect(bar).toContain('onClick={p.onToggleWrap}');
+    expect(bar).not.toContain('onToggleWrap');
+    expect(bar).toContain('{p.display}');
   });
-  it('LogTable: mesaj hücresi sınıfı ve title yalnız kapalıyken', () => {
+  it('LogTable: mesaj hücresi sınıfı (kırpma / sarma) ve title yalnız tek satırda', () => {
     const src = read('../components/LogTable.tsx');
-    expect(src).toContain("className={wrap ? 'lt-wrap' : undefined}");
+    expect(src).toContain("className={clamp ? 'lt-clamp' : wrap ? 'lt-wrap' : undefined}");
     expect(src).toContain('title={wrap ? undefined : l.body}');
+    expect(src).toContain("const rowLines: LogsLines = display?.rowLines ?? (wrap ? 'auto' : 1);");
   });
   it('globals.css: kural tanımlı, .td-full ve telefon kuralı dokunulmamış', () => {
     const css = read('../styles/globals.css');

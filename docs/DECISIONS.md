@@ -12314,3 +12314,14 @@ sağlıklı çalışmıyor; anomaliler oluşsun, gerekirse Problem'e terfi olurl
 - Operatör: "GUID, UUID, id değerlerini yeni log pattern'i algılamasın." Desenler imzası ve Drain şablonu TEK kural kümesini çağırır (`logstore.MaskVariableTokens`, kural sırası dosya başında): UUID her biçim, tek haneden binlik ayraçlıya her sayı (birim korunur), `{0}`/`%s`/`?` = değer, karışık/hex kimlik, k8s pod son eki, e-posta, IPv6, Java hash. Yalnız KİMLİK hesabı; gösterim/saklama/CoSRE girdisi verbatim (redaksiyon değil).
 - Geçiş: `logstore.MaskerVersion` (system_settings `log_masker_version`); sürüm değişince puller 24 sa sessiz pencere yazar — `log_template_new` ve ML `rare_template` olay üretmez. "Bilinen şablon" karşılaştırması saklanmış şablonu güncel maskeyle yeniden maskeler (`templater.Remask`; v1 şablonu → v2 TAM eşit, testli). Kuralı kimlik üreten biçimde değiştiren her sürüm sürümü artırır.
 - Bilinçli dışarıda: exception parmak izi (`normalizeMessage`, operatör durumu taşır — ayrı karar), ORA-kodu ayrımı (bugün de tek kalıp), yalnız harfli pod son eki, boşlukla ayrılmış ID listesi Drain'de (belirteç sayısı).
+
+## 2026-11-05 — Log Search Faz 1 (devam)
+
+- **v0.10.1830 — doküman tablosu görünüm seçenekleri (1.7).** Yeni `coremetry/logs/DisplayOptions` (Görünüm ▾): gövde satır
+  yüksekliği 1/2/3/Otomatik (mesaj hücresi; 2/3 `line-clamp`, Otomatik = eski sarma), başlık 1/2/3/Otomatik, yoğunluk
+  Sıkı (tabloya yerel `data-density="compact"`) / Normal (genel yoğunluk ayarını izler — yerel üstüne yazamaz) / Geniş
+  (yerel dolgu), sayfa başına satır 50/100/250/500 (istemci sayfası; yüklenen örnek bölünür, tek sayfada eski "Load more"
+  görünümü, çok sayfada gezgin + "Load more" SON sayfada). URL `rh/hh/den/pp` eklenen paramlar; yokken bugünkü görünüm.
+  "⤶ sar" düğmesi Görünüm ▾'e katıldı; `logs.wrap` tarayıcı tercihi `rh` yokken varsayılan. `coremetry/DataTable` API'si
+  değişmedi: çok satırlı hücre ui `LogTable`'ın yeni opsiyonel `display` prop'unda (yalnız /logs verir) — Logs istisnası
+  (açık soru §9-5): yalnız mesaj hücresi çok satır, diğer kolonlar tek satır.

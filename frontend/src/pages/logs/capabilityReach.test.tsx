@@ -175,10 +175,22 @@ describe('/logs — her yetenek ≤ 1 tık (v0.10.1498)', () => {
     expect(menuItems().some(t => t.includes('Reset'))).toBe(true);
   });
 
-  it('tablo araç satırı (v0.10.1502): ⤶ sar + sıra yüzeyde; dışa aktarma ⋯ ve Columns ▾ 1 tık', async () => {
+  // v0.10.1830 — "⤶ sar" Görünüm ▾'e katıldı: satır yüksekliği / yoğunluk /
+  // sayfa başına satır 1 tıkta, seçim URL'ye (rh / den / pp) yazılır.
+  it('tablo araç satırı (v0.10.1502/1829): sıra yüzeyde; Görünüm ▾, dışa aktarma ⋯ ve Columns ▾ 1 tık', async () => {
     await mountLogs(`/logs?range=${RANGE}`);
-    expect(btn('⤶ sar')).toBeTruthy();
+    expect(btn('⤶ sar')).toBeFalsy();
     expect(btn('newest first')).toBeTruthy();
+    await click(btn('Görünüm'));
+    const dlg = document.querySelector('[role="dialog"][aria-label="Görünüm seçenekleri"]');
+    expect(dlg, 'Görünüm penceresi').not.toBeNull();
+    const seg = (name: string, label: string) => [...dlg!.querySelectorAll(`[aria-label="${name}"] button`)].find(b => b.textContent === label) as HTMLButtonElement;
+    await click(seg('Yoğunluk', 'Geniş'));
+    expect(new URLSearchParams(window.location.search).get('den')).toBe('expanded');
+    await click(seg('Satır yüksekliği · gövde', '2'));
+    expect(new URLSearchParams(window.location.search).get('rh')).toBe('2');
+    expect(document.querySelector('table.logtbl-dense.lt-rh-2')).not.toBeNull();
+    await closeAll();
     await click(document.querySelector('button[aria-label="Export loaded rows"]'));
     const items = menuItems();
     for (const n of ['Export CSV', 'Export NDJSON']) expect(items.some(t => t.includes(n)), n).toBe(true);
