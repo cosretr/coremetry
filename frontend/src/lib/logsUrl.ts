@@ -40,17 +40,19 @@ export interface LogsUrlFilter {
 
 // The identity of a URL-bearing view. Every field the URL carries must be
 // here, or the sig-guard stops noticing that field's changes.
-export function logsUrlSig(f: LogsUrlFilter, filtersRaw: string, colsRaw: string): string {
+// v0.10.1854 — `pinsRaw` (sabit haplar) yalnız doluyken eklenir: sabitsiz
+// görünümün imzası bayt-bayt eskisi (legacyUrls çivisi).
+export function logsUrlSig(f: LogsUrlFilter, filtersRaw: string, colsRaw: string, pinsRaw = ''): string {
   return JSON.stringify([
     f.service, f.cluster, f.search, f.severity, f.traceId, f.spanId, f.hasTrace,
-    filtersRaw, colsRaw, f.pattern, f.team,
+    filtersRaw, colsRaw, f.pattern, f.team, ...(pinsRaw ? [pinsRaw] : []),
   ]);
 }
 
 // State → params. Empty/zero fields are DELETED rather than written blank,
 // so a default view produces a clean /logs URL.
 export function writeLogsParams(
-  prev: URLSearchParams, f: LogsUrlFilter, filtersRaw: string, colsRaw: string,
+  prev: URLSearchParams, f: LogsUrlFilter, filtersRaw: string, colsRaw: string, pinsRaw = '',
 ): URLSearchParams {
   const p = new URLSearchParams(prev);
   const setOrDel = (k: string, v: string) => { if (v) p.set(k, v); else p.delete(k); };
@@ -65,6 +67,7 @@ export function writeLogsParams(
   setOrDel('pattern', f.pattern); // v0.10.1071
   setOrDel('team', f.team); // v0.10.1477
   setOrDel('filters', filtersRaw);
+  setOrDel('pins', pinsRaw); // v0.10.1854 — sabit haplar
   setOrDel('cols', colsRaw);
   return p;
 }
@@ -93,7 +96,7 @@ export function readLogsParams(p: URLSearchParams): LogsUrlFilter {
 // değildir — Topbar'ın yapışkan `range=`'i otomatik varsayılanı engellemesin.
 export const LOGS_FILTER_PARAMS = [
   'service', 'cluster', 'q', 'search', 'severity', 'traceId', 'spanId',
-  'hasTrace', 'pattern', 'team', 'filters', 'doc',
+  'hasTrace', 'pattern', 'team', 'filters', 'pins', 'doc',
 ] as const;
 
 export function logsUrlHasFilterState(p: URLSearchParams): boolean {
@@ -106,12 +109,13 @@ export function logsUrlHasFilterState(p: URLSearchParams): boolean {
 // başlıyor, URL ancak ilk commit'ten sonraki efektte içe aktarılıyordu; o
 // arada liste + histogram süzgeçsiz bir ES isteği atıyordu (her derin link).
 export function readLogsUrlState(p: URLSearchParams): {
-  filter: LogsUrlFilter; filtersRaw: string; colsRaw: string; sig: string;
+  filter: LogsUrlFilter; filtersRaw: string; colsRaw: string; pinsRaw: string; sig: string;
 } {
   const filtersRaw = p.get('filters') ?? '';
   const colsRaw = p.get('cols') ?? '';
+  const pinsRaw = p.get('pins') ?? ''; // v0.10.1854
   const filter = readLogsParams(p);
-  return { filter, filtersRaw, colsRaw, sig: logsUrlSig(filter, filtersRaw, colsRaw) };
+  return { filter, filtersRaw, colsRaw, pinsRaw, sig: logsUrlSig(filter, filtersRaw, colsRaw, pinsRaw) };
 }
 
 // logsRangeParam — v0.9.853 (UX denetimi K3). The ONE producer of the time

@@ -12537,3 +12537,19 @@ değişmez).
   Sapma: mockup değer satırının sağındaki "4 ▾" (değer sayısı) çizilmedi — sayı yalnız alan açılınca bilinir (ön-yükleme
   ES-maliyet sözleşmesini bozardı); ipucu etiketi değer listesinin altında. Kenar çubuğu başlıkları Türkçeleşti
   ("Seçili alanlar", "Popüler alanlar", "Mevcut alanlar (N)").
+- **v0.10.1854 — filtre hapları: sabitle + FilterBar çip düzenleyici (2.3).** coremetry/FilterBar ailesine
+  `FilterChipRow` (hap satırı, mockup `.pill`: etiket "⊙ sabit" / "DEĞİL" / "kapalı" + ✎ ≠ ◐ ⊙ ✕) ve
+  `FilterChipEditor` (alan · işleç · değer; değer önerisi YALNIZ çağıranın sunucu araması — Logs'ta mevcut
+  `_terms_enum` ucu, 180 ms gecikme + iptal sinyali) eklendi. `FilterBar` dondurulmuş API'si değişmedi; `FilterChip`
+  ek alanlarla genişledi (`values`, `pinned`, `disabled`; işleçler `>=`, `<=`, `in`, `!in`) — `lib/filterChips` kodlayıcısı
+  yeni işleçleri `key>=v`, `key in (a,b)` biçiminde yazar/okur, sunum bayrakları metne girmez. Logs köprüsü
+  `lib/logFilters` (`logFilterToChip` / `chipToLogFilter`, işleçler `LOG_FILTER_OPS` — `~` sunulmaz). Sabit hap: URL'de
+  AYRI `pins` parametresi (filters kodlaması; §9-12 kararı); sabitsiz görünümün URL'i ve imzası bayt-bayt eski.
+  Anlam: sabit hap (1) servis değişince (bugün de tüm haplar kalıyordu — davranış korunur), (2) "Tümünü temizle"de,
+  (3) ⋯ Sıfırla'da ve (4) `pins` taşımayan bir URL'nin içe aktarılmasında (SPA gezinmesi, kayıtlı görünüm, geri/ileri)
+  KALIR ve URL'ye geri yazılır; `pins` taşıyan URL (paylaşılan link) kazanır. Ters çevirme aralık hapında pasif (≥ yerine
+  ≤ seçilir — eski editörün kuralı). `LogsFilterRow` shadcn'e geçti (ui/ importu 0, satır içi stil 0); `LogPillEditor`
+  silindi, "+ Filter ▾ › alan süzgeci" aynı düzenleyiciyi coremetry Popover'da açar. Sapmalar: mockup satırındaki
+  "+ Süzgeç" düğmesi eklenmedi (aynı iş sorgu çubuğundaki + Filter ▾'de; ikinci giriş noktası açılmadı); "Yalnız kritik
+  hatalar" anahtarı Faz 3 (dilim 3.3) işi; sabitlik kalıcılığı yalnız URL (yeni sekme / sayfa yeniden bağlanması sabitleri
+  taşımaz — §9-12 URL kararı).

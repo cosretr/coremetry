@@ -79,7 +79,7 @@ export function atomsImported(src: string, file: string): Set<string> {
 // DisclosureButton +1 taşınan PageControls'ten). R9: 902 → 904 (coremetry/
 // DataTable sarmalayıcısının iki dosyası ui/DataTable'ı içe aktarıyor).
 const CEILINGS: Record<string, number> = {
-  Button: 153, // v0.10.1853 (Logs alan kenar çubuğu): 154 → 153; v0.10.1830 (Logs tablo araç satırı): 155 → 154; v0.10.1821 (Logs sorgu çubuğu): 156 → 155; Faz 2 dilim 1 R15 (Argo CD): 162 → 156; Faz 2 dilim 1 R17 (Anomaly): 164 → 162; Faz 2 dilim 1 R16 (Oracle): 165 → 164; Faz 2 dilim 1 R14 (işletim): 169 → 165; Faz 2 dilim 1 R13 (DevOps + MCP): 171 → 169; Faz 2 dilim 1 R12 (AI SRE + Knowledge): 177 → 171; Faz 2 dilim 1 R11 (CoSRE): 184 → 177; Faz 2 dilim 1 R10 (erişim): 191 → 184; Faz 2 dilim 1 R7: 209 → 207 (Remote Cluster); etkileşim P2: 207 → 206 (⌘K); R8: 206 → 197; R9: 197 → 191
+  Button: 151, // v0.10.1854 (Logs süzgeç satırı + LogPillEditor silindi): 153 → 151; v0.10.1853 (Logs alan kenar çubuğu): 154 → 153; v0.10.1830 (Logs tablo araç satırı): 155 → 154; v0.10.1821 (Logs sorgu çubuğu): 156 → 155; Faz 2 dilim 1 R15 (Argo CD): 162 → 156; Faz 2 dilim 1 R17 (Anomaly): 164 → 162; Faz 2 dilim 1 R16 (Oracle): 165 → 164; Faz 2 dilim 1 R14 (işletim): 169 → 165; Faz 2 dilim 1 R13 (DevOps + MCP): 171 → 169; Faz 2 dilim 1 R12 (AI SRE + Knowledge): 177 → 171; Faz 2 dilim 1 R11 (CoSRE): 184 → 177; Faz 2 dilim 1 R10 (erişim): 191 → 184; Faz 2 dilim 1 R7: 209 → 207 (Remote Cluster); etkileşim P2: 207 → 206 (⌘K); R8: 206 → 197; R9: 197 → 191
   // v0.10.1617 (R9): 126 → 128 — coremetry/DataTable dondurulmuş API'nin Faz 1
   // gövdesi ui/DataTable'ı SARIYOR (plan §6: "thin wrapper over today's
   // code"): DataTable.tsx (gövde) + types.ts (bugünkü tiplerin yeniden dışa
@@ -97,7 +97,7 @@ const CEILINGS: Record<string, number> = {
   // Düğmeyi shadcn'e çevirmek görünür değişiklik olur — PageControls'ü
   // geçiren dilimin işi; o commit bunu 31'e indirir.
   DisclosureButton: 28, // v0.10.1853 (Logs alan kenar çubuğu): 29 → 28; Faz 2 dilim 1 R15 (Argo CD): 30 → 29; Faz 2 dilim 1 R12 (AI SRE + Knowledge): 31 → 30; Faz 2 dilim 1 R10 (erişim): 32 → 31
-  LinkButton: 26, // Faz 2 dilim 1 R15 (Argo CD): 29 → 26; R7: 31 → 30; etkileşim P2: 30 → 29 (⌘K)
+  LinkButton: 25, // v0.10.1854 (Logs süzgeç satırı): 26 → 25; Faz 2 dilim 1 R15 (Argo CD): 29 → 26; R7: 31 → 30; etkileşim P2: 30 → 29 (⌘K)
   Modal: 19, // Faz 2 dilim 1 R14 (işletim): 20 → 19; Faz 2 dilim 1 R11 (CoSRE): 21 → 20; Faz 2 dilim 1 R10 (erişim): 23 → 21
   Stack: 15, // Faz 2 dilim 1 R14 (işletim): 16 → 15; Faz 2 dilim 1 R10 (erişim): 18 → 16; R7: 23 → 21; R8: 21 → 18
   Card: 18, // Faz 2 dilim 1 R11 (CoSRE): 19 → 18
@@ -106,7 +106,7 @@ const CEILINGS: Record<string, number> = {
   Menu: 13, // Faz 2 dilim 1 R15 (Argo CD): 14 → 13
   StatTile: 13,
   SafeHref: 12,
-  Popover: 10, // Faz 2 dilim 1 R15 (Argo CD): 11 → 10
+  Popover: 9, // v0.10.1854 (Logs süzgeç satırı): 10 → 9; Faz 2 dilim 1 R15 (Argo CD): 11 → 10
   SearchField: 10, // Faz 2 dilim 1 R12 (AI SRE + Knowledge): 11 → 10
   PanelTitle: 10,
   PriorityBadge: 8,

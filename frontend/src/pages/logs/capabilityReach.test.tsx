@@ -149,7 +149,7 @@ describe('/logs — her yetenek ≤ 1 tık (v0.10.1498)', () => {
     expect(btn('◆ With trace')).toBeTruthy();
     expect([...document.querySelectorAll('[role="dialog"] button')].some(b => b.textContent?.includes('My team: orders-team'))).toBe(true);
     await click(btn('+ Field filter'));
-    expect(document.querySelector('input[aria-label="Filtre alanı"]')).not.toBeNull();
+    expect(document.querySelector('input[aria-label="Süzgeç alanı"]')).not.toBeNull();
   });
 
   it('Share ▾ (1 tık): Copy link + Discover in Elastic (gerçek dış bağlantı)', async () => {

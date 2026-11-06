@@ -20,7 +20,8 @@ describe('effective search clause chip (B7)', () => {
     // KQL ⓘ, pill'lerin "Clear all" bloğunun KAPANIŞINDAN sonra ve kendi
     // kapısıyla — `filters.length > 0` içine düşerse yalnız pill varken görünür.
     const chip = src.indexOf('<CopyButton value={compiledSearch}');
-    const barClose = src.indexOf('Clear all\n        </Button>\n      )}');
+    // v0.10.1854 — "Clear all" → "Tümünü temizle" (FilterChipRow trailing yuvası).
+    const barClose = src.indexOf('Tümünü temizle\n            </Button>\n          )}');
     expect(barClose).toBeGreaterThan(0);
     expect(chip).toBeGreaterThan(barClose);
     expect(src.indexOf('{compiledSearch && (')).toBeGreaterThan(barClose);

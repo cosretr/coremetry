@@ -7,7 +7,7 @@
 // anlat, CSV/NDJSON) ve çubuk 1280px'te üç satıra sarıyordu. Hepsi TEK
 // TIKLA ulaşılır kaldı (capabilityReach.test.tsx çiviliyor):
 //   • + Filter ▾  (dialog — içinde girdi var): Trace ID, ◆ With trace,
-//                 Takımım, + alan süzgeci (LogPillEditor, yeni pill).
+//                 Takımım, + alan süzgeci (v0.10.1854: coremetry FilterChipEditor, yeni hap).
 //   • Share ▾     (menu): Copy link · ↗ Discover in Elastic (desen/takım
 //                 etkinken çizilmez — aynı dilim sözü tutmaz, bugünkü kural).
 //   • ⋯           (menu): Reset. (v0.10.1499: ✨ Desenleri anlat desen
@@ -18,8 +18,10 @@ import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { MenuItem } from '@/components/ui/Menu';
 import { Popover, PopoverHrefItem } from '@/components/ui/Popover';
-import { LogPillEditor } from '@/components/LogPillEditor';
-import type { LogFilter } from '@/lib/logFilters';
+import { Popover as OverlayPopover, PopoverAnchor, PopoverContent } from '@/components/coremetry/overlay';
+import { FilterChipEditor } from '@/components/coremetry/FilterBar';
+import { chipToLogFilter, LOG_FILTER_OPS, type LogFilter } from '@/lib/logFilters';
+import { api } from '@/lib/api';
 import { copyToClipboard } from '@/lib/clipboard';
 import { absoluteShareHref } from '@/lib/shareUrl';
 import { toast } from '@/lib/toast';
@@ -33,7 +35,10 @@ const LOG_SHARE_TITLE =
   'Copy a shareable link to this filtered logs view (filters are '
   + 'encoded in the URL; recipients sign in to Coremetry to open it)';
 
-const NEW_PILL: LogFilter = { key: '', value: '', negated: false, disabled: false };
+// v0.10.1854 — yeni alan süzgeci coremetry FilterChipEditor'la (LogPillEditor silindi).
+const NEW_CHIP = { key: '', op: '=' as const, value: '' };
+const suggestValues = (since?: string) => (key: string, q: string, signal: AbortSignal) =>
+  api.logsFieldValues(key, q, 20, since, signal).then(r => r?.values ?? []);
 
 export interface LogsAddFilterMenuProps {
   traceIdDraft: string;
@@ -56,6 +61,8 @@ export function LogsAddFilterMenu(p: LogsAddFilterMenuProps) {
   const [open, setOpen] = useState(false);
   const [adding, setAdding] = useState(false);
   return (
+    <OverlayPopover open={adding} onOpenChange={setAdding}>
+    <PopoverAnchor asChild>
     <span className="ld-addf">
       <Button ref={anchorRef} variant="secondary" aria-haspopup="dialog" aria-expanded={open}
         title={tr('logs.dv.addFilterTitle')}
@@ -97,12 +104,14 @@ export function LogsAddFilterMenu(p: LogsAddFilterMenuProps) {
           {tr('logs.dv.fieldFilter')}
         </Button>
       </Popover>
-      {adding && (
-        <LogPillEditor filter={NEW_PILL} since={p.since}
-          onApply={f => { setAdding(false); p.onAddPill(f); }}
-          onCancel={() => setAdding(false)} />
-      )}
     </span>
+    </PopoverAnchor>
+    <PopoverContent align="start" className="w-auto p-3">
+      <FilterChipEditor chip={NEW_CHIP} ops={LOG_FILTER_OPS} suggestValues={suggestValues(p.since)}
+        onApply={c => { setAdding(false); if (c.key.trim()) p.onAddPill(chipToLogFilter(c)); }}
+        onCancel={() => setAdding(false)} />
+    </PopoverContent>
+    </OverlayPopover>
   );
 }
 

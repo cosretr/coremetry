@@ -1,3 +1,5 @@
+import type { FilterChip, FilterOp } from './filterChips';
+
 // logFilters — structured filter state for /logs (Kibana Discover
 // pill model). Filters used to live embedded in the free-text KQL
 // string and were toggled by regex surgery (toggleSearchClause);
@@ -29,6 +31,10 @@ export interface LogFilter {
   // dürüst karşılığı. Negasyon editörde sunulmaz (NOT >= yerine <= kullan)
   // ama compile URL'den gelen negated'ı yine de sayar.
   op?: 'gte' | 'lte';
+  // v0.10.1854 (Log Search Faz 2 dilim 2.3) — sabit hap: URL'de AYRI `pins`
+  // parametresinde (aynı kodlama); "Tümünü temizle", ⋯ Sıfırla ve pins'siz bir
+  // URL'nin içe aktarılması (servis değişimi, SPA gezinmesi) sabitleri korur.
+  pinned?: boolean;
 }
 
 // Always wrap values in double quotes — Lucene treats many
@@ -227,3 +233,61 @@ export function mergePatternQuery(existing: string, pattern: string, exclude: bo
   const left = /\bOR\b/i.test(base) && !/^\(.*\)$/.test(base) ? `(${base})` : base;
   return `${left} AND ${piece}`;
 }
+
+// ── v0.10.1854 (Log Search Faz 2 dilim 2.3) — sabit haplar + FilterChip köprüsü ──
+
+/** `pins` parametresi → sabit haplar (filters kodlamasının aynısı). */
+export function parsePinsParam(raw: string | null | undefined): LogFilter[] {
+  return parseFiltersParam(raw).map(f => ({ ...f, pinned: true }));
+}
+
+/** Hap listesi → {filters, pins} ham parametreleri (sabitler ayrı). */
+export function encodePillParams(pills: LogFilter[]): { filtersRaw: string; pinsRaw: string } {
+  return {
+    filtersRaw: encodeFiltersParam(pills.filter(f => !f.pinned)),
+    pinsRaw: encodeFiltersParam(pills.filter(f => f.pinned)),
+  };
+}
+
+/** URL'den gelen haplar; `pins` YOKSA mevcut sabitler korunur (sabitin anlamı). */
+export function importPills(filtersRaw: string, pinsRaw: string, current: LogFilter[]): LogFilter[] {
+  const pins = pinsRaw ? parsePinsParam(pinsRaw) : current.filter(f => f.pinned);
+  return [...pins, ...parseFiltersParam(filtersRaw)];
+}
+
+/** "Tümünü temizle" / sıfırla: yalnız sabitler kalır. */
+export function keepPinned(pills: LogFilter[]): LogFilter[] {
+  return pills.filter(f => f.pinned);
+}
+
+/** LogFilter → coremetry FilterChip (hap satırı / düzenleyici). */
+export function logFilterToChip(f: LogFilter): FilterChip {
+  const flags = { ...(f.pinned ? { pinned: true } : {}), ...(f.disabled ? { disabled: true } : {}) };
+  if (f.exists) return { key: f.key, op: f.negated ? '!exists' : 'exists', ...flags };
+  if (f.op) return { key: f.key, op: f.op === 'gte' ? '>=' : '<=', value: f.value, ...flags };
+  if (f.values && f.values.length > 1) return { key: f.key, op: f.negated ? '!in' : 'in', values: f.values, ...flags };
+  return { key: f.key, op: f.negated ? '!=' : '=', value: f.values?.[0] ?? f.value, ...flags };
+}
+
+/** FilterChip → LogFilter. `~`/`!~` Logs'ta sunulmaz; gelirse eşitlik sayılır. */
+export function chipToLogFilter(c: FilterChip): LogFilter {
+  const base = { key: c.key.trim(), negated: false, disabled: !!c.disabled, ...(c.pinned ? { pinned: true } : {}) };
+  switch (c.op) {
+    case 'exists': case '!exists':
+      return { ...base, value: '', negated: c.op === '!exists', exists: true };
+    case '>=': case '<=':
+      return { ...base, value: (c.value ?? '').trim(), op: c.op === '>=' ? 'gte' : 'lte' };
+    case 'in': case '!in': {
+      const vals = (c.values ?? []).map(v => v.trim()).filter(Boolean);
+      return vals.length > 1
+        ? { ...base, value: '', negated: c.op === '!in', values: vals }
+        : { ...base, value: vals[0] ?? '', negated: c.op === '!in' };
+    }
+    default:
+      return { ...base, value: (c.value ?? '').trim(), negated: c.op === '!=' || c.op === '!~' };
+  }
+}
+
+/** Logs düzenleyicisinin işleçleri (LogFilter'ın taşıyabildikleri). */
+export const LOG_FILTER_OPS: readonly FilterOp[] = ['=', '!=', 'in', '!in', 'exists', '!exists', '>=', '<='];
+

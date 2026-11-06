@@ -18,6 +18,12 @@ describe('filterChips kodlayıcı', () => {
     [{ key: 'expr', op: '~', value: 'a=b' }, 'expr~"a=b"'],
     [{ key: 'empty', op: '=', value: '' }, 'empty=""'],
     [{ key: 'k8s.pod', op: '=', value: 'çğüşıö-1' }, 'k8s.pod=çğüşıö-1'],
+    // v0.10.1854 (Log Search Faz 2 dilim 2.3) — aralık + liste işleçleri.
+    [{ key: 'http.status', op: '>=', value: '500' }, 'http.status>=500'],
+    [{ key: 'duration_ms', op: '<=', value: '2.5' }, 'duration_ms<=2.5'],
+    [{ key: 'CHANNEL_CODE', op: 'in', values: ['MOBILE', 'WEB'] }, 'CHANNEL_CODE in (MOBILE,WEB)'],
+    [{ key: 'CHANNEL_CODE', op: '!in', values: ['a b', 'x,y', 'z'] }, 'CHANNEL_CODE !in ("a b","x,y",z)'],
+    [{ key: 'msg', op: '=', value: 'f(x)' }, 'msg="f(x)"'],
   ];
 
   it('her işleç tabloda en az bir kez', () => {
@@ -41,6 +47,16 @@ describe('filterChips kodlayıcı', () => {
     }
     expect(parseChips('a=1 bad b=2')).toBeNull();
     expect(parseChips('a="unterminated')).toBeNull();
+  });
+
+  it('v0.10.1854 — in listesinde bozuk biçim null; sunum bayrakları metne girmez', () => {
+    for (const bad of ['k in ()', 'k in (a,)', 'k in (a b)', 'k in ("a"', 'k in a,b', 'k>=', 'k<="x"y']) {
+      expect(parseChip(bad), bad).toBeNull();
+    }
+    expect(formatChip({ key: 'k', op: '=', value: 'v', pinned: true, disabled: true })).toBe('k=v');
+    expect(parseChips('a in (x, "y z") b=1')).toEqual([
+      { key: 'a', op: 'in', values: ['x', 'y z'] }, { key: 'b', op: '=', value: '1' },
+    ]);
   });
 
   it('geçersiz anahtar biçimlenmez', () => {

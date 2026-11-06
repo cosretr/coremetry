@@ -44,8 +44,8 @@ import { severityBandOf } from '@/lib/severityBand';
 import { accumulatePage, narrowLoaded } from '@/lib/logAccumulate';
 import { logsToCSV, logsToNDJSON, downloadText, exportFilename } from '@/lib/logsExport';
 import {
-  compileSearch, toggleFilter, encodeFiltersParam, parseFiltersParam, mergePatternQuery,
-  extractHighlightTerms, toggleExistsFilter, replaceFilterAt,
+  compileSearch, toggleFilter, mergePatternQuery,
+  extractHighlightTerms, toggleExistsFilter, encodePillParams, importPills, keepPinned,
 } from '@/lib/logFilters';
 import type { LogFilter } from '@/lib/logFilters';
 import { logsUrlSig, writeLogsParams, readLogsUrlState, buildDocPermalink, parseDocParam, logsUrlHasFilterState, parseLogsLang } from '@/lib/logsUrl';
@@ -324,7 +324,8 @@ function LogsInner() {
   // query goes out (compiledSearch below), so the backend contract
   // is unchanged. Pills live in the ?filters= URL param so Copy link
   // and SavedViewsBar reproduce them.
-  const [filters, setFilters] = useState<LogFilter[]>(() => parseFiltersParam(initialUrl.filtersRaw)); // v0.10.1076 — ilk render URL'den
+  // v0.10.1854 (dilim 2.3) — sabit haplar `pins`ten (pinned:true), ardından `filters`.
+  const [filters, setFilters] = useState<LogFilter[]>(() => importPills(initialUrl.filtersRaw, initialUrl.pinsRaw, [])); // v0.10.1076 — ilk render URL'den
   // Dynamic table columns (Discover revamp step 3). localStorage is
   // the operator's standing preference; the ?cols= URL param (only
   // written when non-default) wins on deep links so a shared view
@@ -519,17 +520,29 @@ function LogsInner() {
     if (visible.length) setLogCols(visible);
   }, [prefs.model]);
   const urlSig = logsUrlSig;
+  // v0.10.1854 — içe aktarma efekti mevcut sabitleri okur (efekt yalnız URL'de koşar).
+  const filtersRef = useRef<LogFilter[]>(filters);
+  filtersRef.current = filters;
   // v0.10.1076 — ilk sig önceden yazılı: durum zaten URL'den kuruldu, bağlama
   // anındaki içe aktarma no-op'tur (ikinci, aynı dilimli set yok). Sonraki
   // URL değişimleri (SPA gezinmesi, kayıtlı görünüm) sig farkıyla içe aktarılır.
   const lastUrlSigRef = useRef<string | null>(initialUrl.sig);
   useEffect(() => {
-    const { filter: next, filtersRaw, colsRaw, sig } = readLogsUrlState(searchParams);
+    const { filter: next, filtersRaw, colsRaw, pinsRaw, sig } = readLogsUrlState(searchParams);
     if (sig === lastUrlSigRef.current) return;
     lastUrlSigRef.current = sig;
     setFilter(next);
     setDraft(next);
-    setFilters(parseFiltersParam(filtersRaw));
+    // v0.10.1854 (dilim 2.3) — `pins` yoksa mevcut sabitler KALIR (servis
+    // değişimi / SPA gezinmesi / kayıtlı görünüm) ve URL'ye geri yazılır ki
+    // paylaşılan link gördüğünü taşısın.
+    const pills = importPills(filtersRaw, pinsRaw, filtersRef.current);
+    setFilters(pills);
+    if (!pinsRaw && keepPinned(pills).length > 0) {
+      const enc = encodePillParams(pills);
+      lastUrlSigRef.current = urlSig(next, enc.filtersRaw, colsRaw, enc.pinsRaw);
+      setSearchParams(prev => writeLogsParams(prev, next, enc.filtersRaw, colsRaw, enc.pinsRaw), { replace: true });
+    }
     // Deep-linked columns override the view; absence means "keep
     // whatever the operator prefers" (localStorage init), so a plain
     // /logs link never resets their column setup.
@@ -544,11 +557,11 @@ function LogsInner() {
   // v0.10.1499 — `view` verilirse görünüm (?panel=) AYNI yazımda değişir:
   // aynı tikte iki setSearchParams birbirinin `prev`ini görmez.
   const writeUrl = (f: typeof filter, pills: LogFilter[], cols?: string[], view?: LogsView) => {
-    const filtersRaw = encodeFiltersParam(pills);
+    const { filtersRaw, pinsRaw } = encodePillParams(pills); // v0.10.1854 — sabitler `pins`te
     const colsRaw = (prefs.model === undefined && !urlHadCols.current) ? '' : colsParam(cols ?? logCols);
-    lastUrlSigRef.current = urlSig(f, filtersRaw, colsRaw);
+    lastUrlSigRef.current = urlSig(f, filtersRaw, colsRaw, pinsRaw);
     setSearchParams(prev => {
-      const next = writeLogsParams(prev, f, filtersRaw, colsRaw);
+      const next = writeLogsParams(prev, f, filtersRaw, colsRaw, pinsRaw);
       return view ? writeLogsView(next, view) : next;
     }, { replace: true });
   };
@@ -918,8 +931,9 @@ function LogsInner() {
   };
   const reset = () => {
     const empty = { service: '', cluster: '', search: '', severity: 0, traceId: '', spanId: '', hasTrace: false, pattern: '', team: '' };
-    setDraft(empty); setFilter(empty); setFilters([]); resetPaging();
-    writeUrl(empty, []);
+    const kept = keepPinned(filters); // v0.10.1854 — sabit haplar sıfırlamada kalır
+    setDraft(empty); setFilter(empty); setFilters(kept); resetPaging();
+    writeUrl(empty, kept);
   };
   // v0.10.440 (B3) — sayfa-yerel ↻: göreli preset'in penceresi SON range
   // değişiminde donar; tık pencereyi şimdiye taşır (nowTick memo bağımlılığı),
@@ -962,11 +976,8 @@ function LogsInner() {
     resetPaging();
     writeUrl(filter, next);
   };
-  const negatePill  = (i: number) => applyPills(filters.map((f, j) => (j === i ? { ...f, negated: !f.negated } : f)));
-  // v0.9.1219 (dilim 1) — pill EDIT popover'ı: hangi pill düzenleniyor.
-  const [editPill, setEditPill] = useState<number | null>(null);
-  const disablePill = (i: number) => applyPills(filters.map((f, j) => (j === i ? { ...f, disabled: !f.disabled } : f)));
-  const removePill  = (i: number) => applyPills(filters.filter((_, j) => j !== i));
+  // v0.10.1854 (dilim 2.3) — ters / kapat / sabitle / sil / düzenle hap
+  // satırında (coremetry FilterChipRow); her eylem tam listeyi applyPills'e verir.
 
   // Expanded-row KvRow click-to-filter handlers (v0.5.229 →
   // Discover pills). Operator clicks ⊕ on any attribute → adds a
@@ -1353,10 +1364,8 @@ function LogsInner() {
           onToggleTeamPicker={() => { setTeamDraft(filter.team); setTeamPickerOpen(o => !o); }}
           onSetTeam={t => { setTeam(t); setTeamPickerOpen(false); }}
           onClearTeam={clearTeam}
-          filters={filters} editPill={editPill} onEditPill={setEditPill}
-          onNegatePill={negatePill} onDisablePill={disablePill} onRemovePill={removePill}
-          onReplacePill={(i, next) => applyPills(replaceFilterAt(filters, i, next))}
-          onClearPills={() => applyPills([])}
+          filters={filters} onPills={applyPills}
+          onClearPills={() => applyPills(keepPinned(filters))}
           since={autocompleteSince}
           compiledSearch={compiledSearch}
           traceHint={traceHint} onUseTraceHint={applyTraceHint} />
