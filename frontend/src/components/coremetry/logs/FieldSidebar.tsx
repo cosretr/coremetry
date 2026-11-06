@@ -41,6 +41,7 @@ export interface FieldStatsScope {
   search?: string;
   pattern?: string;
   team?: string;
+  scope?: 'mine'; // v0.10.1855
   severity?: number;
   traceId?: string;
   spanId?: string;

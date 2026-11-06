@@ -22,8 +22,8 @@ describe('log-search slice 1 review fixes (v0.10.420)', () => {
   it('statik sorgu canlıyken kapalı', () => {
     // v0.10.1477 — takım kararı beklenirken de kapalı; v0.10.1499 — desen görünümünde de.
     // v0.10.1832 — görünüm tercihi yerleşene kadar da bekler (smp isteği değiştirir).
-    expect(src).toContain('{ enabled: logsListEnabled(view, live, teamGate) && displayPref.settled }');
-    expect(read('./logs/logsView.ts')).toContain("return view === 'logs' && !live && !teamGate;");
+    expect(src).toContain('{ enabled: logsListEnabled(view, live, scopeGate) && displayPref.settled }'); // v0.10.1855 — kapsam kapısı
+    expect(read('./logs/logsView.ts')).toContain("return view === 'logs' && !live && !gate;");
     expect(read('../lib/queries/logs.ts')).toContain('enabled: opts?.enabled ?? true');
   });
   it('wrap düğmesi adı sabit, durum aria-pressed', () => {

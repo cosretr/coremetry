@@ -33,6 +33,6 @@ export function writeLogsView(prev: URLSearchParams, view: LogsView): URLSearchP
 }
 
 /** Statik liste sorgusunun kapısı (canlı kuyrukta ve takım kararı beklenirken de kapalı). */
-export function logsListEnabled(view: LogsView, live: boolean, teamGate: boolean): boolean {
-  return view === 'logs' && !live && !teamGate;
+export function logsListEnabled(view: LogsView, live: boolean, gate: boolean): boolean {
+  return view === 'logs' && !live && !gate;
 }

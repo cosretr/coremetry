@@ -129,24 +129,39 @@ func (s *Server) resolveUserScope(ctx context.Context, escape bool, teamOverride
 	}
 	if teamOverride != "" {
 		in.UserID, in.Team = "evalset", teamOverride
-	} else if uid := copilot.MetaFromContext(ctx).UserID; uid != "" && s.store != nil {
-		u, err := s.store.GetUserByID(ctx, uid)
-		switch {
-		case err != nil:
-			in.UserID, in.LookupErr = uid, err
-		case u != nil: // nil = API token / silinmiş hesap → kimlik yok
-			in.UserID, in.Team = uid, u.Team
-		}
+	} else {
+		s.readUserScopeTeam(ctx, &in, copilot.MetaFromContext(ctx).UserID)
 	}
-	if in.UserID != "" && in.LookupErr == nil && strings.TrimSpace(in.Team) != "" {
-		mds, err := s.store.ListServiceMetadata(ctx)
-		if err != nil {
-			in.LookupErr = err
-		} else {
-			in.TeamServices = mcptools.TeamServiceNames(s.teamAliasesCtx(ctx), mds, strings.TrimSpace(in.Team))
-		}
-	}
+	s.readUserScopeServices(ctx, &in)
 	return resolveUserScopeCore(in)
+}
+
+// readUserScopeTeam — kimlik → users.team okuması (v0.10.1855: /logs kapsamı
+// da aynı okumayı kullanır — logs_scope.go). Boş kimlik / store yok → dokunmaz.
+func (s *Server) readUserScopeTeam(ctx context.Context, in *userScopeInput, uid string) {
+	if uid == "" || s.store == nil {
+		return
+	}
+	u, err := s.store.GetUserByID(ctx, uid)
+	switch {
+	case err != nil:
+		in.UserID, in.LookupErr = uid, err
+	case u != nil: // nil = API token / silinmiş hesap → kimlik yok
+		in.UserID, in.Team = uid, u.Team
+	}
+}
+
+// readUserScopeServices — takım → sahip olunan servisler (ownerTeam VEYA sreTeam).
+func (s *Server) readUserScopeServices(ctx context.Context, in *userScopeInput) {
+	if in.UserID == "" || in.LookupErr != nil || strings.TrimSpace(in.Team) == "" || s.store == nil {
+		return
+	}
+	mds, err := s.store.ListServiceMetadata(ctx)
+	if err != nil {
+		in.LookupErr = err
+		return
+	}
+	in.TeamServices = mcptools.TeamServiceNames(s.teamAliasesCtx(ctx), mds, strings.TrimSpace(in.Team))
 }
 
 // teamAlreadyAsked — SAF: konuşmada bir asistan turu takımı sordu mu (Q1 "bir kez").

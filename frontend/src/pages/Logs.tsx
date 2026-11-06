@@ -26,7 +26,7 @@ import { Pager } from '@/components/Pager';
 import { buildKibanaURL, buildKQLFromFilter } from '@/lib/kibanaLink';
 import { logsUseTimeRange } from '@/lib/logsTraceWindow'; // v0.10.690
 import type { KibanaSettings } from '@/lib/types';
-import { useLogs, useLogsMyTeam, useLogsSearchSettings, logsDocQuery } from '@/lib/queries';
+import { useLogs, useLogsMyTeam, useLogsScope, useLogsSearchSettings, logsDocQuery } from '@/lib/queries';
 import { useQueryClient } from '@tanstack/react-query';
 import { readLogsSample, logsSourceFieldsParam, windowCountAtFloor, LOGS_SAMPLE_MAX_FALLBACK, LOGS_SAMPLE_MIN } from '@/lib/logsSample';
 import { usePageZoomRange } from '@/lib/chart/usePageZoomRange';
@@ -49,7 +49,7 @@ import {
 } from '@/lib/logFilters';
 import type { LogFilter } from '@/lib/logFilters';
 import { logsUrlSig, writeLogsParams, readLogsUrlState, buildDocPermalink, parseDocParam, logsUrlHasFilterState, parseLogsLang } from '@/lib/logsUrl';
-import { decideTeamAutoApply, isSameTeam, readTeamOptOut, writeTeamOptOut } from '@/lib/logsTeam';
+import { decideLogsScope, parseLogsScope, logsScopeRequestParam, logsScopeGate, scopeHealthLabel } from '@/lib/logsScope'; // v0.10.1855 (dilim 2.4)
 import { useAuth } from '@/components/AuthProvider';
 import { useT } from '@/lib/i18n';
 import type { LogsResponse, LogRow, TimeRange, LogsQueryHistoryEntry, LogsDisplay, LoadPhase } from '@/lib/types';
@@ -61,7 +61,7 @@ import { LOGS_DEFAULT_DISPLAY, readLogsDisplay, writeLogsDisplay, pageSlice } fr
 import { DisplayOptions, LoadStatus, FieldSidebar } from '@/components/coremetry/logs';
 import { resolveBusinessFields } from '@/lib/logBusinessFields'; // v0.10.1853 (dilim 2.2)
 import { LogsFilterRow } from './logs/LogsFilterRow';
-import { LogsNotices } from './logs/LogsNotices';
+import { LogsNotices, LogsNeedService } from './logs/LogsNotices';
 import { LogsAddFilterMenu, LogsShareMenu, LogsMoreMenu } from './logs/LogsActionsMenus';
 import { isDraftDirty, bareTraceIdOf } from './logs/logsQuery';
 import { LogsTableToolbar } from './logs/LogsTableToolbar';
@@ -205,13 +205,12 @@ function LogsInner() {
   const [initialUrl] = useState(() => readLogsUrlState(searchParams));
   const [filter, setFilter] = useState(initialUrl.filter);
   const [draft, setDraft] = useState(filter);
-  // v0.10.1477 (operatör 2026-10-23: "giren kişinin takımına göre logs sayfası
-  // filtrelensin otomatik") — "Takımım" varsayılanı. Karar SAF çekirdekte
-  // (lib/logsTeam.ts): URL'de süzgeç varsa hiç dokunulmaz (açık link kazanır);
-  // takım çözüldüyse VE takım süzgeci açıksa (ES + takım alanı) team= BİR KEZ
-  // yazılır (replace). Çip kaldırılırsa vazgeçme kullanıcı başına hatırlanır.
-  // Karar beklenirken liste/histogram/desen okuması ATILMAZ — süzgeçsiz bir ES
-  // isteği atıp hemen takımlısıyla değiştirmek ES-maliyet disiplinini bozardı.
+  // v0.10.1855 (Log Search Faz 2 dilim 2.4; §9-4 kararı) — servis odaklı
+  // başlangıç: varsayılan kapsam `scope=mine` (kullanıcının servisleri, sunucu
+  // çözer). v0.10.1477'nin otomatik "Takımım" (team=) varsayılanının YERİNE
+  // geçer; team= elle süzgeç olarak kalır (+ Filter ▾ › Takımım). Karar SAF
+  // çekirdekte (lib/logsScope.ts). Karar beklenirken ve servis seçilmesi
+  // gerekirken liste/histogram/desen okuması ATILMAZ.
   const tr = useT();
   const userId = useAuth().user?.id;
   // v0.10.1820 (Log Search Faz 1 dilim 1.4) — yerel sorgu geçmişi (kullanıcı +
@@ -222,18 +221,30 @@ function LogsInner() {
   const myTeamQ = useLogsMyTeam();
   const myTeam = myTeamQ.isError ? null : myTeamQ.data;
   const [urlHadFilters] = useState(() => logsUrlHasFilterState(searchParams));
-  const teamAutoDone = useRef(false);
-  const [teamOptOut, setTeamOptOutState] = useState(() => readTeamOptOut(userId));
-  useEffect(() => { setTeamOptOutState(readTeamOptOut(userId)); }, [userId]);
-  const teamDecision = decideTeamAutoApply({ urlHadFilters, optedOut: teamOptOut, done: teamAutoDone.current, myTeam });
-  // Süzgeç kararı bekleniyor (my-team çözülüyor ya da uygulanmak üzere):
-  // statik okumalar o arada koşmaz.
-  const teamGate = teamDecision.kind !== 'none';
   const myTeamName = myTeam?.available ? (myTeam.team ?? '').trim() : '';
   const [teamPickerOpen, setTeamPickerOpen] = useState(false);
   const [teamDraft, setTeamDraft] = useState('');
-  // teamAutoDone bir ref; kilitlendiğinde kapıyı açmak için bir render gerekir.
-  const [, setTeamGateTick] = useState(0);
+  const scopeQ = useLogsScope();
+  const scopeData = scopeQ.isError ? null : scopeQ.data;
+  const urlScope = parseLogsScope(searchParams.get('scope'));
+  const scopeDecision = decideLogsScope({ urlScope, urlHadFilters, service: filter.service, scope: scopeData });
+  // İstek parametresi AYNI render'da (apply'da URL yazımı efektte; istek beklemez).
+  const scopeParam = logsScopeRequestParam(scopeDecision);
+  const scopeGate = logsScopeGate(scopeDecision);
+  useEffect(() => {
+    if (scopeDecision.kind !== 'apply') return;
+    setSearchParams(prev => { const p = new URLSearchParams(prev); p.set('scope', 'mine'); return p; }, { replace: true });
+  }, [scopeDecision.kind, setSearchParams]);
+  const setScopeMode = (mode: 'mine' | 'all') => {
+    setSearchParams(prev => { const p = new URLSearchParams(prev); p.set('scope', mode); return p; }, { replace: true });
+  };
+  // Seçici: "Servislerim" grubu (önde) + satır sonunda sağlık (yeni istek yok).
+  const scopeServices = useMemo(() => scopeData?.available && scopeData.scoped ? scopeData.services : [], [scopeData]);
+  const scopeNames = useMemo(() => scopeServices.map(s => s.name), [scopeServices]);
+  const serviceMeta = useMemo(() => {
+    const by = new Map(scopeServices.map(s => [s.name, s] as const));
+    return (name: string) => { const s = by.get(name); return s ? scopeHealthLabel(s) : undefined; };
+  }, [scopeServices]);
   // v0.10.298 — "Desenler" paneli (log-search Dilim 2b); v0.10.448 (C8) —
   // `?panel=patterns|templates` URL'den adreslenir (görünüm ipucu; süzgeç
   // kimliğine GİRMEZ — logsUrlSig'e girse her tık sayfalamayı sıfırlardı).
@@ -641,11 +652,12 @@ function LogsInner() {
     search: compiledSearch || undefined,
     pattern: filter.pattern || undefined, // v0.10.1071
     team: filter.team || undefined, // v0.10.1477
+    scope: scopeParam, // v0.10.1855
     severity: filter.severity > 0 ? filter.severity : undefined,
     traceId: filter.traceId || undefined,
     spanId: filter.spanId || undefined,
     lang: lang || undefined, // v0.10.1819
-  }), [from, to, filter.service, filter.cluster, env, compiledSearch, filter.pattern, filter.team, filter.severity, filter.traceId, filter.spanId, lang]);
+  }), [from, to, filter.service, filter.cluster, env, compiledSearch, filter.pattern, filter.team, scopeParam, filter.severity, filter.traceId, filter.spanId, lang]);
   const staticQ = useLogs({
     limit: sample, after: cursor || undefined, from, to,
     // v0.10.1831 — görünen kolon alanları (ES dar _source) + sayım yok
@@ -658,6 +670,7 @@ function LogsInner() {
     search: compiledSearch || undefined,
     pattern: filter.pattern || undefined, // v0.10.1071 — desen süzgeci (sunucuda dedektörün yüklemi)
     team: filter.team || undefined, // v0.10.1477 — takım süzgeci (sunucu ham yazımlara açar)
+    scope: scopeParam, // v0.10.1855 — servislerim (sunucu çözer)
     severity: filter.severity > 0 ? filter.severity : undefined,
     traceId: filter.traceId || undefined,
     spanId:  filter.spanId  || undefined,
@@ -665,7 +678,7 @@ function LogsInner() {
     asc: asc || undefined, // v0.9.295 — oldest-first
     sort: sortParam ?? undefined, // v0.10.1833 — çoklu alan sıralama
     lang: lang || undefined, // v0.10.1819 — zorla Lucene
-  }, { enabled: logsListEnabled(view, live, teamGate) && displayPref.settled }); // v0.10.420 — canlıyken statik sorgu koşmaz; v0.10.1477 — takım kararı beklenirken de; v0.10.1499 — desen görünümünde de (tablo çizilmez)
+  }, { enabled: logsListEnabled(view, live, scopeGate) && displayPref.settled }); // v0.10.420 — canlıyken statik sorgu koşmaz; v0.10.1855 — kapsam kararı beklenirken / servis seçilmeden de; v0.10.1499 — desen görünümünde de (tablo çizilmez)
 
   // Level-facet counts. A per-severity timeseries query feeds the
   // toolbar facet chip badges (the duplicate Logs-local stacked-bar
@@ -706,7 +719,7 @@ function LogsInner() {
   const volumeQ = useQuery({
     // v0.9.216 — cluster joins the key AND the request: without it the chips
     // counted every cluster while the table below showed one.
-    queryKey: ['logs', 'sev-volume', from, to, filter.service, filter.cluster, env, compiledSearch, filter.pattern, filter.team, filter.traceId, filter.hasTrace, volumeBucket, lang],
+    queryKey: ['logs', 'sev-volume', from, to, filter.service, filter.cluster, env, compiledSearch, filter.pattern, filter.team, scopeParam, filter.traceId, filter.hasTrace, volumeBucket, lang],
     // v0.10.1822 — RQ sinyali: anahtar değişince / çıkışta ES işi iptal.
     queryFn: ({ signal }) => api.logsTimeseries({
       from, to,
@@ -716,13 +729,14 @@ function LogsInner() {
       search:  compiledSearch || undefined,
       pattern: filter.pattern || undefined, // v0.10.1071
       team:    filter.team || undefined, // v0.10.1477
+      scope:   scopeParam, // v0.10.1855
       traceId: filter.traceId || undefined,
       hasTrace: filter.hasTrace || undefined, // v0.8.406 — trace-only filter
       groupBy: 'severity',
       bucketSec: volumeBucket,
       lang: lang || undefined, // v0.10.1819
     }, signal),
-    enabled: volumeEnabled && !chipsFromHistogram && !teamGate,
+    enabled: volumeEnabled && !chipsFromHistogram && !scopeGate,
     staleTime: 30_000,
   });
   const sevSeries: SevSeries[] = volumeQ.data ?? [];
@@ -771,6 +785,7 @@ function LogsInner() {
       if (filter.hasTrace) p.set('hasTrace', '1'); // v0.8.406 — trace-only filter
       if (filter.pattern) p.set('pattern', filter.pattern); // v0.10.1071 — desen süzgeci canlı kuyrukta da
       if (filter.team) p.set('team', filter.team); // v0.10.1477 — takım süzgeci canlı kuyrukta da
+      if (scopeParam) p.set('scope', scopeParam); // v0.10.1855 — kapsam canlı kuyrukta da
       // v0.10.416 (log arama denetimi B2) — trace kilidi canlı kuyruğa da
       // taşınır; eskiden "Filtered to trace" şeridi dururken kuyruk tüm
       // servisi akıtıyordu. Sunucu zaten okuyor (streamLogs traceId/spanId).
@@ -804,7 +819,7 @@ function LogsInner() {
       es?.close();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [live, filter.service, filter.cluster, env, compiledSearch, filter.pattern, filter.team, filter.severity, filter.hasTrace, filter.traceId, filter.spanId]); // v0.10.416 — kilit değişince akış yeniden açılır
+  }, [live, filter.service, filter.cluster, env, compiledSearch, filter.pattern, filter.team, scopeParam, filter.severity, filter.hasTrace, filter.traceId, filter.spanId]); // v0.10.416 — kilit değişince akış yeniden açılır
 
   // When live, the table renders the SSE buffer; otherwise the static
   // windowed query. Live has no loading/error gate — rows fill in as they
@@ -962,7 +977,7 @@ function LogsInner() {
   // zaman aralığı. v0.10.1071 / v0.10.1477 — desen ve takım süzgeci KQL'e
   // çevrilemez (yüklem/değerler sunucuda); "aynı dilim" sözü tutmayacaksa
   // bağlantı yok. Settings → Kibana boşsa buildKibanaURL null döner.
-  const kibanaHref = (filter.pattern || filter.team) ? null : buildKibanaURL(kibana, {
+  const kibanaHref = (filter.pattern || filter.team || scopeParam) ? null : buildKibanaURL(kibana, {
     fromNs: from ?? undefined,
     toNs: to ?? undefined,
     kql: buildKQLFromFilter({ ...filter, search: compiledSearch }),
@@ -1009,39 +1024,26 @@ function LogsInner() {
     resetPaging();
     writeUrl(next, filters);
   };
-  // v0.10.1477 — takım süzgeci (oto-uygula, desen çipiyle aynı). Kendi
-  // takımını seçmek vazgeçmeyi siler; çipin ×'i vazgeçmeyi yazar (otomatik
-  // varsayılan bu tarayıcıda bu kullanıcı için bir daha uygulanmaz).
+  // v0.10.1477 — takım süzgeci (oto-uygula, desen çipiyle aynı). v0.10.1855 —
+  // otomatik varsayılan kalktı (yerine scope=mine); elle süzgeç olarak kalır.
   const setTeam = (team: string) => {
     const t = team.trim();
     const next = { ...filter, team: t };
     setFilter(next); setDraft(d => ({ ...d, team: t }));
     resetPaging();
     writeUrl(next, filters);
-    if (t && myTeamName && isSameTeam(t, myTeamName) && teamOptOut) {
-      writeTeamOptOut(userId, false); setTeamOptOutState(false);
-    }
   };
   const clearTeam = () => {
-    writeTeamOptOut(userId, true); setTeamOptOutState(true);
     setTeamPickerOpen(false);
     setTeam('');
   };
-  // Otomatik varsayılan — BİR KEZ. Karar verildiği anda (uygula ya da hiçbir
-  // şey) teamAutoDone kilitlenir; sonraki URL değişimleri (sıfırlama, SPA
-  // gezinmesi) yeniden uygulamaz. Operatör bu arada kendisi bir süzgeç
-  // kurduysa onun seçimi kazanır.
+  // v0.10.1855 — kapsam değişince (mine ⇄ all, servis seçimi) yeni sonuç kümesi:
+  // cursor sıfırlanır (v0.7.81 kuralı).
+  const prevScopeRef = useRef(scopeParam);
   useEffect(() => {
-    if (teamAutoDone.current || teamDecision.kind === 'pending') return;
-    teamAutoDone.current = true;
-    if (teamDecision.kind !== 'apply') { setTeamGateTick(t => t + 1); return; }
-    const pristine = !filter.service && !filter.cluster && !filter.search && !filter.severity
-      && !filter.traceId && !filter.spanId && !filter.hasTrace && !filter.pattern && !filter.team
-      && filters.length === 0;
-    if (pristine) setTeam(teamDecision.team);
-    else setTeamGateTick(t => t + 1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [teamDecision.kind]);
+    if (prevScopeRef.current !== scopeParam) { prevScopeRef.current = scopeParam; resetPaging(); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- yalnız kapsam değişiminde
+  }, [scopeParam]);
   const toggle = (id: number) => {
     const next = new Set(expanded);
     if (next.has(id)) next.delete(id); else next.add(id);
@@ -1120,6 +1122,13 @@ function LogsInner() {
       kind: 'error',
       message: 'Sorgu iptal edildi — satırlar yüklenmedi.',
       onRetry: () => { setRowsCanceled(false); void staticQ.refetch(); },
+    }
+    // v0.10.1855 (dilim 2.4) — kapsam çözülemedi: servis seçilmeden sorgu yok.
+    : !live && scopeDecision.kind === 'need-service' ? {
+      kind: 'empty',
+      message: 'Bir servis seçin',
+      detailKey: 'scope',
+      detail: <LogsNeedService reason={scopeDecision.reason} onAll={() => setScopeMode('all')} />,
     }
     : data === undefined ? { kind: 'loading', skeletonRows: 12 }
     // v0.9.215 — the error leg of the tri-state used to render NOTHING:
@@ -1331,6 +1340,7 @@ function LogsInner() {
             "Uygulanan arama" bandı tabloyu ekranın yarısına itiyordu. */}
         <LogsQueryBar
           draft={draft} onDraft={setDraft}
+          preferredServices={scopeNames} serviceMeta={serviceMeta}
           clusters={clusters} autocompleteSince={autocompleteSince}
           fields={fields} fieldsTotal={fieldsTotal} history={historyTexts}
           queryLang={lang === 'lucene' ? 'lucene' : (staticQ.data?.queryLang ?? 'kql')}
@@ -1344,7 +1354,7 @@ function LogsInner() {
               traceIdDraft={draft.traceId} onTraceIdDraft={v => setDraft({ ...draft, traceId: v })}
               onApply={apply}
               hasTrace={filter.hasTrace} onToggleHasTrace={toggleHasTrace}
-              myTeamName={teamGate ? '' : myTeamName} teamActive={!!filter.team}
+              myTeamName={scopeGate ? '' : myTeamName} teamActive={!!filter.team}
               onApplyMyTeam={() => setTeam(myTeamName)}
               onAddPill={f => applyPills([...filters, f])}
               since={autocompleteSince} />
@@ -1359,7 +1369,11 @@ function LogsInner() {
         <LogsFilterRow
           filter={filter}
           onClearTrace={clearTraceLock} onClearPattern={clearPattern} onToggleHasTrace={toggleHasTrace}
-          myTeamName={myTeamName} teamGate={teamGate}
+          myTeamName={myTeamName} teamGate={scopeGate || scopeParam === 'mine'}
+          scope={scopeData?.available && scopeData.scoped && !filter.service && urlScope !== '' ? {
+            mode: scopeParam === 'mine' ? 'mine' : 'all', count: scopeData.services.length + (scopeData.trimmed ?? 0), team: scopeData.team,
+            onMine: () => setScopeMode('mine'), onAll: () => setScopeMode('all'),
+          } : undefined}
           teamPickerOpen={teamPickerOpen} teamDraft={teamDraft} onTeamDraft={setTeamDraft}
           onToggleTeamPicker={() => { setTeamDraft(filter.team); setTeamPickerOpen(o => !o); }}
           onSetTeam={t => { setTeam(t); setTeamPickerOpen(false); }}
@@ -1410,7 +1424,7 @@ function LogsInner() {
             empty data. */}
         {/* v0.9.431 — brush/çift-tık hook üzerinden; ns→sn çeviri burada
             (LogsHistogram sınır sözleşmesi ns, hook saniye alır). */}
-        <LogsHistogram range={{ from, to }} filter={{ ...filter, env, search: compiledSearch, lang: lang || undefined }}
+        <LogsHistogram range={{ from, to }} filter={{ ...filter, env, search: compiledSearch, lang: lang || undefined, scope: scopeParam }}
           onRangeSelect={(fromNs, toNs) => handleZoom(fromNs / 1e9, toNs / 1e9)}
           onZoomReset={handleZoomReset}
           breakdown={breakdown} onBreakdown={setBreakdown}
@@ -1418,7 +1432,7 @@ function LogsInner() {
           onPhase={setHistPhase} cancelToken={histCancel} /* v0.10.1834 — akışlı yükleme */
           onSeriesPick={addFromRow} /* v0.10.503 (B8) — lejant ⊕ → pill */
           spikeSubject={spikeSubject} /* v0.10.1284 — ✨ Artışı açıkla */
-          paused={teamGate} /* v0.10.1477 — takım kararı beklenirken fetch yok */
+          paused={scopeGate} /* v0.10.1855 — kapsam kararı beklenirken / servis seçilmeden fetch yok */
           height={96} /* v0.10.1501 — Discover yoğunluğu; diğer çağıranlar 140 */
           headerLeft={(
             <>
@@ -1442,8 +1456,8 @@ function LogsInner() {
             ]} />
         </div>
         {view !== 'logs' ? (
-          <LogPatternsPanel embedded open={!teamGate} onSearch={searchFromPattern} tab={view}
-            params={{ ...filter, env, search: compiledSearch, lang: lang || undefined, from: from ?? undefined, to: to ?? undefined }}
+          <LogPatternsPanel embedded open={!scopeGate} onSearch={searchFromPattern} tab={view}
+            params={{ ...filter, env, search: compiledSearch, lang: lang || undefined, scope: scopeParam, from: from ?? undefined, to: to ?? undefined }}
             toolbar={(
               /* v0.9.1100 (F3.5) — ✨ desen anlatımı; fetch YALNIZ tıkla (ES-maliyet disiplini). */
               <Button variant="secondary" size="sm" disabled={aiPat.busy}

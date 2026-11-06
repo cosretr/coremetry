@@ -1,7 +1,7 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import type { LogsParams, LogsTemplatesParams } from '@/lib/api';
-import type { LogsResponse, LogsMyTeam, LogPatternsResult, LogTemplate, LogsSearchSettings, LogRow } from '@/lib/types';
+import type { LogsResponse, LogsMyTeam, LogsScope, LogPatternsResult, LogTemplate, LogsSearchSettings, LogRow } from '@/lib/types';
 import { parseServerTiming } from '@/lib/serverTiming';
 
 // /api/logs query — keyed on the full filter object so a
@@ -85,6 +85,19 @@ export function useLogsMyTeam() {
   return useQuery<LogsMyTeam>({
     queryKey: ['logs', 'my-team'],
     queryFn: ({ signal }) => api.logsMyTeam(signal),
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
+}
+
+// v0.10.1855 (Log Search Faz 2 dilim 2.4) — /logs kapsamı: kullanıcının
+// servisleri + seçici sağlığı. Ucuz uç (ES'e gitmez; sunucu 60 s cache) —
+// staleTime = sunucu TTL. Hata = kapsamsız (bugünkü) davranış.
+export function useLogsScope() {
+  return useQuery<LogsScope>({
+    queryKey: ['logs', 'scope'],
+    queryFn: ({ signal }) => api.logsScope(signal),
     staleTime: 60_000,
     refetchOnWindowFocus: false,
     retry: false,

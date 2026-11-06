@@ -6,7 +6,7 @@ OracleLogsResponse, CopilotScopeNames, CosreRouteRED,
   PurgeResult,
   Service, ServiceEdge, TracesResponse, TracesExtrasResponse, TraceDetailResponse, TraceBundleResponse,
   CHMeasureResponse,
-  LogsResponse, LogsMyTeam, LogFieldStats, NotificationLogEntry, MetricInfo, MetricNameSearchResult,
+  LogsResponse, LogsMyTeam, LogsScope, LogFieldStats, NotificationLogEntry, MetricInfo, MetricNameSearchResult,
   MetricPoint, HealthInfo, SortColumn, SortOrder,
   ProfileRow, ProfileDetail, ProfileHotspotsResponse, SpanHotspotsResponse, AggregateRow, SpanMetricSeries, SpanMetricResult, HistogramResult,
   MetricQueryResult,
@@ -911,6 +911,7 @@ export const api = {
     search?: string;
     pattern?: string; // v0.10.1071 — küratörlü log deseni adı (liste ile aynı süzgeç)
     team?: string; // v0.10.1477 — takım süzgeci (sunucu ham yazımlara açar)
+    scope?: 'mine'; // v0.10.1855 — kullanıcının servisleri (sunucu çözer; yalnız ES)
     from?: number;
     to?: number;
     severity?: number;
@@ -964,6 +965,7 @@ export const api = {
     spanId?: string;
     pattern?: string; // v0.10.1071 — küratörlü log deseni adı (liste ile aynı süzgeç)
     team?: string; // v0.10.1477 — takım süzgeci (sunucu ham yazımlara açar)
+    scope?: 'mine'; // v0.10.1855 — kullanıcının servisleri (sunucu çözer; yalnız ES)
     size?: number; // v0.9.1223 — yalnız 5|20 basamakları (sunucu kıskacı)
     errorLift?: 1; // v0.10.509 (C5) — hata seçimi vs taban lift'i (iki fieldstats)
     lang?: 'lucene'; // v0.10.1819 — zorla Lucene geçişi (liste ile aynı)
@@ -1135,6 +1137,8 @@ export const api = {
   // olmadığı (takım alanı yapılandırılmış VE ES backend). /logs otomatik
   // varsayılanı için; sunucu 60 s cache, kapalıyken kullanıcı satırı okunmaz.
   logsMyTeam: (signal?: AbortSignal) => get<LogsMyTeam>('/api/logs/my-team', signal),
+  // v0.10.1855 — /logs kapsamı (kullanıcının servisleri + sağlık son 5 dk).
+  logsScope: (signal?: AbortSignal) => get<LogsScope>('/api/logs/scope', signal),
   logsFields: () => get<{ fields: string[]; total?: number; types?: Record<string, string>; backend: string }>(
     `/api/logs/fields`),
   // Top values of one keyword field prefix-matched against `q`.
@@ -4493,6 +4497,9 @@ export interface LogsParams {
   // etiket yazımlarına açar, ES takım alan(lar)ında exact-term OR uygular.
   // Uygulanamazsa yanıt unappliedFilters:['team'] der.
   team?: string;
+  // scope (v0.10.1855) — 'mine' = kullanıcının servisleri (users.team → katalog
+  // sahipliği, ≤100); sunucu Filter.Services'e açar. Yalnız ES log yolunda.
+  scope?: 'mine';
   severity?: number;
   traceId?: string;
   spanId?: string;

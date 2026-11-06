@@ -7,6 +7,8 @@
 // sunum: durum Logs.tsx'te, burada yalnız `data` (statik sorgunun cevabı)
 // okunur. Canlı kuyruk bu bayrakları taşımaz (hepsi `!live`).
 import type { LogsResponse } from '@/lib/types';
+import { Button } from '@/components/shadcn/button';
+import { scopeReasonText } from '@/lib/logsScope';
 import { useT } from '@/lib/i18n';
 
 export interface LogsNoticesProps {
@@ -67,4 +69,17 @@ export function LogsNotices({ live, env, team, hasTrace, data }: LogsNoticesProp
   ].filter(Boolean);
   if (items.length === 0) return null;
   return <div className="ld-notices" role="status">{items}</div>;
+}
+
+// LogsNeedService — v0.10.1855 (Log Search Faz 2 dilim 2.4): varsayılan kapsam
+// "Servislerim" çözülemedi → tablonun İÇİNDE servis seçimi istenir; açık kaçış
+// "Tüm servislerde ara" (`scope=all`). Sınıflar Tailwind (@source pages/logs).
+export function LogsNeedService({ reason, onAll }: { reason: string; onAll: () => void }) {
+  return (
+    <div className="grid justify-items-center gap-2 text-(--text2)" data-testid="logs-need-service">
+      <span>Varsayılan kapsam "Servislerim" çözülemedi — {scopeReasonText(reason)}. Sorgu servis seçilmeden çalışmaz; üstteki seçiciden bir servis seçin.</span>
+      <Button variant="secondary" size="sm" data-testid="logs-scope-all" onClick={onAll}
+        title="Kapsamsız arama: tüm indekslerde (pencereyle sınırlı) — pahalı olabilir">Tüm servislerde ara</Button>
+    </div>
+  );
 }

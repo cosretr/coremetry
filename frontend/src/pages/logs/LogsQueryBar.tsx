@@ -32,6 +32,9 @@ import { fmtClock } from '@/lib/utils';
 export interface LogsQueryBarProps {
   draft: LogsUrlFilter;
   onDraft: (next: LogsUrlFilter) => void;
+  /** v0.10.1855 — "Servislerim" (kapsam) seçicinin başında; satır sonunda sağlık. */
+  preferredServices?: readonly string[];
+  serviceMeta?: (name: string) => string | undefined;
   clusters: string[];
   autocompleteSince: string;
   fields: string[];
@@ -96,7 +99,8 @@ export function LogsQueryBar(p: LogsQueryBarProps) {
         </>
       )}>
         <ServicePicker value={draft.service} onChange={v => p.onDraft({ ...draft, service: v })}
-          placeholder="Service…" width={170} onEnter={p.onApply} />
+          placeholder="Service…" width={170} onEnter={p.onApply}
+          preferred={p.preferredServices} optionMeta={p.serviceMeta} />
         {/* v0.5.471 — cluster selector. /api/clusters: typically 1-5 entries
             per install, so a plain select is the right shape. */}
         {p.clusters.length > 0 && (

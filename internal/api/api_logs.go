@@ -131,6 +131,9 @@ func (s *Server) streamLogs(w http.ResponseWriter, r *http.Request) {
 	if !s.applyLogsTeamParam(w, r, q, &base) { // v0.10.1477 — /logs?team=
 		return
 	}
+	if !s.applyLogsScopeParam(w, r, q, &base) { // v0.10.1855 — /logs?scope=mine
+		return
+	}
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -224,7 +227,7 @@ func logsFieldStatsKeyLift(field string, f logstore.Filter, fromRaw, toRaw strin
 	// v0.10.1477 — takım (team=) parçası sonda; takımsız anahtar bayt-bayt aynı.
 	return fmt.Sprintf("logs-fieldstats:f=%s:svc=%s:cl=%s:env=%s:sev=%d:trace=%s:span=%s:from=%s:to=%s:q=%s:pat=%s:n=%d:lift=%t",
 		field, f.Service, f.Cluster, f.Env, f.SeverityMin, f.TraceID, f.SpanID,
-		fromRaw, toRaw, f.Search, logstore.PatternKey(f.Pattern), size, lift) + logsTeamKey(f) + logsLangKey(f)
+		fromRaw, toRaw, f.Search, logstore.PatternKey(f.Pattern), size, lift) + logsScopeKeys(f) + logsLangKey(f)
 }
 
 // logsErrorLiftSeverity — hata seçimi eşiği (OTel ERROR = 17); sayfada
@@ -246,7 +249,7 @@ func logsErrorLiftSelection(f logstore.Filter) logstore.Filter {
 func logsTimeseriesKey(f logstore.Filter, fromRaw, toRaw string, bucketSec int, groupBy string) string {
 	return fmt.Sprintf("logs-ts:svc=%s:clu=%s:env=%s:sev=%d:trace=%s:ht=%t:from=%s:to=%s:b=%d:g=%s:q=%s:pat=%s",
 		f.Service, f.Cluster, f.Env, f.SeverityMin, f.TraceID, f.HasTrace, fromRaw, toRaw,
-		bucketSec, groupBy, f.Search, logstore.PatternKey(f.Pattern)) + logsTeamKey(f) + logsLangKey(f) // v0.10.1477; v0.10.1819 lang
+		bucketSec, groupBy, f.Search, logstore.PatternKey(f.Pattern)) + logsScopeKeys(f) + logsLangKey(f) // v0.10.1477; v0.10.1819 lang
 }
 
 // logsSearchKey builds the /api/logs cache key. Pure + extracted
@@ -301,7 +304,7 @@ func logsSearchKey(f logstore.Filter, fromRaw, toRaw string) string {
 	return fmt.Sprintf("logs:svc=%s:clu=%s:env=%s:sev=%d:trace=%s:span=%s:ht=%t:from=%s:to=%s:lim=%d:off=%d:cur=%s:pg=%t:asc=%t:q=%s:pat=%s",
 		f.Service, f.Cluster, f.Env, f.SeverityMin, f.TraceID, f.SpanID, f.HasTrace,
 		fromRaw, toRaw, f.Limit, f.Offset, f.Cursor, f.WantCursor, f.Ascending, f.Search, logstore.PatternKey(f.Pattern)) +
-		logsTeamKey(f) + // v0.10.1477 — team= (takımsız anahtar değişmez)
+		logsScopeKeys(f) + // v0.10.1477 — team= (takımsız anahtar değişmez)
 		logsLangKey(f) + // v0.10.1819 — lang=lucene (otomatikte anahtar değişmez)
 		logsSourceKey(f) + // v0.10.1831 — dar _source kolonları + sayım yok (yoksa anahtar değişmez)
 		logsSortKey(f) // v0.10.1833 — kullanıcı sıralaması (yoksa anahtar değişmez)
@@ -449,6 +452,9 @@ func (s *Server) serveLogsSearch(w http.ResponseWriter, r *http.Request, q url.V
 		return
 	}
 	if !s.applyLogsTeamParam(w, r, q, &f) { // v0.10.1477 — /logs?team=
+		return
+	}
+	if !s.applyLogsScopeParam(w, r, q, &f) { // v0.10.1855 — /logs?scope=mine
 		return
 	}
 	keyFrom, keyTo := snapLogsWindow(&f, q.Get("from"), q.Get("to"), 15*time.Second) // v0.10.446 (A6-V2: TTL kadar)
@@ -1033,6 +1039,9 @@ func (s *Server) getLogsFieldStats(w http.ResponseWriter, r *http.Request) {
 	if !s.applyLogsTeamParam(w, r, q, &f) { // v0.10.1477 — /logs?team=
 		return
 	}
+	if !s.applyLogsScopeParam(w, r, q, &f) { // v0.10.1855 — /logs?scope=mine
+		return
+	}
 	errorLift := q.Get("errorLift") == "1"                                           // v0.10.509 (C5) — hatalıyı ayıran alan
 	keyFrom, keyTo := snapLogsWindow(&f, q.Get("from"), q.Get("to"), 60*time.Second) // v0.10.446 (A6-V2: TTL kadar)
 	// v0.10.1852 (dilim 2.1) — `est` (istemcinin pencere toplamı) → örnekleme
@@ -1141,6 +1150,9 @@ func (s *Server) getLogsTimeseries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !s.applyLogsTeamParam(w, r, q, &f) { // v0.10.1477 — /logs?team=
+		return
+	}
+	if !s.applyLogsScopeParam(w, r, q, &f) { // v0.10.1855 — /logs?scope=mine
 		return
 	}
 	bucketSec := parseInt(q.Get("bucketSec"), 30)

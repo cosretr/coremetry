@@ -12553,3 +12553,28 @@ değişmez).
   "+ Süzgeç" düğmesi eklenmedi (aynı iş sorgu çubuğundaki + Filter ▾'de; ikinci giriş noktası açılmadı); "Yalnız kritik
   hatalar" anahtarı Faz 3 (dilim 3.3) işi; sabitlik kalıcılığı yalnız URL (yeni sekme / sayfa yeniden bağlanması sabitleri
   taşımaz — §9-12 URL kararı).
+- **v0.10.1855 — servis odaklı başlangıç: `scope=mine` + `GET /api/logs/scope` + seçicide sağlık (2.4; OK — operatör
+  §9-4 kararı).** Yeni uç `internal/api/logs_scope.go` (`registerRoutesExtra`, rol kapısı yok — viewer kendi kapsamını
+  görür). Kapsam: oturum kimliği → users.team → team_aliases → service_metadata ownerTeam VEYA sreTeam (CoSRE v2
+  `user_scope` ile AYNI okuma; `chat_user_scope.go` okumaları `readUserScopeTeam` / `readUserScopeServices`'e ayrıldı,
+  davranış aynı; `ai.userScope.enabled` anahtarı Logs'u bağlamaz), ≤100 servis (`MaxTeamServices`). `/logs` okumaları
+  (`/api/logs`, `/search`, `/timeseries`, `/fieldstats`, `/patterns`, `/stream`) `scope=mine`'ı `Filter.Services`'e açar
+  (ES: aday alanlar × terms); açık `service=` kazanır; çözülemeyen kapsam 400 (sessizce kapsamsız `app-*` yok — risk
+  #2); geçersiz değer 400. Önbellek anahtarları `logsScopeKeys` = takım + servis kümesinin sıralı FNV özeti (kapsamsız
+  anahtar bayt-bayt aynı). Kullanıcı → kapsam süreç-içi 60 sn (okuma hatası önbelleğe girmez). Seçici sağlığı:
+  `service_summary_5m` tek IN okuması (son 5 dk) + açık Problem sayıları, kural `/api/services`'in `scoreHealth`'i;
+  pencerede span yoksa sağlık boş ("son 5 dk span yok" — uydurulmaz). Uç 60 sn `serveCached` (anahtar kullanıcı +
+  yetenek). FE (`lib/logsScope` saf karar tablosu): temiz `/logs` açılışında `scope=mine` BİR KEZ replace ile yazılır,
+  istek aynı render'da kapsamlı gider (çift istek yok); karar beklenirken okuma yok; süzgeçli derin link / `scope=all` /
+  seçili servis → kapsamsız; takımsız / servissiz / kimliksiz kullanıcıda servis seçilmeden okuma YOK — tablo "Bir servis
+  seçin" + gerekçe + "Tüm servislerde ara" (`scope=all`, açık kaçış). Süzgeç satırında kapsam çipi "Kapsam: Servislerim
+  (N) · Tüm servisler" ⇄ "Kapsam: tüm servisler · Servislerim (N)". ServicePicker `preferred` = kapsam servisleri (önde),
+  `optionMeta` = sağlık ("sağlıklı · %0,2 hata", "bozulmuş …", "sorunlu … · 1 açık Problem"); sunucu araması aynen.
+  v0.10.1477 otomatik "Takımım" varsayılanı ve kişisel vazgeçme bayrağı KALDIRILDI (shim yok; `lib/logsTeam` yalnız
+  `isSameTeam`); team= elle süzgeç (+ Filter ▾ › Takımım, çip, TeamPicker) aynen. Kibana linki kapsam etkinken çizilmez
+  (servis kümesi KQL'e çevrilmez — desen/takım kuralı). CH log yolu: uç `available:false`, `scope=` yok sayılır — sayfa
+  bugünkü gibi (operatör 2026-11-06). Sapmalar: kapsam çipi mockup'taki ContextBar rozeti yerine süzgeç satırında
+  (Topbar'da sayfa yuvası yok; rozet eylem taşıyamazdı); seçicide "Kapsam dışı" başlığı yok — sunucu araması zaten kapsam
+  dışını getirir, sağlık yalnız kapsam servislerinde; kapsamlı sorguda ES indeks daraltması servis başına şablona inmiyor
+  (gün daraltması + terms süzgeci; şablon başına çoklu indeks ayrı iş). Doğrulanmadı: prod'da users.team doluluğu ve
+  katalog sahipliği oranı (takımsız oranı = "servis seçin" ekranını görecek kullanıcı oranı).

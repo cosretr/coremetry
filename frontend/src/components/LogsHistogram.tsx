@@ -49,6 +49,8 @@ type Filter = {
   // v0.10.1477 — takım süzgeci (`?team=`); liste taşıyıp grafik taşımasaydı
   // v0.9.216 sınıfı (aynı ekranda iki nüfus).
   team?: string;
+  // v0.10.1855 — kapsam (`scope=mine`): liste ile aynı servis kümesi (sunucu çözer).
+  scope?: 'mine';
   severity: number;
   traceId: string;
   spanId: string;
@@ -217,6 +219,7 @@ export function LogsHistogram({ range, filter, onRangeSelect, onZoomReset, onSer
       search:  filter.search  || undefined,
       pattern: filter.pattern || undefined, // v0.10.1071
       team:    filter.team    || undefined, // v0.10.1477
+      scope:   filter.scope, // v0.10.1855
       severity: filter.severity > 0 ? filter.severity : undefined,
       traceId: filter.traceId || undefined,
       hasTrace: filter.hasTrace || undefined, // v0.9.287
@@ -252,7 +255,7 @@ export function LogsHistogram({ range, filter, onRangeSelect, onZoomReset, onSer
         if (bd === 'severity') onSeriesRef.current?.(null);
       });
     return () => { alive = false; ctl.abort(); };
-  }, [range.from, range.to, filter.service, filter.cluster, filter.env, filter.search, filter.pattern, filter.team, filter.severity, filter.traceId, filter.hasTrace, filter.lang, bd, paused]);
+  }, [range.from, range.to, filter.service, filter.cluster, filter.env, filter.search, filter.pattern, filter.team, filter.scope, filter.severity, filter.traceId, filter.hasTrace, filter.lang, bd, paused]);
 
   const { times, series, totals } = useMemo(
     // v0.9.1250 — seviye DIŞINDAKİ her eksen grup katlamasını kullanır

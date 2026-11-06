@@ -4068,6 +4068,27 @@ export interface LogsMyTeam {
   fields: string[];
 }
 
+// v0.10.1855 (Log Search Faz 2 dilim 2.4) — GET /api/logs/scope
+// (internal/api/logs_scope.go logsScopePayload). available=false → log yolu
+// ES değil (CH): kapsam özelliği kapalı. scoped=false → reason (no_team /
+// no_services / no_identity / error) ve /logs servis seçimi ister.
+export interface LogsScopeService {
+  name: string;
+  /** green | yellow | red; yoksa son 5 dk span yok. */
+  health?: 'green' | 'yellow' | 'red';
+  healthReason?: string;
+  errorRate?: number;
+  openProblems?: number;
+}
+export interface LogsScope {
+  available: boolean;
+  scoped: boolean;
+  reason: string;
+  team?: string;
+  services: LogsScopeService[];
+  trimmed?: number;
+}
+
 // /api/notifications/log (v0.8.247 backend, v0.8.263 UI) — one sent
 // notification (email / Slack / Teams / Zoom / webhook / …) as the
 // worker's notify funnel recorded it. Target carries the real

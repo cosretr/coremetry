@@ -50,6 +50,8 @@ export interface LogsFilterRowProps {
   /** KQL kutusunda çıplak trace id varsa o id ('' = öneri yok). */
   traceHint: string;
   onUseTraceHint: () => void;
+  /** v0.10.1855 — kapsam çipi: Servislerim (N) ⇄ tüm servisler. */
+  scope?: { mode: 'mine' | 'all'; count: number; team?: string; onMine: () => void; onAll: () => void };
 }
 
 const CHIP = 'trace-lock';
@@ -64,7 +66,7 @@ export function LogsFilterRow(p: LogsFilterRowProps) {
     api.logsFieldValues(key, q, 20, since, signal).then(r => r?.values ?? []), [since]);
   const suggestTeam = !filter.team && !!p.myTeamName && !p.teamGate;
   const unpinned = filters.filter(f => !f.pinned).length;
-  const any = !!filter.traceId || !!filter.pattern || !!filter.team || filter.hasTrace
+  const any = !!p.scope || !!filter.traceId || !!filter.pattern || !!filter.team || filter.hasTrace
     || filters.length > 0 || suggestTeam || !!p.traceHint || !!compiledSearch;
   if (!any) return null;
   const chips: FilterChip[] = filters.map(logFilterToChip);
@@ -74,6 +76,24 @@ export function LogsFilterRow(p: LogsFilterRowProps) {
       onChange={next => p.onPills(next.map(chipToLogFilter))}
       leading={(
         <>
+          {p.scope && (
+            <span className={CHIP} data-testid="logs-scope-chip"
+              title={p.scope.team ? `users.team (${p.scope.team}) → katalogda sahip olunan servisler` : 'katalogda sahip olunan servisler'}>
+              {p.scope.mode === 'mine' ? (
+                <>
+                  <span>Kapsam: Servislerim ({p.scope.count})</span>
+                  <Button variant="ghost" size="xs" data-testid="logs-scope-all" onClick={p.scope.onAll}
+                    title="Kapsamı kaldır: tüm servislerde ara (pencereyle sınırlı)">Tüm servisler</Button>
+                </>
+              ) : (
+                <>
+                  <span>Kapsam: tüm servisler</span>
+                  <Button variant="ghost" size="xs" data-testid="logs-scope-mine" onClick={p.scope.onMine}
+                    title="Yalnız kendi servislerin">Servislerim ({p.scope.count})</Button>
+                </>
+              )}
+            </span>
+          )}
           {filter.traceId && (
             <span className={CHIP}>
               <span>Filtered to trace</span>
