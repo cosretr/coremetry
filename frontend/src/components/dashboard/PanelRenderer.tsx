@@ -10,6 +10,8 @@ import type {
 import { timeRangeToNs, substituteVars } from '@/lib/utils';
 import { fmtSmart } from '@/lib/chartFmt';
 import { normalizeUnit } from '@/lib/units'; // v0.10.506 (D9)
+import type { MetricResultMeta } from '@/lib/types';
+import { MetricResultNotice } from '@/components/coremetry/metrics/MetricResultNotice'; // v0.10.1836
 import { lazy, Suspense } from 'react';
 
 // v0.9.758 (operatör "önerinle devam" — Grafana deneyimi #1) — dashboard
@@ -158,6 +160,9 @@ export type PanelDataOverride = {
   // v0.9.459 (dürüstlük A1b) — 50k satır tavanı: alfabetik-son seriler
   // eksik olabilir; panel köşesinde ⚠ ipucu.
   rowsCapped?: boolean;
+  // v0.10.1836 — tekil uçla aynı not + meta zarfı (bundle metric slot'u).
+  note?: string;
+  meta?: MetricResultMeta;
   error?: string;
 } | undefined;
 
@@ -376,6 +381,8 @@ function MetricPanel({ cfg, range, syncKey, onZoom, onZoomReset, dataOverride, h
   const boxPx = panelChartHeight(height);
   const [series, setSeries] = useState<SpanMetricSeries[] | null | undefined>(undefined);
   const [capped, setCapped] = useState(false);
+  // v0.10.1836 — meta zarfı + not: kırpılma / kısmi sonuç / boş sonuç nedeni.
+  const [meta, setMeta] = useState<{ meta?: MetricResultMeta; note?: string }>({});
   const [error, setError] = useState<string | null>(null);
   // GRAN-C (v0.8.248) — width-aware auto step. widthPx is the panel's OWN
   // container bucket (panels share a 4-col grid, so #content is the wrong
@@ -400,9 +407,9 @@ function MetricPanel({ cfg, range, syncKey, onZoom, onZoomReset, dataOverride, h
       const { from, to } = timeRangeToNs(range);
       const step = effectivePanelStep(cfg.step, (to - from) / 1e9, widthPx);
       if (step === null) return;
-      setSeries(undefined); setError(null);
+      setSeries(undefined); setError(null); setMeta({});
       api.metricPromql({ query: cfg.promql!, from, to, step })
-        .then(s => setSeries(s ?? [])).catch(e => setError(e.message));
+        .then(r => { setSeries(r?.series ?? []); setMeta({ meta: r?.meta }); }).catch(e => setError(e.message));
       return;
     }
     if (hasOverride) {
@@ -412,6 +419,7 @@ function MetricPanel({ cfg, range, syncKey, onZoom, onZoomReset, dataOverride, h
       } else {
         setSeries(dataOverride!.series ?? []);
         setCapped(dataOverride!.rowsCapped ?? false);
+        setMeta({ meta: dataOverride!.meta, note: dataOverride!.note });
         setError(null);
       }
       return;
@@ -436,7 +444,7 @@ function MetricPanel({ cfg, range, syncKey, onZoom, onZoomReset, dataOverride, h
       // non-heap toplamını "heap" diye çiziyordu.
       filters: cfg.filters,
       groupBy: cfg.groupBy, from, to, step,
-    }).then(r => { setSeries(r?.series ?? []); setCapped(r?.rowsCapped ?? false); })
+    }).then(r => { setSeries(r?.series ?? []); setCapped(r?.rowsCapped ?? false); setMeta({ meta: r?.meta, note: r?.note }); })
       .catch(e => setError(e.message));
   }, [JSON.stringify(cfg), range, hasOverride, JSON.stringify(dataOverride), widthPx]);
 
@@ -450,6 +458,7 @@ function MetricPanel({ cfg, range, syncKey, onZoom, onZoomReset, dataOverride, h
   return (
     <div ref={ref} style={{ position: 'relative' }}>
       {capped && <CapHint />}
+      {series !== undefined && <MetricResultNotice meta={meta.meta} note={meta.note} />}
       {series === undefined ? <PanelLoading height={boxPx} />
         : !series || series.length === 0 ? <PanelEmpty height={boxPx} />
         // Madde 4 sweep — cfg.unit eksene/tooltip'e iner (promql paneli
@@ -584,6 +593,7 @@ function PromqlPanel({ cfg, range, syncKey, onZoom, onZoomReset, height, onFocus
 }) {
   const boxPx = panelChartHeight(height);
   const [series, setSeries] = useState<SpanMetricSeries[] | null | undefined>(undefined);
+  const [promMeta, setPromMeta] = useState<MetricResultMeta | undefined>(undefined); // v0.10.1836
   const [error, setError] = useState<string | null>(null);
   const { ref, widthPx } = usePanelWidth();
 
@@ -607,9 +617,10 @@ function PromqlPanel({ cfg, range, syncKey, onZoom, onZoomReset, height, onFocus
     if (step === null) return; // panel width not measured yet — defer
     setSeries(undefined);
     setError(null);
+    setPromMeta(undefined);
     // v0.10.1443 — cfg.source: kaynak pini (sohbetten gelen VM-only MetricsQL); yoksa kurulum varsayılanı.
     api.metricPromql({ query: debouncedQuery, from, to, step, src: cfg.source })
-      .then(s => setSeries(s ?? []))
+      .then(r => { setSeries(r?.series ?? []); setPromMeta(r?.meta); })
       .catch(e => setError(e.message));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedQuery, cfg.step, cfg.source, range, widthPx]);
@@ -618,6 +629,7 @@ function PromqlPanel({ cfg, range, syncKey, onZoom, onZoomReset, height, onFocus
   const viz = cfg.viz ?? 'line';
   return (
     <div ref={ref}>
+      {series !== undefined && <MetricResultNotice meta={promMeta} />}
       {series === undefined ? <PanelLoading height={boxPx} />
         : !series || series.length === 0 ? <PanelEmpty height={boxPx} />
         : <DashChart series={series} viz={viz} unit={cfg.unit} syncKey={syncKey} onZoom={onZoom} onZoomReset={onZoomReset} bands={cfg.thresholds} storageKey={`dash-q-${cfg.query.slice(0, 60)}`} height={boxPx} onFocusChange={onFocusChange} />}

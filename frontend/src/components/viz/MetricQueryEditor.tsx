@@ -39,6 +39,7 @@ import {
 import { METRIC_SOURCE_LABELS, type MetricSourceParam } from '@/lib/metricSource';
 import { promConsoleError, promMatrixToSeries } from '@/lib/promMatrix';
 import { usePromqlConsoleRange } from '@/lib/queries/promql';
+import { MetricResultNotice } from '@/components/coremetry/metrics/MetricResultNotice'; // v0.10.1836
 import type { MetricInfo, SpanMetricSeries, FilterExpr, TimeRange, Panel, DashboardSummary, MetricPanelAsk } from '@/lib/types';
 // v0.10.1435 — panelden "Bu grafiği açıkla"
 import { metricPanelMenuAction, metricPanelSubject, useMetricPanelAsk } from '@/components/ai/metricPanelAsk';
@@ -796,7 +797,9 @@ export function MetricQueryEditor({ range }: { range: TimeRange }) {
   const results = useQueries({
     queries: debounced.queries.map(q => ({
       queryKey: ['mqe', from, to, q.metric, q.agg, q.groupBy.join(','), encodeFilters(q.filters), q.step] as const,
-      queryFn: () => api.metricQuery({
+      // v0.10.1836 — tam zarf (series + rowsCapped + note + meta): önizleme
+      // kırpılma / kısmi sonuç / boş sonuç nedenini MetricResultNotice ile söyler.
+      queryFn: () => api.metricQueryFull({
         name: q.metric, agg: q.agg,
         groupBy: q.groupBy.length ? q.groupBy.join(',') : undefined,
         filters: q.filters.length ? encodeFilters(q.filters) : undefined,
@@ -821,7 +824,7 @@ export function MetricQueryEditor({ range }: { range: TimeRange }) {
     retry: false,
   });
   const promqlSeries: TSSeries[] = useMemo(
-    () => (promqlRes.data ?? []).map(s => ({
+    () => (promqlRes.data?.series ?? []).map(s => ({
       label: s.groupKey && s.groupKey.length ? s.groupKey.join(' / ') : 'value',
       points: s.points,
     })),
@@ -884,7 +887,7 @@ export function MetricQueryEditor({ range }: { range: TimeRange }) {
     const repById: Record<string, SpanMetricSeries> = {};
     debounced.queries.forEach((q, qi) => {
       if (!q.enabled || q.kind !== 'metric' || !q.metric) return;
-      const data = results[qi]?.data;
+      const data = results[qi]?.data?.series;
       if (!data || !data.length) return;
       repById[q.id] = data[0];
       for (const s of data) {
@@ -1234,6 +1237,13 @@ export function MetricQueryEditor({ range }: { range: TimeRange }) {
             {unit ? ` · ${unit}` : ''}
           </span>
         </div>
+        {/* v0.10.1836 — sunucunun meta zarfı: kırpılma / kısmi sonuç / not. */}
+        {isPromql
+          ? (!thanosSel && <MetricResultNotice meta={promqlRes.data?.meta} />)
+          : debounced.queries.map((q, qi) => (q.enabled && q.kind === 'metric' && q.metric
+            ? <MetricResultNotice key={q.id} meta={results[qi]?.data?.meta} note={results[qi]?.data?.note}
+                prefix={debounced.queries.length > 1 ? q.id : undefined} />
+            : null))}
         {isPromql && thanosForbidden ? (
           <Empty icon="🔒" title="PromQL konsolu editör+ rolü ister">
             Thanos sorgusu yalnız editör ve admin rolleriyle koşar (her koşu denetim kaydına yazılır).

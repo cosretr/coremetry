@@ -2952,7 +2952,7 @@ export const api = {
     // SEBEBİYLE, dashboard panelinde SESSİZCE boş görünmesi olurdu.
     // v0.10.186 — sütunsal nokta kodlaması burada açılır (lib/seriesCompact.ts);
     // tüketiciler {time,value} görmeye devam eder; gövde enc:'col' opt-in.
-    request<Record<string, { series?: SpanMetricSeries[] | null; totalSeries?: number; tail?: TailPoint[]; rowsCapped?: boolean; note?: string; error?: string; enc?: string; cols?: CompactSeries[] }>>(
+    request<Record<string, { series?: SpanMetricSeries[] | null; totalSeries?: number; tail?: TailPoint[]; rowsCapped?: boolean; note?: string; meta?: import('./types').MetricResultMeta; error?: string; enc?: string; cols?: CompactSeries[] }>>(
       // v0.9.1151 — deneme modu POST'ta da geçerli. İşaret SORGU
       // DİZESİNDE taşınıyor, gövdede değil: aynı merkezî yardımcı hem GET
       // hem POST uçlarını damgalıyor ve sunucu tarafında tek bir
@@ -3164,8 +3164,10 @@ export const api = {
   // v0.10.1306 — `src` (/metrics PromQL sekmesi ?src=vm|ch): bu TEK isteği o
   // backend'e sabitler (aynı metricsrc değeri); yoksa sayfa URL'inin
   // ?metricsrc= denemesi / kurulum varsayılanı. signal: sekme/pencere değişince iptal.
+  // v0.10.1836 — meta=1: zarf {series, meta} (kırpılma/kısmi/çalışan sorgu);
+  // tüketiciler (MQE PromQL sekmesi, pano PromQL panelleri) .series okur.
   metricPromql: ({ src, ...params }: { query: string; from?: number; to?: number; step?: number; maxDataPoints?: number; src?: import('./metricSource').MetricSourceParam }, signal?: AbortSignal) =>
-    get<SpanMetricSeries[] | null>(withMetricSource(`/api/metrics/promql?${qs({ maxDataPoints: 1500, ...params })}`, src), signal),
+    get<import('./types').PromqlResult | null>(withMetricSource(`/api/metrics/promql?${qs({ maxDataPoints: 1500, ...params, meta: '1' })}`, src), signal),
   // v0.8.356 — sort/dir: server-side global ordering (whitelisted
   // backend-side; ORDER BY runs before the LIMIT so "top by p95" is
   // the true global top-N, not the top-N-by-calls page reordered).

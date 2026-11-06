@@ -12386,3 +12386,9 @@ Kaynak: `docs/metrics/metrics-explore-dashboards-audit.md` (onaylı, §11) · mo
   gövdesi çıplak DİZİ olduğu için zarf opt-in (`?meta=1`, anahtarda). CH: `executed` yalnız PromQL'de (builder SQL'i
   store içinde kurulur), `stepSec` noktalardan gözlenir. Cache anahtarları değişmedi (meta istemcide isteğe bağlı).
   `/api/metrics` ailesinin 6 handler'ı + 8 rotası api.go'dan `metrics_handlers.go` / `metrics_routes.go`'ya taşındı.
+- **v0.10.1836 — istemci meta'yı taşır (1.2).** `api.metricPromql` `meta=1` ile `{series, meta}` döner (MQE PromQL
+  sekmesi + pano PromQL/metric-PromQL panelleri `.series` okur); MQE builder önizlemesi `metricQueryFull`'a geçti.
+  `api.metricQuery` (zarfı açan) 6 başka tüketici için AYNEN kaldı — onlar bildirim çizmiyor; brief'in "unwrap'i bırak"
+  maddesi bu iki yüzeyle sınırlandı (sapma). Bildirim `coremetry/metrics/MetricResultNotice` (role=status): toplam
+  biliniyorsa "N seriden M'i gösteriliyor", kısmi sonuç, not. CH 50k satır tavanında toplam bilinmez → satır yok, köşedeki
+  "⚠ kesik" söyler (iki cümle aynı şeyi söylemesin). Yerleşim değişmedi (Faz 2).

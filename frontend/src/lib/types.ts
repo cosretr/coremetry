@@ -4545,6 +4545,35 @@ export interface MetricQueryResult {
   // yok: orada bizim operatörden fazla bildiğimiz bir şey olmadığı için
   // not, her sessiz metriğin üstünde gürültü olurdu.
   note?: string;
+  // v0.10.1835 — meta zarfı (MetricResultMeta). Eski gövdede yok → `?:`.
+  meta?: MetricResultMeta;
+}
+
+// MetricResultMeta — v0.10.1835 (Metrics Explorer Faz 1 dilim 1.1): Go
+// internal/api/metric_meta.go `metricMeta` aynası. /api/metrics/query,
+// /api/metrics/histogram, bundle metric slot'u ve /api/metrics/promql?meta=1
+// taşır. Her alan opsiyonel değil: source/tookMs/seriesShown/truncated/partial
+// her zaman gelir; omitempty olanlar `?:`.
+export interface MetricResultMeta {
+  source: 'vm' | 'clickhouse';
+  /** Gerçekten koşan MetricsQL/PromQL (CH builder'da yok). */
+  executed?: string;
+  /** Sunucu hesaplama süresi; önbellek isabetinde ilk hesaplamanınki. */
+  tookMs: number;
+  /** Kırpma öncesi seri sayısı; bilinmiyorsa yok. */
+  seriesTotal?: number;
+  seriesShown: number;
+  truncated: boolean;
+  partial: boolean;
+  stepSec?: number;
+  note?: string;
+}
+
+// /api/metrics/promql?meta=1 zarfı (v0.10.1835). Param yokken uç eski
+// çıplak SpanMetricSeries[] dizisini döner.
+export interface PromqlResult {
+  series: SpanMetricSeries[];
+  meta: MetricResultMeta;
 }
 
 // v0.8.53 ("every metric is a doorway" D4) — result of server-side descriptor
@@ -5125,6 +5154,8 @@ export interface HistogramResult {
   // edilemez kılıyor. ClickHouse yolu hiç set etmez (kova düzeni satırın
   // kendisinde), o yüzden alan bir CH kurulumunda hiç görünmez.
   note?: string;
+  // v0.10.1835 — meta zarfı (MetricResultMeta).
+  meta?: MetricResultMeta;
 }
 
 // ── Alerts & Problems ───────────────────────────────────────────────────────
