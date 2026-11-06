@@ -113,6 +113,10 @@ func (s *Server) queryPromQL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	metaTag += topn.keyTag()
+	// v0.10.1839 — cluster kapsamı: VM'de extra_filters[] (sorgu metni
+	// DEĞİŞMEZ); CH değerlendiricisi kapsayamaz → yok sayılır, anahtar aynı.
+	cs := s.clusterScopeFor(r, src)
+	metaTag += cs.keyTag(true)
 
 	// v0.10.1248 — ?instant=1: anlık sorgu (`to` anında), yalnız VM kaynağı.
 	if q.Get("instant") == "1" {
@@ -123,7 +127,7 @@ func (s *Server) queryPromQL(w http.ResponseWriter, r *http.Request) {
 		}
 		ikey := fmt.Sprintf("promql-instant:src=%s:q=%s:at=%d%s", src.Name(), query, to.Unix()/30, metaTag)
 		s.serveCached(w, r, ikey, 30*time.Second, func(ctx context.Context) (any, error) {
-			ctx, mrun := beginMetricMeta(ctx, src)
+			ctx, mrun := beginMetricMeta(cs.withCtx(ctx), src)
 			res, err := vm.QueryPromQLInstant(ctx, query, to)
 			if err != nil {
 				return nil, err
@@ -139,6 +143,7 @@ func (s *Server) queryPromQL(w http.ResponseWriter, r *http.Request) {
 			}
 			meta := mrun.finish(len(res), chMetaHints{}, "")
 			applyTopNMeta(meta, topn, total, false)
+			meta.Cluster = cs.metaCluster(true)
 			return promqlEnvelope{Series: nonNilSeries(res), Meta: meta}, nil
 		})
 		return
@@ -146,7 +151,7 @@ func (s *Server) queryPromQL(w http.ResponseWriter, r *http.Request) {
 	key := fmt.Sprintf("promql:src=%s:q=%s:step=%d:mdp=%d:from=%d:to=%d%s",
 		src.Name(), query, step, maxDP, from.Unix()/60, to.Unix()/60, metaTag)
 	s.serveCached(w, r, key, 30*time.Second, func(ctx context.Context) (any, error) {
-		ctx, mrun := beginMetricMeta(ctx, src)
+		ctx, mrun := beginMetricMeta(cs.withCtx(ctx), src)
 		var res []chstore.SpanMetricSeries
 		var err error
 		total := 0
@@ -176,6 +181,7 @@ func (s *Server) queryPromQL(w http.ResponseWriter, r *http.Request) {
 		// CH: the operator's own text IS what the evaluator ran.
 		meta := mrun.finish(len(res), chMetaHints{Executed: query, StepSec: observedStepSec(res)}, "")
 		applyTopNMeta(meta, topn, total, false)
+		meta.Cluster = cs.metaCluster(true)
 		return promqlEnvelope{Series: nonNilSeries(res), Meta: meta}, nil
 	})
 }

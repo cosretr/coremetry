@@ -69,6 +69,9 @@ type metricMeta struct {
 	// body (metric_topn.go); omitted when the request did not opt in.
 	Limit int    `json:"limit,omitempty"`
 	Rank  string `json:"rank,omitempty"`
+	// Cluster — v0.10.1839: the cluster scope APPLIED to this read
+	// (metric_cluster_scope.go); omitted when none / not applicable.
+	Cluster string `json:"cluster,omitempty"`
 }
 
 // metaSourceName — internal source marker → wire value.

@@ -76,6 +76,18 @@ type metricsCapabilities struct {
 	Limits       capLimits             `json:"limits"`
 	// TopN — v0.10.1838.
 	TopN capTopN `json:"topN"`
+	// ClusterScope — v0.10.1839. Label is filled per request by the handler
+	// (it comes from Settings, not from the pure document).
+	ClusterScope capClusterScope `json:"clusterScope"`
+}
+
+// capClusterScope — which reads the ?cluster= param narrows.
+type capClusterScope struct {
+	Label     string `json:"label,omitempty"`
+	Query     bool   `json:"query"`
+	Selectors bool   `json:"selectors"`
+	PromQL    bool   `json:"promql"`
+	Reason    string `json:"reason,omitempty"`
 }
 
 // capTopN — the allowed rungs and ranking modes. Mode: "topk" (VictoriaMetrics
@@ -135,7 +147,13 @@ func capabilitiesFor(src string, vmMetadataOK bool) metricsCapabilities {
 	if vm {
 		c.TopN.Mode = "topk"
 	}
-	c.Features["clusterScope"] = notYet
+	// v0.10.1839 — VM scopes everything (extra_filters[]); CH only the
+	// builder reads (query / histogram / bundle), via the cluster coalesce.
+	c.Features["clusterScope"] = capFeature{Supported: true}
+	c.ClusterScope = capClusterScope{Query: true, Selectors: vm, PromQL: vm}
+	if !vm {
+		c.ClusterScope.Reason = "ClickHouse: yalnız builder sorgusu kapsanır; ad/etiket seçicileri ve PromQL kapsanmaz"
+	}
 	c.Features["discoverLabels"] = notYet
 	c.Features["discoverLabelValues"] = notYet
 	c.Features["cardinality"] = notYet
@@ -173,6 +191,10 @@ func (s *Server) getMetricsCapabilities(w http.ResponseWriter, r *http.Request) 
 		if src.Name() == metricSourceVM {
 			_, ok = s.vmMetadata(ctx)
 		}
-		return capabilitiesFor(src.Name(), ok), nil
+		c := capabilitiesFor(src.Name(), ok)
+		if src.Name() == metricSourceVM {
+			c.ClusterScope.Label = s.vmetrics.ClusterLabel()
+		}
+		return c, nil
 	})
 }

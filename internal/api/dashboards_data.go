@@ -225,6 +225,10 @@ func (s *Server) dashboardsData(w http.ResponseWriter, r *http.Request) {
 	// bileşenleriyle aynı: backend adı, ad-kuralı damgası (VM'de adın
 	// çözüldüğü seri değişebilir, istek bayt-aynı kalır), dışlama özeti.
 	metricTag := metricSrc.Name() + "|" + s.metricNameRuleTag(metricSrc) + "|" + s.store.MetricExclusions().Digest()
+	// v0.10.1839 — ?cluster= (sorgu dizesinde, metricsrc gibi) bundle'ın
+	// metric slot'larını kapsar; damga yalnız uygulanınca (anahtar bayt-aynı).
+	cs := s.clusterScopeFor(r, metricSrc)
+	metricTag += cs.keyTag(false)
 
 	out := make(map[string]json.RawMessage, len(body.Requests))
 	var mu sync.Mutex
@@ -246,7 +250,7 @@ func (s *Server) dashboardsData(w http.ResponseWriter, r *http.Request) {
 			}
 			key := dashPanelKey(tag, req, from, to)
 			raw, tier, err := s.cachedJSON(r.Context(), key, dashPanelTTL, bypass, func(ctx context.Context) (any, error) {
-				return s.bundleSlot(ctx, metricSrc, req, from, to)
+				return s.bundleSlot(ctx, metricSrc, req, from, to, cs)
 			})
 			mu.Lock()
 			defer mu.Unlock()
@@ -285,7 +289,7 @@ func (s *Server) dashboardsData(w http.ResponseWriter, r *http.Request) {
 // dalın bilinen bug sınıfı, v0.9.566), spanMetric → QuerySpanMetric (tam
 // seri; dosya başlığı). Kaynak-tarama testi (dashboards_data_test.go)
 // çağrı adlarını pinler.
-func (s *Server) bundleSlot(ctx context.Context, metricSrc metricSource, req bundleReq, from, to time.Time) (*bundleSlot, error) {
+func (s *Server) bundleSlot(ctx context.Context, metricSrc metricSource, req bundleReq, from, to time.Time, cs clusterScope) (*bundleSlot, error) {
 	slot := &bundleSlot{}
 	switch req.Type {
 	case "metric":
@@ -303,7 +307,8 @@ func (s *Server) bundleSlot(ctx context.Context, metricSrc metricSource, req bun
 		if tnErr != nil {
 			return nil, tnErr
 		}
-		ctx, mrun := beginMetricMeta(ctx, metricSrc) // v0.10.1835
+		ctx, mrun := beginMetricMeta(cs.withCtx(ctx), metricSrc) // v0.10.1835
+		mfilters = cs.chFilters(mfilters)                        // v0.10.1839
 		rd, err := readMetric(ctx, metricSrc, chstore.MetricQueryFilter{
 			Name:        req.Name,
 			Service:     req.Service,
@@ -322,6 +327,7 @@ func (s *Server) bundleSlot(ctx context.Context, metricSrc metricSource, req bun
 		slot.Note = rd.Note
 		slot.Meta = mrun.finish(len(rd.Series), chMetaHints{Truncated: rd.Capped, StepSec: observedStepSec(rd.Series)}, rd.Note)
 		applyTopNMeta(slot.Meta, topn, rd.Total, rd.Capped)
+		slot.Meta.Cluster = cs.metaCluster(false)
 	case "spanMetric":
 		filters, ferr := parseFiltersAndDSL(string(req.Filters), req.DSL)
 		if ferr != nil {

@@ -73,12 +73,16 @@ func (s *Server) getMetricNames(w http.ResponseWriter, r *http.Request) {
 	// hiddenByRule ile işaretlenir (metric_names_meta.go). Başka her rolde
 	// param YOK sayılır → anahtar çatallanmaz, gizli ad dönmez.
 	pageDrop, hiddenMark, ihTag := namesDropPlan(drop, isAdminRequest(r) && q.Get("includeHidden") == "1")
+	// v0.10.1839 — cluster kapsamı (VM: extra_filters[]; CH: uygulanamaz,
+	// anahtar çatallanmaz). metric_cluster_scope.go.
+	cs := s.clusterScopeFor(r, src)
+	ihTag += cs.keyTag(true)
 	if pattern == "" && limit == 0 && offset == 0 {
 		s.serveCached(w, r, "metric-names:v3:src="+src.Name()+":svc="+svc+dropTag+ihTag, 60*time.Second, func(ctx context.Context) (any, error) {
 			// GetMetricNames, ListMetricNames(svc, "", 0, 0)'ın ta kendisi
 			// (repo.go:4342) — seam'de ayrı bir metot tutmamak için doğrudan
 			// o çağrı yapılıyor. CH tarafında SQL bayt-bayt aynı.
-			names, _, err := src.ListMetricNames(ctx, svc, "", 0, 0)
+			names, _, err := src.ListMetricNames(cs.withCtx(ctx), svc, "", 0, 0)
 			if err != nil {
 				return nil, err
 			}
@@ -92,7 +96,7 @@ func (s *Server) getMetricNames(w http.ResponseWriter, r *http.Request) {
 	key := fmt.Sprintf("metric-names:v3:src=%s:svc=%s:q=%s:limit=%d:offset=%d%s%s",
 		src.Name(), svc, pattern, limit, offset, dropTag, ihTag)
 	s.serveCached(w, r, key, 30*time.Second, func(ctx context.Context) (any, error) {
-		names, total, err := src.ListMetricNames(ctx, svc, pattern, limit, offset)
+		names, total, err := src.ListMetricNames(cs.withCtx(ctx), svc, pattern, limit, offset)
 		if err != nil {
 			return nil, err
 		}
@@ -204,6 +208,7 @@ func (s *Server) queryMetric(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, tnErr)
 		return
 	}
+	cs := s.clusterScopeFor(r, src) // v0.10.1839
 	// v0.9.1157 → v4: zarfa `note` eklendi (VM yolunda BOŞ dönen bir
 	// yüzdeliğin SEBEBİ). Alan `omitempty` — CH gövdesi bayt-bayt eski —
 	// ama anahtar yine de bumplanır: rolling deploy'da eski pod'un
@@ -216,7 +221,7 @@ func (s *Server) queryMetric(w http.ResponseWriter, r *http.Request) {
 	key := fmt.Sprintf("metric-query:v4%s:src=%s:name=%s:svc=%s:agg=%s:step=%d:mdp=%d:gb=%s:f=%s:inst=%s:eng=%s:from=%d:to=%d:mx=%s",
 		s.metricNameRuleTag(src),
 		src.Name(), name, svc, agg, step, maxDP, groupByRaw, filtersRaw, inst, engine, from.Unix()/60, to.Unix()/60,
-		s.store.MetricExclusions().Digest()) + topn.keyTag()
+		s.store.MetricExclusions().Digest()) + topn.keyTag() + cs.keyTag(false)
 	s.serveCached(w, r, key, 30*time.Second, func(ctx context.Context) (any, error) {
 		// queryMetricNoted, kaynağın açıklayabildiği durumda notu da
 		// getirir (metricNoteSource); CH kaynağı bu yeteneği taşımıyor ve
@@ -225,7 +230,8 @@ func (s *Server) queryMetric(w http.ResponseWriter, r *http.Request) {
 		if ferr != nil {
 			return nil, ferr
 		}
-		ctx, mrun := beginMetricMeta(ctx, src) // v0.10.1835 — meta zarfı (metric_meta.go)
+		ctx, mrun := beginMetricMeta(cs.withCtx(ctx), src) // v0.10.1835 — meta zarfı (metric_meta.go)
+		mfilters = cs.chFilters(mfilters)                  // v0.10.1839 — CH: cluster koşulu
 		rd, qerr := readMetric(ctx, src, chstore.MetricQueryFilter{
 			Name:          name,
 			Service:       svc,
@@ -246,6 +252,7 @@ func (s *Server) queryMetric(w http.ResponseWriter, r *http.Request) {
 		capped := rd.Capped
 		meta := mrun.finish(len(series), chMetaHints{Truncated: capped, StepSec: observedStepSec(series)}, note)
 		applyTopNMeta(meta, topn, rd.Total, capped)
+		meta.Cluster = cs.metaCluster(false)
 		out := map[string]any{
 			"series":     series,
 			"rowsCapped": capped || chstore.SeriesRowsCapped(series), // v0.10.1838 — kesimden ÖNCEKİ tavan da sayılır
@@ -308,20 +315,21 @@ func (s *Server) getMetricHistogram(w http.ResponseWriter, r *http.Request) {
 	// açıktı.
 	// v0.9.1159 — aday alternation'ı ısı haritasının kova adını da değiştirdi
 	// (bkz. metricNameRuleTag); damga yalnız VM tarafına.
+	cs := s.clusterScopeFor(r, src) // v0.10.1839
 	key := fmt.Sprintf("metric-hist%s:src=%s:name=%s:svc=%s:step=%d:f=%s:from=%d:to=%d:mx=%s",
 		s.metricNameRuleTag(src),
 		src.Name(), name, svc, step, filtersRaw, from.Unix()/60, to.Unix()/60,
-		s.store.MetricExclusions().Digest())
+		s.store.MetricExclusions().Digest()) + cs.keyTag(false)
 	s.serveCached(w, r, key, 30*time.Second, func(ctx context.Context) (any, error) {
 		hfilters, ferr := parseFilters(filtersRaw)
 		if ferr != nil {
 			return nil, ferr
 		}
-		ctx, mrun := beginMetricMeta(ctx, src) // v0.10.1835 — meta zarfı (metric_meta.go)
+		ctx, mrun := beginMetricMeta(cs.withCtx(ctx), src) // v0.10.1835 — meta zarfı (metric_meta.go)
 		h, herr := src.QueryMetricHistogram(ctx, chstore.MetricQueryFilter{
 			Name:        name,
 			Service:     svc,
-			Filters:     hfilters,
+			Filters:     cs.chFilters(hfilters),
 			From:        from,
 			To:          to,
 			StepSeconds: step,
@@ -333,8 +341,9 @@ func (s *Server) getMetricHistogram(w http.ResponseWriter, r *http.Request) {
 		if len(h.Times) > 1 {
 			hstep = int((h.Times[1] - h.Times[0]) / int64(time.Second))
 		}
-		return histogramResponse{HistogramSeries: h,
-			Meta: mrun.finish(histogramMetaShown(h), chMetaHints{Truncated: h.RowCapped, StepSec: hstep}, h.Note)}, nil
+		hm := mrun.finish(histogramMetaShown(h), chMetaHints{Truncated: h.RowCapped, StepSec: hstep}, h.Note)
+		hm.Cluster = cs.metaCluster(false)
+		return histogramResponse{HistogramSeries: h, Meta: hm}, nil
 	})
 }
 
@@ -371,10 +380,11 @@ func (s *Server) getMetricLabelValues(w http.ResponseWriter, r *http.Request) {
 	// v0.9.1159 — etiket keşfi de aday alternation'ıyla kapsamlanıyor, yani
 	// VM'de dönen liste değişti; damga yalnız VM tarafına (CH'nin DISTINCT
 	// taraması bu anahtarın var olma sebebi, boşuna ısıtılmaz).
+	cs := s.clusterScopeFor(r, src) // v0.10.1839 — yalnız VM seçicileri kapsar
 	key := fmt.Sprintf("metric-labels%s:src=%s:m=%s:k=%s:since=%s:q=%s:limit=%d",
-		s.metricNameRuleTag(src), src.Name(), metric, lkey, since, lq, llimit)
+		s.metricNameRuleTag(src), src.Name(), metric, lkey, since, lq, llimit) + cs.keyTag(true)
 	s.serveCached(w, r, key, 60*time.Second, func(ctx context.Context) (any, error) {
-		return src.MetricLabelValues(ctx, metric, lkey, since, lq, llimit)
+		return src.MetricLabelValues(cs.withCtx(ctx), metric, lkey, since, lq, llimit)
 	})
 }
 
@@ -405,9 +415,10 @@ func (s *Server) getMetricAttrKeys(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// v0.9.1159 — aynı gerekçe getMetricLabelValues'takiyle.
+	cs := s.clusterScopeFor(r, src) // v0.10.1839 — yalnız VM seçicileri kapsar
 	key := fmt.Sprintf("metric-attr-keys%s:src=%s:m=%s:svc=%s:since=%s",
-		s.metricNameRuleTag(src), src.Name(), metric, service, since)
+		s.metricNameRuleTag(src), src.Name(), metric, service, since) + cs.keyTag(true)
 	s.serveCached(w, r, key, 60*time.Second, func(ctx context.Context) (any, error) {
-		return src.MetricAttrKeys(ctx, metric, service, since)
+		return src.MetricAttrKeys(cs.withCtx(ctx), metric, service, since)
 	})
 }

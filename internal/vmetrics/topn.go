@@ -153,7 +153,7 @@ func (s *Service) countSeriesRange(ctx context.Context, cfg Settings, expr strin
 		"end":   {promTime(to)},
 		"step":  {strconv.Itoa(step) + "s"},
 	}
-	res, err := promapi.QuerySeriesMeta(ctx, s.request("/api/v1/query_range", params, cfg))
+	res, err := promapi.QuerySeriesMeta(ctx, s.requestCtx(ctx, "/api/v1/query_range", params, cfg))
 	if err != nil {
 		return 0, err
 	}

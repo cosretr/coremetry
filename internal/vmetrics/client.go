@@ -510,7 +510,7 @@ func (s *Service) ListMetricNames(ctx context.Context, service, pattern string, 
 	if svc := strings.TrimSpace(service); svc != "" {
 		params.Add("match[]", "{"+serviceLabel()+"="+quotePromString(svc)+"}")
 	}
-	all, err := promapi.QueryStrings(ctx, s.request("/api/v1/label/__name__/values", params, cfg))
+	all, err := promapi.QueryStrings(ctx, s.requestCtx(ctx, "/api/v1/label/__name__/values", params, cfg))
 	if err != nil {
 		return nil, 0, err
 	}
@@ -656,7 +656,7 @@ func (s *Service) labelValuesBetween(ctx context.Context, cfg Settings, metric, 
 		"match[]": {labelValuesMatch(nameMatcher(discoveryNameCandidates(metric)), label, q)},
 		"limit":   {strconv.Itoa(limit)}, // Prometheus 2.x / VM: sunucu tarafı tavan
 	}
-	res, err := promapi.QueryStringsMeta(ctx, s.request("/api/v1/label/"+url.PathEscape(label)+"/values", params, cfg))
+	res, err := promapi.QueryStringsMeta(ctx, s.requestCtx(ctx, "/api/v1/label/"+url.PathEscape(label)+"/values", params, cfg))
 	if err != nil {
 		return nil, false, err
 	}

@@ -102,7 +102,7 @@ func (s *Service) runRangeQueryDetailed(ctx context.Context, cfg Settings, q str
 		"step":  {strconv.Itoa(step) + "s"},
 	}
 	recordQuery(ctx, q) // v0.10.1271 — kanıt çipi (yalnız kaydedici takılıysa)
-	res, err := promapi.QuerySeriesMeta(ctx, s.request("/api/v1/query_range", params, cfg))
+	res, err := promapi.QuerySeriesMeta(ctx, s.requestCtx(ctx, "/api/v1/query_range", params, cfg))
 	if err != nil {
 		return QueryDetail{}, err
 	}
@@ -382,7 +382,7 @@ func (s *Service) metricFamilyNames(ctx context.Context, name, service string) (
 		"end":     {promTime(now)},
 		"match[]": {"{" + strings.Join(matchers, ", ") + "}"},
 	}
-	return promapi.QueryStrings(ctx, s.request("/api/v1/label/__name__/values", params, cfg))
+	return promapi.QueryStrings(ctx, s.requestCtx(ctx, "/api/v1/label/__name__/values", params, cfg))
 }
 
 // MetricExists — does any spelling of this name exist in VM.
@@ -529,7 +529,7 @@ func (s *Service) labelNamesBetweenSvc(ctx context.Context, cfg Settings, metric
 		"end":     {promTime(to)},
 		"match[]": {"{" + strings.Join(matchers, ", ") + "}"},
 	}
-	res, err := promapi.QueryStringsMeta(ctx, s.request("/api/v1/labels", params, cfg))
+	res, err := promapi.QueryStringsMeta(ctx, s.requestCtx(ctx, "/api/v1/labels", params, cfg))
 	if err != nil {
 		return nil, false, err
 	}

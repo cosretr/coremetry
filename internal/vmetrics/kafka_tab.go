@@ -212,7 +212,7 @@ func (s *Service) KafkaLabelNames(ctx context.Context, metrics []string, from, t
 		"end":     {promTime(to)},
 		"match[]": {KafkaLabelNamesSelector(metrics)},
 	}
-	res, err := promapi.QueryStringsMeta(ctx, s.request("/api/v1/labels", params, cfg))
+	res, err := promapi.QueryStringsMeta(ctx, s.requestCtx(ctx, "/api/v1/labels", params, cfg))
 	if err != nil {
 		return nil, err
 	}
@@ -255,7 +255,7 @@ func (s *Service) KafkaLabelValues(ctx context.Context, metrics []string, label,
 		"match[]": sels,
 		"limit":   {strconv.Itoa(limit)},
 	}
-	res, err := promapi.QueryStringsMeta(ctx, s.request("/api/v1/label/"+url.PathEscape(l)+"/values", params, cfg))
+	res, err := promapi.QueryStringsMeta(ctx, s.requestCtx(ctx, "/api/v1/label/"+url.PathEscape(l)+"/values", params, cfg))
 	if err != nil {
 		return nil, err
 	}

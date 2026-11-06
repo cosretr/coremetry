@@ -12410,3 +12410,10 @@ Kaynak: `docs/metrics/metrics-explore-dashboards-audit.md` (onaylı, §11) · mo
   döndürdüyse kesin; pencere doluysa TEK `count(q)` aralık sorgusu, en yüksek nokta (eşzamanlı seri; gelip giden
   serilerde alt sınır). CH: SQL değişmedi; aynı `RankSeries` 50k satır sınırlı sonuçta Go'da sıralar (`ORDER BY … LIMIT`
   rollup katmanlarına da girmek zorundaydı). Anlık sorgu: Go'da kesim. `meta.limit/rank`; capabilities `topN{mode}`.
+- **v0.10.1839 — cluster kapsamı (1.5, davranış değişikliği — onaylı).** `?cluster=` names / labels / attr-keys / query /
+  promql / histogram / bundle (sorgu dizesinde) / discover uçlarında; yok ya da "all" = kapsamsız, anahtar bayt-aynı.
+  VM: TEK `extra_filters[]={<etiket>="<cluster>"}` (sorgu metni değişmez; seçiciler de kapsanır) — etiket
+  `LabelMap.Cluster`, boşsa `k8s_cluster_name` (RoleCandidates ilk aday); birden çok extra_filters[]'ın OR/AND kuralı
+  belgede yok, yazım başına OR göndermek panelleri boşaltabilirdi. Kapsam ctx üzerinde (`requestCtx`): her VM okuması
+  (Test probu hariç) aynı yoldan kurulur. CH: builder okumalarına `cluster =` koşulu (metricClusterExpr coalesce); ad /
+  etiket seçicileri ve PromQL kapsanamaz → param yok sayılır, anahtar çatallanmaz, capabilities `clusterScope` söyler.

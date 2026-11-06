@@ -99,7 +99,7 @@ func (s *Service) QueryMetricHistogram(ctx context.Context, f chstore.MetricQuer
 	recordQuery(ctx, q) // v0.10.1271 — kanıt çipi
 	// v0.10.1835 — QuerySeriesMeta (DecodeSeries'in kendi gövdesi): seriler
 	// bayt-aynı, ek olarak tavan/kısmi bayrakları HTTP meta zarfına gider.
-	res, err := promapi.QuerySeriesMeta(ctx, s.request("/api/v1/query_range", params, cfg))
+	res, err := promapi.QuerySeriesMeta(ctx, s.requestCtx(ctx, "/api/v1/query_range", params, cfg))
 	if err != nil {
 		return nil, err
 	}
@@ -370,7 +370,7 @@ func (s *Service) QueryPromQLRange(ctx context.Context, query string, from, to t
 		"step":  {strconv.Itoa(step) + "s"},
 	}
 	recordQuery(ctx, q) // v0.10.1271 — kanıt çipi
-	res, err := promapi.QuerySeriesMeta(ctx, s.request("/api/v1/query_range", params, cfg))
+	res, err := promapi.QuerySeriesMeta(ctx, s.requestCtx(ctx, "/api/v1/query_range", params, cfg))
 	if err != nil {
 		return nil, err
 	}
@@ -420,7 +420,7 @@ func (s *Service) QueryPromQLInstant(ctx context.Context, query string, at time.
 	if at.IsZero() {
 		at = time.Now()
 	}
-	res, err := promapi.QuerySeriesMeta(ctx, s.request("/api/v1/query", url.Values{"query": {q}, "time": {promTime(at)}}, cfg))
+	res, err := promapi.QuerySeriesMeta(ctx, s.requestCtx(ctx, "/api/v1/query", url.Values{"query": {q}, "time": {promTime(at)}}, cfg))
 	if err != nil {
 		return nil, err
 	}
