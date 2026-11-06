@@ -319,6 +319,8 @@ eşleşmeli** (`var(--warn, #facc15)` reddedilir; yedek, :root'taki gerçek
 TraceMinimap yedeklerini :root'a karşı çiviliyor). Motor marka rengi ise
 dosya-içi gerekçe yorumu şart.
 
+**Butonlar "Öneri B" (v0.10.1888, operatör seçimi):** `shadcn/button` `outline`/`secondary` mavi TONLU (`--accent-bg` + `--accent2`), birincil dolu, seçim (`aria-pressed`, toggle açık, SegmentedControl) DOLU birincil. Seçimi elle `--accent-bg` tonuyla çizme — ton artık boşta görünüm.
+
 **Renk rolleri (v0.10.920, sade palet):** `--accent` = DOLGU (birincil
 buton, seçim rayı; üstünde `--on-accent`), `--accent2` = bağlantı/vurgu
 METNİ, `--accent-hover` = dolgunun hover'ı, `--focus` = odak halkası ve

@@ -13073,3 +13073,27 @@ değer", "Bu aralıkta seri yok".
   `overviewMetricHref.test` (kapı `mtype=histogram` yazar). Doğrulanmadı: tarayıcı / gerçek VM.
 - Bilinen sınır: `mtype` taşımayan ESKİ yer imleri (1861–1886 arası kopyalanmış Overview bağlantıları) hâlâ gösterge
   olarak açılır; fonksiyon menüsünden "ortalama" seçilerek düzeltilir.
+
+## 2026-11-06 — v0.10.1888 — Butonlar: "Öneri B" (tonlu ikincil, dolu birincil, dolu seçim)
+
+Operatör 2026-11-06: "Butonlar daha modern olabilir, siyah gri düz test gibi gözüküyor." Örnek ekranda (bugün / Öneri A
+yumuşak-katmanlı / Öneri B belirgin-renkli) **B'yi seçti** ("Buton öneri b olsun").
+
+- **Ne değişti (yalnız ortak bileşenler):**
+  - `shadcn/button`: `outline` ve `secondary` artık mavi TONLU — zemin `--accent-bg`, metin `--accent2`, outline'da çerçeve
+    `--accent-border` (üstüne gelince `--accent2`). `default` / `accent` dolu birincil + yumuşak mavi gölge. `ghost`,
+    `destructive`, `ghost-danger`, `link` aynı. Basılı durum (`aria-pressed="true"`) outline/secondary'de DOLU birincil.
+  - `shadcn/toggle`: açık durum (`data-state=on`) dolu birincil (eskiden `--bg3` gri).
+  - `coremetry/SegmentedControl`: çerçeveli bitişik hücreler yerine yumuşak zeminli ray + dolu birincil seçim; dış
+    yükseklik aynı (md 36, sm 28 px).
+  - `MLEventPlayer` adım düğmeleri: seçili adımın elle yazılmış tonu kalktı (ton artık boşta görünüm; seçim
+    `aria-pressed` ile dolu).
+- **Yeni renk / belirteç yok.** Kontrast altı temada ölçüldü (WCAG): tonlu metin `--accent2` / `--accent-bg` en düşük
+  4,87 (redhat), dolu `--on-accent` / `--accent` en düşük 4,61 (koyu) — hepsi ≥ 4,5.
+- **Bu karar "renk yalnız sapma, seçim, odak, bağlantı ve veri için" kuralını (v0.10.920 sade palet) BUTONLAR için
+  aşar:** ikincil eylem düğmeleri boşta da renklidir. Kural tablo hücreleri, rozetler ve durum için geçerli kalır.
+  Seçim artık tonla değil DOLGUYLA gösterilir (ton boşta görünüm olduğu için).
+- **Bilinçli dışarıda:** boyutlar değişmedi (örnek ekrandaki 32 px yükseklik uygulanmadı — sıkışık araç çubuklarında
+  yerleşim kayması riski); yazı ağırlığı aynı; çipler hap biçimine çevrilmedi (tonlu outline'ı devralırlar). Taşınmamış
+  eski sayfalardaki `ui/Button` (`button.sec`) eski görünümde; sayfa dilimleri taşındıkça yenilenir.
+- Tek commit, geri alınabilir. Doğrulanmadı: tarayıcı (altı tema, yoğun ekranlar).

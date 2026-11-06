@@ -12,21 +12,26 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90",
+        // coremetry: v0.10.1888 "Öneri B" (operatör 2026-11-06: "Buton öneri b olsun") —
+        // birincil dolu + yumuşak mavi gölge; ikincil (outline / secondary) mavi
+        // TONLU (--accent-bg zemin, --accent2 metin); seçili (aria-pressed) dolu
+        // birincil. Yeni renk yok: hepsi mevcut tema belirteçleri.
+        default: "bg-primary text-primary-foreground shadow-[0_2px_8px_var(--accent-border)] hover:bg-primary/90",
         // coremetry: text-destructive-foreground (← --on-accent), not text-white (v0.10.1848);
         // no dark:bg-destructive/60 — on-accent/err-solid is measured on the SOLID fill (v0.10.1850)
         destructive:
           "bg-destructive text-destructive-foreground hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40",
         // /coremetry
         outline:
-          "border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
+          "border border-(--accent-border) bg-(--accent-bg) text-(--accent2) hover:border-(--accent2) aria-pressed:border-primary aria-pressed:bg-primary aria-pressed:text-primary-foreground",
         secondary:
-          "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+          "bg-(--accent-bg) text-(--accent2) hover:shadow-[inset_0_0_0_1px_var(--accent-border)] aria-pressed:bg-primary aria-pressed:text-primary-foreground",
+        // /coremetry
         ghost:
           "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
         link: "text-primary underline-offset-4 hover:underline",
         // coremetry: accent + ghost-danger (plan §5.4 #3) — tokens only
-        accent: "bg-primary text-primary-foreground hover:bg-primary/90",
+        accent: "bg-primary text-primary-foreground shadow-[0_2px_8px_var(--accent-border)] hover:bg-primary/90",
         "ghost-danger":
           "text-status-critical hover:bg-status-critical-bg hover:text-status-critical",
         // /coremetry

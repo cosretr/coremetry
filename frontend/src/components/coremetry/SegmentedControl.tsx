@@ -12,6 +12,10 @@
 // Radix'in gezici odağı KAPALI (rovingFocus={false}): klavye mantığı
 // bugünkü atomun birebir kopyası — Radix'in setTimeout'lu odak taşıması ve
 // "devre dışı seçili" durumundaki Tab davranışı sözleşmeyi değiştirirdi.
+//
+// v0.10.1888 "Öneri B" (operatör 2026-11-06): çerçeveli bitişik hücreler yerine
+// yumuşak zeminli ray + DOLU birincil seçim (shadcn toggle `data-[state=on]`).
+// Dış yükseklik aynı (md 36 px, sm 28 px): ray 3 px iç boşluk + hücre.
 import { useRef, type KeyboardEvent, type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { ToggleGroup, ToggleGroupItem } from '@/components/shadcn/toggle-group';
@@ -67,10 +71,11 @@ export function SegmentedControl<T extends string>({
   const sel = options.findIndex(o => o.value === value);
   const selectedIdx = sel >= 0 && !options[sel].disabled ? sel : (enabled[0] ?? 0);
   return (
-    <ToggleGroup type="single" rovingFocus={false} variant="outline" size={size === 'sm' ? 'sm' : 'default'}
+    <ToggleGroup type="single" rovingFocus={false} variant="default" spacing={0.5} size={size === 'sm' ? 'sm' : 'default'}
       value={value} onValueChange={v => { if (v) onChange(v as T); }}
       aria-label={aria['aria-label']} title={title}
-      className={cn(size === 'sm' && '[&>*]:h-7 [&>*]:text-xs', className)}>
+      className={cn('rounded-lg bg-secondary p-[3px] [&>*]:rounded-md [&>*]:text-muted-foreground [&>*:hover]:text-foreground',
+        size === 'sm' ? '[&>*]:h-[22px] [&>*]:text-xs' : '[&>*]:h-[30px]', className)}>
       {options.map((o, i) => (
         <ToggleGroupItem key={o.value} value={o.value} ref={el => { refs.current[i] = el; }}
           tabIndex={i === selectedIdx ? 0 : -1} title={o.title} disabled={o.disabled}

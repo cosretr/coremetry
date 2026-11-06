@@ -105,7 +105,6 @@ export function MLEventPlayer({ snap, play, autoPlay = false, above, series }: {
           <div className="inline-flex flex-wrap gap-1" role="group" aria-label="Olay adımları">
             {play.steps.map((s, j) => (
               <Button key={s.key} size="sm" variant="outline" aria-pressed={j === act} data-testid={`ml-step-${s.key}`}
-                className={j === act ? 'border-[color:var(--accent)] bg-[color:var(--accent-bg)] text-[color:var(--accent2)]' : ''}
                 onClick={() => { setPlaying(false); setI(stepIdx[j]); }}>{s.label}</Button>
             ))}
           </div>
