@@ -67,6 +67,10 @@ func TestMLHandlersReturnCardAndSummary(t *testing.T) {
 	if !regexp.MustCompile(`"course":\s*s\.mlCourse\(ctx, in, src\.Config\)`).MatchString(body("getMLReplay")) {
 		t.Error("getMLReplay course katmanını döndürmüyor")
 	}
+	// v0.10.1876 — detay kartının profili de batch adını çözer (liste ile aynı yardımcı).
+	if !strings.Contains(body("getMLReplay"), "ml.ResolveProfile(src.Profile, service,") {
+		t.Error("getMLReplay batch adlı revizyonsuz servisi çözmüyor")
+	}
 	if !strings.Contains(mlReplayKey("a", "UTC"), "ml:replay:v3:") {
 		t.Error("replay yanıt şekli değişti, anahtar sürümü v3 olmalı")
 	}
@@ -120,6 +124,13 @@ func TestMLEventRowsCarrySparkAndProfile(t *testing.T) {
 	bare := mlEventRows([]chstore.MLEvent{ev}, chstore.MLConfig{}, start, loc, mlListExtras{})
 	if bare[0].Spark != nil || bare[0].Profile != "unknown" || bare[0].ProfileLabel != "" {
 		t.Errorf("toplu okuma yoksa boş: %+v", bare[0])
+	}
+	// v0.10.1876 — regresyon: revizyonu olmayan batch adlı servis "batch".
+	bev := ev
+	bev.Service = "inventory-core-batch"
+	isBatch := func(s string) bool { return strings.HasSuffix(s, "-batch") }
+	if b := mlEventRows([]chstore.MLEvent{bev}, chstore.MLConfig{}, start, loc, mlListExtras{IsBatch: isBatch}); b[0].Profile != "batch" || b[0].ProfileLabel != "batch" {
+		t.Errorf("batch adı: %q %q", b[0].Profile, b[0].ProfileLabel)
 	}
 	if !strings.Contains(mlEventsKey(1, "", "", "", "", "UTC"), "ml:events:v4:") {
 		t.Error("liste şekli değişti, anahtar v4 olmalı")

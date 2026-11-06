@@ -64,6 +64,9 @@ func TestClassifyProfile(t *testing.T) {
 		}), ProfileLowTraffic},
 		{"batch adı ilk kural", "orders-batch", callsWeeks("orders-batch", 4, func(int, int) uint32 { return 5000 }), ProfileBatch},
 		{"satır yok → bilinmiyor", "orders-api", nil, ProfileUnknown},
+		// v0.10.1876 — regresyon: adı batch olan ama taban satırı olmayan servis
+		// "unknown" kalıyordu; batch kuralı addan çıkar, sayı istemez.
+		{"satır yok ama batch adı → batch", "orders-batch", nil, ProfileBatch},
 		{"pencere dışı satır sayılmaz", "orders-api", func() []chstore.MLBaselineObs {
 			o := callsWeeks("orders-api", 1, func(int, int) uint32 { return 5000 })
 			for i := range o {
@@ -170,7 +173,7 @@ func TestRunProfilesWritesOnlyChanges(t *testing.T) {
 			"orders-api":      callsWeeks("orders-api", 5, always),      // zaten 7/24 → yazım yok
 			"branch-teller":   callsWeeks("branch-teller", 5, always),   // sabitli → ezilmez
 			"payments-mobile": callsWeeks("payments-mobile", 5, always), // kayıtsız, iki hafta 7/24 → yazılır
-			"orders-batch":    callsWeeks("orders-batch", 1, always),    // yalnız son hafta: önceki hafta bilinmiyor → bekler
+			"orders-batch":    callsWeeks("orders-batch", 1, always),    // v0.10.1876: önceki hafta satırsız ama ad batch → iki hafta da batch → yazılır
 		},
 		latest: []chstore.MLLearnedRow{same, pinned},
 	}
@@ -178,12 +181,43 @@ func TestRunProfilesWritesOnlyChanges(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Services != 4 || res.Changed != 1 || len(st.written) != 1 {
+	if res.Services != 4 || res.Changed != 2 || len(st.written) != 2 {
 		t.Fatalf("res=%+v written=%+v", res, st.written)
 	}
-	w := ServiceProfileFromRow(st.written[0])
-	if w.Service != "payments-mobile" || w.Profile != ProfileAlwaysOn || w.Pinned || w.Source != "auto" || w.Evidence == nil || st.written[0].CreatedBy != profileAuthorAuto {
+	got := map[string]ServiceProfile{}
+	for _, r := range st.written {
+		got[r.Key] = ServiceProfileFromRow(r)
+	}
+	w := got["payments-mobile"]
+	if w.Service != "payments-mobile" || w.Profile != ProfileAlwaysOn || w.Pinned || w.Source != "auto" || w.Evidence == nil {
 		t.Fatalf("yazılan %+v", w)
+	}
+	if b := got["orders-batch"]; b.Profile != ProfileBatch || b.Pinned {
+		t.Fatalf("v0.10.1876: batch adı önceki hafta satırsız da batch yazılır: %+v", b)
+	}
+	for _, r := range st.written {
+		if r.CreatedBy != profileAuthorAuto {
+			t.Fatalf("yazar %q", r.CreatedBy)
+		}
+	}
+}
+
+// v0.10.1876 — okuma yolu: revizyonsuz / bilinmiyor + batch adı → batch;
+// hesaplanmış ya da sabitlenmiş profil ezilmez.
+func TestResolveProfile(t *testing.T) {
+	for _, c := range []struct{ p, svc, want string }{
+		{"", "orders-batch", ProfileBatch},
+		{ProfileUnknown, "orders-batch", ProfileBatch},
+		{"", "orders-api", ProfileUnknown},
+		{ProfileAlwaysOn, "orders-batch", ProfileAlwaysOn},
+		{ProfileLowTraffic, "orders-api", ProfileLowTraffic},
+	} {
+		if got := ResolveProfile(c.p, c.svc, isBatchSuffix); got != c.want {
+			t.Errorf("%q/%s: %s, want %s", c.p, c.svc, got, c.want)
+		}
+	}
+	if ResolveProfile("", "orders-batch", nil) != ProfileUnknown {
+		t.Error("yüklem yoksa tahmin yok")
 	}
 }
 

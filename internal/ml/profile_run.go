@@ -39,6 +39,21 @@ type ServiceProfile struct {
 
 const profileAuthorAuto = "auto"
 
+// ResolveProfile — SAF (v0.10.1876): okuma yolunun profili. Revizyonu
+// olmayan (ya da "bilinmiyor" kalan) servisin adı batch kalıbına giriyorsa
+// "batch" — sınıflandırıcının ilk kuralı da ADDAN çıkar, taban satırı
+// gerekmez (haftalık koşu yazana dek liste/detay "bilinmiyor" demesin).
+// Elle sabitlenmiş ya da hesaplanmış profil EZİLMEZ.
+func ResolveProfile(p, service string, isBatch func(string) bool) string {
+	if (p == "" || p == ProfileUnknown) && isBatch != nil && isBatch(service) {
+		return ProfileBatch
+	}
+	if p == "" {
+		return ProfileUnknown
+	}
+	return p
+}
+
 // ServiceProfileFromRow — SAF: revizyon satırı → API satırı. Boş satır = bilinmiyor.
 func ServiceProfileFromRow(r chstore.MLLearnedRow) ServiceProfile {
 	out := ServiceProfile{Service: r.Key, Profile: ProfileUnknown, Source: "auto", Rev: r.Rev}

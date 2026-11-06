@@ -12853,3 +12853,11 @@ görünüm 1–4. Parti A'nın (1842–1846) üstüne; ana grafik (olay anı kay
     ML kopyasında açıklama = özet, kural adı `ML · <parça>`; `chstore.MLPromotedHeadline` `anomaly-auto:` ailesinde bu adı
     görünce manşeti (= e-posta/sohbet konusu, `trTopic`) özet yapar. RuleID ailesi değişmez (bildirim türü, kategori,
     süpürme aynı); ML dışı terfiler bayt bayt aynı. ML terfisi varsayılan KAPALI — bugün etkisi yalnız terfi açılınca.
+- **v0.10.1876 — adı batch olan ama taban satırı olmayan servisin profili "batch" (unknown değil).** Kök neden:
+  `ClassifyProfile` pencerede `_calls` satırı yoksa batch adını bile tartmadan `unknown` dönüyordu; batch kuralı ADDAN
+  çıkar (`IsBatchService` tek yüklem), sayı istemez. Düzeltme iki yerde: (1) sınıflandırıcı satırsız pencerede de batch
+  adına `batch` der — histerezis iki haftayı aynı bulur, haftalık koşu revizyon yazar (yalnız son haftası olan batch servis
+  artık bekletilmez); (2) okuma yolu `ml.ResolveProfile` — revizyonu olmayan / `unknown` kalan batch adlı servis liste
+  "Servis tipi" sütununda ve detay başlık çipinde "batch"; hesaplanmış ya da elle sabitlenmiş profil ezilmez. Profil
+  yönetim listesi (`/api/ml/profiles`) dokunulmadı: SQL profil süzgeciyle çelişmesin, revizyon haftalık koşuyla gelir.
+  Regresyon testleri `profile_test.go` (`satır yok ama batch adı → batch`, `TestResolveProfile`), `ml_card_test.go`.

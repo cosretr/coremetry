@@ -6,7 +6,9 @@ package ml
 // Girdi: ml_baseline_obs'un trace "_calls" satırları (servis düzeyi trafik
 // = route "|count" serilerinin kova toplamı, v0.10.1814) — saatlik çağrı.
 // Satırı olmayan servis değerlendirilmez (profili "bilinmiyor" kalır; tahmin
-// YOK). Log hacmi çağrı DEĞİL: yedek kaynak olarak kullanılmaz.
+// YOK) — TEK istisna adı batch kalıbına giren servis (v0.10.1876): batch
+// kuralı ADDAN çıkar, sayı istemez; taban satırı olmasa da "batch".
+// Log hacmi çağrı DEĞİL: yedek kaynak olarak kullanılmaz.
 //
 // Kurallar (sırayla, ilk tutan; §4.4 birebir):
 //   batch          ad batch kalıplarıyla eşleşir (IsBatchService — tek yüklem)
@@ -117,7 +119,10 @@ func ClassifyProfile(service string, obs []chstore.MLBaselineObs, end time.Time,
 	}
 	ev := ProfileEvidence{Weeks: len(weeks)}
 	batch := isBatch != nil && isBatch(service)
-	if len(weeks) == 0 { // pencerede satır yok: tahmin yok (batch adı da olsa)
+	if len(weeks) == 0 { // pencerede satır yok: tahmin yok — batch adı hariç (v0.10.1876)
+		if batch {
+			return ProfileBatch, ev
+		}
 		return ProfileUnknown, ev
 	}
 	keys := make([]int64, 0, len(weeks))

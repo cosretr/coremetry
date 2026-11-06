@@ -83,16 +83,18 @@ type mlEventRow struct {
 type mlListExtras struct {
 	Series   map[string]string               // olay id → kayıt serisi (JSON)
 	Profiles map[string]chstore.MLLearnedRow // servis → profil revizyonu
+	IsBatch  func(string) bool               // v0.10.1876 — revizyonsuz batch adı → "batch"
 }
 
 // mlEventRows — SAF: olaylar → özetli satırlar (+ seyir, servis tipi).
 func mlEventRows(items []chstore.MLEvent, cfg chstore.MLConfig, now time.Time, loc *time.Location, ex mlListExtras) []mlEventRow {
 	out := make([]mlEventRow, len(items))
 	for i, e := range items {
-		p := ml.ProfileUnknown
+		p := ""
 		if row, ok := ex.Profiles[e.Service]; ok {
 			p = ml.ServiceProfileFromRow(row).Profile
 		}
+		p = ml.ResolveProfile(p, e.Service, ex.IsBatch)
 		out[i] = mlEventRow{MLEvent: e, Summary: ml.ExplainSummary(ml.SummaryInput(e, cfg, now, loc)),
 			Spark: ml.BuildSpark(ex.Series[e.ID], e.StartedAt, e.LastSeen), Profile: p, ProfileLabel: ml.ProfileLabelTR(p)}
 	}
@@ -112,7 +114,7 @@ func (s *Server) mlListExtrasFor(ctx context.Context, items []chstore.MLEvent) m
 			svcs = append(svcs, e.Service)
 		}
 	}
-	var ex mlListExtras
+	ex := mlListExtras{IsBatch: s.store.AnomalySensitivityForDetectors().IsBatchService}
 	if m, err := s.store.MLSnapshotSeriesFor(ctx, ids); err == nil {
 		ex.Series = m
 	}
@@ -374,6 +376,8 @@ func (s *Server) getMLReplay(w http.ResponseWriter, r *http.Request) {
 		if row, ok, perr := s.store.MLLearnedOne(ctx, chstore.MLLearnedKindProfile, service); perr == nil && ok {
 			src.Profile = ml.ServiceProfileFromRow(row).Profile
 		}
+		// v0.10.1876 — revizyonsuz batch adlı servis "bilinmiyor" değil "batch".
+		src.Profile = ml.ResolveProfile(src.Profile, service, s.store.AnomalySensitivityForDetectors().IsBatchService)
 		in, _ := ml.AssembleCardInput(src)
 		return map[string]any{"snapshot": snapOut, "related": others, "card": ml.BuildExplainCard(in), "verdict": mlReplayVerdict(src.Event),
 			"course": s.mlCourse(ctx, in, src.Config)}, nil
