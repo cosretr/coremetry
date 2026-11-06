@@ -27,8 +27,8 @@ export interface BrandingSettings {
   // (varsayılan), 'off' = kapalı (chstore.BrandingSettings.OnboardingTour).
   onboardingTour?: '' | 'on' | 'off';
   // v0.10.1907 — Login sayfası (chstore.BrandingSettings): kurum adı (kart
-  // başlığı, ≤ 60) + üç ayar. Boş = varsayılan (özet açık, söz açık, topoloji
-  // isimsiz). Sunucu doğrular; istemci yalnız 'off' / 'named' anlamlarını okur.
+  // başlığı, ≤ 60) + üç ayar. Boş = varsayılan (özet açık, söz KAPALI, topoloji
+  // isimsiz). Sunucu doğrular; istemci 'off' (özet/topoloji), 'named' (topoloji), 'on' (söz) anlamlarını okur.
   orgName?: string;
   loginSummary?: '' | 'on' | 'off';
   loginQuote?: '' | 'on' | 'off';
@@ -64,7 +64,7 @@ export const DEFAULT_BRANDING: Required<BrandingSettings> = {
   onboardingTour:    'on', // v0.10.1334 — varsayılan açık
   orgName:           '',
   loginSummary:      'on',
-  loginQuote:        'on',
+  loginQuote:        'off', // operatör kararı: günün sözü varsayılan KAPALI
   loginTopology:     'anonymous',
 };
 
@@ -90,7 +90,7 @@ export function resolveBranding(b: BrandingSettings | null | undefined): Require
   if (b.onboardingTour === 'off') r.onboardingTour = 'off'; // v0.10.1334 — yalnız 'off' kapatır
   r.orgName = (b.orgName ?? '').trim();
   if (b.loginSummary === 'off') r.loginSummary = 'off';
-  if (b.loginQuote === 'off') r.loginQuote = 'off';
+  if (b.loginQuote === 'on') r.loginQuote = 'on'; // yalnız 'on' açar ("" / 'off' = kapalı)
   if (b.loginTopology === 'off' || b.loginTopology === 'named') r.loginTopology = b.loginTopology;
   return r;
 }

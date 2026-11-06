@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState, FormEvent } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState, FormEvent } from 'react';
 import { cn } from 'cn';
 import { useAuth } from '@/components/AuthProvider';
 import { TelescopeIcon } from '@/components/TelescopeIcon';
@@ -12,12 +12,19 @@ import { oidcStartHref } from '@/lib/postLoginRedirect';
 import { useT } from '@/lib/i18n';
 import { LOGIN_WIDE_QUERY, shouldFetchSummary, summaryUsable } from '@/lib/loginSummary';
 import { useLoginSummary } from '@/lib/queries/loginSummary';
+import { backdropMode, type GraphSource } from '@/lib/loginTopology/frame';
+import { syntheticGraph } from '@/lib/loginTopology/synthetic';
+import { currentTheme } from '@/lib/theme';
+import { themeEntry } from '@/lib/themeRegistry';
 import { useMediaQuery } from '@/lib/useMediaQuery';
+import { useThemeTick } from '@/lib/useThemeTick';
 import { LoginTopBar } from './LoginTopBar';
 import { LoginSummarySkeleton } from './SummaryShell';
 
 // Özet sütunu lazy: ilk boyama yalnız form; chunk yalnız ≥ 1100 px ve özet hazırken iner.
 const LoginSummary = lazy(() => import('./LoginSummary'));
+// v0.10.1909 — topoloji arka planı lazy canvas (yalnız ≥ 1100 px, Yüksek Kontrast dışı, ayar `off` değil).
+const TopologyBackdrop = lazy(() => import('./TopologyBackdrop'));
 
 // v0.10.1906 — Login yeniden tasarımı dilim 2.1 (audit §3, §6.1, §6.4). Dosya
 // `pages/login/` altında: Tailwind yalnız index.css `@source` dizinlerini tarar
@@ -133,6 +140,26 @@ export default function LoginPage() {
   const sumData = summaryUsable(summary.data) ? summary.data : null;
   const showSide = sumOn && (summary.isPending || !!sumData);
 
+  // v0.10.1909 — arka plan. Veri: özetteki topoloji (varsa ≥ 1 düğüm); özet sonuçlandı ama
+  // topoloji yoksa (kapalı/hata/429/ready:false/loginTopology=off değilken veri yok) SENTETİK
+  // graf; özet sonuçlanmadıysa bekler (yerleşim ilk gelen grafikle BİR KEZ kurulur).
+  const reduced = useMediaQuery('(prefers-reduced-motion: reduce)');
+  const themeTick = useThemeTick();
+  const highContrast = useMemo(() => themeEntry(currentTheme()).contrast === 'aaa',
+    // themeTick: tema değişince yeniden hesapla (data-theme gözlemcisi).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [themeTick]);
+  const realTopo = sumData?.topology && sumData.topology.nodes.length > 0 ? sumData.topology : null;
+  const source: GraphSource = realTopo ? 'real' : (!sumOn || !summary.isPending) ? 'synthetic' : 'pending';
+  const bd = backdropMode({ setting: brand.loginTopology, wide, highContrast, reducedMotion: reduced, source });
+  const synth = useMemo(() => syntheticGraph(), []);
+  const backdropGraph = realTopo ?? synth;
+  const topoNote = bd.kind === 'canvas' && realTopo
+    ? t('login.topo.note')
+        .replace('{n}', String(realTopo.nodes.filter(n => n.tier !== 'db').length))
+        .replace('{m}', String(Math.max(1, Math.round(realTopo.window_s / 60))))
+    : null;
+
   const invalidMsg = t('login.invalid');
   const ldapParts = t('login.ldapNote').split('{account}');
 
@@ -143,11 +170,21 @@ export default function LoginPage() {
     // `dvh` iOS araç çubuğunu sayar). Zemin `--bg0` (redhat'te `--bg` ≠ uygulama
     // zemini; giriş → uygulama geçişinde zemin sıçramasın).
     <div className="relative grid min-h-dvh place-items-center overflow-auto bg-(--bg0) px-6 pb-6 pt-16">
+      {bd.kind === 'canvas' && (
+        <>
+          <Suspense fallback={null}>
+            <TopologyBackdrop graph={backdropGraph} animated={bd.animated} />
+          </Suspense>
+          <div aria-hidden="true" className="login-veil pointer-events-none absolute inset-0" />
+        </>
+      )}
       <LoginTopBar />
       {/* 340px SABİTTİ: 320px'lik viewport'ta form yatay taşıyordu. Tavan aynı,
           taban akışkan. */}
       <div className={cn(
-        'border border-border bg-card shadow-pop',
+        'relative z-10 border border-border bg-card shadow-pop',
+        // Koyu şemada kart %86 opak + blur: arkadaki siluet yazıya karışmadan sezilir (açıkta düz).
+        bd.kind === 'canvas' && 'dark:bg-card/86 dark:backdrop-blur-[6px]',
         showSide
           ? 'grid w-[min(1120px,calc(100vw-48px))] grid-cols-[480px_1fr] overflow-hidden rounded-2xl'
           : 'w-[min(340px,100%)] rounded-lg',
@@ -264,6 +301,9 @@ export default function LoginPage() {
           </Suspense>
         )}
       </div>
+      {topoNote && (
+        <div className="absolute bottom-7 left-10 z-10 text-[length:var(--fs-xs)] text-(--text3)">{topoNote}</div>
+      )}
     </div>
   );
 }

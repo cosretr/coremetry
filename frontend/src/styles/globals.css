@@ -1980,6 +1980,14 @@ tbody td.dt-state.dt-state--loading, [data-density] tbody td.dt-state.dt-state--
 /* v0.10.678 — trace toplam süresi: şeridin en belirgin sayısı (operatör isteği);
    Trace.tsx özet şeridi + TraceKiosk başlığı aynı sınıfı kullanır. */
 .trace-summary__dur { font-weight: 700; font-size: var(--fs-lg); color: var(--text); font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }
+/* v0.10.1909 (Login topoloji arka planı, audit §6.3) — canvas ile kart arasındaki perde:
+   merkez %10 → kenar %88 `--bg0`; form/özet okunur, siluet kenarlarda sezilir. */
+.login-veil {
+  background: radial-gradient(ellipse at 50% 50%,
+    color-mix(in srgb, var(--bg0) 10%, transparent) 0%,
+    color-mix(in srgb, var(--bg0) 55%, transparent) 55%,
+    color-mix(in srgb, var(--bg0) 88%, transparent) 100%);
+}
 /* Pinned action column (v0.8.573 — Endpoints "Traces"). Wide tables
    overflow .table-wrap's horizontal scroll and the scrollbar renders
    below ALL the rows, so a trailing drill-through column was invisible

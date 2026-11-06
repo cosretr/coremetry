@@ -290,9 +290,10 @@ const READY: LoginSummary = {
   activity_24h: { rollouts_tracked: 3, logins: 47, cosre_questions: 61, traces_viewed: 12_400 },
   components: { state: 'ok', checked_at: Date.UTC(2026, 10, 6, 20, 34), clickhouse_uncompressed_bytes: 4.2 * 1024 ** 4 },
 };
-function stubWide(wide: boolean) {
+function stubWide(wide: boolean, reduced = false) {
   vi.stubGlobal('matchMedia', (q: string) => ({
-    matches: wide && q.includes('1100px'), media: q, onchange: null,
+    matches: (wide && q.includes('1100px')) || (reduced && q.includes('reduced-motion')),
+    media: q, onchange: null,
     addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, dispatchEvent: () => false,
   }));
 }
@@ -364,5 +365,122 @@ describe('Login — özet sütunu', () => {
     expect(aside.textContent).toContain('Toplam span (bugün)');
     expect(aside.textContent).toContain('Anonim özet · hatalar ve ayrıntılar giriş sonrasında');
     expect(aside.textContent).toContain('3 rollout izlendi');
+  });
+});
+
+// ── v0.10.1909 — topoloji arka planı (dilim 3.2) ─────────────────────────────
+const TOPO: NonNullable<LoginSummary['topology']> = {
+  window_s: 900, named: false,
+  nodes: [
+    { id: 'a1', tier: 'gw', weight: 1 }, { id: 'b1', tier: 'bff', weight: 0.5 },
+    { id: 'c1', tier: 'svc', weight: 0.3 }, { id: 'd1', tier: 'db', weight: 0.2 },
+  ],
+  edges: [{ from: 'a1', to: 'b1', weight: 0.9 }, { from: 'b1', to: 'c1', weight: 0.4 }, { from: 'c1', to: 'd1', weight: 0.2 }],
+};
+const canvasQ = (h: HTMLElement) => h.querySelector('[data-testid="login-topology"]');
+
+describe('Login — topoloji arka planı', () => {
+  let raf: ReturnType<typeof vi.fn>;
+  beforeEach(() => {
+    // jsdom'da canvas bağlamı yok: her çağrıyı yutan sahte bağlam.
+    const ctx = new Proxy({}, { get: () => () => {}, set: () => true });
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(ctx as unknown as CanvasRenderingContext2D);
+    raf = vi.fn(() => 1);
+    vi.stubGlobal('requestAnimationFrame', raf);
+    vi.stubGlobal('cancelAnimationFrame', () => {});
+    document.documentElement.removeAttribute('data-theme');
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    document.documentElement.removeAttribute('data-theme');
+    Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+  });
+
+  it('gerçek topoloji: canvas + perde + sol alt not (N servis, db sayılmaz, son 15 dk)', async () => {
+    stubWide(true);
+    m.summary = { ...READY, topology: TOPO };
+    const h = await mount(); await settle();
+    expect(canvasQ(h)).not.toBeNull();
+    expect(canvasQ(h)!.getAttribute('aria-hidden')).toBe('true');
+    expect(h.querySelector('.login-veil')).not.toBeNull();
+    expect(h.textContent).toContain('Live topology silhouette · 3 services · last 15 min · details after sign-in');
+    expect(raf).toHaveBeenCalled(); // canlı kip: animasyon
+  });
+
+  it('loginTopology=off: canvas, perde ve not YOK (özet sütunu yine çalışır)', async () => {
+    stubWide(true);
+    m.brand = { loginTopology: 'off' };
+    m.summary = { ...READY, topology: TOPO };
+    const h = await mount(); await settle();
+    expect(canvasQ(h)).toBeNull();
+    expect(h.querySelector('.login-veil')).toBeNull();
+    expect(h.textContent).not.toContain('Live topology');
+    expect(h.querySelector('aside')).not.toBeNull();
+  });
+
+  it('dar ekran: canvas yok', async () => {
+    stubWide(false);
+    m.summary = { ...READY, topology: TOPO };
+    const h = await mount(); await settle();
+    expect(canvasQ(h)).toBeNull();
+  });
+
+  it('özet hata/429: SENTETİK graf çizilir, not YAZILMAZ', async () => {
+    stubWide(true);
+    m.summaryFail = true;
+    const h = await mount(); await settle();
+    expect(canvasQ(h)).not.toBeNull();
+    expect(h.textContent).not.toContain('Live topology');
+  });
+
+  it('özet kapalı (marka loginSummary=off): çağrı yok, sentetik graf', async () => {
+    stubWide(true);
+    m.brand = { loginSummary: 'off' };
+    const h = await mount(); await settle();
+    expect(m.summaryCalls).toBe(0);
+    expect(canvasQ(h)).not.toBeNull();
+    expect(h.querySelector('aside')).toBeNull();
+    expect(h.textContent).not.toContain('Live topology');
+  });
+
+  it('topoloji alanı yok (ready:true ama loginTopology veri vermedi): sentetik, not yok', async () => {
+    stubWide(true);
+    m.summary = READY;
+    const h = await mount(); await settle();
+    expect(canvasQ(h)).not.toBeNull();
+    expect(h.textContent).not.toContain('Live topology');
+  });
+
+  it('Yüksek Kontrast teması: canvas yok', async () => {
+    stubWide(true);
+    document.documentElement.setAttribute('data-theme', 'contrast');
+    m.summary = { ...READY, topology: TOPO };
+    const h = await mount(); await settle();
+    expect(canvasQ(h)).toBeNull();
+  });
+
+  it('prefers-reduced-motion: tek durağan kare (rAF yok)', async () => {
+    stubWide(true, true);
+    m.summary = { ...READY, topology: TOPO };
+    const h = await mount(); await settle();
+    expect(canvasQ(h)).not.toBeNull();
+    expect(raf).not.toHaveBeenCalled();
+  });
+
+  it('gizli sekme: rAF başlatılmaz', async () => {
+    stubWide(true);
+    Object.defineProperty(document, 'hidden', { configurable: true, value: true });
+    m.summary = { ...READY, topology: TOPO };
+    const h = await mount(); await settle();
+    expect(canvasQ(h)).not.toBeNull();
+    expect(raf).not.toHaveBeenCalled();
+  });
+
+  it('TR not metni', async () => {
+    setUserLang('tr');
+    stubWide(true);
+    m.summary = { ...READY, topology: TOPO };
+    const h = await mount(); await settle();
+    expect(h.textContent).toContain('Canlı topoloji silueti · 3 servis · son 15 dk · ayrıntılar giriş sonrasında');
   });
 });
