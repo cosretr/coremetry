@@ -3870,6 +3870,26 @@ export interface TraceDetailResponse {
   };
 }
 
+// v0.10.1880 (Log Search Faz 3 dilim 3.3) — satırın exception GÖSTERİM özeti
+// (internal/logstore/exception_summary.go ExceptionSummary; yalnız ES log yolu).
+export interface LogException {
+  type: string;
+  message?: string;
+  cause?: string;
+  /** resource | timeout | connectivity | database | null | auth */
+  class?: string;
+  /** "Yalnız kritik hatalar": kaynak tükenmesi ya da FATAL. */
+  critical?: boolean;
+  /** Stack'in okunduğu öznitelik; yoksa gövde. */
+  stackField?: string;
+  frames: number;
+  appFrames: number;
+  /** Stack metninin uygulama çerçevesi satır indeksleri. */
+  appLines?: number[];
+  /** En üstteki ≤3 uygulama çerçevesi (kısa). */
+  top?: string[];
+}
+
 export interface LogRow {
   id: number;
   timestamp: number;     // unix nanoseconds
@@ -3896,6 +3916,8 @@ export interface LogRow {
   // getirir (satır açılınca).
   partial?: boolean;
   docRef?: string;
+  /** v0.10.1880 — exception özeti (yalnız ES log yolu). */
+  exception?: LogException;
 }
 
 // v0.10.1831 — GET/PUT /api/settings/logs-search (internal/api/logs_search_settings.go

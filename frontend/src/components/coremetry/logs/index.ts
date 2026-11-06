@@ -10,6 +10,8 @@ export { LoadStatus } from './LoadStatus';
 export { FieldSidebar, fieldsPanelOpen } from './FieldSidebar';
 export { LogDetailSheet } from './LogDetailSheet';
 export { LogContextSection, CONTEXT_RUNGS } from './LogContextSection';
+export { StackBlock, ExceptionBadge, LogExceptionSection } from './StackBlock';
+export type { StackBlockProps } from './StackBlock';
 export type { LogContextSectionProps } from './LogContextSection';
 export type { LogDetailSheetProps } from './LogDetailSheet';
 export type { FieldSidebarProps, FieldStatsScope } from './FieldSidebar';

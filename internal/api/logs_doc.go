@@ -58,6 +58,9 @@ func (s *Server) getLogsDoc(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, logstore.ErrDocNotFound) {
 			return nil, fmt.Errorf("%w: %v", errNotFound, err)
 		}
+		if err == nil && rec != nil {
+			logstore.AttachExceptions([]*logstore.LogRecord{rec}) // v0.10.1880 — tam doküman (yalnız ES yolu)
+		}
 		return rec, err
 	})
 }

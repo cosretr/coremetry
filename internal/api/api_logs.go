@@ -503,6 +503,7 @@ func (s *Server) serveLogsSearch(w http.ResponseWriter, r *http.Request, q url.V
 				}
 				return nil, logsQueryErr(err, f.Search) // v0.10.1818 — 400 + konum
 			}
+			s.attachLogExceptions(page) // v0.10.1880
 			out := logsSearchPayload(page)
 			if ql := logsQueryLang(s.logs.Backend(), f); ql != "" {
 				out["queryLang"] = ql // v0.10.1819 — KQL / Lucene rozeti
@@ -543,6 +544,7 @@ func (s *Server) serveLogsSearch(w http.ResponseWriter, r *http.Request, q url.V
 			}
 			return nil, logsQueryErr(err, f.Search) // v0.10.1818 — 400 + konum
 		}
+		s.attachLogExceptions(page) // v0.10.1880
 		out := logsSearchPayload(page)
 		if ql := logsQueryLang(s.logs.Backend(), f); ql != "" {
 			out["queryLang"] = ql // v0.10.1819 — KQL / Lucene rozeti

@@ -17,6 +17,8 @@ import { isSortableLogColumn, logsSortBadge, logsSortAriaLabel } from '@/lib/log
 import { traceHref } from '@/lib/traceHref';
 import { logLineSubjectOf } from '@/lib/logLineSubject'; // v0.10.1291 — ✨ log satırı
 import { AIExplainButton } from './ai/AIExplainButton';
+import { ExceptionBadge, StackBlock } from '@/components/coremetry/logs/StackBlock'; // v0.10.1880
+import { exceptionStackText } from '@/lib/logException';
 import { IconSparkles } from './icons';
 import { useT } from '@/lib/i18n'; // v0.10.1338
 import { getRaw, setRaw } from '@/lib/storage'; // v0.10.1502 — doc viewer sekme hafızası
@@ -216,7 +218,12 @@ export function LogTable({
   sort,
   onReorderColumns,
   state,
+  exceptions = false,
 }: {
+  // v0.10.1880 (Log Search Faz 3 dilim 3.3) — mesaj hücresinde exception rozeti
+  // + satır içi katlı stack (yalnız /logs verir; servis sekmesi / pod / trace
+  // panelleri / anomali çekmecesi değişmez).
+  exceptions?: boolean;
   logs: LogRow[];
   hideTraceColumn?: boolean;
   // v0.10.417 (log arama denetimi B5) — mesaj hücresi sarılsın mı; varsayılan
@@ -423,6 +430,7 @@ export function LogTable({
                 onContextOpen={onContextOpen}
                 permalink={permalink}
                 rowLines={rowLines}
+                exceptions={exceptions}
               />
             );
           })}
@@ -455,8 +463,9 @@ function LogLineExplain({ l }: { l: LogRow }) {
 
 function LogRow({
   l, idx, tableId, cols, colIds, highlightTerms, hideTraceColumn, selected, expanded, onClick, extraExpanded,
-  onFilterAdd, onFilterExclude, onToggleColumn, onTracePeek, onContextOpen, permalink, rowLines,
+  onFilterAdd, onFilterExclude, onToggleColumn, onTracePeek, onContextOpen, permalink, rowLines, exceptions = false,
 }: {
+  exceptions?: boolean;
   l: LogRow;
   idx: number;
   tableId?: string;
@@ -479,6 +488,9 @@ function LogRow({
 }) {
   const wrap = rowLines !== 1;
   const clamp = rowLines === 2 || rowLines === 3;
+  // v0.10.1880 — satır içi katlı stack (yalnız `exceptions` açıkken).
+  const [stackOpen, setStackOpen] = useState(false);
+  const ex = exceptions ? l.exception : undefined;
   const attrs = Object.entries(l.attributes ?? {});
   const res = Object.entries(l.resourceAttributes ?? {});
   // Doc viewer tab (Discover revamp 7/7). Per-row state — sticky
@@ -557,6 +569,7 @@ function LogRow({
               // v0.10.945 — satır içi maxWidth sabit düzende etkisizdi (genişlik colgroup'ta).
               <td key={id} className={clamp ? 'lt-clamp' : wrap ? 'lt-wrap' : undefined} title={wrap ? undefined : l.body}>
                 <MessageBody clamp={clamp}>
+                {ex && <span className="lt-ex-badge"><ExceptionBadge e={ex} /></span>}
                 {/* v0.8.407 — span-event pseudo rows (exceptions / log-bridge
                     records riding the trace's spans) are visibly distinct from
                     backend log rows so the merged trace Logs tab stays honest. */}
@@ -580,6 +593,15 @@ function LogRow({
                       s.hl ? <mark key={i} className="log-mark">{s.text}</mark> : <span key={i}>{s.text}</span>)
                   : l.body}
                 </MessageBody>
+                {ex && ex.frames > 0 && (
+                  <span className="lt-ex-stack">
+                    <Button variant="ghost" size="xs" aria-expanded={stackOpen}
+                      onClick={e => { e.stopPropagation(); setStackOpen(o => !o); }}>
+                      {stackOpen ? '▾ stack' : `▸ ${ex.frames} çerçeve (${ex.appFrames} uygulama) — aç/kapat`}
+                    </Button>
+                    {stackOpen && <StackBlock stack={exceptionStackText(l, ex)} appLines={ex.appLines} stopPropagation />}
+                  </span>
+                )}
               </td>
             );
           }

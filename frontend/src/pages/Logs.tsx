@@ -59,7 +59,7 @@ import { LogsQueryBar } from './logs/LogsQueryBar';
 import { parseLogQueryError, logQueryErrorMessage } from '@/lib/logQueryError';
 import { readLogsQueryHistory, recordLogsQuery } from '@/lib/logsQueryHistory';
 import { LOGS_DEFAULT_DISPLAY, readLogsDisplay, writeLogsDisplay, pageSlice } from '@/lib/logsDisplay';
-import { DisplayOptions, LoadStatus, FieldSidebar, LogDetailSheet, LogContextSection } from '@/components/coremetry/logs';
+import { DisplayOptions, LoadStatus, FieldSidebar, LogDetailSheet, LogContextSection, LogExceptionSection } from '@/components/coremetry/logs';
 import { useSheetParam } from '@/components/coremetry/DetailSheet';
 import { AIExplainButton } from '@/components/ai/AIExplainButton';
 import { logLineSubjectOf } from '@/lib/logLineSubject';
@@ -1090,7 +1090,15 @@ function LogsInner() {
   // full round trip, and at 10B docs/day the cheapest query is the one
   // you don't send. Labelled explicitly below — a local subset read as
   // a window-wide answer would be the worst kind of wrong here.
-  const logs = useMemo(() => narrowLoaded(loadedRows, narrow), [loadedRows, narrow]);
+  // v0.10.1880 (dilim 3.3) — "Yalnız kritik hatalar": yüklenen örnek içinde
+  // (kaynak tükenmesi ya da FATAL; sunucu özeti `exception.critical`). Yeni sorgu
+  // yok — narrow gibi okuma yardımı, URL'ye girmez.
+  const [critOnly, setCritOnly] = useState(false);
+  const logs = useMemo(() => {
+    const n = narrowLoaded(loadedRows, narrow);
+    return critOnly ? n.filter(r => r.exception?.critical) : n;
+  }, [loadedRows, narrow, critOnly]);
+  const hasExceptions = useMemo(() => loadedRows.some(r => r.exception), [loadedRows]);
   loadedRowsRef.current = loadedRows;
   // v0.10.1878 — `?doc=` çözümü liste yerleşince (yüklü satırda istek yok).
   const docListSettled = live || data !== undefined || !logsListEnabled(view, live, scopeGate);
@@ -1580,6 +1588,7 @@ function LogsInner() {
         <LogsTableToolbar
           loadedCount={data ? loadedRows.length : 0} shownCount={data ? logs.length : 0}
           narrow={narrow} onNarrow={v => { setNarrow(v); setPage(0); }} narrowRef={narrowRef}
+          critOnly={critOnly} critAvailable={hasExceptions || critOnly} onCritOnly={v => { setCritOnly(v); setPage(0); }}
           columns={viewCols} fields={fields} onColumns={changeCols}
           display={<DisplayOptions value={display} onChange={setDisplay}
             sample={{ value: sample, min: LOGS_SAMPLE_MIN, max: maxSample, onChange: n => {
@@ -1616,6 +1625,7 @@ function LogsInner() {
           }}
           onReorderColumns={changeCols}
           highlightTerms={highlightTerms}
+          exceptions /* v0.10.1880 — rozet + satır içi katlı stack */
           expandedIds={NO_EXPANDED}
           onToggleExpand={id => { const r = shownLogs.find(x => x.id === id); if (r) openRow(r); }}
           onFilterAdd={addFromRow}
@@ -1690,6 +1700,7 @@ function LogsInner() {
       <LogDetailSheet row={sheetRow} onClose={closeRow} fullDoc={sheetFullState}
         columns={viewCols} onFilter={addFromRow} onExclude={excludeFromRow} onToggleColumn={toggleColumn}
         onPrev={() => sheetStep(-1)} onNext={() => sheetStep(1)}
+        exception={sheetRow?.exception ? <LogExceptionSection row={sheetRow} /> : undefined}
         onOpenTrace={tid => navigate(traceHref(tid))}
         permalink={sheetRow ? absoluteShareHref(window.location.origin + buildDocPermalink(sheetRow, env), Date.now()) : undefined}
         actions={sheetSubject ? (

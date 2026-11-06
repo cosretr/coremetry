@@ -12950,3 +12950,23 @@ Loglar yalnız ES'te (operatör 2026-11-06): yeni yetenekler ES yolunda; trace/s
   penceresi + servis ile `/logs`'a gider. /logs artık `LogContextModal` kullanmıyor (modal pod logları yüzeyinde aynen
   duruyor — davranış değişmedi). Sapma: mockup "↑ 50 önceki / ↓ 50 sonraki" iki yönlü ayrı düğme gösteriyordu; uç tek
   `n` ile iki yarıyı simetrik okuyor (uç değişmez kuralı) → tek "Daha geniş (±N)" düğmesi.
+- **v0.10.1880 — exception farkındalığı: tür + sınıf + uygulama çerçeveleri, katlı stack, "yalnız kritik hatalar"
+  (3.3).** Sunucu: SAF `logstore.SummarizeException` (yeni `exception_summary.go`) stack'i `stackparse.FromLog` ile bulur
+  (+ .NET gövdesi için `ParseDotnet`; FromLog gövdeyi Java çerçeve tanımıyla sınıyor), türü/mesajı dış exception
+  başlığından (OTel `exception.type`/`.message` öznitelikleri kazanır), kök sebebi "Caused by" / " ---> " zincirinin en
+  derininden, kaba sınıfı SAF tablodan (`classifyException`: resource = kaynak tükenmesi · timeout · connectivity ·
+  database · null · auth — kurallar `anomaly/log_patterns.go` emsali) çıkarır; çerçeve sayıları + UYGULAMA çerçevesi
+  satır indeksleri (`IsAppFrame`, önek listesi yok → kütüphane sezgisi) + ilk 3 uygulama çerçevesi. Stack metni tekrar
+  gönderilmez (gövdede ya da `stackField` özniteliğinde). Satır başlığı nitelikli tür + Exception/Error/Throwable/Fault
+  ile SATIR BAŞINDA değilse özet YOK (rozet uydurulmaz). YALNIZ ES log yolunda iliştirilir (`/api/logs` iki dalı +
+  `/api/logs/doc`); CH yolu değişmez (pin testi). Dar `_source`'a stack alanları + `exception.type/.message` +
+  `throwable` / `*.throwable` eklendi (liste rozeti için). Gruplama kimliği (`FingerprintException`), exception_groups,
+  dedektörler, öncelik DEĞİŞMEDİ (operatör kararı bekliyor). İstemci: `LogTable` opt-in `exceptions` prop'u (yalnız /logs
+  verir) — mesaj hücresinde `ExceptionBadge` (rozet + metin: "▲ OutOfMemoryError · kaynak tükenmesi"; kritik
+  `critical`, diğerleri `warn`) + "▸ N çerçeve (M uygulama) — aç/kapat" satır içi `StackBlock` (satırı/çekmeceyi açmaz);
+  detay çekmecesinde "Exception" bölümü (tür: mesaj, kök sebep, katlı stack — başlıklar + uygulama satırları görünür,
+  framework çerçeveleri katlı). "Yalnız kritik hatalar" = kaynak tükenmesi ya da FATAL (≥21); tablo araç satırında
+  Toggle, yüklenen örnek içinde süzer (yeni istek yok, narrow gibi URL'ye girmez; "yüklenen N satırın M'i kritik" notu),
+  örnekte hiç exception yoksa (CH) düğme çizilmez. Sapmalar: mockup anahtarı süzgeç hapları satırındaydı — süzgeç bir
+  OKUMA yardımı (sunucu sorgusu değil) olduğundan narrow'un yanına (araç satırı) kondu; sunucu tarafı "kritik" süzgeci
+  (ES sorgusu) yok — desen kurallarını her listede ES'e göndermek ES maliyet kuralına aykırı.
