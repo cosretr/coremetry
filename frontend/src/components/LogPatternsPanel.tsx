@@ -23,6 +23,9 @@ import {
 import { Button } from '@/components/ui/Button';
 import { trendCell, trendLabel, firstSeenBadge, insightsNotes } from '@/lib/logPatternsTrend'; // v0.10.508 (C6); v0.10.1896 (4.2)
 import { Sparkline } from '@/components/Sparkline'; // v0.10.1896 — tablo içi mini grafik emsali (SVG)
+import { PatternCompare } from '@/components/coremetry/logs/PatternCompare'; // v0.10.1897 (4.4)
+import { SegmentedControl } from '@/components/coremetry/SegmentedControl';
+import { PATTERN_COMPARE_LABEL, PATTERN_COMPARE_MODES, type PatternCompareMode } from '@/lib/logsPatternCompare';
 import { getItem, setItem } from '@/lib/storage';
 import { IconButton } from '@/components/ui/IconButton'; // v0.10.502 (B6)
 import { sevClass, sevName, tsLong, tsShort } from '@/lib/utils';
@@ -104,8 +107,14 @@ const TCOLS: ColumnDef<LogTemplate>[] = [
   { id: 'act', label: 'Eylemler', kind: 'actions', width: 64 },
 ];
 
-export function LogPatternsPanel({ params, open, onSearch, tab: tabProp, onTab, embedded = false, toolbar, aside, insights = false }: {
+export function LogPatternsPanel({ params, open, onSearch, tab: tabProp, onTab, embedded = false, toolbar, aside, insights = false, compare = null, onCompare }: {
   params: LogsParams;
+  /** v0.10.1897 (Faz 4 dilim 4.4) — iki aralık karşılaştırması (URL `cmp`). Seçiliyken
+   *  desen tablosu yerine Yeni / Artan / Kaybolan çizilir ve tek-aralık desen isteği
+   *  GİTMEZ (ES işi: iki tek-sayfa örnekleme + bir _msearch). onCompare verilmezse
+   *  seçici çizilmez. */
+  compare?: PatternCompareMode | null;
+  onCompare?: (m: PatternCompareMode | null) => void;
   /** v0.10.1896 (Faz 4 dilim 4.2) — `logs_search.patternInsights`: eğilim çizgisi +
    *  "ilk kez görüldü" (ek ES sorgusu; yalnız bu sekme açıkken istenir). */
   insights?: boolean;
@@ -134,7 +143,7 @@ export function LogPatternsPanel({ params, open, onSearch, tab: tabProp, onTab, 
   // Kalıcı (localStorage); yalnız açıkken ek bir ES sayfası (500) çekilir.
   const [trend, setTrend] = useState<boolean>(() => { try { return getItem<string>('logs.patternsTrend', '0') === '1'; } catch { return false; } });
   const toggleTrend = () => setTrend(v => { const n = !v; try { setItem('logs.patternsTrend', n ? '1' : '0'); } catch { /* storage yok */ } return n; });
-  const q = useLogsPatterns({ ...params, limit: 50, ...(trend ? { baseline: 1 as const } : {}), ...(insights ? { insights: 1 as const } : {}) }, open && tab === 'patterns');
+  const q = useLogsPatterns({ ...params, limit: 50, ...(trend ? { baseline: 1 as const } : {}), ...(insights ? { insights: 1 as const } : {}) }, open && tab === 'patterns' && !compare);
   const tq = useLogsTemplates(
     { since, limit: TEMPLATES_LIMIT, sort: 'last_seen', service: params.service || undefined },
     open && tab === 'templates',
@@ -190,7 +199,13 @@ export function LogPatternsPanel({ params, open, onSearch, tab: tabProp, onTab, 
             { key: 'templates', label: 'Şablonlar', title: "Drain templater'ın kalıcı şablonları (5 dk'da ≤1000 satır örneklenir)" },
           ]} />
         )}
-        {tab === 'patterns' && (
+        {tab === 'patterns' && onCompare && <span className="lp-cmp-label">Karşılaştır:</span>}
+        {tab === 'patterns' && onCompare && (
+          <SegmentedControl<'off' | PatternCompareMode> size="sm" aria-label="Karşılaştır" value={compare ?? 'off'}
+            onChange={v => onCompare(v === 'off' ? null : v)}
+            options={[{ value: 'off', label: 'Tek aralık' }, ...PATTERN_COMPARE_MODES.map(m => ({ value: m, label: PATTERN_COMPARE_LABEL[m] }))]} />
+        )}
+        {tab === 'patterns' && !compare && (
           <Button variant="secondary" active={trend} size="xs" onClick={toggleTrend} /* v0.10.1342 — açık/kapalı durum: active, birincil değil */
             title="Hemen önceki eşit pencerenin örneklemesiyle (tek ek sayfa, 500 satır) karşılaştırır — ipucu, kanıt değil">
             Önceki pencere
@@ -198,7 +213,7 @@ export function LogPatternsPanel({ params, open, onSearch, tab: tabProp, onTab, 
         )}
         <span style={{ fontSize: 11, color: 'var(--text3)' }}>
           {/* v0.10.954 — hata anında bayat örnek/toplam sayıları güncel gibi sunulmaz. */}
-          {tab === 'patterns' ? (d && !q.isError ? (
+          {tab === 'patterns' && compare ? null : tab === 'patterns' ? (d && !q.isError ? (
             <>
               {d.sampled.toLocaleString()} örnek satır{d.truncated ? ` (tavan ${d.cap.toLocaleString()})` : ''}
               {' · '}pencere toplamı {d.total.toLocaleString()}{' · '}{d.distinct} desen
@@ -231,7 +246,8 @@ export function LogPatternsPanel({ params, open, onSearch, tab: tabProp, onTab, 
         {toolbar && <span className="lp-toolbar">{toolbar}</span>}
       </div>
       {aside}
-      {tab === 'patterns' && (
+      {tab === 'patterns' && compare && <PatternCompare params={params} mode={compare} onSearch={onSearch} />}
+      {tab === 'patterns' && !compare && (
         <>
           <div className="table-wrap is-scroll">
             <table {...dt.tableProps}>

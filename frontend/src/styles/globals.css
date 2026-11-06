@@ -5137,6 +5137,8 @@ tr:hover .row-kiosk, .row-kiosk:focus-visible { opacity: 1; }
 .lp-search { white-space: nowrap; }
 .lp-row td.num { position: relative; }
 .lp-bar { position: absolute; right: 6px; top: 6px; bottom: 6px; background: color-mix(in srgb, var(--accent) 18%, transparent); border-radius: 2px; pointer-events: none; }
+/* v0.10.1897 (Log Search 4.4) — Desenler "Karşılaştır:" etiketi */
+.lp-cmp-label { font-size: var(--fs-xs); color: var(--text3); }
 /* v0.10.933 (T2) — `.lp-row:hover td` kalktı: sorgusu olan satır role=button
    taşır ve ortak `tbody tr[role="button"]:hover` bg2'sini alır; sorgusuz
    (tıklanamaz) satır hover almaz. */

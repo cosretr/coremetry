@@ -23,7 +23,7 @@ import { readFileSync } from 'node:fs';
 const HEAVY: { file: string; hooks: string[] }[] = [
   // v0.10.1023 — serviceOperationRoutes: spanmetrics_1m okuması; sekme / pencere değişince kesilmeli.
   { file: 'services.ts', hooks: ['api.services(', 'api.serviceMap(', 'api.serviceOperationRoutes('] },
-  { file: 'logs.ts', hooks: ['api.logs(', 'api.logsPatterns(', 'api.logsMyTeam(', 'api.logsScope(', 'api.logsTracePreview(', 'api.getLogsSearchSettings(', 'api.logsDoc('] }, // v0.10.1831 — ayar + tam doküman // v0.10.297 — desen örneklemesi ≤2000 satır; v0.10.1477 my-team
+  { file: 'logs.ts', hooks: ['api.logs(', 'api.logsPatterns(', 'api.logsPatternsCompare(', 'api.logsMyTeam(', 'api.logsScope(', 'api.logsTracePreview(', 'api.getLogsSearchSettings(', 'api.logsDoc('] }, // v0.10.1831 — ayar + tam doküman // v0.10.297 — desen örneklemesi ≤2000 satır; v0.10.1477 my-team
   // v0.10.131 — entity pivotları: entity_seen_5m taramaları + Thanos delegasyonu.
   { file: 'entities.ts', hooks: ['api.entityServices(', 'api.servicePods(', 'api.entityMetrics(', 'api.entityContainers(', 'api.entityLatency('] },
   { file: 'rollouts.ts', hooks: ['api.rollouts(', 'api.rolloutStats(', 'api.rolloutRuns(', 'api.rolloutDetail(', 'api.serviceGitOps('] }, // v0.10.201, v0.10.981

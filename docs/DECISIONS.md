@@ -13176,3 +13176,22 @@ açılışına ve otomatik yenilemesine yeni Elasticsearch isteği eklenmez.
     `internal/api/logs_pattern_insights_test.go` (kapalı → 0 istek; servissiz → yoklama yok), `lib/ratioPhrase.test.ts`,
     `lib/logPatternsTrend.test.ts`, `pages/Logs.patternInsights.test.tsx`, ayar kartı testi. Doğrulanmadı: gerçek ES
     (sayacın ölçümü, 7 günlük yoklamanın süresi), tarayıcı.
+- **v0.10.1897 — 4.4 İki aralık karşılaştırma.** Yeni uç `GET /api/logs/patterns/compare` (kendi dosyası
+  `internal/api/logs_patterns_compare.go`, `registerRoutesExtra`; rol kapısı yok, salt okuma). Desenler sekmesinde
+  "Karşılaştır: Tek aralık | Önceki aralık | 1 gün önce | 1 hafta önce" (URL `cmp`; B aralığı A ile aynı uzunlukta,
+  ≤31 gün). Seçiliyken desen tablosunun yerinde Yeni / Artan / Kaybolan tabloları (≤20 satır) ve tek düz özet cümlesi.
+  - **ES işi:** istek yalnız kullanıcı karşılaştırmayı SEÇİNCE (sekme açılışında değil); iki aralık × tek sayfa
+    (500 satır) örnekleme + bir `_msearch` (yeni/kaybolan adaylarının ilk 10'ar tanesi, size:0, terminate_after:1,
+    timeout 2s) = 3 istek. Mevcut Desenler isteği en çok 4 sayfa; karşılaştırma seçiliyken o istek GİTMEZ. Bütçe
+    12 sn, `serveCached` 30 sn, anahtar = Desenler anahtarı (tüm süzgeç) + iki pencere.
+  - **Doğrulama:** "yeni" adayı karşılaştırılan aralıkta, "kaybolan" adayı bu aralıkta gerçek sayımla aranır.
+    0 → "doğrulandı: … 0 satır"; satır var → "… da var (örneklem kaçırmış)" (yeni/kaybolan DENMEZ); kısmi → "doğrulanamadı";
+    ilk 10 dışı → "doğrulanmadı". CH log yolunda doğrulama yok ("unsupported", özet cümlesi söyler).
+  - **Artan:** iki aralıkta da var, örneklemdeki payı ≥ 1,8 kat (oran merdiveninde "yaklaşık 2 kat"ın eşiği), bu
+    aralıkta en az 3 satır. Metin oran ifadesiyle.
+  - `getLogsPatterns`'ın süzgeç çözümü `logsPatternsFilter`'a çıkarıldı (iki uç aynı kümeyi örnekler; gövde aynı).
+  - Kimlik (4.3 notu): eşleşme imza hash'i (`SignatureGroup.Hash`) + `AlignPatternBaseline` (aynı SplitKeys uzayı).
+  - Test: `internal/api/logs_patterns_compare_test.go` (sınıflama, yoklama dağılımı, tek `_msearch`, 400),
+    `lib/logsPatternCompare.test.ts`, `pages/Logs.patternCompare.test.tsx` (açılışta istek yok; cmp seçiliyken desen
+    isteği yok). Mockup farkı: mockup karşılaştırmayı tek tabloda Δ sütunuyla çizer; üç ayrı tablo + doğrulama metni
+    seçildi (yeni / kaybolan doğrulaması satır başına cümle ister). Doğrulanmadı: gerçek ES süresi, tarayıcı.

@@ -49,7 +49,7 @@ export {
   useRunbookExecutions, useRunbookExecution,
   useExecuteRunbook, useRunbookStepAction, useCancelRunbookExecution,
 } from './runbooks';
-export { useLogs, useLogsPatterns, useLogsTemplates, useLogsMyTeam, useLogsScope, useLogsTracePreview, useLogsSearchSettings, logsDocQuery } from './logs';
+export { useLogs, useLogsPatterns, useLogsPatternsCompare, useLogsTemplates, useLogsMyTeam, useLogsScope, useLogsTracePreview, useLogsSearchSettings, logsDocQuery } from './logs';
 export {
   useMonitors, useMonitorTimeline,
   useCreateMonitor, useUpdateMonitor, useDeleteMonitor,

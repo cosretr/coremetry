@@ -21,4 +21,6 @@ export type { LoadStatusProps, LoadStatusItem } from './LoadStatus';
 export { TraceLogsView } from './TraceLogsView'; // v0.10.1889 — birleşik trace + log görünümü (3.6)
 export type { TraceLogsViewProps } from './TraceLogsView';
 export { HistogramMarkers } from './HistogramMarkers';
+export { PatternCompare, compareSummary } from './PatternCompare';
+export type { PatternCompareProps } from './PatternCompare';
 export type { HistogramMarkersProps } from './HistogramMarkers';

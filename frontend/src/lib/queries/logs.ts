@@ -1,7 +1,7 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import type { LogsParams, LogsTemplatesParams } from '@/lib/api';
-import type { LogsResponse, LogsMyTeam, LogsScope, LogPatternsResult, LogTemplate, LogsSearchSettings, LogRow } from '@/lib/types';
+import type { LogsResponse, LogsMyTeam, LogsScope, LogPatternsResult, LogPatternsCompareResult, LogTemplate, LogsSearchSettings, LogRow } from '@/lib/types';
 import { parseServerTiming } from '@/lib/serverTiming';
 
 // /api/logs query — keyed on the full filter object so a
@@ -61,6 +61,18 @@ export function useLogsPatterns(params: LogsParams & { limit?: number; sample?: 
     staleTime: 30_000,
     refetchOnWindowFocus: false,
     placeholderData: keepPreviousData,
+    enabled,
+  });
+}
+
+// v0.10.1897 (Faz 4 dilim 4.4) — iki aralık karşılaştırması. YALNIZ kullanıcı
+// "Karşılaştır"da bir aralık seçince (enabled); staleTime = sunucu TTL (30 s).
+export function useLogsPatternsCompare(params: LogsParams & { bfrom: number; bto: number }, enabled: boolean) {
+  return useQuery<LogPatternsCompareResult>({
+    queryKey: ['logs', 'patterns-compare', params],
+    queryFn: ({ signal }) => api.logsPatternsCompare(params, signal),
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
     enabled,
   });
 }

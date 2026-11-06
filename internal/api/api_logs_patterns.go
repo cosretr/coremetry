@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -82,34 +83,8 @@ const logsPatternsBaselineSample = 500
 func (s *Server) getLogsPatterns(w http.ResponseWriter, r *http.Request) {
 	r = withServerTiming(r) // v0.10.1817 — Server-Timing (server_timing.go)
 	q := r.URL.Query()
-	sev, _ := strconv.Atoi(q.Get("severity"))
-	f := logstore.Filter{
-		Service:     q.Get("service"),
-		Cluster:     q.Get("cluster"),
-		Env:         strings.TrimSpace(q.Get("env")),
-		Search:      q.Get("search"),
-		SearchLang:  logsLangParam(q), // v0.10.1819 — `lang=lucene` zorla geçiş
-		From:        parseTime(q.Get("from")),
-		To:          parseTime(q.Get("to")),
-		SeverityMin: uint8(sev),
-		TraceID:     q.Get("traceId"),
-		SpanID:      q.Get("spanId"),
-		HasTrace:    parseBoolParam(q.Get("hasTrace")),
-	}
-	if f.From.IsZero() || f.To.IsZero() {
-		f.To = time.Now()
-		f.From = f.To.Add(-time.Hour)
-	}
-	if s.rejectLogQuerySyntax(w, f.Search, f.SearchLang) { // v0.10.280 sözleşmesi
-		return
-	}
-	if !applyLogsPatternParam(w, q, &f) { // v0.10.1071 — /logs?pattern= (panel listeyle aynı kümeyi örnekler)
-		return
-	}
-	if !s.applyLogsTeamParam(w, r, q, &f) { // v0.10.1477 — /logs?team=
-		return
-	}
-	if !s.applyLogsScopeParam(w, r, q, &f) { // v0.10.1855 — /logs?scope=mine
+	f, ok := s.logsPatternsFilter(w, r, q)
+	if !ok {
 		return
 	}
 	limit := logsPatternsLimit(parseInt(q.Get("limit"), 0))
@@ -167,4 +142,42 @@ func (s *Server) getLogsPatterns(w http.ResponseWriter, r *http.Request) {
 		}
 		return res, nil
 	})
+}
+
+// logsPatternsFilter — /api/logs/patterns ve /patterns/compare'in ORTAK süzgeç
+// çözümü (v0.10.1897'de getLogsPatterns'tan çıkarıldı, gövde bayt bayt aynı):
+// iki uç aynı kümeyi örneklesin (v0.9.216 sınıfı: aynı ekranda iki nüfus).
+// false → yanıt yazıldı (400), çağıran döner.
+func (s *Server) logsPatternsFilter(w http.ResponseWriter, r *http.Request, q url.Values) (logstore.Filter, bool) {
+	sev, _ := strconv.Atoi(q.Get("severity"))
+	f := logstore.Filter{
+		Service:     q.Get("service"),
+		Cluster:     q.Get("cluster"),
+		Env:         strings.TrimSpace(q.Get("env")),
+		Search:      q.Get("search"),
+		SearchLang:  logsLangParam(q), // v0.10.1819 — `lang=lucene` zorla geçiş
+		From:        parseTime(q.Get("from")),
+		To:          parseTime(q.Get("to")),
+		SeverityMin: uint8(sev),
+		TraceID:     q.Get("traceId"),
+		SpanID:      q.Get("spanId"),
+		HasTrace:    parseBoolParam(q.Get("hasTrace")),
+	}
+	if f.From.IsZero() || f.To.IsZero() {
+		f.To = time.Now()
+		f.From = f.To.Add(-time.Hour)
+	}
+	if s.rejectLogQuerySyntax(w, f.Search, f.SearchLang) { // v0.10.280 sözleşmesi
+		return f, false
+	}
+	if !applyLogsPatternParam(w, q, &f) { // v0.10.1071 — /logs?pattern= (panel listeyle aynı kümeyi örnekler)
+		return f, false
+	}
+	if !s.applyLogsTeamParam(w, r, q, &f) { // v0.10.1477 — /logs?team=
+		return f, false
+	}
+	if !s.applyLogsScopeParam(w, r, q, &f) { // v0.10.1855 — /logs?scope=mine
+		return f, false
+	}
+	return f, true
 }

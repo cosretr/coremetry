@@ -11130,6 +11130,42 @@ export interface LogPatternInsights {
   firstSeen: 'ok' | 'partial' | 'error' | 'unsupported' | 'no-service' | 'no-baseline' | 'none';
   lookbackDays: number;
 }
+// v0.10.1897 (Faz 4 dilim 4.4) — GET /api/logs/patterns/compare (Go
+// api/logs_patterns_compare.go patternsCompareResult). verified: yalnız
+// yeni / kaybolan — "yes" öbür aralıkta gerçek sayım 0, "no" satır var
+// (örneklem kaçırmış), "unknown" doğrulanamadı, yok = doğrulanmadı.
+export interface LogPatternsCompareRow {
+  hash: string;
+  template: string;
+  query: string;
+  sample: string;
+  severity: number;
+  severityText?: string;
+  countA: number;
+  countB: number;
+  shareA: number;
+  shareB: number;
+  ratio?: number;
+  verified?: 'yes' | 'no' | 'unknown';
+}
+export interface LogPatternsCompareWindow {
+  fromNs: number;
+  toNs: number;
+  sampled: number;
+  total: number;
+  truncated: boolean;
+  distinct: number;
+}
+export interface LogPatternsCompareResult {
+  a: LogPatternsCompareWindow;
+  b: LogPatternsCompareWindow;
+  new: LogPatternsCompareRow[];
+  rising: LogPatternsCompareRow[];
+  gone: LogPatternsCompareRow[];
+  verify: 'ok' | 'partial' | 'error' | 'unsupported' | 'none';
+  degraded?: boolean;
+  reason?: string;
+}
 export interface LogPatternsBaseline {
   fromNs: number;
   toNs: number;

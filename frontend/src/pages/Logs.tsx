@@ -18,6 +18,7 @@ import {
 import { LogPatternsPanel } from '@/components/LogPatternsPanel';
 import { useLogsMarkers } from './logs/useLogsMarkers';
 import { logsMarkerZoom } from '@/lib/logsMarkers';
+import { parsePatternCompare, type PatternCompareMode } from '@/lib/logsPatternCompare';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
@@ -430,6 +431,13 @@ function LogsInner() {
     if (v !== 'logs') setLive(false);
     setSearchParams(prev => writeLogsView(prev, v), { replace: true });
   };
+  // v0.10.1897 (Faz 4 dilim 4.4) — Desenler "Karşılaştır" (URL `cmp`: prev | 1d | 7d).
+  const patternCompare = parsePatternCompare(searchParams.get('cmp'));
+  const setPatternCompare = (m: PatternCompareMode | null) => setSearchParams(prev => {
+    const n = new URLSearchParams(prev);
+    if (m) n.set('cmp', m); else n.delete('cmp');
+    return n;
+  }, { replace: true });
   const toggleLive = () => {
     if (!live && urlView !== 'logs') setSearchParams(prev => writeLogsView(prev, 'logs'), { replace: true });
     setLive(v => !v);
@@ -1628,6 +1636,7 @@ function LogsInner() {
           )
         ) : view !== 'logs' ? (
           <LogPatternsPanel embedded open={!scopeGate && searchSettingsQ.status !== 'pending'} onSearch={searchFromPattern} tab={view} insights={!!searchSettingsQ.data?.patternInsights} /* v0.10.1896 (4.2) — ayar açıkken eğilim + ilk görülme */
+            compare={patternCompare} onCompare={setPatternCompare} /* v0.10.1897 (4.4) */
             params={{ ...filter, env, search: compiledSearch, lang: lang || undefined, scope: scopeParam, from: from ?? undefined, to: to ?? undefined }}
             toolbar={(
               /* v0.9.1100 (F3.5) — ✨ desen anlatımı; fetch YALNIZ tıkla (ES-maliyet disiplini). */
