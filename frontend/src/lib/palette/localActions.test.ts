@@ -16,6 +16,7 @@ import { localizePages } from './pages';
 import { decodeRange } from '@/lib/urlState';
 import { applyDensity, currentDensity, nextDensity, DENSITY_STORAGE_KEY } from '@/lib/density';
 import { applyTheme } from '@/lib/theme';
+import { THEME_IDS } from '@/lib/themeRegistry';
 import { getRaw } from '@/lib/storage';
 
 // Bu ortamda localStorage yok — depo bellek haritası (anahtar ADI testin konusu).
@@ -30,13 +31,15 @@ const ctx = (o: Partial<LocalActionCtx> = {}): LocalActionCtx => ({
   service: null, servicePinned: false, copilotEnabled: true, theme: 'dark', density: 'comfortable', ...o,
 });
 const ids = (c: LocalActionCtx) => localActionCatalog(c).map(a => a.id);
+// v0.10.1847 — tema eylemleri kayıttan: geçerli tema hariç her tema, kayıt sırasıyla.
+const themesBut = (cur: string) => THEME_IDS.filter(t => t !== cur).map(t => `theme-${t}`);
 
 describe('localActionCatalog — bağlam', () => {
   it.each([
-    ['copilot açık, servis yok', ctx(), ['copy-link', 'ask-cosre', 'theme-light', 'theme-redhat', 'density-compact', 'density-dense', 'shortcuts-help']],
-    ['copilot kapalı', ctx({ copilotEnabled: false }), ['copy-link', 'theme-light', 'theme-redhat', 'density-compact', 'density-dense', 'shortcuts-help']],
-    ['servis sabitli değil', ctx({ service: 'checkout', theme: 'redhat', density: 'dense' }), ['copy-link', 'ask-cosre', 'theme-dark', 'theme-light', 'density-comfortable', 'density-compact', 'shortcuts-help', 'pin-service']],
-    ['servis sabitli', ctx({ service: 'checkout', servicePinned: true }), ['copy-link', 'ask-cosre', 'theme-light', 'theme-redhat', 'density-compact', 'density-dense', 'shortcuts-help', 'unpin-service']],
+    ['copilot açık, servis yok', ctx(), ['copy-link', 'ask-cosre', ...themesBut('dark'), 'density-compact', 'density-dense', 'shortcuts-help']],
+    ['copilot kapalı', ctx({ copilotEnabled: false }), ['copy-link', ...themesBut('dark'), 'density-compact', 'density-dense', 'shortcuts-help']],
+    ['servis sabitli değil', ctx({ service: 'checkout', theme: 'redhat', density: 'dense' }), ['copy-link', 'ask-cosre', ...themesBut('redhat'), 'density-comfortable', 'density-compact', 'shortcuts-help', 'pin-service']],
+    ['servis sabitli', ctx({ service: 'checkout', servicePinned: true }), ['copy-link', 'ask-cosre', ...themesBut('dark'), 'density-compact', 'density-dense', 'shortcuts-help', 'unpin-service']],
   ])('%s', (_n, c, want) => { expect(ids(c)).toEqual(want); });
 
   it('yenileme aralığı / silme / ayar yazımı eylemi yok (Q2)', () => {
@@ -49,7 +52,7 @@ describe('filterLocalActions — sorgu', () => {
   it.each([
     ['', []],
     ['copy', ['copy-link']],
-    ['theme', ['theme-light', 'theme-redhat']],
+    ['theme', themesBut('dark')],
     ['kurumsal', ['theme-redhat']],
     ['dense', ['density-dense']],
     ['ask', ['ask-cosre']],

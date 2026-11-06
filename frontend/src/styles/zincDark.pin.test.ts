@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { THEME_COLOR } from '../lib/theme';
+import { renderDefaultTheme } from '../lib/themeDefault';
 
 // zincDark.pin — v0.10.1621 (audit §13, operatör 2026-10-30). Global koyu
 // tema shadcn zinc benzeri değerlere taşındı; YALNIZ koyu blok, yeni token
@@ -42,7 +44,8 @@ describe('zinc dark', () => {
   });
 
   it('meta theme-color + açılış betiği koyu zemini izliyor', () => {
-    expect(readFileSync(resolve(__dirname, '../lib/theme.ts'), 'utf8')).toContain(`dark: '${tok('--bg0')}'`);
-    expect(readFileSync(resolve(__dirname, '../../index.html'), 'utf8')).toContain(`dark: '${tok('--bg0')}'`);
+    // v0.10.1847 — harita lib/themeRegistry.ts'te; index.html betiğine render'da yazılır.
+    expect(THEME_COLOR.dark).toBe(tok('--bg0'));
+    expect(renderDefaultTheme(readFileSync(resolve(__dirname, '../../index.html'), 'utf8'))).toContain(`dark: '${tok('--bg0')}'`);
   });
 });

@@ -4,7 +4,7 @@ import { IconButton } from '@/components/ui/IconButton';
 // v0.8.268 — third palette: 'redhat' (PatternFly-flavoured light +
 // OpenShift-style dark nav; operator: "tasarım Red Hat ürünlerine
 // benzeyebilir"). The toggle cycles dark → light → redhat.
-import { cycleTheme, currentTheme, THEME_LABEL as LABEL, THEME_NEXT as NEXT, THEME_GLYPH as GLYPH, type Theme } from '@/lib/theme';
+import { cycleTheme, currentTheme, DEFAULT_THEME, THEME_LABEL as LABEL, THEME_NEXT as NEXT, THEME_GLYPH as GLYPH, type Theme } from '@/lib/theme';
 
 /**
  * Cycles the palette by setting the `data-theme` attribute on
@@ -14,7 +14,7 @@ import { cycleTheme, currentTheme, THEME_LABEL as LABEL, THEME_NEXT as NEXT, THE
 export function ThemeToggle() {
   // v0.8.285 — default 'redhat' to match the index.html boot default; the
   // useEffect below still reads the real applied attribute (a saved pref wins).
-  const [theme, setTheme] = useState<Theme>('redhat');
+  const [theme, setTheme] = useState<Theme>(DEFAULT_THEME);
 
   // Read the theme that the boot script already applied to <html>
   useEffect(() => { setTheme(currentTheme()); }, []);

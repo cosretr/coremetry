@@ -39,6 +39,7 @@ import { Field, SelectField, TextareaField, CheckboxField } from '@/components/c
 import { SegmentedControl } from '@/components/coremetry/SegmentedControl';
 // v0.10.1647 (CoSRE v2 Faz 2b B1, plan §5.4): v2 sohbet kabuğu (boş durum).
 import { CosreSheet } from '@/components/cosre/conversation/CosreSheet';
+import { themeScopeAttrs } from '@/lib/theme';
 import { CommandPaletteView } from '@/components/coremetry/CommandPalette/CommandPaletteView';
 import type { CommandPaletteGroup } from '@/components/coremetry/CommandPalette/CommandPalette';
 import { MessageList, type CosreChatMessage } from '@/components/cosre/conversation/MessageList';
@@ -95,7 +96,8 @@ const toggleSizesCovered: Exhaustive<ToggleSize, typeof TOGGLE_SIZES[number]> = 
 
 export const VARIANTS_COVERED = buttonVariantsCovered && buttonSizesCovered && badgeVariantsCovered && tabsVariantsCovered && toggleVariantsCovered && toggleSizesCovered;
 
-const themeAttrs = (c: Cell) => ({ 'data-theme': c.theme, 'data-density': c.density });
+// v0.10.1847 — data-scheme: hücrenin `dark:` varyantı (tokens.css) temanın şemasından.
+const themeAttrs = (c: Cell) => ({ ...themeScopeAttrs(c.theme), 'data-density': c.density });
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (

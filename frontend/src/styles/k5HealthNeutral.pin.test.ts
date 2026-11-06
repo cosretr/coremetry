@@ -21,6 +21,8 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { THEME_IDS } from '../lib/themeRegistry';
+import { hexDecls, themeBlockBody } from './themeBlocks';
 
 const CSS = readFileSync(resolve(__dirname, 'globals.css'), 'utf8');
 
@@ -145,19 +147,9 @@ describe('K5 — sağlıklı hâl nötr, sapma renkli', () => {
 // dolgu (kapalıyken ikincil/dolgusuz) + nabız noktası + etiketle net kalır.
 // Okunurluk contrastTokens.test.ts ile aynı yöntemle burada da çivili:
 // --on-accent / --accent ≥ 4.5 (normal metin, WCAG 1.4.3) üç temada.
-const NO_COMMENTS = CSS.replace(/\/\*[\s\S]*?\*\//g, '');
-function hexBlock(re: RegExp): Map<string, string> {
-  const m = re.exec(NO_COMMENTS);
-  if (!m) throw new Error(`blok yok: ${re}`);
-  const out = new Map<string, string>();
-  for (const d of m[1].matchAll(/(--[\w-]+)\s*:\s*(#[0-9a-fA-F]{6})\s*;/g)) out.set(d[1], d[2].toLowerCase());
-  return out;
-}
-const THEME_BLOCKS: Record<string, Map<string, string>> = {
-  dark: hexBlock(/:root\s*\{([\s\S]*?)\n\}/),
-  light: hexBlock(/\[data-theme="light"\]\s*\{([\s\S]*?)\n\}/),
-  redhat: hexBlock(/\[data-theme="redhat"\]\s*\{([\s\S]*?)\n\}/),
-};
+// v0.10.1847 — her kayıt teması (lib/themeRegistry.ts), blok kimlikle bulunur.
+const THEME_BLOCKS: Record<string, Map<string, string>> = Object.fromEntries(
+  THEME_IDS.map(id => [id, hexDecls(themeBlockBody(CSS, id))]));
 function themeTok(theme: string, name: string): string {
   const v = THEME_BLOCKS[theme].get(name) ?? THEME_BLOCKS.dark.get(name);
   if (!v) throw new Error(`${theme} ${name} hex değil ya da yok`);

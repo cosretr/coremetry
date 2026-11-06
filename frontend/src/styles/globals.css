@@ -331,10 +331,12 @@
   --accent-border: #b3cef3;  /* design --primary-border (light) */
   --text-faint:    #888e95;  /* yalnız devre dışı metin (3.31:1) */
   --shadow-md:     0 4px 16px rgba(20, 30, 45, .08);
-  /* mK6 — see :root for the role of each. --on-accent / --backdrop are
-     deliberately NOT overridden: white-on-solid-blue and a black scrim are
-     correct here too, and an override that restates the inherited value is
-     a future divergence waiting to happen. */
+  /* mK6 — see :root for the role of each. v0.10.1847 (tema kaydı, tamlık
+     kapısı styles/themeRegistry.pin.test.ts): her tema bloğu THEME_TOKENS'in
+     HEPSİNİ açıkça yazar — çıplak :root mirası eksik tokenı sessizce koyu
+     değere düşürüyordu. --on-accent / --backdrop değerleri :root ile AYNI. */
+  --on-accent:     #ffffff;
+  --backdrop:      rgba(0, 0, 0, .55);
   --fatal:         #a40e26;
   --shadow-modal:  0 20px 60px rgba(20, 30, 45, .18);
 
@@ -412,7 +414,10 @@
   --accent-border: #bee1f4;
   --text-faint:    #8b8b93;
   --shadow-md:     0 4px 16px rgba(21, 21, 21, .10);
-  /* mK6 — PF danger red, darkened one step for the severity above error. */
+  /* mK6 — PF danger red, darkened one step for the severity above error.
+     v0.10.1847 — --on-accent / --backdrop açıkça (tamlık kapısı), :root ile aynı. */
+  --on-accent:     #ffffff;
+  --backdrop:      rgba(0, 0, 0, .55);
   --fatal:         #a30000;
   --shadow-modal:  0 20px 60px rgba(21, 21, 21, .20);
   /* Primer'dan kare kalır; shadcn sm 4 / md 6 / lg 8 merdivenine yakın. */

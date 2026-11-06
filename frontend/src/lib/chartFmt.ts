@@ -6,6 +6,7 @@
 // look home-rolled; "12.5k rps" with a curated 10-colour
 // palette looks like a product.
 import { currentTheme } from '@/lib/theme';
+import { SERIES_PALETTE_SETS, byTheme, type Theme } from '@/lib/themeRegistry';
 
 // fmtSmart — turns a raw value into a human-readable label,
 // unit-aware. Axis ticks + tooltip values + KPI tiles all
@@ -149,19 +150,17 @@ function trim(v: number): string {
 // üç rengin kontrastı 3:1 altı (validator WARN) — karşılığı görünür
 // lejant/tooltip (≥2 serili her grafik taşır). Koyulaştırılmış varyant
 // denendi: renk körlüğü ayrımı 8'in altına iniyordu, reddedildi.
-export type ChartTheme = 'dark' | 'light' | 'redhat';
+export type ChartTheme = Theme;
 // v0.10.920 (sade palet, operatör onayı) — yeniden çözüldü: her renk
 // bg0-bg2'ye ≥3:1, durum renklerinden (ok/uyarı/hata) OKLab ≥0.10 uzak.
 // Eski palette yeşil (#008300) ve kırmızı (#e66767) seriler durum rengi
 // gibi okunuyordu (OKLab 0.025-0.052). Yuva 1 artık vurgu TOKEN'ı değil
 // (mavi seriler vurgu tonuna yakın kalabilir; seçim grafikte renkle değil
-// çerçeve/kalınlıkla gösterilir). Sıra: mavi, turkuaz, gül, limon, çevre
-// mavisi, turuncu, mor, orkide. Doğrulama: styles/contrastTokens.test.ts.
-export const SERIES_PALETTES: Record<ChartTheme, readonly string[]> = {
-  dark:   ['#288dd4', '#06d8d9', '#cb4f73', '#b5b614', '#95b6fe', '#d76f04', '#ac78d2', '#fca0e8'],
-  light:  ['#045c93', '#0c9999', '#921545', '#898905', '#567cd3', '#d46e07', '#7b489e', '#bf68ae'],
-  redhat: ['#045c93', '#0c9999', '#921545', '#898905', '#567cd3', '#d46e07', '#7b489e', '#bf68ae'],
-};
+// çerçeve/kalınlıkla gösterilir). Doğrulama: styles/contrastTokens.test.ts.
+// v0.10.1847 — renkler adlandırılmış paletlerde (lib/themeRegistry.ts
+// SERIES_PALETTE_SETS); tema → palet eşlemesi kayıttaki `series` alanı.
+// tokens.css --series-N aynası tokens.pin'de çivili.
+export const SERIES_PALETTES: Record<ChartTheme, readonly string[]> = byTheme(e => SERIES_PALETTE_SETS[e.series]);
 
 // inkOn — SAF (v0.10.920): dolu bir renk üstüne yazılacak metin için
 // siyah ya da beyazdan WCAG karşıtlığı yüksek olanı. Şelale bar etiketi

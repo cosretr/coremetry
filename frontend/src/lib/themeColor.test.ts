@@ -7,22 +7,19 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { THEME_COLOR, THEMES, DEFAULT_THEME, applyTheme, cycleTheme, syncThemeColor, type Theme } from './theme';
+import { THEME_COLOR, THEME_NEXT, THEMES, DEFAULT_THEME, applyTheme, cycleTheme, syncThemeColor, themeScheme, type Theme } from './theme';
 import { renderDefaultTheme } from './themeDefault';
+import { themeBlockBody } from '../styles/themeBlocks';
 
 // v0.10.1610 — index.html varsayılan temayı yer tutucuyla taşır; Vite
 // (transformIndexHtml) onu DEFAULT_THEME ile doldurur. Test aynı dönüşümü
 // uygular, yani tarayıcının gördüğü HTML'i sınar.
 const HTML = renderDefaultTheme(readFileSync(resolve(__dirname, '../../index.html'), 'utf8'));
-const CSS = readFileSync(resolve(__dirname, '../styles/globals.css'), 'utf8')
-  .replace(/\/\*[\s\S]*?\*\//g, '');
+const CSS = readFileSync(resolve(__dirname, '../styles/globals.css'), 'utf8');
 
+// v0.10.1847 — blok kayıttaki kimlikle bulunur (styles/themeBlocks.ts).
 function bg0(theme: Theme): string {
-  const block = theme === 'dark'
-    ? /:root\s*\{([\s\S]*?)\n\}/.exec(CSS)
-    : new RegExp(`\\[data-theme="${theme}"\\]\\s*\\{([\\s\\S]*?)\\n\\}`).exec(CSS);
-  expect(block, `${theme} token bloğu yok`).toBeTruthy();
-  const v = /--bg0:\s*(#[0-9a-fA-F]{3,8})/.exec(block![1]);
+  const v = /--bg0:\s*(#[0-9a-fA-F]{3,8})/.exec(themeBlockBody(CSS, theme));
   expect(v, `${theme} --bg0 yok`).toBeTruthy();
   return v![1].toLowerCase();
 }
@@ -54,10 +51,12 @@ describe('v0.10.1339 — theme-color', () => {
     // sırasında çalışır; sonra gelen meta henüz DOM'da yoktur).
     expect(HTML.indexOf('name="theme-color"')).toBeLessThan(HTML.indexOf("localStorage.getItem('coremetry-theme')"));
     for (const t of THEMES) expect(HTML).toContain(`${t}: '${THEME_COLOR[t]}'`);
+    // v0.10.1847 — şema haritası da kayıttan (betik <html data-scheme> yazar).
+    for (const t of THEMES) expect(HTML).toContain(`${t}: '${themeScheme(t)}'`);
   });
 
   it.each([
-    ['dark', 'dark'], ['light', 'light'], ['redhat', 'redhat'], [null, DEFAULT_THEME], ['cozy', DEFAULT_THEME],
+    ...THEMES.map(t => [t, t] as const), [null, DEFAULT_THEME], ['cozy', DEFAULT_THEME], ['constructor', DEFAULT_THEME],
   ] as const)('açılış betiği: kayıtlı %s → %s rengi', (stored, want) => {
     const script = /<script>\s*(\(function\(\) \{[\s\S]*?coremetry-theme[\s\S]*?\}\)\(\);)\s*<\/script>/.exec(HTML);
     expect(script, 'tema açılış betiği bulunamadı').toBeTruthy();
@@ -65,17 +64,22 @@ describe('v0.10.1339 — theme-color', () => {
     document.head.innerHTML = '<meta name="theme-color" content="#000000">';
     new Function(script![1])();
     expect(document.documentElement.getAttribute('data-theme')).toBe(want);
+    expect(document.documentElement.getAttribute('data-scheme')).toBe(themeScheme(want));
     expect(meta()!.content).toBe(THEME_COLOR[want]);
   });
 
-  it('applyTheme / cycleTheme meta\'yı güncelliyor', () => {
+  it('applyTheme / cycleTheme meta\'yı ve data-scheme\'yı güncelliyor', () => {
     document.head.innerHTML = '<meta name="theme-color" content="#f0f0f0">';
     applyTheme('dark');
     expect(meta()!.content).toBe(THEME_COLOR.dark);
-    expect(cycleTheme()).toBe('light');
-    expect(meta()!.content).toBe(THEME_COLOR.light);
-    expect(cycleTheme()).toBe('redhat');
-    expect(meta()!.content).toBe(THEME_COLOR.redhat);
+    let cur: Theme = 'dark';
+    for (let i = 0; i < THEMES.length; i++) {
+      const next = cycleTheme();
+      expect(next).toBe(THEME_NEXT[cur]);
+      expect(meta()!.content).toBe(THEME_COLOR[next]);
+      expect(document.documentElement.getAttribute('data-scheme')).toBe(themeScheme(next));
+      cur = next;
+    }
     expect(document.querySelectorAll('meta[name="theme-color"]')).toHaveLength(1);
   });
 

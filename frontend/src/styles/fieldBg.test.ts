@@ -11,6 +11,8 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { readdirSync, statSync } from 'node:fs';
+import { THEME_IDS, byTheme, type Theme } from '../lib/themeRegistry';
+import { themeBlockBody } from './themeBlocks';
 
 const CSS = readFileSync(resolve(__dirname, 'globals.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
 
@@ -23,11 +25,8 @@ function decl(body: string, name: string): string | undefined {
   const m = new RegExp(`(?:^|[;{\\s])${name}\\s*:\\s*([^;]+);`).exec(body);
   return m?.[1].trim();
 }
-const THEMES = {
-  dark: block(/:root\s*\{([\s\S]*?)\n\}/),
-  light: block(/\[data-theme="light"\]\s*\{([\s\S]*?)\n\}/),
-  redhat: block(/\[data-theme="redhat"\]\s*\{([\s\S]*?)\n\}/),
-};
+// v0.10.1847 — her kayıt teması (lib/themeRegistry.ts), blok kimlikle bulunur.
+const THEMES: Record<Theme, string> = byTheme(e => themeBlockBody(CSS, e.id));
 const SIDEBAR = block(/\[data-theme="redhat"\] #sidebar\s*\{([\s\S]*?)\n\}/);
 
 // Seçicinin TAM eşleşen kural gövdeleri (virgüllü listeler dahil).
@@ -50,7 +49,7 @@ function backgroundOf(selector: string): string | undefined {
 }
 
 describe('--field-bg her temada tanımlı', () => {
-  it.each(Object.keys(THEMES) as (keyof typeof THEMES)[])('%s bloğu --field-bg tanımlıyor', t => {
+  it.each(THEME_IDS)('%s bloğu --field-bg tanımlıyor', t => {
     expect(decl(THEMES[t], '--field-bg'), `${t}: --field-bg yok`).toBeDefined();
   });
 

@@ -2,10 +2,11 @@ import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { NativeSelect, NativeSelectOption } from '@/components/shadcn/native-select';
 import { CATALOG } from './catalog';
+import { themeScopeAttrs } from '@/lib/theme';
 import { ALL_CELLS, cellKey, parseCell, type Cell } from './cells';
 
 // /design shadcn bölümü — v0.10.1619 (shadcn Faz 1 R10, plan §8.1).
-// Her CATALOG anahtarı × hücre (tema × yoğunluk). Varsayılan: 9 hücre alt
+// Her CATALOG anahtarı × hücre (tema × yoğunluk). Varsayılan: tüm hücreler alt
 // alta; `?cell=dark/compact` tek hücreye daraltır (replace:true — URL tek
 // doğruluk kaynağı). Hücre `<div data-theme data-density>`: tokens.css
 // shadcn değişkenlerini `[data-theme]`'de, globals.css koyu bloğu
@@ -29,12 +30,12 @@ export function ShadcnCatalog() {
             if (e.target.value) next.set('cell', e.target.value); else next.delete('cell');
             setSp(next, { replace: true });
           }}>
-          <NativeSelectOption value="">hepsi (9)</NativeSelectOption>
+          <NativeSelectOption value="">hepsi ({ALL_CELLS.length})</NativeSelectOption>
           {ALL_CELLS.map(c => <NativeSelectOption key={cellKey(c)} value={cellKey(c)}>{cellKey(c)}</NativeSelectOption>)}
         </NativeSelect>
       </div>
       {cells.map(c => (
-        <div key={cellKey(c)} className="dc-cell" data-theme={c.theme} data-density={c.density}>
+        <div key={cellKey(c)} className="dc-cell" {...themeScopeAttrs(c.theme)} data-density={c.density}>
           <h2 className="dc-cell-h">{cellKey(c)}</h2>
           {Object.entries(CATALOG).map(([name, render]) => (
             <div key={name} className="dc-entry">

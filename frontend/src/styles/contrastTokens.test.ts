@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { SERIES_PALETTES } from '../lib/chartFmt';
 import { DEFAULT_RAMP_TOKENS } from '../lib/chart/heatmapRamp';
+import { THEME_IDS, type Theme } from '../lib/themeRegistry';
+import { contrastRatio, hexDecls, themeBlockBody } from './themeBlocks';
 
 // contrastTokens — v0.10.920 (sade palet, operatör onayı 2026-09-25).
 //
@@ -18,23 +20,22 @@ import { DEFAULT_RAMP_TOKENS } from '../lib/chart/heatmapRamp';
 // Kapsam dürüstçe: yalnız hex değerli tokenlar çözülür; color-mix/rgba
 // (--accent-soft, gölgeler) burada ölçülmez.
 
-const CSS = readFileSync(resolve(__dirname, 'globals.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+const RAW = readFileSync(resolve(__dirname, 'globals.css'), 'utf8');
+const CSS = RAW.replace(/\/\*[\s\S]*?\*\//g, '');
 
-type Theme = 'dark' | 'light' | 'redhat';
 function block(re: RegExp): Map<string, string> {
   const m = re.exec(CSS);
   if (!m) throw new Error(`blok yok: ${re}`);
-  const out = new Map<string, string>();
-  for (const d of m[1].matchAll(/(--[\w-]+)\s*:\s*(#[0-9a-fA-F]{6})\s*;/g)) out.set(d[1], d[2].toLowerCase());
-  return out;
+  return hexDecls(m[1]);
 }
-const ROOT = block(/:root\s*\{([\s\S]*?)\n\}/);
-const LIGHT = block(/\[data-theme="light"\]\s*\{([\s\S]*?)\n\}/);
-const REDHAT = block(/\[data-theme="redhat"\]\s*\{([\s\S]*?)\n\}/);
 const SIDEBAR = block(/\[data-theme="redhat"\] #sidebar\s*\{([\s\S]*?)\n\}/);
 
+// v0.10.1847 — temalar kayıttan (lib/themeRegistry.ts); her blok kendi
+// tokenlarını AÇIKÇA yazar (themeRegistry.pin tamlık kapısı), yani :root'a
+// düşüş yok — eksik token burada fırlatır, koyu değer ölçülmez.
+const BLOCKS = new Map(THEME_IDS.map(id => [id, hexDecls(themeBlockBody(RAW, id))] as const));
 function tok(theme: Theme, name: string): string {
-  const v = (theme === 'light' ? LIGHT.get(name) : theme === 'redhat' ? REDHAT.get(name) : undefined) ?? ROOT.get(name);
+  const v = BLOCKS.get(theme)?.get(name);
   if (!v) throw new Error(`${theme} ${name} hex değil ya da yok`);
   return v;
 }
@@ -42,17 +43,9 @@ function sidebarTok(name: string): string {
   return SIDEBAR.get(name) ?? tok('redhat', name);
 }
 
-function lum(hex: string): number {
-  const c = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255)
-    .map(v => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
-  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
-}
-function ratio(a: string, b: string): number {
-  const x = lum(a), y = lum(b);
-  return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
-}
+const ratio = contrastRatio;
 
-const THEMES: Theme[] = ['dark', 'light', 'redhat'];
+const THEMES: readonly Theme[] = THEME_IDS;
 const BGS = ['--bg0', '--bg1', '--bg2', '--bg3'];
 
 function failures(theme: Theme): string[] {
@@ -147,7 +140,7 @@ describe('token karşıtlığı (v0.10.920)', () => {
     // v0.10.928 — tok() eksik temayı :root'a düşürür; yeni tokenlar her
     // blokta KENDİ değeriyle yazılı olmalı, yoksa koyu değer ölçülür.
     for (const name of ['--divider', '--border-control']) {
-      for (const [label, b] of [[':root', ROOT], ['light', LIGHT], ['redhat', REDHAT], ['#sidebar', SIDEBAR]] as const) {
+      for (const [label, b] of [...BLOCKS.entries(), ['#sidebar', SIDEBAR] as const]) {
         expect(b.get(name), `${label} ${name} hex değil ya da yok`).toMatch(/^#[0-9a-f]{6}$/);
       }
     }

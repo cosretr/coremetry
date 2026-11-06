@@ -3,6 +3,8 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { SERIES_PALETTES } from '../lib/chartFmt';
 import { stripTsComments } from './zLayers.test';
+import { THEME_IDS, type Theme } from '../lib/themeRegistry';
+import { decls as declsOf, themeBlockBody, themeRules } from './themeBlocks';
 
 // tokens.pin — v0.10.1611 (shadcn Faz 1 R4, plan §2.1-2.3, §7.1, §12 Q4/Q10).
 // tokens.css shadcn/Tailwind adlarını globals.css'e REFERANSLA verir; bu
@@ -18,26 +20,14 @@ const GLOBALS = strip(readFileSync(resolve(STYLES, 'globals.css'), 'utf8'));
 const CHART = strip(readFileSync(resolve(STYLES, 'chart.css'), 'utf8'));
 const INDEX = strip(readFileSync(resolve(STYLES, 'index.css'), 'utf8'));
 
-type Theme = 'dark' | 'light' | 'redhat';
-const THEMES: Theme[] = ['dark', 'light', 'redhat'];
-
-function decls(re: RegExp): Map<string, string> {
-  const m = re.exec(GLOBALS);
-  if (!m) throw new Error(`globals.css bloğu yok: ${re}`);
-  const out = new Map<string, string>();
-  for (const d of m[1].matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)) out.set(d[1], d[2].trim());
-  return out;
-}
-const ROOT = decls(/(?:^|\n):root\s*\{([\s\S]*?)\n\}/);
-const BLOCK: Record<Theme, Map<string, string>> = {
-  dark: ROOT,
-  light: decls(/\n\[data-theme="light"\]\s*\{([\s\S]*?)\n\}/),
-  redhat: decls(/\n\[data-theme="redhat"\]\s*\{([\s\S]*?)\n\}/),
-};
+// v0.10.1847 — temalar ve blokları kayıttan (lib/themeRegistry.ts).
+const THEMES: readonly Theme[] = THEME_IDS;
+const ROOT = declsOf(themeBlockBody(GLOBALS, 'dark'));
+const BLOCK = new Map(THEMES.map(t => [t, declsOf(themeBlockBody(GLOBALS, t))] as const));
 /** Tema bloğu ?? :root (miras), var(--x) zinciri çözülür. */
 function resolveTok(theme: Theme, name: string, depth = 0): string | undefined {
   if (depth > 8) throw new Error(`${name}: döngü`);
-  const v = BLOCK[theme].get(name) ?? ROOT.get(name);
+  const v = BLOCK.get(theme)?.get(name) ?? ROOT.get(name);
   if (v === undefined) return undefined;
   const m = /^var\((--[\w-]+)\)$/.exec(v);
   return m ? resolveTok(theme, m[1], depth + 1) : v;
@@ -61,9 +51,12 @@ const BASE = () => body(':root, [data-theme]');
 const tokenDecl = (name: string) => new RegExp(`${name}:\\s*([^;]+);`).exec(BASE())?.[1].trim();
 
 describe('tokens.css — referansla, yeni renk yok', () => {
+  // v0.10.1847 — `dark:` varyantı tema adına değil şemaya (`data-scheme`,
+  // lib/themeRegistry.ts) bağlı: yeni koyu tema bu satırı düzenlemez.
   it('base blok `:root, [data-theme]` (kapsamlı tema kabı yeniden çözer) + dark varyantı', () => {
     expect(TOKENS).toContain(':root, [data-theme] {');
-    expect(TOKENS).toContain('@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *, html:not([data-theme]), html:not([data-theme]) *));');
+    expect(TOKENS).toContain('@custom-variant dark (&:where([data-scheme="dark"], [data-scheme="dark"] *, html:not([data-theme]), html:not([data-theme]) *));');
+    expect(TOKENS).not.toMatch(/@custom-variant dark[^;]*data-theme="/);
   });
 
   it('tokens.css\'in referans verdiği her Coremetry token\'ı üç temada çözülüyor', () => {
@@ -81,13 +74,16 @@ describe('tokens.css — referansla, yeni renk yok', () => {
     expect(leaks).toEqual([]);
   });
 
-  it('--series-N aynası SERIES_PALETTES ile eşit (dark; light = redhat)', () => {
-    const series = (sel: string) => [...body(sel).matchAll(/--series-(\d):\s*(#[0-9a-f]{6});/g)].map(m => [Number(m[1]), m[2]] as const);
-    const dark = series(':root, [data-theme="dark"]');
-    const light = series('[data-theme="light"], [data-theme="redhat"]');
-    expect(dark.map(([, v]) => v)).toEqual([...SERIES_PALETTES.dark]);
-    expect(dark.map(([n]) => n)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
-    expect(light.map(([, v]) => v)).toEqual([...SERIES_PALETTES.light]);
+  // v0.10.1847 — kayıttaki her tema için: onu içeren seri kuralının 8 yuvası
+  // = SERIES_PALETTES[tema] (palet seçimi kayıttaki `series` alanı).
+  it('--series-N aynası SERIES_PALETTES ile eşit (kayıttaki her tema)', () => {
+    for (const t of THEMES) {
+      const rules = themeRules(TOKENS).filter(r => r.themes.includes(t) && r.body.includes('--series-1'));
+      expect(rules, `${t}: seri kuralı`).toHaveLength(1);
+      const series = [...rules[0].body.matchAll(/--series-(\d):\s*(#[0-9a-f]{6});/g)].map(m => [Number(m[1]), m[2]] as const);
+      expect(series.map(([n]) => n)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+      expect(series.map(([, v]) => v), t).toEqual([...SERIES_PALETTES[t]]);
+    }
     expect(SERIES_PALETTES.redhat).toEqual(SERIES_PALETTES.light);
   });
 

@@ -1,7 +1,8 @@
 /* tokens.css — v0.10.1611 (shadcn Faz 1 R4, plan §2.1-2.3).
    shadcn/Tailwind adlarının TEK kaynağı, globals.css'e REFERANSLA: yeni
    renk yok (hex yalnız --series-*'ta; lib/chartFmt.ts SERIES_PALETTES'in
-   aynası, tokens.pin eşitliği çiviliyor). Değerler globals.css'in üç tema
+   aynası, tokens.pin eşitliği çiviliyor — v0.10.1847: her kayıt teması
+   tam bir seri seçicisinde, palet kayıttaki `series` alanı). Değerler globals.css'in üç tema
    bloğunda yaşamaya devam eder.
 
    Seçici `:root, [data-theme]`: var()'a referans veren özel özellik
@@ -20,7 +21,10 @@
    ikisi de geçtiği için plan §2.2 varsayılanı (--text2, daha yüksek
    karşıtlık) seçildi. */
 
-@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *, html:not([data-theme]), html:not([data-theme]) *));
+/* v0.10.1847 — `dark:` varyantı TEMA ADINA değil ŞEMAYA bağlı: koyu her tema
+   (lib/themeRegistry.ts scheme: 'dark') `data-scheme="dark"` taşır; yeni koyu
+   tema bu satırı düzenlemez. Öznitelik yoksa :root = koyu bloğu (eski kural). */
+@custom-variant dark (&:where([data-scheme="dark"], [data-scheme="dark"] *, html:not([data-theme]), html:not([data-theme]) *));
 
 :root, [data-theme] {
   --background: var(--bg0);

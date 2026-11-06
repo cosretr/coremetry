@@ -12468,3 +12468,9 @@ Kaynak: `docs/anomaly/learning-loop-audit.md` §7, §10 Faz 2, §15, §17; onayl
   prop: yapı imzasına girmez, yalnız `redraw(false)`. Zamanlayıcı `setTimeout` zinciri (yoklama değil), gizli sekmede
   durur; hareket azaltmada adımdan adıma 1,6 sn. Kaydırıcı shadcn Slider (Radix, klavyeyle). Listede "▶ Oynat"
   `?play=1` ile açar; satır tıkı oynatmaz. Saatler operatör diliminde (sunucu), grafik ekseni tarayıcı diliminde.
+
+## 2026-11-06 — v0.10.1847 — Tema kaydı (yeni tema yok)
+
+- Onaylı plan `docs/frontend/themes-proposal.md` §7. Temaların tek kaydı `frontend/src/lib/themeRegistry.ts` (id, etiket, glif, `scheme`, `contrast`, `series`, `themeColor`, `ciCell`); birlik tipi, seçici/döngü listeleri, `THEME_COLOR`, `SERIES_PALETTES`, /design hücreleri ve ⌘K tema eylemleri buradan türer. index.html açılış betiğinin renk/şema haritaları `renderDefaultTheme` ile kayıttan yazılır.
+- `data-scheme` (`light`/`dark`) `<html>`'e `data-theme` ile birlikte yazılır; Tailwind `dark:` varyantı şemaya bağlı, `isLightTheme` (Grafana modu, sonner) kayıttaki `scheme`'i okur. Yeni koyu tema tokens.css'i ya da theme.ts'i düzenlemez.
+- Tamlık kapısı `styles/themeRegistry.pin.test.ts`: her blok 44 tokenı açıkça yazar (light/redhat `--on-accent`, `--backdrop` eklendi, değer :root ile aynı: görsel fark yok), `color-scheme` = `scheme`, `themeColor` = `--bg0`, seri CSS = JS. Tema kapıları kayıt üzerinde döner (`styles/themeBlocks.ts`); değer pin'leri aynen.

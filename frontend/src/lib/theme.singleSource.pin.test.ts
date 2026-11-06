@@ -3,7 +3,8 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { stripTsComments } from '../styles/zLayers.test';
 import { DEFAULT_THEME, readTheme, currentTheme, isLightTheme } from './theme';
-import { DEFAULT_THEME_MARKER, renderDefaultTheme } from './themeDefault';
+import { DEFAULT_THEME_MARKER, THEME_COLORS_MARKER, renderDefaultTheme } from './themeDefault';
+import { THEME_REGISTRY, THEME_IDS } from './themeRegistry';
 
 // theme.singleSource.pin — v0.10.1610 (shadcn Faz 1 R3, plan §2.4 + §12).
 // Varsayılan tema eskiden dört yerde literal yaşıyordu (index.html
@@ -35,8 +36,12 @@ describe('tema varsayılanı tek kaynak', () => {
     const raw = readFileSync(resolve(FE, 'index.html'), 'utf8');
     expect(raw.split(DEFAULT_THEME_MARKER).length - 1).toBe(3);
     expect(raw).toContain(`<html lang="en" data-theme="${DEFAULT_THEME_MARKER}">`);
-    expect(raw).not.toMatch(/<html[^>]*data-theme="(dark|light|redhat)"/);
-    expect(raw).not.toMatch(/t = '(dark|light|redhat)';/);
+    const ids = THEME_IDS.join('|');
+    expect(raw).not.toMatch(new RegExp(`<html[^>]*data-theme="(${ids})"`));
+    expect(raw).not.toMatch(new RegExp(`t = '(${ids})';`));
+    // v0.10.1847 — açılış betiği tema kimliği / renk taşımaz; haritalar kayıttan.
+    expect(raw).not.toMatch(new RegExp(`(${ids}): '#`));
+    expect(raw).not.toMatch(new RegExp(`t !== '(${ids})'`));
     const html = renderDefaultTheme(raw);
     expect(html).toContain(`<html lang="en" data-theme="${DEFAULT_THEME}">`);
     expect(html.match(new RegExp(`t = '${DEFAULT_THEME}';`, 'g'))?.length).toBe(2);
@@ -51,12 +56,12 @@ describe('tema varsayılanı tek kaynak', () => {
 
   it('renderDefaultTheme yer tutucusuz HTML\'i reddeder', () => {
     expect(() => renderDefaultTheme('<html data-theme="redhat">')).toThrow(DEFAULT_THEME_MARKER);
+    expect(() => renderDefaultTheme(`<html data-theme="${DEFAULT_THEME_MARKER}">`)).toThrow(THEME_COLORS_MARKER);
   });
 
   it('readTheme: geçerli ad aynen, başka her şey DEFAULT_THEME', () => {
-    expect(readTheme('dark')).toBe('dark');
-    expect(readTheme('light')).toBe('light');
-    expect(readTheme('redhat')).toBe('redhat');
+    for (const id of THEME_IDS) expect(readTheme(id)).toBe(id);
+    expect(readTheme('constructor')).toBe(DEFAULT_THEME);
     expect(readTheme(null)).toBe(DEFAULT_THEME);
     expect(readTheme('')).toBe(DEFAULT_THEME);
     expect(readTheme('x')).toBe(DEFAULT_THEME);
@@ -65,7 +70,9 @@ describe('tema varsayılanı tek kaynak', () => {
     expect(currentTheme()).toBe(DEFAULT_THEME);
   });
 
-  it('isLightTheme: yalnız dark koyu', () => {
+  // v0.10.1847 — açık/koyu kayıttaki `scheme`; ad karşılaştırması değil.
+  it('isLightTheme: kayıttaki scheme (dark koyu; light, redhat açık)', () => {
+    for (const e of THEME_REGISTRY) expect(isLightTheme(e.id), e.id).toBe(e.scheme === 'light');
     expect(isLightTheme('dark')).toBe(false);
     expect(isLightTheme('light')).toBe(true);
     expect(isLightTheme('redhat')).toBe(true);

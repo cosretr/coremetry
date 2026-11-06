@@ -17,6 +17,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { chartTheme } from './dataFrame';
 import { DEFAULT_THEME, isLightTheme } from '@/lib/theme';
+import { THEME_REGISTRY } from '@/lib/themeRegistry';
 
 describe('chartTheme mode follows the CSS theme blocks', () => {
   afterEach(() => document.documentElement.removeAttribute('data-theme'));
@@ -27,6 +28,8 @@ describe('chartTheme mode follows the CSS theme blocks', () => {
     { name: 'light', attr: 'light', dark: false },
     { name: 'redhat is a light theme', attr: 'redhat', dark: false },
     { name: 'unknown value falls back to DEFAULT_THEME', attr: 'bogus', dark: !isLightTheme(DEFAULT_THEME) },
+    // v0.10.1847 — kayıttaki her tema: Grafana modu kayıttaki scheme.
+    ...THEME_REGISTRY.map(e => ({ name: `registry ${e.id} → ${e.scheme}`, attr: e.id, dark: e.scheme === 'dark' })),
   ];
 
   for (const c of cases) {

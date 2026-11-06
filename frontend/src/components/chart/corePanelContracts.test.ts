@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { seriesRoleColor } from '@/lib/chart/seriesRole';
 import { visibleRangeStats } from '@/lib/chart/visibleStats';
 import { seriesColor } from '@/lib/chartFmt';
+import { THEME_IDS, type Theme } from '@/lib/themeRegistry';
 
 // CorePanel sözleşme testleri (FAZ 2B). Bileşenin kendisi jsdom+canvas
 // ister (uPlot 2D context) — o katman FAZ 2 self-review'da bilinçli borç.
@@ -43,7 +44,7 @@ describe('seriesRoleColor: durum token\'ı eskisiyle AYNI çözülür (3 tema)',
     return i < 0 ? '' : css.slice(i, css.indexOf('}', i));
   };
   const decl = (body: string, name: string) => new RegExp(`(?:^|[;{\\s])${name}:\\s*([^;]+);`).exec(body)?.[1].trim();
-  const resolveIn = (theme: 'dark' | 'light' | 'redhat', value: string, depth = 0): string => {
+  const resolveIn = (theme: Theme, value: string, depth = 0): string => {
     const m = /^var\((--[\w-]+)\)$/.exec(value);
     if (!m || depth > 8) return value;
     const name = m[1];
@@ -53,7 +54,8 @@ describe('seriesRoleColor: durum token\'ı eskisiyle AYNI çözülür (3 tema)',
     expect(v, `${theme}: ${name} bildirilmemiş`).toBeDefined();
     return resolveIn(theme, v!, depth + 1);
   };
-  for (const theme of ['dark', 'light', 'redhat'] as const) {
+  // v0.10.1847 — kayıttaki her tema (lib/themeRegistry.ts).
+  for (const theme of THEME_IDS) {
     it(`${theme}: error == var(--err), success == var(--ok), sonuç hex`, () => {
       const err = resolveIn(theme, seriesRoleColor('x', 'error'));
       const ok = resolveIn(theme, seriesRoleColor('x', 'success'));

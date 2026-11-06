@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { THEME_COLOR } from '../lib/theme';
+import { renderDefaultTheme } from '../lib/themeDefault';
 
 // redhatPalette.pin — v0.10.1649 (audit §13, operatör 2026-10-30: "redhat
 // dokunulmaz" kalktı). zincDark.pin'in redhat aynası: YALNIZ redhat blokları
@@ -82,8 +84,9 @@ describe('redhat zinc paleti', () => {
   });
 
   it('meta theme-color + açılış betiği redhat zeminini izliyor', () => {
-    expect(readFileSync(resolve(__dirname, '../lib/theme.ts'), 'utf8')).toContain(`redhat: '${tok('--bg0')}'`);
-    const html = readFileSync(resolve(__dirname, '../../index.html'), 'utf8');
+    // v0.10.1847 — harita lib/themeRegistry.ts'te; index.html betiğine render'da yazılır.
+    expect(THEME_COLOR.redhat).toBe(tok('--bg0'));
+    const html = renderDefaultTheme(readFileSync(resolve(__dirname, '../../index.html'), 'utf8'));
     expect(html).toContain(`redhat: '${tok('--bg0')}'`);
     expect(html).toContain(`<meta name="theme-color" content="${tok('--bg0')}" />`);
   });

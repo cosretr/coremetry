@@ -16,6 +16,8 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { THEME_IDS, type Theme } from '../lib/themeRegistry';
+import { contrastRatio, themeHex } from './themeBlocks';
 
 const RAW = readFileSync(resolve(__dirname, 'globals.css'), 'utf8');
 const CSS = RAW.replace(/\/\*[\s\S]*?\*\//g, m => m.replace(/[^\n]/g, ' '));
@@ -31,31 +33,9 @@ const bodyOf = (sel: string): string => {
   return r.body;
 };
 
-type Theme = 'dark' | 'light' | 'redhat';
-function block(re: RegExp): Map<string, string> {
-  const m = re.exec(CSS);
-  if (!m) throw new Error(`blok yok: ${re}`);
-  const out = new Map<string, string>();
-  for (const d of m[1].matchAll(/(--[\w-]+)\s*:\s*(#[0-9a-fA-F]{6})\s*;/g)) out.set(d[1], d[2].toLowerCase());
-  return out;
-}
-const ROOT = block(/:root\s*\{([\s\S]*?)\n\}/);
-const LIGHT = block(/\[data-theme="light"\]\s*\{([\s\S]*?)\n\}/);
-const REDHAT = block(/\[data-theme="redhat"\]\s*\{([\s\S]*?)\n\}/);
-function tok(theme: Theme, name: string): string {
-  const v = (theme === 'light' ? LIGHT.get(name) : theme === 'redhat' ? REDHAT.get(name) : undefined) ?? ROOT.get(name);
-  if (!v) throw new Error(`${theme} ${name} hex değil ya da yok`);
-  return v;
-}
-function lum(hex: string): number {
-  const c = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255)
-    .map(v => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
-  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
-}
-function ratio(a: string, b: string): number {
-  const x = lum(a), y = lum(b);
-  return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
-}
+// v0.10.1847 — temalar kayıttan; her blok tokenlarını açıkça yazar (tamlık kapısı).
+const tok = (theme: Theme, name: string): string => themeHex(CSS, theme, name);
+const ratio = contrastRatio;
 
 /** Sınıf → beklenen (zemin tokeni, metin tokeni). */
 const EXPECT: Record<string, [string, string]> = {
@@ -66,7 +46,7 @@ const EXPECT: Record<string, [string, string]> = {
   '.badge.m-delete': ['--err-bg',  '--err'],
   '.badge.m-other':  ['--bg3',     '--text2'],
 };
-const THEMES: Theme[] = ['dark', 'light', 'redhat'];
+const THEMES: readonly Theme[] = THEME_IDS;
 
 describe('HTTP method rozeti CSS (v0.10.1425)', () => {
   for (const [sel, [bg, fg]] of Object.entries(EXPECT)) {

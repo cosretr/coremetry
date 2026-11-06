@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { SERIES_PALETTES, SERIES_SLOTS, assignSeriesSlots, preferredSlot, seriesColorsFor, inkOn } from './chartFmt';
+import { THEME_IDS, byTheme, type Theme } from './themeRegistry';
+import { themeHex } from '../styles/themeBlocks';
 
 // v0.10.510 (dış skill denetimi D7, mockup onaylı) — sekiz yuvalı, tema
 // başına adımlanmış palet; durum renkleri paletin dışında; panel içi yuva
@@ -9,22 +11,9 @@ import { SERIES_PALETTES, SERIES_SLOTS, assignSeriesSlots, preferredSlot, series
 // v0.10.920 (sade palet) — durum tokenları globals.css'ten OKUNUR (sabit
 // tablo sessizce kayardı: inceleme turu, alt-dize araması yanlış blokta
 // bulunan aynı hex'le yeşil kalıyordu).
-const CSS_RAW = readFileSync(resolve(__dirname, '..', 'styles', 'globals.css'), 'utf8')
-  .replace(/\/\*[\s\S]*?\*\//g, '');
-function themeBlock(theme: 'dark' | 'light' | 'redhat'): string {
-  if (theme === 'dark') return /:root\s*\{([\s\S]*?)\n\}/.exec(CSS_RAW)![1];
-  return new RegExp(`\\[data-theme="${theme}"\\]\\s*\\{([\\s\\S]*?)\\n\\}`).exec(CSS_RAW)![1];
-}
-function tok(theme: 'dark' | 'light' | 'redhat', name: string): string {
-  const m = new RegExp(`${name}\\s*:\\s*(#[0-9a-fA-F]{6})\\s*;`).exec(themeBlock(theme));
-  if (!m) throw new Error(`${theme} ${name} bulunamadı`);
-  return m[1].toLowerCase();
-}
-const STATUS = {
-  dark: ['--ok', '--warn', '--err'].map(t => tok('dark', t)),
-  light: ['--ok', '--warn', '--err'].map(t => tok('light', t)),
-  redhat: ['--ok', '--warn', '--err'].map(t => tok('redhat', t)),
-};
+const CSS_RAW = readFileSync(resolve(__dirname, '..', 'styles', 'globals.css'), 'utf8');
+// v0.10.1847 — temalar kayıttan; blok kimlikle bulunur (styles/themeBlocks.ts).
+const STATUS: Record<Theme, string[]> = byTheme(e => ['--ok', '--warn', '--err'].map(t => themeHex(CSS_RAW, e.id, t)));
 
 // OKLab (Ottosson) Öklid mesafesi — algısal yakınlık. Eski palet durum
 // renklerine 0.025-0.052 yakındı (yeşil/kırmızı seri "durum" gibi okunuyordu).
@@ -56,7 +45,8 @@ describe('SERIES_PALETTES', () => {
     }
   });
   it('durum renkleri gerçekten tema bloklarından okundu (boş tarama yok)', () => {
-    for (const t of ['dark', 'light', 'redhat'] as const) expect(STATUS[t]).toHaveLength(3);
+    for (const t of THEME_IDS) expect(STATUS[t]).toHaveLength(3);
+    expect(Object.keys(SERIES_PALETTES)).toEqual([...THEME_IDS]);
   });
 });
 

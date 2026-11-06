@@ -36,12 +36,15 @@
       v0.10.1339 — theme-color = temanın sayfa zemini (--bg0). Varsayılan
       redhat değeri; açılış betiği kayıtlı temaya göre ilk boyamadan önce
       günceller, lib/theme.ts (syncThemeColor) tema değişince. Harita
-      lib/theme.ts THEME_COLOR ile aynı (platformCss.pin çiviliyor).
+      lib/themeRegistry.ts'ten yazılır (themeColor.test çiviliyor).
     -->
     <meta name="theme-color" content="#f4f4f5" />
     <script>
       (function() {
-        var colors = { dark: '#09090b', light: '#f4f6f8', redhat: '#f4f4f5' };
+        // v0.10.1847 — iki harita lib/themeRegistry.ts'ten (Vite
+        // transformIndexHtml, lib/themeDefault.ts renderDefaultTheme).
+        var colors = __COREMETRY_THEME_COLORS__;
+        var schemes = __COREMETRY_THEME_SCHEMES__;
         var t;
         try {
           t = localStorage.getItem('coremetry-theme');
@@ -49,11 +52,12 @@
           // sessions; a saved pref still wins so existing users keep their pick.
           // v0.10.1610 — the default is written by vite.config.ts
           // (transformIndexHtml) from lib/themeDefault.ts DEFAULT_THEME.
-          if (t !== 'light' && t !== 'dark' && t !== 'redhat') t = '__COREMETRY_DEFAULT_THEME__';
+          if (!Object.prototype.hasOwnProperty.call(colors, t)) t = '__COREMETRY_DEFAULT_THEME__';
         } catch (e) {
           t = '__COREMETRY_DEFAULT_THEME__';
         }
         document.documentElement.setAttribute('data-theme', t);
+        document.documentElement.setAttribute('data-scheme', schemes[t]);
         var meta = document.querySelector('meta[name="theme-color"]');
         if (meta) meta.setAttribute('content', colors[t]);
       })();
