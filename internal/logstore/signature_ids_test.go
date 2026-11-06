@@ -53,7 +53,9 @@ func TestNormalizeSignature_JSONBody(t *testing.T) {
 			`{"error":<x>,"event":"retry scheduled"}`},
 		{"truncated json falls back to masked text", `{"request_id":"SPE1015060201ZTod0000000000002026", "msg":"tim`,
 			`{"request_id":"<x>", "msg":"tim`},
-		{"array is not an object", `[1,2,3]`, `[1,2,3]`},
+		// Dizi JSON nesnesi değil → düz metin yolu; v0.10.1829'dan beri
+		// sayılar tek haneli de maskelenir ve virgüllü koşu tek yer tutucu.
+		{"array is not an object", `[1,2,3]`, `[<x>]`},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

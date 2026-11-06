@@ -34,6 +34,19 @@ type Puller struct {
 	lock     cache.Lock
 	leader   *cache.LeaderHolder // v0.5.429
 	drain    *Drain
+	// maskerChecked — v0.10.1829: bu süreç maske sürümünü (system_settings
+	// `log_masker_version`) doğruladı/yazdı mı. İlk lider tikinde, defter
+	// yazımından ÖNCE (ensureMaskerVersion).
+	maskerChecked bool
+	// maskerStore — testte sahte; nil → store.
+	maskerStore maskerStateStore
+}
+
+// maskerStateStore — ensureMaskerVersion'ın tek bağımlılığı (*chstore.Store
+// karşılar).
+type maskerStateStore interface {
+	GetLogMaskerState(ctx context.Context) (chstore.LogMaskerState, bool, error)
+	PutLogMaskerState(ctx context.Context, st chstore.LogMaskerState) error
 }
 
 const pullerLockKey = "coremetry:lock:templater-puller"
@@ -140,6 +153,23 @@ func (p *Puller) tick(parent context.Context) {
 		p.drain.Add(body, r.ServiceName, r.Timestamp)
 	}
 
+	// v0.10.1829 — maske sürümü geçişi defter yazımından ÖNCE: yeni maskenin
+	// kimlikleri yazılmadan sessiz pencere kayıtlı olmalı (recorder başka
+	// pod'da koşabilir). Yazılamazsa bu tik defter YAZILMAZ — korumasız bir
+	// "yeni şablon" seli yerine bir tik gecikme.
+	if !p.maskerChecked {
+		ms := p.maskerStore
+		if ms == nil {
+			ms = p.store
+		}
+		if err := ensureMaskerVersion(ctx, ms, logstore.MaskerVersion, time.Now()); err != nil {
+			log.Printf("[templater] maske sürümü doğrulanamadı, bu tik defter yazılmadı: %v", err)
+			p.drain.Reset()
+			return
+		}
+		p.maskerChecked = true
+	}
+
 	clusters := p.drain.Snapshot()
 	saved := 0
 	// v0.10.1157 — toplu yazım + ayrı bütçe: ES örneği 30 sn'lik tik
@@ -187,4 +217,26 @@ func (p *Puller) tick(parent context.Context) {
 	// window cold. The persistent ledger (log_templates) carries
 	// continuity — first_seen is sticky on upsert.
 	p.drain.Reset()
+}
+
+// ensureMaskerVersion — v0.10.1829: kayıtlı maske sürümü çalışan sürümden
+// farklıysa (blob yok = v1) yeni sürümü + 24 sa sessiz pencereyi yazar ve
+// TEK satır loglar. Karar chstore.NextLogMaskerState'te (SAF).
+func ensureMaskerVersion(ctx context.Context, ms maskerStateStore, current int, now time.Time) error {
+	stored, found, err := ms.GetLogMaskerState(ctx)
+	if err != nil {
+		return err
+	}
+	next, write := chstore.NextLogMaskerState(stored, found, current, now)
+	if !write {
+		return nil
+	}
+	if err := ms.PutLogMaskerState(ctx, next); err != nil {
+		return err
+	}
+	if next.QuietUntil > 0 {
+		log.Printf("[templater] masker v%d→v%d: yeni şablon uyarıları %d sa susturuldu",
+			next.From, next.Version, int(chstore.LogMaskerQuietWindow/time.Hour))
+	}
+	return nil
 }

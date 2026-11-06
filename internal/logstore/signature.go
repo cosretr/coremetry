@@ -20,6 +20,12 @@ package logstore
 // topladı. Kısa kategorik değerler (status OK/FAILED, level, result, bool)
 // desen toplamında örneklem kardinalitesine göre imzada TUTULUR — karar
 // patterns.go'da (sigEnumKeys); satır başına NormalizeSignature değişmedi.
+//
+// v0.10.1829 (operatör: "GUID, UUID, id değerlerini yeni log pattern'i
+// algılamasın"): maske kuralları ORTAK MaskVariableTokens'a taşındı
+// (variable_tokens.go — Drain maskesiyle tek kural kümesi); burada yalnız
+// boşluk ayraçlı ISO zaman damgası (ön adım), virgüllü liste birleştirmesi
+// ve boşluk sıkıştırma kaldı.
 
 import (
 	"encoding/json"
@@ -40,19 +46,15 @@ const signatureMaxLen = 512
 const signatureJSONMax = 64 << 10
 
 var (
-	sigUUID = regexp.MustCompile(`(?i)\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b`)
-	sigISO  = regexp.MustCompile(`\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?:Z|[+-]\d{2}:?\d{2})?`)
-	sigIP   = regexp.MustCompile(`\b\d{1,3}(?:\.\d{1,3}){3}(?::\d{1,5})?\b`)
-	sigHex  = regexp.MustCompile(`(?i)\b[0-9a-f]{16,}\b`)
-	sigNum  = regexp.MustCompile(`\b\d{2,}`) // sondaki sınır YOK: "1500ms" → "<x>ms"; "OP12" başında sınır yok, kalır
-	sigWS   = regexp.MustCompile(`\s+`)
-	// sigQuotedVal — v0.10.1496: çözülemeyen (kesik) JSON'da `"anahtar": "değer"`
-	// değeri; değer bütün olarak kimlikse (ayraçlar atılmış hâli IsIDLikeToken)
-	// tırnak içi tek `<x>` olur. Anahtar (iki noktadan önceki) dokunulmaz.
-	sigQuotedVal = regexp.MustCompile(`(:\s*)"([^"\\\s]{4,256})"`)
-	// sigXRun — ardışık yer tutucular ayraçla bağlıysa tek yer tutucu.
-	sigXRun = regexp.MustCompile(`<x>(?:[-_.:/+=#]*<x>)+`)
+	// sigISO — boşluk ayraçlı ISO zaman damgası (`2026-09-02 10:15:30`):
+	// iki belirteci kapsadığı için ortak maskede DEĞİL (o, boşluk sayısını
+	// korur — Drain belirteç sayısı); imza yolunun ön adımı.
+	sigISO = regexp.MustCompile(`\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?:Z|[+-]\d{2}:?\d{2})?`)
+	sigWS  = regexp.MustCompile(`\s+`)
 )
+
+// sigPlaceholder — imza yer tutucusu.
+const sigPlaceholder = "<x>"
 
 // sigMessageKeys — JSON gövdede mesaj sayılan alanlar, öncelik sırasıyla
 // (büyük-küçük harf duyarsız; ilk dolu DİZGE değer kazanır).
@@ -62,10 +64,9 @@ var sigMessageKeys = []string{"message", "msg", "log", "error", "event"}
 // kolonu, kayıt seviyesizse; (d) maddesi).
 var sigLevelKeys = []string{"level", "severity", "log.level", "levelname", "loglevel", "severity_text"}
 
-// NormalizeSignature — mesajın imza şablonu. Sıra önemli: UUID önce (hex
-// kuralı parçalarını yakalamasın), ISO zaman IP'den önce (tarih noktaları
-// IP değil), hex sayıdan önce (uzun hex'in içindeki rakamlar sayı değil),
-// kimlik belirteçleri EN SON (önceki kuralların bıraktığı parçalar üstünde).
+// NormalizeSignature — mesajın imza şablonu: boşluklu ISO zaman damgası →
+// MaskVariableTokens (kural sırası variable_tokens.go) → virgüllü yer
+// tutucu listesi tek yer tutucu → boşluk sıkıştırma → 512 bayt tavanı.
 func NormalizeSignature(msg string) string {
 	return signatureOf(msg).sig
 }
@@ -101,46 +102,19 @@ func signatureOf(msg string) sigInfo {
 			return info
 		}
 	}
-	sig := capSignature(maskSignatureText(s, true))
+	sig := capSignature(maskSignatureText(s))
 	return sigInfo{sig: sig, query: sig}
 }
 
-// maskSignatureText — düz metin maskesi. quoted=true: JSON-benzeri
-// `"k":"v"` değerleri de bütün olarak sınanır.
-func maskSignatureText(s string, quoted bool) string {
-	s = sigUUID.ReplaceAllString(s, "<x>")
-	s = sigISO.ReplaceAllString(s, "<x>")
-	s = sigIP.ReplaceAllString(s, "<x>")
-	s = sigHex.ReplaceAllString(s, "<x>")
-	s = sigNum.ReplaceAllString(s, "<x>")
-	if quoted && strings.Contains(s, `"`) {
-		s = sigQuotedVal.ReplaceAllStringFunc(s, func(m string) string {
-			sub := sigQuotedVal.FindStringSubmatch(m)
-			if quotedValueIsID(sub[2]) {
-				return sub[1] + `"<x>"`
-			}
-			return m
-		})
-	}
-	s = MaskIDTokens(s, "<x>")
-	s = sigXRun.ReplaceAllString(s, "<x>")
+// maskSignatureText — düz metin maskesi (düz gövde ve JSON gövdenin mesaj
+// alanı aynı yoldan). v0.10.1829: tırnaklı değer kuralı artık her konumda
+// ve yalnız kimlik gibi içerikte (MaskVariableTokens 9. adım); `quoted`
+// bayrağı kalktı.
+func maskSignatureText(s string) string {
+	s = sigISO.ReplaceAllString(s, sigPlaceholder)
+	s = MaskVariableTokens(s, sigPlaceholder)
+	s = CollapsePlaceholderLists(s, sigPlaceholder)
 	return strings.TrimSpace(sigWS.ReplaceAllString(s, " "))
-}
-
-// quotedValueIsID — boşluksuz bir değer, ayraçları atılınca kimlik mi, ya
-// da zaten yer tutuculardan + ≤3 harflik kırıntıdan mı ibaret?
-func quotedValueIsID(v string) bool {
-	rest := strings.ReplaceAll(v, "<x>", "")
-	var b strings.Builder
-	for _, r := range rest {
-		if isSigAlnum(r) {
-			b.WriteRune(r)
-		}
-	}
-	if strings.Contains(v, "<x>") && len([]rune(b.String())) <= 3 {
-		return true
-	}
-	return IsIDLikeToken(b.String())
 }
 
 // jsonSignature — gövde bir JSON NESNESİ ise: `{"a":<x>,"msg":"<maskeli>",…}`
@@ -166,7 +140,7 @@ func jsonSignature(s string) (sigInfo, bool) {
 			}
 			var v string
 			if json.Unmarshal(m[k], &v) == nil && strings.TrimSpace(v) != "" {
-				msgKey, msgText = k, maskSignatureText(strings.TrimSpace(v), false)
+				msgKey, msgText = k, maskSignatureText(strings.TrimSpace(v))
 			}
 			break
 		}
@@ -272,7 +246,7 @@ func sigCategorical(raw json.RawMessage) (string, bool) {
 	if _, err := strconv.ParseFloat(v, 64); err == nil {
 		return "", false
 	}
-	if IsIDLikeToken(v) || maskSignatureText(v, false) != v {
+	if IsIDLikeToken(v) || maskSignatureText(v) != v {
 		return "", false
 	}
 	return `"` + v + `"`, true
@@ -322,30 +296,42 @@ func MaskIDTokens(s, repl string) string {
 }
 
 // IsIDLikeToken — tek harf/rakam koşusu kimlik mi? SAF.
+//   - izin listesi (idTokenAllowlist: `utf8mb4`, `log4j2`, `sha256`, `ed25519`…) → hayır
 //   - yalnız rakam, ≥4 (sınırsız konumdaki sayılar: `order_123456`)
 //   - yalnız hex, ≥8, en az bir rakam (`1a2b3c4d`; `deadbeef` sözcük sayılır)
+//   - v0.10.1829 kısa hex: yalnız hex, ≥6, harf VE rakam (`7d9f6c`, `a07d33f9c40`)
 //   - rakam baskın: ≥5 rakam ve rakam > yarısı (`ab12345`; `sha256`, `iso8601` kalır)
+//   - v0.10.1829 karışık: ≥6, ≥2 rakam, ≥2 rakam öbeği (rakamlar harflerle
+//     serpiştirilmiş) ve en uzun harf koşusu ≤3 (`TX9F3K2`, `QZ7M4P1`;
+//     `Log4j2Plugins` — 7 harflik koşu — sınıf adı olarak kalır)
 //   - uzun karışık: ≥10 ve ≥3 rakam, ya da ≥16 ve ≥2 rakam
 //     (`SPE1015060201ZTod…`, ULID, base64 parçaları)
 //   - base64-benzeri: ≥16, büyük ve küçük harf her biri ≥¼ ve harf durumu
 //     değişimi ≥⅓ (camelCase sınıf adları — `NullPointerException` — kalır)
 func IsIDLikeToken(tok string) bool {
 	n, digits, letters, upper, lower, flips, hex := 0, 0, 0, 0, 0, 0, true
+	digitGroups, letterRun, maxLetterRun := 0, 0, 0
 	prevCase := 0 // 1 upper, 2 lower
+	prevDigit := false
 	for _, r := range tok {
 		n++
-		switch {
-		case r >= '0' && r <= '9':
+		if r >= '0' && r <= '9' || unicode.IsDigit(r) {
 			digits++
-			prevCase = 0
-			continue
-		case unicode.IsDigit(r):
-			digits++
-			hex = false
-			prevCase = 0
+			if r > '9' || r < '0' {
+				hex = false
+			}
+			if !prevDigit {
+				digitGroups++
+			}
+			prevDigit, prevCase, letterRun = true, 0, 0
 			continue
 		}
+		prevDigit = false
 		letters++
+		letterRun++
+		if letterRun > maxLetterRun {
+			maxLetterRun = letterRun
+		}
 		if !((r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F')) {
 			hex = false
 		}
@@ -362,6 +348,9 @@ func IsIDLikeToken(tok string) bool {
 		}
 		prevCase = c
 	}
+	if digits > 0 && letters > 0 && n <= 10 && idTokenAllowlist[strings.ToLower(tok)] {
+		return false
+	}
 	switch {
 	case n == 0:
 		return false
@@ -371,11 +360,13 @@ func IsIDLikeToken(tok string) bool {
 		return false
 	case letters == 0:
 		return n >= 4
-	case hex && n >= 8:
-		return true
+	case hex && n >= 6:
+		return true // ≥8 hex (v0.10.1496) + v0.10.1496'nın kaçırdığı 6–7 hex (harf+rakam)
 	case digits >= 5 && digits*2 > n:
 		return true
 	case n >= 16 && digits >= 2, n >= 10 && digits >= 3:
+		return true
+	case n >= 6 && digits >= 2 && digitGroups >= 2 && maxLetterRun <= 3:
 		return true
 	}
 	return false

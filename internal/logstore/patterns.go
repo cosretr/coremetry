@@ -6,6 +6,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"unicode"
 )
 
 // patterns.go — v0.10.296 (docs/audit/log-search.md Dilim 2, B3):
@@ -465,7 +466,10 @@ func PatternSearchQuery(template string) string {
 	template = strings.ReplaceAll(template, "<*>", "<x>")
 	parts := strings.Split(template, "<x>")
 	var terms []string
-	for _, p := range parts {
+	for i, p := range parts {
+		if i > 0 {
+			p = dropGluedUnit(p)
+		}
 		p = strings.TrimSpace(p)
 		p = strings.Trim(p, ":;,.-=()[]{}'\"")
 		p = strings.TrimSpace(p)
@@ -478,6 +482,23 @@ func PatternSearchQuery(template string) string {
 		}
 	}
 	return strings.Join(terms, " AND ")
+}
+
+// dropGluedUnit — v0.10.1829: yer tutucuya YAPIŞIK sayı birimi (`<x>MB used`
+// → parça "MB used") aramadan atılır: ES standart çözümleyicisi "18MB"ı tek
+// belirteç yapar, "MB used" ifadesi hiçbir satırla eşleşmezdi. Yalnız
+// MaskVariableTokens'ın koruduğu birimler (numberUnits); başka yapışık
+// parçalar (`GrpHdr<*>`) bugünkü gibi kalır.
+func dropGluedUnit(p string) string {
+	end := strings.IndexFunc(p, unicode.IsSpace)
+	word := p
+	if end >= 0 {
+		word = p[:end]
+	}
+	if word == "" || !numberUnits[strings.ToLower(word)] {
+		return p
+	}
+	return p[len(word):]
 }
 
 // PatternsMaxGroups — v0.10.508 (C6): taban örneklemesinde grup tavanı

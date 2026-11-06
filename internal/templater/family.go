@@ -54,9 +54,13 @@ type ParsedTemplate struct {
 }
 
 // ParseTemplate — saklanmış şablon dizgesini (chstore.LogTemplate.Template =
-// Cluster.TemplateString()) belirteçlerine ayırır. Yeniden MASKELEMEZ.
+// Cluster.TemplateString()) belirteçlerine ayırır. v0.10.1829: önce GÜNCEL
+// maskeyle yeniden maskeler (Remask) — maske sürümü değişince eski defter
+// satırı (v1 maskesi) ile yeni aday (v2) aynı biçime gelir, "bilinen
+// şablonun varyantı" kararı geçişte kırılmaz. Remask belirteç sayısını
+// korur; SQL ön süzgeci (TokenCounts) etkilenmez.
 func ParseTemplate(s string) ParsedTemplate {
-	return ParsedTemplate{tokens: splitTemplate(s)}
+	return ParsedTemplate{tokens: splitTemplate(Remask(s))}
 }
 
 // TokenCount — Drain katman 1'in anahtarı olan belirteç sayısı.
@@ -68,6 +72,7 @@ func (p ParsedTemplate) SameFamily(q ParsedTemplate) bool {
 }
 
 // SameTemplateFamily — v0.10.1030: iki SAKLANMIŞ şablon dizgesini
+// (v0.10.1829'dan beri ikisi de Remask'tan geçer)
 // (belirteçler tek boşlukla birleşik) Drain'in varsayılan ayarlarıyla
 // (NewDrain) aynı kümeye düşer mi diye yargılar. SAF; simetrik; boş/yalnız-
 // boşluk girdi → false (Add sıfır belirteçli satırı hiç kümelemez).
@@ -78,7 +83,9 @@ func SameTemplateFamily(a, b string) bool {
 	if n == 0 || n != countTemplateTokens(b) {
 		return false
 	}
-	return sameFamilyTokens(splitTemplate(a), splitTemplate(b), defaultDepth, defaultSimThreshold)
+	// v0.10.1829: iki taraf da GÜNCEL maskeyle (Remask belirteç sayısını
+	// korur; ön eleme geçerli kalır).
+	return sameFamilyTokens(splitTemplate(Remask(a)), splitTemplate(Remask(b)), defaultDepth, defaultSimThreshold)
 }
 
 func sameFamilyTokens(ta, tb []string, depth int, simThreshold float64) bool {

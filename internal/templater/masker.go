@@ -101,14 +101,34 @@ var maskRules = []maskRule{
 // harf+rakam karışık uzun kimlikler (`SPE1015060201ZTod…`, ULID, kısa hex,
 // `ab12345`) her satırı ayrı şablona bölüyordu. Kurallardan SONRA koşar:
 // `ord_12345` gibi önekli kimlikler önce bütün olarak `<*>` olur.
+//
+// v0.10.1829 (operatör: "GUID, UUID, id değerlerini yeni log pattern'i
+// algılamasın") — son geçiş ORTAK değişken-belirteç maskesi
+// logstore.MaskVariableTokens (Desenler imzasıyla TEK kural kümesi; kural
+// sırası logstore/variable_tokens.go). maskRules BİLEREK değişmedi: yeni
+// maske = MaskVariableTokens(maskRules(satır)), eski (v1) maske =
+// MaskIDTokens(maskRules(satır)); defterdeki eski şablon Remask ile tam
+// olarak yeni şablona dönüşür (TestRemask_V1TemplateEqualsNewMask) —
+// "bilinen şablon" karşılaştırması geçişte kırılmaz. Ardışık `<*>` koşusu
+// artık birleşir (boşluk HARİÇ ayraçla: `$<*>.<*>` → `$<*>`); boşlukla
+// ayrılmış koşu birleşmez (belirteç sayısı = Drain katman 1 anahtarı).
 func Mask(line string) string {
 	out := line
 	for _, r := range maskRules {
 		out = r.re.ReplaceAllString(out, r.repl)
 	}
-	// Ardışık `<*>` birleştirilmez (imzadan farklı olarak): mevcut
-	// şablonların `$<*>.<*>` gibi biçimleri kimlik değiştirmesin.
-	return logstore.MaskIDTokens(out, "<*>")
+	return logstore.MaskVariableTokens(out, templateWildcard)
+}
+
+// Remask — v0.10.1829: SAKLANMIŞ bir şablonu (log_templates.template,
+// Cluster.TemplateString) GÜNCEL maskeyle yeniden maskeler. SAF, ucuz,
+// idempotent; belirteç sayısını korur. Maske sürümü değişince eski
+// defter satırları yeni adaylarla karşılaştırılabilsin diye "bilinen
+// şablon" yüklemleri (ParseTemplate, SameTemplateFamily) bunu çağırır.
+// maskRules'a GİRMEZ: Drain'in inceltilmiş `<*>` belirteçleri ve eski
+// maskenin çıktısı üstünde yalnız ortak son geçiş koşar.
+func Remask(tpl string) string {
+	return logstore.MaskVariableTokens(tpl, templateWildcard)
 }
 
 // Tokenize splits on whitespace AFTER masking, preserving the

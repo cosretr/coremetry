@@ -111,7 +111,28 @@ func DetectNewLogTemplates(ctx context.Context, store *chstore.Store, window tim
 	if !store.AnomalySensitivityForDetectors().LogTemplateNewOn() {
 		return []LogTemplateAnomaly{}, nil
 	}
+	// v0.10.1829 — maske sürümü geçişinin sessiz penceresi (chstore/
+	// log_masker_version.go): etkilenen şablonlar yeni kimlikle doğarken
+	// "yeni şablon" seli olmasın. Kapı aday okumasından ÖNCE.
+	if quiet, err := maskerQuietGate(store.LogMaskerStateCached(ctx)); quiet {
+		return []LogTemplateAnomaly{}, err
+	}
 	return detectNewLogTemplates(ctx, store, window, time.Now())
+}
+
+// maskerQuietGate — v0.10.1829 SAF kapı: maske blobu okunamadıysa
+// FAIL-CLOSED (bu tik yeni-şablon olayı yok, hata kayıtçıya; v0.10.1030
+// bilinen-okuması yönü — kaçan bir not selden ucuz), sessiz pencere
+// açıksa sessiz, değilse koş.
+func maskerQuietGate(st chstore.LogMaskerState, err error) (bool, error) {
+	return maskerQuietGateAt(st, err, time.Now())
+}
+
+func maskerQuietGateAt(st chstore.LogMaskerState, err error, now time.Time) (bool, error) {
+	if err != nil {
+		return true, fmt.Errorf("log masker state unreadable, new-template candidates held back this tick (fail-closed): %w", err)
+	}
+	return st.QuietAt(now), nil
 }
 
 func detectNewLogTemplates(ctx context.Context, store logTemplateLister, window time.Duration, now time.Time) ([]LogTemplateAnomaly, error) {

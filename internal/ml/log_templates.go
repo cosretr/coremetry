@@ -67,6 +67,12 @@ func templatePhrase(tpl string) string {
 
 type tplFamily struct {
 	service, phrase, sample string
+	// shape — v0.10.1829: sample'ın GÜNCEL maskeyle yeniden maskelenmiş,
+	// bir kez ayrılmış hâli (templater.ParseTemplate); aile tekilleştirmesi
+	// maske sürümü değişince eski şablonu yeni adayla eşleştirsin. Seriden
+	// geri yüklenen ailede (sample yok) boş.
+	shape    templater.ParsedTemplate
+	hasShape bool
 }
 
 func (f tplFamily) part() string { return tplPartPrefix + f.phrase }
@@ -117,6 +123,15 @@ func selectFamilies(tracked map[string]tplFamily, cands []chstore.LogTemplate, c
 	for _, f := range tracked {
 		bySvc[f.service] = append(bySvc[f.service], f)
 	}
+	shapeOf := func(f tplFamily) (templater.ParsedTemplate, bool) {
+		if f.hasShape {
+			return f.shape, true
+		}
+		if f.sample == "" {
+			return templater.ParsedTemplate{}, false
+		}
+		return templater.ParseTemplate(f.sample), true
+	}
 	for _, t := range cands {
 		if len(tracked)+len(out) >= cap {
 			break
@@ -125,15 +140,18 @@ func selectFamilies(tracked map[string]tplFamily, cands []chstore.LogTemplate, c
 		if ph == "" {
 			continue
 		}
+		// v0.10.1829: aday bir kez ayrılır (ParseTemplate GÜNCEL maskeyle
+		// yeniden maskeler); izlenen ailelerin biçimi de öyle.
+		shape := templater.ParseTemplate(t.Template)
 		for _, svc := range t.Services {
-			f := tplFamily{service: svc, phrase: ph, sample: t.Template}
+			f := tplFamily{service: svc, phrase: ph, sample: t.Template, shape: shape, hasShape: true}
 			k := f.part() + "\x00" + svc
 			if seen[k] {
 				continue
 			}
 			same := false
 			for _, o := range bySvc[svc] {
-				if o.sample != "" && templater.SameTemplateFamily(o.sample, t.Template) {
+				if oShape, ok := shapeOf(o); ok && oShape.SameFamily(shape) {
 					same = true
 					break
 				}
@@ -150,6 +168,16 @@ func selectFamilies(tracked map[string]tplFamily, cands []chstore.LogTemplate, c
 		}
 	}
 	return out
+}
+
+// rareTemplateQuiet — v0.10.1829 SAF: maske sürümü sessiz penceresi açık
+// mı (ya da blob okunamadı mı → sessiz).
+func rareTemplateQuiet(st chstore.LogMaskerState, err error) bool {
+	return rareTemplateQuietAt(st, err, time.Now())
+}
+
+func rareTemplateQuietAt(st chstore.LogMaskerState, err error, now time.Time) bool {
+	return err != nil || st.QuietAt(now)
 }
 
 // rareJudge — SAF: taban yeterli ve tamamen 0, dwell kovalarının hepsi ≥ min.
@@ -256,6 +284,11 @@ func (d *LogTemplates) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig
 		return nil, err
 	}
 	dwellStart := last.Add(-time.Duration(cfg.DwellBuckets-1) * bucket).Unix()
+	// v0.10.1829 — maske sürümü geçişinin sessiz penceresi: kimliği/ifadesi
+	// değişen şablonlar "ilk kez görüldü" sayılmasın (rare_template); blob
+	// okunamazsa da sessiz (fail-closed). template_spike etkilenmez (taban
+	// ES'te gerçek sayımdan).
+	rareQuiet := rareTemplateQuiet(deps.Store.LogMaskerStateCached(ctx))
 	c2 := cfg
 	c2.MinBaselineRate = 0 // şablon sayımı küçük; hacim tabanı spike için anlamsız (etki eşiği recorder'da)
 	var evs []chstore.MLEvent
@@ -265,7 +298,7 @@ func (d *LogTemplates) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig
 		if !ok {
 			continue
 		}
-		if cfg.DetectorOn(detRareTemplate) && rareJudge(cur, base[k], cfg) && d.dayCap(detRareTemplate, cfg, now) {
+		if !rareQuiet && cfg.DetectorOn(detRareTemplate) && rareJudge(cur, base[k], cfg) && d.dayCap(detRareTemplate, cfg, now) {
 			evs = append(evs, tplEvent(detRareTemplate, f, Judgement{Observed: cur[len(cur)-1], Z: cfg.CriticalZ, Direction: "up"}, last, cfg, class))
 			continue
 		}

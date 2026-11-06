@@ -12308,3 +12308,9 @@ sağlıklı çalışmıyor; anomaliler oluşsun, gerekirse Problem'e terfi olurl
   (şerit, eylem yok). Bildirim türü seçicisinde incident yok (kayıtlı değer korunur); `build_link page=incident` ve ürün yol
   tarifi Anomalies'e bağlar; var olan incident id'sine arşiv linkleri (explain, CoSRE inbox açma) kalır. Rota prefetch girdisi
   dokunulmadı: yalnız hover'la ısınır, gizli sayfaya link yok. Events `incident` süzgeci ve durum sayfası geçmişi aynen.
+
+## 2026-11-05 — Log kalıbı kimliği: değişken belirteçler
+
+- Operatör: "GUID, UUID, id değerlerini yeni log pattern'i algılamasın." Desenler imzası ve Drain şablonu TEK kural kümesini çağırır (`logstore.MaskVariableTokens`, kural sırası dosya başında): UUID her biçim, tek haneden binlik ayraçlıya her sayı (birim korunur), `{0}`/`%s`/`?` = değer, karışık/hex kimlik, k8s pod son eki, e-posta, IPv6, Java hash. Yalnız KİMLİK hesabı; gösterim/saklama/CoSRE girdisi verbatim (redaksiyon değil).
+- Geçiş: `logstore.MaskerVersion` (system_settings `log_masker_version`); sürüm değişince puller 24 sa sessiz pencere yazar — `log_template_new` ve ML `rare_template` olay üretmez. "Bilinen şablon" karşılaştırması saklanmış şablonu güncel maskeyle yeniden maskeler (`templater.Remask`; v1 şablonu → v2 TAM eşit, testli). Kuralı kimlik üreten biçimde değiştiren her sürüm sürümü artırır.
+- Bilinçli dışarıda: exception parmak izi (`normalizeMessage`, operatör durumu taşır — ayrı karar), ORA-kodu ayrımı (bugün de tek kalıp), yalnız harfli pod son eki, boşlukla ayrılmış ID listesi Drain'de (belirteç sayısı).

@@ -26,7 +26,8 @@ func TestMask_PrefixedIDs(t *testing.T) {
 		{
 			"transfer with user + account ID",
 			"User usr_54347 initiated transfer request of $1000.50 to account acc_1523",
-			"User <*> initiated transfer request of $<*>.<*> to account <*>",
+			// v0.10.1829: ondalık sayı tek yer tutucu (`$<*>.<*>` → `$<*>`).
+			"User <*> initiated transfer request of $<*> to account <*>",
 		},
 		// Loan application — same shape across users.
 		{

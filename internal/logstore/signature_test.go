@@ -14,9 +14,11 @@ func TestNormalizeSignature(t *testing.T) {
 		{"ip", "from 192.168.1.1 denied", "from <x> denied"},
 		{"long hex trace", "trace 0af7651916cd43dd8448eb211c80319c not found", "trace <x> not found"},
 		{"number ≥2 digits", "retry 17 of 250 for customer 12345", "retry <x> of <x> for customer <x>"},
-		{"single digit kept", "attempt 3 failed", "attempt 3 failed"},
+		// v0.10.1829: tek hane de değişken (operatör: farklı id/sayı = aynı
+		// kalıp); v0.10.229'da "attempt 3" ile "attempt 4" iki desendi.
+		{"single digit masked", "attempt 3 failed", "attempt <x> failed"},
 		{"whitespace", "  a   b\t\nc  ", "a b c"},
-		{"turkish", "Müşteri 12345 için işlem başarısız: hata kodu 5", "Müşteri <x> için işlem başarısız: hata kodu 5"},
+		{"turkish", "Müşteri 12345 için işlem başarısız: hata kodu 5", "Müşteri <x> için işlem başarısız: hata kodu <x>"}, // v0.10.1829: tek hane
 		{"empty", "   ", ""},
 		{"combined", "req 3f2b1c4e-9d8a-4b7c-8e6f-1a2b3c4d5e6f from 10.1.2.3 at 2026-09-02T10:00:00Z took 1500ms", "req <x> from <x> at <x> took <x>ms"},
 	}

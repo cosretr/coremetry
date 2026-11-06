@@ -195,6 +195,9 @@ func TestPatternSearchQuery(t *testing.T) {
 	for _, tc := range []struct{ in, want string }{
 		{"connection refused to <x>:<x> after <x>ms", `"connection refused to" AND "after"`},
 		{"user <x> logged in", `"user" AND "logged in"`},
+		// v0.10.1829: yapışık birim aramaya girmez (ES "18MB"ı tek belirteç yapar).
+		{"heap <x>MB used by <x>", `"heap" AND "used by"`},
+		{"query took <x>ms for tenant", `"query took" AND "for tenant"`},
 		{"<x>", ""},
 		{"", ""},
 		{`say "hi" <x>`, `"say \"hi"`},

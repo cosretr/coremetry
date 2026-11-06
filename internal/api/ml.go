@@ -121,6 +121,11 @@ func (s *Server) getMLScorecard(w http.ResponseWriter, r *http.Request) {
 		if bp, ok, _ := s.store.GetMLBackfillProgress(ctx, chstore.MLSignalLog); ok {
 			out["backfill"] = []chstore.MLBackfillProgress{bp}
 		}
+		// v0.10.1829: log kalıbı maskesi sürümü + yeni-şablon (log_template_new,
+		// rare_template) sessiz penceresi; yeni UI yok, durum yükünde görünür.
+		if lm, ok, _ := s.store.GetLogMaskerState(ctx); ok {
+			out["logMasker"] = lm
+		}
 		return out, nil
 	})
 }

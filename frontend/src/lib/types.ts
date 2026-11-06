@@ -11876,10 +11876,14 @@ export interface MLServiceProfilePage { items: MLServiceProfile[]; total: number
 export interface MLProfileRun { week: string; services: number; changed: number; durationMs: number; error?: string; at: number }
 /** GET /api/ml/baseline/backfill yanıtı. */
 export interface MLBaselineBackfillView { status: MLBaselineBackfillStatus | null; request: MLBaselineBackfillRequest | null }
+/** v0.10.1829: system_settings `log_masker_version` (Go chstore.LogMaskerState); zamanlar unix ns. */
+export interface LogMaskerState { version: number; from?: number; changedAt?: number; quietUntil?: number }
 export interface MLScorecard {
   tick?: MLTickStatus;
   /** v0.10.1814: günlük baseline işi durumu. */
   baseline?: MLBaselineStatus;
+  /** v0.10.1829: log kalıbı maskesi sürümü + yeni-şablon sessiz penceresi (Go chstore.LogMaskerState). */
+  logMasker?: LogMaskerState;
   windowDays: number; detectors: MLDetectorScore[]; bySignal?: MLDetectorScore[]; backfill?: MLBackfillProgress[];
   promotion: Record<string, MLPromotion>; gates?: Record<string, MLGate>; signals: Record<string, string>;
 }
