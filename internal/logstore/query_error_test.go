@@ -82,7 +82,8 @@ func TestQueryErrorPos(t *testing.T) {
 
 func TestESSearchLimit(t *testing.T) {
 	for _, c := range []struct{ in, want int }{
-		{-5, 100}, {0, 100}, {1, 1}, {100, 100}, {500, 500}, {1000, 1000}, {1001, 1000}, {2000, 1000}, {1 << 30, 1000},
+		// v0.10.1831 — tavan 1000 → 5000 (SearchLimitCap).
+		{-5, 100}, {0, 100}, {1, 1}, {100, 100}, {500, 500}, {1000, 1000}, {2000, 2000}, {5000, 5000}, {5001, 5000}, {1 << 30, 5000},
 	} {
 		if got := esSearchLimit(c.in); got != c.want {
 			t.Errorf("esSearchLimit(%d) = %d, want %d", c.in, got, c.want)
@@ -108,7 +109,7 @@ func TestESSearchBadQueryStructuredAndLimitClamp(t *testing.T) {
 	st.set(func(s *esStubServer) {
 		s.searchStatus, s.searchBody = 200, `{"hits":{"total":{"value":0,"relation":"eq"},"hits":[]}}`
 	})
-	if _, err := es.Search(context.Background(), Filter{Service: "orders-api", Limit: 2000, From: now.Add(-time.Hour), To: now}); err != nil {
+	if _, err := es.Search(context.Background(), Filter{Service: "orders-api", Limit: 9000, From: now.Add(-time.Hour), To: now}); err != nil {
 		t.Fatal(err)
 	}
 	st.mu.Lock()
@@ -120,7 +121,7 @@ func TestESSearchBadQueryStructuredAndLimitClamp(t *testing.T) {
 	if err := json.Unmarshal(raw, &body); err != nil {
 		t.Fatalf("gövde: %v (%s)", err, raw)
 	}
-	if body.Size != 1000 {
-		t.Fatalf("limit=2000 → size %d, 1000 beklendi (v0.10.1818 regresyonu: eskiden 100)", body.Size)
+	if body.Size != SearchLimitCap {
+		t.Fatalf("limit=9000 → size %d, %d beklendi (v0.10.1818 regresyonu: eskiden 100; v0.10.1831 tavan 5000)", body.Size, SearchLimitCap)
 	}
 }

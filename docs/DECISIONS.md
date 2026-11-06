@@ -12325,3 +12325,13 @@ sağlıklı çalışmıyor; anomaliler oluşsun, gerekirse Problem'e terfi olurl
   "⤶ sar" düğmesi Görünüm ▾'e katıldı; `logs.wrap` tarayıcı tercihi `rh` yokken varsayılan. `coremetry/DataTable` API'si
   değişmedi: çok satırlı hücre ui `LogTable`'ın yeni opsiyonel `display` prop'unda (yalnız /logs verir) — Logs istisnası
   (açık soru §9-5): yalnız mesaj hücresi çok satır, diğer kolonlar tek satır.
+- **v0.10.1831 — örnek boyutu, dar `_source`, "daha fazla yükle" (1.8).** URL `smp` (varsayılan 500 — §9-6; 10 … üst sınır)
+  istek `limit`i olur; sunucuda `limit` eksikse 100 (servis sekmesi / trace çekmeceleri / araçlar kendi boyunu yollar), alt
+  sınır yok, üst sınır `system_settings['logs_search'].maxSample` (varsayılan 2000, 10 … 5000; PUT admin + audit
+  `logs_search.settings`, ayrı rota dosyası, boot + 30 sn tazeleme + `publishConfigReload`). Tek istek tavanı iki backend'de
+  5000 (`logstore.SearchLimitCap` = chstore `logsMaxLimit`; ES `index.max_result_window` 10.000 + yanıt boyu). Liste
+  `skipTotal` (ES `track_total_hits:false`); "N hits" histogramın seviye bantlarından (bilinmiyorsa "≥ yüklenen").
+  `fields` = görünen kolon alanları → ES `_source.includes` (satır çizim alanları + kolonlar); satır `partial` + `docRef`,
+  açılınca `GET /api/logs/doc` (tek `ids` sorgusu, 60 sn önbellek). CH: aynı API, satır tam (partial yok). Önbellek anahtarı
+  kolon KÜMESİNİN sıralı özetini + skipTotal'ı taşır. Fikstürde 500 satır 1,12 MB → 345 KB (gerçek ES ölçülmedi).
+  Sapma: NDJSON dışa aktarım yüklenen (dar) alanları yazar; tam doküman yalnız açılan satırlarda. Tampon 10.000.

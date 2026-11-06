@@ -15,7 +15,7 @@ describe('log line wrap toggle (B5)', () => {
     const src = read('./Logs.tsx');
     expect(src).toContain("getRaw('logs.wrap') === '1'");
     expect(src).toContain("rowLines: wrapLines ? 'auto' : 1");
-    expect(src).toContain('display={<DisplayOptions value={display} onChange={setDisplay} />}');
+    expect(src).toContain('display={<DisplayOptions value={display} onChange={setDisplay}');
     const bar = read('./logs/LogsTableToolbar.tsx');
     expect(bar).not.toContain('onToggleWrap');
     expect(bar).toContain('{p.display}');

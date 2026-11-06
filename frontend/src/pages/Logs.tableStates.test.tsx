@@ -208,7 +208,8 @@ describe('/logs durumları tablonun içinde (v0.10.967)', () => {
     await mountLogs('/logs');
     expect(table()!.textContent).toContain('alpha ok');
     m.mode = 'error';
-    const more = buttonIn(host!.querySelector('.pager'), 'Load more');
+    // v0.10.1831 — etiket "Daha fazla yükle (sonraki N)" (örnek boyu).
+    const more = buttonIn(host!.querySelector('.pager'), 'Daha fazla yükle');
     expect(more).toBeDefined();
     await act(async () => { more!.click(); });
     await settle();

@@ -1,7 +1,7 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import type { LogsParams, LogsTemplatesParams } from '@/lib/api';
-import type { LogsResponse, LogsMyTeam, LogPatternsResult, LogTemplate } from '@/lib/types';
+import type { LogsResponse, LogsMyTeam, LogPatternsResult, LogTemplate, LogsSearchSettings, LogRow } from '@/lib/types';
 
 // /api/logs query — keyed on the full filter object so a
 // pagination click or filter change caches separately.
@@ -81,3 +81,29 @@ export function useLogsMyTeam() {
     retry: false,
   });
 }
+
+// v0.10.1831 (Log Search Faz 1 dilim 1.8) — /logs örnek boyu üst sınırı
+// (system_settings logs_search). Ucuz uç (ES'e gitmez); sunucu ayarı 30 sn
+// tazelenir — staleTime 60 sn. Hata = varsayılan tavan (istemci 2000 varsayar).
+export function useLogsSearchSettings() {
+  return useQuery<LogsSearchSettings>({
+    queryKey: ['logs', 'search-settings'],
+    queryFn: ({ signal }) => api.getLogsSearchSettings(signal),
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
+}
+
+// v0.10.1831 — dar `_source` satırının TAM dokümanı; YALNIZ satır açılınca
+// (queryClient.fetchQuery ile, ES-maliyet disiplini: liste boyunca ön-yükleme
+// yok). Sunucu ve RQ 60 sn önbellekte tutar; aynı satır yeniden açılınca istek yok.
+export function logsDocQuery(ref: string) {
+  return {
+    queryKey: ['logs', 'doc', ref] as const,
+    queryFn: ({ signal }: { signal: AbortSignal }) => api.logsDoc(ref, signal),
+    staleTime: 60_000,
+    retry: false as const,
+  };
+}
+export type LogsDocRow = LogRow;

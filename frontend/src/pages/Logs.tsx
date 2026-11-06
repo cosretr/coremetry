@@ -27,7 +27,9 @@ import { Pager } from '@/components/Pager';
 import { buildKibanaURL, buildKQLFromFilter } from '@/lib/kibanaLink';
 import { logsUseTimeRange } from '@/lib/logsTraceWindow'; // v0.10.690
 import type { KibanaSettings } from '@/lib/types';
-import { useLogs, useLogsMyTeam } from '@/lib/queries';
+import { useLogs, useLogsMyTeam, useLogsSearchSettings, logsDocQuery } from '@/lib/queries';
+import { useQueryClient } from '@tanstack/react-query';
+import { readLogsSample, logsSourceFieldsParam, windowCountAtFloor, LOGS_SAMPLE_MAX_FALLBACK, LOGS_SAMPLE_MIN } from '@/lib/logsSample';
 import { usePageZoomRange } from '@/lib/chart/usePageZoomRange';
 import { useUrlEnv } from '@/lib/useUrlEnv';
 import { useTablePrefs } from '@/lib/queries/prefs';
@@ -79,7 +81,7 @@ import { parseLogsView, effectiveLogsView, writeLogsView, logsListEnabled, type 
 // meant two thousand live rows whose React tree and per-row highlight
 // transform both scale linearly. 2000 is generous — past that the
 // answer is a narrower filter, not more scrolling.
-const ACC_CAP = 2000;
+const ACC_CAP = 10000; // v0.10.1831 — örnek 500 (≤ 5000) × "Load more"; DOM yalnız bir sayfa çizer (pp)
 // v0.10.967 — tablo standardı T12: veri yokken / okunamadığında tabloya
 // verilen SABİT boş dizi (her render'da yeni [] j/k gezinmesini tazelerdi).
 const NO_LOGS: LogRow[] = [];
@@ -179,7 +181,7 @@ function LogsInner() {
   // v0.9.292 — how many rows the accumulation cap has dropped off the
   // top in this browsing session. Surfaced, never silent.
   const [accDropped, setAccDropped] = useState(0);
-  const resetPaging = () => { setCursor(''); setAccRows([]); setAccDropped(0); setPage(0); };
+  const resetPaging = () => { setCursor(''); setAccRows([]); setAccDropped(0); setPage(0); setFullDocs({}); };
   // v0.10.440 (log arama denetimi B3) — sayfa-yerel ↻. Göreli preset'in
   // penceresi timeRangeToNs ile SON range değişiminde donuyor ("son 30 dk"
   // bir saat sonra bir saat önceki 30 dakikayı sorguluyordu, ekranda hiçbir
@@ -252,6 +254,16 @@ function LogsInner() {
   const display = useMemo(() => readLogsDisplay(searchParams, displayBase).display, [searchParams, displayBase]);
   // İstemci sayfalaması: yüklenen örnek `pp` satırlık sayfalara bölünür.
   const [page, setPage] = useState(0);
+  // v0.10.1831 (Log Search Faz 1 dilim 1.8; açık soru §9-6) — örnek boyu
+  // `smp` (varsayılan 500, 10 … Settings üst sınırı). İstek boyu budur;
+  // "Load more" sonraki `smp` satırı search_after ile getirir.
+  const searchSettingsQ = useLogsSearchSettings();
+  const maxSample = searchSettingsQ.data?.maxSample ?? LOGS_SAMPLE_MAX_FALLBACK;
+  const sample = useMemo(() => readLogsSample(searchParams.get('smp'), maxSample).sample, [searchParams, maxSample]);
+  const qc = useQueryClient();
+  // Dar `_source` satırının tam dokümanı (satır açılınca): id → tam satır |
+  // 'error' (okunamadı; yüklenen alanlar kalır).
+  const [fullDocs, setFullDocs] = useState<Record<number, LogRow | 'error'>>({});
   const setDisplay = (patch: Partial<LogsDisplay>) => {
     if (patch.pageSize !== undefined) setPage(0);
     setSearchParams(prev => writeLogsDisplay(prev, patch), { replace: true });
@@ -581,7 +593,11 @@ function LogsInner() {
     lang: lang || undefined, // v0.10.1819
   }), [from, to, filter.service, filter.cluster, env, compiledSearch, filter.pattern, filter.team, filter.severity, filter.traceId, filter.spanId, lang]);
   const staticQ = useLogs({
-    limit: 100, after: cursor || undefined, from, to,
+    limit: sample, after: cursor || undefined, from, to,
+    // v0.10.1831 — görünen kolon alanları (ES dar _source) + sayım yok
+    // (pencere toplamı histogramdan / seviye sayımından).
+    fields: logsSourceFieldsParam(logCols) || undefined,
+    skipTotal: true,
     service: filter.service || undefined,
     cluster: filter.cluster || undefined,
     env: env || undefined, // v0.8.400 — global env filter
@@ -944,6 +960,13 @@ function LogsInner() {
     const next = new Set(expanded);
     if (next.has(id)) next.delete(id); else next.add(id);
     setExpanded(next);
+    // v0.10.1831 — dar okunmuş satır açılınca tam doküman (tek `ids` sorgusu).
+    const row = next.has(id) ? accRows.find(r => r.id === id) ?? data?.logs?.find(r => r.id === id) : undefined;
+    if (row?.partial && row.docRef && !fullDocs[id]) {
+      qc.fetchQuery(logsDocQuery(row.docRef))
+        .then(full => setFullDocs(m => ({ ...m, [id]: { ...full, id } })))
+        .catch(() => setFullDocs(m => ({ ...m, [id]: 'error' })));
+    }
   };
 
   // Static view renders the ACCUMULATED rows; the raw page in
@@ -958,7 +981,16 @@ function LogsInner() {
   // you don't send. Labelled explicitly below — a local subset read as
   // a window-wide answer would be the worst kind of wrong here.
   const logs = useMemo(() => narrowLoaded(loadedRows, narrow), [loadedRows, narrow]);
-  const total = data?.total ?? 0;
+  // v0.10.1831 — liste satırları SAYMAZ (skipTotal, ES track_total_hits:false):
+  // pencere toplamı histogramın seviye bantlarından (aynı süzgeç), kırılım
+  // seviye değilse seviye sayımından tabana göre. Bilinmiyorsa undefined —
+  // "N hits" yerine "≥ yüklenen" yazılır (uydurulmaz).
+  const windowTotal = useMemo<number | undefined>(() => {
+    if (breakdown === 'severity' && histTotals) return histTotals.reduce((a, t) => a + t.total, 0);
+    if (!chipsFromHistogram && !facetLoading && volumeQ.data) return windowCountAtFloor(facetCounts, filter.severity);
+    return undefined;
+  }, [breakdown, histTotals, chipsFromHistogram, facetLoading, volumeQ.data, facetCounts, filter.severity]);
+  const total = windowTotal ?? 0;
 
   // j/k row navigation — same pattern as /services and /traces.
   // Enter / o on the selected row toggles the expansion
@@ -973,7 +1005,9 @@ function LogsInner() {
   // listede yalnız geçerli sayfa çizilir (j/k da onu gezer).
   const paged = useMemo(() => pageSlice(data ? logs : NO_LOGS, live ? 0 : page, live ? Number.MAX_SAFE_INTEGER : display.pageSize),
     [data, logs, live, page, display.pageSize]);
-  const shownLogs = paged.rows;
+  const shownLogs = useMemo(
+    () => paged.rows.map(r => { const f = fullDocs[r.id]; return f && f !== 'error' ? f : r; }),
+    [paged.rows, fullDocs]);
   const tableNav = useTableNav<LogRow>(shownLogs, {
     onOpen: (l) => toggle(l.id),
     pageId: 'logs',
@@ -1169,7 +1203,9 @@ function LogsInner() {
   // beyanıyla aynı kaynak. Desen görünümünde ve canlı kuyrukta liste koşmaz →
   // sayı yok (uydurulmaz).
   const hitsLabel = !live && staticQ.data && view === 'logs'
-    ? `${total.toLocaleString()}${staticQ.data.totalIsLowerBound ? '+' : ''} hits`
+    ? (windowTotal !== undefined
+      ? `${windowTotal.toLocaleString()} hits`
+      : `≥ ${loadedRows.length.toLocaleString()} hits`)
     : '';
 
   return (
@@ -1343,7 +1379,11 @@ function LogsInner() {
           loadedCount={data ? loadedRows.length : 0} shownCount={data ? logs.length : 0}
           narrow={narrow} onNarrow={v => { setNarrow(v); setPage(0); }} narrowRef={narrowRef}
           columns={logCols} fields={fields} onColumns={changeCols}
-          display={<DisplayOptions value={display} onChange={setDisplay} />}
+          display={<DisplayOptions value={display} onChange={setDisplay}
+            sample={{ value: sample, min: LOGS_SAMPLE_MIN, max: maxSample, onChange: n => {
+              resetPaging();
+              setSearchParams(prev => { const p = new URLSearchParams(prev); p.set('smp', String(n)); return p; }, { replace: true });
+            } }} />}
           live={live} asc={asc} onToggleAsc={toggleAsc}
           onExport={exportLoaded} />
         {/* v0.10.967 — tablo HER durumda (başlık kalır); durum satırı
@@ -1360,7 +1400,14 @@ function LogsInner() {
           onToggleColumn={toggleColumn}
           onTracePeek={tid => setPeekTraceId(tid)}
           onContextOpen={l => setContextPivot(l)}
-          permalink={l => buildDocPermalink(l, env)} />
+          permalink={l => buildDocPermalink(l, env)}
+          extraExpanded={l => (l.partial ? (
+            <span className="ld-tbar-note" role="status">
+              {fullDocs[l.id] === 'error'
+                ? 'Tam doküman alınamadı — yalnız yüklenen alanlar gösteriliyor.'
+                : 'Tam doküman yükleniyor…'}
+            </span>
+          ) : null)} />
         {/* Load more (v0.8.260 — replaced the Back/Next pager;
             keyset cursor mechanics unchanged underneath). Rows
             accumulate in accRows; the button advances the cursor
@@ -1396,10 +1443,10 @@ function LogsInner() {
         )}
         {data && logs.length > 0 && !live && paged.page === paged.pages - 1 && (
           <Pager mode="cursor"
-            count={staticQ.data?.totalIsLowerBound ? 'capped' : 'exact'}
-            total={total}
+            {...(windowTotal !== undefined ? { count: 'exact' as const, total: windowTotal } : { count: 'skip' as const })}
             loaded={logs.length}
             hasMore={!!data.nextCursor}
+            moreLabel={`Daha fazla yükle (sonraki ${sample.toLocaleString('tr-TR')})`}
             onMore={() => { if (data.nextCursor) { setPage(Math.floor(logs.length / display.pageSize)); setCursor(data.nextCursor); } }}
             loading={staticQ.isFetching}
             extras={

@@ -1514,10 +1514,16 @@ func (s *ESStore) Search(ctx context.Context, f Filter) (*Page, error) {
 		"track_total_hits": esTrackTotalHits(f.SkipTotal), // v0.10.414 — çağıran okumayacaksa false
 		"timeout":          esSoftTimeout(f.SoftTimeout),  // v0.10.944 — çağıranın bütçesine sığan yumuşak süre
 	}
+	narrow := false
 	if f.LeanSource {
 		// v0.10.500 (A4) — yalnız gövde/zaman/severity: desen örneklemesi
 		// 4 × 500 dokümanı tam _source ile çekiyordu, üçünü okuyordu.
 		searchBody["_source"] = s.leanSourceFields()
+	} else if len(f.SourceFields) > 0 {
+		// v0.10.1831 — /logs: görünen kolonlar + satır çizim alanları
+		// (es_narrow_source.go); satır açılınca tam doküman FetchDoc ile.
+		searchBody["_source"] = map[string]any{"includes": s.narrowSourceFields(f.SourceFields)}
+		narrow = true
 	}
 	if usePIT {
 		// The PIT carries the index + a frozen segment view, so the index
@@ -1612,6 +1618,7 @@ func (s *ESStore) Search(ctx context.Context, f Filter) (*Page, error) {
 		Hits             struct {
 			Total esTotal `json:"total"`
 			Hits  []struct {
+				Index  string         `json:"_index"` // v0.10.1831 — DocRef
 				ID     string         `json:"_id"`
 				Source map[string]any `json:"_source"`
 				Fields map[string]any `json:"fields"`
@@ -1626,7 +1633,11 @@ func (s *ESStore) Search(ctx context.Context, f Filter) (*Page, error) {
 	out := make([]*LogRecord, 0, len(raw.Hits.Hits))
 	var lastSort []any
 	for _, h := range raw.Hits.Hits {
-		out = append(out, s.mapHit(h.ID, h.Source, h.Fields, f.TraceID, f.SpanID))
+		rec := s.mapHit(h.ID, h.Source, h.Fields, f.TraceID, f.SpanID)
+		if narrow {
+			rec.Partial, rec.DocRef = true, docRef(h.Index, h.ID)
+		}
+		out = append(out, rec)
 		lastSort = h.Sort
 	}
 	// Carry the PIT id forward — ES may refresh it per request, and the
@@ -3539,18 +3550,24 @@ func ensureConventionalFields(out []string, seen map[string]struct{}) []string {
 }
 
 // esSearchLimit — v0.10.1818 (audit yan bulgusu): sayfa boyu. Boş/negatif →
-// 100 (varsayılan); 1000'in üstü 1000'e KIRPILIR. Önceden >1000 da 100'e
+// 100 (varsayılan); tavanın üstü tavana KIRPILIR. Önceden >1000 da 100'e
 // düşüyordu: limit=2000 isteyen 100 satır alıyor, CH backend'i (logsMaxLimit)
 // ise 1000 döndürüyordu — iki backend aynı istekte farklı sayfa. Saf.
+// v0.10.1831 — tavan 1000 → SearchLimitCap (5000; /logs örnek boyu üst
+// sınırı, api logs_search_settings.go gerekçesi: index.max_result_window).
 func esSearchLimit(n int) int {
 	switch {
 	case n <= 0:
 		return 100
-	case n > 1000:
-		return 1000
+	case n > SearchLimitCap:
+		return SearchLimitCap
 	}
 	return n
 }
+
+// SearchLimitCap — tek Search isteğinin satır tavanı, İKİ backend (CH:
+// chstore logsMaxLimit aynı sayı). v0.10.1831.
+const SearchLimitCap = 5000
 
 // esTrackTotalHits — v0.10.414 (log arama denetimi A7): çağıran Page.Total'ı
 // okumayacaksa (Filter.SkipTotal) tüm-shard sayımı hiç istenmez; aksi

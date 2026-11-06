@@ -3890,6 +3890,22 @@ export interface LogRow {
   // satır; TEK istisna olarak backend basar (/api/oracle/errors), çünkü satır
   // logstore'dan değil kendi tablosundan gelir ve rozet bunu söylemeli.
   origin?: 'span-event' | 'oracle';
+  // v0.10.1831 (Log Search Faz 1 dilim 1.8) — dar `_source` ile okunan satır
+  // (yalnız ES, /logs listesi): öznitelikler yalnız görünen kolonlar + satır
+  // çizim alanları. docRef ("<index>/<_id>") tam dokümanı /api/logs/doc ile
+  // getirir (satır açılınca).
+  partial?: boolean;
+  docRef?: string;
+}
+
+// v0.10.1831 — GET/PUT /api/settings/logs-search (internal/api/logs_search_settings.go
+// logsSearchSettingsResponse). maxSample = /logs örnek boyu üst sınırı.
+export interface LogsSearchSettings {
+  maxSample: number;
+  defaults: { maxSample: number };
+  min: number;
+  hardCap: number;
+  sampleDefault: number;
 }
 
 // OracleLogsResponse — v0.10.602: GET /api/oracle/errors (oracle_logs_routes.go).

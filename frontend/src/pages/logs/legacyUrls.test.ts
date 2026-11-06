@@ -13,6 +13,7 @@ import {
   logsUrlHasFilterState, parseLogsLang,
 } from '@/lib/logsUrl';
 import { readLogsDisplay, LOGS_DEFAULT_DISPLAY } from '@/lib/logsDisplay';
+import { readLogsSample } from '@/lib/logsSample';
 import { parseBreakdown } from '@/components/LogsHistogram';
 
 const GOLDEN = [
@@ -329,5 +330,17 @@ describe('/logs görünüm parametreleri — yalnız eklenir (v0.10.1830)', () =
     const out = writeLogsParams(p, st.filter, st.filtersRaw, st.colsRaw);
     for (const k of ['rh', 'hh', 'den', 'pp']) expect(out.get(k), k).toBe(p.get(k));
     expect(readLogsDisplay(out).display).toEqual({ rowLines: 3, headerLines: 2, density: 'compact', pageSize: 250 });
+  });
+});
+
+// v0.10.1831 (dilim 1.8) — `smp` (örnek boyu) EKLENEN parametre: eski linkler
+// varsayılan 500'ü açar (açık soru §9-6 kararı), imzaya girmez, yazmada korunur.
+describe('/logs smp parametresi — yalnız eklenir (v0.10.1831)', () => {
+  it('eski linkler varsayılan örnek boyu; smp imzaya girmez ve korunur', () => {
+    for (const u of GOLDEN) expect(readLogsSample(sp(u).get('smp'), 2000), u).toEqual({ sample: 500, explicit: false });
+    const p = sp('/logs?q=boom&smp=1200');
+    const st = readLogsUrlState(p);
+    expect(st.sig).toBe(readLogsUrlState(sp('/logs?q=boom')).sig);
+    expect(writeLogsParams(p, st.filter, st.filtersRaw, st.colsRaw).get('smp')).toBe('1200');
   });
 });

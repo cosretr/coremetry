@@ -125,6 +125,9 @@ describe('servis Logs sekmesi — paylaşılan log parçaları çivisi (v0.10.18
 
     expect(m.logsCalls).toHaveLength(1);
     expect(m.logsCalls[0]).toMatchObject({ service: 'orders-api', limit: 200, from: 1759494780000000000, to: 1759497240000000000 });
+    // v0.10.1831 — /logs'un örnek boyu / dar _source / sayımsız isteği sekmeye sızmaz.
+    expect(m.logsCalls[0].fields).toBeUndefined();
+    expect(m.logsCalls[0].skipTotal).toBeUndefined();
     expect(m.tsCalls).toHaveLength(1);
     expect(m.tsCalls[0]).toMatchObject({ service: 'orders-api', groupBy: 'severity', from: 1759494780000000000 });
 

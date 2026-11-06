@@ -30,7 +30,8 @@ const { getLogstoreSettings, putLogstoreSettings, snap } = vi.hoisted(() => {
     putLogstoreSettings: vi.fn(async (_s: ESLogstoreInput) => snap.current),
   };
 });
-vi.mock('@/lib/api', () => ({ api: { getLogstoreSettings, putLogstoreSettings, testLogstoreSettings: vi.fn(async () => ({ ok: true })) } }));
+vi.mock('@/lib/api', () => ({ api: { getLogstoreSettings, putLogstoreSettings, testLogstoreSettings: vi.fn(async () => ({ ok: true })),
+  getLogsSearchSettings: vi.fn(async () => ({ maxSample: 2000, defaults: { maxSample: 2000 }, min: 10, hardCap: 5000, sampleDefault: 500 })), } })); // v0.10.1831 — Log arama kartı
 
 import { ElasticTab } from './ElasticTab';
 

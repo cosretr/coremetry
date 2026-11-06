@@ -5152,7 +5152,7 @@ type LogFilter struct {
 // CLAUDE.md hard-constraint: every query on a billion-row table
 // must carry a bounded LIMIT. The keyset cursor lets the caller
 // page deeper without ever asking for >logsMaxLimit rows at once.
-const logsMaxLimit = 1000
+const logsMaxLimit = 5000 // v0.10.1831 — /logs örnek boyu tavanı (logstore.SearchLimitCap ile aynı)
 
 // logsEnvChainSQL is the logs-local deployment-environment derivation
 // (v0.8.400 — env-separation Phase 4). The topoEnvChainSQL two-spelling

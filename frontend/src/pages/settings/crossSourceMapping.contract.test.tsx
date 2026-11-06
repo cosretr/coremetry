@@ -26,6 +26,7 @@ const m = vi.hoisted(() => ({
 vi.mock('@/lib/api', () => ({
   api: {
     getLogstoreSettings: vi.fn(async () => m.es),
+    getLogsSearchSettings: vi.fn(async () => ({ maxSample: 2000, defaults: { maxSample: 2000 }, min: 10, hardCap: 5000, sampleDefault: 500 })), // v0.10.1831 — Log arama kartı
     putLogstoreSettings: vi.fn(async (s: ESLogstoreInput) => { m.putES.push(s); return m.es; }),
     testLogstoreSettings: vi.fn(async () => ({ ok: true })),
     getVMSettings: vi.fn(async () => m.vm),

@@ -597,6 +597,9 @@ func (s *Server) reloadConfigOnSignal(ctx context.Context, svc string) {
 				log.Printf("[cache] config-reload thanos: %v", err)
 			}
 		}
+	case "logs_search":
+		// v0.10.1831 — /logs örnek boyu üst sınırı (logs_search_settings.go PUT).
+		s.LoadLogsSearchSettings(ctx)
 	case "promql_console":
 		// v0.10.952 — PromQL konsolu korkulukları (promql_console_settings.go
 		// PUT). Case uçla AYNI sürümde (thanos v0.9.237 dersi): dinleyicisiz

@@ -20,7 +20,7 @@ const row = (i: number): LogRow => ({
   id: i + 1, timestamp: T0 + i * 1e6, service: 'orders-api', severityText: 'INFO', severityNumber: 9,
   body: `order ${i} accepted`, traceId: '', spanId: '', attributes: {}, resourceAttributes: {},
 } as unknown as LogRow);
-const m = vi.hoisted(() => ({ calls: [] as Record<string, unknown>[] }));
+const m = vi.hoisted(() => ({ calls: [] as Record<string, unknown>[], partial: false, docs: [] as string[] }));
 vi.mock('@/lib/api', () => {
   const stub: Record<string, (...a: unknown[]) => Promise<unknown>> = {
     logs: (p: unknown) => {
@@ -28,11 +28,16 @@ vi.mock('@/lib/api', () => {
       m.calls.push(params);
       const start = params.after ? 100 : 0;
       return Promise.resolve({
-        total: 230, logs: Array.from({ length: 100 }, (_, i) => row(start + i)),
+        total: 230, logs: Array.from({ length: 100 }, (_, i) => (m.partial ? { ...row(start + i), partial: true, docRef: `app-orders/d${start + i}` } : row(start + i))),
         nextCursor: params.after ? '' : 'c1',
       } as unknown as LogsResponse);
     },
     logsTimeseries: () => Promise.resolve([]),
+    logsDoc: (ref: unknown) => {
+      m.docs.push(String(ref));
+      return Promise.resolve({ ...row(0), attributes: { CHANNEL_CODE: 'MOBILE', 'http.status': '200' } });
+    },
+    getLogsSearchSettings: () => Promise.resolve({ maxSample: 2000, defaults: { maxSample: 2000 }, min: 10, hardCap: 5000, sampleDefault: 500 }),
     clusters: () => Promise.resolve({ clusters: [] }),
     logsFields: () => Promise.resolve({ fields: [], total: 0, types: {} }),
     savedViews: () => Promise.resolve([]),
@@ -69,7 +74,7 @@ async function mountLogs(url: string) {
 const bodyRows = () => host!.querySelectorAll('table.logtbl-dense > tbody > tr[data-row-idx]').length;
 const button = (t: string) => [...host!.querySelectorAll('button')].find(b => b.textContent?.includes(t)) as HTMLButtonElement | undefined;
 
-beforeEach(() => { m.calls = []; });
+beforeEach(() => { m.calls = []; m.partial = false; m.docs = []; });
 afterEach(() => { act(() => { root?.unmount(); }); host?.remove(); root = null; host = null; document.body.innerHTML = ''; });
 
 describe('/logs görünüm + istemci sayfalaması (v0.10.1830)', () => {
@@ -77,7 +82,7 @@ describe('/logs görünüm + istemci sayfalaması (v0.10.1830)', () => {
     await mountLogs(`/logs?range=${RANGE}`);
     expect(bodyRows()).toBe(100);
     expect(host!.querySelector('.pager [aria-label*="Sayfa"], .pager input')).toBeNull();
-    expect(button('Load more') ?? button('more')).toBeTruthy();
+    expect(button('Daha fazla yükle')).toBeTruthy();
     expect(host!.querySelector('table.logtbl-dense.lt-rh-1')).not.toBeNull();
   });
 
@@ -86,17 +91,34 @@ describe('/logs görünüm + istemci sayfalaması (v0.10.1830)', () => {
     expect(bodyRows()).toBe(50);
     expect(host!.querySelector('table.logtbl-dense.lt-rh-3')).not.toBeNull();
     expect(host!.querySelector('.table-wrap[data-density="compact"]')).not.toBeNull();
-    const moreBefore = button('Load more') ?? button('more');
+    const moreBefore = button('Daha fazla yükle');
     expect(moreBefore, 'ilk sayfada Load more yok').toBeFalsy();
     await act(async () => { button('Next')!.click(); });
     await settle();
     expect(host!.textContent).toContain('order 50 accepted');
-    const more = button('Load more') ?? button('more');
+    const more = button('Daha fazla yükle');
     expect(more).toBeTruthy();
     await act(async () => { more!.click(); });
     await settle();
     expect(m.calls.at(-1)!.after).toBe('c1');
     expect(host!.textContent).toContain('order 100 accepted');
     expect(host!.textContent).not.toContain('order 99 accepted');
+  });
+
+  // v0.10.1831 — liste isteği örnek boyu (500 varsayılan), sayımsız; dar
+  // okunmuş satır açılınca tam doküman TEK istekle gelir, ikinci açılış istek atmaz.
+  it('örnek boyu + skipTotal; partial satır açılınca tam doküman', async () => {
+    m.partial = true;
+    await mountLogs(`/logs?range=${RANGE}&smp=300`);
+    expect(m.calls[0]).toMatchObject({ limit: 300, skipTotal: true });
+    const first = host!.querySelector('table.logtbl-dense > tbody > tr[data-row-idx="0"]') as HTMLElement;
+    await act(async () => { first.click(); });
+    await settle();
+    expect(m.docs).toEqual(['app-orders/d0']);
+    expect(host!.textContent).toContain('CHANNEL_CODE');
+    await act(async () => { (host!.querySelector('table.logtbl-dense > tbody > tr[data-row-idx="0"]') as HTMLElement).click(); });
+    await act(async () => { (host!.querySelector('table.logtbl-dense > tbody > tr[data-row-idx="0"]') as HTMLElement).click(); });
+    await settle();
+    expect(m.docs).toHaveLength(1);
   });
 });

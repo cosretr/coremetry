@@ -1,4 +1,5 @@
 import type {
+  LogRow, LogsSearchSettings, // v0.10.1831
   NativeDetectorsView, NativeOwnSwitches, ShellFeatures, IncidentsSettings,
 OracleLogsResponse, CopilotScopeNames, CosreRouteRED,
   McpServersSnapshot, McpServerInput, McpServerTestResult,
@@ -1115,6 +1116,15 @@ export const api = {
   // ES backend prefix-scanned every index in retention on every
   // keystroke. Server clamps to 7d and snaps the window to the hour, so
   // passing the page's own range here is a hint, not a contract.
+  // v0.10.1831 — dar `_source` satırının tam dokümanı (satır açılınca; yalnız ES).
+  logsDoc: (ref: string, signal?: AbortSignal) =>
+    get<LogRow>(`/api/logs/doc?ref=${encodeURIComponent(ref)}`, signal),
+  // v0.10.1831 — /logs örnek boyu üst sınırı (system_settings logs_search).
+  getLogsSearchSettings: (signal?: AbortSignal) => get<LogsSearchSettings>('/api/settings/logs-search', signal),
+  putLogsSearchSettings: (s: { maxSample: number }) =>
+    request<LogsSearchSettings>('/api/settings/logs-search', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(s),
+    }),
   // v0.10.1821 — signal: sorgu çubuğu yeni tuşta önceki öneri isteğini iptal eder.
   logsFieldValues: (field: string, q: string, limit = 20, since?: string, signal?: AbortSignal) =>
     get<{ values: string[] }>(
@@ -4435,6 +4445,11 @@ export interface LogsTemplatesParams {
 
 export interface LogsParams {
   service?: string;
+  // v0.10.1831 (dilim 1.8) — fields: görünen kolon alanları (virgüllü; ES dar
+  // `_source`, satır partial + docRef döner); skipTotal: tam sayım istenmez
+  // (pencere toplamı histogramdan). İkisi de yalnız /logs listesi.
+  fields?: string;
+  skipTotal?: boolean;
   // lang (v0.10.1819) — 'lucene' = arama metni ES'e AYNEN (KQL çevirisi
   // yok). Verilmezse otomatik. URL `lang=lucene` (lib/logsUrl parseLogsLang).
   lang?: 'lucene';

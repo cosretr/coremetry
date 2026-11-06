@@ -6,6 +6,7 @@ import { ActionRow } from '@/components/coremetry/ActionRow';
 import { cn } from '@/lib/cn';
 import { api } from '@/lib/api';
 import { useSettingsLoad, SettingsLoadError, ConfigStatusBanner } from './shared';
+import { LogsSearchSettingsCard } from './LogsSearchSettingsCard';
 import type { ESLogstoreInput, ESLogstoreSnapshot } from '@/lib/types';
 
 // Faz 2 dilim 1 R8 — inline stil yerine Tailwind utility (token değişkenleri).
@@ -268,6 +269,8 @@ export function ElasticTab() {
           secondary={<Button variant="secondary" loading={busy} onClick={test}>Test connection</Button>}
           confirm={<Button type="submit" loading={busy}>Save &amp; apply</Button>} />
       </form>
+      {/* v0.10.1831 — /logs örnek boyu üst sınırı; iki arka uç için de geçerli. */}
+      <LogsSearchSettingsCard />
     </div>
   );
 }

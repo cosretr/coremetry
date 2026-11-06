@@ -302,7 +302,8 @@ func logsSearchKey(f logstore.Filter, fromRaw, toRaw string) string {
 		f.Service, f.Cluster, f.Env, f.SeverityMin, f.TraceID, f.SpanID, f.HasTrace,
 		fromRaw, toRaw, f.Limit, f.Offset, f.Cursor, f.WantCursor, f.Ascending, f.Search, logstore.PatternKey(f.Pattern)) +
 		logsTeamKey(f) + // v0.10.1477 — team= (takımsız anahtar değişmez)
-		logsLangKey(f) // v0.10.1819 — lang=lucene (otomatikte anahtar değişmez)
+		logsLangKey(f) + // v0.10.1819 — lang=lucene (otomatikte anahtar değişmez)
+		logsSourceKey(f) // v0.10.1831 — dar _source kolonları + sayım yok (yoksa anahtar değişmez)
 }
 
 func (s *Server) getLogs(w http.ResponseWriter, r *http.Request) {
@@ -404,8 +405,12 @@ func (s *Server) serveLogsSearch(w http.ResponseWriter, r *http.Request, q url.V
 		TraceID:     q.Get("traceId"),
 		SpanID:      q.Get("spanId"),
 		HasTrace:    parseBoolParam(q.Get("hasTrace")), // v0.8.406 — trace-only filter
-		Limit:       parseInt(q.Get("limit"), 100),
-		Offset:      parseInt(q.Get("offset"), 0),
+		Limit:       logsSampleParam(q.Get("limit")),   // v0.10.1831 — eksik 100, tavan logs_search.maxSample
+		// v0.10.1831 — /logs listesi: görünen kolonlar (ES dar _source) +
+		// sayım yok (pencere toplamı histogramdan).
+		SourceFields: parseLogsSourceFields(q.Get("fields")),
+		SkipTotal:    parseBoolParam(q.Get("skipTotal")),
+		Offset:       parseInt(q.Get("offset"), 0),
 		// v0.7.22 (SAFE-CORE) — opaque keyset cursor. The UI passes
 		// back the prior response's nextCursor; backend-owned format.
 		Cursor: q.Get("after"),

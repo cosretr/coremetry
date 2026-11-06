@@ -181,6 +181,8 @@ describe('/logs ilk yükleme süzgeçsiz istek atmaz (v0.10.1076)', () => {
   // EKLEYEREK değiştirebilir — bu snapshot'ın meşru güncellemesi yalnız yeni
   // satır ekler; mevcut bir anahtarın adı ya da değeri değişirse sözleşme
   // bozulmuştur. Arama kutusu q'yu verbatim gösterir.
+  // v0.10.1831 — TEK bilinçli değer değişikliği: `limit` 100 → 500 (açık soru
+  // §9-6 operatör kararı: örnek boyu 500); `fields` + `skipTotal` eklendi.
   it('derin link: ilk liste + histogram istek nesneleri tam pinli; kutu q verbatim', async () => {
     await mountLogs(`/logs?q=${encodeURIComponent('service.name:(orders-api or payments-mobile) and level: error')}`
       + `&service=orders-api&severity=17&asc=1&breakdown=service&range=${RANGE}`);
@@ -208,15 +210,17 @@ describe('/logs ilk yükleme süzgeçsiz istek atmaz (v0.10.1076)', () => {
           "asc": true,
           "cluster": undefined,
           "env": undefined,
+          "fields": undefined,
           "from": 1759494780000000000,
           "hasTrace": undefined,
           "lang": undefined,
-          "limit": 100,
+          "limit": 500,
           "paging": true,
           "pattern": undefined,
           "search": "service.name:(orders-api or payments-mobile) and level: error",
           "service": "orders-api",
           "severity": 17,
+          "skipTotal": true,
           "spanId": undefined,
           "team": undefined,
           "to": 1759497240000000000,

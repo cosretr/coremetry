@@ -174,6 +174,12 @@ type Filter struct {
 	// ES `_source` includes ile dar çekilir (2000 doküman × tam _source
 	// → üç alan). CH backend'inde etkisiz (zaten yalnız gereken kolonlar).
 	LeanSource bool
+	// SourceFields — v0.10.1831 (Log Search Faz 1 dilim 1.8): /logs
+	// listesinin GÖRÜNEN kolonları. Doluysa ES `_source.includes` = satır
+	// çiziminin gerektirdiği alanlar + bu kolonlar; dönen satır Partial +
+	// DocRef taşır (tam doküman satır açılınca, DocFetcher). ≤ MaxSourceFields.
+	// LeanSource ile birlikte verilmez (LeanSource kazanır). CH: etkisiz.
+	SourceFields []string
 	// SoftTimeout — v0.10.944 (CoSRE search_logs): ES gövdesindeki yumuşak
 	// `timeout` için çağıranın ipucu (LeanSource gibi yalnız ES). 0 = bugünkü
 	// esTimeoutFromEnv("10s"). İstemci deadline'ı ES'in yumuşak bütçesinden
@@ -205,6 +211,11 @@ type LogRecord struct {
 	SpanID             string            `json:"spanId"`
 	Attributes         map[string]string `json:"attributes"`
 	ResourceAttributes map[string]string `json:"resourceAttributes"`
+	// v0.10.1831 — dar `_source` ile okunan satır: öznitelikler YALNIZ
+	// istenen kolonlar (+ satır çizim alanları). DocRef ("<index>/<_id>")
+	// tam dokümanı tek `ids` sorgusuyla geri getirir. Yalnız ES.
+	Partial bool   `json:"partial,omitempty"`
+	DocRef  string `json:"docRef,omitempty"`
 }
 
 // Page is the result of a Search — total covers the full match count
