@@ -29,10 +29,14 @@ package api
 //     A VM HTTP >= 300 body is JSON inside promapi's error text; its inner
 //     `error` field is unwrapped first (engineErrorText).
 //
-// STATUS stays what it is today (brief §1.7): CH syntax errors are already
-// 400 (ValidatePromQL → errBadRequest); a VM rejection is 502 today
-// (upstream class) and stays 502 — only an untagged (500) error whose text is
-// a syntax error moves to 400. Error responses are never cached (serveCached).
+// STATUS: CH syntax errors are 400 (ValidatePromQL → errBadRequest); an
+// untagged (500) error whose text is a syntax error moves to 400.
+// v0.10.1860 (Faz 2 dilim 2.0, operatör onaylı) — a query VictoriaMetrics
+// REJECTS is the operator's to fix, not an outage: VM HTTP 400 / 422 → 400
+// with the positioned body (vmQueryRejected). VM 5xx, transport errors and
+// the 4xx that are NOT about the query text (401/403 credentials, 404 wrong
+// base path, 408/429 load) stay 502 — they point at the VM connection.
+// Error responses are never cached (serveCached).
 
 import (
 	"context"
@@ -44,6 +48,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/cilcenk/coremetry/internal/promapi"
 )
 
 // promqlQueryErr — an error from /api/metrics/promql carrying the query it
@@ -196,12 +202,26 @@ func promqlErrorStatus(err error) int {
 	switch {
 	case errors.Is(err, errBadRequest):
 		return http.StatusBadRequest
+	case vmQueryRejected(err):
+		return http.StatusBadRequest
 	case errors.Is(err, errUpstream):
 		return http.StatusBadGateway
 	case reSyntaxish.MatchString(err.Error()):
 		return http.StatusBadRequest
 	}
 	return http.StatusInternalServerError
+}
+
+// vmQueryRejected — SAF: true when the error chain holds a VM (promapi) HTTP
+// answer that rejects the QUERY TEXT: 400 Bad Request or 422 Unprocessable
+// Entity (VM's "cannot parse" code). Every other status — 401/403 auth, 404
+// path, 408/429 load, 5xx — is the connection's problem and stays 502.
+func vmQueryRejected(err error) bool {
+	var he *promapi.HTTPError
+	if !errors.As(err, &he) {
+		return false
+	}
+	return he.Status == http.StatusBadRequest || he.Status == http.StatusUnprocessableEntity
 }
 
 // promqlErrorBodyFor — SAF: the body for err against query.

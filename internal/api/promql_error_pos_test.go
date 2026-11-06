@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
+	"github.com/cilcenk/coremetry/internal/promapi"
 )
 
 func TestPromQLErrorPos(t *testing.T) {
@@ -57,8 +58,18 @@ func TestPromQLErrorStatus(t *testing.T) {
 		want int
 	}{
 		{fmt.Errorf("%w: promql: bad (at position 1)", errBadRequest), 400},
-		{fmt.Errorf("%w: victoriametrics: HTTP 422: cannot parse", errUpstream), 502}, // today's status kept
-		{errors.New("promql: unexpected token (at position 3)"), 400},                 // untagged 500 syntax → 400
+		{fmt.Errorf("%w: victoriametrics: HTTP 422: cannot parse", errUpstream), 502}, // text alone is not a typed VM answer
+		// v0.10.1860 — typed VM answers: 400/422 reject the QUERY → 400;
+		// credentials / path / load / 5xx stay 502 (the connection's problem).
+		{fmt.Errorf("%w: %w", errUpstream, &promapi.HTTPError{Label: "victoriametrics", Status: 422, Body: "cannot parse"}), 400},
+		{fmt.Errorf("%w: %w", errUpstream, &promapi.HTTPError{Label: "victoriametrics", Status: 400, Body: "bad query"}), 400},
+		{fmt.Errorf("%w: %w", errUpstream, &promapi.HTTPError{Label: "victoriametrics", Status: 401}), 502},
+		{fmt.Errorf("%w: %w", errUpstream, &promapi.HTTPError{Label: "victoriametrics", Status: 403}), 502},
+		{fmt.Errorf("%w: %w", errUpstream, &promapi.HTTPError{Label: "victoriametrics", Status: 404}), 502},
+		{fmt.Errorf("%w: %w", errUpstream, &promapi.HTTPError{Label: "victoriametrics", Status: 429}), 502},
+		{fmt.Errorf("%w: %w", errUpstream, &promapi.HTTPError{Label: "victoriametrics", Status: 503}), 502},
+		{fmt.Errorf("%w: %w", errUpstream, errors.New("dial tcp: connection refused")), 502},
+		{errors.New("promql: unexpected token (at position 3)"), 400}, // untagged 500 syntax → 400
 		{errors.New("clickhouse: connection reset"), 500},
 	}
 	for _, tc := range cases {
@@ -89,7 +100,11 @@ func TestPromQLCHSyntaxErrorCarriesPos(t *testing.T) {
 	}
 }
 
-func TestPromQLVMErrorCarriesPosAndKeepsStatus(t *testing.T) {
+// v0.10.1860 (Faz 2 dilim 2.0) — symptom before: a MetricsQL typo answered
+// 502, the "VM unreachable" class, pointing the operator at a healthy
+// cluster. A VM 4xx query rejection is now 400 with the positioned body; VM
+// 5xx stays 502.
+func TestPromQLVMRejectionIs400(t *testing.T) {
 	fv := newFakeVM(t, func(path string, v url.Values) (int, string) {
 		return 422, `{"status":"error","errorType":"422","error":"cannot parse \"sum(up) foo\": unparsed data left: \"foo\""}`
 	})
@@ -100,7 +115,7 @@ func TestPromQLVMErrorCarriesPosAndKeepsStatus(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &b); err != nil {
 		t.Fatalf("%v %s", err, rec.Body)
 	}
-	if rec.Code != http.StatusBadGateway || b.Pos == nil || *b.Pos != 8 {
+	if rec.Code != http.StatusBadRequest || b.Pos == nil || *b.Pos != 8 || b.Line != 1 || b.Col != 9 || b.Detail == "" {
 		t.Fatalf("status %d body %s", rec.Code, rec.Body)
 	}
 	// no recognisable position → body has no pos, still the legacy error text
@@ -110,7 +125,16 @@ func TestPromQLVMErrorCarriesPosAndKeepsStatus(t *testing.T) {
 	rec = httptest.NewRecorder()
 	b = promqlErrResp{}
 	fv2.server().queryPromQL(rec, httptest.NewRequest("GET", "/api/metrics/promql?query=foo(up)&"+goldenWindow(), nil))
-	if rec.Code != http.StatusBadGateway || json.Unmarshal(rec.Body.Bytes(), &b) != nil || b.Pos != nil || b.Error == "" {
+	if rec.Code != http.StatusBadRequest || json.Unmarshal(rec.Body.Bytes(), &b) != nil || b.Pos != nil || b.Error == "" {
 		t.Fatalf("no-pos case: %d %s", rec.Code, rec.Body)
+	}
+	// VM 5xx → still 502 (VM unreachable / broken, not the operator's query)
+	fv3 := newFakeVM(t, func(path string, v url.Values) (int, string) {
+		return 503, `service unavailable`
+	})
+	rec = httptest.NewRecorder()
+	fv3.server().queryPromQL(rec, httptest.NewRequest("GET", "/api/metrics/promql?query=up&"+goldenWindow(), nil))
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("5xx case: %d %s", rec.Code, rec.Body)
 	}
 }

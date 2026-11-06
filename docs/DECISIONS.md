@@ -12637,3 +12637,12 @@ değişmez).
 - **Tablolar değişmedi.** Liste hücresindeki tek satır SQL düz kalır (tablo standardı: renk yalnız sapan değerde);
   renk yalnız tam ifade bloğunda.
 - Doğrulanmadı: tarayıcı.
+
+## 2026-11-06 — Metrics Explorer Faz 2 (tek sorgu bileşeni + yeni /metrics)
+
+Kaynak: `docs/metrics/metrics-explore-dashboards-audit.md` §7 Faz 2 (onaylı, §11) · mockup `docs/frontend/mockups/metrics-explore.html`. Metrikler yalnız VictoriaMetrics'te (operatör 2026-11-06): tasarım VM'e göre; CH metrik yolu derlenir, davranışı değişmez, ekran desteklenmeyeni `capabilities`'ten nedeniyle kapalı gösterir.
+- **v0.10.1860 — VM'in reddettiği sorgu = 400 (2.0, operatör onaylı).** `/api/metrics/promql`: VM `400`/`422` cevabı
+  (sorgu metnini reddediyor) artık 400 + `{error, pos, line, col, detail}` (1841 gövdesi); önce 502'ydi ve "VM erişilemedi"
+  sınıfına düşüp operatörü sağlıklı kümeye yönlendiriyordu. Karar tipli hatadan (`promapi.HTTPError.Status`, saf
+  `vmQueryRejected`), metinden değil. Bilinçli dar: 401/403 (kimlik), 404 (yanlış taban yol), 408/429 (yük), 5xx ve
+  ağ hatası 502 kalır; brief "VM 4xx → 400" diyordu, bu dört 4xx sorgunun değil bağlantının sorunu (sapma).
