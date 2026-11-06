@@ -8,5 +8,7 @@ export { DisplayOptions } from './DisplayOptions';
 export type { DisplayOptionsProps } from './DisplayOptions';
 export { LoadStatus } from './LoadStatus';
 export { FieldSidebar, fieldsPanelOpen } from './FieldSidebar';
+export { LogDetailSheet } from './LogDetailSheet';
+export type { LogDetailSheetProps } from './LogDetailSheet';
 export type { FieldSidebarProps, FieldStatsScope } from './FieldSidebar';
 export type { LoadStatusProps, LoadStatusItem } from './LoadStatus';
