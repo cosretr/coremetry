@@ -11982,6 +11982,10 @@ export interface MLEvent {
   verdict?: 'anomaly' | 'not_anomaly'; verdictBy?: string; verdictAt?: number; note?: string;
   /** v0.10.1843 — tek satır özet, sunucudaki ml.ExplainSummary'den (liste ucu doldurur). */
   summary?: string;
+  /** v0.10.1874 — "Seyir": ≤ 24 nokta (olay anı kaydından), a = başlangıç indeksi; kayıt yoksa yok. */
+  spark?: { v: number[]; a: number };
+  /** v0.10.1874 — "Servis tipi": profil (always_on | business_hours | low_traffic | batch | unknown) + Türkçe etiket. */
+  profile?: string; profileLabel?: string;
 }
 /** v0.10.1843 — ml.ExplainCard aynası (internal/ml/explain_card.go). Boş impact = satır yok. */
 export interface ExplainLink { label: string; href?: string }

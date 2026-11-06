@@ -20,6 +20,7 @@ import { buttonVariants } from '@/components/shadcn/button';
 import { serviceHref } from '@/lib/serviceHref';
 import { SIGNAL_KINDS, signalKindOf } from '@/lib/signalKind';
 import { SignalKindBadge } from '@/components/coremetry/SignalKindBadge';
+import { Sparkline } from '@/components/Sparkline';
 
 export const ML_DETECTOR_TR: Record<string, string> = {
   log_volume: 'Log hacmi', error_rate: 'Hata oranı', service_silent: 'Servis sustu',
@@ -211,6 +212,11 @@ export function AnomaliesTabBar({ value, onChange }: { value: AnomaliesTab; onCh
   );
 }
 
+/** SAF (test): seyrin tepe değeri (sıralama); seyir yoksa -1. */
+export function sparkPeak(e: MLEvent): number {
+  return e.spark?.v.length ? Math.max(...e.spark.v) : -1;
+}
+
 /** SAF (test): satır metni — sunucu özeti; yoksa (eski sunucu) servis · dedektör adı. Cümle KURMAZ. */
 export function mlRowText(e: MLEvent): string {
   return e.summary || `${e.service} · ${ML_DETECTOR_TR[e.detector] ?? e.detector}`;
@@ -218,12 +224,15 @@ export function mlRowText(e: MLEvent): string {
 const fmtTs = (ns: number) => fmtDateTime(new Date(ns / 1e6));
 
 const COLS: ColumnDef<MLEvent>[] = [
-  // v0.10.1845 — mockup görünüm 1 sırası: Sinyal · Servis · Ne oluyor · Başladı · süre (+ durum). "Seyir" sparkline,
-  // "Servis tipi" ve "Grup" sonraki partide (liste ucu ≤ 24 nokta / profil / anomali grubu gelince).
+  // v0.10.1845 — mockup görünüm 1 sırası: Sinyal · Servis · Ne oluyor · Seyir · Başladı · süre (+ durum) · Servis tipi.
+  // v0.10.1874 — "Seyir" (≤ 24 nokta, olay anı kaydından; liste ucu tek toplu okuma) + "Servis tipi" (profil).
+  // "Grup" Faz 3 (anomali grubu gelince).
   { id: 'signal', label: 'Sinyal', width: 90, sortValue: e => signalKindOf(e.detector, e.signal), naturalDir: 'asc' },
   { id: 'service', label: 'Servis', width: 180, sortValue: e => e.service, naturalDir: 'asc' },
   { id: 'headline', label: 'Ne oluyor', flex: true, minWidth: 280, sortValue: e => mlRowText(e), naturalDir: 'asc' },
+  { id: 'trend', label: 'Seyir', width: 110, priority: 2, sortValue: e => sparkPeak(e) },
   { id: 'started', label: 'Başladı · süre', width: 170, sortValue: e => e.startedAt },
+  { id: 'profile', label: 'Servis tipi', width: 110, priority: 2, sortValue: e => e.profileLabel ?? '', naturalDir: 'asc' },
   { id: 'detector', label: 'Dedektör', width: 150, priority: 3, sortValue: e => e.detector, naturalDir: 'asc' },
   { id: 'last', label: 'Son görülme', width: 150, priority: 3, sortValue: e => e.lastSeen },
   { id: 'fb', label: 'Geri bildirim', width: 120, priority: 2, sortValue: e => (e.verdict === 'anomaly' ? 2 : e.verdict ? 1 : 0) },
@@ -256,6 +265,10 @@ export function MLTab({ signal = '', onSignal }: { signal?: MLSignal; onSignal?:
       case 'headline': return <Link to={mlEventHref(e.id)} title={e.level || e.pod || e.code || ''}>{mlRowText(e)}</Link>;
       case 'service': return <Link to={serviceHref(e.service)} className="font-mono" title={e.service}>{e.service}</Link>;
       case 'detector': return ML_DETECTOR_TR[e.detector] ?? e.detector;
+      case 'trend': return e.spark && e.spark.v.length > 1
+        ? <Sparkline values={e.spark.v} width={96} height={22} color={SIGNAL_KINDS[signalKindOf(e.detector, e.signal)].token} markerAt={e.spark.a} title="Olayın seyri; çizgi = başlangıç" />
+        : <span className="text-muted-foreground">—</span>;
+      case 'profile': return e.profileLabel ? <Badge variant="outline">{e.profileLabel}</Badge> : <span className="text-muted-foreground">—</span>;
       case 'started': return (
         <span className="inline-flex flex-wrap items-center gap-1.5">
           <span className="font-mono" title={fmtTs(e.startedAt)}>{fmtClock(new Date(e.startedAt / 1e6)).slice(0, 5)} · {durationLabel(e.lastSeen - e.startedAt)}</span>

@@ -122,6 +122,34 @@ func (s *Store) MLLearnedLatest(ctx context.Context, q MLLearnedQuery) ([]MLLear
 	return out, int(total), rows.Err()
 }
 
+// MLLearnedForKeys — v0.10.1874: verilen anahtarların etkin revizyonları
+// (liste ucunun "Servis tipi" sütunu: satır başına okuma YOK, tek IN).
+// Anahtar başına en büyük rev; FINAL, LIMIT, max_execution_time.
+func (s *Store) MLLearnedForKeys(ctx context.Context, kind string, keys []string) (map[string]MLLearnedRow, error) {
+	out := map[string]MLLearnedRow{}
+	if len(keys) == 0 {
+		return out, nil
+	}
+	rows, err := s.conn.Query(ctx, `SELECT key, rev, params, stats, created_at, created_by FROM ml_learned FINAL
+		WHERE kind = ? AND key IN (?)
+		ORDER BY key, rev DESC
+		LIMIT 1 BY key
+		LIMIT ?
+		SETTINGS max_execution_time = 5`, kind, keys, len(keys))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		r := MLLearnedRow{Kind: kind}
+		if err := rows.Scan(&r.Key, &r.Rev, &r.Params, &r.Stats, &r.CreatedAt, &r.CreatedBy); err != nil {
+			return nil, err
+		}
+		out[r.Key] = r
+	}
+	return out, rows.Err()
+}
+
 // MLLearnedOne — tek anahtarın etkin revizyonu (yoksa ok=false).
 func (s *Store) MLLearnedOne(ctx context.Context, kind, key string) (MLLearnedRow, bool, error) {
 	rows, err := s.conn.Query(ctx, `SELECT rev, params, stats, created_at, created_by FROM ml_learned FINAL

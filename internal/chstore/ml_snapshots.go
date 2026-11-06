@@ -118,6 +118,33 @@ func (s *Store) ListMLSnapshotsForService(ctx context.Context, service string, f
 	return out, rows.Err()
 }
 
+// MLSnapshotSeriesFor — v0.10.1874: liste ucunun "Seyir" sütunu için TEK
+// toplu okuma — olay id'leri → kayıt serisi (JSON). Satır başına istek YOK;
+// ORDER BY event_id anahtarında IN, FINAL, LIMIT, max_execution_time.
+func (s *Store) MLSnapshotSeriesFor(ctx context.Context, ids []string) (map[string]string, error) {
+	out := map[string]string{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	rows, err := s.conn.Query(ctx, `
+		SELECT event_id, series FROM ml_event_snapshots FINAL
+		WHERE event_id IN (?)
+		LIMIT ?
+		SETTINGS max_execution_time = 5`, ids, len(ids))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id, series string
+		if err := rows.Scan(&id, &series); err != nil {
+			return nil, err
+		}
+		out[id] = series
+	}
+	return out, rows.Err()
+}
+
 // MLCallPoint — az çağrılan servisin tek bir giriş çağrısı (nokta grafiği).
 type MLCallPoint struct {
 	T       int64   `json:"t"`  // unix ms

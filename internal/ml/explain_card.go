@@ -211,6 +211,10 @@ func specFor(in CardInput) detSpec {
 
 var profileLabelsTR = map[string]string{ProfileAlwaysOn: "7/24", ProfileBusinessHours: "mesai", ProfileLowTraffic: "az çağrılan", ProfileBatch: "batch"}
 
+// ProfileLabelTR — SAF: profil → başlık çipi / liste "Servis tipi" etiketi
+// (v0.10.1874; bilinmiyor = "").
+func ProfileLabelTR(p string) string { return profileLabelsTR[p] }
+
 var dayClassTR = map[string]string{"holiday": "tatil", "half_day": "yarım gün", "sunday": "pazar", "saturday": "cumartesi", "weekday": "iş günü", "month_end": "ay sonu benzeri"}
 
 var signalTR = map[string]string{chstore.MLSignalLog: "Log", chstore.MLSignalTrace: "Trace", chstore.MLSignalMetric: "Metrik"}

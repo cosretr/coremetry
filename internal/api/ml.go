@@ -59,25 +59,67 @@ func withMLStats(st *chstore.SystemStats) *chstore.SystemStats {
 }
 
 // mlEventsKey — SAF: tüm girdiler anahtarda (since kovası, süzgeçler, özetin
-// saat dilimi). v3 (v0.10.1843): satır `summary` taşır.
+// saat dilimi). v3 (v0.10.1843): satır `summary` taşır. v4 (v0.10.1874):
+// `spark` + `profile`.
 func mlEventsKey(sinceS int64, signal, detector, service, stage, tz string) string {
-	return fmt.Sprintf("ml:events:v3:since=%d:sig=%s:d=%s:s=%s:st=%s:tz=%s", sinceS, signal, detector, service, stage, tz)
+	return fmt.Sprintf("ml:events:v4:since=%d:sig=%s:d=%s:s=%s:st=%s:tz=%s", sinceS, signal, detector, service, stage, tz)
 }
 
 // mlEventRow — liste satırı: olay + sunucuda kurulan tek satır özet
 // (ml.ExplainSummary; detay kartının özetiyle AYNI işlev).
+//
+// v0.10.1874 — Spark: "Seyir" (≤ 24 nokta, olay anı kaydından; kayıt yoksa
+// yok) + Profile / ProfileLabel: "Servis tipi" (ml_learned; satırsız servis
+// "unknown"). İkisi de liste başına TEK toplu okuma (mlListExtras).
 type mlEventRow struct {
 	chstore.MLEvent
-	Summary string `json:"summary"`
+	Summary      string    `json:"summary"`
+	Spark        *ml.Spark `json:"spark,omitempty"`
+	Profile      string    `json:"profile"`
+	ProfileLabel string    `json:"profileLabel,omitempty"`
 }
 
-// mlEventRows — SAF: olaylar → özetli satırlar.
-func mlEventRows(items []chstore.MLEvent, cfg chstore.MLConfig, now time.Time, loc *time.Location) []mlEventRow {
+// mlListExtras — liste satırlarının toplu ek verisi (okunamayan alan boş).
+type mlListExtras struct {
+	Series   map[string]string               // olay id → kayıt serisi (JSON)
+	Profiles map[string]chstore.MLLearnedRow // servis → profil revizyonu
+}
+
+// mlEventRows — SAF: olaylar → özetli satırlar (+ seyir, servis tipi).
+func mlEventRows(items []chstore.MLEvent, cfg chstore.MLConfig, now time.Time, loc *time.Location, ex mlListExtras) []mlEventRow {
 	out := make([]mlEventRow, len(items))
 	for i, e := range items {
-		out[i] = mlEventRow{MLEvent: e, Summary: ml.ExplainSummary(ml.SummaryInput(e, cfg, now, loc))}
+		p := ml.ProfileUnknown
+		if row, ok := ex.Profiles[e.Service]; ok {
+			p = ml.ServiceProfileFromRow(row).Profile
+		}
+		out[i] = mlEventRow{MLEvent: e, Summary: ml.ExplainSummary(ml.SummaryInput(e, cfg, now, loc)),
+			Spark: ml.BuildSpark(ex.Series[e.ID], e.StartedAt, e.LastSeen), Profile: p, ProfileLabel: ml.ProfileLabelTR(p)}
 	}
 	return out
+}
+
+// mlListExtrasFor — iki toplu okuma (kayıt serileri + profiller); hata o
+// alanı boş bırakır (liste yine döner — seyir/tip yokluğu ≠ liste hatası).
+func (s *Server) mlListExtrasFor(ctx context.Context, items []chstore.MLEvent) mlListExtras {
+	ids := make([]string, 0, len(items))
+	seen := map[string]bool{}
+	var svcs []string
+	for _, e := range items {
+		ids = append(ids, e.ID)
+		if !seen[e.Service] {
+			seen[e.Service] = true
+			svcs = append(svcs, e.Service)
+		}
+	}
+	var ex mlListExtras
+	if m, err := s.store.MLSnapshotSeriesFor(ctx, ids); err == nil {
+		ex.Series = m
+	}
+	if m, err := s.store.MLLearnedForKeys(ctx, chstore.MLLearnedKindProfile, svcs); err == nil {
+		ex.Profiles = m
+	}
+	return ex
 }
 
 func (s *Server) getMLEvents(w http.ResponseWriter, r *http.Request) {
@@ -98,7 +140,7 @@ func (s *Server) getMLEvents(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return nil, err
 		}
-		rows := mlEventRows(items, s.store.GetMLConfig(ctx), time.Now(), loc)
+		rows := mlEventRows(items, s.store.GetMLConfig(ctx), time.Now(), loc, s.mlListExtrasFor(ctx, items))
 		return map[string]any{"items": rows, "truncated": len(items) >= chstore.MLListCap}, nil
 	})
 }

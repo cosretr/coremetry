@@ -12834,3 +12834,11 @@ görünüm 1–4. Parti A'nın (1842–1846) üstüne; ana grafik (olay anı kay
     komşu SERVİSLERİN metrikleri (mockup payments-mobile kartı) ve "Metrics'te aç" linki grup bağlamıyla (Faz 3) gelir.
   Detay başına ek çağrı (bölüm açık/görünürken): endpoint +3 CH (olay satırı + 2 MV), kalıp +1 CH + 2 logstore (ES),
   metrik +2 CH (olay satırı + ml_series); VM 0. Hepsi 60 sn cache'li.
+- **v0.10.1874 — liste: "Seyir" sparkline'ı + "Servis tipi" sütunu.** `/api/ml/events` satırı `spark {v ≤ 24, a}` +
+  `profile`/`profileLabel` taşır (anahtar `ml:events:v4`). İkisi de liste başına TEK toplu okuma: `MLSnapshotSeriesFor`
+  (ml_event_snapshots FINAL, ORDER BY anahtarı `event_id IN (…)`, LIMIT, max_execution_time) ve `MLLearnedForKeys`
+  (ml_learned FINAL, `key IN (…)`, `LIMIT 1 BY key`) — satır başına istek YOK; okuma hatası o alanı boş bırakır, liste
+  yine döner. Seyir (`ml.BuildSpark`): olay anı kaydının serisi, başlangıçtan 8 kova önce başlar, kapalı olayda bitişte
+  (açıkta serinin sonunda) biter; kısa seri bağlamla 24'e tamamlanır, uzun seri 24 eşit gruba ORTALANIR (tepe sönümlenebilir;
+  sıralama tepe değerle). FE mevcut SVG `Sparkline` (renk sinyal türü tokenı, `markerAt` = başlangıç). Kaydı olmayan olay
+  "—". Servis tipi: profil yoksa `unknown` → "—" (1876 batch adını düzeltir). Ek okuma: liste başına +2 CH; detay 0.

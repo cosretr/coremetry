@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -76,7 +77,7 @@ func TestMLEventRowsCarrySummary(t *testing.T) {
 	start := time.Date(2026, 11, 3, 14, 10, 0, 0, loc)
 	ev := chstore.MLEvent{ID: "e1", Detector: "error_rate", Signal: chstore.MLSignalLog, Stage: chstore.MLStageShadow, Service: "branch-teller",
 		Level: "error", StartedAt: start.UnixNano(), LastSeen: start.Add(10 * time.Minute).UnixNano(), WindowSec: 300, Observed: 207, Baseline: 23, Direction: "up"}
-	rows := mlEventRows([]chstore.MLEvent{ev}, chstore.MLConfig{}, start.Add(15*time.Minute), loc)
+	rows := mlEventRows([]chstore.MLEvent{ev}, chstore.MLConfig{}, start.Add(15*time.Minute), loc, mlListExtras{})
 	b, err := json.Marshal(rows)
 	if err != nil {
 		t.Fatal(err)
@@ -89,11 +90,39 @@ func TestMLEventRowsCarrySummary(t *testing.T) {
 	if s, _ := got[0]["summary"].(string); s != "branch-teller: hata logları normalin yaklaşık 9 katı, 15 dakikadır (14:10'dan beri)." {
 		t.Errorf("summary %q", s)
 	}
-	if rows := mlEventRows(nil, chstore.MLConfig{}, start, loc); rows == nil {
+	if rows := mlEventRows(nil, chstore.MLConfig{}, start, loc, mlListExtras{}); rows == nil {
 		t.Error("boş liste nil (JSON null) döndü")
 	}
 	if p := mlEventPath("a b"); !strings.HasPrefix(p, "/anomalies/ml/") || strings.Contains(p, " ") {
 		t.Errorf("path %q", p)
+	}
+}
+
+// v0.10.1874 — liste satırı "Seyir" (kayıttan, ≤ 24 nokta) + "Servis tipi"
+// (ml_learned); ikisi toplu okumadan, okunamazsa boş (satır yine döner).
+func TestMLEventRowsCarrySparkAndProfile(t *testing.T) {
+	loc := time.FixedZone("TR", 3*3600)
+	start := time.Date(2026, 11, 3, 14, 10, 0, 0, loc)
+	ev := chstore.MLEvent{ID: "e1", Detector: "error_rate", Signal: chstore.MLSignalLog, Service: "branch-teller", Level: "error",
+		StartedAt: start.UnixNano(), LastSeen: start.Add(10 * time.Minute).UnixNano(), WindowSec: 300, Observed: 207, Baseline: 23, Direction: "up"}
+	series := `[{"t":` + strconv.FormatInt(start.Add(-5*time.Minute).Unix(), 10) + `,"v":20},{"t":` + strconv.FormatInt(start.Unix(), 10) + `,"v":200}]`
+	ex := mlListExtras{
+		Series:   map[string]string{"e1": series},
+		Profiles: map[string]chstore.MLLearnedRow{"branch-teller": {Key: "branch-teller", Params: `{"profile":"low_traffic"}`}},
+	}
+	rows := mlEventRows([]chstore.MLEvent{ev}, chstore.MLConfig{}, start.Add(15*time.Minute), loc, ex)
+	if rows[0].Spark == nil || len(rows[0].Spark.V) != 2 || rows[0].Spark.A != 1 {
+		t.Errorf("seyir: %+v", rows[0].Spark)
+	}
+	if rows[0].Profile != "low_traffic" || rows[0].ProfileLabel != "az çağrılan" {
+		t.Errorf("servis tipi: %q %q", rows[0].Profile, rows[0].ProfileLabel)
+	}
+	bare := mlEventRows([]chstore.MLEvent{ev}, chstore.MLConfig{}, start, loc, mlListExtras{})
+	if bare[0].Spark != nil || bare[0].Profile != "unknown" || bare[0].ProfileLabel != "" {
+		t.Errorf("toplu okuma yoksa boş: %+v", bare[0])
+	}
+	if !strings.Contains(mlEventsKey(1, "", "", "", "", "UTC"), "ml:events:v4:") {
+		t.Error("liste şekli değişti, anahtar v4 olmalı")
 	}
 }
 
