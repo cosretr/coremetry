@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   fmtMillions, fmtCount, fmtClock, isLive, summaryUsable, shouldFetchSummary,
   splitTemplate, activityParts, componentsLine, leadKey, kpis, LIVE_WINDOW_MS,
-  httpCardUsable, fmtRps, fmtSeconds, throughputHead, responseHead, httpCardTitle,
+  dayOfYear, pickQuote, httpCardUsable, fmtRps, fmtSeconds, throughputHead, responseHead, httpCardTitle,
 } from './loginSummary';
 import type { LoginSummary } from '@/lib/types';
 
@@ -148,5 +148,33 @@ describe('HTTP kartı yardımcıları', () => {
     expect(httpCardTitle('acme', t)).toBe('acme OpenTelemetry metrikleri · son 24 saat');
     expect(httpCardTitle('  ', t)).toBe('OpenTelemetry metrikleri · son 24 saat');
     expect(httpCardTitle(undefined, t)).toBe('OpenTelemetry metrikleri · son 24 saat');
+  });
+});
+
+describe('günün sözü seçimi', () => {
+  // [yıl, ay(1-12), gün, dayOfYear, len=60 dizini]
+  it.each([
+    [2025, 1, 1, 1, 1],
+    [2025, 2, 28, 59, 59],
+    [2025, 3, 1, 60, 0],        // artık olmayan yıl: 1 Mart = 60
+    [2025, 12, 31, 365, 5],
+    [2026, 1, 1, 1, 1],         // yıl sınırı: dizin 5 → 1
+    [2024, 2, 29, 60, 0],       // artık yıl
+    [2024, 3, 1, 61, 1],        // artık yılda 1 Mart = 61
+    [2024, 12, 31, 366, 6],
+  ])('%s-%s-%s → gün %s, dizin %s', (y, mo, d, doy, idx) => {
+    const date = new Date(y, mo - 1, d, 13, 0, 0);
+    expect(dayOfYear(date)).toBe(doy);
+    expect(pickQuote(date, 60)).toBe(idx);
+  });
+  it('gün içinde saat değişse de aynı söz (yerel gün)', () => {
+    expect(pickQuote(new Date(2026, 5, 10, 0, 0, 1), 60)).toBe(pickQuote(new Date(2026, 5, 10, 23, 59, 59), 60));
+  });
+  it('dizin her zaman [0,len); boş liste 0', () => {
+    for (let d = 1; d <= 366; d++) {
+      const i = pickQuote(new Date(2024, 0, d), 7);
+      expect(i).toBeGreaterThanOrEqual(0); expect(i).toBeLessThan(7);
+    }
+    expect(pickQuote(new Date(2026, 0, 5), 0)).toBe(0);
   });
 });

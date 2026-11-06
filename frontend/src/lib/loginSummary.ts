@@ -167,3 +167,15 @@ export function httpCardTitle(orgName: string | undefined, t: (k: string) => str
   const o = (orgName ?? '').trim();
   return o ? t('login.http.title').replace('{org}', o) : t('login.http.titleNoOrg');
 }
+
+// ── Günün sözü (v0.10.1911, audit §5.2) ──────────────────────────────────────
+
+/** Yılın günü, 1-tabanlı (1 Ocak = 1; artık yılda 31 Aralık = 366). Yerel takvim günü; DST'ye duyarsız (UTC farkı). */
+export function dayOfYear(d: Date): number {
+  return Math.floor((Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - Date.UTC(d.getFullYear(), 0, 0)) / 86_400_000);
+}
+
+/** Günün sözünün dizini: `dayOfYear % len`. Boş liste → 0. Yıl sınırında süreksizlik beklenir. */
+export function pickQuote(date: Date, len: number): number {
+  return len > 0 ? dayOfYear(date) % len : 0;
+}

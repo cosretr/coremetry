@@ -19,6 +19,7 @@ import { themeEntry } from '@/lib/themeRegistry';
 import { useMediaQuery } from '@/lib/useMediaQuery';
 import { useThemeTick } from '@/lib/useThemeTick';
 import { LoginTopBar } from './LoginTopBar';
+import { QuoteOfDay } from './QuoteOfDay';
 import { LoginSummarySkeleton } from './SummaryShell';
 
 // Özet sütunu lazy: ilk boyama yalnız form; chunk yalnız ≥ 1100 px ve özet hazırken iner.
@@ -276,6 +277,8 @@ export default function LoginPage() {
               {brand.footerText}
             </div>
           )}
+
+          <QuoteOfDay />
 
           {/* Build version — the "OpenTelemetry-native platform" tag stays even
               with a custom brand override: it positions Coremetry as native to

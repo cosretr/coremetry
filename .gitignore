@@ -54,6 +54,8 @@ charts/*/charts/
 
 # Local data dirs that some compose runs leave behind
 data/
+# v0.10.1911 — Login günün sözü verisi (frontend/src/data/quotes.json) kaynak koddur.
+!frontend/src/data/
 clickhouse-data/
 grafana-data/
 frontend/dist/bundle-analysis.html

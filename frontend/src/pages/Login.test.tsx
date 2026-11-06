@@ -484,3 +484,20 @@ describe('Login — topoloji arka planı', () => {
     expect(h.textContent).toContain('Canlı topoloji silueti · 3 servis · son 15 dk · ayrıntılar giriş sonrasında');
   });
 });
+
+// ── v0.10.1911 — günün sözü (dilim 5.2): varsayılan KAPALI ───────────────────
+describe('Login — günün sözü', () => {
+  it.each([undefined, '', 'off'])('loginQuote=%j → söz çizilmez', async (v) => {
+    m.brand = v === undefined ? {} : { loginQuote: v };
+    const h = await mount(); await settle();
+    expect(h.querySelector('figure')).toBeNull();
+  });
+  it('loginQuote=on → söz formun altında çizilir', async () => {
+    m.brand = { loginQuote: 'on' };
+    const h = await mount(); await settle();
+    const fig = h.querySelector('figure');
+    expect(fig).not.toBeNull();
+    expect(fig!.querySelector('blockquote')!.textContent!.length).toBeGreaterThan(4);
+    expect(h.querySelector('form')!.contains(fig)).toBe(true);
+  });
+});
