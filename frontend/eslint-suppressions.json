@@ -391,7 +391,7 @@
   },
   "src/pages/explore/QueryRow.tsx": {
     "ui/no-raw-element": {
-      "count": 3
+      "count": 2
     }
   },
   "src/pages/logs/LogsActionsMenus.tsx": {

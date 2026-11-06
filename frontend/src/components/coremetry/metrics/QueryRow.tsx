@@ -50,6 +50,10 @@ export interface QueryRowProps {
   aggOptions?: MxAgg[];
   /** Lejant biçimi alanı (Explore satırında yok). */
   showLegend?: boolean;
+  /** Toplaması sabit `sum` olan fonksiyonlar (Explore: rate / increase — sunucu sum ile toplar). */
+  fixedSumFns?: MxFn[];
+  /** Kapsayıcı satırda kalan genişliği doldur (Explore satırı). */
+  grow?: boolean;
   className?: string;
 }
 
@@ -69,7 +73,7 @@ function Pill({ children, onRemove, removeLabel, className }: {
 }
 
 export function QueryRow({
-  query: q, onChange, onRemove, onDuplicate, scope, onScopeOff, cluster, src, fnOptions, aggOptions, showLegend = true, className,
+  query: q, onChange, onRemove, onDuplicate, scope, onScopeOff, cluster, src, fnOptions, aggOptions, showLegend = true, fixedSumFns, grow, className,
 }: QueryRowProps) {
   const [fnOpen, setFnOpen] = useState(false);
   const [aggOpen, setAggOpen] = useState(false);
@@ -80,13 +84,14 @@ export function QueryRow({
   const fnList = fns.includes(q.fn) ? fns : [q.fn, ...fns];
   const aggs = MX_AGGS.filter(a => !aggOptions || aggOptions.includes(a));
   const pct = isPercentileFn(q.fn);
+  const fixedSum = pct || !!fixedSumFns?.includes(q.fn);
   const autoNote = kind && kind !== 'unknown' && q.metric && q.fn === defaultFnFor(kind) && q.fn !== 'raw'
     ? `${KIND_LABEL[kind]} → ${FN_LABEL[q.fn].text}` : '';
   const set = (p: Partial<MxQuery>) => onChange({ ...q, ...p });
 
   return (
     <div role="group" aria-label={`Sorgu ${q.id}`} data-testid={`query-row-${q.id}`}
-      className={cn('flex flex-wrap items-center gap-1.5 border-b py-1.5 last:border-b-0', q.hidden && '[&>*:not([data-keep])]:opacity-60', className)}>
+      className={cn('flex flex-wrap items-center gap-1.5 border-b py-1.5 last:border-b-0', grow && 'min-w-0 flex-1 border-b-0 py-0', q.hidden && '[&>*:not([data-keep])]:opacity-60', className)}>
       <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-md bg-muted font-mono text-xs font-semibold" title={`Sorgu ${q.id}`}>{q.id}</span>
       <MetricPicker value={q.metric} kind={kind} kindEstimated={q.kindEstimated} cluster={cluster} src={src}
         onPick={m => onChange(withMetric(q, m.name, m.typeSource === 'inferred' ? undefined : m.type, m.unit))} />
@@ -137,8 +142,8 @@ export function QueryRow({
         </span>
       )}
 
-      {pct ? (
-        <span className="text-xs text-muted-foreground" title="Yüzdelik, kovaları sum by (le) ile toplar; seri kırılımı by ile">topla <span className="font-mono">sum</span></span>
+      {fixedSum ? (
+        <span className="text-xs text-muted-foreground" title={pct ? 'Yüzdelik, kovaları sum by (le) ile toplar; seri kırılımı by ile' : 'Bu fonksiyonda toplama sabit: sum'}>topla <span className="font-mono">sum</span></span>
       ) : (
         <DropdownMenu open={aggOpen} onOpenChange={setAggOpen}>
           <DropdownMenuTrigger asChild>
@@ -153,7 +158,7 @@ export function QueryRow({
           </DropdownMenuContent>
         </DropdownMenu>
       )}
-      {(pct || q.agg !== 'none') && (
+      {(fixedSum || q.agg !== 'none') && (
         <>
           <span className="text-xs text-muted-foreground">by</span>
           {q.by.map(b => (

@@ -12725,3 +12725,16 @@ Kaynak: `docs/metrics/metrics-explore-dashboards-audit.md` §7 Faz 2 (onaylı, �
   (sayfalama yok — tavan `cardinalityTopNMax`); "gizli · pipeline kuralı" satırı yok (ad zarfı gizli adları
   `includeHidden=1` ile yalnız admin'e verir, istemci bu bayrağı henüz göndermiyor); zaman seçici gün seçmez (kardinalite
   bugünün; sunucu `date` ≤ bugün).
+- **v0.10.1866 — Explore metrik satırı ortak `QueryRow`'u kullanır (2.6).** `pages/explore/QueryRow.tsx` metrik kaynağında
+  GroupedMetricPicker + agg `<select>` + ServicePicker + FilterQueryBox + SplitByPicker yerine `coremetry/metrics/QueryRow`
+  çizer (Spans/Metric anahtarı kalır; harf, gizle, ⋯ ortak satırdan). Explore'un MODELİ (`?q=`, BuilderQuery) ve VERİ
+  YOLU (`/api/metrics/query`) değişmedi: `pages/explore/mxAdapter.ts` köprü — `toMx` yalnız çizim, `fromMx` değişmeyen
+  alanı ÖNCEKİ değeriyle aynen bırakır (dokunulmamış satır bayt-aynı; kabul ölçütü "var olan `?q=` linkleri aynı sonucu
+  verir" tablo testinde: rate+scope+IN, last, p99+LIKE, kapalı satır). Düzenlenen alan eşdeğer biçime döner (IN →
+  `=~"a|b"`, sunucunun iki yolu da `=~` kabul eder; scope = `service.name` çipi). Anahtarlar ÇEVRİLMEZ (`verbatim`):
+  Explore'un sunucu yolu VM'de anahtarı kendisi çevirir, CH'de noktalı anahtarı okur — `legacy.ts`
+  `mxFromExploreQuery(…, {verbatim})`. Explore'un ifade edebildiği seçenekler: fonksiyon ham/rate/increase/p50/p95/p99,
+  toplama sum/avg/min/max; rate/increase'te toplama sabit `sum` (QueryRow `fixedSumFns`). Sapma: eski Explore metrik
+  satırının lejant/birim ayarı yoktu, ortak satırda da kapalı (`showLegend={false}`); eski `last` toplaması satırda "ham
+  değer · max" görünür ama dokunulmadıkça `last` olarak kalır. `eslint-suppressions` QueryRow 3 → 2, ham select tavanı
+  123 → 122.

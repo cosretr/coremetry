@@ -61,8 +61,8 @@ export function likeToRegex(pattern: string): string {
 }
 
 /** Eski FilterExpr → MxFilter; çevrilemeyen null (çağıran uyarı yazar). */
-export function mxFilterFromExpr(f: FilterExpr): MxFilter | null {
-  const k = promLabel(f.k ?? '');
+export function mxFilterFromExpr(f: FilterExpr, verbatim = false): MxFilter | null {
+  const k = verbatim ? (f.k ?? '').trim() : promLabel(f.k ?? '');
   if (!k) return null;
   const vals = (f.v ?? []).filter(v => v !== '');
   const op = String(f.op).toUpperCase();
@@ -128,10 +128,10 @@ function vizFrom(v: unknown): MxViz {
   }
 }
 
-function filtersFrom(fs: FilterExpr[] | undefined, warnings: string[]): MxFilter[] {
+function filtersFrom(fs: FilterExpr[] | undefined, warnings: string[], verbatim = false): MxFilter[] {
   const out: MxFilter[] = [];
   for (const f of fs ?? []) {
-    const m = mxFilterFromExpr(f);
+    const m = mxFilterFromExpr(f, verbatim);
     if (m) out.push(m);
     else warnings.push(`Süzgeç çevrilemedi: ${f.k} ${f.op} ${(f.v ?? []).join(',')}`);
   }
@@ -153,9 +153,15 @@ export interface LegacyExploreQuery {
   filters: FilterExpr[];
 }
 
-export function mxFromExploreQuery(q: LegacyExploreQuery, warnings: string[] = []): MxQuery {
-  const filters = filtersFrom(q.filters, warnings);
-  if (q.scope) filters.unshift({ k: 'service_name', op: '=', v: q.scope });
+/**
+ * `verbatim` (v0.10.1866, Explore'un kendi satırı): anahtarlar ÇEVRİLMEZ —
+ * Explore'un /api/metrics/query yolu VM'de anahtarı kendisi çevirir, CH'de
+ * noktalı anahtarı okur; içe aktarma (Metrics Explorer) promLabel kullanır.
+ */
+export function mxFromExploreQuery(q: LegacyExploreQuery, warnings: string[] = [], opts: { verbatim?: boolean } = {}): MxQuery {
+  const verbatim = !!opts.verbatim;
+  const filters = filtersFrom(q.filters, warnings, verbatim);
+  if (q.scope) filters.unshift({ k: verbatim ? 'service.name' : 'service_name', op: '=', v: q.scope });
   const { kind, estimated } = kindOf(q.metric);
   return {
     ...blankMxQuery(q.letter || 'A'),
@@ -166,7 +172,7 @@ export function mxFromExploreQuery(q: LegacyExploreQuery, warnings: string[] = [
     ...(q.unit ? { unit: q.unit } : {}),
     filters,
     ...mxFnAggFromLegacy(q.agg, q.metric),
-    by: (q.splitBy ?? []).map(promLabel).filter(Boolean),
+    by: (q.splitBy ?? []).map(k => (verbatim ? k.trim() : promLabel(k))).filter(Boolean),
   };
 }
 

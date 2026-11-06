@@ -4,12 +4,13 @@ import { FilterQueryBox } from '@/components/FilterQueryBox';
 import { FilterGroupBuilder } from '@/components/FilterGroupBuilder';
 import { Button } from '@/components/ui/Button';
 import { IconButton, SegmentedControl } from '@/components/ui';
-import { GroupedMetricPicker } from '@/components/viz/GroupedMetricPicker';
+import { QueryRow as MxQueryRow } from '@/components/coremetry/metrics';
+import { EXPLORE_AGGS, EXPLORE_FIXED_SUM, EXPLORE_FNS, fromMx, toMx } from './mxAdapter';
 import { AGG_OPTIONS } from './presets';
 import { SplitByPicker } from './SplitByPicker';
 import {
   type BuilderQuery, type QuerySource,
-  METRIC_CATALOG_AGGS, spanNeedsField, blankQuery,
+  spanNeedsField, blankQuery,
 } from './model';
 import type { FilterGroup } from '@/lib/types';
 
@@ -73,12 +74,12 @@ export function QueryRow({ q, canRemove, canDuplicate, onChange, onDuplicate, on
           accent yerine IconButton `active` (aria-pressed, atomun tint'i);
           MetricQueryEditor'daki kardeş rozetle tek dil. Ad sabit, durum
           pressed'den okunur. */}
-      <IconButton variant="secondary" active={q.enabled}
+      {q.source !== 'metric' && <IconButton variant="secondary" active={q.enabled}
         icon={<b>{q.letter}</b>}
         aria-label={`Sorgu ${q.letter}`}
         onClick={() => onChange({ ...q, enabled: !q.enabled })}
         tooltip={q.enabled ? 'Sorguyu kapat' : 'Sorguyu aç'}
-        style={{ marginTop: 2 }} />
+        style={{ marginTop: 2 }} />}
 
       <div style={{ marginTop: 1 }}>
         <SegmentedControl aria-label="Sorgu kaynağı" value={q.source} onChange={setSource} options={[
@@ -87,7 +88,14 @@ export function QueryRow({ q, canRemove, canDuplicate, onChange, onDuplicate, on
         ]} />
       </div>
 
-      {q.source === 'span' ? (
+      {q.source === 'metric' ? (
+        // v0.10.1866 (Metrics Explorer Faz 2 dilim 2.6) — metrik satırı ORTAK
+        // sorgu bileşenini çizer; model (?q=) ve veri yolu (/api/metrics/query)
+        // aynı: ./mxAdapter dokunulmamış satırı bayt-aynı tutar.
+        <MxQueryRow grow query={toMx(q)} onChange={mx => onChange(fromMx(mx, q))}
+          fnOptions={EXPLORE_FNS} aggOptions={EXPLORE_AGGS} fixedSumFns={EXPLORE_FIXED_SUM} showLegend={false}
+          onDuplicate={canDuplicate ? onDuplicate : undefined} onRemove={canRemove ? onRemove : undefined} />
+      ) : (
         <>
           <select value={q.agg} aria-label="Aggregation"
             onChange={e => onChange({ ...q, agg: e.target.value })}>
@@ -101,18 +109,6 @@ export function QueryRow({ q, canRemove, canDuplicate, onChange, onDuplicate, on
                 placeholder="duration_ms" width={150} />
             </>
           )}
-        </>
-      ) : (
-        <>
-          <GroupedMetricPicker value={q.metric} unit={q.unit}
-            onPick={m => onChange({ ...q, metric: m.name, unit: m.unit })} />
-          <select value={q.agg} aria-label="Aggregation"
-            onChange={e => onChange({ ...q, agg: e.target.value })}>
-            {METRIC_CATALOG_AGGS.map(a => <option key={a} value={a}>{a}</option>)}
-          </select>
-        </>
-      )}
-
       <ServicePicker value={q.scope} onChange={s => onChange({ ...q, scope: s })}
         placeholder="tüm servisler" width={170} />
 
@@ -121,7 +117,7 @@ export function QueryRow({ q, canRemove, canDuplicate, onChange, onDuplicate, on
             builder for (A OR B) AND C predicates (gap-2 → Explore). flat→grouped
             seeds the group's top-level leaves from the current chips;
             grouped→flat flattens back. The flat builder stays the DEFAULT. */}
-        {q.source === 'span' && (
+        {(
           <div className="row gap-2" style={{ alignItems: 'center', justifyContent: 'flex-end', marginBottom: 4 }}>
             {!grouped ? (
               <Button variant="ghost" size="sm"
@@ -138,12 +134,10 @@ export function QueryRow({ q, canRemove, canDuplicate, onChange, onDuplicate, on
             )}
           </div>
         )}
-        {q.source !== 'span' || !grouped ? (
+        {!grouped ? (
           /* v0.10.270 — tek satır sorgu kutusu; metrik kaynağında etiket uzayı. */
           <FilterQueryBox value={q.filters} onChange={f => onChange({ ...q, filters: f })}
-            recentKey={q.source === 'metric' ? 'explore-metric-recent-filters' : 'explore-recent-filters'}
-            metricName={q.source === 'metric' ? q.metric : undefined}
-            metricService={q.source === 'metric' ? q.scope : undefined} />
+            recentKey="explore-recent-filters" />
         ) : (
           <FilterGroupBuilder value={q.filterGroup ?? { join: 'AND', filters: [] }}
             onChange={setGroup} />
@@ -163,9 +157,7 @@ export function QueryRow({ q, canRemove, canDuplicate, onChange, onDuplicate, on
       </div>
 
       <span style={{ color: 'var(--text2)', fontSize: 12, alignSelf: 'center' }}>Split:</span>
-      <SplitByPicker value={q.splitBy} onChange={by => onChange({ ...q, splitBy: by })}
-        metric={q.source === 'metric' ? q.metric : undefined}
-        service={q.source === 'metric' ? q.scope : undefined} />
+      <SplitByPicker value={q.splitBy} onChange={by => onChange({ ...q, splitBy: by })} />
 
       {/* v0.9.847 — ⧉ Çoğalt. Silme düğmesinin SOLUNDA ve aynı sessiz
           dilde: ikinci sorgu pratikte hep "A'nın aynısı ama p50" ya da
@@ -189,6 +181,8 @@ export function QueryRow({ q, canRemove, canDuplicate, onChange, onDuplicate, on
           tooltip={canRemove ? 'Sorguyu sil' : undefined}
           title={canRemove ? undefined : 'Son sorgu silinemez'} />
       </div>
+        </>
+      )}
     </div>
   );
 }
