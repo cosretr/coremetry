@@ -37,6 +37,9 @@ type logQueryErrorBody struct {
 	// Stage — v0.10.1821: "precheck" = sorgu arka uca HİÇ gitmedi (Go
 	// ayrıştırıcı/Lint reddi); "backend" = arka ucun kendi reddi.
 	Stage string `json:"stage,omitempty"`
+	// Field — v0.10.1833: sıralama reddinde sıralanamayan alan (istemci
+	// "sıralamayı kaldır" eylemini buna bağlar).
+	Field string `json:"field,omitempty"`
 }
 
 // logQueryErr — ErrBadQuery'yi kullanıcının sorgu metniyle sarar ki konum
@@ -107,6 +110,10 @@ func writeLogQueryErrorBody(w http.ResponseWriter, b logQueryErrorBody) {
 func writeBadQueryErr(w http.ResponseWriter, r *http.Request, err error) bool {
 	if !errors.Is(err, logstore.ErrBadQuery) {
 		return false
+	}
+	if se, ok := logstore.AsSortError(err); ok { // v0.10.1833 — sözdizimi değil, sıralama reddi
+		writeLogQueryErrorBody(w, sortErrorBody(se))
+		return true
 	}
 	admin := false
 	if c := auth.FromContext(r.Context()); c != nil && c.Role == auth.RoleAdmin {

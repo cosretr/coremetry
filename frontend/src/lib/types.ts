@@ -4001,6 +4001,12 @@ export interface LogsDisplay {
   pageSize: LogsPageSize;
 }
 
+// v0.10.1833 — /logs çoklu alan sıralama anahtarı (URL `sort`; lib/logsSort.ts).
+export interface LogsSortKey {
+  field: string;
+  desc: boolean;
+}
+
 // v0.10.1832 — GET/PUT /api/preferences/{key}/display gövdesi
 // (internal/api/preferences_display.go displayPrefBody). Sunucu şekli:
 // değerler URL yazımında (rh/hh "1|2|3|auto"); bilinmeyen değer okumada düşer.
@@ -4024,6 +4030,8 @@ export interface LogQueryError {
   raw?: string;
   // v0.10.1821 — 'precheck' = sorgu arka uca hiç gitmedi; 'backend' = arka ucun reddi.
   stage?: 'precheck' | 'backend';
+  // v0.10.1833 — sıralama reddinde sıralanamayan alan (logs_sort.go).
+  field?: string;
 }
 
 // v0.10.1477 — /api/logs/my-team (internal/api/logs_team.go logsMyTeamPayload).

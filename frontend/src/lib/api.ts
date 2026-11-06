@@ -4496,6 +4496,10 @@ export interface LogsParams {
   // order is dropped rather than replayed in the other — which is why
   // the UI must reset paging when this flips.
   asc?: boolean;
+  // sort (v0.10.1833) — çoklu alan sunucu sıralaması `field:dir,…` (≤3;
+  // lib/logsSort.ts). Yoksa zaman sırası (asc yönü). Cursor sıralama
+  // imzasını taşır: değişince sayfalama sıfırlanmalı.
+  sort?: string;
   // paging (v0.9.286) — "I will use nextCursor". The ES backend keeps a
   // Point-in-Time alive whenever it returns a cursor, so a caller that
   // reads one page and walks away pins segment readers for 2 minutes.

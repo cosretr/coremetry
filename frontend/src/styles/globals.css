@@ -3898,6 +3898,10 @@ td > .cell-actions.end { justify-content: flex-end; }
 .logtbl-dense.lt-hh-2 .lt-th-label { -webkit-line-clamp: 2; line-clamp: 2; }
 .logtbl-dense.lt-hh-3 .lt-th-label { -webkit-line-clamp: 3; line-clamp: 3; }
 .lt-den-expanded { --row-h: 44px; }
+/* v0.10.1833 — sunucu sıralamalı başlık (LogTable `sort`): etiket düğmesi
+   başlık metni gibi görünür; rozet ↓1 ↑2 vurgu renginde. */
+.logtbl-dense > thead th .lt-sort { padding: 0 2px; gap: 4px; font: inherit; color: inherit; max-width: 100%; justify-content: flex-start; }
+.logtbl-dense > thead th .lt-sort-badge { font-size: 10px; font-variant-numeric: tabular-nums; color: var(--accent); }
 .lt-den-expanded .logtbl-dense > thead th { padding-top: var(--sp-4); padding-bottom: var(--sp-4); }
 .lt-den-expanded .logtbl-dense > tbody > tr > td { padding-top: var(--sp-4); padding-bottom: var(--sp-4); }
 .logtbl-dense > tbody > tr.log-error { background: color-mix(in oklab, var(--err) 7%, transparent); }

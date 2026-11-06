@@ -34,6 +34,7 @@ import { usePageZoomRange } from '@/lib/chart/usePageZoomRange';
 import { useUrlEnv } from '@/lib/useUrlEnv';
 import { useTablePrefs, useDisplayPref } from '@/lib/queries/prefs';
 import { mergeBase, prefParamsMissingFromUrl, prefToView, viewToPref } from '@/lib/logsDisplayPrefs';
+import { parseLogsSort, serializeLogsSort, logsSortClick } from '@/lib/logsSort';
 import { parseColsParam } from '@/lib/columnModel';
 import { getRaw, setRaw } from '@/lib/storage';
 import { useTableNav } from '@/lib/useTableNav';
@@ -441,6 +442,24 @@ function LogsInner() {
     if (urlAsc !== asc) { setAsc(urlAsc); resetPaging(); }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- yalnız URL değişiminde
   }, [urlAsc]);
+  // v0.10.1833 (dilim 1.10) — çoklu alan SUNUCU sıralaması (URL `sort`,
+  // lib/logsSort). Cursor sıralama imzasını taşır → her değişimde (geri/ileri
+  // dahil) sayfalama sıfırlanır.
+  const sortParam = serializeLogsSort(parseLogsSort(searchParams.get('sort')));
+  const sortKeys = useMemo(() => parseLogsSort(sortParam), [sortParam]);
+  const prevSortRef = useRef(sortParam);
+  useEffect(() => {
+    if (prevSortRef.current !== sortParam) { prevSortRef.current = sortParam; resetPaging(); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- yalnız sıralama değişiminde
+  }, [sortParam]);
+  const setSortKeys = (next: ReturnType<typeof parseLogsSort>) => {
+    setSearchParams(prev => {
+      const p = new URLSearchParams(prev);
+      const v = serializeLogsSort(next);
+      if (v) p.set('sort', v); else p.delete('sort');
+      return p;
+    }, { replace: true });
+  };
   // Flipping direction MUST reset paging: the keyset cursor is a strict
   // inequality tied to its direction, so a token minted newest-first is
   // meaningless oldest-first. The backend drops a mismatched token
@@ -631,6 +650,7 @@ function LogsInner() {
     spanId:  filter.spanId  || undefined,
     hasTrace: filter.hasTrace || undefined, // v0.8.406 — trace-only filter
     asc: asc || undefined, // v0.9.295 — oldest-first
+    sort: sortParam ?? undefined, // v0.10.1833 — çoklu alan sıralama
     lang: lang || undefined, // v0.10.1819 — zorla Lucene
   }, { enabled: logsListEnabled(view, live, teamGate) && displayPref.settled }); // v0.10.420 — canlıyken statik sorgu koşmaz; v0.10.1477 — takım kararı beklenirken de; v0.10.1499 — desen görünümünde de (tablo çizilmez)
 
@@ -1071,9 +1091,17 @@ function LogsInner() {
             </div>
           )}
           <div style={{ marginTop: 8 }}>
+            {queryErr?.field && sortKeys.some(k => k.field === queryErr.field) ? (
+              // v0.10.1833 — sıralama reddi: sözdizimi öğüdü değil, kaldırma eylemi.
+              <Button variant="ghost" size="sm"
+                onClick={() => setSortKeys(sortKeys.filter(k => k.field !== queryErr.field))}>
+                “{queryErr.field}” sıralamasını kaldır
+              </Button>
+            ) : (<>
             Most often the search text isn’t valid KQL — check quotes and
             field names (<code>level:error AND service.name:"checkout"</code>),
             or clear the search box to confirm the backend answers at all.
+            </>)}
           </div>
           <div style={{ marginTop: 8 }}>
             <Button variant="ghost" size="sm" onClick={reset}>Clear filters</Button>
@@ -1415,6 +1443,19 @@ function LogsInner() {
           display={display}
           columns={logCols}
           onRemoveColumn={removeColumn}
+          // v0.10.1833 — sunucu sıralaması (canlı kuyrukta yok: akış varış sırası)
+          // + sürükle-bırak kolon sırası (changeCols: URL cols + sunucu tercihi).
+          sort={live ? undefined : {
+            keys: sortKeys, timeAsc: asc,
+            onClick: (id, shift) => {
+              if (!shift && id === 'time') {
+                if (sortKeys.length > 0) setSortKeys([]); else toggleAsc();
+                return;
+              }
+              setSortKeys(logsSortClick(sortKeys, id, shift));
+            },
+          }}
+          onReorderColumns={changeCols}
           highlightTerms={highlightTerms}
           expandedIds={expanded}
           onToggleExpand={toggle}

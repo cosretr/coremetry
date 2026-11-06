@@ -46,13 +46,17 @@ type esCursor struct {
 	// slice. Omitted for the default so pre-v0.9.295 tokens decode as
 	// what they were: DESC.
 	Asc bool `json:"a,omitempty"`
+	// Sig (v0.10.1833) — çoklu sıralama imzası (SortSig). search_after
+	// değerleri sıralama anahtarlarına konumsal bağlı: başka sıralamayla
+	// basılmış token düşürülür (yön uyuşmazlığı gibi). Boş = zaman sırası.
+	Sig string `json:"g,omitempty"`
 }
 
-func encodeESCursor(pit string, sortVals []any, ascending bool) string {
+func encodeESCursor(pit string, sortVals []any, ascending bool, sig string) string {
 	if len(sortVals) == 0 {
 		return ""
 	}
-	b, err := json.Marshal(esCursor{Pit: pit, Sort: sortVals, Asc: ascending})
+	b, err := json.Marshal(esCursor{Pit: pit, Sort: sortVals, Asc: ascending, Sig: sig})
 	if err != nil {
 		return ""
 	}
@@ -63,19 +67,19 @@ func encodeESCursor(pit string, sortVals []any, ascending bool) string {
 // id + sort-values array to feed `search_after`. Returns ok=false for
 // an empty / malformed token (incl. the pre-v0.7.88 bare-array format)
 // so the caller falls back to a fresh first-page read.
-func decodeESCursor(tok string) (pit string, sortVals []any, ascending, ok bool) {
+func decodeESCursor(tok string) (esCursor, bool) {
 	if tok == "" {
-		return "", nil, false, false
+		return esCursor{}, false
 	}
 	b, err := base64.RawURLEncoding.DecodeString(tok)
 	if err != nil {
-		return "", nil, false, false
+		return esCursor{}, false
 	}
 	var c esCursor
 	if err := json.Unmarshal(b, &c); err != nil || len(c.Sort) == 0 {
-		return "", nil, false, false
+		return esCursor{}, false
 	}
-	return c.Pit, c.Sort, c.Asc, true
+	return c, true
 }
 
 // retryPlainOnPITDenial reports whether a failed PIT-mode search should
@@ -340,6 +344,8 @@ type ESStore struct {
 	// on plain paging for the life of the process (openPIT is skipped)
 	// instead of burning a doomed PIT round-trip per search.
 	pitDenied atomic.Bool
+	// sortCache — v0.10.1833: liste sıralaması için eşleme çözümü (es_sort.go).
+	sortCache esSortCache
 	// envField memoises the ?env= filter-field discovery verdict
 	// (v0.8.400, es_env_field.go) — one field_caps per envFieldTTL,
 	// never per request.
@@ -1432,8 +1438,21 @@ func (s *ESStore) Search(ctx context.Context, f Filter) (*Page, error) {
 		sortDir = "asc"
 	}
 
-	pitID, afterSort, cursorAsc, hasCursor := decodeESCursor(f.Cursor)
-	if hasCursor && cursorAsc != f.Ascending {
+	// v0.10.1833 — çoklu alan sıralama (sort.go / es_sort.go). Çözüm PIT
+	// açılmadan ÖNCE: sıralanamaz alan 400 olur ve sızan PIT kalmaz.
+	sortSig := SortSig(f.Sort)
+	var userSort []any
+	if len(f.Sort) > 0 {
+		cl, err := s.userSortClauses(ctx, f.Sort, sortDir)
+		if err != nil {
+			return nil, err
+		}
+		userSort = cl
+	}
+	cur, hasCursor := decodeESCursor(f.Cursor)
+	pitID, afterSort, cursorAsc := cur.Pit, cur.Sort, cur.Asc
+	// v0.10.1833 — başka sıralamayla basılmış token da düşer (konumsal değerler).
+	if hasCursor && (cursorAsc != f.Ascending || cur.Sig != sortSig) {
 		// Costs a return to page one — visible — instead of a wrong
 		// page, which is not. Same contract as the CH backend.
 		pitID, afterSort, hasCursor = "", nil, false
@@ -1483,18 +1502,22 @@ func (s *ESStore) Search(ctx context.Context, f Filter) (*Page, error) {
 	if usePIT {
 		tiebreak = "_shard_doc"
 	}
+	sortClauses := []any{
+		map[string]any{
+			s.fields.Timestamp: map[string]any{
+				"order":         sortDir,
+				"unmapped_type": "date",
+			},
+		},
+		map[string]any{tiebreak: sortDir},
+	}
+	if userSort != nil {
+		sortClauses = append(userSort, map[string]any{tiebreak: sortDir}) // v0.10.1833
+	}
 	searchBody := map[string]any{
 		"query": query,
-		"sort": []any{
-			map[string]any{
-				s.fields.Timestamp: map[string]any{
-					"order":         sortDir,
-					"unmapped_type": "date",
-				},
-			},
-			map[string]any{tiebreak: sortDir},
-		},
-		"size": limit,
+		"sort":  sortClauses,
+		"size":  limit,
 		// Ask ES for the timestamp pre-parsed to epoch_millis off the indexed
 		// `date` field (v0.8.229). mapHit prefers this over the raw _source
 		// string so a non-RFC source shape (logback comma-millis, custom
@@ -1538,7 +1561,9 @@ func (s *ESStore) Search(ctx context.Context, f Filter) (*Page, error) {
 	} else if !usePIT {
 		searchBody["from"] = from
 	}
-	if f.TraceID != "" && f.Cursor == "" && from == 0 {
+	if f.TraceID != "" && f.Cursor == "" && from == 0 && len(f.Sort) == 0 {
+		// v0.10.1833 — kullanıcı sıralamasında terminate_after yok (erken
+		// durma ilk N belgeyi alır, sıralı ilk N'i değil).
 		// terminate_after ONLY on the first page (v0.7.82 fix). It caps
 		// docs collected PER SHARD counting from the shard's sorted START
 		// on EVERY request, and docs sorted before the search_after/from
@@ -1658,7 +1683,7 @@ func (s *ESStore) Search(ctx context.Context, f Filter) (*Page, error) {
 	// 2m keep_alive.
 	next := ""
 	if esRetainPIT(len(out), limit, f.WantCursor) {
-		next = encodeESCursor(pitID, lastSort, f.Ascending)
+		next = encodeESCursor(pitID, lastSort, f.Ascending, sortSig)
 		// Handed to the caller — the next search_after page needs this
 		// PIT alive, so don't let the deferred close fire (v0.8.3).
 		retainPIT = true

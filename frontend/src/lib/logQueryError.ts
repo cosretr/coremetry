@@ -22,6 +22,7 @@ export function parseLogQueryError(err: unknown): LogQueryError | null {
   if (typeof r.detail === 'string' && r.detail) out.detail = r.detail;
   if (typeof r.raw === 'string' && r.raw) out.raw = r.raw;
   if (r.stage === 'precheck' || r.stage === 'backend') out.stage = r.stage;
+  if (typeof r.field === 'string' && r.field) out.field = r.field; // v0.10.1833
   return out;
 }
 

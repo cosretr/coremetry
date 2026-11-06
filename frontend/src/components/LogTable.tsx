@@ -11,7 +11,9 @@ import { podOfLog, podEntryOfLog } from '@/lib/logPod';
 import { clusterEntryOfLog } from '@/lib/logCluster'; // v0.10.501 (B4)
 import { tsLong, sevName, sevClass, isoStampLocal } from '@/lib/utils';
 import type { DataTableColumn } from '@/lib/dataTable';
-import type { LogRow, LogsLines, LogsDensity } from '@/lib/types';
+import type { LogRow, LogsLines, LogsDensity, LogsSortKey } from '@/lib/types';
+import type { ColumnModel } from '@/lib/columnModel';
+import { isSortableLogColumn, logsSortBadge, logsSortAriaLabel } from '@/lib/logsSort';
 import { traceHref } from '@/lib/traceHref';
 import { logLineSubjectOf } from '@/lib/logLineSubject'; // v0.10.1291 — ✨ log satırı
 import { AIExplainButton } from './ai/AIExplainButton';
@@ -211,6 +213,8 @@ export function LogTable({
   permalink,
   wrap = false,
   display,
+  sort,
+  onReorderColumns,
   state,
 }: {
   logs: LogRow[];
@@ -226,6 +230,14 @@ export function LogTable({
   // "compact", normal = genel yoğunluk ayarı, expanded = geniş dolgu.
   // Verilirse `wrap` yok sayılır.
   display?: { rowLines?: LogsLines; headerLines?: LogsLines; density?: LogsDensity };
+  // v0.10.1833 (Log Search Faz 1 dilim 1.10) — SUNUCU sıralaması (yalnız
+  // /logs geçirir). Başlık etiketi düğme olur (tık birincil, Shift+tık ek
+  // anahtar; rozet ↓1 ↑2). Verilmezse başlıklar bugünkü düz etiket — servis
+  // sekmesi / pod / trace panelleri / anomali çekmecesi değişmez.
+  sort?: { keys: LogsSortKey[]; timeAsc: boolean; onClick: (id: string, shift: boolean) => void };
+  // v0.10.1833 — orta kolonların sürükle-bırak sırası (yalnız /logs). Klavye
+  // karşılığı Columns ▾ içindeki ↑ ↓. Time / Trace sabit (taşınırsa yok sayılır).
+  onReorderColumns?: (ids: string[]) => void;
   // Dynamic middle columns (Discover revamp step 3). Omitted →
   // DEFAULT_LOG_COLUMNS, which preserves the classic anatomy. Ids
   // are well-known (level/service/cluster/pod) or raw attribute /
@@ -322,7 +334,17 @@ export function LogTable({
     ...(hideTraceColumn ? [] : [TRACE_COL]),
     // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [colKey, hideTraceColumn]);
-  const dt = useDataTable<LogRow>({ storageKey: 'logs', columns: dtColumns, rows: logs });
+  // v0.10.1833 — sürükle-bırak: primitifin opt-in sırası (v0.10.1516). Model
+  // tutulmaz (sıra zaten `columns` prop'unda); değişiklik orta kolonlara
+  // indirgenip yalnız gerçekten değiştiyse iletilir.
+  const columnModel = useMemo(() => (onReorderColumns ? {
+    value: null,
+    onChange: (m: ColumnModel) => {
+      const next = m.order.filter(id => id !== 'time' && id !== 'trace');
+      if (next.join('\x1f') !== colKey) onReorderColumns(next);
+    },
+  } : undefined), [onReorderColumns, colKey]);
+  const dt = useDataTable<LogRow>({ storageKey: 'logs', columns: dtColumns, rows: logs, reorderable: !!onReorderColumns, columnModel });
   // colSpan for the expanded row: Time + (dynamics incl. Message) (+ Trace).
   const cols = 1 + colIds.length + (hideTraceColumn ? 0 : 1);
   // v0.10.1830 — görünüm: `display` verildiyse satır yüksekliği ondan, yoksa
@@ -331,13 +353,34 @@ export function LogTable({
   const headerLines: LogsLines = display?.headerLines ?? 1;
   const tableCls = [dt.tableProps.className, 'logtbl-dense',
     display ? `lt-rh-${rowLines}` : '', headerLines !== 1 ? `lt-hh-${headerLines}` : ''].filter(Boolean).join(' ');
-  const label = (c: { label: string }) => (headerLines !== 1 ? <span className="lt-th-label">{c.label}</span> : c.label);
+  const plainLabel = (c: { label: string }) => (headerLines !== 1 ? <span className="lt-th-label">{c.label}</span> : c.label);
+  // v0.10.1833 — sıralanabilir başlık: etiket Button (ghost xs) + rozet.
+  // DataTableHead düğmede başlayan basışta sürüklemeyi başlatmaz (v0.10.1516):
+  // sürükleme başlığın etiket dışı alanından (dolgu + boşluk) başlar.
+  // Klavye: Tab ile odak, Enter/Boşluk sıralar (Shift+Enter ek anahtar değil —
+  // klavyede ek anahtar Shift+tık ile aynı: Shift basılıyken Enter).
+  const label = (c: { id: string; label: string }) => {
+    if (!sort || !isSortableLogColumn(c.id)) return plainLabel(c);
+    const timeDefault = c.id === 'time' && sort.keys.length === 0;
+    const badge = timeDefault ? (sort.timeAsc ? '↑' : '↓') : logsSortBadge(sort.keys, c.id);
+    const aria = timeDefault
+      ? `${c.label} — ${sort.timeAsc ? 'eskiden yeniye' : 'yeniden eskiye'}. Tıkla: yönü çevir; Shift+tık: ek sıralama anahtarı`
+      : logsSortAriaLabel(sort.keys, c.id, c.label);
+    return (
+      <Button variant="ghost" size="xs" className="lt-sort" aria-label={aria} title={aria} data-col={c.id}
+        data-sorted={badge ? 'true' : undefined}
+        onClick={e => { e.stopPropagation(); sort.onClick(c.id, e.shiftKey); }}>
+        {plainLabel(c)}
+        {badge && <span className="lt-sort-badge" aria-hidden="true">{badge}</span>}
+      </Button>
+    );
+  };
   return (
     <div className={display?.density === 'expanded' ? 'table-wrap lt-den-expanded' : 'table-wrap'}
       data-density={display?.density === 'compact' ? 'compact' : undefined}>
       <table className={tableCls}>
         <DataTableColgroup dt={dt} />
-        <DataTableHead dt={dt} renderLabel={onRemoveColumn || headerLines !== 1 ? (c) => (
+        <DataTableHead dt={dt} renderLabel={onRemoveColumn || headerLines !== 1 || sort ? (c) => (
           !onRemoveColumn || NON_REMOVABLE_COL_IDS.has(c.id)
             ? label(c)
             : <>

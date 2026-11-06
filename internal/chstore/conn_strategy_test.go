@@ -146,6 +146,7 @@ func TestTelemetryReadConnCallSurface(t *testing.T) {
 		"service_cluster_mv.go":        true, // v0.10.883 — service_env_summary_5m (telemetri MV), state yok
 		// v0.9.497 dilim 2 — üçü de SAF telemetri (aşağıdaki testle pinli):
 		"repo.go":              true, // spans / logs / metric_points / trace_*_5m / topology_edges_5m
+		"logs_sort.go":         true, // v0.10.1833 — logs (kullanıcı sıralamalı liste), state yok
 		"topology.go":          true, // topology_*_5m / service_summary_5m / spans / root_traces
 		"dependencies.go":      true, // db_*_summary_5m / messaging_*_summary_5m / metric_points / spans
 		"problem_telemetry.go": true, // spans — problem.go'dan ayrılan telemetri yarısı (v0.9.507)
@@ -403,6 +404,7 @@ func TestTelemetryReadFilesTouchNoStateTables(t *testing.T) {
 		"deploys.go", "oracle.go", "profile.go", "spanmetric.go", "dbstmt_detail.go",
 		"db_capacity.go", "endpoints_detail.go", "business_dims.go",
 		"endpoints_callers.go", "repeats.go", "service_seen.go", "compare_periods.go",
+		"logs_sort.go",
 	} {
 		b, err := os.ReadFile(f)
 		if err != nil {

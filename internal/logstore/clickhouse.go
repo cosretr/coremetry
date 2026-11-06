@@ -26,7 +26,15 @@ func (s *CHStore) Backend() string { return "clickhouse" }
 func (s *CHStore) Ping(ctx context.Context) error { return s.store.Ping(ctx) }
 
 func (s *CHStore) Search(ctx context.Context, f Filter) (*Page, error) {
-	rows, total, next, err := s.store.GetLogs(ctx, chSearchLogFilter(f))
+	lf := chSearchLogFilter(f)
+	if len(f.Sort) > 0 { // v0.10.1833 — sıralanamaz alan 400 (sorgu koşmadan)
+		cols, err := chSortCols(f.Sort)
+		if err != nil {
+			return nil, err
+		}
+		lf.Sort, lf.SortSig = cols, SortSig(f.Sort)
+	}
+	rows, total, next, err := s.store.GetLogs(ctx, lf)
 	if err != nil {
 		return nil, err
 	}

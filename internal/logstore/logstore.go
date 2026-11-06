@@ -180,6 +180,11 @@ type Filter struct {
 	// DocRef taşır (tam doküman satır açılınca, DocFetcher). ≤ MaxSourceFields.
 	// LeanSource ile birlikte verilmez (LeanSource kazanır). CH: etkisiz.
 	SourceFields []string
+	// Sort — v0.10.1833 (Log Search Faz 1 dilim 1.10): kullanıcı sıralaması
+	// (≤ MaxSortKeys; sort.go). Boş = bugünkü zaman sırası (Ascending yönü).
+	// Doluysa zaman eşitlik bozucu olarak sona eklenir (Ascending yönünde).
+	// Sıralanamaz alan → *SortError (ErrBadQuery) → 400.
+	Sort []SortKey
 	// SoftTimeout — v0.10.944 (CoSRE search_logs): ES gövdesindeki yumuşak
 	// `timeout` için çağıranın ipucu (LeanSource gibi yalnız ES). 0 = bugünkü
 	// esTimeoutFromEnv("10s"). İstemci deadline'ı ES'in yumuşak bütçesinden

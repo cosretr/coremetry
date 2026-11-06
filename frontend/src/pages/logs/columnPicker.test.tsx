@@ -99,7 +99,8 @@ describe('Columns ▾ (v0.10.1502)', () => {
     await click(btn('Columns'));
     await click(document.querySelector('button[aria-label="Move left: Service"]'));
     expect(urlCols()).toBe('cluster,service,message,pod');
-    expect(heads().slice(0, 4)).toEqual(['Time', 'Cluster', 'Service', 'Message']);
+    // v0.10.1833 — Time başlığı sıralama rozeti taşır (zaman sırası, yeniden eskiye).
+    expect(heads().slice(0, 4)).toEqual(['Time↓', 'Cluster', 'Service', 'Message']);
     await click(btn('+ http.status_code'));
     expect(urlCols()).toBe('cluster,service,message,pod,http.status_code');
     await click(document.querySelector('button[aria-label="Remove column: Pod"]'));

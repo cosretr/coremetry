@@ -303,7 +303,8 @@ func logsSearchKey(f logstore.Filter, fromRaw, toRaw string) string {
 		fromRaw, toRaw, f.Limit, f.Offset, f.Cursor, f.WantCursor, f.Ascending, f.Search, logstore.PatternKey(f.Pattern)) +
 		logsTeamKey(f) + // v0.10.1477 — team= (takımsız anahtar değişmez)
 		logsLangKey(f) + // v0.10.1819 — lang=lucene (otomatikte anahtar değişmez)
-		logsSourceKey(f) // v0.10.1831 — dar _source kolonları + sayım yok (yoksa anahtar değişmez)
+		logsSourceKey(f) + // v0.10.1831 — dar _source kolonları + sayım yok (yoksa anahtar değişmez)
+		logsSortKey(f) // v0.10.1833 — kullanıcı sıralaması (yoksa anahtar değişmez)
 }
 
 func (s *Server) getLogs(w http.ResponseWriter, r *http.Request) {
@@ -439,6 +440,9 @@ func (s *Server) serveLogsSearch(w http.ResponseWriter, r *http.Request, q url.V
 	// v0.10.280 — CH arka ucunda ayrışmayan arama metni 400 (mesaj
 	// operatöre); sessiz alt-dize düşüşü yalnız derin katmanda kalır.
 	if s.rejectLogQuerySyntax(w, f.Search, f.SearchLang) {
+		return
+	}
+	if !applyLogsSortParam(w, q, &f) { // v0.10.1833 — /logs?sort= (logs_sort.go)
 		return
 	}
 	if !applyLogsPatternParam(w, q, &f) { // v0.10.1071 — /logs?pattern=

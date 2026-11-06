@@ -221,6 +221,7 @@ describe('/logs ilk yükleme süzgeçsiz istek atmaz (v0.10.1076)', () => {
           "service": "orders-api",
           "severity": 17,
           "skipTotal": true,
+          "sort": undefined,
           "spanId": undefined,
           "team": undefined,
           "to": 1759497240000000000,

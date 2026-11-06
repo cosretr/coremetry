@@ -5146,6 +5146,11 @@ type LogFilter struct {
 	// logstore → chstore); metni olduğu gibi AND'ler. Boş = süzgeç yok.
 	PatternSQL  string
 	PatternArgs []any
+	// Sort / SortSig (v0.10.1833) — kullanıcı sıralaması (logs_sort.go);
+	// kolonlar beyaz listeden (logsSortCols). Doluysa sayfalama ofset
+	// token'ıyla (keyset yok), zaman + rowkey eşitlik bozucu.
+	Sort    []LogSortCol
+	SortSig string
 }
 
 // logsMaxLimit caps the per-page row count on the logs table. A
@@ -5487,6 +5492,12 @@ func (s *Store) GetLogs(ctx context.Context, f LogFilter) ([]LogRow, uint64, str
 			wc.args...).Scan(&total); err != nil {
 			return nil, 0, "", err
 		}
+	}
+
+	// v0.10.1833 — kullanıcı sıralaması: ayrı yol (logs_sort.go).
+	if len(f.Sort) > 0 {
+		out, next, err := s.getLogsSorted(ctx, f, wc)
+		return out, total, next, err
 	}
 
 	// Keyset: append the strict (time, span_id) predicate when a

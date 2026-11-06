@@ -132,6 +132,10 @@ describe('servis Logs sekmesi — paylaşılan log parçaları çivisi (v0.10.18
     expect(m.logsCalls[0].skipTotal).toBeUndefined();
     // v0.10.1832 — /logs görünüm tercihi sekmeye sızmaz (tercih okunmaz).
     expect(m.displayPrefCalls).toBe(0);
+    // v0.10.1833 — /logs sunucu sıralaması + sürüklenebilir başlık sekmeye sızmaz.
+    expect(m.logsCalls[0].sort).toBeUndefined();
+    expect(document.querySelector('thead .lt-sort')).toBeNull();
+    expect(document.querySelector('thead th[draggable]')).toBeNull();
     expect(m.tsCalls).toHaveLength(1);
     expect(m.tsCalls[0]).toMatchObject({ service: 'orders-api', groupBy: 'severity', from: 1759494780000000000 });
 

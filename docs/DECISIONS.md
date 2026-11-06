@@ -12347,3 +12347,20 @@ sağlıklı çalışmıyor; anomaliler oluşsun, gerekirse Problem'e terfi olurl
   hatası/401 → null, sayfa kilitlenmez). Görünüm ▾ değişikliği TAM tercihi 800 ms debounce ile PUT eder. Sapma: tercihi
   olmayan göndericinin linki (rh/den… yok) alıcının kendi tercihiyle açılır — gönderen varsayılandaydı, URL'de kanıt yok;
   servis Logs sekmesi tercihi okumaz (dilim 3.10'da kompakt mod kendi anahtarıyla karar verir).
+- **v0.10.1833 — çoklu alan sıralama + sürükleyerek kolon sırası (1.10).** URL `sort=field:dir,…` (≤3; bozuk parça
+  istemcide düşer, sunucuda 400). Sunucu sıralaması: zaman listede yoksa eşitlik bozucu olarak sona (yönü eski `asc`
+  düğmesi), ardından belge kimliği (ES `_shard_doc`/`_doc`, CH rowkey). ES: kolon kimliği → alan (yerleşikler service /
+  level / cluster / pod yapılandırılmış alan + bilinen şekiller), sıralanabilirlik son 24 saatin eşlemesinden (5 dk
+  önbellek): keyword / sayısal / date / ip / boolean (doc_values kapalı değilse); text alanı keyword alt alanına; aksi
+  `SortError` → 400 `{error, detail, field}` — 500 değil; satır içi hata kutusunda "“x” sıralamasını kaldır". Cursor
+  sıralama imzasını taşır (ES `g`, CH `chs|ofset|imza`); başka sıralamanın token'ı düşer. CH: yalnız Time / service /
+  level (beyaz liste; öznitelik dizileri pencere boyunca açılmaz — en küçük güvenli seçenek), sayfalama ofset ≤10.000
+  (istemci tamponu), zaman-sınırlı WHERE + LIMIT + max_execution_time aynen. Başlık: tık birincil (X↑ → X↓ → yok),
+  Shift+tık ek anahtar (↑ → ↓ → kaldır), rozet ↓1 ↑2; Time tıkı özel sıralamayı temizler, yoksa eski yön düğmesi
+  (`asc=1` linkleri aynen); Message / Trace sıralanmaz; canlı kuyrukta sıralama yok. Etiket ghost xs Button —
+  sürükleme başlığın etiket dışı alanından başlar (DataTableHead düğmede başlayan sürüklemeyi başlatmaz, v0.10.1516).
+  Kolon sırası mevcut `cols` + sunucu kolon tercihi (changeCols); klavye karşılığı Columns ▾ ↑ ↓. Sapmalar: sıralama
+  görünüm tercihine (1832) YAZILMAZ — sorgu anlamı, eski `asc` gibi yalnız URL / kayıtlı arama; Time/Trace sürüklenirse
+  yok sayılır (primitif onları sabit bilmiyor; ui/ dondurulmuş); ⋯ "Sütun sırasını sıfırla" hep pasif (sıfırlama
+  Columns ▾ "Reset columns"). Doğrulanmadı: gerçek ES'te çok indeksli tip çakışması (son okunan kazanır), text alanında
+  eşleme yokken ES reddinin metni, CH'de büyük pencerede sıralı sorgu süresi.
