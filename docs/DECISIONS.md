@@ -12578,3 +12578,13 @@ değişmez).
   dışını getirir, sağlık yalnız kapsam servislerinde; kapsamlı sorguda ES indeks daraltması servis başına şablona inmiyor
   (gün daraltması + terms süzgeci; şablon başına çoklu indeks ayrı iş). Doğrulanmadı: prod'da users.team doluluğu ve
   katalog sahipliği oranı (takımsız oranı = "servis seçin" ekranını görecek kullanıcı oranı).
+- **v0.10.1856 — akıllı varsayılan kolonlar (2.5).** Saf `lib/logsSmartColumns`: yüklenen örnekte doluluğu ≥ %80 olan
+  iş alanı (tanım başına en dolu aday; `attributes` → `resourceAttributes`; boşluk dolu sayılmaz) tabloya kolon olur —
+  YALNIZ kayıtlı kolon tercihi yokken (URL `cols` yok, tarayıcı `dt.logs.columns` yok, sunucu kolon modeli yok) ve yalnız
+  ES log yolunda (`/api/logs/fields` `backend`). Yer: Mesaj kolonunun önü (varsayılan sıra `cluster · message · service ·
+  pod`'da mockup'ın "iş alanı Mesaj'ın yanında" görünümü). Ölçüm için uygunken iş alanı ADAYLARI dar `_source` listesine
+  eklenir (≤50 alan sunucu tavanı; ES'te olmayan aday zararsız); aday listesi ayardan gelir, satırdan değil — kolon
+  kümesi isteği değiştirmez (geri besleme yok). Çift istek olmasın diye uygunken liste isteği `logs_search` ayarı
+  gelene dek bekler (ES'e gitmeyen ucuz uç). Akıllı kolonlar görünüm-yereldir: URL'ye ve tercihe YAZILMAZ; operatör
+  kolonlara dokunduğu an (ekle / kaldır / sırala) görünen küme açık tercihe dönüşür ve akıllı mod kapanır. Doğrulanmadı:
+  prod ES'te iş alanlarının `_source` yolu (alan ES'te iç içe nesne ise satır `attributes` düzleştirmesine bağlı).

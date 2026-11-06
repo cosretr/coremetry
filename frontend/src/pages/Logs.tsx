@@ -60,6 +60,7 @@ import { readLogsQueryHistory, recordLogsQuery } from '@/lib/logsQueryHistory';
 import { LOGS_DEFAULT_DISPLAY, readLogsDisplay, writeLogsDisplay, pageSlice } from '@/lib/logsDisplay';
 import { DisplayOptions, LoadStatus, FieldSidebar } from '@/components/coremetry/logs';
 import { resolveBusinessFields } from '@/lib/logBusinessFields'; // v0.10.1853 (dilim 2.2)
+import { businessCandidates, requestColumns, smartBusinessColumns, withSmartColumns } from '@/lib/logsSmartColumns'; // v0.10.1856 (dilim 2.5)
 import { LogsFilterRow } from './logs/LogsFilterRow';
 import { LogsNotices, LogsNeedService } from './logs/LogsNotices';
 import { LogsAddFilterMenu, LogsShareMenu, LogsMoreMenu } from './logs/LogsActionsMenus';
@@ -355,6 +356,10 @@ function LogsInner() {
     }
     return DEFAULT_LOG_COLUMNS;
   });
+  // v0.10.1856 (dilim 2.5) — akıllı varsayılan kolonlar YALNIZ kayıtlı kolon
+  // tercihi yokken: URL `cols`, tarayıcı tercihi ve sunucu kolon modeli yok.
+  // Operatörün ilk kolon değişikliği (changeCols) görünen kümeyi açık tercihe çevirir.
+  const [colsExplicit, setColsExplicit] = useState(() => !!initialUrl.colsRaw || !!getRaw(COLS_STORE_KEY));
   // '' when the current set matches the defaults → param omitted.
   const colsParam = (cols: string[]) =>
     cols.join(',') === DEFAULT_LOG_COLUMNS.join(',') ? '' : cols.join(',');
@@ -525,6 +530,7 @@ function LogsInner() {
   useEffect(() => {
     if (prefs.model === undefined || prefsAdopted.current) return;
     prefsAdopted.current = true;
+    if (prefs.model) setColsExplicit(true); // v0.10.1856 — sunucuda kayıtlı kolon modeli = tercih var
     if (urlHadCols.current || !prefs.model) return;
     const hidden = new Set(prefs.model.hidden);
     const visible = prefs.model.order.filter(id => !hidden.has(id));
@@ -579,6 +585,7 @@ function LogsInner() {
 
   // Column mutations: state + standing preference + URL in one step.
   const changeCols = (next: string[]) => {
+    setColsExplicit(true); // v0.10.1856 — görünen küme (akıllı kolonlar dahil) artık açık tercih
     setLogCols(next);
     setRaw(COLS_STORE_KEY, JSON.stringify(next));
     // v0.10.318 — operatörün kendi değişikliği sunucuya (debounce'lu PUT,
@@ -586,9 +593,18 @@ function LogsInner() {
     prefs.save({ v: 1, order: next, hidden: [], sig: 'logs' });
     writeUrl(filter, filters, next);
   };
-  const removeColumn = (id: string) => changeCols(logCols.filter(c => c !== id));
-  const toggleColumn = (id: string) =>
-    changeCols(logCols.includes(id) ? logCols.filter(c => c !== id) : [...logCols, id]);
+  // v0.10.1856 — düzenleme GÖRÜNEN küme üzerinde (akıllı kolon kaldırılabilir).
+  const removeColumn = (id: string) => changeCols(viewColsRef.current.filter(c => c !== id));
+  const toggleColumn = (id: string) => {
+    const cur = viewColsRef.current;
+    changeCols(cur.includes(id) ? cur.filter(c => c !== id) : [...cur, id]);
+  };
+  // Uygunken iş alanı ADAYLARI dar `_source`a girer (doluluk ölçülebilsin);
+  // aday listesi ayardan — satırdan değil (istek ↔ kolon geri beslemesi yok).
+  const smartEligible = !colsExplicit && !prefs.model;
+  const bizDefs = searchSettingsQ.data?.businessFields;
+  const smartCandidates = useMemo(() => (smartEligible ? businessCandidates(bizDefs) : []), [smartEligible, bizDefs]);
+  const viewColsRef = useRef<string[]>(logCols);
 
   // Build the params for the static-window query. When live
   // tail is on, we don't run this query (the live useQuery
@@ -662,7 +678,7 @@ function LogsInner() {
     limit: sample, after: cursor || undefined, from, to,
     // v0.10.1831 — görünen kolon alanları (ES dar _source) + sayım yok
     // (pencere toplamı histogramdan / seviye sayımından).
-    fields: logsSourceFieldsParam(logCols) || undefined,
+    fields: logsSourceFieldsParam(requestColumns(logCols, smartCandidates)) || undefined, // v0.10.1856 — + iş alanı adayları (uygunken)
     skipTotal: true,
     service: filter.service || undefined,
     cluster: filter.cluster || undefined,
@@ -678,7 +694,7 @@ function LogsInner() {
     asc: asc || undefined, // v0.9.295 — oldest-first
     sort: sortParam ?? undefined, // v0.10.1833 — çoklu alan sıralama
     lang: lang || undefined, // v0.10.1819 — zorla Lucene
-  }, { enabled: logsListEnabled(view, live, scopeGate) && displayPref.settled }); // v0.10.420 — canlıyken statik sorgu koşmaz; v0.10.1855 — kapsam kararı beklenirken / servis seçilmeden de; v0.10.1499 — desen görünümünde de (tablo çizilmez)
+  }, { enabled: logsListEnabled(view, live, scopeGate) && displayPref.settled && (!smartEligible || searchSettingsQ.status !== 'pending') }); // v0.10.1856 — aday listesi bilinmeden ilk istek gitmez (çift istek yok); // v0.10.420 — canlıyken statik sorgu koşmaz; v0.10.1855 — kapsam kararı beklenirken / servis seçilmeden de; v0.10.1499 — desen görünümünde de (tablo çizilmez)
 
   // Level-facet counts. A per-severity timeseries query feeds the
   // toolbar facet chip badges (the duplicate Logs-local stacked-bar
@@ -910,6 +926,8 @@ function LogsInner() {
   const [fieldsTotal, setFieldsTotal] = useState<number | undefined>(undefined);
   // v0.10.280 — alan → mapping tipi (panel tip rozeti); CH'de sabit şema.
   const [fieldTypes, setFieldTypes] = useState<Record<string, string>>({});
+  // v0.10.1856 — akıllı kolonlar yalnız ES log yolunda (CH'de sessizce kapalı).
+  const [fieldsBackend, setFieldsBackend] = useState('');
 
   // Kibana deep-link config (v0.5.236). Loaded once on mount;
   // when disabled or unconfigured, buildKibanaURL returns null
@@ -929,8 +947,9 @@ function LogsInner() {
         // the cap is the whole mapping.
         setFieldsTotal(d.total);
         setFieldTypes(d.types ?? {});
+        setFieldsBackend(d.backend ?? '');
       })
-      .catch(() => { setFields([]); setFieldsTotal(undefined); setFieldTypes({}); });
+      .catch(() => { setFields([]); setFieldsTotal(undefined); setFieldTypes({}); setFieldsBackend(''); });
   }, []);
   // v0.10.447 (B3 ikinci yarı, operatör kararı 2026-09-06) — Search her
   // zaman ARAR: eskiden aynı taslakla tık React'te bail-out ediyor,
@@ -1069,6 +1088,14 @@ function LogsInner() {
   // you don't send. Labelled explicitly below — a local subset read as
   // a window-wide answer would be the worst kind of wrong here.
   const logs = useMemo(() => narrowLoaded(loadedRows, narrow), [loadedRows, narrow]);
+  // v0.10.1856 (dilim 2.5) — yüklenen örnekte doluluğu ≥ %80 olan iş alanları
+  // kolon olur (yalnız kayıtlı tercih yokken, yalnız ES). Görünüm-yerel: URL'ye
+  // ve tercihe yazılmaz; operatör kolonlara dokununca açık tercihe dönüşür.
+  const smartCols = useMemo(
+    () => (smartEligible && fieldsBackend === 'elasticsearch' ? smartBusinessColumns(bizDefs, loadedRows) : []),
+    [smartEligible, fieldsBackend, bizDefs, loadedRows]);
+  const viewCols = useMemo(() => withSmartColumns(logCols, smartCols), [logCols, smartCols]);
+  viewColsRef.current = viewCols;
   // v0.10.1831 — liste satırları SAYMAZ (skipTotal, ES track_total_hits:false):
   // pencere toplamı histogramın seviye bantlarından (aynı süzgeç), kırılım
   // seviye değilse seviye sayımından tabana göre. Bilinmiyorsa undefined —
@@ -1399,7 +1426,7 @@ function LogsInner() {
             fields={fields}
             fieldsTotal={fieldsTotal}
             types={fieldTypes}
-            columns={logCols}
+            columns={viewCols}
             scope={fieldStatsScope}
             onToggleColumn={toggleColumn}
             onPillAdd={addFromRow}
@@ -1496,7 +1523,7 @@ function LogsInner() {
         <LogsTableToolbar
           loadedCount={data ? loadedRows.length : 0} shownCount={data ? logs.length : 0}
           narrow={narrow} onNarrow={v => { setNarrow(v); setPage(0); }} narrowRef={narrowRef}
-          columns={logCols} fields={fields} onColumns={changeCols}
+          columns={viewCols} fields={fields} onColumns={changeCols}
           display={<DisplayOptions value={display} onChange={setDisplay}
             sample={{ value: sample, min: LOGS_SAMPLE_MIN, max: maxSample, onChange: n => {
               resetPaging();
@@ -1516,7 +1543,7 @@ function LogsInner() {
             logsState'ten. Pager eskisi gibi yalnız satır varken. */}
         <LogTable logs={shownLogs} nav={tableNav} state={logsState}
           display={display}
-          columns={logCols}
+          columns={viewCols}
           onRemoveColumn={removeColumn}
           // v0.10.1833 — sunucu sıralaması (canlı kuyrukta yok: akış varış sırası)
           // + sürükle-bırak kolon sırası (changeCols: URL cols + sunucu tercihi).

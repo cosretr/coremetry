@@ -26,7 +26,7 @@ describe('Logs sunucu sütun tercihi', () => {
     expect(src).toContain("(prefs.model === undefined && !urlHadCols.current) ? '' : colsParam(cols ?? logCols)");
   });
   it('v0.10.1502 — Columns ▾ seçicisi tek yoldan (changeCols) yazar; kendisi sunucuya yazmaz', () => {
-    expect(src).toContain('columns={logCols} fields={fields} onColumns={changeCols}');
+    expect(src).toContain('columns={viewCols} fields={fields} onColumns={changeCols}'); // v0.10.1856 — görünen küme (akıllı kolonlar dahil)
     for (const rel of ['logs/LogsColumnPicker.tsx', 'logs/LogsTableToolbar.tsx', 'logs/logColumns.ts']) {
       const f = readFileSync(resolve(__dirname, rel), 'utf8');
       expect(f, rel).not.toContain('prefs.save(');
