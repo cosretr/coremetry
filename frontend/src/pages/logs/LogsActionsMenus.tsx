@@ -24,6 +24,7 @@ import { chipToLogFilter, LOG_FILTER_OPS, type LogFilter } from '@/lib/logFilter
 import { api } from '@/lib/api';
 import { copyToClipboard } from '@/lib/clipboard';
 import { absoluteShareHref } from '@/lib/shareUrl';
+import { logsShareHref, type LogsShareView } from '@/lib/logsShareView'; // v0.10.1899 (5.2)
 import { toast } from '@/lib/toast';
 import { useT } from '@/lib/i18n';
 
@@ -118,15 +119,20 @@ export function LogsAddFilterMenu(p: LogsAddFilterMenuProps) {
 export interface LogsShareMenuProps {
   /** buildKibanaURL sonucu; null = bağlantı yok (yapılandırılmamış / desen / takım). */
   kibanaHref: string | null;
+  /** v0.10.1899 (Log Search Faz 5 dilim 5.2) — göndericinin etkin görünümü:
+   *  URL'de olmayan kolon / satır yüksekliği / yoğunluk / sayfa / örnek boyu /
+   *  aralık linke eklenir (alıcıda aynı tablo). Verilmezse eski davranış. */
+  view?: LogsShareView;
 }
 
-export function LogsShareMenu({ kibanaHref }: LogsShareMenuProps) {
+export function LogsShareMenu({ kibanaHref, view }: LogsShareMenuProps) {
   const tr = useT();
   const anchorRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const copy = async () => {
     setOpen(false);
-    if (await copyToClipboard(absoluteShareHref(window.location.href, Date.now()))) {
+    const now = Date.now();
+    if (await copyToClipboard(view ? logsShareHref(window.location.href, now, view) : absoluteShareHref(window.location.href, now))) {
       toast.success(tr('logs.dv.linkCopied'));
     }
   };

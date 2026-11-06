@@ -13207,3 +13207,18 @@ açılışına ve otomatik yenilemesine yeni Elasticsearch isteği eklenmez.
   sığar; tavanı aşan `savedViewTooLarge` ile reddedilir. Bilinen sınır (5.2'de kapanır): URL'de olmayan görünüm
   (tarayıcının kolon tercihi, satır sarma) kayıtlı aramaya girmez — aynı kullanıcı kendi tarayıcısında aynı tabloyu
   görür, paylaşılan kayıtlı aramada alıcının tercihi geçerli.
+- **v0.10.1899 — 5.2 Paylaş linki alıcıda aynı tabloyu açar.** "Share ▾ → Copy link" artık göndericinin o an gördüğü
+  görünümü taşır: URL'de OLMAYAN `cols` (ekrandaki kolonlar, akıllı iş alanı kolonları dahil), `rh / hh / den / pp`
+  (görünüm tercihi ya da eski satır sarma), `smp` (örnek boyu) ve `range` (Topbar'ın yapışkan aralığı) linke eklenir;
+  URL'de olan anahtarların baytları değişmez; göreli aralık mevcut kuralla mutlak zamana sabitlenir
+  (`absoluteShareHref`). Neden: sayfa URL'de olmayan anahtarda göndericinin YEREL tercihini kullanır; alıcının tercihi
+  farklıysa aynı link farklı kolonlar / satır yüksekliği / örnek boyu açıyordu. **Adres çubuğu değişmez** (yalnız
+  kopyalanan link): URL'yi her görünümde doldurmak kayıtlı görünüm eşleşmesini ("● modified") bozardı — bu yüzden
+  kayıtlı aramalar (5.1) URL'de olanı taşımaya devam eder. Kolon genişlikleri (tarayıcıya özel sürükleme) linke girmez.
+  Kalıcı doküman linki (`?doc=`) değişmedi. Test: `lib/logsShareView.test.ts` (alıcı farklı tercihle aynı görünümü
+  okur), `pages/Logs.shareLink.test.tsx` (yerel kolon tercihi + göreli aralık linkte; adres çubuğu aynı).
+  Doğrulanmadı: tarayıcı (iki ayrı kullanıcıyla elle).
+- **4.3 notu (kapsam dışı, operatör kararı bekliyor).** 4.2 ve 4.4 desen kimliği olarak Desenler'in imza hash'ini
+  (`SignatureGroup.Hash`, `NormalizeSignature` + xxhash) ve ES tarafında `PatternSearchQuery`'yi kullandı; Log-ML aile
+  ifadesi ve `ml_series` tabanları DEĞİŞMEDİ. 4.3 yapılınca (ortak kimlik) yalnız bu iki yüzeyin eşleştirme anahtarı
+  ortak kimliğe döner; ES sorguları ve ayar aynı kalır.

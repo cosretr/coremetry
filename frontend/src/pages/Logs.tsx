@@ -1180,6 +1180,9 @@ function LogsInner() {
     [smartEligible, fieldsBackend, bizDefs, loadedRows]);
   const viewCols = useMemo(() => withSmartColumns(logCols, smartCols), [logCols, smartCols]);
   viewColsRef.current = viewCols;
+  // v0.10.1899 (Log Search Faz 5 dilim 5.2) — paylaşılan link göndericinin
+  // gördüğü tabloyu taşır (URL'de olmayan görünüm anahtarları linke eklenir).
+  const shareView = useMemo(() => ({ display, sample, cols: viewCols, range }), [display, sample, viewCols, range]);
   // v0.10.1831 — liste satırları SAYMAZ (skipTotal, ES track_total_hits:false):
   // pencere toplamı histogramın seviye bantlarından (aynı süzgeç), kırılım
   // seviye değilse seviye sayımından tabana göre. Bilinmiyorsa undefined —
@@ -1528,7 +1531,7 @@ function LogsInner() {
           menus={(
             <>
               <SavedViewsBar page="logs" variant="compact" />
-              <LogsShareMenu kibanaHref={kibanaHref} />
+              <LogsShareMenu kibanaHref={kibanaHref} view={shareView} /* v0.10.1899 (5.2) — link alıcıda aynı tabloyu açar */ />
               <LogsMoreMenu onReset={reset} />
             </>
           )} />
