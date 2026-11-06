@@ -14,7 +14,6 @@ import { keys, useMLEvents, useMLScorecard } from '@/lib/queries';
 import { fmtDateTime } from '@/lib/utils';
 import type { MLEvent, MLDetectorScore, MLGate, MLBackfillProgress, MLTickStatus, MLSignalTick, MLScorecard, MLKindTick, MLBaselineStatus } from '@/lib/types';
 import { Link } from 'react-router-dom';
-import { mlHeadline, mlValuePair } from '@/lib/mlReplay';
 import { MLPeriodReplay } from './MLPeriodReplay';
 import { mlEventHref } from '@/lib/anomalyHref';
 
@@ -207,17 +206,20 @@ export function AnomaliesTabBar({ value, onChange }: { value: AnomaliesTab; onCh
   );
 }
 
-const fmtNum = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(2));
+/** SAF (test): satır metni — sunucu özeti; yoksa (eski sunucu) servis · dedektör adı. Cümle KURMAZ. */
+export function mlRowText(e: MLEvent): string {
+  return e.summary || `${e.service} · ${ML_DETECTOR_TR[e.detector] ?? e.detector}`;
+}
 const fmtTs = (ns: number) => fmtDateTime(new Date(ns / 1e6));
 
 const COLS: ColumnDef<MLEvent>[] = [
   // v0.10.1779 (operatör mockup): Durum, Süre, insan dili Olay (gerçek link), Servis, Dedektör, birimli değer.
   { id: 'stage', label: 'Durum', width: 90, sortValue: e => e.stage, naturalDir: 'asc' },
   { id: 'duration', label: 'Süre', width: 80, numeric: true, sortValue: e => e.lastSeen - e.startedAt },
-  { id: 'headline', label: 'Olay', flex: true, minWidth: 240, sortValue: e => mlHeadline(e) , naturalDir: 'asc' },
+  // v0.10.1843 — özet sunucudan (ml.ExplainSummary); "gözlenen / taban" sütunu özetin oran ifadesine katıldı.
+  { id: 'headline', label: 'Ne oluyor', flex: true, minWidth: 280, sortValue: e => mlRowText(e), naturalDir: 'asc' },
   { id: 'service', label: 'Servis', width: 200, sortValue: e => e.service, naturalDir: 'asc' },
   { id: 'detector', label: 'Dedektör', width: 150, sortValue: e => e.detector, naturalDir: 'asc' },
-  { id: 'observed', label: 'Gözlenen / taban', width: 150, numeric: true, sortValue: e => e.observed },
   { id: 'started', label: 'Başlangıç', width: 150, sortValue: e => e.startedAt },
   { id: 'last', label: 'Son görülme', width: 150, sortValue: e => e.lastSeen },
   { id: 'fb', label: 'Geri bildirim', width: 130, sortValue: e => (e.verdict === 'anomaly' ? 2 : e.verdict ? 1 : 0) },
@@ -246,10 +248,9 @@ export function MLTab({ signal = '', onSignal }: { signal?: MLSignal; onSignal?:
     switch (col.id) {
       case 'stage': return <Badge variant="outline">{stageLabel(e.stage)}</Badge>;
       case 'duration': return durationLabel(e.lastSeen - e.startedAt);
-      case 'headline': return <Link to={mlEventHref(e.id)} className="font-semibold" title={e.level || e.pod || e.code || ''}>{mlHeadline(e)}</Link>;
+      case 'headline': return <Link to={mlEventHref(e.id)} title={e.level || e.pod || e.code || ''}>{mlRowText(e)}</Link>;
       case 'service': return <span className="font-mono" title={e.service}>{e.service}</span>;
       case 'detector': return ML_DETECTOR_TR[e.detector] ?? e.detector;
-      case 'observed': return mlValuePair(e, e.windowSec || 300);
       case 'started': return <span className="font-mono">{fmtTs(e.startedAt)}</span>;
       case 'last': return <span className="font-mono">{fmtTs(e.lastSeen)}</span>;
       case 'fb':

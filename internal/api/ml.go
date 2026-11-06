@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -57,9 +58,26 @@ func withMLStats(st *chstore.SystemStats) *chstore.SystemStats {
 	return st
 }
 
-// mlEventsKey — SAF: tüm girdiler anahtarda (since kovası, süzgeçler).
-func mlEventsKey(sinceS int64, signal, detector, service, stage string) string {
-	return fmt.Sprintf("ml:events:v2:since=%d:sig=%s:d=%s:s=%s:st=%s", sinceS, signal, detector, service, stage)
+// mlEventsKey — SAF: tüm girdiler anahtarda (since kovası, süzgeçler, özetin
+// saat dilimi). v3 (v0.10.1843): satır `summary` taşır.
+func mlEventsKey(sinceS int64, signal, detector, service, stage, tz string) string {
+	return fmt.Sprintf("ml:events:v3:since=%d:sig=%s:d=%s:s=%s:st=%s:tz=%s", sinceS, signal, detector, service, stage, tz)
+}
+
+// mlEventRow — liste satırı: olay + sunucuda kurulan tek satır özet
+// (ml.ExplainSummary; detay kartının özetiyle AYNI işlev).
+type mlEventRow struct {
+	chstore.MLEvent
+	Summary string `json:"summary"`
+}
+
+// mlEventRows — SAF: olaylar → özetli satırlar.
+func mlEventRows(items []chstore.MLEvent, cfg chstore.MLConfig, now time.Time, loc *time.Location) []mlEventRow {
+	out := make([]mlEventRow, len(items))
+	for i, e := range items {
+		out[i] = mlEventRow{MLEvent: e, Summary: ml.ExplainSummary(ml.SummaryInput(e, cfg, now, loc))}
+	}
+	return out
 }
 
 func (s *Server) getMLEvents(w http.ResponseWriter, r *http.Request) {
@@ -72,17 +90,16 @@ func (s *Server) getMLEvents(w http.ResponseWriter, r *http.Request) {
 	if signal != "" && signal != chstore.MLSignalLog && signal != chstore.MLSignalTrace && signal != chstore.MLSignalMetric {
 		signal = ""
 	}
-	key := mlEventsKey(int64(since.Seconds()), signal, detector, service, stage)
+	loc := ml.OperatorLocation(s.store.AnomalySensitivityForDetectors())
+	key := mlEventsKey(int64(since.Seconds()), signal, detector, service, stage, loc.String())
 	s.serveCached(w, r, key, mlEventsTTL, func(ctx context.Context) (any, error) {
 		items, err := s.store.ListMLEvents(ctx, chstore.MLEventsFilter{
 			Since: time.Now().Add(-since), Signal: signal, Detector: detector, Service: service, Stage: stage, Limit: chstore.MLListCap})
 		if err != nil {
 			return nil, err
 		}
-		if items == nil {
-			items = []chstore.MLEvent{}
-		}
-		return map[string]any{"items": items, "truncated": len(items) >= chstore.MLListCap}, nil
+		rows := mlEventRows(items, s.store.GetMLConfig(ctx), time.Now(), loc)
+		return map[string]any{"items": rows, "truncated": len(items) >= chstore.MLListCap}, nil
 	})
 }
 
@@ -249,36 +266,88 @@ func (s *Server) putMLConfig(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, c)
 }
 
-// getMLReplay — olay replay kaydı (ml_event_snapshots) + aynı servisin ±2 sa
-// içindeki diğer ML olay kayıtları. Kayıt yoksa 404 (olay replay'den önce
-// yazılmış ya da TTL'le düşmüş). ES/rollup okuması YOK.
+// getMLReplay — olay anı kaydı (ml_event_snapshots) + aynı servisin ±2 sa
+// içindeki diğer kayıtları + açıklama kartı (ml.BuildExplainCard, v0.10.1843).
+// Kart canlı olay satırından (süre/durum güncel) + kayıttan (seri, bant,
+// eşikler) + servis profilinden + son 24 sa yayınlarından kurulur. Kayıt
+// yoksa (eski olay / TTL) kart yine döner, snapshot null; ikisi de yoksa 404.
+// ES/rollup okuması YOK; yayınlar servis MV'sinden (GetServiceDeploys).
 func (s *Server) getMLReplay(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimSpace(r.PathValue("id"))
 	if id == "" {
 		writeJSONError(w, http.StatusBadRequest, "id zorunlu")
 		return
 	}
-	snap, ok, err := s.store.GetMLSnapshot(r.Context(), id)
-	if err != nil {
-		writeErr(w, err)
-		return
-	}
-	if !ok {
-		writeJSONError(w, http.StatusNotFound, "bu olay için replay kaydı yok")
-		return
-	}
-	s.serveCached(w, r, "ml:replay:v1:"+id+fmt.Sprintf(":%t", snap.Complete), mlScorecardTTL, func(ctx context.Context) (any, error) {
-		det := time.Unix(0, snap.DetectedAt)
-		related, err := s.store.ListMLSnapshotsForService(ctx, snap.Service, det.Add(-2*time.Hour), det.Add(2*time.Hour))
+	loc := ml.OperatorLocation(s.store.AnomalySensitivityForDetectors())
+	s.serveCached(w, r, mlReplayKey(id, loc.String()), mlReplayTTL, func(ctx context.Context) (any, error) {
+		now := time.Now()
+		snap, hasSnap, err := s.store.GetMLSnapshot(ctx, id)
 		if err != nil {
 			return nil, err
 		}
+		evs, err := s.store.ListMLEvents(ctx, chstore.MLEventsFilter{ID: id, Since: now.Add(-mlEventTTLWindow), Limit: 1})
+		if err != nil {
+			return nil, err
+		}
+		src := ml.CardSources{Config: s.store.GetMLConfig(ctx), Now: now, Loc: loc, HrefOf: mlEventPath, DeployLookback: mlCardDeployLookback}
+		var service string
+		var anchor, last time.Time
+		switch {
+		case len(evs) > 0:
+			src.Event = &evs[0]
+			service, anchor, last = evs[0].Service, time.Unix(0, evs[0].StartedAt), time.Unix(0, evs[0].LastSeen)
+		case hasSnap:
+			service, anchor, last = snap.Service, time.Unix(0, snap.DetectedAt), time.Unix(0, snap.LastSeen)
+		default:
+			return nil, fmt.Errorf("%w: bu olay için kayıt yok", errNotFound)
+		}
+		var snapOut any // null: kayıt yok
 		others := []chstore.MLSnapshot{}
+		if hasSnap {
+			src.Snapshot = &snap
+			snapOut = snap
+			anchor = time.Unix(0, snap.DetectedAt)
+		}
+		related, err := s.store.ListMLSnapshotsForService(ctx, service, anchor.Add(-2*time.Hour), anchor.Add(2*time.Hour))
+		if err != nil {
+			return nil, err
+		}
 		for _, x := range related {
 			if x.EventID != id {
 				others = append(others, x)
 			}
 		}
-		return map[string]any{"snapshot": snap, "related": others}, nil
+		src.Related = others
+		// Yayın penceresi olaya bağlı (başlangıç − 24 sa … son görülme + 5 dk,
+		// şimdiyi aşmaz): eski olayda "bugüne kadar" taraması olmasın.
+		deployTo := last.Add(5 * time.Minute)
+		if deployTo.After(now) || deployTo.Before(anchor) {
+			deployTo = now
+		}
+		if ds, derr := s.store.GetServiceDeploys(ctx, service, anchor.Add(-mlCardDeployLookback), deployTo); derr == nil {
+			src.Deploys, src.DeploysOK = ds, true
+		}
+		if row, ok, perr := s.store.MLLearnedOne(ctx, chstore.MLLearnedKindProfile, service); perr == nil && ok {
+			src.Profile = ml.ServiceProfileFromRow(row).Profile
+		}
+		in, _ := ml.AssembleCardInput(src)
+		return map[string]any{"snapshot": snapOut, "related": others, "card": ml.BuildExplainCard(in)}, nil
 	})
+}
+
+const (
+	mlReplayTTL          = 30 * time.Second
+	mlEventTTLWindow     = 31 * 24 * time.Hour // ml_events TTL 30 g
+	mlCardDeployLookback = 24 * time.Hour
+)
+
+// mlReplayKey — SAF: girdiler = olay id + kart saatlerinin dilimi. v2:
+// yanıt `card` taşır, snapshot null olabilir.
+func mlReplayKey(id, tz string) string {
+	return fmt.Sprintf("ml:replay:v2:id=%s:tz=%s", id, tz)
+}
+
+// mlEventPath — SAF: ML olay detayı (FE lib/anomalyHref.ts mlEventHref ikizi).
+func mlEventPath(id string) string {
+	return "/anomalies/ml/" + url.PathEscape(id)
 }

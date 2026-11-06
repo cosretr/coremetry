@@ -1,4 +1,4 @@
-// mlReplay.ts — ML replay görünümü saf yardımcıları (v0.10.1753). Kayıt
+// mlReplay.ts — ML replay görünümü saf GRAFİK yardımcıları (v0.10.1753). Kayıt
 // (ml_event_snapshots) kendine yeter: seri, taban medyan+MAD, eşikler,
 // tetiklenen kovalar, rollout'lar JSON string olarak gelir; burada çözülür.
 import type { MLSample, MLSnapshot, RecentDeployEntry } from '@/lib/types';
@@ -139,95 +139,10 @@ export function replayMarkers(s: MLSnapshot): { first: number | null; detect: nu
   return { first: dwell[0] ?? null, detect, peak, end: s.complete ? end : null };
 }
 
-// ── Minimalist anlatım (C3) — saf, hem MLEvent hem MLSnapshot besler ──────
-export interface MLNarrativeInput {
-  detector: string; service: string; part?: string; code?: string; pod?: string; level?: string;
-  direction?: string; observed: number; baseline: number; evidence?: string;
-}
-
-function routeOf(n: MLNarrativeInput): string {
-  if (n.code) return n.code.includes('|') ? n.code.split('|').slice(-1)[0] || n.code : n.code;
-  if (n.part) { const p = n.part.split('|'); return p.length > 1 ? p[p.length - 2] : n.part; }
-  return '';
-}
-
-/** SAF (test): insan diliyle başlık, jargon yok. */
-export function mlHeadline(n: MLNarrativeInput): string {
-  const svc = n.service, r = routeOf(n), down = n.direction === 'down';
-  switch (n.detector) {
-    case 'log_volume': return `${svc} ${down ? 'çok daha az' : 'çok daha fazla'} log üretiyor`;
-    case 'error_rate': return `${svc} hata logları arttı`;
-    case 'service_silent': return `${svc} log üretmeyi kesti`;
-    case 'template_spike': return `${svc}: bir log kalıbı patladı`;
-    case 'rare_template': return `${svc}: daha önce görülmeyen bir log kalıbı belirdi`;
-    case 'rare_error_code': return `${svc}: yeni hata kodu ${r || ''}`.trim();
-    case 'pod_outlier': return `${svc}: ${n.pod || 'bir pod'} diğerlerinden fazla hata veriyor`;
-    case 'change_point': return `${svc} log seviyesi kalıcı olarak ${down ? 'düştü' : 'yükseldi'}`;
-    case 'op_latency': return `${svc} ${r} yavaşladı`;
-    case 'op_error_rate': return `${svc} ${r} hata vermeye başladı`;
-    case 'throughput_drop': return `${svc} ${r} trafiği düştü`;
-    case 'dependency_latency': return `${svc} → ${r} çağrıları yavaşladı`;
-    case 'trace_pod_outlier': return `${svc}: ${n.pod || 'bir pod'} diğerlerinden ${n.code === 'p95' ? 'yavaş' : 'hatalı'}`;
-    case 'trace_change_point': return `${svc} ${r} gecikmesi kalıcı olarak ${down ? 'düştü' : 'yükseldi'}`;
-    default:
-      if (n.detector.startsWith('metric_')) return `${svc}: ${r || n.detector.replace('metric_', '')} ${down ? 'düştü' : 'yükseldi'}`;
-      return `${svc}: ${n.detector}`;
-  }
-}
-
-const RATIO = new Set(['op_error_rate', 'op_latency', 'pod_outlier']);
-const MS = new Set(['dependency_latency', 'trace_change_point']);
-function unitOf(n: MLNarrativeInput): 'ratio' | 'ms' | 'count' | 'raw' {
-  if (RATIO.has(n.detector) || (n.detector === 'trace_pod_outlier' && n.code !== 'p95')) return 'ratio';
-  if (MS.has(n.detector) || (n.detector === 'trace_pod_outlier' && n.code === 'p95')) return 'ms';
-  if (n.detector.startsWith('metric_')) return 'raw';
-  return 'count';
-}
-function fmtUnit(v: number, u: ReturnType<typeof unitOf>, bucketMin: number): string {
-  if (u === 'ratio') return `%${(v * 100).toFixed(v * 100 < 10 ? 1 : 0)}`;
-  if (u === 'ms') return v >= 1000 ? `${(v / 1000).toFixed(1)} sn` : `${Math.round(v)} ms`;
-  if (u === 'raw') return Number.isInteger(v) ? String(v) : v.toFixed(2);
-  return `${Math.round(v)} / ${bucketMin} dk`;
-}
-
-/** SAF (test): tek satır "normal → şimdi" birimli + etkilenen; "normalin N×" YOK. */
-export function mlSummary(n: MLNarrativeInput, bucketSec = 300): string {
-  const u = unitOf(n), m = Math.round(bucketSec / 60);
-  let s = `Normalde ${fmtUnit(n.baseline, u, m)}, şimdi ${fmtUnit(n.observed, u, m)}`;
-  const ev = parseObj(n.evidence);
-  if (typeof ev.affected === 'number') s += ` · ${Math.round(ev.affected)} istek etkilendi`;
-  else if (u === 'count' && n.observed > n.baseline) s += ` · ${Math.round(n.observed - n.baseline)} fazla satır`;
-  if (typeof ev.pods === 'number' && ev.pods > 0) s += ` · ${ev.pods} pod'dan biri`;
-  return s;
-}
-
-/** SAF (test): durum + süre satırı. */
-export function mlStatusLine(stage: string, startedNs: number, lastNs: number, nowMs = Date.now()): string {
-  const open = stage !== 'closed';
-  const endNs = open ? nowMs * 1e6 : lastNs;
-  const m = Math.max(1, Math.round((endNs - startedNs) / 60e9));
-  const dur = m < 60 ? `${m} dk` : `${Math.floor(m / 60)} sa ${m % 60} dk`;
-  if (stage === 'chronic') return `Kronik desen · ${dur}`;
-  if (stage === 'promoted') return `Problem'e taşındı · ${dur}`;
-  return open ? `Sürüyor · ${dur}` : `Bitti · ${dur} sürdü`;
-}
-
-/** SAF (test): "Ne değişti" ≤3 kanıtlı madde (rollout, teyit, exception, bubbleUp, kanal). */
-export function mlWhatChanged(evidence: string, confirmIds: string[], related: { signal: string; detector: string }[]): string[] {
-  const ev = parseObj(evidence);
-  const out: string[] = [];
-  const rollouts = Array.isArray(ev.rollouts) ? (ev.rollouts as { service?: string; version?: string }[]) : [];
-  if (rollouts.length) out.push(`±15 dk içinde rollout: ${rollouts.map(r => r.version || '?').slice(0, 2).join(', ')}`);
-  const sigs = new Set(related.map(r => r.signal));
-  if (confirmIds.length || related.length) out.push(`Aynı serviste ${confirmIds.length || related.length} başka sinyal${sigs.size ? ` (${[...sigs].join(', ')})` : ''}`);
-  const exs = Array.isArray(ev.exceptions) ? (ev.exceptions as { type?: string; count?: number }[]) : [];
-  if (exs.length && exs[0].type) out.push(`En sık exception: ${exs[0].type}${exs[0].count ? ` (${exs[0].count})` : ''}`);
-  const bu = Array.isArray(ev.bubbleUp) ? (ev.bubbleUp as { key: string; value: string; selPct: number }[]) : [];
-  if (bu.length) out.push(`Yoğunlaşma: ${bu[0].key}=${bu[0].value} (%${Math.round(bu[0].selPct)})`);
-  const inf = Array.isArray(ev.influencers) ? (ev.influencers as { Value?: string; value?: string }[]) : [];
-  if (inf.length) out.push(`Kanal: ${inf[0].Value ?? inf[0].value ?? '?'}`);
-  return out.slice(0, 3);
-}
+// v0.10.1843 — anlatım (başlık / özet / durum / "ne değişti" / değer çifti)
+// SUNUCUDA: ml.BuildExplainCard (internal/ml/explain_card.go). Bu dosyada
+// yalnız grafik + işaret yardımcıları kalır; ikinci bir Türkçe cümle kurucu
+// eklemek mlSingleSource.pin.test.ts'i kırar.
 
 /** SAF: kayıtta yön yok; tetiklenen kovaların ortalaması medyanın altındaysa "down". */
 export function snapDirection(s: MLSnapshot): 'up' | 'down' {
@@ -236,29 +151,4 @@ export function snapDirection(s: MLSnapshot): 'up' | 'down' {
   if (!pts.length) return 'up';
   const mean = pts.reduce((a, p) => a + p.v, 0) / pts.length;
   return mean < s.baselineMed ? 'down' : 'up';
-}
-
-/** SAF: replay kaydı → anlatım girdisi (code/pod seri parçasından türetilir). */
-export function snapNarrative(s: MLSnapshot): MLNarrativeInput {
-  const pts = parseArr<ReplayPoint>(s.series);
-  const dwell = new Set(parseArr<number>(s.dwell));
-  const hit = pts.filter(p => dwell.has(p.t));
-  const ev = parseObj(s.evidence);
-  // serisiz olay (pod aykırısı): kanıt değerleri (v0.10.1775)
-  const evObserved = typeof ev.observed === 'number' ? ev.observed : undefined;
-  const observed = hit.length ? hit[hit.length - 1].v : (evObserved ?? (pts.length ? pts[pts.length - 1].v : 0));
-  const seg = s.part.split('|');
-  const derived = s.signal === 'trace' && seg.length >= 2 ? seg.slice(0, -1).join('|').replace(/^dep\|[a-z]+\|/, '') : (s.signal === 'log' && s.part.startsWith('tpl|') ? s.part.slice(4) : s.part.startsWith('code|') ? s.part.slice(5) : '');
-  const code = typeof ev.code === 'string' && ev.code ? ev.code : derived;
-  const pod = typeof ev.pod === 'string' ? ev.pod : undefined;
-  const direction = typeof ev.direction === 'string' ? ev.direction : snapDirection(s);
-  const baseline = typeof ev.baseline === 'number' && !pts.length ? ev.baseline : s.baselineMed;
-  return { detector: s.detector, service: s.service, part: s.part, code, pod, direction, observed, baseline, evidence: s.evidence };
-}
-
-/** SAF (test): "gözlenen / taban" birimli (v0.10.1779 ML sekmesi). */
-export function mlValuePair(n: MLNarrativeInput, bucketSec = 300): string {
-  const u = unitOf(n), m = Math.round(bucketSec / 60);
-  const f = (v: number) => (u === 'count' ? String(Math.round(v)) : fmtUnit(v, u, m));
-  return `${f(n.observed)} / ${f(n.baseline)}${n.direction === 'down' ? ' ↓' : ' ↑'}`;
 }

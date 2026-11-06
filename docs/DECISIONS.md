@@ -12443,3 +12443,8 @@ Kaynak: `docs/anomaly/learning-loop-audit.md` §7, §10 Faz 2, §15, §17; onayl
   "Normal aralık" bugün kaydın q25–q75'i (audit q10–q90'ı `ml_baseline_obs` 1.6 ile gelir). Rollouts sayfasında servis
   süzgeci olmadığından yayın linki servis GitOps sekmesine; "Sürüm karşılaştırması" sayfası yok → servis genel bakışı,
   pencere yayından 30 dk önce başlar. Endpoint adı "Ne oldu" cümlesine girmez (audit örneği birebir), başlık çipindedir.
+- **v0.10.1843 — `/api/ml/{id}/replay` `card` döner, `/api/ml/events` satırı `summary`; FE metin üreticileri silindi.**
+  Kart canlı olay satırından (süre/durum güncel; `MLEventsFilter.ID` birincil anahtar araması) + kayıttan + profil
+  (`ml_learned`) + son 24 sa yayından (`GetServiceDeploys`, servis MV'si) kurulur; kayıt yoksa kart yine döner,
+  `snapshot: null`. Anahtarlar özetin saat dilimini de hash'ler (`ml:events:v3`, `ml:replay:v2`). Liste satırının
+  "gözlenen / taban" sütunu kalktı (oran özetin içinde). `mlSingleSource.pin.test.ts` ikinci bir FE cümle kurucuyu yakalar.

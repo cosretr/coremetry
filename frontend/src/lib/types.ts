@@ -11950,6 +11950,20 @@ export interface MLEvent {
   baseline: number; observed: number; score: number; direction: 'up' | 'down' | string;
   evidence?: string; dupOf?: string;
   verdict?: 'anomaly' | 'not_anomaly'; verdictBy?: string; verdictAt?: number; note?: string;
+  /** v0.10.1843 — tek satır özet, sunucudaki ml.ExplainSummary'den (liste ucu doldurur). */
+  summary?: string;
+}
+/** v0.10.1843 — ml.ExplainCard aynası (internal/ml/explain_card.go). Boş impact = satır yok. */
+export interface ExplainLink { label: string; href?: string }
+export interface ExplainItem { text: string; link?: ExplainLink }
+export interface ExplainTechnical { detector: string; score: string; signature: string; thresholds: string; expected: string; revision: string; series?: string }
+export interface ExplainHeader {
+  kind: 'metric' | 'trace' | 'log' | string; detector: string; service: string; serviceHref: string; open: boolean; status: string;
+  profile: string; profileLabel?: string; subject?: ExplainLink;
+}
+export interface ExplainCard {
+  summary: string; what: string; howMuch: string; since: string; impact?: string; whyItMatters: string;
+  whatChanged: ExplainItem[]; whereToLook: ExplainLink[]; technical: ExplainTechnical; header: ExplainHeader;
 }
 export interface MLDetectorScore { detector: string; signal?: string; events: number; samples: number; hits: number; hitRate: number }
 /** Yerleşik dedektörler görünümü (v0.10.1766): own = anomaly_sensitivity içindeki eski anahtarlar. */
@@ -11968,7 +11982,8 @@ export interface MLSnapshot {
   dwell: string; confirmIds: string[] | null; evidence: string; samples: string; deploys: string; complete: boolean;
 }
 export interface MLSample { t: number; traceId?: string; body?: string; kind: 'span' | 'log' | string }
-export interface MLReplay { snapshot: MLSnapshot; related: MLSnapshot[] }
+/** v0.10.1843 — snapshot null: kayıt yok/düşmüş, kart canlı olay satırından. */
+export interface MLReplay { snapshot: MLSnapshot | null; related: MLSnapshot[]; card: ExplainCard }
 export interface MLGate { ok: boolean; reasons?: string[] }
 export interface MLBacktestDetector { detector: string; fired: number; tp: number; fp: number; unlabeled: number; positives: number; covered: number; precision: number; recall: number }
 export interface MLBacktestHit { detector: string; part: string; from: number; to: number; peakZ: number; label?: string }

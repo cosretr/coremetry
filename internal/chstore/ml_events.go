@@ -101,7 +101,9 @@ func (s *Store) UpsertMLEvent(ctx context.Context, e MLEvent) error {
 
 // MLEventsFilter — liste süzgeci; boş alan = süzme yok.
 type MLEventsFilter struct {
-	Since    time.Time
+	Since time.Time
+	// ID — tek olay (detay kartı, v0.10.1843); ORDER BY id → birincil anahtar araması.
+	ID       string
 	Detector string
 	Signal   string
 	Service  string
@@ -119,6 +121,10 @@ func (s *Store) ListMLEvents(ctx context.Context, f MLEventsFilter) ([]MLEvent, 
 	}
 	where := []string{"last_seen >= ?"}
 	args := []any{chDateTime64Arg(f.Since)}
+	if f.ID != "" {
+		where = append(where, "id = ?")
+		args = append(args, f.ID)
+	}
 	if f.Detector != "" {
 		where = append(where, "detector = ?")
 		args = append(args, f.Detector)

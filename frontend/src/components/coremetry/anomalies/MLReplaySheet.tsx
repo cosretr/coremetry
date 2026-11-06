@@ -17,14 +17,13 @@ import { Spinner } from '@/components/Spinner';
 import { useAuthRole } from '@/components/AuthProvider';
 import { api } from '@/lib/api';
 import { keys } from '@/lib/queries/keys';
-import { logsHref } from '@/lib/logsUrl';
 import { traceHref } from '@/lib/traceHref';
 import { fmtDateTime } from '@/lib/utils';
 import {
-  dayClassLabel, exceptionGroupHref, mlHeadline, mlStatusLine, mlSummary, mlWhatChanged, parseObj,
-  replayChart, replayContext, replayMarkers, replaySamples, snapNarrative, whatIfWindow,
+  dayClassLabel, exceptionGroupHref, parseObj,
+  replayChart, replayContext, replayMarkers, replaySamples, whatIfWindow,
 } from '@/lib/mlReplay';
-import type { MLBacktestResult, MLSnapshot } from '@/lib/types';
+import type { ExplainCard, MLBacktestResult, MLSnapshot } from '@/lib/types';
 import { ML_DETECTOR_TR } from './MLTab';
 
 const fmtTs = (ns: number) => fmtDateTime(new Date(ns / 1e6));
@@ -91,39 +90,60 @@ function WhatIf({ snap }: { snap: MLSnapshot }) {
   );
 }
 
+/** SAF (test): kartın tanım listesi satırları — boş Etki satırı yazılmaz. */
+export function cardRows(c: ExplainCard): { k: string; v: string }[] {
+  const rows = [
+    { k: 'Ne oldu', v: c.what }, { k: 'Ne kadar', v: c.howMuch }, { k: 'Ne zamandan beri', v: c.since },
+    { k: 'Etki', v: c.impact ?? '' }, { k: 'Neden önemli', v: c.whyItMatters },
+  ];
+  return rows.filter(r => r.v);
+}
+
 export function MLReplayContent({ id }: { id: string }) {
   const qc = useQueryClient();
-  const q = useQuery({ queryKey: [...keys.anomalies.ml, 'replay', id], queryFn: () => api.mlReplay(id), enabled: !!id, staleTime: 60_000, retry: false });
+  const q = useQuery({ queryKey: [...keys.anomalies.ml, 'replay', id], queryFn: () => api.mlReplay(id), enabled: !!id, staleTime: 30_000, retry: false });
   const [busy, setBusy] = useState(false);
-  const snap = q.data?.snapshot;
+  const snap = q.data?.snapshot ?? null;
+  const card = q.data?.card;
   const verdict = async (v: 'anomaly' | 'not_anomaly') => {
-    if (!snap) return;
+    if (!card) return;
     setBusy(true);
     try {
-      await api.putMlVerdict(snap.eventId, { verdict: v, detector: snap.detector, service: snap.service });
+      await api.putMlVerdict(id, { verdict: v, detector: card.header.detector, service: card.header.service });
       await qc.invalidateQueries({ queryKey: keys.anomalies.ml });
     } finally {
       setBusy(false);
     }
   };
   if (q.isLoading) return <Spinner />;
-  if (q.error || !snap) return <p className="text-sm" data-testid="ml-replay">Bu olay için replay kaydı yok (kayıt v0.10.1752 sonrası açılan olaylarda oluşur).</p>;
-  const ch = replayChart(snap);
-  const thr = parseObj(snap.thresholds);
-  const ev = parseObj(snap.evidence);
-  const ctx = replayContext(snap.evidence);
-  const samples = replaySamples(snap);
-  const markers = replayMarkers(snap);
-  const nar = snapNarrative(snap);
-  const changed = mlWhatChanged(snap.evidence, snap.confirmIds ?? [], q.data?.related ?? []);
-  const episodes = typeof ev.episodes7d === 'number' ? ev.episodes7d : 0;
-  const chronic = snap.detector === 'op_latency' && episodes >= 5;
-  const win = { fromNs: snap.detectedAt - 15 * 60e9, toNs: snap.lastSeen };
+  if (q.error || !card) return <p className="text-sm" data-testid="ml-replay">Bu olay bulunamadı (olay kaydı 30, olay anı kaydı 120 gün saklanır).</p>;
   return (
     <div data-testid="ml-replay" className="flex flex-col gap-3">
-      <h2 className="text-[length:var(--fs-lg)] font-semibold">{mlHeadline(nar)}</h2>
-      <p className="text-sm text-muted-foreground">{mlStatusLine(snap.complete ? 'closed' : 'shadow', snap.detectedAt, snap.lastSeen)}</p>
-      <p className="text-sm" data-testid="ml-summary">{mlSummary(nar, snap.bucketSec)}</p>
+      <h2 className="text-[length:var(--fs-lg)] font-semibold" data-testid="ml-summary">{card.summary}</h2>
+      <p className="text-sm text-muted-foreground">{card.header.status}</p>
+      <KeyValue items={cardRows(card)} />
+      {snap ? <MLReplayChartBlock snap={snap} /> : <p className="text-sm text-muted-foreground">Bu olay için grafik kaydı yok.</p>}
+      <section>
+        <h3 className="mb-1 font-semibold">Yakında ne değişti</h3>
+        {card.whatChanged.length === 0 ? <p className="text-sm text-muted-foreground">Bu pencerede eşlenen değişiklik yok.</p>
+          : <ul className="text-sm" data-testid="ml-what-changed">{card.whatChanged.map(c => <li key={c.text}>{c.text}{c.link?.href && <> <Link to={c.link.href}>{c.link.label} ↗</Link></>}</li>)}</ul>}
+      </section>
+      <div className="flex flex-wrap items-center gap-3 text-sm" data-testid="ml-actions">
+        {card.whereToLook.map(l => (l.href ? <Link key={l.label} to={l.href}>{l.label} ↗</Link> : null))}
+        <span className="text-muted-foreground">· Gerçek mi?</span>
+        <Button size="sm" variant="outline" disabled={busy} onClick={() => { void verdict('anomaly'); }}>Evet</Button>
+        <Button size="sm" variant="outline" disabled={busy} onClick={() => { void verdict('not_anomaly'); }}>Hayır</Button>
+      </div>
+      {snap && <MLReplayTechnical snap={snap} related={q.data?.related ?? []} card={card} />}
+    </div>
+  );
+}
+
+function MLReplayChartBlock({ snap }: { snap: MLSnapshot }) {
+  const ch = replayChart(snap);
+  const markers = replayMarkers(snap);
+  return (
+    <>
       {ch.times.length > 0 ? (
         <TimeChart height={220} times={ch.times} deployMarkers={ch.deploys}
           regions={ch.regions.map(r => ({ ...r, color: r.label === 'anomali' ? 'var(--err)' : 'var(--warn)' }))}
@@ -139,25 +159,29 @@ export function MLReplayContent({ id }: { id: string }) {
         { k: 'Tepe', v: markers.peak ? `${fmtDateTime(new Date(markers.peak.t * 1000))} (${fmtNum(markers.peak.v)})` : '—' },
         { k: 'Bitiş', v: snap.complete ? fmtTs(snap.lastSeen) : 'sürüyor' },
       ]} />
-      <section>
-        <h3 className="mb-1 font-semibold">Ne değişti</h3>
-        {changed.length === 0 ? <p className="text-sm text-muted-foreground">Bu pencerede eşlenen değişiklik yok.</p>
-          : <ul className="text-sm" data-testid="ml-what-changed">{changed.map(c => <li key={c}>{c}</li>)}</ul>}
-      </section>
-      <div className="flex flex-wrap items-center gap-3 text-sm" data-testid="ml-actions">
-        <Link to={logsHref({ window: win, service: snap.service })}>Logs ↗</Link>
-        <Link to={`/traces?service=${encodeURIComponent(snap.service)}`}>Traces ↗</Link>
-        <span className="text-muted-foreground">· Gerçek mi?</span>
-        <Button size="sm" variant="outline" disabled={busy} onClick={() => { void verdict('anomaly'); }}>Evet</Button>
-        <Button size="sm" variant="outline" disabled={busy} onClick={() => { void verdict('not_anomaly'); }}>Hayır</Button>
-      </div>
+    </>
+  );
+}
+
+function MLReplayTechnical({ snap, related, card }: { snap: MLSnapshot; related: MLSnapshot[]; card: ExplainCard }) {
+  const ch = replayChart(snap);
+  const thr = parseObj(snap.thresholds);
+  const ev = parseObj(snap.evidence);
+  const ctx = replayContext(snap.evidence);
+  const samples = replaySamples(snap);
+  const episodes = typeof ev.episodes7d === 'number' ? ev.episodes7d : 0;
+  const chronic = snap.detector === 'op_latency' && episodes >= 5;
+  return (
+    <>
       {chronic && <p className="text-sm" data-testid="ml-chronic">Kronik: son 7 günde {episodes} kez tekrarladı; tek tek olay yerine kalıcı bir desen olarak izleyin.</p>}
       <details className="text-sm">
         <summary className="cursor-pointer font-semibold">Teknik detay</summary>
         <div className="mt-2 flex flex-col gap-3">
           {!snap.complete && <Badge variant="outline">ön kayıt · epizot kapanınca tamamlanır</Badge>}
           <KeyValue items={[
-            { k: 'Dedektör', v: `${ML_DETECTOR_TR[snap.detector] ?? snap.detector} · ${snap.signal}` },
+            { k: 'Dedektör', v: card.technical.detector },
+            { k: 'Sapma skoru', v: card.technical.score },
+            { k: 'İmza', v: card.technical.signature },
             { k: 'Seri', v: snap.part || '—' },
             { k: 'Takvim sınıfı', v: dayClassLabel(snap.dayClass) },
             { k: 'Taban medyan / MAD', v: `${fmtNum(snap.baselineMed)} / ${fmtNum(snap.baselineMad)}` },
@@ -168,8 +192,8 @@ export function MLReplayContent({ id }: { id: string }) {
           ]} />
           <div>
             <h4 className="mb-1 font-semibold">Servisin diğer sinyalleri (±2 sa)</h4>
-            {(q.data?.related ?? []).length === 0 ? <p className="text-muted-foreground">Yok.</p> : (
-              <ul>{(q.data?.related ?? []).map(r => <li key={r.eventId}>{r.signal} · {ML_DETECTOR_TR[r.detector] ?? r.detector} · <span className="font-mono">{r.part}</span> · {fmtTs(r.detectedAt)}</li>)}</ul>
+            {related.length === 0 ? <p className="text-muted-foreground">Yok.</p> : (
+              <ul>{related.map(r => <li key={r.eventId}>{r.signal} · {ML_DETECTOR_TR[r.detector] ?? r.detector} · <span className="font-mono">{r.part}</span> · {fmtTs(r.detectedAt)}</li>)}</ul>
             )}
           </div>
           {(ctx.exceptions.length > 0 || ctx.oracle.length > 0 || ctx.bubbleUp || ctx.bubbleUnreadable) && (
@@ -195,6 +219,6 @@ export function MLReplayContent({ id }: { id: string }) {
           <WhatIf snap={snap} />
         </div>
       </details>
-    </div>
+    </>
   );
 }

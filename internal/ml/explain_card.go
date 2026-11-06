@@ -55,6 +55,7 @@ type ExplainTechnical struct {
 // ExplainHeader — başlık çipleri (sinyal türü, servis, durum + süre, profil).
 type ExplainHeader struct {
 	Kind         string       `json:"kind"` // metric | trace | log
+	Detector     string       `json:"detector"`
 	Service      string       `json:"service"`
 	ServiceHref  string       `json:"serviceHref"`
 	Open         bool         `json:"open"`
@@ -774,7 +775,7 @@ func BuildExplainCard(in CardInput) ExplainCard {
 		WhatChanged:  whatChangedOf(in, end, links),
 		WhereToLook:  whereToLookOf(in, links),
 		Technical:    technicalOf(in, sp),
-		Header: ExplainHeader{Kind: in.Signal, Service: in.Service, ServiceHref: links.service, Open: open,
+		Header: ExplainHeader{Kind: in.Signal, Detector: in.Detector, Service: in.Service, ServiceHref: links.service, Open: open,
 			Status: statusOf(in, open, end), Profile: in.Profile, ProfileLabel: profileLabelsTR[in.Profile], Subject: links.subject},
 	}
 	if c.Header.Profile == "" {
