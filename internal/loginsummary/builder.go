@@ -40,7 +40,7 @@ const (
 
 // Queries — VM'e giden ÜÇ sabit ifade (kullanıcı girdisi yok).
 func Queries(family string) (q1, q2, q3 string) {
-	q1 = "sum by (http_response_status_code) (rate(" + family + "_count[5m]))"
+	q1 = "sum(rate(" + family + "_count[5m]))" // toplam hız; durum kodu kırılımı yok (v0.10.1914)
 	q2 = "sum(rate(" + family + "_sum[5m]))"
 	q3 = "histogram_quantile(0.95, sum by (le, vmrange) (rate(" + family + "_bucket[5m])))"
 	return
@@ -327,7 +327,7 @@ func (b *Builder) fetch(ctx context.Context, ring *Ring, from, to time.Time, p95
 	if len(s1) == 0 {
 		return true
 	}
-	ring.MergeStatus(s1)
+	ring.MergeRate(s1)
 	if s2, ok := b.runQuery(ctx, "q2", q2, from, to, now); ok {
 		ring.MergeSum(s2)
 	}

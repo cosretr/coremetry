@@ -13273,3 +13273,10 @@ JSON sözleşmesi ve kararlar ana oturumda. Backend dilimleri v0.10.1902–1905.
   Kapılar: `loginSummary=off` iken Builder turu HİÇ koşmaz (CH/VM sorgusu ve yayın yok; özellik kapanınca arka uç yükü de kalkar);
   `loginTopology=off` iken topoloji okunmaz ve anlık görüntüden düşer. `[login-summary]` günlük satırı yalnız yavaş turda (≈5 dk)
   ya da durum değişince yazılır.
+- **v0.10.1912–1914 — prod ilk bakış düzeltmeleri (operatör-raporlu, 2026-11-07).** 1912: `Wordmark` tek `<span>` kök (login başlığı
+  `flex gap-2` iken "Core" ile "metry" ayrı flex öğesi oluyordu). 1913: topoloji yerleşimi kenara yığılmıyor (kısa menzilli itme +
+  duvar itmesi; eski hâl düğümlerin %45–100'ünü kenar bandına yığıyordu). 1914: HTTP kartı hiç çizilmiyordu — Q1 `sum by (status)`
+  idi, gerçek VM istemcisi grup anahtarını `http_response_status_code="200"` biçiminde döndürüyor, halka çıplak `200` bekleyip tüm
+  serileri atıyordu (testteki sahte VM çıplak kod döndürüyordu). **Karar (operatör: "illa status code şart değil, önerin"):** durum
+  kodu kırılımı KALKTI; Q1 = `sum(rate(<aile>_count[5m]))`, cevap alanı `http_24h.throughput` (tek seri, grup anahtarı boş),
+  `MergeRate` grup anahtarını hiç okumaz. Giriş öncesi 5xx payı artık görünmez (audit §9-10 kapanır). Anlık görüntü sürümü 2.

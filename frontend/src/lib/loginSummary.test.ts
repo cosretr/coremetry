@@ -125,12 +125,12 @@ describe('satır metinleri', () => {
 
 describe('HTTP kartı yardımcıları', () => {
   const pt = (n: number) => Array.from({ length: n }, (_, i) => ({ time: i, value: 1 }));
-  it('httpCardUsable: ≥ 2 noktalı en az bir durum serisi', () => {
+  it('httpCardUsable: ≥ 2 noktalı toplam hız serisi', () => {
     const base = { from: 0, to: 1, step_s: 300, summary: { now_rps: 1, peak_rps: 2, peak_at: 0 } };
-    expect(httpCardUsable({ ...base, status: [{ groupKey: ['200'], points: pt(2) }] })).toBe(true);
-    expect(httpCardUsable({ ...base, status: [{ groupKey: ['200'], points: pt(1) }] })).toBe(false);
-    expect(httpCardUsable({ ...base, status: [] })).toBe(false);
-    expect(httpCardUsable({ ...base, status: [{ groupKey: ['200'], points: null as never }] })).toBe(false);
+    expect(httpCardUsable({ ...base, throughput: { groupKey: [], points: pt(2) } })).toBe(true);
+    expect(httpCardUsable({ ...base, throughput: { groupKey: [], points: pt(1) } })).toBe(false);
+    expect(httpCardUsable({ ...base })).toBe(false);
+    expect(httpCardUsable({ ...base, throughput: { groupKey: [], points: null as never } })).toBe(false);
     expect(httpCardUsable(undefined)).toBe(false);
   });
   it.each([[0, '0'], [0.04, '0.0'], [3.26, '3.3'], [42.4, '42'], [999, '999'], [12_400, '12.4K'], [NaN, '0']])(

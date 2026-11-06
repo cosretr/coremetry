@@ -9,7 +9,6 @@ package loginsummary
 
 import (
 	"math"
-	"regexp"
 	"sort"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
@@ -21,20 +20,21 @@ const (
 	ringSpanS   = 24 * 3600
 	// ringChunkS — boşluk doldurma parçası (1 saat).
 	ringChunkS = 3600
-	// ringMaxStatus — cevaba giren en çok durum serisi.
-	ringMaxStatus = 8
 )
 
-// statusLabelRe — cevaba yalnız gerçek HTTP durum kodları girer (3 hane, 1-5).
-var statusLabelRe = regexp.MustCompile(`^[1-5][0-9]{2}$`)
-
-// RingBucket — bir 5 dk'lık kova. S: durum kodu → istek/sn (Q1); Sum:
-// yanıt süresi toplam hızı (Q2, sn/sn); P95: saniye (Q3, ayar açıksa).
+// RingBucket — bir 5 dk'lık kova. R: TOPLAM istek/sn (Q1); Sum: yanıt süresi
+// toplam hızı (Q2, sn/sn); P95: saniye (Q3, ayar açıksa).
+//
+// v0.10.1914 — durum kodu kırılımı kalktı (operatör: "illa status code şart
+// değil"): tek toplam throughput serisi. Eski hâl `sum by (status)` idi ve
+// gerçek VM istemcisinin grup anahtarı `etiket="200"` biçiminde geldiği için
+// süzgeç tüm serileri atıyor, kart hiç çizilmiyordu. Gruplamasız sorguda
+// ayrıştırılacak etiket yok; giriş öncesi hata dağılımı da görünmez.
 type RingBucket struct {
-	T   int64              `json:"t"` // unix sn, 300'ün katı
-	S   map[string]float64 `json:"s,omitempty"`
-	Sum *float64           `json:"sum,omitempty"`
-	P95 *float64           `json:"p95,omitempty"`
+	T   int64    `json:"t"` // unix sn, 300'ün katı
+	R   *float64 `json:"r,omitempty"`
+	Sum *float64 `json:"sum,omitempty"`
+	P95 *float64 `json:"p95,omitempty"`
 }
 
 // Ring — kovalar artan zamanla; Filled: boşluk doldurması TAMAMLANMIŞ saatlik
@@ -67,23 +67,22 @@ func (r *Ring) bucket(t int64) *RingBucket {
 	return &r.B[i]
 }
 
-// MergeStatus — Q1 serilerini birleştirir; etiket süzgecinden geçmeyen seri atılır.
-func (r *Ring) MergeStatus(series []chstore.SpanMetricSeries) {
+// MergeRate — Q1 (toplam istek hızı). Sorgu gruplamasızdır ve tek seri
+// döner; yine de birden çok seri gelirse aynı kovadaki değerler TOPLANIR
+// (grup anahtarı okunmaz — biçimine güvenilmez). Kovanın önceki değeri ezilir.
+func (r *Ring) MergeRate(series []chstore.SpanMetricSeries) {
+	acc := map[int64]float64{}
 	for _, s := range series {
-		if len(s.GroupKey) != 1 || !statusLabelRe.MatchString(s.GroupKey[0]) {
-			continue
-		}
-		code := s.GroupKey[0]
 		for _, p := range s.Points {
 			if !finite(p.Value) || p.Value < 0 {
 				continue
 			}
-			b := r.bucket(alignT(p.Time))
-			if b.S == nil {
-				b.S = map[string]float64{}
-			}
-			b.S[code] = p.Value
+			acc[alignT(p.Time)] += p.Value
 		}
+	}
+	for t, v := range acc {
+		v := v
+		r.bucket(t).R = &v
 	}
 }
 
@@ -178,84 +177,41 @@ func (r *Ring) MissingChunks(nowSec, recentFromSec int64, limit int) []int64 {
 
 // ── Okuma: cevap serileri + özet ────────────────────────────────────────
 
-func (b RingBucket) total() float64 {
-	var t float64
-	for _, v := range b.S {
-		t += v
-	}
-	return t
-}
-
 // View — halkadan cevaba giren hâl.
 type View struct {
-	Status  []chstore.SpanMetricSeries
-	Avg     *chstore.SpanMetricSeries
-	P95     *chstore.SpanMetricSeries
-	Summary HTTPSummary
-	From    int64 // unix ms
-	To      int64 // unix ms
+	Throughput *chstore.SpanMetricSeries
+	Avg        *chstore.SpanMetricSeries
+	P95        *chstore.SpanMetricSeries
+	Summary    HTTPSummary
+	From       int64 // unix ms
+	To         int64 // unix ms
 }
 
-// View — halkayı cevaba çevirir. p95 yalnız allowP95 ve veri varsa. Durum
-// serileri toplam hıza göre en büyük 8 ile sınırlıdır (kalan kodlar atılır).
-// Hiç durum verisi yoksa ok=false (kart gizlenir).
+// View — halkayı cevaba çevirir. p95 yalnız allowP95 ve veri varsa. Hiç hız
+// verisi yoksa ok=false (kart gizlenir).
 func (r *Ring) View(allowP95 bool) (View, bool) {
 	var v View
 	if r == nil || len(r.B) == 0 {
 		return v, false
 	}
-	area := map[string]float64{}
-	hasStatus := false
-	for _, b := range r.B {
-		for k, x := range b.S {
-			area[k] += x
-			hasStatus = true
-		}
-	}
-	if !hasStatus {
-		return v, false
-	}
-	codes := make([]string, 0, len(area))
-	for k := range area {
-		if statusLabelRe.MatchString(k) { // savunma: halka dışarıdan yüklenmiş olabilir
-			codes = append(codes, k)
-		}
-	}
-	sort.Slice(codes, func(i, j int) bool {
-		if area[codes[i]] != area[codes[j]] {
-			return area[codes[i]] > area[codes[j]]
-		}
-		return codes[i] < codes[j]
-	})
-	if len(codes) > ringMaxStatus {
-		codes = codes[:ringMaxStatus]
-	}
-	sort.Strings(codes) // sabit lejant sırası
-	for _, c := range codes {
-		ser := chstore.SpanMetricSeries{GroupKey: []string{c}}
-		for _, b := range r.B {
-			if x, ok := b.S[c]; ok {
-				ser.Points = append(ser.Points, chstore.SpanMetricPoint{Time: b.T * 1e9, Value: x})
-			}
-		}
-		v.Status = append(v.Status, ser)
-	}
-
-	var avg, p95 chstore.SpanMetricSeries
+	var tput, avg, p95 chstore.SpanMetricSeries
 	var peak float64
 	var peakAt int64
 	var lastTotal float64
 	var lastAvg, lastP95 *float64
 	for _, b := range r.B {
-		tot := b.total()
-		lastTotal = tot
-		if tot > peak {
-			peak, peakAt = tot, b.T
-		}
-		if b.Sum != nil && tot > 0 {
-			a := *b.Sum / tot
-			avg.Points = append(avg.Points, chstore.SpanMetricPoint{Time: b.T * 1e9, Value: a})
-			lastAvg = &a
+		if b.R != nil {
+			tot := *b.R
+			tput.Points = append(tput.Points, chstore.SpanMetricPoint{Time: b.T * 1e9, Value: tot})
+			lastTotal = tot
+			if tot > peak {
+				peak, peakAt = tot, b.T
+			}
+			if b.Sum != nil && tot > 0 {
+				a := *b.Sum / tot
+				avg.Points = append(avg.Points, chstore.SpanMetricPoint{Time: b.T * 1e9, Value: a})
+				lastAvg = &a
+			}
 		}
 		if allowP95 && b.P95 != nil {
 			x := *b.P95
@@ -263,6 +219,11 @@ func (r *Ring) View(allowP95 bool) (View, bool) {
 			lastP95 = &x
 		}
 	}
+	if len(tput.Points) == 0 {
+		return v, false
+	}
+	tput.GroupKey = []string{}
+	v.Throughput = &tput
 	if len(avg.Points) > 0 {
 		avg.GroupKey = []string{}
 		v.Avg = &avg
@@ -286,11 +247,9 @@ func (r *Ring) Clone() *Ring {
 	c := &Ring{Step: r.Step, B: make([]RingBucket, len(r.B)), Filled: append([]int64(nil), r.Filled...)}
 	for i, b := range r.B {
 		nb := RingBucket{T: b.T}
-		if b.S != nil {
-			nb.S = make(map[string]float64, len(b.S))
-			for k, v := range b.S {
-				nb.S[k] = v
-			}
+		if b.R != nil {
+			v := *b.R
+			nb.R = &v
 		}
 		if b.Sum != nil {
 			v := *b.Sum

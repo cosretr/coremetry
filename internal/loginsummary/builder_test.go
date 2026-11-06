@@ -71,7 +71,9 @@ func (f *fakeVM) QueryPromQLRange(ctx context.Context, q string, from, to time.T
 	}
 	switch name {
 	case "q1":
-		return []chstore.SpanMetricSeries{mk([]string{"200"}, 50), mk([]string{"500"}, 1)}, nil
+		// Gerçek istemci (vmetrics.labelSetGroupKey): gruplamasız `sum(...)`
+		// sonucunda etiket yoktur → GroupKey nil, tek seri.
+		return []chstore.SpanMetricSeries{mk(nil, 51)}, nil
 	case "q2":
 		return []chstore.SpanMetricSeries{mk(nil, 25.5)}, nil
 	default:

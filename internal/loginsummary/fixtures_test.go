@@ -42,16 +42,12 @@ func baseSnapshot(now time.Time) *Snapshot {
 	salt := "00112233445566778899aabbccddeeff"
 	ring := NewRing()
 	nowSec := now.Unix()
-	var pts200, pts500 []chstore.SpanMetricPoint
+	var ptsRate []chstore.SpanMetricPoint
 	for i := 0; i < 10; i++ {
 		t := (nowSec - nowSec%300 - int64(10-i)*300) * 1e9
-		pts200 = append(pts200, chstore.SpanMetricPoint{Time: t, Value: 100 + float64(i)})
-		pts500 = append(pts500, chstore.SpanMetricPoint{Time: t, Value: 2})
+		ptsRate = append(ptsRate, chstore.SpanMetricPoint{Time: t, Value: 102 + float64(i)})
 	}
-	ring.MergeStatus([]chstore.SpanMetricSeries{
-		{GroupKey: []string{"200"}, Points: pts200},
-		{GroupKey: []string{"500"}, Points: pts500},
-	})
+	ring.MergeRate([]chstore.SpanMetricSeries{{Points: ptsRate}})
 	return &Snapshot{
 		V: SnapshotVersion, GeneratedAt: now.UnixMilli(), Salt: salt,
 		SpansToday: u64(5000), TracesToday: u64(900), Services: u64(5),

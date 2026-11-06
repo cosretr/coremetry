@@ -12,7 +12,7 @@ import (
 var allowedKeys = map[string]bool{
 	"enabled": true, "ready": true, "generated_at": true, "spans_today": true, "traces_today": true,
 	"services_monitored": true, "http_24h": true, "activity_24h": true, "topology": true, "components": true,
-	"from": true, "to": true, "step_s": true, "status": true, "avg": true, "p95": true, "summary": true,
+	"from": true, "to": true, "step_s": true, "throughput": true, "avg": true, "p95": true, "summary": true,
 	"groupKey": true, "points": true, "time": true, "value": true,
 	"now_rps": true, "peak_rps": true, "peak_at": true, "avg_now_s": true, "p95_now_s": true,
 	"rollouts_tracked": true, "logins": true, "cosre_questions": true, "traces_viewed": true,
@@ -155,37 +155,24 @@ func TestProjectPoisonedSnapshotNeverEmitsRawIdentifiers(t *testing.T) {
 	}
 }
 
-// Durum etiketi ^[1-5][0-9]{2}$ değilse atılır; en çok 8 seri.
-func TestProjectStatusLabelFilterAndSeriesCap(t *testing.T) {
+// v0.10.1914 — cevapta TEK toplam hız serisi vardır ve grup anahtarı boştur:
+// VM'den gelen hiçbir etiket (durum kodu, servis adı…) anonim cevaba taşınmaz.
+func TestProjectThroughputCarriesNoLabels(t *testing.T) {
 	now := time.Now()
 	snap := baseSnapshot(now)
 	tt := (now.Unix() - now.Unix()%300 - 300) * 1e9
-	var series []chstore.SpanMetricSeries
-	for _, k := range []string{"201", "301", "302", "400", "401", "403", "404", "429", "502", "503"} {
-		series = append(series, chstore.SpanMetricSeries{GroupKey: []string{k}, Points: []chstore.SpanMetricPoint{{Time: tt, Value: 1}}})
-	}
-	for _, bad := range []string{"", "abc", "2xx", "99", "600", "20", "2000", "200 ", "evil-service"} {
-		series = append(series, chstore.SpanMetricSeries{GroupKey: []string{bad}, Points: []chstore.SpanMetricPoint{{Time: tt, Value: 999}}})
-	}
-	series = append(series, chstore.SpanMetricSeries{GroupKey: []string{"200", "extra"}, Points: []chstore.SpanMetricPoint{{Time: tt, Value: 999}}})
-	snap.Ring.MergeStatus(series)
-	// halka dışarıdan zehirlenmiş de olsa (Redis) süzgeç görünümde tekrar uygulanır
-	snap.Ring.B[len(snap.Ring.B)-1].S["evil-service"] = 12345
-
+	snap.Ring.MergeRate([]chstore.SpanMetricSeries{
+		{GroupKey: []string{`service="evil-service"`}, Points: []chstore.SpanMetricPoint{{Time: tt, Value: 5}}},
+		{GroupKey: []string{`http_response_status_code="503"`}, Points: []chstore.SpanMetricPoint{{Time: tt, Value: 1}}},
+	})
 	resp := Project(snap, flags(now, ""))
-	if resp.HTTP24h == nil {
-		t.Fatal("http_24h beklenir")
+	if resp.HTTP24h == nil || resp.HTTP24h.Throughput == nil {
+		t.Fatal("http_24h.throughput beklenir")
 	}
-	re := regexp.MustCompile(`^[1-5][0-9]{2}$`)
-	if n := len(resp.HTTP24h.Status); n > 8 || n == 0 {
-		t.Fatalf("en çok 8 seri, got %d", n)
+	if len(resp.HTTP24h.Throughput.GroupKey) != 0 {
+		t.Errorf("grup anahtarı boş olmalı: %v", resp.HTTP24h.Throughput.GroupKey)
 	}
-	for _, s := range resp.HTTP24h.Status {
-		if len(s.GroupKey) != 1 || !re.MatchString(s.GroupKey[0]) {
-			t.Errorf("geçersiz etiket çıktı: %v", s.GroupKey)
-		}
-	}
-	assertAbsent(t, mustJSON(t, resp), []string{"evil-service", "2xx", "abc"}, "durum etiketi")
+	assertAbsent(t, mustJSON(t, resp), []string{"evil-service", "503", "http_response_status_code"}, "hız serisi etiketi")
 }
 
 func TestProjectP95OnlyWhenAllowed(t *testing.T) {

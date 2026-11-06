@@ -12291,7 +12291,7 @@ export interface LoginSummaryHttpSummary {
 }
 export interface LoginSummaryHttp {
   from: number; to: number; step_s: number; // from/to unix ms
-  status: SpanMetricSeries[];               // groupKey = ["200"]
+  throughput?: SpanMetricSeries;            // TOPLAM istek/sn, tek seri (v0.10.1914: durum kodu kırılımı yok)
   avg?: SpanMetricSeries; p95?: SpanMetricSeries; // saniye; p95 yalnız sunucu ayarı açıksa
   summary: LoginSummaryHttpSummary;
 }

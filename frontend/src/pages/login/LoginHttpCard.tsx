@@ -1,6 +1,6 @@
 // LoginHttpCard — v0.10.1908 (Login yeniden tasarımı dilim 2.3, audit §6.2).
 // Özet sütunundaki "OpenTelemetry metrikleri · son 24 saat" kartı: iki gömülü
-// CorePanelMulti (Throughput durum kodu serileri + Response time ort/p95),
+// CorePanelMulti (Throughput TOPLAM istek/sn + Response time ort/p95),
 // ortak `syncKey` (imleç eşlenir), tek statik lejant. LAZY: @grafana chunk'ı
 // yalnız `http_24h` geldikten sonra iner (LoginSummary.tsx `lazy` ile çağırır).
 // Veri çekmez; sunucu hazır diziyi verir. Seriler zaman = unix ns, x ekseni
@@ -9,14 +9,15 @@ import { useMemo } from 'react';
 import { cn } from 'cn';
 import { CorePanelMulti, type CorePanelMultiItem } from '@/components/chart/corePanelEntry';
 import { msSyncKey } from '@/lib/chart/syncNamespace';
-import { HTTP_FAMILY } from '@/lib/redFamily';
-import { statusCodeSeries } from '@/lib/httpMetrics';
 import { useT } from '@/lib/i18n';
 import { httpCardTitle, responseHead, throughputHead } from '@/lib/loginSummary';
-import type { LoginSummaryHttp, SpanMetricSeries } from '@/lib/types';
+import type { LoginSummaryHttp } from '@/lib/types';
 
 const SYNC = msSyncKey('login-http');
 const PANEL_H = 96;
+// v0.10.1914 — throughput TEK toplam serisi (durum kodu kırılımı kalktı: operatör kararı;
+// giriş öncesi hata dağılımı gösterilmez, küçük panelde tek çizgi okunur).
+const TPUT_TOKEN = '--ok';
 const AVG_TOKEN = '--info';
 const P95_TOKEN = '--purple'; // kayıtlı p95 rengi --orange 4xx ile çakışırdı (audit §6.2)
 
@@ -26,26 +27,16 @@ const TEXT_CLASS: Readonly<Record<string, string>> = {
   '--err': 'text-(--err)', '--purple': 'text-(--purple)',
 };
 
-/** Sunucu durum serisi `groupKey=["200"]` (ham kod) → statusCodeSeries'in beklediği `etiket="kod"` biçimi. */
-function asLabelled(series: SpanMetricSeries[]): SpanMetricSeries[] {
-  const k = HTTP_FAMILY.labels.status;
-  return series.map(s => ({ ...s, groupKey: [`${k}="${s.groupKey[0] ?? ''}"`] }));
-}
-
 interface LegendItem { name: string; token: string }
 
 export default function LoginHttpCard({ http, orgName }: { http: LoginSummaryHttp; orgName?: string }) {
   const t = useT();
   const xRange = useMemo(() => ({ from: http.from / 1000, to: http.to / 1000 }), [http.from, http.to]);
-  const { tputItems, legend } = useMemo(() => {
-    const { series, tokens } = statusCodeSeries(asLabelled(http.status ?? []));
-    const items: CorePanelMultiItem[] = series.map(sr => ({
-      name: sr.groupKey[0], role: 'data' as const,
-      color: `var(${tokens.get(sr.groupKey[0]) ?? '--text3'})`, series: [sr],
-    }));
-    const lg: LegendItem[] = series.map(sr => ({ name: sr.groupKey[0], token: tokens.get(sr.groupKey[0]) ?? '--text3' }));
-    return { tputItems: items, legend: lg };
-  }, [http.status]);
+  const tputName = t('login.http.total');
+  const tputItems = useMemo<CorePanelMultiItem[]>(() => (http.throughput
+    ? [{ name: tputName, role: 'data', color: `var(${TPUT_TOKEN})`, series: [http.throughput] }]
+    : []), [http.throughput, tputName]);
+  const legend: LegendItem[] = http.throughput ? [{ name: tputName, token: TPUT_TOKEN }] : [];
   const rtItems = useMemo(() => {
     const out: CorePanelMultiItem[] = [];
     if (http.avg) out.push({ name: t('login.http.avg'), role: 'data', color: `var(${AVG_TOKEN})`, series: [http.avg] });

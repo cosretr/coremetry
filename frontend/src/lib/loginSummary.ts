@@ -129,7 +129,7 @@ export function kpis(s: LoginSummary): Kpi[] {
 
 /** Kart yalnız en az bir durum serisi ≥ 2 nokta taşıyorsa çizilir (CorePanel boş durumu sabit Türkçe). */
 export function httpCardUsable(h: LoginSummaryHttp | undefined): h is LoginSummaryHttp {
-  return !!h && (h.status ?? []).some(s => (s.points ?? []).length >= 2);
+  return !!h && (h.throughput?.points ?? []).length >= 2;
 }
 
 /** req/s: < 10 → 1 ondalık, < 1000 → tam sayı, ≥ 1000 → `12.4K`. */

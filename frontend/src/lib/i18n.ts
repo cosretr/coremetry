@@ -168,6 +168,7 @@ const EN: Catalog = {
   'login.http.rt':        'Response time · metric',
   'login.http.now':       'now {now} req/s · peak {peak} ({at})',
   'login.http.avg':       'avg',
+  'login.http.total':     'total',
   // v0.10.1909 — topoloji arka planı notu (yalnız gerçek veride).
   'login.topo.note':      'Live topology silhouette · {n} services · last {m} min · details after sign-in',
 
@@ -835,6 +836,7 @@ const TR: Catalog = {
   'login.http.rt':        'Response time · metrik',
   'login.http.now':       'şimdi {now} req/s · tepe {peak} ({at})',
   'login.http.avg':       'ort',
+  'login.http.total':     'toplam',
   'login.topo.note':      'Canlı topoloji silueti · {n} servis · son {m} dk · ayrıntılar giriş sonrasında',
 
   // User menu

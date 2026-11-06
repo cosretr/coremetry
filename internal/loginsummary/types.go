@@ -16,7 +16,7 @@ package loginsummary
 import "github.com/cilcenk/coremetry/internal/chstore"
 
 // SnapshotVersion — Redis'teki anlık görüntü biçimi (anahtar sonekiyle uyumlu).
-const SnapshotVersion = 1
+const SnapshotVersion = 2 // v0.10.1914: halka kovası durum haritası (s) yerine toplam hız (r)
 
 // ── Uç sözleşmesi (login-contract.md; json etiketleri AYNEN) ────────────
 
@@ -34,13 +34,14 @@ type Response struct {
 }
 
 type HTTP24h struct {
-	From    int64                      `json:"from"`          // unix ms
-	To      int64                      `json:"to"`            // unix ms
-	StepS   int                        `json:"step_s"`        // 300
-	Status  []chstore.SpanMetricSeries `json:"status"`        // groupKey = ["200"]; points.time unix NS
-	Avg     *chstore.SpanMetricSeries  `json:"avg,omitempty"` // saniye
-	P95     *chstore.SpanMetricSeries  `json:"p95,omitempty"` // saniye; yalnız AllowUnfilteredPercentiles açıksa
-	Summary HTTPSummary                `json:"summary"`
+	From  int64 `json:"from"`   // unix ms
+	To    int64 `json:"to"`     // unix ms
+	StepS int   `json:"step_s"` // 300
+	// Throughput — TOPLAM istek/sn, tek seri (v0.10.1914: durum kodu kırılımı yok); points.time unix NS.
+	Throughput *chstore.SpanMetricSeries `json:"throughput"`
+	Avg        *chstore.SpanMetricSeries `json:"avg,omitempty"` // saniye
+	P95        *chstore.SpanMetricSeries `json:"p95,omitempty"` // saniye; yalnız AllowUnfilteredPercentiles açıksa
+	Summary    HTTPSummary               `json:"summary"`
 }
 
 type HTTPSummary struct {

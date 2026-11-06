@@ -34,12 +34,8 @@ const ns = (ms: number) => ms * 1e6;
 const pts = (v: number) => [0, 1, 2].map(i => ({ time: ns(T0 + i * 300_000), value: v + i }));
 const HTTP: LoginSummaryHttp = {
   from: T0, to: T0 + 600_000, step_s: 300,
-  // Sıra kasıtlı karışık: kod sırası istemcide kurulur.
-  status: [
-    { groupKey: ['500'], points: pts(1) },
-    { groupKey: ['200'], points: pts(100) },
-    { groupKey: ['404'], points: pts(3) },
-  ],
+  // v0.10.1914 — TEK toplam hız serisi (durum kodu kırılımı yok); grup anahtarı boş.
+  throughput: { groupKey: [], points: pts(104) },
   avg: { groupKey: ['avg'], points: pts(0.2) },
   p95: { groupKey: ['p95'], points: pts(0.4) },
   summary: { now_rps: 1500, peak_rps: 2200, peak_at: new Date(2026, 10, 6, 12, 5).getTime(), avg_now_s: 0.186, p95_now_s: 0.412 },
@@ -89,11 +85,11 @@ describe('LoginHttpCard', () => {
     expect(tp.syncKey).toMatch(/-ms$/);
   });
 
-  it('Throughput: durum kodu serileri kod sırasıyla, sınıf renk token\'ıyla', () => {
+  it('Throughput: tek "toplam" serisi (durum kodu kırılımı yok)', () => {
     render(<LoginHttpCard http={HTTP} orgName="acme" />);
     const tp = panels()[0];
-    expect(tp.items.map(i => i.name)).toEqual(['200', '404', '500']);
-    expect(tp.items.map(i => i.color)).toEqual(['var(--ok)', 'var(--orange)', 'var(--err)']);
+    expect(tp.items.map(i => i.name)).toEqual(['toplam']);
+    expect(tp.items.map(i => i.color)).toEqual(['var(--ok)']);
     expect(tp.items[0].series[0].points).toHaveLength(3);
   });
 
@@ -123,7 +119,7 @@ describe('LoginHttpCard', () => {
     expect(txt).toContain('Response time · metrik');
     expect(txt).toContain('ort 186 ms · p95 412 ms');
     const legend = [...el.querySelectorAll('li')].map(l => l.textContent);
-    expect(legend).toEqual(['—200', '—404', '—500', '—ort', '—p95']);
+    expect(legend).toEqual(['—toplam', '—ort', '—p95']);
   });
 
   it('orgName boşsa ad düşer', () => {
@@ -142,8 +138,8 @@ describe('LoginSummary → grafik kartı (lazy)', () => {
   });
   it.each([
     ['http_24h yok', base],
-    ['yetersiz nokta (< 2)', { ...base, http_24h: { ...HTTP, status: [{ groupKey: ['200'], points: pts(1).slice(0, 1) }] } }],
-    ['boş seri', { ...base, http_24h: { ...HTTP, status: [] } }],
+    ['yetersiz nokta (< 2)', { ...base, http_24h: { ...HTTP, throughput: { groupKey: [], points: pts(1).slice(0, 1) } } }],
+    ['hız serisi yok', { ...base, http_24h: { ...HTTP, throughput: undefined } }],
   ] as [string, LoginSummary][])('%s → kart yok, grafik chunk\'ı çağrılmaz', async (_n, data) => {
     const el = render(<LoginSummaryView data={data} />);
     await wait(); await wait();
