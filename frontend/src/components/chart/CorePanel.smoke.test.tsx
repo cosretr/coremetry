@@ -87,7 +87,7 @@ vi.mock('@grafana/ui', async (importOriginal) => {
         series?: unknown[]; bands?: unknown[];
         axes?: { scale?: string; size?: unknown }[];
         scales?: Record<string, { range?: unknown } | undefined>;
-        cursor?: { points?: { size?: unknown; width?: unknown; show?: unknown } };
+        cursor?: { points?: { size?: unknown; width?: unknown; show?: unknown }; drag?: { x?: unknown; y?: unknown; setScale?: unknown } };
       } };
       width: number; height: number;
       plotRef?: (u: unknown) => void;
@@ -140,6 +140,7 @@ vi.mock('@grafana/ui', async (importOriginal) => {
           data-bands={String((cfg.bands ?? []).length)}
           data-yaxis-size={String(ySize)}
           data-cursor-pt={`${String(pts.size ?? '')}/${String(pts.width ?? '')}/${String(pts.show ?? '')}`}
+          data-cursor-drag={cfg.cursor?.drag ? `${String(cfg.cursor.drag.x)}/${String(cfg.cursor.drag.y)}/${String(cfg.cursor.drag.setScale)}` : 'default'}
           // Yüksek ve dar bir veri aralığı: taban kaymasının en görünür
           // olduğu şekil (1200-1260 arası gezen bir seri).
           data-yrange-pos={yProbe(1200, 1260)}
@@ -637,5 +638,37 @@ describe('CorePanel boş başlık (v0.10.978)', () => {
     const row = badge.parentElement!;
     expect(card(el).firstElementChild).toBe(row);
     expect(row.contains(el.querySelector('[aria-label="Panel menüsü"]'))).toBe(true);
+  });
+});
+
+// v0.10.1908 — `embedded` (Login HTTP kartı, audit §6.2): çerçevesiz kök, üst
+// satır/⋯ menü yok, sürükle-seçim kapalı; varsayılan davranış DEĞİŞMEZ.
+describe('CorePanel embedded (v0.10.1908)', () => {
+  const ready = { state: 'ready' as const, frames: TWO_SERIES };
+
+  it('varsayılan: kart çerçevesi + ⋯ menüsü + sürükle-seçim (drag.x/y belirtilmez = uPlot varsayılanı açık)', () => {
+    const el = render(<CorePanel title="Latency" storageKey="emb-default" data={ready} />);
+    expect(el.querySelector('.card')).not.toBeNull();
+    expect(el.querySelector('[aria-label="Panel menüsü"]')).not.toBeNull();
+    expect(el.querySelector('[data-testid="uplot"]')!.getAttribute('data-cursor-drag')).toBe('undefined/undefined/false');
+  });
+
+  it('embedded: .card yok, başlık/rozet/⋯ yok, sürükle-seçim kapalı; grafik + lejant çizilir', () => {
+    const el = render(<CorePanel embedded title="Latency" storageKey="emb-on"
+      data={{ ...ready, partial: 'son 2 dk eksik' }} />);
+    expect(el.querySelector('.card')).toBeNull();
+    expect(el.querySelector('[aria-label="Panel menüsü"]')).toBeNull();
+    expect(el.querySelector('h3')).toBeNull();
+    expect(el.querySelector('.badge.b-warn')).toBeNull();
+    const plot = el.querySelector('[data-testid="uplot"]')!;
+    expect(plot, 'gömülü panel grafiği mount etmedi').not.toBeNull();
+    expect(plot.getAttribute('data-cursor-drag')).toBe('false/false/false');
+    expect(el.textContent).toContain('Series (2)');
+  });
+
+  it('embedded + hideLegend: lejant da yok; syncKey imleç ayarına yine iner', () => {
+    const el = render(<CorePanel embedded hideLegend title="" storageKey="emb-sync" syncKey="login-http-ms" data={ready} />);
+    expect(el.textContent).not.toContain('Series (');
+    expect(el.querySelector('[data-testid="uplot"]')).not.toBeNull();
   });
 });

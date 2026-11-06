@@ -314,6 +314,12 @@ export interface CorePanelProps {
   // 'stacked-bar' markı buraya düşer; bant YOKTUR, çubuklar opaktır ve
   // tooltip yine HAM katman değerini okur.
   viz?: 'line' | 'bars' | 'area' | 'stacked' | 'stacked-bars';
+  // v0.10.1908 (Login HTTP kartı, audit §6.2) — GÖMÜLÜ mod: çerçevesiz kök
+  // (`.card` yok), üst satır (başlık/rozet/⋯ menü) yok, sürükle-seçim kapalı.
+  // Tooltip, imleç eşlemesi (syncKey) ve lejant aynen çalışır. Kabuğu çağıran
+  // çizer (kendi kartının içine gömmek için). PRİMİTİF boolean: config kimliği
+  // yıkılmaz. Verilmediğinde davranış bayt bayt eskisi.
+  embedded?: boolean;
 }
 
 /** fullNameOf — frame'in kısaltılmamış seri adı (v0.9.1369).
@@ -331,7 +337,7 @@ export function CorePanel({
   thresholds, regions, queryText,
   defaultHidden, xRange, note, onExpandClick, exemplars, onExemplarClick, onRegionClick, regionClickHint,
   onBucketClick, hiddenNames, hideLegend, onCursorTime, dashed, viz = 'line',
-  focusedLabel, menuExtra, onFocusChange,
+  focusedLabel, menuExtra, onFocusChange, embedded,
 }: CorePanelProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
@@ -831,6 +837,8 @@ export function CorePanel({
     b.setCursor({
       points: { size: CURSOR_POINT_PX, width: CURSOR_POINT_BORDER_PX },
       ...(syncKey ? { sync: { key: syncKey } } : {}),
+      // v0.10.1908 — gömülü kartta sürükle-seçim kapalı (zoom sahibi yok).
+      ...(embedded ? { drag: { x: false, y: false, setScale: false } } : {}),
     });
     // v0.9.788 — bant kaynağı TEK: yığın bantları (prop p50-p99 bandı
     // v0.10.284'te tüketicisiz diye silindi; uPlot'ta bir seri en fazla BİR
@@ -1043,7 +1051,7 @@ export function CorePanel({
     // çıktı: oluk uPlot'un size geri çağrısında ölçülür, config kimliğine
     // girmez (measuredAxisSize).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aligned.names.join(' '), roles?.join(), colors?.join(), syncKey, effLog, zeroBase, themeTick, overlaySig, xRange?.from, xRange?.to, viz, dashed?.join(',')]);
+  }, [aligned.names.join(' '), roles?.join(), colors?.join(), syncKey, effLog, zeroBase, themeTick, overlaySig, xRange?.from, xRange?.to, viz, dashed?.join(','), embedded]);
 
   // ── v0.9.793 — focusedLabel (lejant hover vurgusu) ───────────────────────
   //
@@ -1165,7 +1173,7 @@ export function CorePanel({
     // arka planını gösteriyordu. ChartCard'ın çizdiği kart kabuğu (.card:
     // bg1 + border + radius + gölge) buraya taşındı — redhat/light'ta
     // beyaz, dark'ta koyu; tema token'ları karar verir.
-    <div className="card"
+    <div className={embedded ? undefined : 'card'}
       // v0.10.978 — ad yalnız ÇAĞIRAN açıkça verdiğinde (role + aria-label
       // birlikte: rolsüz bir div'de aria-label okunmaz). Aksi hâlde kök
       // adsız kalır — TracePodCharts gibi role=group ile saran kabuk tek
@@ -1181,7 +1189,7 @@ export function CorePanel({
           background: 'var(--bg0)', padding: 12, overflow: 'auto',
         } : {}),
       }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+      {!embedded && <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
         {/* v0.10.978 — boş/yalnız boşluk başlıkta <h3> HİÇ yok; satır
             (rozet + ⋯) olduğu gibi kalır. Boş h3 zaten 0 yükseklikti,
             yalnız gap'e bir öğe katıyordu — yerleşim kaymaz. */}
@@ -1241,7 +1249,7 @@ export function CorePanel({
             </div>
           )}
         </span>
-      </div>
+      </div>}
       {showQuery && queryText && (
         <pre style={{
           margin: 0, padding: 8, fontSize: 11, background: 'var(--bg2)',

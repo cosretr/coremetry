@@ -3,15 +3,19 @@
 // Login.tsx bunu `lazy` ile yalnız ≥ 1100 px ve özet hazırken yükler; eksik
 // bölüm yalnız kendini gizler. KPI'lar düz `div` (tablo değil — audit §6.1).
 // Durum rengi YOK: sağlıklı durum nötr, yalnız `degraded` uyarı tonu (K5 kuralı).
-import { Fragment, useMemo, type ReactNode } from 'react';
+import { Fragment, lazy, Suspense, useMemo } from 'react';
 import { cn } from 'cn';
+import { Skeleton } from '@/components/shadcn/skeleton';
 import { SummaryShell } from './SummaryShell';
 import { useBranding } from '@/lib/branding';
 import { useT } from '@/lib/i18n';
 import {
-  activityParts, componentsLine, isLive, kpis, leadKey,
+  activityParts, componentsLine, httpCardUsable, isLive, kpis, leadKey,
 } from '@/lib/loginSummary';
 import type { LoginSummary as LoginSummaryData } from '@/lib/types';
+
+// Grafik kartı lazy: @grafana chunk'ı yalnız `http_24h` kullanılabilirken iner (audit §6.2).
+const LoginHttpCard = lazy(() => import('./LoginHttpCard'));
 
 const KPI_LABEL = {
   spans: 'login.sum.spans',
@@ -19,7 +23,7 @@ const KPI_LABEL = {
   services: 'login.sum.services',
 } as const;
 
-export default function LoginSummary({ data, children }: { data: LoginSummaryData; children?: ReactNode }) {
+export default function LoginSummary({ data }: { data: LoginSummaryData }) {
   const t = useT();
   const brand = useBranding();
   const live = useMemo(() => isLive(data.generated_at, Date.now()), [data.generated_at]);
@@ -52,7 +56,11 @@ export default function LoginSummary({ data, children }: { data: LoginSummaryDat
         </div>
       )}
 
-      {children}
+      {httpCardUsable(data.http_24h) && (
+        <Suspense fallback={<Skeleton className="h-[290px] rounded-[10px]" />}>
+          <LoginHttpCard http={data.http_24h} orgName={brand.orgName} />
+        </Suspense>
+      )}
 
       {acts.length > 0 && (
         <div className="rounded-[10px] border border-border bg-card px-3.5 py-3 text-[length:var(--fs-sm)] leading-relaxed text-muted-foreground">

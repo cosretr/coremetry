@@ -160,6 +160,14 @@ const EN: Catalog = {
   'login.sum.allOk':    'All components running',
   'login.sum.degraded': 'Some components have issues · details after sign-in',
   'login.sum.checked':  'last check',
+  // v0.10.1908 — Login HTTP grafik kartı (audit §6.2).
+  'login.http.title':     '{org} OpenTelemetry metrics · last 24 hours',
+  'login.http.titleNoOrg': 'OpenTelemetry metrics · last 24 hours',
+  'login.http.scope':     'all HTTP services',
+  'login.http.throughput': 'Throughput · metric',
+  'login.http.rt':        'Response time · metric',
+  'login.http.now':       'now {now} req/s · peak {peak} ({at})',
+  'login.http.avg':       'avg',
 
   // v0.10.1426 — the generic btn.* / state.* / label.* / sev.* keys were
   // removed: no surface ever read them (every button / label / badge carries
@@ -817,6 +825,14 @@ const TR: Catalog = {
   'login.sum.allOk':    'Tüm bileşenler çalışıyor',
   'login.sum.degraded': 'Bazı bileşenler sorunlu · ayrıntı giriş sonrasında',
   'login.sum.checked':  'son kontrol',
+  // v0.10.1908 — Login HTTP grafik kartı.
+  'login.http.title':     '{org} OpenTelemetry metrikleri · son 24 saat',
+  'login.http.titleNoOrg': 'OpenTelemetry metrikleri · son 24 saat',
+  'login.http.scope':     'tüm HTTP servisleri',
+  'login.http.throughput': 'Throughput · metrik',
+  'login.http.rt':        'Response time · metrik',
+  'login.http.now':       'şimdi {now} req/s · tepe {peak} ({at})',
+  'login.http.avg':       'ort',
 
   // User menu
   'user.signOut':        'Çıkış yap',

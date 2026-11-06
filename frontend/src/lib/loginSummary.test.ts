@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   fmtMillions, fmtCount, fmtClock, isLive, summaryUsable, shouldFetchSummary,
   splitTemplate, activityParts, componentsLine, leadKey, kpis, LIVE_WINDOW_MS,
+  httpCardUsable, fmtRps, fmtSeconds, throughputHead, responseHead, httpCardTitle,
 } from './loginSummary';
 import type { LoginSummary } from '@/lib/types';
 
@@ -13,6 +14,10 @@ const T: Record<string, string> = {
   'login.sum.allOk': 'Tüm bileşenler çalışıyor',
   'login.sum.degraded': 'Bazı bileşenler sorunlu · ayrıntı giriş sonrasında',
   'login.sum.checked': 'son kontrol',
+  'login.http.now': 'şimdi {now} req/s · tepe {peak} ({at})',
+  'login.http.avg': 'ort',
+  'login.http.title': '{org} OpenTelemetry metrikleri · son 24 saat',
+  'login.http.titleNoOrg': 'OpenTelemetry metrikleri · son 24 saat',
 };
 const t = (k: string) => T[k] ?? k;
 
@@ -115,5 +120,33 @@ describe('satır metinleri', () => {
     expect(kpis({ enabled: true, ready: true, spans_today: 1_214_000_000, services_monitored: 2148 }))
       .toEqual([{ key: 'spans', value: '1,214M' }, { key: 'services', value: '2,148' }]);
     expect(kpis({ enabled: true, ready: true })).toEqual([]);
+  });
+});
+
+describe('HTTP kartı yardımcıları', () => {
+  const pt = (n: number) => Array.from({ length: n }, (_, i) => ({ time: i, value: 1 }));
+  it('httpCardUsable: ≥ 2 noktalı en az bir durum serisi', () => {
+    const base = { from: 0, to: 1, step_s: 300, summary: { now_rps: 1, peak_rps: 2, peak_at: 0 } };
+    expect(httpCardUsable({ ...base, status: [{ groupKey: ['200'], points: pt(2) }] })).toBe(true);
+    expect(httpCardUsable({ ...base, status: [{ groupKey: ['200'], points: pt(1) }] })).toBe(false);
+    expect(httpCardUsable({ ...base, status: [] })).toBe(false);
+    expect(httpCardUsable({ ...base, status: [{ groupKey: ['200'], points: null as never }] })).toBe(false);
+    expect(httpCardUsable(undefined)).toBe(false);
+  });
+  it.each([[0, '0'], [0.04, '0.0'], [3.26, '3.3'], [42.4, '42'], [999, '999'], [12_400, '12.4K'], [NaN, '0']])(
+    'fmtRps %s → %s', (v, want) => expect(fmtRps(v)).toBe(want));
+  it.each([[0.186, '186 ms'], [0.0004, '0 ms'], [1.2345, '1.23 s'], [12.34, '12.3 s'], [-1, '—']])(
+    'fmtSeconds %s → %s', (v, want) => expect(fmtSeconds(v)).toBe(want));
+  it('başlık satırları', () => {
+    const at = new Date(2026, 10, 6, 12, 5).getTime();
+    expect(throughputHead({ now_rps: 1500, peak_rps: 2200, peak_at: at }, t)).toBe('şimdi 1.5K req/s · tepe 2.2K (12:05)');
+    expect(responseHead({ now_rps: 1, peak_rps: 1, peak_at: 0, avg_now_s: 0.186, p95_now_s: 0.412 }, t)).toBe('ort 186 ms · p95 412 ms');
+    expect(responseHead({ now_rps: 1, peak_rps: 1, peak_at: 0, avg_now_s: 0.186 }, t)).toBe('ort 186 ms');
+    expect(responseHead({ now_rps: 1, peak_rps: 1, peak_at: 0 }, t)).toBe('');
+  });
+  it('kart başlığı: orgName boşsa ad düşer', () => {
+    expect(httpCardTitle('acme', t)).toBe('acme OpenTelemetry metrikleri · son 24 saat');
+    expect(httpCardTitle('  ', t)).toBe('OpenTelemetry metrikleri · son 24 saat');
+    expect(httpCardTitle(undefined, t)).toBe('OpenTelemetry metrikleri · son 24 saat');
   });
 });

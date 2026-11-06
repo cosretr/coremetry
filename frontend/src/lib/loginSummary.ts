@@ -3,7 +3,9 @@
 // çevirmen `t` dışarıdan gelir. Sözleşme: login-summary uç cevabı (lib/types.ts
 // `LoginSummary*`).
 import { fmtBytes } from '@/lib/utils';
-import type { LoginSummary, LoginSummaryActivity, LoginSummaryComponents } from '@/lib/types';
+import type {
+  LoginSummary, LoginSummaryActivity, LoginSummaryComponents, LoginSummaryHttp, LoginSummaryHttpSummary,
+} from '@/lib/types';
 
 /** Kartın iki sütuna geçtiği alt genişlik (px). Altında özet çağrısı/yüklemesi YOK. */
 export const LOGIN_WIDE_MIN_PX = 1100;
@@ -121,4 +123,47 @@ export function kpis(s: LoginSummary): Kpi[] {
   if (s.traces_today != null) out.push({ key: 'traces', value: fmtMillions(s.traces_today) });
   if (s.services_monitored != null) out.push({ key: 'services', value: fmtMillions(s.services_monitored) });
   return out;
+}
+
+// ── HTTP grafik kartı (v0.10.1908, audit §6.2) ───────────────────────────────
+
+/** Kart yalnız en az bir durum serisi ≥ 2 nokta taşıyorsa çizilir (CorePanel boş durumu sabit Türkçe). */
+export function httpCardUsable(h: LoginSummaryHttp | undefined): h is LoginSummaryHttp {
+  return !!h && (h.status ?? []).some(s => (s.points ?? []).length >= 2);
+}
+
+/** req/s: < 10 → 1 ondalık, < 1000 → tam sayı, ≥ 1000 → `12.4K`. */
+export function fmtRps(v: number): string {
+  if (!Number.isFinite(v) || v <= 0) return '0';
+  if (v < 10) return (Math.round(v * 10) / 10).toFixed(1);
+  return fmtCount(v);
+}
+
+/** Saniye → `186 ms` / `1.24 s`. */
+export function fmtSeconds(s: number): string {
+  if (!Number.isFinite(s) || s < 0) return '—';
+  if (s < 1) return `${Math.round(s * 1000)} ms`;
+  return `${s.toFixed(s < 10 ? 2 : 1)} s`;
+}
+
+/** "şimdi X req/s · tepe Y (HH:mm)" — Throughput başlık satırının sağı. */
+export function throughputHead(sum: LoginSummaryHttpSummary, t: (k: string) => string): string {
+  return t('login.http.now')
+    .replace('{now}', fmtRps(sum.now_rps))
+    .replace('{peak}', fmtRps(sum.peak_rps))
+    .replace('{at}', sum.peak_at ? fmtClock(sum.peak_at) : '—');
+}
+
+/** "ort A · p95 B" — Response time başlık satırının sağı; p95 yoksa yalnız ort; ikisi de yoksa boş. */
+export function responseHead(sum: LoginSummaryHttpSummary, t: (k: string) => string): string {
+  const parts: string[] = [];
+  if (sum.avg_now_s != null) parts.push(`${t('login.http.avg')} ${fmtSeconds(sum.avg_now_s)}`);
+  if (sum.p95_now_s != null) parts.push(`p95 ${fmtSeconds(sum.p95_now_s)}`);
+  return parts.join(' · ');
+}
+
+/** Kart başlığı: kurum adı boşsa ad düşer ("OpenTelemetry metrikleri · son 24 saat"). */
+export function httpCardTitle(orgName: string | undefined, t: (k: string) => string): string {
+  const o = (orgName ?? '').trim();
+  return o ? t('login.http.title').replace('{org}', o) : t('login.http.titleNoOrg');
 }
