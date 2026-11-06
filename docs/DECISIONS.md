@@ -12748,3 +12748,16 @@ Kaynak: `docs/metrics/metrics-explore-dashboards-audit.md` §7 Faz 2 (onaylı, �
   (tablo testi zinciri içe aktarıma kadar sınar). Explore'un `source` durumu, eski `viz` geçişi ve URL yazımındaki eski
   dal kalktı; Recent / Saved / Share üst satırda kalır. CSS ailesi: panellerin kendine özgü sınıfı yoktu (`controls`,
   `table-wrap` ortak) — silinecek kural yok.
+
+## 2026-11-06 — v0.10.1868 — Logs: servis seçilmese de son satırlar gelir
+- **Bildirim (operatör, prod).** Takımı tanımlı olmayan kullanıcı Log Search'ü açınca "Bir servis seçin" boş ekranını
+  gördü: "En azından son 500 satır gelse iyi olur, seçilmese de."
+- **Geri alınan karar.** v0.10.1855 (Faz 2 dilim 2.4) kapsam çözülemediğinde okumayı kapatıyordu ("servis seçilmeden sorgu
+  yok"; audit §5 risk #2 maliyet koruması). Bu, takımsız kullanıcıda sayfayı kullanılmaz bıraktı.
+- **Yeni kural.** Kapsam çözülemezse (takım yok / takıma servis atanmamış / kimlik yok) okuma KAPSAMSIZ gider: tüm
+  servisler, seçili pencere, sayfanın örnek boyutu — 1855 öncesinin varsayılanıyla aynı maliyet. Sayfa nedenini
+  engellemeyen bir bilgi notuyla söyler ("Tüm servislerde aranıyor — hesabınızda takım tanımlı değil"). Kapı yalnız
+  kapsam kararı beklenirken tutar (çift istek olmasın). Takımı tanımlı kullanıcıda davranış aynı.
+- **Genel ilke.** Kapsam / maliyet koruması bir sayfayı BOŞ bırakamaz; varsayılan her zaman satır gösterir, daraltma
+  öneridir. Faz 3 dilim 3.7 (kapsam genişletme) bu ilkenin üstüne kurulur.
+- Sunucu tarafı değişmedi (`scope=mine` çözülemezse 400; istemci bu durumda `scope` göndermiyor). Doğrulanmadı: tarayıcı.

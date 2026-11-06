@@ -13,8 +13,13 @@
 //   6. kapsam çözüldü (≥1 servis)   → URL'de mine varsa active; yoksa apply
 //                                       (URL'ye BİR KEZ replace ile yazılır; istek
 //                                       aynı render'da kapsamlı gider)
-//   7. kapsam çözülmedi (takımsız / servissiz / kimliksiz) → need-service:
-//      sorgu atılmaz, servis seçimi istenir ("Tüm servislerde ara" açık kaçış).
+//   7. kapsam çözülmedi (takımsız / servissiz / kimliksiz) → fallback-all:
+//      okuma KAPSAMSIZ gider (tüm servisler, sayfanın örnek boyutu) ve sayfa
+//      nedenini engellemeyen bir notla söyler.
+//      v0.10.1868 (operatör, prod): 1855'te bu durumda sorgu atılmıyor, "Bir
+//      servis seçin" boş ekranı çıkıyordu; takımı tanımlı olmayan kullanıcı
+//      sayfayı boş gördü. "En azından son 500 satır gelse iyi olur, seçilmese
+//      de." Kapsamsız okuma 1855 öncesinin varsayılanıyla aynı maliyettir.
 import type { LogsScope, LogsScopeService } from '@/lib/types';
 
 export type LogsScopeMode = 'mine' | 'all' | '';
@@ -28,7 +33,7 @@ export type LogsScopeDecision =
   | { kind: 'pending' }
   | { kind: 'apply' }
   | { kind: 'active' }
-  | { kind: 'need-service'; reason: string };
+  | { kind: 'fallback-all'; reason: string };
 
 export function decideLogsScope(i: {
   urlScope: LogsScopeMode;
@@ -44,7 +49,7 @@ export function decideLogsScope(i: {
   if (i.scope === undefined) return { kind: 'pending' };
   if (i.scope === null || !i.scope.available) return { kind: 'off' };
   if (i.scope.scoped && i.scope.services.length > 0) return { kind: i.urlScope === 'mine' ? 'active' : 'apply' };
-  return { kind: 'need-service', reason: i.scope.reason };
+  return { kind: 'fallback-all', reason: i.scope.reason };
 }
 
 /** İstek parametresi: kapsam etkinse 'mine'. */
@@ -52,9 +57,10 @@ export function logsScopeRequestParam(d: LogsScopeDecision): 'mine' | undefined 
   return d.kind === 'active' || d.kind === 'apply' ? 'mine' : undefined;
 }
 
-/** Okumalar bekletilsin mi (karar beklenirken / servis seçilmeden). */
+/** Okumalar bekletilsin mi — YALNIZ kapsam kararı beklenirken (kapsamsız istek
+ *  atıp hemen kapsamlısıyla değiştirmemek için). Kapsam çözülemezse beklenmez. */
 export function logsScopeGate(d: LogsScopeDecision): boolean {
-  return d.kind === 'pending' || d.kind === 'need-service';
+  return d.kind === 'pending';
 }
 
 const pct = (v: number) => `%${v.toLocaleString('tr-TR', { maximumFractionDigits: 1, minimumFractionDigits: v > 0 && v < 10 ? 1 : 0 })}`;
@@ -70,7 +76,7 @@ export function scopeHealthLabel(s: LogsScopeService): string {
   }
 }
 
-/** Kapsam gerekçesinin okunur hâli (need-service metni). */
+/** Kapsam gerekçesinin okunur hâli (fallback-all notu). */
 export function scopeReasonText(reason: string): string {
   switch (reason) {
     case 'no_team': return 'hesabınızda takım tanımlı değil';

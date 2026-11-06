@@ -64,7 +64,7 @@ import { DisplayOptions, LoadStatus, FieldSidebar } from '@/components/coremetry
 import { resolveBusinessFields } from '@/lib/logBusinessFields'; // v0.10.1853 (dilim 2.2)
 import { businessCandidates, requestColumns, smartBusinessColumns, withSmartColumns } from '@/lib/logsSmartColumns'; // v0.10.1856 (dilim 2.5)
 import { LogsFilterRow } from './logs/LogsFilterRow';
-import { LogsNotices, LogsNeedService } from './logs/LogsNotices';
+import { LogsNotices } from './logs/LogsNotices';
 import { LogsKeyHints } from './logs/LogsKeyHints';
 import { logRowKeyAction } from './logs/logsKeys';
 import { LogsAddFilterMenu, LogsShareMenu, LogsMoreMenu } from './logs/LogsActionsMenus';
@@ -1172,13 +1172,6 @@ function LogsInner() {
       message: 'Sorgu iptal edildi — satırlar yüklenmedi.',
       onRetry: () => { setRowsCanceled(false); void staticQ.refetch(); },
     }
-    // v0.10.1855 (dilim 2.4) — kapsam çözülemedi: servis seçilmeden sorgu yok.
-    : !live && scopeDecision.kind === 'need-service' ? {
-      kind: 'empty',
-      message: 'Bir servis seçin',
-      detailKey: 'scope',
-      detail: <LogsNeedService reason={scopeDecision.reason} onAll={() => setScopeMode('all')} />,
-    }
     : data === undefined ? { kind: 'loading', skeletonRows: 12 }
     // v0.9.215 — the error leg of the tri-state used to render NOTHING:
     // data===null fell through every branch, so a rejected query (malformed
@@ -1433,6 +1426,7 @@ function LogsInner() {
           compiledSearch={compiledSearch}
           traceHint={traceHint} onUseTraceHint={applyTraceHint} />
         <LogsNotices live={live} env={env} team={filter.team} hasTrace={filter.hasTrace}
+          scopeFallback={scopeDecision.kind === 'fallback-all' ? scopeDecision.reason : ''} /* v0.10.1868 */
           data={staticQ.data} />
 
         {/* Fields panel (Discover revamp step 2) to the left of the

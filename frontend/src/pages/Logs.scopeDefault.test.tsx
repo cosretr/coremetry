@@ -4,7 +4,7 @@
 // kararı, operatör onaylı). v0.10.1477'nin "Takımım" (team=) otomatik
 // varsayılanının YERİNE `scope=mine`. Çivilenen: temiz /logs'ta scope=mine BİR
 // KEZ yazılır ve HİÇBİR okuma kapsamsız gitmez; açık URL kazanır; takımsız
-// kullanıcıda servis seçilmeden okuma yok ("Bir servis seçin" + "Tüm servislerde
+// kullanıcıda okuma tüm servislerde çalışır + not (v0.10.1868; eskiden "Bir servis seçin" + "Tüm servislerde
 // ara" kaçışı); CH log yolunda (available:false) sayfa bugünkü gibi; çip ⇄ tüm
 // servisler; servis seçimi kapsamı devre dışı bırakır; seçicide "Servislerim"
 // önde + sağlık; team= elle süzgeç olarak çalışır (TeamPicker, dürüst çip).
@@ -138,20 +138,22 @@ describe('/logs varsayılan kapsam scope=mine (v0.10.1855)', () => {
     expect(m.logsCalls.every(c => c.scope === undefined && c.service === 'branch-teller')).toBe(true);
   });
 
-  it('takımsız kullanıcı: servis seçilmeden okuma yok; "Tüm servislerde ara" kaçışı', async () => {
+  // v0.10.1868 (operatör, prod): takımsız kullanıcı sayfayı BOŞ görmez. Kapsam
+  // çözülemeyince okuma tüm servislerde, TEK istekle gider; neden not olarak yazılır.
+  it('takımsız kullanıcı: servis seçilmese de satırlar gelir (tüm servisler) + not', async () => {
     m.scope = { available: true, scoped: false, reason: 'no_team', services: [] } satisfies LogsScope;
     await mountLogs(`/logs?range=${RANGE}`);
     expect(urlParam('scope')).toBeNull();
-    expect(m.logsCalls.length).toBe(0);
-    expect(m.tsCalls.length).toBe(0);
-    const prompt = q('[data-testid="logs-need-service"]');
-    expect(prompt).not.toBeNull();
-    expect(prompt!.textContent).toContain('takım tanımlı değil');
-    await act(async () => { (q('[data-testid="logs-scope-all"]') as HTMLButtonElement).click(); });
-    await settle();
-    expect(urlParam('scope')).toBe('all');
     expect(m.logsCalls.length).toBe(1);
     expect(m.logsCalls[0].scope).toBeUndefined();
+    expect(m.logsCalls[0].service).toBeUndefined();
+    expect(m.tsCalls.length).toBeGreaterThan(0);
+    expect(m.tsCalls.every(c => c.scope === undefined)).toBe(true);
+    expect(q('[data-testid="logs-need-service"]')).toBeNull();
+    const note = q('[data-testid="logs-scope-fallback"]');
+    expect(note).not.toBeNull();
+    expect(note!.textContent).toContain('Tüm servislerde aranıyor');
+    expect(note!.textContent).toContain('takım tanımlı değil');
   });
 
   it('CH log yolu (available:false) ve uç hatası: sayfa bugünkü gibi', async () => {

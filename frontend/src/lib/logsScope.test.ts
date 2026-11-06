@@ -17,9 +17,9 @@ describe('decideLogsScope', () => {
     ['CH log yolu → kapalı', { urlScope: 'mine', urlHadFilters: false, service: '', scope: CH }, { kind: 'off' }],
     ['temiz açılış → yaz', { urlScope: '', urlHadFilters: false, service: '', scope: MINE }, { kind: 'apply' }],
     ['URL mine → etkin', { urlScope: 'mine', urlHadFilters: true, service: '', scope: MINE }, { kind: 'active' }],
-    ['takımsız → servis iste', { urlScope: '', urlHadFilters: false, service: '', scope: NOTEAM }, { kind: 'need-service', reason: 'no_team' }],
-    ['URL mine + takımsız → servis iste', { urlScope: 'mine', urlHadFilters: false, service: '', scope: NOTEAM }, { kind: 'need-service', reason: 'no_team' }],
-    ['servissiz takım', { urlScope: '', urlHadFilters: false, service: '', scope: { ...MINE, services: [] } }, { kind: 'need-service', reason: 'team' }],
+    ['takımsız → tüm servisler', { urlScope: '', urlHadFilters: false, service: '', scope: NOTEAM }, { kind: 'fallback-all', reason: 'no_team' }],
+    ['URL mine + takımsız → tüm servisler', { urlScope: 'mine', urlHadFilters: false, service: '', scope: NOTEAM }, { kind: 'fallback-all', reason: 'no_team' }],
+    ['servissiz takım → tüm servisler', { urlScope: '', urlHadFilters: false, service: '', scope: { ...MINE, services: [] } }, { kind: 'fallback-all', reason: 'team' }],
   ];
   it.each(cases)('%s', (_n, input, want) => { expect(decideLogsScope(input)).toEqual(want); });
 
@@ -28,7 +28,9 @@ describe('decideLogsScope', () => {
     expect(logsScopeRequestParam({ kind: 'active' })).toBe('mine');
     expect(logsScopeRequestParam({ kind: 'off' })).toBeUndefined();
     expect(logsScopeGate({ kind: 'pending' })).toBe(true);
-    expect(logsScopeGate({ kind: 'need-service', reason: 'no_team' })).toBe(true);
+    // v0.10.1868 — kapsam çözülemezse okuma BEKLETİLMEZ ve kapsam parametresi gitmez.
+    expect(logsScopeGate({ kind: 'fallback-all', reason: 'no_team' })).toBe(false);
+    expect(logsScopeRequestParam({ kind: 'fallback-all', reason: 'no_team' })).toBeUndefined();
     expect(logsScopeGate({ kind: 'apply' })).toBe(false);
   });
 

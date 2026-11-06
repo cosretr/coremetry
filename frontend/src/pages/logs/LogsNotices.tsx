@@ -7,7 +7,6 @@
 // sunum: durum Logs.tsx'te, burada yalnız `data` (statik sorgunun cevabı)
 // okunur. Canlı kuyruk bu bayrakları taşımaz (hepsi `!live`).
 import type { LogsResponse } from '@/lib/types';
-import { Button } from '@/components/shadcn/button';
 import { scopeReasonText } from '@/lib/logsScope';
 import { useT } from '@/lib/i18n';
 
@@ -18,12 +17,23 @@ export interface LogsNoticesProps {
   hasTrace: boolean;
   /** Statik liste sorgusunun cevabı (yükleniyorken undefined). */
   data: LogsResponse | undefined;
+  /** v0.10.1868 — "Servislerim" kapsamı çözülemedi: gerekçe kodu (no_team …);
+   *  boşsa not çizilmez. Okuma tüm servislerde çalışır, bu satır nedenini söyler. */
+  scopeFallback?: string;
 }
 
-export function LogsNotices({ live, env, team, hasTrace, data }: LogsNoticesProps) {
+export function LogsNotices({ live, env, team, hasTrace, data, scopeFallback }: LogsNoticesProps) {
   const tr = useT();
   const shardsFailed = data?.shardsFailed ?? 0;
   const items = [
+    /* v0.10.1868 — kapsam notu (uyarı değil, bilgi): takımı tanımlı olmayan
+       kullanıcıda sayfa boş kalmaz, tüm servislerde arar ve bunu söyler. */
+    !!scopeFallback && (
+      <span key="scope" className="badge b-info" data-testid="logs-scope-fallback"
+        title={'Varsayılan kapsam "Servislerim" uygulanamadı; arama tüm servislerde, seçili zaman penceresiyle sınırlı çalışıyor. Daraltmak için üstteki seçiciden bir servis seçin.'}>
+        Tüm servislerde aranıyor — {scopeReasonText(scopeFallback)}
+      </span>
+    ),
     /* v0.8.400 — HONEST env-filter chip (the v0.8.398 pattern: state that
        the filter could NOT apply instead of silently answering unfiltered).
        The ES backend sets envUnapplied when ?env= was requested but no
@@ -69,17 +79,4 @@ export function LogsNotices({ live, env, team, hasTrace, data }: LogsNoticesProp
   ].filter(Boolean);
   if (items.length === 0) return null;
   return <div className="ld-notices" role="status">{items}</div>;
-}
-
-// LogsNeedService — v0.10.1855 (Log Search Faz 2 dilim 2.4): varsayılan kapsam
-// "Servislerim" çözülemedi → tablonun İÇİNDE servis seçimi istenir; açık kaçış
-// "Tüm servislerde ara" (`scope=all`). Sınıflar Tailwind (@source pages/logs).
-export function LogsNeedService({ reason, onAll }: { reason: string; onAll: () => void }) {
-  return (
-    <div className="grid justify-items-center gap-2 text-(--text2)" data-testid="logs-need-service">
-      <span>Varsayılan kapsam "Servislerim" çözülemedi — {scopeReasonText(reason)}. Sorgu servis seçilmeden çalışmaz; üstteki seçiciden bir servis seçin.</span>
-      <Button variant="secondary" size="sm" data-testid="logs-scope-all" onClick={onAll}
-        title="Kapsamsız arama: tüm indekslerde (pencereyle sınırlı) — pahalı olabilir">Tüm servislerde ara</Button>
-    </div>
-  );
 }
