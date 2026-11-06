@@ -2,7 +2,7 @@
 // kararsız satır isabet yazdırmaz).
 import { describe, it, expect } from 'vitest';
 import { anomalyEventHref, legacyAnomalyRedirect, mlEventHref } from '@/lib/anomalyHref';
-import { detectorGroup, detectorRows, statusTiles, backfillLabel, durationLabel, gateLabel, stageLabel, signalTickLabel, tickLabel, kindTickLines, baselineStatusLine, resolveAnomaliesTab, resolveMLSignal, scoreLabel, signalScoreLabel } from '@/components/coremetry/anomalies/MLTab';
+import { mlStatusSummary, detectorVerdictText, detectorPromoteText, detectorGroup, detectorRows, statusTiles, backfillLabel, durationLabel, gateLabel, stageLabel, signalTickLabel, tickLabel, kindTickLines, baselineStatusLine, resolveAnomaliesTab, resolveMLSignal, scoreLabel, signalScoreLabel } from '@/components/coremetry/anomalies/MLTab';
 
 describe('log ml slice 0', () => {
   it('tab resolves unknown to detectors', () => {
@@ -117,3 +117,46 @@ describe('baselineStatusLine', () => {
     expect(baselineStatusLine({})?.text).toBe('Baseline · henüz işlenmiş gün yok');
   });
 });
+
+// v0.10.1879 — sade görünüm (operatör: "çok net anlaşılmıyor"): önce düz cümle.
+describe('ML durum özeti ve sade hücreler (v0.10.1879)', () => {
+  const base = { windowDays: 30, detectors: [], promotion: {}, signals: {},
+    bySignal: [{ detector: 'trace', events: 74, samples: 1, hits: 0, hitRate: 0 }, { detector: 'log', events: 9, samples: 0, hits: 0, hitRate: 0 }],
+    tick: { at: 1000 - 120, durationMs: 5000, events: 2, backoff: [] as { family: string; until: number; failures: number }[] } };
+
+  it('düz cümle: ne zaman çalıştı, ne buldu, 30 günde ne kaydedildi', () => {
+    const s = mlStatusSummary(base, '', 1000);
+    expect(s.text).toBe('Anomali tespiti çalışıyor. Son kontrol 2 dakika önce yapıldı, 5 saniye sürdü ve 2 olay buldu. Son 30 günde 83 olay kaydedildi; 1 tanesi değerlendirildi.');
+    expect(s.warnings).toEqual([]);
+    // sinyal süzgeci özet sayılarını daraltır
+    expect(mlStatusSummary(base, 'log', 1000).text).toContain('Son 30 günde 9 olay kaydedildi; henüz hiçbiri değerlendirilmedi.');
+    expect(mlStatusSummary({ ...base, tick: { ...base.tick, at: 1000, events: 0 } }, '', 1000).text).toContain('Son kontrol az önce yapıldı, 5 saniye sürdü ve olay bulmadı.');
+  });
+
+  it('dikkat satırları yalnız sorun varken: gecikme, metrik bekletme, eksik geçmiş, hiç çalışmama', () => {
+    const late = mlStatusSummary({ ...base, tick: { ...base.tick, at: 1000 - 40 * 60 } }, '', 1000);
+    expect(late.text).toContain('Anomali tespiti gecikiyor: son kontrol 40 dakika önce yapıldı.');
+    expect(late.warnings.length).toBe(1);
+    const bo = mlStatusSummary({ ...base, tick: { ...base.tick, backoff: [{ family: 'dep:http', until: 2000, failures: 2 }] } }, '', 1000);
+    expect(bo.warnings).toEqual(['Metrik kaynağı 1 metrik ailesinde geçici olarak bekletiliyor (dep:http).']);
+    const bf = mlStatusSummary({ ...base, backfill: [{ signal: 'log', total: 504, done: 92, missing: [], doneUntil: 0, planEnd: 0, complete: false, running: true, startedAt: 0, updatedAt: 0 }] }, '', 1000);
+    expect(bf.warnings).toEqual(['Log geçmişi henüz tamamlanmadı: 92 / 504 saat, sürüyor.']);
+    const never = mlStatusSummary({ ...base, tick: undefined }, '', 1000);
+    expect(never.text).toContain('Anomali tespiti henüz hiç çalışmadı.');
+    expect(never.warnings.length).toBe(1);
+  });
+
+  it('değerlendirme: "%0 (2)" yerine okunur metin; yoksa boş', () => {
+    expect(detectorVerdictText({ samples: 2, hitRate: 0 })).toBe('2 değerlendirme · 0 doğru');
+    expect(detectorVerdictText({ samples: 20, hitRate: 0.85 })).toBe('20 değerlendirme · 17 doğru');
+    expect(detectorVerdictText({ samples: 0, hitRate: 0 })).toBe('');
+  });
+
+  it('Problem açar mı: Evet / Hayır; gerekçe ipucunda; kapalı dedektörde boş', () => {
+    expect(detectorPromoteText({ enabled: true, gate: { ok: true } })).toEqual({ text: 'Evet', title: 'Bu dedektörün olayları Problem açabilir' });
+    expect(detectorPromoteText({ enabled: true, gate: { ok: false, reasons: ['terfi anahtarı kapalı', 'karar örneği 2 < 20', 'isabet %0 < %80'] } }))
+      .toEqual({ text: 'Hayır', title: 'Neden: terfi anahtarı kapalı · karar örneği 2 < 20 · isabet %0 < %80' });
+    expect(detectorPromoteText({ enabled: false, gate: { ok: false, reasons: ['dedektör kapalı', 'terfi anahtarı kapalı'] } })).toEqual({ text: '', title: 'Dedektör kapalı' });
+  });
+});
+

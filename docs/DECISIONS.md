@@ -12906,3 +12906,18 @@ görünüm 1–4. Parti A'nın (1842–1846) üstüne; ana grafik (olay anı kay
 - **Ders (1877 ile birlikte).** Yeni bir ES sorgu yolu yayınlanırken bu ekranda önce test ortamında sayısı ve süresi
   görülür; varsayılan açılışa giren yol için bu artık yayın ölçütüdür.
 - Doğrulanmadı: canlı küme (yazım, çok-pod toplamı), tarayıcı.
+
+## 2026-11-06 — v0.10.1879 — Anomalies › ML: dedektör durumu sade görünüm
+- **Bildirim (operatör, prod ekran görüntüsü).** "Bu sayfa genel tasarıma uymuyor, çok net anlaşılmıyor." Dört kutu
+  ("5 sn · 2 olay · 79 belge", "504 / 504 sa", "4 karar", "tüm aileler açık"), üç ham satır ("sorgu ES 3 · VM 0 · CH 5")
+  ve on sütunlu tablo ("%0 (2)", "terfi anahtarı kapalı · karar örneği 2 < 20 · isabet %0 < %80") mühendis notuydu.
+- **Karar.** Önce düz cümle, teknik kanıt kapalı (operatörün detay sayfaları ilkesi):
+  1. Tek cümle: "Anomali tespiti çalışıyor. Son kontrol 2 dakika önce yapıldı, 5 saniye sürdü ve 2 olay buldu. Son 30
+     günde 190 olay kaydedildi; 4 tanesi değerlendirildi." Dikkat satırı YALNIZ sorun varken (gecikme, metrik kaynağı
+     bekletme, eksik log geçmişi, hiç çalışmama).
+  2. Tablo dört soruya cevap verir: Dedektör · İzlediği (sinyal rozeti) · Durum (Açık / Kapalı) · Son 30 günde olay ·
+     Değerlendirme ("2 değerlendirme · 0 doğru") · Problem açar mı (Evet / Hayır; gerekçe ipucunda). Açık dedektörler
+     önde, kendi içinde olay sayısına göre.
+  3. "Teknik detay" (kapalı): eski dört kutu, sinyal başına tik satırları, baseline satırı ve dedektör başına kontrol
+     süresi / bakılan servis / aday / kaydedilen / Problem açma koşulları tablosu. Hiçbir bilgi silinmedi.
+- Sunucu ve veri değişmedi; yalnız sunum. Tek commit, geri alınabilir. Doğrulanmadı: tarayıcı.

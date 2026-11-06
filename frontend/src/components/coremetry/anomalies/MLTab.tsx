@@ -182,17 +182,77 @@ export function baselineStatusLine(st: MLBaselineStatus | undefined): { text: st
   return { text: `Baseline · ${bits.join(' · ')}`, warn: !!run?.error || !!st.manual?.error || !!st.profiles?.error };
 }
 
+// ── v0.10.1879 — sade görünüm (operatör, prod ekran görüntüsü: "Bu sayfa genel
+// tasarıma uymuyor, çok net anlaşılmıyor"). Önce düz cümle, sonra dört sorunun
+// cevabını veren tablo (ne izliyor / açık mı / ne buldu / Problem açar mı);
+// tik süreleri, aday sayıları ve terfi kapısı gerekçeleri "Teknik detay"
+// altında kapalı. Bilgi silinmedi, yalnız yerleşti.
+
+/** Durumun düz cümlesi + (varsa) dikkat satırları — SAF (test). */
+export function mlStatusSummary(sc: MLScorecard, signal: MLSignal, nowSec: number): { text: string; warnings: string[] } {
+  const n = (v: number) => v.toLocaleString('tr-TR');
+  const t = sc.tick;
+  const scoped = (sc.bySignal ?? []).filter(x => !signal || x.detector === signal);
+  const events = scoped.reduce((a, x) => a + x.events, 0);
+  const samples = scoped.reduce((a, x) => a + x.samples, 0);
+  const warnings: string[] = [];
+  let head: string;
+  if (!t) {
+    head = 'Anomali tespiti henüz hiç çalışmadı.';
+    warnings.push('Son kontrol kaydı yok: tespit kapalı olabilir (Settings › Anomaly).');
+  } else {
+    const ago = Math.max(0, Math.round((nowSec - t.at) / 60));
+    const dur = Math.max(1, Math.round(t.durationMs / 1000));
+    const when = ago === 0 ? 'az önce' : `${n(ago)} dakika önce`;
+    head = `Anomali tespiti çalışıyor. Son kontrol ${when} yapıldı, ${n(dur)} saniye sürdü ve ${t.events > 0 ? `${n(t.events)} olay buldu` : 'olay bulmadı'}.`;
+    if (ago > 15) {
+      head = `Anomali tespiti gecikiyor: son kontrol ${n(ago)} dakika önce yapıldı.`;
+      warnings.push('Kontroller beş dakikada bir çalışır; bu kadar uzun ara, tespitin durduğunu gösterebilir.');
+    }
+    const bo = t.backoff ?? [];
+    if (bo.length > 0) warnings.push(`Metrik kaynağı ${n(bo.length)} metrik ailesinde geçici olarak bekletiliyor (${bo.map(b => b.family).join(', ')}).`);
+    if (t.partial) warnings.push(`Son kontrolde ${n(t.partial)} kaynak eksik okundu.`);
+  }
+  const bf = (sc.backfill ?? []).find(b => !signal || b.signal === signal);
+  if (bf && !bf.complete) warnings.push(`Log geçmişi henüz tamamlanmadı: ${n(bf.done + (bf.missing?.length ?? 0))} / ${n(bf.total)} saat${bf.running ? ', sürüyor' : ', duraklı'}.`);
+  const tail = events > 0
+    ? ` Son ${sc.windowDays} günde ${n(events)} olay kaydedildi; ${samples > 0 ? `${n(samples)} tanesi değerlendirildi` : 'henüz hiçbiri değerlendirilmedi'}.`
+    : ` Son ${sc.windowDays} günde olay kaydedilmedi.`;
+  return { text: head + tail, warnings };
+}
+
+/** Değerlendirme hücresi — SAF (test): "%0 (2)" yerine "2 değerlendirme · 0 doğru". */
+export function detectorVerdictText(r: Pick<DetectorRow, 'samples' | 'hitRate'>): string {
+  if (r.samples <= 0) return '';
+  return `${r.samples.toLocaleString('tr-TR')} değerlendirme · ${Math.round(r.hitRate * r.samples).toLocaleString('tr-TR')} doğru`;
+}
+
+/** "Problem açar mı" hücresi — SAF (test). Ayrıntı (kapı gerekçeleri) ipucunda. */
+export function detectorPromoteText(r: Pick<DetectorRow, 'enabled' | 'gate'>): { text: string; title: string } {
+  const reasons = (r.gate?.reasons ?? []).filter(x => x !== 'dedektör kapalı' && x !== 'ana anahtar kapalı');
+  if (!r.enabled) return { text: '', title: 'Dedektör kapalı' };
+  if (r.gate?.ok) return { text: 'Evet', title: 'Bu dedektörün olayları Problem açabilir' };
+  return { text: 'Hayır', title: reasons.length ? `Neden: ${reasons.join(' · ')}` : 'Otomatik Problem açma koşulları sağlanmadı' };
+}
+
 const DCOLS: ColumnDef<DetectorRow>[] = [
-  { id: 'detector', label: 'Dedektör', width: 170, sortValue: r => r.detector, naturalDir: 'asc' },
-  { id: 'signal', label: 'Sinyal', width: 70, sortValue: r => r.signal, naturalDir: 'asc' },
-  { id: 'state', label: 'Durum', width: 80, sortValue: r => (r.enabled ? 1 : 0) },
-  { id: 'tick', label: 'Son tik', width: 80, numeric: true, sortValue: r => r.tick?.sourceMs ?? -1 },
-  { id: 'services', label: 'Servis', width: 70, numeric: true, sortValue: r => r.tick?.services ?? -1 },
-  { id: 'candidates', label: 'Aday', width: 60, numeric: true, sortValue: r => r.tick?.candidates ?? -1 },
-  { id: 'written', label: 'Yazıldı', width: 70, numeric: true, sortValue: r => r.tick?.written ?? -1 },
-  { id: 'events', label: 'Olay 30g', width: 80, numeric: true, sortValue: r => r.events },
-  { id: 'hit', label: 'İsabet', width: 100, numeric: true, sortValue: r => r.hitRate },
-  { id: 'gate', label: 'Terfi kapısı', flex: true, minWidth: 180, sortValue: r => (r.gate?.ok ? 0 : 1) },
+  { id: 'detector', label: 'Dedektör', width: 220, minWidth: 150, flex: true, priority: 1, sortValue: r => ML_DETECTOR_TR[r.detector] ?? r.detector, naturalDir: 'asc' },
+  { id: 'signal', label: 'İzlediği', width: 110, minWidth: 90, priority: 1, sortValue: r => r.signal, naturalDir: 'asc' },
+  // Açık olanlar önde, kendi içinde bulduğu olay sayısına göre.
+  { id: 'state', label: 'Durum', width: 100, minWidth: 80, priority: 1, sortValue: r => (r.enabled ? 1e9 : 0) + r.events },
+  { id: 'events', label: 'Son 30 günde olay', width: 150, minWidth: 110, priority: 1, numeric: true, sortValue: r => r.events },
+  { id: 'hit', label: 'Değerlendirme', width: 200, minWidth: 130, priority: 2, sortValue: r => (r.samples > 0 ? r.hitRate : -1) },
+  { id: 'gate', label: 'Problem açar mı', width: 140, minWidth: 110, priority: 2, sortValue: r => (r.gate?.ok ? 1 : 0) },
+];
+
+// Teknik detay tablosu: son kontrolün dedektör başına ölçümü + kapı gerekçesi.
+const DTECH: ColumnDef<DetectorRow>[] = [
+  { id: 'detector', label: 'Dedektör', width: 180, minWidth: 140, priority: 1, sortValue: r => ML_DETECTOR_TR[r.detector] ?? r.detector, naturalDir: 'asc' },
+  { id: 'tick', label: 'Kontrol süresi', width: 110, numeric: true, priority: 2, sortValue: r => r.tick?.sourceMs ?? -1 },
+  { id: 'services', label: 'Bakılan servis', width: 110, numeric: true, priority: 2, sortValue: r => r.tick?.services ?? -1 },
+  { id: 'candidates', label: 'Aday', width: 70, numeric: true, priority: 3, sortValue: r => r.tick?.candidates ?? -1 },
+  { id: 'written', label: 'Kaydedilen', width: 90, numeric: true, priority: 3, sortValue: r => r.tick?.written ?? -1 },
+  { id: 'gate', label: 'Problem açma koşulları', flex: true, minWidth: 200, priority: 1, sortValue: r => (r.gate?.ok ? 0 : 1) },
 ];
 
 // v0.10.1828 — 'groups' (Gruplar): anomali grupları (Faz 3); emekli
@@ -295,48 +355,87 @@ export function MLTab({ signal = '', onSignal }: { signal?: MLSignal; onSignal?:
         <SegmentedControl<MLSignal> value={signal} onChange={onSignal} aria-label="Sinyal" size="sm"
           options={[{ value: '', label: 'Hepsi' }, { value: 'log', label: 'Log' }, { value: 'trace', label: 'Trace' }, { value: 'metric', label: 'Metrik' }]} />
       )}
+      {sc.data && (() => {
+        const sum = mlStatusSummary(sc.data, signal, Math.floor(Date.now() / 1000));
+        return (
+          <div data-testid="ml-status-summary" className="rounded-md border border-border bg-card px-3 py-2">
+            <p className="m-0 text-[length:var(--fs-md)] text-foreground">{sum.text}</p>
+            {sum.warnings.map(w => (
+              <p key={w} className="m-0 mt-1 text-[length:var(--fs-sm)] text-[color:var(--warn)]">{w}</p>
+            ))}
+          </div>
+        );
+      })()}
       {sc.data && (
-        <div className="grid gap-2 md:grid-cols-4" data-testid="ml-status-tiles">
-          {statusTiles(sc.data, signal, Math.floor(Date.now() / 1000)).map(t => (
-            <div key={t.k} className="rounded-md border border-border bg-card px-3 py-2">
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{t.k}</div>
-              <div className={`text-lg font-semibold ${t.warn ? 'text-[color:var(--warn)]' : ''}`}>{t.v}</div>
-              <div className="text-xs text-muted-foreground">{t.s}</div>
+        <>
+          <h3 className="mt-1 mb-0 font-semibold">Dedektörler</h3>
+          <DataTable<DetectorRow>
+            storageKey="anomalies-ml-detectors-v2" columns={DCOLS} rows={detectorRows(sc.data, signal)}
+            state={{ kind: 'empty', message: 'Dedektör yok' }} sort={{ initial: { id: 'state', dir: 'desc' } }}
+            getRowKey={r => r.detector} ariaLabel="Dedektörler"
+            renderCell={(r, c) => {
+              switch (c.id) {
+                case 'detector': return ML_DETECTOR_TR[r.detector] ?? r.detector;
+                case 'signal': return r.signal === 'log' || r.signal === 'trace' || r.signal === 'metric'
+                  ? <SignalKindBadge kind={r.signal} /> : (SIGNAL_TR[r.signal] ?? r.signal);
+                case 'state': return r.enabled ? 'Açık' : <span className="text-muted-foreground">Kapalı</span>;
+                case 'events': return r.events.toLocaleString('tr-TR');
+                case 'hit': {
+                  const v = detectorVerdictText(r);
+                  return v || <span className="text-muted-foreground" title="Bu dedektörün olaylarından henüz hiçbiri “gerçek / değil” diye işaretlenmedi">—</span>;
+                }
+                case 'gate': {
+                  const g = detectorPromoteText(r);
+                  return g.text ? <span title={g.title}>{g.text}</span> : <span className="text-muted-foreground" title={g.title}>—</span>;
+                }
+                default: return null;
+              }
+            }} />
+          <p className="m-0 text-[length:var(--fs-sm)] text-muted-foreground">
+            Dedektörler anomali kaydeder. Bir dedektörün kendiliğinden Problem açması için otomatik terfi anahtarının açık olması
+            ve olaylarının yeterince değerlendirilip doğrulanmış olması gerekir (Settings › Anomaly). Ayrıntı “Teknik detay”da.
+          </p>
+          <details data-testid="ml-tech-details" className="rounded-md border border-border px-3 py-2">
+            <summary className="cursor-pointer text-[length:var(--fs-sm)] font-semibold text-muted-foreground">Teknik detay</summary>
+            <div className="mt-2 flex flex-col gap-3">
+              <div className="grid gap-2 md:grid-cols-4" data-testid="ml-status-tiles">
+                {statusTiles(sc.data, signal, Math.floor(Date.now() / 1000)).map(t => (
+                  <div key={t.k} className="rounded-md border border-border bg-card px-3 py-2">
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{t.k}</div>
+                    <div className={`text-lg font-semibold ${t.warn ? 'text-[color:var(--warn)]' : ''}`}>{t.v}</div>
+                    <div className="text-xs text-muted-foreground">{t.s}</div>
+                  </div>
+                ))}
+              </div>
+              {(sc.data.tick?.kinds || sc.data.baseline) && (
+                <div className="flex flex-col gap-0.5 text-xs text-muted-foreground" data-testid="ml-kind-ticks">
+                  {kindTickLines(sc.data.tick, signal).map(l => (
+                    <div key={l.kind} className={l.warn ? 'text-[color:var(--warn)]' : ''}>{l.text}</div>
+                  ))}
+                  {(() => {
+                    const b = baselineStatusLine(sc.data.baseline);
+                    return b && <div data-testid="ml-baseline-line" className={b.warn ? 'text-[color:var(--warn)]' : ''}>{b.text}</div>;
+                  })()}
+                </div>
+              )}
+              <DataTable<DetectorRow>
+                storageKey="anomalies-ml-detectors-tech" columns={DTECH} rows={detectorRows(sc.data, signal)}
+                state={{ kind: 'empty', message: 'Dedektör yok' }} sort={{ initial: { id: 'detector', dir: 'asc' } }}
+                getRowKey={r => r.detector} ariaLabel="Dedektörler, teknik detay"
+                renderCell={(r, c) => {
+                  switch (c.id) {
+                    case 'detector': return ML_DETECTOR_TR[r.detector] ?? r.detector;
+                    case 'tick': return r.tick ? `${(r.tick.sourceMs / 1000).toFixed(1)} sn` : '—';
+                    case 'services': return r.tick ? r.tick.services : '—';
+                    case 'candidates': return r.tick ? r.tick.candidates : '—';
+                    case 'written': return r.tick ? r.tick.written : '—';
+                    case 'gate': return r.gate?.ok ? 'sağlandı' : (r.gate?.reasons ?? []).join(' · ') || '—';
+                    default: return null;
+                  }
+                }} />
             </div>
-          ))}
-        </div>
-      )}
-      {(sc.data?.tick?.kinds || sc.data?.baseline) && (
-        <div className="flex flex-col gap-0.5 text-xs text-muted-foreground" data-testid="ml-kind-ticks">
-          {kindTickLines(sc.data?.tick, signal).map(l => (
-            <div key={l.kind} className={l.warn ? 'text-[color:var(--warn)]' : ''}>{l.text}</div>
-          ))}
-          {(() => {
-            const b = baselineStatusLine(sc.data?.baseline);
-            return b && <div data-testid="ml-baseline-line" className={b.warn ? 'text-[color:var(--warn)]' : ''}>{b.text}</div>;
-          })()}
-        </div>
-      )}
-      {sc.data && (
-        <DataTable<DetectorRow>
-          storageKey="anomalies-ml-detectors" columns={DCOLS} rows={detectorRows(sc.data, signal)}
-          state={{ kind: 'empty', message: 'Dedektör yok' }} sort={{ initial: { id: 'events', dir: 'desc' } }}
-          getRowKey={r => r.detector}
-          renderCell={(r, c) => {
-            switch (c.id) {
-              case 'detector': return ML_DETECTOR_TR[r.detector] ?? r.detector;
-              case 'signal': return SIGNAL_TR[r.signal] ?? r.signal;
-              case 'state': return <Badge variant="outline">{r.enabled ? 'açık' : 'kapalı'}</Badge>;
-              case 'tick': return r.tick ? `${(r.tick.sourceMs / 1000).toFixed(1)} sn` : '—';
-              case 'services': return r.tick ? r.tick.services : '—';
-              case 'candidates': return r.tick ? r.tick.candidates : '—';
-              case 'written': return r.tick ? r.tick.written : '—';
-              case 'events': return r.events;
-              case 'hit': return r.samples > 0 ? `%${Math.round(r.hitRate * 100)} (${r.samples})` : 'karar yok';
-              case 'gate': return r.gate?.ok ? 'geçildi' : (r.gate?.reasons ?? []).join(' · ') || '—';
-              default: return null;
-            }
-          }} />
+          </details>
+        </>
       )}
       <h3 className="mt-2 font-semibold">Olaylar · son 24 saat</h3>
       <DataTable<MLEvent>
