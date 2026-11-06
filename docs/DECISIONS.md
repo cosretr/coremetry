@@ -12401,3 +12401,12 @@ Kaynak: `docs/metrics/metrics-explore-dashboards-audit.md` (onaylı, §11) · mo
   kez"); histogram ailesinin `_count/_sum` parçası "sum" tipini alır (yalnız `_bucket` histogram). `hiddenByRule`: yalnız
   admin + `includeHidden=1` gizli adı işaretli alır (anahtar `:ih=1`); diğer rollerde param yok sayılır. Audit'teki zarf
   düzeyi "gizli sayısı" eklenmedi (brief satır bayrağını istiyor; sayfa-başı sayı yanıltıcı olurdu).
+- **v0.10.1838 — sunucu tarafı top-N (1.4, davranış değişikliği — onaylı).** `/api/metrics/query`, `/promql` ve bundle
+  metric isteği `limit` (8/20/50; yukarı yuvarlanır, tavan 50) + `rank` (avg|max|last) alır. OPT-IN: iki param da yoksa
+  gövde ve anahtar dünküyle aynı; varsayılan 8 yalnız istek açınca (rank tek başına ya da boş/geçersiz limit). Bugün
+  hiçbir çağıran göndermiyor → hiçbir yüzey değişmedi (varsayılan Faz 2 QueryRow'unda devreye girer). VM: MetricsQL
+  `topk_avg|topk_max|topk_last(k, (q))` (2 argüman; "kalanlar" serisi yok), k = min(2N, 100) fazla-çekim + Go'da
+  deterministik kesim (değer azalan, grup anahtarı artan) — VM eşitlikte depolama sırası döner. Toplam: VM k'dan az
+  döndürdüyse kesin; pencere doluysa TEK `count(q)` aralık sorgusu, en yüksek nokta (eşzamanlı seri; gelip giden
+  serilerde alt sınır). CH: SQL değişmedi; aynı `RankSeries` 50k satır sınırlı sonuçta Go'da sıralar (`ORDER BY … LIMIT`
+  rollup katmanlarına da girmek zorundaydı). Anlık sorgu: Go'da kesim. `meta.limit/rank`; capabilities `topN{mode}`.

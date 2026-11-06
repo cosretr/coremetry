@@ -197,6 +197,13 @@ func (s *Server) queryMetric(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, srcErr)
 		return
 	}
+	// v0.10.1838 — sunucu tarafı top-N (metric_topn.go). Param yoksa kapalı:
+	// anahtar ve gövde bayt-aynı.
+	topn, tnErr := parseTopNQuery(q)
+	if tnErr != nil {
+		writeErr(w, tnErr)
+		return
+	}
 	// v0.9.1157 → v4: zarfa `note` eklendi (VM yolunda BOŞ dönen bir
 	// yüzdeliğin SEBEBİ). Alan `omitempty` — CH gövdesi bayt-bayt eski —
 	// ama anahtar yine de bumplanır: rolling deploy'da eski pod'un
@@ -209,7 +216,7 @@ func (s *Server) queryMetric(w http.ResponseWriter, r *http.Request) {
 	key := fmt.Sprintf("metric-query:v4%s:src=%s:name=%s:svc=%s:agg=%s:step=%d:mdp=%d:gb=%s:f=%s:inst=%s:eng=%s:from=%d:to=%d:mx=%s",
 		s.metricNameRuleTag(src),
 		src.Name(), name, svc, agg, step, maxDP, groupByRaw, filtersRaw, inst, engine, from.Unix()/60, to.Unix()/60,
-		s.store.MetricExclusions().Digest())
+		s.store.MetricExclusions().Digest()) + topn.keyTag()
 	s.serveCached(w, r, key, 30*time.Second, func(ctx context.Context) (any, error) {
 		// queryMetricNoted, kaynağın açıklayabildiği durumda notu da
 		// getirir (metricNoteSource); CH kaynağı bu yeteneği taşımıyor ve
@@ -219,7 +226,7 @@ func (s *Server) queryMetric(w http.ResponseWriter, r *http.Request) {
 			return nil, ferr
 		}
 		ctx, mrun := beginMetricMeta(ctx, src) // v0.10.1835 — meta zarfı (metric_meta.go)
-		series, note, qerr := queryMetricNoted(ctx, src, chstore.MetricQueryFilter{
+		rd, qerr := readMetric(ctx, src, chstore.MetricQueryFilter{
 			Name:          name,
 			Service:       svc,
 			Instance:      inst,
@@ -231,16 +238,19 @@ func (s *Server) queryMetric(w http.ResponseWriter, r *http.Request) {
 			To:            to,
 			StepSeconds:   step,
 			MaxDataPoints: maxDP,
-		})
+		}, topn)
 		if qerr != nil {
 			return nil, qerr
 		}
-		capped := chstore.SeriesRowsCapped(series)
+		series, note := rd.Series, rd.Note
+		capped := rd.Capped
+		meta := mrun.finish(len(series), chMetaHints{Truncated: capped, StepSec: observedStepSec(series)}, note)
+		applyTopNMeta(meta, topn, rd.Total, capped)
 		out := map[string]any{
 			"series":     series,
-			"rowsCapped": capped,
+			"rowsCapped": capped || chstore.SeriesRowsCapped(series), // v0.10.1838 — kesimden ÖNCEKİ tavan da sayılır
 			// v0.10.1835 — EK alan; eski alanlar bayt-aynı (golden test).
-			"meta": mrun.finish(len(series), chMetaHints{Truncated: capped, StepSec: observedStepSec(series)}, note),
+			"meta": meta,
 		}
 		// Yalnız DOLU notta alan eklenir: boş bir "note":"" her gövdeyi
 		// büyütür ve arayüzde "not var mı" kontrolünü değersizleştirir.

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
+	"github.com/cilcenk/coremetry/internal/vmetrics"
 )
 
 // maxPromQLQueryLen caps the raw query length before parsing (review CRITICAL,
@@ -104,6 +105,14 @@ func (s *Server) queryPromQL(w http.ResponseWriter, r *http.Request) {
 	if withMeta {
 		metaTag = ":meta=1"
 	}
+	// v0.10.1838 — sunucu tarafı top-N (metric_topn.go); param yoksa kapalı
+	// ve anahtar bayt-aynı.
+	topn, tnErr := parseTopNQuery(q)
+	if tnErr != nil {
+		writeErr(w, tnErr)
+		return
+	}
+	metaTag += topn.keyTag()
 
 	// v0.10.1248 — ?instant=1: anlık sorgu (`to` anında), yalnız VM kaynağı.
 	if q.Get("instant") == "1" {
@@ -114,15 +123,23 @@ func (s *Server) queryPromQL(w http.ResponseWriter, r *http.Request) {
 		}
 		ikey := fmt.Sprintf("promql-instant:src=%s:q=%s:at=%d%s", src.Name(), query, to.Unix()/30, metaTag)
 		s.serveCached(w, r, ikey, 30*time.Second, func(ctx context.Context) (any, error) {
-			if !withMeta {
-				return vm.QueryPromQLInstant(ctx, query, to)
-			}
 			ctx, mrun := beginMetricMeta(ctx, src)
 			res, err := vm.QueryPromQLInstant(ctx, query, to)
 			if err != nil {
 				return nil, err
 			}
-			return promqlEnvelope{Series: nonNilSeries(res), Meta: mrun.finish(len(res), chMetaHints{}, "")}, nil
+			// Anlık vektörde her serinin tek noktası var: üç sıralama kipi de
+			// o değere iner, kesim Go'da (VM'e ikinci sorgu yok).
+			total := 0
+			if topn.on() {
+				res, total = cutTopNGo(res, topn)
+			}
+			if !withMeta {
+				return res, nil
+			}
+			meta := mrun.finish(len(res), chMetaHints{}, "")
+			applyTopNMeta(meta, topn, total, false)
+			return promqlEnvelope{Series: nonNilSeries(res), Meta: meta}, nil
 		})
 		return
 	}
@@ -130,7 +147,19 @@ func (s *Server) queryPromQL(w http.ResponseWriter, r *http.Request) {
 		src.Name(), query, step, maxDP, from.Unix()/60, to.Unix()/60, metaTag)
 	s.serveCached(w, r, key, 30*time.Second, func(ctx context.Context) (any, error) {
 		ctx, mrun := beginMetricMeta(ctx, src)
-		res, err := src.QueryPromQLRange(ctx, query, from, to, step, maxDP)
+		var res []chstore.SpanMetricSeries
+		var err error
+		total := 0
+		if tn, ok := src.(metricTopNSource); ok && topn.on() {
+			var tr vmetrics.TopNResult
+			tr, err = tn.QueryPromQLRangeTopN(ctx, query, from, to, step, maxDP, topn.Limit, topn.Rank)
+			res, total = tr.Series, tr.Total
+		} else {
+			res, err = src.QueryPromQLRange(ctx, query, from, to, step, maxDP)
+			if err == nil && topn.on() {
+				res, total = cutTopNGo(res, topn)
+			}
+		}
 		// v0.9.1158 — CH değerlendiricisinin SORGU-ŞEKLİ hataları
 		// ("promql:" önekli: desteklenmeyen fonksiyon, subquery, seri
 		// tavanı, yanlış argüman) istemci hatasıdır; sarmasız hâli 500
@@ -145,8 +174,9 @@ func (s *Server) queryPromQL(w http.ResponseWriter, r *http.Request) {
 			return res, nil
 		}
 		// CH: the operator's own text IS what the evaluator ran.
-		return promqlEnvelope{Series: nonNilSeries(res), Meta: mrun.finish(len(res),
-			chMetaHints{Executed: query, StepSec: observedStepSec(res)}, "")}, nil
+		meta := mrun.finish(len(res), chMetaHints{Executed: query, StepSec: observedStepSec(res)}, "")
+		applyTopNMeta(meta, topn, total, false)
+		return promqlEnvelope{Series: nonNilSeries(res), Meta: meta}, nil
 	})
 }
 

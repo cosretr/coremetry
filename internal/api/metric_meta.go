@@ -65,6 +65,10 @@ type metricMeta struct {
 	Partial     bool   `json:"partial"`
 	StepSec     int    `json:"stepSec,omitempty"`
 	Note        string `json:"note,omitempty"`
+	// Limit + Rank — v0.10.1838: the server-side top-N that produced this
+	// body (metric_topn.go); omitted when the request did not opt in.
+	Limit int    `json:"limit,omitempty"`
+	Rank  string `json:"rank,omitempty"`
 }
 
 // metaSourceName — internal source marker → wire value.

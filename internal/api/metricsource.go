@@ -680,6 +680,19 @@ func (v vmMetricSource) QueryMetricDetailed(ctx context.Context, f chstore.Metri
 	return out, upstream(err)
 }
 
+// QueryMetricTopN / QueryPromQLRangeTopN — v0.10.1838: the OPTIONAL
+// metricTopNSource capability (metric_topn.go). Route exclusions apply like
+// every other VM read; errors are upstream()-tagged.
+func (v vmMetricSource) QueryMetricTopN(ctx context.Context, f chstore.MetricQueryFilter, n int, rank string) (vmetrics.TopNResult, error) {
+	out, err := v.svc.QueryMetricTopN(ctx, v.excluded(f), n, rank)
+	return out, upstream(err)
+}
+
+func (v vmMetricSource) QueryPromQLRangeTopN(ctx context.Context, query string, from, to time.Time, stepSeconds, maxDataPoints, n int, rank string) (vmetrics.TopNResult, error) {
+	out, err := v.svc.QueryPromQLRangeTopN(ctx, query, from, to, stepSeconds, maxDataPoints, n, rank)
+	return out, upstream(err)
+}
+
 // QueryMetricNoted satisfies the OPTIONAL metricNoteSource capability — the
 // VM source is its only implementer. Same upstream() tagging as every other
 // method: an untagged error 500s and reads as a Coremetry bug.

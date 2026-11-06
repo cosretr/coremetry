@@ -31,6 +31,7 @@ import (
 
 	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/promapi"
+	"github.com/cilcenk/coremetry/internal/vmetrics"
 )
 
 func init() { registerRoutesExtra("metrics-capabilities", (*Server).registerMetricsCapabilitiesRoutes) }
@@ -73,6 +74,18 @@ type metricsCapabilities struct {
 	Metadata     capMetadata           `json:"metadata"`
 	Features     map[string]capFeature `json:"features"`
 	Limits       capLimits             `json:"limits"`
+	// TopN — v0.10.1838.
+	TopN capTopN `json:"topN"`
+}
+
+// capTopN — the allowed rungs and ranking modes. Mode: "topk" (VictoriaMetrics
+// MetricsQL topk_* pushdown) | "post-rank" (ClickHouse: ranked in Go).
+type capTopN struct {
+	Limits  []int    `json:"limits"`
+	Default int      `json:"default"`
+	Max     int      `json:"max"`
+	Ranks   []string `json:"ranks"`
+	Mode    string   `json:"mode"`
 }
 
 const capReasonVMOnly = "Yalnız VictoriaMetrics"
@@ -114,7 +127,14 @@ func capabilitiesFor(src string, vmMetadataOK bool) metricsCapabilities {
 	// Discovery + server-side ranking land in later Faz 1 slices; each flips
 	// its own entry here (1.4 topN, 1.5 clusterScope, 1.6 discovery*).
 	notYet := capFeature{Reason: "Faz 1 sonraki dilim"}
-	c.Features["topN"] = notYet
+	// v0.10.1838 — both backends rank server-side; VM pushes topk_* down,
+	// ClickHouse ranks its bounded result in Go (metric_topn.go).
+	c.Features["topN"] = capFeature{Supported: true}
+	c.TopN = capTopN{Limits: append([]int(nil), topNRungs...), Default: topNDefault, Max: topNMax,
+		Ranks: []string{vmetrics.RankAvg, vmetrics.RankMax, vmetrics.RankLast}, Mode: "post-rank"}
+	if vm {
+		c.TopN.Mode = "topk"
+	}
 	c.Features["clusterScope"] = notYet
 	c.Features["discoverLabels"] = notYet
 	c.Features["discoverLabelValues"] = notYet

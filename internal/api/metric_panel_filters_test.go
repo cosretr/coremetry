@@ -43,8 +43,10 @@ func TestDashboardBundleMetricBranchPassesFilters(t *testing.T) {
 	if end := strings.Index(body, `case "spanMetric":`); end > 0 {
 		body = body[:end]
 	}
-	if !strings.Contains(body, "queryMetricNoted(ctx, metricSrc, chstore.MetricQueryFilter{") {
-		t.Fatalf("metric dalı queryMetricNoted seam'inden geçmiyor — pencere:\n%s", body)
+	// v0.10.1838 — readMetric (metric_topn.go) = queryMetricNoted + top-N;
+	// tekil /api/metrics/query ile aynı okuma (TestReadMetricIsTheSharedBuilderRead).
+	if !strings.Contains(body, "readMetric(ctx, metricSrc, chstore.MetricQueryFilter{") {
+		t.Fatalf("metric dalı readMetric seam'inden geçmiyor — pencere:\n%s", body)
 	}
 	if !strings.Contains(body, "parseFilters(string(req.Filters))") {
 		t.Error("Filters gövdedeki req.Filters'tan derlenmiyor — sabit ya da boş " +

@@ -85,6 +85,10 @@ type bundleReq struct {
 	DSL     string          `json:"dsl"`
 	// v0.10.186 — gövde düzeyi opt-in'in slot'a kopyası (anahtara srcTag ile girer; JSON'a girmez).
 	Enc string `json:"-"`
+	// v0.10.1838 — sunucu tarafı top-N (metric_topn.go), yalnız metric dalı.
+	// Limit 0 = kapalı (anahtar bayt-aynı).
+	Limit int    `json:"limit,omitempty"`
+	Rank  string `json:"rank,omitempty"`
 }
 
 // bundleSlot — tek panelin yanıtı.
@@ -161,6 +165,15 @@ func dashPanelKey(srcTag string, q bundleReq, from, to time.Time) string {
 		h.Write([]byte(strconv.Itoa(len(part))))
 		h.Write([]byte{':'})
 		h.Write([]byte(part))
+	}
+	// v0.10.1838 — top-N YALNIZ açıkken anahtara girer: kapalı panelin anahtarı
+	// dünkünün aynısı (deploy'da soğuk okuma dalgası yok).
+	if q.Type == "metric" && (q.Limit > 0 || q.Rank != "") {
+		for _, part := range []string{"topn", strconv.Itoa(q.Limit), q.Rank} {
+			h.Write([]byte(strconv.Itoa(len(part))))
+			h.Write([]byte{':'})
+			h.Write([]byte(part))
+		}
 	}
 	return fmt.Sprintf("dash-panel:v3:%s:%x", q.Type, h.Sum64()) // v2: v0.10.147 tail/totalSeries · v3: v0.10.186 sütunsal (enc anahtarda, srcTag üzerinden)
 }
@@ -286,8 +299,12 @@ func (s *Server) bundleSlot(ctx context.Context, metricSrc metricSource, req bun
 		// jvm.memory.type="heap" filtresi uygulanmayınca panel heap +
 		// non-heap toplamını "heap" diye çiziyordu — yanlış ama makul
 		// görünen sayı, boş panelden tehlikelidir).
+		topn, tnErr := parseTopN(strconv.Itoa(req.Limit), req.Rank, req.Limit != 0, req.Rank != "")
+		if tnErr != nil {
+			return nil, tnErr
+		}
 		ctx, mrun := beginMetricMeta(ctx, metricSrc) // v0.10.1835
-		series, note, err := queryMetricNoted(ctx, metricSrc, chstore.MetricQueryFilter{
+		rd, err := readMetric(ctx, metricSrc, chstore.MetricQueryFilter{
 			Name:        req.Name,
 			Service:     req.Service,
 			Aggregation: req.Agg,
@@ -296,14 +313,15 @@ func (s *Server) bundleSlot(ctx context.Context, metricSrc metricSource, req bun
 			From:        from,
 			To:          to,
 			StepSeconds: req.Step,
-		})
+		}, topn)
 		if err != nil {
 			return nil, err
 		}
-		slot.Series = series
-		slot.RowsCapped = chstore.SeriesRowsCapped(series)
-		slot.Note = note
-		slot.Meta = mrun.finish(len(series), chMetaHints{Truncated: slot.RowsCapped, StepSec: observedStepSec(series)}, note)
+		slot.Series = rd.Series
+		slot.RowsCapped = rd.Capped || chstore.SeriesRowsCapped(rd.Series) // v0.10.1838 — kesimden önceki tavan
+		slot.Note = rd.Note
+		slot.Meta = mrun.finish(len(rd.Series), chMetaHints{Truncated: rd.Capped, StepSec: observedStepSec(rd.Series)}, rd.Note)
+		applyTopNMeta(slot.Meta, topn, rd.Total, rd.Capped)
 	case "spanMetric":
 		filters, ferr := parseFiltersAndDSL(string(req.Filters), req.DSL)
 		if ferr != nil {

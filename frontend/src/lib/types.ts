@@ -4152,6 +4152,8 @@ export interface MetricsCapabilities {
     maxQueryLength: number; maxDataPoints: number; maxSeries?: number; maxRows?: number;
     namesPageMax: number; labelValuesMax: number; attrKeysMax: number; labelWindowMaxHours: number;
   };
+  /** v0.10.1838 — mode: 'topk' (VM MetricsQL pushdown) | 'post-rank' (CH, Go'da sıralama). */
+  topN: { limits: number[]; default: number; max: number; ranks: string[]; mode: 'topk' | 'post-rank' };
 }
 
 /**
@@ -4596,6 +4598,9 @@ export interface MetricResultMeta {
   partial: boolean;
   stepSec?: number;
   note?: string;
+  /** v0.10.1838 — sunucu tarafı top-N (yalnız istek ?limit/?rank ile açtıysa). */
+  limit?: number;
+  rank?: 'avg' | 'max' | 'last';
 }
 
 // /api/metrics/promql?meta=1 zarfı (v0.10.1835). Param yokken uç eski

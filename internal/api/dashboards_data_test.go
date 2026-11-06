@@ -152,8 +152,12 @@ func TestDashboardBundle_ConvergesWithSingleEndpoints(t *testing.T) {
 	if !regexp.MustCompile(`s\.cachedJSON\(`).MatchString(src) {
 		t.Errorf("bundle slots must go through cachedJSON (per-panel SWR cache)")
 	}
-	if !regexp.MustCompile(`queryMetricNoted\(`).MatchString(src) {
-		t.Errorf("bundle metric slot must use queryMetricNoted (single /api/metrics/query contract)")
+	// v0.10.1838 — the shared read is readMetric (metric_topn.go), which
+	// wraps queryMetricNoted; the handler and the slot both call it, so the
+	// "single /api/metrics/query contract" is pinned on BOTH callers + the
+	// wrapper (TestReadMetricIsTheSharedBuilderRead).
+	if !regexp.MustCompile(`readMetric\(ctx, metricSrc, `).MatchString(src) {
+		t.Errorf("bundle metric slot must use readMetric (single /api/metrics/query contract)")
 	}
 	// Handler api.go'dan taşındı — geri sızmasın (api.go BÜYÜMEYECEK).
 	apiRaw, err := os.ReadFile("api.go")
