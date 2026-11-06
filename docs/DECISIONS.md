@@ -12392,3 +12392,12 @@ Kaynak: `docs/metrics/metrics-explore-dashboards-audit.md` (onaylı, §11) · mo
   maddesi bu iki yüzeyle sınırlandı (sapma). Bildirim `coremetry/metrics/MetricResultNotice` (role=status): toplam
   biliniyorsa "N seriden M'i gösteriliyor", kısmi sonuç, not. CH 50k satır tavanında toplam bilinmez → satır yok, köşedeki
   "⚠ kesik" söyler (iki cümle aynı şeyi söylemesin). Yerleşim değişmedi (Faz 2).
+- **v0.10.1837 — capabilities + ad zarfında help/typeSource/hiddenByRule (1.3).** `GET /api/metrics/capabilities`
+  (`metrics_capabilities.go`, rol kapısız, 30 sn): source/backend/language/metricsql/instantQuery, metadata merdiveni,
+  `features{…}` bayrakları (sonraki dilimler kendi bayrağını açar), tavanlar. Ad satırları `help`, `typeSource`
+  (catalog | vm-metadata | inferred). SAPMA: VM'de merdiven "ürün kataloğu" ile BAŞLAMAZ — Prometheus adlı ürün kataloğu
+  yok, CH `metric_catalog`'u VM cevabına karıştırmak seam'in reddettiği karışık-depo okuması; VM: vm-metadata → inferred.
+  Metadata (`/api/v1/metadata?limit=5000&limit_per_metric=1`) 5 dk önbellekli, BOŞ cevap da önbelleğe girer ("prob bir
+  kez"); histogram ailesinin `_count/_sum` parçası "sum" tipini alır (yalnız `_bucket` histogram). `hiddenByRule`: yalnız
+  admin + `includeHidden=1` gizli adı işaretli alır (anahtar `:ih=1`); diğer rollerde param yok sayılır. Audit'teki zarf
+  düzeyi "gizli sayısı" eklenmedi (brief satır bayrağını istiyor; sayfa-başı sayı yanıltıcı olurdu).

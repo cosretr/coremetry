@@ -695,6 +695,10 @@ export const api = {
   metricNamesSearch: (service: string, q?: string, limit = 200, offset = 0, src?: import('./metricSource').MetricSourceParam) =>
     get<MetricNameSearchResult>(withMetricSource(
       `/api/metrics/names?${qs({ service, q, limit, offset })}`, src)),
+  // v0.10.1837 — Metrics Explorer'ın sayfa başına BİR kez okuduğu yetenek
+  // belgesi (backend, dil, keşif bayrakları, tavanlar). Sunucu 30 sn önbellek.
+  metricsCapabilities: (src?: import('./metricSource').MetricSourceParam) =>
+    get<import('./types').MetricsCapabilities>(withMetricSource('/api/metrics/capabilities', src)),
   // Distinct attribute keys observed on recent spans — drives the
   // FilterBuilder autocomplete so custom attrs (function_code etc.)
   // surface as suggestions in addition to the hardcoded list.

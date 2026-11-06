@@ -133,3 +133,20 @@ func (e *HTTPError) Unwrap() error {
 	}
 	return nil
 }
+
+// QueryData — v0.10.1837 — Do + the shared status check, returning the raw
+// `data` member and `isPartial`. For endpoints whose data is neither a series
+// matrix nor a string array (/api/v1/metadata, /api/v1/status/tsdb, the
+// /api/v1/series label-set list). Error text is byte-identical to the other
+// decoders (same decodeEnvelopeFull).
+func QueryData(ctx context.Context, req Request) (json.RawMessage, bool, error) {
+	body, err := Do(ctx, req)
+	if err != nil {
+		return nil, false, err
+	}
+	env, err := decodeEnvelopeFull(labelOr(req.Label), body)
+	if err != nil {
+		return nil, false, err
+	}
+	return env.Data, env.IsPartial, nil
+}

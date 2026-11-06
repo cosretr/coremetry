@@ -69,27 +69,38 @@ func (s *Server) getMetricNames(w http.ResponseWriter, r *http.Request) {
 	// EKSİK döner ve arayüz "Son veri: —" gösterip sanki metrik
 	// susmuş gibi yalan söyler. Zarf değişti = anahtar değişti.
 	drop, dropTag := s.metricNameDrop() // v0.10.1809 — pipeline drop kuralı okuma tarafı (metric_name_drop.go)
+	// v0.10.1837 — admin + açık includeHidden=1: gizli adlar süzülmez,
+	// hiddenByRule ile işaretlenir (metric_names_meta.go). Başka her rolde
+	// param YOK sayılır → anahtar çatallanmaz, gizli ad dönmez.
+	pageDrop, hiddenMark, ihTag := namesDropPlan(drop, isAdminRequest(r) && q.Get("includeHidden") == "1")
 	if pattern == "" && limit == 0 && offset == 0 {
-		s.serveCached(w, r, "metric-names:v3:src="+src.Name()+":svc="+svc+dropTag, 60*time.Second, func(ctx context.Context) (any, error) {
+		s.serveCached(w, r, "metric-names:v3:src="+src.Name()+":svc="+svc+dropTag+ihTag, 60*time.Second, func(ctx context.Context) (any, error) {
 			// GetMetricNames, ListMetricNames(svc, "", 0, 0)'ın ta kendisi
 			// (repo.go:4342) — seam'de ayrı bir metot tutmamak için doğrudan
 			// o çağrı yapılıyor. CH tarafında SQL bayt-bayt aynı.
 			names, _, err := src.ListMetricNames(ctx, svc, "", 0, 0)
-			return filterDroppedMetricNames(names, drop), err
+			if err != nil {
+				return nil, err
+			}
+			return s.ladderRows(ctx, src, filterDroppedMetricNames(names, pageDrop), hiddenMark), nil
 		})
 		return
 	}
 	if limit > 1000 {
 		limit = 1000
 	}
-	key := fmt.Sprintf("metric-names:v3:src=%s:svc=%s:q=%s:limit=%d:offset=%d%s",
-		src.Name(), svc, pattern, limit, offset, dropTag)
+	key := fmt.Sprintf("metric-names:v3:src=%s:svc=%s:q=%s:limit=%d:offset=%d%s%s",
+		src.Name(), svc, pattern, limit, offset, dropTag, ihTag)
 	s.serveCached(w, r, key, 30*time.Second, func(ctx context.Context) (any, error) {
 		names, total, err := src.ListMetricNames(ctx, svc, pattern, limit, offset)
 		if err != nil {
 			return nil, err
 		}
-		return metricNamesPage(names, total, offset, src.Name(), drop), nil // zarf + kısa-sayfa notu: metric_name_drop.go
+		page := metricNamesPage(names, total, offset, src.Name(), pageDrop) // zarf + kısa-sayfa notu: metric_name_drop.go
+		if kept, ok := page["names"].([]chstore.MetricInfo); ok {
+			page["names"] = s.ladderRows(ctx, src, kept, hiddenMark) // v0.10.1837 — metadata merdiveni
+		}
+		return page, nil
 	})
 }
 

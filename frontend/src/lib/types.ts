@@ -4123,6 +4123,35 @@ export interface MetricInfo {
   // açıkken tanım gereği 1'dir (satır ZATEN o çift), o yüzden kolon
   // servis seçiliyken gizlenir.
   serviceCount?: number;
+  // v0.10.1837 — metadata merdiveni (Go metric_names_meta.go metricNameRow):
+  // help = açıklama (CH: description, VM: /api/v1/metadata HELP);
+  // typeSource = tür/birimin NEREDEN geldiği — 'inferred' "tahmini" yazılır.
+  help?: string;
+  typeSource?: 'catalog' | 'vm-metadata' | 'inferred';
+  // Yalnız admin + includeHidden=1: pipeline drop kuralıyla listeden gizli.
+  hiddenByRule?: boolean;
+}
+
+// MetricsCapabilities — v0.10.1837 GET /api/metrics/capabilities (Go
+// metrics_capabilities.go metricsCapabilities aynası).
+export interface MetricsCapabilityFeature {
+  supported: boolean;
+  reason?: string;
+}
+export interface MetricsCapabilities {
+  source: 'vm' | 'clickhouse';
+  backend: 'victoriametrics' | 'clickhouse';
+  language: 'metricsql' | 'promql-subset';
+  metricsql: boolean;
+  instantQuery: boolean;
+  metadata: { ladder: string[]; vmMetadata?: 'available' | 'unavailable' };
+  /** topN · clusterScope · discoverLabels · discoverLabelValues · cardinality ·
+   *  seriesSample · topQueries · queryTrace · instantQuery · hiddenByRule */
+  features: Record<string, MetricsCapabilityFeature>;
+  limits: {
+    maxQueryLength: number; maxDataPoints: number; maxSeries?: number; maxRows?: number;
+    namesPageMax: number; labelValuesMax: number; attrKeysMax: number; labelWindowMaxHours: number;
+  };
 }
 
 /**

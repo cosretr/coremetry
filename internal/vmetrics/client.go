@@ -485,8 +485,9 @@ const nameLookback = 7 * 24 * time.Hour
 // VM reports metric NAMES and nothing else: /api/v1/label/__name__/values
 // has no description, unit, instrument type, or last-seen. Those fields
 // come back ZERO, which the frontend renders as "—". That is the honest
-// shape — VM genuinely does not know (its /api/v1/metadata is a
-// Prometheus-only surface VM does not populate) — and the source badge on
+// shape — this call does not know (v0.10.1837: VM ≥ v1.130 can store
+// HELP/TYPE/UNIT and serves /api/v1/metadata; the API layer enriches these
+// rows from it in metric_names_meta.go, metadata.go) — and the source badge on
 // the catalogue tells the operator which backend answered, so an empty
 // Unit column reads as "VM doesn't report it" rather than "the metric is
 // broken".
