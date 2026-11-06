@@ -5,7 +5,8 @@
 // Reset columns varsayılana döner ve `cols=` URL'den düşer; aday listesi
 // YÜKLENMİŞ alanlardan gelir (yeni istek yok). Doc viewer Table/JSON sekmesi
 // tarayıcıda hatırlanır.
-import '@/test/pageJsdom'; // statik sayfa import'undan ÖNCE (matchMedia modül kapsamında)
+import '@/test/pageJsdom';
+import '@/test/radixJsdom'; // statik sayfa import'undan ÖNCE (matchMedia modül kapsamında)
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
@@ -114,18 +115,21 @@ describe('Columns ▾ (v0.10.1502)', () => {
   });
 });
 
-describe('doc viewer sekme hafızası (v0.10.1502)', () => {
-  it('JSON seçimi hatırlanır: başka satır açılınca JSON ile başlar', async () => {
+describe('doc viewer sekme hafızası (v0.10.1502; v0.10.1878 detay çekmecesi)', () => {
+  it('JSON seçimi hatırlanır: çekmece kapanıp başka satır açılınca JSON ile başlar', async () => {
     await mountLogs(`/logs?range=${RANGE}`);
     const rows = () => [...document.querySelectorAll('table.logtbl-dense tbody tr[data-row-idx]')] as HTMLElement[];
     await click(rows()[0]);
-    const jsonTab = () => document.querySelector('[role="tablist"][aria-label="Log kaydı görünümü"] button[data-tab-key="json"]') as HTMLButtonElement | null;
-    await click(jsonTab());
+    const jsonTab = () => [...document.querySelectorAll('[role="radiogroup"][aria-label="Tablo / JSON"] [role="radio"]')]
+      .find(b => b.textContent?.includes('JSON')) as HTMLButtonElement | undefined;
+    expect(jsonTab()).toBeTruthy();
+    await click(jsonTab()!);
     expect(localStorage.getItem('logs.docTab')).toBe('json');
-    await click(rows()[0]); // kapat
+    expect(document.querySelector('[data-testid="log-detail-json"]')).not.toBeNull();
+    await click([...document.querySelectorAll('button')].find(b => b.textContent?.trim() === 'Kapat')); // çekmeceyi kapat
+    expect(document.querySelector('[data-testid="log-detail"]')).toBeNull();
     await click(rows()[1]); // diğer satırı aç
-    const lists = document.querySelectorAll('[role="tablist"][aria-label="Log kaydı görünümü"]');
-    expect(lists.length, 'tek açık satır').toBe(1);
-    expect(jsonTab()?.getAttribute('aria-selected')).toBe('true');
+    expect(document.querySelectorAll('[data-testid="log-detail"]').length, 'tek açık çekmece').toBe(1);
+    expect(document.querySelector('[data-testid="log-detail-json"]')).not.toBeNull();
   });
 });

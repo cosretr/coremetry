@@ -12921,3 +12921,23 @@ görünüm 1–4. Parti A'nın (1842–1846) üstüne; ana grafik (olay anı kay
   3. "Teknik detay" (kapalı): eski dört kutu, sinyal başına tik satırları, baseline satırı ve dedektör başına kontrol
      süresi / bakılan servis / aday / kaydedilen / Problem açma koşulları tablosu. Hiçbir bilgi silinmedi.
 - Sunucu ve veri değişmedi; yalnız sunum. Tek commit, geri alınabilir. Doğrulanmadı: tarayıcı.
+
+## 2026-11-06 — Log Search Faz 3
+
+Audit `docs/logs/log-search-audit.md` §4, §6, §8 Faz 3, §11; mockup `docs/frontend/mockups/log-search.html` görünüm 2–3.
+Loglar yalnız ES'te (operatör 2026-11-06): yeni yetenekler ES yolunda; trace/span verisi ClickHouse'ta (MV-first).
+- **v0.10.1878 — satır detayı çekmecesi (3.1; OK — §9-13).** /logs'ta satır tıkı / Enter artık satır içi genişleme
+  yerine yeni `coremetry/logs/LogDetailSheet`'i açar (`coremetry/DetailSheet`, URL `?doc=<ts>.<id>` — `useSheetParam`:
+  açılış geçmişe girer, Geri kapatır). Sıra mockup görünüm 2: başlık (zaman + seviye rozeti + ↑/↓ — j/k seçimi
+  çekmeceyi taşır) → DÜZ CÜMLE (`lib/logDetail.plainLogSentence`: servis · pod · saat · seviye · gövdenin ilk satırı ·
+  trace'e bağlı mı; yalnız satırdaki veriden, ek istek yok) → eylemler (Trace + loglar (t) · Bu servise filtrele (f) ·
+  Hariç tut (e) · kalıcı linki kopyala · ✨ CoSRE'ye sor) → Alanlar (Tablo / JSON segmenti — `logs.docTab` hafızası
+  aynı anahtar; alan süz; satır başına + − ▥) → çevre loglar (şimdilik ±50 modal düğmesi; dilim 3.2) → Teknik kanıt
+  (kaynak öznitelikleri + `_index` / `_id`, KAPALI başlar). Dar `_source` satırının tam dokümanı çekmece açılınca TEK
+  `ids` isteği (aynı satır yeniden açılınca yok). Kalıcı link: `?doc=` satırı yüklü listedeyse İSTEKSİZ, değilse
+  eskisi gibi tek sınırlı context okuması — artık modal değil aynı çekmeceyi açar; çözüm liste yerleşince yapılır
+  (yüklü satır için boşuna context isteği yok). Çekmece kapanınca `doc` + `docsvc` düşer. Ortak bileşenler: `LogTable`
+  DEĞİŞMEDİ (/logs boş `expandedIds` + `onToggleExpand` ile satırı çekmeceye yönlendirir) → servis sekmesi, pod
+  logları, trace logs paneli ve anomali çekmecesi satır içi genişlemeyi korur. Sapma: mockup'taki "son 5 dk'da 14 kez,
+  rollout'tan 38 sn sonra" cümlesi ek sayım/olay istekleri ister — bu dilimde yok (uydurulmaz); "Bu değere filtrele"
+  servis değerine bağlandı (alan satırlarında her değer için + − ayrıca var).

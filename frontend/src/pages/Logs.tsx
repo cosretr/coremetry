@@ -60,7 +60,12 @@ import { LogsQueryBar } from './logs/LogsQueryBar';
 import { parseLogQueryError, logQueryErrorMessage } from '@/lib/logQueryError';
 import { readLogsQueryHistory, recordLogsQuery } from '@/lib/logsQueryHistory';
 import { LOGS_DEFAULT_DISPLAY, readLogsDisplay, writeLogsDisplay, pageSlice } from '@/lib/logsDisplay';
-import { DisplayOptions, LoadStatus, FieldSidebar } from '@/components/coremetry/logs';
+import { DisplayOptions, LoadStatus, FieldSidebar, LogDetailSheet } from '@/components/coremetry/logs';
+import { useSheetParam } from '@/components/coremetry/DetailSheet';
+import { AIExplainButton } from '@/components/ai/AIExplainButton';
+import { logLineSubjectOf } from '@/lib/logLineSubject';
+import { neighborRow } from '@/lib/logDetail'; // v0.10.1878 (dilim 3.1)
+import { absoluteShareHref } from '@/lib/shareUrl';
 import { resolveBusinessFields } from '@/lib/logBusinessFields'; // v0.10.1853 (dilim 2.2)
 import { businessCandidates, requestColumns, smartBusinessColumns, withSmartColumns } from '@/lib/logsSmartColumns'; // v0.10.1856 (dilim 2.5)
 import { LogsFilterRow } from './logs/LogsFilterRow';
@@ -92,6 +97,8 @@ const ACC_CAP = 10000; // v0.10.1831 — örnek 500 (≤ 5000) × "Load more"; D
 // v0.10.967 — tablo standardı T12: veri yokken / okunamadığında tabloya
 // verilen SABİT boş dizi (her render'da yeni [] j/k gezinmesini tazelerdi).
 const NO_LOGS: LogRow[] = [];
+// v0.10.1878 — /logs satır içi genişleme kullanmaz (detay çekmecesi); sabit boş küme.
+const NO_EXPANDED: Set<number> = new Set();
 
 const LVL_FACETS: Array<{ key: string; label: string; min: number }> = [
   { key: 'error', label: 'ERROR', min: 17 },
@@ -394,25 +401,23 @@ function LogsInner() {
   // ucundan tek sınırlı sorguyla çözülür (yeni uç yok); bulunan satır
   // context modalını pivot'lar. Ref sig-guard: aynı değer bir kez
   // çözülür — range/filtre yazımları efekti yeniden tetiklemez.
-  const docRaw = searchParams.get('doc');
+  // v0.10.1878 (Log Search Faz 3 dilim 3.1; §9-13) — `?doc=` artık satır
+  // detayı ÇEKMECESİNİ açar (useSheetParam: açılış geçmişe girer, Geri kapatır).
+  // Satır yüklü listedeyse istek yok; değilse eskisi gibi tek sınırlı context
+  // okumasıyla çözülür. Dar okunmuş satırın tam dokümanı açılınca TEK `ids` isteği.
+  const [docParam, setDocParam] = useSheetParam('doc');
+  const docRaw = docParam;
   const docResolvedRef = useRef('');
+  const [docRow, setDocRow] = useState<LogRow | null>(null);
+  const loadedRowsRef = useRef<LogRow[]>([]);
+  const ensureFullDoc = (row: LogRow) => {
+    if (!row.partial || !row.docRef || fullDocs[row.id]) return;
+    qc.fetchQuery(logsDocQuery(row.docRef))
+      .then(full => setFullDocs(m => ({ ...m, [row.id]: { ...full, id: row.id } })))
+      .catch(() => setFullDocs(m => ({ ...m, [row.id]: 'error' })));
+  };
   // v0.10.420 — 'degraded': backend yavaş (200 {degraded}); 'miss': kayıt yok.
   const [docMiss, setDocMiss] = useState<false | 'miss' | 'degraded'>(false);
-  useEffect(() => {
-    if (!docRaw || docResolvedRef.current === docRaw) return;
-    docResolvedRef.current = docRaw;
-    const parsed = parseDocParam(docRaw);
-    if (!parsed) { setDocMiss('miss'); return; }
-    const svc = searchParams.get('docsvc') || undefined;
-    api.logsContext({ ts: parsed.ts, service: svc, env: env || undefined, n: 5 })
-      .then(r => {
-        if (r?.degraded) { setDocMiss('degraded'); return; } // v0.10.420 — "kayıt yok" değil "backend yavaş"
-        const rows = [...(r?.before ?? []), ...(r?.after ?? [])];
-        const hit = rows.find(x => x.id === parsed.id);
-        if (hit) { setDocMiss(false); setContextPivot(hit); } else setDocMiss('miss');
-      })
-      .catch(() => setDocMiss('miss'));
-  }, [docRaw, searchParams, env]);
   // Live tail (HyperDX-style): poll, prepend new rows. Cadence is 10s — the
   // ≥10s polling budget, and at the operator's ES scale the ingest pipeline
   // (collector batch + ES exporter flush + index refresh) lags ~10s, so a
@@ -1068,17 +1073,16 @@ function LogsInner() {
     if (prevScopeRef.current !== scopeParam) { prevScopeRef.current = scopeParam; resetPaging(); }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- yalnız kapsam değişiminde
   }, [scopeParam]);
-  const toggle = (id: number) => {
-    const next = new Set(expanded);
-    if (next.has(id)) next.delete(id); else next.add(id);
-    setExpanded(next);
-    // v0.10.1831 — dar okunmuş satır açılınca tam doküman (tek `ids` sorgusu).
-    const row = next.has(id) ? accRows.find(r => r.id === id) ?? data?.logs?.find(r => r.id === id) : undefined;
-    if (row?.partial && row.docRef && !fullDocs[id]) {
-      qc.fetchQuery(logsDocQuery(row.docRef))
-        .then(full => setFullDocs(m => ({ ...m, [id]: { ...full, id } })))
-        .catch(() => setFullDocs(m => ({ ...m, [id]: 'error' })));
-    }
+  // v0.10.1878 (dilim 3.1) — satır tıkı / Enter detay ÇEKMECESİNİ açar (satır
+  // içi genişleme /logs'ta kalktı; servis sekmesi / pod / trace panelleri aynen).
+  const openRow = (l: LogRow) => {
+    const key = `${l.timestamp}.${l.id}`;
+    docResolvedRef.current = key; setDocMiss(false);
+    setDocRow(l); ensureFullDoc(l);
+    setDocParam(key);
+  };
+  const closeRow = () => {
+    setSearchParams(prev => { const n = new URLSearchParams(prev); n.delete('doc'); n.delete('docsvc'); return n; }, { replace: true });
   };
 
   // Static view renders the ACCUMULATED rows; the raw page in
@@ -1093,6 +1097,29 @@ function LogsInner() {
   // you don't send. Labelled explicitly below — a local subset read as
   // a window-wide answer would be the worst kind of wrong here.
   const logs = useMemo(() => narrowLoaded(loadedRows, narrow), [loadedRows, narrow]);
+  loadedRowsRef.current = loadedRows;
+  // v0.10.1878 — `?doc=` çözümü liste yerleşince (yüklü satırda istek yok).
+  const docListSettled = live || data !== undefined || !logsListEnabled(view, live, scopeGate);
+  useEffect(() => {
+    if (!docRaw) { docResolvedRef.current = ''; setDocRow(null); return; }
+    // Liste henüz yükleniyorsa bekle: satır listedeyse İSTEK YOK (v0.10.1878).
+    if (!docListSettled || docResolvedRef.current === docRaw) return;
+    docResolvedRef.current = docRaw;
+    const parsed = parseDocParam(docRaw);
+    if (!parsed) { setDocMiss('miss'); return; }
+    const local = loadedRowsRef.current.find(r => r.id === parsed.id && r.timestamp === parsed.ts);
+    if (local) { setDocMiss(false); setDocRow(local); ensureFullDoc(local); return; }
+    const svc = searchParams.get('docsvc') || undefined;
+    api.logsContext({ ts: parsed.ts, service: svc, env: env || undefined, n: 5 })
+      .then(r => {
+        if (r?.degraded) { setDocMiss('degraded'); return; } // v0.10.420 — "kayıt yok" değil "backend yavaş"
+        const rows = [...(r?.before ?? []), ...(r?.after ?? [])];
+        const hit = rows.find(x => x.id === parsed.id);
+        if (hit) { setDocMiss(false); setDocRow(hit); ensureFullDoc(hit); } else setDocMiss('miss');
+      })
+      .catch(() => setDocMiss('miss'));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- yalnız doc değişiminde
+  }, [docRaw, docListSettled]);
   // v0.10.1856 (dilim 2.5) — yüklenen örnekte doluluğu ≥ %80 olan iş alanları
   // kolon olur (yalnız kayıtlı tercih yokken, yalnız ES). Görünüm-yerel: URL'ye
   // ve tercihe yazılmaz; operatör kolonlara dokununca açık tercihe dönüşür.
@@ -1134,9 +1161,28 @@ function LogsInner() {
     () => paged.rows.map(r => { const f = fullDocs[r.id]; return f && f !== 'error' ? f : r; }),
     [paged.rows, fullDocs]);
   const tableNav = useTableNav<LogRow>(shownLogs, {
-    onOpen: (l) => toggle(l.id),
+    onOpen: (l) => openRow(l),
     pageId: 'logs',
   });
+  // Çekmece açıkken j/k seçimi çekmeceyi taşır (mockup ↑/↓ "Önceki (k) / Sonraki (j)").
+  const navSel = tableNav.selectedItem;
+  useEffect(() => {
+    if (!docRaw || !navSel || navSel.id === docRow?.id) return;
+    openRow(navSel);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- yalnız seçim değişiminde
+  }, [navSel?.id]);
+  const sheetFull = docRow ? fullDocs[docRow.id] : undefined;
+  const sheetRow = sheetFull && sheetFull !== 'error' ? sheetFull : docRow;
+  const sheetFullState: 'loading' | 'error' | undefined = docRow?.partial
+    ? (sheetFull === 'error' ? 'error' : sheetFull ? undefined : 'loading') : undefined;
+  const sheetStep = (dir: -1 | 1) => {
+    if (!docRow) return;
+    const n = neighborRow(shownLogs, docRow.id, dir);
+    if (!n) return;
+    tableNav.setSelected(shownLogs.indexOf(n));
+    openRow(n);
+  };
+  const sheetSubject = useMemo(() => (sheetRow && !sheetRow.origin ? logLineSubjectOf(sheetRow) : null), [sheetRow]);
   // v0.10.1857 (Log Search Faz 2 dilim 2.6) — seçili satırda f / e / t
   // (pages/logs/logsKeys.ts). Yalnız /logs bağlıyken kayıtlı (sayfa ömrü);
   // satır seçili değilse no-op ve tuş tarayıcıya kalır. `?` yardım ekranı
@@ -1576,21 +1622,15 @@ function LogsInner() {
           }}
           onReorderColumns={changeCols}
           highlightTerms={highlightTerms}
-          expandedIds={expanded}
-          onToggleExpand={toggle}
+          expandedIds={NO_EXPANDED}
+          onToggleExpand={id => { const r = shownLogs.find(x => x.id === id); if (r) openRow(r); }}
           onFilterAdd={addFromRow}
           onFilterExclude={excludeFromRow}
           onToggleColumn={toggleColumn}
           onTracePeek={tid => setPeekTraceId(tid)}
           onContextOpen={l => setContextPivot(l)}
           permalink={l => buildDocPermalink(l, env)}
-          extraExpanded={l => (l.partial ? (
-            <span className="ld-tbar-note" role="status">
-              {fullDocs[l.id] === 'error'
-                ? 'Tam doküman alınamadı — yalnız yüklenen alanlar gösteriliyor.'
-                : 'Tam doküman yükleniyor…'}
-            </span>
-          ) : null)} />
+          />
         {/* Load more (v0.8.260 — replaced the Back/Next pager;
             keyset cursor mechanics unchanged underneath). Rows
             accumulate in accRows; the button advances the cursor
@@ -1653,20 +1693,25 @@ function LogsInner() {
       <CorrelationContextDrawer
         anchor={peekTraceId ? { kind: 'trace', traceId: peekTraceId } : null}
         onClose={() => setPeekTraceId(null)} />
+      {/* v0.10.1878 (dilim 3.1) — satır detayı çekmecesi (`?doc=`). */}
+      <LogDetailSheet row={sheetRow} onClose={closeRow} fullDoc={sheetFullState}
+        columns={viewCols} onFilter={addFromRow} onExclude={excludeFromRow} onToggleColumn={toggleColumn}
+        onPrev={() => sheetStep(-1)} onNext={() => sheetStep(1)}
+        onOpenTrace={tid => navigate(traceHref(tid))}
+        permalink={sheetRow ? absoluteShareHref(window.location.origin + buildDocPermalink(sheetRow, env), Date.now()) : undefined}
+        actions={sheetSubject ? (
+          <AIExplainButton subject={sheetSubject} size="sm" title={tr('ai.askCosreLogHint')}
+            label={<><IconSparkles /> <span>{tr('ai.askCosre')}</span></>} />
+        ) : undefined}
+        context={sheetRow && !sheetRow.origin ? (
+          <section aria-label="Çevre loglar">
+            <Button variant="secondary" size="sm" onClick={() => setContextPivot(sheetRow)}
+              title="Bu kaydın 50 öncesi ve 50 sonrası (aynı servis)">≡ Çevre loglar (±50)</Button>
+          </section>
+        ) : undefined} />
       <LogContextModal pivot={contextPivot}
         highlightTerms={highlightTerms} search={compiledSearch || undefined}
-        onClose={() => {
-          setContextPivot(null);
-          // v0.9.1248 — link-açılışlı modal kapanınca ?doc= temizlenir ki
-          // sonraki gezinmelerde yeniden açılmasın; yabancı paramlar korunur.
-          if (searchParams.get('doc')) {
-            setSearchParams(prev => {
-              const n = new URLSearchParams(prev);
-              n.delete('doc'); n.delete('docsvc');
-              return n;
-            }, { replace: true });
-          }
-        }}
+        onClose={() => setContextPivot(null)}
         onTracePeek={tid => { setContextPivot(null); setPeekTraceId(tid); }} />
     </>
   );

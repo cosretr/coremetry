@@ -6,6 +6,7 @@
 // çok sayfada gezgin + "Load more" SON sayfada ve yeni satırların sayfasına
 // iner; `rh` / `den` tabloya sınıf olarak iner.
 import '@/test/pageJsdom';
+import '@/test/radixJsdom';
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
@@ -115,7 +116,8 @@ describe('/logs görünüm + istemci sayfalaması (v0.10.1830)', () => {
     await act(async () => { first.click(); });
     await settle();
     expect(m.docs).toEqual(['app-orders/d0']);
-    expect(host!.textContent).toContain('CHANNEL_CODE');
+    // v0.10.1878 — tam doküman satır detayı ÇEKMECESİNDE (portal: document.body).
+    expect(document.body.querySelector('[data-testid="log-detail"]')!.textContent).toContain('CHANNEL_CODE');
     await act(async () => { (host!.querySelector('table.logtbl-dense > tbody > tr[data-row-idx="0"]') as HTMLElement).click(); });
     await act(async () => { (host!.querySelector('table.logtbl-dense > tbody > tr[data-row-idx="0"]') as HTMLElement).click(); });
     await settle();
