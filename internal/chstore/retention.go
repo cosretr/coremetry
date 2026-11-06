@@ -76,6 +76,14 @@ func (s *Store) GetRetention(ctx context.Context) (RetentionSpec, error) {
 // enough at high cardinality), `start_time` for profiles, plain
 // `time` for metric_points.
 func (s *Store) SetRetention(ctx context.Context, sp RetentionSpec, actor string) error {
+	return s.setRetention(ctx, sp, actor, false)
+}
+
+// setRetention — SetRetention'ın gövdesi. skipCurrent (v0.10.1869) yalnız
+// AÇILIŞ yolunda true: ALTER'dan önce tablonun gerçek TTL'i küme genelinde
+// okunur ve istenenle aynıysa ALTER atlanır (retention_current.go; "emin
+// değilsen uygula"). Admin PUT'u false ile gelir ve HER ZAMAN uygular.
+func (s *Store) setRetention(ctx context.Context, sp RetentionSpec, actor string, skipCurrent bool) error {
 	type tbl struct {
 		key   string
 		val   string
@@ -104,6 +112,17 @@ func (s *Store) SetRetention(ctx context.Context, sp RetentionSpec, actor string
 		{"retention.metrics", sp.Metrics, "metric_points", "time", true},
 		{"retention.profiles", sp.Profiles, "profiles", "start_time", true},
 	}
+	var probe *retentionProbe
+	if skipCurrent {
+		names := make([]string, 0, len(plans))
+		for _, p := range plans {
+			if p.val != "" {
+				names = append(names, p.table)
+			}
+		}
+		probe = s.probeRetention(ctx, names)
+	}
+	skipped, applied := 0, 0
 	for _, p := range plans {
 		if p.val == "" {
 			continue
@@ -112,6 +131,14 @@ func (s *Store) SetRetention(ctx context.Context, sp RetentionSpec, actor string
 		if err != nil {
 			return fmt.Errorf("bad retention for %s: %w", p.key, err)
 		}
+		// v0.10.1869 — açılışta TTL her host'ta zaten istenen değerdeyse
+		// ALTER gönderilmez (yavaş dağıtık DDL kuyruğunda ifade başına ~20 sn).
+		// Ayar satırı zaten kayıtlı (değer oradan okundu) → persist de gerekmez.
+		if probe.tableCurrent(p.table, ttl) {
+			skipped++
+			continue
+		}
+		applied++
 		// Apply to the live table. ALTER MODIFY TTL is online —
 		// doesn't lock the table — but CH defaults to
 		// materialize_ttl_after_modify=1 which synchronously
@@ -160,7 +187,12 @@ func (s *Store) SetRetention(ctx context.Context, sp RetentionSpec, actor string
 		}
 	}
 	if sp.Spans != "" {
-		s.applyExemplarColTTL(ctx, sp.Spans)
+		sk, ap := s.applyExemplarColTTL(ctx, sp.Spans, probe)
+		skipped += sk
+		applied += ap
+	}
+	if skipCurrent {
+		log.Printf("[chstore] saklama süresi açılış denetimi: %d ALTER atlandı (TTL zaten güncel), %d uygulandı", skipped, applied)
 	}
 	return nil
 }
@@ -212,11 +244,15 @@ func exemplarColTTLStmt(inner, onCluster, col, typ, ttl string) string {
 // across shards (Atomic DB, one uuid propagated by the ON CLUSTER create),
 // which is what makes s.onCluster() valid here. execDDL is deliberately NOT
 // used: adaptDDL rewrites by table name and would hand us back the MV.
-func (s *Store) applyExemplarColTTL(ctx context.Context, spansVal string) {
+//
+// v0.10.1869 — probe nil değilse (yalnız açılış yolu) kolon TTL'i her host'ta
+// zaten istenen değerdeyse o MV'nin ALTER'ları atlanır. Dönüş: (atlanan,
+// gönderilen) ALTER sayısı.
+func (s *Store) applyExemplarColTTL(ctx context.Context, spansVal string, probe *retentionProbe) (skipped, applied int) {
 	ttl, err := buildRetentionTTL(spansVal, "time_bucket")
 	if err != nil {
 		log.Printf("[chstore] exemplar column TTL skipped: bad retention %q: %v", spansVal, err)
-		return
+		return 0, 0
 	}
 	for _, mv := range exemplarStateMVs {
 		name := mv
@@ -254,12 +290,22 @@ func (s *Store) applyExemplarColTTL(ctx context.Context, spansVal string) {
 				"yeniden yaratıldığını gösterir; şema o host'ta küme geneliyle aynı değil.",
 				name, len(inners))
 		}
+		// v0.10.1869 — tek (ayrışmamış) inner tabloda iki kolonun TTL'i her
+		// host'ta güncelse ALTER yok. Ayrışma ya da okuma hatası → uygula.
+		if probe != nil && len(inners) == 1 {
+			if creates, cerr := s.createQueriesEverywhere(ctx, inners); cerr == nil &&
+				probe.columnsCurrent(creates[inners[0]], exemplarStateCols, ttl) {
+				skipped += len(exemplarStateCols)
+				continue
+			}
+		}
 		for _, inner := range inners {
 			typ, ok := s.columnTypeCluster(ctx, inner, exemplarStateCols)
 			if len(typ) == 0 || !ok {
 				continue // kolonlar yok — süresi dolacak bir şey yok
 			}
 			for col, ctyp := range typ {
+				applied++
 				err := s.execWithReadonlyRetry(ctx,
 					exemplarColTTLStmt(inner, s.onCluster(), col, ctyp, ttl))
 				// Ayrışma varken sahibi olmayan host'un code 60'ı
@@ -270,6 +316,7 @@ func (s *Store) applyExemplarColTTL(ctx context.Context, spansVal string) {
 			}
 		}
 	}
+	return skipped, applied
 }
 
 // mvInnerTable resolves a combined MV's storage table (`.inner_id.<uuid>`).
@@ -326,7 +373,8 @@ func (s *Store) ApplyPersistedRetention(ctx context.Context) error {
 	if sp == (RetentionSpec{}) {
 		return nil // nothing persisted yet — config defaults stay in effect
 	}
-	return s.SetRetention(ctx, sp, "system:boot")
+	// v0.10.1869 — açılış yolu: TTL zaten güncelse ALTER atlanır.
+	return s.setRetention(ctx, sp, "system:boot", true)
 }
 
 // buildRetentionTTL turns a "<n>h" / "<n>d" retention shorthand plus

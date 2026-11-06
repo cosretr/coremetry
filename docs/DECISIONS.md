@@ -12761,3 +12761,20 @@ Kaynak: `docs/metrics/metrics-explore-dashboards-audit.md` §7 Faz 2 (onaylı, �
 - **Genel ilke.** Kapsam / maliyet koruması bir sayfayı BOŞ bırakamaz; varsayılan her zaman satır gösterir, daraltma
   öneridir. Faz 3 dilim 3.7 (kapsam genişletme) bu ilkenin üstüne kurulur.
 - Sunucu tarafı değişmedi (`scope=mine` çözülemezse 400; istemci bu durumda `scope` göndermiyor). Doğrulanmadı: tarayıcı.
+
+## 2026-11-06 — v0.10.1869 — Açılış: saklama süresi zaten güncelse yeniden uygulanmaz
+- **Bildirim (operatör, test ortamı boot logu).** Küme kipinde pod açılışta ~4,5 dk hazır olamıyordu.
+- **Kök neden.** `ApplyPersistedRetention` kayıtlı saklama sürelerini her boot'ta koşulsuz yeniden uyguluyordu: 7 tablo
+  ALTER'ı + 6 exemplar kolon ALTER'ı = 13 ifade, hepsi ON CLUSTER DDL kuyruğundan; kuyruğu yavaş kümede ifade başına ~20 sn.
+- **Karar.** Yalnız AÇILIŞ yolunda, ALTER'dan önce tablonun gerçek TTL'i küme genelinde okunur
+  (`clusterAllReplicas(system.tables)` → `create_table_query`) ve her host'ta istenenle aynıysa ALTER atlanır. Admin'in
+  Settings'ten yaptığı değişiklik her zaman uygular.
+- **Güvenlik kuralı: "emin değilsen uygula".** Atlama yalnız üç şart birlikte sağlanınca: okuma hatasız (erişilemeyen
+  replika = hata; bilerek `skip_unavailable_shards` yok), tabloyu taşıyan host sayısı = kümedeki host sayısı, her host'taki
+  TTL istenenle aynı. v0.9.620 dersi: TTL tek host'ta ayrışmış olabilir; tek host'a bakıp atlamak o sınıfı geri getirirdi.
+  Exemplar kolonlarında inner tablo ayrışmışsa (birden çok uuid) atlama yok.
+- **Karşılaştırma.** Kanonik: `INTERVAL N DAY` ≡ `toIntervalDay(N)`. Tanınmayan biçim "farklı" sayılır → ALTER koşar
+  (yalnız hız kaybı, yanlış atlama olmaz). Reddedilen alternatif: "uygulandı" işaretini `system_settings`'te tutmak —
+  ClickHouse'un gerçek durumunu yansıtmaz (host yeniden kurulursa yanlış atlar).
+- Boot logu: `[chstore] saklama süresi açılış denetimi: N ALTER atlandı (TTL zaten güncel), M uygulandı`.
+- Doğrulanmadı: canlı küme (lokal küme askıda); ClickHouse sürümünün `create_table_query` biçimi.
