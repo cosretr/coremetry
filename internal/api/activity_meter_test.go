@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cilcenk/coremetry/internal/auth"
 	"github.com/cilcenk/coremetry/internal/chstore"
 )
 
@@ -37,7 +36,7 @@ func (f *strictMetricSink) InsertMetrics(_ context.Context, pts []*chstore.Metri
 		if len(p.AttrKeys) != len(p.AttrValues) || len(p.AttrKeys) != 2 {
 			return fmt.Errorf("etiket uyumsuz: %v %v", p.AttrKeys, p.AttrValues)
 		}
-		if k := p.AttrValues[0]; k != chstore.ActivityKindLogin && k != chstore.ActivityKindTraceView {
+		if k := p.AttrValues[0]; k != chstore.ActivityKindLogin {
 			return fmt.Errorf("kapalı küme dışı tür %q", k)
 		}
 		if !p.Time.Equal(p.Time.Truncate(time.Minute)) || p.Value <= 0 || p.SeriesFingerprint == 0 {
@@ -48,109 +47,12 @@ func (f *strictMetricSink) InsertMetrics(_ context.Context, pts []*chstore.Metri
 	return nil
 }
 
-func reqWithUser(uid string, hdr map[string]string) *http.Request {
-	r := httptest.NewRequest(http.MethodGet, "/api/traces/abc", nil)
-	for k, v := range hdr {
-		r.Header.Set(k, v)
-	}
-	if uid != "" {
-		r = r.WithContext(auth.ContextWithClaims(r.Context(), &auth.Claims{UserID: uid, Email: "ops@acme.test", Role: "viewer"}))
-	}
-	return r
-}
-
-func TestTraceViewDedupWindow(t *testing.T) {
-	t0 := time.Date(2026, 11, 6, 12, 0, 0, 0, time.UTC)
-	cases := []struct {
-		name string
-		at   time.Duration
-		key  string
-		want bool
-	}{
-		{"ilk görüş", 0, "u1\x00t1", true},
-		{"pencere içinde aynı çift", 9*time.Minute + 59*time.Second, "u1\x00t1", false},
-		{"başka kullanıcı", time.Minute, "u2\x00t1", true},
-		{"başka trace", time.Minute, "u1\x00t2", true},
-		{"pencere dolunca yeniden", 10 * time.Minute, "u1\x00t1", true},
-	}
-	d := newTraceViewDedup(traceViewDedupWindow, traceViewDedupMax)
-	for _, c := range cases {
-		if got := d.firstSeen(c.key, t0.Add(c.at)); got != c.want {
-			t.Errorf("%s: firstSeen=%v, beklenen %v", c.name, got, c.want)
-		}
-	}
-}
-
-func TestTraceViewDedupCap(t *testing.T) {
-	t0 := time.Date(2026, 11, 6, 12, 0, 0, 0, time.UTC)
-	d := newTraceViewDedup(traceViewDedupWindow, traceViewDedupMax)
-	for i := 0; i < traceViewDedupMax+500; i++ {
-		d.firstSeen(fmt.Sprintf("u\x00t%d", i), t0.Add(time.Duration(i)*time.Millisecond))
-	}
-	if n := d.size(); n != traceViewDedupMax {
-		t.Fatalf("tablo boyu %d, beklenen tam tavan %d", n, traceViewDedupMax)
-	}
-	// En eski 500 girdi atıldı: yeniden görülünce sayılır; en yeni hâlâ bastırılır.
-	if !d.firstSeen("u\x00t0", t0.Add(time.Second)) {
-		t.Error("atılan en eski girdi yeniden sayılmalı")
-	}
-	if d.firstSeen(fmt.Sprintf("u\x00t%d", traceViewDedupMax+499), t0.Add(time.Second)) {
-		t.Error("tavandaki en yeni girdi bastırılmalı")
-	}
-	if n := d.size(); n > traceViewDedupMax {
-		t.Fatalf("tavan aşıldı: %d", n)
-	}
-}
-
-func TestRecordTraceView(t *testing.T) {
-	now := time.Date(2026, 11, 6, 12, 0, 30, 0, time.UTC)
-	cases := []struct {
-		name    string
-		uid     string
-		hdr     map[string]string
-		traceID string
-		want    bool
-	}{
-		{"normal açılış sayılır", "u1", nil, "t1", true},
-		{"prefetch başlığı sayılmaz", "u1", map[string]string{purposeHeader: "prefetch"}, "t9", false},
-		{"başlık büyük/küçük harf duyarsız", "u1", map[string]string{purposeHeader: " Prefetch "}, "t8", false},
-		{"başka amaç değeri sayılır", "u1", map[string]string{purposeHeader: "other"}, "t7", true},
-		{"boş trace id sayılmaz", "u1", nil, "", false},
-		{"tekrar (aynı kullanıcı+trace) sayılmaz", "u1", nil, "t1", false},
-		{"başka kullanıcı sayılır", "u2", nil, "t1", true},
-		{"kimliksiz istek anon anahtarıyla bir kez", "", nil, "t1", true},
-		{"kimliksiz tekrar sayılmaz", "", nil, "t1", false},
-	}
-	c := newActivityCounter()
-	d := newTraceViewDedup(traceViewDedupWindow, traceViewDedupMax)
-	wantTotal := 0
-	for _, tc := range cases {
-		if got := recordTraceView(c, d, reqWithUser(tc.uid, tc.hdr), tc.traceID, now); got != tc.want {
-			t.Errorf("%s: got %v want %v", tc.name, got, tc.want)
-		}
-		if tc.want {
-			wantTotal++
-		}
-	}
-	cells := c.drain(now.Add(2 * time.Minute))
-	var total uint64
-	for _, cell := range cells {
-		if cell.Kind != chstore.ActivityKindTraceView {
-			t.Errorf("beklenmeyen tür %q", cell.Kind)
-		}
-		total += cell.Count
-	}
-	if int(total) != wantTotal {
-		t.Errorf("sayaç %d, beklenen %d", total, wantTotal)
-	}
-}
-
 func TestActivityCounterDrainKeepsCurrentMinute(t *testing.T) {
 	c := newActivityCounter()
 	m0 := time.Date(2026, 11, 6, 12, 0, 10, 0, time.UTC)
 	c.add(m0, chstore.ActivityKindLogin)
 	c.add(m0.Add(5*time.Second), chstore.ActivityKindLogin)
-	c.add(m0.Add(time.Minute), chstore.ActivityKindTraceView) // 12:01
+	c.add(m0.Add(time.Minute), chstore.ActivityKindLogin) // 12:01
 	// 12:01:20'de yalnız 12:00 dakikası tamamdır.
 	got := c.drain(m0.Add(70 * time.Second))
 	if len(got) != 1 || got[0].Count != 2 || got[0].Kind != chstore.ActivityKindLogin || !got[0].Minute.Equal(m0.Truncate(time.Minute)) {
@@ -159,7 +61,7 @@ func TestActivityCounterDrainKeepsCurrentMinute(t *testing.T) {
 	if again := c.drain(m0.Add(70 * time.Second)); len(again) != 0 {
 		t.Fatalf("boşaltılan hücre geri geldi: %+v", again)
 	}
-	if rest := c.drain(m0.Add(3 * time.Minute)); len(rest) != 1 || rest[0].Kind != chstore.ActivityKindTraceView {
+	if rest := c.drain(m0.Add(3 * time.Minute)); len(rest) != 1 || !rest[0].Minute.Equal(m0.Add(time.Minute).Truncate(time.Minute)) {
 		t.Fatalf("içinde bulunulan dakika kaybolmuş: %+v", rest)
 	}
 }
@@ -169,7 +71,6 @@ func TestActivityCounterBoundsMinutes(t *testing.T) {
 	t0 := time.Date(2026, 11, 6, 0, 0, 0, 0, time.UTC)
 	for i := 0; i < activityMaxMinutes+50; i++ {
 		c.add(t0.Add(time.Duration(i)*time.Minute), chstore.ActivityKindLogin)
-		c.add(t0.Add(time.Duration(i)*time.Minute), chstore.ActivityKindTraceView)
 	}
 	mins := map[int64]bool{}
 	c.mu.Lock()
@@ -187,7 +88,7 @@ func TestFlushActivityStats(t *testing.T) {
 	t0 := time.Date(2026, 11, 6, 12, 0, 5, 0, time.UTC)
 	c.add(t0, chstore.ActivityKindLogin)
 	c.add(t0, chstore.ActivityKindLogin)
-	c.add(t0, chstore.ActivityKindTraceView)
+	c.add(t0, "trace_view") // v0.10.1915: kapalı küme dışı tür yazılmaz
 	now := t0.Add(90 * time.Second)
 
 	sink := &strictMetricSink{}
@@ -201,7 +102,7 @@ func TestFlushActivityStats(t *testing.T) {
 			t.Errorf("pod etiketi yanlış: %+v", p)
 		}
 	}
-	if vals[chstore.ActivityKindLogin] != 2 || vals[chstore.ActivityKindTraceView] != 1 {
+	if vals[chstore.ActivityKindLogin] != 2 || len(vals) != 1 {
 		t.Fatalf("değerler yanlış: %v", vals)
 	}
 
@@ -237,8 +138,9 @@ func TestNoteLoginCountsWithoutStore(t *testing.T) {
 	}
 }
 
-// Çağrı noktaları çivili: getTrace sayar, iki giriş yolu noteLogin kullanır,
-// CORS ön-yükleme başlığını izinli listeler.
+// Çağrı noktaları çivili: iki giriş yolu noteLogin kullanır. v0.10.1915 —
+// trace görüntüleme sayacı kaldırıldı: getTrace saymaz, CORS'ta ön-yükleme
+// başlığı yok (geri gelirse bilerek gelsin).
 func TestActivityCallSitesPinned(t *testing.T) {
 	read := func(p string) string {
 		b, err := os.ReadFile(p)
@@ -247,8 +149,8 @@ func TestActivityCallSitesPinned(t *testing.T) {
 		}
 		return string(b)
 	}
-	if !strings.Contains(read("trace_routes.go"), "s.noteTraceView(r, id)") {
-		t.Error("getTrace noteTraceView çağırmıyor")
+	if strings.Contains(read("trace_routes.go"), "noteTraceView") {
+		t.Error("getTrace trace görüntüleme saymamalı (v0.10.1915'te kaldırıldı)")
 	}
 	api := read("api.go")
 	if strings.Count(api, "s.noteLogin(r, user.ID, user.Email,") != 2 {
@@ -257,7 +159,7 @@ func TestActivityCallSitesPinned(t *testing.T) {
 	if strings.Contains(api, "TouchUserLogin(") {
 		t.Error("api.go doğrudan TouchUserLogin çağırmamalı (noteLogin sarar)")
 	}
-	if !strings.Contains(read("cors.go"), "X-Coremetry-Purpose") {
-		t.Error("CORS izinli başlık listesinde X-Coremetry-Purpose yok")
+	if strings.Contains(read("cors.go"), "X-Coremetry-Purpose") {
+		t.Error("CORS izinli başlık listesinde X-Coremetry-Purpose kalmamalı")
 	}
 }

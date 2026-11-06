@@ -1,16 +1,17 @@
 import { describe, it, expect } from 'vitest';
 import {
   fmtMillions, fmtCount, fmtClock, isLive, summaryUsable, shouldFetchSummary,
-  splitTemplate, activityParts, componentsLine, leadKey, kpis, LIVE_WINDOW_MS,
+  splitTemplate, activityParts, nowParts, componentsLine, leadKey, kpis, LIVE_WINDOW_MS,
   dayOfYear, pickQuote, httpCardUsable, fmtRps, fmtSeconds, throughputHead, responseHead, httpCardTitle,
 } from './loginSummary';
 import type { LoginSummary } from '@/lib/types';
 
 const T: Record<string, string> = {
-  'login.sum.rollouts': '{n} rollout izlendi',
   'login.sum.logins': '{n} giriş yapıldı',
   'login.sum.cosre': 'CoSRE {n} soru yanıtladı',
-  'login.sum.traces': '{n} trace incelendi',
+  'login.sum.endpoints': '{n} endpoint',
+  'login.sum.tput': 'toplam {n} req/s',
+  'login.sum.rt': 'ort. yanıt {n}',
   'login.sum.allOk': 'Tüm bileşenler çalışıyor',
   'login.sum.degraded': 'Bazı bileşenler sorunlu · ayrıntı giriş sonrasında',
   'login.sum.checked': 'son kontrol',
@@ -83,17 +84,22 @@ describe('satır metinleri', () => {
     expect(splitTemplate('CoSRE {n} soru', '61')).toEqual({ pre: 'CoSRE ', n: '61', post: ' soru' });
     expect(splitTemplate('yok', '1')).toEqual({ pre: 'yok', n: '', post: '' });
   });
-  it('aktivite: dört madde, sıra rollout · giriş · CoSRE · trace', () => {
-    const p = activityParts({ rollouts_tracked: 3, logins: 47, cosre_questions: 61, traces_viewed: 12_400 }, t);
-    expect(p.map(x => `${x.pre}${x.n}${x.post}`)).toEqual([
-      '3 rollout izlendi', '47 giriş yapıldı', 'CoSRE 61 soru yanıtladı', '12.4K trace incelendi',
-    ]);
-  });
-  it('rollout alanı yoksa yalnız o madde düşer; aktivite yoksa boş', () => {
-    const p = activityParts({ logins: 1, cosre_questions: 0, traces_viewed: 2 }, t);
-    expect(p).toHaveLength(3);
-    expect(p[0].post).toBe(' giriş yapıldı');
+  // v0.10.1915 — rollout ve trace sayıları kaldırıldı.
+  it('son 24 saat: giriş · CoSRE; aktivite yoksa boş', () => {
+    const p = activityParts({ logins: 47, cosre_questions: 61 }, t);
+    expect(p.map(x => `${x.pre}${x.n}${x.post}`)).toEqual(['47 giriş yapıldı', 'CoSRE 61 soru yanıtladı']);
     expect(activityParts(undefined, t)).toEqual([]);
+  });
+  it('şu an: endpoint · toplam throughput · ort. yanıt; eksik alan yalnız kendini düşürür', () => {
+    const http = { from: 0, to: 1, step_s: 300, summary: { now_rps: 3200, peak_rps: 4000, peak_at: 0, avg_now_s: 0.186 } };
+    const full = nowParts({ enabled: true, ready: true, endpoints_monitored: 12_400, http_24h: http }, t);
+    expect(full.map(x => `${x.pre}${x.n}${x.post}`)).toEqual(['12.4K endpoint', 'toplam 3.2K req/s', 'ort. yanıt 186 ms']);
+    const noHttp = nowParts({ enabled: true, ready: true, endpoints_monitored: 420 }, t);
+    expect(noHttp.map(x => `${x.pre}${x.n}${x.post}`)).toEqual(['420 endpoint']);
+    const noAvg = nowParts({ enabled: true, ready: true, http_24h: { ...http, summary: { now_rps: 5, peak_rps: 9, peak_at: 0 } } }, t);
+    expect(noAvg.map(x => `${x.pre}${x.n}${x.post}`)).toEqual(['toplam 5.0 req/s']);
+    expect(nowParts({ enabled: true, ready: true }, t)).toEqual([]);
+    expect(nowParts({ enabled: true, ready: true, endpoints_monitored: 0 }, t)).toEqual([]);
   });
   it('bileşenler: ok + boyut + saat; boyut yoksa o parça düşer', () => {
     const at = new Date(2026, 10, 6, 20, 34).getTime();

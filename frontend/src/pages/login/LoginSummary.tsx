@@ -1,5 +1,5 @@
 // LoginSummary — v0.10.1907 (Login yeniden tasarımı dilim 2.2, audit §6.1).
-// Kartın sağ sütunu: başlık, 3 KPI, "Son 24 saatte" satırı, bileşen satırı.
+// Kartın sağ sütunu: başlık, 3 KPI, "Şu an" + "Son 24 saatte" satırları, bileşen satırı.
 // Login.tsx bunu `lazy` ile yalnız ≥ 1100 px ve özet hazırken yükler; eksik
 // bölüm yalnız kendini gizler. KPI'lar düz `div` (tablo değil — audit §6.1).
 // Durum rengi YOK: sağlıklı durum nötr, yalnız `degraded` uyarı tonu (K5 kuralı).
@@ -10,7 +10,7 @@ import { SummaryShell } from './SummaryShell';
 import { useBranding } from '@/lib/branding';
 import { useT } from '@/lib/i18n';
 import {
-  activityParts, componentsLine, httpCardUsable, isLive, kpis, leadKey,
+  activityParts, componentsLine, httpCardUsable, isLive, kpis, leadKey, nowParts, type RowPart,
 } from '@/lib/loginSummary';
 import type { LoginSummary as LoginSummaryData } from '@/lib/types';
 
@@ -23,12 +23,30 @@ const KPI_LABEL = {
   services: 'login.sum.services',
 } as const;
 
+/** Başlık + "· " ile ayrılmış parçalar; sayı kalın. */
+function ActivityRow({ title, parts }: { title: string; parts: RowPart[] }) {
+  return (
+    <div>
+      <div className="mb-1 text-[length:var(--fs-xs)]">{title}</div>
+      <div>
+        {parts.map((p, i) => (
+          <Fragment key={i}>
+            {i > 0 && ' · '}
+            {p.pre}<b className="text-foreground">{p.n}</b>{p.post}
+          </Fragment>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function LoginSummary({ data }: { data: LoginSummaryData }) {
   const t = useT();
   const brand = useBranding();
   const live = useMemo(() => isLive(data.generated_at, Date.now()), [data.generated_at]);
   const cards = kpis(data);
   const acts = activityParts(data.activity_24h, t);
+  const nows = nowParts(data, t);
   const comp = componentsLine(data.components, t);
   const degraded = data.components?.state === 'degraded';
   return (
@@ -62,17 +80,10 @@ export default function LoginSummary({ data }: { data: LoginSummaryData }) {
         </Suspense>
       )}
 
-      {acts.length > 0 && (
-        <div className="rounded-[10px] border border-border bg-card px-3.5 py-3 text-[length:var(--fs-sm)] leading-relaxed text-muted-foreground">
-          <div className="mb-1 text-[length:var(--fs-xs)]">{t('login.sum.last24')}</div>
-          <div>
-            {acts.map((p, i) => (
-              <Fragment key={i}>
-                {i > 0 && ' · '}
-                {p.pre}<b className="text-foreground">{p.n}</b>{p.post}
-              </Fragment>
-            ))}
-          </div>
+      {(nows.length > 0 || acts.length > 0) && (
+        <div className="grid gap-2 rounded-[10px] border border-border bg-card px-3.5 py-3 text-[length:var(--fs-sm)] leading-relaxed text-muted-foreground">
+          {nows.length > 0 && <ActivityRow title={t('login.sum.now')} parts={nows} />}
+          {acts.length > 0 && <ActivityRow title={t('login.sum.last24')} parts={acts} />}
         </div>
       )}
 

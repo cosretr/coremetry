@@ -80,16 +80,34 @@ export function splitTemplate(tpl: string, n: string): RowPart {
 }
 
 /**
- * "Son 24 saatte" satırı: eksik alan (ör. `rollouts_tracked`) yalnız kendini
- * düşürür. Sıra: rollout · giriş · CoSRE · trace.
+ * "Son 24 saatte" satırı: giriş · CoSRE. v0.10.1915 — rollout ve trace
+ * sayıları kaldırıldı (operatör kararı).
  */
 export function activityParts(a: LoginSummaryActivity | undefined, t: (k: string) => string): RowPart[] {
   if (!a) return [];
+  return [
+    splitTemplate(t('login.sum.logins'), fmtCount(a.logins)),
+    splitTemplate(t('login.sum.cosre'), fmtCount(a.cosre_questions)),
+  ];
+}
+
+/**
+ * "Şu an" satırı (v0.10.1915): endpoint sayısı · toplam throughput · ortalama
+ * yanıt süresi. Throughput ve yanıt süresi HTTP metrik özetinden (`http_24h.summary`);
+ * eksik alan yalnız kendini düşürür, hiçbiri yoksa satır yok.
+ */
+export function nowParts(s: LoginSummary, t: (k: string) => string): RowPart[] {
   const out: RowPart[] = [];
-  if (a.rollouts_tracked != null) out.push(splitTemplate(t('login.sum.rollouts'), fmtCount(a.rollouts_tracked)));
-  out.push(splitTemplate(t('login.sum.logins'), fmtCount(a.logins)));
-  out.push(splitTemplate(t('login.sum.cosre'), fmtCount(a.cosre_questions)));
-  out.push(splitTemplate(t('login.sum.traces'), fmtCount(a.traces_viewed)));
+  if (s.endpoints_monitored != null && s.endpoints_monitored > 0) {
+    out.push(splitTemplate(t('login.sum.endpoints'), fmtCount(s.endpoints_monitored)));
+  }
+  const sum = s.http_24h?.summary;
+  if (sum && Number.isFinite(sum.now_rps) && sum.now_rps > 0) {
+    out.push(splitTemplate(t('login.sum.tput'), fmtRps(sum.now_rps)));
+  }
+  if (sum?.avg_now_s != null && Number.isFinite(sum.avg_now_s)) {
+    out.push(splitTemplate(t('login.sum.rt'), fmtSeconds(sum.avg_now_s)));
+  }
   return out;
 }
 

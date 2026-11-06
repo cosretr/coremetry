@@ -3,7 +3,7 @@ package loginsummary
 // builder.go — tur döngüsü + devre kesici (audit §5.1–§5.6).
 //
 // Yalnız LİDER çalıştırır (main.go: cache.NewLeaderHolder + isLeader). Her
-// Step: CH sayıları (her tur, ~60 sn); VM halkası + topoloji + CH boyutu
+// Step: CH sayıları (her tur, ~60 sn); VM halkası + endpoint sayısı + topoloji + CH boyutu
 // (yavaş tur, ~5 dk). Arka uçlara yalnız arayüzle bağlıdır — testte sahteler.
 // İstek yolu bu paketin hiçbir arka uç çağrısına gitmez.
 //
@@ -52,6 +52,7 @@ type Store interface {
 	CountCosreQuestions(ctx context.Context, since time.Time) (uint64, error)
 	ReadSelfActivityTotals(ctx context.Context, from, to time.Time) (chstore.SelfActivityTotals, error)
 	TotalUncompressedBytes(ctx context.Context) (uint64, error)
+	CountLoginEndpoints(ctx context.Context) (uint64, error)
 	ReadServiceTopologyAgg(ctx context.Context, from, to time.Time, limit int) ([]chstore.ServiceTopologyEdge, error)
 }
 
@@ -64,20 +65,15 @@ type VM interface {
 	QueryPromQLRange(ctx context.Context, query string, from, to time.Time, stepSeconds, maxDataPoints int) ([]chstore.SpanMetricSeries, error)
 }
 
-// RolloutsFunc — [from, to) penceresinde izlenen rollout adedi; tracked=false
-// → rollout izleme kapalı (alan döndürülmez).
-type RolloutsFunc func(ctx context.Context, from, to time.Time) (total uint64, tracked bool, err error)
-
 // Deps — Builder bağımlılıkları. Zorunlu: Store, Publish. Diğerleri isteğe bağlı.
 type Deps struct {
-	Store    Store
-	VM       VM
-	Rollouts RolloutsFunc
-	Now      func() time.Time
-	Load     func() *Snapshot // mevcut anlık görüntü (Redis/bellek): tuz ve halka buradan devralınır
-	Publish  func(*Snapshot)
-	NewSalt  func() string
-	Logf     func(format string, args ...any)
+	Store   Store
+	VM      VM
+	Now     func() time.Time
+	Load    func() *Snapshot // mevcut anlık görüntü (Redis/bellek): tuz ve halka buradan devralınır
+	Publish func(*Snapshot)
+	NewSalt func() string
+	Logf    func(format string, args ...any)
 	// Enabled — özet ayarı (branding.loginSummary). false → tur HİÇ koşmaz:
 	// CH/VM sorgusu yok, yayın yok (operatör özelliği kapattıysa arka uç yükü
 	// de kalkar; uç zaten {enabled:false} döner). nil = açık.
@@ -117,7 +113,6 @@ type Builder struct {
 	snap     *Snapshot
 	lastSlow time.Time
 	vmOK     bool // son yavaş turda VM Q1 başarılı mı (VM açıksa)
-	rollouts *uint64
 	br       map[string]*breaker
 	timings  map[string]time.Duration
 	// logState — son günlüğe yazılan durum (günlük: yavaş tur ya da durum değişimi).
@@ -223,9 +218,7 @@ func (b *Builder) Step(ctx context.Context) {
 	cosre, cerr := b.d.Store.CountCosreQuestions(ctx, now.Add(-activityWindow))
 	b.timed("cosre", t0)
 	if aerr == nil && cerr == nil {
-		// rollouts_tracked pahalı (RolloutStats çok sorgu): yavaş turda okunur,
-		// hızlı turlarda son değer taşınır.
-		s.Activity = &SnapActivity{Logins: totals.Logins, TracesViewed: totals.TracesViewed, CosreQuestions: cosre, Rollouts: b.rollouts}
+		s.Activity = &SnapActivity{Logins: totals.Logins, CosreQuestions: cosre}
 	}
 
 	// ── yavaş: VM halkası + topoloji + CH boyutu (≈5 dk) ──
@@ -233,9 +226,6 @@ func (b *Builder) Step(ctx context.Context) {
 	if slow {
 		b.lastSlow = now
 		b.slowRound(ctx, s, now)
-		if s.Activity != nil {
-			s.Activity.Rollouts = b.rollouts
-		}
 	}
 
 	state := StateOK
@@ -285,15 +275,13 @@ func (b *Builder) slowRound(ctx context.Context, s *Snapshot, now time.Time) {
 		b.vmOK = false
 	}
 
-	// rollout adedi (izleme kapalı ya da hata → alan yok)
-	b.rollouts = nil
-	if b.d.Rollouts != nil {
-		t0 := time.Now()
-		if n, tracked, err := b.d.Rollouts(ctx, now.Add(-activityWindow), now); err == nil && tracked {
-			b.rollouts = &n
-		}
-		b.timed("rollouts", t0)
+	// endpoint sayısı (son 1 saat, MV). Hata → alan düşer (eski değer taşınmaz).
+	s.Endpoints = nil
+	te := time.Now()
+	if n, err := b.d.Store.CountLoginEndpoints(ctx); err == nil {
+		s.Endpoints = &n
 	}
+	b.timed("endpoints", te)
 
 	// topoloji (ayar off → okunmaz, anlık görüntüden düşer)
 	if b.d.TopologyOn != nil && !b.d.TopologyOn() {

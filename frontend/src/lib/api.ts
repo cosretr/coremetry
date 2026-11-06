@@ -823,9 +823,6 @@ export const api = {
   // gerçekten iptal edilsin (yanıtı atmak yetmez; süperseded sorgu CH'de
   // max_execution_time'a kadar koşuyordu).
   trace:     (id: string, signal?: AbortSignal) => get<TraceDetailResponse>(`/api/traces/${id}`, signal),
-  // v0.10.1902 — hover ön-yüklemesi: aynı uç, ama sunucu bunu "trace görüntülendi"
-  // saymasın (login özeti sayacı). Önbelleği ısıtma etkisi aynen.
-  tracePrefetch: (id: string) => request<TraceDetailResponse>(`/api/traces/${id}`, { headers: { 'X-Coremetry-Purpose': 'prefetch' } }),
   // v0.10.672 — kiosk modu: span + log + Oracle tek istekte (trace_bundle.go).
   // logLimit varsayılan 500, tavan 1000 (sunucu clamp'ler); qs() boşları atar.
   traceBundle: (id: string, opts: { logLimit?: number; oracleLimit?: number; hint?: number } = {}, signal?: AbortSignal) => {

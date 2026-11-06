@@ -12,12 +12,12 @@ func TestSelfActivityPoints(t *testing.T) {
 	min := time.Date(2026, 11, 6, 12, 5, 0, 0, time.UTC)
 	pts := SelfActivityPoints([]SelfActivityCell{
 		{Minute: min.Add(17 * time.Second), Kind: ActivityKindLogin, Count: 3},
-		{Minute: min, Kind: ActivityKindTraceView, Count: 12},
+		{Minute: min, Kind: "trace_view", Count: 12},               // v0.10.1915: tür kaldırıldı, yazılmaz
 		{Minute: min, Kind: ActivityKindLogin, Count: 0},           // sayımsız: yazılmaz
 		{Minute: min, Kind: "orders-api-user@acme.test", Count: 4}, // kapalı küme dışı: yazılmaz
 	}, "coremetry-api-0")
-	if len(pts) != 2 {
-		t.Fatalf("nokta sayısı %d, beklenen 2", len(pts))
+	if len(pts) != 1 {
+		t.Fatalf("nokta sayısı %d, beklenen 1", len(pts))
 	}
 	got := map[string]float64{}
 	for _, p := range pts {
@@ -29,7 +29,7 @@ func TestSelfActivityPoints(t *testing.T) {
 		}
 		got[p.AttrValues[0]] = p.Value
 	}
-	if got[ActivityKindLogin] != 3 || got[ActivityKindTraceView] != 12 {
+	if got[ActivityKindLogin] != 3 || len(got) != 1 {
 		t.Fatalf("değerler yanlış: %v", got)
 	}
 	// Aynı tür farklı pod'da farklı seri kimliği (çok-pod çakışması yok).

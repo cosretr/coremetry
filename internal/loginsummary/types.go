@@ -16,21 +16,23 @@ package loginsummary
 import "github.com/cilcenk/coremetry/internal/chstore"
 
 // SnapshotVersion — Redis'teki anlık görüntü biçimi (anahtar sonekiyle uyumlu).
-const SnapshotVersion = 2 // v0.10.1914: halka kovası durum haritası (s) yerine toplam hız (r)
+const SnapshotVersion = 3 // v0.10.1914: halka kovası toplam hız (r); v0.10.1915: aktivite alanları + endpoint sayısı
 
 // ── Uç sözleşmesi (login-contract.md; json etiketleri AYNEN) ────────────
 
 type Response struct {
-	Enabled     bool        `json:"enabled"`
-	Ready       bool        `json:"ready"`
-	GeneratedAt int64       `json:"generated_at,omitempty"` // unix ms
-	SpansToday  *uint64     `json:"spans_today,omitempty"`
-	TracesToday *uint64     `json:"traces_today,omitempty"`
-	Services    *uint64     `json:"services_monitored,omitempty"`
-	HTTP24h     *HTTP24h    `json:"http_24h,omitempty"`
-	Activity    *Activity   `json:"activity_24h,omitempty"`
-	Topology    *Topology   `json:"topology,omitempty"`
-	Components  *Components `json:"components,omitempty"`
+	Enabled     bool    `json:"enabled"`
+	Ready       bool    `json:"ready"`
+	GeneratedAt int64   `json:"generated_at,omitempty"` // unix ms
+	SpansToday  *uint64 `json:"spans_today,omitempty"`
+	TracesToday *uint64 `json:"traces_today,omitempty"`
+	Services    *uint64 `json:"services_monitored,omitempty"`
+	// Endpoints — v0.10.1915: son 1 saatte istek alan endpoint sayısı (yalnız adet).
+	Endpoints  *uint64     `json:"endpoints_monitored,omitempty"`
+	HTTP24h    *HTTP24h    `json:"http_24h,omitempty"`
+	Activity   *Activity   `json:"activity_24h,omitempty"`
+	Topology   *Topology   `json:"topology,omitempty"`
+	Components *Components `json:"components,omitempty"`
 }
 
 type HTTP24h struct {
@@ -52,11 +54,11 @@ type HTTPSummary struct {
 	P95NowS *float64 `json:"p95_now_s,omitempty"`
 }
 
+// Activity — v0.10.1915: `rollouts_tracked` ve `traces_viewed` KALDIRILDI
+// (operatör: satırda yazmasına gerek yok).
 type Activity struct {
-	Rollouts       *uint64 `json:"rollouts_tracked,omitempty"`
-	Logins         uint64  `json:"logins"`
-	CosreQuestions uint64  `json:"cosre_questions"`
-	TracesViewed   uint64  `json:"traces_viewed"`
+	Logins         uint64 `json:"logins"`
+	CosreQuestions uint64 `json:"cosre_questions"`
 }
 
 type Topology struct {
@@ -112,6 +114,7 @@ type Snapshot struct {
 	SpansToday  *uint64 `json:"spans_today,omitempty"`
 	TracesToday *uint64 `json:"traces_today,omitempty"`
 	Services    *uint64 `json:"services,omitempty"`
+	Endpoints   *uint64 `json:"endpoints,omitempty"`
 
 	Ring *Ring `json:"ring,omitempty"`
 
@@ -126,10 +129,8 @@ type Snapshot struct {
 }
 
 type SnapActivity struct {
-	Logins         uint64  `json:"logins"`
-	TracesViewed   uint64  `json:"traces_viewed"`
-	CosreQuestions uint64  `json:"cosre_questions"`
-	Rollouts       *uint64 `json:"rollouts,omitempty"`
+	Logins         uint64 `json:"logins"`
+	CosreQuestions uint64 `json:"cosre_questions"`
 }
 
 type SnapTopology struct {

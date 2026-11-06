@@ -234,3 +234,13 @@ Ship checklist (`.claude/skills/release/SKILL.md:192-200`): 1 MV okuması ✔ (1
 - CORS izinli başlık listesinin `X-Coremetry-Purpose`'u geçirip geçirmediği.
 - `inlineStyleRatchet` `TOTAL`'da kalan boşluk; güncel ilk yük boyutu.
 - Tüm `dosya:satır` kanıtları keşif ajanlarının okumasıdır; ana yazar dosyaları kendisi açmadı.
+
+## 11. Yayın sonrası değişiklikler (2026-11-07, prod ilk bakış)
+
+Bu bölüm üstteki audit metnini GEÇERSİZ kılar; ayrıntı `docs/DECISIONS.md` "Login özeti (anonim uç)".
+
+- **1912** `Wordmark` tek kök (başlıkta "Core" / "metry" ayrılıyordu).
+- **1913** Topoloji yerleşimi: kısa menzilli itme + duvar itmesi (düğümler kenara yığılıyordu; §6.3'teki "merkez çekimi" yok).
+- **1914** HTTP kartı tek TOPLAM throughput serisi: Q1 `sum(rate(<aile>_count[5m]))`, alan `http_24h.throughput` (§4 ve §5.3'teki durum kodu kırılımı ve `status[]` kalktı; §9-10 kapandı).
+- **1915** `activity_24h` yalnız `logins` + `cosre_questions`; `rollouts_tracked`, `traces_viewed` ve trace görüntüleme sayacı (§5.2) söküldü; yeni `endpoints_monitored`. Ekranda "Şu an" + "Son 24 saatte" satırları.
+

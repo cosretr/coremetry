@@ -297,7 +297,8 @@ describe('Login — marka ve sürüm', () => {
 const READY: LoginSummary = {
   enabled: true, ready: true, generated_at: Date.now(),
   spans_today: 1_214_000_000, traces_today: 48_200_000, services_monitored: 2148,
-  activity_24h: { rollouts_tracked: 3, logins: 47, cosre_questions: 61, traces_viewed: 12_400 },
+  endpoints_monitored: 12_400,
+  activity_24h: { logins: 47, cosre_questions: 61 },
   components: { state: 'ok', checked_at: Date.UTC(2026, 10, 6, 20, 34), clickhouse_uncompressed_bytes: 4.2 * 1024 ** 4 },
 };
 function stubWide(wide: boolean, reduced = false) {
@@ -319,8 +320,12 @@ describe('Login — özet sütunu', () => {
     expect(aside!.textContent).toContain('1,214M');
     expect(aside!.textContent).toContain('48.2M');
     expect(aside!.textContent).toContain('2,148');
-    expect(aside!.textContent).toContain('3 rollouts tracked');
-    expect(aside!.textContent).toContain('12.4K traces inspected');
+    // v0.10.1915 — "Şu an": endpoint; "Son 24 saat": giriş + CoSRE. Rollout / trace sayısı yok.
+    expect(aside!.textContent).toContain('Right now');
+    expect(aside!.textContent).toContain('12.4K endpoints');
+    expect(aside!.textContent).toContain('47 sign-ins · CoSRE answered 61 questions');
+    expect(aside!.textContent).not.toContain('rollouts tracked');
+    expect(aside!.textContent).not.toContain('traces inspected');
     expect(aside!.textContent).toContain('All components running · ClickHouse 4.20 TiB');
     expect(h.innerHTML).toContain('grid-cols-[480px_1fr]');
   });
@@ -374,7 +379,8 @@ describe('Login — özet sütunu', () => {
     expect(aside.textContent).toContain('Coremetry bugün');
     expect(aside.textContent).toContain('Toplam span (bugün)');
     expect(aside.textContent).toContain('Anonim özet · hatalar ve ayrıntılar giriş sonrasında');
-    expect(aside.textContent).toContain('3 rollout izlendi');
+    expect(aside.textContent).toContain('12.4K endpoint');
+    expect(aside.textContent).toContain('47 giriş yapıldı');
   });
 });
 

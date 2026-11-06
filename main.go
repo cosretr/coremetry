@@ -1450,23 +1450,6 @@ func main() {
 		lsBuilder := loginsummary.New(loginsummary.Deps{
 			Store: store,
 			VM:    loginsummary.VMFromService(vmSvc),
-			// rollouts_tracked: izleme kapalıysa alan yok; kaynak ve namespace
-			// dışlaması GET /api/rollouts/stats ile aynı.
-			Rollouts: func(rctx context.Context, from, to time.Time) (uint64, bool, error) {
-				if !rolloutSettings.Resolved().Enabled {
-					return 0, false, nil
-				}
-				f := chstore.RolloutFilter{ExcludeNamespaces: rollout.EffectiveNamespaceExclude(rolloutSettings.Current().ResolvedExcludeNamespaces(), "")}
-				read := store.RolloutStats
-				if rolloutSettings.ResolvedV2().Source == rollout.SourceV2 {
-					read = store.RolloutV2Stats
-				}
-				st, err := read(rctx, f, from, to, 0)
-				if err != nil {
-					return 0, true, err
-				}
-				return uint64(st.Total), true, nil
-			},
 			// Özet ayardan kapalıysa kurucu hiç sorgu atmaz; topoloji off ise okunmaz.
 			Enabled:    api.LoginSummaryEnabled,
 			TopologyOn: api.LoginSummaryTopologyOn,

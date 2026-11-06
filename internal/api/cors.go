@@ -96,7 +96,7 @@ func (p corsPolicy) middleware(h http.Handler) http.Handler {
 			// v0.10.994 — MCP 2026-07-28 istek başlıkları (mcp/modern.go):
 			// izinli bir tarayıcı kökenindeki modern istemci bunları
 			// göndermek ZORUNDA; listede yoksa preflight reddeder.
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Accept, Authorization, MCP-Protocol-Version, Mcp-Method, Mcp-Name, X-Coremetry-Purpose")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Accept, Authorization, MCP-Protocol-Version, Mcp-Method, Mcp-Name")
 		}
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)

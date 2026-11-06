@@ -51,10 +51,11 @@ func baseSnapshot(now time.Time) *Snapshot {
 	return &Snapshot{
 		V: SnapshotVersion, GeneratedAt: now.UnixMilli(), Salt: salt,
 		SpansToday: u64(5000), TracesToday: u64(900), Services: u64(5),
-		Ring:     ring,
-		Activity: &SnapActivity{Logins: 12, TracesViewed: 34, CosreQuestions: 5, Rollouts: u64(7)},
-		Topo:     BuildTopology(sil, salt),
-		State:    StateOK, CheckedAt: now.UnixMilli(), CHBytes: u64(1 << 40),
+		Ring:      ring,
+		Activity:  &SnapActivity{Logins: 12, CosreQuestions: 5},
+		Endpoints: u64(420),
+		Topo:      BuildTopology(sil, salt),
+		State:     StateOK, CheckedAt: now.UnixMilli(), CHBytes: u64(1 << 40),
 	}
 }
 

@@ -36,6 +36,7 @@ func Project(snap *Snapshot, f Flags) Response {
 	out := Response{
 		Enabled: true, Ready: true, GeneratedAt: snap.GeneratedAt,
 		SpansToday: snap.SpansToday, TracesToday: snap.TracesToday, Services: snap.Services,
+		Endpoints: snap.Endpoints,
 	}
 	if v, ok := snap.Ring.View(f.AllowP95); ok {
 		out.HTTP24h = &HTTP24h{
@@ -44,10 +45,7 @@ func Project(snap *Snapshot, f Flags) Response {
 		}
 	}
 	if a := snap.Activity; a != nil {
-		out.Activity = &Activity{
-			Rollouts: a.Rollouts, Logins: a.Logins,
-			CosreQuestions: a.CosreQuestions, TracesViewed: a.TracesViewed,
-		}
+		out.Activity = &Activity{Logins: a.Logins, CosreQuestions: a.CosreQuestions}
 	}
 	out.Topology = projectTopology(snap.Topo, f.Topology)
 	state := snap.State

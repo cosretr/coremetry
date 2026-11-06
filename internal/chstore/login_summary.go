@@ -79,6 +79,32 @@ func (s *Store) LoginSummaryCounts(ctx context.Context) (LoginCounts, error) {
 	return out, errors.Join(errs...)
 }
 
+// loginEndpointsSQL — v0.10.1915: son 1 saatte istek alan endpoint sayısı
+// (yaklaşık, uniq). Giriş-span ilkesi: yalnız `server` / `consumer` türü
+// (servisin KENDİ uçları; giden çağrılar ve iç span'ler endpoint değildir).
+// Kaynak `spanmetrics_1m` (tür boyutunu taşıyan MV; ham `spans` yok). Pencere
+// 1 saat: 1 dk'lık MV'de 24 saat taramak pahalı olurdu; "şu an izlenen" için
+// yeterli. Coremetry'nin kendi servisleri hariç.
+func loginEndpointsSQL() string {
+	return `
+		SELECT uniq(service_name, name)
+		FROM spanmetrics_1m
+		WHERE time_bucket >= now() - toIntervalHour(1)
+		  AND kind IN ('server', 'consumer')
+		  AND NOT startsWith(service_name, 'coremetry-')
+		LIMIT 1
+		SETTINGS max_execution_time = 8`
+}
+
+// CountLoginEndpoints — son 1 saatte istek alan endpoint sayısı (yalnız adet).
+func (s *Store) CountLoginEndpoints(ctx context.Context) (uint64, error) {
+	var n uint64
+	if err := s.telemetryReadConn().QueryRow(ctx, loginEndpointsSQL()).Scan(&n); err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
 // cosreQuestionsSQL — son penceredeki CoSRE sohbet turu sayısı. Her satır bir
 // tur (tek yazıcı api/copilot_chat.go); `explain` ✨ düğmesidir, soru sayılmaz.
 func cosreQuestionsSQL() string {

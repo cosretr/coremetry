@@ -13280,3 +13280,11 @@ JSON sözleşmesi ve kararlar ana oturumda. Backend dilimleri v0.10.1902–1905.
   serileri atıyordu (testteki sahte VM çıplak kod döndürüyordu). **Karar (operatör: "illa status code şart değil, önerin"):** durum
   kodu kırılımı KALKTI; Q1 = `sum(rate(<aile>_count[5m]))`, cevap alanı `http_24h.throughput` (tek seri, grup anahtarı boş),
   `MergeRate` grup anahtarını hiç okumaz. Giriş öncesi 5xx payı artık görünmez (audit §9-10 kapanır). Anlık görüntü sürümü 2.
+- **v0.10.1915 — özet satırları (operatör, 2026-11-07: "rollouts, traces gerek yok; total endpoints, total throughput ve response da olur").**
+  Cevaptan `activity_24h.rollouts_tracked` ve `traces_viewed` KALKTI; yeni `endpoints_monitored` = son 1 saatte istek alan endpoint
+  sayısı (`spanmetrics_1m`, `kind IN ('server','consumer')`, `uniq(service_name, name)`, self servisler hariç; yavaş turda, 8 sn tavan).
+  Ekranda iki satır: "Şu an: N endpoint · toplam X req/s · ort. yanıt Y" (throughput ve yanıt `http_24h.summary`'den; eksik parça
+  düşer) ve "Son 24 saatte: N giriş yapıldı · CoSRE N soru yanıtladı". Sökülenler (ölü kod bırakılmadı): Builder'ın rollout okuması
+  (`Deps.Rollouts`, `main.go` bağlaması), trace görüntüleme sayacı (`noteTraceView`, 10 dk tekilleştirme tablosu, `trace_view` türü),
+  `X-Coremetry-Purpose` başlığı (istemci `tracePrefetch`, CORS izni). `metric_points`'teki eski `trace_view` satırları TTL ile düşer.
+  Anlık görüntü sürümü 3.

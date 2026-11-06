@@ -11,11 +11,11 @@ import (
 
 var allowedKeys = map[string]bool{
 	"enabled": true, "ready": true, "generated_at": true, "spans_today": true, "traces_today": true,
-	"services_monitored": true, "http_24h": true, "activity_24h": true, "topology": true, "components": true,
+	"services_monitored": true, "endpoints_monitored": true, "http_24h": true, "activity_24h": true, "topology": true, "components": true,
 	"from": true, "to": true, "step_s": true, "throughput": true, "avg": true, "p95": true, "summary": true,
 	"groupKey": true, "points": true, "time": true, "value": true,
 	"now_rps": true, "peak_rps": true, "peak_at": true, "avg_now_s": true, "p95_now_s": true,
-	"rollouts_tracked": true, "logins": true, "cosre_questions": true, "traces_viewed": true,
+	"logins": true, "cosre_questions": true, // v0.10.1915: rollouts_tracked + traces_viewed kaldırıldı
 	"window_s": true, "named": true, "nodes": true, "edges": true, "id": true, "tier": true, "weight": true, "name": true,
 	"state": true, "checked_at": true, "clickhouse_uncompressed_bytes": true,
 }
@@ -198,9 +198,14 @@ func TestProjectActivityAndComponents(t *testing.T) {
 	if resp.Components == nil || resp.Components.State != StateDegraded {
 		t.Errorf("bilinmeyen durum degraded sayılır: %+v", resp.Components)
 	}
-	if resp.Activity == nil || resp.Activity.Logins != 12 || resp.Activity.Rollouts == nil || *resp.Activity.Rollouts != 7 {
+	if resp.Activity == nil || resp.Activity.Logins != 12 || resp.Activity.CosreQuestions != 5 {
 		t.Errorf("aktivite: %+v", resp.Activity)
 	}
+	if resp.Endpoints == nil || *resp.Endpoints != 420 {
+		t.Errorf("endpoint sayısı: %v", resp.Endpoints)
+	}
+	// v0.10.1915 — kaldırılan alanlar cevapta geçmez.
+	assertAbsent(t, mustJSON(t, resp), []string{"rollouts_tracked", "traces_viewed"}, "kaldırılan aktivite alanı")
 	snap.Activity = nil
 	if Project(snap, flags(now, "")).Activity != nil {
 		t.Error("aktivite okunamadıysa alan yok")

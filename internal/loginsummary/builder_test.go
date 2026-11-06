@@ -90,7 +90,14 @@ type fakeStore struct {
 	edges                                          []chstore.ServiceTopologyEdge
 	topoWindow                                     time.Duration
 	topoLimit                                      int
-	topoCalls, countsCalls                         int
+	topoCalls, countsCalls, endpointCalls          int
+	endpoints                                      uint64
+	endpointsErr                                   error
+}
+
+func (f *fakeStore) CountLoginEndpoints(ctx context.Context) (uint64, error) {
+	f.endpointCalls++
+	return f.endpoints, f.endpointsErr
 }
 
 func (f *fakeStore) LoginSummaryCounts(ctx context.Context) (chstore.LoginCounts, error) {
@@ -155,7 +162,7 @@ type harness struct {
 
 func newHarness(t *testing.T) *harness {
 	h := &harness{
-		st:    &fakeStore{edges: fixtureEdges(), bytes: 1 << 40, cosre: 5, act: chstore.SelfActivityTotals{Logins: 12, TracesViewed: 34}},
+		st:    &fakeStore{edges: fixtureEdges(), bytes: 1 << 40, cosre: 5, act: chstore.SelfActivityTotals{Logins: 12}, endpoints: 420},
 		vm:    newFakeVM(),
 		redis: &fakeRedis{},
 		clk:   &clock{t: time.Date(2026, 11, 6, 12, 0, 0, 0, time.UTC)},
@@ -163,8 +170,7 @@ func newHarness(t *testing.T) *harness {
 	h.st.counts = chstore.LoginCounts{Spans: u64(5000), Traces: u64(900), Services: u64(5)}
 	h.b = New(Deps{
 		Store: h.st, VM: h.vm, Now: h.clk.now, Load: h.redis.load, Publish: h.redis.publish(t),
-		Logf:     func(f string, a ...any) { h.logs = append(h.logs, fmt.Sprintf(f, a...)) },
-		Rollouts: func(ctx context.Context, from, to time.Time) (uint64, bool, error) { return 7, true, nil },
+		Logf: func(f string, a ...any) { h.logs = append(h.logs, fmt.Sprintf(f, a...)) },
 	})
 	return h
 }
@@ -190,8 +196,11 @@ func TestBuilderFirstStepPublishesFullSnapshot(t *testing.T) {
 	if snap.SpansToday == nil || *snap.SpansToday != 5000 || *snap.Services != 5 {
 		t.Errorf("sayılar: %+v", snap)
 	}
-	if snap.Activity == nil || snap.Activity.Logins != 12 || snap.Activity.CosreQuestions != 5 || snap.Activity.Rollouts == nil || *snap.Activity.Rollouts != 7 {
+	if snap.Activity == nil || snap.Activity.Logins != 12 || snap.Activity.CosreQuestions != 5 {
 		t.Errorf("aktivite: %+v", snap.Activity)
+	}
+	if snap.Endpoints == nil || *snap.Endpoints != 420 {
+		t.Errorf("endpoint sayısı: %v", snap.Endpoints)
 	}
 	if snap.CHBytes == nil || *snap.CHBytes != 1<<40 || snap.Topo == nil || snap.Ring == nil {
 		t.Errorf("yavaş tur çıktıları: bytes=%v topo=%v ring=%v", snap.CHBytes, snap.Topo != nil, snap.Ring != nil)
@@ -449,7 +458,7 @@ func TestBuilderCHFailuresDegradeAndDropFields(t *testing.T) {
 	}
 }
 
-func TestBuilderActivityNeedsBothSourcesAndRolloutsOptional(t *testing.T) {
+func TestBuilderActivityNeedsBothSources(t *testing.T) {
 	h := newHarness(t)
 	h.st.cosreErr = errors.New("cosre")
 	if s := h.step(); s.Activity != nil {
@@ -459,17 +468,6 @@ func TestBuilderActivityNeedsBothSourcesAndRolloutsOptional(t *testing.T) {
 	h2.st.actErr = errors.New("act")
 	if s := h2.step(); s.Activity != nil {
 		t.Error("sayaç okunamadıysa aktivite yok")
-	}
-	h3 := newHarness(t)
-	h3.b = New(Deps{Store: h3.st, VM: h3.vm, Now: h3.clk.now, Publish: h3.redis.publish(t), Logf: func(string, ...any) {},
-		Rollouts: func(context.Context, time.Time, time.Time) (uint64, bool, error) { return 0, false, nil }})
-	if s := h3.step(); s.Activity == nil || s.Activity.Rollouts != nil {
-		t.Errorf("rollout izleme kapalı → alan yok: %+v", s.Activity)
-	}
-	h4 := newHarness(t)
-	h4.b = New(Deps{Store: h4.st, VM: h4.vm, Now: h4.clk.now, Publish: h4.redis.publish(t), Logf: func(string, ...any) {}})
-	if s := h4.step(); s.Activity == nil || s.Activity.Rollouts != nil {
-		t.Errorf("rollout okuyucu yok → alan yok: %+v", s.Activity)
 	}
 }
 
@@ -519,31 +517,25 @@ func TestBuilderRunStopsOnContextAndResetsWhenNotLeader(t *testing.T) {
 	}
 }
 
-// rollouts_tracked pahalı: yalnız yavaş turda okunur, hızlı turlarda son değer taşınır.
-func TestBuilderRolloutsReadOnSlowRoundOnly(t *testing.T) {
+// v0.10.1915 — endpoint sayısı yalnız yavaş turda okunur (hızlı turlarda son
+// değer anlık görüntüde durur); okuma düşerse alan cevaptan düşer.
+func TestBuilderEndpointsReadOnSlowRoundOnly(t *testing.T) {
 	h := newHarness(t)
-	calls := 0
-	h.b = New(Deps{Store: h.st, VM: h.vm, Now: h.clk.now, Publish: h.redis.publish(t), Logf: func(string, ...any) {},
-		Rollouts: func(context.Context, time.Time, time.Time) (uint64, bool, error) {
-			calls++
-			return uint64(10 + calls), true, nil
-		}})
 	s1 := h.step()
 	h.advance(time.Minute)
 	s2 := h.step()
-	h.advance(time.Minute)
-	s3 := h.step()
-	if calls != 1 {
-		t.Errorf("hızlı turlarda rollout okunmaz: %d çağrı", calls)
+	if h.st.endpointCalls != 1 {
+		t.Errorf("hızlı turda endpoint okunmaz: %d çağrı", h.st.endpointCalls)
 	}
-	for i, s := range []*Snapshot{s1, s2, s3} {
-		if s.Activity == nil || s.Activity.Rollouts == nil || *s.Activity.Rollouts != 11 {
-			t.Errorf("tur %d: son değer taşınmalı: %+v", i, s.Activity)
+	for i, s := range []*Snapshot{s1, s2} {
+		if s.Endpoints == nil || *s.Endpoints != 420 {
+			t.Errorf("tur %d: endpoint sayısı taşınmalı: %v", i, s.Endpoints)
 		}
 	}
-	h.advance(4 * time.Minute)
-	if s := h.step(); calls != 2 || *s.Activity.Rollouts != 12 {
-		t.Errorf("yavaş turda yenilenir: calls=%d", calls)
+	h.st.endpointsErr = errors.New("ch")
+	h.advance(5 * time.Minute)
+	if s := h.step(); h.st.endpointCalls != 2 || s.Endpoints != nil {
+		t.Errorf("yavaş turda okuma düşerse alan düşer: calls=%d %v", h.st.endpointCalls, s.Endpoints)
 	}
 }
 

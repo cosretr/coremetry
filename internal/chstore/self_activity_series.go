@@ -11,7 +11,7 @@ package chstore
 // çok-pod kurulumda sayaç pod başınadır ve özet tüm pod'ların toplamını
 // göstermeli; pod yeniden başlayınca geçmiş kaybolmamalı.
 //
-// Seri: `coremetry.self.activity`, etiketler `kind=login|trace_view`, `pod`.
+// Seri: `coremetry.self.activity`, etiketler `kind=login`, `pod`.
 // Sayı yalnız adet taşır — kullanıcı kimliği, e-posta, trace kimliği serinin
 // hiçbir yerine YAZILMAZ.
 //
@@ -30,9 +30,9 @@ const (
 	SelfActivityMetric  = "coremetry.self.activity"
 	selfActivityService = "coremetry-self/activity"
 
-	// ActivityKindLogin / ActivityKindTraceView — kapalı küme (kardinalite sınırı).
-	ActivityKindLogin     = "login"
-	ActivityKindTraceView = "trace_view"
+	// ActivityKindLogin — kapalı küme (kardinalite sınırı). v0.10.1915:
+	// "trace_view" türü kaldırıldı; eski satırlar TTL ile düşer, okunmaz.
+	ActivityKindLogin = "login"
 )
 
 // SelfActivityCell — bir (dakika, tür) hücresi.
@@ -48,13 +48,13 @@ func SelfActivityPoints(cells []SelfActivityCell, pod string) []*MetricPoint {
 	out := make([]*MetricPoint, 0, len(cells))
 	keys := []string{"kind", "pod"}
 	for _, c := range cells {
-		if c.Count == 0 || (c.Kind != ActivityKindLogin && c.Kind != ActivityKindTraceView) {
+		if c.Count == 0 || c.Kind != ActivityKindLogin {
 			continue
 		}
 		t := c.Minute.UTC().Truncate(time.Minute)
 		out = append(out, &MetricPoint{
 			Metric: SelfActivityMetric, Instrument: "gauge", Unit: "1",
-			Description: "Logins and trace views per minute (Coremetry self-observability)",
+			Description: "Logins per minute (Coremetry self-observability)",
 			ServiceName: selfActivityService, HostName: pod, Time: t, StartTime: t, Value: float64(c.Count),
 			AttrKeys: keys, AttrValues: []string{c.Kind, pod},
 			SeriesFingerprint: xxhash.Sum64String(SelfActivityMetric + "\x00" + c.Kind + "\x00" + pod),
@@ -65,8 +65,7 @@ func SelfActivityPoints(cells []SelfActivityCell, pod string) []*MetricPoint {
 
 // SelfActivityTotals — [from, to) penceresinde tüm pod'ların toplamı.
 type SelfActivityTotals struct {
-	Logins       uint64
-	TracesViewed uint64
+	Logins uint64
 }
 
 // selfActivityTotalsSQL — SAF: okuma sorgusu. Zaman sınırlı, LIMIT'li, süre
@@ -81,8 +80,7 @@ func selfActivityTotalsSQL() string {
 		SETTINGS max_execution_time = 5`
 }
 
-// ReadSelfActivityTotals — [from, to) penceresinde giriş ve trace görüntüleme
-// toplamları (tüm pod'lar).
+// ReadSelfActivityTotals — [from, to) penceresinde giriş toplamı (tüm pod'lar).
 func (s *Store) ReadSelfActivityTotals(ctx context.Context, from, to time.Time) (SelfActivityTotals, error) {
 	var out SelfActivityTotals
 	rows, err := s.telemetryReadConn().Query(ctx, selfActivityTotalsSQL(),
@@ -100,11 +98,8 @@ func (s *Store) ReadSelfActivityTotals(ctx context.Context, from, to time.Time) 
 		if n < 0 {
 			n = 0
 		}
-		switch kind {
-		case ActivityKindLogin:
+		if kind == ActivityKindLogin {
 			out.Logins = uint64(n)
-		case ActivityKindTraceView:
-			out.TracesViewed = uint64(n)
 		}
 	}
 	return out, rows.Err()

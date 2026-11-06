@@ -12296,7 +12296,7 @@ export interface LoginSummaryHttp {
   summary: LoginSummaryHttpSummary;
 }
 export interface LoginSummaryActivity {
-  rollouts_tracked?: number; logins: number; cosre_questions: number; traces_viewed: number;
+  logins: number; cosre_questions: number; // v0.10.1915: rollouts_tracked + traces_viewed kaldırıldı
 }
 export interface LoginSummaryNode { id: string; tier: 'gw' | 'bff' | 'svc' | 'db'; weight: number; name?: string }
 export interface LoginSummaryEdge { from: string; to: string; weight: number }
@@ -12306,6 +12306,7 @@ export interface LoginSummary {
   enabled: boolean; ready: boolean;
   generated_at?: number; // unix ms
   spans_today?: number; traces_today?: number; services_monitored?: number;
+  endpoints_monitored?: number; // v0.10.1915 — son 1 saatte istek alan endpoint sayısı
   http_24h?: LoginSummaryHttp;
   activity_24h?: LoginSummaryActivity;
   topology?: LoginSummaryTopology;

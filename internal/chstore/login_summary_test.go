@@ -15,6 +15,7 @@ func TestLoginSummarySQLBounds(t *testing.T) {
 		"tracesToday": loginTracesTodaySQL(),
 		"services":    loginServicesSQL(),
 		"cosre":       cosreQuestionsSQL(),
+		"endpoints":   loginEndpointsSQL(),
 		"bytes":       totalUncompressedBytesSQL(""),
 		"bytesCl":     totalUncompressedBytesSQL("c1"),
 	}
@@ -40,6 +41,11 @@ func TestLoginSummarySQLSources(t *testing.T) {
 	}
 	if s := loginServicesSQL(); !strings.Contains(s, "uniq(service_name)") || !strings.Contains(s, "coremetry-") {
 		t.Error("servis sayısı: uniq + self servis dışlaması")
+	}
+	// v0.10.1915 — endpoint = giriş span'i (server/consumer), MV'den, 1 saat, self servis hariç.
+	if s := loginEndpointsSQL(); !strings.Contains(s, "FROM spanmetrics_1m") || !strings.Contains(s, "kind IN ('server', 'consumer')") ||
+		!strings.Contains(s, "toIntervalHour(1)") || !strings.Contains(s, "coremetry-") {
+		t.Errorf("endpoint sayısı: spanmetrics_1m + giriş türleri + 1 sa + self dışlama: %s", s)
 	}
 	if !strings.Contains(cosreQuestionsSQL(), "tier != 'explain'") {
 		t.Error("cosre: ✨ explain soru sayılmaz")
