@@ -37,6 +37,7 @@ import { PageShell } from '@/components/coremetry/PageShell';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { IconSparkles } from '@/components/icons';
 import { aiErrorHint } from '@/lib/aiErrors';
+import { INCIDENTS_ARCHIVE_BANNER, INCIDENTS_RETIRED_HOME } from '@/lib/incidentsRetired'; // v0.10.1828
 import { TriageStatusBadge } from '@/features/anomalies/statusTone'; // v0.10.929 (K5) — tek durum sözlüğü (hafif yaprak)
 
 export default function IncidentPage() {
@@ -53,7 +54,10 @@ function Inner() {
   const location = useLocation();
   const { user } = useAuth();
   const id = sp.get('id') ?? '';
-  const isAdmin = user?.role === 'admin' || user?.role === 'editor';
+  // v0.10.1828 — Incidents emekliyken (kabuk bayrağı kapalı) sayfa SALT-OKUNUR
+  // arşiv: eski bildirim linkleri açılır, ack / resolve / not / postmortem yok.
+  const archive = user?.features?.incidents !== true;
+  const canAct = (user?.role === 'admin' || user?.role === 'editor') && !archive;
   const tr = useT(); // v0.10.1338
   const qc = useQueryClient();
   // v0.10.1081 — Problems kuyruğundan gelindiyse geri bağlantı oraya (aynı
@@ -226,11 +230,11 @@ function Inner() {
         <div className="rb-bar">
           {/* v0.9.1320 — geri linki pencereyi + env'i taşır (navHref).
               v0.10.928 — satır-içi border kalktı; çerçeve + hover a.sec'ten. */}
-          <Link to={backTo ?? navHref('/incidents', sp.toString())} className="sec" style={{
+          <Link to={backTo ?? navHref(archive ? INCIDENTS_RETIRED_HOME : '/incidents', sp.toString())} className="sec" style={{
             padding: '5px 12px', borderRadius: 6,
             fontSize: 12, color: 'var(--text)', textDecoration: 'none',
             display: 'inline-flex', alignItems: 'center', gap: 6,
-          }}><ArrowLeft size={14} strokeWidth={1.75} /> {backTo ? 'Problems' : 'Incidents'}</Link>
+          }}><ArrowLeft size={14} strokeWidth={1.75} /> {backTo ? 'Problems' : archive ? 'Anomalies' : 'Incidents'}</Link>
           <StatusPill s={inc.status} />
           {/* v0.10.796 — P rozeti liste ve Inbox ile aynı merdivenden (server).
               v0.10.1081 — gerekçe metni ("Declared incident, critical") şeritten
@@ -243,11 +247,18 @@ function Inner() {
           {/* v0.10.1338 (operatör) — görünen ad "Ask CoSRE" / "CoSRE’ye sor". */}
           <AIExplainButton subject={{ kind: 'incident', id: inc.id }}
             label={<><IconSparkles /> <span>{tr('ai.askCosre')}</span></>} />
-          {isAdmin && inc.status === 'open' && <Button variant="secondary" onClick={ack}
+          {canAct && inc.status === 'open' && <Button variant="secondary" onClick={ack}
             loading={busy === 'ack'} disabled={busy !== null}>Acknowledge</Button>}
-          {isAdmin && inc.status !== 'resolved' && <Button variant="primary" onClick={resolve}
+          {canAct && inc.status !== 'resolved' && <Button variant="primary" onClick={resolve}
             loading={busy === 'resolve'} disabled={busy !== null}>Resolve</Button>}
         </div>
+        {/* v0.10.1828 — Incidents emekliyken salt-okunur arşiv şeridi. */}
+        {archive && (
+          <div className="status-banner status-banner-neutral" role="status" data-testid="incident-archive-banner">
+            <span>{INCIDENTS_ARCHIVE_BANNER}</span>
+            <Link to={INCIDENTS_RETIRED_HOME}>Anomalies</Link>
+          </div>
+        )}
 
         {/* Title + meta chips */}
         <h1 style={{ fontSize: 20, margin: '0 0 4px' }}>{inc.title}</h1>
@@ -343,7 +354,7 @@ function Inner() {
                 })}
               </div>
             )}
-            {isAdmin && (
+            {canAct && (
               <div className="ov-card-b" style={{ display: 'flex', gap: 8, borderTop: '1px solid var(--divider)' }}>
                 <input value={note} onChange={e => setNote(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && submitNote()}
@@ -397,7 +408,7 @@ function Inner() {
             <div className="card">
               <div className="ov-card-h">
                 <h3><PenLine size={14} strokeWidth={1.75} style={{ verticalAlign: '-2px', marginRight: 4 }} />Postmortem</h3>
-                {isAdmin && !editingPM && (
+                {canAct && !editingPM && (
                   <Button variant="secondary" size="sm" onClick={() => setEditingPM(true)} style={{ marginLeft: 'auto' }}>
                     {inc.postmortem ? 'Edit' : 'Write'}
                   </Button>
@@ -425,7 +436,7 @@ function Inner() {
                 ) : inc.postmortem ? (
                   <div>
                     <pre className="mono" style={{ fontSize: 12, whiteSpace: 'pre-wrap', margin: 0 }}>{inc.postmortem}</pre>
-                    {isAdmin && (
+                    {canAct && (
                       <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
                         <Button variant="secondary" size="sm" onClick={addPMToKB} loading={kbPM.busy}
                           title="Kayıtlı postmortem'i bilgi tabanına indeksle — AI benzer incident'larda bulur">
@@ -438,7 +449,7 @@ function Inner() {
                   </div>
                 ) : (
                   <div style={{ color: 'var(--text3)', fontSize: 12 }}>
-                    {isAdmin ? 'Once resolved, write a blameless postmortem here.' : 'No postmortem yet.'}
+                    {canAct ? 'Once resolved, write a blameless postmortem here.' : 'No postmortem yet.'}
                   </div>
                 )}
               </div>

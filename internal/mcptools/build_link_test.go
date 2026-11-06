@@ -84,6 +84,7 @@ func TestBuildLinkToolArgs(t *testing.T) {
 
 // v0.10.1222 — tekil varlık sayfaları; sözleşmeler frontend üreticileriyle aynı.
 func TestBuildLinkEntityPages(t *testing.T) {
+	withIncidents(t, true) // v0.10.1828 — açık anahtar: incident arşiv linki aynen
 	rng := "custom:1000-2000"
 	cases := []struct {
 		a    buildLinkArgs

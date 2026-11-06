@@ -5,6 +5,7 @@ import { SETTINGS_TAB_INDEX } from '@/pages/settings/tabIndex';
 import type { Action } from '@/lib/actions';
 import type { LocalActionId } from './localActions';
 import type { PaletteGroupId } from './groups';
+import { incidentsNavVisible } from '@/lib/incidentsRetired'; // v0.10.1828
 
 export type PaletteResult = {
   kind: 'page' | 'service' | 'trace' | 'action' | 'endpoint' | 'operation';
@@ -100,9 +101,11 @@ export const PAGES: PaletteResult[] = [
 ];
 
 /** Rol süzgeçli + yerelleştirilmiş katalog (admin → + Settings sekmeleri). */
-export function localizePages(t: (key: string) => string, isAdmin: boolean): PaletteResult[] {
+// v0.10.1828 — incidentsOn: Incidents emekliyken ⌘K "Incidents" sayfasını önermez.
+export function localizePages(t: (key: string) => string, isAdmin: boolean, incidentsOn: boolean): PaletteResult[] {
   const base = PAGES
     .filter(pg => !pg.adminOnly || isAdmin)
+    .filter(pg => !pg.to || incidentsNavVisible(pg.to, incidentsOn))
     .map(pg => (pg.navKey ? { ...pg, label: t(pg.navKey) } : pg));
   if (!isAdmin) return base;
   // v0.9.1272 (#3) — 23 Settings sekmesi aranabilir: "ayar ara…"

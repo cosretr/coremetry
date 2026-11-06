@@ -16,7 +16,7 @@ const svc = (n: string): PaletteResult => ({ kind: 'service', label: n, hint: 'S
 const ep = (n: string): PaletteResult => ({ kind: 'endpoint', label: n, hint: 'Endpoint', to: `/traces?op=${n}` });
 const op = (n: string): PaletteResult => ({ kind: 'operation', label: n, hint: 'Operasyon', to: `/traces?fc=${n}` });
 const base = (o: Partial<PaletteResultInput>): PaletteResultInput => ({
-  query: '', pages: localizePages(k => k, false), services: [], endpoints: [], oracleOps: [], pivotSvcs: [],
+  query: '', pages: localizePages(k => k, false, true), services: [], endpoints: [], oracleOps: [], pivotSvcs: [],
   role: 'editor', seeAllLabel: 'See all results for “{q}” →', ...o,
 });
 const groupsOf = (rs: PaletteResult[]) => groupPaletteResults(rs).map(g => g.group);
@@ -59,8 +59,8 @@ describe('buildPaletteResults — sıra paritesi', () => {
   });
 
   it('admin değilse Settings/System sayfaları yok; admin → Settings sekmeleri', () => {
-    expect(localizePages(k => k, false).some(p => p.adminOnly)).toBe(false);
-    const admin = localizePages(k => k, true);
+    expect(localizePages(k => k, false, true).some(p => p.adminOnly)).toBe(false);
+    const admin = localizePages(k => k, true, true);
     expect(admin.some(p => p.to?.startsWith('/settings/'))).toBe(true);
     expect(PAGES.some(p => p.to === '/search' && p.navKey === 'nav.search')).toBe(true);
   });

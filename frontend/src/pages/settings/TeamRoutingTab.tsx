@@ -12,7 +12,8 @@ import { api } from '@/lib/api';
 import { useServicesMetadata } from '@/lib/queries';
 import { teamOptionsCI } from '@/lib/teamOptions';
 import type { TeamContacts } from '@/lib/types';
-import { NOTIFY_KIND_OPTIONS, normalizeKinds, toggleKind } from '@/lib/notifyKinds'; // v0.10.814
+import { notifyKindOptionsFor, normalizeKinds, toggleKind } from '@/lib/notifyKinds'; // v0.10.814
+import { useIncidentsEnabled } from '@/components/AuthProvider'; // v0.10.1828
 import { FlashBox, humanize } from './shared';
 
 // Faz 2 dilim 1 R9 (shadcn): inline stil yok (Tailwind utility); coremetry/
@@ -36,6 +37,7 @@ const BARE_INPUT = 'h-8 bg-field border-(--border-control) text-[length:var(--fs
 // send time.
 
 export function TeamRoutingTab() {
+  const incidentsOn = useIncidentsEnabled(); // v0.10.1828
   const [tc, setTc] = useState<TeamContacts | null | undefined>(undefined);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
@@ -171,7 +173,7 @@ export function TeamRoutingTab() {
       <div className="mb-3.5" role="group" aria-labelledby={kindsLabelId}>
         <div id={kindsLabelId} className={LABEL}>Olay türleri (boş = hepsi)</div>
         <div className="flex flex-wrap gap-3.5">
-          {NOTIFY_KIND_OPTIONS.filter(o => o.value !== 'exception').map(o => (
+          {notifyKindOptionsFor(incidentsOn).filter(o => o.value !== 'exception').map(o => (
             <span key={o.value} title={o.hint}>
               <CheckboxField checked={normalizeKinds(tc.kinds).includes(o.value)}
                 onCheckedChange={() => setTc({ ...tc, kinds: toggleKind(normalizeKinds(tc.kinds), o.value) })}

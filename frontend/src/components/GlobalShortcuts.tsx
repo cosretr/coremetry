@@ -1,6 +1,8 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useShortcuts } from '@/lib/keyboard';
 import { navHref } from '@/lib/navHref';
+import { useIncidentsEnabled } from './AuthProvider';
+import { incidentsNavVisible } from '@/lib/incidentsRetired'; // v0.10.1828
 
 // GlobalShortcuts (v0.5.444) — registers app-wide power-user
 // shortcuts: '/' to focus the page search input, and 'g <x>'
@@ -86,6 +88,8 @@ export function GlobalShortcuts() {
   // taşıyor. Bu yüzey en sinsi olanıydı: klavyeyle gezinen operatör
   // sinyaller arasında en hızlı geçen, yani pencereyi en çok kaybeden.
   const { search } = useLocation();
+  // v0.10.1828 — Incidents emekliyken "g i" kaydı yok (gizli sayfaya kısayol olmaz).
+  const incidentsOn = useIncidentsEnabled();
 
   useShortcuts(
     [
@@ -98,7 +102,7 @@ export function GlobalShortcuts() {
         // is suppressed automatically.
         handler: () => focusPageSearch(),
       },
-      ...PAGES.map(p => ({
+      ...PAGES.filter(p => incidentsNavVisible(p.to, incidentsOn)).map(p => ({
         keys: p.key,
         label: p.label,
         group: 'Navigation',
@@ -108,7 +112,7 @@ export function GlobalShortcuts() {
     // v0.9.932 — `search` DEP: navigate kimliği sabit ama handler artık
     // location'ı kapatıyor. Boş dep listesiyle binding ilk mount'taki
     // pencereyi sonsuza dek taşırdı — düzeltilen bug'ın daha sinsi hâli.
-    [search],
+    [search, incidentsOn],
   );
 
   return null;

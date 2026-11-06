@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { NOTIFY_KIND_OPTIONS, kindsSummary, normalizeKinds, toggleKind } from './notifyKinds';
+import { NOTIFY_KIND_OPTIONS, kindsSummary, normalizeKinds, notifyKindOptionsFor, toggleKind } from './notifyKinds';
 
 describe('notifyKinds — saf', () => {
   it('normalizeKinds: kırp, küçült, tekrar at, bilinmeyeni düşür, sıra korunur', () => {
@@ -34,6 +34,14 @@ describe('notifyKinds — saf', () => {
     expect(NOTIFY_KIND_OPTIONS.map(o => o.value)).toEqual(['problem', 'anomaly', 'incident', 'exception']);
     expect(NOTIFY_KIND_OPTIONS[3].hint).toContain('Boş süzgeç bu türü kapsamaz');
   });
+
+  // v0.10.1828 — Incidents emekliyken seçicide incident yok; kayıtlı değer korunur.
+  it('Incidents emekliyken seçicide incident seçeneği yok, kayıtlı değer düşmez', () => {
+    expect(notifyKindOptionsFor(true).map(o => o.value)).toEqual(['problem', 'anomaly', 'incident', 'exception']);
+    expect(notifyKindOptionsFor(false).map(o => o.value)).toEqual(['problem', 'anomaly', 'exception']);
+    expect(normalizeKinds(['incident', 'problem'])).toEqual(['incident', 'problem']);
+    expect(toggleKind(['incident'], 'problem')).toEqual(['problem', 'incident']);
+  });
 });
 
 describe('notifyKinds — kablolama', () => {
@@ -43,7 +51,7 @@ describe('notifyKinds — kablolama', () => {
 
   it('modal kinds alanını serileştirir ve seçenekleri tek kaynaktan çizer', () => {
     expect(modal).toContain('kinds:');
-    expect(modal).toContain('NOTIFY_KIND_OPTIONS.map(');
+    expect(modal).toContain('notifyKindOptionsFor(incidentsOn).map('); // v0.10.1828
     expect(modal).toContain('toggleKind(');
   });
 

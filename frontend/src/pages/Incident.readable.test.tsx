@@ -21,7 +21,7 @@ const m = vi.hoisted(() => {
     addListener: () => {}, removeListener: () => {},
     addEventListener: () => {}, removeEventListener: () => {}, dispatchEvent: () => false,
   })) as unknown as typeof window.matchMedia;
-  return { problemIds: [] as string[], problems: {} as Record<string, unknown> };
+  return { problemIds: [] as string[], problems: {} as Record<string, unknown>, incidents: true };
 });
 const DB_DESC = 'couchbase orders veritabanında hata oranı %100.0 (eşik %5), 3 çağıran servis etkilendi (svc-a, svc-b, svc-c) — 1200 çağrı / 5 dk.';
 vi.mock('@/lib/api', () => {
@@ -41,7 +41,8 @@ vi.mock('@/lib/api', () => {
   };
 });
 vi.mock('@/components/AuthProvider', () => ({
-  useAuth: () => ({ user: { username: 'op', email: 'op@x', role: 'editor' }, loading: false }),
+  // v0.10.1828 — m.incidents: Incidents ana anahtarı (kapalı = salt-okunur arşiv).
+  useAuth: () => ({ user: { username: 'op', email: 'op@x', role: 'editor', features: { incidents: m.incidents } }, loading: false }),
 }));
 vi.mock('@/pages/service/charts/OverviewChart', () => ({ OverviewChart: () => null }));
 vi.mock('@/components/ai/AIExplainButton', () => ({ AIExplainButton: () => null }));
@@ -137,10 +138,31 @@ describe('Incident tam sayfası — okunur üst kısım', () => {
   });
 
   it('başka girişte geri bağlantı Incidents listesi', async () => {
+    m.incidents = true;
     m.problemIds = ['db1'];
     m.problems = { db1: dbProblem };
     const el = await mount();
     const backLink = el.querySelector<HTMLAnchorElement>('.rb-bar a');
     expect(backLink?.getAttribute('href')).toContain('/incidents');
+    expect(el.querySelector('[data-testid="incident-archive-banner"]')).toBeNull();
+    expect([...el.querySelectorAll('button')].some(b => b.textContent?.trim() === 'Resolve')).toBe(true);
+  });
+
+  // v0.10.1828 — Incidents emekliyken (operatör kararı 2026-11-05) sayfa
+  // salt-okunur arşiv: şerit + Anomalies bağlantısı, eylem düğmesi yok.
+  it('emekliyken salt-okunur arşiv: şerit var, ack/resolve/not/postmortem yok', async () => {
+    m.incidents = false;
+    m.problemIds = ['db1'];
+    m.problems = { db1: dbProblem };
+    const el = await mount();
+    const banner = el.querySelector('[data-testid="incident-archive-banner"]');
+    expect(banner?.textContent).toContain("Incidents akışı emekli (arşiv). Yeni olaylar Anomalies'te.");
+    const labels = [...el.querySelectorAll('button')].map(b => b.textContent?.trim());
+    for (const gone of ['Acknowledge', 'Resolve', 'Add note', 'Write', 'Edit']) {
+      expect(labels).not.toContain(gone);
+    }
+    const backLink = el.querySelector<HTMLAnchorElement>('.rb-bar a');
+    expect(backLink?.getAttribute('href')).toContain('/anomalies?tab=groups');
+    m.incidents = true;
   });
 });

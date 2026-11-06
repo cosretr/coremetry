@@ -11,7 +11,8 @@ import (
 
 var guidePages = map[string]bool{"/services": true, "/service": true, "/traces": true, "/trace": true, "/logs": true, "/inbox": true,
 	"/problems": true, "/incidents": true, "/slos": true, "/service-map": true, "/explore": true, "/dashboards": true,
-	"/alerts": true, "/settings/channels": true, "/clusters": true, "/rollouts": true}
+	"/alerts": true, "/settings/channels": true, "/clusters": true, "/rollouts": true,
+	"/anomalies": true} // v0.10.1828 — Incidents emekliyken problems konusu Anomalies'e bağlar
 
 func TestProductGuideTable(t *testing.T) {
 	seen := map[string]bool{}

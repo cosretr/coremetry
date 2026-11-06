@@ -10,7 +10,7 @@ import {
   Inbox, TriangleAlert, Boxes, Webhook, Workflow, Database, ClipboardList,
   MessageSquare, ListTree, ChartSpline, ScrollText, Compass, BookText,
   LayoutDashboard, Bell, Target, CircleGauge, Hash, Eye,
-  Sparkles, LayoutGrid, FileClock, Terminal, Code, Server, Bug, Flag, Rocket, type LucideIcon,
+  Sparkles, LayoutGrid, FileClock, Terminal, Code, Server, Bug, Flag, Rocket, Activity, type LucideIcon,
 } from 'lucide-react';
 import { navHref } from '@/lib/navHref';
 import { useAuth } from './AuthProvider';
@@ -37,6 +37,11 @@ type NavItem = {
   // editorToo — v0.10.1484: adminOnly giriş editöre de görünür (sayfa editöre
   // kısıtlı görünüm çizer; /ai → yalnız "Şüpheli yönlendirmeler").
   editorToo?: boolean;
+  // v0.10.1828 — Incidents emekliliği (operatör: "Incident sekmesi yerine
+  // Anomalies olsun"): incidentsOnly yalnız ana anahtar açıkken, retiredOnly
+  // yalnız kapalıyken görünür — aynı yuvada Incidents ↔ Anomalies.
+  incidentsOnly?: boolean;
+  retiredOnly?: boolean;
 };
 
 // NavItem labels are i18n keys; the actual label is resolved
@@ -87,7 +92,8 @@ const NAV_GROUPS: NavGroup[] = [
       // v0.9.1074 — Problems grubun ilk kalemi (operatör isteği).
       { href: '/inbox',     label: 'nav.inbox',     icon: Inbox },
       { href: '/problems',  label: 'nav.problems',  icon: Bug },
-      { href: '/incidents', label: 'nav.incidents', icon: TriangleAlert },
+      { href: '/incidents', label: 'nav.incidents', icon: TriangleAlert, incidentsOnly: true },
+      { href: '/anomalies', label: 'nav.anomalies', icon: Activity, retiredOnly: true }, // v0.10.1828
       { href: '/rollouts',  label: 'nav.rollouts',  icon: Rocket }, // v0.10.201 — Deployment Report → Rollouts (olay tabanlı)
     ],
   },
@@ -198,6 +204,7 @@ export function Sidebar() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const incidentsOn = user?.features?.incidents === true; // v0.10.1828 — kabuk bayrağı
   const t = useT();
   // Both queries auto-poll on their own intervals (5s / 30s) and
   // share their cache with anywhere else that consumes them.
@@ -411,6 +418,8 @@ export function Sidebar() {
             const items = group.items.filter(n => {
               if (n.adminOnly && user?.role !== 'admin' && !(n.editorToo && user?.role === 'editor')) return false;
               if (allowed && !allowed.includes(n.href)) return false;
+              if (n.incidentsOnly && !incidentsOn) return false; // v0.10.1828
+              if (n.retiredOnly && incidentsOn) return false;
               return true;
             });
             if (items.length === 0) return null;

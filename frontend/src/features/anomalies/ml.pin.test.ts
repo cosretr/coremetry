@@ -9,6 +9,7 @@ describe('log ml slice 0', () => {
     expect(resolveAnomaliesTab(null)).toBe('detectors');
     expect(resolveAnomaliesTab('x')).toBe('detectors');
     expect(resolveAnomaliesTab('ml')).toBe('ml');
+    expect(resolveAnomaliesTab('groups')).toBe('groups'); // v0.10.1828 — Gruplar
   });
   it('score label omits hit rate without samples', () => {
     expect(scoreLabel({ detector: 'log_volume', events: 3, samples: 0, hits: 0, hitRate: 0 })).toBe('Log hacmi: 3 olay · karar yok');

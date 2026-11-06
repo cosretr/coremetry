@@ -190,17 +190,19 @@ const DCOLS: ColumnDef<DetectorRow>[] = [
   { id: 'gate', label: 'Terfi kapısı', flex: true, minWidth: 180, sortValue: r => (r.gate?.ok ? 0 : 1) },
 ];
 
-export type AnomaliesTab = 'detectors' | 'ml';
+// v0.10.1828 — 'groups' (Gruplar): anomali grupları (Faz 3); emekli
+// /incidents buraya iner.
+export type AnomaliesTab = 'detectors' | 'ml' | 'groups';
 /** SAF: bilinmeyen değer → detectors (eski linkler bozulmaz). */
 export function resolveAnomaliesTab(raw: string | null): AnomaliesTab {
-  return raw === 'ml' ? 'ml' : 'detectors';
+  return raw === 'ml' ? 'ml' : raw === 'groups' ? 'groups' : 'detectors';
 }
 
 export function AnomaliesTabBar({ value, onChange }: { value: AnomaliesTab; onChange: (t: AnomaliesTab) => void }) {
   return (
     <div className="mb-3">
       <SegmentedControl<AnomaliesTab> value={value} onChange={onChange} aria-label="Anomali kaynağı"
-        options={[{ value: 'detectors', label: 'Dedektörler' }, { value: 'ml', label: 'ML' }]} />
+        options={[{ value: 'detectors', label: 'Dedektörler' }, { value: 'ml', label: 'ML' }, { value: 'groups', label: 'Gruplar' }]} />
     </div>
   );
 }

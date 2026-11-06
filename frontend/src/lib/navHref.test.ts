@@ -82,7 +82,8 @@ describe('üç nav yüzeyi de helperdan geçiyor', () => {
     expect(src).toContain('navHref(p.to, search)');
     // Dep'siz kayıt ilk mount'un penceresini sonsuza dek taşırdı: aynı
     // bug'ın daha sinsi hâli, ve tamamen sessiz.
-    expect(src).toContain('[search]');
+    // v0.10.1828 — Incidents ana anahtarı da dep ("g i" kaydı ona bağlı).
+    expect(src).toContain('[search, incidentsOn]');
   });
 
   it('⌘K sonuçları', () => {

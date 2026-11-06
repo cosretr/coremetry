@@ -138,7 +138,7 @@ describe('sonuç listesi — etiket + sıra', () => {
   it('ACTIONS "changes state" taşır, yerel eylemler taşımaz ve onların ardından', () => {
     const q = 'disable';
     const rs = buildPaletteResults({
-      query: q, pages: localizePages(k => k, false), services: [], endpoints: [], oracleOps: [], pivotSvcs: [],
+      query: q, pages: localizePages(k => k, false, true), services: [], endpoints: [], oracleOps: [], pivotSvcs: [],
       role: 'editor', seeAllLabel: '{q}', localActions: filterLocalActions(ctx(), 'copy'),
     });
     const acts = rs.filter(r => r.kind === 'action');

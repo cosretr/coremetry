@@ -186,6 +186,16 @@ func buildLink(a buildLinkArgs, clusterID string, filters []chstore.FilterExpr, 
 		q.Set("exc", strings.TrimSpace(a.Fingerprint))
 		withRange = false
 	case "incident":
+		// v0.10.1828 — Incidents emekliyken bağlantı Anomalies › Gruplar'a
+		// (menüde olmayan sayfaya link üretme; şema `incident`'ı kabul etmeye
+		// devam eder, kayıtlı istemler kırılmaz).
+		if !chstore.IncidentsEnabled() {
+			path = "/anomalies"
+			q = url.Values{}
+			q.Set("tab", "groups")
+			withRange = false
+			break
+		}
 		if strings.TrimSpace(a.IncidentID) == "" {
 			return "", fmt.Errorf("incident sayfası incident_id ister")
 		}

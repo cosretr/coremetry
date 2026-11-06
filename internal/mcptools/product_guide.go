@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/mcp"
 )
 
@@ -35,6 +36,11 @@ type GuideTopic struct {
 	Steps    []string
 	Links    func(svc, traceID string) []GuideLink
 	Related  []string
+	// RetiredTitle / RetiredSteps — v0.10.1828 (Incidents emekliliği):
+	// ana anahtar (chstore.IncidentsEnabled) kapalıyken Title / Steps yerine
+	// (Incidents sayfası menüde yok; yol tarifi Anomalies'i gösterir).
+	RetiredTitle string
+	RetiredSteps []string
 }
 
 func svcQ(svc string) string { return url.QueryEscape(svc) }
@@ -118,15 +124,16 @@ var productGuide = []GuideTopic{
 			"Bana \"açık problemler\" ya da \"{svc} sağlığı nasıl\" diyebilirsin.",
 		},
 		Links: func(svc, _ string) []GuideLink {
-			out := []GuideLink{{Label: "Inbox", Href: "/inbox"}}
-			if svc != "" {
-				out = append(out, GuideLink{Label: "Problemler", Href: "/problems?service=" + svcQ(svc)})
-			} else {
-				out = append(out, GuideLink{Label: "Problemler", Href: "/problems"})
-			}
-			return append(out, GuideLink{Label: "Incident'lar", Href: "/incidents"})
+			return problemsGuideLinks(svc, chstore.IncidentsEnabled())
 		},
 		Related: []string{"alerts", "error_traces"},
+		// v0.10.1828 — Incidents emekliyken.
+		RetiredTitle: "Ne bozuk — problemler ve anomaliler",
+		RetiredSteps: []string{
+			"Inbox tek liste: açık problemler ve anomaliler öncelik (P1→P3) sırasıyla; exception grupları çipten açılır.",
+			"Problems sayfası kural bazlı problemleri, Anomalies sayfası dedektör anomalilerini ve anomali gruplarını gösterir.",
+			"Bana \"açık problemler\" ya da \"{svc} sağlığı nasıl\" diyebilirsin.",
+		},
 	},
 	{
 		ID: "slo", Title: "SLO tanımlamak ve bütçeyi izlemek", Ask: "SLO nasıl tanımlanır?",
@@ -256,6 +263,37 @@ var productGuide = []GuideTopic{
 // GuideTopics — salt-okunur kopya (sıra sabit).
 func GuideTopics() []GuideTopic { return append([]GuideTopic(nil), productGuide...) }
 
+// problemsGuideLinks — SAF (v0.10.1828): "problems" konusunun bağlantıları;
+// Incidents emekliyken son bağlantı Anomalies (menüde olmayan sayfaya
+// yönlendirmez).
+func problemsGuideLinks(svc string, incidentsOn bool) []GuideLink {
+	out := []GuideLink{{Label: "Inbox", Href: "/inbox"}}
+	if svc != "" {
+		out = append(out, GuideLink{Label: "Problemler", Href: "/problems?service=" + svcQ(svc)})
+	} else {
+		out = append(out, GuideLink{Label: "Problemler", Href: "/problems"})
+	}
+	if incidentsOn {
+		return append(out, GuideLink{Label: "Incident'lar", Href: "/incidents"})
+	}
+	return append(out, GuideLink{Label: "Anomaliler", Href: "/anomalies"})
+}
+
+// guideTopicFor — SAF (v0.10.1828): emekli anahtarda konunun Retired*
+// metnini seçer; açıkken konu aynen.
+func guideTopicFor(t GuideTopic, incidentsOn bool) GuideTopic {
+	if incidentsOn {
+		return t
+	}
+	if t.RetiredTitle != "" {
+		t.Title = t.RetiredTitle
+	}
+	if len(t.RetiredSteps) > 0 {
+		t.Steps = t.RetiredSteps
+	}
+	return t
+}
+
 func guideTopicByID(id string) (GuideTopic, bool) {
 	for _, t := range productGuide {
 		if t.ID == id {
@@ -328,6 +366,7 @@ func GuideFor(topicID, question, service, traceID string) (GuideAnswer, bool) {
 	if !ok {
 		return GuideAnswer{}, false
 	}
+	t = guideTopicFor(t, chstore.IncidentsEnabled()) // v0.10.1828
 	svcText, trText := "servisin", "trace id"
 	if service != "" {
 		svcText = service

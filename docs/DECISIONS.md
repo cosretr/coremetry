@@ -12302,3 +12302,9 @@ sağlıklı çalışmıyor; anomaliler oluşsun, gerekirse Problem'e terfi olurl
   satırı), tür sözlüğü/varsayılanı problem+anomaly (`inbox_incidents_retired.go` + FE `KIND_*_RETIRED`); yalnız
   `?kind=incident` taşıyan eski link TÜM türlere değil varsayılana düşer. Liste anahtarı `:inc=` + `inbox:v11:`, rozet
   `inbox:count:v3:inc=`; servis şeridi incident satırı çizmez. Açıkken v0.10.1796 aynen (testler iki durumu pinler).
+- **v0.10.1828 — menü/rota/CoSRE anahtarı izler; Anomalies'e "Gruplar".** Kapalıyken menüdeki Incidents yuvasında Anomalies
+  (operatörün sözü: "Incident sekmesi yerine Anomalies"), ⌘K ve "g i" yok, Roles ızgarası `/incidents` önermez (doğrulama
+  tam liste: kayıtlı rol değeri reddedilmez); `/incidents` → `/anomalies?tab=groups`; `/incident?id=` salt-okunur arşiv
+  (şerit, eylem yok). Bildirim türü seçicisinde incident yok (kayıtlı değer korunur); `build_link page=incident` ve ürün yol
+  tarifi Anomalies'e bağlar; var olan incident id'sine arşiv linkleri (explain, CoSRE inbox açma) kalır. Rota prefetch girdisi
+  dokunulmadı: yalnız hover'la ısınır, gizli sayfaya link yok. Events `incident` süzgeci ve durum sayfası geçmişi aynen.

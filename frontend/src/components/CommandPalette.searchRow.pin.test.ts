@@ -22,7 +22,7 @@ describe('⌘K — /search girişi ve "tüm sonuçlar" satırı (v0.10.1335)', (
   it('"tüm sonuçlar" satırı listenin SONUNDA', () => {
     for (const query of ['checkout', 'ack', 'P-3f9a2', '060203vzXA0051685896']) {
       const rs = buildPaletteResults({
-        query, pages: localizePages(k => k, true), services: [], endpoints: [], oracleOps: [], pivotSvcs: [],
+        query, pages: localizePages(k => k, true, true), services: [], endpoints: [], oracleOps: [], pivotSvcs: [],
         role: 'admin', seeAllLabel: 'See all results for “{q}” →',
       });
       expect(rs[rs.length - 1], query).toMatchObject({ kind: 'page', to: searchSeeAllHref(query), label: `See all results for “${query}” →` });

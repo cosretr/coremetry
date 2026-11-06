@@ -63,6 +63,24 @@ var availablePages = []AvailablePage{
 	{ID: "/system", Label: "nav.system", Group: "navGroup.system"},
 }
 
+// availablePagesFor — SAF (v0.10.1828, Incidents emekliliği): Settings →
+// Roles ızgarasının gördüğü liste. Ana anahtar kapalıyken /incidents
+// önerilmez (menüde yok). Doğrulama (availablePageIDs) TAM listeyi kullanır:
+// kayıtlı bir rolün "/incidents" değeri reddedilmez, anahtar açılınca aynen
+// geri gelir.
+func availablePagesFor(incidentsOn bool) []AvailablePage {
+	if incidentsOn {
+		return availablePages
+	}
+	out := make([]AvailablePage, 0, len(availablePages))
+	for _, p := range availablePages {
+		if p.ID != "/incidents" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
 // availablePageIDs returns just the IDs as a lookup set — used by the
 // upsert handler to reject unknown page IDs (catches typos before
 // they silently lock a user out).

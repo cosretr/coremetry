@@ -5,7 +5,8 @@ import { Field, SelectField, TextareaField, CheckboxField } from '@/components/c
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/coremetry/overlay';
 import { api } from '@/lib/api';
 import type { NotificationChannel, ChannelType, NotifyKind } from '@/lib/types';
-import { NOTIFY_KIND_OPTIONS, normalizeKinds, toggleKind } from '@/lib/notifyKinds';
+import { notifyKindOptionsFor, normalizeKinds, toggleKind } from '@/lib/notifyKinds';
+import { useIncidentsEnabled } from '@/components/AuthProvider'; // v0.10.1828
 import { FlashBox, humanize } from './shared';
 import { ZoomChannelPicker } from './ZoomChannelPicker';
 import { useServicesMetadata } from '@/lib/queries';
@@ -46,6 +47,7 @@ export function ChannelModal({ initial, onClose, onSaved }: {
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const incidentsOn = useIncidentsEnabled(); // v0.10.1828 — incident türü yalnız açıkken seçilir
   const kindsLabelId = useId();
   const [name, setName] = useState(initial?.name ?? '');
   const [type, setType] = useState<ChannelType>(initial?.type ?? 'email');
@@ -406,7 +408,7 @@ export function ChannelModal({ initial, onClose, onSaved }: {
               <div className="mb-3" role="group" aria-labelledby={kindsLabelId}>
                 <div id={kindsLabelId} className={LABEL}>Olay türleri (boş = hepsi)</div>
                 <div className="flex flex-wrap gap-3.5">
-                  {NOTIFY_KIND_OPTIONS.map(o => (
+                  {notifyKindOptionsFor(incidentsOn).map(o => (
                     <span key={o.value} title={o.hint}>
                       <CheckboxField checked={matchKinds.includes(o.value)}
                         onCheckedChange={() => setMatchKinds(k => toggleKind(k, o.value))}

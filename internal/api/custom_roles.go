@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/cilcenk/coremetry/internal/auth"
+	"github.com/cilcenk/coremetry/internal/chstore"
 )
 
 // Custom-role admin handlers (v0.5.251). Custom roles are operator-
@@ -120,7 +121,7 @@ func (s *Server) deleteCustomRole(w http.ResponseWriter, r *http.Request) {
 // caching needed because the slice is process-local.
 func (s *Server) listAvailablePages(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{
-		"pages": availablePages,
+		"pages": availablePagesFor(chstore.IncidentsEnabled()), // v0.10.1828
 	})
 }
 

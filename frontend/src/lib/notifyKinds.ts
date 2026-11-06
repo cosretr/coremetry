@@ -24,6 +24,13 @@ export const NOTIFY_KIND_OPTIONS: NotifyKindOption[] = [
   { value: 'exception', label: 'Exception / HTTP hatası', hint: 'Inbox merdiveninde P1/P2 olan TAZE exception ve HTTP-hata grupları (yeni: ilk 15 dk; regressed); grup başına bir kez. Boş süzgeç bu türü kapsamaz — açıkça seçin.' },
 ];
 
+/** v0.10.1828 — seçicide görünen türler: Incidents emekliyken `incident`
+ *  seçeneği yok (incident bildirimi üretilmez). Kayıtlı değer KORUNUR:
+ *  normalizeKinds/toggleKind KNOWN'u kullanır, sunucu da kabul eder. */
+export function notifyKindOptionsFor(incidentsOn: boolean): NotifyKindOption[] {
+  return incidentsOn ? NOTIFY_KIND_OPTIONS : NOTIFY_KIND_OPTIONS.filter(o => o.value !== 'incident');
+}
+
 const KNOWN: NotifyKind[] = ['problem', 'anomaly', 'incident', 'exception'];
 const LABEL: Record<NotifyKind, string> = { problem: 'Problem', anomaly: 'Anomali', incident: 'Incident', exception: 'Exception' };
 

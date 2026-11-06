@@ -152,7 +152,8 @@ export function CommandPaletteBody({ open, onOpenChange, openSeq, takeBufferedQu
 
   // v0.9.1270 (B5#1) sayfa adı sidebar'la tek kaynaktan; v0.9.1272 rol süzgeci.
   const isAdmin = user?.role === 'admin';
-  const localizedPages = useMemo(() => localizePages(t, isAdmin), [t, isAdmin]);
+  const incidentsOn = user?.features?.incidents === true; // v0.10.1828 — kabuk bayrağı
+  const localizedPages = useMemo(() => localizePages(t, isAdmin, incidentsOn), [t, isAdmin, incidentsOn]);
   const results = useMemo(() => buildPaletteResults({
     query, pages: localizedPages, services, endpoints, oracleOps, pivotSvcs,
     role: user?.role, seeAllLabel: t('search.seeAll'),

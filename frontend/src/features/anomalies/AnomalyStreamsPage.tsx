@@ -10,6 +10,7 @@ import { TriageCrumb } from '@/components/TriageCrumb';
 import { AnomalyStreams } from './streams';
 import { PageShell } from '@/components/coremetry/PageShell';
 import { MLTab, AnomaliesTabBar, resolveAnomaliesTab, resolveMLSignal, type AnomaliesTab, type MLSignal } from '@/components/coremetry/anomalies/MLTab';
+import { GroupsTab } from '@/components/coremetry/anomalies/GroupsTab'; // v0.10.1828
 
 
 export default function AnomalyStreamsPage() {
@@ -35,7 +36,8 @@ export default function AnomalyStreamsPage() {
         <TriageCrumb label="Anomalies" />
         <SavedViewsBar page="anomalies" />
         <AnomaliesTabBar value={tab} onChange={setTab} />
-        {tab === 'ml' ? <MLTab signal={signal} onSignal={setSignal} /> : <AnomalyStreams />}
+        {tab === 'ml' ? <MLTab signal={signal} onSignal={setSignal} />
+          : tab === 'groups' ? <GroupsTab /> : <AnomalyStreams />}
       </PageShell>
     </>
   );
