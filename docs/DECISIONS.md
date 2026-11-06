@@ -12692,3 +12692,21 @@ Kaynak: `docs/metrics/metrics-explore-dashboards-audit.md` §7 Faz 2 (onaylı, �
   (silme 2.8, operatör OK'i sonrası). Sapmalar: "Alarm kuralı oluştur" yok (program dışı); TTFI ölçülmedi (tarayıcı
   yok); otomatik adım panel genişliğinden değil sabit 240 nokta bütçesinden (genişlik ölçümü + anahtar parçalanması
   yerine tek sabit — `api.metricQuery`'nin 1500 sabitiyle aynı gerekçe).
+- **v0.10.1864 — MetricsQL kipi (2.4; Code DSL sekmesi yeni sayfada yok).** `coremetry/metrics/MetricsQLEditor`: şeffaf
+  metin alanı + renklendirilmiş kopya (`lib/metricsExplorer/lex.ts`, token metinleri girdiyi aynen kurar) + satır
+  numaraları; ağır editör yok. Tamamlama Ctrl+Space ya da yazarken: metrik (sunucu araması, limit 12), fonksiyon (sabit;
+  MetricsQL'e özgüler CH'de/Thanos'ta nedeniyle kapalı), `{` içinde etiket adı, tırnak içinde etiket değeri
+  (`discover/*`); combobox ↔ listbox bağı, ↑↓ ↵/Tab Esc. Hata konumu: sunucunun `pos`'u (yer tutucuları çözülmüş metne
+  göre) `unsubstitutePos` ile operatörün metnine çevrilir → dalgalı alt çizgi + "Satır L, sütun C: … Sorgu
+  çalıştırılmadı; son başarılı sonuç aşağıda duruyor." (son başarılı sonuç ekranda kalır). "Builder'a çevir"
+  (`parse.ts`): yalnız builder biçimi; WITH / ikili işleç / without / alt sorgu / offset / bilinmeyen fonksiyon nedeniyle
+  reddedilir, elle pencere `[5m]` not düşerek otomatik pencereye döner; derleyici çıktısı kayıpsız geri döner (tablo
+  testi). Parçacık ekle (WITH, default, topk_avg, rollup_rate, keep_metric_names), Biçimlendir (yalnız boşluk; dize/yorum
+  dokunulmaz). Geçmiş (S9): YENİ `internal/api/metrics_history.go` `GET/POST/DELETE /api/metrics/history` — konsolun
+  `saved_views` deseni (page `metrics-history`, kişisel, son 50, ardışık özdeş tekilleşir, 128 KiB duvar, token
+  çağıranı tutmaz; kilit/depo dikişi paylaşılır). SAPMA: konsolda geçmişi handler yazar; burada İSTEMCİ yazar (POST) —
+  `/promql` serveCached arkasında, isabette seri sayısı/süre için gövdeyi yeniden çözmek gerekirdi; blob kişisel,
+  sahte POST yalnız kendi 50 satırını değiştirir; girdi sınırlı (≤ 8 KiB, ok|error). Yalnız Çalıştır'a basılan koşu
+  yazılır (yenileme saati yazmaz); aynı metni yeniden Çalıştır önbellek yerine taze koşar. Rol: her kimlikli kullanıcı
+  (viewer dahil; kişisel durum), audit yok (konsol kararı 2). "Sorgu izi" düğmesi görünür ama kapalı:
+  `capabilities.features.queryTrace` nedeni (sunucuda `trace=1` yok — bu programın dilim listesinde değil).

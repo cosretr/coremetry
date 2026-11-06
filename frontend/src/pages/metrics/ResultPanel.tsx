@@ -66,9 +66,11 @@ export interface ResultPanelProps {
   /** Metin dışı kaynak adı (Thanos). */
   sourceOverride?: string;
   unitFor(id: string): string | undefined;
+  /** Kod kipinde "Sorgu izi" (VM trace=1): desteklenmiyorsa nedeni; undefined = düğme yok. */
+  traceReason?: string;
 }
 
-export function ResultPanel({ model, results, stepSec, onModel, heatmap, onSwitchToBucket, emptyHint, sourceOverride, unitFor }: ResultPanelProps) {
+export function ResultPanel({ model, results, stepSec, onModel, heatmap, onSwitchToBucket, emptyHint, sourceOverride, unitFor, traceReason }: ResultPanelProps) {
   const [limitOpen, setLimitOpen] = useState(false);
   const main = results.filter(r => r.item.kind !== 'formula');
   const formulas = results.filter(r => r.item.kind === 'formula');
@@ -96,6 +98,9 @@ export function ResultPanel({ model, results, stepSec, onModel, heatmap, onSwitc
         <span className="flex-1" />
         {fetching && <Spinner />}
         {status && <span role="status" className="font-mono text-xs text-muted-foreground tabular-nums">{status}</span>}
+        {traceReason !== undefined && (
+          <Button type="button" variant="ghost" size="xs" disabled title={traceReason}>Sorgu izi</Button>
+        )}
       </div>
 
       {tr && (

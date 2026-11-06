@@ -15,6 +15,9 @@ import { promMatrixToSeries } from '@/lib/promMatrix';
 import type { MetricResultMeta, SpanMetricSeries } from '@/lib/types';
 import { parseRunError, type RunError, type RunItem, type RunPlan } from '@/lib/metricsExplorer/run';
 
+/** Kişisel sorgu geçmişinin react-query anahtarı (HistoryTable okur, QueryTab tazeler). */
+export const METRICS_HISTORY_KEY = ['metrics-history'] as const;
+
 export interface RunResult {
   item: RunItem;
   /** undefined = henüz cevap yok. */
@@ -26,6 +29,8 @@ export interface RunResult {
   loading: boolean;
   fetching: boolean;
   error: RunError | null;
+  /** Son cevabın (veri ya da hata) zamanı; geçmiş kaydı bunu izler. */
+  updatedAt: number;
   refetch(): void;
 }
 
@@ -83,6 +88,7 @@ export function useMetricsRun({ plan, from, to, cluster, thanosAllowed }: RunArg
       loading: th.isLoading,
       fetching: th.isFetching,
       error: th.error ? parseRunError(th.error) : null,
+      updatedAt: Math.max(th.dataUpdatedAt, th.errorUpdatedAt),
       refetch: () => { void th.refetch(); },
     }];
   }
@@ -95,6 +101,7 @@ export function useMetricsRun({ plan, from, to, cluster, thanosAllowed }: RunArg
       loading: !!r?.isLoading,
       fetching: !!r?.isFetching,
       error: r?.error ? parseRunError(r.error) : null,
+      updatedAt: r ? Math.max(r.dataUpdatedAt, r.errorUpdatedAt) : 0,
       refetch: () => { void r?.refetch(); },
     };
   });

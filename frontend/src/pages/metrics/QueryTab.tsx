@@ -6,8 +6,8 @@
 // Builder YAZDIKÇA çalışır (300 ms; Çalıştır düğmesi yok); kod kipi
 // Çalıştır'la. Model URL'de (`?mx=`), sayfa yazar; burada yerel durum yok
 // (taslak kod metni hariç).
-import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link2 } from 'lucide-react';
 import { Button } from '@/components/shadcn/button';
 import { SegmentedControl } from '@/components/coremetry/SegmentedControl';
@@ -21,9 +21,12 @@ import {
   type MxModel, type MxQuery, type MxSrc,
 } from '@/lib/metricsExplorer/model';
 import { planRun } from '@/lib/metricsExplorer/run';
+import { unsubstitutePos } from '@/lib/metricsExplorer/compile';
+import { parseBuilderForm } from '@/lib/metricsExplorer/parse';
 import { bucketSibling, sourceLabel } from '@/lib/metricsExplorer/result';
 import { panelsFromModel } from '@/lib/metricsExplorer/panels';
-import { useMetricsRun } from './useMetricsRun';
+import { METRICS_HISTORY_KEY, useMetricsRun, type RunResult } from './useMetricsRun';
+import { HistoryTable } from './HistoryTable';
 import { ResultPanel, type HeatmapState } from './ResultPanel';
 import { CodePanel } from './CodePanel';
 import { histogramResultToHeatmap } from '@/components/dashboard/histogramHeatmap';
@@ -58,7 +61,45 @@ export function QueryTab({ model, onModel, from, to, cluster, caps, canEdit }: Q
   const debounced = useDebouncedValue(model, model.mode === 'builder' ? 300 : 0);
   const plan = useMemo(() => planRun(debounced, rangeSec), [debounced, rangeSec]);
   const thanosAllowed = canEdit;
-  const results = useMetricsRun({ plan, from, to, cluster: scopeOn || plan.src === 'thanos' ? cluster : '', thanosAllowed });
+  const rawResults = useMetricsRun({ plan, from, to, cluster: scopeOn || plan.src === 'thanos' ? cluster : '', thanosAllowed });
+
+  // Kod kipi: hatalı koşuda SON BAŞARILI sonuç ekranda kalır (mockup görünüm 2).
+  const lastGood = useRef<RunResult | null>(null);
+  const code0 = model.mode === 'code' ? rawResults[0] : undefined;
+  if (code0?.series && !code0.error) lastGood.current = code0;
+  const results = code0?.error && lastGood.current
+    ? [{ ...code0, series: lastGood.current.series, meta: lastGood.current.meta }]
+    : rawResults;
+
+  // Geçmiş (S9): yalnız operatörün ÇALIŞTIRDIĞI koşu kaydedilir (yenileme
+  // saati değil); cevabı gelince bir kez POST, sonra liste tazelenir.
+  const qc = useQueryClient();
+  const pending = useRef<{ text: string; after: number } | null>(null);
+  useEffect(() => {
+    const r = code0;
+    const p = pending.current;
+    if (!r || !p || r.item.text !== p.text || r.loading || r.fetching || r.updatedAt < p.after) return;
+    pending.current = null;
+    api.metricsHistoryAdd({
+      q: r.item.text, ...(scopeOn ? { cluster } : {}),
+      status: r.error ? 'error' : 'ok', series: r.series?.length ?? 0, durationMs: r.meta?.tookMs ?? 0,
+      ...(r.error?.line ? { line: r.error.line, col: r.error.col } : {}),
+    }).then(() => qc.invalidateQueries({ queryKey: METRICS_HISTORY_KEY }), () => { /* geçmiş yazılamadı: sorgu sonucu etkilenmez */ });
+  }, [code0, scopeOn, cluster, qc]);
+  const runCode = (code: string) => {
+    pending.current = { text: code.trim(), after: Date.now() };
+    // Aynı metin: önbellekteki cevap yerine YENİDEN koş (Çalıştır = taze sonuç).
+    if (model.mode === 'code' && code.trim() === model.code.trim() && rawResults[0]) rawResults[0].refetch();
+    else set({ mode: 'code', code });
+  };
+  const toBuilder = (text: string) => {
+    const r = parseBuilderForm(text);
+    if (!r.ok) { toast.error(r.reason); return; }
+    set({ mode: 'builder', queries: [{ ...r.query, id: 'A' }] });
+    if (r.notes.length) toast.info(r.notes.join(' · '));
+  };
+  const codeErrPos = code0?.error?.pos !== undefined && model.mode === 'code'
+    ? unsubstitutePos(model.code.trim(), plan.stepSec, code0.error.pos) : undefined;
 
   // Isı haritası: builder'ın ilk görünür metrik satırı; histogram değilse nedenli boş durum.
   const heatQ = model.mode === 'builder' ? model.queries.find(q => q.kind === 'metric' && !q.hidden && q.metric) : undefined;
@@ -104,7 +145,7 @@ export function QueryTab({ model, onModel, from, to, cluster, caps, canEdit }: Q
   const metricRows = model.queries.filter(q => q.kind === 'metric');
   const canAdd = metricRows.length < MX_MAX_QUERIES && nextMxLetter(model.queries) !== null;
   const generated = model.mode === 'builder' ? plan.items.filter(i => i.kind !== 'code') : [];
-  const codeErr = model.mode === 'code' ? results[0]?.error ?? null : null;
+  const codeErr = code0?.error ?? null;
   const scopeChipCode = cluster && !model.scopeOff ? (
     scopeSupported ? (
       <span className="inline-flex h-6 items-center gap-1 rounded-md border border-dashed bg-muted px-1.5 font-mono text-xs" title="Sorgu metni değişmez; kapsam ayrı uygulanır">
@@ -176,19 +217,28 @@ export function QueryTab({ model, onModel, from, to, cluster, caps, canEdit }: Q
                   onClick={() => set({ mode: 'code', code: generated[0].text })}>MetricsQL kipinde aç →</Button>
               </details>
             )}
-            {plan.errors.length > 0 && null}
           </>
         ) : (
           <CodePanel code={model.code} src={model.src} caps={caps} canThanos={canEdit} thanosCluster={cluster}
-            onRun={code => set({ code })} onSrc={(src: MxSrc) => set({ src })} error={codeErr} scopeChip={scopeChipCode} />
+            onRun={runCode} onSrc={(src: MxSrc) => set({ src })} error={codeErr} errorPos={codeErrPos} scopeChip={scopeChipCode}
+            cluster={scopeOn ? cluster : undefined}
+            onToBuilder={(q, notes) => {
+              set({ mode: 'builder', queries: [{ ...q, id: 'A' }] });
+              if (notes.length) toast.info(notes.join(' · '));
+            }} />
         )}
       </section>
 
       <ResultPanel model={model} results={results} stepSec={plan.stepSec}
         onModel={p => set(p)} heatmap={heatmap} onSwitchToBucket={switchToBucket}
+        traceReason={model.mode === 'code' ? (caps?.features.queryTrace?.reason ?? 'Sorgu izi bu sürümde yok') : undefined}
         sourceOverride={plan.src === 'thanos' ? `Thanos · ${cluster}` : caps ? sourceLabel(caps.source) : undefined}
         emptyHint={model.mode === 'code' ? 'Sorguyu yazıp Çalıştır\'a basın.' : 'Bir metrik seçin; sorgu yazdıkça çalışır. Metrikleri Keşif sekmesinde gezebilirsiniz.'}
         unitFor={id => plan.items.find(i => i.id === id)?.unit} />
+
+      {model.mode === 'code' && (
+        <HistoryTable onRun={runCode} onEdit={q => set({ mode: 'code', code: q })} onBuilder={toBuilder} />
+      )}
 
       <AddToDashboardDialog open={dashOpen} onOpenChange={setDashOpen}
         buildPanels={() => panelsFromModel(model, rangeSec, newPanelId)} />

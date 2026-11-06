@@ -712,6 +712,15 @@ export const api = {
     get<import('./types').MetricsDiscoverCardinality>(withMetricSource(`/api/metrics/discover/cardinality?${qs(p)}`), signal),
   metricsDiscoverSeriesSample: (p: { match: string; limit?: number; since?: string; cluster?: string }, signal?: AbortSignal) =>
     get<import('./types').MetricsDiscoverSeriesSample>(withMetricSource(`/api/metrics/discover/series-sample?${qs(p)}`), signal),
+  // v0.10.1864 — Metrics Explorer kişisel sorgu geçmişi (sunucuda son 50;
+  // istemci kod kipinde çalışan her sorgunun sonucunu ekler).
+  metricsHistory: (signal?: AbortSignal) =>
+    get<import('./types').MetricsHistoryResponse>('/api/metrics/history', signal),
+  metricsHistoryAdd: (e: Omit<import('./types').MetricsHistoryEntry, 'at'>) =>
+    request<{ ok: boolean; stored: boolean }>('/api/metrics/history', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(e),
+    }),
+  metricsHistoryClear: () => request<{ ok: boolean }>('/api/metrics/history', { method: 'DELETE' }),
   metricsDiscoverTopQueries: (p: { topN?: number; maxLifetime?: string }, signal?: AbortSignal) =>
     get<import('./types').MetricsDiscoverTopQueries>(withMetricSource(`/api/metrics/discover/top-queries?${qs(p)}`), signal),
   // Distinct attribute keys observed on recent spans — drives the

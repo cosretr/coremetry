@@ -15,6 +15,9 @@ export { KindBadge } from './KindBadge';
 export { PickList } from './PickList';
 export type { PickItem } from './PickList';
 export { useServerSearch } from './useServerSearch';
+// v0.10.1864 — Faz 2 dilim 2.4: MetricsQL kipi.
+export { MetricsQLEditor } from './MetricsQLEditor';
+export type { MetricsQLEditorProps } from './MetricsQLEditor';
 // v0.10.1863 — Faz 2 dilim 2.3.
 export { AddToDashboardDialog } from './AddToDashboardDialog';
 export type { AddToDashboardDialogProps } from './AddToDashboardDialog';

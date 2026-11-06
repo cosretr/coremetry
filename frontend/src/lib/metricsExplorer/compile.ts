@@ -130,6 +130,25 @@ export function substituteIntervals(expr: string, stepSec: number): string {
     .replace(/\$__interval\b/g, `${step}s`);
 }
 
+/**
+ * unsubstitutePos — sunucunun bildirdiği hata konumu (yer tutucuları ÇÖZÜLMÜŞ
+ * metne göre) → operatörün metnindeki konum. Konum bir yer tutucunun
+ * içine düşerse yer tutucunun başı.
+ */
+export function unsubstitutePos(original: string, stepSec: number, pos: number): number {
+  const step = Math.max(1, Math.round(stepSec));
+  const re = /\$__(rate_)?interval\b/g;
+  let shift = 0;
+  for (let m = re.exec(original); m; m = re.exec(original)) {
+    const rep = m[1] ? `${rateWindowSec(step)}s` : `${step}s`;
+    const start = m.index + shift;
+    if (pos < start) break;
+    if (pos < start + rep.length) return m.index;
+    shift += rep.length - m[0].length;
+  }
+  return Math.max(0, Math.min(original.length, pos - shift));
+}
+
 /** Metin yer tutucu içeriyor mu (adım bilinmeden çalıştırılamaz). */
 export function hasIntervalVars(expr: string): boolean {
   return /\$__(rate_)?interval\b/.test(expr);

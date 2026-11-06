@@ -1,7 +1,7 @@
 // v0.10.1862 — builder satırı → MetricsQL (Faz 2 dilim 2.2).
 import { describe, expect, it } from 'vitest';
 import {
-  compileMxQuery, compileMxFormula, selectorText, substituteIntervals, rateWindowSec, legendFor, labelsOf,
+  unsubstitutePos, compileMxQuery, compileMxFormula, selectorText, substituteIntervals, rateWindowSec, legendFor, labelsOf,
   hasIntervalVars, quoteProm,
 } from './compile';
 import { blankMxQuery, type MxQuery } from './model';
@@ -91,4 +91,13 @@ describe('lejant', () => {
     ['{{yok}}', [], 'A'],
   ])('%s', (fmt, by, want) => expect(legendFor(gk, fmt, by, 'A')).toBe(want));
   it('etiketsiz seri → sorgu kimliği', () => expect(legendFor([], '', [], 'A')).toBe('A'));
+});
+
+describe('unsubstitutePos (hata konumu çözülmüş metinden operatörün metnine)', () => {
+  const orig = 'rate(x[$__rate_interval]) + y)';
+  // çözülmüş: 'rate(x[300s]) + y)' — fazla ')' çözülmüşte 17, özgünde 29
+  it.each([[0, 0], [7, 7], [9, 7], [12, 24], [17, 29]])('%i → %i', (pos, want) => {
+    expect(unsubstitutePos(orig, 15, pos)).toBe(want);
+  });
+  it('yer tutucusuz metin aynen', () => expect(unsubstitutePos('up)', 15, 2)).toBe(2));
 });

@@ -4679,6 +4679,21 @@ export type MetricsDiscoverTopQueries = MetricsDiscoverUnsupported | {
 // PromqlErrorBody — v0.10.1841 /api/metrics/promql hata gövdesi (Go
 // promql_error_pos.go). `error` eskisiyle aynı metin; pos 0 tabanlı karakter,
 // line/col 1 tabanlı — yalnız güvenilir konum varsa gelir.
+// v0.10.1864 — Metrics Explorer sorgu geçmişi (Go internal/api/metrics_history.go
+// metricsHistoryEntry / metricsHistoryResponse). Kişisel, sunucuda son 50.
+export interface MetricsHistoryEntry {
+  q: string;
+  cluster?: string;
+  status: 'ok' | 'error';
+  series: number;
+  durationMs: number;
+  line?: number;
+  col?: number;
+  /** unix ms (sunucu damgası) */
+  at: number;
+}
+export interface MetricsHistoryResponse { entries: MetricsHistoryEntry[]; enabled: boolean; maxEntries: number }
+
 export interface PromqlErrorBody { error: string; pos?: number; line?: number; col?: number; detail?: string }
 
 // /api/metrics/promql?meta=1 zarfı (v0.10.1835). Param yokken uç eski
