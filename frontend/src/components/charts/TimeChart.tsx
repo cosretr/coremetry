@@ -20,6 +20,7 @@ import { toggleSeriesVisibility, isolateSeriesVisibility, resetSeriesVisibility 
 import { drawPlayhead, drawThresholds, drawTimeRegions, type ChartPlayhead, type ChartThreshold, type ChartTimeRegion } from '@/lib/chart/overlays';
 import { placeTooltip } from '@/lib/chartTooltip';
 import { escapeHTML } from '@/lib/utils';
+import { stackMatrix } from '@/lib/chart/timeStack';
 
 // TimeChart (v0.8.91) — the ONE time-series primitive. Per-series type
 // (bar | line | area), an optional right (dual) axis, drag-to-brush, deploy
@@ -48,6 +49,13 @@ export interface TimeChartSeries {
   // v0.9.73 — line/area üzerinde nokta göster (seyrek serilerde her
   // gerçek örnek okunur; bar'da yok sayılır).
   pointsShow?: boolean;
+  // v0.10.1871 (ADDITIVE; öğrenme döngüsü Faz 2 parti B) — yığılı çubuk:
+  // aynı anahtarlı 'bar' serileri verildiği sırada üst üste (ilk = en alt;
+  // lib/chart/timeStack.ts). Tooltip ve lejant HAM değeri gösterir.
+  stack?: string;
+  // v0.10.1871 — soluk (gölge) çubuk: daha geniş, düşük opaklık, arkada
+  // (beklenen değer). Yalnız 'bar'.
+  faint?: boolean;
 }
 
 interface Props {
@@ -177,9 +185,14 @@ export function TimeChart({
 
   // uPlot's aligned data — memoised on the DATA inputs only so a poll recomputes
   // it once and either seeds a rebuild (structure changed) or rides setData.
+  // v0.10.1871 — yığılı çubuklar: çizim matrisi kümülatif üst, taban ayrı
+  // (stackRef; bars disp.y0). Yığın yoksa matris ham veriyle birebir.
+  const stacked = useMemo(() => stackMatrix(series), [series]);
+  const stackRef = useRef(stacked); stackRef.current = stacked;
+  const seriesRef = useRef(series); seriesRef.current = series;
   const chartData = useMemo<uPlot.AlignedData>(
-    () => [times, ...series.map(s => s.data)] as uPlot.AlignedData,
-    [times, series],
+    () => [times, ...stacked.draw] as uPlot.AlignedData,
+    [times, stacked],
   );
 
   // Build signature — everything that forces a full re-create. Series POINT
@@ -212,6 +225,16 @@ export function TimeChart({
     // yoğunken davranış birebir aynı — tavan yalnız seyrek bucket'ta devreye
     // girer.
     const barPath = uPlot.paths.bars!({ size: [barSize, MAX_BAR_PX], align: 0 });
+    // v0.10.1871 — gölge çubuk: biraz daha geniş (yığının arkasında görünür).
+    const faintPath = uPlot.paths.bars!({ size: [Math.min(1, barSize + 0.1), MAX_BAR_PX + 4], align: 0 });
+    // v0.10.1871 — yığın katmanı: y0 = kümülatif taban, y1 = kümülatif üst.
+    const stackPath = uPlot.paths.bars!({
+      size: [barSize, MAX_BAR_PX], align: 0,
+      disp: {
+        y0: { unit: 1, values: (u, si) => stackRef.current.base[si - 1] ?? [] },
+        y1: { unit: 1, values: (u, si) => u.data[si] as (number | null)[] },
+      },
+    });
 
     // Overlay plugin — regions (background-most) + threshold lines (Grafana-
     // parite M3) + dashed red deploy vlines. Drawn in a hook so they re-paint
@@ -337,7 +360,11 @@ export function TimeChart({
         ...series.map((s, i) => {
           const scale = s.axis === 'right' ? 'y2' : 'y';
           if (s.type === 'bar') {
-            return { label: s.label, scale, stroke: colors[i], fill: colors[i], width: 0, paths: barPath, points: { show: false } } as uPlot.Series;
+            if (s.faint) {
+              const c = colors[i] + '42'; // ≈ %26 opaklık (mockup .sh)
+              return { label: s.label, scale, stroke: c, fill: c, width: 0, paths: faintPath, points: { show: false } } as uPlot.Series;
+            }
+            return { label: s.label, scale, stroke: colors[i], fill: colors[i], width: 0, paths: s.stack ? stackPath : barPath, points: { show: false } } as uPlot.Series;
           }
           const base: uPlot.Series = {
             label: s.label, scale, stroke: colors[i], width: s.width ?? 1.8,
@@ -392,6 +419,8 @@ export function TimeChart({
               // Grafana-parite #2 — lejanttan gizlenen seri tooltip'ten de
               // düşer (value null → model satırı atar).
               value: visRef.current?.[i] === false ? null
+                // v0.10.1871 — yığın katmanı HAM değerini gösterir (çizim kümülatif).
+                : s.stack ? (seriesRef.current[i]?.data[si] ?? null)
                 : ((u.data[i + 1] as (number | null)[])?.[si] ?? null),
               unit: s.axis === 'right' ? rightUnit : leftUnit,
             };

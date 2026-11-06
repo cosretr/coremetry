@@ -72,6 +72,10 @@ export interface TimeChartSigSeries {
   type: string;       // 'bar' | 'line' | 'area'
   axis?: string;      // 'left' | 'right'
   width?: number;
+  // v0.10.1871 — yığılı çubuk anahtarı + soluk (gölge) çubuk: path kurulumu
+  // build anında → yapı imzasında. Yoksa demet eski şekliyle (imza değişmez).
+  stack?: string;
+  faint?: boolean;
 }
 export interface TimeChartSigInput {
   series: TimeChartSigSeries[];
@@ -92,7 +96,10 @@ export interface TimeChartSigInput {
 }
 export function timeChartBuildSignature(p: TimeChartSigInput): string {
   return JSON.stringify([
-    p.series.map(s => [s.key, s.label, s.color, s.type, s.axis ?? 'left', s.width ?? 0]),
+    p.series.map(s => {
+      const base = [s.key, s.label, s.color, s.type, s.axis ?? 'left', s.width ?? 0];
+      return s.stack || s.faint ? [...base, s.stack ?? '', s.faint ? 1 : 0] : base;
+    }),
     p.height,
     p.leftUnit ?? '',
     p.rightUnit ?? '',

@@ -35,6 +35,7 @@ import type { ExplainCard, ExplainLink, MLBacktestResult, MLReplayVerdict, MLSam
 import { ML_DETECTOR_TR } from './MLTab';
 import { MLEventPlayer } from './MLEventPlayer';
 import { MLTraceHeatmap } from './MLTraceHeatmap';
+import { MLLogPlayer } from './MLLogPlayer';
 
 const fmtTs = (ns: number) => fmtDateTime(new Date(ns / 1e6));
 const fmtNum = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(3));
@@ -136,6 +137,7 @@ export function MLReplayContent({ id, autoPlay = false }: { id: string; autoPlay
   }
   const h = card.header;
   const tc = q.data?.course?.trace; // v0.10.1870 — endpoint'li trace olayı: ısı haritası katmanı
+  const lc = q.data?.course?.log; // v0.10.1871 — log olayı: yığılı çubuk + gölge
   const ev = snap ? parseObj(snap.evidence) : {};
   const episodes = typeof ev.episodes7d === 'number' ? ev.episodes7d : 0;
   return (
@@ -162,7 +164,8 @@ export function MLReplayContent({ id, autoPlay = false }: { id: string; autoPlay
       </div>
       <Section id="ml-course" title="Olayın seyri" sub={snap ? `${Math.round((snap.bucketSec || 300) / 60)} dakikalık kova · olay anı kaydı` : undefined}>
         <div className="rounded-md border border-border bg-card px-3 py-2.5">
-          {snap ? <MLEventPlayer snap={snap} play={card.play} autoPlay={autoPlay} above={tc ? c => <MLTraceHeatmap tc={tc} cursorSec={c} /> : undefined} /> : <>
+          {snap && lc ? <MLLogPlayer snap={snap} play={card.play} autoPlay={autoPlay} lc={lc} />
+            : snap ? <MLEventPlayer snap={snap} play={card.play} autoPlay={autoPlay} above={tc ? c => <MLTraceHeatmap tc={tc} cursorSec={c} /> : undefined} /> : <>
             {tc && <MLTraceHeatmap tc={tc} cursorSec={null} />}
             <p className="text-sm text-muted-foreground">Bu olay için grafik kaydı yok (olay anı kaydı yazılmadan önce açılmış ya da süresi dolmuş).</p>
           </>}

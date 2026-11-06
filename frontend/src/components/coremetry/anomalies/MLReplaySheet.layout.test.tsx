@@ -28,6 +28,8 @@ vi.mock('@/lib/api', () => ({
   isCanceled: () => false,
 }));
 vi.mock('@/components/AuthProvider', () => ({ useAuthRole: () => m.role }));
+// uPlot jsdom'da çizilmez (ResizeObserver/canvas yok); düzen testi grafiği değil yerleşimi ölçer.
+vi.mock('@/components/charts/TimeChart', () => ({ TimeChart: () => null }));
 
 import { MLReplayContent, ML_EVENT_SECTIONS, contextRows } from './MLReplaySheet';
 
@@ -106,6 +108,22 @@ describe('ML olay sayfası düzeni', () => {
     expect(hm!.textContent).toContain("örneklenmiş span'ler");
     const player = el.querySelector('[data-testid="ml-player"]')!;
     expect(player.contains(hm)).toBe(true);
+  });
+  it('v0.10.1871: log olayında yığılı çubuk lejantı (mesaj kalıbı varsayılan, Seviye seçeneği)', async () => {
+    const t0 = 1_800_000_000;
+    const s3 = { ...snap, series: JSON.stringify([{ t: t0, v: 5 }, { t: t0 + 300, v: 60 }]) };
+    const log = {
+      times: [t0, t0 + 300], shadow: [7, 7],
+      byPattern: [{ key: 'tpl|Connection pool exhausted', label: 'Connection pool exhausted', new: true, values: [0, 40] }, { key: '_rest', label: 'diğer hata mesajları', values: [5, 20] }],
+      byLevel: [{ key: '_error', label: 'hata', values: [5, 60] }, { key: '_other', label: 'diğer seviyeler', values: [40, 50] }],
+    };
+    const el = await render({ snapshot: s3, related: [], card, course: { log } });
+    const lg = el.querySelector('[data-testid="ml-course"] [data-testid="ml-log-legend"]');
+    expect(lg).not.toBeNull();
+    expect(lg!.textContent).toContain('Connection pool exhausted(yeni)');
+    expect(lg!.textContent).toContain('gölge çubuk: bu kovada beklenen');
+    expect([...lg!.querySelectorAll('[role="radio"]')].map(b => b.textContent)).toEqual(['Mesaj kalıbı', 'Seviye']);
+    expect(el.querySelector('[data-testid="ml-trace-heatmap"]')).toBeNull();
   });
   it('bağlam satırları: aynı servis kayıtları + yayınlar zaman sıralı', () => {
     const s2 = { ...snap, deploys: JSON.stringify([{ service: 'orders-api', version: 'v2', firstSeenNs: 1_799_999_000e9, spanCount: 1 }]) };

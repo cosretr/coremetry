@@ -12027,8 +12027,12 @@ export interface TraceCourse {
   view: 'heatmap' | string; service: string; route?: string;
   fromNs: number; toNs: number; onsetNs: number; endNs: number; line?: CourseLine;
 }
+/** v0.10.1871 — yığılı çubuk katmanı (ml.LogStack); values times ile hizalı, etiket sunucudan. */
+export interface LogStack { key: string; label: string; new?: boolean; values: number[] }
+/** v0.10.1871 — log olayının yığılı grafiği (ml.LogCourse): times = olay anı kaydının kovaları; shadow = beklenen üst (null = bantsız kova). */
+export interface LogCourse { times: number[]; shadow?: (number | null)[]; byPattern: LogStack[]; byLevel?: LogStack[] }
 /** v0.10.1870 — replay yanıtının `course` alanı (ml.ExplainCourse); sinyale göre biri dolu. */
-export interface ExplainCourse { trace?: TraceCourse }
+export interface ExplainCourse { trace?: TraceCourse; log?: LogCourse }
 export interface MLReplay { snapshot: MLSnapshot | null; related: MLSnapshot[]; card: ExplainCard; verdict?: MLReplayVerdict | null; course?: ExplainCourse }
 export interface MLGate { ok: boolean; reasons?: string[] }
 export interface MLBacktestDetector { detector: string; fired: number; tp: number; fp: number; unlabeled: number; positives: number; covered: number; precision: number; recall: number }

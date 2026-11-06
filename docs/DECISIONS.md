@@ -12794,3 +12794,15 @@ görünüm 1–4. Parti A'nın (1842–1846) üstüne; ana grafik (olay anı kay
   çizilmez. Endpoint'siz trace dedektörleri (bağımlılık, aykırı pod) katmansız: kayıtları servisin giriş isteklerini
   anlatmaz. Ek okuma: replay başına +1 CH (ml_series, yalnız endpoint'li trace olayı) + FE'den +1 CH (`/api/spans/heatmap`,
   ham span örneklemeli, kendi 30 sn cache'i); ES/VM 0. Replay anahtarı v3 (yanıt şekli).
+- **v0.10.1871 — log: gölge çubuklar; varsayılan mesaj kalıbına göre yığılı, "Seviye" ikinci seçenek.** `course.log`
+  (`ml.BuildLogCourse`): taban = olay anı kaydının KENDİ serisi (çubuğun boyu dedektörün değeri, kayıt ekseniyle birebir;
+  hizalı değilse FE çizgi grafiğe düşer). Mesaj kalıbı = ml_series `tpl|<ifade>` aileleri (log dilim 2'nin izlediği aileler,
+  CH — ES'e GİTMEZ): olay penceresinde en çok satır üreten 2 aile + "diğer (hata) mesajları". Aile sayımı tüm seviyeleri
+  içerebildiği için yığın tabana kelepçeli (kalan ≥ 0). "Yeni" işareti yalnız kartın ilk kez görülen mesajıyla eşleşen aileye.
+  Seviye = `_error` + (`_total` − `_error`) — ml_series yalnız bu ikisini tutar (ham seviye kırılımı yok; sapma: mockup
+  "Seviye" daha ince olabilirdi); iki seri yoksa seçenek gizli. Şablon dedektöründe (olayın kendi parçası aile) tek yığın.
+  Gölge = kova bandının q75'i (kart/oynatma cümlesiyle aynı bant; mockup "beklenen aralığın üst değeri"); bant yoksa yok.
+  TimeChart'a iki ADDITIVE seri alanı: `stack` (uPlot bars `disp.y0/y1` — katmanlar örtüşmez, y ölçeği kümülatif tepeyi
+  görür, tooltip/lejant HAM değer; `lib/chart/timeStack.ts`) ve `faint` (daha geniş, ≈%26 opak, arkada). Seçim URL'de
+  (`?stack=level`, replace). Ek okuma: 1870'deki tek ml_series okuması log olayında da (+1 CH, taban `_error`/`_total`);
+  ES/VM 0.

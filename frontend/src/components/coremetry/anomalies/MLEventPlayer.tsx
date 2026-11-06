@@ -10,7 +10,7 @@
 // Zamanlayıcı setTimeout zinciri (yoklama değil; ağ isteği yok).
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Pause, Play } from 'lucide-react';
-import { TimeChart } from '@/components/charts/TimeChart';
+import { TimeChart, type TimeChartSeries } from '@/components/charts/TimeChart';
 import { Button } from '@/components/shadcn/button';
 import { Slider } from '@/components/shadcn/slider';
 import { replayChart } from '@/lib/mlReplay';
@@ -29,11 +29,16 @@ function prefersReducedMotion(): boolean {
 
 // above (v0.10.1870): ana grafiğin ÜSTÜNE çizilen sinyal katmanı (trace ısı
 // haritası); imleç zamanını (unix sn) alır — oynatma iki görselde aynı anda.
-export function MLEventPlayer({ snap, play, autoPlay = false, above }: {
+// series (v0.10.1871): ana grafiğin serilerinin YERİNE (log yığılı çubukları);
+// kayıt zamanlarıyla aynı uzunlukta değilse yok sayılır. Bölge, yayın, imleç
+// aynen; lejant çağıranın (grafiğin üstünde).
+export function MLEventPlayer({ snap, play, autoPlay = false, above, series }: {
   snap: MLSnapshot; play?: ExplainPlay | null; autoPlay?: boolean; above?: (cursorSec: number | null) => ReactNode;
+  series?: TimeChartSeries[] | null;
 }) {
   const ch = useMemo(() => replayChart(snap), [snap]);
   const times = ch.times;
+  const override = series && series.length > 0 && series.every(x => x.data.length === times.length) ? series : null;
   const last = Math.max(0, times.length - 1);
   const [i, setI] = useState(last);
   const [playing, setPlaying] = useState(false);
@@ -84,7 +89,8 @@ export function MLEventPlayer({ snap, play, autoPlay = false, above }: {
         <TimeChart height={220} times={times} deployMarkers={ch.deploys}
           regions={ch.regions.map(r => ({ ...r, color: r.label === 'anomali' ? 'var(--err)' : 'var(--warn)' }))}
           playhead={canPlay && cursorSec != null ? { cursorSec, fromSec: play?.from } : null}
-          series={[
+          hideLegend={!!override} leftInteger={!!override}
+          series={override ?? [
             { key: 'v', label: snap.part || 'değer', data: ch.value, color: 'var(--accent)', type: 'line', width: 2 },
             { key: 'hi', label: ch.banded ? 'beklenen aralık üst' : 'alarm sınırı üst', data: ch.upper, color: 'var(--text3)', type: 'line', width: 1 },
             { key: 'lo', label: ch.banded ? 'beklenen aralık alt' : 'alarm sınırı alt', data: ch.lower, color: 'var(--text3)', type: 'line', width: 1 },

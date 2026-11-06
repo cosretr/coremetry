@@ -14,6 +14,98 @@ import (
 	"github.com/cilcenk/coremetry/internal/chstore"
 )
 
+// v0.10.1871 — log yığını: taban olayın kendi serisi, ilk 2 aile + diğer,
+// yığın tabanı aşmaz, gölge = bant üstü, seviye = hata + diğer seviyeler.
+func logCourseFixture() (CardInput, map[string][]chstore.MLPoint) {
+	pts := func(vs ...float64) []chstore.MLPoint {
+		var out []chstore.MLPoint
+		for i, v := range vs {
+			out = append(out, chstore.MLPoint{T: at(14, 0).Add(time.Duration(i) * 5 * time.Minute).Unix(), V: v})
+		}
+		return out
+	}
+	in := CardInput{Detector: "error_rate", Signal: chstore.MLSignalLog, Service: "orders-api", Part: partError, Direction: "up",
+		StartedAt: at(14, 15), LastSeen: at(14, 25), Now: at(14, 30), Loc: trLoc, BucketSec: 300,
+		Series: pts(5, 5, 5, 60, 62, 58), Band: bands(at(14, 0), 3, 4, 5, 7),
+		NewTemplate: &CardTemplate{Text: "Connection pool exhausted"}}
+	series := map[string][]chstore.MLPoint{
+		tplPartPrefix + "Connection pool exhausted":         pts(0, 0, 0, 40, 45, 40),
+		tplPartPrefix + "Timeout calling payments-mobile":   pts(0, 1, 0, 20, 25, 30),
+		tplPartPrefix + "Order failed upstream unavailable": pts(1, 0, 1, 2, 2, 2),
+		partError: pts(5, 5, 5, 60, 62, 58),
+		partTotal: pts(50, 50, 50, 110, 112, 108),
+	}
+	return in, series
+}
+
+func TestBuildLogCourse(t *testing.T) {
+	in, series := logCourseFixture()
+	if !CourseSeriesNeeded(in) {
+		t.Fatal("log tabanı ml_series okuması ister")
+	}
+	lc := BuildLogCourse(in, series)
+	if lc == nil {
+		t.Fatal("log katmanı yok")
+	}
+	var labels []string
+	for _, s := range lc.ByPattern {
+		labels = append(labels, s.Label)
+	}
+	eqList(t, "kalıplar", labels, []string{"Connection pool exhausted", "Timeout calling payments-mobile", "diğer hata mesajları"})
+	if !lc.ByPattern[0].New || lc.ByPattern[1].New {
+		t.Error("yalnız ilk kez görülen mesaj yeni")
+	}
+	wantVals := [][]float64{{0, 0, 0, 40, 45, 40}, {0, 1, 0, 20, 17, 18}, {5, 4, 5, 0, 0, 0}}
+	for k, w := range wantVals {
+		for i, v := range w {
+			if lc.ByPattern[k].Values[i] != v {
+				t.Fatalf("yığın %d kova %d: %v ≠ %v", k, i, lc.ByPattern[k].Values[i], v)
+			}
+		}
+	}
+	for i, b := range in.Series { // çubuk boyu = dedektörün değeri
+		sum := 0.0
+		for _, s := range lc.ByPattern {
+			sum += s.Values[i]
+		}
+		if sum != b.V {
+			t.Errorf("kova %d toplam %v ≠ taban %v", i, sum, b.V)
+		}
+	}
+	if len(lc.Shadow) != 6 || lc.Shadow[0] == nil || *lc.Shadow[0] != 7 || lc.Shadow[3] != nil {
+		t.Errorf("gölge bant üstü olmalı, bantsız kova null: %v", lc.Shadow)
+	}
+	if len(lc.ByLevel) != 2 || lc.ByLevel[1].Label != "diğer seviyeler" || lc.ByLevel[1].Values[3] != 50 || lc.ByLevel[0].Values[4] != 62 {
+		t.Errorf("seviye: %+v", lc.ByLevel)
+	}
+
+	none := BuildLogCourse(in, nil) // ml_series okunamadı → tek katman, seviye yok
+	if len(none.ByPattern) != 1 || none.ByPattern[0].Label != "hata satırları" || none.ByLevel != nil {
+		t.Errorf("serisiz: %+v", none)
+	}
+	tpl := in
+	tpl.Detector, tpl.Part = "rare_template", tplPartPrefix+"Connection pool exhausted"
+	if x := BuildLogCourse(tpl, series); len(x.ByPattern) != 1 || !x.ByPattern[0].New || x.ByLevel != nil || CourseSeriesNeeded(tpl) {
+		t.Errorf("şablon dedektörü tek katman, okuma yok: %+v", x)
+	}
+	tr := playFixture()
+	if BuildLogCourse(tr, series) != nil {
+		t.Error("trace olayında log katmanı yok")
+	}
+	nb := in
+	nb.Band = nil
+	if BuildLogCourse(nb, series).Shadow != nil {
+		t.Error("bant yoksa gölge yok")
+	}
+}
+
+func TestCourseReadWindow(t *testing.T) {
+	in, _ := logCourseFixture()
+	from, to := CourseReadWindow(in)
+	eq(t, "from", from.In(trLoc).Format("15:04"), "14:00")
+	eq(t, "to", to.In(trLoc).Format("15:04"), "14:30")
+}
+
 func TestCourseWindow(t *testing.T) {
 	in := playFixture() // açık olay, 14:30 başladı, şimdi 14:44
 	from, to := CourseWindow(in)

@@ -273,7 +273,7 @@ func (s *Server) putMLConfig(w http.ResponseWriter, r *http.Request) {
 // yoksa (eski olay / TTL) kart yine döner, snapshot null; ikisi de yoksa 404.
 // ES/rollup okuması YOK; yayınlar servis MV'sinden (GetServiceDeploys).
 // v0.10.1870: `course` (ml_course.go) — endpoint'li trace olayında +1
-// ml_series okuması (CH).
+// ml_series okuması (CH); v0.10.1871: log olayında aynı tek okuma.
 func (s *Server) getMLReplay(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimSpace(r.PathValue("id"))
 	if id == "" {
