@@ -25,7 +25,7 @@ import { Pager } from '@/components/Pager';
 import { buildKibanaURL, buildKQLFromFilter } from '@/lib/kibanaLink';
 import { logsUseTimeRange } from '@/lib/logsTraceWindow'; // v0.10.690
 import type { KibanaSettings } from '@/lib/types';
-import { useLogs, useLogsMyTeam, useLogsScope, useLogsSearchSettings, logsDocQuery } from '@/lib/queries';
+import { useLogs, useLogsMyTeam, useLogsScope, useLogsSearchSettings, useLogsTracePreview, logsDocQuery } from '@/lib/queries';
 import { useQueryClient } from '@tanstack/react-query';
 import { readLogsSample, logsSourceFieldsParam, windowCountAtFloor, LOGS_SAMPLE_MAX_FALLBACK, LOGS_SAMPLE_MIN } from '@/lib/logsSample';
 import { usePageZoomRange } from '@/lib/chart/usePageZoomRange';
@@ -59,7 +59,7 @@ import { LogsQueryBar } from './logs/LogsQueryBar';
 import { parseLogQueryError, logQueryErrorMessage } from '@/lib/logQueryError';
 import { readLogsQueryHistory, recordLogsQuery } from '@/lib/logsQueryHistory';
 import { LOGS_DEFAULT_DISPLAY, readLogsDisplay, writeLogsDisplay, pageSlice } from '@/lib/logsDisplay';
-import { DisplayOptions, LoadStatus, FieldSidebar, LogDetailSheet, LogContextSection, LogExceptionSection } from '@/components/coremetry/logs';
+import { DisplayOptions, LoadStatus, FieldSidebar, LogDetailSheet, LogContextSection, LogExceptionSection, TraceChip } from '@/components/coremetry/logs';
 import { useSheetParam } from '@/components/coremetry/DetailSheet';
 import { AIExplainButton } from '@/components/ai/AIExplainButton';
 import { logLineSubjectOf } from '@/lib/logLineSubject';
@@ -1173,6 +1173,29 @@ function LogsInner() {
     openRow(navSel);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- yalnız seçim değişiminde
   }, [navSel?.id]);
+  // v0.10.1881 (dilim 3.4) — görünen sayfanın trace çipleri: TEK önizleme
+  // isteği (ClickHouse MV), satırlar geldikten sonra; canlı kuyrukta yok.
+  const tracePreviewItems = useMemo(() => {
+    if (live) return [];
+    const latest = new Map<string, number>();
+    for (const r of shownLogs) if (r.traceId && (latest.get(r.traceId) ?? 0) < r.timestamp) latest.set(r.traceId, r.timestamp);
+    return [...latest].map(([id, tsNs]) => ({ id, tsNs }));
+  }, [shownLogs, live]);
+  const previewQ = useLogsTracePreview(tracePreviewItems, !!data && !scopeGate);
+  const tracePreviews = previewQ.data?.traces;
+  const previewT0 = useRef<number | null>(null);
+  const [tracePhase, setTracePhase] = useState<LoadPhase | null>(null);
+  useEffect(() => {
+    if (previewQ.isFetching) { if (previewT0.current === null) previewT0.current = performance.now(); setTracePhase({ state: 'loading' }); return; }
+    if (previewT0.current === null) return;
+    const ms = performance.now() - previewT0.current;
+    previewT0.current = null;
+    setTracePhase(previewQ.isError ? { state: 'error' } : { state: 'done', timing: { clientMs: ms } });
+  }, [previewQ.isFetching, previewQ.isError]);
+  const filterToTrace = (tid: string) => {
+    const next = { ...filter, traceId: tid, spanId: '' };
+    resetPaging(); setFilter(next); setDraft(d => ({ ...d, traceId: tid, spanId: '' })); writeUrl(next, filters);
+  };
   const sheetFull = docRow ? fullDocs[docRow.id] : undefined;
   const sheetRow = sheetFull && sheetFull !== 'error' ? sheetFull : docRow;
   const sheetFullState: 'loading' | 'error' | undefined = docRow?.partial
@@ -1601,6 +1624,7 @@ function LogsInner() {
             <LoadStatus onCancel={cancelAll} items={[
               { key: 'rows', label: 'Satırlar', phase: rowsPhase },
               { key: 'histogram', label: 'Histogram', phase: histPhase },
+              { key: 'trace', label: 'Trace önizleme', phase: tracePhase },
               { key: 'fields', label: 'Alan istatistikleri', phase: fieldsPhase },
             ]} />
           )}
@@ -1626,6 +1650,10 @@ function LogsInner() {
           onReorderColumns={changeCols}
           highlightTerms={highlightTerms}
           exceptions /* v0.10.1880 — rozet + satır içi katlı stack */
+          renderTrace={l => (
+            <TraceChip traceId={l.traceId} preview={tracePreviews?.[l.traceId]}
+              onFilter={filterToTrace} onOpen={tid => navigate(traceHref(tid))} />
+          )}
           expandedIds={NO_EXPANDED}
           onToggleExpand={id => { const r = shownLogs.find(x => x.id === id); if (r) openRow(r); }}
           onFilterAdd={addFromRow}

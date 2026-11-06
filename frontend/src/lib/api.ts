@@ -1150,6 +1150,12 @@ export const api = {
   logsMyTeam: (signal?: AbortSignal) => get<LogsMyTeam>('/api/logs/my-team', signal),
   // v0.10.1855 — /logs kapsamı (kullanıcının servisleri + sağlık son 5 dk).
   logsScope: (signal?: AbortSignal) => get<LogsScope>('/api/logs/scope', signal),
+  // v0.10.1881 — sayfa başına TEK trace önizlemesi (ClickHouse MV; ES yok).
+  logsTracePreview: (items: { id: string; tsNs: number }[], signal?: AbortSignal) =>
+    request<import('./types').TracePreviewResponse>('/api/logs/trace-preview', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items }), signal,
+    }),
   logsFields: () => get<{ fields: string[]; total?: number; types?: Record<string, string>; backend: string }>(
     `/api/logs/fields`),
   // Top values of one keyword field prefix-matched against `q`.

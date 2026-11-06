@@ -91,6 +91,22 @@ export function useLogsMyTeam() {
   });
 }
 
+// v0.10.1881 (Log Search Faz 3 dilim 3.4) — görünen sayfanın trace çipleri için
+// TEK önizleme isteği (ClickHouse MV). Anahtar sıralı kimlikler; staleTime =
+// sunucu TTL (30 s). Satırlar yüklendikten SONRA (akış sırası: satırlar →
+// önizleme). Kimlik yoksa istek yok.
+export function useLogsTracePreview(items: { id: string; tsNs: number }[], enabled: boolean) {
+  const key = items.map(i => i.id).sort().join(',');
+  return useQuery({
+    queryKey: ['logs', 'trace-preview', key, items.length ? Math.min(...items.map(i => i.tsNs)) : 0, items.length ? Math.max(...items.map(i => i.tsNs)) : 0],
+    queryFn: ({ signal }) => api.logsTracePreview(items, signal),
+    enabled: enabled && items.length > 0,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
+}
+
 // v0.10.1855 (Log Search Faz 2 dilim 2.4) — /logs kapsamı: kullanıcının
 // servisleri + seçici sağlığı. Ucuz uç (ES'e gitmez; sunucu 60 s cache) —
 // staleTime = sunucu TTL. Hata = kapsamsız (bugünkü) davranış.

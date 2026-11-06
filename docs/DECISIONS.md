@@ -12970,3 +12970,25 @@ Loglar yalnız ES'te (operatör 2026-11-06): yeni yetenekler ES yolunda; trace/s
   örnekte hiç exception yoksa (CH) düğme çizilmez. Sapmalar: mockup anahtarı süzgeç hapları satırındaydı — süzgeç bir
   OKUMA yardımı (sunucu sorgusu değil) olduğundan narrow'un yanına (araç satırı) kondu; sunucu tarafı "kritik" süzgeci
   (ES sorgusu) yok — desen kurallarını her listede ES'e göndermek ES maliyet kuralına aykırı.
+- **v0.10.1881 — trace önizlemesi: `POST /api/logs/trace-preview` + `TraceChip` + kart + menü (3.4).** Yeni uç kendi
+  dosyasında (`internal/api/logs_trace_preview.go`, `registerRoutesExtra`; POST — 200 kimlik GET dizisine sığmaz; rol
+  kapısı yok). Gövde `{items:[{id, tsNs}]}` (≤64 KiB, ≤200 tekil normalize kimlik); kimlik normalizasyonu 32-hex küçük
+  harf, tireli UUID tiresiz, `0x` öneki atılır, 16-hex sola sıfırla (trace_fallback toleransı), diğer biçim
+  `unrecognized` (sorguya girmez). Sayfa başına TEK ClickHouse sorgusu (`chstore.TracePreviews`): `trace_summary_5m`
+  (MV; ham spans değil), pencere log zamanlarının en erkeni −15 dk … en geçi +15 dk, 5 dk kovaya hizalı, en çok 6 saat
+  (en yeni logdan geriye; log zamanı pencerenin dışında kalan kimlik sorgulanmaz ve yanıtta yer almaz — çip düz kalır,
+  bakılmamış trace'e "örneklenmiş" denmez; `trace_id IN` zaman tabanını daraltmadığı için maliyet pencere genişliğiyle
+  büyür, geniş aralığa saçılmış örnek günlerce MV taratmasın);
+  `trace_id IN (…)` + `GROUP BY trace_id` + `LIMIT 200` + `max_execution_time = 3`. Beş durum (audit §4): found ·
+  pending (satır yok, log 2 dk'dan yeni) · sampled (satır yok, log 2 dk'dan eski, sorgu BAŞARILI) · unrecognized ·
+  error (CH hata / zaman aşımı — asla "örneklenmiş" denmez). `serveCached` 30 sn; anahtar istemci yazımlarının sıralı
+  FNV özeti + hizalı pencere (yanıt istemci yazımıyla anahtarlı). İstemci: `useLogsTracePreview` görünen sayfanın tekil
+  kimlikleri + en yeni log zamanı, satırlar geldikten sonra, canlı kuyrukta yok, kapsam kapısına bağlı; LoadStatus'a
+  "Trace önizleme" çipi. Yeni `coremetry/logs/TraceChip`: ✓/✕ + süre · ◌ henüz yazılmadı · ○ örneklenmiş · önizleme
+  alınamadı; tanınmayan kimlikte çip yok (düz metin). Kart üzerine gelince (250 ms) ya da tıkla açılır (coremetry/overlay
+  Popover): kök servis, kök span, süre, span sayısı, başlangıç + menü "Bu trace'e filtrele (f)" (`traceId=`), "Trace
+  görünümünde aç (t)" (şimdilik trace sayfası; dilim 3.6), "trace_id kopyala". Çip tıkı satırı/çekmeceyi açmaz. `LogTable`
+  opt-in `renderTrace` (yalnız /logs) — diğer yüzeylerin Trace hücresi değişmedi. Sapmalar: kart shadcn `hover-card`
+  yerine mevcut coremetry Popover (yeni üretilmiş shadcn dosyası + katalog açmadan; hover gecikmeli açılır/kapanır); mockup
+  "5 servis" gösterir — servis sayısı MV'de yok (dilim 3.9), çip göstermez. Doğrulanmadı: prod'da sorgu süresi / okunan
+  satır (audit §10-B `log_comment LIKE 'route:POST /api/logs/trace-preview%'`).

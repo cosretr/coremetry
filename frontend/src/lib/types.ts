@@ -3870,6 +3870,24 @@ export interface TraceDetailResponse {
   };
 }
 
+// v0.10.1881 (Log Search Faz 3 dilim 3.4) — POST /api/logs/trace-preview
+// (internal/api/logs_trace_preview.go tracePreview). Beş durum; servis sayısı yok.
+export type TracePreviewState = 'found' | 'pending' | 'sampled' | 'unrecognized' | 'error';
+export interface TracePreview {
+  state: TracePreviewState;
+  rootService?: string;
+  rootName?: string;
+  startNs?: number;
+  durationMs?: number;
+  spanCount?: number;
+  errorCount?: number;
+}
+export interface TracePreviewResponse {
+  /** İstemcinin gönderdiği yazımla anahtarlı. */
+  traces: Record<string, TracePreview>;
+  window?: { fromNs: number; toNs: number };
+}
+
 // v0.10.1880 (Log Search Faz 3 dilim 3.3) — satırın exception GÖSTERİM özeti
 // (internal/logstore/exception_summary.go ExceptionSummary; yalnız ES log yolu).
 export interface LogException {
