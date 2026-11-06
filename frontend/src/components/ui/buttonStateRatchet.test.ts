@@ -135,7 +135,7 @@ describe('K3 — durum birincil dolgu değil (v0.10.1318)', () => {
     // Durum anahtarı / komut → ikincil + active.
     expect(src('components/LogPatternsPanel.tsx')).toContain('active={trend}');
     // v0.10.1853 — LogFieldsPanel silindi; ⚠ ayıran coremetry/logs/FieldSidebar'da shadcn Button + aria-pressed.
-    expect(src('pages/Metrics.tsx')).toContain('active={editor}');
+    // v0.10.1863 — Metrics editör anahtarı kalktı (Metrics Explorer: Sorgu/Keşif sekmeleri).
     expect(src('pages/Explore.tsx')).toContain('active={active}');
     // Tek seçim → SegmentedControl.
     for (const rel of ['components/MethodHotspots.tsx', 'components/FilterGroupBuilder.tsx', 'pages/Alerts.tsx']) {

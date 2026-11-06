@@ -168,7 +168,7 @@ describe('undefinedCssRefs — sessizce düşen token/sınıf referansları', ()
   });
 
   it('Tailwind dizinleri index.css @source listesinden okunuyor (üç + cosre (2b B1) + pages/settings, R1)', () => {
-    expect(TAILWIND_DIRS).toEqual(['components/shadcn/', 'components/ai-elements/', 'components/coremetry/', 'components/cosre/', 'pages/settings/', 'pages/logs/']); // v0.10.1822
+    expect(TAILWIND_DIRS).toEqual(['components/shadcn/', 'components/ai-elements/', 'components/coremetry/', 'components/cosre/', 'pages/settings/', 'pages/logs/', 'pages/metrics/']); // v0.10.1822; v0.10.1863 pages/metrics
   });
 
   it('token izin listesi yok — çıplak var() muafiyeti kabul edilmiyor', () => {

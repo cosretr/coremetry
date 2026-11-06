@@ -12673,3 +12673,22 @@ Kaynak: `docs/metrics/metrics-explore-dashboards-audit.md` §7 Faz 2 (onaylı, �
   audit §9 #5). Ortak açılır liste `PickList` (cmdk, 180 ms debounce + AbortSignal `useServerSearch`). `api.metricNamesSearch`
   `opts{cluster, signal}` aldı. Inline style 0, ham element 0, `components/ui` importu 0 (testte statik tarama). Sayfa
   henüz kullanmıyor.
+- **v0.10.1863 — `/metrics` Sorgu sekmesi yeni builder'a geçti (2.3, kesme dilimi, tek commit).** `pages/metrics/MetricsShell`:
+  bağlam çubuğu (`useContextParams` range + cluster; servis/namespace/compare gizli) + iki sekme Sorgu (varsayılan, S2) /
+  Keşif (`?tab=discover`). Model URL'de `?mx=`; eski biçimler açılışta `legacy.ts` ile bir kez içe okunur ve silinir —
+  `?metric=` artık Explore'a değil buraya (S3; Overview kapısı ve dependencies drill linkleri bu yoldan). Builder yazdıkça
+  çalışır (300 ms): her görünür satır derlenmiş MetricsQL olarak `/api/metrics/promql?meta=1` (adım FE'den: otomatikte 240
+  nokta → rung; `limit` 8/20/50 + `rank` → sunucu top-N; kapsam açıkken `cluster` → VM `extra_filters[]`), formül ayrı
+  sorgu (sunucuda hesap) ve AYRI panel (ikinci eksen yok). Sonuç kartı: görsel (Çizgi/Alan/Yığın: CorePanel; Isı haritası:
+  `/api/metrics/histogram` + LatencyHeatmap, histogram değilse "…_bucket metriğine geç"; Tablo: DataTable; Tek değer: son
+  değer kutuları), adım segmenti, dürüstlük satırı ("8 / 12 seri · adım 15 sn (otomatik) · 142 ms · Kaynak:
+  VictoriaMetrics"), kırpma şeridi ("12 seriden 8'i gösteriliyor" + Tümünü göster / Sınırı değiştir), kısmi/not
+  bildirimi, 400 "Sorgu hatası" ile 502 "VictoriaMetrics cevap vermedi" ayrı başlık + Yeniden dene. Kod kipi bu dilimde
+  sade (metin alanı + Çalıştır ⌘↵ + kaynak Varsayılan/VM/CH/Thanos + dil rozeti + kapsam çipi); 2.4 zenginleştirir.
+  Dashboard'a ekle: görünür her satır bir `metric` paneli, `promql` = yer tutucuları eklendiği adımla çözülmüş metin
+  (pano `$__interval` bilmez); viewer'da gerekçesiyle kapalı. Paylaş = bağlantı kopyala. Keşif sekmesi bu dilimde eski
+  katalog (servis süzgeci `?dsvc=`; satır hâlâ Explore'a — S3 değişimi 2.5'te). Editör anahtarı (`?editor=`),
+  `pages/metricsView.ts` ve iki pin (buttonStateSliceB / buttonStateRatchet) kalktı; MQE dosyası durur, sayfa kullanmaz
+  (silme 2.8, operatör OK'i sonrası). Sapmalar: "Alarm kuralı oluştur" yok (program dışı); TTFI ölçülmedi (tarayıcı
+  yok); otomatik adım panel genişliğinden değil sabit 240 nokta bütçesinden (genişlik ölçümü + anahtar parçalanması
+  yerine tek sabit — `api.metricQuery`'nin 1500 sabitiyle aynı gerekçe).

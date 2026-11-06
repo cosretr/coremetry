@@ -69,12 +69,7 @@ describe('v0.10.1342 — Metrics / Explore anahtarları ikincil + active', () =>
     return tags[0].tag;
   };
 
-  it('Metrics editör anahtarı: variant="secondary" active={editor}', () => {
-    const t = tagWith('pages/Metrics.tsx', 'active={editor}');
-    expect(t).toContain('variant="secondary"');
-    expect(t).not.toMatch(/'primary'/);
-  });
-
+  // v0.10.1863 — Metrics editör anahtarı kalktı (Metrics Explorer: Sorgu/Keşif sekmeleri).
   it('Explore Repeats preset: variant="secondary" active={active}', () => {
     const t = tagWith('pages/Explore.tsx', 'active={active}');
     expect(t).toContain('variant="secondary"');

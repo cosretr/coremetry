@@ -25,6 +25,8 @@ describe('Tailwind kaynak listesi kilitli', () => {
       // v0.10.1821/1822 (Log Search Faz 1): geçirilen /logs dizini (sorgu
       // çubuğu); kalan Logs dosyaları geçtikçe eklenir.
       "'../pages/logs'",
+      // v0.10.1863 (Metrics Explorer Faz 2 dilim 2.3): /metrics sayfa modülleri.
+      "'../pages/metrics'",
     ]);
   });
 

@@ -15,3 +15,6 @@ export { KindBadge } from './KindBadge';
 export { PickList } from './PickList';
 export type { PickItem } from './PickList';
 export { useServerSearch } from './useServerSearch';
+// v0.10.1863 — Faz 2 dilim 2.3.
+export { AddToDashboardDialog } from './AddToDashboardDialog';
+export type { AddToDashboardDialogProps } from './AddToDashboardDialog';

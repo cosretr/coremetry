@@ -38,3 +38,5 @@
 /* v0.10.1821/1822 (Log Search Faz 1 — Logs sayfa dilimi): geçirilen /logs
    dizini (sorgu çubuğu); kalan Logs dosyaları geçtikçe eklenir. */
 @source '../pages/logs';
+/* v0.10.1863 (Metrics Explorer Faz 2 dilim 2.3): /metrics sayfa modülleri. */
+@source '../pages/metrics';

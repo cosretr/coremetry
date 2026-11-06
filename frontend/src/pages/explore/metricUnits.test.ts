@@ -173,7 +173,9 @@ describe('unitFromMetricName', () => {
     const ov = readFileSync(resolve(__dirname, '../service/Overview.tsx'), 'utf8');
     expect(ov).toContain("&unit=${encodeURIComponent(opts.unit)}");
     expect(ov).toContain('metricRedQ.data?.latencyUnitKnown && metricRedQ.data.latencyUnit');
-    const mx = readFileSync(resolve(__dirname, '../Metrics.tsx'), 'utf8');
-    expect(mx).toContain("unit: searchParams.get('unit') || undefined");
+    // v0.10.1863 — eski `/metrics?metric=&unit=` linki artık Metrics Explorer'ın
+    // tek-model içe aktarımında (lib/metricsExplorer/legacy.ts) okunuyor.
+    const mx = readFileSync(resolve(__dirname, '../../lib/metricsExplorer/legacy.ts'), 'utf8');
+    expect(mx).toContain("const unit = (sp.get('unit') ?? '').trim();");
   });
 });

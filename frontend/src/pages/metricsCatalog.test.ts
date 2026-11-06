@@ -56,12 +56,12 @@ describe('decodeCatalogParams', () => {
   });
 
   it('reads all three', () => {
-    const sp = new URLSearchParams('search=http&facet=db&service=api-gateway');
+    const sp = new URLSearchParams('search=http&facet=db&dsvc=api-gateway');
     expect(decodeCatalogParams(sp)).toEqual({ search: 'http', facet: 'db', service: 'api-gateway' });
   });
 
   it('bogus facet does not poison the other two', () => {
-    const sp = new URLSearchParams('search=cpu&facet=nope&service=cart');
+    const sp = new URLSearchParams('search=cpu&facet=nope&dsvc=cart');
     expect(decodeCatalogParams(sp)).toEqual({ search: 'cpu', facet: 'all', service: 'cart' });
   });
 });
@@ -71,22 +71,22 @@ describe('applyCatalogParams', () => {
     const out = applyCatalogParams(new URLSearchParams(), { search: 'http', facet: 'db', service: 'cart' });
     expect(out.get('search')).toBe('http');
     expect(out.get('facet')).toBe('db');
-    expect(out.get('service')).toBe('cart');
+    expect(out.get('dsvc')).toBe('cart');
   });
 
   it('deletes params that fall back to the default', () => {
-    const prev = new URLSearchParams('search=http&facet=db&service=cart');
+    const prev = new URLSearchParams('search=http&facet=db&dsvc=cart');
     const out = applyCatalogParams(prev, { search: '', facet: 'all', service: '' });
     expect(out.has('search')).toBe(false);
     expect(out.has('facet')).toBe(false);
-    expect(out.has('service')).toBe(false);
+    expect(out.has('dsvc')).toBe(false);
     expect(out.toString()).toBe('');
   });
 
   it('trims whitespace-only input to a deletion', () => {
     const out = applyCatalogParams(new URLSearchParams('search=x'), { search: '   ', facet: 'all', service: '  ' });
     expect(out.has('search')).toBe(false);
-    expect(out.has('service')).toBe(false);
+    expect(out.has('dsvc')).toBe(false);
   });
 
   // Regresyon: yabancı param koruması (ev kuralı — prev KOPYALANIR).

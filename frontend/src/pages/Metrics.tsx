@@ -1,21 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { rowKeyboard } from '@/lib/a11y'; // v0.10.455 (dış denetim D3 dilim 3)
-import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
-import { metricsViewFromParam, metricsViewUrlValue, shouldRedirectLegacyMetric } from './metricsView';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Topbar } from '@/components/Topbar';
-import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Chip } from '@/components/ui/Chip';
 import { Pager } from '@/components/Pager';
 import { ServicePicker } from '@/components/ServicePicker';
-import { MetricQueryEditor } from '@/components/viz/MetricQueryEditor';
 import {
   useDataTable, DataTableHead, DataTableColgroup, DataTableState, type DataTableStateProps,
 } from '@/components/ui/DataTable';
 import { useDebouncedValue } from '@/lib/perf/useDebouncedValue';
 import { api } from '@/lib/api';
-import { useUrlRange, DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import { classifyMetric } from '@/lib/metricTemplates';
 import { METRIC_SOURCE_LABELS, METRIC_SOURCE_PARAM, parseMetricSource } from '@/lib/metricSource';
 import { metricCatalogueHref } from './explore/urlCodec';
@@ -28,17 +23,14 @@ import { SearchField } from '@/components/ui/SearchField';
 import type { DataTableColumn } from '@/lib/dataTable';
 import type { MetricInfo } from '@/lib/types';
 import { PageControls } from '@/components/coremetry/PageControls';
-import { PageShell } from '@/components/coremetry/PageShell';
+import { MetricsShell } from './metrics/MetricsShell';
 
-// Metrics — v0.8.x Phase-5 collapse. /metrics is now a CATALOGUE: a
-// server-side-searchable, sortable index of every metric name (name / type /
-// unit / description). Picking a row opens it in Explore as a real builder
-// query A (source=metric) via metricCatalogueHref — Explore is the one place a
-// metric is actually charted, so the old in-page builder + dual-mode explorer
-// are gone. Two escape valves remain:
-//   • ?editor=1 — the full MetricQueryEditor as a page (power users).
-//   • legacy /metrics?metric=&service=&agg= bookmarks / saved views collapse
-//     to the canonical /explore?q= seed (Navigate replace).
+// Metrics — v0.10.1863 (Metrics Explorer Faz 2 dilim 2.3): /metrics artık
+// Metrics Explorer (pages/metrics/MetricsShell — Sorgu + Keşif sekmeleri).
+// Bu dosyada kalan katalog, dilim 2.5'te Keşif sekmesinin yeni gezginiyle
+// değişene dek Keşif sekmesinin içeriğidir; satır tıklaması bugünkü gibi
+// Explore'a gider (S3 değişimi 2.5'te). Eski `?editor=`, `?metric=` ve
+// `?mq=` linkleri lib/metricsExplorer/legacy.ts'te bir kez içe okunur.
 
 // v0.9.832 — facet sınıflandırması + URL kodeki + dürüst sayaç metinleri
 // pages/metricsCatalog.ts'e taşındı (saf + tablo testli).
@@ -65,27 +57,18 @@ function catalogColumns(showServices: boolean): DataTableColumn<MetricInfo>[] {
 }
 
 export default function MetricsPage() {
+  return <MetricsShell discover={<MetricsCatalogue />} />;
+}
+
+function MetricsCatalogue() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
-
-  // v0.9.561 — varsayılan görünüm EDİTÖR (operatör talebi). Okuma ve
-  // yazma tek kodekten geçiyor (metricsView.ts): varsayılan iki yerde
-  // ayrı yazılırsa kullanıcının seçimi sessizce yutulur.
-  const editorParam = searchParams.get('editor');
-  const editor = metricsViewFromParam(editorParam) === 'editor';
-  const legacyMetric = searchParams.get('metric') ?? '';
 
   // trialSource — v0.9.1151 deneme modu. searchParams üzerinden okunuyor
   // (window.location DEĞİL) ki router navigasyonunda rozet birlikte
   // güncellensin; ayrıştırma api.ts'in kullandığı AYNI saf fonksiyonda,
   // yani "geçerli param" tanımı iki yerde ayrışamaz.
   const trialSource = parseMetricSource(searchParams.toString());
-
-  // v0.9.832 — aralık artık URL'in kendisinde (ev kuralı: her operatör
-  // seçimi paylaşılabilir). Eskiden useState idi: gelen `?range=` bir
-  // kez okunuyor, seçilen aralık URL'e HİÇ yazılmıyordu — kopyalanan
-  // link operatörün baktığı pencereyi taşımıyordu.
-  const [range, setRange] = useUrlRange(DEFAULT_RANGE_PRESET);
 
   // Katalog seçimleri URL'de: paylaşılabilir + geri/ileri tutarlı.
   // Arama kutusu tek istisna — yazarken her tuşta URL yazmak yerine
@@ -136,25 +119,6 @@ export default function MetricsPage() {
     setLimit(CATALOG_PAGE);
   }, [sliceKey]);
 
-  // Legacy deep-link → canonical Explore seed. Computed pre-render; the
-  // Navigate return sits AFTER every hook so rules-of-hooks holds.
-  // Yönlendirme kararı VARSAYILANA DEĞİL, kullanıcının açıkça editör
-  // isteyip istemediğine bakar. Eskiden `!editor` yazıyordu; varsayılan
-  // editöre çevrilince o koşul hep false olur ve eski `?metric=`
-  // linkleri sessizce boş bir sorgu editörüne düşerdi.
-  const redirectTo = shouldRedirectLegacyMetric(legacyMetric, editorParam)
-    ? metricCatalogueHref(legacyMetric, {
-        service: searchParams.get('service') || undefined,
-        agg: searchParams.get('agg') || undefined,
-        // v0.9.746 — ?by=http.route (virgüllü çoklu) kırılımı Explore
-        // seed'ine taşır; Overview route paneli geçişi bunu kullanır.
-        splitBy: searchParams.get('by')?.split(',').filter(Boolean) || undefined,
-        // v0.10.512 — ?unit= (Overview kapısı RED'in bildiği birimi taşır;
-        // VM kataloğu birimsiz → Explore ham saniye çizmesin).
-        unit: searchParams.get('unit') || undefined,
-      }) + (searchParams.get('range') ? `&range=${encodeURIComponent(searchParams.get('range')!)}` : '')
-    : null;
-
   // SERVER-SIDE search (scale-audit #10) — debounced + bounded. The eager
   // api.metricNames('') full-catalogue load is fatal at 10k+ names.
   //
@@ -173,7 +137,6 @@ export default function MetricsPage() {
     queryKey: ['metric-catalog', service, dq, limit],
     queryFn: () => api.metricNamesSearch(service, dq || undefined, limit, 0),
     staleTime: 60_000,
-    enabled: !redirectTo && !editor,
   });
   const catalog = useMemo<MetricInfo[]>(() => catalogQ.data?.names ?? [], [catalogQ.data]);
   // Bayatlık referans anı VERİYLE birlikte sabitlenir, her render'da
@@ -232,8 +195,6 @@ export default function MetricsPage() {
     }
     : { kind: 'empty', message: 'Katalogda metrik yok — uygulamaların OTEL_EXPORTER_OTLP_ENDPOINT\'e metrik gönderdiğini doğrula.' };
 
-  if (redirectTo) return <Navigate replace to={redirectTo} />;
-
   // classifyMetric picks the default agg (e.g. p99 for a histogram) so the
   // chart lands right; metricCatalogueHref encodes it into the ?q= seed.
   // v0.9.801 — birim de tohuma girer. Katalog satırı zaten elimizde;
@@ -283,11 +244,9 @@ export default function MetricsPage() {
 
   return (
     <>
-      <Topbar title="Metrics" range={range} onRangeChange={setRange} />
-      <PageShell>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
           <div style={{ fontSize: 12, color: 'var(--text2)' }}>
-            Metric catalogue — pick one to open it in Explore.
+            Metrik kataloğu — bir satır Explore'da açılır.
           </div>
           {/* KAYNAK ROZETİ (v0.9.1150). Yalnız VM aktifken görünür —
               varsayılan ClickHouse için rozet basmak her kuruluma kalıcı
@@ -321,28 +280,9 @@ export default function MetricsPage() {
               deneme modu: {METRIC_SOURCE_LABELS[trialSource]}
             </Badge>
           )}
-          <div style={{ flex: 1 }} />
-          {/* v0.10.1342 (K3 dilim B) — editör açık/kapalı bir durum: ikincil +
-              `active` (tint + aria-pressed), dolu birincil değil. */}
-          <Button variant="secondary" active={editor} size="sm"
-            onClick={() => {
-              // Yabancı paramlar KORUNUR (range!). Eskiden tam URL
-              // yazılıyordu ve görünüm değiştiren operatörün zaman
-              // aralığı sıfırlanıyordu.
-              const next = new URLSearchParams(searchParams);
-              const v = metricsViewUrlValue(editor ? 'catalogue' : 'editor');
-              if (v !== null) next.set('editor', v); else next.delete('editor');
-              navigate({ pathname: '/metrics', search: next.toString() }, { replace: true });
-            }}>
-            {editor ? '← Catalogue' : 'Advanced query editor →'}
-          </Button>
         </div>
 
-        {editor ? (
-          <MetricQueryEditor range={range} />
-        ) : (
-          <>
-            <PageControls sticky style={{ marginBottom: 10 }}>
+            <PageControls style={{ marginBottom: 10 }}>
               <SearchField placeholder="Search metrics…" value={search}
                 aria-label="Search metrics"
                 onChange={setSearch} width={240} autoFocus />
@@ -484,9 +424,6 @@ export default function MetricsPage() {
                   ) : undefined} />
               </>
             )}
-          </>
-        )}
-      </PageShell>
     </>
   );
 }

@@ -78,7 +78,7 @@ export function decodeCatalogParams(sp: URLSearchParams): CatalogParams {
   return {
     search: sp.get('search') ?? '',
     facet: decodeFacet(sp.get('facet')),
-    service: sp.get('service') ?? '',
+    service: sp.get('dsvc') ?? '', // v0.10.1863 — Keşif sekmesi param'ı (`service` bağlam boyutu değil)
   };
 }
 
@@ -92,7 +92,7 @@ export function applyCatalogParams(prev: URLSearchParams, p: CatalogParams): URL
   const put = (k: string, v: string | null) => { if (v) next.set(k, v); else next.delete(k); };
   put('search', p.search.trim());
   put('facet', facetUrlValue(p.facet));
-  put('service', p.service.trim());
+  put('dsvc', p.service.trim());
   return next;
 }
 

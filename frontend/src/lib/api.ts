@@ -3162,8 +3162,10 @@ export const api = {
   // ŞART, süs değil: aynı sayfada çizgi grafiği VM'den okurken ısı
   // haritası ClickHouse'tan okursa operatör iki store'un sayısını tek
   // panelde karşılaştırıyor olur ve bunu hiçbir şey söylemez.
-  metricHistogram: (params: MetricQueryParams) =>
-    get<HistogramResult | null>(withMetricSource(`/api/metrics/histogram?${qs(params)}`)),
+  // v0.10.1863 — opsiyonel signal (Metrics Explorer ısı haritası: aralık /
+  // sorgu değişince uçuştaki istek iptal).
+  metricHistogram: (params: MetricQueryParams, signal?: AbortSignal) =>
+    get<HistogramResult | null>(withMetricSource(`/api/metrics/histogram?${qs(params)}`), signal),
   // v0.9.116 (F4 Phase 5) — PromQL range query. Returns the same
   // SpanMetricSeries[] shape as metricQuery; a 400 body carries the parse
   // error, other errors bubble the eval message.
@@ -3190,7 +3192,10 @@ export const api = {
   // ?metricsrc= denemesi / kurulum varsayılanı. signal: sekme/pencere değişince iptal.
   // v0.10.1836 — meta=1: zarf {series, meta} (kırpılma/kısmi/çalışan sorgu);
   // tüketiciler (MQE PromQL sekmesi, pano PromQL panelleri) .series okur.
-  metricPromql: ({ src, ...params }: { query: string; from?: number; to?: number; step?: number; maxDataPoints?: number; src?: import('./metricSource').MetricSourceParam }, signal?: AbortSignal) =>
+  // v0.10.1863 — limit/rank (sunucu top-N, v0.10.1838) + cluster (kapsam,
+  // v0.10.1839): Metrics Explorer gönderir; param yokken istek bayt-aynı.
+  metricPromql: ({ src, ...params }: { query: string; from?: number; to?: number; step?: number; maxDataPoints?: number; src?: import('./metricSource').MetricSourceParam;
+    limit?: number; rank?: 'avg' | 'max' | 'last'; cluster?: string }, signal?: AbortSignal) =>
     get<import('./types').PromqlResult | null>(withMetricSource(`/api/metrics/promql?${qs({ maxDataPoints: 1500, ...params, meta: '1' })}`, src), signal),
   // v0.8.356 — sort/dir: server-side global ordering (whitelisted
   // backend-side; ORDER BY runs before the LIMIT so "top by p95" is
@@ -4350,6 +4355,9 @@ export interface MetricQueryParams {
   // verinin ~5s'e inmesi, eski 30s ladder yerine). metricQuery default 1500
   // enjekte eder (cache-dostu sabit); çağıran özel panel genişliği geçebilir.
   maxDataPoints?: number;
+  // v0.10.1863 — cluster kapsamı (sunucu v0.10.1839: VM extra_filters[],
+  // CH builder koşulu). Yokken istek bayt-aynı.
+  cluster?: string;
 }
 
 export interface SpanMetricParams {
