@@ -7,7 +7,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 
 const m = vi.hoisted(() => ({ puts: [] as unknown[], fail: false }));
-const SNAP = { maxSample: 1500, defaults: { maxSample: 2000 }, min: 10, hardCap: 5000, sampleDefault: 500 };
+const SNAP = { maxSample: 1500, businessFields: [{ label: 'Kanal', fields: ['CHANNEL_CODE', 'channel_code'] }], defaults: { maxSample: 2000 }, min: 10, hardCap: 5000, sampleDefault: 500 };
 vi.mock('@/lib/api', () => ({
   api: {
     getLogsSearchSettings: vi.fn(async () => SNAP),
@@ -45,11 +45,30 @@ describe('LogsSearchSettingsCard', () => {
     setInput(input, '800');
     await act(async () => { (h.querySelector('button[type="submit"]') as HTMLButtonElement).click(); });
     await settle();
-    expect(m.puts).toEqual([{ maxSample: 800 }]);
+    // v0.10.1853 — TAM blob: iş alanları da taşınır (tam-satır yazım).
+    expect(m.puts).toEqual([{ maxSample: 800, businessFields: [{ label: 'Kanal', fields: ['CHANNEL_CODE', 'channel_code'] }] }]);
     expect(h.querySelector('[role="status"]')?.textContent).toContain('Kaydedildi');
     m.fail = true;
     await act(async () => { (h.querySelector('button[type="submit"]') as HTMLButtonElement).click(); });
     await settle();
     expect(h.querySelector('[role="alert"]')?.textContent).toContain('maxSample');
+  });
+
+  it('v0.10.1853 — iş alanı ekle / düzenle / kaldır; boş satır gitmez', async () => {
+    const h = await render();
+    expect(h.querySelectorAll('[data-testid="biz-row"]')).toHaveLength(1);
+    const add = [...h.querySelectorAll('button')].find(b => b.textContent === '+ İş alanı ekle')!;
+    await act(async () => { add.click(); });
+    await act(async () => { add.click(); }); // ikinci satır boş kalır → gönderilmez
+    const rows = h.querySelectorAll('[data-testid="biz-row"]');
+    expect(rows).toHaveLength(3);
+    const [lbl, cand] = rows[1].querySelectorAll('input');
+    setInput(lbl as HTMLInputElement, 'İşlem');
+    setInput(cand as HTMLInputElement, 'FUNCTION_CODE, function_code ,');
+    const rm = rows[0].querySelector('button[aria-label^="İş alanını kaldır"]') as HTMLButtonElement;
+    await act(async () => { rm.click(); });
+    await act(async () => { (h.querySelector('button[type="submit"]') as HTMLButtonElement).click(); });
+    await settle();
+    expect(m.puts).toEqual([{ maxSample: 1500, businessFields: [{ label: 'İşlem', fields: ['FUNCTION_CODE', 'function_code'] }] }]);
   });
 });

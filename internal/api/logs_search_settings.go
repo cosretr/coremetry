@@ -21,6 +21,15 @@ package api
 //   · 10 tabanı: URL `smp` alt sınırıyla aynı (audit "10..üst sınır").
 // CH backend'i aynı sınırı uygular (chstore logsMaxLimit = 5000).
 //
+// v0.10.1853 (Log Search Faz 2 dilim 2.2) — `businessFields`: alan kenar
+// çubuğunun "İş alanları" bölümü, etiket → ES alan adayları (ilk eşleşen aday
+// kullanılır; çözüm istemcide eşleme listesine karşı, lib/logBusinessFields).
+// Varsayılan BOŞ (alan adı uydurulmaz; boşken bölüm gizli). Sınırlar: ≤20
+// tanım, etiket 1–64 karakter (büyük/küçük harf duyarsız tekil), tanım başına
+// 1–8 aday, aday 1–256 karakter, boşluk / tırnak / joker / ters bölü yok.
+// PUT TAM blob yazar (system_settings tam-satır: istemci maxSample'ı da yollar).
+// Yalnız Elasticsearch log yolunda anlamlı; CH'de eşleme keşfi yok → bölüm gizli.
+//
 // Neden ayrı dosya + blob: Server alanları api.go'da ve api.go BÜYÜMEZ
 // (TestApiGoDoesNotGrow); paket düzeyi atomik promql_console emsali.
 
@@ -31,8 +40,10 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 
 	"github.com/cilcenk/coremetry/internal/auth"
 )
@@ -57,14 +68,30 @@ const (
 
 // logsSearchSettings — `logs_search` blobu (FE lib/types.ts LogsSearchSettings).
 type logsSearchSettings struct {
-	MaxSample int `json:"maxSample"`
+	MaxSample      int                 `json:"maxSample"`
+	BusinessFields []logsBusinessField `json:"businessFields"` // v0.10.1853
 }
 
-// normalizeLogsSearchSettings — SAF okuma-yolu kelepçesi.
+// logsBusinessField — v0.10.1853: kenar çubuğu "İş alanları" tanımı.
+type logsBusinessField struct {
+	Label  string   `json:"label"`
+	Fields []string `json:"fields"`
+}
+
+const (
+	logsBusinessFieldsMax  = 20
+	logsBusinessLabelMax   = 64
+	logsBusinessCandMax    = 8
+	logsBusinessFieldNmMax = 256
+)
+
+// normalizeLogsSearchSettings — SAF okuma-yolu kelepçesi. Bozuk iş alanı
+// tanımları okumada SESSİZCE düşer (yazım yolu 400 verir).
 func normalizeLogsSearchSettings(c logsSearchSettings) logsSearchSettings {
 	if c.MaxSample < logsSampleMin || c.MaxSample > logsSampleHardCap {
 		c.MaxSample = logsSampleDefaultMax
 	}
+	c.BusinessFields, _ = sanitizeLogsBusinessFields(c.BusinessFields, false)
 	return c
 }
 
@@ -74,7 +101,76 @@ func validateLogsSearchSettings(in logsSearchSettings) (logsSearchSettings, erro
 	if in.MaxSample != 0 && (in.MaxSample < logsSampleMin || in.MaxSample > logsSampleHardCap) {
 		return in, fmt.Errorf("maxSample %d–%d olmalı (0 = varsayılan %d)", logsSampleMin, logsSampleHardCap, logsSampleDefaultMax)
 	}
+	if _, err := sanitizeLogsBusinessFields(in.BusinessFields, true); err != nil {
+		return in, err
+	}
 	return normalizeLogsSearchSettings(in), nil
+}
+
+// logsBusinessFieldNameOK — SAF: ES alan yolu adayı (boşluk/kontrol, tırnak,
+// joker, ters bölü yok — sorguya ve önbellek anahtarına aynen girer).
+func logsBusinessFieldNameOK(f string) bool {
+	if f == "" || len(f) > logsBusinessFieldNmMax {
+		return false
+	}
+	for _, r := range f {
+		if r <= ' ' || r == 0x7f || strings.ContainsRune("\"'*?\\`", r) {
+			return false
+		}
+	}
+	return true
+}
+
+// sanitizeLogsBusinessFields — SAF: kırp + tekilleştir + sınırla. strict
+// (PUT) ilk ihlalde hata döner; değilse (okuma) ihlal eden tanım düşer.
+// Dönüş hiçbir zaman nil değil (JSON `[]`).
+func sanitizeLogsBusinessFields(in []logsBusinessField, strict bool) ([]logsBusinessField, error) {
+	out := make([]logsBusinessField, 0, len(in))
+	labels := map[string]bool{}
+	for i, d := range in {
+		label := strings.TrimSpace(d.Label)
+		var bad string
+		switch {
+		case label == "":
+			bad = "etiket boş"
+		case utf8.RuneCountInString(label) > logsBusinessLabelMax:
+			bad = fmt.Sprintf("etiket en çok %d karakter", logsBusinessLabelMax)
+		case labels[strings.ToLower(label)]:
+			bad = fmt.Sprintf("etiket %q tekrar ediyor", label)
+		}
+		var fields []string
+		seen := map[string]bool{}
+		for _, f := range d.Fields {
+			f = strings.TrimSpace(f)
+			if f == "" || seen[f] {
+				continue
+			}
+			if !logsBusinessFieldNameOK(f) && bad == "" {
+				bad = fmt.Sprintf("alan adı %q geçersiz (boşluk, tırnak, joker, ters bölü olamaz; en çok %d karakter)", f, logsBusinessFieldNmMax)
+			}
+			seen[f] = true
+			fields = append(fields, f)
+		}
+		switch {
+		case bad != "":
+		case len(fields) == 0:
+			bad = "en az bir alan adayı gerekli"
+		case len(fields) > logsBusinessCandMax:
+			bad = fmt.Sprintf("tanım başına en çok %d aday", logsBusinessCandMax)
+		}
+		if bad == "" && len(out) >= logsBusinessFieldsMax {
+			bad = fmt.Sprintf("en çok %d iş alanı", logsBusinessFieldsMax)
+		}
+		if bad != "" {
+			if strict {
+				return nil, fmt.Errorf("iş alanı %d: %s", i+1, bad)
+			}
+			continue
+		}
+		labels[strings.ToLower(label)] = true
+		out = append(out, logsBusinessField{Label: label, Fields: fields})
+	}
+	return out, nil
 }
 
 func decodeLogsSearchSettings(raw []byte) logsSearchSettings {

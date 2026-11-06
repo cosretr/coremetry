@@ -3902,10 +3902,18 @@ export interface LogRow {
 // logsSearchSettingsResponse). maxSample = /logs örnek boyu üst sınırı.
 export interface LogsSearchSettings {
   maxSample: number;
+  /** v0.10.1853 — alan kenar çubuğu "İş alanları": etiket → ES alan adayları (ilk eşleşen). */
+  businessFields: LogsBusinessField[];
   defaults: { maxSample: number };
   min: number;
   hardCap: number;
   sampleDefault: number;
+}
+
+// v0.10.1853 (Log Search Faz 2 dilim 2.2) — system_settings logs_search.businessFields girdisi.
+export interface LogsBusinessField {
+  label: string;
+  fields: string[];
 }
 
 // OracleLogsResponse — v0.10.602: GET /api/oracle/errors (oracle_logs_routes.go).

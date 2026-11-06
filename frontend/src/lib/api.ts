@@ -1,5 +1,5 @@
 import type {
-  LogRow, LogsSearchSettings, DisplayPref, // v0.10.1831 / v0.10.1832
+  LogRow, LogsSearchSettings, LogsBusinessField, DisplayPref, // v0.10.1831 / v0.10.1832 / v0.10.1853
   NativeDetectorsView, NativeOwnSwitches, ShellFeatures, IncidentsSettings,
 OracleLogsResponse, CopilotScopeNames, CosreRouteRED,
   McpServersSnapshot, McpServerInput, McpServerTestResult,
@@ -1149,7 +1149,7 @@ export const api = {
     get<LogRow>(`/api/logs/doc?ref=${encodeURIComponent(ref)}`, signal),
   // v0.10.1831 — /logs örnek boyu üst sınırı (system_settings logs_search).
   getLogsSearchSettings: (signal?: AbortSignal) => get<LogsSearchSettings>('/api/settings/logs-search', signal),
-  putLogsSearchSettings: (s: { maxSample: number }) =>
+  putLogsSearchSettings: (s: { maxSample: number; businessFields: LogsBusinessField[] }) => // v0.10.1853 — TAM blob
     request<LogsSearchSettings>('/api/settings/logs-search', {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(s),
     }),

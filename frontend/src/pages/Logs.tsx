@@ -16,7 +16,6 @@ import { LogContextModal } from '@/components/LogContextModal';
 import {
   LogsHistogram, parseBreakdown, histogramFeedsChips, type LogsBreakdown,
 } from '@/components/LogsHistogram';
-import { LogFieldsPanel } from '@/components/LogFieldsPanel';
 import { LogPatternsPanel } from '@/components/LogPatternsPanel';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -59,7 +58,8 @@ import { LogsQueryBar } from './logs/LogsQueryBar';
 import { parseLogQueryError, logQueryErrorMessage } from '@/lib/logQueryError';
 import { readLogsQueryHistory, recordLogsQuery } from '@/lib/logsQueryHistory';
 import { LOGS_DEFAULT_DISPLAY, readLogsDisplay, writeLogsDisplay, pageSlice } from '@/lib/logsDisplay';
-import { DisplayOptions, LoadStatus } from '@/components/coremetry/logs';
+import { DisplayOptions, LoadStatus, FieldSidebar } from '@/components/coremetry/logs';
+import { resolveBusinessFields } from '@/lib/logBusinessFields'; // v0.10.1853 (dilim 2.2)
 import { LogsFilterRow } from './logs/LogsFilterRow';
 import { LogsNotices } from './logs/LogsNotices';
 import { LogsAddFilterMenu, LogsShareMenu, LogsMoreMenu } from './logs/LogsActionsMenus';
@@ -876,7 +876,7 @@ function LogsInner() {
   useEffect(() => { resetPaging(); setExpanded(new Set()); }, [env]);
 
   // Backend mapping fields (v0.5.136 → fields panel v0.8.255).
-  // Feeds the left LogFieldsPanel's "Available fields" group. CH
+  // Feeds the left FieldSidebar's "Available fields" group. CH
   // backend returns an empty list (its shape is fixed).
   const [fields, setFields] = useState<string[]>([]);
   const [fieldsTotal, setFieldsTotal] = useState<number | undefined>(undefined);
@@ -1066,6 +1066,11 @@ function LogsInner() {
     return undefined;
   }, [breakdown, histTotals, chipsFromHistogram, facetLoading, volumeQ.data, facetCounts, filter.severity]);
   const total = windowTotal ?? 0;
+  // v0.10.1853 (dilim 2.2) — kenar çubuğu "İş alanları": Settings tanımları
+  // eşlemedeki gerçek alana çözülür (CH log yolunda eşleme boş → bölüm gizli).
+  const businessDefs = searchSettingsQ.data?.businessFields;
+  const businessFields = useMemo(() => resolveBusinessFields(businessDefs, fields, fieldsTotal),
+    [businessDefs, fields, fieldsTotal]);
 
   // j/k row navigation — same pattern as /services and /traces.
   // Enter / o on the selected row toggles the expansion
@@ -1366,7 +1371,8 @@ function LogsInner() {
             add/remove-column. The right side keeps everything that
             was here before, unchanged. */}
         <div className="ld-body">
-          <LogFieldsPanel
+          <FieldSidebar
+            businessFields={businessFields}
             fields={fields}
             fieldsTotal={fieldsTotal}
             types={fieldTypes}

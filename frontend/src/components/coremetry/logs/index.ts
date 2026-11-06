@@ -7,4 +7,6 @@ export type { LogQueryErrorLineProps } from './LogQueryErrorLine';
 export { DisplayOptions } from './DisplayOptions';
 export type { DisplayOptionsProps } from './DisplayOptions';
 export { LoadStatus } from './LoadStatus';
+export { FieldSidebar, fieldsPanelOpen } from './FieldSidebar';
+export type { FieldSidebarProps, FieldStatsScope } from './FieldSidebar';
 export type { LoadStatusProps, LoadStatusItem } from './LoadStatus';

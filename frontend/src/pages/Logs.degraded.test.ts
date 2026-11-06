@@ -29,8 +29,8 @@ describe('degraded log backend surfaces (B1)', () => {
     expect(src).toContain('!d.degraded && rows.length > 0');
     expect(src).toMatch(/: \{ kind: 'empty', message: `Bu pencerede/);
   });
-  it('LogFieldsPanel: degraded ve partial "No values" ile karışmaz', () => {
-    const src = read('../components/LogFieldsPanel.tsx');
+  it('FieldSidebar: degraded ve partial "değer yok" ile karışmaz', () => {
+    const src = read('../components/coremetry/logs/FieldSidebar.tsx'); // v0.10.1853
     expect(src).toContain('d?.degraded &&');
     expect(src).toContain('d?.partial &&');
     expect(src).toContain('d && !d.degraded && d.values.length === 0');

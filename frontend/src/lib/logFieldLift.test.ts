@@ -17,8 +17,8 @@ describe('liftBadge', () => {
 });
 
 // Kaynak pini: panel düğmesi yalnız genişletilen alanın sorgusuna errorLift ekler.
-describe('LogFieldsPanel hatalıyı ayıran (v0.10.509)', () => {
-  const src = readFileSync(resolve(__dirname, '../components/LogFieldsPanel.tsx'), 'utf8');
+describe('FieldSidebar hatalıyı ayıran (v0.10.509; v0.10.1853 coremetry/logs)', () => {
+  const src = readFileSync(resolve(__dirname, '../components/coremetry/logs/FieldSidebar.tsx'), 'utf8');
   it('errorLift sorgu anahtarında ve parametrede; rozet liftBadge ile', () => {
     expect(src).toContain("...(lift ? { errorLift: 1 as const } : {})");
     expect(src).toContain("queryKey: ['logs', 'fieldstats', field, scope, size, lift, est]"); // v0.10.1852 — est (örnekleme)

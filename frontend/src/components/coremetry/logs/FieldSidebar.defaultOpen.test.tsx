@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 //
-// LogFieldsPanel.defaultOpen — v0.10.1501 (/logs Kibana-Discover dilim 3;
+// FieldSidebar.defaultOpen — v0.10.1501 (v0.10.1853: components/LogFieldsPanel → coremetry/logs/FieldSidebar) (/logs Kibana-Discover dilim 3;
 // operatör onayı 2026-10-24 "Alan listesi açık başlasın", v0.8.286'nın
 // "varsayılan kapalı" kararını ≥1280px'te tersine çevirir).
 //   • saf kural: saklı '1' açık, saklı '0' KAPALI (operatörün kapatması her
@@ -39,7 +39,7 @@ vi.mock('@/components/AuthProvider', () => ({
   useAuth: () => ({ user: { id: 'u1', username: 'op', role: 'admin' }, loading: false }),
 }));
 
-import { LogFieldsPanel, fieldsPanelOpen } from './LogFieldsPanel';
+import { FieldSidebar, fieldsPanelOpen } from './FieldSidebar';
 // Sayfa modülü STATİK (v0.10.1707): test gövdesindeki dinamik import ilk
 // testin 5 s bütçesinden ödeniyordu — tam paket yükünde zaman aşımı +
 // sızan mount ile ardışık düşüş. Toplama aşamasının süre tavanı yok.
@@ -86,7 +86,7 @@ const panelProps = {
   onToggleColumn: () => {}, onPillAdd: () => {}, onPillExclude: () => {},
 };
 const isOpen = () => !!host!.querySelector('.ld-fields');
-const rail = () => [...host!.querySelectorAll('button')].find(b => b.textContent?.includes('ƒ Fields'));
+const rail = () => [...host!.querySelectorAll('button')].find(b => b.textContent?.includes('ƒ Alanlar'));
 
 describe('fieldsPanelOpen (saf)', () => {
   it.each([
@@ -99,10 +99,10 @@ describe('fieldsPanelOpen (saf)', () => {
   });
 });
 
-describe('LogFieldsPanel varsayılan açıklık', () => {
+describe('FieldSidebar varsayılan açıklık', () => {
   it('geniş ekran + tercih yok → açık; « kapatır ve "0" yazar', async () => {
     setWide(true);
-    mount(<LogFieldsPanel {...panelProps} />);
+    mount(<FieldSidebar {...panelProps} />);
     expect(isOpen()).toBe(true);
     const close = [...host!.querySelectorAll('button')].find(b => b.textContent === '«')!;
     await act(async () => { close.click(); });
@@ -112,13 +112,13 @@ describe('LogFieldsPanel varsayılan açıklık', () => {
   it('saklı "0" geniş ekranda da kapalı (ray)', () => {
     setWide(true);
     localStorage.setItem('logs.fieldsPanel.open', '0');
-    mount(<LogFieldsPanel {...panelProps} />);
+    mount(<FieldSidebar {...panelProps} />);
     expect(isOpen()).toBe(false);
     expect(rail()).toBeTruthy();
   });
   it('dar ekran (<1280) + tercih yok → ray; tık açar ve "1" yazar', async () => {
     setWide(false);
-    mount(<LogFieldsPanel {...panelProps} />);
+    mount(<FieldSidebar {...panelProps} />);
     expect(isOpen()).toBe(false);
     await act(async () => { rail()!.click(); });
     expect(isOpen()).toBe(true);

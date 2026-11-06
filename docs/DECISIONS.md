@@ -12521,3 +12521,19 @@ değişmez).
   açıkken örnekleme yok (`est` sayfa penceresinin toplamı, hata seçimininki değil). CH log yolu `FieldStatsSampler`
   uygulamaz: `est` yok sayılır (pin testi). Doğrulanmadı: gerçek ES sürümü (audit §10-V), `random_sampler`'ın prod
   kümede lisans/yetki davranışı, örneklemeli terms süresi.
+- **v0.10.1853 — alan kenar çubuğu shadcn'e + "İş alanları" (2.2).** `components/LogFieldsPanel` silindi; yerine
+  `coremetry/logs/FieldSidebar` (shadcn Button/Input + `coremetry/StatusBadge`; ui/ importu 0, statik satır içi stil 0 —
+  yalnız yüzde çubuğunun hesaplanmış genişliği). Davranış aynı: ≥1280px açık başlar, saklı tercih kazanır; alan açılınca
+  TEK fieldstats (ön-yükleme yok), "⚠ ayıran", ∃ var/yok, daha fazla (20), kolon ekle/kaldır. Yeni: en üstte "İş alanları"
+  bölümü — `system_settings['logs_search'].businessFields` = `[{label, fields[]}]` (etiket → ES alan adayları).
+  Varsayılan BOŞ (alan adı uydurulmaz), boşken bölüm gizli. Çözüm istemcide (`lib/logBusinessFields`): eşlemede bulunan
+  İLK aday; eşleme kırpılmışsa (`fieldsTotal > fields.length`) bulunamayan tanım ilk adayıyla kalır (kırpılmış listede
+  yok ≠ eşlemede yok); eşleme tam ve aday yoksa tanım düşer; alan listesi boşsa (CH log yolu — eşleme keşfi yok) bölüm
+  gizli → CH'de sessizce kapalı. İş alanı "Seçili/Mevcut" gruplarında ikinci kez çizilmez. Settings › Logs arka ucu ›
+  Log arama kartına editör (etiket + virgüllü adaylar, ekle/kaldır, ≤20); PUT TAM blob (maxSample + businessFields;
+  tam-satır yazım — eski kart yalnız maxSample yollardı, iş alanlarını silerdi), admin + mevcut audit
+  `logs_search.settings`. Doğrulama: ≤20 tanım, etiket 1–64 rune ve büyük/küçük harf duyarsız tekil, 1–8 aday, aday
+  1–256 bayt, boşluk/kontrol/tırnak/joker/ters bölü yok; PUT'ta 400 + gerekçe, okumada bozuk tanım sessizce düşer.
+  Sapma: mockup değer satırının sağındaki "4 ▾" (değer sayısı) çizilmedi — sayı yalnız alan açılınca bilinir (ön-yükleme
+  ES-maliyet sözleşmesini bozardı); ipucu etiketi değer listesinin altında. Kenar çubuğu başlıkları Türkçeleşti
+  ("Seçili alanlar", "Popüler alanlar", "Mevcut alanlar (N)").

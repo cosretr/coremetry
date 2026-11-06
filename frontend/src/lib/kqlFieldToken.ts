@@ -10,7 +10,7 @@
 // "alanın adı farklı" diye değil.
 //
 // AĞ MALİYETİ SIFIR: alan listesi ZATEN çekiliyor (/api/logs/fields,
-// LogFieldsPanel'in "Available fields" bölümü). Bu modül yalnız o listeyi
+// FieldSidebar'ın "Available fields" bölümü). Bu modül yalnız o listeyi
 // kutunun kendisine bağlıyor. Operatörün "elastic api kullanımını çok
 // artırma" şartı (v0.8.270 disiplini) yeni bir tur eklemeden karşılanıyor.
 //

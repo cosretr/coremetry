@@ -29,11 +29,6 @@
       "count": 1
     }
   },
-  "src/components/LogFieldsPanel.tsx": {
-    "ui/no-raw-element": {
-      "count": 1
-    }
-  },
   "src/components/LogPillEditor.tsx": {
     "ui/no-raw-element": {
       "count": 3
