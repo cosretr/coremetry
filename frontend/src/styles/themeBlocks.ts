@@ -5,12 +5,13 @@
 // Üretim kodu bu dosyayı import etmez (styles/pageFiles.ts gibi kapı yardımcısı).
 import type { Theme } from '../lib/themeRegistry';
 
-/** Her tema bloğunun AÇIKÇA yazdığı 47 token (çıplak :root mirası yok):
- *  44 renk/gölge + v0.10.1844 sinyal türü tonları (--sig-*). */
+/** Her tema bloğunun AÇIKÇA yazdığı 48 token (çıplak :root mirası yok):
+ *  44 renk/gölge + v0.10.1844 sinyal türü tonları (--sig-*) + v0.10.1851
+ *  `--heat` (ısı haritası düşük ucu). */
 export const THEME_TOKENS = [
   '--bg0', '--bg1', '--bg2', '--bg3', '--field-bg', '--bg', '--border', '--divider', '--border-control', '--border-strong',
   '--text', '--text2', '--text3', '--text-faint', '--brand', '--brand2',
-  '--accent', '--accent2', '--accent-hover', '--focus', '--on-accent', '--accent-soft', '--accent-bg', '--accent-border',
+  '--accent', '--accent2', '--accent-hover', '--focus', '--on-accent', '--accent-soft', '--accent-bg', '--accent-border', '--heat',
   '--ok', '--warn', '--warn-solid', '--err', '--err-solid', '--fatal', '--info',
   '--ok-bg', '--warn-bg', '--err-bg', '--info-bg',
   '--purple', '--indigo', '--orange', '--teal', '--sig-metric', '--sig-trace', '--sig-log',

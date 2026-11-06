@@ -29,6 +29,10 @@ export const SERIES_PALETTE_SETS = {
   // 3 #ff8fb3→#ff87cb (--err 0.063→0.106), 4 #e6e04a→#c6f056 (--warn
   // 0.052→0.105), 6 #ffa257→#ffa227 (--err 0.075→0.107).
   contrast: ['#6cb6ff', '#4fded8', '#ff87cb', '#c6f056', '#b3c4ff', '#ffa227', '#cfa0ff', '#ffb3ec'],
+  // v0.10.1851 — Kağıt: sıcak açık zemin (light paleti bg0'da 3.01 sınırda).
+  // Mockup'tan iki yuva durum rengine OKLab < 0.10 idi; en küçük değişiklik:
+  // 3 #a3245a→#972472 (--err 0.057→0.105), 4 #7d7a08→#7d7e10 (--warn 0.095→0.106).
+  stone: ['#1f6fa8', '#0d8f8a', '#972472', '#7d7e10', '#5a6fd0', '#b85c0a', '#7a4aa6', '#b85aa3'],
 } as const;
 export type SeriesPaletteId = keyof typeof SERIES_PALETTE_SETS;
 
@@ -59,6 +63,8 @@ export const THEME_REGISTRY = [
   { id: 'slate', label: 'Arduvaz', glyph: '◑', scheme: 'dark', contrast: 'aa', series: 'dark', themeColor: '#0f172a', ciCell: false },
   // v0.10.1850 — Yüksek Kontrast: AAA katmanı, kendi paleti; CI axe temsilcisi (öneri §3).
   { id: 'contrast', label: 'Yüksek Kontrast', glyph: '◐', scheme: 'dark', contrast: 'aaa', series: 'contrast', themeColor: '#000000', ciCell: true },
+  // v0.10.1851 — Kağıt: sıcak açık, turuncu vurgu, --heat = --info (operatör).
+  { id: 'stone', label: 'Kağıt', glyph: '❖', scheme: 'light', contrast: 'aa', series: 'stone', themeColor: '#f4f2ee', ciCell: false },
 ] as const satisfies readonly ThemeEntryShape[];
 
 export type ThemeEntry = (typeof THEME_REGISTRY)[number];

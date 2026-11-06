@@ -37,8 +37,8 @@ describe('tema kaydı ↔ globals.css blokları', () => {
     const body = themeBlockBody(GLOBALS, id);
     const d = decls(body);
 
-    it('47 token açıkça yazılı (44 + v0.10.1844 --sig-*)', () => {
-      expect(THEME_TOKENS).toHaveLength(47);
+    it('48 token açıkça yazılı (44 + v0.10.1844 --sig-* + v0.10.1851 --heat)', () => {
+      expect(THEME_TOKENS).toHaveLength(48);
       expect(THEME_TOKENS.filter(t => !d.has(t))).toEqual([]);
     });
 
@@ -58,6 +58,16 @@ describe('tema kaydı ↔ globals.css blokları', () => {
       expect(css.map(m => m[2])).toEqual([...SERIES_PALETTES[id]]);
       expect(SERIES_PALETTES[id]).toEqual(SERIES_PALETTE_SETS[entry.series]);
     });
+  });
+
+  // v0.10.1851 — ısı haritası düşük ucu: --heat tema bloğunda bir rol tokenına
+  // bağlı (vurgu ya da bilgi); Kağıt'ta bilgi mavisi (operatör: turuncu vurgu
+  // amber/kızıl ile tek aileye düşmesin). LatencyHeatmap --heat'i okur.
+  it('--heat: var(--accent) | var(--info); Kağıt = var(--info); ısı haritası --heat okur', () => {
+    for (const id of THEME_IDS) expect(decls(themeBlockBody(GLOBALS, id)).get('--heat'), id).toMatch(/^var\(--(accent|info)\)$/);
+    expect(decls(themeBlockBody(GLOBALS, 'stone')).get('--heat')).toBe('var(--info)');
+    const heat = readFileSync(resolve(STYLES, '..', 'components', 'LatencyHeatmap.tsx'), 'utf8');
+    expect(heat).toContain("accent: pick('--heat', DEFAULT_RAMP_TOKENS.accent)");
   });
 
   it('tokens.css seri kurallarında kayıtsız tema yok', () => {

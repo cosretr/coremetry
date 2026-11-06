@@ -141,6 +141,8 @@
      Only the genuinely-missing levels are defined here, in both themes. */
   --accent-bg:     #253040;  /* soft solid accent fill — focus ring, selected-row rail, active chip (design --primary-bg) */
   --accent-border: #294d82;  /* accent hairline — selected-row / active border (design --primary-border) */
+  /* v0.10.1851 — ısı haritası rampasının düşük ucu (LatencyHeatmap); Kağıt'ta --info. */
+  --heat: var(--accent);
   --text-faint:    #71717a;  /* v0.10.920 — YALNIZ devre dışı metin (3.31:1); okunacak metin --text3 */
   --shadow-md:     0 6px 20px rgba(0, 0, 0, .45);  /* drawers / popovers, between --shadow-sm and --shadow-pop */
 
@@ -329,6 +331,7 @@
   /* design-system reconciliation (light) — see :root block for the mapping. */
   --accent-bg:     #ebf2fc;  /* design --primary-bg (light) */
   --accent-border: #b3cef3;  /* design --primary-border (light) */
+  --heat: var(--accent);
   --text-faint:    #888e95;  /* yalnız devre dışı metin (3.31:1) */
   --shadow-md:     0 4px 16px rgba(20, 30, 45, .08);
   /* mK6 — see :root for the role of each. v0.10.1847 (tema kaydı, tamlık
@@ -412,6 +415,7 @@
 
   --accent-bg:     #e7f1fa;  /* PF blue-50 */
   --accent-border: #bee1f4;
+  --heat: var(--accent);
   --text-faint:    #8b8b93;
   --shadow-md:     0 4px 16px rgba(21, 21, 21, .10);
   /* mK6 — PF danger red, darkened one step for the severity above error.
@@ -493,6 +497,7 @@
   --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
   --accent-bg:     #1c2f52;
   --accent-border: #2a4a85;
+  --heat: var(--accent);
   --ok:   #4ac98a;
   --warn: #f5b83d;
   --warn-solid: #f5b83d;
@@ -554,6 +559,7 @@
   --accent-soft: color-mix(in srgb, var(--accent) 20%, transparent);
   --accent-bg:     #0b2440;
   --accent-border: #3d7fc0;
+  --heat: var(--accent);
   --ok:   #5ee08a;
   --warn: #ffcf40;
   --warn-solid: #ffcf40;
@@ -580,6 +586,67 @@
   --backdrop:     rgba(0, 0, 0, .75);
 
   color-scheme: dark;
+}
+
+/* ── Kağıt / stone (v0.10.1851, operatör onayı 2026-11-06) ────────────────
+   docs/frontend/themes-proposal.md §4. Tek sıcak AÇIK tema: kağıt nötrü,
+   kiremit-turuncu vurgu (ton 17°); uyarı altın (43°), hata kızıl (347°),
+   bilgi ayrı mavi (#1e5aa8). Isı haritası düşük ucu --heat = --info
+   (operatör: turuncu → amber → kızıl tek renk ailesine düşmesin). Koyu
+   kenar çubuğu YOK (operatör). Kendi seri paleti (tokens.css). */
+[data-theme="stone"] {
+  --bg0: #f4f2ee;
+  --bg1: #fdfcfa;
+  --bg2: #f1eee9;
+  --bg3: #e6e2db;
+  --field-bg: var(--bg1);
+  --bg:  #fdfcfa;
+  --border: #d9d5cd;
+  --divider: #e3e0db;
+  --border-control: #b0a9a1;
+  --border-strong: #8c857d;
+  --text:  #1c1917;
+  --text2: #44403c;
+  --text3: #645e58;
+  --text-faint: #8a837c;
+  --brand:  #E30613;
+  --brand2: #ff2333;
+  --accent:  #c2410c;
+  --accent2: #9a3412;
+  --accent-hover: #9a3412;
+  --focus:   #c2410c;
+  --on-accent: #ffffff;
+  --accent-soft: color-mix(in srgb, var(--accent) 10%, transparent);
+  --accent-bg:     #fbeee4;
+  --accent-border: #f0c8a8;
+  --heat: var(--info);
+  --ok:   #166534;
+  --warn: #7c5800;
+  --warn-solid: #b07d00;
+  --err:  #b4173a;
+  --err-solid: #be123c;
+  --fatal: #8f1239;
+  --info: #1e5aa8;
+  --ok-bg:   #e9f2ea;
+  --warn-bg: #f7f0dd;
+  --err-bg:  #f9ebec;
+  --info-bg: #e8f0f9;
+  --purple: #7c4fd0;
+  --indigo: #5a5fd0;
+  --orange: #c2570a;
+  --teal:   #0f766e;
+  /* v0.10.1844 sinyal türü tonları — bg0–bg2'de ≥4.5 (4.73 / 4.67 / 4.97);
+     log tonu --orange'dan koyu (#c2570a burada 3.89). */
+  --sig-metric: #0f766e;
+  --sig-trace:  #7c4fd0;
+  --sig-log:    #a84a08;
+  --shadow-sm:    0 1px 2px rgba(41, 37, 36, .06);
+  --shadow-md:    0 4px 16px rgba(41, 37, 36, .09);
+  --shadow-pop:   0 8px 24px rgba(41, 37, 36, .14);
+  --shadow-modal: 0 20px 60px rgba(41, 37, 36, .18);
+  --backdrop:     rgba(41, 37, 36, .4);
+
+  color-scheme: light;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }

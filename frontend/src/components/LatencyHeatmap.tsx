@@ -35,7 +35,9 @@ function resolveRampTokens(): RampTokens {
   const css = getComputedStyle(document.documentElement);
   const pick = (name: string, fb: string) => css.getPropertyValue(name).trim() || fb;
   return {
-    accent: pick('--accent', DEFAULT_RAMP_TOKENS.accent),
+    // v0.10.1851 — düşük uç --heat (varsayılan var(--accent); Kağıt'ta --info:
+    // turuncu vurgu → amber → kızıl tek renk ailesine düşmesin).
+    accent: pick('--heat', DEFAULT_RAMP_TOKENS.accent),
     warn: pick('--warn-solid', DEFAULT_RAMP_TOKENS.warn), // v0.10.920 — dolgu tonu (açık temalarda --warn metin kahvesi)
     err: pick('--err', DEFAULT_RAMP_TOKENS.err),
   };

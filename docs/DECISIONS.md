@@ -12492,3 +12492,10 @@ Kaynak: `docs/anomaly/learning-loop-audit.md` §7, §10 Faz 2, §15, §17; onayl
 - `contrastTokens` eşik katmanı kayıttan: 'aa' değişmedi; 'aaa' birincil metin ≥15, okunan metin/durum/vurgu üstü ≥7, devre dışı ≥4.5, `--border` ≥3, ikincil kenar ≥4.5, form kenarı ≥7, seri ≥4.5. Mockup token değerleri ilk koşuda yeşil.
 - Mockup'tan sapma (seri paleti, `seriesPalette` OKLab ≥0.10 kapısı; en küçük değişiklik): 2 #4fe0d0→#4fded8 (--ok 0.093→0.107), 3 #ff8fb3→#ff87cb (--err 0.063→0.106), 4 #e6e04a→#c6f056 (--warn 0.052→0.105), 6 #ffa257→#ffa227 (--err 0.075→0.107). Öneri betiği yalnız kontrastı ölçüyordu, durum yakınlığını değil.
 - shadcn `button`/`badge` `destructive`'ten `dark:bg-destructive/60` kalktı: `--on-accent`/`--err-solid` sözleşmesi DOLU dolgu üstünde ölçülü; %60 dolgu Yüksek Kontrast'ta siyah yazıyı 3.5:1'e düşürüyordu. Görsel sapma: dark ve Arduvaz'da tehlike düğmesi/rozeti tam `--err-solid` (beyaz yazı 4.61 / 4.83, eşik 4.5).
+
+## 2026-11-06 — v0.10.1851 — Kağıt (stone) teması + `--heat`
+
+- Öneri §4 bloğu (`[data-theme="stone"]`): tek sıcak açık tema, kiremit-turuncu vurgu, bilgi ayrı mavi; koyu kenar çubuğu yok (operatör). Kayıtta açık şema, `aa`, kendi seri paleti, CI hücresi değil (gece işi).
+- `--heat` rol tokenı (ısı haritası düşük ucu, LatencyHeatmap `--accent` yerine okur): her blokta açıkça, varsayılan `var(--accent)`, Kağıt'ta `var(--info)` (operatör). Tamlık listesi 47 → 48 (44 + `--sig-*` + `--heat`); mevcut temalarda değer = `--accent`, görsel fark yok.
+- v0.10.1844 `--sig-*` (mockup'ta yok): metric #0f766e (--teal), trace #7c4fd0 (--purple), log #a84a08 (--orange #c2570a bg0'da 3.89 < 4.5 → koyulaştırıldı); bg0–bg2'de en düşük 4.73 / 4.67 / 4.97.
+- Öneri notu "Stone düzeltme döngüsünde yakınsamadı": gerçek `contrastTokens` ile koşuldu, token çiftlerinin HEPSİ ilk koşuda geçti — token değeri değişmedi. Kırılan tek kapı seri paleti (`seriesPalette` OKLab ≥0.10): 3 #a3245a→#972472 (--err 0.057→0.105), 4 #7d7a08→#7d7e10 (--warn 0.095→0.106); ikisi de bg0-bg2'de ≥3 (6.46 / 3.73).
