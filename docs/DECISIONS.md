@@ -13150,3 +13150,29 @@ açılışına ve otomatik yenilemesine yeni Elasticsearch isteği eklenmez.
   şerit satırı; verilmezse bayt bayt eski). Test: `lib/logsMarkers.test.ts`, `pages/Logs.markers.test.tsx` (tek servis
   → 1 annotations isteği, liste + histogram ES isteği 1 + 1 kalır; servissiz → istek yok). Mockup farkı: mockup
   işaretleri yalnız grafikte çizer; metin satırı ek. Doğrulanmadı: tarayıcı.
+- **v0.10.1896 — 4.2 Desenler: oran dili, "önceki pencerede yok" ≠ "ilk kez görüldü", eğilim çizgisi.**
+  - **Davranış değişikliği (varsayılan kipte de):** "Trend" düğmesi "Önceki pencere" oldu; "Δ" sütunu "Önceki pencere"
+    oldu ve "×3.0" yerine oran ifadesi kuralıyla yazar ("yaklaşık 3 kat", "biraz yüksek", "yaklaşık 2 kat az";
+    `lib/ratioPhrase.ts`, Go `ml.RatioPhrase` ile aynı eşikler). Oran artık ÖRNEKLEMDEKİ PAY üzerinden:
+    (sayı / örnek) ÷ (önceki sayı / önceki örnek). Ham sayı oranı pencere örneği 2000, taban 500 iken dört kat
+    şişiyordu. "YENİ" rozeti → "önceki pencerede yok" (örneklem ipucu, kanıt değil).
+  - **Yeni ayar `system_settings['logs_search'].patternInsights` (varsayılan KAPALI)**, Settings › Log arama'da tek
+    onay kutusu + ES maliyet açıklaması; admin PUT mevcut `logs_search.settings` audit'iyle. Açıkken Desenler sekmesi
+    (yalnız sekme açılınca) iki ek ES `_msearch` ister: (1) ilk 20 desenin eğilim çizgisi (size:0 + date_histogram,
+    ≤30 kova); (2) "önceki pencerede yok" desenlerden ilk 20'si için pencereden geriye 7 gün varlık yoklaması →
+    "ilk kez görüldü". Kapalıyken sunucu `insights=1`'i yok sayar (Go testi: iki istek HİÇ gitmez). Servis seçili
+    değilse yoklama yapılmaz ("ilk görülme ölçülmedi: tek servis seçin"); kısmi / zaman aşımı "ölçülemedi" der.
+  - **Sapma (brief'ten):** yoklama `track_total_hits:false` değil `1` — size:0 + sayım kapalı sorguda ES eşleşmeyi
+    hiç toplamayabilir; "var" ile "yok" ayırt edilemez ve yanlış "ilk kez görüldü" üretirdi. `terminate_after:1`
+    ile maliyet sınırı aynı. Eşleşme yüklemi desen satırının "Ara" sorgusu (şablonun tırnaklı literal parçaları) +
+    sayfa süzgeci; yaklaşık, "⊕ ekle" ile aynı küme.
+  - Eğilim hücresi `Sparkline` (tablo içi SVG mini grafik emsali; uPlot tablo satırı başına ağır). Ayar açıkken
+    sütunlar ayrı `storageKey` (`logs-patterns-insights`). Desenler, ayarlar yüklenmeden istenmez (açık ayarda çift
+    örnekleme olmasın).
+  - Ayar adı brief'te "Kalıplar sekmesi" diyordu; ekrandaki sekme adı "Desenler" olduğu için metin "Desenler".
+  - Kimlik (4.3 notu): eğilim ve yoklama satırı imza hash'iyle (`SignatureGroup.Hash`, xxhash) eşleşir, ES sorgusu
+    `PatternSearchQuery` ile kurulur. Log-ML aile kimliği DEĞİŞMEDİ.
+  - Test: `internal/logstore/pattern_insights_test.go` (tek `_msearch`, ≤20, gövde şekli, kısmi ≠ yok),
+    `internal/api/logs_pattern_insights_test.go` (kapalı → 0 istek; servissiz → yoklama yok), `lib/ratioPhrase.test.ts`,
+    `lib/logPatternsTrend.test.ts`, `pages/Logs.patternInsights.test.tsx`, ayar kartı testi. Doğrulanmadı: gerçek ES
+    (sayacın ölçümü, 7 günlük yoklamanın süresi), tarayıcı.

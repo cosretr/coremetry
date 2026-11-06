@@ -21,6 +21,9 @@ vi.mock('@/lib/api', () => ({
 import { LogsSearchSettingsCard } from './LogsSearchSettingsCard';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+// v0.10.1896 — shadcn Checkbox (radix) boyut gözlemcisi ister; jsdom'da yok.
+class NoopResizeObserver { observe() {} unobserve() {} disconnect() {} }
+(globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver ??= NoopResizeObserver;
 let host: HTMLDivElement | null = null; let root: Root | null = null;
 afterEach(() => { act(() => { root?.unmount(); }); host?.remove(); root = null; host = null; m.puts = []; m.fail = false; });
 const settle = () => act(async () => { await new Promise(r => setTimeout(r, 0)); });
@@ -46,7 +49,7 @@ describe('LogsSearchSettingsCard', () => {
     await act(async () => { (h.querySelector('button[type="submit"]') as HTMLButtonElement).click(); });
     await settle();
     // v0.10.1853 — TAM blob: iş alanları da taşınır (tam-satır yazım).
-    expect(m.puts).toEqual([{ maxSample: 800, businessFields: [{ label: 'Kanal', fields: ['CHANNEL_CODE', 'channel_code'] }] }]);
+    expect(m.puts).toEqual([{ maxSample: 800, businessFields: [{ label: 'Kanal', fields: ['CHANNEL_CODE', 'channel_code'] }], patternInsights: false }]);
     expect(h.querySelector('[role="status"]')?.textContent).toContain('Kaydedildi');
     m.fail = true;
     await act(async () => { (h.querySelector('button[type="submit"]') as HTMLButtonElement).click(); });
@@ -69,6 +72,19 @@ describe('LogsSearchSettingsCard', () => {
     await act(async () => { rm.click(); });
     await act(async () => { (h.querySelector('button[type="submit"]') as HTMLButtonElement).click(); });
     await settle();
-    expect(m.puts).toEqual([{ maxSample: 1500, businessFields: [{ label: 'İşlem', fields: ['FUNCTION_CODE', 'function_code'] }] }]);
+    expect(m.puts).toEqual([{ maxSample: 1500, businessFields: [{ label: 'İşlem', fields: ['FUNCTION_CODE', 'function_code'] }], patternInsights: false }]);
+  });
+
+  it('v0.10.1896 — desen eğilimi anahtarı: varsayılan kapalı, açıklama ES maliyetini söyler, açılınca blobla gider', async () => {
+    const h = await render();
+    const box = h.querySelector('[data-testid="pattern-insights-setting"]')!;
+    expect(box.textContent).toContain("Elasticsearch'e ek sorgu atar");
+    expect(box.textContent).toContain('Admin → Elasticsearch');
+    const cb = box.querySelector('[role="checkbox"]') as HTMLButtonElement;
+    expect(cb.getAttribute('aria-checked')).toBe('false');
+    await act(async () => { cb.click(); });
+    await act(async () => { (h.querySelector('button[type="submit"]') as HTMLButtonElement).click(); });
+    await settle();
+    expect(m.puts).toEqual([{ maxSample: 1500, businessFields: [{ label: 'Kanal', fields: ['CHANNEL_CODE', 'channel_code'] }], patternInsights: true }]);
   });
 });

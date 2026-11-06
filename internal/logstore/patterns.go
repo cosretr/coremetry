@@ -61,6 +61,15 @@ type SignatureGroup struct {
 	PrevCount int64   `json:"prevCount,omitempty"`
 	Ratio     float64 `json:"ratio,omitempty"`
 	New       bool    `json:"new,omitempty"`
+	// v0.10.1896 (Log Search Faz 4 dilim 4.2) — yalnız `logs_search.patternInsights`
+	// açıkken ve ilk PatternInsightsMax desende dolar (api attachPatternInsights).
+	// Trend: pencere kovaları (PatternsResult.Insights.BucketSec); TrendPartial:
+	// ES kısmi yanıt. FirstSeen7d: "first" = pencereden geriye 7 günde eşleşme
+	// yok (ilk kez görüldü), "seen" = var, "unknown" = ölçülemedi. Yalnız
+	// önceki pencere örneklemesinde olmayan (New) desenler yoklanır.
+	Trend        []int64 `json:"trend,omitempty"`
+	TrendPartial bool    `json:"trendPartial,omitempty"`
+	FirstSeen7d  string  `json:"firstSeen7d,omitempty"`
 }
 
 // PatternsBaseline — v0.10.508 (C6): taban örneklemesinin dürüstlük zarfı.
@@ -114,12 +123,14 @@ func patternsPageWantsCursor(remaining, pageLimit int) bool {
 type PatternsResult struct {
 	Groups []SignatureGroup `json:"groups"`
 	// Baseline — v0.10.508 (C6): yalnız ?baseline=1 ile dolar.
-	Baseline  *PatternsBaseline `json:"baseline,omitempty"`
-	Sampled   int               `json:"sampled"`   // okunan satır
-	Total     int               `json:"total"`     // backend'in pencere toplamı (ES ≤10k doygun)
-	Cap       int               `json:"cap"`       // PatternsSampleCap
-	Truncated bool              `json:"truncated"` // Sampled == Cap && Total > Cap
-	Distinct  int               `json:"distinct"`  // limit'ten önceki grup sayısı
+	Baseline *PatternsBaseline `json:"baseline,omitempty"`
+	// Insights — v0.10.1896: yalnız ?insights=1 + ayar açıkken dolar.
+	Insights  *PatternInsightsMeta `json:"insights,omitempty"`
+	Sampled   int                  `json:"sampled"`   // okunan satır
+	Total     int                  `json:"total"`     // backend'in pencere toplamı (ES ≤10k doygun)
+	Cap       int                  `json:"cap"`       // PatternsSampleCap
+	Truncated bool                 `json:"truncated"` // Sampled == Cap && Total > Cap
+	Distinct  int                  `json:"distinct"`  // limit'ten önceki grup sayısı
 	// CoveredFromNs/CoveredToNs (v0.10.441, log arama denetimi C4) —
 	// örneklemenin GERÇEKTEN kapsadığı alt pencere (en yeni uç; okunan
 	// satırların min/max zaman damgası). Tavan dolduğunda istenen

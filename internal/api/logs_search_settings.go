@@ -28,6 +28,10 @@ package api
 // tanım, etiket 1–64 karakter (büyük/küçük harf duyarsız tekil), tanım başına
 // 1–8 aday, aday 1–256 karakter, boşluk / tırnak / joker / ters bölü yok.
 // PUT TAM blob yazar (system_settings tam-satır: istemci maxSample'ı da yollar).
+//
+// v0.10.1896 (Log Search Faz 4 dilim 4.2) — `patternInsights` (bool, varsayılan
+// false): Desenler sekmesinde eğilim çizgisi + "ilk kez görüldü" etiketi; iki
+// ek Elasticsearch `_msearch` (logs_pattern_insights.go). Yalnız ES'te.
 // Yalnız Elasticsearch log yolunda anlamlı; CH'de eşleme keşfi yok → bölüm gizli.
 //
 // Neden ayrı dosya + blob: Server alanları api.go'da ve api.go BÜYÜMEZ
@@ -70,6 +74,10 @@ const (
 type logsSearchSettings struct {
 	MaxSample      int                 `json:"maxSample"`
 	BusinessFields []logsBusinessField `json:"businessFields"` // v0.10.1853
+	// PatternInsights — v0.10.1896 (Faz 4 dilim 4.2): Desenler sekmesinde
+	// eğilim çizgisi + "ilk kez görüldü" (iki ek ES `_msearch`). Varsayılan
+	// KAPALI (1877 olayı: ölçülmemiş ES yükü varsayılan açılmaz).
+	PatternInsights bool `json:"patternInsights"`
 }
 
 // logsBusinessField — v0.10.1853: kenar çubuğu "İş alanları" tanımı.

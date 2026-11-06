@@ -1627,7 +1627,7 @@ function LogsInner() {
               onClose={() => setView('logs')} />
           )
         ) : view !== 'logs' ? (
-          <LogPatternsPanel embedded open={!scopeGate} onSearch={searchFromPattern} tab={view}
+          <LogPatternsPanel embedded open={!scopeGate && searchSettingsQ.status !== 'pending'} onSearch={searchFromPattern} tab={view} insights={!!searchSettingsQ.data?.patternInsights} /* v0.10.1896 (4.2) — ayar açıkken eğilim + ilk görülme */
             params={{ ...filter, env, search: compiledSearch, lang: lang || undefined, scope: scopeParam, from: from ?? undefined, to: to ?? undefined }}
             toolbar={(
               /* v0.9.1100 (F3.5) — ✨ desen anlatımı; fetch YALNIZ tıkla (ES-maliyet disiplini). */

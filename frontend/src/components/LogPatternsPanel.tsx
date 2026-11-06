@@ -21,7 +21,8 @@ import {
   type ColumnDef, type DataTableStateProps,
 } from '@/components/ui/DataTable';
 import { Button } from '@/components/ui/Button';
-import { trendCell, trendLabel } from '@/lib/logPatternsTrend'; // v0.10.508 (C6)
+import { trendCell, trendLabel, firstSeenBadge, insightsNotes } from '@/lib/logPatternsTrend'; // v0.10.508 (C6); v0.10.1896 (4.2)
+import { Sparkline } from '@/components/Sparkline'; // v0.10.1896 — tablo içi mini grafik emsali (SVG)
 import { getItem, setItem } from '@/lib/storage';
 import { IconButton } from '@/components/ui/IconButton'; // v0.10.502 (B6)
 import { sevClass, sevName, tsLong, tsShort } from '@/lib/utils';
@@ -77,12 +78,21 @@ const TEMPLATES_LIMIT = 200;
 const COLS: ColumnDef<LogPatternGroup>[] = [
   { id: 'template', label: 'Desen', sortValue: r => r.template, naturalDir: 'asc', flex: true, mono: true },
   { id: 'count', label: 'Sayı', sortValue: r => r.count, numeric: true, width: 110 },
-  { id: 'trend', label: 'Δ', sortValue: r => r.new ? Number.MAX_SAFE_INTEGER : (r.ratio ?? 0), numeric: true, width: 72 },
+  // v0.10.1896 (4.2) — "Δ" → "Önceki pencere": oran ifadesi + "önceki pencerede yok" / "ilk kez görüldü".
+  { id: 'trend', label: 'Önceki pencere', sortValue: r => r.new ? Number.MAX_SAFE_INTEGER : (r.ratio ?? 0), numeric: true, width: 190, minWidth: 120 },
   { id: 'severity', label: 'Seviye', sortValue: r => r.severity, numeric: true, width: 84 },
   { id: 'services', label: 'Servisler', sortValue: r => r.services.join(','), naturalDir: 'asc', width: 170, mono: true, tone: () => 'muted' },
   { id: 'lastSeen', label: 'Son', sortValue: r => r.lastSeen, numeric: true, width: 96, tone: () => 'muted' },
   // v0.10.945 — eylem kolonu boyutlanmaz (T8): genişlik Ara + ⊕ + ⊖ içeriğine göre; 64px'te ⊖ kırpılıyordu.
   { id: 'act', label: 'Eylemler', kind: 'actions', width: 108, minWidth: 108 },
+];
+
+// v0.10.1896 (4.2) — eğilim sütunu yalnız `logs_search.patternInsights` açıkken
+// (ayrı storageKey: kapalı kipin kayıtlı genişlikleri bozulmaz).
+const COLS_INSIGHTS: ColumnDef<LogPatternGroup>[] = [
+  ...COLS.slice(0, 2),
+  { id: 'spark', label: 'Eğilim', width: 110, minWidth: 90, priority: 3 },
+  ...COLS.slice(2),
 ];
 
 const TCOLS: ColumnDef<LogTemplate>[] = [
@@ -94,8 +104,11 @@ const TCOLS: ColumnDef<LogTemplate>[] = [
   { id: 'act', label: 'Eylemler', kind: 'actions', width: 64 },
 ];
 
-export function LogPatternsPanel({ params, open, onSearch, tab: tabProp, onTab, embedded = false, toolbar, aside }: {
+export function LogPatternsPanel({ params, open, onSearch, tab: tabProp, onTab, embedded = false, toolbar, aside, insights = false }: {
   params: LogsParams;
+  /** v0.10.1896 (Faz 4 dilim 4.2) — `logs_search.patternInsights`: eğilim çizgisi +
+   *  "ilk kez görüldü" (ek ES sorgusu; yalnız bu sekme açıkken istenir). */
+  insights?: boolean;
   /** v0.10.1499 (/logs Discover dilim 2) — sayfanın görünüm anahtarı
    *  (Logs | Desenler | Şablonlar) sekmeyi sürer: kendi TabStrip'i çizilmez,
    *  panel tablonun YERİNE oturur (kart boşluğu yok). Varsayılan false =
@@ -121,7 +134,7 @@ export function LogPatternsPanel({ params, open, onSearch, tab: tabProp, onTab, 
   // Kalıcı (localStorage); yalnız açıkken ek bir ES sayfası (500) çekilir.
   const [trend, setTrend] = useState<boolean>(() => { try { return getItem<string>('logs.patternsTrend', '0') === '1'; } catch { return false; } });
   const toggleTrend = () => setTrend(v => { const n = !v; try { setItem('logs.patternsTrend', n ? '1' : '0'); } catch { /* storage yok */ } return n; });
-  const q = useLogsPatterns({ ...params, limit: 50, ...(trend ? { baseline: 1 as const } : {}) }, open && tab === 'patterns');
+  const q = useLogsPatterns({ ...params, limit: 50, ...(trend ? { baseline: 1 as const } : {}), ...(insights ? { insights: 1 as const } : {}) }, open && tab === 'patterns');
   const tq = useLogsTemplates(
     { since, limit: TEMPLATES_LIMIT, sort: 'last_seen', service: params.service || undefined },
     open && tab === 'templates',
@@ -129,8 +142,8 @@ export function LogPatternsPanel({ params, open, onSearch, tab: tabProp, onTab, 
   const rows = useMemo(() => q.data?.groups ?? [], [q.data]);
   const trows = useMemo(() => tq.data ?? [], [tq.data]);
   const dt = useDataTable<LogPatternGroup>({
-    storageKey: 'logs-patterns',
-    columns: COLS,
+    storageKey: insights ? 'logs-patterns-insights' : 'logs-patterns',
+    columns: insights ? COLS_INSIGHTS : COLS,
     rows,
     initialSort: { id: 'count', dir: 'desc' },
     onOpen: r => { if (r.query) onSearch(r.query); },
@@ -179,8 +192,8 @@ export function LogPatternsPanel({ params, open, onSearch, tab: tabProp, onTab, 
         )}
         {tab === 'patterns' && (
           <Button variant="secondary" active={trend} size="xs" onClick={toggleTrend} /* v0.10.1342 — açık/kapalı durum: active, birincil değil */
-            title="Δ / YENİ: hemen önceki eşit pencerenin örneklemesiyle (tek ek sayfa, 500 satır) karşılaştırır — ipucu, kanıt değil">
-            Trend
+            title="Hemen önceki eşit pencerenin örneklemesiyle (tek ek sayfa, 500 satır) karşılaştırır — ipucu, kanıt değil">
+            Önceki pencere
           </Button>
         )}
         <span style={{ fontSize: 11, color: 'var(--text3)' }}>
@@ -194,6 +207,10 @@ export function LogPatternsPanel({ params, open, onSearch, tab: tabProp, onTab, 
                 ? <span className="badge b-warn" style={{ marginLeft: 6 }} title={d.baseline.reason}>taban okunamadı</span>
                 : <span title="Δ/YENİ tabanı: hemen önceki eşit pencerenin örneklemesi (ipucu, kanıt değil)">{' · '}taban {d.baseline.sampled.toLocaleString()} satır / {d.baseline.distinct} desen{d.baseline.truncated ? ' (tavan)' : ''}</span>)}
               {d.degraded && <span className="badge b-warn" style={{ marginLeft: 6 }}>{d.reason ?? 'degraded'}</span>}
+              {/* v0.10.1896 — eğilim / ilk görülme durumu (kısmi ve hata ayrı söylenir) */}
+              {insightsNotes(d.insights).map(n => (
+                <span key={n.text} className={n.warn ? 'badge b-warn ml-1.5' : 'ml-1.5'} data-testid="patterns-insights-note">{n.warn ? n.text : `· ${n.text}`}</span>
+              ))}
             </>
           ) : 'sayımlar en yeni örnek satırlara göredir') : (
             <>
@@ -232,12 +249,30 @@ export function LogPatternsPanel({ params, open, onSearch, tab: tabProp, onTab, 
                         <span className="lp-bar" style={{ width: `${share}%` }} aria-hidden="true" />
                         <span style={{ position: 'relative' }}>{r.count.toLocaleString()}</span>
                       </td>
+                      {insights && (
+                        <td data-testid="pattern-spark">
+                          {r.trend && r.trend.length > 1
+                            ? <Sparkline values={r.trend} mode="count" width={96} height={20}
+                                title={`Pencere boyunca bu desene uyan satırlar (${d?.insights?.bucketSec ? Math.round(d.insights.bucketSec / 60) : '?'} dk kovalar)${r.trendPartial ? ' — kısmi yanıt' : ''}`} />
+                            : <span className="cell-empty" title="Yalnız ilk 20 desen için çizilir">—</span>}
+                        </td>
+                      )}
                       <td className="num" title={d?.baseline && !d.baseline.degraded
-                        ? `önceki pencere örneklemesinde ${r.prevCount ?? 0} satır${r.new ? ' (yok → örneklemede yeni)' : ''}`
-                        : 'Trend kapalı ya da taban okunamadı'}>
-                        {(() => { const c = trendCell(r, d?.baseline); return c.kind === 'new'
-                          ? <span className="badge b-warn">YENİ</span>
-                          : <span style={{ color: c.kind === 'ratio' ? (c.up ? 'var(--err)' : 'var(--text2)' /* v0.10.929 (K5) — düşüş nötr */) : 'var(--text3)' }}>{trendLabel(c)}</span>; })()}
+                        ? `Önceki pencerenin örneklemesinde ${r.prevCount ?? 0} satır; oran örneklemdeki paya göre${r.new ? ' (örneklemde yok — ipucu, kanıt değil)' : ''}`
+                        : '"Önceki pencere" kapalı ya da önceki pencere okunamadı'}>
+                        {(() => {
+                          const c = trendCell(r, d?.baseline, d?.sampled);
+                          if (c.kind !== 'new') {
+                            return <span className={c.kind === 'ratio' ? (c.up ? 'cell-err' : '') : 'cell-faint'}>{trendLabel(c)}</span>;
+                          }
+                          const fs = firstSeenBadge(r, d?.insights?.lookbackDays);
+                          return (
+                            <>
+                              <span className="badge b-gray">{trendLabel(c)}</span>
+                              {fs && <>{' '}<span className={fs.tone === 'warn' ? 'badge b-warn' : 'cell-faint'} title={fs.title} data-testid="pattern-first-seen">{fs.text}</span></>}
+                            </>
+                          );
+                        })()}
                       </td>
                       <td><span className={sevClass(r.severity)}>{r.severityText || sevName(r.severity)}</span></td>
                       <DataTableCell dt={dt} col="services" row={r} title={r.services.join(', ')}

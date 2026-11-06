@@ -169,7 +169,7 @@ describe('LogPatternsPanel', () => {
   it('v0.10.1342 — Trend açık/kapalı durumu ikincil + active (tint + aria-pressed), dolu birincil değil', async () => {
     const el = render(<LogPatternsPanel params={{ service: 'api', from: 1, to: 2 }} open onSearch={() => {}} />);
     await settled();
-    const trend = () => [...el.querySelectorAll('button')].find(b => b.textContent?.trim() === 'Trend') as HTMLButtonElement;
+    const trend = () => [...el.querySelectorAll('button')].find(b => b.textContent?.trim() === 'Önceki pencere') as HTMLButtonElement;
     expect(trend()).toBeTruthy();
     expect(trend().getAttribute('aria-pressed')).toBe('false');
     expect(trend().className).toContain('sec');

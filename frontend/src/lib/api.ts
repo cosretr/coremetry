@@ -1138,7 +1138,7 @@ export const api = {
   // for ClickHouse (shape is fixed); ES backend returns the
   // mapping leaves. Server caches 60s.
   // v0.10.297 — /api/logs/patterns: /api/logs filtre kümesi + limit (20/50/100).
-  logsPatterns: (params: LogsParams & { limit?: number; sample?: number; baseline?: 1 }, signal?: AbortSignal) => // sample (v0.10.452): 500 | 2000; baseline (v0.10.508 C6): önceki pencere örneklemesi
+  logsPatterns: (params: LogsParams & { limit?: number; sample?: number; baseline?: 1; insights?: 1 }, signal?: AbortSignal) => // insights (v0.10.1896): eğilim + ilk görülme (ayar kapalıysa sunucu yok sayar) // sample (v0.10.452): 500 | 2000; baseline (v0.10.508 C6): önceki pencere örneklemesi
     get<LogPatternsResult>(`/api/logs/patterns?${qs(params)}`, signal),
   // v0.10.310 — /api/logs/templates: Drain kalıcı şablonları (+ türetilmiş
   // "Ara" sorgusu). Sunucu 30 s cache; yalnız Şablonlar sekmesi açıkken.
@@ -1170,7 +1170,7 @@ export const api = {
     get<LogRow>(`/api/logs/doc?ref=${encodeURIComponent(ref)}`, signal),
   // v0.10.1831 — /logs örnek boyu üst sınırı (system_settings logs_search).
   getLogsSearchSettings: (signal?: AbortSignal) => get<LogsSearchSettings>('/api/settings/logs-search', signal),
-  putLogsSearchSettings: (s: { maxSample: number; businessFields: LogsBusinessField[] }) => // v0.10.1853 — TAM blob
+  putLogsSearchSettings: (s: { maxSample: number; businessFields: LogsBusinessField[]; patternInsights: boolean }) => // v0.10.1853 — TAM blob
     request<LogsSearchSettings>('/api/settings/logs-search', {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(s),
     }),

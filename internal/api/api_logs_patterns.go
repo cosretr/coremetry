@@ -116,7 +116,9 @@ func (s *Server) getLogsPatterns(w http.ResponseWriter, r *http.Request) {
 	sample := logsPatternsSample(parseInt(q.Get("sample"), 0))                       // v0.10.452
 	baseline := q.Get("baseline") == "1"                                             // v0.10.508 (C6) — Trend: önceki pencere örneklemesi
 	keyFrom, keyTo := snapLogsWindow(&f, q.Get("from"), q.Get("to"), 30*time.Second) // v0.10.446 (A6-V2: TTL kadar; varsayılan pencere de anahtara girer)
-	key := logsPatternsKey(f, keyFrom, keyTo, limit, sample, baseline)
+	// v0.10.1896 (4.2) — eğilim + ilk görülme: ayar kapalıysa istek yok sayılır.
+	insights := patternInsightsOn(q.Get("insights") == "1", currentLogsSearchSettings().PatternInsights)
+	key := logsPatternsKey(f, keyFrom, keyTo, limit, sample, baseline) + patternInsightsKeySuffix(insights)
 	s.serveCached(w, r, key, 30*time.Second, func(ctx context.Context) (any, error) {
 		tctx, cancel := context.WithTimeout(ctx, logsPatternsBudget)
 		defer cancel()
@@ -159,6 +161,9 @@ func (s *Server) getLogsPatterns(w http.ResponseWriter, r *http.Request) {
 					logstore.JoinPatternBaseline(res, base)
 				}
 			}
+		}
+		if insights {
+			s.attachPatternInsights(ctx, f, res, baseline)
 		}
 		return res, nil
 	})

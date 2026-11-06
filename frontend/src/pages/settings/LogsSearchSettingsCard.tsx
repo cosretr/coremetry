@@ -10,7 +10,13 @@
 // v0.10.1853 (Log Search Faz 2 dilim 2.2) — "İş alanları": /logs alan kenar
 // çubuğunun en üstündeki bölüm (etiket → ES alan adayları, ilk eşleşen aday).
 // PUT TAM blobu yazar: maxSample + businessFields birlikte gider (tam-satır).
-import { useState, type FormEvent } from 'react';
+//
+// v0.10.1896 (Log Search Faz 4 dilim 4.2) — "Desen eğilimi ve ilk görülme"
+// anahtarı (`logs_search.patternInsights`, varsayılan KAPALI): Desenler
+// sekmesine Elasticsearch'e iki ek sorgu ekler (1877 olayı: ölçülmeden açılmaz).
+import { useId, useState, type FormEvent } from 'react';
+import { Checkbox } from '@/components/shadcn/checkbox';
+import { Label } from '@/components/shadcn/label';
 import { Spinner } from '@/components/Spinner';
 import { Button } from '@/components/shadcn/button';
 import { Field } from '@/components/coremetry/Field';
@@ -36,6 +42,8 @@ export function LogsSearchSettingsCard() {
   const [snap, setSnap] = useState<LogsSearchSettings | null>(null);
   const [maxSample, setMaxSample] = useState('');
   const [biz, setBiz] = useState<BizDraft[]>([]);
+  const [insights, setInsights] = useState(false);
+  const insightsId = useId();
   const setBizAt = (i: number, patch: Partial<BizDraft>) => setBiz(rows => rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -43,6 +51,7 @@ export function LogsSearchSettingsCard() {
     setSnap(s);
     setMaxSample(String(s.maxSample));
     setBiz(toDraft(s.businessFields));
+    setInsights(!!s.patternInsights);
   });
 
   const save = async (e: FormEvent) => {
@@ -50,9 +59,9 @@ export function LogsSearchSettingsCard() {
     setBusy(true); setMsg(null);
     try {
       const n = Number(maxSample);
-      const s = await api.putLogsSearchSettings({ maxSample: Number.isFinite(n) ? Math.round(n) : 0, businessFields: bizFromDraft(biz) });
-      setSnap(s); setMaxSample(String(s.maxSample)); setBiz(toDraft(s.businessFields));
-      setMsg({ ok: true, text: 'Kaydedildi — /logs örnek boyu üst sınırı ve iş alanları güncellendi.' });
+      const s = await api.putLogsSearchSettings({ maxSample: Number.isFinite(n) ? Math.round(n) : 0, businessFields: bizFromDraft(biz), patternInsights: insights });
+      setSnap(s); setMaxSample(String(s.maxSample)); setBiz(toDraft(s.businessFields)); setInsights(!!s.patternInsights);
+      setMsg({ ok: true, text: 'Kaydedildi — /logs örnek boyu üst sınırı, iş alanları ve desen ayarı güncellendi.' });
     } catch (err) {
       setMsg({ ok: false, text: err instanceof Error ? err.message : String(err) });
     } finally {
@@ -95,6 +104,18 @@ export function LogsSearchSettingsCard() {
             onClick={() => setBiz(rows => [...rows, { label: '', fields: '' }])}>+ İş alanı ekle</Button>
         </div>
       </fieldset>
+      <div className="grid gap-1" data-testid="pattern-insights-setting">
+        <div className="flex items-center gap-2">
+          <Checkbox id={insightsId} checked={insights} onCheckedChange={v => setInsights(v === true)}
+            aria-describedby={`${insightsId}-note`} />
+          <Label htmlFor={insightsId}>Desenler sekmesinde eğilim ve "ilk kez görüldü"</Label>
+        </div>
+        <p id={`${insightsId}-note`} className="m-0 text-[length:var(--fs-xs)] text-(--text3)">
+          Desenler sekmesinde eğilim çizgisi ve "ilk kez görüldü" etiketi; Elasticsearch'e ek sorgu atar — önce test
+          ortamında Admin → Elasticsearch sayacıyla ölçün. Kapalıyken bu sorgular hiç gitmez. Açıkken yalnız Desenler
+          sekmesi açılınca, ilk 20 desen için iki toplu sorgu (her biri en çok 2 sn). Yalnız Elasticsearch log arka ucunda.
+        </p>
+      </div>
       <ActionRow confirm={<Button type="submit" loading={busy}>Kaydet</Button>} />
       {msg && <p role={msg.ok ? 'status' : 'alert'} className={msg.ok ? NOTE : 'text-[length:var(--fs-sm)] text-status-critical'}>{msg.text}</p>}
     </form>

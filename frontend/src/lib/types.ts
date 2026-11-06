@@ -3944,6 +3944,8 @@ export interface LogsSearchSettings {
   maxSample: number;
   /** v0.10.1853 — alan kenar çubuğu "İş alanları": etiket → ES alan adayları (ilk eşleşen). */
   businessFields: LogsBusinessField[];
+  /** v0.10.1896 (Faz 4 dilim 4.2) — Desenler: eğilim + "ilk kez görüldü" (ek ES sorgusu); varsayılan kapalı. */
+  patternInsights?: boolean;
   defaults: { maxSample: number };
   min: number;
   hardCap: number;
@@ -11111,6 +11113,22 @@ export interface LogPatternGroup {
   prevCount?: number;
   ratio?: number;
   new?: boolean;
+  /** v0.10.1896 (Faz 4 dilim 4.2) — yalnız `logs_search.patternInsights` açıkken,
+   *  ilk 20 desende: pencere kovaları (insights.bucketSec), ES kısmi yanıt
+   *  bayrağı ve 7 günlük ilk görülme ("first" = ilk kez görüldü, "seen" =
+   *  7 günde görülmüş, "unknown" = ölçülemedi). */
+  trend?: number[];
+  trendPartial?: boolean;
+  firstSeen7d?: 'first' | 'seen' | 'unknown';
+}
+/** v0.10.1896 — Desenler ek sorularının durum zarfı (Go logstore.PatternInsightsMeta). */
+export interface LogPatternInsights {
+  bucketSec: number;
+  fromNs: number;
+  toNs: number;
+  trend: 'ok' | 'partial' | 'error' | 'unsupported';
+  firstSeen: 'ok' | 'partial' | 'error' | 'unsupported' | 'no-service' | 'no-baseline' | 'none';
+  lookbackDays: number;
 }
 export interface LogPatternsBaseline {
   fromNs: number;
@@ -11124,6 +11142,7 @@ export interface LogPatternsBaseline {
 export interface LogPatternsResult {
   groups: LogPatternGroup[];
   baseline?: LogPatternsBaseline; // v0.10.508 (C6)
+  insights?: LogPatternInsights; // v0.10.1896 (4.2)
   sampled: number;
   total: number;
   cap: number;

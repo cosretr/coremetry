@@ -20,7 +20,7 @@ describe('Logs ?panel= (C8 → görünüm anahtarı)', () => {
   it('writes the param with replace:true (logs = deleted) and passes the view as the panel tab', () => {
     expect(view).toContain("if (view === 'logs') p.delete('panel'); else p.set('panel', view);");
     expect(src).toContain('setSearchParams(prev => writeLogsView(prev, v), { replace: true });');
-    expect(src).toContain('<LogPatternsPanel embedded open={!scopeGate} onSearch={searchFromPattern} tab={view}'); // v0.10.1855
+    expect(src).toContain("<LogPatternsPanel embedded open={!scopeGate && searchSettingsQ.status !== 'pending'} onSearch={searchFromPattern} tab={view}"); // v0.10.1855; v0.10.1896 ayar yüklenmeden istek yok
     // satır tıkı q yazar VE Logs'a geçer — tek URL yazımında
     expect(src).toContain("writeUrl(next, filters, undefined, mode === 'replace' ? 'logs' : undefined);");
   });
