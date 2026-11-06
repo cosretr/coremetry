@@ -21,10 +21,10 @@ const m = vi.hoisted(() => {
     matches: false, media: q, onchange: null, addListener: () => {}, removeListener: () => {},
     addEventListener: () => {}, removeEventListener: () => {}, dispatchEvent: () => false,
   })) as unknown as typeof window.matchMedia;
-  return { role: 'viewer', replay: null as unknown };
+  return { role: 'viewer', replay: null as unknown, calls: [] as string[] };
 });
 vi.mock('@/lib/api', () => ({
-  api: new Proxy({}, { get: (_t, k: string) => (k === 'mlReplay' ? async () => m.replay : async () => null) }),
+  api: new Proxy({}, { get: (_t, k: string) => (k === 'mlReplay' ? async () => m.replay : async () => { m.calls.push(k); return null; }) }),
   isCanceled: () => false,
 }));
 vi.mock('@/components/AuthProvider', () => ({ useAuthRole: () => m.role }));
@@ -137,6 +137,15 @@ describe('ML olay sayfası düzeni', () => {
     expect(lg!.textContent).toContain('gölge çubuk: bu kovada beklenen');
     expect([...lg!.querySelectorAll('[role="radio"]')].map(b => b.textContent)).toEqual(['Mesaj kalıbı', 'Seviye']);
     expect(el.querySelector('[data-testid="ml-trace-heatmap"]')).toBeNull();
+  });
+  it('v0.10.1873: log kanıtı (mesaj kalıpları) kapalı gelir, açılmadan logstore çağrısı yok', async () => {
+    m.calls = [];
+    const el = await render({ snapshot: snap, related: [], card });
+    const det = el.querySelector('[data-testid="ml-evidence"] [data-testid="ml-evidence-patterns"]') as HTMLDetailsElement | null;
+    expect(det).not.toBeNull();
+    expect(det!.open).toBe(false);
+    expect(m.calls).not.toContain('mlEvidence');
+    expect(el.querySelector('[data-testid="ml-evidence"] h3')!.textContent).toContain('yeni ve artan mesajlar');
   });
   it('bağlam satırları: aynı servis kayıtları + yayınlar zaman sıralı', () => {
     const s2 = { ...snap, deploys: JSON.stringify([{ service: 'orders-api', version: 'v2', firstSeenNs: 1_799_999_000e9, spanCount: 1 }]) };

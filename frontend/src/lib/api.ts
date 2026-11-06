@@ -1687,6 +1687,9 @@ export const api = {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     }),
   mlReplay: (id: string) => get<import('./types').MLReplay>(`/api/ml/${encodeURIComponent(id)}/replay`),
+  // v0.10.1873 — olay detayı kanıt bölümleri (endpoints: MV · patterns: logstore, yalnız açılınca · metrics: ml_series).
+  mlEvidence: <R,>(id: string, kind: import('./types').MLEvidenceKind, signal?: AbortSignal) =>
+    get<import('./types').MLEvidence<R>>(`/api/ml/${encodeURIComponent(id)}/evidence/${kind}`, signal),
   // Kalite çerçevesi backtest / what-if (v0.10.1751): salt hesap, yazmaz.
   mlBacktest: (body: { signal: string; service: string; from?: number; to?: number; config?: import('./types').MLConfig;
     overrides?: { criticalZ?: number; dwellBuckets?: number; impactMinRel?: number } }) =>

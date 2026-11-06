@@ -12815,3 +12815,22 @@ görünüm 1–4. Parti A'nın (1842–1846) üstüne; ana grafik (olay anı kay
   söyler. Özet cümlesi Go'da ("Olay penceresindeki N çağrının K'sı … üstünde."). Okuma hatası "çağrı yok" sayılmaz
   (`dotsUnread`). TimeChart'a ADDITIVE `points` seri türü (çizgisiz, `hollow` = içi boş; dolu nokta = çizginin üstü).
   Ek okuma: az çağrılan olayda +1 CH (spans, LIMIT 500) ve ısı haritası isteği −1 → net 0; ES/VM 0.
+- **v0.10.1873 — kanıt bölümleri: endpoint tablosu, mesaj kalıbı tablosu, komşu metrikler.** Yeni uç
+  `GET /api/ml/{id}/evidence/{endpoints|patterns|metrics}` (`internal/api/ml_evidence.go`, registerRoutesExtra; her rol;
+  serveCached 60 sn, anahtar id + tür + saat dilimi), saf kurucular `internal/ml/explain_evidence.go`. Pencere
+  `ml.EvidenceWindow` = başlangıç … en çok 1 sa (en az 15 dk), karşılaştırma = hemen önceki eşit pencere. Sinyal uymazsa boş.
+  - Endpoint (trace): `GetEndpointsMV` iki kez (pencere + önceki), `SkipStatus` → ham spans yan okuması YOK (MV-first);
+    olayın endpoint'i başta, sonra çağrı; p95 öncekinin ≥ 1,8 katıysa hücre `err` tonu. Sapma: mockup "Yavaş çağrılardaki
+    payı" sütunu YOK — MV'de endpoint başına yavaş çağrı sayımı yok; yerine "p95 önce".
+  - Mesaj kalıbı (log): `logstore.GroupBySignatureN` iki kez (pencere + önceki, örneklem 500, `/api/logs/patterns?
+    baseline=1` ile aynı hizalama/birleştirme); yalnız yeni (önceki örneklemde yok → "önceki eşit pencerede görülmedi",
+    ilk görülme saati) ve artan (oran ≥ 1,12 → kartın oran merdiveni) satırlar. Taban okunamazsa oran ve "yeni" yazılmaz.
+    FE bölümü KAPALI gelir, açılınca ister (ES maliyeti). Sapma: mockup "normalde hiç görülmez" yerine örneklem dili
+    (tek pencere örneği "hiç" kanıtı değil); sayılar örneklem içi, tablo altı bunu söyler.
+  - Komşu metrikler (metric): aynı servisin dedektörün izlediği DİĞER ifadeleri — ml_series (VM'den tikte zaten çekilmiş
+    seri; detayda VM'e yeni sorgu YOK, `metric_points` okuması YOK), olay öncesi medyan → pencerede en çok sapan değer,
+    en çok sapan 3 ifade, kart başına mini TimeChart + "önce → sonra." / "Değişmedi.". Sapma: brief "metrik kaynak dikişi"
+    diyordu; dikişte PromQL aralık okuması yok ve dedektörün kendi serisi zaten ml_series'te (aynı veri, 0 VM çağrısı) —
+    komşu SERVİSLERİN metrikleri (mockup payments-mobile kartı) ve "Metrics'te aç" linki grup bağlamıyla (Faz 3) gelir.
+  Detay başına ek çağrı (bölüm açık/görünürken): endpoint +3 CH (olay satırı + 2 MV), kalıp +1 CH + 2 logstore (ES),
+  metrik +2 CH (olay satırı + ml_series); VM 0. Hepsi 60 sn cache'li.

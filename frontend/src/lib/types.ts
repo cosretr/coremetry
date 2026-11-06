@@ -12029,6 +12029,18 @@ export interface TraceCourse {
   /** v0.10.1872 — az çağrılan servis: ısı haritası yerine tek tek çağrılar (view 'dots'). */
   dots?: CallPoint[]; dotsCapped?: boolean; dotsUnread?: boolean; dotsSummary?: string;
 }
+/** v0.10.1873 — ml.EndpointEvidenceRow: olay penceresi vs önceki eşit pencere (spanmetrics MV). */
+export interface EndpointEvidenceRow { route: string; calls: number; p95Ms: number; prevP95Ms?: number; deviates?: boolean; focus?: boolean; href: string }
+/** v0.10.1873 — ml.PatternEvidenceRow: yeni ve artan mesaj kalıbı (örneklem içi sayı; compare sunucuda kurulur). */
+export interface PatternEvidenceRow { template: string; count: number; compare: string; new?: boolean; firstSeen?: string; sample?: string; href: string }
+/** v0.10.1873 — ml.MetricNeighbor: dedektörün aynı servis için izlediği başka bir metrik ifadesi (ml_series). */
+export interface MetricNeighbor { part: string; label: string; unit?: string; times: number[]; values: number[]; text: string }
+/** v0.10.1873 — GET /api/ml/{id}/evidence/{kind} gövdesi (pencere ns; satır türü kind'a göre). */
+export interface MLEvidence<R> {
+  rows: R[]; from?: number; to?: number; prevFrom?: number;
+  prevOK?: boolean; baseOK?: boolean; sampled?: number; cap?: number; degraded?: boolean;
+}
+export type MLEvidenceKind = 'endpoints' | 'patterns' | 'metrics';
 /** v0.10.1872 — chstore.MLCallPoint: tek giriş çağrısı (t unix ms, süre ms). */
 export interface CallPoint { t: number; ms: number; err?: boolean; traceId?: string }
 /** v0.10.1871 — yığılı çubuk katmanı (ml.LogStack); values times ile hizalı, etiket sunucudan. */

@@ -37,6 +37,7 @@ import { MLEventPlayer } from './MLEventPlayer';
 import { MLTraceHeatmap } from './MLTraceHeatmap';
 import { MLTraceDots } from './MLTraceDots';
 import { MLLogPlayer } from './MLLogPlayer';
+import { MLSignalEvidence } from './MLSignalEvidence';
 
 const fmtTs = (ns: number) => fmtDateTime(new Date(ns / 1e6));
 const fmtNum = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(3));
@@ -111,6 +112,13 @@ export function cardRows(c: ExplainCard): { k: string; v: string }[] {
   return rows.filter(r => r.v);
 }
 
+/** v0.10.1873 — Kanıt bölümünün alt başlığı (mockup görünüm 2–4). */
+const EVIDENCE_SUB: Record<string, string> = {
+  metric: 'ilgili ve komşu metrikler · aynı zaman aralığı',
+  trace: "endpoint dağılımı · örnek trace'ler",
+  log: 'yeni ve artan mesajlar · örnek satırlar',
+};
+
 /** SAF (test): sayfa bölümlerinin sırası (audit §17 — kart → grafik → eylemler → kanıt → bağlam → teknik detay). */
 export const ML_EVENT_SECTIONS = ['ml-header', 'ml-summary', 'ml-card', 'ml-course', 'ml-actions', 'ml-evidence', 'ml-context', 'ml-technical'] as const;
 
@@ -176,8 +184,11 @@ export function MLReplayContent({ id, autoPlay = false }: { id: string; autoPlay
       <Section id="ml-actions" title="Ne yapmak istersiniz?">
         <MLEventActions id={id} card={card} verdict={q.data?.verdict ?? null} />
       </Section>
-      <Section id="ml-evidence" title="Kanıt" sub="olay anı kaydındaki örnekler">
-        {snap ? <MLEvidence snap={snap} /> : <p className="text-sm text-muted-foreground">Kayıt yok.</p>}
+      <Section id="ml-evidence" title="Kanıt" sub={EVIDENCE_SUB[h.kind] ?? 'olay anı kaydındaki örnekler'}>
+        <div className="flex flex-col gap-2">
+          <MLSignalEvidence id={id} signal={h.kind} />
+          {snap ? <MLEvidence snap={snap} /> : <p className="text-sm text-muted-foreground">Olay anı kaydı yok; örnek satır gösterilemiyor.</p>}
+        </div>
       </Section>
       <Section id="ml-context" title="Bağlam">
         <MLContext snap={snap} related={q.data?.related ?? []} />
