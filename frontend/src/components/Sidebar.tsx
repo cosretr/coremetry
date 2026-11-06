@@ -487,7 +487,8 @@ export function Sidebar() {
             ) : (
               <div style={{
                 width: 26, height: 26, borderRadius: '50%',
-                background: 'var(--accent)', color: '#fff',
+                // v0.10.1848 — dolgu üstü yazı rol tokenı (açık vurgulu temada siyah).
+                background: 'var(--accent)', color: 'var(--on-accent)',
                 display: 'grid', placeItems: 'center', flexShrink: 0,
                 fontSize: 12, fontWeight: 600, textTransform: 'uppercase',
               }} title={!showLabels ? user.email : undefined}>
