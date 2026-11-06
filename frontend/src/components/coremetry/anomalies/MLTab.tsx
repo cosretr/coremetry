@@ -16,6 +16,8 @@ import type { MLEvent, MLDetectorScore, MLGate, MLBackfillProgress, MLTickStatus
 import { Link } from 'react-router-dom';
 import { MLPeriodReplay } from './MLPeriodReplay';
 import { mlEventHref } from '@/lib/anomalyHref';
+import { SIGNAL_KINDS, signalKindOf } from '@/lib/signalKind';
+import { SignalKindBadge } from '@/components/coremetry/SignalKindBadge';
 
 export const ML_DETECTOR_TR: Record<string, string> = {
   log_volume: 'Log hacmi', error_rate: 'Hata oranı', service_silent: 'Servis sustu',
@@ -38,7 +40,8 @@ export function scoreLabel(s: MLDetectorScore): string {
   return `${name}: ${s.events} olay · %${Math.round(s.hitRate * 100)} isabet (${s.samples} karar)`;
 }
 
-const SIGNAL_TR: Record<string, string> = { log: 'Log', trace: 'Trace', metric: 'Metrik' };
+// v0.10.1844 — sinyal adları tek yerden (lib/signalKind.ts).
+const SIGNAL_TR: Record<string, string> = { log: SIGNAL_KINDS.log.label, trace: SIGNAL_KINDS.trace.label, metric: SIGNAL_KINDS.metric.label };
 
 /** Sinyal karnesi satırı — SAF (test). */
 export function signalScoreLabel(s: MLDetectorScore): string {
@@ -214,6 +217,8 @@ const fmtTs = (ns: number) => fmtDateTime(new Date(ns / 1e6));
 
 const COLS: ColumnDef<MLEvent>[] = [
   // v0.10.1779 (operatör mockup): Durum, Süre, insan dili Olay (gerçek link), Servis, Dedektör, birimli değer.
+  // v0.10.1844 — mockup görünüm 1: öncü "Sinyal" sütunu (ikon + metin + tür rengi).
+  { id: 'signal', label: 'Sinyal', width: 90, sortValue: e => signalKindOf(e.detector, e.signal), naturalDir: 'asc' },
   { id: 'stage', label: 'Durum', width: 90, sortValue: e => e.stage, naturalDir: 'asc' },
   { id: 'duration', label: 'Süre', width: 80, numeric: true, sortValue: e => e.lastSeen - e.startedAt },
   // v0.10.1843 — özet sunucudan (ml.ExplainSummary); "gözlenen / taban" sütunu özetin oran ifadesine katıldı.
@@ -246,6 +251,7 @@ export function MLTab({ signal = '', onSignal }: { signal?: MLSignal; onSignal?:
 
   const renderCell = (e: MLEvent, col: ColumnDef<MLEvent>) => {
     switch (col.id) {
+      case 'signal': return <SignalKindBadge kind={signalKindOf(e.detector, e.signal)} />;
       case 'stage': return <Badge variant="outline">{stageLabel(e.stage)}</Badge>;
       case 'duration': return durationLabel(e.lastSeen - e.startedAt);
       case 'headline': return <Link to={mlEventHref(e.id)} title={e.level || e.pod || e.code || ''}>{mlRowText(e)}</Link>;

@@ -8,6 +8,8 @@ export { PageControls } from './PageControls';
 export type { PageControlsProps } from './PageControls';
 export { StatusBadge } from './StatusBadge';
 export type { StatusBadgeProps } from './StatusBadge';
+export { SignalKindBadge } from './SignalKindBadge';
+export type { SignalKindBadgeProps } from './SignalKindBadge';
 export * from './overlay';
 export * from './DataTable';
 export * from './TimeRangePicker';

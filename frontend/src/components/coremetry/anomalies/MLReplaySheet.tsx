@@ -25,6 +25,8 @@ import {
 } from '@/lib/mlReplay';
 import type { ExplainCard, MLBacktestResult, MLSnapshot } from '@/lib/types';
 import { ML_DETECTOR_TR } from './MLTab';
+import { SignalKindBadge } from '@/components/coremetry/SignalKindBadge';
+import { signalKindOf } from '@/lib/signalKind';
 
 const fmtTs = (ns: number) => fmtDateTime(new Date(ns / 1e6));
 const fmtNum = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(3));
@@ -119,6 +121,10 @@ export function MLReplayContent({ id }: { id: string }) {
   if (q.error || !card) return <p className="text-sm" data-testid="ml-replay">Bu olay bulunamadı (olay kaydı 30, olay anı kaydı 120 gün saklanır).</p>;
   return (
     <div data-testid="ml-replay" className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2 text-sm" data-testid="ml-header">
+        <SignalKindBadge kind={signalKindOf(card.header.detector, card.header.kind)} />
+        <Link to={card.header.serviceHref} className="font-mono">{card.header.service}</Link>
+      </div>
       <h2 className="text-[length:var(--fs-lg)] font-semibold" data-testid="ml-summary">{card.summary}</h2>
       <p className="text-sm text-muted-foreground">{card.header.status}</p>
       <KeyValue items={cardRows(card)} />

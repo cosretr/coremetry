@@ -69,6 +69,8 @@ function failures(theme: Theme): string[] {
     need(`--accent2 on ${bg}`, t('--accent2'), t(bg), 4.5);
     need(`--focus vs ${bg}`, t('--focus'), t(bg), 3);
     for (const s of ['--ok', '--warn', '--err', '--info']) need(`${s} on ${bg}`, t(s), t(bg), 4.5);
+    // v0.10.1844 — sinyal türü rozet metni (ikon + metin) bg0–bg2'de normal metin eşiği.
+    if (bg !== '--bg3') for (const s of ['--sig-metric', '--sig-trace', '--sig-log']) need(`${s} on ${bg}`, t(s), t(bg), 4.5);
   }
   need('--text3 on --accent-bg', t('--text3'), t('--accent-bg'), 4.5);
   need('--accent2 on --accent-bg', t('--accent2'), t('--accent-bg'), 4.5);

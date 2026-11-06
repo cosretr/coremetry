@@ -12448,3 +12448,8 @@ Kaynak: `docs/anomaly/learning-loop-audit.md` §7, §10 Faz 2, §15, §17; onayl
   (`ml_learned`) + son 24 sa yayından (`GetServiceDeploys`, servis MV'si) kurulur; kayıt yoksa kart yine döner,
   `snapshot: null`. Anahtarlar özetin saat dilimini de hash'ler (`ml:events:v3`, `ml:replay:v2`). Liste satırının
   "gözlenen / taban" sütunu kalktı (oran özetin içinde). `mlSingleSource.pin.test.ts` ikinci bir FE cümle kurucuyu yakalar.
+- **v0.10.1844 — sinyal türü kimliği `--sig-metric/-trace/-log` + `lib/signalKind.ts` + `coremetry/SignalKindBadge`.**
+  Değerler mockup'tan, üç temada bg0–bg2'de ≥4.5 (`contrastTokens.test.ts`; bg3 bilinçli dışarıda — rozet bg3 zemine
+  oturmuyor). Grafik yuvası token'larından (`--teal/--purple/--orange`) ayrı: seri paleti değişirse kimlik kaymaz.
+  Dedektör → tür eşlemesi tek yerde (sunucu sözlüğüyle test pinli); rozet her zaman ikon (aria-hidden) + metin. Yalnız ML
+  listesi (öncü "Sinyal" sütunu) ve olay sayfası başlığı; CoSRE kartı sonraki parti.

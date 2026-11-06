@@ -113,6 +113,13 @@
   --indigo: #a371f7;
   --orange: #d76f04;  /* v0.10.920 — yeni --err (#fe7f73) ile ΔE 7 idi; grafik yuvası 6 ile aynı (ΔE 11.7) */
   --teal:   #39c5cf;
+  /* v0.10.1844 — sinyal türü kimliği (öğrenme döngüsü Faz 2, mockup anomaly-detail.html):
+     tür başına tek ton, her yerde ikon + metinle (lib/signalKind.ts). bg0–bg2'de ≥4.5
+     (contrastTokens.test.ts). Grafik yuvası token'larından AYRI: renk ileride
+     değişirse seri paleti kaymaz. */
+  --sig-metric: #39c5cf;
+  --sig-trace:  #b48cf9;
+  --sig-log:    #f0903a;
   /* v0.10.920 — YARI SAYDAM kalır: bg2 üstündeki seçimler (SegmentedControl,
      odak halkaları) ton olarak yığılır. Sabit seçim zemini --accent-bg. */
   --accent-soft:   color-mix(in srgb, var(--accent) 16%, transparent);
@@ -310,6 +317,9 @@
   --indigo: #8250df;
   --orange: #bc4c00;
   --teal:   #137775;
+  --sig-metric: #137775;  /* v0.10.1844 — gerekçe :root'ta */
+  --sig-trace:  #8250df;
+  --sig-log:    #bc4c00;
   --accent-soft:   rgba(37, 114, 222, .10);
   --border-strong: #8d939a;
   --border-control: #b2b7be;  /* v0.10.928 (Y4) — gerekçe :root'ta */
@@ -389,6 +399,9 @@
   --indigo: #8476d1;
   --orange: #ec7a08;
   --teal:   #009596;
+  --sig-metric: #00777a;  /* v0.10.1844 — gerekçe :root'ta; --teal beyazda <4.5 olduğu için koyu ton */
+  --sig-trace:  #5e4fb3;
+  --sig-log:    #b35200;
   --accent-soft:   rgba(0, 102, 204, .08);
   --border-strong: #71717a;  /* zinc-500 form kenarı (1.4.11 ≥3; beyazda 4.83) */
   --border-control: #a1a1aa;  /* v0.10.928 (Y4) — zinc-400; shadcn input zinc-200 beyazda 1.27, ≥2 bandını geçmez */
