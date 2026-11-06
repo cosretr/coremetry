@@ -190,22 +190,30 @@ export interface FieldSidebarProps extends FieldActions {
   businessFields?: readonly ResolvedBusinessField[];
   /** v0.10.1857 — sayfa okumaları bekletiliyor (kapsam kapısı): değer isteği atılmaz. */
   paused?: boolean;
+  /** v0.10.1900 (Log Search 3.10) — kontrollü açık/kapalı (kompakt kip:
+   *  varsayılan KAPALI, alan listesi isteği açılınca). Verilmezse eski
+   *  davranış (yerel tercih, geniş ekranda açık). */
+  open?: boolean;
+  onOpenChange?(open: boolean): void;
 }
 
 export function FieldSidebar({
   fields, fieldsTotal, types, columns, scope, windowTotal, businessFields = [], paused,
-  onToggleColumn, onPillAdd, onPillExclude, onExists,
+  onToggleColumn, onPillAdd, onPillExclude, onExists, open: openProp, onOpenChange,
 }: FieldSidebarProps) {
   const wide = useMediaQuery(WIDE_QUERY);
   const [stored, setStored] = useState<string | null>(() => getRaw(OPEN_KEY));
-  const open = fieldsPanelOpen(stored, wide);
+  const open = openProp ?? fieldsPanelOpen(stored, wide);
   // v0.10.509 (C5) — "Hatalıyı ayıran": kalıcı; açıkken genişletilen alan için
   // iki fieldstats (hata seçimi + taban). Kapalıyken ek istek yok.
   const [lift, setLift] = useState<boolean>(() => getRaw(LIFT_KEY) === '1');
   const toggleLift = () => setLift(v => { setRaw(LIFT_KEY, v ? '0' : '1'); return !v; });
   const [needle, setNeedle] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
-  const toggleOpen = () => { const next = open ? '0' : '1'; setRaw(OPEN_KEY, next); setStored(next); };
+  const toggleOpen = () => {
+    if (openProp !== undefined) { onOpenChange?.(!openProp); return; } // v0.10.1900 — kontrollü kip
+    const next = open ? '0' : '1'; setRaw(OPEN_KEY, next); setStored(next);
+  };
   const actions: FieldActions = { onToggleColumn, onPillAdd, onPillExclude, onExists };
 
   const n = needle.trim().toLowerCase();

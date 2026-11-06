@@ -13036,6 +13036,26 @@ Loglar yalnız ES'te (operatör 2026-11-06): yeni yetenekler ES yolunda; trace/s
   logs bağlantısı trace'in tüm logları yerine o span'in loglarını açar (trace'in tümü için süzgeçteki spanId hapı
   kaldırılır); bağlantı metni "open in Logs" → "bu span'in logları". Derin link `?q=<trace_id>` otomatik açılmaz
   (yalnız operatörün uyguladığı arama).
+- **v0.10.1900 — servis Logs sekmesi kompakt Log Search'ü takar (3.10; OK — §11).** Yeni
+  `coremetry/logs/CompactLogSearch` (servise SABİT kip): `service:` hapı + sorgu çubuğu (`LogQueryInput`: KQL / Lucene
+  rozeti + geçiş, yerel geçmiş /logs ile ortak, değer tamamlaması) + "Ara" + "Logs'ta aç →" + seviye `SegmentedControl`
+  (Tümü / ERROR / WARN / INFO / DEBUG, sayılar histogram serisinden — v0.9.358 kuralı aynen) + histogram (`LogsHistogram`,
+  sürükle = sayfa zoom'u) + alan kenar çubuğu (`FieldSidebar`, yeni kontrollü `open` / `onOpenChange`; varsayılan
+  KAPALI, yerel tercih `svc.logs.fields`) + tablo (`LogTable`: trace çipi + önizleme, exception rozeti + katlı stack,
+  kolon ekle/kaldır yerel) + "200 satır daha" (`Pager`, kullanıcı tetiklemeli keyset — aynen) + satır detayı çekmecesi
+  (`LogDetailSheet`, URL `ldoc`; Exception + çevre loglar bölümü kapalı başlar; ⊕/⊖ değeri KQL terimi olarak aramaya
+  ekler). Trace çipi menüsü ve çekmecedeki "Trace + loglar" /logs birleşik görünümünü açar (`logsHref` yeni
+  `traceView` / `traceHintSec`, `lang`). "Logs'ta aç" servis + arama + seviye tabanı + pencere + env + dil + kolonları
+  taşır. URL paramları `lq` / `llvl` aynen (+ `llang`, `ldoc`). Seviye bant kuralları SAF `lib/logLevelBand`'e taşındı
+  (davranış aynı). **ES bütçesi (test çivili):** açılışta liste (200) + histogram — eskisiyle aynı istek nesneleri; alan
+  listesi yalnız kenar çubuğu açılınca, alan istatistiği alan açılınca, çevre loglar bölüm açılınca, değer tamamlaması
+  yazarken. Yeni CH isteği: trace önizlemesi (`trace_summary_5m`, satırlar geldikten sonra tek istek). **Davranış
+  değişikliği:** (1) arama yazarken (300 ms) değil Enter / "Ara" ile gider (daha az ES isteği); istek aynı `search`
+  paramı (sunucu 1819'dan beri /logs ile aynı KQL çevirisini yapıyor), yeni olan dil rozeti + Lucene geçişi; (2) satır tıkı satır içi genişleme yerine
+  çekmece açar; (3) seviye çipleri SegmentedControl oldu (renkli rozet yok — sade palet); (4) "Log volume" kart başlığı
+  yerine histogramın kendi başlığı. Servis Overview düzeni değişmedi (yalnız Logs sekmesinin içi). Sapmalar: pod logları
+  ve trace Logs paneli bu dilimde DEĞİŞMEDİ (pod: bileşik histogramı bölüm açılışına yeni ES isteği eklerdi; trace paneli bundle verisiyle çalışır, sorgu çubuğu yeni ES isteği demek — ayrı karar); mockup'taki sabitlenmiş haplar ve satır yüksekliği /
+  yoğunluk seçenekleri kompakt kipte yok (/logs'un kendi görünüm tercihi sekmeye sızmaz — 1830/1832 çivisi aynen).
 
 ## 2026-11-06 — v0.10.1885 — Kod araması: depo süzgeci proje süzgeciyle birlikte (Azure DevOps 400)
 

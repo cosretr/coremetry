@@ -24,3 +24,7 @@ export { HistogramMarkers } from './HistogramMarkers';
 export { PatternCompare, compareSummary } from './PatternCompare';
 export type { PatternCompareProps } from './PatternCompare';
 export type { HistogramMarkersProps } from './HistogramMarkers';
+// v0.10.1900 — CompactLogSearch (servis Logs sekmesi, 3.10) bilerek BURADA DEĞİL:
+// LogsHistogram üzerinden uPlot'u modül yüklenirken çeker; barrel'a girerse
+// coremetry barrel'ını içe aktaran her dosya grafik motorunu yükler. Doğrudan
+// yoldan içe aktar: '@/components/coremetry/logs/CompactLogSearch'.

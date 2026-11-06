@@ -6282,6 +6282,18 @@ a.cell-link--block { display: block; overflow: hidden; text-overflow: ellipsis; 
    onayı), kompakt histogram başlığı: "N hits" + seviye çipleri + kırılım. */
 .ld-body { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--sp-5); align-items: start; }
 .ld-body > .ld-main { min-width: 0; }
+/* v0.10.1900 (Log Search 3.10) — kompakt Log Search (servis Logs sekmesi; coremetry/logs/CompactLogSearch). */
+.cls { display: grid; gap: var(--sp-4); margin-top: var(--sp-2); }
+.cls-bar { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-3); }
+.cls-svc { flex: 0 0 auto; padding: 0 var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg2); color: var(--text2); font-size: var(--fs-sm); line-height: 26px; white-space: nowrap; }
+.cls-svc b { color: var(--text); font-weight: 600; }
+.cls-q { flex: 1 1 320px; min-width: 0; }
+.cls-hist { padding: var(--sp-3) var(--sp-4) var(--sp-2); }
+.cls-body { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--sp-4); align-items: start; }
+.cls-main { min-width: 0; }
+.cls-main-h { display: flex; align-items: baseline; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--divider); }
+.cls-main-h h3 { margin: 0; font-size: var(--fs-md); font-weight: 600; }
+.cls-sub { color: var(--text3); font-size: var(--fs-xs); }
 .ld-fields {
   width: 264px; box-sizing: border-box; position: sticky; top: var(--controls-h, 0px);
   max-height: calc(100vh - var(--controls-h, 0px) - 96px); overflow-y: auto;

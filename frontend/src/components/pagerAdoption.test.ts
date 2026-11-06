@@ -34,7 +34,7 @@ const CURSOR = [
   'pages/Logs.tsx',
   // v0.10.1865 — 'pages/Metrics.tsx' düştü: katalog Keşif sekmesine geçti, liste
   // seri sayısına göre ilk 50 (sunucu kesimi + arama), sayfalama yok.
-  'pages/service/ServiceSignalTabs.tsx',
+  'components/coremetry/logs/CompactLogSearch.tsx', // v0.10.1900 — servis Logs sekmesi kompakt Log Search'e taşındı
 ];
 const ADOPTED = [...OFFSET, ...CURSOR];
 

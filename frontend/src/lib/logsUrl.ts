@@ -285,6 +285,12 @@ export interface LogsPivot {
    * Ad `panel` bu sayfaya ayrılmıştır; dashboard "panel" kavramı değildir.
    */
   panel?: LogsPanel;
+  /** v0.10.1900 (Log Search 3.10) — zorla Lucene (`lang=lucene`). */
+  lang?: 'lucene';
+  /** v0.10.1900 — birleşik trace + log görünümü (3.6): `panel=trace&trace=&th=`.
+   *  Verilirse `panel`'i ezer; `traceHintSec` log zamanı (unix sn). */
+  traceView?: string;
+  traceHintSec?: number;
 }
 
 export type LogsPanel = 'patterns' | 'templates';
@@ -337,6 +343,12 @@ export function logsHref(p: LogsPivot): string {
   if (p.cols) q.set('cols', p.cols);
   if (p.env) q.set('env', p.env);
   if (p.panel) q.set('panel', p.panel); // v0.10.448 (C8)
+  if (p.lang) q.set('lang', p.lang); // v0.10.1900
+  if (p.traceView) { // v0.10.1900 — birleşik görünüm (3.6)
+    q.set('panel', 'trace');
+    q.set('trace', p.traceView);
+    if (p.traceHintSec && p.traceHintSec > 0) q.set('th', String(Math.floor(p.traceHintSec)));
+  }
   const range = pivotRangeParam(p.window, p.padNs ?? 0);
   if (range) q.set('range', range);
   return `/logs?${q.toString()}`;

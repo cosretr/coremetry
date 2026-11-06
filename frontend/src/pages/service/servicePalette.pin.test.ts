@@ -68,7 +68,9 @@ describe('/service sade palet — K5 artıkları (v0.10.929)', () => {
   it('normal durum rozetleri nötr: pod fazı, heap bandı, INFO seviyesi', () => {
     expect(read('ServicePodsTable.tsx')).toContain("t.phaseKnown && t.failing > 0 ? 'b-err' : 'b-gray'");
     expect(HEAP_STATUS.ok.tone).toBe('b-gray');
-    expect(read('ServiceSignalTabs.tsx')).toMatch(/info: 'b-gray'/);
+    // v0.10.1900 — Logs sekmesi kompakt Log Search'e taşındı: seviye seçimi
+    // SegmentedControl (renksiz metin + sayı); hiçbir seviye rozet tonu yok.
+    expect(read('../../components/coremetry/logs/CompactLogSearch.tsx')).not.toMatch(/b-(info|gray|err|warn)/);
   });
 
   // v0.10.929 (K5, lider kararı) — kaynak rozeti: 'MV' normal yol nötr;

@@ -1,309 +1,48 @@
 import { usePivotCtx, withPivotCtx } from '@/lib/pivotContext';
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { Pager } from '@/components/Pager';
-import { useQuery } from '@tanstack/react-query';
+import { useMemo } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { api } from '@/lib/api';
 import { encodeRange } from '@/lib/urlState';
-import { logsHref } from '@/lib/logsUrl';
-import { logQueryErrorMessage } from '@/lib/logQueryError';
 import { timeRangeToNs, fmtNum, isMessagingDep } from '@/lib/utils';
-import type { TimeRange, LogRow, ServiceMap } from '@/lib/types';
+import type { TimeRange, ServiceMap } from '@/lib/types';
 import { Spinner } from '@/components/Spinner';
-import { LogsHistogram } from '@/components/LogsHistogram';
 import { useUrlEnv } from '@/lib/useUrlEnv';
-import { LogTable } from '@/components/LogTable';
+import { CompactLogSearch } from '@/components/coremetry/logs/CompactLogSearch'; // barrel değil: uPlot'u yalnız bu sekme yükler
 import { TopologyPillGraph, type PillNode, type PillEdge, type PillLevel } from '@/components/TopologyPillGraph';
 import { FocusedNeighborhood } from '@/components/topology/FocusedNeighborhood';
 import { parseTopologyHops, topologyHopsUrlValue } from './topologyHops';
 import { serviceHref } from '@/lib/serviceHref';
-import { Chip } from '@/components/ui'; // v0.10.928 — seviye fasetleri
-import type { DataTableStateProps } from '@/components/ui/DataTable';
 
 // Service-scoped Logs / Topology tabs — the design's tab strip beyond
 // Overview/Operations/Details. All read-only, all reuse the app-wide
-// primitives (LogsHistogram / LogTable / TopologyPillGraph) so the
-// operator's eye builds the same scan pattern as the standalone surfaces.
+// primitives so the operator's eye builds the same scan pattern as the
+// standalone surfaces.
 //
 // v0.9.212 — the Traces tab that used to live here is gone: it was a 25-row
 // "slowest traces" table plus an "Open in Traces →" link, and the service
 // header's ⋮ Traces chip already lands on that same page.
 
-type Lvl = 'error' | 'warn' | 'info' | 'debug';
-const LVL_ORDER: Lvl[] = ['error', 'warn', 'info', 'debug'];
-
-// Normalise a row to one of the four facet buckets — prefer the canonical
-// severityText, fall back to the OTel numeric severity (ERROR≥17, WARN≥13,
-// INFO≥9, else DEBUG/TRACE).
-function levelOf(r: LogRow): Lvl {
-  const t = (r.severityText || '').toUpperCase();
-  if (t.startsWith('ERR') || t.startsWith('FATAL') || t.startsWith('CRIT')) return 'error';
-  if (t.startsWith('WARN')) return 'warn';
-  if (t.startsWith('INFO')) return 'info';
-  if (t.startsWith('DEBUG') || t.startsWith('TRACE')) return 'debug';
-  const s = r.severity;
-  if (s >= 17) return 'error';
-  if (s >= 13) return 'warn';
-  if (s >= 9) return 'info';
-  return 'debug';
-}
-
-// v0.10.929 (K5) — INFO normal seviye: nötr (b-gray); renk yalnız warn/error'da.
-const LVL_BADGE: Record<Lvl, string> = { error: 'b-err', warn: 'b-warn', info: 'b-gray', debug: 'b-mut' };
-// Faset sayacı — eski `.ov-facet .n` tonu (Metrics.tsx ile aynı).
-const FACET_N: CSSProperties = { fontVariantNumeric: 'tabular-nums', color: 'var(--text3)', fontWeight: 600 };
-
-// v0.9.358 — histogram serisi adını levelOf ile AYNI kurallarla banda indirger;
-// iki ayrı sınıflandırıcı sürüklenirse çip ile çubuk yine ayrışırdı.
-function bandOfName(name: string): Lvl {
-  const t = name.toUpperCase();
-  if (t.startsWith('ERR') || t.startsWith('FATAL') || t.startsWith('CRIT')) return 'error';
-  if (t.startsWith('WARN')) return 'warn';
-  if (t.startsWith('INFO')) return 'info';
-  return 'debug';
-}
-// Sunucu severity paramı MINIMUM'dur (OTel numarası). error bandı için kesin
-// (>=17 zaten bandın kendisi); warn/info için taban — sayfa o taban ÜSTÜNDEN
-// gelir, istemci bant kesimi görünümü tamamlar.
-const LVL_MIN_SEV: Record<Lvl, number> = { error: 17, warn: 13, info: 9, debug: 0 };
-// v0.10.954 — kararlı boş dizi: satır gösterilmeyen durumlarda LogTable'a.
-const NO_LOGS: LogRow[] = [];
-
+// v0.10.1900 (Log Search Faz 3 dilim 3.10; audit §11) — Logs sekmesi kendi
+// ince kabuğu (arama kutusu + seviye çipleri + 200 satır) yerine Log Search
+// bileşiğinin KOMPAKT, servise sabitlenmiş kipini takar
+// (coremetry/logs/CompactLogSearch). Açılış ES bütçesi eskisiyle aynı:
+// liste + histogram. URL paramları (`lq`, `llvl`) aynen; sayfanın memo'lu
+// penceresi (v0.9.361) aynen geçer.
 export function ServiceLogsTab({ service, range, windowNs, onZoom, onZoomReset }: {
   service: string; range: TimeRange;
-  // v0.9.373 — histogram brush'ı sayfanın zoom yoluna bağlar (Service.tsx
-  // handleZoom: unix-SANİYE alır, geri-yığını korur; diğer grafiklerle aynı).
+  // v0.9.373 — histogram brush'ı sayfanın zoom yoluna bağlar (unix-SANİYE).
   onZoom?: (fromUnixSec: number, toUnixSec: number) => void;
   onZoomReset?: () => void;
-  // v0.9.361 — sayfanın ZATEN memo'lu penceresi. Sekme kendi
-  // timeRangeToNs'ini üretiyordu; {tab==='logs' && …} her sekme dönüşünde
-  // unmount/remount ettiği için her dönüş taze bir nanosaniye basıyor,
-  // React Query anahtarı VE sunucu cache anahtarları (list + histogram)
-  // ıskalıyordu — her Overview↔Logs gidiş-gelişi iki gerçek ES sorgusuydu.
+  // v0.9.361 — sayfanın ZATEN memo'lu penceresi: sekme dönüşünde taze
+  // nanosaniye basılıp liste + histogram önbellekleri ıskalanmasın.
   windowNs?: { from: number; to: number };
 }) {
   const local = useMemo(() => timeRangeToNs(range), [range]);
   const { from, to } = windowNs ?? local;
-  const rangeParam = encodeRange(range);
-
-  // Search box → debounced into the query key (server-side substring
-  // search scales). Level facet filters the fetched page client-side
-  // (instant, mirrors the design); the histogram always shows full
-  // volume-by-level for the service so the facet doesn't hide the shape.
-  // v0.9.382 (redesign D6) — arama + seviye facet'i URL'de (?lq/?llvl,
-  // replace:true): sekme değişince kaybolmuyor, paylaşılabiliyor.
-  // Yalnız SAHİP OLDUĞUMUZ paramlar yazılır (prev kopyalanır); debounce
-  // input state'te yaşar, URL'e ödemeli (settled) değer düşer.
-  // v0.9.453 (operatör onayı: "sekme ile /logs farklı") — global ortam
-  // filtresi bu sekmede de uygulanır: /logs env geçiriyordu, sekme
-  // geçirmiyordu; env seçiliyken iki yüzey farklı kayıt kümesi
-  // gösteriyordu (v0.9.219 drift sınıfı). Liste + sayfalama + histogram
-  // aynı env'i taşır; env yokken davranış değişmez.
+  // v0.9.453 — global ortam süzgeci bu sekmede de (liste + histogram).
   const [env] = useUrlEnv();
-  const envParam = env || undefined;
-  const [lparams, setLparams] = useSearchParams();
-  const urlLq = lparams.get('lq') ?? '';
-  const urlLvl = (lparams.get('llvl') as 'all' | Lvl | null) ?? 'all';
-  const [searchInput, setSearchInput] = useState(urlLq);
-  const [search, setSearch] = useState(urlLq);
-  // v0.10.1220 — dış ?lq= değişimini içe al (gönderim ikisini birlikte yazar).
-  useEffect(() => {
-    if (urlLq !== search) { setSearch(urlLq); setSearchInput(urlLq); }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- yalnız URL değişiminde
-  }, [urlLq]);
-  const lvl: 'all' | Lvl = urlLvl;
-  const setLvl = (v: 'all' | Lvl) => setLparams(prev => {
-    const next = new URLSearchParams(prev);
-    if (v !== 'all') next.set('llvl', v); else next.delete('llvl');
-    return next;
-  }, { replace: true });
-  useEffect(() => {
-    const t = setTimeout(() => {
-      setSearch(searchInput);
-      setLparams(prev => {
-        const next = new URLSearchParams(prev);
-        if (searchInput) next.set('lq', searchInput); else next.delete('lq');
-        return next;
-      }, { replace: true });
-    }, 300);
-    return () => clearTimeout(t);
-  }, [searchInput, setLparams]);
-
-  const filter = useMemo(
-    () => ({ service, search, severity: 0, traceId: '', spanId: '', env: envParam }),
-    [service, search, envParam],
-  );
-
-  // v0.9.358 — seçili bant SUNUCUYA gider: eskiden 200 satır her zaman
-  // "her seviyeden en yeni 200"dü ve ERROR çipi o sayfada sıfır sayarken
-  // histogram kıpkırmızı olabiliyordu (dakikada 10k satır basan bir servis
-  // 30 dakikalık pencerenin ilk ~1.2 saniyesiyle 200'ü dolduruyor).
-  const minSev = lvl === 'all' ? undefined : (LVL_MIN_SEV[lvl] || undefined);
-  const q = useQuery({
-    queryKey: ['service-tab-logs', service, from, to, search, minSev ?? 0, envParam ?? ''],
-    // v0.10.1822 — RQ sinyali: arama/pencere değişince ya da sekmeden çıkışta
-    // uçuştaki ES araması iptal edilir (paylaşılan log parçaları sözleşmesi).
-    queryFn: ({ signal }) => api.logs({ limit: 200, from, to, service, search: search || undefined, severity: minSev, env: envParam }, signal),
-    enabled: !!service,
-    staleTime: 15_000,
-    // v0.8.3 (operator-reported ES incident) — /api/logs is uncached and
-    // opens an ES Point-in-Time per call; a tab focus/reconnect shouldn't
-    // re-open one. The filter/range/search change still refetches via the key.
-    refetchOnWindowFocus: false,
-  });
-  // v0.9.406 (redesign açık-dilimi "200 satır daha") — kullanıcı-tetiklemeli
-  // keyset sayfalama. İlk sayfa CURSOR'SUZ kalır (PIT açılmaz — v0.9.361
-  // maliyet kapısı aynen); butona ilk basışta bir kez wantCursor'lu sayfa-1
-  // ile cursor alınır (tek ek ES sorgusu, kullanıcı tetikli), sonrası
-  // after-zinciri. Filtre/pencere değişince birikim sıfırlanır.
-  const [extraRows, setExtraRows] = useState<import('@/lib/types').LogRow[]>([]);
-  const [pagingBusy, setPagingBusy] = useState(false);
-  const [pagingDone, setPagingDone] = useState(false);
-  const cursorRef = useRef<string>('');
-  // v0.10.1822 — "200 satır daha" istekleri de iptal edilebilir: süzgeç
-  // değişimi ya da sekmeden çıkış uçuştaki sayfayı keser (bayat sayfa
-  // yeni süzgecin birikimine karışmaz).
-  const pagingCtl = useRef<AbortController | null>(null);
-  useEffect(() => {
-    pagingCtl.current?.abort(); pagingCtl.current = null;
-    setExtraRows([]); setPagingDone(false); cursorRef.current = '';
-  }, [service, from, to, search, minSev, envParam]);
-  useEffect(() => () => pagingCtl.current?.abort(), []);
-  const loadMore = async () => {
-    if (pagingBusy || pagingDone) return;
-    setPagingBusy(true);
-    const ctl = new AbortController();
-    pagingCtl.current = ctl;
-    try {
-      const base = { limit: 200, from, to, service, search: search || undefined, severity: minSev, env: envParam } as const;
-      if (!cursorRef.current) {
-        const first = await api.logs({ ...base, paging: true }, ctl.signal);
-        cursorRef.current = first?.nextCursor ?? '';
-        if (!cursorRef.current) { setPagingDone(true); return; }
-      }
-      const next = await api.logs({ ...base, after: cursorRef.current, paging: true }, ctl.signal);
-      if (ctl.signal.aborted) return;
-      setExtraRows(r => [...r, ...(next?.logs ?? [])]);
-      cursorRef.current = next?.nextCursor ?? '';
-      if (!cursorRef.current || (next?.logs ?? []).length === 0) setPagingDone(true);
-    } catch {
-      if (!ctl.signal.aborted) setPagingDone(true); // hata = sessiz sonsuz-retry yok; sayaç zaten dürüst
-    } finally {
-      setPagingBusy(false);
-    }
-  };
-  const logs = useMemo(() => [...(q.data?.logs ?? []), ...extraRows], [q.data, extraRows]);
-
-  // v0.9.358 — çip sayıları histogramın ZATEN çektiği severity serisinden
-  // (pencerenin tamamı), sayfadan değil. Aynı ekrandaki iki sayı aynı
-  // popülasyonu saymalı; eskiden çip en yeni 200 satırı sayıyordu.
-  // Histogram verisi gelmeden sayfa-türevi sayılara düşer (yüklenme anı).
-  const [bandTotals, setBandTotals] = useState<Record<string, number> | null>(null);
-  const onHistSeries = useMemo(() => (series: { name: string; total: number }[] | null) => {
-    // v0.9.1220 — histogram fetch hatası null iletir: bandTotals'ı sıfırla
-    // ki aşağıdaki memo sayfa-türevi sayılara (dürüst geri-düşüş) dönsün.
-    if (series === null) { setBandTotals(null); return; }
-    const c: Record<string, number> = { all: 0, error: 0, warn: 0, info: 0, debug: 0 };
-    for (const sr of series) { c[bandOfName(sr.name)] += sr.total; c.all += sr.total; }
-    setBandTotals(c);
-  }, []);
-
-  const counts = useMemo(() => {
-    if (bandTotals) return bandTotals;
-    const c: Record<string, number> = { all: logs.length, error: 0, warn: 0, info: 0, debug: 0 };
-    for (const r of logs) c[levelOf(r)]++;
-    return c;
-  }, [bandTotals, logs]);
-  const rows = useMemo(() => (lvl === 'all' ? logs : logs.filter(r => levelOf(r) === lvl)), [logs, lvl]);
-
-  // v0.10.954 — tablo standardı T12 (P6): yükleniyor / backend yanıtsız /
-  // boş artık LogTable'ın İÇİNDE, başlık durur. Sıra eskisiyle aynı;
-  // degraded (ES brownout, v0.9.363) "log yok" değil → hata türü, nedeni
-  // satırda. Arama ya da seviye çipi seçiliyken boş sonuç "eşleşme yok"
-  // (ortak temizleme eylemi yok). Eskisi gibi ayrı bir okuma-hatası dalı
-  // yok. showRows eski öncelik: degraded satırları da gizliyordu.
-  const showRows = !q.isLoading && !q.data?.degraded && rows.length > 0;
-  const logsState: Omit<DataTableStateProps<LogRow>, 'dt' | 'leading' | 'trailing'> =
-    q.isLoading ? { kind: 'loading', skeletonRows: 10 }
-    // v0.10.1818 — sorgu reddi (400 {error, pos, detail}) ya da arka uç
-    // hatası: "log yok" DEĞİL. Önceden hata dalı yoktu ve reddedilen arama
-    // "Bu pencerede … log yok" diye okunuyordu.
-    : q.isError ? {
-        kind: 'error',
-        message: logQueryErrorMessage(q.error, 'Log sorgusu çalışmadı — log backend sorguyu reddetti ya da zamanında cevap vermedi.'),
-        onRetry: () => void q.refetch(),
-      }
-    : q.data?.degraded ? {
-        kind: 'error',
-        message: `Log backend'i yanıt veremedi — ${q.data.reason || 'Elasticsearch yavaş ya da erişilemez — pencerede log olmadığı anlamına gelmez.'}`,
-      }
-    : (search || lvl !== 'all') ? { kind: 'no-match', message: `Bu pencerede ${service} için süzgeçle eşleşen log yok` }
-    : { kind: 'empty', message: `Bu pencerede ${service} için log yok` };
-
   return (
-    <div style={{ marginTop: 4 }}>
-      {/* Filter bar — substring search + level facet chips with counts */}
-      <div className="ov-logbar">
-        <input className="field" placeholder="Filter logs (message, service)…" value={searchInput}
-          onChange={e => setSearchInput(e.target.value)} style={{ flex: '1 1 280px', maxWidth: 360 }} />
-        {/* v0.10.928 — Metrics.tsx'in v0.10.924 dönüşümünün kaçan ikizi:
-            `span.ov-facet onClick` (rol yok, tabIndex yok, klavye yok) →
-            Chip `active` (gerçek düğme, seçili hâl aria-pressed). */}
-        <Chip active={lvl === 'all'} onClick={() => setLvl('all')}>
-          All <span style={FACET_N}>{counts.all}</span>
-        </Chip>
-        {LVL_ORDER.map(l => (
-          <Chip key={l} active={lvl === l} onClick={() => setLvl(l)}>
-            <span className={`badge ${LVL_BADGE[l]}`}>{l.toUpperCase()}</span>
-            <span style={FACET_N}>{counts[l]}</span>
-          </Chip>
-        ))}
-        <Link className="ov-sub" style={{ marginLeft: 'auto' }}
-          to={logsHref({ window: rangeParam, service })}>Open in Logs →</Link>
-      </div>
-
-      {/* Volume histogram — full service volume, stacked by level */}
-      <div className="card ov-mb">
-        <div className="ov-card-h"><h3>Log volume</h3><span className="ov-sub">by level</span></div>
-        <div className="ov-card-b" style={{ paddingTop: 8 }}>
-          <LogsHistogram range={{ from, to }} filter={filter} onSeries={onHistSeries}
-            onRangeSelect={onZoom ? (fromNs, toNs) => onZoom(fromNs / 1e9, toNs / 1e9) : undefined}
-            onZoomReset={onZoomReset} />
-        </div>
-      </div>
-
-      {/* Log table */}
-      <div className="card">
-        <div className="ov-card-h">
-          <h3>Logs</h3>
-          <span className="ov-sub">
-            {rows.length} lines{lvl !== 'all' ? ` · ${lvl}` : ''}
-            {/* v0.9.358 — sınır varsa görünür olur: 200'lük sayfa penceredeki
-                her şey değilse gerçek toplamı söyle (total zaten telde). */}
-            {(q.data?.total ?? 0) > logs.length &&
-              ` · pencerede ${q.data!.total}${q.data?.totalIsLowerBound ? '+' : ''} satır, en yeni ${logs.length} gösteriliyor`}
-          </span>
-        </div>
-        <LogTable logs={showRows ? rows : NO_LOGS} state={logsState} />
-        {showRows && (
-          <>
-          {/* v0.9.406 — "200 satır daha": kullanıcı-tetiklemeli keyset
-              sayfa (otomatik prefetch YOK — ES disiplini). Sayaç üstteki
-              başlıkta; burada yalnız eylem + dürüst son. */}
-          {/* v0.9.1016 — paylaşılan sözleşme (v0.9.1014), cursor kipi.
-              v0.9.406'nın kararı korunuyor: kullanıcı-tetiklemeli keyset
-              sayfa, otomatik prefetch YOK (ES disiplini). Dürüst son
-              cümlesi zaten atomun varsayılanı — bu yüzeyden geldi.
-              (v0.9.1078: `stickyBottom` prop'u atomdan tamamen söküldü —
-              yüzen şeritler operatör kararıyla kalktı; buradaki eski
-              "kart içinde kapalı" istisnası artık genel kural.) */}
-          <Pager mode="cursor" count="skip"
-            hasMore={!pagingDone} onMore={loadMore} loading={pagingBusy}
-            loaded={logs.length} moreLabel="200 satır daha" />
-          </>
-        )}
-      </div>
-    </div>
+    <CompactLogSearch service={service} range={range} from={from} to={to} env={env || undefined}
+      onZoom={onZoom} onZoomReset={onZoomReset} rangeParam={encodeRange(range)} />
   );
 }
 

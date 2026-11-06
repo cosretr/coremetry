@@ -12,7 +12,7 @@ describe('dış URL değişimi içe alınır', () => {
     ['Endpoints.tsx', /if \(urlSearch !== search\) setSearch\(urlSearch\)/],
     ['SlowQueries.tsx', /if \(q === lastQRef\.current\) return;/],
     ['ServiceMap.tsx', /if \(urlFocus && urlFocus !== focus\) setFocus\(urlFocus\)/],
-    ['service/ServiceSignalTabs.tsx', /if \(urlLq !== search\)/],
+    ['../components/coremetry/logs/CompactLogSearch.tsx', /if \(search !== lastSearch\.current\)/], // v0.10.1900 — servis Logs sekmesi
   ])('%s', (file, re) => {
     expect(read(file)).toMatch(re);
   });

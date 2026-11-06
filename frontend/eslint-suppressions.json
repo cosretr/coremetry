@@ -419,11 +419,6 @@
       "count": 1
     }
   },
-  "src/pages/service/ServiceSignalTabs.tsx": {
-    "ui/no-raw-element": {
-      "count": 1
-    }
-  },
   "src/pages/traces/ColumnFilter.tsx": {
     "ui/no-raw-element": {
       "count": 4
