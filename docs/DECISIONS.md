@@ -13195,3 +13195,15 @@ açılışına ve otomatik yenilemesine yeni Elasticsearch isteği eklenmez.
     `lib/logsPatternCompare.test.ts`, `pages/Logs.patternCompare.test.tsx` (açılışta istek yok; cmp seçiliyken desen
     isteği yok). Mockup farkı: mockup karşılaştırmayı tek tabloda Δ sütunuyla çizer; üç ayrı tablo + doğrulama metni
     seçildi (yeni / kaybolan doğrulaması satır başına cümle ister). Doğrulanmadı: gerçek ES süresi, tarayıcı.
+- **v0.10.1898 — 5.1 Kayıtlı aramalar (yalnız sözleşme + test; üretim kodu değişmedi).** Kayıtlı arama URL arama
+  dizesidir (`saved_views(page='logs')`, yeni tablo yok; `SavedViewsBar` aynen: kaydet = `location.search`, uygula =
+  `navigate`). Faz 1–4'ün eklediği parametreler (`scope, group, sort, rh, hh, den, smp, pp, pins, doc, docsvc, cmp,
+  lang`) altın listeye girdi (`pages/logs/legacyUrls.test.ts`, eski snapshot değişmedi): eski linklerde yoklar →
+  bugünkü görünüm; görünüm parametreleri süzgeç imzasına girmez, `pins` / `doc` girer; yazmada hepsi korunur; her biri
+  kendi ayrıştırıcısıyla aynı görünüme döner. Sayfa testi (`pages/Logs.savedSearch.test.tsx`): kayıtlı aramadan
+  açılınca sayfa hiçbir parametreyi düşürmez / yeniden yazmaz (aksi hâlde "● modified" ve eksik görünüm) ve liste
+  isteği `sort`, `limit` (= `smp`), `lang`, hap süzgecini taşır; açık sayfada başka kayıtlı arama uygulanınca yeni
+  değerler istekte. 8 KiB: 20 hap + 3 sabit + 15 kolon + 3 sıralama + uzun sorgu + tüm görünüm parametreli kayıtlı arama
+  sığar; tavanı aşan `savedViewTooLarge` ile reddedilir. Bilinen sınır (5.2'de kapanır): URL'de olmayan görünüm
+  (tarayıcının kolon tercihi, satır sarma) kayıtlı aramaya girmez — aynı kullanıcı kendi tarayıcısında aynı tabloyu
+  görür, paylaşılan kayıtlı aramada alıcının tercihi geçerli.

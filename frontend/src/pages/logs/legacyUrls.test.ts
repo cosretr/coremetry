@@ -15,6 +15,12 @@ import {
 import { readLogsDisplay, LOGS_DEFAULT_DISPLAY } from '@/lib/logsDisplay';
 import { readLogsSample } from '@/lib/logsSample';
 import { parseBreakdown } from '@/components/LogsHistogram';
+import { parseLogsSort, serializeLogsSort } from '@/lib/logsSort';
+import { parseLogsGroup } from '@/lib/logsGroup';
+import { parseLogsScope } from '@/lib/logsScope';
+import { parsePatternCompare } from '@/lib/logsPatternCompare';
+import { encodePillParams } from '@/lib/logFilters';
+import { savedViewTooLarge, SAVED_VIEW_QUERY_MAX } from '@/lib/savedViewLimits';
 
 const GOLDEN = [
   '/logs',
@@ -342,5 +348,76 @@ describe('/logs smp parametresi — yalnız eklenir (v0.10.1831)', () => {
     const st = readLogsUrlState(p);
     expect(st.sig).toBe(readLogsUrlState(sp('/logs?q=boom')).sig);
     expect(writeLogsParams(p, st.filter, st.filtersRaw, st.colsRaw).get('smp')).toBe('1200');
+  });
+});
+
+// v0.10.1898 (Log Search Faz 5 dilim 5.1) — kayıtlı arama: Faz 1–4'ün EKLEDİĞİ
+// parametreler (scope, group, sort, rh, hh, den, smp, pp, pins, doc / docsvc,
+// cmp, lang). Kayıtlı arama URL arama dizesidir (SavedViewsBar aynen); her
+// parametre (1) eski linklerde yok → bugünkü görünüm, (2) süzgeç imzasını
+// yalnız taşıması gerekenler değiştirir (pins, doc), (3) yazmada korunur,
+// (4) kendi ayrıştırıcısıyla aynı görünüme döner.
+const SAVED_PARAMS = {
+  scope: 'mine', group: 'trace', sort: 'service.name:asc,timestamp:desc', rh: '3', hh: '2', den: 'compact',
+  smp: '1200', pp: '250', cmp: 'prev', lang: 'lucene', doc: '1759494780000000000.12345', docsvc: 'orders-api',
+} as const;
+
+describe('/logs kayıtlı arama parametreleri — altın liste (v0.10.1898)', () => {
+  it('eski linkler bu parametreleri taşımaz → bugünkü görünüm', () => {
+    for (const u of GOLDEN) {
+      const p = sp(u);
+      expect(parseLogsSort(p.get('sort')), u).toEqual([]);
+      expect(parseLogsGroup(p.get('group')), u).toBe('');
+      expect(parseLogsScope(p.get('scope')), u).toBe('');
+      expect(parsePatternCompare(p.get('cmp')), u).toBeNull();
+      expect(p.get('pins'), u).toBeNull();
+    }
+  });
+  it('görünüm parametreleri imzaya girmez, yazmada korunur, ayrıştırıcıyla aynı görünüme döner', () => {
+    const base = '/logs?service=orders-api&q=boom';
+    const p = new URLSearchParams(sp(base));
+    for (const [k, v] of Object.entries(SAVED_PARAMS)) if (k !== 'doc' && k !== 'docsvc') p.set(k, v);
+    const st = readLogsUrlState(p);
+    expect(st.sig).toBe(readLogsUrlState(sp(base)).sig);
+    const out = writeLogsParams(p, st.filter, st.filtersRaw, st.colsRaw, st.pinsRaw);
+    for (const k of Object.keys(SAVED_PARAMS)) if (k !== 'doc' && k !== 'docsvc') expect(out.get(k), k).toBe(p.get(k));
+    expect(serializeLogsSort(parseLogsSort(out.get('sort')))).toBe(SAVED_PARAMS.sort);
+    expect(parseLogsGroup(out.get('group'))).toBe('trace');
+    expect(parsePatternCompare(out.get('cmp'))).toBe('prev');
+    expect(readLogsSample(out.get('smp'), 2000)).toEqual({ sample: 1200, explicit: true });
+    expect(readLogsDisplay(out).display).toEqual({ rowLines: 3, headerLines: 2, density: 'compact', pageSize: 250 });
+    expect(parseLogsLang(out.get('lang'))).toBe('lucene');
+  });
+  it('pins ve doc süzgeç taşır: imzaya girer, yazmada korunur', () => {
+    const pills = encodePillParams([{ key: 'http.status_code', value: '502', negated: true, disabled: false, pinned: true }]);
+    const p = sp(`/logs?service=orders-api&pins=${encodeURIComponent(pills.pinsRaw)}&doc=${SAVED_PARAMS.doc}&docsvc=orders-api`);
+    const st = readLogsUrlState(p);
+    expect(st.sig).not.toBe(readLogsUrlState(sp('/logs?service=orders-api')).sig);
+    expect(logsUrlHasFilterState(p)).toBe(true);
+    const out = writeLogsParams(p, st.filter, st.filtersRaw, st.colsRaw, st.pinsRaw);
+    expect(out.get('pins')).toBe(pills.pinsRaw);
+    expect(out.get('doc')).toBe(SAVED_PARAMS.doc);
+    expect(parseDocParam(out.get('doc'))).not.toBeNull();
+  });
+  it('8 KiB: gerçekçi en dolu kayıtlı arama sığar; tavanı aşan reddedilir', () => {
+    const pills = encodePillParams(Array.from({ length: 20 }, (_, i) => ({
+      key: `attributes.business.field_${i}`, value: `value-${i}-${'x'.repeat(40)}`, negated: i % 3 === 0, disabled: i % 5 === 0, pinned: i < 3,
+    })));
+    const p = new URLSearchParams();
+    p.set('service', 'payments-mobile');
+    p.set('q', `level:error AND (${Array.from({ length: 12 }, (_, i) => `"timeout step ${i}"`).join(' OR ')})`);
+    p.set('range', 'custom:1759494780000-1759497240000');
+    p.set('filters', pills.filtersRaw);
+    p.set('pins', pills.pinsRaw);
+    p.set('cols', Array.from({ length: 15 }, (_, i) => `attributes.business.field_${i}`).join(','));
+    for (const [k, v] of Object.entries(SAVED_PARAMS)) p.set(k, v);
+    p.set('panel', 'patterns');
+    p.set('breakdown', 'namespace');
+    p.set('asc', '1');
+    p.set('env', 'prod');
+    const qs = p.toString();
+    expect(qs.length).toBeLessThan(SAVED_VIEW_QUERY_MAX);
+    expect(savedViewTooLarge(qs)).toBe('');
+    expect(savedViewTooLarge(qs + '&q2=' + 'y'.repeat(SAVED_VIEW_QUERY_MAX))).toMatch(/çok büyük/);
   });
 });
