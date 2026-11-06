@@ -1,7 +1,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTablePrefs } from '@/lib/queries/prefs';
 import type { CSSProperties } from 'react';
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Topbar } from '@/components/Topbar';
 import { Spinner, Empty } from '@/components/Spinner';
 import { FilterQueryBox } from '@/components/FilterQueryBox';
@@ -11,11 +11,8 @@ import { useAuth } from '@/components/AuthProvider';
 import { LatencyHeatmap } from '@/components/LatencyHeatmap';
 import { BubbleUpPanel } from '@/components/BubbleUpPanel';
 import { ShareButton } from '@/components/ShareButton';
-import { LogsExplorer } from '@/components/LogsExplorer';
-import { MetricsExplorer } from '@/components/MetricsExplorer';
 import { CorrelationContextDrawer } from '@/components/CorrelationContextDrawer';
 import type { PivotAnchor } from '@/lib/types';
-import type { ExploreVizKind } from '@/components/ExploreViz';
 import { api } from '@/lib/api';
 import { heatmapBucketCount } from '@/lib/chartStep';
 import { timeRangeToNs, fmtNum, fmtClock } from '@/lib/utils';
@@ -26,9 +23,10 @@ import { pushZoom, popZoom } from '@/lib/chart/zoomHistory';
 import type { FilterExpr, LatencyHeatmap as Heatmap } from '@/lib/types';
 import {
   REPEAT_PRESETS, STEP_OPTIONS,
-  type ResultMode, type Source,
+  type ResultMode,
 } from './explore/presets';
 import { NLQueryBox } from './explore/NLQueryBox';
+import { exploreLegacySourceHref } from './explore/legacySource';
 import { TracesResult } from './explore/TracesResult';
 import { RepeatsResult } from './explore/RepeatsResult';
 import { useQueryHistory } from './explore/useQueryHistory';
@@ -77,8 +75,9 @@ import { exploreQueryAsk, exploreSelectedSeries } from './explore/panelAsk';
 //
 // Traces + repeats result modes keep their pre-v2 console (filter zone,
 // presets) and URL shapes — those params remain the canonical form there.
-// source=metrics / source=logs keep their dedicated panels until the
-// Phase-5 /metrics collapse.
+// v0.10.1867 (Metrics Explorer Faz 2 dilim 2.7) — eski `source=metrics|logs`
+// panelleri KALKTI: /explore span analitiği; metrik /metrics'e, log /logs'a
+// yönlenir (exploreLegacySourceHref, ExplorePage).
 
 // The pristine builder's ?q= encoding — used to suppress the param entirely
 // so a paramless /explore keeps showing the entry cards.
@@ -101,10 +100,6 @@ function ExploreInner({ onSelfWrite }: {
     builderSeed.current = seedFromLegacyParams(searchParams);
   }
 
-  const [source, setSource] = useState<Source>(() => {
-    const v = searchParams.get('source');
-    return v === 'metrics' || v === 'logs' ? v : 'spans';
-  });
   const [resultMode, setResultMode] = useState<ResultMode>(() => {
     const r = searchParams.get('result');
     if (r === 'traces' || r === 'repeats') return r;
@@ -115,13 +110,6 @@ function ExploreInner({ onSelfWrite }: {
   // hashlemiyor) ve state→URL efekti eski aralığı geri yazıyordu; oturum
   // aralığı da hiç kaydedilmiyordu.
   const [range, setRange] = useUrlRange(DEFAULT_RANGE_PRESET);
-
-  // Legacy viz passthrough for the metrics/logs source panels only — the
-  // spans builder has its own ExploreViz inside BuilderState.
-  const [legacyViz] = useState<ExploreVizKind>(() => {
-    const v = searchParams.get('viz') as ExploreVizKind;
-    return ['line', 'bar', 'topN', 'kpi'].includes(v) ? v : 'line';
-  });
 
   // ── Builder state (metric result mode) ───────────────────────────────────
   const [builder, setBuilder] = useState<BuilderState>(
@@ -318,21 +306,11 @@ function ExploreInner({ onSelfWrite }: {
   const seedNextRef = useRef<string | null>(null);
 
   // ── State → URL ───────────────────────────────────────────────────────────
-  // Metric mode writes the canonical ?q=; traces/repeats and the
-  // metrics/logs panels keep writing their legacy shapes (those params ARE
-  // the canonical form for those surfaces). replace keeps history clean.
+  // Metric mode writes the canonical ?q=; traces/repeats keep writing their
+  // legacy shapes (those params ARE the canonical form for those surfaces). replace keeps history clean.
   useEffect(() => {
     let queryEntries: Array<[string, string | number | undefined | null | false]>;
-    if (source !== 'spans') {
-      queryEntries = [
-        ['source', source],
-        ['viz', legacyViz !== 'line' ? legacyViz : ''],
-        // service/metric passthrough for ServiceInfra deep links — the
-        // panels read them at mount; keep them while the panel is up.
-        ['service', searchParams.get('service') ?? ''],
-        ['metric', searchParams.get('metric') ?? ''],
-      ];
-    } else if (resultMode === 'metric') {
+    if (resultMode === 'metric') {
       // A pristine default builder writes NO params so the paramless
       // /explore entry screen (question cards) survives — the exact
       // old-workspace semantics where all-defaults produced an empty qs.
@@ -383,9 +361,7 @@ function ExploreInner({ onSelfWrite }: {
       seedNextRef.current = next;
     }
     if (meaningful && next !== seedNextRef.current) {
-      const desc = source !== 'spans'
-        ? `${source} explorer`
-        : resultMode === 'metric'
+      const desc = resultMode === 'metric'
           ? builderDesc(debounced)
           // dslDebounced, not dsl: the history entry must describe the query
           // that actually ran, and this effect now wakes on the debounced
@@ -394,10 +370,7 @@ function ExploreInner({ onSelfWrite }: {
           : legacyHistoryDesc({ resultMode, mode, dsl: dslDebounced, filters, repeatMin, repeatGroupBy });
       saveHistory(desc, next);
     }
-    // searchParams intentionally omitted: it's only read for the
-    // metrics/logs passthrough whose values never change while mounted.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [source, resultMode, debounced, filters, dslDebounced, mode, range, traceLimit, showTotal, extraCols, repeatMin, repeatGroupBy, legacyViz, navigate, saveHistory, onSelfWrite]);
+  }, [resultMode, debounced, filters, dslDebounced, mode, range, traceLimit, showTotal, extraCols, repeatMin, repeatGroupBy, navigate, saveHistory, onSelfWrite]);
 
   // Service options for the traces/repeats filter suggestions. Gated on
   // hasParams (entry screen fires no workspace fetches — Phase-1 finding).
@@ -407,11 +380,11 @@ function ExploreInner({ onSelfWrite }: {
   // (api.attributeValues, substring-aware) for the long tail, so at 1000s
   // of services an unbounded all-window catalogue was pure waste.
   useEffect(() => {
-    if (!hasParams || source !== 'spans' || resultMode === 'metric') return;
+    if (!hasParams || resultMode === 'metric') return;
     api.services(timeRangeToNs(range), 500)
       .then(s => setServices((s ?? []).map(x => x.name)))
       .catch(() => setServices([]));
-  }, [range, hasParams, source, resultMode]);
+  }, [range, hasParams, resultMode]);
 
   // ── Global daraltmalar (UX denetimi B2/K9, v0.9.942) ─────────────────────
   //
@@ -431,7 +404,7 @@ function ExploreInner({ onSelfWrite }: {
     [debounced, env, clusterScope]);
 
   // ── Builder fan-out (react-query; inactive modes pass from=0 → disabled) ──
-  const builderActive = hasParams && source === 'spans' && resultMode === 'metric';
+  const builderActive = hasParams && resultMode === 'metric';
   const builderFrom = builderActive && debounced.viz !== 'heatmap' ? exploreRange.from : 0;
   // D5 — eligible span queries fetch series + exemplars in ONE resolver call;
   // exemplarsByLetter (◆ glyphs) comes from the same hook now. v0.8.332
@@ -583,7 +556,7 @@ function ExploreInner({ onSelfWrite }: {
 
   // ── Traces / repeats fetches (pre-v2 behaviour, scoped to their modes) ───
   useEffect(() => {
-    if (!hasParams || source !== 'spans' || resultMode === 'metric') return;
+    if (!hasParams || resultMode === 'metric') return;
     setQueryError(null);
     setReadErr(null);
     // v0.9.939 (C2/C3) — bayrak + GERÇEK İPTAL (raceGuard) ve BLANK YOK:
@@ -642,7 +615,7 @@ function ExploreInner({ onSelfWrite }: {
         });
     }
     return g.cancel;
-  }, [resultMode, range, filters, dslDebounced, mode, traceLimit, showTotal, extraCols, repeatMin, repeatGroupBy, hasParams, source, retryNonce]);
+  }, [resultMode, range, filters, dslDebounced, mode, traceLimit, showTotal, extraCols, repeatMin, repeatGroupBy, hasParams, retryNonce]);
 
   // ── Builder mutators ──────────────────────────────────────────────────────
   const setQuery = (i: number, q: BuilderState['queries'][number]) =>
@@ -803,11 +776,8 @@ function ExploreInner({ onSelfWrite }: {
           borderRadius: 'var(--radius)', marginBottom: 12,
         }}>
 
-          {/* SOURCE zone */}
+          {/* Üst satır: geçmiş + kayıtlı görünümler + paylaş (v0.10.1867: Source anahtarı kalktı) */}
           <div style={ZONE_FIRST}>
-            <span style={ZONE_LABEL}>Source</span>
-            <SegmentedControl aria-label="Veri kaynağı" value={source} onChange={setSource}
-              options={(['spans', 'metrics', 'logs'] as Source[]).map(s => ({ value: s, label: s[0].toUpperCase() + s.slice(1) }))} />
             <span style={{ flex: 1 }} />
             {/* v0.9.849 — halka artık GÖRÜNÜR. Kayıtlı görünümlerin yanı,
                 çünkü ikisi de "daha önce kurduğum sorguya dön" ailesinden;
@@ -819,7 +789,7 @@ function ExploreInner({ onSelfWrite }: {
             <ShareButton size="sm" />
           </div>
 
-          {source === 'spans' && (<>
+          <>
 
           {/* SHOW zone — result mode + (metric mode) viz rail + step */}
           <div style={ZONE}>
@@ -1064,22 +1034,9 @@ name ~ checkout`}
             </div>
           )}
 
-          </>)}
+          </>
         </div>
 
-        {/* Metrics + Logs source panels (until the Phase-5 collapse). */}
-        {source === 'metrics' && (
-          <MetricsExplorer range={range}
-            viz={legacyViz}
-            compare={false}
-            initialService={searchParams.get('service') ?? ''}
-            initialMetric={searchParams.get('metric') ?? ''} />
-        )}
-        {source === 'logs' && (
-          <LogsExplorer range={range} viz={legacyViz} compare={false} />
-        )}
-
-        {source === 'spans' && (
           <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
             <div style={{ flex: 1, minWidth: 0 }}>
 
@@ -1356,7 +1313,6 @@ name ~ checkout`}
         )}
             </div>
           </div>
-        )}
 
         {/* Heatmap cell-click exemplars modal (query A's filter context). */}
         {cellExemplar && (() => {
@@ -1433,6 +1389,8 @@ export default function ExplorePage() {
   // sonucu değiştirmez (prev.sig === sig → prev döner), o yüzden StrictMode
   // çift render'ı güvenli.
   keyRef.current = nextExploreKey(keyRef.current, search, selfWriteSigRef.current);
+  const legacy = exploreLegacySourceHref(search);
+  if (legacy) return <Navigate replace to={legacy} />;
   return (
     <Suspense fallback={<Spinner />}>
       <ExploreInner key={keyRef.current.key} onSelfWrite={onSelfWrite} />

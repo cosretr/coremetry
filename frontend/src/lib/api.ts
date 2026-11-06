@@ -7,7 +7,7 @@ OracleLogsResponse, CopilotScopeNames, CosreRouteRED,
   Service, ServiceEdge, TracesResponse, TracesExtrasResponse, TraceDetailResponse, TraceBundleResponse,
   CHMeasureResponse,
   LogsResponse, LogsMyTeam, LogsScope, LogFieldStats, NotificationLogEntry, MetricInfo, MetricNameSearchResult,
-  MetricPoint, HealthInfo, SortColumn, SortOrder,
+  HealthInfo, SortColumn, SortOrder,
   ProfileRow, ProfileDetail, ProfileHotspotsResponse, SpanHotspotsResponse, AggregateRow, SpanMetricSeries, SpanMetricResult, HistogramResult,
   MetricQueryResult,
   MetricResolveResult,
@@ -907,7 +907,6 @@ export const api = {
   metricNames: (service: string)     => get<MetricInfo[] | null>(withMetricSource(`/api/metrics/names${service ? '?service=' + encodeURIComponent(service) : ''}`)),
   // v0.9.464 (dürüstlük A12) — zarf {points, truncated}: nokta tavanı
   // dolduğunda pencerenin SON kısmı döner ve UI bunu söyler.
-  metrics:     (params: MetricsParams) => get<{ points: MetricPoint[]; truncated: boolean } | null>(`/api/metrics?${qs(params)}`),
 
   // Logs timeseries — Histogram aggregation routed through
   // whichever backend is configured (CH or external ES). Powers
@@ -4556,14 +4555,6 @@ export interface LogsParams {
   // Load-more); the trace drawers, the service Logs tab and span detail
   // deliberately omit it.
   paging?: boolean;
-}
-
-export interface MetricsParams {
-  name: string;
-  service?: string;
-  from?: number;
-  to?: number;
-  limit?: number;
 }
 
 // amp — v0.10.201: qs() çıktısını mevcut sorgu dizesine '&' ile ekler (boşsa hiçbir şey).

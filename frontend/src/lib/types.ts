@@ -4216,14 +4216,6 @@ export interface MetricNameSearchResult {
   source?: MetricSourceKind;
 }
 
-export interface MetricPoint {
-  time: number;
-  value: number;
-  count: number;
-  sum: number;
-  attrs: string;
-}
-
 export interface HealthInfo {
   status: string;
   // v0.9.238 — which roles the answering pod runs. Absent on pre-v0.9.238
@@ -6698,15 +6690,6 @@ export interface EndpointSplitValue {
 // observed across the sampled traces; siblings repeating the exact
 // same triple collapse into a single row carrying count + avg/max
 // duration + error count.
-// Generic series shape used by the /explore Data Explorer to
-// render Line / Bar / Top-N / KPI from any of the three sources
-// (spans / metrics / logs). Backends compute the buckets; the
-// SPA only normalises into this shape.
-export interface ExploreSeries {
-  name: string;                          // legend label (group_value or _total)
-  points: { t: number; v: number }[];    // unix ns × value
-}
-
 // SQL playground response shape.
 export interface SQLResult {
   columns: string[];

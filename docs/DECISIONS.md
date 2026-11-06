@@ -12738,3 +12738,13 @@ Kaynak: `docs/metrics/metrics-explore-dashboards-audit.md` §7 Faz 2 (onaylı, �
   satırının lejant/birim ayarı yoktu, ortak satırda da kapalı (`showLegend={false}`); eski `last` toplaması satırda "ham
   değer · max" görünür ama dokunulmadıkça `last` olarak kalır. `eslint-suppressions` QueryRow 3 → 2, ham select tavanı
   123 → 122.
+- **v0.10.1867 — Explore'un eski `source=metrics|logs` panelleri kalktı (2.7, operatör onayı audit §11).** `/explore` =
+  span analitiği: Source anahtarı (Spans / Metrics / Logs) ve iki eski panel silindi — `components/MetricsExplorer.tsx`,
+  `components/LogsExplorer.tsx`, `components/ExploreViz.tsx` (yalnız bu panellerin tükettiği `api.metrics` istemci
+  metodu, `MetricsParams` / `MetricPoint` / `ExploreSeries` tipleri ve `metricSourceApi.test` satırı da; sunucu `/api/metrics`
+  ucu durur — başka tüketicileri var). Eski linkler `pages/explore/legacySource.ts` ile bir kez yönlenir: `source=metrics`
+  → `/metrics?metric=&service=` (Metrics Explorer'ın tek-model içe aktarımı sorgu A kurar; metrik yoksa
+  `?editor=0&service=` → Keşif, servis süzgeçli), `source=logs` → `/logs?service=&q=`; range / cluster / env taşınır
+  (tablo testi zinciri içe aktarıma kadar sınar). Explore'un `source` durumu, eski `viz` geçişi ve URL yazımındaki eski
+  dal kalktı; Recent / Saved / Share üst satırda kalır. CSS ailesi: panellerin kendine özgü sınıfı yoktu (`controls`,
+  `table-wrap` ortak) — silinecek kural yok.

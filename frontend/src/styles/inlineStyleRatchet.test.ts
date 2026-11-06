@@ -23,11 +23,11 @@ const CEILINGS: Record<Page, number> = {
   Logs: 61, // v0.10.1854 (dilim 2.3, LogPillEditor silindi + LogsFilterRow shadcn): 65 → 61; v0.10.1853 (Faz 2 dilim 2.2, LogFieldsPanel → coremetry/logs/FieldSidebar): 87 → 65; v0.10.1821 (Log Search Faz 1 dilim 1.5): 94 → 87 (KqlSearchInput → coremetry/logs/LogQueryInput, 0 stil)
   Trace: 150, // 17
   Traces: 103, // 13
-  Explore: 141, // 17
+  Explore: 132, // v0.10.1867 (eski Metrics/Logs panelleri silindi): 141 → 132
   Metrics: 38, // v0.10.1865 (Metrics Explorer 2.5, katalog → Keşif): 49 → 38; v0.10.1863 (2.3, editör anahtarı kalktı): 50 → 49
   Shell: 16, // 5 — etkileşim P2: 43 → 16 (⌘K cmdk)
 };
-const TOTAL = 3999; // v0.10.1865 (Metrics Explorer 2.5): 4010 → 3999; v0.10.1863 (Metrics Explorer 2.3): 4011 → 4010; v0.10.1854 (Logs süzgeç satırı): 4015 → 4011; v0.10.1853 (Logs alan kenar çubuğu): 4037 → 4015; v0.10.1821 (Logs sorgu çubuğu): 4044 → 4037; Faz 2 dilim 1 R18 (Settings kapanışı): 4060 → 4044; Faz 2 dilim 1 R15 (Argo CD): 4062 → 4060; Faz 2 dilim 1 R17 (Anomaly): 4284 → 4062; Faz 2 dilim 1 R16 (Oracle): 4298 → 4284; Faz 2 dilim 1 R14 (işletim): 4427 → 4298; Faz 2 dilim 1 R13 (DevOps + MCP): 4557 → 4427; Faz 2 dilim 1 R12 (AI SRE + Knowledge): 4661 → 4557; Faz 2 dilim 1 R11 (CoSRE): 4752 → 4661; Faz 2 dilim 1 R10 (erişim): 4894 → 4752; 449 dosya (plan §3.2 v0.10.1604 ölçümü 5,244; aradaki sürümler +15) — Faz 2 dilim 1 R7: 5259 → 5209; CoSRE 2b B1: 5209 → 5208; etkileşim P2: 5180 (⌘K −27, aradaki sürümler −1); R8: 5180 → 4999; R9: 4999 → 4894
+const TOTAL = 3976; // v0.10.1867 (Explore eski panelleri + ExploreViz silindi): 3999 → 3976; v0.10.1865 (Metrics Explorer 2.5): 4010 → 3999; v0.10.1863 (Metrics Explorer 2.3): 4011 → 4010; v0.10.1854 (Logs süzgeç satırı): 4015 → 4011; v0.10.1853 (Logs alan kenar çubuğu): 4037 → 4015; v0.10.1821 (Logs sorgu çubuğu): 4044 → 4037; Faz 2 dilim 1 R18 (Settings kapanışı): 4060 → 4044; Faz 2 dilim 1 R15 (Argo CD): 4062 → 4060; Faz 2 dilim 1 R17 (Anomaly): 4284 → 4062; Faz 2 dilim 1 R16 (Oracle): 4298 → 4284; Faz 2 dilim 1 R14 (işletim): 4427 → 4298; Faz 2 dilim 1 R13 (DevOps + MCP): 4557 → 4427; Faz 2 dilim 1 R12 (AI SRE + Knowledge): 4661 → 4557; Faz 2 dilim 1 R11 (CoSRE): 4752 → 4661; Faz 2 dilim 1 R10 (erişim): 4894 → 4752; 449 dosya (plan §3.2 v0.10.1604 ölçümü 5,244; aradaki sürümler +15) — Faz 2 dilim 1 R7: 5259 → 5209; CoSRE 2b B1: 5209 → 5208; etkileşim P2: 5180 (⌘K −27, aradaki sürümler −1); R8: 5180 → 4999; R9: 4999 → 4894
 const MIGRATED: Page[] = ['RemoteCluster', 'Settings']; // Faz 2 dilim 1 R7 — pilot; R18 — Settings (her dosya 0)
 
 function walk(dir: string, out: string[] = []): string[] {

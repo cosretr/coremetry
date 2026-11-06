@@ -87,21 +87,9 @@ describe('api.ts forwards ?metricsrc= (v0.9.1151)', () => {
     expect(urls[0]).not.toContain('metricsrc');
   });
 
-  it('does NOT stamp endpoints outside the seam', async () => {
-    // The inverse half, so "stamp everything metric-shaped" cannot creep
-    // in: an endpoint whose handler ignores the param would imply coverage
-    // that does not exist and let an operator read a ClickHouse chart as
-    // VictoriaMetrics data.
-    //
-    // v0.9.1157 — histogram + promql LEFT this list (the seam now covers
-    // them). What remains is /api/metrics, the raw metric_points reader:
-    // it has no VM translation at all, so a stamp there would be a lie.
-    pinPage('?metricsrc=vm');
-    const urls = captureFetch();
-    await api.metrics({ name: 'm', from: 1, to: 2 });
-    expect(urls).toHaveLength(1);
-    for (const u of urls) expect(u).not.toContain('metricsrc');
-  });
+  // v0.10.1867 — 'does NOT stamp endpoints outside the seam' düştü: seam
+  // dışındaki son uç (/api/metrics, ham metric_points) istemcisi eski Explore
+  // Metrics paneliyle birlikte silindi.
 
   it('survives a windowless environment', async () => {
     // api.ts is imported in node-env tests; reading location unguarded
