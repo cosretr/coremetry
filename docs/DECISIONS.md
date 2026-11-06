@@ -12432,3 +12432,14 @@ Kaynak: `docs/metrics/metrics-explore-dashboards-audit.md` (onaylı, §11) · mo
   soneki ise) → "unexpected end of stream" (sorgu sonu); VM HTTP ≥ 300 gövdesindeki JSON `error` önce açılır; hiçbiri
   yoksa pos yok. Statü aynı: CH sözdizimi 400, VM reddi 502 KALDI (brief; audit §4 "400 ile 502 ayrı" → VM 4xx'ini
   400'e eşlemek ayrı karar), yalnız etiketsiz (500) sözdizimi hatası 400. Hook `serveCached` hata yolunda tek satır.
+
+## 2026-11-06 — Öğrenme döngüsü Faz 2 (anomali detayı)
+
+Kaynak: `docs/anomaly/learning-loop-audit.md` §7, §10 Faz 2, §15, §17; onaylı mockup `docs/frontend/mockups/anomaly-detail.html`.
+- **v0.10.1842 — tek Go kart üreticisi `ml.BuildExplainCard` / `ml.ExplainSummary` (`internal/ml/explain_card.go`).**
+  Deterministik şablon + dedektör sözlüğü; ek uyumu sayının okunuşundan (`explain_text.go`), oran merdiveni mockup `kat()`
+  birebir. Girdide olmayan sayı uydurulmaz: bant yoksa "normalde yaklaşık <taban>", etki yoksa Etki boş, yayın verisi
+  bilinmiyorsa "yayın yok" da yazılmaz. 4 kova görülmeyen açık olay "sürdü" der (ML kapalıyken "sürüyor" büyümesin).
+  "Normal aralık" bugün kaydın q25–q75'i (audit q10–q90'ı `ml_baseline_obs` 1.6 ile gelir). Rollouts sayfasında servis
+  süzgeci olmadığından yayın linki servis GitOps sekmesine; "Sürüm karşılaştırması" sayfası yok → servis genel bakışı,
+  pencere yayından 30 dk önce başlar. Endpoint adı "Ne oldu" cümlesine girmez (audit örneği birebir), başlık çipindedir.
