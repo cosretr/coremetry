@@ -187,6 +187,20 @@ describe('kare çekirdeği', () => {
     const many = Array.from({ length: 200 }, (_, i) => ({ id: `m${i}`, tier: 'svc' as const, weight: 0.1, name: `n${i}` }));
     expect(labelNodes(layoutOf(many, [], 1, 5))).toHaveLength(MAX_LABELS);
   });
+  // v0.10.1918 (operatör: "isimler de random gelsin").
+  it('etiket rastgele: yalnız adı olanlardan, tavan kadar, tekrarsız; farklı kaynak farklı küme', () => {
+    const many = Array.from({ length: 200 }, (_, i) => ({ id: `m${i}`, tier: (i < 5 ? 'gw' : 'svc') as 'gw' | 'svc', weight: 0.1, name: i % 2 ? `n${i}` : undefined }));
+    const l = layoutOf(many, [], 1, 5);
+    const a = labelNodes(l, MAX_LABELS, mulberry32(7));
+    const b = labelNodes(l, MAX_LABELS, mulberry32(8));
+    expect(a).toHaveLength(MAX_LABELS);
+    expect(new Set(a).size).toBe(a.length);
+    expect(a.every(i => !!l.nodes[i].name)).toBe(true);
+    expect(a).toEqual([...a].sort((x, y) => x - y));
+    expect(a).not.toEqual(b);
+    expect(labelNodes(l, MAX_LABELS, mulberry32(7))).toEqual(a); // aynı kaynak → aynı küme
+    expect(labelNodes(layoutOf(NODES, EDGES, 2, 10), MAX_LABELS, Math.random)).toEqual([]); // ad yoksa boş
+  });
 });
 
 describe('arka plan kipi', () => {

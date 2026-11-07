@@ -80,12 +80,26 @@ export function flowEdges(layout: Layout, max = MAX_FLOW_EDGES): number[] {
 }
 
 const TIER_RANK: Record<string, number> = { gw: 0, bff: 1, svc: 2, db: 3 };
-/** Etiket yazılacak düğümler: yalnız ADI olanlar (isimli kip); giriş/BFF önce, sonra ağırlık. En çok `max`. */
-export function labelNodes(layout: Layout, max = MAX_LABELS): number[] {
-  return layout.nodes.map((n, i) => ({ i, n }))
-    .filter(x => !!x.n.name)
-    .sort((a, b) => (TIER_RANK[a.n.tier] ?? 9) - (TIER_RANK[b.n.tier] ?? 9) || b.n.weight - a.n.weight || a.i - b.i)
-    .slice(0, max).map(x => x.i);
+/**
+ * Etiket yazılacak düğümler: yalnız ADI olanlar (isimli kip), en çok `max`.
+ * `rand` verilmezse kararlı sıra (giriş/BFF önce, sonra ağırlık). v0.10.1918
+ * (operatör: "isimler de random gelsin") — `rand` verilirse adı olanlar
+ * arasından RASTGELE alt küme (Fisher–Yates); sayfa her açılışta farklı
+ * servisleri etiketler. Dönüş dizin sırasına göre (çizim sırası kararlı).
+ */
+export function labelNodes(layout: Layout, max = MAX_LABELS, rand?: () => number): number[] {
+  const named = layout.nodes.map((n, i) => ({ i, n })).filter(x => !!x.n.name);
+  if (!rand) {
+    return named
+      .sort((a, b) => (TIER_RANK[a.n.tier] ?? 9) - (TIER_RANK[b.n.tier] ?? 9) || b.n.weight - a.n.weight || a.i - b.i)
+      .slice(0, max).map(x => x.i);
+  }
+  const idx = named.map(x => x.i);
+  for (let k = idx.length - 1; k > 0; k--) {
+    const j = Math.floor(rand() * (k + 1));
+    [idx[k], idx[j]] = [idx[j], idx[k]];
+  }
+  return idx.slice(0, max).sort((a, b) => a - b);
 }
 
 // ── Arka plan kipi (audit §6.3 + sözleşme: loginTopology) ───────────────────

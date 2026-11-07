@@ -15,7 +15,7 @@ import { useEffect, useRef, useState } from 'react';
 import { chartMonoFont, resolveVar } from '@/lib/chart/resolveVar';
 import { useThemeTick } from '@/lib/useThemeTick';
 import {
-  flowEdges, flowPos, labelNodes, nodeStyle, screenPositions, shouldDraw, thinGraph, type Pt,
+  flowEdges, flowPos, labelNodes, MAX_LABELS, nodeStyle, screenPositions, shouldDraw, thinGraph, type Pt,
 } from '@/lib/loginTopology/frame';
 import { beginDrag, dragTo, hitNode, type Drag } from '@/lib/loginTopology/drag';
 import { layoutOf, seedOfIds, type Layout } from '@/lib/loginTopology/layout';
@@ -97,7 +97,8 @@ export default function TopologyBackdrop({ graph, animated }: { graph: BackdropG
     return layoutOf(g.nodes, g.edges, graph.seed ?? seedOfIds(graph.nodes.map(n => n.id)));
   });
   const [flows] = useState<number[]>(() => flowEdges(layout));
-  const [labels] = useState<Set<number>>(() => new Set(labelNodes(layout)));
+  // v0.10.1918 — etiketlenecek servisler her açılışta RASTGELE (operatör isteği).
+  const [labels] = useState<Set<number>>(() => new Set(labelNodes(layout, MAX_LABELS, Math.random)));
 
   useEffect(() => {
     const canvas = ref.current;
