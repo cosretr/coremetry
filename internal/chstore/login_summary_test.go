@@ -17,6 +17,7 @@ func TestLoginSummarySQLBounds(t *testing.T) {
 		"cosre":       cosreQuestionsSQL(),
 		"endpoints":   loginEndpointsSQL(),
 		"dbNames":     loginDBNamesSQL(),
+		"svcVolumes":  loginServiceVolumesSQL(),
 		"bytes":       totalUncompressedBytesSQL(""),
 		"bytesCl":     totalUncompressedBytesSQL("c1"),
 	}

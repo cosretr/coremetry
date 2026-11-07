@@ -80,6 +80,7 @@ type Store interface {
 	CountLoginEndpoints(ctx context.Context) (uint64, error)
 	ReadServiceTopologyAgg(ctx context.Context, from, to time.Time, limit int) ([]chstore.ServiceTopologyEdge, error)
 	LoginDBNames(ctx context.Context, since time.Time, keys []string) (map[string]string, error)
+	LoginServiceVolumes(ctx context.Context, since time.Time) (map[string]uint64, error)
 }
 
 var _ Store = (*chstore.Store)(nil)
@@ -307,6 +308,15 @@ func (b *Builder) slowRound(ctx context.Context, s *Snapshot, now time.Time, sum
 			b.timed("db_names", t1)
 		}
 		s.Topo = BuildTopology(sil, s.Salt)
+		// v0.10.1937 — tüm servisler: siluet dışındakiler adsız yıldız (MV, son
+		// 15 dk). Hata: yıldızsız yayınlanır (yumuşak).
+		if s.Topo != nil {
+			t2 := time.Now()
+			if vols, verr := b.d.Store.LoginServiceVolumes(ctx, now.Add(-topoWindowS*time.Second)); verr == nil {
+				s.Topo.Stars = BuildStars(sil, edges, vols, topoMaxStars)
+			}
+			b.timed("stars", t2)
+		}
 	}
 }
 

@@ -4,7 +4,7 @@ import { mulberry32 } from './prng';
 import { syntheticGraph, SYNTHETIC_SEED } from './synthetic';
 import {
   buildGalaxy, depthOf, flowPos, flowSpeed, isDarkColor, nodeAlpha, nodeRadius, paceFrom, pickBackendLabels, pickLabelSet, project,
-  sizeOf, spinRate, wantsLabel, DENSE_NODES, DENSE_SIZE_K, introProgress, INTRO_S, INTRO_SWIRL, MIN_ARMS, TILT0, DUST_ARM, DUST_CORE, FLOW_EDGES, type GNode,
+  sizeOf, spinRate, wantsLabel, DENSE_NODES, DENSE_SIZE_K, introProgress, INTRO_S, INTRO_SWIRL, MAX_STARS, MIN_DUST, MIN_ARMS, TILT0, DUST_ARM, DUST_CORE, FLOW_EDGES, type GNode,
 } from './galaxy';
 import type { LoginSummaryEdge, LoginSummaryNode } from '@/lib/types';
 
@@ -172,5 +172,29 @@ describe('açılış hareketi (v0.10.1936)', () => {
     expect(introProgress(-1).k).toBe(0);
     let prev = -1;
     for (let t = 0; t <= INTRO_S; t += 0.1) { const { k } = introProgress(t); expect(k).toBeGreaterThanOrEqual(prev); prev = k; }
+  });
+});
+
+describe('tüm servisler: adsız yıldızlar (v0.10.1937)', () => {
+  const g = syntheticGraph(SYNTHETIC_SEED);
+  const base = buildGalaxy(g.nodes, g.edges, 7);
+  it('yıldız yokken toz aynen, yıldız boş', () => {
+    expect(base.stars.length).toBe(0);
+    expect(base.dust.length / 5).toBe(DUST_ARM + DUST_CORE);
+  });
+  it('yıldızlar tozun yerini alır (en az MIN_DUST toz), komşusuna yakın yarıçapta durur', () => {
+    const stars = Array.from({ length: 3000 }, (_, i) => ({ w: (i % 10) / 10, near: i % 2 ? 5 : -1 }));
+    const gx = buildGalaxy(g.nodes, g.edges, 7, undefined, undefined, stars);
+    expect(gx.stars.length / 5).toBe(3000);
+    expect(gx.dust.length / 5).toBeGreaterThanOrEqual(MIN_DUST);
+    expect(gx.dust.length / 5 + gx.stars.length / 5).toBeLessThanOrEqual(DUST_ARM + DUST_CORE + 2);
+    for (let k = 1; k < 3000; k += 2) expect(Math.abs(gx.stars[k * 5] - gx.nodes[5].r)).toBeLessThan(0.4);
+    for (let o = 3; o < gx.stars.length; o += 5) { expect(gx.stars[o]).toBeGreaterThanOrEqual(0); expect(gx.stars[o]).toBeLessThanOrEqual(1); }
+  });
+  it('tavan MAX_STARS; düğüm konumları yıldızlardan etkilenmez', () => {
+    const many = Array.from({ length: MAX_STARS + 50 }, () => ({ w: 0.5, near: -1 }));
+    const gx = buildGalaxy(g.nodes, g.edges, 7, undefined, undefined, many);
+    expect(gx.stars.length / 5).toBe(MAX_STARS);
+    expect(gx.nodes.map(n => [n.r, n.th])).toEqual(base.nodes.map(n => [n.r, n.th]));
   });
 });

@@ -247,3 +247,36 @@ func TestNameDatabasesAndQueueTier(t *testing.T) {
 		}
 	}
 }
+
+// v0.10.1937 — tüm servisler: siluet dışındakiler adsız yıldız.
+func TestBuildStars(t *testing.T) {
+	edges := []chstore.ServiceTopologyEdge{
+		{ParentService: "api-gateway", ChildNode: "orders-api", Calls: 100},
+		{ParentService: "orders-api", ChildNode: "pricing-service", Calls: 5},
+		{ParentService: "api-gateway", ChildNode: "pricing-service", Calls: 9}, // en çok çağrı → near = api-gateway
+		{ParentService: "audit-service", ChildNode: "orders-api", Calls: 3},
+	}
+	sil := Silhouette{Nodes: []SilNode{{Key: "api-gateway"}, {Key: "orders-api"}}}
+	vols := map[string]uint64{
+		"api-gateway": 10000, "orders-api": 5000, // siluette → yıldız değil
+		"pricing-service": 100, "audit-service": 100, "lonely-batch": 10,
+		"coremetry-api": 99999, "ext:partner.example.com": 50, "node:worker-1": 50, "zero": 0,
+	}
+	stars := BuildStars(sil, edges, vols, 10)
+	if len(stars) != 3 {
+		t.Fatalf("3 yıldız beklenir: %+v", stars)
+	}
+	// sıra: yoğunluk azalan, eşitlikte ad (audit < pricing)
+	if stars[0].Near != 1 || stars[1].Near != 0 || stars[2].Near != -1 {
+		t.Errorf("near: audit→orders-api(1), pricing→api-gateway(0), lonely→-1: %+v", stars)
+	}
+	if stars[0].W <= stars[2].W || stars[0].W > 1 || stars[2].W <= 0 {
+		t.Errorf("yoğunluk 0..1 ve span'a göre: %+v", stars)
+	}
+	if got := BuildStars(sil, edges, vols, 2); len(got) != 2 {
+		t.Errorf("tavan: %d", len(got))
+	}
+	if BuildStars(sil, edges, nil, 10) != nil {
+		t.Error("hacim yoksa yıldız yok")
+	}
+}

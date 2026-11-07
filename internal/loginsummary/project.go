@@ -77,7 +77,8 @@ func projectTopology(t *SnapTopology, mode string) *Topology {
 	named := mode == TopologyNamed
 	out := &Topology{WindowS: t.WindowS, Named: named, Nodes: []Node{}, Edges: []Edge{}}
 	ok := map[string]bool{}
-	for _, n := range t.Nodes {
+	remap := map[int]int{} // anlık görüntü düğüm dizini → cevap düğüm dizini (düşenler yok)
+	for si, n := range t.Nodes {
 		// savunma: ext:/node:/db:/queue: ham kimlikler ya da instance işareti
 		// taşıyan bir ad (anlık görüntü bozuk/zehirli olsa bile) hiçbir kipte çıkmaz.
 		if n.ID == "" || isDroppedNode(n.Name) || strings.Contains(n.Name, "@") ||
@@ -95,6 +96,7 @@ func projectTopology(t *SnapTopology, mode string) *Topology {
 				node.Name = n.Name
 			}
 		}
+		remap[si] = len(out.Nodes)
 		out.Nodes = append(out.Nodes, node)
 		ok[n.ID] = true
 	}
@@ -105,6 +107,18 @@ func projectTopology(t *SnapTopology, mode string) *Topology {
 	}
 	if len(out.Nodes) == 0 {
 		return nil
+	}
+	// v0.10.1937 — adsız servis yıldızları: yalnız [yoğunluk, dizin]; düşen
+	// düğüme bağlı yıldız -1 alır; tavan savunma amaçlı yeniden uygulanır.
+	for i, st := range t.Stars {
+		if i >= topoMaxStars {
+			break
+		}
+		near := -1
+		if j, has := remap[st.Near]; has {
+			near = j
+		}
+		out.Stars = append(out.Stars, [2]float64{round2(st.W), float64(near)})
 	}
 	return out
 }

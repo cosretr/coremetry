@@ -230,3 +230,37 @@ func (s *Store) LoginDBNames(ctx context.Context, since time.Time, keys []string
 	}
 	return out, rows.Err()
 }
+
+// loginServiceVolumesSQL — v0.10.1937: servis başına son penceredeki span
+// sayısı (login galaksisinin adsız servis yıldızları). MV okuması
+// (service_summary_5m); Coremetry'nin kendi servisleri hariç; en çok 5000.
+func loginServiceVolumesSQL() string {
+	return `
+		SELECT service_name, countMerge(span_count_state) AS c
+		FROM service_summary_5m
+		WHERE time_bucket >= ? AND NOT startsWith(service_name, 'coremetry-')
+		GROUP BY service_name
+		ORDER BY c DESC
+		LIMIT 5000
+		SETTINGS max_execution_time = 5`
+}
+
+// LoginServiceVolumes — servis → span sayısı (ad yalnız sunucuda; cevaba
+// yalnız normalize yoğunluk çıkar, bkz. loginsummary.BuildStars).
+func (s *Store) LoginServiceVolumes(ctx context.Context, since time.Time) (map[string]uint64, error) {
+	rows, err := s.telemetryReadConn().Query(ctx, loginServiceVolumesSQL(), since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]uint64{}
+	for rows.Next() {
+		var name string
+		var c uint64
+		if err := rows.Scan(&name, &c); err != nil {
+			return nil, err
+		}
+		out[name] = c
+	}
+	return out, rows.Err()
+}

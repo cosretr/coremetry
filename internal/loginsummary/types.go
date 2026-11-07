@@ -66,6 +66,10 @@ type Topology struct {
 	Named   bool   `json:"named"`
 	Nodes   []Node `json:"nodes"`
 	Edges   []Edge `json:"edges"`
+	// Stars — v0.10.1937 (operatör: "tüm servisleri gösterelim"): siluete
+	// girmeyen her servis ADSIZ bir yıldız: [yoğunluk 0..1, en yakın düğümün
+	// Nodes dizini ya da -1]. Ad, kimlik, mutlak sayı YOK — hiçbir kipte.
+	Stars [][2]float64 `json:"stars,omitempty"`
 }
 
 type Node struct {
@@ -140,6 +144,14 @@ type SnapTopology struct {
 	WindowS int        `json:"window_s"`
 	Nodes   []SnapNode `json:"nodes"`
 	Edges   []Edge     `json:"edges"`
+	Stars   []SnapStar `json:"stars,omitempty"` // v0.10.1937
+}
+
+// SnapStar — adsız servis yıldızı: W yoğunluk (0..1, span sayısının log1p
+// normu), Near en yakın siluet düğümünün SnapTopology.Nodes dizini (yoksa -1).
+type SnapStar struct {
+	W    float64 `json:"w"`
+	Near int     `json:"near"`
 }
 
 // SnapNode — Name: servis adı ya da db/kuyruk için YALNIZ sistem adı.

@@ -12305,7 +12305,8 @@ export interface LoginSummaryActivity {
 // v0.10.1931: 'queue' — kuyruk (kafka, rabbitmq…) veritabanından ayrı katman.
 export interface LoginSummaryNode { id: string; tier: 'gw' | 'bff' | 'svc' | 'db' | 'queue'; weight: number; name?: string }
 export interface LoginSummaryEdge { from: string; to: string; weight: number }
-export interface LoginSummaryTopology { window_s: number; named: boolean; nodes: LoginSummaryNode[]; edges: LoginSummaryEdge[] }
+// v0.10.1937 — stars: siluet dışındaki her servis ADSIZ yıldız: [yoğunluk 0..1, en yakın düğümün `nodes` dizini ya da -1].
+export interface LoginSummaryTopology { window_s: number; named: boolean; nodes: LoginSummaryNode[]; edges: LoginSummaryEdge[]; stars?: [number, number][] }
 export interface LoginSummaryComponents { state: 'ok' | 'degraded' | string; checked_at: number; clickhouse_uncompressed_bytes?: number }
 export interface LoginSummary {
   enabled: boolean; ready: boolean;

@@ -31,7 +31,7 @@ import {
 import { seedOfIds } from '@/lib/loginTopology/prng';
 import type { LoginSummaryEdge, LoginSummaryNode } from '@/lib/types';
 
-export interface BackdropGraph { nodes: LoginSummaryNode[]; edges: LoginSummaryEdge[]; seed?: number }
+export interface BackdropGraph { nodes: LoginSummaryNode[]; edges: LoginSummaryEdge[]; seed?: number; stars?: [number, number][] }
 
 interface Colors { star: string; arm: string; mq: string; flow: string; label: string; bg: string; glow: number; flowBoost: number }
 
@@ -98,6 +98,18 @@ function drawFrame(ctx: CanvasRenderingContext2D, f: Frame): Pt[] {
     ctx.globalAlpha = Math.max(0.04, (0.18 + 0.22 * p.z) * d[o + 3] * tw(d[o + 4]) * (0.6 + col.glow * 0.5));
     const s = 0.8 + 0.7 * depthOf(p.z);
     ctx.fillRect(p.x, p.y, s, s);
+  }
+
+  // v0.10.1937 — tüm servisler: adsız servis yıldızları; parlaklık ve boyut = yoğunluk (span sayısı)
+  const sv = g.stars;
+  for (let o = 0; o < sv.length; o += 5) {
+    const p = project(v, sv[o] * ik, sv[o + 1] + swirl, sv[o + 2]);
+    if (p.x < -3 || p.y < -3 || p.x > f.w + 3 || p.y > f.h + 3) continue;
+    const depth = depthOf(p.z), lit = 0.3 + 0.7 * sv[o + 3];
+    ctx.globalAlpha = (0.28 + 0.55 * lit) * (0.45 + 0.55 * depth) * (0.6 + col.glow * 0.5) * tw(sv[o + 4], 0.9);
+    const s = (1 + 1.8 * sv[o + 3]) * g.sizeK * (0.8 + 0.4 * depth);
+    if (s < 1.6) { ctx.fillRect(p.x, p.y, s, s); continue; } // küçükler kare (ucuz)
+    ctx.beginPath(); ctx.arc(p.x, p.y, s / 2 + 0.3, 0, TAU); ctx.fill();
   }
 
   // düğüm konumları (hafif nefes)
@@ -183,7 +195,10 @@ export default function TopologyBackdrop({ graph, animated, pace = 0.6 }: {
   // BİR KEZ: galaksi ilk gelen grafikle kurulur; `graph` sonradan değişse de yeniden kurulmaz.
   const [galaxy] = useState<Galaxy>(() => {
     const t = thinGraph(graph.nodes, graph.edges);
-    return buildGalaxy(t.nodes, t.edges, graph.seed ?? seedOfIds(graph.nodes.map(n => n.id)));
+    // v0.10.1937 — yıldızın komşu dizini seyreltilmiş grafiğe çevrilir (düşen komşu → -1).
+    const at = new Map(t.nodes.map((n, i) => [n.id, i]));
+    const stars = (graph.stars ?? []).map(([w, near]) => ({ w, near: at.get(graph.nodes[near]?.id ?? '') ?? -1 }));
+    return buildGalaxy(t.nodes, t.edges, graph.seed ?? seedOfIds(graph.nodes.map(n => n.id)), undefined, undefined, stars);
   });
   // v0.10.1918 — etiketlenecek servisler her açılışta RASTGELE.
   // v0.10.1931 — veri katmanı: her veritabanı/konu adı bir kez (en ağır düğümde).

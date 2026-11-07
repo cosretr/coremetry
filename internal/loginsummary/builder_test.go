@@ -99,6 +99,8 @@ type fakeStore struct {
 	dbNamesErr                                     error
 	dbNameCalls                                    int
 	dbNameKeys                                     []string
+	vols                                           map[string]uint64
+	volsErr                                        error
 }
 
 func (f *fakeStore) CountLoginEndpoints(ctx context.Context) (uint64, error) {
@@ -110,6 +112,10 @@ func (f *fakeStore) LoginDBNames(ctx context.Context, since time.Time, keys []st
 	f.dbNameCalls++
 	f.dbNameKeys = keys
 	return f.dbNames, f.dbNamesErr
+}
+
+func (f *fakeStore) LoginServiceVolumes(ctx context.Context, since time.Time) (map[string]uint64, error) {
+	return f.vols, f.volsErr
 }
 
 func (f *fakeStore) LoginSummaryCounts(ctx context.Context) (chstore.LoginCounts, error) {
@@ -709,6 +715,32 @@ func TestBuilderNamesDatabases(t *testing.T) {
 		}
 		if !found || h.st.dbNameCalls != 1 {
 			t.Errorf("fail=%v: db adı %q beklenir (çağrı %d): %+v", fail, want, h.st.dbNameCalls, snap.Topo.Nodes)
+		}
+	}
+}
+
+// v0.10.1937 — siluet dışındaki servisler adsız yıldız olur; okuma hatası
+// topolojiyi düşürmez (yıldızsız yayınlanır).
+func TestBuilderAttachesStars(t *testing.T) {
+	for _, fail := range []bool{false, true} {
+		h := newHarness(t)
+		h.st.vols = map[string]uint64{"orders-api": 900, "lonely-batch": 40, "coremetry-api": 5000}
+		if fail {
+			h.st.volsErr = errors.New("boom")
+		}
+		snap := h.step()
+		if snap == nil || snap.Topo == nil {
+			t.Fatal("topoloji yayınlanmalı")
+		}
+		if fail {
+			if len(snap.Topo.Stars) != 0 {
+				t.Errorf("hata: yıldız olmamalı: %+v", snap.Topo.Stars)
+			}
+			continue
+		}
+		// orders-api siluette (yıldız değil), coremetry-* hariç → yalnız lonely-batch
+		if len(snap.Topo.Stars) != 1 || snap.Topo.Stars[0].Near != -1 {
+			t.Errorf("tek adsız yıldız (komşusuz) beklenir: %+v", snap.Topo.Stars)
 		}
 	}
 }

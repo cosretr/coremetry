@@ -2,6 +2,7 @@ package loginsummary
 
 import (
 	"encoding/json"
+	"fmt"
 	"regexp"
 	"testing"
 	"time"
@@ -17,6 +18,7 @@ var allowedKeys = map[string]bool{
 	"now_rps": true, "grpc_now_rps": true, "kafka_now_mps": true, "avg_now_s": true,
 	"logins": true, "cosre_questions": true, // v0.10.1915: rollouts_tracked + traces_viewed kaldırıldı
 	"window_s": true, "named": true, "nodes": true, "edges": true, "id": true, "tier": true, "weight": true, "name": true,
+	"stars": true, // v0.10.1937: [yoğunluk, düğüm dizini] — ad yok
 	"state": true, "checked_at": true, "clickhouse_uncompressed_bytes": true,
 }
 
@@ -218,5 +220,28 @@ func TestProjectActivityAndComponents(t *testing.T) {
 	snap.Activity = nil
 	if Project(snap, flags(now, "")).Activity != nil {
 		t.Error("aktivite okunamadıysa alan yok")
+	}
+}
+
+// v0.10.1937 — adsız yıldızlar her kipte yalnız [yoğunluk, dizin]; düşen
+// düğüme bağlı yıldız -1; topoloji kapalıyken yok.
+func TestProjectStarsRemapAndOff(t *testing.T) {
+	now := time.Now()
+	snap := baseSnapshot(now)
+	snap.Topo = &SnapTopology{WindowS: 900, Nodes: []SnapNode{
+		{ID: "aaaaaaaaaa", Name: "orders-api", Tier: "svc", Weight: 0.5},
+		{ID: "bbbbbbbbbb", Name: "ext:partner.example.com", Tier: "svc", Weight: 0.5}, // düşer
+		{ID: "cccccccccc", Name: "payments-mobile", Tier: "svc", Weight: 0.5},
+	}, Stars: []SnapStar{{W: 0.9, Near: 2}, {W: 0.4, Near: 1}, {W: 0.123, Near: -1}}}
+	for _, mode := range []string{TopologyAnonymous, TopologyNamed} {
+		resp := Project(snap, flags(now, mode))
+		got := resp.Topology.Stars
+		want := [][2]float64{{0.9, 1}, {0.4, -1}, {0.12, -1}}
+		if fmt.Sprint(got) != fmt.Sprint(want) {
+			t.Errorf("%s: yıldızlar %v, beklenen %v", mode, got, want)
+		}
+	}
+	if r := Project(snap, flags(now, TopologyOff)); r.Topology != nil {
+		t.Error("kapalıyken topoloji (ve yıldız) yok")
 	}
 }

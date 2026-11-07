@@ -13360,4 +13360,11 @@ JSON sözleşmesi ve kararlar ana oturumda. Backend dilimleri v0.10.1902–1905.
 - **v0.10.1936 — login galaksisi: açılış hareketi (operatör, aynı istek).** Sayfa açılınca yıldızlar, düğümler ve toz 1,4 sn'de
   merkezden kollarına yayılır (easeOutCubic + 1,4 rad burgu, `introProgress`, saf). Sayfa ömründe bir kez: başlangıç anı ref'te,
   tema değişiminde efekt yeniden kurulsa da tekrar oynamaz. Hareket azaltmada (durağan kare) hiç oynamaz.
+- **v0.10.1937 — login galaksisi: tüm servisler (operatör, 2026-11-07: mockup "tüm servisler" → "gösterelim").** Siluete
+  (360 bağlantılı düğüm) girmeyen her servis ADSIZ bir yıldız. Kaynak `service_summary_5m` (MV, son 15 dk span sayısı, en çok
+  5000, coremetry-* hariç); lider worker'ın yavaş turu, hata → yıldızsız (yumuşak). Cevap `topology.stars` = [yoğunluk 0..1
+  (log1p normu, siluet dahil en büyük), en yakın seçili düğümün dizini ya da -1]; ad/kimlik/mutlak sayı hiçbir kipte YOK.
+  Komşu = ham topoloji kenarlarında en çok çağrı alışverişi olan seçili düğüm; Project düşen düğümü -1'e eşler. İstemci
+  yıldızı komşunun kolunda ona yakın yarıçapa (bağsızsa rastgele kola) koyar; boyut/parlaklık = yoğunluk; sentetik toz o kadar
+  azalır (en az 1000), toplam nokta ~aynı. Cevap 4000 serviste ~+40 KB.
 

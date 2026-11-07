@@ -68,7 +68,17 @@ export interface Galaxy {
   flows: number[];
   flowPh: number[];
   adj: number[][];
+  /** v0.10.1937 — adsız servis yıldızları: yıldız başına 5 değer (r, th, h, yoğunluk, pırıltı evresi). */
+  stars: Float32Array;
+  /** Yoğun grafikte nokta küçültmesi (DENSE_SIZE_K ya da 1). */
+  sizeK: number;
 }
+
+/** Adsız servis yıldızı girdisi: yoğunluk ve en yakın düğümün `nodes` dizini (-1 = yok). */
+export interface StarIn { w: number; near: number }
+/** v0.10.1937 — istemci tavanı (sunucu da 5000) ve yıldızlar yer kaplarken korunacak en az toz. */
+export const MAX_STARS = 5000;
+export const MIN_DUST = 1000;
 
 const clamp01 = (v: number) => (Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0);
 
@@ -79,7 +89,7 @@ export function sizeOf(weight: number, jitter: number): number {
 
 export function buildGalaxy(
   nodes: readonly LoginSummaryNode[], edges: readonly LoginSummaryEdge[], seed: number,
-  dustArm = DUST_ARM, dustCore = DUST_CORE,
+  dustArm = DUST_ARM, dustCore = DUST_CORE, starsIn: readonly StarIn[] = [],
 ): Galaxy {
   const rand = mulberry32(seed);
   const gauss = () => (rand() + rand() + rand() - 1.5) / 1.5;
@@ -135,6 +145,13 @@ export function buildGalaxy(
     };
   });
 
+  // v0.10.1937 — gerçek servis yıldızları sentetik tozun yerini alır: toplam nokta ~aynı (en az MIN_DUST toz).
+  const nStars = Math.min(MAX_STARS, starsIn.length);
+  const dustTotal = dustArm + dustCore;
+  if (nStars > 0 && dustTotal > 0) {
+    const keep = Math.max(Math.min(MIN_DUST, dustTotal), dustTotal - nStars) / dustTotal;
+    dustArm = Math.round(dustArm * keep); dustCore = Math.round(dustCore * keep);
+  }
   // Toz: kol çizgisine yakın çoğunluk (sarmal belirgin) + çekirdekte yuvarlak bulut.
   const dust = new Float32Array((dustArm + dustCore) * 5);
   let o = 0;
@@ -153,7 +170,19 @@ export function buildGalaxy(
   const flows = gedges.map((e, i) => ({ i, w: e.w })).sort((x, y) => y.w - x.w || x.i - y.i)
     .slice(0, FLOW_EDGES).map(x => x.i);
   const flowPh = gedges.map(() => rand());
-  return { nodes: gnodes, edges: gedges, arms, dust, flows, flowPh, adj };
+  // Adsız servis yıldızları: bağlı olduğu düğümün kolunda, ona yakın yarıçapta; bağsızsa rastgele kol.
+  const stars = new Float32Array(nStars * 5);
+  let so = 0;
+  for (let k = 0; k < nStars; k++) {
+    const st = starsIn[k], base = st.near >= 0 ? gnodes[st.near] : undefined;
+    let a: number, r: number;
+    if (base) { a = base.arm; r = Math.min(1.18, Math.max(0.08, base.r + gauss() * 0.07)); }
+    else { a = Math.floor(rand() * arms); r = 0.05 + (0.3 + Math.pow(rand(), 0.85) * 0.68) * 0.95; }
+    stars[so++] = r;
+    stars[so++] = (a / arms) * TAU + Math.log(0.18 + r) * TWIST + gauss() * (0.12 + r * 0.12);
+    stars[so++] = gauss() * 0.035; stars[so++] = clamp01(st.w); stars[so++] = rand() * TAU;
+  }
+  return { nodes: gnodes, edges: gedges, arms, dust, flows, flowPh, adj, stars, sizeK };
 }
 
 export interface View { angle: number; tilt: number; cx: number; cy: number; R: number }

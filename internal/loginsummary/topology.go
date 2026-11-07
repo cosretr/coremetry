@@ -21,6 +21,9 @@ const (
 	// v0.10.1934 (operatör, mockup karşılaştırması: "360"): 180 → 360; prod 1300
 	// servisin ~%25'i görünür (önceden ~%11).
 	topoMaxNodes = 360
+	// topoMaxStars — v0.10.1937: adsız servis yıldızı tavanı (cevapta ~10 B/yıldız;
+	// test 4000, prod 1300 servis).
+	topoMaxStars = 5000
 	// topoWindowS — okuma penceresi (15 dk; son kova geç yazılırsa siluet boşalmasın).
 	topoWindowS = 900
 )
@@ -376,4 +379,96 @@ func BuildTopology(sil Silhouette, salt string) *SnapTopology {
 		t.Edges = append(t.Edges, Edge{From: NodeID(salt, e.From), To: NodeID(salt, e.To), Weight: norm(e.Calls, maxEdge)})
 	}
 	return t
+}
+
+// BuildStars — SAF. v0.10.1937 (operatör: "tüm servisleri gösterelim"):
+// siluete girmeyen her servis için adsız bir yıldız. volumes: servis → son
+// pencerede span sayısı. Yoğunluk = log1p(span) / log1p(en büyük span, siluet
+// dahil) — mutlak sayı çıkmaz. Near: ham topoloji kenarlarında bu servisle en
+// çok çağrı alışverişi olan SEÇİLİ düğümün sil.Nodes dizini; yoksa -1.
+// Coremetry'nin kendi servisleri (coremetry-*) ve ext:/node: düşer. Sıra:
+// yoğunluk azalan, eşitlikte ada göre (deterministik); en çok max.
+func BuildStars(sil Silhouette, edges []chstore.ServiceTopologyEdge, volumes map[string]uint64, max int) []SnapStar {
+	if len(volumes) == 0 || max <= 0 {
+		return nil
+	}
+	idx := make(map[string]int, len(sil.Nodes))
+	for i, n := range sil.Nodes {
+		idx[n.Key] = i
+	}
+	var top uint64
+	for _, v := range volumes {
+		if v > top {
+			top = v
+		}
+	}
+	type cand struct {
+		name string
+		v    uint64
+	}
+	var cands []cand
+	for name, v := range volumes {
+		if v == 0 || name == "" || isDroppedNode(name) || strings.HasPrefix(name, "coremetry-") {
+			continue
+		}
+		if kind, _ := chstore.TopologyNodeIdentity(name); kind != "" {
+			continue
+		}
+		if _, linked := idx[name]; linked {
+			continue
+		}
+		cands = append(cands, cand{name, v})
+	}
+	if len(cands) == 0 {
+		return nil
+	}
+	sort.Slice(cands, func(i, j int) bool {
+		if cands[i].v != cands[j].v {
+			return cands[i].v > cands[j].v
+		}
+		return cands[i].name < cands[j].name
+	})
+	if len(cands) > max {
+		cands = cands[:max]
+	}
+	// en yakın seçili komşu: iki yönde de en çok çağrı
+	want := make(map[string]bool, len(cands))
+	for _, c := range cands {
+		want[c.name] = true
+	}
+	type best struct {
+		near  int
+		calls uint64
+	}
+	nb := map[string]best{}
+	consider := func(svc, other string, calls uint64) {
+		if !want[svc] {
+			return
+		}
+		i, ok := idx[other]
+		if !ok {
+			return
+		}
+		cur, seen := nb[svc]
+		if !seen || calls > cur.calls || (calls == cur.calls && i < cur.near) {
+			nb[svc] = best{i, calls}
+		}
+	}
+	for _, e := range edges {
+		consider(e.ParentService, e.ChildNode, e.Calls)
+		consider(e.ChildNode, e.ParentService, e.Calls)
+	}
+	out := make([]SnapStar, 0, len(cands))
+	for _, c := range cands {
+		near := -1
+		if b, ok := nb[c.name]; ok {
+			near = b.near
+		}
+		w := 0.0
+		if top > 0 {
+			w = round2(math.Log1p(float64(c.v)) / math.Log1p(float64(top)))
+		}
+		out = append(out, SnapStar{W: w, Near: near})
+	}
+	return out
 }
