@@ -174,6 +174,12 @@ const EN: Catalog = {
   'login.http.avg':       'avg',
   // v0.10.1909 — topoloji arka planı notu (yalnız gerçek veride).
   'login.topo.note':      'Live topology silhouette · {n} services · last {m} min · details after sign-in',
+  // v0.10.1935 — galakside üzerine gelince adın altındaki tür satırı.
+  'login.topo.kind.gw':    'gateway',
+  'login.topo.kind.bff':   'BFF',
+  'login.topo.kind.svc':   'service',
+  'login.topo.kind.db':    'database',
+  'login.topo.kind.queue': 'queue',
 
   // v0.10.1426 — the generic btn.* / state.* / label.* / sev.* keys were
   // removed: no surface ever read them (every button / label / badge carries
@@ -844,6 +850,11 @@ const TR: Catalog = {
   'login.http.perSec':    'şimdi · saniyede',
   'login.http.avg':       'ort',
   'login.topo.note':      'Canlı topoloji silueti · {n} servis · son {m} dk · ayrıntılar giriş sonrasında',
+  'login.topo.kind.gw':    'gateway',
+  'login.topo.kind.bff':   'BFF',
+  'login.topo.kind.svc':   'servis',
+  'login.topo.kind.db':    'veritabanı',
+  'login.topo.kind.queue': 'kuyruk',
 
   // User menu
   'user.signOut':        'Çıkış yap',

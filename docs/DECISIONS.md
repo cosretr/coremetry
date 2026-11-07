@@ -13354,4 +13354,7 @@ JSON sözleşmesi ve kararlar ana oturumda. Backend dilimleri v0.10.1902–1905.
   düğüm (540; en zayıf bağlar zaten görünmüyordu, kare başına çizgi maliyeti sınırlı). İstemci çizim tavanı da 360; 180'i
   aşınca noktalar %15 küçülür (`DENSE_SIZE_K`, 1927'deki "iri ve seyrek" şikâyeti geri gelmesin). Etiket tavanları aynı
   (24 servis + 12 veri). Veritabanı adı sorgusu en çok 60 çift sorar. Citrix'te kare süresi ÖLÇÜLMEDİ.
+- **v0.10.1935 — login galaksisi: üzerine gelince tür satırı (operatör, 2026-11-07: "üzerine gelince tür, açılış hareketi
+  olsun").** Adın altında soluk ikinci satır: gateway / BFF / servis / veritabanı / kuyruk (`login.topo.kind.*`, TR + EN);
+  halka ile noktanın anlamı açıklamasız öğrenilir. Etiket çerçevesiyle (1933) aynı çizim.
 

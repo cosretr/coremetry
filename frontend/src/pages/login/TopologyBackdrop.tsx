@@ -9,6 +9,7 @@
 //
 // Durum/uyarı rengi YOK; renkler yalnız tema token'ları (`resolveVar`): yıldız
 // v0.10.1933: etiketler zemin renginde (--bg0) ince çerçeveyle çizilir (toz üstünde okunur).
+// v0.10.1935: üzerine gelince adın altında soluk TÜR satırı (gateway / BFF / servis / veritabanı / kuyruk, i18n).
 // --accent2, kol/veri --purple, akan noktalar --orange (Traces süre çizgisiyle AYNI token; v0.10.1932),
 // etiket --text2. v0.10.1931: veritabanı mor YUVARLAK nokta + hafif hale (kare değil),
 // kuyruk --teal İÇİ BOŞ halka; ikisi de adıyla (veritabanı adı / konu), her ad bir kez. Parıltı gücü zeminin koyuluğuna göre (koyu temada güçlü).
@@ -19,6 +20,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { chartMonoFont, resolveVar } from '@/lib/chart/resolveVar';
 import { useThemeTick } from '@/lib/useThemeTick';
+import { useT } from '@/lib/i18n';
 import { MAX_LABELS, shouldDraw, thinGraph } from '@/lib/loginTopology/frame';
 import {
   buildGalaxy, depthOf, flowPos, isDarkColor, nodeAlpha, nodeRadius, pickBackendLabels, pickLabelSet, project, spinRate,
@@ -59,6 +61,8 @@ function halo(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, co
 interface Frame {
   g: Galaxy; v: View; w: number; h: number; dpr: number; tSec: number; still: boolean;
   col: Colors; pace: number; hover: number; labels: ReadonlySet<number>;
+  /** Katman → üzerine gelince gösterilen tür adı (i18n). */
+  kinds: Readonly<Record<string, string>>;
 }
 
 /** Etiket: zemin renginde ince çerçeve + metin (yıldız tozundan ayrışsın). */
@@ -149,6 +153,8 @@ function drawFrame(ctx: CanvasRenderingContext2D, f: Frame): Pt[] {
     const nd = g.nodes[hover], p = pos[hover];
     ctx.globalAlpha = 1; ctx.font = chartMonoFont(12);
     label(ctx, nd.name ?? '', p.x + 9, p.y + 4, col);
+    const kind = f.kinds[nd.tier];
+    if (kind) { ctx.globalAlpha = 0.7; ctx.font = chartMonoFont(10.5); label(ctx, kind, p.x + 9, p.y + 18, col); }
   }
   ctx.globalAlpha = 1;
   return pos;
@@ -161,6 +167,13 @@ export default function TopologyBackdrop({ graph, animated, pace = 0.6 }: {
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const themeTick = useThemeTick();
+  const t = useT();
+  // Tür adları ref'te: dil değişince efekt yeniden kurulmaz, sonraki karede güncellenir.
+  const kindsRef = useRef<Record<string, string>>({});
+  kindsRef.current = {
+    gw: t('login.topo.kind.gw'), bff: t('login.topo.kind.bff'), svc: t('login.topo.kind.svc'),
+    db: t('login.topo.kind.db'), queue: t('login.topo.kind.queue'),
+  };
   // BİR KEZ: galaksi ilk gelen grafikle kurulur; `graph` sonradan değişse de yeniden kurulmaz.
   const [galaxy] = useState<Galaxy>(() => {
     const t = thinGraph(graph.nodes, graph.edges);
@@ -196,7 +209,7 @@ export default function TopologyBackdrop({ graph, animated, pace = 0.6 }: {
     const paint = (tSec: number, still: boolean) => {
       pos = drawFrame(ctx, {
         g: galaxy, v: { angle: st.angle, tilt: st.tilt, cx: w / 2, cy: h / 2, R }, w, h, dpr, tSec, still,
-        col, pace: paceRef.current, hover, labels,
+        col, pace: paceRef.current, hover, labels, kinds: kindsRef.current,
       });
     };
     const paintStill = () => paint(0, true);
