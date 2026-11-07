@@ -248,3 +248,4 @@ Bu bölüm üstteki audit metnini GEÇERSİZ kılar; ayrıntı `docs/DECISIONS.m
 - **1933** Etiketlere zemin çerçevesi. Merkezi kartın dışına alma reddedildi.
 - **1934** Topoloji 360 düğüm (300 servis + 60 veri), kenar tavanı 540; 180'i aşınca noktalar %15 küçük.
 - **1935** Üzerine gelince adın altında tür satırı (i18n).
+- **1936** Açılışta yıldızlar 1,4 sn'de merkezden kollarına yayılır (bir kez; hareket azaltmada yok).

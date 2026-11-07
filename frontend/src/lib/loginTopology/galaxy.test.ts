@@ -4,7 +4,7 @@ import { mulberry32 } from './prng';
 import { syntheticGraph, SYNTHETIC_SEED } from './synthetic';
 import {
   buildGalaxy, depthOf, flowPos, flowSpeed, isDarkColor, nodeAlpha, nodeRadius, paceFrom, pickBackendLabels, pickLabelSet, project,
-  sizeOf, spinRate, wantsLabel, DENSE_NODES, DENSE_SIZE_K, MIN_ARMS, TILT0, DUST_ARM, DUST_CORE, FLOW_EDGES, type GNode,
+  sizeOf, spinRate, wantsLabel, DENSE_NODES, DENSE_SIZE_K, introProgress, INTRO_S, INTRO_SWIRL, MIN_ARMS, TILT0, DUST_ARM, DUST_CORE, FLOW_EDGES, type GNode,
 } from './galaxy';
 import type { LoginSummaryEdge, LoginSummaryNode } from '@/lib/types';
 
@@ -161,5 +161,16 @@ describe('yoğun grafik (v0.10.1934)', () => {
     const top = sizeOf(1, 1);
     expect(maxSize(DENSE_NODES)).toBeGreaterThan(top * DENSE_SIZE_K);
     expect(maxSize(DENSE_NODES + 1)).toBeLessThanOrEqual(top * DENSE_SIZE_K + 1e-9);
+  });
+});
+
+describe('açılış hareketi (v0.10.1936)', () => {
+  it('merkezden başlar, INTRO_S sonunda tam yerinde ve burgusuz; arada monoton', () => {
+    expect(introProgress(0)).toEqual({ k: 0, swirl: INTRO_SWIRL });
+    expect(introProgress(INTRO_S)).toEqual({ k: 1, swirl: 0 });
+    expect(introProgress(99)).toEqual({ k: 1, swirl: 0 });
+    expect(introProgress(-1).k).toBe(0);
+    let prev = -1;
+    for (let t = 0; t <= INTRO_S; t += 0.1) { const { k } = introProgress(t); expect(k).toBeGreaterThanOrEqual(prev); prev = k; }
   });
 });

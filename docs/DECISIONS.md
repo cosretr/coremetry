@@ -13357,4 +13357,7 @@ JSON sözleşmesi ve kararlar ana oturumda. Backend dilimleri v0.10.1902–1905.
 - **v0.10.1935 — login galaksisi: üzerine gelince tür satırı (operatör, 2026-11-07: "üzerine gelince tür, açılış hareketi
   olsun").** Adın altında soluk ikinci satır: gateway / BFF / servis / veritabanı / kuyruk (`login.topo.kind.*`, TR + EN);
   halka ile noktanın anlamı açıklamasız öğrenilir. Etiket çerçevesiyle (1933) aynı çizim.
+- **v0.10.1936 — login galaksisi: açılış hareketi (operatör, aynı istek).** Sayfa açılınca yıldızlar, düğümler ve toz 1,4 sn'de
+  merkezden kollarına yayılır (easeOutCubic + 1,4 rad burgu, `introProgress`, saf). Sayfa ömründe bir kez: başlangıç anı ref'te,
+  tema değişiminde efekt yeniden kurulsa da tekrar oynamaz. Hareket azaltmada (durağan kare) hiç oynamaz.
 

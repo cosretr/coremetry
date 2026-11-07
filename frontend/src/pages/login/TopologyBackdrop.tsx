@@ -9,6 +9,8 @@
 //
 // Durum/uyarı rengi YOK; renkler yalnız tema token'ları (`resolveVar`): yıldız
 // v0.10.1933: etiketler zemin renginde (--bg0) ince çerçeveyle çizilir (toz üstünde okunur).
+// v0.10.1936: açılışta yıldızlar 1,4 sn'de merkezden kollarına yayılır (bir kez; hareket azaltmada yok,
+// tema değişiminde yeniden oynamaz).
 // v0.10.1935: üzerine gelince adın altında soluk TÜR satırı (gateway / BFF / servis / veritabanı / kuyruk, i18n).
 // --accent2, kol/veri --purple, akan noktalar --orange (Traces süre çizgisiyle AYNI token; v0.10.1932),
 // etiket --text2. v0.10.1931: veritabanı mor YUVARLAK nokta + hafif hale (kare değil),
@@ -23,7 +25,7 @@ import { useThemeTick } from '@/lib/useThemeTick';
 import { useT } from '@/lib/i18n';
 import { MAX_LABELS, shouldDraw, thinGraph } from '@/lib/loginTopology/frame';
 import {
-  buildGalaxy, depthOf, flowPos, isDarkColor, nodeAlpha, nodeRadius, pickBackendLabels, pickLabelSet, project, spinRate,
+  buildGalaxy, depthOf, flowPos, introProgress, isDarkColor, nodeAlpha, nodeRadius, pickBackendLabels, pickLabelSet, project, spinRate,
   TILT0, TILT_MAX, TILT_MIN, wantsLabel, type Galaxy, type Pt, type View,
 } from '@/lib/loginTopology/galaxy';
 import { seedOfIds } from '@/lib/loginTopology/prng';
@@ -49,6 +51,7 @@ function readColors(): Colors {
 }
 
 const TAU = Math.PI * 2;
+const DONE = { k: 1, swirl: 0 } as const;
 const HOVER_PX = 14;
 
 function halo(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, color: string, a: number) {
@@ -61,6 +64,8 @@ function halo(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, co
 interface Frame {
   g: Galaxy; v: View; w: number; h: number; dpr: number; tSec: number; still: boolean;
   col: Colors; pace: number; hover: number; labels: ReadonlySet<number>;
+  /** Açılış: yarıçap çarpanı k ∈ [0,1] ve burgu (radyan); bitince k=1, swirl=0. */
+  intro: { k: number; swirl: number };
   /** Katman → üzerine gelince gösterilen tür adı (i18n). */
   kinds: Readonly<Record<string, string>>;
 }
@@ -75,6 +80,7 @@ function label(ctx: CanvasRenderingContext2D, text: string, x: number, y: number
 /** Bir kare: toz → kenarlar → akan noktalar → düğümler (arkadan öne) → etiketler. Düğüm konumlarını döner (isabet testi için). */
 function drawFrame(ctx: CanvasRenderingContext2D, f: Frame): Pt[] {
   const { g, v, col, hover } = f;
+  const { k: ik, swirl } = f.intro;
   ctx.setTransform(f.dpr, 0, 0, f.dpr, 0, 0);
   ctx.clearRect(0, 0, f.w, f.h);
   const tw = (ph: number, k = 1.3) => (f.still ? 1 : 0.7 + 0.3 * Math.sin(f.tSec * k + ph));
@@ -87,7 +93,7 @@ function drawFrame(ctx: CanvasRenderingContext2D, f: Frame): Pt[] {
   ctx.fillStyle = col.star;
   const d = g.dust;
   for (let o = 0; o < d.length; o += 5) {
-    const p = project(v, d[o], d[o + 1], d[o + 2]);
+    const p = project(v, d[o] * ik, d[o + 1] + swirl, d[o + 2]);
     if (p.x < -3 || p.y < -3 || p.x > f.w + 3 || p.y > f.h + 3) continue;
     ctx.globalAlpha = Math.max(0.04, (0.18 + 0.22 * p.z) * d[o + 3] * tw(d[o + 4]) * (0.6 + col.glow * 0.5));
     const s = 0.8 + 0.7 * depthOf(p.z);
@@ -95,7 +101,7 @@ function drawFrame(ctx: CanvasRenderingContext2D, f: Frame): Pt[] {
   }
 
   // düğüm konumları (hafif nefes)
-  const pos = g.nodes.map(nd => project(v, nd.r + (f.still ? 0 : Math.sin(f.tSec * 0.6 + nd.ph) * 0.004), nd.th, nd.h));
+  const pos = g.nodes.map(nd => project(v, (nd.r + (f.still ? 0 : Math.sin(f.tSec * 0.6 + nd.ph) * 0.004)) * ik, nd.th + swirl, nd.h));
 
   // kenarlar
   ctx.strokeStyle = col.arm; ctx.lineWidth = 0.7;
@@ -185,6 +191,8 @@ export default function TopologyBackdrop({ graph, animated, pace = 0.6 }: {
   // Görünüm (açı/eğim/hız) efekt yeniden kurulunca (tema değişimi) korunur.
   const view = useRef({ angle: 0, tilt: TILT0, vel: 0, tiltVel: 0 });
   const paceRef = useRef(pace);
+  // Açılışın başladığı an (performance.now): ilk karede kurulur, efekt yeniden kurulunca korunur.
+  const introT0 = useRef<number | null>(null);
   useEffect(() => { paceRef.current = pace; }, [pace]);
 
   useEffect(() => {
@@ -210,6 +218,7 @@ export default function TopologyBackdrop({ graph, animated, pace = 0.6 }: {
       pos = drawFrame(ctx, {
         g: galaxy, v: { angle: st.angle, tilt: st.tilt, cx: w / 2, cy: h / 2, R }, w, h, dpr, tSec, still,
         col, pace: paceRef.current, hover, labels, kinds: kindsRef.current,
+        intro: still || !animated ? DONE : introProgress((performance.now() - (introT0.current ??= performance.now())) / 1000),
       });
     };
     const paintStill = () => paint(0, true);
