@@ -327,7 +327,7 @@ describe('Login — özet sütunu', () => {
     expect(aside!.textContent).not.toContain('rollouts tracked');
     expect(aside!.textContent).not.toContain('traces inspected');
     expect(aside!.textContent).toContain('All components running · ClickHouse 4.20 TiB');
-    expect(h.innerHTML).toContain('grid-cols-[480px_1fr]');
+    expect(h.innerHTML).toContain('grid-cols-[420px_1fr]');
   });
 
   it('dar ekran: özet çağrısı YOK, tek sütun', async () => {

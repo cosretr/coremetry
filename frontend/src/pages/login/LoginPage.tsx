@@ -192,11 +192,13 @@ export default function LoginPage() {
         // Koyu şemada kart %86 opak + blur: arkadaki siluet yazıya karışmadan sezilir (açıkta düz).
         bd.kind === 'canvas' && 'dark:bg-card/86 dark:backdrop-blur-[6px]',
         showSide
-          ? 'grid w-[min(1120px,calc(100vw-48px))] grid-cols-[480px_1fr] overflow-hidden rounded-2xl'
+          // v0.10.1920 (operatör: kart sayfayı tam kaplıyor gibi) — 1120 → 1040 px, kenarda en az 80 px
+          // boşluk, form sütunu 480 → 420 px: arka plandaki topoloji kartın çevresinde görünür kalır.
+          ? 'grid w-[min(1040px,calc(100vw-160px))] grid-cols-[420px_1fr] overflow-hidden rounded-2xl'
           : 'w-[min(340px,100%)] rounded-lg',
       )}>
-        <form onSubmit={onSubmit} className={showSide ? 'px-12 pb-9 pt-11' : 'p-8'}>
-          <div className="mb-6 text-center">
+        <form onSubmit={onSubmit} className={showSide ? 'px-10 pb-7 pt-9' : 'p-8'}>
+          <div className="mb-5 text-center">
             <h1 className="m-0 flex items-center justify-center gap-2 text-[length:var(--fs-xl)] font-bold tracking-tight">
               <Wordmark name={brand.appName} />
               {/* Operatör logosu üst çubukta; OpenTelemetry işareti ürün adının

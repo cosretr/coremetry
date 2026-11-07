@@ -14,7 +14,7 @@ import { httpCardTitle, responseHead, throughputHead } from '@/lib/loginSummary'
 import type { LoginSummaryHttp } from '@/lib/types';
 
 const SYNC = msSyncKey('login-http');
-const PANEL_H = 96;
+const PANEL_H = 76; // v0.10.1920: 96 → 76 (kart daha kompakt)
 // v0.10.1914 — throughput TEK toplam serisi (durum kodu kırılımı kalktı: operatör kararı;
 // giriş öncesi hata dağılımı gösterilmez, küçük panelde tek çizgi okunur).
 const TPUT_TOKEN = '--ok';
@@ -50,7 +50,7 @@ export default function LoginHttpCard({ http, orgName }: { http: LoginSummaryHtt
   const rtHead = responseHead(http.summary, t);
 
   return (
-    <section className="rounded-[10px] border border-border bg-card px-3.5 py-3">
+    <section className="rounded-[10px] border border-border bg-card px-3.5 py-2.5">
       <header className="mb-2 flex items-baseline justify-between gap-2">
         <h3 className="m-0 truncate text-[length:var(--fs-sm)] font-semibold">{httpCardTitle(orgName, t)}</h3>
         <span className="shrink-0 text-[length:var(--fs-xs)] text-muted-foreground">{t('login.http.scope')}</span>

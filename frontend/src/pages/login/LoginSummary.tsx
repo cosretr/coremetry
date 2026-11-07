@@ -61,7 +61,7 @@ export default function LoginSummary({ data }: { data: LoginSummaryData }) {
       {cards.length > 0 && (
         <div className="grid grid-cols-3 gap-3">
           {cards.map((k, i) => (
-            <div key={k.key} className="min-w-0 rounded-[10px] border border-border bg-card px-3.5 py-3">
+            <div key={k.key} className="min-w-0 rounded-[10px] border border-border bg-card px-3.5 py-2.5">
               <div className="truncate text-[length:var(--fs-xs)] text-muted-foreground">{t(KPI_LABEL[k.key])}</div>
               <div className="mt-1 text-[length:var(--fs-xl)] font-semibold tabular-nums">
                 {k.value}
@@ -75,13 +75,13 @@ export default function LoginSummary({ data }: { data: LoginSummaryData }) {
       )}
 
       {httpCardUsable(data.http_24h) && (
-        <Suspense fallback={<Skeleton className="h-[290px] rounded-[10px]" />}>
+        <Suspense fallback={<Skeleton className="h-[240px] rounded-[10px]" />}>
           <LoginHttpCard http={data.http_24h} orgName={brand.orgName} />
         </Suspense>
       )}
 
       {(nows.length > 0 || acts.length > 0) && (
-        <div className="grid gap-2 rounded-[10px] border border-border bg-card px-3.5 py-3 text-[length:var(--fs-sm)] leading-relaxed text-muted-foreground">
+        <div className="grid gap-1.5 rounded-[10px] border border-border bg-card px-3.5 py-2.5 text-[length:var(--fs-sm)] leading-relaxed text-muted-foreground">
           {nows.length > 0 && <ActivityRow title={t('login.sum.now')} parts={nows} />}
           {acts.length > 0 && <ActivityRow title={t('login.sum.last24')} parts={acts} />}
         </div>

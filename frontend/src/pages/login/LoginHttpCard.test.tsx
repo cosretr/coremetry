@@ -73,7 +73,7 @@ describe('LoginHttpCard', () => {
       expect(p.embedded).toBe(true);
       expect(p.hideLegend).toBe(true);
       expect(p.title).toBe('');
-      expect(p.height).toBe(96);
+      expect(p.height).toBe(76);
       expect(p.xRange).toEqual({ from: T0 / 1000, to: (T0 + 600_000) / 1000 });
     }
     expect(tp.storageKey).toBe('login-tput');
