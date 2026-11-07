@@ -8,7 +8,7 @@
 // adı (isimli kipte) görünür. Kolların çevresinde yıldız tozu.
 //
 // Durum/uyarı rengi YOK; renkler yalnız tema token'ları (`resolveVar`): yıldız
-// --accent2, kol/veri --purple, akan noktalar --warn (her temada altın tonu),
+// --accent2, kol/veri --purple, akan noktalar --galaxy-gold (her temada altın; v0.10.1929),
 // etiket --text2. Parıltı gücü zeminin koyuluğuna göre (koyu temada güçlü).
 // Performans: 30 fps tavanı, DPR ≤ 2, `document.hidden`'da rAF durur,
 // `prefers-reduced-motion`'da kendiliğinden hareket yok (sürükleme çalışır).
@@ -33,8 +33,10 @@ function readColors(): Colors {
   const dark = isDarkColor(resolveVar('var(--bg0)'));
   return {
     star: resolveVar('var(--accent2)'), arm: resolveVar('var(--purple)'),
-    flow: resolveVar('var(--warn)'), label: resolveVar('var(--text2)'),
-    glow: dark ? 0.9 : 0.35, flowBoost: dark ? 0.7 : 0.95,
+    // v0.10.1929 (operatör-raporlu: kurumsal temada akan noktalar altın değil) — --warn açık temalarda
+    // kahverengi metin tonu (#795600); galaksiye ayrı altın token'ı.
+    flow: resolveVar('var(--galaxy-gold)'), label: resolveVar('var(--text2)'),
+    glow: dark ? 0.9 : 0.35, flowBoost: dark ? 0.7 : 1.1,
   };
 }
 

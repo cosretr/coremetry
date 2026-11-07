@@ -94,6 +94,8 @@
   --ok:   #4db96b;
   --err:  #fe7f73;
   --warn: #f3b94c;   /* K2 (operatör): sakin altın; parlak #ffc762 yerine */
+  /* v0.10.1929 — login galaksisinin akan noktaları (yalnız canvas süsü; metin değil). Koyu temalarda sönük altın. */
+  --galaxy-gold: #d4af37;
   /* --warn-solid: METİN DEĞİL dolgu (nokta, ray, çubuk, ısı haritası basamağı).
      Açık temalarda --warn koyu kahve metin tonu; dolguda renk körlüğünde
      kırmızıya yaklaşıyordu. Dolgu altın kalır: ≥3:1 (1.4.11), hata/ok'tan
@@ -306,6 +308,7 @@
   --ok:   #047735;
   --err:  #c42a28;
   --warn: #8f5c04;
+  --galaxy-gold: #eeb222; /* v0.10.1929 — açık zeminde zeytine kaçmayan sıcak altın (yalnız canvas süsü) */
   --warn-solid: #b98206;
   --info: #1263cd;
   --ok-bg:   #e8f3ed;
@@ -392,6 +395,7 @@
   --ok:   #317928;    /* PF success, metin için bir kademe koyu (bg0'da 3.95 → ≥4.5) */
   --err:  #c9190b;    /* PF danger red */
   --warn: #795600;    /* PF warning-color--200 (metin); altın #f0ab00 beyazda 1.99 idi */
+  --galaxy-gold: #eeb222; /* v0.10.1929 — login galaksisi; metin değil, canvas süsü */
   --warn-solid: #b08307;  /* PF altınının 3:1 koyusu — dolgu (nokta/çubuk/ray); renk körlüğünde hatadan ayrışır */
   --info: #0066cc;    /* bilgi = vurgu ailesi; #2b9af3 beyazda 2.99 idi */
   --ok-bg:   #eef4ed;
@@ -622,6 +626,7 @@
   --heat: var(--info);
   --ok:   #166534;
   --warn: #7c5800;
+  --galaxy-gold: #eeb222; /* v0.10.1929 — login galaksisi (açık zemin) */
   --warn-solid: #b07d00;
   --err:  #b4173a;
   --err-solid: #be123c;
