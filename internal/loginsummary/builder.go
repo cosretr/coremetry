@@ -47,9 +47,13 @@ const (
 //     (rpc.server.duration). `or` ile: ikisini birden yayan (semconv dup kipi)
 //     servis çift sayılmaz. Eksi: ikisini ayrı ayrı yayan iki servis grubu
 //     varsa yalnız yeni olanlar sayılır.
-//   - Kafka: TÜKETİLEN mesaj/sn. Önce OTel Java agent'ın Kafka istemci metriği
-//     — `topic=""` yalnız istemci düzeyi seri (konu başına seriler aynı sayıyı
-//     tekrar eder, toplanırsa çift sayar) — yoksa OTel mesajlaşma semconv.
+//   - Kafka: TÜKETİLEN mesaj/sn. v0.10.1925 (operatör-raporlu: login'de Kafka 0,
+//     servis sayfalarında var) — servis sayfalarının prod'da çalışan metriği
+//     OTel Java agent'ın `kafka_consumer_records_consumed_rate` GÖSTERGESİ
+//     (Kafka'nın kendi ~30 sn ortalaması, rate() uygulanmaz; vmetrics/kafka.go
+//     kuralı). 1923'ün `_total` sayacı + rate() 0 döndürüyordu. Önce istemci
+//     düzeyi seri (`topic=""`; konu başına seriler aynı sayıyı tekrar eder),
+//     yoksa tüm seriler, yoksa OTel mesajlaşma semconv.
 type VMQueries struct {
 	HTTPRate, HTTPSum, GRPCRate, KafkaRate string
 }
@@ -60,7 +64,8 @@ func Queries(family string) VMQueries {
 		HTTPRate: "sum(rate(" + family + "_count[5m]))",
 		HTTPSum:  "sum(rate(" + family + "_sum[5m]))",
 		GRPCRate: "sum(rate(rpc_server_call_duration_seconds_count[5m])) or sum(rate(rpc_server_duration_milliseconds_count[5m]))",
-		KafkaRate: "sum(rate(kafka_consumer_records_consumed_total{topic=\"\"}[5m]))" +
+		KafkaRate: "sum(kafka_consumer_records_consumed_rate{topic=\"\"})" +
+			" or sum(kafka_consumer_records_consumed_rate)" +
 			" or sum(rate(messaging_client_consumed_messages_total[5m]))" +
 			" or sum(rate(messaging_process_duration_seconds_count[5m]))",
 	}

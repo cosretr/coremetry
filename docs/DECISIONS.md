@@ -13318,4 +13318,8 @@ JSON sözleşmesi ve kararlar ana oturumda. Backend dilimleri v0.10.1902–1905.
   süresi HTTP ortalaması kaldı. Halka kovası `r/g/k`, cevap `http_24h.grpc|kafka` + `summary.grpc_now_rps|kafka_now_mps`; tepe değeri
   (peak) kaldırıldı. Ekran: başlık "şimdi · saniyede: HTTP X · gRPC Y · Kafka Z"; "Şu an" satırı protokol başına. Eksen birimi
   `short` (istek ve mesaj aynı eksen). Prod'daki Kafka metrik adı DOĞRULANMADI.
+- **v0.10.1925 — login Kafka hızı servis sayfalarıyla aynı metrikten (operatör-raporlu, 2026-11-07: "Kafka throughput 0, service
+  overview'da vardı").** 1923 `rate(kafka_consumer_records_consumed_total{topic=""})` okuyordu, prod'da 0. Servis sayfaları
+  (vmetrics/kafka.go) `kafka.consumer.records_consumed_rate` GÖSTERGESİNİ kullanıyor (Kafka'nın ~30 sn ortalaması; rate() yok).
+  Yeni sıra: `sum(…_rate{topic=""})` (istemci düzeyi) → `sum(…_rate)` → mesajlaşma semconv yedekleri.
 

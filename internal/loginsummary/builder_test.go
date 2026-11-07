@@ -657,8 +657,14 @@ func TestBuilderProtocolsAndPartialFailure(t *testing.T) {
 // birlikte toplanmaz (`or`).
 func TestQueriesAvoidDoubleCounting(t *testing.T) {
 	qs := Queries(HTTPFamily)
-	if !strings.Contains(qs.KafkaRate, `kafka_consumer_records_consumed_total{topic=""}`) {
-		t.Errorf("Kafka istemci düzeyi seri: %s", qs.KafkaRate)
+	// v0.10.1925 (operatör-raporlu: login'de Kafka 0) — servis sayfalarıyla aynı
+	// metrik: records_consumed_rate GÖSTERGESİ, rate() UYGULANMAZ; önce istemci
+	// düzeyi seri.
+	if !strings.HasPrefix(qs.KafkaRate, `sum(kafka_consumer_records_consumed_rate{topic=""})`) {
+		t.Errorf("Kafka önce istemci düzeyi gösterge: %s", qs.KafkaRate)
+	}
+	if strings.Contains(qs.KafkaRate, "rate(kafka_consumer") || strings.Contains(qs.KafkaRate, "records_consumed_total") {
+		t.Errorf("Kafka göstergesine rate() uygulanmaz, _total sayacı kullanılmaz: %s", qs.KafkaRate)
 	}
 	if !strings.Contains(qs.GRPCRate, " or ") || strings.Contains(qs.GRPCRate, " + ") {
 		t.Errorf("gRPC aileleri `or` ile: %s", qs.GRPCRate)
