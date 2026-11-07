@@ -1,275 +1,234 @@
 // TopologyBackdrop — v0.10.1909 (Login topoloji arka planı, audit §6.3).
-// Kartın ARKASINDA tam sayfa canvas: servis topolojisinin SİLUETİ (gerçek, ya da
-// veri yoksa sentetik). Durum/uyarı rengi YOK; yalnız tema token'ları
-// (`resolveVar`). Yerleşim (lib/loginTopology) ilk gelen grafikle BİR KEZ kurulur
-// (`useState` başlatıcısı); sonraki yenilemeler yerleşimi yeniden kurmaz.
+// v0.10.1928 (operatör: "veriye bağlı galaksi en iyisi"; mockup "Login Galaksi"):
+// topoloji kartın ARKASINDA bir sarmal GALAKSİ olarak çizilir (lib/loginTopology/
+// galaxy): her gateway bir kol, BFF ve servisler o kol boyunca; boyut/parlaklık =
+// trafik, dönüş ve akan noktaların hızı = toplam throughput (`pace`). Sürükleme
+// bütün galaksiyi BİRLİKTE döndürür (yatay) ve eğer (dikey), bırakınca yavaşça
+// durur; çift tık başa alır. Üzerine gelince düğüm büyür, bağlantıları parlar,
+// adı (isimli kipte) görünür. Kolların çevresinde yıldız tozu.
+//
+// Durum/uyarı rengi YOK; renkler yalnız tema token'ları (`resolveVar`): yıldız
+// --accent2, kol/veri --purple, akan noktalar --warn (her temada altın tonu),
+// etiket --text2. Parıltı gücü zeminin koyuluğuna göre (koyu temada güçlü).
 // Performans: 30 fps tavanı, DPR ≤ 2, `document.hidden`'da rAF durur,
-// `prefers-reduced-motion`'da tek durağan kare. Dekoratif: aria-hidden. Yeni
-// bağımlılık YOK.
-//
-// v0.10.1917 (operatör) — düğümler fareyle TUTULUP sürüklenir (lib/loginTopology/
-// drag: komşular yaylı takip eder, bırakılan yerde kalır). Canvas yalnız kartın
-// DIŞINDA olay alır (kart ve üst çubuk üstte). Çizilen düğüm sayısı seyreltilir
-// (thinGraph) ve yerleşim ekrana eşit yayılır (layout.evenOut).
-//
-// v0.10.1919 (operatör: "derinlik olsun, gerçekten güzel bir deneyim olsun") —
-// üç katmanlı derinlik (lib/loginTopology/depth): önemliler önde büyük ve net,
-// uzun kuyruk arkada küçük, soluk ve yavaş; çizim arkadan öne; isim etiketi
-// yalnız ön katmanda. Üzerine gelinen düğüm büyür, bağlantıları parlar ve adı
-// (katmanı ne olursa olsun) görünür; sahne açılışta yumuşakça belirir.
-// Parallax YOK (şifre yazarken dikkat dağıtmasın, tutulan nokta kaymasın).
+// `prefers-reduced-motion`'da kendiliğinden hareket yok (sürükleme çalışır).
+// Galaksi ilk gelen grafikle BİR KEZ kurulur. Dekoratif: aria-hidden; olay alır
+// (sürükleme) — kart ve üst çubuk üstte olduğundan yalnız kart DIŞINDA.
 import { useEffect, useRef, useState } from 'react';
 import { chartMonoFont, resolveVar } from '@/lib/chart/resolveVar';
 import { useThemeTick } from '@/lib/useThemeTick';
+import { MAX_LABELS, shouldDraw, thinGraph } from '@/lib/loginTopology/frame';
 import {
-  flowEdges, flowPos, labelNodes, MAX_LABELS, nodeStyle, screenPositions, shouldDraw, thinGraph, type Pt,
-} from '@/lib/loginTopology/frame';
-import { beginDrag, dragTo, hitNode, type Drag } from '@/lib/loginTopology/drag';
-import {
-  DEPTH_STYLE, depthLayers, drawOrder, edgeDepth, fadeIn, FOCUS_SCALE, type Depth,
-} from '@/lib/loginTopology/depth';
-import { layoutOf, seedOfIds, type Layout } from '@/lib/loginTopology/layout';
+  buildGalaxy, depthOf, flowPos, isDarkColor, nodeAlpha, nodeRadius, pickLabelSet, project, spinRate,
+  TILT0, TILT_MAX, TILT_MIN, wantsLabel, type Galaxy, type Pt, type View,
+} from '@/lib/loginTopology/galaxy';
+import { seedOfIds } from '@/lib/loginTopology/prng';
 import type { LoginSummaryEdge, LoginSummaryNode } from '@/lib/types';
 
 export interface BackdropGraph { nodes: LoginSummaryNode[]; edges: LoginSummaryEdge[]; seed?: number }
 
-interface Colors { edge: string; node: string; db: string; label: string }
+interface Colors { star: string; arm: string; flow: string; label: string; glow: number; flowBoost: number }
 
 function readColors(): Colors {
+  const dark = isDarkColor(resolveVar('var(--bg0)'));
   return {
-    edge: resolveVar('var(--accent2)'), node: resolveVar('var(--accent2)'),
-    db: resolveVar('var(--purple)'), label: resolveVar('var(--text2)'),
+    star: resolveVar('var(--accent2)'), arm: resolveVar('var(--purple)'),
+    flow: resolveVar('var(--warn)'), label: resolveVar('var(--text2)'),
+    glow: dark ? 0.9 : 0.35, flowBoost: dark ? 0.7 : 0.95,
   };
 }
 
-/** Bir karenin girdileri. */
-interface Scene {
-  lay: Layout; cssW: number; cssH: number; dpr: number;
-  pos: readonly Pt[]; tSec: number; col: Colors;
-  flows: readonly number[]; labels: ReadonlySet<number>;
-  depth: readonly Depth[]; order: readonly number[];
-  /** Odaktaki düğüm (üzerine gelinen ya da tutulan); -1 = yok. */
-  focus: number;
-  /** Odaktaki düğümün komşuları. */
-  near: ReadonlySet<number>;
-  /** Açılış saydamlık çarpanı [0, 1]. */
-  fade: number;
+const TAU = Math.PI * 2;
+const HOVER_PX = 14;
+
+function halo(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, color: string, a: number) {
+  const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+  g.addColorStop(0, color); g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.globalAlpha = a; ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
 }
 
-/** Bir kareyi çizer: kenarlar (arkadan öne), akan noktalar, düğümler (arkadan öne), etiketler, odak. */
-function drawFrame(ctx: CanvasRenderingContext2D, s: Scene) {
-  const { lay, pos, col, depth, focus, near, fade } = s;
-  ctx.setTransform(s.dpr, 0, 0, s.dpr, 0, 0);
-  ctx.clearRect(0, 0, s.cssW, s.cssH);
+interface Frame {
+  g: Galaxy; v: View; w: number; h: number; dpr: number; tSec: number; still: boolean;
+  col: Colors; pace: number; hover: number; labels: ReadonlySet<number>;
+}
 
-  // Kenarlar: katman başına tek yol (arka → ön); daha derin uç belirler.
-  ctx.strokeStyle = col.edge;
-  for (const layer of [2, 1, 0] as const) {
-    const st = DEPTH_STYLE[layer];
-    ctx.lineWidth = st.edgeWidth;
-    ctx.globalAlpha = st.edgeAlpha * fade;
-    ctx.beginPath();
-    for (const e of lay.edges) {
-      if (edgeDepth(depth, e.a, e.b) !== layer) continue;
-      ctx.moveTo(pos[e.a].x, pos[e.a].y); ctx.lineTo(pos[e.b].x, pos[e.b].y);
-    }
-    ctx.stroke();
-  }
-  // Odaktaki düğümün bağlantıları parlar.
-  if (focus >= 0) {
-    ctx.lineWidth = 1.2;
-    ctx.globalAlpha = 0.55 * fade;
-    ctx.beginPath();
-    for (const e of lay.edges) {
-      if (e.a !== focus && e.b !== focus) continue;
-      ctx.moveTo(pos[e.a].x, pos[e.a].y); ctx.lineTo(pos[e.b].x, pos[e.b].y);
-    }
-    ctx.stroke();
+/** Bir kare: toz → kenarlar → akan noktalar → düğümler (arkadan öne) → etiketler. Düğüm konumlarını döner (isabet testi için). */
+function drawFrame(ctx: CanvasRenderingContext2D, f: Frame): Pt[] {
+  const { g, v, col, hover } = f;
+  ctx.setTransform(f.dpr, 0, 0, f.dpr, 0, 0);
+  ctx.clearRect(0, 0, f.w, f.h);
+  const tw = (ph: number, k = 1.3) => (f.still ? 1 : 0.7 + 0.3 * Math.sin(f.tSec * k + ph));
+
+  // çekirdek parıltısı
+  const core = project(v, 0, 0, 0);
+  halo(ctx, core.x, core.y, v.R * 0.5, col.star, 0.16 * col.glow);
+
+  // yıldız tozu (1–1,5 px kareler: en ucuz çizim)
+  ctx.fillStyle = col.star;
+  const d = g.dust;
+  for (let o = 0; o < d.length; o += 5) {
+    const p = project(v, d[o], d[o + 1], d[o + 2]);
+    if (p.x < -3 || p.y < -3 || p.x > f.w + 3 || p.y > f.h + 3) continue;
+    ctx.globalAlpha = Math.max(0.04, (0.18 + 0.22 * p.z) * d[o + 3] * tw(d[o + 4]) * (0.6 + col.glow * 0.5));
+    const s = 0.8 + 0.7 * depthOf(p.z);
+    ctx.fillRect(p.x, p.y, s, s);
   }
 
-  // Akan noktalar: yalnız ön ve orta katman kenarlarında (durağan karede kenar ortasında).
-  ctx.fillStyle = col.edge;
-  for (const ei of s.flows) {
-    const e = lay.edges[ei];
-    const layer = edgeDepth(depth, e.a, e.b);
-    if (layer === 2) continue;
-    const p = s.tSec === 0 ? 0.5 : flowPos(lay, ei, s.tSec);
-    ctx.globalAlpha = (layer === 0 ? 0.55 : 0.3) * fade;
-    ctx.beginPath();
-    ctx.arc(pos[e.a].x + (pos[e.b].x - pos[e.a].x) * p, pos[e.a].y + (pos[e.b].y - pos[e.a].y) * p,
-      layer === 0 ? 1.4 : 1, 0, Math.PI * 2);
-    ctx.fill();
+  // düğüm konumları (hafif nefes)
+  const pos = g.nodes.map(nd => project(v, nd.r + (f.still ? 0 : Math.sin(f.tSec * 0.6 + nd.ph) * 0.004), nd.th, nd.h));
+
+  // kenarlar
+  ctx.strokeStyle = col.arm; ctx.lineWidth = 0.7;
+  for (const e of g.edges) {
+    const focus = hover >= 0 && (e.a === hover || e.b === hover);
+    ctx.globalAlpha = focus ? 0.7 : Math.max(0.03, 0.08 + 0.04 * (pos[e.a].z + pos[e.b].z));
+    ctx.beginPath(); ctx.moveTo(pos[e.a].x, pos[e.a].y); ctx.lineTo(pos[e.b].x, pos[e.b].y); ctx.stroke();
   }
 
-  // Düğümler: arkadan öne.
-  for (const i of s.order) {
-    const n = lay.nodes[i];
-    const st = nodeStyle(n);
-    const ds = DEPTH_STYLE[depth[i]];
-    const focused = i === focus;
-    const r = st.r * ds.scale * (focused ? FOCUS_SCALE : 1);
-    const alpha = (focused ? 1 : near.has(i) ? Math.min(1, ds.nodeAlpha + 0.3) : ds.nodeAlpha) * fade;
-    const { x, y } = pos[i];
-    ctx.globalAlpha = alpha;
-    if (st.square) {
-      ctx.fillStyle = col.db;
-      ctx.beginPath();
-      // roundRect eski tarayıcılarda yok (Safari < 16, Chrome < 99): düz kareye düş, çizim döngüsü kırılmasın.
-      if (typeof ctx.roundRect === 'function') ctx.roundRect(x - r / 2, y - r / 2, r, r, 1.5);
-      else ctx.rect(x - r / 2, y - r / 2, r, r);
-      ctx.fill();
-      continue;
-    }
-    ctx.fillStyle = col.node;
-    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
-    if (st.ring && depth[i] < 2) {
-      ctx.strokeStyle = col.node; ctx.lineWidth = 1;
-      ctx.globalAlpha = alpha * 0.4;
-      ctx.beginPath(); ctx.arc(x, y, r + 5 * ds.scale, 0, Math.PI * 2); ctx.stroke();
-    }
-    if (focused) { // odak halkası: tutulabildiğini söyler
-      ctx.strokeStyle = col.node; ctx.lineWidth = 1.5;
-      ctx.globalAlpha = 0.5 * fade;
-      ctx.beginPath(); ctx.arc(x, y, r + 4, 0, Math.PI * 2); ctx.stroke();
-    }
+  // akan noktalar: altın yıldız (çekirdek + küçük hale), hız = kenar ağırlığı × tempo
+  for (const k of g.flows) {
+    const e = g.edges[k];
+    const t = f.still ? 0.5 : flowPos(g.flowPh[k], f.tSec, e.w, f.pace);
+    const x = pos[e.a].x + (pos[e.b].x - pos[e.a].x) * t, y = pos[e.a].y + (pos[e.b].y - pos[e.a].y) * t;
+    const depth = depthOf((pos[e.a].z + pos[e.b].z) / 2);
+    const sp = tw(g.flowPh[k] * 20, 3);
+    const hr = 5 * (0.8 + 0.2 * col.flowBoost);
+    halo(ctx, x, y, hr, col.flow, Math.min(1, (0.25 + 0.35 * depth) * sp * (0.5 + col.glow * 0.5) * col.flowBoost));
+    ctx.globalAlpha = Math.min(1, (0.6 + 0.35 * depth) * sp * col.flowBoost); ctx.fillStyle = col.flow;
+    ctx.beginPath(); ctx.arc(x, y, 1.4 * (0.85 + 0.15 * col.flowBoost), 0, TAU); ctx.fill();
   }
 
-  // Etiketler: ön katman (rastgele alt küme) + odaktaki düğüm (katmanı ne olursa olsun).
-  ctx.font = chartMonoFont(11);
+  // düğümler: arkadan öne
+  const order = g.nodes.map((_, i) => i).sort((i, j) => pos[i].z - pos[j].z);
+  for (const i of order) {
+    const nd = g.nodes[i], p = pos[i], depth = depthOf(p.z), focus = i === hover;
+    const r = nodeRadius(nd, depth, focus), a = nodeAlpha(nd, depth, focus);
+    if (nd.tier === 'db') { ctx.globalAlpha = a; ctx.fillStyle = col.arm; ctx.fillRect(p.x - r, p.y - r, r * 2, r * 2); continue; }
+    if (nd.tier === 'gw' || nd.weight > 0.55 || focus) {
+      halo(ctx, p.x, p.y, r * 3.4, col.star, (0.12 + 0.3 * col.glow) * (0.35 + 0.65 * nd.weight) * (0.5 + depth));
+    }
+    ctx.globalAlpha = a; ctx.fillStyle = col.star;
+    ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, TAU); ctx.fill();
+  }
+
+  // etiketler (yalnız isimli kipte ad gelir)
   ctx.fillStyle = col.label;
-  const label = (i: number, a: number) => {
-    const n = lay.nodes[i];
-    if (!n.name) return;
-    const r = nodeStyle(n).r * DEPTH_STYLE[depth[i]].scale * (i === focus ? FOCUS_SCALE : 1);
-    ctx.globalAlpha = a * fade;
-    ctx.fillText(n.name, pos[i].x + r + 5, pos[i].y + 3);
-  };
-  for (const i of s.labels) if (i !== focus) label(i, nodeStyle(lay.nodes[i]).labelAlpha * 0.95);
-  if (focus >= 0) label(focus, 1);
+  ctx.font = chartMonoFont(11);
+  for (const i of order) {
+    if (i === hover) continue;
+    const nd = g.nodes[i], depth = depthOf(pos[i].z);
+    if (!wantsLabel(nd, depth, f.labels.has(i))) continue;
+    ctx.globalAlpha = Math.min(0.85, (depth - 0.3) * 1.3);
+    ctx.fillText(nd.name ?? '', pos[i].x + 8, pos[i].y + 3);
+  }
+  if (hover >= 0 && g.nodes[hover].name) {
+    ctx.globalAlpha = 1; ctx.font = chartMonoFont(12);
+    ctx.fillText(g.nodes[hover].name ?? '', pos[hover].x + 9, pos[hover].y + 4);
+  }
   ctx.globalAlpha = 1;
+  return pos;
 }
 
-export default function TopologyBackdrop({ graph, animated }: { graph: BackdropGraph; animated: boolean }) {
+export default function TopologyBackdrop({ graph, animated, pace = 0.6 }: {
+  graph: BackdropGraph; animated: boolean;
+  /** Toplam throughput temposu ∈ [0,1] (son / 24 sa tepe): dönüş ve akış hızı. */
+  pace?: number;
+}) {
   const ref = useRef<HTMLCanvasElement>(null);
   const themeTick = useThemeTick();
-  // BİR KEZ: başlatıcı yalnız ilk render'da çalışır; `graph` sonradan değişse de yerleşim kurulmaz.
-  const [layout] = useState<Layout>(() => {
-    const g = thinGraph(graph.nodes, graph.edges);
-    return layoutOf(g.nodes, g.edges, graph.seed ?? seedOfIds(graph.nodes.map(n => n.id)));
+  // BİR KEZ: galaksi ilk gelen grafikle kurulur; `graph` sonradan değişse de yeniden kurulmaz.
+  const [galaxy] = useState<Galaxy>(() => {
+    const t = thinGraph(graph.nodes, graph.edges);
+    return buildGalaxy(t.nodes, t.edges, graph.seed ?? seedOfIds(graph.nodes.map(n => n.id)));
   });
-  const [flows] = useState<number[]>(() => flowEdges(layout));
-  // v0.10.1919 — derinlik: önem sırasıyla ön / orta / arka katman.
-  const [depth] = useState<Depth[]>(() => depthLayers(layout));
-  const [order] = useState<number[]>(() => drawOrder(depth));
-  const [adj] = useState<Map<number, Set<number>>>(() => {
-    const m = new Map<number, Set<number>>();
-    const add = (a: number, b: number) => { (m.get(a) ?? m.set(a, new Set()).get(a)!).add(b); };
-    for (const e of layout.edges) { add(e.a, e.b); add(e.b, e.a); }
-    return m;
-  });
-  // v0.10.1918 — etiketlenecek servisler her açılışta RASTGELE; v0.10.1919 — yalnız ön katmandan.
-  // v0.10.1926 (operatör-raporlu: arka planda birden fazla "oracle" / "queue" yazıyor) —
-  // veri katmanı düğümleri (db/kuyruk) SABİT etiket almaz: adları yalnız sistem adıdır,
-  // aynı ad onlarca kez tekrar ederdi. Üzerine gelince adı yine görünür.
-  const [labels] = useState<Set<number>>(() =>
-    new Set(labelNodes(layout, MAX_LABELS, Math.random, i => depth[i] === 0 && layout.nodes[i].tier !== 'db')));
+  // v0.10.1918 — etiketlenecek servisler her açılışta RASTGELE.
+  const [labels] = useState<Set<number>>(() => pickLabelSet(galaxy, MAX_LABELS, Math.random));
+  // Görünüm (açı/eğim/hız) efekt yeniden kurulunca (tema değişimi) korunur.
+  const view = useRef({ angle: 0, tilt: TILT0, vel: 0, tiltVel: 0 });
+  const paceRef = useRef(pace);
+  useEffect(() => { paceRef.current = pace; }, [pace]);
 
   useEffect(() => {
     const canvas = ref.current;
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return;
     const col = readColors(); // tema değişince (themeTick) efekt yeniden kurulur
-    let cssW = 0, cssH = 0, dpr = 1;
-    let raf = 0, last = 0;
-    let curT = 0; // son çizilen karenin zamanı (durağan kipte 0): isabet ve sürükleme aynı konumu kullanır
-    let drag: Drag | null = null;
-    let target: Pt | null = null; // sürüklenen düğümün mantıksal hedefi
-    let hover = -1; // üzerine gelinen düğüm
+    const st = view.current;
+    let w = 0, h = 0, dpr = 1, R = 1;
+    let raf = 0, last = 0, prev = performance.now();
+    let pos: Pt[] = [];
+    let hover = -1, dragging = false, lx = 0, ly = 0, lt = 0;
     const t0 = performance.now();
-    const motion = (i: number) => ({ amp: DEPTH_STYLE[depth[i]].driftMul, speed: DEPTH_STYLE[depth[i]].speedMul });
 
     const fit = () => {
       const r = canvas.getBoundingClientRect();
-      cssW = Math.max(1, r.width); cssH = Math.max(1, r.height);
+      w = Math.max(1, r.width); h = Math.max(1, r.height);
       dpr = Math.min(window.devicePixelRatio || 1, 2);
-      canvas.width = Math.round(cssW * dpr); canvas.height = Math.round(cssH * dpr);
+      canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
+      R = Math.max(w, h) * 0.6;
     };
-    const positions = () => screenPositions(layout, curT, cssW / layout.w, cssH / layout.h, motion);
-    const paint = (now = performance.now()) => {
-      if (drag && target) dragTo(layout, drag, target.x, target.y);
-      const focus = drag?.i ?? hover;
-      drawFrame(ctx, {
-        lay: layout, cssW, cssH, dpr, pos: positions(), tSec: curT, col, flows, labels, depth, order,
-        focus, near: focus >= 0 ? adj.get(focus) ?? new Set() : new Set(), fade: fadeIn(now - t0, animated),
+    const paint = (tSec: number, still: boolean) => {
+      pos = drawFrame(ctx, {
+        g: galaxy, v: { angle: st.angle, tilt: st.tilt, cx: w / 2, cy: h / 2, R }, w, h, dpr, tSec, still,
+        col, pace: paceRef.current, hover, labels,
       });
     };
-    const paintStill = () => { curT = 0; paint(); };
+    const paintStill = () => paint(0, true);
     const tick = (now: number) => {
       raf = 0;
       if (document.hidden) return; // görünür olunca visibilitychange yeniden başlatır
-      if (shouldDraw(now, last)) {
-        last = now;
-        curT = (now - t0) / 1000 + 0.001;
-        paint(now);
+      const dt = Math.min(0.1, (now - prev) / 1000); prev = now;
+      if (!dragging) {
+        st.angle += st.vel * dt; st.tilt += st.tiltVel * dt;
+        const fr = Math.pow(0.12, dt); st.vel *= fr; st.tiltVel *= fr; // bırakınca yavaşça durur
+        st.angle += spinRate(paceRef.current) * dt; // dönüş hızı = throughput temposu
+        st.tilt += (TILT0 - st.tilt) * Math.min(1, dt * 0.25); // eğim yavaşça varsayılana döner
       }
+      if (shouldDraw(now, last)) { last = now; paint((now - t0) / 1000, false); }
       raf = requestAnimationFrame(tick);
     };
-    const start = () => { if (animated && !raf && !document.hidden) raf = requestAnimationFrame(tick); };
+    const start = () => { if (animated && !raf && !document.hidden) { prev = performance.now(); raf = requestAnimationFrame(tick); } };
     const onVis = () => { if (document.hidden) { if (raf) cancelAnimationFrame(raf); raf = 0; } else start(); };
 
-    // ── fare / dokunma: tut-sürükle (v0.10.1917) ──
-    const local = (e: PointerEvent): Pt => {
-      const r = canvas.getBoundingClientRect();
-      return { x: e.clientX - r.left, y: e.clientY - r.top };
-    };
-    /** Ekran noktası → tutulan düğümün mantıksal konumu (o anki kaymayı düşerek; düğüm imlecin altında kalır). */
-    const toLogical = (p: Pt, i: number): Pt => {
-      const sx = cssW / layout.w, sy = cssH / layout.h;
-      const shown = screenPositions(layout, curT, sx, sy, motion)[i];
-      const n = layout.nodes[i];
-      return { x: n.x + (p.x - shown.x) / sx, y: n.y + (p.y - shown.y) / sy };
-    };
+    // ── sürükleme: bütün galaksi BİRLİKTE döner (yatay) ve eğilir (dikey) ──
+    const local = (e: PointerEvent) => { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
     const onDown = (e: PointerEvent) => {
       if (e.button !== 0) return;
-      const p = local(e);
-      const i = hitNode(layout, positions(), p.x, p.y, undefined, depth);
-      if (i < 0) return;
-      e.preventDefault(); // metin seçimi / sürükle-bırak başlamasın
-      drag = beginDrag(layout, i);
-      target = toLogical(p, i);
+      e.preventDefault(); // metin seçimi başlamasın
+      dragging = true; const p = local(e); lx = p.x; ly = p.y; lt = performance.now(); st.vel = 0; st.tiltVel = 0;
       canvas.setPointerCapture?.(e.pointerId);
       canvas.style.cursor = 'grabbing';
-      if (!animated) paint();
     };
     const onMove = (e: PointerEvent) => {
       const p = local(e);
-      if (drag) {
-        target = toLogical(p, drag.i);
-        if (!animated) paint();
+      if (dragging) {
+        const now = performance.now(), dts = Math.max(0.008, (now - lt) / 1000);
+        const da = (p.x - lx) / (R * 0.9), dtl = (p.y - ly) / (R * 1.6);
+        st.angle += da; st.tilt = Math.min(TILT_MAX, Math.max(TILT_MIN, st.tilt - dtl));
+        st.vel = st.vel * 0.6 + (da / dts) * 0.4; st.tiltVel = st.tiltVel * 0.6 + (-dtl / dts) * 0.4;
+        lx = p.x; ly = p.y; lt = now;
+        if (!animated) paintStill();
         return;
       }
-      const i = hitNode(layout, positions(), p.x, p.y, undefined, depth);
-      canvas.style.cursor = i >= 0 ? 'grab' : '';
-      if (i !== hover) { hover = i; if (!animated) paint(); }
-    };
-    const onLeave = () => {
-      if (drag || hover < 0) return;
-      hover = -1;
-      canvas.style.cursor = '';
-      if (!animated) paint();
+      let best = -1, bd = HOVER_PX;
+      for (let i = 0; i < pos.length; i++) { const d = Math.hypot(pos[i].x - p.x, pos[i].y - p.y); if (d < bd) { bd = d; best = i; } }
+      canvas.style.cursor = best >= 0 ? 'pointer' : 'grab';
+      if (best !== hover) { hover = best; if (!animated) paintStill(); }
     };
     const onUp = (e: PointerEvent) => {
-      if (!drag) return;
-      hover = drag.i; // bırakılan düğüm odakta kalır (imleç hâlâ üstünde)
-      drag = null; target = null;
+      if (!dragging) return;
+      dragging = false;
       canvas.releasePointerCapture?.(e.pointerId);
       canvas.style.cursor = 'grab';
-      if (!animated) paint();
     };
+    const onLeave = () => { if (!dragging && hover >= 0) { hover = -1; if (!animated) paintStill(); } };
+    const onDbl = () => { st.angle = 0; st.tilt = TILT0; st.vel = 0; st.tiltVel = 0; if (!animated) paintStill(); };
 
     fit();
+    canvas.style.cursor = 'grab';
     if (animated) start(); else paintStill();
-    const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { fit(); if (!animated) paint(); }) : null;
+    const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { fit(); if (!animated) paintStill(); }) : null;
     ro?.observe(canvas);
     document.addEventListener('visibilitychange', onVis);
     canvas.addEventListener('pointerdown', onDown);
@@ -277,6 +236,7 @@ export default function TopologyBackdrop({ graph, animated }: { graph: BackdropG
     canvas.addEventListener('pointerup', onUp);
     canvas.addEventListener('pointercancel', onUp);
     canvas.addEventListener('pointerleave', onLeave);
+    canvas.addEventListener('dblclick', onDbl);
     return () => {
       if (raf) cancelAnimationFrame(raf);
       ro?.disconnect();
@@ -286,10 +246,10 @@ export default function TopologyBackdrop({ graph, animated }: { graph: BackdropG
       canvas.removeEventListener('pointerup', onUp);
       canvas.removeEventListener('pointercancel', onUp);
       canvas.removeEventListener('pointerleave', onLeave);
+      canvas.removeEventListener('dblclick', onDbl);
     };
-  }, [layout, flows, labels, depth, order, adj, animated, themeTick]);
+  }, [galaxy, labels, animated, themeTick]);
 
-  // Olay alır (sürükleme); kart ve üst çubuk üstte olduğundan yalnız kart DIŞINDA.
   return <canvas ref={ref} aria-hidden="true" data-testid="login-topology"
-    className="absolute inset-0 size-full select-none" />;
+    className="absolute inset-0 size-full select-none touch-none" />;
 }

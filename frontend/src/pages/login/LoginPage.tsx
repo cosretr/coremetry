@@ -14,6 +14,7 @@ import { LOGIN_WIDE_QUERY, panelEnabled, shouldFetchSummary, summaryUsable } fro
 import { useLoginSummary } from '@/lib/queries/loginSummary';
 import { backdropMode, type GraphSource } from '@/lib/loginTopology/frame';
 import { syntheticGraph } from '@/lib/loginTopology/synthetic';
+import { paceFrom } from '@/lib/loginTopology/galaxy';
 import { currentTheme } from '@/lib/theme';
 import { themeEntry } from '@/lib/themeRegistry';
 import { useMediaQuery } from '@/lib/useMediaQuery';
@@ -160,6 +161,9 @@ export default function LoginPage() {
   const bd = backdropMode({ setting: brand.loginTopology, wide, highContrast, reducedMotion: reduced, source });
   const synth = useMemo(() => syntheticGraph(), []);
   const backdropGraph = realTopo ?? synth;
+  // v0.10.1928 — galaksinin dönüş/akış temposu: toplam throughput (son / 24 sa tepe).
+  const http = summary.data?.ready ? summary.data.http_24h : undefined;
+  const pace = useMemo(() => paceFrom((http?.throughput ?? http?.grpc ?? http?.kafka)?.points.map(p => p.value)), [http]);
   const topoNote = bd.kind === 'canvas' && realTopo
     ? t('login.topo.note')
         .replace('{n}', String(realTopo.nodes.filter(n => n.tier !== 'db').length))
@@ -179,7 +183,7 @@ export default function LoginPage() {
       {bd.kind === 'canvas' && (
         <>
           <Suspense fallback={null}>
-            <TopologyBackdrop graph={backdropGraph} animated={bd.animated} />
+            <TopologyBackdrop graph={backdropGraph} animated={bd.animated} pace={pace} />
           </Suspense>
           <div aria-hidden="true" className="login-veil pointer-events-none absolute inset-0" />
         </>

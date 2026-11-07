@@ -3,7 +3,7 @@
 // şey söylemez: ad yok, durum yok; yalnız hiyerarşik şekil (giriş → BFF → servis
 // → veri). Tohumlu: aynı tohum → aynı graf.
 import type { LoginSummaryEdge, LoginSummaryNode } from '@/lib/types';
-import { mulberry32 } from './layout';
+import { mulberry32 } from './prng';
 
 export const SYNTHETIC_SEED = 0x5eed1909;
 

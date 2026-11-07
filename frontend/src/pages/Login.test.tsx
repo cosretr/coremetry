@@ -399,7 +399,11 @@ describe('Login — topoloji arka planı', () => {
   let raf: ReturnType<typeof vi.fn>;
   beforeEach(() => {
     // jsdom'da canvas bağlamı yok: her çağrıyı yutan sahte bağlam.
-    const ctx = new Proxy({}, { get: () => () => {}, set: () => true });
+    // v0.10.1928 — galaksi parıltısı radyal gradyan kullanır: gerçek API gibi addColorStop'lu nesne döner.
+    const ctx = new Proxy({}, {
+      get: (_t, k) => (k === 'createRadialGradient' ? () => ({ addColorStop() {} }) : () => {}),
+      set: () => true,
+    });
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(ctx as unknown as CanvasRenderingContext2D);
     raf = vi.fn(() => 1);
     vi.stubGlobal('requestAnimationFrame', raf);

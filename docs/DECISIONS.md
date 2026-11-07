@@ -13322,4 +13322,14 @@ JSON sözleşmesi ve kararlar ana oturumda. Backend dilimleri v0.10.1902–1905.
   overview'da vardı").** 1923 `rate(kafka_consumer_records_consumed_total{topic=""})` okuyordu, prod'da 0. Servis sayfaları
   (vmetrics/kafka.go) `kafka.consumer.records_consumed_rate` GÖSTERGESİNİ kullanıyor (Kafka'nın ~30 sn ortalaması; rate() yok).
   Yeni sıra: `sum(…_rate{topic=""})` (istemci düzeyi) → `sum(…_rate)` → mesajlaşma semconv yedekleri.
+- **v0.10.1928 — login topolojisi: veriye bağlı galaksi (operatör, 2026-11-07: dört seçenekli mockup'tan "veriye bağlı galaksi en
+  iyisi"; mockup "Login Galaksi").** Topoloji sarmal galaksi olarak çizilir (`lib/loginTopology/galaxy.ts`, saf): her gateway bir kol
+  (gateway yoksa en ağır düğümler, en az 3 kol), BFF/servisler çok kaynaklı BFS ile en yakın gateway'in kolunda; gateway çekirdeğe
+  yakın, BFF orta, servis ve veri dışta. Boyut ve parlaklık = trafik (boyut 0,45×–1,95×; operatör: "gezegenlerin bir kısmı küçük bir
+  kısmı büyük"). Dönüş ve akan noktaların hızı = toplam throughput temposu (`http_24h` son / tepe). Disk eğik (~62°); sürükleme
+  bütün galaksiyi BİRLİKTE döndürür/eğer, bırakınca yavaşça durur, çift tık başa alır (1917'nin tek nokta sürüklemesi kalktı).
+  5.100 toz noktası (1–1,5 px kare). Renk yalnız token: yıldız --accent2, kol/veri --purple, akan nokta --warn (altın), etiket
+  --text2; parıltı zeminin koyuluğuna göre. Etiket: gateway/BFF önde, servis 1918'in rastgele kümesinden, veri katmanı asla
+  (1926). Sökülenler (ölü kod yok): kuvvet yerleşimi + `evenOut` (layout.ts), derinlik katmanları (depth.ts), nokta sürükleme
+  (drag.ts); PRNG `prng.ts`'e taşındı. Ölçüm: tarayıcıda/Citrix'te yapılmadı (mockup'ta canlı ölçer var).
 
