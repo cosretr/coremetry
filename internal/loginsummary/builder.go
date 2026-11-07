@@ -79,6 +79,7 @@ type Store interface {
 	TotalUncompressedBytes(ctx context.Context) (uint64, error)
 	CountLoginEndpoints(ctx context.Context) (uint64, error)
 	ReadServiceTopologyAgg(ctx context.Context, from, to time.Time, limit int) ([]chstore.ServiceTopologyEdge, error)
+	LoginDBNames(ctx context.Context, since time.Time, keys []string) (map[string]string, error)
 }
 
 var _ Store = (*chstore.Store)(nil)
@@ -293,7 +294,19 @@ func (b *Builder) slowRound(ctx context.Context, s *Snapshot, now time.Time, sum
 	edges, err := b.d.Store.ReadServiceTopologyAgg(ctx, now.Add(-topoWindowS*time.Second), now, topoEdgeLimit)
 	b.timed("topology", t0)
 	if err == nil {
-		s.Topo = BuildTopology(PickSilhouette(edges, topoMaxNodes), s.Salt)
+		sil := PickSilhouette(edges, topoMaxNodes)
+		// v0.10.1931 — veritabanı adı (db_summary_5m, son 1 sa). Hata: sistem
+		// adında kalır (yumuşak; topoloji yine yayınlanır).
+		// Yalnız siluette SEÇİLİ db'ler sorulur (≤ topoMaxNodes/6): test 4000,
+		// prod 1300 servis — tüm instance'ları okumak ölçekle büyürdü.
+		if keys := sil.DatabaseKeys(); len(keys) > 0 {
+			t1 := time.Now()
+			if names, nerr := b.d.Store.LoginDBNames(ctx, now.Add(-time.Hour), keys); nerr == nil {
+				NameDatabases(&sil, names)
+			}
+			b.timed("db_names", t1)
+		}
+		s.Topo = BuildTopology(sil, s.Salt)
 	}
 }
 

@@ -243,4 +243,4 @@ Bu bölüm üstteki audit metnini GEÇERSİZ kılar; ayrıntı `docs/DECISIONS.m
 - **1913** Topoloji yerleşimi: kısa menzilli itme + duvar itmesi (düğümler kenara yığılıyordu; §6.3'teki "merkez çekimi" yok).
 - **1914** HTTP kartı tek TOPLAM throughput serisi: Q1 `sum(rate(<aile>_count[5m]))`, alan `http_24h.throughput` (§4 ve §5.3'teki durum kodu kırılımı ve `status[]` kalktı; §9-10 kapandı).
 - **1915** `activity_24h` yalnız `logins` + `cosre_questions`; `rollouts_tracked`, `traces_viewed` ve trace görüntüleme sayacı (§5.2) söküldü; yeni `endpoints_monitored`. Ekranda "Şu an" + "Son 24 saatte" satırları.
-
+- **1931** Veri katmanı: veritabanı mor yuvarlak nokta + veritabanı adı (`db.name` ilk parçası), kuyruk ayrı `queue` katmanı (turkuaz halka + konu adı); her ad bir kez etiketlenir. Host çıkmaz.

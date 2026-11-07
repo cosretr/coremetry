@@ -12302,7 +12302,8 @@ export interface LoginSummaryHttp {
 export interface LoginSummaryActivity {
   logins: number; cosre_questions: number; // v0.10.1915: rollouts_tracked + traces_viewed kaldırıldı
 }
-export interface LoginSummaryNode { id: string; tier: 'gw' | 'bff' | 'svc' | 'db'; weight: number; name?: string }
+// v0.10.1931: 'queue' — kuyruk (kafka, rabbitmq…) veritabanından ayrı katman.
+export interface LoginSummaryNode { id: string; tier: 'gw' | 'bff' | 'svc' | 'db' | 'queue'; weight: number; name?: string }
 export interface LoginSummaryEdge { from: string; to: string; weight: number }
 export interface LoginSummaryTopology { window_s: number; named: boolean; nodes: LoginSummaryNode[]; edges: LoginSummaryEdge[] }
 export interface LoginSummaryComponents { state: 'ok' | 'degraded' | string; checked_at: number; clickhouse_uncompressed_bytes?: number }

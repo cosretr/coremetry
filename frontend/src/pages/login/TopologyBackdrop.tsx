@@ -9,7 +9,8 @@
 //
 // Durum/uyarı rengi YOK; renkler yalnız tema token'ları (`resolveVar`): yıldız
 // --accent2, kol/veri --purple, akan noktalar --galaxy-gold (OpenTelemetry sarı-turuncusu; v0.10.1929–1930),
-// etiket --text2. Parıltı gücü zeminin koyuluğuna göre (koyu temada güçlü).
+// etiket --text2. v0.10.1931: veritabanı mor YUVARLAK nokta + hafif hale (kare değil),
+// kuyruk --teal İÇİ BOŞ halka; ikisi de adıyla (veritabanı adı / konu), her ad bir kez. Parıltı gücü zeminin koyuluğuna göre (koyu temada güçlü).
 // Performans: 30 fps tavanı, DPR ≤ 2, `document.hidden`'da rAF durur,
 // `prefers-reduced-motion`'da kendiliğinden hareket yok (sürükleme çalışır).
 // Galaksi ilk gelen grafikle BİR KEZ kurulur. Dekoratif: aria-hidden; olay alır
@@ -19,7 +20,7 @@ import { chartMonoFont, resolveVar } from '@/lib/chart/resolveVar';
 import { useThemeTick } from '@/lib/useThemeTick';
 import { MAX_LABELS, shouldDraw, thinGraph } from '@/lib/loginTopology/frame';
 import {
-  buildGalaxy, depthOf, flowPos, isDarkColor, nodeAlpha, nodeRadius, pickLabelSet, project, spinRate,
+  buildGalaxy, depthOf, flowPos, isDarkColor, nodeAlpha, nodeRadius, pickBackendLabels, pickLabelSet, project, spinRate,
   TILT0, TILT_MAX, TILT_MIN, wantsLabel, type Galaxy, type Pt, type View,
 } from '@/lib/loginTopology/galaxy';
 import { seedOfIds } from '@/lib/loginTopology/prng';
@@ -27,12 +28,12 @@ import type { LoginSummaryEdge, LoginSummaryNode } from '@/lib/types';
 
 export interface BackdropGraph { nodes: LoginSummaryNode[]; edges: LoginSummaryEdge[]; seed?: number }
 
-interface Colors { star: string; arm: string; flow: string; label: string; glow: number; flowBoost: number }
+interface Colors { star: string; arm: string; mq: string; flow: string; label: string; glow: number; flowBoost: number }
 
 function readColors(): Colors {
   const dark = isDarkColor(resolveVar('var(--bg0)'));
   return {
-    star: resolveVar('var(--accent2)'), arm: resolveVar('var(--purple)'),
+    star: resolveVar('var(--accent2)'), arm: resolveVar('var(--purple)'), mq: resolveVar('var(--teal)'),
     // v0.10.1929 (operatör-raporlu: kurumsal temada akan noktalar altın değil) — --warn açık temalarda
     // kahverengi metin tonu (#795600); galaksiye ayrı altın token'ı.
     flow: resolveVar('var(--galaxy-gold)'), label: resolveVar('var(--text2)'),
@@ -106,7 +107,16 @@ function drawFrame(ctx: CanvasRenderingContext2D, f: Frame): Pt[] {
   for (const i of order) {
     const nd = g.nodes[i], p = pos[i], depth = depthOf(p.z), focus = i === hover;
     const r = nodeRadius(nd, depth, focus), a = nodeAlpha(nd, depth, focus);
-    if (nd.tier === 'db') { ctx.globalAlpha = a; ctx.fillStyle = col.arm; ctx.fillRect(p.x - r, p.y - r, r * 2, r * 2); continue; }
+    if (nd.tier === 'queue') { // kuyruk: turkuaz halka
+      halo(ctx, p.x, p.y, r * 2.6, col.mq, (0.08 + 0.22 * col.glow) * (0.5 + depth));
+      ctx.globalAlpha = a; ctx.strokeStyle = col.mq; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.arc(p.x, p.y, r * 1.15, 0, TAU); ctx.stroke(); continue;
+    }
+    if (nd.tier === 'db') { // veritabanı: mor yuvarlak nokta + hafif hale
+      halo(ctx, p.x, p.y, r * 2.6, col.arm, (0.1 + 0.25 * col.glow) * (0.5 + depth));
+      ctx.globalAlpha = a; ctx.fillStyle = col.arm;
+      ctx.beginPath(); ctx.arc(p.x, p.y, r * 0.9, 0, TAU); ctx.fill(); continue;
+    }
     if (nd.tier === 'gw' || nd.weight > 0.55 || focus) {
       halo(ctx, p.x, p.y, r * 3.4, col.star, (0.12 + 0.3 * col.glow) * (0.35 + 0.65 * nd.weight) * (0.5 + depth));
     }
@@ -145,7 +155,8 @@ export default function TopologyBackdrop({ graph, animated, pace = 0.6 }: {
     return buildGalaxy(t.nodes, t.edges, graph.seed ?? seedOfIds(graph.nodes.map(n => n.id)));
   });
   // v0.10.1918 — etiketlenecek servisler her açılışta RASTGELE.
-  const [labels] = useState<Set<number>>(() => pickLabelSet(galaxy, MAX_LABELS, Math.random));
+  // v0.10.1931 — veri katmanı: her veritabanı/konu adı bir kez (en ağır düğümde).
+  const [labels] = useState<Set<number>>(() => new Set([...pickLabelSet(galaxy, MAX_LABELS, Math.random), ...pickBackendLabels(galaxy)]));
   // Görünüm (açı/eğim/hız) efekt yeniden kurulunca (tema değişimi) korunur.
   const view = useRef({ angle: 0, tilt: TILT0, vel: 0, tiltVel: 0 });
   const paceRef = useRef(pace);

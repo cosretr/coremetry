@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { mulberry32 } from './prng';
 import { syntheticGraph, SYNTHETIC_SEED } from './synthetic';
 import {
-  buildGalaxy, depthOf, flowPos, flowSpeed, isDarkColor, nodeAlpha, nodeRadius, paceFrom, pickLabelSet, project,
+  buildGalaxy, depthOf, flowPos, flowSpeed, isDarkColor, nodeAlpha, nodeRadius, paceFrom, pickBackendLabels, pickLabelSet, project,
   sizeOf, spinRate, wantsLabel, MIN_ARMS, TILT0, DUST_ARM, DUST_CORE, FLOW_EDGES, type GNode,
 } from './galaxy';
 import type { LoginSummaryEdge, LoginSummaryNode } from '@/lib/types';
@@ -109,9 +109,13 @@ describe('izdüşüm ve tempo', () => {
 });
 
 describe('etiketler', () => {
-  it('veri katmanı asla sabit etiket almaz (v0.10.1926); adı olmayan da', () => {
-    const db = { tier: 'db', name: 'oracle', weight: 1 } as GNode;
-    expect(wantsLabel(db, 1, true)).toBe(false);
+  it('veri katmanı yalnız kümedeyse ve önde etiket alır (v0.10.1931); adı olmayan hiç', () => {
+    const db = { tier: 'db', name: 'pcrmt11', weight: 1 } as GNode;
+    const q = { tier: 'queue', name: 'orders.events', weight: 1 } as GNode;
+    expect(wantsLabel(db, 1, true)).toBe(true);
+    expect(wantsLabel(db, 1, false)).toBe(false);
+    expect(wantsLabel(q, 0.6, true)).toBe(true);
+    expect(wantsLabel(q, 0.3, true)).toBe(false);
     expect(wantsLabel({ tier: 'gw', weight: 1 } as GNode, 1, true)).toBe(false);
   });
   it('gateway önde, BFF yakın önde, servis yalnız rastgele kümede ve önde', () => {
@@ -125,6 +129,20 @@ describe('etiketler', () => {
     expect(wantsLabel(svc, 0.8, true)).toBe(true);
     expect(wantsLabel(svc, 0.8, false)).toBe(false);
     expect(wantsLabel(svc, 0.6, true)).toBe(false);
+  });
+  it('veri katmanı etiketleri (v0.10.1931): her ad bir kez, en ağırında; "db"/"queue" yedek adı hiç', () => {
+    const nodes = [
+      { id: 'g', tier: 'gw' as const, weight: 1, name: 'api-gateway' },
+      { id: 'a', tier: 'db' as const, weight: 0.4, name: 'pcrmt11' },
+      { id: 'b', tier: 'db' as const, weight: 0.9, name: 'pcrmt11' },
+      { id: 'c', tier: 'db' as const, weight: 0.8, name: 'db' },
+      { id: 'd', tier: 'queue' as const, weight: 0.5, name: 'orders.events' },
+      { id: 'e', tier: 'queue' as const, weight: 0.7, name: 'queue' },
+    ];
+    const gx = buildGalaxy(nodes, nodes.slice(1).map(n => ({ from: 'g', to: n.id, weight: 0.5 })), 3);
+    const set = pickBackendLabels(gx);
+    expect([...set].map(i => gx.nodes[i].id).sort()).toEqual(['b', 'd']);
+    expect(pickBackendLabels(gx, 1).size).toBe(1);
   });
   it('rastgele etiket kümesi (v0.10.1918): yalnız adı olan servisler, tavan kadar; kaynak değişince değişir', () => {
     const gx = named();

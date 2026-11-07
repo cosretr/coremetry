@@ -28,7 +28,12 @@ export const TILT0 = 1.08;
 export const TILT_MIN = 0.5;
 export const TILT_MAX = 1.35;
 /** Gateway / BFF / veri / servis taban yarıçapı (css px). */
-export const BASE_R: Readonly<Record<string, number>> = { gw: 6.5, bff: 4, db: 3.4, svc: 2.4 };
+export const BASE_R: Readonly<Record<string, number>> = { gw: 6.5, bff: 4, db: 3.4, queue: 3.4, svc: 2.4 };
+
+/** Veri katmanı (veritabanı ya da kuyruk). */
+export const isBackendTier = (tier: string) => tier === 'db' || tier === 'queue';
+/** Veri katmanında sabit etiket tavanı (v0.10.1931). */
+export const MAX_BACKEND_LABELS = 12;
 /** Üzerine gelinen düğümün büyüme çarpanı. */
 export const FOCUS_SCALE = 1.5;
 
@@ -89,7 +94,7 @@ export function buildGalaxy(
   let hubs = byWeight.filter(x => nodes[x.i].tier === 'gw').map(x => x.i).slice(0, MAX_ARMS);
   for (const x of byWeight) {
     if (hubs.length >= Math.min(MIN_ARMS, n)) break;
-    if (!hubs.includes(x.i) && nodes[x.i].tier !== 'db') hubs.push(x.i);
+    if (!hubs.includes(x.i) && !isBackendTier(nodes[x.i].tier)) hubs.push(x.i);
   }
   if (hubs.length === 0 && n > 0) hubs = [byWeight[0].i];
   const arms = Math.max(1, hubs.length);
@@ -112,7 +117,7 @@ export function buildGalaxy(
     if (hubSet.has(i)) t = 0.02 + rand() * 0.05;
     else if (tier === 'gw') t = 0.08 + rand() * 0.06;
     else if (tier === 'bff') t = 0.14 + rand() * 0.18;
-    else if (tier === 'db') t = 0.55 + rand() * 0.4;
+    else if (isBackendTier(tier)) t = 0.55 + rand() * 0.4;
     else t = Math.min(0.98, 0.3 + Math.min(hop[i], 4) * 0.06 + Math.pow(rand(), 0.85) * 0.45);
     const r = 0.05 + t * 0.95;
     return {
@@ -170,11 +175,13 @@ export function nodeAlpha(nd: GNode, depth: number, focus: boolean): number {
 /**
  * Etiket kuralı (isimli kip): gateway önde (derinlik > 0,35), BFF yakın önde
  * (> 0,62), servis yalnız RASTGELE etiket kümesindeyse (v0.10.1918) ve önde
- * (> 0,72). Veri katmanı (db/kuyruk) ASLA sabit etiket almaz (v0.10.1926:
- * aynı sistem adı tekrar ederdi); adı yalnız üzerine gelince.
+ * (> 0,72). Veri katmanı (db/kuyruk) v0.10.1931'den beri kendi adıyla
+ * (veritabanı adı / konu) etiketlenir, ama yalnız `pickBackendLabels`
+ * kümesindeyse — her ad BİR kez (v0.10.1926'daki tekrar şikâyeti) — ve önde (> 0,45).
  */
 export function wantsLabel(nd: GNode, depth: number, inLabelSet: boolean): boolean {
-  if (!nd.name || nd.tier === 'db') return false;
+  if (!nd.name) return false;
+  if (isBackendTier(nd.tier)) return inLabelSet && depth > 0.45;
   if (nd.tier === 'gw') return depth > 0.35;
   if (nd.tier === 'bff') return depth > 0.62;
   return inLabelSet && depth > 0.72;
@@ -188,6 +195,20 @@ export function pickLabelSet(g: Galaxy, max: number, rand: () => number): Set<nu
     [idx[k], idx[j]] = [idx[j], idx[k]];
   }
   return new Set(idx.slice(0, max));
+}
+
+/**
+ * Veri katmanı etiket kümesi (v0.10.1931): her ad için yalnız EN AĞIR düğüm;
+ * genel yedek adlar ("db", "queue") hiç etiket almaz; en çok `max`, ağırlığa göre.
+ */
+export function pickBackendLabels(g: Galaxy, max: number = MAX_BACKEND_LABELS): Set<number> {
+  const best = new Map<string, number>();
+  g.nodes.forEach((nd, i) => {
+    if (!isBackendTier(nd.tier) || !nd.name || nd.name === 'db' || nd.name === 'queue') return;
+    const cur = best.get(nd.name);
+    if (cur == null || g.nodes[cur].weight < nd.weight) best.set(nd.name, i);
+  });
+  return new Set([...best.values()].sort((a, b) => g.nodes[b].weight - g.nodes[a].weight || a - b).slice(0, max));
 }
 
 /**

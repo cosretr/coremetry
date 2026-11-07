@@ -105,22 +105,32 @@ func TestPickSilhouetteCaps(t *testing.T) {
 	}
 }
 
-func TestBackendNameIsSystemOnly(t *testing.T) {
-	cases := map[string]string{
-		"db:oracle@db-host-1.acme.internal": "oracle",
-		"db:Redis@10.0.0.5:6379":            "redis",
-		"queue:kafka@orders-topic":          "kafka",
-		"db:weird name@h":                   "db",    // güvensiz sistem adı → genel etiket
-		"db:nohost":                         "db",    // @ yok → genel
-		"queue:orders-topic":                "queue", // @ yok → konu adı sızmaz
+// v0.10.1931 (operatör: "postgres/queue yazmasın, isimleri gözüksün"):
+// kuyrukta konu adı çıkar; host ASLA çıkmaz.
+func TestBackendNameNeverHost(t *testing.T) {
+	type want struct {
+		name  string
+		queue bool
 	}
-	for id, want := range cases {
-		got, ok := backendName(id)
-		if !ok || got != want {
-			t.Errorf("backendName(%q) = %q,%v want %q", id, got, ok, want)
+	cases := map[string]want{
+		"db:oracle@db-host-1.acme.internal":       {"oracle", false},
+		"db:Redis@10.0.0.5:6379":                  {"redis", false},
+		"db:weird name@h":                         {"db", false}, // güvensiz sistem adı → genel etiket
+		"db:nohost":                               {"db", false}, // @ yok → genel
+		"queue:kafka@orders-topic":                {"kafka", true},
+		"queue:kafka:orders.events":               {"orders.events", true},
+		"queue:Kafka:bad topic":                   {"kafka", true}, // güvensiz konu → sistem
+		"queue:kafka:broker-1.acme.internal:9092": {"kafka", true}, // host:port konu kılığında → sistem
+		"queue:rabbitmq":                          {"rabbitmq", true},
+		"queue:weird name":                        {"queue", true},
+	}
+	for id, w := range cases {
+		got, q, ok := backendName(id)
+		if !ok || got != w.name || q != w.queue {
+			t.Errorf("backendName(%q) = %q,%v,%v want %q,%v", id, got, q, ok, w.name, w.queue)
 		}
 	}
-	if _, ok := backendName("orders-api"); ok {
+	if _, _, ok := backendName("orders-api"); ok {
 		t.Error("düz servis backend değil")
 	}
 }
@@ -175,5 +185,52 @@ func TestBuildTopologyWeightsNormalized(t *testing.T) {
 	}
 	if tiers["api-gateway"] != TierGateway || tiers["bff-web"] != TierBFF || tiers["oracle"] != TierDB || tiers["branch-teller"] != TierGateway || tiers["orders-api"] != TierService {
 		t.Errorf("katmanlar: %v", tiers)
+	}
+}
+
+func TestDBLabel(t *testing.T) {
+	cases := map[string]string{
+		"PCRMT11.ACME.LOCAL": "pcrmt11",
+		"orders_db":          "orders_db",
+		" Ledger ":           "ledger",
+		"10.0.0.5":           "", // IP parçası
+		"bad name":           "",
+		"":                   "",
+		"db-host:1521":       "",
+	}
+	for in, want := range cases {
+		if got := dbLabel(in); got != want {
+			t.Errorf("dbLabel(%q) = %q want %q", in, got, want)
+		}
+	}
+}
+
+// v0.10.1931: db düğümü veritabanı adını alır; kuyruk ayrı katman.
+func TestNameDatabasesAndQueueTier(t *testing.T) {
+	sil := PickSilhouette([]chstore.ServiceTopologyEdge{
+		{ParentService: "orders-api", ChildNode: "payments-mobile", Calls: 10},
+		{ParentService: "orders-api", ChildNode: "db:oracle@db-host-1.acme.internal", NodeKind: "db", Calls: 9},
+		{ParentService: "orders-api", ChildNode: "db:oracle@db-host-2.acme.internal", NodeKind: "db", Calls: 8},
+		{ParentService: "orders-api", ChildNode: "queue:kafka:orders.events", NodeKind: "queue", Calls: 7},
+	}, 180)
+	if keys := sil.DatabaseKeys(); len(keys) != 2 {
+		t.Fatalf("iki db anahtarı beklenir: %v", keys)
+	}
+	NameDatabases(&sil, map[string]string{
+		"oracle@db-host-1.acme.internal": "PCRMT11.ACME.LOCAL",
+		"oracle@db-host-2.acme.internal": "bad name", // kalıp dışı → sistem adı kalır
+	})
+	topo := BuildTopology(sil, "salt")
+	got := map[string]string{}
+	for _, n := range topo.Nodes {
+		got[n.Name] = n.Tier
+	}
+	if got["pcrmt11"] != TierDB || got["oracle"] != TierDB || got["orders.events"] != TierQueue {
+		t.Fatalf("adlar/katmanlar: %v", got)
+	}
+	for name := range got {
+		if strings.Contains(name, "db-host") || strings.Contains(name, "acme") {
+			t.Fatalf("host sızdı: %q", name)
+		}
 	}
 }

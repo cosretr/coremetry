@@ -57,7 +57,7 @@ describe('sentetik graf', () => {
     const ids = new Set(a.nodes.map(n => n.id));
     expect(ids.size).toBe(a.nodes.length);
     expect(a.edges.every(e => ids.has(e.from) && ids.has(e.to) && e.from !== e.to)).toBe(true);
-    expect(new Set(a.nodes.map(n => n.tier))).toEqual(new Set(['gw', 'bff', 'svc', 'db']));
+    expect(new Set(a.nodes.map(n => n.tier))).toEqual(new Set(['gw', 'bff', 'svc', 'db', 'queue']));
     expect(a.nodes.every(n => n.weight >= 0 && n.weight <= 1)).toBe(true);
   });
 });

@@ -23,7 +23,8 @@ export function syntheticGraph(seed: number = SYNTHETIC_SEED): SyntheticGraph {
 
   const GW = 6;
   const gws = Array.from({ length: GW }, () => add('gw', 0.7 + rand() * 0.3));
-  const dbs = Array.from({ length: 5 }, () => add('db', 0.3 + rand() * 0.4));
+  // v0.10.1931: veri katmanı = 4 veritabanı + 2 kuyruk (ayrı çizilir)
+  const dbs = Array.from({ length: 6 }, (_, k) => add(k < 4 ? 'db' : 'queue', 0.3 + rand() * 0.4));
   const bffs: number[] = [];
   for (const g of gws) {
     const nb = 2 + Math.floor(rand() * 2);

@@ -144,6 +144,9 @@ func TestProjectPoisonedSnapshotNeverEmitsRawIdentifiers(t *testing.T) {
 		{ID: "eeeeeeeeee", Name: "Some Host.acme.internal", Tier: "db", Weight: 0.5},
 		{ID: "ffffffffff", Name: "node:worker-1", Tier: "svc", Weight: 0.5},
 		{ID: "gggggggggg", Name: "bff-web", Tier: "evil-tier", Weight: 7},
+		{ID: "hhhhhhhhhh", Name: "Broker Host:9092", Tier: "queue", Weight: 0.5},
+		{ID: "iiiiiiiiii", Name: "pcrmt11", Tier: "db", Weight: 0.5},
+		{ID: "jjjjjjjjjj", Name: "orders.events", Tier: "queue", Weight: 0.5},
 	}, Edges: []Edge{
 		{From: "aaaaaaaaaa", To: "bbbbbbbbbb", Weight: 1},
 		{From: "aaaaaaaaaa", To: "eeeeeeeeee", Weight: 1},
@@ -152,14 +155,22 @@ func TestProjectPoisonedSnapshotNeverEmitsRawIdentifiers(t *testing.T) {
 	}}
 	resp := Project(snap, flags(now, TopologyNamed))
 	out := mustJSON(t, resp)
-	assertAbsent(t, out, []string{"ext:", "partner.example.com", "db-host-1", "acme", "worker-1", "node:", "db:", "@", "Some Host", "unknown000", "bbbbbbbbbb", "cccccccccc"}, "zehirli")
+	assertAbsent(t, out, []string{"ext:", "partner.example.com", "db-host-1", "acme", "worker-1", "node:", "db:", "@", "Some Host", "Broker Host", "9092", "unknown000", "bbbbbbbbbb", "cccccccccc"}, "zehirli")
 	for _, n := range resp.Topology.Nodes {
 		if n.Weight < 0 || n.Weight > 1 {
 			t.Errorf("ağırlık 0..1 olmalı: %+v", n)
 		}
-		if n.Tier != "gw" && n.Tier != "bff" && n.Tier != "svc" && n.Tier != "db" {
+		if n.Tier != "gw" && n.Tier != "bff" && n.Tier != "svc" && n.Tier != "db" && n.Tier != "queue" {
 			t.Errorf("bilinmeyen katman çıkmamalı: %+v", n)
 		}
+	}
+	// v0.10.1931: veritabanı adı ve konu adı geçer; güvensiz kuyruk adı genel etikete düşer.
+	byID := map[string]Node{}
+	for _, n := range resp.Topology.Nodes {
+		byID[n.ID] = n
+	}
+	if byID["iiiiiiiiii"].Name != "pcrmt11" || byID["jjjjjjjjjj"].Name != "orders.events" || byID["hhhhhhhhhh"].Name != "queue" {
+		t.Errorf("db/kuyruk adları: %+v %+v %+v", byID["iiiiiiiiii"], byID["jjjjjjjjjj"], byID["hhhhhhhhhh"])
 	}
 	for _, e := range resp.Topology.Edges {
 		if e.Weight > 1 {

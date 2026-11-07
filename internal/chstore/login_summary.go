@@ -164,3 +164,69 @@ func (s *Store) TotalUncompressedBytes(ctx context.Context) (uint64, error) {
 	}
 	return n, nil
 }
+
+// loginDBNamesSQL — v0.10.1931: verilen (db_system, instance) çiftleri için
+// son pencerede en çok çağrılan veritabanı adı (db.name). MV okuması
+// (db_summary_5m); süzgeç ORDER BY önekinde (db_system, instance) → yalnız
+// seçili ≤30 db'nin granülleri okunur, servis sayısından bağımsız. Anahtar
+// topoloji kimliğiyle aynı `instance` zinciri (dbInstanceExpr).
+func loginDBNamesSQL() string {
+	return `
+		SELECT db_system, instance, argMax(db_name, c)
+		FROM (
+			SELECT db_system, instance, db_name, countMerge(span_count_state) AS c
+			FROM db_summary_5m
+			WHERE time_bucket >= ? AND db_system IN ? AND instance IN ?
+			  AND db_name != 'default' AND db_name != ''
+			GROUP BY db_system, instance, db_name
+		)
+		GROUP BY db_system, instance
+		LIMIT 1000
+		SETTINGS max_execution_time = 5`
+}
+
+// LoginDBNames — keys (`<db_system>@<instance>`) → veritabanı adı (login
+// topolojisi db düğümlerini adlandırır; host cevaba çıkmaz, yalnız anahtardır).
+// IN süzgeci iki ayrı listedir; çapraz eşleşmeler aşağıda anahtarla elenir.
+func (s *Store) LoginDBNames(ctx context.Context, since time.Time, keys []string) (map[string]string, error) {
+	if len(keys) == 0 {
+		return map[string]string{}, nil
+	}
+	want := map[string]bool{}
+	var systems, instances []string
+	seenSys, seenInst := map[string]bool{}, map[string]bool{}
+	for _, k := range keys {
+		at := strings.Index(k, "@")
+		if at <= 0 {
+			continue
+		}
+		want[k] = true
+		if sys := k[:at]; !seenSys[sys] {
+			seenSys[sys] = true
+			systems = append(systems, sys)
+		}
+		if inst := k[at+1:]; !seenInst[inst] {
+			seenInst[inst] = true
+			instances = append(instances, inst)
+		}
+	}
+	if len(want) == 0 {
+		return map[string]string{}, nil
+	}
+	rows, err := s.telemetryReadConn().Query(ctx, loginDBNamesSQL(), since, systems, instances)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]string{}
+	for rows.Next() {
+		var sys, inst, name string
+		if err := rows.Scan(&sys, &inst, &name); err != nil {
+			return nil, err
+		}
+		if k := sys + "@" + inst; want[k] {
+			out[k] = name
+		}
+	}
+	return out, rows.Err()
+}

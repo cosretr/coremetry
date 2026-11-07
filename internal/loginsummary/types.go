@@ -70,7 +70,7 @@ type Topology struct {
 
 type Node struct {
 	ID     string  `json:"id"`             // 10 hex, tuzlu özet
-	Tier   string  `json:"tier"`           // gw | bff | svc | db
+	Tier   string  `json:"tier"`           // gw | bff | svc | db | queue
 	Weight float64 `json:"weight"`         // 0..1, 2 hane
 	Name   string  `json:"name,omitempty"` // yalnız loginTopology=named
 }
@@ -93,6 +93,9 @@ const (
 	TierBFF     = "bff"
 	TierService = "svc"
 	TierDB      = "db"
+	// TierQueue — v0.10.1931: kuyruk (kafka, rabbitmq…) veritabanından ayrı
+	// çizilir (halka); önceden ikisi de "db" idi.
+	TierQueue = "queue"
 
 	StateOK       = "ok"
 	StateDegraded = "degraded"

@@ -28,6 +28,13 @@ var (
 	bffNameRe = regexp.MustCompile(`(^|[-_.])bff([-_.]|$)`)
 	// sysNameRe — db/kuyrukta cevaba çıkabilecek sistem adı (redis, kafka, oracle…).
 	sysNameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]{0,23}$`)
+	// dbLabelRe — v0.10.1931: veritabanı ADI (db.name'in ilk parçası, küçük
+	// harf; ör. pcrmt11). Nokta YOK: host/alan adı bu kalıptan geçemez.
+	dbLabelRe = regexp.MustCompile(`^[a-z0-9][a-z0-9_$-]{0,31}$`)
+	// topicRe — v0.10.1931: kuyruk konusu (orders.events gibi). Boşluk, @, :
+	// ve / yok — host:port ya da URL konu kılığında geçemez.
+	topicRe  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,47}$`)
+	digitsRe = regexp.MustCompile(`^[0-9]+$`)
 )
 
 // SilNode — siluet düğümü. Key: kimlik girdisi (servis adı ya da tam çocuk
@@ -37,6 +44,7 @@ type SilNode struct {
 	Key           string
 	Name          string
 	Backend       bool // db: / queue:
+	Queue         bool // queue: (v0.10.1931 — ayrı katman)
 	Calls         uint64
 	InDeg, OutDeg int
 }
@@ -53,26 +61,85 @@ type Silhouette struct {
 	Edges []SilEdge
 }
 
-// backendName — db:/queue: çocuk kimliğinden cevaba çıkabilecek TEK ad:
-// sistem (instance/host/topic değil); güvenli değilse genel etiket.
-func backendName(child string) (name string, ok bool) {
+// backendName — db:/queue: çocuk kimliğinden cevaba çıkabilecek ad. Host /
+// instance ASLA çıkmaz. db: sistem adı (veritabanı adı sonradan
+// NameDatabases ile gelir). queue: v0.10.1931 (operatör: "isimleri gözüksün")
+// — `queue:<sistem>:<konu>` → konu adı; `queue:<sistem>@<host>` ve
+// `queue:<sistem>` → sistem adı. Güvenli değilse genel etiket ("db"/"queue").
+func backendName(child string) (name string, queue, ok bool) {
 	kind, rest := chstore.TopologyNodeIdentity(child)
-	var generic string
 	switch kind {
 	case chstore.NodeKindDB:
-		generic = "db"
+		if at := strings.Index(rest, "@"); at > 0 {
+			if sys := strings.ToLower(rest[:at]); sysNameRe.MatchString(sys) {
+				return sys, false, true
+			}
+		}
+		return "db", false, true
 	case chstore.NodeKindQueue:
-		generic = "queue"
-	default:
-		return "", false
+		at, colon := strings.Index(rest, "@"), strings.Index(rest, ":")
+		if colon > 0 && (at < 0 || colon < at) {
+			if topic := rest[colon+1:]; topicRe.MatchString(topic) {
+				return topic, true, true
+			}
+			rest = rest[:colon]
+		} else if at > 0 {
+			rest = rest[:at]
+		}
+		if sys := strings.ToLower(rest); sysNameRe.MatchString(sys) {
+			return sys, true, true
+		}
+		return "queue", true, true
 	}
-	if at := strings.Index(rest, "@"); at > 0 {
-		sys := strings.ToLower(rest[:at])
-		if sysNameRe.MatchString(sys) {
-			return sys, true
+	return "", false, false
+}
+
+// dbLabel — SAF. db.name değerinden gösterilecek veritabanı adı: ilk nokta
+// parçası, küçük harf (PCRMT11.ACME.LOCAL → pcrmt11). Kalıba uymayan ya da
+// yalnız rakam (IP parçası) → "".
+func dbLabel(raw string) string {
+	s := strings.TrimSpace(raw)
+	if i := strings.Index(s, "."); i >= 0 {
+		s = s[:i]
+	}
+	s = strings.ToLower(s)
+	if !dbLabelRe.MatchString(s) || digitsRe.MatchString(s) {
+		return ""
+	}
+	return s
+}
+
+// DatabaseKeys — siluetteki veritabanı düğümlerinin `<db_system>@<instance>`
+// anahtarları (ad sorgusu yalnız bunları sorar; boşsa sorgu atlanır).
+func (s Silhouette) DatabaseKeys() []string {
+	var out []string
+	for _, n := range s.Nodes {
+		if n.Backend && !n.Queue {
+			if _, rest := chstore.TopologyNodeIdentity(n.Key); rest != "" {
+				out = append(out, rest)
+			}
 		}
 	}
-	return generic, true
+	return out
+}
+
+// NameDatabases — SAF. v0.10.1931 (operatör: "database'lerin isimleri
+// gözüksün, host adresi değil"): db düğümünün adı sistem adı yerine
+// veritabanı adı olur. names anahtarı `<db_system>@<instance>` — topoloji
+// kimliğinin önekten sonraki kısmıyla birebir (chstore.LoginDBNames).
+// Adı olmayan ya da kalıba uymayan düğüm sistem adında kalır.
+func NameDatabases(sil *Silhouette, names map[string]string) {
+	for i := range sil.Nodes {
+		n := &sil.Nodes[i]
+		if !n.Backend || n.Queue {
+			continue
+		}
+		if _, rest := chstore.TopologyNodeIdentity(n.Key); rest != "" {
+			if l := dbLabel(names[rest]); l != "" {
+				n.Name = l
+			}
+		}
+	}
 }
 
 // PickSilhouette — SAF. 1) `ext:` çocuklu kenarlar atılır; 2) servis skoru =
@@ -114,7 +181,7 @@ func PickSilhouette(edges []chstore.ServiceTopologyEdge, maxNodes int) Silhouett
 		if isDroppedNode(p) || isDroppedNode(c) || e.NodeKind == chstore.NodeKindExternal {
 			continue
 		}
-		if _, isBackend := backendName(c); isBackend {
+		if _, _, isBackend := backendName(c); isBackend {
 			kept = append(kept, rawEdge{p, c, true, e.Calls})
 			a := touch(svc, p)
 			a.out++
@@ -183,8 +250,8 @@ func PickSilhouette(edges []chstore.ServiceTopologyEdge, maxNodes int) Silhouett
 		out.Nodes = append(out.Nodes, SilNode{Key: n, Name: n, Calls: a.calls, InDeg: a.in, OutDeg: a.out})
 	}
 	for _, k := range bkKeys {
-		name, _ := backendName(k)
-		out.Nodes = append(out.Nodes, SilNode{Key: k, Name: name, Backend: true, Calls: attached[k]})
+		name, queue, _ := backendName(k)
+		out.Nodes = append(out.Nodes, SilNode{Key: k, Name: name, Backend: true, Queue: queue, Calls: attached[k]})
 	}
 
 	// kenarlar: iki ucu da seçili, ağırlığa göre ilk 2*maxNodes (aynı çift birleşir)
@@ -292,9 +359,13 @@ func BuildTopology(sil Silhouette, salt string) *SnapTopology {
 	}
 	t := &SnapTopology{WindowS: topoWindowS}
 	for _, n := range sil.Nodes {
+		tier := TierOf(n.Name, n.Backend, n.InDeg, n.OutDeg)
+		if n.Backend && n.Queue {
+			tier = TierQueue
+		}
 		t.Nodes = append(t.Nodes, SnapNode{
 			ID: NodeID(salt, n.Key), Name: n.Name,
-			Tier: TierOf(n.Name, n.Backend, n.InDeg, n.OutDeg), Weight: norm(n.Calls, maxNode),
+			Tier: tier, Weight: norm(n.Calls, maxNode),
 		})
 	}
 	for _, e := range sil.Edges {

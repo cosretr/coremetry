@@ -86,9 +86,12 @@ func projectTopology(t *SnapTopology, mode string) *Topology {
 		}
 		node := Node{ID: n.ID, Tier: tierOrSvc(n.Tier), Weight: round2(n.Weight)}
 		if named {
-			if node.Tier == TierDB && !sysNameRe.MatchString(n.Name) {
+			switch {
+			case node.Tier == TierDB && !sysNameRe.MatchString(n.Name) && !dbLabelRe.MatchString(n.Name):
 				node.Name = "db"
-			} else {
+			case node.Tier == TierQueue && !sysNameRe.MatchString(n.Name) && !topicRe.MatchString(n.Name):
+				node.Name = "queue"
+			default:
 				node.Name = n.Name
 			}
 		}
@@ -108,7 +111,7 @@ func projectTopology(t *SnapTopology, mode string) *Topology {
 
 func tierOrSvc(t string) string {
 	switch t {
-	case TierGateway, TierBFF, TierService, TierDB:
+	case TierGateway, TierBFF, TierService, TierDB, TierQueue:
 		return t
 	}
 	return TierService

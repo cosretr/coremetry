@@ -17,7 +17,7 @@ export function shouldDraw(now: number, last: number): boolean {
 export const MAX_DRAW_NODES = 180;
 export const MAX_LABELS = 24;
 
-const THIN_RANK: Record<string, number> = { gw: 0, bff: 1, db: 2, svc: 3 };
+const THIN_RANK: Record<string, number> = { gw: 0, bff: 1, db: 2, queue: 2, svc: 3 };
 /**
  * Çizilecek düğümler: giriş → BFF → veri → servis (servisler ağırlığa göre),
  * en çok `max`. Girdi sırası korunur (tohum kararlı kalsın); kenarlar yalnız

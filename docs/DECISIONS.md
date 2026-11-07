@@ -13332,4 +13332,13 @@ JSON sözleşmesi ve kararlar ana oturumda. Backend dilimleri v0.10.1902–1905.
   --text2; parıltı zeminin koyuluğuna göre. Etiket: gateway/BFF önde, servis 1918'in rastgele kümesinden, veri katmanı asla
   (1926). Sökülenler (ölü kod yok): kuvvet yerleşimi + `evenOut` (layout.ts), derinlik katmanları (depth.ts), nokta sürükleme
   (drag.ts); PRNG `prng.ts`'e taşındı. Ölçüm: tarayıcıda/Citrix'te yapılmadı (mockup'ta canlı ölçer var).
+- **v0.10.1931 — login galaksisi: veri katmanı adlarıyla, kuyruk ayrı (operatör, 2026-11-07: "database'lerin postgres/queue
+  yazmasın, isimleri gözüksün"; "queue kafka oracle ayrı noktalar olabilir"; "gerçek galaksi" mockup seçeneği REDDEDİLDİ, son karar
+  veriye bağlı galaksi).** Yeni katman `queue` (cevap sözleşmesi `tier: gw|bff|svc|db|queue`). Veritabanı mor YUVARLAK nokta + hale
+  (1928'in karesi kalktı), kuyruk --teal içi boş halka. Ad: veritabanı = `db_summary_5m`'deki en çok çağrılan `db.name`'in ilk nokta
+  parçası, küçük harf (PCRMT11.ACME.LOCAL → pcrmt11); sorgu YALNIZ siluette seçili ≤30 db çiftini sorar (`db_system IN ? AND
+  instance IN ?`, ORDER BY öneki; test 4000 / prod 1300 servis ölçeğinden bağımsız), hata → sistem adı. Kuyruk = kimlikteki konu
+  (`queue:<sistem>:<konu>`), `@host` biçiminde sistem adı. Host ASLA çıkmaz: db adı kalıbında nokta yok, konu kalıbında `@ : /`
+  boşluk yok; Project kapısı kalıp dışını "db"/"queue"ya düşürür. Etiket: her ad BİR kez (en ağır düğüm), "db"/"queue" yedeği hiç,
+  en çok 12 (1926'daki tekrar şikâyeti böyle kapandı). 2026-11-07'deki "Gerek yok" (db adları) bu istekle geri alındı.
 

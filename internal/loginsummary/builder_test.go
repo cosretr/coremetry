@@ -95,11 +95,21 @@ type fakeStore struct {
 	topoCalls, countsCalls, endpointCalls          int
 	endpoints                                      uint64
 	endpointsErr                                   error
+	dbNames                                        map[string]string
+	dbNamesErr                                     error
+	dbNameCalls                                    int
+	dbNameKeys                                     []string
 }
 
 func (f *fakeStore) CountLoginEndpoints(ctx context.Context) (uint64, error) {
 	f.endpointCalls++
 	return f.endpoints, f.endpointsErr
+}
+
+func (f *fakeStore) LoginDBNames(ctx context.Context, since time.Time, keys []string) (map[string]string, error) {
+	f.dbNameCalls++
+	f.dbNameKeys = keys
+	return f.dbNames, f.dbNamesErr
 }
 
 func (f *fakeStore) LoginSummaryCounts(ctx context.Context) (chstore.LoginCounts, error) {
@@ -668,5 +678,37 @@ func TestQueriesAvoidDoubleCounting(t *testing.T) {
 	}
 	if !strings.Contains(qs.GRPCRate, " or ") || strings.Contains(qs.GRPCRate, " + ") {
 		t.Errorf("gRPC aileleri `or` ile: %s", qs.GRPCRate)
+	}
+}
+
+// v0.10.1931 — yavaş tur db adlarını okur ve db düğümüne uygular; hata
+// topolojiyi düşürmez (sistem adında kalır).
+func TestBuilderNamesDatabases(t *testing.T) {
+	for _, fail := range []bool{false, true} {
+		h := newHarness(t)
+		h.st.dbNames = map[string]string{"oracle@db-host-1.acme.internal": "PCRMT11.ACME.LOCAL"}
+		if fail {
+			h.st.dbNamesErr = errors.New("boom")
+		}
+		snap := h.step()
+		if snap == nil || snap.Topo == nil {
+			t.Fatal("topoloji yayınlanmalı")
+		}
+		want := "pcrmt11"
+		if fail {
+			want = "oracle"
+		}
+		found := false
+		for _, n := range snap.Topo.Nodes {
+			if n.Tier == TierDB && n.Name == want {
+				found = true
+			}
+		}
+		if len(h.st.dbNameKeys) != 1 || h.st.dbNameKeys[0] != "oracle@db-host-1.acme.internal" {
+			t.Errorf("yalnız seçili db anahtarları sorulmalı: %v", h.st.dbNameKeys)
+		}
+		if !found || h.st.dbNameCalls != 1 {
+			t.Errorf("fail=%v: db adı %q beklenir (çağrı %d): %+v", fail, want, h.st.dbNameCalls, snap.Topo.Nodes)
+		}
 	}
 }
