@@ -48,7 +48,7 @@ func Project(snap *Snapshot, f Flags) Response {
 	if v, ok := snap.Ring.View(); ok {
 		out.HTTP24h = &HTTP24h{
 			From: v.From, To: v.To, StepS: ringStepS,
-			Throughput: v.Throughput, Avg: v.Avg, Summary: v.Summary,
+			Throughput: v.Throughput, GRPC: v.GRPC, Kafka: v.Kafka, Avg: v.Avg, Summary: v.Summary,
 		}
 	}
 	if a := snap.Activity; a != nil {

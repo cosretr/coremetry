@@ -10,12 +10,13 @@ const T: Record<string, string> = {
   'login.sum.logins': '{n} giriş yapıldı',
   'login.sum.cosre': 'CoSRE {n} soru yanıtladı',
   'login.sum.endpoints': '{n} endpoint',
-  'login.sum.tput': 'toplam {n} req/s',
+  'login.sum.tput': 'HTTP {n} req/s',
+  'login.sum.grpc': 'gRPC {n} req/s',
+  'login.sum.kafka': 'Kafka {n} mesaj/sn',
   'login.sum.rt': 'ort. yanıt {n}',
   'login.sum.allOk': 'Tüm bileşenler çalışıyor',
   'login.sum.degraded': 'Bazı bileşenler sorunlu · ayrıntı giriş sonrasında',
   'login.sum.checked': 'son kontrol',
-  'login.http.now': 'şimdi {now} req/s · tepe {peak} ({at})',
   'login.http.avg': 'ort',
   'login.http.title': '{org} OpenTelemetry metrikleri · son 24 saat',
   'login.http.titleNoOrg': 'OpenTelemetry metrikleri · son 24 saat',
@@ -94,14 +95,16 @@ describe('satır metinleri', () => {
     expect(p.map(x => `${x.pre}${x.n}${x.post}`)).toEqual(['47 giriş yapıldı', 'CoSRE 61 soru yanıtladı']);
     expect(activityParts(undefined, t)).toEqual([]);
   });
-  it('şu an: endpoint · toplam throughput · ort. yanıt; eksik alan yalnız kendini düşürür', () => {
-    const http = { from: 0, to: 1, step_s: 300, summary: { now_rps: 3200, peak_rps: 4000, peak_at: 0, avg_now_s: 0.186 } };
+  // v0.10.1923 — protokol başına hız (HTTP · gRPC · Kafka).
+  it('şu an: endpoint · HTTP · gRPC · Kafka · ort. yanıt; eksik/sıfır alan yalnız kendini düşürür', () => {
+    const http = { from: 0, to: 1, step_s: 300, summary: { now_rps: 3200, grpc_now_rps: 120, kafka_now_mps: 40_000, avg_now_s: 0.186 } };
     const full = nowParts({ enabled: true, ready: true, endpoints_monitored: 12_400, http_24h: http }, t);
-    expect(full.map(x => `${x.pre}${x.n}${x.post}`)).toEqual(['12.4K endpoint', 'toplam 3.2K req/s', 'ort. yanıt 186 ms']);
+    expect(full.map(x => `${x.pre}${x.n}${x.post}`)).toEqual(
+      ['12.4K endpoint', 'HTTP 3.2K req/s', 'gRPC 120 req/s', 'Kafka 40.0K mesaj/sn', 'ort. yanıt 186 ms']);
     const noHttp = nowParts({ enabled: true, ready: true, endpoints_monitored: 420 }, t);
     expect(noHttp.map(x => `${x.pre}${x.n}${x.post}`)).toEqual(['420 endpoint']);
-    const noAvg = nowParts({ enabled: true, ready: true, http_24h: { ...http, summary: { now_rps: 5, peak_rps: 9, peak_at: 0 } } }, t);
-    expect(noAvg.map(x => `${x.pre}${x.n}${x.post}`)).toEqual(['toplam 5.0 req/s']);
+    const onlyHttp = nowParts({ enabled: true, ready: true, http_24h: { ...http, summary: { now_rps: 5, grpc_now_rps: 0 } } }, t);
+    expect(onlyHttp.map(x => `${x.pre}${x.n}${x.post}`)).toEqual(['HTTP 5.0 req/s']);
     expect(nowParts({ enabled: true, ready: true }, t)).toEqual([]);
     expect(nowParts({ enabled: true, ready: true, endpoints_monitored: 0 }, t)).toEqual([]);
   });
@@ -135,8 +138,10 @@ describe('satır metinleri', () => {
 
 describe('HTTP kartı yardımcıları', () => {
   const pt = (n: number) => Array.from({ length: n }, (_, i) => ({ time: i, value: 1 }));
-  it('httpCardUsable: ≥ 2 noktalı toplam hız serisi', () => {
-    const base = { from: 0, to: 1, step_s: 300, summary: { now_rps: 1, peak_rps: 2, peak_at: 0 } };
+  it('httpCardUsable: protokollerden en az biri ≥ 2 noktalı', () => {
+    const base = { from: 0, to: 1, step_s: 300, summary: { now_rps: 1 } };
+    expect(httpCardUsable({ ...base, kafka: { groupKey: [], points: pt(2) } })).toBe(true);
+    expect(httpCardUsable({ ...base, grpc: { groupKey: [], points: pt(1) } })).toBe(false);
     expect(httpCardUsable({ ...base, throughput: { groupKey: [], points: pt(2) } })).toBe(true);
     expect(httpCardUsable({ ...base, throughput: { groupKey: [], points: pt(1) } })).toBe(false);
     expect(httpCardUsable({ ...base })).toBe(false);
@@ -149,9 +154,11 @@ describe('HTTP kartı yardımcıları', () => {
     'fmtSeconds %s → %s', (v, want) => expect(fmtSeconds(v)).toBe(want));
   it('başlık satırları', () => {
     const at = new Date(2026, 10, 6, 12, 5).getTime();
-    expect(throughputHead({ now_rps: 1500, peak_rps: 2200, peak_at: at }, t)).toBe('şimdi 1.5K req/s · tepe 2.2K (12:05)');
-    expect(responseHead({ now_rps: 1, peak_rps: 1, peak_at: 0, avg_now_s: 0.186 }, t)).toBe('ort 186 ms');
-    expect(responseHead({ now_rps: 1, peak_rps: 1, peak_at: 0 }, t)).toBe('');
+    void at;
+    expect(throughputHead({ now_rps: 1500, grpc_now_rps: 12, kafka_now_mps: 40_000 })).toBe('HTTP 1.5K · gRPC 12 · Kafka 40.0K');
+    expect(throughputHead({ now_rps: 0, kafka_now_mps: 9 })).toBe('Kafka 9.0');
+    expect(responseHead({ now_rps: 1, avg_now_s: 0.186 }, t)).toBe('ort 186 ms');
+    expect(responseHead({ now_rps: 1 }, t)).toBe('');
   });
   it('kart başlığı: orgName boşsa ad düşer', () => {
     expect(httpCardTitle('acme', t)).toBe('acme OpenTelemetry metrikleri · son 24 saat');

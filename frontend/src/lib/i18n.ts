@@ -154,7 +154,9 @@ const EN: Catalog = {
   'login.sum.live':     'live',
   'login.sum.now':      'Right now',
   'login.sum.endpoints': '{n} endpoints',
-  'login.sum.tput':     'total {n} req/s',
+  'login.sum.tput':     'HTTP {n} req/s',
+  'login.sum.grpc':     'gRPC {n} req/s',
+  'login.sum.kafka':    'Kafka {n} msg/s',
   'login.sum.rt':       'avg response {n}',
   'login.sum.last24':   'Last 24 hours',
   'login.sum.logins':   '{n} sign-ins',
@@ -165,12 +167,11 @@ const EN: Catalog = {
   // v0.10.1908 — Login HTTP grafik kartı (audit §6.2).
   'login.http.title':     '{org} OpenTelemetry metrics · last 24 hours',
   'login.http.titleNoOrg': 'OpenTelemetry metrics · last 24 hours',
-  'login.http.scope':     'all HTTP services',
+  'login.http.scope':     'all services',
   'login.http.throughput': 'Throughput · metric',
   'login.http.rt':        'Response time · metric',
-  'login.http.now':       'now {now} req/s · peak {peak} ({at})',
+  'login.http.perSec':    'now · per second',
   'login.http.avg':       'avg',
-  'login.http.total':     'total',
   // v0.10.1909 — topoloji arka planı notu (yalnız gerçek veride).
   'login.topo.note':      'Live topology silhouette · {n} services · last {m} min · details after sign-in',
 
@@ -824,7 +825,9 @@ const TR: Catalog = {
   'login.sum.live':     'canlı',
   'login.sum.now':      'Şu an',
   'login.sum.endpoints': '{n} endpoint',
-  'login.sum.tput':     'toplam {n} req/s',
+  'login.sum.tput':     'HTTP {n} req/s',
+  'login.sum.grpc':     'gRPC {n} req/s',
+  'login.sum.kafka':    'Kafka {n} mesaj/sn',
   'login.sum.rt':       'ort. yanıt {n}',
   'login.sum.last24':   'Son 24 saatte',
   'login.sum.logins':   '{n} giriş yapıldı',
@@ -835,12 +838,11 @@ const TR: Catalog = {
   // v0.10.1908 — Login HTTP grafik kartı.
   'login.http.title':     '{org} OpenTelemetry metrikleri · son 24 saat',
   'login.http.titleNoOrg': 'OpenTelemetry metrikleri · son 24 saat',
-  'login.http.scope':     'tüm HTTP servisleri',
+  'login.http.scope':     'tüm servisler',
   'login.http.throughput': 'Throughput · metrik',
   'login.http.rt':        'Response time · metrik',
-  'login.http.now':       'şimdi {now} req/s · tepe {peak} ({at})',
+  'login.http.perSec':    'şimdi · saniyede',
   'login.http.avg':       'ort',
-  'login.http.total':     'toplam',
   'login.topo.note':      'Canlı topoloji silueti · {n} servis · son {m} dk · ayrıntılar giriş sonrasında',
 
   // User menu

@@ -39,13 +39,17 @@ func (f *fakeVM) QueryPromQLRange(ctx context.Context, q string, from, to time.T
 	if _, has := ctx.Deadline(); !has {
 		return nil, errors.New("fakeVM: bağlamda zaman aşımı yok")
 	}
-	q1, q2 := Queries(HTTPFamily)
+	qs := Queries(HTTPFamily)
 	var name string
 	switch q {
-	case q1:
+	case qs.HTTPRate:
 		name = "q1"
-	case q2:
+	case qs.HTTPSum:
 		name = "q2"
+	case qs.GRPCRate:
+		name = "grpc"
+	case qs.KafkaRate:
+		name = "kafka"
 	default:
 		f.unknown = append(f.unknown, q)
 		return nil, fmt.Errorf("fakeVM: bilinmeyen ifade %q", q)
@@ -72,8 +76,10 @@ func (f *fakeVM) QueryPromQLRange(ctx context.Context, q string, from, to time.T
 		return []chstore.SpanMetricSeries{mk(nil, 51)}, nil
 	case "q2":
 		return []chstore.SpanMetricSeries{mk(nil, 25.5)}, nil
-	default:
-		return []chstore.SpanMetricSeries{mk(nil, 0.3)}, nil
+	case "grpc":
+		return []chstore.SpanMetricSeries{mk(nil, 7)}, nil
+	default: // kafka
+		return []chstore.SpanMetricSeries{mk(nil, 40)}, nil
 	}
 }
 
@@ -230,8 +236,8 @@ func TestBuilderNeverQueriesPercentiles(t *testing.T) {
 	if len(h.vm.unknown) != 0 {
 		t.Fatalf("beklenmeyen VM ifadesi: %v", h.vm.unknown)
 	}
-	q1, q2 := Queries(HTTPFamily)
-	for _, q := range []string{q1, q2} {
+	qs := Queries(HTTPFamily)
+	for _, q := range []string{qs.HTTPRate, qs.HTTPSum, qs.GRPCRate, qs.KafkaRate} {
 		if strings.Contains(q, "histogram_quantile") || strings.Contains(q, "_bucket") {
 			t.Fatalf("yüzdelik ifadesi kalmamalı: %s", q)
 		}
@@ -621,5 +627,40 @@ func TestBuilderLogsOnSlowRoundOrStateChange(t *testing.T) {
 	h.step() // durum degraded oldu → satır
 	if len(h.logs) != 2 || !strings.Contains(h.logs[1], "state=degraded") {
 		t.Fatalf("durum değişimi günlüğe yazılmalı: %v", h.logs)
+	}
+}
+
+// v0.10.1923 (operatör: "tek grafikte Kafka, gRPC, HTTP throughput") — üç
+// protokol de halkaya girer; gRPC / Kafka arızası pencereyi düşürmez, yalnız
+// o çizgi eksik kalır.
+func TestBuilderProtocolsAndPartialFailure(t *testing.T) {
+	h := newHarness(t)
+	snap := h.step()
+	v, ok := snap.Ring.View()
+	if !ok || v.Throughput == nil || v.GRPC == nil || v.Kafka == nil {
+		t.Fatalf("üç protokol beklenir: %+v", v)
+	}
+	if v.Summary.GRPCNow == nil || *v.Summary.GRPCNow != 7 || v.Summary.KafkaNow == nil || *v.Summary.KafkaNow != 40 {
+		t.Errorf("anlık değerler: %+v", v.Summary)
+	}
+	h2 := newHarness(t)
+	h2.vm.fail["kafka"] = true
+	h2.vm.fail["grpc"] = true
+	s2 := h2.step()
+	v2, ok := s2.Ring.View()
+	if !ok || v2.Throughput == nil || v2.GRPC != nil || v2.Kafka != nil || s2.State != StateOK {
+		t.Errorf("gRPC/Kafka arızası HTTP'yi ve durumu etkilememeli: %+v state=%s", v2, s2.State)
+	}
+}
+
+// Kafka ifadesi konu başına serileri toplamaz (çift sayım); gRPC yeni/eski aile
+// birlikte toplanmaz (`or`).
+func TestQueriesAvoidDoubleCounting(t *testing.T) {
+	qs := Queries(HTTPFamily)
+	if !strings.Contains(qs.KafkaRate, `kafka_consumer_records_consumed_total{topic=""}`) {
+		t.Errorf("Kafka istemci düzeyi seri: %s", qs.KafkaRate)
+	}
+	if !strings.Contains(qs.GRPCRate, " or ") || strings.Contains(qs.GRPCRate, " + ") {
+		t.Errorf("gRPC aileleri `or` ile: %s", qs.GRPCRate)
 	}
 }

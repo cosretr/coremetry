@@ -1,6 +1,6 @@
 // LoginHttpCard — v0.10.1908 (Login yeniden tasarımı dilim 2.3, audit §6.2).
 // Özet sütunundaki "OpenTelemetry metrikleri · son 24 saat" kartı: iki gömülü
-// CorePanelMulti (Throughput TOPLAM istek/sn + Response time ortalama; v0.10.1922: p95 yok),
+// CorePanelMulti (Throughput: HTTP / gRPC / Kafka hızı, v0.10.1923 + Response time HTTP ortalama; v0.10.1922: p95 yok),
 // ortak `syncKey` (imleç eşlenir), tek statik lejant. LAZY: @grafana chunk'ı
 // yalnız `http_24h` geldikten sonra iner (LoginSummary.tsx `lazy` ile çağırır).
 // Veri çekmez; sunucu hazır diziyi verir. Seriler zaman = unix ns, x ekseni
@@ -17,13 +17,18 @@ const SYNC = msSyncKey('login-http');
 const PANEL_H = 76; // v0.10.1920: 96 → 76 (kart daha kompakt)
 // v0.10.1914 — throughput TEK toplam serisi (durum kodu kırılımı kalktı: operatör kararı;
 // giriş öncesi hata dağılımı gösterilmez, küçük panelde tek çizgi okunur).
-const TPUT_TOKEN = '--ok';
+// v0.10.1923 (operatör: "tek grafikte Kafka, gRPC, HTTP throughput") — üç çizgi, tek panel.
+const PROTO = [
+  { key: 'throughput', name: 'HTTP', token: '--ok' },
+  { key: 'grpc', name: 'gRPC', token: '--purple' },
+  { key: 'kafka', name: 'Kafka', token: '--orange' },
+] as const;
 const AVG_TOKEN = '--info';
 
 // Tailwind literal ister: token → sınıf haritası (yalnız bu kümedeki tokenlar).
 const TEXT_CLASS: Readonly<Record<string, string>> = {
   '--ok': 'text-(--ok)', '--info': 'text-(--info)', '--orange': 'text-(--orange)',
-  '--err': 'text-(--err)',
+  '--err': 'text-(--err)', '--purple': 'text-(--purple)',
 };
 
 interface LegendItem { name: string; token: string }
@@ -31,11 +36,12 @@ interface LegendItem { name: string; token: string }
 export default function LoginHttpCard({ http, orgName }: { http: LoginSummaryHttp; orgName?: string }) {
   const t = useT();
   const xRange = useMemo(() => ({ from: http.from / 1000, to: http.to / 1000 }), [http.from, http.to]);
-  const tputName = t('login.http.total');
-  const tputItems = useMemo<CorePanelMultiItem[]>(() => (http.throughput
-    ? [{ name: tputName, role: 'data', color: `var(${TPUT_TOKEN})`, series: [http.throughput] }]
-    : []), [http.throughput, tputName]);
-  const legend: LegendItem[] = http.throughput ? [{ name: tputName, token: TPUT_TOKEN }] : [];
+  const present = PROTO.filter(p => (http[p.key]?.points ?? []).length > 0);
+  const tputItems = useMemo<CorePanelMultiItem[]>(() => PROTO
+    .filter(p => (http[p.key]?.points ?? []).length > 0)
+    .map(p => ({ name: p.name, role: 'data' as const, color: `var(${p.token})`, series: [http[p.key]!] })),
+  [http]);
+  const legend: LegendItem[] = present.map(p => ({ name: p.name, token: p.token }));
   const rtItems = useMemo(() => {
     const out: CorePanelMultiItem[] = [];
     if (http.avg) out.push({ name: t('login.http.avg'), role: 'data', color: `var(${AVG_TOKEN})`, series: [http.avg] });
@@ -55,10 +61,10 @@ export default function LoginHttpCard({ http, orgName }: { http: LoginSummaryHtt
 
       <div className="mb-0.5 flex items-baseline justify-between gap-2 text-[length:var(--fs-2xs)] text-muted-foreground">
         <span>{t('login.http.throughput')}</span>
-        <span className="tabular-nums">{throughputHead(http.summary, t)}</span>
+        <span className="tabular-nums">{t('login.http.perSec')}: {throughputHead(http.summary)}</span>
       </div>
       <CorePanelMulti embedded title="" hideLegend height={PANEL_H} storageKey="login-tput"
-        syncKey={SYNC} xRange={xRange} unit="reqps" items={tputItems} />
+        syncKey={SYNC} xRange={xRange} unit="short" items={tputItems} />
 
       {rtItems.length > 0 && (
         <>

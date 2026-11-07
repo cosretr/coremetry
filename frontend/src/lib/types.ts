@@ -12286,13 +12286,17 @@ export interface MLScorecard {
 // internal/loginsummary.Response). Özet kapalıyken {enabled:false,ready:false};
 // anlık görüntü yok/eski iken {enabled:true,ready:false}. Seri zamanları unix ns.
 export interface LoginSummaryHttpSummary {
-  now_rps: number; peak_rps: number; peak_at: number; // peak_at unix ms
-  avg_now_s?: number; // v0.10.1922: p95 kaldırıldı
+  now_rps: number;          // HTTP istek/sn (son kova)
+  grpc_now_rps?: number;    // v0.10.1923 — gRPC istek/sn
+  kafka_now_mps?: number;   // v0.10.1923 — Kafka tüketilen mesaj/sn
+  avg_now_s?: number;       // HTTP ortalama yanıt (sn)
 }
 export interface LoginSummaryHttp {
   from: number; to: number; step_s: number; // from/to unix ms
-  throughput?: SpanMetricSeries;            // TOPLAM istek/sn, tek seri (v0.10.1914: durum kodu kırılımı yok)
-  avg?: SpanMetricSeries; // saniye (ortalama = toplam süre / istek sayısı)
+  throughput?: SpanMetricSeries;            // HTTP istek/sn, tek seri
+  grpc?: SpanMetricSeries;                  // v0.10.1923 — gRPC istek/sn
+  kafka?: SpanMetricSeries;                 // v0.10.1923 — Kafka mesaj/sn
+  avg?: SpanMetricSeries;                   // saniye (HTTP ortalama = toplam süre / istek sayısı)
   summary: LoginSummaryHttpSummary;
 }
 export interface LoginSummaryActivity {

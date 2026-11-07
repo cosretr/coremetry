@@ -30,10 +30,34 @@ const (
 // gerçek VM istemcisinin grup anahtarı `etiket="200"` biçiminde geldiği için
 // süzgeç tüm serileri atıyor, kart hiç çizilmiyordu. Gruplamasız sorguda
 // ayrıştırılacak etiket yok; giriş öncesi hata dağılımı da görünmez.
+//
+// v0.10.1923 (operatör: "tek grafikte Kafka, gRPC, HTTP throughput") — R HTTP
+// istek/sn, G gRPC istek/sn, K Kafka tüketilen mesaj/sn; Sum yalnız HTTP.
 type RingBucket struct {
 	T   int64    `json:"t"` // unix sn, 300'ün katı
 	R   *float64 `json:"r,omitempty"`
+	G   *float64 `json:"g,omitempty"`
+	K   *float64 `json:"k,omitempty"`
 	Sum *float64 `json:"sum,omitempty"`
+}
+
+// Proto — throughput serisinin protokolü.
+type Proto int
+
+const (
+	ProtoHTTP Proto = iota
+	ProtoGRPC
+	ProtoKafka
+)
+
+func (b *RingBucket) slot(p Proto) **float64 {
+	switch p {
+	case ProtoGRPC:
+		return &b.G
+	case ProtoKafka:
+		return &b.K
+	}
+	return &b.R
 }
 
 // Ring — kovalar artan zamanla; Filled: boşluk doldurması TAMAMLANMIŞ saatlik
@@ -66,10 +90,10 @@ func (r *Ring) bucket(t int64) *RingBucket {
 	return &r.B[i]
 }
 
-// MergeRate — Q1 (toplam istek hızı). Sorgu gruplamasızdır ve tek seri
+// MergeRate — bir protokolün toplam hızı. Sorgu gruplamasızdır ve tek seri
 // döner; yine de birden çok seri gelirse aynı kovadaki değerler TOPLANIR
 // (grup anahtarı okunmaz — biçimine güvenilmez). Kovanın önceki değeri ezilir.
-func (r *Ring) MergeRate(series []chstore.SpanMetricSeries) {
+func (r *Ring) MergeRate(series []chstore.SpanMetricSeries, proto Proto) {
 	acc := map[int64]float64{}
 	for _, s := range series {
 		for _, p := range s.Points {
@@ -81,7 +105,7 @@ func (r *Ring) MergeRate(series []chstore.SpanMetricSeries) {
 	}
 	for t, v := range acc {
 		v := v
-		r.bucket(t).R = &v
+		*r.bucket(t).slot(proto) = &v
 	}
 }
 
@@ -158,49 +182,61 @@ func (r *Ring) MissingChunks(nowSec, recentFromSec int64, limit int) []int64 {
 
 // View — halkadan cevaba giren hâl.
 type View struct {
-	Throughput *chstore.SpanMetricSeries
-	Avg        *chstore.SpanMetricSeries
+	Throughput *chstore.SpanMetricSeries // HTTP
+	GRPC       *chstore.SpanMetricSeries
+	Kafka      *chstore.SpanMetricSeries
+	Avg        *chstore.SpanMetricSeries // HTTP ortalama yanıt
 	Summary    HTTPSummary
 	From       int64 // unix ms
 	To         int64 // unix ms
 }
 
-// View — halkayı cevaba çevirir. Hiç hız verisi yoksa ok=false (kart gizlenir).
+// View — halkayı cevaba çevirir. Hiçbir protokolde hız verisi yoksa ok=false (kart gizlenir).
 func (r *Ring) View() (View, bool) {
 	var v View
 	if r == nil || len(r.B) == 0 {
 		return v, false
 	}
-	var tput, avg chstore.SpanMetricSeries
-	var peak float64
-	var peakAt int64
-	var lastTotal float64
-	var lastAvg *float64
+	var http, grpc, kafka, avg chstore.SpanMetricSeries
+	var lastHTTP float64
+	var lastGRPC, lastKafka, lastAvg *float64
+	add := func(s *chstore.SpanMetricSeries, t int64, x float64) {
+		s.Points = append(s.Points, chstore.SpanMetricPoint{Time: t * 1e9, Value: x})
+	}
 	for _, b := range r.B {
 		if b.R != nil {
 			tot := *b.R
-			tput.Points = append(tput.Points, chstore.SpanMetricPoint{Time: b.T * 1e9, Value: tot})
-			lastTotal = tot
-			if tot > peak {
-				peak, peakAt = tot, b.T
-			}
+			add(&http, b.T, tot)
+			lastHTTP = tot
 			if b.Sum != nil && tot > 0 {
 				a := *b.Sum / tot
-				avg.Points = append(avg.Points, chstore.SpanMetricPoint{Time: b.T * 1e9, Value: a})
+				add(&avg, b.T, a)
 				lastAvg = &a
 			}
 		}
+		if b.G != nil {
+			x := *b.G
+			add(&grpc, b.T, x)
+			lastGRPC = &x
+		}
+		if b.K != nil {
+			x := *b.K
+			add(&kafka, b.T, x)
+			lastKafka = &x
+		}
 	}
-	if len(tput.Points) == 0 {
-		return v, false
+	keep := func(s chstore.SpanMetricSeries) *chstore.SpanMetricSeries {
+		if len(s.Points) == 0 {
+			return nil
+		}
+		s.GroupKey = []string{}
+		return &s
 	}
-	tput.GroupKey = []string{}
-	v.Throughput = &tput
-	if len(avg.Points) > 0 {
-		avg.GroupKey = []string{}
-		v.Avg = &avg
+	v.Throughput, v.GRPC, v.Kafka, v.Avg = keep(http), keep(grpc), keep(kafka), keep(avg)
+	if v.Throughput == nil && v.GRPC == nil && v.Kafka == nil {
+		return View{}, false
 	}
-	v.Summary = HTTPSummary{NowRPS: lastTotal, PeakRPS: peak, PeakAt: peakAt * 1000, AvgNowS: lastAvg}
+	v.Summary = HTTPSummary{NowRPS: lastHTTP, GRPCNow: lastGRPC, KafkaNow: lastKafka, AvgNowS: lastAvg}
 	v.From = r.B[0].T * 1000
 	v.To = (r.B[len(r.B)-1].T + ringStepS) * 1000
 	return v, true
@@ -215,9 +251,11 @@ func (r *Ring) Clone() *Ring {
 	c := &Ring{Step: r.Step, B: make([]RingBucket, len(r.B)), Filled: append([]int64(nil), r.Filled...)}
 	for i, b := range r.B {
 		nb := RingBucket{T: b.T}
-		if b.R != nil {
-			v := *b.R
-			nb.R = &v
+		for _, p := range []Proto{ProtoHTTP, ProtoGRPC, ProtoKafka} {
+			if src := *b.slot(p); src != nil {
+				v := *src
+				*nb.slot(p) = &v
+			}
 		}
 		if b.Sum != nil {
 			v := *b.Sum

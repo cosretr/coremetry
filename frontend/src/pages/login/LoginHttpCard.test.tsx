@@ -2,7 +2,7 @@
 //
 // LoginHttpCard.test.tsx — v0.10.1908 (Login HTTP grafik kartı, audit §6.2).
 // CorePanelMulti (grafik chunk'ı) stub'lanır: burada kartın VERİ → PROP
-// eşlemesi çivilenir (toplam throughput, ortalama yanıt, ortak syncKey, xRange
+// eşlemesi çivilenir (HTTP/gRPC/Kafka throughput, ortalama yanıt, ortak syncKey, xRange
 // saniye, gömülü + lejantsız paneller, başlık satırları, tek statik lejant).
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { act } from 'react';
@@ -34,10 +34,12 @@ const ns = (ms: number) => ms * 1e6;
 const pts = (v: number) => [0, 1, 2].map(i => ({ time: ns(T0 + i * 300_000), value: v + i }));
 const HTTP: LoginSummaryHttp = {
   from: T0, to: T0 + 600_000, step_s: 300,
-  // v0.10.1914 — TEK toplam hız serisi (durum kodu kırılımı yok); grup anahtarı boş.
+  // v0.10.1923 — HTTP / gRPC / Kafka hızı, her biri tek seri (grup anahtarı boş).
   throughput: { groupKey: [], points: pts(104) },
+  grpc: { groupKey: [], points: pts(12) },
+  kafka: { groupKey: [], points: pts(400) },
   avg: { groupKey: ['avg'], points: pts(0.2) },
-  summary: { now_rps: 1500, peak_rps: 2200, peak_at: new Date(2026, 10, 6, 12, 5).getTime(), avg_now_s: 0.186 },
+  summary: { now_rps: 1500, grpc_now_rps: 12, kafka_now_mps: 40_000, avg_now_s: 0.186 },
 };
 
 function memoryStorage(): Storage {
@@ -77,19 +79,22 @@ describe('LoginHttpCard', () => {
     }
     expect(tp.storageKey).toBe('login-tput');
     expect(rt.storageKey).toBe('login-rt');
-    expect(tp.unit).toBe('reqps');
+    expect(tp.unit).toBe('short'); // v0.10.1923: istek ve mesaj aynı eksende
     expect(rt.unit).toBe('s');
     expect(tp.syncKey).toBeTruthy();
     expect(tp.syncKey).toBe(rt.syncKey);
     expect(tp.syncKey).toMatch(/-ms$/);
   });
 
-  it('Throughput: tek "toplam" serisi (durum kodu kırılımı yok)', () => {
+  it('Throughput: HTTP / gRPC / Kafka tek panelde, ayrı renk; olmayan protokol çizilmez', () => {
     render(<LoginHttpCard http={HTTP} orgName="acme" />);
     const tp = panels()[0];
-    expect(tp.items.map(i => i.name)).toEqual(['toplam']);
-    expect(tp.items.map(i => i.color)).toEqual(['var(--ok)']);
+    expect(tp.items.map(i => i.name)).toEqual(['HTTP', 'gRPC', 'Kafka']);
+    expect(tp.items.map(i => i.color)).toEqual(['var(--ok)', 'var(--purple)', 'var(--orange)']);
     expect(tp.items[0].series[0].points).toHaveLength(3);
+    act(() => root?.unmount()); host?.remove(); seen.panels = [];
+    render(<LoginHttpCard http={{ ...HTTP, grpc: undefined, kafka: undefined }} orgName="acme" />);
+    expect(panels()[0].items.map(i => i.name)).toEqual(['HTTP']);
   });
 
   // v0.10.1922 — p95 kaldırıldı: Response time yalnız ortalama.
@@ -108,14 +113,14 @@ describe('LoginHttpCard', () => {
     const el = render(<LoginHttpCard http={HTTP} orgName="acme" />);
     const txt = el.textContent ?? '';
     expect(txt).toContain('acme OpenTelemetry metrikleri · son 24 saat');
-    expect(txt).toContain('tüm HTTP servisleri');
+    expect(txt).toContain('tüm servisler');
     expect(txt).toContain('Throughput · metrik');
-    expect(txt).toContain('şimdi 1.5K req/s · tepe 2.2K (12:05)');
+    expect(txt).toContain('şimdi · saniyede: HTTP 1.5K · gRPC 12 · Kafka 40.0K');
     expect(txt).toContain('Response time · metrik');
     expect(txt).toContain('ort 186 ms');
     expect(txt).not.toContain('p95');
     const legend = [...el.querySelectorAll('li')].map(l => l.textContent);
-    expect(legend).toEqual(['—toplam', '—ort']);
+    expect(legend).toEqual(['—HTTP', '—gRPC', '—Kafka', '—ort']);
   });
 
   it('orgName boşsa ad düşer', () => {
@@ -134,8 +139,8 @@ describe('LoginSummary → grafik kartı (lazy)', () => {
   });
   it.each([
     ['http_24h yok', base],
-    ['yetersiz nokta (< 2)', { ...base, http_24h: { ...HTTP, throughput: { groupKey: [], points: pts(1).slice(0, 1) } } }],
-    ['hız serisi yok', { ...base, http_24h: { ...HTTP, throughput: undefined } }],
+    ['yetersiz nokta (< 2)', { ...base, http_24h: { ...HTTP, throughput: { groupKey: [], points: pts(1).slice(0, 1) }, grpc: undefined, kafka: undefined } }],
+    ['hız serisi yok', { ...base, http_24h: { ...HTTP, throughput: undefined, grpc: undefined, kafka: undefined } }],
   ] as [string, LoginSummary][])('%s → kart yok, grafik chunk\'ı çağrılmaz', async (_n, data) => {
     const el = render(<LoginSummaryView data={data} />);
     await wait(); await wait();

@@ -12,9 +12,9 @@ import (
 var allowedKeys = map[string]bool{
 	"enabled": true, "ready": true, "generated_at": true, "spans_today": true, "traces_today": true,
 	"services_monitored": true, "endpoints_monitored": true, "http_24h": true, "activity_24h": true, "topology": true, "components": true,
-	"from": true, "to": true, "step_s": true, "throughput": true, "avg": true, "summary": true,
+	"from": true, "to": true, "step_s": true, "throughput": true, "grpc": true, "kafka": true, "avg": true, "summary": true,
 	"groupKey": true, "points": true, "time": true, "value": true,
-	"now_rps": true, "peak_rps": true, "peak_at": true, "avg_now_s": true,
+	"now_rps": true, "grpc_now_rps": true, "kafka_now_mps": true, "avg_now_s": true,
 	"logins": true, "cosre_questions": true, // v0.10.1915: rollouts_tracked + traces_viewed kaldırıldı
 	"window_s": true, "named": true, "nodes": true, "edges": true, "id": true, "tier": true, "weight": true, "name": true,
 	"state": true, "checked_at": true, "clickhouse_uncompressed_bytes": true,
@@ -177,7 +177,7 @@ func TestProjectThroughputCarriesNoLabels(t *testing.T) {
 	snap.Ring.MergeRate([]chstore.SpanMetricSeries{
 		{GroupKey: []string{`service="evil-service"`}, Points: []chstore.SpanMetricPoint{{Time: tt, Value: 5}}},
 		{GroupKey: []string{`http_response_status_code="503"`}, Points: []chstore.SpanMetricPoint{{Time: tt, Value: 1}}},
-	})
+	}, ProtoHTTP)
 	resp := Project(snap, flags(now, ""))
 	if resp.HTTP24h == nil || resp.HTTP24h.Throughput == nil {
 		t.Fatal("http_24h.throughput beklenir")

@@ -13,15 +13,15 @@ func pt(sec int64, v float64) chstore.SpanMetricPoint {
 
 func TestRingMergeAlignsAndOverrides(t *testing.T) {
 	r := NewRing()
-	r.MergeRate([]chstore.SpanMetricSeries{{Points: []chstore.SpanMetricPoint{pt(1000, 5), pt(1303, 6)}}})
+	r.MergeRate([]chstore.SpanMetricSeries{{Points: []chstore.SpanMetricPoint{pt(1000, 5), pt(1303, 6)}}}, ProtoHTTP)
 	if len(r.B) != 2 || r.B[0].T != 900 || r.B[1].T != 1200 {
 		t.Fatalf("300 sn hizalama: %+v", r.B)
 	}
-	r.MergeRate([]chstore.SpanMetricSeries{{Points: []chstore.SpanMetricPoint{pt(1010, 9)}}})
+	r.MergeRate([]chstore.SpanMetricSeries{{Points: []chstore.SpanMetricPoint{pt(1010, 9)}}}, ProtoHTTP)
 	if len(r.B) != 2 || r.B[0].R == nil || *r.B[0].R != 9 {
 		t.Fatalf("aynı kova yeni değerle ezilir: %+v", r.B)
 	}
-	r.MergeRate([]chstore.SpanMetricSeries{{Points: []chstore.SpanMetricPoint{pt(100, 1)}}})
+	r.MergeRate([]chstore.SpanMetricSeries{{Points: []chstore.SpanMetricPoint{pt(100, 1)}}}, ProtoHTTP)
 	if len(r.B) != 3 || r.B[0].T != 0 || r.B[1].T != 900 {
 		t.Fatalf("sıralı ekleme: %+v", r.B)
 	}
@@ -29,7 +29,7 @@ func TestRingMergeAlignsAndOverrides(t *testing.T) {
 
 func TestRingIgnoresNaNInfNegative(t *testing.T) {
 	r := NewRing()
-	r.MergeRate([]chstore.SpanMetricSeries{{Points: []chstore.SpanMetricPoint{pt(900, math.NaN()), pt(1200, math.Inf(1)), pt(1500, -1)}}})
+	r.MergeRate([]chstore.SpanMetricSeries{{Points: []chstore.SpanMetricPoint{pt(900, math.NaN()), pt(1200, math.Inf(1)), pt(1500, -1)}}}, ProtoHTTP)
 	r.MergeSum([]chstore.SpanMetricSeries{{Points: []chstore.SpanMetricPoint{pt(900, math.NaN())}}})
 	if len(r.B) != 0 {
 		t.Fatalf("geçersiz değerler atılır: %+v", r.B)
@@ -44,7 +44,7 @@ func TestRingTrimBoundsToDayAnd288(t *testing.T) {
 	for i := 0; i < 400; i++ { // 400 kova ≈ 33 saat
 		pts = append(pts, pt(now-int64(i)*300, 1))
 	}
-	r.MergeRate([]chstore.SpanMetricSeries{{Points: pts}})
+	r.MergeRate([]chstore.SpanMetricSeries{{Points: pts}}, ProtoHTTP)
 	r.MarkFilled(ChunkStart(now - 30*3600))
 	r.Trim(now)
 	if len(r.B) > 288 {
@@ -103,13 +103,13 @@ func TestRingViewSummary(t *testing.T) {
 	r.MergeRate([]chstore.SpanMetricSeries{
 		{Points: []chstore.SpanMetricPoint{pt(900, 10), pt(1200, 30), pt(1500, 20)}},
 		{GroupKey: []string{`http_response_status_code="500"`}, Points: []chstore.SpanMetricPoint{pt(900, 1), pt(1200, 2), pt(1500, 0)}},
-	})
+	}, ProtoHTTP)
 	r.MergeSum([]chstore.SpanMetricSeries{{Points: []chstore.SpanMetricPoint{pt(1200, 6.4), pt(1500, 4)}}})
 	v, ok := r.View()
 	if !ok {
 		t.Fatal("görünüm beklenir")
 	}
-	if v.Summary.NowRPS != 20 || v.Summary.PeakRPS != 32 || v.Summary.PeakAt != 1200_000 {
+	if v.Summary.NowRPS != 20 {
 		t.Errorf("özet: %+v", v.Summary)
 	}
 	if v.Summary.AvgNowS == nil || math.Abs(*v.Summary.AvgNowS-0.2) > 1e-9 {
@@ -139,7 +139,7 @@ func TestRingViewSummary(t *testing.T) {
 func TestRingMergeRateIgnoresGroupKeyShape(t *testing.T) {
 	for _, key := range [][]string{nil, {}, {"200"}, {`http_response_status_code="200"`}, {"a", "b"}} {
 		r := NewRing()
-		r.MergeRate([]chstore.SpanMetricSeries{{GroupKey: key, Points: []chstore.SpanMetricPoint{pt(900, 7), pt(1200, 8)}}})
+		r.MergeRate([]chstore.SpanMetricSeries{{GroupKey: key, Points: []chstore.SpanMetricPoint{pt(900, 7), pt(1200, 8)}}}, ProtoHTTP)
 		v, ok := r.View()
 		if !ok || v.Throughput == nil || len(v.Throughput.Points) != 2 || v.Summary.NowRPS != 8 {
 			t.Errorf("grup anahtarı %q: veri kaybolmamalı: ok=%v %+v", key, ok, v.Throughput)
@@ -158,16 +158,36 @@ func TestRingViewNeedsRate(t *testing.T) {
 
 func TestRingCloneIsIndependent(t *testing.T) {
 	r := NewRing()
-	r.MergeRate([]chstore.SpanMetricSeries{{Points: []chstore.SpanMetricPoint{pt(900, 1)}}})
+	r.MergeRate([]chstore.SpanMetricSeries{{Points: []chstore.SpanMetricPoint{pt(900, 1)}}}, ProtoHTTP)
 	r.MergeSum([]chstore.SpanMetricSeries{{Points: []chstore.SpanMetricPoint{pt(900, 2)}}})
 	c := r.Clone()
 	*r.B[0].R = 99
 	*r.B[0].Sum = 99
-	r.MergeRate([]chstore.SpanMetricSeries{{Points: []chstore.SpanMetricPoint{pt(1200, 3)}}})
+	r.MergeRate([]chstore.SpanMetricSeries{{Points: []chstore.SpanMetricPoint{pt(1200, 3)}}}, ProtoHTTP)
 	if *c.B[0].R != 1 || *c.B[0].Sum != 2 || len(c.B) != 1 {
 		t.Errorf("klon bağımsız olmalı: %+v", c.B)
 	}
 	if (*Ring)(nil).Clone() != nil {
 		t.Error("nil klon nil")
+	}
+}
+
+// v0.10.1923 — protokoller ayrı yuvalara yazılır; yalnız gRPC/Kafka verisi
+// olan halka da kart üretir; ortalama yalnız HTTP'den.
+func TestRingProtocolsSeparate(t *testing.T) {
+	r := NewRing()
+	r.MergeRate([]chstore.SpanMetricSeries{{Points: []chstore.SpanMetricPoint{pt(900, 5), pt(1200, 6)}}}, ProtoGRPC)
+	r.MergeRate([]chstore.SpanMetricSeries{{Points: []chstore.SpanMetricPoint{pt(900, 50), pt(1200, 60)}}}, ProtoKafka)
+	v, ok := r.View()
+	if !ok || v.Throughput != nil || v.GRPC == nil || v.Kafka == nil || v.Avg != nil {
+		t.Fatalf("yalnız gRPC + Kafka: %+v", v)
+	}
+	if *v.Summary.GRPCNow != 6 || *v.Summary.KafkaNow != 60 || v.Summary.NowRPS != 0 {
+		t.Errorf("anlık: %+v", v.Summary)
+	}
+	c := r.Clone()
+	*r.B[0].G = 99
+	if *c.B[0].G != 5 {
+		t.Error("klon protokol yuvalarını da kopyalar")
 	}
 }

@@ -13309,4 +13309,13 @@ JSON sözleşmesi ve kararlar ana oturumda. Backend dilimleri v0.10.1902–1905.
   KALDIRILDI** — prod worker günlüğünde `vm_q3=15002ms` (3 × 5 sn zaman aşımı; süzgeçsiz `histogram_quantile` tüm servislerde
   bitmiyor), login'de hiç görünmüyor ve VM'e 30 dk'da bir boşa yük bindiriyordu. Yanıt süresi = ortalama (`sum(rate(_sum)) /
   sum(rate(_count))`, tüm HTTP servisleri, istek ağırlıklı). `AllowUnfilteredPercentiles` login için artık okunmaz.
+- **v0.10.1923 — login grafiği: HTTP + gRPC + Kafka throughput (operatör, 2026-11-07: "tek bir grafikte Kafka, gRPC, HTTP throughput
+  olsa").** Kaynak VictoriaMetrics. HTTP: `sum(rate(http_server_request_duration_seconds_count[5m]))` (değişmedi). gRPC: yeni semconv
+  `rpc_server_call_duration_seconds_count` VARSA o, yoksa eski `rpc_server_duration_milliseconds_count` (`or`; dup kipte çift sayım
+  yok). Kafka: TÜKETİLEN mesaj/sn — önce OTel Java agent `kafka_consumer_records_consumed_total{topic=""}` (yalnız istemci düzeyi;
+  konu başına seriler toplanırsa çift sayar), yoksa `messaging_client_consumed_messages_total`, yoksa
+  `messaging_process_duration_seconds_count`. Her protokolün kendi devre kesicisi var; metrik yoksa yalnız o çizgi çıkmaz. Yanıt
+  süresi HTTP ortalaması kaldı. Halka kovası `r/g/k`, cevap `http_24h.grpc|kafka` + `summary.grpc_now_rps|kafka_now_mps`; tepe değeri
+  (peak) kaldırıldı. Ekran: başlık "şimdi · saniyede: HTTP X · gRPC Y · Kafka Z"; "Şu an" satırı protokol başına. Eksen birimi
+  `short` (istek ve mesaj aynı eksen). Prod'daki Kafka metrik adı DOĞRULANMADI.
 

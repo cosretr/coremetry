@@ -47,7 +47,7 @@ func baseSnapshot(now time.Time) *Snapshot {
 		t := (nowSec - nowSec%300 - int64(10-i)*300) * 1e9
 		ptsRate = append(ptsRate, chstore.SpanMetricPoint{Time: t, Value: 102 + float64(i)})
 	}
-	ring.MergeRate([]chstore.SpanMetricSeries{{Points: ptsRate}})
+	ring.MergeRate([]chstore.SpanMetricSeries{{Points: ptsRate}}, ProtoHTTP)
 	return &Snapshot{
 		V: SnapshotVersion, GeneratedAt: now.UnixMilli(), Salt: salt,
 		SpansToday: u64(5000), TracesToday: u64(900), Services: u64(5),

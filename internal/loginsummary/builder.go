@@ -38,14 +38,32 @@ const (
 	topoEdgeLimit    = 5000
 )
 
-// Queries — VM'e giden İKİ sabit ifade (kullanıcı girdisi yok). v0.10.1922 —
-// p95 (Q3, süzgeçsiz histogram_quantile) KALDIRILDI: prod'da her denemede 5 sn
-// zaman aşımına düşüyordu (worker günlüğü vm_q3=15002ms = 3 × 5 sn), login'de
-// hiç görünmüyor ve VM'e 30 dk'da bir boşa yük bindiriyordu (operatör kararı).
-func Queries(family string) (q1, q2 string) {
-	q1 = "sum(rate(" + family + "_count[5m]))" // toplam hız; durum kodu kırılımı yok (v0.10.1914)
-	q2 = "sum(rate(" + family + "_sum[5m]))"
-	return
+// VMQueries — VM'e giden sabit ifadeler (kullanıcı girdisi yok). v0.10.1922 —
+// p95 (süzgeçsiz histogram_quantile) KALDIRILDI: prod'da her denemede 5 sn
+// zaman aşımı (vm_q3=15002ms). v0.10.1923 (operatör: "tek grafikte Kafka, gRPC,
+// HTTP throughput") — gRPC ve Kafka hızı eklendi.
+//
+//   - gRPC: yeni semconv (rpc.server.call.duration) VARSA o, yoksa eski
+//     (rpc.server.duration). `or` ile: ikisini birden yayan (semconv dup kipi)
+//     servis çift sayılmaz. Eksi: ikisini ayrı ayrı yayan iki servis grubu
+//     varsa yalnız yeni olanlar sayılır.
+//   - Kafka: TÜKETİLEN mesaj/sn. Önce OTel Java agent'ın Kafka istemci metriği
+//     — `topic=""` yalnız istemci düzeyi seri (konu başına seriler aynı sayıyı
+//     tekrar eder, toplanırsa çift sayar) — yoksa OTel mesajlaşma semconv.
+type VMQueries struct {
+	HTTPRate, HTTPSum, GRPCRate, KafkaRate string
+}
+
+// Queries — HTTP ailesi verilir (varsayılan HTTPFamily); gRPC ve Kafka ifadeleri sabit.
+func Queries(family string) VMQueries {
+	return VMQueries{
+		HTTPRate: "sum(rate(" + family + "_count[5m]))",
+		HTTPSum:  "sum(rate(" + family + "_sum[5m]))",
+		GRPCRate: "sum(rate(rpc_server_call_duration_seconds_count[5m])) or sum(rate(rpc_server_duration_milliseconds_count[5m]))",
+		KafkaRate: "sum(rate(kafka_consumer_records_consumed_total{topic=\"\"}[5m]))" +
+			" or sum(rate(messaging_client_consumed_messages_total[5m]))" +
+			" or sum(rate(messaging_process_duration_seconds_count[5m]))",
+	}
 }
 
 // Store — Builder'ın CH okuma yüzeyi (*chstore.Store bunu sağlar).
@@ -141,7 +159,7 @@ func New(d Deps) *Builder {
 	if d.SlowEvery <= 0 {
 		d.SlowEvery = DefaultSlowEvery
 	}
-	return &Builder{d: d, br: map[string]*breaker{"q1": {}, "q2": {}}}
+	return &Builder{d: d, br: map[string]*breaker{"q1": {}, "q2": {}, "grpc": {}, "kafka": {}}}
 }
 
 // Reset — liderlik kaybında çağrılır; sonraki Step anlık görüntüyü yeniden
@@ -315,20 +333,27 @@ func (b *Builder) panelSlow(ctx context.Context, s *Snapshot, now time.Time) {
 	}
 }
 
-// fetch — bir pencere için Q1 (+ Q2) çalıştırıp halkaya birleştirir.
-// q1ok: Q1 hatasız döndü (boş sonuç da başarıdır: aile yok → kart gizlenir).
+// fetch — bir pencere için HTTP hızı (q1) + HTTP süre toplamı (q2) + gRPC +
+// Kafka hızlarını çalıştırıp halkaya birleştirir. q1ok: HTTP hız sorgusu
+// hatasız döndü (boş sonuç da başarıdır: aile yok). gRPC/Kafka hatası pencereyi
+// düşürmez (kendi devre kesicileri var); metrik yoksa yalnız o çizgi çıkmaz.
 func (b *Builder) fetch(ctx context.Context, ring *Ring, from, to, now time.Time) bool {
-	q1, q2 := Queries(b.d.Family)
-	s1, ok := b.runQuery(ctx, "q1", q1, from, to, now)
+	q := Queries(b.d.Family)
+	s1, ok := b.runQuery(ctx, "q1", q.HTTPRate, from, to, now)
 	if !ok {
 		return false
 	}
-	if len(s1) == 0 {
-		return true
+	ring.MergeRate(s1, ProtoHTTP)
+	if len(s1) > 0 {
+		if s2, ok := b.runQuery(ctx, "q2", q.HTTPSum, from, to, now); ok {
+			ring.MergeSum(s2)
+		}
 	}
-	ring.MergeRate(s1)
-	if s2, ok := b.runQuery(ctx, "q2", q2, from, to, now); ok {
-		ring.MergeSum(s2)
+	if sg, ok := b.runQuery(ctx, "grpc", q.GRPCRate, from, to, now); ok {
+		ring.MergeRate(sg, ProtoGRPC)
+	}
+	if sk, ok := b.runQuery(ctx, "kafka", q.KafkaRate, from, to, now); ok {
+		ring.MergeRate(sk, ProtoKafka)
 	}
 	return true
 }

@@ -97,10 +97,25 @@ export function activityParts(a: LoginSummaryActivity | undefined, t: (k: string
   ];
 }
 
+/** Protokol başına son kova hızları; yalnız sıfırdan büyük olanlar (sıra: HTTP, gRPC, Kafka). */
+export function protocolRates(sum: LoginSummaryHttpSummary | undefined): Array<{ key: 'http' | 'grpc' | 'kafka'; v: number }> {
+  if (!sum) return [];
+  const out: Array<{ key: 'http' | 'grpc' | 'kafka'; v: number }> = [];
+  const push = (key: 'http' | 'grpc' | 'kafka', v: number | undefined) => {
+    if (v != null && Number.isFinite(v) && v > 0) out.push({ key, v });
+  };
+  push('http', sum.now_rps);
+  push('grpc', sum.grpc_now_rps);
+  push('kafka', sum.kafka_now_mps);
+  return out;
+}
+
+const RATE_KEY = { http: 'login.sum.tput', grpc: 'login.sum.grpc', kafka: 'login.sum.kafka' } as const;
+
 /**
- * "Şu an" satırı (v0.10.1915): endpoint sayısı · toplam throughput · ortalama
- * yanıt süresi. Throughput ve yanıt süresi HTTP metrik özetinden (`http_24h.summary`);
- * eksik alan yalnız kendini düşürür, hiçbiri yoksa satır yok.
+ * "Şu an" satırı: endpoint sayısı · HTTP / gRPC / Kafka hızı (v0.10.1923) ·
+ * ortalama yanıt süresi. Hız ve yanıt `http_24h.summary`'den; eksik alan yalnız
+ * kendini düşürür, hiçbiri yoksa satır yok.
  */
 export function nowParts(s: LoginSummary, t: (k: string) => string): RowPart[] {
   const out: RowPart[] = [];
@@ -108,9 +123,7 @@ export function nowParts(s: LoginSummary, t: (k: string) => string): RowPart[] {
     out.push(splitTemplate(t('login.sum.endpoints'), fmtCount(s.endpoints_monitored)));
   }
   const sum = s.http_24h?.summary;
-  if (sum && Number.isFinite(sum.now_rps) && sum.now_rps > 0) {
-    out.push(splitTemplate(t('login.sum.tput'), fmtRps(sum.now_rps)));
-  }
+  for (const r of protocolRates(sum)) out.push(splitTemplate(t(RATE_KEY[r.key]), fmtRps(r.v)));
   if (sum?.avg_now_s != null && Number.isFinite(sum.avg_now_s)) {
     out.push(splitTemplate(t('login.sum.rt'), fmtSeconds(sum.avg_now_s)));
   }
@@ -153,7 +166,7 @@ export function kpis(s: LoginSummary): Kpi[] {
 
 /** Kart yalnız en az bir durum serisi ≥ 2 nokta taşıyorsa çizilir (CorePanel boş durumu sabit Türkçe). */
 export function httpCardUsable(h: LoginSummaryHttp | undefined): h is LoginSummaryHttp {
-  return !!h && (h.throughput?.points ?? []).length >= 2;
+  return !!h && [h.throughput, h.grpc, h.kafka].some(x => (x?.points ?? []).length >= 2);
 }
 
 /** req/s: < 10 → 1 ondalık, < 1000 → tam sayı, ≥ 1000 → `12.4K`. */
@@ -170,12 +183,10 @@ export function fmtSeconds(s: number): string {
   return `${s.toFixed(s < 10 ? 2 : 1)} s`;
 }
 
-/** "şimdi X req/s · tepe Y (HH:mm)" — Throughput başlık satırının sağı. */
-export function throughputHead(sum: LoginSummaryHttpSummary, t: (k: string) => string): string {
-  return t('login.http.now')
-    .replace('{now}', fmtRps(sum.now_rps))
-    .replace('{peak}', fmtRps(sum.peak_rps))
-    .replace('{at}', sum.peak_at ? fmtClock(sum.peak_at) : '—');
+const RATE_LABEL = { http: 'HTTP', grpc: 'gRPC', kafka: 'Kafka' } as const;
+/** "HTTP 829K · gRPC 12K · Kafka 40K" — Throughput başlık satırının sağı (v0.10.1923: protokol başına anlık). */
+export function throughputHead(sum: LoginSummaryHttpSummary): string {
+  return protocolRates(sum).map(r => `${RATE_LABEL[r.key]} ${fmtRps(r.v)}`).join(' · ');
 }
 
 /** "ort A" — Response time başlık satırının sağı; ortalama yoksa boş (v0.10.1922: p95 kaldırıldı). */

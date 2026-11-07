@@ -16,7 +16,7 @@ package loginsummary
 import "github.com/cilcenk/coremetry/internal/chstore"
 
 // SnapshotVersion — Redis'teki anlık görüntü biçimi (anahtar sonekiyle uyumlu).
-const SnapshotVersion = 3 // v0.10.1914: halka kovası toplam hız (r); v0.10.1915: aktivite alanları + endpoint sayısı
+const SnapshotVersion = 4 // v0.10.1923: halka kovası protokol başına hız (r/g/k); v0.10.1914: halka kovası toplam hız (r); v0.10.1915: aktivite alanları + endpoint sayısı
 
 // ── Uç sözleşmesi (login-contract.md; json etiketleri AYNEN) ────────────
 
@@ -39,21 +39,23 @@ type HTTP24h struct {
 	From  int64 `json:"from"`   // unix ms
 	To    int64 `json:"to"`     // unix ms
 	StepS int   `json:"step_s"` // 300
-	// Throughput — TOPLAM istek/sn, tek seri (v0.10.1914: durum kodu kırılımı yok); points.time unix NS.
-	Throughput *chstore.SpanMetricSeries `json:"throughput"`
-	Avg        *chstore.SpanMetricSeries `json:"avg,omitempty"` // saniye
-	Summary    HTTPSummary               `json:"summary"`
+	// Throughput — HTTP TOPLAM istek/sn, tek seri (v0.10.1914: durum kodu kırılımı yok); points.time unix NS.
+	Throughput *chstore.SpanMetricSeries `json:"throughput,omitempty"`
+	// GRPC — gRPC sunucu istek/sn; Kafka — tüketilen mesaj/sn (v0.10.1923). Metrik yoksa alan yok.
+	GRPC    *chstore.SpanMetricSeries `json:"grpc,omitempty"`
+	Kafka   *chstore.SpanMetricSeries `json:"kafka,omitempty"`
+	Avg     *chstore.SpanMetricSeries `json:"avg,omitempty"` // saniye (HTTP ortalama yanıt)
+	Summary HTTPSummary               `json:"summary"`
 }
 
+// HTTPSummary — son kovanın değerleri (v0.10.1923: tepe değeri kaldırıldı; protokol başına anlık).
 type HTTPSummary struct {
-	NowRPS  float64  `json:"now_rps"`
-	PeakRPS float64  `json:"peak_rps"`
-	PeakAt  int64    `json:"peak_at"` // unix ms
-	AvgNowS *float64 `json:"avg_now_s,omitempty"`
+	NowRPS   float64  `json:"now_rps"`                 // HTTP
+	GRPCNow  *float64 `json:"grpc_now_rps,omitempty"`  // gRPC istek/sn
+	KafkaNow *float64 `json:"kafka_now_mps,omitempty"` // Kafka mesaj/sn
+	AvgNowS  *float64 `json:"avg_now_s,omitempty"`
 }
 
-// Activity — v0.10.1915: `rollouts_tracked` ve `traces_viewed` KALDIRILDI
-// (operatör: satırda yazmasına gerek yok).
 type Activity struct {
 	Logins         uint64 `json:"logins"`
 	CosreQuestions uint64 `json:"cosre_questions"`
