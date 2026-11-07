@@ -286,16 +286,3 @@ export function isDarkColor(color: string): boolean {
   }
   return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 < 0.45;
 }
-
-/**
- * v0.10.1936 (operatör: "açılış hareketi olsun") — açılışta yıldızlar merkezden
- * kollarına yayılır: `INTRO_S` saniyede easeOutCubic, hafif burgu (radyan).
- * Sayfa ömründe BİR kez; hareket azaltmada hiç (çağıran 1 verir).
- */
-export const INTRO_S = 1.4;
-export const INTRO_SWIRL = 1.4;
-export function introProgress(elapsedS: number): { k: number; swirl: number } {
-  const x = Math.min(1, Math.max(0, elapsedS / INTRO_S));
-  const k = 1 - Math.pow(1 - x, 3);
-  return { k, swirl: (1 - k) * INTRO_SWIRL };
-}

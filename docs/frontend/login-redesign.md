@@ -250,3 +250,4 @@ Bu bölüm üstteki audit metnini GEÇERSİZ kılar; ayrıntı `docs/DECISIONS.m
 - **1935** Üzerine gelince adın altında tür satırı (i18n).
 - **1936** Açılışta yıldızlar 1,4 sn'de merkezden kollarına yayılır (bir kez; hareket azaltmada yok).
 - **1937** Tüm servisler: siluet dışındaki her servis adsız yıldız (`topology.stars` = [yoğunluk, komşu dizini]); toz o kadar azalır.
+- **1938** Açılış hareketi kaldırıldı (1936); galaksi doğrudan yerinde açılır.

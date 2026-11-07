@@ -13367,4 +13367,6 @@ JSON sözleşmesi ve kararlar ana oturumda. Backend dilimleri v0.10.1902–1905.
   Komşu = ham topoloji kenarlarında en çok çağrı alışverişi olan seçili düğüm; Project düşen düğümü -1'e eşler. İstemci
   yıldızı komşunun kolunda ona yakın yarıçapa (bağsızsa rastgele kola) koyar; boyut/parlaklık = yoğunluk; sentetik toz o kadar
   azalır (en az 1000), toplam nokta ~aynı. Cevap 4000 serviste ~+40 KB.
+- **v0.10.1938 — login galaksisi: açılış hareketi KALDIRILDI (operatör, 2026-11-07: "açılış efekti de olmasın, direk
+  açılsın").** 1936'nın merkezden yayılma hareketi (`introProgress`) söküldü; galaksi ilk karede yerinde. Yeniden önerme.
 
