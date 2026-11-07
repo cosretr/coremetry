@@ -103,8 +103,10 @@ describe('/logs exception farkındalığı (v0.10.1882)', () => {
     expect(sec.textContent).toContain('1 uygulama · 1 framework çerçevesi');
   });
 
-  it('pin: diğer LogTable tüketicileri exceptions vermez', () => {
-    for (const rel of ['./service/ServiceSignalTabs.tsx', './pod/PodLogsSection.tsx', './trace/TraceLogsPanel.tsx']) {
+  it('pin: diğer LogTable tüketicileri exceptions vermez (trace paneli v0.10.1940\'tan beri TraceLogTable ile verir)', () => {
+    const trace = readFileSync(resolve(__dirname, './trace/TraceLogTable.tsx'), 'utf8');
+    expect(trace).toMatch(/<LogTable[^>]*\bexceptions\b/);
+    for (const rel of ['./service/ServiceSignalTabs.tsx', './pod/PodLogsSection.tsx']) {
       const src = readFileSync(resolve(__dirname, rel), 'utf8');
       expect(src.includes('exceptions'), rel).toBe(false);
     }

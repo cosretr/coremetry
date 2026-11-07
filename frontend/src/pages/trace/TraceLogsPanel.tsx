@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Spinner, Empty } from '@/components/Spinner';
-import { LogTable } from '@/components/LogTable';
+import { TraceLogTable } from './TraceLogTable';
 import { Chip } from '@/components/ui/Chip';
 import { traceServicesWithoutTraceField } from '@/lib/traceEventLogs';
 import type { LogRow } from '@/lib/types';
@@ -58,17 +58,15 @@ export function TraceLogsPanel({ logs, degraded, logsTotal, eventRows, oracleRow
   if (logs === null) {
     // Backend errored — the span events still tell part of the story.
     if (eventRows.length > 0 || oracleRows.length > 0) {
+      // v0.10.577 — bu dalda da çip lazım: gizlenen event'ler yüzünden liste
+      // boş görünebilir ve operatörün geri getirecek hiçbir yolu kalmazdı.
+      // v0.10.1940 — tablo TraceLogTable (rozet, çekmece, Görünüm ▾).
       return (
-        <>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '0 10px 6px' }}>
+        <TraceLogTable rows={[...eventRows, ...oracleRows].sort((a, b) => a.timestamp - b.timestamp)}
+          head={<>
             <span className="badge b-err">⚠ Failed to load logs — showing the trace's span events only</span>
-            {/* v0.10.577 — bu dalda da çip lazım: gizlenen event'ler
-                yüzünden liste boş görünebilir ve operatörün geri getirecek
-                hiçbir yolu kalmazdı. */}
             {grpcChip}
-          </div>
-          <LogTable logs={[...eventRows, ...oracleRows].sort((a, b) => a.timestamp - b.timestamp)} hideTraceColumn />
-        </>
+          </>} />
       );
     }
     return <Empty icon="⚠" title="Failed to load logs" />;
@@ -101,10 +99,10 @@ export function TraceLogsPanel({ logs, degraded, logsTotal, eventRows, oracleRow
           </span>
         </div>
       )}
-      <div style={{
-        display: 'flex', gap: 10, alignItems: 'center', padding: '6px 10px',
-        fontSize: 11, color: 'var(--text3)',
-      }}>
+      {/* v0.10.1940 — sayaç + çip TraceLogTable'ın üst satırında, Görünüm ▾ sağda. */}
+      <TraceLogTable rows={sorted}
+        state={degraded ? { kind: 'error', message: "Log backend'i yavaş/erişilemez — liste boş gösterilmedi." } : undefined}
+        head={<>
         <span>
           {/* v0.9.461 (dürüstlük A5) — sunucu toplamı sayfadan büyükse
               "ilk N / M": limit'e çarpan sayfa tam envanter değil.
@@ -119,12 +117,10 @@ export function TraceLogsPanel({ logs, degraded, logsTotal, eventRows, oracleRow
           {hiddenGrpcMsgs > 0 && ` (${hiddenGrpcMsgs} gürültü event'i gizlendi)`}
         </span>
         {grpcChip}
-      </div>
+        </>} />
       {/* v0.10.954 — tablo standardı T12: LogTable satırsızken tablonun
           İÇİNDE "veri yok" der. Backend bozukken boş liste bir ölçüm değil;
           boş demek hatayı boş diye sunmak olurdu (MT1/K6). */}
-      <LogTable logs={sorted} hideTraceColumn
-        state={degraded ? { kind: 'error', message: "Log backend'i yavaş/erişilemez — liste boş gösterilmedi." } : undefined} />
     </>
   );
 }

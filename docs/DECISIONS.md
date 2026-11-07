@@ -13371,4 +13371,9 @@ JSON sözleşmesi ve kararlar ana oturumda. Backend dilimleri v0.10.1902–1905.
   açılsın").** 1936'nın merkezden yayılma hareketi (`introProgress`) söküldü; galaksi ilk karede yerinde. Yeniden önerme.
 - **v0.10.1939 — login: sol alttaki "Canlı topoloji silueti" notu KALDIRILDI (operatör, 2026-11-07: "sol altta live topology
   siluet yazmasın").** 1909'dan beri gerçek veride çıkan not ve `login.topo.note` anahtarları silindi. Yeniden önerme.
+- **v0.10.1940 — trace sayfası log sekmesi Log Search'ün tarayıcı-yanı parçalarını alır (operatör, 2026-11-07: "yeni log
+  yapısı trace log sayfasında da geçerli mi" → öneri → "Yap").** `pages/trace/TraceLogTable`: exception rozeti + katlı stack,
+  satır → detay çekmecesi (URL `logdoc`; çevre loglar yalnız çekmecede istenince), Görünüm ▾ (satır yüksekliği / yoğunluk /
+  sayfa başına satır; Logs sayfasıyla AYNI kullanıcı tercihi `useDisplayPref('logs')`) ve istemci sayfalaması. Açılışa yeni ES
+  isteği YOK — satırlar trace paketinden. Histogram, desenler, alan istatistikleri bilinçli yok (tek trace). Kiosk da aynı panel.
 
