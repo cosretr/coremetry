@@ -28,10 +28,12 @@ export interface DepthStyle {
   speedMul: number;
 }
 
+// v0.10.1927 (operatör-raporlu: noktalar çok büyümüş) — ölçekler küçüldü
+// (1 / 0.72 / 0.5 → 0.75 / 0.55 / 0.4); ön katman eski (1915) boyuta yakın.
 export const DEPTH_STYLE: readonly DepthStyle[] = [
-  { scale: 1, nodeAlpha: 0.8, edgeAlpha: 0.2, edgeWidth: 0.9, driftMul: 1.25, speedMul: 1.15 },
-  { scale: 0.72, nodeAlpha: 0.42, edgeAlpha: 0.1, edgeWidth: 0.7, driftMul: 0.9, speedMul: 0.85 },
-  { scale: 0.5, nodeAlpha: 0.2, edgeAlpha: 0.05, edgeWidth: 0.6, driftMul: 0.6, speedMul: 0.6 },
+  { scale: 0.75, nodeAlpha: 0.75, edgeAlpha: 0.18, edgeWidth: 0.8, driftMul: 1.25, speedMul: 1.15 },
+  { scale: 0.55, nodeAlpha: 0.42, edgeAlpha: 0.1, edgeWidth: 0.7, driftMul: 0.9, speedMul: 0.85 },
+  { scale: 0.4, nodeAlpha: 0.22, edgeAlpha: 0.05, edgeWidth: 0.6, driftMul: 0.6, speedMul: 0.6 },
 ];
 
 const RANK: Record<string, number> = { gw: 0, bff: 1, db: 2, svc: 3 };

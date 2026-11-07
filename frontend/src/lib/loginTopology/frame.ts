@@ -11,7 +11,10 @@ export function shouldDraw(now: number, last: number): boolean {
 
 // v0.10.1917 (operatör: "çok dolu gözükmesin") — çizilen düğüm, etiket ve akan
 // nokta tavanları düşürüldü (180 → 110 düğüm, 70 → 24 etiket, 120 → 40 nokta).
-export const MAX_DRAW_NODES = 110;
+// v0.10.1927 (operatör-raporlu: "noktalar çok büyümüş ve seyrelmiş, eski hâli
+// daha iyiydi") — düğüm tavanı yeniden 180 (sunucunun gönderdiği tamamı);
+// sadeliği küçük düğüm ve derinlik sağlar, seyreltme değil.
+export const MAX_DRAW_NODES = 180;
 export const MAX_LABELS = 24;
 export const MAX_FLOW_EDGES = 40;
 
