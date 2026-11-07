@@ -245,3 +245,4 @@ Bu bölüm üstteki audit metnini GEÇERSİZ kılar; ayrıntı `docs/DECISIONS.m
 - **1915** `activity_24h` yalnız `logins` + `cosre_questions`; `rollouts_tracked`, `traces_viewed` ve trace görüntüleme sayacı (§5.2) söküldü; yeni `endpoints_monitored`. Ekranda "Şu an" + "Son 24 saatte" satırları.
 - **1931** Veri katmanı: veritabanı mor yuvarlak nokta + veritabanı adı (`db.name` ilk parçası), kuyruk ayrı `queue` katmanı (turkuaz halka + konu adı); her ad bir kez etiketlenir. Host çıkmaz.
 - **1932** Akan noktalar Traces süre çizgisiyle aynı token (`--orange`); `--galaxy-gold` silindi.
+- **1933** Etiketlere zemin çerçevesi. Merkezi kartın dışına alma reddedildi.

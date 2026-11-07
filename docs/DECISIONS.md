@@ -13345,4 +13345,8 @@ JSON sözleşmesi ve kararlar ana oturumda. Backend dilimleri v0.10.1902–1905.
   sayfasındaki süre grafiğindeki sarı tonda değil akan ışıklar").** 1930'daki ayrı `--galaxy-gold` (#f5a800, OTel logosu) operatörün
   kastettiği ton değildi; o ton Traces response-time çizgisinin `--orange`'ı (kurumsal #ec7a08, koyu #d76f04). Canvas artık
   doğrudan `--orange` okur, `--galaxy-gold` silindi; pin testi iki yüzeyin aynı token'da kalmasını şart koşar.
+- **v0.10.1933 — login galaksisi etiketlerine zemin çerçevesi (operatör, 2026-11-07: mockup'taki dört tasarım önerisinden
+  "360, etiket çerçevesi olsun").** Etiketler `--bg0` renginde 3,5 px çerçeveyle çizilir (yıldız tozu üstünde okunur).
+  REDDEDİLDİ — yeniden önerme: çekirdeği kartın dışına (sol alta) kaydırmak ("beğenmedim", galaksi ortada kalır). Diğer
+  seçilenler ayrı sürümlerde: 360 düğüm (1934), üzerine gelince tür (1935), açılış hareketi (1936).
 

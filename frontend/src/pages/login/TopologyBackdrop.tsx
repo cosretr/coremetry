@@ -8,6 +8,7 @@
 // adı (isimli kipte) görünür. Kolların çevresinde yıldız tozu.
 //
 // Durum/uyarı rengi YOK; renkler yalnız tema token'ları (`resolveVar`): yıldız
+// v0.10.1933: etiketler zemin renginde (--bg0) ince çerçeveyle çizilir (toz üstünde okunur).
 // --accent2, kol/veri --purple, akan noktalar --orange (Traces süre çizgisiyle AYNI token; v0.10.1932),
 // etiket --text2. v0.10.1931: veritabanı mor YUVARLAK nokta + hafif hale (kare değil),
 // kuyruk --teal İÇİ BOŞ halka; ikisi de adıyla (veritabanı adı / konu), her ad bir kez. Parıltı gücü zeminin koyuluğuna göre (koyu temada güçlü).
@@ -28,11 +29,13 @@ import type { LoginSummaryEdge, LoginSummaryNode } from '@/lib/types';
 
 export interface BackdropGraph { nodes: LoginSummaryNode[]; edges: LoginSummaryEdge[]; seed?: number }
 
-interface Colors { star: string; arm: string; mq: string; flow: string; label: string; glow: number; flowBoost: number }
+interface Colors { star: string; arm: string; mq: string; flow: string; label: string; bg: string; glow: number; flowBoost: number }
 
 function readColors(): Colors {
-  const dark = isDarkColor(resolveVar('var(--bg0)'));
+  const bg = resolveVar('var(--bg0)');
+  const dark = isDarkColor(bg);
   return {
+    bg,
     star: resolveVar('var(--accent2)'), arm: resolveVar('var(--purple)'), mq: resolveVar('var(--teal)'),
     // v0.10.1929 (operatör-raporlu: kurumsal temada akan noktalar altın değil) — --warn açık temalarda
     // kahverengi metin tonu (#795600); galaksiye ayrı altın token'ı.
@@ -56,6 +59,13 @@ function halo(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, co
 interface Frame {
   g: Galaxy; v: View; w: number; h: number; dpr: number; tSec: number; still: boolean;
   col: Colors; pace: number; hover: number; labels: ReadonlySet<number>;
+}
+
+/** Etiket: zemin renginde ince çerçeve + metin (yıldız tozundan ayrışsın). */
+function label(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, col: Colors) {
+  ctx.lineJoin = 'round'; ctx.lineWidth = 3.5; ctx.strokeStyle = col.bg;
+  ctx.strokeText(text, x, y);
+  ctx.fillStyle = col.label; ctx.fillText(text, x, y);
 }
 
 /** Bir kare: toz → kenarlar → akan noktalar → düğümler (arkadan öne) → etiketler. Düğüm konumlarını döner (isabet testi için). */
@@ -127,18 +137,18 @@ function drawFrame(ctx: CanvasRenderingContext2D, f: Frame): Pt[] {
   }
 
   // etiketler (yalnız isimli kipte ad gelir)
-  ctx.fillStyle = col.label;
   ctx.font = chartMonoFont(11);
   for (const i of order) {
     if (i === hover) continue;
     const nd = g.nodes[i], depth = depthOf(pos[i].z);
     if (!wantsLabel(nd, depth, f.labels.has(i))) continue;
     ctx.globalAlpha = Math.min(0.85, (depth - 0.3) * 1.3);
-    ctx.fillText(nd.name ?? '', pos[i].x + 8, pos[i].y + 3);
+    label(ctx, nd.name ?? '', pos[i].x + 8, pos[i].y + 3, col);
   }
   if (hover >= 0 && g.nodes[hover].name) {
+    const nd = g.nodes[hover], p = pos[hover];
     ctx.globalAlpha = 1; ctx.font = chartMonoFont(12);
-    ctx.fillText(g.nodes[hover].name ?? '', pos[hover].x + 9, pos[hover].y + 4);
+    label(ctx, nd.name ?? '', p.x + 9, p.y + 4, col);
   }
   ctx.globalAlpha = 1;
   return pos;
