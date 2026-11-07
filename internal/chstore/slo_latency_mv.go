@@ -107,11 +107,37 @@ func sloGoodCount(total uint64, frac float64) uint64 {
 	return g
 }
 
-// sloLatencyMVEligible — the MV can serve a window starting at `since`
-// only when it holds every bucket from there on (forward-only cutover +
-// 30-day TTL). coverageStart is spanmetricsCoverageStart (fail-safe now()).
-func sloLatencyMVEligible(since, coverageStart time.Time) bool {
-	return !since.Before(coverageStart)
+// sloMVClampTolerance / sloMVClampMaxShare — v0.10.1924 (operatör-raporlu,
+// prod: "[slo] durum hesabı başarısız … 154 SLO'luk fan-out … code 159 …
+// 20 s"). spanmetrics_1m TTL'i 30 gün ve varsayılan SLO penceresi 30 gün;
+// kapsam probu en eski günü kısmi sayıp ERTESİ günden başlatır
+// (coverageFromPartsDate). Sonuç: 30 günlük pencere MV'nin kapsamından hep
+// ~1–2 gün önce başlıyor, "tam kapsam" şartı (v0.10.518) hiç sağlanmıyor ve
+// HER gecikme SLO'su 30 günlük ham span taramasına düşüp 20 sn'de kesiliyordu.
+//
+// Kural: pencere başı kapsamdan en çok 48 sa VE pencerenin en çok %10'u kadar
+// önceyse MV kapsam başından okunur (30 gün → ≥ 28 gün). Yüzde şartı fail-safe
+// probu korur: prob hata verince kapsam = now() döner; kısa pencerede açık
+// pencerenin tamamıdır → MV'ye boş pencere okutulmaz, ham yol kalır.
+const (
+	sloMVClampTolerance = 48 * time.Hour
+	sloMVClampMaxShare  = 0.10
+)
+
+// sloLatencyMVFrom — SAF: MV'nin okunacağı başlangıç ve kullanılabilirlik.
+// Pencere tamamen kapsanıyorsa `since`; küçük açık varsa (yukarıdaki kural)
+// kapsam başı; aksi hâlde ok=false (ham yol). coverageStart =
+// spanmetricsCoverageStart (fail-safe now()).
+func sloLatencyMVFrom(since, coverageStart, now time.Time) (time.Time, bool) {
+	if !since.Before(coverageStart) {
+		return since, true
+	}
+	gap := coverageStart.Sub(since)
+	window := now.Sub(since)
+	if window > 0 && gap <= sloMVClampTolerance && float64(gap) <= sloMVClampMaxShare*float64(window) {
+		return coverageStart, true
+	}
+	return time.Time{}, false
 }
 
 // sloLatencyMVSQL — the MV read. grouped=true adds the per-day bucket used

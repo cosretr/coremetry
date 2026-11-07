@@ -41,6 +41,10 @@ type SLOStatus struct {
 	// operasyon adı / servis adı değişimi kalıcı %100 gösteriyordu. Ne
 	// sağlıklı ne ihlal: FE gri "Olay yok".
 	NoData bool `json:"noData,omitempty"`
+	// WindowFrom (v0.10.1924) — gecikme SLI'si penceresinin başından DEĞİL,
+	// spanmetrics_1m kapsamının başından hesaplandıysa o an (unix ns). Boş =
+	// pencerenin tamamı. 30 günlük pencere TTL sınırında ≥ 28 gün olur.
+	WindowFrom int64 `json:"windowFrom,omitempty"`
 	// Hint (v0.10.801) — SLI tanım kontrolü ipucu: olay yok / hiç başarısız
 	// olmuyor / her olay başarısız. Boş = ipucu yok.
 	Hint string `json:"hint,omitempty"`
@@ -173,6 +177,7 @@ func (s *Store) ComputeSLOStatus(ctx context.Context, o SLO) (*SLOStatus, error)
 	since := time.Now().Add(-time.Duration(o.WindowDays) * 24 * time.Hour)
 
 	var total, good uint64
+	var windowFrom int64 // v0.10.1924 — MV kapsam başından hesaplandıysa (unix ns)
 	switch o.SLIType {
 	case SLITypeAvailability:
 		// v0.8.200 (scale-audit) — availability = (count - errors)/count, which
@@ -205,9 +210,12 @@ func (s *Store) ComputeSLOStatus(ctx context.Context, o SLO) (*SLOStatus, error)
 		// v0.10.518 — spanmetrics_1m t-digest inverse CDF (slo_latency_mv.go)
 		// when the MV covers the window; raw spans only as the cutover/TTL
 		// fallback. Prod: 140-SLO fan-out timed out at 20 s on the raw scan.
-		if sloLatencyMVEligible(since, s.spanmetricsCoverageStart(ctx)) {
+		if from, ok := sloLatencyMVFrom(since, s.spanmetricsCoverageStart(ctx), time.Now()); ok {
+			if from.After(since) {
+				windowFrom = from.UnixNano()
+			}
 			q := sloLatencyMVSQL(s.spanmetricsSourceFor("spanmetrics_1m"), o.Operation != "", false, 20)
-			args := []any{o.Service, since}
+			args := []any{o.Service, from}
 			if o.Operation != "" {
 				args = append(args, o.Operation)
 			}
@@ -237,6 +245,7 @@ func (s *Store) ComputeSLOStatus(ctx context.Context, o SLO) (*SLOStatus, error)
 	}
 
 	st := sloStatusFrom(total, good, o.Target) // v0.10.801 — saf matematik + NoData/ipucu
+	st.WindowFrom = windowFrom
 	return &st, nil
 }
 
@@ -301,7 +310,8 @@ func (s *Store) ComputeSLOBurnSeries(ctx context.Context, o SLO, days int) ([]Bu
 		// v0.10.518 — per-day t-digest merge on spanmetrics_1m when covered
 		// (slo_latency_mv.go); the raw per-span compare stays as the
 		// cutover/TTL fallback.
-		if sloLatencyMVEligible(since, s.spanmetricsCoverageStart(ctx)) {
+		if from, ok := sloLatencyMVFrom(since, s.spanmetricsCoverageStart(ctx), time.Now()); ok {
+			args[1] = from // v0.10.1924 — TTL sınırındaki küçük açıkta kapsam başından
 			if o.Operation != "" {
 				args = append(args, o.Operation)
 			}
@@ -491,10 +501,13 @@ func (s *Store) ComputeSLOBurnRate(ctx context.Context, o SLO, window time.Durat
 	// v0.10.518 — latency rides spanmetrics_1m too (same 5m-aligned window
 	// start as availability; the evaluator calls this four times per SLO
 	// per tick). Sub-5m and pre-coverage windows stay raw below.
-	if o.SLIType == SLITypeLatency && UseSummaryMV(window) &&
-		sloLatencyMVEligible(MVWindowStart(time.Now(), window), s.spanmetricsCoverageStart(ctx)) {
+	mvFrom, mvOK := time.Time{}, false
+	if o.SLIType == SLITypeLatency && UseSummaryMV(window) {
+		mvFrom, mvOK = sloLatencyMVFrom(MVWindowStart(time.Now(), window), s.spanmetricsCoverageStart(ctx), time.Now())
+	}
+	if mvOK {
 		q := sloLatencyMVSQL(s.spanmetricsSourceFor("spanmetrics_1m"), o.Operation != "", false, 10)
-		args := []any{o.Service, MVWindowStart(time.Now(), window)}
+		args := []any{o.Service, mvFrom}
 		if o.Operation != "" {
 			args = append(args, o.Operation)
 		}

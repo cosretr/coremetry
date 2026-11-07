@@ -112,18 +112,56 @@ func TestSLOGoodCountNeverExceedsTotal(t *testing.T) {
 	}
 }
 
-func TestSLOLatencyMVEligible(t *testing.T) {
-	now := time.Now()
+func TestSLOLatencyMVFrom(t *testing.T) {
+	now := time.Date(2026, 11, 7, 7, 15, 0, 0, time.UTC)
 	cov := now.Add(-30 * 24 * time.Hour)
-	if !sloLatencyMVEligible(now.Add(-7*24*time.Hour), cov) {
-		t.Error("7d window inside 30d coverage should be eligible")
+	if from, ok := sloLatencyMVFrom(now.Add(-7*24*time.Hour), cov, now); !ok || !from.Equal(now.Add(-7*24*time.Hour)) {
+		t.Error("7d window inside 30d coverage: MV from the window start")
 	}
-	if sloLatencyMVEligible(now.Add(-90*24*time.Hour), cov) {
+	if _, ok := sloLatencyMVFrom(now.Add(-90*24*time.Hour), cov, now); ok {
 		t.Error("90d window before coverage must fall back to raw")
 	}
-	// Fail-safe probe (coverage = now) → never the MV.
-	if sloLatencyMVEligible(now.Add(-time.Hour), now.Add(time.Second)) {
-		t.Error("coverage after window start must fall back")
+	// Fail-safe probe (coverage = now) → never the MV, even for a short window.
+	if _, ok := sloLatencyMVFrom(now.Add(-time.Hour), now.Add(time.Second), now); ok {
+		t.Error("coverage after window start (fail-safe now) must fall back")
+	}
+}
+
+// v0.10.1924 (operatör-raporlu, prod: 154 SLO'luk fan-out 20 sn'de kesiliyor)
+// — spanmetrics_1m TTL 30 gün, varsayılan pencere 30 gün; kapsam probu en eski
+// günü atlayıp ertesi günden başlatıyor. Eski kural (tam kapsam) her 30 günlük
+// gecikme SLO'sunu ham span taramasına düşürüyordu. TTL sınırındaki küçük açık
+// artık MV'den, kapsam başından okunur.
+func TestSLOLatencyMVFromClampsTTLBoundary(t *testing.T) {
+	now := time.Date(2026, 11, 7, 7, 15, 0, 0, time.UTC)
+	since := now.Add(-30 * 24 * time.Hour) // 2026-10-08 07:15
+	// TTL `toDate + 30 DAY` → en eski bölüm 2026-10-08; kapsam ertesi gün.
+	cov, ok := coverageFromPartsDate(time.Date(2026, 10, 8, 0, 0, 0, 0, time.UTC), now)
+	if !ok {
+		t.Fatal("kapsam hesaplanmalı")
+	}
+	from, ok := sloLatencyMVFrom(since, cov, now)
+	if !ok {
+		t.Fatal("30 günlük pencere TTL sınırında MV'den okunmalı (eski kural ham yola düşürüyordu)")
+	}
+	if !from.Equal(cov) || now.Sub(from) < 28*24*time.Hour {
+		t.Errorf("kapsam başından, ≥ 28 gün: from=%v", from)
+	}
+	// Açık 48 sa'i ya da pencerenin %10'unu aşarsa ham yol.
+	if _, ok := sloLatencyMVFrom(now.Add(-7*24*time.Hour), now.Add(-5*24*time.Hour), now); ok {
+		t.Error("7 günlük pencerede 2 günlük açık (%28) ham yola düşmeli")
+	}
+	if _, ok := sloLatencyMVFrom(now.Add(-60*24*time.Hour), now.Add(-57*24*time.Hour), now); ok {
+		t.Error("72 sa açık (48 sa üstü) ham yola düşmeli")
+	}
+}
+
+// Üç gecikme yolu (durum, yanma serisi, yanma oranı) aynı kuralı kullanır.
+func TestSLOLatencyPathsUseClampRule(t *testing.T) {
+	for _, fn := range []string{"func (s *Store) ComputeSLOStatus(", "func (s *Store) ComputeSLOBurnSeries(", "func (s *Store) ComputeSLOBurnRate("} {
+		if !strings.Contains(funcBody(t, "slo.go", fn), "sloLatencyMVFrom(") {
+			t.Errorf("%s sloLatencyMVFrom kullanmalı", fn)
+		}
 	}
 }
 
