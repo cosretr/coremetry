@@ -13341,4 +13341,8 @@ JSON sözleşmesi ve kararlar ana oturumda. Backend dilimleri v0.10.1902–1905.
   (`queue:<sistem>:<konu>`), `@host` biçiminde sistem adı. Host ASLA çıkmaz: db adı kalıbında nokta yok, konu kalıbında `@ : /`
   boşluk yok; Project kapısı kalıp dışını "db"/"queue"ya düşürür. Etiket: her ad BİR kez (en ağır düğüm), "db"/"queue" yedeği hiç,
   en çok 12 (1926'daki tekrar şikâyeti böyle kapandı). 2026-11-07'deki "Gerek yok" (db adları) bu istekle geri alındı.
+- **v0.10.1932 — login galaksisi akan noktaları Traces süre çizgisinin renginde (operatör-raporlu, 2026-11-07: "Traces
+  sayfasındaki süre grafiğindeki sarı tonda değil akan ışıklar").** 1930'daki ayrı `--galaxy-gold` (#f5a800, OTel logosu) operatörün
+  kastettiği ton değildi; o ton Traces response-time çizgisinin `--orange`'ı (kurumsal #ec7a08, koyu #d76f04). Canvas artık
+  doğrudan `--orange` okur, `--galaxy-gold` silindi; pin testi iki yüzeyin aynı token'da kalmasını şart koşar.
 

@@ -8,7 +8,7 @@
 // adı (isimli kipte) görünür. Kolların çevresinde yıldız tozu.
 //
 // Durum/uyarı rengi YOK; renkler yalnız tema token'ları (`resolveVar`): yıldız
-// --accent2, kol/veri --purple, akan noktalar --galaxy-gold (OpenTelemetry sarı-turuncusu; v0.10.1929–1930),
+// --accent2, kol/veri --purple, akan noktalar --orange (Traces süre çizgisiyle AYNI token; v0.10.1932),
 // etiket --text2. v0.10.1931: veritabanı mor YUVARLAK nokta + hafif hale (kare değil),
 // kuyruk --teal İÇİ BOŞ halka; ikisi de adıyla (veritabanı adı / konu), her ad bir kez. Parıltı gücü zeminin koyuluğuna göre (koyu temada güçlü).
 // Performans: 30 fps tavanı, DPR ≤ 2, `document.hidden`'da rAF durur,
@@ -36,7 +36,9 @@ function readColors(): Colors {
     star: resolveVar('var(--accent2)'), arm: resolveVar('var(--purple)'), mq: resolveVar('var(--teal)'),
     // v0.10.1929 (operatör-raporlu: kurumsal temada akan noktalar altın değil) — --warn açık temalarda
     // kahverengi metin tonu (#795600); galaksiye ayrı altın token'ı.
-    flow: resolveVar('var(--galaxy-gold)'), label: resolveVar('var(--text2)'),
+    // v0.10.1932 (operatör: "Traces sayfasındaki süre grafiğinin sarı tonunda değil") — ayrı altın token'ı
+    // kalktı; akan noktalar Traces response-time çizgisinin token'ını okur (components/traces/volumeSeries.ts).
+    flow: resolveVar('var(--orange)'), label: resolveVar('var(--text2)'),
     glow: dark ? 0.9 : 0.35, flowBoost: dark ? 0.7 : 1.1,
   };
 }
