@@ -110,7 +110,7 @@ describe('izdüşüm ve tempo', () => {
 
 describe('etiketler', () => {
   it('veri katmanı yalnız kümedeyse ve önde etiket alır (v0.10.1931); adı olmayan hiç', () => {
-    const db = { tier: 'db', name: 'pcrmt11', weight: 1 } as GNode;
+    const db = { tier: 'db', name: 'ordersdb1', weight: 1 } as GNode;
     const q = { tier: 'queue', name: 'orders.events', weight: 1 } as GNode;
     expect(wantsLabel(db, 1, true)).toBe(true);
     expect(wantsLabel(db, 1, false)).toBe(false);
@@ -133,8 +133,8 @@ describe('etiketler', () => {
   it('veri katmanı etiketleri (v0.10.1931): her ad bir kez, en ağırında; "db"/"queue" yedek adı hiç', () => {
     const nodes = [
       { id: 'g', tier: 'gw' as const, weight: 1, name: 'api-gateway' },
-      { id: 'a', tier: 'db' as const, weight: 0.4, name: 'pcrmt11' },
-      { id: 'b', tier: 'db' as const, weight: 0.9, name: 'pcrmt11' },
+      { id: 'a', tier: 'db' as const, weight: 0.4, name: 'ordersdb1' },
+      { id: 'b', tier: 'db' as const, weight: 0.9, name: 'ordersdb1' },
       { id: 'c', tier: 'db' as const, weight: 0.8, name: 'db' },
       { id: 'd', tier: 'queue' as const, weight: 0.5, name: 'orders.events' },
       { id: 'e', tier: 'queue' as const, weight: 0.7, name: 'queue' },

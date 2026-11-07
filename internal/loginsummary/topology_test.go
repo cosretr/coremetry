@@ -190,7 +190,7 @@ func TestBuildTopologyWeightsNormalized(t *testing.T) {
 
 func TestDBLabel(t *testing.T) {
 	cases := map[string]string{
-		"PCRMT11.ACME.LOCAL": "pcrmt11",
+		"ORDERSDB1.ACME.LOCAL": "ordersdb1",
 		"orders_db":          "orders_db",
 		" Ledger ":           "ledger",
 		"10.0.0.5":           "", // IP parçası
@@ -217,7 +217,7 @@ func TestNameDatabasesAndQueueTier(t *testing.T) {
 		t.Fatalf("iki db anahtarı beklenir: %v", keys)
 	}
 	NameDatabases(&sil, map[string]string{
-		"oracle@db-host-1.acme.internal": "PCRMT11.ACME.LOCAL",
+		"oracle@db-host-1.acme.internal": "ORDERSDB1.ACME.LOCAL",
 		"oracle@db-host-2.acme.internal": "bad name", // kalıp dışı → sistem adı kalır
 	})
 	topo := BuildTopology(sil, "salt")
@@ -225,7 +225,7 @@ func TestNameDatabasesAndQueueTier(t *testing.T) {
 	for _, n := range topo.Nodes {
 		got[n.Name] = n.Tier
 	}
-	if got["pcrmt11"] != TierDB || got["oracle"] != TierDB || got["orders.events"] != TierQueue {
+	if got["ordersdb1"] != TierDB || got["oracle"] != TierDB || got["orders.events"] != TierQueue {
 		t.Fatalf("adlar/katmanlar: %v", got)
 	}
 	for name := range got {

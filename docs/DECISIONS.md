@@ -13336,7 +13336,7 @@ JSON sözleşmesi ve kararlar ana oturumda. Backend dilimleri v0.10.1902–1905.
   yazmasın, isimleri gözüksün"; "queue kafka oracle ayrı noktalar olabilir"; "gerçek galaksi" mockup seçeneği REDDEDİLDİ, son karar
   veriye bağlı galaksi).** Yeni katman `queue` (cevap sözleşmesi `tier: gw|bff|svc|db|queue`). Veritabanı mor YUVARLAK nokta + hale
   (1928'in karesi kalktı), kuyruk --teal içi boş halka. Ad: veritabanı = `db_summary_5m`'deki en çok çağrılan `db.name`'in ilk nokta
-  parçası, küçük harf (PCRMT11.ACME.LOCAL → pcrmt11); sorgu YALNIZ siluette seçili ≤30 db çiftini sorar (`db_system IN ? AND
+  parçası, küçük harf (ORDERSDB1.ACME.LOCAL → ordersdb1); sorgu YALNIZ siluette seçili ≤30 db çiftini sorar (`db_system IN ? AND
   instance IN ?`, ORDER BY öneki; test 4000 / prod 1300 servis ölçeğinden bağımsız), hata → sistem adı. Kuyruk = kimlikteki konu
   (`queue:<sistem>:<konu>`), `@host` biçiminde sistem adı. Host ASLA çıkmaz: db adı kalıbında nokta yok, konu kalıbında `@ : /`
   boşluk yok; Project kapısı kalıp dışını "db"/"queue"ya düşürür. Etiket: her ad BİR kez (en ağır düğüm), "db"/"queue" yedeği hiç,

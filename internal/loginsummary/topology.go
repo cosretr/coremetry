@@ -29,7 +29,7 @@ var (
 	// sysNameRe — db/kuyrukta cevaba çıkabilecek sistem adı (redis, kafka, oracle…).
 	sysNameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]{0,23}$`)
 	// dbLabelRe — v0.10.1931: veritabanı ADI (db.name'in ilk parçası, küçük
-	// harf; ör. pcrmt11). Nokta YOK: host/alan adı bu kalıptan geçemez.
+	// harf; ör. ordersdb1). Nokta YOK: host/alan adı bu kalıptan geçemez.
 	dbLabelRe = regexp.MustCompile(`^[a-z0-9][a-z0-9_$-]{0,31}$`)
 	// topicRe — v0.10.1931: kuyruk konusu (orders.events gibi). Boşluk, @, :
 	// ve / yok — host:port ya da URL konu kılığında geçemez.
@@ -95,7 +95,7 @@ func backendName(child string) (name string, queue, ok bool) {
 }
 
 // dbLabel — SAF. db.name değerinden gösterilecek veritabanı adı: ilk nokta
-// parçası, küçük harf (PCRMT11.ACME.LOCAL → pcrmt11). Kalıba uymayan ya da
+// parçası, küçük harf (ORDERSDB1.ACME.LOCAL → ordersdb1). Kalıba uymayan ya da
 // yalnız rakam (IP parçası) → "".
 func dbLabel(raw string) string {
 	s := strings.TrimSpace(raw)

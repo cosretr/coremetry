@@ -145,7 +145,7 @@ func TestProjectPoisonedSnapshotNeverEmitsRawIdentifiers(t *testing.T) {
 		{ID: "ffffffffff", Name: "node:worker-1", Tier: "svc", Weight: 0.5},
 		{ID: "gggggggggg", Name: "bff-web", Tier: "evil-tier", Weight: 7},
 		{ID: "hhhhhhhhhh", Name: "Broker Host:9092", Tier: "queue", Weight: 0.5},
-		{ID: "iiiiiiiiii", Name: "pcrmt11", Tier: "db", Weight: 0.5},
+		{ID: "iiiiiiiiii", Name: "ordersdb1", Tier: "db", Weight: 0.5},
 		{ID: "jjjjjjjjjj", Name: "orders.events", Tier: "queue", Weight: 0.5},
 	}, Edges: []Edge{
 		{From: "aaaaaaaaaa", To: "bbbbbbbbbb", Weight: 1},
@@ -169,7 +169,7 @@ func TestProjectPoisonedSnapshotNeverEmitsRawIdentifiers(t *testing.T) {
 	for _, n := range resp.Topology.Nodes {
 		byID[n.ID] = n
 	}
-	if byID["iiiiiiiiii"].Name != "pcrmt11" || byID["jjjjjjjjjj"].Name != "orders.events" || byID["hhhhhhhhhh"].Name != "queue" {
+	if byID["iiiiiiiiii"].Name != "ordersdb1" || byID["jjjjjjjjjj"].Name != "orders.events" || byID["hhhhhhhhhh"].Name != "queue" {
 		t.Errorf("db/kuyruk adları: %+v %+v %+v", byID["iiiiiiiiii"], byID["jjjjjjjjjj"], byID["hhhhhhhhhh"])
 	}
 	for _, e := range resp.Topology.Edges {

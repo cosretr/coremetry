@@ -686,7 +686,7 @@ func TestQueriesAvoidDoubleCounting(t *testing.T) {
 func TestBuilderNamesDatabases(t *testing.T) {
 	for _, fail := range []bool{false, true} {
 		h := newHarness(t)
-		h.st.dbNames = map[string]string{"oracle@db-host-1.acme.internal": "PCRMT11.ACME.LOCAL"}
+		h.st.dbNames = map[string]string{"oracle@db-host-1.acme.internal": "ORDERSDB1.ACME.LOCAL"}
 		if fail {
 			h.st.dbNamesErr = errors.New("boom")
 		}
@@ -694,7 +694,7 @@ func TestBuilderNamesDatabases(t *testing.T) {
 		if snap == nil || snap.Topo == nil {
 			t.Fatal("topoloji yayınlanmalı")
 		}
-		want := "pcrmt11"
+		want := "ordersdb1"
 		if fail {
 			want = "oracle"
 		}
