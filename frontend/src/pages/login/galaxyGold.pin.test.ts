@@ -1,7 +1,8 @@
 // v0.10.1929 (operatör-raporlu: kurumsal temada login galaksisinin akan
 // noktaları altın gibi görünmüyor) — 1928 `--warn` kullanıyordu; açık
 // temalarda o kahverengi METİN tonu (#795600). Galaksinin kendi altın token'ı
-// her temada altın olmalı ve canvas onu okumalı.
+// her temada altın olmalı ve canvas onu okumalı. v0.10.1930 (operatör) —
+// değer her temada OpenTelemetry sarı-turuncusu (#f5a800): telemetri vurgusu.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -25,6 +26,11 @@ describe('login galaksisi altın token', () => {
       expect(v, t).toBeDefined();
       expect(isGold(v!, 0.6), `${t} ${v}`).toBe(true);
     }
+  });
+  it('her temada OpenTelemetry sarı-turuncusu (#f5a800)', () => {
+    const all = [...css.matchAll(/--galaxy-gold:\s*(#[0-9a-f]{6})/gi)].map(m => m[1].toLowerCase());
+    expect(all.length).toBeGreaterThanOrEqual(4);
+    expect(new Set(all)).toEqual(new Set(['#f5a800']));
   });
   it('canvas akan noktaları --galaxy-gold okur (--warn değil)', () => {
     const src = readFileSync(resolve(__dirname, 'TopologyBackdrop.tsx'), 'utf8');

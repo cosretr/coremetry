@@ -8,7 +8,7 @@
 // adı (isimli kipte) görünür. Kolların çevresinde yıldız tozu.
 //
 // Durum/uyarı rengi YOK; renkler yalnız tema token'ları (`resolveVar`): yıldız
-// --accent2, kol/veri --purple, akan noktalar --galaxy-gold (her temada altın; v0.10.1929),
+// --accent2, kol/veri --purple, akan noktalar --galaxy-gold (OpenTelemetry sarı-turuncusu; v0.10.1929–1930),
 // etiket --text2. Parıltı gücü zeminin koyuluğuna göre (koyu temada güçlü).
 // Performans: 30 fps tavanı, DPR ≤ 2, `document.hidden`'da rAF durur,
 // `prefers-reduced-motion`'da kendiliğinden hareket yok (sürükleme çalışır).
