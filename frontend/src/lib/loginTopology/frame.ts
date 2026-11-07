@@ -35,10 +35,18 @@ export function thinGraph<N extends { id: string; tier: string; weight: number }
 }
 
 export interface Pt { x: number; y: number }
-/** Düğümlerin ekran (css px) konumları: yerleşim + kayma, ölçekli. Çizim ve isabet testi AYNI konumu kullanır. */
-export function screenPositions(layout: Layout, tSec: number, sx: number, sy: number): Pt[] {
+/**
+ * Düğümlerin ekran (css px) konumları: yerleşim + kayma, ölçekli. Çizim ve
+ * isabet testi AYNI konumu kullanır. v0.10.1919 — `motion` verilirse düğüm
+ * başına salınım genliği/hız çarpanı (derinlik katmanı).
+ */
+export function screenPositions(
+  layout: Layout, tSec: number, sx: number, sy: number,
+  motion?: (i: number) => { amp: number; speed: number },
+): Pt[] {
   return layout.nodes.map((n, i) => {
-    const d = drift(layout, i, tSec);
+    const m = motion?.(i);
+    const d = drift(layout, i, tSec, m?.amp ?? 1, m?.speed ?? 1);
     return { x: (n.x + d.dx) * sx, y: (n.y + d.dy) * sy };
   });
 }
@@ -57,12 +65,12 @@ export function nodeStyle(n: Pick<LayoutNode, 'tier' | 'weight' | 'deg'>): NodeS
   }
 }
 
-/** Düğümün zamana bağlı sinüs kayması (mantıksal birim). Aynı (i, t) → aynı sonuç. */
-export function drift(layout: Layout, i: number, tSec: number): { dx: number; dy: number } {
+/** Düğümün zamana bağlı sinüs kayması (mantıksal birim). Aynı (i, t) → aynı sonuç. `ampMul`/`speedMul`: derinlik çarpanı. */
+export function drift(layout: Layout, i: number, tSec: number, ampMul = 1, speedMul = 1): { dx: number; dy: number } {
   const ph = layout.nodePhase[i] ?? 0;
-  const amp = 2 + 3 * (layout.nodes[i]?.weight ?? 0);
+  const amp = (2 + 3 * (layout.nodes[i]?.weight ?? 0)) * ampMul;
   const period = 8 + (i % 7); // 8..14 sn
-  const a = (tSec / period) * Math.PI * 2 + ph;
+  const a = ((tSec * speedMul) / period) * Math.PI * 2 + ph;
   return { dx: Math.sin(a) * amp, dy: Math.cos(a * 0.8 + ph) * amp };
 }
 
@@ -87,8 +95,11 @@ const TIER_RANK: Record<string, number> = { gw: 0, bff: 1, svc: 2, db: 3 };
  * arasından RASTGELE alt küme (Fisher–Yates); sayfa her açılışta farklı
  * servisleri etiketler. Dönüş dizin sırasına göre (çizim sırası kararlı).
  */
-export function labelNodes(layout: Layout, max = MAX_LABELS, rand?: () => number): number[] {
-  const named = layout.nodes.map((n, i) => ({ i, n })).filter(x => !!x.n.name);
+export function labelNodes(
+  layout: Layout, max = MAX_LABELS, rand?: () => number, eligible?: (i: number) => boolean,
+): number[] {
+  // v0.10.1919 — `eligible`: yalnız ön katman etiketlenir (derinlik).
+  const named = layout.nodes.map((n, i) => ({ i, n })).filter(x => !!x.n.name && (!eligible || eligible(x.i)));
   if (!rand) {
     return named
       .sort((a, b) => (TIER_RANK[a.n.tier] ?? 9) - (TIER_RANK[b.n.tier] ?? 9) || b.n.weight - a.n.weight || a.i - b.i)

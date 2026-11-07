@@ -10,21 +10,30 @@
 // bıraktıkları yerde kalır (sayfa yenilenince yerleşim baştan kurulur).
 import { MARGIN, type Layout } from './layout';
 import { nodeStyle, type Pt } from './frame';
+import { DEPTH_STYLE, type Depth } from './depth';
 
 /** İsabet toleransı (css px): küçük düğümler de tutulabilsin. */
 export const HIT_SLOP = 6;
 export const FOLLOW_1 = 0.22;
 export const FOLLOW_2 = 0.08;
 
-/** Ekran konumunda (css px) tutulabilecek en yakın düğüm; yoksa -1. */
-export function hitNode(layout: Layout, pos: readonly Pt[], x: number, y: number, slop = HIT_SLOP): number {
-  let best = -1, bestD = Infinity;
+/**
+ * Ekran konumunda (css px) tutulabilecek düğüm; yoksa -1. v0.10.1919 —
+ * `depth` verilirse yarıçap katman ölçeğiyle küçülür ve çakışmada ÖNDEKİ
+ * kazanır (göze yakın olan tutulur); katman içinde en yakın.
+ */
+export function hitNode(
+  layout: Layout, pos: readonly Pt[], x: number, y: number, slop = HIT_SLOP, depth?: readonly Depth[],
+): number {
+  let best = -1, bestD = Infinity, bestLayer = Infinity;
   for (let i = 0; i < pos.length; i++) {
     const p = pos[i];
     if (!p) continue;
-    const r = Math.max(nodeStyle(layout.nodes[i]).r + slop, 10);
+    const layer = depth?.[i] ?? 0;
+    const r = Math.max(nodeStyle(layout.nodes[i]).r * DEPTH_STYLE[layer].scale + slop, 10);
     const d = Math.hypot(p.x - x, p.y - y);
-    if (d <= r && d < bestD) { best = i; bestD = d; }
+    if (d > r) continue;
+    if (layer < bestLayer || (layer === bestLayer && d < bestD)) { best = i; bestD = d; bestLayer = layer; }
   }
   return best;
 }

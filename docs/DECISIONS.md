@@ -13297,4 +13297,10 @@ JSON sözleşmesi ve kararlar ana oturumda. Backend dilimleri v0.10.1902–1905.
   panel kapalı + topoloji açıkken kurucu yalnız topolojiyi okur, uç `{enabled:false, ready:true, topology}` döner (sayı, grafik,
   aktivite, bileşen yok); ikisi de kapalıysa kurucu hiç koşmaz. Eskiden panel kapalıyken topoloji sentetiğe düşmeliydi; istemci
   önbelleği yüzünden gerçek veri görünebiliyordu (tutarsız).
+- **v0.10.1919 — topoloji derinliği (operatör, 2026-11-07: "derinlik olsun, gerçekten güzel bir deneyim olsun").** 3B/WebGL YOK
+  (sanal masaüstünde ekran kartı yok, paket bütçesi); 2B canvas'ta üç katman: önem sırasıyla ilk %30 ön, %35 orta, kalan arka
+  (giriş → BFF → veri → servis, sonra ağırlık). Ön büyük/net/canlı, arka küçük/soluk/yavaş; çizim arkadan öne; kenar daha derin
+  ucun katmanında; isim etiketi yalnız ön katmanda (1918'in rastgele seçimi onun içinden). Üzerine gelinen düğüm büyür, bağlantıları
+  parlar, adı her katmanda görünür; çakışmada öndeki tutulur; açılışta 0.9 sn yumuşak beliriş. Parallax BİLEREK yok (şifre
+  yazarken dikkat dağıtır, tutulan nokta imlecin altından kayar).
 
