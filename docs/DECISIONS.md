@@ -13369,4 +13369,6 @@ JSON sözleşmesi ve kararlar ana oturumda. Backend dilimleri v0.10.1902–1905.
   azalır (en az 1000), toplam nokta ~aynı. Cevap 4000 serviste ~+40 KB.
 - **v0.10.1938 — login galaksisi: açılış hareketi KALDIRILDI (operatör, 2026-11-07: "açılış efekti de olmasın, direk
   açılsın").** 1936'nın merkezden yayılma hareketi (`introProgress`) söküldü; galaksi ilk karede yerinde. Yeniden önerme.
+- **v0.10.1939 — login: sol alttaki "Canlı topoloji silueti" notu KALDIRILDI (operatör, 2026-11-07: "sol altta live topology
+  siluet yazmasın").** 1909'dan beri gerçek veride çıkan not ve `login.topo.note` anahtarları silindi. Yeniden önerme.
 

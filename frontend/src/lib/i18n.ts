@@ -172,8 +172,6 @@ const EN: Catalog = {
   'login.http.rt':        'Response time · metric',
   'login.http.perSec':    'now · per second',
   'login.http.avg':       'avg',
-  // v0.10.1909 — topoloji arka planı notu (yalnız gerçek veride).
-  'login.topo.note':      'Live topology silhouette · {n} services · last {m} min · details after sign-in',
   // v0.10.1935 — galakside üzerine gelince adın altındaki tür satırı.
   'login.topo.kind.gw':    'gateway',
   'login.topo.kind.bff':   'BFF',
@@ -849,7 +847,6 @@ const TR: Catalog = {
   'login.http.rt':        'Response time · metrik',
   'login.http.perSec':    'şimdi · saniyede',
   'login.http.avg':       'ort',
-  'login.topo.note':      'Canlı topoloji silueti · {n} servis · son {m} dk · ayrıntılar giriş sonrasında',
   'login.topo.kind.gw':    'gateway',
   'login.topo.kind.bff':   'BFF',
   'login.topo.kind.svc':   'servis',

@@ -164,11 +164,6 @@ export default function LoginPage() {
   // v0.10.1928 — galaksinin dönüş/akış temposu: toplam throughput (son / 24 sa tepe).
   const http = summary.data?.ready ? summary.data.http_24h : undefined;
   const pace = useMemo(() => paceFrom((http?.throughput ?? http?.grpc ?? http?.kafka)?.points.map(p => p.value)), [http]);
-  const topoNote = bd.kind === 'canvas' && realTopo
-    ? t('login.topo.note')
-        .replace('{n}', String(realTopo.nodes.filter(n => n.tier !== 'db').length))
-        .replace('{m}', String(Math.max(1, Math.round(realTopo.window_s / 60))))
-    : null;
 
   const invalidMsg = t('login.invalid');
   const ldapParts = t('login.ldapNote').split('{account}');
@@ -316,9 +311,6 @@ export default function LoginPage() {
           </Suspense>
         )}
       </div>
-      {topoNote && (
-        <div className="absolute bottom-7 left-10 z-10 text-[length:var(--fs-xs)] text-(--text3)">{topoNote}</div>
-      )}
     </div>
   );
 }

@@ -426,7 +426,8 @@ describe('Login — topoloji arka planı', () => {
     expect(canvasQ(h)!.className).not.toContain('pointer-events-none');
     expect(h.querySelector('.login-veil')!.className).toContain('pointer-events-none');
     expect(h.querySelector('.login-veil')).not.toBeNull();
-    expect(h.textContent).toContain('Live topology silhouette · 3 services · last 15 min · details after sign-in');
+    // v0.10.1939 (operatör: "sol altta live topology silüet yazmasın") — not kalktı.
+    expect(h.textContent).not.toContain('Live topology silhouette');
     expect(raf).toHaveBeenCalled(); // canlı kip: animasyon
   });
 
@@ -466,7 +467,7 @@ describe('Login — topoloji arka planı', () => {
     expect(m.summaryCalls).toBe(1);
     expect(canvasQ(h)).not.toBeNull();
     expect(h.querySelector('aside')).toBeNull();
-    expect(h.textContent).toContain('Live topology');
+    expect(h.textContent).not.toContain('Live topology'); // v0.10.1939: not yok
   });
   it('panel kapalı, sunucu yine panel verisi dönse bile sağ sütun çizilmez', async () => {
     stubWide(true);
@@ -510,12 +511,12 @@ describe('Login — topoloji arka planı', () => {
     expect(raf).not.toHaveBeenCalled();
   });
 
-  it('TR not metni', async () => {
+  it('TR: topoloji notu yok (v0.10.1939)', async () => {
     setUserLang('tr');
     stubWide(true);
     m.summary = { ...READY, topology: TOPO };
     const h = await mount(); await settle();
-    expect(h.textContent).toContain('Canlı topoloji silueti · 3 servis · son 15 dk · ayrıntılar giriş sonrasında');
+    expect(h.textContent).not.toContain('Canlı topoloji silueti');
   });
 });
 
