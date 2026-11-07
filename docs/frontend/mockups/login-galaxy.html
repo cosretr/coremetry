@@ -1,0 +1,846 @@
+<title>Login Galaksi</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@600;700&family=Red+Hat+Text:wght@400;500&family=Red+Hat+Mono:wght@400&display=swap">
+<style>
+/* Layout: tam ekran canvas arka plan (4 görünüm); ortada login kartı; altta görünüm seçici + kontroller + canlı ölçüm şeridi. */
+:root {
+  /* Kurumsal (açık) tema: Coremetry redhat paleti — kırmızı marka, mavi vurgu, mor veri katmanı */
+  --bg: #f2f3f5;
+  --bg-deep: #e4e7ec;
+  --star: #0066cc;
+  --arm: #6753ac;
+  --core: #73bcf7;
+  --db: #6753ac;
+  --label: #3c3f42;
+  --card: #ffffff;
+  --card-line: #d2d2d2;
+  --text: #151515;
+  --muted: #5f6368;
+  --brand: #ee0000;
+  --accent: #0066cc;
+  --chip: rgba(255,255,255,0.84);
+  --flow: #ec7a08; /* Traces süre çizgisiyle aynı (--orange, kurumsal tema) */
+  --mq: #009596; /* kuyruk (kafka, rabbitmq): turkuaz halka */
+  --flow-boost: 1.1;
+  /* gerçek galaksi: yıldız sınıfları sıcak→mavi (açıkta mürekkep tonları), nebula, disk ışığı */
+  --s0: #a35a12; --s1: #7a6440; --s2: #3d4466; --s3: #2f5ea8; --s4: #0066cc;
+  --neb: #c2407f; --tex-old: #d08a3c; --tex-young: #5b7fc7; --space-hi: #f7f8fa;
+  --font-display: "Red Hat Display", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Red Hat Text", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "Red Hat Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --glow: 0.35;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #070a12; --bg-deep: #020308; --star: #9cc1ff; --arm: #b39bff; --core: #ffd9a8;
+    --db: #c3a3ff; --label: #c4cbe0; --card: rgba(18,21,30,0.88); --card-line: #2b3243;
+    --text: #eef1f7; --muted: #98a1b5; --brand: #ff3b3b; --accent: #5aa2ff; --chip: rgba(14,17,26,0.8);
+    --flow: #d76f04; --flow-boost: 0.7; --mq: #5ec7c7; --glow: 0.9; color-scheme: dark;
+    --s0: #ffc98f; --s1: #ffe9c9; --s2: #ffffff; --s3: #d4e3ff; --s4: #9fbfff; --neb: #ff5d9e; --tex-old: #ffcf96; --tex-young: #7fa6ff; --space-hi: #0e1528;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #070a12; --bg-deep: #020308; --star: #9cc1ff; --arm: #b39bff; --core: #ffd9a8;
+  --db: #c3a3ff; --label: #c4cbe0; --card: rgba(18,21,30,0.88); --card-line: #2b3243;
+  --text: #eef1f7; --muted: #98a1b5; --brand: #ff3b3b; --accent: #5aa2ff; --chip: rgba(14,17,26,0.8);
+  --flow: #d76f04; --flow-boost: 0.7; --mq: #5ec7c7; --glow: 0.9; color-scheme: dark;
+    --s0: #ffc98f; --s1: #ffe9c9; --s2: #ffffff; --s3: #d4e3ff; --s4: #9fbfff; --neb: #ff5d9e; --tex-old: #ffcf96; --tex-young: #7fa6ff; --space-hi: #0e1528;
+}
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--text); font-family: var(--font-body); overflow: hidden; }
+#sky { position: fixed; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
+#sky.dragging { cursor: grabbing; }
+.stage {
+  position: relative; z-index: 2; height: 100%; display: grid; place-items: center; pointer-events: none;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 16px 176px;
+}
+.card {
+  pointer-events: auto; width: min(1040px, calc(100vw - 160px)); display: grid; grid-template-columns: 420px 1fr;
+  background: var(--card); border: 1px solid var(--card-line); border-radius: 16px; box-shadow: 0 18px 50px rgba(0,0,0,0.22);
+}
+.card form { padding: 34px 40px 26px; }
+.sum { border-left: 1px solid var(--card-line); padding: 28px 32px; display: grid; gap: 14px; align-content: start; min-width: 0; }
+.sum h2 { margin: 0; font: 600 12px/1 var(--font-body); color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
+.sum .kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.sum .kpi b { display: block; font: 600 22px/1.1 var(--font-display); color: var(--text); font-variant-numeric: tabular-nums; }
+.sum .kpi span { font-size: 12px; color: var(--muted); }
+.sum .bars { height: 76px; display: flex; align-items: flex-end; gap: 3px; }
+.sum .bars i { flex: 1; background: var(--accent); opacity: 0.55; border-radius: 2px 2px 0 0; }
+.sum .line { font-size: 12.5px; color: var(--muted); }
+@media (max-width: 900px) { .card { grid-template-columns: 1fr; width: min(420px, 100%); } .sum { display: none; } }
+.mark { font-family: var(--font-display); font-weight: 700; font-size: 26px; text-align: center; letter-spacing: -0.3px; margin: 0; }
+.mark span { color: var(--brand); }
+.sub { text-align: center; color: var(--muted); font-size: 13px; margin: 4px 0 18px; }
+.field { display: grid; gap: 6px; margin-bottom: 12px; }
+.field label { font-size: 12.5px; color: var(--muted); }
+.field input { font: inherit; font-size: 14px; padding: 9px 11px; border-radius: 8px; border: 1px solid var(--card-line); background: transparent; color: var(--text); }
+.field input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.btn { width: 100%; font: inherit; font-weight: 500; font-size: 14px; padding: 10px; border: 0; border-radius: 8px; background: var(--accent); color: #fff; cursor: pointer; margin-top: 4px; }
+.btn:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+.note { margin-top: 12px; font-size: 11.5px; color: var(--muted); text-align: center; }
+/* katlanabilir seçim alanı: gizliyken yalnız küçük "Seçenekler" düğmesi kalır */
+.panel-body { display: grid; gap: 8px; }
+.panel-toggle {
+  justify-self: end; font: inherit; font-size: 12px; padding: 4px 10px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--card-line); background: transparent; color: var(--muted);
+}
+.panel-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.panel.collapsed { width: auto; left: auto; transform: none; right: max(16px, env(safe-area-inset-right, 0px)); padding: 6px; }
+.panel.collapsed .panel-toggle { justify-self: auto; }
+body.panel-collapsed .stage { padding-block: 16px; }
+.panel {
+  position: fixed; z-index: 3; left: 50%; transform: translateX(-50%);
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px)); width: min(1040px, calc(100% - 32px));
+  display: grid; gap: 8px; background: var(--chip); border: 1px solid var(--card-line); border-radius: 12px;
+  padding: 10px 12px; backdrop-filter: blur(6px); font-size: 12.5px;
+}
+.row { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: space-between; }
+.group { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.group .lbl { color: var(--muted); font-size: 11.5px; letter-spacing: 0.04em; text-transform: uppercase; margin-right: 2px; }
+.group button {
+  font: inherit; font-size: 12px; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--card-line);
+  background: transparent; color: var(--muted); cursor: pointer;
+}
+.group button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.group button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.desc { color: var(--text); font-size: 12.5px; min-width: 0; }
+.desc b { font-weight: 500; }
+.perf { font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 0; }
+.perf b { color: var(--text); font-weight: 400; }
+@media (max-width: 640px) { .desc { display: none; } .row { justify-content: center; } }
+</style>
+
+<canvas id="sky" aria-hidden="true"></canvas>
+
+<div class="stage">
+  <div class="card" id="card">
+  <form onsubmit="event.preventDefault()">
+    <p class="mark"><span>Core</span>metry</p>
+    <p class="sub">Giriş yapın</p>
+    <div class="field"><label for="u">Kullanıcı adı</label><input id="u" value="ops@acme.local" autocomplete="off"></div>
+    <div class="field"><label for="p">Şifre</label><input id="p" type="password" value="example-only"></div>
+    <button class="btn" type="submit">Giriş</button>
+    <p class="note">Mockup · tasarım önerileri · örnek veri</p>
+  </form>
+  <section class="sum" aria-label="Özet (örnek)">
+    <h2>Şu an</h2>
+    <div class="kpis">
+      <div class="kpi"><b>1.312</b><span>servis</span></div>
+      <div class="kpi"><b>4,2 Mr</b><span>span bugün</span></div>
+      <div class="kpi"><b>186 ms</b><span>p95</span></div>
+    </div>
+    <h2>Son 24 saatte · istek/sn</h2>
+    <div class="bars" id="bars"></div>
+    <p class="line">48 giriş · 17 CoSRE sorusu · 3.940 endpoint izleniyor</p>
+  </section>
+  </div>
+</div>
+
+<div class="panel" id="panel">
+  <button type="button" class="panel-toggle" id="panel-toggle" aria-expanded="true" aria-controls="panel-body">▾ Gizle</button>
+  <div class="panel-body" id="panel-body">
+  <div class="row">
+    <div class="group" role="group" aria-label="Düğüm sayısı">
+      <span class="lbl">Düğüm</span>
+      <button type="button" data-n="180" aria-pressed="false">180</button>
+      <button type="button" data-n="360" aria-pressed="false">360 (bugün)</button>
+    </div>
+    <div class="group" role="group" aria-label="Servis yıldızları">
+      <span class="lbl">Tüm servisler</span>
+      <button type="button" data-s="0" aria-pressed="false">Kapalı (bugün)</button>
+      <button type="button" data-s="1300" aria-pressed="false">1300 (prod)</button>
+      <button type="button" data-s="4000" aria-pressed="false">4000 (test)</button>
+    </div>
+    <div class="group" role="group" aria-label="Tema">
+      <button id="th-light" type="button" aria-pressed="false">Kurumsal</button>
+      <button id="th-dark" type="button" aria-pressed="false">Koyu</button>
+    </div>
+  </div>
+  <div class="row">
+    <div class="group" role="group" aria-label="Öneriler">
+      <span class="lbl">Öneriler</span>
+      <button id="o-center" type="button" aria-pressed="true">1 · Merkez kartın dışında</button>
+      <button id="o-halo" type="button" aria-pressed="true">2 · Etiket çerçevesi</button>
+      <button id="o-type" type="button" aria-pressed="true">3 · Üzerine gelince tür</button>
+      <button id="o-intro" type="button" aria-pressed="true">4 · Açılış hareketi</button>
+      <button id="o-replay" type="button">▶ Açılışı oynat</button>
+    </div>
+  </div>
+  <div class="row">
+    <span class="desc" id="desc"></span>
+  </div>
+  <div class="row">
+    <div class="group" role="group" aria-label="Ayarlar">
+      <button id="t-spin" type="button" aria-pressed="true">Kendiliğinden hareket</button>
+      <button id="t-dust" type="button" aria-pressed="true">Yıldızlar</button>
+      <button id="t-flow" type="button" aria-pressed="true">Akan noktalar</button>
+      <button id="t-names" type="button" aria-pressed="true">İsimler</button>
+    </div>
+    <span class="perf" id="perf">ölçülüyor…</span>
+  </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const cv = document.getElementById('sky');
+  const ctx = cv.getContext('2d');
+  const perfEl = document.getElementById('perf');
+  const descEl = document.getElementById('desc');
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const TAU = Math.PI * 2;
+
+  // ── tohumlu rastgele: her açılışta aynı sahne ──
+  let seed = 0x5eed1923;
+  const rnd = () => { seed = (seed + 0x6d2b79f5) >>> 0; let t = seed; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const gauss = () => (rnd() + rnd() + rnd() - 1.5) / 1.5;
+
+  // ── ORTAK sentetik topoloji: 6 gateway → 18 BFF → servisler → veri. Her düğümün trafiği (w) var. ──
+  const gwNames = ['api-gateway', 'web-gateway', 'mobile-gateway', 'partner-gateway', 'branch-gateway', 'open-api-gw'];
+  const bffBases = ['bff-web', 'bff-mobile', 'bff-branch', 'bff-partner', 'bff-atm', 'bff-ivr'];
+  const svcBases = ['orders-api', 'payments-mobile', 'account-service', 'card-service', 'pricing-service', 'customer-profile', 'notification-service', 'ledger-service', 'fraud-score', 'transfer-service', 'statement-service', 'loan-service', 'campaign-service', 'search-service', 'audit-service', 'document-service', 'fx-service', 'limit-service', 'otp-service', 'invest-service'];
+  // veri katmanı: veritabanları (mor dolu nokta) + kuyruklar (turkuaz halka)
+  const dbNames = ['orders_db', 'ledger', 'cards', 'orders_db', 'crm', 'session-cache', 'payments', 'audit'];
+  const mqNames = ['orders.events', 'payments.v1', 'notify.sms', 'orders.events'];
+  // 180 / 360 karşılaştırması (#n360): 360'ta ~2× servis, 2× veri katmanı, noktalar %15 küçük
+  // adres: #n360-s1300 gibi (n = bağlantılı düğüm sayısı, s = adsız servis yıldızı sayısı)
+  const HASH = location.hash.slice(1);
+  const BIG = !/(^|-)n180(-|$)/.test(HASH); // login bugün 360
+  const SVC_STARS = (() => { const m = /(^|-)s(\d+)(-|$)/.exec(HASH); return m ? Math.min(4000, +m[2]) : 0; })();
+  const setHash = (n, sv) => { location.hash = `n${n}-s${sv}`; location.reload(); };
+  const SIZE_K = BIG ? 0.85 : 1;
+  const nodes = [], edges = [];
+  const add = (tier, name, parent, w) => { nodes.push({ tier, name, parent, w, kids: [], ph: rnd() * TAU }); const i = nodes.length - 1; if (parent >= 0) nodes[parent].kids.push(i); return i; };
+  const gws = gwNames.map(n => add('gw', n, -1, 0.75 + rnd() * 0.25));
+  const bffs = [], svcs = [], dbs = [];
+  let sc = 0;
+  gws.forEach((g, gi) => {
+    for (let k = 0; k < 3; k++) {
+      const b = add('bff', `${bffBases[gi % bffBases.length]}${k ? '-' + (k + 1) : ''}`, g, 0.35 + rnd() * 0.45);
+      bffs.push(b); edges.push([g, b]);
+      const n = BIG ? 16 + Math.floor(rnd() * 3) : 7 + Math.floor(rnd() * 3);
+      for (let j = 0; j < n && nodes.length < (BIG ? 336 : 168); j++) {
+        const nm = svcBases[sc % svcBases.length] + (sc >= svcBases.length ? '-' + (Math.floor(sc / svcBases.length) + 1) : '');
+        sc++;
+        const s = add('svc', nm, b, Math.min(1, 0.04 + Math.pow(rnd(), 2.2) * 0.9));
+        svcs.push(s); edges.push([b, s]);
+      }
+    }
+  });
+  for (let i = 0; i < (BIG ? 24 : 12); i++) {
+    const k = i % 12, isMq = k >= dbNames.length;
+    const d = add('db', isMq ? mqNames[k - dbNames.length] : dbNames[k], -1, 0.3 + rnd() * 0.5);
+    nodes[d].mq = isMq;
+    dbs.push(d);
+    for (let k = 0; k < 3; k++) edges.push([svcs[Math.floor(rnd() * svcs.length)], d]);
+  }
+  const gwOf = i => { let n = i; while (n >= 0 && nodes[n].tier !== 'gw') n = nodes[n].parent; return n; };
+  nodes.forEach((n, i) => { n.gw = n.tier === 'db' ? Math.floor(rnd() * gws.length) : gwOf(i); });
+  const adj = nodes.map(() => new Set());
+  edges.forEach(([a, b]) => { adj[a].add(b); adj[b].add(a); });
+  const edgeW = edges.map(([a, b]) => nodes[b].tier === 'db' ? nodes[a].w : nodes[b].w);
+  const flowIdx = edges.map((e, i) => ({ i, w: edgeW[i] })).sort((a, b) => b.w - a.w).slice(0, 48).map(x => x.i);
+  const flowPh = edges.map(() => rnd());
+
+  // simüle toplam trafik: 90 sn'lik "gün" (yoğun saat ↔ gece)
+  const PEAK = 889000;
+  const traffic = t => 0.62 + 0.38 * Math.sin((t / 90) * TAU - 1.2);
+
+  // ── tema renkleri ──
+  let col = {};
+  const readColors = () => {
+    const cs = getComputedStyle(document.documentElement);
+    const v = n => cs.getPropertyValue(n).trim();
+    col = { muted: v('--muted'), pal: ['--s0', '--s1', '--s2', '--s3', '--s4'].map(v), neb: v('--neb'), texOld: v('--tex-old'), texYoung: v('--tex-young'), spaceHi: v('--space-hi'), dark: (parseFloat(v('--glow')) || 0.5) > 0.6, mq: v('--mq'), flow: v('--flow'), flowBoost: parseFloat(v('--flow-boost')) || 1, star: v('--star'), arm: v('--arm'), core: v('--core'), db: v('--db'), label: v('--label'), bg: v('--bg'), glow: parseFloat(v('--glow')) || 0.5, mono: v('--font-mono') };
+  };
+
+  // ── görünüm durumu ──
+  let w = 0, h = 0, dpr = 1, R = 1, cx = 0, cy = 0;
+  const TILT0 = 1.08;
+  let angle = 0, tilt = TILT0, vel = 0, tiltVel = 0, panX = 0, panY = 0, panVX = 0, panVY = 0;
+  let autoMove = !reduced, showDust = true, showFlow = true, showNames = true;
+  let pos = [], hover = -1, lastT = 0;
+  // öneriler (hepsi açık başlar; kapatıp bugünküyle karşılaştır)
+  let offCenter = true, labelHalo = true, showType = true, introOn = !reduced, introStart = 0;
+  const fit = () => {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    w = innerWidth; h = innerHeight;
+    cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+    if (!offCenter) { R = Math.max(w, h) * 0.6; cx = w / 2; cy = h / 2; return; }
+    // 1 · çekirdek kartın SOL ALT dışında; kollar sağa/yukarı, kartın arkasına akar
+    const r = document.getElementById('card').getBoundingClientRect();
+    R = Math.max(w, h) * 0.72;
+    cx = r.left > 200 ? Math.max(110, r.left * 0.5) : w * 0.16;
+    cy = r.left > 200 ? Math.min(h - 150, r.bottom - 30) : Math.min(h - 150, r.bottom + 60);
+  };
+  // disk düzlemi (R biriminde) → ekran: dönüş + eğim; z>0 izleyiciye yakın
+  const project = (x0, y0, hh) => {
+    const ca = Math.cos(angle), sa = Math.sin(angle);
+    const x = x0 * ca - y0 * sa, y1 = x0 * sa + y0 * ca;
+    const ct = Math.cos(tilt), st = Math.sin(tilt);
+    return { x: cx + x * R, y: cy + (y1 * ct - hh * st) * R, z: y1 * st + hh * ct };
+  };
+  const polar = (r, th, hh) => project(r * Math.cos(th), r * Math.sin(th), hh);
+
+  // ═════════ MOD 1 — Veriye bağlı galaksi ═════════
+  // Her gateway bir KOL; BFF'leri ve servisleri o kol boyunca. Parlaklık = trafik, akış hızı = istek hızı, dönüş = toplam throughput.
+  const ARMS = gws.length, TWIST = 2.3;
+  const gal = nodes.map(n => {
+    const arm = gws.indexOf(n.gw);
+    const t = n.tier === 'gw' ? 0.02 + rnd() * 0.05 : n.tier === 'bff' ? 0.14 + rnd() * 0.18 : n.tier === 'db' ? 0.55 + rnd() * 0.4 : 0.32 + Math.pow(rnd(), 0.85) * 0.66;
+    const r = 0.05 + t * 0.95;
+    return { r, th: (arm / ARMS) * TAU + Math.log(0.18 + r) * TWIST + gauss() * (0.12 + t * 0.1), h: gauss() * 0.03 * (1 - t * 0.5) };
+  });
+  const galDust = [];
+  for (let i = 0; i < 4200; i++) { const r = Math.pow(rnd(), 0.75) * 1.2; const arm = i % ARMS; const sp = (rnd() < 0.7 ? 0.13 : 0.4) + r * 0.18; galDust.push({ r, th: (arm / ARMS) * TAU + Math.log(0.18 + r) * TWIST + gauss() * sp, h: gauss() * 0.05, b: 0.3 + rnd() * 0.7, tw: rnd() * TAU }); }
+  for (let i = 0; i < 900; i++) galDust.push({ r: Math.abs(gauss()) * 0.22, th: rnd() * TAU, h: gauss() * 0.06, b: 0.45 + rnd() * 0.55, tw: rnd() * TAU });
+  galDust.forEach(d => { d.k = rnd(); });
+  // TÜM SERVİSLER: bağlantılı 360'ın dışındaki her servis kolunda ADSIZ bir yıldız (yalnız kol + trafik gelir).
+  // Sentetik toz bu kadar azalır → toplam nokta ~aynı.
+  const svcStars = [];
+  const anon = Math.max(0, SVC_STARS - svcs.length); // toplam servis − bağlantılı servisler
+  for (let i = 0; i < anon; i++) {
+    const arm = Math.floor(rnd() * ARMS), t = 0.3 + Math.pow(rnd(), 0.85) * 0.68, r = 0.05 + t * 0.95;
+    const wt = Math.pow(rnd(), 2.6); // çoğu servis sakin, azı yoğun
+    svcStars.push({ r, th: (arm / ARMS) * TAU + Math.log(0.18 + r) * TWIST + gauss() * (0.14 + t * 0.12), h: gauss() * 0.035, w: wt, tw: rnd() * TAU });
+  }
+  const dustKeep = Math.max(1000, galDust.length - anon) / galDust.length;
+  let dustDrawn = 0;
+
+  // ═════════ MOD 2 — Takımyıldız ═════════
+  // Servisler gökyüzüne sabit yıldızlar (ekrana eşit, titreşimli ızgara). Bağlantılar görünmez; üzerine gelince (ya da kendiliğinden sırayla) takımyıldız çizgileri belirir.
+  const cons = (() => {
+    const order = nodes.map((_, i) => i).sort(() => rnd() - 0.5);
+    const cols = 18, rows = Math.ceil(nodes.length / cols);
+    const out = new Array(nodes.length);
+    order.forEach((i, k) => { const c = k % cols, r = Math.floor(k / cols); out[i] = { x: (c + 0.5 + (rnd() - 0.5) * 0.8) / cols, y: (r + 0.5 + (rnd() - 0.5) * 0.8) / rows }; });
+    return out;
+  })();
+  let consFocus = gws[0], consFocusT = 0;
+
+  // ═════════ MOD 3 — Yörünge ═════════
+  // Gateway = güneş (merkez çevresinde halka), BFF = gezegen (güneşin çevresinde), servis = uydu (gezegenin çevresinde), veri = dış kuşak asteroidleri.
+  const orb = nodes.map((n, i) => ({ rad: 0, spd: 0, ph: rnd() * TAU }));
+  gws.forEach((g, k) => { orb[g].rad = 0.52; orb[g].ph = (k / gws.length) * TAU; orb[g].spd = 0.02; });
+  bffs.forEach(b => { orb[b].rad = 0.06 + rnd() * 0.06; orb[b].spd = 0.5 / Math.pow(orb[b].rad / 0.06, 1.5); });
+  svcs.forEach(s => { orb[s].rad = 0.012 + rnd() * 0.03; orb[s].spd = 1.6 + rnd() * 1.2; });
+  dbs.forEach(d => { orb[d].rad = 0.86 + rnd() * 0.12; orb[d].spd = 0.012 + rnd() * 0.01; });
+  const orbDust = []; for (let i = 0; i < 1800; i++) orbDust.push({ r: 0.84 + gauss() * 0.06, th: rnd() * TAU, h: gauss() * 0.02, b: 0.3 + rnd() * 0.7, tw: rnd() * TAU });
+
+  // ═════════ MOD 4 — Nabız ağı ═════════
+  // Düz radyal ağ: gateway'ler iç halkada, BFF orta, servis dış, veri en dışta. Gateway'lerden dışa ışık dalgaları (sıklık = istek hızı); dalga kenarlar boyunca ilerler.
+  const net = (() => {
+    const out = new Array(nodes.length);
+    gws.forEach((g, k) => { out[g] = { r: 0.26, th: (k / gws.length) * TAU }; });
+    gws.forEach((g, k) => {
+      const base = (k / gws.length) * TAU, span = TAU / gws.length;
+      nodes[g].kids.forEach((b, bi) => {
+        const bth = base - span / 2 + span * (bi + 0.5) / nodes[g].kids.length;
+        out[b] = { r: 0.44, th: bth };
+        const ks = nodes[b].kids, sub = span / nodes[g].kids.length;
+        ks.forEach((s, si) => { out[s] = { r: 0.62 + (si % 3) * 0.1 + rnd() * 0.03, th: bth - sub / 2 + sub * (si + 0.5) / ks.length }; });
+      });
+    });
+    dbs.forEach((d, k) => { out[d] = { r: 1.0, th: (k / dbs.length) * TAU + 0.2 }; });
+    return out;
+  })();
+  const waveStart = gws.map(() => -rnd() * 3);
+
+  const MODES = {
+    gercek: { label: 'Gerçek galaksi', tilt: true, tiltMin: 0.3, tiltMax: 1.52, desc: '<b>Fotoğraftaki gibi sarmal galaksi:</b> sıcak renkli küresel çekirdek, kollarda genç mavi yıldızlar ve pembe nebulalar, kolların iç kenarında koyu toz şeritleri. İç kısım dıştan hızlı döner. Servisler kollardaki parlak yıldızlar; çizgi yalnız üzerine gelince. Aşağı sürükleyince yandan görünüm.' },
+    galaksi: { label: 'Veriye bağlı galaksi', tilt: true, desc: '<b>Tüm servisler:</b> bağlantılı 360 düğüm (çizgi, akan nokta, ad) aynen kalır; kalan her servis kendi kolunda ADSIZ bir yıldız olur — parlaklık ve boyut trafiği gösterir. Sentetik toz o kadar azalır, toplam nokta sayısı ~aynı. Adsız yıldızlar giriş öncesi ad taşımaz.' },
+    takimyildiz: { label: 'Takımyıldız', tilt: false, desc: '<b>Servisler sabit yıldızlar;</b> trafiği yüksek olan daha parlak. Bağlantılar görünmez; üzerine gelince (ya da kendiliğinden sırayla) o servisin bağımlılıkları takımyıldız çizgisi olarak belirir. En hafif ve en sakin seçenek.' },
+    yorunge: { label: 'Yörünge', tilt: true, desc: '<b>Gateway güneş, BFF gezegen, servis uydu;</b> veritabanları dış kuşakta asteroid. Her biri kendi yörüngesinde döner; hiyerarşi tek bakışta okunur. Sürükleyince bütün sistem birlikte döner.' },
+    nabiz: { label: 'Nabız ağı', tilt: false, desc: '<b>Gateway\'lerden dışa ışık dalgaları;</b> dalga sıklığı = istek hızı, ışık kenarlar boyunca BFF ve servislere ilerler. Anlamı en güçlü; galaksi hissi vermez.' },
+  };
+  let mode = 'galaksi';
+
+  // ── ortak çizim yardımcıları ──
+  const haloDot = (x, y, r, color, a) => {
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, color); g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.globalAlpha = a; ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+  };
+  const dot = (x, y, r, color, a) => { ctx.globalAlpha = a; ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill(); };
+  const baseR = { gw: 6.5, bff: 4, db: 3.4, svc: 2.4 };
+  const drawFlows = (tSec, speedMul) => {
+    if (!showFlow) return;
+    for (const k of flowIdx) {
+      const [a, b] = edges[k]; if (!pos[a] || !pos[b]) continue;
+      const f = (flowPh[k] + tSec * (0.04 + 0.08 * edgeW[k]) * speedMul) % 1;
+      const x = pos[a].x + (pos[b].x - pos[a].x) * f, y = pos[a].y + (pos[b].y - pos[a].y) * f;
+      const depth = ((pos[a].z ?? 0) + (pos[b].z ?? 0)) / 2 * 0.5 + 0.5;
+      const tw = reduced ? 1 : 0.8 + 0.2 * Math.sin(tSec * 3 + flowPh[k] * 20);
+      const hr = 5 * (0.8 + 0.2 * col.flowBoost);
+      haloDot(x, y, hr, col.flow, Math.min(1, (0.25 + 0.35 * depth) * tw * (0.5 + col.glow * 0.5) * col.flowBoost));
+      dot(x, y, 1.4 * (0.85 + 0.15 * col.flowBoost), col.flow, Math.min(1, (0.6 + 0.35 * depth) * tw * col.flowBoost));
+    }
+  };
+  const text = (str, x, y, a, size, color) => {
+    ctx.globalAlpha = a; ctx.font = `${size}px ${col.mono}`;
+    if (labelHalo) { ctx.lineJoin = 'round'; ctx.lineWidth = 3.5; ctx.strokeStyle = col.bg; ctx.strokeText(str, x, y); }
+    ctx.fillStyle = color; ctx.fillText(str, x, y);
+  };
+  const drawLabel = (i, a, size = 11) => { const p = pos[i]; text(nodes[i].name, p.x + 8, p.y + 3, a, size, col.label); };
+  const kindOf = n => n.tier === 'gw' ? 'gateway' : n.tier === 'bff' ? 'BFF' : n.tier === 'svc' ? 'servis' : n.mq ? 'kuyruk' : 'veritabanı';
+  const drawHover = i => {
+    const p = pos[i]; drawLabel(i, 1, 12);
+    if (showType) text(kindOf(nodes[i]), p.x + 9, p.y + 17, 0.75, 10.5, col.muted || col.label);
+  };
+  const drawNode = (i, depth) => {
+    const n = nodes[i], p = pos[i], focus = i === hover;
+    const lit = 0.35 + 0.65 * n.w; // trafik → parlaklık
+    // boyut çeşitliliği: trafik geniş bir aralığa yayılır (0.45×–1.95×) + düğüme özgü küçük sapma
+    const size = (0.45 + 1.5 * Math.pow(n.w, 0.9)) * (0.85 + 0.3 * ((n.ph / TAU) % 1));
+    const r = baseR[n.tier] * SIZE_K * (0.55 + 0.6 * depth) * size * (focus ? 1.5 : 1);
+    const a = focus ? 1 : (0.2 + 0.7 * depth) * (0.55 + 0.45 * lit);
+    // veri katmanı: kuyruk = turkuaz İÇİ BOŞ halka; veritabanı = mor YUVARLAK dolu nokta (+ hafif hale)
+    if (n.tier === 'db' && n.mq) {
+      haloDot(p.x, p.y, r * 2.6, col.mq, (0.08 + 0.22 * col.glow) * (0.5 + depth));
+      ctx.globalAlpha = a; ctx.strokeStyle = col.mq; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.arc(p.x, p.y, r * 1.15, 0, TAU); ctx.stroke(); return;
+    }
+    if (n.tier === 'db') { haloDot(p.x, p.y, r * 2.6, col.db, (0.1 + 0.25 * col.glow) * (0.5 + depth)); dot(p.x, p.y, r * 0.9, col.db, a); return; }
+    if (n.tier === 'gw' || n.w > 0.55 || focus) haloDot(p.x, p.y, r * 3.4, n.tier === 'gw' ? col.core : col.star, (0.12 + 0.3 * col.glow) * lit * (0.5 + depth));
+    dot(p.x, p.y, r, n.tier === 'gw' ? col.core : col.star, a);
+  };
+  const backendLabel = (() => { const best = new Map(); dbs.forEach(i => { const c = best.get(nodes[i].name); if (c == null || nodes[c].w < nodes[i].w) best.set(nodes[i].name, i); }); return new Set(best.values()); })();
+  const twinkle = (tSec, ph, k = 1.3) => reduced ? 1 : 0.7 + 0.3 * Math.sin(tSec * k + ph);
+
+  function drawGalaxy(tSec) {
+    const ki = introOn && !reduced ? Math.min(1, Math.max(0, (tSec - introStart) / 1.4)) : 1;
+    const K = 1 - Math.pow(1 - ki, 3), swirl = (1 - K) * 1.4; // easeOutCubic + hafif burgu
+    const polar = (r, th, hh) => project(r * K * Math.cos(th + swirl), r * K * Math.sin(th + swirl), hh);
+    const core = project(0, 0, 0);
+    haloDot(core.x, core.y, R * 0.5, col.core, 0.2 * col.glow);
+    if (showDust) {
+      ctx.fillStyle = col.star; dustDrawn = 0;
+      for (const d of galDust) {
+        if (d.k >= dustKeep) continue;
+        dustDrawn++;
+        const p = polar(d.r, d.th, d.h);
+        if (p.x < -3 || p.y < -3 || p.x > w + 3 || p.y > h + 3) continue;
+        ctx.globalAlpha = Math.max(0.04, (0.18 + 0.22 * p.z) * d.b * twinkle(tSec, d.tw) * (0.6 + col.glow * 0.5));
+        const s = 0.8 + 0.7 * (p.z + 1) / 2; ctx.fillRect(p.x, p.y, s, s);
+      }
+    }
+    if (svcStars.length) { // gerçek servisler: parlaklık ve boyut = trafik
+      ctx.fillStyle = col.star;
+      for (const sv of svcStars) {
+        const p = polar(sv.r, sv.th, sv.h);
+        if (p.x < -3 || p.y < -3 || p.x > w + 3 || p.y > h + 3) continue;
+        const depth = (p.z + 1) / 2, lit = 0.3 + 0.7 * sv.w;
+        ctx.globalAlpha = (0.28 + 0.55 * lit) * (0.45 + 0.55 * depth) * (0.6 + col.glow * 0.5) * twinkle(tSec, sv.tw, 0.9);
+        const sz = (1 + 1.8 * sv.w) * SIZE_K * (0.8 + 0.4 * depth);
+        ctx.beginPath(); ctx.arc(p.x, p.y, sz / 2 + 0.3, 0, TAU); ctx.fill();
+      }
+    }
+    pos = gal.map((g, i) => polar(g.r + (reduced ? 0 : Math.sin(tSec * 0.6 + nodes[i].ph) * 0.004), g.th, g.h));
+    ctx.strokeStyle = col.arm; ctx.lineWidth = 0.7;
+    edges.forEach(([a, b]) => { const f = hover >= 0 && (a === hover || b === hover); ctx.globalAlpha = f ? 0.7 : Math.max(0.03, 0.08 + 0.08 * (pos[a].z + pos[b].z) / 2); ctx.beginPath(); ctx.moveTo(pos[a].x, pos[a].y); ctx.lineTo(pos[b].x, pos[b].y); ctx.stroke(); });
+    drawFlows(tSec, 0.6 + traffic(tSec));
+    const order = nodes.map((_, i) => i).sort((i, j) => pos[i].z - pos[j].z);
+    for (const i of order) drawNode(i, (pos[i].z + 1) / 2);
+    if (showNames) for (const i of order) {
+      const n = nodes[i], d = (pos[i].z + 1) / 2;
+      if (i === hover) continue;
+      if (n.tier === 'db') { if (backendLabel.has(i) && d > 0.45) drawLabel(i, Math.min(0.85, (d - 0.3) * 1.3)); continue; }
+      if ((n.tier === 'gw' && d > 0.35) || (n.tier === 'bff' && d > 0.62) || (n.tier === 'svc' && n.w > 0.5 && d > 0.75)) drawLabel(i, Math.min(0.85, (d - 0.3) * 1.3));
+    }
+  }
+
+  function drawConstellation(tSec) {
+    const wrap = (v, m) => ((v % m) + m) % m;
+    if (showDust) { // seyrek arka plan yıldızları
+      ctx.fillStyle = col.star;
+      for (let k = 0; k < farStars.length; k++) { const s = farStars[k]; ctx.globalAlpha = 0.22 * s.b * twinkle(tSec, s.tw, 0.9) * (0.5 + col.glow * 0.6); ctx.fillRect(wrap(s.x * w + panX * 0.4, w), wrap(s.y * h + panY * 0.4, h), s.s, s.s); }
+    }
+    pos = cons.map(c => ({ x: wrap(c.x * w + panX, w), y: wrap(c.y * h + panY, h), z: 0 }));
+    // odak: üzerine gelinen ya da kendiliğinden sırayla dolaşan gateway
+    const focus = hover >= 0 ? hover : (autoMove ? consFocus : -1);
+    if (focus >= 0) {
+      const lvl1 = [...adj[focus]], lvl2 = new Set();
+      lvl1.forEach(j => adj[j].forEach(k => { if (k !== focus && !adj[focus].has(k)) lvl2.add(k); }));
+      const fade = hover >= 0 ? 1 : Math.min(1, Math.sin(Math.min(1, consFocusT / 5) * Math.PI) * 1.4);
+      ctx.strokeStyle = col.star; ctx.lineWidth = 1;
+      for (const j of lvl1) { ctx.globalAlpha = 0.55 * fade; ctx.beginPath(); ctx.moveTo(pos[focus].x, pos[focus].y); ctx.lineTo(pos[j].x, pos[j].y); ctx.stroke(); }
+      ctx.lineWidth = 0.7;
+      for (const j of lvl1) for (const k of adj[j]) if (lvl2.has(k)) { ctx.globalAlpha = 0.22 * fade; ctx.beginPath(); ctx.moveTo(pos[j].x, pos[j].y); ctx.lineTo(pos[k].x, pos[k].y); ctx.stroke(); }
+      for (const i of nodes.keys()) {
+        const tw = twinkle(tSec, nodes[i].ph, 1.1);
+        drawStar(i, tw, i === focus || adj[focus].has(i) ? 1 : lvl2.has(i) ? 0.75 : 0.45);
+      }
+      if (showNames) { drawLabel(focus, 0.95 * fade, 12); lvl1.forEach(j => nodes[j].tier !== 'db' && drawLabel(j, 0.7 * fade)); }
+      drawFlowsOn(lvl1.map(j => [focus, j]), tSec, fade);
+    } else {
+      for (const i of nodes.keys()) drawStar(i, twinkle(tSec, nodes[i].ph, 1.1), 1);
+    }
+    if (showNames && focus < 0) gws.forEach(g => drawLabel(g, 0.6));
+  }
+  function drawStar(i, tw, emph) {
+    const n = nodes[i], p = pos[i], lit = 0.3 + 0.7 * n.w;
+    const r = (n.tier === 'gw' ? 2.6 : n.tier === 'bff' ? 1.9 : 1.1 + 1.6 * n.w) * (i === hover ? 1.6 : 1);
+    if (n.tier === 'db' && n.mq) { ctx.globalAlpha = 0.6 * emph; ctx.strokeStyle = col.mq; ctx.lineWidth = 1.3; ctx.beginPath(); ctx.arc(p.x, p.y, r * 1.2, 0, TAU); ctx.stroke(); return; }
+    if (n.tier === 'db') { dot(p.x, p.y, r, col.db, 0.55 * emph); return; }
+    if (lit > 0.6 || n.tier === 'gw') haloDot(p.x, p.y, r * 4.5, n.tier === 'gw' ? col.core : col.star, (0.12 + 0.35 * col.glow) * lit * tw * emph);
+    dot(p.x, p.y, r, n.tier === 'gw' ? col.core : col.star, Math.min(1, (0.35 + 0.6 * lit) * tw * emph));
+  }
+  function drawFlowsOn(pairs, tSec, fade) {
+    if (!showFlow) return;
+    pairs.forEach(([a, b], k) => {
+      const f = (k * 0.17 + tSec * 0.25) % 1;
+      const x = pos[a].x + (pos[b].x - pos[a].x) * f, y = pos[a].y + (pos[b].y - pos[a].y) * f;
+      haloDot(x, y, 5, col.flow, 0.5 * fade * Math.min(1, col.flowBoost));
+      dot(x, y, 1.5, col.flow, Math.min(1, 0.95 * fade * col.flowBoost));
+    });
+  }
+  const farStars = []; for (let i = 0; i < 520; i++) farStars.push({ x: rnd(), y: rnd(), b: 0.2 + rnd() * 0.8, s: rnd() < 0.08 ? 1.6 : 0.9, tw: rnd() * TAU });
+
+  function drawOrbit(tSec) {
+    const t = reduced ? 0 : tSec;
+    // yörünge konumları (disk düzleminde), sonra ortak dönüş + eğim
+    const plane = new Array(nodes.length);
+    gws.forEach(g => { const o = orb[g]; const th = o.ph + t * o.spd; plane[g] = [o.rad * Math.cos(th), o.rad * Math.sin(th)]; });
+    bffs.forEach(b => { const o = orb[b], c = plane[nodes[b].parent]; const th = o.ph + t * o.spd; plane[b] = [c[0] + o.rad * Math.cos(th), c[1] + o.rad * Math.sin(th)]; });
+    svcs.forEach(s => { const o = orb[s], c = plane[nodes[s].parent]; const th = o.ph + t * o.spd; plane[s] = [c[0] + o.rad * Math.cos(th), c[1] + o.rad * Math.sin(th)]; });
+    dbs.forEach(d => { const o = orb[d]; const th = o.ph + t * o.spd; plane[d] = [o.rad * Math.cos(th), o.rad * Math.sin(th)]; });
+    pos = plane.map(([x, y]) => project(x, y, 0));
+    if (showDust) {
+      ctx.fillStyle = col.star;
+      for (const d of orbDust) { const p = polar(d.r, d.th + t * 0.01, d.h); ctx.globalAlpha = 0.16 * d.b * twinkle(tSec, d.tw) * (0.6 + col.glow * 0.5); ctx.fillRect(p.x, p.y, 1, 1); }
+      for (const s of farStars) { ctx.globalAlpha = 0.15 * s.b * twinkle(tSec, s.tw, 0.9) * (0.5 + col.glow * 0.6); ctx.fillRect(s.x * w, s.y * h, s.s, s.s); }
+    }
+    // yörünge halkaları: güneşlerin büyük halkası + gezegen yörüngeleri
+    ctx.strokeStyle = col.arm; ctx.lineWidth = 0.7;
+    const ring = (ccx, ccy, rad, a) => { ctx.globalAlpha = a; ctx.beginPath(); for (let k = 0; k <= 48; k++) { const th = (k / 48) * TAU; const p = project(ccx + rad * Math.cos(th), ccy + rad * Math.sin(th), 0); k ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y); } ctx.stroke(); };
+    ring(0, 0, 0.52, 0.16);
+    bffs.forEach(b => { const c = plane[nodes[b].parent]; ring(c[0], c[1], orb[b].rad, 0.1); });
+    const core = project(0, 0, 0); haloDot(core.x, core.y, R * 0.3, col.core, 0.12 * col.glow);
+    gws.forEach(g => haloDot(pos[g].x, pos[g].y, 36, col.core, (0.15 + 0.35 * col.glow)));
+    drawFlows(tSec, 0.6 + traffic(tSec));
+    const order = nodes.map((_, i) => i).sort((i, j) => pos[i].z - pos[j].z);
+    for (const i of order) drawNode(i, (pos[i].z + 1) / 2);
+    if (showNames) { gws.forEach(g => drawLabel(g, 0.85)); bffs.forEach(b => (pos[b].z > 0.2) && drawLabel(b, 0.55)); }
+  }
+
+  function drawPulse(tSec) {
+    pos = net.map(n => polar(n.r, n.th, 0)).map(p => ({ x: p.x + panX, y: p.y + panY, z: 0 }));
+    if (showDust) { ctx.fillStyle = col.star; for (const s of farStars) { ctx.globalAlpha = 0.12 * s.b * (0.5 + col.glow * 0.6); ctx.fillRect(s.x * w, s.y * h, s.s, s.s); } }
+    ctx.strokeStyle = col.arm; ctx.lineWidth = 0.7;
+    edges.forEach(([a, b]) => { const f = hover >= 0 && (a === hover || b === hover); ctx.globalAlpha = f ? 0.7 : 0.13; ctx.beginPath(); ctx.moveTo(pos[a].x, pos[a].y); ctx.lineTo(pos[b].x, pos[b].y); ctx.stroke(); });
+    // dalgalar: gateway'den dışa genişleyen halkalar (sıklık = istek hızı)
+    const tr = traffic(tSec);
+    if (!reduced) gws.forEach((g, k) => {
+      const period = 3.2 / (0.4 + tr * nodes[g].w);
+      for (let m = 0; m < 3; m++) {
+        const age = ((tSec - waveStart[k]) / period + m / 3) % 1;
+        const rad = 8 + age * R * 0.42;
+        ctx.globalAlpha = (1 - age) * 0.35 * (0.6 + col.glow * 0.5) * col.flowBoost; ctx.strokeStyle = col.flow; ctx.lineWidth = 1.4;
+        ctx.beginPath(); ctx.arc(pos[g].x, pos[g].y, rad, 0, TAU); ctx.stroke();
+      }
+    });
+    // ışık kenarlar boyunca: gateway → BFF → servis (kuyruklu)
+    if (showFlow) edges.forEach(([a, b], k) => {
+      if (nodes[b].tier === 'db' && k % 2) return;
+      const hop = nodes[a].tier === 'gw' ? 0 : nodes[a].tier === 'bff' ? 0.33 : 0.66;
+      const f = ((tSec * (0.25 + 0.35 * tr)) + flowPh[k] * 0.2 - hop + 3) % 1;
+      if (f > 0.85) return;
+      const fx = Math.min(1, f / 0.85);
+      for (let s = 0; s < 3; s++) {
+        const ff = Math.max(0, fx - s * 0.05);
+        const x = pos[a].x + (pos[b].x - pos[a].x) * ff, y = pos[a].y + (pos[b].y - pos[a].y) * ff;
+        dot(x, y, 1.6 - s * 0.4, col.flow, (0.85 - s * 0.28) * Math.min(1, col.flowBoost));
+      }
+    });
+    for (const i of nodes.keys()) drawNode(i, 0.75);
+    if (showNames) { gws.forEach(g => drawLabel(g, 0.85)); bffs.forEach(b => drawLabel(b, 0.5, 10.5)); }
+  }
+
+  // ═════════ MOD 0 — Gerçek galaksi ═════════
+  // Fotoğraftaki sarmal galaksi: sıcak renkli küresel çekirdek, kollarda genç mavi yıldızlar + pembe nebulalar,
+  // kolların iç (içbükey) kenarında koyu toz şeritleri, diskte yaşlı sarımsı yıldızlar.
+  // Disk ve çekirdek yıldızları DİFERANSİYEL döner (içerisi hızlı); kol deseni + servis yıldızları desen hızıyla döner.
+  const SPIN = -1; // kollar dönüşün gerisinde kalır (trailing), gerçek galaksilerdeki gibi
+  const armTh = (k, r) => (k / ARMS) * TAU + Math.log(0.18 + r) * TWIST;
+  const omega = r => 0.006 + 0.012 / (r + 0.12);
+  const mkRnd = s0 => { let s = s0; return () => { s = (s + 0x6d2b79f5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
+  const pickC = cum => { const x = rnd(); let i = 0; while (i < cum.length - 1 && x > cum[i]) i++; return i; };
+  const real = [];
+  for (let i = 0; i < 1500; i++) { // çekirdek: küresel, yoğun, sıcak
+    const rr = Math.min(0.36, 0.085 * -Math.log(1 - rnd() * 0.985)), u = rnd() * 2 - 1;
+    real.push({ r: rr * Math.sqrt(1 - u * u), th: rnd() * TAU, h: rr * u * 0.75, pop: 0, c: rnd() < 0.6 ? 0 : 1, s: 0.7 + rnd() * 0.6, b: 0.35 + rnd() * 0.65, tw: rnd() < 0.1 ? rnd() * TAU : -1 });
+  }
+  for (let i = 0; i < 3200; i++) { // disk: yaşlı yıldızlar, üstel yoğunluk
+    const r = Math.min(1.25, 0.03 + 0.33 * -Math.log(1 - rnd() * 0.98));
+    real.push({ r, th: rnd() * TAU, h: gauss() * 0.018 * (1 + r), pop: 1, c: pickC([0.2, 0.6, 0.9, 1]), s: 0.6 + rnd() * 0.6, b: 0.2 + rnd() * 0.6, tw: rnd() < 0.12 ? rnd() * TAU : -1, big: rnd() < 0.006 });
+  }
+  for (let i = 0; i < 2600; i++) { // kollar: genç mavi-beyaz yıldızlar
+    const r = 0.08 + Math.pow(rnd(), 0.8) * 1.12, k = i % ARMS, sp = (rnd() < 0.75 ? 0.07 : 0.22) + r * 0.06;
+    real.push({ r, th: armTh(k, r) + gauss() * sp, h: gauss() * 0.012, pop: 2, c: 2 + pickC([0.25, 0.65, 1]), s: 0.7 + rnd() * 0.7, b: 0.35 + rnd() * 0.65, tw: rnd() < 0.2 ? rnd() * TAU : -1, big: rnd() < 0.018 });
+  }
+  const realBk = [0, 1, 2, 3, 4].map(c => real.filter(s => s.c === c && !s.big));
+  const realBig = real.filter(s => s.big);
+  const farGals = []; for (let i = 0; i < 7; i++) farGals.push({ x: rnd(), y: rnd(), r: 7 + rnd() * 12, k: 0.3 + rnd() * 0.4, rot: rnd() * TAU, a: 0.18 + rnd() * 0.2, c: rnd() < 0.5 ? 1 : 3 });
+  const fgStars = []; for (let i = 0; i < 22; i++) fgStars.push({ x: rnd(), y: rnd(), c: Math.floor(rnd() * 5), s: 3 + rnd() * 5, tw: rnd() * TAU });
+  const hexA = (hex, a) => { const n = parseInt(hex.replace('#', ''), 16); return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`; };
+  const glow = (x, y, r, hex, a) => { const g = ctx.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, hexA(hex, 1)); g.addColorStop(1, hexA(hex, 0)); ctx.globalAlpha = a; ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill(); };
+  const S = 1.3; // doku yarı-genişliği (R biriminde)
+  let tex = null, sprites = [], spikes = null, texFor = '', realStride = 1, realCount = 0;
+  // disk ışığı TEMA BAŞINA bir kez çizilir; her karede tek drawImage ile dönüş + eğim uygulanır
+  const buildReal = () => {
+    const key = col.pal.join() + col.neb + col.texOld + col.texYoung + col.dark; if (key === texFor) return; texFor = key;
+    const r2 = mkRnd(0x9a1a7), g2 = () => (r2() + r2() + r2() - 1.5) / 1.5;
+    const N = 1024; tex = document.createElement('canvas'); tex.width = tex.height = N;
+    const t = tex.getContext('2d');
+    t.setTransform(N / (2 * S), 0, 0, N / (2 * S), N / 2, N / 2);
+    t.globalCompositeOperation = col.dark ? 'lighter' : 'source-over';
+    const blob = (x, y, r, c, a) => { const g = t.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, hexA(c, 1)); g.addColorStop(1, hexA(c, 0)); t.globalAlpha = Math.min(1, a); t.fillStyle = g; t.beginPath(); t.arc(x, y, r, 0, TAU); t.fill(); };
+    const k0 = col.dark ? 1 : 0.7;
+    blob(0, 0, 1.2, col.texOld, 0.2 * k0); blob(0, 0, 0.55, col.texOld, 0.28 * k0);
+    for (let k = 0; k < ARMS; k++) for (let i = 0; i < 240; i++) { // kol pusu
+      const r = 0.05 + Math.pow(i / 240, 0.9) * 1.12, th = armTh(k, r) + g2() * 0.06;
+      blob(r * Math.cos(th), r * Math.sin(th), 0.04 + r * 0.08, r < 0.22 ? col.texOld : col.texYoung, 0.075 * k0 * (1.15 - r * 0.75));
+    }
+    for (let k = 0; k < ARMS; k++) for (let j = 0; j < 8; j++) { // nebulalar: kolun dış kenarında pembe kümeler
+      const r = 0.28 + r2() * 0.75, th = armTh(k, r) - 0.03 + g2() * 0.05, x = r * Math.cos(th), y = r * Math.sin(th);
+      for (let q = 0; q < 4; q++) blob(x + g2() * 0.02, y + g2() * 0.02, 0.008 + r2() * 0.02, col.neb, (col.dark ? 0.45 : 0.3) * (0.5 + r2() * 0.5));
+    }
+    t.globalCompositeOperation = 'destination-out'; // toz şeritleri: kolun iç kenarında ışığı keser
+    for (let k = 0; k < ARMS; k++) for (let i = 0; i < 200; i++) {
+      const r = 0.1 + (i / 200) * 0.9, th = armTh(k, r) + Math.min(0.3, 0.03 / r + 0.05) + g2() * 0.02;
+      blob(r * Math.cos(th), r * Math.sin(th), 0.012 + r * 0.022, '#000000', 0.24 * (1.1 - r));
+    }
+    sprites = col.pal.map(c => {
+      const sp = document.createElement('canvas'); sp.width = sp.height = 32; const q = sp.getContext('2d');
+      const g = q.createRadialGradient(16, 16, 0, 16, 16, 16);
+      g.addColorStop(0, col.dark ? '#ffffff' : c); g.addColorStop(0.18, hexA(c, 1)); g.addColorStop(0.45, hexA(c, 0.22)); g.addColorStop(1, hexA(c, 0));
+      q.fillStyle = g; q.fillRect(0, 0, 32, 32); return sp;
+    });
+    spikes = document.createElement('canvas'); spikes.width = spikes.height = 64; const q = spikes.getContext('2d');
+    for (const hz of [true, false]) {
+      const g = hz ? q.createLinearGradient(0, 32, 64, 32) : q.createLinearGradient(32, 0, 32, 64);
+      g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(0.5, 'rgba(255,255,255,0.9)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+      q.fillStyle = g; hz ? q.fillRect(0, 31.5, 64, 1) : q.fillRect(31.5, 0, 1, 64);
+    }
+  };
+  const bigStar = (x, y, size, c, a, spike) => {
+    ctx.globalAlpha = a; ctx.drawImage(sprites[c], x - size, y - size, size * 2, size * 2);
+    if (spike && col.dark) { ctx.globalAlpha = a * 0.55; ctx.drawImage(spikes, x - size * 2.6, y - size * 2.6, size * 5.2, size * 5.2); }
+  };
+
+  function drawReal(tSec) {
+    buildReal();
+    const dark = col.dark, t = reduced ? 0 : tSec, add = dark ? 'lighter' : 'source-over';
+    if (dark) { // derin uzay: ortası hafif aydınlık, kenarlar koyu
+      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(w, h) * 0.75);
+      g.addColorStop(0, col.spaceHi); g.addColorStop(1, col.bg); ctx.globalAlpha = 1; ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+    }
+    ctx.globalCompositeOperation = add;
+    for (const gx of farGals) { // uzak galaksiler: ekran düzleminde sabit, küçük eliptik lekeler
+      ctx.save(); ctx.translate(gx.x * w, gx.y * h); ctx.rotate(gx.rot); ctx.scale(1, gx.k);
+      ctx.globalAlpha = gx.a * (dark ? 1 : 0.5); ctx.drawImage(sprites[gx.c], -gx.r, -gx.r, gx.r * 2, gx.r * 2); ctx.restore();
+    }
+    if (showDust) { ctx.fillStyle = col.pal[dark ? 2 : 3]; for (const s of farStars) { ctx.globalAlpha = 0.2 * s.b * twinkle(tSec, s.tw, 0.9) * (dark ? 1 : 0.45); ctx.fillRect(s.x * w, s.y * h, s.s * 0.8, s.s * 0.8); } }
+    // disk ışığı: dönüş + eğim tek affine dönüşüm
+    ctx.save(); ctx.translate(cx, cy); ctx.scale(R, R * Math.cos(tilt)); ctx.rotate(angle);
+    ctx.globalCompositeOperation = dark ? 'lighter' : 'multiply'; ctx.globalAlpha = dark ? 0.9 : 0.75;
+    ctx.drawImage(tex, -S, -S, 2 * S, 2 * S); ctx.restore();
+    // küresel çekirdek: eğimden bağımsız — yandan bakınca da yuvarlak
+    const core = project(0, 0, 0);
+    ctx.globalCompositeOperation = dark ? 'lighter' : 'multiply';
+    glow(core.x, core.y, R * 0.3, col.texOld, dark ? 0.32 : 0.28);
+    glow(core.x, core.y, R * 0.11, col.pal[1], dark ? 0.55 : 0.3);
+    if (dark) glow(core.x, core.y, R * 0.028, '#ffffff', 0.85);
+    let n = 0;
+    if (showDust) {
+      ctx.globalCompositeOperation = add;
+      for (let c = 0; c < 5; c++) {
+        ctx.fillStyle = col.pal[c];
+        const bk = realBk[c];
+        for (let j = 0; j < bk.length; j += realStride) {
+          const st = bk[j];
+          const p = polar(st.r, st.pop === 2 ? st.th : st.th + SPIN * omega(st.r) * t, st.h);
+          if (p.x < -2 || p.y < -2 || p.x > w + 2 || p.y > h + 2) continue;
+          const depth = (p.z + 1) / 2;
+          let a = st.b * (0.6 + 0.4 * depth) * (dark ? 0.8 : 0.5);
+          if (st.tw >= 0 && !reduced) a *= 0.6 + 0.4 * Math.sin(tSec * 1.7 + st.tw);
+          const s = st.s * (0.85 + 0.4 * depth);
+          ctx.globalAlpha = a; ctx.fillRect(p.x - s / 2, p.y - s / 2, s, s); n++;
+        }
+      }
+      for (const st of realBig) {
+        const p = polar(st.r, st.pop === 2 ? st.th : st.th + SPIN * omega(st.r) * t, st.h);
+        const tw = st.tw >= 0 && !reduced ? 0.7 + 0.3 * Math.sin(tSec * 1.3 + st.tw) : 1;
+        bigStar(p.x, p.y, 3 + st.s * 2.5, st.c, (dark ? 0.85 : 0.6) * tw * (0.6 + 0.4 * (p.z + 1) / 2), st.s > 1.1); n++;
+      }
+      for (const s of fgStars) { // önümüzdeki parlak yıldızlar (kırınım çivili)
+        const tw = reduced ? 1 : 0.75 + 0.25 * Math.sin(tSec * 0.8 + s.tw);
+        bigStar(s.x * w, s.y * h, s.s, s.c, (dark ? 0.7 : 0.35) * tw, true);
+      }
+    }
+    realCount = n + farStars.length;
+    ctx.globalCompositeOperation = 'source-over';
+    // servisler: kollardaki parlak yıldızlar. Bağlantı çizgisi YALNIZ üzerine gelince; akış her zaman.
+    pos = gal.map((g, i) => polar(g.r + (reduced ? 0 : Math.sin(tSec * 0.6 + nodes[i].ph) * 0.003), g.th, g.h));
+    if (hover >= 0) {
+      ctx.strokeStyle = col.arm; ctx.lineWidth = 0.8; ctx.globalAlpha = 0.7;
+      edges.forEach(([a, b]) => { if (a !== hover && b !== hover) return; ctx.beginPath(); ctx.moveTo(pos[a].x, pos[a].y); ctx.lineTo(pos[b].x, pos[b].y); ctx.stroke(); });
+    }
+    ctx.globalCompositeOperation = add; drawFlows(tSec, 0.6 + traffic(tSec)); ctx.globalCompositeOperation = 'source-over';
+    const order = nodes.map((_, i) => i).sort((i, j) => pos[i].z - pos[j].z);
+    for (const i of order) drawNode(i, (pos[i].z + 1) / 2);
+    if (showNames) for (const i of order) {
+      const nd = nodes[i], d = (pos[i].z + 1) / 2;
+      if (i === hover || nd.tier === 'db') continue;
+      if ((nd.tier === 'gw' && d > 0.35) || (nd.tier === 'bff' && d > 0.62) || (nd.tier === 'svc' && nd.w > 0.5 && d > 0.75)) drawLabel(i, Math.min(0.85, (d - 0.3) * 1.3));
+    }
+  }
+
+  function draw(tSec) {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = col.bg; ctx.globalAlpha = 1; ctx.fillRect(0, 0, w, h);
+    if (mode === 'gercek') drawReal(tSec);
+    else if (mode === 'galaksi') drawGalaxy(tSec);
+    else if (mode === 'takimyildiz') drawConstellation(tSec);
+    else if (mode === 'yorunge') drawOrbit(tSec);
+    else drawPulse(tSec);
+    if (hover >= 0 && pos[hover]) drawHover(hover);
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+    lastT = tSec;
+  }
+
+  // ── ölçüm ──
+  const samples = []; let frames = 0, fpsT = performance.now(), fps = 0;
+  const pointCount = () => mode === 'gercek' ? realCount : mode === 'galaksi' ? dustDrawn + svcStars.length : mode === 'takimyildiz' ? farStars.length : mode === 'yorunge' ? orbDust.length + farStars.length : farStars.length;
+  const report = () => {
+    if (!samples.length) return;
+    const s = [...samples].sort((a, b) => a - b);
+    const avg = s.reduce((a, b) => a + b, 0) / s.length, p95 = s[Math.min(s.length - 1, Math.floor(s.length * 0.95))];
+    perfEl.innerHTML = `çizim <b>${avg.toFixed(1)} ms</b> ort · <b>${p95.toFixed(1)} ms</b> p95 · bütçe 33 ms · <b>${fps}</b> fps · ${nodes.length} bağlantılı düğüm + ${svcStars.length} adsız servis + ${showDust ? dustDrawn : 0} toz${mode === 'gercek' ? ` · kalite <b>${realStride === 1 ? 'tam' : '1/' + realStride}</b>` : ''} · simüle <b>${Math.round(PEAK * traffic(lastT) / 1000)}K</b> req/s`;
+  };
+
+  // ── döngü: 30 fps tavanı, gizli sekmede durur ──
+  let last = 0, prev = performance.now(), raf = 0, dragging = false;
+  const t0 = performance.now();
+  function tick(now) {
+    raf = 0;
+    if (document.hidden) return;
+    const dt = Math.min(0.1, (now - prev) / 1000); prev = now;
+    const tSec = (now - t0) / 1000;
+    if (!dragging) {
+      angle += vel * dt; tilt += tiltVel * dt; panX += panVX * dt; panY += panVY * dt;
+      const fr = Math.pow(0.12, dt); vel *= fr; tiltVel *= fr; panVX *= fr; panVY *= fr;
+      if (autoMove) {
+        if (mode === 'gercek') angle += SPIN * 0.008 * (0.5 + traffic(tSec)) * dt * 1.6;
+        else if (mode === 'galaksi') angle += 0.01 * (0.5 + traffic(tSec)) * dt * 1.6; // dönüş hızı = toplam throughput
+        else if (mode === 'yorunge') angle += 0.008 * dt;
+        else if (mode === 'takimyildiz') { panX += 4 * dt; consFocusT += dt; if (consFocusT > 5) { consFocusT = 0; consFocus = gws[(gws.indexOf(consFocus) + 1) % gws.length]; } }
+      }
+      if (MODES[mode].tilt) tilt += (TILT0 - tilt) * Math.min(1, dt * 0.25);
+    }
+    if (now - last >= 33) {
+      last = now;
+      const a = performance.now(); draw(tSec); samples.push(performance.now() - a); if (samples.length > 120) samples.shift();
+      // kendini ayarlayan kalite: yavaş makinede (Citrix) yıldızların yarısını/üçte birini çiz
+      if (mode === 'gercek' && samples.length >= 60 && realStride < 3) { const s2 = [...samples].sort((x, y) => x - y); if (s2[Math.floor(s2.length * 0.95)] > 22) { realStride++; samples.length = 0; } }
+      frames++; if (now - fpsT >= 1000) { fps = Math.round(frames * 1000 / (now - fpsT)); frames = 0; fpsT = now; report(); }
+    }
+    raf = requestAnimationFrame(tick);
+  }
+  const start = () => { if (!raf && !document.hidden) { prev = performance.now(); raf = requestAnimationFrame(tick); } };
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) start(); });
+  const still = () => { if (reduced) draw(lastT); };
+
+  // ── sürükleme: sahne BİRLİKTE hareket eder (galaksi/yörünge: döndür + eğ; takımyıldız/nabız: kaydır) ──
+  let lx = 0, ly = 0, lt = 0;
+  cv.addEventListener('pointerdown', e => { dragging = true; lx = e.clientX; ly = e.clientY; lt = performance.now(); vel = tiltVel = panVX = panVY = 0; cv.setPointerCapture(e.pointerId); cv.classList.add('dragging'); });
+  cv.addEventListener('pointermove', e => {
+    if (dragging) {
+      const now = performance.now(), dt = Math.max(0.008, (now - lt) / 1000);
+      const dx = e.clientX - lx, dy = e.clientY - ly;
+      if (MODES[mode].tilt) {
+        const da = dx / (R * 0.9), dtl = dy / (R * 1.6);
+        angle += da; tilt = Math.min(MODES[mode].tiltMax ?? 1.35, Math.max(MODES[mode].tiltMin ?? 0.5, tilt - dtl));
+        vel = vel * 0.6 + (da / dt) * 0.4; tiltVel = tiltVel * 0.6 + (-dtl / dt) * 0.4;
+      } else if (mode === 'nabiz') {
+        const da = dx / (R * 0.9); angle += da; vel = vel * 0.6 + (da / dt) * 0.4;
+      } else {
+        panX += dx; panY += dy; panVX = panVX * 0.6 + (dx / dt) * 0.4; panVY = panVY * 0.6 + (dy / dt) * 0.4;
+      }
+      lx = e.clientX; ly = e.clientY; lt = now; still(); return;
+    }
+    let best = -1, bd = 14;
+    for (let i = 0; i < pos.length; i++) { if (!pos[i]) continue; const d = Math.hypot(pos[i].x - e.clientX, pos[i].y - e.clientY); if (d < bd) { bd = d; best = i; } }
+    if (best !== hover) { hover = best; still(); }
+  });
+  const end = e => { if (!dragging) return; dragging = false; cv.classList.remove('dragging'); try { cv.releasePointerCapture(e.pointerId); } catch (_) {} };
+  cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
+  cv.addEventListener('pointerleave', () => { if (!dragging && hover >= 0) { hover = -1; still(); } });
+  cv.addEventListener('dblclick', () => { angle = 0; tilt = TILT0; vel = tiltVel = panX = panY = panVX = panVY = 0; still(); });
+
+  // ── görünüm seçici (adres çubuğunda #galaksi, #takimyildiz, #yorunge, #nabiz) ──
+  const modeBtns = [...document.querySelectorAll('[data-mode]')];
+  const setMode = m => {
+    m = 'galaksi';
+    mode = m; hover = -1; angle = 0; tilt = TILT0; vel = tiltVel = panX = panY = panVX = panVY = 0;
+    modeBtns.forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === m)));
+    descEl.innerHTML = MODES[m].desc;
+    samples.length = 0; still();
+  };
+  modeBtns.forEach(b => b.addEventListener('click', () => { if (location.hash !== '#' + b.dataset.mode) location.hash = b.dataset.mode; else setMode(b.dataset.mode); }));
+  addEventListener('hashchange', () => setMode(location.hash.slice(1)));
+
+  // ── düğüm sayısı: sahne baştan kurulur (adres #n180 / #n360) ──
+  document.querySelectorAll('[data-n]').forEach(b => {
+    b.setAttribute('aria-pressed', String((b.dataset.n === '360') === BIG));
+    b.addEventListener('click', () => { if ((b.dataset.n === '360') === BIG) return; setHash(b.dataset.n, SVC_STARS); });
+  });
+  document.querySelectorAll('[data-s]').forEach(b => {
+    b.setAttribute('aria-pressed', String(+b.dataset.s === SVC_STARS));
+    b.addEventListener('click', () => { if (+b.dataset.s === SVC_STARS) return; setHash(BIG ? 360 : 180, b.dataset.s); });
+  });
+
+  // ── seçim alanı: aç / gizle (tarayıcıda hatırlanır) ──
+  const panelEl = document.getElementById('panel'), panelBody = document.getElementById('panel-body'), panelBtn = document.getElementById('panel-toggle');
+  const setPanel = open => {
+    panelBody.hidden = !open; panelEl.classList.toggle('collapsed', !open); document.body.classList.toggle('panel-collapsed', !open);
+    panelBtn.setAttribute('aria-expanded', String(open)); panelBtn.textContent = open ? '▾ Gizle' : '▴ Seçenekler';
+    try { localStorage.setItem('galaksi-panel', open ? '1' : '0'); } catch (_) {}
+  };
+  let panelOpen = true; try { panelOpen = localStorage.getItem('galaksi-panel') !== '0'; } catch (_) {}
+  setPanel(panelOpen);
+  panelBtn.addEventListener('click', () => { panelOpen = !panelOpen; setPanel(panelOpen); if (offCenter) fit(); });
+
+  // ── düğmeler ──
+  const bind = (id, get, set) => { const b = document.getElementById(id); b.setAttribute('aria-pressed', String(get())); b.addEventListener('click', () => { set(!get()); b.setAttribute('aria-pressed', String(get())); still(); }); };
+  bind('t-spin', () => autoMove, v => { autoMove = v; });
+  bind('t-dust', () => showDust, v => { showDust = v; });
+  bind('t-flow', () => showFlow, v => { showFlow = v; });
+  bind('t-names', () => showNames, v => { showNames = v; });
+  bind('o-center', () => offCenter, v => { offCenter = v; fit(); });
+  bind('o-halo', () => labelHalo, v => { labelHalo = v; });
+  bind('o-type', () => showType, v => { showType = v; });
+  bind('o-intro', () => introOn, v => { introOn = v && !reduced; if (introOn) introStart = lastT; });
+  document.getElementById('o-replay').addEventListener('click', () => { if (reduced) return; introOn = true; introStart = lastT; document.getElementById('o-intro').setAttribute('aria-pressed', 'true'); });
+  // özet panelindeki örnek 24 sa çubukları (yalnız görünüm için)
+  document.getElementById('bars').innerHTML = Array.from({ length: 48 }, (_, i) => `<i style="height:${Math.round(22 + 70 * (0.5 + 0.5 * Math.sin(i / 48 * TAU - 1.9)) * (0.85 + 0.15 * Math.sin(i * 1.7)))}%"></i>`).join('');
+
+  // ── tema: Kurumsal (açık) / Koyu ──
+  const thLight = document.getElementById('th-light'), thDark = document.getElementById('th-dark');
+  const isDark = () => document.documentElement.dataset.theme === 'dark' || (document.documentElement.dataset.theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
+  const syncTheme = () => { const d = isDark(); thLight.setAttribute('aria-pressed', String(!d)); thDark.setAttribute('aria-pressed', String(d)); };
+  thLight.addEventListener('click', () => { document.documentElement.dataset.theme = 'light'; syncTheme(); });
+  thDark.addEventListener('click', () => { document.documentElement.dataset.theme = 'dark'; syncTheme(); });
+  syncTheme();
+
+  readColors(); fit();
+  addEventListener('resize', () => { fit(); still(); });
+  new MutationObserver(() => { readColors(); syncTheme(); still(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { readColors(); syncTheme(); still(); });
+  setMode(location.hash.slice(1));
+  if (reduced) { draw(0); perfEl.textContent = 'hareketi azalt açık: kendiliğinden hareket kapalı, sürükleme çalışır'; } else start();
+})();
+</script>
