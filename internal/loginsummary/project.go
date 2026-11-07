@@ -16,7 +16,6 @@ const StaleAfter = 15 * time.Minute
 type Flags struct {
 	Enabled  bool   // branding.loginSummary != "off"
 	Topology string // TopologyOff | TopologyAnonymous | TopologyNamed ("" = anonymous)
-	AllowP95 bool   // VM ayarı AllowUnfilteredPercentiles
 	Now      time.Time
 }
 
@@ -46,10 +45,10 @@ func Project(snap *Snapshot, f Flags) Response {
 		SpansToday: snap.SpansToday, TracesToday: snap.TracesToday, Services: snap.Services,
 		Endpoints: snap.Endpoints,
 	}
-	if v, ok := snap.Ring.View(f.AllowP95); ok {
+	if v, ok := snap.Ring.View(); ok {
 		out.HTTP24h = &HTTP24h{
 			From: v.From, To: v.To, StepS: ringStepS,
-			Throughput: v.Throughput, Avg: v.Avg, P95: v.P95, Summary: v.Summary,
+			Throughput: v.Throughput, Avg: v.Avg, Summary: v.Summary,
 		}
 	}
 	if a := snap.Activity; a != nil {

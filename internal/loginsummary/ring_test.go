@@ -105,8 +105,7 @@ func TestRingViewSummary(t *testing.T) {
 		{GroupKey: []string{`http_response_status_code="500"`}, Points: []chstore.SpanMetricPoint{pt(900, 1), pt(1200, 2), pt(1500, 0)}},
 	})
 	r.MergeSum([]chstore.SpanMetricSeries{{Points: []chstore.SpanMetricPoint{pt(1200, 6.4), pt(1500, 4)}}})
-	r.MergeP95([]chstore.SpanMetricSeries{{Points: []chstore.SpanMetricPoint{pt(1500, 0.25)}}})
-	v, ok := r.View(true)
+	v, ok := r.View()
 	if !ok {
 		t.Fatal("görünüm beklenir")
 	}
@@ -119,22 +118,16 @@ func TestRingViewSummary(t *testing.T) {
 	if v.Avg == nil || len(v.Avg.Points) != 2 {
 		t.Errorf("avg serisi yalnız Sum'lı kovalarda: %+v", v.Avg)
 	}
-	if v.P95 == nil || v.Summary.P95NowS == nil || *v.Summary.P95NowS != 0.25 {
-		t.Errorf("p95: %+v", v.P95)
-	}
 	if v.Throughput == nil || len(v.Throughput.Points) != 3 || len(v.Throughput.GroupKey) != 0 {
 		t.Fatalf("tek toplam hız serisi, grup anahtarı boş: %+v", v.Throughput)
 	}
 	if v.Throughput.Points[0].Time != 900*1e9 || v.Throughput.Points[1].Value != 32 {
 		t.Errorf("zaman unix ns, değer toplam: %+v", v.Throughput.Points)
 	}
-	if v2, _ := r.View(false); v2.P95 != nil || v2.Summary.P95NowS != nil {
-		t.Error("allowP95 yoksa p95 yok")
-	}
-	if _, ok := (*Ring)(nil).View(true); ok {
+	if _, ok := (*Ring)(nil).View(); ok {
 		t.Error("nil halka → görünüm yok")
 	}
-	if _, ok := NewRing().View(true); ok {
+	if _, ok := NewRing().View(); ok {
 		t.Error("boş halka → görünüm yok")
 	}
 }
@@ -147,18 +140,18 @@ func TestRingMergeRateIgnoresGroupKeyShape(t *testing.T) {
 	for _, key := range [][]string{nil, {}, {"200"}, {`http_response_status_code="200"`}, {"a", "b"}} {
 		r := NewRing()
 		r.MergeRate([]chstore.SpanMetricSeries{{GroupKey: key, Points: []chstore.SpanMetricPoint{pt(900, 7), pt(1200, 8)}}})
-		v, ok := r.View(false)
+		v, ok := r.View()
 		if !ok || v.Throughput == nil || len(v.Throughput.Points) != 2 || v.Summary.NowRPS != 8 {
 			t.Errorf("grup anahtarı %q: veri kaybolmamalı: ok=%v %+v", key, ok, v.Throughput)
 		}
 	}
 }
 
-// Yalnız Q2/Q3 verisi olan (hız verisi olmayan) halka kart üretmez.
+// Yalnız Q2 verisi olan (hız verisi olmayan) halka kart üretmez.
 func TestRingViewNeedsRate(t *testing.T) {
 	r := NewRing()
 	r.MergeSum([]chstore.SpanMetricSeries{{Points: []chstore.SpanMetricPoint{pt(900, 2)}}})
-	if _, ok := r.View(true); ok {
+	if _, ok := r.View(); ok {
 		t.Error("hız verisi yokken görünüm olmamalı")
 	}
 }

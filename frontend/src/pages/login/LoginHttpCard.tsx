@@ -1,6 +1,6 @@
 // LoginHttpCard — v0.10.1908 (Login yeniden tasarımı dilim 2.3, audit §6.2).
 // Özet sütunundaki "OpenTelemetry metrikleri · son 24 saat" kartı: iki gömülü
-// CorePanelMulti (Throughput TOPLAM istek/sn + Response time ort/p95),
+// CorePanelMulti (Throughput TOPLAM istek/sn + Response time ortalama; v0.10.1922: p95 yok),
 // ortak `syncKey` (imleç eşlenir), tek statik lejant. LAZY: @grafana chunk'ı
 // yalnız `http_24h` geldikten sonra iner (LoginSummary.tsx `lazy` ile çağırır).
 // Veri çekmez; sunucu hazır diziyi verir. Seriler zaman = unix ns, x ekseni
@@ -19,12 +19,11 @@ const PANEL_H = 76; // v0.10.1920: 96 → 76 (kart daha kompakt)
 // giriş öncesi hata dağılımı gösterilmez, küçük panelde tek çizgi okunur).
 const TPUT_TOKEN = '--ok';
 const AVG_TOKEN = '--info';
-const P95_TOKEN = '--purple'; // kayıtlı p95 rengi --orange 4xx ile çakışırdı (audit §6.2)
 
 // Tailwind literal ister: token → sınıf haritası (yalnız bu kümedeki tokenlar).
 const TEXT_CLASS: Readonly<Record<string, string>> = {
   '--ok': 'text-(--ok)', '--info': 'text-(--info)', '--orange': 'text-(--orange)',
-  '--err': 'text-(--err)', '--purple': 'text-(--purple)',
+  '--err': 'text-(--err)',
 };
 
 interface LegendItem { name: string; token: string }
@@ -40,12 +39,10 @@ export default function LoginHttpCard({ http, orgName }: { http: LoginSummaryHtt
   const rtItems = useMemo(() => {
     const out: CorePanelMultiItem[] = [];
     if (http.avg) out.push({ name: t('login.http.avg'), role: 'data', color: `var(${AVG_TOKEN})`, series: [http.avg] });
-    if (http.p95) out.push({ name: 'p95', role: 'data', color: `var(${P95_TOKEN})`, series: [http.p95] });
     return out;
-  }, [http.avg, http.p95, t]);
+  }, [http.avg, t]);
   const rtLegend: LegendItem[] = [
     ...(http.avg ? [{ name: t('login.http.avg'), token: AVG_TOKEN }] : []),
-    ...(http.p95 ? [{ name: 'p95', token: P95_TOKEN }] : []),
   ];
   const rtHead = responseHead(http.summary, t);
 

@@ -12,9 +12,9 @@ import (
 var allowedKeys = map[string]bool{
 	"enabled": true, "ready": true, "generated_at": true, "spans_today": true, "traces_today": true,
 	"services_monitored": true, "endpoints_monitored": true, "http_24h": true, "activity_24h": true, "topology": true, "components": true,
-	"from": true, "to": true, "step_s": true, "throughput": true, "avg": true, "p95": true, "summary": true,
+	"from": true, "to": true, "step_s": true, "throughput": true, "avg": true, "summary": true,
 	"groupKey": true, "points": true, "time": true, "value": true,
-	"now_rps": true, "peak_rps": true, "peak_at": true, "avg_now_s": true, "p95_now_s": true,
+	"now_rps": true, "peak_rps": true, "peak_at": true, "avg_now_s": true,
 	"logins": true, "cosre_questions": true, // v0.10.1915: rollouts_tracked + traces_viewed kaldırıldı
 	"window_s": true, "named": true, "nodes": true, "edges": true, "id": true, "tier": true, "weight": true, "name": true,
 	"state": true, "checked_at": true, "clickhouse_uncompressed_bytes": true,
@@ -38,7 +38,7 @@ func walkKeys(t *testing.T, v any, path string) {
 }
 
 func flags(now time.Time, topo string) Flags {
-	return Flags{Enabled: true, Topology: topo, AllowP95: true, Now: now}
+	return Flags{Enabled: true, Topology: topo, Now: now}
 }
 
 func TestProjectAnonymousNeverLeaksNames(t *testing.T) {
@@ -186,21 +186,6 @@ func TestProjectThroughputCarriesNoLabels(t *testing.T) {
 		t.Errorf("grup anahtarı boş olmalı: %v", resp.HTTP24h.Throughput.GroupKey)
 	}
 	assertAbsent(t, mustJSON(t, resp), []string{"evil-service", "503", "http_response_status_code"}, "hız serisi etiketi")
-}
-
-func TestProjectP95OnlyWhenAllowed(t *testing.T) {
-	now := time.Now()
-	snap := baseSnapshot(now)
-	tt := (now.Unix() - now.Unix()%300 - 300) * 1e9
-	snap.Ring.MergeP95([]chstore.SpanMetricSeries{{Points: []chstore.SpanMetricPoint{{Time: tt, Value: 0.4}}}})
-	on := Project(snap, Flags{Enabled: true, AllowP95: true, Now: now})
-	off := Project(snap, Flags{Enabled: true, AllowP95: false, Now: now})
-	if on.HTTP24h.P95 == nil || on.HTTP24h.Summary.P95NowS == nil {
-		t.Error("AllowUnfilteredPercentiles açıkken p95 beklenir")
-	}
-	if off.HTTP24h.P95 != nil || off.HTTP24h.Summary.P95NowS != nil {
-		t.Error("ayar kapalıyken p95 çıkmamalı (koruma delinmez)")
-	}
 }
 
 func TestProjectActivityAndComponents(t *testing.T) {

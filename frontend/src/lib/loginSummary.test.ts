@@ -150,7 +150,6 @@ describe('HTTP kartı yardımcıları', () => {
   it('başlık satırları', () => {
     const at = new Date(2026, 10, 6, 12, 5).getTime();
     expect(throughputHead({ now_rps: 1500, peak_rps: 2200, peak_at: at }, t)).toBe('şimdi 1.5K req/s · tepe 2.2K (12:05)');
-    expect(responseHead({ now_rps: 1, peak_rps: 1, peak_at: 0, avg_now_s: 0.186, p95_now_s: 0.412 }, t)).toBe('ort 186 ms · p95 412 ms');
     expect(responseHead({ now_rps: 1, peak_rps: 1, peak_at: 0, avg_now_s: 0.186 }, t)).toBe('ort 186 ms');
     expect(responseHead({ now_rps: 1, peak_rps: 1, peak_at: 0 }, t)).toBe('');
   });

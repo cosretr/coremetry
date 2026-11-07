@@ -42,7 +42,6 @@ type HTTP24h struct {
 	// Throughput — TOPLAM istek/sn, tek seri (v0.10.1914: durum kodu kırılımı yok); points.time unix NS.
 	Throughput *chstore.SpanMetricSeries `json:"throughput"`
 	Avg        *chstore.SpanMetricSeries `json:"avg,omitempty"` // saniye
-	P95        *chstore.SpanMetricSeries `json:"p95,omitempty"` // saniye; yalnız AllowUnfilteredPercentiles açıksa
 	Summary    HTTPSummary               `json:"summary"`
 }
 
@@ -51,7 +50,6 @@ type HTTPSummary struct {
 	PeakRPS float64  `json:"peak_rps"`
 	PeakAt  int64    `json:"peak_at"` // unix ms
 	AvgNowS *float64 `json:"avg_now_s,omitempty"`
-	P95NowS *float64 `json:"p95_now_s,omitempty"`
 }
 
 // Activity — v0.10.1915: `rollouts_tracked` ve `traces_viewed` KALDIRILDI

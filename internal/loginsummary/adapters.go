@@ -11,18 +11,13 @@ import (
 	"github.com/cilcenk/coremetry/internal/vmetrics"
 )
 
-// vmAdapter — *vmetrics.Service Configured + QueryPromQLRange'ı zaten sağlar;
-// AllowUnfilteredPercentiles ayar blobundan okunur (bellek-içi, VM çağrısı yok).
+// vmAdapter — *vmetrics.Service Configured + QueryPromQLRange'ı zaten sağlar.
 type vmAdapter struct{ svc *vmetrics.Service }
 
 // VMFromService — nil servis her zaman "yapılandırılmamış".
 func VMFromService(svc *vmetrics.Service) VM { return vmAdapter{svc: svc} }
 
 func (a vmAdapter) Configured() bool { return a.svc != nil && a.svc.Configured() }
-
-func (a vmAdapter) AllowUnfilteredPercentiles() bool {
-	return a.svc != nil && a.svc.CurrentSettings().AllowUnfilteredPercentiles
-}
 
 func (a vmAdapter) QueryPromQLRange(ctx context.Context, q string, from, to time.Time, step, maxPts int) ([]chstore.SpanMetricSeries, error) {
 	if a.svc == nil {

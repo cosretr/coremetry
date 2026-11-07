@@ -20,8 +20,7 @@ import (
 type fakeVM struct {
 	mu         sync.Mutex
 	configured bool
-	allowP95   bool
-	fail       map[string]bool // "q1" | "q2" | "q3" → hata
+	fail       map[string]bool // "q1" | "q2" → hata
 	calls      map[string]int
 	windows    []time.Duration
 	unknown    []string
@@ -30,8 +29,7 @@ type fakeVM struct {
 func newFakeVM() *fakeVM {
 	return &fakeVM{configured: true, fail: map[string]bool{}, calls: map[string]int{}}
 }
-func (f *fakeVM) Configured() bool                 { return f.configured }
-func (f *fakeVM) AllowUnfilteredPercentiles() bool { return f.allowP95 }
+func (f *fakeVM) Configured() bool { return f.configured }
 func (f *fakeVM) QueryPromQLRange(ctx context.Context, q string, from, to time.Time, step, maxPts int) ([]chstore.SpanMetricSeries, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -41,15 +39,13 @@ func (f *fakeVM) QueryPromQLRange(ctx context.Context, q string, from, to time.T
 	if _, has := ctx.Deadline(); !has {
 		return nil, errors.New("fakeVM: bağlamda zaman aşımı yok")
 	}
-	q1, q2, q3 := Queries(HTTPFamily)
+	q1, q2 := Queries(HTTPFamily)
 	var name string
 	switch q {
 	case q1:
 		name = "q1"
 	case q2:
 		name = "q2"
-	case q3:
-		name = "q3"
 	default:
 		f.unknown = append(f.unknown, q)
 		return nil, fmt.Errorf("fakeVM: bilinmeyen ifade %q", q)
@@ -223,29 +219,21 @@ func TestBuilderFirstStepPublishesFullSnapshot(t *testing.T) {
 	}
 }
 
-// p95 yalnız VM ayarı açıkken sorgulanır (koruma delinmez).
-func TestBuilderP95OnlyWhenAllowed(t *testing.T) {
+// v0.10.1922 — p95 (süzgeçsiz histogram_quantile) hiç sorgulanmaz: sahte VM
+// bilinmeyen ifadeyi reddeder; kurucu yalnız Q1 ve Q2 gönderir.
+func TestBuilderNeverQueriesPercentiles(t *testing.T) {
 	h := newHarness(t)
-	h.step()
-	if h.vm.calls["q3"] != 0 {
-		t.Errorf("AllowUnfilteredPercentiles kapalıyken Q3 sorgulanmaz: %d", h.vm.calls["q3"])
+	for i := 0; i < 3; i++ {
+		h.step()
+		h.advance(6 * time.Minute)
 	}
-	h2 := newHarness(t)
-	h2.vm.allowP95 = true
-	snap := h2.step()
-	if h2.vm.calls["q3"] == 0 {
-		t.Error("ayar açıkken Q3 sorgulanır")
+	if len(h.vm.unknown) != 0 {
+		t.Fatalf("beklenmeyen VM ifadesi: %v", h.vm.unknown)
 	}
-	if snap.Ring.B[len(snap.Ring.B)-1].P95 == nil {
-		t.Error("p95 halkada")
-	}
-	// ayar kapanınca halkadaki eski p95'ler silinir
-	h2.vm.allowP95 = false
-	h2.advance(6 * time.Minute)
-	snap = h2.step()
-	for _, b := range snap.Ring.B {
-		if b.P95 != nil {
-			t.Fatal("ayar kapanınca p95 halkadan düşer")
+	q1, q2 := Queries(HTTPFamily)
+	for _, q := range []string{q1, q2} {
+		if strings.Contains(q, "histogram_quantile") || strings.Contains(q, "_bucket") {
+			t.Fatalf("yüzdelik ifadesi kalmamalı: %s", q)
 		}
 	}
 }
@@ -541,8 +529,8 @@ func TestBuilderEndpointsReadOnSlowRoundOnly(t *testing.T) {
 
 func TestVMFromServiceNilIsUnconfigured(t *testing.T) {
 	vm := VMFromService(nil)
-	if vm.Configured() || vm.AllowUnfilteredPercentiles() {
-		t.Error("nil servis: yapılandırılmamış, p95 kapalı")
+	if vm.Configured() {
+		t.Error("nil servis: yapılandırılmamış")
 	}
 	if _, err := vm.QueryPromQLRange(context.Background(), "x", time.Now(), time.Now(), 300, 0); err == nil {
 		t.Error("nil servis sorgu hatası döner")

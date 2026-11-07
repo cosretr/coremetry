@@ -23,7 +23,7 @@ const (
 )
 
 // RingBucket — bir 5 dk'lık kova. R: TOPLAM istek/sn (Q1); Sum: yanıt süresi
-// toplam hızı (Q2, sn/sn); P95: saniye (Q3, ayar açıksa).
+// toplam hızı (Q2, sn/sn). v0.10.1922: p95 (Q3) kaldırıldı.
 //
 // v0.10.1914 — durum kodu kırılımı kalktı (operatör: "illa status code şart
 // değil"): tek toplam throughput serisi. Eski hâl `sum by (status)` idi ve
@@ -34,7 +34,6 @@ type RingBucket struct {
 	T   int64    `json:"t"` // unix sn, 300'ün katı
 	R   *float64 `json:"r,omitempty"`
 	Sum *float64 `json:"sum,omitempty"`
-	P95 *float64 `json:"p95,omitempty"`
 }
 
 // Ring — kovalar artan zamanla; Filled: boşluk doldurması TAMAMLANMIŞ saatlik
@@ -96,26 +95,6 @@ func (r *Ring) MergeSum(series []chstore.SpanMetricSeries) {
 			v := p.Value
 			r.bucket(alignT(p.Time)).Sum = &v
 		}
-	}
-}
-
-// MergeP95 — Q3.
-func (r *Ring) MergeP95(series []chstore.SpanMetricSeries) {
-	for _, s := range series {
-		for _, p := range s.Points {
-			if !finite(p.Value) || p.Value < 0 {
-				continue
-			}
-			v := p.Value
-			r.bucket(alignT(p.Time)).P95 = &v
-		}
-	}
-}
-
-// DropP95 — ayar kapandıysa halkadaki eski p95'leri siler.
-func (r *Ring) DropP95() {
-	for i := range r.B {
-		r.B[i].P95 = nil
 	}
 }
 
@@ -181,24 +160,22 @@ func (r *Ring) MissingChunks(nowSec, recentFromSec int64, limit int) []int64 {
 type View struct {
 	Throughput *chstore.SpanMetricSeries
 	Avg        *chstore.SpanMetricSeries
-	P95        *chstore.SpanMetricSeries
 	Summary    HTTPSummary
 	From       int64 // unix ms
 	To         int64 // unix ms
 }
 
-// View — halkayı cevaba çevirir. p95 yalnız allowP95 ve veri varsa. Hiç hız
-// verisi yoksa ok=false (kart gizlenir).
-func (r *Ring) View(allowP95 bool) (View, bool) {
+// View — halkayı cevaba çevirir. Hiç hız verisi yoksa ok=false (kart gizlenir).
+func (r *Ring) View() (View, bool) {
 	var v View
 	if r == nil || len(r.B) == 0 {
 		return v, false
 	}
-	var tput, avg, p95 chstore.SpanMetricSeries
+	var tput, avg chstore.SpanMetricSeries
 	var peak float64
 	var peakAt int64
 	var lastTotal float64
-	var lastAvg, lastP95 *float64
+	var lastAvg *float64
 	for _, b := range r.B {
 		if b.R != nil {
 			tot := *b.R
@@ -213,11 +190,6 @@ func (r *Ring) View(allowP95 bool) (View, bool) {
 				lastAvg = &a
 			}
 		}
-		if allowP95 && b.P95 != nil {
-			x := *b.P95
-			p95.Points = append(p95.Points, chstore.SpanMetricPoint{Time: b.T * 1e9, Value: x})
-			lastP95 = &x
-		}
 	}
 	if len(tput.Points) == 0 {
 		return v, false
@@ -228,11 +200,7 @@ func (r *Ring) View(allowP95 bool) (View, bool) {
 		avg.GroupKey = []string{}
 		v.Avg = &avg
 	}
-	if len(p95.Points) > 0 {
-		p95.GroupKey = []string{}
-		v.P95 = &p95
-	}
-	v.Summary = HTTPSummary{NowRPS: lastTotal, PeakRPS: peak, PeakAt: peakAt * 1000, AvgNowS: lastAvg, P95NowS: lastP95}
+	v.Summary = HTTPSummary{NowRPS: lastTotal, PeakRPS: peak, PeakAt: peakAt * 1000, AvgNowS: lastAvg}
 	v.From = r.B[0].T * 1000
 	v.To = (r.B[len(r.B)-1].T + ringStepS) * 1000
 	return v, true
@@ -254,10 +222,6 @@ func (r *Ring) Clone() *Ring {
 		if b.Sum != nil {
 			v := *b.Sum
 			nb.Sum = &v
-		}
-		if b.P95 != nil {
-			v := *b.P95
-			nb.P95 = &v
 		}
 		c.B[i] = nb
 	}

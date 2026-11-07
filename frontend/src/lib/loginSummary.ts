@@ -178,12 +178,9 @@ export function throughputHead(sum: LoginSummaryHttpSummary, t: (k: string) => s
     .replace('{at}', sum.peak_at ? fmtClock(sum.peak_at) : '—');
 }
 
-/** "ort A · p95 B" — Response time başlık satırının sağı; p95 yoksa yalnız ort; ikisi de yoksa boş. */
+/** "ort A" — Response time başlık satırının sağı; ortalama yoksa boş (v0.10.1922: p95 kaldırıldı). */
 export function responseHead(sum: LoginSummaryHttpSummary, t: (k: string) => string): string {
-  const parts: string[] = [];
-  if (sum.avg_now_s != null) parts.push(`${t('login.http.avg')} ${fmtSeconds(sum.avg_now_s)}`);
-  if (sum.p95_now_s != null) parts.push(`p95 ${fmtSeconds(sum.p95_now_s)}`);
-  return parts.join(' · ');
+  return sum.avg_now_s != null ? `${t('login.http.avg')} ${fmtSeconds(sum.avg_now_s)}` : '';
 }
 
 /** Kart başlığı: kurum adı boşsa ad düşer ("OpenTelemetry metrikleri · son 24 saat"). */

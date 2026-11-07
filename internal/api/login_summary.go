@@ -152,12 +152,12 @@ func StartLoginSummarySync(ctx context.Context, c cache.Cache) {
 }
 
 // loginSummaryResponse — SAF karar: ayar yüklenmemişse kapalı; aksi hâlde Project.
-func loginSummaryResponse(snap *loginsummary.Snapshot, fl *loginBrandingFlags, allowP95 bool, now time.Time) loginsummary.Response {
+func loginSummaryResponse(snap *loginsummary.Snapshot, fl *loginBrandingFlags, now time.Time) loginsummary.Response {
 	if fl == nil {
 		return loginsummary.Response{Enabled: false}
 	}
 	return loginsummary.Project(snap, loginsummary.Flags{
-		Enabled: fl.summary, Topology: fl.topology, AllowP95: allowP95, Now: now,
+		Enabled: fl.summary, Topology: fl.topology, Now: now,
 	})
 }
 
@@ -168,6 +168,5 @@ func (s *Server) getLoginSummary(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusTooManyRequests, "rate limited")
 		return
 	}
-	allowP95 := s.vmetrics != nil && s.vmetrics.CurrentSettings().AllowUnfilteredPercentiles
-	writeJSON(w, loginSummaryResponse(loginSummarySnap.Load(), loginSummaryFlags.Load(), allowP95, time.Now()))
+	writeJSON(w, loginSummaryResponse(loginSummarySnap.Load(), loginSummaryFlags.Load(), time.Now()))
 }

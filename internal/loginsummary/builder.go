@@ -38,11 +38,13 @@ const (
 	topoEdgeLimit    = 5000
 )
 
-// Queries — VM'e giden ÜÇ sabit ifade (kullanıcı girdisi yok).
-func Queries(family string) (q1, q2, q3 string) {
+// Queries — VM'e giden İKİ sabit ifade (kullanıcı girdisi yok). v0.10.1922 —
+// p95 (Q3, süzgeçsiz histogram_quantile) KALDIRILDI: prod'da her denemede 5 sn
+// zaman aşımına düşüyordu (worker günlüğü vm_q3=15002ms = 3 × 5 sn), login'de
+// hiç görünmüyor ve VM'e 30 dk'da bir boşa yük bindiriyordu (operatör kararı).
+func Queries(family string) (q1, q2 string) {
 	q1 = "sum(rate(" + family + "_count[5m]))" // toplam hız; durum kodu kırılımı yok (v0.10.1914)
 	q2 = "sum(rate(" + family + "_sum[5m]))"
-	q3 = "histogram_quantile(0.95, sum by (le, vmrange) (rate(" + family + "_bucket[5m])))"
 	return
 }
 
@@ -61,7 +63,6 @@ var _ Store = (*chstore.Store)(nil)
 // VM — VictoriaMetrics okuma yüzeyi.
 type VM interface {
 	Configured() bool
-	AllowUnfilteredPercentiles() bool
 	QueryPromQLRange(ctx context.Context, query string, from, to time.Time, stepSeconds, maxDataPoints int) ([]chstore.SpanMetricSeries, error)
 }
 
@@ -140,7 +141,7 @@ func New(d Deps) *Builder {
 	if d.SlowEvery <= 0 {
 		d.SlowEvery = DefaultSlowEvery
 	}
-	return &Builder{d: d, br: map[string]*breaker{"q1": {}, "q2": {}, "q3": {}}}
+	return &Builder{d: d, br: map[string]*breaker{"q1": {}, "q2": {}}}
 }
 
 // Reset — liderlik kaybında çağrılır; sonraki Step anlık görüntüyü yeniden
@@ -280,17 +281,13 @@ func (b *Builder) panelSlow(ctx context.Context, s *Snapshot, now time.Time) {
 		if s.Ring == nil {
 			s.Ring = NewRing()
 		}
-		allowP95 := b.d.VM.AllowUnfilteredPercentiles()
-		if !allowP95 {
-			s.Ring.DropP95()
-		}
 		nowSec := now.Unix()
 		recentFrom := nowSec - nowSec%ringStepS - int64(vmRecentWindow/time.Second)
-		q1ok := b.fetch(ctx, s.Ring, time.Unix(recentFrom, 0), now, allowP95, now)
+		q1ok := b.fetch(ctx, s.Ring, time.Unix(recentFrom, 0), now, now)
 		b.vmOK = q1ok
 		if q1ok {
 			for _, c := range s.Ring.MissingChunks(nowSec, recentFrom, vmChunksPerRound) {
-				if b.fetch(ctx, s.Ring, time.Unix(c, 0), time.Unix(c+ringChunkS, 0), allowP95, now) {
+				if b.fetch(ctx, s.Ring, time.Unix(c, 0), time.Unix(c+ringChunkS, 0), now) {
 					s.Ring.MarkFilled(c)
 				}
 			}
@@ -318,10 +315,10 @@ func (b *Builder) panelSlow(ctx context.Context, s *Snapshot, now time.Time) {
 	}
 }
 
-// fetch — bir pencere için Q1 (+ Q2, Q3) çalıştırıp halkaya birleştirir.
+// fetch — bir pencere için Q1 (+ Q2) çalıştırıp halkaya birleştirir.
 // q1ok: Q1 hatasız döndü (boş sonuç da başarıdır: aile yok → kart gizlenir).
-func (b *Builder) fetch(ctx context.Context, ring *Ring, from, to time.Time, p95 bool, now time.Time) bool {
-	q1, q2, q3 := Queries(b.d.Family)
+func (b *Builder) fetch(ctx context.Context, ring *Ring, from, to, now time.Time) bool {
+	q1, q2 := Queries(b.d.Family)
 	s1, ok := b.runQuery(ctx, "q1", q1, from, to, now)
 	if !ok {
 		return false
@@ -332,11 +329,6 @@ func (b *Builder) fetch(ctx context.Context, ring *Ring, from, to time.Time, p95
 	ring.MergeRate(s1)
 	if s2, ok := b.runQuery(ctx, "q2", q2, from, to, now); ok {
 		ring.MergeSum(s2)
-	}
-	if p95 {
-		if s3, ok := b.runQuery(ctx, "q3", q3, from, to, now); ok {
-			ring.MergeP95(s3)
-		}
 	}
 	return true
 }

@@ -12287,12 +12287,12 @@ export interface MLScorecard {
 // anlık görüntü yok/eski iken {enabled:true,ready:false}. Seri zamanları unix ns.
 export interface LoginSummaryHttpSummary {
   now_rps: number; peak_rps: number; peak_at: number; // peak_at unix ms
-  avg_now_s?: number; p95_now_s?: number;
+  avg_now_s?: number; // v0.10.1922: p95 kaldırıldı
 }
 export interface LoginSummaryHttp {
   from: number; to: number; step_s: number; // from/to unix ms
   throughput?: SpanMetricSeries;            // TOPLAM istek/sn, tek seri (v0.10.1914: durum kodu kırılımı yok)
-  avg?: SpanMetricSeries; p95?: SpanMetricSeries; // saniye; p95 yalnız sunucu ayarı açıksa
+  avg?: SpanMetricSeries; // saniye (ortalama = toplam süre / istek sayısı)
   summary: LoginSummaryHttpSummary;
 }
 export interface LoginSummaryActivity {

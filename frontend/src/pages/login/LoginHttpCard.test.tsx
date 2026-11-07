@@ -2,7 +2,7 @@
 //
 // LoginHttpCard.test.tsx — v0.10.1908 (Login HTTP grafik kartı, audit §6.2).
 // CorePanelMulti (grafik chunk'ı) stub'lanır: burada kartın VERİ → PROP
-// eşlemesi çivilenir (durum kodu serileri, avg/p95, ortak syncKey, xRange
+// eşlemesi çivilenir (toplam throughput, ortalama yanıt, ortak syncKey, xRange
 // saniye, gömülü + lejantsız paneller, başlık satırları, tek statik lejant).
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { act } from 'react';
@@ -37,8 +37,7 @@ const HTTP: LoginSummaryHttp = {
   // v0.10.1914 — TEK toplam hız serisi (durum kodu kırılımı yok); grup anahtarı boş.
   throughput: { groupKey: [], points: pts(104) },
   avg: { groupKey: ['avg'], points: pts(0.2) },
-  p95: { groupKey: ['p95'], points: pts(0.4) },
-  summary: { now_rps: 1500, peak_rps: 2200, peak_at: new Date(2026, 10, 6, 12, 5).getTime(), avg_now_s: 0.186, p95_now_s: 0.412 },
+  summary: { now_rps: 1500, peak_rps: 2200, peak_at: new Date(2026, 10, 6, 12, 5).getTime(), avg_now_s: 0.186 },
 };
 
 function memoryStorage(): Storage {
@@ -93,18 +92,14 @@ describe('LoginHttpCard', () => {
     expect(tp.items[0].series[0].points).toHaveLength(3);
   });
 
-  it('Response time: ort --info, p95 --purple', () => {
+  // v0.10.1922 — p95 kaldırıldı: Response time yalnız ortalama.
+  it('Response time: yalnız ort (--info); ortalama yoksa panel çizilmez', () => {
     render(<LoginHttpCard http={HTTP} orgName="acme" />);
     const rt = panels()[1];
-    expect(rt.items.map(i => i.name)).toEqual(['ort', 'p95']);
-    expect(rt.items.map(i => i.color)).toEqual(['var(--info)', 'var(--purple)']);
-  });
-
-  it('p95 yoksa yalnız ort; ikisi de yoksa Response time paneli hiç çizilmez', () => {
-    render(<LoginHttpCard http={{ ...HTTP, p95: undefined, summary: { ...HTTP.summary, p95_now_s: undefined } }} orgName="acme" />);
-    expect(panels()[1].items.map(i => i.name)).toEqual(['ort']);
+    expect(rt.items.map(i => i.name)).toEqual(['ort']);
+    expect(rt.items.map(i => i.color)).toEqual(['var(--info)']);
     act(() => root?.unmount()); host?.remove(); seen.panels = [];
-    const el = render(<LoginHttpCard http={{ ...HTTP, avg: undefined, p95: undefined }} orgName="acme" />);
+    const el = render(<LoginHttpCard http={{ ...HTTP, avg: undefined }} orgName="acme" />);
     expect(panels()).toHaveLength(1);
     expect(el.textContent).not.toContain('Response time');
   });
@@ -117,9 +112,10 @@ describe('LoginHttpCard', () => {
     expect(txt).toContain('Throughput · metrik');
     expect(txt).toContain('şimdi 1.5K req/s · tepe 2.2K (12:05)');
     expect(txt).toContain('Response time · metrik');
-    expect(txt).toContain('ort 186 ms · p95 412 ms');
+    expect(txt).toContain('ort 186 ms');
+    expect(txt).not.toContain('p95');
     const legend = [...el.querySelectorAll('li')].map(l => l.textContent);
-    expect(legend).toEqual(['—toplam', '—ort', '—p95']);
+    expect(legend).toEqual(['—toplam', '—ort']);
   });
 
   it('orgName boşsa ad düşer', () => {

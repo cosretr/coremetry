@@ -13303,4 +13303,10 @@ JSON sözleşmesi ve kararlar ana oturumda. Backend dilimleri v0.10.1902–1905.
   ucun katmanında; isim etiketi yalnız ön katmanda (1918'in rastgele seçimi onun içinden). Üzerine gelinen düğüm büyür, bağlantıları
   parlar, adı her katmanda görünür; çakışmada öndeki tutulur; açılışta 0.9 sn yumuşak beliriş. Parallax BİLEREK yok (şifre
   yazarken dikkat dağıtır, tutulan nokta imlecin altından kayar).
+- **v0.10.1920–1922 — prod ikinci bakış (operatör, 2026-11-07).** 1920: kart 1120 → 1040 px (kenarda ≥ 80 px), form sütunu 420 px,
+  grafik panelleri 76 px, perde kenarda %45 (kart sayfayı kaplıyordu). 1921: gömülü CorePanel'de ipucunun yatay kıstırması panelin
+  kendisi (`tooltipClampBox`; sağ uçta imlecin soluna geçer), sabitleme satırı yok; login kartı kırpmaz. 1922: **p95 login özetinden
+  KALDIRILDI** — prod worker günlüğünde `vm_q3=15002ms` (3 × 5 sn zaman aşımı; süzgeçsiz `histogram_quantile` tüm servislerde
+  bitmiyor), login'de hiç görünmüyor ve VM'e 30 dk'da bir boşa yük bindiriyordu. Yanıt süresi = ortalama (`sum(rate(_sum)) /
+  sum(rate(_count))`, tüm HTTP servisleri, istek ağırlıklı). `AllowUnfilteredPercentiles` login için artık okunmaz.
 
