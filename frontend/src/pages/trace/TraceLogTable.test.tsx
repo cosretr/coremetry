@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 //
 // TraceLogTable — v0.10.1940: trace sayfasının log sekmesi Log Search'ün
-// tarayıcı-yanı parçalarını alır (exception rozeti, detay çekmecesi, Görünüm ▾,
-// sayfalama). Açılışta log araması YAPILMAZ (satırlar trace paketinden gelir).
+// tarayıcı-yanı parçalarını alır (exception rozeti, Görünüm ▾, sayfalama);
+// satır tablonun içinde açılır (v0.10.1941 — yan çekmece kaldırıldı). Açılışta log araması YAPILMAZ (satırlar trace paketinden gelir).
 import '@/test/pageJsdom';
 import '@/test/radixJsdom';
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
@@ -56,13 +56,15 @@ describe('TraceLogTable (v0.10.1940)', () => {
     expect(m.logs).toBe(0);
   });
 
-  it('satıra tık → detay çekmecesi (URL logdoc) ve Exception bölümü', async () => {
+  // v0.10.1941 (operatör: "çekmece yandan açılmasın, eski şekilde inline olsun").
+  it('satıra tık → satır tablonun İÇİNDE açılır; yan çekmece yok, arama yok', async () => {
     await mount([OOM, row(2)]);
+    const before = host!.querySelectorAll('tbody tr').length;
     await act(async () => { trs()[0].click(); }); await settle();
-    expect(new URLSearchParams(window.location.search).get('logdoc')).toBe('1');
-    expect(document.querySelector('[data-testid="log-detail"]')).not.toBeNull();
-    expect(document.querySelector('[data-testid="log-exception"]')!.textContent).toContain('OutOfMemoryError');
-    expect(m.logs).toBe(0); // çevre loglar yalnız istenince
+    expect(host!.querySelectorAll('tbody tr').length).toBe(before + 1);
+    expect(document.querySelector('[data-testid="log-detail"]')).toBeNull();
+    expect(new URLSearchParams(window.location.search).get('logdoc')).toBeNull();
+    expect(m.logs).toBe(0);
   });
 
   it('sayfa başına satırı aşınca sayfalama', async () => {

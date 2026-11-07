@@ -13376,4 +13376,7 @@ JSON sözleşmesi ve kararlar ana oturumda. Backend dilimleri v0.10.1902–1905.
   satır → detay çekmecesi (URL `logdoc`; çevre loglar yalnız çekmecede istenince), Görünüm ▾ (satır yüksekliği / yoğunluk /
   sayfa başına satır; Logs sayfasıyla AYNI kullanıcı tercihi `useDisplayPref('logs')`) ve istemci sayfalaması. Açılışa yeni ES
   isteği YOK — satırlar trace paketinden. Histogram, desenler, alan istatistikleri bilinçli yok (tek trace). Kiosk da aynı panel.
+- **v0.10.1941 — trace log sekmesinde yan çekmece KALDIRILDI (operatör, 2026-11-07: "log satırına tıklayınca çekmece yandan
+  açılmasını konuşmadık, eski şekilde inline olsun").** Satır tıklaması yine tablonun içinde açılır (LogTable'ın kendi açılımı);
+  1940'ın exception rozeti, Görünüm ▾ ve sayfalaması kalır. Trace sayfasında yan çekmece yeniden önerme.
 
