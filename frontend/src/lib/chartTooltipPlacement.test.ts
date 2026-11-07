@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { placeTooltip } from './chartTooltip';
+import { placeTooltip, tooltipClampBox } from './chartTooltip';
 
 // v0.9.631 — operatör-bildirimli: "neden imlecin sol üstünde çıkıyor,
 // sağ altta çıksa daha iyi, Grafana gibi".
@@ -118,5 +118,20 @@ describe('placeTooltip', () => {
         expect(p.y + th).toBeLessThanOrEqual(150);
       }
     }
+  });
+});
+
+// v0.10.1921 (operatör-raporlu: login'de panelin sağ ucunda ipucu kesiliyor).
+describe('tooltipClampBox — gömülü panel yatayda kendi içinde kalır', () => {
+  it('gömülü: yatay kutu panel genişliği; sağ uçta ipucu imlecin SOLUNA geçer', () => {
+    const box = tooltipClampBox(true, 500, 76, 1536, 760, 900, 600);
+    expect(box.cw).toBe(500);
+    const pl = placeTooltip(490, 30, 140, 50, 500, 76, 0, 0, box.cw, box.ch);
+    expect(pl.x + 140).toBeLessThanOrEqual(500); // panelin içinde
+    expect(pl.x).toBeLessThan(490);               // imlecin solunda
+  });
+  it('gömülü değil: kutu ekranın kalanına kadar (kartın dışına taşabilir — v0.9.755)', () => {
+    expect(tooltipClampBox(false, 500, 200, 1536, 760, 400, 100).cw).toBe(1536 - 400 - 8);
+    expect(tooltipClampBox(false, 500, 200, 1536, 760, 400, 100).ch).toBe(760 - 100 - 8);
   });
 });

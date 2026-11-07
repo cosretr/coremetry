@@ -7,7 +7,7 @@ import { Skeleton } from '@/components/shadcn/skeleton';
 /** Sağ sütun çerçevesi (iskelet ve içerik aynı kabuğu paylaşır). */
 export function SummaryShell({ children }: { children: ReactNode }) {
   return (
-    <aside className="flex min-w-0 flex-col gap-3 border-l border-border bg-muted/40 px-8 py-7">
+    <aside className="flex min-w-0 flex-col gap-3 rounded-r-2xl border-l border-border bg-muted/40 px-8 py-7">
       {children}
     </aside>
   );

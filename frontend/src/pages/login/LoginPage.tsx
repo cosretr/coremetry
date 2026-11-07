@@ -194,7 +194,8 @@ export default function LoginPage() {
         showSide
           // v0.10.1920 (operatör: kart sayfayı tam kaplıyor gibi) — 1120 → 1040 px, kenarda en az 80 px
           // boşluk, form sütunu 480 → 420 px: arka plandaki topoloji kartın çevresinde görünür kalır.
-          ? 'grid w-[min(1040px,calc(100vw-160px))] grid-cols-[420px_1fr] overflow-hidden rounded-2xl'
+          // v0.10.1921 — overflow-hidden YOK: grafik ipucu kart kenarında kırpılıyordu; köşeyi sağ sütun kendisi yuvarlar.
+          ? 'grid w-[min(1040px,calc(100vw-160px))] grid-cols-[420px_1fr] rounded-2xl'
           : 'w-[min(340px,100%)] rounded-lg',
       )}>
         <form onSubmit={onSubmit} className={showSide ? 'px-10 pb-7 pt-9' : 'p-8'}>

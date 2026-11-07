@@ -589,7 +589,7 @@ describe('CorePanel tooltip pin (v0.9.792)', () => {
     // İpucu: note satırıyla aynı token'lar, tooltip'in ALTINDA.
     expect(src).toMatch(/Shift\+tık: sabitle/);
     expect(src).toMatch(/color:var\(--text3\);font-size:10px/);
-    expect(src).toMatch(/\.join\(''\) \+ PIN_TIP_HTML;/);
+    expect(src).toMatch(/\.join\(''\) \+ \(embedded \? '' : PIN_TIP_HTML\);/ /* v0.10.1921: gömülü panelde ipucu yok */);
   });
 });
 

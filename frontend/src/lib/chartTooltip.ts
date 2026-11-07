@@ -90,3 +90,20 @@ export function placeTooltip(
 
   return { x: hx.p, y: hy.p };
 }
+
+/**
+ * İpucu kıstırma kutusu (container px). Varsayılan (v0.9.755): kutu kartın
+ * dışına taşabilir, yalnız EKRANA kıstırılır. v0.10.1921 (operatör-raporlu:
+ * login'de panelin sağ ucunda ipucu kesiliyor, "total" görünmüyor) — GÖMÜLÜ
+ * panelde yatay kıstırma panelin KENDİ genişliğidir: sağ uca yaklaşınca ipucu
+ * imlecin SOLUNA geçer. Gömülü panel kenarlarını kırpan bir kartın içinde
+ * durabilir (login); taşma görünmez. Dikey kıstırma ikisinde de ekrandır.
+ */
+export function tooltipClampBox(
+  embedded: boolean, hostW: number, hostH: number,
+  viewportW: number, viewportH: number, hostLeft: number, hostTop: number,
+): { cw: number; ch: number } {
+  const ch = Math.max(hostH, viewportH - hostTop - 8);
+  if (embedded) return { cw: hostW, ch };
+  return { cw: Math.max(hostW, viewportW - hostLeft - 8), ch };
+}

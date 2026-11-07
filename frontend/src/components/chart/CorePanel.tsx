@@ -66,7 +66,7 @@ import { alignedToCsv } from '@/lib/chart/exportCsv';
 import { sortedTooltipRows, capTooltipRows } from '@/lib/chart/tooltipModel';
 import { decidePinGesture, applyPinStyle, clearPinStyle } from '@/lib/chart/tooltipPin';
 import { resolveFocusIdx, focusSeriesStyle } from '@/lib/chart/seriesFocus';
-import { placeTooltip } from '@/lib/chartTooltip';
+import { placeTooltip, tooltipClampBox } from '@/lib/chartTooltip';
 import { fmtTooltipTime } from '@/lib/chartFmt';
 import { getItem, setItem, legendCollapseKey } from '@/lib/storage';
 import { useThemeTick } from '@/lib/useThemeTick';
@@ -1005,7 +1005,7 @@ export function CorePanel({
       if (rows.length === 0 && !regionHTML) { tt.style.display = 'none'; return; }
       tt.innerHTML = regionHTML + (rows.length ? `<div class="ov-tt-t">${fmtTooltipTime(tMs / 1000, stepSec)}</div>` : '') + rows.map(r =>
         `<div class="ov-tt-r"><span class="ov-lbl"><i class="ov-sw" style="background:${escapeHTML(r.color)}"></i><span class="ov-lbl-t" title="${escapeHTML(r.label)}">${escapeHTML(r.label)}</span></span><b>${escapeHTML(r.text)}</b></div>`,
-      ).join('') + PIN_TIP_HTML;
+      ).join('') + (embedded ? '' : PIN_TIP_HTML); // v0.10.1921 — gömülü panelde sabitleme ipucu yok (yer kaplar)
       tt.style.display = 'block';
       const host = wrapRef.current;
       if (host) {
@@ -1016,13 +1016,15 @@ export function CorePanel({
         // viewport'a kıstırılır → "imlecin sonrası/öncesi" hemen her
         // zaman yer bulur, işaretçi kutunun ÜSTÜNE gelmez.
         const hr = host.getBoundingClientRect();
+        // v0.10.1921 — gömülü panelde yatay kıstırma panelin kendisi (login kartı kırpar).
+        const box = tooltipClampBox(!!embedded, host.clientWidth, host.clientHeight,
+          window.innerWidth, window.innerHeight, hr.left, hr.top);
         const pl = placeTooltip(
           u.cursor.left ?? 0, u.cursor.top ?? 0,
           tt.offsetWidth, tt.offsetHeight,
           u.over.clientWidth, u.over.clientHeight,
           u.over.offsetLeft, u.over.offsetTop,
-          Math.max(host.clientWidth, window.innerWidth - hr.left - 8),
-          Math.max(host.clientHeight, window.innerHeight - hr.top - 8),
+          box.cw, box.ch,
         );
         tt.style.left = `${pl.x}px`;
         tt.style.top = `${pl.y}px`;
