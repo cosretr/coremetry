@@ -95,8 +95,21 @@ func TestPickSilhouetteCaps(t *testing.T) {
 	if svc > 150 || bk > 30 || svc+bk > 180 {
 		t.Errorf("tavan: servis %d (≤150), backend %d (≤30)", svc, bk)
 	}
-	if len(sil.Edges) > 360 {
-		t.Errorf("kenar tavanı 360, got %d", len(sil.Edges))
+	if len(sil.Edges) > 270 {
+		t.Errorf("kenar tavanı 1,5×180 = 270, got %d", len(sil.Edges))
+	}
+	// v0.10.1934 — varsayılan tavan 360: 300 servis + 60 backend, en çok 540 kenar.
+	big := PickSilhouette(edges, 0)
+	svc, bk = 0, 0
+	for _, n := range big.Nodes {
+		if n.Backend {
+			bk++
+		} else {
+			svc++
+		}
+	}
+	if svc != 300 || bk != 60 || len(big.Edges) > 540 {
+		t.Errorf("varsayılan tavan: servis %d (300), backend %d (60), kenar %d (≤540)", svc, bk, len(big.Edges))
 	}
 	// deterministik
 	again := PickSilhouette(edges, 180)
@@ -191,12 +204,12 @@ func TestBuildTopologyWeightsNormalized(t *testing.T) {
 func TestDBLabel(t *testing.T) {
 	cases := map[string]string{
 		"ORDERSDB1.ACME.LOCAL": "ordersdb1",
-		"orders_db":          "orders_db",
-		" Ledger ":           "ledger",
-		"10.0.0.5":           "", // IP parçası
-		"bad name":           "",
-		"":                   "",
-		"db-host:1521":       "",
+		"orders_db":            "orders_db",
+		" Ledger ":             "ledger",
+		"10.0.0.5":             "", // IP parçası
+		"bad name":             "",
+		"":                     "",
+		"db-host:1521":         "",
 	}
 	for in, want := range cases {
 		if got := dbLabel(in); got != want {

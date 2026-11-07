@@ -17,8 +17,10 @@ import (
 )
 
 const (
-	// topoMaxNodes — siluetin düğüm tavanı: 150 servis + 30 db/kuyruk.
-	topoMaxNodes = 180
+	// topoMaxNodes — siluetin düğüm tavanı: 300 servis + 60 db/kuyruk.
+	// v0.10.1934 (operatör, mockup karşılaştırması: "360"): 180 → 360; prod 1300
+	// servisin ~%25'i görünür (önceden ~%11).
+	topoMaxNodes = 360
 	// topoWindowS — okuma penceresi (15 dk; son kova geç yazılırsa siluet boşalmasın).
 	topoWindowS = 900
 )
@@ -145,7 +147,9 @@ func NameDatabases(sil *Silhouette, names map[string]string) {
 // PickSilhouette — SAF. 1) `ext:` çocuklu kenarlar atılır; 2) servis skoru =
 // servis↔servis kenarlarında giren+çıkan çağrı, ilk (maxNodes-maxNodes/6)
 // servis; 3) bu servislere bağlı db:/queue: düğümlerinden çağrıya göre ilk
-// maxNodes/6; 4) iki ucu da seçili kenarlardan ağırlığa göre ilk 2*maxNodes.
+// maxNodes/6; 4) iki ucu da seçili kenarlardan ağırlığa göre ilk 1,5×maxNodes
+// (v0.10.1934: 2× idi; 360 düğümde 540 kenar — en zayıf bağlar zaten görünmüyordu,
+// kare başına çizgi maliyeti sınırlı kalır).
 func PickSilhouette(edges []chstore.ServiceTopologyEdge, maxNodes int) Silhouette {
 	if maxNodes <= 0 {
 		maxNodes = topoMaxNodes
@@ -254,7 +258,7 @@ func PickSilhouette(edges []chstore.ServiceTopologyEdge, maxNodes int) Silhouett
 		out.Nodes = append(out.Nodes, SilNode{Key: k, Name: name, Backend: true, Queue: queue, Calls: attached[k]})
 	}
 
-	// kenarlar: iki ucu da seçili, ağırlığa göre ilk 2*maxNodes (aynı çift birleşir)
+	// kenarlar: iki ucu da seçili, ağırlığa göre ilk 1,5×maxNodes (aynı çift birleşir)
 	pair := map[[2]string]uint64{}
 	for _, e := range kept {
 		okFrom := selSvc[e.from]
@@ -276,8 +280,8 @@ func PickSilhouette(edges []chstore.ServiceTopologyEdge, maxNodes int) Silhouett
 		}
 		return a.To < b.To
 	})
-	if len(out.Edges) > 2*maxNodes {
-		out.Edges = out.Edges[:2*maxNodes]
+	if edgeCap := maxNodes * 3 / 2; len(out.Edges) > edgeCap {
+		out.Edges = out.Edges[:edgeCap]
 	}
 	return out
 }

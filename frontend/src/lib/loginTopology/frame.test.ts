@@ -94,7 +94,7 @@ describe('seyreltme (thinGraph)', () => {
   it('tavan altında aynen; üstünde giriş/BFF/veri önce, servis ağırlığa göre; kenarlar iki ucu kalanlar', () => {
     const small = thinGraph(NODES, EDGES);
     expect(small.nodes).toHaveLength(NODES.length);
-    const g = sparseGraph(260, 200, 4); // v0.10.1927: tavan 180, sentetik graf (160) altında kalır
+    const g = sparseGraph(520, 400, 4); // v0.10.1934: tavan 360, sentetik graf (160) altında kalır
     expect(g.nodes.length).toBeGreaterThan(MAX_DRAW_NODES);
     const t = thinGraph(g.nodes, g.edges);
     expect(t.nodes).toHaveLength(MAX_DRAW_NODES);

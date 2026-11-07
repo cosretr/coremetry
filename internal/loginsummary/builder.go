@@ -297,7 +297,7 @@ func (b *Builder) slowRound(ctx context.Context, s *Snapshot, now time.Time, sum
 		sil := PickSilhouette(edges, topoMaxNodes)
 		// v0.10.1931 — veritabanı adı (db_summary_5m, son 1 sa). Hata: sistem
 		// adında kalır (yumuşak; topoloji yine yayınlanır).
-		// Yalnız siluette SEÇİLİ db'ler sorulur (≤ topoMaxNodes/6): test 4000,
+		// Yalnız siluette SEÇİLİ db'ler sorulur (≤ topoMaxNodes/6 = 60): test 4000,
 		// prod 1300 servis — tüm instance'ları okumak ölçekle büyürdü.
 		if keys := sil.DatabaseKeys(); len(keys) > 0 {
 			t1 := time.Now()

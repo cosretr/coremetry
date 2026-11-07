@@ -14,7 +14,9 @@ export function shouldDraw(now: number, last: number): boolean {
 // v0.10.1927 (operatör-raporlu: "noktalar çok büyümüş ve seyrelmiş, eski hâli
 // daha iyiydi") — düğüm tavanı yeniden 180 (sunucunun gönderdiği tamamı);
 // sadeliği küçük düğüm ve derinlik sağlar, seyreltme değil.
-export const MAX_DRAW_NODES = 180;
+// v0.10.1934 (operatör: "360") — sunucu tavanıyla birlikte 360; kalabalığı
+// galaxy.ts'teki küçültme (DENSE_SIZE_K) dengeler.
+export const MAX_DRAW_NODES = 360;
 export const MAX_LABELS = 24;
 
 const THIN_RANK: Record<string, number> = { gw: 0, bff: 1, db: 2, queue: 2, svc: 3 };

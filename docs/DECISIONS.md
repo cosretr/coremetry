@@ -13349,4 +13349,9 @@ JSON sözleşmesi ve kararlar ana oturumda. Backend dilimleri v0.10.1902–1905.
   "360, etiket çerçevesi olsun").** Etiketler `--bg0` renginde 3,5 px çerçeveyle çizilir (yıldız tozu üstünde okunur).
   REDDEDİLDİ — yeniden önerme: çekirdeği kartın dışına (sol alta) kaydırmak ("beğenmedim", galaksi ortada kalır). Diğer
   seçilenler ayrı sürümlerde: 360 düğüm (1934), üzerine gelince tür (1935), açılış hareketi (1936).
+- **v0.10.1934 — login galaksisi 360 düğüm (operatör, 2026-11-07: mockup'ta 180/360 karşılaştırması → "360").** Sunucu
+  siluet tavanı 180 → 360 (300 servis + 60 db/kuyruk; prod 1300 servisin ~%11'i yerine ~%25'i), kenar tavanı 2× → 1,5×
+  düğüm (540; en zayıf bağlar zaten görünmüyordu, kare başına çizgi maliyeti sınırlı). İstemci çizim tavanı da 360; 180'i
+  aşınca noktalar %15 küçülür (`DENSE_SIZE_K`, 1927'deki "iri ve seyrek" şikâyeti geri gelmesin). Etiket tavanları aynı
+  (24 servis + 12 veri). Veritabanı adı sorgusu en çok 60 çift sorar. Citrix'te kare süresi ÖLÇÜLMEDİ.
 

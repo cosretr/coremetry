@@ -4,7 +4,7 @@ import { mulberry32 } from './prng';
 import { syntheticGraph, SYNTHETIC_SEED } from './synthetic';
 import {
   buildGalaxy, depthOf, flowPos, flowSpeed, isDarkColor, nodeAlpha, nodeRadius, paceFrom, pickBackendLabels, pickLabelSet, project,
-  sizeOf, spinRate, wantsLabel, MIN_ARMS, TILT0, DUST_ARM, DUST_CORE, FLOW_EDGES, type GNode,
+  sizeOf, spinRate, wantsLabel, DENSE_NODES, DENSE_SIZE_K, MIN_ARMS, TILT0, DUST_ARM, DUST_CORE, FLOW_EDGES, type GNode,
 } from './galaxy';
 import type { LoginSummaryEdge, LoginSummaryNode } from '@/lib/types';
 
@@ -151,5 +151,15 @@ describe('etiketler', () => {
     expect([...a].every(i => gx.nodes[i].tier === 'svc')).toBe(true);
     expect([...a].sort()).not.toEqual([...b].sort());
     expect(pickLabelSet(synth(), 24, mulberry32(1)).size).toBe(0); // isimsiz kip: ad yok
+  });
+});
+
+describe('yoğun grafik (v0.10.1934)', () => {
+  it('çizilen düğüm DENSE_NODES\'u aşınca noktalar %15 küçülür', () => {
+    const mk = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `n${i}`, tier: (i < 6 ? 'gw' : 'svc') as 'gw' | 'svc', weight: 1 }));
+    const maxSize = (n: number) => Math.max(...buildGalaxy(mk(n), [], 5).nodes.map(nd => nd.size));
+    const top = sizeOf(1, 1);
+    expect(maxSize(DENSE_NODES)).toBeGreaterThan(top * DENSE_SIZE_K);
+    expect(maxSize(DENSE_NODES + 1)).toBeLessThanOrEqual(top * DENSE_SIZE_K + 1e-9);
   });
 });

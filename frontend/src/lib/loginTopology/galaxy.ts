@@ -30,6 +30,13 @@ export const TILT_MAX = 1.35;
 /** Gateway / BFF / veri / servis taban yarıçapı (css px). */
 export const BASE_R: Readonly<Record<string, number>> = { gw: 6.5, bff: 4, db: 3.4, queue: 3.4, svc: 2.4 };
 
+/**
+ * v0.10.1934 (operatör: 360 düğüm) — çizilen düğüm DENSE_NODES'u aşınca noktalar
+ * %15 küçülür: kollar dolar ama "iri ve seyrek" görünüm (1927 şikâyeti) geri gelmez.
+ */
+export const DENSE_NODES = 180;
+export const DENSE_SIZE_K = 0.85;
+
 /** Veri katmanı (veritabanı ya da kuyruk). */
 export const isBackendTier = (tier: string) => tier === 'db' || tier === 'queue';
 /** Veri katmanında sabit etiket tavanı (v0.10.1931). */
@@ -109,6 +116,7 @@ export function buildGalaxy(
     for (const v of adj[u]) if (arm[v] < 0) { arm[v] = arm[u]; hop[v] = hop[u] + 1; queue.push(v); }
   }
   const hubSet = new Set(hubs);
+  const sizeK = n > DENSE_NODES ? DENSE_SIZE_K : 1;
 
   const gnodes: GNode[] = nodes.map((nd, i) => {
     const a = arm[i] >= 0 ? arm[i] : i % arms; // bağlantısız: dizine göre kol
@@ -123,7 +131,7 @@ export function buildGalaxy(
     return {
       id: nd.id, tier, weight: clamp01(nd.weight), name: nd.name, arm: a,
       r, th: (a / arms) * TAU + Math.log(0.18 + r) * TWIST + gauss() * (0.12 + t * 0.1),
-      h: gauss() * 0.03 * (1 - t * 0.5), ph: rand() * TAU, size: sizeOf(nd.weight, rand()),
+      h: gauss() * 0.03 * (1 - t * 0.5), ph: rand() * TAU, size: sizeOf(nd.weight, rand()) * sizeK,
     };
   });
 

@@ -246,3 +246,4 @@ Bu bölüm üstteki audit metnini GEÇERSİZ kılar; ayrıntı `docs/DECISIONS.m
 - **1931** Veri katmanı: veritabanı mor yuvarlak nokta + veritabanı adı (`db.name` ilk parçası), kuyruk ayrı `queue` katmanı (turkuaz halka + konu adı); her ad bir kez etiketlenir. Host çıkmaz.
 - **1932** Akan noktalar Traces süre çizgisiyle aynı token (`--orange`); `--galaxy-gold` silindi.
 - **1933** Etiketlere zemin çerçevesi. Merkezi kartın dışına alma reddedildi.
+- **1934** Topoloji 360 düğüm (300 servis + 60 veri), kenar tavanı 540; 180'i aşınca noktalar %15 küçük.
