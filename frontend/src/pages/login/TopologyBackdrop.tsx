@@ -168,8 +168,11 @@ export default function TopologyBackdrop({ graph, animated }: { graph: BackdropG
     return m;
   });
   // v0.10.1918 — etiketlenecek servisler her açılışta RASTGELE; v0.10.1919 — yalnız ön katmandan.
+  // v0.10.1926 (operatör-raporlu: arka planda birden fazla "oracle" / "queue" yazıyor) —
+  // veri katmanı düğümleri (db/kuyruk) SABİT etiket almaz: adları yalnız sistem adıdır,
+  // aynı ad onlarca kez tekrar ederdi. Üzerine gelince adı yine görünür.
   const [labels] = useState<Set<number>>(() =>
-    new Set(labelNodes(layout, MAX_LABELS, Math.random, i => depth[i] === 0)));
+    new Set(labelNodes(layout, MAX_LABELS, Math.random, i => depth[i] === 0 && layout.nodes[i].tier !== 'db')));
 
   useEffect(() => {
     const canvas = ref.current;
