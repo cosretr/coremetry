@@ -74,12 +74,13 @@ type Deps struct {
 	Publish func(*Snapshot)
 	NewSalt func() string
 	Logf    func(format string, args ...any)
-	// Enabled — özet ayarı (branding.loginSummary). false → tur HİÇ koşmaz:
-	// CH/VM sorgusu yok, yayın yok (operatör özelliği kapattıysa arka uç yükü
-	// de kalkar; uç zaten {enabled:false} döner). nil = açık.
+	// Enabled — özet paneli ayarı (branding.loginSummary). false → sayılar,
+	// VM halkası, endpoint ve CH boyutu OKUNMAZ. nil = açık.
 	Enabled func() bool
 	// TopologyOn — branding.loginTopology != off. false → topoloji okunmaz ve
-	// anlık görüntüden düşer. nil = açık.
+	// anlık görüntüden düşer. nil = açık. v0.10.1917: panelden BAĞIMSIZ —
+	// panel kapalı, topoloji açıkken tur yalnız topolojiyi okur. İkisi de
+	// kapalıysa tur HİÇ koşmaz (arka uç çağrısı yok, yayın yok).
 	TopologyOn func() bool
 
 	Family    string        // boşsa HTTPFamily
@@ -182,8 +183,10 @@ func (b *Builder) timed(name string, start time.Time) {
 
 // Step — bir tur: anlık görüntüyü günceller ve yayınlar.
 func (b *Builder) Step(ctx context.Context) {
-	if b.d.Enabled != nil && !b.d.Enabled() {
-		return // özet kapalı: arka uç çağrısı yok, yayın yok
+	sumOn := b.d.Enabled == nil || b.d.Enabled()
+	topoOn := b.d.TopologyOn == nil || b.d.TopologyOn()
+	if !sumOn && !topoOn {
+		return // panel ve topoloji kapalı: arka uç çağrısı yok, yayın yok
 	}
 	now := b.d.Now()
 	b.timings = map[string]time.Duration{}
@@ -200,36 +203,41 @@ func (b *Builder) Step(ctx context.Context) {
 		s.Salt = b.d.NewSalt()
 	}
 
-	// ── hızlı: CH sayıları (her tur) ──
+	// ── hızlı: CH sayıları (her tur; yalnız panel açıkken) ──
 	countsOK := true
-	t0 := time.Now()
-	counts, err := b.d.Store.LoginSummaryCounts(ctx)
-	b.timed("counts", t0)
-	if err != nil {
-		countsOK = false
-	}
-	s.SpansToday, s.TracesToday, s.Services = counts.Spans, counts.Traces, counts.Services
+	if sumOn {
+		t0 := time.Now()
+		counts, err := b.d.Store.LoginSummaryCounts(ctx)
+		b.timed("counts", t0)
+		if err != nil {
+			countsOK = false
+		}
+		s.SpansToday, s.TracesToday, s.Services = counts.Spans, counts.Traces, counts.Services
 
-	s.Activity = nil
-	t0 = time.Now()
-	totals, aerr := b.d.Store.ReadSelfActivityTotals(ctx, now.Add(-activityWindow), now)
-	b.timed("activity", t0)
-	t0 = time.Now()
-	cosre, cerr := b.d.Store.CountCosreQuestions(ctx, now.Add(-activityWindow))
-	b.timed("cosre", t0)
-	if aerr == nil && cerr == nil {
-		s.Activity = &SnapActivity{Logins: totals.Logins, CosreQuestions: cosre}
+		s.Activity = nil
+		t0 = time.Now()
+		totals, aerr := b.d.Store.ReadSelfActivityTotals(ctx, now.Add(-activityWindow), now)
+		b.timed("activity", t0)
+		t0 = time.Now()
+		cosre, cerr := b.d.Store.CountCosreQuestions(ctx, now.Add(-activityWindow))
+		b.timed("cosre", t0)
+		if aerr == nil && cerr == nil {
+			s.Activity = &SnapActivity{Logins: totals.Logins, CosreQuestions: cosre}
+		}
+	} else {
+		// Panel kapalı: panel alanları anlık görüntüde TUTULMAZ (bayat sayı yayılmasın).
+		s.SpansToday, s.TracesToday, s.Services, s.Endpoints, s.Activity, s.CHBytes, s.Ring = nil, nil, nil, nil, nil, nil, nil
 	}
 
 	// ── yavaş: VM halkası + topoloji + CH boyutu (≈5 dk) ──
 	slow := b.lastSlow.IsZero() || now.Sub(b.lastSlow) >= b.d.SlowEvery
 	if slow {
 		b.lastSlow = now
-		b.slowRound(ctx, s, now)
+		b.slowRound(ctx, s, now, sumOn, topoOn)
 	}
 
 	state := StateOK
-	vmOn := b.d.VM != nil && b.d.VM.Configured()
+	vmOn := sumOn && b.d.VM != nil && b.d.VM.Configured()
 	if !countsOK || (vmOn && !b.vmOK) {
 		state = StateDegraded
 	}
@@ -248,7 +256,25 @@ func (b *Builder) Step(ctx context.Context) {
 	}
 }
 
-func (b *Builder) slowRound(ctx context.Context, s *Snapshot, now time.Time) {
+func (b *Builder) slowRound(ctx context.Context, s *Snapshot, now time.Time, sumOn, topoOn bool) {
+	if sumOn {
+		b.panelSlow(ctx, s, now)
+	}
+	// topoloji (ayar off → okunmaz, anlık görüntüden düşer)
+	if !topoOn {
+		s.Topo = nil
+		return
+	}
+	t0 := time.Now()
+	edges, err := b.d.Store.ReadServiceTopologyAgg(ctx, now.Add(-topoWindowS*time.Second), now, topoEdgeLimit)
+	b.timed("topology", t0)
+	if err == nil {
+		s.Topo = BuildTopology(PickSilhouette(edges, topoMaxNodes), s.Salt)
+	}
+}
+
+// panelSlow — yavaş turun panel kısmı: VM halkası, endpoint sayısı, CH boyutu.
+func (b *Builder) panelSlow(ctx context.Context, s *Snapshot, now time.Time) {
 	// VM halkası
 	if b.d.VM != nil && b.d.VM.Configured() {
 		if s.Ring == nil {
@@ -282,18 +308,6 @@ func (b *Builder) slowRound(ctx context.Context, s *Snapshot, now time.Time) {
 		s.Endpoints = &n
 	}
 	b.timed("endpoints", te)
-
-	// topoloji (ayar off → okunmaz, anlık görüntüden düşer)
-	if b.d.TopologyOn != nil && !b.d.TopologyOn() {
-		s.Topo = nil
-	} else {
-		t0 := time.Now()
-		edges, err := b.d.Store.ReadServiceTopologyAgg(ctx, now.Add(-topoWindowS*time.Second), now, topoEdgeLimit)
-		b.timed("topology", t0)
-		if err == nil {
-			s.Topo = BuildTopology(PickSilhouette(edges, topoMaxNodes), s.Salt)
-		}
-	}
 
 	// CH boyutu
 	t0 := time.Now()

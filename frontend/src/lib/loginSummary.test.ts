@@ -70,11 +70,15 @@ describe('düşüş kararı', () => {
     expect(summaryUsable(undefined)).toBe(false);
     expect(summaryUsable(null)).toBe(false);
   });
-  it('çağrı: dar ekranda ya da marka off iken YOK', () => {
+  // v0.10.1917 — topoloji panelden bağımsız: panel kapalıyken topoloji için yine çağrılır.
+  it('çağrı: dar ekranda ya da panel VE topoloji kapalıyken YOK', () => {
     expect(shouldFetchSummary(true, undefined)).toBe(true);
     expect(shouldFetchSummary(true, 'on')).toBe(true);
     expect(shouldFetchSummary(true, '')).toBe(true);
-    expect(shouldFetchSummary(true, 'off')).toBe(false);
+    expect(shouldFetchSummary(true, 'off')).toBe(true); // topoloji varsayılan açık
+    expect(shouldFetchSummary(true, 'off', 'anonymous')).toBe(true);
+    expect(shouldFetchSummary(true, 'off', 'off')).toBe(false);
+    expect(shouldFetchSummary(true, 'on', 'off')).toBe(true);
     expect(shouldFetchSummary(false, 'on')).toBe(false);
   });
 });

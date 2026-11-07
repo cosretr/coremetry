@@ -5,7 +5,9 @@ import {
 import { syntheticGraph, SYNTHETIC_SEED } from './synthetic';
 import {
   shouldDraw, FRAME_MIN_MS, nodeStyle, drift, flowPos, flowEdges, labelNodes, backdropMode, MAX_LABELS,
+  thinGraph, screenPositions, MAX_DRAW_NODES,
 } from './frame';
+import { beginDrag, dragTo, hitNode, FOLLOW_1, FOLLOW_2 } from './drag';
 import type { LoginSummaryEdge, LoginSummaryNode } from '@/lib/types';
 
 const NODES: LoginSummaryNode[] = [
@@ -112,7 +114,9 @@ function spread(g: { nodes: LoginSummaryNode[]; edges: LoginSummaryEdge[] }) {
   };
 }
 
-describe('yerleşim yayılımı (kenara / ortaya yığılma yok)', () => {
+// v0.10.1917 (operatör: "ekrana eşit dağılsın"; ekran görüntüsünde kartın
+// çevresinde öbek) — evenOut sonrası her 4×3 hücre ≈ eşit pay (düzgün = %8.3).
+describe('yerleşim yayılımı (ekrana eşit; kenara / ortaya yığılma yok)', () => {
   const cases: Array<[string, { nodes: LoginSummaryNode[]; edges: LoginSummaryEdge[] }, boolean]> = [
     ['sentetik (bağlı, hiyerarşik)', syntheticGraph(), true],
     ['seyrek: 150 düğüm, 60 kenar', sparseGraph(150, 60, 7), true],
@@ -121,10 +125,9 @@ describe('yerleşim yayılımı (kenara / ortaya yığılma yok)', () => {
   ];
   it.each(cases)('%s', (_name, g, connected) => {
     const m = spread(g);
-    // Düzgün dağılımda %4'lük kenar bandının alan payı ≈ %15; yığılma bunu katlar.
-    expect(m.border).toBeLessThanOrEqual(0.25);
-    expect(m.minCell).toBeGreaterThanOrEqual(0.02); // her hücrede düğüm var (düzgün ≈ %8.3)
-    expect(m.maxCell).toBeLessThanOrEqual(0.2);     // hiçbir hücre baskın değil
+    expect(m.border).toBeLessThanOrEqual(0.06);      // kenar bandına yığılma yok
+    expect(m.minCell).toBeGreaterThanOrEqual(0.05);  // boş bölge yok (düzgün ≈ %8.3)
+    expect(m.maxCell).toBeLessThanOrEqual(0.12);     // öbek yok
     if (connected) expect(m.edgeRatio).toBeLessThan(0.6); // yapı korunur: komşular yakın
   });
 });
@@ -204,3 +207,69 @@ describe('arka plan kipi', () => {
     expect(backdropMode({ ...base, ...over })).toEqual(want);
   });
 });
+
+// v0.10.1917 (operatör: "çok dolu gözükmesin") — çizilen düğüm seyreltmesi.
+describe('seyreltme (thinGraph)', () => {
+  it('tavan altında aynen; üstünde giriş/BFF/veri önce, servis ağırlığa göre; kenarlar iki ucu kalanlar', () => {
+    const small = thinGraph(NODES, EDGES);
+    expect(small.nodes).toHaveLength(NODES.length);
+    const g = syntheticGraph();
+    expect(g.nodes.length).toBeGreaterThan(MAX_DRAW_NODES);
+    const t = thinGraph(g.nodes, g.edges);
+    expect(t.nodes).toHaveLength(MAX_DRAW_NODES);
+    for (const tier of ['gw', 'bff', 'db'] as const) {
+      expect(t.nodes.filter(n => n.tier === tier)).toHaveLength(g.nodes.filter(n => n.tier === tier).length);
+    }
+    const kept = new Set(t.nodes.map(n => n.id));
+    expect(t.edges.every(e => kept.has(e.from) && kept.has(e.to))).toBe(true);
+    const order = g.nodes.filter(n => kept.has(n.id)).map(n => n.id);
+    expect(t.nodes.map(n => n.id)).toEqual(order); // girdi sırası korunur
+    const minKeptSvc = Math.min(...t.nodes.filter(n => n.tier === 'svc').map(n => n.weight));
+    const maxDroppedSvc = Math.max(...g.nodes.filter(n => n.tier === 'svc' && !kept.has(n.id)).map(n => n.weight));
+    expect(minKeptSvc).toBeGreaterThanOrEqual(maxDroppedSvc);
+  });
+});
+
+// v0.10.1917 (operatör: "noktalar mouse ile tutularak hareket etsin").
+describe('sürükleme çekirdeği', () => {
+  const lay = () => layoutOf(NODES, EDGES, 3, 50);
+  it('isabet: en yakın düğüm, tolerans içinde; uzakta -1', () => {
+    const l = lay();
+    const pos = screenPositions(l, 0, 1, 1);
+    expect(hitNode(l, pos, pos[2].x + 3, pos[2].y - 2)).toBe(2);
+    expect(hitNode(l, pos, -500, -500)).toBe(-1);
+  });
+  it('tutulan düğüm hedefe gider; 1 adım komşu 2 adımdan çok, ilgisiz düğüm hiç kıpırdamaz', () => {
+    const l = layoutOf([...NODES, { id: 'z9', tier: 'svc', weight: 0.1 }], EDGES, 3, 50);
+    const before = l.nodes.map(n => ({ x: n.x, y: n.y }));
+    const d = beginDrag(l, 1); // b1: komşular a1, c1, c2 (1 adım), d1 (2 adım)
+    expect(d.follow.filter(f => f.k === FOLLOW_1).map(f => f.j).sort()).toEqual([0, 2, 3]);
+    expect(d.follow.filter(f => f.k === FOLLOW_2).map(f => f.j)).toEqual([4]);
+    const tx = before[1].x + 200, ty = before[1].y + 100;
+    dragTo(l, d, tx, ty);
+    expect(l.nodes[1].x).toBeCloseTo(Math.min(tx, l.w - 24));
+    const moved = (i: number) => Math.hypot(l.nodes[i].x - before[i].x, l.nodes[i].y - before[i].y);
+    expect(moved(2)).toBeGreaterThan(moved(4));
+    expect(moved(4)).toBeGreaterThan(0);
+    expect(moved(5)).toBe(0); // z9 bağlantısız
+  });
+  it('tekrarlı adımlarda komşu göreli konumuna yakınsar; konumlar çerçeve içinde kalır', () => {
+    const l = lay();
+    const d = beginDrag(l, 0);
+    const rel = d.follow.find(f => f.j === 1)!;
+    for (let i = 0; i < 60; i++) dragTo(l, d, 700, 400);
+    expect(l.nodes[1].x - l.nodes[0].x).toBeCloseTo(rel.rx, 0);
+    for (let i = 0; i < 60; i++) dragTo(l, d, -9999, 99999);
+    for (const n of l.nodes) {
+      expect(n.x).toBeGreaterThanOrEqual(24); expect(n.x).toBeLessThanOrEqual(l.w - 24);
+      expect(n.y).toBeGreaterThanOrEqual(24); expect(n.y).toBeLessThanOrEqual(l.h - 24);
+    }
+  });
+  it('geçersiz hedef yok sayılır', () => {
+    const l = lay();
+    const x = l.nodes[0].x;
+    dragTo(l, beginDrag(l, 0), NaN, 10);
+    expect(l.nodes[0].x).toBe(x);
+  });
+});
+

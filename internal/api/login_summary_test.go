@@ -77,10 +77,21 @@ func TestLoginSummaryEndpointServesWithNilBackends(t *testing.T) {
 		t.Fatalf("hazır cevap: %d %s", w.Code, w.Body)
 	}
 
-	SetLoginSummaryBranding(chstore.BrandingSettings{LoginSummary: "off"})
+	SetLoginSummaryBranding(chstore.BrandingSettings{LoginSummary: "off", LoginTopology: "off"})
 	w = getSummary(h, http.MethodGet, "/api/public/login-summary")
 	if strings.TrimSpace(w.Body.String()) != `{"enabled":false,"ready":false}` {
-		t.Fatalf("özet kapalıyken yalnız enabled+ready: %s", w.Body)
+		t.Fatalf("panel ve topoloji kapalıyken yalnız enabled+ready: %s", w.Body)
+	}
+
+	// v0.10.1917 — panel kapalı, topoloji açık: panel alanları YOK (topoloji panelden bağımsız).
+	SetLoginSummaryBranding(chstore.BrandingSettings{LoginSummary: "off"})
+	w = getSummary(h, http.MethodGet, "/api/public/login-summary")
+	var off loginsummary.Response
+	if err := json.Unmarshal(w.Body.Bytes(), &off); err != nil {
+		t.Fatal(err)
+	}
+	if off.Enabled || !off.Ready || off.SpansToday != nil || off.HTTP24h != nil || off.Activity != nil || off.Components != nil {
+		t.Fatalf("panel kapalıyken panel alanı sızmamalı: %s", w.Body)
 	}
 }
 

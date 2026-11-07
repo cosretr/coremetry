@@ -22,7 +22,11 @@ type Flags struct {
 
 // Project — Snapshot + ayarlar → Response.
 func Project(snap *Snapshot, f Flags) Response {
-	if !f.Enabled {
+	// v0.10.1917 — topoloji panelden BAĞIMSIZ: panel kapalı ama topoloji
+	// açıksa cevap {enabled:false, ready:true, topology} — sayı, grafik,
+	// aktivite, bileşen YOK. İkisi de kapalıysa yalnız {enabled:false}.
+	topoOn := f.Topology != TopologyOff
+	if !f.Enabled && !topoOn {
 		return Response{Enabled: false}
 	}
 	now := f.Now
@@ -31,7 +35,11 @@ func Project(snap *Snapshot, f Flags) Response {
 	}
 	if snap == nil || snap.V != SnapshotVersion || snap.GeneratedAt <= 0 ||
 		now.Sub(time.UnixMilli(snap.GeneratedAt)) > StaleAfter {
-		return Response{Enabled: true, Ready: false}
+		return Response{Enabled: f.Enabled, Ready: false}
+	}
+	if !f.Enabled {
+		return Response{Enabled: false, Ready: true, GeneratedAt: snap.GeneratedAt,
+			Topology: projectTopology(snap.Topo, f.Topology)}
 	}
 	out := Response{
 		Enabled: true, Ready: true, GeneratedAt: snap.GeneratedAt,

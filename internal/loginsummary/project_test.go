@@ -102,8 +102,21 @@ func TestProjectResponseKeysAreSubsetOfAllowList(t *testing.T) {
 func TestProjectDisabledAndNotReady(t *testing.T) {
 	now := time.Now()
 	snap := baseSnapshot(now)
-	if got := mustJSON(t, Project(snap, Flags{Enabled: false, Now: now})); got != `{"enabled":false,"ready":false}` {
-		t.Errorf("özet kapalı: yalnız enabled+ready, got %s", got)
+	if got := mustJSON(t, Project(snap, Flags{Enabled: false, Topology: TopologyOff, Now: now})); got != `{"enabled":false,"ready":false}` {
+		t.Errorf("panel ve topoloji kapalı: yalnız enabled+ready, got %s", got)
+	}
+	// v0.10.1917 — panel kapalı, topoloji açık: YALNIZ topoloji.
+	r := Project(snap, Flags{Enabled: false, Topology: TopologyAnonymous, Now: now})
+	if r.Enabled || !r.Ready || r.Topology == nil || len(r.Topology.Nodes) == 0 {
+		t.Fatalf("panel kapalı + topoloji açık: topoloji beklenir: %+v", r)
+	}
+	if r.SpansToday != nil || r.TracesToday != nil || r.Services != nil || r.Endpoints != nil ||
+		r.HTTP24h != nil || r.Activity != nil || r.Components != nil {
+		t.Errorf("panel kapalıyken panel alanı sızmamalı: %s", mustJSON(t, r))
+	}
+	assertAbsent(t, mustJSON(t, r), serviceNeedles, "panel kapalı + isimsiz topoloji")
+	if got := mustJSON(t, Project(nil, Flags{Enabled: false, Topology: TopologyAnonymous, Now: now})); got != `{"enabled":false,"ready":false}` {
+		t.Errorf("panel kapalı + anlık görüntü yok: got %s", got)
 	}
 	if got := mustJSON(t, Project(nil, flags(now, ""))); got != `{"enabled":true,"ready":false}` {
 		t.Errorf("anlık görüntü yok: got %s", got)

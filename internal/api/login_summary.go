@@ -68,8 +68,9 @@ func SetLoginSummaryBranding(b chstore.BrandingSettings) {
 	loginSummaryFlags.Store(&loginBrandingFlags{summary: b.LoginSummaryEnabled(), topology: b.ResolvedLoginTopology()})
 }
 
-// LoginSummaryEnabled — Builder kapısı: özet ayarı açık mı (ayar hiç
-// okunmadıysa kapalı). Kapalıyken kurucu CH/VM'e gitmez.
+// LoginSummaryEnabled — Builder kapısı: özet PANELİ ayarı açık mı (ayar hiç
+// okunmadıysa kapalı). Kapalıyken kurucu sayı/VM/boyut okumaz; topoloji
+// kendi kapısıyla (LoginSummaryTopologyOn) okunmaya devam edebilir.
 func LoginSummaryEnabled() bool {
 	fl := loginSummaryFlags.Load()
 	return fl != nil && fl.summary

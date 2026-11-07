@@ -13288,3 +13288,13 @@ JSON sözleşmesi ve kararlar ana oturumda. Backend dilimleri v0.10.1902–1905.
   (`Deps.Rollouts`, `main.go` bağlaması), trace görüntüleme sayacı (`noteTraceView`, 10 dk tekilleştirme tablosu, `trace_view` türü),
   `X-Coremetry-Purpose` başlığı (istemci `tracePrefetch`, CORS izni). `metric_points`'teki eski `trace_view` satırları TTL ile düşer.
   Anlık görüntü sürümü 3.
+- **v0.10.1917 — topoloji: sürükleme, eşit dağılım, seyreltme, panelden bağımsız (operatör, 2026-11-07).** "Noktalar mouse ile
+  tutularak hareket etsin" + "ekrana eşit dağılsın, çok dolu gözükmesin" + ekran görüntüsü (panel kapalıyken düğümler kartın
+  çevresinde öbek). (1) `lib/loginTopology/drag`: tutulan düğüm imleci izler, 1 adım komşular 0.22, 2 adım 0.08 oranla yaylı takip
+  eder, bırakılan yerde kalır; canvas yalnız kart dışında olay alır (üst çubuğun boş alanı geçirir). (2) `layout.evenOut`: kuvvet
+  yerleşiminin sırası korunarak titreşimli eşit ızgaraya oturtma (ölçüm: 4×3 hücre payı %6–11, düzgün %8.3). (3) Çizim tavanları
+  180 → 110 düğüm, 70 → 24 etiket, 120 → 40 akan nokta; kenar ve düğüm opaklığı düştü. (4) Topoloji özet panelinden BAĞIMSIZ:
+  panel kapalı + topoloji açıkken kurucu yalnız topolojiyi okur, uç `{enabled:false, ready:true, topology}` döner (sayı, grafik,
+  aktivite, bileşen yok); ikisi de kapalıysa kurucu hiç koşmaz. Eskiden panel kapalıyken topoloji sentetiğe düşmeliydi; istemci
+  önbelleği yüzünden gerçek veri görünebiliyordu (tutarsız).
+

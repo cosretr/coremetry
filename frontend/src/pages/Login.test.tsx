@@ -339,9 +339,9 @@ describe('Login — özet sütunu', () => {
     expect(h.innerHTML).toContain('w-[min(340px,100%)]');
   });
 
-  it('marka loginSummary=off: çağrı YOK', async () => {
+  it('panel ve topoloji kapalı: çağrı YOK', async () => {
     stubWide(true);
-    m.brand = { loginSummary: 'off' };
+    m.brand = { loginSummary: 'off', loginTopology: 'off' };
     const h = await mount(); await settle();
     expect(m.summaryCalls).toBe(0);
     expect(h.querySelector('aside')).toBeNull();
@@ -418,6 +418,9 @@ describe('Login — topoloji arka planı', () => {
     const h = await mount(); await settle();
     expect(canvasQ(h)).not.toBeNull();
     expect(canvasQ(h)!.getAttribute('aria-hidden')).toBe('true');
+    // v0.10.1917 — sürükleme: canvas olay alır; perde ve üst çubuğun boş alanı olayı geçirir.
+    expect(canvasQ(h)!.className).not.toContain('pointer-events-none');
+    expect(h.querySelector('.login-veil')!.className).toContain('pointer-events-none');
     expect(h.querySelector('.login-veil')).not.toBeNull();
     expect(h.textContent).toContain('Live topology silhouette · 3 services · last 15 min · details after sign-in');
     expect(raf).toHaveBeenCalled(); // canlı kip: animasyon
@@ -449,14 +452,25 @@ describe('Login — topoloji arka planı', () => {
     expect(h.textContent).not.toContain('Live topology');
   });
 
-  it('özet kapalı (marka loginSummary=off): çağrı yok, sentetik graf', async () => {
+  // v0.10.1917 (operatör ekran görüntüsü: panel kapalıyken topoloji) — topoloji
+  // panelden bağımsız: panel kapalıyken de gerçek topoloji çizilir, sağ sütun yok.
+  it('panel kapalı, topoloji açık: çağrı var, gerçek topoloji, sağ sütun YOK', async () => {
     stubWide(true);
     m.brand = { loginSummary: 'off' };
+    m.summary = { enabled: false, ready: true, topology: TOPO };
     const h = await mount(); await settle();
-    expect(m.summaryCalls).toBe(0);
+    expect(m.summaryCalls).toBe(1);
     expect(canvasQ(h)).not.toBeNull();
     expect(h.querySelector('aside')).toBeNull();
-    expect(h.textContent).not.toContain('Live topology');
+    expect(h.textContent).toContain('Live topology');
+  });
+  it('panel kapalı, sunucu yine panel verisi dönse bile sağ sütun çizilmez', async () => {
+    stubWide(true);
+    m.brand = { loginSummary: 'off' };
+    m.summary = { ...READY, topology: TOPO };
+    const h = await mount(); await settle();
+    expect(h.querySelector('aside')).toBeNull();
+    expect(h.textContent).not.toContain('1,214M');
   });
 
   it('topoloji alanı yok (ready:true ama loginTopology veri vermedi): sentetik, not yok', async () => {

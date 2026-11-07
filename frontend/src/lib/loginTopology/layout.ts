@@ -8,7 +8,7 @@ import type { LoginSummaryEdge, LoginSummaryNode } from '@/lib/types';
 
 export const LOGICAL_W = 1600;
 export const LOGICAL_H = 900;
-const MARGIN = 24;
+export const MARGIN = 24;
 
 /** mulberry32 — küçük, hızlı, tohumlu PRNG ([0,1)). */
 export function mulberry32(seed: number): () => number {
@@ -157,6 +157,35 @@ export function stepLayout(s: Work): void {
   s.step++;
 }
 
+/**
+ * v0.10.1917 (operatör: "ekrana eşit dağılsın, çok dolu gözükmesin"; ekran
+ * görüntüsünde düğümler kartın çevresinde öbekti) — kuvvet yerleşiminin
+ * SIRASINI koruyarak düğümleri ekranı eşit kaplayan titreşimli bir ızgaraya
+ * oturtur: y'ye göre satırlara, satır içinde x'e göre hücrelere. Komşular
+ * kabaca komşu kalır (sıra korunur), yoğunluk her yerde aynıdır: öbek ve
+ * boşluk yok. `jitter` hücrenin ±oranı (ızgara görüntüsü kırılsın diye).
+ */
+export function evenOut(lay: Layout, rand: () => number, jitter = 0.32): void {
+  const n = lay.nodes.length;
+  if (n === 0) return;
+  const uw = lay.w - 2 * MARGIN, uh = lay.h - 2 * MARGIN;
+  const wantRows = Math.max(1, Math.round(Math.sqrt((n * uh) / uw)));
+  const perRow = Math.ceil(n / wantRows);
+  const rows = Math.ceil(n / perRow); // boş satır kalmasın
+  const cellH = uh / rows;
+  const byY = lay.nodes.map((_, i) => i).sort((a, b) => lay.nodes[a].y - lay.nodes[b].y || a - b);
+  const j = () => (rand() - 0.5) * 2 * jitter;
+  for (let r = 0; r < rows; r++) {
+    const row = byY.slice(r * perRow, (r + 1) * perRow)
+      .sort((a, b) => lay.nodes[a].x - lay.nodes[b].x || a - b);
+    const cellW = uw / row.length;
+    row.forEach((i, c) => {
+      lay.nodes[i].x = MARGIN + (c + 0.5 + j()) * cellW;
+      lay.nodes[i].y = MARGIN + (r + 0.5 + j()) * cellH;
+    });
+  }
+}
+
 /** Başlangıç + `steps` adım → çözülmüş yerleşim (bir kez, boşta). */
 export function layoutOf(
   nodes: readonly LoginSummaryNode[], edges: readonly LoginSummaryEdge[],
@@ -165,6 +194,7 @@ export function layoutOf(
   const lay = initLayout(nodes, edges, w, h, seed);
   const work = beginSolve(lay, steps);
   for (let i = 0; i < steps; i++) stepLayout(work);
+  evenOut(lay, mulberry32(seed ^ 0x51ed2701)); // v0.10.1917 — ekrana eşit dağılım
   // çözücü tamponlarını bırak: dönen nesne düz Layout
   const out: Layout = {
     w: lay.w, h: lay.h, nodes: lay.nodes, edges: lay.edges,

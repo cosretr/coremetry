@@ -555,17 +555,46 @@ func TestBuilderDisabledRunsNoBackendCalls(t *testing.T) {
 	h := newHarness(t)
 	on := false
 	h.b = New(Deps{Store: h.st, VM: h.vm, Now: h.clk.now, Load: h.redis.load, Publish: h.redis.publish(t),
-		Logf: func(string, ...any) {}, Enabled: func() bool { return on }})
+		Logf: func(string, ...any) {}, Enabled: func() bool { return on }, TopologyOn: func() bool { return on }})
 	for i := 0; i < 3; i++ {
 		h.b.Step(context.Background())
 		h.advance(6 * time.Minute)
 	}
 	if h.st.countsCalls != 0 || h.st.topoCalls != 0 || len(h.vm.calls) != 0 || h.redis.n != 0 {
-		t.Fatalf("kapalıyken çağrı/yayın olmamalı: counts=%d topo=%d vm=%v yayın=%d", h.st.countsCalls, h.st.topoCalls, h.vm.calls, h.redis.n)
+		t.Fatalf("panel ve topoloji kapalıyken çağrı/yayın olmamalı: counts=%d topo=%d vm=%v yayın=%d", h.st.countsCalls, h.st.topoCalls, h.vm.calls, h.redis.n)
 	}
 	on = true
 	if snap := h.step(); snap == nil || snap.Topo == nil || h.vm.calls["q1"] == 0 {
 		t.Fatalf("açılınca ilk tur tam koşmalı: %+v vm=%v", snap, h.vm.calls)
+	}
+}
+
+// v0.10.1917 — panel kapalı, topoloji açık: tur YALNIZ topolojiyi okur
+// (sayı, VM, endpoint, boyut yok) ve panel alanları anlık görüntüde tutulmaz.
+func TestBuilderPanelOffTopologyOnReadsOnlyTopology(t *testing.T) {
+	h := newHarness(t)
+	panel := true
+	h.b = New(Deps{Store: h.st, VM: h.vm, Now: h.clk.now, Load: h.redis.load, Publish: h.redis.publish(t),
+		Logf: func(string, ...any) {}, Enabled: func() bool { return panel }, TopologyOn: func() bool { return true }})
+	if s := h.step(); s.SpansToday == nil || s.Ring == nil {
+		t.Fatal("panel açıkken sayılar ve halka dolu olmalı")
+	}
+	panel = false
+	counts, vmq, eps, topo := h.st.countsCalls, h.vm.calls["q1"], h.st.endpointCalls, h.st.topoCalls
+	h.advance(6 * time.Minute)
+	s := h.step()
+	if h.st.countsCalls != counts || h.vm.calls["q1"] != vmq || h.st.endpointCalls != eps {
+		t.Errorf("panel kapalıyken sayı/VM/endpoint okunmaz: counts %d→%d vm %d→%d eps %d→%d",
+			counts, h.st.countsCalls, vmq, h.vm.calls["q1"], eps, h.st.endpointCalls)
+	}
+	if h.st.topoCalls != topo+1 || s.Topo == nil {
+		t.Errorf("topoloji okunmalı: %d→%d", topo, h.st.topoCalls)
+	}
+	if s.SpansToday != nil || s.Ring != nil || s.Activity != nil || s.Endpoints != nil || s.CHBytes != nil {
+		t.Errorf("panel alanları anlık görüntüde tutulmamalı: %+v", s)
+	}
+	if s.State != StateOK {
+		t.Errorf("yalnız topoloji turunda durum ok: %s", s.State)
 	}
 }
 

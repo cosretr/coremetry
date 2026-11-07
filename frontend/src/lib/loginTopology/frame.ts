@@ -9,8 +9,39 @@ export function shouldDraw(now: number, last: number): boolean {
   return last <= 0 || now - last >= FRAME_MIN_MS;
 }
 
-export const MAX_LABELS = 70;
-export const MAX_FLOW_EDGES = 120;
+// v0.10.1917 (operatör: "çok dolu gözükmesin") — çizilen düğüm, etiket ve akan
+// nokta tavanları düşürüldü (180 → 110 düğüm, 70 → 24 etiket, 120 → 40 nokta).
+export const MAX_DRAW_NODES = 110;
+export const MAX_LABELS = 24;
+export const MAX_FLOW_EDGES = 40;
+
+const THIN_RANK: Record<string, number> = { gw: 0, bff: 1, db: 2, svc: 3 };
+/**
+ * Çizilecek düğümler: giriş → BFF → veri → servis (servisler ağırlığa göre),
+ * en çok `max`. Girdi sırası korunur (tohum kararlı kalsın); kenarlar yalnız
+ * iki ucu da kalanlar arasında.
+ */
+export function thinGraph<N extends { id: string; tier: string; weight: number }, E extends { from: string; to: string }>(
+  nodes: readonly N[], edges: readonly E[], max = MAX_DRAW_NODES,
+): { nodes: N[]; edges: E[] } {
+  if (nodes.length <= max) return { nodes: [...nodes], edges: [...edges] };
+  const keep = new Set(nodes.map((n, i) => ({ n, i }))
+    .sort((a, b) => (THIN_RANK[a.n.tier] ?? 9) - (THIN_RANK[b.n.tier] ?? 9) || b.n.weight - a.n.weight || a.i - b.i)
+    .slice(0, max).map(x => x.n.id));
+  return {
+    nodes: nodes.filter(n => keep.has(n.id)),
+    edges: edges.filter(e => keep.has(e.from) && keep.has(e.to)),
+  };
+}
+
+export interface Pt { x: number; y: number }
+/** Düğümlerin ekran (css px) konumları: yerleşim + kayma, ölçekli. Çizim ve isabet testi AYNI konumu kullanır. */
+export function screenPositions(layout: Layout, tSec: number, sx: number, sy: number): Pt[] {
+  return layout.nodes.map((n, i) => {
+    const d = drift(layout, i, tSec);
+    return { x: (n.x + d.dx) * sx, y: (n.y + d.dy) * sy };
+  });
+}
 
 export interface NodeStyle { r: number; ring: boolean; square: boolean; labelAlpha: number }
 

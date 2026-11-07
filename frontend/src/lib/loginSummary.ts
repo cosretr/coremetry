@@ -63,11 +63,17 @@ export function summaryUsable(s: LoginSummary | null | undefined): s is LoginSum
 }
 
 /**
- * Özet çağrısı yapılsın mı? Yalnız geniş ekran VE marka ayarı `off` değil.
- * (`loginSummary` boş = açık.)
+ * Özet çağrısı yapılsın mı? Geniş ekran VE (panel ya da topoloji açık).
+ * v0.10.1917 — topoloji panelden bağımsız: panel kapalıyken de topoloji
+ * için çağrılır. (`loginSummary` / `loginTopology` boş = açık.)
  */
-export function shouldFetchSummary(wide: boolean, loginSummary: string | undefined): boolean {
-  return wide && loginSummary !== 'off';
+export function shouldFetchSummary(wide: boolean, loginSummary: string | undefined, loginTopology?: string): boolean {
+  return wide && (loginSummary !== 'off' || loginTopology !== 'off');
+}
+
+/** Sağ panel açık mı (marka ayarı; boş = açık). */
+export function panelEnabled(loginSummary: string | undefined): boolean {
+  return loginSummary !== 'off';
 }
 
 /** Metin parçası: `{n}` yer tutucusu `n` (kalın çizilir) olarak ayrılır. */

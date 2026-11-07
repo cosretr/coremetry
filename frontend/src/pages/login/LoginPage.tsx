@@ -10,7 +10,7 @@ import { api, type AuthConfigResponse } from '@/lib/api';
 import { useBranding } from '@/lib/branding';
 import { oidcStartHref } from '@/lib/postLoginRedirect';
 import { useT } from '@/lib/i18n';
-import { LOGIN_WIDE_QUERY, shouldFetchSummary, summaryUsable } from '@/lib/loginSummary';
+import { LOGIN_WIDE_QUERY, panelEnabled, shouldFetchSummary, summaryUsable } from '@/lib/loginSummary';
 import { useLoginSummary } from '@/lib/queries/loginSummary';
 import { backdropMode, type GraphSource } from '@/lib/loginTopology/frame';
 import { syntheticGraph } from '@/lib/loginTopology/synthetic';
@@ -136,10 +136,14 @@ export default function LoginPage() {
 
   // v0.10.1907 — özet sütunu. Dar ekranda sorgu hiç kurulmaz (enabled:false).
   const wide = useMediaQuery(LOGIN_WIDE_QUERY);
-  const sumOn = shouldFetchSummary(wide, brand.loginSummary);
+  // v0.10.1917 — topoloji panelden bağımsız: panel kapalıyken de topoloji için
+  // çağrılır; sağ sütun YALNIZ panel ayarı açıkken. Panel kapalıyken cevap
+  // yalnız topoloji taşır (sunucu: enabled=false, ready=true).
+  const sumOn = shouldFetchSummary(wide, brand.loginSummary, brand.loginTopology);
+  const panelOn = sumOn && panelEnabled(brand.loginSummary);
   const summary = useLoginSummary(sumOn);
-  const sumData = summaryUsable(summary.data) ? summary.data : null;
-  const showSide = sumOn && (summary.isPending || !!sumData);
+  const sumData = panelOn && summaryUsable(summary.data) ? summary.data : null;
+  const showSide = panelOn && (summary.isPending || !!sumData);
 
   // v0.10.1909 — arka plan. Veri: özetteki topoloji (varsa ≥ 1 düğüm); özet sonuçlandı ama
   // topoloji yoksa (kapalı/hata/429/ready:false/loginTopology=off değilken veri yok) SENTETİK
@@ -150,7 +154,8 @@ export default function LoginPage() {
     // themeTick: tema değişince yeniden hesapla (data-theme gözlemcisi).
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [themeTick]);
-  const realTopo = sumData?.topology && sumData.topology.nodes.length > 0 ? sumData.topology : null;
+  const topoData = sumOn && summary.data?.ready ? summary.data.topology : undefined;
+  const realTopo = topoData && topoData.nodes.length > 0 ? topoData : null;
   const source: GraphSource = realTopo ? 'real' : (!sumOn || !summary.isPending) ? 'synthetic' : 'pending';
   const bd = backdropMode({ setting: brand.loginTopology, wide, highContrast, reducedMotion: reduced, source });
   const synth = useMemo(() => syntheticGraph(), []);

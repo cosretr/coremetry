@@ -20,8 +20,10 @@ export function LoginTopBar() {
   const t = useT();
   const lang = useLang();
   return (
-    <div className="absolute inset-x-0 top-0 flex items-center justify-between gap-3 px-6 py-4">
-      <div className="flex min-w-0 items-center text-[length:var(--fs-xl)] font-bold tracking-tight">
+    // v0.10.1917 — şeridin boş alanı arka plandaki topolojiye (sürükleme) geçer;
+    // yalnız marka ve araçlar olay alır.
+    <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between gap-3 px-6 py-4">
+      <div className="pointer-events-auto flex min-w-0 items-center text-[length:var(--fs-xl)] font-bold tracking-tight">
         {brand.logoDataUri ? (
           <img src={brand.logoDataUri} alt={brand.appName}
             className="max-h-8 max-w-[160px] object-contain" />
@@ -32,7 +34,7 @@ export function LoginTopBar() {
           </>
         )}
       </div>
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="pointer-events-auto flex shrink-0 items-center gap-2">
         <SegmentedControl<Lang> aria-label={t('login.language')} value={lang}
           onChange={setUserLang} options={LANGS} />
         <ThemeToggle />
