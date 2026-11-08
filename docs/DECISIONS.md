@@ -13456,5 +13456,8 @@ ve sade span detayı (cümle + temel alanlar, öznitelikler katlı). Uygulananla
   Metinler `trace.sum.*` (TR + EN; Türkçe ekler sayıdan bağımsız kalıplarla).- **v0.10.1953 — hızlı atlama.** Span süzgeç çubuğunda "İlk hata · <servis>" (kök hata, ipucu = hata mesajı) ve
   "En yavaş çağrı · <süre>" (en uzun dış çağrı) çipleri; veri 1952'nin özetinden. Tıklama span'i seçer ve
   şelalenin mevcut reveal mekanizmasıyla atalarını açıp satıra kaydırır (aynı çipe ikinci tık da kaydırır;
-  servis odağı atlamayı sıfırlar). Emoji yok (operatör: "Emoji kullanma").
+  servis odağı atlamayı sıfırlar). Emoji yok (operatör: "Emoji kullanma").- **v0.10.1954 — düz cümle özeti KALDIRILDI** (operatör: "metin olarak açıklama olmasın, o zaman CoSRE'ye sor
+  anlamı kalmaz"). `TraceSummaryLine`, `trace.sum.*` anahtarları ve `.trace-sum` stili silindi; hızlı atlama
+  çipleri kalır, hedefleri sadeleşmiş saf `lib/traceJumps`'tan (kök hata + en uzun dış çağrı). Trace sayfasında
+  metinle açıklama/özet yeniden önerme — açıklama CoSRE'nin işi.
 

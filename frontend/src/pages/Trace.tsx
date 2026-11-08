@@ -17,8 +17,7 @@ import { computeCriticalPath } from '@/lib/criticalPath';
 import { traceRepeatGroups, type TraceRepeatGroup } from '@/lib/traceRepeats';
 import { CopyButton } from '@/components/CopyButton';
 import { TraceLogsPanel } from './trace/TraceLogsPanel'; // v0.10.675 — kiosk ile paylaşılan panel
-import { TraceSummaryLine } from './trace/TraceSummaryLine'; // v0.10.1952 — düz cümle özeti
-import { traceSummary, type TraceSummary } from '@/lib/traceSummary';
+import { traceJumps, type TraceJumps } from '@/lib/traceJumps'; // v0.10.1953 — hızlı atlama hedefleri
 import { TraceMetricsPanel } from './trace/TraceMetricsPanel'; // v0.10.913 — pod metrikleri sekmesi
 import { tracePods } from './trace/traceMetrics';
 import { TRACE_METRICS_URL_PARAMS } from './trace/traceMetricsModel'; // v0.10.968 — sekmeden çıkınca silinecek parametreler
@@ -401,8 +400,8 @@ function TraceDetailInner() {
   // seçim / sekme değişimi yeniden hesaplatmaz.
   const repeatGroups = useMemo(
     () => traceRepeatGroups(spans ?? []), [spans]);
-  // v0.10.1952 — düz cümle özeti (saf; spans + tekrar grupları).
-  const traceSum = useMemo(() => (spans && spans.length > 0 ? traceSummary(spans, repeatGroups) : null), [spans, repeatGroups]);
+  // v0.10.1953 — hızlı atlama hedefleri (saf). v0.10.1954: düz cümle özeti kaldırıldı (operatör).
+  const jumpTargets = useMemo(() => (spans && spans.length > 0 ? traceJumps(spans) : null), [spans]);
   const spanMatchIds = useMemo<Set<string> | undefined>(() => {
     const q = spanFilter.trim().toLowerCase();
     if (!q || !spans) return undefined;
@@ -700,9 +699,6 @@ function TraceDetailInner() {
           )}
         </section>
 
-        {/* v0.10.1952 (operatör: mockup "düz cümle özeti") — başlık kartının altında tek paragraf. */}
-        {traceSum && <TraceSummaryLine sum={traceSum} />}
-
         {spans === undefined && <Spinner />}
         {spans === null && <Empty icon="⚠" title="Failed to load trace" />}
         {spans && spans.length === 0 && source === 'mv_only' && stub && (
@@ -816,7 +812,7 @@ function TraceDetailInner() {
                       critFocus={critFocus} onCritFocus={pickCritFocus}
                       repeatGroups={repeatGroups}
                       onRepeatChip={g => { setSpanFilter(g.name); setGroupSimilar(true); }}
-                      jumps={traceSum} onJump={jumpTo} />
+                      jumps={jumpTargets} onJump={jumpTo} />
                     <TraceWaterfall spans={spans} selectedId={selectedId}
                       onSelect={id => setSelectedId(prev => toggleSpanSelection(prev, id))} // v0.10.693 — tekrar tık kapatır (kiosk 685)
                       evidenceIds={evidenceIds}
@@ -930,8 +926,8 @@ function SpanFilterBar({ spans, value, onChange, critCount, critFocus, onCritFoc
   // bozardı ve uyarı rengini enflasyona uğratırdı.
   repeatGroups?: TraceRepeatGroup[];
   onRepeatChip?: (g: TraceRepeatGroup) => void;
-  // v0.10.1953 (operatör: mockup "hızlı atlama") — kök hata ve en uzun dış çağrı (lib/traceSummary).
-  jumps?: TraceSummary | null;
+  // v0.10.1953 (operatör: mockup "hızlı atlama") — kök hata ve en uzun dış çağrı (lib/traceJumps).
+  jumps?: TraceJumps | null;
   onJump?: (spanId: string) => void;
 }) {
   const t = useT();

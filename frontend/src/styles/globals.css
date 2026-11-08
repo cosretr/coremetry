@@ -6407,14 +6407,6 @@ th:hover .tcf-btn, .tcf-btn:focus-visible, .tcf-btn[aria-expanded="true"] { opac
    (.crumbs-actions margin-left:auto) sağa dayalı. Satır sarar; ≤640px'te id
    kendi satırında önce gelir. Yana kayma yok.
    Pin: pages/traceHeaderMeasures.pin.test.ts. */
-/* v0.10.1952 — tekil trace düz cümle özeti (pages/trace/TraceSummaryLine). Kartla aynı yüzey,
-   solda vurgu çizgisi; hata kodu --err metni. */
-.trace-sum {
-  margin: 0 0 10px; padding: 10px 14px; background: var(--bg1); border: 1px solid var(--border);
-  border-left: 3px solid var(--accent); border-radius: var(--radius-lg); font-size: var(--fs-md); line-height: 1.6; color: var(--text);
-}
-.trace-sum b { font-weight: 600; }
-.trace-sum__err { color: var(--err); font-weight: 600; font-family: var(--font-mono); }
 .trace-hdr { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: var(--sp-4); padding: var(--sp-5) var(--sp-7); border-radius: var(--radius); }
 .trace-hdr__actions { justify-content: flex-start; flex-wrap: wrap; gap: var(--sp-3) var(--sp-4); }
 .trace-hdr__actions > .crumbs-actions { flex-shrink: 1; min-width: 0; justify-content: flex-end; }

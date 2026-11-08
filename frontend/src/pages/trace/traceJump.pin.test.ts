@@ -10,7 +10,9 @@ const src = readFileSync(resolve(__dirname, '../Trace.tsx'), 'utf8');
 
 describe('trace hızlı atlama', () => {
   it('çipler özetin kök hatası ve en uzun dış çağrısından', () => {
-    expect(src).toContain('jumps={traceSum} onJump={jumpTo}');
+    expect(src).toContain('jumps={jumpTargets} onJump={jumpTo}');
+    // v0.10.1954 — düz cümle özeti kaldırıldı (operatör: açıklama CoSRE'nin işi).
+    expect(src).not.toMatch(/TraceSummaryLine|trace-sum\b/);
     expect(src).toMatch(/data-testid="trace-jump-error"[\s\S]{0,200}onJump\(jumps\.firstError!\.spanId\)/);
     expect(src).toMatch(/data-testid="trace-jump-slow"[\s\S]{0,120}onJump\(jumps\.hot!\.spanId\)/);
   });

@@ -574,15 +574,6 @@ const EN: Catalog = {
   'endpoint.opcard.code.matchNote': 'Matches are heuristic: same kind + the literal route / topic / Feign client name in code, or the only call of its kind. Field names and types only — no values.',
   // v0.10.1514 — trace başlığı (A): ölçü kümesi + kimlik satırı.
   'trace.hdr.summary':     'Trace summary',
-  // v0.10.1952 — tekil trace düz cümle özeti (pages/trace/TraceSummaryLine).
-  'trace.sum.took':   'This request took {d}.',
-  'trace.sum.failed': 'This request took {d} and failed{http}.',
-  'trace.sum.http':   ' (HTTP {s})',
-  'trace.sum.hot':    '{p}% of the time was spent in the {svc} → {target} call ({d}).',
-  'trace.sum.err1':   'The error starts in {svc}: {msg}.',
-  'trace.sum.errN':   '{n} errors; the first starts in {svc}: {msg}.',
-  'trace.sum.noMsg':  'no message',
-  'trace.sum.repeat': '{n} similar {name} calls were made.',
   // v0.10.1953 — hızlı atlama çipleri.
   'trace.jump.err':   'First error · {svc}',
   'trace.jump.slow':  'Slowest call · {d}',
@@ -1230,14 +1221,6 @@ const TR: Catalog = {
   'endpoint.opcard.code.matchNote': 'Eşleşmeler sezgisel: aynı tür + koddaki literal rota / topic / Feign istemci adı ya da türünün tek çağrısı. Yalnız alan adı ve tipi — değer yok.',
   // v0.10.1514 — trace başlığı (A): ölçü kümesi + kimlik satırı.
   'trace.hdr.summary':     'Trace özeti',
-  'trace.sum.took':   'Bu istek {d} sürdü.',
-  'trace.sum.failed': 'Bu istek {d} sürdü ve hatayla bitti{http}.',
-  'trace.sum.http':   ' (HTTP {s})',
-  'trace.sum.hot':    'Sürenin %{p} kadarı {svc} → {target} çağrısında geçti ({d}).',
-  'trace.sum.err1':   'Hata {svc} servisinde başlıyor: {msg}.',
-  'trace.sum.errN':   '{n} hata var; ilki {svc} servisinde başlıyor: {msg}.',
-  'trace.sum.noMsg':  'mesaj yok',
-  'trace.sum.repeat': '{n} benzer {name} çağrısı yapıldı.',
   'trace.jump.err':   'İlk hata · {svc}',
   'trace.jump.slow':  'En yavaş çağrı · {d}',
   'trace.hdr.identity':    'İş kimliği',
