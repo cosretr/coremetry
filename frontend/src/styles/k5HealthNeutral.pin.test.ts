@@ -192,9 +192,9 @@ describe('K5/K3 — açık kip seçim dilinde (.live-on, v0.10.1318)', () => {
     expect(logs).toContain("'live-on");
     expect(logs).not.toMatch(/variant=\{p?\.?live \?/);
     expect(readFileSync(resolve(__dirname, '../pages/Logs.tsx'), 'utf8')).toContain('live={live} onToggleLive={toggleLive}');
-    const tint = bodyOf('button.sec.is-active');
-    expect(tint).toMatch(/color:\s*var\(--accent2\)/);
-    expect(tint).toMatch(/background:\s*var\(--accent-bg\)/);
+    const tint = bodyOf('button.sec.is-active'); // v0.10.1950 — Öneri B: seçim DOLU birincil
+    expect(tint).toMatch(/color:\s*var\(--on-accent\)/);
+    expect(tint).toMatch(/background:\s*var\(--accent\)/);
   });
 
   it('okunurluk: --accent2 / --accent-bg ≥ 4.5 her temada', () => {

@@ -125,24 +125,27 @@ describe('Y3 — düz tablo başlıkları', () => {
   });
 });
 
-describe('Y4 — dolgusuz ikincil', () => {
-  it('`button.sec` / `a.sec` / `.ib-sec` şeffaf, kenar --border-control', () => {
+// v0.10.1950 — Buton Öneri B (operatör 2026-11-06) eski sayfalarda: Y4'ün dolgusuz ikincili yerine
+// shadcn `outline` ile aynı TONLU ikincil (sade palet kuralını butonlar için aşar).
+describe('Y4 → Öneri B — tonlu ikincil', () => {
+  it('`button.sec` / `a.sec` / `.ib-sec` tonlu: --accent-bg zemin, --accent2 yazı, --accent-border kenar', () => {
     for (const sel of ['button.sec', 'a.sec', '.btn-icon.ib-sec']) {
       const body = bodyOf(sel);
-      expect(body, sel).toMatch(/background:\s*transparent/);
-      expect(body, sel).toMatch(/var\(--border-control\)/);
+      expect(body, sel).toMatch(/background:\s*var\(--accent-bg\)/);
+      expect(body, sel).toMatch(/color:\s*var\(--accent2\)/);
+      expect(body, sel).toMatch(/var\(--accent-border\)/);
     }
   });
 
-  it('hover bg2 + --border-strong, basılı bg3 (her biri background yazar)', () => {
+  it('hover kenarı --accent2, basılı --accent (her biri background yazar)', () => {
     for (const [hover, active] of [
       ['button.sec:hover:not(:disabled)', 'button.sec:active:not(:disabled)'],
       ['a.sec:hover', 'a.sec:active'],
       ['.btn-icon.ib-sec:hover:not(:disabled)', '.btn-icon.ib-sec:active:not(:disabled)'],
     ]) {
-      expect(bodyOf(hover), hover).toMatch(/background:\s*var\(--bg2\)/);
-      expect(bodyOf(hover), hover).toMatch(/border-color:\s*var\(--border-strong\)/);
-      expect(bodyOf(active), active).toMatch(/background:\s*var\(--bg3\)/);
+      expect(bodyOf(hover), hover).toMatch(/background:\s*var\(--accent-bg\)/);
+      expect(bodyOf(hover), hover).toMatch(/border-color:\s*var\(--accent2\)/);
+      expect(bodyOf(active), active).toMatch(/border-color:\s*var\(--accent\)/);
     }
   });
 

@@ -348,7 +348,7 @@ describe('K3 — active (v0.10.1318)', () => {
     expect(b.getAttribute('aria-pressed')).toBe('mixed');
   });
 
-  it('CSS: button.sec.is-active tint (accent-bg/accent2/accent-border), dolgu değil', () => {
+  it('CSS: button.sec.is-active DOLU birincil (v0.10.1950 Öneri B; shadcn aria-pressed ile aynı)', () => {
     const css = readFileSync(
       resolve(__dirname, '..', '..', 'styles', 'globals.css'), 'utf8')
       .replace(/\/\*[\s\S]*?\*\//g, '');
@@ -356,10 +356,9 @@ describe('K3 — active (v0.10.1318)', () => {
       .find(m => m[1].split(',').map(s => s.trim()).includes('button.sec.is-active'));
     expect(rule, 'button.sec.is-active kuralı yok').toBeDefined();
     const body = rule![2];
-    expect(body).toMatch(/background:\s*var\(--accent-bg\)/);
-    expect(body).toMatch(/color:\s*var\(--accent2\)/);
-    expect(body).toMatch(/border-color:\s*var\(--accent-border\)/);
-    expect(body).not.toMatch(/background:\s*var\(--accent\)/);
+    expect(body).toMatch(/background:\s*var\(--accent\)/);
+    expect(body).toMatch(/color:\s*var\(--on-accent\)/);
+    expect(body).toMatch(/border-color:\s*var\(--accent\)/);
     // Seçili + disabled solmaz; yüklenen buton kendi kuralında.
     expect(css).toMatch(/button\.is-active:disabled:not\(\[aria-busy="true"\]\)\s*\{[^}]*opacity:\s*1/);
   });

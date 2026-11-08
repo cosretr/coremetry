@@ -13423,3 +13423,10 @@ arası çizgiler ekranı kesiyor, 360 dışındaki servisler adsız soluk yıld�
   bağlantılı düğümde de servis yıldızında da yalnız ad, zemin çerçeveli etiket olarak. Ölü kod kalmadı: `trafficLevel`,
   `cardPlacement`, `login.topo.kind/level/links` anahtarları ve cevaptaki `star_links` silindi. Kart yeniden önerme.
 
+## 2026-11-08 — v0.10.1950 — Buton Öneri B eski sayfalarda (operatör: kuyruk "6'yı yap")
+
+1888'de shadcn butonlarına gelen Öneri B, taşınmamış sayfalardaki eski `ui/Button`'a da uygulandı: `button.sec`,
+`a.sec`, `.btn-icon.ib-sec` tonlu (--accent-bg / --accent2 / --accent-border; hover kenar --accent2); seçili ikincil
+(`.is-active`) dolu birincil (--accent / --on-accent). Çipler (`.btn-chip`) hap biçimli. shadcn varsayılan buton
+boyu 36 → 32 px. Y4 "dolgusuz ikincil" ve K3 "seçim tonu" pinleri Öneri B'ye güncellendi. Geri dönüş tek commit.
+

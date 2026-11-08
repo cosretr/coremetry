@@ -935,9 +935,11 @@ summary:focus-visible,
    şeffaf < hover bg2 + --border-strong < basılı bg3. Her :hover/:active
    `background` YAZAR — yoksa `button:hover` (0,2,1) accent'e boyar.
    İçeriğin ÜSTÜNDE yüzen ikinciller opak kalsın diye `.is-overlay` aşağıda. */
-button.sec { background: transparent; color: var(--text); border: 1px solid var(--border-control); transition: background .15s, border-color .15s; }
-button.sec:hover:not(:disabled) { background: var(--bg2); border-color: var(--border-strong); }
-button.sec:active:not(:disabled) { background: var(--bg3); }
+/* v0.10.1950 — Buton Öneri B eski sayfalarda: ikincil shadcn `outline` ile aynı TONLU görünüm
+   (--accent-bg zemin, --accent2 yazı, --accent-border kenar; hover kenar --accent2). */
+button.sec { background: var(--accent-bg); color: var(--accent2); border: 1px solid var(--accent-border); transition: background .15s, border-color .15s; }
+button.sec:hover:not(:disabled) { background: var(--accent-bg); border-color: var(--accent2); }
+button.sec:active:not(:disabled) { background: var(--accent-bg); border-color: var(--accent); }
 /* v0.9.1210 (operatör bildirimi) — bağlantı-düğme: `<Link className="sec">`
    DÖRT çağrı yerinde yaşıyordu ama yukarıdaki kural button-scoped —
    anchor'a sınıf SESSİZCE hiç uygulanmıyordu; "Traces → / Explore →"
@@ -946,14 +948,14 @@ button.sec:active:not(:disabled) { background: var(--bg3); }
    yüzeyini birlikte giyer; underline yok (düğme, metin-link değil). */
 a.sec {
   display: inline-flex; align-items: center; gap: 4px;
-  background: transparent; color: var(--text); border: 1px solid var(--border-control);
+  background: var(--accent-bg); color: var(--accent2); border: 1px solid var(--accent-border);
   border-radius: var(--radius-sm); padding: 5px 14px; font-size: 13px;
   text-decoration: none; transition: background .15s, border-color .15s;
 }
-a.sec:hover { background: var(--bg2); border-color: var(--border-strong); }
+a.sec:hover { background: var(--accent-bg); border-color: var(--accent2); } /* v0.10.1950 — Öneri B tonlu */
 /* v0.10.1418'in a.sec.op-chip'i v0.10.1514'te kalktı: operasyon adı artık
    kimlik çipinde (.idchip, trace başlığı bloğu). */
-a.sec:active { background: var(--bg3); }
+a.sec:active { background: var(--accent-bg); border-color: var(--accent); }
 /* a.accent — `.sec` ikizinin accent kardeşi (v0.9.1372).
    v0.9.1210'un dersi bir varyant sonra aynen tekrarlanacaktı: `.accent`
    yalnız `button.accent` olarak tanımlıydı, dolayısıyla bir <Link>'e
@@ -1112,9 +1114,9 @@ button.xs.copy-btn { min-height: 0; }
 .btn-icon.ib-ghost:hover:not(:disabled) { background: var(--bg2); color: var(--text); }
 /* v0.10.928 (Y4) — `button.sec` ile aynı dolgusuz dil. `.btn-icon.active`in
    ÜSTÜNDE kalmalı: ikisi de (0,2,0), açık anahtarın tint'ini sıra kazandırır. */
-.btn-icon.ib-sec { background: transparent; color: var(--text); border-color: var(--border-control); }
-.btn-icon.ib-sec:hover:not(:disabled) { background: var(--bg2); border-color: var(--border-strong); }
-.btn-icon.ib-sec:active:not(:disabled) { background: var(--bg3); }
+.btn-icon.ib-sec { background: var(--accent-bg); color: var(--accent2); border-color: var(--accent-border); } /* v0.10.1950 — Öneri B */
+.btn-icon.ib-sec:hover:not(:disabled) { background: var(--accent-bg); border-color: var(--accent2); }
+.btn-icon.ib-sec:active:not(:disabled) { background: var(--accent-bg); border-color: var(--accent); }
 /* `bare` is the honest replacement for `all: unset`: no chrome at all,
    but the focus ring and a colour hover survive. */
 /* `background` here is NOT decoration — it is the fix for v0.9.895.
@@ -1179,8 +1181,9 @@ button.xs.copy-btn { min-height: 0; }
    bg2'ye çekerdi; ghost metni de --text'e). Seçili + disabled (problem kararı:
    işaretli seçenek yeniden tıklanamaz) %40'a SOLMAZ — seçim okunur kalmalı;
    yüklenen buton (aria-busy) kendi kuralında. */
-button.sec.is-active, button.ghost.is-active { color: var(--accent2); background: var(--accent-bg); border-color: var(--accent-border); }
-button.sec.is-active:hover:not(:disabled), button.ghost.is-active:hover:not(:disabled) { color: var(--accent2); background: var(--accent-bg); border-color: var(--accent); }
+/* v0.10.1950 — Öneri B: seçili ikincil = DOLU birincil (shadcn aria-pressed ile aynı); ton artık boştaki görünüm. */
+button.sec.is-active, button.ghost.is-active { color: var(--on-accent); background: var(--accent); border-color: var(--accent); }
+button.sec.is-active:hover:not(:disabled), button.ghost.is-active:hover:not(:disabled) { color: var(--on-accent); background: var(--accent-hover); border-color: var(--accent-hover); }
 button.is-active:disabled:not([aria-busy="true"]) { opacity: 1; cursor: default; }
 /* v0.10.928 (Y4) — içeriğin ÜSTÜNDE yüzen ikinciller (kiosk çıkışı, kompakt
    panel ⋯, kod bloğu Kopyala) şeffaf kalırsa arkadaki çizgi/kod glifin
@@ -1302,7 +1305,7 @@ button.sec.is-overlay, .btn-icon.ib-sec.is-overlay { background: var(--bg1); box
 .btn-chip {
   display: inline-flex; align-items: center; gap: 5px;
   background: var(--bg3); color: var(--text);
-  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  border: 1px solid var(--border); border-radius: 999px; /* v0.10.1950 — Öneri B: çipler hap biçimli */
   cursor: pointer; line-height: 1.4; max-width: 100%;
   transition: background .15s, color .15s, border-color .15s;
 }
