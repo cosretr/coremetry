@@ -87,8 +87,14 @@ describe('/logs trace çipi + önizleme (v0.10.1883)', () => {
 
   it('menü: Bu trace\'e filtrele → traceId URL\'de', async () => {
     await mountLogs();
-    const chip = host!.querySelector('[data-testid="trace-chip"]') as HTMLButtonElement;
-    await act(async () => { chip.click(); }); await settle();
+    // v0.10.1968 — çip trace sayfasına GERÇEK bağlantı (tık gider); kart/menü üzerine gelince açılır.
+    const chip = host!.querySelector('[data-testid="trace-chip"]') as HTMLAnchorElement;
+    expect(chip.tagName).toBe('A');
+    expect(chip.getAttribute('href')).toBe(`/trace?id=${A}`);
+    await act(async () => {
+      chip.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+      await new Promise(r => setTimeout(r, 300));
+    }); await settle();
     const btn = [...document.querySelectorAll('button')].find(b => b.textContent?.startsWith("Bu trace'e filtrele"))!;
     expect(document.body.textContent).toContain('POST /api/orders');
     await act(async () => { btn.click(); }); await settle();

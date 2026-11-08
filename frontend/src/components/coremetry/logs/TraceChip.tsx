@@ -10,6 +10,7 @@
 // "Bu trace'e filtrele (f)", "Trace görünümünde aç (t)", "trace_id kopyala".
 // Servis SAYISI gösterilmez (MV'de yok — dilim 3.9; uydurma yok).
 import { useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Button } from '@/components/shadcn/button';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/coremetry/overlay';
 import { KeyValue } from '@/components/coremetry/KeyValue';
@@ -44,6 +45,12 @@ export interface TraceChipProps {
   preview?: TracePreview;
   onFilter?(traceId: string): void;
   onOpen?(traceId: string): void;
+  /**
+   * v0.10.1968 (operatör: "eskiden log sayfasında trace'e basınca gidiyordu, artık çalışmıyor") —
+   * verilirse çip GERÇEK bağlantıdır: tık trace sayfasına gider (yeni sekme çalışır), kart ve menü
+   * üzerine gelince açılır. Verilmezse tık kartı açar/kapar (eski davranış).
+   */
+  href?: string;
 }
 
 const TONE: Record<string, string> = {
@@ -53,11 +60,13 @@ const TONE: Record<string, string> = {
   plain: 'text-(--text2)',
 };
 
-export function TraceChip({ traceId, preview, onFilter, onOpen }: TraceChipProps) {
+export function TraceChip({ traceId, preview, onFilter, onOpen, href }: TraceChipProps) {
   const [open, setOpen] = useState(false);
   const timer = useRef<number | null>(null);
   if (preview?.state === 'unrecognized') {
-    return <span className="font-mono text-(--text2)" title="Tanınmayan trace kimliği biçimi">{traceId}</span>;
+    return href
+      ? <Link to={href} className="font-mono" title="Tanınmayan trace kimliği biçimi" onClick={e => e.stopPropagation()}>{traceId}</Link>
+      : <span className="font-mono text-(--text2)" title="Tanınmayan trace kimliği biçimi">{traceId}</span>;
   }
   const v = traceChipView(traceId, preview);
   const hold = (next: boolean, ms: number) => {
@@ -67,12 +76,22 @@ export function TraceChip({ traceId, preview, onFilter, onOpen }: TraceChipProps
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverAnchor asChild>
-        <Button variant="ghost" size="xs" className={'h-5 px-1 font-mono ' + TONE[v.tone]} title={v.title}
-          aria-haspopup="dialog" aria-expanded={open} data-testid="trace-chip" data-state-kind={preview?.state ?? 'loading'}
-          onMouseEnter={() => hold(true, 250)} onMouseLeave={() => hold(false, 200)}
-          onClick={e => { e.stopPropagation(); setOpen(o => !o); }}>
-          {v.text}
-        </Button>
+        {href ? (
+          <Button asChild variant="ghost" size="xs" className={'h-5 px-1 font-mono ' + TONE[v.tone]}>
+            <Link to={href} title={`${v.title} — tıkla: trace sayfası`} data-testid="trace-chip" data-state-kind={preview?.state ?? 'loading'}
+              onMouseEnter={() => hold(true, 250)} onMouseLeave={() => hold(false, 200)}
+              onClick={e => e.stopPropagation()}>
+              {v.text}
+            </Link>
+          </Button>
+        ) : (
+          <Button variant="ghost" size="xs" className={'h-5 px-1 font-mono ' + TONE[v.tone]} title={v.title}
+            aria-haspopup="dialog" aria-expanded={open} data-testid="trace-chip" data-state-kind={preview?.state ?? 'loading'}
+            onMouseEnter={() => hold(true, 250)} onMouseLeave={() => hold(false, 200)}
+            onClick={e => { e.stopPropagation(); setOpen(o => !o); }}>
+            {v.text}
+          </Button>
+        )}
       </PopoverAnchor>
       <PopoverContent align="start" className="grid w-80 gap-2 p-3 text-sm" aria-label="Trace önizlemesi"
         onMouseEnter={() => hold(true, 0)} onMouseLeave={() => hold(false, 200)} onClick={e => e.stopPropagation()}>
@@ -97,6 +116,7 @@ export function TraceChip({ traceId, preview, onFilter, onOpen }: TraceChipProps
         )}
         <div className="grid gap-0.5 border-t pt-2">
           {onFilter && <Button variant="ghost" size="sm" className="justify-between" onClick={() => { setOpen(false); onFilter(traceId); }}>Bu trace'e filtrele <kbd className="kbd">f</kbd></Button>}
+          {href && <Button asChild variant="ghost" size="sm" className="justify-start"><Link to={href} onClick={() => setOpen(false)}>Trace sayfasında aç</Link></Button>}
           {onOpen && <Button variant="ghost" size="sm" className="justify-between" onClick={() => { setOpen(false); onOpen(traceId); }}>Trace görünümünde aç <kbd className="kbd">t</kbd></Button>}
           <span className="inline-flex items-center gap-2 px-3 text-[length:var(--fs-sm)]">trace_id kopyala <CopyButton value={traceId} title="trace_id kopyala" /></span>
         </div>

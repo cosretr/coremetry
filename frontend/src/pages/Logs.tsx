@@ -60,6 +60,7 @@ import { LogsQueryBar } from './logs/LogsQueryBar';
 import { parseLogQueryError, logQueryErrorMessage } from '@/lib/logQueryError';
 import { readLogsQueryHistory, recordLogsQuery } from '@/lib/logsQueryHistory';
 import { LOGS_DEFAULT_DISPLAY, readLogsDisplay, writeLogsDisplay, pageSlice } from '@/lib/logsDisplay';
+import { traceHref } from '@/lib/traceHref'; // v0.10.1968 — trace çipi trace sayfasına
 import { DisplayOptions, LoadStatus, FieldSidebar, LogDetailSheet, LogContextSection, LogExceptionSection, TraceChip, TraceLogsView, fmtTraceDuration, HistogramMarkers } from '@/components/coremetry/logs';
 import { useSheetParam } from '@/components/coremetry/DetailSheet';
 import { AIExplainButton } from '@/components/ai/AIExplainButton';
@@ -1710,13 +1711,13 @@ function LogsInner() {
               <span className="lt-group-text">trace_id yok · {count.toLocaleString('tr-TR')} log (bu örnekte)</span>
             ) : (
               <span className="lt-group-text">
-                <TraceChip traceId={k} preview={tracePreviews?.[k]} onFilter={tid => filterToTrace(tid)} onOpen={tid => openTraceView(tid, l.timestamp)} />
+                <TraceChip traceId={k} preview={tracePreviews?.[k]} href={traceHref(k)} onFilter={tid => filterToTrace(tid)} onOpen={tid => openTraceView(tid, l.timestamp)} />
                 <span>{traceGroupSummary(tracePreviews?.[k], count, fmtTraceDuration)}</span>
               </span>
             );
           } : undefined}
           renderTrace={l => (
-            <TraceChip traceId={l.traceId} preview={tracePreviews?.[l.traceId]}
+            <TraceChip traceId={l.traceId} preview={tracePreviews?.[l.traceId]} href={traceHref(l.traceId)} /* v0.10.1968 — tık trace sayfasına */
               onFilter={tid => filterToTrace(tid)} onOpen={tid => openTraceView(tid, l.timestamp)} />
           )}
           expandedIds={NO_EXPANDED}

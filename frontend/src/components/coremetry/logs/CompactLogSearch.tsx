@@ -44,6 +44,7 @@ import { LogDetailSheet } from './LogDetailSheet';
 import { LogContextSection } from './LogContextSection';
 import { LogExceptionSection } from './StackBlock';
 import { TraceChip } from './TraceChip';
+import { traceHref } from '@/lib/traceHref';
 
 const PAGE = 200;
 const NO_LOGS: LogRow[] = [];
@@ -279,7 +280,7 @@ export function CompactLogSearch({ service, range, from, to, env, onZoom, onZoom
           <LogTable logs={showRows ? rows : NO_LOGS} state={showRows ? undefined : state} columns={cols}
             exceptions
             renderTrace={l => (
-              <TraceChip traceId={l.traceId} preview={previewQ.data?.traces?.[l.traceId]}
+              <TraceChip traceId={l.traceId} preview={previewQ.data?.traces?.[l.traceId]} href={traceHref(l.traceId)} /* v0.10.1968 */
                 onOpen={tid => openTraceView(tid, l.timestamp)} />
             )}
             expandedIds={NO_EXPANDED}
