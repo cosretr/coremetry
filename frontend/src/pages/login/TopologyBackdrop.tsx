@@ -60,6 +60,8 @@ function readColors(): Colors {
 
 const TAU = Math.PI * 2;
 const HOVER_PX = 14;
+/** v0.10.1985 — düğüm halesi opaklık çarpanı (1983'te kaldırılan halenin ~%40'ı). */
+const HALO_K = 0.4;
 
 function halo(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, color: string, a: number) {
   const g = ctx.createRadialGradient(x, y, 0, x, y, r);
@@ -178,13 +180,20 @@ function drawFrame(ctx: CanvasRenderingContext2D, f: Frame): { pos: Pt[]; starPo
     const nd = g.nodes[i], p = pos[i], depth = depthOf(p.z), focus = i === hover;
     // v0.10.1983 (operatör: "yıldızların çevresinde gölge olmasın, bir tık daha küçük") — hale yok, %85 boy.
     const r = nodeRadius(nd, depth, focus) * 0.85, a = nodeAlpha(nd, depth, focus);
+    // v0.10.1985 (operatör: "noktaların çevresinde hale tekrar olabilir ama daha az") — hale geri, eskinin
+    // ~%40 opaklığı ve daha dar yarıçapla (HALO_K).
     if (nd.tier === 'queue') { // kuyruk: turkuaz halka
+      halo(ctx, p.x, p.y, r * 2.2, col.mq, HALO_K * (0.08 + 0.22 * col.glow) * (0.5 + depth));
       ctx.globalAlpha = a; ctx.strokeStyle = col.mq; ctx.lineWidth = 1.4;
       ctx.beginPath(); ctx.arc(p.x, p.y, r * 1.15, 0, TAU); ctx.stroke(); continue;
     }
-    if (nd.tier === 'db') { // veritabanı: mor yuvarlak nokta
+    if (nd.tier === 'db') { // veritabanı: mor yuvarlak nokta + hafif hale
+      halo(ctx, p.x, p.y, r * 2.2, col.arm, HALO_K * (0.1 + 0.25 * col.glow) * (0.5 + depth));
       ctx.globalAlpha = a; ctx.fillStyle = col.arm;
       ctx.beginPath(); ctx.arc(p.x, p.y, r * 0.9, 0, TAU); ctx.fill(); continue;
+    }
+    if (nd.tier === 'gw' || nd.weight > 0.55 || focus) {
+      halo(ctx, p.x, p.y, r * 2.8, col.star, HALO_K * (0.12 + 0.3 * col.glow) * (0.35 + 0.65 * nd.weight) * (0.5 + depth));
     }
     ctx.globalAlpha = a; ctx.fillStyle = col.star;
     ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, TAU); ctx.fill();
