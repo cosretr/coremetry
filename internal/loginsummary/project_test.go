@@ -200,7 +200,9 @@ func TestProjectThroughputCarriesNoLabels(t *testing.T) {
 	if len(resp.HTTP24h.Throughput.GroupKey) != 0 {
 		t.Errorf("grup anahtarı boş olmalı: %v", resp.HTTP24h.Throughput.GroupKey)
 	}
-	assertAbsent(t, mustJSON(t, resp), []string{"evil-service", "503", "http_response_status_code"}, "hız serisi etiketi")
+	// v0.10.1966 — çıplak "503" saat damgalarında da geçer (…150300… → Release kapısı 1961'de kırıldı);
+	// etiket JSON'da kaçışlı tırnak içinde taşınırdı, aranan biçim o.
+	assertAbsent(t, mustJSON(t, resp), []string{"evil-service", `\"503\"`, "http_response_status_code"}, "hız serisi etiketi")
 }
 
 func TestProjectActivityAndComponents(t *testing.T) {
