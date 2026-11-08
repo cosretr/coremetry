@@ -210,3 +210,14 @@ func TestKafkaDiscoverFilter(t *testing.T) {
 		t.Fatal("ters pencere")
 	}
 }
+
+// v0.10.1974 — consumer metriği topic adında "." yerine "_" yazar: noktalı topic iki yazımı seçer.
+func TestKafkaTopicFilterBothSpellings(t *testing.T) {
+	f := kafkaTopicFilter("orders.events")
+	if f.Op != "IN" || len(f.Values) != 2 || f.Values[0] != "orders.events" || f.Values[1] != "orders_events" {
+		t.Fatalf("noktalı: %+v", f)
+	}
+	if g := kafkaTopicFilter("audit_log"); g.Op != "=" || len(g.Values) != 1 {
+		t.Fatalf("noktasız: %+v", g)
+	}
+}

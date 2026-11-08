@@ -23,12 +23,12 @@ const base: DepRow = {
 
 let host: HTMLDivElement | null = null;
 let root: Root | null = null;
-function mount(rows: DepRow[]): HTMLElement {
+function mount(rows: DepRow[], pageSize?: number, onPageRows?: (r: DepRow[]) => void): HTMLElement {
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
   act(() => {
-    root!.render(<MemoryRouter><DependenciesTable rows={rows} kind="queue" range={RANGE} /></MemoryRouter>);
+    root!.render(<MemoryRouter><DependenciesTable rows={rows} kind="queue" range={RANGE} pageSize={pageSize} onPageRows={onPageRows} /></MemoryRouter>);
   });
   return host;
 }
@@ -56,5 +56,23 @@ describe('Kafka UI kolonları', () => {
     expect(row.querySelectorAll('td').length).toBe(el.querySelectorAll('thead th').length);
     expect(row.textContent).toContain('a, b +1');
     expect(row.textContent).toContain('12');
+  });
+});
+
+// v0.10.1974 — sayfalı tablo: sayfa boyu kadar satır, sayfa satırları ebeveyne bildirilir.
+describe('sayfalama', () => {
+  it('60 satır, sayfa 50 → 50 satır + sayfa şeridi', () => {
+    let seen: DepRow[] = [];
+    const rows = Array.from({ length: 60 }, (_, i) => ({ ...base, destination: `t${i}`, spanCount: 1000 - i }));
+    const el = mount(rows, 50, r => { seen = r; });
+    expect(el.querySelectorAll('tbody tr.cv-row').length).toBe(50);
+    expect(el.querySelector('[data-pager-mode="offset"]')).not.toBeNull();
+    expect(seen).toHaveLength(50);
+  });
+  it('sayfa boyu verilmezse hepsi', () => {
+    const rows = Array.from({ length: 60 }, (_, i) => ({ ...base, destination: `t${i}` }));
+    const el = mount(rows);
+    expect(el.querySelectorAll('tbody tr.cv-row').length).toBe(60);
+    expect(el.querySelector('[data-pager-mode="offset"]')).toBeNull();
   });
 });

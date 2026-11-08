@@ -8,16 +8,24 @@
 import type { SpanMetricSeries } from '@/lib/types';
 import { lastValue, seriesLabels } from '@/lib/httpMetrics';
 
+/**
+ * v0.10.1974 — topic eşleme anahtarı. Kafka Java istemcisi consumer topic metriklerinde (records_consumed,
+ * records_lag…) topic adındaki "." karakterini "_" yapar; producer metrikleri adı olduğu gibi yazar.
+ * Span'deki ad ("orders.events") ile iki yazım da bu anahtarda buluşur.
+ */
+export const kafkaTopicKey = (t: string): string => t.replace(/\./g, '_');
+
 export const TOPIC_LAG_EXPR = 'max by (topic) (kafka_consumer_records_lag_max)';
 
-/** topic → son lag değeri (0 dahil; değeri olmayan seri yok sayılır). */
+/** kafkaTopicKey(topic) → son lag değeri (0 dahil; değeri olmayan seri yok sayılır). */
 export function topicLagMap(series: SpanMetricSeries[] | null | undefined): Map<string, number> {
   const out = new Map<string, number>();
   for (const s of series ?? []) {
     const t = seriesLabels(s).topic;
     const v = lastValue(s);
     if (!t || v === null || v < 0) continue;
-    out.set(t, Math.max(out.get(t) ?? 0, v));
+    const k = kafkaTopicKey(t); // v0.10.1974 — consumer metriği "." yerine "_" yazar
+    out.set(k, Math.max(out.get(k) ?? 0, v));
   }
   return out;
 }

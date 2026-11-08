@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useEscLayer } from '@/lib/escLayer';
 import { SavedViewsBar } from '@/components/SavedViewsBar';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -16,7 +16,7 @@ import type { MessagingInstance, MessagingOverview } from '@/lib/types';
 import { PageShell } from '@/components/coremetry/PageShell';
 import { useHttpPromql } from '@/lib/queries/httpMetrics';
 import { topicLagMap, sortByLag } from './messaging/topicLag'; // v0.10.1959
-import { KAFKA_LIST_ITEMS, kafkaTopicStats, kafkaListSummary, type KafkaListSummary } from './messaging/kafkaOverview'; // v0.10.1961
+import { KAFKA_LIST_ITEMS, kafkaTopicStats, kafkaListSummary, kafkaSvcNameItems, kafkaSvcNames, kafkaTopicKey, type KafkaListSummary, type KafkaTopicStat } from './messaging/kafkaOverview'; // v0.10.1961
 import { KafkaConsumersTable } from './messaging/KafkaConsumersTable';
 import { Tabs, TabsList, TabsTrigger } from '@/components/shadcn/tabs';
 import { HttpStat } from '@/pages/service/httpMetricsViz';
@@ -129,8 +129,17 @@ export default function MessagingPage() {
   const lagMap = useMemo(() => topicLagMap(kq.data.lag), [kq.data.lag]);
   const kStats = useMemo(() => kafkaTopicStats(kq.data),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- veri kimliği sorgu sonuçları
-    [kq.data.produce, kq.data.consume, kq.data.sendErr, kq.data.parts, kq.data.prodSvc, kq.data.consSvc]);
-  const kSummary = useMemo(() => kafkaListSummary(kStats, lagMap), [kStats, lagMap]);
+    [kq.data.produce, kq.data.consume, kq.data.sendErr, kq.data.parts, kq.data.prodCnt, kq.data.consCnt]);
+  const consTotal = kq.data.consTotal?.[0]?.points?.at(-1)?.value ?? 0;
+  const kSummary = useMemo(() => kafkaListSummary(kStats, lagMap, Math.round(consTotal)), [kStats, lagMap, consTotal]);
+  // v0.10.1974 — servis ADLARI yalnız görünen sayfanın Kafka topic'leri için (seri tavanı aşılmasın).
+  const [pageTopics, setPageTopics] = useState<string[]>([]);
+  const onPageRows = useCallback((rs: DepRow[]) => {
+    setPageTopics(rs.filter(r => r.system === 'kafka' && r.destination).map(r => r.destination!));
+  }, []);
+  const nameItems = useMemo(() => kafkaSvcNameItems(pageTopics), [pageTopics]);
+  const nq = useHttpPromql(nameItems, win, nameItems.length > 0);
+  const svcNames = useMemo(() => kafkaSvcNames(nq.data.prodSvc, nq.data.consSvc), [nq.data.prodSvc, nq.data.consSvc]);
   const view: MsgView = kSummary && params.get('view') === 'consumers' ? 'consumers' : 'topics';
   const setView = (v: MsgView) => setParams(prev => {
     const next = new URLSearchParams(prev);
@@ -180,22 +189,24 @@ export default function MessagingPage() {
         priorP50Ms: d.priorP50Ms,
         priorP99Ms: d.priorP99Ms,
         callers: d.callers ?? [],
-        lag: d.system === 'kafka' ? lagMap.get(d.destination) : undefined,
-        kafka: d.system === 'kafka' ? kStats.get(d.destination) : undefined,
+        // v0.10.1974 — eşleme anahtarı: consumer metriği topic adında "." yerine "_" yazar.
+        lag: d.system === 'kafka' ? lagMap.get(kafkaTopicKey(d.destination)) : undefined,
+        kafka: d.system === 'kafka' ? withNames(kStats.get(kafkaTopicKey(d.destination)), svcNames.get(kafkaTopicKey(d.destination))) : undefined,
       };
     });
     // v0.10.1959 — lag'i olan topic'ler üstte (azalan), gerisi çağrı hacmine göre.
     return sortByLag(mapped);
-  }, [list, windowMins, lagMap, kStats]);
+  }, [list, windowMins, lagMap, kStats, svcNames]);
   // Consumers sekmesinde topic bağlantısı: span tarafında topic tek cluster'daysa o cluster.
   const clusterOf = useMemo(() => {
     const m = new Map<string, string | null>();
     for (const d of list) {
       if (d.system !== 'kafka') continue;
-      const prev = m.get(d.destination);
-      m.set(d.destination, prev === undefined || prev === d.cluster ? d.cluster : null);
+      const k = kafkaTopicKey(d.destination);
+      const prev2 = m.get(k);
+      m.set(k, prev2 === undefined || prev2 === d.cluster ? d.cluster : null);
     }
-    return (topic: string) => m.get(topic) ?? undefined;
+    return (topic: string) => m.get(kafkaTopicKey(topic)) ?? undefined;
   }, [list]);
 
   // v0.10.954 — tablo standardı T12 (P6): yükleniyor / hata / boş artık
@@ -274,6 +285,7 @@ export default function MessagingPage() {
         {view === 'consumers' && <KafkaConsumersTable range={range} win={win} clusterOf={clusterOf} />}
         {view === 'topics' && <DependenciesTable
           rows={rows}
+          pageSize={50} onPageRows={onPageRows} /* v0.10.1974 — sayfalı (tavan 200 yerine 2000 satır) */
           kind="queue"
           range={range}
           compare={compare}
@@ -310,4 +322,11 @@ function KafkaStrip({ s }: { s: KafkaListSummary }) {
       <HttpStat label="Consumers" title={`${hint}. Tüketen tekil servis`} value={fmtNum(s.consumerServices)} />
     </div>
   );
+}
+
+/** v0.10.1974 — sayfa adları (varsa) sayılarla birleşir; adı olmayan topic'te kolon sayıyı gösterir. */
+function withNames(st: KafkaTopicStat | undefined, names: { producers: string[]; consumers: string[] } | undefined): KafkaTopicStat | undefined {
+  if (!st && !names) return undefined;
+  const base = st ?? { producers: [], consumers: [] };
+  return names ? { ...base, producers: names.producers, consumers: names.consumers } : base;
 }

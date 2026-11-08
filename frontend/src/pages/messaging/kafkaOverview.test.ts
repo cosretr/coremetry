@@ -1,7 +1,7 @@
 // v0.10.1961 — Messaging Kafka görünümü (Kafka UI benzeri): VM serileri → topic kolonları, şerit, Consumers satırları.
 import { describe, it, expect } from 'vitest';
 import {
-  KAFKA_LIST_ITEMS, KAFKA_CONSUMER_ITEMS, kafkaTopicStats, kafkaListSummary, svcListLabel,
+  KAFKA_LIST_ITEMS, KAFKA_CONSUMER_ITEMS, kafkaTopicStats, kafkaListSummary, svcListLabel, kafkaTopicKey, kafkaSvcNameItems, kafkaSvcNames,
   kafkaConsumerRows, consumerState, KAFKA_CONSUMER_ROWS,
 } from './kafkaOverview';
 
@@ -13,6 +13,8 @@ const ser = (labels: Record<string, string>, v: number) => ({
 describe('kafka list items', () => {
   it('yalnız topic etiketli seriler (istemci düzeyi çift sayılmaz); partition lag serisinden', () => {
     for (const it of KAFKA_LIST_ITEMS.filter(i => i.id !== 'lag')) expect(it.expr).toContain('{topic!=""}');
+    // v0.10.1974 — (topic, servis) çiftleri değil topic başına sayı (1000 seri tavanı).
+    expect(KAFKA_LIST_ITEMS.find(i => i.id === 'prodCnt')!.expr).toBe('count by (topic) (count by (topic, service_name) (kafka_producer_record_send_rate{topic!=""}))');
     expect(KAFKA_LIST_ITEMS.find(i => i.id === 'parts')!.expr)
       .toBe('count by (topic) (max by (topic, partition) (kafka_consumer_records_lag{topic!=""}))');
     expect([...KAFKA_LIST_ITEMS, ...KAFKA_CONSUMER_ITEMS].every(i => i.instant)).toBe(true);
@@ -20,33 +22,40 @@ describe('kafka list items', () => {
 });
 
 describe('kafkaTopicStats + summary', () => {
+  // v0.10.1974 — consumer metriği topic adında "." yerine "_" yazar; anahtar kafkaTopicKey.
   const d = {
     produce: [ser({ topic: 'orders.events' }, 412), ser({}, 9)],
-    consume: [ser({ topic: 'orders.events' }, 388), ser({ topic: 'audit.log' }, 640)],
+    consume: [ser({ topic: 'orders_events' }, 388), ser({ topic: 'audit_log' }, 640)],
     sendErr: [ser({ topic: 'orders.events' }, 0.3)],
-    parts: [ser({ topic: 'orders.events' }, 12)],
-    prodSvc: [ser({ topic: 'orders.events', service_name: 'orders-api' }, 2)],
-    consSvc: [
-      ser({ topic: 'orders.events', service_name: 'notification-service' }, 1),
-      ser({ topic: 'orders.events', service_name: 'ledger-service' }, 3),
-      ser({ topic: 'audit.log', service_name: 'ledger-service' }, 1),
-    ],
+    parts: [ser({ topic: 'orders_events' }, 12)],
+    prodCnt: [ser({ topic: 'orders.events' }, 1)],
+    consCnt: [ser({ topic: 'orders_events' }, 2), ser({ topic: 'audit_log' }, 1)],
   };
-  it('topic başına kolonlar; topic etiketsiz seri yok sayılır; servisler sıralı', () => {
+  it('iki yazım tek anahtarda; topic etiketsiz seri yok sayılır', () => {
     const m = kafkaTopicStats(d);
     expect(m.size).toBe(2);
-    expect(m.get('orders.events')).toEqual({
-      produce: 412, consume: 388, sendErr: 0.3, partitions: 12,
-      producers: ['orders-api'], consumers: ['ledger-service', 'notification-service'],
+    expect(m.get(kafkaTopicKey('orders.events'))).toEqual({
+      produce: 412, consume: 388, sendErr: 0.3, partitions: 12, producerCount: 1, consumerCount: 2,
+      producers: [], consumers: [],
     });
-    expect(m.get('audit.log')?.partitions).toBeUndefined();
+    expect(m.get('audit_log')?.partitions).toBeUndefined();
   });
-  it('şerit: lag ≥ 1.000 sayılır, tüketici servis tekil, veri yoksa null', () => {
-    const lag = new Map([['orders.events', 12400], ['payments.v1', 999]]);
-    expect(kafkaListSummary(kafkaTopicStats(d), lag)).toEqual({
+  it('şerit: lag ≥ 1.000 sayılır, tüketici servis sayısı dışarıdan, veri yoksa null', () => {
+    const lag = new Map([['orders_events', 12400], ['payments_v1', 999]]);
+    expect(kafkaListSummary(kafkaTopicStats(d), lag, 2)).toEqual({
       topics: 3, lagged: 1, produce: 412, consume: 1028, sendErr: 0.3, consumerServices: 2,
     });
-    expect(kafkaListSummary(new Map(), new Map())).toBeNull();
+    expect(kafkaListSummary(new Map(), new Map(), 0)).toBeNull();
+  });
+  it('sayfa adları: iki yazımla seçilir, anahtarda birleşir', () => {
+    const items = kafkaSvcNameItems(['orders.events', 'audit_log']);
+    expect(items[0].expr).toBe('count by (topic, service_name) (kafka_producer_record_send_rate{topic=~"orders\\\\.events|orders_events|audit_log"})');
+    expect(kafkaSvcNameItems([])).toEqual([]);
+    const n = kafkaSvcNames(
+      [ser({ topic: 'orders.events', service_name: 'orders-api' }, 1)],
+      [ser({ topic: 'orders_events', service_name: 'notification-service' }, 1), ser({ topic: 'orders_events', service_name: 'ledger-service' }, 1)],
+    );
+    expect(n.get('orders_events')).toEqual({ producers: ['orders-api'], consumers: ['ledger-service', 'notification-service'] });
   });
   it('servis hücresi: ilk iki + kalan sayı', () => {
     expect(svcListLabel([])).toBe('');
@@ -89,9 +98,11 @@ describe('topic sekmeleri', () => {
   it('tek topic: son poll yalnız o topic\'i tüketen istemciler', () => {
     const it = kafkaConsumerItems('{topic="orders.events"}');
     expect(it.find(i => i.id === 'lag')!.expr).toBe('max by (service_name, client_id, topic) (kafka_consumer_records_lag_max{topic="orders.events"})');
+    // v0.10.1974 — topic sayfası seçicisi iki yazımla.
     expect(it.find(i => i.id === 'poll')!.expr).toBe('max by (service_name, client_id) (kafka_consumer_last_poll_seconds_ago and on (service_name, client_id) kafka_consumer_records_consumed_rate{topic="orders.events"})');
     expect(kafkaConsumerItems().find(i => i.id === 'poll')!.expr).toBe('max by (service_name, client_id) (kafka_consumer_last_poll_seconds_ago)');
-    expect(kafkaTopicPartitionsExpr('orders.events')).toBe('count(max by (partition) (kafka_consumer_records_lag{topic="orders.events"}))');
+    expect(kafkaTopicPartitionsExpr('orders.events')).toBe('count(max by (partition) (kafka_consumer_records_lag{topic=~"orders\\\\.events|orders_events"}))');
+    expect(kafkaTopicPartitionsExpr('audit')).toBe('count(max by (partition) (kafka_consumer_records_lag{topic="audit"}))');
   });
   it('producer satırları: hatalı önce, sonra gönderim', () => {
     expect(kafkaProducerItems('{topic="t"}').map(i => i.id)).toEqual(['send', 'err', 'retry']);

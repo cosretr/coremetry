@@ -1,4 +1,5 @@
-import { Fragment, useMemo, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Pager } from './Pager';
 import { rowActivation, stopRowClick } from '@/lib/a11y';
 import { dbTracesHref } from '@/lib/pivotHref';
 import { messagingTopicHref } from '@/pages/messaging/topicHref'; // v0.10.586
@@ -37,16 +38,18 @@ export function lagTone(lag: number | undefined): string {
 function KafkaTopicCells({ k }: { k: KafkaTopicStat | undefined }) {
   const none = <span className="cell-muted">—</span>;
   const rate = (v: number | undefined) => (v == null ? none : fmtSmart(v, 'reqps'));
-  const svcs = (list: string[] | undefined, what: string) => (list?.length
+  // v0.10.1974 — adlar yalnız görünen sayfa için okunur; gelmeden ya da adsız topic'te servis SAYISI.
+  const svcs = (list: string[] | undefined, n: number | undefined, what: string) => (list?.length
     ? <td title={`${what}: ${list.join(', ')}`}><span className="cell-ellipsis mono">{svcListLabel(list)}</span></td>
+    : n ? <td title={`${n} ${what} servis (adlar yükleniyor)`}>{n} servis</td>
     : <td title={`Bu topic için VM'de ${what} metriği yok`}>{none}</td>);
   return (
     <>
       <td className="num" title="Tüketicilerin okuduğu partition sayısı (kafka_consumer_records_lag, partition etiketi). Kimsenin tüketmediği partition sayılmaz.">
         {k?.partitions != null ? fmtNum(k.partitions) : none}
       </td>
-      {svcs(k?.producers, 'producer')}
-      {svcs(k?.consumers, 'consumer')}
+      {svcs(k?.producers, k?.producerCount, 'producer')}
+      {svcs(k?.consumers, k?.consumerCount, 'consumer')}
       <td className="num" title="kafka_producer_record_send_rate · topic toplamı, kayıt/sn (VictoriaMetrics, pencere sonu)">{rate(k?.produce)}</td>
       <td className="num" title="kafka_consumer_records_consumed_rate · topic toplamı, kayıt/sn (VictoriaMetrics, pencere sonu)">{rate(k?.consume)}</td>
     </>
@@ -137,7 +140,7 @@ const NATURAL: Record<SortKey, 'asc' | 'desc'> = {
 // click lands on /explore scoped to that system+instance.
 export function DependenciesTable({
   rows, kind, range, compare, extraControls, openRowKey, onOpenRowChange,
-  rowHref, state,
+  rowHref, state, pageSize, onPageRows,
 }: {
   rows: DepRow[];
   // 'db' → uses instance + filters by db.system; 'queue' → uses
@@ -180,6 +183,13 @@ export function DependenciesTable({
   // boşken tablonun İÇİNDE çizilecek durum (ebeveynin yükleniyor / hata /
   // boş'u). Verilmezse türe özgü boş satırı basılır.
   state?: Omit<DataTableStateProps<DepRow>, 'dt' | 'leading' | 'trailing'>;
+  /**
+   * v0.10.1974 (operatör: "en yoğun 200 yerine sayfalı yapı") — verilirse sıralanmış + süzülmüş satırlar
+   * bu boyda sayfalanır (istemci; sıralama tüm kümede). Verilmezse bütün liste (eski davranış).
+   */
+  pageSize?: number;
+  /** Görünen sayfanın satırları (ebeveyn yalnız onlar için ek veri okusun — Messaging servis adları). */
+  onPageRows?: (rows: DepRow[]) => void;
 }) {
   // v0.9.813 — System filtresi + arama URL'e taşındı (?msys= / ?q=).
   //
@@ -292,8 +302,8 @@ export function DependenciesTable({
     ...(hasKafkaCols
       ? [
           { id: 'partitions', label: 'Partitions', sortValue: (r: DepRow) => r.kafka?.partitions ?? -1, numeric: true, naturalDir: 'desc', width: 100, minWidth: 90, priority: 2 } as DataTableColumn<DepRow>,
-          { id: 'producers', label: 'Producers', sortValue: (r: DepRow) => r.kafka?.producers.length ?? -1, naturalDir: 'desc', width: 190, minWidth: 130, priority: 2 } as DataTableColumn<DepRow>,
-          { id: 'consumers', label: 'Consumers', sortValue: (r: DepRow) => r.kafka?.consumers.length ?? -1, naturalDir: 'desc', width: 190, minWidth: 130, priority: 2 } as DataTableColumn<DepRow>,
+          { id: 'producers', label: 'Producers', sortValue: (r: DepRow) => r.kafka?.producerCount ?? r.kafka?.producers.length ?? -1, naturalDir: 'desc', width: 190, minWidth: 130, priority: 2 } as DataTableColumn<DepRow>,
+          { id: 'consumers', label: 'Consumers', sortValue: (r: DepRow) => r.kafka?.consumerCount ?? r.kafka?.consumers.length ?? -1, naturalDir: 'desc', width: 190, minWidth: 130, priority: 2 } as DataTableColumn<DepRow>,
           { id: 'kproduce', label: 'Produce/s', sortValue: (r: DepRow) => r.kafka?.produce ?? -1, numeric: true, naturalDir: 'desc', width: 104, minWidth: 90, priority: 1 } as DataTableColumn<DepRow>,
           { id: 'kconsume', label: 'Consume/s', sortValue: (r: DepRow) => r.kafka?.consume ?? -1, numeric: true, naturalDir: 'desc', width: 104, minWidth: 90, priority: 1 } as DataTableColumn<DepRow>,
         ]
@@ -327,8 +337,8 @@ export function DependenciesTable({
           // yavaş olduğunu söylemiyor. Bu ikisi soruyu bitiriyor.
           // sortValue null → ölçümsüz satırlar en alta (0 DEĞİL: 0 ms
           // "anında" diye okunurdu, v0.9.262 dersi).
-          { id: 'producep95', label: 'Üretim P95', sortValue: (r: DepRow) => r.produceP95Ms ?? null, numeric: true, naturalDir: 'desc', width: 104, minWidth: 96, priority: 3 } as DataTableColumn<DepRow>,
-          { id: 'consumep95', label: 'İşleme P95', sortValue: (r: DepRow) => r.consumeP95Ms ?? null, numeric: true, naturalDir: 'desc', width: 104, minWidth: 96, priority: 3 } as DataTableColumn<DepRow>,
+          { id: 'producep95', label: 'Produce P95', sortValue: (r: DepRow) => r.produceP95Ms ?? null, numeric: true, naturalDir: 'desc', width: 104, minWidth: 96, priority: 3 } as DataTableColumn<DepRow>,
+          { id: 'consumep95', label: 'Consume P95', sortValue: (r: DepRow) => r.consumeP95Ms ?? null, numeric: true, naturalDir: 'desc', width: 104, minWidth: 96, priority: 3 } as DataTableColumn<DepRow>,
         ]
       : []),
     { id: 'errorRate', label: 'Err %', sortValue: r => r.errorRate, numeric: true, naturalDir: NATURAL.errorRate, width: 96, minWidth: 72, priority: 2 },
@@ -388,6 +398,16 @@ export function DependenciesTable({
       setOpen(openKey === rowKey ? null : row, openKey === rowKey ? null : rowKey);
     },
   });
+
+  // v0.10.1974 — sayfalama: sıralama/süzgeç değişince başa dön; sayfa satırları ebeveyne bildirilir.
+  const [page, setPage] = useState(0);
+  const sortedKey = dt.sortedRows.length + '|' + systemFilter + '|' + search;
+  useEffect(() => { setPage(0); }, [sortedKey]);
+  const pageRows = useMemo(
+    () => (pageSize ? dt.sortedRows.slice(page * pageSize, (page + 1) * pageSize) : dt.sortedRows),
+    [dt.sortedRows, page, pageSize]);
+  const pageKey = pageRows.map(depRowKey).join('\n');
+  useEffect(() => { onPageRows?.(pageRows); }, [pageKey]); // eslint-disable-line react-hooks/exhaustive-deps -- yalnız sayfa kimliği değişince
   // v0.9.1256 — kimlik kolonu (System) sola sabit: /databases ve
   // /messaging geniş tabloda kaydırınca satır kimliği kayboluyordu
   // (operatör raporu). 24 = leading genişlet-oku hücresi; o da sabit.
@@ -527,7 +547,7 @@ export function DependenciesTable({
           <DataTableColgroup dt={dt} leading={[24]} />
           <DataTableHead dt={dt} stickyLeftBase={24} leading={<th className="sticky-left" style={{ width: 24, left: 0 }} aria-label="Expand"></th>} />
           <tbody>
-            {dt.sortedRows.length === 0 ? <DataTableState dt={dt} leading={[24]} {...tableState} /> : dt.sortedRows.map((r, i) => {
+            {dt.sortedRows.length === 0 ? <DataTableState dt={dt} leading={[24]} {...tableState} /> : pageRows.map((r, i) => {
               // v0.10.929 (K5) — %0 hata sağlıklı: nötr rozet.
               const errCls = r.errorRate > 5 ? 'err' : r.errorRate > 0 ? 'warn' : 'gray';
               // Key includes cluster so two rows with the same
@@ -702,8 +722,8 @@ export function DependenciesTable({
                             kapsar: bu pencerede o kind'da span yok, ya da
                             payload eski (rolling deploy). İkisi de "0 ms"
                             DEĞİL. */}
-                        <KindP95Cell v={r.produceP95Ms} what="üretim (publish)" />
-                        <KindP95Cell v={r.consumeP95Ms} what="işleme (process)" />
+                        <KindP95Cell v={r.produceP95Ms} what="produce (publish)" />
+                        <KindP95Cell v={r.consumeP95Ms} what="consume (process)" />
                       </>
                     )}
                     <td className="num">
@@ -828,6 +848,10 @@ export function DependenciesTable({
           </tbody>
         </table>
       </div>
+      {pageSize && dt.sortedRows.length > pageSize && (
+        <Pager mode="offset" count="exact" total={dt.sortedRows.length}
+          page={page} pageSize={pageSize} onPage={setPage} />
+      )}
     </>
   );
 }

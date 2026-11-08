@@ -13,8 +13,9 @@ describe('topic lag', () => {
   });
   it('son değer; 0 dahil; topic etiketi olmayan seri yok sayılır', () => {
     const m = topicLagMap([ser('orders.events', 10, 12400), ser('payments.v1', 0), { groupKey: [], points: [{ time: 0, value: 5 }] }]);
-    expect(m.get('orders.events')).toBe(12400);
-    expect(m.get('payments.v1')).toBe(0);
+    // v0.10.1974 — anahtar kafkaTopicKey ("." → "_"; consumer metriğinin yazımı).
+    expect(m.get('orders_events')).toBe(12400);
+    expect(m.get('payments_v1')).toBe(0);
     expect(m.size).toBe(2);
     expect(topicLagMap(null).size).toBe(0);
   });

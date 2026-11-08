@@ -22,6 +22,7 @@
 package chstore
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -82,10 +83,12 @@ func TestMsgTopCallersLimitBy(t *testing.T) {
 			t.Errorf("sınır eksik: %q\n%s", must, sql)
 		}
 	}
-	// Dış tavan grup tavanını TAM karşılamalı: 200 destination × 5
-	// çağıran. Küçük olsaydı kesme yine ayrım gözetmeden vururdu.
-	if !strings.Contains(sql, "LIMIT 1000\n") {
-		t.Errorf("dış tel-bayt tavanı %d×%d = 1000 değil:\n%s",
+	// Dış tavan grup tavanını TAM karşılamalı: tavan destination × 5
+	// çağıran (v0.10.1974: 2000 × 5). Küçük olsaydı kesme yine ayrım
+	// gözetmeden vururdu.
+	want := fmt.Sprintf("LIMIT %d\n", msgOverviewRowLimit*msgTopCallersPerDest)
+	if !strings.Contains(sql, want) {
+		t.Errorf("dış tel-bayt tavanı %d×%d değil:\n%s",
 			msgOverviewRowLimit, msgTopCallersPerDest, sql)
 	}
 }

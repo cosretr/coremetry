@@ -1364,7 +1364,7 @@ func (s *Store) discoverReceiverInstances(
 // DAYANMAK sessiz bir yalandır: 200 satır dönen bir sayfa "estateın
 // tamamı bu" gibi okunur, oysa 201. destination hiç görünmez. v0.9.813
 // bu yüzden tavanı zarfta İLAN ediyor (MessagingOverview.RowsCapped).
-const msgOverviewRowLimit = 200
+const msgOverviewRowLimit = 2000 // v0.10.1974 — sayfalı tablo (operatör); 200'de topic'ler düşüyordu
 
 // msgTopCallersPerDest — satır başına taşınan üst çağıran sayısı.
 // Frontend zaten ilk 3'ü çizip "+N" diyor; 5 hem eski davranışın

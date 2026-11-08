@@ -167,7 +167,7 @@ func KafkaLabelSides(metrics []string, label string, sc KafkaLabelScope) []Kafka
 		}
 		filters := []chstore.FilterExpr{{Key: "service.name", Op: "IN", Values: svcs}}
 		if t := strings.TrimSpace(sc.Topic); t != "" && label != "topic" {
-			filters = append(filters, chstore.FilterExpr{Key: "topic", Op: "=", Values: []string{t}})
+			filters = append(filters, kafkaTopicFilter(t))
 		}
 		if c := strings.TrimSpace(sc.ClientID); c != "" && label != "client_id" {
 			filters = append(filters, chstore.FilterExpr{Key: "client_id", Op: "=", Values: []string{c}})

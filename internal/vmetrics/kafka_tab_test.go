@@ -132,8 +132,9 @@ func TestKafkaScopedLabelValuesSelectorsGolden(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []string{
-		`{__name__=~"^(kafka\\.producer\\.connection_count|kafka_producer_connection_count)$", service_name=~"svc-api|svc-pay", topic="orders.v1"}`,
-		`{__name__=~"^(kafka\\.consumer\\.connection_count|kafka_consumer_connection_count)$", service_name="svc-ledger", topic="orders.v1"}`,
+		// v0.10.1974 — noktalı topic iki yazımla (consumer metriği "." yerine "_" yazar).
+		`{__name__=~"^(kafka\\.producer\\.connection_count|kafka_producer_connection_count)$", service_name=~"svc-api|svc-pay", topic=~"orders\\.v1|orders_v1"}`,
+		`{__name__=~"^(kafka\\.consumer\\.connection_count|kafka_consumer_connection_count)$", service_name="svc-ledger", topic=~"orders\\.v1|orders_v1"}`,
 	}
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("client_id seçicileri\n got: %s\nwant: %s", strings.Join(got, "\n      "), strings.Join(want, "\n      "))

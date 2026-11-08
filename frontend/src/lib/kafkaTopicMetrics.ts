@@ -32,7 +32,11 @@ export interface KafkaTopicPanel {
 
 /** Seçici: topic kesin, servis yalnız seçiliyse. */
 export function kafkaTopicSel(topic: string, service?: string): string {
-  const parts = [`topic=${promStr(topic)}`];
+  // v0.10.1974 — Kafka Java istemcisi consumer topic metriklerinde "." yerine "_" yazar; noktalı
+  // topic iki yazımla seçilir (producer: "a.b", consumer: "a_b").
+  const u = topic.replace(/\./g, '_');
+  const esc = (v: string) => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const parts = [u === topic ? `topic=${promStr(topic)}` : `topic=~${promStr(`${esc(topic)}|${esc(u)}`)}`];
   if (service) parts.push(`service_name=${promStr(service)}`);
   return `{${parts.join(', ')}}`;
 }

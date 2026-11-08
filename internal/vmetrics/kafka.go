@@ -242,7 +242,7 @@ func KafkaQuery(m KafkaMetric, sc KafkaScope, groupBy []string) (chstore.MetricQ
 		if !scopeHasLabel(m, sc, "topic") {
 			return chstore.MetricQueryFilter{}, fmt.Errorf("%s: topic label'ı yok, topic süzgeci uygulanamaz", m.Name)
 		}
-		filters = append(filters, chstore.FilterExpr{Key: "topic", Op: "=", Values: []string{t}})
+		filters = append(filters, kafkaTopicFilter(t))
 	}
 	if c := strings.TrimSpace(sc.ClientID); c != "" {
 		if !scopeHasLabel(m, sc, "client_id") {
@@ -306,7 +306,7 @@ func KafkaDiscoverFilter(m KafkaMetric, topic string, from, to time.Time) (chsto
 	}
 	return chstore.MetricQueryFilter{
 		Name:    m.Name,
-		Filters: []chstore.FilterExpr{{Key: "topic", Op: "=", Values: []string{t}}},
+		Filters: []chstore.FilterExpr{kafkaTopicFilter(t)},
 		GroupBy: []string{"service.name"}, Aggregation: "max",
 		From: from, To: to, MaxDataPoints: 1, PlainSeries: true,
 	}, nil
@@ -416,4 +416,14 @@ func KafkaPartitionQuestions() []KafkaQuestion {
 		{Key: "consumer_partition_lag", Metric: "kafka.consumer.records_lag", TR: "Lag — partition", GroupBy: gb},
 		{Key: "consumer_partition_lead", Metric: "kafka.consumer.records_lead", TR: "Lead — partition", GroupBy: gb},
 	}
+}
+
+// kafkaTopicFilter — v0.10.1974: Kafka Java istemcisi consumer topic metriklerinde (records_consumed,
+// records_lag…) topic adındaki "." karakterini "_" yazar; producer metrikleri adı olduğu gibi yazar.
+// Noktalı bir topic için süzgeç iki yazımı birden seçer (IN); noktasızda eskisi gibi eşitlik.
+func kafkaTopicFilter(t string) chstore.FilterExpr {
+	if u := strings.ReplaceAll(t, ".", "_"); u != t {
+		return chstore.FilterExpr{Key: "topic", Op: "IN", Values: []string{t, u}}
+	}
+	return chstore.FilterExpr{Key: "topic", Op: "=", Values: []string{t}}
 }

@@ -10,10 +10,21 @@
 // Partition sayısı tüketici tarafındaki partition lag serisinden (kafka_consumer_records_lag, partition
 // etiketi): yalnız bir tüketicinin okuduğu partition'lar sayılır; üretici metriklerinde partition yok.
 import type { SpanMetricSeries } from '@/lib/types';
-import { lastValue, seriesLabels } from '@/lib/httpMetrics';
-import { TOPIC_LAG_EXPR } from './topicLag';
+import { lastValue, promStr, seriesLabels } from '@/lib/httpMetrics';
+import { TOPIC_LAG_EXPR, kafkaTopicKey } from './topicLag';
+
+export { kafkaTopicKey };
 
 const T = '{topic!=""}';
+
+const reEscape = (v: string) => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** Topic'in iki yazımını (nokta / alt çizgi) birlikte seçen PromQL regex gövdesi. */
+export function topicAltRegex(topics: readonly string[]): string {
+  const alts = new Set<string>();
+  for (const t of topics) { alts.add(reEscape(t)); alts.add(reEscape(kafkaTopicKey(t))); }
+  return [...alts].join('|');
+}
 
 export const KAFKA_LIST_ITEMS = [
   { id: 'lag', expr: TOPIC_LAG_EXPR, instant: true },
@@ -21,16 +32,22 @@ export const KAFKA_LIST_ITEMS = [
   { id: 'consume', expr: `sum by (topic) (kafka_consumer_records_consumed_rate${T})`, instant: true },
   { id: 'sendErr', expr: `sum by (topic) (kafka_producer_record_error_rate${T})`, instant: true },
   { id: 'parts', expr: `count by (topic) (max by (topic, partition) (kafka_consumer_records_lag${T}))`, instant: true },
-  { id: 'prodSvc', expr: `count by (topic, service_name) (kafka_producer_record_send_rate${T})`, instant: true },
-  { id: 'consSvc', expr: `count by (topic, service_name) (kafka_consumer_records_consumed_rate${T})`, instant: true },
+  // v0.10.1974 — servis SAYISI topic başına (seri sayısı = topic sayısı); adlar yalnız görünen sayfa için
+  // (kafkaSvcNameItems). (topic, servis) çiftleri prod'da 1000 seri tavanını aşıp kesiliyordu.
+  { id: 'prodCnt', expr: `count by (topic) (count by (topic, service_name) (kafka_producer_record_send_rate${T}))`, instant: true },
+  { id: 'consCnt', expr: `count by (topic) (count by (topic, service_name) (kafka_consumer_records_consumed_rate${T}))`, instant: true },
+  { id: 'consTotal', expr: `count(count by (service_name) (kafka_consumer_records_consumed_rate${T}))`, instant: true },
 ] as const;
 
 export type KafkaListData = Partial<Record<(typeof KAFKA_LIST_ITEMS)[number]['id'], SpanMetricSeries[] | null | undefined>>;
 
 export interface KafkaTopicStat {
   partitions?: number;
+  /** Adlar (yalnız görünen sayfa için okunur; yoksa boş) ve sayılar (tüm topic'ler). */
   producers: string[];
   consumers: string[];
+  producerCount?: number;
+  consumerCount?: number;
   produce?: number;
   consume?: number;
   sendErr?: number;
@@ -45,25 +62,48 @@ function byTopic(series: SpanMetricSeries[] | null | undefined, each: (topic: st
   }
 }
 
-/** topic → Kafka UI kolonları. Servis listeleri sıralı ve tekil. */
+const emptyStat = (): KafkaTopicStat => ({ producers: [], consumers: [] });
+
+/** kafkaTopicKey(topic) → Kafka UI kolonları; iki yazımın katkısı birleşir (toplanır / en büyük). */
 export function kafkaTopicStats(d: KafkaListData): Map<string, KafkaTopicStat> {
   const out = new Map<string, KafkaTopicStat>();
   const get = (t: string) => {
-    let e = out.get(t);
-    if (!e) { e = { producers: [], consumers: [] }; out.set(t, e); }
+    const k = kafkaTopicKey(t);
+    let e = out.get(k);
+    if (!e) { e = emptyStat(); out.set(k, e); }
     return e;
   };
-  byTopic(d.produce, (t, v) => { get(t).produce = v; });
-  byTopic(d.consume, (t, v) => { get(t).consume = v; });
-  byTopic(d.sendErr, (t, v) => { get(t).sendErr = v; });
-  byTopic(d.parts, (t, v) => { get(t).partitions = Math.round(v); });
-  byTopic(d.prodSvc, (t, _v, l) => { if (l.service_name) get(t).producers.push(l.service_name); });
-  byTopic(d.consSvc, (t, _v, l) => { if (l.service_name) get(t).consumers.push(l.service_name); });
-  for (const e of out.values()) {
-    e.producers = [...new Set(e.producers)].sort();
-    e.consumers = [...new Set(e.consumers)].sort();
-  }
+  byTopic(d.produce, (t, v) => { const e = get(t); e.produce = (e.produce ?? 0) + v; });
+  byTopic(d.consume, (t, v) => { const e = get(t); e.consume = (e.consume ?? 0) + v; });
+  byTopic(d.sendErr, (t, v) => { const e = get(t); e.sendErr = (e.sendErr ?? 0) + v; });
+  byTopic(d.parts, (t, v) => { const e = get(t); e.partitions = Math.max(e.partitions ?? 0, Math.round(v)); });
+  byTopic(d.prodCnt, (t, v) => { const e = get(t); e.producerCount = Math.max(e.producerCount ?? 0, Math.round(v)); });
+  byTopic(d.consCnt, (t, v) => { const e = get(t); e.consumerCount = Math.max(e.consumerCount ?? 0, Math.round(v)); });
   return out;
+}
+
+/** Görünen sayfanın topic'leri için servis adı sorguları (seri sayısı ≈ sayfa × servis). */
+export function kafkaSvcNameItems(topics: readonly string[]) {
+  if (topics.length === 0) return [];
+  const sel = `{topic=~${promStr(topicAltRegex(topics))}}`;
+  return [
+    { id: 'prodSvc', expr: `count by (topic, service_name) (kafka_producer_record_send_rate${sel})`, instant: true },
+    { id: 'consSvc', expr: `count by (topic, service_name) (kafka_consumer_records_consumed_rate${sel})`, instant: true },
+  ];
+}
+
+/** SAF: ad sorgularının sonucu → kafkaTopicKey(topic) → { producers, consumers } (sıralı, tekil). */
+export function kafkaSvcNames(prod: SpanMetricSeries[] | null | undefined, cons: SpanMetricSeries[] | null | undefined): Map<string, { producers: string[]; consumers: string[] }> {
+  const out = new Map<string, { producers: Set<string>; consumers: Set<string> }>();
+  const get = (t: string) => {
+    const k = kafkaTopicKey(t);
+    let e = out.get(k);
+    if (!e) { e = { producers: new Set(), consumers: new Set() }; out.set(k, e); }
+    return e;
+  };
+  byTopic(prod, (t, _v, l) => { if (l.service_name) get(t).producers.add(l.service_name); });
+  byTopic(cons, (t, _v, l) => { if (l.service_name) get(t).consumers.add(l.service_name); });
+  return new Map([...out].map(([k, e]) => [k, { producers: [...e.producers].sort(), consumers: [...e.consumers].sort() }]));
 }
 
 export const LAGGED_MIN = 1000;
@@ -77,21 +117,19 @@ export interface KafkaListSummary {
   consumerServices: number;
 }
 
-/** Şerit: Kafka metriği olan topic sayısı, lag ≥ 1.000 olan topic, toplam hızlar, tekil tüketici servis. */
-export function kafkaListSummary(stats: Map<string, KafkaTopicStat>, lag: Map<string, number>): KafkaListSummary | null {
+/** Şerit: Kafka metriği olan topic sayısı (iki yazım tek), lag ≥ 1.000 olan topic, toplam hızlar, tekil tüketici servis. */
+export function kafkaListSummary(stats: Map<string, KafkaTopicStat>, lag: Map<string, number>, consumerServices: number): KafkaListSummary | null {
   const topics = new Set([...stats.keys(), ...lag.keys()]);
   if (topics.size === 0) return null;
   let produce = 0, consume = 0, sendErr = 0, lagged = 0;
-  const cons = new Set<string>();
   for (const t of topics) {
     const s = stats.get(t);
     produce += s?.produce ?? 0;
     consume += s?.consume ?? 0;
     sendErr += s?.sendErr ?? 0;
-    s?.consumers.forEach(c => cons.add(c));
     if ((lag.get(t) ?? 0) >= LAGGED_MIN) lagged++;
   }
-  return { topics: topics.size, lagged, produce, consume, sendErr, consumerServices: cons.size };
+  return { topics: topics.size, lagged, produce, consume, sendErr, consumerServices };
 }
 
 /** Hücre metni: ilk iki servis + "+N"; tam liste ipucunda. */
