@@ -586,7 +586,8 @@ function TraceDetailInner() {
         <div className="crumbs-row trace-hdr__actions">
           <div className="trace-hdr__trace" role="group" data-testid="trace-hdr-traceid" aria-label={tr('trace.hdr.traceStatus')}>
             <span className="trace-hdr__idlabel">{tr('trace.hdr.traceId')}:</span>
-            <code className="trace-hdr__id" title={id}>{id.length > 12 ? `${id.slice(0, 12)}…` : id}</code>
+            {/* v0.10.1965 (operatör: "trace id tam gözükmüyor, kırpmışsın") — TAM id; 1527'deki 12 karakter kırpması kalktı. */}
+            <code className="trace-hdr__id" title={id}>{id}</code>
             <CopyButton value={id} title="Copy trace ID" />
             {spans && spans.length > 0 && (
               <>

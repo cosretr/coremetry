@@ -135,9 +135,9 @@ describe('trace başlığı: ölçüler sağa dayalı kümede (v0.10.1347)', () 
     expect(pre).not.toMatch(/traceActions &&|spans &&/);
     const groupEnd = trace.indexOf('{traceActions && <span', tid);
     const group = trace.slice(tid, groupEnd);
-    // Sıra: etiket → kısaltılmış id (tam id title'da) → kopyala (TAM id) → ERROR → hatalı span.
+    // Sıra: etiket → TAM id (v0.10.1965, kırpma yok) → kopyala → ERROR → hatalı span.
     const seq = ["<span className=\"trace-hdr__idlabel\">{tr('trace.hdr.traceId')}:</span>",
-      '<code className="trace-hdr__id" title={id}>{id.length > 12 ? `${id.slice(0, 12)}…` : id}</code>',
+      '<code className="trace-hdr__id" title={id}>{id}</code>',
       '<CopyButton value={id} title="Copy trace ID" />',
       '{spans && spans.length > 0 && (',
       '<span className="badge b-err">ERROR</span>', '<span className="sr-only">OK</span>', 'error span{errSpans'].map(n => group.indexOf(n));
