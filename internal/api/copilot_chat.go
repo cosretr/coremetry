@@ -521,6 +521,13 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// ya da kanıt yoksa aşağıdaki zincir AYNEN. /telemetri komutu tablo / wiki
 	// kademelerini atlatır.
 	skipDocs := forcedChatSource(ctx) == srcTelemetry || apCont.on // S5 — onay devamı doküman kademelerini atlar
+	// v0.10.1942 (operator-reported) — "<takım> servisleri nasıl?" / "servislerim
+	// nasıl" servis SAĞLIĞI sorusudur: yüklü envantere gitmez, telemetriye gider
+	// (doküman / keşif / satır / wiki kademeleri atlanır; chat_clarify_entity.go).
+	if !skipDocs && forcedChatSource(ctx) == "" && isServiceHealthAsk(lastUserText(req.Messages)) {
+		ctx = withForcedChatSource(ctx, srcTelemetry)
+		skipDocs = true
+	}
 	// v0.10.1739 (operator-reported) — v2 endpoint kartına aday tur ("<servis>
 	// endpointleri") doküman / keşif / wiki kademelerine girmez: kart aşağıda
 	// (opPre / rota planından sonra) çıkar, belge kaynağı eklenmez.

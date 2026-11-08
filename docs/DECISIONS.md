@@ -13380,3 +13380,19 @@ JSON sözleşmesi ve kararlar ana oturumda. Backend dilimleri v0.10.1902–1905.
   açılmasını konuşmadık, eski şekilde inline olsun").** Satır tıklaması yine tablonun içinde açılır (LogTable'ın kendi açılımı);
   1940'ın exception rozeti, Görünüm ▾ ve sayfalaması kalır. Trace sayfasında yan çekmece yeniden önerme.
 
+## 2026-11-08 — v0.10.1942 — CoSRE: envanter önce sorar, servis sağlığı envantere gitmez
+
+Operatör-raporlu (prod): "<takım> takımının servisleri nasıl?" sorusu kaynak keşfi kademesinde yüklü envanter
+tablosundan, üstelik benzer adlı BAŞKA bir takımın satırlarıyla (OpenShift + sunucu) doğrudan cevaplandı.
+Operatör: "Envanterde direkt cevap dönmesin önce sorsun; servislerim nasıl dediğinde yüklenen envanter dosyasına
+gitmemesi gerekir."
+
+- **Servis sağlığı sorusu telemetriye gider.** `isServiceHealthAsk`: "servislerim / takımımın" iyelik biçimi ya da
+  (servis|takım|ekip) + (nasıl|durum|sağlık|sorun|iyi). Nasıl-yapılır ve envanteri/dokümanı açıkça anan soru hariç.
+  Eşleşince telemetri zorlanır; keşif, satır, wiki ve RAG'ın gevşek satırı koşmaz.
+- **Envanter kullanıcı seçmeden cevap olmaz.** "Önce sor" kademesi (1576'da yalnız çıplak varlık adı) artık her
+  sıkı tablo eşleşmesinde sorar: "Bu soru yüklü envanter tablosunda N satırla eşleşiyor (…). Envanterden mi
+  göstereyim, yoksa canlı telemetriden mi bakayım?" Bekleyen soru saklanamayan yolda (bellek kapalı, keşif, RAG'ın
+  gevşek satırı) aynı soru çiplerle (`/excel · N satır`, `/telemetri`). "envanter / tablo" cevabı ve `/excel`
+  komutu doğrudan cevaplar.
+

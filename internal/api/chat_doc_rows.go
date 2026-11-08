@@ -311,10 +311,21 @@ func mapStr(xs []string, f func(string) string) []string {
 // docRowsAnswer — kademe (strict: erken kademe; değil: doküman adımı).
 // handled=false → olay yok, akış aynen sürer.
 func (s *Server) docRowsAnswer(ctx context.Context, emit func(string, any), msgs []copilot.ChatMessage, strict bool) (handled, ok bool) {
+	// v0.10.1942 (operator-reported) — telemetri zorlanmışsa (sağlık sorusu,
+	// /telemetri) yüklü tablo hiç okunmaz.
+	if forcedChatSource(ctx) == srcTelemetry {
+		return false, false
+	}
 	q := lastUserText(msgs)
 	rows, vals := s.docRowsFind(ctx, q, strict)
 	if len(rows) == 0 {
 		return false, false
+	}
+	// v0.10.1942 (operatör: "envanterde direkt cevap dönmesin önce sorsun") —
+	// kullanıcı envanteri seçmediyse satırlar basılmaz, önce sorulur.
+	if !docsConfirmed(ctx) {
+		docRowsAsk(emit, len(rows), vals, nil)
+		return true, true
 	}
 	s.docRowsEmit(withRecordsQuestion(ctx, q), emit, rows, vals, nil)
 	return true, true

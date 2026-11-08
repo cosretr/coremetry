@@ -279,7 +279,7 @@ func (s *Server) chatClarifyReplyTier(ctx context.Context, emit func(string, any
 	case p.Kind == pendingKindDocOrEntity && class == entityReplyDocs: // v0.10.1576 (chat_clarify_entity.go)
 		out.msgs = replaceLastUserText(msgs, p.Question)
 		out.handled = true
-		if h, dok := s.docRowsAnswer(ctx, emit, out.msgs, true); h {
+		if h, dok := s.docRowsAnswer(withDocsConfirmed(ctx), emit, out.msgs, true); h { // v0.10.1942 — kullanıcı envanteri seçti
 			out.tier, out.ok = "doc-rows", dok
 			break
 		}
@@ -335,6 +335,9 @@ func clarifyReplyEvidenceTR(p *chatPendingAsk, class string) string {
 		what = "ad yüklü dokümanlarda aranıyor"
 	case entityReplyEntity:
 		what = "ad Coremetry varlığı (" + p.Entity + ") olarak cevaplanıyor"
+		if p.Entity == "" { // v0.10.1942 — çıplak olmayan envanter sorusu
+			what = "özgün soru canlı telemetriden cevaplanıyor"
+		}
 	}
 	return "bekleyen soru (" + p.Kind + "): " + clipRunes(q, 200) + "\ncevap: " + class + " — " + what
 }

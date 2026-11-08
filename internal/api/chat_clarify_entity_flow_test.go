@@ -159,17 +159,24 @@ func TestBareServiceNameAsks(t *testing.T) {
 	}
 }
 
-// TestDocQuestionNotBareEntityUnchanged — çıplak varlık OLMAYAN doküman sorusu
-// tabloyu doğrudan alır (bugünkü davranış); tabloda eşleşmesi olmayan çıplak
-// takım adı soru sormadan guided'a gider.
+// TestDocQuestionNotBareEntityUnchanged — v0.10.1942 (operator-reported:
+// "envanterde direkt cevap dönmesin önce sorsun"): çıplak varlık OLMAYAN
+// doküman sorusu da önce sorulur; "envanter" cevabı satırları getirir.
+// Tabloda eşleşmesi olmayan çıplak takım adı soru sormadan guided'a gider.
 func TestDocQuestionNotBareEntityUnchanged(t *testing.T) {
 	rg := newEntityDocRig(t)
-	fr := rg.post(t, "Payments-Core sunucuları hangi ortamda")
-	if r := lastRow(t, rg.rows()); r.Tier != aisurface.TierDocRows || !strings.Contains(lastAnswerText(fr), "srvpay02") {
-		t.Fatalf("doküman sorusu doğrudan tablo: tier=%q cevap=%q", r.Tier, lastAnswerText(fr))
+	const q = "Payments-Core sunucuları hangi ortamda"
+	fr := rg.post(t, q)
+	if r := lastRow(t, rg.rows()); r.Tier != aisurface.TierClarify || strings.Contains(lastAnswerText(fr), "srvpay02") ||
+		!strings.Contains(lastAnswerText(fr), "Envanterden mi göstereyim") {
+		t.Fatalf("doküman sorusu önce sorulmalı: tier=%q cevap=%q", r.Tier, lastAnswerText(fr))
 	}
-	if p := rg.pending(t); p != nil {
-		t.Fatalf("soru sorulmamalı: %+v", p)
+	if p := rg.pending(t); p == nil || p.Kind != pendingKindDocOrEntity {
+		t.Fatalf("bekleyen soru beklenir: %+v", p)
+	}
+	fr = rg.post(t, q, lastAnswerText(fr), "envanterden göster")
+	if r := lastRow(t, rg.rows()); r.Tier != aisurface.TierDocRows || !strings.Contains(lastAnswerText(fr), "srvpay02") {
+		t.Fatalf("envanter seçilince tablo: tier=%q cevap=%q", r.Tier, lastAnswerText(fr))
 	}
 
 	rg2 := newEntityDocRig(t)
@@ -221,5 +228,42 @@ func TestClassifyDocOrEntityReply(t *testing.T) {
 		if got := classifyDocOrEntityReply(c.in); got != c.want {
 			t.Errorf("classifyDocOrEntityReply(%q) = %q, want %q", c.in, got, c.want)
 		}
+	}
+}
+
+// TestIsServiceHealthAsk — v0.10.1942 (operator-reported): servis sağlığı
+// sorusu yüklü envantere gitmez. Nasıl-yapılır ve envanteri açıkça anan soru
+// sağlık sorusu değildir.
+func TestIsServiceHealthAsk(t *testing.T) {
+	cases := map[string]bool{
+		"Payments Core takımının servisleri nasıl?":    true,
+		"servislerim nasıl":                            true,
+		"takımımın servisleri nasıl?":                  true,
+		"orders-api servisinin durumu":                 true,
+		"Payments ekibinde sorun var mı":               true,
+		"orders-api servisi nasıl kurulur":             false, // nasıl-yapılır
+		"Payments Core envanterindeki servisler nasıl": false, // envanteri açıkça anıyor
+		"Payments-Core sunucuları hangi ortamda":       false,
+		"Payments-Core sunucularının IP adresleri":     false,
+		"Payments-Core":                                false,
+	}
+	for q, want := range cases {
+		if got := isServiceHealthAsk(q); got != want {
+			t.Errorf("isServiceHealthAsk(%q) = %v, beklenen %v", q, got, want)
+		}
+	}
+}
+
+// TestDocsAskChips — v0.10.1942: bellek kapalı yolda çipli soru; /excel aynı
+// soruyu envanterden, /telemetri canlı veriden cevaplar.
+func TestDocsAskChips(t *testing.T) {
+	var got map[string]any
+	docRowsAsk(func(ev string, v any) { got = v.(map[string]any) }, 3, []string{"payments-core", "srvpay01", "x"}, []string{"/telemetri · canlı veri", "/wiki · Runbook"})
+	if txt, _ := got["text"].(string); !strings.Contains(txt, "3 satırla") || !strings.Contains(txt, "payments-core, srvpay01") || strings.Contains(txt, ", x") {
+		t.Fatalf("metin: %q", txt)
+	}
+	chips, _ := got["suggestions"].([]string)
+	if len(chips) != 3 || chips[0] != "/excel · 3 satır" || chips[1] != "/telemetri" || chips[2] != "/wiki · Runbook" {
+		t.Fatalf("çipler: %v", chips)
 	}
 }

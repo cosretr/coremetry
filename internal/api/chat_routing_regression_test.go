@@ -353,9 +353,16 @@ var routingRegressionRows = []routingRow{
 		q: "Payments-Core", setup: withRoutingDocTeam(true),
 		wantTier: aisurface.TierClarify, wantRoute: "doc_or_entity_ask", noLLM: true,
 		ansPrefix: docOrEntityAskTR(bareEntityTeam, "Payments-Core"), ansNot: []string{"srvpay01"}},
-	{release: "komşu v0.10.1576", name: "çıplak olmayan doküman sorusu → doc-rows (soru sorulmaz)",
+	// v0.10.1942 (operator-reported) — envanter doğrudan cevap dönmez: çıplak
+	// olmayan doküman sorusu da önce sorulur; servis sağlığı sorusu envantere
+	// hiç gitmez (telemetri).
+	{release: "v0.10.1942", name: "çıplak olmayan doküman sorusu → önce sorar (envanter mi, telemetri mi)",
 		q: "Payments-Core sunucuları hangi ortamda", setup: withRoutingDocTeam(true),
-		wantTier: aisurface.TierDocRows, ansHas: []string{"srvpay01"}},
+		wantTier: aisurface.TierClarify, wantRoute: "doc_or_entity_ask", noLLM: true,
+		ansPrefix: docsAskTR(1, []string{"payments-core"}), ansNot: []string{"srvpay01"}},
+	{release: "v0.10.1942", name: "takımın servisleri nasıl + tabloda eşleşme → envantere gitmez, team_services",
+		q: "Payments-Core takımının servisleri nasıl?", setup: withRoutingDocTeam(true),
+		wantTier: aisurface.TierGuided, wantRoute: string(guidedTeamServices), ansNot: []string{"srvpay01", "envanter"}},
 	{release: "komşu v0.10.1576", name: "çıplak takım adı, tabloda yok → team_services",
 		q: "Payments-Core", setup: withRoutingDocTeam(false),
 		wantTier: aisurface.TierGuided, wantRoute: string(guidedTeamServices)},

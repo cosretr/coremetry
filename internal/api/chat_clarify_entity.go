@@ -26,9 +26,25 @@ package api
 //	    hangisini seçtiğini söylemez) → bekleyen soru düşer, tur yeni soru.
 //
 // Çıplak varlık değilse ya da tabloda eşleşme yoksa akış bayt bayt eski.
+//
+// v0.10.1942 (operator-reported, prod: "<takım> takımının servisleri nasıl?" →
+// keşif kademesi benzer adlı BAŞKA takımın envanter satırlarını (OpenShift +
+// sunucu) doğrudan cevapladı). Operatör: "Envanterde direkt cevap dönmesin önce
+// sorsun; servislerim nasıl dediğinde yüklenen envanter dosyasına gitmemeli."
+// Kök neden: doküman kademeleri (keşif, sıkı satır, RAG'ın gevşek satırı) yüklü
+// tabloda güçlü eşleşme bulunca soru servis sağlığını sorsa da doğrudan
+// envanterden cevaplıyordu; "önce sor" yalnız ÇIPLAK varlık adında vardı.
+// Kural (iki parça):
+//   1. isServiceHealthAsk → telemetri zorlanır, doküman kademeleri hiç koşmaz.
+//   2. Tablo eşleşmesi kullanıcı seçmeden cevap olmaz: bu kademe her eşleşmede
+//      sorar (çıplak varlıkta eski metin, değilse docsAskTR); bekleyen soru
+//      yoksa (bellek kapalı) satır kademesi / keşif çiplerle sorar
+//      (docRowsAsk: /excel · N satır, /telemetri). "envanter / tablo" cevabı ve
+//      /excel komutu doğrudan cevaplar (withDocsConfirmed / sourceForcedAnswer).
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 	"unicode"
@@ -48,6 +64,84 @@ const (
 	// bareEntityMaxTokens — çıplak varlık mesajının sözcük tavanı.
 	bareEntityMaxTokens = 3
 )
+
+type docsConfirmedKey struct{}
+
+// withDocsConfirmed — kullanıcı yüklü envanteri seçti: satır kademesi sormadan cevaplar.
+func withDocsConfirmed(ctx context.Context) context.Context {
+	return context.WithValue(ctx, docsConfirmedKey{}, true)
+}
+
+func docsConfirmed(ctx context.Context) bool {
+	v, _ := ctx.Value(docsConfirmedKey{}).(bool)
+	return v
+}
+
+var (
+	// healthSubjectStems / healthStateStems — servis sağlığı sorusunun iki yarısı
+	// (katlanmış önekler): "servisleri" + "nasıl", "takımın" + "durumu".
+	healthSubjectStems = []string{"servis", "service", "uygulama", "takim", "ekip", "ekib", "team"} // ekib: "ekibinde" (p→b)
+	healthStateStems   = []string{"nasil", "durum", "saglik", "health", "sorun", "iyi"}
+	// healthDocCueStems — envanteri / dokümanı açıkça anan soru sağlık sorusu sayılmaz.
+	healthDocCueStems = []string{"envanter", "tablo", "excel", "dokuman", "wiki", "belge", "runbook", "dosya", "kayit"}
+)
+
+// isServiceHealthAsk — SAF (v0.10.1942): soru servis sağlığını mı soruyor.
+// "servislerim / takımımın servisleri" iyelik biçimi ya da (servis|takım) +
+// (nasıl|durum|sağlık|sorun|iyi) birlikte; nasıl-yapılır sorusu ve envanteri /
+// dokümanı açıkça anan soru değil.
+func isServiceHealthAsk(q string) bool {
+	norm := normalizeGuidedMsg(q)
+	toks := guidedTokens(norm)
+	if len(toks) == 0 || hasHowToShape(toks) {
+		return false
+	}
+	folded := strings.Fields(foldWords(norm))
+	has := func(stems []string) bool {
+		for _, t := range folded {
+			for _, st := range stems {
+				if strings.HasPrefix(t, st) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	if has(healthDocCueStems) {
+		return false
+	}
+	return hasTeamSelfSignal(toks) || (has(healthSubjectStems) && has(healthStateStems))
+}
+
+// docsAskTR — SAF (v0.10.1942): çıplak olmayan soruda envanter eşleşmesi sorusu.
+func docsAskTR(n int, vals []string) string {
+	what := ""
+	if len(vals) > 0 {
+		v := vals
+		if len(v) > 2 {
+			v = v[:2]
+		}
+		what = " (" + strings.Join(v, ", ") + ")"
+	}
+	return fmt.Sprintf("Bu soru yüklü envanter tablosunda %d satırla eşleşiyor%s. Envanterden mi göstereyim, yoksa canlı telemetriden mi bakayım?", n, what)
+}
+
+// docRowsAsk — v0.10.1942: bekleyen soru saklanamayan yolda (bellek kapalı,
+// keşif, RAG'ın gevşek satırı) çiplerle sor: /excel aynı soruyu envanterden,
+// /telemetri canlı veriden cevaplar (sourceCommandQuestion önceki soruyu alır).
+func docRowsAsk(emit func(string, any), n int, vals []string, alts []string) {
+	chips := []string{sourceChip(srcCand{Kind: srcExcel, Label: fmt.Sprintf("%d satır", n)}), "/" + srcTelemetry}
+	for _, a := range alts {
+		if len(chips) >= discoverMaxChips {
+			break
+		}
+		if !strings.HasPrefix(a, "/"+srcTelemetry) && !strings.HasPrefix(a, "/"+srcExcel) {
+			chips = append(chips, a)
+		}
+	}
+	emit("answer", map[string]any{"text": docsAskTR(n, vals), "suggestions": chips,
+		"sources": []any{}, "links": []guidedAnswerLink{}, "allowedLinks": []string{}})
+}
 
 // docOrEntityAskTR — SAF: sorunun deterministik metni (LLM yok).
 func docOrEntityAskTR(kind, name string) string {
@@ -125,20 +219,27 @@ func (s *Server) chatDocOrEntityAskTier(ctx context.Context, emit func(string, a
 		return false
 	}
 	q := strings.TrimSpace(lastUserText(msgs))
-	if q == "" || len(guidedTokens(normalizeGuidedMsg(q))) > bareEntityMaxTokens {
-		return false // katalog okumasından önce ucuz kapı
-	}
-	kind, name := bareEntityOf(q, s.guidedTeamNames(ctx), s.guidedServiceNames(ctx))
-	if kind == "" {
+	if q == "" {
 		return false
 	}
-	if rows, _ := s.docRowsFind(ctx, q, true); len(rows) == 0 {
+	rows, vals := s.docRowsFind(ctx, q, true)
+	if len(rows) == 0 {
 		return false // doküman kademeleri zaten cevaplamazdı
+	}
+	// Çıplak varlık adı (≤3 sözcük; katalog yalnız o zaman okunur) eski metinle;
+	// v0.10.1942'den beri diğer her tablo eşleşmesi de önce sorulur.
+	kind, name := "", ""
+	if len(guidedTokens(normalizeGuidedMsg(q))) <= bareEntityMaxTokens {
+		kind, name = bareEntityOf(q, s.guidedTeamNames(ctx), s.guidedServiceNames(ctx))
+	}
+	text := docsAskTR(len(rows), vals)
+	if kind != "" {
+		text = docOrEntityAskTR(kind, name)
 	}
 	cst.setPending(&chatPendingAsk{Kind: pendingKindDocOrEntity, Question: clipRunes(q, chatPendingQuestionMax),
 		Entity: kind, AskedAt: time.Now().UnixNano()})
 	chatExchangeFrom(ctx).noteRoute("doc_or_entity_ask")
-	emit("answer", map[string]any{"text": docOrEntityAskTR(kind, name), "sources": []any{}, "links": []guidedAnswerLink{}, "allowedLinks": []string{}})
+	emit("answer", map[string]any{"text": text, "sources": []any{}, "links": []guidedAnswerLink{}, "allowedLinks": []string{}})
 	return true
 }
 

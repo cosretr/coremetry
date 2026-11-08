@@ -273,9 +273,10 @@ func (s *Server) chatSourceDiscoveryTier(ctx context.Context, emit func(string, 
 	switch w.Kind {
 	case srcExcel:
 		if len(alts) == 0 {
-			return // tek kaynak: bugünkü sıkı satır kademesi aynı satırları basar
+			return // tek kaynak: sıkı satır kademesi (v0.10.1942: önce sorar)
 		}
-		s.docRowsEmit(ctx, emit, w.rows, w.vals, alts)
+		// v0.10.1942 (operatör: "envanterde direkt cevap dönmesin önce sorsun").
+		docRowsAsk(emit, len(w.rows), w.vals, alts)
 		return true, true, emit, false
 	case srcExceptions:
 		s.exceptionsSourceAnswer(ctx, emit, w.exTerm, w.exEv, alts)
