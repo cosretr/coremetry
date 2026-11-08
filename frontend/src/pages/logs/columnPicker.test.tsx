@@ -116,10 +116,10 @@ describe('Columns ▾ (v0.10.1502)', () => {
 });
 
 describe('doc viewer sekme hafızası (v0.10.1502; v0.10.1880 detay çekmecesi)', () => {
-  it('JSON seçimi hatırlanır: çekmece kapanıp başka satır açılınca JSON ile başlar', async () => {
-    await mountLogs(`/logs?range=${RANGE}`);
-    const rows = () => [...document.querySelectorAll('table.logtbl-dense tbody tr[data-row-idx]')] as HTMLElement[];
-    await click(rows()[0]);
+  // v0.10.1970 — çekmece yalnız kalıcı link (?doc=) ile; JSON seçimi yine hatırlanır.
+  it('JSON seçimi hatırlanır: çekmece kapanıp yeniden açılınca JSON ile başlar', async () => {
+    const first = `/logs?doc=${1.7e18 + 1}.1&range=${RANGE}`;
+    await mountLogs(first);
     const jsonTab = () => [...document.querySelectorAll('[role="radiogroup"][aria-label="Tablo / JSON"] [role="radio"]')]
       .find(b => b.textContent?.includes('JSON')) as HTMLButtonElement | undefined;
     expect(jsonTab()).toBeTruthy();
@@ -128,7 +128,8 @@ describe('doc viewer sekme hafızası (v0.10.1502; v0.10.1880 detay çekmecesi)'
     expect(document.querySelector('[data-testid="log-detail-json"]')).not.toBeNull();
     await click([...document.querySelectorAll('button')].find(b => b.textContent?.trim() === 'Kapat')); // çekmeceyi kapat
     expect(document.querySelector('[data-testid="log-detail"]')).toBeNull();
-    await click(rows()[1]); // diğer satırı aç
+    act(() => { root?.unmount(); }); host?.remove();
+    await mountLogs(first);
     expect(document.querySelectorAll('[data-testid="log-detail"]').length, 'tek açık çekmece').toBe(1);
     expect(document.querySelector('[data-testid="log-detail-json"]')).not.toBeNull();
   });

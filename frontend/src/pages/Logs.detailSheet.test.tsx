@@ -78,22 +78,27 @@ const docParam = () => new URLSearchParams(window.location.search).get('doc');
 const click = async (el: Element | null | undefined) => { expect(el).toBeTruthy(); await act(async () => { (el as HTMLElement).click(); }); await settle(); };
 
 describe('/logs satır detayı çekmecesi (v0.10.1880)', () => {
-  it('satır tıkı çekmeceyi açar: düz cümle önce, doc URL\'de, satır içi genişleme yok', async () => {
+  // v0.10.1970 (operatör: "drawer açılıyor, inline'dı eskiden daha iyi") — satır tıkı SATIR İÇİ açar;
+  // çekmece yalnız kalıcı link (?doc=) ile.
+  it('satır tıkı satır içinde açar: çekmece yok, doc URL\'de yok', async () => {
     await mountLogs(`/logs?range=${RANGE}`);
     await click(rows()[0]);
-    expect(docParam()).toBe(`${TS}.100`);
+    expect(docParam()).toBeNull();
+    expect(sheet()).toBeNull();
+    expect(host!.querySelectorAll('[aria-label="Log kaydı görünümü"]')).toHaveLength(1);
+  });
+
+  it('kalıcı link çekmeceyi açar: düz cümle önce, teknik kanıt kapalı', async () => {
+    await mountLogs(`/logs?doc=${TS}.100&range=${RANGE}`);
     expect(document.querySelector('[data-testid="log-detail-lead"]')!.textContent)
       .toMatch(/^orders-api .*ERROR seviyesinde bir kayıt yazdı: “Order validation failed” Kayıt bir trace'e bağlı\.$/);
-    expect(host!.querySelectorAll('[aria-label="Log kaydı görünümü"]')).toHaveLength(0);
     expect(sheet()!.textContent).toContain('CHANNEL_CODE');
-    // Teknik kanıt kapalı başlar.
     expect((document.querySelector('[data-testid="log-detail-tech"]') as HTMLDetailsElement).open).toBe(false);
     expect(m.ctxCalls).toHaveLength(0);
   });
 
   it('alan süz + ↓ sonraki kayıt', async () => {
-    await mountLogs(`/logs?range=${RANGE}`);
-    await click(rows()[0]);
+    await mountLogs(`/logs?doc=${TS}.100&range=${RANGE}`);
     const input = document.querySelector('input[aria-label="Alan süz"]') as HTMLInputElement;
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
     await act(async () => { setter.call(input, 'function'); input.dispatchEvent(new Event('input', { bubbles: true })); });

@@ -52,8 +52,8 @@ window.matchMedia = ((q: string) => ({
 
 let root: Root | null = null; let host: HTMLDivElement | null = null;
 const settle = () => act(async () => { await new Promise(r => setTimeout(r, 30)); });
-async function mountLogs() {
-  window.history.replaceState(null, '', '/logs?range=custom:1759494780000-1759497240000');
+async function mountLogs(extra = '') {
+  window.history.replaceState(null, '', `/logs?range=custom:1759494780000-1759497240000${extra}`);
   host = document.createElement('div'); document.body.appendChild(host); root = createRoot(host);
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   await act(async () => {
@@ -95,9 +95,9 @@ describe('/logs exception farkındalığı (v0.10.1882)', () => {
     expect(m.calls).toBe(before);
   });
 
+  // v0.10.1970 — çekmece yalnız kalıcı link (?doc=) ile açılır; satır tıkı satır içi.
   it('detay çekmecesinde Exception bölümü', async () => {
-    await mountLogs();
-    await click(rows()[0]);
+    await mountLogs(`&doc=${TS}.1`);
     const sec = document.querySelector('[data-testid="log-exception"]')!;
     expect(sec.textContent).toContain('java.lang.OutOfMemoryError: Java heap space');
     expect(sec.textContent).toContain('1 uygulama · 1 framework çerçevesi');

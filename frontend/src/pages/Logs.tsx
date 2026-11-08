@@ -100,7 +100,6 @@ const ACC_CAP = 10000; // v0.10.1831 — örnek 500 (≤ 5000) × "Load more"; D
 // verilen SABİT boş dizi (her render'da yeni [] j/k gezinmesini tazelerdi).
 const NO_LOGS: LogRow[] = [];
 // v0.10.1880 — /logs satır içi genişleme kullanmaz (detay çekmecesi); sabit boş küme.
-const NO_EXPANDED: Set<number> = new Set();
 
 const LVL_FACETS: Array<{ key: string; label: string; min: number }> = [
   { key: 'error', label: 'ERROR', min: 17 },
@@ -1100,6 +1099,15 @@ function LogsInner() {
     setDocRow(l); ensureFullDoc(l);
     setDocParam(key);
   };
+  // v0.10.1970 (operatör: "logs sayfasında drawer açılıyor, inline'dı eskiden, daha iyi") — satır tıkı /
+  // Enter yeniden SATIR İÇİ genişlemedir (1880 öncesi). Dar okunmuş satır açılınca tam doküman (tek `ids`
+  // sorgusu). Çekmece yalnız paylaşılan `?doc=` bağlantısı ve çevre loglardan açılan kayıt için kalır.
+  const toggleRow = (id: number) => {
+    const opening = !expanded.has(id);
+    setExpanded(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+    const row = opening ? loadedRowsRef.current.find(r => r.id === id) : undefined;
+    if (row) ensureFullDoc(row);
+  };
   const closeRow = () => {
     setSearchParams(prev => { const n = new URLSearchParams(prev); n.delete('doc'); n.delete('docsvc'); return n; }, { replace: true });
   };
@@ -1201,7 +1209,7 @@ function LogsInner() {
     () => paged.rows.map(r => { const f = fullDocs[r.id]; return f && f !== 'error' ? f : r; }),
     [paged.rows, fullDocs]);
   const tableNav = useTableNav<LogRow>(shownLogs, {
-    onOpen: (l) => openRow(l),
+    onOpen: (l) => toggleRow(l.id),
     pageId: 'logs',
   });
   // Çekmece açıkken j/k seçimi çekmeceyi taşır (mockup ↑/↓ "Önceki (k) / Sonraki (j)").
@@ -1720,8 +1728,15 @@ function LogsInner() {
             <TraceChip traceId={l.traceId} preview={tracePreviews?.[l.traceId]} href={traceHref(l.traceId)} /* v0.10.1968 — tık trace sayfasına */
               onFilter={tid => filterToTrace(tid)} onOpen={tid => openTraceView(tid, l.timestamp)} />
           )}
-          expandedIds={NO_EXPANDED}
-          onToggleExpand={id => { const r = shownLogs.find(x => x.id === id); if (r) openRow(r); }}
+          expandedIds={expanded}
+          onToggleExpand={toggleRow}
+          extraExpanded={l => (l.partial ? (
+            <span className="ld-tbar-note" role="status">
+              {fullDocs[l.id] === 'error'
+                ? 'Tam doküman alınamadı — yalnız yüklenen alanlar gösteriliyor.'
+                : 'Tam doküman yükleniyor…'}
+            </span>
+          ) : null)}
           onFilterAdd={addFromRow}
           onFilterExclude={excludeFromRow}
           onToggleColumn={toggleColumn}
