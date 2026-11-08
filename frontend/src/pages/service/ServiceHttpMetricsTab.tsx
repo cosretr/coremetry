@@ -24,7 +24,7 @@ import { Spinner, Empty } from '@/components/Spinner';
 import {
   useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef,
 } from '@/components/ui/DataTable';
-import { useHttpPromql, useRedFamily, sectionEnvScope } from '@/lib/queries/httpMetrics';
+import { useHttpPromql, useRedFamily, sectionEnvScope, useRouteExclusions } from '@/lib/queries/httpMetrics';
 import { httpEnvScopeReady, type HttpEnvScopeView } from '@/lib/httpEnvScopeNote';
 import { familySections, familyUnknownNote, familyPartialNote, statusCodeLabel, type RedFamilySpec } from '@/lib/redFamily';
 import { timeRangeToNs } from '@/lib/utils';
@@ -146,9 +146,11 @@ function FamilySection({ service, win, family, envScope, head, tried }: {
   const windowSec = Math.max(60, (win.to - win.from) / 1e9);
   // v0.10.1377 — ortam eşleyicisi; env/cluster yoksa envSel undefined → sorgular bayt bayt eski.
   const envSel = envScope.envSel;
-  const scope = { app: service, envSel, route: fRoute || undefined, method: fMethod || undefined, family };
-  const queries = useMemo(() => httpQueries(scope, windowSec), [service, envSel, fRoute, fMethod, windowSec, family]); // eslint-disable-line react-hooks/exhaustive-deps
-  const optsExpr = useMemo(() => httpQueries({ app: service, envSel, family }, windowSec).rateByRoute, [service, envSel, windowSec, family]);
+  // v0.10.1976 — healthcheck (ve operatörün diğer "her metrik" route dışlamaları) varsayılan düşer.
+  const routeExclude = useRouteExclusions();
+  const scope = { app: service, envSel, route: fRoute || undefined, method: fMethod || undefined, family, routeExclude };
+  const queries = useMemo(() => httpQueries(scope, windowSec), [service, envSel, fRoute, fMethod, windowSec, family, routeExclude]); // eslint-disable-line react-hooks/exhaustive-deps
+  const optsExpr = useMemo(() => httpQueries({ app: service, envSel, family, routeExclude }, windowSec).rateByRoute, [service, envSel, windowSec, family, routeExclude]);
   // gRPC: downstream (http_client_*) sorguları yok — o aile HTTP'nin (rpc.client.duration kapsam dışı).
   const ids = Object.keys(queries).filter(id => !grpc || !id.startsWith('d'));
   const all = [...ids.map(id => ({ id, expr: queries[id], instant: HTTP_INSTANT_IDS.has(id) })), { id: 'opts', expr: optsExpr, instant: false }];

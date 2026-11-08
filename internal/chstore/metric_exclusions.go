@@ -306,14 +306,26 @@ func rollupAttrlessBlocked(ex *CompiledMetricExclusions, metric string) bool {
 // düşer (GetExceptionTriage'ın duruşu).
 func (s *Store) GetMetricExclusions(ctx context.Context) MetricExclusions {
 	raw, err := s.GetSetting(ctx, metricExclusionsKey)
-	if err != nil || len(raw) == 0 {
+	if err != nil {
 		return MetricExclusions{}
+	}
+	if len(raw) == 0 {
+		// v0.10.1976 (operatör: "healthcheck geçen metrikleri default göstermesin") — ayar HİÇ
+		// kaydedilmemişse varsayılan kural; operatör Ayarlar'da silip kaydederse (boş liste de
+		// bir kayıttır) varsayılan geri gelmez.
+		return DefaultMetricExclusions()
 	}
 	var c MetricExclusions
 	if err := json.Unmarshal(raw, &c); err != nil {
 		return MetricExclusions{}
 	}
 	return c
+}
+
+// DefaultMetricExclusions — v0.10.1976: hiç kaydedilmemiş kurulumda healthcheck route'ları her
+// metrikten okumada düşer (ingest'e dokunmaz).
+func DefaultMetricExclusions() MetricExclusions {
+	return MetricExclusions{Rules: []MetricExclusionRule{{Metric: MetricExclusionWildcard, AttrKey: MetricExclusionAttrKey, Pattern: "(?i)healthcheck"}}}
 }
 
 // SaveMetricExclusions — system_settings'e yazar. Yeni şema YOK.

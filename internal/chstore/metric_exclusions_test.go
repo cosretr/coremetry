@@ -301,3 +301,18 @@ func TestAttrlessRollupPlansBlockedByExclusion(t *testing.T) {
 		t.Error("ilgisiz kural histogram kademesini kapattı")
 	}
 }
+
+// v0.10.1976 — varsayılan kural healthcheck route'larını (büyük/küçük harf) her metrikten düşürür.
+func TestDefaultMetricExclusionsHealthcheck(t *testing.T) {
+	c, err := CompileMetricExclusions(DefaultMetricExclusions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := c.RoutePatterns("")
+	if len(p) != 1 || p[0] != "(?i)healthcheck" {
+		t.Fatalf("desen: %v", p)
+	}
+	if c.DropAtIngest("http.server.request.duration", "/juzdan-overview/healthcheck") {
+		t.Fatal("varsayılan ingest'e dokunmaz")
+	}
+}

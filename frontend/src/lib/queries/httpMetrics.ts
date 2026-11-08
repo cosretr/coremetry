@@ -82,3 +82,15 @@ export function sectionEnvScope(sec: RedFamilySection | undefined, v: RedFamilyV
   if (!sc) return { state: 'unresolved' }; // aile yok / kapsam gelmedi → süzgeçsiz, bant söyler (asla bekletmez)
   return httpEnvScopeView(env, cluster, { data: sc, error: null }, true);
 }
+
+/** v0.10.1976 — "her metrik" route dışlama desenleri (healthcheck varsayılanı); 60 sn önbellek, hata → []. */
+export function useRouteExclusions(): string[] {
+  const q = useQuery({
+    queryKey: ['metric-route-exclusions'],
+    queryFn: () => api.metricRouteExclusions(),
+    staleTime: 60_000,
+    retry: false,
+  });
+  return q.data?.patterns ?? NO_PATTERNS;
+}
+const NO_PATTERNS: string[] = [];

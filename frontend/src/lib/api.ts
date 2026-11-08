@@ -3207,6 +3207,8 @@ export const api = {
     get<import('./types').CosreGreeting>(`/api/cosre/greeting${env ? `?env=${encodeURIComponent(env)}` : ''}`),
   // v0.10.1244 — servis HTTP Metrics sekmesi: kaynak VictoriaMetrics'e SABİT
   // (operatör: pano VM'den okunsun); sayfanın deneme kaynağı seçimi uygulanmaz.
+  // v0.10.1976 — her rolün okuyabildiği route dışlama desenleri (servis HTTP sekmesi PromQL'i).
+  metricRouteExclusions: () => get<{ patterns: string[]; digest: string }>('/api/metrics/route-exclusions'),
   httpMetricsPromql: (params: { query: string; from: number; to: number; maxDataPoints: number; instant?: '1' }) =>
     get<SpanMetricSeries[] | null>(withMetricSource(`/api/metrics/promql?${qs(params)}`, 'vm')),
   // v0.10.1429 — servisin RED ailesi (HTTP / gRPC) + aile başına ortam

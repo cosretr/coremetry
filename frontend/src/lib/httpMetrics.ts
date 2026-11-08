@@ -32,6 +32,12 @@ export interface HttpScope {
    * Yoksa / boşsa her sorgu bugünküyle bayt bayt aynı.
    */
   envSel?: string;
+  /**
+   * v0.10.1976 — operatörün "her metrik" route dışlama desenleri (ANKORSUZ RE2; /api/metrics/route-exclusions).
+   * Yalnız HTTP ailesinde ve açık route süzgeci yokken `route!~".*(?:p).*"` olarak eklenir — sunucu metrik
+   * yolunun (vmMetricSource.excluded) uyguladığı kümenin aynısı. Boş/yoksa sorgu bayt bayt eski.
+   */
+  routeExclude?: readonly string[];
 }
 
 // v0.10.1350 — VM etiket adları TEK yerde. Backend aynı OTel anahtarlarını
@@ -76,6 +82,9 @@ export function serverSel(s: HttpScope, extra = ''): string {
   if (s.routeRe !== undefined) parts.push(`${FL.route}=~${promStr(s.routeRe)}`);
   else if (s.route) parts.push(`${FL.route}=${promStr(s.route)}`);
   if (s.method) parts.push(`${FL.method}=${promStr(s.method)}`);
+  if (s.routeExclude?.length && famOf(s).kind === 'http' && s.routeRe === undefined && !s.route) {
+    for (const p of s.routeExclude) parts.push(`${FL.route}!~${promStr(`.*(?:${p}).*`)}`);
+  }
   if (extra) parts.push(extra);
   return `{${parts.join(', ')}}`;
 }
