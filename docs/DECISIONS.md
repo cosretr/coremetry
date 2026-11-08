@@ -13453,5 +13453,8 @@ ve sade span detayı (cümle + temel alanlar, öznitelikler katlı). Uygulananla
   `pages/trace/TraceSummaryLine`): süre ve hatayla bitiş (HTTP durum), en uzun dış çağrının payı (≥ %20;
   hedef = DB sistemi / çocuğun servisi / peer.service / server.address), kök hata (hatalı çocuğu olmayan, mesajlı
   önce; `ORA-00001` gibi kod varsa kod), en büyük tekrar grubu (≥ 5). Kanıtı olmayan parça cümleden düşer.
-  Metinler `trace.sum.*` (TR + EN; Türkçe ekler sayıdan bağımsız kalıplarla).
+  Metinler `trace.sum.*` (TR + EN; Türkçe ekler sayıdan bağımsız kalıplarla).- **v0.10.1953 — hızlı atlama.** Span süzgeç çubuğunda "İlk hata · <servis>" (kök hata, ipucu = hata mesajı) ve
+  "En yavaş çağrı · <süre>" (en uzun dış çağrı) çipleri; veri 1952'nin özetinden. Tıklama span'i seçer ve
+  şelalenin mevcut reveal mekanizmasıyla atalarını açıp satıra kaydırır (aynı çipe ikinci tık da kaydırır;
+  servis odağı atlamayı sıfırlar). Emoji yok (operatör: "Emoji kullanma").
 

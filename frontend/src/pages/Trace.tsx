@@ -18,7 +18,7 @@ import { traceRepeatGroups, type TraceRepeatGroup } from '@/lib/traceRepeats';
 import { CopyButton } from '@/components/CopyButton';
 import { TraceLogsPanel } from './trace/TraceLogsPanel'; // v0.10.675 — kiosk ile paylaşılan panel
 import { TraceSummaryLine } from './trace/TraceSummaryLine'; // v0.10.1952 — düz cümle özeti
-import { traceSummary } from '@/lib/traceSummary';
+import { traceSummary, type TraceSummary } from '@/lib/traceSummary';
 import { TraceMetricsPanel } from './trace/TraceMetricsPanel'; // v0.10.913 — pod metrikleri sekmesi
 import { tracePods } from './trace/traceMetrics';
 import { TRACE_METRICS_URL_PARAMS } from './trace/traceMetricsModel'; // v0.10.968 — sekmeden çıkınca silinecek parametreler
@@ -395,7 +395,7 @@ function TraceDetailInner() {
   // Operatör servis odağına bir kez dokunduysa ?span= derin bağlantı kaydırması
   // bir daha devreye girmez (odak kalkınca ilk span'e geri sıçramasın).
   const [svcTouched, setSvcTouched] = useState(false);
-  const pickSvcFocus = (svc: string | null) => { setSvcTouched(true); setSvcFocus(svc); if (svc) setCritFocus(false); };
+  const pickSvcFocus = (svc: string | null) => { setSvcTouched(true); setSvcFocus(svc); setJumpId(null); if (svc) setCritFocus(false); };
   const pickCritFocus = (on: boolean) => { setCritFocus(on); if (on) setSvcFocus(null); };
   // Trace'in TAMAMINDAKİ tekrar desenleri. Ham `spans` kimliğine bağlı —
   // seçim / sekme değişimi yeniden hesaplatmaz.
@@ -421,6 +421,13 @@ function TraceDetailInner() {
   const urlSpanRef = useRef<string | null>(searchParams.get('span'));
   // v0.10.278 — sanal modda hedef satır mount olmayabilir; kaydırmayı şelale yapar.
   const [revealSpanId] = useState<string | null>(() => searchParams.get('span'));
+  // v0.10.1953 — hızlı atlama çipi: hedef span (seç + şelalede göster). Aynı çipe tekrar
+  // tıklama da kaydırsın diye önce boşaltılır, sonraki karede yeniden verilir.
+  const [jumpId, setJumpId] = useState<string | null>(null);
+  const jumpTo = (id: string) => {
+    setSelectedId(id); setSvcFocus(null); setCritFocus(false); setJumpId(null);
+    requestAnimationFrame(() => setJumpId(id));
+  };
   useEffect(() => {
     const want = urlSpanRef.current;
     if (!want || !spans || spans.length === 0) return;
@@ -808,7 +815,8 @@ function TraceDetailInner() {
                       critCount={criticalPath?.ids.size ?? 0}
                       critFocus={critFocus} onCritFocus={pickCritFocus}
                       repeatGroups={repeatGroups}
-                      onRepeatChip={g => { setSpanFilter(g.name); setGroupSimilar(true); }} />
+                      onRepeatChip={g => { setSpanFilter(g.name); setGroupSimilar(true); }}
+                      jumps={traceSum} onJump={jumpTo} />
                     <TraceWaterfall spans={spans} selectedId={selectedId}
                       onSelect={id => setSelectedId(prev => toggleSpanSelection(prev, id))} // v0.10.693 — tekrar tık kapatır (kiosk 685)
                       evidenceIds={evidenceIds}
@@ -818,7 +826,7 @@ function TraceDetailInner() {
                       focusIds={critFocus && criticalPath ? criticalPath.ids
                         : svcFocusInfo.ids.size > 0 ? svcFocusInfo.ids : undefined}
                       linkedSpanIds={linkedIds} analysis={analysis}
-                      revealSpanId={svcFocusInfo.first ?? (svcTouched ? null : revealSpanId)}
+                      revealSpanId={jumpId ?? svcFocusInfo.first ?? (svcTouched ? null : revealSpanId)}
                       logSignals={logSignals} onLogsClick={() => setTab('logs')}
                       /* v0.10.691 (operatör: "inline gösterim trace'te iyiymiş, Coremetry
                          içindeki trace'lerde de yapalım") — span detayı sağda yüzen panel
@@ -909,7 +917,7 @@ function repeatTotalLabel(totalMs: number): string {
 }
 
 function SpanFilterBar({ spans, value, onChange, critCount, critFocus, onCritFocus,
-  repeatGroups, onRepeatChip }: {
+  repeatGroups, onRepeatChip, jumps, onJump }: {
   spans: SpanRow[];
   value: string;
   onChange: (v: string) => void;
@@ -922,7 +930,11 @@ function SpanFilterBar({ spans, value, onChange, critCount, critFocus, onCritFoc
   // bozardı ve uyarı rengini enflasyona uğratırdı.
   repeatGroups?: TraceRepeatGroup[];
   onRepeatChip?: (g: TraceRepeatGroup) => void;
+  // v0.10.1953 (operatör: mockup "hızlı atlama") — kök hata ve en uzun dış çağrı (lib/traceSummary).
+  jumps?: TraceSummary | null;
+  onJump?: (spanId: string) => void;
 }) {
+  const t = useT();
   const matches = useMemo(() => {
     const q = value.trim().toLowerCase();
     if (!q) return 0;
@@ -952,6 +964,18 @@ function SpanFilterBar({ spans, value, onChange, critCount, critFocus, onCritFoc
       {/* v0.10.924 — buton bütünlüğü Faz 2: `.facet` + role=button
           taklidi yerine gerçek düğme (Chip); Enter/Space'i tarayıcı verir,
           `active` aria-pressed basar. */}
+      {/* v0.10.1953 — hızlı atlama: tıkla → span seçilir, ataları açılır, satıra kayılır. Emoji yok (operatör). */}
+      {onJump && jumps?.firstError && (
+        <Chip pill data-testid="trace-jump-error" title={jumps.firstError.message || undefined}
+          onClick={() => onJump(jumps.firstError!.spanId)}>
+          {t('trace.jump.err').replace('{svc}', jumps.firstError.service)}
+        </Chip>
+      )}
+      {onJump && jumps?.hot && (
+        <Chip pill data-testid="trace-jump-slow" onClick={() => onJump(jumps.hot!.spanId)}>
+          {t('trace.jump.slow').replace('{d}', fmtNs(jumps.hot.ms * 1e6))}
+        </Chip>
+      )}
       {onCritFocus && (critCount ?? 0) > 0 && (
         <Chip pill active={!!critFocus}
           title="Dim every span that is NOT on the critical path"

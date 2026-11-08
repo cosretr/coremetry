@@ -583,6 +583,9 @@ const EN: Catalog = {
   'trace.sum.errN':   '{n} errors; the first starts in {svc}: {msg}.',
   'trace.sum.noMsg':  'no message',
   'trace.sum.repeat': '{n} similar {name} calls were made.',
+  // v0.10.1953 — hızlı atlama çipleri.
+  'trace.jump.err':   'First error · {svc}',
+  'trace.jump.slow':  'Slowest call · {d}',
   'trace.hdr.identity':    'Business identity',
   'trace.hdr.traceStatus': 'Trace id and status',
   'trace.hdr.traceId':     'Trace ID',
@@ -1235,6 +1238,8 @@ const TR: Catalog = {
   'trace.sum.errN':   '{n} hata var; ilki {svc} servisinde başlıyor: {msg}.',
   'trace.sum.noMsg':  'mesaj yok',
   'trace.sum.repeat': '{n} benzer {name} çağrısı yapıldı.',
+  'trace.jump.err':   'İlk hata · {svc}',
+  'trace.jump.slow':  'En yavaş çağrı · {d}',
   'trace.hdr.identity':    'İş kimliği',
   'trace.hdr.traceStatus': 'Trace kimliği ve durumu',
   'trace.hdr.traceId':     'Trace ID',
