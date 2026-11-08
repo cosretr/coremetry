@@ -13413,5 +13413,10 @@ arası çizgiler ekranı kesiyor, 360 dışındaki servisler adsız soluk yıld�
   komşu sayısı) ve `star_names` (YALNIZ isimli kipte; düğüm adlarıyla aynı savunma). İstemci yıldızları biraz daha
   belirgin çizer (×1,3 boy, ×1,15 opaklık); isimli kipte üzerine gelince büyür ve 1946 kartını gösterir (bağlantılı
   düğüm isabette 4 px öncelikli). Sabit etiket ve bağ çizgisi kuralları aynı — kalabalık artmaz. Bedel: isimli kipte
-  tüm servis adları giriş öncesi görülür; cevap 1300 serviste ~+40 KB, 4000'de ~+120 KB.
+  tüm servis adları giriş öncesi görülür; cevap 1300 serviste ~+40 KB, 4000'de ~+120 KB.- **v0.10.1948 — servis yıldızlarının yoğunluğu VictoriaMetrics'ten** (operatör: "service summary'den değil
+  VictoriaMetrics'ten gelsin"). Servis LİSTESİ yine `service_summary_5m`'den (kim var); yoğunluk VM'de servis başına
+  istek hızı: `sum by (<service.name etiketi>) (rate({__name__=~"<http aile>_count|rpc_server_call_duration_seconds_count|
+  rpc_server_duration_milliseconds_count|messaging_process_duration_seconds_count"}[5m]))` + Kafka istemci düzeyi
+  tüketim hızı (`topic=""`). VM'de serisi olmayan servis görünür ama "sakin". VM yok / kesici açık / sorgu hatası →
+  span sayısı (eski yol). Bağlantılı 360 düğümün ağırlığı hâlâ topolojideki çağrı sayısından.
 

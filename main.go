@@ -1450,6 +1450,8 @@ func main() {
 		lsBuilder := loginsummary.New(loginsummary.Deps{
 			Store: store,
 			VM:    loginsummary.VMFromService(vmSvc),
+			// v0.10.1948 — galaksi servis yıldızlarının hızı VM'den (servis etiketi).
+			ServiceLabel: loginsummary.VMServiceLabel(),
 			// Özet ayardan kapalıysa kurucu hiç sorgu atmaz; topoloji off ise okunmaz.
 			Enabled:    api.LoginSummaryEnabled,
 			TopologyOn: api.LoginSummaryTopologyOn,

@@ -15,7 +15,9 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -109,9 +111,11 @@ type Deps struct {
 	// kapalıysa tur HİÇ koşmaz (arka uç çağrısı yok, yayın yok).
 	TopologyOn func() bool
 
-	Family    string        // boşsa HTTPFamily
-	FastEvery time.Duration // boşsa 60 sn
-	SlowEvery time.Duration // boşsa 5 dk
+	Family string // boşsa HTTPFamily
+	// ServiceLabel — v0.10.1948: VM'de service.name etiketi (boşsa "service_name").
+	ServiceLabel string
+	FastEvery    time.Duration // boşsa 60 sn
+	SlowEvery    time.Duration // boşsa 5 dk
 }
 
 // breaker — art arda 3 hatada 30 dk atlar.
@@ -160,13 +164,16 @@ func New(d Deps) *Builder {
 	if d.Family == "" {
 		d.Family = HTTPFamily
 	}
+	if d.ServiceLabel == "" {
+		d.ServiceLabel = "service_name"
+	}
 	if d.FastEvery <= 0 {
 		d.FastEvery = DefaultFastEvery
 	}
 	if d.SlowEvery <= 0 {
 		d.SlowEvery = DefaultSlowEvery
 	}
-	return &Builder{d: d, br: map[string]*breaker{"q1": {}, "q2": {}, "grpc": {}, "kafka": {}}}
+	return &Builder{d: d, br: map[string]*breaker{"q1": {}, "q2": {}, "grpc": {}, "kafka": {}, "stars": {}}}
 }
 
 // Reset — liderlik kaybında çağrılır; sonraki Step anlık görüntüyü yeniden
@@ -313,6 +320,12 @@ func (b *Builder) slowRound(ctx context.Context, s *Snapshot, now time.Time, sum
 		if s.Topo != nil {
 			t2 := time.Now()
 			if vols, verr := b.d.Store.LoginServiceVolumes(ctx, now.Add(-topoWindowS*time.Second)); verr == nil {
+				// v0.10.1948 (operatör: "service summary'den değil VictoriaMetrics'ten gelsin") —
+				// servis LİSTESİ ClickHouse'tan (kim var), yoğunluk VM'deki istek hızından;
+				// VM yok / hata → span sayısı (eski yol).
+				if rates, ok := b.vmServiceRates(ctx, now); ok {
+					vols = VolumesFromRates(vols, rates)
+				}
 				s.Topo.Stars = BuildStars(sil, edges, vols, topoMaxStars)
 			}
 			b.timed("stars", t2)
@@ -414,4 +427,82 @@ func (b *Builder) logRound(state string) {
 		fmt.Fprintf(&sb, " %s=%dms", k, b.timings[k].Milliseconds())
 	}
 	b.d.Logf("[login-summary] state=%s%s", state, sb.String())
+}
+
+// StarRateQueries — SAF (v0.10.1948): servis başına istek hızı. counters = HTTP
+// (aile `_count`) + gRPC (yeni/eski semconv) + mesaj işleme sayaçlarının toplam
+// hızı; kafka = istemci düzeyi Kafka tüketim hızı göstergesi (konu toplamı ile
+// çift sayım olmasın diye topic="" — v0.10.1925 dersi).
+func StarRateQueries(family, label string) (counters, kafka string) {
+	names := family + "_count|rpc_server_call_duration_seconds_count|rpc_server_duration_milliseconds_count|messaging_process_duration_seconds_count"
+	counters = "sum by (" + label + ") (rate({__name__=~\"" + names + "\"}[5m]))"
+	kafka = "sum by (" + label + ") (kafka_consumer_records_consumed_rate{topic=\"\"})"
+	return counters, kafka
+}
+
+// serviceOfGroupKey — SAF: VM grup anahtarından (`<etiket>="<değer>"`, bkz.
+// vmetrics.labelSetGroupKey) servis adı; yoksa "".
+func serviceOfGroupKey(key []string, label string) string {
+	for _, kv := range key {
+		if v, ok := strings.CutPrefix(kv, label+"="); ok {
+			if u, err := strconv.Unquote(v); err == nil {
+				return u
+			}
+			return strings.Trim(v, "\"")
+		}
+	}
+	return ""
+}
+
+// VolumesFromRates — SAF (v0.10.1948): servis listesi CH'den (kim var), değer VM
+// hızından: 1 + hız×1000 (VM'de serisi olmayan servis 1 = "sakin" ama GÖRÜNÜR).
+func VolumesFromRates(list map[string]uint64, rates map[string]float64) map[string]uint64 {
+	out := make(map[string]uint64, len(list))
+	for name := range list {
+		r := rates[name]
+		if r < 0 || math.IsNaN(r) || math.IsInf(r, 0) {
+			r = 0
+		}
+		out[name] = 1 + uint64(r*1000)
+	}
+	return out
+}
+
+// vmServiceRates — servis → istek hızı (req/s; Kafka mesaj/sn eklenir). VM
+// yapılandırılmamış, kesici açık ya da sayaç sorgusu hata → ok=false (çağıran
+// CH span sayısına düşer). Kafka sorgusu hatası yalnız o kolu düşürür.
+func (b *Builder) vmServiceRates(ctx context.Context, now time.Time) (map[string]float64, bool) {
+	if b.d.VM == nil || !b.d.VM.Configured() || !b.br["stars"].allow(now) {
+		return nil, false
+	}
+	counters, kafka := StarRateQueries(b.d.Family, b.d.ServiceLabel)
+	t0 := time.Now()
+	defer b.timed("stars_vm", t0)
+	read := func(q string) ([]chstore.SpanMetricSeries, error) {
+		qctx, cancel := context.WithTimeout(ctx, vmQueryTimeout)
+		defer cancel()
+		return b.d.VM.QueryPromQLRange(qctx, q, now.Add(-5*time.Minute), now, 300, 2)
+	}
+	out := map[string]float64{}
+	add := func(series []chstore.SpanMetricSeries) {
+		for _, s := range series {
+			name := serviceOfGroupKey(s.GroupKey, b.d.ServiceLabel)
+			if name == "" || len(s.Points) == 0 {
+				continue
+			}
+			if v := s.Points[len(s.Points)-1].Value; v > 0 && !math.IsNaN(v) && !math.IsInf(v, 0) {
+				out[name] += v
+			}
+		}
+	}
+	series, err := read(counters)
+	b.br["stars"].record(now, err)
+	if err != nil {
+		return nil, false
+	}
+	add(series)
+	if ks, kerr := read(kafka); kerr == nil {
+		add(ks)
+	}
+	return out, true
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -24,6 +25,8 @@ type fakeVM struct {
 	calls      map[string]int
 	windows    []time.Duration
 	unknown    []string
+	starRates  map[string]float64 // v0.10.1948 — servis → req/s
+	starKafka  map[string]float64
 }
 
 func newFakeVM() *fakeVM {
@@ -40,8 +43,13 @@ func (f *fakeVM) QueryPromQLRange(ctx context.Context, q string, from, to time.T
 		return nil, errors.New("fakeVM: bağlamda zaman aşımı yok")
 	}
 	qs := Queries(HTTPFamily)
+	starQ, starK := StarRateQueries(HTTPFamily, "service_name")
 	var name string
 	switch q {
+	case starQ:
+		name = "stars"
+	case starK:
+		name = "starsKafka"
 	case qs.HTTPRate:
 		name = "q1"
 	case qs.HTTPSum:
@@ -70,6 +78,18 @@ func (f *fakeVM) QueryPromQLRange(ctx context.Context, q string, from, to time.T
 		return s
 	}
 	switch name {
+	case "stars", "starsKafka":
+		// Gerçek istemci (vmetrics.labelSetGroupKey): `sum by (service_name)` → GroupKey
+		// tek eleman `service_name="<ad>"` (tırnaklı) — v0.10.1914 dersi: sahte gerçek biçimi taklit eder.
+		var out []chstore.SpanMetricSeries
+		src := f.starRates
+		if name == "starsKafka" {
+			src = f.starKafka
+		}
+		for svc, v := range src {
+			out = append(out, mk([]string{"service_name=" + strconv.Quote(svc)}, v))
+		}
+		return out, nil
 	case "q1":
 		// Gerçek istemci (vmetrics.labelSetGroupKey): gruplamasız `sum(...)`
 		// sonucunda etiket yoktur → GroupKey nil, tek seri.
@@ -742,5 +762,63 @@ func TestBuilderAttachesStars(t *testing.T) {
 		if len(snap.Topo.Stars) != 1 || snap.Topo.Stars[0].Near != -1 {
 			t.Errorf("tek adsız yıldız (komşusuz) beklenir: %+v", snap.Topo.Stars)
 		}
+	}
+}
+
+// v0.10.1948 — yıldız yoğunluğu VM'deki istek hızından (servis listesi CH'den);
+// VM hatası → CH span sayısı (eski yol).
+func TestBuilderStarsFromVM(t *testing.T) {
+	for _, vmFail := range []bool{false, true} {
+		h := newHarness(t)
+		// CH span sayısı: busy-batch çok, quiet-api az. VM tersini söylüyor.
+		h.st.vols = map[string]uint64{"busy-batch": 90000, "quiet-api": 10, "no-metrics": 500}
+		h.vm.starRates = map[string]float64{"quiet-api": 40, "busy-batch": 0.5}
+		h.vm.starKafka = map[string]float64{"busy-batch": 1}
+		if vmFail {
+			h.vm.fail["stars"] = true
+		}
+		snap := h.step()
+		if snap == nil || snap.Topo == nil || len(snap.Topo.Stars) != 3 {
+			t.Fatalf("vmFail=%v: 3 yıldız beklenir: %+v", vmFail, snap)
+		}
+		first := snap.Topo.Stars[0].Name
+		want := "quiet-api" // VM: 40 req/s en yoğun
+		if vmFail {
+			want = "busy-batch" // CH: en çok span
+		}
+		if first != want {
+			t.Errorf("vmFail=%v: en yoğun yıldız %q, beklenen %q (%+v)", vmFail, first, want, snap.Topo.Stars)
+		}
+		// VM'de serisi olmayan servis yine görünür (sakin)
+		found := false
+		for _, st := range snap.Topo.Stars {
+			found = found || st.Name == "no-metrics"
+		}
+		if !found {
+			t.Errorf("vmFail=%v: VM'de olmayan servis de görünmeli", vmFail)
+		}
+		if len(h.vm.unknown) != 0 {
+			t.Errorf("bilinmeyen VM ifadesi: %v", h.vm.unknown)
+		}
+	}
+}
+
+func TestStarRateHelpers(t *testing.T) {
+	q, k := StarRateQueries("http_server_request_duration_seconds", "service_name")
+	if !strings.HasPrefix(q, "sum by (service_name) (rate({__name__=~\"http_server_request_duration_seconds_count|") || !strings.Contains(q, "[5m]") {
+		t.Errorf("sayaç sorgusu: %s", q)
+	}
+	if k != `sum by (service_name) (kafka_consumer_records_consumed_rate{topic=""})` {
+		t.Errorf("kafka sorgusu: %s", k)
+	}
+	if got := serviceOfGroupKey([]string{`service_name="orders-api"`}, "service_name"); got != "orders-api" {
+		t.Errorf("grup anahtarı: %q", got)
+	}
+	if got := serviceOfGroupKey([]string{`job="x"`}, "service_name"); got != "" {
+		t.Errorf("etiket yoksa boş: %q", got)
+	}
+	v := VolumesFromRates(map[string]uint64{"a": 5, "b": 9}, map[string]float64{"a": 2.5, "x": 9})
+	if v["a"] != 2501 || v["b"] != 1 || len(v) != 2 {
+		t.Errorf("hacim: %v", v)
 	}
 }

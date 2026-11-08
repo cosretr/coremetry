@@ -14,6 +14,9 @@ import (
 // vmAdapter — *vmetrics.Service Configured + QueryPromQLRange'ı zaten sağlar.
 type vmAdapter struct{ svc *vmetrics.Service }
 
+// VMServiceLabel — v0.10.1948: VM'de service.name'in etiketi (Deps.ServiceLabel).
+func VMServiceLabel() string { return vmetrics.ServiceLabel() }
+
 // VMFromService — nil servis her zaman "yapılandırılmamış".
 func VMFromService(svc *vmetrics.Service) VM { return vmAdapter{svc: svc} }
 

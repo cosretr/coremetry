@@ -364,6 +364,10 @@ func promLabel(k string) string {
 // promLabel rather than hard-coded so the two can never disagree.
 func serviceLabel() string { return promLabel("service.name") }
 
+// ServiceLabel — v0.10.1948: serviceLabel'ın paket dışı adı (login galaksisi servis
+// başına hız sorgusu `sum by (<etiket>)`).
+func ServiceLabel() string { return serviceLabel() }
+
 // quotePromString escapes a value for a MetricsQL double-quoted literal.
 func quotePromString(v string) string {
 	var b strings.Builder
