@@ -36,10 +36,10 @@ describe('bigBangWarp', () => {
 });
 
 describe('SRE sözleri (JSON)', () => {
-  it('hepsi metin + kaynak taşır; rastgele seçim art arda aynısını vermez', () => {
+  it('hepsi dolu metin; rastgele seçim art arda aynısını vermez', () => {
     expect(SRE_QUOTES.length).toBeGreaterThan(3);
-    for (const q of SRE_QUOTES) { expect(q.text.trim()).not.toBe(''); expect(q.by.trim()).not.toBe(''); }
+    for (const q of SRE_QUOTES) expect(q.trim()).not.toBe('');
     const first = pickQuote(() => 0);
-    expect(pickQuote(() => 0, first).text).not.toBe(first.text);
+    expect(pickQuote(() => 0, first)).not.toBe(first);
   });
 });

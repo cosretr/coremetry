@@ -227,8 +227,7 @@ export default function LoginPage() {
       {!zen && !banging && <LoginTopBar />}
       {quote && (
         <figure role="status" className="login-egg-quote pointer-events-none absolute inset-x-0 top-[14%] z-20 m-0 px-6 text-center">
-          <blockquote className="m-0 text-[length:var(--fs-xl)] font-semibold text-(--text)">“{quote.text}”</blockquote>
-          <figcaption className="mt-2 text-[length:var(--fs-sm)] text-(--text2)">— {quote.by}</figcaption>
+          <blockquote className="m-0 text-[length:var(--fs-xl)] font-semibold text-(--text)">“{quote}”</blockquote>
         </figure>
       )}
       {/* 340px SABİTTİ: 320px'lik viewport'ta form yatay taşıyordu. Tavan aynı,

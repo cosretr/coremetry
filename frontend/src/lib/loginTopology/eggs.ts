@@ -70,11 +70,12 @@ export function bigBangWarp(t: number): Warp {
 
 // v0.10.1978 (operatör: "özlü söz İngilizce olsun, random sözler gelsin, onları JSON'a kaydet") — sözler
 // sreQuotes.json'da (kaynaklı); patlamadan sonra rastgele biri belirir.
-export interface SreQuote { text: string; by: string }
+// v0.10.1981 (operatör: "sahiplerini eklemene gerek yok") — yalnız metin.
+export type SreQuote = string;
 export const SRE_QUOTES: readonly SreQuote[] = quotes;
 /** Rastgele söz; `prev` verilirse art arda aynısı gelmez. */
 export function pickQuote(rand: () => number, prev?: SreQuote | null): SreQuote {
-  const pool = SRE_QUOTES.length > 1 && prev ? SRE_QUOTES.filter(q => q.text !== prev.text) : SRE_QUOTES;
+  const pool = SRE_QUOTES.length > 1 && prev ? SRE_QUOTES.filter(q => q !== prev) : SRE_QUOTES;
   return pool[Math.min(pool.length - 1, Math.floor(rand() * pool.length))];
 }
 /** Söz, patlama bitince belirir ve bu kadar kalır (ms). */
