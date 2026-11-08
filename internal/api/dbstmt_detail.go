@@ -133,7 +133,8 @@ func (s *Server) getDBStmtDetail(w http.ResponseWriter, r *http.Request) {
 		// tolerance. The ctx guard stops the chain when the client is
 		// gone / the request deadline hit, so the reads can't outlive
 		// one budget (the endpoints_detail shape).
-		if sum, err := s.store.GetDBStmtSummary(ctx, dq); err == nil && sum != nil {
+		// v0.10.1957 — kısa pencerede sayı/kuantil 1 dk tablodan (trendle aynı seçim, tg).
+		if sum, err := s.store.GetDBStmtSummaryGrain(ctx, dq, tg); err == nil && sum != nil {
 			out.Summary = sum
 			out.Statement = chstore.NormalizeDBStatement(sum.SampleStatement)
 		}
@@ -172,7 +173,7 @@ func (s *Server) getDBStmtDetail(w http.ResponseWriter, r *http.Request) {
 		// drawer renders current values without deltas rather than 500'ing.
 		pq := dq
 		pq.From, pq.To = chstore.PriorWindow(from, to)
-		if psum, err := s.store.GetDBStmtSummary(ctx, pq); err == nil && psum != nil {
+		if psum, err := s.store.GetDBStmtSummaryGrain(ctx, pq, s.store.DBStmtTrendGrain(ctx, pq.From, pq.To)); err == nil && psum != nil {
 			out.Summary.PriorCalls = psum.Calls
 			out.Summary.PriorErrors = psum.Errors
 			out.Summary.PriorAvgMs = psum.AvgMs

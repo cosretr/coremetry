@@ -13469,4 +13469,8 @@ ve sade span detayı (cümle + temel alanlar, öznitelikler katlı). Uygulananla
   olağan sürede." + "Sorgu detayı →". Veri statement detay ucu (db_statement_summary MV, 30 sn önbellek, yoklama yok);
   `stmtVerdict` saf (≥3× kat, ≥1,5× yavaş). Traces'te sorgu süzgeci olmadığı için "bu sorgunun trace'leri" linki yok;
   Sorgu detayı örnek trace'leri zaten listeliyor.
+- **v0.10.1957 — statement özeti kısa pencerede 1 dk tablodan** (operatör: "db summary 1 dakika yok muydu"). Trendin
+  seçicisiyle aynı karar (pencere ≤ 6 sa ve `db_statement_summary_1m` kapsıyor): çağrı / hata / ort / p95 / p99 1 dk
+  ızgarasından; örnek metin ve max 5m'den (1m tabloda o kolonlar yok). 1m okuma hatası → 5m değerleri. Prior pencere
+  kendi grenliğini seçer. 1956'nın bağlam satırı ve Statement sayfası özeti aynı hassasiyeti alır.
 

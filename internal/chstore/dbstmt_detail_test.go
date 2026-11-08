@@ -204,3 +204,34 @@ func TestDBStmtTrendBucketSec(t *testing.T) {
 		})
 	}
 }
+
+// v0.10.1957 — özet kısa pencerede 1 dk tablodan: SQL sınırları + 5m özetle birleşme.
+func TestDBStmtSummaryFineSQL(t *testing.T) {
+	sql := dbStmtSummaryFineSQL("WHERE stmt_hash = ?")
+	for _, want := range []string{"FROM db_statement_summary_1m", "LIMIT 1", "max_execution_time", "quantilesTDigestMerge"} {
+		if !strings.Contains(sql, want) {
+			t.Errorf("dbStmtSummaryFineSQL %q içermeli:\n%s", want, sql)
+		}
+	}
+	// 1 dk tabloda olmayan kolonlar sorguya girmez
+	for _, bad := range []string{"sample_stmt_state", "duration_max_state", "FROM spans"} {
+		if strings.Contains(sql, bad) {
+			t.Errorf("dbStmtSummaryFineSQL %q içermemeli", bad)
+		}
+	}
+}
+
+func TestMergeFineSummary(t *testing.T) {
+	out := &DBStmtSummary{SampleStatement: "SELECT 1", MaxMs: 900, Calls: 120, P95Ms: 50}
+	mergeFineSummary(out, 100, 2, 1000, 30, 80)
+	if out.Calls != 100 || out.Errors != 2 || out.AvgMs != 10 || out.P95Ms != 30 || out.P99Ms != 80 {
+		t.Errorf("1 dk değerleri yazılmalı: %+v", out)
+	}
+	if out.SampleStatement != "SELECT 1" || out.MaxMs != 900 {
+		t.Errorf("örnek metin ve max 5m'den kalmalı: %+v", out)
+	}
+	mergeFineSummary(out, 0, 0, 0, 0, 0)
+	if out.Calls != 0 || out.AvgMs != 0 {
+		t.Errorf("hassas pencerede çağrı yoksa 0: %+v", out)
+	}
+}

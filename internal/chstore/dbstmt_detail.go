@@ -150,6 +150,53 @@ func (s *Store) GetDBStmtSummary(ctx context.Context, q DBStmtDetailQuery) (*DBS
 	return &out, nil
 }
 
+// dbStmtSummaryFineSQL — v0.10.1957: özetin sayı + kuantil yarısı 1 dk tablodan
+// (db_statement_summary_1m; örnek metin ve max kolonu bu tabloda YOK, onlar 5m'den kalır).
+func dbStmtSummaryFineSQL(where string) string {
+	return `
+		SELECT
+			countMerge(span_count_state)                AS cnt,
+			countIfMerge(error_count_state)             AS err_cnt,
+			sumMerge(duration_sum_state) / 1e6          AS total_ms,
+			arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state), 2) / 1e6 AS p95_ms,
+			arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state), 3) / 1e6 AS p99_ms
+		FROM ` + dbStmtTrendTableFine + ` ` + where + `
+		LIMIT 1
+		SETTINGS max_execution_time = 10`
+}
+
+// mergeFineSummary — SAF: 1 dk tablonun sayıları/kuantilleri 5m özetin üstüne yazılır;
+// örnek metin ve max 5m'den kalır. cnt == 0 da yazılır (hassas pencerede çağrı yok).
+func mergeFineSummary(out *DBStmtSummary, cnt, errs uint64, totalMs, p95, p99 float64) {
+	out.Calls, out.Errors = cnt, errs
+	out.TotalMs = safeF(&totalMs)
+	out.AvgMs = 0
+	if cnt > 0 {
+		out.AvgMs = out.TotalMs / float64(cnt)
+	}
+	out.P95Ms = safeF(&p95)
+	out.P99Ms = safeF(&p99)
+}
+
+// GetDBStmtSummaryGrain — v0.10.1957 (operatör: "db summary 1 dakika yok muydu"): kısa ve
+// 1 dk tablonun kapsadığı pencerede (g = DBStmtTrendGrain, trendle aynı seçim) sayı ve
+// kuantiller 1 dk ızgarasından — 5 dk kova kenarı pencereyi kaydırmaz. 1 dk okuması hata
+// verirse 5m değerleri kalır (yumuşak).
+func (s *Store) GetDBStmtSummaryGrain(ctx context.Context, q DBStmtDetailQuery, g DBStmtTrendGrain) (*DBStmtSummary, error) {
+	out, err := s.GetDBStmtSummary(ctx, q)
+	if err != nil || out == nil || g.Table != dbStmtTrendTableFine {
+		return out, err
+	}
+	wc := dbStmtDetailWhereGrain(q, time.Minute)
+	var cnt, errs uint64
+	var totalMs, p95, p99 float64
+	if ferr := s.telemetryReadConn().QueryRow(ctx, dbStmtSummaryFineSQL(wc.sql()), wc.args...).Scan(&cnt, &errs, &totalMs, &p95, &p99); ferr != nil {
+		return out, nil
+	}
+	mergeFineSummary(out, cnt, errs, totalMs, p95, p99)
+	return out, nil
+}
+
 // DBStmtTrendPoint is one trend bucket: bucket-start ns + RED-shaped
 // values for the statement class.
 type DBStmtTrendPoint struct {
