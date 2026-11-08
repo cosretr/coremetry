@@ -14,7 +14,7 @@ describe('KioskSpanPanel (v0.10.681)', () => {
     }
   });
   it('gruplama tek kaynaktan; loglar span_id ile süzülür', () => {
-    expect(src).toContain("import { groupSpanAttrs, groupResourceAttrs } from '@/lib/spanAttrGroups'");
+    expect(src).toContain("import { groupSpanAttrs, groupResourceAttrs, resourceGroupOpen } from '@/lib/spanAttrGroups'");
     expect(src).toContain('.filter(r => r.spanId === span.spanId)');
     expect(src).toContain('<LogTable logs={spanLogs} hideTraceColumn />');
   });

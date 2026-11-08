@@ -3,7 +3,7 @@ import { IconButton } from '@/components/ui';
 import { CopyButton } from '@/components/CopyButton';
 import { SvcBadge } from '@/components/traces/shared';
 import { LogTable } from '@/components/LogTable';
-import { groupSpanAttrs, groupResourceAttrs } from '@/lib/spanAttrGroups';
+import { groupSpanAttrs, groupResourceAttrs, resourceGroupOpen } from '@/lib/spanAttrGroups';
 import { formatAttrValue } from './kioskModel';
 import { spanHasError } from '@/lib/otel';
 import { fmtNs, tsLong, displaySpanName } from '@/lib/utils';
@@ -81,7 +81,7 @@ export function KioskSpanPanel({ span, traceStartNs, logs, eventRows, onClose }:
         <div>
           <div className="kiosk-span__col-title">Resource attributes <span className="kiosk-span__cnt">{resCount}</span></div>
           {resGroups.length === 0 && <div className="kiosk-span__empty">Resource attribute yok.</div>}
-          {resGroups.map(g => <AttrGroup key={g.key} label={g.label} entries={g.entries} />)}
+          {resGroups.map(g => <AttrGroup key={g.key} label={g.label} entries={g.entries} open={resourceGroupOpen(g.key)} />)}
         </div>
       </div>
       {exceptions.length > 0 && (
@@ -109,9 +109,9 @@ export function KioskSpanPanel({ span, traceStartNs, logs, eventRows, onClose }:
 
 // AttrGroup — Tempo'daki gibi katlanabilir grup (▾ Database 7): native
 // <details open>, LogTable emsali; JS state yok.
-function AttrGroup({ label, entries }: { label: string; entries: [string, string][] }) {
+function AttrGroup({ label, entries, open = true }: { label: string; entries: [string, string][]; open?: boolean }) {
   return (
-    <details open className="kiosk-span__group">
+    <details open={open} className="kiosk-span__group">
       <summary className="ps-sec-title">{label} <span className="kiosk-span__cnt">{entries.length}</span></summary>
       {/* v0.10.947 — statik tablo (T1): Tempo yoğunluğunda öznitelik listesi (`.kiosk-span .ps-kv`,
           etiket içeriğe sığar); KeyValue sıkı kip kazanınca SpanDetail'in `.ps-kv`siyle birlikte göçer. */}

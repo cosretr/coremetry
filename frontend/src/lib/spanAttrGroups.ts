@@ -93,3 +93,9 @@ export function groupResourceAttrs(attrs: Record<string, unknown> | null | undef
   if (custom && custom.length) out.push({ key: 'custom', label: 'Custom', entries: custom });
   return out;
 }
+
+/** v0.10.1964 (operatör: "resource attributes'tan sadece Kubernetes açık gelsin, diğerleri kapalı") —
+ *  span detayında varsayılan açık resource grubu. Span attribute grupları açık kalır. */
+export function resourceGroupOpen(key: string): boolean {
+  return key === 'k8s';
+}

@@ -3,7 +3,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState } from 
 import { useEscLayer } from '@/lib/escLayer';
 import { Link } from 'react-router-dom';
 import type { SpanLinkEntry } from '@/lib/spanLinks';
-import { groupSpanAttrs, groupResourceAttrs } from '@/lib/spanAttrGroups';
+import { groupSpanAttrs, groupResourceAttrs, resourceGroupOpen } from '@/lib/spanAttrGroups';
 import { traceHref } from '@/lib/traceHref';
 import type { SpanRow, ProfileRow, SpanHotspotsResponse, LogRow, TimeRange } from '@/lib/types';
 import { selfTimeMs } from '@/lib/selfTime';
@@ -418,7 +418,7 @@ export function SpanDetail({ span, onClose, logsFrom, logsTo, serviceLinks = tru
             <div className="kiosk-span__col-title">Resource attributes <span className="kiosk-span__cnt">{resCount}</span></div>
             {resGroups.length === 0 && <div className="kiosk-span__empty">Resource attribute yok.</div>}
             {resGroups.map(g => (
-              <details key={g.key} open className="kiosk-span__group">
+              <details key={g.key} open={resourceGroupOpen(g.key)} className="kiosk-span__group">
                 <summary className="ps-sec-title">{g.label} <span className="kiosk-span__cnt">{g.entries.length}</span></summary>
                 <KV>{g.entries.map(([k, v]) => <Row key={k} k={k} v={v} copyable scope="resource" />)}</KV>
               </details>

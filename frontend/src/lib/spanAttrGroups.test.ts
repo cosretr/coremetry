@@ -29,3 +29,14 @@ describe('spanAttrGroups', () => {
     expect(spanAttrGroupOf('FUNCTION_CODE')).toBe('custom');
   });
 });
+
+// v0.10.1964 — span detayında resource gruplarından yalnız Kubernetes açık başlar.
+import { resourceGroupOpen } from './spanAttrGroups';
+describe('resourceGroupOpen', () => {
+  it('yalnız k8s açık', () => {
+    expect(resourceGroupOpen('k8s')).toBe(true);
+    for (const k of ['service', 'deployment', 'container', 'host', 'cloud', 'process', 'telemetry', 'custom']) {
+      expect(resourceGroupOpen(k)).toBe(false);
+    }
+  });
+});
