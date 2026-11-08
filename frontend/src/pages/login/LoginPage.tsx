@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState, FormEvent } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, FormEvent } from 'react';
 import { cn } from 'cn';
 import { useAuth } from '@/components/AuthProvider';
 import { TelescopeIcon } from '@/components/TelescopeIcon';
@@ -145,6 +145,8 @@ export default function LoginPage() {
   const summary = useLoginSummary(sumOn);
   const sumData = panelOn && summaryUsable(summary.data) ? summary.data : null;
   const showSide = panelOn && (summary.isPending || !!sumData);
+  // v0.10.1943 — galaksi etiketleri kartın altına girmesin (TopologyBackdrop avoidRef).
+  const cardRef = useRef<HTMLDivElement>(null);
 
   // v0.10.1909 — arka plan. Veri: özetteki topoloji (varsa ≥ 1 düğüm); özet sonuçlandı ama
   // topoloji yoksa (kapalı/hata/429/ready:false/loginTopology=off değilken veri yok) SENTETİK
@@ -178,7 +180,7 @@ export default function LoginPage() {
       {bd.kind === 'canvas' && (
         <>
           <Suspense fallback={null}>
-            <TopologyBackdrop graph={backdropGraph} animated={bd.animated} pace={pace} />
+            <TopologyBackdrop graph={backdropGraph} animated={bd.animated} pace={pace} avoidRef={cardRef} />
           </Suspense>
           <div aria-hidden="true" className="login-veil pointer-events-none absolute inset-0" />
         </>
@@ -186,7 +188,7 @@ export default function LoginPage() {
       <LoginTopBar />
       {/* 340px SABİTTİ: 320px'lik viewport'ta form yatay taşıyordu. Tavan aynı,
           taban akışkan. */}
-      <div className={cn(
+      <div ref={cardRef} className={cn(
         'relative z-10 border border-border bg-card shadow-pop',
         // Koyu şemada kart %86 opak + blur: arkadaki siluet yazıya karışmadan sezilir (açıkta düz).
         bd.kind === 'canvas' && 'dark:bg-card/86 dark:backdrop-blur-[6px]',

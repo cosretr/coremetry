@@ -234,6 +234,38 @@ export function pickLabelSet(g: Galaxy, max: number, rand: () => number): Set<nu
   return new Set(idx.slice(0, max));
 }
 
+/** Ekran kutusu (px): sol, sağ, üst, alt. */
+export interface Box { l: number; r: number; t: number; b: number }
+/** Etiket adayı: düğüm dizini, ekran konumu, metin genişliği (px), katman, ağırlık. */
+export interface LabelCand { i: number; x: number; y: number; w: number; tier: string; weight: number }
+
+const LABEL_PRI: Readonly<Record<string, number>> = { gw: 0, bff: 1, db: 2, queue: 2, svc: 3 };
+/** Kartın çevresinde etiket konmayan pay (px) ve etiketler arası boşluk. */
+export const LABEL_CARD_MARGIN = 10;
+
+/** Etiket kutusu: metin noktanın sağında (x+8), taban çizgisi y+3. */
+export const labelBox = (c: LabelCand): Box => ({ l: c.x + 6, r: c.x + 10 + c.w, t: c.y - 9, b: c.y + 6 });
+
+/**
+ * SAF (v0.10.1943, operatör: prod'da etiketler kartın altına giriyor ve üst üste
+ * biniyordu). Öncelik: gateway > BFF > veri > servis, eşitlikte ağırlık. Kartın
+ * (avoid, LABEL_CARD_MARGIN payıyla) altına giren ya da yerleşmiş bir etikete
+ * binen aday çizilmez. Çizilecek düğüm dizinlerini öncelik sırasıyla döner.
+ */
+export function placeLabels(cands: readonly LabelCand[], avoid: Box | null): number[] {
+  const sorted = [...cands].sort((a, b) => (LABEL_PRI[a.tier] ?? 9) - (LABEL_PRI[b.tier] ?? 9) || b.weight - a.weight || a.i - b.i);
+  const placed: Box[] = [];
+  const out: number[] = [];
+  const M = LABEL_CARD_MARGIN;
+  for (const c of sorted) {
+    const bx = labelBox(c);
+    if (avoid && bx.r > avoid.l - M && bx.l < avoid.r + M && bx.b > avoid.t - M && bx.t < avoid.b + M) continue;
+    if (placed.some(q => bx.l < q.r + 4 && bx.r > q.l - 4 && bx.t < q.b + 2 && bx.b > q.t - 2)) continue;
+    placed.push(bx); out.push(c.i);
+  }
+  return out;
+}
+
 /**
  * Veri katmanı etiket kümesi (v0.10.1931): her ad için yalnız EN AĞIR düğüm;
  * genel yedek adlar ("db", "queue") hiç etiket almaz; en çok `max`, ağırlığa göre.

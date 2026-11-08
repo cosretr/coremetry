@@ -4,7 +4,7 @@ import { mulberry32 } from './prng';
 import { syntheticGraph, SYNTHETIC_SEED } from './synthetic';
 import {
   buildGalaxy, depthOf, flowPos, flowSpeed, isDarkColor, nodeAlpha, nodeRadius, paceFrom, pickBackendLabels, pickLabelSet, project,
-  sizeOf, spinRate, wantsLabel, DENSE_NODES, DENSE_SIZE_K, MAX_STARS, MIN_DUST, MIN_ARMS, TILT0, DUST_ARM, DUST_CORE, FLOW_EDGES, type GNode,
+  sizeOf, spinRate, wantsLabel, DENSE_NODES, DENSE_SIZE_K, MAX_STARS, MIN_DUST, placeLabels, labelBox, LABEL_CARD_MARGIN, MIN_ARMS, TILT0, DUST_ARM, DUST_CORE, FLOW_EDGES, type GNode,
 } from './galaxy';
 import type { LoginSummaryEdge, LoginSummaryNode } from '@/lib/types';
 
@@ -185,5 +185,26 @@ describe('tüm servisler: adsız yıldızlar (v0.10.1937)', () => {
     const gx = buildGalaxy(g.nodes, g.edges, 7, undefined, undefined, many);
     expect(gx.stars.length / 5).toBe(MAX_STARS);
     expect(gx.nodes.map(n => [n.r, n.th])).toEqual(base.nodes.map(n => [n.r, n.th]));
+  });
+});
+
+describe('etiket yerleşimi (v0.10.1943)', () => {
+  const c = (i: number, x: number, y: number, tier: string, weight = 0.5, w = 60) => ({ i, x, y, w, tier, weight });
+  it('kartın altına (pay dahil) giren etiket çizilmez', () => {
+    const card = { l: 400, r: 1000, t: 200, b: 700 };
+    // 0: kutu sağı 330+70=400 > 400-10 (paya uzanır) · 1: içinde · 2: kutu solu 1000+6 < 1000+10 (payda) · 3: dışarıda
+    const out = placeLabels([c(0, 330, 300, 'svc'), c(1, 500, 300, 'svc'), c(2, 1000, 300, 'svc'), c(3, 1100, 300, 'svc')], card);
+    expect(out.sort()).toEqual([3]);
+    expect(placeLabels([c(0, 300, 300, 'svc')], card)).toEqual([0]); // kutu sağı 370 < 390
+  });
+  it('çakışmada öncelik: gateway > BFF > veri > servis, sonra ağırlık', () => {
+    expect(placeLabels([c(0, 100, 100, 'svc', 1), c(1, 110, 102, 'gw', 0.1)], null)).toEqual([1]);
+    expect(placeLabels([c(0, 100, 100, 'svc', 0.2), c(1, 110, 102, 'svc', 0.9)], null)).toEqual([1]);
+    expect(placeLabels([c(0, 100, 100, 'db'), c(1, 110, 102, 'bff')], null)).toEqual([1]);
+  });
+  it('çakışmayanların hepsi kalır', () => {
+    const out = placeLabels([c(0, 100, 100, 'svc'), c(1, 100, 140, 'svc'), c(2, 400, 100, 'svc')], null);
+    expect(out.sort()).toEqual([0, 1, 2]);
+    expect(labelBox(c(0, 100, 100, 'svc'))).toEqual({ l: 106, r: 170, t: 91, b: 106 });
   });
 });

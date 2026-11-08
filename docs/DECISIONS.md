@@ -13396,3 +13396,12 @@ gitmemesi gerekir."
   gevşek satırı) aynı soru çiplerle (`/excel · N satır`, `/telemetri`). "envanter / tablo" cevabı ve `/excel`
   komutu doğrudan cevaplar.
 
+## 2026-11-08 — v0.10.1943–1947 — Login galaksisi iyileştirmeleri (operatör: mockup → "önerini yapalım")
+
+Prod ekran görüntüsü: etiketler kartın altına giriyor ve üst üste biniyor, galaksi tek kola yığılıyor, kollar
+arası çizgiler ekranı kesiyor, 360 dışındaki servisler adsız soluk yıldız. Mockup'taki beş öneri ayrı sürümlerde.
+
+- **v0.10.1943 — etiket çakışması yok.** `placeLabels` (saf): öncelik gateway > BFF > veri > servis, eşitlikte
+  ağırlık; login kartının kutusuna (10 px payla) giren ya da yerleşmiş etikete binen etiket çizilmez. Kart kutusu
+  LoginPage'den `avoidRef` ile her karede okunur.
+

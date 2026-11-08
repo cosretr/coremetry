@@ -10,6 +10,7 @@
 // Durum/uyarı rengi YOK; renkler yalnız tema token'ları (`resolveVar`): yıldız
 // v0.10.1933: etiketler zemin renginde (--bg0) ince çerçeveyle çizilir (toz üstünde okunur).
 // v0.10.1938 (operatör: "açılış efekti olmasın, direkt açılsın"): 1936'nın açılış hareketi söküldü.
+// v0.10.1943: etiketler çakışmaz ve kartın altına girmez (placeLabels; kart kutusu `avoidRef`).
 // v0.10.1935: üzerine gelince adın altında soluk TÜR satırı (gateway / BFF / servis / veritabanı / kuyruk, i18n).
 // --accent2, kol/veri --purple, akan noktalar --orange (Traces süre çizgisiyle AYNI token; v0.10.1932),
 // etiket --text2. v0.10.1931: veritabanı mor YUVARLAK nokta + hafif hale (kare değil),
@@ -18,13 +19,13 @@
 // `prefers-reduced-motion`'da kendiliğinden hareket yok (sürükleme çalışır).
 // Galaksi ilk gelen grafikle BİR KEZ kurulur. Dekoratif: aria-hidden; olay alır
 // (sürükleme) — kart ve üst çubuk üstte olduğundan yalnız kart DIŞINDA.
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 import { chartMonoFont, resolveVar } from '@/lib/chart/resolveVar';
 import { useThemeTick } from '@/lib/useThemeTick';
 import { useT } from '@/lib/i18n';
 import { MAX_LABELS, shouldDraw, thinGraph } from '@/lib/loginTopology/frame';
 import {
-  buildGalaxy, depthOf, flowPos, isDarkColor, nodeAlpha, nodeRadius, pickBackendLabels, pickLabelSet, project, spinRate,
+  buildGalaxy, depthOf, flowPos, isDarkColor, placeLabels, type Box, type LabelCand, nodeAlpha, nodeRadius, pickBackendLabels, pickLabelSet, project, spinRate,
   TILT0, TILT_MAX, TILT_MIN, wantsLabel, type Galaxy, type Pt, type View,
 } from '@/lib/loginTopology/galaxy';
 import { seedOfIds } from '@/lib/loginTopology/prng';
@@ -62,6 +63,8 @@ function halo(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, co
 interface Frame {
   g: Galaxy; v: View; w: number; h: number; dpr: number; tSec: number; still: boolean;
   col: Colors; pace: number; hover: number; labels: ReadonlySet<number>;
+  /** Etiket konmayacak kutu (login kartı), tuval koordinatında; yoksa null. */
+  avoid: Box | null;
   /** Katman → üzerine gelince gösterilen tür adı (i18n). */
   kinds: Readonly<Record<string, string>>;
 }
@@ -155,12 +158,16 @@ function drawFrame(ctx: CanvasRenderingContext2D, f: Frame): Pt[] {
 
   // etiketler (yalnız isimli kipte ad gelir)
   ctx.font = chartMonoFont(11);
+  const cands: LabelCand[] = [];
   for (const i of order) {
     if (i === hover) continue;
     const nd = g.nodes[i], depth = depthOf(pos[i].z);
     if (!wantsLabel(nd, depth, f.labels.has(i))) continue;
-    ctx.globalAlpha = Math.min(0.85, (depth - 0.3) * 1.3);
-    label(ctx, nd.name ?? '', pos[i].x + 8, pos[i].y + 3, col);
+    cands.push({ i, x: pos[i].x, y: pos[i].y, w: ctx.measureText(nd.name ?? '').width, tier: nd.tier, weight: nd.weight });
+  }
+  for (const i of placeLabels(cands, f.avoid)) {
+    ctx.globalAlpha = Math.min(0.85, (depthOf(pos[i].z) - 0.3) * 1.3);
+    label(ctx, g.nodes[i].name ?? '', pos[i].x + 8, pos[i].y + 3, col);
   }
   if (hover >= 0 && g.nodes[hover].name) {
     const nd = g.nodes[hover], p = pos[hover];
@@ -173,8 +180,10 @@ function drawFrame(ctx: CanvasRenderingContext2D, f: Frame): Pt[] {
   return pos;
 }
 
-export default function TopologyBackdrop({ graph, animated, pace = 0.6 }: {
+export default function TopologyBackdrop({ graph, animated, pace = 0.6, avoidRef }: {
   graph: BackdropGraph; animated: boolean;
+  /** v0.10.1943 — etiketlerin girmeyeceği öğe (login kartı). */
+  avoidRef?: RefObject<HTMLElement | null>;
   /** Toplam throughput temposu ∈ [0,1] (son / 24 sa tepe): dönüş ve akış hızı. */
   pace?: number;
 }) {
@@ -222,8 +231,15 @@ export default function TopologyBackdrop({ graph, animated, pace = 0.6 }: {
       canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
       R = Math.max(w, h) * 0.6;
     };
+    const avoidBox = (): Box | null => {
+      const el = avoidRef?.current;
+      if (!el) return null;
+      const a = el.getBoundingClientRect(), c = canvas.getBoundingClientRect();
+      return { l: a.left - c.left, r: a.right - c.left, t: a.top - c.top, b: a.bottom - c.top };
+    };
     const paint = (tSec: number, still: boolean) => {
       pos = drawFrame(ctx, {
+        avoid: avoidBox(),
         g: galaxy, v: { angle: st.angle, tilt: st.tilt, cx: w / 2, cy: h / 2, R }, w, h, dpr, tSec, still,
         col, pace: paceRef.current, hover, labels, kinds: kindsRef.current,
       });
@@ -302,7 +318,7 @@ export default function TopologyBackdrop({ graph, animated, pace = 0.6 }: {
       canvas.removeEventListener('pointerleave', onLeave);
       canvas.removeEventListener('dblclick', onDbl);
     };
-  }, [galaxy, labels, animated, themeTick]);
+  }, [galaxy, labels, animated, themeTick, avoidRef]);
 
   return <canvas ref={ref} aria-hidden="true" data-testid="login-topology"
     className="absolute inset-0 size-full select-none touch-none" />;
