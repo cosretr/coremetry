@@ -5,6 +5,7 @@ import {
   dbSpanRef, dbLinkWindow, dbAttrKind, dbSpanAttrHref, dbSpanDatabaseHref,
   dbSpanStatementHref, dbSpanTableHref, STMT_LIST_PATH, STMT_DETAIL_PATH, DB_LINK_PAD_NS,
 } from './dbSpanLinks';
+import { stmtVerdict } from './dbSpanLinks';
 import { databaseDetailHref, parseDatabasePageRef } from '@/pages/databases/databaseParam';
 import { decodeStmtParam } from '@/pages/slowqueries/stmtParam';
 import { windowRangeParam } from '@/lib/urlState';
@@ -111,4 +112,15 @@ describe('rotalar App.tsx.te KAYITLI', () => {
   for (const path of [STMT_LIST_PATH, STMT_DETAIL_PATH, '/database', '/databases']) {
     it(path, () => { expect(app).toContain(`path="${path}"`); });
   }
+});
+
+// v0.10.1956 — span detayında sorgu bağlamı: bu çalışmanın p95'e göre yeri.
+describe('stmtVerdict', () => {
+  it('eşikler: ≥3× kat sayısı, ≥1,5× yavaş, altı olağan; p95 yoksa null', () => {
+    expect(stmtVerdict(1590, 180)).toEqual({ kind: 'slowX', x: 9 });
+    expect(stmtVerdict(300, 180)).toEqual({ kind: 'slow' });
+    expect(stmtVerdict(100, 180)).toEqual({ kind: 'normal' });
+    expect(stmtVerdict(100, 0)).toBeNull();
+    expect(stmtVerdict(100, undefined)).toBeNull();
+  });
 });

@@ -14,7 +14,7 @@ import { logsRangeParam, logsHref } from '@/lib/logsUrl';
 import { serviceHref } from '@/lib/serviceHref';
 import { spanAttrHref, spanEndpointHref, type SpanLinkCtx } from './spanEntityLinks';
 import {
-  dbSpanRef, dbLinkWindow, dbSpanAttrHref, dbSpanDatabaseHref, dbSpanStatementHref,
+  dbSpanRef, dbLinkWindow, dbSpanAttrHref, dbSpanDatabaseHref, dbSpanStatementHref, stmtVerdict,
   type DbSpanRef, type DbLinkKind,
 } from '@/lib/dbSpanLinks';
 import { IconFlame, IconSparkles } from './icons';
@@ -22,6 +22,7 @@ import { CopyButton } from './CopyButton';
 import { IconButton } from './ui/IconButton';
 import { DisclosureButton } from './ui/DisclosureButton';
 import { SqlCode } from '@/components/coremetry/SqlCode'; // v0.10.1955
+import { useDBStmtDetail } from '@/lib/queries/databases'; // v0.10.1956
 import { AIExplainButton } from './ai/AIExplainButton';
 import { useT } from '@/lib/i18n'; // v0.10.1338 — "Ask CoSRE" etiketi
 import { BreakdownBar, KindBadge } from './KindBadge';
@@ -168,6 +169,26 @@ export function SpanDetail({ span, onClose, logsFrom, logsTo, serviceLinks = tru
   // v0.10.1525 — başlık satırındaki "Database'de aç" / "Sorgu detayı" çifti.
   // v0.10.1955 — renkli SQL bloğunun metni: sunucunun dbStatement'ı, yoksa öznitelik (eski / yeni semconv).
   const spanSql = (span.dbStatement || span.attributes?.['db.statement'] || span.attributes?.['db.query.text'] || '').trim();
+  // v0.10.1956 — sorgu bağlamı: bu çalışmadan önceki 1 saatin statement özeti (yalnız sorgu kimliği varken;
+  // önbellekli kanca, yoklama yok).
+  const stmtRefCtx = spanLinkCtx.db?.stmtHash && span.startTime > 0 ? spanLinkCtx.db : null;
+  const stmtQ = useDBStmtDetail(spanSql && stmtRefCtx ? {
+    hash: stmtRefCtx.stmtHash, system: stmtRefCtx.system, from: span.startTime - 3_600_000_000_000, to: span.startTime,
+  } : null);
+  const stmtCtx = useMemo(() => {
+    const sum = stmtQ.data?.summary;
+    if (!sum) return null;
+    if (!(sum.calls > 0)) return { text: tr('dbspan.ctx.none'), slow: false };
+    const v = stmtVerdict(span.durationMs, sum.p95Ms);
+    if (!v) return null;
+    const verdict = v.kind === 'slowX' ? tr('dbspan.ctx.slowX').replace('{x}', String(v.x)) : tr(`dbspan.ctx.${v.kind}`);
+    const ms = (x: number) => fmtNs(x * 1e6);
+    return {
+      text: tr('dbspan.ctx').replace('{calls}', sum.calls.toLocaleString()).replace('{p95}', ms(sum.p95Ms))
+        .replace('{d}', ms(span.durationMs)).replace('{verdict}', verdict),
+      slow: v.kind !== 'normal',
+    };
+  }, [stmtQ.data, span.durationMs, tr]);
   const dbLinks = useMemo(() => {
     const ref = spanLinkCtx.db;
     if (!ref) return null;
@@ -369,7 +390,19 @@ export function SpanDetail({ span, onClose, logsFrom, logsTo, serviceLinks = tru
         )}
         {/* v0.10.1955 (operatör: "db sorguları Toad gibi highlight edilebilir mi") — DB span'inde
             sorgu metni renkli blok + kopyala (coremetry/SqlCode, Database sayfasıyla aynı bileşen). */}
-        {spanSql && <div className="kiosk-span__sql" data-testid="span-sql"><SqlCode sql={spanSql} /></div>}
+        {spanSql && (
+          <div className="kiosk-span__sql" data-testid="span-sql">
+            <SqlCode sql={spanSql} />
+            {/* v0.10.1956 — bu sorgu her zaman böyle mi: önceki 1 saatin özeti (db_statement_summary) +
+                bu çalışmanın p95'e göre yeri; ayrıntı için Sorgu detayı. */}
+            {stmtCtx && (
+              <div className={`kiosk-span__sqlctx${stmtCtx.slow ? ' is-slow' : ''}`} data-testid="span-sql-ctx">
+                <span>{stmtCtx.text}</span>
+                {dbLinks?.statement && <Link to={dbLinks.statement} title={tr('dbspan.statementDetailHint')}>{tr('dbspan.statementDetail')} →</Link>}
+              </div>
+            )}
+          </div>
+        )}
         <div className="kiosk-span__cols">
           <div>
             <div className="kiosk-span__col-title">Span attributes <span className="kiosk-span__cnt">{attrCount}</span></div>

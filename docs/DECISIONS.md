@@ -13464,4 +13464,9 @@ ve sade span detayı (cümle + temel alanlar, öznitelikler katlı). Uygulananla
   açılınca sorgu metni öznitelik kolonlarının üstünde `coremetry/SqlCode` ile (Database sayfasındaki bileşen: anahtar
   sözcük vurgu rengi + kalın, fonksiyon / metin / sayı ayrı ton, yorum soluk; kopyala). Metin: `dbStatement` >
   `db.statement` > `db.query.text`.
+- **v0.10.1956 — span detayında sorgu bağlamı.** Renkli SQL'in altında, sorgu kimliği olan DB span'inde: "Bu sorgu bu
+  çağrıdan önceki 1 saatte N kez çalıştı, genelde p95 X. Bu çalışma Y sürdü: her zamankinden K kat yavaş / yavaş /
+  olağan sürede." + "Sorgu detayı →". Veri statement detay ucu (db_statement_summary MV, 30 sn önbellek, yoklama yok);
+  `stmtVerdict` saf (≥3× kat, ≥1,5× yavaş). Traces'te sorgu süzgeci olmadığı için "bu sorgunun trace'leri" linki yok;
+  Sorgu detayı örnek trace'leri zaten listeliyor.
 

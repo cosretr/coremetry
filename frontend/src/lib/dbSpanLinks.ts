@@ -122,3 +122,18 @@ export function dbSpanAttrHref(
   }
   return href ? { href, kind } : null;
 }
+
+/**
+ * v0.10.1956 (operatör: span detayında sorgu bağlamı) — bu çalışmanın süresi, sorgunun
+ * önceki 1 saatlik p95'ine göre: ≥ 3× → kat sayısıyla yavaş, ≥ 1,5× → yavaş, altı → olağan.
+ * p95 yoksa (veri yok) null.
+ */
+export type StmtVerdict = { kind: 'slowX'; x: number } | { kind: 'slow' } | { kind: 'normal' };
+export function stmtVerdict(durationMs: number, p95Ms: number | undefined | null): StmtVerdict | null {
+  if (!p95Ms || !(p95Ms > 0) || !Number.isFinite(durationMs)) return null;
+  const x = durationMs / p95Ms;
+  if (x >= 3) return { kind: 'slowX', x: Math.round(x) };
+  if (x >= 1.5) return { kind: 'slow' };
+  return { kind: 'normal' };
+}
+
