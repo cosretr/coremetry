@@ -203,4 +203,10 @@
     font: inherit; color: inherit; line-height: inherit; cursor: pointer;
   }
   button[data-slot]:disabled { cursor: default; }
+  /* v0.10.1975 (operatör: "search'te hâlâ başında siyah çizgi, çerçeve kenarı gibi") — aynı sınıf,
+     giriş kutuları: legacy input/textarea kuralı data-slot'lu öğeleri bilerek dışarıda bırakır ve
+     preflight yok, yani kenar yazmayan shadcn girişi (komut paleti araması: command-input) UA'nın
+     2 px INSET kenarıyla çiziliyordu — koyu sol kenar "siyah çizgi". Kenar yazan girişler (input,
+     textarea: `border` yardımcısı) utilities katmanında bunu yener. */
+  input[data-slot], textarea[data-slot] { border: 0 solid; margin: 0; }
 }
