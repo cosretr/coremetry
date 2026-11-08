@@ -543,3 +543,14 @@ func TestTraceDrillLineTraceRecordsBudget(t *testing.T) {
 		t.Fatalf("düz kayıt tavanı değişmemeli: %d", len([]rune(got)))
 	}
 }
+
+// v0.10.1990 — traceRecords bütçesi modelin penceresinden: kayıtlar arasında bölünür, [1500, 16000].
+func TestTraceRecordsPerLog(t *testing.T) {
+	for _, c := range []struct{ total, n, want int }{
+		{0, 3, 1500}, {100000, 0, 1500}, {179200, 4, 16000}, {44800, 4, 11200}, {3000, 4, 1500},
+	} {
+		if got := traceRecordsPerLog(c.total, c.n); got != c.want {
+			t.Errorf("traceRecordsPerLog(%d,%d)=%d, want %d", c.total, c.n, got, c.want)
+		}
+	}
+}

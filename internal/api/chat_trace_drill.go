@@ -28,6 +28,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/cilcenk/coremetry/internal/ai/modelcaps"
 	"net/url"
 	"sort"
 	"strings"
@@ -56,8 +57,10 @@ const (
 	traceDrillLogBodyRunes = 200
 	// traceDrillRecordsBodyRunes — traceRecords gövdeli kayıtların tavanı (v0.10.1988).
 	traceDrillRecordsBodyRunes = 1500
-	traceDrillBaselineWin      = 24 * time.Hour
-	traceDrillMax              = 2
+	// traceDrillRecordsMaxRunes — kayıt başı üst sınır (gövdenin kendi tavanı; v0.10.1990).
+	traceDrillRecordsMaxRunes = 16000
+	traceDrillBaselineWin     = 24 * time.Hour
+	traceDrillMax             = 2
 )
 
 // drillPick — kritik yoldaki baskın span (öz süresi en büyük).
@@ -408,11 +411,16 @@ func renderTraceLogLineTR(lg *logstore.LogRecord) string {
 // renderTraceLogLineBodyTR — SAF (v0.10.1343): gövde tavanı parametreli hâl
 // (operasyon/endpoint ön-getirmesinin kırılımı model tavanına sığsın diye).
 func renderTraceLogLineBodyTR(lg *logstore.LogRecord, bodyRunes int) string {
-	// v0.10.1988 (operatör: "traceRecords altında çok değerli bilgiler var; trace logu CoSRE'ye
-	// sorulduğunda dikkate alsın") — gövdesi traceRecords dizisinden kurulan kayıt (istek / yanıt /
-	// müşteri / cihaz satırları) 200 karakterde ilk iki satırı geçemiyordu; bu kayıtlarda tavan geniş.
-	if _, ok := lg.Attributes["traceRecords"]; ok && bodyRunes < traceDrillRecordsBodyRunes {
-		bodyRunes = traceDrillRecordsBodyRunes
+	return renderTraceLogLineBudgetTR(lg, bodyRunes, traceDrillRecordsBodyRunes)
+}
+
+// renderTraceLogLineBudgetTR — v0.10.1988/1990 (operatör: "traceRecords uzun bir JSON olabilir ama
+// anlamlı; CoSRE'ye giderken gerekirse uzun prompt olsun, modelin context'i ayarlasın") — gövdesi
+// traceRecords dizisinden kurulan kayıtta (istek / yanıt / müşteri / cihaz satırları) tavan
+// recordsRunes: modelin bağlam penceresinden türer (traceRecordsPerLog).
+func renderTraceLogLineBudgetTR(lg *logstore.LogRecord, bodyRunes, recordsRunes int) string {
+	if _, ok := lg.Attributes["traceRecords"]; ok && bodyRunes < recordsRunes {
+		bodyRunes = recordsRunes
 	}
 	body := oneLineSample(lg.Body, bodyRunes)
 	if et := strings.TrimSpace(lg.Attributes["exception.type"]); et != "" && !strings.Contains(body, et) {
@@ -430,6 +438,29 @@ func renderTraceDrillLogsTR(noStore bool, page *logstore.Page, err error, traceI
 
 // renderTraceDrillLogsBodyTR — SAF (v0.10.1343): gövde tavanı parametreli hâl.
 func renderTraceDrillLogsBodyTR(noStore bool, page *logstore.Page, err error, traceIDs []string, bodyRunes int) string {
+	return renderTraceDrillLogsBudgetTR(noStore, page, err, traceIDs, bodyRunes, 0)
+}
+
+// traceRecordsPerLog — SAF (v0.10.1990): traceRecords gövdeli kayıt başına karakter tavanı.
+// recordsTotal = bu kayıtlara ayrılan toplam bütçe (modelin penceresinden; 0 = bilinmiyor → eski
+// sabit 1500). Bütçe kayıtlar arasında eşit bölünür, kayıt başına [1500, 16000] (16000 = gövdenin
+// kendi tavanı, logstore.traceRecordsMaxTotal).
+func traceRecordsPerLog(recordsTotal, n int) int {
+	if recordsTotal <= 0 || n <= 0 {
+		return traceDrillRecordsBodyRunes
+	}
+	per := recordsTotal / n
+	if per < traceDrillRecordsBodyRunes {
+		return traceDrillRecordsBodyRunes
+	}
+	if per > traceDrillRecordsMaxRunes {
+		return traceDrillRecordsMaxRunes
+	}
+	return per
+}
+
+// renderTraceDrillLogsBudgetTR — renderTraceDrillLogsBodyTR + traceRecords toplam bütçesi.
+func renderTraceDrillLogsBudgetTR(noStore bool, page *logstore.Page, err error, traceIDs []string, bodyRunes, recordsTotal int) string {
 	switch {
 	case len(traceIDs) == 0:
 		return ""
@@ -444,13 +475,23 @@ func renderTraceDrillLogsBodyTR(noStore bool, page *logstore.Page, err error, tr
 	}
 	var b strings.Builder
 	b.WriteString("O TRACE'LERİN LOGLARI (yalnız bu trace id'leri, trace zarfı ±1 dk):\n")
-	for i, g := range groupTraceLogs(logs, traceIDs, traceDrillLogsPerTrace) {
+	groups := groupTraceLogs(logs, traceIDs, traceDrillLogsPerTrace)
+	nRec := 0
+	for _, g := range groups {
+		for _, lg := range g {
+			if _, ok := lg.Attributes["traceRecords"]; ok {
+				nRec++
+			}
+		}
+	}
+	recRunes := traceRecordsPerLog(recordsTotal, nRec)
+	for i, g := range groups {
 		if len(g) == 0 {
 			fmt.Fprintf(&b, "- trace %s: bu trace'e bağlı log kaydı YOK.\n", drillTraceID12(traceIDs[i]))
 			continue
 		}
 		for _, lg := range g {
-			b.WriteString(renderTraceLogLineBodyTR(lg, bodyRunes) + "\n")
+			b.WriteString(renderTraceLogLineBudgetTR(lg, bodyRunes, recRunes) + "\n")
 		}
 	}
 	if len(logs) >= traceDrillLogsLimit {
@@ -709,7 +750,7 @@ func (s *Server) traceDrillEvidenceBody(ctx context.Context, emit func(string, a
 	largs, _ := json.Marshal(map[string]any{"trace_ids": ids, "limit": traceDrillLogsLimit})
 	nLog := emitGuidedStep(emit, "trace_drill_logs", string(largs))
 	page, lerr := s.readDrillLogs(dctx, ids, minNs, maxNs, from, to)
-	logText := renderTraceDrillLogsBodyTR(s.logs == nil, page, lerr, ids, bodyRunes)
+	logText := renderTraceDrillLogsBudgetTR(s.logs == nil, page, lerr, ids, bodyRunes, s.traceRecordsBudget(ctx))
 	emitGuidedStepResult(emit, nLog, "trace_drill_logs", logText, lerr)
 	rows := make([]chstore.TraceRow, 0, len(cands))
 	for _, c := range cands {
@@ -835,4 +876,17 @@ func latestPriorService(prior []string, services, envs []string) string {
 		}
 	}
 	return ""
+}
+
+// traceRecordsBudget — v0.10.1990: traceRecords gövdelerine ayrılan toplam karakter = modelin bağlam
+// penceresinin %35'i (token ≈ 4 karakter). Pencere bilinmiyorsa 0 (kayıt başı eski sabit 1500).
+func (s *Server) traceRecordsBudget(ctx context.Context) int {
+	if s == nil || s.copilot == nil {
+		return 0
+	}
+	w := modelcaps.ContextWindow(s.copilot.ModelFor(ctx))
+	if w <= 0 {
+		return 0
+	}
+	return w * 4 * 35 / 100
 }
