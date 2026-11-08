@@ -64,6 +64,12 @@ export function KafkaTopicMetrics({ system, cluster, topic, range, win, compact 
     () => [...kafkaTopicClientRows('producer', prodRows), ...kafkaTopicClientRows('consumer', consRows)],
     // eslint-disable-next-line react-hooks/exhaustive-deps -- veri kimliği sorgu sonucu
     [clientsQ.data.prod, clientsQ.data.cons]);
+  // v0.10.1963 — pod sayısı Consumers / Producers sekme tablolarına (1962'de kalkan istemci tablosundaki kolon).
+  const pods = useMemo(() => {
+    const m = { producer: new Map<string, number>(), consumer: new Map<string, number>() };
+    for (const c of clients) m[c.side].set(`${c.service}|${c.clientId}`, c.pods);
+    return m;
+  }, [clients]);
   const pending = clientsQ.pending('prod') || clientsQ.pending('cons');
   const none = !pending && clients.length === 0;
 
@@ -177,8 +183,8 @@ export function KafkaTopicMetrics({ system, cluster, topic, range, win, compact 
       {statRow}
       {tabs}
       {tab === 'overview' && (lagAlarm ? <>{lagSection}{flowGrid}</> : <>{flowGrid}{lagSection}</>)}
-      {tab === 'consumers' && <TopicConsumersTable topic={topic} range={range} win={win} />}
-      {tab === 'producers' && <TopicProducersTable topic={topic} range={range} win={win} />}
+      {tab === 'consumers' && <TopicConsumersTable topic={topic} range={range} win={win} pods={pods.consumer} />}
+      {tab === 'producers' && <TopicProducersTable topic={topic} range={range} win={win} pods={pods.producer} />}
       {tab !== 'traces' && (
         <div className="field-hint">
           Kaynak: VictoriaMetrics, <span className="mono">topic=&quot;{topic}&quot;</span> etiketli Kafka istemci metrikleri.

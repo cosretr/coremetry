@@ -17,6 +17,15 @@ import {
 import type { TimeRange } from '@/lib/types';
 
 type Win = { from: number; to: number };
+/** v0.10.1963 — `${servis}|${client_id}` → pod sayısı (host_name), KafkaTopicMetrics'in istemci okumasından. */
+export type PodCounts = ReadonlyMap<string, number>;
+const podKey = (service: string, clientId: string) => `${service}|${clientId}`;
+const podsCol = <T extends { service: string; clientId: string }>(pods: PodCounts): ColumnDef<T> =>
+  ({ id: 'pods', label: 'Pod', sortValue: r => pods.get(podKey(r.service, r.clientId)) ?? -1, numeric: true, naturalDir: 'desc', width: 70 });
+const podsText = (pods: PodCounts, service: string, clientId: string) => {
+  const n = pods.get(podKey(service, clientId));
+  return n == null ? '—' : fmtNum(n);
+};
 const none = (v: number | null, f: (v: number) => string) => (v == null ? '—' : f(v));
 const rate = (v: number) => fmtSmart(v, 'reqps');
 
@@ -30,9 +39,10 @@ const vmState = <T,>(pending: boolean, err: Error | null, empty: string): DataTa
   : err ? { kind: 'error', message: `VictoriaMetrics okunamadı — ${err.message}` }
   : { kind: 'empty', message: empty };
 
-const CONS_COLS: ColumnDef<KafkaConsumerRow>[] = [
+const consCols = (pods: PodCounts): ColumnDef<KafkaConsumerRow>[] => [
   { id: 'service', label: 'Servis', sortValue: r => r.service, naturalDir: 'asc', flex: true, minWidth: 160, mono: true },
   { id: 'client', label: 'client_id', sortValue: r => r.clientId, naturalDir: 'asc', width: 220, minWidth: 130, mono: true },
+  podsCol<KafkaConsumerRow>(pods),
   { id: 'lag', label: 'Lag', sortValue: r => r.lag ?? -1, numeric: true, naturalDir: 'desc', width: 100,
     tone: r => (r.lag == null ? undefined : r.lag >= 10_000 ? 'err' : r.lag >= LAGGED_MIN ? 'warn' : undefined) },
   { id: 'lead', label: 'Lead (min)', sortValue: r => r.lead ?? Number.MAX_SAFE_INTEGER, numeric: true, naturalDir: 'asc', width: 104,
@@ -41,7 +51,8 @@ const CONS_COLS: ColumnDef<KafkaConsumerRow>[] = [
   { id: 'poll', label: 'Son poll', sortValue: r => r.pollSec ?? -1, numeric: true, naturalDir: 'desc', width: 96 },
 ];
 
-export function TopicConsumersTable({ topic, range, win }: { topic: string; range: TimeRange; win: Win }) {
+export function TopicConsumersTable({ topic, range, win, pods }: { topic: string; range: TimeRange; win: Win; pods: PodCounts }) {
+  const cols = useMemo(() => consCols(pods), [pods]);
   const items = useMemo(() => kafkaConsumerItems(kafkaTopicSel(topic)), [topic]);
   const q = useHttpPromql(items, win);
   const { rows } = useMemo(() => kafkaConsumerRows(q.data),
@@ -49,13 +60,14 @@ export function TopicConsumersTable({ topic, range, win }: { topic: string; rang
     [q.data.lag, q.data.lead, q.data.rate, q.data.poll]);
   const err = q.error('lag') && q.error('rate') ? q.error('lag') : null;
   return (
-    <DataTable<KafkaConsumerRow> storageKey="msg-topic-kafka-consumers" columns={CONS_COLS} rows={rows} ariaLabel="Consumers"
+    <DataTable<KafkaConsumerRow> storageKey="msg-topic-kafka-consumers" columns={cols} rows={rows} ariaLabel="Consumers"
       getRowKey={r => r.key} sort={{ initial: { id: 'lag', dir: 'desc' } }}
       state={vmState(q.pending('lag') || q.pending('rate'), err, 'Bu topic için VM\'de consumer metriği yok.')}
       renderCell={(r, c) => {
         switch (c.id) {
           case 'service': return svcLink(r.service, r.clientId, 'kcons', range);
           case 'client': return r.clientId ? <span title={r.clientId}>{r.clientId}</span> : '—';
+          case 'pods': return podsText(pods, r.service, r.clientId);
           case 'lag': return none(r.lag, fmtNum);
           case 'lead': return none(r.lead, fmtNum);
           case 'rate': return none(r.rate, rate);
@@ -66,9 +78,10 @@ export function TopicConsumersTable({ topic, range, win }: { topic: string; rang
   );
 }
 
-const PROD_COLS: ColumnDef<KafkaProducerRow>[] = [
+const prodCols = (pods: PodCounts): ColumnDef<KafkaProducerRow>[] => [
   { id: 'service', label: 'Servis', sortValue: r => r.service, naturalDir: 'asc', flex: true, minWidth: 160, mono: true },
   { id: 'client', label: 'client_id', sortValue: r => r.clientId, naturalDir: 'asc', width: 220, minWidth: 130, mono: true },
+  podsCol<KafkaProducerRow>(pods),
   { id: 'send', label: 'Produce/s', sortValue: r => r.send ?? -1, numeric: true, naturalDir: 'desc', width: 110 },
   { id: 'err', label: 'Send errors/s', sortValue: r => r.err ?? -1, numeric: true, naturalDir: 'desc', width: 120,
     tone: r => (r.err != null && r.err > 0 ? 'err' : undefined) },
@@ -76,20 +89,22 @@ const PROD_COLS: ColumnDef<KafkaProducerRow>[] = [
     tone: r => (r.retry != null && r.retry > 0 ? 'warn' : undefined) },
 ];
 
-export function TopicProducersTable({ topic, range, win }: { topic: string; range: TimeRange; win: Win }) {
+export function TopicProducersTable({ topic, range, win, pods }: { topic: string; range: TimeRange; win: Win; pods: PodCounts }) {
+  const cols = useMemo(() => prodCols(pods), [pods]);
   const items = useMemo(() => kafkaProducerItems(kafkaTopicSel(topic)), [topic]);
   const q = useHttpPromql(items, win);
   const rows = useMemo(() => kafkaProducerRows(q.data),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- veri kimliği sorgu sonuçları
     [q.data.send, q.data.err, q.data.retry]);
   return (
-    <DataTable<KafkaProducerRow> storageKey="msg-topic-kafka-producers" columns={PROD_COLS} rows={rows} ariaLabel="Producers"
+    <DataTable<KafkaProducerRow> storageKey="msg-topic-kafka-producers" columns={cols} rows={rows} ariaLabel="Producers"
       getRowKey={r => r.key} sort={{ initial: { id: 'send', dir: 'desc' } }}
       state={vmState(q.pending('send'), q.error('send'), 'Bu topic için VM\'de producer metriği yok.')}
       renderCell={(r, c) => {
         switch (c.id) {
           case 'service': return svcLink(r.service, r.clientId, 'kprod', range);
           case 'client': return r.clientId ? <span title={r.clientId}>{r.clientId}</span> : '—';
+          case 'pods': return podsText(pods, r.service, r.clientId);
           case 'send': return none(r.send, rate);
           case 'err': return none(r.err, rate);
           case 'retry': return none(r.retry, rate);
