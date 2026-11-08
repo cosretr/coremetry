@@ -356,6 +356,10 @@ export default function TopologyBackdrop({ graph, animated, pace = 0.6, avoidRef
     const onDown = (e: PointerEvent) => {
       if (e.button !== 0) return;
       e.preventDefault(); // metin seçimi başlamasın
+      // v0.10.1982 (operatör: "arka plana tıklayıp yazınca da algılamıyor") — preventDefault odağı giriş
+      // kutusunda bırakıyordu; galaksiye tıklayınca odak bırakılır, kısayollar (Space × 3, S R E) çalışır.
+      const act = document.activeElement;
+      if (act instanceof HTMLElement && act !== document.body) act.blur();
       dragging = true; const p = local(e); lx = p.x; ly = p.y; lt = performance.now(); st.vel = 0; st.tiltVel = 0;
       downX = p.x; downY = p.y; downT = lt;
       canvas.setPointerCapture?.(e.pointerId);
