@@ -270,7 +270,7 @@ describe('tüm servisler düğüm (v0.10.1947)', () => {
     const src = readFileSync(resolve(__dirname, '../../pages/login/TopologyBackdrop.tsx'), 'utf8');
     expect(src).not.toMatch(/hoverCard|roundRect|trafficLevel|kinds\[/);
     expect(src).toContain('label(ctx, hn, hp.x + 9, hp.y + 4, col);');
-    expect(src).toContain('if (!q || !galaxy.starNames[k]) continue;');
+    expect(src).toContain('if (!q || !galaxy.starNames[k] || gone.has(pos.length + k)) continue;'); // v0.10.1989 — patlayan atlanır
   });
 });
 

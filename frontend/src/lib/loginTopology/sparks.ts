@@ -80,3 +80,15 @@ export function orbitProgress(t0: number, nowSec: number): number | null {
   const u = (nowSec - t0) / ORBIT_SEC;
   return u < 0 || u > 1 ? null : u;
 }
+
+// ── v0.10.1989 — 10. tıkta nokta PATLAR ve sayfa yenilenene dek kaybolur ──
+/** Patlama süresi (sn): nokta büyüyerek söner. */
+export const POP_SEC = 0.7;
+/** Patlayan noktanın o anki çarpanları; bittiyse null (artık çizilmez, tıklanmaz). */
+export function popState(t0: number | undefined, nowSec: number): { alpha: number; scale: number } | null | undefined {
+  if (t0 === undefined) return undefined; // patlamadı
+  const u = (nowSec - t0) / POP_SEC;
+  if (u >= 1) return null;
+  const v = Math.max(0, u);
+  return { alpha: 1 - v, scale: 1 + 2.2 * v };
+}

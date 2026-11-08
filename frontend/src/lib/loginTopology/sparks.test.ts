@@ -1,6 +1,6 @@
 // v0.10.1973 — login galaksisi: tık → bağlı noktalara yıldız; hızlı tık → daha çok yıldız.
 import { describe, it, expect } from 'vitest';
-import { burstSize, sparkTargets, spawnSparks, sparkProgress, pruneSparks, MAX_SPARKS, MAX_BURST, nextStreak, orbitProgress, ORBIT_CLICKS, ORBIT_SEC } from './sparks';
+import { burstSize, sparkTargets, spawnSparks, sparkProgress, pruneSparks, MAX_SPARKS, MAX_BURST, nextStreak, orbitProgress, ORBIT_CLICKS, ORBIT_SEC, popState, POP_SEC } from './sparks';
 import type { Galaxy } from './galaxy';
 
 const g = {
@@ -51,5 +51,17 @@ describe('10 tık yörünge', () => {
     expect(orbitProgress(10, 9)).toBeNull();
     expect(orbitProgress(10, 10 + ORBIT_SEC / 2)).toBeCloseTo(0.5);
     expect(orbitProgress(10, 10 + ORBIT_SEC + 0.1)).toBeNull();
+  });
+});
+
+describe('patlayan nokta', () => {
+  it('patlamamış → undefined; patlarken söner ve büyür; bitince null (kalıcı)', () => {
+    expect(popState(undefined, 5)).toBeUndefined();
+    expect(popState(5, 5)).toEqual({ alpha: 1, scale: 1 });
+    const mid = popState(5, 5 + POP_SEC / 2)!;
+    expect(mid.alpha).toBeCloseTo(0.5);
+    expect(mid.scale).toBeGreaterThan(1);
+    expect(popState(5, 5 + POP_SEC)).toBeNull();
+    expect(popState(5, 999)).toBeNull();
   });
 });

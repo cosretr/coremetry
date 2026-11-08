@@ -33,7 +33,7 @@ import {
 } from '@/lib/loginTopology/galaxy';
 import { seedOfIds } from '@/lib/loginTopology/prng';
 import { bigBangWarp, BH_TOTAL, NO_WARP, type Warp } from '@/lib/loginTopology/eggs'; // v0.10.1977
-import { burstSize, nextStreak, orbitProgress, ORBIT_CLICKS, ORBIT_TARGETS, pruneSparks, sparkProgress, sparkTargets, spawnSparks, type Spark, type Streak } from '@/lib/loginTopology/sparks'; // v0.10.1973 / 1978
+import { burstSize, nextStreak, orbitProgress, popState, ORBIT_CLICKS, ORBIT_TARGETS, pruneSparks, sparkProgress, sparkTargets, spawnSparks, type Spark, type Streak } from '@/lib/loginTopology/sparks'; // v0.10.1973 / 1978
 import type { LoginSummaryEdge, LoginSummaryNode } from '@/lib/types';
 
 export interface BackdropGraph {
@@ -79,6 +79,8 @@ interface Frame {
   warp: Warp;
   /** v0.10.1978 — 10 tık yörünge halkası: nokta (hover kodlaması) + başlangıç (sn); yoksa null. */
   orbit: { at: number; t0: number } | null;
+  /** v0.10.1989 — patlayan noktalar (hover kodlaması → patlama başı sn); sayfa yenilenene dek kalıcı. */
+  gone: ReadonlyMap<number, number>;
   /** Etiket konmayacak kutu (login kartı), tuval koordinatında; yoksa null. */
   avoid: Box | null;
 }
@@ -124,11 +126,13 @@ function drawFrame(ctx: CanvasRenderingContext2D, f: Frame): { pos: Pt[]; starPo
     const p = P(sv[o], sv[o + 1], sv[o + 2]);
     if (p.x < -3 || p.y < -3 || p.x > f.w + 3 || p.y > f.h + 3) continue;
     const k = o / 5, focus = hover === nN + k;
+    const pop = popState(f.gone.get(nN + k), f.tSec);
+    if (pop === null) continue; // patladı: çizilmez, tıklanmaz (starPos null kalır)
     starPos[k] = p;
     const depth = depthOf(p.z), lit = 0.3 + 0.7 * sv[o + 3];
     // v0.10.1947 — her servis düğüm: biraz daha belirgin (×1,3 boy, ×1,15 opaklık), odakta ×2 ve tam opak
-    ctx.globalAlpha = focus ? 1 : Math.min(1, (0.28 + 0.55 * lit) * (0.45 + 0.55 * depth) * (0.6 + col.glow * 0.5) * tw(sv[o + 4], 0.9) * 1.15);
-    const s = (1 + 1.8 * sv[o + 3]) * g.sizeK * (0.8 + 0.4 * depth) * 1.3 * (focus ? 2 : 1);
+    ctx.globalAlpha = (pop?.alpha ?? 1) * (focus ? 1 : Math.min(1, (0.28 + 0.55 * lit) * (0.45 + 0.55 * depth) * (0.6 + col.glow * 0.5) * tw(sv[o + 4], 0.9) * 1.15));
+    const s = (1 + 1.8 * sv[o + 3]) * g.sizeK * (0.8 + 0.4 * depth) * 1.3 * (focus ? 2 : 1) * (pop?.scale ?? 1);
     if (s < 1.6) { ctx.fillRect(p.x, p.y, s, s); continue; } // küçükler kare (ucuz)
     ctx.beginPath(); ctx.arc(p.x, p.y, s / 2 + 0.3, 0, TAU); ctx.fill();
   }
@@ -136,9 +140,13 @@ function drawFrame(ctx: CanvasRenderingContext2D, f: Frame): { pos: Pt[]; starPo
   // düğüm konumları (hafif nefes)
   const pos = g.nodes.map(nd => P(nd.r + (f.still ? 0 : Math.sin(f.tSec * 0.6 + nd.ph) * 0.004), nd.th, nd.h));
 
+  // v0.10.1989 — tamamen patlamış düğüm (kenar, akış, etiket ve tıklama dışı).
+  const dead = (i: number) => popState(f.gone.get(i), f.tSec) === null;
+
   // kenarlar
   ctx.strokeStyle = col.arm; ctx.lineWidth = 0.7;
   for (const e of g.edges) {
+    if (dead(e.a) || dead(e.b)) continue;
     const focus = hover >= 0 && (e.a === hover || e.b === hover);
     if (!edgeVisible(g.nodes[e.a].arm, g.nodes[e.b].arm, focus)) continue;
     ctx.globalAlpha = focus ? 0.7 : Math.max(0.03, 0.07 + 0.04 * (pos[e.a].z + pos[e.b].z));
@@ -148,6 +156,7 @@ function drawFrame(ctx: CanvasRenderingContext2D, f: Frame): { pos: Pt[]; starPo
   // akan noktalar: altın yıldız (çekirdek + küçük hale), hız = kenar ağırlığı × tempo
   for (const k of g.flows) {
     const e = g.edges[k];
+    if (dead(e.a) || dead(e.b)) continue;
     const t = f.still ? 0.5 : flowPos(g.flowPh[k], f.tSec, e.w, f.pace);
     const x = pos[e.a].x + (pos[e.b].x - pos[e.a].x) * t, y = pos[e.a].y + (pos[e.b].y - pos[e.a].y) * t;
     const depth = depthOf((pos[e.a].z + pos[e.b].z) / 2);
@@ -177,9 +186,11 @@ function drawFrame(ctx: CanvasRenderingContext2D, f: Frame): { pos: Pt[]; starPo
   // düğümler: arkadan öne
   const order = g.nodes.map((_, i) => i).sort((i, j) => pos[i].z - pos[j].z);
   for (const i of order) {
+    const pop = popState(f.gone.get(i), f.tSec);
+    if (pop === null) continue;
     const nd = g.nodes[i], p = pos[i], depth = depthOf(p.z), focus = i === hover;
     // v0.10.1983 (operatör: "yıldızların çevresinde gölge olmasın, bir tık daha küçük") — hale yok, %85 boy.
-    const r = nodeRadius(nd, depth, focus) * 0.85, a = nodeAlpha(nd, depth, focus);
+    const r = nodeRadius(nd, depth, focus) * 0.85 * (pop?.scale ?? 1), a = nodeAlpha(nd, depth, focus) * (pop?.alpha ?? 1);
     // v0.10.1985 (operatör: "noktaların çevresinde hale tekrar olabilir ama daha az") — hale geri, eskinin
     // ~%40 opaklığı ve daha dar yarıçapla (HALO_K).
     if (nd.tier === 'queue') { // kuyruk: turkuaz halka
@@ -205,7 +216,7 @@ function drawFrame(ctx: CanvasRenderingContext2D, f: Frame): { pos: Pt[]; starPo
   for (const i of order) {
     if (i === hover) continue;
     const nd = g.nodes[i], depth = depthOf(pos[i].z);
-    if (!wantsLabel(nd, depth, f.labels.has(i))) continue;
+    if (f.gone.has(i) || !wantsLabel(nd, depth, f.labels.has(i))) continue;
     cands.push({ i, x: pos[i].x, y: pos[i].y, w: ctx.measureText(nd.name ?? '').width, tier: nd.tier, weight: nd.weight });
   }
   for (const i of placeLabels(cands, f.avoid)) {
@@ -270,6 +281,7 @@ export default function TopologyBackdrop({ graph, animated, pace = 0.6, avoidRef
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const bangRef = useRef<(() => void) | null>(null);
+  const goneRef = useRef(new Map<number, number>());
   useEffect(() => { if (bigBang > 0) bangRef.current?.(); }, [bigBang]);
   const themeTick = useThemeTick();
   // BİR KEZ: galaksi ilk gelen grafikle kurulur; `graph` sonradan değişse de yeniden kurulmaz.
@@ -308,6 +320,8 @@ export default function TopologyBackdrop({ graph, animated, pace = 0.6, avoidRef
     // v0.10.1978 — 10 tık: art arda tık sayacı + açık halka.
     let streak: Streak | null = null;
     let orbit: { at: number; t0: number } | null = null;
+    // v0.10.1989 — patlayan noktalar; efekt yeniden kurulsa da (tema) sayfa yenilenene dek kalır.
+    const gone = goneRef.current;
     const bangHandler = () => { bangT0 = (performance.now() - t0) / 1000; };
     bangRef.current = bangHandler;
     const clicks: number[] = [];
@@ -332,7 +346,7 @@ export default function TopologyBackdrop({ graph, animated, pace = 0.6, avoidRef
         g: galaxy, v: { angle: st.angle, tilt: st.tilt, cx: w / 2, cy: h / 2, R }, w, h, dpr, tSec, still,
         col, pace: paceRef.current, hover, labels, sparks,
         warp: bangT0 >= 0 ? bigBangWarp(tSec - bangT0) : NO_WARP,
-        orbit,
+        orbit, gone,
       }));
     };
     const paintStill = () => paint(0, true);
@@ -372,11 +386,11 @@ export default function TopologyBackdrop({ graph, animated, pace = 0.6, avoidRef
     };
     const hitAt = (p: { x: number; y: number }) => {
       let best = -1, bd = HOVER_PX;
-      for (let i = 0; i < pos.length; i++) { const d = Math.hypot(pos[i].x - p.x, pos[i].y - p.y); if (d < bd) { bd = d; best = i; } }
+      for (let i = 0; i < pos.length; i++) { if (gone.has(i)) continue; const d = Math.hypot(pos[i].x - p.x, pos[i].y - p.y); if (d < bd) { bd = d; best = i; } }
       // v0.10.1947 — adı olan servis yıldızları; bağlantılı düğüm 4 px öncelikli
       for (let k = 0; k < starPos.length; k++) {
         const q = starPos[k];
-        if (!q || !galaxy.starNames[k]) continue;
+        if (!q || !galaxy.starNames[k] || gone.has(pos.length + k)) continue;
         const d = Math.hypot(q.x - p.x, q.y - p.y);
         if (d < bd - 4) { bd = d + 4; best = pos.length + k; }
       }
@@ -409,8 +423,10 @@ export default function TopologyBackdrop({ graph, animated, pace = 0.6, avoidRef
         const nowSec = (now - t0) / 1000;
         streak = nextStreak(streak, hit, now);
         if (streak.n === ORBIT_CLICKS) {
-          // 10. tık: yörünge halkası + BÜTÜN bağlı noktalara yıldız yağmuru.
+          // 10. tık: yörünge halkası + BÜTÜN bağlı noktalara yıldız yağmuru; v0.10.1989 — nokta patlar
+          // ve sayfa yenilenene dek kaybolur (operatör: "hepsini o şekilde patlatabilsin").
           orbit = { at: hit, t0: nowSec };
+          gone.set(hit, nowSec); streak = null; hover = -1;
           const all = sparkTargets(galaxy, hit, ORBIT_TARGETS);
           if (all.length) sparks = pruneSparks([...sparks, ...spawnSparks(hit, all, nowSec, 4)], nowSec);
         } else {
