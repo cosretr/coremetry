@@ -6497,6 +6497,9 @@ a.idchip__val:hover { color: var(--accent2); text-decoration: underline; }
 /* v0.10.1539 — topic sayfası: metrik önce (KafkaTopicMetrics, VM). */
 .mtp-kafka { margin: 12px 0 18px; }
 .mtp-kafka-stats { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); margin-bottom: 14px; }
+/* v0.10.1961 — Messaging listesi Kafka UI düzeni: şerit (aynı karo) + Topics / Consumers sekmesi. */
+.msg-kafka-strip { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); margin-bottom: 10px; }
+.msg-kafka-tabs { margin-bottom: 10px; }
 .mtp-kafka-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); margin-bottom: 14px; }
 .mtp-kafka-h { font-size: var(--fs-md); font-weight: 600; margin: 14px 0 8px; }
 .mtp-kafka-lag--alarm { border-left: 3px solid var(--warn); padding-left: 10px; }

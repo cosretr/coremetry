@@ -19,6 +19,8 @@ import { DetailDrawer } from '@/features/dependencies/DetailDrawer';
 import { useDepTrends } from '@/lib/queries/dependencies';
 import type { DataTableColumn } from '@/lib/dataTable';
 import { serviceHref } from '@/lib/serviceHref';
+import { fmtSmart } from '@/lib/chartFmt';
+import { svcListLabel, type KafkaTopicStat } from '@/pages/messaging/kafkaOverview'; // v0.10.1961
 import type { TimeRange, DBTrend } from '@/lib/types';
 
 // Row is the shape both /databases and /messaging hand to this
@@ -31,10 +33,32 @@ export function lagTone(lag: number | undefined): string {
   return lag >= 10_000 ? 'cell-err' : lag >= 1_000 ? 'cell-warn' : '';
 }
 
+/** v0.10.1961 — Kafka UI kolon hücreleri (Partitions · Producers · Consumers · Produce/s · Consume/s). */
+function KafkaTopicCells({ k }: { k: KafkaTopicStat | undefined }) {
+  const none = <span className="cell-muted">—</span>;
+  const rate = (v: number | undefined) => (v == null ? none : fmtSmart(v, 'reqps'));
+  const svcs = (list: string[] | undefined, what: string) => (list?.length
+    ? <td title={`${what}: ${list.join(', ')}`}><span className="cell-ellipsis mono">{svcListLabel(list)}</span></td>
+    : <td title={`Bu topic için VM'de ${what} metriği yok`}>{none}</td>);
+  return (
+    <>
+      <td className="num" title="Tüketicilerin okuduğu partition sayısı (kafka_consumer_records_lag, partition etiketi). Kimsenin tüketmediği partition sayılmaz.">
+        {k?.partitions != null ? fmtNum(k.partitions) : none}
+      </td>
+      {svcs(k?.producers, 'producer')}
+      {svcs(k?.consumers, 'consumer')}
+      <td className="num" title="kafka_producer_record_send_rate · topic toplamı, kayıt/sn (VictoriaMetrics, pencere sonu)">{rate(k?.produce)}</td>
+      <td className="num" title="kafka_consumer_records_consumed_rate · topic toplamı, kayıt/sn (VictoriaMetrics, pencere sonu)">{rate(k?.consume)}</td>
+    </>
+  );
+}
+
 export interface DepRow {
   system: string;
   /** v0.10.1959 — Kafka consumer lag (VM `kafka_consumer_records_lag_max`, topic başına en kötü partition); yoksa undefined. */
   lag?: number;
+  /** v0.10.1961 — Kafka UI kolonları (VM, topic etiketli istemci metrikleri; pages/messaging/kafkaOverview). */
+  kafka?: KafkaTopicStat;
   // Messaging-only — physical cluster identifier. Empty / undefined
   // for DB rows. Surfaced as a Cluster column when any row in
   // the set has it populated so a Kafka deployment with one
@@ -209,6 +233,8 @@ export function DependenciesTable({
   // skip the column entirely.
   // v0.10.1959 — lag kolonu yalnız en az bir satırda VM lag değeri varsa (Kafka metriği olmayan kurulumda boş kolon yok).
   const hasLagCol = useMemo(() => kind === 'queue' && rows.some(r => r.lag != null), [kind, rows]);
+  // v0.10.1961 — Kafka UI kolonları yalnız VM'de topic etiketli Kafka metriği olan satır varsa.
+  const hasKafkaCols = useMemo(() => kind === 'queue' && rows.some(r => r.kafka != null), [kind, rows]);
   const hasClusterCol = useMemo(
     () => rows.some(r => r.cluster && r.cluster !== '(default)'),
     [rows]);
@@ -261,6 +287,17 @@ export function DependenciesTable({
       : []),
     { id: 'name', label: kind === 'db' ? 'Instance' : 'Destination', sortValue: r => nameOf(r), naturalDir: NATURAL.name, flex: true, minWidth: 180, priority: 1 },
     // v0.10.1959 (operatör: lag olan topic'ler üstte) — yalnız lag verisi olan satır varsa; lag'siz satır -1 ile alta.
+    // v0.10.1961 (Kafka UI düzeni, mockup onayı) — Topic · Partitions · Producers · Consumers · Produce/s ·
+    // Consume/s · Lag. Span türevli Produce/min / Consume/min bu durumda önce düşer (öncelik 4).
+    ...(hasKafkaCols
+      ? [
+          { id: 'partitions', label: 'Partitions', sortValue: (r: DepRow) => r.kafka?.partitions ?? -1, numeric: true, naturalDir: 'desc', width: 100, minWidth: 90, priority: 2 } as DataTableColumn<DepRow>,
+          { id: 'producers', label: 'Producers', sortValue: (r: DepRow) => r.kafka?.producers.length ?? -1, naturalDir: 'desc', width: 190, minWidth: 130, priority: 2 } as DataTableColumn<DepRow>,
+          { id: 'consumers', label: 'Consumers', sortValue: (r: DepRow) => r.kafka?.consumers.length ?? -1, naturalDir: 'desc', width: 190, minWidth: 130, priority: 2 } as DataTableColumn<DepRow>,
+          { id: 'kproduce', label: 'Produce/s', sortValue: (r: DepRow) => r.kafka?.produce ?? -1, numeric: true, naturalDir: 'desc', width: 104, minWidth: 90, priority: 1 } as DataTableColumn<DepRow>,
+          { id: 'kconsume', label: 'Consume/s', sortValue: (r: DepRow) => r.kafka?.consume ?? -1, numeric: true, naturalDir: 'desc', width: 104, minWidth: 90, priority: 1 } as DataTableColumn<DepRow>,
+        ]
+      : []),
     ...(hasLagCol
       ? [{ id: 'lag', label: 'Lag', sortValue: (r: DepRow) => r.lag ?? -1, numeric: true, naturalDir: 'desc', width: 96, minWidth: 80, priority: 1 } as DataTableColumn<DepRow>]
       : []),
@@ -271,8 +308,8 @@ export function DependenciesTable({
     // bottom naturally.
     ...(kind === 'queue'
       ? [
-          { id: 'produce', label: 'Produce/min', sortValue: (r: DepRow) => r.producePerMin ?? 0, numeric: true, naturalDir: 'desc', width: 116, minWidth: 100, priority: 2 } as DataTableColumn<DepRow>,
-          { id: 'consume', label: 'Consume/min', sortValue: (r: DepRow) => r.consumePerMin ?? 0, numeric: true, naturalDir: 'desc', width: 116, minWidth: 100, priority: 2 } as DataTableColumn<DepRow>,
+          { id: 'produce', label: 'Produce/min', sortValue: (r: DepRow) => r.producePerMin ?? 0, numeric: true, naturalDir: 'desc', width: 116, minWidth: 100, priority: hasKafkaCols ? 4 : 2 } as DataTableColumn<DepRow>,
+          { id: 'consume', label: 'Consume/min', sortValue: (r: DepRow) => r.consumePerMin ?? 0, numeric: true, naturalDir: 'desc', width: 116, minWidth: 100, priority: hasKafkaCols ? 4 : 2 } as DataTableColumn<DepRow>,
           // v0.9.835 — v0.9.815'in "Denge" kolonu KALDIRILDI. Broker
           // metriği (consumer lag) OTel'e ingest edilmediği için
           // span-türevli denge yanıltıcı sayılar üretiyordu (canlıda
@@ -320,7 +357,7 @@ export function DependenciesTable({
       ? [{ id: 'trend', label: 'Trend', width: 140, minWidth: 120, priority: 4 } as DataTableColumn<DepRow>]
       : []),
     { id: 'callers', label: 'Top callers', width: 240, minWidth: 160, priority: 3 },
-  ], [hasClusterCol, hasLagCol, kind]);
+  ], [hasClusterCol, hasLagCol, hasKafkaCols, kind]);
 
   const dt = useDataTable<DepRow>({
     storageKey: `deps-${kind}`,
@@ -632,6 +669,7 @@ export function DependenciesTable({
                         </span>
                       )}
                     </td>
+                    {hasKafkaCols && <KafkaTopicCells k={r.kafka} />}
                     {hasLagCol && (
                       // v0.10.1959 — servis Messaging sekmesiyle aynı eşik: ≥ 1.000 sarı, ≥ 10.000 kırmızı (renk yalnız sapanda).
                       <td className={`num ${lagTone(r.lag)}`} title={r.lag != null ? 'kafka_consumer_records_lag_max · topic başına en kötü partition (VictoriaMetrics; topic sayfasındaki En yüksek lag ile aynı)' : 'Bu destination için VM lag metriği yok'}>

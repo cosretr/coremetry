@@ -15,7 +15,13 @@ import { depRowKey } from '@/lib/depsTable';
 import type { MessagingInstance, MessagingOverview } from '@/lib/types';
 import { PageShell } from '@/components/coremetry/PageShell';
 import { useHttpPromql } from '@/lib/queries/httpMetrics';
-import { TOPIC_LAG_EXPR, topicLagMap, sortByLag } from './messaging/topicLag'; // v0.10.1959
+import { topicLagMap, sortByLag } from './messaging/topicLag'; // v0.10.1959
+import { KAFKA_LIST_ITEMS, kafkaTopicStats, kafkaListSummary, type KafkaListSummary } from './messaging/kafkaOverview'; // v0.10.1961
+import { KafkaConsumersTable } from './messaging/KafkaConsumersTable';
+import { Tabs, TabsList, TabsTrigger } from '@/components/shadcn/tabs';
+import { HttpStat } from '@/pages/service/httpMetricsViz';
+import { fmtSmart } from '@/lib/chartFmt';
+import { fmtNum } from '@/lib/utils';
 
 // /messaging — top-level queue / topic technologies overview.
 // Kafka brokers, RabbitMQ vhosts, IBM MQ queues, NATS subjects,
@@ -35,7 +41,7 @@ import { TOPIC_LAG_EXPR, topicLagMap, sortByLag } from './messaging/topicLag'; /
 //     v0.5.404 pattern; opt-in, doubles the backend scan).
 //   • ?destination= URL param drives the topic detail drawer
 //     (URL-first house rule; replace:true, Esc/✕ clears).
-const LAG_ITEMS = [{ id: 'lag', expr: TOPIC_LAG_EXPR, instant: true }] as const;
+type MsgView = 'topics' | 'consumers';
 
 export default function MessagingPage() {
   const [range, setRange] = useUrlRange(DEFAULT_RANGE_PRESET);
@@ -116,8 +122,21 @@ export default function MessagingPage() {
   // construction, so the same divisor applies.
   const windowMins = Math.max((to - from) / 60e9, 1 / 60);
   // v0.10.1959 — Kafka lag VM'den (servis Messaging sekmesiyle aynı metrik); anlık, 30 sn önbellek.
-  const lagQ = useHttpPromql(LAG_ITEMS, { from, to });
-  const lagMap = useMemo(() => topicLagMap(lagQ.data.lag), [lagQ.data.lag]);
+  // v0.10.1961 (Kafka UI düzeni) — aynı anlık okumaya Partitions / Producers / Consumers / Produce/s /
+  // Consume/s / gönderim hatası eklendi (topic etiketli seriler; sorgular kafkaOverview'da testli).
+  const win = useMemo(() => ({ from, to }), [from, to]);
+  const kq = useHttpPromql(KAFKA_LIST_ITEMS, win);
+  const lagMap = useMemo(() => topicLagMap(kq.data.lag), [kq.data.lag]);
+  const kStats = useMemo(() => kafkaTopicStats(kq.data),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- veri kimliği sorgu sonuçları
+    [kq.data.produce, kq.data.consume, kq.data.sendErr, kq.data.parts, kq.data.prodSvc, kq.data.consSvc]);
+  const kSummary = useMemo(() => kafkaListSummary(kStats, lagMap), [kStats, lagMap]);
+  const view: MsgView = kSummary && params.get('view') === 'consumers' ? 'consumers' : 'topics';
+  const setView = (v: MsgView) => setParams(prev => {
+    const next = new URLSearchParams(prev);
+    if (v === 'consumers') next.set('view', 'consumers'); else next.delete('view');
+    return next;
+  }, { replace: true });
   // v0.9.813 — zarf. `?? []` HER İKİ eksikliği karşılar: yanıt yok ve
   // rows yok. Tavan bilgisi ayrı okunur — şerit tabloyu değil listeyi
   // niteliyor, bu yüzden filtrelenmiş satır sayısına DEĞİL sunucunun
@@ -162,11 +181,22 @@ export default function MessagingPage() {
         priorP99Ms: d.priorP99Ms,
         callers: d.callers ?? [],
         lag: d.system === 'kafka' ? lagMap.get(d.destination) : undefined,
+        kafka: d.system === 'kafka' ? kStats.get(d.destination) : undefined,
       };
     });
     // v0.10.1959 — lag'i olan topic'ler üstte (azalan), gerisi çağrı hacmine göre.
     return sortByLag(mapped);
-  }, [list, windowMins, lagMap]);
+  }, [list, windowMins, lagMap, kStats]);
+  // Consumers sekmesinde topic bağlantısı: span tarafında topic tek cluster'daysa o cluster.
+  const clusterOf = useMemo(() => {
+    const m = new Map<string, string | null>();
+    for (const d of list) {
+      if (d.system !== 'kafka') continue;
+      const prev = m.get(d.destination);
+      m.set(d.destination, prev === undefined || prev === d.cluster ? d.cluster : null);
+    }
+    return (topic: string) => m.get(topic) ?? undefined;
+  }, [list]);
 
   // v0.10.954 — tablo standardı T12 (P6): yükleniyor / hata / boş artık
   // DependenciesTable'ın İÇİNDE (başlık durur); tablo her durumda çizilir.
@@ -232,7 +262,17 @@ export default function MessagingPage() {
             listede yoksa aramayı daralt ya da pencereyi kısalt.
           </div>
         )}
-        <DependenciesTable
+        {kSummary && <KafkaStrip s={kSummary} />}
+        {kSummary && (
+          <Tabs value={view} onValueChange={v => setView(v as MsgView)} className="msg-kafka-tabs">
+            <TabsList variant="line" aria-label="Messaging görünümü">
+              <TabsTrigger value="topics">Topics<span className="tab-count">{fmtNum(rows.length)}</span></TabsTrigger>
+              <TabsTrigger value="consumers">Consumers<span className="tab-count">{fmtNum(kSummary.consumerServices)}</span></TabsTrigger>
+            </TabsList>
+          </Tabs>
+        )}
+        {view === 'consumers' && <KafkaConsumersTable range={range} win={win} clusterOf={clusterOf} />}
+        {view === 'topics' && <DependenciesTable
           rows={rows}
           kind="queue"
           range={range}
@@ -250,8 +290,24 @@ export default function MessagingPage() {
                 onChange={e => setCompare(e.target.checked)} />
               Compare vs prior
             </label>
-          } />
+          } />}
       </PageShell>
     </>
+  );
+}
+
+// v0.10.1961 — Kafka UI'deki özet şeridi: yalnız topic etiketli Kafka metriği varsa, anlık (pencere sonu).
+// Karo topic sayfasının karosuyla aynı (HttpStat, .mtp-kafka-stats ızgarası).
+function KafkaStrip({ s }: { s: KafkaListSummary }) {
+  const hint = 'Kafka istemci metrikleri (VictoriaMetrics, topic etiketli), pencere sonundaki değer';
+  return (
+    <div className="mtp-kafka-stats msg-kafka-strip">
+      <HttpStat label="Topics" title={hint} value={fmtNum(s.topics)} />
+      <HttpStat label="Lag ≥ 1.000" title={`${hint}. kafka_consumer_records_lag_max, topic başına en kötü partition`} value={fmtNum(s.lagged)} tone={s.lagged > 0 ? 'warn' : undefined} />
+      <HttpStat label="Produce/s" title={`${hint}. kafka_producer_record_send_rate`} value={fmtSmart(s.produce, 'reqps')} />
+      <HttpStat label="Consume/s" title={`${hint}. kafka_consumer_records_consumed_rate`} value={fmtSmart(s.consume, 'reqps')} />
+      <HttpStat label="Send errors/s" title={`${hint}. kafka_producer_record_error_rate`} value={fmtSmart(s.sendErr, 'reqps')} tone={s.sendErr > 0 ? 'err' : undefined} />
+      <HttpStat label="Consumers" title={`${hint}. Tüketen tekil servis`} value={fmtNum(s.consumerServices)} />
+    </div>
   );
 }
