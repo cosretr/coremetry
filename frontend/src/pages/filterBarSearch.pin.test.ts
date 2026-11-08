@@ -29,7 +29,8 @@ function bar(src: string): string {
 
 // `<Button …>Search</Button>` açılış etiketi (tek primary).
 function searchTag(seg: string): string {
-  const m = /<Button\b(?:=>|[^>])*?variant="primary"(?:=>|[^>])*?>Search<\/Button>/.exec(seg);
+  // v0.10.1951 — Traces shadcn dilimi: ui `primary` ≡ shadcn `default` (dolu birincil).
+  const m = /<Button\b(?:=>|[^>])*?variant="(?:primary|default)"(?:=>|[^>])*?>Search<\/Button>/.exec(seg);
   expect(m, 'Search primary bulunamadı').not.toBeNull();
   return m![0];
 }
@@ -82,7 +83,7 @@ describe('v0.10.1332 — Traces', () => {
   it('filtre barı: Search md + ipucu, Root\'tan SONRA, boşluk + görünüm anahtarından ÖNCE', () => {
     const seg = bar(src);
     expect(searchTag(seg)).not.toMatch(/size="sm"/);
-    expect(seg).toMatch(/<span className="search-go">\s*<Button variant="primary"(?:=>|[^>])*?>Search<\/Button>\s*<EnterHint /);
+    expect(seg).toMatch(/<span className="search-go">\s*<Button variant="(?:primary|default)"(?:=>|[^>])*?>Search<\/Button>\s*<EnterHint /);
     const iRoot = at(seg, '>Root</span>');
     const iSearch = at(seg, '>Search</Button>');
     const iSpacer = at(seg, "<span style={{ marginLeft: 'auto' }} />");
