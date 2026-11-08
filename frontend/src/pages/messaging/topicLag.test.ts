@@ -33,7 +33,8 @@ describe('topic lag', () => {
   });
   it('topic detayı: lag eşiği aşıldıysa Lag bölümü akış grafiklerinin üstünde', () => {
     const src = readFileSync(resolve(__dirname, '../../features/dependencies/KafkaTopicMetrics.tsx'), 'utf8');
-    expect(src).toContain('{lagAlarm ? <>{lagSection}{flowGrid}</> : <>{flowGrid}{lagSection}</>}');
+    // v0.10.1962 — Overview sekmesinde (Kafka UI düzeni).
+    expect(src).toContain("{tab === 'overview' && (lagAlarm ? <>{lagSection}{flowGrid}</> : <>{flowGrid}{lagSection}</>)}");
   });
   it('Messaging tablosu: kuyrukta varsayılan sıralama lag', () => {
     const src = readFileSync(resolve(__dirname, '../../components/DependenciesTable.tsx'), 'utf8');

@@ -55,13 +55,14 @@ describe('URL sözleşmesi', () => {
     expect(page).toContain('const setTab = (next: MsgTopicTab) => setParams(prev => {');
     // prev'den TÜREME: yabancı param (env, gelecekteki filtreler) korunur.
     expect(page).toContain('const p = new URLSearchParams(prev);');
-    expect(page).toContain("if (next === 'producers') p.delete('tab'); else p.set('tab', next);");
+    // v0.10.1962 — varsayılan sekme Overview (Kafka UI düzeni); varsayılan param'ı siler.
+    expect(page).toContain("if (next === MSG_TOPIC_DEFAULT_TAB) p.delete('tab'); else p.set('tab', next);");
     expect(page).toContain('{ replace: true }');
     // Sıfırdan kurulan bir query string yabancı param'ı sessizce düşürürdü.
     expect(page).not.toMatch(/setParams\(new URLSearchParams\(/);
   });
   it('sekme ve kimlik saf kodekten okunur (elle parse yok)', () => {
-    expect(page).toContain("import { parseTopicRef, parseTopicTab, type MsgTopicTab } from './messaging/topicHref';");
+    expect(page).toContain("import { parseTopicRef, parseTopicTab, MSG_TOPIC_DEFAULT_TAB, type MsgTopicTab } from './messaging/topicHref';");
     expect(page).toContain("const tab = parseTopicTab(params.get('tab'));");
     expect(page).toContain('const ref = useMemo(() => parseTopicRef(search), [search]);');
   });
@@ -76,7 +77,7 @@ describe('URL sözleşmesi', () => {
 describe('metrik önce (v0.10.1539)', () => {
   const comp = readFileSync(new URL('../features/dependencies/KafkaTopicMetrics.tsx', import.meta.url), 'utf8');
   it('metrik bölümü span detayından ÖNCE ve koşulsuz', () => {
-    const m = page.indexOf('<KafkaTopicMetrics system={system} cluster={cluster} topic={destination} range={range} win={win} />');
+    const m = page.indexOf('<KafkaTopicMetrics system={system} cluster={cluster} topic={destination} range={range} win={win}');
     expect(m).toBeGreaterThan(-1);
     expect(m).toBeLessThan(page.indexOf('{detailQ.isPending &&'));
   });

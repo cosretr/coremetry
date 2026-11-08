@@ -672,7 +672,7 @@ export function DependenciesTable({
                     {hasKafkaCols && <KafkaTopicCells k={r.kafka} />}
                     {hasLagCol && (
                       // v0.10.1959 — servis Messaging sekmesiyle aynı eşik: ≥ 1.000 sarı, ≥ 10.000 kırmızı (renk yalnız sapanda).
-                      <td className={`num ${lagTone(r.lag)}`} title={r.lag != null ? 'kafka_consumer_records_lag_max · topic başına en kötü partition (VictoriaMetrics; topic sayfasındaki En yüksek lag ile aynı)' : 'Bu destination için VM lag metriği yok'}>
+                      <td className={`num ${lagTone(r.lag)}`} title={r.lag != null ? 'kafka_consumer_records_lag_max · topic başına en kötü partition (VictoriaMetrics; topic sayfasındaki Max lag ile aynı)' : 'Bu destination için VM lag metriği yok'}>
                         {r.lag != null ? fmtNum(r.lag) : <span className="cell-muted">—</span>}
                       </td>
                     )}

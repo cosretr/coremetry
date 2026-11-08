@@ -42,7 +42,7 @@ import { navHref } from '@/lib/navHref';
 import { msSyncKey } from '@/lib/chart/syncNamespace';
 import { fmtNum, fmtNs, timeRangeToNs } from '@/lib/utils';
 import { useUrlRange, DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
-import { parseTopicRef, parseTopicTab, type MsgTopicTab } from './messaging/topicHref';
+import { parseTopicRef, parseTopicTab, MSG_TOPIC_DEFAULT_TAB, type MsgTopicTab } from './messaging/topicHref';
 import type { DBOpStat, MsgOperationStat, TimeRange } from '@/lib/types';
 
 // Çekmecedeki gerekçenin aynısı (v0.9.814): @grafana paketleri statik bağlanırsa bu
@@ -62,10 +62,10 @@ export default function MessagingTopicPage() {
   // URL = tek doğruluk kaynağı. Yazım `prev`den TÜRETİLİYOR (yabancı param —
   // env, gelecekteki filtreler — korunur) ve `replace: true` (sekme gezinmesi
   // geçmişe yığılmaz; geri tuşu ÖNCEKİ SAYFAYA döner). Varsayılan sekme
-  // param'ı SİLER: "tab yok" ile "tab=producers" tek adres olur.
+  // param'ı SİLER: "tab yok" ile "tab=overview" tek adres olur.
   const setTab = (next: MsgTopicTab) => setParams(prev => {
     const p = new URLSearchParams(prev);
-    if (next === 'producers') p.delete('tab'); else p.set('tab', next);
+    if (next === MSG_TOPIC_DEFAULT_TAB) p.delete('tab'); else p.set('tab', next);
     return p;
   }, { replace: true });
 
@@ -142,55 +142,59 @@ export default function MessagingTopicPage() {
 
         {/* v0.10.1539 — ÖNCE METRİK (operatör: "topic'e girince kullanıcı önce
             metrikleri görsün; ClickHouse'a gerek yok, doğrudan VM"): topic
-            etiketli Kafka istemci metrikleri, span detayından BAĞIMSIZ. */}
-        <KafkaTopicMetrics system={system} cluster={cluster} topic={destination} range={range} win={win} />
+            etiketli Kafka istemci metrikleri, span detayından BAĞIMSIZ.
+            v0.10.1962 (Kafka UI düzeni, mockup onayı 2026-11-08) — şerit → sekmeler
+            (Overview · Consumers · Producers · Traces); span tarafı ilgili sekmenin altında. */}
+        <KafkaTopicMetrics system={system} cluster={cluster} topic={destination} range={range} win={win}
+          tab={tab} tabs={
+            <TabStrip ariaLabel="Topic sekmeleri" value={tab} onChange={setTab} tabs={[
+              { key: 'overview', label: 'Overview' },
+              { key: 'consumers', label: 'Consumers' },
+              { key: 'producers', label: 'Producers' },
+              { key: 'traces', label: 'Traces' },
+            ]} />
+          } />
 
-        <h3 className="mtp-kafka-h mtp-span-h">Trace tarafı (span)</h3>
-        {detailQ.isPending && <Spinner label="Span detayı yükleniyor…" />}
-        {d === null && (
-          <Empty icon="⚠" title="Span detayı alınamadı">
-            /api/messaging/detail isteği hata döndü; metrikler yukarıda.
-          </Empty>
+        {tab !== 'overview' && (
+          <>
+            <h3 className="mtp-kafka-h mtp-span-h">Trace tarafı (span)</h3>
+            {detailQ.isPending && <Spinner label="Span detayı yükleniyor…" />}
+            {d === null && (
+              <Empty icon="⚠" title="Span detayı alınamadı">
+                /api/messaging/detail isteği hata döndü; metrikler yukarıda.
+              </Empty>
+            )}
+          </>
         )}
 
-        {d && (
+        {d && tab === 'consumers' && (
+          <CallerSection
+            title={`Consumers · span · ${consumers.length} satır`}
+            rows={consumers}
+            emptyMessage="Bu pencerede bu destination'a consumer span'i yok."
+            tone="consumer" range={range}
+            storageKey="msg-topic-consumers" />
+        )}
+        {d && tab === 'producers' && (
+          <CallerSection
+            title={`Producers · span · ${producers.length} satır`}
+            rows={producers}
+            emptyMessage="Bu pencerede bu destination'a producer span'i yok."
+            tone="producer" range={range}
+            storageKey="msg-topic-producers" />
+        )}
+        {d && tab === 'traces' && (
           <>
             <div className="mtp-cap">
-              span üretici / tüketici <b>{producers.length}</b> / <b>{consumers.length}</b>
+              span producer / consumer <b>{producers.length}</b> / <b>{consumers.length}</b>
               {others.length > 0 && <> · diğer istemci <b>{others.length}</b></>}
               {' '}· {fmtNum(d.spanCount)} span · hata {d.errorRate.toFixed(2)} %
             </div>
             <div className="mtp-card">
               <E2EPanel e2e={e2e} range={range} xRange={xRange} syncKey={syncKey} />
             </div>
-
-            <TabStrip ariaLabel="Topic sekmeleri" value={tab} onChange={setTab} tabs={[
-              { key: 'producers', label: <>Üreticiler<span className="tab-count">{producers.length}</span></> },
-              { key: 'consumers', label: <>Tüketiciler<span className="tab-count">{consumers.length}</span></> },
-              { key: 'operations', label: <>Operasyonlar<span className="tab-count">{msgOps.length}</span></> },
-              { key: 'spannames', label: <>Span adları<span className="tab-count">{topOps.length}</span></> },
-            ]} />
-
-            {tab === 'producers' && (
-              <CallerSection
-                title={`Üreticiler · ${producers.length} satır`}
-                rows={producers}
-                emptyMessage="Bu pencerede bu destination'a üretici span'i yok."
-                tone="producer" range={range}
-                storageKey="msg-topic-producers" />
-            )}
-            {tab === 'consumers' && (
-              <CallerSection
-                title={`Tüketiciler · ${consumers.length} satır`}
-                rows={consumers}
-                emptyMessage="Bu pencerede bu destination'a tüketici span'i yok."
-                tone="consumer" range={range}
-                storageKey="msg-topic-consumers" />
-            )}
-            {tab === 'operations' && <OperationsTable rows={msgOps} />}
-            {tab === 'spannames' && (
-              <SpanNamesTable rows={topOps} range={range} system={system} destination={destination} />
-            )}
+            <OperationsTable rows={msgOps} />
+            <SpanNamesTable rows={topOps} range={range} system={system} destination={destination} />
           </>
         )}
       </PageShell>

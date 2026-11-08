@@ -103,15 +103,22 @@ export function svcListLabel(svcs: readonly string[]): string {
 // ── Consumers sekmesi (fetch-on-open) ───────────────────────────────────────
 
 const BY = 'service_name, client_id, topic';
-export const KAFKA_CONSUMER_ITEMS = [
-  { id: 'lag', expr: `max by (${BY}) (kafka_consumer_records_lag_max${T})`, instant: true },
-  { id: 'lead', expr: `min by (${BY}) (kafka_consumer_records_lead_min${T})`, instant: true },
-  { id: 'rate', expr: `sum by (${BY}) (kafka_consumer_records_consumed_rate${T})`, instant: true },
-  // Son poll istemci düzeyinde (topic etiketi yok) — (servis, client) ile eşlenir.
-  { id: 'poll', expr: 'max by (service_name, client_id) (kafka_consumer_last_poll_seconds_ago)', instant: true },
-] as const;
+/** Consumers sorguları. `sel` boşsa tüm topic'ler (liste sekmesi), verilirse tek topic (topic sayfası). */
+export function kafkaConsumerItems(sel = T) {
+  return [
+    { id: 'lag', expr: `max by (${BY}) (kafka_consumer_records_lag_max${sel})`, instant: true },
+    { id: 'lead', expr: `min by (${BY}) (kafka_consumer_records_lead_min${sel})`, instant: true },
+    { id: 'rate', expr: `sum by (${BY}) (kafka_consumer_records_consumed_rate${sel})`, instant: true },
+    // Son poll istemci düzeyinde (topic etiketi yok) — (servis, client) ile eşlenir; tek topic'te
+    // yalnız o topic'i tüketen istemciler (`and on`).
+    { id: 'poll', expr: sel === T
+      ? 'max by (service_name, client_id) (kafka_consumer_last_poll_seconds_ago)'
+      : `max by (service_name, client_id) (kafka_consumer_last_poll_seconds_ago and on (service_name, client_id) kafka_consumer_records_consumed_rate${sel})`, instant: true },
+  ] as const;
+}
+export const KAFKA_CONSUMER_ITEMS = kafkaConsumerItems();
 
-export type KafkaConsumerData = Partial<Record<(typeof KAFKA_CONSUMER_ITEMS)[number]['id'], SpanMetricSeries[] | null | undefined>>;
+export type KafkaConsumerData = Partial<Record<'lag' | 'lead' | 'rate' | 'poll', SpanMetricSeries[] | null | undefined>>;
 
 export interface KafkaConsumerRow {
   key: string;
@@ -156,4 +163,42 @@ export function kafkaConsumerRows(d: KafkaConsumerData): { rows: KafkaConsumerRo
 export function consumerState(lag: number | null): 'behind' | 'lagging' | 'ok' | null {
   if (lag == null) return null;
   return lag >= 10_000 ? 'behind' : lag >= LAGGED_MIN ? 'lagging' : 'ok';
+}
+
+// ── Producers (topic sayfası) ──────────────────────────────────────────────
+
+/** Producers sorguları, tek topic: gönderim / hata / yeniden deneme, (servis, client) başına. */
+export function kafkaProducerItems(sel: string) {
+  return [
+    { id: 'send', expr: `sum by (${BY}) (kafka_producer_record_send_rate${sel})`, instant: true },
+    { id: 'err', expr: `sum by (${BY}) (kafka_producer_record_error_rate${sel})`, instant: true },
+    { id: 'retry', expr: `sum by (${BY}) (kafka_producer_record_retry_rate${sel})`, instant: true },
+  ] as const;
+}
+export type KafkaProducerData = Partial<Record<'send' | 'err' | 'retry', SpanMetricSeries[] | null | undefined>>;
+
+export interface KafkaProducerRow {
+  key: string;
+  service: string;
+  clientId: string;
+  topic: string;
+  send: number | null;
+  err: number | null;
+  retry: number | null;
+}
+
+/** SAF: (servis, client, topic) satırları — hatalı olan önce, sonra gönderim hızı azalan. */
+export function kafkaProducerRows(d: KafkaProducerData): KafkaProducerRow[] {
+  const m = new Map<string, KafkaProducerRow>();
+  const row = (l: Record<string, string>) => {
+    const service = l.service_name ?? '', clientId = l.client_id ?? '', topic = l.topic ?? '';
+    const key = `${service}|${clientId}|${topic}`;
+    let r = m.get(key);
+    if (!r) { r = { key, service, clientId, topic, send: null, err: null, retry: null }; m.set(key, r); }
+    return r;
+  };
+  byTopic(d.send, (_t, v, l) => { row(l).send = v; });
+  byTopic(d.err, (_t, v, l) => { row(l).err = v; });
+  byTopic(d.retry, (_t, v, l) => { row(l).retry = v; });
+  return [...m.values()].sort((a, b) => (b.err ?? 0) - (a.err ?? 0) || (b.send ?? -1) - (a.send ?? -1) || a.service.localeCompare(b.service));
 }

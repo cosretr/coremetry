@@ -80,3 +80,26 @@ describe('kafkaConsumerRows', () => {
       .toEqual([null, 'ok', 'lagging', 'behind']);
   });
 });
+
+// v0.10.1962 — topic sayfası Consumers / Producers sekmeleri.
+import { kafkaConsumerItems, kafkaProducerItems, kafkaProducerRows } from './kafkaOverview';
+import { kafkaTopicPartitionsExpr } from '@/lib/kafkaTopicMetrics';
+
+describe('topic sekmeleri', () => {
+  it('tek topic: son poll yalnız o topic\'i tüketen istemciler', () => {
+    const it = kafkaConsumerItems('{topic="orders.events"}');
+    expect(it.find(i => i.id === 'lag')!.expr).toBe('max by (service_name, client_id, topic) (kafka_consumer_records_lag_max{topic="orders.events"})');
+    expect(it.find(i => i.id === 'poll')!.expr).toBe('max by (service_name, client_id) (kafka_consumer_last_poll_seconds_ago and on (service_name, client_id) kafka_consumer_records_consumed_rate{topic="orders.events"})');
+    expect(kafkaConsumerItems().find(i => i.id === 'poll')!.expr).toBe('max by (service_name, client_id) (kafka_consumer_last_poll_seconds_ago)');
+    expect(kafkaTopicPartitionsExpr('orders.events')).toBe('count(max by (partition) (kafka_consumer_records_lag{topic="orders.events"}))');
+  });
+  it('producer satırları: hatalı önce, sonra gönderim', () => {
+    expect(kafkaProducerItems('{topic="t"}').map(i => i.id)).toEqual(['send', 'err', 'retry']);
+    const rows = kafkaProducerRows({
+      send: [ser({ service_name: 'a', client_id: 'p1', topic: 't' }, 100), ser({ service_name: 'b', client_id: 'p2', topic: 't' }, 5)],
+      err: [ser({ service_name: 'b', client_id: 'p2', topic: 't' }, 0.4)],
+      retry: [ser({ service_name: 'a', client_id: 'p1', topic: 't' }, 0)],
+    });
+    expect(rows.map(r => [r.service, r.send, r.err, r.retry])).toEqual([['b', 5, 0.4, null], ['a', 100, null, 0]]);
+  });
+});

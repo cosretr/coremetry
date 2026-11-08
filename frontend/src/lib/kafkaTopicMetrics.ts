@@ -51,19 +51,19 @@ export function kafkaTopicPanels(topic: string, service?: string): KafkaTopicPan
     ({ expr: `${agg} by (service_name, client_id) (${m}${s})`, legend });
   return [
     // ── Özet (stat) ──
-    { id: 'send_rate', kind: 'stat', side: 'producer', title: 'Produce', unit: 'reqps',
+    { id: 'send_rate', kind: 'stat', side: 'producer', title: 'Produce/s', unit: 'reqps',
       hint: 'Bu topic\'e saniyede gönderilen kayıt (kafka_producer_record_send_rate, tüm üreticiler).',
       queries: [{ expr: `sum(kafka_producer_record_send_rate${s})`, legend: 'produce' }] },
-    { id: 'send_errors', kind: 'stat', side: 'producer', title: 'Gönderim hatası', unit: 'reqps',
+    { id: 'send_errors', kind: 'stat', side: 'producer', title: 'Send errors/s', unit: 'reqps',
       hint: 'Bu topic için saniyede başarısız gönderim (kafka_producer_record_error_rate). 0 dışı her değer hata.',
       queries: [{ expr: `sum(kafka_producer_record_error_rate${s})`, legend: 'hata' }], tone: anyIsBad },
-    { id: 'consume_rate', kind: 'stat', side: 'consumer', title: 'Consume', unit: 'reqps',
+    { id: 'consume_rate', kind: 'stat', side: 'consumer', title: 'Consume/s', unit: 'reqps',
       hint: 'Bu topic\'ten saniyede tüketilen kayıt (kafka_consumer_records_consumed_rate, tüm tüketiciler).',
       queries: [{ expr: `sum(kafka_consumer_records_consumed_rate${s})`, legend: 'consume' }] },
-    { id: 'max_lag', kind: 'stat', side: 'consumer', title: 'En yüksek lag', unit: '',
+    { id: 'max_lag', kind: 'stat', side: 'consumer', title: 'Max lag', unit: '',
       hint: 'Bu topic\'in partition\'larında tüketicilerin gördüğü en yüksek lag (kafka_consumer_records_lag_max, kayıt).',
       queries: [{ expr: `max(kafka_consumer_records_lag_max${s})`, legend: 'lag' }], tone: ge(1000, 10000) },
-    { id: 'min_lead', kind: 'stat', side: 'consumer', title: 'En düşük lead', unit: '',
+    { id: 'min_lead', kind: 'stat', side: 'consumer', title: 'Min lead', unit: '',
       hint: 'Retention sınırına uzaklık (kafka_consumer_records_lead_min, kayıt). Sıfıra yaklaşırsa okunmamış kayıt silinmek üzere.',
       queries: [{ expr: `min(kafka_consumer_records_lead_min${s})`, legend: 'lead' }], tone: lowIsBad(1000, 100) },
     // ── Grafikler — v0.10.1539 operatör: "panoyu baz al, sade ve anlamlı;
@@ -83,6 +83,11 @@ export function kafkaTopicPanels(topic: string, service?: string): KafkaTopicPan
       hint: 'kafka_producer_record_error_rate / record_retry_rate, bu topic. Retry artıp hata sıfırsa broker yavaş; hata varsa kayıt kayboluyor.',
       queries: [by('sum', 'kafka_producer_record_error_rate', `hata - ${SC}`), by('sum', 'kafka_producer_record_retry_rate', `retry - ${SC}`)] },
   ];
+}
+
+/** v0.10.1962 — topic'in partition sayısı: tüketici partition lag serisinin partition etiketi (yalnız tüketilenler). */
+export function kafkaTopicPartitionsExpr(topic: string): string {
+  return `count(max by (partition) (kafka_consumer_records_lag${kafkaTopicSel(topic)}))`;
 }
 
 /** "Bu topic'e kim dokunuyor" — anlık, (servis, client_id) başına pod sayısı + hız. */

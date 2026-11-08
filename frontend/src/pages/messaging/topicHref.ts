@@ -19,16 +19,19 @@ import type { TimeRange } from '@/lib/types';
 
 export const MSG_TOPIC_PATH = '/messaging/topic';
 
-/** Sekme ekseni. Varsayılan `producers` — URL'de YAZILMAZ (Service.tsx deseni). */
-// v0.10.1539 — 'clients' / 'partitions' sekmeleri kalktı: topic metrikleri ve
-// partition lag'i sayfanın üstünde (KafkaTopicMetrics); eski link varsayılana düşer.
-export type MsgTopicTab = 'producers' | 'consumers' | 'operations' | 'spannames';
+/** Sekme ekseni. Varsayılan `overview` — URL'de YAZILMAZ (Service.tsx deseni). */
+// v0.10.1539 — 'clients' / 'partitions' sekmeleri kalktı (eski link varsayılana düşer).
+// v0.10.1962 (Kafka UI düzeni, mockup onayı 2026-11-08) — Overview · Consumers · Producers · Traces.
+// Eski 'operations' / 'spannames' linkleri Traces'e düşer (o bölümler orada).
+export type MsgTopicTab = 'overview' | 'consumers' | 'producers' | 'traces';
 
 export const MSG_TOPIC_TABS: readonly MsgTopicTab[] = [
-  'producers', 'consumers', 'operations', 'spannames',
+  'overview', 'consumers', 'producers', 'traces',
 ];
 
-export const MSG_TOPIC_DEFAULT_TAB: MsgTopicTab = 'producers';
+export const MSG_TOPIC_DEFAULT_TAB: MsgTopicTab = 'overview';
+
+const LEGACY_TABS: Record<string, MsgTopicTab> = { operations: 'traces', spannames: 'traces' };
 
 /**
  * parseTopicTab — `?tab=` ham değerini sekmeye çevirir.
@@ -39,6 +42,7 @@ export const MSG_TOPIC_DEFAULT_TAB: MsgTopicTab = 'producers';
  */
 export function parseTopicTab(raw: string | null | undefined): MsgTopicTab {
   const t = (raw ?? '').trim();
+  if (LEGACY_TABS[t]) return LEGACY_TABS[t];
   return (MSG_TOPIC_TABS as readonly string[]).includes(t) ? (t as MsgTopicTab) : MSG_TOPIC_DEFAULT_TAB;
 }
 

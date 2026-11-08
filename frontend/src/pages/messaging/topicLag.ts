@@ -1,7 +1,7 @@
 // topicLag — v0.10.1959 (operatör: "Messaging sayfasında VM metrikte lag olan topic'ler üstte gözüksün,
 // servis Messaging sekmesindeki lag nasıl gözüküyorsa aynı şekilde"). SAF yardımcılar.
 //
-// Kaynak servis Messaging sekmesi ve topic detayının "En yüksek lag" karosuyla AYNI metrik:
+// Kaynak servis Messaging sekmesi ve topic detayının "Max lag" karosuyla AYNI metrik:
 // kafka_consumer_records_lag_max (OTel Java agent; tüketici istemcinin topic'te gördüğü en kötü partition lag'i).
 // Topic başına maks. — listedeki sayı detay karosuyla birebir. Eşik lib/kafkaMetrics ile aynı
 // (≥ 1.000 sarı, ≥ 10.000 kırmızı — DependenciesTable lagTone).

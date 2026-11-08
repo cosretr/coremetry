@@ -8,19 +8,20 @@
 // lib/kafkaTopicMetrics.ts'te (tablo testli). Sıra: özet kartları (lag dahil),
 // üretim↔tüketim + hata grafiği, lag (grafik + partition tablosu; lag/lead
 // eşiği aşıldıysa vurgulu), "kim yazıyor / kim okuyor" tablosu.
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { KafkaAlertModal } from '@/pages/alerts/KafkaAlertModal';
 import { messagingTopicHref } from '@/pages/messaging/topicHref';
 import { Empty, Spinner } from '@/components/Spinner';
-import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef } from '@/components/ui/DataTable';
 import { HttpStat, HttpChartPanel } from '@/pages/service/httpMetricsViz';
 import { useHttpPromql, type HttpPromqlItem } from '@/lib/queries/httpMetrics';
 import { relabel, scalarOf, sparkValues, seriesLabels, lastValue, stepSeconds } from '@/lib/httpMetrics';
-import { kafkaTopicPanels, kafkaTopicClientQueries, kafkaTopicClientRows, type KafkaTopicPanel, type KafkaTopicClientRow } from '@/lib/kafkaTopicMetrics';
+import { kafkaTopicPanels, kafkaTopicClientQueries, kafkaTopicClientRows, kafkaTopicPartitionsExpr, type KafkaTopicPanel } from '@/lib/kafkaTopicMetrics';
 import { fmtSmart } from '@/lib/chartFmt';
-import { serviceHref } from '@/lib/serviceHref';
+import { fmtNum } from '@/lib/utils';
+import { TopicConsumersTable, TopicProducersTable } from './KafkaTopicClients';
+import type { MsgTopicTab } from '@/pages/messaging/topicHref';
 import { useThemeTick } from '@/lib/useThemeTick';
 import { PartitionLagTable } from './PartitionLagTable';
 import type { TimeRange } from '@/lib/types';
@@ -28,8 +29,15 @@ import type { TimeRange } from '@/lib/types';
 const itemsOf = (ps: KafkaTopicPanel[]): HttpPromqlItem[] =>
   ps.flatMap(p => p.queries.map((q, i) => ({ id: `${p.id}#${i}`, expr: q.expr, instant: false })));
 
-export function KafkaTopicMetrics({ system, cluster, topic, range, win, compact = false }: {
+export function KafkaTopicMetrics({ system, cluster, topic, range, win, compact = false, tab = 'overview', tabs }: {
   system: string; cluster: string; topic: string; range: TimeRange; win: { from: number; to: number };
+  /**
+   * v0.10.1962 (Kafka UI düzeni) — topic sayfası: şerit → `tabs` (sayfanın sekme şeridi) → seçili sekmenin
+   * VM gövdesi (overview: akış + lag + partition; consumers / producers: istemci tabloları; traces: yok,
+   * span tarafı sayfada). Çekmece (compact) bunları kullanmaz.
+   */
+  tab?: MsgTopicTab;
+  tabs?: ReactNode;
   /**
    * v0.10.1557 (operatör: Messaging çekmecesi topic sayfasıyla aynı görünüm) —
    * çekmece kipi: kartlar + üç grafik; partition / istemci tabloları yalnız topic
@@ -48,6 +56,7 @@ export function KafkaTopicMetrics({ system, cluster, topic, range, win, compact 
   const clientsQ = useHttpPromql([
     { id: 'prod', expr: cq.producers, instant: true },
     { id: 'cons', expr: cq.consumers, instant: true },
+    ...(compact ? [] : [{ id: 'parts', expr: kafkaTopicPartitionsExpr(topic), instant: true }]),
   ], win);
   const prodRows = (clientsQ.data.prod ?? []).map(s => ({ labels: seriesLabels(s), value: lastValue(s) }));
   const consRows = (clientsQ.data.cons ?? []).map(s => ({ labels: seriesLabels(s), value: lastValue(s) }));
@@ -61,18 +70,22 @@ export function KafkaTopicMetrics({ system, cluster, topic, range, win, compact 
   const st = useHttpPromql(itemsOf(stats), win, !none);
   const ch = useHttpPromql(itemsOf(charts), win, !none);
 
-  if (pending) return <Spinner label="Topic metrikleri (VictoriaMetrics)…" />;
+  // v0.10.1962 — sekmeler yüklenirken / VM hatasında da durur: span sekmelerine erişim VM'e bağlı değil.
+  if (pending) return <>{!compact && tabs}<Spinner label="Topic metrikleri (VictoriaMetrics)…" /></>;
   if (clientsQ.error('prod') && clientsQ.error('cons')) {
-    return <Empty icon="⚠" title="VictoriaMetrics okunamadı">{clientsQ.error('prod')?.message}</Empty>;
+    return <>{!compact && tabs}<Empty icon="⚠" title="VictoriaMetrics okunamadı">{clientsQ.error('prod')?.message}</Empty></>;
   }
   if (none) {
     return (
+      <>
+      {!compact && tabs}
       <Empty icon="∅" title="Bu topic için Kafka istemci metriği yok">
         VictoriaMetrics&apos;te <span className="mono">topic=&quot;{topic}&quot;</span> etiketli
         {' '}<span className="mono">kafka_producer_record_send_rate</span> /{' '}
         <span className="mono">kafka_consumer_records_consumed_rate</span> serisi bulunamadı.
-        {compact ? ' Span tarafı yukarıda.' : ' Span tarafı aşağıdaki sekmelerde.'}
+        {compact ? ' Span tarafı yukarıda.' : ' Span tarafı Consumers, Producers ve Traces sekmelerinde.'}
       </Empty>
+      </>
     );
   }
 
@@ -94,8 +107,19 @@ export function KafkaTopicMetrics({ system, cluster, topic, range, win, compact 
   );
   const byId = (id: string) => charts.find(p => p.id === id)!;
   const consumerServices = [...new Set(clients.filter(c => c.side === 'consumer' && c.service).map(c => c.service))].sort();
+  const producerServices = new Set(clients.filter(c => c.side === 'producer' && c.service).map(c => c.service));
+  const parts = scalarOf(clientsQ.data.parts);
   const statRow = (
     <div className="mtp-kafka-stats">
+      {/* v0.10.1962 (Kafka UI düzeni) — kimlik karoları: partition / producer / consumer sayısı. */}
+      {!compact && (
+        <>
+          <HttpStat label="Partitions" value={parts == null ? '—' : fmtNum(parts)}
+            title="Tüketicilerin okuduğu partition sayısı (kafka_consumer_records_lag, partition etiketi). Kimsenin tüketmediği partition sayılmaz." />
+          <HttpStat label="Producers" value={fmtNum(producerServices.size)} title="Bu topic'e yazan servis sayısı (kafka_producer_record_send_rate)" />
+          <HttpStat label="Consumers" value={fmtNum(consumerServices.length)} title="Bu topic'i okuyan servis sayısı (kafka_consumer_records_consumed_rate)" />
+        </>
+      )}
       {stats.map(p => {
         const { v, tone } = statOf(p);
         return (
@@ -151,59 +175,17 @@ export function KafkaTopicMetrics({ system, cluster, topic, range, win, compact 
   return (
     <div className="mtp-kafka">
       {statRow}
-
-      {lagAlarm ? <>{lagSection}{flowGrid}</> : <>{flowGrid}{lagSection}</>}
-
-      <section aria-label="İstemciler">
-        <h3 className="mtp-kafka-h">Producer / consumer istemciler</h3>
-        <ClientsTable rows={clients} range={range} />
-      </section>
-      <div className="field-hint">
-        Kaynak: VictoriaMetrics, <span className="mono">topic=&quot;{topic}&quot;</span> etiketli Kafka istemci metrikleri.
-        Bağlantı, broker gecikmesi ve rebalance topic&apos;e değil istemciye aittir — servis satırından
-        {' '}Service → Messaging sekmesinde.
-      </div>
-    </div>
-  );
-}
-
-function ClientsTable({ rows, range }: { rows: KafkaTopicClientRow[]; range: TimeRange }) {
-  const cols = useMemo<ColumnDef<KafkaTopicClientRow>[]>(() => [
-    { id: 'side', label: 'Rol', sortValue: r => r.side, naturalDir: 'asc', width: 96 },
-    { id: 'service', label: 'Servis', sortValue: r => r.service, naturalDir: 'asc', flex: true, minWidth: 160, mono: true },
-    { id: 'client', label: 'client_id', sortValue: r => r.clientId, naturalDir: 'asc', minWidth: 140, width: 220, mono: true },
-    { id: 'pods', label: 'Pod', sortValue: r => r.pods, numeric: true, naturalDir: 'desc', width: 70 },
-    { id: 'rate', label: 'Kayıt/sn', sortValue: r => r.rate ?? -1, numeric: true, naturalDir: 'desc', width: 100 },
-  ], []);
-  const dt = useDataTable<KafkaTopicClientRow>({
-    storageKey: 'msg-topic-kafka-clients', columns: cols, rows, initialSort: { id: 'rate', dir: 'desc' },
-  });
-  return (
-    <div className="table-wrap">
-      <table {...dt.tableProps}>
-        <DataTableColgroup dt={dt} />
-        <DataTableHead dt={dt} />
-        <tbody>
-          {dt.sortedRows.length === 0 ? (
-            <DataTableState dt={dt} kind="empty" message="İstemci yok" />
-          ) : dt.sortedRows.map(r => (
-            <tr key={r.key} className="cv-row">
-              <DataTableCell dt={dt} col="side" row={r} value={r.side === 'producer' ? 'Producer' : 'Consumer'} />
-              <DataTableCell dt={dt} col="service" row={r} title={r.service}>
-                <Link to={serviceHref(r.service, {
-                  tab: 'messaging', range,
-                  params: r.side === 'producer' ? { kprod: r.clientId } : { kcons: r.clientId },
-                })} title="Bu istemcinin sağlığı (bağlantı, gecikme, rebalance) — Service → Messaging">
-                  {r.service || '—'}
-                </Link>
-              </DataTableCell>
-              <DataTableCell dt={dt} col="client" row={r} value={r.clientId || '—'} title={r.clientId} />
-              <DataTableCell dt={dt} col="pods" row={r} value={String(r.pods)} />
-              <DataTableCell dt={dt} col="rate" row={r} value={r.rate == null ? '—' : fmtSmart(r.rate, 'reqps')} />
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {tabs}
+      {tab === 'overview' && (lagAlarm ? <>{lagSection}{flowGrid}</> : <>{flowGrid}{lagSection}</>)}
+      {tab === 'consumers' && <TopicConsumersTable topic={topic} range={range} win={win} />}
+      {tab === 'producers' && <TopicProducersTable topic={topic} range={range} win={win} />}
+      {tab !== 'traces' && (
+        <div className="field-hint">
+          Kaynak: VictoriaMetrics, <span className="mono">topic=&quot;{topic}&quot;</span> etiketli Kafka istemci metrikleri.
+          Bağlantı, broker gecikmesi ve rebalance topic&apos;e değil istemciye aittir — servis satırından
+          {' '}Service → Messaging sekmesinde.
+        </div>
+      )}
     </div>
   );
 }
