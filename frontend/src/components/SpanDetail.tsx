@@ -21,6 +21,7 @@ import { IconFlame, IconSparkles } from './icons';
 import { CopyButton } from './CopyButton';
 import { IconButton } from './ui/IconButton';
 import { DisclosureButton } from './ui/DisclosureButton';
+import { SqlCode } from '@/components/coremetry/SqlCode'; // v0.10.1955
 import { AIExplainButton } from './ai/AIExplainButton';
 import { useT } from '@/lib/i18n'; // v0.10.1338 — "Ask CoSRE" etiketi
 import { BreakdownBar, KindBadge } from './KindBadge';
@@ -165,6 +166,8 @@ export function SpanDetail({ span, onClose, logsFrom, logsTo, serviceLinks = tru
   // endpoint'e gidilebilmeli.
   const endpointLink = useMemo(() => spanEndpointHref(spanLinkCtx), [spanLinkCtx]);
   // v0.10.1525 — başlık satırındaki "Database'de aç" / "Sorgu detayı" çifti.
+  // v0.10.1955 — renkli SQL bloğunun metni: sunucunun dbStatement'ı, yoksa öznitelik (eski / yeni semconv).
+  const spanSql = (span.dbStatement || span.attributes?.['db.statement'] || span.attributes?.['db.query.text'] || '').trim();
   const dbLinks = useMemo(() => {
     const ref = spanLinkCtx.db;
     if (!ref) return null;
@@ -364,6 +367,9 @@ export function SpanDetail({ span, onClose, logsFrom, logsTo, serviceLinks = tru
               label={<><IconSparkles /> <span style={{ marginLeft: 6 }}>{tr('ai.askCosre')}</span></>} />
           </div>
         )}
+        {/* v0.10.1955 (operatör: "db sorguları Toad gibi highlight edilebilir mi") — DB span'inde
+            sorgu metni renkli blok + kopyala (coremetry/SqlCode, Database sayfasıyla aynı bileşen). */}
+        {spanSql && <div className="kiosk-span__sql" data-testid="span-sql"><SqlCode sql={spanSql} /></div>}
         <div className="kiosk-span__cols">
           <div>
             <div className="kiosk-span__col-title">Span attributes <span className="kiosk-span__cnt">{attrCount}</span></div>

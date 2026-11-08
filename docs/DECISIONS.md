@@ -13460,4 +13460,8 @@ ve sade span detayı (cümle + temel alanlar, öznitelikler katlı). Uygulananla
   anlamı kalmaz"). `TraceSummaryLine`, `trace.sum.*` anahtarları ve `.trace-sum` stili silindi; hızlı atlama
   çipleri kalır, hedefleri sadeleşmiş saf `lib/traceJumps`'tan (kök hata + en uzun dış çağrı). Trace sayfasında
   metinle açıklama/özet yeniden önerme — açıklama CoSRE'nin işi.
+- **v0.10.1955 — span detayında renkli SQL** (operatör: "db sorguları Toad gibi highlight edilebilir mi"). DB span'i
+  açılınca sorgu metni öznitelik kolonlarının üstünde `coremetry/SqlCode` ile (Database sayfasındaki bileşen: anahtar
+  sözcük vurgu rengi + kalın, fonksiyon / metin / sayı ayrı ton, yorum soluk; kopyala). Metin: `dbStatement` >
+  `db.statement` > `db.query.text`.
 
