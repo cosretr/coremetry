@@ -10,6 +10,7 @@
 // Durum/uyarı rengi YOK; renkler yalnız tema token'ları (`resolveVar`): yıldız
 // v0.10.1933: etiketler zemin renginde (--bg0) ince çerçeveyle çizilir (toz üstünde okunur).
 // v0.10.1938 (operatör: "açılış efekti olmasın, direkt açılsın"): 1936'nın açılış hareketi söküldü.
+// v0.10.1946: üzerine gelince küçük kart (ad · tür · trafik seviyesi · bağlantı sayısı; kesin sayı yok).
 // v0.10.1945: kollar arası bağ çizgisi yalnız odakta (edgeVisible); akan noktalar sürer.
 // v0.10.1943: etiketler çakışmaz ve kartın altına girmez (placeLabels; kart kutusu `avoidRef`).
 // v0.10.1935: üzerine gelince adın altında soluk TÜR satırı (gateway / BFF / servis / veritabanı / kuyruk, i18n).
@@ -26,7 +27,7 @@ import { useThemeTick } from '@/lib/useThemeTick';
 import { useT } from '@/lib/i18n';
 import { MAX_LABELS, shouldDraw, thinGraph } from '@/lib/loginTopology/frame';
 import {
-  buildGalaxy, depthOf, edgeVisible, flowPos, isDarkColor, placeLabels, type Box, type LabelCand, nodeAlpha, nodeRadius, pickBackendLabels, pickLabelSet, project, spinRate,
+  buildGalaxy, cardPlacement, depthOf, edgeVisible, trafficLevel, flowPos, isDarkColor, placeLabels, type Box, type LabelCand, nodeAlpha, nodeRadius, pickBackendLabels, pickLabelSet, project, spinRate,
   TILT0, TILT_MAX, TILT_MIN, wantsLabel, type Galaxy, type Pt, type View,
 } from '@/lib/loginTopology/galaxy';
 import { seedOfIds } from '@/lib/loginTopology/prng';
@@ -34,13 +35,13 @@ import type { LoginSummaryEdge, LoginSummaryNode } from '@/lib/types';
 
 export interface BackdropGraph { nodes: LoginSummaryNode[]; edges: LoginSummaryEdge[]; seed?: number; stars?: [number, number][] }
 
-interface Colors { star: string; arm: string; mq: string; flow: string; label: string; bg: string; glow: number; flowBoost: number }
+interface Colors { star: string; arm: string; mq: string; flow: string; label: string; bg: string; card: string; border: string; text: string; muted: string; glow: number; flowBoost: number }
 
 function readColors(): Colors {
   const bg = resolveVar('var(--bg0)');
   const dark = isDarkColor(bg);
   return {
-    bg,
+    bg, card: resolveVar('var(--card)'), border: resolveVar('var(--border)'), text: resolveVar('var(--text)'), muted: resolveVar('var(--text3)'),
     star: resolveVar('var(--accent2)'), arm: resolveVar('var(--purple)'), mq: resolveVar('var(--teal)'),
     // v0.10.1929 (operatör-raporlu: kurumsal temada akan noktalar altın değil) — --warn açık temalarda
     // kahverengi metin tonu (#795600); galaksiye ayrı altın token'ı.
@@ -75,6 +76,20 @@ function label(ctx: CanvasRenderingContext2D, text: string, x: number, y: number
   ctx.lineJoin = 'round'; ctx.lineWidth = 3.5; ctx.strokeStyle = col.bg;
   ctx.strokeText(text, x, y);
   ctx.fillStyle = col.label; ctx.fillText(text, x, y);
+}
+
+/** v0.10.1946 — üzerine gelince kart: ad, "tür · trafik seviyesi", "N bağlantı". */
+function hoverCard(ctx: CanvasRenderingContext2D, f: Frame, p: Pt, name: string, tier: string, weight: number, links: number) {
+  const { col, kinds } = f;
+  const l2 = [kinds[tier], kinds[`level.${trafficLevel(weight)}`]].filter(Boolean).join(' · ');
+  const l3 = (kinds.links ?? '{n}').replace('{n}', String(links));
+  ctx.font = `600 ${chartMonoFont(12)}`; const w1 = ctx.measureText(name).width;
+  ctx.font = chartMonoFont(11); const cw = Math.max(w1, ctx.measureText(l2).width, ctx.measureText(l3).width) + 20, ch = 58;
+  const { x, y } = cardPlacement(p.x, p.y, cw, ch, f.w, f.h);
+  ctx.globalAlpha = 0.96; ctx.fillStyle = col.card; ctx.strokeStyle = col.border; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.roundRect(x, y, cw, ch, 8); ctx.fill(); ctx.stroke();
+  ctx.globalAlpha = 1; ctx.fillStyle = col.text; ctx.font = `600 ${chartMonoFont(12)}`; ctx.fillText(name, x + 10, y + 19);
+  ctx.fillStyle = col.muted; ctx.font = chartMonoFont(11); ctx.fillText(l2, x + 10, y + 35); ctx.fillText(l3, x + 10, y + 50);
 }
 
 /** Bir kare: toz → kenarlar → akan noktalar → düğümler (arkadan öne) → etiketler. Düğüm konumlarını döner (isabet testi için). */
@@ -173,10 +188,7 @@ function drawFrame(ctx: CanvasRenderingContext2D, f: Frame): Pt[] {
   }
   if (hover >= 0 && g.nodes[hover].name) {
     const nd = g.nodes[hover], p = pos[hover];
-    ctx.globalAlpha = 1; ctx.font = chartMonoFont(12);
-    label(ctx, nd.name ?? '', p.x + 9, p.y + 4, col);
-    const kind = f.kinds[nd.tier];
-    if (kind) { ctx.globalAlpha = 0.7; ctx.font = chartMonoFont(10.5); label(ctx, kind, p.x + 9, p.y + 18, col); }
+    hoverCard(ctx, f, p, nd.name ?? '', nd.tier, nd.weight, g.adj[hover].length);
   }
   ctx.globalAlpha = 1;
   return pos;
@@ -197,6 +209,8 @@ export default function TopologyBackdrop({ graph, animated, pace = 0.6, avoidRef
   kindsRef.current = {
     gw: t('login.topo.kind.gw'), bff: t('login.topo.kind.bff'), svc: t('login.topo.kind.svc'),
     db: t('login.topo.kind.db'), queue: t('login.topo.kind.queue'),
+    'level.busy': t('login.topo.level.busy'), 'level.mid': t('login.topo.level.mid'), 'level.calm': t('login.topo.level.calm'),
+    links: t('login.topo.links'),
   };
   // BİR KEZ: galaksi ilk gelen grafikle kurulur; `graph` sonradan değişse de yeniden kurulmaz.
   const [galaxy] = useState<Galaxy>(() => {

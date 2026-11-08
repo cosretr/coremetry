@@ -25,7 +25,9 @@ describe('login galaksisi etiketleri', () => {
     }
     expect(t('login.topo.kind.db', 'tr')).toBe('veritabanı');
     expect(t('login.topo.kind.queue', 'tr')).toBe('kuyruk');
-    expect(src).toContain('const kind = f.kinds[nd.tier]');
+    // v0.10.1946 — tür artık üzerine gelince kartın ikinci satırında.
+    expect(src).toContain('hoverCard(ctx, f, p, nd.name');
+    expect(src).toContain('kinds[tier]');
   });
   // v0.10.1938 (operatör: "açılış efekti olmasın, direkt açılsın") — 1936'nın açılış hareketi söküldü.
   it('açılış hareketi yok: galaksi doğrudan yerinde açılır', () => {

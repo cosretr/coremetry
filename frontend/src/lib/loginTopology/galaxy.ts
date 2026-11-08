@@ -272,6 +272,26 @@ export function edgeVisible(armA: number, armB: number, focus: boolean): boolean
   return focus || armA === armB;
 }
 
+/** v0.10.1946 — üzerine gelince kartın trafik seviyesi (ağırlık eşikleri; mutlak sayı yok). */
+export type TrafficLevel = 'busy' | 'mid' | 'calm';
+export function trafficLevel(weight: number): TrafficLevel {
+  return weight > 0.6 ? 'busy' : weight > 0.25 ? 'mid' : 'calm';
+}
+
+/**
+ * SAF (v0.10.1946): kartın sol üst köşesi. Noktanın sağına (x+14), sığmazsa
+ * soluna; dikeyde tuvalin içinde (8 px pay) tutulur.
+ */
+export function cardPlacement(px: number, py: number, cw: number, ch: number, w: number, h: number): { x: number; y: number } {
+  let x = px + 14;
+  if (x + cw > w - 8) x = px - 14 - cw;
+  if (x < 8) x = 8;
+  let y = py - 8;
+  if (y + ch > h - 8) y = h - 8 - ch;
+  if (y < 8) y = 8;
+  return { x, y };
+}
+
 /** Ekran kutusu (px): sol, sağ, üst, alt. */
 export interface Box { l: number; r: number; t: number; b: number }
 /** Etiket adayı: düğüm dizini, ekran konumu, metin genişliği (px), katman, ağırlık. */

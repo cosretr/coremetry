@@ -6,7 +6,7 @@ import { mulberry32 } from './prng';
 import { syntheticGraph, SYNTHETIC_SEED } from './synthetic';
 import {
   buildGalaxy, depthOf, flowPos, flowSpeed, isDarkColor, nodeAlpha, nodeRadius, paceFrom, pickBackendLabels, pickLabelSet, project,
-  sizeOf, spinRate, wantsLabel, DENSE_NODES, DENSE_SIZE_K, MAX_STARS, MIN_DUST, placeLabels, labelBox, LABEL_CARD_MARGIN, rebalanceArms, edgeVisible, MIN_ARMS, TILT0, DUST_ARM, DUST_CORE, FLOW_EDGES, type GNode,
+  sizeOf, spinRate, wantsLabel, DENSE_NODES, DENSE_SIZE_K, MAX_STARS, MIN_DUST, placeLabels, labelBox, LABEL_CARD_MARGIN, rebalanceArms, edgeVisible, trafficLevel, cardPlacement, MIN_ARMS, TILT0, DUST_ARM, DUST_CORE, FLOW_EDGES, type GNode,
 } from './galaxy';
 import type { LoginSummaryEdge, LoginSummaryNode } from '@/lib/types';
 
@@ -253,5 +253,19 @@ describe('sade çizgiler (v0.10.1945)', () => {
     expect(src).toContain('if (!edgeVisible(g.nodes[e.a].arm, g.nodes[e.b].arm, focus)) continue;');
     const flowLoop = src.slice(src.indexOf('for (const k of g.flows)'), src.indexOf('// düğümler: arkadan öne'));
     expect(flowLoop).not.toContain('edgeVisible');
+  });
+});
+
+describe('üzerine gelince kart (v0.10.1946)', () => {
+  it('trafik seviyesi ağırlık eşiklerinden', () => {
+    expect(trafficLevel(0.9)).toBe('busy');
+    expect(trafficLevel(0.4)).toBe('mid');
+    expect(trafficLevel(0.1)).toBe('calm');
+  });
+  it('kart noktanın sağında; sığmazsa solunda; dikeyde tuvalde kalır', () => {
+    expect(cardPlacement(100, 100, 120, 58, 1000, 800)).toEqual({ x: 114, y: 92 });
+    expect(cardPlacement(950, 100, 120, 58, 1000, 800)).toEqual({ x: 816, y: 92 });
+    expect(cardPlacement(100, 790, 120, 58, 1000, 800)).toEqual({ x: 114, y: 734 });
+    expect(cardPlacement(100, 2, 120, 58, 1000, 800)).toEqual({ x: 114, y: 8 });
   });
 });
