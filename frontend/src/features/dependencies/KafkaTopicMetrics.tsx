@@ -136,19 +136,23 @@ export function KafkaTopicMetrics({ system, cluster, topic, range, win, compact 
     );
   }
 
+  // v0.10.1959 (operatör: "detay sayfasında da [lag] anlaşılsın") — lag eşiği aşıldıysa Lag bölümü
+  // özet kartlarının hemen altına, akış grafiklerinin ÜSTÜNE gelir; aşılmadıysa sıra eskisi gibi.
+  const lagSection = (
+    <section aria-label="Lag" data-testid="mtp-kafka-lag" className={lagAlarm ? 'mtp-kafka-lag mtp-kafka-lag--alarm' : 'mtp-kafka-lag'}>
+      <h3 className="mtp-kafka-h">
+        Lag{lagAlarm && <span className="badge b-warn" style={{ marginLeft: 8 }}>eşik aşıldı</span>}
+      </h3>
+      <div className="mtp-kafka-grid">{chart(byId('lag_by_client'))}</div>
+      <PartitionLagTable system={system} cluster={cluster} destination={topic} range={range} />
+    </section>
+  );
+  const flowGrid = <div className="mtp-kafka-grid">{chart(byId('flow'))}{chart(byId('errors_by_client'))}</div>;
   return (
     <div className="mtp-kafka">
       {statRow}
 
-      <div className="mtp-kafka-grid">{chart(byId('flow'))}{chart(byId('errors_by_client'))}</div>
-
-      <section aria-label="Lag" className={lagAlarm ? 'mtp-kafka-lag mtp-kafka-lag--alarm' : 'mtp-kafka-lag'}>
-        <h3 className="mtp-kafka-h">
-          Lag{lagAlarm && <span className="badge b-warn" style={{ marginLeft: 8 }}>eşik aşıldı</span>}
-        </h3>
-        <div className="mtp-kafka-grid">{chart(byId('lag_by_client'))}</div>
-        <PartitionLagTable system={system} cluster={cluster} destination={topic} range={range} />
-      </section>
+      {lagAlarm ? <>{lagSection}{flowGrid}</> : <>{flowGrid}{lagSection}</>}
 
       <section aria-label="İstemciler">
         <h3 className="mtp-kafka-h">Producer / consumer istemciler</h3>

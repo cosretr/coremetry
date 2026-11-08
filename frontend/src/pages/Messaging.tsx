@@ -14,6 +14,8 @@ import { encodeDestinationParam, decodeDestinationParam } from './messaging/dest
 import { depRowKey } from '@/lib/depsTable';
 import type { MessagingInstance, MessagingOverview } from '@/lib/types';
 import { PageShell } from '@/components/coremetry/PageShell';
+import { useHttpPromql } from '@/lib/queries/httpMetrics';
+import { TOPIC_LAG_EXPR, topicLagMap, sortByLag } from './messaging/topicLag'; // v0.10.1959
 
 // /messaging — top-level queue / topic technologies overview.
 // Kafka brokers, RabbitMQ vhosts, IBM MQ queues, NATS subjects,
@@ -33,6 +35,8 @@ import { PageShell } from '@/components/coremetry/PageShell';
 //     v0.5.404 pattern; opt-in, doubles the backend scan).
 //   • ?destination= URL param drives the topic detail drawer
 //     (URL-first house rule; replace:true, Esc/✕ clears).
+const LAG_ITEMS = [{ id: 'lag', expr: TOPIC_LAG_EXPR, instant: true }] as const;
+
 export default function MessagingPage() {
   const [range, setRange] = useUrlRange(DEFAULT_RANGE_PRESET);
   const [params, setParams] = useSearchParams();
@@ -111,6 +115,9 @@ export default function MessagingPage() {
   // /min rates here. Prior windows are equal-length by
   // construction, so the same divisor applies.
   const windowMins = Math.max((to - from) / 60e9, 1 / 60);
+  // v0.10.1959 — Kafka lag VM'den (servis Messaging sekmesiyle aynı metrik); anlık, 30 sn önbellek.
+  const lagQ = useHttpPromql(LAG_ITEMS, { from, to });
+  const lagMap = useMemo(() => topicLagMap(lagQ.data.lag), [lagQ.data.lag]);
   // v0.9.813 — zarf. `?? []` HER İKİ eksikliği karşılar: yanıt yok ve
   // rows yok. Tavan bilgisi ayrı okunur — şerit tabloyu değil listeyi
   // niteliyor, bu yüzden filtrelenmiş satır sayısına DEĞİL sunucunun
@@ -120,7 +127,7 @@ export default function MessagingPage() {
   const rowsCapped = ov?.rowsCapped === true;
   const rowLimit = ov?.rowLimit ?? 0;
   const rows = useMemo<DepRow[]>(() => {
-    return list.map((d: MessagingInstance) => {
+    const mapped = list.map((d: MessagingInstance): DepRow => {
       const hasPrior = d.priorSpanCount !== undefined;
       return {
         system: d.system,
@@ -154,9 +161,12 @@ export default function MessagingPage() {
         priorP50Ms: d.priorP50Ms,
         priorP99Ms: d.priorP99Ms,
         callers: d.callers ?? [],
+        lag: d.system === 'kafka' ? lagMap.get(d.destination) : undefined,
       };
     });
-  }, [list, windowMins]);
+    // v0.10.1959 — lag'i olan topic'ler üstte (azalan), gerisi çağrı hacmine göre.
+    return sortByLag(mapped);
+  }, [list, windowMins, lagMap]);
 
   // v0.10.954 — tablo standardı T12 (P6): yükleniyor / hata / boş artık
   // DependenciesTable'ın İÇİNDE (başlık durur); tablo her durumda çizilir.

@@ -25,8 +25,16 @@ import type { TimeRange, DBTrend } from '@/lib/types';
 // component. We type-erase the row-specific labelling (Instance
 // vs Destination, System vs System) via the props above; the
 // table logic is otherwise identical.
+/** v0.10.1959 — lag hücre tonu: servis Messaging sekmesindeki eşik (lib/kafkaMetrics `ge(1000, 10000)`). */
+export function lagTone(lag: number | undefined): string {
+  if (lag == null) return '';
+  return lag >= 10_000 ? 'cell-err' : lag >= 1_000 ? 'cell-warn' : '';
+}
+
 export interface DepRow {
   system: string;
+  /** v0.10.1959 — Kafka consumer lag (VM `kafka_consumer_records_lag_max`, topic başına en kötü partition); yoksa undefined. */
+  lag?: number;
   // Messaging-only — physical cluster identifier. Empty / undefined
   // for DB rows. Surfaced as a Cluster column when any row in
   // the set has it populated so a Kafka deployment with one
@@ -199,6 +207,8 @@ export function DependenciesTable({
   // Show the Cluster column only when at least one row carries
   // a non-default cluster. Single-Kafka-cluster deployments
   // skip the column entirely.
+  // v0.10.1959 — lag kolonu yalnız en az bir satırda VM lag değeri varsa (Kafka metriği olmayan kurulumda boş kolon yok).
+  const hasLagCol = useMemo(() => kind === 'queue' && rows.some(r => r.lag != null), [kind, rows]);
   const hasClusterCol = useMemo(
     () => rows.some(r => r.cluster && r.cluster !== '(default)'),
     [rows]);
@@ -250,6 +260,10 @@ export function DependenciesTable({
       ? [{ id: 'database', label: 'Database', sortValue: (r: DepRow) => r.dbName ?? '', naturalDir: 'asc', width: 120, minWidth: 100, priority: 2 } as DataTableColumn<DepRow>]
       : []),
     { id: 'name', label: kind === 'db' ? 'Instance' : 'Destination', sortValue: r => nameOf(r), naturalDir: NATURAL.name, flex: true, minWidth: 180, priority: 1 },
+    // v0.10.1959 (operatör: lag olan topic'ler üstte) — yalnız lag verisi olan satır varsa; lag'siz satır -1 ile alta.
+    ...(hasLagCol
+      ? [{ id: 'lag', label: 'Lag', sortValue: (r: DepRow) => r.lag ?? -1, numeric: true, naturalDir: 'desc', width: 96, minWidth: 80, priority: 1 } as DataTableColumn<DepRow>]
+      : []),
     { id: 'spanCount', label: 'Calls', sortValue: r => r.spanCount, numeric: true, naturalDir: NATURAL.spanCount, width: 96, minWidth: 72, priority: 2 },
     // v0.8.364 (Stage-2 M1) — messaging-only producer/consumer
     // split. Rates are precomputed by the page (it owns the window
@@ -306,7 +320,7 @@ export function DependenciesTable({
       ? [{ id: 'trend', label: 'Trend', width: 140, minWidth: 120, priority: 4 } as DataTableColumn<DepRow>]
       : []),
     { id: 'callers', label: 'Top callers', width: 240, minWidth: 160, priority: 3 },
-  ], [hasClusterCol, kind]);
+  ], [hasClusterCol, hasLagCol, kind]);
 
   const dt = useDataTable<DepRow>({
     storageKey: `deps-${kind}`,
@@ -324,8 +338,9 @@ export function DependenciesTable({
     //
     // /databases DEĞİŞMEDİ: p99delta kolonu yalnız kind='queue' için
     // kuruluyor, DB tarafı spanCount varsayılanını koruyor.
+    // v0.10.1959 — kuyrukta varsayılan lag (azalan); lag kolonu yoksa sıralama yok (sayfanın sırası).
     initialSort: kind === 'queue'
-      ? { id: 'p99delta', dir: 'desc' }
+      ? { id: 'lag', dir: 'desc' }
       : { id: 'spanCount', dir: 'desc' },
     // v0.9.404 (desen paritesi) — j/k/Enter klavye gezinmesi: Enter satır
     // drawer'ını Endpoints'teki gibi açar/kapar. /databases + /messaging
@@ -617,6 +632,12 @@ export function DependenciesTable({
                         </span>
                       )}
                     </td>
+                    {hasLagCol && (
+                      // v0.10.1959 — servis Messaging sekmesiyle aynı eşik: ≥ 1.000 sarı, ≥ 10.000 kırmızı (renk yalnız sapanda).
+                      <td className={`num ${lagTone(r.lag)}`} title={r.lag != null ? 'kafka_consumer_records_lag_max · topic başına en kötü partition (VictoriaMetrics; topic sayfasındaki En yüksek lag ile aynı)' : 'Bu destination için VM lag metriği yok'}>
+                        {r.lag != null ? fmtNum(r.lag) : <span className="cell-muted">—</span>}
+                      </td>
+                    )}
                     <td className="num">
                       {fmtNum(r.spanCount)}
                       {/* v0.10.1025 (R2) — burada zeroPrior gerekmez: eşleşen satırın

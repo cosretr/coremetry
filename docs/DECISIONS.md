@@ -13482,3 +13482,13 @@ süre dağılımı. Dynatrace 90. yüzdeliği kullanıyor; MV'lerde hazır p95 k
 - **v0.10.1958 — medyan.** Statement özeti ve trend noktaları p50 taşır (aynı TDigest durumu, 1. eleman; 5m, 1m ve
   prior). Sayfa: Avg'den önce "Median" karosu (prior farkıyla), süre paneli "Latency · median, p95" iki çizgi.
 
+## 2026-11-08 — v0.10.1959 — Messaging: Kafka lag listede üstte, detayda öne (operatör isteği)
+
+Operatör: "Messaging sayfasında da VM metrikte lag olan topic'ler üstte gözüksün, detay sayfasında da anlaşılsın;
+Service overview messaging'teki lag nasıl gözüküyorsa aynı şekilde." Liste VM'den anlık
+`max by (topic) (kafka_consumer_records_lag_max)` okur — servis sekmesi ve topic sayfasının "En yüksek lag" karosuyla
+AYNI metrik ve AYNI eşik (≥ 1.000 sarı, ≥ 10.000 kırmızı), sayı birebir. Kafka satırlarında "Lag" kolonu (yalnız
+değeri olan satır varsa; renk yalnız sapan hücrede), kuyruk tablosunun varsayılan sıralaması lag azalan, sayfa lag'li
+topic'leri önce, gerisini çağrı hacmine göre dizer. Topic sayfası: lag eşiği aşıldıysa Lag bölümü özet kartlarının
+hemen altına, akış grafiklerinin üstüne gelir. Statement süre işinin kalan parçaları 1960 (bant) ve 1961 (dağılım).
+
