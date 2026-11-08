@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  stmtTrendGrid, stmtTrendSeries, stmtBucketBounds, stmtBucketIndex,
+  stmtTrendGrid, stmtTrendSeries, stmtBucketBounds, stmtBucketIndex, stmtBaselineSeries,
   stmtBucketCoveredSec, stmtBucketLabel,
 } from './stmtTrend';
 
@@ -174,5 +174,20 @@ describe('medyan serisi', () => {
     const s = stmtTrendSeries(g, (T + 600) * 1e9);
     expect(s.p50Ms[0].groupKey).toEqual(['Median']);
     expect(s.p50Ms[0].points[0].value).toBe(22);
+  });
+});
+
+// v0.10.1960 — normal aralık: kova → pencere başına göre 5 dk dilim; dilim yoksa NaN.
+describe('normal aralık serileri', () => {
+  it('1 dk kovalar aynı 5 dk dilimin değerini alır; eksik dilim NaN; veri yoksa null', () => {
+    const from = 1_700_000_100; // 5 dk hizalı değil → dilim başı 1_700_000_100 - (… % 300)
+    const from5 = Math.floor(from / 300) * 300;
+    const ts = [from5 + 0, from5 + 60, from5 + 300, from5 + 600].map(s => s * 1e9);
+    const out = stmtBaselineSeries(ts, from * 1e9, [{ offsetSec: 0, p50Ms: 20, p95Ms: 200 }, { offsetSec: 300, p50Ms: 25, p95Ms: 250 }])!;
+    expect(out.p95[0].groupKey).toEqual(['Normal p95 (7d)']);
+    expect(out.p95[0].points.map(p => p.value).slice(0, 3)).toEqual([200, 200, 250]);
+    expect(Number.isNaN(out.p50[0].points[3].value)).toBe(true);
+    expect(stmtBaselineSeries(ts, from * 1e9, [])).toBeNull();
+    expect(stmtBaselineSeries(ts, from * 1e9, undefined)).toBeNull();
   });
 });

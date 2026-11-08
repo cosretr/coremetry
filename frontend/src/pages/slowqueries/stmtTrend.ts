@@ -151,3 +151,21 @@ export function stmtBucketLabel(bucketSec: number): string {
   if (bucketSec % 60 === 0) return `${bucketSec / 60}m`;
   return `${bucketSec}s`;
 }
+
+/**
+ * v0.10.1960 — normal aralık serileri: her trend kovası, pencere başına (5 dk hizalı) göre
+ * düştüğü 5 dk dilimin son-7-gün p50 / p95'ini alır; dilim yoksa NaN (çizgide boşluk).
+ */
+export function stmtBaselineSeries(
+  tsNs: readonly number[], fromNs: number,
+  baseline: ReadonlyArray<{ offsetSec: number; p50Ms: number; p95Ms: number }> | undefined,
+): { p50: SpanMetricSeries[]; p95: SpanMetricSeries[] } | null {
+  if (!baseline || baseline.length === 0) return null;
+  const from5 = Math.floor(fromNs / 1e9 / 300) * 300;
+  const byOff = new Map(baseline.map(b => [b.offsetSec, b]));
+  const at = (t: number) => byOff.get(Math.floor((t / 1e9 - from5) / 300) * 300);
+  const mk = (label: string, pick: (b: { p50Ms: number; p95Ms: number }) => number): SpanMetricSeries[] =>
+    [{ groupKey: [label], points: tsNs.map(t => { const b = at(t); return { time: t, value: b ? pick(b) : NaN }; }) }];
+  return { p50: mk('Normal p50 (7d)', b => b.p50Ms), p95: mk('Normal p95 (7d)', b => b.p95Ms) };
+}
+

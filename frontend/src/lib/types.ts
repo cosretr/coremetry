@@ -9676,6 +9676,8 @@ export interface DBStmtDetail {
   trendSource?: 'db_statement_summary_1m' | 'db_statement_summary_5m';
   callers: DBStmtCaller[] | null;
   exemplars: { slowTraceId?: string; errorTraceId?: string } | null;
+  /** v0.10.1960 — son 7 günün aynı saat dilimlerinden normal aralık; offsetSec = pencere başına (5 dk hizalı) göre. */
+  baseline?: Array<{ offsetSec: number; p50Ms: number; p95Ms: number }>;
 }
 
 // Exemplar — single representative span looked up to bridge a

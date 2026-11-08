@@ -13481,6 +13481,11 @@ süre dağılımı. Dynatrace 90. yüzdeliği kullanıyor; MV'lerde hazır p95 k
 
 - **v0.10.1958 — medyan.** Statement özeti ve trend noktaları p50 taşır (aynı TDigest durumu, 1. eleman; 5m, 1m ve
   prior). Sayfa: Avg'den önce "Median" karosu (prior farkıyla), süre paneli "Latency · median, p95" iki çizgi.
+- **v0.10.1960 — normal aralık.** Detay yanıtında `baseline`: pencere ≤ 24 sa ise 5m MV'den pencereden önceki 7 günün
+  AYNI SAAT dilimleri (gün-içi uzaklık modulo), her 5 dk dilim için birleşik TDigest p50 / p95; < 20 çağrılı dilim
+  atlanır, hata → bant yok. Süre panelinde iki soluk kesikli çizgi "Normal p95 (7d)" / "Normal p50 (7d)". Grafik
+  motorunun dolgulu bant kanalı 0.10.284'te tüketicisiz diye silinmişti; bu sürüm gölge yerine çizgi çiziyor,
+  bandın üstünü renklendirme yok (mockup'tan sapma).
 
 ## 2026-11-08 — v0.10.1959 — Messaging: Kafka lag listede üstte, detayda öne (operatör isteği)
 

@@ -549,3 +549,87 @@ func clampExemplarWindow(from, to time.Time) (time.Time, time.Time) {
 	}
 	return from, to
 }
+
+// ── v0.10.1960 — taban çizgisi (normal aralık) ──────────────────────────────
+//
+// Operatör (Dynatrace benzeri süre gösterimi, öneri 2): sorgunun süresinin arkasında
+// "normal aralık". Kaynak 5m MV (90 gün TTL): pencereden ÖNCEKİ 7 günün AYNI SAAT
+// dilimleri; her 5 dk dilim için 7 günün birleşik TDigest'inden p50 ve p95. Dilim
+// kimliği pencere başına göre gün-içi uzaklık (offsetSec, 300'ün katı). Pencere
+// 24 saati aşarsa bant yok; az çağrılı dilim (< dbStmtBaselineMinCalls) atlanır.
+
+// DBStmtBaselinePoint — pencere başından offsetSec saniye sonraki 5 dk dilimin normal aralığı.
+type DBStmtBaselinePoint struct {
+	OffsetSec int64   `json:"offsetSec"`
+	P50Ms     float64 `json:"p50Ms"`
+	P95Ms     float64 `json:"p95Ms"`
+}
+
+const (
+	dbStmtBaselineDays      = 7
+	dbStmtBaselineMaxWindow = 24 * time.Hour
+	dbStmtBaselineMinCalls  = 20
+	dbStmtBaselineStepSec   = 300
+)
+
+// dbStmtBaselineSQL — saf kurucu. İlk iki argüman: pencere başı (unix, 5 dk hizalı) —
+// gün-içi uzaklığı GROUP BY için; WHERE argümanları ardından.
+func dbStmtBaselineSQL(where string) string {
+	return `
+		SELECT
+			intDiv(modulo(toUnixTimestamp(time_bucket) - ? + 604800, 86400), 300) * 300 AS off,
+			countMerge(span_count_state)                                              AS cnt,
+			arrayElement(quantilesTDigestMerge(0.5, 0.95)(duration_q_state), 1) / 1e6 AS p50_ms,
+			arrayElement(quantilesTDigestMerge(0.5, 0.95)(duration_q_state), 2) / 1e6 AS p95_ms
+		FROM db_statement_summary_5m ` + where + `
+		GROUP BY off
+		ORDER BY off
+		LIMIT 300
+		SETTINGS max_execution_time = 10`
+}
+
+// dbStmtBaselineWhere — saf: önceki 7 gün, pencereyle aynı gün-içi dilimler.
+func dbStmtBaselineWhere(q DBStmtDetailQuery, from5 time.Time, windowSec int64) whereClause {
+	var wc whereClause
+	wc.add("stmt_hash = ?", q.Hash)
+	wc.add("time_bucket >= ?", from5.Add(-dbStmtBaselineDays*24*time.Hour))
+	wc.add("time_bucket < ?", from5)
+	if q.DBSystem != "" {
+		wc.add("db_system = ?", q.DBSystem)
+	}
+	if q.DBName != "" {
+		wc.add("db_name = ?", q.DBName)
+	}
+	wc.add("modulo(toUnixTimestamp(time_bucket) - ? + 604800, 86400) < ?", from5.Unix(), windowSec)
+	return wc
+}
+
+// GetDBStmtBaseline — pencere ≤ 24 sa ise normal aralık dilimleri; aksi nil.
+func (s *Store) GetDBStmtBaseline(ctx context.Context, q DBStmtDetailQuery) ([]DBStmtBaselinePoint, error) {
+	w := q.To.Sub(q.From)
+	if w <= 0 || w > dbStmtBaselineMaxWindow {
+		return nil, nil
+	}
+	from5 := q.From.Truncate(dbStmtBaselineStepSec * time.Second)
+	wc := dbStmtBaselineWhere(q, from5, int64(q.To.Sub(from5)/time.Second))
+	args := append([]any{from5.Unix()}, wc.args...)
+	rows, err := s.telemetryReadConn().Query(ctx, dbStmtBaselineSQL(wc.sql()), args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []DBStmtBaselinePoint
+	for rows.Next() {
+		var off int64
+		var cnt uint64
+		var p50, p95 float64
+		if err := rows.Scan(&off, &cnt, &p50, &p95); err != nil {
+			return nil, err
+		}
+		if cnt < dbStmtBaselineMinCalls {
+			continue
+		}
+		out = append(out, DBStmtBaselinePoint{OffsetSec: off, P50Ms: safeF(&p50), P95Ms: safeF(&p95)})
+	}
+	return out, rows.Err()
+}

@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/DataTable';
 import { fmtNum } from '@/lib/utils';
 import type { TimeRange, DBStmtDetail, DBStmtCaller } from '@/lib/types';
-import { stmtTrendGrid, stmtTrendSeries, DEFAULT_GRAIN_SEC } from './stmtTrend';
+import { stmtBaselineSeries, stmtTrendGrid, stmtTrendSeries, DEFAULT_GRAIN_SEC } from './stmtTrend';
 import { dbTrendBucketLabel, dbTrendPanelTitle } from '@/pages/databases/trendBucket';
 import { serviceHref } from '@/lib/serviceHref';
 import { repeatsExploreHref, stmtIdentityTracesHref } from '@/lib/pivotHref';
@@ -151,7 +151,7 @@ export function StmtTrendSection({ detail, compare = false, onZoom, onZoomReset 
   const view = useMemo(() => {
     const g = stmtTrendGrid(detail.trend ?? [], detail.fromNs, detail.toNs,
       detail.trendBucketSec ?? 0, detail.trendGrainSec ?? DEFAULT_GRAIN_SEC);
-    return g ? stmtTrendSeries(g, detail.toNs) : null;
+    return g ? { ...stmtTrendSeries(g, detail.toNs), baseline: stmtBaselineSeries(g.tsNs, detail.fromNs, detail.baseline) } : null;
   }, [detail]);
   if (!detail.trend) return (
     <div>
@@ -199,7 +199,15 @@ export function StmtTrendSection({ detail, compare = false, onZoom, onZoomReset 
                 onZoom={onZoom} onZoomReset={onZoomReset}
                 emptyReason={empty}
                 items={c.extra
-                  ? [{ name: 'P95', role: c.role, series: c.series }, { name: 'Median', role: c.role, series: c.extra }]
+                  ? [
+                    { name: 'P95', role: c.role, series: c.series },
+                    { name: 'Median', role: c.role, series: c.extra },
+                    // v0.10.1960 — normal aralık: son 7 günün aynı saatleri (kesikli, soluk).
+                    ...(view?.baseline ? [
+                      { name: 'Normal p95 (7d)', role: 'muted' as const, series: view.baseline.p95, dashed: true },
+                      { name: 'Normal p50 (7d)', role: 'muted' as const, series: view.baseline.p50, dashed: true },
+                    ] : []),
+                  ]
                   : [{ name: c.title, role: c.role, series: c.series }]} />
             </Suspense>
           </LazyMount>

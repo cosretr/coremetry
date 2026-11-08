@@ -98,6 +98,8 @@ type dbStmtDetailPayload struct {
 	TrendSource   string                 `json:"trendSource,omitempty"`
 	Callers       []chstore.DBStmtCaller `json:"callers"`
 	Exemplars     *dbStmtExemplars       `json:"exemplars"`
+	// v0.10.1960 — son 7 günün aynı saat dilimlerinden normal aralık (5 dk dilim, pencere başına göre).
+	Baseline []chstore.DBStmtBaselinePoint `json:"baseline,omitempty"`
 }
 
 // getDBStmtDetail serves GET /api/databases/statements/detail. Window
@@ -146,6 +148,13 @@ func (s *Server) getDBStmtDetail(w http.ResponseWriter, r *http.Request) {
 			out.TrendBucketSec = bucketSec
 			out.TrendGrainSec = tg.GrainSec
 			out.TrendSource = tg.Table
+		}
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		// v0.10.1960 — normal aralık (yumuşak; hata → bant yok).
+		if bl, err := s.store.GetDBStmtBaseline(ctx, dq); err == nil {
+			out.Baseline = bl
 		}
 		if ctx.Err() != nil {
 			return nil, ctx.Err()

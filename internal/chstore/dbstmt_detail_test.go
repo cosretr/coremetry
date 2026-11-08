@@ -235,3 +235,26 @@ func TestMergeFineSummary(t *testing.T) {
 		t.Errorf("hassas pencerede çağrı yoksa 0: %+v", out)
 	}
 }
+
+// v0.10.1960 — normal aralık: önceki 7 gün, aynı gün-içi dilimler, MV, sınırlı.
+func TestDBStmtBaselineSQLAndWhere(t *testing.T) {
+	sql := dbStmtBaselineSQL("WHERE stmt_hash = ?")
+	for _, want := range []string{"FROM db_statement_summary_5m", "LIMIT 300", "max_execution_time", "GROUP BY off", "modulo(toUnixTimestamp(time_bucket) - ? + 604800, 86400)"} {
+		if !strings.Contains(sql, want) {
+			t.Errorf("baseline SQL %q içermeli:\n%s", want, sql)
+		}
+	}
+	from := time.Date(2026, 11, 8, 10, 3, 0, 0, time.UTC)
+	from5 := from.Truncate(5 * time.Minute)
+	wc := dbStmtBaselineWhere(DBStmtDetailQuery{Hash: 42, DBSystem: "oracle"}, from5, 3600)
+	got := wc.sql()
+	for _, want := range []string{"stmt_hash = ?", "time_bucket >= ?", "time_bucket < ?", "db_system = ?", "modulo(toUnixTimestamp(time_bucket) - ? + 604800, 86400) < ?"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("where %q içermeli: %s", want, got)
+		}
+	}
+	// argümanlar: hash, 7 gün önce, pencere başı (dahil değil), sistem, gün-içi kaydırma, pencere uzunluğu
+	if len(wc.args) != 6 || wc.args[1] != from5.Add(-7*24*time.Hour) || wc.args[2] != from5 || wc.args[4] != from5.Unix() || wc.args[5] != int64(3600) {
+		t.Errorf("args: %v", wc.args)
+	}
+}
