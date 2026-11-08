@@ -72,10 +72,12 @@ export interface Galaxy {
   stars: Float32Array;
   /** Yoğun grafikte nokta küçültmesi (DENSE_SIZE_K ya da 1). */
   sizeK: number;
+  /** v0.10.1947 — yıldız başına ad (isimli kipte) ve komşu sayısı; `stars` ile aynı sıra. */
+  starMeta: { name?: string; links: number }[];
 }
 
 /** Adsız servis yıldızı girdisi: yoğunluk ve en yakın düğümün `nodes` dizini (-1 = yok). */
-export interface StarIn { w: number; near: number }
+export interface StarIn { w: number; near: number; name?: string; links?: number }
 /** v0.10.1937 — istemci tavanı (sunucu da 5000) ve yıldızlar yer kaplarken korunacak en az toz. */
 export const MAX_STARS = 5000;
 export const MIN_DUST = 1000;
@@ -176,6 +178,7 @@ export function buildGalaxy(
   const flowPh = gedges.map(() => rand());
   // Adsız servis yıldızları: bağlı olduğu düğümün kolunda, ona yakın yarıçapta; bağsızsa rastgele kol.
   const stars = new Float32Array(nStars * 5);
+  const starMeta: { name?: string; links: number }[] = [];
   let so = 0;
   for (let k = 0; k < nStars; k++) {
     const st = starsIn[k], base = st.near >= 0 ? gnodes[st.near] : undefined;
@@ -185,8 +188,9 @@ export function buildGalaxy(
     stars[so++] = r;
     stars[so++] = (a / arms) * TAU + Math.log(0.18 + r) * TWIST + gauss() * (0.12 + r * 0.12);
     stars[so++] = gauss() * 0.035; stars[so++] = clamp01(st.w); stars[so++] = rand() * TAU;
+    starMeta.push({ name: st.name || undefined, links: Math.max(0, st.links ?? 0) });
   }
-  return { nodes: gnodes, edges: gedges, arms, dust, flows, flowPh, adj, stars, sizeK };
+  return { nodes: gnodes, edges: gedges, arms, dust, flows, flowPh, adj, stars, sizeK, starMeta };
 }
 
 export interface View { angle: number; tilt: number; cx: number; cy: number; R: number }

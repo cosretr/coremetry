@@ -10,6 +10,8 @@
 // Durum/uyarı rengi YOK; renkler yalnız tema token'ları (`resolveVar`): yıldız
 // v0.10.1933: etiketler zemin renginde (--bg0) ince çerçeveyle çizilir (toz üstünde okunur).
 // v0.10.1938 (operatör: "açılış efekti olmasın, direkt açılsın"): 1936'nın açılış hareketi söküldü.
+// v0.10.1947: tüm servisler düğüm — servis yıldızları biraz daha belirgin; isimli kipte üzerine gelince
+// büyür ve aynı kartı gösterir (bağlantılı düğüm isabette önce gelir).
 // v0.10.1946: üzerine gelince küçük kart (ad · tür · trafik seviyesi · bağlantı sayısı; kesin sayı yok).
 // v0.10.1945: kollar arası bağ çizgisi yalnız odakta (edgeVisible); akan noktalar sürer.
 // v0.10.1943: etiketler çakışmaz ve kartın altına girmez (placeLabels; kart kutusu `avoidRef`).
@@ -33,7 +35,10 @@ import {
 import { seedOfIds } from '@/lib/loginTopology/prng';
 import type { LoginSummaryEdge, LoginSummaryNode } from '@/lib/types';
 
-export interface BackdropGraph { nodes: LoginSummaryNode[]; edges: LoginSummaryEdge[]; seed?: number; stars?: [number, number][] }
+export interface BackdropGraph {
+  nodes: LoginSummaryNode[]; edges: LoginSummaryEdge[]; seed?: number; stars?: [number, number][];
+  star_names?: string[]; star_links?: number[];
+}
 
 interface Colors { star: string; arm: string; mq: string; flow: string; label: string; bg: string; card: string; border: string; text: string; muted: string; glow: number; flowBoost: number }
 
@@ -93,7 +98,7 @@ function hoverCard(ctx: CanvasRenderingContext2D, f: Frame, p: Pt, name: string,
 }
 
 /** Bir kare: toz → kenarlar → akan noktalar → düğümler (arkadan öne) → etiketler. Düğüm konumlarını döner (isabet testi için). */
-function drawFrame(ctx: CanvasRenderingContext2D, f: Frame): Pt[] {
+function drawFrame(ctx: CanvasRenderingContext2D, f: Frame): { pos: Pt[]; starPos: (Pt | null)[] } {
   const { g, v, col, hover } = f;
   ctx.setTransform(f.dpr, 0, 0, f.dpr, 0, 0);
   ctx.clearRect(0, 0, f.w, f.h);
@@ -116,12 +121,17 @@ function drawFrame(ctx: CanvasRenderingContext2D, f: Frame): Pt[] {
 
   // v0.10.1937 — tüm servisler: adsız servis yıldızları; parlaklık ve boyut = yoğunluk (span sayısı)
   const sv = g.stars;
+  const starPos: (Pt | null)[] = new Array(sv.length / 5).fill(null);
+  const nN = g.nodes.length;
   for (let o = 0; o < sv.length; o += 5) {
     const p = project(v, sv[o], sv[o + 1], sv[o + 2]);
     if (p.x < -3 || p.y < -3 || p.x > f.w + 3 || p.y > f.h + 3) continue;
+    const k = o / 5, focus = hover === nN + k;
+    starPos[k] = p;
     const depth = depthOf(p.z), lit = 0.3 + 0.7 * sv[o + 3];
-    ctx.globalAlpha = (0.28 + 0.55 * lit) * (0.45 + 0.55 * depth) * (0.6 + col.glow * 0.5) * tw(sv[o + 4], 0.9);
-    const s = (1 + 1.8 * sv[o + 3]) * g.sizeK * (0.8 + 0.4 * depth);
+    // v0.10.1947 — her servis düğüm: biraz daha belirgin (×1,3 boy, ×1,15 opaklık), odakta ×2 ve tam opak
+    ctx.globalAlpha = focus ? 1 : Math.min(1, (0.28 + 0.55 * lit) * (0.45 + 0.55 * depth) * (0.6 + col.glow * 0.5) * tw(sv[o + 4], 0.9) * 1.15);
+    const s = (1 + 1.8 * sv[o + 3]) * g.sizeK * (0.8 + 0.4 * depth) * 1.3 * (focus ? 2 : 1);
     if (s < 1.6) { ctx.fillRect(p.x, p.y, s, s); continue; } // küçükler kare (ucuz)
     ctx.beginPath(); ctx.arc(p.x, p.y, s / 2 + 0.3, 0, TAU); ctx.fill();
   }
@@ -186,12 +196,15 @@ function drawFrame(ctx: CanvasRenderingContext2D, f: Frame): Pt[] {
     ctx.globalAlpha = Math.min(0.85, (depthOf(pos[i].z) - 0.3) * 1.3);
     label(ctx, g.nodes[i].name ?? '', pos[i].x + 8, pos[i].y + 3, col);
   }
-  if (hover >= 0 && g.nodes[hover].name) {
+  if (hover >= 0 && hover < nN && g.nodes[hover].name) {
     const nd = g.nodes[hover], p = pos[hover];
     hoverCard(ctx, f, p, nd.name ?? '', nd.tier, nd.weight, g.adj[hover].length);
+  } else if (hover >= nN) { // v0.10.1947 — servis yıldızı
+    const k = hover - nN, m = g.starMeta[k], p = starPos[k];
+    if (m?.name && p) hoverCard(ctx, f, p, m.name, 'svc', sv[k * 5 + 3], m.links);
   }
   ctx.globalAlpha = 1;
-  return pos;
+  return { pos, starPos };
 }
 
 export default function TopologyBackdrop({ graph, animated, pace = 0.6, avoidRef }: {
@@ -217,7 +230,9 @@ export default function TopologyBackdrop({ graph, animated, pace = 0.6, avoidRef
     const t = thinGraph(graph.nodes, graph.edges);
     // v0.10.1937 — yıldızın komşu dizini seyreltilmiş grafiğe çevrilir (düşen komşu → -1).
     const at = new Map(t.nodes.map((n, i) => [n.id, i]));
-    const stars = (graph.stars ?? []).map(([w, near]) => ({ w, near: at.get(graph.nodes[near]?.id ?? '') ?? -1 }));
+    const stars = (graph.stars ?? []).map(([w, near], k) => ({
+      w, near: at.get(graph.nodes[near]?.id ?? '') ?? -1, name: graph.star_names?.[k] || undefined, links: graph.star_links?.[k] ?? 0,
+    }));
     return buildGalaxy(t.nodes, t.edges, graph.seed ?? seedOfIds(graph.nodes.map(n => n.id)), undefined, undefined, stars);
   });
   // v0.10.1918 — etiketlenecek servisler her açılışta RASTGELE.
@@ -237,6 +252,7 @@ export default function TopologyBackdrop({ graph, animated, pace = 0.6, avoidRef
     let w = 0, h = 0, dpr = 1, R = 1;
     let raf = 0, last = 0, prev = performance.now();
     let pos: Pt[] = [];
+    let starPos: (Pt | null)[] = [];
     let hover = -1, dragging = false, lx = 0, ly = 0, lt = 0;
     const t0 = performance.now();
 
@@ -254,11 +270,11 @@ export default function TopologyBackdrop({ graph, animated, pace = 0.6, avoidRef
       return { l: a.left - c.left, r: a.right - c.left, t: a.top - c.top, b: a.bottom - c.top };
     };
     const paint = (tSec: number, still: boolean) => {
-      pos = drawFrame(ctx, {
+      ({ pos, starPos } = drawFrame(ctx, {
         avoid: avoidBox(),
         g: galaxy, v: { angle: st.angle, tilt: st.tilt, cx: w / 2, cy: h / 2, R }, w, h, dpr, tSec, still,
         col, pace: paceRef.current, hover, labels, kinds: kindsRef.current,
-      });
+      }));
     };
     const paintStill = () => paint(0, true);
     const tick = (now: number) => {
@@ -299,6 +315,13 @@ export default function TopologyBackdrop({ graph, animated, pace = 0.6, avoidRef
       }
       let best = -1, bd = HOVER_PX;
       for (let i = 0; i < pos.length; i++) { const d = Math.hypot(pos[i].x - p.x, pos[i].y - p.y); if (d < bd) { bd = d; best = i; } }
+      // v0.10.1947 — adı olan servis yıldızları; bağlantılı düğüm 4 px öncelikli
+      for (let k = 0; k < starPos.length; k++) {
+        const q = starPos[k];
+        if (!q || !galaxy.starMeta[k]?.name) continue;
+        const d = Math.hypot(q.x - p.x, q.y - p.y);
+        if (d < bd - 4) { bd = d + 4; best = pos.length + k; }
+      }
       canvas.style.cursor = best >= 0 ? 'pointer' : 'grab';
       if (best !== hover) { hover = best; if (!animated) paintStill(); }
     };

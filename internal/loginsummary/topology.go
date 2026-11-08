@@ -441,10 +441,15 @@ func BuildStars(sil Silhouette, edges []chstore.ServiceTopologyEdge, volumes map
 		calls uint64
 	}
 	nb := map[string]best{}
+	links := map[string]map[string]bool{} // v0.10.1947 — yıldızın farklı komşuları
 	consider := func(svc, other string, calls uint64) {
 		if !want[svc] {
 			return
 		}
+		if links[svc] == nil {
+			links[svc] = map[string]bool{}
+		}
+		links[svc][other] = true
 		i, ok := idx[other]
 		if !ok {
 			return
@@ -468,7 +473,7 @@ func BuildStars(sil Silhouette, edges []chstore.ServiceTopologyEdge, volumes map
 		if top > 0 {
 			w = round2(math.Log1p(float64(c.v)) / math.Log1p(float64(top)))
 		}
-		out = append(out, SnapStar{W: w, Near: near})
+		out = append(out, SnapStar{W: w, Near: near, Name: c.name, Links: len(links[c.name])})
 	}
 	return out
 }

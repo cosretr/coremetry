@@ -270,6 +270,10 @@ func TestBuildStars(t *testing.T) {
 	if stars[0].Near != 1 || stars[1].Near != 0 || stars[2].Near != -1 {
 		t.Errorf("near: audit→orders-api(1), pricing→api-gateway(0), lonely→-1: %+v", stars)
 	}
+	// v0.10.1947 — ad ve farklı komşu sayısı: audit→orders-api (1), pricing→orders-api+api-gateway (2), lonely→0
+	if stars[0].Name != "audit-service" || stars[0].Links != 1 || stars[1].Name != "pricing-service" || stars[1].Links != 2 || stars[2].Links != 0 {
+		t.Errorf("ad/komşu: %+v", stars)
+	}
 	if stars[0].W <= stars[2].W || stars[0].W > 1 || stars[2].W <= 0 {
 		t.Errorf("yoğunluk 0..1 ve span'a göre: %+v", stars)
 	}

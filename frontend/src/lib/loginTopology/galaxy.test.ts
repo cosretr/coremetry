@@ -269,3 +269,20 @@ describe('üzerine gelince kart (v0.10.1946)', () => {
     expect(cardPlacement(100, 2, 120, 58, 1000, 800)).toEqual({ x: 114, y: 8 });
   });
 });
+
+describe('tüm servisler düğüm (v0.10.1947)', () => {
+  it('yıldız başına ad ve komşu sayısı sırayla tutulur; ad yoksa undefined', () => {
+    const g = syntheticGraph(SYNTHETIC_SEED);
+    const gx = buildGalaxy(g.nodes, g.edges, 7, undefined, undefined, [
+      { w: 0.5, near: 2, name: 'pricing-service', links: 3 }, { w: 0.1, near: -1 }, { w: 0.2, near: -1, name: '', links: 1 },
+    ]);
+    expect(gx.starMeta).toEqual([{ name: 'pricing-service', links: 3 }, { name: undefined, links: 0 }, { name: undefined, links: 1 }]);
+    expect(gx.stars.length / 5).toBe(gx.starMeta.length);
+  });
+  it('çizim yıldızı odakta büyütür ve adlı yıldıza kart çizer; isabet adsız yıldızı atlar', () => {
+    const src = readFileSync(resolve(__dirname, '../../pages/login/TopologyBackdrop.tsx'), 'utf8');
+    expect(src).toContain("if (m?.name && p) hoverCard(ctx, f, p, m.name, 'svc'");
+    expect(src).toContain('if (!q || !galaxy.starMeta[k]?.name) continue;');
+  });
+});
+

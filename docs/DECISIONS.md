@@ -13408,5 +13408,10 @@ arası çizgiler ekranı kesiyor, 360 dışındaki servisler adsız soluk yıld�
   servislerin çoğunu toplasa da galaksi tek kola yığılmaz; dal bütün kalır (servis BFF'iyle aynı kolda).- **v0.10.1945 — sade çizgiler.** `edgeVisible` (saf): bağ çizgisi yalnız iki ucu aynı koldaysa ya da odaktaysa;
   kollar arası çizgiler ekranı kesmez. Akan noktalar her bağda sürer (bağlantı hissi kaybolmaz).- **v0.10.1946 — üzerine gelince kart.** Ad (kalın), "tür · trafik seviyesi" (yoğun / orta / sakin — ağırlık eşikleri,
   kesin sayı yok) ve "N bağlantı"; `--card` zemin, `--border` çerçeve, noktanın sağında (sığmazsa solunda,
-  `cardPlacement`). Metinler i18n (`login.topo.level.*`, `login.topo.links`). Yalnız isimli kipte (ad varsa).
+  `cardPlacement`). Metinler i18n (`login.topo.level.*`, `login.topo.links`). Yalnız isimli kipte (ad varsa).- **v0.10.1947 — tüm servisler düğüm** (operatör: "360 düğüm yerine tüm servisler gözüksün" → öneri → "önerini
+  yapalım"). 1937'nin adsız yıldızları servis düğümü olur: cevapta `star_links` (her kipte, ham topolojideki farklı
+  komşu sayısı) ve `star_names` (YALNIZ isimli kipte; düğüm adlarıyla aynı savunma). İstemci yıldızları biraz daha
+  belirgin çizer (×1,3 boy, ×1,15 opaklık); isimli kipte üzerine gelince büyür ve 1946 kartını gösterir (bağlantılı
+  düğüm isabette 4 px öncelikli). Sabit etiket ve bağ çizgisi kuralları aynı — kalabalık artmaz. Bedel: isimli kipte
+  tüm servis adları giriş öncesi görülür; cevap 1300 serviste ~+40 KB, 4000'de ~+120 KB.
 

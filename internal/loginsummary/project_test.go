@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -18,7 +19,8 @@ var allowedKeys = map[string]bool{
 	"now_rps": true, "grpc_now_rps": true, "kafka_now_mps": true, "avg_now_s": true,
 	"logins": true, "cosre_questions": true, // v0.10.1915: rollouts_tracked + traces_viewed kaldırıldı
 	"window_s": true, "named": true, "nodes": true, "edges": true, "id": true, "tier": true, "weight": true, "name": true,
-	"stars": true, // v0.10.1937: [yoğunluk, düğüm dizini] — ad yok
+	"stars":      true,                     // v0.10.1937: [yoğunluk, düğüm dizini] — ad yok
+	"star_names": true, "star_links": true, // v0.10.1947: ad yalnız isimli kipte
 	"state": true, "checked_at": true, "clickhouse_uncompressed_bytes": true,
 }
 
@@ -243,5 +245,24 @@ func TestProjectStarsRemapAndOff(t *testing.T) {
 	}
 	if r := Project(snap, flags(now, TopologyOff)); r.Topology != nil {
 		t.Error("kapalıyken topoloji (ve yıldız) yok")
+	}
+}
+
+// v0.10.1947 — yıldız adı yalnız isimli kipte; zehirli ad çıkmaz; komşu sayısı her kipte.
+func TestProjectStarNamesNamedOnly(t *testing.T) {
+	now := time.Now()
+	snap := baseSnapshot(now)
+	snap.Topo = &SnapTopology{WindowS: 900, Nodes: []SnapNode{{ID: "aaaaaaaaaa", Name: "orders-api", Tier: "svc", Weight: 0.5}},
+		Stars: []SnapStar{{W: 0.5, Near: 0, Name: "pricing-service", Links: 3}, {W: 0.2, Near: -1, Name: "db:oracle@db-host-1", Links: 1}}}
+	anon := Project(snap, flags(now, TopologyAnonymous)).Topology
+	if len(anon.StarNames) != 0 || fmt.Sprint(anon.StarLinks) != "[3 1]" {
+		t.Errorf("anonim: ad yok, bağlantı var: %v %v", anon.StarNames, anon.StarLinks)
+	}
+	if out := mustJSON(t, Project(snap, flags(now, TopologyAnonymous))); strings.Contains(out, "pricing-service") {
+		t.Fatal("anonim kipte yıldız adı sızdı")
+	}
+	named := Project(snap, flags(now, TopologyNamed)).Topology
+	if fmt.Sprint(named.StarNames) != "[pricing-service ]" {
+		t.Errorf("isimli: ad + zehirli ad boş: %q", named.StarNames)
 	}
 }
