@@ -48,7 +48,6 @@ import { traceHref } from '@/lib/traceHref';
 
 const PAGE = 200;
 const NO_LOGS: LogRow[] = [];
-const NO_EXPANDED = new Set<number>();
 const FIELDS_KEY = 'svc.logs.fields';
 
 type TableState = ComponentProps<typeof LogTable>['state'];
@@ -215,6 +214,10 @@ export function CompactLogSearch({ service, range, from, to, env, onZoom, onZoom
   const [docParam, setDocParam] = useSheetParam('ldoc');
   const docRow = useMemo(() => (docParam ? rows.find(r => String(r.id) === docParam) ?? null : null), [docParam, rows]);
   const openRow = (r: LogRow) => setDocParam(String(r.id));
+  // v0.10.1984 (operatör: "servis Logs sekmesinde loglar yandaki çekmeceden açılıyor, o da inline olsun") —
+  // satır tıkı yeniden SATIR İÇİ (/logs 1970 ile aynı); çekmece yalnız paylaşılan ?doc= ve çevre loglardan.
+  const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
+  const toggleRow = (id: number) => setExpanded(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
 
   const showRows = !q.isLoading && !q.data?.degraded && rows.length > 0;
   const state: TableState =
@@ -283,8 +286,8 @@ export function CompactLogSearch({ service, range, from, to, env, onZoom, onZoom
               <TraceChip traceId={l.traceId} preview={previewQ.data?.traces?.[l.traceId]} href={traceHref(l.traceId)} /* v0.10.1968 */
                 onOpen={tid => openTraceView(tid, l.timestamp)} />
             )}
-            expandedIds={NO_EXPANDED}
-            onToggleExpand={id => { const r = rows.find(x => x.id === id); if (r) openRow(r); }} />
+            expandedIds={expanded}
+            onToggleExpand={toggleRow} />
           {showRows && (
             <Pager mode="cursor" count="skip" hasMore={!pagingDone} onMore={loadMore} loading={pagingBusy}
               loaded={logs.length} moreLabel="200 satır daha" />
