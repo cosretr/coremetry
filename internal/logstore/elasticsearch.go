@@ -3187,6 +3187,10 @@ func (s *ESStore) mapHit(id string, src map[string]any, dv map[string]any, expec
 		"service_name", "serviceName", "ServiceName")
 	r.Body = readPathAny(src, s.fields.Body,
 		"message", "Body", "body", "log.message", "log")
+	if r.Body == "" {
+		// v0.10.1988 — mesaj alanı boş, içerik traceRecords dizisinde (ör. API gateway kayıtları).
+		r.Body = traceRecordsBody(src)
+	}
 	r.SeverityText = readPathAny(src, s.fields.SeverityTx,
 		"log.level", "level", "severity", "severity_text", "SeverityText")
 	if r.SeverityText == "" {

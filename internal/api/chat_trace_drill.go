@@ -54,8 +54,10 @@ const (
 	traceDrillLogsLimit    = 60
 	traceDrillLogsPerTrace = 8
 	traceDrillLogBodyRunes = 200
-	traceDrillBaselineWin  = 24 * time.Hour
-	traceDrillMax          = 2
+	// traceDrillRecordsBodyRunes — traceRecords gövdeli kayıtların tavanı (v0.10.1988).
+	traceDrillRecordsBodyRunes = 1500
+	traceDrillBaselineWin      = 24 * time.Hour
+	traceDrillMax              = 2
 )
 
 // drillPick — kritik yoldaki baskın span (öz süresi en büyük).
@@ -406,6 +408,12 @@ func renderTraceLogLineTR(lg *logstore.LogRecord) string {
 // renderTraceLogLineBodyTR — SAF (v0.10.1343): gövde tavanı parametreli hâl
 // (operasyon/endpoint ön-getirmesinin kırılımı model tavanına sığsın diye).
 func renderTraceLogLineBodyTR(lg *logstore.LogRecord, bodyRunes int) string {
+	// v0.10.1988 (operatör: "traceRecords altında çok değerli bilgiler var; trace logu CoSRE'ye
+	// sorulduğunda dikkate alsın") — gövdesi traceRecords dizisinden kurulan kayıt (istek / yanıt /
+	// müşteri / cihaz satırları) 200 karakterde ilk iki satırı geçemiyordu; bu kayıtlarda tavan geniş.
+	if _, ok := lg.Attributes["traceRecords"]; ok && bodyRunes < traceDrillRecordsBodyRunes {
+		bodyRunes = traceDrillRecordsBodyRunes
+	}
 	body := oneLineSample(lg.Body, bodyRunes)
 	if et := strings.TrimSpace(lg.Attributes["exception.type"]); et != "" && !strings.Contains(body, et) {
 		body += " [exception.type=" + et + "]"

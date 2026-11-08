@@ -530,3 +530,16 @@ func TestTraceDrillFollowupChip(t *testing.T) {
 		t.Error("trace_drill rotası derin link taşımalı")
 	}
 }
+
+// v0.10.1988 — traceRecords gövdeli kayıt CoSRE kanıt satırında 200 karakterde kesilmez.
+func TestTraceDrillLineTraceRecordsBudget(t *testing.T) {
+	body := strings.Repeat("Request: {x} ", 60) // ~780 karakter
+	lg := &logstore.LogRecord{Body: body, Attributes: map[string]string{"traceRecords": "[...]"}}
+	if got := renderTraceLogLineTR(lg); len([]rune(got)) < 700 {
+		t.Fatalf("traceRecords kaydı kısa kesildi: %d", len([]rune(got)))
+	}
+	plain := &logstore.LogRecord{Body: body, Attributes: map[string]string{}}
+	if got := renderTraceLogLineTR(plain); len([]rune(got)) > 400 {
+		t.Fatalf("düz kayıt tavanı değişmemeli: %d", len([]rune(got)))
+	}
+}
