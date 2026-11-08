@@ -38,7 +38,6 @@ const ALLOW: Record<string, string> = {
   // v0.9.1078 — `.controls.is-sticky` ve `.pager.is-sticky-bottom`
   // muafiyetleri kaldırıldı: yüzen şeritler operatör kararıyla söküldü,
   // iki kural da artık --bg0 basmıyor (biri zemin bildirmiyor, diğeri yok).
-  '.tab-strip.svc-tabs': 'yapışkan sekme şeridi; aynı gerekçe',
   '.login-veil': 'v0.10.1909 Login topoloji perdesi: sayfa zemininin ŞEFFAF radyal katmanı (color-mix, merkez %10 → kenar %88); yüzey değil, canvas ile kart arasındaki zemin tonu. Gerekçe sürdükçe KALICI',
   '.topo-node.ext': 'zemin DEĞİL ayırt edici: taban .topo-node --bg1, .ext ondan geri çekiliyor. --bg1 iç/dış ayrımını siler, --bg2 .topo tuvaliyle çakışır. OPERATÖR KARARI 2026-08-14: olduğu gibi kalır — KALICI muafiyet',
 };

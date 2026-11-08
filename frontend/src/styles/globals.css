@@ -1502,10 +1502,9 @@ button.btn-chip-label:hover { background: transparent; color: var(--accent2); }
    active colour drifted to --accent2 with a 700 weight while every other
    strip used --accent at 600. Sticky is the ONLY thing that is special
    about it, so sticky is the only thing this class carries. */
-.tab-strip.svc-tabs {
-  position: sticky; top: 0; z-index: var(--z-sticky-bar);
-  background: var(--bg0); padding-top: 8px; margin-top: 16px;
-}
+/* v0.10.1987 (operatör: "sayfayı aşağı çekince tab isimleri de geliyor, düzeltelim") — yapışkanlık
+   KALDIRILDI: şerit sayfayla birlikte kayar (sayfa düzeyinde yüzen şerit yok kuralı). Boşluk aynı. */
+.tab-strip.svc-tabs { padding-top: 8px; margin-top: 16px; }
 /* The count that rides along a tab label ("Operations 412"). */
 .tab-strip .tab-count {
   margin-left: 6px; font-size: 11px; color: var(--text3);

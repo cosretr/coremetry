@@ -853,9 +853,8 @@ function TabStrip({ tab, onChange, opCount }: {
   ];
   // The house `.tab-strip` set — same active colour, underline weight and
   // padding as Settings, Anomalies, Endpoints and the eight other strips
-  // (v0.9.900, BB7). `svc-tabs` adds only the sticky behaviour: the strip
-  // stays pinned to the top of the #main scroll viewport while the body
-  // scrolls under it, with the page bg masking the content behind it.
+  // (v0.9.900, BB7). `svc-tabs` taşıdığı yapışkanlık v0.10.1987'de kalktı
+  // (operatör): şerit sayfayla birlikte kayar; sınıf yalnız boşluğu taşır.
   return (
     <UiTabStrip ariaLabel="Servis sekmeleri" className="svc-tabs" value={tab} onChange={onChange}
       tabs={items.map(it => {
