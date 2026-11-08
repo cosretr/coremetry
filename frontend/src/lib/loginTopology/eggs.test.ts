@@ -1,6 +1,6 @@
 // v0.10.1977 — login galaksisi easter egg'leri: Space × 3 (galaksi kipi), S R E (kara delik + big bang).
 import { describe, it, expect } from 'vitest';
-import { createEggDetector, bigBangWarp, BH_COLLAPSE, BH_HOLD, BH_TOTAL, NO_WARP } from './eggs';
+import { createEggDetector, bigBangWarp, BH_COLLAPSE, BH_HOLD, BH_TOTAL, NO_WARP, SRE_QUOTES, pickQuote } from './eggs';
 
 describe('createEggDetector', () => {
   it('Space × 3 pencere içinde → zen; yavaşsa yok', () => {
@@ -32,5 +32,14 @@ describe('bigBangWarp', () => {
     expect(bigBangWarp(BH_COLLAPSE + BH_HOLD / 2)).toMatchObject({ k: 0.01, hole: 1, flash: 0 });
     expect(bigBangWarp(BH_COLLAPSE + BH_HOLD + 0.01).flash).toBeGreaterThan(0.9);
     expect(bigBangWarp(BH_TOTAL)).toBe(NO_WARP);
+  });
+});
+
+describe('SRE sözleri (JSON)', () => {
+  it('hepsi metin + kaynak taşır; rastgele seçim art arda aynısını vermez', () => {
+    expect(SRE_QUOTES.length).toBeGreaterThan(3);
+    for (const q of SRE_QUOTES) { expect(q.text.trim()).not.toBe(''); expect(q.by.trim()).not.toBe(''); }
+    const first = pickQuote(() => 0);
+    expect(pickQuote(() => 0, first).text).not.toBe(first.text);
   });
 });

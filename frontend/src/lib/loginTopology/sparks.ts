@@ -21,7 +21,7 @@ export function burstSize(clicks: readonly number[], now: number): number {
 }
 
 /** Tıklanan noktanın bağlı olduğu düğümler: düğüm → komşuları (ağır kenar önce), yıldız → bağlı düğümü. */
-export function sparkTargets(g: Galaxy, hit: number): number[] {
+export function sparkTargets(g: Galaxy, hit: number, max = MAX_TARGETS): number[] {
   const nN = g.nodes.length;
   if (hit < 0) return [];
   if (hit >= nN) {
@@ -33,7 +33,7 @@ export function sparkTargets(g: Galaxy, hit: number): number[] {
     if (e.a === hit) w.set(e.b, Math.max(w.get(e.b) ?? 0, e.w));
     else if (e.b === hit) w.set(e.a, Math.max(w.get(e.a) ?? 0, e.w));
   }
-  return [...w.entries()].sort((x, y) => y[1] - x[1] || x[0] - y[0]).slice(0, MAX_TARGETS).map(([i]) => i);
+  return [...w.entries()].sort((x, y) => y[1] - x[1] || x[0] - y[0]).slice(0, max).map(([i]) => i);
 }
 
 /** Demet: her hedefe `burst` yıldız, 80 ms aralıkla; hızlı tıkta uçuş kısalır (0,9 sn → 0,6 sn). */
@@ -57,4 +57,26 @@ export function sparkProgress(s: Spark, nowSec: number): number | null {
 export function pruneSparks(list: readonly Spark[], nowSec: number): Spark[] {
   const live = list.filter(s => nowSec - s.t0 <= s.dur);
   return live.length > MAX_SPARKS ? live.slice(live.length - MAX_SPARKS) : live;
+}
+
+// ── v0.10.1978 — 10 tık: yörünge halkası + bütün bağlı noktalara yıldız yağmuru ──
+/** Aynı noktaya art arda bu kadar tık (aralar ≤ STREAK_GAP_MS) halkayı açar. */
+export const ORBIT_CLICKS = 10;
+export const STREAK_GAP_MS = 900;
+/** Halka süresi (sn) ve yağmurda en çok hedef. */
+export const ORBIT_SEC = 4.5;
+export const ORBIT_TARGETS = 40;
+
+export interface Streak { hit: number; n: number; last: number }
+
+/** Art arda aynı noktaya tık sayacı; başka nokta ya da uzun ara sıfırlar. */
+export function nextStreak(prev: Streak | null, hit: number, now: number): Streak {
+  if (prev && prev.hit === hit && now - prev.last <= STREAK_GAP_MS) return { hit, n: prev.n + 1, last: now };
+  return { hit, n: 1, last: now };
+}
+
+/** Halka evresi: 0..1 ilerleme (null = bitti). */
+export function orbitProgress(t0: number, nowSec: number): number | null {
+  const u = (nowSec - t0) / ORBIT_SEC;
+  return u < 0 || u > 1 ? null : u;
 }

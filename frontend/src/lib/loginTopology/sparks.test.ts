@@ -1,6 +1,6 @@
 // v0.10.1973 — login galaksisi: tık → bağlı noktalara yıldız; hızlı tık → daha çok yıldız.
 import { describe, it, expect } from 'vitest';
-import { burstSize, sparkTargets, spawnSparks, sparkProgress, pruneSparks, MAX_SPARKS, MAX_BURST } from './sparks';
+import { burstSize, sparkTargets, spawnSparks, sparkProgress, pruneSparks, MAX_SPARKS, MAX_BURST, nextStreak, orbitProgress, ORBIT_CLICKS, ORBIT_SEC } from './sparks';
 import type { Galaxy } from './galaxy';
 
 const g = {
@@ -36,5 +36,20 @@ describe('sparks', () => {
     expect(pruneSparks([a], 12)).toHaveLength(0);
     const many = spawnSparks(0, Array.from({ length: 10 }, (_, i) => i), 10, 6).concat(spawnSparks(0, Array.from({ length: 400 }, (_, i) => i), 10, 1));
     expect(pruneSparks(many, 10).length).toBe(MAX_SPARKS);
+  });
+});
+
+describe('10 tık yörünge', () => {
+  it('aynı noktaya art arda tık sayılır; başka nokta / uzun ara sıfırlar', () => {
+    let s = nextStreak(null, 3, 0);
+    for (let i = 1; i < ORBIT_CLICKS; i++) s = nextStreak(s, 3, i * 200);
+    expect(s.n).toBe(ORBIT_CLICKS);
+    expect(nextStreak(s, 4, 2100).n).toBe(1);
+    expect(nextStreak(s, 3, 5000).n).toBe(1);
+  });
+  it('halka ilerlemesi', () => {
+    expect(orbitProgress(10, 9)).toBeNull();
+    expect(orbitProgress(10, 10 + ORBIT_SEC / 2)).toBeCloseTo(0.5);
+    expect(orbitProgress(10, 10 + ORBIT_SEC + 0.1)).toBeNull();
   });
 });

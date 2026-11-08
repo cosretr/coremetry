@@ -1,4 +1,4 @@
-import { createEggDetector, QUOTE_DELAY_MS, QUOTE_SHOW_MS, SRE_QUOTES } from '@/lib/loginTopology/eggs'; // v0.10.1977
+import { BH_TOTAL, createEggDetector, pickQuote, QUOTE_SHOW_MS, type SreQuote } from '@/lib/loginTopology/eggs'; // v0.10.1977
 import { useEscLayer } from '@/lib/escLayer';
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, FormEvent } from 'react';
 import { cn } from 'cn';
@@ -189,13 +189,20 @@ export default function LoginPage() {
     return () => window.removeEventListener('keydown', onKey);
   }, [eggOn]);
   useEscLayer(zen, () => setZen(false));
-  // Patlamadan sonra galaksi yeniden kurulurken ortada bir SRE sözü (sırayla).
-  const [quote, setQuote] = useState<{ text: string; by: string } | null>(null);
+  // v0.10.1978 (operatör: "SRE yazınca login de gitsin, özlü söze gerek yok") — kara delik + big bang
+  // süresince kart da söner, bitince geri gelir.
+  const [banging, setBanging] = useState(false);
+  // Patlama bitince ortada rastgele bir SRE sözü (İngilizce; lib/loginTopology/sreQuotes.json).
+  const [quote, setQuote] = useState<SreQuote | null>(null);
+  const lastQuote = useRef<SreQuote | null>(null);
   useEffect(() => {
     if (bang === 0) return;
-    const q = SRE_QUOTES[(bang - 1) % SRE_QUOTES.length];
-    const a = window.setTimeout(() => setQuote(q), QUOTE_DELAY_MS);
-    const b = window.setTimeout(() => setQuote(null), QUOTE_DELAY_MS + QUOTE_SHOW_MS);
+    setBanging(true); setQuote(null);
+    const a = window.setTimeout(() => {
+      setBanging(false);
+      const q = pickQuote(Math.random, lastQuote.current); lastQuote.current = q; setQuote(q);
+    }, BH_TOTAL * 1000);
+    const b = window.setTimeout(() => setQuote(null), BH_TOTAL * 1000 + QUOTE_SHOW_MS);
     return () => { window.clearTimeout(a); window.clearTimeout(b); };
   }, [bang]);
 
@@ -214,21 +221,21 @@ export default function LoginPage() {
           <Suspense fallback={null}>
             <TopologyBackdrop graph={backdropGraph} animated={bd.animated} pace={pace} avoidRef={cardRef} bigBang={bang} />
           </Suspense>
-          {!zen && <div aria-hidden="true" className="login-veil pointer-events-none absolute inset-0" />}
+          {!zen && !banging && <div aria-hidden="true" className="login-veil pointer-events-none absolute inset-0" />}
         </>
       )}
-      {!zen && <LoginTopBar />}
+      {!zen && !banging && <LoginTopBar />}
       {quote && (
-        <figure role="status" className="login-egg-quote pointer-events-none absolute inset-x-0 top-[18%] z-20 m-0 px-6 text-center">
+        <figure role="status" className="login-egg-quote pointer-events-none absolute inset-x-0 top-[14%] z-20 m-0 px-6 text-center">
           <blockquote className="m-0 text-[length:var(--fs-xl)] font-semibold text-(--text)">“{quote.text}”</blockquote>
           <figcaption className="mt-2 text-[length:var(--fs-sm)] text-(--text2)">— {quote.by}</figcaption>
         </figure>
       )}
       {/* 340px SABİTTİ: 320px'lik viewport'ta form yatay taşıyordu. Tavan aynı,
           taban akışkan. */}
-      <div ref={cardRef} aria-hidden={zen || undefined} className={cn(
+      <div ref={cardRef} aria-hidden={zen || banging || undefined} className={cn(
         'relative z-10 border border-border bg-card shadow-pop transition-opacity duration-500',
-        zen && 'pointer-events-none opacity-0', // v0.10.1977 — Space × 3: yalnız galaksi
+        (zen || banging) && 'pointer-events-none opacity-0', // v0.10.1977 — Space × 3 / S R E: yalnız galaksi
         // Koyu şemada kart %86 opak + blur: arkadaki siluet yazıya karışmadan sezilir (açıkta düz).
         bd.kind === 'canvas' && 'dark:bg-card/86 dark:backdrop-blur-[6px]',
         showSide

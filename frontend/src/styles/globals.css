@@ -112,6 +112,7 @@
   --purple: #a371f7;
   --indigo: #a371f7;
   --orange: #d76f04;  /* v0.10.920 — yeni --err (#fe7f73) ile ΔE 7 idi; grafik yuvası 6 ile aynı (ΔE 11.7) */
+  --otel-blue: #425cc7; /* v0.10.1978 — OpenTelemetry logosu mavisi (login galaksisi yörünge uyduları); tüm temalar */
   --teal:   #39c5cf;
   /* v0.10.1844 — sinyal türü kimliği (öğrenme döngüsü Faz 2, mockup anomaly-detail.html):
      tür başına tek ton, her yerde ikon + metinle (lib/signalKind.ts). bg0–bg2'de ≥4.5
@@ -1986,7 +1987,7 @@ tbody td.dt-state.dt-state--loading, [data-density] tbody td.dt-state.dt-state--
 /* v0.10.1909 (Login topoloji arka planı, audit §6.3) — canvas ile kart arasındaki perde.
    v0.10.1920 (operatör: kart sayfayı kaplıyor gibi) — kenar %88 → %45: topoloji kartın
    GÖRÜNEN tek yeri olan kenarlarda soluyordu. Kart opak (koyuda %86 + bulanık), form okunur. */
-/* v0.10.1977 — big bang sonrası SRE sözü: yavaşça belirir, kalır, söner (6,5 sn). */
+/* v0.10.1977/1978 — big bang sonrası SRE sözü: yavaşça belirir, kalır, söner (6,5 sn). */
 .login-egg-quote { animation: login-egg-quote 6.5s ease forwards; text-shadow: 0 1px 12px var(--bg0); }
 @keyframes login-egg-quote { 0% { opacity: 0; transform: translateY(6px); } 15% { opacity: 1; transform: none; } 85% { opacity: 1; } 100% { opacity: 0; } }
 .login-veil {

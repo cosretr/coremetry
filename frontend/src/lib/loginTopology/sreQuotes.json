@@ -1,0 +1,10 @@
+[
+  { "text": "Hope is not a strategy.", "by": "Traditional SRE saying" },
+  { "text": "100% is the wrong reliability target for basically everything.", "by": "Benjamin Treynor Sloss" },
+  { "text": "SRE is what happens when you ask a software engineer to design an operations team.", "by": "Benjamin Treynor Sloss" },
+  { "text": "Everything fails, all the time.", "by": "Werner Vogels" },
+  { "text": "You build it, you run it.", "by": "Werner Vogels" },
+  { "text": "Simplicity is prerequisite for reliability.", "by": "Edsger W. Dijkstra" },
+  { "text": "Debugging is twice as hard as writing the code in the first place.", "by": "Brian Kernighan" },
+  { "text": "Anything that can go wrong will go wrong.", "by": "Murphy's law" }
+]

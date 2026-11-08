@@ -2,6 +2,8 @@
 // yazınca kara delik tüm gezegenleri içine çekip big bang vari bir patlama yapsın"). SAF: tuş dizisi
 // algılama + kara delik / big bang zaman çizelgesi. Çizim TopologyBackdrop'ta, tetik LoginPage'de.
 
+import quotes from './sreQuotes.json';
+
 export type Egg = 'zen' | 'bigbang';
 
 /** Space × 3 bu süre içinde → galaksi kipi. */
@@ -66,12 +68,14 @@ export function bigBangWarp(t: number): Warp {
   return { k: Math.max(0.01, easeOutBack(u)), spin: 6 * (1 - u), hole: Math.max(0, 1 - u * 6), flash: Math.max(0, 1 - u * 1.8) };
 }
 
-/** v0.10.1977 — patlamadan sonra beliren SRE sözleri (sırayla döner). Kaynaklı, uydurma yok. */
-export const SRE_QUOTES: readonly { text: string; by: string }[] = [
-  { text: 'Umut bir strateji değildir.', by: 'SRE geleneği' },
-  { text: '%100 güvenilirlik neredeyse her şey için yanlış hedeftir.', by: 'Ben Treynor Sloss' },
-  { text: 'SRE, bir yazılım mühendisinden operasyon ekibi tasarlamasını istediğinizde ortaya çıkan şeydir.', by: 'Ben Treynor Sloss' },
-];
-/** Söz, patlamanın tepe anından sonra belirir; bu kadar kalır (ms). */
-export const QUOTE_DELAY_MS = (BH_COLLAPSE + BH_HOLD + 0.8) * 1000;
+// v0.10.1978 (operatör: "özlü söz İngilizce olsun, random sözler gelsin, onları JSON'a kaydet") — sözler
+// sreQuotes.json'da (kaynaklı); patlamadan sonra rastgele biri belirir.
+export interface SreQuote { text: string; by: string }
+export const SRE_QUOTES: readonly SreQuote[] = quotes;
+/** Rastgele söz; `prev` verilirse art arda aynısı gelmez. */
+export function pickQuote(rand: () => number, prev?: SreQuote | null): SreQuote {
+  const pool = SRE_QUOTES.length > 1 && prev ? SRE_QUOTES.filter(q => q.text !== prev.text) : SRE_QUOTES;
+  return pool[Math.min(pool.length - 1, Math.floor(rand() * pool.length))];
+}
+/** Söz, patlama bitince belirir ve bu kadar kalır (ms). */
 export const QUOTE_SHOW_MS = 6500;

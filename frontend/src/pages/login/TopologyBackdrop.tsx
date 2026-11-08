@@ -33,7 +33,7 @@ import {
 } from '@/lib/loginTopology/galaxy';
 import { seedOfIds } from '@/lib/loginTopology/prng';
 import { bigBangWarp, BH_TOTAL, NO_WARP, type Warp } from '@/lib/loginTopology/eggs'; // v0.10.1977
-import { burstSize, pruneSparks, sparkProgress, sparkTargets, spawnSparks, type Spark } from '@/lib/loginTopology/sparks'; // v0.10.1973
+import { burstSize, nextStreak, orbitProgress, ORBIT_CLICKS, ORBIT_TARGETS, pruneSparks, sparkProgress, sparkTargets, spawnSparks, type Spark, type Streak } from '@/lib/loginTopology/sparks'; // v0.10.1973 / 1978
 import type { LoginSummaryEdge, LoginSummaryNode } from '@/lib/types';
 
 export interface BackdropGraph {
@@ -41,7 +41,7 @@ export interface BackdropGraph {
   star_names?: string[];
 }
 
-interface Colors { star: string; arm: string; mq: string; flow: string; label: string; bg: string; glow: number; flowBoost: number }
+interface Colors { star: string; arm: string; mq: string; flow: string; otel: string; label: string; bg: string; glow: number; flowBoost: number }
 
 function readColors(): Colors {
   const bg = resolveVar('var(--bg0)');
@@ -53,7 +53,7 @@ function readColors(): Colors {
     // kahverengi metin tonu (#795600); galaksiye ayrı altın token'ı.
     // v0.10.1932 (operatör: "Traces sayfasındaki süre grafiğinin sarı tonunda değil") — ayrı altın token'ı
     // kalktı; akan noktalar Traces response-time çizgisinin token'ını okur (components/traces/volumeSeries.ts).
-    flow: resolveVar('var(--orange)'), label: resolveVar('var(--text2)'),
+    flow: resolveVar('var(--orange)'), otel: resolveVar('var(--otel-blue)') || '#425cc7', label: resolveVar('var(--text2)'),
     glow: dark ? 0.9 : 0.35, flowBoost: dark ? 0.7 : 1.1,
   };
 }
@@ -75,6 +75,8 @@ interface Frame {
   sparks: readonly Spark[];
   /** v0.10.1977 — S R E: kara delik → big bang (yarıçap çarpanı, ek dönüş, delik, parlama). */
   warp: Warp;
+  /** v0.10.1978 — 10 tık yörünge halkası: nokta (hover kodlaması) + başlangıç (sn); yoksa null. */
+  orbit: { at: number; t0: number } | null;
   /** Etiket konmayacak kutu (login kartı), tuval koordinatında; yoksa null. */
   avoid: Box | null;
 }
@@ -213,6 +215,28 @@ function drawFrame(ctx: CanvasRenderingContext2D, f: Frame): { pos: Pt[]; starPo
     label(ctx, hn, hp.x + 9, hp.y + 4, col);
   }
   ctx.globalAlpha = 1;
+  // v0.10.1978 — yörünge halkası: noktanın çevresinde dönen kesikli halka + üç uydu, Traces süre rengi (--orange).
+  if (f.orbit) {
+    const u = orbitProgress(f.orbit.t0, f.tSec);
+    const c = f.orbit.at < nN ? pos[f.orbit.at] : starPos[f.orbit.at - nN];
+    if (u !== null && c) {
+      const fade = u < 0.15 ? u / 0.15 : u > 0.8 ? (1 - u) / 0.2 : 1;
+      const rr = 10 + 12 * Math.min(1, u * 4);
+      halo(ctx, c.x, c.y, rr * 1.8, col.flow, 0.35 * fade);
+      ctx.globalAlpha = 0.9 * fade; ctx.strokeStyle = col.flow; ctx.lineWidth = 1.4;
+      ctx.setLineDash([4, 3]); ctx.lineDashOffset = -f.tSec * 20;
+      ctx.beginPath(); ctx.ellipse(c.x, c.y, rr, rr * 0.55, -0.35, 0, TAU); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = col.otel; // uydular OTel mavisi (halka Traces süre rengi)
+      for (let m = 0; m < 3; m++) {
+        const a = f.tSec * 2.4 + (m * TAU) / 3;
+        const ox = Math.cos(a) * rr, oy = Math.sin(a) * rr * 0.55, rot = -0.35;
+        const x = c.x + ox * Math.cos(rot) - oy * Math.sin(rot), y = c.y + ox * Math.sin(rot) + oy * Math.cos(rot);
+        ctx.beginPath(); ctx.arc(x, y, 2, 0, TAU); ctx.fill();
+      }
+    }
+  }
+
   // v0.10.1977 — kara delik (koyu disk + turuncu yığılma halkası) ve big bang parlaması.
   if (W.hole > 0) {
     const r = v.R * 0.07 * W.hole;
@@ -276,6 +300,9 @@ export default function TopologyBackdrop({ graph, animated, pace = 0.6, avoidRef
     let sparks: Spark[] = [], downX = 0, downY = 0, downT = 0;
     // v0.10.1977 — big bang başlangıcı (tSec cinsinden; -1 = yok). Nonce değişince tetiklenir.
     let bangT0 = -1;
+    // v0.10.1978 — 10 tık: art arda tık sayacı + açık halka.
+    let streak: Streak | null = null;
+    let orbit: { at: number; t0: number } | null = null;
     const bangHandler = () => { bangT0 = (performance.now() - t0) / 1000; };
     bangRef.current = bangHandler;
     const clicks: number[] = [];
@@ -300,6 +327,7 @@ export default function TopologyBackdrop({ graph, animated, pace = 0.6, avoidRef
         g: galaxy, v: { angle: st.angle, tilt: st.tilt, cx: w / 2, cy: h / 2, R }, w, h, dpr, tSec, still,
         col, pace: paceRef.current, hover, labels, sparks,
         warp: bangT0 >= 0 ? bigBangWarp(tSec - bangT0) : NO_WARP,
+        orbit,
       }));
     };
     const paintStill = () => paint(0, true);
@@ -316,7 +344,8 @@ export default function TopologyBackdrop({ graph, animated, pace = 0.6, avoidRef
       if (sparks.length) sparks = pruneSparks(sparks, (now - t0) / 1000);
       // yıldız uçarken kare atlanmaz (akıcı uçuş); aksi kare bütçesi aynen
       if (bangT0 >= 0 && (now - t0) / 1000 - bangT0 > BH_TOTAL) bangT0 = -1;
-      if (sparks.length || bangT0 >= 0 || shouldDraw(now, last)) { last = now; paint((now - t0) / 1000, false); }
+      if (orbit && orbitProgress(orbit.t0, (now - t0) / 1000) === null) orbit = null;
+      if (sparks.length || bangT0 >= 0 || orbit || shouldDraw(now, last)) { last = now; paint((now - t0) / 1000, false); }
       raf = requestAnimationFrame(tick);
     };
     const start = () => { if (animated && !raf && !document.hidden) { prev = performance.now(); raf = requestAnimationFrame(tick); } };
@@ -368,8 +397,17 @@ export default function TopologyBackdrop({ graph, animated, pace = 0.6, avoidRef
       if (hit >= 0) {
         st.vel = 0; st.tiltVel = 0; // tık galaksiyi savurmasın
         clicks.push(now); while (clicks.length > 20) clicks.shift();
-        const targets = sparkTargets(galaxy, hit);
-        if (targets.length) sparks = pruneSparks([...sparks, ...spawnSparks(hit, targets, (now - t0) / 1000, burstSize(clicks, now))], (now - t0) / 1000);
+        const nowSec = (now - t0) / 1000;
+        streak = nextStreak(streak, hit, now);
+        if (streak.n === ORBIT_CLICKS) {
+          // 10. tık: yörünge halkası + BÜTÜN bağlı noktalara yıldız yağmuru.
+          orbit = { at: hit, t0: nowSec };
+          const all = sparkTargets(galaxy, hit, ORBIT_TARGETS);
+          if (all.length) sparks = pruneSparks([...sparks, ...spawnSparks(hit, all, nowSec, 4)], nowSec);
+        } else {
+          const targets = sparkTargets(galaxy, hit);
+          if (targets.length) sparks = pruneSparks([...sparks, ...spawnSparks(hit, targets, nowSec, burstSize(clicks, now))], nowSec);
+        }
       }
       canvas.releasePointerCapture?.(e.pointerId);
       canvas.style.cursor = 'grab';
