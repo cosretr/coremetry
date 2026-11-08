@@ -40,7 +40,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/cilcenk/coremetry/internal/ai/modelcaps"
 	"github.com/cilcenk/coremetry/internal/copilot"
 	"github.com/cilcenk/coremetry/internal/wiki"
 )
@@ -151,7 +150,7 @@ var wikiModelLimitsFn = func(s *Server, ctx context.Context, surface string) (wi
 	m := copilot.MetaFromContext(ctx)
 	m.Surface = surface
 	sctx := copilot.WithMeta(ctx, m)
-	return modelcaps.ContextWindow(s.copilot.ModelFor(sctx)), s.copilot.MaxTokensFor(sctx)
+	return s.copilot.ContextWindowFor(sctx), s.copilot.MaxTokensFor(sctx) // v0.10.1991 — sunucudan
 }
 
 // ── sayfa seçimi ────────────────────────────────────────────────────────────

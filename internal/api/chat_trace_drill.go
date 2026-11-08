@@ -28,7 +28,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/cilcenk/coremetry/internal/ai/modelcaps"
 	"net/url"
 	"sort"
 	"strings"
@@ -879,12 +878,12 @@ func latestPriorService(prior []string, services, envs []string) string {
 }
 
 // traceRecordsBudget — v0.10.1990: traceRecords gövdelerine ayrılan toplam karakter = modelin bağlam
-// penceresinin %35'i (token ≈ 4 karakter). Pencere bilinmiyorsa 0 (kayıt başı eski sabit 1500).
+// penceresinin %35'i (token ≈ 4 karakter; pencere sunucudan, v0.10.1991). Pencere bilinmiyorsa 0 (kayıt başı eski sabit 1500).
 func (s *Server) traceRecordsBudget(ctx context.Context) int {
 	if s == nil || s.copilot == nil {
 		return 0
 	}
-	w := modelcaps.ContextWindow(s.copilot.ModelFor(ctx))
+	w := s.copilot.ContextWindowFor(ctx) // v0.10.1991 — sunucudan okunan pencere (yoksa ad tahmini)
 	if w <= 0 {
 		return 0
 	}

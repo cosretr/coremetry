@@ -9,6 +9,7 @@ import { api } from '@/lib/api';
 import { useSettingsLoad, SettingsLoadError, FlashBox, ConfigStatusBanner } from './shared';
 import type { AIProvider, AISettings, AIIntentClassify, AIProfilesPayload } from '@/lib/types';
 import { AiProfilesPanel } from './AiProfilesPanel';
+import { AiContextWindowLine } from './AiContextWindowLine'; // v0.10.1991
 import { AiBudgetPanel } from './AiBudgetPanel'; // v0.10.411
 import { AiChatRetentionPanel } from './AiChatRetentionPanel'; // v0.10.561
 import { AiEvalPanel } from './AiEvalPanel'; // v0.10.940
@@ -400,6 +401,8 @@ function AiProviderSettings() {
 
         <Field label="Model (optional)" value={model} onChange={e => setModel(e.target.value)}
           placeholder={modelPlaceholder} />
+
+        <AiContextWindowLine />
 
         {/* v0.9.1120 (Faz 0.5) — call tuning. Every box is an OVERRIDE:
             the built-in default lives in the placeholder, so an empty

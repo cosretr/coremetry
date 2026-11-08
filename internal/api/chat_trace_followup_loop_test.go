@@ -48,6 +48,12 @@ func newLoopLLM(t *testing.T, script func(n int, body map[string]any) map[string
 	t.Helper()
 	l := &loopLLM{script: script}
 	l.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// v0.10.1991 — bağlam penceresi okuması (GET /models, POST /api/show) model çağrısı değil;
+		// kaydedilmez, 404 döner (pencere ad tahminine düşer).
+		if r.Method == http.MethodGet || strings.HasSuffix(r.URL.Path, "/api/show") {
+			http.NotFound(w, r)
+			return
+		}
 		raw, _ := io.ReadAll(r.Body)
 		var body map[string]any
 		_ = json.Unmarshal(raw, &body)
