@@ -263,6 +263,15 @@ export function rebalanceArms(arm: number[], branch: readonly number[], arms: nu
   return load;
 }
 
+/**
+ * SAF (v0.10.1945, operatör: kollar arası çizgiler ekranı çaprazlamasına
+ * kesiyordu). Bağ çizgisi yalnız iki ucu AYNI koldaysa ya da uçlardan biri
+ * odaktaysa çizilir; akan noktalar her bağda sürer.
+ */
+export function edgeVisible(armA: number, armB: number, focus: boolean): boolean {
+  return focus || armA === armB;
+}
+
 /** Ekran kutusu (px): sol, sağ, üst, alt. */
 export interface Box { l: number; r: number; t: number; b: number }
 /** Etiket adayı: düğüm dizini, ekran konumu, metin genişliği (px), katman, ağırlık. */

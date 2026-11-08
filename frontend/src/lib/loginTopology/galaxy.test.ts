@@ -1,10 +1,12 @@
 // galaxy.test — v0.10.1928 (operatör: "veriye bağlı galaksi en iyisi").
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { mulberry32 } from './prng';
 import { syntheticGraph, SYNTHETIC_SEED } from './synthetic';
 import {
   buildGalaxy, depthOf, flowPos, flowSpeed, isDarkColor, nodeAlpha, nodeRadius, paceFrom, pickBackendLabels, pickLabelSet, project,
-  sizeOf, spinRate, wantsLabel, DENSE_NODES, DENSE_SIZE_K, MAX_STARS, MIN_DUST, placeLabels, labelBox, LABEL_CARD_MARGIN, rebalanceArms, MIN_ARMS, TILT0, DUST_ARM, DUST_CORE, FLOW_EDGES, type GNode,
+  sizeOf, spinRate, wantsLabel, DENSE_NODES, DENSE_SIZE_K, MAX_STARS, MIN_DUST, placeLabels, labelBox, LABEL_CARD_MARGIN, rebalanceArms, edgeVisible, MIN_ARMS, TILT0, DUST_ARM, DUST_CORE, FLOW_EDGES, type GNode,
 } from './galaxy';
 import type { LoginSummaryEdge, LoginSummaryNode } from '@/lib/types';
 
@@ -237,5 +239,19 @@ describe('kol dengesi (v0.10.1944)', () => {
     const per = new Array(gx.arms).fill(0);
     gx.nodes.forEach(nd => { per[nd.arm]++; });
     expect(Math.max(...per) / gx.nodes.length).toBeLessThan(0.5);
+  });
+});
+
+describe('sade çizgiler (v0.10.1945)', () => {
+  it('kollar arası bağ yalnız odakta; aynı koldaki bağ hep', () => {
+    expect(edgeVisible(1, 1, false)).toBe(true);
+    expect(edgeVisible(1, 2, false)).toBe(false);
+    expect(edgeVisible(1, 2, true)).toBe(true);
+  });
+  it('çizim kenarı edgeVisible ile süzer, akış süzülmez', () => {
+    const src = readFileSync(resolve(__dirname, '../../pages/login/TopologyBackdrop.tsx'), 'utf8');
+    expect(src).toContain('if (!edgeVisible(g.nodes[e.a].arm, g.nodes[e.b].arm, focus)) continue;');
+    const flowLoop = src.slice(src.indexOf('for (const k of g.flows)'), src.indexOf('// düğümler: arkadan öne'));
+    expect(flowLoop).not.toContain('edgeVisible');
   });
 });

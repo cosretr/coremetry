@@ -10,6 +10,7 @@
 // Durum/uyarı rengi YOK; renkler yalnız tema token'ları (`resolveVar`): yıldız
 // v0.10.1933: etiketler zemin renginde (--bg0) ince çerçeveyle çizilir (toz üstünde okunur).
 // v0.10.1938 (operatör: "açılış efekti olmasın, direkt açılsın"): 1936'nın açılış hareketi söküldü.
+// v0.10.1945: kollar arası bağ çizgisi yalnız odakta (edgeVisible); akan noktalar sürer.
 // v0.10.1943: etiketler çakışmaz ve kartın altına girmez (placeLabels; kart kutusu `avoidRef`).
 // v0.10.1935: üzerine gelince adın altında soluk TÜR satırı (gateway / BFF / servis / veritabanı / kuyruk, i18n).
 // --accent2, kol/veri --purple, akan noktalar --orange (Traces süre çizgisiyle AYNI token; v0.10.1932),
@@ -25,7 +26,7 @@ import { useThemeTick } from '@/lib/useThemeTick';
 import { useT } from '@/lib/i18n';
 import { MAX_LABELS, shouldDraw, thinGraph } from '@/lib/loginTopology/frame';
 import {
-  buildGalaxy, depthOf, flowPos, isDarkColor, placeLabels, type Box, type LabelCand, nodeAlpha, nodeRadius, pickBackendLabels, pickLabelSet, project, spinRate,
+  buildGalaxy, depthOf, edgeVisible, flowPos, isDarkColor, placeLabels, type Box, type LabelCand, nodeAlpha, nodeRadius, pickBackendLabels, pickLabelSet, project, spinRate,
   TILT0, TILT_MAX, TILT_MIN, wantsLabel, type Galaxy, type Pt, type View,
 } from '@/lib/loginTopology/galaxy';
 import { seedOfIds } from '@/lib/loginTopology/prng';
@@ -117,7 +118,8 @@ function drawFrame(ctx: CanvasRenderingContext2D, f: Frame): Pt[] {
   ctx.strokeStyle = col.arm; ctx.lineWidth = 0.7;
   for (const e of g.edges) {
     const focus = hover >= 0 && (e.a === hover || e.b === hover);
-    ctx.globalAlpha = focus ? 0.7 : Math.max(0.03, 0.08 + 0.04 * (pos[e.a].z + pos[e.b].z));
+    if (!edgeVisible(g.nodes[e.a].arm, g.nodes[e.b].arm, focus)) continue;
+    ctx.globalAlpha = focus ? 0.7 : Math.max(0.03, 0.07 + 0.04 * (pos[e.a].z + pos[e.b].z));
     ctx.beginPath(); ctx.moveTo(pos[e.a].x, pos[e.a].y); ctx.lineTo(pos[e.b].x, pos[e.b].y); ctx.stroke();
   }
 

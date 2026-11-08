@@ -13405,5 +13405,6 @@ arası çizgiler ekranı kesiyor, 360 dışındaki servisler adsız soluk yıld�
   ağırlık; login kartının kutusuna (10 px payla) giren ya da yerleşmiş etikete binen etiket çizilmez. Kart kutusu
   LoginPage'den `avoidRef` ile her karede okunur.- **v0.10.1944 — kol dengesi.** `rebalanceArms` (saf): kol başları (gateway) kendi kolunda; her dal (kol başının
   doğrudan komşusu + BFS'te onun altından ulaşılanlar) büyükten küçüğe en az yüklü kola atanır. Bir gateway
-  servislerin çoğunu toplasa da galaksi tek kola yığılmaz; dal bütün kalır (servis BFF'iyle aynı kolda).
+  servislerin çoğunu toplasa da galaksi tek kola yığılmaz; dal bütün kalır (servis BFF'iyle aynı kolda).- **v0.10.1945 — sade çizgiler.** `edgeVisible` (saf): bağ çizgisi yalnız iki ucu aynı koldaysa ya da odaktaysa;
+  kollar arası çizgiler ekranı kesmez. Akan noktalar her bağda sürer (bağlantı hissi kaybolmaz).
 
