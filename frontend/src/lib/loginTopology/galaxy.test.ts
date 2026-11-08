@@ -4,7 +4,7 @@ import { mulberry32 } from './prng';
 import { syntheticGraph, SYNTHETIC_SEED } from './synthetic';
 import {
   buildGalaxy, depthOf, flowPos, flowSpeed, isDarkColor, nodeAlpha, nodeRadius, paceFrom, pickBackendLabels, pickLabelSet, project,
-  sizeOf, spinRate, wantsLabel, DENSE_NODES, DENSE_SIZE_K, MAX_STARS, MIN_DUST, placeLabels, labelBox, LABEL_CARD_MARGIN, MIN_ARMS, TILT0, DUST_ARM, DUST_CORE, FLOW_EDGES, type GNode,
+  sizeOf, spinRate, wantsLabel, DENSE_NODES, DENSE_SIZE_K, MAX_STARS, MIN_DUST, placeLabels, labelBox, LABEL_CARD_MARGIN, rebalanceArms, MIN_ARMS, TILT0, DUST_ARM, DUST_CORE, FLOW_EDGES, type GNode,
 } from './galaxy';
 import type { LoginSummaryEdge, LoginSummaryNode } from '@/lib/types';
 
@@ -21,15 +21,18 @@ describe('galaksi kurulumu', () => {
     expect(a.nodes.map(n => [n.r, n.th])).toEqual(b.nodes.map(n => [n.r, n.th]));
     expect(c.nodes.map(n => n.th)).not.toEqual(a.nodes.map(n => n.th));
   });
-  it('her gateway bir kol; BFF ve servisler bağlı oldukları gateway\'in kolunda', () => {
+  // v0.10.1944 — kol dengesi: BFF dalları en boş kola gider (gateway'inin kolunda olmayabilir);
+  // gateway'ler kendi kolunda, servis bağlı olduğu BFF ile aynı kolda.
+  it('her gateway bir kol; servis BFF\'iyle aynı kolda (dal bütün kalır)', () => {
     const gx = synth();
     const gws = gx.nodes.map((n, i) => ({ n, i })).filter(x => x.n.tier === 'gw');
     expect(gx.arms).toBe(gws.length);
     expect(new Set(gws.map(x => x.n.arm)).size).toBe(gws.length);
-    // gateway → BFF kenarında BFF, gateway'in kolunda
     for (const e of gx.edges) {
       const a = gx.nodes[e.a], b = gx.nodes[e.b];
-      if (a.tier === 'gw' && b.tier === 'bff') expect(b.arm).toBe(a.arm);
+      if (a.tier === 'bff' && b.tier === 'svc' && !gx.edges.some(x => (x.a === e.b || x.b === e.b) && gx.nodes[x.a === e.b ? x.b : x.a].tier === 'gw')) {
+        expect(b.arm).toBe(a.arm);
+      }
     }
   });
   it('gateway çekirdeğe yakın, BFF orta, servis ve veri dışta', () => {
@@ -206,5 +209,33 @@ describe('etiket yerleşimi (v0.10.1943)', () => {
     const out = placeLabels([c(0, 100, 100, 'svc'), c(1, 100, 140, 'svc'), c(2, 400, 100, 'svc')], null);
     expect(out.sort()).toEqual([0, 1, 2]);
     expect(labelBox(c(0, 100, 100, 'svc'))).toEqual({ l: 106, r: 170, t: 91, b: 106 });
+  });
+});
+
+describe('kol dengesi (v0.10.1944)', () => {
+  it('rebalanceArms: dallar büyükten küçüğe en boş kola; kol başları yerinde', () => {
+    // 3 kol başı (0,1,2). Kol 0'ın 3 dalı: 10, 8, 2 düğüm; kol 1 ve 2'nin dalı yok.
+    const arm: number[] = [0, 1, 2], branch: number[] = [-1, -1, -1];
+    const add = (br: number, sz: number) => { for (let k = 0; k < sz; k++) { arm.push(0); branch.push(br); } };
+    add(100, 10); add(101, 8); add(102, 2);
+    const load = rebalanceArms(arm, branch, 3);
+    expect(arm.slice(0, 3)).toEqual([0, 1, 2]);
+    expect([...load].sort((a, b) => a - b)).toEqual([3, 9, 11]); // 10→kol0 (1+10), 8→kol1 (1+8), 2→kol2 (1+2)
+    expect(new Set(arm.slice(3, 13))).toEqual(new Set([0])); // aynı dal aynı kolda
+  });
+  it('dengesiz grafikte hiçbir kol düğümlerin yarısından fazlasını almaz', () => {
+    const nodes: { id: string; tier: 'gw' | 'bff' | 'svc'; weight: number }[] = [];
+    const edges: { from: string; to: string; weight: number }[] = [];
+    const gw = ['g0', 'g1', 'g2', 'g3'];
+    gw.forEach(id => nodes.push({ id, tier: 'gw', weight: 1 }));
+    const bffPer = [8, 1, 1, 1];
+    gw.forEach((g, gi) => { for (let b = 0; b < bffPer[gi]; b++) {
+      const bid = `${g}b${b}`; nodes.push({ id: bid, tier: 'bff', weight: 0.5 }); edges.push({ from: g, to: bid, weight: 1 });
+      for (let s = 0; s < 6; s++) { const sid = `${bid}s${s}`; nodes.push({ id: sid, tier: 'svc', weight: 0.2 }); edges.push({ from: bid, to: sid, weight: 1 }); }
+    } });
+    const gx = buildGalaxy(nodes, edges, 3);
+    const per = new Array(gx.arms).fill(0);
+    gx.nodes.forEach(nd => { per[nd.arm]++; });
+    expect(Math.max(...per) / gx.nodes.length).toBeLessThan(0.5);
   });
 });

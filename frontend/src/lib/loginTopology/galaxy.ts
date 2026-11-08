@@ -119,12 +119,16 @@ export function buildGalaxy(
   // Çok kaynaklı BFS: her düğüm en yakın kol başının kolunda; hop = uzaklık.
   const arm = new Array<number>(n).fill(-1);
   const hop = new Array<number>(n).fill(0);
+  const branch = new Array<number>(n).fill(-1); // kol başının hangi doğrudan komşusundan (dal) gelindi
   const queue: number[] = [];
   hubs.forEach((hIdx, k) => { arm[hIdx] = k; queue.push(hIdx); });
   for (let q = 0; q < queue.length; q++) {
     const u = queue[q];
-    for (const v of adj[u]) if (arm[v] < 0) { arm[v] = arm[u]; hop[v] = hop[u] + 1; queue.push(v); }
+    for (const v of adj[u]) if (arm[v] < 0) {
+      arm[v] = arm[u]; hop[v] = hop[u] + 1; branch[v] = hop[u] === 0 ? v : branch[u]; queue.push(v);
+    }
   }
+  rebalanceArms(arm, branch, arms);
   const hubSet = new Set(hubs);
   const sizeK = n > DENSE_NODES ? DENSE_SIZE_K : 1;
 
@@ -232,6 +236,31 @@ export function pickLabelSet(g: Galaxy, max: number, rand: () => number): Set<nu
     [idx[k], idx[j]] = [idx[j], idx[k]];
   }
   return new Set(idx.slice(0, max));
+}
+
+/**
+ * SAF, yerinde (v0.10.1944, operatör: prod'da galaksi tek kola yığılıyordu — bir
+ * gateway servislerin çoğunu topluyor). Kol başları kendi kolunda kalır; her DAL
+ * (kol başının doğrudan komşusu + BFS'te onun altından ulaşılanlar) büyükten
+ * küçüğe en az yüklü kola atanır. branch[i] < 0 olan düğüm (kol başı / bağsız)
+ * yerinde kalır. Kol yükleri döner (test için).
+ */
+export function rebalanceArms(arm: number[], branch: readonly number[], arms: number): number[] {
+  const load = new Array<number>(arms).fill(0);
+  const size = new Map<number, number>();
+  for (let i = 0; i < arm.length; i++) {
+    if (branch[i] >= 0) size.set(branch[i], (size.get(branch[i]) ?? 0) + 1);
+    else if (arm[i] >= 0 && arm[i] < arms) load[arm[i]]++;
+  }
+  const order = [...size.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0]);
+  const to = new Map<number, number>();
+  for (const [br, sz] of order) {
+    let k = 0;
+    for (let j = 1; j < arms; j++) if (load[j] < load[k]) k = j;
+    to.set(br, k); load[k] += sz;
+  }
+  for (let i = 0; i < arm.length; i++) if (branch[i] >= 0) arm[i] = to.get(branch[i]) ?? arm[i];
+  return load;
 }
 
 /** Ekran kutusu (px): sol, sağ, üst, alt. */
