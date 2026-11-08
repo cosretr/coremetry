@@ -172,17 +172,6 @@ const EN: Catalog = {
   'login.http.rt':        'Response time · metric',
   'login.http.perSec':    'now · per second',
   'login.http.avg':       'avg',
-  // v0.10.1935 — galakside üzerine gelince adın altındaki tür satırı.
-  'login.topo.kind.gw':    'gateway',
-  'login.topo.kind.bff':   'BFF',
-  'login.topo.kind.svc':   'service',
-  'login.topo.kind.db':    'database',
-  'login.topo.kind.queue': 'queue',
-  // v0.10.1946 — üzerine gelince kart: trafik seviyesi + bağlantı sayısı (kesin sayı yok).
-  'login.topo.level.busy': 'busy',
-  'login.topo.level.mid':  'moderate traffic',
-  'login.topo.level.calm': 'quiet',
-  'login.topo.links':      '{n} links',
 
   // v0.10.1426 — the generic btn.* / state.* / label.* / sev.* keys were
   // removed: no surface ever read them (every button / label / badge carries
@@ -852,15 +841,6 @@ const TR: Catalog = {
   'login.http.rt':        'Response time · metrik',
   'login.http.perSec':    'şimdi · saniyede',
   'login.http.avg':       'ort',
-  'login.topo.kind.gw':    'gateway',
-  'login.topo.kind.bff':   'BFF',
-  'login.topo.kind.svc':   'servis',
-  'login.topo.kind.db':    'veritabanı',
-  'login.topo.kind.queue': 'kuyruk',
-  'login.topo.level.busy': 'yoğun trafik',
-  'login.topo.level.mid':  'orta trafik',
-  'login.topo.level.calm': 'sakin',
-  'login.topo.links':      '{n} bağlantı',
 
   // User menu
   'user.signOut':        'Çıkış yap',

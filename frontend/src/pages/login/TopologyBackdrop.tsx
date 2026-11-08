@@ -10,12 +10,12 @@
 // Durum/uyarı rengi YOK; renkler yalnız tema token'ları (`resolveVar`): yıldız
 // v0.10.1933: etiketler zemin renginde (--bg0) ince çerçeveyle çizilir (toz üstünde okunur).
 // v0.10.1938 (operatör: "açılış efekti olmasın, direkt açılsın"): 1936'nın açılış hareketi söküldü.
+// v0.10.1949 (operatör son kararı: "kart çıkmasına gerek yok, sadece ismi yazsa olur") — üzerine gelince
+// YALNIZ ad (zemin çerçeveli etiket); 1946'nın kartı ve 1935'in tür satırı söküldü.
 // v0.10.1947: tüm servisler düğüm — servis yıldızları biraz daha belirgin; isimli kipte üzerine gelince
-// büyür ve aynı kartı gösterir (bağlantılı düğüm isabette önce gelir).
-// v0.10.1946: üzerine gelince küçük kart (ad · tür · trafik seviyesi · bağlantı sayısı; kesin sayı yok).
+// büyür ve adı yazar (bağlantılı düğüm isabette önce gelir).
 // v0.10.1945: kollar arası bağ çizgisi yalnız odakta (edgeVisible); akan noktalar sürer.
 // v0.10.1943: etiketler çakışmaz ve kartın altına girmez (placeLabels; kart kutusu `avoidRef`).
-// v0.10.1935: üzerine gelince adın altında soluk TÜR satırı (gateway / BFF / servis / veritabanı / kuyruk, i18n).
 // --accent2, kol/veri --purple, akan noktalar --orange (Traces süre çizgisiyle AYNI token; v0.10.1932),
 // etiket --text2. v0.10.1931: veritabanı mor YUVARLAK nokta + hafif hale (kare değil),
 // kuyruk --teal İÇİ BOŞ halka; ikisi de adıyla (veritabanı adı / konu), her ad bir kez. Parıltı gücü zeminin koyuluğuna göre (koyu temada güçlü).
@@ -26,10 +26,9 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { chartMonoFont, resolveVar } from '@/lib/chart/resolveVar';
 import { useThemeTick } from '@/lib/useThemeTick';
-import { useT } from '@/lib/i18n';
 import { MAX_LABELS, shouldDraw, thinGraph } from '@/lib/loginTopology/frame';
 import {
-  buildGalaxy, cardPlacement, depthOf, edgeVisible, trafficLevel, flowPos, isDarkColor, placeLabels, type Box, type LabelCand, nodeAlpha, nodeRadius, pickBackendLabels, pickLabelSet, project, spinRate,
+  buildGalaxy, depthOf, edgeVisible, flowPos, isDarkColor, placeLabels, type Box, type LabelCand, nodeAlpha, nodeRadius, pickBackendLabels, pickLabelSet, project, spinRate,
   TILT0, TILT_MAX, TILT_MIN, wantsLabel, type Galaxy, type Pt, type View,
 } from '@/lib/loginTopology/galaxy';
 import { seedOfIds } from '@/lib/loginTopology/prng';
@@ -37,16 +36,16 @@ import type { LoginSummaryEdge, LoginSummaryNode } from '@/lib/types';
 
 export interface BackdropGraph {
   nodes: LoginSummaryNode[]; edges: LoginSummaryEdge[]; seed?: number; stars?: [number, number][];
-  star_names?: string[]; star_links?: number[];
+  star_names?: string[];
 }
 
-interface Colors { star: string; arm: string; mq: string; flow: string; label: string; bg: string; card: string; border: string; text: string; muted: string; glow: number; flowBoost: number }
+interface Colors { star: string; arm: string; mq: string; flow: string; label: string; bg: string; glow: number; flowBoost: number }
 
 function readColors(): Colors {
   const bg = resolveVar('var(--bg0)');
   const dark = isDarkColor(bg);
   return {
-    bg, card: resolveVar('var(--card)'), border: resolveVar('var(--border)'), text: resolveVar('var(--text)'), muted: resolveVar('var(--text3)'),
+    bg,
     star: resolveVar('var(--accent2)'), arm: resolveVar('var(--purple)'), mq: resolveVar('var(--teal)'),
     // v0.10.1929 (operatör-raporlu: kurumsal temada akan noktalar altın değil) — --warn açık temalarda
     // kahverengi metin tonu (#795600); galaksiye ayrı altın token'ı.
@@ -72,8 +71,6 @@ interface Frame {
   col: Colors; pace: number; hover: number; labels: ReadonlySet<number>;
   /** Etiket konmayacak kutu (login kartı), tuval koordinatında; yoksa null. */
   avoid: Box | null;
-  /** Katman → üzerine gelince gösterilen tür adı (i18n). */
-  kinds: Readonly<Record<string, string>>;
 }
 
 /** Etiket: zemin renginde ince çerçeve + metin (yıldız tozundan ayrışsın). */
@@ -81,20 +78,6 @@ function label(ctx: CanvasRenderingContext2D, text: string, x: number, y: number
   ctx.lineJoin = 'round'; ctx.lineWidth = 3.5; ctx.strokeStyle = col.bg;
   ctx.strokeText(text, x, y);
   ctx.fillStyle = col.label; ctx.fillText(text, x, y);
-}
-
-/** v0.10.1946 — üzerine gelince kart: ad, "tür · trafik seviyesi", "N bağlantı". */
-function hoverCard(ctx: CanvasRenderingContext2D, f: Frame, p: Pt, name: string, tier: string, weight: number, links: number) {
-  const { col, kinds } = f;
-  const l2 = [kinds[tier], kinds[`level.${trafficLevel(weight)}`]].filter(Boolean).join(' · ');
-  const l3 = (kinds.links ?? '{n}').replace('{n}', String(links));
-  ctx.font = `600 ${chartMonoFont(12)}`; const w1 = ctx.measureText(name).width;
-  ctx.font = chartMonoFont(11); const cw = Math.max(w1, ctx.measureText(l2).width, ctx.measureText(l3).width) + 20, ch = 58;
-  const { x, y } = cardPlacement(p.x, p.y, cw, ch, f.w, f.h);
-  ctx.globalAlpha = 0.96; ctx.fillStyle = col.card; ctx.strokeStyle = col.border; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.roundRect(x, y, cw, ch, 8); ctx.fill(); ctx.stroke();
-  ctx.globalAlpha = 1; ctx.fillStyle = col.text; ctx.font = `600 ${chartMonoFont(12)}`; ctx.fillText(name, x + 10, y + 19);
-  ctx.fillStyle = col.muted; ctx.font = chartMonoFont(11); ctx.fillText(l2, x + 10, y + 35); ctx.fillText(l3, x + 10, y + 50);
 }
 
 /** Bir kare: toz → kenarlar → akan noktalar → düğümler (arkadan öne) → etiketler. Düğüm konumlarını döner (isabet testi için). */
@@ -196,12 +179,12 @@ function drawFrame(ctx: CanvasRenderingContext2D, f: Frame): { pos: Pt[]; starPo
     ctx.globalAlpha = Math.min(0.85, (depthOf(pos[i].z) - 0.3) * 1.3);
     label(ctx, g.nodes[i].name ?? '', pos[i].x + 8, pos[i].y + 3, col);
   }
-  if (hover >= 0 && hover < nN && g.nodes[hover].name) {
-    const nd = g.nodes[hover], p = pos[hover];
-    hoverCard(ctx, f, p, nd.name ?? '', nd.tier, nd.weight, g.adj[hover].length);
-  } else if (hover >= nN) { // v0.10.1947 — servis yıldızı
-    const k = hover - nN, m = g.starMeta[k], p = starPos[k];
-    if (m?.name && p) hoverCard(ctx, f, p, m.name, 'svc', sv[k * 5 + 3], m.links);
+  // v0.10.1949 — üzerine gelince yalnız ad (bağlantılı düğüm ya da servis yıldızı)
+  const hp = hover >= 0 && hover < nN ? pos[hover] : hover >= nN ? starPos[hover - nN] : null;
+  const hn = hover >= 0 && hover < nN ? g.nodes[hover].name : hover >= nN ? g.starNames[hover - nN] : undefined;
+  if (hp && hn) {
+    ctx.globalAlpha = 1; ctx.font = chartMonoFont(12);
+    label(ctx, hn, hp.x + 9, hp.y + 4, col);
   }
   ctx.globalAlpha = 1;
   return { pos, starPos };
@@ -216,22 +199,13 @@ export default function TopologyBackdrop({ graph, animated, pace = 0.6, avoidRef
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const themeTick = useThemeTick();
-  const t = useT();
-  // Tür adları ref'te: dil değişince efekt yeniden kurulmaz, sonraki karede güncellenir.
-  const kindsRef = useRef<Record<string, string>>({});
-  kindsRef.current = {
-    gw: t('login.topo.kind.gw'), bff: t('login.topo.kind.bff'), svc: t('login.topo.kind.svc'),
-    db: t('login.topo.kind.db'), queue: t('login.topo.kind.queue'),
-    'level.busy': t('login.topo.level.busy'), 'level.mid': t('login.topo.level.mid'), 'level.calm': t('login.topo.level.calm'),
-    links: t('login.topo.links'),
-  };
   // BİR KEZ: galaksi ilk gelen grafikle kurulur; `graph` sonradan değişse de yeniden kurulmaz.
   const [galaxy] = useState<Galaxy>(() => {
     const t = thinGraph(graph.nodes, graph.edges);
     // v0.10.1937 — yıldızın komşu dizini seyreltilmiş grafiğe çevrilir (düşen komşu → -1).
     const at = new Map(t.nodes.map((n, i) => [n.id, i]));
     const stars = (graph.stars ?? []).map(([w, near], k) => ({
-      w, near: at.get(graph.nodes[near]?.id ?? '') ?? -1, name: graph.star_names?.[k] || undefined, links: graph.star_links?.[k] ?? 0,
+      w, near: at.get(graph.nodes[near]?.id ?? '') ?? -1, name: graph.star_names?.[k] || undefined,
     }));
     return buildGalaxy(t.nodes, t.edges, graph.seed ?? seedOfIds(graph.nodes.map(n => n.id)), undefined, undefined, stars);
   });
@@ -273,7 +247,7 @@ export default function TopologyBackdrop({ graph, animated, pace = 0.6, avoidRef
       ({ pos, starPos } = drawFrame(ctx, {
         avoid: avoidBox(),
         g: galaxy, v: { angle: st.angle, tilt: st.tilt, cx: w / 2, cy: h / 2, R }, w, h, dpr, tSec, still,
-        col, pace: paceRef.current, hover, labels, kinds: kindsRef.current,
+        col, pace: paceRef.current, hover, labels,
       }));
     };
     const paintStill = () => paint(0, true);
@@ -318,7 +292,7 @@ export default function TopologyBackdrop({ graph, animated, pace = 0.6, avoidRef
       // v0.10.1947 — adı olan servis yıldızları; bağlantılı düğüm 4 px öncelikli
       for (let k = 0; k < starPos.length; k++) {
         const q = starPos[k];
-        if (!q || !galaxy.starMeta[k]?.name) continue;
+        if (!q || !galaxy.starNames[k]) continue;
         const d = Math.hypot(q.x - p.x, q.y - p.y);
         if (d < bd - 4) { bd = d + 4; best = pos.length + k; }
       }

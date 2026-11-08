@@ -119,7 +119,6 @@ func projectTopology(t *SnapTopology, mode string) *Topology {
 			near = j
 		}
 		out.Stars = append(out.Stars, [2]float64{round2(st.W), float64(near)})
-		out.StarLinks = append(out.StarLinks, st.Links)
 		if named {
 			// v0.10.1947 — düğüm adlarıyla aynı savunma: ham kimlik / instance işareti çıkmaz.
 			nm := st.Name

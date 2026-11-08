@@ -13418,5 +13418,8 @@ arası çizgiler ekranı kesiyor, 360 dışındaki servisler adsız soluk yıld�
   istek hızı: `sum by (<service.name etiketi>) (rate({__name__=~"<http aile>_count|rpc_server_call_duration_seconds_count|
   rpc_server_duration_milliseconds_count|messaging_process_duration_seconds_count"}[5m]))` + Kafka istemci düzeyi
   tüketim hızı (`topic=""`). VM'de serisi olmayan servis görünür ama "sakin". VM yok / kesici açık / sorgu hatası →
-  span sayısı (eski yol). Bağlantılı 360 düğümün ağırlığı hâlâ topolojideki çağrı sayısından.
+  span sayısı (eski yol). Bağlantılı 360 düğümün ağırlığı hâlâ topolojideki çağrı sayısından.- **v0.10.1949 — üzerine gelince KART KALDIRILDI, yalnız ad** (operatör son kararı: "kart çıkmasına gerek yok, sadece
+  ismi yazsa olur"). 1946'nın kartı (tür · trafik seviyesi · bağlantı) ve 1935'in tür satırı söküldü; üzerine gelince
+  bağlantılı düğümde de servis yıldızında da yalnız ad, zemin çerçeveli etiket olarak. Ölü kod kalmadı: `trafficLevel`,
+  `cardPlacement`, `login.topo.kind/level/links` anahtarları ve cevaptaki `star_links` silindi. Kart yeniden önerme.
 

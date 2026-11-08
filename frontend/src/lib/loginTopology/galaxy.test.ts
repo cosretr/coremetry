@@ -6,7 +6,7 @@ import { mulberry32 } from './prng';
 import { syntheticGraph, SYNTHETIC_SEED } from './synthetic';
 import {
   buildGalaxy, depthOf, flowPos, flowSpeed, isDarkColor, nodeAlpha, nodeRadius, paceFrom, pickBackendLabels, pickLabelSet, project,
-  sizeOf, spinRate, wantsLabel, DENSE_NODES, DENSE_SIZE_K, MAX_STARS, MIN_DUST, placeLabels, labelBox, LABEL_CARD_MARGIN, rebalanceArms, edgeVisible, trafficLevel, cardPlacement, MIN_ARMS, TILT0, DUST_ARM, DUST_CORE, FLOW_EDGES, type GNode,
+  sizeOf, spinRate, wantsLabel, DENSE_NODES, DENSE_SIZE_K, MAX_STARS, MIN_DUST, placeLabels, labelBox, LABEL_CARD_MARGIN, rebalanceArms, edgeVisible, MIN_ARMS, TILT0, DUST_ARM, DUST_CORE, FLOW_EDGES, type GNode,
 } from './galaxy';
 import type { LoginSummaryEdge, LoginSummaryNode } from '@/lib/types';
 
@@ -256,33 +256,21 @@ describe('sade çizgiler (v0.10.1945)', () => {
   });
 });
 
-describe('üzerine gelince kart (v0.10.1946)', () => {
-  it('trafik seviyesi ağırlık eşiklerinden', () => {
-    expect(trafficLevel(0.9)).toBe('busy');
-    expect(trafficLevel(0.4)).toBe('mid');
-    expect(trafficLevel(0.1)).toBe('calm');
-  });
-  it('kart noktanın sağında; sığmazsa solunda; dikeyde tuvalde kalır', () => {
-    expect(cardPlacement(100, 100, 120, 58, 1000, 800)).toEqual({ x: 114, y: 92 });
-    expect(cardPlacement(950, 100, 120, 58, 1000, 800)).toEqual({ x: 816, y: 92 });
-    expect(cardPlacement(100, 790, 120, 58, 1000, 800)).toEqual({ x: 114, y: 734 });
-    expect(cardPlacement(100, 2, 120, 58, 1000, 800)).toEqual({ x: 114, y: 8 });
-  });
-});
-
 describe('tüm servisler düğüm (v0.10.1947)', () => {
-  it('yıldız başına ad ve komşu sayısı sırayla tutulur; ad yoksa undefined', () => {
+  it('yıldız başına ad sırayla tutulur; ad yoksa undefined', () => {
     const g = syntheticGraph(SYNTHETIC_SEED);
     const gx = buildGalaxy(g.nodes, g.edges, 7, undefined, undefined, [
-      { w: 0.5, near: 2, name: 'pricing-service', links: 3 }, { w: 0.1, near: -1 }, { w: 0.2, near: -1, name: '', links: 1 },
+      { w: 0.5, near: 2, name: 'pricing-service' }, { w: 0.1, near: -1 }, { w: 0.2, near: -1, name: '' },
     ]);
-    expect(gx.starMeta).toEqual([{ name: 'pricing-service', links: 3 }, { name: undefined, links: 0 }, { name: undefined, links: 1 }]);
-    expect(gx.stars.length / 5).toBe(gx.starMeta.length);
+    expect(gx.starNames).toEqual(['pricing-service', undefined, undefined]);
+    expect(gx.stars.length / 5).toBe(gx.starNames.length);
   });
-  it('çizim yıldızı odakta büyütür ve adlı yıldıza kart çizer; isabet adsız yıldızı atlar', () => {
+  // v0.10.1949 (operatör: "kart çıkmasına gerek yok, sadece ismi yazsa olur").
+  it('üzerine gelince yalnız ad: kart ve tür satırı yok; isabet adsız yıldızı atlar', () => {
     const src = readFileSync(resolve(__dirname, '../../pages/login/TopologyBackdrop.tsx'), 'utf8');
-    expect(src).toContain("if (m?.name && p) hoverCard(ctx, f, p, m.name, 'svc'");
-    expect(src).toContain('if (!q || !galaxy.starMeta[k]?.name) continue;');
+    expect(src).not.toMatch(/hoverCard|roundRect|trafficLevel|kinds\[/);
+    expect(src).toContain('label(ctx, hn, hp.x + 9, hp.y + 4, col);');
+    expect(src).toContain('if (!q || !galaxy.starNames[k]) continue;');
   });
 });
 

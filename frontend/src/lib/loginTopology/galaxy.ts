@@ -72,12 +72,12 @@ export interface Galaxy {
   stars: Float32Array;
   /** Yoğun grafikte nokta küçültmesi (DENSE_SIZE_K ya da 1). */
   sizeK: number;
-  /** v0.10.1947 — yıldız başına ad (isimli kipte) ve komşu sayısı; `stars` ile aynı sıra. */
-  starMeta: { name?: string; links: number }[];
+  /** v0.10.1947 — yıldız başına ad (yalnız isimli kipte; yoksa undefined); `stars` ile aynı sıra. */
+  starNames: (string | undefined)[];
 }
 
 /** Adsız servis yıldızı girdisi: yoğunluk ve en yakın düğümün `nodes` dizini (-1 = yok). */
-export interface StarIn { w: number; near: number; name?: string; links?: number }
+export interface StarIn { w: number; near: number; name?: string }
 /** v0.10.1937 — istemci tavanı (sunucu da 5000) ve yıldızlar yer kaplarken korunacak en az toz. */
 export const MAX_STARS = 5000;
 export const MIN_DUST = 1000;
@@ -178,7 +178,7 @@ export function buildGalaxy(
   const flowPh = gedges.map(() => rand());
   // Adsız servis yıldızları: bağlı olduğu düğümün kolunda, ona yakın yarıçapta; bağsızsa rastgele kol.
   const stars = new Float32Array(nStars * 5);
-  const starMeta: { name?: string; links: number }[] = [];
+  const starNames: (string | undefined)[] = [];
   let so = 0;
   for (let k = 0; k < nStars; k++) {
     const st = starsIn[k], base = st.near >= 0 ? gnodes[st.near] : undefined;
@@ -188,9 +188,9 @@ export function buildGalaxy(
     stars[so++] = r;
     stars[so++] = (a / arms) * TAU + Math.log(0.18 + r) * TWIST + gauss() * (0.12 + r * 0.12);
     stars[so++] = gauss() * 0.035; stars[so++] = clamp01(st.w); stars[so++] = rand() * TAU;
-    starMeta.push({ name: st.name || undefined, links: Math.max(0, st.links ?? 0) });
+    starNames.push(st.name || undefined);
   }
-  return { nodes: gnodes, edges: gedges, arms, dust, flows, flowPh, adj, stars, sizeK, starMeta };
+  return { nodes: gnodes, edges: gedges, arms, dust, flows, flowPh, adj, stars, sizeK, starNames };
 }
 
 export interface View { angle: number; tilt: number; cx: number; cy: number; R: number }
@@ -274,26 +274,6 @@ export function rebalanceArms(arm: number[], branch: readonly number[], arms: nu
  */
 export function edgeVisible(armA: number, armB: number, focus: boolean): boolean {
   return focus || armA === armB;
-}
-
-/** v0.10.1946 — üzerine gelince kartın trafik seviyesi (ağırlık eşikleri; mutlak sayı yok). */
-export type TrafficLevel = 'busy' | 'mid' | 'calm';
-export function trafficLevel(weight: number): TrafficLevel {
-  return weight > 0.6 ? 'busy' : weight > 0.25 ? 'mid' : 'calm';
-}
-
-/**
- * SAF (v0.10.1946): kartın sol üst köşesi. Noktanın sağına (x+14), sığmazsa
- * soluna; dikeyde tuvalin içinde (8 px pay) tutulur.
- */
-export function cardPlacement(px: number, py: number, cw: number, ch: number, w: number, h: number): { x: number; y: number } {
-  let x = px + 14;
-  if (x + cw > w - 8) x = px - 14 - cw;
-  if (x < 8) x = 8;
-  let y = py - 8;
-  if (y + ch > h - 8) y = h - 8 - ch;
-  if (y < 8) y = 8;
-  return { x, y };
 }
 
 /** Ekran kutusu (px): sol, sağ, üst, alt. */

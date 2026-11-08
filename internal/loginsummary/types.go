@@ -73,8 +73,6 @@ type Topology struct {
 	// v0.10.1947 (operatör: "360 düğüm yerine tüm servisler gözüksün") — yıldız
 	// başına ad (Stars ile aynı sıra) YALNIZ isimli kipte; anonim kipte alan yok.
 	StarNames []string `json:"star_names,omitempty"`
-	// StarLinks — yıldız başına ham topolojideki komşu sayısı (her kipte; ad değil).
-	StarLinks []int `json:"star_links,omitempty"`
 }
 
 type Node struct {
@@ -157,9 +155,8 @@ type SnapTopology struct {
 type SnapStar struct {
 	W    float64 `json:"w"`
 	Near int     `json:"near"`
-	// v0.10.1947 — servis adı (cevaba yalnız isimli kipte çıkar) ve komşu sayısı.
-	Name  string `json:"name,omitempty"`
-	Links int    `json:"links,omitempty"`
+	// v0.10.1947 — servis adı (cevaba yalnız isimli kipte çıkar).
+	Name string `json:"name,omitempty"`
 }
 
 // SnapNode — Name: servis adı ya da db/kuyruk için YALNIZ sistem adı.
