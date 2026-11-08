@@ -32,6 +32,7 @@ import {
   TILT0, TILT_MAX, TILT_MIN, wantsLabel, type Galaxy, type Pt, type View,
 } from '@/lib/loginTopology/galaxy';
 import { seedOfIds } from '@/lib/loginTopology/prng';
+import { burstSize, pruneSparks, sparkProgress, sparkTargets, spawnSparks, type Spark } from '@/lib/loginTopology/sparks'; // v0.10.1973
 import type { LoginSummaryEdge, LoginSummaryNode } from '@/lib/types';
 
 export interface BackdropGraph {
@@ -69,6 +70,8 @@ function halo(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, co
 interface Frame {
   g: Galaxy; v: View; w: number; h: number; dpr: number; tSec: number; still: boolean;
   col: Colors; pace: number; hover: number; labels: ReadonlySet<number>;
+  /** v0.10.1973 — tıkla gönderilen yıldızlar (kaynak/hedef `hover` kodlamasıyla). */
+  sparks: readonly Spark[];
   /** Etiket konmayacak kutu (login kartı), tuval koordinatında; yoksa null. */
   avoid: Box | null;
 }
@@ -142,6 +145,22 @@ function drawFrame(ctx: CanvasRenderingContext2D, f: Frame): { pos: Pt[]; starPo
     halo(ctx, x, y, hr, col.flow, Math.min(1, (0.25 + 0.35 * depth) * sp * (0.5 + col.glow * 0.5) * col.flowBoost));
     ctx.globalAlpha = Math.min(1, (0.6 + 0.35 * depth) * sp * col.flowBoost); ctx.fillStyle = col.flow;
     ctx.beginPath(); ctx.arc(x, y, 1.4 * (0.85 + 0.15 * col.flowBoost), 0, TAU); ctx.fill();
+  }
+
+  // v0.10.1973 — tıkla gönderilen yıldızlar: kaynaktan bağlı noktaya, kısa kuyrukla, akan noktalarla aynı renk.
+  for (const sp of f.sparks) {
+    const u = sparkProgress(sp, f.tSec);
+    if (u === null) continue;
+    const a = sp.from < nN ? pos[sp.from] : starPos[sp.from - nN];
+    const b = sp.to < nN ? pos[sp.to] : starPos[sp.to - nN];
+    if (!a || !b) continue;
+    for (let j = 3; j >= 0; j--) { // kuyruk: geride kalan 3 soluk nokta
+      const t = Math.max(0, u - j * 0.035);
+      const x = a.x + (b.x - a.x) * t, y = a.y + (b.y - a.y) * t;
+      if (j === 0) halo(ctx, x, y, 7, col.flow, Math.min(1, 0.55 * col.flowBoost));
+      ctx.globalAlpha = Math.min(1, (j === 0 ? 1 : 0.5 - j * 0.12) * col.flowBoost); ctx.fillStyle = col.flow;
+      ctx.beginPath(); ctx.arc(x, y, j === 0 ? 2 : 1.4 - j * 0.25, 0, TAU); ctx.fill();
+    }
   }
 
   // düğümler: arkadan öne
@@ -228,6 +247,9 @@ export default function TopologyBackdrop({ graph, animated, pace = 0.6, avoidRef
     let pos: Pt[] = [];
     let starPos: (Pt | null)[] = [];
     let hover = -1, dragging = false, lx = 0, ly = 0, lt = 0;
+    // v0.10.1973 — tık → yıldız: basış konumu/zamanı (sürüklemeden ayırmak için) + son tıklar (hız).
+    let sparks: Spark[] = [], downX = 0, downY = 0, downT = 0;
+    const clicks: number[] = [];
     const t0 = performance.now();
 
     const fit = () => {
@@ -247,7 +269,7 @@ export default function TopologyBackdrop({ graph, animated, pace = 0.6, avoidRef
       ({ pos, starPos } = drawFrame(ctx, {
         avoid: avoidBox(),
         g: galaxy, v: { angle: st.angle, tilt: st.tilt, cx: w / 2, cy: h / 2, R }, w, h, dpr, tSec, still,
-        col, pace: paceRef.current, hover, labels,
+        col, pace: paceRef.current, hover, labels, sparks,
       }));
     };
     const paintStill = () => paint(0, true);
@@ -261,7 +283,9 @@ export default function TopologyBackdrop({ graph, animated, pace = 0.6, avoidRef
         st.angle += spinRate(paceRef.current) * dt; // dönüş hızı = throughput temposu
         st.tilt += (TILT0 - st.tilt) * Math.min(1, dt * 0.25); // eğim yavaşça varsayılana döner
       }
-      if (shouldDraw(now, last)) { last = now; paint((now - t0) / 1000, false); }
+      if (sparks.length) sparks = pruneSparks(sparks, (now - t0) / 1000);
+      // yıldız uçarken kare atlanmaz (akıcı uçuş); aksi kare bütçesi aynen
+      if (sparks.length || shouldDraw(now, last)) { last = now; paint((now - t0) / 1000, false); }
       raf = requestAnimationFrame(tick);
     };
     const start = () => { if (animated && !raf && !document.hidden) { prev = performance.now(); raf = requestAnimationFrame(tick); } };
@@ -273,8 +297,21 @@ export default function TopologyBackdrop({ graph, animated, pace = 0.6, avoidRef
       if (e.button !== 0) return;
       e.preventDefault(); // metin seçimi başlamasın
       dragging = true; const p = local(e); lx = p.x; ly = p.y; lt = performance.now(); st.vel = 0; st.tiltVel = 0;
+      downX = p.x; downY = p.y; downT = lt;
       canvas.setPointerCapture?.(e.pointerId);
       canvas.style.cursor = 'grabbing';
+    };
+    const hitAt = (p: { x: number; y: number }) => {
+      let best = -1, bd = HOVER_PX;
+      for (let i = 0; i < pos.length; i++) { const d = Math.hypot(pos[i].x - p.x, pos[i].y - p.y); if (d < bd) { bd = d; best = i; } }
+      // v0.10.1947 — adı olan servis yıldızları; bağlantılı düğüm 4 px öncelikli
+      for (let k = 0; k < starPos.length; k++) {
+        const q = starPos[k];
+        if (!q || !galaxy.starNames[k]) continue;
+        const d = Math.hypot(q.x - p.x, q.y - p.y);
+        if (d < bd - 4) { bd = d + 4; best = pos.length + k; }
+      }
+      return best;
     };
     const onMove = (e: PointerEvent) => {
       const p = local(e);
@@ -287,26 +324,32 @@ export default function TopologyBackdrop({ graph, animated, pace = 0.6, avoidRef
         if (!animated) paintStill();
         return;
       }
-      let best = -1, bd = HOVER_PX;
-      for (let i = 0; i < pos.length; i++) { const d = Math.hypot(pos[i].x - p.x, pos[i].y - p.y); if (d < bd) { bd = d; best = i; } }
-      // v0.10.1947 — adı olan servis yıldızları; bağlantılı düğüm 4 px öncelikli
-      for (let k = 0; k < starPos.length; k++) {
-        const q = starPos[k];
-        if (!q || !galaxy.starNames[k]) continue;
-        const d = Math.hypot(q.x - p.x, q.y - p.y);
-        if (d < bd - 4) { bd = d + 4; best = pos.length + k; }
-      }
+      const best = hitAt(p);
       canvas.style.cursor = best >= 0 ? 'pointer' : 'grab';
       if (best !== hover) { hover = best; if (!animated) paintStill(); }
     };
     const onUp = (e: PointerEvent) => {
       if (!dragging) return;
       dragging = false;
+      // Kısa ve yerinde basış = tık: üzerindeki noktadan bağlı noktalara yıldız (hızlı tık → daha çok).
+      const p = local(e), now = performance.now();
+      const hit = animated && now - downT < 350 && Math.hypot(p.x - downX, p.y - downY) < 6 ? hitAt(p) : -1; // dokunmatikte hover yok
+      if (hit >= 0) {
+        st.vel = 0; st.tiltVel = 0; // tık galaksiyi savurmasın
+        clicks.push(now); while (clicks.length > 20) clicks.shift();
+        const targets = sparkTargets(galaxy, hit);
+        if (targets.length) sparks = pruneSparks([...sparks, ...spawnSparks(hit, targets, (now - t0) / 1000, burstSize(clicks, now))], (now - t0) / 1000);
+      }
       canvas.releasePointerCapture?.(e.pointerId);
       canvas.style.cursor = 'grab';
     };
     const onLeave = () => { if (!dragging && hover >= 0) { hover = -1; if (!animated) paintStill(); } };
-    const onDbl = () => { st.angle = 0; st.tilt = TILT0; st.vel = 0; st.tiltVel = 0; if (!animated) paintStill(); };
+    // v0.10.1973 — nokta üzerinde hızlı tık yıldız gönderir; çift tık orada görünümü sıfırlamaz.
+    const onDbl = (e: MouseEvent) => {
+      const r = canvas.getBoundingClientRect();
+      if (hitAt({ x: e.clientX - r.left, y: e.clientY - r.top }) >= 0) return;
+      st.angle = 0; st.tilt = TILT0; st.vel = 0; st.tiltVel = 0; if (!animated) paintStill();
+    };
 
     fit();
     canvas.style.cursor = 'grab';

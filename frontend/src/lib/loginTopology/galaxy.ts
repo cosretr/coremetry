@@ -74,6 +74,8 @@ export interface Galaxy {
   sizeK: number;
   /** v0.10.1947 — yıldız başına ad (yalnız isimli kipte; yoksa undefined); `stars` ile aynı sıra. */
   starNames: (string | undefined)[];
+  /** v0.10.1973 — yıldızın bağlı olduğu düğüm (`nodes` dizini; -1 = yok); `stars` ile aynı sıra. */
+  starNear: number[];
 }
 
 /** Adsız servis yıldızı girdisi: yoğunluk ve en yakın düğümün `nodes` dizini (-1 = yok). */
@@ -179,6 +181,7 @@ export function buildGalaxy(
   // Adsız servis yıldızları: bağlı olduğu düğümün kolunda, ona yakın yarıçapta; bağsızsa rastgele kol.
   const stars = new Float32Array(nStars * 5);
   const starNames: (string | undefined)[] = [];
+  const starNear: number[] = [];
   let so = 0;
   for (let k = 0; k < nStars; k++) {
     const st = starsIn[k], base = st.near >= 0 ? gnodes[st.near] : undefined;
@@ -189,8 +192,9 @@ export function buildGalaxy(
     stars[so++] = (a / arms) * TAU + Math.log(0.18 + r) * TWIST + gauss() * (0.12 + r * 0.12);
     stars[so++] = gauss() * 0.035; stars[so++] = clamp01(st.w); stars[so++] = rand() * TAU;
     starNames.push(st.name || undefined);
+    starNear.push(base ? st.near : -1);
   }
-  return { nodes: gnodes, edges: gedges, arms, dust, flows, flowPh, adj, stars, sizeK, starNames };
+  return { nodes: gnodes, edges: gedges, arms, dust, flows, flowPh, adj, stars, sizeK, starNames, starNear };
 }
 
 export interface View { angle: number; tilt: number; cx: number; cy: number; R: number }
