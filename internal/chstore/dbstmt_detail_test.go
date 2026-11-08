@@ -223,14 +223,14 @@ func TestDBStmtSummaryFineSQL(t *testing.T) {
 
 func TestMergeFineSummary(t *testing.T) {
 	out := &DBStmtSummary{SampleStatement: "SELECT 1", MaxMs: 900, Calls: 120, P95Ms: 50}
-	mergeFineSummary(out, 100, 2, 1000, 30, 80)
-	if out.Calls != 100 || out.Errors != 2 || out.AvgMs != 10 || out.P95Ms != 30 || out.P99Ms != 80 {
+	mergeFineSummary(out, 100, 2, 1000, 12, 30, 80)
+	if out.Calls != 100 || out.Errors != 2 || out.AvgMs != 10 || out.P50Ms != 12 || out.P95Ms != 30 || out.P99Ms != 80 {
 		t.Errorf("1 dk değerleri yazılmalı: %+v", out)
 	}
 	if out.SampleStatement != "SELECT 1" || out.MaxMs != 900 {
 		t.Errorf("örnek metin ve max 5m'den kalmalı: %+v", out)
 	}
-	mergeFineSummary(out, 0, 0, 0, 0, 0)
+	mergeFineSummary(out, 0, 0, 0, 0, 0, 0)
 	if out.Calls != 0 || out.AvgMs != 0 {
 		t.Errorf("hassas pencerede çağrı yoksa 0: %+v", out)
 	}

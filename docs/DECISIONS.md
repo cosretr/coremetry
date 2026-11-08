@@ -13474,3 +13474,11 @@ ve sade span detayı (cümle + temel alanlar, öznitelikler katlı). Uygulananla
   ızgarasından; örnek metin ve max 5m'den (1m tabloda o kolonlar yok). 1m okuma hatası → 5m değerleri. Prior pencere
   kendi grenliğini seçer. 1956'nın bağlam satırı ve Statement sayfası özeti aynı hassasiyeti alır.
 
+## 2026-11-08 — v0.10.1958–1960 — Statement sayfasında süre gösterimi (operatör: mockup "Sorgu Süre Görünümü" → "Yap")
+
+Dynatrace'in süreyi daha iyi gösterdiği üç nokta (operatör seçimi 1, 2, 4): medyan + yüzdelik, taban çizgisi bandı,
+süre dağılımı. Dynatrace 90. yüzdeliği kullanıyor; MV'lerde hazır p95 kullanıldı.
+
+- **v0.10.1958 — medyan.** Statement özeti ve trend noktaları p50 taşır (aynı TDigest durumu, 1. eleman; 5m, 1m ve
+  prior). Sayfa: Avg'den önce "Median" karosu (prior farkıyla), süre paneli "Latency · median, p95" iki çizgi.
+

@@ -178,6 +178,7 @@ func (s *Server) getDBStmtDetail(w http.ResponseWriter, r *http.Request) {
 			out.Summary.PriorErrors = psum.Errors
 			out.Summary.PriorAvgMs = psum.AvgMs
 			out.Summary.PriorP95Ms = psum.P95Ms
+			out.Summary.PriorP50Ms = psum.P50Ms
 		}
 		if len(out.Callers) > 0 {
 			if pcs, err := s.store.GetDBStmtCallers(ctx, pq, 20); err == nil {

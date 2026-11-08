@@ -9620,6 +9620,8 @@ export interface DBStmtSummary {
   errors: number;
   totalMs: number;
   avgMs: number;
+  /** v0.10.1958 — medyan (eski sunucuda yok). */
+  p50Ms?: number;
   p95Ms: number;
   p99Ms: number;
   maxMs: number;
@@ -9629,6 +9631,7 @@ export interface DBStmtSummary {
   priorErrors?: number;
   priorAvgMs?: number;
   priorP95Ms?: number;
+  priorP50Ms?: number;
 }
 
 export interface DBStmtTrendPoint {
@@ -9637,6 +9640,8 @@ export interface DBStmtTrendPoint {
   errors: number;
   avgMs: number;
   p95Ms: number;
+  /** v0.10.1958 — medyan. */
+  p50Ms?: number;
 }
 
 export interface DBStmtCaller {

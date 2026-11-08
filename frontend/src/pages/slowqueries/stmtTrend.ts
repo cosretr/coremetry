@@ -51,6 +51,8 @@ export interface StmtTrendGrid {
   errors: number[];
   /** Çağrısız kovada NaN. */
   p95Ms: number[];
+  /** v0.10.1958 — medyan. */
+  p50Ms: number[];
 }
 
 /** Kova i'nin yarı-açık sınırları, unix sn. */
@@ -98,6 +100,7 @@ export function stmtTrendGrid(
     calls: new Array<number>(n).fill(0),
     errors: new Array<number>(n).fill(0),
     p95Ms: new Array<number>(n).fill(NaN),
+    p50Ms: new Array<number>(n).fill(NaN),
   };
   for (let i = 0; i < n; i++) {
     const [s] = stmtBucketBounds(startSec, bucketSec, i);
@@ -110,6 +113,7 @@ export function stmtTrendGrid(
     g.calls[i] = p.calls;
     g.errors[i] = p.errors;
     g.p95Ms[i] = p.calls > 0 ? p.p95Ms : NaN;
+    g.p50Ms[i] = p.calls > 0 && p.p50Ms != null ? p.p50Ms : NaN;
   }
   return g;
 }
@@ -118,6 +122,8 @@ export interface StmtTrendSeries {
   callsPerSec: SpanMetricSeries[];
   errors: SpanMetricSeries[];
   p95Ms: SpanMetricSeries[];
+  /** v0.10.1958 — medyan serisi (süre panelinde p95'in yanında). */
+  p50Ms: SpanMetricSeries[];
   /** Grafiğin x aralığı, unix SANİYE (CorePanel xRange): ızgara başı → to. */
   xRange: { from: number; to: number };
   /** Pencerede tek çağrı var mı (boş-durum kararı). */
@@ -132,6 +138,7 @@ export function stmtTrendSeries(g: StmtTrendGrid, toNs: number): StmtTrendSeries
     // v0.10.1525 — dakika başına (kova adedi / kapsanan dakika).
     errors: one('Errors / min', i => (g.coveredSec[i] > 0 ? g.errors[i] / (g.coveredSec[i] / 60) : NaN)),
     p95Ms: one('P95', i => g.p95Ms[i]),
+    p50Ms: one('Median', i => g.p50Ms[i]),
     xRange: { from: g.startSec, to: toNs / 1e9 },
     hasCalls: g.calls.some(v => v > 0),
   };

@@ -96,6 +96,7 @@ type DBStmtSummary struct {
 	Errors          uint64  `json:"errors"`
 	TotalMs         float64 `json:"totalMs"`
 	AvgMs           float64 `json:"avgMs"`
+	P50Ms           float64 `json:"p50Ms"` // v0.10.1958 — medyan
 	P95Ms           float64 `json:"p95Ms"`
 	P99Ms           float64 `json:"p99Ms"`
 	MaxMs           float64 `json:"maxMs"`
@@ -103,6 +104,7 @@ type DBStmtSummary struct {
 	PriorErrors     uint64  `json:"priorErrors,omitempty"`
 	PriorAvgMs      float64 `json:"priorAvgMs,omitempty"`
 	PriorP95Ms      float64 `json:"priorP95Ms,omitempty"`
+	PriorP50Ms      float64 `json:"priorP50Ms,omitempty"`
 }
 
 // dbStmtSummarySQL — pure builder, pinned by dbstmt_detail_test.go.
@@ -117,6 +119,7 @@ func dbStmtSummarySQL(where string) string {
 			countMerge(span_count_state)                AS cnt,
 			countIfMerge(error_count_state)             AS err_cnt,
 			sumMerge(duration_sum_state) / 1e6          AS total_ms,
+			arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state), 1) / 1e6 AS p50_ms,
 			arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state), 2) / 1e6 AS p95_ms,
 			arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state), 3) / 1e6 AS p99_ms,
 			maxMerge(duration_max_state) / 1e6          AS max_ms
@@ -134,9 +137,9 @@ func (s *Store) GetDBStmtSummary(ctx context.Context, q DBStmtDetailQuery) (*DBS
 	wc := dbStmtDetailWhere(q)
 	row := s.telemetryReadConn().QueryRow(ctx, dbStmtSummarySQL(wc.sql()), wc.args...)
 	var out DBStmtSummary
-	var totalMs, p95, p99, maxMs float64
+	var totalMs, p50, p95, p99, maxMs float64
 	if err := row.Scan(&out.SampleStatement, &out.DBSystem, &out.DBName,
-		&out.Calls, &out.Errors, &totalMs, &p95, &p99, &maxMs); err != nil {
+		&out.Calls, &out.Errors, &totalMs, &p50, &p95, &p99, &maxMs); err != nil {
 		return nil, err
 	}
 	if out.Calls == 0 {
@@ -144,6 +147,7 @@ func (s *Store) GetDBStmtSummary(ctx context.Context, q DBStmtDetailQuery) (*DBS
 	}
 	out.TotalMs = safeF(&totalMs)
 	out.AvgMs = out.TotalMs / float64(out.Calls)
+	out.P50Ms = safeF(&p50)
 	out.P95Ms = safeF(&p95)
 	out.P99Ms = safeF(&p99)
 	out.MaxMs = safeF(&maxMs)
@@ -158,6 +162,7 @@ func dbStmtSummaryFineSQL(where string) string {
 			countMerge(span_count_state)                AS cnt,
 			countIfMerge(error_count_state)             AS err_cnt,
 			sumMerge(duration_sum_state) / 1e6          AS total_ms,
+			arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state), 1) / 1e6 AS p50_ms,
 			arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state), 2) / 1e6 AS p95_ms,
 			arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state), 3) / 1e6 AS p99_ms
 		FROM ` + dbStmtTrendTableFine + ` ` + where + `
@@ -167,13 +172,14 @@ func dbStmtSummaryFineSQL(where string) string {
 
 // mergeFineSummary — SAF: 1 dk tablonun sayıları/kuantilleri 5m özetin üstüne yazılır;
 // örnek metin ve max 5m'den kalır. cnt == 0 da yazılır (hassas pencerede çağrı yok).
-func mergeFineSummary(out *DBStmtSummary, cnt, errs uint64, totalMs, p95, p99 float64) {
+func mergeFineSummary(out *DBStmtSummary, cnt, errs uint64, totalMs, p50, p95, p99 float64) {
 	out.Calls, out.Errors = cnt, errs
 	out.TotalMs = safeF(&totalMs)
 	out.AvgMs = 0
 	if cnt > 0 {
 		out.AvgMs = out.TotalMs / float64(cnt)
 	}
+	out.P50Ms = safeF(&p50)
 	out.P95Ms = safeF(&p95)
 	out.P99Ms = safeF(&p99)
 }
@@ -189,11 +195,11 @@ func (s *Store) GetDBStmtSummaryGrain(ctx context.Context, q DBStmtDetailQuery, 
 	}
 	wc := dbStmtDetailWhereGrain(q, time.Minute)
 	var cnt, errs uint64
-	var totalMs, p95, p99 float64
-	if ferr := s.telemetryReadConn().QueryRow(ctx, dbStmtSummaryFineSQL(wc.sql()), wc.args...).Scan(&cnt, &errs, &totalMs, &p95, &p99); ferr != nil {
+	var totalMs, p50, p95, p99 float64
+	if ferr := s.telemetryReadConn().QueryRow(ctx, dbStmtSummaryFineSQL(wc.sql()), wc.args...).Scan(&cnt, &errs, &totalMs, &p50, &p95, &p99); ferr != nil {
 		return out, nil
 	}
-	mergeFineSummary(out, cnt, errs, totalMs, p95, p99)
+	mergeFineSummary(out, cnt, errs, totalMs, p50, p95, p99)
 	return out, nil
 }
 
@@ -205,6 +211,7 @@ type DBStmtTrendPoint struct {
 	Errors uint64  `json:"errors"`
 	AvgMs  float64 `json:"avgMs"`
 	P95Ms  float64 `json:"p95Ms"`
+	P50Ms  float64 `json:"p50Ms"` // v0.10.1958 — medyan
 }
 
 // dbStmtTrendMaxPoints bounds the trend payload — ~288 points covers a
@@ -300,7 +307,8 @@ func dbStmtTrendSQLFrom(table, where string) string {
 			countMerge(span_count_state)                    AS cnt,
 			countIfMerge(error_count_state)                 AS err_cnt,
 			sumMerge(duration_sum_state) / 1e6              AS total_ms,
-			arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state), 2) / 1e6 AS p95_ms
+			arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state), 2) / 1e6 AS p95_ms,
+			arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state), 1) / 1e6 AS p50_ms
 		FROM ` + table + ` ` + where + `
 		GROUP BY b
 		ORDER BY b
@@ -333,8 +341,8 @@ func (s *Store) GetDBStmtTrend(ctx context.Context, q DBStmtDetailQuery, g DBStm
 	for rows.Next() {
 		var b int64
 		var p DBStmtTrendPoint
-		var totalMs, p95 float64
-		if err := rows.Scan(&b, &p.Calls, &p.Errors, &totalMs, &p95); err != nil {
+		var totalMs, p95, p50 float64
+		if err := rows.Scan(&b, &p.Calls, &p.Errors, &totalMs, &p95, &p50); err != nil {
 			return nil, bucketSec, err
 		}
 		p.TsNs = (bucketStart.Unix() + b*bucketSec) * int64(time.Second)
@@ -342,6 +350,7 @@ func (s *Store) GetDBStmtTrend(ctx context.Context, q DBStmtDetailQuery, g DBStm
 			p.AvgMs = safeF(&totalMs) / float64(p.Calls)
 		}
 		p.P95Ms = safeF(&p95)
+		p.P50Ms = safeF(&p50)
 		out = append(out, p)
 	}
 	return out, bucketSec, rows.Err()

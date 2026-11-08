@@ -96,6 +96,13 @@ export function StmtSummarySection({ detail, compare }: {
         {fmtNum(s.errors)}
         {compare && <TrendDelta cur={s.errors} prior={s.priorErrors} kind="lowerBetter" />}
       </StatTile>
+      {/* v0.10.1958 (operatör: Dynatrace gibi medyan) — tipik çağrı; ortalama uçlarla şişer. */}
+      {s.p50Ms != null && (
+        <StatTile label="Median">
+          {s.p50Ms.toFixed(1)} ms
+          {compare && <TrendDelta cur={s.p50Ms} prior={s.priorP50Ms} kind="lowerBetter" />}
+        </StatTile>
+      )}
       <StatTile label="Avg">
         {s.avgMs.toFixed(1)} ms
         {compare && <TrendDelta cur={s.avgMs} prior={s.priorAvgMs} kind="lowerBetter" />}
@@ -162,8 +169,9 @@ export function StmtTrendSection({ detail, compare = false, onZoom, onZoomReset 
       series: view?.callsPerSec ?? [] },
     { key: 'errors', title: dbTrendPanelTitle('Errors / min', detail.trendBucketSec), unit: 'short',
       role: 'error' as const, series: view?.errors ?? [] },
-    { key: 'p95', title: dbTrendPanelTitle('P95 latency', detail.trendBucketSec), unit: 'ms', role: 'data' as const,
-      series: view?.p95Ms ?? [] },
+    // v0.10.1958 — süre paneli medyan + p95 (iki çizgi); eski sunucuda medyan serisi boş kalır.
+    { key: 'p95', title: dbTrendPanelTitle('Latency · median, p95', detail.trendBucketSec), unit: 'ms', role: 'data' as const,
+      series: view?.p95Ms ?? [], extra: view?.p50Ms },
   ];
   return (
     <div>
@@ -190,7 +198,9 @@ export function StmtTrendSection({ detail, compare = false, onZoom, onZoomReset 
                 syncKey={msSyncKey('statement-detail')}
                 onZoom={onZoom} onZoomReset={onZoomReset}
                 emptyReason={empty}
-                items={[{ name: c.title, role: c.role, series: c.series }]} />
+                items={c.extra
+                  ? [{ name: 'P95', role: c.role, series: c.series }, { name: 'Median', role: c.role, series: c.extra }]
+                  : [{ name: c.title, role: c.role, series: c.series }]} />
             </Suspense>
           </LazyMount>
         ))}

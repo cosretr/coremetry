@@ -160,3 +160,19 @@ describe('1 dk taneli ızgara (trendGrainSec = 60)', () => {
     expect(g.tsNs.length).toBe(360);
   });
 });
+
+// v0.10.1958 (operatör: Dynatrace gibi medyan) — ızgara ve seri medyanı taşır; çağrısız kova NaN.
+describe('medyan serisi', () => {
+  it('p50Ms ızgaraya ve "Median" serisine girer', () => {
+    const T = 1_700_000_100;
+    const g = stmtTrendGrid([
+      { tsNs: T * 1e9, calls: 4, errors: 0, avgMs: 30, p95Ms: 90, p50Ms: 22 },
+      { tsNs: (T + 300) * 1e9, calls: 0, errors: 0, avgMs: 0, p95Ms: 0, p50Ms: 0 },
+    ], T * 1e9, (T + 600) * 1e9, 300)!;
+    expect(g.p50Ms[0]).toBe(22);
+    expect(Number.isNaN(g.p50Ms[1])).toBe(true);
+    const s = stmtTrendSeries(g, (T + 600) * 1e9);
+    expect(s.p50Ms[0].groupKey).toEqual(['Median']);
+    expect(s.p50Ms[0].points[0].value).toBe(22);
+  });
+});

@@ -78,7 +78,7 @@ describe('StmtTrendSection — standart zaman grafiği (v0.10.1058)', () => {
     expect(panels.map(p => [p.title, p.unit, p.items[0].role])).toEqual([
       ['Calls / s · 5 dk', 'reqps', 'data'],
       ['Errors / min · 5 dk', 'short', 'error'],
-      ['P95 latency · 5 dk', 'ms', 'data'],
+      ['Latency · median, p95 · 5 dk', 'ms', 'data'], // v0.10.1958 — medyan + p95
     ]);
     for (const p of panels) expect(p.height).toBe(150);
   });
@@ -105,7 +105,7 @@ describe('StmtTrendSection — standart zaman grafiği (v0.10.1058)', () => {
       trend: [{ tsNs: (T0 + 120) * 1e9, calls: 120, errors: 2, avgMs: 2, p95Ms: 9 }],
       trendBucketSec: 60, trendGrainSec: 60, trendSource: 'db_statement_summary_1m',
     })} />);
-    expect(panels.map(p => p.title)).toEqual(['Calls / s · 1 dk', 'Errors / min · 1 dk', 'P95 latency · 1 dk']);
+    expect(panels.map(p => p.title)).toEqual(['Calls / s · 1 dk', 'Errors / min · 1 dk', 'Latency · median, p95 · 1 dk']);
     const calls = panels[0].items[0].series[0].points;
     expect(calls[0]).toEqual({ time: (T0 + 120) * 1e9, value: 2 });
     expect(panels[1].items[0].series[0].points[0].value).toBe(2);
