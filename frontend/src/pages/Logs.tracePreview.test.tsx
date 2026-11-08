@@ -122,7 +122,7 @@ describe('traceChipView', () => {
   it('beş durum + yükleniyor', () => {
     expect(traceChipView(A, undefined).text).toBe('9c1d07aa…');
     expect(traceChipView(A, { state: 'found', durationMs: 212, errorCount: 0 }).text).toBe('✓ 9c1d07aa… · 212 ms');
-    expect(traceChipView(A, { state: 'pending' }).text).toBe('◌ 9c1d07aa… · henüz yazılmadı');
+    expect(traceChipView(A, { state: 'pending' }).text).toBe('◌ 9c1d07aa…'); // v0.10.1986 — metin yok, açıklama title'da
     expect(traceChipView(A, { state: 'sampled' }).text).toBe('○ 9c1d07aa… · örneklenmiş');
     expect(traceChipView(A, { state: 'error' }).text).toBe('9c1d07aa… · önizleme alınamadı');
     expect(traceChipView(A, { state: 'error' }).text).not.toContain('örneklenmiş');

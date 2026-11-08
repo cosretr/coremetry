@@ -33,7 +33,8 @@ export function traceChipView(id: string, p: TracePreview | undefined): { text: 
       return { text: `${err ? '✕' : '✓'} ${s} · ${fmtTraceDuration(p.durationMs ?? 0)}`, tone: err ? 'err' : 'ok',
         title: `${id} — ${err ? `${p.errorCount} hatalı span` : 'hata yok'} · ${p.spanCount ?? 0} span` };
     }
-    case 'pending': return { text: `◌ ${s} · henüz yazılmadı`, tone: 'muted', title: `${id} — trace henüz ClickHouse'a yazılmadı (log 2 dk'dan yeni)` };
+    // v0.10.1986 (operatör: "henüz yazılmadı yazmasına gerek yok" — dar kolonda kesiliyordu): yalnız ◌ + kimlik; açıklama ipucunda.
+    case 'pending': return { text: `◌ ${s}`, tone: 'muted', title: `${id} — trace henüz ClickHouse'a yazılmadı (log 2 dk'dan yeni)` };
     case 'sampled': return { text: `○ ${s} · örneklenmiş`, tone: 'muted', title: `${id} — trace ClickHouse'ta yok: örneklenmiş (sampling Collector'da)` };
     case 'error': return { text: `${s} · önizleme alınamadı`, tone: 'muted', title: `${id} — önizleme okunamadı (ClickHouse hata / zaman aşımı)` };
     default: return { text: id, tone: 'plain', title: id };
