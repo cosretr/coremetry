@@ -9,7 +9,6 @@ import { operationCardHref } from './endpoints/links'; // v0.10.1491
 import { pickTraceOpCard } from './endpoints/traceOpCardPick'; // v0.10.1503 — gateway kökü → ilk iç servis
 import { useQuery } from '@tanstack/react-query';
 import { Topbar } from '@/components/Topbar';
-import { DrillButton } from '@/components/DrillButton';
 import { Spinner, Empty } from '@/components/Spinner';
 import { perSpanLogSignals, spanEventLogRows, splitGrpcMessageEvents } from '@/lib/traceEventLogs';
 import { STORAGE_KEYS, getRaw, setRaw } from '@/lib/storage';
@@ -34,7 +33,6 @@ import { useAuth } from '@/components/AuthProvider';
 import { useShortcuts } from '@/lib/keyboard';
 import { api } from '@/lib/api';
 import { useUrlRange, DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
-import { logsRangeParam } from '@/lib/logsUrl';
 import { raceGuard } from '@/lib/raceGuard';
 import { useOutsideClose } from '@/lib/useOutsideClose';
 import { useCorrelatedLogs, useOracleTraceLogs, spanHasError, traceLogWindow } from '@/lib/otel';
@@ -520,46 +518,11 @@ function TraceDetailInner() {
                       }}>
                   ↔ Compare trace
                 </Link>
-                {/* Drill to logs scoped to this trace (v0.5.463).
-                    Operators jump trace→logs constantly during
-                    incident investigation; carrying the trace_id
-                    saves the manual paste step. */}
-                {/* v0.9.853 (UX denetimi K3): bu buton pencereyi `from/to`
-                    adlarıyla gönderiyordu — /logs pencereyi YALNIZ `?range=`
-                    ten okur (lib/logsUrl.ts readLogsParams). Sonuç: eski her
-                    trace'te sticky pencere + "log yok". Tek üretici:
-                    logsRangeParam (ns→ms). */}
-                <DrillButton to="/logs"
-                  params={{ traceId: id, range: logsRangeParam(logWin?.from, logWin?.to) }}
-                  title="Logs correlated to this trace_id"
-                  label="≡ Logs" variant="secondary" />
-                {/* v0.10.1240 (operatör onayı; v0.10.347 Correlate kararının yerine
-                    tek düğme) — kök servisin metrikleri, trace penceresinde. */}
-                {root?.serviceName && (
-                  <DrillButton to="/metrics"
-                    params={{ service: root.serviceName, editor: '0', range: logsRangeParam(logWin?.from, logWin?.to) }}
-                    carry={['env']}
-                    title={`${root.serviceName} metrikleri — bu trace'in zaman penceresinde`}
-                    label="∿ Metrics" variant="secondary" />
-                )}
-                {/* v0.10.347 (operatör) — "Correlate ◆" düğmesi ve pivot çekmecesi
-                    KALDIRILDI ("trace'te correlate özelliğine gerek yok"). Loglar
-                    "≡ Logs" ile, metrikler servis sayfasıyla ulaşılır. */}
-                <SharePopover traceId={id} />
-                <Button variant="secondary" size="sm"
-                  onClick={() => exportTraceJSON(id, spans)}
-                  title="Download this trace as JSON (full span list with attributes + events)"
-                  leftIcon={<IconDownload />}>
-                  <span>Export JSON</span>
-                </Button>
-                {/* v0.10.676 — kiosk modu: aynı trace'i (seçili span dahil) kromsuz
-                    tam ekran şelale + loglar olarak YENİ PENCEREDE açar
-                    (pages/TraceKiosk.tsx; kabuk dalı AppShell + lib/kioskMode.ts). */}
-                <Button variant="secondary" size="sm"
-                  onClick={() => window.open(kioskHref, '_blank', 'noopener,noreferrer')}
-                  title="Kiosk: kromsuz tam ekran şelale + loglar, yeni pencerede">
-                  <span>⧉ Kiosk</span>
-                </Button>
+                {/* v0.10.1969 (operatör: "Logs, Metrics düğmelerine gerek yok; Share en sağda, Export ve
+                    Kiosk menünün içinde") — eylem satırında yalnız Compare + Share kalır. */}
+                <SharePopover traceId={id}
+                  onExport={() => exportTraceJSON(id, spans)}
+                  onKiosk={() => window.open(kioskHref, '_blank', 'noopener,noreferrer')} />
               </>
   ) : null;
 
@@ -1126,7 +1089,12 @@ export default function TraceDetailPage() {
 // /api/traces/{id}/share that resolves to a no-auth /public/trace
 // page; useful for handing a trace to support, customers, or anyone
 // outside Coremetry without giving them an account.
-function SharePopover({ traceId }: { traceId: string }) {
+function SharePopover({ traceId, onExport, onKiosk }: {
+  traceId: string;
+  /** v0.10.1969 — eylem satırından menüye taşınan iki eylem (dosya indirme, kiosk penceresi). */
+  onExport?: () => void;
+  onKiosk?: () => void;
+}) {
   const confirm = useConfirm();
   const { user } = useAuth();
   // v0.8.102 — minting a public link is now open to any authenticated
@@ -1396,6 +1364,28 @@ function SharePopover({ traceId }: { traceId: string }) {
             </div>
           )}
             </>
+          )}
+          {(onExport || onKiosk) && (
+            <div className="trace-share__more">
+              <div className="trace-share__more-h">Diğer</div>
+              <div className="trace-share__more-row">
+                {/* v0.10.1969 — eskiden eylem satırındaki ayrı düğmeler. */}
+                {onExport && (
+                  <Button variant="secondary" size="sm" leftIcon={<IconDownload />}
+                    onClick={() => { setOpen(false); onExport(); }}
+                    title="Download this trace as JSON (full span list with attributes + events)">
+                    Export JSON
+                  </Button>
+                )}
+                {onKiosk && (
+                  <Button variant="secondary" size="sm"
+                    onClick={() => { setOpen(false); onKiosk(); }}
+                    title="Kiosk: kromsuz tam ekran şelale + loglar, yeni pencerede">
+                    ⧉ Kiosk
+                  </Button>
+                )}
+              </div>
+            </div>
           )}
         </div>
       )}
