@@ -17,6 +17,8 @@ import { computeCriticalPath } from '@/lib/criticalPath';
 import { traceRepeatGroups, type TraceRepeatGroup } from '@/lib/traceRepeats';
 import { CopyButton } from '@/components/CopyButton';
 import { TraceLogsPanel } from './trace/TraceLogsPanel'; // v0.10.675 — kiosk ile paylaşılan panel
+import { TraceSummaryLine } from './trace/TraceSummaryLine'; // v0.10.1952 — düz cümle özeti
+import { traceSummary } from '@/lib/traceSummary';
 import { TraceMetricsPanel } from './trace/TraceMetricsPanel'; // v0.10.913 — pod metrikleri sekmesi
 import { tracePods } from './trace/traceMetrics';
 import { TRACE_METRICS_URL_PARAMS } from './trace/traceMetricsModel'; // v0.10.968 — sekmeden çıkınca silinecek parametreler
@@ -399,6 +401,8 @@ function TraceDetailInner() {
   // seçim / sekme değişimi yeniden hesaplatmaz.
   const repeatGroups = useMemo(
     () => traceRepeatGroups(spans ?? []), [spans]);
+  // v0.10.1952 — düz cümle özeti (saf; spans + tekrar grupları).
+  const traceSum = useMemo(() => (spans && spans.length > 0 ? traceSummary(spans, repeatGroups) : null), [spans, repeatGroups]);
   const spanMatchIds = useMemo<Set<string> | undefined>(() => {
     const q = spanFilter.trim().toLowerCase();
     if (!q || !spans) return undefined;
@@ -688,6 +692,9 @@ function TraceDetailInner() {
           </div>
           )}
         </section>
+
+        {/* v0.10.1952 (operatör: mockup "düz cümle özeti") — başlık kartının altında tek paragraf. */}
+        {traceSum && <TraceSummaryLine sum={traceSum} />}
 
         {spans === undefined && <Spinner />}
         {spans === null && <Empty icon="⚠" title="Failed to load trace" />}

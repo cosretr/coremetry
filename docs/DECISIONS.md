@@ -13444,3 +13444,14 @@ testleri değişmeden geçer, test değişmesi gerekirse dilim durur ve operatö
   secondary→outline, ghost→ghost; ui sm/xs 24 px → shadcn xs 24 px, yoğunluk birebir). Tailwind `@source`
   eklenmedi (eski sınıf adları utility'lerle çakışmasın). Traces testleri değişmeden geçti.
 
+## 2026-11-08 — v0.10.1952–1955 — Tekil trace iyileştirmeleri (operatör: mockup → "3 ve 4 gerek yok, onlarsız yap")
+
+Mockup "Trace Görünümü" (5 öneri). REDDEDİLDİ — yeniden önerme: sıkıştırılmış şelale (sakin alt ağaçları katlama)
+ve sade span detayı (cümle + temel alanlar, öznitelikler katlı). Uygulananlar ayrı sürümlerde:
+
+- **v0.10.1952 — düz cümle özeti.** Başlık kartının altında tek paragraf (`lib/traceSummary` saf +
+  `pages/trace/TraceSummaryLine`): süre ve hatayla bitiş (HTTP durum), en uzun dış çağrının payı (≥ %20;
+  hedef = DB sistemi / çocuğun servisi / peer.service / server.address), kök hata (hatalı çocuğu olmayan, mesajlı
+  önce; `ORA-00001` gibi kod varsa kod), en büyük tekrar grubu (≥ 5). Kanıtı olmayan parça cümleden düşer.
+  Metinler `trace.sum.*` (TR + EN; Türkçe ekler sayıdan bağımsız kalıplarla).
+
