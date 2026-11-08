@@ -246,7 +246,6 @@ const EN: Catalog = {
   'ai.askCosreSpanHint':  'Ask CoSRE · span — explain this span.',
   // v0.10.1338 (operatör) — log satırı / log artışı düğmeleri de "Ask CoSRE"; ipucu ayırır.
   'ai.askCosreLogHint':      'Ask CoSRE · log — explain this log line.',
-  'ai.askCosreLogSpikeHint': 'Ask CoSRE · log spike — explain this log increase.',
   // v0.10.1367 — Endpoint detay / arama endpoint sonucu: tek tık "Ask CoSRE".
   'ai.askCosreEndpointHint': 'Ask CoSRE · endpoint — what is happening, since when, where the time goes, which errors.',
   // v0.10.1525 — DB span → Databases / ifade detayı (SpanDetail) + ifade listesi adı
@@ -914,7 +913,6 @@ const TR: Catalog = {
   'ai.askCosreSpanHint':  'CoSRE’ye sor · span — bu span’i açıkla.',
   // v0.10.1338
   'ai.askCosreLogHint':      'CoSRE’ye sor · log — bu log satırını açıkla.',
-  'ai.askCosreLogSpikeHint': 'CoSRE’ye sor · log artışı — bu log artışını açıkla.',
   'ai.askCosreEndpointHint': 'CoSRE’ye sor · endpoint — ne oluyor, ne zamandan beri, süre nereye gidiyor, hangi hatalar.', // v0.10.1367
   'dbspan.openDatabase':       "Database'de aç",
   'dbspan.openDatabaseHint':   'Bu veritabanını Databases sayfasında aç (span penceresi)',

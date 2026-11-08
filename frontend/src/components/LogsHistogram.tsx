@@ -5,13 +5,9 @@ import { severityBandOf } from '@/lib/severityBand';
 import { TimeChart, type TimeChartSeries } from '@/components/charts/TimeChart';
 import { seriesPalette } from '@/lib/chartFmt'; // v0.10.510 (D7)
 import { useThemeTick } from '@/lib/useThemeTick';
-import { AIExplainButton } from '@/components/ai/AIExplainButton';
-import { IconSparkles } from '@/components/icons';
-import type { AISubject } from '@/lib/aiSubject';
 import type { LoadPhase } from '@/lib/types';
 import type { ChartTimeRegion } from '@/lib/chart/overlays';
 import { parseServerTiming } from '@/lib/serverTiming';
-import { useT } from '@/lib/i18n'; // v0.10.1338
 
 // LogsHistogram — log volume over time for /logs, the service Logs tab and
 // the anomaly drawer.
@@ -122,7 +118,7 @@ export function histogramFeedsChips(bd: LogsBreakdown, severityFloor: number): b
   return severityFloor === 0 && bd === 'severity';
 }
 
-export function LogsHistogram({ range, filter, onRangeSelect, onZoomReset, onSeries, breakdown, onBreakdown, onSeriesPick, spikeSubject, paused, height = 140, headerLeft, onPhase, cancelToken = 0, regions, onRegionClick }: {
+export function LogsHistogram({ range, filter, onRangeSelect, onZoomReset, onSeries, breakdown, onBreakdown, onSeriesPick, paused, height = 140, headerLeft, onPhase, cancelToken = 0, regions, onRegionClick }: {
   range: { from?: number; to?: number };
   filter: Filter;
   // Drag-select a horizontal span → called with the selection as unix-ns
@@ -145,11 +141,6 @@ export function LogsHistogram({ range, filter, onRangeSelect, onZoomReset, onSer
   // Verilirse başlıkta kırılım seçicisi çizilir (yalnız /logs geçirir;
   // servis Logs sekmesi + anomali çekmecesi seviye modunda kalır).
   onBreakdown?: (b: LogsBreakdown) => void;
-  // v0.10.1284 (AI SRE Faz 1a) — verilirse başlıkta ✨ "Artışı açıkla" (v0.10.1338: "CoSRE’ye sor")
-  // (`log-spike` öznesi; v0.10.1407 — tık CoSRE sohbetine tur gönderir, cevap
-  // LogSpikeCard; kanıt tıkta bir kez okunur). Yalnız /logs
-  // geçirir; copilot kapalıysa düğme kendini gizler (AIExplainButton).
-  spikeSubject?: AISubject;
   // v0.10.1477 — true iken fetch YOK (ebeveynin süzgeç kararı bekleniyor).
   paused?: boolean;
   // v0.10.1501 (/logs Discover dilim 3) — grafik yüksekliği (px). Varsayılan
@@ -182,7 +173,6 @@ export function LogsHistogram({ range, filter, onRangeSelect, onZoomReset, onSer
   // onZoomRef pattern) so a per-render callback identity doesn't re-run the
   // fetch effect.
   const onSeriesRef = useRef(onSeries); onSeriesRef.current = onSeries;
-  const tr = useT(); // v0.10.1338 — "Ask CoSRE" etiketi
   const themeTick = useThemeTick(); // v0.10.510 (D7) — kırılım renkleri paletten; tema değişince yeniden kur
   const bd: LogsBreakdown = breakdown ?? 'severity';
 
@@ -317,13 +307,6 @@ export function LogsHistogram({ range, filter, onRangeSelect, onZoomReset, onSer
         {/* The hand-drawn version's only hint that it was draggable was a
             crosshair cursor. Say it. */}
         <span className={headerLeft ? 'lh-hint' : undefined}>
-          {spikeSubject && !degraded && (
-            <>
-              <AIExplainButton size="xs" subject={spikeSubject}
-                title={tr('ai.askCosreLogSpikeHint')}
-                label={<><IconSparkles /> <span>{tr('ai.askCosre')}</span></>} />{' '}
-            </>
-          )}
           {totals.ratePct !== null && totals.error > 0 && `${fmtPct(totals.ratePct)} hata · `}
           {/* v0.9.287 — a severity floor narrows the denominator, so the
               rate isn't the error rate any more. Say that instead of

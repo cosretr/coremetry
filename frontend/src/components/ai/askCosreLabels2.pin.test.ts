@@ -40,12 +40,9 @@ describe('Ask CoSRE etiketleri — log / log-spike / kompakt anomali (v0.10.1338
     expect(els[0]).not.toMatch(/Açıkla/);
   });
 
-  it('LogsHistogram artış düğmesi ai.askCosre + ai.askCosreLogSpikeHint', () => {
-    const els = explainButtons(read('components/LogsHistogram.tsx'));
-    expect(els.length).toBe(1);
-    expect(els[0]).toContain("tr('ai.askCosre')");
-    expect(els[0]).toContain("title={tr('ai.askCosreLogSpikeHint')}");
-    expect(els[0]).not.toMatch(/Artışı açıkla/);
+  // v0.10.1967 (operatör: "Burada Ask CoSRE olmasına gerek yok") — log histogramında düğme yok.
+  it('LogsHistogram artış düğmesi kaldırıldı', () => {
+    expect(explainButtons(read('components/LogsHistogram.tsx')).length).toBe(0);
   });
 
   it('streams kompakt "AI" düğmesinin erişilebilir adı ai.askCosre · anomaly', () => {
@@ -76,8 +73,6 @@ describe('Ask CoSRE etiketleri — log / log-spike / kompakt anomali (v0.10.1338
   it('i18n ipuçları iki dilde', () => {
     expect(t('ai.askCosreLogHint', 'en')).toBe('Ask CoSRE · log — explain this log line.');
     expect(t('ai.askCosreLogHint', 'tr')).toBe('CoSRE’ye sor · log — bu log satırını açıkla.');
-    expect(t('ai.askCosreLogSpikeHint', 'en')).toBe('Ask CoSRE · log spike — explain this log increase.');
-    expect(t('ai.askCosreLogSpikeHint', 'tr')).toBe('CoSRE’ye sor · log artışı — bu log artışını açıkla.');
   });
 
   it('aiSubjectTitle log / log-spike = CoSRE’ye sor; aiSubjectTopic eski ifadeyi korur', () => {
