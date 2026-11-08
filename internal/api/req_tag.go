@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -21,6 +22,10 @@ type reqTagWriter struct {
 	http.ResponseWriter
 	tag    string
 	status int
+	// v0.10.1971 — ham sorgu dizesi; YALNIZ ClickHouse kaynak hatasında (bellek / zaman aşımı) loga
+	// yazılır (chResourceQuerySuffix). Prod'da system.query_log yok: patlayan Traces sorgusunun hangi
+	// süzgeç + pencereyle geldiğini görmenin tek yolu bu.
+	rawQuery string
 }
 
 func (w *reqTagWriter) WriteHeader(code int) {
@@ -48,7 +53,7 @@ func (w *reqTagWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 func withReqTag(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		tw := &reqTagWriter{ResponseWriter: w, tag: r.Method + " " + r.URL.Path}
+		tw := &reqTagWriter{ResponseWriter: w, tag: r.Method + " " + r.URL.Path, rawQuery: r.URL.RawQuery}
 		next.ServeHTTP(tw, r)
 		recordHTTPServer(r, tw, time.Since(start)) // v0.10.1422
 	})
@@ -60,6 +65,48 @@ func reqTagSuffix(w http.ResponseWriter) string {
 	for i := 0; i < 8 && w != nil; i++ {
 		if t, ok := w.(*reqTagWriter); ok {
 			return " [" + t.tag + "]"
+		}
+		u, ok := w.(interface{ Unwrap() http.ResponseWriter })
+		if !ok {
+			return ""
+		}
+		w = u.Unwrap()
+	}
+	return ""
+}
+
+// chResourceErr — SAF: ClickHouse bellek sınırı (241 MEMORY_LIMIT_EXCEEDED) ya da sorgu zaman aşımı
+// (159 TIMEOUT_EXCEEDED). İkisi de "bu süzgeç + pencere çok pahalı" der; teşhis için isteğin
+// süzgeçleri gerekir.
+func chResourceErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	m := err.Error()
+	return strings.Contains(m, "code: 241") || strings.Contains(m, "MEMORY_LIMIT_EXCEEDED") ||
+		strings.Contains(m, "code: 159") || strings.Contains(m, "TIMEOUT_EXCEEDED")
+}
+
+// maxLoggedQuery — log satırını sınırlar; Traces süzgeç dizesi bunun çok altında.
+const maxLoggedQuery = 1500
+
+// chResourceQuerySuffix — v0.10.1971: ClickHouse kaynak hatasında " q=<sorgu dizesi>" (kırpılmış),
+// diğer hatalarda "". v0.10.918'in "sorgu dizesi yazılmaz" kuralının TEK istisnası: yalnız bu hata
+// sınıfı, yalnız teşhis için.
+func chResourceQuerySuffix(w http.ResponseWriter, err error) string {
+	if !chResourceErr(err) {
+		return ""
+	}
+	for i := 0; i < 8 && w != nil; i++ {
+		if t, ok := w.(*reqTagWriter); ok {
+			q := t.rawQuery
+			if q == "" {
+				return ""
+			}
+			if len(q) > maxLoggedQuery {
+				q = q[:maxLoggedQuery] + "…"
+			}
+			return " q=" + q
 		}
 		u, ok := w.(interface{ Unwrap() http.ResponseWriter })
 		if !ok {

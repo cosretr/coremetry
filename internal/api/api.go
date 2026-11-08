@@ -10027,7 +10027,7 @@ func writeErr(w http.ResponseWriter, err error) {
 		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 		return
 	}
-	log.Printf("[api] error%s: %v", reqTagSuffix(w), err) // v0.10.918 — uç etiketi (req_tag.go)
+	log.Printf("[api] error%s: %v%s", reqTagSuffix(w), err, chResourceQuerySuffix(w, err)) // v0.10.918 uç etiketi; 1971 CH kaynak hatasında süzgeçler
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusInternalServerError)
 	json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
