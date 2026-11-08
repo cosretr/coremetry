@@ -32,6 +32,7 @@ import {
   TILT0, TILT_MAX, TILT_MIN, wantsLabel, type Galaxy, type Pt, type View,
 } from '@/lib/loginTopology/galaxy';
 import { seedOfIds } from '@/lib/loginTopology/prng';
+import { bigBangWarp, BH_TOTAL, NO_WARP, type Warp } from '@/lib/loginTopology/eggs'; // v0.10.1977
 import { burstSize, pruneSparks, sparkProgress, sparkTargets, spawnSparks, type Spark } from '@/lib/loginTopology/sparks'; // v0.10.1973
 import type { LoginSummaryEdge, LoginSummaryNode } from '@/lib/types';
 
@@ -72,6 +73,8 @@ interface Frame {
   col: Colors; pace: number; hover: number; labels: ReadonlySet<number>;
   /** v0.10.1973 — tıkla gönderilen yıldızlar (kaynak/hedef `hover` kodlamasıyla). */
   sparks: readonly Spark[];
+  /** v0.10.1977 — S R E: kara delik → big bang (yarıçap çarpanı, ek dönüş, delik, parlama). */
+  warp: Warp;
   /** Etiket konmayacak kutu (login kartı), tuval koordinatında; yoksa null. */
   avoid: Box | null;
 }
@@ -85,20 +88,24 @@ function label(ctx: CanvasRenderingContext2D, text: string, x: number, y: number
 
 /** Bir kare: toz → kenarlar → akan noktalar → düğümler (arkadan öne) → etiketler. Düğüm konumlarını döner (isabet testi için). */
 function drawFrame(ctx: CanvasRenderingContext2D, f: Frame): { pos: Pt[]; starPos: (Pt | null)[] } {
-  const { g, v, col, hover } = f;
+  const { g, col, hover } = f;
+  // v0.10.1977 — her konum çarpıtmadan geçer (k: yarıçap, spin: ek açı); normalde k=1, spin=0.
+  const v = f.v, W = f.warp;
+  const P = W.k === 1 && W.spin === 0 ? (r: number, th: number, h: number) => project(v, r, th, h)
+    : (r: number, th: number, h: number) => project(v, r * W.k, th + W.spin * (1 + (1.2 - Math.min(1.2, r))), h * W.k);
   ctx.setTransform(f.dpr, 0, 0, f.dpr, 0, 0);
   ctx.clearRect(0, 0, f.w, f.h);
   const tw = (ph: number, k = 1.3) => (f.still ? 1 : 0.7 + 0.3 * Math.sin(f.tSec * k + ph));
 
   // çekirdek parıltısı
-  const core = project(v, 0, 0, 0);
+  const core = P(0, 0, 0);
   halo(ctx, core.x, core.y, v.R * 0.5, col.star, 0.16 * col.glow);
 
   // yıldız tozu (1–1,5 px kareler: en ucuz çizim)
   ctx.fillStyle = col.star;
   const d = g.dust;
   for (let o = 0; o < d.length; o += 5) {
-    const p = project(v, d[o], d[o + 1], d[o + 2]);
+    const p = P(d[o], d[o + 1], d[o + 2]);
     if (p.x < -3 || p.y < -3 || p.x > f.w + 3 || p.y > f.h + 3) continue;
     ctx.globalAlpha = Math.max(0.04, (0.18 + 0.22 * p.z) * d[o + 3] * tw(d[o + 4]) * (0.6 + col.glow * 0.5));
     const s = 0.8 + 0.7 * depthOf(p.z);
@@ -110,7 +117,7 @@ function drawFrame(ctx: CanvasRenderingContext2D, f: Frame): { pos: Pt[]; starPo
   const starPos: (Pt | null)[] = new Array(sv.length / 5).fill(null);
   const nN = g.nodes.length;
   for (let o = 0; o < sv.length; o += 5) {
-    const p = project(v, sv[o], sv[o + 1], sv[o + 2]);
+    const p = P(sv[o], sv[o + 1], sv[o + 2]);
     if (p.x < -3 || p.y < -3 || p.x > f.w + 3 || p.y > f.h + 3) continue;
     const k = o / 5, focus = hover === nN + k;
     starPos[k] = p;
@@ -123,7 +130,7 @@ function drawFrame(ctx: CanvasRenderingContext2D, f: Frame): { pos: Pt[]; starPo
   }
 
   // düğüm konumları (hafif nefes)
-  const pos = g.nodes.map(nd => project(v, nd.r + (f.still ? 0 : Math.sin(f.tSec * 0.6 + nd.ph) * 0.004), nd.th, nd.h));
+  const pos = g.nodes.map(nd => P(nd.r + (f.still ? 0 : Math.sin(f.tSec * 0.6 + nd.ph) * 0.004), nd.th, nd.h));
 
   // kenarlar
   ctx.strokeStyle = col.arm; ctx.lineWidth = 0.7;
@@ -206,17 +213,35 @@ function drawFrame(ctx: CanvasRenderingContext2D, f: Frame): { pos: Pt[]; starPo
     label(ctx, hn, hp.x + 9, hp.y + 4, col);
   }
   ctx.globalAlpha = 1;
+  // v0.10.1977 — kara delik (koyu disk + turuncu yığılma halkası) ve big bang parlaması.
+  if (W.hole > 0) {
+    const r = v.R * 0.07 * W.hole;
+    halo(ctx, core.x, core.y, r * 3.2, col.flow, 0.55 * W.hole);
+    ctx.globalAlpha = W.hole; ctx.fillStyle = '#000';
+    ctx.beginPath(); ctx.arc(core.x, core.y, r, 0, TAU); ctx.fill();
+    ctx.globalAlpha = 0.8 * W.hole; ctx.strokeStyle = col.flow; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(core.x, core.y, r * 1.15, 0, TAU); ctx.stroke();
+  }
+  if (W.flash > 0) {
+    halo(ctx, core.x, core.y, v.R * (0.15 + 1.4 * (1 - W.flash)), '#ffffff', W.flash);
+    halo(ctx, core.x, core.y, v.R * (0.05 + 0.6 * (1 - W.flash)), col.flow, W.flash * 0.8);
+  }
+  ctx.globalAlpha = 1;
   return { pos, starPos };
 }
 
-export default function TopologyBackdrop({ graph, animated, pace = 0.6, avoidRef }: {
+export default function TopologyBackdrop({ graph, animated, pace = 0.6, avoidRef, bigBang = 0 }: {
   graph: BackdropGraph; animated: boolean;
   /** v0.10.1943 — etiketlerin girmeyeceği öğe (login kartı). */
   avoidRef?: RefObject<HTMLElement | null>;
   /** Toplam throughput temposu ∈ [0,1] (son / 24 sa tepe): dönüş ve akış hızı. */
   pace?: number;
+  /** v0.10.1977 — her artışında kara delik → big bang (LoginPage, S R E). 0 = hiç. */
+  bigBang?: number;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
+  const bangRef = useRef<(() => void) | null>(null);
+  useEffect(() => { if (bigBang > 0) bangRef.current?.(); }, [bigBang]);
   const themeTick = useThemeTick();
   // BİR KEZ: galaksi ilk gelen grafikle kurulur; `graph` sonradan değişse de yeniden kurulmaz.
   const [galaxy] = useState<Galaxy>(() => {
@@ -249,6 +274,10 @@ export default function TopologyBackdrop({ graph, animated, pace = 0.6, avoidRef
     let hover = -1, dragging = false, lx = 0, ly = 0, lt = 0;
     // v0.10.1973 — tık → yıldız: basış konumu/zamanı (sürüklemeden ayırmak için) + son tıklar (hız).
     let sparks: Spark[] = [], downX = 0, downY = 0, downT = 0;
+    // v0.10.1977 — big bang başlangıcı (tSec cinsinden; -1 = yok). Nonce değişince tetiklenir.
+    let bangT0 = -1;
+    const bangHandler = () => { bangT0 = (performance.now() - t0) / 1000; };
+    bangRef.current = bangHandler;
     const clicks: number[] = [];
     const t0 = performance.now();
 
@@ -270,6 +299,7 @@ export default function TopologyBackdrop({ graph, animated, pace = 0.6, avoidRef
         avoid: avoidBox(),
         g: galaxy, v: { angle: st.angle, tilt: st.tilt, cx: w / 2, cy: h / 2, R }, w, h, dpr, tSec, still,
         col, pace: paceRef.current, hover, labels, sparks,
+        warp: bangT0 >= 0 ? bigBangWarp(tSec - bangT0) : NO_WARP,
       }));
     };
     const paintStill = () => paint(0, true);
@@ -285,7 +315,8 @@ export default function TopologyBackdrop({ graph, animated, pace = 0.6, avoidRef
       }
       if (sparks.length) sparks = pruneSparks(sparks, (now - t0) / 1000);
       // yıldız uçarken kare atlanmaz (akıcı uçuş); aksi kare bütçesi aynen
-      if (sparks.length || shouldDraw(now, last)) { last = now; paint((now - t0) / 1000, false); }
+      if (bangT0 >= 0 && (now - t0) / 1000 - bangT0 > BH_TOTAL) bangT0 = -1;
+      if (sparks.length || bangT0 >= 0 || shouldDraw(now, last)) { last = now; paint((now - t0) / 1000, false); }
       raf = requestAnimationFrame(tick);
     };
     const start = () => { if (animated && !raf && !document.hidden) { prev = performance.now(); raf = requestAnimationFrame(tick); } };

@@ -1986,6 +1986,9 @@ tbody td.dt-state.dt-state--loading, [data-density] tbody td.dt-state.dt-state--
 /* v0.10.1909 (Login topoloji arka planı, audit §6.3) — canvas ile kart arasındaki perde.
    v0.10.1920 (operatör: kart sayfayı kaplıyor gibi) — kenar %88 → %45: topoloji kartın
    GÖRÜNEN tek yeri olan kenarlarda soluyordu. Kart opak (koyuda %86 + bulanık), form okunur. */
+/* v0.10.1977 — big bang sonrası SRE sözü: yavaşça belirir, kalır, söner (6,5 sn). */
+.login-egg-quote { animation: login-egg-quote 6.5s ease forwards; text-shadow: 0 1px 12px var(--bg0); }
+@keyframes login-egg-quote { 0% { opacity: 0; transform: translateY(6px); } 15% { opacity: 1; transform: none; } 85% { opacity: 1; } 100% { opacity: 0; } }
 .login-veil {
   background: radial-gradient(ellipse at 50% 50%,
     color-mix(in srgb, var(--bg0) 10%, transparent) 0%,

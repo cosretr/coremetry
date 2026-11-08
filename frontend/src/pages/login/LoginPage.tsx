@@ -1,3 +1,5 @@
+import { createEggDetector, QUOTE_DELAY_MS, QUOTE_SHOW_MS, SRE_QUOTES } from '@/lib/loginTopology/eggs'; // v0.10.1977
+import { useEscLayer } from '@/lib/escLayer';
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, FormEvent } from 'react';
 import { cn } from 'cn';
 import { useAuth } from '@/components/AuthProvider';
@@ -167,6 +169,36 @@ export default function LoginPage() {
   const http = summary.data?.ready ? summary.data.http_24h : undefined;
   const pace = useMemo(() => paceFrom((http?.throughput ?? http?.grpc ?? http?.kafka)?.points.map(p => p.value)), [http]);
 
+  // v0.10.1977 — easter egg'ler (yazı alanı dışındayken): Space × 3 → yalnız galaksi (tekrar Space × 3
+  // ya da Esc geri getirir); S R E → kara delik + big bang. Galaksi yoksa (dar ekran, hareketi azalt…) yok.
+  const [zen, setZen] = useState(false);
+  const [bang, setBang] = useState(0);
+  const eggOn = bd.kind === 'canvas' && bd.animated;
+  useEffect(() => {
+    if (!eggOn) return;
+    const feed = createEggDetector();
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+      const egg = feed(e.key, performance.now());
+      if (egg === 'zen') { e.preventDefault(); setZen(z => !z); }
+      else if (egg === 'bigbang') setBang(n => n + 1);
+      else if (e.key === ' ') e.preventDefault(); // boşluk sayfayı kaydırmasın
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [eggOn]);
+  useEscLayer(zen, () => setZen(false));
+  // Patlamadan sonra galaksi yeniden kurulurken ortada bir SRE sözü (sırayla).
+  const [quote, setQuote] = useState<{ text: string; by: string } | null>(null);
+  useEffect(() => {
+    if (bang === 0) return;
+    const q = SRE_QUOTES[(bang - 1) % SRE_QUOTES.length];
+    const a = window.setTimeout(() => setQuote(q), QUOTE_DELAY_MS);
+    const b = window.setTimeout(() => setQuote(null), QUOTE_DELAY_MS + QUOTE_SHOW_MS);
+    return () => { window.clearTimeout(a); window.clearTimeout(b); };
+  }, [bang]);
+
   const invalidMsg = t('login.invalid');
   const ldapParts = t('login.ldapNote').split('{account}');
 
@@ -180,16 +212,23 @@ export default function LoginPage() {
       {bd.kind === 'canvas' && (
         <>
           <Suspense fallback={null}>
-            <TopologyBackdrop graph={backdropGraph} animated={bd.animated} pace={pace} avoidRef={cardRef} />
+            <TopologyBackdrop graph={backdropGraph} animated={bd.animated} pace={pace} avoidRef={cardRef} bigBang={bang} />
           </Suspense>
-          <div aria-hidden="true" className="login-veil pointer-events-none absolute inset-0" />
+          {!zen && <div aria-hidden="true" className="login-veil pointer-events-none absolute inset-0" />}
         </>
       )}
-      <LoginTopBar />
+      {!zen && <LoginTopBar />}
+      {quote && (
+        <figure role="status" className="login-egg-quote pointer-events-none absolute inset-x-0 top-[18%] z-20 m-0 px-6 text-center">
+          <blockquote className="m-0 text-[length:var(--fs-xl)] font-semibold text-(--text)">“{quote.text}”</blockquote>
+          <figcaption className="mt-2 text-[length:var(--fs-sm)] text-(--text2)">— {quote.by}</figcaption>
+        </figure>
+      )}
       {/* 340px SABİTTİ: 320px'lik viewport'ta form yatay taşıyordu. Tavan aynı,
           taban akışkan. */}
-      <div ref={cardRef} className={cn(
-        'relative z-10 border border-border bg-card shadow-pop',
+      <div ref={cardRef} aria-hidden={zen || undefined} className={cn(
+        'relative z-10 border border-border bg-card shadow-pop transition-opacity duration-500',
+        zen && 'pointer-events-none opacity-0', // v0.10.1977 — Space × 3: yalnız galaksi
         // Koyu şemada kart %86 opak + blur: arkadaki siluet yazıya karışmadan sezilir (açıkta düz).
         bd.kind === 'canvas' && 'dark:bg-card/86 dark:backdrop-blur-[6px]',
         showSide
