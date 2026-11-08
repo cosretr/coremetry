@@ -13430,3 +13430,17 @@ arası çizgiler ekranı kesiyor, 360 dışındaki servisler adsız soluk yıld�
 (`.is-active`) dolu birincil (--accent / --on-accent). Çipler (`.btn-chip`) hap biçimli. shadcn varsayılan buton
 boyu 36 → 32 px. Y4 "dolgusuz ikincil" ve K3 "seçim tonu" pinleri Öneri B'ye güncellendi. Geri dönüş tek commit.
 
+## 2026-11-08 — shadcn geçişi: tek tablo yığını kararı (audit §11 g) = B, Traces dilimi başladı
+
+Operatör: "B'yi yap" — Traces en çok kullanılan sayfa; histogram vs. shadcn'e geçince fonksiyon olarak birebir
+çalışmalı. **TanStack Table GİRMEZ**; bütün tablolar bugünkü `useDataTable` (+ `VirtualTable`) üzerinde kalır,
+`coremetry/DataTable` onu sarar. Gerekçe: ekranda fark yok, TanStack ~90 tabloda URL sıralama / kolon modeli /
+seçim / sunucu sıralama / satır-bağlantı / genişlik hafızası adaptörlerini yeniden bağlamak demekti.
+Traces dilimi kuralları: `VolumeChart` + uPlot sarmalayıcıları taşınmaz; sorgular, URL parametreleri, kayıtlı
+görünümler, sayfa kuralları (zaman en solda, satır=link, kutu kaydırma yok, şerit p50) değişmez; mevcut Traces
+testleri değişmeden geçer, test değişmesi gerekirse dilim durur ve operatöre sorulur; küçük sürümler.
+
+- **v0.10.1951 — dilim 1:** `pages/Traces.tsx`'teki 11 `ui/Button` → `shadcn/button` (primary→default,
+  secondary→outline, ghost→ghost; ui sm/xs 24 px → shadcn xs 24 px, yoğunluk birebir). Tailwind `@source`
+  eklenmedi (eski sınıf adları utility'lerle çakışmasın). Traces testleri değişmeden geçti.
+

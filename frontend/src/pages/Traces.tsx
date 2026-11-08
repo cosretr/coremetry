@@ -31,7 +31,9 @@ import { ServicePicker } from '@/components/ServicePicker';
 import { FilterQueryBox } from '@/components/FilterQueryBox';
 import { TRACES_EXTRA_FILTER_KEYS } from '@/lib/filterQuery'; // v0.10.1115 — op_group anahtar önerisi
 import { FilterGroupBuilder } from '@/components/FilterGroupBuilder';
-import { Button } from '@/components/ui/Button';
+// v0.10.1951 — shadcn Traces dilimi 1 (karar g = B: tablo motoru değişmez): ui Button → shadcn Button.
+// Eşleme: primary→default, secondary→outline, ghost→ghost; ui sm/xs (24 px) → shadcn xs (24 px) — yoğunluk birebir.
+import { Button } from '@/components/shadcn/button';
 import { EnterHint, IconButton, SegmentedControl } from '@/components/ui'; // v0.10.676 — satır-içi kiosk düğmesi; v0.10.914 SegmentedControl
 import { Chip } from '@/components/ui/Chip';
 import { Pager } from '@/components/Pager';
@@ -1308,7 +1310,7 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
             : 'Şuna benzer bir anahtar var:'}{' '}
           <Button
             variant="ghost"
-            size="sm"
+            size="xs"
             onClick={() => setGroupAttr(attrSuggestion.key)}
           >{attrSuggestion.key}</Button>
           {' '}— attribute anahtarları harf duyarlıdır.
@@ -1333,7 +1335,7 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
   const pageActions = (
     <>
       <SavedViewsBar page="traces" variant="compact" size="sm" />
-      <Button variant="secondary" size="sm" onClick={reset}>Reset</Button>
+      <Button variant="outline" size="xs" onClick={reset}>Reset</Button>
       <a className="sec"
       href={`/api/traces/export.csv?${(() => {
         const { from, to } = exportRangeNs;
@@ -1395,7 +1397,7 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
                 { value: 'volume', label: 'Volume' }, { value: 'latency', label: 'Latency' },
               ]} />
               {zoomDepth > 0 && (
-                <Button variant="secondary" size="sm" onClick={clearBrush}
+                <Button variant="outline" size="xs" onClick={clearBrush}
                   title="Zoom back one step (double-click on the chart does the same)">
                   ⤺ Zoom back{zoomDepth > 1 ? ` (${zoomDepth})` : ''}
                 </Button>
@@ -1530,7 +1532,7 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
                   boy) + "Enter ↵" ipucu; son filtrenin (Errors / Root) hemen
                   arkasında, ardından boşluk ve sağ küme (görünüm anahtarı). */}
               <span className="search-go">
-                <Button variant="primary" onClick={() => apply()}>Search</Button>
+                <Button variant="default" onClick={() => apply()}>Search</Button>
                 <EnterHint title="Arama kutusunda Enter" />
               </span>
           {/* v0.10.1088 (operatör: "Traces sayfasındaki service search sol başta
@@ -1585,12 +1587,12 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
                     onChange={e => setHaving(p => p.map((x, j) =>
                       j === i ? { ...x, value: Number(e.target.value) } : x))}
                     style={{ width: 76, fontSize: 12 }} />
-                  <Button variant="secondary" size="sm" aria-label="Koşulu kaldır"
+                  <Button variant="outline" size="xs" aria-label="Koşulu kaldır"
                     onClick={() => setHaving(p => p.filter((_, j) => j !== i))}>✕</Button>
                 </span>
               ))}
               {having.length < 8 && (
-                <Button variant="secondary" size="sm"
+                <Button variant="outline" size="xs"
                   title='Grup metriği eşiği ekle — ör. "Error % > 1 AND P95 ms > 500"'
                   onClick={() => setHaving(p => [...p, { metric: 'errorRate', op: '>', value: 1 }])}>
                   {having.length === 0 ? '＋ Having' : '＋'}
@@ -1616,7 +1618,7 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
                 {s}
               </Chip>
             ))}
-            <Button variant="secondary" size="sm" onClick={() => setFilter({ ...filter, requireServices: [] })} style={{ marginLeft: 'auto' }}>
+            <Button variant="outline" size="xs" onClick={() => setFilter({ ...filter, requireServices: [] })} style={{ marginLeft: 'auto' }}>
               Clear all
             </Button>
           </div>
@@ -1633,7 +1635,7 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
                 AND/OR'u alıyor. Gruplu kip yalnız URL/kayıtlı görünümden
                 (?filterGroup=) gelir ve düz çiplere dönülebilir. */}
             {grouped && (
-              <Button variant="ghost" size="sm"
+              <Button variant="ghost" size="xs"
                 title="Back to the flat filter chips (drops any OR / nested groups)"
                 onClick={() => {
                   setAdvFilters((advGroup?.filters ?? []).filter(f => f.k && f.k.trim()));
@@ -2188,12 +2190,12 @@ function TracesEmptyDetail({ service, search, range, onSwitchView, narrowedFromN
         ) : reason === 'aged' ? (
           <>
             <b style={{ color: 'var(--warn)' }}>{mvSpans!.toLocaleString()}</b> spans recorded for <code>{service}</code> in this window via the 5-min MV, but the raw spans table holds <b>none</b> for it here. The span data aged out past the raw-spans TTL (or never landed) while the MV still holds the rollup.{' '}
-            <Button variant="secondary" size="sm" onClick={onSwitchView} style={{ marginLeft: 4 }}>Switch to Aggregate view →</Button>
+            <Button variant="outline" size="xs" onClick={onSwitchView} style={{ marginLeft: 4 }}>Switch to Aggregate view →</Button>
           </>
         ) : reason === 'unmeasured' ? (
           <>
             <b style={{ color: 'var(--warn)' }}>{mvSpans!.toLocaleString()}</b> spans recorded for <code>{service}</code> in this window via the 5-min MV, but no raw spans match the search. The server could not measure whether raw spans for this service are still stored, so this is either the search predicate or data aged out past the raw-spans TTL.{' '}
-            <Button variant="secondary" size="sm" onClick={onSwitchView} style={{ marginLeft: 4 }}>Switch to Aggregate view →</Button>
+            <Button variant="outline" size="xs" onClick={onSwitchView} style={{ marginLeft: 4 }}>Switch to Aggregate view →</Button>
           </>
         ) : (
           <>Try widening the time range, dropping the service or search filter, or turning off the "Root traces" chip. If even an unfiltered query is empty, check ingest health at <Link to="/system/stats" style={{ color: 'var(--accent2)' }}>system stats</Link>.</>
