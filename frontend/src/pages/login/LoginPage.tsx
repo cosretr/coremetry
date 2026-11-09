@@ -1,3 +1,4 @@
+import { loginStatusLine } from './statusLine'; // v0.10.1994
 import { BH_TOTAL, createEggDetector, pickQuote, QUOTE_SHOW_MS, type SreQuote } from '@/lib/loginTopology/eggs'; // v0.10.1977
 import { useEscLayer } from '@/lib/escLayer';
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, FormEvent } from 'react';
@@ -206,6 +207,11 @@ export default function LoginPage() {
     return () => { window.clearTimeout(a); window.clearTimeout(b); };
   }, [bang]);
 
+  // v0.10.1994 (operatör) — sol alt durum satırı: izlenen servis · ClickHouse sıkıştırılmamış · durum.
+  const statusLine = bd.kind === 'canvas'
+    ? loginStatusLine(summary.data, realTopo ? realTopo.nodes.filter(n => n.tier !== 'db' && n.tier !== 'queue').length + (realTopo.stars?.length ?? 0) : 0)
+    : null;
+
   const invalidMsg = t('login.invalid');
   const ldapParts = t('login.ldapNote').split('{account}');
 
@@ -358,6 +364,9 @@ export default function LoginPage() {
           </Suspense>
         )}
       </div>
+      {statusLine && !banging && (
+        <div className="absolute bottom-7 left-10 z-10 text-[length:var(--fs-xs)] text-(--text3)" data-testid="login-status-line">{statusLine}</div>
+      )}
     </div>
   );
 }
