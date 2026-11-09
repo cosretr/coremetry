@@ -70,3 +70,53 @@ func traceRecordsBody(src map[string]any) string {
 	}
 	return b.String()
 }
+
+// ── v0.10.1992 (operatör: listede de görünsün) — dar /logs listesi traceRecords'u taşımaz (yanıt
+// gövdeleri büyük; 500 satır MB'larca eder). Bunun yerine ES her isabet için KISA bir özet hesaplar:
+// ilk 12 öğe, öğe başına 160 karakter, toplam ~1200 — yanıt küçük kalır. ES fetch evresi _source'u
+// zaten yükler; script yalnız alan varsa döngüye girer. Satır açılınca tam doküman (traceRecordsBody).
+
+const traceRecordsSummaryKey = "cm_tr_summary"
+
+const traceRecordsSummaryScript = `def tr = params._source['traceRecords'];
+if (!(tr instanceof List)) { return null; }
+StringBuilder sb = new StringBuilder();
+int n = 0;
+for (def it : tr) {
+  if (!(it instanceof Map)) { continue; }
+  def m = it.get('message');
+  if (m == null) { continue; }
+  String v = m.toString().trim();
+  if (v.isEmpty()) { continue; }
+  if (v.length() > 160) { v = v.substring(0, 160) + '…'; }
+  def md = it.get('metadata');
+  String t = (md instanceof Map && md.get('Type') != null) ? md.get('Type').toString() : '';
+  if (sb.length() > 0) { sb.append(' | '); }
+  sb.append(t.isEmpty() ? v : t + ': ' + v);
+  n++;
+  if (n >= 12 || sb.length() > 1200) { break; }
+}
+return sb.length() == 0 ? null : sb.toString();`
+
+func traceRecordsScriptFields() map[string]any {
+	return map[string]any{
+		traceRecordsSummaryKey: map[string]any{
+			"script": map[string]any{"lang": "painless", "source": traceRecordsSummaryScript},
+		},
+	}
+}
+
+// traceRecordsSummaryField — SAF: isabetin `fields` haritasından özet (ES script alanları dizi döner).
+func traceRecordsSummaryField(dv map[string]any) string {
+	switch v := dv[traceRecordsSummaryKey].(type) {
+	case []any:
+		if len(v) > 0 {
+			if s, ok := v[0].(string); ok {
+				return s
+			}
+		}
+	case string:
+		return v
+	}
+	return ""
+}

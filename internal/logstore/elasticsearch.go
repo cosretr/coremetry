@@ -344,6 +344,8 @@ type ESStore struct {
 	// on plain paging for the life of the process (openPIT is skipped)
 	// instead of burning a doomed PIT round-trip per search.
 	pitDenied atomic.Bool
+	// trScriptOff — v0.10.1992: traceRecords özet script_fields'ı küme reddetti (bir kez; süreç ömrü).
+	trScriptOff atomic.Bool
 	// esVersion — v0.10.1852: bağlantıda okunan `version.number`
 	// (random_sampler ≥ 8.2 kararı, fieldstats_sample.go). samplerDenied —
 	// ES örneklemli gövdeyi reddettiyse süreç ömrü boyunca örneklemesiz yol.
@@ -1586,6 +1588,10 @@ func (s *ESStore) Search(ctx context.Context, f Filter) (*Page, error) {
 		// (es_narrow_source.go); satır açılınca tam doküman FetchDoc ile.
 		searchBody["_source"] = map[string]any{"includes": s.narrowSourceFields(f.SourceFields)}
 		narrow = true
+		// v0.10.1992 — dar listede traceRecords taşınmaz (büyük); kısa özeti ES'te hesaplanır.
+		if !s.trScriptOff.Load() {
+			searchBody["script_fields"] = traceRecordsScriptFields()
+		}
 	}
 	if usePIT {
 		// The PIT carries the index + a frozen segment view, so the index
@@ -1657,6 +1663,14 @@ func (s *ESStore) Search(ctx context.Context, f Filter) (*Page, error) {
 	if res.IsError() {
 		qErr := s.recordQueryError("search", queryIdx, body, res.StatusCode,
 			parseESError("search", res, s.cfg.Index))
+		if narrow && !s.trScriptOff.Load() && res.StatusCode == http.StatusBadRequest && strings.Contains(strings.ToLower(qErr.Error()), "script") {
+			// v0.10.1992 — küme script_fields'ı reddediyor (painless kapalı / izin yok): bu süreçte kapat,
+			// özetsiz tekrar dene (liste eskisi gibi; satır açılınca tam gövde).
+			if s.trScriptOff.CompareAndSwap(false, true) {
+				log.Printf("[logstore-es] traceRecords özet script'i reddedildi — kapatıldı: %v", qErr)
+			}
+			return s.Search(ctx, f)
+		}
 		if retryPlainOnPITDenial(usePIT, res.StatusCode) {
 			// v0.8.237 — operator-reported: PIT search 403'd on a
 			// data-stream cluster (credential covers the "app*"
@@ -3190,6 +3204,10 @@ func (s *ESStore) mapHit(id string, src map[string]any, dv map[string]any, expec
 	if r.Body == "" {
 		// v0.10.1988 — mesaj alanı boş, içerik traceRecords dizisinde (ör. API gateway kayıtları).
 		r.Body = traceRecordsBody(src)
+	}
+	if r.Body == "" {
+		// v0.10.1992 — dar liste: ES'in hesapladığı kısa özet (script_fields).
+		r.Body = traceRecordsSummaryField(dv)
 	}
 	r.SeverityText = readPathAny(src, s.fields.SeverityTx,
 		"log.level", "level", "severity", "severity_text", "SeverityText")

@@ -32,3 +32,17 @@ func TestTraceRecordsBody(t *testing.T) {
 		t.Fatalf("tavan: %d", len(b))
 	}
 }
+
+// v0.10.1992 — dar listede ES script özeti: istek alanı + isabetten okuma.
+func TestTraceRecordsSummaryField(t *testing.T) {
+	sf := traceRecordsScriptFields()
+	if _, ok := sf["cm_tr_summary"]; !ok {
+		t.Fatal("script alanı adı")
+	}
+	if got := traceRecordsSummaryField(map[string]any{"cm_tr_summary": []any{"ClientIp: x | Request: y"}}); got != "ClientIp: x | Request: y" {
+		t.Fatalf("got %q", got)
+	}
+	if traceRecordsSummaryField(map[string]any{}) != "" || traceRecordsSummaryField(nil) != "" {
+		t.Fatal("yoksa boş")
+	}
+}
