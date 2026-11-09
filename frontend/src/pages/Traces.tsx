@@ -34,7 +34,8 @@ import { FilterGroupBuilder } from '@/components/FilterGroupBuilder';
 // v0.10.1951 — shadcn Traces dilimi 1 (karar g = B: tablo motoru değişmez): ui Button → shadcn Button.
 // Eşleme: primary→default, secondary→outline, ghost→ghost; ui sm/xs (24 px) → shadcn xs (24 px) — yoğunluk birebir.
 import { Button } from '@/components/shadcn/button';
-import { EnterHint, IconButton, SegmentedControl } from '@/components/ui'; // v0.10.676 — satır-içi kiosk düğmesi; v0.10.914 SegmentedControl
+import { EnterHint, IconButton } from '@/components/ui'; // v0.10.676 — satır-içi kiosk düğmesi
+import { SegmentedControl } from '@/components/coremetry/SegmentedControl'; // v0.10.1993 — Traces dilimi 2 (shadcn; API aynı)
 import { Chip } from '@/components/ui/Chip';
 import { Pager } from '@/components/Pager';
 import { ColumnManager } from '@/components/ColumnManager';

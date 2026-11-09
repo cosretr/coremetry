@@ -90,7 +90,7 @@ const CEILINGS: Record<string, number> = {
   Field: 19, // Faz 2 dilim 1 R15 (Argo CD): 22 → 19; Faz 2 dilim 1 R16 (Oracle): 23 → 22; Faz 2 dilim 1 R14 (işletim): 24 → 23; Faz 2 dilim 1 R13 (DevOps + MCP): 25 → 24; Faz 2 dilim 1 R12 (AI SRE + Knowledge): 27 → 25; Faz 2 dilim 1 R11 (CoSRE): 29 → 27; Faz 2 dilim 1 R10 (erişim): 30 → 29; R7: 37 → 36; R8: 36 → 31; R9: 31 → 30
   Chip: 34, // Faz 2 dilim 1 R15 (Argo CD): 35 → 34; Faz 2 dilim 1 R11 (CoSRE): 36 → 35
   ConfirmDialog: 20, // Faz 2 dilim 1 R14 (işletim): 22 → 20; Faz 2 dilim 1 R13 (DevOps + MCP): 23 → 22; Faz 2 dilim 1 R12 (AI SRE + Knowledge): 25 → 23; Faz 2 dilim 1 R11 (CoSRE): 28 → 25; Faz 2 dilim 1 R10 (erişim): 31 → 28; R8: 35 → 34; R9: 34 → 31
-  SegmentedControl: 33, // Faz 2 dilim 1 R12 (AI SRE + Knowledge): 34 → 33; Faz 2 dilim 1 R11 (CoSRE): 35 → 34
+  SegmentedControl: 32, // v0.10.1993 Traces dilimi 2: 33 → 32; Faz 2 dilim 1 R12 (AI SRE + Knowledge): 34 → 33; Faz 2 dilim 1 R11 (CoSRE): 35 → 34
   // v0.10.1616 (R8): 31 → 32 — ARTIŞ değil TAŞIMA: coremetry/PageControls
   // (ui/'den değişmeden taşındı, karar k) dar ekran "Filtreler (N)"
   // düğmesini hâlâ DisclosureButton ile çiziyor; ui/ içindeyken sayılmıyordu.
