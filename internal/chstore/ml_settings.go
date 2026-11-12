@@ -131,6 +131,14 @@ type MLQuality struct {
 	FeedbackMaxBoost float64 `json:"feedbackMaxBoost"`
 }
 
+// MLKafkaLagImpactFloor — v0.10.2041 (Operator-reported: "Consumer lag
+// 12'ye çıkması sorun değil"): Kafka consumer lag ML olayının MUTLAK etki
+// tabanı (kayıt). Ürünün Messaging "Genel bakış eşiği" ile AYNI sayı:
+// frontend/src/lib/kafkaMetrics.ts `max_lag` tonu ge(1000, 10000) — "1.000
+// üstü sarı" (frontend/src/lib/kafkaLagFloor.pin.test.ts bu sabiti bu
+// dosyadan okuyup karşılaştırır). Ayar alanı değil; tek yer.
+const MLKafkaLagImpactFloor = 1000
+
 // DefaultMLQuality — makul varsayılanlar.
 func DefaultMLQuality() MLQuality {
 	return MLQuality{ImpactMinRel: 0.2, RegimeHours: 6, ConfirmWindowMin: 10,

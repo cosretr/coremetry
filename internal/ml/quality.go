@@ -87,6 +87,21 @@ func dwellWindow(byB map[int64]float64, start, last, step int64, missingIsZero b
 	return cur, true
 }
 
+// belowImpactFloor — SAF (v0.10.2041): olayın değeri ailenin mutlak etki
+// tabanının altında mı. Bugün yalnız Kafka consumer lag (VM ve Thanos
+// parçası): değer = dedektörün kova ölçüsü, yani
+// max by (servis) (kafka_consumer_records_lag_max) kova sonunda (servisin en
+// kötü partition lag'i, anlık). Taban chstore.MLKafkaLagImpactFloor.
+func belowImpactFloor(ev chstore.MLEvent) bool {
+	if ev.Detector != "metric_kafka" || ev.Direction == "down" {
+		return false
+	}
+	if _, id, _ := splitThanosPart(ev.Code); id != "consumer_lag" {
+		return false
+	}
+	return ev.Observed < chstore.MLKafkaLagImpactFloor
+}
+
 // impactOK — SAF: etki eşiği. Taban 0 iken göreli eşik uygulanmaz.
 func impactOK(baseline, observed float64, q chstore.MLQuality) bool {
 	d := math.Abs(observed - baseline)
@@ -225,6 +240,16 @@ func (t *tracker) setEvent(ev chstore.MLEvent) {
 	t.mu.Unlock()
 }
 
+// openRun — v0.10.2041: taban kimliğin açık bir koşusu var mı (observe'un
+// "taze değil" kuralının tersi; kapanmamış ve son görülme kapanış eşiğinin
+// içinde).
+func (t *tracker) openRun(baseID string, now time.Time, tick time.Duration) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	r := t.runs[baseID]
+	return r != nil && r.closedAt.IsZero() && now.Sub(r.last) <= time.Duration(episodeCloseMisses)*tick
+}
+
 // prevEvent — v0.10.2037: epizodun önceki tikte yazılan hali (contrib kapısı).
 func (t *tracker) prevEvent(epID string) (chstore.MLEvent, bool) {
 	t.mu.Lock()
@@ -307,6 +332,12 @@ func qualityFilter(evs []chstore.MLEvent, cfg chstore.MLConfig, lb *Labels, tr *
 			continue
 		}
 		if !impactOK(ev.Baseline, ev.Observed, q) {
+			sup.Impact++
+			continue
+		}
+		// v0.10.2041 — mutlak etki tabanı (Kafka lag < 1.000 kayıt): yalnız
+		// YENİ olay; açık koşu tabanın altına inse de sürer.
+		if belowImpactFloor(ev) && !tr.openRun(ev.ID, now, tick) {
 			sup.Impact++
 			continue
 		}
