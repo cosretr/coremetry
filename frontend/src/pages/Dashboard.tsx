@@ -1,4 +1,4 @@
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import { useEscLayer } from '@/lib/escLayer';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -6,8 +6,19 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Topbar } from '@/components/Topbar';
 import { Spinner, Empty } from '@/components/Spinner';
 import { Button, IconButton, MenuItem, useConfirm } from '@/components/ui';
+import { LazyMount } from '@/components/LazyMount';
+import { PanelFrameMenu } from '@/components/coremetry/dashboard/PanelFrameMenu';
+import { PanelMenuProvider, usePanelMenuFrame } from '@/components/dashboard/panelMenuHost';
+import { panelChartHeight } from '@/components/dashboard/panelChrome';
+import type { PanelMenuAction } from '@/lib/chart/panelMenu';
+import { copyToClipboard } from '@/lib/clipboard';
+import { absoluteShareHref } from '@/lib/shareUrl';
+import { ShareButton } from '@/components/ShareButton';
+import { encodeRange } from '@/lib/urlState';
+import { metricsExplorerCodeHref } from '@/lib/metricsExplorer/panels';
+import { useAiSubject } from '@/components/ai/useAiSubject';
 import { useAuth } from '@/components/AuthProvider';
-import { PanelRenderer, applyVarsToMetric, applyVarsToSpan, type PanelDataOverride } from '@/components/dashboard/PanelRenderer';
+import { PanelRenderer, applyVarsToMetric, applyVarsToSpan, expandPromqlVars, type PanelDataOverride } from '@/components/dashboard/PanelRenderer';
 import { PanelEditor, defaultConfig } from '@/components/dashboard/PanelEditor';
 import { VariableEditor } from '@/components/dashboard/VariableEditor';
 import { VariablesBar } from '@/components/dashboard/VariablesBar';
@@ -20,21 +31,18 @@ import { quantizeWidth } from '@/lib/chartStep';
 import { effectivePanelStep, estimatePanelPx } from '@/components/dashboard/panelStep';
 import type {
   Dashboard, Panel, PanelType, TimeRange,
-  MetricPanelConfig, SpanMetricPanelConfig,
+  MetricPanelConfig, SpanMetricPanelConfig, PromqlPanelConfig,
 } from '@/lib/types';
 import { timeRangeToNs } from '@/lib/utils';
-import { DASHBOARD_RESERVED_PARAMS, isDashboardVariableParam } from '@/lib/dashboardUrl';
+import { DASHBOARD_RESERVED_PARAMS, isDashboardVariableParam, panelShareUrl } from '@/lib/dashboardUrl';
 import { useRefreshHold } from '@/lib/useAutoRefresh';
 import { downloadDashboard } from '@/lib/dashboardIO';
 import { panelToExploreHref } from '@/pages/explore/panelToExplore';
 import { PageShell } from '@/components/coremetry/PageShell';
-// v0.10.1435 — panelden "Bu grafiği açıkla"
-import { AIExplainButton } from '@/components/ai/AIExplainButton';
 import { metricPanelSubject } from '@/components/ai/metricPanelAsk';
 import { useCopilotEnabled } from '@/components/ai/useCopilotEnabled';
 import { ASKABLE_PANEL_TYPES, dashboardPanelAsk } from '@/components/dashboard/panelAsk';
 import { dashboardPanelLoc, formatAiParam } from '@/lib/aiSubject';
-import { t } from '@/lib/i18n';
 import { stageMetricPanelAsk, usePublishPageOverlay } from '@/lib/pageContextOverlay';
 
 // Wrapper handles the Suspense requirement of useSearchParams() in App
@@ -99,6 +107,15 @@ function Inner() {
   // tam sayıları hâlâ okunuyor. Düzenleme modu saati DURDURUR (aşağıdaki
   // hold): kaydedilmemiş taslağın üstüne veri çekmek gürültü.
   const kiosk = sp.get('kiosk') === '1';
+  // v0.10.1998 (dilim 3.4) — tek panel görünümü (?panel=<id>), router üzerinden.
+  const soloId = sp.get('panel');
+  const setSolo = useCallback((pid: string | null) => {
+    setSp(prev => {
+      const next = new URLSearchParams(prev);
+      if (pid) next.set('panel', pid); else next.delete('panel');
+      return next;
+    }, { replace: true });
+  }, [setSp]);
   const setKiosk = useCallback((on: boolean) => {
     setSp(prev => {
       const next = new URLSearchParams(prev);
@@ -467,6 +484,10 @@ function Inner() {
                 title="TV/kiosk modu — sol menüyü gizler, panoyu tam genişliğe açar. ESC ile çıkılır.">
                 ⛶ TV
               </Button>
+              {/* v0.10.1998 (dilim 3.4) — pano bağlantısı: değişkenler + aralık
+                  (mutlak zamana sabitlenir) + kiosk/tek panel aynı URL'de. */}
+              <ShareButton size="sm" label="Paylaş" copiedLabel="Bağlantı kopyalandı"
+                title="Pano bağlantısını kopyala — zaman penceresi mutlak zamana sabitlenir" />
               {/* Export is read-only → available to every role so a
                   viewer can grab a board to share / version. */}
               <Button variant="secondary" onClick={exportDashboard}
@@ -501,7 +522,27 @@ function Inner() {
           />
         )}
 
-        {panels.length === 0 ? (
+        {soloId && !editing ? (
+          <SoloPanel panel={panels.find(p => p.id === soloId && p.type !== 'row')} onBack={() => setSolo(null)}>
+            <DashboardGrid
+              panels={panels.filter(p => p.id === soloId).map(p => ({ ...p, width: 4, height: 'l' }))}
+              range={range}
+              vars={varValues}
+              editing={false}
+              canEdit={isAdmin}
+              onEditPanel={setEditingPanel}
+              onEditRequest={requestEditPanel}
+              onDuplicatePanel={duplicatePanel}
+              onDeletePanel={deletePanel}
+              onMovePanel={movePanel}
+              onSolo={setSolo}
+              onZoom={handleZoom}
+              onZoomReset={handleZoomReset}
+              dashboardId={id}
+              zoomBase={zoomDepth > 0 ? zoomBase : null}
+              bundlePanelData={{}} />
+          </SoloPanel>
+        ) : panels.length === 0 ? (
           <Empty icon="◫" title="No panels yet">
             {editing ? 'Use "+ Add panel" above to start building.'
                      : 'Click Edit to add panels.'}
@@ -518,6 +559,7 @@ function Inner() {
             onDuplicatePanel={duplicatePanel}
             onDeletePanel={deletePanel}
             onMovePanel={movePanel}
+            onSolo={setSolo}
             onZoom={handleZoom}
             onZoomReset={handleZoomReset}
             dashboardId={id}
@@ -539,55 +581,38 @@ function Inner() {
 // RefreshControl (v0.9.779) — v0.10.1430'da SİLİNDİ: auto-refresh global
 // Topbar RefreshPicker'ında (components/RefreshPicker.tsx), şim yok.
 
-// PanelMenu (v0.9.773) — the ⋯ on a dashboard panel's TITLE row.
+// usePanelActions — v0.10.1998 (Faz 3 dilim 3.4; eski PanelMenu v0.9.773).
 //
-// Deliberately NOT a second chart menu. Metric / spanmetric / promql
-// panels are drawn by CorePanel, which already owns a ⋯
-// for chart-level actions (fullscreen / CSV / show query). This one carries
-// PANEL-level actions only — things about the tile, not about the plot — so
-// the two never overlap and the operator learns one rule: outer menu = the
-// panel, inner menu = the picture.
-//
-// Delete stays OUT. It lives on the edit-mode × where an accidental click is
-// already guarded by having entered edit mode on purpose; promoting it into
-// a hover menu that a viewer can also open is how boards lose panels.
-function PanelMenu({ panel, vars, range, canEdit, onDuplicate, onEdit, dashboardId, zoomBase, selected, editing }: {
+// Panel başına TEK eylem listesi; nerede çizileceğine panelMenuHost karar
+// verir (grafik varsa CorePanel'in ⋯'ü, yoksa çerçevenin PanelFrameMenu'sü).
+// Sıra (mockup görünüm 5): sor · Düzenle · Tek başına aç · Explorer'da aç ·
+// Çoğalt · Bağlantıyı kopyala. Silme menüde YOK (v0.9.773 kararı: düzenleme
+// kipindeki × zaten bilinçli giriş ister).
+function usePanelActions({ panel, vars, range, canEdit, onDuplicate, onEdit, onSolo, dashboardId, zoomBase, selected, editing }: {
   panel: Panel;
   vars?: Record<string, string>;
   range: TimeRange;
   canEdit: boolean;
   onDuplicate: (id: string) => void;
   onEdit: (id: string) => void;
-  // v0.10.1435 — "✨ CoSRE'ye sor": konum (pano + panel), zoom tabanı (pencere),
-  // panelin lejantta seçili serileri; düzenlemede YOK (taslak ≠ kayıtlı panel).
+  onSolo: (id: string) => void;
   dashboardId: string;
   zoomBase: TimeRange | null;
   selected: readonly string[];
   editing: boolean;
-}) {
+}): PanelMenuAction[] {
   const navigate = useNavigate();
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLSpanElement | null>(null);
-
+  const [, setAi] = useAiSubject();
+  const [copied, setCopied] = useState(false);
   // A panel's own range override wins — Explore should open the window the
   // operator is actually looking at, not the dashboard's.
-  const exploreHref = panelToExploreHref(panel, vars, panel.rangeOverride ?? range);
+  const win = panel.rangeOverride ?? range;
+  const exploreHref = panelToExploreHref(panel, vars, win)
+    ?? (panel.type === 'promql'
+      ? metricsExplorerCodeHref(expandPromqlVars((panel.config as PromqlPanelConfig).query ?? '', vars), encodeRange(win), (panel.config as PromqlPanelConfig).source)
+      : null);
 
-  // Same keyboard contract CorePanel learned in v0.9.711: promising
-  // role="menu" without ESC and outside-click is lying to a screen reader.
-  // v0.9.950 (E2/Ö28) — menü kendi katmanı; kiosk'un ÜSTÜNDE açılırsa ilk
-  // Esc menüyü kapatır (LIFO), kiosk'tan düşürmez.
-  useEscLayer(open, () => setOpen(false));
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    window.addEventListener('mousedown', onDown);
-    return () => window.removeEventListener('mousedown', onDown);
-  }, [open]);
-
-  // v0.10.1435 — ✨ yalnız zaman serisi panelinde, düzenleme dışında, copilot
+  // v0.10.1435 — sor yalnız zaman serisi panelinde, düzenleme dışında, copilot
   // açıkken ve kimlikler konum kodeğine sığıyorsa.
   const copilotOn = useCopilotEnabled() === true;
   const loc = dashboardPanelLoc(dashboardId, panel.id);
@@ -601,55 +626,27 @@ function PanelMenu({ panel, vars, range, canEdit, onDuplicate, onEdit, dashboard
     return metricPanelSubject(loc, nsWin(range), null, selected);
   }, [askable, loc, panel.rangeOverride, zoomBase, range, selected]);
 
-  // A menu with nothing in it is worse than no menu: a viewer on a stat panel
-  // has neither a convertible query nor edit rights.
-  if (!exploreHref && !canEdit && !askSubject) return null;
-
-  const item = (label: string, onClick: () => void) => (
-    <MenuItem key={label} onClick={() => { setOpen(false); onClick(); }}>
-      {label}
-    </MenuItem>
-  );
-
-  return (
-    <span ref={ref} style={{ position: 'relative', display: 'inline-flex' }}
-      // The card is draggable in edit mode; a press on the menu must not
-      // start a drag (and must not be read as an outside-click either).
-      draggable={false}
-      onMouseDown={e => e.stopPropagation()}>
-      <IconButton className="dash-panel-menu-btn"
-        variant="secondary" size="sm"
-        aria-label="Panel menüsü" aria-haspopup="menu" aria-expanded={open}
-        tooltip="Panel actions"
-        onClick={() => setOpen(o => !o)}
-        icon="⋯" />
-      {open && (
-        <div role="menu" style={{
-          position: 'absolute', top: '100%', right: 0, marginTop: 4,
-          minWidth: 188, background: 'var(--bg2)',
-          border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)',
-          boxShadow: 'var(--shadow-pop)', padding: 4, zIndex: 'var(--z-dropdown)',
-          display: 'flex', flexDirection: 'column', gap: 2,
-        }}>
-          {/* Absent for panel shapes the builder can't express (stat, gauge,
-              markdown, heatmap, raw PromQL) — panelToExploreHref returns null
-              rather than opening a query that isn't this panel's. */}
-          {askSubject && (
-            <span onClick={() => setOpen(false)} style={{ display: 'flex' }}>
-              <AIExplainButton subject={askSubject} size="xs" title={t('ai.askCosreMetricPanelHint')}
-                onAsk={() => {
-                  const ask = dashboardPanelAsk(panel, vars ?? {});
-                  if (ask) stageMetricPanelAsk(formatAiParam(askSubject), ask);
-                }} />
-            </span>
-          )}
-          {exploreHref && item("↗ Explore'da aç", () => navigate(exploreHref))}
-          {canEdit && item('⧉ Çoğalt', () => onDuplicate(panel.id))}
-          {canEdit && item('✎ Düzenle', () => onEdit(panel.id))}
-        </div>
-      )}
-    </span>
-  );
+  const out: PanelMenuAction[] = [];
+  if (askSubject) out.push({ key: 'ask', label: "CoSRE'ye sor", onClick: () => {
+    const ask = dashboardPanelAsk(panel, vars ?? {});
+    if (ask) stageMetricPanelAsk(formatAiParam(askSubject), ask);
+    setAi(askSubject);
+  } });
+  if (canEdit) out.push({ key: 'edit', label: 'Düzenle', onClick: () => onEdit(panel.id) });
+  out.push({ key: 'solo', label: 'Tek başına aç', onClick: () => onSolo(panel.id) });
+  if (exploreHref) out.push({ key: 'explore', label: "Explorer'da aç", onClick: () => navigate(exploreHref) });
+  if (canEdit) out.push({ key: 'dup', label: 'Çoğalt', onClick: () => onDuplicate(panel.id) });
+  out.push({
+    key: 'share', label: copied ? 'Kopyalandı' : 'Bağlantıyı kopyala', keepOpen: true,
+    onClick: () => {
+      void copyToClipboard(absoluteShareHref(panelShareUrl(window.location.href, panel.id), Date.now())).then(ok => {
+        if (!ok) return;
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 1500);
+      });
+    },
+  });
+  return out;
 }
 
 function AddPanelMenu({ onAdd }: { onAdd: (t: PanelType) => void }) {
@@ -716,7 +713,7 @@ function normalizePanels(raw: unknown): Panel[] {
 // add a localStorage layer if users start asking for it).
 function DashboardGrid({
   panels, range, vars, editing, canEdit, onEditPanel, onEditRequest, onDuplicatePanel,
-  onDeletePanel, onMovePanel, onZoom, onZoomReset, dashboardId, zoomBase,
+  onDeletePanel, onMovePanel, onSolo, onZoom, onZoomReset, dashboardId, zoomBase,
   bundlePanelData,
 }: {
   panels: Panel[];
@@ -735,6 +732,8 @@ function DashboardGrid({
   onDuplicatePanel: (id: string) => void;
   onDeletePanel: (id: string) => void;
   onMovePanel: (srcId: string, targetId: string) => void;
+  // v0.10.1998 — "Tek başına aç" (?panel=<id>).
+  onSolo: (id: string) => void;
   // onZoom propagates a chart's drag-to-zoom selection up to
   // the dashboard so the rest of the panels re-fetch for the
   // new range. Receives unix-seconds bounds, parent owns the
@@ -840,116 +839,176 @@ function DashboardGrid({
                 marginTop: g.rowPanel ? 8 : 0,
               }}>
                 {g.panels.map(p => (
-                  <div key={p.id}
-                    className="dash-panel"
-                    draggable={editing}
-                    onDragStart={e => {
-                      if (!editing) return;
-                      e.dataTransfer.setData('text/panel-id', p.id);
-                      e.dataTransfer.effectAllowed = 'move';
-                    }}
-                    onDragOver={e => {
-                      if (!editing) return;
-                      e.preventDefault();
-                      e.dataTransfer.dropEffect = 'move';
-                      if (dropTarget !== p.id) setDropTarget(p.id);
-                    }}
-                    onDragLeave={() => {
-                      if (dropTarget === p.id) setDropTarget(null);
-                    }}
-                    onDrop={e => {
-                      if (!editing) return;
-                      e.preventDefault();
-                      const srcId = e.dataTransfer.getData('text/panel-id');
-                      setDropTarget(null);
-                      if (srcId && srcId !== p.id) onMovePanel(srcId, p.id);
-                    }}
-                    onDragEnd={() => setDropTarget(null)}
-                    style={{
-                      gridColumn: `span ${Math.max(1, Math.min(4, p.width))}`,
-                      background: 'var(--bg2)',
-                      border: dropTarget === p.id
-                        ? '1px dashed var(--accent)'
-                        : '1px solid var(--border)',
-                      borderRadius: 6, padding: 10,
-                      position: 'relative',
-                      cursor: editing ? 'grab' : 'default',
-                      opacity: 1,
-                      transition: 'border-color 0.1s',
-                    }}>
-                    <div className="row-between" style={{
-                      marginBottom: 6, fontSize: 12, color: 'var(--text2)',
-                    }}>
-                      <span className="row gap-2" style={{ minWidth: 0 }}>
-                        {editing && (
-                          <span title="Drag to reorder"
-                            style={{
-                              color: 'var(--text3)', fontSize: 14,
-                              cursor: 'grab', userSelect: 'none',
-                            }}>⋮⋮</span>
-                        )}
-                        <span style={{
-                          fontWeight: 600, color: 'var(--text)',
-                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                        }}>{p.title}</span>
-                        {/* v0.9.773 — operator note. A dashboard is scanned,
-                            so the text lives in a tooltip, not in the card
-                            body where it would push the chart down. */}
-                        {p.description && (
-                          <i className="dash-panel-info" title={p.description}
-                            aria-label={`Panel description: ${p.description}`}>i</i>
-                        )}
-                        {/* v0.6.20 — range-override indicator. When
-                            a panel locks its own window, surface
-                            the preset next to the title so the
-                            operator doesn't wonder why the chart
-                            doesn't move with the Topbar picker.
-                            Empty when default (inherit dashboard
-                            range) — the page-level Topbar already
-                            shows that window. */}
-                        {p.rangeOverride?.preset && (
-                          <span className="badge b-info mono"
-                            title="This panel uses a fixed time range — overrides the dashboard Topbar">
-                            ↻ {p.rangeOverride.preset}
-                          </span>
-                        )}
-                      </span>
-                      <span className="row gap-1">
-                        {editing && (
-                          <>
-                            <Button variant="secondary" size="sm"
-                              onClick={() => onEditPanel(p.id)}>Edit</Button>
-                            <IconButton variant="danger" size="sm" tooltip="Delete panel"
-                              aria-label="Delete panel"
-                              onClick={() => onDeletePanel(p.id)} icon="×" />
-                          </>
-                        )}
-                        <PanelMenu panel={p} vars={vars} range={range} canEdit={canEdit}
-                          onDuplicate={onDuplicatePanel} onEdit={onEditRequest}
-                          dashboardId={dashboardId} zoomBase={zoomBase}
-                          selected={selectedByPanel[p.id] ?? NO_SELECTION} editing={editing} />
-                      </span>
-                    </div>
-                    <PanelRenderer panel={p} range={range} vars={vars}
-                                   syncKey={`dashboard:${dashboardId}`}
-                                   onFocusChange={names => onPanelFocus(p.id, names)}
-                                   onZoom={onZoom}
-                                   onZoomReset={onZoomReset}
-                                   // v0.10.146 — düzenlerken override YOK: bundle kayıtlı doc'un
-                                   // konfigiyle dolar (bundleablePanels doc.panels'a memoize) ve
-                                   // tick edit'te durur; PanelEditor'ün ayrı önizlemesi yok — bu
-                                   // grid paneli ÖNİZLEMENİN kendisi. Override geçilince taslak
-                                   // konfig ekrana hiç yansımıyordu (dolu slot bayat kalır, boş
-                                   // slot "No data"da donar). Edit modunda her panel taslak
-                                   // konfigiyle kendi fetch'ini yapar.
-                                   dataOverride={editing ? undefined : bundlePanelData[p.id]} />
-                  </div>
+                  <PanelCard key={p.id} p={p} range={range} vars={vars} editing={editing} canEdit={canEdit}
+                    dropTarget={dropTarget === p.id}
+                    onDragState={setDropTarget}
+                    onMovePanel={onMovePanel}
+                    onEditPanel={onEditPanel} onEditRequest={onEditRequest}
+                    onDuplicatePanel={onDuplicatePanel} onDeletePanel={onDeletePanel}
+                    onSolo={onSolo}
+                    onZoom={onZoom} onZoomReset={onZoomReset}
+                    dashboardId={dashboardId} zoomBase={zoomBase}
+                    selected={selectedByPanel[p.id] ?? NO_SELECTION}
+                    onPanelFocus={onPanelFocus}
+                    dataOverride={editing ? undefined : bundlePanelData[p.id]} />
                 ))}
               </div>
             )}
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// PanelCard — v0.10.1998 (Faz 3 dilim 3.4). Eski DashboardGrid satır içi
+// kartı + üç değişiklik:
+//   • TEK ⋯: eylemler panelMenuHost bağlamıyla aşağı iner; grafik çizilince
+//     CorePanel'in menüsünde, çizilmezken çerçevenin PanelFrameMenu'sünde.
+//   • LazyMount: görünmeyen panel MOUNT EDİLMEZ, yani kendi isteğini atmaz
+//     (bundle'daki paneller zaten tek istekle gelir; promql / stat / gauge /
+//     top-N / heatmap ekrana yaklaşınca çeker). Kiosk ve düzenleme kipinde de
+//     aynı: TV'de görünmeyen panel istek atmamalı.
+//   • "Tek başına aç": ?panel=<id> (aşağıdaki SoloPanel).
+function PanelCard({
+  p, range, vars, editing, canEdit, dropTarget, onDragState, onMovePanel, onEditPanel, onEditRequest,
+  onDuplicatePanel, onDeletePanel, onSolo, onZoom, onZoomReset, dashboardId, zoomBase, selected, onPanelFocus, dataOverride,
+}: {
+  p: Panel;
+  range: TimeRange;
+  vars?: Record<string, string>;
+  editing: boolean;
+  canEdit: boolean;
+  dropTarget: boolean;
+  onDragState: (id: string | null) => void;
+  onMovePanel: (srcId: string, targetId: string) => void;
+  onEditPanel: (id: string) => void;
+  onEditRequest: (id: string) => void;
+  onDuplicatePanel: (id: string) => void;
+  onDeletePanel: (id: string) => void;
+  onSolo: (id: string) => void;
+  onZoom?: (fromUnixSec: number, toUnixSec: number) => void;
+  onZoomReset?: () => void;
+  dashboardId: string;
+  zoomBase: TimeRange | null;
+  selected: readonly string[];
+  onPanelFocus: (panelId: string, names: string[]) => void;
+  dataOverride: PanelDataOverride;
+}) {
+  const actions = usePanelActions({
+    panel: p, vars, range, canEdit, onDuplicate: onDuplicatePanel, onEdit: onEditRequest, onSolo,
+    dashboardId, zoomBase, selected, editing,
+  });
+  const frame = usePanelMenuFrame();
+  return (
+    <div
+      className="dash-panel"
+      data-panel-id={p.id}
+      draggable={editing}
+      onDragStart={e => {
+        if (!editing) return;
+        e.dataTransfer.setData('text/panel-id', p.id);
+        e.dataTransfer.effectAllowed = 'move';
+      }}
+      onDragOver={e => {
+        if (!editing) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        if (!dropTarget) onDragState(p.id);
+      }}
+      onDragLeave={() => {
+        if (dropTarget) onDragState(null);
+      }}
+      onDrop={e => {
+        if (!editing) return;
+        e.preventDefault();
+        const srcId = e.dataTransfer.getData('text/panel-id');
+        onDragState(null);
+        if (srcId && srcId !== p.id) onMovePanel(srcId, p.id);
+      }}
+      onDragEnd={() => onDragState(null)}
+      style={{
+        gridColumn: `span ${Math.max(1, Math.min(4, p.width))}`,
+        background: 'var(--bg2)',
+        border: dropTarget
+          ? '1px dashed var(--accent)'
+          : '1px solid var(--border)',
+        borderRadius: 6, padding: 10,
+        position: 'relative',
+        cursor: editing ? 'grab' : 'default',
+        opacity: 1,
+        transition: 'border-color 0.1s',
+      }}>
+      <div className="row-between" style={{
+        marginBottom: 6, fontSize: 12, color: 'var(--text2)',
+      }}>
+        <span className="row gap-2" style={{ minWidth: 0 }}>
+          {editing && (
+            <span title="Drag to reorder"
+              style={{
+                color: 'var(--text3)', fontSize: 14,
+                cursor: 'grab', userSelect: 'none',
+              }}>⋮⋮</span>
+          )}
+          <span style={{
+            fontWeight: 600, color: 'var(--text)',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>{p.title}</span>
+          {/* v0.9.773 — operator note. A dashboard is scanned,
+              so the text lives in a tooltip, not in the card
+              body where it would push the chart down. */}
+          {p.description && (
+            <i className="dash-panel-info" title={p.description}
+              aria-label={`Panel description: ${p.description}`}>i</i>
+          )}
+          {/* v0.6.20 — range-override indicator. */}
+          {p.rangeOverride?.preset && (
+            <span className="badge b-info mono"
+              title="This panel uses a fixed time range — overrides the dashboard Topbar">
+              ↻ {p.rangeOverride.preset}
+            </span>
+          )}
+        </span>
+        <span className="row gap-1">
+          {editing && (
+            <>
+              <Button variant="secondary" size="sm"
+                onClick={() => onEditPanel(p.id)}>Edit</Button>
+              <IconButton variant="danger" size="sm" tooltip="Delete panel"
+                aria-label="Delete panel"
+                onClick={() => onDeletePanel(p.id)} icon="×" />
+            </>
+          )}
+          {!frame.hosted && <PanelFrameMenu actions={actions} label={`${p.title || 'Panel'} menüsü`} />}
+        </span>
+      </div>
+      <PanelMenuProvider actions={actions} claim={frame.claim}>
+        <LazyMount minHeight={p.type === 'markdown' ? 40 : panelChartHeight(p.height)}>
+          <PanelRenderer panel={p} range={range} vars={vars}
+            syncKey={`dashboard:${dashboardId}`}
+            onFocusChange={names => onPanelFocus(p.id, names)}
+            onZoom={onZoom}
+            onZoomReset={onZoomReset}
+            // v0.10.146 — düzenlerken override YOK (çağıran undefined geçer):
+            // taslak konfig her panelde kendi fetch'iyle önizlenir.
+            dataOverride={dataOverride} />
+        </LazyMount>
+      </PanelMenuProvider>
+    </div>
+  );
+}
+
+// SoloPanel — v0.10.1998 (Faz 3 dilim 3.4; audit §5.3 "Tam ekran: tek panel
+// URL'i ?panel=<id>"). Panoyu tek panele indirir: tam genişlik, uzun gövde.
+// Değişkenler, aralık ve kiosk aynı URL'de kalır; "Panoya dön" ?panel'i siler.
+function SoloPanel({ panel, children, onBack }: { panel: Panel | undefined; children: ReactNode; onBack: () => void }) {
+  return (
+    <div>
+      <div className="controls" style={{ marginBottom: 10 }}>
+        <Button variant="secondary" size="sm" onClick={onBack}>← Panoya dön</Button>
+        <b>{panel?.title ?? 'Panel bulunamadı'}</b>
+      </div>
+      {panel ? children : <Empty icon="◫" title="Panel bulunamadı">Bağlantıdaki panel bu panoda yok; panoya dönün.</Empty>}
     </div>
   );
 }

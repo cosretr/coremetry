@@ -68,6 +68,9 @@ function DashChart({ series, tail, totalSeries, viz = 'line', unit, syncKey, onZ
   bands?: PanelThresholdBand[];
 }) {
   const h = height ?? panelChartHeight();
+  // v0.10.1998 (Faz 3 dilim 3.4) — pano çerçevesinin eylemleri CorePanel'in
+  // TEK ⋯'üne iner; çerçeve kendi menüsünü bu grafik yaşadıkça çizmez.
+  const menuExtra = usePanelMenuHost();
   const bandsKey = JSON.stringify(bands ?? []);
   const thresholds = useMemo(() => {
     const lines = bandThresholdLines(JSON.parse(bandsKey) as PanelThresholdBand[]);
@@ -113,6 +116,7 @@ function DashChart({ series, tail, totalSeries, viz = 'line', unit, syncKey, onZ
         onZoom={onZoom} onZoomReset={onZoomReset}
         onFocusChange={onFocusChange}
         thresholds={thresholds}
+        menuExtra={menuExtra}
       />
     </Suspense>
   );
@@ -139,6 +143,7 @@ import { tracesPivotHref } from '@/lib/pivotHref';
 import { serviceHref } from '@/lib/serviceHref';
 import { encodeFilters } from '@/lib/urlState';
 import { Link } from 'react-router-dom';
+import { usePanelMenuHost } from './panelMenuHost';
 
 // PanelRenderer dispatches on panel.type. Self-contained — fetches its
 // own data, re-fetches when `range` changes. Errors are surfaced inline

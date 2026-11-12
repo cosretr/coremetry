@@ -22,7 +22,18 @@ export const DASHBOARD_RESERVED_PARAMS: ReadonlySet<string> = new Set([
   'range',   // zaman penceresi (useUrlRange)
   'refresh', // global auto-refresh aralığı (v0.9.779 → v0.10.1430 lib/autoRefresh.ts)
   'kiosk',   // TV/kiosk modu (v0.9.779)
+  'panel',   // tek panel görünümü (v0.10.1998, Faz 3 dilim 3.4)
 ]);
+
+// panelShareUrl — SAF: bu panonun tek panel bağlantısı. Geçerli adresin
+// tüm paramları (aralık, değişkenler, kiosk) korunur; düzenleme kipi düşer
+// (paylaşılan bağlantı alıcıyı düzenlemeye sokmaz).
+export function panelShareUrl(href: string, panelId: string): string {
+  const u = new URL(href);
+  u.searchParams.set('panel', panelId);
+  u.searchParams.delete('edit');
+  return u.toString();
+}
 
 // isDashboardVariableParam — bu param bir pano değişkeninin değeri mi?
 export function isDashboardVariableParam(key: string): boolean {
