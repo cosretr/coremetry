@@ -135,7 +135,17 @@ func (r *Recorder) tick(ctx context.Context) {
 	}
 	recordNewLogTemplates(ctx, r.store.AnomalySensitivityForDetectors().LogTemplateNewOn(),
 		func(ctx context.Context) ([]LogTemplateAnomaly, error) {
-			return DetectNewLogTemplates(ctx, r.store, 2*r.window)
+			found, err := DetectNewLogTemplates(ctx, r.store, 2*r.window)
+			if err != nil {
+				return found, err
+			}
+			// v0.10.2028 — gürültü tabanı (log_template_noise.go): ≥ 20 satır;
+			// batch servislerde yeni kalıp olayı yok. Defter etkilenmez.
+			kept, cut := filterNewTemplateNoise(found, r.store.AnomalySensitivityForDetectors().IsBatchService)
+			if cut > 0 {
+				log.Printf("[anomaly-recorder] new log templates: %d below noise floor (min %d lines; batch services skipped), %d kept", cut, newTemplateEventMinLines, len(kept))
+			}
+			return kept, nil
 		},
 		r.store.UpsertAnomalyEvent)
 
