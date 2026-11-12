@@ -7,6 +7,7 @@ import { Topbar } from '@/components/Topbar';
 import { Spinner, Empty } from '@/components/Spinner';
 import { Button, IconButton, MenuItem, useConfirm } from '@/components/ui';
 import { LazyMount } from '@/components/LazyMount';
+import { useDebouncedValue } from '@/lib/perf/useDebouncedValue';
 import { PanelFrameMenu } from '@/components/coremetry/dashboard/PanelFrameMenu';
 import { DASH_GRID_CLASS, panelSpan, panelSpanClass } from '@/components/coremetry/dashboard/grid';
 import { PanelMenuProvider, usePanelMenuFrame } from '@/components/dashboard/panelMenuHost';
@@ -61,7 +62,9 @@ function Inner() {
   const qc = useQueryClient();
   const { user } = useAuth();
   const id = sp.get('id') ?? '';
-  const startInEdit = sp.get('edit') === '1';
+  // v0.10.2004 (dilim 3.7) — ?edit=1 pano düzenleme, ?edit=<panelId> panel
+  // düzenleyicisi (bölünmüş görünüm); ikisi de düzenleme kipinde açar.
+  const startInEdit = !!sp.get('edit');
 
   // v0.9.429 — zoom-yığını deseni paylaşılan usePageZoomRange hook'unda
   // (Dynatrace-style drag-to-zoom: her panel global range'i yazar, tüm
@@ -72,7 +75,18 @@ function Inner() {
   const [doc, setDoc] = useState<Dashboard | null | undefined>(undefined);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Dashboard | null>(null);
-  const [editingPanel, setEditingPanel] = useState<string | null>(null); // panel id
+  // v0.10.2004 (dilim 3.7) — açık panel düzenleyicisi URL'de (?edit=<id>).
+  const editParam = sp.get('edit');
+  const editingPanel = editParam && editParam !== '1' ? editParam : null;
+  const setEditingPanel = useCallback((pid: string | null) => {
+    setSp(prev => {
+      const next = new URLSearchParams(prev);
+      if (pid) next.set('edit', pid); else next.delete('edit');
+      return next;
+    }, { replace: true });
+  }, [setSp]);
+  // Vazgeç / Esc için düzenleyici açıldığındaki panel (taslağa geri yazılır).
+  const [panelSnapshot, setPanelSnapshot] = useState<Panel | null>(null);
   // v0.9.780 — etiket girdisinin HAM metni. null = dokunulmadı (değer
   // draft.tags'ten türetilir). Ayrı tutulmasının nedeni edit alanının
   // yanında açıklanıyor: türetilmiş değer virgülü yutuyor.
@@ -137,7 +151,8 @@ function Inner() {
       const panels = normalizePanels(d.panels);
       setDraft({ ...d, panels });
       setUndo(emptyUndo());
-      if (startInEdit && user?.role === 'admin') setEditing(true);
+      // v0.10.2004 — editor de (audit §5.3: "?edit=1 editor için de açar").
+      if (startInEdit && (user?.role === 'admin' || user?.role === 'editor')) setEditing(true);
       // v0.10.1996 (Faz 3 dilim 3.2) — kişisel "Son görüntülemeniz";
       // en iyi çaba (hata listeyi bozmaz, kullanıcıya gösterilmez).
       void api.recordDashboardView(d.id).then(
@@ -408,7 +423,17 @@ function Inner() {
     downloadDashboard({ ...draft, panels, variables: effVariables });
   };
 
-  const editingPanelObj = editingPanel ? panels.find(p => p.id === editingPanel) : null;
+  const editingPanelObj = editing && editingPanel ? panels.find(p => p.id === editingPanel) ?? null : null;
+  if (editingPanelObj && panelSnapshot?.id !== editingPanelObj.id) {
+    // Render sırasında tek seferlik anlık görüntü (React "önceki değere göre
+    // durum" deseni): düzenleyici açılırken panelin hâli.
+    setPanelSnapshot(structuredClone(editingPanelObj));
+  }
+  const closePanelEditor = () => { setPanelSnapshot(null); setEditingPanel(null); };
+  const cancelPanelEditor = () => {
+    if (panelSnapshot) setDraft({ ...draft, panels: panels.map(p => (p.id === panelSnapshot.id ? panelSnapshot : p)) });
+    closePanelEditor();
+  };
 
   return (
     <>
@@ -516,7 +541,16 @@ function Inner() {
           />
         )}
 
-        {soloId && !editing ? (
+        {editingPanelObj ? (
+          // v0.10.2004 (dilim 3.7) — bölünmüş görünüm ızgaranın YERİNDE (akışta).
+          <PanelEditor panel={editingPanelObj}
+            dashboardName={draft.name}
+            onChange={updatePanel}
+            onDone={closePanelEditor}
+            onCancel={cancelPanelEditor}
+            onDelete={() => { deletePanel(editingPanelObj.id); closePanelEditor(); }}
+            preview={<PanelPreview panel={editingPanelObj} range={range} vars={varValues} dashboardId={id} />} />
+        ) : soloId && !editing ? (
           <SoloPanel panel={panels.find(p => p.id === soloId && p.type !== 'row')} onBack={() => setSolo(null)}>
             <DashboardGrid
               panels={panels.filter(p => p.id === soloId).map(p => ({ ...p, width: 4, span: 12, height: 'l' }))}
@@ -559,13 +593,6 @@ function Inner() {
             dashboardId={id}
             zoomBase={zoomDepth > 0 ? zoomBase : null}
             bundlePanelData={bundlePanelData} />
-        )}
-
-        {editingPanelObj && (
-          <PanelEditor panel={editingPanelObj}
-            onChange={updatePanel}
-            onClose={() => setEditingPanel(null)}
-            onDelete={() => deletePanel(editingPanelObj.id)} />
         )}
       </PageShell>
     </>
@@ -986,6 +1013,20 @@ function PanelCard({
         </LazyMount>
       </PanelMenuProvider>
     </div>
+  );
+}
+
+// PanelPreview — v0.10.2004 (dilim 3.7; audit §5.4 "Önizleme: canlı, 300 ms
+// gecikmeli; gerçek panel bileşeni çizer"). Taslak panel 300 ms durulunca
+// yeniden çizilir; bundle yok (taslak konfig kendi isteğini atar).
+function PanelPreview({ panel, range, vars, dashboardId }: {
+  panel: Panel; range: TimeRange; vars?: Record<string, string>; dashboardId: string;
+}) {
+  const settled = useDebouncedValue(panel, 300);
+  if (settled.type === 'row') return <Empty icon="◫" title="Satır paneli">Satır yalnız bir başlıktır; önizlenecek veri yok.</Empty>;
+  return (
+    <PanelRenderer panel={{ ...settled, height: settled.height ?? 'l' }} range={range} vars={vars}
+      syncKey={`dashboard-edit:${dashboardId}`} />
   );
 }
 

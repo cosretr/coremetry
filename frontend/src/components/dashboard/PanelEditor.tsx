@@ -1,7 +1,8 @@
 import { UnitSelect } from './UnitSelect'; // v0.10.506 (D9)
 import { MetricNamePicker } from '../MetricNamePicker';
 import { Button, SegmentedControl } from '@/components/ui';
-import { ActionRow } from '@/components/coremetry/ActionRow';
+import type { ReactNode } from 'react';
+import { PanelEditLayout } from '@/components/coremetry/dashboard/PanelEditLayout';
 import { STEP_OPTIONS } from '@/pages/explore/presets';
 import type {
   Panel, PanelType, PanelHeight,
@@ -92,11 +93,22 @@ function StepSelect({ value, onChange }: {
 // PanelEditor renders a form whose fields depend on panel.type. Pure
 // controlled component — the parent owns the panel state and the save
 // flow.
-export function PanelEditor({ panel, onChange, onClose, onDelete }: {
+//
+// v0.10.2004 (Dashboards Faz 3 dilim 3.7; audit §5.4, mockup görünüm 6) —
+// 520 px'lik sabit kutu yerine sayfa içi BÖLÜNMÜŞ görünüm
+// (coremetry/dashboard/PanelEditLayout): solda canlı önizleme (çağıranın
+// `preview`u — gerçek panel bileşeni, 300 ms gecikmeli taslak), sağda bu
+// form. Esc = Vazgeç (açılıştaki hâle döner), Tamam = taslakta kalır
+// (pano Kaydet ile yazılır). URL ?edit=<panelId>.
+export function PanelEditor({ panel, onChange, onDone, onCancel, onDelete, preview, previewFooter, dashboardName }: {
   panel: Panel;
   onChange: (next: Panel) => void;
-  onClose: () => void;
+  onDone: () => void;
+  onCancel: () => void;
   onDelete: () => void;
+  preview: ReactNode;
+  previewFooter?: ReactNode;
+  dashboardName: string;
 }) {
   const update = <K extends keyof Panel>(k: K, v: Panel[K]) =>
     onChange({ ...panel, [k]: v });
@@ -107,25 +119,10 @@ export function PanelEditor({ panel, onChange, onClose, onDelete }: {
   const showHeight = panel.type !== 'row' && panel.type !== 'markdown';
 
   return (
-    <div onClick={onClose} style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
-      display: 'grid', placeItems: 'center', zIndex: 'var(--z-modal)',
-    }}>
-      {/* v0.9.988 (D6.2) — görüntü alanına kelepçeli genişlik; masaüstü
-          (520 < 100vw-32) değişmiyor. */}
-      <div onClick={e => e.stopPropagation()} style={{
-        width: 'min(520px, calc(100vw - 32px))', maxHeight: '90vh', overflow: 'auto',
-        padding: 24, borderRadius: 8,
-        background: 'var(--bg2)', border: '1px solid var(--border)',
-      }}>
-        <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 14 }}>Edit panel</div>
-
-        <Field label="Title">
-          <input value={panel.title}
-            onChange={e => update('title', e.target.value)}
-            style={{ width: '100%' }} />
-        </Field>
-
+    <PanelEditLayout title={panel.title} onTitle={v => update('title', v)} dashboardName={dashboardName}
+      preview={preview} previewFooter={previewFooter}
+      onCancel={onCancel} onDone={onDone} onDelete={onDelete}
+      options={<div>
         {/* v0.9.773 — optional note surfaced as a hoverable ⓘ next to the
             panel title on the dashboard. Blank string is normalized back to
             undefined so clearing the box removes the field rather than
@@ -237,16 +234,8 @@ export function PanelEditor({ panel, onChange, onClose, onDelete }: {
           </Field>
         )}
 
-        {/* v0.9.1007 (M5) — elle `space-between` yerine ActionRow'un
-            `destructive` + `confirm` yuvaları; aynı görsel sonuç, ama
-            sıra artık sözleşme. "Done" çıplak bir <button>du (atom
-            baypası): varyantsız ham element `button {}` element-
-            seviyesi kuralına düşüyor, yani DOLU MAVİ oluyordu. */}
-        <ActionRow
-          destructive={<Button variant="ghost-danger" onClick={onDelete}>Delete panel</Button>}
-          confirm={<Button variant="primary" onClick={onClose}>Done</Button>} />
-      </div>
-    </div>
+        {/* v0.10.2004 — Sil / Vazgeç / Tamam PanelEditLayout başlık satırında. */}
+      </div>} />
   );
 }
 

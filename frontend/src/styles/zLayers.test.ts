@@ -230,7 +230,9 @@ describe('MK2 — yüzey ikili sıraları (kaynak-seviyesi matris)', () => {
 
   it('Toast her modalın ÜSTÜNDE', () => {
     above(['components/ServiceCharts.tsx', 'aria-live'],
-      ['components/dashboard/PanelEditor.tsx', 'position: \'fixed\'']);
+      // v0.10.2004 — PanelEditor modal değil (sayfa içi bölünmüş görünüm);
+      // z-modal temsilcisi CorePanel'in tam ekran kaplaması.
+      ['components/chart/CorePanel.tsx', 'position: \'fixed\', inset: 12']);
   });
 
   it('DEV ölçer (debug) toast\'ın bile ÜSTÜNDE', () => {
