@@ -262,16 +262,13 @@ var errExplainLogsUnconfigured = errors.New("log arka ucu yapılandırılmamış
 // logLineNotFoundMsg — satır yeniden okunamadı (HTTP 404 JSON gövdesi + sohbet).
 const logLineNotFoundMsg = "log satırı yeniden okunamadı (saklama süresi dolmuş ya da kaynak değişmiş olabilir)"
 
-// buildLogLineExplain — v0.10.1405: tek log satırı açıklamasının girdisi, ctx
-// tabanlı (gövde v0.10.1291 handler'ının aynısı). İki çağıran — HTTP düğmesi
-// ve sohbetin açıklama turu (operatör: "Trace ve exception üzerinden çalışan
-// Ask CoSRE açıklamaları güzel ama sanki ayrı drawer hissi, CoSRE
-// bütünselliğine uymuyor.") — aynı explainBuilt'i, yani aynı
-// explainCacheKey(SystemPromptLogLine(), user, "") anahtarını kullanır.
-// body validateLogLineBody'den geçmiş olmalı.
-func (s *Server) buildLogLineExplain(ctx context.Context, body logLineExplainBody) (explainBuilt, error) {
+// rereadLogLine — öznenin satırını logstore'dan yeniden okur (±1 sn, ≤20
+// satır; pod eşlenmemişse pod'suz bir kez daha) ve pod'u alan eşlemesinden
+// çözer. explain-log ile Log Search 6.4'ün explain-log-runbook'u ortak
+// kullanır (v0.10.1291 gövdesinden ayrıldı; davranış aynı).
+func (s *Server) rereadLogLine(ctx context.Context, body logLineExplainBody) (*logstore.LogRecord, bool, string, error) {
 	if s.logs == nil {
-		return explainBuilt{}, errExplainLogsUnconfigured
+		return nil, false, "", errExplainLogsUnconfigured
 	}
 	at := time.Unix(0, body.tsNs)
 	f := logstore.Filter{Service: body.Service, Pod: body.Pod, Env: body.Env,
@@ -283,7 +280,7 @@ func (s *Server) buildLogLineExplain(ctx context.Context, body logLineExplainBod
 		page, err = logstore.SearchWithTimeout(ctx, s.logs, f, logLineReadBudget)
 	}
 	if err != nil {
-		return explainBuilt{}, err
+		return nil, false, "", err
 	}
 	var recs []*logstore.LogRecord
 	if page != nil {
@@ -291,7 +288,7 @@ func (s *Server) buildLogLineExplain(ctx context.Context, body logLineExplainBod
 	}
 	line, exact := pickLogLine(recs, body.tsNs, body.Hash)
 	if line == nil {
-		return explainBuilt{}, &explainNotFoundError{msg: logLineNotFoundMsg, jsonBody: true}
+		return nil, false, "", &explainNotFoundError{msg: logLineNotFoundMsg, jsonBody: true}
 	}
 	var fm logstore.FieldMapping
 	if m, ok := logstore.Unwrap(s.logs).(logstore.FieldMapper); ok {
@@ -300,6 +297,21 @@ func (s *Server) buildLogLineExplain(ctx context.Context, body logLineExplainBod
 	pod := logstore.RoleValue(line, logstore.RolePod, fm)
 	if pod == "" {
 		pod = body.Pod
+	}
+	return line, exact, pod, nil
+}
+
+// buildLogLineExplain — v0.10.1405: tek log satırı açıklamasının girdisi, ctx
+// tabanlı (gövde v0.10.1291 handler'ının aynısı). İki çağıran — HTTP düğmesi
+// ve sohbetin açıklama turu (operatör: "Trace ve exception üzerinden çalışan
+// Ask CoSRE açıklamaları güzel ama sanki ayrı drawer hissi, CoSRE
+// bütünselliğine uymuyor.") — aynı explainBuilt'i, yani aynı
+// explainCacheKey(SystemPromptLogLine(), user, "") anahtarını kullanır.
+// body validateLogLineBody'den geçmiş olmalı.
+func (s *Server) buildLogLineExplain(ctx context.Context, body logLineExplainBody) (explainBuilt, error) {
+	line, exact, pod, err := s.rereadLogLine(ctx, body)
+	if err != nil {
+		return explainBuilt{}, err
 	}
 	in := logLineInput{Line: line, Pod: pod, Exact: exact, Pattern: anomaly.MatchLogPatternName(line.Body)}
 

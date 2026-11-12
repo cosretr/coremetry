@@ -207,6 +207,7 @@ export function LogTable({
   expandedIds,
   onToggleExpand,
   extraExpanded,
+  expandedSection,
   onFilterAdd,
   onFilterExclude,
   onToggleColumn,
@@ -285,6 +286,9 @@ export function LogTable({
   expandedIds?: Set<number>;
   onToggleExpand?: (id: number) => void;
   extraExpanded?: (l: LogRow) => React.ReactNode;
+  // Log Search 6.4 — açılan satırın eylem şeridinin ALTINDA tam genişlik
+  // bölüm (ör. "Runbook ile açıkla" cevap kartı); extraExpanded şerit içidir.
+  expandedSection?: (l: LogRow) => React.ReactNode;
   // Kibana-style "click any field value to filter" (v0.5.229).
   // When set, the expanded row's kv-table renders per-field
   // ⊕ / ⊖ buttons that fold the key:value into the parent's
@@ -439,6 +443,7 @@ export function LogTable({
                   toggle(l.id);
                 }}
                 extraExpanded={extraExpanded}
+                expandedSection={expandedSection}
                 onFilterAdd={onFilterAdd}
                 onFilterExclude={onFilterExclude}
                 onToggleColumn={onToggleColumn}
@@ -480,7 +485,7 @@ function LogLineExplain({ l }: { l: LogRow }) {
 }
 
 function LogRow({
-  l, idx, tableId, cols, colIds, highlightTerms, hideTraceColumn, selected, expanded, onClick, extraExpanded,
+  l, idx, tableId, cols, colIds, highlightTerms, hideTraceColumn, selected, expanded, onClick, extraExpanded, expandedSection,
   onFilterAdd, onFilterExclude, onToggleColumn, onTracePeek, onContextOpen, permalink, rowLines, exceptions = false, renderTrace,
 }: {
   exceptions?: boolean;
@@ -496,6 +501,7 @@ function LogRow({
   expanded: boolean;
   onClick: () => void;
   extraExpanded?: (l: LogRow) => React.ReactNode;
+  expandedSection?: (l: LogRow) => React.ReactNode;
   onFilterAdd?: (key: string, value: string) => void;
   onFilterExclude?: (key: string, value: string) => void;
   onToggleColumn?: (key: string) => void;
@@ -754,6 +760,7 @@ function LogRow({
               )}
               {extraExpanded && extraExpanded(l)}
             </div>
+            {expandedSection && expandedSection(l)}
             {docTab === 'table' ? (
               <>
                 {/* v0.5.323 — if the body looks like JSON (starts

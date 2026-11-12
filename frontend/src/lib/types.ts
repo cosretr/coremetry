@@ -11230,6 +11230,19 @@ export interface ExplainLogsResponse {
   traces: ChatAnswerLink[];
   patterns: LogsExplainPatternLink[];
 }
+// Log Search Faz 6 dilim 6.4 — POST /api/copilot/explain-log-runbook (Go
+// copilot_explain_log_runbook.go). Gövde explain-log öznesiyle aynı alanlar.
+export interface LogRunbookRequest { tsNs: string; service: string; pod: string; traceId: string; hash: string; env: string }
+/** Runbook sözcük eşleşmesi (Go mcptools.RunbookMatch; skor 0-1). */
+export interface LogRunbookMatch { id: string; title: string; href: string; snippet?: string; score: number }
+export interface LogRunbookResponse {
+  explanation: string;
+  exchangeId?: string;
+  matched?: boolean;
+  runbooks: LogRunbookMatch[];
+  runbookError?: boolean;
+  exception?: LogException | null;
+}
 export interface LogPatternsBaseline {
   fromNs: number;
   toNs: number;

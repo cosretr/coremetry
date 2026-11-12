@@ -2299,6 +2299,15 @@ export const api = {
   // Log Search 6.3 — "Bu logları açıkla": sayfanın süzgeci (Desenler ile aynı
   // paramlar) + kullanıcının açtığı satırlar (≤12). Yalnız tıkla; sunucu 2 ES
   // araması yapar (pencere + önceki pencere örneklemi).
+  // Log Search 6.4 — tek satır + exception özeti + runbook eşleşmesi (RAG
+  // kullanmaz). Yalnız tıkla; sunucu satırı 1 ES aramasıyla yeniden okur.
+  explainLogRunbook: (body: import('./types').LogRunbookRequest, signal?: AbortSignal) =>
+    request<import('./types').LogRunbookResponse>('/api/copilot/explain-log-runbook', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal,
+    }),
   explainLogs: (params: LogsParams, rows: import('./types').ExplainLogsRow[], signal?: AbortSignal) =>
     request<import('./types').ExplainLogsResponse>(`/api/copilot/explain-logs?${qs(params)}`, {
       method: 'POST',
