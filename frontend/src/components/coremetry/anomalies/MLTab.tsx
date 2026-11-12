@@ -73,11 +73,13 @@ export function thanosTickText(t: MLThanosTick): string {
 /** v0.10.2053 (D4) — SAF: grup → Problem tik özeti. Canlı kipte açılan /
  *  kapanan sayısı (izleyici de görür); kapalıyken gölge sayacı. Boş = satır yok. */
 export function groupTickText(t: MLTickStatus): string {
+  // v0.10.2058: tek sinyal kolu yalnız gölgede — her iki kipte ayrı sayaç
+  const single = t.shadowSingleWouldOpen ? ` · tek sinyal: ${t.shadowSingleWouldOpen} Problem açardı (gölge)` : '';
   if (t.groupLive) {
     const bits = [`${t.groupOpened ?? 0} açıldı`, `${t.groupRefreshed ?? 0} sürüyor`, `${t.groupResolved ?? 0} kapandı`];
-    return `grup Problem'i (canlı): ${bits.join(', ')}${t.shadowGroups ? ` · ${t.shadowGroups} grup değerlendirildi` : ''}`;
+    return `grup Problem'i (canlı): ${bits.join(', ')}${t.shadowGroups ? ` · ${t.shadowGroups} grup değerlendirildi` : ''}${single}`;
   }
-  return t.shadowGroups ? `gölge terfi: ${t.shadowGroups} grup, ${t.shadowWouldOpen ?? 0} Problem açardı (açılmadı)` : '';
+  return t.shadowGroups ? `gölge terfi: ${t.shadowGroups} grup, ${t.shadowWouldOpen ?? 0} Problem açardı (açılmadı)${single}` : '';
 }
 
 /** Son tik + VM bekleme satırı — SAF (test). nowSec: şimdi (unix sn). */

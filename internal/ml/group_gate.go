@@ -76,6 +76,11 @@ type GroupDecision struct {
 	// tazeledi; ProblemID o Problem (detay bağlantısı). Gölgede boş.
 	Live      bool   `json:"live,omitempty"`
 	ProblemID string `json:"problemId,omitempty"`
+	// SingleWouldOpen — v0.10.2058 (Davis tek-olay kolu, YALNIZ GÖLGE): tek
+	// sinyalli grubun güçlü + uzun süren kötüleşmesi "tek sinyal: Problem
+	// açardı". WouldOpen false kalır → canlı yol (group_live.go) bu kararla
+	// Problem AÇMAZ, bildirim gitmez. Canlıya alma ayrı operatör kararı.
+	SingleWouldOpen bool `json:"singleWouldOpen,omitempty"`
 }
 
 // eventRatio — SAF: sapma oranı (≥ 1). Yukarı: gözlenen/taban; aşağı:
@@ -150,6 +155,10 @@ func DecideGroupPromotion(g MLGroup, members []chstore.MLEvent, in GroupGateInpu
 		d.Reason = "açmazdı: batch servisi, yalnız yük sinyali (batch kuralı)"
 	case len(sigs) < groupMinSignals:
 		d.Reason = fmt.Sprintf("açmazdı: tek sinyal (%s), başka sinyal teyit etmedi", strings.Join(d.Signals, ", "))
+		if why, ok := singleSignalShadow(members, inGroup, in, now); ok {
+			d.SingleWouldOpen = true
+			d.Reason += "; tek sinyal: Problem açardı (gölge) — " + why
+		}
 	default:
 		d.WouldOpen = true
 		d.Severity = "critical"
@@ -157,6 +166,80 @@ func DecideGroupPromotion(g MLGroup, members []chstore.MLEvent, in GroupGateInpu
 		d.Reason = fmt.Sprintf("açardı: %d farklı sinyal teyit etti (%s), en büyük sapma %.1f kat", len(sigs), strings.Join(d.Signals, ", "), peak)
 	}
 	return d
+}
+
+// Tek sinyal kolu eşikleri — Davis özne kapısının (evaluator
+// subjectPromotionGate) VARSAYILAN değerleri; yeni ayar yok: 600 sn
+// sürdürme, tabanın 2 katı, taban 0 iken sayım ≥ 20 (countOnlyMinCount).
+var (
+	singleMinSustained = time.Duration(chstore.DefaultAnomalySubjects().PromotionMinSustainedSec) * time.Second
+	singleMinRatio     = chstore.DefaultAnomalySubjects().PromotionMinRatio
+	singleCountOnlyMin = float64(chstore.DefaultAnomalyPromotion().CountOnlyMinCount)
+)
+
+// singleWorsening — SAF: olay kötüleşme yönünde mi; count = değeri bir SAYI
+// mı (taban 0 iken sayım kolu yalnız sayılarda anlamlı). Davis emsali:
+// yalnız hata / gecikme / consumer lag ARTIŞI; yük (hacim, trafik düşüşü,
+// sessizlik), yapı (pod aykırısı, nadir şablon) ve diğer metrik serileri
+// kötüleşme sayılmaz.
+func singleWorsening(e chstore.MLEvent) (worse, count bool) {
+	if e.Direction != "up" {
+		return false, false
+	}
+	switch e.Detector {
+	case detErrorRate, detTraceErrorCount:
+		return true, true
+	case detChangePoint:
+		return e.Level == "error", true
+	case detOpErrorRate:
+		return true, false
+	case detOpLatency, detDependencyLatency, detTraceChangePoint:
+		return true, false
+	case "metric_kafka":
+		_, id, _ := splitThanosPart(e.Code)
+		return id == "consumer_lag", true
+	}
+	return false, false
+}
+
+// singleSignalShadow — SAF: tek sinyalli grubun Davis tek-olay kolu. Açık,
+// batch kuralından geçen bir üye ≥ 600 sn sürmüş, kötüleşme yönünde ve
+// tabanın ≥ 2 katıysa (taban 0: sayım ≥ 20) gölgede "açardı". En güçlü
+// üyenin cümlesi döner.
+func singleSignalShadow(members []chstore.MLEvent, inGroup map[string]bool, in GroupGateInput, now time.Time) (string, bool) {
+	best, bestR := "", 0.0
+	for _, e := range members {
+		if !inGroup[e.ID] || !groupMemberOpen(e, in.Open) || !batchKeep(e, in.IsBatch, in.LoadParts) {
+			continue
+		}
+		worse, count := singleWorsening(e)
+		if !worse {
+			continue
+		}
+		dur := now.Sub(time.Unix(0, e.StartedAt))
+		if dur < singleMinSustained {
+			continue
+		}
+		var why string
+		var r float64
+		if e.Baseline <= 0 {
+			if !count || e.Observed < singleCountOnlyMin {
+				continue
+			}
+			r = math.Inf(1)
+			why = fmt.Sprintf("%s %d dk sürdü, normalde hiç yokken %.0f", e.Detector, int(dur.Minutes()), e.Observed)
+		} else {
+			r = e.Observed / e.Baseline
+			if r < singleMinRatio {
+				continue
+			}
+			why = fmt.Sprintf("%s %d dk sürdü, normalin %.1f katı (kötüleşme)", e.Detector, int(dur.Minutes()), r)
+		}
+		if best == "" || r > bestR {
+			best, bestR = why, r
+		}
+	}
+	return best, best != ""
 }
 
 // memberSignal — SAF: olayın sinyali (eski satırda dedektörden).
@@ -199,7 +282,7 @@ func ReplayGroupDecisions(evs []chstore.MLEvent, slack time.Duration, in GroupGa
 }
 
 // shadowCounts — tik sayaçları.
-type shadowCounts struct{ Groups, WouldOpen int64 }
+type shadowCounts struct{ Groups, WouldOpen, SingleWouldOpen int64 }
 
 // decidedGroup — bu tikte karar verilen grup + üye satırları.
 type decidedGroup struct {
@@ -250,6 +333,9 @@ func decideGroups(kept, running []chstore.MLEvent, slack time.Duration, in Group
 		c.Groups++
 		if d.WouldOpen {
 			c.WouldOpen++
+		}
+		if d.SingleWouldOpen {
+			c.SingleWouldOpen++
 		}
 	}
 	return out, c

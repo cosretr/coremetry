@@ -21,6 +21,11 @@ describe('grup kararı çipi', () => {
     expect(groupProblemChip(dec({ wouldOpen: false, priority: undefined }))).toBeNull();
     expect(groupProblemChip(undefined)).toBeNull();
   });
+  it('v0.10.2058 tek sinyal gölgesi ayrı çip + satır, bağlantısız', () => {
+    const d = dec({ wouldOpen: false, priority: undefined, singleWouldOpen: true, reason: 'açmazdı: tek sinyal (trace); tek sinyal: Problem açardı (gölge) — op_latency 30 dk sürdü, normalin 5.0 katı (kötüleşme)' });
+    expect(groupProblemChip(d)).toEqual({ label: 'Tek sinyal: Problem açardı (gölge)' });
+    expect(groupGateLine(d).startsWith('tek sinyal: açardı (gölge) — ')).toBe(true);
+  });
   it('teknik satır ve en son karar', () => {
     expect(groupGateLine(dec({ live: true, problemId: 'p' }))).toBe('Problem açtı · P2 — açardı: 2 farklı sinyal teyit etti (log, trace)');
     expect(groupGateLine(dec({ wouldOpen: false, priority: undefined, reason: 'açmazdı: tek sinyal (trace)' }))).toBe('açmazdı — açmazdı: tek sinyal (trace)');
@@ -46,5 +51,11 @@ describe('ML tik özeti', () => {
       .toBe("grup Problem'i (canlı): 1 açıldı, 2 sürüyor, 0 kapandı · 4 grup değerlendirildi");
     expect(groupTickText({ ...base, shadowGroups: 4, shadowWouldOpen: 1 })).toBe('gölge terfi: 4 grup, 1 Problem açardı (açılmadı)');
     expect(groupTickText(base)).toBe('');
+  });
+  it('v0.10.2058 tek sinyal gölge sayacı iki kipte de ayrı', () => {
+    expect(groupTickText({ ...base, shadowGroups: 4, shadowWouldOpen: 1, shadowSingleWouldOpen: 2 }))
+      .toBe('gölge terfi: 4 grup, 1 Problem açardı (açılmadı) · tek sinyal: 2 Problem açardı (gölge)');
+    expect(groupTickText({ ...base, groupLive: true, shadowGroups: 3, shadowSingleWouldOpen: 1 }))
+      .toBe("grup Problem'i (canlı): 0 açıldı, 0 sürüyor, 0 kapandı · 3 grup değerlendirildi · tek sinyal: 1 Problem açardı (gölge)");
   });
 });

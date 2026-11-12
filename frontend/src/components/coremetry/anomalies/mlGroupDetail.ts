@@ -38,13 +38,14 @@ export function groupProblemChip(d: MLGroupDecision | undefined): { label: strin
   if (!d) return null;
   if (d.live && d.problemId) return { label: `Problem açtı${d.priority ? ` · ${d.priority}` : ''}`, href: `/inbox?problem=${encodeURIComponent(d.problemId)}` };
   if (d.wouldOpen) return { label: 'Problem açardı (canlı kip kapalı)' };
+  if (d.singleWouldOpen) return { label: 'Tek sinyal: Problem açardı (gölge)' };
   return null;
 }
 
 /** v0.10.2053 (D4) — SAF: teknik ayrıntıdaki "Problem kapısı" satırı. */
 export function groupGateLine(d: MLGroupDecision | undefined): string {
   if (!d) return 'karar yok';
-  const verb = d.live ? 'Problem açtı' : d.wouldOpen ? 'açardı' : 'açmazdı';
+  const verb = d.live ? 'Problem açtı' : d.wouldOpen ? 'açardı' : d.singleWouldOpen ? 'tek sinyal: açardı (gölge)' : 'açmazdı';
   return `${verb}${d.priority ? ` · ${d.priority}` : ''} — ${d.reason}`;
 }
 

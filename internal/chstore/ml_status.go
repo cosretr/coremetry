@@ -75,6 +75,9 @@ type MLTickStatus struct {
 	// karar verilen grup ve kapıdan geçseydi Problem "açardı" sayısı.
 	ShadowGroups    int64 `json:"shadowGroups,omitempty"`
 	ShadowWouldOpen int64 `json:"shadowWouldOpen,omitempty"`
+	// v0.10.2058 — Davis tek-olay kolu (yalnız gölge): tek sinyalli grubun
+	// güçlü + uzun kötüleşmesi "tek sinyal: Problem açardı" sayısı.
+	ShadowSingleWouldOpen int64 `json:"shadowSingleWouldOpen,omitempty"`
 	// v0.10.2052 (D4) — canlı kip: anahtar açık mı (izleyici de görür) ve
 	// bu tikte açılan / tazelenen / kapanan grup Problem'i sayısı.
 	GroupLive      bool  `json:"groupLive,omitempty"`

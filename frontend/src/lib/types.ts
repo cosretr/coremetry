@@ -12236,6 +12236,8 @@ export interface MLGroupDecision {
   group: string; wouldOpen: boolean; rule: string; severity?: string; priority?: string; reason: string; detectors: string[]; at: number;
   /** v0.10.2052 (D4): batch sonrası farklı sinyaller; bitmiş grup; canlı Problem (açtı/tazeledi) ve kimliği. */
   signals?: string[]; finished?: boolean; live?: boolean; problemId?: string;
+  /** v0.10.2058: Davis tek-olay kolu (yalnız gölge) — tek sinyalin güçlü + uzun kötüleşmesi "açardı"; Problem açmaz. */
+  singleWouldOpen?: boolean;
 }
 /** v0.10.1843 — ml.ExplainCard aynası (internal/ml/explain_card.go). Boş impact = satır yok. */
 export interface ExplainLink { label: string; href?: string }
@@ -12363,6 +12365,8 @@ export interface MLTickStatus {
   es?: number; vm?: number; ch?: number;
   /** v0.10.2015 (D3): bu tikte gölge karar verilen grup / Problem "açardı" sayısı. */
   shadowGroups?: number; shadowWouldOpen?: number;
+  /** v0.10.2058: tek sinyal kolu (yalnız gölge) — "Tek sinyal: Problem açardı" sayısı. */
+  shadowSingleWouldOpen?: number;
   /** v0.10.2052 (D4): grup → Problem canlı mı; bu tikte açılan / tazelenen / kapanan grup Problem'i. */
   groupLive?: boolean; groupOpened?: number; groupRefreshed?: number; groupResolved?: number;
   /** v0.10.2037: suçlu seri kırılım sorgusu (yeni açılan / tepesi büyüyen metrik olayı). */
