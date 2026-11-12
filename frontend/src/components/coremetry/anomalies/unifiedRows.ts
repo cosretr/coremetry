@@ -171,3 +171,24 @@ export function sortUnified(rows: UnifiedRow[]): UnifiedRow[] {
 export function isOpenRow(r: Pick<UnifiedRow, 'status'>): boolean {
   return r.status === 'running' || r.status === 'watching';
 }
+
+/** SAF (v0.10.2030; operatör: "Ne oldu" servisi tekrar ediyor): liste hücresi
+ *  cümlesi — servis kendi sütununda; baştaki "<servis>: " / "<servis> " öneki
+ *  atılır, ilk harf büyür. Cümle KURULMAZ, yalnız önek kırpılır. */
+export function stripServicePrefix(text: string, service: string): string {
+  let t = text.trim();
+  const svc = service.trim();
+  if (svc) {
+    for (const pre of [`${svc}: `, `${svc} servisinin `, `${svc} servisi, `, `${svc} `]) {
+      if (t.startsWith(pre)) { t = t.slice(pre.length); break; }
+    }
+  }
+  if (!t) return text;
+  const first = t[0] === 'i' ? 'İ' : t[0].toLocaleUpperCase('tr-TR');
+  return first + t.slice(1);
+}
+
+/** SAF: listedeki "Ne oldu" metni. */
+export function listHeadline(r: Pick<UnifiedRow, 'headline' | 'service'>): string {
+  return stripServicePrefix(r.headline, r.service);
+}

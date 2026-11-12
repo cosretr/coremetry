@@ -15,15 +15,15 @@ import { useAnomalyEvents, useMLEvents } from '@/lib/queries';
 import { fmtClock, fmtDateTime } from '@/lib/utils';
 import type { SignalKind } from '@/lib/signalKind';
 import { groupStatusRank, groupStatusText } from './mlGroupRows';
-import { isOpenRow, unifiedRows, type UnifiedRow } from './unifiedRows';
+import { isOpenRow, listHeadline, unifiedRows, type UnifiedRow } from './unifiedRows';
 
 const fmtTs = (ns: number) => fmtDateTime(new Date(ns / 1e6));
 
 // v0.10.2027 — sütun kimlikleri v0.10.2021 ML listesiyle aynı; fazla sütun yok.
 export const UNIFIED_COLS: ColumnDef<UnifiedRow>[] = [
   { id: 'started', label: 'Başlangıç', width: 110, priority: 1, sortValue: r => r.start },
-  { id: 'service', label: 'Servis', width: 190, minWidth: 140, priority: 1, sortValue: r => r.service, naturalDir: 'asc' },
-  { id: 'headline', label: 'Ne oldu', flex: true, minWidth: 280, sortValue: r => r.headline, naturalDir: 'asc' },
+  { id: 'service', label: 'Servis', width: 260, minWidth: 160, priority: 1, sortValue: r => r.service, naturalDir: 'asc' },
+  { id: 'headline', label: 'Ne oldu', flex: true, minWidth: 280, sortValue: r => listHeadline(r), naturalDir: 'asc' },
   { id: 'signals', label: 'Sinyaller', width: 190, minWidth: 120, priority: 2, sortValue: r => r.signals.length },
   { id: 'status', label: 'Durum', width: 170, minWidth: 130, priority: 1, sortValue: r => groupStatusRank(r.status) * 1e19 + r.start },
 ];
@@ -47,7 +47,7 @@ export function UnifiedAnomalies({ signal = '', onSignal, detectorStatus }: {
     switch (col.id) {
       case 'started': return <span className="font-mono" title={fmtTs(r.start)}>{fmtClock(new Date(r.start / 1e6)).slice(0, 5)}</span>;
       case 'service': return <span className="dt-trunc font-mono" title={r.service}>{r.service || '—'}</span>;
-      case 'headline': return <Link to={r.href} className="dt-trunc" title={r.headline}>{r.headline}</Link>;
+      case 'headline': { const h = listHeadline(r); return <Link to={r.href} className="dt-trunc" title={h}>{h}</Link>; }
       case 'signals': return (
         <span className="inline-flex flex-wrap items-center gap-2">
           {r.signals.map(k => <SignalKindBadge key={k} kind={k} />)}
@@ -75,11 +75,15 @@ export function UnifiedAnomalies({ signal = '', onSignal, detectorStatus }: {
           options={[{ value: '', label: 'Hepsi' }, { value: 'trace', label: 'Trace' }, { value: 'log', label: 'Log' }, { value: 'metric', label: 'Metrik' }]} />
       )}
       {partial && <p className="m-0 text-sm text-[color:var(--warn)]">{partial} okunamadı; liste eksik.</p>}
-      <DataTable<UnifiedRow>
-        storageKey="anomalies-unified" columns={UNIFIED_COLS} rows={open} state={state}
-        getRowHref={r => r.href}
-        sort={{ initial: { id: 'status', dir: 'desc' } }}
-        getRowKey={r => r.key} renderCell={renderCell} ariaLabel="Süren anomaliler" />
+      {/* v0.10.2030 — sayfada DOĞRUDAN duran tablo, diğer liste sayfaları gibi
+          .table-wrap yüzeyinde (Inbox emsali; coremetry DataTable çıplak <table>). */}
+      <div className="table-wrap">
+        <DataTable<UnifiedRow>
+          storageKey="anomalies-unified" columns={UNIFIED_COLS} rows={open} state={state}
+          getRowHref={r => r.href}
+          sort={{ initial: { id: 'status', dir: 'desc' } }}
+          getRowKey={r => r.key} renderCell={renderCell} ariaLabel="Süren anomaliler" />
+      </div>
       {done.length > 0 && (
         <details data-testid="anomalies-done" className="rounded-md border border-border bg-card px-2.5 py-1.5">
           <summary className="cursor-pointer text-sm font-semibold">Bitenler ({done.length})</summary>
