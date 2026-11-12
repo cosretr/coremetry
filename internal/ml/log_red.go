@@ -162,6 +162,13 @@ func judgeMM(cur []float64, med, mad float64, n int, cfg chstore.MLConfig, upOnl
 // baselineDates — SAF: son `days` gün içinde `at` ile aynı takvim sınıfındaki
 // günler; sınıf eşleşmesi 3'ün altındaysa (nadir sınıf, ör. tatil) tüm günler.
 func baselineDates(at time.Time, days int, cal chstore.AnomalyCalendarConfig, loc *time.Location) (dates []string, class string) {
+	dates, class, _ = baselineDatesKind(at, days, cal, loc)
+	return dates, class
+}
+
+// baselineDatesKind — SAF (v0.10.2065, Davis S5): baselineDates + seasonal
+// (false = sınıf eşleşmesi < 3, tüm günlere düşüldü; evidence.baselineKind).
+func baselineDatesKind(at time.Time, days int, cal chstore.AnomalyCalendarConfig, loc *time.Location) (dates []string, class string, seasonal bool) {
 	class = mlDayClass(at.In(loc), cal)
 	var all []string
 	for i := 1; i <= days; i++ {
@@ -172,9 +179,9 @@ func baselineDates(at time.Time, days int, cal chstore.AnomalyCalendarConfig, lo
 		}
 	}
 	if len(dates) < 3 {
-		return all, class
+		return all, class, false
 	}
-	return dates, class
+	return dates, class, true
 }
 
 // halfDayCutoffHour — yarım gün saat desteği (v0.10.1762, operatör 2026-10-31:

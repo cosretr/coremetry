@@ -144,6 +144,7 @@ type CardInput struct {
 	CriticalZ, EffectiveZ, ImpactMinRel                                   float64
 	DwellBuckets, BaselineDays                                            int
 	ConfigHash, DayClass                                                  string
+	BaselineKind                                                          string // v0.10.2065: evidence.baselineKind (seasonal | recent | none; "" = eski olay)
 	Profile                                                               string
 	BusyHour                                                              *bool
 	Now                                                                   time.Time
@@ -792,6 +793,9 @@ func technicalOf(in CardInput, sp detSpec) ExplainTechnical {
 	}
 	if c := dayClassTR[in.DayClass]; c != "" {
 		exp += " · takvim sınıfı: " + c
+	}
+	if k := baselineKindTR[in.BaselineKind]; k != "" {
+		exp += " · " + k
 	}
 	if len(in.Band) > 0 {
 		exp += " · aralık: aynı kova diliminin q25–q75'i"

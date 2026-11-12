@@ -219,6 +219,12 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 		}
 	}
 	deps.meter = nil // tik sonrası yazımlar dedektör ölçümüne girmez
+	// v0.10.2065 (Davis S5): evidence.baselineKind — tek yer, saf takvim hesabı, sorgu yok.
+	if cal, loc := calendarFor(sens); len(all) > 0 {
+		for i := range all {
+			all[i] = withBaselineKind(all[i], cfg.BaselineDays, cal, loc)
+		}
+	}
 	// v0.10.2045 — log ML olayı yalnız katalogdaki servise (log_service_identity.go).
 	all, logSvc := resolveLogServices(tctx, deps, all, start, 2*time.Duration(cfg.BucketSec)*time.Second)
 	steps["detectorsMs"] = time.Since(start).Milliseconds() - steps["labelsMs"]

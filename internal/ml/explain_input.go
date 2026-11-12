@@ -57,7 +57,7 @@ func CardInputFromEvent(ev chstore.MLEvent, now time.Time, loc *time.Location) C
 		Code: ev.Code, Pod: ev.Pod, Stage: ev.Stage, Direction: ev.Direction,
 		StartedAt: time.Unix(0, ev.StartedAt), LastSeen: time.Unix(0, ev.LastSeen), BucketSec: int(ev.WindowSec),
 		Observed: ev.Observed, Baseline: ev.Baseline, Score: ev.Score, Now: now, Loc: loc,
-		DayClass: evStr(m, "dayClass"), ConfigHash: evStr(m, "configHash")}
+		DayClass: evStr(m, "dayClass"), ConfigHash: evStr(m, "configHash"), BaselineKind: evStr(m, "baselineKind")}
 	if in.Signal == "" {
 		in.Signal = chstore.MLDetectorSignal(ev.Detector)
 	}
