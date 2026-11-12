@@ -1,6 +1,6 @@
 import type {
   LogRow, LogsSearchSettings, LogsBusinessField, DisplayPref, // v0.10.1831 / v0.10.1832 / v0.10.1853
-  NativeDetectorsView, NativeOwnSwitches, ShellFeatures, IncidentsSettings,
+  NativeDetectorsView, NativeOwnSwitches, ShellFeatures,
 OracleLogsResponse, CopilotScopeNames, CosreRouteRED,
   McpServersSnapshot, McpServerInput, McpServerTestResult,
   PurgeResult,
@@ -1591,14 +1591,6 @@ export const api = {
   // pre-tunable behaviour.
   getAnomalyPromotion: () =>
     get<AnomalyPromotionConfig>(`/api/settings/anomaly-promotion`),
-  // v0.10.1826 — eski Incidents akışının ana anahtarı (admin; audit incidents.settings).
-  getIncidentsSettings: () =>
-    get<IncidentsSettings>(`/api/settings/incidents`),
-  putIncidentsSettings: (c: IncidentsSettings) =>
-    request<IncidentsSettings>(`/api/settings/incidents`, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ enabled: c.enabled }),
-    }),
   // v0.9.248 — age-based escalation (escalateStaleProblems). Separate
   // key from anomaly promotion because it applies to EVERY Problem,
   // not just promoted anomalies.

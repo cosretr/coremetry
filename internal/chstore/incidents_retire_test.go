@@ -11,7 +11,9 @@ package chstore
 
 import (
 	"context"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -32,18 +34,53 @@ func withIncidentsEnabled(t *testing.T, on bool) {
 	t.Cleanup(func() { SetIncidentsEnabled(prev) })
 }
 
-func TestIncidentsSettingDefaultOff(t *testing.T) {
-	c, ok := parseIncidentsSettings(nil)
-	if !ok || c.Enabled {
-		t.Fatalf("boş blob = kapalı bekleniyordu, %+v ok=%v", c, ok)
+// TestIncidentsSwitchNoProductionWriter — v0.10.2024 (operatör 2026-11-12:
+// prod'da system_settings incidents={"enabled":true} kayıtlı kaldığından
+// boot yüklemesi akışı açıyor, menü Incidents gösterip Anomalies'i
+// gizliyordu; "sen default yap onu"). Anahtar kalktı: repo'da hiçbir
+// üretim (_test olmayan) Go dosyası SetIncidentsEnabled çağırmaz ve
+// `incidents` blobunu okuyan yükleyici yoktur — kayıtlı değer ne olursa
+// olsun IncidentsEnabled() false kalır.
+func TestIncidentsSwitchNoProductionWriter(t *testing.T) {
+	if IncidentsEnabled() {
+		t.Fatal("süreç açılışında akış kapalı olmalı")
 	}
-	if _, ok := parseIncidentsSettings([]byte("{bozuk")); ok {
-		t.Fatal("bozuk blob ok=false dönmeli (son değer korunur)")
-	}
-	// Süreç açılışında (yükleme olmadan) atomic'in sıfır değeri kapalı.
-	var fresh IncidentsSettings
-	if fresh.Enabled {
-		t.Fatal("sıfır değer kapalı olmalı")
+	root := filepath.Join("..", "..")
+	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			switch d.Name() {
+			case "node_modules", "frontend", ".git", ".claude", "vendor":
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(p, ".go") || strings.HasSuffix(p, "_test.go") {
+			return nil
+		}
+		b, err := os.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		src := string(b)
+		n := strings.Count(src, "SetIncidentsEnabled(")
+		if filepath.Base(p) == "incidents_settings.go" && strings.Contains(p, "chstore") {
+			n -= strings.Count(src, "func SetIncidentsEnabled(")
+		}
+		if n > 0 {
+			t.Errorf("%s: üretim kodu SetIncidentsEnabled çağırmamalı", p)
+		}
+		for _, bad := range []string{"LoadIncidentsSettings", "SaveIncidentsSettings", "IncidentsSettingsKey"} {
+			if strings.Contains(src, bad) {
+				t.Errorf("%s: %q geri gelmemeli (kayıtlı anahtar okunmaz)", p, bad)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -150,39 +187,6 @@ func TestLifecycleHookSilentWhenRetired(t *testing.T) {
 		if hooked != want {
 			t.Errorf("enabled=%v: kanca %d kez, istenen %d", on, hooked, want)
 		}
-	}
-}
-
-func TestIncidentsSettingsRoundTrip(t *testing.T) {
-	withIncidentsEnabled(t, false)
-	st, q, a := retireFakeStore()
-	if _, err := st.SaveIncidentsSettings(context.Background(), IncidentsSettings{Enabled: true}); err != nil {
-		t.Fatal(err)
-	}
-	if !IncidentsEnabled() {
-		t.Fatal("kayıt bu pod'u hemen açmalı")
-	}
-	if len(*a) != 1 || (*a)[0][0] != IncidentsSettingsKey || (*a)[0][1] != `{"enabled":true}` {
-		t.Fatalf("yazılan satır beklenmedik: %v (sorgular %v)", *a, *q)
-	}
-	// Okuma: saklı blob kapalı → atomic kapanır.
-	var rq []string
-	rd := &Store{conn: exSnapFakeConn{queries: &rq, row: []any{`{"enabled":false}`}}}
-	if err := rd.LoadIncidentsSettings(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	if IncidentsEnabled() {
-		t.Fatal("saklı kapalı blob atomic'i kapatmalı")
-	}
-	// Blob yok (ErrNoRows) → varsayılan kapalı.
-	SetIncidentsEnabled(true)
-	var nq []string
-	none := &Store{conn: exSnapFakeConn{queries: &nq}}
-	if err := none.LoadIncidentsSettings(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	if IncidentsEnabled() {
-		t.Fatal("blob yokken varsayılan kapalı olmalı")
 	}
 }
 

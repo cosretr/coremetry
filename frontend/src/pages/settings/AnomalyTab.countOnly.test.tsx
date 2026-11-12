@@ -65,10 +65,11 @@ describe('Yeni hata / yeni desen sayım tabanı', () => {
   });
 });
 
-// v0.10.1588 — terfi incident bağlama kutusu: alan yok → işaretli; kaldırınca
-// kayıt açık false gönderir.
+// v0.10.1588 — terfi incident bağlama kutusu. v0.10.2024: Incidents kalıcı
+// emekli — kutu devre dışı + gerekçe, kayıtlı değer (alan yok → işaretli)
+// görünür ve kayıtta değişmeden taşınır.
 describe('Terfi Problem’i incident bağlama', () => {
-  it('alan yok → işaretli; kaldırınca false gider', async () => {
+  it('kalıcı devre dışı; kayıt değeri değiştirmez', async () => {
     host = document.createElement('div');
     document.body.appendChild(host);
     root = createRoot(host);
@@ -77,11 +78,13 @@ describe('Terfi Problem’i incident bağlama', () => {
     const box = host.querySelector<HTMLButtonElement>('button[role="checkbox"][aria-label="Terfi Problem\'i incident\'a bağlansın"]');
     if (!box) throw new Error('kutu yok');
     expect(box.getAttribute('aria-checked')).toBe('true');
-    await act(async () => { box.click(); });
+    expect(box.disabled).toBe(true);
+    expect(host.textContent).toContain('Eski Incidents akışı emekli');
+    expect(host.textContent).not.toContain('Eski Incidents akışı (emekli)');
     const save = [...host.querySelectorAll('button')].find(b => b.textContent?.trim() === 'Save');
     if (!save) throw new Error('Save yok');
     await act(async () => { save.click(); });
     await settle();
-    expect(m.puts[0].attachToIncident).toBe(false);
+    expect(m.puts[0].attachToIncident).toBeUndefined();
   });
 });

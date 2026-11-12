@@ -10296,13 +10296,8 @@ export interface AnomalyCalendarConfig {
 // api.shellFeatures aynası: /api/auth/session · /api/auth/me kullanıcı
 // gövdesinin `features` alanı (kabuk bir kez yükler, polling yok).
 export interface ShellFeatures {
-  /** Eski Incidents akışı açık mı (system_settings incidents.enabled; varsayılan kapalı). */
+  /** Eski Incidents akışı açık mı — v0.10.2024'den beri sunucu hep false gönderir. */
   incidents?: boolean;
-}
-
-// v0.10.1826 — GET/PUT /api/settings/incidents (admin) — Go chstore.IncidentsSettings.
-export interface IncidentsSettings {
-  enabled: boolean;
 }
 
 // Anomali terfi ayarları (GET/PUT /api/settings/anomaly-promotion).

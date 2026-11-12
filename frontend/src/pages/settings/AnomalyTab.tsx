@@ -17,8 +17,7 @@ import { ErrorRampSubsection } from './ErrorRampSubsection';
 import { errorRampErrors, withErrorRampDefaults } from './errorRamp';
 import { MLSubsection } from './MLSubsection';
 import { NativeDetectorsSubsection } from './NativeDetectorsSubsection'; // v0.10.1746 // log ML dilim 0
-import { IncidentsLegacySection } from './IncidentsLegacySection'; // v0.10.1826 — Incidents emekliliği
-import { IncidentsSwitchCtx, useIncidentsSwitch, incidentAttachLockedReason } from './incidentsSwitch';
+import { INCIDENT_ATTACH_LOCKED } from './incidentsSwitch'; // v0.10.2024 — Incidents kalıcı emekli
 
 // Faz 2 dilim 1 R17 — elle yazılmış `<Field><input/><div hint/></Field>`
 // (shared.tsx) → coremetry Field ailesi (`hint`), ham onay kutuları →
@@ -71,17 +70,10 @@ export function AnomalyPromotionTab() {
   const [busy, setBusy] = useState(false);
   const [flash, setFlash] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
-  // v0.10.1826 — eski Incidents akışının ana anahtarı (aile kutuları okur).
-  const [incOn, setIncOn] = useState<boolean | null>(null);
-  const [incErr, setIncErr] = useState<string | null>(null);
-
   useEffect(() => {
     api.getAnomalyPromotion()
       .then(c => setCfg(c))
       .catch(err => setFlash({ kind: 'err', text: humanize(err) }));
-    api.getIncidentsSettings()
-      .then(c => setIncOn(c.enabled === true))
-      .catch(err => setIncErr(humanize(err)));
   }, []);
 
   const save = async () => {
@@ -107,10 +99,7 @@ export function AnomalyPromotionTab() {
     );
   }
 
-  const incLocked = incidentAttachLockedReason(incOn);
-
   return (
-    <IncidentsSwitchCtx.Provider value={incOn}>
     <div className="max-w-[640px]">
       <h2 className={H2}>Anomaly auto-promotion</h2>
       {/* v0.9.827 — DÜRÜSTLÜK DÜZELTMESİ.
@@ -134,9 +123,6 @@ export function AnomalyPromotionTab() {
         eşikleri aşağıdaki <b>Dedektör hassasiyeti</b> bölümünde.
       </p>
 
-      {/* v0.10.1826 — Incidents emekliliği: tek ana anahtar, aile kutularının üstünde. */}
-      <IncidentsLegacySection saved={incOn} onSaved={setIncOn} loadError={incErr} />
-
       <CheckboxField className="mb-4" checked={cfg.enabled}
         onCheckedChange={v => setCfg({ ...cfg, enabled: v })}
         label={<>Güçlü log/iz anomalilerini Problem&apos;e terfi ettir</>} />
@@ -145,8 +131,8 @@ export function AnomalyPromotionTab() {
       <CheckboxField className="mb-4" aria-label="Terfi Problem'i incident'a bağlansın"
         checked={cfg.attachToIncident !== false}
         onCheckedChange={v => setCfg({ ...cfg, attachToIncident: v })}
-        disabled={!cfg.enabled || incLocked !== null}
-        hint={incLocked ?? undefined}
+        disabled
+        hint={INCIDENT_ATTACH_LOCKED}
         label={<>Terfi edilen Problem incident&apos;a bağlansın (aynı servis / komşu; yoksa yeni incident)</>} />
 
       <div data-disabled={!cfg.enabled || undefined} className={cn(STACK, DIM)}>
@@ -233,7 +219,6 @@ export function AnomalyPromotionTab() {
       <hr className={HR} />
       <MLSubsection />
     </div>
-    </IncidentsSwitchCtx.Provider>
   );
 }
 
@@ -365,7 +350,6 @@ const SENSITIVITY_FIELDS: {
 ];
 
 function SensitivitySection() {
-  const incLocked = incidentAttachLockedReason(useIncidentsSwitch()); // v0.10.1826
   const [cfg, setCfg] = useState<AnomalySensitivityConfig | null>(null);
   const [busy, setBusy] = useState(false);
   const [flash, setFlash] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
@@ -682,10 +666,10 @@ function SensitivitySection() {
           <div className={SEP}>
             <CheckboxField checked={cfg.attachToIncident !== false}
               onCheckedChange={v => setCfg({ ...cfg, attachToIncident: v })}
-              disabled={incLocked !== null}
+              disabled
               label={<>Dedektör problemini otomatik incident&apos;a bağla</>}
               hint={<>
-                {incLocked && <span className={WARN_LINE}>{incLocked}</span>}
+                <span className={WARN_LINE}>{INCIDENT_ATTACH_LOCKED}</span>
                 Açıkken, dedektörün açtığı her metrik problemi servis ve şiddetine göre
                 aktif bir incident&apos;a iliştirilir (yoksa yenisi açılır). Varsayılan
                 açık &mdash; bugüne kadarki davranış budur.
@@ -1020,7 +1004,6 @@ function EscalationSection() {
 // taze hâlâ acildir" filoya, nöbet devrine ve ekrana bakma sıklığına
 // bağlı — kodda tahmin edilecek bir sayı değil.
 function ExceptionTriageSection() {
-  const incLocked = incidentAttachLockedReason(useIncidentsSwitch()); // v0.10.1826
   const [cfg, setCfg] = useState<ExceptionTriageConfig | null>(null);
   const [busy, setBusy] = useState(false);
   const [flash, setFlash] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
@@ -1150,14 +1133,14 @@ function ExceptionTriageSection() {
             <CheckboxField aria-label="Fırtına incident'a bağlansın"
               checked={cfg.stormAttachToIncident !== false}
               onCheckedChange={v => setCfg({ ...cfg, stormAttachToIncident: v })}
-              disabled={incLocked !== null}
-              hint={incLocked ?? undefined}
+              disabled
+              hint={INCIDENT_ATTACH_LOCKED}
               label={<>Exception fırtınası incident&apos;a bağlansın (yoksa kendi incident&apos;ı açılır)</>} />
             <CheckboxField aria-label="Tekil exception problemi açık incident'a katılsın"
               checked={cfg.singleGroupJoinIncident !== false}
               onCheckedChange={v => setCfg({ ...cfg, singleGroupJoinIncident: v })}
-              disabled={incLocked !== null}
-              hint={incLocked ?? undefined}
+              disabled
+              hint={INCIDENT_ATTACH_LOCKED}
               label={<>
                 Ölümcül / paylaşılan exception problemi, aynı servis ya da komşusunda AÇIK
                 incident varsa ona katılsın (kendi incident&apos;ını açmaz)

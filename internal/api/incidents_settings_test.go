@@ -67,23 +67,44 @@ func TestShellFeaturesCarriesIncidentsFlag(t *testing.T) {
 	}
 }
 
-func TestGetIncidentsSettingsReflectsSwitch(t *testing.T) {
+// TestIncidentsSettingsAlwaysRetired — v0.10.2024 (operatör 2026-11-12:
+// prod'da kayıtlı anahtar açık kaldığı için menü Incidents gösterip
+// Anomalies'i gizliyordu; "sen default yap onu"). GET hep kapalı; PUT
+// açma isteği 410 ve deposuz Server'da bile panik/yazma yok (store nil).
+func TestIncidentsSettingsAlwaysRetired(t *testing.T) {
 	for _, on := range []bool{false, true} {
 		withIncidentsOn(t, on)
 		w := httptest.NewRecorder()
 		(&Server{}).getIncidentsSettings(w, httptest.NewRequest(http.MethodGet, "/api/settings/incidents", nil))
-		want := `"enabled":false`
-		if on {
-			want = `"enabled":true`
+		if !strings.Contains(w.Body.String(), `"enabled":false`) {
+			t.Errorf("süreç bayrağı=%v: GET hep kapalı olmalı, gövde %s", on, w.Body.String())
 		}
-		if !strings.Contains(w.Body.String(), want) {
-			t.Errorf("enabled=%v: gövde %s", on, w.Body.String())
+	}
+	withIncidentsOn(t, false)
+	for _, tc := range []struct {
+		body string
+		code int
+	}{
+		{`{"enabled":true}`, http.StatusGone},
+		{`{"enabled":false}`, http.StatusOK},
+		{`{`, http.StatusBadRequest},
+	} {
+		w := httptest.NewRecorder()
+		(&Server{}).putIncidentsSettings(w, httptest.NewRequest(http.MethodPut, "/api/settings/incidents", strings.NewReader(tc.body)))
+		if w.Code != tc.code {
+			t.Errorf("PUT %s: %d, istenen %d", tc.body, w.Code, tc.code)
 		}
+		if tc.code == http.StatusGone && !strings.Contains(w.Body.String(), incidentsRetiredMsg) {
+			t.Errorf("PUT açma: emekli mesajı yok: %s", w.Body.String())
+		}
+	}
+	if chstore.IncidentsEnabled() {
+		t.Fatal("PUT açma isteği süreç bayrağını açmamalı")
 	}
 }
 
-// TestIncidentRoutesRegisteredOutsideAPIGo — rotalar api_incidents.go'da,
-// admin yazımı audit'li, PUT config-reload yayınlıyor.
+// TestIncidentRoutesRegisteredOutsideAPIGo — rotalar api_incidents.go'da;
+// ayar dosyası artık yazmıyor (v0.10.2024), config-reload kolu yok.
 func TestIncidentRoutesRegisteredOutsideAPIGo(t *testing.T) {
 	api, _ := os.ReadFile("api.go")
 	if strings.Contains(string(api), `" /api/incidents`) || strings.Contains(string(api), `"GET    /api/incidents`) {
@@ -97,15 +118,14 @@ func TestIncidentRoutesRegisteredOutsideAPIGo(t *testing.T) {
 	for _, want := range []string{
 		`registerRoutesExtra("incidents-settings"`,
 		`auth.RequireRole(auth.RoleAdmin, http.HandlerFunc(s.putIncidentsSettings))`,
-		`s.audit(r, "incidents.settings", "settings", chstore.IncidentsSettingsKey,`,
-		`s.publishConfigReload(r.Context(), incidentsReloadSvc)`,
 	} {
 		if !strings.Contains(string(set), want) {
 			t.Errorf("incidents_settings.go: %q yok", want)
 		}
 	}
-	cache, _ := os.ReadFile("cache.go")
-	if !strings.Contains(string(cache), "case incidentsReloadSvc:") {
-		t.Error("cache.go config-reload kolu yok")
+	for _, bad := range []string{"SaveIncidentsSettings", "LoadIncidentsSettings", "publishConfigReload"} {
+		if strings.Contains(string(set), bad) {
+			t.Errorf("incidents_settings.go %q taşımamalı (anahtar kalktı, v0.10.2024)", bad)
+		}
 	}
 }

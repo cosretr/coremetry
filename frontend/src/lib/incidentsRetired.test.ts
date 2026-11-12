@@ -33,12 +33,19 @@ describe('⌘K sayfaları', () => {
 });
 
 describe('kablolama', () => {
-  it('menü: Incidents yuvası emekliyken Anomalies', () => {
+  // v0.10.2024 — operatör 2026-11-12: kayıtlı anahtar açık kalmış kurulumda
+  // menü Incidents gösterip Anomalies'i gizliyordu. Menü artık bayrağa hiç
+  // bakmaz: Incidents girişi yok, Anomalies her zaman.
+  it('menü: Incidents girişi yok, Anomalies koşulsuz', () => {
     const src = read('../components/Sidebar.tsx');
-    expect(src).toContain("{ href: '/incidents', label: 'nav.incidents', icon: TriangleAlert, incidentsOnly: true },");
-    expect(src).toContain("{ href: '/anomalies', label: 'nav.anomalies', icon: Activity, retiredOnly: true },");
-    expect(src).toContain('if (n.incidentsOnly && !incidentsOn) return false;');
-    expect(src).toContain('if (n.retiredOnly && incidentsOn) return false;');
+    expect(src).toContain("{ href: '/anomalies', label: 'nav.anomalies', icon: Activity },");
+    expect(src).not.toContain("href: '/incidents'");
+    expect(src).not.toContain('features?.incidents');
+    expect(src).not.toMatch(/incidentsOnly|retiredOnly/);
+  });
+  it('Settings: Incidents ana anahtarı kutusu ve PUT istemcisi yok', () => {
+    expect(read('../pages/settings/AnomalyTab.tsx')).not.toContain('IncidentsLegacySection');
+    expect(read('./api.ts')).not.toMatch(/putIncidentsSettings|getIncidentsSettings/);
   });
   it('"g i" kısayolu anahtara bağlı', () => {
     const src = read('../components/GlobalShortcuts.tsx');

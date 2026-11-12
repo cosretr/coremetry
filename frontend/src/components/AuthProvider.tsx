@@ -17,9 +17,6 @@ interface AuthState {
   // relogin() derin bağlantıyı kaydedip /login'e götürür (normal dönüş).
   sessionEnded: boolean;
   relogin: () => void;
-  // v0.10.1826 — admin Incidents ana anahtarını kaydedince kabuk bayrağı
-  // yeniden yüklemesiz güncellenir (menü / Problems türleri aynı anda).
-  setIncidentsFeature: (on: boolean) => void;
 }
 
 const Ctx = createContext<AuthState | null>(null);
@@ -66,12 +63,6 @@ export function useAuthRole(): string | undefined {
 export function useIncidentsEnabled(): boolean {
   return useContext(Ctx)?.user?.features?.incidents === true;
 }
-
-/** v0.10.1826 — Settings anahtarının kaydından sonra kabuk bayrağını günceller. */
-export function useSetIncidentsFeature(): (on: boolean) => void {
-  return useContext(Ctx)?.setIncidentsFeature ?? noopSetFeature;
-}
-function noopSetFeature(): void { /* sağlayıcısız ağaç */ }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
@@ -225,13 +216,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // reference per navigation and re-rendered all of them. login/logout
   // are useCallback-stable, so the value now only changes when the
   // session actually changes (user/loading).
-  const setIncidentsFeature = useCallback((on: boolean) => {
-    setUser(u => (u ? { ...u, features: { ...u.features, incidents: on } } : u));
-  }, []);
-
   const value = useMemo(
-    () => ({ user, loading, login, logout, sessionEnded, relogin, setIncidentsFeature }),
-    [user, loading, login, logout, sessionEnded, relogin, setIncidentsFeature],
+    () => ({ user, loading, login, logout, sessionEnded, relogin }),
+    [user, loading, login, logout, sessionEnded, relogin],
   );
 
   return (

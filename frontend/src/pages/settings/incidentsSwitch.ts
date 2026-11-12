@@ -1,19 +1,7 @@
-import { createContext, useContext } from 'react';
-
 // v0.10.1826 — Incidents emekliliği (operatör kararı 2026-11-05: "Incident
-// sekmesi yerine Anomalies olsun; eski incident'lar devre dışı kalsın").
-// Settings › Anomaly sekmesinde ana anahtarın SON KAYDEDİLEN değeri; aile
-// başına "incident'a bağla" kutuları kapalıyken devre dışı + gerekçe.
-// null = henüz okunmadı (kutular bu arada bugünkü gibi çizilir).
-export const IncidentsSwitchCtx = createContext<boolean | null>(null);
-
-export function useIncidentsSwitch(): boolean | null {
-  return useContext(IncidentsSwitchCtx);
-}
-
-/** Kapalı ana anahtarda aile kutusunun gerekçesi (açık / bilinmiyor → null). */
-export function incidentAttachLockedReason(on: boolean | null): string | null {
-  return on === false
-    ? 'Eski Incidents akışı kapalı (yukarıdaki ana anahtar): bu kutu şu an etkisiz, kayıtlı değeri korunur.'
-    : null;
-}
+// sekmesi yerine Anomalies olsun"). v0.10.2024 (operatör 2026-11-12: "sen
+// default yap onu"): ana anahtar kalktı, eski akış her zaman emekli. Aile
+// başına "incident'a bağla" kutuları kalıcı devre dışı + bu gerekçe;
+// kayıtlı değerleri korunur (veri silinmez).
+export const INCIDENT_ATTACH_LOCKED =
+  'Eski Incidents akışı emekli: bu kutu etkisiz, kayıtlı değeri korunur.';

@@ -675,10 +675,6 @@ func (s *Server) reloadConfigOnSignal(ctx context.Context, svc string) {
 				log.Printf("[cache] config-reload mcpclient: %v", err)
 			}
 		}
-	case incidentsReloadSvc: // v0.10.1826 — Incidents ana anahtarı
-		if err := s.reloadIncidentsSettings(ctx); err != nil {
-			log.Printf("[cache] config-reload incidents: %v", err)
-		}
 	// v0.9.233 — custom roles had no reload case, and the gap failed OPEN.
 	// userPayload only emits customRolePages when CustomRolePages(name)
 	// returns non-nil; a peer pod that hasn't polled yet returns nil, the
