@@ -11,14 +11,21 @@
 // eklenmez. Trace bulunamazsa (örneklenmiş / henüz yazılmadı) sunucu log
 // bacağını HİÇ koşmaz (pencere span'lerden kurulur) → ES isteği yok.
 //
-// Mockup sapmaları: "N servis" sayısı (MV'de yok — 3.9), kapsam genişletme +
-// "kapsam dışı" etiketi (3.7) ve "✦ Bu trace'te ne oldu?" (6.5) bu dilimde yok.
+// Mockup sapmaları: "N servis" sayısı (MV'de yok — 3.9) ve kapsam genişletme +
+// "kapsam dışı" etiketi (3.7) yok.
+//
+// Log Search Faz 6 dilim 6.5 — "Bu trace’te ne oldu?": MEVCUT trace açıklaması
+// (AIExplainButton, `trace` öznesi → CoSRE sohbet turu; sunucu
+// explain_trace_input.go span'leri ve trace'in loglarını okur). Yeni uç ve
+// yeni ES yolu yok; düğme yalnız tıkla çalışır, copilot kapalıyken çizilmez.
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/shadcn/button';
 import { Toggle } from '@/components/shadcn/toggle';
 import { StatusBadge } from '@/components/coremetry/StatusBadge';
 import { CopyButton } from '@/components/CopyButton';
+import { AIExplainButton } from '@/components/ai/AIExplainButton';
+import { IconSparkles } from '@/components/icons';
 import { Spinner, Empty } from '@/components/Spinner';
 import { TraceWaterfall } from '@/components/TraceWaterfall';
 import { LogTable } from '@/components/LogTable';
@@ -86,6 +93,9 @@ export function TraceLogsView({ traceId, hintSec, onFilter, onClose }: TraceLogs
         <Button variant="ghost" size="xs" aria-label="Birleşik görünümü kapat" onClick={onClose}>✕</Button>
       </span>
       <span className="flex-1" />
+      <AIExplainButton subject={{ kind: 'trace', id: traceId }} size="sm"
+        title="CoSRE bu trace’in hikâyesini anlatır: span’ler, hatalar ve trace’in logları (sohbette açılır)"
+        label={<><IconSparkles /> <span>Bu trace’te ne oldu?</span></>} />
       <Button variant="outline" size="sm" onClick={() => onFilter(traceId)}>Bu trace'e filtrele</Button>
       <Button variant="outline" size="sm" asChild>
         <Link to={traceHref(traceId)}>Trace sayfasında aç ↗</Link>
