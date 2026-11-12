@@ -1,14 +1,16 @@
 // @vitest-environment jsdom
 //
-// MLReplaySheet.layout — v0.10.1845 (öğrenme döngüsü Faz 2, mockup
-// anomaly-detail.html görünüm 2–4; audit §17 bölüm sırası).
+// MLReplaySheet.layout — v0.10.1845; v0.10.2022 düzeni (mockup
+// anomaly-unified.html "Hedef: tek anomali"):
 //
 // NE ÇİVİLİYOR:
-//   • bölümler mockup sırasında: başlık çipleri → kalın özet → kart →
-//     olayın seyri → eylemler → kanıt → bağlam → katlı teknik detay;
-//   • kart etiketleri mockup'la birebir, metin SUNUCUDAN (FE cümle kurmaz);
+//   • bölümler: başlık (servis · operasyon + durum) → tek cümle → TEK grafik →
+//     kanıt satırları (sinyal + cümle + kaynak notu) → eylemler → KAPALI
+//     "Teknik ayrıntı" (kart, bağlam, örnekler, replay / what-if burada);
+//   • kart etiketleri birebir, metin SUNUCUDAN (FE cümle kurmaz);
 //   • viewer etiketi GÖRÜR, düğmeler devre dışı (salt okunur, boş değil);
-//   • kayıt yoksa (snapshot null) kart yine çizilir, grafik yerine not.
+//   • kayıt yoksa grafik yerine not;
+//   • grup verilince her üye bir kanıt satırı, durum grubun durumu.
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -79,8 +81,17 @@ describe('ML olay sayfası düzeni', () => {
     const labels = [...el.querySelectorAll('[data-testid="ml-card"] dt')].map(d => d.textContent);
     expect(labels).toEqual(['Ne oldu', 'Ne kadar', 'Ne zamandan beri', 'Neden önemli', 'Yakında ne değişti', 'Nereye bakmalı']);
     expect(el.querySelector('[data-testid="ml-header"]')!.textContent).toContain('Sürüyor · 13 dk');
-    expect((el.querySelector('[data-testid="ml-technical"]') as HTMLDetailsElement).open).toBe(false);
-    expect(el.querySelector('[data-testid="ml-evidence"]')!.textContent).toContain('abcdef0123456789');
+    const tech = el.querySelector('[data-testid="ml-technical"]') as HTMLDetailsElement;
+    expect(tech.open).toBe(false);
+    expect(tech.querySelector('summary')!.textContent).toBe('Teknik ayrıntı');
+    expect(tech.contains(el.querySelector('[data-testid="ml-card"]'))).toBe(true);
+    expect(tech.textContent).toContain('abcdef0123456789'); // örnek satırlar teknik ayrıntıda
+    // kanıt satırı: sinyal + cümle + kaynak notu
+    const row = el.querySelector('[data-testid="ml-evidence-rows"] li')!;
+    expect(row.textContent).toContain(card.what);
+    expect(row.textContent).toContain('Elasticsearch');
+    // eylemler: örnek trace + nereye bakmalı + Gerçek / Değil
+    expect(el.querySelector('[data-testid="ml-actions"]')!.textContent).toContain("Örnek trace'i aç");
     expect(el.querySelector('[data-testid="ml-trace-heatmap"]')).toBeNull(); // course yok → katman yok
   });
   it('viewer etiketi görür, düğmeler devre dışı', async () => {
@@ -99,15 +110,15 @@ describe('ML olay sayfası düzeni', () => {
     const btns = [...el.querySelectorAll('[data-testid="ml-actions"] button')] as HTMLButtonElement[];
     expect(btns.some(b => b.disabled)).toBe(false);
   });
-  it('v0.10.1870: endpoint\'li trace olayında ısı haritası katmanı olayın seyrinde, oynatıcının üstünde', async () => {
+  // v0.10.2022 — TEK grafik: ısı haritası katmanı olayın seyrinden teknik ayrıntıya taşındı.
+  it('v0.10.1870: endpoint\'li trace olayında ısı haritası teknik ayrıntıda, olayın seyrinde değil', async () => {
     const tc = { view: 'heatmap', service: 'notify-gateway', route: '/notify/order-status', fromNs: 1, toNs: 2, onsetNs: 1, endNs: 2, line: { ms: 620, label: 'olay öncesi p95 ≈ 620 ms' } };
     const el = await render({ snapshot: snap, related: [], card, course: { trace: tc } });
-    const hm = el.querySelector('[data-testid="ml-course"] [data-testid="ml-trace-heatmap"]');
+    expect(el.querySelector('[data-testid="ml-course"] [data-testid="ml-trace-heatmap"]')).toBeNull();
+    const hm = el.querySelector('[data-testid="ml-technical"] [data-testid="ml-trace-heatmap"]');
     expect(hm).not.toBeNull();
     expect(hm!.textContent).toContain('olay öncesi p95 ≈ 620 ms');
     expect(hm!.textContent).toContain("örneklenmiş span'ler");
-    const player = el.querySelector('[data-testid="ml-player"]')!;
-    expect(player.contains(hm)).toBe(true);
   });
   it('v0.10.1872: az çağrılan serviste ısı haritasının YERİNE nokta grafiği (ikisi birlikte yok)', async () => {
     const tc = {
@@ -116,7 +127,7 @@ describe('ML olay sayfası düzeni', () => {
       dots: [{ t: 1000, ms: 600 }, { t: 2000, ms: 2400 }], dotsSummary: 'özet sunucudan',
     };
     const el = await render({ snapshot: snap, related: [], card, course: { trace: tc } });
-    const dots = el.querySelector('[data-testid="ml-course"] [data-testid="ml-trace-dots"]');
+    const dots = el.querySelector('[data-testid="ml-technical"] [data-testid="ml-trace-dots"]');
     expect(dots).not.toBeNull();
     expect(el.querySelector('[data-testid="ml-trace-dots-summary"]')!.textContent).toBe('özet sunucudan');
     expect(dots!.textContent).toContain('alışılmış üst sınır ≈ 1,2 sn');
@@ -141,11 +152,42 @@ describe('ML olay sayfası düzeni', () => {
   it('v0.10.1873: log kanıtı (mesaj kalıpları) kapalı gelir, açılmadan logstore çağrısı yok', async () => {
     m.calls = [];
     const el = await render({ snapshot: snap, related: [], card });
-    const det = el.querySelector('[data-testid="ml-evidence"] [data-testid="ml-evidence-patterns"]') as HTMLDetailsElement | null;
+    // v0.10.2022 — sinyal kanıtı (ES) teknik ayrıntıya taşındı; yine kapalı ve tembel.
+    const det = el.querySelector('[data-testid="ml-technical"] [data-testid="ml-evidence-patterns"]') as HTMLDetailsElement | null;
     expect(det).not.toBeNull();
     expect(det!.open).toBe(false);
     expect(m.calls).not.toContain('mlEvidence');
-    expect(el.querySelector('[data-testid="ml-evidence"] h3')!.textContent).toContain('yeni ve artan mesajlar');
+  });
+  it('v0.10.2022: grup verilince her üye bir kanıt satırı, kaynak notu, durum grubun', async () => {
+    const min = 60e9;
+    const mk = (id: string, detector: string, signal: string, extra: Record<string, unknown> = {}) => ({
+      id, detector, signal, stage: 'shadow', service: 'payment-api', startedAt: 0, lastSeen: 10 * min, windowSec: 300,
+      baseline: 1, observed: 2, score: 5, direction: 'up', groupId: 'g1', ...extra,
+    });
+    const members = [
+      mk('a', 'trace_error_count', 'trace', { summary: 'hata sayısı 184', code: 'POST /payments', score: 9, groupShadow: { group: 'g1', wouldOpen: true, rule: 'r', priority: 'P2', reason: 'açardı: 3 dedektör', detectors: [], at: 2 } }),
+      mk('b', 'template_spike', 'log', { summary: 'Connection is not available 211 kez' }),
+      mk('c', 'metric_jvm', 'metric', { summary: 'heap arttı', evidence: '{"source":"thanos","cluster":"prod-east"}' }),
+    ];
+    const { groupRows } = await import('./mlGroupRows');
+    const group = groupRows(members as never)[0];
+    m.replay = { snapshot: snap, related: [], card, verdict: null };
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    await act(async () => {
+      root!.render(<QueryClientProvider client={qc}><MemoryRouter><MLReplayContent id="a" group={group} /></MemoryRouter></QueryClientProvider>);
+    });
+    await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+    const rows = [...host.querySelectorAll('[data-testid="ml-evidence-rows"] li')].map(li => li.textContent ?? '');
+    expect(rows).toHaveLength(3);
+    expect(rows[0]).toContain("ClickHouse span'leri");
+    expect(rows.some(r => r.includes('Elasticsearch'))).toBe(true);
+    expect(rows.some(r => r.includes('Thanos · prod-east'))).toBe(true);
+    expect(host.querySelector('[data-testid="ml-header"]')!.textContent).toContain('Sürüyor');
+    expect(host.querySelector('[data-testid="ml-header"]')!.textContent).toContain('POST /payments');
+    expect(host.querySelector('[data-testid="ml-technical"]')!.textContent).toContain('açardı · P2 — açardı: 3 dedektör');
   });
   it('bağlam satırları: aynı servis kayıtları + yayınlar zaman sıralı', () => {
     const s2 = { ...snap, deploys: JSON.stringify([{ service: 'orders-api', version: 'v2', firstSeenNs: 1_799_999_000e9, spanCount: 1 }]) };

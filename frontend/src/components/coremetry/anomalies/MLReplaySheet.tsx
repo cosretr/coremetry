@@ -1,4 +1,9 @@
-// MLReplayContent — /anomalies/ml/:id içeriği. v0.10.1845 (öğrenme döngüsü
+// MLReplayContent — /anomalies/ml/:id içeriği. v0.10.2022: GRUP sayfası
+// (mockup anomaly-unified.html): başlıkta servis · operasyon + durum, tek
+// cümle, TEK grafik (en güçlü üyenin olay anı kaydı + normal aralık bandı),
+// kanıt satırları (sinyal + cümle + kaynak), eylemler, KAPALI "Teknik
+// ayrıntı" (aşağıdaki eski bölümler, replay / what-if dahil, oraya taşındı).
+// Önceki düzen — v0.10.1845 (öğrenme döngüsü
 // Faz 2, mockup docs/frontend/mockups/anomaly-detail.html görünüm 2–4; audit
 // §17 bölüm sırası): başlık çipleri → kalın tek satır özet → açıklama kartı
 // (sunucu ml.BuildExplainCard; FE cümle KURMAZ) → olayın seyri (olay anı
@@ -38,6 +43,8 @@ import { MLTraceHeatmap } from './MLTraceHeatmap';
 import { MLTraceDots } from './MLTraceDots';
 import { MLLogPlayer } from './MLLogPlayer';
 import { MLSignalEvidence } from './MLSignalEvidence';
+import { groupStatusText, type MLGroupRow } from './mlGroupRows';
+import { evidenceSource, headerOperation } from './mlGroupDetail';
 
 const fmtTs = (ns: number) => fmtDateTime(new Date(ns / 1e6));
 const fmtNum = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(3));
@@ -112,15 +119,8 @@ export function cardRows(c: ExplainCard): { k: string; v: string }[] {
   return rows.filter(r => r.v);
 }
 
-/** v0.10.1873 — Kanıt bölümünün alt başlığı (mockup görünüm 2–4). */
-const EVIDENCE_SUB: Record<string, string> = {
-  metric: 'ilgili ve komşu metrikler · aynı zaman aralığı',
-  trace: "endpoint dağılımı · örnek trace'ler",
-  log: 'yeni ve artan mesajlar · örnek satırlar',
-};
-
-/** SAF (test): sayfa bölümlerinin sırası (audit §17 — kart → grafik → eylemler → kanıt → bağlam → teknik detay). */
-export const ML_EVENT_SECTIONS = ['ml-header', 'ml-summary', 'ml-card', 'ml-course', 'ml-actions', 'ml-evidence', 'ml-context', 'ml-technical'] as const;
+/** SAF (test): sayfa bölümlerinin sırası. v0.10.2022 (mockup anomaly-unified.html): başlık → tek cümle → tek grafik → kanıt satırları → eylemler → KAPALI teknik ayrıntı (kart, bağlam, örnekler, replay / what-if). */
+export const ML_EVENT_SECTIONS = ['ml-header', 'ml-summary', 'ml-course', 'ml-evidence', 'ml-actions', 'ml-technical'] as const;
 
 function Chip({ link }: { link: ExplainLink }) {
   if (!link.href) return <Badge variant="outline">{link.label}</Badge>;
@@ -136,7 +136,7 @@ function Section({ id, title, sub, children }: { id: string; title: string; sub?
   );
 }
 
-export function MLReplayContent({ id, autoPlay = false }: { id: string; autoPlay?: boolean }) {
+export function MLReplayContent({ id, autoPlay = false, group = null }: { id: string; autoPlay?: boolean; group?: MLGroupRow | null }) {
   const q = useQuery({ queryKey: [...keys.anomalies.ml, 'replay', id], queryFn: () => api.mlReplay(id), enabled: !!id, staleTime: 30_000, retry: false });
   const snap = q.data?.snapshot ?? null;
   const card = q.data?.card;
@@ -145,57 +145,76 @@ export function MLReplayContent({ id, autoPlay = false }: { id: string; autoPlay
     return <Empty icon={<SearchX size={28} strokeWidth={1.5} />} title="Bu olay bulunamadı">Olay kaydı 30, olay anı kaydı 120 gün saklanır; daha eski olaylar listeden de düşer.</Empty>;
   }
   const h = card.header;
-  const tc = q.data?.course?.trace; // v0.10.1870 — endpoint'li trace olayı: ısı haritası katmanı
+  const tc = q.data?.course?.trace; // v0.10.1870 — endpoint'li trace olayı: ısı haritası (teknik ayrıntıda)
   const lc = q.data?.course?.log; // v0.10.1871 — log olayı: yığılı çubuk + gölge
   const ev = snap ? parseObj(snap.evidence) : {};
   const episodes = typeof ev.episodes7d === 'number' ? ev.episodes7d : 0;
+  const lead = group?.lead ?? null;
+  const op = h.subject?.label || headerOperation(lead);
+  const status = group ? groupStatusText(group, Date.now() * 1e6) : h.status;
+  const running = group ? group.status === 'running' || group.status === 'watching' : h.open;
+  const members = group?.members ?? [];
+  const sample = snap ? replaySamples(snap).find(x => x.traceId) : undefined;
+  const shadow = members.map(m => m.groupShadow).filter(Boolean).sort((x, y) => (y!.at - x!.at))[0];
   return (
     <div data-testid="ml-replay" className="flex flex-col">
       <div className="mb-2 flex flex-wrap items-center gap-2 text-sm" data-testid="ml-header">
-        <SignalKindBadge kind={signalKindOf(h.detector, h.kind)} />
         <Link to={h.serviceHref} className="font-mono">{h.service}</Link>
-        <Badge variant="outline" className={h.open ? 'border-transparent bg-[color:var(--warn-bg)] text-[color:var(--warn)]' : ''}>{h.status}</Badge>
-        {h.profileLabel && <Badge variant="outline">{h.profileLabel}</Badge>}
-        {h.subject && <Chip link={h.subject} />}
+        {op && <span className="font-mono text-muted-foreground">· {op}</span>}
+        <Badge variant="outline" className={running ? 'border-transparent bg-[color:var(--warn-bg)] text-[color:var(--warn)]' : ''}>{status}</Badge>
       </div>
       <p className="mb-2.5 text-sm font-semibold leading-normal" data-testid="ml-summary">{card.summary}</p>
       {snap?.detector === 'op_latency' && episodes >= 5 && (
         <p className="mb-2 text-sm text-muted-foreground" data-testid="ml-chronic">Kronik: son 7 günde {episodes} kez tekrarladı; tek tek olay yerine kalıcı bir desen olarak izleyin.</p>
       )}
-      <div className="rounded-md border border-border bg-card" data-testid="ml-card">
-        <KeyValue items={[
-          ...cardRows(card),
-          { k: 'Yakında ne değişti', v: card.whatChanged.length === 0
-            ? <span className="text-muted-foreground">Bu pencerede eşlenen değişiklik yok.</span>
-            : <ul className="m-0 pl-4" data-testid="ml-what-changed">{card.whatChanged.map(c => <li key={c.text}>{c.text}{c.link && <> <Chip link={c.link} /></>}</li>)}</ul> },
-          { k: 'Nereye bakmalı', v: <span className="flex flex-wrap gap-2" data-testid="ml-where">{card.whereToLook.map(l => <Chip key={l.label} link={l} />)}</span> },
-        ]} />
-      </div>
-      <Section id="ml-course" title="Olayın seyri" sub={snap ? `${Math.round((snap.bucketSec || 300) / 60)} dakikalık kova · olay anı kaydı` : undefined}>
+      <Section id="ml-course" title="Olayın seyri" sub={snap ? `${Math.round((snap.bucketSec || 300) / 60)} dakikalık kova · normal aralık bandıyla` : undefined}>
         <div className="rounded-md border border-border bg-card px-3 py-2.5">
           {snap && lc ? <MLLogPlayer snap={snap} play={card.play} autoPlay={autoPlay} lc={lc} />
-            : snap ? <MLEventPlayer snap={snap} play={card.play} autoPlay={autoPlay} above={tc ? c => <MLTraceCourse tc={tc} cursorSec={c} /> : undefined} /> : <>
-            {tc && <MLTraceCourse tc={tc} cursorSec={null} />}
-            <p className="text-sm text-muted-foreground">Bu olay için grafik kaydı yok (olay anı kaydı yazılmadan önce açılmış ya da süresi dolmuş).</p>
-          </>}
-          {snap && <p className="mt-2 text-xs text-muted-foreground">Grafik dedektörün kullandığı aynı kayıtla çizilir; sayfa yeniden sorgu atmaz.</p>}
+            : snap ? <MLEventPlayer snap={snap} play={card.play} autoPlay={autoPlay} />
+              : <p className="text-sm text-muted-foreground">Bu olay için grafik kaydı yok (olay anı kaydı yazılmadan önce açılmış ya da süresi dolmuş).</p>}
         </div>
+      </Section>
+      <Section id="ml-evidence" title="Kanıt" sub={members.length > 1 ? `${members.length} sinyal aynı olayda` : undefined}>
+        <ul className="m-0 flex list-none flex-col gap-2 p-0" data-testid="ml-evidence-rows">
+          {(members.length ? members : [null]).map(m => (
+            <li key={m?.id ?? 'lead'} className="flex flex-wrap items-baseline gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm">
+              <SignalKindBadge kind={m ? signalKindOf(m.detector, m.signal) : signalKindOf(h.detector, h.kind)} />
+              <span className="min-w-0 flex-1">{m ? (m.summary || card.what) : card.what}</span>
+              <span className="text-xs text-muted-foreground">{m ? evidenceSource(m.detector, m.signal, m.evidence) : evidenceSource(h.detector, h.kind, snap?.evidence)}</span>
+            </li>
+          ))}
+        </ul>
       </Section>
       <Section id="ml-actions" title="Ne yapmak istersiniz?">
+        <div className="mb-2 flex flex-wrap gap-2" data-testid="ml-where">
+          {sample?.traceId && <Chip link={{ label: "Örnek trace'i aç", href: traceHref(sample.traceId) }} />}
+          {card.whereToLook.map(l => <Chip key={l.label} link={l} />)}
+        </div>
         <MLEventActions id={id} card={card} verdict={q.data?.verdict ?? null} />
       </Section>
-      <Section id="ml-evidence" title="Kanıt" sub={EVIDENCE_SUB[h.kind] ?? 'olay anı kaydındaki örnekler'}>
-        <div className="flex flex-col gap-2">
+      <details className="mt-3.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-sm" data-testid="ml-technical">
+        <summary className="cursor-pointer text-xs font-semibold">Teknik ayrıntı</summary>
+        <div className="mt-2 flex flex-col gap-3">
+          <KeyValue labelWidth="wide" items={[
+            { k: 'Dedektörler', v: (members.length ? [...new Set(members.map(m => m.detector))] : [h.detector]).map(d => ML_DETECTOR_TR[d] ?? d).join(', ') },
+            ...(group ? [{ k: 'Grup aralığı', v: `${fmtTs(group.start)} – ${group.status === 'running' || group.status === 'watching' ? 'sürüyor' : fmtTs(group.end)}` }] : []),
+            { k: 'Problem kapısı (gölge)', v: shadow ? `${shadow.wouldOpen ? 'açardı' : 'açmazdı'}${shadow.priority ? ` · ${shadow.priority}` : ''} — ${shadow.reason}` : 'karar yok' },
+          ]} />
+          <div className="rounded-md border border-border bg-card" data-testid="ml-card">
+            <KeyValue items={[
+              ...cardRows(card),
+              { k: 'Yakında ne değişti', v: card.whatChanged.length === 0
+                ? <span className="text-muted-foreground">Bu pencerede eşlenen değişiklik yok.</span>
+                : <ul className="m-0 pl-4" data-testid="ml-what-changed">{card.whatChanged.map(c => <li key={c.text}>{c.text}{c.link && <> <Chip link={c.link} /></>}</li>)}</ul> },
+              { k: 'Nereye bakmalı', v: <span className="flex flex-wrap gap-2">{card.whereToLook.map(l => <Chip key={l.label} link={l} />)}</span> },
+            ]} />
+          </div>
+          {tc && <MLTraceCourse tc={tc} cursorSec={null} />}
           <MLSignalEvidence id={id} signal={h.kind} />
           {snap ? <MLEvidence snap={snap} /> : <p className="text-sm text-muted-foreground">Olay anı kaydı yok; örnek satır gösterilemiyor.</p>}
+          <div data-testid="ml-context"><MLContext snap={snap} related={q.data?.related ?? []} /></div>
+          <MLTechnical snap={snap} card={card} />
         </div>
-      </Section>
-      <Section id="ml-context" title="Bağlam">
-        <MLContext snap={snap} related={q.data?.related ?? []} />
-      </Section>
-      <details className="mt-3.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-sm" data-testid="ml-technical">
-        <summary className="cursor-pointer text-xs font-semibold">Teknik detay</summary>
-        <MLTechnical snap={snap} card={card} />
       </details>
     </div>
   );
