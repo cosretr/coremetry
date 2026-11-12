@@ -122,7 +122,7 @@ func TestAssembleCardSnapshotOnly(t *testing.T) {
 		t.Fatal("kayıttan kurulmadı")
 	}
 	c := BuildExplainCard(in)
-	eq(t, "summary", c.Summary, "orders-api: yavaş istek oranı normalin yaklaşık 3 katı, 5 dakika sürdü (14:30–14:35).")
+	eq(t, "summary", c.Summary, "orders-api: yavaş istek oranı normalin yaklaşık 3 katı; 14:30'da başladı, 14:35'te bitti (5 dakika sürdü).")
 	if c.Header.Open {
 		t.Error("tamam kayıt açık sayıldı")
 	}

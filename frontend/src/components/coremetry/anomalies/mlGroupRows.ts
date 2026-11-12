@@ -93,8 +93,23 @@ export function groupStatusText(r: Pick<MLGroupRow, 'status' | 'start' | 'end'>,
     case 'running': return `Sürüyor · ${dur(nowNs - r.start)}`;
     case 'watching': return `İzleniyor · ${dur(nowNs - r.start)}`;
     case 'rejected': return 'Değil dendi';
-    default: return `Bitti · ${dur(r.end - r.start)} sürdü`;
+    default: {
+      // v0.10.2034 (operatör: "Bittiyse bitişini de göstersin") — bitiş SAATİ
+      // açıkça; başka güne taşıyorsa tarihle. Bitiş = son anormal kovanın sonu
+      // (olayın last_seen'i; kapanış kararının verildiği an DEĞİL).
+      if (!(r.end > r.start)) return `Bitti ${endClock(r.end, nowNs)} · tek ölçüm`;
+      return `Bitti ${endClock(r.end, nowNs)} · ${dur(r.end - r.start)} sürdü`;
+    }
   }
+}
+
+/** SAF: bitiş saati; bugün değilse "12.11 16:12". */
+export function endClock(endNs: number, nowNs: number): string {
+  const d = new Date(endNs / 1e6);
+  const n = new Date(nowNs / 1e6);
+  const hm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  if (d.toDateString() === n.toDateString()) return hm;
+  return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')} ${hm}`;
 }
 
 /** SAF: durum sıralama değeri (süren önce). */

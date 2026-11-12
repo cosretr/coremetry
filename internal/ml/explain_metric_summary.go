@@ -54,5 +54,5 @@ func metricSummary(in CardInput, sp detSpec, open bool, end time.Time) string {
 	if open {
 		return fmt.Sprintf("%s; %s. %s%s beri sürüyor (%s).", head, normal, day, clockSfx(st, sfxAbl), plain)
 	}
-	return fmt.Sprintf("%s; %s. %s%s–%s arasında sürdü (%s).", head, normal, day, st.Format("15:04"), end.In(loc).Format("15:04"), plain)
+	return fmt.Sprintf("%s; %s. %s%s başladı, %s bitti (%s sürdü).", head, normal, day, clockSfx(st, sfxLoc), clockSfx(end.In(loc), sfxLoc), plain) // v0.10.2034
 }

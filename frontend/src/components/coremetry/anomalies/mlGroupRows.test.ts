@@ -42,7 +42,7 @@ describe('groupStatus / metin', () => {
   it('metinler', () => {
     expect(groupStatusText({ status: 'running', start: 0, end: 0 }, 12 * min)).toBe('Sürüyor · 12 dk');
     expect(groupStatusText({ status: 'watching', start: 0, end: 0 }, 8 * min)).toBe('İzleniyor · 8 dk');
-    expect(groupStatusText({ status: 'done', start: 0, end: 18 * min }, 99 * min)).toBe('Bitti · 18 dk sürdü');
+    expect(groupStatusText({ status: 'done', start: 0, end: 18 * min }, 99 * min)).toBe('Bitti 00:18 · 18 dk sürdü');
     expect(groupStatusText({ status: 'rejected', start: 0, end: 0 }, 1)).toBe('Değil dendi');
   });
 });

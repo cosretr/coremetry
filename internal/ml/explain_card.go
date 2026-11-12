@@ -457,7 +457,7 @@ func summaryOf(in CardInput, sp detSpec, open bool, end time.Time) string {
 	if open {
 		return fmt.Sprintf("%s, %s (%s%s beri).", head, since, day, clockSfx(st, sfxAbl))
 	}
-	return fmt.Sprintf("%s, %s sürdü (%s%s–%s).", head, plain, day, st.Format("15:04"), end.In(loc).Format("15:04"))
+	return fmt.Sprintf("%s; %s%s başladı, %s bitti (%s sürdü).", head, day, clockSfx(st, sfxLoc), clockSfx(end.In(loc), sfxLoc), plain) // v0.10.2034 bitiş saati açık
 }
 
 // traceErrHead — SAF (v0.10.2018 T-err): mutlak hata sayısı cümlesi; oran

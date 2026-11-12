@@ -24,7 +24,7 @@ func TestMetricSummary(t *testing.T) {
 			"orders-consumer: Consumer lag 162'ye çıktı; normalde hiç görülmez. 16:00'dan beri sürüyor (12 dakika)."},
 		{"tabanlı, bitti", func(in *CardInput) {
 			in.Observed, in.Baseline, in.Stage, in.Now = 1340, 120, chstore.MLStageClosed, st.Add(3*time.Hour)
-		}, "orders-consumer: Consumer lag 1.340'a çıktı; normalde yaklaşık 120. 16:00–16:12 arasında sürdü (12 dakika)."},
+		}, "orders-consumer: Consumer lag 1.340'a çıktı; normalde yaklaşık 120. 16:00'da başladı, 16:12'de bitti (12 dakika sürdü)."},
 		{"birimli düşüş", func(in *CardInput) {
 			in.MetricLabel, in.MetricUnit, in.Part, in.Detector = "Bellek (working set)", "bytes", "metric_k8s|memory", "metric_k8s"
 			in.Observed, in.Baseline, in.Direction = 512e6, 2e9, "down"

@@ -7,7 +7,23 @@
 // görünüyordu. Kural tek: kapalı damgası YA DA 4 kova boyunca görülmemek = bitti.
 import { describe, it, expect } from 'vitest';
 import type { MLEvent } from '@/lib/types';
-import { groupRows, groupStatus, groupStatusText, memberOpen } from './mlGroupRows';
+import { endClock, groupRows, groupStatus, groupStatusText, memberOpen } from './mlGroupRows';
+
+// v0.10.2034 (operatör: "Bittiyse bitişini de göstersin") — bitiş saati açık;
+// başka güne taşıyorsa tarihle; tek ölçümlü olay "tek ölçüm".
+describe('bitiş saati', () => {
+  const h = 3600e9;
+  const D = Date.UTC(2026, 10, 12, 0, 0) * 1e6;
+  it('aynı gün saat, başka gün tarih + saat', () => {
+    expect(endClock(D + 11 * h + 23 * 60e9, D + 15 * h)).toBe('11:23');
+    expect(endClock(D + 11 * h + 23 * 60e9, D + 30 * h)).toBe('12.11 11:23');
+  });
+  it('rozet: "Bitti 11:23 · 11 dk sürdü"; tek ölçüm', () => {
+    const start = D + 11 * h + 12 * 60e9, end = D + 11 * h + 23 * 60e9;
+    expect(groupStatusText({ status: 'done', start, end }, D + 15 * h)).toBe('Bitti 11:23 · 11 dk sürdü');
+    expect(groupStatusText({ status: 'done', start, end: start }, D + 15 * h)).toBe('Bitti 11:12 · tek ölçüm');
+  });
+});
 
 const min = 60e9;
 const T = 1_800_000_000e9;
@@ -25,11 +41,11 @@ describe('durum = kart kuralı (stage + tazelik)', () => {
   ])('%s', (_n, over, now, want) => {
     expect(memberOpen(ev(over), now)).toBe(want);
   });
-  it('saatlerce görülmeyen olay "Bitti · 5 dk sürdü" ve gerçek bitişle', () => {
+  it('saatlerce görülmeyen olay "Bitti 08:05 · 5 dk sürdü" — bitiş saati açık', () => {
     const now = T + 5 * 60 * min;
     expect(groupStatus([ev({})], now)).toBe('done');
     const g = groupRows([ev({})], now)[0];
     expect(g.status).toBe('done');
-    expect(groupStatusText(g, now)).toBe('Bitti · 5 dk sürdü');
+    expect(groupStatusText(g, now)).toBe('Bitti 08:05 · 5 dk sürdü');
   });
 });

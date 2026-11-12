@@ -84,7 +84,7 @@ export function legacyStatusText(e: AnomalyEvent, nowNs: number): string {
   const st = legacyStatus(e);
   if (st === 'rejected') return 'Değil dendi';
   const end = st === 'watching' ? nowNs : e.lastSeen;
-  if (st === 'done' && !(e.lastSeen > e.startedAt)) return 'Bitti · tek ölçüm';
+
   return groupStatusText({ status: st, start: e.startedAt, end }, nowNs);
 }
 
