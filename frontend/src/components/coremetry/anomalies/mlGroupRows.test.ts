@@ -32,12 +32,12 @@ describe('groupRows', () => {
 describe('groupStatus / metin', () => {
   const shadowOpen = { group: 'g', wouldOpen: true, rule: 'r', reason: 'açardı', detectors: [], at: 1 };
   it('Sürüyor = açık + açardı; İzleniyor = açık + açmazdı; Bitti; Değil dendi', () => {
-    expect(groupStatus([ev({ groupShadow: shadowOpen })])).toBe('running');
-    expect(groupStatus([ev({ groupShadow: { ...shadowOpen, wouldOpen: false } })])).toBe('watching');
-    expect(groupStatus([ev({})])).toBe('watching');
-    expect(groupStatus([ev({ stage: 'closed' })])).toBe('done');
-    expect(groupStatus([ev({ verdict: 'not_anomaly' }), ev({})])).toBe('rejected');
-    expect(groupStatus([ev({ verdict: 'not_anomaly' }), ev({ verdict: 'anomaly' })])).toBe('watching');
+    expect(groupStatus([ev({ groupShadow: shadowOpen })], 10 * min)).toBe('running');
+    expect(groupStatus([ev({ groupShadow: { ...shadowOpen, wouldOpen: false } })], 10 * min)).toBe('watching');
+    expect(groupStatus([ev({})], 10 * min)).toBe('watching');
+    expect(groupStatus([ev({ stage: 'closed' })], 10 * min)).toBe('done');
+    expect(groupStatus([ev({ verdict: 'not_anomaly' }), ev({})], 10 * min)).toBe('rejected');
+    expect(groupStatus([ev({ verdict: 'not_anomaly' }), ev({ verdict: 'anomaly' })], 10 * min)).toBe('watching');
   });
   it('metinler', () => {
     expect(groupStatusText({ status: 'running', start: 0, end: 0 }, 12 * min)).toBe('Sürüyor · 12 dk');

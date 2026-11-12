@@ -170,7 +170,7 @@ describe('ML olay sayfası düzeni', () => {
       mk('c', 'metric_jvm', 'metric', { summary: 'heap arttı', evidence: '{"source":"thanos","cluster":"prod-east"}' }),
     ];
     const { groupRows } = await import('./mlGroupRows');
-    const group = groupRows(members as never)[0];
+    const group = groupRows(members as never, 10 * min)[0];
     m.replay = { snapshot: snap, related: [], card, verdict: null };
     host = document.createElement('div');
     document.body.appendChild(host);

@@ -37,7 +37,7 @@ export function leadMember(ms: MLEvent[]): MLEvent {
 }
 
 /** SAF: olay satırları → grup satırları (girdi sırası korunmaz; varsayılan sıralama tabloda). */
-export function groupRows(events: MLEvent[]): MLGroupRow[] {
+export function groupRows(events: MLEvent[], nowNs = Date.now() * 1e6): MLGroupRow[] {
   const byKey = new Map<string, MLEvent[]>();
   for (const e of events) {
     const k = e.groupId || `ev:${e.id}`;
@@ -53,16 +53,27 @@ export function groupRows(events: MLEvent[]): MLGroupRow[] {
     for (const s of lead.groupSignals ?? []) sig.add(s === 'trace' || s === 'log' || s === 'metric' ? s : 'log');
     for (const d of lead.groupDetectors ?? []) sig.add(signalKindOf(d));
     for (const m of members) sig.add(signalKindOf(m.detector, m.signal));
-    out.push({ key, lead, members, service: lead.service, start, end, signals: SIGNAL_ORDER.filter(s => sig.has(s)), status: groupStatus(members) });
+    out.push({ key, lead, members, service: lead.service, start, end, signals: SIGNAL_ORDER.filter(s => sig.has(s)), status: groupStatus(members, nowNs) });
   }
   return out;
 }
 
 /** SAF. */
-export function groupStatus(members: MLEvent[]): MLGroupStatus {
+/** SAF (v0.10.2031; operatör: rozet "İzleniyor · 4 sa 59 dk", cümle "5
+ *  dakika sürdü"): üye hâlâ açık mı — sunucu kartının (ml cardOpen) AYNI
+ *  kuralı: kapalı damgası yoksa VE son görülme 4 kovadan taze. Kapanış
+ *  satırı süreç içi koşu durumuna bağlı (yeniden başlatmada yazılmaz);
+ *  yalnız damgaya bakmak bitmiş olayı saatlerce "açık" gösteriyordu. */
+export function memberOpen(m: Pick<MLEvent, 'stage' | 'lastSeen' | 'windowSec'>, nowNs: number): boolean {
+  if (m.stage === 'closed') return false;
+  const bucketNs = (m.windowSec > 0 ? m.windowSec : 300) * 1e9;
+  return nowNs - m.lastSeen <= 4 * bucketNs;
+}
+
+export function groupStatus(members: MLEvent[], nowNs = Date.now() * 1e6): MLGroupStatus {
   const real = members.some(m => m.verdict === 'anomaly');
   if (!real && members.some(m => m.verdict === 'not_anomaly')) return 'rejected';
-  if (members.some(m => m.stage !== 'closed')) {
+  if (members.some(m => memberOpen(m, nowNs))) {
     return members.some(m => m.groupShadow?.wouldOpen) ? 'running' : 'watching';
   }
   return 'done';
