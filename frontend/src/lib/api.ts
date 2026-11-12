@@ -3561,7 +3561,9 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(d),
     }),
-  updateDashboard: (id: string, d: Omit<Dashboard, 'id' | 'createdAt' | 'updatedAt'>) =>
+  // v0.10.2000 (Faz 3 dilim 3.10) — ifUpdatedAt: yüklenen sürüm; sunucu başka
+  // biri kaydettiyse 409 döner (lib/dashboardEdit isDashboardConflict).
+  updateDashboard: (id: string, d: Omit<Dashboard, 'id' | 'createdAt' | 'updatedAt'> & { ifUpdatedAt?: number }) =>
     request<Dashboard>(`/api/dashboards/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },

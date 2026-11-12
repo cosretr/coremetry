@@ -9221,38 +9221,6 @@ func (s *Server) createDashboard(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, d)
 }
 
-func (s *Server) updateDashboard(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	existing, err := s.store.GetDashboard(r.Context(), id)
-	if err != nil {
-		writeErr(w, err)
-		return
-	}
-	if existing == nil {
-		http.Error(w, `{"error":"dashboard not found"}`, http.StatusNotFound)
-		return
-	}
-	var d chstore.Dashboard
-	if err := json.NewDecoder(r.Body).Decode(&d); err != nil {
-		http.Error(w, "invalid body", http.StatusBadRequest)
-		return
-	}
-	// v0.9.563 — gövdede GELMEYEN alanlar mevcut satırdan taşınır.
-	// Öncesinde yalnız CreatedAt taşınıyordu; frontend `variables`
-	// göndermediği için dashboard'un $service değişkeni İLK KAYITTA
-	// kalıcı siliniyordu ve ${service} referanslı paneller sessizce
-	// filo geneline geçiyordu (bkz. dashboard_merge.go).
-	d.ID = id
-	d = mergeDashboardUpdate(d, *existing)
-	if err := s.store.UpsertDashboard(r.Context(), d); err != nil {
-		writeErr(w, err)
-		return
-	}
-	details, _ := json.Marshal(map[string]any{"name": d.Name})
-	s.audit(r, "dashboard.update", "dashboard", d.ID, string(details))
-	writeJSON(w, d)
-}
-
 func (s *Server) deleteDashboard(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if err := s.store.DeleteDashboard(r.Context(), id); err != nil {

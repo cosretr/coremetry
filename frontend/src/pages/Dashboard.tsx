@@ -38,6 +38,7 @@ import { timeRangeToNs } from '@/lib/utils';
 import { DASHBOARD_RESERVED_PARAMS, isDashboardVariableParam, panelShareUrl } from '@/lib/dashboardUrl';
 import { useRefreshHold } from '@/lib/useAutoRefresh';
 import { downloadDashboard } from '@/lib/dashboardIO';
+import { emptyUndo, isDashboardConflict, undoPop, undoPush, type UndoStack } from '@/lib/dashboardEdit';
 import { panelToExploreHref } from '@/pages/explore/panelToExplore';
 import { PageShell } from '@/components/coremetry/PageShell';
 import { metricPanelSubject } from '@/components/ai/metricPanelAsk';
@@ -75,6 +76,9 @@ function Inner() {
   // yanında açıklanıyor: türetilmiş değer virgülü yutuyor.
   const [tagsInput, setTagsInput] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // v0.10.2000 (dilim 3.10) — oturum içi geri al (düzenleme kipinde taslağın
+  // önceki hâlleri; kayıt / vazgeç / yükleme sıfırlar).
+  const [undo, setUndo] = useState<UndoStack<Dashboard>>(emptyUndo);
   const confirm = useConfirm();
   // Resolved values for the dashboard's Grafana-style variables.
   // URL-persisted so reloads + share-links keep the choice.
@@ -147,6 +151,7 @@ function Inner() {
       // normalize it to an array for our local state.
       const panels = normalizePanels(d.panels);
       setDraft({ ...d, panels });
+      setUndo(emptyUndo());
       if (startInEdit && user?.role === 'admin') setEditing(true);
       // v0.10.1996 (Faz 3 dilim 3.2) — kişisel "Son görüntülemeniz";
       // en iyi çaba (hata listeyi bozmaz, kullanıcıya gösterilmez).
@@ -299,8 +304,21 @@ function Inner() {
   const isAdmin = user?.role === 'admin' || user?.role === 'editor';
   const panels: Panel[] = draft.panels ?? [];
 
+  // editDraft — taslağı değiştiren HER yol buradan: önceki hâl geri-al
+  // yığınına (aynı anahtarlı ardışık değişiklik tek adım, lib/dashboardEdit).
+  const editDraft = (next: Dashboard, key: string | null = null) => {
+    setUndo(u => undoPush(u, draft, key));
+    setDraft(next);
+  };
+  const undoLast = () => {
+    const r = undoPop(undo);
+    if (!r) return;
+    setDraft(r.state);
+    setUndo(r.stack);
+    setTagsInput(null);
+  };
   const updatePanel = (panel: Panel) => {
-    setDraft({ ...draft, panels: panels.map(p => p.id === panel.id ? panel : p) });
+    editDraft({ ...draft, panels: panels.map(p => p.id === panel.id ? panel : p) }, `panel:${panel.id}`);
   };
   const addPanel = (type: PanelType) => {
     const p: Panel = {
@@ -311,11 +329,11 @@ function Inner() {
       width: type === 'row' ? 4 : 2,
       config: defaultConfig(type),
     };
-    setDraft({ ...draft, panels: [...panels, p] });
+    editDraft({ ...draft, panels: [...panels, p] });
     setEditingPanel(p.id);
   };
   const deletePanel = (id: string) => {
-    setDraft({ ...draft, panels: panels.filter(p => p.id !== id) });
+    editDraft({ ...draft, panels: panels.filter(p => p.id !== id) });
     setEditingPanel(null);
   };
   // v0.9.773 — duplicate a panel in place (Grafana's "Copy" on the panel
@@ -342,7 +360,7 @@ function Inner() {
     const next = [...panels];
     next.splice(idx + 1, 0, copy);
     if (!editing) setEditing(true);
-    setDraft({ ...draft, panels: next });
+    editDraft({ ...draft, panels: next });
   };
   // Edit requested from the panel menu — reachable in view mode, so it has
   // to open edit mode first (the editor writes into `draft`).
@@ -364,12 +382,12 @@ function Inner() {
     // if src came before it.
     const insertAt = srcIdx < tgtIdx ? tgtIdx - 1 : tgtIdx;
     next.splice(insertAt, 0, moved);
-    setDraft({ ...draft, panels: next });
+    editDraft({ ...draft, panels: next });
   };
   const save = async () => {
     setBusy(true);
     try {
-      const updated = await api.updateDashboard(id, {
+      const body = {
         name: draft.name, description: draft.description, panels: draft.panels,
         // v0.9.759 — değişken tanımları da kaydedilir (backend merge
         // semantiği: alan yoksa korunur, açık boş liste boşaltır).
@@ -377,10 +395,28 @@ function Inner() {
         // v0.9.780 — etiketler. Aynı merge semantiği: burada AÇIKÇA
         // gönderiliyor, yani operatör hepsini silerse ([]) boş kalır.
         tags: draft.tags ?? [],
-      });
+      };
+      let updated: Dashboard;
+      try {
+        // v0.10.2000 (dilim 3.10) — yüklenen sürüm; başkası kaydettiyse 409.
+        updated = await api.updateDashboard(id, { ...body, ifUpdatedAt: doc.updatedAt });
+      } catch (e) {
+        if (!isDashboardConflict(e)) throw e;
+        if (!await confirm({
+          title: 'Pano başka biri tarafından kaydedildi',
+          body: <>Siz düzenlerken <b>{doc.name}</b> başka bir sekmede ya da kullanıcı tarafından kaydedildi.
+            Kaydederseniz onun değişiklikleri sizinkilerle değiştirilir. Vazgeçip sayfayı yenilerseniz
+            güncel sürümü görürsünüz (taslağınız kaybolur).</>,
+          confirmLabel: 'Yine de kaydet',
+          cancelLabel: 'Vazgeç',
+          danger: true,
+        })) return;
+        updated = await api.updateDashboard(id, body);
+      }
       setDoc({ ...updated, panels: normalizePanels(updated.panels) });
       setVarDefs(null);
       setTagsInput(null);
+      setUndo(emptyUndo());
       // v0.9.780 — /dashboards listesi ad/açıklama/etiket gösteriyor ve
       // 60s staleTime ile duruyor; geçersiz kılmazsak operatör bir
       // etiketi kaydedip listeye dönünce eski hâlini görürdü. ['dashboards']
@@ -395,6 +431,7 @@ function Inner() {
     setDraft({ ...doc, panels: normalizePanels(doc.panels) });
     setVarDefs(null); // v0.9.759 — düzenlenen değişkenler de geri alınır
     setTagsInput(null); // v0.9.780 — etiket girdisi de taslakla birlikte
+    setUndo(emptyUndo());
     setEditing(false);
     setEditingPanel(null);
   };
@@ -443,10 +480,10 @@ function Inner() {
           {editing ? (
             <>
               <input value={draft.name} placeholder="Dashboard name" aria-label="Dashboard name"
-                onChange={e => setDraft({ ...draft, name: e.target.value })}
+                onChange={e => editDraft({ ...draft, name: e.target.value }, 'name')}
                 style={{ width: 220 }} />
               <input value={draft.description} placeholder="Description" aria-label="Dashboard description"
-                onChange={e => setDraft({ ...draft, description: e.target.value })}
+                onChange={e => editDraft({ ...draft, description: e.target.value }, 'description')}
                 style={{ width: 320 }} />
               {/* v0.9.780 — etiketler. Virgülle ayrılmış düz metin:
                   bir rozet-editörü kurmak yerine yazmayı serbest
@@ -462,14 +499,18 @@ function Inner() {
                   // (ve ardındaki boşluk) filtreden düşer ve operatör
                   // ikinci etiketi hiç yazamazdı.
                   setTagsInput(e.target.value);
-                  setDraft({
+                  editDraft({
                     ...draft,
                     tags: e.target.value.split(',').map(t => t.trim()).filter(Boolean),
-                  });
+                  }, 'tags');
                 }}
                 style={{ width: 220 }} />
               <AddPanelMenu onAdd={addPanel} />
               <span style={{ marginLeft: 'auto' }} />
+              <Button variant="secondary" onClick={undoLast} disabled={undo.past.length === 0}
+                title={undo.past.length ? `Son değişikliği geri al (${undo.past.length} adım)` : 'Geri alınacak değişiklik yok'}>
+                Geri al
+              </Button>
               <Button variant="secondary" onClick={cancel}>Cancel</Button>
               <Button variant="primary" onClick={save} loading={busy}>Save</Button>
             </>

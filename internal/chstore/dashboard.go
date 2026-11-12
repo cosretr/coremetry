@@ -107,6 +107,14 @@ func (s *Store) GetDashboard(ctx context.Context, id string) (*Dashboard, error)
 // UpsertDashboard inserts a new version row — ReplacingMergeTree merges
 // on `id` keeping the row with the highest version (set to current ns).
 func (s *Store) UpsertDashboard(ctx context.Context, d Dashboard) error {
+	return s.UpsertDashboardAt(ctx, d, time.Now().UnixNano())
+}
+
+// UpsertDashboardAt — v0.10.2000 (Dashboards Faz 3 dilim 3.10): yazım
+// zamanını çağıran verir, böylece PUT yanıtı satıra GERÇEKTEN yazılan
+// updated_at'i döner (DateTime64(9), ns kaybı yok) ve istemcinin bir
+// sonraki kaydındaki çakışma denetimi (ifUpdatedAt) doğru sürümle yapılır.
+func (s *Store) UpsertDashboardAt(ctx context.Context, d Dashboard, now int64) error {
 	if d.ID == "" {
 		return fmt.Errorf("dashboard id required")
 	}
@@ -119,7 +127,6 @@ func (s *Store) UpsertDashboard(ctx context.Context, d Dashboard) error {
 	if len(d.Tags) == 0 {
 		d.Tags = json.RawMessage("[]")
 	}
-	now := time.Now().UnixNano()
 	if d.CreatedAt == 0 {
 		d.CreatedAt = now
 	}
