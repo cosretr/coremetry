@@ -4,6 +4,8 @@ import { Button } from '@/components/ui';
 import type { ReactNode } from 'react';
 import { PanelEditLayout } from '@/components/coremetry/dashboard/PanelEditLayout';
 import { PanelQueryEditor } from '@/components/coremetry/dashboard/PanelQueryEditor';
+import { TOPLIST_DEFAULT, TOPLIST_LIMITS } from '@/components/coremetry/dashboard/PromqlTableViews';
+import { SegmentedControl } from '@/components/coremetry/SegmentedControl';
 import { applyPanelQuery, hasQueryEditor } from '@/lib/metricsExplorer/panelQuery';
 import { STEP_OPTIONS } from '@/pages/explore/presets';
 import type {
@@ -343,8 +345,25 @@ function PromqlFields({ cfg, onChange }: {
             <option value="bar">Bar</option>
             <option value="stacked-bar">Stacked bar</option>
             <option value="stacked-area">Stacked area</option>
+            {/* v0.10.2017 — yeni panel tipi değil, promql panelinin görünümü. */}
+            <option value="table">Tablo</option>
+            <option value="toplist">Sıralı liste</option>
           </select>
         </Field>
+        {(cfg.viz === 'table' || cfg.viz === 'toplist') && (
+          <Field label="Sırala">
+            <SegmentedControl aria-label="Sıralama ölçütü" size="sm" value={cfg.rank ?? 'last'}
+              onChange={v => update('rank', v)}
+              options={[{ value: 'last', label: 'Son' }, { value: 'avg', label: 'Ort' }, { value: 'max', label: 'Maks' }]} />
+          </Field>
+        )}
+        {cfg.viz === 'toplist' && (
+          <Field label="Satır">
+            <SegmentedControl aria-label="Satır sayısı" size="sm" value={String(cfg.limit ?? TOPLIST_DEFAULT)}
+              onChange={v => update('limit', Number(v))}
+              options={TOPLIST_LIMITS.map(n => ({ value: String(n), label: String(n) }))} />
+          </Field>
+        )}
         <Field label="Unit (optional)">
           <UnitSelect value={cfg.unit} onChange={v => update('unit', v)} />
         </Field>

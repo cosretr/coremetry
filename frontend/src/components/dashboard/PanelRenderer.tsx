@@ -146,6 +146,7 @@ import { Link } from 'react-router-dom';
 import { usePanelMenuHost } from './panelMenuHost';
 import { MULTI, plainVars } from '@/lib/dashboardVars';
 import { resolvePanelQuery } from '@/lib/metricsExplorer/panelQuery';
+import { PROMQL_TABLE_MAX, TOPLIST_DEFAULT, PromqlTableView, PromqlToplistView } from '@/components/coremetry/dashboard/PromqlTableViews';
 
 // PanelRenderer dispatches on panel.type. Self-contained — fetches its
 // own data, re-fetches when `range` changes. Errors are surfaced inline
@@ -629,6 +630,10 @@ function PromqlPanel({ cfg, range, syncKey, onZoom, onZoomReset, height, onFocus
   }, [cfg.query]);
 
   const hasOverride = !!dataOverride && (dataOverride.series !== undefined || !!dataOverride.error);
+  const tabular = cfg.viz === 'table' || cfg.viz === 'toplist';
+  const tabularLimit = cfg.viz === 'toplist'
+    ? Math.max(1, Math.min(PROMQL_TABLE_MAX, cfg.limit ?? TOPLIST_DEFAULT))
+    : Math.max(1, Math.min(PROMQL_TABLE_MAX, cfg.limit ?? PROMQL_TABLE_MAX));
   useEffect(() => {
     if (hasOverride) {
       if (dataOverride!.error) { setSeries(undefined); setError(dataOverride!.error); return; }
@@ -649,11 +654,15 @@ function PromqlPanel({ cfg, range, syncKey, onZoom, onZoomReset, height, onFocus
     setError(null);
     setPromMeta(undefined);
     // v0.10.1443 — cfg.source: kaynak pini (sohbetten gelen VM-only MetricsQL); yoksa kurulum varsayılanı.
-    api.metricPromql({ query: resolvePanelQuery(debouncedQuery, step, (to - from) / 1e9), from, to, step, src: cfg.source })
+    api.metricPromql({
+      query: resolvePanelQuery(debouncedQuery, step, (to - from) / 1e9), from, to, step, src: cfg.source,
+      // v0.10.2017 — tablo / sıralı liste sunucu top-N ile (tavan PROMQL_TABLE_MAX).
+      ...(tabular ? { limit: tabularLimit, rank: cfg.rank ?? 'last' } : {}),
+    })
       .then(r => { setSeries(r?.series ?? []); setPromMeta(r?.meta); })
       .catch(e => setError(e.message));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedQuery, cfg.step, cfg.source, range, widthPx, hasOverride, JSON.stringify(dataOverride)]);
+  }, [debouncedQuery, cfg.step, cfg.source, range, widthPx, hasOverride, JSON.stringify(dataOverride), tabular, tabularLimit, cfg.rank]);
 
   if (error) return <PanelError msg={error} height={boxPx} />;
   const viz = cfg.viz ?? 'line';
@@ -662,6 +671,8 @@ function PromqlPanel({ cfg, range, syncKey, onZoom, onZoomReset, height, onFocus
       {series !== undefined && <MetricResultNotice meta={promMeta} />}
       {series === undefined ? <PanelLoading height={boxPx} />
         : !series || series.length === 0 ? <PanelEmpty height={boxPx} />
+        : viz === 'table' ? <div style={{ height: boxPx, overflow: 'auto' }}><PromqlTableView series={series} unit={cfg.unit} /></div>
+        : viz === 'toplist' ? <div style={{ height: boxPx, overflow: 'auto' }}><PromqlToplistView series={series} unit={cfg.unit} by={cfg.rank ?? 'last'} limit={tabularLimit} /></div>
         : <DashChart series={series} viz={viz} unit={cfg.unit} syncKey={syncKey} onZoom={onZoom} onZoomReset={onZoomReset} bands={cfg.thresholds} storageKey={`dash-q-${cfg.query.slice(0, 60)}`} height={boxPx} onFocusChange={onFocusChange} />}
     </div>
   );

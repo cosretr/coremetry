@@ -6124,7 +6124,13 @@ export interface PromqlPanelConfig {
   query: string;
   unit?: string;           // y-axis unit override (ms | % | rps | free text)
   step?: number;           // bucket seconds; absent/0 = width-aware auto
-  viz?: PanelVizType;      // line (default) / bar / area / stacked
+  // v0.10.2017 (Faz 3 dilim 3.7 kalanı) — 'table' / 'toplist' YENİ PANEL TİPİ
+  // DEĞİL, bu panelin görünümü (audit §5.4). Yokluğu = çizgi (eski panel aynen).
+  viz?: PanelVizType | 'table' | 'toplist';
+  /** table / toplist: sunucu top-N satır sayısı (toplist 5/10/20/50, tablo tavanı 50). */
+  limit?: number;
+  /** table / toplist: sıralama ölçütü (sunucu top-N rank). Yok = son değer. */
+  rank?: 'last' | 'avg' | 'max';
   /**
    * v0.10.1443 — kaynak pini: sohbetten gelen VM-only MetricsQL
    * (histogram_quantiles …) CH yolunda kırılır, bu yüzden panel kaynağını

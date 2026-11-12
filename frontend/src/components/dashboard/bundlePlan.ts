@@ -45,8 +45,11 @@ export function isBundleable(p: Panel): boolean {
     case 'metric':
     case 'spanmetric':
       return true;
-    case 'promql':
-      return !(p.config as PromqlPanelConfig).source && !!(p.config as PromqlPanelConfig).query?.trim();
+    case 'promql': {
+      // v0.10.2017 — tablo / sıralı liste sunucu top-N ister (limit + rank); kendi isteği.
+      const c = p.config as PromqlPanelConfig;
+      return !c.source && !!c.query?.trim() && c.viz !== 'table' && c.viz !== 'toplist';
+    }
     case 'stat':
     case 'gauge': {
       const c = p.config as StatPanelConfig | GaugePanelConfig;
