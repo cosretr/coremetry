@@ -59,8 +59,9 @@ export function genericAnomalySentence(service: string): string {
 //       "<servis> servisinde <operasyon> için hata/gecikme normalin <tepe> katına çıktı."
 //   log_pattern / elastic_ml
 //       "<servis> loglarında bu desen normalin <tepe> katına çıktı."
-//   log_template_new (oranı yok — "ilk görülme")
-//       "<servis> loglarında daha önce görülmemiş bir satır biçimi çıktı."
+//   log_template_new (oranı yok — "ilk görülme"; v0.10.2038 neden "yeni"
+//   olduğunu söyler, servis adı başlıkta)
+//       "Bu satır biçimi bu serviste ilk kez görüldü (kalıp defterinde yok); 3 satır, 15:54."
 //   oran yok / güvenilmez
 //       "<servis> servisinde olağan dışı bir değişim saptandı."
 //
@@ -68,7 +69,7 @@ export function genericAnomalySentence(service: string): string {
 // ayrıştırılamadıysa null → genel cümle. Artış türlerinde (log / trace) tepe
 // oranı 1'in ALTINDAYSA "katına çıktı" yalan olurdu → genel cümle.
 export function anomalySummary(
-  e: Pick<AnomalyEvent, 'kind' | 'service' | 'pattern' | 'peakRatio'>,
+  e: Pick<AnomalyEvent, 'kind' | 'service' | 'pattern' | 'peakRatio'> & Partial<Pick<AnomalyEvent, 'currentCount' | 'startedAt'>>,
   details: BehaviorChangeDetails | null,
 ): string {
   const svc = e.service ?? '';
@@ -107,8 +108,14 @@ export function anomalySummary(
     case 'elastic_ml':
       if (peak === null) return genericAnomalySentence(svc);
       return `${inLogs(svc)} bu desen normalin ${fmtRatio(peak)} katına çıktı.`;
-    case 'log_template_new':
-      return `${inLogs(svc)} daha önce görülmemiş bir satır biçimi çıktı.`;
+    case 'log_template_new': {
+      const where = svc ? 'bu serviste' : 'bir serviste';
+      const bits = [
+        e.currentCount && e.currentCount > 0 ? `${e.currentCount.toLocaleString('tr-TR')} satır` : '',
+        e.startedAt && e.startedAt > 0 ? clockMinute(e.startedAt) : '',
+      ].filter(Boolean);
+      return `Bu satır biçimi ${where} ilk kez görüldü (kalıp defterinde yok)${bits.length ? `; ${bits.join(', ')}` : ''}.`;
+    }
     default:
       return genericAnomalySentence(svc);
   }

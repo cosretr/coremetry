@@ -60,6 +60,9 @@ const (
 	StdSourceSelf      = "self"
 	StdSourceExternal  = "external"
 	StdSourceRule      = "rule"
+	// StdSourceLogs — v0.10.2038: log olayı (desen sayımı / Drain kalıbı /
+	// Elastic ML); "span · örneklenmiş" diye görünüyordu.
+	StdSourceLogs = "logs"
 )
 
 // Aileler (ProblemStandard.Family) — replay raporu bu anahtarla gruplar.
@@ -1051,14 +1054,26 @@ func StandardizeAnomalyEvent(e AnomalyEvent, f StdFacts) ProblemStandard {
 	if e.StartedAt > 0 && end > e.StartedAt {
 		std.Since.DurationSec = (end - e.StartedAt) / int64(time.Second)
 	}
-	std.Evidence = StdEvidence{Sentence: "Anomali olayı (henüz problem değil).", Source: StdSourceSpan, Sampled: true}
-	gates := ComputeSignalGates(GateInput{Family: fam, Dwell: "unknown", Source: StdSourceSpan,
+	src := anomalyEventSource(e.Kind)
+	std.Evidence = StdEvidence{Sentence: "Anomali olayı (henüz problem değil).", Source: src, Sampled: true}
+	gates := ComputeSignalGates(GateInput{Family: fam, Dwell: "unknown", Source: src,
 		RelationClaimed: f.RelationClaimed, RelationVerified: f.RelationVerified,
 		RecentDeploy: f.RecentDeploy, CalendarKind: f.CalendarKind, Batch: f.Batch})
 	std.Confidence = StdConfidence{Level: ConfidenceFromGates(gates, ConfidenceInput{Sampled: true, Ratio: e.PeakRatio, BigBreach: f.bigBreach()}), Gates: gates}
 	std.NextStep = StdNextStep{Text: "Anomali detayını aç", Href: "/inbox?anomaly=" + url.QueryEscape(e.ID)}
 	std.Context = stdContext(f, e.EpisodeCount)
 	return std
+}
+
+// anomalyEventSource — SAF (v0.10.2038): anomaly_events türünün kanıt
+// kaynağı. Log türleri log kaynağı (Drain kalıbı örneklemle çıkarıldığından
+// Sampled aynen kalır — güven tavanı değişmez); diğerleri span.
+func anomalyEventSource(kind string) string {
+	switch kind {
+	case "log_pattern", "log_template_new", "new_template", "elastic_ml":
+		return StdSourceLogs
+	}
+	return StdSourceSpan
 }
 
 // StandardizeIncident — SAF: incident.

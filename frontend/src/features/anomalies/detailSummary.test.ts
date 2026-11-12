@@ -12,7 +12,7 @@ import {
   genericAnomalySentence, priorDeployText, problemWhenLine, promotedRecurrence, recurrenceClause, recurrenceTitle,
 } from './detailSummary';
 
-type Ev = Pick<AnomalyEvent, 'kind' | 'service' | 'pattern' | 'peakRatio'>;
+type Ev = Pick<AnomalyEvent, 'kind' | 'service' | 'pattern' | 'peakRatio'> & Partial<Pick<AnomalyEvent, 'currentCount' | 'startedAt'>>;
 const ev = (over: Partial<Ev> = {}): Ev => ({ kind: 'log_pattern', service: 'checkout', pattern: 'ORA-00060', peakRatio: 4.2, ...over });
 const bd = (over: Partial<BehaviorChangeDetails> = {}): BehaviorChangeDetails => ({
   metric: 'p99_ms', signal: 'regime', direction: 'up', ratio: 2.4, z: 6.1, baseline: 120, current: 290,
@@ -78,10 +78,13 @@ describe('anomalySummary — türe göre tek cümle', () => {
       'checkout loglarında bu desen normalin 17 katına çıktı.'],
     ['log, tepe yok → genel', ev({ kind: 'log_pattern', peakRatio: 0 }), null,
       'checkout servisinde olağan dışı bir değişim saptandı.'],
+    // v0.10.2038 — neden "yeni": kalıp defterinde yok; sayı + saat; servis başlıkta.
     ['log_template_new (oranı yok, olmamalı)', ev({ kind: 'log_template_new', peakRatio: 0 }), null,
-      'checkout loglarında daha önce görülmemiş bir satır biçimi çıktı.'],
+      'Bu satır biçimi bu serviste ilk kez görüldü (kalıp defterinde yok).'],
     ['log_template_new, oran olsa da oransız', ev({ kind: 'log_template_new', peakRatio: 5 }), null,
-      'checkout loglarında daha önce görülmemiş bir satır biçimi çıktı.'],
+      'Bu satır biçimi bu serviste ilk kez görüldü (kalıp defterinde yok).'],
+    ['log_template_new, sayı + saat', { ...ev({ kind: 'log_template_new', peakRatio: 0 }), currentCount: 3, startedAt: Date.UTC(2026, 10, 12, 15, 54) * 1e6 }, null,
+      'Bu satır biçimi bu serviste ilk kez görüldü (kalıp defterinde yok); 3 satır, 15:54.'],
     // ── servis yok ──
     ['servissiz trace', ev({ kind: 'trace_op', service: '', pattern: 'POST /pay' }), null,
       'Bir serviste POST /pay için hata normalin 4.2 katına çıktı.'],

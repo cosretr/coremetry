@@ -362,6 +362,7 @@ export function LogsHistogram({ range, filter, onRangeSelect, onZoomReset, onSer
           seriesPickable={i => series[i]?.key !== 'rest'}
           regions={regions}
           onRegionClick={onRegionClick}
+          yAxisLeft={source === 'anomaly'} // v0.10.2038 — anomali detayında değerler solda (üst şeritte yatay dizilmez)
         />
       )}
     </div>

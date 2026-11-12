@@ -2,7 +2,7 @@
 // satır modelinde; iki kaynağa birlikte gruplama. Fikstür nötr.
 import { describe, it, expect } from 'vitest';
 import type { AnomalyEvent, MLEvent } from '@/lib/types';
-import { isOpenRow, legacyHeadline, legacySignal, unifiedRows } from './unifiedRows';
+import { isOpenRow, legacyEvidenceGroups, legacyHeadline, legacySignal, unifiedRows } from './unifiedRows';
 
 const min = 60e9;
 const T = 1_800_000_000e9;
@@ -52,5 +52,25 @@ describe('unifiedRows', () => {
   });
   it('legacyHeadline: kalıp dışındaki türlerde sayı eklenmez', () => {
     expect(legacyHeadline(ae({ kind: 'trace_op', pattern: 'POST /orders', currentCount: 40 }))).not.toContain('satır');
+  });
+});
+
+// v0.10.2038 — operatör: aynı kalıp 100 ms arayla iki ayrı kanıt satırıydı.
+describe('legacyEvidenceGroups', () => {
+  it('aynı tür + kalıp tek satır; satırlar toplanır; örnek tekrar etmez, en çok 2', () => {
+    const g = legacyEvidenceGroups([
+      ae({ id: 'a1', currentCount: 2, sample: 'Batch job 7 failed' }),
+      ae({ id: 'a2', currentCount: 1, sample: 'Batch job 7 failed' }),
+      ae({ id: 'a3', currentCount: 0, sample: 'Batch job 9 failed' }),
+      ae({ id: 'a4', currentCount: 1, sample: 'Batch job 11 failed' }),
+    ]);
+    expect(g).toHaveLength(1);
+    expect(g[0]).toMatchObject({ ids: ['a1', 'a2', 'a3', 'a4'], pattern: 'Batch job <*> failed', text: '5 satır; örnek:', samples: ['Batch job 7 failed', 'Batch job 9 failed'], source: 'log kalıpları (Drain)' });
+  });
+  it('farklı kalıp ayrı satır; log dışı tür kendi cümlesiyle', () => {
+    const g = legacyEvidenceGroups([ae({ id: 'a1' }), ae({ id: 'a2', pattern: 'Other <*>' }), ae({ id: 't', kind: 'trace_op', pattern: 'POST /orders', peakRatio: 3, sample: '' })]);
+    expect(g.map(x => x.ids)).toEqual([['a1'], ['a2'], ['t']]);
+    expect(g[2].pattern).toBeUndefined();
+    expect(g[2].text.length).toBeGreaterThan(0);
   });
 });

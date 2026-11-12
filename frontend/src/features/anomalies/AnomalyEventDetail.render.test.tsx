@@ -280,16 +280,35 @@ describe('AnomalyEventDetail — yalın varsayılan görünüm', () => {
     expect(el.querySelector('.pd-triage')).not.toBeNull();
   });
 
-  it('log_template_new: log hacmi grafiği kalır, desen grafiği yok', async () => {
-    m.events.c3 = ev({ id: 'c3', kind: 'log_template_new', pattern: 'user <*> logged in', service: 'billing', peakRatio: 0, currentRatio: 0, sample: 'user 7 logged in' });
+  // v0.10.2038 — yeni kalıp olayı: servisin tüm log hacmi ÇİZİLMEZ; arama
+  // metni yoksa dürüst not; kalıp başlıkta değil, kanıt satırında (tam,
+  // kopyalanabilir); aynı kalıbın iki olayı tek kanıt satırı.
+  it('log_template_new: servis hacmi yok, kalıp kanıtta, aynı kalıp tek satır', async () => {
+    m.events.c3 = ev({ id: 'c3', kind: 'log_template_new', pattern: '{"request_id":"<*>","level":"info"}', service: 'billing', peakRatio: 0, currentRatio: 0, sample: '{"request_id":"a1","level":"info"}' });
     const el = await mount('c3');
-    expect(el.querySelector('[data-loghist]')).not.toBeNull();
+    expect(el.querySelector('[data-loghist]')).toBeNull();
+    expect(el.querySelector('[data-testid="template-chart-empty"]')).not.toBeNull();
     expect(el.querySelector('[data-pattern-panel]')).toBeNull();
+    expect(el.querySelector('.pd-summary__detail')).toBeNull();
+    expect(el.querySelector('.pd-summary__what')?.textContent).toContain('ilk kez görüldü (kalıp defterinde yok)');
+    const rows = el.querySelectorAll('[data-testid="anomaly-evidence-rows"] li');
+    expect(rows.length).toBe(1);
+    expect(rows[0].querySelector('[data-testid="anomaly-evidence-pattern"]')?.textContent).toContain('{"request_id":"<*>","level":"info"}');
+    expect(rows[0].textContent).toContain('log kalıpları');
+    expect(el.textContent).not.toContain('Sonraki adım');
+    expect(el.textContent).not.toContain('Neden böyle değerlendiriyoruz');
     expect(m.patternCalls).toBe(0);
   });
 
+  it('elastic_ml: log hacmi grafiği kalır', async () => {
+    m.events.c4 = ev({ id: 'c4', kind: 'elastic_ml', pattern: 'job-a', service: 'billing', peakRatio: 3, currentRatio: 3, sample: '' });
+    const el = await mount('c4');
+    expect(el.querySelector('[data-loghist]')).not.toBeNull();
+    expect(el.querySelector('[data-pattern-panel]')).toBeNull();
+  });
+
   it('log hacmi boş / hatalı: sayfanın kısa notu (sessiz boşluk yok)', async () => {
-    m.events.c3 = ev({ id: 'c3', kind: 'log_template_new', pattern: 'user <*> logged in', service: 'billing', peakRatio: 0, currentRatio: 0, sample: 'user 7 logged in' });
+    m.events.c3 = ev({ id: 'c3', kind: 'elastic_ml', pattern: 'job-a', service: 'billing', peakRatio: 3, currentRatio: 3, sample: '' });
     m.logSeries = [];
     const el = await mount('c3');
     expect(byText(el, '.pb-sect', 'Log hacmi')!.textContent).toContain('Bu pencere için seri yok — olay saklama süresinin dışında olabilir.');

@@ -31,7 +31,8 @@ import {
 } from './anomalyDetail';
 import { SignalKindBadge } from '@/components/coremetry/SignalKindBadge';
 import { signalKindOf, type SignalKind } from '@/lib/signalKind';
-import { legacyEvidenceText, legacySignal, legacySource, legacyStatusText, unifiedRows } from '@/components/coremetry/anomalies/unifiedRows';
+import { legacyEvidenceGroups, legacySignal, legacyStatusText, unifiedRows } from '@/components/coremetry/anomalies/unifiedRows';
+import { CopyButton } from '@/components/CopyButton';
 import { evidenceSource } from '@/components/coremetry/anomalies/mlGroupDetail';
 import { AnomalyLogVolume, AnomalySample, BehaviorDetailsBox, SpikeFacts } from './anomalyDetailParts';
 import { hasLogPatternSeries, logPatternSeriesArgs, patternLogsPivot } from './logPatternSeries';
@@ -187,7 +188,17 @@ export function AnomalyEventDetail({ event, isAdmin, onBack }: {
   const isLog = isLogAnomalyKind(event.kind);
   const patternSeries = hasLogPatternSeries(event);
   const liveLog = !!event.service && (patternSeries || (event.kind === 'log_template_new' && !!event.logQuery));
+  // v0.10.2038 — yeni kalıp olayında servisin TÜM log hacmi kalıbı anlatmaz
+  // (operatör: "Log hacmi" grafiği kalıbı değil servisi gösteriyordu): canlı
+  // histogram boşsa dürüst not, servis hacmi çizilmez.
   const oldLogChart = patternSeries ? <LogPatternCountSection event={event} />
+    : event.kind === 'log_template_new' ? (
+      <Sect title="Seyir" sub="bu kalıp · olay penceresi">
+        <p data-testid="template-chart-empty" style={{ margin: 0, fontSize: 13, color: 'var(--text3)' }}>
+          Bu kalıba uyan satırlar log aramasında bulunamadı (kalıp örneklemle çıkarılır; satırlar saklama süresini aşmış olabilir). Kalıp metni kanıt satırında.
+        </p>
+      </Sect>
+    )
     : isLog && event.service ? (
       <Sect title="Log hacmi" sub="servis · olay penceresi">
         <AnomalyLogVolume service={event.service} win={win} bare />
@@ -232,9 +243,12 @@ export function AnomalyEventDetail({ event, isAdmin, onBack }: {
       </div>
       {/* Tek düz cümle: standart başlık (sunucu); yüklenene ya da bulunamayana
           dek olayın özeti + ne zaman satırı. Log türünde desen kimliği altında. */}
-      <ProblemStandardHeader stdRef={`anomaly:${event.id}`}
-        fallback={<DetailSummary sentence={sentence} when={when}
-          detail={isLog && event.pattern ? event.pattern : undefined} />} />
+      {/* v0.10.2038 — mockup düzeni: başlık + rozet + TEK cümle. Standart
+          kartları (etki / güven / kaynak) teknik ayrıntıda; "Neden böyle
+          değerlendiriyoruz" / "Sonraki adım" burada döngüsel, çizilmez. Ham
+          kalıp metni başlıkta değil, kanıt satırında (tam, kopyalanabilir). */}
+      <DetailSummary sentence={sentence} when={when}
+        detail={event.kind === 'log_pattern' && event.pattern ? event.pattern : undefined} />
       {/* Triyaj TEK satır, özetin hemen altında (alarm sayfasıyla aynı yer). */}
       <AnomalyTriage event={event} isAdmin={isAdmin} onBack={onBack} />
 
@@ -275,6 +289,7 @@ export function AnomalyEventDetail({ event, isAdmin, onBack }: {
                 <Badge tone={event.promotion === 'live' ? 'warning' : 'info'}>{promotionBadge}</Badge>
               </p>
             )}
+            <ProblemStandardHeader stdRef={`anomaly:${event.id}`} factsOnly />
             {!rcInSummary && <div style={{ margin: '8px 0' }}>{rootCause}</div>}
             <AnomalyTechnical event={event} win={win} hasDetails={!!details} sampleIsTrace={!!sampleTrace} />
             {details && <BehaviorDetailsBox d={details} />}
@@ -321,9 +336,11 @@ function AnomalyEvidenceRows({ event }: { event: AnomalyEvent }) {
     () => unifiedRows(ml.data?.items ?? [], legacy.data?.items ?? []).find(r => r.legacy.some(e => e.id === event.id)) ?? null,
     [ml.data, legacy.data, event.id]);
   const others = (row?.legacy ?? []).filter(e => e.id !== event.id);
-  const items: { key: string; kind: SignalKind; text: string; source: string }[] = [
-    { key: event.id, kind: legacySignal(event), text: legacyEvidenceText(event), source: legacySource(event) },
-    ...others.map(e => ({ key: e.id, kind: legacySignal(e), text: legacyEvidenceText(e), source: legacySource(e) })),
+  // v0.10.2038 — aynı tür + aynı kalıp TEK satır (örnekler alt alta, en çok 2);
+  // log türünde kanıt cümleyi tekrar etmez, kalıp tam ve kopyalanabilir.
+  const groups = legacyEvidenceGroups([event, ...others]);
+  const items: { key: string; kind: SignalKind; text: string; source: string; pattern?: string; samples?: string[] }[] = [
+    ...groups.map(g => ({ key: g.key, kind: legacySignal({ kind: g.kind } as Pick<AnomalyEvent, 'kind'>), text: g.text, source: g.source, pattern: g.pattern, samples: g.samples })),
     ...(row?.ml ?? []).flatMap(g => g.members.map(m => ({
       key: `ml:${m.id}`, kind: signalKindOf(m.detector, m.signal), text: m.summary || m.detector,
       source: evidenceSource(m.detector, m.signal, m.evidence),
@@ -334,7 +351,18 @@ function AnomalyEvidenceRows({ event }: { event: AnomalyEvent }) {
       {items.map(it => (
         <li key={it.key} style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'baseline', fontSize: 13 }}>
           <SignalKindBadge kind={it.kind} />
-          <span style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>{it.text}</span>
+          <span style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>
+            {it.pattern && (
+              <span data-testid="anomaly-evidence-pattern" style={{ display: 'flex', gap: 6, alignItems: 'flex-start', marginBottom: 4 }}>
+                <code className="mono" style={{ fontSize: 12, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{it.pattern}</code>
+                <CopyButton value={it.pattern} title="Kalıbı kopyala" />
+              </span>
+            )}
+            {it.text}
+            {(it.samples ?? []).map(x => (
+              <code key={x} className="mono" style={{ display: 'block', fontSize: 12, color: 'var(--text2)', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{x}</code>
+            ))}
+          </span>
           <span style={{ fontSize: 12, color: 'var(--text3)' }}>{it.source}</span>
         </li>
       ))}

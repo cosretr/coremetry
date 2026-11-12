@@ -21,19 +21,23 @@ import {
 } from '@/lib/problemStandardView';
 import type { ProblemStandard } from '@/lib/types';
 
-export function ProblemStandardHeader({ stdRef, fallback, showTitle = true }: {
+export function ProblemStandardHeader({ stdRef, fallback, showTitle = true, factsOnly = false }: {
   /** InboxItem.id biçimi: problem:<id> · exception:<fp> · anomaly:<id>. */
   stdRef: string;
   fallback?: ReactNode;
   showTitle?: boolean;
+  /** v0.10.2038 — yalnız dört kart (anomali detayının "Teknik ayrıntı"sı):
+   *  "Neden böyle değerlendiriyoruz" / "Sonraki adım" detay sayfasında
+   *  döngüsel ("Anomali detayını aç"); Problem kartında kalır. */
+  factsOnly?: boolean;
 }) {
   const q = useProblemStandard(stdRef);
   if (!q.data) return <>{fallback ?? null}</>;
-  return <ProblemStandardBlock std={q.data} showTitle={showTitle} />;
+  return <ProblemStandardBlock std={q.data} showTitle={showTitle && !factsOnly} factsOnly={factsOnly} />;
 }
 
 /** Saf çizim (test edilebilir; veri çağırandan). */
-export function ProblemStandardBlock({ std, showTitle = true }: { std: ProblemStandard; showTitle?: boolean }) {
+export function ProblemStandardBlock({ std, showTitle = true, factsOnly = false }: { std: ProblemStandard; showTitle?: boolean; factsOnly?: boolean }) {
   const head = splitStdHeadline(std);
   const impactSub = stdImpactSecondary(std);
   const nextHref = stdNextHref(std);
@@ -68,7 +72,7 @@ export function ProblemStandardBlock({ std, showTitle = true }: { std: ProblemSt
           <div className="std-card__sub">{stdSamplingNote(std)}</div>
         </div>
       </div>
-      <dl className="std-why">
+      {!factsOnly && <dl className="std-why">
         <dt>Neden böyle değerlendiriyoruz</dt>
         <dd>{std.evidence.sentence || '—'}</dd>
         {(std.context?.length ?? 0) > 0 && (
@@ -82,7 +86,7 @@ export function ProblemStandardBlock({ std, showTitle = true }: { std: ProblemSt
           {nextHref ? <Link to={nextHref}>{std.nextStep.text}</Link> : std.nextStep.text}
           {' '}<span className="cell-faint">(öneri — sistem hiçbir şeyi değiştirmez)</span>
         </dd>
-      </dl>
+      </dl>}
     </section>
   );
 }

@@ -31,6 +31,7 @@ export function stdConfidenceRank(std: ProblemStandard | undefined): number {
 const SOURCE_LABEL: Record<string, string> = {
   vm: 'VictoriaMetrics', span: 'span', db_mv: 'DB özeti', probe: 'sentetik kontrol',
   exception: 'exception grubu', oracle: 'Oracle', self: 'Coremetry', external: 'dış kaynak', rule: 'kural',
+  logs: 'log kalıpları', // v0.10.2038 — log anomalisi (span değil)
 };
 
 /** Kaynak adı ("VictoriaMetrics", "span" …). Bilinmeyen kaynak kendi adıyla. */

@@ -67,6 +67,45 @@ export function legacyEvidenceText(e: AnomalyEvent): string {
   return legacyHeadline(e);
 }
 
+/** v0.10.2038 — eski olayların kanıt grubu: aynı tür + aynı kalıp TEK satır. */
+export interface LegacyEvidenceGroup {
+  key: string; kind: AnomalyEvent['kind']; ids: string[];
+  /** Cümlede olmayan bilgi (log türünde "3 satır"); diğer türlerde olayın kendi kanıt cümlesi. */
+  text: string;
+  /** Log türünde kalıp metni (tam; kopyalanabilir). */
+  pattern?: string;
+  /** En çok 2 örnek satır, tekrar edenler bir kez. */
+  samples: string[];
+  source: string;
+}
+
+/** SAF (v0.10.2038; operatör: aynı kalıp 100 ms arayla iki satır olarak
+ *  listeleniyordu): eski olaylar → kanıt grupları. Aynı tür + aynı kalıp
+ *  tek grup; log türünde satır sayıları toplanır, örnekler tekilleşir. */
+export function legacyEvidenceGroups(events: AnomalyEvent[]): LegacyEvidenceGroup[] {
+  const out: LegacyEvidenceGroup[] = [];
+  const byKey = new Map<string, LegacyEvidenceGroup>();
+  const counts = new Map<string, number>();
+  for (const e of events) {
+    const isLog = e.kind === 'log_template_new' || e.kind === 'log_pattern';
+    const key = isLog ? `${e.kind}|${e.service}|${e.pattern}` : `id|${e.id}`;
+    let g = byKey.get(key);
+    if (!g) {
+      g = { key, kind: e.kind, ids: [], text: isLog ? '' : legacyEvidenceText(e), pattern: isLog && e.pattern ? e.pattern : undefined, samples: [], source: legacySource(e) };
+      byKey.set(key, g);
+      out.push(g);
+    }
+    g.ids.push(e.id);
+    counts.set(key, (counts.get(key) ?? 0) + (e.currentCount > 0 ? e.currentCount : 1));
+    const one = (e.sample || '').trim().split('\n')[0]?.trim();
+    if (isLog && one && g.samples.length < 2 && !g.samples.includes(one)) g.samples.push(one.length > 400 ? `${one.slice(0, 400)}…` : one);
+  }
+  for (const g of byKey.values()) {
+    if (!g.text) g.text = `${(counts.get(g.key) ?? 0).toLocaleString('tr-TR')} satır${g.samples.length ? '; örnek:' : ''}`;
+  }
+  return out;
+}
+
 /** SAF: eski olayın kaynak notu (sinyalin nereden okunduğu). */
 export function legacySource(e: Pick<AnomalyEvent, 'kind'>): string {
   switch (String(e.kind)) {
