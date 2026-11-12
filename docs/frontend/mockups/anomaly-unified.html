@@ -1,0 +1,372 @@
+<title>Tek Anomali Modeli</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Yerleşim: tek sütun anlatım; her örnek solda "bugün" (dağınık satırlar), sağda "hedef" (tek anomali kartı).
+   Token blokları diğer Coremetry mockup'larıyla aynıdır (kaynak: frontend/src/styles/globals.css + tokens.css). Statik mockup; ürün kodu değildir. */
+:root{
+  --font-sans:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+  --font-mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  --bg0:#f4f6f8;--bg1:#ffffff;--bg2:#f0f3f6;--bg3:#e4e8ed;
+  --border:#dde2e9;--divider:#e6e9ef;--border-control:#b2b7be;--border-strong:#8d939a;
+  --text:#212429;--text2:#474c54;--text3:#62676f;--text-faint:#888e95;
+  --accent:#2572de;--accent2:#1263cd;--on-accent:#ffffff;--focus:#2572de;
+  --accent-bg:#ebf2fc;--accent-border:#b3cef3;
+  --ok:#047735;--warn:#8f5c04;--err:#c42a28;--info:#1263cd;
+  --ok-bg:#e8f3ed;--warn-bg:#f5f0e8;--err-bg:#faecec;--info-bg:#ebf2fc;
+  --shadow-sm:0 1px 2px rgba(20,30,45,.05);
+  --radius-xs:4px;--radius-sm:6px;--radius:8px;
+  --sig-metric:#137775;--sig-trace:#8250df;--sig-log:#bc4c00;
+  --band:rgba(37,114,222,.10);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg0:#09090b;--bg1:#18181b;--bg2:#212125;--bg3:#27272a;
+    --border:#3f3f46;--divider:#2c2c31;--border-control:#52525b;--border-strong:#71717a;
+    --text:#fafafa;--text2:#d4d4d8;--text3:#a6a6ae;--text-faint:#71717a;
+    --accent:#2d73d8;--accent2:#6ba6fb;--on-accent:#ffffff;--focus:#6ba6fb;
+    --accent-bg:#253040;--accent-border:#294d82;
+    --ok:#4db96b;--warn:#f3b94c;--err:#fe7f73;--info:#6ba6fb;
+    --ok-bg:#293933;--warn-bg:#3d392f;--err-bg:#3e3234;--info-bg:#253040;
+    --shadow-sm:0 1px 2px rgba(0,0,0,.25);
+    --sig-metric:#39c5cf;--sig-trace:#b48cf9;--sig-log:#f0903a;
+    --band:rgba(107,166,251,.14);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg0:#09090b;--bg1:#18181b;--bg2:#212125;--bg3:#27272a;
+  --border:#3f3f46;--divider:#2c2c31;--border-control:#52525b;--border-strong:#71717a;
+  --text:#fafafa;--text2:#d4d4d8;--text3:#a6a6ae;--text-faint:#71717a;
+  --accent:#2d73d8;--accent2:#6ba6fb;--on-accent:#ffffff;--focus:#6ba6fb;
+  --accent-bg:#253040;--accent-border:#294d82;
+  --ok:#4db96b;--warn:#f3b94c;--err:#fe7f73;--info:#6ba6fb;
+  --ok-bg:#293933;--warn-bg:#3d392f;--err-bg:#3e3234;--info-bg:#253040;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.25);
+  --sig-metric:#39c5cf;--sig-trace:#b48cf9;--sig-log:#f0903a;
+  --band:rgba(107,166,251,.14);
+  color-scheme:dark;
+}
+
+*{box-sizing:border-box}
+body{background:var(--bg0);color:var(--text);font-family:var(--font-sans);font-size:14px;line-height:1.55;
+  padding-block:32px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1040px;margin:0 auto;display:flex;flex-direction:column;gap:40px}
+section{display:flex;flex-direction:column;gap:16px;min-width:0}
+h1{font-size:28px;line-height:1.2;font-weight:700;margin:0;text-wrap:balance;letter-spacing:-.01em}
+h2{font-size:19px;line-height:1.3;font-weight:650;margin:0;text-wrap:balance}
+h3{font-size:15px;font-weight:600;margin:0}
+p{margin:0;max-width:68ch;color:var(--text2)}
+.lede{font-size:16px;color:var(--text)}
+.note{font-size:12.5px;color:var(--text3)}
+.mono{font-family:var(--font-mono);font-size:12.5px}
+.num{font-variant-numeric:tabular-nums}
+.eyebrow{font-size:11.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text3)}
+
+/* sayım tablosu */
+.tbl-scroll{overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg1)}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{text-align:left;padding:9px 14px;border-bottom:1px solid var(--divider);vertical-align:top}
+th{font-size:12px;font-weight:600;color:var(--text3);background:var(--bg2);white-space:nowrap}
+tr:last-child td{border-bottom:0}
+td.n{font-variant-numeric:tabular-nums;white-space:nowrap}
+td.strong{font-weight:600;color:var(--text)}
+
+/* akış */
+.flow{display:grid;grid-template-columns:1.25fr auto 1fr auto 1fr;gap:12px;align-items:stretch}
+.flow .col{display:flex;flex-direction:column;gap:8px;min-width:0}
+.flow .arrow{align-self:center;color:var(--text-faint);font-size:20px;line-height:1}
+.box{border:1px solid var(--border);background:var(--bg1);border-radius:var(--radius);padding:11px 13px;display:flex;flex-direction:column;gap:3px;min-width:0}
+.box b{font-weight:600}
+.box span{font-size:12.5px;color:var(--text3)}
+.box.result{border-color:var(--accent-border);background:var(--accent-bg);justify-content:center;flex:1}
+.box.mid{justify-content:center;flex:1}
+@media (max-width:760px){.flow{grid-template-columns:1fr}.flow .arrow{transform:rotate(90deg);justify-self:center}}
+
+/* sinyal çipi: renk + metin birlikte */
+.sig{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;border:1px solid var(--border);background:var(--bg1);color:var(--text2);white-space:nowrap}
+.sig i{width:8px;height:8px;border-radius:2px;display:block}
+.sig.trace i{background:var(--sig-trace)}.sig.log i{background:var(--sig-log)}.sig.metric i{background:var(--sig-metric)}
+.sigs{display:flex;flex-wrap:wrap;gap:6px}
+
+.pill{display:inline-block;font-size:12px;font-weight:600;padding:2px 9px;border-radius:999px;white-space:nowrap}
+.pill.err{background:var(--err-bg);color:var(--err)}
+.pill.warn{background:var(--warn-bg);color:var(--warn)}
+.pill.ok{background:var(--ok-bg);color:var(--ok)}
+.pill.mute{background:var(--bg3);color:var(--text2)}
+
+/* örnek: bugün / hedef */
+.ex{display:flex;flex-direction:column;gap:12px}
+.pair{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:16px;align-items:start}
+@media (max-width:820px){.pair{grid-template-columns:minmax(0,1fr)}}
+.side{display:flex;flex-direction:column;gap:8px;min-width:0}
+.old{border:1px dashed var(--border-control);border-radius:var(--radius);background:transparent;display:flex;flex-direction:column}
+.old .row{padding:8px 12px;border-bottom:1px dashed var(--divider);display:flex;flex-direction:column;gap:1px;min-width:0}
+.old .row:last-child{border-bottom:0}
+.old .row .where{font-size:11.5px;color:var(--text-faint)}
+.old .row .what{font-family:var(--font-mono);font-size:12px;color:var(--text2);overflow-wrap:anywhere}
+
+.anom{border:1px solid var(--border);border-radius:var(--radius);background:var(--bg1);box-shadow:var(--shadow-sm);padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.anom .head{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.anom .svc{font-weight:600}
+.anom .sentence{font-size:15.5px;line-height:1.45;color:var(--text);max-width:none}
+.anom .sentence b{font-weight:650}
+.ev{display:flex;flex-direction:column;border-top:1px solid var(--divider)}
+.ev .line{display:grid;grid-template-columns:86px minmax(0,1fr);gap:10px;padding:8px 0;border-bottom:1px solid var(--divider);align-items:start}
+.ev .line:last-child{border-bottom:0}
+.ev .line p{max-width:none;font-size:13.5px}
+.ev .src{font-size:11.5px;color:var(--text-faint)}
+.chart{width:100%;height:auto;display:block}
+.chart .band{fill:var(--band)}
+.chart .ln{fill:none;stroke:var(--text3);stroke-width:1.6}
+.chart .hot{fill:none;stroke:var(--err);stroke-width:2}
+.chart .dot{fill:var(--err)}
+.chart .axis{stroke:var(--divider);stroke-width:1}
+.chart .mark{stroke:var(--border-strong);stroke-width:1;stroke-dasharray:3 3}
+.chart text{font-family:var(--font-sans);font-size:11px;fill:var(--text3)}
+details{border-top:1px solid var(--divider);padding-top:8px}
+summary{cursor:pointer;font-size:13px;color:var(--accent2);font-weight:500}
+summary:focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:var(--radius-xs)}
+details .kv{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 14px;padding-top:8px;font-size:12.5px}
+details .kv dt{color:var(--text3)}details .kv dd{margin:0;font-family:var(--font-mono);overflow-wrap:anywhere}
+.actions{display:flex;flex-wrap:wrap;gap:8px}
+.btn{font:inherit;font-size:13px;font-weight:500;padding:5px 11px;border-radius:var(--radius-sm);border:1px solid transparent;background:var(--accent-bg);color:var(--accent2);cursor:default}
+.btn.q{background:var(--bg2);color:var(--text2)}
+
+.quiet{border:1px solid var(--border);border-radius:var(--radius);background:var(--bg2);padding:14px 16px;display:flex;flex-direction:column;gap:6px}
+.two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+@media (max-width:760px){.two{grid-template-columns:minmax(0,1fr)}}
+ul{margin:0;padding-left:18px;color:var(--text2);display:flex;flex-direction:column;gap:5px;max-width:68ch}
+.sample{font-size:12px;color:var(--text3);border:1px solid var(--border);border-radius:999px;padding:2px 10px;align-self:flex-start}
+</style>
+
+<div class="wrap">
+
+<section>
+  <span class="eyebrow">Coremetry · anomali tekilleştirme · öneri mockup'ı</span>
+  <h1>Bir olay, tek anomali, tek cümle</h1>
+  <p class="lede">Bugün aynı yavaşlama ya da hata dalgası birkaç ayrı yapıda, ayrı satırlar olarak beliriyor ve hiçbiri size ulaşmıyor. Hedef: trace, log ve metrik sinyallerini tek motor toplar, aynı olaya ait olanları birleştirir ve ne olduğunu düz bir cümleyle söyler.</p>
+  <span class="sample">Aşağıdaki servis adları ve sayılar örnektir, gerçek veri değildir.</span>
+</section>
+
+<section>
+  <h2>Bugün ile hedef</h2>
+  <div class="tbl-scroll">
+    <table>
+      <thead><tr><th></th><th>Bugün</th><th>Hedef</th></tr></thead>
+      <tbody>
+        <tr><td class="strong">Tespit motoru</td><td>3 ayrı motor, ayrıca kümeleme ve Davis özneleri</td><td class="strong">1 (ML katmanı)</td></tr>
+        <tr><td class="strong">Tespit yolu</td><td>yaklaşık 15 eski dedektör + 8 ML dedektörü</td><td class="strong">yalnız ML dedektörleri</td></tr>
+        <tr><td class="strong">Olay tablosu</td><td>2</td><td class="strong">1</td></tr>
+        <tr><td class="strong">Problem'e giden yol</td><td>4, hepsi varsayılanda kapalı</td><td class="strong">1</td></tr>
+        <tr><td class="strong">Ayar ekranı</td><td>4 ayrı anahtar grubu</td><td class="strong">1</td></tr>
+        <tr><td class="strong">Sayfa</td><td>3 sekme + 2 farklı detay sayfası</td><td class="strong">1 liste + 1 detay</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2>Hangi sinyal nereden okunur</h2>
+  <p>Collector hatalı trace'lerin tamamını saklıyor, başarılıları %5 örnekliyor. Bu yüzden hata sayıları span'lerden tam okunur; hız, hata oranı ve gecikme ise VictoriaMetrics'ten gelir. JVM metrikleri VictoriaMetrics'te değil, uzak cluster'ların OpenShift izleme yığınında durur.</p>
+  <div class="flow">
+    <div class="col">
+      <div class="box"><span class="sigs"><span class="sig trace"><i></i>Trace</span></span><b>Hata span'leri</b><span>ClickHouse. Hata sayısı sıçraması, yeni hata türü, örnek trace.</span></div>
+      <div class="box"><span class="sigs"><span class="sig trace"><i></i>Trace</span><span class="sig metric"><i></i>Metrik</span></span><b>Hız, hata oranı, gecikme</b><span>VictoriaMetrics. Yavaşlama ve oran artışı buradan yakalanır.</span></div>
+      <div class="box"><span class="sigs"><span class="sig metric"><i></i>Metrik</span></span><b>Kafka, bağımlılık süreleri</b><span>VictoriaMetrics.</span></div>
+      <div class="box"><span class="sigs"><span class="sig metric"><i></i>Metrik</span></span><b>JVM: heap, GC, thread</b><span>Uzak cluster'ların OpenShift izleme yığını (Thanos). VictoriaMetrics'te yok; her cluster kendi kaynağından sorgulanır.</span></div>
+      <div class="box"><span class="sigs"><span class="sig log"><i></i>Log</span></span><b>Hacim, hata satırı, yeni kalıp</b><span>Elasticsearch.</span></div>
+    </div>
+    <div class="arrow" aria-hidden="true">&rarr;</div>
+    <div class="col">
+      <div class="box mid"><b>Tespit</b><span>Her sinyal kendi normaline göre ölçülür: son haftaların aynı saati, takvim (tatil, ay sonu) hesaba katılır.</span></div>
+      <div class="box mid"><b>Birleştirme</b><span>Aynı servis ve örtüşen zaman aralığındaki tespitler tek gruba bağlanır.</span></div>
+    </div>
+    <div class="arrow" aria-hidden="true">&rarr;</div>
+    <div class="col">
+      <div class="box result"><b>Tek anomali</b><span>Bir cümle, bir grafik, kanıt satırları. Gerekiyorsa tek Problem ve tek bildirim.</span></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Örnek 1: hata dalgası</h2>
+  <p>Ödeme servisi veritabanına bağlanamıyor. Üç sinyal aynı şeyi söylüyor.</p>
+  <div class="pair">
+    <div class="side">
+      <span class="eyebrow">Bugün: dört ayrı satır, dört ayrı yerde</span>
+      <div class="old">
+        <div class="row"><span class="where">ML sekmesi</span><span class="what">trace_red · payment-api · err_ratio</span></div>
+        <div class="row"><span class="where">ML sekmesi</span><span class="what">template_spike · payment-api · tpl|Connection is not available</span></div>
+        <div class="row"><span class="where">ML sekmesi</span><span class="what">dependency_latency · payment-api → orders-db</span></div>
+        <div class="row"><span class="where">Anomaliler geçmişi (kapalıysa hiç)</span><span class="what">trace_op · POST /payments</span></div>
+      </div>
+      <p class="note">Hiçbiri Problem açmıyor, bildirim gitmiyor. Hangisinin aynı olay olduğunu siz eşleştiriyorsunuz.</p>
+    </div>
+    <div class="side">
+      <span class="eyebrow">Hedef: tek anomali</span>
+      <div class="anom">
+        <div class="head">
+          <span class="svc">payment-api · POST /payments</span>
+          <span class="pill err">Sürüyor · 12 dk</span>
+        </div>
+        <p class="sentence">Ödeme isteklerinde hata sayısı son 10 dakikada <b>184</b>'e çıktı; bu saatte normali <b>en çok 12</b>. Yeni bir hata türü var: <span class="mono">SQLTransientConnectionException</span>.</p>
+        <svg class="chart" id="c1" viewBox="0 0 600 150" role="img" aria-label="payment-api hata sayısı, 10 dakikalık pencereler; 14:10'dan sonra normal aralığın çok üstüne çıkıyor"></svg>
+        <div class="ev">
+          <div class="line"><span class="sig trace"><i></i>Trace</span><div><p>184 hatalı istek, tamamı aynı adımda: <span class="mono">orders-db</span> bağlantısı alınamıyor.</p><span class="src">ClickHouse span'leri · 3 örnek trace</span></div></div>
+          <div class="line"><span class="sig log"><i></i>Log</span><div><p>"Connection is not available, request timed out" satırı 10 dakikada 211 kez; önceki hafta bu saatte 0.</p><span class="src">Elasticsearch</span></div></div>
+          <div class="line"><span class="sig metric"><i></i>Metrik</span><div><p><span class="mono">orders-db</span> çağrılarının süresi (p95) 12 ms'den 30 sn'lik zaman aşımına çıktı.</p><span class="src">VictoriaMetrics</span></div></div>
+        </div>
+        <div class="actions"><span class="btn">Örnek trace'i aç</span><span class="btn">Logları aç</span><span class="btn q">Gerçek</span><span class="btn q">Değil</span></div>
+        <details>
+          <summary>Teknik ayrıntı</summary>
+          <dl class="kv">
+            <dt>Dedektörler</dt><dd>trace_error_count (CH), template_spike (ES), dependency_latency (VM)</dd>
+            <dt>Grup</dt><dd>payment-api · 14:10–sürüyor · 3 sinyal</dd>
+            <dt>Taban</dt><dd>son 21 gün, aynı saat dilimi, iş günü</dd>
+            <dt>Problem</dt><dd>anomaly-auto:group:… · P2</dd>
+          </dl>
+        </details>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Örnek 2: yavaşlama</h2>
+  <p>Hata yok, istekler başarılı ama yavaş. Başarılı trace'ler örneklendiği için tespit metrikten yapılır; nedenini span'ler anlatır.</p>
+  <div class="pair">
+    <div class="side">
+      <span class="eyebrow">Bugün</span>
+      <div class="old">
+        <div class="row"><span class="where">ML sekmesi</span><span class="what">trace_red · checkout-service · p95</span></div>
+        <div class="row"><span class="where">ML sekmesi</span><span class="what">dependency_latency · checkout-service → inventory-service</span></div>
+        <div class="row"><span class="where">ML sekmesi</span><span class="what">change_point · checkout-service · |p95</span></div>
+        <div class="row"><span class="where">ML sekmesi</span><span class="what">trace_red · inventory-service · p95</span></div>
+      </div>
+      <p class="note">Dört satır, iki servis. Hangisinin neden, hangisinin sonuç olduğu yazmıyor.</p>
+    </div>
+    <div class="side">
+      <span class="eyebrow">Hedef</span>
+      <div class="anom">
+        <div class="head">
+          <span class="svc">checkout-service · POST /checkout</span>
+          <span class="pill err">Sürüyor · 25 dk</span>
+        </div>
+        <p class="sentence">Sepet onayı <b>14:10'dan beri yavaş</b>: yanıt süresi (p95) 420 ms'den <b>2,1 sn</b>'ye çıktı. Sürenin büyük kısmı <b>inventory-service</b> çağrısında geçiyor; o servis 14:08'de yeni sürüme geçti.</p>
+        <svg class="chart" id="c2" viewBox="0 0 600 150" role="img" aria-label="checkout-service p95 yanıt süresi; 14:10'dan sonra 2 saniyenin üstüne çıkıyor"></svg>
+        <div class="ev">
+          <div class="line"><span class="sig metric"><i></i>Metrik</span><div><p>p95 420 ms → 2,1 sn. İstek sayısı ve hata oranı değişmedi.</p><span class="src">VictoriaMetrics</span></div></div>
+          <div class="line"><span class="sig trace"><i></i>Trace</span><div><p>Örneklenen 40 yavaş istekte sürenin ortalama %78'i <span class="mono">GET /stock/reserve</span> adımında.</p><span class="src">ClickHouse span'leri (%5 örnek, yalnız açıklama için)</span></div></div>
+          <div class="line"><span class="sig metric"><i></i>Metrik</span><div><p>inventory-service 14:08'de v2.31'e geçti; kendi p95'i de aynı anda yükseldi.</p><span class="src">Yayın kaydı + VictoriaMetrics</span></div></div>
+        </div>
+        <div class="actions"><span class="btn">Yavaş bir trace aç</span><span class="btn">inventory-service'e git</span><span class="btn q">Gerçek</span><span class="btn q">Değil</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Örnek 3 ve 4: tek sinyal, ve anomali olmayan</h2>
+  <div class="two">
+    <div class="anom">
+      <div class="head"><span class="svc">notification-worker</span><span class="pill warn">İzleniyor · 8 dk</span></div>
+      <p class="sentence">"SMTP relay rejected" satırı <b>ilk kez görüldü</b> ve 10 dakikada 312 kez yazıldı.</p>
+      <div class="sigs"><span class="sig log"><i></i>Log</span></div>
+      <p class="note">Yalnız bir sinyal var; hata span'i ya da metrik sapması eşlik etmiyor. Listede görünür, Problem açmaz. İkinci bir sinyal katılırsa ya da süre uzarsa yükselir.</p>
+    </div>
+    <div class="quiet">
+      <h3>report-batch · gece 02:00 yük artışı</h3>
+      <p>İstek sayısı normalin 9 katı, ama servis adı <span class="mono">-batch</span> ile bitiyor ve hata oranı değişmedi.</p>
+      <p class="note">Anomali açılmaz. Batch yükü anomali sayılmıyor; yalnız gerçek hata artışı açar. Bu kural bugünkü gibi kalır.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Liste: tek sayfa</h2>
+  <p>Üç sekme yerine tek tablo. Her satır bir olaydır, dedektör adı değil ne olduğu yazar.</p>
+  <div class="tbl-scroll">
+    <table>
+      <thead><tr><th>Başlangıç</th><th>Servis</th><th>Ne oldu</th><th>Sinyaller</th><th>Durum</th></tr></thead>
+      <tbody>
+        <tr><td class="n">14:10</td><td class="strong">payment-api</td><td>Ödeme isteklerinde hata sayısı 184 (normali en çok 12), yeni hata türü</td><td><span class="sigs"><span class="sig trace"><i></i>Trace</span><span class="sig log"><i></i>Log</span><span class="sig metric"><i></i>Metrik</span></span></td><td><span class="pill err">Sürüyor · 12 dk</span></td></tr>
+        <tr><td class="n">14:10</td><td class="strong">checkout-service</td><td>Sepet onayı yavaş: p95 420 ms → 2,1 sn, neden inventory-service</td><td><span class="sigs"><span class="sig metric"><i></i>Metrik</span><span class="sig trace"><i></i>Trace</span></span></td><td><span class="pill err">Sürüyor · 25 dk</span></td></tr>
+        <tr><td class="n">14:27</td><td class="strong">notification-worker</td><td>"SMTP relay rejected" satırı ilk kez görüldü, 312 kez</td><td><span class="sigs"><span class="sig log"><i></i>Log</span></span></td><td><span class="pill warn">İzleniyor · 8 dk</span></td></tr>
+        <tr><td class="n">11:42</td><td class="strong">orders-consumer</td><td>Kafka tüketici gecikmesi 40 bin kayda çıktı, 18 dakikada eridi</td><td><span class="sigs"><span class="sig metric"><i></i>Metrik</span></span></td><td><span class="pill ok">Bitti · 18 dk sürdü</span></td></tr>
+        <tr><td class="n">09:05</td><td class="strong">search-api</td><td>Heap kullanımı 40 dakika boyunca normalin üstünde kaldı (prod-east cluster'ı, Thanos)</td><td><span class="sigs"><span class="sig metric"><i></i>Metrik</span></span></td><td><span class="pill mute">Değil dendi</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2>Ne zaman Problem açılır</h2>
+  <p>Bugün dört ayrı terfi yolu var ve varsayılanda hepsi kapalı; anomali görseniz bile bildirim gelmiyor. Öneri tek kural:</p>
+  <ul>
+    <li><b>İki ya da daha fazla sinyal</b> aynı olayda buluşuyorsa (örnek 1 ve 2) Problem açılır ve bildirim gider.</li>
+    <li><b>Tek sinyal</b> ise (örnek 3) listede "İzleniyor" olarak kalır; uzun sürerse ya da etkisi büyükse yükselir.</li>
+    <li>Aynı olay için <b>tek Problem</b> açılır; sinyaller sonradan katılırsa aynı Problem'e eklenir.</li>
+    <li>"Gerçek" ve "Değil" düğmeleri motorun o servisteki eşiğini zamanla ayarlar.</li>
+  </ul>
+  <p class="note">Bu kural öneridir; eşikleri sizin vereceğiniz gerçek örneklerle (kaçırılan ve boşuna açılan olaylar) deneyip öyle canlıya alacağım. O zamana kadar motor gölgede çalışır: "açardı" diye kaydeder, Problem açmaz.</p>
+</section>
+
+<section>
+  <h2>Kalkacaklar ve sıra</h2>
+  <div class="two">
+    <div class="side">
+      <h3>Silinir (her biri ayrı onayınızla)</h3>
+      <ul>
+        <li>Eski dedektörler ve onların ayar ekranı</li>
+        <li>Elastic ML poller</li>
+        <li>Davis özneleri ve kümeleme (Kafka gecikmesi ML'e taşınır)</li>
+        <li>Eski anomali tablosu, ML sekmesi ve ikinci detay sayfası</li>
+      </ul>
+    </div>
+    <div class="side">
+      <h3>Sıra</h3>
+      <ul>
+        <li><b>Şimdi (çalışıyor):</b> fırtına düzeltmesi, ölçüm sorguları, gölgede birleştirme, gölgede "açardı" kaydı, hata span'lerinden trace tespiti</li>
+        <li><b>Sonra, onayınızla:</b> canlı Problem, tek liste ve tek detay sayfası</li>
+        <li><b>En son:</b> eski yapıların silinmesi</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<script>
+(function(){
+  var NS='http://www.w3.org/2000/svg';
+  function el(n,a,t){var e=document.createElementNS(NS,n);for(var k in a)e.setAttribute(k,a[k]);if(t!=null)e.textContent=t;return e}
+  // Tek ölçek: x = indeks, y = değer; etiketler aynı ölçekten yerleşir.
+  function draw(id,o){
+    var s=document.getElementById(id);if(!s)return;
+    var W=600,H=150,L=46,R=14,T=14,B=24,n=o.data.length,max=o.max;
+    function x(i){return L+(W-L-R)*i/(n-1)}
+    function y(v){return T+(H-T-B)*(1-v/max)}
+    s.appendChild(el('rect',{class:'band',x:L,y:y(o.bandHi),width:W-L-R,height:y(o.bandLo)-y(o.bandHi)}));
+    s.appendChild(el('line',{class:'axis',x1:L,y1:y(0),x2:W-R,y2:y(0)}));
+    s.appendChild(el('text',{x:L-6,y:y(max)+4,'text-anchor':'end'},o.fmt(max)));
+    s.appendChild(el('text',{x:L-6,y:y(0)+4,'text-anchor':'end'},o.fmt(0)));
+    s.appendChild(el('text',{x:L+6,y:y(o.bandHi)-5},'normal aralık'));
+    var k=o.start;
+    s.appendChild(el('line',{class:'mark',x1:x(k),y1:T,x2:x(k),y2:y(0)}));
+    s.appendChild(el('text',{x:x(k),y:H-6,'text-anchor':'middle'},o.startLabel));
+    s.appendChild(el('text',{x:L,y:H-6,'text-anchor':'start'},o.firstLabel));
+    function path(a,b){var d='';for(var i=a;i<=b;i++)d+=(i===a?'M':'L')+x(i).toFixed(1)+' '+y(o.data[i]).toFixed(1);return d}
+    s.appendChild(el('path',{class:'ln',d:path(0,k)}));
+    s.appendChild(el('path',{class:'hot',d:path(k,n-1)}));
+    s.appendChild(el('circle',{class:'dot',cx:x(n-1),cy:y(o.data[n-1]),r:3.5}));
+    s.appendChild(el('text',{x:x(n-1)-8,y:y(o.data[n-1])-7,'text-anchor':'end'},o.fmt(o.data[n-1])));
+  }
+  draw('c1',{data:[5,7,4,6,9,5,8,6,4,7,6,5,8,96,152,184],max:200,bandLo:0,bandHi:12,start:12,
+    firstLabel:'12:00',startLabel:'14:10',fmt:function(v){return String(v)}});
+  draw('c2',{data:[410,430,400,420,440,415,425,405,430,420,410,425,420,1350,1900,2050,2100],max:2400,bandLo:340,bandHi:520,start:12,
+    firstLabel:'12:00',startLabel:'14:10',fmt:function(v){return v>=1000?(v/1000).toFixed(1).replace('.',',')+' sn':v+' ms'}});
+})();
+</script>
