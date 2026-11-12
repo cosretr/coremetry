@@ -2040,11 +2040,20 @@ func serviceHealthSweepTool(d Deps) mcp.Tool {
 				"window":  map[string]any{"type": "string", "enum": sweepWindowEnum, "description": "Sweep window, compared with the equal prior window. Default 1h."},
 				"deep":    map[string]any{"type": "boolean", "description": "Deeper sweep: top 5 findings, sampled code.* functions, log patterns. Default false."},
 				"top_n":   map[string]any{"type": "integer", "minimum": 1, "maximum": sweepTopNMax, "description": "Findings to rank and read logs for. Default 3 (5 when deep)."},
+				// v0.10.2048 — operatörün servis sağlık kontrolü (runbook) AYNI araçtan.
+				"checks": map[string]any{"type": "string", "enum": []string{"standard", "all"}, "description": "\"all\" = run the operator's service HEALTHCHECK runbook instead of the sweep (same result as the Service page button): 13 fixed rule-based checks — RED, open problems, ongoing anomalies, recent deploy, P1/P2 exceptions, per cluster pod restarts/OOM, waiting pods, CPU/memory vs limit, ready replicas, cluster health (NotReady nodes, firing alerts), per datasource JBoss pool, Kafka consumer lag, Oracle errors. Returns {verdict ok|warn|crit|unknown, sentence, rows[{check,title,subject,state,seen,link}], notApplicable}; 'unknown' = could not measure, never healthy. No Elasticsearch, cached 60 s. window default 15m."},
 			},
 			"required": []string{"service"},
 		},
 		Handler: func(ctx context.Context, raw json.RawMessage) (any, error) {
 			req, a, warnings := parseSweepRequest(raw)
+			if strings.EqualFold(a.str("checks", "check"), "all") { // v0.10.2048 — sağlık kontrolü
+				w := a.str("window")
+				if w == "" {
+					w = hcDefaultWindow
+				}
+				return ReadServiceHealthcheckCached(ctx, d, HealthcheckRequest{Service: req.Service, Env: req.Env, Window: w})
+			}
 			from, to, label, ww := cosreWindow(ctx, a, cosreWindowSeconds["6h"], "1h")
 			warnings = append(warnings, ww...)
 			req.From, req.To, req.Window = from, to, label

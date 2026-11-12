@@ -1294,6 +1294,12 @@ func routeGuidedIntentExt(raw string, services, envs, teams []string, ctxService
 		defer func() { route.EnvSet = envSet }()
 	}
 	team := extractTeamEntity(msg, teams)
+	// v0.10.2048 — servis SAĞLIK KONTROLÜ (copilot_service_healthcheck.go): yalnız
+	// "sağlık kontrolü / healthcheck / runbook çalıştır" ifadesi; özel şekillerden
+	// ÖNCE (cümlede pod / kafka geçse de açık kontrol isteği kendi niyetinde).
+	if r, ok := routeServiceHealthcheck(msg, svc, env, ctxService); ok {
+		return r
+	}
 	// v0.10.1455 — giden çağrı R2 (copilot_outbound_call_route.go): hedef
 	// sözcüğü (canlı dış host / esb·mainframe… / "dış servis") + ölçü ipucu
 	// topolojiden ve metrik grafiğinden ÖNCE ("ESB gecikme grafiği" sunucu
@@ -2239,6 +2245,9 @@ func (s *Server) runGuidedRoute(ctx context.Context, emit func(string, any), rou
 	}
 	if route.Intent == guidedHowTo { // v0.10.809 — LLM'siz yol tarifi
 		return s.guidedHowToAnswer(emit, route, question, ctxService)
+	}
+	if route.Intent == guidedServiceHealthcheck { // v0.10.2048 — LLM'siz sağlık kontrolü (copilot_service_healthcheck.go)
+		return s.guidedHealthcheckAnswer(ctx, emit, route, ctxService)
 	}
 	if route.Intent == guidedSelfMeta { // LLM'siz: cevap yapılandırmada yazılı
 		n := emitGuidedStep(emit, "self_meta", "")

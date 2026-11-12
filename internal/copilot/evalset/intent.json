@@ -318,6 +318,38 @@
       }
     },
     {
+      "id": "intent-service-healthcheck",
+      "surface": "IntentClassify",
+      "why": "v0.10.2048 — açık \"sağlık kontrolü\" isteği yeni service_healthcheck niyeti (kural tabanlı kontrol listesi); servis slotu aynen",
+      "user": "payments için sağlık kontrolü yapar mısın",
+      "expect": {
+        "intent": "service_healthcheck",
+        "intentService": "payments",
+        "knownEntities": [
+          "payments",
+          "checkout",
+          "inventory"
+        ],
+        "maxLatencyMs": 20000
+      }
+    },
+    {
+      "id": "intent-service-health-not-healthcheck",
+      "surface": "IntentClassify",
+      "why": "v0.10.2048 komşusu — \"sağlıklı mı\" sorusu service_health'te kalır, service_healthcheck'e kaymaz",
+      "user": "checkout servisi şu an sağlıklı mı",
+      "expect": {
+        "intent": "service_health",
+        "intentService": "checkout",
+        "knownEntities": [
+          "payments",
+          "checkout",
+          "inventory"
+        ],
+        "maxLatencyMs": 20000
+      }
+    },
+    {
       "id": "intent-offtopic-capital",
       "surface": "IntentClassify",
       "why": "v0.10.1458 operatör sorusu: başkent → off_topic (sunucu yarısı chat_routing_regression_test.go'da sahte sınıflandırıcıyla pinli)",

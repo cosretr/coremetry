@@ -31,9 +31,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"sort"
 	"strings"
-	"time"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/mcptools"
@@ -47,26 +45,8 @@ func (s *Server) registerServiceHealthcheckRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/services/{name}/healthcheck", s.getServiceHealthcheck)
 }
 
-const healthcheckTTL = 60 * time.Second
-
-// healthcheckClustersDigest — SAF: etkin cluster kümesi → sıralı parçalar
-// (ID, ad, sıralı span değerleri). Sıra bağımsız.
-func healthcheckClustersDigest(clusters []mcptools.ClusterRef) string {
-	parts := make([]string, 0, len(clusters))
-	for _, c := range clusters {
-		vals := append([]string(nil), c.SpanValues...)
-		sort.Strings(vals)
-		parts = append(parts, c.ID+"\x00"+c.Name+"\x00"+strings.Join(vals, ","))
-	}
-	return correlateKeyDigest(parts...)
-}
-
-// healthcheckKey — SAF: TÜM girdiler (cache_key_test.go deseni).
-func healthcheckKey(service, env, window string, clusters []mcptools.ClusterRef) string {
-	return "healthcheck:" + correlateKeyDigest(
-		"svc="+service, "env="+env, "win="+window,
-		"clusters="+healthcheckClustersDigest(clusters), "ver="+mcptools.HCCatalogVersion)
-}
+// v0.10.2048 — anahtar mcptools.HealthcheckCacheKey'de (sohbet ve MCP aracı
+// AYNI girdiyi okur/yazar: Memo ve serveCached ikisi de cachedJSON).
 
 func (s *Server) getServiceHealthcheck(w http.ResponseWriter, r *http.Request) {
 	service := strings.TrimSpace(r.PathValue("name"))
@@ -82,8 +62,8 @@ func (s *Server) getServiceHealthcheck(w http.ResponseWriter, r *http.Request) {
 	if d.Clusters != nil {
 		clusters = d.Clusters()
 	}
-	key := healthcheckKey(service, env, window, clusters)
-	s.serveCached(w, r, key, healthcheckTTL, func(ctx context.Context) (any, error) {
+	key := mcptools.HealthcheckCacheKey(service, env, window, clusters)
+	s.serveCached(w, r, key, mcptools.HealthcheckTTL, func(ctx context.Context) (any, error) {
 		ctx = chstore.WithQueryTag(ctx, "healthcheck")
 		res, err := mcptools.ReadServiceHealthcheck(ctx, d, mcptools.HealthcheckRequest{Service: service, Env: env, Window: window})
 		if errors.Is(err, mcptools.ErrHealthcheckNoService) {

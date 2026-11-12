@@ -2658,6 +2658,7 @@ Niyetler:
 - service_health: bir servisin genel sağlığı (gecikme, hata oranı, trafik)
 - root_cause: bir servisteki bozulmanın NEDENİ ("neden yavaş", "sebebi ne")
 - service_report: bir servisin KAPSAMLI analiz raporu ("checkout servisini analiz et", "checkout için rapor çıkar") — operasyonlar + teknik hatalar + trace/log kanıtı tek raporda
+- service_healthcheck: bir servis için AÇIKÇA "sağlık kontrolü" / "healthcheck" / "runbook çalıştır" isteği ("checkout'un sağlık kontrolünü yap", "checkout healthcheck") — sabit kontrol listesi; "sağlıklı mı / nasıl" soruları service_health kalır
 - slow_traces: en yavaş trace'ler / istekler
 - deploy_impact: son deploy'un etkisi, sürüm değişikliği
 - log_errors: hata logları, exception'lar
@@ -2694,6 +2695,7 @@ Kurallar:
 - "checkout servisi son 1 saatte nasıl?" → {"intent":"service_health","service":"checkout","env":"","rangeS":3600,"traceId":"","spanId":""}
 - "açık problemler neler?" → {"intent":"problems","service":"","env":"","rangeS":0,"traceId":"","spanId":""}
 - "payments servisini analiz et, rapor çıkar" → {"intent":"service_report","service":"payments","env":"","rangeS":0,"traceId":"","spanId":"","team":""}
+- "payments için sağlık kontrolü yap" → {"intent":"service_healthcheck","service":"payments","env":"","rangeS":0,"traceId":"","spanId":"","team":""}
 - "bugün hava nasıl?" → {"intent":"off_topic","service":"","env":"","rangeS":0,"traceId":"","spanId":"","team":""}
 - "Türkiye'nin nüfusu kaçtır?" → {"intent":"off_topic","service":"","env":"","rangeS":0,"traceId":"","spanId":"","team":""}
 - "o şey yine oldu mu?" → {"intent":"none","service":"","env":"","rangeS":0,"traceId":"","spanId":"","team":""}

@@ -75,13 +75,18 @@ var intentAllowed = map[string]guidedIntent{
 	// slotu canlı katalogla; servissiz → bağlam servisi ya da "hangi servis?".
 	// Pod/workload hedefi dar ön-sınıflandırıcıda (chat_resource_classify.go).
 	"resource_investigation": guidedResourceInvestigation,
+	// v0.10.2048 — servis sağlık kontrolü (copilot_service_healthcheck.go): LLM'siz
+	// kural tabanlı kontrol listesi; yalnız açık "sağlık kontrolü / healthcheck /
+	// runbook çalıştır" isteği (service_health'in "sağlıklı mı" soruları değişmez).
+	"service_healthcheck": guidedServiceHealthcheck,
 }
 
 // intentNeedsService — servissiz anlamsız şekiller: model servis vermediyse
 // ve ekranda bağlam servisi yoksa none. pod_health DIŞARIDA: servissiz hâli
 // filo-geneli sıralama (copilot_guided.go, bilinçli).
 var intentNeedsService = map[guidedIntent]bool{guidedServiceHealth: true, guidedRootCause: true, guidedServiceReport: true,
-	guidedResourceInvestigation: true} // v0.10.1442 — hedefsiz kaynak incelemesi yok
+	guidedResourceInvestigation: true, // v0.10.1442 — hedefsiz kaynak incelemesi yok
+	guidedServiceHealthcheck:    true} // v0.10.2048 — kontrol tek servisin
 
 func intentClassifySchema() map[string]any {
 	names := make([]string, 0, len(intentAllowed)+1)

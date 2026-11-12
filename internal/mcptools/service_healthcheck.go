@@ -43,6 +43,7 @@ package mcptools
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -221,6 +222,56 @@ var hcDefaultCaps = hcCaps{red: sweepCapRED, inbox: sweepCapProblems, anomalies:
 // (Ölçülemedi) çevrilir.
 func ReadServiceHealthcheck(ctx context.Context, d Deps, req HealthcheckRequest) (HealthcheckResult, error) {
 	return runServiceHealthcheck(ctx, hcReadersFrom(d), req, hcDefaultCaps, hcBudget)
+}
+
+// HealthcheckTTL — sonuç önbelleği (art arda tıklama kaynakları dövmez).
+const HealthcheckTTL = 60 * time.Second
+
+// HealthcheckCacheKey — SAF (v0.10.2048: api'den taşındı; HTTP ucu, sohbet
+// ve MCP AYNI anahtarı kullanır → biri koşunca diğeri önbellekten okur).
+// TÜM girdiler (v0.5.187): servis, env, pencere, etkin cluster kümesi (ID +
+// ad + sıralı span değerleri, kümece sıralı) ve katalog sürümü; parçalar
+// "etiket=değer" biçiminde sıralanıp FNV'lenir (boş değer de ayrı yuva).
+func HealthcheckCacheKey(service, env, window string, clusters []ClusterRef) string {
+	cs := make([]string, 0, len(clusters))
+	for _, c := range clusters {
+		vals := append([]string(nil), c.SpanValues...)
+		sort.Strings(vals)
+		cs = append(cs, c.ID+"\x00"+c.Name+"\x00"+strings.Join(vals, ","))
+	}
+	sort.Strings(cs)
+	parts := []string{"svc=" + service, "env=" + env, "win=" + HCNormalizeWindow(window),
+		"clusters=" + fnvHex(cs...), "ver=" + HCCatalogVersion}
+	sort.Strings(parts)
+	return "healthcheck:" + fnvHex(parts...)
+}
+
+// ReadServiceHealthcheckCached — Deps.Memo'lu koşu (Memo yoksa doğrudan).
+// HTTP ucu serveCached ile AYNI anahtarı yazar; sohbet ve MCP bunu çağırır.
+func ReadServiceHealthcheckCached(ctx context.Context, d Deps, req HealthcheckRequest) (HealthcheckResult, error) {
+	if strings.TrimSpace(req.Service) == "" {
+		return HealthcheckResult{}, ErrHealthcheckNoService
+	}
+	if d.Memo == nil {
+		return ReadServiceHealthcheck(ctx, d, req)
+	}
+	var clusters []ClusterRef
+	if d.Clusters != nil {
+		clusters = d.Clusters()
+	}
+	key := HealthcheckCacheKey(strings.TrimSpace(req.Service), strings.TrimSpace(req.Env), req.Window, clusters)
+	body, err := d.Memo(ctx, key, HealthcheckTTL, func(c context.Context) (any, bool, error) {
+		res, err := ReadServiceHealthcheck(chstore.WithQueryTag(c, "healthcheck"), d, req)
+		return res, err == nil, err
+	})
+	if err != nil {
+		return HealthcheckResult{}, err
+	}
+	var out HealthcheckResult
+	if err := json.Unmarshal(body, &out); err != nil {
+		return HealthcheckResult{}, fmt.Errorf("healthcheck cache decode: %w", err)
+	}
+	return out, nil
 }
 
 // ErrHealthcheckNoService — servis adı boş.
