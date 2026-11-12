@@ -86,6 +86,9 @@ func CardInputFromEvent(ev chstore.MLEvent, now time.Time, loc *time.Location) C
 		in.Impact = &im
 	}
 	in.Contrib = evidenceContrib(ev.Evidence)
+	if ls := evStr(m, "logService"); ls != "" && ls != ev.Service {
+		in.LogService = ls // v0.10.2045
+	}
 	if lt, ok := m["lowTraffic"].(map[string]any); ok {
 		n, _ := evNum(lt, "n")
 		k, _ := evNum(lt, "k")

@@ -98,7 +98,7 @@ func buildSnapshot(ctx context.Context, deps Deps, ev chstore.MLEvent, cfg chsto
 	part := eventPart(ev)
 	pts := []chstore.MLPoint{}
 	if part != "" {
-		if all, err := deps.Store.MLSeriesRange(ctx, ev.Signal, ev.Service, from, to, cfg.BucketSec); err == nil && all[part] != nil {
+		if all, err := deps.Store.MLSeriesRange(ctx, ev.Signal, logServiceOf(ev), from, to, cfg.BucketSec); err == nil && all[part] != nil { // v0.10.2045 seri ES adıyla
 			pts = all[part]
 		}
 	}
@@ -172,7 +172,7 @@ func collectSamples(ctx context.Context, deps Deps, ev chstore.MLEvent, cfg chst
 		out = append(out, xs...)
 	}
 	if esLeft && deps.Logs != nil {
-		f := logstore.Filter{Service: ev.Service, From: from, To: to, Limit: 3, SkipTotal: true, LeanSource: true, SoftTimeout: 3 * time.Second}
+		f := logstore.Filter{Service: logServiceOf(ev), From: from, To: to, Limit: 3, SkipTotal: true, LeanSource: true, SoftTimeout: 3 * time.Second}
 		if errOnly || ev.Level == "error" {
 			f.SeverityMin = 17
 		}

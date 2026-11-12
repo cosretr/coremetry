@@ -12338,6 +12338,10 @@ export interface MLTickStatus {
   es?: number; vm?: number; ch?: number;
   /** v0.10.2015 (D3): bu tikte gölge karar verilen grup / Problem "açardı" sayısı. */
   shadowGroups?: number; shadowWouldOpen?: number;
+  /** v0.10.2037: suçlu seri kırılım sorgusu (yeni açılan / tepesi büyüyen metrik olayı). */
+  contribQueries?: number;
+  /** v0.10.2045: katalogda olmayan log servis adı — çözülemedi (yazılmadı) / pod'dan çözüldü. */
+  logSvcUnmatched?: number; logSvcViaPod?: number;
   /** v0.10.2019: metrik ailesi başına otomatik seçilen kaynak (ayar değil) + tikin Thanos ölçümü. */
   metricSources?: Record<string, MLMetricSource>;
   thanos?: MLThanosTick;

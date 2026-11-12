@@ -124,7 +124,7 @@ func PatternEvidence(in CardInput, groups []logstore.SignatureGroup, baseOK bool
 			continue
 		}
 		x := PatternEvidenceRow{Template: g.Template, Count: g.Count, Sample: truncRunes(g.Sample, 300),
-			Href: logsLink(in.Service, g.Query, errOnly, rangeParam)}
+			Href: logsLink(in.logSvc(), g.Query, errOnly, rangeParam)}
 		ratio := 0.0
 		if baseOK {
 			switch {

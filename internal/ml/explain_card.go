@@ -157,6 +157,7 @@ type CardInput struct {
 	LowTraffic                                                            *CardLowTraffic
 	Contrib                                                               *Contrib // v0.10.2037 — suçlu seri (evidence.contrib)
 	MetricWindowed                                                        bool     // v0.10.2044 — aile ifadesi pencereli (rate/increase)
+	LogService                                                            string   // v0.10.2045 — log tarafındaki servis adı (katalog adından farklıysa)
 }
 
 // ── sözlük ───────────────────────────────────────────────────────────────
@@ -437,6 +438,9 @@ func ratioRef(in CardInput) string {
 }
 
 func summaryOf(in CardInput, sp detSpec, open bool, end time.Time) string {
+	if in.LogService != "" && in.LogService != in.Service { // v0.10.2045 — "orders-api (logda: Api)"
+		in.Service = fmt.Sprintf("%s (logda: %s)", in.Service, in.LogService)
+	}
 	loc := in.loc()
 	st := in.StartedAt.In(loc)
 	var head string

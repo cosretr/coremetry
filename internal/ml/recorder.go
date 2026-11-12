@@ -201,6 +201,8 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 		}
 	}
 	deps.meter = nil // tik sonrası yazımlar dedektör ölçümüne girmez
+	// v0.10.2045 — log ML olayı yalnız katalogdaki servise (log_service_identity.go).
+	all, logSvc := resolveLogServices(tctx, deps, all, start, 2*time.Duration(cfg.BucketSec)*time.Second)
 	steps["detectorsMs"] = time.Since(start).Milliseconds() - steps["labelsMs"]
 	kept, sup := qualityFilter(all, cfg, lb, r.runs, start)
 	w0 := time.Now()
@@ -268,7 +270,8 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	status := chstore.MLTickStatus{At: start.Unix(), DurationMs: time.Since(start).Milliseconds(), Events: written, Backoff: r.backoff.snapshot(start),
 		Partial: int64(partialN), Docs: global.docs.Load(), Steps: steps, Signals: signals, BatchCut: int64(batchCut),
 		Kinds: foldKindTicks(samples), ES: global.esQueries.Load() - esAtStart, VM: global.vmQueries.Load() - vmAtStart, CH: chQueries.Load(),
-		ShadowGroups: shadow.Groups, ShadowWouldOpen: shadow.WouldOpen, ContribQueries: int64(contribQ)}
+		ShadowGroups: shadow.Groups, ShadowWouldOpen: shadow.WouldOpen, ContribQueries: int64(contribQ),
+		LogSvcUnmatched: int64(logSvc.Unmatched), LogSvcViaPod: int64(logSvc.ViaPod)}
 	// v0.10.2019 — metrik aile kaynakları + Thanos ölçümü (MetricThanos)
 	for _, det := range r.detectors {
 		if ts, ok := det.(interface {
@@ -288,7 +291,7 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	scancel()
 	log.Printf("[ml] tick placement=%s detectors=%d events=%d suppressed=impact:%d,feedback:%d,regime:%d,batch:%d labels=%d dur=%dms es_p95=%dms err=%v",
 		r.placement, active, written, sup.Impact, sup.Feedback, sup.Regime, batchCut, len(labels), time.Since(start).Milliseconds(), Observability().ESP95Ms, firstErr)
-	log.Printf("[ml] tick group_shadow groups=%d would_open=%d contrib_queries=%d", shadow.Groups, shadow.WouldOpen, contribQ)
+	log.Printf("[ml] tick group_shadow groups=%d would_open=%d contrib_queries=%d log_svc_unmatched=%d log_svc_via_pod=%d", shadow.Groups, shadow.WouldOpen, contribQ, logSvc.Unmatched, logSvc.ViaPod)
 	log.Printf("[ml] tick steps labels=%dms detectors=%dms write=%dms snapshot=%dms es_queries=%d vm_queries=%d partial=%d docs=%d",
 		steps["labelsMs"], steps["detectorsMs"], steps["writeMs"], steps["snapshotMs"], global.esQueries.Load()-esAtStart, global.vmQueries.Load()-vmAtStart, partialN, global.docs.Load())
 	for _, line := range kindTickLines(status.Kinds) {

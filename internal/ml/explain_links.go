@@ -191,13 +191,13 @@ func whereToLookOf(in CardInput, l cardLinks) []ExplainLink {
 			if qq == "" {
 				qq = quoteQ(strings.TrimSuffix(in.NewTemplate.Text, "…"))
 			}
-			first = ExplainLink{Label: "Bu mesajı içeren loglar", Href: logsLink(in.Service, qq, false, l.rangeParam)}
+			first = ExplainLink{Label: "Bu mesajı içeren loglar", Href: logsLink(in.logSvc(), qq, false, l.rangeParam)}
 		case in.Detector == "template_spike" || in.Detector == "rare_template":
-			first = ExplainLink{Label: "Bu mesajı içeren loglar", Href: logsLink(in.Service, quoteQ(in.Code), false, l.rangeParam)}
+			first = ExplainLink{Label: "Bu mesajı içeren loglar", Href: logsLink(in.logSvc(), quoteQ(in.Code), false, l.rangeParam)}
 		case in.Detector == "log_volume" || in.Detector == "service_silent":
-			first = ExplainLink{Label: "Loglar", Href: logsLink(in.Service, "", false, l.rangeParam)}
+			first = ExplainLink{Label: "Loglar", Href: logsLink(in.logSvc(), "", false, l.rangeParam)}
 		default:
-			first = ExplainLink{Label: "Hata logları", Href: logsLink(in.Service, "", true, l.rangeParam)}
+			first = ExplainLink{Label: "Hata logları", Href: logsLink(in.logSvc(), "", true, l.rangeParam)}
 		}
 		return []ExplainLink{first, {Label: "Hatalı trace'ler", Href: tracesLink(in.Service, l.rangeParam, tracesOpts{hasError: true})}, svc}
 	}

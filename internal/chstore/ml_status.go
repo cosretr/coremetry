@@ -54,13 +54,17 @@ type MLTickStatus struct {
 	Events     int64 `json:"events"`
 	// ContribQueries — v0.10.2037: bu tikte suçlu seri için atılan kırılım
 	// sorgusu (yalnız yeni açılan / tepesi büyüyen metrik olayları).
-	ContribQueries int64                   `json:"contribQueries,omitempty"`
-	Steps          map[string]int64        `json:"steps,omitempty"` // adım → ms
-	Signals        map[string]MLSignalTick `json:"signals,omitempty"`
-	Backoff        []MLBackoffEntry        `json:"backoff"`
-	Partial        int64                   `json:"partial"`            // bu tikte kısmi ES sonucu alan dedektör
-	Docs           int64                   `json:"docs"`               // log RED penceresinde toplanan belge
-	BatchCut       int64                   `json:"batchCut,omitempty"` // v0.10.1811: batch kuralının kestiği aday
+	ContribQueries int64 `json:"contribQueries,omitempty"`
+	// LogSvcUnmatched / LogSvcViaPod — v0.10.2045: log ML olayının ES servis
+	// adı katalogda yoktu ve pod'dan çözülemedi (yazılmadı) / pod'dan çözüldü.
+	LogSvcUnmatched int64                   `json:"logSvcUnmatched,omitempty"`
+	LogSvcViaPod    int64                   `json:"logSvcViaPod,omitempty"`
+	Steps           map[string]int64        `json:"steps,omitempty"` // adım → ms
+	Signals         map[string]MLSignalTick `json:"signals,omitempty"`
+	Backoff         []MLBackoffEntry        `json:"backoff"`
+	Partial         int64                   `json:"partial"`            // bu tikte kısmi ES sonucu alan dedektör
+	Docs            int64                   `json:"docs"`               // log RED penceresinde toplanan belge
+	BatchCut        int64                   `json:"batchCut,omitempty"` // v0.10.1811: batch kuralının kestiği aday
 	// v0.10.1812 — sinyal türü başına ölçüm + tik toplam sorgu sayıları.
 	Kinds     map[string]MLKindTick `json:"kinds,omitempty"`
 	ES        int64                 `json:"es"`

@@ -34,7 +34,7 @@ func (s *Server) mlCourse(ctx context.Context, in ml.CardInput, cfg chstore.MLCo
 		from, to := ml.CourseReadWindow(in)
 		cctx, cancel := context.WithTimeout(ctx, mlCourseReadBudget)
 		defer cancel()
-		if x, err := s.store.MLSeriesRange(cctx, in.Signal, in.Service, from, to, cfg.BucketSec); err == nil {
+		if x, err := s.store.MLSeriesRange(cctx, in.Signal, in.SeriesService(), from, to, cfg.BucketSec); err == nil {
 			series = x
 		}
 	}
