@@ -12241,6 +12241,8 @@ export interface MLQuality {
   feedbackOff: boolean; feedbackMinNegatives: number; feedbackZStep: number; feedbackMaxBoost: number;
 }
 /** Replay kaydı (v0.10.1752, ml_event_snapshots): JSON alanlar ham string. */
+/** v0.10.2035 — logstore.LogSeries aynası (/api/anomalies/log-chart; seviye bandı başına bir seri). */
+export interface LogHistogramSeries { name: string; points: { t: number; v: number }[] }
 export interface MLSnapshot {
   eventId: string; detector: string; signal: string; service: string; part: string;
   detectedAt: number; lastSeen: number; bucketSec: number; series: string;

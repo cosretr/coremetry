@@ -27,7 +27,7 @@ describe('sourcePanelFor', () => {
     ['gecikme → Traces şeridi', ev('op_latency', 'trace', 'POST /orders'), 'traces'],
     ['hata sayısı → Traces şeridi', ev('trace_error_count', 'trace', 'POST /orders'), 'traces'],
     ['bağımlılık → kayıtlı', ev('dependency_latency', 'trace', 'db|orders'), 'snapshot'],
-    ['log → kayıtlı (ES yükü yok)', ev('error_rate', 'log'), 'snapshot'],
+    ['log, Logs bağlantısı yok → kayıtlı', ev('error_rate', 'log'), 'snapshot'],
     ['JVM → kayıtlı', ev('metric_jvm', 'metric', 'metric_jvm|heap_used'), 'snapshot'],
   ])('%s', (_n, e, want) => {
     expect(sourcePanelFor(e).kind).toBe(want);
@@ -36,6 +36,21 @@ describe('sourcePanelFor', () => {
     const lat = sourcePanelFor(ev('op_latency', 'trace', '/orders/{id}'), 1);
     expect(lat).toMatchObject({ kind: 'traces', stat: 'p99', minMs: 1000, byRoute: true, errorsFirst: false });
     expect(sourcePanelFor(ev('trace_error_count', 'trace', 'POST /orders'))).toMatchObject({ errorsFirst: true, byRoute: false });
+  });
+});
+
+// v0.10.2035 — log olayı: Logs histogramı, süzgeç kartın Logs bağlantısından (aynı nüfus).
+describe('log olayı → Logs histogramı', () => {
+  it.each<[string, string | undefined, unknown]>([
+    ['yeni mesaj: servis + tümcecik', '/logs?service=orders-batch&q=%22payment+failed%22&range=1h',
+      { kind: 'logs', service: 'orders-batch', search: '"payment failed"', severity: 0 }],
+    ['hata oranı: seviye 17', '/logs?service=orders-batch&severity=17', { kind: 'logs', search: '', severity: 17 }],
+    ['hacim: yalnız servis', '/logs?service=orders-batch', { kind: 'logs', search: '', severity: 0 }],
+    ['servissiz bağlantı → kayıtlı', '/logs?q=x', { kind: 'snapshot' }],
+    ['Logs dışı bağlantı → kayıtlı', '/traces?service=orders-batch', { kind: 'snapshot' }],
+    ['bağlantı yok → kayıtlı', undefined, { kind: 'snapshot' }],
+  ])('%s', (_n, href, want) => {
+    expect(sourcePanelFor(ev('error_rate', 'log'), 1, href)).toMatchObject(want as object);
   });
 });
 

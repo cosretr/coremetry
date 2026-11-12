@@ -118,7 +118,7 @@ export function histogramFeedsChips(bd: LogsBreakdown, severityFloor: number): b
   return severityFloor === 0 && bd === 'severity';
 }
 
-export function LogsHistogram({ range, filter, onRangeSelect, onZoomReset, onSeries, breakdown, onBreakdown, onSeriesPick, paused, height = 140, headerLeft, onPhase, cancelToken = 0, regions, onRegionClick }: {
+export function LogsHistogram({ range, filter, onRangeSelect, onZoomReset, onSeries, breakdown, onBreakdown, onSeriesPick, paused, height = 140, headerLeft, onPhase, cancelToken = 0, regions, onRegionClick, source = 'logs' }: {
   range: { from?: number; to?: number };
   filter: Filter;
   // Drag-select a horizontal span → called with the selection as unix-ns
@@ -162,6 +162,10 @@ export function LogsHistogram({ range, filter, onRangeSelect, onZoomReset, onSer
   // grafik bayt bayt eski.
   regions?: ChartTimeRegion[];
   onRegionClick?: (region: ChartTimeRegion) => void;
+  // v0.10.2035 — 'anomaly': ML log olayı detayı; aynı okuma kendi ucundan
+  // (/api/anomalies/log-chart: kova sunucuda, ES sayacında ayrı yüzey).
+  // Yalnız servis + arama + seviye + pencere gider; seviye bantlı.
+  source?: 'logs' | 'anomaly';
 }) {
   const [data, setData] = useState<Series[] | null | undefined>(undefined);
   const [canceled, setCanceled] = useState(false);
@@ -224,7 +228,10 @@ export function LogsHistogram({ range, filter, onRangeSelect, onZoomReset, onSer
       bucketSec: pickBucket(range),
     };
     // Gözlemcisiz çağrı imzası eskisiyle aynı (servis sekmesi / anomali çekmecesi).
-    (report ? api.logsTimeseries(params, ctl.signal, h => { header = h; }) : api.logsTimeseries(params, ctl.signal))
+    const req = source === 'anomaly' && filter.service && range.from && range.to
+      ? api.anomalyLogChart({ service: filter.service, search: params.search, severity: params.severity, from: range.from, to: range.to }, ctl.signal)
+      : report ? api.logsTimeseries(params, ctl.signal, h => { header = h; }) : api.logsTimeseries(params, ctl.signal);
+    req
       .then(d => {
         // v0.9.1220 review — bayat-yanıt korkuluğu: dep değişimiyle aşılmış
         // bir istek geç çözülünce ne grafiği (kırılım değişmişse seviye
@@ -251,7 +258,7 @@ export function LogsHistogram({ range, filter, onRangeSelect, onZoomReset, onSer
         if (bd === 'severity') onSeriesRef.current?.(null);
       });
     return () => { alive = false; ctl.abort(); };
-  }, [range.from, range.to, filter.service, filter.cluster, filter.env, filter.search, filter.pattern, filter.team, filter.scope, filter.severity, filter.traceId, filter.hasTrace, filter.lang, bd, paused]);
+  }, [range.from, range.to, filter.service, filter.cluster, filter.env, filter.search, filter.pattern, filter.team, filter.scope, filter.severity, filter.traceId, filter.hasTrace, filter.lang, bd, paused, source]);
 
   const { times, series, totals } = useMemo(
     // v0.9.1250 — seviye DIŞINDAKİ her eksen grup katlamasını kullanır

@@ -1694,6 +1694,9 @@ export const api = {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     }),
   mlReplay: (id: string) => get<import('./types').MLReplay>(`/api/ml/${encodeURIComponent(id)}/replay`),
+  // v0.10.2035 — ML log olayının canlı histogramı (Logs histogramıyla aynı okuma; kova sunucuda; ES sayacında kendi yüzeyi).
+  anomalyLogChart: (params: { service: string; search?: string; severity?: number; from: number; to: number }, signal?: AbortSignal) =>
+    request<import('./types').LogHistogramSeries[]>(`/api/anomalies/log-chart?${qs(params)}`, { signal }),
   // v0.10.1873 — olay detayı kanıt bölümleri (endpoints: MV · patterns: logstore, yalnız açılınca · metrics: ml_series).
   mlEvidence: <R,>(id: string, kind: import('./types').MLEvidenceKind, signal?: AbortSignal) =>
     get<import('./types').MLEvidence<R>>(`/api/ml/${encodeURIComponent(id)}/evidence/${kind}`, signal),

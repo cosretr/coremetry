@@ -46,7 +46,7 @@ import { MLSignalEvidence } from './MLSignalEvidence';
 import { groupStatusText, type MLGroupRow } from './mlGroupRows';
 import { evidenceSource, headerOperation } from './mlGroupDetail';
 import { MLSourceChart } from './MLSourceChart';
-import { contributorLine, leadFromSnapshot, type Contributors } from './mlSourcePanel';
+import { contributorLine, leadFromSnapshot, parseLogsLink, type Contributors } from './mlSourcePanel';
 
 const fmtTs = (ns: number) => fmtDateTime(new Date(ns / 1e6));
 const fmtNum = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(3));
@@ -184,7 +184,8 @@ export function MLReplayContent({ id, autoPlay = false, group = null }: { id: st
       <Section id="ml-course" title="Olayın seyri">
         {/* v0.10.2033 — servis sayfasındaki panelin aynısı (mlSourcePanel); yoksa kayıtlı 5 dakikalık görüntü. */}
         {chartLead ? (
-          <MLSourceChart lead={chartLead} open={running} onContributors={setContrib} fallback={snapshotView} />
+          <MLSourceChart lead={chartLead} open={running} onContributors={setContrib} fallback={snapshotView}
+            logsLink={card.whereToLook.find(l => parseLogsLink(l.href))?.href} />
         ) : snapshotView}
       </Section>
       <Section id="ml-evidence" title="Kanıt" sub={members.length > 1 ? `${members.length} sinyal aynı olayda` : undefined}>

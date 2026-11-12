@@ -4,10 +4,13 @@
 // ve aynı bileşenle (mlSourcePanel.ts eşlemesi), olayı çevreleyen pencerede.
 // Panel yoksa / veri gelmezse / hata olursa kayıtlı 5 dakikalık görüntü
 // (fallback) çizilir ve başlık bunu söyler. Sayfa açılışında en çok BİR
-// kaynak isteği (Kafka: tek PromQL range; Traces: tek spanMetricBatch).
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+// kaynak isteği (Kafka: tek PromQL range; Traces: tek spanMetricBatch;
+// Log (v0.10.2035): tek /api/anomalies/log-chart = tek ES _search).
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { HttpChartPanel } from '@/pages/service/httpMetricsViz';
+import { LogsHistogram } from '@/components/LogsHistogram';
+import { logsHref } from '@/lib/logsUrl';
 import { VolumeChart } from '@/components/traces/VolumeChart';
 import { useHttpPromql } from '@/lib/queries/httpMetrics';
 import { relabel, stepSeconds } from '@/lib/httpMetrics';
@@ -28,6 +31,8 @@ export interface SourceChartProps {
   fallback: ReactNode;
   /** Suçlu seri(ler) — panel verisinden (yalnız Kafka paneli). */
   onContributors?: (c: Contributors) => void;
+  /** v0.10.2035 — kartın Logs bağlantısı (log olayı): grafik süzgeci buradan. */
+  logsLink?: string;
 }
 
 function Frame({ title, source, marks, link, children }: {
@@ -48,13 +53,14 @@ function Frame({ title, source, marks, link, children }: {
   );
 }
 
-export function MLSourceChart({ lead, open, fallback, onContributors }: SourceChartProps) {
-  const panel = useMemo(() => sourcePanelFor(lead), [lead]);
+export function MLSourceChart({ lead, open, fallback, onContributors, logsLink }: SourceChartProps) {
+  const panel = useMemo(() => sourcePanelFor(lead, 1, logsLink), [lead, logsLink]);
   // Pencere bir kez (sayfa açılışı) sabitlenir: her render'da now() oynarsa sorgu anahtarı değişirdi.
   const [win] = useState(() => panelWindow(lead.startedAt, lead.lastSeen, open, Date.now() * 1e6));
   const marks = open ? `Tespit ${hm(lead.startedAt)} · sürüyor` : `Tespit ${hm(lead.startedAt)} · Bitti ${hm(lead.lastSeen)}`;
   if (panel.kind === 'kafka-lag') return <KafkaLag panel={panel} win={win} lead={lead} marks={marks} fallback={fallback} onContributors={onContributors} />;
   if (panel.kind === 'traces') return <TracesStrip panel={panel} win={win} marks={marks} fallback={fallback} />;
+  if (panel.kind === 'logs') return <LogsChart panel={panel} win={win} lead={lead} marks={marks} fallback={fallback} />;
   return <>{fallback}</>;
 }
 
@@ -125,6 +131,32 @@ function TracesStrip({ panel, win, marks, fallback }: {
       marks={marks} link={{ label: "Traces'te aç", href }}>
       <VolumeChart count={data?.count ?? null} errors={data?.errors ?? null} latency={data?.rt ?? null} stat={panel.stat}
         height={150} xRange={{ from: win.fromNs / 1e9, to: win.toNs / 1e9 }} />
+    </Frame>
+  );
+}
+
+/** v0.10.2035 — log olayı: Logs sayfasının histogramı (seviye bantlı), kartın
+ *  Logs bağlantısının süzgeciyle; kova sunucuda (≤ 3 sa → 1 dk). Hata ya da
+ *  pencerede hiç log yoksa kayıtlı görüntü. */
+function LogsChart({ panel, win, lead, marks, fallback }: {
+  panel: Extract<SourcePanel, { kind: 'logs' }>; win: { fromNs: number; toNs: number };
+  lead: SourceChartProps['lead']; marks: string; fallback: ReactNode;
+}) {
+  const [state, setState] = useState<'loading' | 'ok' | 'fallback'>('loading');
+  const filter = useMemo(() => ({ service: panel.service, search: panel.search, severity: panel.severity, traceId: '', spanId: '' }), [panel]);
+  const range = useMemo(() => ({ from: win.fromNs, to: win.toNs }), [win]);
+  const regions = useMemo(() => [{ fromSec: Math.floor(lead.startedAt / 1e9), toSec: Math.floor(lead.lastSeen / 1e9), label: `tespit ${hm(lead.startedAt)}`, color: 'var(--text3)' }],
+    [lead.startedAt, lead.lastSeen]);
+  const onSeries = useCallback((s: { name: string; total: number }[] | null) => {
+    setState(s && s.some(x => x.total > 0) ? 'ok' : 'fallback');
+  }, []);
+  if (state === 'fallback') return <>{fallback}</>;
+  const href = logsHref({ service: panel.service, q: panel.search || undefined, severity: panel.severity || undefined, window: { fromNs: win.fromNs, toNs: win.toNs } });
+  const what = panel.search ? 'bu mesajı içeren loglar' : panel.severity > 0 ? 'hata logları' : 'tüm loglar';
+  return (
+    <Frame title={`${panel.service} · ${what}`} source="Logs sayfasındaki histogramın aynısı · seviyeye göre · 3 saate kadar 1 dakikalık kova"
+      marks={marks} link={{ label: panel.search ? "Logs'ta aç (bu kalıp)" : "Logs'ta aç", href }}>
+      <LogsHistogram source="anomaly" range={range} filter={filter} onSeries={onSeries} height={150} regions={regions} />
     </Frame>
   );
 }

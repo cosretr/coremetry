@@ -23,10 +23,12 @@ const m = vi.hoisted(() => {
     matches: false, media: q, onchange: null, addListener: () => {}, removeListener: () => {},
     addEventListener: () => {}, removeEventListener: () => {}, dispatchEvent: () => false,
   })) as unknown as typeof window.matchMedia;
-  return { role: 'viewer', replay: null as unknown, calls: [] as string[] };
+  return { role: 'viewer', replay: null as unknown, calls: [] as string[], logChart: null as unknown, logChartArgs: [] as unknown[] };
 });
 vi.mock('@/lib/api', () => ({
-  api: new Proxy({}, { get: (_t, k: string) => (k === 'mlReplay' ? async () => m.replay : async () => { m.calls.push(k); return null; }) }),
+  api: new Proxy({}, { get: (_t, k: string) => (k === 'mlReplay' ? async () => m.replay
+    : k === 'anomalyLogChart' ? async (p: unknown) => { m.calls.push(k); m.logChartArgs.push(p); return m.logChart; }
+      : async () => { m.calls.push(k); return null; }) }),
   isCanceled: () => false,
 }));
 vi.mock('@/components/AuthProvider', () => ({ useAuthRole: () => m.role }));
@@ -194,5 +196,24 @@ describe('ML olay sayfası düzeni', () => {
     const rel = { ...snap, eventId: 'e2', detector: 'op_latency', signal: 'trace', detectedAt: 1_800_000_300e9 };
     expect(contextRows(s2, [rel]).map(r => r.rel)).toEqual(['Yayın', 'Aynı servis']);
     expect(contextRows(null, [])).toEqual([]);
+  });
+
+  // v0.10.2035 — log olayı: Logs histogramı, kartın Logs bağlantısının süzgeciyle,
+  // sayfa açılışı başına TEK istek (kendi ucu); veri yoksa kayıtlı görüntü.
+  it('log olayı: tek anomalyLogChart isteği, süzgeç Logs bağlantısından; boşsa kayıtlı görüntü', async () => {
+    m.calls = []; m.logChartArgs = []; m.logChart = [];
+    const logCard = { ...card, whereToLook: [{ label: 'Bu mesajı içeren loglar', href: '/logs?service=orders-api&q=%22payment+failed%22' }] };
+    let el = await render({ snapshot: snap, related: [], card: logCard });
+    expect(m.calls.filter(c => c === 'anomalyLogChart')).toHaveLength(1);
+    expect(m.calls).not.toContain('logsTimeseries');
+    expect(m.logChartArgs[0]).toMatchObject({ service: 'orders-api', search: '"payment failed"' });
+    expect(el.querySelector('[data-testid="ml-course"]')!.textContent).toContain('Kayıtlı görüntü');
+    act(() => { root?.unmount(); }); host?.remove();
+    m.calls = []; m.logChart = [{ name: 'ERROR', points: [{ t: snap.detectedAt, v: 40 }] }];
+    el = await render({ snapshot: snap, related: [], card: logCard });
+    const chart = el.querySelector('[data-testid="ml-course"] [data-testid="ml-source-chart"]');
+    expect(chart).not.toBeNull();
+    expect(chart!.textContent).toContain("Logs'ta aç (bu kalıp)");
+    expect(m.calls.filter(c => c === 'anomalyLogChart')).toHaveLength(1);
   });
 });
