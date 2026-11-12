@@ -8,7 +8,8 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
-import { HealthcheckResultView, hcStateClass, HC_STATE_LABEL } from './ServiceHealthcheck';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { HealthcheckResultView, HealthcheckRunbookRow, hcStateClass, HC_STATE_LABEL } from './ServiceHealthcheck';
 import type { HealthcheckResult } from '@/lib/types';
 
 let host: HTMLDivElement | null = null;
@@ -49,6 +50,30 @@ describe('HealthcheckResultView', () => {
     expect(host.querySelector('tbody tr:nth-child(2) td')?.textContent).toBe('Pod restart ve OOM · cluster-a');
     expect(host.textContent).toContain('Uygulanmadı (bu serviste veri yok): Kafka consumer lag');
     expect(host.querySelector('details')).not.toBeNull();
+  });
+
+  it('v0.10.2047 — /runbooks yerleşik satırı: 6 hücre (RUNBOOK_COLS), boşken Çalıştır kapalı, seçimle onRun', () => {
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    const runs: string[] = [];
+    const draw = (value: string) => act(() => {
+      root!.render(
+        <QueryClientProvider client={new QueryClient()}>
+          <MemoryRouter><table><tbody>
+            <HealthcheckRunbookRow value={value} onChange={() => {}} onRun={s => runs.push(s)} />
+          </tbody></table></MemoryRouter>
+        </QueryClientProvider>);
+    });
+    draw('');
+    const tr = host.querySelector('tr[data-builtin="healthcheck"]');
+    expect(tr?.children.length).toBe(6);
+    expect(tr?.textContent).toContain('Yerleşik');
+    const runBtn = () => [...host!.querySelectorAll('button')].find(b => b.textContent === 'Çalıştır');
+    expect(runBtn()?.disabled).toBe(true);
+    draw('orders-api');
+    act(() => { runBtn()?.click(); });
+    expect(runs).toEqual(['orders-api']);
   });
 
   it('durum sınıfları: yalnız sapma renkli', () => {

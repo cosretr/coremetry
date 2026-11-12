@@ -20,6 +20,7 @@ import { Button } from '@/components/shadcn/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/shadcn/table';
 import { DetailSheet, useSheetParam } from '@/components/coremetry/DetailSheet';
 import { Spinner, Empty } from '@/components/Spinner';
+import { ServicePicker } from '@/components/ServicePicker';
 import { useServiceHealthcheck } from '@/lib/queries';
 import { cn } from '@/lib/cn';
 import { fmtClock } from '@/lib/utils';
@@ -120,6 +121,44 @@ export function ServiceHealthcheckPanel({ service, env = '', window = '15m', act
         <Button variant="secondary" size="sm" loading={q.isFetching} onClick={() => void q.refetch()}>Yeniden çalıştır</Button>
       </div>
     </div>
+  );
+}
+
+/** v0.10.2047 — /runbooks'un yerleşik satırı (kayıt değil; tablonun başında,
+ *  sıralanmaz). Sütunlar sayfanın RUNBOOK_COLS sırasıyla: başlık · adım ·
+ *  açık · etiket · güncelleme · eylem. Seçici sunucu aramalı (ServicePicker). */
+export function HealthcheckRunbookRow({ value, onChange, onRun }: {
+  value: string; onChange: (v: string) => void; onRun: (svc: string) => void;
+}) {
+  return (
+    <tr data-builtin="healthcheck">
+      <td>
+        <span className="font-semibold">Servis sağlık kontrolü</span>{' '}
+        <span className="badge b-gray">Yerleşik</span>
+        <div className="field-hint">Pod, cluster, JBoss datasource, Kafka lag, Oracle ve servis sinyallerini salt-okunur kontrol eder; hüküm kurallardan.</div>
+      </td>
+      <td className="num">13</td>
+      <td><span className="badge b-gray">ON</span></td>
+      <td><span className="badge b-gray">yerleşik</span></td>
+      <td className="cell-faint">—</td>
+      <td>
+        <div className="cell-actions end">
+          <ServicePicker value={value} onChange={onChange} width={150} placeholder="Servis seç"
+            onEnter={v => onRun(v ?? value)} />
+          <Button size="sm" disabled={!value.trim()} onClick={() => onRun(value)}>Çalıştır</Button>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+/** v0.10.2047 — /runbooks'ta sayfa içi sonuç bölümü. */
+export function HealthcheckRunbookResult({ service }: { service: string }) {
+  return (
+    <section className="mt-4 flex flex-col gap-2" aria-label="Servis sağlık kontrolü sonucu">
+      <h2 className="m-0 text-[length:var(--fs-lg)]">Sağlık kontrolü · {service}</h2>
+      <ServiceHealthcheckPanel service={service} />
+    </section>
   );
 }
 

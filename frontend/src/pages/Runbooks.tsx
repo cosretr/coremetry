@@ -1,4 +1,6 @@
-import { useNavigate } from 'react-router-dom';
+import { useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { HealthcheckRunbookRow, HealthcheckRunbookResult } from '@/components/coremetry/ServiceHealthcheck';
 import { Topbar } from '@/components/Topbar';
 import { Button } from '@/components/ui/Button';
 import {
@@ -46,6 +48,27 @@ export default function RunbooksPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const canEdit = user?.role === 'admin' || user?.role === 'editor';
+
+  // v0.10.2047 — yerleşik "Servis sağlık kontrolü" satırı (spec dilim 5,
+  // operatör onayı 2026-11-12: listenin başında tek satır, ayrı sekme değil).
+  // Kayıt DEĞİL (runbooks tablosunda yok, sıralamaya girmez, silinmez):
+  // salt-okunur kontrol turu, viewer da koşturur. Koşan servis URL'de
+  // (?hc=<servis>) — link aynı sonucu açar; seçicideki yazılmamış seçim
+  // yalnız taslak (draft), URL'den TÜRETİLİR (tek-yön okuma sınıfı doğmaz).
+  const [sp, setSp] = useSearchParams();
+  const hcService = (sp.get('hc') ?? '').trim();
+  const [hcDraft, setHcDraft] = useState<string | null>(null);
+  const hcPick = hcDraft ?? hcService;
+  const runHealthcheck = (svc: string) => {
+    const v = svc.trim();
+    if (!v) return;
+    setHcDraft(null);
+    setSp(prev => {
+      const next = new URLSearchParams(prev);
+      next.set('hc', v);
+      return next;
+    }, { replace: true });
+  };
 
   const runbooksQ = useRunbooks();
   // v0.9.865 (tutarlılık denetimi MT1) — `?? []` okuma hatasını BOŞ KATALOĞA
@@ -121,7 +144,10 @@ export default function RunbooksPage() {
             <DataTableColgroup dt={dt} />
             <DataTableHead dt={dt} />
             <tbody>
-              {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...tableState} /> : dt.sortedRows.map(rb => (
+              {/* v0.10.2047 — yerleşik satır HER ZAMAN başta (sıralanmaz,
+                  boş katalogda da görünür). Eylem: seçici + Çalıştır. */}
+              <HealthcheckRunbookRow value={hcPick} onChange={setHcDraft} onRun={runHealthcheck} />
+              {dt.sortedRows.length === 0 ?<DataTableState dt={dt} {...tableState} /> : dt.sortedRows.map(rb => (
                 <tr key={rb.id}>
                   <td>
                     <a href={`/runbook?id=${encodeURIComponent(rb.id)}`}
@@ -176,6 +202,7 @@ export default function RunbooksPage() {
             </tbody>
           </table>
         </div>
+        {hcService && <HealthcheckRunbookResult service={hcService} />}
       </PageShell>
     </>
   );
