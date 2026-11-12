@@ -14,7 +14,7 @@ import { SignalKindBadge } from '@/components/coremetry/SignalKindBadge';
 
 export const ML_DETECTOR_TR: Record<string, string> = {
   log_volume: 'Log hacmi', error_rate: 'Hata oranı', service_silent: 'Servis sustu',
-  template_spike: 'Şablon spike', rare_template: 'Nadir şablon', rare_error_code: 'Nadir hata kodu',
+  template_spike: 'Şablon spike', rare_template: 'Nadir şablon', new_template: 'Yeni log kalıbı', rare_error_code: 'Nadir hata kodu',
   pod_outlier: 'Aykırı pod', change_point: 'Kırılma',
   op_latency: 'Endpoint gecikmesi', op_error_rate: 'Endpoint hata oranı', throughput_drop: 'Trafik düşüşü',
   metric_jvm: 'JVM', metric_pool: 'Connection pool', metric_kafka: 'Kafka', metric_http_client: 'HTTP client', metric_k8s: 'Kubernetes',
@@ -122,6 +122,7 @@ export function detectorGroup(d: string): string {
     case 'template_spike': case 'rare_template': return 'log_templates';
     case 'rare_error_code': case 'pod_outlier': return 'log_breakdown';
     case 'change_point': return 'log_change_point';
+    case 'new_template': return 'new_template'; // v0.10.2069: eski log_template_new kararı
     case 'op_latency': case 'op_error_rate': case 'throughput_drop': return 'trace_red';
     case 'dependency_latency': case 'dependency_error_rate': return 'dependency';
     case 'trace_error_count': return 'trace_errors'; // v0.10.2018

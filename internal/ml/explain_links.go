@@ -190,6 +190,12 @@ func whereToLookOf(in CardInput, l cardLinks) []ExplainLink {
 	case "log":
 		var first ExplainLink
 		switch {
+		case in.Detector == detNewTemplate: // v0.10.2069: kalıbın araması (v0.10.2026 türeticisi)
+			qq := in.LogQuery
+			if qq == "" {
+				qq = quoteQ(strings.TrimSuffix(in.Code, "…"))
+			}
+			first = ExplainLink{Label: "Bu kalıbı içeren loglar", Href: logsLink(in.logSvc(), qq, false, l.rangeParam)}
 		case in.NewTemplate != nil && in.NewTemplate.Text != "":
 			qq := in.NewTemplate.Query
 			if qq == "" {

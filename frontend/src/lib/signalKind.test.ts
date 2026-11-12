@@ -13,7 +13,7 @@ describe('signalKind', () => {
   it('every server detector maps to its signal', () => {
     const want: Record<string, SignalKind> = {
       log_volume: 'log', error_rate: 'log', service_silent: 'log', template_spike: 'log', rare_template: 'log', rare_error_code: 'log',
-      pod_outlier: 'log', change_point: 'log', op_latency: 'trace', op_error_rate: 'trace', throughput_drop: 'trace',
+      pod_outlier: 'log', change_point: 'log', new_template: 'log', op_latency: 'trace', op_error_rate: 'trace', throughput_drop: 'trace',
       dependency_latency: 'trace', trace_pod_outlier: 'trace', trace_change_point: 'trace', trace_error_count: 'trace', dependency_error_rate: 'trace',
       metric_jvm: 'metric', metric_pool: 'metric', metric_kafka: 'metric', metric_http_client: 'metric', metric_k8s: 'metric',
     };

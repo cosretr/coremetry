@@ -28,7 +28,7 @@ export const SIGNAL_KINDS: Record<SignalKind, SignalKindSpec> = {
 // MLTraceDetectorNames / MLMetricDetectorNames) aynası; metric_* öneki
 // ailedir. Bilinmeyen dedektör sunucunun `signal` alanına düşer.
 const TRACE_DETECTORS = new Set(['op_latency', 'op_error_rate', 'throughput_drop', 'dependency_latency', 'trace_pod_outlier', 'trace_change_point', 'trace_error_count', 'dependency_error_rate']);
-const LOG_DETECTORS = new Set(['log_volume', 'error_rate', 'service_silent', 'template_spike', 'rare_template', 'rare_error_code', 'pod_outlier', 'change_point']);
+const LOG_DETECTORS = new Set(['log_volume', 'error_rate', 'service_silent', 'template_spike', 'rare_template', 'rare_error_code', 'pod_outlier', 'change_point', 'new_template']);
 
 /** SAF: dedektör (+ sunucunun signal alanı) → sinyal türü. */
 export function signalKindOf(detector: string, signal?: string): SignalKind {

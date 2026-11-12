@@ -89,6 +89,7 @@ func CardInputFromEvent(ev chstore.MLEvent, now time.Time, loc *time.Location) C
 	if ls := evStr(m, "logService"); ls != "" && ls != ev.Service {
 		in.LogService = ls // v0.10.2045
 	}
+	in.LogQuery = evStr(m, "logQuery") // v0.10.2069: new_template (v0.10.2026 türeticisi)
 	if lt, ok := m["lowTraffic"].(map[string]any); ok {
 		n, _ := evNum(lt, "n")
 		k, _ := evNum(lt, "k")
@@ -253,7 +254,7 @@ func EnrichFromRelated(in *CardInput, related []chstore.MLSnapshot, hrefOf func(
 			continue
 		}
 		m := evidenceMap(x.Evidence)
-		if x.Detector == "rare_template" && in.NewTemplate == nil {
+		if (x.Detector == "rare_template" || x.Detector == detNewTemplate) && in.NewTemplate == nil {
 			txt := evStr(m, "phrase")
 			if txt == "" {
 				txt = evStr(m, "code")
@@ -261,6 +262,9 @@ func EnrichFromRelated(in *CardInput, related []chstore.MLSnapshot, hrefOf func(
 			// v0.10.2026 — arama metni KESİLMEMİŞ ifadeden: kesik metin ("…")
 			// tırnaklanınca hiçbir satırla eşleşmiyordu ve /logs boş açılıyordu.
 			query := quoteQ(txt)
+			if q := evStr(m, "logQuery"); q != "" { // v0.10.2069: new_template kalıbın kendi araması
+				query = q
+			}
 			if r := []rune(txt); len(r) > 120 {
 				txt = string(r[:120]) + "…"
 			}

@@ -187,7 +187,9 @@ func TestMLBaselineSettingOffAndOutOfHash(t *testing.T) {
 // v0.10.2064: metric_kafka varsayılan açık (Davis S3) → 338fe387817c0331.
 // v0.10.2067: `promotion` alanı (ml/promote.go kopya yolu) blobdan kalktı →
 // 3095f1a59e098e82 (tek seferlik; hash yalnız kanıt/backtest etiketi).
-const mlDefaultHash1813 = "3095f1a59e098e82"
+// v0.10.2069: new_template (eski log_template_new taşıması, varsayılan açık) →
+// 226ec2c6bb225cdf.
+const mlDefaultHash1813 = "226ec2c6bb225cdf"
 
 // v0.10.2020 — k8s ailesi: cAdvisor ifadeleri pod toplam satırını
 // (container="") ve duraklatma kabını (POD) süzer; KSM restart ifadesi

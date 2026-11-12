@@ -104,9 +104,9 @@ func getLogAnomaliesTool(d Deps) mcp.Tool {
 		Name: GetLogAnomaliesName,
 		ShortDescription: "ML gölge anomalileri (varsayılan log; trace/metric seçilebilir): servis, dedektör, gözlenen/taban, skor, teyit, operatör kararı. " +
 			"Gölgedir, Problem değildir. Tek olayın ayrıntısı için explain_ml_event.",
-		Description: "List recent ML shadow anomaly events (ml_events) — log signal by default (log volume, error rate, silence, template spike, rare template, rare error code, pod outlier, change point); `signal` trace or metric selects the trace (endpoint latency/error/traffic, dependency latency, pod outlier, change point) or metric-family detectors. " +
+		Description: "List recent ML shadow anomaly events (ml_events) — log signal by default (log volume, error rate, silence, template spike, rare template, first-seen log pattern, rare error code, pod outlier, change point); `signal` trace or metric selects the trace (endpoint latency/error/traffic, dependency latency, pod outlier, change point) or metric-family detectors. " +
 			"Each row: id, signal, detector, service, part (level / endpoint / code / pod), start time, observed vs baseline, direction, robust score, confirmed_by (other detectors on the same service within the confirm window) and the operator verdict if any. " +
-			"These are SHADOW detections: they never opened a Problem and promotion is off — say so, do not present them as alerts. Use it for 'any log anomaly on X', 'what did ML see'. For one event's evidence call explain_ml_event with its id; for real alerts use the problem tools. " +
+			"A single event never opens a Problem by itself — say so, do not present one as an alert; only when two or more different signals of the same service agree does their group open one Problem (rule anomaly-auto:group:…), which the problem tools list.Use it for 'any log anomaly on X', 'what did ML see'. For one event's evidence call explain_ml_event with its id; for real alerts use the problem tools. " +
 			"range_s default 86400, max 604800; at most 20 rows, body under 2 KB.",
 		InputSchema: map[string]any{
 			"type": "object",

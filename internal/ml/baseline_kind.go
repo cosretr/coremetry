@@ -29,7 +29,7 @@ const (
 // baselineKindOf — SAF: olayın taban türü.
 func baselineKindOf(ev chstore.MLEvent, days int, cal chstore.AnomalyCalendarConfig, loc *time.Location) string {
 	switch ev.Detector {
-	case detTracePodOutlier, detPodOutlier, detRareTemplate, detRareErrorCode:
+	case detTracePodOutlier, detPodOutlier, detRareTemplate, detRareErrorCode, detNewTemplate:
 		return baselineNone
 	case detChangePoint, detTraceChangePoint:
 		return baselineRecent

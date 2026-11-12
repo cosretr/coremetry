@@ -40,7 +40,7 @@ func startML(ctx context.Context, mode runMode, cfg *config.Config, store *chsto
 	log.Printf("[ml] alt sistem başlıyor placement=%s dedektörler=log_red(log_volume,error_rate,service_silent) trace_red(op_latency,op_error_rate,throughput_drop; VM configured=%v)", label, vm != nil && vm.Configured())
 	// v0.10.2019 — metrik aileleri: kaynak (VM | Thanos) saatte bir otomatik seçilir; Thanos yolu önce koşar.
 	msrc := ml.NewMetricSources()
-	ml.New(store, logs, vm, lock, label, ml.NewLogRED(), ml.NewLogTemplates(), ml.NewLogBreakdown(), ml.NewLogChangePoint(), ml.NewTraceRED(), ml.NewTraceErrors(), ml.NewDependency(), ml.NewTracePods(), ml.NewMetricThanos(ml.NewThanosQuerier(th), msrc), ml.NewMetricML().WithSources(msrc)).
+	ml.New(store, logs, vm, lock, label, ml.NewLogRED(), ml.NewLogTemplates(), ml.NewLogBreakdown(), ml.NewLogChangePoint(), ml.NewTraceRED(), ml.NewTraceErrors(), ml.NewDependency(), ml.NewTracePods(), ml.NewMetricThanos(ml.NewThanosQuerier(th), msrc), ml.NewMetricML().WithSources(msrc), ml.NewNewTemplates()).
 		WithNotifier(mlNotifier(notifier)). // v0.10.2052 (D4): grup Problem'i bildirimi, mevcut hat
 		Start(chstore.WithQueryTag(ctx, "ml:recorder"))
 }

@@ -53,6 +53,9 @@ func eventPart(ev chstore.MLEvent) string {
 	if ev.Detector == detTemplateSpike || ev.Detector == detRareTemplate {
 		return tplPartPrefix + ev.Code
 	}
+	if ev.Detector == detNewTemplate {
+		return "" // v0.10.2069: ilk görülme — ml_series serisi yok (canlı grafik Logs histogramı)
+	}
 	if ev.Level == "error" {
 		return partError
 	}
@@ -166,6 +169,16 @@ func collectSamples(ctx context.Context, deps Deps, ev chstore.MLEvent, cfg chst
 		raw, _ := json.Marshal(out)
 		return string(raw)
 	}
+	// v0.10.2069 — new_template: örnek satır Drain defterinden (olay kanıtı);
+	// ES/CH okuması yok (ES istek sayısı kip açılınca DEĞİŞMEZ).
+	if ev.Detector == detNewTemplate {
+		out := []chstore.MLSample{}
+		if body := evStr(evidenceMap(ev.Evidence), "sample"); body != "" {
+			out = append(out, chstore.MLSample{T: ev.StartedAt, Body: body, Kind: "log"})
+		}
+		raw, _ := json.Marshal(out)
+		return string(raw)
+	}
 	errOnly := ev.Detector == detErrorRate || ev.Detector == detOpErrorRate
 	route := ""
 	if ev.Signal == chstore.MLSignalTrace {
@@ -253,7 +266,9 @@ func (r *Recorder) writeSnapshots(ctx context.Context, deps Deps, cfg chstore.ML
 		}
 		if st.samples == "" {
 			st.samples = collectSamples(ctx, deps, ev, cfg, esLeft > 0)
-			esLeft--
+			if ev.Detector != detNewTemplate { // v0.10.2069: defterden örnek, ES bütçesi harcanmaz
+				esLeft--
+			}
 		}
 		if err := deps.Store.UpsertMLSnapshot(ctx, buildSnapshot(ctx, deps, ev, cfg, now, false, st.samples)); err != nil {
 			if firstErr == nil {

@@ -21,6 +21,7 @@ export const ML_LOG_DETECTORS: { id: string; label: string; hint: string }[] = [
   { id: 'service_silent', label: 'Servis sustu', hint: 'Beklenen hacim varken log gelmiyor' },
   { id: 'template_spike', label: 'Şablon spike', hint: 'Şablon ailesinin ES\'te gerçek sayımı kendi tabanının üstüne çıktı (tik başına 1 istek, ≤100 aile)' },
   { id: 'rare_template', label: 'Nadir şablon', hint: 'Taban günlerinde hiç görülmeyen şablon ailesi belirdi (yeni aileye bir kez geçmiş sayımı)' },
+  { id: 'new_template', label: 'Yeni log kalıbı', hint: 'Drain kalıbı ilk kez görüldü (en az 20 satır; batch serviste yalnız ERROR). Eski "yeni log kalıbı" kararının aynısı, ES isteği yok' },
   { id: 'rare_error_code', label: 'Nadir hata kodu', hint: 'Serviste 14 gündür görülmemiş kod' },
   { id: 'pod_outlier', label: 'Aykırı pod', hint: 'Aynı servisin pod\'ları arasında hata sayısı sapması' },
   { id: 'change_point', label: 'Kırılma noktası', hint: 'CUSUM; ±15 dk içinde rollout varsa eşlenir' },

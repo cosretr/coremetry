@@ -26,7 +26,8 @@ const mlSettingsKey = "ml"
 // exception kaydı bulursa en sık 3 tip + Oracle bağlamı KANITA ID ile bağlanır,
 // veri kopyalanmaz (T1).
 var (
-	MLLogDetectorNames   = []string{"log_volume", "error_rate", "service_silent", "template_spike", "rare_template", "rare_error_code", "pod_outlier", "change_point"}
+	MLLogDetectorNames = []string{"log_volume", "error_rate", "service_silent", "template_spike", "rare_template", "rare_error_code", "pod_outlier", "change_point",
+		"new_template"} // v0.10.2069: eski log_template_new kararı (ilk kez görülen Drain kalıbı)
 	MLTraceDetectorNames = []string{"op_latency", "op_error_rate", "throughput_drop", "dependency_latency", "trace_pod_outlier", "trace_change_point",
 		"trace_error_count",     // v0.10.2018 T-err: CH spanmetrics_1m mutlak hata span sayısı (oran DEĞİL)
 		"dependency_error_rate"} // v0.10.2063 Davis S2: VM DB/messaging client hata oranı (error_type)
@@ -260,7 +261,8 @@ func (c MLConfig) BaselineOn() bool { return c.Enabled && c.Baseline != nil && c
 // yetenekleri varsayılan AÇIK"): ML'e taşınan Davis özne yetenekleri.
 // Varsayılan blobda ve blobda HİÇ yazılmamış anahtarda açık; operatörün
 // kaydettiği değer (true/false) aynen korunur. Ana anahtar (Enabled) ayrı.
-var mlDefaultOnDetectors = map[string]bool{"op_latency": true, "dependency_error_rate": true, "metric_kafka": true}
+var mlDefaultOnDetectors = map[string]bool{"op_latency": true, "dependency_error_rate": true, "metric_kafka": true,
+	"new_template": true} // v0.10.2069: eski log_template_new taşıması (birleşik yetenek, varsayılan açık)
 
 // MLDetectorDefaultOn — SAF: dedektörün varsayılan durumu.
 func MLDetectorDefaultOn(name string) bool { return mlDefaultOnDetectors[name] }

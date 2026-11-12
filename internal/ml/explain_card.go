@@ -159,6 +159,7 @@ type CardInput struct {
 	Contrib                                                               *Contrib // v0.10.2037 — suçlu seri (evidence.contrib)
 	MetricWindowed                                                        bool     // v0.10.2044 — aile ifadesi pencereli (rate/increase)
 	LogService                                                            string   // v0.10.2045 — log tarafındaki servis adı (katalog adından farklıysa)
+	LogQuery                                                              string   // v0.10.2069 — new_template: kalıbın /logs araması (logstore.PatternSearchQuery)
 }
 
 // ── sözlük ───────────────────────────────────────────────────────────────
@@ -197,6 +198,7 @@ var mlDetSpecs = map[string]detSpec{
 	"service_silent":        {label: "Servis sustu", fact: "log akışı", what: "{svc} servisi log üretmeyi kesti.", past: "log akışı durdu", unit: unitCount, noun: "log satırı", additive: true},
 	"template_spike":        {label: "Şablon artışı", fact: "bir log mesajı", what: "{svc} servisinde bir log mesajı arttı: \"{code}\".", past: "bir log mesajı arttı", unit: unitCount, noun: "satır", additive: true},
 	"rare_template":         {label: "Nadir şablon", fact: "yeni bir log mesajı", what: "{svc} servisinde daha önce görülmemiş bir log mesajı çıktı: \"{code}\".", past: "yeni bir log mesajı çıktı", unit: unitCount, noun: "satır", additive: true},
+	"new_template":          {label: "Yeni log kalıbı (ilk kez görüldü)", fact: "yeni bir log kalıbı", what: "{svc} servisinde ilk kez görülen bir log kalıbı çıktı: \"{code}\".", past: "yeni bir log kalıbı çıktı", unit: unitCount, noun: "satır", additive: true},
 	"rare_error_code":       {label: "Nadir hata kodu", fact: "{code} hata kodu", what: "{svc} servisinde yeni bir hata kodu görüldü: {code}.", past: "yeni bir hata kodu görüldü", unit: unitCount, noun: "satır", additive: true},
 	"pod_outlier":           {label: "Aykırı pod (log)", fact: "{pod} pod'unda hata payı", what: "{svc} servisinde {pod} pod'u diğerlerinden fazla hata logu üretiyor.", past: "bir pod diğerlerinden fazla hata üretti", unit: unitRatio},
 	"change_point":          {label: "Kırılma (log)", fact: "log seviyesi", what: "{svc} servisinin log seviyesi kalıcı olarak {dir}.", past: "log seviyesi kalıcı olarak değişti", unit: unitCount, noun: "satır"},
@@ -464,6 +466,8 @@ func summaryOf(in CardInput, sp detSpec, open bool, end time.Time) string {
 		return metricSummary(in, sp, open, end)
 	} else if in.Detector == "log_volume" {
 		head = logVolumeHead(in) // v0.10.2044 — değer + normal (oran değil)
+	} else if in.Detector == detNewTemplate {
+		head = newTemplateHead(in) // v0.10.2069 — kalıp adıyla, değer + normal
 	} else {
 		head = fmt.Sprintf("%s: %s %s", in.Service, fill(sp.fact, in), RatioPhrase(in.Observed, in.Baseline, in.Direction, RatioLong, ratioRef(in)))
 	}
@@ -499,6 +503,15 @@ func logVolumeHead(in CardInput) string {
 		normal = "normalde ~" + trInt(in.Baseline/m)
 	}
 	return fmt.Sprintf("%s: log hacmi dakikada ~%s satıra %s (%s)", in.Service, trInt(in.Observed/m), verb, normal)
+}
+
+// newTemplateHead — SAF (v0.10.2069): "X: ilk kez görülen log kalıbı "…"
+// örneklemde 37 satır (normalde hiç yok)". Sayı Drain örnekleminden
+// (templater puller, tik başına ~1000 satır) — gerçek toplam değil, o
+// yüzden "örneklemde".
+func newTemplateHead(in CardInput) string {
+	return fmt.Sprintf("%s: ilk kez görülen log kalıbı \"%s\" örneklemde %s satır (normalde hiç yok)",
+		in.Service, truncRunes(strings.TrimSuffix(in.Code, "…"), 80), trInt(in.Observed))
 }
 
 // traceErrHead — SAF (v0.10.2018 T-err): mutlak hata sayısı cümlesi; oran

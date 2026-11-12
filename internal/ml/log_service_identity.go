@@ -75,6 +75,35 @@ func logServiceOf(ev chstore.MLEvent) string {
 
 type logSvcStats struct{ Unmatched, ViaPod int }
 
+// unmatchedLogNames — SAF: pod sorgusuna gidecek, katalogda olmayan log
+// servis adları (sıralı). v0.10.2069 — new_template olayları ES yükü
+// eklemesin: onların adları sorguya YALNIZ başka bir log olayı sorguyu
+// zaten açıyorsa katılır; yoksa o tik pod çözümü yok (olay yazılmaz,
+// "katalogda olmayan" sayılır — v0.10.2045'in güvenli yönü).
+func unmatchedLogNames(evs []chstore.MLEvent, known map[string]bool) []string {
+	var base, extra []string
+	seen := map[string]bool{}
+	for _, ev := range evs {
+		if ev.Signal != chstore.MLSignalLog || known[ev.Service] || ev.Service == "" || ev.Detector == detNewTemplate || seen[ev.Service] {
+			continue
+		}
+		seen[ev.Service] = true
+		base = append(base, ev.Service)
+	}
+	if len(base) == 0 {
+		return nil
+	}
+	for _, ev := range evs {
+		if ev.Signal == chstore.MLSignalLog && ev.Detector == detNewTemplate && !known[ev.Service] && ev.Service != "" && !seen[ev.Service] {
+			seen[ev.Service] = true
+			extra = append(extra, ev.Service)
+		}
+	}
+	sort.Strings(base)
+	sort.Strings(extra)
+	return append(base, extra...)
+}
+
 // resolveLogServices — log sinyalli olayların servisini katalogla çözer.
 // Katalog okunamazsa olaylar AYNEN geçer (fail-open: bugünkü davranış).
 func resolveLogServices(ctx context.Context, deps Deps, evs []chstore.MLEvent, now time.Time, window time.Duration) ([]chstore.MLEvent, logSvcStats) {
@@ -97,15 +126,7 @@ func resolveLogServices(ctx context.Context, deps Deps, evs []chstore.MLEvent, n
 	for _, n := range names {
 		known[n] = true
 	}
-	var unmatched []string
-	seen := map[string]bool{}
-	for _, ev := range evs {
-		if ev.Signal == chstore.MLSignalLog && !known[ev.Service] && !seen[ev.Service] && ev.Service != "" {
-			seen[ev.Service] = true
-			unmatched = append(unmatched, ev.Service)
-		}
-	}
-	sort.Strings(unmatched)
+	unmatched := unmatchedLogNames(evs, known)
 	if len(unmatched) > logSvcMaxNames {
 		unmatched = unmatched[:logSvcMaxNames]
 	}

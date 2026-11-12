@@ -264,7 +264,11 @@ func BuildUnified(in UnifiedInput) []UnifiedRow {
 	for i, f := range folds {
 		ws = append(ws, Window{Key: in.ML[f.lead].Service, ID: f.key, Start: f.start, End: f.end, Idx: i})
 	}
+	superseded := legacySupersededByML(in.ML)
 	for i, e := range in.Legacy {
+		if superseded[e.ID] {
+			continue
+		}
 		ws = append(ws, Window{Key: e.Service, ID: e.ID, Start: e.StartedAt, End: e.LastSeen, Idx: len(folds) + i})
 	}
 	chains := ChainWindows(ws, in.Slack)
@@ -314,6 +318,30 @@ func BuildUnified(in UnifiedInput) []UnifiedRow {
 		}
 		r.Status = combineUnifiedStatus(statuses)
 		out = append(out, r)
+	}
+	return out
+}
+
+// legacySupersededByML — SAF (v0.10.2069): ML'e taşınan eski olayların
+// kimlikleri. Eski log_template_new dedektörü silinene dek AYNI kalıp hem
+// eski satır hem ML new_template olayı üretir; ML olayı eski satırın
+// kimliğini kanıtında taşır (evidence.legacyId) ve listede eski satır
+// bastırılır — kalıp bir kez görünür. Seçim: ML satırını değil ESKİ satırı
+// düşürmek, çünkü ML olayı gruplara / ≥ 2 sinyal Problem kuralına giren
+// kayıttır. ML olayı listede yoksa (ML kapalı, katalog dışı, kesildi)
+// eski satır aynen görünür.
+func legacySupersededByML(ml []chstore.MLEvent) map[string]bool {
+	var out map[string]bool
+	for _, e := range ml {
+		if e.Detector != detNewTemplate {
+			continue
+		}
+		if id := evStr(evidenceMap(e.Evidence), "legacyId"); id != "" {
+			if out == nil {
+				out = map[string]bool{}
+			}
+			out[id] = true
+		}
 	}
 	return out
 }
