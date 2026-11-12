@@ -28,6 +28,8 @@ func eventPart(ev chstore.MLEvent) string {
 		switch ev.Detector {
 		case detDependencyLatency:
 			return depPartPrefix + ev.Code + "|p95"
+		case detDependencyErrorRate: // v0.10.2063 Davis S2
+			return depPartPrefix + ev.Code + "|err_ratio"
 		case detTraceChangePoint:
 			return tracePart(ev.Code, "p95")
 		case detTracePodOutlier:

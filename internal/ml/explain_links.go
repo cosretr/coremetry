@@ -128,7 +128,7 @@ func buildCardLinks(in CardInput, open bool, end time.Time) cardLinks {
 			s.Href = endpointLink(in.Service, l.route, rng)
 		}
 		l.subject = s
-	case in.Detector == "dependency_latency" && in.Code != "":
+	case (in.Detector == "dependency_latency" || in.Detector == "dependency_error_rate") && in.Code != "":
 		l.subject = &ExplainLink{Label: "→ " + in.Code}
 	case in.Pod != "":
 		l.subject = &ExplainLink{Label: "pod " + in.Pod}
@@ -174,7 +174,7 @@ func whereToLookOf(in CardInput, l cardLinks) []ExplainLink {
 				minMs = math.Round(in.Observed)
 			}
 			first = ExplainLink{Label: "Yavaş trace'ler", Href: tracesLink(in.Service, l.rangeParam, tracesOpts{route: l.route, minMs: minMs})}
-		case "op_error_rate", "trace_error_count":
+		case "op_error_rate", "trace_error_count", "dependency_error_rate":
 			first = ExplainLink{Label: "Hatalı trace'ler", Href: tracesLink(in.Service, l.rangeParam, tracesOpts{route: l.route, hasError: true})}
 		default:
 			first = ExplainLink{Label: "Trace'ler", Href: tracesLink(in.Service, l.rangeParam, tracesOpts{route: l.route})}

@@ -54,6 +54,9 @@ func BuildSourceQuery(cfg chstore.MLConfig, detector, code, service, svcLabel st
 	if detector == detDependencyLatency {
 		return dependencySourceQuery(code, service, svcLabel)
 	}
+	if detector == detDependencyErrorRate {
+		return dependencyErrSourceQuery(code, service, svcLabel)
+	}
 	fam, id, cluster := splitThanosPart(code)
 	if fam != detector {
 		return SourceQuery{}, false
@@ -178,19 +181,39 @@ func TracePodSourceQuery(pin anomaly.REDFamilyPin, l TracePodLabels, service, me
 	return SourceQuery{}, false
 }
 
-func dependencySourceQuery(code, service, svcLabel string) (SourceQuery, bool) {
+// depFamilyOf — SAF: olay kodu ("aile|hedef") → aile + hedef.
+func depFamilyOf(code string) (*depFamily, string, bool) {
 	famID, target, ok := strings.Cut(code, "|")
 	if !ok || target == "" {
-		return SourceQuery{}, false
+		return nil, "", false
 	}
-	var f *depFamily
 	for i := range depFamilies {
 		if depFamilies[i].ID == famID {
-			f = &depFamilies[i]
-			break
+			return &depFamilies[i], target, true
 		}
 	}
-	if f == nil {
+	return nil, "", false
+}
+
+// dependencyErrSourceQuery — v0.10.2063 (Davis S2): hedefin hata oranı (%),
+// dedektörle aynı tanım: _count{error_type dolu} / _count; hatasız an 0.
+func dependencyErrSourceQuery(code, service, svcLabel string) (SourceQuery, bool) {
+	f, target, ok := depFamilyOf(code)
+	if !ok || !f.ErrorRate {
+		return SourceQuery{}, false
+	}
+	parts := make([]string, 0, len(f.Targets))
+	for _, tl := range f.Targets {
+		all := thanos.WithEqualMatcher(thanos.WithEqualMatcher(f.Metric+"_count", svcLabel, service), tl, target)
+		errs := thanos.WithRegexMatcher(all, depErrorLabel, ".+")
+		parts = append(parts, fmt.Sprintf("(sum(rate(%s[%ds])) or vector(0)) / sum(rate(%s[%ds])) * 100", errs, SourceQueryWinSec, all, SourceQueryWinSec))
+	}
+	return SourceQuery{Expr: strings.Join(parts, " or "), Unit: "%", Label: target + " · hata oranı"}, true
+}
+
+func dependencySourceQuery(code, service, svcLabel string) (SourceQuery, bool) {
+	f, target, ok := depFamilyOf(code)
+	if !ok {
 		return SourceQuery{}, false
 	}
 	parts := make([]string, 0, len(f.Targets))

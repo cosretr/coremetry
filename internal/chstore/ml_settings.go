@@ -28,7 +28,8 @@ const mlSettingsKey = "ml"
 var (
 	MLLogDetectorNames   = []string{"log_volume", "error_rate", "service_silent", "template_spike", "rare_template", "rare_error_code", "pod_outlier", "change_point"}
 	MLTraceDetectorNames = []string{"op_latency", "op_error_rate", "throughput_drop", "dependency_latency", "trace_pod_outlier", "trace_change_point",
-		"trace_error_count"} // v0.10.2018 T-err: CH spanmetrics_1m mutlak hata span sayısı (oran DEĞİL)
+		"trace_error_count",     // v0.10.2018 T-err: CH spanmetrics_1m mutlak hata span sayısı (oran DEĞİL)
+		"dependency_error_rate"} // v0.10.2063 Davis S2: VM DB/messaging client hata oranı (error_type)
 	// Metrik aileleri = dedektörler (M1): her aile ayrı anahtar + ayrı terfi.
 	MLMetricDetectorNames = []string{"metric_jvm", "metric_pool", "metric_kafka", "metric_http_client", "metric_k8s"}
 	MLDetectorNames       = append(append(append([]string{}, MLLogDetectorNames...), MLTraceDetectorNames...), MLMetricDetectorNames...)
@@ -265,7 +266,7 @@ func (c MLConfig) BaselineOn() bool { return c.Enabled && c.Baseline != nil && c
 // yetenekleri varsayılan AÇIK"): ML'e taşınan Davis özne yetenekleri.
 // Varsayılan blobda ve blobda HİÇ yazılmamış anahtarda açık; operatörün
 // kaydettiği değer (true/false) aynen korunur. Ana anahtar (Enabled) ayrı.
-var mlDefaultOnDetectors = map[string]bool{"op_latency": true}
+var mlDefaultOnDetectors = map[string]bool{"op_latency": true, "dependency_error_rate": true}
 
 // MLDetectorDefaultOn — SAF: dedektörün varsayılan durumu.
 func MLDetectorDefaultOn(name string) bool { return mlDefaultOnDetectors[name] }

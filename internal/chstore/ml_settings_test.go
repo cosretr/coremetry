@@ -202,7 +202,8 @@ func TestMLBaselineSettingOffAndOutOfHash(t *testing.T) {
 // kaldığı yukarıdaki d/on karşılaştırmasıyla ayrıca çivili.
 // v0.10.2020: k8s cAdvisor ifadelerine container süzgeci → 60610b14fef39c95.
 // v0.10.2059: op_latency varsayılan açık (Davis S1) → 7bbfaa479ac1811c.
-const mlDefaultHash1813 = "7bbfaa479ac1811c"
+// v0.10.2063: dependency_error_rate (Davis S2, varsayılan açık) → 9cc38f9f62ebea9e.
+const mlDefaultHash1813 = "9cc38f9f62ebea9e"
 
 // v0.10.2020 — k8s ailesi: cAdvisor ifadeleri pod toplam satırını
 // (container="") ve duraklatma kabını (POD) süzer; KSM restart ifadesi

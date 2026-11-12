@@ -27,6 +27,7 @@ describe('sourcePanelFor', () => {
     ['gecikme → Traces şeridi', ev('op_latency', 'trace', 'POST /orders'), 'traces'],
     ['hata sayısı → Traces şeridi', ev('trace_error_count', 'trace', 'POST /orders'), 'traces'],
     ['bağımlılık → hedefin p95 serisi', ev('dependency_latency', 'trace', 'db|orders'), 'metric'],
+    ['bağımlılık hata oranı → hedefin oran serisi (v0.10.2063)', ev('dependency_error_rate', 'trace', 'db|orders'), 'metric'],
     ['trace pod sapması → pod başına kaynak serisi (v0.10.2055)', ev('trace_pod_outlier', 'trace', 'p95'), 'metric'],
     ['trace pod sapması ölçüsüz → kayıtlı', ev('trace_pod_outlier', 'trace', ''), 'snapshot'],
     ['metrik olayı seri kimliksiz → kayıtlı', ev('metric_jvm', 'metric', ''), 'snapshot'],

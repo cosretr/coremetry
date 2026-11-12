@@ -39,11 +39,13 @@ var mlDetectorSources = map[string][]string{
 	"trace_pod_outlier":  {MLSourceHTTPServer, MLSourceGRPCServer},
 	"trace_change_point": {MLSourceHTTPServer, MLSourceGRPCServer},
 	"dependency_latency": {MLSourceHTTPClient, MLSourceDBClient, MLSourceMessagingClient},
-	"metric_jvm":         {"metric_jvm"},
-	"metric_pool":        {"metric_pool"},
-	"metric_kafka":       {"metric_kafka"},
-	"metric_http_client": {"metric_http_client"},
-	"metric_k8s":         {"metric_k8s"},
+	// v0.10.2063: hata oranı yalnız DB + messaging client'ta (error_type).
+	"dependency_error_rate": {MLSourceDBClient, MLSourceMessagingClient},
+	"metric_jvm":            {"metric_jvm"},
+	"metric_pool":           {"metric_pool"},
+	"metric_kafka":          {"metric_kafka"},
+	"metric_http_client":    {"metric_http_client"},
+	"metric_k8s":            {"metric_k8s"},
 }
 
 // mlRecommendExempt — v0.10.2018: kaynağı VictoriaMetrics olmayan log-dışı

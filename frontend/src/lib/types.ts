@@ -12355,7 +12355,9 @@ export interface MLBackfillProgress {
   complete: boolean; running: boolean; startedAt: number; updatedAt: number; lastError?: string;
 }
 export interface MLBackoffEntry { family: string; until: number; failures: number; lastError?: string }
-export interface MLSignalTick { ran: boolean; services: number; sourceMs: number; candidates: number; suppressed: number; written: number; partial: number; batchCut?: number; error?: string }
+export interface MLSignalTick { ran: boolean; services: number; sourceMs: number; candidates: number; suppressed: number; written: number; partial: number; batchCut?: number; error?: string;
+  /** v0.10.2063: dedektör → "ölçülemedi" gerekçesi (kaynak / etiket yok; sağlıklı da anomali de değil). */
+  unmeasured?: Record<string, string> }
 /** Son tik durumu (v0.10.1764, system_settings ml_tick_status). */
 export interface MLTickStatus {
   at: number; durationMs: number; events: number; steps?: Record<string, number>; signals?: Record<string, MLSignalTick>;

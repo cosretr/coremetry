@@ -183,21 +183,22 @@ type detSpec struct {
 // mlDetSpecs — dedektör sözlüğü (chstore.MLDetectorNames ile aynı küme;
 // explain_card_test TestDetSpecsCoverDetectors pinler).
 var mlDetSpecs = map[string]detSpec{
-	"op_latency":         {label: "Endpoint gecikmesi · yavaş istek oranı", fact: "yavaş istek oranı", what: "{svc} servisinde yavaş yanıt alan isteklerin oranı arttı.", past: "yavaş istek oranı arttı", unit: unitRatio},
-	"op_error_rate":      {label: "Endpoint hata oranı", fact: "hata oranı", what: "{svc} servisinde hata alan isteklerin oranı arttı.", past: "hata oranı arttı", unit: unitRatio},
-	"throughput_drop":    {label: "Trafik düşüşü", fact: "istek sayısı", what: "{svc} servisine gelen istek sayısı düştü.", past: "istek sayısı düştü", unit: unitCount, noun: "istek", additive: true},
-	"dependency_latency": {label: "Bağımlılık gecikmesi (p95)", fact: "{code} çağrı süresi", what: "{svc} servisinin {code} çağrıları yavaşladı.", past: "{code} çağrıları yavaşladı", unit: unitMs, measure: "Çağrı süresi (p95)"},
-	"trace_change_point": {label: "Kırılma (trace, p95)", fact: "yanıt süresi (p95)", what: "{svc} servisinde yanıt süresi kalıcı olarak {dir}.", past: "yanıt süresi kalıcı olarak değişti", unit: unitMs, measure: "Yanıt süresi (p95)"},
-	"trace_error_count":  {label: "Operasyon hata sayısı (CH, örneklenmemiş hata span'leri)", fact: "{code} hata sayısı", what: "{svc} servisinin {code} operasyonunda hata sayısı arttı.", past: "hata sayısı arttı", unit: unitCount, noun: "hata", additive: true},
-	"trace_pod_outlier":  {label: "Aykırı pod (trace)", fact: "{pod} pod'unda hata payı", what: "{svc} servisinde {pod} pod'u diğerlerinden daha çok hata veriyor.", past: "bir pod diğerlerinden ayrıştı", unit: unitRatio},
-	"log_volume":         {label: "Log hacmi", fact: "log hacmi", what: "{svc} servisinin log hacmi {dirn}.", past: "log hacmi değişti", unit: unitCount, noun: "log satırı", additive: true},
-	"error_rate":         {label: "Hata oranı (log)", fact: "hata logları", what: "{svc} servisinde hata logları arttı.", past: "hata logları arttı", unit: unitCount, noun: "hata satırı", additive: true},
-	"service_silent":     {label: "Servis sustu", fact: "log akışı", what: "{svc} servisi log üretmeyi kesti.", past: "log akışı durdu", unit: unitCount, noun: "log satırı", additive: true},
-	"template_spike":     {label: "Şablon artışı", fact: "bir log mesajı", what: "{svc} servisinde bir log mesajı arttı: \"{code}\".", past: "bir log mesajı arttı", unit: unitCount, noun: "satır", additive: true},
-	"rare_template":      {label: "Nadir şablon", fact: "yeni bir log mesajı", what: "{svc} servisinde daha önce görülmemiş bir log mesajı çıktı: \"{code}\".", past: "yeni bir log mesajı çıktı", unit: unitCount, noun: "satır", additive: true},
-	"rare_error_code":    {label: "Nadir hata kodu", fact: "{code} hata kodu", what: "{svc} servisinde yeni bir hata kodu görüldü: {code}.", past: "yeni bir hata kodu görüldü", unit: unitCount, noun: "satır", additive: true},
-	"pod_outlier":        {label: "Aykırı pod (log)", fact: "{pod} pod'unda hata payı", what: "{svc} servisinde {pod} pod'u diğerlerinden fazla hata logu üretiyor.", past: "bir pod diğerlerinden fazla hata üretti", unit: unitRatio},
-	"change_point":       {label: "Kırılma (log)", fact: "log seviyesi", what: "{svc} servisinin log seviyesi kalıcı olarak {dir}.", past: "log seviyesi kalıcı olarak değişti", unit: unitCount, noun: "satır"},
+	"op_latency":            {label: "Endpoint gecikmesi · yavaş istek oranı", fact: "yavaş istek oranı", what: "{svc} servisinde yavaş yanıt alan isteklerin oranı arttı.", past: "yavaş istek oranı arttı", unit: unitRatio},
+	"op_error_rate":         {label: "Endpoint hata oranı", fact: "hata oranı", what: "{svc} servisinde hata alan isteklerin oranı arttı.", past: "hata oranı arttı", unit: unitRatio},
+	"throughput_drop":       {label: "Trafik düşüşü", fact: "istek sayısı", what: "{svc} servisine gelen istek sayısı düştü.", past: "istek sayısı düştü", unit: unitCount, noun: "istek", additive: true},
+	"dependency_latency":    {label: "Bağımlılık gecikmesi (p95)", fact: "{code} çağrı süresi", what: "{svc} servisinin {code} çağrıları yavaşladı.", past: "{code} çağrıları yavaşladı", unit: unitMs, measure: "Çağrı süresi (p95)"},
+	"dependency_error_rate": {label: "Bağımlılık hata oranı (VM client, error_type)", fact: "{code} çağrılarında hata oranı", what: "{svc} servisinin {code} çağrılarında hata oranı arttı.", past: "{code} çağrılarında hata arttı", unit: unitRatio},
+	"trace_change_point":    {label: "Kırılma (trace, p95)", fact: "yanıt süresi (p95)", what: "{svc} servisinde yanıt süresi kalıcı olarak {dir}.", past: "yanıt süresi kalıcı olarak değişti", unit: unitMs, measure: "Yanıt süresi (p95)"},
+	"trace_error_count":     {label: "Operasyon hata sayısı (CH, örneklenmemiş hata span'leri)", fact: "{code} hata sayısı", what: "{svc} servisinin {code} operasyonunda hata sayısı arttı.", past: "hata sayısı arttı", unit: unitCount, noun: "hata", additive: true},
+	"trace_pod_outlier":     {label: "Aykırı pod (trace)", fact: "{pod} pod'unda hata payı", what: "{svc} servisinde {pod} pod'u diğerlerinden daha çok hata veriyor.", past: "bir pod diğerlerinden ayrıştı", unit: unitRatio},
+	"log_volume":            {label: "Log hacmi", fact: "log hacmi", what: "{svc} servisinin log hacmi {dirn}.", past: "log hacmi değişti", unit: unitCount, noun: "log satırı", additive: true},
+	"error_rate":            {label: "Hata oranı (log)", fact: "hata logları", what: "{svc} servisinde hata logları arttı.", past: "hata logları arttı", unit: unitCount, noun: "hata satırı", additive: true},
+	"service_silent":        {label: "Servis sustu", fact: "log akışı", what: "{svc} servisi log üretmeyi kesti.", past: "log akışı durdu", unit: unitCount, noun: "log satırı", additive: true},
+	"template_spike":        {label: "Şablon artışı", fact: "bir log mesajı", what: "{svc} servisinde bir log mesajı arttı: \"{code}\".", past: "bir log mesajı arttı", unit: unitCount, noun: "satır", additive: true},
+	"rare_template":         {label: "Nadir şablon", fact: "yeni bir log mesajı", what: "{svc} servisinde daha önce görülmemiş bir log mesajı çıktı: \"{code}\".", past: "yeni bir log mesajı çıktı", unit: unitCount, noun: "satır", additive: true},
+	"rare_error_code":       {label: "Nadir hata kodu", fact: "{code} hata kodu", what: "{svc} servisinde yeni bir hata kodu görüldü: {code}.", past: "yeni bir hata kodu görüldü", unit: unitCount, noun: "satır", additive: true},
+	"pod_outlier":           {label: "Aykırı pod (log)", fact: "{pod} pod'unda hata payı", what: "{svc} servisinde {pod} pod'u diğerlerinden fazla hata logu üretiyor.", past: "bir pod diğerlerinden fazla hata üretti", unit: unitRatio},
+	"change_point":          {label: "Kırılma (log)", fact: "log seviyesi", what: "{svc} servisinin log seviyesi kalıcı olarak {dir}.", past: "log seviyesi kalıcı olarak değişti", unit: unitCount, noun: "satır"},
 }
 
 func specFor(in CardInput) detSpec {
@@ -574,6 +575,9 @@ func howMuchOf(in CardInput, sp detSpec, end time.Time) string {
 				slow = 1
 			}
 			verb = trDec(slow, 1) + " saniyeden uzun sürüyor"
+		}
+		if in.Detector == "dependency_error_rate" { // v0.10.2063: suçlu hedef adıyla
+			return fmt.Sprintf("%s çağrılarının %s hata alıyor; %s.%s", fill("{code}", in), trNumWithSfx(pct, sfxPoss3), normal(), tail)
 		}
 		return fmt.Sprintf("İsteklerin %s %s; %s.%s", trNumWithSfx(pct, sfxPoss3), verb, normal(), tail)
 	case sp.additive:

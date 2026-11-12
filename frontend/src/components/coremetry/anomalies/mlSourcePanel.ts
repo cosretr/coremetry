@@ -59,7 +59,7 @@ export function sourcePanelFor(e: Pick<MLEvent, 'detector' | 'signal' | 'code' |
   if (e.detector === 'metric_kafka' && code.startsWith('metric_kafka|consumer_lag') && !code.includes('@')) {
     return { kind: 'kafka-lag', service: e.service };
   }
-  if ((e.signal === 'metric' && e.detector.startsWith('metric_')) || e.detector === 'dependency_latency') {
+  if ((e.signal === 'metric' && e.detector.startsWith('metric_')) || e.detector === 'dependency_latency' || e.detector === 'dependency_error_rate') { // v0.10.2063: hata oranı da dedektörün ifadesi
     if (!code || !e.service) return { kind: 'snapshot', reason: e.service ? 'olay kaydı ölçülen serinin adını taşımıyor' : 'olay kaydında servis yok' };
     const at = code.indexOf('@');
     return { kind: 'metric', detector: e.detector, service: e.service, code, cluster: at >= 0 ? code.slice(at + 1) : '' };

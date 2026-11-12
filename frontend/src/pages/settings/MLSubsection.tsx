@@ -30,6 +30,8 @@ export const ML_TRACE_DETECTORS: { id: string; label: string; hint: string }[] =
   { id: 'op_error_rate', label: 'Endpoint hata oranı', hint: 'Servis × endpoint hata oranı, yukarı' },
   { id: 'throughput_drop', label: 'Trafik düşüşü', hint: 'Endpoint çağrı sayısı tabanın altına düştü' },
   { id: 'dependency_latency', label: 'Bağımlılık gecikmesi', hint: 'VM client histogramları: HTTP/DB/messaging hedefi bazında p95 (rollup yok — tail sampling)' },
+  // v0.10.2063 — Davis S2: oran VM'den; CH özet tabloları örneklenmiş (başarılı %5) olduğu için kullanılmaz.
+  { id: 'dependency_error_rate', label: 'Bağımlılık hata oranı', hint: 'VM DB/messaging client histogramları: çağıran × hedef hata oranı (error_type etiketi); etiket yoksa "ölçülemedi"' },
   { id: 'trace_pod_outlier', label: 'Aykırı pod (trace)', hint: 'VM server RED, pod etiketi varsa: pod\'lar arasında hata oranı / p95 sapması' },
   { id: 'trace_change_point', label: 'Kırılma (trace)', hint: 'CUSUM + rollout eşleştirmesi' },
   // v0.10.2018 — T-err: hata span'leri örneklenmediği için sayı CH'de tam; oran DEĞİL.

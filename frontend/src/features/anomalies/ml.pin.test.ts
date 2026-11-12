@@ -97,6 +97,18 @@ describe('log ml slice 0', () => {
     // v0.10.1811 kesimi görünür kutuda (tickLabel artık çizilmiyor — 1812'de düzeltildi)
     expect(statusTiles({ ...sc, tick: { ...sc.tick!, batchCut: 4 } }, '', 1000)[0].s).toBe('2 sn · 1 olay · batch kuralı 4 adayı kesti');
   });
+  // v0.10.2063 — Davis S2: error_type etiketi yoksa dependency_error_rate "ölçülemedi"; kardeşi (gecikme) etkilenmez.
+  it('unmeasured detector row', () => {
+    const sc = { windowDays: 30, detectors: [], bySignal: [], promotion: {},
+      gates: { dependency_latency: { ok: false, reasons: [] }, dependency_error_rate: { ok: false, reasons: [] } },
+      signals: { dependency_latency: 'trace', dependency_error_rate: 'trace' },
+      tick: { at: 1, durationMs: 1, events: 0, backoff: [], signals: { dependency: { ran: true, services: 2, sourceMs: 1, candidates: 0, suppressed: 0, written: 0, partial: 0,
+        unmeasured: { dependency_error_rate: 'ölçülemedi: db, messaging client histogramında error_type etiketi (ya da metrik) yok' } } } } };
+    const rows = detectorRows(sc, '');
+    expect(rows.find(r => r.detector === 'dependency_error_rate')?.unmeasured).toMatch(/^ölçülemedi/);
+    expect(rows.find(r => r.detector === 'dependency_latency')?.unmeasured).toBeUndefined();
+    expect(detectorGroup('dependency_error_rate')).toBe('dependency');
+  });
 });
 
 // v0.10.1814 — günlük baseline işi: "Baseline: son gün, satır, süre" satırı (render: MLTab ml-baseline-line).

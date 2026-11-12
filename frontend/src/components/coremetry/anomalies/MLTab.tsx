@@ -19,6 +19,7 @@ export const ML_DETECTOR_TR: Record<string, string> = {
   op_latency: 'Endpoint gecikmesi', op_error_rate: 'Endpoint hata oranı', throughput_drop: 'Trafik düşüşü',
   metric_jvm: 'JVM', metric_pool: 'Connection pool', metric_kafka: 'Kafka', metric_http_client: 'HTTP client', metric_k8s: 'Kubernetes',
   dependency_latency: 'Bağımlılık gecikmesi', trace_pod_outlier: 'Aykırı pod (trace)', trace_change_point: 'Kırılma (trace)', trace_error_count: 'Operasyon hata sayısı',
+  dependency_error_rate: 'Bağımlılık hata oranı', // v0.10.2063 Davis S2
 };
 export type MLSignal = '' | 'log' | 'trace' | 'metric';
 /** SAF: ?signal= çözümü; bilinmeyen → hepsi. */
@@ -129,13 +130,15 @@ export function detectorGroup(d: string): string {
     case 'rare_error_code': case 'pod_outlier': return 'log_breakdown';
     case 'change_point': return 'log_change_point';
     case 'op_latency': case 'op_error_rate': case 'throughput_drop': return 'trace_red';
-    case 'dependency_latency': return 'dependency';
+    case 'dependency_latency': case 'dependency_error_rate': return 'dependency';
     case 'trace_error_count': return 'trace_errors'; // v0.10.2018
     default: return 'trace_pods';
   }
 }
 
-export interface DetectorRow { detector: string; signal: string; enabled: boolean; events: number; samples: number; hitRate: number; tick?: MLSignalTick; gate?: MLGate }
+export interface DetectorRow { detector: string; signal: string; enabled: boolean; events: number; samples: number; hitRate: number; tick?: MLSignalTick; gate?: MLGate;
+  /** v0.10.2063: son tikte kaynağı yoktu ("ölçülemedi: …"); sağlıklı DEĞİL. */
+  unmeasured?: string }
 
 /** Karne satırları — SAF (test): tüm dedektörler, olay yoksa 0; kapalı = kapı gerekçesinden. */
 export function detectorRows(sc: MLScorecard, signal: MLSignal): DetectorRow[] {
@@ -144,8 +147,9 @@ export function detectorRows(sc: MLScorecard, signal: MLSignal): DetectorRow[] {
     const sc1 = byDet.get(d);
     const gate = sc.gates?.[d];
     const reasons = gate?.reasons ?? [];
+    const tick = sc.tick?.signals?.[detectorGroup(d)];
     return { detector: d, signal: sc.signals[d], enabled: !reasons.includes('dedektör kapalı') && !reasons.includes('ana anahtar kapalı'),
-      events: sc1?.events ?? 0, samples: sc1?.samples ?? 0, hitRate: sc1?.hitRate ?? 0, tick: sc.tick?.signals?.[detectorGroup(d)], gate };
+      events: sc1?.events ?? 0, samples: sc1?.samples ?? 0, hitRate: sc1?.hitRate ?? 0, tick, gate, unmeasured: tick?.unmeasured?.[d] };
   });
 }
 
@@ -315,7 +319,9 @@ export function MLTab({ signal = '', onSignal }: { signal?: MLSignal; onSignal?:
                 case 'detector': return ML_DETECTOR_TR[r.detector] ?? r.detector;
                 case 'signal': return r.signal === 'log' || r.signal === 'trace' || r.signal === 'metric'
                   ? <SignalKindBadge kind={r.signal} /> : (SIGNAL_TR[r.signal] ?? r.signal);
-                case 'state': return r.enabled ? 'Açık' : <span className="text-muted-foreground">Kapalı</span>;
+                case 'state': return r.enabled
+                  ? (r.unmeasured ? <span className="text-[color:var(--warn)]" title={r.unmeasured}>Açık · {r.unmeasured.startsWith('kısmen') ? 'kısmen ölçülüyor' : 'ölçülemedi'}</span> : 'Açık')
+                  : <span className="text-muted-foreground">Kapalı</span>;
                 case 'events': return r.events.toLocaleString('tr-TR');
                 case 'hit': {
                   const v = detectorVerdictText(r);

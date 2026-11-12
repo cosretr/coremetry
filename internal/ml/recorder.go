@@ -205,6 +205,10 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 		if derr != nil {
 			st.Error = truncRunes(derr.Error(), 200)
 		}
+		// v0.10.2063: kaynağı olmayan dedektör "ölçülemedi" (dependency_error_rate).
+		if u, ok := det.(interface{ Unmeasured() map[string]string }); ok {
+			st.Unmeasured = u.Unmeasured()
+		}
 		signals[det.Name()] = st
 		if derr != nil && firstErr == nil {
 			firstErr = derr

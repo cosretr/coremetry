@@ -31,6 +31,10 @@ type MLSignalTick struct {
 	Partial    int    `json:"partial"`
 	BatchCut   int    `json:"batchCut,omitempty"` // v0.10.1811: batch kuralının kestiği aday
 	Error      string `json:"error,omitempty"`
+	// Unmeasured — v0.10.2063: dedektör → "ölçülemedi" gerekçesi (kaynak /
+	// etiket yok; sağlıklı DEĞİL, anomali DEĞİL). Ör. dependency_error_rate
+	// error_type etiketi olmayan VM'de.
+	Unmeasured map[string]string `json:"unmeasured,omitempty"`
 }
 
 // MLKindTick — v0.10.1812 (audit §10 dilim 1.1, §13 D3): bir sinyal türünün
