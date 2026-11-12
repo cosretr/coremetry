@@ -49,15 +49,18 @@ type MLKindTick struct {
 
 // MLTickStatus — son tik.
 type MLTickStatus struct {
-	At         int64                   `json:"at"` // unix sn
-	DurationMs int64                   `json:"durationMs"`
-	Events     int64                   `json:"events"`
-	Steps      map[string]int64        `json:"steps,omitempty"` // adım → ms
-	Signals    map[string]MLSignalTick `json:"signals,omitempty"`
-	Backoff    []MLBackoffEntry        `json:"backoff"`
-	Partial    int64                   `json:"partial"`            // bu tikte kısmi ES sonucu alan dedektör
-	Docs       int64                   `json:"docs"`               // log RED penceresinde toplanan belge
-	BatchCut   int64                   `json:"batchCut,omitempty"` // v0.10.1811: batch kuralının kestiği aday
+	At         int64 `json:"at"` // unix sn
+	DurationMs int64 `json:"durationMs"`
+	Events     int64 `json:"events"`
+	// ContribQueries — v0.10.2037: bu tikte suçlu seri için atılan kırılım
+	// sorgusu (yalnız yeni açılan / tepesi büyüyen metrik olayları).
+	ContribQueries int64                   `json:"contribQueries,omitempty"`
+	Steps          map[string]int64        `json:"steps,omitempty"` // adım → ms
+	Signals        map[string]MLSignalTick `json:"signals,omitempty"`
+	Backoff        []MLBackoffEntry        `json:"backoff"`
+	Partial        int64                   `json:"partial"`            // bu tikte kısmi ES sonucu alan dedektör
+	Docs           int64                   `json:"docs"`               // log RED penceresinde toplanan belge
+	BatchCut       int64                   `json:"batchCut,omitempty"` // v0.10.1811: batch kuralının kestiği aday
 	// v0.10.1812 — sinyal türü başına ölçüm + tik toplam sorgu sayıları.
 	Kinds     map[string]MLKindTick `json:"kinds,omitempty"`
 	ES        int64                 `json:"es"`

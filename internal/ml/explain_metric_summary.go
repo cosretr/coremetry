@@ -12,6 +12,8 @@ package ml
 
 import (
 	"fmt"
+	"math"
+	"strings"
 	"time"
 )
 
@@ -51,8 +53,57 @@ func metricSummary(in CardInput, sp detSpec, open bool, end time.Time) string {
 	default:
 		day = w + " "
 	}
+	if cp := contribSentence(in.Contrib); cp != "" { // v0.10.2037 — suçlu seri
+		normal += ". " + cp
+	}
 	if open {
 		return fmt.Sprintf("%s; %s. %s%s beri sürüyor (%s).", head, normal, day, clockSfx(st, sfxAbl), plain)
 	}
 	return fmt.Sprintf("%s; %s. %s%s başladı, %s bitti (%s sürdü).", head, normal, day, clockSfx(st, sfxLoc), clockSfx(end.In(loc), sfxLoc), plain) // v0.10.2034
+}
+
+// contribSentence — SAF (v0.10.2037): suçlu seri cümlesi (nokta yok).
+//
+//	tek, pay ≥ %90: "Neredeyse tamamı orders-collector-consumer-v1 istemcisinde"
+//	tek, pay < %90: "Çoğu (%73) orders-batch-7d9-a pod'unda"
+//	ilk 3:          "En çok orders-a, orders-b ve orders-c istemcilerinde"
+//	yayılmış:       "12 istemciye yayılmış; öne çıkan yok"
+func contribSentence(c *Contrib) string {
+	if c == nil {
+		return ""
+	}
+	one, many, dat := "pod'unda", "pod'larında", "pod'a"
+	if c.Label == "client_id" {
+		one, many, dat = "istemcisinde", "istemcilerinde", "istemciye"
+	}
+	switch c.Kind {
+	case "single":
+		if len(c.Items) == 0 {
+			return ""
+		}
+		it := c.Items[0]
+		if it.Share >= 0.9 {
+			return fmt.Sprintf("Neredeyse tamamı %s %s", it.Name, one)
+		}
+		return fmt.Sprintf("Çoğu (%%%d) %s %s", int(math.Round(it.Share*100)), it.Name, one)
+	case "top":
+		if len(c.Items) == 0 {
+			return ""
+		}
+		names := make([]string, len(c.Items))
+		for i, it := range c.Items {
+			names[i] = it.Name
+		}
+		list := names[0]
+		if len(names) > 1 {
+			list = strings.Join(names[:len(names)-1], ", ") + " ve " + names[len(names)-1]
+		}
+		return fmt.Sprintf("En çok %s %s", list, many)
+	case "spread":
+		if c.Active < 2 {
+			return ""
+		}
+		return fmt.Sprintf("%d %s yayılmış; öne çıkan yok", c.Active, dat)
+	}
+	return ""
 }

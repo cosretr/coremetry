@@ -85,6 +85,7 @@ func CardInputFromEvent(ev chstore.MLEvent, now time.Time, loc *time.Location) C
 	if im.Affected > 0 || len(im.Channels) > 0 || im.PodsTotal > 0 {
 		in.Impact = &im
 	}
+	in.Contrib = evidenceContrib(ev.Evidence)
 	if lt, ok := m["lowTraffic"].(map[string]any); ok {
 		n, _ := evNum(lt, "n")
 		k, _ := evNum(lt, "k")

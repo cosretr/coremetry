@@ -225,6 +225,16 @@ func (t *tracker) setEvent(ev chstore.MLEvent) {
 	t.mu.Unlock()
 }
 
+// prevEvent — v0.10.2037: epizodun önceki tikte yazılan hali (contrib kapısı).
+func (t *tracker) prevEvent(epID string) (chstore.MLEvent, bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if r := t.byEpisode(epID); r != nil && r.ev.ID != "" {
+		return r.ev, true
+	}
+	return chstore.MLEvent{}, false
+}
+
 // events — v0.10.2015 (D3): koşuların son yazılan halleri (açık + 24 sa
 // içinde kapanmış); gölge gruplamanın süreç-içi girdisi.
 func (t *tracker) events() []chstore.MLEvent {

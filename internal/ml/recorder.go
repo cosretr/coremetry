@@ -215,6 +215,11 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	r.runs.gc(start)
 	// T1b: trace olaylarına exception / Oracle / BubbleUp referansı (koşu başına bir kez)
 	r.enrichTraceContext(tctx, deps, cfg, kept, cfg.MaxESQueriesPerTick-int(global.esQueries.Load()-esAtStart))
+	// v0.10.2037 — suçlu seri: yeni açılan (ya da tepesi 1,5 kat büyüyen)
+	// metrik olayına TEK kırılımlı anlık sorgu; sonuç kanıta (contrib.go).
+	c0 := time.Now()
+	contribQ := r.contribSource().enrichContributors(tctx, deps, cfg, kept, r.runs.prevEvent, start)
+	steps["contribMs"] = time.Since(c0).Milliseconds()
 	// v0.10.2015 (anomali tekilleştirme D3) — promoteMLGroups GÖLGE kipi:
 	// grup Problem kapısından geçseydi "açardı" kararı üyenin kanıtına
 	// (groupShadow) yazılır. Problem / bildirim / anomaly_events YOK; sorgu
@@ -263,7 +268,7 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	status := chstore.MLTickStatus{At: start.Unix(), DurationMs: time.Since(start).Milliseconds(), Events: written, Backoff: r.backoff.snapshot(start),
 		Partial: int64(partialN), Docs: global.docs.Load(), Steps: steps, Signals: signals, BatchCut: int64(batchCut),
 		Kinds: foldKindTicks(samples), ES: global.esQueries.Load() - esAtStart, VM: global.vmQueries.Load() - vmAtStart, CH: chQueries.Load(),
-		ShadowGroups: shadow.Groups, ShadowWouldOpen: shadow.WouldOpen}
+		ShadowGroups: shadow.Groups, ShadowWouldOpen: shadow.WouldOpen, ContribQueries: int64(contribQ)}
 	// v0.10.2019 — metrik aile kaynakları + Thanos ölçümü (MetricThanos)
 	for _, det := range r.detectors {
 		if ts, ok := det.(interface {
@@ -283,7 +288,7 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	scancel()
 	log.Printf("[ml] tick placement=%s detectors=%d events=%d suppressed=impact:%d,feedback:%d,regime:%d,batch:%d labels=%d dur=%dms es_p95=%dms err=%v",
 		r.placement, active, written, sup.Impact, sup.Feedback, sup.Regime, batchCut, len(labels), time.Since(start).Milliseconds(), Observability().ESP95Ms, firstErr)
-	log.Printf("[ml] tick group_shadow groups=%d would_open=%d", shadow.Groups, shadow.WouldOpen)
+	log.Printf("[ml] tick group_shadow groups=%d would_open=%d contrib_queries=%d", shadow.Groups, shadow.WouldOpen, contribQ)
 	log.Printf("[ml] tick steps labels=%dms detectors=%dms write=%dms snapshot=%dms es_queries=%d vm_queries=%d partial=%d docs=%d",
 		steps["labelsMs"], steps["detectorsMs"], steps["writeMs"], steps["snapshotMs"], global.esQueries.Load()-esAtStart, global.vmQueries.Load()-vmAtStart, partialN, global.docs.Load())
 	for _, line := range kindTickLines(status.Kinds) {
@@ -292,6 +297,17 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	for name, st := range signals {
 		log.Printf("[ml] tick %s ran=%v services=%d source=%dms candidates=%d batch_cut=%d written=%d partial=%d err=%s", name, st.Ran, st.Services, st.SourceMs, st.Candidates, st.BatchCut, st.Written, st.Partial, st.Error)
 	}
+}
+
+// contribSource — kırılım sorgusunun kaynakları: VM deps'ten; Thanos
+// MetricThanos dedektöründen (querier + backoff paylaşılır).
+func (r *Recorder) contribSource() contribSource {
+	for _, d := range r.detectors {
+		if mt, ok := d.(*MetricThanos); ok && mt.q != nil {
+			return contribSource{thanos: mt.q, backoff: mt.backoff}
+		}
+	}
+	return contribSource{}
 }
 
 // distinctServices — SAF.

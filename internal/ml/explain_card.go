@@ -151,6 +151,7 @@ type CardInput struct {
 	Related                                                               []CardRelated
 	Impact                                                                *CardImpact
 	LowTraffic                                                            *CardLowTraffic
+	Contrib                                                               *Contrib // v0.10.2037 — suçlu seri (evidence.contrib)
 }
 
 // ── sözlük ───────────────────────────────────────────────────────────────
