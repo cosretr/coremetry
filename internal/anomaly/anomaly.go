@@ -514,13 +514,38 @@ func (d *Detector) runIfLeader(ctx context.Context) {
 		return
 	}
 	defer selfobs.ObserveJob("anomaly", time.Now(), nil) // v0.10.1422 — worker RED
-	d.scan(ctx)
+
+	// v0.10.1746 — Settings anahtarı (varsayılan kapalı).
+	p := planAnomalyTick(d.store.NativeDetectorOn(ctx, chstore.NativeMetricAnomaly))
+	if p.native {
+		d.scan(ctx)
+	}
+	// v0.9.1194 — FIRTINA dedektörü, tikin sonunda: kendi içinde soft-fail,
+	// ani-sapma hattına gecikme bindirmez. Tik başına iki küçük okuma
+	// (triage config + pencere sayımı). v0.10.2011 — yerel kapıdan bağımsız
+	// (exception akışı anomali tespiti değil; 1746 kararı "KALIR").
+	if p.storm {
+		d.checkExceptionStorm(ctx)
+	}
 }
 
+// anomalyTickPlan — tik başına hangi fazlar koşar.
+type anomalyTickPlan struct {
+	native bool // scan(): metrik taraması + kümeleme + sessizlik + heap + özneler + davranış
+	storm  bool // checkExceptionStorm
+}
+
+// planAnomalyTick — SAF. v0.10.2011: v0.10.1746 erken dönüşü scan()
+// içindeydi ve sondaki fırtına çağrısını da susturuyordu (audit N3). Fırtına
+// artık kapıdan bağımsız; scan()'in geri kalanı (özneler dahil) kapıya
+// bağlı kalır.
+func planAnomalyTick(nativeMetricOn bool) anomalyTickPlan {
+	return anomalyTickPlan{native: nativeMetricOn, storm: true}
+}
+
+// scan — yerel metrik-anomali taraması. Çağıran (runIfLeader) yalnız
+// `native_detectors.metric_anomaly` açıkken çağırır.
 func (d *Detector) scan(ctx context.Context) {
-	if !d.store.NativeDetectorOn(ctx, chstore.NativeMetricAnomaly) { // v0.10.1746 — Settings anahtarı (varsayılan kapalı)
-		return
-	}
 	// v0.8.506: yalnız isim listesi gerekiyor — MV'den (bkz.
 	// ListActiveServiceNames); ham spans 24h taraması kalktı.
 	services, err := d.store.ListActiveServiceNames(ctx, 24*time.Hour)
@@ -803,11 +828,7 @@ func (d *Detector) scan(ctx context.Context) {
 	d.applySubjects(ctx, subjects, sens, minSamples, now)
 
 	d.scanBehavior(ctx, now, sens, redView)
-
-	// v0.9.1194 — FIRTINA dedektörü, aynı tikin sonunda ve aynı gerekçeyle:
-	// kendi içinde soft-fail, ani-sapma hattına gecikme bindirmez. Tik
-	// başına iki küçük okuma (triage config + pencere sayımı).
-	d.checkExceptionStorm(ctx)
+	// Fırtına burada DEĞİL: runIfLeader'da, kapıdan bağımsız (v0.10.2011).
 }
 
 // reachesApply — SAF: faz 1'in kararı uygulama döngüsüne (applyOutcome) girer mi.

@@ -7,8 +7,15 @@ package chstore
 // Oracle Problem akışları, Elastic ML poller, exception gruplama/fırtına/P1
 // merdiveni/fatal+shared exception, slo_burn, heartbeat, self-health, rollout
 // korelasyonu (Problem AÇMAZ, zenginleştirir), kök neden sentezi/açıklayıcılar.
-// Kendi anahtarı zaten olan ve varsayılanı kapalı dedektörler (op_latency,
-// log_template_new, heap bandı) burada tekrar listelenmez.
+// v0.10.2011 — fırtına `metric_anomaly` kapısından gerçekten bağımsız:
+// 1746'dan beri `anomaly.scan()` erken dönüşü onu da susturuyordu
+// (anomaly-reassessment-audit N3); şimdi `runIfLeader` kapıdan ayrı çağırır.
+// Aynı kapının arkasında KALANLAR (metric_anomaly kapalıyken koşmaz):
+// error_ramp, takvim düşüşü, service_silent, kümeleme, heap bandı, Davis
+// özneleri ve davranış motoru; evaluator'da anomali terfi süpürmesi.
+// Kendi anahtarı olan dedektörler burada tekrar listelenmez: op_latency
+// (varsayılan AÇIK, v0.10.1085; yerel kapı dışında), log_template_new ve
+// heap bandı (varsayılan kapalı).
 //
 // Okuma her tikte (restart yok): blob 15 sn süreç-içi önbellekle okunur
 // (tik başına ≤1 CH nokta okuması). CH hatasında SON bilinen değer, hiç
