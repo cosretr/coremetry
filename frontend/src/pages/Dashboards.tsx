@@ -7,6 +7,7 @@ import { Button, Field, IconButton, Modal, SearchField, Stack } from '@/componen
 import { DataTable, type ColumnDef, type DataTableStateInput } from '@/components/coremetry/DataTable';
 import { DashboardListFilters } from '@/components/coremetry/dashboard/DashboardListFilters';
 import { useDashboardRowActions } from '@/components/coremetry/dashboard/useDashboardRowActions';
+import { TemplateGallery } from '@/components/coremetry/dashboard/TemplateGallery';
 import { csvParam, boolParam, strParam, useUrlParams, type ParamSpec } from '@/lib/urlParams';
 import { filterDashboards, tagChips, toggleTag } from '@/lib/dashboardList';
 import { api } from '@/lib/api';
@@ -257,6 +258,10 @@ export default function DashboardsPage() {
               if (f) onImportFile(f);
             }} />
         )}
+
+        {/* v0.10.1997 (dilim 3.3) — şablon şeridi tablonun ÜSTÜNDE, tek satır;
+            kurulum yazma eylemi → yalnız editor+. */}
+        {isAdmin && <TemplateGallery />}
 
         {chips.length > 0 || params.fav || starMap.size > 0 ? (
           <DashboardListFilters chips={chips} selected={params.tags} fav={params.fav}

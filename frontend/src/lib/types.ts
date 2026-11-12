@@ -6237,6 +6237,14 @@ export interface DashboardEditor { dashboardId: string; actor: string; at: numbe
 // son görüntülenen panolar, en yeni önce; `at` unix ms.
 export interface DashboardRecentEntry { id: string; at: number }
 export interface DashboardRecentResponse { entries: DashboardRecentEntry[]; enabled: boolean }
+// v0.10.1997 (Faz 3 dilim 3.3) — GET /api/dashboards/templates
+// (internal/api/dashboard_templates.go dashTemplateSummary). `missing` =
+// ön kontrolde bulunamayan metrikler; `checked:false` = denetlenemedi.
+export interface DashboardTemplate {
+  id: string; name: string; description: string; tags: string[];
+  panelCount: number; required: string[]; missing: string[]; checked: boolean;
+}
+export interface DashboardTemplatesResponse { templates: DashboardTemplate[]; backend: string }
 export interface Dashboard extends DashboardSummary {
   // Optional because list responses skip the heavy fields; only
   // the single-dashboard endpoint guarantees them. Renderer

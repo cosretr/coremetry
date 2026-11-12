@@ -26,6 +26,7 @@ const m = vi.hoisted(() => ({
   role: 'admin',
   editors: [] as unknown[],
   recent: [] as unknown[],
+  templates: [] as unknown[],
 }));
 vi.mock('@/lib/api', async (importOriginal) => {
   const mod = await importOriginal<Record<string, unknown>>();
@@ -41,6 +42,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
       savedViews: () => Promise.resolve([]),
       dashboardEditors: () => Promise.resolve({ editors: m.editors }),
       dashboardRecent: () => Promise.resolve({ entries: m.recent, enabled: true }),
+      dashboardTemplates: () => Promise.resolve({ templates: m.templates, backend: 'vm' }),
     },
   };
 });
@@ -99,7 +101,7 @@ async function type(input: HTMLInputElement, value: string) {
 }
 
 beforeEach(() => {
-  m.items = []; m.fail = false; m.pending = false; m.role = 'admin'; m.editors = []; m.recent = [];
+  m.items = []; m.fail = false; m.pending = false; m.role = 'admin'; m.editors = []; m.recent = []; m.templates = [];
   try { localStorage.clear(); } catch { /* jsdom */ }
 });
 afterEach(() => {
@@ -210,5 +212,25 @@ describe('/dashboards — dilim 3.2: son düzenleyen + son görüntülemeniz', (
     expect(rows[0].textContent).toContain('7');
     expect(rows[1].textContent).toContain('hiç');
     expect(el.textContent).not.toContain('Ingest');
+  });
+});
+
+describe('/dashboards — dilim 3.3: şablon galerisi', () => {
+  const tpl = (id: string, missing: string[], checked = true) => ({
+    id, name: id, description: '', tags: ['red'], panelCount: 6, required: ['m'], missing, checked,
+  });
+  it('editor galeriyi görür; eksik metrik kartta adıyla yazılır', async () => {
+    m.templates = [tpl('Service RED', []), tpl('Kubernetes', ['kube_pod_status_phase'])];
+    const el = await mount();
+    const g = el.querySelector('section[aria-label="Şablondan oluştur"]')!;
+    expect(g.textContent).toContain('Gereken metrikler: var');
+    expect(g.textContent).toContain('eksik: kube_pod_status_phase');
+    expect(g.textContent).toContain('6 panel');
+  });
+  it('viewer galeriyi görmez', async () => {
+    m.role = 'viewer';
+    m.templates = [tpl('Service RED', [])];
+    const el = await mount();
+    expect(el.querySelector('section[aria-label="Şablondan oluştur"]')).toBeNull();
   });
 });

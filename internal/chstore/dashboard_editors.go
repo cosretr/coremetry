@@ -30,6 +30,7 @@ type DashboardEditor struct {
 var DashboardEditActions = []string{
 	"dashboard.create", "dashboard.update",
 	"dashboard.panels_append", "dashboard.create_from_chat",
+	"dashboard.create_from_template", // v0.10.1997 (dilim 3.3)
 }
 
 // dashboardEditorsWindow — audit_log TTL'i (store.go: INTERVAL 365 DAY).

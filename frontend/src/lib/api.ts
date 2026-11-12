@@ -3579,6 +3579,15 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id }),
     }),
+  // v0.10.1997 (Faz 3 dilim 3.3) — şablon galerisi + ön kontrol; kurulum editor+.
+  dashboardTemplates: (signal?: AbortSignal) =>
+    get<import('./types').DashboardTemplatesResponse>(withMetricSource('/api/dashboards/templates'), signal),
+  createDashboardFromTemplate: (id: string) =>
+    request<Dashboard>('/api/dashboards/from-template', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    }),
   deleteDashboard: (id: string) =>
     request<void>(`/api/dashboards/${id}`, { method: 'DELETE' }),
   // v0.10.1443 — sohbetten dashboard (dashboard_panels_routes.go): sunucu
