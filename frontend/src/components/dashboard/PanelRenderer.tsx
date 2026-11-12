@@ -145,6 +145,7 @@ import { encodeFilters } from '@/lib/urlState';
 import { Link } from 'react-router-dom';
 import { usePanelMenuHost } from './panelMenuHost';
 import { MULTI, plainVars } from '@/lib/dashboardVars';
+import { resolvePanelQuery } from '@/lib/metricsExplorer/panelQuery';
 
 // PanelRenderer dispatches on panel.type. Self-contained — fetches its
 // own data, re-fetches when `range` changes. Errors are surfaced inline
@@ -426,7 +427,8 @@ function MetricPanel({ cfg, range, syncKey, onZoom, onZoomReset, dataOverride, h
       const step = effectivePanelStep(cfg.step, (to - from) / 1e9, widthPx);
       if (step === null) return;
       setSeries(undefined); setError(null); setMeta({});
-      api.metricPromql({ query: cfg.promql!, from, to, step })
+      // v0.10.2016 — builder'ın $__rate_interval / $__interval yer tutucuları panelin adımıyla.
+      api.metricPromql({ query: resolvePanelQuery(cfg.promql!, step, (to - from) / 1e9), from, to, step })
         .then(r => { setSeries(r?.series ?? []); setMeta({ meta: r?.meta }); }).catch(e => setError(e.message));
       return;
     }
@@ -647,7 +649,7 @@ function PromqlPanel({ cfg, range, syncKey, onZoom, onZoomReset, height, onFocus
     setError(null);
     setPromMeta(undefined);
     // v0.10.1443 — cfg.source: kaynak pini (sohbetten gelen VM-only MetricsQL); yoksa kurulum varsayılanı.
-    api.metricPromql({ query: debouncedQuery, from, to, step, src: cfg.source })
+    api.metricPromql({ query: resolvePanelQuery(debouncedQuery, step, (to - from) / 1e9), from, to, step, src: cfg.source })
       .then(r => { setSeries(r?.series ?? []); setPromMeta(r?.meta); })
       .catch(e => setError(e.message));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -901,7 +903,7 @@ function bundledOr(o: PanelDataOverride, own: () => Promise<SpanMetricSeries[] |
 
 function singleValueSeries(cfg: StatPanelConfig | GaugePanelConfig, from: number, to: number): Promise<SpanMetricSeries[] | null | undefined> {
   if (cfg.source !== 'spanmetric' && cfg.metric?.promql?.trim()) {
-    return api.metricPromql({ query: cfg.metric.promql, from, to, step: cfg.metric.step }).then(r => r?.series ?? []);
+    return api.metricPromql({ query: resolvePanelQuery(cfg.metric.promql, cfg.metric.step, (to - from) / 1e9), from, to, step: cfg.metric.step }).then(r => r?.series ?? []);
   }
   return cfg.source === 'spanmetric'
     ? api.spanMetric({

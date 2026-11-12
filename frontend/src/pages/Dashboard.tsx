@@ -18,6 +18,7 @@ import { absoluteShareHref } from '@/lib/shareUrl';
 import { ShareButton } from '@/components/ShareButton';
 import { encodeRange } from '@/lib/urlState';
 import { metricsExplorerCodeHref } from '@/lib/metricsExplorer/panels';
+import { hasQueryEditor, panelQueryState, panelQueryText } from '@/lib/metricsExplorer/panelQuery';
 import { useAiSubject } from '@/components/ai/useAiSubject';
 import { useAuth } from '@/components/AuthProvider';
 import { PanelRenderer, expandPromqlVars, type PanelDataOverride } from '@/components/dashboard/PanelRenderer';
@@ -549,6 +550,9 @@ function Inner() {
             onDone={closePanelEditor}
             onCancel={cancelPanelEditor}
             onDelete={() => { deletePanel(editingPanelObj.id); closePanelEditor(); }}
+            explorerHref={hasQueryEditor(editingPanelObj)
+              ? metricsExplorerCodeHref(expandPromqlVars(panelQueryText(panelQueryState(editingPanelObj)), varValues), encodeRange(range))
+              : null}
             preview={<PanelPreview panel={editingPanelObj} range={range} vars={varValues} dashboardId={id} />} />
         ) : soloId && !editing ? (
           <SoloPanel panel={panels.find(p => p.id === soloId && p.type !== 'row')} onBack={() => setSolo(null)}>

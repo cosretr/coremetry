@@ -23,6 +23,7 @@ import type {
   GaugePanelConfig, MetricPanelConfig, Panel, PromqlPanelConfig, SpanMetricPanelConfig, StatPanelConfig,
 } from '@/lib/types';
 import { plainVars } from '@/lib/dashboardVars';
+import { resolvePanelQuery } from '@/lib/metricsExplorer/panelQuery';
 import {
   applyVarsToGauge, applyVarsToMetric, applyVarsToPromql, applyVarsToSpan, applyVarsToStat,
 } from './PanelRenderer';
@@ -70,8 +71,11 @@ export function bundleRequestFor(
 ): BundleRequest | null {
   const plain = plainVars(vars);
   const mdp = Math.max(1, Math.min(4000, Math.round(px)));
+  const rangeSec = (win.to - win.from) / 1e9;
+  // v0.10.2016 — builder'ın yer tutucuları panelin adımıyla çözülür
+  // (sunucu değerlendiricisi $__rate_interval bilmez).
   const promql = (query: string, step: number | undefined, extra: Partial<BundleRequest> = {}): BundleRequest =>
-    ({ id: p.id, type: 'promql', query, step, maxDataPoints: mdp, ...extra });
+    ({ id: p.id, type: 'promql', query: resolvePanelQuery(query, step, rangeSec), step, maxDataPoints: mdp, ...extra });
   switch (p.type) {
     case 'metric': {
       const cfg = applyVarsToMetric(p.config as MetricPanelConfig, plain);
@@ -111,7 +115,8 @@ export function bundleRequestFor(
       const m = cfg.metric;
       if (m?.promql?.trim()) {
         const raw = ((p.config as StatPanelConfig).metric?.promql) ?? m.promql;
-        return { id: p.id, type: 'promql', query: applyVarsToPromql({ query: raw }, vars).query, step: m.step, ...extra };
+        const span = (w ?? win);
+        return { id: p.id, type: 'promql', query: resolvePanelQuery(applyVarsToPromql({ query: raw }, vars).query, m.step, (span.to - span.from) / 1e9), step: m.step, ...extra };
       }
       return { id: p.id, type: 'metric', name: m?.metricName ?? '', service: m?.service, agg: m?.agg, step: m?.step, ...extra };
     }

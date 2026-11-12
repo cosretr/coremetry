@@ -86,7 +86,7 @@
   },
   "src/components/dashboard/PanelEditor.tsx": {
     "ui/no-raw-element": {
-      "count": 36
+      "count": 31
     }
   },
   "src/components/dashboard/UnitSelect.tsx": {

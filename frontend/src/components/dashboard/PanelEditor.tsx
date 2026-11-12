@@ -1,8 +1,10 @@
 import { UnitSelect } from './UnitSelect'; // v0.10.506 (D9)
 import { MetricNamePicker } from '../MetricNamePicker';
-import { Button, SegmentedControl } from '@/components/ui';
+import { Button } from '@/components/ui';
 import type { ReactNode } from 'react';
 import { PanelEditLayout } from '@/components/coremetry/dashboard/PanelEditLayout';
+import { PanelQueryEditor } from '@/components/coremetry/dashboard/PanelQueryEditor';
+import { applyPanelQuery, hasQueryEditor } from '@/lib/metricsExplorer/panelQuery';
 import { STEP_OPTIONS } from '@/pages/explore/presets';
 import type {
   Panel, PanelType, PanelHeight,
@@ -65,7 +67,6 @@ const HEIGHT_LABELS: Record<PanelHeight, string> = {
 
 const SPAN_AGGS = ['count', 'rate', 'errors', 'error_rate', 'avg', 'sum', 'min', 'max',
                    'p50', 'p90', 'p95', 'p99', 'p999'];
-const METRIC_AGGS = ['avg', 'sum', 'min', 'max', 'last', 'p50', 'p95', 'p99'];
 
 // GRAN-C (v0.8.248) — shared step <select> for the metric / spanmetric forms.
 // Same option list as Explore's Step picker (STEP_OPTIONS); the 0 entry is
@@ -100,7 +101,7 @@ function StepSelect({ value, onChange }: {
 // `preview`u — gerçek panel bileşeni, 300 ms gecikmeli taslak), sağda bu
 // form. Esc = Vazgeç (açılıştaki hâle döner), Tamam = taslakta kalır
 // (pano Kaydet ile yazılır). URL ?edit=<panelId>.
-export function PanelEditor({ panel, onChange, onDone, onCancel, onDelete, preview, previewFooter, dashboardName }: {
+export function PanelEditor({ panel, onChange, onDone, onCancel, onDelete, preview, previewFooter, dashboardName, explorerHref }: {
   panel: Panel;
   onChange: (next: Panel) => void;
   onDone: () => void;
@@ -109,6 +110,8 @@ export function PanelEditor({ panel, onChange, onDone, onCancel, onDelete, previ
   preview: ReactNode;
   previewFooter?: ReactNode;
   dashboardName: string;
+  /** v0.10.2016 — sorgu bölgesindeki "Explorer'da aç" hedefi. */
+  explorerHref?: string | null;
 }) {
   const update = <K extends keyof Panel>(k: K, v: Panel[K]) =>
     onChange({ ...panel, [k]: v });
@@ -204,6 +207,13 @@ export function PanelEditor({ panel, onChange, onDone, onCancel, onDelete, previ
           </select>
         </Field>
 
+        {/* v0.10.2016 (dilim 3.7 kalanı) — metric / promql sorgusu Metrics
+            Explorer'ın AYNI satırıyla (PanelQueryEditor → QueryRow /
+            MetricsQLEditor); eski metin / builder alanları kalktı. */}
+        {hasQueryEditor(panel) && (
+          <PanelQueryEditor panel={panel} explorerHref={explorerHref}
+            onQuery={(text, q) => onChange(applyPanelQuery(panel, text, q))} />
+        )}
         {panel.type === 'metric' && (
           <MetricFields cfg={panel.config as MetricPanelConfig} onChange={updateConfig} />
         )}
@@ -248,56 +258,17 @@ function MetricFields({ cfg, onChange }: {
   // the picker usable.
   const update = <K extends keyof MetricPanelConfig>(k: K, v: MetricPanelConfig[K]) =>
     onChange({ ...cfg, [k]: v });
-  // v0.9.121 (F4) — Builder ↔ PromQL toggle. PromQL mode when cfg.promql is
-  // defined (even ''); switching to Builder clears it.
-  const promqlMode = cfg.promql !== undefined;
+  // v0.10.2016 — sorgu PanelQueryEditor'de; burada yalnız görsel seçenekler.
   return (
     <>
-      <div style={{ marginBottom: 8 }}>
-        <SegmentedControl aria-label="Sorgu kipi" value={promqlMode ? 'promql' : 'builder'}
-          onChange={v => { if (v === 'builder') update('promql', undefined); else if (cfg.promql === undefined) update('promql', ''); }}
-          options={[{ value: 'builder', label: 'Builder' }, { value: 'promql', label: 'PromQL / MetricsQL' }]} />
-      </div>
-      {promqlMode ? (
-        <Field label="PromQL / MetricsQL query">
-          <textarea value={cfg.promql ?? ''} spellCheck={false}
-            onChange={e => update('promql', e.target.value)}
-            rows={3}
-            className="mono" style={{ width: '100%' }}
-            placeholder={'sum by (service.name) (rate(http.server.duration[5m]))'} />
-        </Field>
-      ) : (
-        <>
-          <Field label="Metric name">
-            <MetricNamePicker service="" value={cfg.metricName ?? ''}
-              onChange={v => update('metricName', v)}
-              placeholder="search metrics…" width="100%" />
-          </Field>
-          <div className="grid-3" style={{ display: 'grid', gap: 12 }}>
-            <Field label="Aggregation">
-              <select value={cfg.agg ?? 'avg'} onChange={e => update('agg', e.target.value)}>
-                {METRIC_AGGS.map(a => <option key={a} value={a}>{a}</option>)}
-              </select>
-            </Field>
-            <Field label="Service (optional)">
-              <input value={cfg.service ?? ''}
-                onChange={e => update('service', e.target.value)} />
-            </Field>
-            <Field label="Step">
-              <StepSelect value={cfg.step} onChange={v => update('step', v)} />
-            </Field>
-          </div>
-          <Field label="Group by (comma-sep keys, optional)">
-            <input value={cfg.groupBy ?? ''}
-              onChange={e => update('groupBy', e.target.value)} style={{ width: '100%' }} />
-          </Field>
-        </>
-      )}
       {/* v0.9.790 — mark seçimi (SpanMetricFields'in ikizi). Builder/PromQL
           koşulunun DIŞINDA duruyor çünkü MetricPanel'in çizim dalı iki modda
           da aynı: viz'i yalnız builder'a koymak, PromQL'e geçen operatörün
           config'inde okunan ama düzenlenemeyen bir alan bırakırdı. */}
       <div className="grid-3" style={{ display: 'grid', gap: 12 }}>
+        <Field label="Step">
+          <StepSelect value={cfg.step} onChange={v => update('step', v)} />
+        </Field>
         <Field label="Visualization">
           <select value={cfg.viz ?? 'line'}
             onChange={e => update('viz', e.target.value as MetricPanelConfig['viz'])}>
@@ -363,13 +334,6 @@ function PromqlFields({ cfg, onChange }: {
     onChange({ ...cfg, [k]: v });
   return (
     <>
-      <Field label="PromQL / MetricsQL query">
-        <textarea value={cfg.query ?? ''} spellCheck={false}
-          onChange={e => update('query', e.target.value)}
-          rows={3}
-          className="mono" style={{ width: '100%' }}
-          placeholder={'sum by (service.name) (rate(http.server.duration[5m]))'} />
-      </Field>
       <div className="grid-4" style={{ display: 'grid', gap: 12 }}>
         <Field label="Viz">
           <select value={cfg.viz ?? 'line'}
