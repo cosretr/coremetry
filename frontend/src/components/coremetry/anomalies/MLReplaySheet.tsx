@@ -45,6 +45,8 @@ import { MLLogPlayer } from './MLLogPlayer';
 import { MLSignalEvidence } from './MLSignalEvidence';
 import { groupStatusText, type MLGroupRow } from './mlGroupRows';
 import { evidenceSource, headerOperation } from './mlGroupDetail';
+import { MLSourceChart } from './MLSourceChart';
+import { contributorLine, leadFromSnapshot, type Contributors } from './mlSourcePanel';
 
 const fmtTs = (ns: number) => fmtDateTime(new Date(ns / 1e6));
 const fmtNum = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(3));
@@ -140,6 +142,8 @@ export function MLReplayContent({ id, autoPlay = false, group = null }: { id: st
   const q = useQuery({ queryKey: [...keys.anomalies.ml, 'replay', id], queryFn: () => api.mlReplay(id), enabled: !!id, staleTime: 30_000, retry: false });
   const snap = q.data?.snapshot ?? null;
   const card = q.data?.card;
+  // v0.10.2033 — panel verisinden suçlu seri(ler) (ek sorgu yok).
+  const [contrib, setContrib] = useState<Contributors>({ kind: 'none' });
   if (q.isLoading) return <Spinner />;
   if (q.error || !card) {
     return <Empty icon={<SearchX size={28} strokeWidth={1.5} />} title="Bu olay bulunamadı">Olay kaydı 30, olay anı kaydı 120 gün saklanır; daha eski olaylar listeden de düşer.</Empty>;
@@ -156,6 +160,16 @@ export function MLReplayContent({ id, autoPlay = false, group = null }: { id: st
   const members = group?.members ?? [];
   const sample = snap ? replaySamples(snap).find(x => x.traceId) : undefined;
   const shadow = members.map(m => m.groupShadow).filter(Boolean).sort((x, y) => (y!.at - x!.at))[0];
+  const chartLead = lead ?? (snap ? leadFromSnapshot(snap) : null);
+  const contribLine = contributorLine(contrib, 'istemci');
+  const snapshotView = (
+    <div className="rounded-md border border-border bg-card px-3 py-2.5">
+      {snap && <p className="m-0 mb-1.5 text-xs text-muted-foreground">Kayıtlı görüntü · {Math.round((snap.bucketSec || 300) / 60)} dakikalık kova · normal aralık ince çizgilerle</p>}
+      {snap && lc ? <MLLogPlayer snap={snap} play={card.play} autoPlay={autoPlay} lc={lc} />
+        : snap ? <MLEventPlayer snap={snap} play={card.play} compact />
+          : <p className="text-sm text-muted-foreground">Bu olay için grafik kaydı yok (olay anı kaydı yazılmadan önce açılmış ya da süresi dolmuş).</p>}
+    </div>
+  );
   return (
     <div data-testid="ml-replay" className="flex flex-col">
       <div className="mb-2 flex flex-wrap items-center gap-2 text-sm" data-testid="ml-header">
@@ -167,15 +181,21 @@ export function MLReplayContent({ id, autoPlay = false, group = null }: { id: st
       {snap?.detector === 'op_latency' && episodes >= 5 && (
         <p className="mb-2 text-sm text-muted-foreground" data-testid="ml-chronic">Kronik: son 7 günde {episodes} kez tekrarladı; tek tek olay yerine kalıcı bir desen olarak izleyin.</p>
       )}
-      <Section id="ml-course" title="Olayın seyri" sub={snap ? `${Math.round((snap.bucketSec || 300) / 60)} dakikalık kova · normal aralık bandıyla` : undefined}>
-        <div className="rounded-md border border-border bg-card px-3 py-2.5">
-          {snap && lc ? <MLLogPlayer snap={snap} play={card.play} autoPlay={autoPlay} lc={lc} />
-            : snap ? <MLEventPlayer snap={snap} play={card.play} compact />
-              : <p className="text-sm text-muted-foreground">Bu olay için grafik kaydı yok (olay anı kaydı yazılmadan önce açılmış ya da süresi dolmuş).</p>}
-        </div>
+      <Section id="ml-course" title="Olayın seyri">
+        {/* v0.10.2033 — servis sayfasındaki panelin aynısı (mlSourcePanel); yoksa kayıtlı 5 dakikalık görüntü. */}
+        {chartLead ? (
+          <MLSourceChart lead={chartLead} open={running} onContributors={setContrib} fallback={snapshotView} />
+        ) : snapshotView}
       </Section>
       <Section id="ml-evidence" title="Kanıt" sub={members.length > 1 ? `${members.length} sinyal aynı olayda` : undefined}>
         <ul className="m-0 flex list-none flex-col gap-2 p-0" data-testid="ml-evidence-rows">
+          {contribLine && (
+            <li data-testid="ml-contributors" className="flex flex-wrap items-baseline gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm">
+              <SignalKindBadge kind="metric" />
+              <span className="min-w-0 flex-1 select-all [overflow-wrap:anywhere]">{contribLine}</span>
+              <span className="text-xs text-muted-foreground">Messaging paneli · VictoriaMetrics</span>
+            </li>
+          )}
           {(members.length ? members : [null]).map(m => (
             <li key={m?.id ?? 'lead'} className="flex flex-wrap items-baseline gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm">
               <SignalKindBadge kind={m ? signalKindOf(m.detector, m.signal) : signalKindOf(h.detector, h.kind)} />
