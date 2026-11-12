@@ -31,6 +31,7 @@ package mcptools
 //	9 hazır replika (v0.10.2042) kube-state Deployment/StatefulSet       1 / cluster
 //	10 cluster sağlığı (v0.10.2042) node Ready + firing ALERTS           2 / cluster
 //	   (9-10 pod okumasının ardından, aynı cluster tavanında paralel; yalnız pod'u olan cluster)
+//	11 JBoss datasource (v0.10.2043) ad keşfi (10 dk önbellek) + şimdi + pencere başı   ≤3 / cluster
 //
 // Hüküm KURALLARDAN çıkar (model yok). Durum: ok (İyi) / warn (Dikkat) /
 // crit (Sorun) / unknown (Ölçülemedi). Ölçülemedi ASLA İyi sayılmaz.
@@ -71,13 +72,14 @@ const (
 	HCCheckPodRestarts  = "pod_restarts"
 	HCCheckPodWaiting   = "pod_waiting"
 	HCCheckPodResources = "pod_resources"
-	HCCheckReplicas     = "replicas" // v0.10.2042
-	HCCheckCluster      = "cluster"  // v0.10.2042
+	HCCheckReplicas     = "replicas"   // v0.10.2042
+	HCCheckCluster      = "cluster"    // v0.10.2042
+	HCCheckDatasource   = "datasource" // v0.10.2043
 )
 
 // HCCatalogVersion — önbellek anahtarına girer: kontrol kümesi / eşikler
 // değişince eski gövde servis edilmez.
-const HCCatalogVersion = "hc-v2"
+const HCCatalogVersion = "hc-v3"
 
 // Eşikler (spec kontrol kataloğu; ayar YOK — operatör "ayarda vida değil
 // varsayılan" dedi).
@@ -329,7 +331,7 @@ wait:
 var hcCheckOrder = map[string]int{
 	HCCheckRED: 1, HCCheckProblems: 2, HCCheckAnomalies: 3, HCCheckDeploys: 4, HCCheckExceptions: 5,
 	HCCheckPodRestarts: 6, HCCheckPodWaiting: 7, HCCheckPodResources: 8,
-	HCCheckReplicas: 9, HCCheckCluster: 10,
+	HCCheckReplicas: 9, HCCheckCluster: 10, HCCheckDatasource: 11,
 }
 
 // hcOrderRows — SAF: işlerin satırları → katalog sırası (aynı kontrolde
@@ -359,6 +361,7 @@ var hcTitles = map[string]string{
 	HCCheckPodResources: "Pod CPU / bellek limiti",
 	HCCheckReplicas:     "Hazır replika",
 	HCCheckCluster:      "Cluster sağlığı",
+	HCCheckDatasource:   "JBoss datasource havuzu",
 }
 
 func hcServiceHref(service, tab string) string {
@@ -381,7 +384,7 @@ func hcBase(service, check, subject string) HealthcheckRow {
 		row.Link, row.LinkLabel = "/anomalies?service="+url.QueryEscape(service), "Anomaliler"
 	case HCCheckDeploys:
 		row.Link, row.LinkLabel = "/rollouts", "Rollouts"
-	case HCCheckPodRestarts, HCCheckPodWaiting, HCCheckPodResources, HCCheckReplicas:
+	case HCCheckPodRestarts, HCCheckPodWaiting, HCCheckPodResources, HCCheckReplicas, HCCheckDatasource:
 		row.Link, row.LinkLabel = hcServiceHref(service, "infra"), "Infrastructure"
 	case HCCheckCluster:
 		row.Link, row.LinkLabel = "/clusters", "Clusters"
@@ -690,15 +693,16 @@ func hcRunPods(ctx context.Context, r hcReaders, service string, from, to time.T
 	if len(refs) > hcMaxPodClusters {
 		refs = refs[:hcMaxPodClusters]
 	}
-	res, err := r.servicePods(ctx, service, refs, from, to, ServicePodsOpts{WaitingReasons: true, Replicas: hcAllPodChecks.replicas, ClusterHealth: hcAllPodChecks.cluster})
+	res, err := r.servicePods(ctx, service, refs, from, to, ServicePodsOpts{WaitingReasons: true,
+		Replicas: hcAllPodChecks.replicas, ClusterHealth: hcAllPodChecks.cluster, JBossDS: hcAllPodChecks.datasource})
 	return hcClassifyPodsOpts(service, res, err, false, hcAllPodChecks)
 }
 
 // hcPodChecks — pod okumasından türeyen ek cluster kontrolleri.
-type hcPodChecks struct{ replicas, cluster bool }
+type hcPodChecks struct{ replicas, cluster, datasource bool }
 
-// hcAllPodChecks — koşunun açtığı ek kontroller (dilim 2: 9 + 10).
-var hcAllPodChecks = hcPodChecks{replicas: true, cluster: true}
+// hcAllPodChecks — koşunun açtığı ek kontroller (dilim 2: 9 + 10; dilim 3: 11).
+var hcAllPodChecks = hcPodChecks{replicas: true, cluster: true, datasource: true}
 
 // hcPodCheckIDs — SAF: açık kontrollerin katalog sırası.
 func hcPodCheckIDs(o hcPodChecks) []string {
@@ -708,6 +712,9 @@ func hcPodCheckIDs(o hcPodChecks) []string {
 	}
 	if o.cluster {
 		ids = append(ids, HCCheckCluster)
+	}
+	if o.datasource {
+		ids = append(ids, HCCheckDatasource)
 	}
 	return ids
 }
@@ -759,6 +766,9 @@ func hcClassifyPodsOpts(service string, res ServicePodsResult, err error, skippe
 		if o.cluster {
 			rows = append(rows, hcClusterHealth(service, name, cl))
 		}
+		if o.datasource { // datasource başına satır — cluster başına sayı değişken
+			rows = append(rows, hcDatasources(service, name, cl)...)
+		}
 		per = append(per, rows)
 	}
 	if len(per) == 0 {
@@ -771,12 +781,13 @@ func hcClassifyPodsOpts(service string, res ServicePodsResult, err error, skippe
 		}
 		return allUnknown("", seen)
 	}
-	out := make([]HealthcheckRow, 0, len(ids)*len(per))
-	for k := range ids {
-		for _, rows := range per {
-			out = append(out, rows[k])
-		}
+	// Kontrol-önce sıra: cluster blokları art arda, katalog sırasına göre
+	// KARARLI sıralama (aynı kontrolde cluster sırası, datasource sırası korunur).
+	var out []HealthcheckRow
+	for _, rows := range per {
+		out = append(out, rows...)
 	}
+	sort.SliceStable(out, func(i, j int) bool { return hcCheckOrder[out[i].Check] < hcCheckOrder[out[j].Check] })
 	return out
 }
 

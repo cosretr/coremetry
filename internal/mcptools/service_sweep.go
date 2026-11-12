@@ -153,6 +153,13 @@ type ServicePodsCluster struct {
 	NodeReadyOK   bool
 	Alerts        []ClusterAlert
 	AlertsOK      bool
+	// v0.10.2043 (yalnız opt.JBossDS): JBoss/WildFly datasource havuzları.
+	// DSNames = canlı keşifte bulunan aile adları (boş = bulunamadı);
+	// DSDiscoveryOK = keşif okundu; DSErr dolu = değer okunamadı.
+	DSNames       []string
+	DSDiscoveryOK bool
+	DS            []DatasourcePool
+	DSErr         string
 	Truncated     bool
 	Err           string // okunamadıysa neden
 	DurationMs    int64
@@ -181,6 +188,9 @@ type ServicePodsOpts struct {
 	// firing ALERTS (2 sorgu). Tarama ve AI SRE bunları istemez.
 	Replicas      bool
 	ClusterHealth bool
+	// JBossDS — v0.10.2043 (dilim 3): datasource havuzu; aile adları canlı
+	// keşifle (önbellekli), değerler şimdi + pencere başı (2 sorgu).
+	JBossDS bool
 }
 
 // WorkloadReplicas — v0.10.2042: bir iş yükünün istenen / hazır replikası

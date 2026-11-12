@@ -134,8 +134,8 @@ func (s *Server) mcpServicePodsCluster(ctx context.Context, c thanos.ClusterConf
 			cl.WaitingOK = true
 		}
 	}
-	if (opt.Replicas || opt.ClusterHealth) && len(rows) > 0 {
-		s.mcpServicePodsExtras(cctx, c, &cl, opt)
+	if (opt.Replicas || opt.ClusterHealth || opt.JBossDS) && len(rows) > 0 {
+		s.mcpServicePodsExtras(cctx, c, &cl, opt, re, window, offset)
 	}
 	cl.DurationMs = time.Since(start).Milliseconds()
 	return cl
@@ -146,7 +146,11 @@ func (s *Server) mcpServicePodsCluster(ctx context.Context, c thanos.ClusterConf
 // sorgu — iş yükü replikası (servis pod'larının namespace'i + pod adından
 // türeyen iş yükü adları), node Ready sayımı, firing ALERTS. Biri düşerse
 // yalnız o alan "okunamadı" kalır (okunamadı ≠ temiz).
-func (s *Server) mcpServicePodsExtras(ctx context.Context, c thanos.ClusterConfig, cl *mcptools.ServicePodsCluster, opt mcptools.ServicePodsOpts) {
+//
+// v0.10.2043 (dilim 3) — opt.JBossDS: datasource aile adları canlı keşifle
+// (jbossDSNames, 10 dk önbellek), sonra şimdiki + pencere başı değerler
+// paralel (2 sorgu). Ad bulunamazsa değer sorgusu HİÇ atılmaz.
+func (s *Server) mcpServicePodsExtras(ctx context.Context, c thanos.ClusterConfig, cl *mcptools.ServicePodsCluster, opt mcptools.ServicePodsOpts, podRe string, window, offset time.Duration) {
 	nsSet := map[string]bool{}
 	var namespaces, pods []string
 	for _, r := range cl.Rows {
@@ -198,12 +202,106 @@ func (s *Server) mcpServicePodsExtras(ctx context.Context, c thanos.ClusterConfi
 			cl.Alerts, cl.AlertsOK = clusterAlertsFrom(samples), true
 		}()
 	}
+	var dsQueries []string
+	if opt.JBossDS && len(namespaces) > 0 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			dsQueries = s.mcpServiceJBossDS(ctx, c, cl, podRe, namespaces, window, offset)
+		}()
+	}
 	wg.Wait()
-	for _, q := range []string{rq, nq, aq} {
+	for _, q := range append([]string{rq, nq, aq}, dsQueries...) {
 		if q != "" {
 			cl.Query += "\n" + q
 		}
 	}
+}
+
+// mcpServiceJBossDS — keşif (önbellekli) + değerler. Yalnız cl'nin DS*
+// alanlarına yazar; çalışan sorguların metnini döner (kanıt).
+func (s *Server) mcpServiceJBossDS(ctx context.Context, c thanos.ClusterConfig, cl *mcptools.ServicePodsCluster, podRe string, namespaces []string, window, offset time.Duration) []string {
+	dq := thanos.JBossDSDiscoveryQuery(c.NamespaceFilter, namespaces, podRe)
+	names, err := jbossDSDiscovery.names(ctx, c.EffectiveID()+"\x00"+dq, func(ctx context.Context) ([]string, error) {
+		samples, err := s.thanos.InstantSamples(ctx, c, dq)
+		if err != nil {
+			return nil, err
+		}
+		var out []string
+		for _, smp := range samples {
+			if n := smp.Labels["__name__"]; thanos.JBossDSRole(n) != "" {
+				out = append(out, n)
+			}
+		}
+		sort.Strings(out)
+		return out, nil
+	})
+	queries := []string{dq}
+	if err != nil {
+		cl.DSErr = err.Error()
+		return queries
+	}
+	cl.DSDiscoveryOK, cl.DSNames = true, names
+	if len(names) == 0 {
+		return queries
+	}
+	cq := thanos.JBossDSValuesQuery(names, c.NamespaceFilter, namespaces, podRe, offset)
+	pq := thanos.JBossDSValuesQuery(names, c.NamespaceFilter, namespaces, podRe, offset+window)
+	var cur, prev []thanos.Sample
+	var cerr, perr error
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() { defer wg.Done(); cur, cerr = s.thanos.InstantSamples(ctx, c, cq) }()
+	go func() { defer wg.Done(); prev, perr = s.thanos.InstantSamples(ctx, c, pq) }()
+	wg.Wait()
+	if cerr != nil {
+		cl.DSErr = cerr.Error()
+		return append(queries, cq, pq)
+	}
+	cl.DS = mcptools.DatasourcePoolsFrom(cur, prev, perr == nil)
+	return append(queries, cq, pq)
+}
+
+// jbossDSDiscoveryTTL — keşif sonucu (bulunan ya da BULUNAMAYAN adlar) bu
+// süre önbellekte: ad kümesi deploy'la değişir, her tıklamada değil.
+const jbossDSDiscoveryTTL = 10 * time.Minute
+
+const jbossDSDiscoveryMax = 512
+
+// dsDiscoveryCache — küçük süreç içi önbellek (anahtar = cluster + sorgu
+// metni; sorgu servis pod seçicisini ve namespace'leri taşıdığından TÜM
+// girdiler anahtarda). Taşınca tamamen boşaltılır (sınırlı bellek).
+type dsDiscoveryCache struct {
+	mu  sync.Mutex
+	m   map[string]dsDiscoveryEntry
+	now func() time.Time
+}
+
+type dsDiscoveryEntry struct {
+	names []string
+	at    time.Time
+}
+
+var jbossDSDiscovery = &dsDiscoveryCache{m: map[string]dsDiscoveryEntry{}, now: time.Now}
+
+func (d *dsDiscoveryCache) names(ctx context.Context, key string, load func(context.Context) ([]string, error)) ([]string, error) {
+	d.mu.Lock()
+	if e, ok := d.m[key]; ok && d.now().Sub(e.at) < jbossDSDiscoveryTTL {
+		d.mu.Unlock()
+		return e.names, nil
+	}
+	d.mu.Unlock()
+	names, err := load(ctx)
+	if err != nil {
+		return nil, err // hata önbelleğe girmez
+	}
+	d.mu.Lock()
+	if len(d.m) >= jbossDSDiscoveryMax {
+		d.m = map[string]dsDiscoveryEntry{}
+	}
+	d.m[key] = dsDiscoveryEntry{names: names, at: d.now()}
+	d.mu.Unlock()
+	return names, nil
 }
 
 const mcpWorkloadNamesMax = 10
