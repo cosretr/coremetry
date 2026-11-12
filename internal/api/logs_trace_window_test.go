@@ -14,6 +14,7 @@ package api
 //   3. Türetilen pencere yanıtta ilan edilir (traceWindow).
 
 import (
+	"context"
 	"os"
 	"strings"
 	"testing"
@@ -59,5 +60,33 @@ func TestLogsTraceBranchDerivesWindow(t *testing.T) {
 	}
 	if !strings.Contains(s, `out["traceWindow"]`) {
 		t.Error("türetilen pencere yanıtta ilan edilmeli")
+	}
+}
+
+// Histogram ve alan istatistiği listeyle aynı trace penceresini kullanır;
+// yoksa traceId + göreli aralıkta tüm saklama süresini tararlar.
+func TestTraceWindowReachesHistogramAndFieldStats(t *testing.T) {
+	src, err := os.ReadFile("api_logs.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(src)
+	for _, fn := range []string{"getLogsTimeseries", "getLogsFieldStats"} {
+		i := strings.Index(s, "func (s *Server) "+fn+"(")
+		if i < 0 {
+			t.Fatalf("%s bulunamadı", fn)
+		}
+		end := strings.Index(s[i:], "\n}\n")
+		if !strings.Contains(s[i:i+end], "s.traceLogsWindow(tctx, f)") {
+			t.Errorf("%s trace penceresini uygulamalı", fn)
+		}
+	}
+	// İstemcinin gönderdiği pencere ezilmez; traceId yoksa dokunulmaz.
+	var srv Server
+	lo := time.Now().Add(-time.Hour)
+	for _, f := range []logstore.Filter{{}, {TraceID: "t", From: lo}, {TraceID: "t"}} {
+		if _, ok := srv.traceLogsWindow(context.Background(), f); ok {
+			t.Errorf("pencere türetilmemeli: %+v", f)
+		}
 	}
 }

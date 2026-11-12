@@ -1053,6 +1053,10 @@ func (s *Server) getLogsFieldStats(w http.ResponseWriter, r *http.Request) {
 	s.serveCached(w, r, key, 60*time.Second, func(ctx context.Context) (any, error) {
 		tctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 		defer cancel()
+		f := f
+		if tf, ok := s.traceLogsWindow(tctx, f); ok { // liste (v0.10.690) ile aynı pencere
+			f = tf
+		}
 		if errorLift {
 			// v0.10.509 (C5) — iki fieldstats (seçim = severity ≥ ERROR, taban =
 			// sayfa süzgeci) — yalnız genişletilen alan için, düğme açıkken;
@@ -1189,6 +1193,12 @@ func (s *Server) getLogsTimeseries(w http.ResponseWriter, r *http.Request) {
 		// soft-timeout in the query body is the tighter inner bound).
 		tctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
+		// Liste (v0.10.690) gibi: traceId + penceresiz istek trace'in kendi
+		// penceresine iner; yoksa histogram tüm saklama süresini tarar.
+		f, bucketSec := f, bucketSec
+		if tf, ok := s.traceLogsWindow(tctx, f); ok {
+			f, bucketSec = tf, floorBucketByWindow(bucketSec, tf.From, tf.To)
+		}
 		series, err := s.logs.Histogram(tctx, f, bucketSec, groupBy)
 		if err != nil {
 			// v0.8.350 (HA 🟡6) — slow/unreachable backend → 200 with an
@@ -1207,6 +1217,20 @@ func (s *Server) getLogsTimeseries(w http.ResponseWriter, r *http.Request) {
 		}
 		return series, nil
 	})
+}
+
+// traceLogsWindow — traceId seçili ve istemci pencere göndermemişse trace'in
+// kendi penceresini (trace_summary_5m) uygular. Liste, histogram ve alan
+// istatistiği aynı pencereyi kullanır; trace bulunamazsa süzgeç değişmez.
+func (s *Server) traceLogsWindow(ctx context.Context, f logstore.Filter) (logstore.Filter, bool) {
+	if f.TraceID == "" || !f.From.IsZero() || !f.To.IsZero() || s.store == nil {
+		return f, false
+	}
+	lo, hi, ok := s.store.TraceWindow(ctx, f.TraceID)
+	if !ok {
+		return f, false
+	}
+	return traceLogsWindowFallback(f, lo, hi)
 }
 
 // traceLogsWindowFallback — SAF (v0.10.690): yalnız İKİ sınır da boşken
