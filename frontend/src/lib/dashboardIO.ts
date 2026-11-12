@@ -5,11 +5,16 @@ import type { Dashboard, Panel, DashboardVariable } from './types';
 // Import button and the single-dashboard Export button.
 //
 // Wire format is deliberately the SUBSET of Dashboard that's
-// portable across installs: name, description, panels, variables.
+// portable across installs: name, description, tags, panels, variables.
 // id / createdAt / updatedAt are install-specific and stripped on
 // export (re-minted by the backend on import). A `schema` tag lets
 // future format changes be detected + migrated rather than failing
 // opaquely.
+//
+// Dashboards Faz 3 dilim 3.1: export etiketleri atlıyordu (audit §5.5
+// "Export: etiketleri atlıyor — hata düzeltme"). `tags` artık yazılır ve
+// okunur; alan isteğe bağlı, v1 şeması değişmez (eski dosyalar etiketsiz
+// içe aktarılır).
 
 const SCHEMA = 'coremetry.dashboard/v1';
 
@@ -17,6 +22,7 @@ export interface DashboardExport {
   schema: string;
   name: string;
   description: string;
+  tags?: string[];
   panels: Panel[];
   variables: DashboardVariable[];
 }
@@ -28,6 +34,7 @@ export function serializeDashboard(d: Dashboard): string {
     schema: SCHEMA,
     name: d.name,
     description: d.description ?? '',
+    tags: d.tags ?? [],
     panels: d.panels ?? [],
     variables: d.variables ?? [],
   };
@@ -45,8 +52,20 @@ export function suggestedFilename(name: string): string {
   return `${slug}.dashboard.json`;
 }
 
+// downloadDashboard — tarayıcıda dosya indirir (liste satır eylemi ve pano
+// sayfası aynı yolu kullanır).
+export function downloadDashboard(d: Dashboard): void {
+  const blob = new Blob([serializeDashboard(d)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = suggestedFilename(d.name);
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 // parseDashboardImport validates an uploaded file's text and returns
-// the create-payload (name/description/panels/variables). Throws an
+// the create-payload (name/description/tags/panels/variables). Throws an
 // Error with an operator-readable message on any shape problem —
 // the caller surfaces it via toast.
 //
@@ -56,7 +75,7 @@ export function suggestedFilename(name: string): string {
 // rejected so a future-version file fails loud instead of importing
 // a half-understood shape.
 export function parseDashboardImport(text: string): {
-  name: string; description: string; panels: Panel[]; variables: DashboardVariable[];
+  name: string; description: string; tags: string[]; panels: Panel[]; variables: DashboardVariable[];
 } {
   let raw: unknown;
   try {
@@ -84,9 +103,13 @@ export function parseDashboardImport(text: string): {
   }
   const description = typeof obj.description === 'string' ? obj.description : '';
   const variables = Array.isArray(obj.variables) ? (obj.variables as DashboardVariable[]) : [];
+  const tags = Array.isArray(obj.tags)
+    ? obj.tags.filter((t): t is string => typeof t === 'string' && t.trim() !== '').map(t => t.trim())
+    : [];
   return {
     name,
     description,
+    tags,
     panels: obj.panels as Panel[],
     variables,
   };

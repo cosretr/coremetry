@@ -17,6 +17,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { DashboardSummary } from '@/lib/types';
+import { ConfirmGate } from '@/components/coremetry/Confirm';
 
 const m = vi.hoisted(() => ({
   items: [] as unknown[],
@@ -73,7 +74,7 @@ async function mount(): Promise<HTMLElement> {
     root = createRoot(host!);
     root.render(
       <QueryClientProvider client={qc}>
-        <MemoryRouter initialEntries={['/dashboards']}><DashboardsPage /></MemoryRouter>
+        <ConfirmGate><MemoryRouter initialEntries={['/dashboards']}><DashboardsPage /></MemoryRouter></ConfirmGate>
       </QueryClientProvider>,
     );
   });
@@ -173,5 +174,23 @@ describe('/dashboards — durumlar tablonun içinde (v0.10.967)', () => {
     await wait();
     expect(stateRow(el)?.dataset.dtState).toBe('error');
     expect(dataRows(el)).toBe(0);
+  });
+});
+
+describe('/dashboards — dilim 3.1: etiket çipleri + satır menüsü', () => {
+  it('etiket çipi VE ile süzer; satır başına tek ⋯ düğmesi', async () => {
+    m.items = [
+      { ...dash('1', 'checkout'), tags: ['red', 'ödeme'] },
+      { ...dash('2', 'kafka lag'), tags: ['kafka'] },
+    ];
+    const el = await mount();
+    expect(dataRows(el)).toBe(2);
+    expect(el.querySelectorAll('button[aria-label$=" eylemleri"]').length).toBe(2);
+    const chip = button(el, 'red')!;
+    expect(chip.getAttribute('aria-pressed')).toBe('false');
+    await act(async () => { chip.click(); });
+    await wait();
+    expect(dataRows(el)).toBe(1);
+    expect(button(el, 'red')!.getAttribute('aria-pressed')).toBe('true');
   });
 });

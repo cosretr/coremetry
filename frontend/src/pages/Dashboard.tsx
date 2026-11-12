@@ -25,7 +25,7 @@ import type {
 import { timeRangeToNs } from '@/lib/utils';
 import { DASHBOARD_RESERVED_PARAMS, isDashboardVariableParam } from '@/lib/dashboardUrl';
 import { useRefreshHold } from '@/lib/useAutoRefresh';
-import { serializeDashboard, suggestedFilename } from '@/lib/dashboardIO';
+import { downloadDashboard } from '@/lib/dashboardIO';
 import { panelToExploreHref } from '@/pages/explore/panelToExplore';
 import { PageShell } from '@/components/coremetry/PageShell';
 // v0.10.1435 — panelden "Bu grafiği açıkla"
@@ -393,14 +393,7 @@ function Inner() {
   // side download with no backend round-trip.
   const exportDashboard = () => {
     if (!draft) return;
-    const json = serializeDashboard({ ...draft, panels, variables: effVariables });
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = suggestedFilename(draft.name);
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadDashboard({ ...draft, panels, variables: effVariables });
   };
 
   const editingPanelObj = editingPanel ? panels.find(p => p.id === editingPanel) : null;

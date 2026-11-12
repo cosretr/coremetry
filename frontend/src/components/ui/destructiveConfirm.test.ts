@@ -202,7 +202,10 @@ describe('Kapı B — yıkıcı dosyalarda kırmızı dil', () => {
       // varyantı aramak menüye taşınan Delete'i yanlış yere düşürüyordu.
       // Faz 2 dilim 1 R12: shadcn Button `variant="destructive"` de kırmızı dil
       // (bg-destructive) — shadcn'e geçen sayfalar bu yazımı kullanır.
-      .filter(f => !/variant=["'{]?\s*(["'])?((ghost-)?danger|destructive)\b|<MenuItem\b[^>]*\bdanger\b/.test(f.src))
+      // Dashboards Faz 3 dilim 3.1: coremetry DataTable `rowActions`
+      // MenuItemSpec'inin `danger: true`'su da kırmızı dil (DataTable onu
+      // `variant="destructive"` menü öğesi olarak çizer).
+      .filter(f => !/variant=["'{]?\s*(["'])?((ghost-)?danger|destructive)\b|<MenuItem\b[^>]*\bdanger\b|\bdanger:\s*true\b/.test(f.src))
       .map(f => f.rel);
     expect(bad, 'kalıcı silme yolu `secondary`/`ghost` ile Edit’le eş ağırlıkta duramaz').toEqual([]);
   });

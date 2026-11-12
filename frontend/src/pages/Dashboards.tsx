@@ -5,10 +5,11 @@ import { Topbar } from '@/components/Topbar';
 import { useAuth } from '@/components/AuthProvider';
 import { Button, Field, IconButton, Modal, SearchField, Stack } from '@/components/ui';
 import { Sparkline } from '@/components/Sparkline';
-import {
-  useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState,
-  type ColumnDef, type DataTableStateProps,
-} from '@/components/ui/DataTable';
+import { DataTable, type ColumnDef, type DataTableStateInput } from '@/components/coremetry/DataTable';
+import { DashboardListFilters } from '@/components/coremetry/dashboard/DashboardListFilters';
+import { useDashboardRowActions } from '@/components/coremetry/dashboard/useDashboardRowActions';
+import { csvParam, boolParam, strParam, useUrlParams, type ParamSpec } from '@/lib/urlParams';
+import { filterDashboards, tagChips, toggleTag } from '@/lib/dashboardList';
 import { api } from '@/lib/api';
 import { parseDashboardImport } from '@/lib/dashboardIO';
 import { toast } from '@/lib/toast';
@@ -38,15 +39,23 @@ const STAR_PAGE = 'dashboard-star';
 // yani eski varsayılan grupların İÇİNDE aynen korunuyor.
 //
 // v0.10.947 (tablo standardı) — ikincil kolonların rengi `tone`da (S3).
+//
+// Dilim 3.1 (Faz 3): coremetry DataTable — satır gerçek bağlantı (yeni sekme
+// çalışır), ⋯ satır menüsü (Aç · Çoğalt · Dışa aktar · Sil), yıldız ve
+// etiket hücreleri kendi düğmelerini taşır (`ownLink`).
 function dashCols(starMap: Map<string, string>): ColumnDef<DashboardSummary>[] {
   return [
-    { id: 'star',        label: '',           sortValue: r => (starMap.has(r.id) ? 1 : 0), numeric: true, width: 36, minWidth: 36 },
-    { id: 'name',        label: 'Dashboard',  sortValue: r => r.name,        naturalDir: 'asc', width: 240 },
-    { id: 'tags',        label: 'Tags',       sortValue: r => (r.tags ?? []).join(','), naturalDir: 'asc', width: 180 },
-    { id: 'description', label: 'Description', sortValue: r => r.description, naturalDir: 'asc', width: 300, tone: () => 'muted' },
-    { id: 'updatedAt',   label: 'Updated',    sortValue: r => r.updatedAt,   numeric: true,     width: 150, tone: () => 'muted' },
+    { id: 'star',        label: 'Favori',     sortValue: r => (starMap.has(r.id) ? 1 : 0), numeric: true, width: 36, minWidth: 36, ownLink: true, priority: 1 },
+    { id: 'name',        label: 'Dashboard',  sortValue: r => r.name,        naturalDir: 'asc', width: 240, minWidth: 160, priority: 1 },
+    { id: 'tags',        label: 'Tags',       sortValue: r => (r.tags ?? []).join(','), naturalDir: 'asc', width: 180, minWidth: 100, priority: 2 },
+    { id: 'description', label: 'Description', sortValue: r => r.description, naturalDir: 'asc', width: 300, minWidth: 140, flex: true, priority: 3, tone: () => 'muted' },
+    { id: 'updatedAt',   label: 'Updated',    sortValue: r => r.updatedAt,   numeric: true,     width: 150, minWidth: 110, priority: 2, tone: () => 'muted' },
   ];
 }
+
+// Liste süzgeci URL'de (CLAUDE.md "URL = source of truth"): ?q, ?tags, ?fav.
+interface ListParams { q: string; tags: string[]; fav: boolean }
+const LIST_PARAMS: ParamSpec<ListParams> = { q: strParam(), tags: csvParam(), fav: boolParam() };
 
 export default function DashboardsPage() {
   const { user } = useAuth();
@@ -55,7 +64,9 @@ export default function DashboardsPage() {
   const [showNew, setShowNew] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
-  const [q, setQ] = useState('');
+  const [params, setParams] = useUrlParams(LIST_PARAMS);
+  const q = params.q;
+  const setQ = (v: string) => setParams({ q: v });
 
   // v0.6.50 — import a dashboard from a previously-exported JSON
   // file. Reuses POST /api/dashboards (createDashboard) so the
@@ -90,19 +101,6 @@ export default function DashboardsPage() {
       ? null
       : dashboardsQ.data ?? [];
 
-  // Substring filter over name + description + tags, case-insensitive.
-  // Etiketler filtreye v0.9.780'de girdi: bir etiketi görüp aramak
-  // ("prod" yazmak) etiketlerin var olma sebebi.
-  const filtered = useMemo(() => {
-    if (!items) return items;
-    const needle = q.trim().toLowerCase();
-    if (!needle) return items;
-    return items.filter(d =>
-      d.name.toLowerCase().includes(needle) ||
-      (d.description ?? '').toLowerCase().includes(needle) ||
-      (d.tags ?? []).some(t => t.toLowerCase().includes(needle)));
-  }, [items, q]);
-
   // ── Yıldızlar (v0.9.780) ──────────────────────────────────────────
   // saved_views(page='dashboard-star') → Map<pano id, saved view id>.
   const starsQ = useQuery({
@@ -121,6 +119,17 @@ export default function DashboardsPage() {
     }
     return m;
   }, [starsQ.data]);
+
+  // Dilim 3.1 — arama (ad + açıklama + etiket) + etiket çipleri (VE) +
+  // yalnız favoriler; saf çekirdek lib/dashboardList.
+  const starred = useMemo(() => new Set(starMap.keys()), [starMap]);
+  const filtered = useMemo(
+    () => (items ? filterDashboards(items, params, starred) : items),
+    [items, params, starred],
+  );
+  const chips = useMemo(() => tagChips(items ?? [], params.tags), [items, params.tags]);
+  const filtersActive = q.trim() !== '' || params.tags.length > 0 || params.fav;
+
   const [starBusy, setStarBusy] = useState<string | null>(null);
   const toggleStar = async (d: DashboardSummary) => {
     if (starBusy) return;
@@ -176,17 +185,7 @@ export default function DashboardsPage() {
   // (j/k move, Enter/o open, "/" focuses the filter). Called
   // unconditionally (hooks rule) with [] while loading.
   const columns = useMemo(() => dashCols(starMap), [starMap]);
-  const dt = useDataTable<DashboardSummary>({
-    storageKey: 'dashboards',
-    columns,
-    rows: filtered ?? [],
-    // v0.9.780 — yıldızlılar üstte. Sunucu sırası zaten updated_at DESC
-    // ve sortRows stable, dolayısıyla grup İÇİ sıra eski varsayılanın
-    // aynısı kalıyor.
-    initialSort: { id: 'star', dir: 'desc' },
-    onOpen: d => navigate(`/dashboard?id=${d.id}`),
-    searchRef,
-  });
+  const rowActions = useDashboardRowActions(isAdmin, items ?? []);
 
   // v0.10.967 — tablo standardı dilim 5 (T12 + P-1): yükleniyor / hata /
   // eşleşme yok / boş tablonun İÇİNDE, başlık durur. Sıra eskisiyle aynı
@@ -194,13 +193,13 @@ export default function DashboardsPage() {
   // kaynakta pano VARKEN; "Filtreleri temizle" aramanın kendi ✕'iyle aynı
   // setter, odak arama kutusuna döner. "+ New dashboard" CTA'sı boş satırın
   // detail yuvasında (P-1) — silinmedi, tablonun dışına da taşınmadı.
-  const tableState: Omit<DataTableStateProps<DashboardSummary>, 'dt'> =
+  const tableState: DataTableStateInput<DashboardSummary> =
     items === undefined ? { kind: 'loading' }
     : items === null ? { kind: 'error' }
     : items.length > 0 ? {
         kind: 'no-match',
-        message: `“${q}” ile eşleşen kayıtlı pano yok`,
-        onClearFilters: () => setQ(''),
+        message: q.trim() ? `“${q}” ile eşleşen kayıtlı pano yok` : 'Süzgeçle eşleşen kayıtlı pano yok',
+        onClearFilters: () => setParams({ q: '', tags: [], fav: false }),
         returnFocusRef: searchRef,
       }
     : {
@@ -247,46 +246,45 @@ export default function DashboardsPage() {
             }} />
         )}
 
+        {chips.length > 0 || params.fav || starMap.size > 0 ? (
+          <DashboardListFilters chips={chips} selected={params.tags} fav={params.fav}
+            onToggleTag={t => setParams({ tags: toggleTag(params.tags, t) })}
+            onFav={v => setParams({ fav: v })} />
+        ) : null}
+
         <div className="table-wrap">
-          <table {...dt.tableProps}>
-            <DataTableColgroup dt={dt} />
-            <DataTableHead dt={dt} />
-            <tbody>
-              {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...tableState} /> : dt.sortedRows.map((d, i) => (
-                <tr key={d.id}
-                    {...dt.rowProps(i)}
-                    // v0.10.933 (tablo standardı T2) — elle onClick: imleç + hover bu işaretle (globals.css)
-                    data-row-action
-                    onMouseEnter={() => dt.nav.setSelected(i)}
-                    onClick={() => navigate(`/dashboard?id=${d.id}`)}>
-                  {/* <td> SIRASI dashCols() ile BİREBİR olmak zorunda —
-                      tableLayout:fixed + colgroup, kayma tsc'ye
-                      görünmez. Sıra: star · name · tags · description
-                      · updatedAt. */}
-                  <td>
-                    <IconButton
-                      aria-label={starMap.has(d.id) ? `${d.name} yıldızını kaldır` : `${d.name} panosunu yıldızla`}
-                      active={starMap.has(d.id)}
-                      variant="bare" size="xs" className="ib-star"
-                      tooltip={starMap.has(d.id) ? 'Yıldızı kaldır' : 'Yıldızla — listenin başına gelir'}
-                      disabled={starBusy === d.id}
-                      // Satırın kendi onClick'i panoya gidiyor;
-                      // durdurulmazsa her yıldız tıklaması sayfayı
-                      // değiştirirdi.
-                      onClick={e => { e.stopPropagation(); void toggleStar(d); }}
-                      icon={starMap.has(d.id) ? '★' : '☆'} />
-                  </td>
-                  <DataTableCell dt={dt} col="name" row={d} value={d.name} className="cell-strong" />
-                  <td title={(d.tags ?? []).join(', ') || undefined}>
-                    <TagBadges tags={d.tags} />
-                  </td>
-                  <DataTableCell dt={dt} col="description" row={d} value={d.description || null} />
-                  <DataTableCell dt={dt} col="updatedAt" row={d} value={tsLong(d.updatedAt)}
-                    title={`Updated ${tsLong(d.updatedAt)}`} />
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <DataTable<DashboardSummary>
+            storageKey="dashboards"
+            ariaLabel="Panolar"
+            columns={columns}
+            rows={filtered ?? []}
+            // v0.9.780 — yıldızlılar üstte. Sunucu sırası zaten updated_at DESC
+            // ve sortRows stable, dolayısıyla grup İÇİ sıra eski varsayılanın
+            // aynısı kalıyor.
+            sort={{ initial: { id: 'star', dir: 'desc' } }}
+            getRowKey={d => d.id}
+            getRowHref={d => `/dashboard?id=${encodeURIComponent(d.id)}`}
+            state={tableState}
+            rowActions={{ label: 'Eylemler', items: rowActions, triggerLabel: d => `${d.name} eylemleri` }}
+            renderCell={(d, c) => {
+              switch (c.id) {
+                case 'star': return (
+                  <IconButton
+                    aria-label={starMap.has(d.id) ? `${d.name} yıldızını kaldır` : `${d.name} panosunu yıldızla`}
+                    active={starMap.has(d.id)}
+                    variant="bare" size="xs" className="ib-star"
+                    tooltip={starMap.has(d.id) ? 'Yıldızı kaldır' : 'Yıldızla — listenin başına gelir'}
+                    disabled={starBusy === d.id}
+                    onClick={e => { e.stopPropagation(); void toggleStar(d); }}
+                    icon={starMap.has(d.id) ? '★' : '☆'} />
+                );
+                case 'name': return <span className="cell-strong">{d.name}</span>;
+                case 'tags': return <span title={(d.tags ?? []).join(', ') || undefined}><TagBadges tags={d.tags} /></span>;
+                case 'description': return d.description || <span className="cell-empty">—</span>;
+                case 'updatedAt': return <span title={`Updated ${tsLong(d.updatedAt)}`}>{tsLong(d.updatedAt)}</span>;
+              }
+              return null;
+            }} />
         </div>
 
         {/* Shared system-wide activity strip — same data as the
