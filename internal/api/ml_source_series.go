@@ -56,6 +56,32 @@ type mlSourceSeriesResponse struct {
 	StepSec   int                        `json:"stepSec"`
 	Series    []chstore.SpanMetricSeries `json:"series"`
 	Truncated bool                       `json:"truncated,omitempty"`
+	// Reason — v0.10.2061: canlı seri neden yok (tek düz cümle); seri varsa boş.
+	Reason string `json:"reason,omitempty"`
+}
+
+// Canlı seri yokken detayın tek satırı (v0.10.2061; eskiden kayıtlı görüntüye
+// sessizce düşülüyordu).
+const (
+	srcGapNoVM        = "metrik deposu (VictoriaMetrics) yapılandırılmamış"
+	srcGapNoExpr      = "olayın ölçtüğü ifade ayarlarda artık yok (Settings › Anomaly › ML'de değişmiş ya da silinmiş)"
+	srcGapNoCluster   = "olayın Thanos cluster'ı ayarlarda etkin değil"
+	srcGapPartial     = "Thanos yanıtı kısmi geldi; eksik veriden grafik çizilmez"
+	srcGapNoPodLabels = "RED metriklerinde pod etiketi bulunamadı"
+	srcGapEmpty       = "olay penceresinde kaynakta seri yok (saklama süresi dolmuş ya da metrik adı değişmiş olabilir)"
+)
+
+// withReason — SAF: seri yoksa ve gerekçe verilmemişse boş-pencere gerekçesi.
+func withReason(out mlSourceSeriesResponse, reason string) mlSourceSeriesResponse {
+	if len(out.Series) > 0 {
+		out.Reason = ""
+		return out
+	}
+	if reason == "" {
+		reason = srcGapEmpty
+	}
+	out.Reason = reason
+	return out
 }
 
 // mlSourceSeriesKey — SAF; her girdi anahtarda (v0.5.187). Serbest metinler
@@ -82,7 +108,7 @@ func (s *Server) getMLSourceSeries(w http.ResponseWriter, r *http.Request) {
 		rd, vmOK := s.metricChartReaderFor()
 		if det == "trace_pod_outlier" {
 			if !vmOK {
-				return out, nil
+				return withReason(out, srcGapNoVM), nil
 			}
 			return s.tracePodSourceSeries(ctx, rd, out, svc, code, family, from, to, step)
 		}
@@ -103,14 +129,14 @@ func (s *Server) getMLSourceSeries(w http.ResponseWriter, r *http.Request) {
 		}
 		sq, ok := ml.BuildSourceQuery(s.store.GetMLConfig(ctx), det, code, svc, svcLabel, scope)
 		if !ok {
-			return out, nil
+			return withReason(out, srcGapNoExpr), nil
 		}
 		out.Query = sq
 		cctx, cancel := context.WithTimeout(ctx, mlSourceSeriesTimeout)
 		defer cancel()
 		if sq.Cluster == "" {
 			if !vmOK {
-				return out, nil
+				return withReason(out, srcGapNoVM), nil
 			}
 			res, err := rd.QueryPromQLRange(cctx, sq.Expr, from, to, step, anomalyLogChartMaxBuckets+1)
 			if err != nil {
@@ -119,11 +145,11 @@ func (s *Server) getMLSourceSeries(w http.ResponseWriter, r *http.Request) {
 			if res != nil {
 				out.Series = res
 			}
-			return out, nil
+			return withReason(out, ""), nil
 		}
 		c, found := s.thanos.ClusterByName(sq.Cluster)
 		if !found {
-			return out, nil
+			return withReason(out, srcGapNoCluster), nil
 		}
 		res, err := s.thanos.ConsoleQueryRange(cctx, c, thanos.ConsoleRangeQuery{Query: sq.Expr, Start: from, End: to, Step: time.Duration(step) * time.Second},
 			thanos.ConsoleLimits{Timeout: mlSourceSeriesTimeout, MaxSeries: mlSourceSeriesMaxSeries, MaxBodyBytes: 8 << 20})
@@ -131,11 +157,11 @@ func (s *Server) getMLSourceSeries(w http.ResponseWriter, r *http.Request) {
 			return nil, fmt.Errorf("%w: thanos: %v", errUpstream, err)
 		}
 		if res.Partial() {
-			return out, nil
+			return withReason(out, srcGapPartial), nil
 		}
 		out.Truncated = res.Truncated
 		out.Series = decodeMatrixSeries(res.ResultType, res.Result, sq.By)
-		return out, nil
+		return withReason(out, ""), nil
 	})
 }
 
@@ -175,7 +201,10 @@ func (s *Server) tracePodSourceSeries(ctx context.Context, rd metricChartReader,
 			return out, nil
 		}
 	}
-	return out, nil
+	if out.Query.Expr == "" {
+		return withReason(out, srcGapNoPodLabels), nil
+	}
+	return withReason(out, ""), nil
 }
 
 // seriesByLabel — SAF: VM aralık serilerinin grup anahtarını tek etiketin

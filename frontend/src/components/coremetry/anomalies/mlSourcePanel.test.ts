@@ -2,7 +2,7 @@
 // çevreler; suçlu seri adıyla. Fikstür nötr.
 import { describe, it, expect } from 'vitest';
 import type { SpanMetricSeries } from '@/lib/types';
-import { contributorLine, highlightColors, thanosSourceText, leadFromSnapshot, panelWindow, sourcePanelFor, topContributors } from './mlSourcePanel';
+import { contributorLine, highlightColors, liveGapLine, thanosSourceText, leadFromSnapshot, panelWindow, sourcePanelFor, topContributors } from './mlSourcePanel';
 
 describe('contributorLine / leadFromSnapshot', () => {
   it('tek suçlu adıyla, diğerleri tek ifadeyle; ad kırpılmaz', () => {
@@ -51,6 +51,11 @@ describe('sourcePanelFor', () => {
     ['bozuk kanıt, Code yok → kayıtlı', { ...ev('trace_pod_outlier', 'trace', ''), evidence: '{' }, { kind: 'snapshot' }],
   ])('trace pod: %s', (_n, e, want) => {
     expect(sourcePanelFor(e)).toMatchObject(want);
+  });
+  it('v0.10.2061: canlı grafik yoksa nedeni tek satır; metrik olayı serisiz → neden yazılı', () => {
+    expect(liveGapLine('olay penceresinde kaynakta seri yok')).toBe('Canlı grafik çizilemedi: olay penceresinde kaynakta seri yok. Aşağıdaki, olay anında kaydedilen 5 dakikalık görüntü.');
+    expect(liveGapLine(undefined)).toContain('kaynak okunamadı');
+    expect(sourcePanelFor(ev('metric_jvm', 'metric', ''))).toEqual({ kind: 'snapshot', reason: 'olay kaydı ölçülen serinin adını taşımıyor' });
   });
   it('v0.10.2060: Thanos kaynak satırı eşi olan Pods panelini söyler', () => {
     expect(thanosSourceText('pods-resource')).toBe('Servis › Pods sekmesindeki panelin aynı sorgusu');

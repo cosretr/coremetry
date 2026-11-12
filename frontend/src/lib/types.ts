@@ -12274,7 +12274,8 @@ export interface MLQuality {
 /** v0.10.2036 — ml.SourceQuery + /api/ml/source-series yanıtı (metrik / bağımlılık olayının detay grafiği). */
 /** panel (v0.10.2060): Thanos grafiğinin eşi Pods paneli — 'pods-resource' (CPU/Bellek, aynı sorgu) | 'pods' (aynı pod kümesi). */
 export interface MLSourceQuery { expr: string; cluster?: string; unit?: string; label: string; by?: string; panel?: 'pods-resource' | 'pods' }
-export interface MLSourceSeries { query: MLSourceQuery; stepSec: number; series: SpanMetricSeries[]; truncated?: boolean }
+/** reason (v0.10.2061): canlı seri yokken neden (tek düz cümle; sunucu ml_source_series.go). */
+export interface MLSourceSeries { query: MLSourceQuery; stepSec: number; series: SpanMetricSeries[]; truncated?: boolean; reason?: string }
 /** v0.10.2035 — logstore.LogSeries aynası (/api/anomalies/log-chart; seviye bandı başına bir seri). */
 export interface LogHistogramSeries { name: string; points: { t: number; v: number }[] }
 export interface MLSnapshot {

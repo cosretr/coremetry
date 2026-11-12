@@ -60,7 +60,7 @@ export function sourcePanelFor(e: Pick<MLEvent, 'detector' | 'signal' | 'code' |
     return { kind: 'kafka-lag', service: e.service };
   }
   if ((e.signal === 'metric' && e.detector.startsWith('metric_')) || e.detector === 'dependency_latency') {
-    if (!code || !e.service) return { kind: 'snapshot', reason: 'seri kimliği yok' };
+    if (!code || !e.service) return { kind: 'snapshot', reason: e.service ? 'olay kaydı ölçülen serinin adını taşımıyor' : 'olay kaydında servis yok' };
     const at = code.indexOf('@');
     return { kind: 'metric', detector: e.detector, service: e.service, code, cluster: at >= 0 ? code.slice(at + 1) : '' };
   }
@@ -84,6 +84,13 @@ export function parseLogsLink(href?: string): URL | null {
     const u = new URL(href, 'http://local');
     return u.pathname === '/logs' ? u : null;
   } catch { return null; }
+}
+
+/** SAF (v0.10.2061): canlı grafik yokken kayıtlı görüntünün üstündeki tek
+ *  düz satır — neden canlı değil (sessiz düşüş yok). */
+export function liveGapLine(reason?: string): string {
+  const r = (reason ?? '').trim() || 'kaynak okunamadı';
+  return `Canlı grafik çizilemedi: ${r}. Aşağıdaki, olay anında kaydedilen 5 dakikalık görüntü.`;
 }
 
 /** SAF (v0.10.2060): Thanos grafiğinin kaynak satırı — eşi olan Pods paneli. */

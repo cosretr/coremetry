@@ -51,6 +51,30 @@ func TestMLSourceSeriesKeyCarriesAllInputs(t *testing.T) {
 	}
 }
 
+// v0.10.2061 — canlı seri yokken gerekçe tek cümle (eski: kayıtlı görüntüye
+// sessiz düşüş); seri varsa gerekçe taşınmaz.
+func TestWithReason(t *testing.T) {
+	empty := mlSourceSeriesResponse{Series: []chstore.SpanMetricSeries{}}
+	full := mlSourceSeriesResponse{Series: []chstore.SpanMetricSeries{{GroupKey: []string{""}}}}
+	cases := []struct {
+		name string
+		in   mlSourceSeriesResponse
+		r    string
+		want string
+	}{
+		{"ifade yok", empty, srcGapNoExpr, srcGapNoExpr},
+		{"VM yok", empty, srcGapNoVM, srcGapNoVM},
+		{"kısmi", empty, srcGapPartial, srcGapPartial},
+		{"gerekçesiz boş → boş pencere", empty, "", srcGapEmpty},
+		{"seri var → gerekçe yok", full, srcGapPartial, ""},
+	}
+	for _, c := range cases {
+		if got := withReason(c.in, c.r).Reason; got != c.want {
+			t.Fatalf("%s: %q", c.name, got)
+		}
+	}
+}
+
 // v0.10.2055 — trace_pod_outlier: VM aralık serisinin anahtarı pod adına iner.
 func TestSeriesByLabel(t *testing.T) {
 	pt := []chstore.SpanMetricPoint{{Time: 1, Value: 2}}

@@ -22,7 +22,7 @@ import { serviceHref } from '@/lib/serviceHref';
 import { operationTracesHref, tracesPivotHref } from '@/lib/pivotHref';
 import { fmtClock } from '@/lib/utils';
 import type { MLEvent, MLSourceSeries, SpanMetricSeries } from '@/lib/types';
-import { highlightColors, thanosSourceText, panelWindow, peakInRange, sourcePanelFor, topContributors, type Contributors, type SourcePanel } from './mlSourcePanel';
+import { highlightColors, liveGapLine, thanosSourceText, panelWindow, peakInRange, sourcePanelFor, topContributors, type Contributors, type SourcePanel } from './mlSourcePanel';
 
 const hm = (ns: number) => fmtClock(new Date(ns / 1e6)).slice(0, 5);
 const cssVar = (t: string) => getComputedStyle(document.documentElement).getPropertyValue(t);
@@ -70,7 +70,18 @@ export function MLSourceChart({ lead, open, fallback, onContributors, logsLink, 
   if (panel.kind === 'traces') return <TracesStrip panel={panel} win={win} marks={marks} fallback={fallback} />;
   if (panel.kind === 'metric') return <MetricSeries panel={panel} win={win} lead={lead} marks={marks} fallback={fallback} onPeak={onPeak} direction={direction} />;
   if (panel.kind === 'logs') return <LogsChart panel={panel} win={win} lead={lead} marks={marks} fallback={fallback} />;
+  // v0.10.2061 — metrik olayında kayıtlı görüntüye düşüş nedeniyle söylenir.
+  if (lead.signal === 'metric') return <Gap reason={panel.reason}>{fallback}</Gap>;
   return <>{fallback}</>;
+}
+
+function Gap({ reason, children }: { reason?: string; children: ReactNode }) {
+  return (
+    <>
+      <p data-testid="ml-source-gap" className="m-0 mb-1.5 text-xs text-muted-foreground">{liveGapLine(reason)}</p>
+      {children}
+    </>
+  );
 }
 
 function KafkaLag({ panel, win, lead, marks, fallback, onContributors, onPeak, direction }: {
@@ -199,7 +210,8 @@ function MetricSeries({ panel, win, lead, marks, fallback, onPeak, direction }: 
   // v0.10.2055 — sapan pod tek renkli, diğerleri gri (renk yalnız sapmada).
   const names = useMemo(() => (data?.series ?? []).map(s => s.groupKey.join(' · ')), [data]);
   const colors = useMemo(() => highlightColors(names, panel.highlight, cssVar), [names, panel.highlight]);
-  if (data === null || (data && !data.series.some(x => (x.points ?? []).length))) return <>{fallback}</>;
+  // v0.10.2061 — canlı seri yoksa nedeni tek satır, altında kayıtlı görüntü (sessiz düşüş yok).
+  if (data === null || (data && !data.series.some(x => (x.points ?? []).length))) return <Gap reason={data?.reason}>{fallback}</Gap>;
   const q = data?.query;
   const thanos = !!panel.cluster;
   const byPod = thanos || !!q?.by;
