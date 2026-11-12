@@ -283,15 +283,25 @@ export function mlRowText(e: MLEvent): string {
 }
 const fmtTs = (ns: number) => fmtDateTime(new Date(ns / 1e6));
 
+/** SAF (test): v0.10.2013 D2 — "Grup" hücresi. Tek üyeli / grupsuz = '' (soluk "—"). */
+export function mlGroupLabel(e: MLEvent): { text: string; title: string } {
+  const n = e.groupSize ?? 0;
+  if (n <= 1) return { text: '', title: '' };
+  const dets = e.groupDetectors ?? [];
+  const title = `Aynı servis, aynı zaman: ${dets.map(d => ML_DETECTOR_TR[d] ?? d).join(', ')}`;
+  return { text: dets.length > 1 ? `${dets.length} dedektör birlikte` : `${n} olay birlikte`, title };
+}
+
 const COLS: ColumnDef<MLEvent>[] = [
   // v0.10.1845 — mockup görünüm 1 sırası: Sinyal · Servis · Ne oluyor · Seyir · Başladı · süre (+ durum) · Servis tipi.
   // v0.10.1874 — "Seyir" (≤ 24 nokta, olay anı kaydından; liste ucu tek toplu okuma) + "Servis tipi" (profil).
-  // "Grup" Faz 3 (anomali grubu gelince).
+  // v0.10.2013 — "Grup" (anomali tekilleştirme D2): aynı servis + örtüşen pencere; yalnız yeni sütun.
   { id: 'signal', label: 'Sinyal', width: 90, sortValue: e => signalKindOf(e.detector, e.signal), naturalDir: 'asc' },
   { id: 'service', label: 'Servis', width: 180, sortValue: e => e.service, naturalDir: 'asc' },
   { id: 'headline', label: 'Ne oluyor', flex: true, minWidth: 280, sortValue: e => mlRowText(e), naturalDir: 'asc' },
   { id: 'trend', label: 'Seyir', width: 110, priority: 2, sortValue: e => sparkPeak(e) },
   { id: 'started', label: 'Başladı · süre', width: 170, sortValue: e => e.startedAt },
+  { id: 'group', label: 'Grup', width: 150, minWidth: 110, priority: 2, sortValue: e => e.groupSize ?? 0 },
   { id: 'profile', label: 'Servis tipi', width: 110, priority: 2, sortValue: e => e.profileLabel ?? '', naturalDir: 'asc' },
   { id: 'detector', label: 'Dedektör', width: 150, priority: 3, sortValue: e => e.detector, naturalDir: 'asc' },
   { id: 'last', label: 'Son görülme', width: 150, priority: 3, sortValue: e => e.lastSeen },
@@ -328,6 +338,10 @@ export function MLTab({ signal = '', onSignal }: { signal?: MLSignal; onSignal?:
       case 'trend': return e.spark && e.spark.v.length > 1
         ? <Sparkline values={e.spark.v} width={96} height={22} color={SIGNAL_KINDS[signalKindOf(e.detector, e.signal)].token} markerAt={e.spark.a} title="Olayın seyri; çizgi = başlangıç" />
         : <span className="text-muted-foreground">—</span>;
+      case 'group': {
+        const g = mlGroupLabel(e);
+        return g.text ? <span title={g.title}>{g.text}</span> : <span className="text-muted-foreground">—</span>;
+      }
       case 'profile': return e.profileLabel ? <Badge variant="outline">{e.profileLabel}</Badge> : <span className="text-muted-foreground">—</span>;
       case 'started': return (
         <span className="inline-flex flex-wrap items-center gap-1.5">

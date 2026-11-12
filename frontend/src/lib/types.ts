@@ -12213,6 +12213,8 @@ export interface MLEvent {
   spark?: { v: number[]; a: number };
   /** v0.10.1874 — "Servis tipi": profil (always_on | business_hours | low_traffic | batch | unknown) + Türkçe etiket. */
   profile?: string; profileLabel?: string;
+  /** v0.10.2013 (anomali tekilleştirme D2) — dedektörler arası grup: aynı servis, örtüşen pencere (okuma anında). */
+  groupId?: string; groupSize?: number; groupDetectors?: string[];
 }
 /** v0.10.1843 — ml.ExplainCard aynası (internal/ml/explain_card.go). Boş impact = satır yok. */
 export interface ExplainLink { label: string; href?: string }

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
+	"github.com/cilcenk/coremetry/internal/ml"
 )
 
 func TestMLEventsKeyHashesAllInputs(t *testing.T) {
@@ -132,8 +133,26 @@ func TestMLEventRowsCarrySparkAndProfile(t *testing.T) {
 	if b := mlEventRows([]chstore.MLEvent{bev}, chstore.MLConfig{}, start, loc, mlListExtras{IsBatch: isBatch}); b[0].Profile != "batch" || b[0].ProfileLabel != "batch" {
 		t.Errorf("batch adı: %q %q", b[0].Profile, b[0].ProfileLabel)
 	}
-	if !strings.Contains(mlEventsKey(1, "", "", "", "", "UTC"), "ml:events:v4:") {
-		t.Error("liste şekli değişti, anahtar v4 olmalı")
+	if !strings.Contains(mlEventsKey(1, "", "", "", "", "UTC"), "ml:events:v5:") {
+		t.Error("liste şekli değişti, anahtar v5 olmalı")
+	}
+}
+
+// v0.10.2013 — anomali tekilleştirme D2: satır grup alanlarını taşır; grup
+// okunamazsa boş. Liste okuması tavanda kesilse de liste satırı gruba girer.
+func TestMLEventRowsCarryGroup(t *testing.T) {
+	loc := time.UTC
+	start := time.Date(2026, 11, 12, 10, 0, 0, 0, loc)
+	a := chstore.MLEvent{ID: "a", Detector: "op_latency", Service: "checkout", StartedAt: start.UnixNano(), LastSeen: start.Add(30 * time.Minute).UnixNano()}
+	b := chstore.MLEvent{ID: "b", Detector: "dependency_latency", Service: "checkout", StartedAt: start.Add(5 * time.Minute).UnixNano(), LastSeen: start.Add(20 * time.Minute).UnixNano()}
+	// okuma yalnız b'yi döndü (tavan); liste satırı a yine gruba katılır
+	idx := ml.GroupIndex(ml.GroupMLEvents(mergeGroupInput([]chstore.MLEvent{b}, []chstore.MLEvent{a, b}), 10*time.Minute))
+	rows := mlEventRows([]chstore.MLEvent{a}, chstore.MLConfig{}, start, loc, mlListExtras{Groups: idx})
+	if rows[0].GroupID == "" || rows[0].GroupSize != 2 || len(rows[0].GroupDetectors) != 2 {
+		t.Errorf("grup alanları: %+v", rows[0])
+	}
+	if bare := mlEventRows([]chstore.MLEvent{a}, chstore.MLConfig{}, start, loc, mlListExtras{}); bare[0].GroupID != "" || bare[0].GroupSize != 0 {
+		t.Errorf("grup yoksa boş: %+v", bare[0])
 	}
 }
 

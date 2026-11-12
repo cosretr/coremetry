@@ -182,6 +182,44 @@ func (s *Store) ListMLEvents(ctx context.Context, f MLEventsFilter) ([]MLEvent, 
 	return out, nil
 }
 
+// mlGroupRowsSQL — v0.10.2013 (anomali tekilleştirme D2): gruplama girdisi.
+// Liste sayfasındaki servislerin TÜM dedektör satırları (liste dedektör /
+// sinyal süzgeci taşısa da grup tam kurulsun). Kanıt okunmaz (ağır kolon).
+const mlGroupRowsSQL = `
+		SELECT id, detector, signal, stage, service, started_at, last_seen, baseline, observed, score, direction
+		FROM ml_events FINAL
+		WHERE last_seen >= ? AND service IN ?
+		ORDER BY last_seen DESC
+		LIMIT ?
+		SETTINGS max_execution_time = 5`
+
+// MLGroupRowsCap — gruplama okuması tavanı.
+const MLGroupRowsCap = 5000
+
+// ListMLEventsForGroups — gruplama girdisi (hafif kolonlar, karar yok).
+// Boş servis listesi = okuma yok.
+func (s *Store) ListMLEventsForGroups(ctx context.Context, services []string, since time.Time) ([]MLEvent, error) {
+	if len(services) == 0 {
+		return nil, nil
+	}
+	rows, err := s.conn.Query(ctx, mlGroupRowsSQL, chDateTime64Arg(since), services, MLGroupRowsCap)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []MLEvent
+	for rows.Next() {
+		var e MLEvent
+		var st, ls time.Time
+		if err := rows.Scan(&e.ID, &e.Detector, &e.Signal, &e.Stage, &e.Service, &st, &ls, &e.Baseline, &e.Observed, &e.Score, &e.Direction); err != nil {
+			return nil, err
+		}
+		e.StartedAt, e.LastSeen = st.UnixNano(), ls.UnixNano()
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
 // MLDetectorScore — dedektör karnesi satırı.
 type MLDetectorScore struct {
 	Detector string  `json:"detector"`

@@ -60,9 +60,9 @@ func withMLStats(st *chstore.SystemStats) *chstore.SystemStats {
 
 // mlEventsKey — SAF: tüm girdiler anahtarda (since kovası, süzgeçler, özetin
 // saat dilimi). v3 (v0.10.1843): satır `summary` taşır. v4 (v0.10.1874):
-// `spark` + `profile`.
+// `spark` + `profile`. v5 (v0.10.2013): `group*` (D2 gruplama).
 func mlEventsKey(sinceS int64, signal, detector, service, stage, tz string) string {
-	return fmt.Sprintf("ml:events:v4:since=%d:sig=%s:d=%s:s=%s:st=%s:tz=%s", sinceS, signal, detector, service, stage, tz)
+	return fmt.Sprintf("ml:events:v5:since=%d:sig=%s:d=%s:s=%s:st=%s:tz=%s", sinceS, signal, detector, service, stage, tz)
 }
 
 // mlEventRow — liste satırı: olay + sunucuda kurulan tek satır özet
@@ -77,6 +77,12 @@ type mlEventRow struct {
 	Spark        *ml.Spark `json:"spark,omitempty"`
 	Profile      string    `json:"profile"`
 	ProfileLabel string    `json:"profileLabel,omitempty"`
+	// v0.10.2013 (anomali tekilleştirme D2) — dedektörler arası grup
+	// (ml.GroupMLEvents, okuma anında; şemasız). Yalnız yeni alan: satırlar,
+	// sıralama ve tıklama aynı. Grup okunamazsa alanlar boş.
+	GroupID        string   `json:"groupId,omitempty"`
+	GroupSize      int      `json:"groupSize,omitempty"`
+	GroupDetectors []string `json:"groupDetectors,omitempty"`
 }
 
 // mlListExtras — liste satırlarının toplu ek verisi (okunamayan alan boş).
@@ -84,6 +90,7 @@ type mlListExtras struct {
 	Series   map[string]string               // olay id → kayıt serisi (JSON)
 	Profiles map[string]chstore.MLLearnedRow // servis → profil revizyonu
 	IsBatch  func(string) bool               // v0.10.1876 — revizyonsuz batch adı → "batch"
+	Groups   map[string]*ml.MLGroup          // v0.10.2013 — olay id → grup
 }
 
 // mlEventRows — SAF: olaylar → özetli satırlar (+ seyir, servis tipi).
@@ -97,6 +104,50 @@ func mlEventRows(items []chstore.MLEvent, cfg chstore.MLConfig, now time.Time, l
 		p = ml.ResolveProfile(p, e.Service, ex.IsBatch)
 		out[i] = mlEventRow{MLEvent: e, Summary: ml.ExplainSummary(ml.SummaryInput(e, cfg, now, loc)),
 			Spark: ml.BuildSpark(ex.Series[e.ID], e.StartedAt, e.LastSeen), Profile: p, ProfileLabel: ml.ProfileLabelTR(p)}
+		if g := ex.Groups[e.ID]; g != nil {
+			out[i].GroupID, out[i].GroupSize, out[i].GroupDetectors = g.ID, len(g.Members), g.Detectors
+		}
+	}
+	return out
+}
+
+// mlGroupsFor — v0.10.2013 (D2): listedeki servislerin, listenin en erken
+// başlangıcından bir teyit penceresi öncesine kadarki TÜM dedektör satırları
+// (tek okuma) → gruplar. Okuma hatası = grup yok (liste yine döner).
+func (s *Server) mlGroupsFor(ctx context.Context, items []chstore.MLEvent, slack time.Duration) map[string]*ml.MLGroup {
+	if len(items) == 0 {
+		return nil
+	}
+	seen := map[string]bool{}
+	var svcs []string
+	earliest := items[0].StartedAt
+	for _, e := range items {
+		earliest = min(earliest, e.StartedAt)
+		if !seen[e.Service] {
+			seen[e.Service] = true
+			svcs = append(svcs, e.Service)
+		}
+	}
+	evs, err := s.store.ListMLEventsForGroups(ctx, svcs, time.Unix(0, earliest).Add(-slack))
+	if err != nil {
+		return nil
+	}
+	return ml.GroupIndex(ml.GroupMLEvents(mergeGroupInput(evs, items), slack))
+}
+
+// mergeGroupInput — SAF: gruplama okuması + liste satırları (aynı id bir kez;
+// okuma tavanı liste satırını düşürse bile satır gruba girer).
+func mergeGroupInput(read, items []chstore.MLEvent) []chstore.MLEvent {
+	seen := make(map[string]bool, len(read))
+	out := make([]chstore.MLEvent, 0, len(read)+len(items))
+	for _, e := range read {
+		seen[e.ID] = true
+		out = append(out, e)
+	}
+	for _, e := range items {
+		if !seen[e.ID] {
+			out = append(out, e)
+		}
 	}
 	return out
 }
@@ -142,7 +193,10 @@ func (s *Server) getMLEvents(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return nil, err
 		}
-		rows := mlEventRows(items, s.store.GetMLConfig(ctx), time.Now(), loc, s.mlListExtrasFor(ctx, items))
+		cfg := s.store.GetMLConfig(ctx)
+		ex := s.mlListExtrasFor(ctx, items)
+		ex.Groups = s.mlGroupsFor(ctx, items, ml.GroupSlack(cfg))
+		rows := mlEventRows(items, cfg, time.Now(), loc, ex)
 		return map[string]any{"items": rows, "truncated": len(items) >= chstore.MLListCap}, nil
 	})
 }
