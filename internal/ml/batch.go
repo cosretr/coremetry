@@ -67,7 +67,8 @@ func batchMeasureOf(ev chstore.MLEvent, loadParts map[string]bool) batchMeasure 
 		}
 		return batchMeasureLoad
 	}
-	if ev.Signal == chstore.MLSignalMetric && loadParts[ev.Code] {
+	// v0.10.2019: Thanos parçası "@<cluster>" taşır; Load işareti aile|ifade'de.
+	if fam, id, _ := splitThanosPart(ev.Code); ev.Signal == chstore.MLSignalMetric && loadParts[metricPart(fam, id)] {
 		return batchMeasureLoad
 	}
 	return batchMeasureOther

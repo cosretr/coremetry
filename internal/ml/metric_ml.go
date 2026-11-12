@@ -11,9 +11,7 @@ package ml
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"math"
 	"strings"
 	"sync"
 	"time"
@@ -27,9 +25,16 @@ type MetricML struct {
 	mu    sync.Mutex
 	daily map[string]int
 	day   string
+	// src — v0.10.2019: aile başına kaynak (MetricThanos tespiti); nil =
+	// her açık aile VM'den (önceki davranış). Kaynağı Thanos/none olan aile
+	// VM'e sorulmaz.
+	src *MetricSources
 }
 
 func NewMetricML() *MetricML { return &MetricML{daily: map[string]int{}} }
+
+// WithSources — v0.10.2019: kaynak tespitini paylaş.
+func (d *MetricML) WithSources(s *MetricSources) *MetricML { d.src = s; return d }
 
 func (d *MetricML) Name() string { return "metric_ml" }
 
@@ -65,6 +70,14 @@ func (d *MetricML) dayCap(det string, cfg chstore.MLConfig, now time.Time) bool 
 }
 
 func (d *MetricML) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, now time.Time) ([]chstore.MLEvent, error) {
+	src := d.src.Sources()
+	onVM := false
+	for _, fam := range chstore.MLMetricDetectorNames {
+		onVM = onVM || (cfg.DetectorOn(fam) && familyOnVM(src, fam))
+	}
+	if !onVM { // v0.10.2019: açık ailelerin hepsi Thanos'ta ya da kaynaksız
+		return nil, nil
+	}
 	if deps.VM == nil || !deps.VM.Configured() {
 		return nil, fmt.Errorf("VictoriaMetrics yapılandırılmamış: metrik ML sessiz")
 	}
@@ -79,6 +92,9 @@ func (d *MetricML) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 	dirOf := map[string]string{} // part → direction
 	var waiting []string
 	for _, pe := range metricExprs(cfg, svcLabel, cfg.BucketSec) {
+		if !familyOnVM(src, pe.family) {
+			continue
+		}
 		rows, skip, err := vmInstant(ctx, deps, "metric:"+pe.family, pe.expr, to, now)
 		if skip {
 			if len(waiting) == 0 || waiting[len(waiting)-1] != pe.family {
@@ -110,62 +126,6 @@ func (d *MetricML) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 	if len(waiting) > 0 && len(series) == 0 {
 		return nil, fmt.Errorf("VM metrik aileleri beklemede (backoff): %v", waiting)
 	}
-	dwellFrom := last.Add(-time.Duration(cfg.DwellBuckets-1) * bucket)
-	if hist, herr := deps.Store.MLSeriesRecent(ctx, chstore.MLSignalMetric, nil, "", "", dwellFrom, cfg.BucketSec); herr == nil {
-		mergeHistory(series, hist, dwellFrom.Unix(), last.Unix())
-	}
-	var srows []chstore.MLSeriesRow
-	for k, byB := range series {
-		svc, part, _ := strings.Cut(k, "\x00")
-		for b, v := range byB {
-			srows = append(srows, chstore.MLSeriesRow{Signal: chstore.MLSignalMetric, Service: svc, Part: part, Bucket: time.Unix(b, 0), BucketSec: uint32(cfg.BucketSec), Count: v})
-		}
-	}
-	if err := deps.insertSeries(ctx, srows); err != nil {
-		return nil, err
-	}
-	global.series.Add(int64(len(series)))
-	sens := deps.Store.AnomalySensitivityForDetectors()
-	loc := time.UTC
-	if sens.Calendar.Timezone != "" {
-		if l, err := time.LoadLocation(sens.Calendar.Timezone); err == nil {
-			loc = l
-		}
-	}
-	dates, class := baselineDates(last, cfg.BaselineDays, sens.Calendar, loc)
-	h := last.In(loc).Hour()
-	t0 := time.Now()
-	base, err := deps.Store.MLBaseline(ctx, chstore.MLBaselineRequest{Signal: chstore.MLSignalMetric, Dates: dates, HourFrom: max(h-1, 0), HourTo: min(h+1, 23), TargetSec: cfg.BucketSec, TZ: loc.String(), Exclude: deps.Labels.Exclude(cfg)})
-	global.lastCHMs.Store(time.Since(t0).Milliseconds())
-	if err != nil {
-		return nil, err
-	}
-	dwellStart := last.Add(-time.Duration(cfg.DwellBuckets-1) * bucket).Unix()
-	off := isOffDay(class)
-	c2 := cfg
-	c2.MinBaselineRate = 0 // gauge/oran serilerinde hacim tabanı anlamsız; eksik veri kuralı yeter
-	var evs []chstore.MLEvent
-	for k := range series {
-		svc, part, _ := strings.Cut(k, "\x00")
-		fam, _, _ := strings.Cut(part, "|")
-		cur, ok := dwellWindow(series[k], dwellStart, last.Unix(), int64(cfg.BucketSec), false)
-		if !ok { // scrape boşluğu: eksik veri → değerlendirme yok
-			continue
-		}
-		dir := dirOf[part]
-		j := judge(cur, base[k], c2, dir == "up")
-		if !j.Fire || (dir == "down" && j.Direction != "down") || (j.Direction == "down" && off) {
-			continue
-		}
-		if !d.dayCap(fam, cfg, now) {
-			continue
-		}
-		raw, _ := json.Marshal(map[string]any{"source": "vm", "expr": part, "dayClass": class, "mad": j.MAD, "dwell": cfg.DwellBuckets, "bucketSec": cfg.BucketSec})
-		evs = append(evs, chstore.MLEvent{
-			ID: chstore.MLEventID(fam, svc, part), Detector: fam, Signal: chstore.MLSignalMetric, Stage: chstore.MLStageShadow,
-			Service: svc, Code: part, StartedAt: last.UnixNano(), LastSeen: last.Add(bucket).UnixNano(), WindowSec: uint32(cfg.BucketSec),
-			Baseline: j.Median, Observed: j.Observed, Score: math.Abs(j.Z), Direction: j.Direction, Evidence: string(raw),
-		})
-	}
-	return evs, nil
+	return evalMetricSeries(ctx, deps, cfg, last, now, series, dirOf, func(fam string) bool { return d.dayCap(fam, cfg, now) },
+		func(string) map[string]any { return nil })
 }

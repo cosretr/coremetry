@@ -3,7 +3,7 @@
 // tetiklendiğini söyler, adlar ipucunda.
 import { describe, it, expect } from 'vitest';
 import type { MLEvent } from '@/lib/types';
-import { mlGroupLabel, tickLabel, ML_DETECTOR_TR, detectorGroup } from './MLTab';
+import { mlGroupLabel, tickLabel, ML_DETECTOR_TR, detectorGroup, thanosTickText } from './MLTab';
 import { signalKindOf } from '@/lib/signalKind';
 
 // v0.10.2018 — T-err: yeni trace dedektörü adı, türü ve tik özeti grubu.
@@ -46,5 +46,14 @@ describe('mlGroupLabel', () => {
   });
   it('aynı dedektörün birden çok olayı', () => {
     expect(mlGroupLabel({ ...base, groupId: 'g', groupSize: 2, groupDetectors: ['op_latency'] }).text).toBe('2 olay birlikte');
+  });
+});
+
+// v0.10.2019 — tikin Thanos ölçümü ayrı sayaçla görünür.
+describe('thanosTickText', () => {
+  it('sorgu, süre, hata, tavan, eşlenemeyen, yanıtsız cluster', () => {
+    const s = thanosTickText({ queries: 14, ms: 5300, maxMs: 2100, errors: 1, budgetCut: 2, unmatched: 40, failed: ['prod-west'] });
+    expect(s).toBe('Thanos 14 sorgu · 5.3 sn (en yavaş 2.1 sn) · 1 hata/kısmi · 2 ifade tavan dışı · 40 pod servise eşlenemedi · yanıtsız: prod-west');
+    expect(tickLabel({ at: 1, durationMs: 1, events: 0, backoff: [], thanos: { queries: 3, ms: 100, maxMs: 50, errors: 0 } }, 1)).toContain('Thanos 3 sorgu');
   });
 });

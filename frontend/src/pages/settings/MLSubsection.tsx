@@ -9,10 +9,11 @@ import { Button } from '@/components/shadcn/button';
 import { Field, CheckboxField } from '@/components/coremetry/Field';
 import { ActionRow } from '@/components/coremetry/ActionRow';
 import { api } from '@/lib/api';
-import type { MLConfig, MLQuality } from '@/lib/types';
+import type { MLConfig, MLQuality, MLMetricSource } from '@/lib/types';
 import { FlashBox, humanize } from './shared';
 import { MLBaselineSections } from './MLBaselineSections';
 import { MLRecommendedCard } from './MLRecommendedCard';
+import { metricSourceLabel } from './mlMetricSource';
 
 export const ML_LOG_DETECTORS: { id: string; label: string; hint: string }[] = [
   { id: 'log_volume', label: 'Log hacmi', hint: 'Servis × seviye hacmi, mevsimsel median+MAD, iki yönlü' },
@@ -35,7 +36,7 @@ export const ML_TRACE_DETECTORS: { id: string; label: string; hint: string }[] =
   { id: 'trace_error_count', label: 'Operasyon hata sayısı', hint: 'ClickHouse spanmetrics_1m: servis × operasyon (server/consumer) hata span sayısı kendi tabanının üstüne çıktı; oran hesaplanmaz' },
 ];
 export const ML_METRIC_DETECTORS: { id: string; label: string; hint: string }[] = [
-  { id: 'metric_jvm', label: 'JVM', hint: 'Heap, GC, thread (VM, servis düzeyi)' },
+  { id: 'metric_jvm', label: 'JVM', hint: 'Heap, GC, thread (servis düzeyi; Thanos\'ta cluster başına)' },
   { id: 'metric_pool', label: 'Connection pool', hint: 'Havuz kullanımı, bekleme' },
   { id: 'metric_kafka', label: 'Kafka', hint: 'Consumer lag, throttle' },
   { id: 'metric_http_client', label: 'HTTP client', hint: 'Dış çağrı p95, 5xx oranı' },
@@ -53,9 +54,13 @@ export function MLSubsection() {
   const [cfg, setCfg] = useState<MLConfig | null>(null);
   const [busy, setBusy] = useState(false);
   const [flash, setFlash] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  // v0.10.2019 — metrik ailesi kaynağı (salt-okunur; ML lideri saatte bir seçer).
+  const [sources, setSources] = useState<Record<string, MLMetricSource>>({});
 
   useEffect(() => {
     api.getMl().then(setCfg).catch(err => setFlash({ kind: 'err', text: humanize(err) }));
+    // tek seferlik okuma (karne ucu, 60 sn sunucu önbelleği); okunamazsa satır "henüz ölçülmedi" der.
+    api.mlScorecard().then(sc => setSources(sc?.tick?.metricSources ?? {})).catch(() => undefined);
   }, []);
 
   const save = async () => {
@@ -118,7 +123,7 @@ export function MLSubsection() {
                 <div key={d.id} className="grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_120px_120px] md:items-start">
                   <CheckboxField checked={cfg.detectors[d.id] === true} disabled={!cfg.enabled}
                     onCheckedChange={v => setCfg({ ...cfg, detectors: { ...cfg.detectors, [d.id]: v } })}
-                    label={d.label} hint={d.hint} />
+                    label={d.label} hint={d.id.startsWith('metric_') ? `${d.hint} · ${metricSourceLabel(sources[d.id], cfg.enabled && cfg.detectors[d.id] === true)}` : d.hint} />
                   <CheckboxField checked={p.enabled} disabled={!cfg.enabled || cfg.detectors[d.id] !== true}
                     onCheckedChange={v => setCfg({ ...cfg, promotion: { ...cfg.promotion, [d.id]: { ...p, enabled: v } } })}
                     label="Problem'e terfi" hint="Varsayılan kapalı; eşik + asgari örnek şart" />

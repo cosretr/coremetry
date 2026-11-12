@@ -36,6 +36,20 @@ var servicePodEnvSuffixes = []string{"-prod", "-int", "-uat", "-prep"}
 // deployment | servis | ortam eksiz ad, "-.*" son eki. v0.10.1271 — api'deki
 // thanosServicePodRegex'ten taşındı (mcptools da kullanır; api delege eder).
 func ServicePodRegex(service, deploy string) string {
+	keys := ServicePodKeys(service, deploy)
+	cands := make([]string, len(keys))
+	for i, k := range keys {
+		cands[i] = regexp.QuoteMeta(k)
+	}
+	return "(" + strings.Join(cands, "|") + ")-.*"
+}
+
+// ServicePodKeys — SAF (v0.10.2019): ServicePodRegex'in aday pod öneki
+// kümesi (deployment | servis | ortam eksiz ad; sıra ve tekillik aynı).
+// Pod, "<anahtar>-" ile başlıyorsa servise aittir. ML metrik Thanos yolu
+// (internal/ml) çok servisi tek geçişte eşlemek için regex yerine bu
+// kümeyi önek indeksine koyar — anlam ServicePodRegex ile birebir.
+func ServicePodKeys(service, deploy string) []string {
 	stripped := service
 	for _, suf := range servicePodEnvSuffixes {
 		if len(service) > len(suf) && strings.HasSuffix(service, suf) {
@@ -44,14 +58,14 @@ func ServicePodRegex(service, deploy string) string {
 		}
 	}
 	seen := map[string]bool{}
-	var cands []string
+	var out []string
 	for _, c := range []string{deploy, service, stripped} {
 		if c != "" && !seen[c] {
 			seen[c] = true
-			cands = append(cands, regexp.QuoteMeta(c))
+			out = append(out, c)
 		}
 	}
-	return "(" + strings.Join(cands, "|") + ")-.*"
+	return out
 }
 
 // promDur — saniye cinsinden PromQL süre literal'i (en az 1s).

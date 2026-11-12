@@ -1470,8 +1470,8 @@ func main() {
 	// YALNIZ vmetrics yapılandırılmışken, VM'den okuyarak değerlendirir
 	// (SetLogs geç-bağlama emsali; runtime_vm.go başlığı).
 	evalr.SetVMetrics(vmSvc)
-	alertVM.SetVM(vmSvc)                                       // v0.10.1489 — yapılandırılmamışsa Configured()=false → span
-	startML(ctx, mode, cfg, store, logsStore, vmSvc, lockImpl) // ML alt sistemi — main_ml.go (yerleşim config'ten, varsayılan sre; VM = trace kaynağı)
+	alertVM.SetVM(vmSvc)                                                  // v0.10.1489 — yapılandırılmamışsa Configured()=false → span
+	startML(ctx, mode, cfg, store, logsStore, vmSvc, thanosSvc, lockImpl) // ML alt sistemi — main_ml.go (yerleşim config'ten, varsayılan sre; VM = trace kaynağı)
 	// v0.10.293 (VM tek metrik deposu Dilim 1b) — OTLP metrik gövdesinin
 	// VM'e HAM iletimi: ayrı, bayt bütçeli kuyruk (ingest yolunda ikinci ağ
 	// çağrısı ASLA senkron — audit R5). Yazım kapalıyken ingester kopya bile

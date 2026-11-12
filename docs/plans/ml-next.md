@@ -35,4 +35,5 @@ Heap, JVM ve GC metrikleri VictoriaMetrics'te DEĞİL; uzak cluster'ların Thano
 - `metric_jvm` ailesi (M1) VM'de boş döner → bugünkü hâliyle prod'da sessiz kalır; kaynak seçimi gerekir: aile başına kaynak (VM | Thanos cluster(ları)), Thanos için cluster × servis gezme (multicluster-first).
 - Eski heap bandı dedektörü (`anomaly/heap_source.go`, metricsrc CH|VM) da aynı kaynak sorununu taşır; A3'te ayrı anahtar bulunamadı — Thanos kaynağıyla birlikte ele alınır.
 - Backoff / bütçe aynı mantıkla Thanos sorgularına uygulanır (Thanos query_range maliyeti VM'den yüksek).
+- v0.10.2019 GEMİDE (heap bandı hariç): aile başına kaynak saatte bir otomatik (VM varsa VM, yoksa metriği taşıyan Thanos cluster'ları; ayar yok, Settings › ML'de salt-okunur); Thanos'ta ifade pod düzeyinde, pod → servis `thanos.ServicePodKeys` ile; cluster × tik ≤ 12 sorgu, ayrı backoff, query_range yok. Kod: `internal/ml/thanos_source.go`, `metric_thanos.go`, `thanos_adapter.go`.
 Karar operatörde; kodlanmadı.

@@ -12329,7 +12329,14 @@ export interface MLTickStatus {
   es?: number; vm?: number; ch?: number;
   /** v0.10.2015 (D3): bu tikte gölge karar verilen grup / Problem "açardı" sayısı. */
   shadowGroups?: number; shadowWouldOpen?: number;
+  /** v0.10.2019: metrik ailesi başına otomatik seçilen kaynak (ayar değil) + tikin Thanos ölçümü. */
+  metricSources?: Record<string, MLMetricSource>;
+  thanos?: MLThanosTick;
 }
+/** v0.10.2019 — chstore.MLMetricSource aynası. source: vm | thanos | none | '' (ölçülemedi). */
+export interface MLMetricSource { source: string; clusters?: string[]; checkedAt?: number; note?: string }
+/** v0.10.2019 — chstore.MLThanosTick aynası. */
+export interface MLThanosTick { queries: number; ms: number; maxMs: number; errors: number; budgetCut?: number; unmatched?: number; failed?: string[] }
 /** Sinyal türünün son tik ölçümü (v0.10.1812, audit §10 dilim 1.1). dropped = ES terms tavanı dışında kalan servis (yalnız log). */
 export interface MLKindTick { services: number; series: number; seriesRows: number; es: number; vm: number; ch: number; dropped: number; durationMs: number }
 /** Baseline günü koşusu (v0.10.1814, Go chstore.MLBaselineRun). */

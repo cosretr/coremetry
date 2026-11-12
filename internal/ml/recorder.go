@@ -264,6 +264,14 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 		Partial: int64(partialN), Docs: global.docs.Load(), Steps: steps, Signals: signals, BatchCut: int64(batchCut),
 		Kinds: foldKindTicks(samples), ES: global.esQueries.Load() - esAtStart, VM: global.vmQueries.Load() - vmAtStart, CH: chQueries.Load(),
 		ShadowGroups: shadow.Groups, ShadowWouldOpen: shadow.WouldOpen}
+	// v0.10.2019 — metrik aile kaynakları + Thanos ölçümü (MetricThanos)
+	for _, det := range r.detectors {
+		if ts, ok := det.(interface {
+			tickStatus() (map[string]chstore.MLMetricSource, *chstore.MLThanosTick)
+		}); ok {
+			status.MetricSources, status.Thanos = ts.tickStatus()
+		}
+	}
 	global.setLastKinds(status.Kinds)
 	if firstErr != nil {
 		status.LastError = truncRunes(firstErr.Error(), 300)

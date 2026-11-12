@@ -68,6 +68,30 @@ type MLTickStatus struct {
 	// karar verilen grup ve kapıdan geçseydi Problem "açardı" sayısı.
 	ShadowGroups    int64 `json:"shadowGroups,omitempty"`
 	ShadowWouldOpen int64 `json:"shadowWouldOpen,omitempty"`
+	// v0.10.2019 — metrik ailesi başına otomatik seçilen kaynak (saatte bir
+	// tespit; ayar DEĞİL, Settings › ML'de salt-okunur) ve tikin Thanos ölçümü.
+	MetricSources map[string]MLMetricSource `json:"metricSources,omitempty"`
+	Thanos        *MLThanosTick             `json:"thanos,omitempty"`
+}
+
+// MLMetricSource — v0.10.2019: bir metrik ailesinin kaynağı. Source:
+// "vm" | "thanos" | "none" (ölçüldü, iki kaynakta da yok) | "" (ölçülemedi).
+type MLMetricSource struct {
+	Source    string   `json:"source"`
+	Clusters  []string `json:"clusters,omitempty"` // Thanos cluster adları
+	CheckedAt int64    `json:"checkedAt,omitempty"`
+	Note      string   `json:"note,omitempty"`
+}
+
+// MLThanosTick — v0.10.2019: tikin Thanos okuması (VM sayacından ayrı).
+type MLThanosTick struct {
+	Queries   int64    `json:"queries"`
+	Ms        int64    `json:"ms"`                  // sorgu sürelerinin toplamı
+	MaxMs     int64    `json:"maxMs"`               // en yavaş sorgu
+	Errors    int64    `json:"errors"`              // hata / kısmi / kesik sonuç
+	BudgetCut int64    `json:"budgetCut,omitempty"` // cluster tavanı yüzünden sorulmayan ifade
+	Unmatched int64    `json:"unmatched,omitempty"` // servise eşlenemeyen pod
+	Failed    []string `json:"failed,omitempty"`    // bu tikte yanıt vermeyen cluster'lar
 }
 
 func (s *Store) GetMLTickStatus(ctx context.Context) (MLTickStatus, bool, error) {

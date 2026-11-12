@@ -276,7 +276,7 @@ func EnrichFromRelated(in *CardInput, related []chstore.MLSnapshot, hrefOf func(
 // MetricLabelFor — SAF: metrik olayının etiketi + birimi (Settings
 // MetricFamilies; part = "<aile>|<ifade id>"). Bulunamazsa ifade id'si.
 func MetricLabelFor(cfg chstore.MLConfig, detector, part string) (label, unit string) {
-	_, id, _ := strings.Cut(part, "|")
+	_, id, _ := splitThanosPart(part) // v0.10.2019: "@<cluster>" eki etiketi değiştirmez
 	for _, e := range cfg.MetricFamilies[detector] {
 		if e.ID == id {
 			return e.Label, e.Unit

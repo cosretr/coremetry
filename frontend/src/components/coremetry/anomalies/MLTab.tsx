@@ -12,7 +12,7 @@ import { Badge } from '@/components/shadcn/badge';
 import { api } from '@/lib/api';
 import { keys, useMLEvents, useMLScorecard } from '@/lib/queries';
 import { fmtClock, fmtDateTime } from '@/lib/utils';
-import type { MLEvent, MLDetectorScore, MLGate, MLBackfillProgress, MLTickStatus, MLSignalTick, MLScorecard, MLKindTick, MLBaselineStatus } from '@/lib/types';
+import type { MLEvent, MLDetectorScore, MLGate, MLBackfillProgress, MLTickStatus, MLSignalTick, MLScorecard, MLKindTick, MLBaselineStatus, MLThanosTick } from '@/lib/types';
 import { Link } from 'react-router-dom';
 import { MLPeriodReplay } from './MLPeriodReplay';
 import { mlEventHref, mlEventPlayHref } from '@/lib/anomalyHref';
@@ -70,6 +70,16 @@ export function backfillLabel(b: MLBackfillProgress): string {
   return `${head}${tail} · duraklı${b.lastError ? ` (${b.lastError})` : ''}`;
 }
 
+/** SAF (test): v0.10.2019 — tikin Thanos ölçümü (VM sayacından ayrı). */
+export function thanosTickText(t: MLThanosTick): string {
+  const bits = [`Thanos ${t.queries} sorgu · ${(t.ms / 1000).toFixed(1)} sn (en yavaş ${(t.maxMs / 1000).toFixed(1)} sn)`];
+  if (t.errors) bits.push(`${t.errors} hata/kısmi`);
+  if (t.budgetCut) bits.push(`${t.budgetCut} ifade tavan dışı`);
+  if (t.unmatched) bits.push(`${t.unmatched} pod servise eşlenemedi`);
+  if (t.failed?.length) bits.push(`yanıtsız: ${t.failed.join(', ')}`);
+  return bits.join(' · ');
+}
+
 /** Son tik + VM bekleme satırı — SAF (test). nowSec: şimdi (unix sn). */
 export function tickLabel(t: MLTickStatus | undefined, nowSec: number): string {
   if (!t) return 'son tik yok';
@@ -79,6 +89,7 @@ export function tickLabel(t: MLTickStatus | undefined, nowSec: number): string {
   if (t.partial) parts.push(`${t.partial} kısmi ES sonucu (yazılmadı)`);
   if (t.batchCut) parts.push(`batch kuralı ${t.batchCut} adayı kesti`);
   if (t.shadowGroups) parts.push(`gölge terfi: ${t.shadowGroups} grup, ${t.shadowWouldOpen ?? 0} Problem açardı (açılmadı)`);
+  if (t.thanos?.queries) parts.push(thanosTickText(t.thanos));
   if (t.backoff.length) parts.push(`VM bekleme: ${t.backoff.map(b => `${b.family} (${Math.max(1, Math.round((b.until - nowSec) / 60))} dk)`).join(', ')}`);
   if (t.lastError) parts.push(`hata: ${t.lastError}`);
   return parts.join(' · ');
@@ -145,7 +156,7 @@ export function statusTiles(sc: MLScorecard, signal: MLSignal, nowSec: number): 
   const samples = (sc.bySignal ?? []).filter(s => !signal || s.detector === signal).reduce((a, s) => a + s.samples, 0);
   const bo = t?.backoff ?? [];
   return [
-    { k: 'Son tik', v: t ? `${ago} dk önce` : 'yok', s: t ? `${Math.round(t.durationMs / 1000)} sn · ${t.events} olay${t.docs ? ` · ${t.docs.toLocaleString('tr-TR')} belge` : ''}${t.partial ? ` · ${t.partial} kısmi` : ''}${t.batchCut ? ` · batch kuralı ${t.batchCut} adayı kesti` : ''}${t.shadowGroups ? ` · gölge terfi: ${t.shadowGroups} grup, ${t.shadowWouldOpen ?? 0} Problem açardı (açılmadı)` : ''}` : 'tik yok', warn: !!t?.lastError },
+    { k: 'Son tik', v: t ? `${ago} dk önce` : 'yok', s: t ? `${Math.round(t.durationMs / 1000)} sn · ${t.events} olay${t.docs ? ` · ${t.docs.toLocaleString('tr-TR')} belge` : ''}${t.partial ? ` · ${t.partial} kısmi` : ''}${t.batchCut ? ` · batch kuralı ${t.batchCut} adayı kesti` : ''}${t.shadowGroups ? ` · gölge terfi: ${t.shadowGroups} grup, ${t.shadowWouldOpen ?? 0} Problem açardı (açılmadı)` : ''}${t.thanos?.queries ? ` · ${thanosTickText(t.thanos)}` : ''}` : 'tik yok', warn: !!t?.lastError },
     { k: 'Log geçmişi', v: bf ? `${bf.done + miss} / ${bf.total} sa` : '—', s: bf ? (bf.complete ? 'tamam' : bf.running ? 'sürüyor' : 'duraklı') + (miss ? ` · eksik ${miss}` : '') : 'kayıt yok' },
     { k: 'Olay · 30 gün', v: String(events), s: samples ? `${samples} karar` : 'karar yok · terfi kapalı' },
     { k: 'VM bekleme', v: bo.length ? `${bo.length} aile` : 'yok', s: bo.map(b => `${b.family} · ${Math.max(1, Math.round((b.until - nowSec) / 60))} dk`).join(', ') || 'tüm aileler açık', warn: bo.length > 0 },
