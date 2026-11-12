@@ -335,12 +335,7 @@ func (d *LogRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, now 
 
 	// taban: takvim sınıfı + saat penceresi (yerel dilim)
 	sens := deps.Store.AnomalySensitivityForDetectors()
-	loc := time.UTC
-	if sens.Calendar.Timezone != "" {
-		if l, err := time.LoadLocation(sens.Calendar.Timezone); err == nil {
-			loc = l
-		}
-	}
+	_, loc := calendarFor(sens) // v0.10.2066: mevsimsel dilim (Davis ile ortak)
 	dates, class := baselineDates(last, cfg.BaselineDays, sens.Calendar, loc)
 	h := last.In(loc).Hour()
 	hf, ht := h-1, h+1

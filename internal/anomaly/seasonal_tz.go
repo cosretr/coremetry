@@ -24,25 +24,11 @@ import (
 // seasonalUTC — eski (≤ v0.10.1790) dilim; SQL metni bununla bayt bayt aynı.
 const seasonalUTC = "UTC"
 
-// seasonalLocation — SAF: ayar adı → konum. Boş → varsayılan (Europe/Istanbul,
-// chstore.DefaultSeasonalTimezone); yüklenemeyen ad → UTC (ayar PUT'ta
-// doğrulandığı için yalnız elle düzenlenmiş blobda; güvenli yön eski davranış).
+// seasonalLocation — SAF: ayar adı → konum. v0.10.2066: tek çözüm
+// chstore.SeasonalLocation (ML ile ortak; boş → Europe/Istanbul, yüklenemeyen
+// ad → UTC).
 func seasonalLocation(name string) *time.Location {
-	name = strings.TrimSpace(name)
-	if name == "" {
-		name = chstore.DefaultSeasonalTimezone
-	}
-	if strings.EqualFold(name, seasonalUTC) {
-		return time.UTC
-	}
-	if chstore.ValidateSeasonalTimezone(name) != nil {
-		return time.UTC
-	}
-	loc, err := time.LoadLocation(name)
-	if err != nil {
-		return time.UTC
-	}
-	return loc
+	return chstore.SeasonalLocation(name)
 }
 
 // seasonalLocOrUTC — nil → UTC.

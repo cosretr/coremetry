@@ -82,10 +82,10 @@ const (
 	// v0.10.1802 — queue.lagMinRecords varsayılanı + aralığı.
 	subjectLagMinRecordsDefault = 1000
 	subjectLagMinRecordsMax     = 1_000_000_000
-
-	// DefaultSeasonalTimezone — karar 3: gün sınıfı operatör diliminde.
-	DefaultSeasonalTimezone = "Europe/Istanbul"
 )
+
+// v0.10.2066 — DefaultSeasonalTimezone / ValidateSeasonalTimezone /
+// normalizeSeasonalTimezone seasonal_timezone.go'ya taşındı (ML ile ortak).
 
 // DefaultAnomalySubjects — üç tür kapalı, tavanlar varsayılan.
 func DefaultAnomalySubjects() AnomalySubjectsConfig {
@@ -148,26 +148,4 @@ func normalizeSubjectKind(k AnomalySubjectKindConfig) AnomalySubjectKindConfig {
 // AnyEnabled — en az bir özne türü açık mı.
 func (c AnomalySubjectsConfig) AnyEnabled() bool {
 	return c.Endpoint.Enabled || c.DB.Enabled || c.Queue.Enabled
-}
-
-// ValidateSeasonalTimezone — SAF: PUT kapısı. ValidateCalendarTimezone'un
-// kuralı (boş geçerli = varsayılan, "Local" red, aksi IANA) yalnız hata
-// metninin alan adı farklı. Kelepçe değil RED: bilinmeyen ad sessizce
-// varsayılana dönseydi taban operatörün haberi olmadan kayardı.
-func ValidateSeasonalTimezone(name string) error {
-	if err := ValidateCalendarTimezone(name); err != nil {
-		return fmt.Errorf("seasonalTimezone%s", strings.TrimPrefix(err.Error(), "calendar.timezone"))
-	}
-	return nil
-}
-
-// normalizeSeasonalTimezone — SAF: boş ya da geçersiz → varsayılan; aksi
-// kırpılmış ad. (Geçersiz ad PUT'ta reddedilir; burası elle düzenlenmiş
-// blob için.)
-func normalizeSeasonalTimezone(name string) string {
-	name = strings.TrimSpace(name)
-	if name == "" || ValidateCalendarTimezone(name) != nil {
-		return DefaultSeasonalTimezone
-	}
-	return name
 }

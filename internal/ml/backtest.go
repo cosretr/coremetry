@@ -401,15 +401,12 @@ func scoreHits(hits []BacktestHit, labels []chstore.MLLabel, from, to, pad int64
 	return out, hits
 }
 
-// calendarFor — takvim + dilim (canlı dedektörlerle aynı kaynak).
+// calendarFor — takvim + dilim (canlı dedektörlerle aynı kaynak). v0.10.2066
+// (Davis S6): dilim Davis ile AYNI ayar — anomaly_sensitivity.seasonalTimezone
+// (varsayılan Europe/Istanbul, chstore.SeasonalLocation). Önce
+// calendar.timezone okunuyordu ve boşken UTC kalıyordu.
 func calendarFor(sens chstore.AnomalySensitivityConfig) (chstore.AnomalyCalendarConfig, *time.Location) {
-	loc := time.UTC
-	if sens.Calendar.Timezone != "" {
-		if l, err := time.LoadLocation(sens.Calendar.Timezone); err == nil {
-			loc = l
-		}
-	}
-	return sens.Calendar, loc
+	return sens.Calendar, chstore.SeasonalLocation(sens.SeasonalTimezone)
 }
 
 // Backtest — store okumalı sarmalayıcı (API what-if / dönem replay). İki
