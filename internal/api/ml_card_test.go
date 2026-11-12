@@ -133,8 +133,8 @@ func TestMLEventRowsCarrySparkAndProfile(t *testing.T) {
 	if b := mlEventRows([]chstore.MLEvent{bev}, chstore.MLConfig{}, start, loc, mlListExtras{IsBatch: isBatch}); b[0].Profile != "batch" || b[0].ProfileLabel != "batch" {
 		t.Errorf("batch adı: %q %q", b[0].Profile, b[0].ProfileLabel)
 	}
-	if !strings.Contains(mlEventsKey(1, "", "", "", "", "UTC"), "ml:events:v6:") {
-		t.Error("liste şekli değişti, anahtar v6 olmalı")
+	if !strings.Contains(mlEventsKey(1, "", "", "", "", "UTC"), "ml:events:v7:") {
+		t.Error("liste şekli değişti, anahtar v7 olmalı")
 	}
 }
 
@@ -150,6 +150,10 @@ func TestMLEventRowsCarryGroup(t *testing.T) {
 	rows := mlEventRows([]chstore.MLEvent{a}, chstore.MLConfig{}, start, loc, mlListExtras{Groups: idx})
 	if rows[0].GroupID == "" || rows[0].GroupSize != 2 || len(rows[0].GroupDetectors) != 2 {
 		t.Errorf("grup alanları: %+v", rows[0])
+	}
+	// v0.10.2021 — liste satırı = grup: aralık ve sinyaller grubun tüm üyelerinden.
+	if rows[0].GroupStart != a.StartedAt || rows[0].GroupEnd != a.LastSeen || len(rows[0].GroupSignals) != 1 || rows[0].GroupSignals[0] != "trace" {
+		t.Errorf("grup aralığı/sinyal: %+v", rows[0])
 	}
 	if bare := mlEventRows([]chstore.MLEvent{a}, chstore.MLConfig{}, start, loc, mlListExtras{}); bare[0].GroupID != "" || bare[0].GroupSize != 0 {
 		t.Errorf("grup yoksa boş: %+v", bare[0])

@@ -22,12 +22,8 @@ describe('sparkPeak', () => {
 
 describe('MLTab sütunları', () => {
   const src = readFileSync(resolve(__dirname, 'MLTab.tsx'), 'utf8');
-  it('mockup sırası: Ne oluyor → Seyir … Başladı → Servis tipi', () => {
-    const i = (id: string) => src.indexOf(`{ id: '${id}'`);
-    expect(i('headline')).toBeLessThan(i('trend'));
-    expect(i('trend')).toBeLessThan(i('started'));
-    expect(i('started')).toBeLessThan(i('profile'));
-  });
+  // v0.10.2021 — Seyir / Servis tipi sütunları liste satırı = grup düzeninde
+  // kalktı (mockup anomaly-unified.html; sıra MLTab.group.test.ts'de çivili).
   it('satır başına istek yok: seyir satırın kendi alanından', () => {
     expect(src).toContain('e.spark');
     expect(src).not.toMatch(/api\.mlReplay\(/);

@@ -3,24 +3,19 @@
 // Eski dedektörler kendi sekmesinde; burada yalnız ml_events (gölge) +
 // satır başına «gerçek / değil» + not (anomaly_verdicts 'ml:' önekli) ve
 // üstte dedektör karnesi (30 gün isabet + örnek). Tablo: coremetry DataTable.
-import { useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useMemo } from 'react';
 import { DataTable } from '@/components/coremetry/DataTable';
 import type { ColumnDef } from '@/components/coremetry/DataTable';
 import { SegmentedControl } from '@/components/coremetry/SegmentedControl';
-import { Badge } from '@/components/shadcn/badge';
-import { api } from '@/lib/api';
-import { keys, useMLEvents, useMLScorecard } from '@/lib/queries';
+import { useMLEvents, useMLScorecard } from '@/lib/queries';
 import { fmtClock, fmtDateTime } from '@/lib/utils';
 import type { MLEvent, MLDetectorScore, MLGate, MLBackfillProgress, MLTickStatus, MLSignalTick, MLScorecard, MLKindTick, MLBaselineStatus, MLThanosTick } from '@/lib/types';
 import { Link } from 'react-router-dom';
 import { MLPeriodReplay } from './MLPeriodReplay';
-import { mlEventHref, mlEventPlayHref } from '@/lib/anomalyHref';
-import { buttonVariants } from '@/components/shadcn/button';
-import { serviceHref } from '@/lib/serviceHref';
-import { SIGNAL_KINDS, signalKindOf } from '@/lib/signalKind';
+import { mlEventHref } from '@/lib/anomalyHref';
+import { groupRows, groupStatusRank, groupStatusText, type MLGroupRow } from './mlGroupRows';
+import { SIGNAL_KINDS } from '@/lib/signalKind';
 import { SignalKindBadge } from '@/components/coremetry/SignalKindBadge';
-import { Sparkline } from '@/components/Sparkline';
 
 export const ML_DETECTOR_TR: Record<string, string> = {
   log_volume: 'Log hacmi', error_rate: 'Hata oranı', service_silent: 'Servis sustu',
@@ -296,83 +291,40 @@ export function mlRowText(e: MLEvent): string {
 }
 const fmtTs = (ns: number) => fmtDateTime(new Date(ns / 1e6));
 
-/** SAF (test): v0.10.2013 D2 — "Grup" hücresi. Tek üyeli / grupsuz = '' (soluk "—"). */
-export function mlGroupLabel(e: MLEvent): { text: string; title: string } {
-  const n = e.groupSize ?? 0;
-  if (n <= 1) return { text: '', title: '' };
-  const dets = e.groupDetectors ?? [];
-  const head = `Aynı servis, aynı zaman: ${dets.map(d => ML_DETECTOR_TR[d] ?? d).join(', ')}`;
-  const base = dets.length > 1 ? `${dets.length} dedektör birlikte` : `${n} olay birlikte`;
-  // v0.10.2015 D3 — gölge terfi: Problem AÇILMAZ; yalnız "kapıdan geçseydi açardı" işareti.
-  const s = e.groupShadow;
-  if (!s) return { text: base, title: head };
-  const title = `${head}\nGölge terfi (Problem açılmadı): ${s.reason}`;
-  return { text: s.wouldOpen ? `${base} · açardı${s.priority ? ` (${s.priority})` : ''}` : base, title };
-}
-
-const COLS: ColumnDef<MLEvent>[] = [
-  // v0.10.1845 — mockup görünüm 1 sırası: Sinyal · Servis · Ne oluyor · Seyir · Başladı · süre (+ durum) · Servis tipi.
-  // v0.10.1874 — "Seyir" (≤ 24 nokta, olay anı kaydından; liste ucu tek toplu okuma) + "Servis tipi" (profil).
-  // v0.10.2013 — "Grup" (anomali tekilleştirme D2): aynı servis + örtüşen pencere; yalnız yeni sütun.
-  { id: 'signal', label: 'Sinyal', width: 90, sortValue: e => signalKindOf(e.detector, e.signal), naturalDir: 'asc' },
-  { id: 'service', label: 'Servis', width: 180, sortValue: e => e.service, naturalDir: 'asc' },
-  { id: 'headline', label: 'Ne oluyor', flex: true, minWidth: 280, sortValue: e => mlRowText(e), naturalDir: 'asc' },
-  { id: 'trend', label: 'Seyir', width: 110, priority: 2, sortValue: e => sparkPeak(e) },
-  { id: 'started', label: 'Başladı · süre', width: 170, sortValue: e => e.startedAt },
-  { id: 'group', label: 'Grup', width: 150, minWidth: 110, priority: 2, sortValue: e => e.groupSize ?? 0 },
-  { id: 'profile', label: 'Servis tipi', width: 110, priority: 2, sortValue: e => e.profileLabel ?? '', naturalDir: 'asc' },
-  { id: 'detector', label: 'Dedektör', width: 150, priority: 3, sortValue: e => e.detector, naturalDir: 'asc' },
-  { id: 'last', label: 'Son görülme', width: 150, priority: 3, sortValue: e => e.lastSeen },
-  { id: 'fb', label: 'Geri bildirim', width: 120, priority: 2, sortValue: e => (e.verdict === 'anomaly' ? 2 : e.verdict ? 1 : 0) },
-  // v0.10.1846 — mockup "Olayı izle": ▶ detayı açıp oynatır; satır tıkı oynatmadan açar.
-  { id: 'play', label: 'Olayı izle', width: 100 },
+// v0.10.2021 — olay tablosu: satır = GRUP (mockup anomaly-unified.html "Liste:
+// tek sayfa"). Başlangıç · Servis · Ne oldu · Sinyaller · Durum; fazla sütun
+// yok. "Ne oldu" grubun en güçlü üyesinin sunucu özeti (mlGroupRows.ts).
+// v0.10.2013'ün "Grup" sütunu bu düzende gereksizleşti, kaldırıldı; "gerçek /
+// değil" ve oynatma detay sayfasında.
+const COLS: ColumnDef<MLGroupRow>[] = [
+  { id: 'started', label: 'Başlangıç', width: 110, priority: 1, sortValue: r => r.start },
+  { id: 'service', label: 'Servis', width: 190, minWidth: 140, priority: 1, sortValue: r => r.service, naturalDir: 'asc' },
+  { id: 'headline', label: 'Ne oldu', flex: true, minWidth: 280, sortValue: r => mlRowText(r.lead), naturalDir: 'asc' },
+  { id: 'signals', label: 'Sinyaller', width: 190, minWidth: 120, priority: 2, sortValue: r => r.signals.length },
+  { id: 'status', label: 'Durum', width: 170, minWidth: 130, priority: 1, sortValue: r => groupStatusRank(r.status) * 1e19 + r.start },
 ];
 
 
 export function MLTab({ signal = '', onSignal }: { signal?: MLSignal; onSignal?: (s: MLSignal) => void }) {
-  const qc = useQueryClient();
   const ev = useMLEvents(signal);
   const sc = useMLScorecard();
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const rows = ev.data?.items ?? [];
+  const rows = useMemo(() => groupRows(ev.data?.items ?? []), [ev.data]);
+  const nowNs = Date.now() * 1e6;
 
-  const verdict = async (e: MLEvent, v: 'anomaly' | 'not_anomaly') => {
-    const note = v === 'not_anomaly' ? (window.prompt('Not (isteğe bağlı): neden anomali değil?') ?? '') : '';
-    setBusyId(e.id);
-    try {
-      await api.putMlVerdict(e.id, { verdict: v, note, detector: e.detector, service: e.service });
-      await qc.invalidateQueries({ queryKey: keys.anomalies.ml });
-    } finally {
-      setBusyId(null);
-    }
-  };
-
-  const renderCell = (e: MLEvent, col: ColumnDef<MLEvent>) => {
+  const renderCell = (r: MLGroupRow, col: ColumnDef<MLGroupRow>) => {
     switch (col.id) {
-      case 'signal': return <SignalKindBadge kind={signalKindOf(e.detector, e.signal)} />;
-      case 'headline': return <Link to={mlEventHref(e.id)} title={e.level || e.pod || e.code || ''}>{mlRowText(e)}</Link>;
-      case 'service': return <Link to={serviceHref(e.service)} className="font-mono" title={e.service}>{e.service}</Link>;
-      case 'detector': return ML_DETECTOR_TR[e.detector] ?? e.detector;
-      case 'trend': return e.spark && e.spark.v.length > 1
-        ? <Sparkline values={e.spark.v} width={96} height={22} color={SIGNAL_KINDS[signalKindOf(e.detector, e.signal)].token} markerAt={e.spark.a} title="Olayın seyri; çizgi = başlangıç" />
-        : <span className="text-muted-foreground">—</span>;
-      case 'group': {
-        const g = mlGroupLabel(e);
-        return g.text ? <span title={g.title}>{g.text}</span> : <span className="text-muted-foreground">—</span>;
-      }
-      case 'profile': return e.profileLabel ? <Badge variant="outline">{e.profileLabel}</Badge> : <span className="text-muted-foreground">—</span>;
-      case 'started': return (
-        <span className="inline-flex flex-wrap items-center gap-1.5">
-          <span className="font-mono" title={fmtTs(e.startedAt)}>{fmtClock(new Date(e.startedAt / 1e6)).slice(0, 5)} · {durationLabel(e.lastSeen - e.startedAt)}</span>
-          <Badge variant="outline" className={e.stage === 'closed' ? '' : 'border-transparent bg-[color:var(--warn-bg)] text-[color:var(--warn)]'}>{stageLabel(e.stage)}</Badge>
+      case 'started': return <span className="font-mono" title={fmtTs(r.start)}>{fmtClock(new Date(r.start / 1e6)).slice(0, 5)}</span>;
+      case 'service': return <span className="dt-trunc font-mono" title={r.service}>{r.service}</span>;
+      case 'headline': return <Link to={mlEventHref(r.lead.id)} className="dt-trunc" title={mlRowText(r.lead)}>{mlRowText(r.lead)}</Link>;
+      case 'signals': return (
+        <span className="inline-flex flex-wrap items-center gap-2">
+          {r.signals.map(k => <SignalKindBadge key={k} kind={k} />)}
         </span>
       );
-      case 'last': return <span className="font-mono">{fmtTs(e.lastSeen)}</span>;
-      case 'play': return <Link to={mlEventPlayHref(e.id)} className={buttonVariants({ variant: 'outline', size: 'sm' })} aria-label={`${e.service} olayını oynat`}>▶ Oynat</Link>;
-      case 'fb':
-        if (e.verdict === 'anomaly') return <Badge variant="outline" title={`${e.verdictBy ?? ''}${e.verdictAt ? ` · ${fmtTs(e.verdictAt)}` : ''}`}>gerçek ✓</Badge>;
-        if (e.verdict === 'not_anomaly') return <Badge variant="outline" title={`${e.verdictBy ?? ''}${e.note ? ` · ${e.note}` : ''}`}>değil ✗</Badge>;
-        return <span className="text-muted-foreground">—</span>;
+      case 'status': {
+        const t = groupStatusText(r, nowNs);
+        return r.status === 'running' ? <span className="text-[color:var(--warn)]">{t}</span> : <span className="text-muted-foreground">{t}</span>;
+      }
       default: return null;
     }
   };
@@ -469,21 +421,12 @@ export function MLTab({ signal = '', onSignal }: { signal?: MLSignal; onSignal?:
           </details>
         </>
       )}
-      <h3 className="mt-2 font-semibold">Olaylar · son 24 saat</h3>
-      <DataTable<MLEvent>
-        storageKey="anomalies-ml" columns={COLS} rows={rows} state={state}
-        getRowHref={e => mlEventHref(e.id)}
-        sort={{ initial: { id: 'last', dir: 'desc' } }}
-        getRowKey={e => e.id} renderCell={renderCell}
-        rowActions={{
-          label: 'Eylemler',
-          triggerLabel: e => `${e.service} geri bildirim`,
-          isDisabled: e => busyId === e.id,
-          items: e => [
-            { id: 'real', label: 'Gerçek anomali', onSelect: () => { void verdict(e, 'anomaly'); }, disabled: e.verdict === 'anomaly' },
-            { id: 'not', label: 'Anomali değil (not ile)', onSelect: () => { void verdict(e, 'not_anomaly'); }, disabled: e.verdict === 'not_anomaly' },
-          ],
-        }} />
+      <h3 className="mt-2 font-semibold">Anomaliler · son 24 saat</h3>
+      <DataTable<MLGroupRow>
+        storageKey="anomalies-ml-groups" columns={COLS} rows={rows} state={state}
+        getRowHref={r => mlEventHref(r.lead.id)}
+        sort={{ initial: { id: 'status', dir: 'desc' } }}
+        getRowKey={r => r.key} renderCell={renderCell} ariaLabel="ML anomalileri" />
       {ev.data?.truncated && <p className="text-xs text-muted-foreground">Liste 200 satırda kesildi.</p>}
       <MLPeriodReplay signal={signal} />
     </div>

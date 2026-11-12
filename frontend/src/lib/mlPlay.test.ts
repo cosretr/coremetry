@@ -52,9 +52,12 @@ describe('mlPlay', () => {
     expect(wantsAutoPlay(new URLSearchParams('play=0'))).toBe(false);
     expect(mlEventPlayHref('a b')).toBe(`${mlEventHref('a b')}?play=1`);
   });
-  it('list row ▶ links to the play href; row click (getRowHref) does not play', () => {
+  // v0.10.2021 — liste satırı = grup (mockup anomaly-unified.html): "Olayı izle"
+  // sütunu kalktı (fazla sütun yok); oynatma detay sayfasından. Satır tıkı
+  // grubun en güçlü üyesinin detayını OYNATMADAN açar.
+  it('row click (getRowHref) opens the group lead without play', () => {
     const src = readFileSync(resolve(__dirname, '../components/coremetry/anomalies/MLTab.tsx'), 'utf8');
-    expect(src).toMatch(/case 'play': return <Link to=\{mlEventPlayHref\(e\.id\)\}/);
-    expect(src).toMatch(/getRowHref=\{e => mlEventHref\(e\.id\)\}/);
+    expect(src).not.toMatch(/mlEventPlayHref/);
+    expect(src).toMatch(/getRowHref=\{r => mlEventHref\(r\.lead\.id\)\}/);
   });
 });

@@ -12208,6 +12208,8 @@ export interface MLEvent {
   profile?: string; profileLabel?: string;
   /** v0.10.2013 (anomali tekilleştirme D2) — dedektörler arası grup: aynı servis, örtüşen pencere (okuma anında). */
   groupId?: string; groupSize?: number; groupDetectors?: string[];
+  /** v0.10.2021 — grubun aralığı (unix ns) ve sinyalleri, grubun TÜM üyelerinden (liste satırı = grup). */
+  groupStart?: number; groupEnd?: number; groupSignals?: string[];
   /** v0.10.2015 (D3) — grubun en son gölge terfi kararı (Problem AÇILMAZ; yalnız "açardı" kaydı). */
   groupShadow?: MLGroupDecision;
 }

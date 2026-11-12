@@ -60,9 +60,9 @@ func withMLStats(st *chstore.SystemStats) *chstore.SystemStats {
 
 // mlEventsKey — SAF: tüm girdiler anahtarda (since kovası, süzgeçler, özetin
 // saat dilimi). v3 (v0.10.1843): satır `summary` taşır. v4 (v0.10.1874):
-// `spark` + `profile`. v5 (v0.10.2013): `group*` (D2). v6 (v0.10.2015): `groupShadow` (D3).
+// `spark` + `profile`. v5 (v0.10.2013): `group*` (D2). v6 (v0.10.2015): `groupShadow` (D3). v7 (v0.10.2021): grup aralığı + sinyaller.
 func mlEventsKey(sinceS int64, signal, detector, service, stage, tz string) string {
-	return fmt.Sprintf("ml:events:v6:since=%d:sig=%s:d=%s:s=%s:st=%s:tz=%s", sinceS, signal, detector, service, stage, tz)
+	return fmt.Sprintf("ml:events:v7:since=%d:sig=%s:d=%s:s=%s:st=%s:tz=%s", sinceS, signal, detector, service, stage, tz)
 }
 
 // mlEventRow — liste satırı: olay + sunucuda kurulan tek satır özet
@@ -83,6 +83,10 @@ type mlEventRow struct {
 	GroupID        string   `json:"groupId,omitempty"`
 	GroupSize      int      `json:"groupSize,omitempty"`
 	GroupDetectors []string `json:"groupDetectors,omitempty"`
+	// v0.10.2021 — liste satırı = grup: grubun tüm üyelerinden aralık ve sinyaller.
+	GroupStart   int64    `json:"groupStart,omitempty"`
+	GroupEnd     int64    `json:"groupEnd,omitempty"`
+	GroupSignals []string `json:"groupSignals,omitempty"`
 	// v0.10.2015 (D3) — grubun en son gölge terfi kararı ("açardı / açmazdı",
 	// kural, öncelik, neden); üyelerin kanıtından, ek okuma yok.
 	GroupShadow *ml.GroupDecision `json:"groupShadow,omitempty"`
@@ -127,6 +131,7 @@ func mlEventRows(items []chstore.MLEvent, cfg chstore.MLConfig, now time.Time, l
 			Spark: ml.BuildSpark(ex.Series[e.ID], e.StartedAt, e.LastSeen), Profile: p, ProfileLabel: ml.ProfileLabelTR(p)}
 		if g := ex.Groups[e.ID]; g != nil {
 			out[i].GroupID, out[i].GroupSize, out[i].GroupDetectors = g.ID, len(g.Members), g.Detectors
+			out[i].GroupStart, out[i].GroupEnd, out[i].GroupSignals = g.Start, g.End, g.Signals
 			if d, ok := shadows[g.ID]; ok {
 				out[i].GroupShadow = &d
 			}
