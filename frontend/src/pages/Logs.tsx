@@ -77,6 +77,7 @@ import { logRowKeyAction } from './logs/logsKeys';
 import { LogsAddFilterMenu, LogsShareMenu, LogsMoreMenu } from './logs/LogsActionsMenus';
 import { isDraftDirty, bareTraceIdOf } from './logs/logsQuery';
 import { LogsTableToolbar } from './logs/LogsTableToolbar';
+import { useLogsExplain, LogsExplainButton, LogsExplainResult } from './logs/LogsExplain'; // Log Search 6.3
 import { parseLogsView, effectiveLogsView, writeLogsView, writeTraceView, readTraceViewTarget, logsListEnabled, type LogsView } from './logs/logsView';
 
 // v0.10.1498 — Share affordance (Copy link) moved into pages/logs/LogsActionsMenus.tsx (Share ▾).
@@ -1248,6 +1249,20 @@ function LogsInner() {
   const sheetRow = sheetFull && sheetFull !== 'error' ? sheetFull : docRow;
   const sheetFullState: 'loading' | 'error' | undefined = docRow?.partial
     ? (sheetFull === 'error' ? 'error' : sheetFull ? undefined : 'loading') : undefined;
+  // Log Search 6.3 — "Bu logları açıkla": kullanıcının AÇTIĞI satırlar (satır
+  // içi + çekmece) seçim sayılır; istek yalnız tıkla (pages/logs/LogsExplain).
+  const openedRows = useMemo(() => {
+    const out: LogRow[] = sheetRow ? [sheetRow] : [];
+    if (expanded.size > 0) {
+      for (const r of loadedRows) {
+        if (!expanded.has(r.id)) continue;
+        const full = fullDocs[r.id];
+        out.push(full && full !== 'error' ? full : r);
+      }
+    }
+    return out;
+  }, [sheetRow, expanded, loadedRows, fullDocs]);
+  const explainCtl = useLogsExplain(fieldStatsScope, openedRows);
   const sheetStep = (dir: -1 | 1) => {
     if (!docRow) return;
     const n = neighborRow(shownLogs, docRow.id, dir);
@@ -1689,7 +1704,9 @@ function LogsInner() {
               { key: 'fields', label: 'Alan istatistikleri', phase: fieldsPhase },
             ]} />
           )}
+          explain={<LogsExplainButton ctl={explainCtl} disabled={live || scopeGate} openCount={openedRows.length} />}
           onExport={exportLoaded} />
+        <LogsExplainResult ctl={explainCtl} onSearchPattern={q => searchFromPattern(q, 'and')} />
         {/* v0.10.967 — tablo HER durumda (başlık kalır); durum satırı
             logsState'ten. Pager eskisi gibi yalnız satır varken. */}
         <LogTable logs={shownLogs} nav={tableNav} state={logsState}

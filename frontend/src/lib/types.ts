@@ -11207,6 +11207,29 @@ export interface LogPatternsCompareResult {
   degraded?: boolean;
   reason?: string;
 }
+// Log Search Faz 6 dilim 6.3 — POST /api/copilot/explain-logs (Go
+// copilot_explain_logs.go). Satır = kullanıcının açtığı log; tsNs ondalık metin
+// (2^53 üstü), gövde sunucuda ≤1000 rune'a kesilir, ≤12 satır.
+export interface ExplainLogsRow {
+  tsNs: string;
+  service: string;
+  severity: string;
+  body: string;
+  traceId: string;
+}
+/** Yeni / artan desenin arama dizesi — arayüz mevcut süzgece AND'ler. */
+export interface LogsExplainPatternLink { kind: 'new' | 'rising'; label: string; query: string }
+export interface ExplainLogsResponse {
+  explanation: string;
+  exchangeId?: string;
+  selected?: boolean;
+  rows?: number;
+  sampled?: number;
+  degraded?: boolean;
+  reason?: string;
+  traces: ChatAnswerLink[];
+  patterns: LogsExplainPatternLink[];
+}
 export interface LogPatternsBaseline {
   fromNs: number;
   toNs: number;

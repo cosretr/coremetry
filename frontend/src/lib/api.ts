@@ -2296,6 +2296,16 @@ export const api = {
     return request<{ explanation: string; exchangeId?: string; windowSec: number; scope?: string }>(
       `/api/copilot/explain-log-patterns?${p.toString()}`, { method: 'POST' });
   },
+  // Log Search 6.3 — "Bu logları açıkla": sayfanın süzgeci (Desenler ile aynı
+  // paramlar) + kullanıcının açtığı satırlar (≤12). Yalnız tıkla; sunucu 2 ES
+  // araması yapar (pencere + önceki pencere örneklemi).
+  explainLogs: (params: LogsParams, rows: import('./types').ExplainLogsRow[], signal?: AbortSignal) =>
+    request<import('./types').ExplainLogsResponse>(`/api/copilot/explain-logs?${qs(params)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rows }),
+      signal,
+    }),
 
   clusterResourceTrend: (cluster: string, metric: 'cpu' | 'mem', byNode: boolean, fromNs: number, toNs: number, node?: string) =>
     get<ClusterResourceTrendResponse>(`/api/clusters/resource-trend?cluster=${encodeURIComponent(cluster)}` +

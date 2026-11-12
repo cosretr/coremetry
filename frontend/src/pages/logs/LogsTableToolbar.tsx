@@ -45,6 +45,8 @@ export interface LogsTableToolbarProps {
   asc: boolean;
   onToggleAsc: () => void;
   onExport: (kind: 'csv' | 'ndjson') => void;
+  /** Log Search 6.3 — "Bu logları açıkla" (pages/logs/LogsExplain); sağ grubun başında. */
+  explain?: ReactNode;
 }
 
 export function LogsTableToolbar(p: LogsTableToolbarProps) {
@@ -94,6 +96,7 @@ export function LogsTableToolbar(p: LogsTableToolbarProps) {
         <span className="ld-tbar-note" data-testid="logs-group-note">yüklenen {p.loadedCount.toLocaleString('tr-TR')} satır içinde</span>
       )}
       <span className="ld-tbar-right">
+        {p.explain}
         {p.status}
         <LogsColumnPicker columns={p.columns} fields={p.fields} onChange={p.onColumns} />
         {p.display}

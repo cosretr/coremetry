@@ -132,6 +132,7 @@ func (s *Server) registerAIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST   /api/copilot/explain-log-patterns", s.requireCopilot(s.explainLogPatterns))  // v0.9.1100 — F3.5 desen anlatıcısı ✨
 	mux.HandleFunc("POST   /api/copilot/explain-log-spike", s.requireCopilot(s.copilotExplainLogSpike)) // v0.10.1284 — AI SRE Faz 1a: log artışını ne açıklıyor ✨
 	mux.HandleFunc("POST   /api/copilot/explain-log", s.requireCopilot(s.copilotExplainLog))            // v0.10.1291 — CoSRE: tek log satırı ✨ (logstore üzerinden yeniden okur)
+	mux.HandleFunc("POST   /api/copilot/explain-logs", s.requireCopilot(s.copilotExplainLogs))          // Log Search 6.3 — "Bu logları açıkla" (desen özeti + seçili satırlar)
 	mux.HandleFunc("POST   /api/copilot/runbook/{id}", s.requireCopilot(s.copilotRunbook))
 	// v0.9.1198 (Faz 5.5) — probleme bağlı koşudan runbook güncelleme
 	// önerisi ({id} = execution). Rol kapısı yok — copilotRunbook emsali.

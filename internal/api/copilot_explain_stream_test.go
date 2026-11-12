@@ -354,9 +354,12 @@ var explainStreamDeferred = map[string]string{
 	"explainShift":           "bağımsız küçük panel — Faz 1.5 takibi",
 	"explainAlertNoise":      "bağımsız küçük panel — Faz 1.5 takibi",
 	"explainLogPatterns":     "bağımsız küçük panel — Faz 1.5 takibi",
-	"copilotCompareTraces":   "bağımsız küçük panel — Faz 1.5 takibi",
-	"copilotDeployImpact":    "bağımsız küçük panel — Faz 1.5 takibi",
-	"copilotExplainSLO":      "bağımsız küçük panel — Faz 1.5 takibi",
+	// Log Search Faz 6 — /logs cevap kartı (coremetry/logs/LogsAiAnswer):
+	// anlatım + sunucunun deterministik bağlantıları tek JSON.
+	"copilotExplainLogs":   "Logs cevap kartı — anlatım + bağlantılar tek JSON (Log Search 6.3)",
+	"copilotCompareTraces": "bağımsız küçük panel — Faz 1.5 takibi",
+	"copilotDeployImpact":  "bağımsız küçük panel — Faz 1.5 takibi",
+	"copilotExplainSLO":    "bağımsız küçük panel — Faz 1.5 takibi",
 	// copilotExplainSlowQuery SİLİNDİ — v0.9.1209: FE tüketicisi v0.9.1137'de
 	// insight kartına devredilmişti, uç 72 gün sıfır-çağrılı yaşadı.
 	"copilotSuggestServiceTags": "JSON kipi — prose değil",

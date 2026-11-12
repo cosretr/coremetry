@@ -102,6 +102,7 @@ func promptRegistry() map[string]promptClass {
 		"LogPatterns":          classTurkishNative,
 		"LogSpike":             classTurkishNative, // v0.10.1284 — AI SRE Faz 1a, sabit dört bölüm + tek örnek
 		"LogLine":              classTurkishNative, // v0.10.1291 — ✨ log satırı, sabit dört bölüm + tek örnek
+		"ExplainLogs":          classTurkishNative, // Log Search 6.3 — "Bu logları açıkla", sabit beş bölüm + tek örnek
 		"SREInvestigation":     classTurkishNative, // v0.10.1287 — AI SRE Faz 1b, sabit dört bölüm + tek örnek + veri çerçevesi
 		"RuleProposal":         classTurkishNative, // v0.10.1289 — "bunu hatırla" tek cümlelik kural önerisi + tek örnek + veri çerçevesi
 		"Postmortem":           classTurkishNative, // Faz 5.4 — markdown taslak, Türkçe talimat
@@ -148,6 +149,7 @@ func promptTexts() map[string]string {
 		"AlertNoise": SystemPromptAlertNoise(), "LogPatterns": SystemPromptLogPatterns(),
 		"LogSpike":         SystemPromptLogSpike(),
 		"LogLine":          SystemPromptLogLine(),
+		"ExplainLogs":      SystemPromptExplainLogs(),
 		"SREInvestigation": SystemPromptSREInvestigation(), // v0.10.1287
 		"RuleProposal":     SystemPromptRuleProposal(),     // v0.10.1289
 		"Postmortem":       SystemPromptPostmortem(), "RunbookUpdate": SystemPromptRunbookUpdate(),
