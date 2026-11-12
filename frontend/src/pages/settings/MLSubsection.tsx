@@ -1,7 +1,7 @@
 // MLSubsection — Settings › Anomaly › "Log ML" (dilim 0; operatör
 // 2026-10-31). Ana anahtar (kapalıyken ES'e sorgu yok), dedektör başına
-// anahtar, dedektör başına ayrı "Problem'e terfi" anahtarı, temel eşikler.
-// Hepsi varsayılan KAPALI. Blob bir sonraki tikte okunur (restart yok);
+// anahtar, temel eşikler. v0.10.2067: dedektör başına "Problem'e terfi"
+// anahtarı kalktı — Problem'i yalnız anomali grubu açar. Hepsi varsayılan KAPALI. Blob bir sonraki tikte okunur (restart yok);
 // PUT audit'e eski/yeni değerle düşer (sunucu).
 import { useEffect, useState } from 'react';
 import { Spinner } from '@/components/Spinner';
@@ -97,7 +97,7 @@ export function MLSubsection() {
         ML dedektörleri: log sinyali (Elasticsearch: hacim, hata oranı, şablon, nadir kod, pod, kırılma) ve
         trace sinyali (rollup: endpoint gecikmesi/hata/trafik, bağımlılık, exception, pod, kırılma). Olaylar
         /anomalies listesine düşer. Aynı serviste en az 2 farklı sinyal birlikte bozulursa grup Problem açar
-        (aşağıdaki anahtar); tek sinyal Problem üretmez. Eski terfi dedektör başına ayrı anahtar ve karne eşiğiyle açılır. Ana anahtar kapalıyken ES&apos;e hiç sorgu atılmaz.
+        (aşağıdaki anahtar); tek sinyal Problem üretmez. Ana anahtar kapalıyken ES&apos;e hiç sorgu atılmaz.
       </p>
       {!cfg ? (
         flash ? <FlashBox kind={flash.kind}>{flash.text}</FlashBox> : <Spinner />
@@ -120,27 +120,15 @@ export function MLSubsection() {
             label="Anomali grubu Problem açar"
             hint="Aynı serviste en az 2 farklı sinyalde (trace, log, metrik) anomali varsa grup bir Problem açar (P2) ve bildirim mevcut kanallardan gider. Tek sinyal anomali olarak kalır. Kapalı: yalnız kayıt (Problem açardı)." />
 
-          <p className={NOTE}>Soldaki anahtar dedektörü açar (gölge). Sağdaki &quot;terfi&quot; anahtarı karne eşiğini geçen olayı Problem&apos;e kopyalar.</p>
+          <p className={NOTE}>Anahtar dedektörü açar; dedektör anomali kaydeder, Problem açmaz.</p>
           {([['Log dedektörleri', ML_LOG_DETECTORS], ['Trace dedektörleri', ML_TRACE_DETECTORS], ['Metrik aileleri', ML_METRIC_DETECTORS]] as const).map(([title, list]) => (<div key={title}>
           <h3 className={H3}>{title}</h3>
           <div className="mt-2 grid gap-2">
-            {list.map(d => {
-              const p = cfg.promotion[d.id] ?? { enabled: false, minHitRate: 0.8, minSamples: 20 };
-              return (
-                <div key={d.id} className="grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_120px_120px] md:items-start">
-                  <CheckboxField checked={cfg.detectors[d.id] === true} disabled={!cfg.enabled}
-                    onCheckedChange={v => setCfg({ ...cfg, detectors: { ...cfg.detectors, [d.id]: v } })}
-                    label={d.label} hint={d.id.startsWith('metric_') ? `${d.hint} · ${metricSourceLabel(sources[d.id], cfg.enabled && cfg.detectors[d.id] === true)}` : d.hint} />
-                  <CheckboxField checked={p.enabled} disabled={!cfg.enabled || cfg.detectors[d.id] !== true}
-                    onCheckedChange={v => setCfg({ ...cfg, promotion: { ...cfg.promotion, [d.id]: { ...p, enabled: v } } })}
-                    label="Problem'e terfi" hint="Varsayılan kapalı; eşik + asgari örnek şart" />
-                  <Field type="number" label="Min isabet" step={0.05} value={String(p.minHitRate)} small
-                    onChange={e => setCfg({ ...cfg, promotion: { ...cfg.promotion, [d.id]: { ...p, minHitRate: Number(e.target.value) } } })} />
-                  <Field type="number" label="Min örnek" value={String(p.minSamples)} small
-                    onChange={e => setCfg({ ...cfg, promotion: { ...cfg.promotion, [d.id]: { ...p, minSamples: Number(e.target.value) } } })} />
-                </div>
-              );
-            })}
+            {list.map(d => (
+              <CheckboxField key={d.id} checked={cfg.detectors[d.id] === true} disabled={!cfg.enabled}
+                onCheckedChange={v => setCfg({ ...cfg, detectors: { ...cfg.detectors, [d.id]: v } })}
+                label={d.label} hint={d.id.startsWith('metric_') ? `${d.hint} · ${metricSourceLabel(sources[d.id], cfg.enabled && cfg.detectors[d.id] === true)}` : d.hint} />
+            ))}
           </div>
           </div>))}
 

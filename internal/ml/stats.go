@@ -13,7 +13,7 @@ import (
 // son 64 örnekten p95; bellek sayacı yalnız bilgi amaçlı.
 type stats struct {
 	ticks, skipped, lastUnix, lastMs, lastESMs, esQueries, events, series, lastCHMs atomic.Int64
-	supImpact, supFeedback, supRegime, supBatch, vmQueries, promoted, partial, docs atomic.Int64
+	supImpact, supFeedback, supRegime, supBatch, vmQueries, partial, docs           atomic.Int64
 	mu                                                                              sync.Mutex
 	esSamples                                                                       []int64
 	lastKinds                                                                       map[string]chstore.MLKindTick // v0.10.1812: son tik ölçümü
@@ -91,7 +91,7 @@ func (s *stats) snapshot(placement string, enabled, leader, tableReady bool) chs
 		Ticks: s.ticks.Load(), Skipped: s.skipped.Load(), LastUnix: s.lastUnix.Load(),
 		LastDurationMs: s.lastMs.Load(), LastESMs: s.lastESMs.Load(), ESP95Ms: p95,
 		ESQueries: s.esQueries.Load(), Events: s.events.Load(), SeriesInMemory: s.series.Load(), LastCHMs: s.lastCHMs.Load(),
-		VMQueries: s.vmQueries.Load(), Promoted: s.promoted.Load(), Partial: s.partial.Load(), LastDocs: s.docs.Load(), SuppressedImpact: s.supImpact.Load(), SuppressedFeedback: s.supFeedback.Load(), SuppressedRegime: s.supRegime.Load(), SuppressedBatch: s.supBatch.Load(),
+		VMQueries: s.vmQueries.Load(), Partial: s.partial.Load(), LastDocs: s.docs.Load(), SuppressedImpact: s.supImpact.Load(), SuppressedFeedback: s.supFeedback.Load(), SuppressedRegime: s.supRegime.Load(), SuppressedBatch: s.supBatch.Load(),
 		LastError: lastErr, LastKinds: lastKinds,
 	}
 }

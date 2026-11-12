@@ -301,10 +301,6 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 		firstErr = serr
 	}
 	steps["snapshotMs"] = time.Since(s0).Milliseconds()
-	// terfi (K4): yalnız terfi anahtarı açık dedektör varsa okuma yapar
-	if perr := r.promote(tctx, cfg, kept); perr != nil && firstErr == nil {
-		firstErr = perr
-	}
 	global.events.Add(written)
 	global.setError(firstErr)
 	global.tickDone(start)

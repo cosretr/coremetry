@@ -21,42 +21,31 @@ func TestMLConfigDefaultsOff(t *testing.T) {
 		if c.Detectors[d] != MLDetectorDefaultOn(d) || DefaultMLConfig().Detectors[d] != MLDetectorDefaultOn(d) {
 			t.Fatalf("%s: dedektör varsayılanı %v olmalı", d, MLDetectorDefaultOn(d))
 		}
-		p, ok := c.Promotion[d]
-		if !ok || p.Enabled {
-			t.Fatalf("%s: terfi varsayılan kapalı olmalı: %+v ok=%v", d, p, ok)
-		}
 	}
-	c2 := NormalizeMLConfig(MLConfig{BucketSec: 1, TickSec: 99999, Promotion: map[string]MLPromotion{"bogus": {Enabled: true}}})
+	c2 := NormalizeMLConfig(MLConfig{BucketSec: 1, TickSec: 99999, Detectors: map[string]bool{"bogus": true}})
 	if c2.BucketSec != 300 || c2.TickSec != 300 {
 		t.Fatalf("sınır dışı değerler varsayılana dönmeli: %+v", c2)
 	}
-	if _, ok := c2.Promotion["bogus"]; ok {
+	if _, ok := c2.Detectors["bogus"]; ok {
 		t.Fatalf("bilinmeyen dedektör anahtarı düşmeli")
 	}
 }
 
-func TestMLPromotionAllowed(t *testing.T) {
-	c := DefaultMLConfig()
-	sc := MLDetectorScore{Detector: "log_volume", Samples: 50, Hits: 45, HitRate: 0.9}
-	if c.PromotionAllowed("log_volume", sc, "Europe/Istanbul") {
-		t.Fatal("kapalı anahtar terfi etmemeli")
+// v0.10.2067 — eski `promotion` alanı (ml/promote.go kopya yolu) kaldırıldı:
+// kayıtlı blobda kalan alan hatasız okunur, yok sayılır; yeniden yazımda düşer.
+func TestMLConfigTolerantOfRetiredPromotionField(t *testing.T) {
+	raw := `{"enabled":true,"detectors":{"error_rate":true},"promotion":{"error_rate":{"enabled":true,"minHitRate":0.8,"minSamples":20}}}`
+	var c MLConfig
+	if err := json.Unmarshal([]byte(raw), &c); err != nil {
+		t.Fatalf("eski blob okunmalı: %v", err)
 	}
-	c.Promotion["log_volume"] = MLPromotion{Enabled: true, MinHitRate: 0.8, MinSamples: 20}
-	if c.PromotionAllowed("log_volume", sc, "Europe/Istanbul") {
-		t.Fatal("ana anahtar/dedektör kapalıyken terfi olmamalı")
+	c = NormalizeMLConfig(c)
+	if !c.Enabled || !c.Detectors["error_rate"] {
+		t.Fatalf("diğer alanlar aynen: %+v", c)
 	}
-	c.Enabled, c.Detectors["log_volume"] = true, true
-	if !c.PromotionAllowed("log_volume", sc, "Europe/Istanbul") {
-		t.Fatal("eşik geçildi, terfi açık olmalı")
-	}
-	if c.PromotionAllowed("log_volume", MLDetectorScore{Samples: 5, Hits: 5, HitRate: 1}, "Europe/Istanbul") {
-		t.Fatal("asgari örnek altında terfi olmamalı")
-	}
-	if c.PromotionAllowed("log_volume", MLDetectorScore{Samples: 40, Hits: 20, HitRate: 0.5}, "Europe/Istanbul") {
-		t.Fatal("isabet eşiği altında terfi olmamalı")
-	}
-	if c.PromotionAllowed("unknown", sc, "Europe/Istanbul") {
-		t.Fatal("bilinmeyen dedektör terfi etmemeli")
+	out, _ := json.Marshal(c)
+	if strings.Contains(string(out), `"promotion"`) {
+		t.Fatalf("yeniden yazımda promotion alanı olmamalı: %s", out)
 	}
 }
 
@@ -97,19 +86,11 @@ func TestMLScorecardFromRows(t *testing.T) {
 	}
 }
 
-// Kalite çerçevesi (v0.10.1751): takvim dilimi olmadan terfi kapısı kapalı,
-// her koşul ayrı gerekçe; eski blob (quality alanı yok) varsayılanla açılır.
-func TestMLPromotionGateReasonsAndQualityDefaults(t *testing.T) {
+// Kalite çerçevesi (v0.10.1751): eski blob (quality alanı yok) varsayılanla
+// açılır. (Terfi kapısı gerekçeleri v0.10.2067'de kopya yoluyla kalktı.)
+func TestMLQualityDefaults(t *testing.T) {
 	c := DefaultMLConfig()
-	c.Enabled, c.Detectors["op_latency"] = true, true
-	c.Promotion["op_latency"] = MLPromotion{Enabled: true, MinHitRate: 0.8, MinSamples: 20}
-	sc := MLDetectorScore{Samples: 50, Hits: 45, HitRate: 0.9}
-	if g := c.PromotionGate("op_latency", sc, ""); g.OK || len(g.Reasons) != 1 {
-		t.Fatalf("takvimsiz kapı kapalı + tek gerekçe olmalı: %+v", g)
-	}
-	if g := DefaultMLConfig().PromotionGate("log_volume", MLDetectorScore{}, ""); len(g.Reasons) != 5 { // v0.10.2059: op_latency varsayılan açık
-		t.Fatalf("varsayılan: 5 gerekçe (ana, dedektör, terfi, örnek, takvim), got %+v", g)
-	}
+	c.Enabled, c.Detectors["log_volume"] = true, true
 	n := NormalizeMLConfig(MLConfig{})
 	if n.Quality != DefaultMLQuality() {
 		t.Fatalf("eksik quality = varsayılan, got %+v", n.Quality)
@@ -204,7 +185,9 @@ func TestMLBaselineSettingOffAndOutOfHash(t *testing.T) {
 // v0.10.2059: op_latency varsayılan açık (Davis S1) → 7bbfaa479ac1811c.
 // v0.10.2063: dependency_error_rate (Davis S2, varsayılan açık) → 9cc38f9f62ebea9e.
 // v0.10.2064: metric_kafka varsayılan açık (Davis S3) → 338fe387817c0331.
-const mlDefaultHash1813 = "338fe387817c0331"
+// v0.10.2067: `promotion` alanı (ml/promote.go kopya yolu) blobdan kalktı →
+// 3095f1a59e098e82 (tek seferlik; hash yalnız kanıt/backtest etiketi).
+const mlDefaultHash1813 = "3095f1a59e098e82"
 
 // v0.10.2020 — k8s ailesi: cAdvisor ifadeleri pod toplam satırını
 // (container="") ve duraklatma kabını (POD) süzer; KSM restart ifadesi

@@ -12318,18 +12318,15 @@ export interface LogCourse { times: number[]; shadow?: (number | null)[]; byPatt
 /** v0.10.1870 — replay yanıtının `course` alanı (ml.ExplainCourse); sinyale göre biri dolu. */
 export interface ExplainCourse { trace?: TraceCourse; log?: LogCourse }
 export interface MLReplay { snapshot: MLSnapshot | null; related: MLSnapshot[]; card: ExplainCard; verdict?: MLReplayVerdict | null; course?: ExplainCourse }
-export interface MLGate { ok: boolean; reasons?: string[] }
 export interface MLBacktestDetector { detector: string; fired: number; tp: number; fp: number; unlabeled: number; positives: number; covered: number; precision: number; recall: number }
 export interface MLBacktestHit { detector: string; part: string; from: number; to: number; peakZ: number; label?: string }
 export interface MLBacktestResult {
   signal: string; service: string; from: number; to: number; series: number; buckets: number; configHash: string;
   detectors: MLBacktestDetector[]; hits: MLBacktestHit[]; truncated: boolean;
 }
-export interface MLPromotion { enabled: boolean; minHitRate: number; minSamples: number }
 export interface MLConfig {
   enabled: boolean;
   detectors: Record<string, boolean>;
-  promotion: Record<string, MLPromotion>;
   bucketSec: number; tickSec: number; timeoutMs: number; maxServices: number; maxEsQueriesPerTick: number;
   baselineDays: number; minBaselineRate: number; dwellBuckets: number; dailyEventCap: number;
   ingestLagSec: number; minBaselineSamples: number; criticalZ: number; influencerField: string; errorLevels: string[];
@@ -12436,7 +12433,8 @@ export interface MLScorecard {
   /** v0.10.1829: log kalıbı maskesi sürümü + yeni-şablon sessiz penceresi (Go chstore.LogMaskerState). */
   logMasker?: LogMaskerState;
   windowDays: number; detectors: MLDetectorScore[]; bySignal?: MLDetectorScore[]; backfill?: MLBackfillProgress[];
-  promotion: Record<string, MLPromotion>; gates?: Record<string, MLGate>; signals: Record<string, string>;
+  /** v0.10.2067: dedektör → açık mı (ana anahtar VE dedektör); eski terfi kapısı (gates/promotion) kalktı. */
+  enabled?: Record<string, boolean>; signals: Record<string, string>;
 }
 
 // ── Login özeti (v0.10.1907) — GET /api/public/login-summary (kimliksiz; Go

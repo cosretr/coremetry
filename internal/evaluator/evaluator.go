@@ -1347,14 +1347,10 @@ func anomalyPromotionDescription(ev chstore.AnomalyEvent) string {
 		"×, count " + formatUint(ev.CurrentCount) + tail + ")"
 }
 
-// promotedRuleText — SAF (v0.10.1875): terfi Problem'inin kural adı +
-// açıklaması. ML olayının kopyası (kind "ml:", Sample = ml.ExplainSummary)
-// kartın özetini taşır: açıklama = özet, ad "ML · <parça>" → manşet ve
-// bildirim konusu bu cümle (chstore.MLPromotedHeadline). Diğer türler aynen.
+// promotedRuleText — SAF: terfi Problem'inin kural adı + açıklaması.
+// v0.10.2067: ML olayının "ml:" kopyası (ml/promote.go) kaldırıldı; ML
+// Problem'ini yalnız grup yolu açar (ml/group_live.go) — özel dal yok.
 func promotedRuleText(ev chstore.AnomalyEvent) (ruleName, desc string) {
-	if strings.HasPrefix(ev.Kind, "ml:") && strings.TrimSpace(ev.Sample) != "" {
-		return chstore.MLPromotedRuleNamePrefix + ev.Pattern, truncate(ev.Sample, 480)
-	}
 	return "Anomaly · " + ev.Pattern, truncate(anomalyPromotionDescription(ev), 480)
 }
 

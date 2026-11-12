@@ -231,7 +231,7 @@ func (s *Server) getMLEvents(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getMLScorecard(w http.ResponseWriter, r *http.Request) {
-	s.serveCached(w, r, "ml:scorecard:v2:30d", mlScorecardTTL, func(ctx context.Context) (any, error) {
+	s.serveCached(w, r, "ml:scorecard:v3:30d", mlScorecardTTL, func(ctx context.Context) (any, error) {
 		rows, err := s.store.MLScorecard(ctx, time.Now().Add(-mlScoreWindow))
 		if err != nil {
 			return nil, err
@@ -244,18 +244,14 @@ func (s *Server) getMLScorecard(w http.ResponseWriter, r *http.Request) {
 		for _, n := range chstore.MLDetectorNames {
 			signals[n] = chstore.MLDetectorSignal(n)
 		}
-		// terfi kapısı: olay görmemiş dedektör de gerekçesiyle listelenir
-		tz := s.store.AnomalySensitivityForDetectors().Calendar.Timezone
-		byDet := map[string]chstore.MLDetectorScore{}
-		for _, r := range rows {
-			byDet[r.Detector] = r
-		}
-		gates := map[string]chstore.MLGate{}
+		// v0.10.2067: dedektör başına terfi kapısı (gates/promotion) kaldırıldı;
+		// karne yalnız açık/kapalı durumunu taşır (ana anahtar VE dedektör).
+		enabled := map[string]bool{}
 		for _, n := range chstore.MLDetectorNames {
-			gates[n] = cfg.PromotionGate(n, byDet[n], tz)
+			enabled[n] = cfg.DetectorOn(n)
 		}
 		out := map[string]any{"windowDays": 30, "detectors": rows, "bySignal": chstore.MLSignalScores(rows),
-			"promotion": cfg.Promotion, "gates": gates, "signals": signals}
+			"enabled": enabled, "signals": signals}
 		if ts, ok, _ := s.store.GetMLTickStatus(ctx); ok {
 			out["tick"] = ts
 		}

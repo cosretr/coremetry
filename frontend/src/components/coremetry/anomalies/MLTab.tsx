@@ -7,7 +7,7 @@ import { DataTable } from '@/components/coremetry/DataTable';
 import type { ColumnDef } from '@/components/coremetry/DataTable';
 import { SegmentedControl } from '@/components/coremetry/SegmentedControl';
 import { useMLScorecard } from '@/lib/queries';
-import type { MLEvent, MLDetectorScore, MLGate, MLBackfillProgress, MLTickStatus, MLSignalTick, MLScorecard, MLKindTick, MLBaselineStatus, MLThanosTick } from '@/lib/types';
+import type { MLEvent, MLDetectorScore, MLBackfillProgress, MLTickStatus, MLSignalTick, MLScorecard, MLKindTick, MLBaselineStatus, MLThanosTick } from '@/lib/types';
 import { MLPeriodReplay } from './MLPeriodReplay';
 import { SIGNAL_KINDS } from '@/lib/signalKind';
 import { SignalKindBadge } from '@/components/coremetry/SignalKindBadge';
@@ -42,13 +42,6 @@ export function signalScoreLabel(s: MLDetectorScore): string {
   const name = SIGNAL_TR[s.detector] ?? s.detector;
   if (s.samples <= 0) return `${name}: ${s.events} olay · karar yok`;
   return `${name}: %${Math.round(s.hitRate * 100)} isabet (${s.samples} karar / ${s.events} olay)`;
-}
-
-/** Terfi kapısı metni — SAF (test): geçemediği koşullar sırayla. */
-export function gateLabel(g: MLGate | undefined): string {
-  if (!g) return '';
-  if (g.ok) return 'terfi kapısı geçildi';
-  return `terfi kapısı: ${(g.reasons ?? []).join(' · ')}`;
 }
 
 /** Backfill satırı — SAF (test). */
@@ -136,20 +129,18 @@ export function detectorGroup(d: string): string {
   }
 }
 
-export interface DetectorRow { detector: string; signal: string; enabled: boolean; events: number; samples: number; hitRate: number; tick?: MLSignalTick; gate?: MLGate;
+export interface DetectorRow { detector: string; signal: string; enabled: boolean; events: number; samples: number; hitRate: number; tick?: MLSignalTick;
   /** v0.10.2063: son tikte kaynağı yoktu ("ölçülemedi: …"); sağlıklı DEĞİL. */
   unmeasured?: string }
 
-/** Karne satırları — SAF (test): tüm dedektörler, olay yoksa 0; kapalı = kapı gerekçesinden. */
+/** Karne satırları — SAF (test): tüm dedektörler, olay yoksa 0; açık/kapalı sunucunun `enabled` haritasından. */
 export function detectorRows(sc: MLScorecard, signal: MLSignal): DetectorRow[] {
   const byDet = new Map(sc.detectors.map(d => [d.detector, d]));
   return Object.keys(sc.signals ?? {}).filter(d => !signal || sc.signals[d] === signal).map(d => {
     const sc1 = byDet.get(d);
-    const gate = sc.gates?.[d];
-    const reasons = gate?.reasons ?? [];
     const tick = sc.tick?.signals?.[detectorGroup(d)];
-    return { detector: d, signal: sc.signals[d], enabled: !reasons.includes('dedektör kapalı') && !reasons.includes('ana anahtar kapalı'),
-      events: sc1?.events ?? 0, samples: sc1?.samples ?? 0, hitRate: sc1?.hitRate ?? 0, tick, gate, unmeasured: tick?.unmeasured?.[d] };
+    return { detector: d, signal: sc.signals[d], enabled: sc.enabled?.[d] === true,
+      events: sc1?.events ?? 0, samples: sc1?.samples ?? 0, hitRate: sc1?.hitRate ?? 0, tick, unmeasured: tick?.unmeasured?.[d] };
   });
 }
 
@@ -165,7 +156,7 @@ export function statusTiles(sc: MLScorecard, signal: MLSignal, nowSec: number): 
   return [
     { k: 'Son tik', v: t ? `${ago} dk önce` : 'yok', s: t ? `${Math.round(t.durationMs / 1000)} sn · ${t.events} olay${t.docs ? ` · ${t.docs.toLocaleString('tr-TR')} belge` : ''}${t.partial ? ` · ${t.partial} kısmi` : ''}${t.batchCut ? ` · batch kuralı ${t.batchCut} adayı kesti` : ''}${groupTickText(t) ? ` · ${groupTickText(t)}` : ''}${t.thanos?.queries ? ` · ${thanosTickText(t.thanos)}` : ''}${t.contribQueries ? ` · suçlu seri sorgusu ${t.contribQueries}` : ''}${t.logSvcUnmatched ? ` · katalogda olmayan log servisi: ${t.logSvcUnmatched} (yazılmadı)` : ''}${t.logSvcViaPod ? ` · pod'dan servise çözülen: ${t.logSvcViaPod}` : ''}` : 'tik yok', warn: !!t?.lastError },
     { k: 'Log geçmişi', v: bf ? `${bf.done + miss} / ${bf.total} sa` : '—', s: bf ? (bf.complete ? 'tamam' : bf.running ? 'sürüyor' : 'duraklı') + (miss ? ` · eksik ${miss}` : '') : 'kayıt yok' },
-    { k: 'Olay · 30 gün', v: String(events), s: samples ? `${samples} karar` : 'karar yok · terfi kapalı' },
+    { k: 'Olay · 30 gün', v: String(events), s: samples ? `${samples} karar` : 'karar yok' },
     { k: 'VM bekleme', v: bo.length ? `${bo.length} aile` : 'yok', s: bo.map(b => `${b.family} · ${Math.max(1, Math.round((b.until - nowSec) / 60))} dk`).join(', ') || 'tüm aileler açık', warn: bo.length > 0 },
   ];
 }
@@ -204,9 +195,9 @@ export function baselineStatusLine(st: MLBaselineStatus | undefined): { text: st
 
 // ── v0.10.1879 — sade görünüm (operatör, prod ekran görüntüsü: "Bu sayfa genel
 // tasarıma uymuyor, çok net anlaşılmıyor"). Önce düz cümle, sonra dört sorunun
-// cevabını veren tablo (ne izliyor / açık mı / ne buldu / Problem açar mı);
-// tik süreleri, aday sayıları ve terfi kapısı gerekçeleri "Teknik detay"
-// altında kapalı. Bilgi silinmedi, yalnız yerleşti.
+// cevabını veren tablo (ne izliyor / açık mı / ne buldu); tik süreleri ve
+// aday sayıları "Teknik detay" altında kapalı. v0.10.2067: "Problem açar mı"
+// sütunu (dedektör başına terfi kapısı) kopya yoluyla birlikte kalktı.
 
 /** Durumun düz cümlesi + (varsa) dikkat satırları — SAF (test). */
 export function mlStatusSummary(sc: MLScorecard, signal: MLSignal, nowSec: number): { text: string; warnings: string[] } {
@@ -247,14 +238,6 @@ export function detectorVerdictText(r: Pick<DetectorRow, 'samples' | 'hitRate'>)
   return `${r.samples.toLocaleString('tr-TR')} değerlendirme · ${Math.round(r.hitRate * r.samples).toLocaleString('tr-TR')} doğru`;
 }
 
-/** "Problem açar mı" hücresi — SAF (test). Ayrıntı (kapı gerekçeleri) ipucunda. */
-export function detectorPromoteText(r: Pick<DetectorRow, 'enabled' | 'gate'>): { text: string; title: string } {
-  const reasons = (r.gate?.reasons ?? []).filter(x => x !== 'dedektör kapalı' && x !== 'ana anahtar kapalı');
-  if (!r.enabled) return { text: '', title: 'Dedektör kapalı' };
-  if (r.gate?.ok) return { text: 'Evet', title: 'Bu dedektörün olayları Problem açabilir' };
-  return { text: 'Hayır', title: reasons.length ? `Neden: ${reasons.join(' · ')}` : 'Otomatik Problem açma koşulları sağlanmadı' };
-}
-
 const DCOLS: ColumnDef<DetectorRow>[] = [
   { id: 'detector', label: 'Dedektör', width: 220, minWidth: 150, flex: true, priority: 1, sortValue: r => ML_DETECTOR_TR[r.detector] ?? r.detector, naturalDir: 'asc' },
   { id: 'signal', label: 'İzlediği', width: 110, minWidth: 90, priority: 1, sortValue: r => r.signal, naturalDir: 'asc' },
@@ -262,17 +245,15 @@ const DCOLS: ColumnDef<DetectorRow>[] = [
   { id: 'state', label: 'Durum', width: 100, minWidth: 80, priority: 1, sortValue: r => (r.enabled ? 1e9 : 0) + r.events },
   { id: 'events', label: 'Son 30 günde olay', width: 150, minWidth: 110, priority: 1, numeric: true, sortValue: r => r.events },
   { id: 'hit', label: 'Değerlendirme', width: 200, minWidth: 130, priority: 2, sortValue: r => (r.samples > 0 ? r.hitRate : -1) },
-  { id: 'gate', label: 'Problem açar mı', width: 140, minWidth: 110, priority: 2, sortValue: r => (r.gate?.ok ? 1 : 0) },
 ];
 
-// Teknik detay tablosu: son kontrolün dedektör başına ölçümü + kapı gerekçesi.
+// Teknik detay tablosu: son kontrolün dedektör başına ölçümü.
 const DTECH: ColumnDef<DetectorRow>[] = [
   { id: 'detector', label: 'Dedektör', width: 180, minWidth: 140, priority: 1, sortValue: r => ML_DETECTOR_TR[r.detector] ?? r.detector, naturalDir: 'asc' },
   { id: 'tick', label: 'Kontrol süresi', width: 110, numeric: true, priority: 2, sortValue: r => r.tick?.sourceMs ?? -1 },
   { id: 'services', label: 'Bakılan servis', width: 110, numeric: true, priority: 2, sortValue: r => r.tick?.services ?? -1 },
   { id: 'candidates', label: 'Aday', width: 70, numeric: true, priority: 3, sortValue: r => r.tick?.candidates ?? -1 },
   { id: 'written', label: 'Kaydedilen', width: 90, numeric: true, priority: 3, sortValue: r => r.tick?.written ?? -1 },
-  { id: 'gate', label: 'Problem açma koşulları', flex: true, minWidth: 200, priority: 1, sortValue: r => (r.gate?.ok ? 0 : 1) },
 ];
 
 /** SAF (test): seyrin tepe değeri (sıralama); seyir yoksa -1. */
@@ -327,16 +308,12 @@ export function MLTab({ signal = '', onSignal }: { signal?: MLSignal; onSignal?:
                   const v = detectorVerdictText(r);
                   return v || <span className="text-muted-foreground" title="Bu dedektörün olaylarından henüz hiçbiri “gerçek / değil” diye işaretlenmedi">—</span>;
                 }
-                case 'gate': {
-                  const g = detectorPromoteText(r);
-                  return g.text ? <span title={g.title}>{g.text}</span> : <span className="text-muted-foreground" title={g.title}>—</span>;
-                }
                 default: return null;
               }
             }} />
           <p className="m-0 text-[length:var(--fs-sm)] text-muted-foreground">
-            Dedektörler anomali kaydeder. Bir dedektörün kendiliğinden Problem açması için otomatik terfi anahtarının açık olması
-            ve olaylarının yeterince değerlendirilip doğrulanmış olması gerekir (Settings › Anomaly). Ayrıntı “Teknik detay”da.
+            Dedektörler anomali kaydeder. Tek dedektör Problem açmaz: aynı serviste en az 2 farklı sinyalde (trace, log, metrik)
+            anomali varsa anomali grubu Problem açar (Settings › Anomaly). Ayrıntı “Teknik detay”da.
           </p>
           <details data-testid="ml-tech-details" className="rounded-md border border-border px-3 py-2">
             <summary className="cursor-pointer text-[length:var(--fs-sm)] font-semibold text-muted-foreground">Teknik detay</summary>
@@ -372,7 +349,6 @@ export function MLTab({ signal = '', onSignal }: { signal?: MLSignal; onSignal?:
                     case 'services': return r.tick ? r.tick.services : '—';
                     case 'candidates': return r.tick ? r.tick.candidates : '—';
                     case 'written': return r.tick ? r.tick.written : '—';
-                    case 'gate': return r.gate?.ok ? 'sağlandı' : (r.gate?.reasons ?? []).join(' · ') || '—';
                     default: return null;
                   }
                 }} />

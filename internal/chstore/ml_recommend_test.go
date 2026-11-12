@@ -19,7 +19,6 @@ func TestRecommendMLConfig(t *testing.T) {
 	cur.Detectors["metric_jvm"] = true    // verisi yok: kapanır
 	cur.Detectors["op_latency"] = false   // v0.10.2059: varsayılan açık; kapalı kaydedilmiş eski blob
 	cur.Detectors["metric_kafka"] = false // v0.10.2064: aynı (Davis S3)
-	cur.Promotion["metric_kafka"] = MLPromotion{Enabled: true, MinHitRate: 0.9, MinSamples: 30}
 	cur.MaxServices = 2000
 	checks := []MLSourceCheck{
 		chk(MLSourceHTTPServer, "HTTP sunucu", true, true),
@@ -54,10 +53,9 @@ func TestRecommendMLConfig(t *testing.T) {
 		t.Fatalf("farklar: %v, want %v", keys, want)
 	}
 	// dependency_latency: bir kaynağı ölçülemedi → kapatma kararı yok (zaten kapalıydı, fark yok).
-	// Terfi, eşik, ifade aynen.
-	if got.Promotion["metric_kafka"] != cur.Promotion["metric_kafka"] || got.MaxServices != 2000 ||
-		!reflect.DeepEqual(got.MetricFamilies, cur.MetricFamilies) {
-		t.Fatal("terfi / eşik / ifade değişmemeli")
+	// Eşik, ifade aynen.
+	if got.MaxServices != 2000 || !reflect.DeepEqual(got.MetricFamilies, cur.MetricFamilies) {
+		t.Fatal("eşik / ifade değişmemeli")
 	}
 	// Girdi değişmez.
 	if cur.Enabled || cur.Detectors["op_latency"] || !cur.Detectors["metric_jvm"] {

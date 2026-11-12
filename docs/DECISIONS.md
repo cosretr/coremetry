@@ -13516,3 +13516,20 @@ eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
 - Kapatma: yaml `ml_enabled: false` ya da `COREMETRY_ES_ML_ENABLED=false` / `0` (eskiden env yalnız açabiliyordu).
 - Yük: 5 dakikada bir `/_ml/anomaly_detectors/_stats` + açık job başına 1 kayıt sorgusu (≤100 kayıt). Lider kilidi altında.
 - Sonuç: Elastic ML poller silme listesinden ÇIKTI (`docs/anomaly/old-detectors-ml-gap.md` D2 geçersiz). Olaylar `anomaly_events` (`elastic_ml`) üzerinden /anomalies'e düşer; ML motoruna taşınması ayrı iş.
+
+## 2026-11-12 — v0.10.2067 — ML olay başına terfi kopyası kaldırıldı (anomali tekilleştirme, operatör onayı)
+
+- Silinen: `internal/ml/promote.go` (ml_events olayını `ml:<dedektör>` kind'ıyla anomaly_events'e kopyalayıp eski
+  `anomaly-auto:<fp>` terfisine sokan yol, v0.10.1761/1875), `ml` blobundaki `promotion` alanı (dedektör başına
+  terfi anahtarı + min isabet + min örnek), `PromotionGate`/`PromotionAllowed`, karnedeki `gates`/`promotion`
+  (yerine `enabled` haritası), Settings › ML "Problem'e terfi" kontrolleri, MLTab "Problem açar mı" sütunları,
+  evaluator `promotedRuleText` "ml:" dalı, `MLStats.promoted` sayacı.
+- Neden güvenli: ML'in Problem açan TEK yolu v0.10.2052'den beri grup (`DecideGroupPromotion` →
+  `group_live.go`, `anomaly-auto:group:*`); kopya yolu varsayılan kapalıydı ve keep listesi, bildirim türü,
+  CoSRE/MCP hiçbiri `ml:` kind'ına ya da kopya Problem'ine özel bağlı değildi (keep listesi tekil
+  `anomaly-auto:<id>`'yi bilerek dışarıda tutar).
+- Kalan açık kopya Problem'i: kaynak `ml:` satırını artık kimse tazelemez → 10 dk sonra aktif değil →
+  `resolveClearedAnomalyPromotions` "anomaly cleared" ile kapatır; `anomaly_promotion` kapalıysa bayat süpürme
+  (3 × aralık, "source silent") kapatır. Kayıtlı blobdaki `promotion` alanı okunmaz, bir sonraki kayıtta düşer.
+- Tek seferlik yan etki: `ConfigHash` (olay kanıtı / backtest etiketi) değişir; tespit davranışı değişmez.
+  Geçmiş `stage=promoted` ml_events satırları ve `ml:` anomaly_events satırları TTL'e dek okunur.

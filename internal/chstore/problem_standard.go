@@ -662,9 +662,10 @@ func guessRuleUnit(m string) string {
 // directionWord — SAF: aşağı yönlü kural mı.
 func isDown(p Problem) bool { return isBelowRule(p.Comparator) }
 
-// MLPromotedRuleNamePrefix — v0.10.1875: ML olayının terfi Problem'inin
-// kural adı öneki (evaluator promotedRuleText yazar). RuleID ailesi
-// değişmez (anomaly-auto:); yalnız manşet kaynağını seçer.
+// MLPromotedRuleNamePrefix — v0.10.1875: ML Problem'inin kural adı öneki.
+// v0.10.2067'den beri yalnız ML grup Problem'i yazar (ml/group_live.go
+// groupProblemRuleName); RuleID ailesi anomaly-auto:, yalnız manşet
+// kaynağını seçer.
 const MLPromotedRuleNamePrefix = "ML · "
 
 // MLPromotedHeadline — SAF: ML terfi Problem'inde açıklama = kartın özeti.

@@ -97,13 +97,6 @@ func DefaultMLMetricFamilies() map[string][]MLMetricExpr {
 	}
 }
 
-// MLPromotion — dedektör başına terfi kuralı.
-type MLPromotion struct {
-	Enabled    bool    `json:"enabled"`
-	MinHitRate float64 `json:"minHitRate"` // 0..1
-	MinSamples int     `json:"minSamples"`
-}
-
 // MLQuality — kalite çerçevesi (üç sinyal ortak; operatör 2026-10-31).
 // Dedektör olayı yazılmadan önce recorder bu kapılardan geçirir; bastırılan
 // olay sayacı self-obs'ta (sebep başına). Bool'lar ters adlı: eksik blob
@@ -176,8 +169,9 @@ type MLConfig struct {
 	Enabled bool `json:"enabled"`
 	// Detectors — dedektör adı → açık mı (eksik = kapalı).
 	Detectors map[string]bool `json:"detectors"`
-	// Promotion — dedektör adı → terfi kuralı (eksik = kapalı).
-	Promotion map[string]MLPromotion `json:"promotion"`
+	// v0.10.2067 — eski `promotion` (dedektör başına terfi kopyası) alanı
+	// kaldırıldı: Problem'i yalnız ML grubu açar (GroupProblems). Kayıtlı
+	// blobdaki alan okunmaz; json.Unmarshal bilinmeyen alanı yok sayar.
 	// BucketSec — ES date_histogram kovası (60..3600, varsayılan 300).
 	BucketSec int `json:"bucketSec"`
 	// TickSec — alt sistem tiki (60..3600, varsayılan 300).
@@ -275,12 +269,10 @@ func MLDetectorDefaultOn(name string) bool { return mlDefaultOnDetectors[name] }
 // yetenekleri hariç, mlDefaultOnDetectors); eşikler makul.
 func DefaultMLConfig() MLConfig {
 	d := map[string]bool{}
-	p := map[string]MLPromotion{}
 	for _, n := range MLDetectorNames {
 		d[n] = MLDetectorDefaultOn(n)
-		p[n] = MLPromotion{Enabled: false, MinHitRate: 0.8, MinSamples: 20}
 	}
-	return MLConfig{Enabled: false, Detectors: d, Promotion: p,
+	return MLConfig{Enabled: false, Detectors: d,
 		BucketSec: 300, TickSec: 300, TimeoutMs: 10000, MaxServices: 500, MaxESQueriesPerTick: 4,
 		BaselineDays: 21, MinBaselineRate: 5, DwellBuckets: 2, DailyEventCap: 200,
 		IngestLagSec: 120, BackfillTimeoutMs: 30000, BackfillIntervalMs: 2000, VMTargetCardinality: 20, VMServiceBatch: 50, SlowRequestSec: 1, MinAffectedRequests: 5, ChronicEpisodes: 5, MinBaselineSamples: 20, CriticalZ: 4, MetricFamilies: DefaultMLMetricFamilies(), Quality: DefaultMLQuality(),
@@ -354,35 +346,16 @@ func NormalizeMLConfig(c MLConfig) MLConfig {
 	if c.Detectors == nil {
 		c.Detectors = map[string]bool{}
 	}
-	if c.Promotion == nil {
-		c.Promotion = map[string]MLPromotion{}
-	}
 	known := map[string]bool{}
 	for _, name := range MLDetectorNames {
 		known[name] = true
 		if _, ok := c.Detectors[name]; !ok {
 			c.Detectors[name] = MLDetectorDefaultOn(name)
 		}
-		p, ok := c.Promotion[name]
-		if !ok {
-			p = d.Promotion[name]
-		}
-		if p.MinHitRate < 0 || p.MinHitRate > 1 {
-			p.MinHitRate = 0.8
-		}
-		if p.MinSamples < 1 {
-			p.MinSamples = 20
-		}
-		c.Promotion[name] = p
 	}
 	for name := range c.Detectors {
 		if !known[name] {
 			delete(c.Detectors, name)
-		}
-	}
-	for name := range c.Promotion {
-		if !known[name] {
-			delete(c.Promotion, name)
 		}
 	}
 	return c
@@ -390,46 +363,6 @@ func NormalizeMLConfig(c MLConfig) MLConfig {
 
 // DetectorOn — SAF: ana anahtar VE dedektör anahtarı.
 func (c MLConfig) DetectorOn(name string) bool { return c.Enabled && c.Detectors[name] }
-
-// MLGate — terfi kapısı sonucu: geçemediği her koşul ayrı gerekçe.
-type MLGate struct {
-	OK      bool     `json:"ok"`
-	Reasons []string `json:"reasons,omitempty"`
-}
-
-// PromotionGate — SAF terfi kapısı (kalite çerçevesi): ana anahtar, dedektör
-// ve terfi anahtarı açık; karne örneği + isabet eşiği (kararsız satır
-// paydada yok, S4); takvim dilimi tanımlı (tatil/ay sonu sınıfı olmadan taban
-// yanlış güne bakar — operatör: takvim terfiden önce). Gerekçeler karnede
-// gösterilir; geçen dedektör bile bu sürümde Problem'e KOPYALANMAZ.
-func (c MLConfig) PromotionGate(detector string, score MLDetectorScore, calendarTZ string) MLGate {
-	var r []string
-	if !c.Enabled {
-		r = append(r, "ana anahtar kapalı")
-	}
-	if !c.Detectors[detector] {
-		r = append(r, "dedektör kapalı")
-	}
-	p, ok := c.Promotion[detector]
-	if !ok || !p.Enabled {
-		r = append(r, "terfi anahtarı kapalı")
-	}
-	if score.Samples < int64(p.MinSamples) {
-		r = append(r, fmt.Sprintf("karar örneği %d < %d", score.Samples, p.MinSamples))
-	}
-	if score.Samples > 0 && score.HitRate < p.MinHitRate {
-		r = append(r, fmt.Sprintf("isabet %%%.0f < %%%.0f", score.HitRate*100, p.MinHitRate*100))
-	}
-	if calendarTZ == "" {
-		r = append(r, "takvim dilimi tanımlı değil")
-	}
-	return MLGate{OK: len(r) == 0, Reasons: r}
-}
-
-// PromotionAllowed — SAF: PromotionGate geçildi mi (takvim dilimi çağıranda).
-func (c MLConfig) PromotionAllowed(detector string, score MLDetectorScore, calendarTZ string) bool {
-	return c.PromotionGate(detector, score, calendarTZ).OK
-}
 
 // ConfigHash — SAF: normalize blob'un FNV-64 özeti (olay kanıtı + backtest:
 // hangi ayarla üretildi; replay/what-if karşılaştırması).
@@ -482,9 +415,8 @@ type MLStats struct {
 	ESP95Ms        int64  `json:"esP95Ms"`
 	ESQueries      int64  `json:"esQueries"`
 	VMQueries      int64  `json:"vmQueries"`
-	Promoted       int64  `json:"promoted"`
 	Partial        int64  `json:"partial"`  // v0.10.1765: kısmi ES sonucuyla atlanan dedektör tiki (kümülatif)
-	LastDocs       int64  `json:"lastDocs"` // son log RED penceresinde toplanan belge // v0.10.1761: anomaly_events'e kopyalanan olay (kümülatif) // v0.10.1758: VM sorguları ES bütçesinden ayrı
+	LastDocs       int64  `json:"lastDocs"` // son log RED penceresinde toplanan belge // v0.10.1758: VM sorguları ES bütçesinden ayrı
 	LastCHMs       int64  `json:"lastChMs"` // taban CH sorgusu (trace T1)
 	Events         int64  `json:"events"`
 	SeriesInMemory int64  `json:"seriesInMemory"`

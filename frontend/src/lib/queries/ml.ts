@@ -16,7 +16,7 @@ export function useMLEvents(signal: '' | 'log' | 'trace' | 'metric' = '', enable
 export function useMLScorecard(enabled = true) {
   return useQuery<MLScorecard>({
     queryKey: keys.anomalies.mlScore,
-    queryFn: async () => (await api.mlScorecard()) ?? { windowDays: 30, detectors: [], promotion: {}, signals: {} },
+    queryFn: async () => (await api.mlScorecard()) ?? { windowDays: 30, detectors: [], signals: {} },
     enabled, staleTime: 60_000,
   });
 }

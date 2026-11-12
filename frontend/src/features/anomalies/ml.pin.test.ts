@@ -2,7 +2,7 @@
 // kararsız satır isabet yazdırmaz).
 import { describe, it, expect } from 'vitest';
 import { anomalyEventHref, legacyAnomalyRedirect, mlEventHref } from '@/lib/anomalyHref';
-import { mlStatusSummary, detectorVerdictText, detectorPromoteText, detectorGroup, detectorRows, statusTiles, backfillLabel, durationLabel, gateLabel, stageLabel, signalTickLabel, tickLabel, kindTickLines, baselineStatusLine, resolveMLSignal, scoreLabel, signalScoreLabel } from '@/components/coremetry/anomalies/MLTab';
+import { mlStatusSummary, detectorVerdictText, detectorGroup, detectorRows, statusTiles, backfillLabel, durationLabel, stageLabel, signalTickLabel, tickLabel, kindTickLines, baselineStatusLine, resolveMLSignal, scoreLabel, signalScoreLabel } from '@/components/coremetry/anomalies/MLTab';
 
 describe('log ml slice 0', () => {
   // v0.10.2027 — /anomalies tek sayfa: sekme çözümü kalktı; eski ?tab= yok sayılır.
@@ -18,13 +18,10 @@ describe('log ml slice 0', () => {
     expect(scoreLabel({ detector: 'log_volume', events: 3, samples: 0, hits: 0, hitRate: 0 })).toBe('Log hacmi: 3 olay · karar yok');
     expect(scoreLabel({ detector: 'error_rate', events: 10, samples: 4, hits: 3, hitRate: 0.75 })).toBe('Hata oranı: 10 olay · %75 isabet (4 karar)');
   });
-  // v0.10.1751 — kalite çerçevesi: sinyal karnesi + terfi kapısı gerekçeleri.
-  it('signal score and gate labels', () => {
+  // v0.10.1751 — kalite çerçevesi: sinyal karnesi.
+  it('signal score labels', () => {
     expect(signalScoreLabel({ detector: 'trace', events: 7, samples: 0, hits: 0, hitRate: 0 })).toBe('Trace: 7 olay · karar yok');
     expect(signalScoreLabel({ detector: 'metric', events: 9, samples: 4, hits: 2, hitRate: 0.5 })).toBe('Metrik: %50 isabet (4 karar / 9 olay)');
-    expect(gateLabel({ ok: false, reasons: ['ana anahtar kapalı', 'takvim dilimi tanımlı değil'] })).toBe('terfi kapısı: ana anahtar kapalı · takvim dilimi tanımlı değil');
-    expect(gateLabel({ ok: true })).toBe('terfi kapısı geçildi');
-    expect(gateLabel(undefined)).toBe('');
   });
   // v0.10.1763 — backfill ilerleme satırı: "0 olay" ile "çalışmıyor" ayrımı.
   it('backfill label', () => {
@@ -81,8 +78,8 @@ describe('log ml slice 0', () => {
   // v0.10.1779 — ML sekmesi düzeni (mockup): durum kutuları + dedektör karnesi tablosu.
   it('detector rows and status tiles', () => {
     const sc = { windowDays: 30, detectors: [{ detector: 'trace_pod_outlier', events: 3, samples: 0, hits: 0, hitRate: 0 }],
-      bySignal: [{ detector: 'trace', events: 3, samples: 0, hits: 0, hitRate: 0 }], promotion: {},
-      gates: { log_volume: { ok: false, reasons: ['dedektör kapalı'] }, trace_pod_outlier: { ok: false, reasons: ['terfi anahtarı kapalı', 'karar örneği 0 < 20'] } },
+      bySignal: [{ detector: 'trace', events: 3, samples: 0, hits: 0, hitRate: 0 }],
+      enabled: { log_volume: false, trace_pod_outlier: true },
       signals: { log_volume: 'log', trace_pod_outlier: 'trace' },
       tick: { at: 1000 - 180, durationMs: 2000, events: 1, backoff: [{ family: 'dep:http', until: 1000 + 1320, failures: 2 }], signals: { trace_pods: { ran: true, services: 1, sourceMs: 400, candidates: 1, suppressed: 0, written: 1, partial: 0 } } },
       backfill: [{ signal: 'log', total: 504, done: 92, missing: [], doneUntil: 0, planEnd: 0, complete: false, running: true, startedAt: 0, updatedAt: 0 }] };
@@ -99,8 +96,8 @@ describe('log ml slice 0', () => {
   });
   // v0.10.2063 — Davis S2: error_type etiketi yoksa dependency_error_rate "ölçülemedi"; kardeşi (gecikme) etkilenmez.
   it('unmeasured detector row', () => {
-    const sc = { windowDays: 30, detectors: [], bySignal: [], promotion: {},
-      gates: { dependency_latency: { ok: false, reasons: [] }, dependency_error_rate: { ok: false, reasons: [] } },
+    const sc = { windowDays: 30, detectors: [], bySignal: [],
+      enabled: { dependency_latency: true, dependency_error_rate: true },
       signals: { dependency_latency: 'trace', dependency_error_rate: 'trace' },
       tick: { at: 1, durationMs: 1, events: 0, backoff: [], signals: { dependency: { ran: true, services: 2, sourceMs: 1, candidates: 0, suppressed: 0, written: 0, partial: 0,
         unmeasured: { dependency_error_rate: 'ölçülemedi: db, messaging client histogramında error_type etiketi (ya da metrik) yok' } } } } };
@@ -135,7 +132,7 @@ describe('baselineStatusLine', () => {
 
 // v0.10.1879 — sade görünüm (operatör: "çok net anlaşılmıyor"): önce düz cümle.
 describe('ML durum özeti ve sade hücreler (v0.10.1879)', () => {
-  const base = { windowDays: 30, detectors: [], promotion: {}, signals: {},
+  const base = { windowDays: 30, detectors: [], signals: {},
     bySignal: [{ detector: 'trace', events: 74, samples: 1, hits: 0, hitRate: 0 }, { detector: 'log', events: 9, samples: 0, hits: 0, hitRate: 0 }],
     tick: { at: 1000 - 120, durationMs: 5000, events: 2, backoff: [] as { family: string; until: number; failures: number }[] } };
 
@@ -167,11 +164,12 @@ describe('ML durum özeti ve sade hücreler (v0.10.1879)', () => {
     expect(detectorVerdictText({ samples: 0, hitRate: 0 })).toBe('');
   });
 
-  it('Problem açar mı: Evet / Hayır; gerekçe ipucunda; kapalı dedektörde boş', () => {
-    expect(detectorPromoteText({ enabled: true, gate: { ok: true } })).toEqual({ text: 'Evet', title: 'Bu dedektörün olayları Problem açabilir' });
-    expect(detectorPromoteText({ enabled: true, gate: { ok: false, reasons: ['terfi anahtarı kapalı', 'karar örneği 2 < 20', 'isabet %0 < %80'] } }))
-      .toEqual({ text: 'Hayır', title: 'Neden: terfi anahtarı kapalı · karar örneği 2 < 20 · isabet %0 < %80' });
-    expect(detectorPromoteText({ enabled: false, gate: { ok: false, reasons: ['dedektör kapalı', 'terfi anahtarı kapalı'] } })).toEqual({ text: '', title: 'Dedektör kapalı' });
+  // v0.10.2067 — dedektör başına terfi kapısı kalktı: açık/kapalı yalnız
+  // sunucunun `enabled` haritasından; harita yoksa kapalı.
+  it('açık/kapalı enabled haritasından', () => {
+    const rows = detectorRows({ ...base, signals: { log_volume: 'log', op_latency: 'trace' }, enabled: { op_latency: true } }, '');
+    expect(rows.map(r => `${r.detector}:${r.enabled}`)).toEqual(['log_volume:false', 'op_latency:true']);
+    expect(detectorRows({ ...base, signals: { log_volume: 'log' } }, '')[0].enabled).toBe(false);
   });
 });
 
