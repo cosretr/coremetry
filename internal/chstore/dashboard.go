@@ -31,9 +31,12 @@ type Dashboard struct {
 	// panels/variables'ın aksine LİSTE yanıtında da dönüyor — /dashboards
 	// tablosu etiket kolonunu gösteriyor ve etiketler tanımı gereği
 	// küçük (panel gövdesi gibi kilobaytlar değil).
-	Tags      json.RawMessage `json:"tags,omitempty"`
-	CreatedAt int64           `json:"createdAt"` // unix ns
-	UpdatedAt int64           `json:"updatedAt"` // unix ns
+	Tags json.RawMessage `json:"tags,omitempty"`
+	// PanelCount (v0.10.1996, Dashboards Faz 3 dilim 3.2) — yalnız liste
+	// yanıtında: JSONLength(panels). Panel gövdesi listeye taşınmaz.
+	PanelCount *int  `json:"panelCount,omitempty"`
+	CreatedAt  int64 `json:"createdAt"` // unix ns
+	UpdatedAt  int64 `json:"updatedAt"` // unix ns
 }
 
 func (s *Store) ListDashboards(ctx context.Context) ([]Dashboard, error) {
@@ -42,6 +45,7 @@ func (s *Store) ListDashboards(ctx context.Context) ([]Dashboard, error) {
 	// kolonu çiziyor, ve etiketler panel gövdesinin aksine küçük.
 	rows, err := s.conn.Query(ctx, `
 		SELECT id, name, description, tags,
+		       toInt64(JSONLength(panels)),
 		       toUnixTimestamp64Nano(created_at),
 		       toUnixTimestamp64Nano(updated_at)
 		FROM dashboards FINAL
@@ -54,9 +58,12 @@ func (s *Store) ListDashboards(ctx context.Context) ([]Dashboard, error) {
 	for rows.Next() {
 		var d Dashboard
 		var tags string
-		if err := rows.Scan(&d.ID, &d.Name, &d.Description, &tags, &d.CreatedAt, &d.UpdatedAt); err != nil {
+		var panelCount int64
+		if err := rows.Scan(&d.ID, &d.Name, &d.Description, &tags, &panelCount, &d.CreatedAt, &d.UpdatedAt); err != nil {
 			return nil, err
 		}
+		pc := int(panelCount)
+		d.PanelCount = &pc
 		if tags == "" {
 			tags = "[]"
 		}

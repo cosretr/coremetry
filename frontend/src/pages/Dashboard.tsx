@@ -130,6 +130,12 @@ function Inner() {
       const panels = normalizePanels(d.panels);
       setDraft({ ...d, panels });
       if (startInEdit && user?.role === 'admin') setEditing(true);
+      // v0.10.1996 (Faz 3 dilim 3.2) — kişisel "Son görüntülemeniz";
+      // en iyi çaba (hata listeyi bozmaz, kullanıcıya gösterilmez).
+      void api.recordDashboardView(d.id).then(
+        () => qc.invalidateQueries({ queryKey: ['dashboards', 'recent'] }),
+        () => undefined,
+      );
     }).catch(() => { if (g.ok()) setDoc(null); });
     return g.cancel;
   }, [id]);

@@ -3567,6 +3567,18 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(d),
     }),
+  // v0.10.1996 (Faz 3 dilim 3.2) — liste kolonları: son düzenleyen (audit_log,
+  // paylaşılan, 60 sn önbellek) + kişisel son görüntülenenler (saved_views).
+  dashboardEditors: (signal?: AbortSignal) =>
+    get<{ editors: import('./types').DashboardEditor[] }>('/api/dashboards/editors', signal),
+  dashboardRecent: (signal?: AbortSignal) =>
+    get<import('./types').DashboardRecentResponse>('/api/dashboards/recent', signal),
+  recordDashboardView: (id: string) =>
+    request<{ ok: boolean }>('/api/dashboards/recent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    }),
   deleteDashboard: (id: string) =>
     request<void>(`/api/dashboards/${id}`, { method: 'DELETE' }),
   // v0.10.1443 — sohbetten dashboard (dashboard_panels_routes.go): sunucu

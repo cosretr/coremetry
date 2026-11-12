@@ -61,7 +61,7 @@ const REFETCH_FILES = [
   'lib/queries/watchers.ts',
   'pages/AdminClickhouse.tsx',
   'pages/AdminStats.tsx',
-  'pages/Dashboards.tsx',
+  // v0.10.1996 — pages/Dashboards.tsx çıktı (ingest şeridi kaldırıldı, Faz 3 dilim 3.2).
   'pages/PublicStatus.tsx',
 ].sort();
 

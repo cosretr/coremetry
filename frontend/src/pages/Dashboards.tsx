@@ -4,7 +4,6 @@ import { useQuery } from '@tanstack/react-query';
 import { Topbar } from '@/components/Topbar';
 import { useAuth } from '@/components/AuthProvider';
 import { Button, Field, IconButton, Modal, SearchField, Stack } from '@/components/ui';
-import { Sparkline } from '@/components/Sparkline';
 import { DataTable, type ColumnDef, type DataTableStateInput } from '@/components/coremetry/DataTable';
 import { DashboardListFilters } from '@/components/coremetry/dashboard/DashboardListFilters';
 import { useDashboardRowActions } from '@/components/coremetry/dashboard/useDashboardRowActions';
@@ -13,8 +12,8 @@ import { filterDashboards, tagChips, toggleTag } from '@/lib/dashboardList';
 import { api } from '@/lib/api';
 import { parseDashboardImport } from '@/lib/dashboardIO';
 import { toast } from '@/lib/toast';
-import { tsLong, fmtNum } from '@/lib/utils';
-import type { DashboardSummary } from '@/lib/types';
+import { tsLong, agoTR } from '@/lib/utils';
+import type { DashboardEditor, DashboardSummary } from '@/lib/types';
 import { PageControls } from '@/components/coremetry/PageControls';
 import { PageShell } from '@/components/coremetry/PageShell';
 
@@ -43,13 +42,25 @@ const STAR_PAGE = 'dashboard-star';
 // Dilim 3.1 (Faz 3): coremetry DataTable — satır gerçek bağlantı (yeni sekme
 // çalışır), ⋯ satır menüsü (Aç · Çoğalt · Dışa aktar · Sil), yıldız ve
 // etiket hücreleri kendi düğmelerini taşır (`ownLink`).
-function dashCols(starMap: Map<string, string>): ColumnDef<DashboardSummary>[] {
+//
+// Dilim 3.2: "Panel" (liste yanıtındaki panelCount), "Son düzenleyen"
+// (audit_log'dan türetilir, kolon yok — S7) ve kişisel "Son görüntülemeniz"
+// (saved_views page='dashboard-recent'). Eksik değer soluk "—".
+interface ListMeta {
+  starMap: Map<string, string>;
+  editors: Map<string, DashboardEditor>;
+  recent: Map<string, number>; // pano id → unix ms
+}
+function dashCols({ starMap, editors, recent }: ListMeta): ColumnDef<DashboardSummary>[] {
   return [
     { id: 'star',        label: 'Favori',     sortValue: r => (starMap.has(r.id) ? 1 : 0), numeric: true, width: 36, minWidth: 36, ownLink: true, priority: 1 },
     { id: 'name',        label: 'Dashboard',  sortValue: r => r.name,        naturalDir: 'asc', width: 240, minWidth: 160, priority: 1 },
-    { id: 'tags',        label: 'Tags',       sortValue: r => (r.tags ?? []).join(','), naturalDir: 'asc', width: 180, minWidth: 100, priority: 2 },
-    { id: 'description', label: 'Description', sortValue: r => r.description, naturalDir: 'asc', width: 300, minWidth: 140, flex: true, priority: 3, tone: () => 'muted' },
-    { id: 'updatedAt',   label: 'Updated',    sortValue: r => r.updatedAt,   numeric: true,     width: 150, minWidth: 110, priority: 2, tone: () => 'muted' },
+    { id: 'tags',        label: 'Tags',       sortValue: r => (r.tags ?? []).join(','), naturalDir: 'asc', width: 160, minWidth: 100, priority: 2 },
+    { id: 'panels',      label: 'Panel',      sortValue: r => r.panelCount ?? -1, numeric: true, width: 64, minWidth: 56, priority: 3 },
+    { id: 'description', label: 'Description', sortValue: r => r.description, naturalDir: 'asc', width: 260, minWidth: 140, flex: true, priority: 4, tone: () => 'muted' },
+    { id: 'editor',      label: 'Son düzenleyen', sortValue: r => editors.get(r.id)?.actor ?? '', naturalDir: 'asc', width: 170, minWidth: 110, priority: 3, tone: () => 'muted' },
+    { id: 'updatedAt',   label: 'Updated',    sortValue: r => r.updatedAt,   numeric: true,     width: 130, minWidth: 100, priority: 2, tone: () => 'muted' },
+    { id: 'recent',      label: 'Son görüntülemeniz', sortValue: r => recent.get(r.id) ?? 0, numeric: true, width: 150, minWidth: 110, priority: 2, tone: () => 'muted' },
   ];
 }
 
@@ -157,34 +168,35 @@ export default function DashboardsPage() {
     }
   };
 
-  // Single global "spans/min over last 1h" series. Every row
-  // renders the same sparkline because the metric is system-
-  // wide; fetching once and sharing avoids N parallel requests
-  // when the dashboard list is long. Refresh every minute.
-  const activityQ = useQuery({
-    queryKey: ['dashboards', 'activity'],
-    queryFn: async () => {
-      const now = Date.now() * 1e6;
-      const from = now - 60 * 60 * 1e9; // last 1h
-      const series = await api.spanMetric({
-        agg: 'count',
-        from, to: now,
-        step: 60, // 1-min buckets, ~60 points
-      });
-      return series?.[0]?.points ?? [];
-    },
+  // Dilim 3.2 — son düzenleyen (paylaşılan, sunucu 60 sn) + kişisel son
+  // görüntülenenler. İkisi de liste açılınca bir kez okunur; polling yok.
+  const editorsQ = useQuery({
+    queryKey: ['dashboards', 'editors'],
+    queryFn: ({ signal }) => api.dashboardEditors(signal),
     staleTime: 60_000,
-    refetchInterval: 60_000,
   });
-  const activity = (activityQ.data ?? []).map(p => p.value);
-  const totalSpans = activity.reduce((a, b) => a + b, 0);
+  const recentQ = useQuery({
+    queryKey: ['dashboards', 'recent'],
+    queryFn: ({ signal }) => api.dashboardRecent(signal),
+    staleTime: 60_000,
+  });
+  const editors = useMemo(() => {
+    const m = new Map<string, DashboardEditor>();
+    for (const e of editorsQ.data?.editors ?? []) m.set(e.dashboardId, e);
+    return m;
+  }, [editorsQ.data]);
+  const recent = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const e of recentQ.data?.entries ?? []) m.set(e.id, e.at);
+    return m;
+  }, [recentQ.data]);
 
   const isAdmin = user?.role === 'admin' || user?.role === 'editor';
 
   // Shared sortable + resizable table with operator-speed keyboard nav
   // (j/k move, Enter/o open, "/" focuses the filter). Called
   // unconditionally (hooks rule) with [] while loading.
-  const columns = useMemo(() => dashCols(starMap), [starMap]);
+  const columns = useMemo(() => dashCols({ starMap, editors, recent }), [starMap, editors, recent]);
   const rowActions = useDashboardRowActions(isAdmin, items ?? []);
 
   // v0.10.967 — tablo standardı dilim 5 (T12 + P-1): yükleniyor / hata /
@@ -281,35 +293,24 @@ export default function DashboardsPage() {
                 case 'name': return <span className="cell-strong">{d.name}</span>;
                 case 'tags': return <span title={(d.tags ?? []).join(', ') || undefined}><TagBadges tags={d.tags} /></span>;
                 case 'description': return d.description || <span className="cell-empty">—</span>;
+                case 'panels': return d.panelCount ?? <span className="cell-empty">—</span>;
+                case 'editor': {
+                  const e = editors.get(d.id);
+                  return e
+                    ? <span title={`${e.actor} · ${tsLong(e.at)}`}>{e.actor}</span>
+                    : <span className="cell-empty" title="Denetim kaydında düzenleme yok (hazır pano ya da 365 günden eski)">—</span>;
+                }
                 case 'updatedAt': return <span title={`Updated ${tsLong(d.updatedAt)}`}>{tsLong(d.updatedAt)}</span>;
+                case 'recent': {
+                  const at = recent.get(d.id);
+                  return at
+                    ? <span title={tsLong(at * 1e6)}>{agoTR(at * 1e6)}</span>
+                    : <span className="cell-empty">hiç</span>;
+                }
               }
               return null;
             }} />
         </div>
-
-        {/* Shared system-wide activity strip — same data as the
-            former per-card thumbnails, lifted out so the table rows
-            stay scannable. Tells the operator at a glance whether
-            ingest traffic is steady, ramping, or quiet. */}
-        {filtered && filtered.length > 0 && (
-          <div className="row gap-3" style={{
-            marginTop: 12, padding: '8px 12px',
-            border: '1px solid var(--border)', borderRadius: 8,
-            background: 'var(--bg1)',
-          }}>
-            <span style={{ fontSize: 11, color: 'var(--text3)' }}>Ingest · last 1h</span>
-            {activity.length > 1 ? (
-              <Sparkline values={activity} width={180} height={28}
-                title={`Spans/min · last 1h · total ${fmtNum(totalSpans)}`} />
-            ) : (
-              <span style={{ color: 'var(--text3)', fontSize: 11 }}>—</span>
-            )}
-            <span style={{ flex: 1 }} />
-            <span style={{ fontSize: 11, color: 'var(--text2)' }} className="mono">
-              {fmtNum(totalSpans)} spans/h
-            </span>
-          </div>
-        )}
 
         {showNew && isAdmin && (
           <NewDashboardModal

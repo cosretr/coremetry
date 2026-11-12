@@ -6224,9 +6224,19 @@ export interface DashboardSummary {
   // yanıtında da geliyor (panels/variables'ın aksine: etiketler küçük
   // ve /dashboards tablosu onları çiziyor). Eski kayıtlarda yok → `?`.
   tags?: string[];
+  /** v0.10.1996 — yalnız liste yanıtında (JSONLength(panels)); tek pano GET'inde yok. */
+  panelCount?: number;
   createdAt: number;
   updatedAt: number;
 }
+// v0.10.1996 (Dashboards Faz 3 dilim 3.2) — GET /api/dashboards/editors
+// (internal/chstore/dashboard_editors.go DashboardEditor): audit_log'dan
+// türetilen son düzenleyen.
+export interface DashboardEditor { dashboardId: string; actor: string; at: number /* unix ns */ }
+// GET /api/dashboards/recent (internal/api/dashboard_list_meta.go) — kişisel
+// son görüntülenen panolar, en yeni önce; `at` unix ms.
+export interface DashboardRecentEntry { id: string; at: number }
+export interface DashboardRecentResponse { entries: DashboardRecentEntry[]; enabled: boolean }
 export interface Dashboard extends DashboardSummary {
   // Optional because list responses skip the heavy fields; only
   // the single-dashboard endpoint guarantees them. Renderer

@@ -24,6 +24,8 @@ const m = vi.hoisted(() => ({
   fail: false,
   pending: false,
   role: 'admin',
+  editors: [] as unknown[],
+  recent: [] as unknown[],
 }));
 vi.mock('@/lib/api', async (importOriginal) => {
   const mod = await importOriginal<Record<string, unknown>>();
@@ -37,7 +39,8 @@ vi.mock('@/lib/api', async (importOriginal) => {
         return Promise.resolve(m.items);
       },
       savedViews: () => Promise.resolve([]),
-      spanMetric: () => Promise.resolve([]),
+      dashboardEditors: () => Promise.resolve({ editors: m.editors }),
+      dashboardRecent: () => Promise.resolve({ entries: m.recent, enabled: true }),
     },
   };
 });
@@ -96,7 +99,7 @@ async function type(input: HTMLInputElement, value: string) {
 }
 
 beforeEach(() => {
-  m.items = []; m.fail = false; m.pending = false; m.role = 'admin';
+  m.items = []; m.fail = false; m.pending = false; m.role = 'admin'; m.editors = []; m.recent = [];
   try { localStorage.clear(); } catch { /* jsdom */ }
 });
 afterEach(() => {
@@ -192,5 +195,20 @@ describe('/dashboards — dilim 3.1: etiket çipleri + satır menüsü', () => {
     await wait();
     expect(dataRows(el)).toBe(1);
     expect(button(el, 'red')!.getAttribute('aria-pressed')).toBe('true');
+  });
+});
+
+describe('/dashboards — dilim 3.2: son düzenleyen + son görüntülemeniz', () => {
+  it('audit kaynaklı düzenleyen ve kişisel görüntüleme hücrede; yoksa soluk', async () => {
+    m.items = [{ ...dash('1', 'checkout'), panelCount: 7 }, dash('2', 'kafka')];
+    m.editors = [{ dashboardId: '1', actor: 'editor@com.acme', at: 1 }];
+    m.recent = [{ id: '1', at: Date.now() }];
+    const el = await mount();
+    const rows = [...el.querySelectorAll('table tbody tr:not([data-dt-state])')];
+    expect(rows[0].textContent).toContain('editor@com.acme');
+    expect(rows[0].textContent).toContain('az önce');
+    expect(rows[0].textContent).toContain('7');
+    expect(rows[1].textContent).toContain('hiç');
+    expect(el.textContent).not.toContain('Ingest');
   });
 });
