@@ -8,6 +8,7 @@ import { Spinner, Empty } from '@/components/Spinner';
 import { Button, IconButton, MenuItem, useConfirm } from '@/components/ui';
 import { LazyMount } from '@/components/LazyMount';
 import { PanelFrameMenu } from '@/components/coremetry/dashboard/PanelFrameMenu';
+import { DASH_GRID_CLASS, panelSpan, panelSpanClass } from '@/components/coremetry/dashboard/grid';
 import { PanelMenuProvider, usePanelMenuFrame } from '@/components/dashboard/panelMenuHost';
 import { panelChartHeight } from '@/components/dashboard/panelChrome';
 import type { PanelMenuAction } from '@/lib/chart/panelMenu';
@@ -262,7 +263,7 @@ function Inner() {
     // fine requests at the metric's export interval.
     const rangeSec = (to - from) / 1e9;
     const stepFor = (cfgStep: number | undefined, p: Panel) =>
-      effectivePanelStep(cfgStep, rangeSec, estimatePanelPx(contentW, p.width)) ?? undefined;
+      effectivePanelStep(cfgStep, rangeSec, estimatePanelPx(contentW, panelSpan(p) / 3)) ?? undefined;
     const requests = bundleablePanels.map(p => {
       if (p.type === 'metric') {
         const cfg = applyVarsToMetric(p.config as MetricPanelConfig, varValues);
@@ -525,7 +526,7 @@ function Inner() {
         {soloId && !editing ? (
           <SoloPanel panel={panels.find(p => p.id === soloId && p.type !== 'row')} onBack={() => setSolo(null)}>
             <DashboardGrid
-              panels={panels.filter(p => p.id === soloId).map(p => ({ ...p, width: 4, height: 'l' }))}
+              panels={panels.filter(p => p.id === soloId).map(p => ({ ...p, width: 4, span: 12, height: 'l' }))}
               range={range}
               vars={varValues}
               editing={false}
@@ -834,10 +835,8 @@ function DashboardGrid({
               </div>
             )}
             {!isCollapsed && g.panels.length > 0 && (
-              <div className="grid-4" style={{
-                display: 'grid', gap: 12,
-                marginTop: g.rowPanel ? 8 : 0,
-              }}>
+              // v0.10.1999 (dilim 3.5) — 12 kolon akış ızgarası (grid.ts).
+              <div className={DASH_GRID_CLASS} style={{ marginTop: g.rowPanel ? 8 : 0 }}>
                 {g.panels.map(p => (
                   <PanelCard key={p.id} p={p} range={range} vars={vars} editing={editing} canEdit={canEdit}
                     dropTarget={dropTarget === p.id}
@@ -902,7 +901,7 @@ function PanelCard({
   const frame = usePanelMenuFrame();
   return (
     <div
-      className="dash-panel"
+      className={`dash-panel ${panelSpanClass(p)}`}
       data-panel-id={p.id}
       draggable={editing}
       onDragStart={e => {
@@ -928,7 +927,6 @@ function PanelCard({
       }}
       onDragEnd={() => onDragState(null)}
       style={{
-        gridColumn: `span ${Math.max(1, Math.min(4, p.width))}`,
         background: 'var(--bg2)',
         border: dropTarget
           ? '1px dashed var(--accent)'

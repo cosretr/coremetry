@@ -6183,6 +6183,11 @@ export interface Panel {
   // (chstore/dashboard.go), so this round-trips with no migration.
   description?: string;
   width: PanelWidth;
+  // v0.10.1999 (Dashboards Faz 3 dilim 3.5; operatör S8) — 12 kolon akış
+  // ızgarasında genişlik (2..12). Yoksa `width × 3`: eski panolar piksel
+  // yakın aynı dizilir, göç yok (panel dizisi opak JSON). Okuyucu tek:
+  // components/coremetry/dashboard/grid.ts panelSpan.
+  span?: number;
   // v0.9.778 — optional body height (s / m / l). Deliberately NOT in the
   // per-type config: StatPanel's fetch effect keys on JSON.stringify(cfg), so
   // a height stored there would re-run the ClickHouse query on every resize.

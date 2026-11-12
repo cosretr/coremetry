@@ -4,7 +4,7 @@ import { Button, SegmentedControl } from '@/components/ui';
 import { ActionRow } from '@/components/coremetry/ActionRow';
 import { STEP_OPTIONS } from '@/pages/explore/presets';
 import type {
-  Panel, PanelType, PanelWidth, PanelHeight,
+  Panel, PanelType, PanelHeight,
   MetricPanelConfig, SpanMetricPanelConfig, StatPanelConfig, GaugePanelConfig, MarkdownPanelConfig,
   HeatmapPanelConfig, PromqlPanelConfig, TopNPanelConfig,
 } from '@/lib/types';
@@ -16,6 +16,7 @@ import { TOPN_SERVER_CAP } from './topN';
 // the same rgb() literals as PanelRenderer, so the editor swatch and the
 // rendered panel were two independent sources that could (and did) drift.
 import { THRESHOLD_COLOURS } from './panelChrome';
+import { SPAN_CHOICES, panelSpan, widthForSpan } from '@/components/coremetry/dashboard/grid';
 
 const TYPE_LABELS: Record<PanelType, string> = {
   metric:     'Metric (line)',
@@ -41,11 +42,15 @@ const TYPE_LABELS: Record<PanelType, string> = {
   row:        'Row (collapsible group)',
 };
 
-const WIDTH_LABELS: Record<PanelWidth, string> = {
-  1: 'Quarter (1/4)',
-  2: 'Half (2/4)',
-  3: 'Three quarters (3/4)',
-  4: 'Full row',
+// v0.10.1999 (dilim 3.5) — 12 kolon basamakları; seçim `span` yazar ve
+// `width`ı en yakın eski basamağa eşitler (grid.ts widthForSpan).
+const SPAN_LABELS: Record<number, string> = {
+  3: '3/12 (çeyrek)',
+  4: '4/12 (üçte bir)',
+  6: '6/12 (yarım)',
+  8: '8/12 (üçte iki)',
+  9: '9/12 (dörtte üç)',
+  12: '12/12 (tam satır)',
 };
 
 // v0.9.778 — panel body height. Grafana lets you drag any pixel value; three
@@ -148,10 +153,14 @@ export function PanelEditor({ panel, onChange, onClose, onDelete }: {
             </select>
           </Field>
           <Field label="Width">
-            <select value={panel.width}
-              onChange={e => update('width', Number(e.target.value) as PanelWidth)}>
-              {([1, 2, 3, 4] as PanelWidth[]).map(w =>
-                <option key={w} value={w}>{WIDTH_LABELS[w]}</option>)}
+            <select value={panelSpan(panel)}
+              onChange={e => {
+                const span = Number(e.target.value);
+                onChange({ ...panel, span, width: widthForSpan(span) });
+              }}>
+              {/* Seçenek dışı (ör. içe aktarılan 5/12) mevcut değer de listede. */}
+              {[...new Set([...SPAN_CHOICES, panelSpan(panel)])].sort((a, b) => a - b).map(n =>
+                <option key={n} value={n}>{SPAN_LABELS[n] ?? `${n}/12`}</option>)}
             </select>
           </Field>
           {showHeight && (
