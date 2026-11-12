@@ -1,5 +1,7 @@
 import { useUrlParams, strParam, csvParam, intParam } from '@/lib/urlParams';
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useTablePrefs } from '@/lib/queries/prefs';
+import { isDefaultExcOrder, parseStoredExcOrder, resolveExcOrder } from './exceptionColumns';
 import { TabStrip } from '@/components/ui/TabStrip'; // v0.10.456 (D5)
 import { rowActivation } from '@/lib/a11y'; // v0.10.451 (dış denetim D3 kalan)
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
@@ -101,6 +103,13 @@ const EXC_COLS: ColumnDef<ExceptionGroup>[] = [
 // `kind: 'actions'`) KALDIRILDI. Durum eylemleri satırın açtığı detayda
 // (ProblemDetail detay çubuğu: Acknowledge / Reopen / Ignore / Resolve) —
 // her durum için orada; satırdan erişilip detayda olmayan eylem kalmadı.
+
+// v0.10.2023 — kullanıcı kolon sırası (/traces v0.10.1516 kalıbı): başlık
+// sürükle-bırak + ⋯ "Sütun sırasını sıfırla". Kaynak önceliği sunucu tercihi
+// (/api/preferences/exception-inbox-v3) > localStorage > tanım sırası.
+const EXC_COL_IDS = EXC_COLS.map(c => c.id);
+const EXC_PREF_KEY = 'exception-inbox-v3';
+const EXC_COL_ORDER_LS_KEY = 'exception-inbox-col-order';
 
 // v0.10.740 — varsayılan occurrence tabanı (sunucu inboxDefaultMinOcc ile aynı).
 // v0.10.949 — 2 → 5, çoklu-servis istisnalı; varsayılan kipte istek tabanı
@@ -317,7 +326,48 @@ export default function ProblemsPage() {
   // fetch below forwards the sanitized pair so a stale persisted id
   // (old column schema, hand-edited URL) never reaches the backend
   // ORDER BY. Must precede the fetch effect that consumes it.
+  // v0.10.2023 (operatör 2026-11-12: "kolonlar yer değiştirebilir değil,
+  // traces'te gibi") — kolon sırası /traces ile aynı kalıp: null = tanım
+  // sırası (varsayılan görünüm aynen); sunucu tercihi BİR KEZ benimsenir,
+  // operatörün sonraki değişiklikleri debounce'lu PUT ile sunucuya, ayrıca
+  // localStorage'a (varsayılansa silinir). Genişlik imzası bildirilen
+  // kolonlardan: sürükleme genişlikleri sıfırlamaz. Sıfırlama başlık ⋯
+  // menüsündeki "Sütun sırasını sıfırla" (dt.reorder.reset, /traces ile
+  // ortak). /traces'in "Columns ▾" klavye eşi BİLEREK yok: ui/ColumnsPicker
+  // donmuş atom (uiImportRatchet tavanı 2), yeni içe aktaran giremez.
+  const [colOrder, setColOrder] = useState<string[] | null>(() => {
+    try { return parseStoredExcOrder(localStorage.getItem(EXC_COL_ORDER_LS_KEY)); } catch { return null; }
+  });
+  const colOrderIds = useMemo(() => resolveExcOrder(EXC_COL_IDS, colOrder), [colOrder]);
+  const applyColOrder = useCallback((next: readonly string[]) => setColOrder([...next]), []);
+  useEffect(() => {
+    try {
+      if (isDefaultExcOrder(EXC_COL_IDS, colOrderIds)) localStorage.removeItem(EXC_COL_ORDER_LS_KEY);
+      else localStorage.setItem(EXC_COL_ORDER_LS_KEY, JSON.stringify(colOrderIds));
+    } catch { /* private mode */ }
+  }, [colOrderIds]);
+  const prefs = useTablePrefs(EXC_PREF_KEY);
+  const prefsAdopted = useRef(false);
+  useEffect(() => {
+    if (prefs.model === undefined || prefsAdopted.current) return;
+    prefsAdopted.current = true;
+    if (prefs.model) setColOrder(resolveExcOrder(EXC_COL_IDS, prefs.model.order));
+  }, [prefs.model]);
+  useEffect(() => {
+    if (!prefsAdopted.current) return;
+    if (prefs.model && prefs.model.order.join(',') === colOrderIds.join(',')) return;
+    if (!prefs.model && isDefaultExcOrder(EXC_COL_IDS, colOrderIds)) return;
+    prefs.save({ v: 1, order: colOrderIds, hidden: [], sig: EXC_PREF_KEY });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [colOrderIds]);
+  const colModel = useMemo(() => ({
+    value: { v: 1 as const, order: colOrderIds, hidden: [], sig: EXC_PREF_KEY },
+    onChange: (m: { order: string[] }) => applyColOrder(m.order),
+  }), [colOrderIds, applyColOrder]);
+
   const dt = useDataTable<ExceptionGroup>({
+    columnModel: colModel,
+    reorderable: true,
     // v0.10.703 — anahtar v2: eski kalıcı sıra (lastSeen) yeni öncelik
     // varsayılanını gölgelemesin; genişlikler sıfırlanır (bilinçli).
     // v0.10.1323 — anahtar v3: v0.10.831 öncesi hook sıralamayı MOUNT'ta da
@@ -650,6 +700,105 @@ export default function ProblemsPage() {
                 // sekme); caret/servis/assignee hücreleri kendi tıklarını
                 // taşır, satır onClick'i kalan boşluk için kalıyor.
                 const excHref = excDetailHref(location.pathname, searchParams, g.fingerprint);
+                // v0.10.2023 — hücreler kullanıcı kolon sırasıyla (dt.visibleColumns,
+                // başlıkla aynı liste; hideCss konumu da buna dayanır).
+                const cells: Record<string, ReactNode> = {
+                  priority: <td className="row-cell"><Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}>{g.priority ? <PriorityBadge p={g.priority} reason={g.priorityReason} /> : <span style={{ color: 'var(--text3)' }}>—</span>}</Link></td>,
+                  state: <td className="row-cell"><Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}><StateBadge s={g.state} /></Link></td>,
+                  service: <td>
+                    {/* v0.9.966 — grubun KENDİ ömrü (firstSeen→
+                        lastSeen). ProblemDetail aynı satır tipi için
+                        zaten bu pencereyi kullanıyor; listeden ve
+                        detaydan açılan servis sayfası aynı zamana
+                        bakmalı. */}
+                    {ora && isSyntheticOracleService(g.service) ? (
+                      // v0.10.1092 — servisi çözülemeyen Oracle grubu: sentetik ad, link yok.
+                      <span className="mono cell-faint" title="Trace → servis çözümü bu operasyon için servis bulamadı">{g.service}</span>
+                    ) : (
+                      <Link to={serviceHref(g.service, { range: { fromNs: g.firstSeen, toNs: g.lastSeen } })}
+                        onClick={e => e.stopPropagation()}
+                        className="mono">
+                        {g.service}
+                      </Link>
+                    )}
+                    {/* v0.10.1092 — Oracle grubu: etkilenen servislerin ilk 3'ü (baskın yukarıda). */}
+                    {ora && (g.oracle?.serviceCount ?? 0) > 1 && (
+                      <div className="cell-faint" title={(g.oracle?.services ?? []).map(sv => sv.name).join(', ')}
+                        style={{ marginTop: 2, fontSize: 10.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        +{(g.oracle?.serviceCount ?? 1) - 1} servis
+                      </div>
+                    )}
+                    {/* v0.10.949 — aynı exception aynı anda N serviste (Inbox ile aynı işaret). */}
+                    {spread && (
+                      <div className="cell-faint" title={spreadTitle(spread.n, spread.partners, floorMeta.spreadWindowMin)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2, fontSize: 10.5, whiteSpace: 'nowrap' }}>
+                        <span className="dot" aria-hidden="true"
+                          style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor', flex: 'none' }} />
+                        {spread.n} servis
+                      </div>
+                    )}
+                  </td>,
+                  type: <td className="row-cell">
+                    <Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}>
+                    {/* v0.10.1084 — başlık hücresi Problems kuyruğuyla ORTAK
+                        bileşen (TriageTitleCell; operatör: "Exceptions'taki
+                        format güzel"): tip (mono, hata rengi) + mesaj + AI.
+                        v0.10.1068 — tip "…" ile kırpılır (dt-trunc).
+                        v0.9.1133 — AI özeti PASİF: payload'da zaten var, sıfır
+                        fetch; yoksa hiçbir şey çizilmez. stripMarkdown ŞART
+                        (kırpılmış yüzeyde `**` dökülür, v0.9.641/696). */}
+                    <TriageTitleCell
+                      title={ora ? oracleRowTitle(g) : g.type}
+                      code
+                      chips={<>
+                        {/* v0.10.1092 — Oracle hata tablosu grubu rozeti. */}
+                        {ora && (
+                          <Badge tone="info" style={{ fontSize: 9, padding: '0 5px' }}
+                            title="Oracle hata tablosu satırlarından oluşan grup (kaynak · hata kodu · operasyon)">
+                            {oraLabel}
+                          </Badge>
+                        )}
+                        {/* First observed within the last hour — the
+                           highest-signal marker for an SRE scanning the
+                           list in the morning. v0.9.314 — "<1h", not
+                           "NEW" (NEW is the STATE column's word). */}
+                        {Date.now() - g.firstSeen / 1e6 < 60 * 60 * 1000 && (
+                          <span className="badge b-warn" style={{ fontSize: 9, padding: '0 5px' }}
+                            title="First seen within the last hour — this exception did not exist before that.">
+                            &lt;1h
+                          </span>
+                        )}
+                      </>}
+                      detail={ora ? oracleRowDetail(g, oraLabel) : (g.message || '—')}
+                      detailTitle={ora ? oracleRowTooltip(g, oraLabel) : g.message}
+                      detailMono={!ora}
+                      ai={g.aiSummary ? stripMarkdown(g.aiSummary) : undefined} />
+                    </Link>
+                  </td>,
+                  occurrences: <td className="num row-cell cell-strong cell-err">
+                    <Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}>{fmtNum(Number(g.occurrences))}</Link>
+                  </td>,
+                  // v0.10.739 — tarih damgası 13 px (.ib-when, Inbox 736 ile aynı).
+                  // v0.10.1068 — yılsız damga (tsCompact), tam damga title'da.
+                  firstSeen: <td className="mono row-cell ib-when cell-faint" title={tsLong(g.firstSeen)}><Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}>{tsCompact(g.firstSeen)}</Link></td>,
+                  lastSeen: <td className="mono row-cell ib-when cell-faint" title={tsLong(g.lastSeen)}><Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}>{tsCompact(g.lastSeen)}</Link></td>,
+                  assignee: <td onClick={e => e.stopPropagation()}>
+                    {isAdmin ? (
+                      // v0.10.1068 — seçici hücreye sığar (eskiden 160 px sabit, 120 px hücrede kesiliyordu).
+                      <select value={g.assignee} onChange={e => setAssignee(g, e.target.value)}
+                        style={{ fontSize: 11, maxWidth: '100%' }}>
+                        <option value="">— unassigned —</option>
+                        {users.map(u => (
+                          <option key={u.id} value={u.id}>{u.email}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span style={{ fontSize: 11, color: 'var(--text2)' }}>
+                        {g.assignee ? (userById.get(g.assignee)?.email ?? g.assignee) : '—'}
+                      </span>
+                    )}
+                  </td>,
+                };
                 return (
                   <Fragment key={g.fingerprint}>
                     <tr {...rowActivation(() => openExcDetail(g))}
@@ -666,101 +815,7 @@ export default function ProblemsPage() {
                           ? <ChevronDown size={13} strokeWidth={1.75} style={{ verticalAlign: 'middle' }} />
                           : <ChevronRight size={13} strokeWidth={1.75} style={{ verticalAlign: 'middle' }} />}
                       </td>
-                      <td className="row-cell"><Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}>{g.priority ? <PriorityBadge p={g.priority} reason={g.priorityReason} /> : <span style={{ color: 'var(--text3)' }}>—</span>}</Link></td>
-                      <td className="row-cell"><Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}><StateBadge s={g.state} /></Link></td>
-                      <td>
-                        {/* v0.9.966 — grubun KENDİ ömrü (firstSeen→
-                            lastSeen). ProblemDetail aynı satır tipi için
-                            zaten bu pencereyi kullanıyor; listeden ve
-                            detaydan açılan servis sayfası aynı zamana
-                            bakmalı. */}
-                        {ora && isSyntheticOracleService(g.service) ? (
-                          // v0.10.1092 — servisi çözülemeyen Oracle grubu: sentetik ad, link yok.
-                          <span className="mono cell-faint" title="Trace → servis çözümü bu operasyon için servis bulamadı">{g.service}</span>
-                        ) : (
-                          <Link to={serviceHref(g.service, { range: { fromNs: g.firstSeen, toNs: g.lastSeen } })}
-                            onClick={e => e.stopPropagation()}
-                            className="mono">
-                            {g.service}
-                          </Link>
-                        )}
-                        {/* v0.10.1092 — Oracle grubu: etkilenen servislerin ilk 3'ü (baskın yukarıda). */}
-                        {ora && (g.oracle?.serviceCount ?? 0) > 1 && (
-                          <div className="cell-faint" title={(g.oracle?.services ?? []).map(sv => sv.name).join(', ')}
-                            style={{ marginTop: 2, fontSize: 10.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            +{(g.oracle?.serviceCount ?? 1) - 1} servis
-                          </div>
-                        )}
-                        {/* v0.10.949 — aynı exception aynı anda N serviste (Inbox ile aynı işaret). */}
-                        {spread && (
-                          <div className="cell-faint" title={spreadTitle(spread.n, spread.partners, floorMeta.spreadWindowMin)}
-                            style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2, fontSize: 10.5, whiteSpace: 'nowrap' }}>
-                            <span className="dot" aria-hidden="true"
-                              style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor', flex: 'none' }} />
-                            {spread.n} servis
-                          </div>
-                        )}
-                      </td>
-                      <td className="row-cell">
-                        <Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}>
-                        {/* v0.10.1084 — başlık hücresi Problems kuyruğuyla ORTAK
-                            bileşen (TriageTitleCell; operatör: "Exceptions'taki
-                            format güzel"): tip (mono, hata rengi) + mesaj + AI.
-                            v0.10.1068 — tip "…" ile kırpılır (dt-trunc).
-                            v0.9.1133 — AI özeti PASİF: payload'da zaten var, sıfır
-                            fetch; yoksa hiçbir şey çizilmez. stripMarkdown ŞART
-                            (kırpılmış yüzeyde `**` dökülür, v0.9.641/696). */}
-                        <TriageTitleCell
-                          title={ora ? oracleRowTitle(g) : g.type}
-                          code
-                          chips={<>
-                            {/* v0.10.1092 — Oracle hata tablosu grubu rozeti. */}
-                            {ora && (
-                              <Badge tone="info" style={{ fontSize: 9, padding: '0 5px' }}
-                                title="Oracle hata tablosu satırlarından oluşan grup (kaynak · hata kodu · operasyon)">
-                                {oraLabel}
-                              </Badge>
-                            )}
-                            {/* First observed within the last hour — the
-                               highest-signal marker for an SRE scanning the
-                               list in the morning. v0.9.314 — "<1h", not
-                               "NEW" (NEW is the STATE column's word). */}
-                            {Date.now() - g.firstSeen / 1e6 < 60 * 60 * 1000 && (
-                              <span className="badge b-warn" style={{ fontSize: 9, padding: '0 5px' }}
-                                title="First seen within the last hour — this exception did not exist before that.">
-                                &lt;1h
-                              </span>
-                            )}
-                          </>}
-                          detail={ora ? oracleRowDetail(g, oraLabel) : (g.message || '—')}
-                          detailTitle={ora ? oracleRowTooltip(g, oraLabel) : g.message}
-                          detailMono={!ora}
-                          ai={g.aiSummary ? stripMarkdown(g.aiSummary) : undefined} />
-                        </Link>
-                      </td>
-                      <td className="num row-cell cell-strong cell-err">
-                        <Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}>{fmtNum(Number(g.occurrences))}</Link>
-                      </td>
-                      {/* v0.10.739 — tarih damgası 13 px (.ib-when, Inbox 736 ile aynı). */}
-                      {/* v0.10.1068 — yılsız damga (tsCompact), tam damga title'da. */}
-                      <td className="mono row-cell ib-when cell-faint" title={tsLong(g.firstSeen)}><Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}>{tsCompact(g.firstSeen)}</Link></td>
-                      <td className="mono row-cell ib-when cell-faint" title={tsLong(g.lastSeen)}><Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}>{tsCompact(g.lastSeen)}</Link></td>
-                      <td onClick={e => e.stopPropagation()}>
-                        {isAdmin ? (
-                          // v0.10.1068 — seçici hücreye sığar (eskiden 160 px sabit, 120 px hücrede kesiliyordu).
-                          <select value={g.assignee} onChange={e => setAssignee(g, e.target.value)}
-                            style={{ fontSize: 11, maxWidth: '100%' }}>
-                            <option value="">— unassigned —</option>
-                            {users.map(u => (
-                              <option key={u.id} value={u.id}>{u.email}</option>
-                            ))}
-                          </select>
-                        ) : (
-                          <span style={{ fontSize: 11, color: 'var(--text2)' }}>
-                            {g.assignee ? (userById.get(g.assignee)?.email ?? g.assignee) : '—'}
-                          </span>
-                        )}
-                      </td>
+                      {dt.visibleColumns.map(c => <Fragment key={c.id}>{cells[c.id]}</Fragment>)}
                     </tr>
                     {open && (
                       <tr>
