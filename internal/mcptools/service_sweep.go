@@ -134,13 +134,28 @@ type ServicePodsCluster struct {
 	// "namespace\x00pod" → node (kube_pod_info), node'ların CPU baskısı + en
 	// işlek pod'ları. NodesOK = node okuması koştu (pod→node eşlemesi boşsa
 	// Nodes boş: "node etiketi yok"); NodeErr = baskı okunamadı.
-	PodNodes   map[string]string
-	Nodes      []NodePressure
-	NodesOK    bool
-	NodeErr    string
-	Truncated  bool
-	Err        string // okunamadıysa neden
-	DurationMs int64
+	PodNodes map[string]string
+	Nodes    []NodePressure
+	NodesOK  bool
+	NodeErr  string
+	// v0.10.2042 (servis sağlık kontrolü dilim 2; yalnız opt.Replicas):
+	// servis pod'larının iş yüklerinin istenen / hazır replikası.
+	// WorkloadNames = pod adlarından türetilen sorgu kümesi (bulunamadıysa
+	// satır bunu yazar); WorkloadsErr dolu = okunamadı.
+	Workloads     []WorkloadReplicas
+	WorkloadNames []string
+	WorkloadsOK   bool
+	WorkloadsErr  string
+	// v0.10.2042 (yalnız opt.ClusterHealth): node Ready sayımı + firing
+	// critical/warning alert'ler (cluster geneli; Watchdog hariç).
+	NodesReady    int
+	NodesNotReady int // status false | unknown
+	NodeReadyOK   bool
+	Alerts        []ClusterAlert
+	AlertsOK      bool
+	Truncated     bool
+	Err           string // okunamadıysa neden
+	DurationMs    int64
 }
 
 // ServicePodsResult — adaptörün cevabı.
@@ -160,6 +175,32 @@ type ServicePodsOpts struct {
 	// işlek 5 pod (thanos.PodNodeQuery / NodeCPUPressureQuery /
 	// NodeTopPodsQuery). Yalnız doygunluk hipotezi isterse (internal/sre).
 	Nodes bool
+	// Replicas / ClusterHealth — v0.10.2042 (servis sağlık kontrolü dilim 2):
+	// pod okumasının ARDINDAN, yalnız pod'u bulunan cluster'da, paralel:
+	// iş yükü replikası (1 sorgu; thanos.WorkloadReplicasQuery), node Ready +
+	// firing ALERTS (2 sorgu). Tarama ve AI SRE bunları istemez.
+	Replicas      bool
+	ClusterHealth bool
+}
+
+// WorkloadReplicas — v0.10.2042: bir iş yükünün istenen / hazır replikası
+// (kube-state; *OK = seri okundu).
+type WorkloadReplicas struct {
+	Namespace string  `json:"namespace"`
+	Kind      string  `json:"kind"` // Deployment | StatefulSet
+	Name      string  `json:"name"`
+	Desired   float64 `json:"desired"`
+	Ready     float64 `json:"ready"`
+	DesiredOK bool    `json:"-"`
+	ReadyOK   bool    `json:"-"`
+}
+
+// ClusterAlert — v0.10.2042: firing alert (ad × önem × namespace) sayısı.
+type ClusterAlert struct {
+	Name      string `json:"name"`
+	Severity  string `json:"severity"`
+	Namespace string `json:"namespace,omitempty"`
+	Count     int    `json:"count"`
 }
 
 // NodePressure — v0.10.1288: bir node'un CPU baskısı (allocatable'ın %'si)

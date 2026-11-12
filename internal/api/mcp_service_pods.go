@@ -134,8 +134,141 @@ func (s *Server) mcpServicePodsCluster(ctx context.Context, c thanos.ClusterConf
 			cl.WaitingOK = true
 		}
 	}
+	if (opt.Replicas || opt.ClusterHealth) && len(rows) > 0 {
+		s.mcpServicePodsExtras(cctx, c, &cl, opt)
+	}
 	cl.DurationMs = time.Since(start).Milliseconds()
 	return cl
+}
+
+// mcpServicePodsExtras — v0.10.2042 (servis sağlık kontrolü dilim 2): pod'u
+// bulunan cluster'da, AYNI cluster tavanı (cctx) içinde PARALEL üç anlık
+// sorgu — iş yükü replikası (servis pod'larının namespace'i + pod adından
+// türeyen iş yükü adları), node Ready sayımı, firing ALERTS. Biri düşerse
+// yalnız o alan "okunamadı" kalır (okunamadı ≠ temiz).
+func (s *Server) mcpServicePodsExtras(ctx context.Context, c thanos.ClusterConfig, cl *mcptools.ServicePodsCluster, opt mcptools.ServicePodsOpts) {
+	nsSet := map[string]bool{}
+	var namespaces, pods []string
+	for _, r := range cl.Rows {
+		pods = append(pods, r.Pod)
+		if r.Namespace != "" && !nsSet[r.Namespace] {
+			nsSet[r.Namespace] = true
+			namespaces = append(namespaces, r.Namespace)
+		}
+	}
+	sort.Strings(namespaces)
+	var wg sync.WaitGroup
+	var rq, nq, aq string
+	if opt.Replicas {
+		cl.WorkloadNames = thanos.WorkloadNamesFromPods(pods, mcpWorkloadNamesMax)
+		if len(cl.WorkloadNames) > 0 && len(namespaces) > 0 {
+			rq = thanos.WorkloadReplicasQuery(c.NamespaceFilter, namespaces, cl.WorkloadNames)
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				samples, err := s.thanos.InstantSamples(ctx, c, rq)
+				if err != nil {
+					cl.WorkloadsErr = err.Error()
+					return
+				}
+				cl.Workloads, cl.WorkloadsOK = workloadReplicasFrom(samples), true
+			}()
+		} else {
+			cl.WorkloadsOK = true // aranacak ad yok → "bulunamadı"
+		}
+	}
+	if opt.ClusterHealth {
+		nq, aq = thanos.NodeReadyQuery(), thanos.FiringAlertsQuery()
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			samples, err := s.thanos.InstantSamples(ctx, c, nq)
+			if err != nil {
+				return
+			}
+			cl.NodesReady, cl.NodesNotReady = nodeReadyCounts(samples)
+			cl.NodeReadyOK = true
+		}()
+		go func() {
+			defer wg.Done()
+			samples, err := s.thanos.InstantSamples(ctx, c, aq)
+			if err != nil {
+				return
+			}
+			cl.Alerts, cl.AlertsOK = clusterAlertsFrom(samples), true
+		}()
+	}
+	wg.Wait()
+	for _, q := range []string{rq, nq, aq} {
+		if q != "" {
+			cl.Query += "\n" + q
+		}
+	}
+}
+
+const mcpWorkloadNamesMax = 10
+
+// workloadReplicasFrom — SAF: replika sorgusunun örnekleri → iş yükü satırları.
+func workloadReplicasFrom(samples []thanos.Sample) []mcptools.WorkloadReplicas {
+	by := map[string]*mcptools.WorkloadReplicas{}
+	var order []string
+	for _, smp := range samples {
+		kind, name := "Deployment", smp.Labels["deployment"]
+		if name == "" {
+			kind, name = "StatefulSet", smp.Labels["statefulset"]
+		}
+		if name == "" {
+			continue
+		}
+		k := smp.Labels["namespace"] + "\x00" + kind + "\x00" + name
+		w := by[k]
+		if w == nil {
+			w = &mcptools.WorkloadReplicas{Namespace: smp.Labels["namespace"], Kind: kind, Name: name}
+			by[k] = w
+			order = append(order, k)
+		}
+		switch smp.Labels["__name__"] {
+		case "kube_deployment_spec_replicas", "kube_statefulset_replicas":
+			w.Desired, w.DesiredOK = smp.Value, true
+		case "kube_deployment_status_replicas_ready", "kube_statefulset_status_replicas_ready":
+			w.Ready, w.ReadyOK = smp.Value, true
+		}
+	}
+	sort.Strings(order)
+	out := make([]mcptools.WorkloadReplicas, 0, len(order))
+	for _, k := range order {
+		out = append(out, *by[k])
+	}
+	return out
+}
+
+// nodeReadyCounts — SAF: status → sayı; false + unknown "hazır değil".
+func nodeReadyCounts(samples []thanos.Sample) (ready, notReady int) {
+	for _, smp := range samples {
+		n := int(math.Round(smp.Value))
+		if smp.Labels["status"] == "true" {
+			ready += n
+		} else {
+			notReady += n
+		}
+	}
+	return ready, notReady
+}
+
+// clusterAlertsFrom — SAF: alert sorgusunun örnekleri → satırlar.
+func clusterAlertsFrom(samples []thanos.Sample) []mcptools.ClusterAlert {
+	out := make([]mcptools.ClusterAlert, 0, len(samples))
+	for _, smp := range samples {
+		out = append(out, mcptools.ClusterAlert{Name: smp.Labels["alertname"], Severity: smp.Labels["severity"],
+			Namespace: smp.Labels["namespace"], Count: int(math.Round(smp.Value))})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Severity != out[j].Severity {
+			return out[i].Severity == "critical"
+		}
+		return out[i].Name+out[i].Namespace < out[j].Name+out[j].Namespace
+	})
+	return out
 }
 
 // mcpServicePodsNodes — v0.10.1288 (AI SRE Faz 2, tembel node kontrolü):

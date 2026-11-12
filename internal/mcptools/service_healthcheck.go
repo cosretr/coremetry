@@ -28,6 +28,9 @@ package mcptools
 //	5 exception P1/P2            2 ile AYNI okuma                         0
 //	6-8 pod restart/bekleyen/kaynak  Thanos PodMetrics + restart artışı + bekleme sebebi   13 / cluster
 //	   (+ servisin cluster'ları: span cluster kırılımı                    1 CH)
+//	9 hazır replika (v0.10.2042) kube-state Deployment/StatefulSet       1 / cluster
+//	10 cluster sağlığı (v0.10.2042) node Ready + firing ALERTS           2 / cluster
+//	   (9-10 pod okumasının ardından, aynı cluster tavanında paralel; yalnız pod'u olan cluster)
 //
 // Hüküm KURALLARDAN çıkar (model yok). Durum: ok (İyi) / warn (Dikkat) /
 // crit (Sorun) / unknown (Ölçülemedi). Ölçülemedi ASLA İyi sayılmaz.
@@ -68,11 +71,13 @@ const (
 	HCCheckPodRestarts  = "pod_restarts"
 	HCCheckPodWaiting   = "pod_waiting"
 	HCCheckPodResources = "pod_resources"
+	HCCheckReplicas     = "replicas" // v0.10.2042
+	HCCheckCluster      = "cluster"  // v0.10.2042
 )
 
 // HCCatalogVersion — önbellek anahtarına girer: kontrol kümesi / eşikler
 // değişince eski gövde servis edilmez.
-const HCCatalogVersion = "hc-v1"
+const HCCatalogVersion = "hc-v2"
 
 // Eşikler (spec kontrol kataloğu; ayar YOK — operatör "ayarda vida değil
 // varsayılan" dedi).
@@ -260,7 +265,7 @@ func runServiceHealthcheck(ctx context.Context, r hcReaders, req HealthcheckRequ
 		{"pods", caps.pods, func(c context.Context) []HealthcheckRow {
 			return hcRunPods(c, r, svc, from, now)
 		}, func() []HealthcheckRow {
-			return hcClassifyPods(svc, ServicePodsResult{Thanos: true}, context.DeadlineExceeded, false)
+			return hcClassifyPodsOpts(svc, ServicePodsResult{Thanos: true}, context.DeadlineExceeded, false, hcAllPodChecks)
 		}},
 	}
 
@@ -324,6 +329,7 @@ wait:
 var hcCheckOrder = map[string]int{
 	HCCheckRED: 1, HCCheckProblems: 2, HCCheckAnomalies: 3, HCCheckDeploys: 4, HCCheckExceptions: 5,
 	HCCheckPodRestarts: 6, HCCheckPodWaiting: 7, HCCheckPodResources: 8,
+	HCCheckReplicas: 9, HCCheckCluster: 10,
 }
 
 // hcOrderRows — SAF: işlerin satırları → katalog sırası (aynı kontrolde
@@ -351,6 +357,8 @@ var hcTitles = map[string]string{
 	HCCheckPodRestarts:  "Pod restart ve OOM",
 	HCCheckPodWaiting:   "Bekleyen pod",
 	HCCheckPodResources: "Pod CPU / bellek limiti",
+	HCCheckReplicas:     "Hazır replika",
+	HCCheckCluster:      "Cluster sağlığı",
 }
 
 func hcServiceHref(service, tab string) string {
@@ -373,8 +381,10 @@ func hcBase(service, check, subject string) HealthcheckRow {
 		row.Link, row.LinkLabel = "/anomalies?service="+url.QueryEscape(service), "Anomaliler"
 	case HCCheckDeploys:
 		row.Link, row.LinkLabel = "/rollouts", "Rollouts"
-	case HCCheckPodRestarts, HCCheckPodWaiting, HCCheckPodResources:
+	case HCCheckPodRestarts, HCCheckPodWaiting, HCCheckPodResources, HCCheckReplicas:
 		row.Link, row.LinkLabel = hcServiceHref(service, "infra"), "Infrastructure"
+	case HCCheckCluster:
+		row.Link, row.LinkLabel = "/clusters", "Clusters"
 	}
 	return row
 }
@@ -674,33 +684,59 @@ func hcRunPods(ctx context.Context, r hcReaders, service string, from, to time.T
 		all = r.clusters()
 	}
 	if r.servicePods == nil || len(all) == 0 {
-		return hcClassifyPods(service, ServicePodsResult{}, nil, true)
+		return hcClassifyPodsOpts(service, ServicePodsResult{}, nil, true, hcAllPodChecks)
 	}
 	refs, _ := sweepPodClusterRefs(ctx, r.sweepReaders, SweepRequest{Service: service, From: from, To: to}, all)
 	if len(refs) > hcMaxPodClusters {
 		refs = refs[:hcMaxPodClusters]
 	}
-	res, err := r.servicePods(ctx, service, refs, from, to, ServicePodsOpts{WaitingReasons: true})
-	return hcClassifyPods(service, res, err, false)
+	res, err := r.servicePods(ctx, service, refs, from, to, ServicePodsOpts{WaitingReasons: true, Replicas: hcAllPodChecks.replicas, ClusterHealth: hcAllPodChecks.cluster})
+	return hcClassifyPodsOpts(service, res, err, false, hcAllPodChecks)
 }
 
-// hcClassifyPods — SAF: pod okuması → cluster başına üç satır, sıra: kontrol
-// önce (restart ×N, bekleyen ×N, kaynak ×N). Pod'u olmayan cluster düşer
-// (servis orada koşmuyor); hiçbirinde pod yoksa üç Ölçülemedi satırı.
+// hcPodChecks — pod okumasından türeyen ek cluster kontrolleri.
+type hcPodChecks struct{ replicas, cluster bool }
+
+// hcAllPodChecks — koşunun açtığı ek kontroller (dilim 2: 9 + 10).
+var hcAllPodChecks = hcPodChecks{replicas: true, cluster: true}
+
+// hcPodCheckIDs — SAF: açık kontrollerin katalog sırası.
+func hcPodCheckIDs(o hcPodChecks) []string {
+	ids := []string{HCCheckPodRestarts, HCCheckPodWaiting, HCCheckPodResources}
+	if o.replicas {
+		ids = append(ids, HCCheckReplicas)
+	}
+	if o.cluster {
+		ids = append(ids, HCCheckCluster)
+	}
+	return ids
+}
+
+// hcClassifyPods — dilim-1 kümesi (6-8).
 func hcClassifyPods(service string, res ServicePodsResult, err error, skipped bool) []HealthcheckRow {
-	three := func(subject, seen string) []HealthcheckRow {
-		return []HealthcheckRow{hcUnknownRow(service, HCCheckPodRestarts, subject, seen),
-			hcUnknownRow(service, HCCheckPodWaiting, subject, seen),
-			hcUnknownRow(service, HCCheckPodResources, subject, seen)}
+	return hcClassifyPodsOpts(service, res, err, skipped, hcPodChecks{})
+}
+
+// hcClassifyPodsOpts — SAF: pod okuması → cluster başına kontrol satırları,
+// sıra: kontrol önce (restart ×N, bekleyen ×N, …), cluster sonra. Pod'u
+// olmayan cluster düşer (servis orada koşmuyor); hiçbirinde pod yoksa her
+// kontrol için tek Ölçülemedi satırı.
+func hcClassifyPodsOpts(service string, res ServicePodsResult, err error, skipped bool, o hcPodChecks) []HealthcheckRow {
+	ids := hcPodCheckIDs(o)
+	allUnknown := func(subject, seen string) []HealthcheckRow {
+		out := make([]HealthcheckRow, 0, len(ids))
+		for _, id := range ids {
+			out = append(out, hcUnknownRow(service, id, subject, seen))
+		}
+		return out
 	}
 	switch {
 	case skipped || (!res.Thanos && err == nil):
-		return three("", "Thanos Remote Cluster yapılandırılmamış — pod metrikleri okunamaz")
+		return allUnknown("", "Thanos Remote Cluster yapılandırılmamış — pod / cluster metrikleri okunamaz")
 	case err != nil:
-		return three("", "pod'lar "+hcErrSeen(err))
+		return allUnknown("", "pod'lar "+hcErrSeen(err))
 	}
-	type trio struct{ a, b, c HealthcheckRow }
-	var per []trio
+	var per [][]HealthcheckRow
 	empty := 0
 	for _, cl := range res.Clusters {
 		name := firstNonEmpty(cl.Name, cl.ID)
@@ -709,15 +745,21 @@ func hcClassifyPods(service string, res ServicePodsResult, err error, skipped bo
 			if strings.Contains(strings.ToLower(cl.Err), "deadline") || strings.Contains(strings.ToLower(cl.Err), "timeout") {
 				seen = "zaman aşımı — okunamadı"
 			}
-			t := three(name, seen)
-			per = append(per, trio{t[0], t[1], t[2]})
+			per = append(per, allUnknown(name, seen))
 			continue
 		}
 		if len(cl.Rows) == 0 {
 			empty++
 			continue
 		}
-		per = append(per, trio{hcPodRestarts(service, name, cl), hcPodWaiting(service, name, cl), hcPodResources(service, name, cl)})
+		rows := []HealthcheckRow{hcPodRestarts(service, name, cl), hcPodWaiting(service, name, cl), hcPodResources(service, name, cl)}
+		if o.replicas {
+			rows = append(rows, hcReplicas(service, name, cl))
+		}
+		if o.cluster {
+			rows = append(rows, hcClusterHealth(service, name, cl))
+		}
+		per = append(per, rows)
 	}
 	if len(per) == 0 {
 		seen := "Thanos'ta bu servisin pod'u bulunamadı"
@@ -727,17 +769,13 @@ func hcClassifyPods(service string, res ServicePodsResult, err error, skipped bo
 		if empty == 0 {
 			seen = "taranacak cluster yok"
 		}
-		return three("", seen)
+		return allUnknown("", seen)
 	}
-	out := make([]HealthcheckRow, 0, 3*len(per))
-	for _, t := range per {
-		out = append(out, t.a)
-	}
-	for _, t := range per {
-		out = append(out, t.b)
-	}
-	for _, t := range per {
-		out = append(out, t.c)
+	out := make([]HealthcheckRow, 0, len(ids)*len(per))
+	for k := range ids {
+		for _, rows := range per {
+			out = append(out, rows[k])
+		}
 	}
 	return out
 }
