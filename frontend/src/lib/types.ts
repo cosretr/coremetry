@@ -12210,6 +12210,27 @@ export interface MLEvent {
   /** v0.10.2015 (D3) — grubun en son gölge terfi kararı (Problem AÇILMAZ; yalnız "açardı" kaydı). */
   groupShadow?: MLGroupDecision;
 }
+/** v0.10.2051 — /api/anomalies/unified satırı (internal/api/anomalies_unified.go
+ *  unifiedAnomalyRow): ML grupları + eski dedektör olayları sunucuda birleşir.
+ *  Liste kipinde yalnız lider (mlLead YA DA legacyLead; ML liderinde kanıt yok),
+ *  olay kipinde (`?event=`) üyeler de (ml / legacy). */
+export interface UnifiedAnomalyRow {
+  key: string; service: string;
+  start: number; end: number; // unix ns
+  signals: ('trace' | 'log' | 'metric')[];
+  status: 'running' | 'watching' | 'done' | 'rejected';
+  mlLead?: MLEvent; legacyLead?: AnomalyEvent;
+  mlCount: number; legacyCount: number;
+  ml?: MLEvent[]; legacy?: AnomalyEvent[];
+}
+/** v0.10.2051 — unifiedAnomaliesResponse. total = bu bölümün kesin satır sayısı
+ *  (süzgeç sonrası); truncated = bir kaynak okuma tavanına değdi (son 24 saat);
+ *  partial = o kaynak okunamadı. */
+export interface UnifiedAnomaliesPage {
+  items: UnifiedAnomalyRow[]; total: number; openTotal: number; doneTotal: number;
+  offset: number; limit: number; truncated: boolean; partial?: 'ml' | 'legacy';
+  row?: UnifiedAnomalyRow;
+}
 /** v0.10.2015 — ml.GroupDecision aynası (internal/ml/group_gate.go). */
 export interface MLGroupDecision {
   group: string; wouldOpen: boolean; rule: string; severity?: string; priority?: string; reason: string; detectors: string[]; at: number;

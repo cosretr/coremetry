@@ -15,7 +15,7 @@ import { CosreChart } from '@/components/CosreChart';
 import { ProblemVerdictActions } from '@/components/ProblemVerdictActions';
 import { ProblemStandardHeader } from './ProblemStandardHeader'; // v0.10.1529
 import { api } from '@/lib/api';
-import { keys, useAnomalyEventByID, useAnomalyEvents, useLogPatternSeries, useMLEvents } from '@/lib/queries';
+import { keys, useAnomalyEventByID, useLogPatternSeries, useUnifiedAnomalyRow } from '@/lib/queries';
 import { useEscLayer } from '@/lib/escLayer';
 import { DEFAULT_DURATIONS } from '@/lib/actions';
 import { anomalyEventSilenceBody } from '@/lib/inboxDrawer';
@@ -31,7 +31,7 @@ import {
 } from './anomalyDetail';
 import { SignalKindBadge } from '@/components/coremetry/SignalKindBadge';
 import { signalKindOf, type SignalKind } from '@/lib/signalKind';
-import { legacyEvidenceGroups, legacySignal, legacyStatusText, unifiedRows } from '@/components/coremetry/anomalies/unifiedRows';
+import { legacyEvidenceGroups, legacySignal, legacyStatusText } from '@/components/coremetry/anomalies/unifiedRows';
 import { CopyButton } from '@/components/CopyButton';
 import { evidenceSource } from '@/components/coremetry/anomalies/mlGroupDetail';
 import { AnomalyLogVolume, AnomalySample, BehaviorDetailsBox, SpikeFacts } from './anomalyDetailParts';
@@ -327,24 +327,21 @@ export function AnomalyEventDetail({ event, isAdmin, onBack }: {
 
 // AnomalyEvidenceRows — v0.10.2027: kanıt satırları (sinyal çipi + bir cümle +
 // kaynak notu). Olayın birleşik listedeki satırı (aynı servis, aynı zaman:
-// ML grubu + eski dedektör olayları) liste uçlarının önbelleğinden; satır
-// bulunamazsa yalnız bu olay. Yeni istek yok (aynı sorgu anahtarları).
+// ML grubu + eski dedektör olayları); satır bulunamazsa yalnız bu olay.
+// v0.10.2051 — satır sunucunun birleştirmesinden (/api/anomalies/unified?event=,
+// liste ile AYNI kural; istemci birleştirmesi kaldırıldı).
 function AnomalyEvidenceRows({ event }: { event: AnomalyEvent }) {
-  const ml = useMLEvents('');
-  const legacy = useAnomalyEvents();
-  const row = useMemo(
-    () => unifiedRows(ml.data?.items ?? [], legacy.data?.items ?? []).find(r => r.legacy.some(e => e.id === event.id)) ?? null,
-    [ml.data, legacy.data, event.id]);
+  const row = useUnifiedAnomalyRow(event.id).data?.row ?? null;
   const others = (row?.legacy ?? []).filter(e => e.id !== event.id);
   // v0.10.2038 — aynı tür + aynı kalıp TEK satır (örnekler alt alta, en çok 2);
   // log türünde kanıt cümleyi tekrar etmez, kalıp tam ve kopyalanabilir.
   const groups = legacyEvidenceGroups([event, ...others]);
   const items: { key: string; kind: SignalKind; text: string; source: string; pattern?: string; samples?: string[] }[] = [
     ...groups.map(g => ({ key: g.key, kind: legacySignal({ kind: g.kind } as Pick<AnomalyEvent, 'kind'>), text: g.text, source: g.source, pattern: g.pattern, samples: g.samples })),
-    ...(row?.ml ?? []).flatMap(g => g.members.map(m => ({
+    ...(row?.ml ?? []).map(m => ({
       key: `ml:${m.id}`, kind: signalKindOf(m.detector, m.signal), text: m.summary || m.detector,
       source: evidenceSource(m.detector, m.signal, m.evidence),
-    }))),
+    })),
   ];
   return (
     <ul data-testid="anomaly-evidence-rows" style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 6 }}>

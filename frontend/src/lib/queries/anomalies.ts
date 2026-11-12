@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { keys } from './keys';
 import type {
-  LogPatternAnomaly, TraceOpAnomaly, AnomalyEvent, AnomalySilence, Problem, LogPatternSeries,
+  LogPatternAnomaly, TraceOpAnomaly, AnomalyEvent, AnomalySilence, Problem, LogPatternSeries, UnifiedAnomaliesPage,
 } from '@/lib/types';
 
 // /anomalies is the heaviest fan-out page in the app — five
@@ -69,6 +69,34 @@ export function useAnomalyEvents(enabled = true) {
     // staleTime=50s < refetchInterval=60s which double-fetched
     // any time the operator switched tabs near the 50-60s mark.
     staleTime: 60_000,
+  });
+}
+
+const EMPTY_UNIFIED: UnifiedAnomaliesPage = { items: [], total: 0, openTotal: 0, doneTotal: 0, offset: 0, limit: 0, truncated: false };
+
+// useUnifiedAnomalies — v0.10.2051: /anomalies birleşik listesinin bir bölüm
+// sayfası (sunucu birleştirir, sıralar, sayfalar). Yoklama eski olay ucuyla
+// aynı (60 sn, RQ gizli sekmede durur); staleTime = sunucu TTL'i (30 sn).
+// Sayfa/süzgeç değişince önceki sayfa yerinde kalır (placeholderData).
+export function useUnifiedAnomalies(p: { section: 'open' | 'done'; signal: string; offset: number; limit: number }, enabled = true) {
+  return useQuery<UnifiedAnomaliesPage>({
+    queryKey: keys.anomalies.unified(p),
+    queryFn: async ({ signal }) => (await api.anomaliesUnified(p, signal)) ?? EMPTY_UNIFIED,
+    enabled,
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+    placeholderData: prev => prev,
+  });
+}
+
+// useUnifiedAnomalyRow — v0.10.2051: eski olayın birleşik satırı (üyeleriyle;
+// detay sayfasının kanıt satırları). Yoklama yok; staleTime = sunucu TTL'i.
+export function useUnifiedAnomalyRow(eventId: string) {
+  return useQuery<UnifiedAnomaliesPage>({
+    queryKey: keys.anomalies.unifiedRow(eventId),
+    queryFn: async ({ signal }) => (await api.anomalyUnifiedRow(eventId, signal)) ?? EMPTY_UNIFIED,
+    enabled: !!eventId,
+    staleTime: 30_000,
   });
 }
 

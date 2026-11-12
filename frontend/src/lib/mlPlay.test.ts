@@ -57,9 +57,10 @@ describe('mlPlay', () => {
   // grubun en güçlü üyesinin detayını OYNATMADAN açar.
   // v0.10.2027 — liste UnifiedAnomalies'e taşındı; satır href'i satırın kendi
   // hedefi (ML grubunda en güçlü üye, mlEventHref — oynatmasız).
+  // v0.10.2051 — satır sunucudan; href lider üyeden rowHref (unifiedRows.ts).
   it('row click (getRowHref) opens the row target without play', () => {
     const src = readFileSync(resolve(__dirname, '../components/coremetry/anomalies/UnifiedAnomalies.tsx'), 'utf8');
     expect(src).not.toMatch(/mlEventPlayHref/);
-    expect(src).toMatch(/getRowHref=\{r => r\.href\}/);
+    expect(src).toMatch(/getRowHref=\{rowHref\}/);
   });
 });

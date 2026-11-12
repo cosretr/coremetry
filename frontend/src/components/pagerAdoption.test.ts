@@ -29,6 +29,7 @@ const OFFSET = [
   'pages/Traces.tsx',
   'pages/Services.tsx',
   'features/anomalies/AnomaliesPage.tsx',
+  'components/coremetry/anomalies/UnifiedAnomalies.tsx', // v0.10.2051 — birleşik liste sunucu sayfalı
 ];
 const CURSOR = [
   'pages/Logs.tsx',

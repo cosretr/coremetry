@@ -15,7 +15,7 @@ describe('stripServicePrefix', () => {
     expect(stripServicePrefix(text, svc)).toBe(want);
   });
   it('listHeadline satırın servisini kullanır', () => {
-    expect(listHeadline({ headline: 'orders-batch: yeni bir log kalıbı belirdi, 25 satır', service: 'orders-batch' }))
+    expect(listHeadline({ mlLead: { summary: 'orders-batch: yeni bir log kalıbı belirdi, 25 satır' } as never, service: 'orders-batch' }))
       .toBe('Yeni bir log kalıbı belirdi, 25 satır');
   });
 });

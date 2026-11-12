@@ -10,6 +10,7 @@ export { useProblems, useProblemByID, useProblemSourceEvent, useProblemLogTempla
 export {
   useLogPatternAnomalies, useTraceOpAnomalies, useMetricAnomalies,
   useAnomalyEvents, useAnomalySilences, useAnomalyEventByID, useLogPatternSeries,
+  useUnifiedAnomalies, useUnifiedAnomalyRow,
   useCreateAnomalySilence, usePutAnomalyVerdict, useDeleteAnomalySilence,
   useBulkDeleteAnomalySilences,
 } from './anomalies';

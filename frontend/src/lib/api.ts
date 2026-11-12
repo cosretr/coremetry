@@ -1688,6 +1688,12 @@ export const api = {
   mlEvents: (p: { since?: GoDuration; signal?: string; detector?: string; service?: string; stage?: string } = {}) =>
     get<{ items: import('./types').MLEvent[]; truncated: boolean }>(
       `/api/ml/events?since=${p.since ?? '24h'}&signal=${encodeURIComponent(p.signal ?? '')}&detector=${encodeURIComponent(p.detector ?? '')}&service=${encodeURIComponent(p.service ?? '')}&stage=${encodeURIComponent(p.stage ?? '')}`),
+  // v0.10.2051 — /anomalies birleşik listesi (sunucuda birleşir + sayfalanır).
+  anomaliesUnified: (p: { section: 'open' | 'done'; signal?: string; offset: number; limit: number }, signal?: AbortSignal) =>
+    get<import('./types').UnifiedAnomaliesPage>(
+      `/api/anomalies/unified?section=${p.section}&signal=${encodeURIComponent(p.signal ?? '')}&offset=${p.offset}&limit=${p.limit}`, signal),
+  anomalyUnifiedRow: (eventId: string, signal?: AbortSignal) =>
+    get<import('./types').UnifiedAnomaliesPage>(`/api/anomalies/unified?event=${encodeURIComponent(eventId)}`, signal),
   mlScorecard: () => get<import('./types').MLScorecard>(`/api/ml/scorecard`),
   putMlVerdict: (id: string, body: { verdict: 'anomaly' | 'not_anomaly'; note?: string; detector: string; service: string }) =>
     request<unknown>(`/api/ml/${encodeURIComponent(id)}/verdict`, {

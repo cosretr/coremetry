@@ -49,43 +49,82 @@ func mlGroupID(service, firstMemberID string) string {
 // GroupMLEvents — SAF: olaylar → gruplar (servis, sonra başlangıç sırasıyla).
 // Girdi sırası sonucu değiştirmez; girdi değiştirilmez.
 func GroupMLEvents(evs []chstore.MLEvent, slack time.Duration) []MLGroup {
-	bySvc := map[string][]chstore.MLEvent{}
-	for _, e := range evs {
+	ws := make([]Window, 0, len(evs))
+	for i, e := range evs {
 		if e.Stage == chstore.MLStageChronic || e.Service == "" || e.ID == "" {
 			continue
 		}
-		bySvc[e.Service] = append(bySvc[e.Service], e)
+		ws = append(ws, Window{Key: e.Service, ID: e.ID, Start: e.StartedAt, End: e.LastSeen, Idx: i})
 	}
-	svcs := make([]string, 0, len(bySvc))
-	for s := range bySvc {
-		svcs = append(svcs, s)
+	chains := ChainWindows(ws, slack)
+	out := make([]MLGroup, 0, len(chains))
+	for _, c := range chains {
+		mem := make([]chstore.MLEvent, len(c.Members))
+		for j, w := range c.Members {
+			mem[j] = evs[w.Idx]
+		}
+		out = append(out, buildGroup(c.Key, mem, c.End))
 	}
-	sort.Strings(svcs)
-	var out []MLGroup
-	for _, svc := range svcs {
-		list := bySvc[svc]
-		sort.Slice(list, func(i, j int) bool {
-			if list[i].StartedAt != list[j].StartedAt {
-				return list[i].StartedAt < list[j].StartedAt
+	return out
+}
+
+// Window — zincirleme girdisi: bir anahtar (servis) altında [Start, End]
+// aralığı. Idx çağıranın kendi dilimindeki konumu (zincir onu geri taşır).
+type Window struct {
+	Key        string
+	ID         string
+	Start, End int64 // unix ns; End < Start ise Start sayılır
+	Idx        int
+}
+
+// Chain — aynı anahtarın zincirlenmiş pencereleri (başlangıç sırasıyla).
+type Chain struct {
+	Key        string
+	Members    []Window
+	Start, End int64
+}
+
+// ChainWindows — SAF, D2 KURALININ TEK GÖVDESİ (v0.10.2051'de GroupMLEvents'ten
+// ayrıldı; /api/anomalies/unified aynı kuralı ML grupları + eski dedektör
+// olaylarına uygular, ikinci bir gruplama yazılmasın diye): aynı anahtar,
+// pencereler arası boşluk ≤ slack → tek zincir; zincirleme geçerli. Sıra:
+// anahtar, sonra başlangıç, sonra ID. Filtre YOK (çağıran süzer). Girdi
+// değiştirilmez.
+func ChainWindows(ws []Window, slack time.Duration) []Chain {
+	byKey := map[string][]Window{}
+	for _, w := range ws {
+		byKey[w.Key] = append(byKey[w.Key], w)
+	}
+	keys := make([]string, 0, len(byKey))
+	for k := range byKey {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var out []Chain
+	for _, k := range keys {
+		list := byKey[k]
+		sort.SliceStable(list, func(i, j int) bool {
+			if list[i].Start != list[j].Start {
+				return list[i].Start < list[j].Start
 			}
 			return list[i].ID < list[j].ID
 		})
-		var cur []chstore.MLEvent
+		var cur []Window
 		var end int64
 		flush := func() {
 			if len(cur) > 0 {
-				out = append(out, buildGroup(svc, cur, end))
+				out = append(out, Chain{Key: k, Members: cur, Start: cur[0].Start, End: end})
 			}
 		}
-		for _, e := range list {
-			last := max(e.LastSeen, e.StartedAt)
-			if len(cur) > 0 && e.StartedAt <= end+int64(slack) {
-				cur = append(cur, e)
+		for _, w := range list {
+			last := max(w.End, w.Start)
+			if len(cur) > 0 && w.Start <= end+int64(slack) {
+				cur = append(cur, w)
 				end = max(end, last)
 				continue
 			}
 			flush()
-			cur, end = []chstore.MLEvent{e}, last
+			cur, end = []Window{w}, last
 		}
 		flush()
 	}

@@ -70,7 +70,8 @@ const HEAVY: { file: string; hooks: string[] }[] = [
   // iki koşunun vaka kayıtlarını çözer; sekme ya da çekmece kapanınca eski
   // istek kesilmeli. Başlat / durdur mutasyonları kapsam dışı (iptal edilmez).
   // v0.10.1060 — log deseni sayısı: ES'e giden histogram; detay sayfası kapanınca kesilmeli.
-  { file: 'anomalies.ts', hooks: ['api.anomalyLogPatternSeries('] },
+  // v0.10.2051 — birleşik liste: sayfa/süzgeç değişince eski istek kesilmeli.
+  { file: 'anomalies.ts', hooks: ['api.anomalyLogPatternSeries(', 'api.anomaliesUnified(', 'api.anomalyUnifiedRow('] },
   // v0.10.1064 — alarm metriği dizisi: MV ya da ham spans (≤6 sa) okuması; detay kapanınca kesilmeli.
   { file: 'alerts.ts', hooks: ['api.alertRuleSeries('] },
   { file: 'aiEval.ts', hooks: ['api.aiEvalsetCatalog(', 'api.aiEvalsetRuns(', 'api.aiEvalsetRun(', 'api.aiEvalsetCompare('] },

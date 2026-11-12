@@ -28,6 +28,9 @@ const (
 	mlVerdictPref  = "ml:"
 	// MLListCap — liste ucu tavanı (events ucuyla aynı: 200).
 	MLListCap = 200
+	// MLUnifiedCap — v0.10.2051: /api/anomalies/unified okuma tavanı (liste
+	// sunucuda birleşip sayfalanır; tavana değen cevap truncated söyler).
+	MLUnifiedCap = 2000
 )
 
 // MLVerdictID — anomaly_verdicts.event_id anahtarı. Önek, eski
@@ -113,8 +116,11 @@ type MLEventsFilter struct {
 
 // ListMLEvents — son olaylar (FINAL), last_seen DESC; kararlar eklenir.
 func (s *Store) ListMLEvents(ctx context.Context, f MLEventsFilter) ([]MLEvent, error) {
-	if f.Limit <= 0 || f.Limit > MLListCap {
+	if f.Limit <= 0 {
 		f.Limit = MLListCap
+	}
+	if f.Limit > MLUnifiedCap {
+		f.Limit = MLUnifiedCap
 	}
 	if f.Since.IsZero() {
 		f.Since = time.Now().Add(-24 * time.Hour)

@@ -119,6 +119,11 @@ export const keys = {
     traceOps:    ['anomalies', 'trace-ops'] as const,
     metrics:     ['anomalies', 'metrics'] as const,
     events:      ['anomalies', 'events'] as const,
+    // v0.10.2051 — birleşik liste (bölüm × süzgeç × sayfa) ve olayın birleşik satırı.
+    unifiedAll:  ['anomalies', 'unified'] as const,
+    unified:     (p: { section: string; signal: string; offset: number; limit: number }) =>
+      ['anomalies', 'unified', p.section, p.signal, p.offset, p.limit] as const,
+    unifiedRow:  (eventId: string) => ['anomalies', 'unified-row', eventId] as const,
     silences:    ['anomalies', 'silences'] as const,
     // v0.10.1032 — tekil olay (Problems kuyruğundaki tam sayfa anomali
     // detayı). 'anomalies' ağacının altında: susturma / karar / SSE ile

@@ -896,6 +896,9 @@ type ListAnomalyEventsFilter struct {
 	// türe düşsün: özne terfi süpürmesi subject_red satırlarını diğer
 	// türlerin bütçesinden ayrı okur). Boş = kısıt yok.
 	Kind string
+	// MaxExecSec (v0.10.2051) — >0 ise sorgu SETTINGS max_execution_time
+	// taşır (/api/anomalies/unified geniş okuması). 0 = eski davranış.
+	MaxExecSec int
 }
 
 // anomalyExcludeIDsSQL — ExcludeIDs'in TEK SQL karşılığı (v0.10.1042). Liste
@@ -966,6 +969,14 @@ func (s *Store) CountAnomalyEventsByStatus(ctx context.Context, sinceNs int64, a
 		return 0, 0, err
 	}
 	return active, cleared, nil
+}
+
+// anomalyMaxExecSQL — SAF: 0 = SETTINGS yok (eski çağıranlar aynen).
+func anomalyMaxExecSQL(sec int) string {
+	if sec <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("\n\t\tSETTINGS max_execution_time = %d", sec)
 }
 
 func (s *Store) ListAnomalyEvents(ctx context.Context, f ListAnomalyEventsFilter) ([]AnomalyEvent, error) {
@@ -1046,7 +1057,7 @@ func (s *Store) ListAnomalyEvents(ctx context.Context, f ListAnomalyEventsFilter
 		-- One more day of history and the active rows vanish silently.
 		-- Written as a boolean so the lexical trap can't come back.
 		ORDER BY status = 'active' DESC, last_seen DESC
-		LIMIT ?`, args...)
+		LIMIT ?`+anomalyMaxExecSQL(f.MaxExecSec), args...)
 	if err != nil {
 		return nil, err
 	}

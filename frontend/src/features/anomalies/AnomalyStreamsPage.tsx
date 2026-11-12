@@ -22,6 +22,7 @@ export default function AnomalyStreamsPage() {
   const setSignal = (s: MLSignal) => {
     const next = new URLSearchParams(sp);
     if (s) next.set('signal', s); else next.delete('signal');
+    next.delete('page'); next.delete('donePage'); // v0.10.2051 — süzgeç değişince sayfa başa
     setSp(next, { replace: true });
   };
   const legacy = legacyAnomalyRedirect(sp);

@@ -277,6 +277,7 @@ function MLEventActions({ id, card, verdict }: { id: string; card: ExplainCard; 
     try {
       await api.putMlVerdict(id, { verdict: v, detector: card.header.detector, service: card.header.service });
       await qc.invalidateQueries({ queryKey: keys.anomalies.ml });
+      await qc.invalidateQueries({ queryKey: keys.anomalies.unifiedAll }); // v0.10.2051 — birleşik liste ML kararını taşır
     } finally {
       setBusy(false);
     }
