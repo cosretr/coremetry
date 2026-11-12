@@ -13,11 +13,15 @@ import { Pause, Play } from 'lucide-react';
 import { TimeChart, type TimeChartSeries } from '@/components/charts/TimeChart';
 import { Button } from '@/components/shadcn/button';
 import { Slider } from '@/components/shadcn/slider';
-import { replayChart } from '@/lib/mlReplay';
+import { compactRegions, replayChart } from '@/lib/mlReplay';
+import { fmtClock } from '@/lib/utils';
+
 import {
   activeStep, frameAt, nextIndex, nextReduced, playStart, reducedSequence, stepIndices, PLAY_REDUCED_STEP_MS, PLAY_TICK_MS,
 } from '@/lib/mlPlay';
 import type { ExplainPlay, MLSnapshot } from '@/lib/types';
+
+const clockHM = (sec: number) => fmtClock(new Date(sec * 1000)).slice(0, 5);
 
 function prefersReducedMotion(): boolean {
   try {
@@ -32,9 +36,14 @@ function prefersReducedMotion(): boolean {
 // series (v0.10.1871): ana grafiğin serilerinin YERİNE (log yığılı çubukları);
 // kayıt zamanlarıyla aynı uzunlukta değilse yok sayılır. Bölge, yayın, imleç
 // aynen; lejant çağıranın (grafiğin üstünde).
-export function MLEventPlayer({ snap, play, autoPlay = false, above, series }: {
+// compact (v0.10.2032; operatör: "Series tablosu, üst üste binen tetik
+// etiketleri, oynatma şeridi sade görünümde fazla"): lejant tablosu yok,
+// oynatma şeridi yok, tetikler tek hafif bant + tek "tespit HH:MM" etiketi;
+// normal aralık bant çizgileri kalır, altında tek satır açıklama. Tam görünüm
+// (lejant + oynatma) teknik ayrıntıda.
+export function MLEventPlayer({ snap, play, autoPlay = false, above, series, compact = false }: {
   snap: MLSnapshot; play?: ExplainPlay | null; autoPlay?: boolean; above?: (cursorSec: number | null) => ReactNode;
-  series?: TimeChartSeries[] | null;
+  series?: TimeChartSeries[] | null; compact?: boolean;
 }) {
   const ch = useMemo(() => replayChart(snap), [snap]);
   const times = ch.times;
@@ -45,7 +54,7 @@ export function MLEventPlayer({ snap, play, autoPlay = false, above, series }: {
   const reducedRef = useRef(false);
   const stepIdx = useMemo(() => (play ? stepIndices(times, play.steps) : []), [times, play]);
   const seq = useMemo(() => reducedSequence(stepIdx), [stepIdx]);
-  const canPlay = !!play && play.frames.length > 0 && times.length > 1;
+  const canPlay = !compact && !!play && play.frames.length > 0 && times.length > 1;
 
   const start = () => {
     reducedRef.current = prefersReducedMotion();
@@ -87,16 +96,21 @@ export function MLEventPlayer({ snap, play, autoPlay = false, above, series }: {
       {above?.(cursorSec ?? null)}
       {times.length > 0 ? (
         <TimeChart height={220} times={times} deployMarkers={ch.deploys}
-          regions={ch.regions.map(r => ({ ...r, color: r.label === 'anomali' ? 'var(--err)' : 'var(--warn)' }))}
+          regions={compact
+            ? compactRegions(ch.regions, clockHM).map(r => ({ ...r, color: 'var(--text3)' }))
+            : ch.regions.map(r => ({ ...r, color: r.label === 'anomali' ? 'var(--err)' : 'var(--warn)' }))}
           playhead={canPlay && cursorSec != null ? { cursorSec, fromSec: play?.from } : null}
-          hideLegend={!!override} leftInteger={!!override}
+          hideLegend={!!override || compact} leftInteger={!!override}
           series={override ?? [
             { key: 'v', label: snap.part || 'değer', data: ch.value, color: 'var(--accent)', type: 'line', width: 2 },
             { key: 'hi', label: ch.banded ? 'beklenen aralık üst' : 'alarm sınırı üst', data: ch.upper, color: 'var(--text3)', type: 'line', width: 1 },
             { key: 'lo', label: ch.banded ? 'beklenen aralık alt' : 'alarm sınırı alt', data: ch.lower, color: 'var(--text3)', type: 'line', width: 1 },
-            ...(ch.banded ? [{ key: 'alarm', label: 'alarm sınırı', data: ch.alarm, color: 'var(--warn)', type: 'line' as const, width: 1 }] : []),
+            ...(ch.banded && !compact ? [{ key: 'alarm', label: 'alarm sınırı', data: ch.alarm, color: 'var(--warn)', type: 'line' as const, width: 1 }] : []),
           ]} />
       ) : <p className="text-sm text-muted-foreground">{snap.part ? 'Seri boş (ml_series bu pencereyi taşımıyor).' : 'Bu dedektör seri tutmaz (kesitsel karar); kanıt aşağıda.'}</p>}
+      {compact && times.length > 0 && !override && (
+        <p className="m-0 mt-1 text-xs text-muted-foreground" data-testid="ml-chart-legend">düz çizgi: değer · ince çizgiler: normal aralık</p>
+      )}
       {canPlay && play && (
         <div className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-2 border-t border-[color:var(--divider)] pt-2" data-testid="ml-play-controls">
           <Button size="sm" onClick={toggle} aria-label={playing ? 'Oynatmayı duraklat' : 'Olayı oynat'} data-testid="ml-play-toggle">

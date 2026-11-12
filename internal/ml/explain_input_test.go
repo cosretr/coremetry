@@ -143,7 +143,7 @@ func TestMetricLabelFor(t *testing.T) {
 	ev := chstore.MLEvent{ID: "m", Detector: "metric_pool", Signal: chstore.MLSignalMetric, Service: "payments-mobile", Code: "metric_pool|pool_wait",
 		StartedAt: at(14, 28).UnixNano(), LastSeen: at(14, 40).UnixNano(), WindowSec: 300, Observed: 0.9, Baseline: 0.3, Direction: "up"}
 	got := ExplainSummary(SummaryInput(ev, cfg, at(14, 44), trLoc))
-	if !strings.HasPrefix(got, "payments-mobile: Bağlantı bekleme normalin yaklaşık 3 katı, 16 dakikadır") {
+	if !strings.HasPrefix(got, "payments-mobile: Bağlantı bekleme 0,9 sn/sn seviyesine çıktı; normalde yaklaşık 0,3 sn/sn.") { // v0.10.2032
 		t.Errorf("metrik özeti: %q", got)
 	}
 }

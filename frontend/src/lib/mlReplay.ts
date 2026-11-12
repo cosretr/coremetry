@@ -165,3 +165,13 @@ export function snapDirection(s: MLSnapshot): 'up' | 'down' {
   const mean = pts.reduce((a, p) => a + p.v, 0) / pts.length;
   return mean < s.baselineMed ? 'down' : 'up';
 }
+
+/** SAF (v0.10.2032; operatör: üst üste binen "tetik" etiketleri okunmuyor):
+ *  sade grafik için tek bölge — olay aralığı tek hafif bant, tek etiket
+ *  "tespit HH:MM". Tetik kovaları ayrı çizilmez (oynatmalı tam görünüm
+ *  teknik ayrıntıda). clock: unix sn → "HH:MM". */
+export function compactRegions(regions: { fromSec: number; toSec: number; label: string }[], clock: (sec: number) => string): { fromSec: number; toSec: number; label: string }[] {
+  const ev = regions.find(r => r.label === 'anomali') ?? regions[0];
+  if (!ev) return [];
+  return [{ fromSec: ev.fromSec, toSec: ev.toSec, label: `tespit ${clock(ev.fromSec)}` }];
+}

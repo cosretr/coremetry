@@ -154,9 +154,10 @@ func TestThanosEventGroupsWithService(t *testing.T) {
 func TestThanosSummaryCarriesCluster(t *testing.T) {
 	st := time.Date(2026, 11, 12, 10, 0, 0, 0, time.UTC)
 	in := CardInput{Detector: "metric_jvm", Signal: chstore.MLSignalMetric, Service: "checkout", Code: "metric_jvm|heap_used@prod-east",
-		Part: "metric_jvm|heap_used@prod-east", MetricLabel: "Heap kullanımı", StartedAt: st, LastSeen: st.Add(10 * time.Minute), BucketSec: 300,
+		Part: "metric_jvm|heap_used@prod-east", MetricLabel: "Heap kullanımı", MetricUnit: "bytes", StartedAt: st, LastSeen: st.Add(10 * time.Minute), BucketSec: 300,
 		Observed: 2e9, Baseline: 1e9, Direction: "up", Now: st.Add(10 * time.Minute)}
-	if s := ExplainSummary(in); !strings.HasPrefix(s, "checkout servisi, prod-east cluster'ında heap kullanımı") {
+	// v0.10.2032 — metrik özeti değer + normal + cluster.
+	if s := ExplainSummary(in); !strings.HasPrefix(s, "checkout: Heap kullanımı prod-east cluster'ında") || !strings.Contains(s, "seviyesine çıktı; normalde yaklaşık") {
 		t.Errorf("özet: %q", s)
 	}
 }

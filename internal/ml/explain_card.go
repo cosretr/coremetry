@@ -438,10 +438,10 @@ func summaryOf(in CardInput, sp detSpec, open bool, end time.Time) string {
 		head = fmt.Sprintf("%s: son %d çağrının %s normalden yavaş", in.Service, lt.N, numSfx(int64(lt.K), sfxPoss3))
 	} else if in.Detector == detTraceErrorCount {
 		head = traceErrHead(in)
-	} else if _, _, cl := splitThanosPart(in.Part); in.Signal == chstore.MLSignalMetric && cl != "" {
-		// v0.10.2019 — Thanos kaynaklı metrik olayı cluster'ı söyler.
-		head = fmt.Sprintf("%s servisi, %s cluster'ında %s %s", in.Service, cl, lowerFirstTR(fill(sp.fact, in)),
-			RatioPhrase(in.Observed, in.Baseline, in.Direction, RatioLong, ratioRef(in)))
+	} else if in.Signal == chstore.MLSignalMetric {
+		// v0.10.2032 (operatör: "cümle değeri söylemiyor") — metrik olayı
+		// ölçülen değeri ve normalini birimiyle söyler; cluster varsa adıyla.
+		return metricSummary(in, sp, open, end)
 	} else {
 		head = fmt.Sprintf("%s: %s %s", in.Service, fill(sp.fact, in), RatioPhrase(in.Observed, in.Baseline, in.Direction, RatioLong, ratioRef(in)))
 	}

@@ -170,7 +170,7 @@ export function MLReplayContent({ id, autoPlay = false, group = null }: { id: st
       <Section id="ml-course" title="Olayın seyri" sub={snap ? `${Math.round((snap.bucketSec || 300) / 60)} dakikalık kova · normal aralık bandıyla` : undefined}>
         <div className="rounded-md border border-border bg-card px-3 py-2.5">
           {snap && lc ? <MLLogPlayer snap={snap} play={card.play} autoPlay={autoPlay} lc={lc} />
-            : snap ? <MLEventPlayer snap={snap} play={card.play} autoPlay={autoPlay} />
+            : snap ? <MLEventPlayer snap={snap} play={card.play} compact />
               : <p className="text-sm text-muted-foreground">Bu olay için grafik kaydı yok (olay anı kaydı yazılmadan önce açılmış ya da süresi dolmuş).</p>}
         </div>
       </Section>
@@ -209,6 +209,12 @@ export function MLReplayContent({ id, autoPlay = false, group = null }: { id: st
               { k: 'Nereye bakmalı', v: <span className="flex flex-wrap gap-2">{card.whereToLook.map(l => <Chip key={l.label} link={l} />)}</span> },
             ]} />
           </div>
+          {/* v0.10.2032 — tam görünüm (seriler + alarm sınırları + oynatma) burada; özetteki grafik sade. */}
+          {snap && !lc && (
+            <div data-testid="ml-replay-full">
+              <MLEventPlayer snap={snap} play={card.play} autoPlay={autoPlay} />
+            </div>
+          )}
           {tc && <MLTraceCourse tc={tc} cursorSec={null} />}
           <MLSignalEvidence id={id} signal={h.kind} />
           {snap ? <MLEvidence snap={snap} /> : <p className="text-sm text-muted-foreground">Olay anı kaydı yok; örnek satır gösterilemiyor.</p>}

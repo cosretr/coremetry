@@ -355,23 +355,6 @@ func RatioPhrase(observed, base float64, dir string, form RatioForm, ref string)
 	return fmt.Sprintf("yaklaşık %d kat", n)
 }
 
-// lowerFirstTR — SAF (v0.10.2019): ilk harfi küçült (Türkçe İ → i, I → ı).
-func lowerFirstTR(s string) string {
-	rs := []rune(s)
-	if len(rs) == 0 {
-		return s
-	}
-	switch rs[0] {
-	case 'İ':
-		rs[0] = 'i'
-	case 'I':
-		rs[0] = 'ı'
-	default:
-		rs[0] = unicode.ToLower(rs[0])
-	}
-	return string(rs)
-}
-
 // capFirst — SAF: ilk harfi büyüt (Türkçe i → İ).
 func capFirst(s string) string {
 	rs := []rune(s)
