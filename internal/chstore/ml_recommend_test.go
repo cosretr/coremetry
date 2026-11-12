@@ -87,6 +87,12 @@ func TestRecommendMLConfigUnmeasuredLeavesAsIs(t *testing.T) {
 // öneri onu sessizce atlamasın) ve hiçbir log dedektörü haritada olmamalı.
 func TestMLDetectorSourcesCoverNonLogDetectors(t *testing.T) {
 	for _, d := range append(append([]string{}, MLTraceDetectorNames...), MLMetricDetectorNames...) {
+		if _, exempt := mlRecommendExempt[d]; exempt {
+			if _, ok := mlDetectorSources[d]; ok {
+				t.Errorf("%s: muaf dedektör VM kaynak haritasında olmamalı", d)
+			}
+			continue
+		}
 		if len(mlDetectorSources[d]) == 0 {
 			t.Errorf("%s: kaynak tanımsız", d)
 		}

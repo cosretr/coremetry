@@ -28,7 +28,7 @@ export const ML_DETECTOR_TR: Record<string, string> = {
   pod_outlier: 'Aykırı pod', change_point: 'Kırılma',
   op_latency: 'Endpoint gecikmesi', op_error_rate: 'Endpoint hata oranı', throughput_drop: 'Trafik düşüşü',
   metric_jvm: 'JVM', metric_pool: 'Connection pool', metric_kafka: 'Kafka', metric_http_client: 'HTTP client', metric_k8s: 'Kubernetes',
-  dependency_latency: 'Bağımlılık gecikmesi', trace_pod_outlier: 'Aykırı pod (trace)', trace_change_point: 'Kırılma (trace)',
+  dependency_latency: 'Bağımlılık gecikmesi', trace_pod_outlier: 'Aykırı pod (trace)', trace_change_point: 'Kırılma (trace)', trace_error_count: 'Operasyon hata sayısı',
 };
 export type MLSignal = '' | 'log' | 'trace' | 'metric';
 /** SAF: ?signal= çözümü; bilinmeyen → hepsi. */
@@ -116,6 +116,7 @@ export function detectorGroup(d: string): string {
     case 'change_point': return 'log_change_point';
     case 'op_latency': case 'op_error_rate': case 'throughput_drop': return 'trace_red';
     case 'dependency_latency': return 'dependency';
+    case 'trace_error_count': return 'trace_errors'; // v0.10.2018
     default: return 'trace_pods';
   }
 }

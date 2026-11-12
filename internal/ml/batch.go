@@ -58,7 +58,7 @@ func batchMeasureOf(ev chstore.MLEvent, loadParts map[string]bool) batchMeasure 
 	switch ev.Detector {
 	case detLogVolume, detServiceSilent, detThroughputDrop:
 		return batchMeasureLoad
-	case detErrorRate:
+	case detErrorRate, detTraceErrorCount: // v0.10.2018: CH hata span sayısı; pay kanıtı yok → KALIR
 		return batchMeasureErrCount
 	case detChangePoint:
 		// log CUSUM iki seri üstünde: _total (hacim) ve _error (hata sayısı)

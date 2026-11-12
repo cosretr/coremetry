@@ -31,6 +31,8 @@ export const ML_TRACE_DETECTORS: { id: string; label: string; hint: string }[] =
   { id: 'dependency_latency', label: 'Bağımlılık gecikmesi', hint: 'VM client histogramları: HTTP/DB/messaging hedefi bazında p95 (rollup yok — tail sampling)' },
   { id: 'trace_pod_outlier', label: 'Aykırı pod (trace)', hint: 'VM server RED, pod etiketi varsa: pod\'lar arasında hata oranı / p95 sapması' },
   { id: 'trace_change_point', label: 'Kırılma (trace)', hint: 'CUSUM + rollout eşleştirmesi' },
+  // v0.10.2018 — T-err: hata span'leri örneklenmediği için sayı CH'de tam; oran DEĞİL.
+  { id: 'trace_error_count', label: 'Operasyon hata sayısı', hint: 'ClickHouse spanmetrics_1m: servis × operasyon (server/consumer) hata span sayısı kendi tabanının üstüne çıktı; oran hesaplanmaz' },
 ];
 export const ML_METRIC_DETECTORS: { id: string; label: string; hint: string }[] = [
   { id: 'metric_jvm', label: 'JVM', hint: 'Heap, GC, thread (VM, servis düzeyi)' },

@@ -180,6 +180,7 @@ var mlDetSpecs = map[string]detSpec{
 	"throughput_drop":    {label: "Trafik düşüşü", fact: "istek sayısı", what: "{svc} servisine gelen istek sayısı düştü.", past: "istek sayısı düştü", unit: unitCount, noun: "istek", additive: true},
 	"dependency_latency": {label: "Bağımlılık gecikmesi (p95)", fact: "{code} çağrı süresi", what: "{svc} servisinin {code} çağrıları yavaşladı.", past: "{code} çağrıları yavaşladı", unit: unitMs, measure: "Çağrı süresi (p95)"},
 	"trace_change_point": {label: "Kırılma (trace, p95)", fact: "yanıt süresi (p95)", what: "{svc} servisinde yanıt süresi kalıcı olarak {dir}.", past: "yanıt süresi kalıcı olarak değişti", unit: unitMs, measure: "Yanıt süresi (p95)"},
+	"trace_error_count":  {label: "Operasyon hata sayısı (CH, örneklenmemiş hata span'leri)", fact: "{code} hata sayısı", what: "{svc} servisinin {code} operasyonunda hata sayısı arttı.", past: "hata sayısı arttı", unit: unitCount, noun: "hata", additive: true},
 	"trace_pod_outlier":  {label: "Aykırı pod (trace)", fact: "{pod} pod'unda hata payı", what: "{svc} servisinde {pod} pod'u diğerlerinden daha çok hata veriyor.", past: "bir pod diğerlerinden ayrıştı", unit: unitRatio},
 	"log_volume":         {label: "Log hacmi", fact: "log hacmi", what: "{svc} servisinin log hacmi {dirn}.", past: "log hacmi değişti", unit: unitCount, noun: "log satırı", additive: true},
 	"error_rate":         {label: "Hata oranı (log)", fact: "hata logları", what: "{svc} servisinde hata logları arttı.", past: "hata logları arttı", unit: unitCount, noun: "hata satırı", additive: true},
@@ -434,6 +435,8 @@ func summaryOf(in CardInput, sp detSpec, open bool, end time.Time) string {
 	var head string
 	if lt := in.LowTraffic; lt != nil && lt.N > 0 {
 		head = fmt.Sprintf("%s: son %d çağrının %s normalden yavaş", in.Service, lt.N, numSfx(int64(lt.K), sfxPoss3))
+	} else if in.Detector == detTraceErrorCount {
+		head = traceErrHead(in)
 	} else {
 		head = fmt.Sprintf("%s: %s %s", in.Service, fill(sp.fact, in), RatioPhrase(in.Observed, in.Baseline, in.Direction, RatioLong, ratioRef(in)))
 	}
@@ -450,6 +453,14 @@ func summaryOf(in CardInput, sp detSpec, open bool, end time.Time) string {
 		return fmt.Sprintf("%s, %s (%s%s beri).", head, since, day, clockSfx(st, sfxAbl))
 	}
 	return fmt.Sprintf("%s, %s sürdü (%s%s–%s).", head, plain, day, st.Format("15:04"), end.In(loc).Format("15:04"))
+}
+
+// traceErrHead — SAF (v0.10.2018 T-err): mutlak hata sayısı cümlesi; oran
+// söylenmez. "X servisinin Y operasyonunda hata sayısı son 5 dakikada 40'a
+// çıktı; bu saatte normali en çok 4". Baseline = normalin üst sınırı.
+func traceErrHead(in CardInput) string {
+	return fmt.Sprintf("%s servisinin %s operasyonunda hata sayısı son %d dakikada %s çıktı; bu saatte normali en çok %d",
+		in.Service, in.Code, int(in.bucket().Minutes()), numSfx(int64(math.Round(in.Observed)), sfxDat), int64(math.Ceil(in.Baseline)))
 }
 
 func sinceOf(in CardInput, open bool, end time.Time) string {

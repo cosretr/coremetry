@@ -325,6 +325,9 @@ func TestTelemetryReadConnCallSurface(t *testing.T) {
 		// FROM'u spanmetrics_1m (zaman sınırlı, LIMIT). SlowestCallees
 		// topology_edges_5m FINAL'i ana bağlantıdan okur (telemetryReadConn DEĞİL).
 		"route_red.go": true,
+		// v0.10.2018 — SAF telemetri: ML trace_error_count, tek FROM'u
+		// spanmetrics_1m (zaman sınırlı, LIMIT). Taban okuması ml_series.go'da (ana bağlantı).
+		"ml_trace_errors.go": true,
 		// v0.10.1807 — SAF telemetri: servis süzgeçli /traces satırının
 		// Name/route'u, tek FROM'u spans (trace_id IN sayfa, zaman sınırlı).
 		"trace_row_op.go": true,

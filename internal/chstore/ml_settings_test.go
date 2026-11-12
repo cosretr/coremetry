@@ -194,4 +194,8 @@ func TestMLBaselineSettingOffAndOutOfHash(t *testing.T) {
 
 // mlDefaultHash1813 — v0.10.1813 HEAD'de DefaultMLConfig().ConfigHash()
 // (ölçüldü): 1814 baseline anahtarı varsayılan hash'i değiştirmemeli.
-const mlDefaultHash1813 = "66df3eb38772bb64"
+// v0.10.2018: yeni dedektör (trace_error_count) Detectors/Promotion
+// haritasına girdiği için varsayılan hash BEKLENEN şekilde değişti
+// (66df3eb38772bb64 → 254767bc3f68c4a3); baseline anahtarının hash dışında
+// kaldığı yukarıdaki d/on karşılaştırmasıyla ayrıca çivili.
+const mlDefaultHash1813 = "254767bc3f68c4a3"

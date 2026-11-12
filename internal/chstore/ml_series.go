@@ -328,3 +328,60 @@ func mlPartCond(parts []string, prefix, suffix string) (string, any) {
 	}
 	return "startsWith(part, ?)", prefix
 }
+
+// v0.10.2018 (T-err) — trace_error_count tabanı.
+// mlSuffixBaselineSQL — MLBaseline'ın parça sonekiyle daraltılmış ikizi;
+// zaman damgaları da döner (dedektör sıfır dolgusu için "ölçülen kova"
+// kümesini kurar). FINAL yok: RMT çift satırı medyanı/üst sınırı bozmaz.
+const mlSuffixBaselineSQL = `
+		SELECT service, part, groupArray(toUnixTimestamp(bucket)) AS ts, groupArray(count * ? / bucket_sec) AS xs
+		FROM ml_series
+		WHERE signal = ?
+		  AND endsWith(part, ?)
+		  AND toDate(bucket, ?) IN (?)
+		  AND toHour(bucket, ?) BETWEEN ? AND ?
+		  AND bucket >= ?
+		GROUP BY service, part
+		LIMIT 20000
+		SETTINGS max_execution_time = 10`
+
+// MLSuffixBaseline — taban örnekleri + zaman damgaları (parça soneki süzgeçli).
+// Dönüş: anahtar → noktalar (hijyen dışlaması uygulanmış).
+func (s *Store) MLSuffixBaseline(ctx context.Context, req MLBaselineRequest, suffix string) (map[string][]MLPoint, error) {
+	out := map[string][]MLPoint{}
+	if len(req.Dates) == 0 {
+		return out, nil
+	}
+	tz := req.TZ
+	if tz == "" {
+		tz = "UTC"
+	}
+	rows, err := s.conn.Query(ctx, mlSuffixBaselineSQL,
+		float64(req.TargetSec), req.Signal, suffix, tz, req.Dates, tz, req.HourFrom, req.HourTo,
+		time.Now().Add(-35*24*time.Hour).UTC()) // bucket DateTime: DateTime64 bind YOK
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var svc, part string
+		var ts []uint32
+		var xs []float64
+		if err := rows.Scan(&svc, &part, &ts, &xs); err != nil {
+			return nil, err
+		}
+		if len(ts) != len(xs) {
+			continue
+		}
+		win := req.Exclude[svc]
+		pts := make([]MLPoint, 0, len(xs))
+		for i, v := range xs {
+			if len(win) > 0 && MLExcluded(win, int64(ts[i])) {
+				continue
+			}
+			pts = append(pts, MLPoint{T: int64(ts[i]), V: v})
+		}
+		out[MLSeriesKey(svc, part)] = pts
+	}
+	return out, rows.Err()
+}

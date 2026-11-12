@@ -46,6 +46,12 @@ var mlDetectorSources = map[string][]string{
 	"metric_k8s":         {"metric_k8s"},
 }
 
+// mlRecommendExempt — v0.10.2018: kaynağı VictoriaMetrics olmayan log-dışı
+// dedektörler; öneri (VM kaynak ölçümü) bunlara dokunmaz, log dedektörleri gibi.
+var mlRecommendExempt = map[string]string{
+	"trace_error_count": "kaynak ClickHouse spanmetrics_1m (hata span'leri örneklenmez); VM ölçümü ilgisiz",
+}
+
 // MLRecommendChange — önerinin bugünkü ayardan bir farkı. Key "enabled" (ana
 // anahtar) ya da dedektör adı.
 type MLRecommendChange struct {
@@ -70,6 +76,9 @@ func RecommendMLConfig(cur MLConfig, checks []MLSourceCheck) (MLConfig, []MLReco
 	}
 	var changes []MLRecommendChange
 	for _, det := range MLDetectorNames {
+		if _, exempt := mlRecommendExempt[det]; exempt {
+			continue // VM dışı kaynak: dokunulmaz
+		}
 		srcs, ok := mlDetectorSources[det]
 		if !ok {
 			continue // log dedektörü: dokunulmaz

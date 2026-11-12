@@ -3,7 +3,17 @@
 // tetiklendiğini söyler, adlar ipucunda.
 import { describe, it, expect } from 'vitest';
 import type { MLEvent } from '@/lib/types';
-import { mlGroupLabel, tickLabel } from './MLTab';
+import { mlGroupLabel, tickLabel, ML_DETECTOR_TR, detectorGroup } from './MLTab';
+import { signalKindOf } from '@/lib/signalKind';
+
+// v0.10.2018 — T-err: yeni trace dedektörü adı, türü ve tik özeti grubu.
+describe('trace_error_count', () => {
+  it('Türkçe ad, trace türü, trace_errors tik grubu', () => {
+    expect(ML_DETECTOR_TR.trace_error_count).toBe('Operasyon hata sayısı');
+    expect(signalKindOf('trace_error_count')).toBe('trace');
+    expect(detectorGroup('trace_error_count')).toBe('trace_errors');
+  });
+});
 
 const base: MLEvent = {
   id: 'e1', detector: 'op_latency', signal: 'trace', stage: 'shadow', service: 'checkout',

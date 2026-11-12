@@ -36,6 +36,8 @@ func eventPart(ev chstore.MLEvent) string {
 			return tracePart(ev.Code, "slow")
 		case detOpErrorRate:
 			return tracePart(ev.Code, "err_ratio")
+		case detTraceErrorCount:
+			return tracePart(ev.Code, traceErrMeasure)
 		default:
 			return tracePart(ev.Code, "count")
 		}
@@ -148,6 +150,16 @@ func collectSamples(ctx context.Context, deps Deps, ev chstore.MLEvent, cfg chst
 	det := time.Unix(0, ev.StartedAt)
 	bucket := time.Duration(cfg.BucketSec) * time.Second
 	from, to := det.Add(-time.Duration(cfg.DwellBuckets)*bucket), time.Unix(0, ev.LastSeen)
+	// v0.10.2018 — trace_error_count: örnekler olayın kanıtında (MV exemplar);
+	// ek CH/ES okuması yok (Code operasyon adıdır, route süzgecine uymaz).
+	if ev.Detector == detTraceErrorCount {
+		out := []chstore.MLSample{}
+		for _, tid := range traceErrSamples(ev.Evidence) {
+			out = append(out, chstore.MLSample{T: ev.StartedAt, TraceID: tid, Kind: "span"})
+		}
+		raw, _ := json.Marshal(out)
+		return string(raw)
+	}
 	errOnly := ev.Detector == detErrorRate || ev.Detector == detOpErrorRate
 	route := ""
 	if ev.Signal == chstore.MLSignalTrace {

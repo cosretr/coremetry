@@ -106,6 +106,7 @@ const (
 	sfxLoc                       // -da/-de/-ta/-te
 	sfxPoss3                     // -ı/-i/-u/-ü, ünlüden sonra -sı/-si/-su/-sü
 	sfxPossLoc                   // -ında/-sında/-inde/-unda/-ünde …
+	sfxDat                       // -a/-e, ünlüden sonra -ya/-ye (v0.10.2018)
 )
 
 func isVowelTR(r rune) bool { return strings.ContainsRune("aeıioöuü", r) }
@@ -141,6 +142,11 @@ func suffixFor(word string, k suffixKind) string {
 		return d + a + "n"
 	case sfxLoc:
 		return d + a
+	case sfxDat:
+		if endsV {
+			return "y" + a
+		}
+		return a
 	case sfxPoss3, sfxPossLoc:
 		p := v4
 		if endsV {

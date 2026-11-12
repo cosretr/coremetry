@@ -27,7 +27,8 @@ const mlSettingsKey = "ml"
 // veri kopyalanmaz (T1).
 var (
 	MLLogDetectorNames   = []string{"log_volume", "error_rate", "service_silent", "template_spike", "rare_template", "rare_error_code", "pod_outlier", "change_point"}
-	MLTraceDetectorNames = []string{"op_latency", "op_error_rate", "throughput_drop", "dependency_latency", "trace_pod_outlier", "trace_change_point"}
+	MLTraceDetectorNames = []string{"op_latency", "op_error_rate", "throughput_drop", "dependency_latency", "trace_pod_outlier", "trace_change_point",
+		"trace_error_count"} // v0.10.2018 T-err: CH spanmetrics_1m mutlak hata span sayısı (oran DEĞİL)
 	// Metrik aileleri = dedektörler (M1): her aile ayrı anahtar + ayrı terfi.
 	MLMetricDetectorNames = []string{"metric_jvm", "metric_pool", "metric_kafka", "metric_http_client", "metric_k8s"}
 	MLDetectorNames       = append(append(append([]string{}, MLLogDetectorNames...), MLTraceDetectorNames...), MLMetricDetectorNames...)
