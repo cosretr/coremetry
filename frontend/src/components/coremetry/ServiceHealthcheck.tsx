@@ -41,7 +41,8 @@ export function hcStateClass(s: HealthcheckState): string {
 }
 
 function rowTitle(r: HealthcheckRow): string {
-  return r.subject ? `${r.title} (${r.subject})` : r.title;
+  // " · " ayırıcı: datasource öznesi zaten "ORDERS_DS (cluster-a)" biçiminde.
+  return r.subject ? `${r.title} · ${r.subject}` : r.title;
 }
 
 /** Sonucun gövdesi — cümle + tablo + kapalı kanıt. Servis sayfası, /runbooks
@@ -75,6 +76,9 @@ export function HealthcheckResultView({ data }: { data: HealthcheckResult }) {
           ))}
         </TableBody>
       </Table>
+      {data.notApplicable && data.notApplicable.length > 0 && (
+        <div className="field-hint m-0">Uygulanmadı (bu serviste veri yok): {data.notApplicable.join(', ')}</div>
+      )}
       {evid.length > 0 && (
         <details>
           <summary className="field-hint cursor-pointer">Teknik kanıt (çalışan sorgular)</summary>

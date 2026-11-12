@@ -89,12 +89,12 @@ func TestHCDatasources(t *testing.T) {
 			c := base
 			c.DS = []DatasourcePool{{Name: "ORDERS_DS", Pods: 2, UtilPct: f(85), UtilPod: "orders-api-1"}}
 			return c
-		}, []string{HCWarn}, "%85", "ORDERS_DS havuzu %85 dolu"},
+		}, []string{HCWarn}, "%85", "ORDERS_DS havuzu %85 dolu (cluster-a)"},
 		{"%96 → sorun", func() ServicePodsCluster {
 			c := base
 			c.DS = []DatasourcePool{{Name: "ORDERS_DS", Pods: 2, UtilPct: f(96), UtilPod: "orders-api-1"}}
 			return c
-		}, []string{HCCrit}, "%96", "ORDERS_DS havuzu dolu"},
+		}, []string{HCCrit}, "%96", "ORDERS_DS havuzu dolu (cluster-a)"},
 		{"kullanılabilir 0 pencere boyunca → sorun", func() ServicePodsCluster {
 			c := base
 			c.DS = []DatasourcePool{{Name: "ORDERS_DS", Pods: 1, UtilPct: f(100), ZeroAvailPods: 1, ZeroAvailBoth: 1}}

@@ -12471,4 +12471,5 @@ export interface HealthcheckResult {
   measuredAt: number; // unix ms
   partial: boolean;
   durationMs: number;
+  notApplicable?: string[]; // v0.10.2046 — bu serviste verisi olmayan kontroller (satır değil, dipnot)
 }

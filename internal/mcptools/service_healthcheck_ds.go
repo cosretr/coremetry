@@ -188,8 +188,11 @@ func hcDatasources(service, cluster string, cl ServicePodsCluster) []Healthcheck
 		if cluster != "" {
 			subject += " (" + cluster + ")"
 		}
-		row := hcBase(service, HCCheckDatasource, subject)
-		rows = append(rows, hcDatasourceRow(row, pl))
+		row := hcDatasourceRow(hcBase(service, HCCheckDatasource, subject), pl)
+		if row.Short != "" && cluster != "" {
+			row.Short += " (" + cluster + ")" // cümle çok-cluster'da hangi cluster'ı söyler
+		}
+		rows = append(rows, row)
 	}
 	if len(pools) > hcDSMaxRows {
 		rows[len(rows)-1].Seen += fmt.Sprintf(" · +%d datasource gösterilmedi", len(pools)-hcDSMaxRows)

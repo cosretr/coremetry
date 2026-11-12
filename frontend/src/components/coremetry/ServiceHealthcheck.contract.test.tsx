@@ -28,6 +28,7 @@ const data: HealthcheckResult = {
     { check: 'pod_resources', title: 'Pod CPU / bellek limiti', subject: 'cluster-a', state: 'unknown', seen: 'limit tanımlı değil' },
   ],
   counts: { ok: 1, warn: 0, crit: 1, unknown: 1 }, measuredAt: 0, partial: false, durationMs: 1200,
+  notApplicable: ['Kafka consumer lag'],
 };
 
 describe('HealthcheckResultView', () => {
@@ -45,7 +46,8 @@ describe('HealthcheckResultView', () => {
     expect(states[0].className).not.toMatch(/--err|--warn|--text3/);
     expect(states[1].className).toMatch(/--err/);
     expect(states[2].className).toMatch(/--text3/);
-    expect(host.querySelector('tbody tr:nth-child(2) td')?.textContent).toBe('Pod restart ve OOM (cluster-a)');
+    expect(host.querySelector('tbody tr:nth-child(2) td')?.textContent).toBe('Pod restart ve OOM · cluster-a');
+    expect(host.textContent).toContain('Uygulanmadı (bu serviste veri yok): Kafka consumer lag');
     expect(host.querySelector('details')).not.toBeNull();
   });
 

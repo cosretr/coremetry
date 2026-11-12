@@ -32,6 +32,9 @@ package mcptools
 //	10 cluster sağlığı (v0.10.2042) node Ready + firing ALERTS           2 / cluster
 //	   (9-10 pod okumasının ardından, aynı cluster tavanında paralel; yalnız pod'u olan cluster)
 //	11 JBoss datasource (v0.10.2043) ad keşfi (10 dk önbellek) + şimdi + pencere başı   ≤3 / cluster
+//	12 Kafka consumer lag (v0.10.2046) metrik yönlendiricisi (VM), topic kırılımı         1
+//	13 Oracle hataları (v0.10.2046)   exception_groups `ora:` (servis, 7 gün)            1 CH
+//	   (12-13: serviste hiç veri yoksa "uygulanmadı" — satır değil dipnot)
 //
 // Hüküm KURALLARDAN çıkar (model yok). Durum: ok (İyi) / warn (Dikkat) /
 // crit (Sorun) / unknown (Ölçülemedi). Ölçülemedi ASLA İyi sayılmaz.
@@ -75,11 +78,13 @@ const (
 	HCCheckReplicas     = "replicas"   // v0.10.2042
 	HCCheckCluster      = "cluster"    // v0.10.2042
 	HCCheckDatasource   = "datasource" // v0.10.2043
+	HCCheckKafkaLag     = "kafka_lag"  // v0.10.2046
+	HCCheckOracle       = "oracle"     // v0.10.2046
 )
 
 // HCCatalogVersion — önbellek anahtarına girer: kontrol kümesi / eşikler
 // değişince eski gövde servis edilmez.
-const HCCatalogVersion = "hc-v3"
+const HCCatalogVersion = "hc-v4"
 
 // Eşikler (spec kontrol kataloğu; ayar YOK — operatör "ayarda vida değil
 // varsayılan" dedi).
@@ -149,6 +154,10 @@ type HealthcheckResult struct {
 	MeasuredAt int64             `json:"measuredAt"` // unix ms
 	Partial    bool              `json:"partial"`
 	DurationMs int64             `json:"durationMs"`
+	// NotApplicable — v0.10.2046: bu serviste HİÇ verisi olmayan kontroller
+	// (Kafka tüketicisi değil, Oracle hatası hiç yok). Satır olmaz, sayılmaz;
+	// adları dipnotta yazılır (İyi değil, Ölçülemedi de değil).
+	NotApplicable []string `json:"notApplicable,omitempty"`
 }
 
 // HCNormalizeWindow — SAF: bilinmeyen / boş → 15m.
@@ -166,6 +175,12 @@ type hcReaders struct {
 	sweepReaders
 	// mlEvents — servisin son ML olayları (karar zenginleştirmeli). nil = yok.
 	mlEvents func(ctx context.Context, service string, since time.Time) ([]chstore.MLEvent, error)
+	// kafkaLag — v0.10.2046: kafka.consumer.records_lag_max, topic kırılımı
+	// (metrik yönlendiricisi: VictoriaMetrics). nil = yok.
+	kafkaLag func(ctx context.Context, service string, from, to time.Time) ([]chstore.SpanMetricSeries, error)
+	// oracleGroups — v0.10.2046: servisin Oracle kökenli exception grupları
+	// (`ora:`; son 7 gün). nil = yok.
+	oracleGroups func(ctx context.Context, service string, since time.Time) ([]chstore.ExceptionGroup, error)
 }
 
 func hcReadersFrom(d Deps) hcReaders {
@@ -174,17 +189,32 @@ func hcReadersFrom(d Deps) hcReaders {
 		r.mlEvents = func(ctx context.Context, service string, since time.Time) ([]chstore.MLEvent, error) {
 			return st.ListMLEvents(ctx, chstore.MLEventsFilter{Service: service, Since: since, Limit: hcAnomalyReadMax})
 		}
+		r.oracleGroups = func(ctx context.Context, service string, since time.Time) ([]chstore.ExceptionGroup, error) {
+			return st.ListExceptionGroups(ctx, chstore.ExceptionGroupFilter{Service: service, Oracle: "only",
+				ActiveFromNs: since.UnixNano(), Limit: hcOracleReadMax, Sort: "lastSeen", Dir: "desc"})
+		}
+	}
+	// Metrik yönlendiricisi (prod: VictoriaMetrics). Bilinçli olarak d.metrics()
+	// DEĞİL: Metrics bağlı değilse CH'ye düşüp boş sonucu "uygulanmadı" saymasın.
+	if src := d.Metrics; src != nil {
+		r.kafkaLag = func(ctx context.Context, service string, from, to time.Time) ([]chstore.SpanMetricSeries, error) {
+			f, err := hcKafkaLagFilter(service, from, to)
+			if err != nil {
+				return nil, err
+			}
+			return src.QueryMetric(ctx, f)
+		}
 	}
 	return r
 }
 
 // hcCaps — kaynak başına tavan (test dikişi).
 type hcCaps struct {
-	red, inbox, anomalies, deploys, pods time.Duration
+	red, inbox, anomalies, deploys, pods, kafka, oracle time.Duration
 }
 
 var hcDefaultCaps = hcCaps{red: sweepCapRED, inbox: sweepCapProblems, anomalies: 3 * time.Second,
-	deploys: sweepCapDeploys, pods: sweepCapPods + 2*time.Second}
+	deploys: sweepCapDeploys, pods: sweepCapPods + 2*time.Second, kafka: 4 * time.Second, oracle: 3 * time.Second}
 
 // ReadServiceHealthcheck — koşunun tamamı. Hata yalnız çağıran iptal
 // ettiğinde ya da servis boşken döner; her okuma arızası satır durumuna
@@ -250,6 +280,24 @@ func runServiceHealthcheck(ctx context.Context, r hcReaders, req HealthcheckRequ
 			return []HealthcheckRow{hcUnknownRow(svc, HCCheckProblems, "", "zaman aşımı — okunamadı"),
 				hcUnknownRow(svc, HCCheckExceptions, "", "zaman aşımı — okunamadı")}
 		}},
+		{"kafka", caps.kafka, func(c context.Context) []HealthcheckRow {
+			if r.kafkaLag == nil {
+				return []HealthcheckRow{hcUnknownRow(svc, HCCheckKafkaLag, "", "metrik kaynağı (VictoriaMetrics) bağlı değil")}
+			}
+			lagFrom := from
+			if now.Sub(lagFrom) < hcKafkaMinWindow {
+				lagFrom = now.Add(-hcKafkaMinWindow)
+			}
+			series, err := r.kafkaLag(c, svc, lagFrom, now)
+			return []HealthcheckRow{hcClassifyKafkaLag(svc, series, err)}
+		}, unk(HCCheckKafkaLag, "zaman aşımı — okunamadı")},
+		{"oracle", caps.oracle, func(c context.Context) []HealthcheckRow {
+			if r.oracleGroups == nil {
+				return []HealthcheckRow{hcUnknownRow(svc, HCCheckOracle, "", "ClickHouse okuyucusu bağlı değil")}
+			}
+			groups, err := r.oracleGroups(c, svc, now.Add(-hcOracleLookback))
+			return []HealthcheckRow{hcClassifyOracle(svc, groups, from, now, err)}
+		}, unk(HCCheckOracle, "zaman aşımı — okunamadı")},
 		{"anomalies", caps.anomalies, func(c context.Context) []HealthcheckRow {
 			if r.mlEvents == nil {
 				return []HealthcheckRow{hcUnknownRow(svc, HCCheckAnomalies, "", "anomali okuyucusu bağlı değil")}
@@ -315,7 +363,7 @@ wait:
 			partial = true
 		}
 	}
-	rows := hcOrderRows(outs)
+	rows, notApplicable := hcSplitNotApplicable(hcOrderRows(outs))
 	for i := range rows {
 		rows[i].Seen = truncateRunes(rows[i].Seen, hcSeenRunes)
 		if rows[i].State == HCUnknown && strings.Contains(rows[i].Seen, "zaman aşımı") {
@@ -324,7 +372,8 @@ wait:
 	}
 	verdict, sentence, counts := hcSummarize(svc, rows)
 	return HealthcheckResult{Service: svc, Env: req.Env, Window: req.Window, Verdict: verdict, Sentence: sentence,
-		Rows: rows, Counts: counts, MeasuredAt: now.UnixMilli(), Partial: partial, DurationMs: elapsed()}, nil
+		Rows: rows, Counts: counts, MeasuredAt: now.UnixMilli(), Partial: partial, DurationMs: elapsed(),
+		NotApplicable: notApplicable}, nil
 }
 
 // hcCheckOrder — katalog sırası.
@@ -332,6 +381,7 @@ var hcCheckOrder = map[string]int{
 	HCCheckRED: 1, HCCheckProblems: 2, HCCheckAnomalies: 3, HCCheckDeploys: 4, HCCheckExceptions: 5,
 	HCCheckPodRestarts: 6, HCCheckPodWaiting: 7, HCCheckPodResources: 8,
 	HCCheckReplicas: 9, HCCheckCluster: 10, HCCheckDatasource: 11,
+	HCCheckKafkaLag: 12, HCCheckOracle: 13,
 }
 
 // hcOrderRows — SAF: işlerin satırları → katalog sırası (aynı kontrolde
@@ -362,6 +412,8 @@ var hcTitles = map[string]string{
 	HCCheckReplicas:     "Hazır replika",
 	HCCheckCluster:      "Cluster sağlığı",
 	HCCheckDatasource:   "JBoss datasource havuzu",
+	HCCheckKafkaLag:     "Kafka consumer lag",
+	HCCheckOracle:       "Oracle hataları",
 }
 
 func hcServiceHref(service, tab string) string {
@@ -388,6 +440,10 @@ func hcBase(service, check, subject string) HealthcheckRow {
 		row.Link, row.LinkLabel = hcServiceHref(service, "infra"), "Infrastructure"
 	case HCCheckCluster:
 		row.Link, row.LinkLabel = "/clusters", "Clusters"
+	case HCCheckKafkaLag:
+		row.Link, row.LinkLabel = hcServiceHref(service, "messaging"), "Messaging"
+	case HCCheckOracle:
+		row.Link, row.LinkLabel = "/problems?service="+url.QueryEscape(service), "Problems"
 	}
 	return row
 }
@@ -933,7 +989,9 @@ func hcSummarize(service string, rows []HealthcheckRow) (string, string, Healthc
 	var crit, warn []string
 	label := func(r HealthcheckRow) string {
 		s := firstNonEmpty(r.Short, strings.ToLower(r.Title))
-		if r.Subject != "" && !strings.Contains(s, r.Subject) {
+		// Kendi parantezini taşıyan kısa ad (ör. "Kafka lag (orders)") ya da
+		// özneyi zaten içeren ad yeniden eklenmez.
+		if r.Subject != "" && !strings.Contains(s, r.Subject) && !strings.Contains(s, "(") {
 			s += " (" + r.Subject + ")"
 		}
 		return s
