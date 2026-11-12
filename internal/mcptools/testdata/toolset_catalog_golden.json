@@ -1,7 +1,7 @@
 {
   "conditional/chat": {
     "count": 73,
-    "sha256": "89174b3c01c7daf653db6fe1af3f3e713de04d34f7c273690c061eafa3001ae5",
+    "sha256": "bf62a4bf81b09db6916762b6d2333197eca600a02bc91272e9b098bf34caae6d",
     "names": [
       "list_services",
       "list_teams",
@@ -80,7 +80,7 @@
   },
   "conditional/chat_auto": {
     "count": 73,
-    "sha256": "89174b3c01c7daf653db6fe1af3f3e713de04d34f7c273690c061eafa3001ae5",
+    "sha256": "bf62a4bf81b09db6916762b6d2333197eca600a02bc91272e9b098bf34caae6d",
     "names": [
       "list_services",
       "list_teams",
@@ -159,7 +159,7 @@
   },
   "conditional/chat_full": {
     "count": 73,
-    "sha256": "89174b3c01c7daf653db6fe1af3f3e713de04d34f7c273690c061eafa3001ae5",
+    "sha256": "bf62a4bf81b09db6916762b6d2333197eca600a02bc91272e9b098bf34caae6d",
     "names": [
       "list_services",
       "list_teams",
@@ -238,7 +238,7 @@
   },
   "conditional/chat_simple": {
     "count": 69,
-    "sha256": "06e833fff61893723a42c4688d461f9906efa667389c7ce9f30c119c58203c94",
+    "sha256": "faf2c51fdfdf75f4b1f11a96a3f8d69e257d6458a3d108237f3eb8405267ec71",
     "names": [
       "list_services",
       "list_teams",
@@ -313,12 +313,12 @@
   },
   "conditional/mcp_tools_list": {
     "count": -1,
-    "sha256": "a410e38f038820fcac6e1426f9748d4d97ac121334332eafe378c0a26f0dbc21",
+    "sha256": "617dbf477db492a62b365013c8abb3d0ce2177668189659240f7101158d4ce24",
     "names": null
   },
   "conditional/tool_list": {
     "count": 74,
-    "sha256": "160c420453dcdc8c7eed8d94259672c2b98b3fdf0243566e0990bea895a4b649",
+    "sha256": "8609296ab0d4ad9a6096df81db5b5dfe3d23ea39060d1943715b069ddf70bae6",
     "names": [
       "list_services",
       "list_teams",
@@ -398,7 +398,7 @@
   },
   "conditional/v2": {
     "count": 77,
-    "sha256": "dd03966710897c6873ecb6bb04d7345a6bb863da918983331005b043da01571a",
+    "sha256": "06671530742f6f072e4e71d35dae0cf3b37c8d1a3760a390b220c7c86cd05301",
     "names": [
       "list_services",
       "list_teams",
@@ -481,7 +481,7 @@
   },
   "zero/chat": {
     "count": 68,
-    "sha256": "036fd9d62ddf0d8b4a74be55023189bb768e0f1d2129d35e6eb903a1007b7134",
+    "sha256": "99cc743c8bb177017379529e01d92fbc95e15d828b6187ed75ed8784c8505fea",
     "names": [
       "list_services",
       "list_teams",
@@ -555,7 +555,7 @@
   },
   "zero/chat_auto": {
     "count": 68,
-    "sha256": "036fd9d62ddf0d8b4a74be55023189bb768e0f1d2129d35e6eb903a1007b7134",
+    "sha256": "99cc743c8bb177017379529e01d92fbc95e15d828b6187ed75ed8784c8505fea",
     "names": [
       "list_services",
       "list_teams",
@@ -629,7 +629,7 @@
   },
   "zero/chat_full": {
     "count": 68,
-    "sha256": "036fd9d62ddf0d8b4a74be55023189bb768e0f1d2129d35e6eb903a1007b7134",
+    "sha256": "99cc743c8bb177017379529e01d92fbc95e15d828b6187ed75ed8784c8505fea",
     "names": [
       "list_services",
       "list_teams",
@@ -703,7 +703,7 @@
   },
   "zero/chat_simple": {
     "count": 64,
-    "sha256": "42e0e9b8328aa81e9bfabe7b09c6791b08272b405fe1ece3171d6bd2cb6ca54e",
+    "sha256": "edfd6849b7d118e2b53c729769f04361761e5b2c338455da6c358dd68b348282",
     "names": [
       "list_services",
       "list_teams",
@@ -773,12 +773,12 @@
   },
   "zero/mcp_tools_list": {
     "count": -1,
-    "sha256": "a410e38f038820fcac6e1426f9748d4d97ac121334332eafe378c0a26f0dbc21",
+    "sha256": "617dbf477db492a62b365013c8abb3d0ce2177668189659240f7101158d4ce24",
     "names": null
   },
   "zero/tool_list": {
     "count": 74,
-    "sha256": "160c420453dcdc8c7eed8d94259672c2b98b3fdf0243566e0990bea895a4b649",
+    "sha256": "8609296ab0d4ad9a6096df81db5b5dfe3d23ea39060d1943715b069ddf70bae6",
     "names": [
       "list_services",
       "list_teams",
@@ -858,7 +858,7 @@
   },
   "zero/v2": {
     "count": 72,
-    "sha256": "00079bcc89c78472c170041f1b201ee548d41585c59aa3caf40e4fcda539bca5",
+    "sha256": "6ca395d2b178be9ddf09e86b7c6a0aab76cc3770ded254baae37d6d6cf60145d",
     "names": [
       "list_services",
       "list_teams",

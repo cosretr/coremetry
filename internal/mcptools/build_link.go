@@ -44,7 +44,6 @@ type buildLinkArgs struct {
 	// v0.10.1222 — tekil varlık sayfaları.
 	ProblemID   string `json:"problem_id,omitempty"`
 	Fingerprint string `json:"fingerprint,omitempty"`
-	IncidentID  string `json:"incident_id,omitempty"`
 	Path        string `json:"path,omitempty"`
 	Signature   bool   `json:"signature,omitempty"`
 	StmtHash    string `json:"stmt_hash,omitempty"`
@@ -186,20 +185,12 @@ func buildLink(a buildLinkArgs, clusterID string, filters []chstore.FilterExpr, 
 		q.Set("exc", strings.TrimSpace(a.Fingerprint))
 		withRange = false
 	case "incident":
-		// v0.10.1828 — Incidents emekliyken bağlantı Anomalies › Gruplar'a
-		// (menüde olmayan sayfaya link üretme; şema `incident`'ı kabul etmeye
-		// devam eder, kayıtlı istemler kırılmaz).
-		if !chstore.IncidentsEnabled() {
-			path = "/anomalies"
-			q = url.Values{}
-			q.Set("tab", "groups")
-			withRange = false
-			break
-		}
-		if strings.TrimSpace(a.IncidentID) == "" {
-			return "", fmt.Errorf("incident sayfası incident_id ister")
-		}
-		q.Set("id", strings.TrimSpace(a.IncidentID))
+		// Incidents emekli (v0.10.1826 / 2024); sayfa Incidents ölü kod dilimi
+		// 2'de silindi. `incident` isteyen istem hata değil Anomalies bağlantısı
+		// alır (FE INCIDENTS_RETIRED_HOME ile aynı adres).
+		path = "/anomalies"
+		q = url.Values{}
+		q.Set("tab", "groups")
 		withRange = false
 	case "endpoint":
 		if a.Service == "" || a.Path == "" {
@@ -253,7 +244,7 @@ func buildLinkTool(d Deps) mcp.Tool {
 		Name:             "build_link",
 		ShortDescription: "Coremetry UI deep-link'i (liste + tekil problem / exception / incident / endpoint / statement / topic / rollouts), süzgeç + pencere dolu. Link cevabın altına çip olur: metne URL/host/araç çıktısı YAZMA.",
 		Description: "Build a Coremetry UI deep-link with the filters, scope and time window pre-filled so the operator continues in the product with one click. " +
-			"Single-entity pages (v0.10.1222): problem (problem_id), exception (fingerprint), incident (incident_id), endpoint (service + path, signature=true when the path is an ID-collapsed template row, env, cluster), " +
+			"Single-entity pages (v0.10.1222): problem (problem_id), exception (fingerprint), incident (retired → Anomalies link), endpoint (service + path, signature=true when the path is an ID-collapsed template row, env, cluster), " +
 			"statement (stmt_hash = decimal statement hash, db_system), topic (messaging_system + cluster = broker cluster + destination), rollouts (cluster, namespace, workload). " +
 			"Pages: traces (service, search, filters[], errors_only, min_ms/max_ms, env, cluster, sort, group_by/group_attr → aggregate view), trace (trace_id, span_id, tab), " +
 			"logs (query=KQL, service, cluster, severity or errors_only, trace_id/span_id, env), service (service, tab), pod (cluster, namespace, pod), clusters (cluster, namespace, " +
@@ -288,7 +279,6 @@ func buildLinkTool(d Deps) mcp.Tool {
 				"range_s":          map[string]any{"type": "integer", "minimum": 60, "maximum": 604800, "description": "Window seconds ending at the chat anchor. Default 1800, max 604800 (7d); for a longer link use preset (e.g. 30d)."},
 				"problem_id":       map[string]any{"type": "string", "description": "problem page: Problem id (from list_problems)."},
 				"fingerprint":      map[string]any{"type": "string", "description": "exception page: exception group fingerprint."},
-				"incident_id":      map[string]any{"type": "string", "description": "incident page: incident id."},
 				"path":             map[string]any{"type": "string", "description": "endpoint page: route/path as listed (e.g. /api/orders/{id})."},
 				"signature":        map[string]any{"type": "boolean", "description": "endpoint page: true when path is an ID-collapsed signature row."},
 				"stmt_hash":        map[string]any{"type": "string", "description": "statement page: decimal statement hash."},

@@ -13578,3 +13578,16 @@ eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
   gider), kabuk bayrağı `features.incidents` tüketicileri, AI özne türü `incident` (geçmiş sohbet
   kayıtlarını çizer), `pageContext` sayfa kimlikleri (Go aynası), sunucu uçları — sonraki dilimler.
 - Veri: incident tabloları aynen; arşivi gösteren yüzey kalmadı (yüzeyle birlikte kaldırıldı).
+
+## 2026-11-13 — v0.10.2072 — Incidents ölü kod dilimi 3: CoSRE/MCP incident anahtar dalları silindi
+
+- Silinen: `build_link` `page=incident` açık-anahtar dalı (`/incident?id=`), `incident_id` argümanı ve şema
+  alanı; ürün yol tarifi `RetiredTitle` / `RetiredSteps` + `guideTopicFor` — "problems" konusu artık doğrudan
+  Anomalies metnini ve bağlantısını taşır (önceki emekli metin aynen). `IncidentsEnabled()` hep false
+  olduğundan çalışan dal değişmedi.
+- Incident isteyen çağıran hata almaz: `page=incident` → `/anomalies?tab=groups` (FE ile aynı adres);
+  "incident" anahtar sözcüğü problems konusuna eşlenir ve Anomalies'i anlatır. Eski istemdeki
+  `incident_id` alanı yok sayılır (katı çözme yok).
+- Yan düzelme: `GuideTopics()` / konu dizini emekli metni değil eski "Incidents sayfası" metnini veriyordu
+  (anahtar yalnız `GuideFor`'da uygulanıyordu); artık tek metin.
+- Katalog altını (`toolset_catalog_golden.json`) yalnız build_link şeması yüzünden yeniden yazıldı.
