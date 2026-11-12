@@ -22,7 +22,7 @@ import { serviceHref } from '@/lib/serviceHref';
 import { operationTracesHref, tracesPivotHref } from '@/lib/pivotHref';
 import { fmtClock } from '@/lib/utils';
 import type { MLEvent, MLSourceSeries, SpanMetricSeries } from '@/lib/types';
-import { panelWindow, sourcePanelFor, topContributors, type Contributors, type SourcePanel } from './mlSourcePanel';
+import { panelWindow, peakInRange, sourcePanelFor, topContributors, type Contributors, type SourcePanel } from './mlSourcePanel';
 
 const hm = (ns: number) => fmtClock(new Date(ns / 1e6)).slice(0, 5);
 
@@ -35,16 +35,21 @@ export interface SourceChartProps {
   onContributors?: (c: Contributors) => void;
   /** v0.10.2035 — kartın Logs bağlantısı (log olayı): grafik süzgeci buradan. */
   logsLink?: string;
+  /** v0.10.2044 — panelin olay aralığındaki tepesi (cümle panelin ölçüsünü söylesin); veri yoksa null. */
+  onPeak?: (peak: number | null) => void;
+  /** Düşüş olayında en küçük değer. */
+  direction?: string;
 }
 
 function Frame({ title, source, marks, link, children }: {
-  title: string; source: string; marks: string; link?: { label: string; href: string }; children: ReactNode;
+  /** Boş: panelin kendi başlığı yeter (Messaging / metrik paneli başlık taşır; v0.10.2044 tek başlık). */
+  title?: string; source: string; marks: string; link?: { label: string; href: string }; children: ReactNode;
 }) {
   return (
     <div data-testid="ml-source-chart" className="rounded-md border border-border bg-card px-3 py-2.5">
       <p className="m-0 mb-1.5 text-xs">
-        <span className="font-semibold">{title}</span>
-        <span className="text-muted-foreground"> · {source}</span>
+        {title && <span className="font-semibold">{title} · </span>}
+        <span className="text-muted-foreground">{source}</span>
       </p>
       {children}
       <p className="m-0 mt-1.5 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
@@ -55,21 +60,22 @@ function Frame({ title, source, marks, link, children }: {
   );
 }
 
-export function MLSourceChart({ lead, open, fallback, onContributors, logsLink }: SourceChartProps) {
+export function MLSourceChart({ lead, open, fallback, onContributors, logsLink, onPeak, direction }: SourceChartProps) {
   const panel = useMemo(() => sourcePanelFor(lead, 1, logsLink), [lead, logsLink]);
   // Pencere bir kez (sayfa açılışı) sabitlenir: her render'da now() oynarsa sorgu anahtarı değişirdi.
   const [win] = useState(() => panelWindow(lead.startedAt, lead.lastSeen, open, Date.now() * 1e6));
   const marks = open ? `Tespit ${hm(lead.startedAt)} · sürüyor` : `Tespit ${hm(lead.startedAt)} · Bitti ${hm(lead.lastSeen)}`;
-  if (panel.kind === 'kafka-lag') return <KafkaLag panel={panel} win={win} lead={lead} marks={marks} fallback={fallback} onContributors={onContributors} />;
+  if (panel.kind === 'kafka-lag') return <KafkaLag panel={panel} win={win} lead={lead} marks={marks} fallback={fallback} onContributors={onContributors} onPeak={onPeak} direction={direction} />;
   if (panel.kind === 'traces') return <TracesStrip panel={panel} win={win} marks={marks} fallback={fallback} />;
-  if (panel.kind === 'metric') return <MetricSeries panel={panel} win={win} lead={lead} marks={marks} fallback={fallback} />;
+  if (panel.kind === 'metric') return <MetricSeries panel={panel} win={win} lead={lead} marks={marks} fallback={fallback} onPeak={onPeak} direction={direction} />;
   if (panel.kind === 'logs') return <LogsChart panel={panel} win={win} lead={lead} marks={marks} fallback={fallback} />;
   return <>{fallback}</>;
 }
 
-function KafkaLag({ panel, win, lead, marks, fallback, onContributors }: {
+function KafkaLag({ panel, win, lead, marks, fallback, onContributors, onPeak, direction }: {
   panel: Extract<SourcePanel, { kind: 'kafka-lag' }>; win: { fromNs: number; toNs: number };
   lead: SourceChartProps['lead']; marks: string; fallback: ReactNode; onContributors?: (c: Contributors) => void;
+  onPeak?: (p: number | null) => void; direction?: string;
 }) {
   const def = useMemo(() => kafkaPanels({ service: panel.service }).find(p => p.id === 'lag'), [panel.service]);
   const items = useMemo(() => (def ? def.queries.map((q, i) => ({ id: `lag#${i}`, expr: q.expr, instant: false })) : []), [def]);
@@ -82,15 +88,17 @@ function KafkaLag({ panel, win, lead, marks, fallback, onContributors }: {
   const empty = !pending && series.every(s => !(s.points ?? []).length);
   const contributors = useMemo(() => topContributors(series), [series]);
   useEffect(() => { if (!pending && onContributors) onContributors(contributors); }, [pending, contributors, onContributors]);
+  const peak = useMemo(() => peakInRange(series, lead.startedAt, lead.lastSeen, direction), [series, lead.startedAt, lead.lastSeen, direction]);
+  useEffect(() => { if (!pending && onPeak) onPeak(failed ? null : peak); }, [pending, failed, peak, onPeak]);
   if (!def || failed || empty) return <>{fallback}</>;
   const step = stepSeconds(Math.max(60, Math.round((win.toNs - win.fromNs) / 1e9)));
   const range = { preset: 'custom' as const, fromMs: Math.floor(win.fromNs / 1e6), toMs: Math.ceil(win.toNs / 1e6) };
   return (
-    <Frame title={def.title} source={`Messaging sayfasındaki panelin aynısı · ${step < 60 ? `${step} sn` : `${Math.round(step / 60)} dk`} adım · VictoriaMetrics`}
+    <Frame source={`Messaging sayfasındaki panelin aynısı · ${step < 60 ? `${step} sn` : `${Math.round(step / 60)} dk`} adım · VictoriaMetrics`}
       marks={marks} link={{ label: 'Messaging sayfasında aç', href: serviceHref(lead.service, { tab: 'messaging', range }) }}>
       <HttpChartPanel title={def.title} series={series} unit={def.unit} stepSec={step} loading={pending}
         syncKey="ml-source" legendKey="ml-source:kafka-lag" legendOpen={false}
-        regions={[{ fromSec: Math.floor(lead.startedAt / 1e9), toSec: Math.floor(lead.lastSeen / 1e9), label: `tespit ${hm(lead.startedAt)}`, color: 'var(--text3)' }]} />
+        regions={[{ fromSec: Math.floor(lead.startedAt / 1e9), toSec: Math.floor(lead.lastSeen / 1e9), label: `tespit ${hm(lead.startedAt)}`, color: 'var(--text3)', subtle: true }]} />
     </Frame>
   );
 }
@@ -148,7 +156,7 @@ function LogsChart({ panel, win, lead, marks, fallback }: {
   const [state, setState] = useState<'loading' | 'ok' | 'fallback'>('loading');
   const filter = useMemo(() => ({ service: panel.service, search: panel.search, pattern: panel.pattern, severity: panel.severity, traceId: '', spanId: '' }), [panel]);
   const range = useMemo(() => ({ from: win.fromNs, to: win.toNs }), [win]);
-  const regions = useMemo(() => [{ fromSec: Math.floor(lead.startedAt / 1e9), toSec: Math.floor(lead.lastSeen / 1e9), label: `tespit ${hm(lead.startedAt)}`, color: 'var(--text3)' }],
+  const regions = useMemo(() => [{ fromSec: Math.floor(lead.startedAt / 1e9), toSec: Math.floor(lead.lastSeen / 1e9), label: `tespit ${hm(lead.startedAt)}`, color: 'var(--text3)', subtle: true }],
     [lead.startedAt, lead.lastSeen]);
   const onSeries = useCallback((s: { name: string; total: number }[] | null) => {
     setState(s && s.some(x => x.total > 0) ? 'ok' : 'fallback');
@@ -167,9 +175,9 @@ function LogsChart({ panel, win, lead, marks, fallback }: {
 /** v0.10.2036 — metrik / bağımlılık olayı: dedektörün kendi ifadesi, servis
  *  kapsamlı (VM) ya da servisin pod'ları (Thanos, pod başına); Messaging
  *  paneliyle aynı bileşen. Hata ya da boş → kayıtlı görüntü. */
-function MetricSeries({ panel, win, lead, marks, fallback }: {
+function MetricSeries({ panel, win, lead, marks, fallback, onPeak, direction }: {
   panel: Extract<SourcePanel, { kind: 'metric' }>; win: { fromNs: number; toNs: number };
-  lead: SourceChartProps['lead']; marks: string; fallback: ReactNode;
+  lead: SourceChartProps['lead']; marks: string; fallback: ReactNode; onPeak?: (p: number | null) => void; direction?: string;
 }) {
   const [data, setData] = useState<MLSourceSeries | null | undefined>(undefined);
   useEffect(() => {
@@ -179,8 +187,14 @@ function MetricSeries({ panel, win, lead, marks, fallback }: {
       .catch((e: unknown) => { if (!isCanceled(e)) setData(null); });
     return () => ctl.abort();
   }, [panel, win]);
-  const regions = useMemo(() => [{ fromSec: Math.floor(lead.startedAt / 1e9), toSec: Math.floor(lead.lastSeen / 1e9), label: `tespit ${hm(lead.startedAt)}`, color: 'var(--text3)' }],
+  const regions = useMemo(() => [{ fromSec: Math.floor(lead.startedAt / 1e9), toSec: Math.floor(lead.lastSeen / 1e9), label: `tespit ${hm(lead.startedAt)}`, color: 'var(--text3)', subtle: true }],
     [lead.startedAt, lead.lastSeen]);
+  // Tepe yalnız tek seride (VM: dedektörün ölçtüğü seri). Thanos pod başına
+  // çizer; pod tepesi servis değeri değil → cümle dedektör değerinde kalır.
+  useEffect(() => {
+    if (!onPeak || data === undefined) return;
+    onPeak(data && !panel.cluster && data.series.length === 1 ? peakInRange(data.series, lead.startedAt, lead.lastSeen, direction) : null);
+  }, [data, panel.cluster, lead.startedAt, lead.lastSeen, direction, onPeak]);
   if (data === null || (data && !data.series.some(x => (x.points ?? []).length))) return <>{fallback}</>;
   const q = data?.query;
   const thanos = !!panel.cluster;
@@ -195,7 +209,7 @@ function MetricSeries({ panel, win, lead, marks, fallback }: {
     ? { label: "Clusters'ta aç", href: serviceHref(panel.service, { tab: 'infra', range, params: { icluster: panel.cluster } }) }
     : { label: 'Servis sayfasında aç', href: serviceHref(panel.service, { range }) };
   return (
-    <Frame title={title} source={source} marks={marks} link={link}>
+    <Frame source={source} marks={marks} link={link}>
       <HttpChartPanel title={title} series={data?.series ?? []} unit={chartUnit(q?.unit)} stepSec={step} loading={data === undefined}
         syncKey="ml-source" legendKey={`ml-source:${panel.detector}`} legendOpen={thanos} regions={regions} />
     </Frame>

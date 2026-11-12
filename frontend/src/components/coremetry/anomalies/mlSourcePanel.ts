@@ -75,6 +75,22 @@ export function logsPanelFromHref(href?: string): Extract<SourcePanel, { kind: '
   return { kind: 'logs', service, search: q.get('q') ?? '', severity: Number.isFinite(sev) && sev > 0 ? sev : 0, href };
 }
 
+/** SAF (v0.10.2044): panelin olay aralığındaki tepesi — her an serilerin
+ *  en büyüğü (Messaging lag paneli = en kötü partition, dedektörün `max`'ı
+ *  ile aynı toplama), aralıktaki en büyük; düşüş olayında en küçük. Nokta
+ *  yoksa null. */
+export function peakInRange(series: SpanMetricSeries[], fromNs: number, toNs: number, direction?: string): number | null {
+  const byT = new Map<number, number>();
+  for (const s of series) for (const p of s.points ?? []) {
+    if (p.time < fromNs || p.time > toNs || !Number.isFinite(p.value)) continue;
+    const cur = byT.get(p.time);
+    byT.set(p.time, cur === undefined ? p.value : Math.max(cur, p.value));
+  }
+  if (byT.size === 0) return null;
+  const vals = [...byT.values()];
+  return direction === 'down' ? Math.min(...vals) : Math.max(...vals);
+}
+
 /** SAF: panel penceresi (ns) — olayı çevreler. */
 export function panelWindow(startNs: number, endNs: number, open: boolean, nowNs: number): { fromNs: number; toNs: number } {
   const fromNs = startNs - 30 * MIN;

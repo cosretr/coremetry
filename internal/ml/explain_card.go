@@ -50,6 +50,8 @@ type ExplainTechnical struct {
 	Expected   string `json:"expected"`
 	Revision   string `json:"revision"`
 	Series     string `json:"series,omitempty"`
+	// Measured — v0.10.2044: "Dedektörün ölçtüğü" (metrik olayı; cümle panel tepesini söyleyebilir).
+	Measured string `json:"measured,omitempty"`
 }
 
 // ExplainHeader — başlık çipleri (sinyal türü, servis, durum + süre, profil).
@@ -79,6 +81,8 @@ type ExplainCard struct {
 	Header       ExplainHeader    `json:"header"`
 	// Play — v0.10.1846 olayı oynat (adımlar + kova başına cümle); seri yoksa yok.
 	Play *ExplainPlay `json:"play,omitempty"`
+	// Value — v0.10.2044: metrik özetinin değer parçası (yalnız metrik olayı).
+	Value *ExplainValue `json:"value,omitempty"`
 }
 
 // ── girdi ────────────────────────────────────────────────────────────────
@@ -152,6 +156,7 @@ type CardInput struct {
 	Impact                                                                *CardImpact
 	LowTraffic                                                            *CardLowTraffic
 	Contrib                                                               *Contrib // v0.10.2037 — suçlu seri (evidence.contrib)
+	MetricWindowed                                                        bool     // v0.10.2044 — aile ifadesi pencereli (rate/increase)
 }
 
 // ── sözlük ───────────────────────────────────────────────────────────────
@@ -443,6 +448,8 @@ func summaryOf(in CardInput, sp detSpec, open bool, end time.Time) string {
 		// v0.10.2032 (operatör: "cümle değeri söylemiyor") — metrik olayı
 		// ölçülen değeri ve normalini birimiyle söyler; cluster varsa adıyla.
 		return metricSummary(in, sp, open, end)
+	} else if in.Detector == "log_volume" {
+		head = logVolumeHead(in) // v0.10.2044 — değer + normal (oran değil)
 	} else {
 		head = fmt.Sprintf("%s: %s %s", in.Service, fill(sp.fact, in), RatioPhrase(in.Observed, in.Baseline, in.Direction, RatioLong, ratioRef(in)))
 	}
@@ -459,6 +466,25 @@ func summaryOf(in CardInput, sp detSpec, open bool, end time.Time) string {
 		return fmt.Sprintf("%s, %s (%s%s beri).", head, since, day, clockSfx(st, sfxAbl))
 	}
 	return fmt.Sprintf("%s; %s%s başladı, %s bitti (%s sürdü).", head, day, clockSfx(st, sfxLoc), clockSfx(end.In(loc), sfxLoc), plain) // v0.10.2034 bitiş saati açık
+}
+
+// logVolumeHead — SAF (v0.10.2044; operatör: "normalin 20 katından fazla"
+// değeri söylemiyordu): "X: log hacmi dakikada ~880 satıra çıktı (normalde
+// ~40)". Değer = kova sayımı / kova dakikası.
+func logVolumeHead(in CardInput) string {
+	m := in.bucket().Minutes()
+	if m <= 0 {
+		m = 5
+	}
+	verb := "çıktı"
+	if in.Direction == "down" {
+		verb = "düştü"
+	}
+	normal := "normalde neredeyse hiç yok"
+	if in.Baseline/m >= 0.5 {
+		normal = "normalde ~" + trInt(in.Baseline/m)
+	}
+	return fmt.Sprintf("%s: log hacmi dakikada ~%s satıra %s (%s)", in.Service, trInt(in.Observed/m), verb, normal)
 }
 
 // traceErrHead — SAF (v0.10.2018 T-err): mutlak hata sayısı cümlesi; oran
@@ -806,5 +832,10 @@ func BuildExplainCard(in CardInput) ExplainCard {
 		c.Header.Profile = ProfileUnknown
 	}
 	c.Play = BuildPlay(in)
+	if in.Signal == chstore.MLSignalMetric {
+		v := metricValue(in, sp)
+		c.Value = &v
+		c.Technical.Measured = v.Measured
+	}
 	return c
 }

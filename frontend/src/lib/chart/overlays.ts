@@ -54,6 +54,10 @@ export interface ChartTimeRegion {
   /** v0.10.1365 — etiket durumu zaten söylüyorsa (exception bandı: «sürüyor» /
    *  «son görülme …») kronik «· pencere boyu» eki basılmaz. */
   noChronicLabel?: boolean;
+  /** v0.10.2044 (operatör: anomali detayında "tespit" etiketi dolu gri kutu,
+   *  olay aralığı koyu blok) — çok hafif bant + başlangıçta ince çizgi + düz
+   *  etiket (şerit ve ▮ yok). Yalnız verenlerde; diğer grafikler aynen. */
+  subtle?: boolean;
 }
 
 // ResolvedThreshold — drawThresholds girdisi: renk canvas-hazır (preset çözdü).
@@ -178,6 +182,8 @@ export function drawThresholds(
 const REGION_FILL_ALPHA = 0.07;
 const REGION_STRIP_ALPHA = 0.55;
 const REGION_STRIP_H = 3;
+const REGION_SUBTLE_FILL_ALPHA = 0.03;
+const REGION_SUBTLE_LINE_ALPHA = 0.6;
 
 // drawTimeRegions — {fromSec,toSec} bölgelerini canlı x-ölçeğine göre çizer.
 // valToPos canlı ölçeği okur → drag-zoom / kontrollü zoomWindow'da bölge
@@ -218,13 +224,13 @@ export function assignLanes(regions: { fromSec: number; toSec: number }[]): numb
 }
 
 /** Çakışan/bitişik aralıkların birleşimi (dolgu tek kat çizilsin diye); ilk bölgenin rengi. */
-export function mergeIntervals(regions: { fromSec: number; toSec: number; color?: string }[]): { fromSec: number; toSec: number; color?: string }[] {
+export function mergeIntervals(regions: { fromSec: number; toSec: number; color?: string; subtle?: boolean }[]): { fromSec: number; toSec: number; color?: string; subtle?: boolean }[] {
   const s = regions.slice().sort((a, b) => a.fromSec - b.fromSec);
-  const out: { fromSec: number; toSec: number; color?: string }[] = [];
+  const out: { fromSec: number; toSec: number; color?: string; subtle?: boolean }[] = [];
   for (const r of s) {
     const last = out[out.length - 1];
-    if (last && r.fromSec <= last.toSec) { if (r.toSec > last.toSec) last.toSec = r.toSec; }
-    else out.push({ fromSec: r.fromSec, toSec: r.toSec, color: r.color });
+    if (last && r.fromSec <= last.toSec) { if (r.toSec > last.toSec) last.toSec = r.toSec; if (!r.subtle && last.subtle) delete last.subtle; }
+    else out.push({ fromSec: r.fromSec, toSec: r.toSec, color: r.color, ...(r.subtle ? { subtle: true } : {}) });
   }
   return out;
 }
@@ -333,7 +339,7 @@ export function drawTimeRegions(u: uPlot, regions: ChartTimeRegion[], xUnit = 1)
     if (!cl) continue;
     const x1 = u.valToPos(cl.from, 'x', true);
     const x2 = u.valToPos(cl.to, 'x', true);
-    ctx.globalAlpha = REGION_FILL_ALPHA;
+    ctx.globalAlpha = mg.subtle ? REGION_SUBTLE_FILL_ALPHA : REGION_FILL_ALPHA;
     ctx.fillStyle = resolveVar(mg.color ?? 'var(--err)');
     ctx.fillRect(x1, u.bbox.top, Math.max(1, x2 - x1), u.bbox.height);
   }
@@ -352,15 +358,23 @@ export function drawTimeRegions(u: uPlot, regions: ChartTimeRegion[], xUnit = 1)
     const w = Math.max(1, x2 - x1);
     const laneTop = u.bbox.top + lanes[ri] * LANE_H * dpr;
     if (laneTop >= u.bbox.top + u.bbox.height) continue; // çizim alanını aşan şerit çizilmez
-    // Şerit — bölgenin "başlık çubuğu", kendi şerit satırında.
-    ctx.globalAlpha = REGION_STRIP_ALPHA;
-    ctx.fillStyle = colour;
-    ctx.fillRect(x1, laneTop, w, REGION_STRIP_H * dpr);
-    ctx.globalAlpha = 1;
+    if (rg.subtle) {
+      // v0.10.2044 — ince başlangıç çizgisi (şerit yok).
+      ctx.globalAlpha = REGION_SUBTLE_LINE_ALPHA;
+      ctx.fillStyle = colour;
+      ctx.fillRect(x1, u.bbox.top, Math.max(1, dpr), u.bbox.height);
+      ctx.globalAlpha = 1;
+    } else {
+      // Şerit — bölgenin "başlık çubuğu", kendi şerit satırında.
+      ctx.globalAlpha = REGION_STRIP_ALPHA;
+      ctx.fillStyle = colour;
+      ctx.fillRect(x1, laneTop, w, REGION_STRIP_H * dpr);
+      ctx.globalAlpha = 1;
+    }
     // Küçük etiket — şeridin altında; bant içine sığmazsa SOLA (v0.10.1077,
     // regionLabelPlacement), orada da yer yoksa kısalt, hiç sığmazsa çizme (fitLabel).
     if (rg.label) {
-      const full = '▮ ' + rg.label + (chronic[ri] && !rg.noChronicLabel ? ' · pencere boyu' : ''); // v0.10.1365 noChronicLabel
+      const full = (rg.subtle ? '' : '▮ ') + rg.label + (chronic[ri] && !rg.noChronicLabel ? ' · pencere boyu' : ''); // v0.10.1365 noChronicLabel
       const labelW = ctx.measureText(full).width;
       let floorX = u.bbox.left;
       for (let j = 0; j < regions.length; j++) {

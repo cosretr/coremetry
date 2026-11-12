@@ -12217,7 +12217,11 @@ export interface MLGroupDecision {
 /** v0.10.1843 — ml.ExplainCard aynası (internal/ml/explain_card.go). Boş impact = satır yok. */
 export interface ExplainLink { label: string; href?: string }
 export interface ExplainItem { text: string; link?: ExplainLink }
-export interface ExplainTechnical { detector: string; score: string; signature: string; thresholds: string; expected: string; revision: string; series?: string }
+export interface ExplainTechnical { detector: string; score: string; signature: string; thresholds: string; expected: string; revision: string; series?: string;
+  /** v0.10.2044 — "Dedektörün ölçtüğü" (metrik olayı). */
+  measured?: string }
+/** v0.10.2044 — ml.ExplainValue: metrik özetinin değer parçası (cümlede birebir). */
+export interface ExplainValue { text: string; measured: string; unit?: string; direction?: string }
 export interface ExplainHeader {
   kind: 'metric' | 'trace' | 'log' | string; detector: string; service: string; serviceHref: string; open: boolean; status: string;
   profile: string; profileLabel?: string; subject?: ExplainLink;
@@ -12230,6 +12234,7 @@ export interface ExplainCard {
   summary: string; what: string; howMuch: string; since: string; impact?: string; whyItMatters: string;
   whatChanged: ExplainItem[]; whereToLook: ExplainLink[]; technical: ExplainTechnical; header: ExplainHeader;
   play?: ExplainPlay;
+  value?: ExplainValue;
 }
 export interface MLDetectorScore { detector: string; signal?: string; events: number; samples: number; hits: number; hitRate: number }
 /** Yerleşik dedektörler görünümü (v0.10.1766): own = anomaly_sensitivity içindeki eski anahtarlar. */

@@ -289,6 +289,18 @@ func MetricLabelFor(cfg chstore.MLConfig, detector, part string) (label, unit st
 	return id, ""
 }
 
+// MetricWindowedFor — SAF (v0.10.2044): aile ifadesi pencereli mi (`{win}`:
+// rate / increase → değer kova ortalaması; değilse kova sonundaki ölçüm).
+func MetricWindowedFor(cfg chstore.MLConfig, detector, part string) bool {
+	_, id, _ := splitThanosPart(part)
+	for _, e := range cfg.MetricFamilies[detector] {
+		if e.ID == id {
+			return strings.Contains(e.Expr, "{win}")
+		}
+	}
+	return false
+}
+
 // OperatorLocation — dedektörlerin kullandığı operatör dilimi (takvim
 // ayarı; yoksa UTC) — kart saatleri tespitle aynı dilimde yazılır.
 func OperatorLocation(sens chstore.AnomalySensitivityConfig) *time.Location {
@@ -316,6 +328,7 @@ func SummaryInput(ev chstore.MLEvent, cfg chstore.MLConfig, now time.Time, loc *
 	in := CardInputFromEvent(ev, now, loc)
 	if in.Signal == chstore.MLSignalMetric {
 		in.MetricLabel, in.MetricUnit = MetricLabelFor(cfg, ev.Detector, in.Part)
+		in.MetricWindowed = MetricWindowedFor(cfg, ev.Detector, in.Part)
 	}
 	return in
 }
@@ -334,6 +347,7 @@ func AssembleCardInput(src CardSources) (CardInput, bool) {
 		in = CardInputFromSnapshot(*src.Snapshot, src.Now, src.Loc)
 		if in.Signal == chstore.MLSignalMetric {
 			in.MetricLabel, in.MetricUnit = MetricLabelFor(src.Config, in.Detector, in.Part)
+			in.MetricWindowed = MetricWindowedFor(src.Config, in.Detector, in.Part)
 		}
 	default:
 		return CardInput{}, false

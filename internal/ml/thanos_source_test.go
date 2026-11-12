@@ -157,7 +157,7 @@ func TestThanosSummaryCarriesCluster(t *testing.T) {
 		Part: "metric_jvm|heap_used@prod-east", MetricLabel: "Heap kullanımı", MetricUnit: "bytes", StartedAt: st, LastSeen: st.Add(10 * time.Minute), BucketSec: 300,
 		Observed: 2e9, Baseline: 1e9, Direction: "up", Now: st.Add(10 * time.Minute)}
 	// v0.10.2032 — metrik özeti değer + normal + cluster.
-	if s := ExplainSummary(in); !strings.HasPrefix(s, "checkout: Heap kullanımı prod-east cluster'ında") || !strings.Contains(s, "seviyesine çıktı; normalde yaklaşık") {
+	if s := ExplainSummary(in); !strings.HasPrefix(s, "checkout: Heap kullanımı prod-east cluster'ında") || !strings.Contains(s, "seviyesine çıktı (5 dakikalık ölçüm); normalde yaklaşık") {
 		t.Errorf("özet: %q", s)
 	}
 }

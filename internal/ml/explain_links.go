@@ -201,6 +201,19 @@ func whereToLookOf(in CardInput, l cardLinks) []ExplainLink {
 		}
 		return []ExplainLink{first, {Label: "Hatalı trace'ler", Href: tracesLink(in.Service, l.rangeParam, tracesOpts{hasError: true})}, svc}
 	}
+	// v0.10.2044 (operatör: Kafka lag olayında "Trace'ler", "Endpoint
+	// dağılımı" alakasızdı) — Kafka → Messaging; JVM / havuz / k8s → altyapı
+	// (pod'lar); ardından servis sayfası. HTTP client aşağıdaki trace yolunda.
+	if in.Signal == "metric" && in.Detector != "metric_http_client" {
+		first := ExplainLink{Label: "Altyapı (pod'lar)", Href: serviceLink(in.Service, "infra", l.rangeParam)}
+		if in.Detector == "metric_kafka" {
+			first = ExplainLink{Label: "Messaging sayfası", Href: serviceLink(in.Service, "messaging", l.rangeParam)}
+		}
+		if ro != nil {
+			return []ExplainLink{first, compare(), svc}
+		}
+		return []ExplainLink{first, svc}
+	}
 	tl := ExplainLink{Label: "Trace'ler", Href: tracesLink(in.Service, l.rangeParam, tracesOpts{})}
 	if in.MetricUnit == "s" || in.MetricUnit == "ms" {
 		tl.Label = "Yavaş trace'ler"

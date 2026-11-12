@@ -163,7 +163,7 @@ func TestExplainCardFamilies(t *testing.T) {
 			in: CardInput{Detector: "metric_http_client", Signal: chstore.MLSignalMetric, Service: "orders-api", Code: "metric_http_client|client_p95",
 				MetricLabel: "HTTP client p95", MetricUnit: "s", Direction: "up", StartedAt: at(14, 30), LastSeen: at(14, 40), Now: at(14, 44), Loc: trLoc,
 				Observed: 2.1, Baseline: 0.65, Band: bands(at(14, 30), 3, 0.5, 0.65, 0.8), Profile: ProfileAlwaysOn},
-			summary: "orders-api: HTTP client p95 2,1 sn seviyesine çıktı; normalde yaklaşık 0,7 sn. 14:30'dan beri sürüyor (14 dakika).", // v0.10.2032 değer + normal
+			summary: "orders-api: HTTP client p95 2,1 sn seviyesine çıktı (5 dakikalık ölçüm); normalde yaklaşık 0,7 sn. 14:30'dan beri sürüyor (14 dakika).", // v0.10.2032 değer + normal
 			what:    "orders-api servisinde HTTP client p95 arttı.",
 			howMuch: "HTTP client p95 2,1 sn; bu saatte normalde 0,5–0,8 sn. Yaklaşık 3 kat.",
 			since:   "Bugün 14:30'dan beri, 14 dakikadır sürüyor.",
@@ -253,7 +253,7 @@ func TestExplainCardFamilies(t *testing.T) {
 			name: "4 kova görülmeyen açık olay 'sürdü' der",
 			in: CardInput{Detector: "log_volume", Signal: chstore.MLSignalLog, Service: "orders-api", Stage: chstore.MLStageShadow, Direction: "up",
 				StartedAt: at(8, 0), LastSeen: at(8, 20), Now: at(9, 0), Loc: trLoc, Observed: 900, Baseline: 100},
-			summary: "orders-api: log hacmi normalin yaklaşık 9 katı; 08:00'de başladı, 08:20'de bitti (20 dakika sürdü).",
+			summary: "orders-api: log hacmi dakikada ~180 satıra çıktı (normalde ~20); 08:00'de başladı, 08:20'de bitti (20 dakika sürdü).",
 			what:    "orders-api servisinin log hacmi arttı.",
 			howMuch: "Son 5 dakikada 900 log satırı; bu saatte normalde yaklaşık 100. Yaklaşık 9 kat.",
 			since:   "Bugün 08:00–08:20 arasında, 20 dakika sürdü.",

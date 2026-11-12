@@ -17,6 +17,50 @@ import (
 	"time"
 )
 
+// ExplainValue — v0.10.2044 (operatör: cümle 1,34 bin derken grafik 2,8 bin
+// gösteriyordu): metrik özetinin DEĞER parçası. Text cümlede birebir geçer;
+// detay sayfası panel verisi gelince yalnız bu parçayı panelin olay
+// aralığındaki tepesiyle yeniden yazar (FE mlValueText.withPanelPeak).
+// Measured "Teknik ayrıntı"nın "Dedektörün ölçtüğü" satırı.
+type ExplainValue struct {
+	Text      string `json:"text"`
+	Measured  string `json:"measured"`
+	Unit      string `json:"unit,omitempty"`
+	Direction string `json:"direction,omitempty"`
+}
+
+// metricMeasureName — SAF: dedektör değerinin adı. Pencereli ifade (rate /
+// increase, `{win}`) kova ortalaması; değilse kova sonundaki ölçüm.
+func metricMeasureName(in CardInput) string {
+	m := int(in.bucket().Minutes())
+	if m <= 0 {
+		m = 5
+	}
+	if in.MetricWindowed {
+		return fmt.Sprintf("%d dakikalık ortalama", m)
+	}
+	return fmt.Sprintf("%d dakikalık ölçüm", m)
+}
+
+// metricValue — SAF: değer parçası ("162'ye çıktı (5 dakikalık ölçüm)").
+func metricValue(in CardInput, sp detSpec) ExplainValue {
+	metricS := sp.unit == unitMetric && in.MetricUnit == "s"
+	f := newValueFmt(sp, in, in.Observed)
+	verb := "çıktı"
+	if in.Direction == "down" {
+		verb = "düştü"
+	}
+	val := f.one(in.Observed, metricS)
+	measure := metricMeasureName(in)
+	var text string
+	if f.suffix() == "" && f.unit != unitRatio {
+		text = fmt.Sprintf("%s %s (%s)", trNumWithSfx(val, sfxDat), verb, measure)
+	} else {
+		text = fmt.Sprintf("%s seviyesine %s (%s)", val, verb, measure)
+	}
+	return ExplainValue{Text: text, Measured: val + " (" + measure + ")", Unit: in.MetricUnit, Direction: in.Direction}
+}
+
 func metricSummary(in CardInput, sp detSpec, open bool, end time.Time) string {
 	loc := in.loc()
 	st := in.StartedAt.In(loc)
@@ -26,17 +70,7 @@ func metricSummary(in CardInput, sp detSpec, open bool, end time.Time) string {
 	if _, _, cl := splitThanosPart(in.Part); cl != "" {
 		subj = fmt.Sprintf("%s %s cluster'ında", subj, cl)
 	}
-	verb := "çıktı"
-	if in.Direction == "down" {
-		verb = "düştü"
-	}
-	val := f.one(in.Observed, metricS)
-	var head string
-	if f.suffix() == "" && f.unit != unitRatio {
-		head = fmt.Sprintf("%s %s %s", subj, trNumWithSfx(val, sfxDat), verb)
-	} else {
-		head = fmt.Sprintf("%s %s seviyesine %s", subj, val, verb)
-	}
+	head := subj + " " + metricValue(in, sp).Text
 	if in.Service != "" {
 		head = in.Service + ": " + head // tek kaynak: Problem başlığı / bildirim de bu cümle; liste öneki kırpar
 	}

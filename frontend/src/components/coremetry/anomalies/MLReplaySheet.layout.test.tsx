@@ -79,7 +79,8 @@ describe('ML olay sayfası düzeni', () => {
     for (let i = 1; i < order.length; i++) {
       expect(order[i - 1]!.compareDocumentPosition(order[i]!) & Node.DOCUMENT_POSITION_FOLLOWING, ML_EVENT_SECTIONS[i]).toBeTruthy();
     }
-    expect(el.querySelector('[data-testid="ml-summary"]')!.textContent).toBe(card.summary);
+    // v0.10.2044 — servis başlıkta; cümle öneksiz (sunucu cümlesi, kırpılmış).
+    expect(el.querySelector('[data-testid="ml-summary"]')!.textContent).toBe("Hata logları normalin yaklaşık 9 katı, 13 dakikadır (14:31'den beri).");
     const labels = [...el.querySelectorAll('[data-testid="ml-card"] dt')].map(d => d.textContent);
     expect(labels).toEqual(['Ne oldu', 'Ne kadar', 'Ne zamandan beri', 'Neden önemli', 'Yakında ne değişti', 'Nereye bakmalı']);
     expect(el.querySelector('[data-testid="ml-header"]')!.textContent).toContain('Sürüyor · 13 dk');
@@ -90,7 +91,7 @@ describe('ML olay sayfası düzeni', () => {
     expect(tech.textContent).toContain('abcdef0123456789'); // örnek satırlar teknik ayrıntıda
     // kanıt satırı: sinyal + cümle + kaynak notu
     const row = el.querySelector('[data-testid="ml-evidence-rows"] li')!;
-    expect(row.textContent).toContain(card.what);
+    expect(row.textContent).toContain(card.howMuch); // v0.10.2044 — kanıt başlık cümlesini tekrar etmez
     expect(row.textContent).toContain('Elasticsearch');
     // eylemler: örnek trace + nereye bakmalı + Gerçek / Değil
     expect(el.querySelector('[data-testid="ml-actions"]')!.textContent).toContain("Örnek trace'i aç");

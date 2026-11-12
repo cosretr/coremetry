@@ -97,7 +97,7 @@ export function MLEventPlayer({ snap, play, autoPlay = false, above, series, com
       {times.length > 0 ? (
         <TimeChart height={220} times={times} deployMarkers={ch.deploys}
           regions={compact
-            ? compactRegions(ch.regions, clockHM).map(r => ({ ...r, color: 'var(--text3)' }))
+            ? compactRegions(ch.regions, clockHM).map(r => ({ ...r, color: 'var(--text3)', subtle: true }))
             : ch.regions.map(r => ({ ...r, color: r.label === 'anomali' ? 'var(--err)' : 'var(--warn)' }))}
           playhead={canPlay && cursorSec != null ? { cursorSec, fromSec: play?.from } : null}
           hideLegend={!!override || compact} leftInteger={!!override} yAxisLeft={compact}

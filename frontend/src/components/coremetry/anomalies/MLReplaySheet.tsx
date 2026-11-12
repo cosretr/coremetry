@@ -47,6 +47,9 @@ import { groupStatusText, type MLGroupRow } from './mlGroupRows';
 import { evidenceSource, headerOperation } from './mlGroupDetail';
 import { MLSourceChart } from './MLSourceChart';
 import { contributorLine, leadFromSnapshot, parseLogsLink, type Contributors } from './mlSourcePanel';
+import { evidenceRows, evidenceSub } from './mlEvidenceRows';
+import { withPanelPeak } from './mlValueText';
+import { stripServicePrefix } from './unifiedRows';
 
 const fmtTs = (ns: number) => fmtDateTime(new Date(ns / 1e6));
 const fmtNum = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(3));
@@ -144,6 +147,8 @@ export function MLReplayContent({ id, autoPlay = false, group = null }: { id: st
   const card = q.data?.card;
   // v0.10.2033 — panel verisinden suçlu seri(ler) (ek sorgu yok).
   const [contrib, setContrib] = useState<Contributors>({ kind: 'none' });
+  // v0.10.2044 — panelin olay aralığındaki tepesi: cümle panelin ölçüsünü söyler.
+  const [peak, setPeak] = useState<number | null>(null);
   if (q.isLoading) return <Spinner />;
   if (q.error || !card) {
     return <Empty icon={<SearchX size={28} strokeWidth={1.5} />} title="Bu olay bulunamadı">Olay kaydı 30, olay anı kaydı 120 gün saklanır; daha eski olaylar listeden de düşer.</Empty>;
@@ -162,6 +167,11 @@ export function MLReplayContent({ id, autoPlay = false, group = null }: { id: st
   const shadow = members.map(m => m.groupShadow).filter(Boolean).sort((x, y) => (y!.at - x!.at))[0];
   const chartLead = lead ?? (snap ? leadFromSnapshot(snap) : null);
   const contribLine = contributorLine(contrib, 'istemci');
+  // v0.10.2044 — servis başlıkta; cümle değer parçası panel tepesiyle (varsa).
+  const headline = withPanelPeak(stripServicePrefix(card.summary, h.service), card.value, peak);
+  const rows = members.length
+    ? evidenceRows(members, stripServicePrefix(card.summary, h.service), card.howMuch, h.service)
+    : [{ key: 'lead', kind: signalKindOf(h.detector, h.kind), detector: h.detector, text: card.howMuch, ids: [] as string[] }];
   const snapshotView = (
     <div className="rounded-md border border-border bg-card px-3 py-2.5">
       {snap && <p className="m-0 mb-1.5 text-xs text-muted-foreground">Kayıtlı görüntü · {Math.round((snap.bucketSec || 300) / 60)} dakikalık kova · normal aralık ince çizgilerle</p>}
@@ -177,7 +187,7 @@ export function MLReplayContent({ id, autoPlay = false, group = null }: { id: st
         {op && <span className="font-mono text-muted-foreground">· {op}</span>}
         <Badge variant="outline" className={running ? 'border-transparent bg-[color:var(--warn-bg)] text-[color:var(--warn)]' : ''}>{status}</Badge>
       </div>
-      <p className="mb-2.5 text-sm font-semibold leading-normal" data-testid="ml-summary">{card.summary}</p>
+      <p className="mb-2.5 text-sm font-semibold leading-normal" data-testid="ml-summary">{headline}</p>
       {snap?.detector === 'op_latency' && episodes >= 5 && (
         <p className="mb-2 text-sm text-muted-foreground" data-testid="ml-chronic">Kronik: son 7 günde {episodes} kez tekrarladı; tek tek olay yerine kalıcı bir desen olarak izleyin.</p>
       )}
@@ -185,10 +195,11 @@ export function MLReplayContent({ id, autoPlay = false, group = null }: { id: st
         {/* v0.10.2033 — servis sayfasındaki panelin aynısı (mlSourcePanel); yoksa kayıtlı 5 dakikalık görüntü. */}
         {chartLead ? (
           <MLSourceChart lead={chartLead} open={running} onContributors={setContrib} fallback={snapshotView}
+            onPeak={setPeak} direction={card.value?.direction}
             logsLink={card.whereToLook.find(l => parseLogsLink(l.href))?.href} />
         ) : snapshotView}
       </Section>
-      <Section id="ml-evidence" title="Kanıt" sub={members.length > 1 ? `${members.length} sinyal aynı olayda` : undefined}>
+      <Section id="ml-evidence" title="Kanıt" sub={evidenceSub(members)}>
         <ul className="m-0 flex list-none flex-col gap-2 p-0" data-testid="ml-evidence-rows">
           {contribLine && (
             <li data-testid="ml-contributors" className="flex flex-wrap items-baseline gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm">
@@ -197,18 +208,22 @@ export function MLReplayContent({ id, autoPlay = false, group = null }: { id: st
               <span className="text-xs text-muted-foreground">Messaging paneli · VictoriaMetrics</span>
             </li>
           )}
-          {(members.length ? members : [null]).map(m => (
-            <li key={m?.id ?? 'lead'} className="flex flex-wrap items-baseline gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm">
-              <SignalKindBadge kind={m ? signalKindOf(m.detector, m.signal) : signalKindOf(h.detector, h.kind)} />
-              <span className="min-w-0 flex-1">{m ? (m.summary || card.what) : card.what}</span>
-              <span className="text-xs text-muted-foreground">{m ? evidenceSource(m.detector, m.signal, m.evidence) : evidenceSource(h.detector, h.kind, snap?.evidence)}</span>
-            </li>
-          ))}
+          {rows.map(r => {
+            const m = members.find(x => r.ids.includes(x.id));
+            return (
+              <li key={r.key} className="flex flex-wrap items-baseline gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm">
+                <SignalKindBadge kind={r.kind} />
+                <span className="min-w-0 flex-1">{r.text}</span>
+                <span className="text-xs text-muted-foreground">{m ? evidenceSource(m.detector, m.signal, m.evidence) : evidenceSource(h.detector, h.kind, snap?.evidence)}</span>
+              </li>
+            );
+          })}
         </ul>
       </Section>
       <Section id="ml-actions" title="Ne yapmak istersiniz?">
         <div className="mb-2 flex flex-wrap gap-2" data-testid="ml-where">
-          {sample?.traceId && <Chip link={{ label: "Örnek trace'i aç", href: traceHref(sample.traceId) }} />}
+          {/* v0.10.2044 — örnek trace metrik olayında yok (Kafka lag olayında alakasızdı). */}
+          {h.kind !== 'metric' && sample?.traceId && <Chip link={{ label: "Örnek trace'i aç", href: traceHref(sample.traceId) }} />}
           {card.whereToLook.map(l => <Chip key={l.label} link={l} />)}
         </div>
         <MLEventActions id={id} card={card} verdict={q.data?.verdict ?? null} />
@@ -367,6 +382,8 @@ function MLTechnical({ snap, card }: { snap: MLSnapshot | null; card: ExplainCar
         { k: 'Eşikler', v: t.thresholds },
         { k: 'Beklenen aralık', v: t.expected },
         { k: 'Ayar revizyonu', v: t.revision, mono: true },
+        // v0.10.2044 — cümle panel tepesini söyleyebilir; dedektörün değeri burada.
+        ...(t.measured ? [{ k: 'Dedektörün ölçtüğü', v: t.measured, mono: true }] : []),
         ...(snap ? [
           { k: 'Takvim sınıfı', v: dayClassLabel(snap.dayClass) },
           { k: 'Taban medyan / MAD', v: `${fmtNum(snap.baselineMed)} / ${fmtNum(snap.baselineMad)}`, mono: true },
