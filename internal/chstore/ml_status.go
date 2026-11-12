@@ -64,6 +64,10 @@ type MLTickStatus struct {
 	VM        int64                 `json:"vm"`
 	CH        int64                 `json:"ch"`
 	LastError string                `json:"lastError,omitempty"`
+	// v0.10.2015 (anomali tekilleştirme D3) — gölge grup terfisi: bu tikte
+	// karar verilen grup ve kapıdan geçseydi Problem "açardı" sayısı.
+	ShadowGroups    int64 `json:"shadowGroups,omitempty"`
+	ShadowWouldOpen int64 `json:"shadowWouldOpen,omitempty"`
 }
 
 func (s *Store) GetMLTickStatus(ctx context.Context) (MLTickStatus, bool, error) {

@@ -78,6 +78,7 @@ export function tickLabel(t: MLTickStatus | undefined, nowSec: number): string {
   if (t.docs) parts.push(`${t.docs.toLocaleString('tr-TR')} belge`);
   if (t.partial) parts.push(`${t.partial} kısmi ES sonucu (yazılmadı)`);
   if (t.batchCut) parts.push(`batch kuralı ${t.batchCut} adayı kesti`);
+  if (t.shadowGroups) parts.push(`gölge terfi: ${t.shadowGroups} grup, ${t.shadowWouldOpen ?? 0} Problem açardı (açılmadı)`);
   if (t.backoff.length) parts.push(`VM bekleme: ${t.backoff.map(b => `${b.family} (${Math.max(1, Math.round((b.until - nowSec) / 60))} dk)`).join(', ')}`);
   if (t.lastError) parts.push(`hata: ${t.lastError}`);
   return parts.join(' · ');
@@ -143,7 +144,7 @@ export function statusTiles(sc: MLScorecard, signal: MLSignal, nowSec: number): 
   const samples = (sc.bySignal ?? []).filter(s => !signal || s.detector === signal).reduce((a, s) => a + s.samples, 0);
   const bo = t?.backoff ?? [];
   return [
-    { k: 'Son tik', v: t ? `${ago} dk önce` : 'yok', s: t ? `${Math.round(t.durationMs / 1000)} sn · ${t.events} olay${t.docs ? ` · ${t.docs.toLocaleString('tr-TR')} belge` : ''}${t.partial ? ` · ${t.partial} kısmi` : ''}${t.batchCut ? ` · batch kuralı ${t.batchCut} adayı kesti` : ''}` : 'tik yok', warn: !!t?.lastError },
+    { k: 'Son tik', v: t ? `${ago} dk önce` : 'yok', s: t ? `${Math.round(t.durationMs / 1000)} sn · ${t.events} olay${t.docs ? ` · ${t.docs.toLocaleString('tr-TR')} belge` : ''}${t.partial ? ` · ${t.partial} kısmi` : ''}${t.batchCut ? ` · batch kuralı ${t.batchCut} adayı kesti` : ''}${t.shadowGroups ? ` · gölge terfi: ${t.shadowGroups} grup, ${t.shadowWouldOpen ?? 0} Problem açardı (açılmadı)` : ''}` : 'tik yok', warn: !!t?.lastError },
     { k: 'Log geçmişi', v: bf ? `${bf.done + miss} / ${bf.total} sa` : '—', s: bf ? (bf.complete ? 'tamam' : bf.running ? 'sürüyor' : 'duraklı') + (miss ? ` · eksik ${miss}` : '') : 'kayıt yok' },
     { k: 'Olay · 30 gün', v: String(events), s: samples ? `${samples} karar` : 'karar yok · terfi kapalı' },
     { k: 'VM bekleme', v: bo.length ? `${bo.length} aile` : 'yok', s: bo.map(b => `${b.family} · ${Math.max(1, Math.round((b.until - nowSec) / 60))} dk`).join(', ') || 'tüm aileler açık', warn: bo.length > 0 },
@@ -288,8 +289,13 @@ export function mlGroupLabel(e: MLEvent): { text: string; title: string } {
   const n = e.groupSize ?? 0;
   if (n <= 1) return { text: '', title: '' };
   const dets = e.groupDetectors ?? [];
-  const title = `Aynı servis, aynı zaman: ${dets.map(d => ML_DETECTOR_TR[d] ?? d).join(', ')}`;
-  return { text: dets.length > 1 ? `${dets.length} dedektör birlikte` : `${n} olay birlikte`, title };
+  const head = `Aynı servis, aynı zaman: ${dets.map(d => ML_DETECTOR_TR[d] ?? d).join(', ')}`;
+  const base = dets.length > 1 ? `${dets.length} dedektör birlikte` : `${n} olay birlikte`;
+  // v0.10.2015 D3 — gölge terfi: Problem AÇILMAZ; yalnız "kapıdan geçseydi açardı" işareti.
+  const s = e.groupShadow;
+  if (!s) return { text: base, title: head };
+  const title = `${head}\nGölge terfi (Problem açılmadı): ${s.reason}`;
+  return { text: s.wouldOpen ? `${base} · açardı${s.priority ? ` (${s.priority})` : ''}` : base, title };
 }
 
 const COLS: ColumnDef<MLEvent>[] = [

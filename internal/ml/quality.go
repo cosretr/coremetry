@@ -225,6 +225,20 @@ func (t *tracker) setEvent(ev chstore.MLEvent) {
 	t.mu.Unlock()
 }
 
+// events — v0.10.2015 (D3): koşuların son yazılan halleri (açık + 24 sa
+// içinde kapanmış); gölge gruplamanın süreç-içi girdisi.
+func (t *tracker) events() []chstore.MLEvent {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	out := make([]chstore.MLEvent, 0, len(t.runs))
+	for _, r := range t.runs {
+		if r.ev.ID != "" {
+			out = append(out, r.ev)
+		}
+	}
+	return out
+}
+
 // snap — koşunun replay durumu (yoksa nil); yalnız lider goroutine'i yazar.
 func (t *tracker) snap(epID string) *snapshotState {
 	t.mu.Lock()

@@ -215,6 +215,18 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	r.runs.gc(start)
 	// T1b: trace olaylarına exception / Oracle / BubbleUp referansı (koşu başına bir kez)
 	r.enrichTraceContext(tctx, deps, cfg, kept, cfg.MaxESQueriesPerTick-int(global.esQueries.Load()-esAtStart))
+	// v0.10.2015 (anomali tekilleştirme D3) — promoteMLGroups GÖLGE kipi:
+	// grup Problem kapısından geçseydi "açardı" kararı üyenin kanıtına
+	// (groupShadow) yazılır. Problem / bildirim / anomaly_events YOK; sorgu
+	// yok (girdi süreç-içi koşu durumu). Kapanış satırı (closeStale) koşunun
+	// son halini yazdığı için damgalı hal koşuya da geri verilir.
+	shadow := shadowPromoteGroups(kept, r.runs.events(), GroupSlack(cfg),
+		GroupGateInput{IsBatch: isBatch, LoadParts: loadParts, CalendarTZ: sens.Calendar.Timezone}, start)
+	for _, ev := range kept {
+		if ev.Stage != chstore.MLStageChronic {
+			r.runs.setEvent(ev)
+		}
+	}
 	for _, ev := range kept {
 		if werr := r.store.UpsertMLEvent(tctx, ev); werr != nil {
 			if firstErr == nil {
@@ -250,7 +262,8 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	// tik durumu: api pod'u karnede okur (süreç-içi sayaç bu pod'da kalır)
 	status := chstore.MLTickStatus{At: start.Unix(), DurationMs: time.Since(start).Milliseconds(), Events: written, Backoff: r.backoff.snapshot(start),
 		Partial: int64(partialN), Docs: global.docs.Load(), Steps: steps, Signals: signals, BatchCut: int64(batchCut),
-		Kinds: foldKindTicks(samples), ES: global.esQueries.Load() - esAtStart, VM: global.vmQueries.Load() - vmAtStart, CH: chQueries.Load()}
+		Kinds: foldKindTicks(samples), ES: global.esQueries.Load() - esAtStart, VM: global.vmQueries.Load() - vmAtStart, CH: chQueries.Load(),
+		ShadowGroups: shadow.Groups, ShadowWouldOpen: shadow.WouldOpen}
 	global.setLastKinds(status.Kinds)
 	if firstErr != nil {
 		status.LastError = truncRunes(firstErr.Error(), 300)
@@ -262,6 +275,7 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	scancel()
 	log.Printf("[ml] tick placement=%s detectors=%d events=%d suppressed=impact:%d,feedback:%d,regime:%d,batch:%d labels=%d dur=%dms es_p95=%dms err=%v",
 		r.placement, active, written, sup.Impact, sup.Feedback, sup.Regime, batchCut, len(labels), time.Since(start).Milliseconds(), Observability().ESP95Ms, firstErr)
+	log.Printf("[ml] tick group_shadow groups=%d would_open=%d", shadow.Groups, shadow.WouldOpen)
 	log.Printf("[ml] tick steps labels=%dms detectors=%dms write=%dms snapshot=%dms es_queries=%d vm_queries=%d partial=%d docs=%d",
 		steps["labelsMs"], steps["detectorsMs"], steps["writeMs"], steps["snapshotMs"], global.esQueries.Load()-esAtStart, global.vmQueries.Load()-vmAtStart, partialN, global.docs.Load())
 	for _, line := range kindTickLines(status.Kinds) {

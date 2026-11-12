@@ -3,7 +3,7 @@
 // tetiklendiğini söyler, adlar ipucunda.
 import { describe, it, expect } from 'vitest';
 import type { MLEvent } from '@/lib/types';
-import { mlGroupLabel } from './MLTab';
+import { mlGroupLabel, tickLabel } from './MLTab';
 
 const base: MLEvent = {
   id: 'e1', detector: 'op_latency', signal: 'trace', stage: 'shadow', service: 'checkout',
@@ -20,6 +20,19 @@ describe('mlGroupLabel', () => {
     expect(g.text).toBe('3 dedektör birlikte');
     expect(g.title).toContain('Bağımlılık gecikmesi');
     expect(g.title).toContain('Kırılma (trace)');
+  });
+  it('v0.10.2015 D3 — gölge karar: açardı + öncelik; açmazdı yalnız ipucunda', () => {
+    const g = { ...base, groupId: 'g', groupSize: 2, groupDetectors: ['op_latency', 'dependency_latency'] };
+    const open = mlGroupLabel({ ...g, groupShadow: { group: 'g', wouldOpen: true, rule: 'anomaly-auto:group:g', priority: 'P2', reason: 'açardı: 2 dedektör', detectors: [], at: 1 } });
+    expect(open.text).toBe('2 dedektör birlikte · açardı (P2)');
+    expect(open.title).toContain('Problem açılmadı');
+    const no = mlGroupLabel({ ...g, groupShadow: { group: 'g', wouldOpen: false, rule: 'r', reason: 'açmazdı: takvim dilimi tanımlı değil', detectors: [], at: 1 } });
+    expect(no.text).toBe('2 dedektör birlikte');
+    expect(no.title).toContain('takvim');
+  });
+  it('tik satırı gölge sayacını söyler', () => {
+    const t = { at: 100, durationMs: 1000, events: 3, backoff: [], shadowGroups: 4, shadowWouldOpen: 1 };
+    expect(tickLabel(t, 100)).toContain('gölge terfi: 4 grup, 1 Problem açardı (açılmadı)');
   });
   it('aynı dedektörün birden çok olayı', () => {
     expect(mlGroupLabel({ ...base, groupId: 'g', groupSize: 2, groupDetectors: ['op_latency'] }).text).toBe('2 olay birlikte');

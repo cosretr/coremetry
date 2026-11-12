@@ -133,8 +133,8 @@ func TestMLEventRowsCarrySparkAndProfile(t *testing.T) {
 	if b := mlEventRows([]chstore.MLEvent{bev}, chstore.MLConfig{}, start, loc, mlListExtras{IsBatch: isBatch}); b[0].Profile != "batch" || b[0].ProfileLabel != "batch" {
 		t.Errorf("batch adı: %q %q", b[0].Profile, b[0].ProfileLabel)
 	}
-	if !strings.Contains(mlEventsKey(1, "", "", "", "", "UTC"), "ml:events:v5:") {
-		t.Error("liste şekli değişti, anahtar v5 olmalı")
+	if !strings.Contains(mlEventsKey(1, "", "", "", "", "UTC"), "ml:events:v6:") {
+		t.Error("liste şekli değişti, anahtar v6 olmalı")
 	}
 }
 
@@ -153,6 +153,28 @@ func TestMLEventRowsCarryGroup(t *testing.T) {
 	}
 	if bare := mlEventRows([]chstore.MLEvent{a}, chstore.MLConfig{}, start, loc, mlListExtras{}); bare[0].GroupID != "" || bare[0].GroupSize != 0 {
 		t.Errorf("grup yoksa boş: %+v", bare[0])
+	}
+}
+
+// v0.10.2015 — anomali tekilleştirme D3: grubun en son gölge kararı tüm
+// üye satırlarına taşınır (kanıttan; ek okuma yok); kararsız grup alanı boş.
+func TestMLEventRowsCarryGroupShadow(t *testing.T) {
+	start := time.Date(2026, 11, 12, 10, 0, 0, 0, time.UTC)
+	a := chstore.MLEvent{ID: "a", Detector: "op_latency", Service: "checkout", StartedAt: start.UnixNano(), LastSeen: start.Add(30 * time.Minute).UnixNano(),
+		Evidence: `{"groupShadow":{"group":"mlg-old","wouldOpen":false,"rule":"anomaly-auto:group:mlg-old","reason":"açmazdı: tek dedektör","at":100}}`}
+	b := chstore.MLEvent{ID: "b", Detector: "dependency_latency", Service: "checkout", StartedAt: start.Add(5 * time.Minute).UnixNano(), LastSeen: start.Add(20 * time.Minute).UnixNano(),
+		Evidence: `{"groupShadow":{"group":"mlg-x","wouldOpen":true,"rule":"anomaly-auto:group:mlg-x","priority":"P2","reason":"açardı","at":200}}`}
+	c := chstore.MLEvent{ID: "c", Detector: "op_latency", Service: "payments", StartedAt: start.UnixNano(), LastSeen: start.Add(5 * time.Minute).UnixNano()}
+	items := []chstore.MLEvent{a, b, c}
+	idx := ml.GroupIndex(ml.GroupMLEvents(items, 10*time.Minute))
+	rows := mlEventRows(items, chstore.MLConfig{}, start, time.UTC, mlListExtras{Groups: idx})
+	for _, r := range rows[:2] {
+		if r.GroupShadow == nil || !r.GroupShadow.WouldOpen || r.GroupShadow.Priority != "P2" {
+			t.Errorf("%s: en son karar taşınmalı: %+v", r.ID, r.GroupShadow)
+		}
+	}
+	if rows[2].GroupShadow != nil {
+		t.Errorf("kararsız grup boş olmalı: %+v", rows[2].GroupShadow)
 	}
 }
 

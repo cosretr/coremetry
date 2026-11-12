@@ -60,9 +60,9 @@ func withMLStats(st *chstore.SystemStats) *chstore.SystemStats {
 
 // mlEventsKey — SAF: tüm girdiler anahtarda (since kovası, süzgeçler, özetin
 // saat dilimi). v3 (v0.10.1843): satır `summary` taşır. v4 (v0.10.1874):
-// `spark` + `profile`. v5 (v0.10.2013): `group*` (D2 gruplama).
+// `spark` + `profile`. v5 (v0.10.2013): `group*` (D2). v6 (v0.10.2015): `groupShadow` (D3).
 func mlEventsKey(sinceS int64, signal, detector, service, stage, tz string) string {
-	return fmt.Sprintf("ml:events:v5:since=%d:sig=%s:d=%s:s=%s:st=%s:tz=%s", sinceS, signal, detector, service, stage, tz)
+	return fmt.Sprintf("ml:events:v6:since=%d:sig=%s:d=%s:s=%s:st=%s:tz=%s", sinceS, signal, detector, service, stage, tz)
 }
 
 // mlEventRow — liste satırı: olay + sunucuda kurulan tek satır özet
@@ -83,6 +83,26 @@ type mlEventRow struct {
 	GroupID        string   `json:"groupId,omitempty"`
 	GroupSize      int      `json:"groupSize,omitempty"`
 	GroupDetectors []string `json:"groupDetectors,omitempty"`
+	// v0.10.2015 (D3) — grubun en son gölge terfi kararı ("açardı / açmazdı",
+	// kural, öncelik, neden); üyelerin kanıtından, ek okuma yok.
+	GroupShadow *ml.GroupDecision `json:"groupShadow,omitempty"`
+}
+
+// groupShadows — SAF: okuma anı grubu → üyelerin kanıtındaki en son gölge karar.
+func groupShadows(items []chstore.MLEvent, groups map[string]*ml.MLGroup) map[string]ml.GroupDecision {
+	out := map[string]ml.GroupDecision{}
+	for _, e := range items {
+		g := groups[e.ID]
+		if g == nil {
+			continue
+		}
+		if d, ok := ml.GroupShadowOf(e.Evidence); ok {
+			if cur, seen := out[g.ID]; !seen || d.At > cur.At {
+				out[g.ID] = d
+			}
+		}
+	}
+	return out
 }
 
 // mlListExtras — liste satırlarının toplu ek verisi (okunamayan alan boş).
@@ -96,6 +116,7 @@ type mlListExtras struct {
 // mlEventRows — SAF: olaylar → özetli satırlar (+ seyir, servis tipi).
 func mlEventRows(items []chstore.MLEvent, cfg chstore.MLConfig, now time.Time, loc *time.Location, ex mlListExtras) []mlEventRow {
 	out := make([]mlEventRow, len(items))
+	shadows := groupShadows(items, ex.Groups)
 	for i, e := range items {
 		p := ""
 		if row, ok := ex.Profiles[e.Service]; ok {
@@ -106,6 +127,9 @@ func mlEventRows(items []chstore.MLEvent, cfg chstore.MLConfig, now time.Time, l
 			Spark: ml.BuildSpark(ex.Series[e.ID], e.StartedAt, e.LastSeen), Profile: p, ProfileLabel: ml.ProfileLabelTR(p)}
 		if g := ex.Groups[e.ID]; g != nil {
 			out[i].GroupID, out[i].GroupSize, out[i].GroupDetectors = g.ID, len(g.Members), g.Detectors
+			if d, ok := shadows[g.ID]; ok {
+				out[i].GroupShadow = &d
+			}
 		}
 	}
 	return out

@@ -12202,6 +12202,12 @@ export interface MLEvent {
   profile?: string; profileLabel?: string;
   /** v0.10.2013 (anomali tekilleştirme D2) — dedektörler arası grup: aynı servis, örtüşen pencere (okuma anında). */
   groupId?: string; groupSize?: number; groupDetectors?: string[];
+  /** v0.10.2015 (D3) — grubun en son gölge terfi kararı (Problem AÇILMAZ; yalnız "açardı" kaydı). */
+  groupShadow?: MLGroupDecision;
+}
+/** v0.10.2015 — ml.GroupDecision aynası (internal/ml/group_gate.go). */
+export interface MLGroupDecision {
+  group: string; wouldOpen: boolean; rule: string; severity?: string; priority?: string; reason: string; detectors: string[]; at: number;
 }
 /** v0.10.1843 — ml.ExplainCard aynası (internal/ml/explain_card.go). Boş impact = satır yok. */
 export interface ExplainLink { label: string; href?: string }
@@ -12315,6 +12321,8 @@ export interface MLTickStatus {
   /** v0.10.1812: sinyal türü başına ölçüm + tik toplam sorgu sayıları. */
   kinds?: Record<string, MLKindTick>;
   es?: number; vm?: number; ch?: number;
+  /** v0.10.2015 (D3): bu tikte gölge karar verilen grup / Problem "açardı" sayısı. */
+  shadowGroups?: number; shadowWouldOpen?: number;
 }
 /** Sinyal türünün son tik ölçümü (v0.10.1812, audit §10 dilim 1.1). dropped = ES terms tavanı dışında kalan servis (yalnız log). */
 export interface MLKindTick { services: number; series: number; seriesRows: number; es: number; vm: number; ch: number; dropped: number; durationMs: number }
