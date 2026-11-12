@@ -22,12 +22,13 @@ import { serviceHref } from '@/lib/serviceHref';
 import { operationTracesHref, tracesPivotHref } from '@/lib/pivotHref';
 import { fmtClock } from '@/lib/utils';
 import type { MLEvent, MLSourceSeries, SpanMetricSeries } from '@/lib/types';
-import { panelWindow, peakInRange, sourcePanelFor, topContributors, type Contributors, type SourcePanel } from './mlSourcePanel';
+import { highlightColors, panelWindow, peakInRange, sourcePanelFor, topContributors, type Contributors, type SourcePanel } from './mlSourcePanel';
 
 const hm = (ns: number) => fmtClock(new Date(ns / 1e6)).slice(0, 5);
+const cssVar = (t: string) => getComputedStyle(document.documentElement).getPropertyValue(t);
 
 export interface SourceChartProps {
-  lead: Pick<MLEvent, 'detector' | 'signal' | 'code' | 'service' | 'startedAt' | 'lastSeen'>;
+  lead: Pick<MLEvent, 'detector' | 'signal' | 'code' | 'service' | 'startedAt' | 'lastSeen' | 'pod' | 'evidence'>;
   open: boolean;
   /** Kayıtlı 5 dakikalık görüntü (yedek). */
   fallback: ReactNode;
@@ -182,7 +183,7 @@ function MetricSeries({ panel, win, lead, marks, fallback, onPeak, direction }: 
   const [data, setData] = useState<MLSourceSeries | null | undefined>(undefined);
   useEffect(() => {
     const ctl = new AbortController();
-    api.mlSourceSeries({ detector: panel.detector, service: panel.service, code: panel.code, from: win.fromNs, to: win.toNs }, ctl.signal)
+    api.mlSourceSeries({ detector: panel.detector, service: panel.service, code: panel.code, family: panel.family, from: win.fromNs, to: win.toNs }, ctl.signal)
       .then(setData)
       .catch((e: unknown) => { if (!isCanceled(e)) setData(null); });
     return () => ctl.abort();
@@ -195,23 +196,33 @@ function MetricSeries({ panel, win, lead, marks, fallback, onPeak, direction }: 
     if (!onPeak || data === undefined) return;
     onPeak(data && !panel.cluster && data.series.length === 1 ? peakInRange(data.series, lead.startedAt, lead.lastSeen, direction) : null);
   }, [data, panel.cluster, lead.startedAt, lead.lastSeen, direction, onPeak]);
+  // v0.10.2055 — sapan pod tek renkli, diğerleri gri (renk yalnız sapmada).
+  const names = useMemo(() => (data?.series ?? []).map(s => s.groupKey.join(' · ')), [data]);
+  const colors = useMemo(() => highlightColors(names, panel.highlight, cssVar), [names, panel.highlight]);
   if (data === null || (data && !data.series.some(x => (x.points ?? []).length))) return <>{fallback}</>;
   const q = data?.query;
   const thanos = !!panel.cluster;
+  const byPod = thanos || !!q?.by;
   const range = { preset: 'custom' as const, fromMs: Math.floor(win.fromNs / 1e6), toMs: Math.ceil(win.toNs / 1e6) };
   const step = data?.stepSec ?? 60;
   const stepTxt = step < 60 ? `${step} sn` : `${Math.round(step / 60)} dk`;
   const title = `${q?.label ?? panel.code}${thanos ? ` · ${panel.cluster}` : ''}`;
+  const tail = data?.truncated ? ' · seri tavanı aşıldı' : '';
   const source = thanos
-    ? `Clusters katmanının pod kümesi · pod başına · ${stepTxt} adım · Thanos (${panel.cluster})${data?.truncated ? ' · seri tavanı aşıldı' : ''}`
-    : `dedektörün ölçtüğü seri · ${stepTxt} adım · VictoriaMetrics`;
+    ? `Clusters katmanının pod kümesi · pod başına · ${stepTxt} adım · Thanos (${panel.cluster})${tail}`
+    : q?.by ? `dedektörün kaynağı · pod başına · ${stepTxt} adım · VictoriaMetrics${tail}`
+      : `dedektörün ölçtüğü seri · ${stepTxt} adım · VictoriaMetrics`;
   const link = thanos
     ? { label: "Clusters'ta aç", href: serviceHref(panel.service, { tab: 'infra', range, params: { icluster: panel.cluster } }) }
     : { label: 'Servis sayfasında aç', href: serviceHref(panel.service, { range }) };
+  const note = panel.highlight
+    ? (colors.size ? `Sapan pod kırmızı: ${panel.highlight}; diğer ${names.length - 1} pod gri.` : `Sapan pod (${panel.highlight}) bu pencerede seri döndürmedi.`)
+    : undefined;
   return (
     <Frame source={source} marks={marks} link={link}>
       <HttpChartPanel title={title} series={data?.series ?? []} unit={chartUnit(q?.unit)} stepSec={step} loading={data === undefined}
-        syncKey="ml-source" legendKey={`ml-source:${panel.detector}`} legendOpen={thanos} regions={regions} />
+        syncKey="ml-source" legendKey={`ml-source:${panel.detector}`} legendOpen={byPod} regions={regions}
+        seriesColors={colors} note={note} />
     </Frame>
   );
 }

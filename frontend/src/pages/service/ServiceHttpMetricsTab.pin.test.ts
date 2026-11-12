@@ -42,7 +42,8 @@ describe('HTTP Metrics Grafana paritesi', () => {
     const viz = read('httpMetricsViz.tsx');
     expect(tab).toContain('<HttpChartPanel ');
     expect(viz).toMatch(/maxSeries=\{60\} legendDefaultOpen/);
-    expect(viz).toContain('seriesColors={httpSeriesColors(');
+    // v0.10.2055 — çağıran renk haritası vermezse (HTTP sekmesi vermez) kod paleti.
+    expect(viz).toContain('seriesColors={seriesColors?.size ? seriesColors : httpSeriesColors(');
   });
 });
 

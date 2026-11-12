@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/cilcenk/coremetry/internal/anomaly"
 	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/thanos"
 )
@@ -71,6 +72,52 @@ func BuildSourceQuery(cfg chstore.MLConfig, detector, code, service, svcLabel st
 	}
 	expr := thanos.WithEqualMatcher(renderExpr(e.Expr, svcLabel, SourceQueryWinSec), svcLabel, service)
 	return SourceQuery{Expr: expr, Unit: e.Unit, Label: e.Label}, true
+}
+
+// TracePodLabels — v0.10.2055: trace_pod_outlier'ın RED ailesinde keşfettiği
+// etiket adları (servis, pod, durum). Olay kanıtında da yazılır.
+type TracePodLabels struct{ Svc, Pod, Status string }
+
+// PickTracePodLabels — SAF: ailenin `_count` metriğinin etiket adlarından
+// dedektörün seçtiği üçlü (trace_pods.go famLabels ile aynı aday sırası).
+// svcPreferred: VM LabelMap'in servis etiketi (önce denenir).
+func PickTracePodLabels(names []string, svcPreferred string, pin anomaly.REDFamilyPin) (TracePodLabels, bool) {
+	l := TracePodLabels{
+		Svc:    pickLabel(names, append([]string{svcPreferred}, svcLabelCandidates...)),
+		Pod:    pickLabel(names, podLabelCandidates),
+		Status: pickLabel(names, pin.StatusLabels),
+	}
+	return l, l.Svc != "" && l.Pod != "" && l.Status != ""
+}
+
+// TracePodSourceQuery — SAF (v0.10.2055): trace_pod_outlier detay grafiği.
+// Dedektörün ölçüsü (measure = olayın Code'u: err_ratio | p95) pod başına,
+// servis kapsamlı aralık sorgusu: hata oranı yüzde, p95 ms. Seri kırılımı
+// pod etiketi; sapan pod'u istemci adıyla vurgular.
+func TracePodSourceQuery(pin anomaly.REDFamilyPin, l TracePodLabels, service, measure string) (SourceQuery, bool) {
+	if strings.TrimSpace(service) == "" || l.Svc == "" || l.Pod == "" {
+		return SourceQuery{}, false
+	}
+	w := fmt.Sprintf("[%ds]", SourceQueryWinSec)
+	count := thanos.WithEqualMatcher(pin.Names+"_count", l.Svc, service)
+	switch measure {
+	case "err_ratio":
+		if l.Status == "" {
+			return SourceQuery{}, false
+		}
+		errSel := thanos.WithRegexMatcher(count, l.Status, pin.ServerErr)
+		expr := fmt.Sprintf("100 * sum by (%s) (rate(%s%s)) / sum by (%s) (rate(%s%s))", l.Pod, errSel, w, l.Pod, count, w)
+		return SourceQuery{Expr: expr, Unit: "percent", Label: "Pod başına hata oranı", By: l.Pod}, true
+	case "p95":
+		scale := 1.0
+		if pin.Unit == "s" {
+			scale = 1000
+		}
+		bucket := thanos.WithEqualMatcher(pin.Names+"_bucket", l.Svc, service)
+		expr := fmt.Sprintf("histogram_quantile(0.95, sum by (%s, le) (rate(%s%s))) * %g", l.Pod, bucket, w, scale)
+		return SourceQuery{Expr: expr, Unit: "ms", Label: "Pod başına p95", By: l.Pod}, true
+	}
+	return SourceQuery{}, false
 }
 
 func dependencySourceQuery(code, service, svcLabel string) (SourceQuery, bool) {

@@ -17,7 +17,9 @@
 //     (cluster'lı; pod başına) ve bağımlılık gecikmesi → dedektörün KENDİ
 //     ifadesi, servis kapsamlı tek aralık sorgusu (v0.10.2036,
 //     /api/ml/source-series; VM ya da o cluster'ın Thanos'u)
-//   trace pod sapması, log dışı kalanlar → kayıtlı görüntü
+//   trace pod sapması (v0.10.2055) → dedektörün kaynağı (VM RED ailesi) pod
+//     başına, 1 dakikalık; sapan pod adıyla ve tek renkli (diğerleri gri)
+//   log dışı kalanlar → kayıtlı görüntü
 import type { MLEvent, MLSnapshot, SpanMetricSeries } from '@/lib/types';
 import type { StripStat } from '@/components/traces/stripStat';
 
@@ -25,14 +27,34 @@ export type SourcePanel =
   | { kind: 'kafka-lag'; service: string }
   | { kind: 'traces'; service: string; operation: string; byRoute: boolean; stat: StripStat; errorsFirst: boolean; minMs?: number }
   | { kind: 'logs'; service: string; search: string; pattern?: string; severity: number; href: string }
-  | { kind: 'metric'; detector: string; service: string; code: string; cluster: string }
+  /** highlight: vurgulanacak seri (sapan pod); family: RED ailesi (trace pod). */
+  | { kind: 'metric'; detector: string; service: string; code: string; cluster: string; highlight?: string; family?: string }
   | { kind: 'snapshot'; reason: string };
 
 const MIN = 60e9;
 
+/** SAF: olay kanıtı (JSON metni) → nesne; bozuksa boş. */
+export function evidenceObj(raw?: string): Record<string, unknown> {
+  if (!raw) return {};
+  try {
+    const v: unknown = JSON.parse(raw);
+    return v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : {};
+  } catch { return {}; }
+}
+
+const str = (v: unknown) => (typeof v === 'string' ? v : '');
+
 /** SAF: olay → panel. */
-export function sourcePanelFor(e: Pick<MLEvent, 'detector' | 'signal' | 'code' | 'service'>, slowSec = 1, logsHref?: string): SourcePanel {
+export function sourcePanelFor(e: Pick<MLEvent, 'detector' | 'signal' | 'code' | 'service' | 'pod' | 'evidence'>, slowSec = 1, logsHref?: string): SourcePanel {
   const code = e.code ?? '';
+  if (e.detector === 'trace_pod_outlier') {
+    // Olayın Code'u ölçü (err_ratio | p95); kayıttan açılınca kanıttan.
+    const ev = evidenceObj(e.evidence);
+    const measure = code || str(ev.measure);
+    if (!e.service || (measure !== 'err_ratio' && measure !== 'p95')) return { kind: 'snapshot', reason: 'pod ölçüsü yok' };
+    return { kind: 'metric', detector: e.detector, service: e.service, code: measure, cluster: '',
+      highlight: e.pod || str(ev.pod) || undefined, family: str(ev.family) || undefined };
+  }
   if (e.signal === 'log') return logsPanelFromHref(logsHref) ?? { kind: 'snapshot', reason: 'log olayı: Logs bağlantısı yok' };
   if (e.detector === 'metric_kafka' && code.startsWith('metric_kafka|consumer_lag') && !code.includes('@')) {
     return { kind: 'kafka-lag', service: e.service };
@@ -99,10 +121,25 @@ export function panelWindow(startNs: number, endNs: number, open: boolean, nowNs
 }
 
 /** SAF: grup bilgisi yokken kayıttan panel girdisi (trace parçası "op|ölçü"). */
-export function leadFromSnapshot(s: Pick<MLSnapshot, 'detector' | 'signal' | 'service' | 'part' | 'detectedAt' | 'lastSeen'>):
-  Pick<MLEvent, 'detector' | 'signal' | 'code' | 'service' | 'startedAt' | 'lastSeen'> {
+export function leadFromSnapshot(s: Pick<MLSnapshot, 'detector' | 'signal' | 'service' | 'part' | 'detectedAt' | 'lastSeen'> & Partial<Pick<MLSnapshot, 'evidence'>>):
+  Pick<MLEvent, 'detector' | 'signal' | 'code' | 'service' | 'startedAt' | 'lastSeen' | 'evidence'> {
   const code = s.signal === 'trace' ? s.part.replace(/\|[^|]*$/, '') : s.part;
-  return { detector: s.detector, signal: s.signal, code, service: s.service, startedAt: s.detectedAt, lastSeen: s.lastSeen };
+  return { detector: s.detector, signal: s.signal, code, service: s.service, startedAt: s.detectedAt, lastSeen: s.lastSeen, evidence: s.evidence };
+}
+
+/** SAF (v0.10.2055): seri adı → renk. Vurgu varsa YALNIZ o seri sapma rengi
+ *  (--err), diğerleri soluk (--text3) — renk yalnız sapan değerde. Vurgu yok
+ *  ya da serilerde değilse boş harita (panelin kendi paleti). */
+export function highlightColors(names: readonly string[], highlight: string | undefined, resolve: (token: string) => string): Map<string, string> {
+  const out = new Map<string, string>();
+  if (!highlight || !names.includes(highlight)) return out;
+  const hot = resolve('--err').trim();
+  const cold = resolve('--text3').trim();
+  for (const n of names) {
+    const c = n === highlight ? hot : cold;
+    if (c) out.set(n, c);
+  }
+  return out;
 }
 
 /** SAF: suçlu seri kanıt satırı (adlar kırpılmaz). noun: "istemci" vb. */

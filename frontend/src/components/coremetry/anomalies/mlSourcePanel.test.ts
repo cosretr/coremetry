@@ -2,7 +2,7 @@
 // çevreler; suçlu seri adıyla. Fikstür nötr.
 import { describe, it, expect } from 'vitest';
 import type { SpanMetricSeries } from '@/lib/types';
-import { contributorLine, leadFromSnapshot, panelWindow, sourcePanelFor, topContributors } from './mlSourcePanel';
+import { contributorLine, highlightColors, leadFromSnapshot, panelWindow, sourcePanelFor, topContributors } from './mlSourcePanel';
 
 describe('contributorLine / leadFromSnapshot', () => {
   it('tek suçlu adıyla, diğerleri tek ifadeyle; ad kırpılmaz', () => {
@@ -27,7 +27,8 @@ describe('sourcePanelFor', () => {
     ['gecikme → Traces şeridi', ev('op_latency', 'trace', 'POST /orders'), 'traces'],
     ['hata sayısı → Traces şeridi', ev('trace_error_count', 'trace', 'POST /orders'), 'traces'],
     ['bağımlılık → hedefin p95 serisi', ev('dependency_latency', 'trace', 'db|orders'), 'metric'],
-    ['trace pod sapması → kayıtlı', ev('trace_pod_outlier', 'trace', 'p95'), 'snapshot'],
+    ['trace pod sapması → pod başına kaynak serisi (v0.10.2055)', ev('trace_pod_outlier', 'trace', 'p95'), 'metric'],
+    ['trace pod sapması ölçüsüz → kayıtlı', ev('trace_pod_outlier', 'trace', ''), 'snapshot'],
     ['metrik olayı seri kimliksiz → kayıtlı', ev('metric_jvm', 'metric', ''), 'snapshot'],
     ['log, Logs bağlantısı yok → kayıtlı', ev('error_rate', 'log'), 'snapshot'],
     ['JVM → dedektörün serisi (VM)', ev('metric_jvm', 'metric', 'metric_jvm|heap_used'), 'metric'],
@@ -38,6 +39,24 @@ describe('sourcePanelFor', () => {
   it('v0.10.2036: Thanos olayında cluster adı ayrılır, VM\'de boş', () => {
     expect(sourcePanelFor(ev('metric_k8s', 'metric', 'metric_k8s|memory@prod-east'))).toMatchObject({ kind: 'metric', cluster: 'prod-east', code: 'metric_k8s|memory@prod-east' });
     expect(sourcePanelFor(ev('metric_jvm', 'metric', 'metric_jvm|heap_used'))).toMatchObject({ kind: 'metric', cluster: '' });
+  });
+  // v0.10.2055 — trace_pod_outlier eskiden kayıtlı 5 dakikalık görüntüydü.
+  it.each<[string, Parameters<typeof sourcePanelFor>[0], object]>([
+    ['grup lideri: ölçü Code, pod alanı, aile kanıttan',
+      { ...ev('trace_pod_outlier', 'trace', 'err_ratio'), pod: 'orders-consumer-7f9c-a', evidence: '{"family":"http","measure":"err_ratio"}' },
+      { kind: 'metric', code: 'err_ratio', highlight: 'orders-consumer-7f9c-a', family: 'http', cluster: '' }],
+    ['kayıttan: ölçü + pod kanıttan',
+      { ...ev('trace_pod_outlier', 'trace', ''), evidence: '{"family":"grpc","measure":"p95","pod":"orders-consumer-7f9c-b"}' },
+      { kind: 'metric', code: 'p95', highlight: 'orders-consumer-7f9c-b', family: 'grpc' }],
+    ['bozuk kanıt, Code yok → kayıtlı', { ...ev('trace_pod_outlier', 'trace', ''), evidence: '{' }, { kind: 'snapshot' }],
+  ])('trace pod: %s', (_n, e, want) => {
+    expect(sourcePanelFor(e)).toMatchObject(want);
+  });
+  it('vurgu rengi yalnız sapan seride; vurgu yoksa boş', () => {
+    const res = (t: string) => (t === '--err' ? 'red' : 'gray');
+    expect([...highlightColors(['a', 'b', 'c'], 'b', res)]).toEqual([['a', 'gray'], ['b', 'red'], ['c', 'gray']]);
+    expect(highlightColors(['a', 'b'], 'z', res).size).toBe(0);
+    expect(highlightColors(['a', 'b'], undefined, res).size).toBe(0);
   });
   it('gecikme olayı p99 + minMs eşiği; hata olayı hata çubukları önde; route ayrımı', () => {
     const lat = sourcePanelFor(ev('op_latency', 'trace', '/orders/{id}'), 1);

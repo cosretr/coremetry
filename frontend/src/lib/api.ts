@@ -1701,7 +1701,8 @@ export const api = {
     }),
   mlReplay: (id: string) => get<import('./types').MLReplay>(`/api/ml/${encodeURIComponent(id)}/replay`),
   // v0.10.2036 — metrik / bağımlılık olayının detay grafiği: dedektörün ifadesi, servis kapsamlı tek aralık sorgusu (VM ya da Thanos).
-  mlSourceSeries: (params: { detector: string; service: string; code: string; from: number; to: number }, signal?: AbortSignal) =>
+  // v0.10.2055 — family: trace_pod_outlier kanıtındaki RED ailesi (yoksa sunucu sırayla dener).
+  mlSourceSeries: (params: { detector: string; service: string; code: string; family?: string; from: number; to: number }, signal?: AbortSignal) =>
     request<import('./types').MLSourceSeries>(`/api/ml/source-series?${qs(params)}`, { signal }),
   // v0.10.2035 — ML log olayının canlı histogramı (Logs histogramıyla aynı okuma; kova sunucuda; ES sayacında kendi yüzeyi).
   anomalyLogChart: (params: { service: string; search?: string; pattern?: string; severity?: number; from: number; to: number }, signal?: AbortSignal) =>

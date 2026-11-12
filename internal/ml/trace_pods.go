@@ -101,11 +101,9 @@ func (d *TracePods) famLabels(ctx context.Context, deps Deps, pin anomaly.REDFam
 	}
 	l = podFamLabels{at: time.Now()}
 	if names, _, err := deps.VM.MetricLabelNamesIn(ctx, pin.Names+"_count", from, to); err == nil {
-		lm := deps.VM.MetricLabelMap()
-		l.svc = pickLabel(names, append([]string{lm.Service}, svcLabelCandidates...))
-		l.pod = pickLabel(names, podLabelCandidates)
-		l.status = pickLabel(names, pin.StatusLabels)
-		l.ok = l.svc != "" && l.pod != "" && l.status != ""
+		// v0.10.2055 — seçim detay grafiğiyle ortak (PickTracePodLabels).
+		tl, ok := PickTracePodLabels(names, deps.VM.MetricLabelMap().Service, pin)
+		l.svc, l.pod, l.status, l.ok = tl.Svc, tl.Pod, tl.Status, ok
 	}
 	d.mu.Lock()
 	d.labels[pin.ID] = l
@@ -190,7 +188,7 @@ func (d *TracePods) pods(ctx context.Context, deps Deps, cfg chstore.MLConfig, n
 				Signal: chstore.MLSignalTrace, Stage: chstore.MLStageShadow, Service: svc, Pod: p.Pod, Code: measure,
 				StartedAt: last.UnixNano(), LastSeen: to.UnixNano(), WindowSec: uint32(cfg.BucketSec), Baseline: p.Median, Observed: p.Ratio,
 				Score: p.Z, Direction: "up", Evidence: mergeEvidence("", map[string]any{"source": "vm", "family": pin.ID, "measure": measure,
-					"pods": p.Pods, "errors": p.Errors, "total": p.Total, "windowSec": win,
+					"pods": p.Pods, "pod": p.Pod, "errors": p.Errors, "total": p.Total, "windowSec": win,
 					"queryAt": to.Unix(), "sampleTs": sampleTs, "tickAt": now.Unix()})})
 		}
 		for svc, rows := range rowsBy {

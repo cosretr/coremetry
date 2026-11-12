@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"testing"
 	"time"
+
+	"github.com/cilcenk/coremetry/internal/chstore"
 )
 
 func TestDecodeMatrixSeries(t *testing.T) {
@@ -32,18 +34,37 @@ func TestDecodeMatrixSeries(t *testing.T) {
 func TestMLSourceSeriesKeyCarriesAllInputs(t *testing.T) {
 	a := time.Unix(1_800_000_000, 0)
 	b := a.Add(time.Hour)
-	base := mlSourceSeriesKey("metric_jvm", "orders-batch", "metric_jvm|heap_used", a, b, 60)
+	base := mlSourceSeriesKey("metric_jvm", "orders-batch", "metric_jvm|heap_used", "", a, b, 60)
 	for i, k := range []string{
-		mlSourceSeriesKey("metric_k8s", "orders-batch", "metric_jvm|heap_used", a, b, 60),
-		mlSourceSeriesKey("metric_jvm", "orders-consumer", "metric_jvm|heap_used", a, b, 60),
-		mlSourceSeriesKey("metric_jvm", "orders-batch", "metric_jvm|gc_time", a, b, 60),
-		mlSourceSeriesKey("metric_jvm", "orders-batch", "metric_jvm|heap_used@prod-east", a, b, 60),
-		mlSourceSeriesKey("metric_jvm", "orders-batch", "metric_jvm|heap_used", a.Add(time.Minute), b, 60),
-		mlSourceSeriesKey("metric_jvm", "orders-batch", "metric_jvm|heap_used", a, b.Add(time.Minute), 60),
-		mlSourceSeriesKey("metric_jvm", "orders-batch", "metric_jvm|heap_used", a, b, 120),
+		mlSourceSeriesKey("metric_k8s", "orders-batch", "metric_jvm|heap_used", "", a, b, 60),
+		mlSourceSeriesKey("metric_jvm", "orders-consumer", "metric_jvm|heap_used", "", a, b, 60),
+		mlSourceSeriesKey("metric_jvm", "orders-batch", "metric_jvm|gc_time", "", a, b, 60),
+		mlSourceSeriesKey("metric_jvm", "orders-batch", "metric_jvm|heap_used@prod-east", "", a, b, 60),
+		mlSourceSeriesKey("metric_jvm", "orders-batch", "metric_jvm|heap_used", "http", a, b, 60), // v0.10.2055 aile
+		mlSourceSeriesKey("metric_jvm", "orders-batch", "metric_jvm|heap_used", "", a.Add(time.Minute), b, 60),
+		mlSourceSeriesKey("metric_jvm", "orders-batch", "metric_jvm|heap_used", "", a, b.Add(time.Minute), 60),
+		mlSourceSeriesKey("metric_jvm", "orders-batch", "metric_jvm|heap_used", "", a, b, 120),
 	} {
 		if k == base {
 			t.Fatalf("girdi %d anahtarı değiştirmedi", i)
 		}
+	}
+}
+
+// v0.10.2055 — trace_pod_outlier: VM aralık serisinin anahtarı pod adına iner.
+func TestSeriesByLabel(t *testing.T) {
+	pt := []chstore.SpanMetricPoint{{Time: 1, Value: 2}}
+	in := []chstore.SpanMetricSeries{
+		{GroupKey: []string{`k8s_pod_name="orders-api-7f9c-b"`}, Points: pt},
+		{GroupKey: []string{`k8s_pod_name="orders-api-7f9c-a"`}, Points: pt},
+		{GroupKey: []string{`other="x"`}, Points: pt},
+		{GroupKey: []string{`k8s_pod_name="orders-api-7f9c-c"`}},
+	}
+	got := seriesByLabel(in, "k8s_pod_name", 50)
+	if len(got) != 2 || got[0].GroupKey[0] != "orders-api-7f9c-a" || got[1].GroupKey[0] != "orders-api-7f9c-b" {
+		t.Fatalf("seriler: %+v", got)
+	}
+	if n := len(seriesByLabel(in, "k8s_pod_name", 1)); n != 1 {
+		t.Fatalf("tavan 1, %d", n)
 	}
 }

@@ -189,8 +189,10 @@ const cssToken = (t: string) => getComputedStyle(document.documentElement).getPr
  * altında tek satır soluk açıklama (field-hint).
  */
 export function HttpChartPanel({
-  title, series, unit, stepSec, loading, syncKey, legendKey, right, note, regions, onZoom, onZoomReset, legendOpen = true,
+  title, series, unit, stepSec, loading, syncKey, legendKey, right, note, regions, onZoom, onZoomReset, legendOpen = true, seriesColors,
 }: {
+  /** v0.10.2055 — seri renkleri (ad → çözülmüş renk); verilirse panelin kod paletinin yerine (anomali detayı: sapan pod). */
+  seriesColors?: ReadonlyMap<string, string>;
   title: string; series: SpanMetricSeries[]; unit: string;
   /** Range sorgusunun adımı (sn) — `stepSeconds(windowSec)`; boşluk dolgusu buna göre. */
   stepSec: number;
@@ -211,7 +213,7 @@ export function HttpChartPanel({
         : <MultiLineChart series={drawn} unit={unit} height={220} syncKey={syncKey} legendStorageKey={legendKey}
             maxSeries={60} legendDefaultOpen={legendOpen} regions={regions} onZoom={onZoom} onZoomReset={onZoomReset}
             zeroBase={httpPanelZeroBase(unit)}
-            seriesColors={httpSeriesColors(series.map(x => x.groupKey[0] ?? ''), cssToken)} />}
+            seriesColors={seriesColors?.size ? seriesColors : httpSeriesColors(series.map(x => x.groupKey[0] ?? ''), cssToken)} />}
       {note && <div className="field-hint">{note}</div>}
     </Card>
   );

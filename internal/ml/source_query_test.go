@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/cilcenk/coremetry/internal/anomaly"
 	"github.com/cilcenk/coremetry/internal/chstore"
 )
 
@@ -53,5 +54,54 @@ func TestBuildSourceQuery(t *testing.T) {
 	}
 	if _, ok := BuildSourceQuery(cfg, "metric_jvm", "metric_jvm|heap_used", " ", ""); ok {
 		t.Fatal("servissiz olay ifade kurmamalı")
+	}
+}
+
+// v0.10.2055 — trace_pod_outlier detay grafiği: ölçü başına pod kırılımlı
+// sorgu (eski: kayıtlı 5 dakikalık görüntü). Her ölçü + birim sınanır.
+func TestTracePodSourceQuery(t *testing.T) {
+	pin := anomaly.REDFamilyPin{ID: "http", Names: "http_server_request_duration_seconds", Unit: "s", ServerErr: "5..",
+		StatusLabels: []string{"http_response_status_code"}}
+	names := []string{"service_name", "k8s_pod_name", "http_response_status_code", "le"}
+	l, ok := PickTracePodLabels(names, "", pin)
+	if !ok || l.Svc != "service_name" || l.Pod != "k8s_pod_name" || l.Status != "http_response_status_code" {
+		t.Fatalf("etiketler %+v ok=%v", l, ok)
+	}
+	if _, ok := PickTracePodLabels([]string{"service_name"}, "", pin); ok {
+		t.Fatal("pod etiketi yokken ok olmamalı")
+	}
+	cases := []struct {
+		measure, unit string
+		ok            bool
+		contains      []string
+	}{
+		{"err_ratio", "percent", true, []string{`100 * sum by (k8s_pod_name)`, `http_response_status_code=~"5.."`, `service_name="orders-api"`, "[120s]"}},
+		{"p95", "ms", true, []string{`histogram_quantile(0.95, sum by (k8s_pod_name, le)`, `http_server_request_duration_seconds_bucket{service_name="orders-api"}`, "* 1000"}},
+		{"count", "", false, nil},
+	}
+	for _, c := range cases {
+		q, ok := TracePodSourceQuery(pin, l, "orders-api", c.measure)
+		if ok != c.ok {
+			t.Fatalf("%s: ok=%v", c.measure, ok)
+		}
+		if !ok {
+			continue
+		}
+		if q.Unit != c.unit || q.By != "k8s_pod_name" || q.Cluster != "" {
+			t.Fatalf("%s: unit/by/cluster = %q/%q/%q", c.measure, q.Unit, q.By, q.Cluster)
+		}
+		for _, s := range c.contains {
+			if !strings.Contains(q.Expr, s) {
+				t.Fatalf("%s: %q yok:\n%s", c.measure, s, q.Expr)
+			}
+		}
+	}
+	msPin := pin
+	msPin.Unit = "ms"
+	if q, _ := TracePodSourceQuery(msPin, l, "orders-api", "p95"); !strings.HasSuffix(q.Expr, "* 1") {
+		t.Fatalf("ms ailesinde ölçek 1 olmalı: %s", q.Expr)
+	}
+	if _, ok := TracePodSourceQuery(pin, l, " ", "p95"); ok {
+		t.Fatal("servissiz sorgu kurulmamalı")
 	}
 }

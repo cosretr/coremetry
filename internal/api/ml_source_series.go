@@ -14,6 +14,10 @@ package api
 // sayılır. Salt okunur (viewer görür); önbellek 30 s, anahtar tüm girdiler.
 // İfade kurulamaz ya da kaynak yoksa 200 + boş seri: istemci kayıtlı
 // görüntüye düşer, başlık bunu söyler.
+//
+// v0.10.2055 — trace_pod_outlier (code = ölçü err_ratio | p95, ?family=
+// kanıttaki RED ailesi): dedektörün kaynağı VM RED ailesi pod başına
+// (ml.TracePodSourceQuery); aile başına bir etiket keşfi + bir aralık sorgusu.
 
 import (
 	"context"
@@ -26,6 +30,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cilcenk/coremetry/internal/anomaly"
 	"github.com/cilcenk/coremetry/internal/auth"
 	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/ml"
@@ -55,8 +60,8 @@ type mlSourceSeriesResponse struct {
 
 // mlSourceSeriesKey — SAF; her girdi anahtarda (v0.5.187). Serbest metinler
 // fnvStr ile ayrı ayrı.
-func mlSourceSeriesKey(detector, service, code string, from, to time.Time, step int) string {
-	return fmt.Sprintf("ml-source-series:v1:%s:from=%d:to=%d:s=%d", fnvStr(detector, service, code), from.Unix(), to.Unix(), step)
+func mlSourceSeriesKey(detector, service, code, family string, from, to time.Time, step int) string {
+	return fmt.Sprintf("ml-source-series:v2:%s:from=%d:to=%d:s=%d", fnvStr(detector, service, code, family), from.Unix(), to.Unix(), step)
 }
 
 func (s *Server) getMLSourceSeries(w http.ResponseWriter, r *http.Request) {
@@ -71,9 +76,16 @@ func (s *Server) getMLSourceSeries(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "from zorunlu ve to'dan önce olmalı")
 		return
 	}
-	s.serveCached(w, r, mlSourceSeriesKey(det, svc, code, from, to, step), mlSourceSeriesTTL, func(ctx context.Context) (any, error) {
+	family := strings.TrimSpace(q.Get("family"))
+	s.serveCached(w, r, mlSourceSeriesKey(det, svc, code, family, from, to, step), mlSourceSeriesTTL, func(ctx context.Context) (any, error) {
 		out := mlSourceSeriesResponse{StepSec: step, Series: []chstore.SpanMetricSeries{}}
 		rd, vmOK := s.metricChartReaderFor()
+		if det == "trace_pod_outlier" {
+			if !vmOK {
+				return out, nil
+			}
+			return s.tracePodSourceSeries(ctx, rd, out, svc, code, family, from, to, step)
+		}
 		svcLabel := ""
 		if vmOK {
 			svcLabel = rd.MetricLabelMap().Normalized().Service
@@ -114,6 +126,75 @@ func (s *Server) getMLSourceSeries(w http.ResponseWriter, r *http.Request) {
 		out.Series = decodeMatrixSeries(res.ResultType, res.Result, sq.By)
 		return out, nil
 	})
+}
+
+// tracePodSourceSeries — v0.10.2055: trace_pod_outlier detay grafiği. Kaynak
+// dedektörünki (VM RED ailesi, pod etiketi); aile kanıttan gelirse yalnız o,
+// gelmezse (eski olay) ailelerin sırasıyla ilk veri dönen. Aile başına bir
+// etiket keşfi (VM metadata) + bir aralık sorgusu; en çok 2 aile.
+func (s *Server) tracePodSourceSeries(ctx context.Context, rd metricChartReader, out mlSourceSeriesResponse, svc, measure, family string,
+	from, to time.Time, step int) (any, error) {
+	cctx, cancel := context.WithTimeout(ctx, mlSourceSeriesTimeout)
+	defer cancel()
+	pref := rd.MetricLabelMap().Normalized().Service
+	for _, pin := range anomaly.REDFamilyPins() {
+		if family != "" && pin.ID != family {
+			continue
+		}
+		names, _, err := rd.MetricLabelNamesIn(cctx, pin.Names+"_count", from.Add(-time.Hour), to)
+		if err != nil {
+			return nil, fmt.Errorf("%w: vm: %v", errUpstream, err)
+		}
+		labels, ok := ml.PickTracePodLabels(names, pref, pin)
+		if !ok {
+			continue
+		}
+		sq, ok := ml.TracePodSourceQuery(pin, labels, svc, measure)
+		if !ok {
+			continue
+		}
+		res, err := rd.QueryPromQLRange(cctx, sq.Expr, from, to, step, anomalyLogChartMaxBuckets+1)
+		if err != nil {
+			return nil, fmt.Errorf("%w: vm: %v", errUpstream, err)
+		}
+		out.Query = sq
+		out.Series = seriesByLabel(res, sq.By, mlSourceSeriesMaxSeries)
+		out.Truncated = len(res) > mlSourceSeriesMaxSeries
+		if len(out.Series) > 0 {
+			return out, nil
+		}
+	}
+	return out, nil
+}
+
+// seriesByLabel — SAF: VM aralık serilerinin grup anahtarını tek etiketin
+// değerine indirger (pod adı); boş değerli seri düşer, ada göre sıralı, en
+// çok capN seri.
+func seriesByLabel(in []chstore.SpanMetricSeries, by string, capN int) []chstore.SpanMetricSeries {
+	out := []chstore.SpanMetricSeries{}
+	for _, sr := range in {
+		v := ""
+		for _, kv := range sr.GroupKey {
+			k, val, ok := strings.Cut(kv, "=")
+			if !ok || k != by {
+				continue
+			}
+			if u, err := strconv.Unquote(val); err == nil {
+				val = u
+			}
+			v = val
+		}
+		if v == "" || len(sr.Points) == 0 {
+			continue
+		}
+		sr.GroupKey = []string{v}
+		out = append(out, sr)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].GroupKey[0] < out[j].GroupKey[0] })
+	if len(out) > capN {
+		out = out[:capN]
+	}
+	return out
 }
 
 // decodeMatrixSeries — SAF: Prometheus matrisi → seriler (sonlu değerler);
