@@ -40,6 +40,14 @@ func TestForceNonExceptionP3WithAllowlist(t *testing.T) {
 		{"db-health kalır", prob("db-health:replication-lag", "critical", "P1"), def,
 			"P1", "(DB sağlık kuralı)"},
 		{"SLO burn P3'e", prob("slo:checkout:critical", "critical", "P1"), def, "P3", "tür kuralı"},
+		// v0.10.2056 — ML anomali grubu kaynak önceliğini korur (operatör onayı
+		// 2026-11-12); grup dışı anomaly-auto kimlikleri P3'te kalır.
+		{"ML anomali grubu P2 kalır", prob("anomaly-auto:group:ev-1", "critical", "P2"), def,
+			"P2", "kaynak önceliği korundu (anomali grubu: birden çok sinyal)"},
+		{"ML anomali grubu 4 sa sonra P1 kalır", prob("anomaly-auto:group:ev-1", "critical", "P1"), def,
+			"P1", "(anomali grubu: birden çok sinyal)"},
+		{"ML özne terfisi P3'e", prob("anomaly-auto:subject:orders-api", "critical", "P2"), def,
+			"P3", "tür kuralı"},
 		// v0.10.1083 — operatör: "Oracle hataları da problemse hâlâ düşmüyor".
 		{"Oracle hata serisi P1 kalır", prob("anomaly:ext:oracle-errlog/OP_PAY/ORA-00060:ext:error_count", "critical", "P1"), def,
 			"P1", "(dış kaynak hata serisi)"},

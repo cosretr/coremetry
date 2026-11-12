@@ -70,8 +70,13 @@ func TestDefaultInboxKeep_IncludesExternalErrorSeries(t *testing.T) {
 		d1083[len(d1083)-1] != InboxKeepExtCap {
 		t.Errorf("1083 varsayılanı = eski varsayılan + 3 dış kaynak kalıbı (seri, küme, tavan) olmalı: %v", d1083)
 	}
-	if !reflect.DeepEqual(def, append(append([]string{}, d1083...), InboxKeepSvcSlowdown)) {
-		t.Errorf("güncel varsayılan = 1083 varsayılanı + svc-slowdown:* olmalı: %v", def)
+	d1091 := inboxKeepDefault1091()
+	if !reflect.DeepEqual(d1091, append(append([]string{}, d1083...), InboxKeepSvcSlowdown)) {
+		t.Errorf("1091 varsayılanı = 1083 varsayılanı + svc-slowdown:* olmalı: %v", d1091)
+	}
+	// v0.10.2056 — güncel varsayılan 1091'in üstüne yalnız ML grubu ekler.
+	if !reflect.DeepEqual(def, append(append([]string{}, d1091...), InboxKeepMLGroup)) {
+		t.Errorf("güncel varsayılan = 1091 varsayılanı + anomaly-auto:group:* olmalı: %v", def)
 	}
 }
 

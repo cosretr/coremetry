@@ -13497,3 +13497,15 @@ değeri olan satır varsa; renk yalnız sapan hücrede), kuyruk tablosunun varsa
 topic'leri önce, gerisini çağrı hacmine göre dizer. Topic sayfası: lag eşiği aşıldıysa Lag bölümü özet kartlarının
 hemen altına, akış grafiklerinin üstüne gelir. Statement süre işinin kalan parçaları 1960 (bant) ve 1961 (dağılım).
 
+
+## 2026-11-12 — v0.10.2056 — ML anomali grubu Problem'i inbox'ta kaynak önceliğini korur (operatör onayı)
+
+v0.10.2052'nin açtığı birleşik ML grup Problem'i (`anomaly-auto:group:<ilk olay id>`, ≥2 bağımsız sinyal) kaynakta
+P2'dir (critical; 4 sa sonra merdivenle P1), ama inbox görünüm kuralı exception dışı her türü istisna listesine
+uymadıkça P3'e çiviliyordu; bildirim önceliği görünüm önceliği olduğundan (`NotifyViewPriority`) P3 bildiriliyor ve
+P3 süzen politika onu düşürebiliyordu. Karar: varsayılan istisna listesine YALNIZ `anomaly-auto:group:*` eklenir
+(gerekçe "anomali grubu: birden çok sinyal"); tekil terfi `anomaly-auto:<id>` ve özne `anomaly-auto:subject:…`
+bilinçli DIŞARIDA kalır. Kayıtlı liste 1091 varsayılanına küme olarak eşitse tek seferlik v4 göçüyle yeniye taşınır
+(audit, işaret `problem_priority_inbox_keep_v4`); özelleştirilmiş ya da açıkça boş liste dokunulmaz, bir kez loglanır —
+o kurulumda kalıp elle eklenir (PUT `/api/settings/problem-priority`, `inboxKeepSourcePriority`). computePriority,
+eskalasyon merdiveni ve P1 yapışkanlığı değişmez.

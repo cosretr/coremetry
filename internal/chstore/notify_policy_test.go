@@ -177,6 +177,12 @@ func TestNotifyViewPriority(t *testing.T) {
 		{Problem{RuleID: "anomaly:orders-api:error_rate", Priority: "P1"}, "P1"},
 		{Problem{RuleID: "anomaly:orders-api:p99_ms", Priority: "P1"}, "P3"},
 		{Problem{RuleID: "svc-slowdown:crm", Priority: "P1"}, "P1"},
+		// v0.10.2056 — ML anomali grubu kaynak önceliğini korur; diğer
+		// anomaly-auto kimlikleri P3 (inbox ile aynı).
+		{Problem{RuleID: "anomaly-auto:group:ev-1", Priority: "P2"}, "P2"},
+		{Problem{RuleID: "anomaly-auto:group:ev-1", Priority: "P1"}, "P1"},
+		{Problem{RuleID: "anomaly-auto:subject:orders-api", Priority: "P2"}, "P3"},
+		{Problem{RuleID: "anomaly-auto:ev-2", Priority: "P1"}, "P3"},
 		{Problem{RuleID: "db-health:oracle@h/d", Priority: "P2"}, "P2"},
 		{Problem{RuleID: "user-rule", Priority: "P1"}, "P3"},
 		{Problem{RuleID: "builtin-http-p99-5s", Priority: "P2"}, "P2"},

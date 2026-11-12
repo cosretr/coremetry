@@ -27,6 +27,12 @@ package chstore
 // eşitse yeniye taşınır, işaret `problem_priority_inbox_keep_v3`. Adımlar sırayla
 // koşar (v2 → v3): v2 eski 1072 listesini doğrudan GÜNCEL varsayılana taşır,
 // v3 o hâlde "current" der.
+//
+// v0.10.2056 — üçüncü adım (v4): varsayılana ML anomali grubu
+// (`anomaly-auto:group:*`) eklendi; kayıtlı liste 1091 varsayılanına KÜME
+// olarak eşitse yeniye taşınır, işaret `problem_priority_inbox_keep_v4`.
+// Sıra v2 → v3 → v4; önceki adımlar doğrudan GÜNCEL varsayılana taşıdığı için
+// sonrakiler "current" der.
 
 import (
 	"context"
@@ -46,6 +52,9 @@ const (
 	// inboxKeepMigrateKeyV3 / inboxKeepMigrateVersionV3 — v0.10.1091 adımı.
 	inboxKeepMigrateKeyV3     = "problem_priority_inbox_keep_v3"
 	inboxKeepMigrateVersionV3 = "v0.10.1091"
+	// inboxKeepMigrateKeyV4 / inboxKeepMigrateVersionV4 — v0.10.2056 adımı.
+	inboxKeepMigrateKeyV4     = "problem_priority_inbox_keep_v4"
+	inboxKeepMigrateVersionV4 = "v0.10.2056"
 	// inboxKeepField — problem_priority blobundaki alan adı (JSON etiketi).
 	inboxKeepField = "inboxKeepSourcePriority"
 )
@@ -69,6 +78,11 @@ var (
 		key: inboxKeepMigrateKeyV3, version: inboxKeepMigrateVersionV3, from: inboxKeepDefault1083,
 		reason: "inbox istisna listesi önceki (v0.10.1083) varsayılandaydı — yeni varsayılana taşındı (yaygın yavaşlama)",
 		hint:   "yaygın yavaşlama kalıbını (" + InboxKeepSvcSlowdown + ") istersen elle ekle",
+	}
+	inboxKeepStepV4 = inboxKeepMigrateStep{
+		key: inboxKeepMigrateKeyV4, version: inboxKeepMigrateVersionV4, from: inboxKeepDefault1091,
+		reason: "inbox istisna listesi önceki (v0.10.1091) varsayılandaydı — yeni varsayılana taşındı (ML anomali grubu)",
+		hint:   "ML anomali grubu kalıbını (" + InboxKeepMLGroup + ") istersen elle ekle",
 	}
 )
 
@@ -182,6 +196,12 @@ func MigrateInboxKeepDefaultsV3(ctx context.Context, st inboxKeepMigrateStore, n
 	return migrateInboxKeepStep(ctx, st, now, inboxKeepStepV3)
 }
 
+// MigrateInboxKeepDefaultsV4 — v0.10.2056 adımı (ML anomali grubu); aynı
+// sözleşme, ayrı işaret.
+func MigrateInboxKeepDefaultsV4(ctx context.Context, st inboxKeepMigrateStore, now time.Time) (string, error) {
+	return migrateInboxKeepStep(ctx, st, now, inboxKeepStepV4)
+}
+
 func migrateInboxKeepStep(ctx context.Context, st inboxKeepMigrateStore, now time.Time, step inboxKeepMigrateStep) (string, error) {
 	marker, err := st.GetSetting(ctx, step.key)
 	if err != nil {
@@ -243,8 +263,9 @@ func MigrateInboxKeepDefaultsOnce(ctx context.Context, st inboxKeepMigrateStore)
 	if inboxKeepMigrated.Load() || st == nil {
 		return
 	}
-	// v0.10.1091 — iki adım SIRAYLA (v2 → v3); v2 düşerse v3 o tur koşmaz
-	// (v3'ün "önceki varsayılan" kıyası v2'nin sonucuna dayanır).
+	// v0.10.1091 — adımlar SIRAYLA (v2 → v3 → v4, v0.10.2056); biri düşerse
+	// sonrakiler o tur koşmaz ("önceki varsayılan" kıyası öncekinin sonucuna
+	// dayanır).
 	now := time.Now()
 	if _, err := MigrateInboxKeepDefaults(ctx, st, now); err != nil {
 		log.Printf("[settings] problem_priority göçü (sonraki turda yeniden): %v", err)
@@ -252,6 +273,10 @@ func MigrateInboxKeepDefaultsOnce(ctx context.Context, st inboxKeepMigrateStore)
 	}
 	if _, err := MigrateInboxKeepDefaultsV3(ctx, st, now); err != nil {
 		log.Printf("[settings] problem_priority göçü v3 (sonraki turda yeniden): %v", err)
+		return
+	}
+	if _, err := MigrateInboxKeepDefaultsV4(ctx, st, now); err != nil {
+		log.Printf("[settings] problem_priority göçü v4 (sonraki turda yeniden): %v", err)
 		return
 	}
 	inboxKeepMigrated.Store(true)

@@ -148,13 +148,13 @@ exception/httperror dışı satırlar inbox'ta P3 — YALNIZ dar istisna listesi
 (`problem_priority.inboxKeepSourcePriority`, glob `*`, tam eşleşme; kimlik Problem
 RuleID / incident `incident:<severity>`) uyan satır kaynak P1/P2'sini korur, gerekçe
 "kaynak önceliği korundu (…)". Varsayılan `anomaly:*:error_rate`, `builtin-*`, `svc-slowdown:*` (v0.10.1091),
-`db-health:*`, `incident:critical`, `anomaly:ext:*:ext:error_count`, `anomaly-cluster:ext:*`, `anomaly:ext-cap:*`; nil = varsayılan, `[]` = saf v0.9.487; geniş kalıp
+`db-health:*`, `incident:critical`, `anomaly:ext:*:ext:error_count`, `anomaly-cluster:ext:*`, `anomaly:ext-cap:*`, `anomaly-auto:group:*` (v0.10.2056, ML grup Problem'i; v4 göçü `problem_priority_inbox_keep_v4`, 1091 varsayılanından); nil = varsayılan, `[]` = saf v0.9.487; geniş kalıp
 400 (literal önek + ≥3 literal; `*:*` red); PUT kayıtlı değerin üstüne çözülür (alan
 yoksa liste korunur). **v0.10.1091:** varsayılana `svc-slowdown:*` (yaygın yavaşlama) eklendi; kayıtlı liste 1083 varsayılanına KÜME olarak eşitse aynı desenle ikinci tek seferlik göç (`MigrateInboxKeepDefaultsV3`, işaret `problem_priority_inbox_keep_v3`; tazeleyicide v2 → v3 sırayla, v2 düşerse v3 o tur koşmaz). **v0.10.1083:** varsayılana `anomaly:ext:*:ext:error_count` + `anomaly-cluster:ext:*` (Oracle hata
 serisi/kümesi) + `anomaly:ext-cap:*` (tavan özeti; `ext-down` DIŞARIDA) eklendi; kayıtlı liste ESKİ varsayılana küme olarak eşitse tek seferlik
 göç yeniye taşır (`MigrateInboxKeepDefaults`, ayar tazeleyicisinde okumadan önce, işaret
 `system_settings.problem_priority_inbox_keep_v2`, system audit), özelleştirilmişse dokunmaz ve bir kez loglar. Regressed P1 yükseltmesi regresyon başına bir kez bildirilir (v0.10.1078: `<fp>:regressed:p1:<epoch>`, `claimRegressed`); taban `<fp>:regressed` 90 günde bir, damgasız (kronik grup gürültüsü). Bilinçli DIŞARIDA: trace_op(_latency) / log_* / behavior_change /
-`anomaly-auto:*` / `slo:*` / yavaş ifade / self-health — listeye ekleme önerme.
+`anomaly-auto:*` (grup alt ailesi hariç) / `slo:*` / yavaş ifade / self-health — listeye ekleme önerme.
 Facet sayaçlarından ÖNCE (`inbox_keep_priority_test.go` sırayı pinler). Kod
 `chstore/problem_priority_inbox.go` + `api/inbox_keep_priority.go`.
 

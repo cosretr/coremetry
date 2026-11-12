@@ -49,6 +49,13 @@ const (
 	// yaygın yavaşlama hızlı yolu. Kaynağı critical + ≥ 2× → P1; inbox'ta P3'e
 	// çivilenirse kuralın varlık sebebi kaybolur.
 	InboxKeepSvcSlowdown = "svc-slowdown:*"
+	// InboxKeepMLGroup — v0.10.2056 (operatör onayı 2026-11-12): birleşik ML
+	// anomali GRUBU Problem'i (`anomaly-auto:group:<ilk olay id>`, v0.10.2052;
+	// birden çok bağımsız sinyal). Kaynağı P2 (critical; 4 sa sonra P1);
+	// inbox'ta P3'e çivilenirse P3 bildirilir ve P3 süzen politika düşürür.
+	// YALNIZ grup alt ailesi — tekil terfi (`anomaly-auto:<id>`) ve özne
+	// (`anomaly-auto:subject:…`) DIŞARIDA kalır.
+	InboxKeepMLGroup = MLGroupRulePrefix + "*"
 )
 
 // DefaultInboxKeepSourcePriority — alan YOKKEN geçerli liste. BİLİNÇLİ
@@ -63,7 +70,17 @@ const (
 //
 // v0.10.1091 — yaygın yavaşlama (`svc-slowdown:*`) eklendi (operatör onaylı);
 // 1083 varsayılanında kayıtlı liste v3 göçüyle yeniye taşınır.
+//
+// v0.10.2056 — ML anomali grubu (`anomaly-auto:group:*`) eklendi (operatör
+// onaylı 2026-11-12); 1091 varsayılanında kayıtlı liste v4 göçüyle taşınır.
+// `anomaly-auto:*` geri kalanı yukarıdaki gerekçeyle hâlâ DIŞARIDA.
 func DefaultInboxKeepSourcePriority() []string {
+	return append(inboxKeepDefault1091(), InboxKeepMLGroup)
+}
+
+// inboxKeepDefault1091 — v0.10.1091'in varsayılanı (v4 göçünün "önceki
+// varsayılan" tanımı; DEĞİŞTİRME — kayıtlı listeyi bununla kıyaslıyoruz).
+func inboxKeepDefault1091() []string {
 	return append(inboxKeepDefault1083(), InboxKeepSvcSlowdown)
 }
 
