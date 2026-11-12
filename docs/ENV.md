@@ -188,7 +188,7 @@ Settings → Elasticsearch'ün tohumu; UI'dan kaydedilen blob env'i ezer
 | `COREMETRY_ES_INDEX` | `config.go:760` | `""` → `app-*` (`elasticsearch.go:261-264`) | Sorgulanan index deseni. | api, worker | hayır |
 | `COREMETRY_ES_INDEX_TEMPLATE` | `config.go:763` | `""` = kapalı | Servis kapsamlı sorguyu tek index'e daraltır; `{service}`, `{namespace}` yer tutucuları (`config.go:124-131`), ör. `app-{service}.{namespace}`. | api, worker | hayır |
 | `COREMETRY_ES_INSECURE` | `config.go:766` | `false` | TLS zincir doğrulamasını atlar. | api, worker | hayır |
-| `COREMETRY_ES_ML_ENABLED` | `config.go:769` | `false` | Elastic ML anomaly job poller — salt okunur `/_ml/anomaly_detectors` (`main.go:671`). | worker | hayır |
+| `COREMETRY_ES_ML_ENABLED` | `config.go:769` | `true` (v0.10.2057; `false`/`0` kapatır) | Elastic ML anomaly job poller — salt okunur `/_ml/anomaly_detectors` (`main.go:671`). | worker | hayır |
 | `COREMETRY_ES_ML_MIN_SCORE` | `config.go:772` | `0` → `75` (`elasticml/poller.go:28`) | Kayıt eşiği (Elastic "critical" bandı). | worker | hayır |
 | `COREMETRY_ES_FIELD_TIMESTAMP` | `config.go:781` | `@timestamp` | Belge alan yolu. | api, worker | hayır |
 | `COREMETRY_ES_FIELD_TRACE_ID` | `config.go:784` | `trace.id` (ek yedekler: `trace_id`, `traceId`, `TraceId`) | | api, worker | hayır |

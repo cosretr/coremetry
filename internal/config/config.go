@@ -555,6 +555,10 @@ var defaults = Config{
 	// v0.8.328 — exemplars without trace context are dropped by default;
 	// yaml merges over this so only an explicit false disables the gate.
 	Exemplars: ExemplarsConfig{RequireTraceContext: true},
+	// v0.10.2057 — Elastic ML job poller varsayılan AÇIK (operatör kararı,
+	// 2026-11-12). ES adresi yoksa main.go zaten başlatmaz; kapatmak için
+	// yaml `ml_enabled: false` ya da COREMETRY_ES_ML_ENABLED=false.
+	Logs: LogsConfig{Elasticsearch: ESConfig{MLEnabled: true}},
 }
 
 // applyBackgroundDefaults fills zero-valued duration fields on
@@ -901,9 +905,8 @@ func Load(path string) (*Config, error) {
 	if v := os.Getenv("COREMETRY_ES_INSECURE"); v == "true" || v == "1" {
 		cfg.Logs.Elasticsearch.InsecureSkipVerify = true
 	}
-	if v := os.Getenv("COREMETRY_ES_ML_ENABLED"); v == "true" || v == "1" {
-		cfg.Logs.Elasticsearch.MLEnabled = true
-	}
+	cfg.Logs.Elasticsearch.MLEnabled = resolveLogAnomalyEnabled(
+		os.Getenv("COREMETRY_ES_ML_ENABLED"), cfg.Logs.Elasticsearch.MLEnabled)
 	if v := os.Getenv("COREMETRY_ES_ML_MIN_SCORE"); v != "" {
 		if f, err := strconv.ParseFloat(v, 64); err == nil {
 			cfg.Logs.Elasticsearch.MLMinScore = f

@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -76,6 +78,42 @@ func TestResolveLogAnomalyEnabled(t *testing.T) {
 	for _, c := range cases {
 		if got := resolveLogAnomalyEnabled(c.env, c.current); got != c.want {
 			t.Errorf("resolveLogAnomalyEnabled(%q, %v) = %v, want %v", c.env, c.current, got, c.want)
+		}
+	}
+}
+
+// v0.10.2057 — Elastic ML job poller varsayılan AÇIK (operatör kararı);
+// yaml `ml_enabled: false` ve COREMETRY_ES_ML_ENABLED=false kapatır.
+func TestElasticMLPollerDefaultOn(t *testing.T) {
+	if !defaults.Logs.Elasticsearch.MLEnabled {
+		t.Fatal("varsayılan açık olmalı")
+	}
+	dir := t.TempDir()
+	write := func(body string) string {
+		p := filepath.Join(dir, "c.yaml")
+		if err := os.WriteFile(p, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	cases := []struct {
+		name, yaml, env string
+		want            bool
+	}{
+		{"alan yok → açık", "logs:\n  backend: elasticsearch\n", "", true},
+		{"yaml false → kapalı", "logs:\n  elasticsearch:\n    ml_enabled: false\n", "", false},
+		{"env false → kapalı", "", "false", false},
+		{"env 0 → kapalı", "", "0", false},
+		{"yaml false + env true → açık", "logs:\n  elasticsearch:\n    ml_enabled: false\n", "true", true},
+	}
+	for _, c := range cases {
+		t.Setenv("COREMETRY_ES_ML_ENABLED", c.env)
+		cfg, err := Load(write(c.yaml))
+		if err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		if cfg.Logs.Elasticsearch.MLEnabled != c.want {
+			t.Errorf("%s: %v, beklenen %v", c.name, cfg.Logs.Elasticsearch.MLEnabled, c.want)
 		}
 	}
 }

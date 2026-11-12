@@ -13509,3 +13509,10 @@ bilinçli DIŞARIDA kalır. Kayıtlı liste 1091 varsayılanına küme olarak e�
 (audit, işaret `problem_priority_inbox_keep_v4`); özelleştirilmiş ya da açıkça boş liste dokunulmaz, bir kez loglanır —
 o kurulumda kalıp elle eklenir (PUT `/api/settings/problem-priority`, `inboxKeepSourcePriority`). computePriority,
 eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
+
+## 2026-11-12 — v0.10.2057 — Elastic ML job poller varsayılan AÇIK (operatör: "Es ml enabled default true olsun")
+
+- `logs.elasticsearch.ml_enabled` varsayılanı `false` → `true`. ES adresi tanımlı değilse poller yine başlamaz.
+- Kapatma: yaml `ml_enabled: false` ya da `COREMETRY_ES_ML_ENABLED=false` / `0` (eskiden env yalnız açabiliyordu).
+- Yük: 5 dakikada bir `/_ml/anomaly_detectors/_stats` + açık job başına 1 kayıt sorgusu (≤100 kayıt). Lider kilidi altında.
+- Sonuç: Elastic ML poller silme listesinden ÇIKTI (`docs/anomaly/old-detectors-ml-gap.md` D2 geçersiz). Olaylar `anomaly_events` (`elastic_ml`) üzerinden /anomalies'e düşer; ML motoruna taşınması ayrı iş.
