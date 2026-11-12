@@ -19,8 +19,10 @@ package anomaly
 // templater örnekleme tabanlıdır; payda için yeni bir ES sorgusu gerekir.
 // Bu yüzden canlı yolda yalnız "≥ 20 satır" kuralı uygulanır (ServiceLines
 // = 0 = bilinmiyor); pay kuralı saf fonksiyonda hazır ve sınanmış, payda
-// eklendiğinde kendiliğinden devreye girer. Seviye de defterde yok → batch
-// servislerde canlı yolda yeni kalıp olayı hiç üretilmez.
+// eklendiğinde kendiliğinden devreye girer. v0.10.2029 — seviye süreç içi
+// kayıttan (templater/severity.go: örneklemde çoğunluk ERROR+ ise "ERROR");
+// batch serviste yalnız böyle bir kalıp ≥ 20 satırla olay üretir. Kayıtta
+// yoksa (puller başka pod'da, ya da satırlar seviyesiz) üretilmez.
 //
 // Yalnız anomaly_events yazımını keser: şablon defteri (Logs "patterns")
 // ve geçmiş olaylar değişmez.
@@ -64,12 +66,20 @@ func isErrorOrAbove(level string) bool {
 
 // filterNewTemplateNoise — SAF: recorder adımı; taban altındaki adaylar
 // düşer (yazılmaz), sayıları döner. Payda ve seviye canlı yolda yok.
-func filterNewTemplateNoise(in []LogTemplateAnomaly, isBatch func(string) bool) ([]LogTemplateAnomaly, int) {
+//
+// v0.10.2029 — levelOf: kalıbın örneklem seviyesi (templater.TemplateLevel;
+// çoğunluk ERROR+ ise "ERROR", değilse ""). nil = seviye bilinmiyor. Batch
+// olmayan serviste seviye karara girmez (davranış aynı).
+func filterNewTemplateNoise(in []LogTemplateAnomaly, isBatch func(string) bool, levelOf func(templateID string) string) ([]LogTemplateAnomaly, int) {
 	out := in[:0:0]
 	cut := 0
 	for _, a := range in {
 		batch := isBatch != nil && isBatch(a.Service)
-		if newTemplateIsEvent(newTemplateNoiseInput{Lines: a.TotalCount, Batch: batch}) {
+		level := ""
+		if batch && levelOf != nil {
+			level = levelOf(a.TemplateID)
+		}
+		if newTemplateIsEvent(newTemplateNoiseInput{Lines: a.TotalCount, Batch: batch, Level: level}) {
 			out = append(out, a)
 		} else {
 			cut++

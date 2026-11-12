@@ -46,8 +46,31 @@ func TestFilterNewTemplateNoise(t *testing.T) {
 		{TemplateID: "c", Service: "checkout", TotalCount: 25},
 		{TemplateID: "d", Service: "checkout", TotalCount: 7},
 	}
-	out, cut := filterNewTemplateNoise(in, isBatch)
+	out, cut := filterNewTemplateNoise(in, isBatch, nil)
 	if len(out) != 1 || out[0].TemplateID != "c" || cut != 3 {
 		t.Fatalf("kalan %+v, kesilen %d", out, cut)
+	}
+}
+
+// v0.10.2029 — kalıbın örneklem seviyesi karara girer: batch serviste
+// çoğunluğu ERROR+ olan kalıp ≥ 20 satırla olay üretir; seviye bilinmiyor
+// ya da "other" çoğunlukta ise üretmez. Batch olmayan serviste seviye
+// sorulmaz (davranış aynı).
+func TestFilterNewTemplateNoiseLevel(t *testing.T) {
+	isBatch := func(s string) bool { return s == "orders-batch" }
+	levels := map[string]string{"err": "ERROR", "other": ""}
+	asked := map[string]bool{}
+	levelOf := func(id string) string { asked[id] = true; return levels[id] }
+	in := []LogTemplateAnomaly{
+		{TemplateID: "err", Service: "orders-batch", TotalCount: 25},
+		{TemplateID: "other", Service: "orders-batch", TotalCount: 900},
+		{TemplateID: "plain", Service: "checkout", TotalCount: 25},
+	}
+	out, cut := filterNewTemplateNoise(in, isBatch, levelOf)
+	if len(out) != 2 || out[0].TemplateID != "err" || out[1].TemplateID != "plain" || cut != 1 {
+		t.Fatalf("kalan %+v, kesilen %d", out, cut)
+	}
+	if asked["plain"] {
+		t.Error("batch olmayan serviste seviye sorulmamalı")
 	}
 }

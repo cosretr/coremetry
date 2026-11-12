@@ -150,7 +150,10 @@ func (p *Puller) tick(parent context.Context) {
 			skipped++
 			continue
 		}
-		p.drain.Add(body, r.ServiceName, r.Timestamp)
+		c := p.drain.Add(body, r.ServiceName, r.Timestamp)
+		if IsErrorSeverity(r.Severity, r.SeverityText) { // v0.10.2029 — kalıbın seviyesi
+			p.drain.NoteErrorPlus(c)
+		}
 	}
 
 	// v0.10.1829 — maske sürümü geçişi defter yazımından ÖNCE: yeni maskenin
@@ -176,7 +179,9 @@ func (p *Puller) tick(parent context.Context) {
 	// bağlamını tüketse de yazım kendi 20 sn'siyle koşar (kökten iptal
 	// yine geçer); küme başına 2 gidiş-dönüş yerine iki sorgu.
 	ts := make([]chstore.LogTemplate, 0, len(clusters))
+	sevAt := time.Now()
 	for _, c := range clusters {
+		RecordTemplateSeverity(c.ID, c.ErrPlus, c.Count, sevAt) // v0.10.2029 — süreç içi seviye kaydı
 		ts = append(ts, chstore.LogTemplate{
 			ID:         c.ID,
 			Template:   c.TemplateString(),

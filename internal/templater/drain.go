@@ -114,6 +114,7 @@ type Cluster struct {
 	LastSeen  int64 // unix ns
 	Services  []string
 	Sample    string // representative raw line (for UI hover)
+	ErrPlus   uint64 // v0.10.2029: ERROR+ seviyeli örnek satır (severity.go)
 }
 
 // Drain-3 varsayılanları — v0.10.1030: NewDrain ile SameTemplateFamily

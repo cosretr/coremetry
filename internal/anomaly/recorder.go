@@ -8,6 +8,7 @@ import (
 	"github.com/cilcenk/coremetry/internal/cache"
 	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/logstore"
+	"github.com/cilcenk/coremetry/internal/templater"
 )
 
 // Recorder is the persistence side of the anomaly system. The
@@ -141,7 +142,7 @@ func (r *Recorder) tick(ctx context.Context) {
 			}
 			// v0.10.2028 — gürültü tabanı (log_template_noise.go): ≥ 20 satır;
 			// batch servislerde yeni kalıp olayı yok. Defter etkilenmez.
-			kept, cut := filterNewTemplateNoise(found, r.store.AnomalySensitivityForDetectors().IsBatchService)
+			kept, cut := filterNewTemplateNoise(found, r.store.AnomalySensitivityForDetectors().IsBatchService, templater.TemplateLevel)
 			if cut > 0 {
 				log.Printf("[anomaly-recorder] new log templates: %d below noise floor (min %d lines; batch services skipped), %d kept", cut, newTemplateEventMinLines, len(kept))
 			}
