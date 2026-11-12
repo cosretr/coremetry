@@ -1,26 +1,29 @@
 package ml
 
 // group_gate.go — v0.10.2015 (anomali tekilleştirme D3,
-// docs/anomaly/anomaly-reassessment-audit.md §6 B, §9): promoteMLGroups
-// GÖLGE kipi. Grup (group.go) Problem'e terfi kapısından geçseydi "açardı"
-// kaydı tutulur: hangi grup, hangi kural kimliği, hangi öncelik, neden ya
-// da neden değil. CANLI Problem, bildirim ve anomaly_events kopyası YOK
-// (canlı yol D4, ayrı operatör onayı).
+// docs/anomaly/anomaly-reassessment-audit.md §6 B, §9): grup terfi kararı.
+// v0.10.2015'te yalnız GÖLGE ("açardı" kaydı); v0.10.2052 (D4, operatör
+// onayı 2026-11-12) aynı karar canlı yolu (group_live.go) da sürer.
 //
-// KAPI (audit S2 önerilen varsayılanı; S1 örnekleri gelince ayarlanır):
-//   - batch kuralı (batch.go batchKeep) üyelere yeniden uygulanır: kalıp
-//     sonradan eklenmiş olsa da `-batch` serviste yük sinyali sayılmaz;
-//   - kalan üyelerde ≥ 2 FARKLI dedektör (aynı dedektörün iki olayı teyit
-//     değildir);
-//   - takvim dilimi tanımlı (PromotionGate ile aynı ön koşul).
-//   Karne (etiket isabeti) kapı DEĞİL — etiket yokken terfi hiç olmuyordu
-//   (N2); karne susturma için kalır.
+// KAPI (operatör kuralı, tek cümle): aynı servisin grubunda en az 2 FARKLI
+// sinyalden (trace / log / metric) anomali varsa grup Problem açar; tek
+// sinyalli grup yalnız anomali kalır.
+//   - batch kuralı (batch.go batchKeep) üyelere yeniden uygulanır: `-batch`
+//     serviste yük sinyali sayılmaz, gerçek hata oranı sinyali sayılır;
+//   - aynı sinyalin iki olayı (iki trace dedektörü dahil) teyit değildir;
+//   - bitmiş grup (koşusu açık üyesi kalmamış) yeni Problem açmaz.
+//   v0.10.2015 gölgesinden farklar: "≥ 2 farklı DEDEKTÖR" → "≥ 2 farklı
+//   SİNYAL"; takvim dilimi ön koşulu kalktı (varsayılan dilim boş = UTC
+//   olduğundan kural hiçbir grubu açmazdı). Karne kapı DEĞİL (N2).
 //
-// ÖNCELİK (gölge tahmini, computePriority'nin şiddet/sapma merdiveniyle
-// aynı biçim): şiddet critical = ≥ 2 sinyal ya da ≥ 3 dedektör, değilse
-// warning; büyük sapma = üyelerin en büyük gözlenen/taban oranı ≥ 2.
-// critical+büyük → P1, critical → P2, warning+büyük → P2, warning → P3.
-// Canlı yolda öncelik yine okuma anında computePriority'den gelir.
+// ÖNCELİK: şiddet critical; canlı Problem'de Value = Threshold = sinyal
+// sayısı (oran 1, büyük sapma yok) → computePriority P2. Audit D4 öncelik
+// söylemiyor; brif varsayılanı P2. 4 sa açık kalan critical'ı mevcut
+// staleCrit kuralı P1 yapar (merdiven aynen).
+//
+// GÖLGE = CANLI: karar her tik bu işlevden çıkar, üyenin kanıtına
+// (groupShadow) damgalanır; canlı yol Problem'i YALNIZ bu kararın
+// WouldOpen'ına göre açar — "açardı" ile "açtı" ayrışamaz.
 //
 // KAYIT YERİ: şemasız — kararı üyenin ml_events.evidence'ına `groupShadow`
 // anahtarıyla yazar (tek yazıcı ML lideri; satır zaten her tik tam
@@ -37,25 +40,26 @@ import (
 	"github.com/cilcenk/coremetry/internal/chstore"
 )
 
-// MLGroupRulePrefix — canlı yolda (D4) açılacak Problem'in kural kimliği
-// öneki; `anomaly-auto:` ailesi mevcut bildirim türünü ve incident yolunu
-// değiştirmez (audit §6 B). Gölgede yalnız kayda yazılır.
-const MLGroupRulePrefix = "anomaly-auto:group:"
+// MLGroupRulePrefix — grup Problem'inin kural kimliği öneki (tek kaynak
+// chstore; evaluator süpürmeleri de oradan okur).
+const MLGroupRulePrefix = chstore.MLGroupRulePrefix
 
 const (
-	groupMinDetectors = 2
-	bigBreachRatio    = 2.0
-	groupShadowKey    = "groupShadow"
+	groupMinSignals = 2
+	bigBreachRatio  = 2.0
+	groupShadowKey  = "groupShadow"
 )
 
 // GroupGateInput — kapının dış girdileri (tik başına bir kez).
 type GroupGateInput struct {
-	IsBatch    func(string) bool // nil = batch kuralı kapalı
-	LoadParts  map[string]bool   // Load işaretli metrik serileri (metricLoadParts)
-	CalendarTZ string
+	IsBatch   func(string) bool // nil = batch kuralı kapalı
+	LoadParts map[string]bool   // Load işaretli metrik serileri (metricLoadParts)
+	// Open — koşusu açık olay kimlikleri (tracker + bu tikin olayları).
+	// nil = bilinmiyor (replay): stage=closed olmayan üye açık sayılır.
+	Open map[string]bool
 }
 
-// GroupDecision — gölge terfi kararı.
+// GroupDecision — grup terfi kararı (gölge kaydı; canlıda Live/ProblemID dolu).
 type GroupDecision struct {
 	Group     string   `json:"group"`
 	WouldOpen bool     `json:"wouldOpen"`
@@ -64,7 +68,14 @@ type GroupDecision struct {
 	Priority  string   `json:"priority,omitempty"`
 	Reason    string   `json:"reason"`
 	Detectors []string `json:"detectors"`
-	At        int64    `json:"at"` // unix sn
+	Signals   []string `json:"signals,omitempty"` // v0.10.2052: batch sonrası farklı sinyaller
+	At        int64    `json:"at"`                // unix sn
+	// Finished — koşusu açık üyesi kalmadı (canlı Problem bu grupla kapanır).
+	Finished bool `json:"finished,omitempty"`
+	// Live — v0.10.2052 (D4): canlı kip bu grubun Problem'ini açtı ya da
+	// tazeledi; ProblemID o Problem (detay bağlantısı). Gölgede boş.
+	Live      bool   `json:"live,omitempty"`
+	ProblemID string `json:"problemId,omitempty"`
 }
 
 // eventRatio — SAF: sapma oranı (≥ 1). Yukarı: gözlenen/taban; aşağı:
@@ -80,19 +91,46 @@ func eventRatio(e chstore.MLEvent) float64 {
 	return math.Max(num/den, 1)
 }
 
-// DecideGroupPromotion — SAF: grubun gölge terfi kararı. members: grubun
-// üye satırları (fazlası zararsız; kimliğe göre süzülür).
+// groupMemberOpen — SAF: üyenin koşusu açık mı (Open nil → stage'e bak).
+func groupMemberOpen(e chstore.MLEvent, open map[string]bool) bool {
+	if open == nil {
+		return e.Stage != chstore.MLStageClosed
+	}
+	return open[e.ID]
+}
+
+// GroupRuleID — SAF: grup Problem'inin kural kimliği = önek + grubun ilk
+// üyesinin olay kimliği (grup kimliği de ondan türer; detay bağlantısı
+// /anomalies/ml/<olay> bu kimlikten kurulur).
+func GroupRuleID(g MLGroup) string {
+	if len(g.Members) == 0 {
+		return MLGroupRulePrefix + g.ID
+	}
+	return MLGroupRulePrefix + g.Members[0]
+}
+
+// GroupEventOfRule — SAF: kural kimliğinden detay olayının kimliği.
+func GroupEventOfRule(ruleID string) (string, bool) {
+	id, ok := strings.CutPrefix(ruleID, MLGroupRulePrefix)
+	return id, ok && id != ""
+}
+
+// DecideGroupPromotion — SAF: grubun terfi kararı (gölge ve canlı AYNI
+// işlev). members: grubun üye satırları (fazlası zararsız; kimliğe göre süzülür).
 func DecideGroupPromotion(g MLGroup, members []chstore.MLEvent, in GroupGateInput, now time.Time) GroupDecision {
-	d := GroupDecision{Group: g.ID, RuleID: MLGroupRulePrefix + g.ID, At: now.Unix()}
+	d := GroupDecision{Group: g.ID, RuleID: GroupRuleID(g), At: now.Unix()}
 	inGroup := make(map[string]bool, len(g.Members))
 	for _, id := range g.Members {
 		inGroup[id] = true
 	}
 	dets, sigs := map[string]bool{}, map[string]bool{}
-	peak, kept, cut := 1.0, 0, 0
+	peak, kept, cut, open := 1.0, 0, 0, 0
 	for _, e := range members {
 		if !inGroup[e.ID] {
 			continue
+		}
+		if groupMemberOpen(e, in.Open) {
+			open++
 		}
 		if !batchKeep(e, in.IsBatch, in.LoadParts) {
 			cut++
@@ -100,39 +138,33 @@ func DecideGroupPromotion(g MLGroup, members []chstore.MLEvent, in GroupGateInpu
 		}
 		kept++
 		dets[e.Detector] = true
-		sig := e.Signal
-		if sig == "" {
-			sig = chstore.MLDetectorSignal(e.Detector)
-		}
-		sigs[sig] = true
+		sigs[memberSignal(e)] = true
 		peak = math.Max(peak, eventRatio(e))
 	}
-	d.Detectors = sortedKeys(dets)
+	d.Detectors, d.Signals = sortedKeys(dets), sortedKeys(sigs)
 	switch {
+	case open == 0:
+		d.Finished = true
+		d.Reason = "açmazdı: grup bitti (açık olay kalmadı)"
 	case kept == 0 && cut > 0:
 		d.Reason = "açmazdı: batch servisi, yalnız yük sinyali (batch kuralı)"
-	case len(dets) < groupMinDetectors:
-		d.Reason = fmt.Sprintf("açmazdı: tek dedektör (%s), başka dedektör teyit etmedi", strings.Join(d.Detectors, ", "))
-	case in.CalendarTZ == "":
-		d.Reason = "açmazdı: takvim dilimi tanımlı değil"
+	case len(sigs) < groupMinSignals:
+		d.Reason = fmt.Sprintf("açmazdı: tek sinyal (%s), başka sinyal teyit etmedi", strings.Join(d.Signals, ", "))
 	default:
 		d.WouldOpen = true
-		d.Severity = "warning"
-		if len(sigs) >= 2 || len(dets) >= 3 {
-			d.Severity = "critical"
-		}
-		big := peak >= bigBreachRatio
-		switch {
-		case d.Severity == "critical" && big:
-			d.Priority = "P1"
-		case d.Severity == "critical", big:
-			d.Priority = "P2"
-		default:
-			d.Priority = "P3"
-		}
-		d.Reason = fmt.Sprintf("açardı: %d dedektör teyit etti (%s), en büyük sapma %.1f kat", len(dets), strings.Join(d.Detectors, ", "), peak)
+		d.Severity = "critical"
+		d.Priority = "P2"
+		d.Reason = fmt.Sprintf("açardı: %d farklı sinyal teyit etti (%s), en büyük sapma %.1f kat", len(sigs), strings.Join(d.Signals, ", "), peak)
 	}
 	return d
+}
+
+// memberSignal — SAF: olayın sinyali (eski satırda dedektörden).
+func memberSignal(e chstore.MLEvent) string {
+	if e.Signal != "" {
+		return e.Signal
+	}
+	return chstore.MLDetectorSignal(e.Detector)
 }
 
 // stampGroupShadow — SAF: kararı kanıt JSON'una yazar (mevcut alanlar korunur).
@@ -155,7 +187,7 @@ func GroupShadowOf(evidence string) (GroupDecision, bool) {
 }
 
 // ReplayGroupDecisions — SAF replay kancası: geçmiş ml_events satırları
-// üzerinde gruplama + gölge kapı. S1 örnekleri gelince backtest/replay
+// üzerinde gruplama + kapı. S1 örnekleri gelince backtest/replay
 // karşılaştırması bunu çağırır (grup sırası GroupMLEvents'inki).
 func ReplayGroupDecisions(evs []chstore.MLEvent, slack time.Duration, in GroupGateInput, now time.Time) []GroupDecision {
 	gs := GroupMLEvents(evs, slack)
@@ -169,43 +201,80 @@ func ReplayGroupDecisions(evs []chstore.MLEvent, slack time.Duration, in GroupGa
 // shadowCounts — tik sayaçları.
 type shadowCounts struct{ Groups, WouldOpen int64 }
 
-// shadowPromoteGroups — recorder tik adımı (SAF çekirdek): bu tikte
-// yazılacak olayların gruplarını süreç-içi koşu durumu (tracker; son 24 sa
-// koşuları, kapanmışlar dahil) + bu tikin olaylarıyla kurar, karar verir
-// ve kararı yazılacak üyenin kanıtına damgalar. CH/ES/VM okuması YOK.
-// Lider değişince koşu durumu sıfırlanır (kabul edilen sapma, audit N7):
-// yeni liderin ilk tiklerinde grup yalnız o anda açık olaylardan kurulur.
-func shadowPromoteGroups(kept, running []chstore.MLEvent, slack time.Duration, in GroupGateInput, now time.Time) shadowCounts {
+// decidedGroup — bu tikte karar verilen grup + üye satırları.
+type decidedGroup struct {
+	G       MLGroup
+	D       GroupDecision
+	Members []chstore.MLEvent
+}
+
+// decideGroups — recorder tik adımı (SAF çekirdek): bu tikte yazılacak
+// olaylar + süreç-içi koşu durumu (tracker; son 24 sa koşuları, kapanmışlar
+// dahil) ile grupları kurar; bu tikin bir olayını ya da koşusu açık bir
+// üyeyi taşıyan her grup için karar verir (servis, başlangıç sırası).
+// CH/ES/VM okuması YOK. Lider değişince koşu durumu sıfırlanır (kabul
+// edilen sapma, audit N7): yeni liderin ilk tiklerinde grup yalnız o anda
+// açık olaylardan kurulur.
+func decideGroups(kept, running []chstore.MLEvent, slack time.Duration, in GroupGateInput, now time.Time) ([]decidedGroup, shadowCounts) {
 	byID := make(map[string]chstore.MLEvent, len(running)+len(kept))
 	for _, e := range running {
 		byID[e.ID] = e
 	}
+	keptIDs := make(map[string]bool, len(kept))
 	for _, e := range kept {
 		byID[e.ID] = e
+		keptIDs[e.ID] = true
 	}
 	all := make([]chstore.MLEvent, 0, len(byID))
 	for _, e := range byID {
 		all = append(all, e)
 	}
 	sort.Slice(all, func(i, j int) bool { return all[i].ID < all[j].ID })
-	idx := GroupIndex(GroupMLEvents(all, slack))
-	decided := map[string]GroupDecision{}
+	var out []decidedGroup
 	var c shadowCounts
-	for i := range kept {
-		g := idx[kept[i].ID]
-		if g == nil {
-			continue
-		}
-		d, ok := decided[g.ID]
-		if !ok {
-			d = DecideGroupPromotion(*g, all, in, now)
-			decided[g.ID] = d
-			c.Groups++
-			if d.WouldOpen {
-				c.WouldOpen++
+	for _, g := range GroupMLEvents(all, slack) {
+		touch := false
+		var mem []chstore.MLEvent
+		for _, id := range g.Members {
+			e := byID[id]
+			mem = append(mem, e)
+			if keptIDs[id] || groupMemberOpen(e, in.Open) {
+				touch = true
 			}
 		}
-		kept[i].Evidence = stampGroupShadow(kept[i].Evidence, d)
+		if !touch {
+			continue
+		}
+		d := DecideGroupPromotion(g, mem, in, now)
+		out = append(out, decidedGroup{G: g, D: d, Members: mem})
+		c.Groups++
+		if d.WouldOpen {
+			c.WouldOpen++
+		}
 	}
+	return out, c
+}
+
+// stampGroupDecisions — SAF: kararı yazılacak üyelerin kanıtına damgalar
+// (kronik kayıt gruba girmez, damgalanmaz).
+func stampGroupDecisions(kept []chstore.MLEvent, groups []decidedGroup) {
+	byMember := map[string]GroupDecision{}
+	for _, g := range groups {
+		for _, id := range g.G.Members {
+			byMember[id] = g.D
+		}
+	}
+	for i := range kept {
+		if d, ok := byMember[kept[i].ID]; ok {
+			kept[i].Evidence = stampGroupShadow(kept[i].Evidence, d)
+		}
+	}
+}
+
+// shadowPromoteGroups — karar + damga (canlı kip kapalıyken recorder'ın
+// tek adımı; testler eski adıyla çağırır).
+func shadowPromoteGroups(kept, running []chstore.MLEvent, slack time.Duration, in GroupGateInput, now time.Time) shadowCounts {
+	gs, c := decideGroups(kept, running, slack, in, now)
+	stampGroupDecisions(kept, gs)
 	return c
 }

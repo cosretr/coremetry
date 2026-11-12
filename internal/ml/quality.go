@@ -274,6 +274,23 @@ func (t *tracker) events() []chstore.MLEvent {
 	return out
 }
 
+// openIDs — v0.10.2052 (D4): koşusu açık (kapanmamış) epizot kimlikleri +
+// bu tikin olayları. Grup "bitti" kararının girdisi (closeStale sonrası).
+func (t *tracker) openIDs(kept []chstore.MLEvent) map[string]bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	out := make(map[string]bool, len(t.runs)+len(kept))
+	for _, r := range t.runs {
+		if r.closedAt.IsZero() && r.epID != "" {
+			out[r.epID] = true
+		}
+	}
+	for _, e := range kept {
+		out[e.ID] = true
+	}
+	return out
+}
+
 // snap — koşunun replay durumu (yoksa nil); yalnız lider goroutine'i yazar.
 func (t *tracker) snap(epID string) *snapshotState {
 	t.mu.Lock()

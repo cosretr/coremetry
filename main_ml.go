@@ -16,10 +16,20 @@ import (
 	"github.com/cilcenk/coremetry/internal/config"
 	"github.com/cilcenk/coremetry/internal/logstore"
 	"github.com/cilcenk/coremetry/internal/ml"
+	"github.com/cilcenk/coremetry/internal/notify"
 	"github.com/cilcenk/coremetry/internal/thanos"
 )
 
-func startML(ctx context.Context, mode runMode, cfg *config.Config, store *chstore.Store, logs logstore.Store, vm anomaly.REDVM, th *thanos.Service, lock cache.Lock) {
+// mlNotifier — nil *Notifier arayüze sarılırsa nil-olmayan arayüz olur;
+// açıkça nil döner.
+func mlNotifier(n *notify.Notifier) ml.ProblemNotifier {
+	if n == nil {
+		return nil
+	}
+	return n
+}
+
+func startML(ctx context.Context, mode runMode, cfg *config.Config, store *chstore.Store, logs logstore.Store, vm anomaly.REDVM, th *thanos.Service, lock cache.Lock, notifier *notify.Notifier) {
 	run, label := ml.Placement(cfg.Background.MLEnabled, cfg.Background.MLRole, ml.Roles{Worker: mode.worker, Sre: mode.sre})
 	if !run {
 		if cfg.Background.MLEnabled && (mode.worker || mode.sre) {
@@ -30,5 +40,7 @@ func startML(ctx context.Context, mode runMode, cfg *config.Config, store *chsto
 	log.Printf("[ml] alt sistem başlıyor placement=%s dedektörler=log_red(log_volume,error_rate,service_silent) trace_red(op_latency,op_error_rate,throughput_drop; VM configured=%v)", label, vm != nil && vm.Configured())
 	// v0.10.2019 — metrik aileleri: kaynak (VM | Thanos) saatte bir otomatik seçilir; Thanos yolu önce koşar.
 	msrc := ml.NewMetricSources()
-	ml.New(store, logs, vm, lock, label, ml.NewLogRED(), ml.NewLogTemplates(), ml.NewLogBreakdown(), ml.NewLogChangePoint(), ml.NewTraceRED(), ml.NewTraceErrors(), ml.NewDependency(), ml.NewTracePods(), ml.NewMetricThanos(ml.NewThanosQuerier(th), msrc), ml.NewMetricML().WithSources(msrc)).Start(chstore.WithQueryTag(ctx, "ml:recorder"))
+	ml.New(store, logs, vm, lock, label, ml.NewLogRED(), ml.NewLogTemplates(), ml.NewLogBreakdown(), ml.NewLogChangePoint(), ml.NewTraceRED(), ml.NewTraceErrors(), ml.NewDependency(), ml.NewTracePods(), ml.NewMetricThanos(ml.NewThanosQuerier(th), msrc), ml.NewMetricML().WithSources(msrc)).
+		WithNotifier(mlNotifier(notifier)). // v0.10.2052 (D4): grup Problem'i bildirimi, mevcut hat
+		Start(chstore.WithQueryTag(ctx, "ml:recorder"))
 }

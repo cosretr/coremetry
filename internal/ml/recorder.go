@@ -71,6 +71,18 @@ type Recorder struct {
 	bjob baselineJob
 	// bf — v0.10.1815 baseline geçmiş doldurma (baseline_backfill.go).
 	bf backfillJob
+	// notifier — v0.10.2052 (D4): grup Problem'inin açılış bildirimi (mevcut hat).
+	notifier ProblemNotifier
+	// leaderTicks — art arda lider tik sayısı; grup Problem'i kapanışı
+	// yalnız > episodeCloseMisses sonra (yeni liderin boş koşu durumu).
+	leaderTicks int
+}
+
+// WithNotifier — v0.10.2052: grup Problem'i bildirimi için mevcut Problem
+// bildirim hattı. nil = bildirim yok (Problem yine açılır).
+func (r *Recorder) WithNotifier(n ProblemNotifier) *Recorder {
+	r.notifier = n
+	return r
 }
 
 // New — placement etiketi /admin/stats için ("sre" | "worker").
@@ -130,9 +142,11 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 		return
 	}
 	if !leader {
+		r.leaderTicks = 0
 		global.skipped.Add(1)
 		return
 	}
+	r.leaderTicks++
 	start := time.Now()
 	budget := time.Duration(cfg.TimeoutMs)*time.Millisecond*time.Duration(1+len(r.detectors)) + 10*time.Second
 	tctx, tcancel := context.WithTimeout(ctx, budget)
@@ -222,13 +236,31 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	c0 := time.Now()
 	contribQ := r.contribSource().enrichContributors(tctx, deps, cfg, kept, r.runs.prevEvent, start)
 	steps["contribMs"] = time.Since(c0).Milliseconds()
-	// v0.10.2015 (anomali tekilleştirme D3) — promoteMLGroups GÖLGE kipi:
-	// grup Problem kapısından geçseydi "açardı" kararı üyenin kanıtına
-	// (groupShadow) yazılır. Problem / bildirim / anomaly_events YOK; sorgu
-	// yok (girdi süreç-içi koşu durumu). Kapanış satırı (closeStale) koşunun
-	// son halini yazdığı için damgalı hal koşuya da geri verilir.
-	shadow := shadowPromoteGroups(kept, r.runs.events(), GroupSlack(cfg),
-		GroupGateInput{IsBatch: isBatch, LoadParts: loadParts, CalendarTZ: sens.Calendar.Timezone}, start)
+	// v0.10.2015 (anomali tekilleştirme D3) — grup kararı her tik; karar
+	// üyenin kanıtına (groupShadow) yazılır. v0.10.2052 (D4) — canlı kip
+	// (ml.groupProblems, varsayılan açık) AYNI kararla Problem açar /
+	// tazeler / kapatır (group_live.go); kapalıyken yalnız gölge kaydı.
+	// Girdi süreç-içi koşu durumu; canlıda tek ek okuma açık Problem
+	// anlık görüntüsü. Kapanış satırı (closeStale) koşunun son halini
+	// yazdığı için damgalı hal koşuya da geri verilir.
+	groups, shadow := decideGroups(kept, r.runs.events(), GroupSlack(cfg),
+		GroupGateInput{IsBatch: isBatch, LoadParts: loadParts, Open: r.runs.openIDs(kept)}, start)
+	var live liveCounts
+	if cfg.GroupProblemsOn() {
+		loc := OperatorLocation(sens)
+		desc := func(g decidedGroup) string {
+			return groupProblemDescription(g, func(e chstore.MLEvent) string { return ExplainSummary(SummaryInput(e, cfg, start, loc)) })
+		}
+		lc, lerr := r.liveGroupProblems(tctx, groups, r.leaderTicks > episodeCloseMisses, desc, start)
+		live = lc
+		if lerr != nil {
+			log.Printf("[ml] group problems: %v", lerr)
+			if firstErr == nil {
+				firstErr = lerr
+			}
+		}
+	}
+	stampGroupDecisions(kept, groups)
 	for _, ev := range kept {
 		if ev.Stage != chstore.MLStageChronic {
 			r.runs.setEvent(ev)
@@ -271,6 +303,7 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 		Partial: int64(partialN), Docs: global.docs.Load(), Steps: steps, Signals: signals, BatchCut: int64(batchCut),
 		Kinds: foldKindTicks(samples), ES: global.esQueries.Load() - esAtStart, VM: global.vmQueries.Load() - vmAtStart, CH: chQueries.Load(),
 		ShadowGroups: shadow.Groups, ShadowWouldOpen: shadow.WouldOpen, ContribQueries: int64(contribQ),
+		GroupLive: cfg.GroupProblemsOn(), GroupOpened: live.Opened, GroupRefreshed: live.Refreshed, GroupResolved: live.Resolved,
 		LogSvcUnmatched: int64(logSvc.Unmatched), LogSvcViaPod: int64(logSvc.ViaPod)}
 	// v0.10.2019 — metrik aile kaynakları + Thanos ölçümü (MetricThanos)
 	for _, det := range r.detectors {
@@ -291,6 +324,7 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	scancel()
 	log.Printf("[ml] tick placement=%s detectors=%d events=%d suppressed=impact:%d,feedback:%d,regime:%d,batch:%d labels=%d dur=%dms es_p95=%dms err=%v",
 		r.placement, active, written, sup.Impact, sup.Feedback, sup.Regime, batchCut, len(labels), time.Since(start).Milliseconds(), Observability().ESP95Ms, firstErr)
+	log.Printf("[ml] tick group_problems live=%v opened=%d refreshed=%d resolved=%d", cfg.GroupProblemsOn(), live.Opened, live.Refreshed, live.Resolved)
 	log.Printf("[ml] tick group_shadow groups=%d would_open=%d contrib_queries=%d log_svc_unmatched=%d log_svc_via_pod=%d", shadow.Groups, shadow.WouldOpen, contribQ, logSvc.Unmatched, logSvc.ViaPod)
 	log.Printf("[ml] tick steps labels=%dms detectors=%dms write=%dms snapshot=%dms es_queries=%d vm_queries=%d partial=%d docs=%d",
 		steps["labelsMs"], steps["detectorsMs"], steps["writeMs"], steps["snapshotMs"], global.esQueries.Load()-esAtStart, global.vmQueries.Load()-vmAtStart, partialN, global.docs.Load())

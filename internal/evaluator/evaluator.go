@@ -1148,6 +1148,9 @@ func (e *Evaluator) sweepStaleProblems(ctx context.Context) {
 		log.Printf("[evaluator] stale sweep: list: %v", err)
 		return
 	}
+	// v0.10.2052 (D4) — ML grup Problem'inin yaşam döngüsü ML tikinde
+	// (seyrek); kendi eşiğini aşmadıkça süpürülmez (chstore.SplitMLGroupStale).
+	stale = e.dropLiveMLGroupProblems(ctx, stale)
 	// v0.10.592 — poller'ın sahiplendiği Problem'ler (ext-down / ext-cap)
 	// süpürülmez: yaşam döngüleri poll anında touch/resolve ile yönetiliyor;
 	// poll aralığı 3×interval'ı aşan kaynakta süpürme onları "source silent"
@@ -1180,6 +1183,37 @@ func (e *Evaluator) sweepStaleProblems(ctx context.Context) {
 	if resolved > 0 {
 		log.Printf("[evaluator] stale sweep: resolved %d problem(s) with silent sources", resolved)
 	}
+}
+
+// dropLiveMLGroupProblems — bayat listede ML grup Problem'i varsa ML
+// tikinin eşiğiyle İKİNCİ bir sınırlı okuma (LIMIT 500) yapar; yalnız o
+// eşiği de aşanlar süpürülür. Okuma hatası → grup Problem'leri bu tur muaf.
+func (e *Evaluator) dropLiveMLGroupProblems(ctx context.Context, stale []chstore.Problem) []chstore.Problem {
+	has := false
+	for _, p := range stale {
+		if chstore.IsMLGroupProblem(p.RuleID) {
+			has = true
+			break
+		}
+	}
+	if !has {
+		return stale
+	}
+	var very map[string]bool
+	cutoff := time.Now().Add(-chstore.MLGroupStaleAfter(e.store.GetMLConfig(ctx).TickSec))
+	if rows, err := e.store.ListStaleOpenProblems(ctx, cutoff); err != nil {
+		log.Printf("[evaluator] stale sweep: ml group cutoff list: %v (grup Problem'leri bu tur muaf)", err)
+	} else {
+		very = make(map[string]bool, len(rows))
+		for _, p := range rows {
+			very[p.ID] = true
+		}
+	}
+	sweep, exempt := chstore.SplitMLGroupStale(stale, very)
+	if len(exempt) > 0 {
+		log.Printf("[evaluator] stale sweep: %d ml group problem(s) skipped (lifecycle belongs to the ML recorder)", len(exempt))
+	}
+	return sweep
 }
 
 // staleSweepCandidates — SAF: bayat listeden süpürülecekler ve poller'a ait
@@ -1696,6 +1730,11 @@ func (e *Evaluator) resolveClearedAnomalyPromotions(ctx context.Context, muted m
 //	                          "anomaly cleared" (üye susturması gruptan
 //	                          düşürür); activeGroups nil = bilinmiyor → kalır.
 func promotedResolveReason(ruleID string, active, muted, activeGroups map[string]bool) (string, bool) {
+	// v0.10.2052 (D4) — ML grup Problem'i anomaly_events'te parmak izi
+	// taşımaz; yaşam döngüsü ML kaydedicisinde (internal/ml/group_live.go).
+	if chstore.IsMLGroupProblem(ruleID) {
+		return "", false
+	}
 	if strings.HasPrefix(ruleID, promoteSubjectRulePrefix) {
 		if activeGroups == nil || activeGroups[ruleID] {
 			return "", false

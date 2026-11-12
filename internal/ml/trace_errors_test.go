@@ -106,22 +106,22 @@ func TestTraceErrBatchClass(t *testing.T) {
 	}
 }
 
-// D2/D3: aynı servis + teyit penceresi → trace_red ile tek grup; kapıda
-// farklı dedektör sayılır → açardı.
+// D2/D3/D4: aynı servis + teyit penceresi → trace_red ile tek grup; v0.10.2052
+// kapısı farklı SİNYAL sayar → iki trace dedektörü Problem açmaz.
 func TestTraceErrGroupsWithTraceRED(t *testing.T) {
 	evs := []chstore.MLEvent{gateEv("e", detTraceErrorCount, "checkout", 0, 20, 4, 40), gateEv("r", detOpErrorRate, "checkout", 5, 25, 0.01, 0.2)}
 	gs := GroupMLEvents(evs, 10*time.Minute)
 	if len(gs) != 1 || len(gs[0].Detectors) != 2 {
 		t.Fatalf("tek grup, iki dedektör bekleniyordu: %+v", gs)
 	}
-	d := DecideGroupPromotion(gs[0], evs, GroupGateInput{CalendarTZ: "UTC"}, gBase)
-	if !d.WouldOpen || !strings.Contains(d.Reason, detTraceErrorCount) {
-		t.Fatalf("açardı bekleniyordu: %+v", d)
+	d := DecideGroupPromotion(gs[0], evs, GroupGateInput{}, gBase)
+	if d.WouldOpen || !strings.Contains(d.Reason, "tek sinyal") {
+		t.Fatalf("iki trace dedektörü açmamalı: %+v", d)
 	}
-	// tek başına trace_error_count teyitsiz → açmazdı
-	solo := []chstore.MLEvent{gateEv("e", detTraceErrorCount, "checkout", 0, 20, 4, 40)}
-	if d := DecideGroupPromotion(GroupMLEvents(solo, 10*time.Minute)[0], solo, GroupGateInput{CalendarTZ: "UTC"}, gBase); d.WouldOpen {
-		t.Errorf("tek dedektör açmamalı: %+v", d)
+	// log hata oranı teyit ederse (ikinci sinyal) açar
+	evs = append(evs, gateEv("l", detErrorRate, "checkout", 8, 22, 5, 30))
+	if d := DecideGroupPromotion(GroupMLEvents(evs, 10*time.Minute)[0], evs, GroupGateInput{}, gBase); !d.WouldOpen {
+		t.Errorf("trace + log açmalı: %+v", d)
 	}
 }
 

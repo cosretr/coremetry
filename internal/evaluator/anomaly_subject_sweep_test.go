@@ -138,6 +138,11 @@ func TestPromotedResolveReason(t *testing.T) {
 		{grp, map[string]bool{grp: true}, "", false},
 		{grp, map[string]bool{}, "anomaly cleared", true},
 		{grp, nil, "", false}, // bilinmiyor → dokunma
+		// v0.10.2052 (D4) — ML grup Problem'i anomaly_events'te yok; yaşam
+		// döngüsü ML kaydedicisinde. Burada "cleared" diye kapatılsaydı her
+		// ML tikinde yeniden açılır, her açılış bildirim olurdu.
+		{chstore.MLGroupRulePrefix + "ev1", nil, "", false},
+		{chstore.MLGroupRulePrefix + "ev1", map[string]bool{}, "", false},
 	}
 	for _, c := range cases {
 		r, ok := promotedResolveReason(c.rule, active, muted, c.groups)

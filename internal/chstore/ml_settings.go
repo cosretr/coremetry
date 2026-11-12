@@ -235,7 +235,23 @@ type MLConfig struct {
 	// İşaretçi + omitempty: ConfigHash'e girmez (olay kanıtındaki hash bu
 	// anahtarla değişmez — tespit davranışı aynı).
 	Baseline *MLBaselineSettings `json:"baseline,omitempty"`
+	// GroupProblems — v0.10.2052 (anomali tekilleştirme D4, operatör onayı
+	// 2026-11-12): ≥ 2 farklı sinyalli ML grubu gerçek Problem açar. TEK
+	// anahtar; nil = AÇIK (varsayılan), false = yalnız gölge kaydı. İşaretçi
+	// + omitempty: ConfigHash'e girmez (tespit ayarı değil).
+	GroupProblems *bool `json:"groupProblems,omitempty"`
 }
+
+// GroupProblemsOn — SAF: ana anahtar VE grup → Problem anahtarı (nil = açık).
+func (c MLConfig) GroupProblemsOn() bool {
+	return c.Enabled && (c.GroupProblems == nil || *c.GroupProblems)
+}
+
+// MLGroupRulePrefix — ML grubunun açtığı Problem'in kural kimliği öneki
+// (v0.10.2015 gölge, v0.10.2052 canlı). `anomaly-auto:` ailesi: bildirim
+// türü "anomaly", kategori ve incident yolu değişmez (audit §6 B). Kuyruk:
+// grubun ilk üyesinin olay kimliği → detay bağlantısı /anomalies/ml/<id>.
+const MLGroupRulePrefix = PromotedAnomalyRulePrefix + "group:"
 
 // MLBaselineSettings — günlük baseline işi ayarı (system_settings `ml.baseline`).
 type MLBaselineSettings struct {
@@ -408,7 +424,8 @@ func (c MLConfig) PromotionAllowed(detector string, score MLDetectorScore, calen
 // hangi ayarla üretildi; replay/what-if karşılaştırması).
 func (c MLConfig) ConfigHash() string {
 	n := NormalizeMLConfig(c)
-	n.Baseline = nil // v0.10.1814: gözlem işi tespit ayarı değil
+	n.Baseline = nil      // v0.10.1814: gözlem işi tespit ayarı değil
+	n.GroupProblems = nil // v0.10.2052: Problem anahtarı tespit ayarı değil
 	raw, _ := json.Marshal(n)
 	h := fnv.New64a()
 	_, _ = h.Write(raw)

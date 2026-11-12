@@ -81,13 +81,14 @@ func TestIncidentWritersGoThroughDoors(t *testing.T) {
 	for _, n := range attach {
 		total += n
 	}
-	if total != 18 {
+	// v0.10.2052 — 18 → 19: ML grup Problem'i açılışta bağlanır (ml/group_live.go).
+	if total != 19 {
 		keys := make([]string, 0, len(attach))
 		for k := range attach {
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
-		t.Errorf("otomatik AttachProblemToIncident çağıranı %d (istenen 18): %v", total, keys)
+		t.Errorf("otomatik AttachProblemToIncident çağıranı %d (istenen 19): %v", total, keys)
 	}
 	if len(join) != 1 || join["../evaluator/fatal_exception.go"] != 1 {
 		t.Errorf("JoinOpenIncident yalnız evaluator.joinOpenIncident'ten: %v", join)
