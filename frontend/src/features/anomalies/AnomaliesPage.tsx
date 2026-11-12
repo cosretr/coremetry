@@ -2,6 +2,9 @@ import { useUrlParams, strParam, csvParam, intParam } from '@/lib/urlParams';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTablePrefs } from '@/lib/queries/prefs';
 import { isDefaultExcOrder, parseStoredExcOrder, resolveExcOrder } from './exceptionColumns';
+import { ColumnFilterShell } from '@/pages/traces/ColumnFilter';
+import { usePickerSearch } from '@/components/usePickerSearch';
+import { useT } from '@/lib/i18n';
 import { TabStrip } from '@/components/ui/TabStrip'; // v0.10.456 (D5)
 import { rowActivation } from '@/lib/a11y'; // v0.10.451 (dış denetim D3 kalan)
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
@@ -52,7 +55,7 @@ import { useBranding } from '@/lib/branding'; // v0.10.1108 — Oracle grubu gö
 
 // v0.10.751 — sekmeler tek kaynaktan (tabs.ts): Inbox = ignored hariç her
 // durum; eski `?tab=open` adresi ayrıştırıcıda inbox'a çevrilir.
-import { EXCEPTION_TABS as TABS, resolveExceptionTab } from './tabs';
+import { EXCEPTION_TABS as TABS, EXCEPTION_TAB_DEFAULT, resolveExceptionTab } from './tabs';
 import { spreadOf, spreadTitle, defaultFloorTitle, spreadOffFloorTitle, readFloorMeta, type FloorMeta } from './spread'; // v0.10.949
 
 // Exception-inbox sort keys the SERVER understands (v0.8.318 — the
@@ -484,6 +487,62 @@ export default function ProblemsPage() {
   // old client-side sort of one 50-row server page mis-prioritized, and
   // the client search read as "no results" for matches on other pages.
   const filtered = data ?? [];
+
+  // v0.10.2025 (operatör 2026-11-12, öneri A) — başlık hunisi: /traces
+  // v0.10.1511'in kabuğu (ColumnFilterShell: aynı tetik, etkin işaret,
+  // Temizle). Gövdeler bu sayfanın MEVCUT süzgeç durumuna yazar — tek
+  // doğruluk kaynağı URL: Service → `service` (setService), Exception →
+  // `q` (üst satırdaki aramayla AYNI taslak; debounce aynı), State → `tab`
+  // (setTab; Inbox varsayılanı ve minOcc dokunulmadı). Yeni parametre ve
+  // yeni sorgu yok: servis listesi ServicePicker'ın sunucu araması
+  // (/api/service-names). Huni başlığın içinde → kolonla birlikte taşınır.
+  const renderExcHead = (c: { id: string; label: string }): ReactNode => {
+    let shell: ReactNode = null;
+    if (c.id === 'service') {
+      shell = (
+        <ColumnFilterShell label={c.label} active={!!service} summary={service}
+          onClear={() => setService('')}>
+          {close => <ExcServiceFilterBody value={service} onPick={v => { setService(v); close(); }} />}
+        </ColumnFilterShell>
+      );
+    } else if (c.id === 'type') {
+      shell = (
+        <ColumnFilterShell label={c.label} active={!!committedSearch} summary={committedSearch}
+          onClear={() => setSearch('')}>
+          {close => (
+            <SearchField value={search} onChange={setSearch} width="100%" autoFocus
+              aria-label="Search anomaly type or message" placeholder="Search type/message…"
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); close(); } }} />
+          )}
+        </ColumnFilterShell>
+      );
+    } else if (c.id === 'state') {
+      const cur = TABS.find(t => t.key === tab);
+      shell = (
+        <ColumnFilterShell label={c.label} active={tab !== EXCEPTION_TAB_DEFAULT} summary={cur?.label ?? tab}
+          onClear={() => setTab(EXCEPTION_TAB_DEFAULT)}>
+          {close => (
+            <div className="tcf-list" role="radiogroup" aria-label={c.label}>
+              {TABS.map(t => (
+                <label key={t.key} className="tcf-row tcf-row--check" title={t.hint}>
+                  <input type="radio" name="exc-state-filter" checked={tab === t.key}
+                    onChange={() => { setTab(t.key); close(); }} />
+                  <span>{t.label}</span>
+                </label>
+              ))}
+            </div>
+          )}
+        </ColumnFilterShell>
+      );
+    }
+    if (!shell) return c.label;
+    return (
+      <span className="tcf-th">
+        <span className="tcf-th-l">{c.label}</span>
+        {shell}
+      </span>
+    );
+  };
   // v0.10.967 — tablo standardı T12 (dilim 5): yükleniyor / hata / eşleşme
   // yok / boş tablonun İÇİNDE; başlık, eşik şeridi ve Pager yerinde. Hata
   // aynı sunucu metnini ve aynı ↻ Retry'ı (refreshExceptionGroups) taşır;
@@ -690,7 +749,8 @@ export default function ProblemsPage() {
           <table {...dt.tableProps}>
             <DataTableColgroup dt={dt} leading={[24]} />
             <DataTableHead dt={dt}
-              leading={<th style={{ width: 24 }}></th>} />
+              leading={<th style={{ width: 24 }}></th>}
+              renderLabel={renderExcHead} />
             <tbody>
               {filtered.length === 0 ? <DataTableState dt={dt} leading={[24]} {...excTableState} /> : filtered.map(g => {
                 const open = expanded.has(g.fingerprint);
@@ -857,6 +917,39 @@ export default function ProblemsPage() {
           isAdmin={isAdmin}
           onBack={() => setSearchParams(prev => withProblemParam(prev, null), { replace: true })}
         />
+      )}
+    </>
+  );
+}
+
+// ExcServiceFilterBody — v0.10.2025: Service hunisinin gövdesi. Liste
+// ServicePicker'ın AYNI sunucu araması (usePickerSearch → /api/service-names,
+// 180 ms debounce); tam katalog yok, sayfadaki örnekten doğrulama yok.
+// ServicePicker'ın kendisi değil: onun açılır listesi body'ye portal ediliyor
+// ve huni popover'ının dış-tık kapanışı seçimden önce onu söküyor.
+function ExcServiceFilterBody({ value, onPick }: { value: string; onPick: (v: string) => void }) {
+  const tr = useT();
+  const [q, setQ] = useState('');
+  const res = usePickerSearch(q.trim(), '', s => api.serviceNames(s, 50).then(r => ({ items: r.names, total: r.total })));
+  const rows = value && !res.items.includes(value) && (!q || value.includes(q.trim())) ? [value, ...res.items] : res.items;
+  return (
+    <>
+      <SearchField value={q} onChange={setQ} width="100%" autoFocus
+        aria-label={tr('traces.colFilter.search')} placeholder={tr('traces.colFilter.search')}
+        onKeyDown={e => { if (e.key === 'Enter' && rows[0]) { e.preventDefault(); onPick(rows[0]); } }} />
+      <div className="tcf-list" role="radiogroup" aria-label="Service" aria-busy={res.status === 'loading'}>
+        {res.status === 'loading' && res.items.length === 0 && <div className="tcf-state"><Spinner /></div>}
+        {res.status === 'error' && <div className="tcf-state tcf-err">{tr('traces.colFilter.error')}</div>}
+        {res.status === undefined && rows.length === 0 && <div className="tcf-state">Eşleşen servis yok</div>}
+        {rows.map(name => (
+          <label key={name} className="tcf-row tcf-row--check" title={name}>
+            <input type="radio" name="exc-service-filter" checked={name === value} onChange={() => onPick(name)} />
+            <span className="mono tcf-v">{name}</span>
+          </label>
+        ))}
+      </div>
+      {res.total > res.items.length && (
+        <p className="tcf-hint">{fmtNum(res.total)} servisten ilk {res.items.length} — aramayı daralt</p>
       )}
     </>
   );

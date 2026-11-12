@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { Popover } from '@/components/ui/Popover';
@@ -42,23 +42,62 @@ export function ColumnFilter({ colId, label, status, scope, onAction, chipBlocke
 }) {
   const tr = useT();
   const kind = colFilterKind(colId);
+  if (!kind) return null;
+  return (
+    <ColumnFilterShell label={label} active={status.active} summary={status.summary}
+      onClear={() => onAction({ kind: 'clear' })}>
+      {close => (
+        <>
+          {kind === 'status' && (
+            <StatusBody on={status.active} onAction={a => { onAction(a); close(); }} />
+          )}
+          {kind === 'duration' && (
+            <DurationBody min={durationMin ?? ''} max={durationMax ?? ''}
+              onAction={a => { onAction(a); close(); }} />
+          )}
+          {(kind === 'service' || kind === 'operation' || kind === 'attr') && (
+            chipBlocked
+              ? <p className="tcf-note">{tr('traces.colFilter.orBlocked')}</p>
+              : <ValuesBody colId={colId} kind={kind} scope={scope} status={status}
+                  onAction={a => { onAction(a); close(); }} />
+          )}
+        </>
+      )}
+    </ColumnFilterShell>
+  );
+}
+
+// ColumnFilterShell — v0.10.2025 (operatör 2026-11-12: Exceptions başlığına
+// Traces'in hunisi). ColumnFilter'ın tetik + popover + başlık/Temizle kabuğu,
+// gövdesiz: /traces gövdeleri yukarıda, /problems exception listesi kendi
+// süzgeç modelinin gövdelerini (servis seçici / arama / durum) bu kabuğa
+// verir. DOM ve sınıflar (tcf-*) v0.10.1511 ile aynı — etkin işaret
+// (`is-active`), Esc katmanı, başlığa tık sızdırmama dahil.
+export function ColumnFilterShell({ label, active, summary, onClear, children }: {
+  label: string;
+  active: boolean;
+  summary: string;
+  onClear: () => void;
+  children: (close: () => void) => ReactNode;
+}) {
+  const tr = useT();
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
-  if (!kind) return null;
-  const tip = status.active
-    ? `${tr('traces.colFilter.filtered')}: ${status.summary}`
+  const close = () => setOpen(false);
+  const tip = active
+    ? `${tr('traces.colFilter.filtered')}: ${summary}`
     : `${tr('traces.colFilter.filterBy')} ${label}`;
   return (
     <>
       <IconButton ref={btnRef} size="xs" variant="bare"
-        className={status.active ? 'tcf-btn is-active' : 'tcf-btn'}
+        className={active ? 'tcf-btn is-active' : 'tcf-btn'}
         aria-label={`${tr('traces.colFilter.filterBy')} ${label}`}
         aria-haspopup="dialog" aria-expanded={open}
         tooltip={tip}
-        icon={<IconFilter size={11} strokeWidth={status.active ? 2.4 : 1.7} />}
+        icon={<IconFilter size={11} strokeWidth={active ? 2.4 : 1.7} />}
         onClick={e => { e.stopPropagation(); setOpen(o => !o); }}
         onKeyDown={e => { if (e.key !== 'Escape') e.stopPropagation(); }} />
-      <Popover anchorRef={btnRef} open={open} onClose={() => setOpen(false)} kind="dialog"
+      <Popover anchorRef={btnRef} open={open} onClose={close} kind="dialog"
         ariaLabel={`${tr('traces.colFilter.filterBy')} ${label}`} width={300}
         placement={{ align: 'start' }}>
         {/* The popover renders inside the <th>: clicks would sort, Shift+←/→
@@ -67,25 +106,13 @@ export function ColumnFilter({ colId, label, status, scope, onAction, chipBlocke
           onKeyDown={e => { if (e.key !== 'Escape') e.stopPropagation(); }}>
           <div className="tcf-head">
             <span className="tcf-title mono" title={label}>{label}</span>
-            {status.active && (
-              <Button variant="ghost" size="xs" onClick={() => { onAction({ kind: 'clear' }); setOpen(false); }}>
+            {active && (
+              <Button variant="ghost" size="xs" onClick={() => { onClear(); close(); }}>
                 {tr('traces.colFilter.clear')}
               </Button>
             )}
           </div>
-          {kind === 'status' && (
-            <StatusBody on={status.active} onAction={a => { onAction(a); setOpen(false); }} />
-          )}
-          {kind === 'duration' && (
-            <DurationBody min={durationMin ?? ''} max={durationMax ?? ''}
-              onAction={a => { onAction(a); setOpen(false); }} />
-          )}
-          {(kind === 'service' || kind === 'operation' || kind === 'attr') && (
-            chipBlocked
-              ? <p className="tcf-note">{tr('traces.colFilter.orBlocked')}</p>
-              : <ValuesBody colId={colId} kind={kind} scope={scope} status={status}
-                  onAction={a => { onAction(a); setOpen(false); }} />
-          )}
+          {open && children(close)}
         </div>
       </Popover>
     </>
