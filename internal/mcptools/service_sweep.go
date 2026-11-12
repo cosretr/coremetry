@@ -1254,8 +1254,14 @@ func sweepMappedClusters(vals []string, all []ClusterRef) []ClusterRef {
 // span'lerinde eşlenen cluster'lar, yoksa etkinlerin ilk sweepAllClusterMax'ı
 // (+ notlar). v0.10.1288: tembel node kontrolü (ReadNodeCheck) aynı kümeyi okur.
 func sweepPodClusterRefs(ctx context.Context, r sweepReaders, req SweepRequest, all []ClusterRef) ([]string, []string) {
-	var notes []string
-	var refs []string
+	refs, notes, _ := sweepPodClusterRefsMax(ctx, r, req, all, sweepAllClusterMax)
+	return refs, notes
+}
+
+// sweepPodClusterRefsMax — aynı çözüm, eşleme yokken taranacak cluster
+// tavanı çağırandan (v0.10.2049: sağlık kontrolü 3 kullanır). fallback =
+// span'lerden eşleme çıkmadı, etkin cluster'ların başı tarandı.
+func sweepPodClusterRefsMax(ctx context.Context, r sweepReaders, req SweepRequest, all []ClusterRef, fallbackMax int) (refs, notes []string, fallback bool) {
 	if r.clusterValues != nil {
 		vals, err := r.clusterValues(ctx, req.Service, req.From, req.To)
 		if err != nil && len(vals) == 0 {
@@ -1266,10 +1272,11 @@ func sweepPodClusterRefs(ctx context.Context, r sweepReaders, req SweepRequest, 
 		}
 	}
 	if len(refs) == 0 {
+		fallback = true
 		n := len(all)
-		if n > sweepAllClusterMax {
-			n = sweepAllClusterMax
-			notes = append(notes, fmt.Sprintf("servisin span'lerinde eşlenen cluster yok — etkin cluster'ların ilk %d'i tarandı (%d kayıtlı)", sweepAllClusterMax, len(all)))
+		if n > fallbackMax {
+			n = fallbackMax
+			notes = append(notes, fmt.Sprintf("servisin span'lerinde eşlenen cluster yok — etkin cluster'ların ilk %d'i tarandı (%d kayıtlı)", fallbackMax, len(all)))
 		} else {
 			notes = append(notes, "servisin span'lerinde eşlenen cluster yok — tüm etkin cluster'lar tarandı")
 		}
@@ -1277,7 +1284,7 @@ func sweepPodClusterRefs(ctx context.Context, r sweepReaders, req SweepRequest, 
 			refs = append(refs, firstNonEmpty(c.ID, c.Name))
 		}
 	}
-	return refs, notes
+	return refs, notes, fallback
 }
 
 func sweepRunPods(ctx context.Context, r sweepReaders, req SweepRequest) sweepOutcome {

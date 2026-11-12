@@ -90,29 +90,32 @@ const HCCatalogVersion = "hc-v4"
 // Eşikler (spec kontrol kataloğu; ayar YOK — operatör "ayarda vida değil
 // varsayılan" dedi).
 const (
-	hcErrWarnPct      = 2.0
-	hcErrCritPct      = 5.0
-	hcErrMinCount     = 5  // bundan az hatalı span oranı hükme taşımaz (düşük trafik gürültüsü)
-	hcLatMinSpans     = 20 // p95 kıyası için iki pencerede de en az bu kadar span
-	hcLatWarnRatio    = 1.5
-	hcLatCritRatio    = 2.0
-	hcLatMinDeltaMs   = 50 // 4 → 8 ms "2×" bir sorun değildir
-	hcMemWarnPct      = 80.0
-	hcMemCritPct      = 95.0
-	hcCPUWarnPct      = 90.0
-	hcRestartCrit     = 3
-	hcDeployRecent    = 30 * time.Minute
-	hcDeployLookback  = 2 * time.Hour
-	hcAnomalyOngoing  = 10 * time.Minute
-	hcAnomalyReadMax  = 50
-	hcBudget          = 15 * time.Second
-	hcSeenRunes       = 200
-	hcErrRunes        = 120
-	hcShortListMax    = 3
-	hcDefaultWindow   = "15m"
-	hcMaxPodClusters  = sweepAllClusterMax
-	hcPodNamesInSeen  = 2
-	hcTitlesInSeenMax = 2
+	hcErrWarnPct     = 2.0
+	hcErrCritPct     = 5.0
+	hcErrMinCount    = 5  // bundan az hatalı span oranı hükme taşımaz (düşük trafik gürültüsü)
+	hcLatMinSpans    = 20 // p95 kıyası için iki pencerede de en az bu kadar span
+	hcLatWarnRatio   = 1.5
+	hcLatCritRatio   = 2.0
+	hcLatMinDeltaMs  = 50 // 4 → 8 ms "2×" bir sorun değildir
+	hcMemWarnPct     = 80.0
+	hcMemCritPct     = 95.0
+	hcCPUWarnPct     = 90.0
+	hcRestartCrit    = 3
+	hcDeployRecent   = 30 * time.Minute
+	hcDeployLookback = 2 * time.Hour
+	hcAnomalyOngoing = 10 * time.Minute
+	hcAnomalyReadMax = 50
+	hcBudget         = 15 * time.Second
+	hcSeenRunes      = 200
+	hcErrRunes       = 120
+	hcShortListMax   = 3
+	hcDefaultWindow  = "15m"
+	hcMaxPodClusters = sweepAllClusterMax
+	// hcFallbackClusters — v0.10.2049: servisin cluster'ı span'lerden
+	// çözülemezse taranan etkin cluster sayısı (6 → 3; cluster başına ~19 sorgu).
+	hcFallbackClusters = 3
+	hcPodNamesInSeen   = 2
+	hcTitlesInSeenMax  = 2
 )
 
 // HealthcheckRequest — normalize girdi.
@@ -796,17 +799,32 @@ func hcRunPods(ctx context.Context, r hcReaders, service string, from, to time.T
 	if r.servicePods == nil || len(all) == 0 {
 		return hcClassifyPodsOpts(service, ServicePodsResult{}, nil, true, hcAllPodChecks)
 	}
-	refs, _ := sweepPodClusterRefs(ctx, r.sweepReaders, SweepRequest{Service: service, From: from, To: to}, all)
+	refs, _, fallback := sweepPodClusterRefsMax(ctx, r.sweepReaders, SweepRequest{Service: service, From: from, To: to}, all, hcFallbackClusters)
 	if len(refs) > hcMaxPodClusters {
 		refs = refs[:hcMaxPodClusters]
 	}
 	res, err := r.servicePods(ctx, service, refs, from, to, ServicePodsOpts{WaitingReasons: true,
 		Replicas: hcAllPodChecks.replicas, ClusterHealth: hcAllPodChecks.cluster, JBossDS: hcAllPodChecks.datasource})
-	return hcClassifyPodsOpts(service, res, err, false, hcAllPodChecks)
+	o := hcAllPodChecks
+	o.scanNote = hcScanNote(fallback, len(refs), len(all))
+	return hcClassifyPodsOpts(service, res, err, false, o)
 }
 
-// hcPodChecks — pod okumasından türeyen ek cluster kontrolleri.
-type hcPodChecks struct{ replicas, cluster, datasource bool }
+// hcScanNote — SAF: cluster eşlemesi yokken kayıtlıların yalnız bir kısmı
+// tarandıysa "pod bulunamadı" satırına eklenen açıklama; aksi halde boş.
+func hcScanNote(fallback bool, scanned, total int) string {
+	if !fallback || scanned >= total {
+		return ""
+	}
+	return fmt.Sprintf("servisin cluster'ı span'lerden çözülemedi; %d kayıtlı cluster'ın yalnız ilk %d'i tarandı", total, scanned)
+}
+
+// hcPodChecks — pod okumasından türeyen ek cluster kontrolleri. scanNote:
+// kısmi tarama açıklaması (hcScanNote), yalnız "pod bulunamadı" satırında.
+type hcPodChecks struct {
+	replicas, cluster, datasource bool
+	scanNote                      string
+}
 
 // hcAllPodChecks — koşunun açtığı ek kontroller (dilim 2: 9 + 10; dilim 3: 11).
 var hcAllPodChecks = hcPodChecks{replicas: true, cluster: true, datasource: true}
@@ -885,6 +903,8 @@ func hcClassifyPodsOpts(service string, res ServicePodsResult, err error, skippe
 		}
 		if empty == 0 {
 			seen = "taranacak cluster yok"
+		} else if o.scanNote != "" {
+			seen += " — " + o.scanNote
 		}
 		return allUnknown("", seen)
 	}

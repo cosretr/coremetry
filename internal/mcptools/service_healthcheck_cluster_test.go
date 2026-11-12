@@ -5,6 +5,7 @@ package mcptools
 // başına satır; okunamayan kaynak Ölçülemedi, asla İyi.
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -91,5 +92,29 @@ func TestHCPodsWithClusterChecks(t *testing.T) {
 	}
 	if n := len(hcClassifyPodsOpts("orders-api", ServicePodsResult{}, nil, true, all)); n != 5 {
 		t.Fatalf("Thanos yokken 5 satır, got %d", n)
+	}
+}
+
+// v0.10.2049 — cluster eşlemesi yokken tarama 3 cluster'la sınırlı ve kısmi
+// tarama "pod bulunamadı" satırında söylenir (sessiz yanlış-negatif olmasın).
+func TestHealthcheckFallbackClusterCap(t *testing.T) {
+	all := []ClusterRef{{ID: "a"}, {ID: "b"}, {ID: "c"}, {ID: "d"}, {ID: "e"}}
+	refs, _, fb := sweepPodClusterRefsMax(context.Background(), sweepReaders{}, SweepRequest{Service: "orders-api"}, all, hcFallbackClusters)
+	if !fb || len(refs) != 3 || refs[2] != "c" {
+		t.Fatalf("fallback=%v refs=%v, beklenen ilk 3", fb, refs)
+	}
+	if old, _ := sweepPodClusterRefs(context.Background(), sweepReaders{}, SweepRequest{Service: "orders-api"}, all); len(old) != 5 {
+		t.Fatalf("sweep tavanı değişmemeli (≤%d): %v", sweepAllClusterMax, old)
+	}
+	if n := hcScanNote(true, 3, 5); !strings.Contains(n, "5 kayıtlı") || !strings.Contains(n, "ilk 3") {
+		t.Fatalf("not: %q", n)
+	}
+	if hcScanNote(true, 3, 3) != "" || hcScanNote(false, 3, 9) != "" {
+		t.Fatal("tam tarama / eşlenmiş cluster not üretmemeli")
+	}
+	o := hcPodChecks{scanNote: hcScanNote(true, 3, 5)}
+	rows := hcClassifyPodsOpts("orders-api", ServicePodsResult{Thanos: true, Clusters: []ServicePodsCluster{{ID: "a"}, {ID: "b"}, {ID: "c"}}}, nil, false, o)
+	if len(rows) == 0 || rows[0].State != HCUnknown || !strings.Contains(rows[0].Seen, "ilk 3") {
+		t.Fatalf("satır: %+v", rows)
 	}
 }
