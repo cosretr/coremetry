@@ -2,14 +2,17 @@
 // kararsız satır isabet yazdırmaz).
 import { describe, it, expect } from 'vitest';
 import { anomalyEventHref, legacyAnomalyRedirect, mlEventHref } from '@/lib/anomalyHref';
-import { mlStatusSummary, detectorVerdictText, detectorPromoteText, detectorGroup, detectorRows, statusTiles, backfillLabel, durationLabel, gateLabel, stageLabel, signalTickLabel, tickLabel, kindTickLines, baselineStatusLine, resolveAnomaliesTab, resolveMLSignal, scoreLabel, signalScoreLabel } from '@/components/coremetry/anomalies/MLTab';
+import { mlStatusSummary, detectorVerdictText, detectorPromoteText, detectorGroup, detectorRows, statusTiles, backfillLabel, durationLabel, gateLabel, stageLabel, signalTickLabel, tickLabel, kindTickLines, baselineStatusLine, resolveMLSignal, scoreLabel, signalScoreLabel } from '@/components/coremetry/anomalies/MLTab';
 
 describe('log ml slice 0', () => {
-  it('tab resolves unknown to detectors', () => {
-    expect(resolveAnomaliesTab(null)).toBe('detectors');
-    expect(resolveAnomaliesTab('x')).toBe('detectors');
-    expect(resolveAnomaliesTab('ml')).toBe('ml');
-    expect(resolveAnomaliesTab('groups')).toBe('groups'); // v0.10.1828 — Gruplar
+  // v0.10.2027 — /anomalies tek sayfa: sekme çözümü kalktı; eski ?tab= yok sayılır.
+  it('page has no tab bar; legacy ?tab= values land on the single page', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    const page = readFileSync(resolve(__dirname, 'AnomalyStreamsPage.tsx'), 'utf8');
+    expect(page).not.toMatch(/sp\.get\('tab'\)/);
+    expect(page).toContain('<UnifiedAnomalies signal={signal} onSignal={setSignal}');
+    expect(page).toContain('<AnomalyStreams withHistory={false} />');
   });
   it('score label omits hit rate without samples', () => {
     expect(scoreLabel({ detector: 'log_volume', events: 3, samples: 0, hits: 0, hitRate: 0 })).toBe('Log hacmi: 3 olay · karar yok');

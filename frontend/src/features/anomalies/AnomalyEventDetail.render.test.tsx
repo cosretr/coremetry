@@ -201,9 +201,13 @@ describe('AnomalyEventDetail — yalın varsayılan görünüm', () => {
     expect(charts[0].getAttribute('data-op')).toBe('POST /pay');
     expect(charts[0].getAttribute('data-title')).toBe('POST /pay · hata sayısı');
     expect(charts[0].getAttribute('data-empty')).toContain('Bu pencere için seri yok');
-    // Tür rozeti düz Türkçe.
-    expect(el.querySelector('.rb-bar')?.textContent).toContain('Operasyon hatası');
+    // v0.10.2027 — başlık: servis · operasyon + durum; tür rozeti teknik ayrıntıda (düz Türkçe).
+    expect(el.querySelector('[data-testid="anomaly-header"]')?.textContent).toContain('checkout');
+    expect(el.querySelector('[data-testid="anomaly-header"]')?.textContent).toContain('POST /pay');
     expect(el.querySelector('.rb-bar')?.textContent).not.toContain('TRACE OP');
+    expect(el.querySelector('.rb-bar')?.textContent).not.toContain('Operasyon hatası');
+    act(() => { byText(el, 'button', 'Teknik ayrıntı')!.click(); });
+    expect(byText(el, '.pb-sect', 'Teknik ayrıntı')!.textContent).toContain('Operasyon hatası');
     expect(el.querySelector('[data-loghist]')).toBeNull();
     // v0.10.1060 — log dışı türde desen grafiği yok, okuması da yok.
     expect(el.querySelector('[data-pattern-panel]')).toBeNull();
@@ -248,7 +252,8 @@ describe('AnomalyEventDetail — yalın varsayılan görünüm', () => {
     expect(byText(el, '.pb-sect', 'Ne yapabilirim')!.textContent).toContain("Hatalı trace'ler");
     // Bölüm başlığı yeterli: bileşenin İngilizce alt yazısı tam sayfada YOK.
     expect(el.textContent).not.toContain('log volume around the spike');
-    expect(el.querySelector('.rb-bar')?.textContent).toContain('Log deseni');
+    act(() => { byText(el, 'button', 'Teknik ayrıntı')!.click(); });
+    expect(byText(el, '.pb-sect', 'Teknik ayrıntı')!.textContent).toContain('Log deseni');
   });
 
   it('desen okuması düşerse: panel içinde hata, sayfanın geri kalanı ayakta', async () => {
@@ -385,8 +390,8 @@ describe('AnomalyEventHost — önbellek ilk boyama, okuma gerçek', () => {
   it('önbellekte ACTIVE, okuma CLEARED → sayfa CLEARED ve "bitti" der', async () => {
     m.events = { a1: ev({ status: 'cleared' }) };
     const el = await mount('a1', [ev({ status: 'active' })]);
-    expect(el.querySelector('.rb-bar')?.textContent).toContain('CLEARED');
-    expect(el.querySelector('.rb-bar')?.textContent).not.toContain('ACTIVE');
+    expect(el.querySelector('[data-testid="anomaly-header"]')?.textContent).toContain('Bitti');
+    expect(el.querySelector('[data-testid="anomaly-header"]')?.textContent).not.toContain('İzleniyor');
     expect(el.querySelector('.pd-summary__when')?.textContent).toMatch(/bitti$/);
   });
   it('okuma beklerken önbellekteki satır anında çizilir', async () => {
@@ -437,7 +442,12 @@ describe('AnomalyEventDetail — Triyaj', () => {
 // v0.10.1792 — Davis F1.4: tek sade "Yön · taban" satırı; eski satır (alanlar
 // yok) "bilinmiyor"; tabansız olayın tepe oranı "×0.0" değil "taban yok".
 describe('AnomalyEventDetail — yön · taban satırı', () => {
-  const line = (el: HTMLElement) => el.querySelector('[data-testid="anomaly-direction-baseline"]')?.textContent;
+  // v0.10.2027 — satır KAPALI "Teknik ayrıntı"da; okumadan önce açılır.
+  const line = (el: HTMLElement) => {
+    const t = byText(el, 'button', 'Teknik ayrıntı')!;
+    if (t.getAttribute('aria-expanded') === 'false') act(() => { t.click(); });
+    return el.querySelector('[data-testid="anomaly-direction-baseline"]')?.textContent;
+  };
 
   it('eski satır (alan yok) → "bilinmiyor"', async () => {
     const el = await mount('a1');
@@ -454,15 +464,20 @@ describe('AnomalyEventDetail — yön · taban satırı', () => {
     m.events.a1 = ev({ peakRatio: 0, currentRatio: 0, direction: 'up', baselineKind: 'none' });
     const el = await mount('a1');
     expect(line(el)).toBe('Yön · taban: artış · taban yok (ilk görülme)');
-    act(() => { byText(el, 'button', 'Teknik ayrıntı')!.click(); });
-    expect(el.textContent).toContain('taban yok');
+    // v0.10.2027 — tabansız olayda "En yüksek artış" alanı hiç çizilmez.
+    expect(el.textContent).not.toContain('En yüksek artış');
     expect(el.textContent).not.toContain('×0.0');
   });
 });
 
 // v0.10.1799 — Davis FAZ 3 dilim 3: gölge rozeti "Yön · taban" satırının altında.
 describe('AnomalyEventDetail — terfi izi rozeti', () => {
-  const badge = (el: HTMLElement) => el.querySelector('[data-testid="anomaly-promotion"]')?.textContent ?? null;
+  // v0.10.2027 — rozet KAPALI "Teknik ayrıntı"da; okumadan önce açılır.
+  const badge = (el: HTMLElement) => {
+    const t = byText(el, 'button', 'Teknik ayrıntı')!;
+    if (t.getAttribute('aria-expanded') === 'false') act(() => { t.click(); });
+    return el.querySelector('[data-testid="anomaly-promotion"]')?.textContent ?? null;
+  };
 
   it('izsiz olay → rozet yok', async () => {
     const el = await mount('a1');

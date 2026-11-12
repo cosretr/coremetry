@@ -1,7 +1,11 @@
-// AnomalyStreamsPage — /anomalies. v0.10.1743 (log ML dilim 0): iki sekme,
-// URL kaynak (?tab=detectors|logml). Eski dedektörler "Dedektörler"
-// sekmesinde olduğu gibi; "Log ML" sekmesi ayrı tablo (ml_events),
-// karışmaz (docs/audits/ml-audit.md K1).
+// AnomalyStreamsPage — /anomalies. v0.10.2027 (operatör: "Anomalies hâlâ
+// karışık", "tekilleştirme çalışmadı"): TEK SAYFA, sekme yok. Üstte tek liste
+// (UnifiedAnomalies: ML grupları + eski dedektör olayları aynı satır modelinde,
+// süren olaylar üstte, bitenler kapalı bölümde); en altta KAPALI "Teknik
+// ayrıntı / Dedektör durumu" (ML dedektör karnesi + eski dedektörlerin canlı
+// kartları ve susturmaları — silinmedi, yer değiştirdi). Eski ?tab=
+// değerleri (detectors | ml | groups) yok sayılır, aynı sayfa açılır;
+// ?event= / ?replay= tam sayfaya yönlenir (C1).
 import { Navigate, useSearchParams } from 'react-router-dom';
 import { legacyAnomalyRedirect } from '@/lib/anomalyHref';
 import { Topbar } from '@/components/Topbar';
@@ -9,22 +13,15 @@ import { SavedViewsBar } from '@/components/SavedViewsBar';
 import { TriageCrumb } from '@/components/TriageCrumb';
 import { AnomalyStreams } from './streams';
 import { PageShell } from '@/components/coremetry/PageShell';
-import { MLTab, AnomaliesTabBar, resolveAnomaliesTab, resolveMLSignal, type AnomaliesTab, type MLSignal } from '@/components/coremetry/anomalies/MLTab';
-import { GroupsTab } from '@/components/coremetry/anomalies/GroupsTab'; // v0.10.1828
-
+import { MLTab, resolveMLSignal, type MLSignal } from '@/components/coremetry/anomalies/MLTab';
+import { UnifiedAnomalies } from '@/components/coremetry/anomalies/UnifiedAnomalies';
 
 export default function AnomalyStreamsPage() {
   const [sp, setSp] = useSearchParams();
-  const tab = resolveAnomaliesTab(sp.get('tab'));
   const signal = resolveMLSignal(sp.get('signal'));
   const setSignal = (s: MLSignal) => {
     const next = new URLSearchParams(sp);
     if (s) next.set('signal', s); else next.delete('signal');
-    setSp(next, { replace: true });
-  };
-  const setTab = (t: AnomaliesTab) => {
-    const next = new URLSearchParams(sp);
-    if (t === 'detectors') next.delete('tab'); else next.set('tab', t);
     setSp(next, { replace: true });
   };
   const legacy = legacyAnomalyRedirect(sp);
@@ -35,9 +32,8 @@ export default function AnomalyStreamsPage() {
       <PageShell>
         <TriageCrumb label="Anomalies" />
         <SavedViewsBar page="anomalies" />
-        <AnomaliesTabBar value={tab} onChange={setTab} />
-        {tab === 'ml' ? <MLTab signal={signal} onSignal={setSignal} />
-          : tab === 'groups' ? <GroupsTab /> : <AnomalyStreams />}
+        <UnifiedAnomalies signal={signal} onSignal={setSignal}
+          detectorStatus={<><MLTab signal={signal} /><AnomalyStreams withHistory={false} /></>} />
       </PageShell>
     </>
   );

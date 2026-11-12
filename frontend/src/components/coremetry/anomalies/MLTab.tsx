@@ -3,17 +3,12 @@
 // Eski dedektörler kendi sekmesinde; burada yalnız ml_events (gölge) +
 // satır başına «gerçek / değil» + not (anomaly_verdicts 'ml:' önekli) ve
 // üstte dedektör karnesi (30 gün isabet + örnek). Tablo: coremetry DataTable.
-import { useMemo } from 'react';
 import { DataTable } from '@/components/coremetry/DataTable';
 import type { ColumnDef } from '@/components/coremetry/DataTable';
 import { SegmentedControl } from '@/components/coremetry/SegmentedControl';
-import { useMLEvents, useMLScorecard } from '@/lib/queries';
-import { fmtClock, fmtDateTime } from '@/lib/utils';
+import { useMLScorecard } from '@/lib/queries';
 import type { MLEvent, MLDetectorScore, MLGate, MLBackfillProgress, MLTickStatus, MLSignalTick, MLScorecard, MLKindTick, MLBaselineStatus, MLThanosTick } from '@/lib/types';
-import { Link } from 'react-router-dom';
 import { MLPeriodReplay } from './MLPeriodReplay';
-import { mlEventHref } from '@/lib/anomalyHref';
-import { groupRows, groupStatusRank, groupStatusText, type MLGroupRow } from './mlGroupRows';
 import { SIGNAL_KINDS } from '@/lib/signalKind';
 import { SignalKindBadge } from '@/components/coremetry/SignalKindBadge';
 
@@ -263,23 +258,6 @@ const DTECH: ColumnDef<DetectorRow>[] = [
   { id: 'gate', label: 'Problem açma koşulları', flex: true, minWidth: 200, priority: 1, sortValue: r => (r.gate?.ok ? 0 : 1) },
 ];
 
-// v0.10.1828 — 'groups' (Gruplar): anomali grupları (Faz 3); emekli
-// /incidents buraya iner.
-export type AnomaliesTab = 'detectors' | 'ml' | 'groups';
-/** SAF: bilinmeyen değer → detectors (eski linkler bozulmaz). */
-export function resolveAnomaliesTab(raw: string | null): AnomaliesTab {
-  return raw === 'ml' ? 'ml' : raw === 'groups' ? 'groups' : 'detectors';
-}
-
-export function AnomaliesTabBar({ value, onChange }: { value: AnomaliesTab; onChange: (t: AnomaliesTab) => void }) {
-  return (
-    <div className="mb-3">
-      <SegmentedControl<AnomaliesTab> value={value} onChange={onChange} aria-label="Anomali kaynağı"
-        options={[{ value: 'detectors', label: 'Dedektörler' }, { value: 'ml', label: 'ML' }, { value: 'groups', label: 'Gruplar' }]} />
-    </div>
-  );
-}
-
 /** SAF (test): seyrin tepe değeri (sıralama); seyir yoksa -1. */
 export function sparkPeak(e: MLEvent): number {
   return e.spark?.v.length ? Math.max(...e.spark.v) : -1;
@@ -289,50 +267,12 @@ export function sparkPeak(e: MLEvent): number {
 export function mlRowText(e: MLEvent): string {
   return e.summary || `${e.service} · ${ML_DETECTOR_TR[e.detector] ?? e.detector}`;
 }
-const fmtTs = (ns: number) => fmtDateTime(new Date(ns / 1e6));
 
-// v0.10.2021 — olay tablosu: satır = GRUP (mockup anomaly-unified.html "Liste:
-// tek sayfa"). Başlangıç · Servis · Ne oldu · Sinyaller · Durum; fazla sütun
-// yok. "Ne oldu" grubun en güçlü üyesinin sunucu özeti (mlGroupRows.ts).
-// v0.10.2013'ün "Grup" sütunu bu düzende gereksizleşti, kaldırıldı; "gerçek /
-// değil" ve oynatma detay sayfasında.
-const COLS: ColumnDef<MLGroupRow>[] = [
-  { id: 'started', label: 'Başlangıç', width: 110, priority: 1, sortValue: r => r.start },
-  { id: 'service', label: 'Servis', width: 190, minWidth: 140, priority: 1, sortValue: r => r.service, naturalDir: 'asc' },
-  { id: 'headline', label: 'Ne oldu', flex: true, minWidth: 280, sortValue: r => mlRowText(r.lead), naturalDir: 'asc' },
-  { id: 'signals', label: 'Sinyaller', width: 190, minWidth: 120, priority: 2, sortValue: r => r.signals.length },
-  { id: 'status', label: 'Durum', width: 170, minWidth: 130, priority: 1, sortValue: r => groupStatusRank(r.status) * 1e19 + r.start },
-];
-
-
+// v0.10.2027 — /anomalies tek sayfa: olay listesi UnifiedAnomalies'te; MLTab yalnız
+// ML dedektör durumu (özet, karne, teknik detay, dönem oynatma) — sayfanın kapalı
+// "Teknik ayrıntı / Dedektör durumu" bölümünde.
 export function MLTab({ signal = '', onSignal }: { signal?: MLSignal; onSignal?: (s: MLSignal) => void }) {
-  const ev = useMLEvents(signal);
   const sc = useMLScorecard();
-  const rows = useMemo(() => groupRows(ev.data?.items ?? []), [ev.data]);
-  const nowNs = Date.now() * 1e6;
-
-  const renderCell = (r: MLGroupRow, col: ColumnDef<MLGroupRow>) => {
-    switch (col.id) {
-      case 'started': return <span className="font-mono" title={fmtTs(r.start)}>{fmtClock(new Date(r.start / 1e6)).slice(0, 5)}</span>;
-      case 'service': return <span className="dt-trunc font-mono" title={r.service}>{r.service}</span>;
-      case 'headline': return <Link to={mlEventHref(r.lead.id)} className="dt-trunc" title={mlRowText(r.lead)}>{mlRowText(r.lead)}</Link>;
-      case 'signals': return (
-        <span className="inline-flex flex-wrap items-center gap-2">
-          {r.signals.map(k => <SignalKindBadge key={k} kind={k} />)}
-        </span>
-      );
-      case 'status': {
-        const t = groupStatusText(r, nowNs);
-        return r.status === 'running' ? <span className="text-[color:var(--warn)]">{t}</span> : <span className="text-muted-foreground">{t}</span>;
-      }
-      default: return null;
-    }
-  };
-
-  const state = ev.isLoading ? { kind: 'loading' as const }
-    : ev.error ? { kind: 'error' as const, message: 'ML olayları okunamadı' }
-      : { kind: 'empty' as const, message: 'Log ML olayı yok — dedektörler Settings › Anomaly › Log ML\'den açılır; olaylar gölge olarak buraya düşer, Problem üretmez.' };
-
   return (
     <div data-testid="ml-tab" className="flex flex-col gap-3">
       {onSignal && (
@@ -421,13 +361,6 @@ export function MLTab({ signal = '', onSignal }: { signal?: MLSignal; onSignal?:
           </details>
         </>
       )}
-      <h3 className="mt-2 font-semibold">Anomaliler · son 24 saat</h3>
-      <DataTable<MLGroupRow>
-        storageKey="anomalies-ml-groups" columns={COLS} rows={rows} state={state}
-        getRowHref={r => mlEventHref(r.lead.id)}
-        sort={{ initial: { id: 'status', dir: 'desc' } }}
-        getRowKey={r => r.key} renderCell={renderCell} ariaLabel="ML anomalileri" />
-      {ev.data?.truncated && <p className="text-xs text-muted-foreground">Liste 200 satırda kesildi.</p>}
       <MLPeriodReplay signal={signal} />
     </div>
   );

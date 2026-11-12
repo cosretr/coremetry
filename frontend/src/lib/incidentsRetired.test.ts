@@ -57,13 +57,11 @@ describe('kablolama', () => {
     expect(src).toContain('if (!incidentsOn) return <Navigate to={INCIDENTS_RETIRED_HOME} replace />;');
     expect(src).toContain('<Route path="/incident"       element={<Incident />} />');
   });
-  it('Anomalies sayfasında Gruplar segmenti ve boş durumu', () => {
-    const bar = read('../components/coremetry/anomalies/MLTab.tsx');
-    expect(bar).toContain("{ value: 'groups', label: 'Gruplar' }");
+  // v0.10.2027 — Gruplar sekmesi (veri okumuyordu) kalktı; /anomalies tek sayfa
+  // ve ?tab=groups aynı sayfayı açar (eski bağlantılar bozulmaz).
+  it('Anomalies tek sayfa: Gruplar sekmesi yok, ?tab= yok sayılır', () => {
     const page = read('../features/anomalies/AnomalyStreamsPage.tsx');
-    expect(page).toContain("tab === 'groups' ? <GroupsTab />");
-    const groups = read('../components/coremetry/anomalies/GroupsTab.tsx');
-    expect(groups).toContain('Anomali grupları yakında burada: aynı zamanda başlayan, birbirini çağıran servislerdeki anomaliler tek grupta toplanır.');
-    expect(groups).toContain('<Empty ');
+    expect(page).not.toContain('GroupsTab');
+    expect(page).not.toMatch(/sp\.get\('tab'\)/);
   });
 });

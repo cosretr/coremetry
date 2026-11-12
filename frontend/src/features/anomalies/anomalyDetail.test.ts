@@ -11,8 +11,22 @@ import type { CosreChartSpec } from '@/components/cosreChartSpec';
 import {
   ANOMALY_CHART_EMPTY, ANOMALY_KIND_LABEL, ANOMALY_KIND_PLAIN, anomalyChart, anomalyChartWindow, anomalyDurationNs,
   anomalySignalHrefs, behaviorDetailsOf, findAnomalyEventInCache, hourOfWeekLabel, isLogAnomalyKind,
-  isTraceAnomalyKind, parseBehaviorDetails, sampleTraceHref,
+  isTraceAnomalyKind, parseBehaviorDetails, sampleTraceHref, showRootCauseInSummary, spikeDurationLabel,
 } from './anomalyDetail';
+
+// v0.10.2027 — tek düzen: anlamsız alanlar gizlenir, düşük güvenli kök neden özette yok.
+describe('detay sadeleştirme', () => {
+  it('sıfır süre "tek ölçüm"; açık olay "· sürüyor"', () => {
+    expect(spikeDurationLabel('active', 0, '0s')).toBe('tek ölçüm');
+    expect(spikeDurationLabel('active', 600e9, '10m')).toBe('10m · sürüyor');
+    expect(spikeDurationLabel('cleared', 600e9, '10m')).toBe('10m');
+  });
+  it('kök neden özette yalnız güven ≥ %50', () => {
+    expect(showRootCauseInSummary(0.31)).toBe(false);
+    expect(showRootCauseInSummary(0.5)).toBe(true);
+    expect(showRootCauseInSummary(undefined)).toBe(false);
+  });
+});
 
 const MIN = 60 * 1e9;
 // Dakikaya hizalı bir an (1_700_000_040 s / 60 tam sayı) — pencere uçları

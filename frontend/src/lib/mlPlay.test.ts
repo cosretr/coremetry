@@ -55,9 +55,11 @@ describe('mlPlay', () => {
   // v0.10.2021 — liste satırı = grup (mockup anomaly-unified.html): "Olayı izle"
   // sütunu kalktı (fazla sütun yok); oynatma detay sayfasından. Satır tıkı
   // grubun en güçlü üyesinin detayını OYNATMADAN açar.
-  it('row click (getRowHref) opens the group lead without play', () => {
-    const src = readFileSync(resolve(__dirname, '../components/coremetry/anomalies/MLTab.tsx'), 'utf8');
+  // v0.10.2027 — liste UnifiedAnomalies'e taşındı; satır href'i satırın kendi
+  // hedefi (ML grubunda en güçlü üye, mlEventHref — oynatmasız).
+  it('row click (getRowHref) opens the row target without play', () => {
+    const src = readFileSync(resolve(__dirname, '../components/coremetry/anomalies/UnifiedAnomalies.tsx'), 'utf8');
     expect(src).not.toMatch(/mlEventPlayHref/);
-    expect(src).toMatch(/getRowHref=\{r => mlEventHref\(r\.lead\.id\)\}/);
+    expect(src).toMatch(/getRowHref=\{r => r\.href\}/);
   });
 });

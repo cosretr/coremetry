@@ -33,13 +33,13 @@ describe('thanosTickText', () => {
 });
 
 // v0.10.2021 — liste: satır = grup, mockup sütunları, fazla sütun yok.
-describe('ML olay tablosu', () => {
-  const src = readFileSync(resolve(__dirname, 'MLTab.tsx'), 'utf8');
+// v0.10.2027 — liste /anomalies tek sayfasında (UnifiedAnomalies).
+describe('anomali tablosu', () => {
+  const src = readFileSync(resolve(__dirname, 'UnifiedAnomalies.tsx'), 'utf8');
   it('sütun sırası Başlangıç · Servis · Ne oldu · Sinyaller · Durum', () => {
     const ids = [...src.matchAll(/\{ id: '(\w+)', label: '([^']+)'/g)].map(m => m[1]);
-    const i = ids.indexOf('started');
-    expect(ids.slice(i, i + 5)).toEqual(['started', 'service', 'headline', 'signals', 'status']);
-    expect(src).not.toContain("id: 'group'");
-    expect(src).toContain('storageKey="anomalies-ml-groups"');
+    expect(ids).toEqual(['started', 'service', 'headline', 'signals', 'status']);
+    expect(src).toContain('storageKey="anomalies-unified"');
+    expect(src).toContain('Bitenler (');
   });
 });

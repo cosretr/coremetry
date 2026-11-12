@@ -296,3 +296,17 @@ export function anomalyChart(
 
 /** Seyir grafiği boşken sayfanın kendi notu (sohbetin çit-dili notu değil). */
 export const ANOMALY_CHART_EMPTY = 'Bu pencere için seri yok — olay saklama süresinin dışında olabilir.';
+
+/** SAF (v0.10.2027; operatör: "0s · sürüyor" anlamsız): süre metni. Sıfır
+ *  süre = tek gözlem → "tek ölçüm"; açık olay "· sürüyor" eki alır. */
+export function spikeDurationLabel(status: string, durationNs: number, formatted: string): string {
+  if (!(durationNs > 0)) return 'tek ölçüm';
+  return status === 'active' ? `${formatted} · sürüyor` : formatted;
+}
+
+/** SAF (v0.10.2027): kök neden özetinin özet bölümünde gösterilip
+ *  gösterilmeyeceği — güveni %50'nin altındaki aday yalnız teknik ayrıntıda. */
+export const ROOT_CAUSE_SUMMARY_MIN_CONFIDENCE = 0.5;
+export function showRootCauseInSummary(confidence: number | undefined | null): boolean {
+  return typeof confidence === 'number' && confidence >= ROOT_CAUSE_SUMMARY_MIN_CONFIDENCE;
+}

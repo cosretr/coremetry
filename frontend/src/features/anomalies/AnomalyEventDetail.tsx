@@ -15,8 +15,7 @@ import { CosreChart } from '@/components/CosreChart';
 import { ProblemVerdictActions } from '@/components/ProblemVerdictActions';
 import { ProblemStandardHeader } from './ProblemStandardHeader'; // v0.10.1529
 import { api } from '@/lib/api';
-import { keys, useAnomalyEventByID, useLogPatternSeries } from '@/lib/queries';
-import { anomalyPlainHeadline, anomalyPlainSummary } from '@/lib/anomalyNarrative';
+import { keys, useAnomalyEventByID, useAnomalyEvents, useLogPatternSeries, useMLEvents } from '@/lib/queries';
 import { useEscLayer } from '@/lib/escLayer';
 import { DEFAULT_DURATIONS } from '@/lib/actions';
 import { anomalyEventSilenceBody } from '@/lib/inboxDrawer';
@@ -27,8 +26,13 @@ import { Sect, SignalLink, DeployBox, DetailSummary } from './detailSections';
 import { anomalySummary, anomalyWhenLine } from './detailSummary';
 import {
   ANOMALY_CHART_EMPTY, ANOMALY_KIND_PLAIN, anomalyChart, anomalyChartWindow, anomalySignalHrefs,
-  anomalyDirectionBaselineLine, anomalyPromotionBadge, behaviorDetailsOf, findAnomalyEventInCache, isLogAnomalyKind, sampleTraceHref,
+  anomalyDirectionBaselineLine, anomalyPromotionBadge, behaviorDetailsOf, findAnomalyEventInCache, isLogAnomalyKind, isTraceAnomalyKind,
+  sampleTraceHref, showRootCauseInSummary,
 } from './anomalyDetail';
+import { SignalKindBadge } from '@/components/coremetry/SignalKindBadge';
+import { signalKindOf, type SignalKind } from '@/lib/signalKind';
+import { legacyEvidenceText, legacySignal, legacySource, legacyStatusText, unifiedRows } from '@/components/coremetry/anomalies/unifiedRows';
+import { evidenceSource } from '@/components/coremetry/anomalies/mlGroupDetail';
 import { AnomalyLogVolume, AnomalySample, BehaviorDetailsBox, SpikeFacts } from './anomalyDetailParts';
 import { hasLogPatternSeries, logPatternSeriesArgs, patternLogsPivot } from './logPatternSeries';
 import { LogPatternCountSection } from './LogPatternCountSection';
@@ -188,40 +192,38 @@ export function AnomalyEventDetail({ event, isAdmin, onBack }: {
   const when = anomalyWhenLine(event);
   const promotionBadge = anomalyPromotionBadge(event); // v0.10.1799
 
+  const rcInSummary = showRootCauseInSummary(event.rootCause?.confidence);
+  const rootCause = (
+    <RootCauseRibbon anchor="anomaly" id={event.id} summary={event.rootCause}
+      window={win}
+      trailing={(
+        <AIExplainButton subject={{ kind: 'anomaly', id: event.id }}
+          label={<><IconSparkles /> <span>{tr('ai.askCosre')}</span></>} />
+      )} />
+  );
+
+  // v0.10.2027 — TEK düzen (ML grup sayfasıyla aynı; mockup anomaly-unified.html):
+  // başlık (servis · operasyon + durum) → tek cümle → tek grafik → kanıt
+  // satırları → eylemler → KAPALI "Teknik ayrıntı". Tür rozeti, yön/taban
+  // satırı, standart başlık, olgu ızgarası ve güveni düşük kök neden teknik
+  // ayrıntıda. Anlamsız alanlar (0 sn süre, "taban yok") gösterilmez.
   return (
     <PageShell>
       <div className="rb-bar">
         <Button variant="secondary" onClick={onBack} leftIcon={<ArrowLeft size={14} strokeWidth={1.75} />}>
           Problems
         </Button>
-        {/* v0.10.929 (K5) — çekmeceyle AYNI ton: ACTIVE normal durum → nötr;
-            CLEARED bir geçiş, yeşil kalır. */}
-        <Badge tone={event.status === 'active' ? 'neutral' : 'success'}>
-          {event.status === 'active' ? 'ACTIVE' : 'CLEARED'}
-        </Badge>
-        {/* v0.10.1032 (inceleme) — tür rozeti düz Türkçe ("Operasyon hatası"). */}
-        <span className="badge b-gray">{ANOMALY_KIND_PLAIN[event.kind] ?? String(event.kind)}</span>
         <span className="spacer" />
         <ShareButton copiedLabel="Copied" />
       </div>
 
-      {/* Ne oldu + ne zaman. Log türlerinde cümle "bu desen" diyor — hangi
-          desen olduğu hemen altında (sayı değil, kimlik). */}
-      {/* v0.10.1529 (Problem standardı R2) — standart başlık; yüklenene ya da
-          bulunamayana dek önceki özet (fallback). Desen kimliği başlığın altında. */}
-      {/* C3 (v0.10.1771) — insan diliyle başlık + tek satır özet, jargon yok. */}
-      <h2 style={{ margin: '8px 0 2px', fontSize: 'var(--fs-lg)', fontWeight: 600 }} data-testid="anomaly-headline">{anomalyPlainHeadline(event)}</h2>
-      <p style={{ margin: '0 0 8px', fontSize: 13, color: 'var(--text3)' }}>{anomalyPlainSummary(event)}</p>
-      {/* v0.10.1792 (Davis F1.4) — tek sade satır: yön + taban türü (eski satır "bilinmiyor"). */}
-      <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--text3)' }} data-testid="anomaly-direction-baseline">
-        Yön · taban: {anomalyDirectionBaselineLine(event)}
-      </p>
-      {/* v0.10.1799 (Davis FAZ 3) — terfi izi rozeti; izsiz olayda hiçbir şey. */}
-      {promotionBadge && (
-        <p style={{ margin: '0 0 8px' }} data-testid="anomaly-promotion">
-          <Badge tone={event.promotion === 'live' ? 'warning' : 'info'}>{promotionBadge}</Badge>
-        </p>
-      )}
+      <div data-testid="anomaly-header" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', margin: '8px 0 2px', fontSize: 13 }}>
+        <span className="mono">{event.service || '—'}</span>
+        {isTraceAnomalyKind(event.kind) && event.pattern && <span className="mono" style={{ color: 'var(--text3)' }}>· {event.pattern}</span>}
+        <Badge tone={event.status === 'active' ? 'neutral' : 'success'}>{legacyStatusText(event, Date.now() * 1e6)}</Badge>
+      </div>
+      {/* Tek düz cümle: standart başlık (sunucu); yüklenene ya da bulunamayana
+          dek olayın özeti + ne zaman satırı. Log türünde desen kimliği altında. */}
       <ProblemStandardHeader stdRef={`anomaly:${event.id}`}
         fallback={<DetailSummary sentence={sentence} when={when}
           detail={isLog && event.pattern ? event.pattern : undefined} />} />
@@ -229,66 +231,52 @@ export function AnomalyEventDetail({ event, isAdmin, onBack }: {
       <AnomalyTriage event={event} isAdmin={isAdmin} onBack={onBack} />
 
       <div className="pd-cols pd-cols-15">
-        {/* ── Sol kolon: türün tek grafiği, kök neden, teknik ayrıntı ── */}
         <div style={{ minWidth: 0 }}>
-          {/* v0.10.1060 (operatör: "artışın ne zaman başladığını
-              göstermiyor. Elastic'e gidip bakınca barlardan net görüyorum")
-              — log_pattern'ın tek grafiği desenin KENDİ sayısı (bar, olay
-              başlangıcında işaret); servisin genel log hacmi bu türde
-              çizilmez ("Logları aç" pivotu duruyor). */}
-          {patternSeries && <LogPatternCountSection event={event} />}
-          {/* Diğer log biçimli türler (yeni log biçimi, Elastic ML): servisin
-              spike çevresindeki log hacmi — çekmeceyle aynı TEK sınırlı çağrı,
-              yalnız sayfa açıkken. */}
-          {isLog && !patternSeries && event.service && (
-            <Sect title="Log hacmi" sub="servis · olay penceresi">
-              {/* Bölüm başlığı zaten söylüyor: bileşenin İngilizce alt yazısı
-                  burada basılmaz; boş / hata için sayfanın kendi notu. */}
-              <AnomalyLogVolume service={event.service} win={win} bare />
-            </Sect>
-          )}
-          {/* Trace / gecikme / davranış türleri: olayın KENDİ sinyali, olay
-              penceresiyle, düz Türkçe başlıkla. Mevcut CosreChart: tek sınırlı
-              span sorgusu, yoklama YOK, yeni uç YOK. Çizilemeyen tür (dış
-              kaynak metriği, ayrıştırılamayan kanıt) için bölüm hiç çizilmez —
-              ilgisiz bir seri "grafik var" güvenini yanlış yere taşırdı. */}
-          {chart && (
-            <Sect title="Seyir" sub={chart.spec.operation ? 'operasyon · olay penceresi' : 'servis · olay penceresi'}>
-              <CosreChart spec={chart.spec} presentation={chartPresentation} />
-            </Sect>
-          )}
+          {/* TEK grafik: türün kendi sinyali (desen sayısı | log hacmi | seyir). */}
+          {patternSeries ? <LogPatternCountSection event={event} />
+            : isLog && event.service ? (
+              <Sect title="Log hacmi" sub="servis · olay penceresi">
+                <AnomalyLogVolume service={event.service} win={win} bare />
+              </Sect>
+            ) : chart ? (
+              <Sect title="Seyir" sub={chart.spec.operation ? 'operasyon · olay penceresi' : 'servis · olay penceresi'}>
+                <CosreChart spec={chart.spec} presentation={chartPresentation} />
+              </Sect>
+            ) : null}
 
-          <Sect title="Kök neden">
-            {/* KAPALI şerit (operatör: "çok detay verince daha anlaşılır
-                olmuyor"): çip sıfır istek; tık tam kök-neden dökümünü O ZAMAN
-                çeker. AI açıklaması CoSRE sohbetinin bir turu (?ai=anomaly:<id>;
-                v0.10.1407 — /anomalies çekmecesindeki satır-içi istisna da kalktı). */}
-            <RootCauseRibbon anchor="anomaly" id={event.id} summary={event.rootCause}
-              window={win}
-              trailing={(
-                <AIExplainButton subject={{ kind: 'anomaly', id: event.id }}
-                  label={<><IconSparkles /> <span>{tr('ai.askCosre')}</span></>} />
-              )} />
+          <Sect title="Kanıt">
+            <AnomalyEvidenceRows event={event} />
           </Sect>
+
+          {/* Güveni yeterli kök neden özette; düşükse yalnız teknik ayrıntıda. */}
+          {rcInSummary && <Sect title="Kök neden">{rootCause}</Sect>}
 
           {/* Geri kalan her şey TEK kapalı bölümde; kapalıyken mount edilmez. */}
           <Sect title="Teknik ayrıntı" collapsible>
+            <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--text3)' }}>
+              Tür: <span className="badge b-gray">{ANOMALY_KIND_PLAIN[event.kind] ?? String(event.kind)}</span>
+            </p>
+            <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--text3)' }} data-testid="anomaly-direction-baseline">
+              Yön · taban: {anomalyDirectionBaselineLine(event)}
+            </p>
+            {promotionBadge && (
+              <p style={{ margin: '0 0 8px' }} data-testid="anomaly-promotion">
+                <Badge tone={event.promotion === 'live' ? 'warning' : 'info'}>{promotionBadge}</Badge>
+              </p>
+            )}
+            {!rcInSummary && <div style={{ margin: '8px 0' }}>{rootCause}</div>}
             <AnomalyTechnical event={event} win={win} hasDetails={!!details} sampleIsTrace={!!sampleTrace} />
             {details && <BehaviorDetailsBox d={details} />}
           </Sect>
         </div>
 
-        {/* ── Sağ kolon: ne yapabilirim ── */}
         <div style={{ minWidth: 0 }}>
           <Sect title="Ne yapabilirim">
-            {/* Servis adı gerektiren pivotlar servis yoksa hiç basılmaz —
-                boş açılan bir liste "olay yok" diye okunur (v0.9.1331).
-                v0.10.1062 — servissiz log deseni olayında servis gerekmez:
-                desene uyan satırlar (PatternLogsAction). */}
             {hrefs ? (
               <>
                 <SignalLink to={hrefs.logs} label="Logları aç"
-                  sub={patternSeries ? 'servis + desen, olay penceresi' : 'servis, olay penceresi'} />
+                  sub={patternSeries ? 'servis + desen, olay penceresi'
+                    : event.kind === 'log_template_new' && event.logQuery ? 'servis + bu kalıp, olay penceresi' : 'servis, olay penceresi'} />
                 {hrefs.operationTraces
                   ? <SignalLink to={hrefs.operationTraces}
                       label={event.kind === 'trace_op' ? "Operasyonun hatalı trace'leri" : "Operasyonun trace'leri"}
@@ -308,6 +296,38 @@ export function AnomalyEventDetail({ event, isAdmin, onBack }: {
         </div>
       </div>
     </PageShell>
+  );
+}
+
+// AnomalyEvidenceRows — v0.10.2027: kanıt satırları (sinyal çipi + bir cümle +
+// kaynak notu). Olayın birleşik listedeki satırı (aynı servis, aynı zaman:
+// ML grubu + eski dedektör olayları) liste uçlarının önbelleğinden; satır
+// bulunamazsa yalnız bu olay. Yeni istek yok (aynı sorgu anahtarları).
+function AnomalyEvidenceRows({ event }: { event: AnomalyEvent }) {
+  const ml = useMLEvents('');
+  const legacy = useAnomalyEvents();
+  const row = useMemo(
+    () => unifiedRows(ml.data?.items ?? [], legacy.data?.items ?? []).find(r => r.legacy.some(e => e.id === event.id)) ?? null,
+    [ml.data, legacy.data, event.id]);
+  const others = (row?.legacy ?? []).filter(e => e.id !== event.id);
+  const items: { key: string; kind: SignalKind; text: string; source: string }[] = [
+    { key: event.id, kind: legacySignal(event), text: legacyEvidenceText(event), source: legacySource(event) },
+    ...others.map(e => ({ key: e.id, kind: legacySignal(e), text: legacyEvidenceText(e), source: legacySource(e) })),
+    ...(row?.ml ?? []).flatMap(g => g.members.map(m => ({
+      key: `ml:${m.id}`, kind: signalKindOf(m.detector, m.signal), text: m.summary || m.detector,
+      source: evidenceSource(m.detector, m.signal, m.evidence),
+    }))),
+  ];
+  return (
+    <ul data-testid="anomaly-evidence-rows" style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 6 }}>
+      {items.map(it => (
+        <li key={it.key} style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'baseline', fontSize: 13 }}>
+          <SignalKindBadge kind={it.kind} />
+          <span style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>{it.text}</span>
+          <span style={{ fontSize: 12, color: 'var(--text3)' }}>{it.source}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 

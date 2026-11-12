@@ -4,7 +4,7 @@ import { fmtNum, tsLong } from '@/lib/utils';
 import type { AnomalyEvent, BehaviorChangeDetails } from '@/lib/types';
 import { fmtDurationNs } from './problemTime';
 import { anomalyRatioLabel } from '@/lib/anomalyBaseline';
-import { ANOMALY_CHART_EMPTY, anomalyDurationNs, hourOfWeekLabel } from './anomalyDetail';
+import { ANOMALY_CHART_EMPTY, anomalyDurationNs, hourOfWeekLabel, spikeDurationLabel } from './anomalyDetail';
 
 // anomalyDetailParts — anomali olayı detayının görsel parçaları (v0.10.1032).
 //
@@ -44,12 +44,14 @@ export function SpikeFacts({ event }: { event: AnomalyEvent }) {
     }}>
       <Fact k="Başladı" v={tsLong(event.startedAt)} />
       <Fact k="Son görülme" v={tsLong(event.lastSeen)} />
-      <Fact k="Süre" v={event.status === 'active'
-        ? `${fmtDurationNs(durationNs)} · sürüyor`
-        : fmtDurationNs(durationNs)} />
-      {/* v0.10.1792 — tabansız olayda "×0.0" değil "taban yok" (Davis F1.4). */}
-      <Fact k="En yüksek artış" v={anomalyRatioLabel(event)}
-        title="Tepe sayım / spike öncesi taban penceresi" />
+      {/* v0.10.2027 (operatör: "0s · sürüyor" anlamsız) — tek gözlemli olay "tek ölçüm". */}
+      <Fact k="Süre" v={spikeDurationLabel(event.status, durationNs, fmtDurationNs(durationNs))} />
+      {/* v0.10.1792 — tabansız olayda "×0.0" değil "taban yok" (Davis F1.4).
+          v0.10.2027 — tabansız olayda alan hiç çizilmez ("taban yok" bilgi değil). */}
+      {event.baselineKind !== 'none' && event.peakRatio > 0 && (
+        <Fact k="En yüksek artış" v={anomalyRatioLabel(event)}
+          title="Tepe sayım / spike öncesi taban penceresi" />
+      )}
       {event.currentRatio > 0 && (
         <Fact k="Şimdiki artış" v={`×${event.currentRatio.toFixed(1)}`} />
       )}

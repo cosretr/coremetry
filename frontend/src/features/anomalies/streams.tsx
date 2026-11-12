@@ -49,7 +49,9 @@ import { SubjectLink } from '../../components/SubjectLink';
 // Query hook (mute/unmute mutations invalidate the matching cache).
 // Returns a single render block — the consumer wraps it in a Topbar
 // + #content if used as a top-level page.
-export function AnomalyStreams() {
+// v0.10.2027 — withHistory=false: /anomalies tek sayfasının kapalı "Dedektör
+// durumu" bölümü; olay geçmişi tablosu orada çizilmez (tek liste UnifiedAnomalies).
+export function AnomalyStreams({ withHistory = true }: { withHistory?: boolean } = {}) {
   const confirm = useConfirm();
   const { user } = useAuth();
   // Editor+ can mute/unmute; viewers see the silence chips and
@@ -109,7 +111,7 @@ export function AnomalyStreams() {
       <LogPatternsSection items={logPatterns} onMute={onMute} canEdit={canEdit} />
       <TraceOpsSection    items={traceOps}    onMute={onMute} canEdit={canEdit} />
       <MetricSection      items={metrics} />
-      <HistorySection items={history} meta={historyMeta} error={historyQ.isError} />
+      {withHistory && <HistorySection items={history} meta={historyMeta} error={historyQ.isError} />}
     </>
   );
 }
