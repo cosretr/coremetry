@@ -11,7 +11,7 @@ package chstore
 // 1746'dan beri `anomaly.scan()` erken dönüşü onu da susturuyordu
 // (anomaly-reassessment-audit N3); şimdi `runIfLeader` kapıdan ayrı çağırır.
 // Aynı kapının arkasında KALANLAR (metric_anomaly kapalıyken koşmaz):
-// error_ramp, takvim düşüşü, service_silent, kümeleme, heap bandı, Davis
+// error_ramp, takvim düşüşü, kümeleme, heap bandı, Davis
 // özneleri ve davranış motoru; evaluator'da anomali terfi süpürmesi.
 // Kendi anahtarı olan dedektörler burada tekrar listelenmez: op_latency
 // (varsayılan AÇIK, v0.10.1085; yerel kapı dışında), log_template_new ve

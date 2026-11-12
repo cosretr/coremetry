@@ -53,7 +53,7 @@ const baseSens = (extra: Partial<AnomalySensitivityConfig> = {}): Record<string,
     p99_ms: { floorPct: 0.1, absFloor: 10, minAbsDelta: 0, minMAD: 1, minBaselineRate: 0 },
     request_rate: { floorPct: 0.15, absFloor: 0, minAbsDelta: 0, minMAD: 0, minBaselineRate: 0 },
   },
-  dwellBuckets: 3, criticalZ: 6, attachToIncident: true, serviceSilent: false,
+  dwellBuckets: 3, criticalZ: 6, attachToIncident: true,
   batchServicePatterns: ['-batch'],
   ...extra,
 });

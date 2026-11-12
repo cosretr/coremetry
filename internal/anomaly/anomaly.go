@@ -786,27 +786,6 @@ func (d *Detector) scan(ctx context.Context) {
 		}
 		d.applyOutcome(ctx, pa.service, pa.metric, pa.oc, snap, sens)
 	}
-	// v0.10.543 — service_silent dedektörü VARSAYILAN KAPALI (operatör:
-	// "Olmasınlar"). Kapalıyken açık kalan service_silent problemleri bu
-	// tikte çözülür ki prod'daki 100+ "Anomaly · Service silent" incident'ı
-	// kaskadla kapansın; açıkken eski davranış aynen.
-	if !sens.ServiceSilentEnabled() {
-		d.resolveSilentProblems(ctx, snap)
-	} else {
-		for _, svc := range services {
-			// v0.9.1051 (Faz 0.3) — servis-sustu kontrolü, servis başına BİR
-			// kez. Hacim serisi metrikten bağımsız (istek sayısı); ilk izlenen
-			// metriğin toplu okumasından gelir, ek sorgu yok. tracked boşsa
-			// (operatör her şeyi kapattıysa) bu kontrol de kapalı — bilinçli:
-			// izleme tamamen kapatılmışken arka kapıdan problem açmazız.
-			if len(tracked) > 0 {
-				if rates := seriesFor(ratesByMetric[tracked[0]], svc); len(rates) > 0 {
-					d.checkSilence(ctx, svc, rates, snap, sens)
-				}
-			}
-		}
-	}
-
 	// v0.9.936 — DAVRANIŞ MOTORU, aynı tikin sonunda.
 	//
 	// SONDA olması bilinçli: ani-sapma dedektörü operatörün bugün
@@ -1037,8 +1016,8 @@ func (d *Detector) applyOutcome(ctx context.Context, service, metric string, oc 
 		// "veri olmadığı için" düşer — bu toparlanma değil, sinyal kaybı.
 		// Problem yine kapanır (v0.9.449 donmuş-kuyruk kararı: hacim
 		// kapısı çözülmeye uygulanmaz), ama "recovered" DEĞİL "source
-		// silent" gerekçesiyle; asıl kayıp aynı tikte checkSilence'ın
-		// açtığı critical service_silent problemi olarak görünür kalır.
+		// silent" gerekçesiyle. (Ayrı service_silent problemi v0.10.2068'de
+		// dedektörüyle birlikte kalktı; operatör kararı v0.10.543.)
 		latestHasData := oc.LatestHasData
 		reason := "recovered"
 		if !latestHasData {
@@ -1055,29 +1034,6 @@ func (d *Detector) applyOutcome(ctx context.Context, service, metric string, oc 
 	}
 }
 
-// ─── service_silent dedektörü (v0.9.1051, Faz 0.3) ─────────────────────
-//
-// "Servis tamamen sustu" en pahalı arıza sınıfıydı ve varsayılan
-// kurulumda TAMAMEN KÖRDÜ: request_rate izlemesi varsayılan kapalı,
-// gömülü kuralların hiçbiri rate değil; üstelik susan servisin açık
-// p99/error anomalisi resolve bandına "veri yokluğundan" girip
-// kapanıyordu — servis ölünce ekran temizleniyordu.
-//
-// Kapı bilinçli MUHAFAZAKÂR: baseline'da İSTİKRARLI trafik şartı
-// (aktif-kova payı ≥ %90) batch/cron servislerini dışarıda tutar —
-// onların baseline'ı zaten sıfırlarla dolu, 15 dakikalık sessizlik
-// olağan. comparator '<' + value 0 sayesinde P1 "tamamen kayıp" kapısı
-// (problem_priority) doğal tetiklenir.
-
-const (
-	// silentTrailingBuckets — kaç ardışık SIFIR kovası "sustu" sayılır
-	// (3 × 5dk = 15dk). Tek kova scrape/ingest gecikmesi olabilir.
-	silentTrailingBuckets = 3
-	// silentMinActiveShare — baseline kovalarının en az bu payı trafik
-	// taşımalı ki "istikrarlı akış kesildi" iddiası dürüst olsun.
-	silentMinActiveShare = 0.9
-)
-
 // trimTrailingSilent — baseline diliminin KUYRUĞUNDAKİ veri-yok
 // (rate==0) koşusunu kırpar (v0.9.1052, Q3 — padTrailingSilence
 // sıfırları baseline'a taşmasın). İçerideki sıfırlara DOKUNMAZ:
@@ -1093,129 +1049,6 @@ func trimTrailingSilent(values, rates []float64) []float64 {
 		n--
 	}
 	return values[:n]
-}
-
-// silenceVerdict — saf, tablo-testli. rates = 5dk hacim serisi
-// (padTrailingSilence'tan geçmiş, yani eksik kuyruk kovaları sıfır).
-// silent=true: son `trailing` kova tamamen sıfır VE baseline istikrarlı
-// trafik taşıyor. baselineRate = baseline medyanı (problem satırının
-// Threshold'u).
-func silenceVerdict(rates []float64, trailing int, minActiveShare float64) (silent bool, baselineRate float64) {
-	if trailing <= 0 || len(rates) < trailing+minSamples {
-		return false, 0
-	}
-	split := len(rates) - trailing
-	for _, v := range rates[split:] {
-		if v > 0 {
-			return false, 0
-		}
-	}
-	base := rates[:split]
-	active := 0
-	for _, v := range base {
-		if v > 0 {
-			active++
-		}
-	}
-	if float64(active) < minActiveShare*float64(len(base)) {
-		return false, 0
-	}
-	med, _ := medianMAD(base)
-	if med <= 0 {
-		return false, 0
-	}
-	return true, med
-}
-
-// checkSilence — scan()'in servis başına BİR kez çağırdığı taraf-etkili
-// yarı: silenceVerdict'e göre critical service_silent problemi açar/
-// tazeler, trafik dönünce hızlı-çözer. Ek CH okuması SIFIR — rates
-// serisi zaten tikin toplu okumasından geliyor.
-// silentProblemsToResolve — v0.10.543: açık service_silent problemleri
-// (RuleID soneki). SAF; tablo-testli.
-func silentProblemsToResolve(all []*chstore.Problem) []*chstore.Problem {
-	out := make([]*chstore.Problem, 0)
-	for _, p := range all {
-		if p != nil && p.ID != "" && strings.HasSuffix(p.RuleID, ":service_silent") {
-			out = append(out, p)
-		}
-	}
-	return out
-}
-
-// resolveSilentProblems — dedektör kapalıyken açık service_silent
-// problemlerini kapatır (gerekçe açıklamada; incident kaskadı evaluator
-// süpürmesinde). Snapshot bellekte: ek sorgu yok.
-func (d *Detector) resolveSilentProblems(ctx context.Context, openSnap *chstore.OpenProblems) {
-	for _, p := range silentProblemsToResolve(openSnap.All()) {
-		p.Description = strings.TrimRight(p.Description, " ") + " Resolved: service-silent detector disabled in Settings → Anomaly (v0.10.543)."
-		chstore.MarkResolved(p, time.Now().UnixNano())
-		if err := d.store.UpsertProblem(ctx, *p); err != nil {
-			log.Printf("[anomaly] resolve %s (service_silent disabled): %v", p.RuleID, err)
-			continue
-		}
-		log.Printf("[anomaly] RESOLVED %s · service_silent (detector disabled)", p.Service)
-	}
-}
-
-func (d *Detector) checkSilence(ctx context.Context, service string, rates []float64, openSnap *chstore.OpenProblems, cfg chstore.AnomalySensitivityConfig) {
-	ruleID := "anomaly:" + service + ":service_silent"
-	open := openSnap.ByKey(ruleID, service)
-	hasOpen := open != nil && open.ID != ""
-
-	silent, baseRate := silenceVerdict(rates, silentTrailingBuckets, silentMinActiveShare)
-	if !silent {
-		if hasOpen && len(rates) > 0 && rates[len(rates)-1] > 0 {
-			chstore.MarkResolved(open, time.Now().UnixNano())
-			if err := d.store.UpsertProblem(ctx, *open); err != nil {
-				log.Printf("[anomaly] resolve %s: %v", ruleID, err)
-				return
-			}
-			log.Printf("[anomaly] RESOLVED %s · service_silent (traffic returned)", service)
-		}
-		return
-	}
-
-	desc := fmt.Sprintf("Service went SILENT — no spans for ≥%dm; baseline ~%.2f req/s. Total signal loss (crash, network partition or collector wedge), not a metric deviation.",
-		silentTrailingBuckets*5, baseRate)
-	if hasOpen {
-		open.Description = desc
-		if err := d.store.UpsertProblem(ctx, *open); err != nil {
-			log.Printf("[anomaly] refresh %s: %v", ruleID, err)
-		}
-		return
-	}
-	p := chstore.Problem{
-		ID:       newID(),
-		RuleID:   ruleID,
-		RuleName: "Anomaly · Service silent",
-		Severity: "critical",
-		Service:  service,
-		Metric:   "request_rate",
-		Value:    0,
-		// Threshold = baseline medyanı; '<' comparator'la value/threshold
-		// oranı ters çevrilir → "tamamen kayıp" P1 kapısı doğal tetiklenir
-		// (v0.9.978 anomali-satırı sözleşmesinin aynısı).
-		Threshold:   baseRate,
-		Comparator:  "<",
-		Status:      "open",
-		Description: desc,
-		StartedAt:   time.Now().UnixNano(),
-	}
-	if err := d.store.UpsertProblem(ctx, p); err != nil {
-		log.Printf("[anomaly] open %s: %v", ruleID, err)
-		return
-	}
-	log.Printf("[anomaly] OPENED %s · service_silent (baseline %.2f req/s, %dm sessiz)",
-		service, baseRate, silentTrailingBuckets*5)
-	if cfg.AttachesToIncident() {
-		if _, err := d.store.AttachProblemToIncident(ctx, p); err != nil {
-			log.Printf("[anomaly] incident attach: %v", err)
-		}
-	}
-	if d.notifier != nil {
-		go d.notifier.SendProblemAlert(context.Background(), p)
-	}
 }
 
 // metricValueExpr returns the service_summary_5m SELECT expression that

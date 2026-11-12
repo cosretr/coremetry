@@ -59,7 +59,7 @@ const baseSens = (extra: Partial<AnomalySensitivityConfig> = {}): Record<string,
     p99_ms: { floorPct: 0.1, absFloor: 10, minAbsDelta: 0, minMAD: 1, minBaselineRate: 0 },
     request_rate: { floorPct: 0.15, absFloor: 0, minAbsDelta: 0, minMAD: 0, minBaselineRate: 0 },
   },
-  dwellBuckets: 3, criticalZ: 6, attachToIncident: true, serviceSilent: false,
+  dwellBuckets: 3, criticalZ: 6, attachToIncident: true,
   batchServicePatterns: ['-batch'], opLatency: true,
   ...extra,
 });
@@ -130,7 +130,7 @@ describe('Yeni log deseni anomalileri kutusu', () => {
     expect(m.puts[0].logTemplateNew).toBe(true);
     expect(m.puts[0].opLatency).toBe(true);
     expect(m.puts[0].criticalZ).toBe(6);
-    expect(m.puts[0].serviceSilent).toBe(false);
+    expect(m.puts[0].attachToIncident).toBe(true);
     expect(toggle(el).getAttribute('aria-checked')).toBe('true');
   });
 });

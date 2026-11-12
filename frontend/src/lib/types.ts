@@ -10368,9 +10368,6 @@ export interface AnomalySensitivityConfig {
   // Bu yüzden okuma daima `!== false` ile yapılmalı, `=== true` ile
   // DEĞİL — ikincisi eski satırları sessizce kapalı gösterirdi.
   attachToIncident?: boolean;
-  // v0.10.543 — service_silent dedektörü; VARSAYILAN KAPALI (operatör kararı):
-  // okuma `=== true` (attachToIncident'ın tersi).
-  serviceSilent?: boolean;
   // v0.10.1056 — trace_op_latency (operasyon bazında p99 sıçraması) dedektörü
   // (operatör: "Trace op latency false pozitif geliyor"). v0.10.1085 —
   // VARSAYILAN AÇIK, yalnız sürdürme kuralıyla (operatör: "Önerini yapalım").

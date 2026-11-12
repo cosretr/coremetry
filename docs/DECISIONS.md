@@ -13533,3 +13533,17 @@ eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
   (3 × aralık, "source silent") kapatır. Kayıtlı blobdaki `promotion` alanı okunmaz, bir sonraki kayıtta düşer.
 - Tek seferlik yan etki: `ConfigHash` (olay kanıtı / backtest etiketi) değişir; tespit davranışı değişmez.
   Geçmiş `stage=promoted` ml_events satırları ve `ml:` anomaly_events satırları TTL'e dek okunur.
+
+## 2026-11-12 — v0.10.2068 — Yerel service_silent dedektörü kaldırıldı (operatör kararı v0.10.543: "Olmasınlar")
+
+- Silinen: `anomaly.go` `checkSilence` / `silenceVerdict` / `silentProblemsToResolve` / `resolveSilentProblems`
+  (servis trafiği 15 dk sıfırsa critical `anomaly:<svc>:service_silent` Problem'i AÇARDI — anomaly_events
+  yazmazdı), `anomaly_sensitivity.serviceSilent` anahtarı + `ServiceSilentEnabled`, Settings › Anomaly kutusu,
+  testleri. `trimTrailingSilent` kalır (verdict / error_ramp kullanıyor).
+- Neden güvenli: v0.10.543'ten beri varsayılan kapalı; keep listesi, davranış motoru, RCA skoru, servis sağlık
+  kontrolü, CoSRE ve MCP araçlarında tüketicisi yok. Geçmiş satırların OKUYUCULARI kalır (kategori
+  `problem_category.go`, standart başlık `problem_standard.go`, bildirim türü) — kapanmış Problem'ler aynı görünür.
+- Kalan açık satır: dedektör kapalıyken her tik kapatıyordu; açık bırakılmış biri varsa artık hiç tazelenmez →
+  evaluator bayat süpürmesi 3 × aralık sonra "source silent" ile kapatır (muafiyet yalnız ext / ML grup).
+- Kayıtlı blobdaki `serviceSilent` okunmaz; Normalize yalnız bilinen alanları yazdığından bir sonraki kayıtta düşer.
+- DOKUNULMADI: ML log ailesinin `service_silent` dedektörü (`ml/log_red.go`, ayrı motor, `ml_events`).

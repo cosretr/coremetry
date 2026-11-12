@@ -294,3 +294,7 @@ func TestTechnicalErrorIs5xxOnly(t *testing.T) {
 		}
 	}
 }
+
+// boolPtrT — paket testleri için *bool yardımcısı (v0.10.2068'de silinen
+// silence_test.go'dan taşındı).
+func boolPtrT(b bool) *bool { return &b }

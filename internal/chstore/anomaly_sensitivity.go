@@ -73,15 +73,10 @@ type AnomalySensitivityConfig struct {
 	// ESKİ her settings satırı sessizce davranış değiştirirdi. nil =
 	// "yazılmamış" = bugünkü davranış (bağla).
 	AttachToIncident *bool `json:"attachToIncident,omitempty"`
-	// ServiceSilent — v0.10.543 (operatör 2026-09-07: "Anomali service
-	// silent'lara ihtiyacım yok. Olmasınlar"): servisin trafiği tamamen
-	// kesilince açılan critical `service_silent` problemi (anomaly.go
-	// checkSilence). *bool ama bu kez VARSAYILAN KAPALI: nil = false. Prod'da
-	// 100+ açık "Anomaly · Service silent" incident'ı gürültüydü — servisler
-	// kapanıp açılıyor, span kesintisi bir arıza değil. Açmak için Settings →
-	// Anomaly. Kapalıyken dedektör AÇIK kalan service_silent problemlerini
-	// bir sonraki tikte çözer (incident kaskadı onları kapatır).
-	ServiceSilent *bool `json:"serviceSilent,omitempty"`
+	// v0.10.2068 — eski `serviceSilent` anahtarı (yerel service_silent
+	// dedektörü, v0.10.543'ten beri varsayılan kapalı; operatör: "Olmasınlar")
+	// dedektörüyle birlikte kalktı. Kayıtlı blobdaki alan okunmaz; Normalize
+	// yalnız bilinen alanları yazdığı için bir sonraki kayıtta düşer.
 	// TemporalRanking — v0.10.700 (Dynatrace paritesi #2): kök neden
 	// hipotezinde zamansal çarpan. "shadow" (varsayılan, boş dahil) =
 	// faktör ve gerekçe adaya YAZILIR, sıra/skor değişmez — prod'da bir
@@ -105,7 +100,7 @@ type AnomalySensitivityConfig struct {
 	// geliyor, gerek yok gelmelerine bence."): operasyon bazında p99 sıçraması
 	// dedektörü (`trace_op_latency`, internal/anomaly/op_latency.go). BİLİNÇLİ
 	// varsayılan davranış değişikliği, operatör kararı: *bool, nil = KAPALI
-	// (ServiceSilent v0.10.543 ve self_health.diskEta v0.10.1031 emsali). Bu
+	// (eski serviceSilent v0.10.543 ve self_health.diskEta v0.10.1031 emsali). Bu
 	// sürümden ESKİ her blob alanı taşımaz ve KAPALI okunur. Neden gürültü:
 	// tek 5 dk kovanın p99'u 24 sa p99'una karşı — düşük gecikmeli bir
 	// operasyonda TEK yavaş çağrı ×3'ü kendi başına geçer, dwell yok.
@@ -219,11 +214,6 @@ func normalizeTemporalRanking(v string) string {
 // TemporalRankingOn — nil-güvenli okuma: yalnız açıkça "on".
 func (c AnomalySensitivityConfig) TemporalRankingOn() bool {
 	return normalizeTemporalRanking(c.TemporalRanking) == TemporalRankingModeOn
-}
-
-// ServiceSilentEnabled — nil ⇒ KAPALI (AttachToIncident'ın tersi; gerekçe alanda).
-func (c AnomalySensitivityConfig) ServiceSilentEnabled() bool {
-	return c.ServiceSilent != nil && *c.ServiceSilent
 }
 
 // OpLatencyOn — trace_op_latency dedektörü koşsun mu? v0.10.1085: nil ⇒ AÇIK
@@ -628,7 +618,6 @@ func DefaultAnomalySensitivity() AnomalySensitivityConfig {
 		// sürümü: var olan davranışı kapatılabilir yapıyor, kendiliğinden
 		// değiştirmiyor.
 		AttachToIncident: boolPtr(true),
-		ServiceSilent:    boolPtr(false),          // v0.10.543 — operatör kararı
 		Runtime:          DefaultAnomalyRuntime(), // v0.10.890 — heap kipi off
 		// v0.10.1039 — BİLİNÇLİ varsayılan davranış değişikliği: operatörün
 		// adını verdiği `-batch` kalıbı kutudan açık gelir.
@@ -679,7 +668,6 @@ func NormalizeAnomalySensitivity(c AnomalySensitivityConfig) AnomalySensitivityC
 		// bir sonraki okuyucu (ya da elle bakan operatör) varsayılanı
 		// tahmin etmek zorunda kalmaz.
 		AttachToIncident: boolPtr(c.AttachesToIncident()),
-		ServiceSilent:    boolPtr(c.ServiceSilentEnabled()),
 		TemporalRanking:  normalizeTemporalRanking(c.TemporalRanking), // v0.10.700
 		// v0.9.935 — davranış bölümü kendi kelepçesinden geçer. Eksik
 		// bölüm (bu sürümden ESKİ her settings satırı) varsayılanını
@@ -693,7 +681,7 @@ func NormalizeAnomalySensitivity(c AnomalySensitivityConfig) AnomalySensitivityC
 		BatchServicePatterns: batchPatternsPtr(c.BatchServicePatternList()),
 		// v0.10.1056 — kopyalanmazsa PUT'ta düşer ve operatörün açtığı
 		// dedektör bir sonraki kayıtta sessizce kapanırdı. SOMUTLAŞTIRIR
-		// (ServiceSilent gibi): true/false aynen; v0.10.1085'ten beri nil → true.
+		// (AttachToIncident gibi): true/false aynen; v0.10.1085'ten beri nil → true.
 		OpLatency: boolPtr(c.OpLatencyOn()),
 		// v0.10.1085 — sürdürme kova sayısı; kopyalanmazsa PUT'ta düşerdi.
 		// Aralık dışı / eksik → 2.

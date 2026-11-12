@@ -541,20 +541,6 @@ function SensitivitySection() {
               ona ulaşmıyordu: üstteki "terfi ettir" kutucuğu BAŞKA bir
               hattı yönetiyor. Operatör onu kapatıp metrik dedektörünün
               incident açmaya devam ettiğini görüyordu. */}
-          {/* v0.10.543 — service_silent dedektörü: VARSAYILAN KAPALI (operatör
-              2026-09-07: "Anomali service silent'lara ihtiyacım yok"). Kapalıyken
-              açık kalan service_silent problemleri bir sonraki tikte çözülür. */}
-          <div className={SEP}>
-            <CheckboxField checked={cfg.serviceSilent === true}
-              onCheckedChange={v => setCfg({ ...cfg, serviceSilent: v })}
-              label={<>Sessiz servis anomalisi (<code>service_silent</code>)</>}
-              hint={<>
-                Açıkken, 15 dakika boyunca hiç span üretmeyen (öncesinde düzenli trafiği olan)
-                servis için critical &quot;Anomaly · Service silent&quot; problemi açılır. Varsayılan
-                KAPALI: kapanıp açılan servisler incident listesini dolduruyordu. Kapatınca açık
-                kalanlar bir sonraki tikte çözülür.
-              </>} />
-          </div>
           {/* v0.10.1056 — trace_op_latency dedektörü anahtarı (operatör: "Trace op
               latency false pozitif geliyor"). v0.10.1085 — varsayılan yeniden AÇIK,
               yalnız sürdürme kuralıyla (operatör: "Önerini yapalım"): alan yoksa AÇIK

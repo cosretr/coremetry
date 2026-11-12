@@ -46,8 +46,9 @@ süpürmeden ÖNCE koşar.
 **Anomaly tik sırası** (`anomaly.go:481-697`): aktif servisler (24 sa) →
 mevsimsel vidalar → izlenen set → duyarlılık (tik başına bir kez) → toplu MV
 okuması `batchSeries` → `OpenProblemsSnapshot` → faz 1 kararlar → faz 1.5
-kümeleme → bayat küme çözümü → `applyOutcome` → service_silent → davranış
-motoru → exception fırtınası.
+kümeleme → bayat küme çözümü → `applyOutcome` → davranış motoru → exception
+fırtınası. (Yerel service_silent v0.10.2068'de kalktı; ML log `service_silent`
+dedektörü ayrıdır, dokunulmadı.)
 
 ## 2. Karar ağacı — "yeni bir sinyal üreteceğim"
 
@@ -357,7 +358,7 @@ v0.10.1072 — inbox istisna listesi taşıdığı için).
 3. Öncelik/merdivene dokunuyor mu? → SAF işlevde kal, gerekçe cümlesi yalan
    söylemesin, `problem_priority_*`/`exception_triage_test` tablosuna satır;
    operatör direktiflerini (P1 yapışkan, taban 2, Inbox tüm durumlar, service
-   silent kapalı, disk ETA kapalı,
+   silent yok (v0.10.2068'de silindi), disk ETA kapalı,
    yeni log deseni (`log_template_new`) kapalı, yerleşik alarm kuralları (`builtin-*`) kapalı,
    SLO burn Problem'i (`problem_priority.sloBurnProblems`) kapalı, Problems varsayılanı
    yalnız P1 + ilk görülme, fresh deploy yok) YENİDEN AÇMA. Operasyon gecikmesi

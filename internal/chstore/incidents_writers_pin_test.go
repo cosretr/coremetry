@@ -82,13 +82,14 @@ func TestIncidentWritersGoThroughDoors(t *testing.T) {
 		total += n
 	}
 	// v0.10.2052 — 18 → 19: ML grup Problem'i açılışta bağlanır (ml/group_live.go).
-	if total != 19 {
+	// v0.10.2068 — 19 → 18: yerel service_silent dedektörü (anomaly.go) kalktı.
+	if total != 18 {
 		keys := make([]string, 0, len(attach))
 		for k := range attach {
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
-		t.Errorf("otomatik AttachProblemToIncident çağıranı %d (istenen 19): %v", total, keys)
+		t.Errorf("otomatik AttachProblemToIncident çağıranı %d (istenen 18): %v", total, keys)
 	}
 	if len(join) != 1 || join["../evaluator/fatal_exception.go"] != 1 {
 		t.Errorf("JoinOpenIncident yalnız evaluator.joinOpenIncident'ten: %v", join)

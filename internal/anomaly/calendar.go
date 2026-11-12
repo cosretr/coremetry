@@ -16,7 +16,7 @@ package anomaly
 // metrik dedektörünün request_rate DÜŞÜŞ anomalisi Problem AÇMAZ — olay
 // anomaly_events'e "calendar_traffic_drop" olarak yazılır (/anomalies'te
 // görünür, bildirim/incident yok). Kapsam dışı ve bilinçli: sıçramalar, hata
-// oranı, gecikme, service_silent (tam kesinti tatilde de alarm), zaten açık
+// oranı, gecikme, zaten açık
 // bir Problem'in tazelenmesi/kapanması ve month-end-like günleri (ay sonu
 // yoğun gün; düşüş anlamlı). Davranış motorunun düşüş adayları zaten terfi
 // etmez (behavior_scan.go behaviorEvent); motorun 28 günlük haftanın-saati
