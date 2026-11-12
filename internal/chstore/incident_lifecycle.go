@@ -4,7 +4,7 @@ package chstore
 // (operatör: "anomali, incident ve problems ayrı ayrı gelsin", Dilim 2).
 //
 // Incident açılışı/çözümü bugüne dek HİÇ bildirim üretmiyordu. Dört yol
-// var — otomatik korelasyon (AttachProblemToIncidentWith), manuel API
+// vardı — otomatik korelasyon (Incidents ölü kod dilimi 1'de silindi), manuel API
 // açılışı, otomatik kademeli çözüm (evaluator cascade), manuel çözüm
 // (API) — ve dördü de zaten bir IncidentEvent yazıyor. Tek boğaz:
 // AppendIncidentLifecycle = olayı yaz + kancayı çağır. Yeni bir açılış
@@ -22,7 +22,7 @@ import "context"
 type IncidentLifecycleHook func(ctx context.Context, inc Incident, ev IncidentEvent)
 
 // SetIncidentLifecycleHook — boot'ta, işçiler başlamadan ÖNCE
-// (neighborProvider ile aynı disiplin: kilitsiz alan, tek yazım).
+// (kilitsiz alan, tek yazım).
 func (s *Store) SetIncidentLifecycleHook(h IncidentLifecycleHook) {
 	s.incidentLifecycle = h
 }
@@ -42,11 +42,6 @@ func incidentLifecycleNotifies(kind string, enabled bool) bool {
 	}
 	return kind == "created" || kind == "resolved" || kind == "severity_raised"
 }
-
-// incidentDoorsOpen — SAF (v0.10.1826): iki otomatik kapı
-// (AttachProblemToIncidentWith, JoinOpenIncidentWith) CH'ye gider mi.
-// Kapalı ana anahtar = "incident yok" erken dönüşü.
-func incidentDoorsOpen(enabled bool) bool { return enabled }
 
 // AppendIncidentLifecycle — olayı yazar, sonra kancayı çağırır. Olay
 // satırının yazım HATASI kancayı ENGELLEMEZ: incident satırı bu noktada

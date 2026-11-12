@@ -154,17 +154,14 @@ func TestRankReconvergenceTakesMax(t *testing.T) {
 	}
 }
 
-// RootCauseRank goes through the live graph + lock; sanity-check it
-// agrees with the pure scorer.
-func TestRootCauseRankViaLiveGraph(t *testing.T) {
-	c := New(nil)
-	c.applyEdges([]chstore.ServiceEdgePair{
+// RankRootCausesFromEdges builds the graph and scores it in one call.
+func TestRankRootCausesFromEdgesOrder(t *testing.T) {
+	cs := RankRootCausesFromEdges([]chstore.ServiceEdgePair{
 		e("S", "A", 100, 9),
 		e("S", "B", 100, 1),
-	})
-	cs := c.RootCauseRank("S")
+	}, "S")
 	if len(cs) != 2 || cs[0].Service != "A" || !approx(cs[0].Score, 0.9) {
-		t.Errorf("live RootCauseRank disagrees with scorer: %+v", cs)
+		t.Errorf("RankRootCausesFromEdges order/score: %+v", cs)
 	}
 }
 

@@ -492,7 +492,7 @@ func TestSvcSlowLatestBucket(t *testing.T) {
 
 // Yumuşak-hata ve sıra pinleri (kaynak okuması): doğrulanmamış ayar → tazele;
 // kural kapalı → rule-disabled kapanışı; pas db-health'ten SONRA, runtime'dan
-// ÖNCE (eskalasyon + bayat süpürmeden önce); açılışta incident + bildirim.
+// ÖNCE (eskalasyon + bayat süpürmeden önce); açılışta bildirim.
 func TestSvcSlowWiring(t *testing.T) {
 	b, err := os.ReadFile("service_slowdown.go")
 	if err != nil {
@@ -503,7 +503,6 @@ func TestSvcSlowWiring(t *testing.T) {
 		"if !e.store.AnomalySensitivityConfirmed() {\n\t\te.applySvcSlow(ctx, keepAll(open))\n\t\treturn",
 		"rctx, cancel := context.WithTimeout(ctx, chstore.SvcSlowReadTimeout)",
 		"if !cfg.On() {\n\t\te.applySvcSlow(ctx, svcSlowActions{Resolve: svcSlowDisabledResolutions(open, now.UnixNano())})",
-		"e.store.AttachProblemToIncident(ctx, p)",
 		"go e.notifier.SendProblemAlert(context.Background(), p)",
 	} {
 		if !strings.Contains(s, frag) {

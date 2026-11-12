@@ -22,7 +22,6 @@ type sloBurnStore interface {
 	ComputeSLOBurnRate(ctx context.Context, o chstore.SLO, window time.Duration) (float64, uint64, error)
 	OpenProblemsSnapshot(ctx context.Context) (*chstore.OpenProblems, error)
 	UpsertProblem(ctx context.Context, p chstore.Problem) error
-	AttachProblemToIncident(ctx context.Context, p chstore.Problem) (*chstore.Incident, error)
 }
 
 // sloBurnDisabledReason — bayrak kapalıyken (operatör sonradan kapattı)
@@ -175,9 +174,6 @@ func (e *Evaluator) evaluateSLOBurn(ctx context.Context, st sloBurnStore, slo ch
 		e.countOpened() // v0.9.550 — kalp atışı sayacı
 		log.Printf("[evaluator/slo] PROBLEM OPENED: %s %s burn=%.1fx/%.1fx",
 			slo.Service, pol.Severity, fastRate, slowRate)
-		if _, err := st.AttachProblemToIncident(ctx, p); err != nil {
-			log.Printf("[evaluator/slo] incident attach: %v", err)
-		}
 		if e.notifier != nil {
 			go e.notifier.SendProblemAlert(context.Background(), p)
 		}

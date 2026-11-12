@@ -154,12 +154,6 @@ func (e *Evaluator) promoteSubjectsLive(ctx context.Context, events []chstore.An
 		opened++
 		marks = append(marks, subjectLiveMarks(c.Opening)...)
 		log.Printf("[evaluator] ÖZNE TERFİSİ: %s → %s", p.RuleName, p.Severity)
-		// Karar 7: terfi Problem'i incident'a bağlanır (anomaly-auto ailesi).
-		if pcfg.AttachesToIncident() {
-			if _, err := e.store.AttachProblemToIncident(ctx, p); err != nil {
-				log.Printf("[evaluator] özne terfisi: incident bağlama %s: %v", p.ID, err)
-			}
-		}
 		if e.notifier != nil {
 			go e.notifier.SendProblemAlert(context.Background(), p)
 		}

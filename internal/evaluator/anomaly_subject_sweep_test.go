@@ -181,9 +181,8 @@ func TestGenericPromotionSkipsSubjects(t *testing.T) {
 	}
 	body := sw[j:]
 	cont := strings.Index(body, "if step != promoteCreate {\n\t\t\tcontinue")
-	att := strings.Index(body, "e.store.AttachProblemToIncident(ctx, p)")
 	ntf := strings.Index(body, "e.notifier.SendProblemAlert(context.Background(), p)")
-	if cont < 0 || att < cont || ntf < cont || !strings.Contains(body, "pcfg.AttachesToIncident()") {
-		t.Errorf("açılış kolu: bağlama/bildirim tazeleme kapısından sonra olmalı (cont=%d att=%d ntf=%d)", cont, att, ntf)
+	if cont < 0 || ntf < cont {
+		t.Errorf("açılış kolu: bildirim tazeleme kapısından sonra olmalı (cont=%d ntf=%d)", cont, ntf)
 	}
 }

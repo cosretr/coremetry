@@ -135,9 +135,6 @@ func (e *Evaluator) reconcileRuntime(ctx context.Context, r runtimeReconcile) {
 		}
 		e.countOpened()
 		log.Printf("[evaluator] PROBLEM OPENED (%s): %s", r.metric, p.Description)
-		if _, err := e.store.AttachProblemToIncident(ctx, p); err != nil {
-			log.Printf("[evaluator] runtime incident attach: %v", err)
-		}
 		if e.notifier != nil {
 			go e.notifier.SendProblemAlert(context.Background(), p)
 		}

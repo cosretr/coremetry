@@ -437,9 +437,6 @@ func (r *Runner) handleStateChange(ctx context.Context, m chstore.Monitor, statu
 			return
 		}
 		log.Printf("[monitor] %s flipped to DOWN — opened problem", m.Name)
-		if _, err := r.store.AttachProblemToIncident(ctx, p); err != nil {
-			log.Printf("[monitor] incident attach: %v", err)
-		}
 		if r.notifier != nil {
 			go r.notifier.SendProblemAlert(context.Background(), p)
 		}

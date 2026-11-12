@@ -235,7 +235,6 @@ func (r *Recorder) liveGroupProblems(ctx context.Context, groups []decidedGroup,
 		}
 		c.Refreshed++
 	}
-	attach := len(plan.Open) > 0 && r.store.GetAnomalyPromotion(ctx).AttachesToIncident()
 	for _, p := range plan.Open {
 		if err := r.store.UpsertProblem(ctx, p); err != nil {
 			failed[p.ID] = true
@@ -244,11 +243,6 @@ func (r *Recorder) liveGroupProblems(ctx context.Context, groups []decidedGroup,
 		}
 		c.Opened++
 		log.Printf("[ml] GROUP PROBLEM OPENED %s · %s · %s", p.Service, p.ID, p.Description)
-		if attach {
-			if _, err := r.store.AttachProblemToIncident(ctx, p); err != nil {
-				log.Printf("[ml] group problem incident attach %s: %v", p.ID, err)
-			}
-		}
 		if r.notifier != nil {
 			go r.notifier.SendProblemAlert(context.Background(), p)
 		}

@@ -723,9 +723,6 @@ func (e *Evaluator) reconcileSelfHealth(ctx context.Context, snap *chstore.OpenP
 			}
 			e.countOpened()
 			log.Printf("[evaluator] PROBLEM OPENED (%s): %s", w.metric, w.description)
-			if _, err := e.store.AttachProblemToIncident(ctx, p); err != nil {
-				log.Printf("[evaluator] self-health incident attach %s: %v", w.id, err)
-			}
 			if e.notifier != nil {
 				go e.notifier.SendProblemAlert(context.Background(), p)
 			}

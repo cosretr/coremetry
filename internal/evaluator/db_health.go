@@ -676,9 +676,6 @@ func (e *Evaluator) openDBHealth(ctx context.Context, toOpen []dbHealthVerdict, 
 		}
 		e.countOpened()
 		log.Printf("[evaluator] PROBLEM OPENED (db.health): %s", p.Description)
-		if _, err := e.store.AttachProblemToIncident(ctx, p); err != nil {
-			log.Printf("[evaluator] db-health incident attach: %v", err)
-		}
 		if e.notifier != nil {
 			go e.notifier.SendProblemAlert(context.Background(), p)
 		}

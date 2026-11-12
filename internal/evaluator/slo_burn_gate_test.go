@@ -29,7 +29,6 @@ type fakeSLOStore struct {
 	total    uint64
 	problems map[string]chstore.Problem
 	measured int
-	attached []string
 }
 
 func (f *fakeSLOStore) ListSLOs(context.Context) ([]chstore.SLO, error) { return f.slos, nil }
@@ -52,11 +51,6 @@ func (f *fakeSLOStore) OpenProblemsSnapshot(context.Context) (*chstore.OpenProbl
 func (f *fakeSLOStore) UpsertProblem(_ context.Context, p chstore.Problem) error {
 	f.problems[p.ID] = p
 	return nil
-}
-
-func (f *fakeSLOStore) AttachProblemToIncident(_ context.Context, p chstore.Problem) (*chstore.Incident, error) {
-	f.attached = append(f.attached, p.ID)
-	return &chstore.Incident{ID: "inc-" + p.ID}, nil
 }
 
 // burningFixture — sentetik SLO, burn her iki politikanın da (critical 14.4×
@@ -101,9 +95,6 @@ func TestSLOBurnDisabledOpensNothingEvenAboveCritical(t *testing.T) {
 	if len(f.problems) != 0 {
 		t.Fatalf("kapalıyken %d problem açıldı, 0 bekleniyordu", len(f.problems))
 	}
-	if len(f.attached) != 0 {
-		t.Fatalf("kapalıyken incident'a bağlandı: %v", f.attached)
-	}
 	if f.measured != 0 {
 		t.Fatalf("kapalıyken burn %d kez ölçüldü — CH'ye hiç gitmemeli", f.measured)
 	}
@@ -133,9 +124,6 @@ func TestSLOBurnEnabledEmitsAsBefore(t *testing.T) {
 		if !strings.HasPrefix(p.RuleName, "SLO burn-rate "+sev) {
 			t.Errorf("%s: RuleName %q", sev, p.RuleName)
 		}
-	}
-	if len(f.attached) != 2 {
-		t.Fatalf("iki problem de incident'a bağlanmalı, %d bağlandı", len(f.attached))
 	}
 	if e.opened.Load() != 2 {
 		t.Fatalf("kalp atışı sayacı %d, 2 bekleniyordu", e.opened.Load())

@@ -62,21 +62,12 @@ type ScoredCause struct {
 	Kind string
 }
 
-// RootCauseRank scores the live graph's downstream candidates for svc,
-// best first. Read-locked snapshot — safe to call concurrently with the
-// refresh loop.
-func (c *Correlator) RootCauseRank(svc string) []ScoredCause {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return rankRootCauses(c.out, svc)
-}
-
-// RankRootCausesFromEdges scores a one-off weighted edge list without a
-// live Correlator — the anomaly fusion path uses this so its evidence
-// bundle stays a pure, store-free assembly (it already holds the edges).
-// Reuses buildGraph so the directed-edge construction has one home.
+// RankRootCausesFromEdges scores a weighted edge list — the anomaly fusion
+// path uses this so its evidence bundle stays a pure, store-free assembly
+// (it already holds the edges). Reuses buildGraph so the directed-edge
+// construction has one home.
 func RankRootCausesFromEdges(edges []chstore.ServiceEdgePair, trigger string) []ScoredCause {
-	out, _ := buildGraph(edges)
+	out := buildGraph(edges)
 	return rankRootCauses(out, trigger)
 }
 

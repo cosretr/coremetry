@@ -164,9 +164,6 @@ func (e *Evaluator) evaluateDBSlowStatements(ctx context.Context) {
 			}
 			e.countOpened()
 			log.Printf("[evaluator] PROBLEM OPENED (db.slow_statement): %s", p.Description)
-			if _, err := e.store.AttachProblemToIncident(ctx, p); err != nil {
-				log.Printf("[evaluator] db-slow-stmt incident attach: %v", err)
-			}
 			if e.notifier != nil {
 				go e.notifier.SendProblemAlert(context.Background(), p)
 			}

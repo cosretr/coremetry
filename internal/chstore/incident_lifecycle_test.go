@@ -47,7 +47,7 @@ func TestIncidentLifecycleReachable(t *testing.T) {
 		call string
 		want int
 	}{
-		{"incident.go", "s.AppendIncidentLifecycle(ctx, inc,", 2},    // otomatik korelasyon açılışı + şiddet yükselişi (v0.10.802)
+		{"incident.go", "s.AppendIncidentLifecycle(ctx, inc,", 0},    // otomatik açılış + şiddet yükselişi: Incidents ölü kod dilimi 1'de silindi
 		{"../api/api_incidents.go", "AppendIncidentLifecycle(", 2},   // manuel açılış + manuel çözüm
 		{"../evaluator/evaluator.go", "AppendIncidentLifecycle(", 1}, // otomatik kademeli çözüm
 		{"../../main.go", "SetIncidentLifecycleHook(notifier.IncidentLifecycle)", 1},

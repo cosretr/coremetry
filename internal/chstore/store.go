@@ -398,14 +398,6 @@ type Store struct {
 	// kapsama probları (prior_coverage.go; kaynak başına 60 s).
 	priorCoverage [priorSourceCount]coverageProbe
 
-	// neighborProvider is the optional 1-hop topology lookup used
-	// by AttachProblemToIncident for rule 3 (cluster a new
-	// problem into an existing incident on a service that calls
-	// or is called by this one). Set via SetNeighborProvider —
-	// kept on the store so the three auto-attach call sites
-	// (evaluator, anomaly, monitor) don't need to thread it
-	// through their constructors.
-	neighborProvider NeighborProvider
 	// incidentLifecycle — v0.10.748 incident açılış/çözüm bildirimi kancası
 	// (incident_lifecycle.go); boot'ta SetIncidentLifecycleHook ile.
 	incidentLifecycle IncidentLifecycleHook

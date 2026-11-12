@@ -404,9 +404,6 @@ func (e *Evaluator) reconcileCapacity(ctx context.Context, c capacityCheck, s ch
 		}
 		e.countOpened() // v0.9.550 — kalp atışı sayacı
 		log.Printf("[evaluator] PROBLEM OPENED (db.capacity): %s", p.Description)
-		if _, err := e.store.AttachProblemToIncident(ctx, p); err != nil {
-			log.Printf("[evaluator] db-capacity incident attach: %v", err)
-		}
 		if e.notifier != nil {
 			go e.notifier.SendProblemAlert(context.Background(), p)
 		}

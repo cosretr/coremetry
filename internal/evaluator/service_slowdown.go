@@ -616,9 +616,6 @@ func (e *Evaluator) applySvcSlow(ctx context.Context, act svcSlowActions) {
 		}
 		e.countOpened()
 		log.Printf("[evaluator] PROBLEM OPENED (svc.slowdown): %s", p.Description)
-		if _, err := e.store.AttachProblemToIncident(ctx, p); err != nil {
-			log.Printf("[evaluator] svc-slowdown incident attach: %v", err)
-		}
 		if e.notifier != nil {
 			go e.notifier.SendProblemAlert(context.Background(), p)
 		}

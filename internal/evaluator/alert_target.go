@@ -142,9 +142,6 @@ func (e *Evaluator) settleTargetBreach(ctx context.Context, r chstore.AlertRule,
 		}
 		e.countOpened()
 		log.Printf("[evaluator] PROBLEM OPENED (%s): %s", tag, p.Description)
-		if _, err := e.store.AttachProblemToIncident(ctx, p); err != nil {
-			log.Printf("[evaluator] target rule incident attach: %v", err)
-		}
 		if e.notifier != nil {
 			go e.notifier.SendProblemAlert(context.Background(), p)
 		}

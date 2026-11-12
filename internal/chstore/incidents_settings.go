@@ -8,9 +8,8 @@ package chstore
 // boot / 30 s cfgRefresh / config-reload yolu yok.
 //
 // Kapalı durumun anlamı (değişmedi):
-//   - iki otomatik kapı (AttachProblemToIncidentWith, JoinOpenIncidentWith)
-//     CH'ye dokunmadan "incident yok" döner — Problem'ler aynen açılır ve
-//     bildirilir, yalnız incident'a bağlanmaz;
+//   - otomatik incident açma / katılma yok (kapılar Incidents ölü kod
+//     dilimi 1'de silindi) — Problem'ler aynen açılır ve bildirilir;
 //   - yaşam döngüsü kancası (incidentLifecycleNotifies) susar; açık eski
 //     incident'ların otomatik kademeli kapanışı sessizce sürer;
 //   - elle ilan (POST /api/incidents) 410. Veri silinmez.

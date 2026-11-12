@@ -980,24 +980,6 @@ func (d *Detector) applyOutcome(ctx context.Context, service, metric string, oc 
 		}
 		log.Printf("[anomaly] OPENED %s · %s = %.2f%s (med=%.2f mad=%.2f z=%.1f)",
 			service, metric, current, unitOf(metric), median, mad, z)
-		// Auto-attach to the active incident for this service+severity
-		// (same convention as evaluator-opened problems).
-		//
-		// v0.9.827 — ARTIK KAPATILABİLİR. Bu çağrı bugüne kadar KOŞULSUZDU
-		// ve Settings'teki hiçbir vida ona ulaşmıyordu: "Promote strong
-		// anomalies" kutucuğu BAŞKA bir hattı yönetiyor (evaluator.
-		// promoteStrongAnomalies ← recorder'ın log/trace AnomalyEvent'leri).
-		// Operatör o kutucuğu kapatıp metrik dedektörünün incident açmaya
-		// devam ettiğini görüyordu — ayar sayfası yalan söylüyordu.
-		//
-		// KAPALIYKEN PROBLEM YİNE AÇILIR ve bildirim YİNE gider; yalnız
-		// incident açılmaz/bağlanmaz. Ayrım bilinçli: bu vida "bana haber
-		// verme" değil, "bunu OLAY YÖNETİMİNE sokma" demek.
-		if cfg.AttachesToIncident() {
-			if _, err := d.store.AttachProblemToIncident(ctx, p); err != nil {
-				log.Printf("[anomaly] incident attach: %v", err)
-			}
-		}
 		if d.notifier != nil {
 			go d.notifier.SendProblemAlert(context.Background(), p)
 		}

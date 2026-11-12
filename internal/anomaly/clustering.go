@@ -399,11 +399,6 @@ func (d *Detector) applyClusters(ctx context.Context, clusters []anomalyCluster,
 		}
 		log.Printf("[anomaly] CLUSTER OPENED %s — %d services (score %.2f, %d merged)",
 			cl.Source, len(memberSvc)+1, cl.SourceScore, len(targets))
-		if cfg.AttachesToIncident() {
-			if _, err := d.store.AttachProblemToIncident(ctx, p); err != nil {
-				log.Printf("[anomaly] cluster incident attach: %v", err)
-			}
-		}
 		if d.notifier != nil {
 			go d.notifier.SendProblemAlert(context.Background(), p)
 		}

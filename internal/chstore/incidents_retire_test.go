@@ -97,79 +97,10 @@ func TestIncidentLifecycleNotifiesSwitch(t *testing.T) {
 	}
 }
 
-func TestIncidentDoorsOpenPure(t *testing.T) {
-	if incidentDoorsOpen(false) || !incidentDoorsOpen(true) {
-		t.Fatal("kapı yalnız açık anahtarda açık olmalı")
-	}
-}
-
 func retireFakeStore() (*Store, *[]string, *[][]any) {
 	var queries []string
 	var appended [][]any
 	return &Store{conn: exSnapFakeConn{queries: &queries, appended: &appended}}, &queries, &appended
-}
-
-func TestAttachDoorRespectsSwitch(t *testing.T) {
-	p := Problem{ID: "p-1", RuleName: "err", Service: "svc-a", Severity: "critical"}
-
-	t.Run("kapalı", func(t *testing.T) {
-		withIncidentsEnabled(t, false)
-		st, q, a := retireFakeStore()
-		var hooked int
-		st.SetIncidentLifecycleHook(func(context.Context, Incident, IncidentEvent) { hooked++ })
-		inc, err := st.AttachProblemToIncidentWith(context.Background(), p, nil)
-		if inc != nil || err != nil {
-			t.Fatalf("kapalı: (nil, nil) bekleniyordu, (%v, %v)", inc, err)
-		}
-		if len(*q) != 0 || len(*a) != 0 || hooked != 0 {
-			t.Fatalf("kapalı: CH'ye dokunulmamalı (sorgu %d, yazım %d, kanca %d)", len(*q), len(*a), hooked)
-		}
-	})
-	t.Run("açık", func(t *testing.T) {
-		withIncidentsEnabled(t, true)
-		st, q, _ := retireFakeStore()
-		var kinds []string
-		st.SetIncidentLifecycleHook(func(_ context.Context, _ Incident, ev IncidentEvent) { kinds = append(kinds, ev.Kind) })
-		inc, err := st.AttachProblemToIncidentWith(context.Background(), p, nil)
-		if err != nil || inc == nil {
-			t.Fatalf("açık: yeni incident bekleniyordu, (%v, %v)", inc, err)
-		}
-		joined := strings.Join(*q, "\n")
-		for _, want := range []string{"FROM incident_problems FINAL", "FROM incidents FINAL", "INSERT INTO incidents", "INSERT INTO incident_problems"} {
-			if !strings.Contains(joined, want) {
-				t.Errorf("açık: %q sorgusu bekleniyordu", want)
-			}
-		}
-		if len(kinds) != 1 || kinds[0] != "created" {
-			t.Fatalf("açık: created kancası bir kez bekleniyordu, %v", kinds)
-		}
-	})
-}
-
-func TestJoinDoorRespectsSwitch(t *testing.T) {
-	p := Problem{ID: "p-2", RuleName: "fatal", Service: "svc-b", Severity: "critical"}
-
-	t.Run("kapalı", func(t *testing.T) {
-		withIncidentsEnabled(t, false)
-		st, q, _ := retireFakeStore()
-		inc, joined, err := st.JoinOpenIncidentWith(context.Background(), p, []string{"svc-b"}, nil)
-		if inc != nil || joined || err != nil || len(*q) != 0 {
-			t.Fatalf("kapalı: (nil,false,nil) ve sorgusuz bekleniyordu; (%v,%v,%v) sorgu %d", inc, joined, err, len(*q))
-		}
-	})
-	t.Run("açık", func(t *testing.T) {
-		withIncidentsEnabled(t, true)
-		st, q, _ := retireFakeStore()
-		inc, joined, err := st.JoinOpenIncidentWith(context.Background(), p, []string{"svc-b"}, nil)
-		// Eşleşen açık incident yok → bugünkü davranış: açmaz, katılmaz,
-		// ama okumaları YAPAR.
-		if inc != nil || joined || err != nil {
-			t.Fatalf("açık: eşleşme yok → (nil,false,nil), (%v,%v,%v)", inc, joined, err)
-		}
-		if len(*q) == 0 {
-			t.Fatal("açık: kapı okumaları atmalı")
-		}
-	})
 }
 
 func TestLifecycleHookSilentWhenRetired(t *testing.T) {
@@ -190,33 +121,14 @@ func TestLifecycleHookSilentWhenRetired(t *testing.T) {
 	}
 }
 
-// TestIncidentDoorsGateFirst — wiring pini: kapı iki kapının İLK deyimi;
-// AttachProblemToIncident / JoinOpenIncident yalnız With hâline delege eder
-// (otomatik yazıcıların hepsi bu iki sarmalayıcıdan geçer — api tarafı
-// pini evaluator/anomaly/monitor çağıranlarını sayar).
-func TestIncidentDoorsGateFirst(t *testing.T) {
+// TestNoAutoIncidentDoors — v0.10.2070 (Incidents ölü kod dilimi 1): otomatik
+// incident kapıları (AttachProblemToIncident / JoinOpenIncident) SİLİNDİ;
+// geri gelmesin. Yaşam döngüsü kancası hâlâ ana anahtarla kapılı.
+func TestNoAutoIncidentDoors(t *testing.T) {
 	src := readSrc(t, "incident.go")
-	for _, sig := range []string{
-		"func (s *Store) AttachProblemToIncidentWith(ctx context.Context, p Problem, np NeighborProvider) (*Incident, error) {",
-		"func (s *Store) JoinOpenIncidentWith(ctx context.Context, p Problem, services []string, np NeighborProvider) (*Incident, bool, error) {",
-	} {
-		i := strings.Index(src, sig)
-		if i < 0 {
-			t.Fatalf("imza yok: %s", sig)
-		}
-		body := src[i+len(sig):]
-		gate := strings.Index(body, "if !incidentDoorsOpen(IncidentsEnabled()) {")
-		firstCH := strings.Index(body, "s.conn.")
-		if gate < 0 || firstCH < 0 || gate > firstCH {
-			t.Errorf("%s: kapı ilk CH okumasından önce olmalı (gate=%d ch=%d)", sig, gate, firstCH)
-		}
-	}
-	for _, want := range []string{
-		"return s.AttachProblemToIncidentWith(ctx, p, s.neighborProvider)",
-		"return s.JoinOpenIncidentWith(ctx, p, services, s.neighborProvider)",
-	} {
-		if !strings.Contains(src, want) {
-			t.Errorf("sarmalayıcı delegesi yok: %s", want)
+	for _, gone := range []string{"AttachProblemToIncident", "JoinOpenIncident", "NeighborProvider"} {
+		if strings.Contains(src, gone) {
+			t.Errorf("incident.go: %s geri geldi", gone)
 		}
 	}
 	lc := readSrc(t, "incident_lifecycle.go")

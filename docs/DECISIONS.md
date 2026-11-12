@@ -13547,3 +13547,19 @@ eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
   evaluator bayat süpürmesi 3 × aralık sonra "source silent" ile kapatır (muafiyet yalnız ext / ML grup).
 - Kayıtlı blobdaki `serviceSilent` okunmaz; Normalize yalnız bilinen alanları yazdığından bir sonraki kayıtta düşer.
 - DOKUNULMADI: ML log ailesinin `service_silent` dedektörü (`ml/log_red.go`, ayrı motor, `ml_events`).
+
+## 2026-11-12 — v0.10.2070 — Incidents ölü kod dilimi 1: otomatik incident bağlama silindi
+
+- Silinen: `chstore.AttachProblemToIncident(With)` + `JoinOpenIncident(With)` ve yalnız onların
+  kullandığı yardımcılar (eşleme okumaları, `createIncidentFor`, `refreshIncidentOnAttach`,
+  `bindProblemToIncident`, `NeighborProvider` / `SetNeighborProvider`); 18 Attach + 1 Join çağıranı
+  (evaluator, anomaly, monitor, ml grup Problem'i, dış tarayıcı); in-memory topoloji korelatörü
+  (`correlator.Correlator`, 5 dk `topology_edges_5m` okuması — tek tüketicisi rule-3 komşu eşlemesiydi).
+  `correlator` paketinin saf kısmı (`buildGraph`, `RankRootCausesFromEdges`, hipotez) kalır.
+- Neden güvenli: v0.10.1826'dan beri iki kapı `IncidentsEnabled()` false iken CH'ye dokunmadan
+  (nil, nil) dönüyordu; v0.10.2024'ten beri üretim kodu anahtarı yazamıyor (pin). Her çağıran sonucu
+  atıyordu; Problem açılışı ve bildirim kapıdan önce/ayrı. Davranış farkı yok.
+- Pin `incidents_writers_pin_test.go` 18 → 0: çağrı biçimleri chstore dışında geri gelemez.
+- Veri: incident tabloları ve satırları aynen; arşiv sayfası, kademeli kapanış, elle uçlar sonraki dilimlerde.
+- Kalan (bilerek): ayar alanları `attachToIncident` / `stormAttachToIncident` / `singleGroupJoinIncident`
+  artık etkisiz — Settings kontrolleriyle birlikte ayar dilimindeki silinecek.

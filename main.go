@@ -33,7 +33,6 @@ import (
 	"github.com/cilcenk/coremetry/internal/config"
 	"github.com/cilcenk/coremetry/internal/consumer"
 	"github.com/cilcenk/coremetry/internal/copilot"
-	"github.com/cilcenk/coremetry/internal/correlator"
 	"github.com/cilcenk/coremetry/internal/cosrelearn"
 	"github.com/cilcenk/coremetry/internal/devops"
 	"github.com/cilcenk/coremetry/internal/elasticml"
@@ -707,11 +706,6 @@ func main() {
 		// ── Alert evaluator (background — opens & resolves problems) ─────
 		go evalr.Start(chstore.WithQueryTag(ctx, "worker:evaluator")) // v0.10.254 — log_comment
 
-		// ── Topology correlator (incident auto-clustering) ──────────────
-		corr := correlator.New(store)
-		go corr.Start(chstore.WithQueryTag(ctx, "worker:correlator"))
-		store.SetNeighborProvider(corr)
-
 		// ── Anomaly detector (Watchdog-style baseline check) ────────────
 		// v0.10.891 — heap bandı fazının kaynağı (VM/CH) aşağıda vmSvc kurulunca
 		// takılır (atomik setter, Start sonrası güvenli); önbellek burada.
@@ -748,13 +742,6 @@ func main() {
 				log.Printf("[elastic-ml] polling enabled (min_score=%v)", cfg.Logs.Elasticsearch.MLMinScore)
 			}
 		}
-	} else {
-		// api/ingest still need the neighbor provider for store reads
-		// (e.g. AttachProblemToIncident lookup during writes). Build
-		// it but don't Start() the background refresher — reads use
-		// the snapshot the worker pod is keeping warm in CH.
-		corr := correlator.New(store)
-		store.SetNeighborProvider(corr)
 	}
 
 	// ── Runbook agent (executes automated runbook steps in an isolated role) ──

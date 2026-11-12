@@ -24,9 +24,8 @@ Tüm döngüler `if mode.worker` (`main.go:652,1221,1251`) + Redis lider kilidi
 | Döngü | Kilit / kurucu | Aralık | Ne yazar |
 |---|---|---|---|
 | Alert evaluator | `evaluator.go:26` `coremetry:lock:evaluator` | 1 dk | problems, incidents, notify |
-| Anomaly detector | `anomaly.go:28` `coremetry:lock:anomaly` | 2 dk (`config.go:474`) | problems (anomaly:*), incidents (kapılı) |
+| Anomaly detector | `anomaly.go:28` `coremetry:lock:anomaly` | 2 dk (`config.go:474`) | problems (anomaly:*) |
 | Anomaly recorder | `recorder.go:36` | 1 dk, pencere 5 dk | anomaly_events (log_pattern / trace_op / new_template) |
-| Topology correlator | `correlator/correlator.go:70` — kilit YOK (saf önbellek) | 5 dk | bellek (komşu grafı) |
 | Exception refresher | `main.go:1616` | 60 s; bayat süpürme her 6. tik | exception_groups |
 | Oracle exception tazeleyicisi (v0.10.1092) | `oracle/exgroups.go` ← oracle poller kancası (oracle-poller lideri) | başarılı poll başına | exception_groups (`ora:`) |
 | ProblemExplainer / ExceptionExplainer | `problem_explainer.go:43`, `exception_explainer.go:35` | 30 s / 60 s | ai_summary — v0.10.1100: `ora:` grubu Oracle bağlamı + `SystemPromptOracleException`; aday yaşı kapanmış dakika gecikmesi kadar geriden (`isExceptionExplainCandidateAt`, `GroupStatsCache` gecikmesi), kaynaksız Oracle grubu aday değil |
@@ -86,21 +85,11 @@ Ne üretiyorsun?
    + `computePriority` 4 saati aşan critical'ı P1 yapar. Muafiyet
    `escalationExempt` (`evaluator.go:1226`) — hem tazeleme dalına hem
    süpürmeye; tekine konursa v0.8.309 seli geri gelir.
-3. **Incident'a bağlanacak mı?** Tek açıcı `AttachProblemToIncidentWith`
-   (`incident.go` `AttachProblemToIncidentWith`; mevcut bağ yalnız incident
-   çözülmemişse — v0.10.1580; aynı servis, 1-hop komşu: çözülmemiş VE son
-   30 dk'da ETKİN `greatest(started_at, updated_at)`, bağlanma updated_at'i
-   tazeler — v0.10.1581; yoksa yeni). Anomali
-   ailesi tek kapılı olan (`attachToIncident`, `anomaly_sensitivity.go:58-73`).
-   **v0.10.1588 (Davis FAZ 0.5 / D, operatör kararı 7):** terfi (`anomaly-auto:`,
-   açılışta, vida `anomaly_promotion.attachToIncident`), fırtına (vida
-   `exception_triage.stormAttachToIncident`) ve dış kaynak (seri / küme / tavan /
-   ext-down — YALNIZ canlı tarayıcı, gölge bağlamaz; vida `anomaly_sensitivity.
-   attachToIncident`) da `AttachProblemToIncident` ile bağlanır; tekil exception
-   (ölümcül + paylaşılan patlama, vida `exception_triage.singleGroupJoinIncident`)
-   `JoinOpenIncident` ile YALNIZ açık incident'a katılır, ASLA açmaz (kural 1 →
-   servisler → komşular `joinCandidateNeighbours`). Üç vida da `*bool` nil = açık.
-   Bağlama yalnız AÇILIŞTA (sonra açılan incident'a geriye bağlanmaz).
+3. **Incident'a bağlama YOK.** Incidents emekli (v0.10.1826 / 2024); otomatik
+   kapılar (`AttachProblemToIncident` 18 çağıran, `JoinOpenIncident` 1) ve
+   topoloji korelatörü (komşu grafı döngüsü) Incidents ölü kod dilimi 1'de
+   silindi. Yeni dedektör incident'a bağlanmaz; pin
+   `chstore/incidents_writers_pin_test.go`.
 4. **Tam satır değiştirme:** `UpsertProblem` tüm satırı yazar; tazeleme yolu
    Status/Assignee/Pod/AISummary'yi TAŞIMALI (`carryProblemOperatorState`,
    `problem_aisummary_test.go`). Unutulan alan sıfırlanır (invariant #4).
@@ -234,7 +223,7 @@ bu sınıfı GÖREMEZ. Emsal: `internal/rollout/reconcile.go`.
 
 | Katman | Yer | Sözleşme |
 |---|---|---|
-| Komşu grafı | `correlator/correlator.go:169-222` ← `topology_edges_5m` (`service_adjacency.go:167`) | 5 dk önbellek; api/ingest rolleri kurar ama Start etmez |
+| Kenar modeli | `correlator/correlator.go` `buildGraph` (SAF) ← çağıranın okuduğu `topology_edges_5m` kenarları | canlı komşu grafı döngüsü Incidents ölü kod dilimi 1'de silindi (tek tüketicisi incident bağlamaydı) |
 | Yayılım sırası | `propagation.go:68 RootCauseRank`, `:200 RankNodeCauses` | aynı-node yerleşimi v0.10.94 |
 | Zamansal katsayı | `temporal.go:54` Spearman | **gölge kip** (`anomaly_sensitivity.temporalRanking`, v0.10.700): katsayı kaydedilir, sıra DEĞİŞMEZ |
 | Hipotez birleştirici | `hypothesis.go:284 Synthesize` (SAF) | deploy 0.80 (+0.15 tazelik; düzenli yinelenen anomalide 0.10 — `DeployRecurring`, ölçülen gerilemede geri, v0.10.1049; terfi Problem'i çıpasında da, kaynak olayın sayacıyla — `deployRecurrence` iki çıpanın tek yardımcısı, v0.10.1054) · yayılım ×0.70 · aynı-servis sinyal [0.30,0.60] · komşu [0.28,0.52] (upstream ×0.6) · eş-ateşleme 0.20 · rollout +0.05 doğrulama; güven = 0.5·genişlik + 0.5·güç (:112-125) |
@@ -378,7 +367,7 @@ v0.10.1072 — inbox istisna listesi taşıdığı için).
 ## 14. Sayım tabanları
 
 - 21 saklanan kural-id ailesi (v0.10.1073 `db-health:`, v0.10.1091 `svc-slowdown:` dahil) + 2 notify-only = `internal/{anomaly,evaluator,monitor}` test-dışı dosyalarda `RuleID:` / `ruleID :=`.
-- 15 arka plan döngüsü = AIOps paketleri + `main.go`'da `NewLeaderHolder` / `time.NewTicker` sahipleri (v0.10.1287: 13 → 15 — AI SRE üreticisi + drain/orkestratör; Job başlatıcı operatör kararıyla yok).
+- 14 arka plan döngüsü = AIOps paketleri + `main.go`'da `NewLeaderHolder` / `time.NewTicker` sahipleri (v0.10.1287: 13 → 15 — AI SRE üreticisi + drain/orkestratör; Job başlatıcı operatör kararıyla yok; Incidents ölü kod dilimi 1: 15 → 14, topoloji korelatörü silindi).
 - 8 ayar anahtarı = `internal/chstore/{anomaly_tracked,anomaly_sensitivity,anomaly_promotion,problem_priority,problem_escalation,exception_triage,selfhealth,notify_policy}.go` içindeki `const *Key`.
 - 12 state tablosu = `store.go`'da problems|anomaly_*|root_cause_hypotheses|rca_verdicts|incident*|exception_groups|events|notification_log CREATE'leri.
 - Kaynak: `docs/DECISIONS.md:385-436` (Anomali/Problems kararları), `docs/INCIDENTS.md:285-299`, planlar `docs/plans/spec-anomaly-clustering.md`, `anomaly-rootcause.md`.

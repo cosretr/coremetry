@@ -725,7 +725,7 @@ func (e *Evaluator) evaluateAll(ctx context.Context) int {
 // incidentOrphanGrace — how long an incident with NO attached problem is left
 // alone before the cascade closes it.
 //
-// The window exists for one reason: AttachProblemToIncident creates the
+// The window existed for one reason: the (now removed) auto-attach created the
 // incident and then binds the problem to it in a second statement. Between
 // those two a rollup sees zero attached problems, and resolving there would
 // close incidents the instant they open. An hour is far longer than that gap
@@ -978,14 +978,6 @@ func (e *Evaluator) evaluateOne(ctx context.Context, r chstore.AlertRule, servic
 			e.countOpened() // v0.9.550 — kalp atışı sayacı
 			log.Printf("[evaluator] PROBLEM OPENED: %s · %s = %.2f (threshold %.2f) [%s]",
 				service, r.Metric, value, r.Threshold, m.src.Label())
-			// Auto-group into an Incident — same-service same-severity
-			// problems within 30min get folded under one declared
-			// incident so the oncall has a single place to drive
-			// response from. Best-effort; failure here doesn't block
-			// alerting.
-			if _, err := e.store.AttachProblemToIncident(ctx, p); err != nil {
-				log.Printf("[evaluator] incident attach: %v", err)
-			}
 			// Fan out to user channels (email/slack/etc). Fire-and-forget
 			// so a flaky SMTP doesn't block the eval loop. When a
 			// maintenance window is active for this (service,
@@ -1513,16 +1505,6 @@ func (e *Evaluator) promoteStrongAnomalies(ctx context.Context) {
 		if isNew {
 			log.Printf("[evaluator] AUTO-PROMOTED anomaly %s · %s · ratio %.1fx → %s",
 				ev.Service, ev.Pattern, ev.PeakRatio, sev)
-			// v0.10.1588 (Davis paritesi FAZ 0.5 / D, operatör kararı 7) —
-			// terfi Problem'i de incident'a bağlanır (aynı servis / 1-hop komşu
-			// / yoksa yeni): aynı olaya N ayrı satır yerine Inbox'ta tek
-			// incident satırı. Vida anomaly_promotion.attachToIncident (nil =
-			// açık); yumuşak hata.
-			if cfg.AttachesToIncident() {
-				if _, err := e.store.AttachProblemToIncident(ctx, p); err != nil {
-					log.Printf("[evaluator] anomaly promotion: incident attach %s: %v", p.ID, err)
-				}
-			}
 			if e.notifier != nil {
 				go e.notifier.SendProblemAlert(context.Background(), p)
 			}
