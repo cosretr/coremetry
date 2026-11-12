@@ -2,6 +2,7 @@ package chstore
 
 import (
 	"context"
+	"strings"
 	"time"
 )
 
@@ -104,6 +105,10 @@ type ListLogTemplatesFilter struct {
 	// belirteç sayısı (templater/family_test.go sabitler). countSubstrings,
 	// splitByChar'ın aksine dizi kurmaz.
 	TokenCounts []int
+	// AnyPrefixes — v0.10.2040: TokenCounts'a VEYA'lanır: şablon bu sabit
+	// öneklerden biriyle başlıyorsa da gelir (log_template_new ön ek ailesi:
+	// aynı biçimin farklı belirteç sayılı varyantları). En çok 20.
+	AnyPrefixes []string
 }
 
 // logTemplatesWhere — v0.10.310: WHERE + ORDER BY saf kurucu (tablo testi
@@ -154,11 +159,27 @@ func logTemplatesWhere(f ListLogTemplatesFilter) (string, []any) {
 	case f.IncludeServiceless:
 		wc += " AND empty(services)"
 	}
+	prefixes := f.AnyPrefixes
+	if len(prefixes) > 20 {
+		prefixes = prefixes[:20]
+	}
+	var conds []string
 	if len(f.TokenCounts) > 0 {
-		wc += " AND (countSubstrings(template, ' ') + 1) IN (" + chPlaceholders(len(f.TokenCounts)) + ")"
+		conds = append(conds, "(countSubstrings(template, ' ') + 1) IN ("+chPlaceholders(len(f.TokenCounts))+")")
 		for _, n := range f.TokenCounts {
 			args = append(args, n)
 		}
+	}
+	for _, p := range prefixes {
+		conds = append(conds, "startsWith(template, ?)")
+		args = append(args, p)
+	}
+	switch len(conds) {
+	case 0:
+	case 1:
+		wc += " AND " + conds[0]
+	default:
+		wc += " AND (" + strings.Join(conds, " OR ") + ")"
 	}
 	return wc + "\n\t\tORDER BY " + order, args
 }

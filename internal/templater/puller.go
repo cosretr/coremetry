@@ -150,7 +150,8 @@ func (p *Puller) tick(parent context.Context) {
 			skipped++
 			continue
 		}
-		c := p.drain.Add(body, r.ServiceName, r.Timestamp)
+		// v0.10.2040 — JSON zarfında şablon `message` alanından (newness.go).
+		c := p.drain.Add(TemplateSource(body), r.ServiceName, r.Timestamp)
 		if IsErrorSeverity(r.Severity, r.SeverityText) { // v0.10.2029 — kalıbın seviyesi
 			p.drain.NoteErrorPlus(c)
 		}

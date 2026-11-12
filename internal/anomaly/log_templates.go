@@ -280,7 +280,23 @@ func knownTemplatesFilter(cands []parsedLogTemplate, now time.Time, sinceNs int6
 		AnyServices:        svcs,
 		IncludeServiceless: serviceless,
 		TokenCounts:        candidateTokenCounts(cands),
+		AnyPrefixes:        candidatePrefixes(cands), // v0.10.2040 — ön ek ailesi
 	}
+}
+
+// candidatePrefixes — v0.10.2040: ön ek imzalı adayların sabit başları
+// (tekil, sıralı).
+func candidatePrefixes(cands []parsedLogTemplate) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, c := range cands {
+		if p := c.shape.LiteralPrefix(); p != "" && !seen[p] {
+			seen[p] = true
+			out = append(out, p)
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 // candidateServices — adayların servis birleşimi, sıralı (deterministik
@@ -392,7 +408,7 @@ func variantOfKnown(c parsedLogTemplate, known []parsedLogTemplate) bool {
 		if k.ID == c.ID {
 			continue
 		}
-		if servicesOverlap(c.Services, k.Services) && c.shape.SameFamily(k.shape) {
+		if servicesOverlap(c.Services, k.Services) && c.shape.SameNewnessFamily(k.shape) { // v0.10.2040
 			return true
 		}
 	}
@@ -404,7 +420,7 @@ func dupOfEmitted(c parsedLogTemplate, emitted []parsedLogTemplate) bool {
 		if e.ID == c.ID {
 			return true
 		}
-		if servicesOverlap(c.Services, e.Services) && c.shape.SameFamily(e.shape) {
+		if servicesOverlap(c.Services, e.Services) && c.shape.SameNewnessFamily(e.shape) { // v0.10.2040
 			return true
 		}
 	}

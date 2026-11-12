@@ -10,6 +10,8 @@ func BenchmarkMask(b *testing.B) {
 		"Payment authorization failed for customer account, retrying later",
 		"pod orders-api-7d9f6-x2k4p restarted, attempt 3 of 5, took 18.45MB",
 		`{"request_id":"SPE1015060201ZTod000000000000202610240340413867","msg":"inquiry completed in 15ms"}`,
+		// v0.10.2040 — anahtar=değer dökümü (rastgele kimlik kuralı)
+		"AuthContext(challengeCode=482913, tabId=eISAG_fy28U, channel=MOBILE, status=null, imageType=SECURITY_IMAGE, response=LoginStatusResponse)",
 	}
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {

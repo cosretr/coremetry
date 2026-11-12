@@ -192,7 +192,7 @@ func TestMaskVariableTokens_IdempotentAndWhitespaceInvariant(t *testing.T) {
 }
 
 func TestMaskerVersion(t *testing.T) {
-	if MaskerVersion != 2 {
+	if MaskerVersion != 3 { // v0.10.2040 — anahtar=değer rastgele kimlik + JSON zarfı
 		t.Fatalf("MaskerVersion = %d; bump it ONLY with a rule change that alters identities (templater quiet window keys on it)", MaskerVersion)
 	}
 }

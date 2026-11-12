@@ -77,7 +77,13 @@ import (
 // sürümü yazar ve "yeni şablon" uyarılarını 24 sa susturur (persisted Drain
 // kimlikleri değişen şablonlar için toptan "yeni" doğar). 1 = v0.10.1496–
 // 1828 (MaskIDTokens son geçişli), 2 = bu dosya.
-const MaskerVersion = 2
+//
+// 3 = v0.10.2040 (Operator-reported: servisin en sık `anahtar=değer` dökümü
+// "yeni log şablonu" sayıldı): `anahtar=değer` / `"anahtar":"değer"` içindeki
+// kısa rastgele kimlik (isRandomIDValue) değişken; templater ayrıca JSON
+// zarfında şablonu `message` alanından çıkarır. Tek artış = tek 24 sa
+// sessizlik penceresi.
+const MaskerVersion = 3
 
 // kubeSuffixAlphabet — Kubernetes rand.String alfabesi (sesli harf ve 0/1/3
 // yok; `k8s.io/apimachinery/pkg/util/rand`).
@@ -124,6 +130,7 @@ type varRules struct {
 	fmtBrace *regexp.Regexp
 	fmtPct   *regexp.Regexp
 	number   *regexp.Regexp
+	kvID     *regexp.Regexp
 	quotedD  *regexp.Regexp
 	quotedS  *regexp.Regexp
 	collapse *regexp.Regexp
@@ -161,6 +168,7 @@ func rulesFor(repl string) *varRules {
 		fmtPct:   regexp.MustCompile(`%[sdvfi]|\?`),
 		number: regexp.MustCompile(`(?:\d{1,3}(?:[\x{00A0}\x{202F}\x{2009}]\d{3})+|(?:\d+|` + p + `)(?:[.,](?:\d+|` + p + `))*)` +
 			`([A-Za-zµμ%]*)`),
+		kvID:     regexp.MustCompile(`([A-Za-z_][A-Za-z0-9_.-]{0,63}=)([A-Za-z0-9_-]{8,64})`),
 		quotedD:  regexp.MustCompile(`"([^"\\\s]{1,256})"`),
 		quotedS:  regexp.MustCompile(`'([^'\\\s]{1,256})'`),
 		collapse: regexp.MustCompile(p + `(?:[-_.:/+=#,@\x{00A0}\x{202F}\x{2009}]*` + p + `)+`),
@@ -236,6 +244,20 @@ func MaskVariableTokens(s, repl string) string {
 		s = r.fmtBrace.ReplaceAllString(s, repl)
 		s = replaceChecked(s, r.fmtPct, func(s string, loc []int) (string, bool) {
 			return repl, formatPlaceholderAt(s, loc[0], loc[1])
+		})
+	}
+	if strings.IndexByte(s, '=') >= 0 {
+		// v0.10.2040 — `anahtar=değer` içindeki rastgele kimlik (anahtar kalır).
+		s = replaceChecked(s, r.kvID, func(s string, loc []int) (string, bool) {
+			if loc[1] < len(s) {
+				if c := s[loc[1]]; isASCIIAlnum(c) || c == '_' || c == '-' || c == '.' {
+					return "", false
+				}
+			}
+			if !isRandomIDValue(s[loc[4]:loc[5]]) {
+				return "", false
+			}
+			return s[loc[2]:loc[3]] + repl, true
 		})
 	}
 	if strings.ContainsAny(s, `"'`) {
@@ -447,6 +469,9 @@ func quotedValueIsID(v, repl string) bool {
 	if strings.Contains(v, repl) {
 		return false
 	}
+	if isRandomIDValue(v) { // v0.10.2040 — `"anahtar":"eISAG_fy28U"`
+		return true
+	}
 	var b strings.Builder
 	for _, r := range v {
 		if isSigAlnum(r) {
@@ -454,4 +479,59 @@ func quotedValueIsID(v, repl string) bool {
 		}
 	}
 	return IsIDLikeToken(b.String())
+}
+
+func isASCIIAlnum(c byte) bool {
+	return c >= '0' && c <= '9' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'
+}
+
+// isRandomIDValue — SAF (v0.10.2040): `anahtar=değer` değeri rastgele kimlik
+// gibi mi. Yalnız [A-Za-z0-9_-], 8–64 karakter; izin listesinde değil; harf
+// içerir ve (rakam da içerir YA DA büyük + küçük harf karışık); aynı harf
+// durumunda en uzun koşu ≤ 4 (sözcük / sınıf adı / BÜYÜK_SABİT değil:
+// `LoginStatusResponse`, `HTTPServer`, `SECURITY_IMAGE`, `Log4j2Plugins`
+// kalır); sınıf (büyük / küçük / rakam) geçişi ≥ 0,3 × uzunluk (rastgele
+// dizgelerde ~0,4–0,55, camelCase'de ~0,1–0,3). Örnek: `eISAG_fy28U`,
+// `JVNQbZ54lgk`, `z8CscvEYOzo`.
+func isRandomIDValue(v string) bool {
+	if len(v) < 8 || len(v) > 64 || idTokenAllowlist[strings.ToLower(v)] {
+		return false
+	}
+	n, digits, upper, lower, trans, run, maxRun, prev := 0, 0, 0, 0, 0, 0, 0, 0
+	for i := 0; i < len(v); i++ {
+		c := v[i]
+		cls := 0
+		switch {
+		case c >= 'A' && c <= 'Z':
+			cls, upper = 1, upper+1
+		case c >= 'a' && c <= 'z':
+			cls, lower = 2, lower+1
+		case c >= '0' && c <= '9':
+			cls, digits = 3, digits+1
+		case c == '_' || c == '-':
+			continue
+		default:
+			return false
+		}
+		n++
+		switch {
+		case cls == 3:
+			run = 0
+		case cls == prev:
+			run++
+		default:
+			run = 1
+		}
+		if run > maxRun {
+			maxRun = run
+		}
+		if prev != 0 && cls != prev {
+			trans++
+		}
+		prev = cls
+	}
+	if upper+lower == 0 || (digits == 0 && (upper == 0 || lower == 0)) || maxRun > 4 {
+		return false
+	}
+	return trans*10 >= n*3
 }
