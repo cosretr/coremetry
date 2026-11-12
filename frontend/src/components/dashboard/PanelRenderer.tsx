@@ -245,13 +245,13 @@ export function PanelRenderer({ panel, range, vars, syncKey, onZoom, onZoomReset
     case 'spanmetric':
       return <SpanMetricPanel cfg={applyVarsToSpan(panel.config as SpanMetricPanelConfig, vars)} range={effectiveRange} syncKey={syncKey} onZoom={onZoom} onZoomReset={onZoomReset} dataOverride={effectiveDataOverride} height={h} onFocusChange={onFocusChange} />;
     case 'stat':
-      return <StatPanel cfg={applyVarsToStat(panel.config as StatPanelConfig, vars)} range={effectiveRange} height={h} />;
+      return <StatPanel cfg={applyVarsToStat(panel.config as StatPanelConfig, vars)} range={effectiveRange} height={h} dataOverride={effectiveDataOverride} />;
     case 'gauge':
-      return <GaugePanel cfg={applyVarsToGauge(panel.config as GaugePanelConfig, vars)} range={effectiveRange} height={h} />;
+      return <GaugePanel cfg={applyVarsToGauge(panel.config as GaugePanelConfig, vars)} range={effectiveRange} height={h} dataOverride={effectiveDataOverride} />;
     case 'heatmap':
       return <HeatmapPanel cfg={applyVarsToHeatmap(panel.config as HeatmapPanelConfig, vars)} range={effectiveRange} height={h} />;
     case 'promql':
-      return <PromqlPanel cfg={applyVarsToPromql(panel.config as PromqlPanelConfig, promVars)} range={effectiveRange} syncKey={syncKey} onZoom={onZoom} onZoomReset={onZoomReset} height={h} onFocusChange={onFocusChange} />;
+      return <PromqlPanel cfg={applyVarsToPromql(panel.config as PromqlPanelConfig, promVars)} range={effectiveRange} syncKey={syncKey} onZoom={onZoom} onZoomReset={onZoomReset} height={h} onFocusChange={onFocusChange} dataOverride={effectiveDataOverride} />;
     // v0.9.781 — non-temporal (ranked bars, no time axis): no syncKey, no
     // onZoom — there is no cursor to sync and no x-range to drag. Carries
     // panelId instead so the dashboard's panel-actions menu can anchor to it
@@ -302,7 +302,7 @@ export function applyVarsToSpan(cfg: SpanMetricPanelConfig, vars?: Record<string
   };
 }
 
-function applyVarsToStat(cfg: StatPanelConfig, vars?: Record<string, string>): StatPanelConfig {
+export function applyVarsToStat(cfg: StatPanelConfig, vars?: Record<string, string>): StatPanelConfig {
   if (!vars) return cfg;
   if (cfg.source === 'metric') {
     return { ...cfg, metric: cfg.metric ? applyVarsToMetric(cfg.metric, vars) : cfg.metric };
@@ -314,7 +314,7 @@ function applyVarsToStat(cfg: StatPanelConfig, vars?: Record<string, string>): S
 // metric/span source pattern. Separate function so future
 // gauge-only fields (min/max/thresholds) can pick up variable
 // substitution without contaminating the Stat code path.
-function applyVarsToGauge(cfg: GaugePanelConfig, vars?: Record<string, string>): GaugePanelConfig {
+export function applyVarsToGauge(cfg: GaugePanelConfig, vars?: Record<string, string>): GaugePanelConfig {
   if (!vars) return cfg;
   if (cfg.source === 'metric') {
     return { ...cfg, metric: cfg.metric ? applyVarsToMetric(cfg.metric, vars) : cfg.metric };
@@ -416,9 +416,11 @@ function MetricPanel({ cfg, range, syncKey, onZoom, onZoomReset, dataOverride, h
   // operator is switching modes). Own-fetch (the dashboard bundle only
   // prefetches builder metrics); takes precedence over any stale override.
   const promqlMode = cfg.promql !== undefined;
-  const hasOverride = !promqlMode && dataOverride && (dataOverride.series !== undefined || dataOverride.error);
+  // v0.10.2003 (dilim 3.6) — PromQL kipindeki metric paneli de bundle'da
+  // (promql slotu); override varsa iki kipte de kendi isteği yok.
+  const hasOverride = dataOverride && (dataOverride.series !== undefined || dataOverride.error);
   useEffect(() => {
-    if (promqlMode) {
+    if (promqlMode && !hasOverride) {
       if (!cfg.promql!.trim()) { setSeries(undefined); setError('Configure a PromQL query'); return; }
       const { from, to } = timeRangeToNs(range);
       const step = effectivePanelStep(cfg.step, (to - from) / 1e9, widthPx);
@@ -600,12 +602,14 @@ function HeatmapPanel({ cfg, range, height }: {
 // A dashboard chart driven by a raw PromQL query (/api/metrics/promql, the
 // Phase 1-3 engine). Own-fetch, width-aware step, standard loading/empty/error
 // states; a parse/eval error surfaces inline (the backend message).
-function PromqlPanel({ cfg, range, syncKey, onZoom, onZoomReset, height, onFocusChange }: {
+function PromqlPanel({ cfg, range, syncKey, onZoom, onZoomReset, height, onFocusChange, dataOverride }: {
   cfg: PromqlPanelConfig; range: TimeRange; syncKey?: string;
   onZoom?: (fromUnixSec: number, toUnixSec: number) => void;
   onZoomReset?: () => void;
   height?: PanelHeight;
   onFocusChange?: (names: string[]) => void; // v0.10.1435
+  // v0.10.2003 (Faz 3 dilim 3.6) — pano bundle'ının slotu; varsa kendi isteği yok.
+  dataOverride?: PanelDataOverride;
 }) {
   const boxPx = panelChartHeight(height);
   const [series, setSeries] = useState<SpanMetricSeries[] | null | undefined>(undefined);
@@ -622,7 +626,15 @@ function PromqlPanel({ cfg, range, syncKey, onZoom, onZoomReset, height, onFocus
     return () => window.clearTimeout(t);
   }, [cfg.query]);
 
+  const hasOverride = !!dataOverride && (dataOverride.series !== undefined || !!dataOverride.error);
   useEffect(() => {
+    if (hasOverride) {
+      if (dataOverride!.error) { setSeries(undefined); setError(dataOverride!.error); return; }
+      setError(null);
+      setSeries(dataOverride!.series ?? []);
+      setPromMeta(dataOverride!.meta);
+      return;
+    }
     if (!debouncedQuery || !debouncedQuery.trim()) {
       setSeries(undefined);
       setError('Configure a PromQL query');
@@ -639,7 +651,7 @@ function PromqlPanel({ cfg, range, syncKey, onZoom, onZoomReset, height, onFocus
       .then(r => { setSeries(r?.series ?? []); setPromMeta(r?.meta); })
       .catch(e => setError(e.message));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedQuery, cfg.step, cfg.source, range, widthPx]);
+  }, [debouncedQuery, cfg.step, cfg.source, range, widthPx, hasOverride, JSON.stringify(dataOverride)]);
 
   if (error) return <PanelError msg={error} height={boxPx} />;
   const viz = cfg.viz ?? 'line';
@@ -879,6 +891,14 @@ function SpanMetricPanel({ cfg, range, syncKey, onZoom, onZoomReset, dataOverrid
 // audit §5.4 "Stat ve gauge'a MetricsQL kaynağı"): metric alt-konfiginde
 // `promql` doluysa MetricsQL sorgusu (/api/metrics/promql) — Grafana içe
 // aktarması stat / gauge'u bu yoldan getirir. Yoksa eski iki yol aynen.
+// bundledOr — v0.10.2003 (dilim 3.6): bundle slotu doluysa onun serileri
+// (hata slotu reddedilir), yoksa panelin kendi isteği.
+function bundledOr(o: PanelDataOverride, own: () => Promise<SpanMetricSeries[] | null | undefined>): Promise<SpanMetricSeries[] | null | undefined> {
+  if (o && o.error) return Promise.reject(new Error(o.error));
+  if (o && o.series !== undefined) return Promise.resolve(o.series);
+  return own();
+}
+
 function singleValueSeries(cfg: StatPanelConfig | GaugePanelConfig, from: number, to: number): Promise<SpanMetricSeries[] | null | undefined> {
   if (cfg.source !== 'spanmetric' && cfg.metric?.promql?.trim()) {
     return api.metricPromql({ query: cfg.metric.promql, from, to, step: cfg.metric.step }).then(r => r?.series ?? []);
@@ -896,8 +916,9 @@ function singleValueSeries(cfg: StatPanelConfig | GaugePanelConfig, from: number
       });
 }
 
-function StatPanel({ cfg, range, height }: {
+function StatPanel({ cfg, range, height, dataOverride }: {
   cfg: StatPanelConfig; range: TimeRange; height?: PanelHeight;
+  dataOverride?: PanelDataOverride; // v0.10.2003 — bundle slotu (iki kat pencere)
 }) {
   const boxPx = panelBoxHeight(height);
   const [value, setValue] = useState<number | null | undefined>(undefined);
@@ -913,7 +934,7 @@ function StatPanel({ cfg, range, height }: {
     const { from, to } = timeRangeToNs(range);
     const span = to - from;
     const extendedFrom = from - span;
-    const promise = singleValueSeries(cfg, extendedFrom, to);
+    const promise = bundledOr(dataOverride, () => singleValueSeries(cfg, extendedFrom, to));
     promise
       .then(s => {
         const flat = (s ?? []).flatMap(x => x.points);
@@ -929,7 +950,7 @@ function StatPanel({ cfg, range, height }: {
         setPrior(priorPts.length > 0 ? mean(priorPts.map(p => p.value)) : null);
       })
       .catch(e => setError(e.message));
-  }, [JSON.stringify(cfg), range]);
+  }, [JSON.stringify(cfg), range, JSON.stringify(dataOverride)]);
 
   if (error) return <PanelError msg={error} height={boxPx} />;
   if (value === undefined) return <PanelLoading height={boxPx} />;
@@ -1013,8 +1034,9 @@ function StatPanel({ cfg, range, height }: {
 // recent half-window. No prior-period overlay (the gauge's
 // visual job is "current state", not "trend"; the Stat panel
 // covers the trend story).
-function GaugePanel({ cfg, range, height }: {
+function GaugePanel({ cfg, range, height, dataOverride }: {
   cfg: GaugePanelConfig; range: TimeRange; height?: PanelHeight;
+  dataOverride?: PanelDataOverride; // v0.10.2003 — bundle slotu
 }) {
   const boxPx = panelBoxHeight(height);
   const [value, setValue] = useState<number | null | undefined>(undefined);
@@ -1023,7 +1045,7 @@ function GaugePanel({ cfg, range, height }: {
   useEffect(() => {
     setValue(undefined); setError(null);
     const { from, to } = timeRangeToNs(range);
-    const promise = singleValueSeries(cfg, from, to);
+    const promise = bundledOr(dataOverride, () => singleValueSeries(cfg, from, to));
     promise
       .then(s => {
         const flat = (s ?? []).flatMap(x => x.points);

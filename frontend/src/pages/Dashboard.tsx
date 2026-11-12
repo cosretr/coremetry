@@ -19,7 +19,7 @@ import { encodeRange } from '@/lib/urlState';
 import { metricsExplorerCodeHref } from '@/lib/metricsExplorer/panels';
 import { useAiSubject } from '@/components/ai/useAiSubject';
 import { useAuth } from '@/components/AuthProvider';
-import { PanelRenderer, applyVarsToMetric, applyVarsToSpan, expandPromqlVars, type PanelDataOverride } from '@/components/dashboard/PanelRenderer';
+import { PanelRenderer, expandPromqlVars, type PanelDataOverride } from '@/components/dashboard/PanelRenderer';
 import { PanelEditor, defaultConfig } from '@/components/dashboard/PanelEditor';
 import { VariableEditor } from '@/components/dashboard/VariableEditor';
 import { VariablesBar } from '@/components/dashboard/VariablesBar';
@@ -30,9 +30,10 @@ import { usePageZoomRange } from '@/lib/chart/usePageZoomRange';
 import { useContentWidth } from '@/lib/useContentWidth';
 import { quantizeWidth } from '@/lib/chartStep';
 import { effectivePanelStep, estimatePanelPx } from '@/components/dashboard/panelStep';
+import { bundleRequestFor, isBundleable, type BundleRequest } from '@/components/dashboard/bundlePlan';
 import type {
   Dashboard, Panel, PanelType, TimeRange,
-  MetricPanelConfig, SpanMetricPanelConfig, PromqlPanelConfig,
+  PromqlPanelConfig,
 } from '@/lib/types';
 import { timeRangeToNs } from '@/lib/utils';
 import { panelShareUrl } from '@/lib/dashboardUrl';
@@ -196,7 +197,8 @@ function Inner() {
     const list = doc?.panels;
     if (!list) return [];
     const panels = normalizePanels(list);
-    return panels.filter(p => p.type === 'metric' || p.type === 'spanmetric');
+    // v0.10.2003 (dilim 3.6) — promql / stat / gauge da bundle'da (bundlePlan.ts).
+    return panels.filter(isBundleable);
   }, [doc?.panels]);
   // GRAN-C (v0.8.248) — quantized #content width for the bundle's
   // width-aware auto step. The bundle builds every panel's query before the
@@ -235,27 +237,10 @@ function Inner() {
     const rangeSec = (to - from) / 1e9;
     const stepFor = (cfgStep: number | undefined, p: Panel) =>
       effectivePanelStep(cfgStep, rangeSec, estimatePanelPx(contentW, panelSpan(p) / 3)) ?? undefined;
-    const requests = bundleablePanels.map(p => {
-      if (p.type === 'metric') {
-        const cfg = applyVarsToMetric(p.config as MetricPanelConfig, plainVars(varValues));
-        return {
-          id: p.id, type: 'metric' as const,
-          name: cfg.metricName, service: cfg.service,
-          agg: cfg.agg,
-          groupBy: cfg.groupBy ? cfg.groupBy.split(',').map(s => s.trim()).filter(Boolean) : undefined,
-          step: stepFor(cfg.step, p),
-          filters: cfg.filters,
-        };
-      }
-      const cfg = applyVarsToSpan(p.config as SpanMetricPanelConfig, plainVars(varValues));
-      return {
-        id: p.id, type: 'spanMetric' as const,
-        agg: cfg.agg, field: cfg.field,
-        groupBy: cfg.groupBy ? cfg.groupBy.split(',').map(s => s.trim()).filter(Boolean) : undefined,
-        filters: cfg.filters, dsl: cfg.dsl,
-        step: stepFor(cfg.step, p),
-      };
-    });
+    const requests = bundleablePanels
+      .map(p => bundleRequestFor(p, varValues, s => stepFor(s, p),
+        estimatePanelPx(contentW, panelSpan(p) / 3), { from, to }))
+      .filter((r): r is BundleRequest => r !== null);
     api.dashboardData({ from, to, requests })
       .then(out => { if (!cancelled) setBundlePanelData(out as Record<string, PanelDataOverride>); })
       .catch(() => { if (!cancelled) setBundlePanelData({}); });

@@ -2991,11 +2991,14 @@ export const api = {
   dashboardData: (body: {
     from: number; to: number;
     requests: Array<{
-      id: string; type: 'metric' | 'spanMetric';
+      id: string; type: 'metric' | 'spanMetric' | 'promql';
       name?: string; service?: string;
       agg?: string; field?: string;
       groupBy?: string[]; step?: number;
       filters?: string; dsl?: string;
+      // v0.10.2003 (Faz 3 dilim 3.6) — promql slotu + piksel bütçesi + slot
+      // penceresi (stat'ın iki kat penceresi; unix ns, ikisi birlikte).
+      query?: string; maxDataPoints?: number; from?: number; to?: number;
     }>;
   }) =>
     // v0.9.1157 — `note`: tekil /api/metrics/query zarfıyla AYNI alan. Bu

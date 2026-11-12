@@ -89,6 +89,36 @@ type bundleReq struct {
 	// Limit 0 = kapalı (anahtar bayt-aynı).
 	Limit int    `json:"limit,omitempty"`
 	Rank  string `json:"rank,omitempty"`
+	// v0.10.2003 (Dashboards Faz 3 dilim 3.6) — bundle'a promql slotu ve
+	// slot başına pencere. Query: MetricsQL / PromQL metni (değişkenler FE'de
+	// genişletilmiş). MaxDataPoints: panelin piksel bütçesi (VM adımı
+	// ceil(aralık/mdp)); tekil /promql ile aynı 0..4000 kelepçesi. From/To
+	// (unix ns, ikisi birlikte): stat / gauge'un iki kat penceresi gibi
+	// gövdeden farklı pencere. Hepsi yalnız doluyken anahtara girer (eski
+	// slotların anahtarı bayt-aynı).
+	Query         string `json:"query,omitempty"`
+	MaxDataPoints int    `json:"maxDataPoints,omitempty"`
+	From          int64  `json:"from,omitempty"`
+	To            int64  `json:"to,omitempty"`
+}
+
+// window — SAF: slotun penceresi; geçerli (From < To) override yoksa gövdeninki.
+func (q bundleReq) window(from, to time.Time) (time.Time, time.Time) {
+	if q.From > 0 && q.To > q.From {
+		return time.Unix(0, q.From), time.Unix(0, q.To)
+	}
+	return from, to
+}
+
+// maxDP — SAF: tekil /promql kelepçesi.
+func (q bundleReq) maxDP() int {
+	switch {
+	case q.MaxDataPoints < 0:
+		return 0
+	case q.MaxDataPoints > 4000:
+		return 4000
+	}
+	return q.MaxDataPoints
 }
 
 // bundleSlot — tek panelin yanıtı.
@@ -157,6 +187,7 @@ func dashPanelKey(srcTag string, q bundleReq, from, to time.Time) string {
 	// Parçalar UZUNLUK-önekli: çıplak ayırıcıyla ("a\x00b","c") ve
 	// ("a","b\x00c") aynı ön-görüntüyü üretirdi (inceleme, v0.10.146).
 	h := fnv.New64a()
+	from, to = q.window(from, to) // v0.10.2003 — slot penceresi kovaya
 	for _, part := range []string{
 		q.Type, q.Name, q.Service, q.Agg, field,
 		strconv.Itoa(len(q.GroupBy)), strings.Join(q.GroupBy, "\x1f"), strconv.Itoa(q.Step),
@@ -170,6 +201,14 @@ func dashPanelKey(srcTag string, q bundleReq, from, to time.Time) string {
 	// dünkünün aynısı (deploy'da soğuk okuma dalgası yok).
 	if q.Type == "metric" && (q.Limit > 0 || q.Rank != "") {
 		for _, part := range []string{"topn", strconv.Itoa(q.Limit), q.Rank} {
+			h.Write([]byte(strconv.Itoa(len(part))))
+			h.Write([]byte{':'})
+			h.Write([]byte(part))
+		}
+	}
+	// v0.10.2003 — promql metni + piksel bütçesi yalnız doluyken.
+	if q.Query != "" || q.MaxDataPoints != 0 {
+		for _, part := range []string{"pq", q.Query, strconv.Itoa(q.maxDP())} {
 			h.Write([]byte(strconv.Itoa(len(part))))
 			h.Write([]byte{':'})
 			h.Write([]byte(part))
@@ -241,7 +280,7 @@ func (s *Server) dashboardsData(w http.ResponseWriter, r *http.Request) {
 		go func() {
 			defer wg.Done()
 			tag := ""
-			if req.Type == "metric" {
+			if req.Type == "metric" || req.Type == "promql" {
 				tag = metricTag
 			}
 			req.Enc = body.Enc
@@ -291,7 +330,29 @@ func (s *Server) dashboardsData(w http.ResponseWriter, r *http.Request) {
 // çağrı adlarını pinler.
 func (s *Server) bundleSlot(ctx context.Context, metricSrc metricSource, req bundleReq, from, to time.Time, cs clusterScope) (*bundleSlot, error) {
 	slot := &bundleSlot{}
+	from, to = req.window(from, to) // v0.10.2003 — stat / gauge iki kat penceresi
 	switch req.Type {
+	case "promql":
+		// v0.10.2003 (dilim 3.6) — tekil /api/metrics/promql'in aralık yolu:
+		// aynı sözdizimi kapısı, aynı 8 KiB tavanı, aynı hata sınıflaması.
+		q := strings.TrimSpace(req.Query)
+		if q == "" {
+			return nil, fmt.Errorf("%w: query is required", errBadRequest)
+		}
+		if len(q) > maxPromQLQueryLen {
+			return nil, fmt.Errorf("%w: query too long", errBadRequest)
+		}
+		if verr := metricSrc.ValidatePromQL(q); verr != nil {
+			return nil, verr
+		}
+		ctx, mrun := beginMetricMeta(cs.withCtx(ctx), metricSrc)
+		res, err := metricSrc.QueryPromQLRange(ctx, q, from, to, req.Step, req.maxDP())
+		if err != nil {
+			return nil, classifyPromQLEvalErr(err)
+		}
+		slot.Series = res
+		slot.Meta = mrun.finish(len(res), chMetaHints{Executed: q, StepSec: observedStepSec(res)}, "")
+		slot.Meta.Cluster = cs.metaCluster(true)
 	case "metric":
 		// v0.10.118 — derlenemeyen filtre bu panelde HATA olur (slot
 		// Error), sessiz "filtresiz seri" değil — parseFilters sözleşmesi.
