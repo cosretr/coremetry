@@ -88,11 +88,62 @@ func (s *Server) offTopicGeneralEnabled(question string) bool {
 
 // guidedOffTopicDispatch — runGuidedRoute'un off_topic dalı: anahtar açıksa
 // kısa genel cevap, kapalıysa (ya da zararlı istek) v0.10.819 sınırı.
-func (s *Server) guidedOffTopicDispatch(ctx context.Context, emit func(string, any), question, ctxService string) (bool, bool) {
+func (s *Server) guidedOffTopicDispatch(ctx context.Context, emit func(string, any), msgs []copilot.ChatMessage, question, ctxService string) (bool, bool) {
 	if s.offTopicGeneralEnabled(question) {
-		return s.offTopicGeneralAnswer(ctx, emit, question, ctxService)
+		return s.offTopicGeneralAnswer(ctx, emit, msgs, question, ctxService)
 	}
 	return s.guidedOffTopicAnswer(emit, question, ctxService)
+}
+
+// Önceki konuşmanın genel cevaba taşınan payı: en çok offTopicGeneralHistoryMsgs
+// ileti, toplam offTopicGeneralHistoryRunes; tek kullanıcı iletisi (yapıştırılan
+// kod) offTopicGeneralUserRunes, tek asistan iletisi offTopicGeneralAsstRunes.
+const (
+	offTopicGeneralQuestionRunes = 1500
+	offTopicGeneralHistoryMsgs   = 6
+	offTopicGeneralHistoryRunes  = 6000
+	offTopicGeneralUserRunes     = 4000
+	offTopicGeneralAsstRunes     = 1200
+)
+
+// offTopicGeneralPrompt — SAF: genel cevabın kullanıcı istemi. v0.10.2012
+// (operatör, prod): kullanıcı bir turda kod yapıştırıp sonrakinde "buna junit
+// testi yazar mısın" dedi; modele yalnız son soru gittiği için "kodu
+// paylaşmadınız" cevabı çıktı. Önceki iletiler (en yeniden geriye, bütçe
+// dolana dek) sorunun önüne konur; önceki ileti yoksa istem eskisi gibi
+// yalnız sorudur.
+func offTopicGeneralPrompt(msgs []copilot.ChatMessage, question string) string {
+	q := clipRunes(question, offTopicGeneralQuestionRunes)
+	end := len(msgs)
+	if end > 0 && msgs[end-1].Role == "user" && strings.TrimSpace(msgs[end-1].Text) == strings.TrimSpace(question) {
+		end-- // son ileti şimdiki sorunun kendisi
+	}
+	var prior []string
+	budget := offTopicGeneralHistoryRunes
+	for i := end - 1; i >= 0 && len(prior) < offTopicGeneralHistoryMsgs && budget > 0; i-- {
+		t := strings.TrimSpace(msgs[i].Text)
+		if t == "" {
+			continue
+		}
+		who, limit := "Kullanıcı", offTopicGeneralUserRunes
+		if msgs[i].Role != "user" {
+			who, limit = "CoSRE", offTopicGeneralAsstRunes
+		}
+		if limit > budget {
+			limit = budget
+		}
+		t = clipRunes(t, limit)
+		budget -= utf8.RuneCountInString(t)
+		prior = append(prior, "["+who+"]\n"+t)
+	}
+	if len(prior) == 0 {
+		return q
+	}
+	for i, j := 0, len(prior)-1; i < j; i, j = i+1, j-1 {
+		prior[i], prior[j] = prior[j], prior[i]
+	}
+	return "ÖNCEKİ KONUŞMA (kullanıcı \"bu\", \"buna\", \"şunu\" derse buradaki içeriği kasteder):\n\n" +
+		strings.Join(prior, "\n\n") + "\n\nŞİMDİKİ SORU:\n" + q
 }
 
 // offTopicGeneralText — SAF: model çıktısı (+ hata) → ekrana giden metin.
@@ -268,11 +319,8 @@ func collapseBlankLines(s string) string {
 
 // offTopicGeneralAnswer — tek araçsız çağrı + çipler (düşüşte v0.10.819 sınırı
 // çip ve bağlantılarıyla).
-func (s *Server) offTopicGeneralAnswer(ctx context.Context, emit func(string, any), question, ctxService string) (bool, bool) {
-	q := question
-	if r := []rune(q); len(r) > 1500 {
-		q = string(r[:1500])
-	}
+func (s *Server) offTopicGeneralAnswer(ctx context.Context, emit func(string, any), msgs []copilot.ChatMessage, question, ctxService string) (bool, bool) {
+	q := offTopicGeneralPrompt(msgs, question)
 	const tool = "off_topic_general"
 	args, _ := json.Marshal(map[string]string{"q": clipRunes(question, 120), "service": ctxService})
 	n := emitGuidedStep(emit, tool, string(args))

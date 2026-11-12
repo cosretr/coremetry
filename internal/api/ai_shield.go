@@ -43,7 +43,7 @@ func aiShieldWith(known []string) func(prompt, answer string) uint8 {
 func shieldCountsSurface(surface string) bool {
 	switch surface {
 	case "chat-intent", "chat-intent-none", "chat-general", "chat-offtopic", // chat-offtopic v0.10.819
-		"chat-offtopic-general": // v0.10.1458 — prompt yalnız kullanıcı sorusu
+		"chat-offtopic-general": // v0.10.1458 — prompt kullanıcı sorusu (+ v0.10.2012 önceki konuşma), kanıt taşımaz
 		return false
 	}
 	return true

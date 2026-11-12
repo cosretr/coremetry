@@ -2235,7 +2235,7 @@ func (s *Server) runGuidedRoute(ctx context.Context, emit func(string, any), rou
 		return s.guidedOutboundAnswer(ctx, emit, route, chatUserTexts(msgs), from, to)
 	}
 	if route.Intent == guidedOffTopic { // v0.10.819 — LLM'siz kibar sınır + yol tarifi; v0.10.1458 — anahtar açıksa kısa genel cevap (chat_offtopic_general.go)
-		return s.guidedOffTopicDispatch(ctx, emit, question, ctxService)
+		return s.guidedOffTopicDispatch(ctx, emit, msgs, question, ctxService)
 	}
 	if route.Intent == guidedHowTo { // v0.10.809 — LLM'siz yol tarifi
 		return s.guidedHowToAnswer(emit, route, question, ctxService)

@@ -14,6 +14,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -22,6 +23,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/cilcenk/coremetry/internal/ai/aisurface"
 	"github.com/cilcenk/coremetry/internal/auth"
@@ -247,7 +249,7 @@ func TestOffTopicGeneralOffersNoTools(t *testing.T) {
 	s, _ := offTopicTestServer(t, l)
 	ctx := copilot.WithDeepAnswer(copilot.WithMeta(context.Background(), copilot.CallMeta{ExchangeID: "xdeep"}))
 	ev, emit := collectEmit()
-	if h, ok := s.guidedOffTopicDispatch(ctx, emit, offTopicCapitalQ, ""); !h || !ok {
+	if h, ok := s.guidedOffTopicDispatch(ctx, emit, nil, offTopicCapitalQ, ""); !h || !ok {
 		t.Fatal("cevaplanmalı")
 	}
 	_ = answerOf(t, *ev)
@@ -275,7 +277,7 @@ func TestOffTopicGeneralOffersNoTools(t *testing.T) {
 	l2 := newOffTopicLLM(t, "off_topic")
 	s2, _ := offTopicTestServer(t, l2)
 	_, emit2 := collectEmit()
-	s2.guidedOffTopicDispatch(copilot.WithMeta(context.Background(), copilot.CallMeta{ExchangeID: "xplain"}), emit2, offTopicCapitalQ, "")
+	s2.guidedOffTopicDispatch(copilot.WithMeta(context.Background(), copilot.CallMeta{ExchangeID: "xplain"}), emit2, nil, offTopicCapitalQ, "")
 	if a, b := st[0]["max_tokens"], l2.streams()[0]["max_tokens"]; !reflect.DeepEqual(a, b) {
 		t.Errorf("Derin kip genel cevabın bütçesini değiştirmemeli: deep=%v plain=%v", a, b)
 	}
@@ -292,7 +294,7 @@ func TestOffTopicBoundaryByteIdenticalWhenOff(t *testing.T) {
 	s, _ := offTopicTestServer(t, l)
 	ctx := copilot.WithMeta(context.Background(), copilot.CallMeta{ExchangeID: "xoff"})
 	gotEv, emit := collectEmit()
-	s.guidedOffTopicDispatch(ctx, emit, offTopicCapitalQ, "shop")
+	s.guidedOffTopicDispatch(ctx, emit, nil, offTopicCapitalQ, "shop")
 	wantEv, wemit := collectEmit()
 	(&Server{}).guidedOffTopicAnswer(wemit, offTopicCapitalQ, "shop")
 	if !reflect.DeepEqual(*gotEv, *wantEv) {
@@ -390,7 +392,7 @@ func TestAIGeneralQuestionsRolesAuditRoundTrip(t *testing.T) {
 // satırı yalnız genel cevap kapalıyken yazılır; none dalı anahtarı okumaz.
 func TestOffTopicGeneralSourceGates(t *testing.T) {
 	g := readRepoFile(t, "copilot_guided.go")
-	if !strings.Contains(g, "return s.guidedOffTopicDispatch(ctx, emit, question, ctxService)") || strings.Contains(g, "return s.guidedOffTopicAnswer(emit") {
+	if !strings.Contains(g, "return s.guidedOffTopicDispatch(ctx, emit, msgs, question, ctxService)") || strings.Contains(g, "return s.guidedOffTopicAnswer(emit") {
 		t.Fatal("runGuidedRoute off_topic dalı guidedOffTopicDispatch'ten geçmeli")
 	}
 	i := readRepoFile(t, "copilot_intent.go")
@@ -499,5 +501,52 @@ func assertOffTopicGeneralShape(t *testing.T, text string) {
 	}
 	if !strings.Contains(text, "```python\n") || strings.Count(text, "```")%2 != 0 {
 		t.Errorf("kod dil etiketli kapalı çitte olmalı: %q", text)
+	}
+}
+
+// v0.10.2012 — operatör (prod): kod yapıştırılan turdan sonra "buna junit
+// testi yazarmısın" sorusu modele TEK BAŞINA gidiyordu; cevap "kodu
+// paylaşmadınız" oldu. Önceki iletiler isteme girmeli, bütçe içinde kalmalı.
+func TestOffTopicGeneralPromptCarriesPriorTurns(t *testing.T) {
+	code := "package com.acme.orders;\npublic class OrderService { public int total(int a, int b) { return a + b; } }"
+	q := "buna junit testi yazarmısın"
+	msgs := []copilot.ChatMessage{
+		{Role: "user", Text: code},
+		{Role: "assistant", Text: "Bu bir Java sınıfı."},
+		{Role: "user", Text: q},
+	}
+	p := offTopicGeneralPrompt(msgs, q)
+	for _, want := range []string{"OrderService", "Bu bir Java sınıfı.", "ŞİMDİKİ SORU:\n" + q} {
+		if !strings.Contains(p, want) {
+			t.Errorf("istem %q taşımalı:\n%s", want, p)
+		}
+	}
+	if strings.Count(p, q) != 1 {
+		t.Errorf("şimdiki soru bir kez geçmeli (geçmişte tekrar edilmez):\n%s", p)
+	}
+	if strings.Index(p, "OrderService") > strings.Index(p, "Bu bir Java sınıfı.") {
+		t.Error("önceki iletiler zaman sırasıyla dizilmeli")
+	}
+	// Önceki ileti yoksa istem eskisi gibi yalnız sorudur.
+	for _, m := range [][]copilot.ChatMessage{nil, {{Role: "user", Text: q}}, {{Role: "assistant", Text: "  "}, {Role: "user", Text: q}}} {
+		if got := offTopicGeneralPrompt(m, q); got != q {
+			t.Errorf("geçmiş yokken istem yalnız soru olmalı, geldi: %q", got)
+		}
+	}
+	// Bütçe: uzun geçmiş toplam tavanı aşmaz, en YENİ ileti korunur.
+	var long []copilot.ChatMessage
+	for i := 0; i < 20; i++ {
+		long = append(long, copilot.ChatMessage{Role: "user", Text: strings.Repeat("x", 3000) + fmt.Sprintf(" ileti-%02d", i)})
+	}
+	long = append(long, copilot.ChatMessage{Role: "user", Text: q})
+	lp := offTopicGeneralPrompt(long, q)
+	if n := utf8.RuneCountInString(lp); n > offTopicGeneralHistoryRunes+offTopicGeneralQuestionRunes+400 {
+		t.Errorf("istem bütçeyi aştı: %d rune", n)
+	}
+	if strings.Contains(lp, "ileti-00") {
+		t.Error("en eski ileti bütçe dışında kalmalı")
+	}
+	if !strings.Contains(lp[len(lp)-len(q)-10:], q) {
+		t.Error("soru istemin sonunda olmalı")
 	}
 }
