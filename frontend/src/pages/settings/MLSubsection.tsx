@@ -94,8 +94,8 @@ export function MLSubsection() {
       <p className="mb-[18px] text-[length:var(--fs-sm)] leading-[1.55] text-(--text2)">
         ML dedektörleri: log sinyali (Elasticsearch: hacim, hata oranı, şablon, nadir kod, pod, kırılma) ve
         trace sinyali (rollup: endpoint gecikmesi/hata/trafik, bağımlılık, exception, pod, kırılma). Olaylar
-        /anomalies › ML sekmesine <b>gölge</b> olarak düşer; Problem üretmez. Terfi dedektör
-        başına ayrı anahtar ve karne eşiğiyle açılır. Ana anahtar kapalıyken ES&apos;e hiç sorgu atılmaz.
+        /anomalies listesine düşer. Aynı serviste en az 2 farklı sinyal birlikte bozulursa grup Problem açar
+        (aşağıdaki anahtar); tek sinyal Problem üretmez. Eski terfi dedektör başına ayrı anahtar ve karne eşiğiyle açılır. Ana anahtar kapalıyken ES&apos;e hiç sorgu atılmaz.
       </p>
       {!cfg ? (
         flash ? <FlashBox kind={flash.kind}>{flash.text}</FlashBox> : <Spinner />
@@ -112,6 +112,11 @@ export function MLSubsection() {
             onCheckedChange={v => setCfg({ ...cfg, baseline: { enabled: v } })}
             label="Baseline gözlem işi (günlük)"
             hint="03:00 sonrası dünün ml_series kovalarından saatlik bant gözlemi yazar (ml_baseline_obs). Tespit bu sürümde değişmez; yalnız CH okur." />
+          {/* v0.10.2054 (D4) — tek anahtar; yok = açık. */}
+          <CheckboxField className="mb-3" checked={cfg.groupProblems !== false} disabled={!cfg.enabled}
+            onCheckedChange={v => setCfg({ ...cfg, groupProblems: v })}
+            label="Anomali grubu Problem açar"
+            hint="Aynı serviste en az 2 farklı sinyalde (trace, log, metrik) anomali varsa grup bir Problem açar (P2) ve bildirim mevcut kanallardan gider. Tek sinyal anomali olarak kalır. Kapalı: yalnız kayıt (Problem açardı)." />
 
           <p className={NOTE}>Soldaki anahtar dedektörü açar (gölge). Sağdaki &quot;terfi&quot; anahtarı karne eşiğini geçen olayı Problem&apos;e kopyalar.</p>
           {([['Log dedektörleri', ML_LOG_DETECTORS], ['Trace dedektörleri', ML_TRACE_DETECTORS], ['Metrik aileleri', ML_METRIC_DETECTORS]] as const).map(([title, list]) => (<div key={title}>
