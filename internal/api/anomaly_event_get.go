@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
+	"github.com/cilcenk/coremetry/internal/logstore"
 )
 
 // anomaly_event_get.go — v0.10.1032. Tekil anomali olayı okuması ve olay
@@ -54,6 +55,21 @@ func enrichAnomalyEvents(ctx context.Context, st anomalyEventEnricher, rows []ch
 	rows = st.EnrichAnomaliesWithDeploys(ctx, rows, 30*time.Minute)
 	rows = st.EnrichAnomaliesWithRootCause(ctx, rows)
 	rows = st.EnrichAnomaliesWithVerdicts(ctx, rows)
+	return withLogQueries(rows)
+}
+
+// withLogQueries — SAF (v0.10.2026). Operatör: log kalıbı anomalisinde
+// "Logs" servisin TÜM loglarını açıyordu, o kalıbı değil. log_template_new
+// olayının Pattern'ı Drain şablonudur; /logs arama metni Şablonlar
+// sekmesiyle aynı türeticiden (yer tutucular atılır, ≥3 karakterlik literal
+// parçalar tırnaklanıp AND'lenir). log_pattern olayı `pattern=` ile gider
+// (FE), burada dokunulmaz. Okuma yok.
+func withLogQueries(rows []chstore.AnomalyEvent) []chstore.AnomalyEvent {
+	for i := range rows {
+		if rows[i].Kind == "log_template_new" && rows[i].Pattern != "" {
+			rows[i].LogQuery = logstore.PatternSearchQuery(rows[i].Pattern)
+		}
+	}
 	return rows
 }
 

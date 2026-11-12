@@ -7069,6 +7069,8 @@ export interface AnomalyEvent {
   // v0.10.1799 — SAKLANMAZ: terfi izli endpoint olayının adayındaki rota
   // sayısı (yalnız GET /api/anomalies/event doldurur).
   promotionGroupSize?: number;
+  /** v0.10.2026 — SAKLANMAZ: log_template_new olayının /logs arama metni (sunucu, logstore.PatternSearchQuery). */
+  logQuery?: string;
   // v0.10.1049 — yalnız deploy raporu / rollout çekmecesinin "deploy sonrası
   // anomaliler" satırında: anomali o deploy'dan önce de DÜZENLİ görülüyordu
   // (chstore.AnomalyPredatesDeploy). Satır listede kalır, "yinelenen" işaretli.

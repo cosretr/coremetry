@@ -70,8 +70,8 @@ export function AnomalyDetailDrawer({ event, onClose }: {
   // pencere, tracesPivotHref hasError → rootOnly kapalı). v0.10.1032 —
   // üreticiler anomalyDetail.anomalySignalHrefs'te, tam sayfa ile ortak.
   const hrefs = useMemo(
-    () => anomalySignalHrefs({ kind: event.kind, service: event.service, pattern: event.pattern }, win),
-    [event.kind, event.service, event.pattern, win],
+    () => anomalySignalHrefs({ kind: event.kind, service: event.service, pattern: event.pattern, logQuery: event.logQuery }, win),
+    [event.kind, event.service, event.pattern, event.logQuery, win],
   );
 
   // v0.8.499 (sadeleştirme #2, 5/5) — kabuk ui/Drawer'a taşındı:

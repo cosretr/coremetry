@@ -193,7 +193,7 @@ export interface AnomalySignalHrefs {
 }
 
 export function anomalySignalHrefs(
-  e: Pick<AnomalyEvent, 'kind' | 'service' | 'pattern'>,
+  e: Pick<AnomalyEvent, 'kind' | 'service' | 'pattern'> & Partial<Pick<AnomalyEvent, 'logQuery'>>,
   win: { fromNs: number; toNs: number },
 ): AnomalySignalHrefs | null {
   if (!e.service) return null;
@@ -201,9 +201,14 @@ export function anomalySignalHrefs(
     // v0.10.1071 — log_pattern olayında "Logları aç" servise EK olarak deseni
     // de taşır (`pattern=` — sunucu dedektörün yüklemini uygular; token'lar
     // arama metnine çevrilmez). Diğer türlerde desen bir log yüklemi değil.
+    // v0.10.2026 (operatör: "Logs tüm servis loglarını getiriyor, o spesifik
+    // logu değil") — log_template_new olayı şablonun arama metniyle (`q=`,
+    // sunucunun logQuery'si; Şablonlar sekmesiyle aynı türetici) açılır.
+    // Metin türetilemediyse bağlantı yalnız servisle kalır.
     logs: logsHref({
       window: win, service: e.service,
       pattern: e.kind === 'log_pattern' && e.pattern ? e.pattern : undefined,
+      q: e.kind === 'log_template_new' && e.logQuery ? e.logQuery : undefined,
     }),
     errorTraces: tracesPivotHref({ window: win, service: e.service, hasError: true }),
     servicePage: serviceHref(e.service, { range: win }),

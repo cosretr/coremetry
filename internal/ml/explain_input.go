@@ -254,6 +254,9 @@ func EnrichFromRelated(in *CardInput, related []chstore.MLSnapshot, hrefOf func(
 			if txt == "" {
 				txt = evStr(m, "code")
 			}
+			// v0.10.2026 — arama metni KESİLMEMİŞ ifadeden: kesik metin ("…")
+			// tırnaklanınca hiçbir satırla eşleşmiyordu ve /logs boş açılıyordu.
+			query := quoteQ(txt)
 			if r := []rune(txt); len(r) > 120 {
 				txt = string(r[:120]) + "…"
 			}
@@ -262,7 +265,7 @@ func EnrichFromRelated(in *CardInput, related []chstore.MLSnapshot, hrefOf func(
 				if cnt == 0 {
 					cnt, _ = evNum(m, "observed")
 				}
-				in.NewTemplate = &CardTemplate{Text: txt, FirstSeen: at, Count: cnt, Href: hrefOf(x.EventID)}
+				in.NewTemplate = &CardTemplate{Text: txt, Query: query, FirstSeen: at, Count: cnt, Href: hrefOf(x.EventID)}
 				continue
 			}
 		}

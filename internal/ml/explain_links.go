@@ -187,7 +187,11 @@ func whereToLookOf(in CardInput, l cardLinks) []ExplainLink {
 		var first ExplainLink
 		switch {
 		case in.NewTemplate != nil && in.NewTemplate.Text != "":
-			first = ExplainLink{Label: "Bu mesajı içeren loglar", Href: logsLink(in.Service, quoteQ(in.NewTemplate.Text), false, l.rangeParam)}
+			qq := in.NewTemplate.Query
+			if qq == "" {
+				qq = quoteQ(strings.TrimSuffix(in.NewTemplate.Text, "…"))
+			}
+			first = ExplainLink{Label: "Bu mesajı içeren loglar", Href: logsLink(in.Service, qq, false, l.rangeParam)}
 		case in.Detector == "template_spike" || in.Detector == "rare_template":
 			first = ExplainLink{Label: "Bu mesajı içeren loglar", Href: logsLink(in.Service, quoteQ(in.Code), false, l.rangeParam)}
 		case in.Detector == "log_volume" || in.Detector == "service_silent":

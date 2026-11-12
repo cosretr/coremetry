@@ -70,6 +70,11 @@ type AnomalyEvent struct {
 	// sayısı (CountSubjectPromotionGroup) — "Gölge: Problem açılırdı (3
 	// rota)". 0 = sayılmadı / tek özne.
 	PromotionGroupSize int `json:"promotionGroupSize,omitempty"`
+	// LogQuery — v0.10.2026, SAKLANMAZ: log_template_new olayının /logs
+	// arama metni (Pattern = Drain şablonu; logstore.PatternSearchQuery —
+	// Şablonlar sekmesi ve Problem şablon kanıtıyla AYNI türetici). Boş =
+	// türetilemedi, bağlantı yalnız servisle açılır. Okuma zincirinde dolar.
+	LogQuery string `json:"logQuery,omitempty"`
 	// PredatesDeploy — v0.10.1049, SAKLANMAZ: yalnız deploy raporu / rollout
 	// çekmecesinin "deploy sonrası anomaliler" satırında, o deploy'a göre
 	// AnomalyPredatesDeploy true ise (düzenli yinelenen olay) dolar. Satır

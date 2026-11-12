@@ -98,6 +98,7 @@ type CardRollout struct {
 // CardTemplate — aynı serviste ilk kez görülen log mesajı.
 type CardTemplate struct {
 	Text      string
+	Query     string // v0.10.2026: /logs arama metni (kesilmemiş ifadeden); boşsa Text tırnaklanır
 	FirstSeen time.Time
 	Count     float64
 	Href      string

@@ -170,8 +170,8 @@ export function AnomalyEventDetail({ event, isAdmin, onBack }: {
     () => behaviorDetailsOf({ kind: event.kind, sample: event.sample }),
     [event.kind, event.sample]);
   const hrefs = useMemo(
-    () => anomalySignalHrefs({ kind: event.kind, service: event.service, pattern: event.pattern }, win),
-    [event.kind, event.service, event.pattern, win]);
+    () => anomalySignalHrefs({ kind: event.kind, service: event.service, pattern: event.pattern, logQuery: event.logQuery }, win),
+    [event.kind, event.service, event.pattern, event.logQuery, win]);
   const chart = useMemo(
     () => anomalyChart({ kind: event.kind, service: event.service, pattern: event.pattern }, win, details),
     [event.kind, event.service, event.pattern, win, details]);

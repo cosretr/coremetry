@@ -146,6 +146,21 @@ describe('anomalySignalHrefs — üreticilerle, olay penceresiyle', () => {
       .operationTraces!.split('?')[1]);
     expect(lat.has('hasError')).toBe(false);
   });
+  // v0.10.2026 — Operator-reported: log kalıbı anomalisinde Logs tüm servis
+  // loglarını açıyordu. Kural tablosu: tür → /logs süzgeci.
+  it.each<[string, Partial<AnomalyEvent>, Record<string, string | null>]>([
+    ['log_template_new + arama metni → q', { kind: 'log_template_new', pattern: 'Batch job <*> failed', logQuery: '"Batch job" AND "failed"', service: 'orders-batch' },
+      { service: 'orders-batch', q: '"Batch job" AND "failed"', pattern: null }],
+    ['log_template_new, metin türetilemedi → yalnız servis', { kind: 'log_template_new', pattern: '<*> <*>', logQuery: '', service: 'orders-batch' },
+      { service: 'orders-batch', q: null, pattern: null }],
+    ['log_pattern → pattern= (q yok)', { kind: 'log_pattern', pattern: 'connection_refused', logQuery: '"x"' },
+      { service: 'checkout', q: null, pattern: 'connection_refused' }],
+    ['trace türü → yalnız servis', { kind: 'trace_op', pattern: 'POST /pay' }, { service: 'checkout', q: null, pattern: null }],
+  ])('Logs bağlantısı: %s', (_n, over, want) => {
+    const p = new URLSearchParams(anomalySignalHrefs(ev(over), win)!.logs.split('?')[1]);
+    for (const [k, v] of Object.entries(want)) expect(p.get(k), k).toBe(v);
+    expect(p.get('range')).toMatch(/^custom:/);
+  });
 });
 
 describe('sampleTraceHref — trace türünde örnek bir trace kimliği', () => {
