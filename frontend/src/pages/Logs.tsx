@@ -79,6 +79,8 @@ import { isDraftDirty, bareTraceIdOf } from './logs/logsQuery';
 import { LogsTableToolbar } from './logs/LogsTableToolbar';
 import { useLogsExplain, LogsExplainButton, LogsExplainResult } from './logs/LogsExplain'; // Log Search 6.3
 import { LogRunbookSection } from '@/components/coremetry/logs/LogRunbookSection'; // Log Search 6.4
+import { LogsNLToggle, LogsNLQueryRow } from './logs/LogsNLQuery'; // Log Search 6.6
+import { applyNLToDraft } from '@/lib/logsNLQuery';
 import { parseLogsView, effectiveLogsView, writeLogsView, writeTraceView, readTraceViewTarget, logsListEnabled, type LogsView } from './logs/logsView';
 
 // v0.10.1498 — Share affordance (Copy link) moved into pages/logs/LogsActionsMenus.tsx (Share ▾).
@@ -220,6 +222,8 @@ function LogsInner() {
   const [initialUrl] = useState(() => readLogsUrlState(searchParams));
   const [filter, setFilter] = useState(initialUrl.filter);
   const [draft, setDraft] = useState(filter);
+  // Log Search 6.6 — "Doğal dille" satırı (yerel; açılış isteği yok).
+  const [nlOpen, setNlOpen] = useState(false);
   // v0.10.1855 (Log Search Faz 2 dilim 2.4; §9-4 kararı) — servis odaklı
   // başlangıç: varsayılan kapsam `scope=mine` (kullanıcının servisleri, sunucu
   // çözer). v0.10.1477'nin otomatik "Takımım" (team=) varsayılanının YERİNE
@@ -1539,11 +1543,16 @@ function LogsInner() {
           )}
           menus={(
             <>
+              <LogsNLToggle open={nlOpen} onOpenChange={setNlOpen} />
               <SavedViewsBar page="logs" variant="compact" />
               <LogsShareMenu kibanaHref={kibanaHref} view={shareView} /* v0.10.1899 (5.2) — link alıcıda aynı tabloyu açar */ />
               <LogsMoreMenu onReset={reset} />
             </>
           )} />
+        {nlOpen && !live && (
+          <LogsNLQueryRow fields={fields} onClose={() => setNlOpen(false)}
+            onUse={(q, sev) => setDraft(d => applyNLToDraft(d, q, sev))} />
+        )}
         <LogsFilterRow
           filter={filter}
           onClearTrace={clearTraceLock} onClearPattern={clearPattern} onToggleHasTrace={toggleHasTrace}

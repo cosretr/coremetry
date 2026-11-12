@@ -1801,6 +1801,37 @@ Sonraki adım: orders-api-6c9-x2 pod'unun JVM sekmesinde heap used / max grafiğ
 // SystemPromptLogRunbook — /api/copilot/explain-log-runbook yüzeyi (6.4).
 func SystemPromptLogRunbook() string { return systemLogRunbook }
 
+// systemLogsNLQuery — Log Search Faz 6 dilim 6.6: Logs sayfasının "Doğal
+// dille" kutusu (uç /api/copilot/logs-nl-query). Cümle → KQL arama dizesi +
+// seviye tabanı + aralık önerisi, katı JSON (şema api/copilot_logs_nl_query.go
+// logsNLQuerySchema). Sunucu sorguyu logql.Check ile doğrular; arayüz sorguyu
+// GÖSTERİR, çalıştırmaz. Türkçe-native talimat (WikiSelect emsali: JSON çıktı,
+// Türkçe talimat — küçük yerel model).
+const systemLogsNLQuery = `Sen Coremetry APM içinde log arama sorgusu yazan bir asistansın. Operatörün
+cümlesini Logs sayfasının KQL arama dizesine çevirirsin. Sorguyu ÇALIŞTIRMAZSIN.
+
+Girdi: CÜMLE ve (varsa) ALANLAR — bu kurulumun log alan adları.
+
+KQL yazımı:
+- alan:değer → service.name:"orders-api"; boşluk ya da özel karakter varsa çift tırnak.
+- serbest metin → timeout ya da "connection refused" (tam ifade için çift tırnak).
+- and / or / not ve parantez: level:error and ("timeout" or "refused").
+- Yalnız ALANLAR listesindeki alan adlarını kullan; listede yoksa serbest metin yaz.
+- Seviyeyi sorguya yazma; "severity" alanına koy (debug, info, warn, error, fatal ya da "").
+- Zaman ifadesini sorguya yazma; "range" alanına koy (5m, 15m, 30m, 1h, 3h, 6h, 12h, 24h, 2d, 7d ya da "").
+- Cümlede olmayan koşul ekleme. Servis adını, kimliği, kodu cümlede yazıldığı gibi aynen kullan.
+
+Çıktı YALNIZ şu JSON nesnesi:
+{"query": "<KQL>", "severity": "<seviye ya da boş>", "range": "<aralık ya da boş>", "explain": "<sorgunun ne aradığı — tek kısa Türkçe cümle>"}
+
+ÖRNEK:
+CÜMLE: son 1 saatte orders-api'deki zaman aşımı hataları
+ALANLAR: message, service.name, http.route, k8s.pod.name
+{"query": "service.name:\"orders-api\" and (timeout or \"timed out\")", "severity": "error", "range": "1h", "explain": "orders-api servisinde zaman aşımı geçen hata logları."}`
+
+// SystemPromptLogsNLQuery — /api/copilot/logs-nl-query yüzeyi (6.6).
+func SystemPromptLogsNLQuery() string { return systemLogsNLQuery }
+
 // systemSREInvestigation — v0.10.1287 (AI SRE Faz 1b): arka plan AI SRE
 // ajanının araştırma ANLATIMI (surface "sre-investigation", araştırma başına
 // ≤1 çağrı). Girdi HAZIR deterministik paket (internal/sre

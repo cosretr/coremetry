@@ -53,6 +53,7 @@ var promptVersionRegistry = map[string]string{
 	"systemLogLine":              systemLogLine,          // v0.10.1291 — ✨ log satırı
 	"systemExplainLogs":          systemExplainLogs,      // Log Search 6.3 — "Bu logları açıkla"
 	"systemLogRunbook":           systemLogRunbook,       // Log Search 6.4 — satır + runbook
+	"systemLogsNLQuery":          systemLogsNLQuery,      // Log Search 6.6 — doğal dilden log sorgusu
 	"systemSREInvestigation":     systemSREInvestigation, // v0.10.1287 — AI SRE Faz 1b
 	"systemPostmortem":           systemPostmortem,
 	"systemRunbookUpdate":        systemRunbookUpdate,

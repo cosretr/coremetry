@@ -2308,6 +2308,15 @@ export const api = {
       body: JSON.stringify(body),
       signal,
     }),
+  // Log Search 6.6 — cümle → KQL önerisi. Uç sorgu ÇALIŞTIRMAZ (ES isteği yok);
+  // alan adları sayfanın zaten yüklediği listeden (≤80).
+  logsNLQuery: (prompt: string, fields: readonly string[], signal?: AbortSignal) =>
+    request<import('./types').LogsNLQueryResponse>('/api/copilot/logs-nl-query', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt, fields }),
+      signal,
+    }),
   explainLogs: (params: LogsParams, rows: import('./types').ExplainLogsRow[], signal?: AbortSignal) =>
     request<import('./types').ExplainLogsResponse>(`/api/copilot/explain-logs?${qs(params)}`, {
       method: 'POST',

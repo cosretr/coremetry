@@ -358,6 +358,7 @@ var explainStreamDeferred = map[string]string{
 	// anlatım + sunucunun deterministik bağlantıları tek JSON.
 	"copilotExplainLogs":       "Logs cevap kartı — anlatım + bağlantılar tek JSON (Log Search 6.3)",
 	"copilotExplainLogRunbook": "Logs cevap kartı — anlatım + runbook eşleşmeleri tek JSON (Log Search 6.4)",
+	"copilotLogsNLQuery":       "JSON kipi — akan token anlamsız (Log Search 6.6)",
 	"copilotCompareTraces":     "bağımsız küçük panel — Faz 1.5 takibi",
 	"copilotDeployImpact":      "bağımsız küçük panel — Faz 1.5 takibi",
 	"copilotExplainSLO":        "bağımsız küçük panel — Faz 1.5 takibi",

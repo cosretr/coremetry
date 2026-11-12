@@ -11243,6 +11243,18 @@ export interface LogRunbookResponse {
   runbookError?: boolean;
   exception?: LogException | null;
 }
+// Log Search Faz 6 dilim 6.6 — POST /api/copilot/logs-nl-query (Go
+// copilot_logs_nl_query.go). Sorgu GÖSTERİLİR; çalıştırılmaz.
+export interface LogsNLQueryResponse {
+  query: string;
+  /** OTel severity tabanı (5/9/13/17/21); 0 = öneri yok. */
+  severityMin: number;
+  /** Önerilen aralık ('1h', '24h' …); '' = öneri yok. */
+  range: string;
+  explain: string;
+  valid: boolean;
+  error?: string;
+}
 export interface LogPatternsBaseline {
   fromNs: number;
   toNs: number;
