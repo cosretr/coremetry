@@ -3,6 +3,7 @@ import { SafeHref } from '@/components/ui/SafeHref'; // v0.10.1315 — olay/kata
 import { useEscLayer } from '@/lib/escLayer';
 import { Link } from 'react-router-dom';
 import { rolloutEvidenceHref } from '@/lib/rolloutRow';
+import { mlGroupProblemHref } from '@/lib/anomalyHref';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Users } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -855,6 +856,7 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
   // v0.10.1055 (operatör: "Okdir") — terfi ("anomaly-auto:") ve küme
   // ("anomaly-cluster:") Problem'leri de ANOMALY rozeti taşır; tek yüklem.
   const isAnomaly = isAnomalyProblem(problem.ruleId);
+  const mlGroupHref = mlGroupProblemHref(problem.ruleId); // v0.10.2053 (D4)
   const endNs = problem.resolvedAt || Date.now() * 1e6;
 
   const ack = async () => {
@@ -1017,6 +1019,10 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
                 {/* v0.10.922 (sade palet adım 1) — ANOMALY bir tür etiketi
                     (üst veri), mavi değil nötr. */}
                 <span className="badge b-gray">ANOMALY</span>
+                {/* v0.10.2053 (D4) — ML grubunun açtığı Problem: gruba geri bağlantı. */}
+                {mlGroupHref && (
+                  <Link to={mlGroupHref} style={{ marginLeft: 8 }} data-testid="pd-ml-group">Anomali grubunu aç ↗</Link>
+                )}
               </div>
             )}
             {/* v0.10.230 (Influx D5) — dış kaynak öznesinde topoloji/servis

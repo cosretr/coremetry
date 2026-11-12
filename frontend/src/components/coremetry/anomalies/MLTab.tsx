@@ -70,6 +70,16 @@ export function thanosTickText(t: MLThanosTick): string {
   return bits.join(' · ');
 }
 
+/** v0.10.2053 (D4) — SAF: grup → Problem tik özeti. Canlı kipte açılan /
+ *  kapanan sayısı (izleyici de görür); kapalıyken gölge sayacı. Boş = satır yok. */
+export function groupTickText(t: MLTickStatus): string {
+  if (t.groupLive) {
+    const bits = [`${t.groupOpened ?? 0} açıldı`, `${t.groupRefreshed ?? 0} sürüyor`, `${t.groupResolved ?? 0} kapandı`];
+    return `grup Problem'i (canlı): ${bits.join(', ')}${t.shadowGroups ? ` · ${t.shadowGroups} grup değerlendirildi` : ''}`;
+  }
+  return t.shadowGroups ? `gölge terfi: ${t.shadowGroups} grup, ${t.shadowWouldOpen ?? 0} Problem açardı (açılmadı)` : '';
+}
+
 /** Son tik + VM bekleme satırı — SAF (test). nowSec: şimdi (unix sn). */
 export function tickLabel(t: MLTickStatus | undefined, nowSec: number): string {
   if (!t) return 'son tik yok';
@@ -78,7 +88,8 @@ export function tickLabel(t: MLTickStatus | undefined, nowSec: number): string {
   if (t.docs) parts.push(`${t.docs.toLocaleString('tr-TR')} belge`);
   if (t.partial) parts.push(`${t.partial} kısmi ES sonucu (yazılmadı)`);
   if (t.batchCut) parts.push(`batch kuralı ${t.batchCut} adayı kesti`);
-  if (t.shadowGroups) parts.push(`gölge terfi: ${t.shadowGroups} grup, ${t.shadowWouldOpen ?? 0} Problem açardı (açılmadı)`);
+  const gt = groupTickText(t);
+  if (gt) parts.push(gt);
   if (t.thanos?.queries) parts.push(thanosTickText(t.thanos));
   if (t.backoff.length) parts.push(`VM bekleme: ${t.backoff.map(b => `${b.family} (${Math.max(1, Math.round((b.until - nowSec) / 60))} dk)`).join(', ')}`);
   if (t.lastError) parts.push(`hata: ${t.lastError}`);
@@ -146,7 +157,7 @@ export function statusTiles(sc: MLScorecard, signal: MLSignal, nowSec: number): 
   const samples = (sc.bySignal ?? []).filter(s => !signal || s.detector === signal).reduce((a, s) => a + s.samples, 0);
   const bo = t?.backoff ?? [];
   return [
-    { k: 'Son tik', v: t ? `${ago} dk önce` : 'yok', s: t ? `${Math.round(t.durationMs / 1000)} sn · ${t.events} olay${t.docs ? ` · ${t.docs.toLocaleString('tr-TR')} belge` : ''}${t.partial ? ` · ${t.partial} kısmi` : ''}${t.batchCut ? ` · batch kuralı ${t.batchCut} adayı kesti` : ''}${t.shadowGroups ? ` · gölge terfi: ${t.shadowGroups} grup, ${t.shadowWouldOpen ?? 0} Problem açardı (açılmadı)` : ''}${t.thanos?.queries ? ` · ${thanosTickText(t.thanos)}` : ''}${t.contribQueries ? ` · suçlu seri sorgusu ${t.contribQueries}` : ''}${t.logSvcUnmatched ? ` · katalogda olmayan log servisi: ${t.logSvcUnmatched} (yazılmadı)` : ''}${t.logSvcViaPod ? ` · pod'dan servise çözülen: ${t.logSvcViaPod}` : ''}` : 'tik yok', warn: !!t?.lastError },
+    { k: 'Son tik', v: t ? `${ago} dk önce` : 'yok', s: t ? `${Math.round(t.durationMs / 1000)} sn · ${t.events} olay${t.docs ? ` · ${t.docs.toLocaleString('tr-TR')} belge` : ''}${t.partial ? ` · ${t.partial} kısmi` : ''}${t.batchCut ? ` · batch kuralı ${t.batchCut} adayı kesti` : ''}${groupTickText(t) ? ` · ${groupTickText(t)}` : ''}${t.thanos?.queries ? ` · ${thanosTickText(t.thanos)}` : ''}${t.contribQueries ? ` · suçlu seri sorgusu ${t.contribQueries}` : ''}${t.logSvcUnmatched ? ` · katalogda olmayan log servisi: ${t.logSvcUnmatched} (yazılmadı)` : ''}${t.logSvcViaPod ? ` · pod'dan servise çözülen: ${t.logSvcViaPod}` : ''}` : 'tik yok', warn: !!t?.lastError },
     { k: 'Log geçmişi', v: bf ? `${bf.done + miss} / ${bf.total} sa` : '—', s: bf ? (bf.complete ? 'tamam' : bf.running ? 'sürüyor' : 'duraklı') + (miss ? ` · eksik ${miss}` : '') : 'kayıt yok' },
     { k: 'Olay · 30 gün', v: String(events), s: samples ? `${samples} karar` : 'karar yok · terfi kapalı' },
     { k: 'VM bekleme', v: bo.length ? `${bo.length} aile` : 'yok', s: bo.map(b => `${b.family} · ${Math.max(1, Math.round((b.until - nowSec) / 60))} dk`).join(', ') || 'tüm aileler açık', warn: bo.length > 0 },

@@ -44,7 +44,7 @@ import { MLTraceDots } from './MLTraceDots';
 import { MLLogPlayer } from './MLLogPlayer';
 import { MLSignalEvidence } from './MLSignalEvidence';
 import { groupStatusText, type MLGroupRow } from './mlGroupRows';
-import { evidenceSource, headerOperation } from './mlGroupDetail';
+import { evidenceSource, groupGateLine, groupProblemChip, headerOperation, latestGroupDecision } from './mlGroupDetail';
 import { MLSourceChart } from './MLSourceChart';
 import { contributorLine, leadFromSnapshot, parseLogsLink, type Contributors } from './mlSourcePanel';
 import { evidenceRows, evidenceSub } from './mlEvidenceRows';
@@ -164,7 +164,8 @@ export function MLReplayContent({ id, autoPlay = false, group = null }: { id: st
   const running = group ? group.status === 'running' || group.status === 'watching' : h.open;
   const members = group?.members ?? [];
   const sample = snap ? replaySamples(snap).find(x => x.traceId) : undefined;
-  const shadow = members.map(m => m.groupShadow).filter(Boolean).sort((x, y) => (y!.at - x!.at))[0];
+  const shadow = latestGroupDecision(members);
+  const problemChip = groupProblemChip(shadow);
   const chartLead = lead ?? (snap ? leadFromSnapshot(snap) : null);
   const contribLine = contributorLine(contrib, 'istemci');
   // v0.10.2044 — servis başlıkta; cümle değer parçası panel tepesiyle (varsa).
@@ -186,6 +187,8 @@ export function MLReplayContent({ id, autoPlay = false, group = null }: { id: st
         <Link to={h.serviceHref} className="font-mono">{h.service}</Link>
         {op && <span className="font-mono text-muted-foreground">· {op}</span>}
         <Badge variant="outline" className={running ? 'border-transparent bg-[color:var(--warn-bg)] text-[color:var(--warn)]' : ''}>{status}</Badge>
+        {/* v0.10.2053 (D4) — grubun kararı: canlıda "Problem açtı" + bağlantı. */}
+        {problemChip && <span data-testid="ml-group-problem"><Chip link={problemChip} /></span>}
       </div>
       <p className="mb-2.5 text-sm font-semibold leading-normal" data-testid="ml-summary">{headline}</p>
       {snap?.detector === 'op_latency' && episodes >= 5 && (
@@ -214,6 +217,7 @@ export function MLReplayContent({ id, autoPlay = false, group = null }: { id: st
               <li key={r.key} className="flex flex-wrap items-baseline gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm">
                 <SignalKindBadge kind={r.kind} />
                 <span className="min-w-0 flex-1">{r.text}</span>
+                {m?.groupShadow?.live && <span className="text-xs font-medium" data-testid="ml-row-problem">Problem açtı</span>}
                 <span className="text-xs text-muted-foreground">{m ? evidenceSource(m.detector, m.signal, m.evidence) : evidenceSource(h.detector, h.kind, snap?.evidence)}</span>
               </li>
             );
@@ -234,7 +238,7 @@ export function MLReplayContent({ id, autoPlay = false, group = null }: { id: st
           <KeyValue labelWidth="wide" items={[
             { k: 'Dedektörler', v: (members.length ? [...new Set(members.map(m => m.detector))] : [h.detector]).map(d => ML_DETECTOR_TR[d] ?? d).join(', ') },
             ...(group ? [{ k: 'Grup aralığı', v: `${fmtTs(group.start)} – ${group.status === 'running' || group.status === 'watching' ? 'sürüyor' : fmtTs(group.end)}` }] : []),
-            { k: 'Problem kapısı (gölge)', v: shadow ? `${shadow.wouldOpen ? 'açardı' : 'açmazdı'}${shadow.priority ? ` · ${shadow.priority}` : ''} — ${shadow.reason}` : 'karar yok' },
+            { k: 'Problem kapısı', v: groupGateLine(shadow) },
           ]} />
           <div className="rounded-md border border-border bg-card" data-testid="ml-card">
             <KeyValue items={[

@@ -7,6 +7,14 @@ export function anomalyEventHref(id: string): string {
 export function mlEventHref(id: string): string {
   return `/anomalies/ml/${encodeURIComponent(id)}`;
 }
+/** v0.10.2053 (D4) — ML grup Problem'inin kural öneki (chstore.MLGroupRulePrefix);
+ *  kuyruk grubun ilk olayının kimliği → grup sayfası. */
+export const ML_GROUP_RULE_PREFIX = 'anomaly-auto:group:';
+/** SAF: grup Problem'inin kuralından grup sayfası; başka kural → null. */
+export function mlGroupProblemHref(ruleId: string | null | undefined): string | null {
+  const id = (ruleId ?? '').startsWith(ML_GROUP_RULE_PREFIX) ? (ruleId ?? '').slice(ML_GROUP_RULE_PREFIX.length) : '';
+  return id ? mlEventHref(id) : null;
+}
 /** v0.10.1846 — listedeki ▶: detayı açar ve oynatmayı başlatır (satır tıkı oynatmaz). */
 export function mlEventPlayHref(id: string): string {
   return `${mlEventHref(id)}?play=1`;

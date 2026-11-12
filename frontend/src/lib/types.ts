@@ -12234,6 +12234,8 @@ export interface UnifiedAnomaliesPage {
 /** v0.10.2015 — ml.GroupDecision aynası (internal/ml/group_gate.go). */
 export interface MLGroupDecision {
   group: string; wouldOpen: boolean; rule: string; severity?: string; priority?: string; reason: string; detectors: string[]; at: number;
+  /** v0.10.2052 (D4): batch sonrası farklı sinyaller; bitmiş grup; canlı Problem (açtı/tazeledi) ve kimliği. */
+  signals?: string[]; finished?: boolean; live?: boolean; problemId?: string;
 }
 /** v0.10.1843 — ml.ExplainCard aynası (internal/ml/explain_card.go). Boş impact = satır yok. */
 export interface ExplainLink { label: string; href?: string }
@@ -12333,6 +12335,8 @@ export interface MLConfig {
   quality: MLQuality;
   /** v0.10.1814: günlük baseline gözlem işi (`ml.baseline.enabled`); yok = kapalı. */
   baseline?: { enabled: boolean };
+  /** v0.10.2052 (D4): ≥ 2 sinyalli ML grubu Problem açar; yok = açık. */
+  groupProblems?: boolean;
 }
 /** v0.10.1886 — önerilen ML kurulumu (GET /api/admin/ml/recommended; salt-okunur). */
 export interface MLSourceCheck { id: string; label: string; checked: boolean; present: boolean; note?: string }
@@ -12359,6 +12363,8 @@ export interface MLTickStatus {
   es?: number; vm?: number; ch?: number;
   /** v0.10.2015 (D3): bu tikte gölge karar verilen grup / Problem "açardı" sayısı. */
   shadowGroups?: number; shadowWouldOpen?: number;
+  /** v0.10.2052 (D4): grup → Problem canlı mı; bu tikte açılan / tazelenen / kapanan grup Problem'i. */
+  groupLive?: boolean; groupOpened?: number; groupRefreshed?: number; groupResolved?: number;
   /** v0.10.2037: suçlu seri kırılım sorgusu (yeni açılan / tepesi büyüyen metrik olayı). */
   contribQueries?: number;
   /** v0.10.2045: katalogda olmayan log servis adı — çözülemedi (yazılmadı) / pod'dan çözüldü. */

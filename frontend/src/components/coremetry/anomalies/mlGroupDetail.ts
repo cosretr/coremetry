@@ -3,7 +3,7 @@
 // /anomalies/ml/:id grubun sayfasıdır. Saf yardımcılar: açılan olayın grubu,
 // kanıt satırının kaynak notu, başlık operasyonu. Grup üyeleri liste ucunun
 // (son 24 sa, aynı önbellek) satırlarından; ek sunucu okuması YOK.
-import type { MLEvent } from '@/lib/types';
+import type { MLEvent, MLGroupDecision } from '@/lib/types';
 import { parseObj } from '@/lib/mlReplay';
 import { groupRows, type MLGroupRow } from './mlGroupRows';
 
@@ -25,6 +25,27 @@ export function evidenceSource(detector: string, signal: string, evidence?: stri
     if (ev.source === 'thanos') return `Thanos · ${typeof ev.cluster === 'string' && ev.cluster ? ev.cluster : 'cluster'}`;
   }
   return 'VictoriaMetrics';
+}
+
+/** v0.10.2053 (D4) — SAF: üyelerin en son grup kararı (gölge ya da canlı). */
+export function latestGroupDecision(members: Pick<MLEvent, 'groupShadow'>[]): MLGroupDecision | undefined {
+  return members.map(m => m.groupShadow).filter((d): d is MLGroupDecision => !!d).sort((x, y) => y.at - x.at)[0];
+}
+
+/** v0.10.2053 (D4) — SAF: grup kararı çipi. Canlı → "Problem açtı" + Problem
+ *  bağlantısı; gölge "açardı" (anahtar kapalı) → bağlantısız; açmaz → null. */
+export function groupProblemChip(d: MLGroupDecision | undefined): { label: string; href?: string } | null {
+  if (!d) return null;
+  if (d.live && d.problemId) return { label: `Problem açtı${d.priority ? ` · ${d.priority}` : ''}`, href: `/inbox?problem=${encodeURIComponent(d.problemId)}` };
+  if (d.wouldOpen) return { label: 'Problem açardı (canlı kip kapalı)' };
+  return null;
+}
+
+/** v0.10.2053 (D4) — SAF: teknik ayrıntıdaki "Problem kapısı" satırı. */
+export function groupGateLine(d: MLGroupDecision | undefined): string {
+  if (!d) return 'karar yok';
+  const verb = d.live ? 'Problem açtı' : d.wouldOpen ? 'açardı' : 'açmazdı';
+  return `${verb}${d.priority ? ` · ${d.priority}` : ''} — ${d.reason}`;
 }
 
 /** SAF: trace olayında başlığın operasyonu (Code = endpoint / operasyon); diğerlerinde boş. */
