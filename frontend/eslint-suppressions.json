@@ -101,7 +101,7 @@
   },
   "src/components/dashboard/VariablesBar.tsx": {
     "ui/no-raw-element": {
-      "count": 2
+      "count": 1
     }
   },
   "src/components/topology/FocusedNeighborhood.tsx": {

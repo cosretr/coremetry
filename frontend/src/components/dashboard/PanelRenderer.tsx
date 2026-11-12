@@ -144,6 +144,7 @@ import { serviceHref } from '@/lib/serviceHref';
 import { encodeFilters } from '@/lib/urlState';
 import { Link } from 'react-router-dom';
 import { usePanelMenuHost } from './panelMenuHost';
+import { MULTI, plainVars } from '@/lib/dashboardVars';
 
 // PanelRenderer dispatches on panel.type. Self-contained — fetches its
 // own data, re-fetches when `range` changes. Errors are surfaced inline
@@ -234,6 +235,10 @@ export function PanelRenderer({ panel, range, vars, syncKey, onZoom, onZoomReset
   // JSON.stringify(cfg), so a height living in config would fire a fresh
   // ClickHouse query every time the operator resized a tile.
   const h = panel.height;
+  // v0.10.2001 (dilim 3.8) — çoklu değer yalnız MetricsQL'de =~ olur; diğer
+  // alanlar (span DSL, servis, metrik adı) İLK değeri görür.
+  const promVars = vars;
+  vars = plainVars(vars);
   switch (panel.type) {
     case 'metric':
       return <MetricPanel cfg={applyVarsToMetric(panel.config as MetricPanelConfig, vars)} range={effectiveRange} syncKey={syncKey} onZoom={onZoom} onZoomReset={onZoomReset} dataOverride={effectiveDataOverride} height={h} onFocusChange={onFocusChange} />;
@@ -246,7 +251,7 @@ export function PanelRenderer({ panel, range, vars, syncKey, onZoom, onZoomReset
     case 'heatmap':
       return <HeatmapPanel cfg={applyVarsToHeatmap(panel.config as HeatmapPanelConfig, vars)} range={effectiveRange} height={h} />;
     case 'promql':
-      return <PromqlPanel cfg={applyVarsToPromql(panel.config as PromqlPanelConfig, vars)} range={effectiveRange} syncKey={syncKey} onZoom={onZoom} onZoomReset={onZoomReset} height={h} onFocusChange={onFocusChange} />;
+      return <PromqlPanel cfg={applyVarsToPromql(panel.config as PromqlPanelConfig, promVars)} range={effectiveRange} syncKey={syncKey} onZoom={onZoom} onZoomReset={onZoomReset} height={h} onFocusChange={onFocusChange} />;
     // v0.9.781 — non-temporal (ranked bars, no time axis): no syncKey, no
     // onZoom — there is no cursor to sync and no x-range to drag. Carries
     // panelId instead so the dashboard's panel-actions menu can anchor to it
@@ -347,10 +352,16 @@ export function expandPromqlVars(query: string, vars?: Record<string, string>): 
     /,?\s*[\w.]+\s*(?:=~|!~|=|!=)\s*"\$\{([^}]+)\}"/g,
     (m, name: string) => {
       const v = vars[name];
-      return v != null && v !== '' ? m.replace('${' + name + '}', v) : '';
+      if (v == null || v === '') return '';
+      // v0.10.2001 (dilim 3.8) — çoklu seçim: regex alternasyonu, = → =~, != → !~.
+      if (v.startsWith(MULTI)) {
+        return m.replace(/(!?)=(?!~)/, (_x, neg: string) => (neg ? '!~' : '=~'))
+          .replace('${' + name + '}', v.slice(MULTI.length));
+      }
+      return m.replace('${' + name + '}', v);
     },
   );
-  q = q.replace(/\$\{([^}]+)\}/g, (_, name: string) => vars[name] ?? '');
+  q = q.replace(/\$\{([^}]+)\}/g, (_, name: string) => plainVars(vars)?.[name] ?? '');
   return q.replace(/\{\s*,/g, '{').replace(/,\s*\}/g, '}').replace(/,\s*,/g, ',');
 }
 

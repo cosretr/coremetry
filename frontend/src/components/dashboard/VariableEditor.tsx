@@ -3,6 +3,7 @@
 // varsayılan. Paneller ${ad} ile başvurur (applyVars* mevcut mekanizma);
 // bar zaten URL'e yazıyor. JSON elle düzenleme devri kapanıyor.
 import { Button } from '../ui/Button';
+import { VarDefFields } from '@/components/coremetry/dashboard/VarDefFields';
 import type { DashboardVariable } from '@/lib/types';
 
 export function VariableEditor({ value, onChange }: {
@@ -37,6 +38,7 @@ export function VariableEditor({ value, onChange }: {
             <option value="service">service</option>
             <option value="database">database</option>
             <option value="custom">custom</option>
+            <option value="label">metrik etiketi</option>
           </select>
           {v.type === 'custom' && (
             <input value={(v.options ?? []).join(',')} placeholder="seçenekler (virgüllü)"
@@ -44,6 +46,8 @@ export function VariableEditor({ value, onChange }: {
               onChange={e => upd(i, { options: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
               style={{ width: 220 }} />
           )}
+          {/* v0.10.2001 (dilim 3.8) — etiket-değeri değişkeni + çoklu seçim. */}
+          <VarDefFields v={v} onPatch={p => upd(i, p)} />
           <input value={v.defaultValue ?? ''} placeholder="varsayılan (boş = all)"
             aria-label="Varsayılan değer"
             onChange={e => upd(i, { defaultValue: e.target.value || undefined })}

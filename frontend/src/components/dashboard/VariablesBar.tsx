@@ -1,36 +1,8 @@
 import { ServicePicker } from '../ServicePicker';
-import { useQuery } from '@tanstack/react-query';
-import { api } from '@/lib/api';
-
-// v0.9.759 — database değişkeni: /api/databases kataloğundan ad listesi
-// (dbName ?? instance; tekilleştirilmiş). DB sayısı küçük küme → düz
-// select (ev kuralı: ≤~10 sabit küme picker istemez). Son 24h penceresi
-// katalog için yeterli; 60s staleTime sunucu cache'iyle uyumlu.
-function useDbNames(): string[] {
-  const q = useQuery({
-    queryKey: ['dash-var-db-names'],
-    queryFn: () => {
-      const to = Date.now() * 1e6;
-      return api.databases(to - 24 * 3600 * 1e9, to);
-    },
-    staleTime: 60_000,
-  });
-  // v0.9.821 — /api/databases zarfa geçti ({rows, …}); dizi yerine
-  // rows okunuyor. Değişkenin anlamı aynı: pencerede görülen db adları.
-  const names = new Set<string>();
-  for (const r of q.data?.rows ?? []) names.add(r.dbName || r.instance);
-  return [...names].sort();
-}
-
-function DatabaseSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const names = useDbNames();
-  return (
-    <select value={value} onChange={e => onChange(e.target.value)} style={{ minWidth: 160 }}>
-      <option value="">(all)</option>
-      {names.map(n => <option key={n} value={n}>{n}</option>)}
-    </select>
-  );
-}
+// v0.10.2001 (Faz 3 dilim 3.8) — database değişkeninin eager katalog
+// <select>'i (v0.9.759) kalktı: sunucu aramalı DatabaseVarPicker. Yeni tip
+// 'label': metrik etiketi değeri, sunucu aramalı, çoklu seçim.
+import { DatabaseVarPicker, LabelVarPicker } from '@/components/coremetry/dashboard/VariablePickers';
 import { Button } from '@/components/ui';
 import type { DashboardVariable } from '@/lib/types';
 
@@ -45,10 +17,12 @@ import type { DashboardVariable } from '@/lib/types';
 //
 // Looks like Grafana's variable bar: small label + picker, sits above
 // the dashboard toolbar, no border-heavy chrome.
-export function VariablesBar({ variables, values, onChange }: {
+export function VariablesBar({ variables, values, selected, onChange }: {
   variables: DashboardVariable[];
   values: Record<string, string>;
-  onChange: (name: string, value: string) => void;
+  /** Değişken başına URL'deki seçili değerler (çoklu seçim dahil). */
+  selected: (name: string) => string[];
+  onChange: (name: string, values: string[]) => void;
 }) {
   if (variables.length === 0) return null;
   return (
@@ -64,19 +38,18 @@ export function VariablesBar({ variables, values, onChange }: {
           {v.type === 'service' ? (
             <ServicePicker
               value={values[v.name] ?? ''}
-              onChange={x => onChange(v.name, x)}
+              onChange={x => onChange(v.name, x ? [x] : [])}
               placeholder="(all)"
               width={220}
             />
           ) : v.type === 'database' ? (
-            <DatabaseSelect
-              value={values[v.name] ?? ''}
-              onChange={x => onChange(v.name, x)}
-            />
+            <DatabaseVarPicker def={v} values={selected(v.name)} onChange={xs => onChange(v.name, xs)} />
+          ) : v.type === 'label' ? (
+            <LabelVarPicker def={v} values={selected(v.name)} onChange={xs => onChange(v.name, xs)} />
           ) : (
             <select
               value={values[v.name] ?? ''}
-              onChange={e => onChange(v.name, e.target.value)}
+              onChange={e => onChange(v.name, e.target.value ? [e.target.value] : [])}
               style={{ minWidth: 160 }}
             >
               <option value="">(all)</option>
@@ -85,11 +58,11 @@ export function VariablesBar({ variables, values, onChange }: {
               ))}
             </select>
           )}
-          {values[v.name] && (
+          {values[v.name] && (v.type === 'service' || v.type === 'custom') && (
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => onChange(v.name, '')}
+              onClick={() => onChange(v.name, [])}
               title="Clear"
             >✕</Button>
           )}

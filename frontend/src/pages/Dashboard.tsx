@@ -35,7 +35,8 @@ import type {
   MetricPanelConfig, SpanMetricPanelConfig, PromqlPanelConfig,
 } from '@/lib/types';
 import { timeRangeToNs } from '@/lib/utils';
-import { DASHBOARD_RESERVED_PARAMS, isDashboardVariableParam, panelShareUrl } from '@/lib/dashboardUrl';
+import { panelShareUrl } from '@/lib/dashboardUrl';
+import { plainVars, resolveVarValues, selectedValues, writeVarValues } from '@/lib/dashboardVars';
 import { useRefreshHold } from '@/lib/useAutoRefresh';
 import { downloadDashboard } from '@/lib/dashboardIO';
 import { emptyUndo, isDashboardConflict, undoPop, undoPush, type UndoStack } from '@/lib/dashboardEdit';
@@ -80,23 +81,6 @@ function Inner() {
   // önceki hâlleri; kayıt / vazgeç / yükleme sıfırlar).
   const [undo, setUndo] = useState<UndoStack<Dashboard>>(emptyUndo);
   const confirm = useConfirm();
-  // Resolved values for the dashboard's Grafana-style variables.
-  // URL-persisted so reloads + share-links keep the choice.
-  // Empty value for a variable means "all" — the renderer drops any
-  // predicate line that references the empty variable so the panel
-  // shows aggregates across the relevant universe.
-  const [varValues, setVarValues] = useState<Record<string, string>>(() => {
-    const init: Record<string, string> = {};
-    sp.forEach((v, k) => {
-      // Reserve route params like id/edit/range for their own slots; everything
-      // else becomes a candidate variable value. Cheaper than parsing the
-      // dashboard's variable list synchronously here.
-      if (!isDashboardVariableParam(k)) return;
-      init[k] = v;
-    });
-    return init;
-  });
-
   // ── Kiosk (v0.9.779) ──────────────────────────────────────────────
   // ADRESTE yaşıyor: paylaşılan link aynı TV görünümünü açar. Yazım
   // react-router üzerinden (aşağıdaki değişken aynası ham replaceState
@@ -163,37 +147,6 @@ function Inner() {
     return g.cancel;
   }, [id]);
 
-  // Mirror the variable values into the URL so the selection survives
-  // reloads + is shareable. One param per variable name. Empty values
-  // get removed so we don't accumulate dead params on toggle.
-  //
-  // NOTE: defined BEFORE the early returns below — Rules of Hooks
-  // require every hook to be called on every render in the same
-  // order. Putting this after the early returns crashed the page on
-  // second render (when doc finished loading) because the hook count
-  // changed mid-mount.
-  //
-  // v0.9.779 — rezerve set artık DASHBOARD_RESERVED_PARAMS (testli, tek
-  // yer). 'refresh' / 'kiosk' listeye girmeseydi bu effect onları her
-  // yazımda silerdi: auto-refresh açılır, bir sonraki render'da sessizce
-  // kapanırdı.
-  //
-  // `sp` de bağımlılıkta: bu ayna ham replaceState yazıyor, yani
-  // react-router'ın location'ı onu GÖRMÜYOR. Router üzerinden bir yazım
-  // olduğunda (Topbar'ın range seçimi, aşağıdaki refresh/kiosk yazımları)
-  // router'ın bayat snapshot'ı değişken paramlarını adresten düşürüyordu;
-  // sp değişince ayna tekrar koşup onları geri koyar.
-  useEffect(() => {
-    const url = new URL(window.location.href);
-    for (const key of Array.from(url.searchParams.keys())) {
-      if (!DASHBOARD_RESERVED_PARAMS.has(key)) url.searchParams.delete(key);
-    }
-    for (const [k, v] of Object.entries(varValues)) {
-      if (v) url.searchParams.set(k, v);
-    }
-    window.history.replaceState({}, '', url.toString());
-  }, [varValues, sp]);
-
   // Parsed variable definitions (live from the dashboard doc) drive
   // both the picker bar and what gets substituted into panels. Same
   // Rules-of-Hooks reasoning as the URL mirror — declared before any
@@ -211,6 +164,19 @@ function Inner() {
     } catch { return []; }
   }, [doc?.variables]);
   const effVariables = varDefs ?? variables;
+
+  // v0.10.2001 (Faz 3 dilim 3.8; audit §5.3) — değişken değerleri URL'den
+  // TÜRETİLİR (yerel kopya yok; geri/ileri ve paylaşılan bağlantı kendiliğinden
+  // uygulanır). Yazım router üzerinden ve YALNIZ tanımlı değişken adına
+  // dokunur: eski ayna rezerve olmayan her paramı ham replaceState ile
+  // siliyordu (router'ı bayat bırakıyor, yabancı paramları düşürüyordu).
+  // Çoklu değer tekrarlı param (?env=a&env=b) → MetricsQL'de =~"a|b"
+  // (lib/dashboardVars). Boş değer = "hepsi": eşleyici düşer.
+  const varValues = useMemo(() => resolveVarValues(effVariables, sp), [effVariables, sp]);
+  const setVarSelection = useCallback((name: string, values: string[]) => {
+    setSp(prev => writeVarValues(prev, name, values), { replace: true });
+  }, [setSp]);
+  const varSelected = useCallback((name: string) => selectedValues(sp, name), [sp]);
 
   // Bundled panel data — v0.5.81 perf nudge. Instead of every
   // metric / spanmetric panel firing its own /api/{metrics,
@@ -271,7 +237,7 @@ function Inner() {
       effectivePanelStep(cfgStep, rangeSec, estimatePanelPx(contentW, panelSpan(p) / 3)) ?? undefined;
     const requests = bundleablePanels.map(p => {
       if (p.type === 'metric') {
-        const cfg = applyVarsToMetric(p.config as MetricPanelConfig, varValues);
+        const cfg = applyVarsToMetric(p.config as MetricPanelConfig, plainVars(varValues));
         return {
           id: p.id, type: 'metric' as const,
           name: cfg.metricName, service: cfg.service,
@@ -281,7 +247,7 @@ function Inner() {
           filters: cfg.filters,
         };
       }
-      const cfg = applyVarsToSpan(p.config as SpanMetricPanelConfig, varValues);
+      const cfg = applyVarsToSpan(p.config as SpanMetricPanelConfig, plainVars(varValues));
       return {
         id: p.id, type: 'spanMetric' as const,
         agg: cfg.agg, field: cfg.field,
@@ -559,8 +525,9 @@ function Inner() {
         {!editing && effVariables.length > 0 && (
           <VariablesBar
             variables={effVariables}
-            values={varValues}
-            onChange={(k, v) => setVarValues(prev => ({ ...prev, [k]: v }))}
+            values={plainVars(varValues) ?? {}}
+            selected={varSelected}
+            onChange={setVarSelection}
           />
         )}
 
@@ -649,7 +616,7 @@ function usePanelActions({ panel, vars, range, canEdit, onDuplicate, onEdit, onS
   // A panel's own range override wins — Explore should open the window the
   // operator is actually looking at, not the dashboard's.
   const win = panel.rangeOverride ?? range;
-  const exploreHref = panelToExploreHref(panel, vars, win)
+  const exploreHref = panelToExploreHref(panel, plainVars(vars), win)
     ?? (panel.type === 'promql'
       ? metricsExplorerCodeHref(expandPromqlVars((panel.config as PromqlPanelConfig).query ?? '', vars), encodeRange(win), (panel.config as PromqlPanelConfig).source)
       : null);
@@ -670,7 +637,7 @@ function usePanelActions({ panel, vars, range, canEdit, onDuplicate, onEdit, onS
 
   const out: PanelMenuAction[] = [];
   if (askSubject) out.push({ key: 'ask', label: "CoSRE'ye sor", onClick: () => {
-    const ask = dashboardPanelAsk(panel, vars ?? {});
+    const ask = dashboardPanelAsk(panel, plainVars(vars) ?? {});
     if (ask) stageMetricPanelAsk(formatAiParam(askSubject), ask);
     setAi(askSubject);
   } });

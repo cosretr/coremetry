@@ -6216,9 +6216,18 @@ export interface DashboardVariable {
   label?: string;        // display label (default: name)
   // v0.9.759 — 'database': /api/databases kataloğundan (system/instance/
   // dbName) ad seçici; DB sayısı küçük küme (≤~10) → düz select ev kuralı.
-  type: 'service' | 'database' | 'custom';
+  // v0.10.2001 (Faz 3 dilim 3.8) — 'label': metrik etiketinin değeri, sunucu
+  // aramalı (/api/metrics/discover/label-values). 'database' de sunucu
+  // aramasına geçti (eager katalog kalktı).
+  type: 'service' | 'database' | 'custom' | 'label';
   options?: string[];    // custom-type only
   defaultValue?: string; // empty → "all" / no override
+  /** label tipi: etiket adı (ör. deployment_environment). */
+  labelName?: string;
+  /** label tipi: değer önerilerini daraltan metrik adı (boş = tüm metrikler). */
+  metric?: string;
+  /** Çoklu seçim (label): MetricsQL'de =~"a|b"; diğer alanlarda ilk değer. */
+  multi?: boolean;
 }
 
 export interface DashboardSummary {
