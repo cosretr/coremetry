@@ -326,8 +326,8 @@ değil. Golden pinler: `anomaly/prompt_golden_test.go`, `rootcause_prompt_test.g
 Settings → Bildirim politikası) — hepsi
 `system_settings` JSON blobu: `Default*` / `Normalize*` / `Get*` (hataya
 varsayılana düşer) + boot `Load*` + 30 s `Start*Refresh` + sıcak yol için paket
-düzeyi atomic. Varsayılanı TRUE olan her bayrak `*bool` (AttachToIncident,
-Behavior.Enabled, SelfHealth.Enabled) — `false` ile "yok" ayrılsın. Varsayılanı DOLU
+düzeyi atomic. Varsayılanı TRUE olan her bayrak `*bool` (Behavior.Enabled,
+SelfHealth.Enabled) — `false` ile "yok" ayrılsın. Varsayılanı DOLU
 liste `*[]string` (`batchServicePatterns`, v0.10.1039): nil = varsayılan, `[]` = kapalı;
 Normalize boş listeyi `[]` (nil olmayan dilim) yazar — `null` geri okununca nil olur ve
 kural sessizce geri açılırdı. Normalize'a kopyalanmayan alan PUT'ta düşer. Varsayılanı

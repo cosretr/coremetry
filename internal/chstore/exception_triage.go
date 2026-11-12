@@ -110,27 +110,6 @@ type ExceptionTriageConfig struct {
 	// "30'dan fazla hata olursa P1 olsun"): Oracle grubunda P1 = son 1 sa >
 	// bu eşik — api.oraclePriorityAt. Varsayılan 30 (önceden 5000 + patlama/yeni şartı).
 	OracleP1MinOccurrences int `json:"oracleP1MinOccurrences"`
-
-	// ── v0.10.1588 — incident bağlama (Davis paritesi FAZ 0.5 / D, operatör
-	// kararı 7). *bool: nil = AÇIK, yalnız açıkça false kapatır.
-	//
-	// StormAttachToIncident — fırtına Problem'i açılışta incident'a bağlanır
-	// (diğer ailelerle aynı kurallar; yoksa kendi incident'ı açılır).
-	StormAttachToIncident *bool `json:"stormAttachToIncident,omitempty"`
-	// SingleGroupJoinIncident — tekil exception problemleri (ölümcül altyapı
-	// + paylaşılan bağımlılık patlaması) YALNIZ aynı servis / 1-hop komşuda
-	// AÇIK incident varsa ona katılır; kendi incident'ını AÇMAZ.
-	SingleGroupJoinIncident *bool `json:"singleGroupJoinIncident,omitempty"`
-}
-
-// StormAttachesToIncident — v0.10.1588: nil ⇒ AÇIK.
-func (c ExceptionTriageConfig) StormAttachesToIncident() bool {
-	return c.StormAttachToIncident == nil || *c.StormAttachToIncident
-}
-
-// SingleGroupJoinsIncident — v0.10.1588: nil ⇒ AÇIK.
-func (c ExceptionTriageConfig) SingleGroupJoinsIncident() bool {
-	return c.SingleGroupJoinIncident == nil || *c.SingleGroupJoinIncident
 }
 
 // legacyOracleP1Default — v0.10.1092..1802 kod varsayılanı; Normalize onu

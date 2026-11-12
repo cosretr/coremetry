@@ -57,22 +57,9 @@ type AnomalySensitivityConfig struct {
 	// cevaplanmaz. Bir rejim kayması 1.5× ile gerçektir ve 6σ'ya hiç
 	// ulaşmayabilir; bir sıçrama 6σ ile gerçektir ve 30 dakika sürmez.
 	Behavior AnomalyBehaviorConfig `json:"behavior"`
-	// AttachToIncident — dedektörün açtığı metrik problemi otomatik
-	// olarak aktif incident'a bağlansın mı? (v0.9.827)
-	//
-	// NEDEN GEREKTİ: dedektör hattının HİÇBİR kapısı yoktu. Settings'teki
-	// "Promote strong anomalies" vidaları (15× / 1800s / 1000) BAŞKA bir
-	// hattı yönetiyor — evaluator.promoteStrongAnomalies, recorder'ın
-	// AnomalyEvent'lerinden (log/trace desen anomalileri) besleniyor.
-	// Metrik dedektörü kendi problemini KOŞULSUZ açıp koşulsuz incident'a
-	// bağlıyordu; o kutucuk KAPALIYKEN bile. Operatör "anomali terfisini
-	// kapattım" sanıp incident akışının devam ettiğini görüyordu.
-	//
-	// *bool ÇÜNKÜ VARSAYILAN TRUE: düz bool'da JSON'ın sıfır değeri false
-	// ve "alan yok" ile "operatör kapattı" ayırt edilemezdi — bu sürümden
-	// ESKİ her settings satırı sessizce davranış değiştirirdi. nil =
-	// "yazılmamış" = bugünkü davranış (bağla).
-	AttachToIncident *bool `json:"attachToIncident,omitempty"`
+	// v0.10.2073 — eski `attachToIncident` anahtarı (dedektör problemini incident'a
+	// bağlama vidası) Incidents ölü kod diliminde kalktı; kapısı v0.10.2070'te
+	// silinmişti. Kayıtlı blobdaki alan okunmaz, bir sonraki kayıtta düşer.
 	// v0.10.2068 — eski `serviceSilent` anahtarı (yerel service_silent
 	// dedektörü, v0.10.543'ten beri varsayılan kapalı; operatör: "Olmasınlar")
 	// dedektörüyle birlikte kalktı. Kayıtlı blobdaki alan okunmaz; Normalize
@@ -91,7 +78,7 @@ type AnomalySensitivityConfig struct {
 	// geçen servis isimlerinde"): adında bu kalıplardan biri (ASCII büyük-
 	// küçük duyarsız ALT DİZGİ) geçen servislerde yük artışı anomali sayılmaz
 	// (anomaly_sensitivity_batch.go). *[]string ÇÜNKÜ "yok" ile "boş"
-	// AYRI anlamlar taşıyor — AttachToIncident'ın *bool gerekçesinin aynısı:
+	// AYRI anlamlar taşıyor — Behavior.Enabled'ın *bool gerekçesinin aynısı:
 	// nil = alan yazılmamış = varsayılan ["-batch"]; boş liste = operatör
 	// kuralı KAPATTI. Normalize somutlaştırır (nil → varsayılan liste), boş
 	// liste `[]` olarak yazılır, `null` olarak DEĞİL.
@@ -270,12 +257,6 @@ func (c AnomalySensitivityConfig) LogTemplateNewOn() bool {
 	return c.LogTemplateNew != nil && *c.LogTemplateNew
 }
 
-// AttachesToIncident — nil-güvenli okuma. Yazılmamış = BAĞLA (bugünkü
-// davranış); bir ayarın yokluğu asla davranış değiştirmemeli.
-func (c AnomalySensitivityConfig) AttachesToIncident() bool {
-	return c.AttachToIncident == nil || *c.AttachToIncident
-}
-
 // AnomalyBehaviorConfig — davranış motoru AŞAMA 1'in vidaları
 // (v0.9.935). Motorun kendisi internal/anomaly/behavior.go'da.
 //
@@ -299,7 +280,7 @@ type AnomalyBehaviorConfig struct {
 	// Enabled — motor koşsun mu? *bool ÇÜNKÜ VARSAYILAN TRUE: düz
 	// bool'da JSON'ın sıfır değeri false olurdu ve bu sürümden ESKİ
 	// her settings satırı motoru sessizce kapalı gösterirdi
-	// (AttachToIncident ile aynı gerekçe). nil = "yazılmamış" = açık.
+	// nil = "yazılmamış" = açık.
 	Enabled *bool `json:"enabled,omitempty"`
 	// SeasonalZ — mevsimsel sapmanın açılma eşiği (robust z, σ).
 	// Ani-sapma dedektörünün CriticalZ'sinden AYRI ve daha düşük
@@ -614,11 +595,7 @@ func DefaultAnomalySensitivity() AnomalySensitivityConfig {
 		// adaylar mevcut terfi kapısından geçtiği için kendiliğinden
 		// Problem/bildirim üretmez: /anomalies akışına düşerler.
 		Behavior: DefaultAnomalyBehavior(),
-		// v0.9.827 — AÇIK = bugünkü davranış. Bu sürüm bir GÖRÜNÜRLÜK
-		// sürümü: var olan davranışı kapatılabilir yapıyor, kendiliğinden
-		// değiştirmiyor.
-		AttachToIncident: boolPtr(true),
-		Runtime:          DefaultAnomalyRuntime(), // v0.10.890 — heap kipi off
+		Runtime:  DefaultAnomalyRuntime(), // v0.10.890 — heap kipi off
 		// v0.10.1039 — BİLİNÇLİ varsayılan davranış değişikliği: operatörün
 		// adını verdiği `-batch` kalıbı kutudan açık gelir.
 		BatchServicePatterns: batchPatternsPtr(DefaultBatchServicePatterns()),
@@ -662,13 +639,8 @@ func NormalizeAnomalySensitivity(c AnomalySensitivityConfig) AnomalySensitivityC
 		Metrics:                make(map[string]AnomalyMetricSensitivity, len(AnomalySensitivityMetrics)),
 		DwellBuckets:           c.DwellBuckets,
 		CriticalZ:              c.CriticalZ,
-		ExternalOpenCapPerTick: c.ExternalOpenCapPerTick, // v0.10.587 — kopyalanmazsa PUT'ta sessizce düşer
-		// Normalize SOMUTLAŞTIRIR: nil gelen bayrak açık haliyle yazılır.
-		// Böylece kaydedilen blob her zaman ne olduğunu AÇIKÇA söyler ve
-		// bir sonraki okuyucu (ya da elle bakan operatör) varsayılanı
-		// tahmin etmek zorunda kalmaz.
-		AttachToIncident: boolPtr(c.AttachesToIncident()),
-		TemporalRanking:  normalizeTemporalRanking(c.TemporalRanking), // v0.10.700
+		ExternalOpenCapPerTick: c.ExternalOpenCapPerTick,                    // v0.10.587 — kopyalanmazsa PUT'ta sessizce düşer
+		TemporalRanking:        normalizeTemporalRanking(c.TemporalRanking), // v0.10.700
 		// v0.9.935 — davranış bölümü kendi kelepçesinden geçer. Eksik
 		// bölüm (bu sürümden ESKİ her settings satırı) varsayılanını
 		// alır: sıfır-değerli bir AnomalyBehaviorConfig aralık dışıdır,
@@ -681,7 +653,7 @@ func NormalizeAnomalySensitivity(c AnomalySensitivityConfig) AnomalySensitivityC
 		BatchServicePatterns: batchPatternsPtr(c.BatchServicePatternList()),
 		// v0.10.1056 — kopyalanmazsa PUT'ta düşer ve operatörün açtığı
 		// dedektör bir sonraki kayıtta sessizce kapanırdı. SOMUTLAŞTIRIR
-		// (AttachToIncident gibi): true/false aynen; v0.10.1085'ten beri nil → true.
+		// true/false aynen; v0.10.1085'ten beri nil → true.
 		OpLatency: boolPtr(c.OpLatencyOn()),
 		// v0.10.1085 — sürdürme kova sayısı; kopyalanmazsa PUT'ta düşerdi.
 		// Aralık dışı / eksik → 2.

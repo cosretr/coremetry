@@ -17,7 +17,6 @@ import { ErrorRampSubsection } from './ErrorRampSubsection';
 import { errorRampErrors, withErrorRampDefaults } from './errorRamp';
 import { MLSubsection } from './MLSubsection';
 import { NativeDetectorsSubsection } from './NativeDetectorsSubsection'; // v0.10.1746 // log ML dilim 0
-import { INCIDENT_ATTACH_LOCKED } from './incidentsSwitch'; // v0.10.2024 — Incidents kalıcı emekli
 
 // Faz 2 dilim 1 R17 — elle yazılmış `<Field><input/><div hint/></Field>`
 // (shared.tsx) → coremetry Field ailesi (`hint`), ham onay kutuları →
@@ -126,15 +125,6 @@ export function AnomalyPromotionTab() {
       <CheckboxField className="mb-4" checked={cfg.enabled}
         onCheckedChange={v => setCfg({ ...cfg, enabled: v })}
         label={<>Güçlü log/iz anomalilerini Problem&apos;e terfi ettir</>} />
-      {/* v0.10.1588 — terfi Problem'i incident'a bağlansın (Davis paritesi
-          FAZ 0.5 / D). Alan yoksa AÇIK (`!== false`); kayıt açık boolean. */}
-      <CheckboxField className="mb-4" aria-label="Terfi Problem'i incident'a bağlansın"
-        checked={cfg.attachToIncident !== false}
-        onCheckedChange={v => setCfg({ ...cfg, attachToIncident: v })}
-        disabled
-        hint={INCIDENT_ATTACH_LOCKED}
-        label={<>Terfi edilen Problem incident&apos;a bağlansın (aynı servis / komşu; yoksa yeni incident)</>} />
-
       <div data-disabled={!cfg.enabled || undefined} className={cn(STACK, DIM)}>
         <Num label="Minimum peak ratio (× baseline)" min={1} max={1000} step={0.5}
           value={cfg.minPeakRatio}
@@ -649,22 +639,6 @@ function SensitivitySection() {
               <option value="on">Açık — skor = yapısal × zamansal</option>
             </SelectField>
           </div>
-          <div className={SEP}>
-            <CheckboxField checked={cfg.attachToIncident !== false}
-              onCheckedChange={v => setCfg({ ...cfg, attachToIncident: v })}
-              disabled
-              label={<>Dedektör problemini otomatik incident&apos;a bağla</>}
-              hint={<>
-                <span className={WARN_LINE}>{INCIDENT_ATTACH_LOCKED}</span>
-                Açıkken, dedektörün açtığı her metrik problemi servis ve şiddetine göre
-                aktif bir incident&apos;a iliştirilir (yoksa yenisi açılır). Varsayılan
-                açık &mdash; bugüne kadarki davranış budur.
-                <br />
-                <b>Kapatırsanız problem yine açılır ve bildirim yine gider</b>; yalnız
-                incident açılmaz. Bu vida &laquo;bana haber verme&raquo; değil,
-                &laquo;bunu olay yönetimine sokma&raquo; demektir.
-              </>} />
-          </div>
 
           {/* v0.10.1039 — kapsam notu düzeltildi: batch kalıpları metrik
               dedektörünün DIŞINA da (iz operasyon anomalileri, hacim sıçraması
@@ -1112,24 +1086,6 @@ function ExceptionTriageSection() {
                 Pencerede yeni grup açan farklı servis sayısı bu eşiği bulunca
                 tek bir <b>P1 &laquo;Exception fırtınası&raquo;</b> problemi açılır ve
                 critical bildirim kanallarına düşer. Varsayılan 5.
-              </>} />
-
-            {/* v0.10.1588 — incident bağlama (Davis paritesi FAZ 0.5 / D). Alan
-                yoksa AÇIK okunur (`!== false`); kayıt açık boolean gönderir. */}
-            <CheckboxField aria-label="Fırtına incident'a bağlansın"
-              checked={cfg.stormAttachToIncident !== false}
-              onCheckedChange={v => setCfg({ ...cfg, stormAttachToIncident: v })}
-              disabled
-              hint={INCIDENT_ATTACH_LOCKED}
-              label={<>Exception fırtınası incident&apos;a bağlansın (yoksa kendi incident&apos;ı açılır)</>} />
-            <CheckboxField aria-label="Tekil exception problemi açık incident'a katılsın"
-              checked={cfg.singleGroupJoinIncident !== false}
-              onCheckedChange={v => setCfg({ ...cfg, singleGroupJoinIncident: v })}
-              disabled
-              hint={INCIDENT_ATTACH_LOCKED}
-              label={<>
-                Ölümcül / paylaşılan exception problemi, aynı servis ya da komşusunda AÇIK
-                incident varsa ona katılsın (kendi incident&apos;ını açmaz)
               </>} />
 
             <Num label="P2 aynı-gün penceresi (saat)" min={cfg.p1FreshHours} max={720} step={1}

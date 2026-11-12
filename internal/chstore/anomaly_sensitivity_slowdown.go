@@ -19,7 +19,7 @@ package chstore
 // ServiceSlowdownConfig — yaygın yavaşlama kuralının vidaları. Sıfır değer
 // (bu sürümden ESKİ blob alanı taşımaz) Normalize'da varsayılanlara dolar.
 type ServiceSlowdownConfig struct {
-	// Enabled — *bool, nil = AÇIK (operatör onaylı yeni kural; AttachToIncident
+	// Enabled — *bool, nil = AÇIK (operatör onaylı yeni kural; Behavior.Enabled
 	// emsali). Yalnız açıkça false kapatır; kapalıyken açık satırlar "rule
 	// disabled" gerekçesiyle kapanır.
 	Enabled *bool `json:"enabled,omitempty"`

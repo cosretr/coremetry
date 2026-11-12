@@ -244,7 +244,7 @@ gerekçeleri, R4 TR şablon + yaşam döngüsü, R5 enforce + özet + ayar UI, R
 | v0.9.825 | Tam kayıp (Value 0, Threshold>0) bigBreach; monitor DOWN P2'de takılıyordu | `problem.go:442-467` |
 | v0.9.977 | Kapatma yolu Value'yu ezmez | `problem.go:524-555` |
 | v0.9.978 | Anomali satırında Threshold=medyan, Comparator yöne göre — trafik düşüşü P1 kalır | `anomaly.go:768-797` |
-| v0.9.827 | `attachToIncident` kapısı ile "güçlü anomaliyi terfi et" kutusu FARKLI hatları yönetir | `anomaly_sensitivity.go:58-73` |
+| v0.9.827 | `attachToIncident` kapısı ile "güçlü anomaliyi terfi et" kutusu FARKLI hatları yönetirdi (alan v0.10.2073'te Incidents ölü koduyla silindi) | — |
 | v0.8.250 / v0.9.957 | Örnek kıtlığı: mevsimsel taban 14 g ±3 kova, cmt/paz ayrı; davranış motoru kova başına ≥3 FARKLI gün ister (sayı yeterken gün çeşitliliği kapısı şart) | `anomaly.go:59-74`; `behavior_scarcity_test.go` |
 | v0.8.507 / v0.9.691 / v0.10.156 | Tik başına toplu MV okuması + tek anlık görüntü; (servis,metrik) başına nokta sorgusu YOK | `anomaly.go:518-563`; `open_snapshot_test.go` |
 | v0.9.1069 / v0.10.699 / v0.10.199 | İki faz karar→uygula; küme ≥3 üye; katılım gözlenmiş StartedAt'e bağlı | `clustering.go:21-50` |

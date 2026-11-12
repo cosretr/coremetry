@@ -100,7 +100,7 @@ func TestNormalizeAnomalyBehavior(t *testing.T) {
 }
 
 // TestNormalizeAnomalyBehaviorRespectsDisable — operatörün KAPATMA
-// kararı ezilmemeli. AttachToIncident'la aynı tuzak: *bool olmasaydı
+// kararı ezilmemeli. eski AttachToIncident'la aynı tuzak: *bool olmasaydı
 // bu satır ayırt edilemezdi.
 func TestNormalizeAnomalyBehaviorRespectsDisable(t *testing.T) {
 	off := false

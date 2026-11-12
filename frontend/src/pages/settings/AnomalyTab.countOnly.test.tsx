@@ -65,26 +65,15 @@ describe('Yeni hata / yeni desen sayım tabanı', () => {
   });
 });
 
-// v0.10.1588 — terfi incident bağlama kutusu. v0.10.2024: Incidents kalıcı
-// emekli — kutu devre dışı + gerekçe, kayıtlı değer (alan yok → işaretli)
-// görünür ve kayıtta değişmeden taşınır.
-describe('Terfi Problem’i incident bağlama', () => {
-  it('kalıcı devre dışı; kayıt değeri değiştirmez', async () => {
+// Incidents ölü kod dilimi 4 (v0.10.2073): incident bağlama kutuları silindi.
+describe('Terfi sekmesinde incident bağlama kutusu yok', () => {
+  it('kutu ve emekli gerekçesi çizilmez', async () => {
     host = document.createElement('div');
     document.body.appendChild(host);
     root = createRoot(host);
     await act(async () => { root!.render(<AnomalyPromotionTab />); });
     await settle();
-    const box = host.querySelector<HTMLButtonElement>('button[role="checkbox"][aria-label="Terfi Problem\'i incident\'a bağlansın"]');
-    if (!box) throw new Error('kutu yok');
-    expect(box.getAttribute('aria-checked')).toBe('true');
-    expect(box.disabled).toBe(true);
-    expect(host.textContent).toContain('Eski Incidents akışı emekli');
-    expect(host.textContent).not.toContain('Eski Incidents akışı (emekli)');
-    const save = [...host.querySelectorAll('button')].find(b => b.textContent?.trim() === 'Save');
-    if (!save) throw new Error('Save yok');
-    await act(async () => { save.click(); });
-    await settle();
-    expect(m.puts[0].attachToIncident).toBeUndefined();
+    expect(host.querySelector('button[role="checkbox"][aria-label="Terfi Problem\'i incident\'a bağlansın"]')).toBeNull();
+    expect(host.textContent).not.toContain('Eski Incidents akışı emekli');
   });
 });

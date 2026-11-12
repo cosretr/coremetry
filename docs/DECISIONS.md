@@ -13591,3 +13591,20 @@ eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
 - Yan düzelme: `GuideTopics()` / konu dizini emekli metni değil eski "Incidents sayfası" metnini veriyordu
   (anahtar yalnız `GuideFor`'da uygulanıyordu); artık tek metin.
 - Katalog altını (`toolset_catalog_golden.json`) yalnız build_link şeması yüzünden yeniden yazıldı.
+
+## 2026-11-13 — v0.10.2073 — Incidents ölü kod dilimi 4: etkisiz incident bağlama ayarları silindi
+
+- Silinen: `anomaly_sensitivity.attachToIncident`, `anomaly_promotion.attachToIncident`,
+  `exception_triage.stormAttachToIncident` / `singleGroupJoinIncident` alanları + getter'ları + varsayılan /
+  Normalize satırları; audit / log satırlarındaki karşılıkları; Settings › Anomaly'deki dört devre dışı kutu ve
+  `incidentsSwitch.ts` gerekçe metni; FE tip alanları; yalnız bu alanları sınayan testler.
+- Neden güvenli: tek okuyucuları v0.10.2070'te silinen incident kapılarıydı; kutular v0.10.2024'ten beri
+  devre dışıydı. Kayıtlı bloblardaki alanlar okunmaz; Normalize yalnız bilinen alanları yazdığından bir
+  sonraki kayıtta düşer (veri tablosu değil, ayar blobu). ConfigHash / ML etiketi bu alanları içermiyor.
+- DOKUNULMADI (bilerek): evaluator `cascadeResolveIncidents` — prod'da ana anahtar 2026-11-12'ye dek açıktı,
+  açık eski incident'ları hâlâ kapatıyor (gerçek yazım); bildirim "Sustur" bağlantısının incident dalı
+  (`notify_actions.go`) — 7 günlük jetonlar 2026-11-19'a dek geçerli olabilir; bildirim türü `incident`,
+  keep kalıbı `incident:critical`, `notify_policy_replay` (geçmiş gönderimleri okur); inbox katlama dalları
+  ve kabuk bayrağı; `/api/incidents*` uçları (silinirse 410 yerine SPA-200 döner — operatör kararı ister);
+  explain-incident / postmortem AI uçları; RAG postmortem (RAG söküm ayrı onay ister); AI SRE
+  `GetProblemIncident` okuması (geçmiş bağları zaman çizelgesinde gösterir).

@@ -21,8 +21,8 @@ package ml
 //
 // BİLDİRİM: yalnız AÇILIŞTA, mevcut hattan (notify.SendProblemAlert; tür
 // "anomaly" — chstore.ProblemNotifyKind). Tazeleme ve kapanış bildirim
-// üretmez (evaluator terfi yoluyla aynı). Incident bağlama açılışta,
-// anomaly_promotion.attachToIncident vidasıyla (terfi yoluyla aynı).
+// üretmez (evaluator terfi yoluyla aynı). Incident bağlama yok (Incidents
+// emekli; kapı v0.10.2070'te silindi).
 
 import (
 	"context"

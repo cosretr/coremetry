@@ -386,42 +386,6 @@ func TestDefaultsMatchShippedBehaviour(t *testing.T) {
 	}
 }
 
-// TestIncidentAttachDefaultsToOn — v0.9.827.
-//
-// Bu sürüm bir GÖRÜNÜRLÜK sürümü: var olan davranışı kapatılabilir
-// yapıyor, kendiliğinden değiştirmiyor. Bayrak yazılmamışsa (bu
-// sürümden ESKİ her settings satırı) davranış aynen sürmeli.
-func TestIncidentAttachDefaultsToOn(t *testing.T) {
-	if !chstore.DefaultAnomalySensitivity().AttachesToIncident() {
-		t.Error("varsayılan KAPALI — bu sürüm davranışı sessizce değiştirirdi")
-	}
-	// Eski satır: alan hiç yok.
-	var old chstore.AnomalySensitivityConfig
-	if !old.AttachesToIncident() {
-		t.Error("bayrağı olmayan eski satır KAPALI okundu — yükseltme, " +
-			"operatörün hiç istemediği bir davranış değişikliği yapardı")
-	}
-	// Açıkça kapatılmış.
-	off := false
-	if (chstore.AnomalySensitivityConfig{AttachToIncident: &off}).AttachesToIncident() {
-		t.Error("açıkça false yazılmış bayrak AÇIK okundu — operatörün " +
-			"kararı yok sayılıyor")
-	}
-	// Normalize bayrağı SOMUTLAŞTIRMALI: kaydedilen blob ne olduğunu
-	// açıkça söylesin, sonraki okuyucu varsayılanı tahmin etmesin.
-	n := chstore.NormalizeAnomalySensitivity(chstore.AnomalySensitivityConfig{DwellBuckets: 3, CriticalZ: 6})
-	if n.AttachToIncident == nil {
-		t.Error("Normalize bayrağı nil bıraktı — kaydedilen blob kendini anlatmıyor")
-	}
-	// …ve operatörün kapatma kararını EZMEMELİ.
-	n2 := chstore.NormalizeAnomalySensitivity(chstore.AnomalySensitivityConfig{
-		DwellBuckets: 3, CriticalZ: 6, AttachToIncident: &off,
-	})
-	if n2.AttachesToIncident() {
-		t.Error("Normalize operatörün kapatma kararını ezdi")
-	}
-}
-
 // TestVolumeRidesTheSameQuery — MALİYET sözleşmesi.
 //
 // Hacim kapısı için AYRI bir sorgu açmak, v0.8.507'nin toparladığı N+1
