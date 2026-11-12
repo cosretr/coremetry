@@ -875,6 +875,27 @@ function SpanMetricPanel({ cfg, range, syncKey, onZoom, onZoomReset, dataOverrid
 // half computes the prior baseline. One round trip, no extra
 // API surface.
 
+// singleValueSeries — stat / gauge verisi. v0.10.2002 (Faz 3 dilim 3.9;
+// audit §5.4 "Stat ve gauge'a MetricsQL kaynağı"): metric alt-konfiginde
+// `promql` doluysa MetricsQL sorgusu (/api/metrics/promql) — Grafana içe
+// aktarması stat / gauge'u bu yoldan getirir. Yoksa eski iki yol aynen.
+function singleValueSeries(cfg: StatPanelConfig | GaugePanelConfig, from: number, to: number): Promise<SpanMetricSeries[] | null | undefined> {
+  if (cfg.source !== 'spanmetric' && cfg.metric?.promql?.trim()) {
+    return api.metricPromql({ query: cfg.metric.promql, from, to, step: cfg.metric.step }).then(r => r?.series ?? []);
+  }
+  return cfg.source === 'spanmetric'
+    ? api.spanMetric({
+        agg: cfg.span?.agg ?? 'count', field: cfg.span?.field,
+        groupBy: cfg.span?.groupBy, filters: cfg.span?.filters, dsl: cfg.span?.dsl,
+        from, to, step: cfg.span?.step,
+      })
+    : api.metricQuery({
+        name: cfg.metric?.metricName ?? '', service: cfg.metric?.service,
+        agg: cfg.metric?.agg, groupBy: cfg.metric?.groupBy,
+        from, to, step: cfg.metric?.step,
+      });
+}
+
 function StatPanel({ cfg, range, height }: {
   cfg: StatPanelConfig; range: TimeRange; height?: PanelHeight;
 }) {
@@ -892,17 +913,7 @@ function StatPanel({ cfg, range, height }: {
     const { from, to } = timeRangeToNs(range);
     const span = to - from;
     const extendedFrom = from - span;
-    const promise = cfg.source === 'spanmetric'
-      ? api.spanMetric({
-          agg: cfg.span?.agg ?? 'count', field: cfg.span?.field,
-          groupBy: cfg.span?.groupBy, filters: cfg.span?.filters, dsl: cfg.span?.dsl,
-          from: extendedFrom, to, step: cfg.span?.step,
-        })
-      : api.metricQuery({
-          name: cfg.metric?.metricName ?? '', service: cfg.metric?.service,
-          agg: cfg.metric?.agg, groupBy: cfg.metric?.groupBy,
-          from: extendedFrom, to, step: cfg.metric?.step,
-        });
+    const promise = singleValueSeries(cfg, extendedFrom, to);
     promise
       .then(s => {
         const flat = (s ?? []).flatMap(x => x.points);
@@ -1012,17 +1023,7 @@ function GaugePanel({ cfg, range, height }: {
   useEffect(() => {
     setValue(undefined); setError(null);
     const { from, to } = timeRangeToNs(range);
-    const promise = cfg.source === 'spanmetric'
-      ? api.spanMetric({
-          agg: cfg.span?.agg ?? 'count', field: cfg.span?.field,
-          groupBy: cfg.span?.groupBy, filters: cfg.span?.filters, dsl: cfg.span?.dsl,
-          from, to, step: cfg.span?.step,
-        })
-      : api.metricQuery({
-          name: cfg.metric?.metricName ?? '', service: cfg.metric?.service,
-          agg: cfg.metric?.agg, groupBy: cfg.metric?.groupBy,
-          from, to, step: cfg.metric?.step,
-        });
+    const promise = singleValueSeries(cfg, from, to);
     promise
       .then(s => {
         const flat = (s ?? []).flatMap(x => x.points);

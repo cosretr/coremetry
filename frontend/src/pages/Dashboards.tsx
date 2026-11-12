@@ -8,6 +8,7 @@ import { DataTable, type ColumnDef, type DataTableStateInput } from '@/component
 import { DashboardListFilters } from '@/components/coremetry/dashboard/DashboardListFilters';
 import { useDashboardRowActions } from '@/components/coremetry/dashboard/useDashboardRowActions';
 import { TemplateGallery } from '@/components/coremetry/dashboard/TemplateGallery';
+import { GrafanaImportDialog } from '@/components/coremetry/dashboard/GrafanaImportDialog';
 import { csvParam, boolParam, strParam, useUrlParams, type ParamSpec } from '@/lib/urlParams';
 import { filterDashboards, tagChips, toggleTag } from '@/lib/dashboardList';
 import { api } from '@/lib/api';
@@ -76,6 +77,8 @@ export default function DashboardsPage() {
   const [showNew, setShowNew] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
+  // v0.10.2002 (dilim 3.9) — Grafana JSON içe aktarma (önce kuru rapor).
+  const [grafanaOpen, setGrafanaOpen] = useState(false);
   const [params, setParams] = useUrlParams(LIST_PARAMS);
   const q = params.q;
   const setQ = (v: string) => setParams({ q: v });
@@ -236,6 +239,10 @@ export default function DashboardsPage() {
                 title="Import a dashboard from an exported JSON file" loading={importing}>
                 ↑ Import JSON
               </Button>
+              <Button variant="secondary" onClick={() => setGrafanaOpen(true)}
+                title="Grafana pano JSON dosyası içe aktarılır — önce neyin alınıp neyin atlandığını gösteren rapor">
+                Grafana JSON içe aktar
+              </Button>
               <Button variant="primary" onClick={() => setShowNew(true)}>+ New dashboard</Button>
             </>
           )}>
@@ -316,6 +323,11 @@ export default function DashboardsPage() {
               return null;
             }} />
         </div>
+
+        {isAdmin && (
+          <GrafanaImportDialog open={grafanaOpen} onOpenChange={setGrafanaOpen}
+            onImported={id => navigate(`/dashboard?id=${encodeURIComponent(id)}`)} />
+        )}
 
         {showNew && isAdmin && (
           <NewDashboardModal

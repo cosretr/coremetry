@@ -1,0 +1,60 @@
+{
+  "meta": { "type": "db" },
+  "dashboard": {
+    "title": "Acme Service RED",
+    "description": "com.acme servis panosu",
+    "tags": ["red", "acme"],
+    "annotations": { "list": [
+      { "builtIn": 1, "name": "Annotations & Alerts", "datasource": { "type": "grafana", "uid": "-- Grafana --" } },
+      { "name": "Deploys", "datasource": { "type": "loki", "uid": "loki1" }, "expr": "{app=\"deploy\"}" }
+    ] },
+    "templating": { "list": [
+      { "name": "datasource", "type": "datasource", "query": "prometheus" },
+      { "name": "service", "label": "Servis", "type": "query", "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "query": { "query": "label_values(http_server_request_duration_seconds_count, service_name)", "refId": "A" }, "multi": true },
+      { "name": "route", "type": "query", "query": "label_values(http_route)" },
+      { "name": "pct", "type": "custom", "query": "0.5,0.95,0.99" },
+      { "name": "job", "type": "query", "query": "query_result(up)" },
+      { "name": "interval", "type": "interval", "query": "1m,5m" }
+    ] },
+    "panels": [
+      { "id": 3, "type": "stat", "title": "p95", "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 },
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "fieldConfig": { "defaults": { "unit": "ms" }, "overrides": [] },
+        "targets": [ { "refId": "A", "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=~\"$service\"}[$__rate_interval])))" } ] },
+      { "id": 1, "type": "timeseries", "title": "İstek hızı", "description": "Saniyedeki istek",
+        "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+        "datasource": { "type": "prometheus", "uid": "prom1" },
+        "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "drawStyle": "line", "fillOpacity": 10 } },
+          "overrides": [ { "matcher": { "id": "byName", "options": "x" }, "properties": [] } ] },
+        "transformations": [ { "id": "organize" } ],
+        "targets": [
+          { "refId": "A", "expr": "sum by (http_route) (rate(http_server_request_duration_seconds_count{service_name=\"[[service]]\"}[5m]))" },
+          { "refId": "B", "expr": "sum(rate(http_server_request_duration_seconds_count[5m]))" }
+        ] },
+      { "id": 4, "type": "gauge", "title": "Hata %", "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
+        "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 5 } },
+        "targets": [ { "refId": "A", "expr": "100 * sum(rate(http_server_request_duration_seconds_count{http_response_status_code=~\"5..\"}[5m])) / sum(rate(http_server_request_duration_seconds_count[5m]))" } ] },
+      { "id": 10, "type": "row", "title": "Ayrıntı", "collapsed": true, "gridPos": { "x": 0, "y": 8, "w": 24, "h": 1 },
+        "panels": [
+          { "id": 11, "type": "heatmap", "title": "Süre dağılımı", "gridPos": { "x": 0, "y": 9, "w": 24, "h": 10 },
+            "datasource": { "type": "prometheus", "uid": "prom1" },
+            "targets": [ { "refId": "A", "expr": "sum by (le) (increase(http_server_request_duration_seconds_bucket[$__interval]))" } ] },
+          { "id": 12, "type": "logs", "title": "Hata logları", "gridPos": { "x": 0, "y": 19, "w": 24, "h": 8 },
+            "datasource": { "type": "loki", "uid": "loki1" }, "targets": [ { "refId": "A", "expr": "{app=\"acme\"}" } ] }
+        ] },
+      { "id": 20, "type": "table", "title": "Route tablosu", "gridPos": { "x": 0, "y": 30, "w": 12, "h": 8 },
+        "targets": [ { "refId": "A", "expr": "sum by (http_route) (rate(x[5m]))" } ] },
+      { "id": 21, "type": "timeseries", "title": "Karışık", "gridPos": { "x": 12, "y": 30, "w": 12, "h": 8 },
+        "datasource": { "type": "datasource", "uid": "-- Mixed --" },
+        "targets": [ { "refId": "A", "expr": "up" } ] },
+      { "id": 22, "type": "timeseries", "title": "Tempo", "gridPos": { "x": 0, "y": 40, "w": 8, "h": 5 },
+        "datasource": { "type": "tempo", "uid": "t1" }, "targets": [ { "refId": "A", "query": "x" } ] },
+      { "id": 23, "type": "text", "title": "Not", "gridPos": { "x": 8, "y": 40, "w": 16, "h": 5 },
+        "options": { "mode": "markdown", "content": "# Acme\nRunbook: wiki" } },
+      { "id": 24, "type": "graph", "title": "Eski grafik", "repeat": "service", "gridPos": { "x": 0, "y": 50, "w": 24, "h": 12 },
+        "bars": true, "stack": true, "alert": { "name": "x" },
+        "targets": [ { "refId": "A", "expr": "sum(rate(jvm_gc_duration_seconds_count{service_name=\"${service:regex}\"}[$__range]))" } ] }
+    ]
+  }
+}

@@ -1,0 +1,219 @@
+{
+  "dashboard": {
+    "name": "Acme Service RED",
+    "description": "com.acme servis panosu",
+    "tags": [
+      "red",
+      "acme",
+      "grafana"
+    ],
+    "panels": [
+      {
+        "id": "g1",
+        "title": "İstek hızı",
+        "span": 6,
+        "width": 2,
+        "type": "promql",
+        "config": {
+          "query": "sum by (http_route) (rate(http_server_request_duration_seconds_count{service_name=\"${service}\"}[5m]))",
+          "unit": "reqps",
+          "viz": "area"
+        },
+        "description": "Saniyedeki istek"
+      },
+      {
+        "id": "g2",
+        "title": "p95",
+        "span": 3,
+        "width": 1,
+        "height": "s",
+        "type": "stat",
+        "config": {
+          "source": "metric",
+          "metric": {
+            "metricName": "",
+            "promql": "histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=~\"${service}\"}[5m])))"
+          },
+          "unit": "ms"
+        }
+      },
+      {
+        "id": "g3",
+        "title": "Hata %",
+        "span": 3,
+        "width": 1,
+        "height": "s",
+        "type": "gauge",
+        "config": {
+          "source": "metric",
+          "metric": {
+            "metricName": "",
+            "promql": "100 * sum(rate(http_server_request_duration_seconds_count{http_response_status_code=~\"5..\"}[5m])) / sum(rate(http_server_request_duration_seconds_count[5m]))"
+          },
+          "unit": "%",
+          "min": 0,
+          "max": 5
+        }
+      },
+      {
+        "id": "g4",
+        "type": "row",
+        "title": "Ayrıntı",
+        "width": 4,
+        "config": {
+          "collapsed": true
+        }
+      },
+      {
+        "id": "g5",
+        "title": "Süre dağılımı",
+        "span": 12,
+        "width": 4,
+        "height": "l",
+        "type": "heatmap",
+        "config": {
+          "metricName": "http_server_request_duration_seconds"
+        }
+      },
+      {
+        "id": "ga",
+        "title": "Not",
+        "span": 8,
+        "width": 3,
+        "height": "s",
+        "type": "markdown",
+        "config": {
+          "text": "# Acme\nRunbook: wiki"
+        }
+      },
+      {
+        "id": "gb",
+        "title": "Eski grafik",
+        "span": 12,
+        "width": 4,
+        "height": "l",
+        "type": "promql",
+        "config": {
+          "query": "sum(rate(jvm_gc_duration_seconds_count{service_name=\"${service}\"}[1h]))",
+          "viz": "stacked-bar"
+        }
+      }
+    ],
+    "variables": [
+      {
+        "name": "service",
+        "label": "Servis",
+        "type": "label",
+        "labelName": "service_name",
+        "metric": "http_server_request_duration_seconds_count",
+        "multi": true
+      },
+      {
+        "name": "route",
+        "type": "label",
+        "labelName": "http_route"
+      },
+      {
+        "name": "pct",
+        "type": "custom",
+        "options": [
+          "0.5",
+          "0.95",
+          "0.99"
+        ]
+      }
+    ]
+  },
+  "report": {
+    "panels": [
+      {
+        "title": "İstek hızı",
+        "as": "MetricsQL grafiği",
+        "notes": [
+          "2 sorgudan yalnız A alındı",
+          "dönüşümler (transformations) alınmadı",
+          "alan geçersiz kılmaları (overrides) alınmadı"
+        ]
+      },
+      {
+        "title": "p95",
+        "as": "tek değer (MetricsQL)",
+        "notes": [
+          "$__rate_interval → 5m (pano sabit pencere kullanır)"
+        ]
+      },
+      {
+        "title": "Hata %",
+        "as": "gösterge (MetricsQL)",
+        "notes": []
+      },
+      {
+        "title": "Ayrıntı",
+        "as": "satır",
+        "notes": []
+      },
+      {
+        "title": "Süre dağılımı",
+        "as": "ısı haritası (http_server_request_duration_seconds)",
+        "notes": [
+          "$__interval → 1m (pano sabit pencere kullanır)",
+          "ısı haritası metriğin tüm dağılımını çizer; sorgudaki süzgeç ve toplama alınmadı"
+        ]
+      },
+      {
+        "title": "Not",
+        "as": "not (markdown)",
+        "notes": []
+      },
+      {
+        "title": "Eski grafik",
+        "as": "MetricsQL grafiği",
+        "notes": [
+          "$__range → 1h (pano sabit pencere kullanır)",
+          "repeat (\"service\") alınmadı: panel bir kez",
+          "panel alarmı alınmadı"
+        ]
+      }
+    ],
+    "skipped": [
+      {
+        "title": "Hata logları",
+        "reason": "desteklenmeyen panel tipi: logs"
+      },
+      {
+        "title": "Route tablosu",
+        "reason": "desteklenmeyen panel tipi: table"
+      },
+      {
+        "title": "Karışık",
+        "reason": "karışık kaynak"
+      },
+      {
+        "title": "Tempo",
+        "reason": "kaynak desteklenmiyor (tempo)"
+      }
+    ],
+    "variables": [
+      "service",
+      "route",
+      "pct"
+    ],
+    "skippedVariables": [
+      {
+        "name": "datasource",
+        "reason": "değişken tipi desteklenmiyor: datasource"
+      },
+      {
+        "name": "job",
+        "reason": "sorgu desteklenmiyor: query_result(up)"
+      },
+      {
+        "name": "interval",
+        "reason": "değişken tipi desteklenmiyor: interval"
+      }
+    ],
+    "notes": [
+      "1 annotation sorgusu alınmadı"
+    ]
+  }
+}
