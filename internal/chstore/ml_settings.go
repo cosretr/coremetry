@@ -85,9 +85,12 @@ func DefaultMLMetricFamilies() map[string][]MLMetricExpr {
 			{ID: "client_p95", Label: "HTTP client p95", Expr: "histogram_quantile(0.95, sum by ({svc}, le) (rate(http_client_request_duration_seconds_bucket[{win}])))", Direction: "up", Unit: "s"},
 			{ID: "client_5xx", Label: "HTTP client 5xx oranı", Expr: "sum by ({svc}) (rate(http_client_request_duration_seconds_count{http_response_status_code=~\"5..\"}[{win}])) / sum by ({svc}) (rate(http_client_request_duration_seconds_count[{win}]))", Direction: "up"},
 		},
+		// v0.10.2020 — cAdvisor pod toplam satırı (container="") ve duraklatma
+		// kabı (container="POD") süzülür; clusters katmanının süzgeciyle aynı
+		// (thanos/pod_family.go). Süzgeçsiz toplam pod'u iki kez sayıyordu.
 		"metric_k8s": {
-			{ID: "cpu", Label: "CPU kullanımı", Expr: "sum by ({svc}) (rate(container_cpu_usage_seconds_total[{win}]))", Direction: "up", Unit: "core"},
-			{ID: "memory", Label: "Bellek (working set)", Expr: "sum by ({svc}) (container_memory_working_set_bytes)", Direction: "up", Unit: "bytes"},
+			{ID: "cpu", Label: "CPU kullanımı", Expr: "sum by ({svc}) (rate(container_cpu_usage_seconds_total{container!=\"\",container!=\"POD\"}[{win}]))", Direction: "up", Unit: "core"},
+			{ID: "memory", Label: "Bellek (working set)", Expr: "sum by ({svc}) (container_memory_working_set_bytes{container!=\"\",container!=\"POD\"})", Direction: "up", Unit: "bytes"},
 			{ID: "restarts", Label: "Pod restart", Expr: "sum by ({svc}) (increase(kube_pod_container_status_restarts_total[{win}]))", Direction: "up"},
 		},
 	}

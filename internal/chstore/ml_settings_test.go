@@ -2,6 +2,7 @@ package chstore
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -198,4 +199,34 @@ func TestMLBaselineSettingOffAndOutOfHash(t *testing.T) {
 // haritasına girdiği için varsayılan hash BEKLENEN şekilde değişti
 // (66df3eb38772bb64 → 254767bc3f68c4a3); baseline anahtarının hash dışında
 // kaldığı yukarıdaki d/on karşılaştırmasıyla ayrıca çivili.
-const mlDefaultHash1813 = "254767bc3f68c4a3"
+// v0.10.2020: k8s cAdvisor ifadelerine container süzgeci → 60610b14fef39c95.
+const mlDefaultHash1813 = "60610b14fef39c95"
+
+// v0.10.2020 — k8s ailesi: cAdvisor ifadeleri pod toplam satırını
+// (container="") ve duraklatma kabını (POD) süzer; KSM restart ifadesi
+// değişmez; operatörün kaydettiği ifade korunur (yalnız varsayılan değişti).
+func TestMLK8sCAdvisorFilter(t *testing.T) {
+	by := map[string]string{}
+	for _, e := range DefaultMLMetricFamilies()["metric_k8s"] {
+		by[e.ID] = e.Expr
+	}
+	for _, id := range []string{"cpu", "memory"} {
+		if !strings.Contains(by[id], `container!="",container!="POD"`) {
+			t.Errorf("%s süzgeçsiz: %s", id, by[id])
+		}
+	}
+	if by["restarts"] != "sum by ({svc}) (increase(kube_pod_container_status_restarts_total[{win}]))" {
+		t.Errorf("KSM restart ifadesi değişmemeli: %s", by["restarts"])
+	}
+	saved := DefaultMLConfig()
+	custom := "sum by ({svc}) (rate(container_cpu_usage_seconds_total[{win}]))"
+	saved.MetricFamilies["metric_k8s"] = []MLMetricExpr{{ID: "cpu", Label: "CPU", Expr: custom, Direction: "up"}}
+	raw, _ := json.Marshal(saved)
+	var back MLConfig
+	if err := json.Unmarshal(raw, &back); err != nil {
+		t.Fatal(err)
+	}
+	if got := NormalizeMLConfig(back).MetricFamilies["metric_k8s"]; len(got) != 1 || got[0].Expr != custom {
+		t.Fatalf("kayıtlı ifade korunmalı: %+v", got)
+	}
+}
