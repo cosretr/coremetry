@@ -2317,6 +2317,10 @@ export const api = {
       body: JSON.stringify({ prompt, fields }),
       signal,
     }),
+  // Log Search 6.7 — servis log özeti (servis Logs sekmesi). Yalnız tıkla; sunucu
+  // 2 ES araması (pencere + önceki pencere). Arama / seviye bilerek gitmez.
+  explainServiceLogs: (p: { service: string; env?: string; from: number; to: number }, signal?: AbortSignal) =>
+    request<import('./types').ServiceLogSummaryResponse>(`/api/copilot/explain-service-logs?${qs(p)}`, { method: 'POST', signal }),
   explainLogs: (params: LogsParams, rows: import('./types').ExplainLogsRow[], signal?: AbortSignal) =>
     request<import('./types').ExplainLogsResponse>(`/api/copilot/explain-logs?${qs(params)}`, {
       method: 'POST',

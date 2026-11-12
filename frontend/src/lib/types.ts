@@ -11255,6 +11255,16 @@ export interface LogsNLQueryResponse {
   valid: boolean;
   error?: string;
 }
+// Log Search Faz 6 dilim 6.7 — POST /api/copilot/explain-service-logs (Go
+// copilot_explain_service_logs.go; 6.3 ile ortak kanıt katmanı).
+export interface ServiceLogSummaryResponse {
+  explanation: string;
+  exchangeId?: string;
+  sampled?: number;
+  degraded?: boolean;
+  reason?: string;
+  patterns: LogsExplainPatternLink[];
+}
 export interface LogPatternsBaseline {
   fromNs: number;
   toNs: number;

@@ -43,6 +43,7 @@ import { FieldSidebar } from './FieldSidebar';
 import { LogDetailSheet } from './LogDetailSheet';
 import { LogContextSection } from './LogContextSection';
 import { LogRunbookSection } from './LogRunbookSection';
+import { useServiceLogSummary, ServiceLogSummaryButton, ServiceLogSummaryResult } from './ServiceLogSummary';
 import { LogExceptionSection } from './StackBlock';
 import { TraceChip } from './TraceChip';
 import { traceHref } from '@/lib/traceHref';
@@ -240,6 +241,8 @@ export function CompactLogSearch({ service, range, from, to, env, onZoom, onZoom
     ...LOG_LEVEL_BANDS.map(l => ({ value: l, label: `${l.toUpperCase()} · ${(counts[l] ?? 0).toLocaleString('tr-TR')}` })),
   ];
   const href = compactLogsHref({ service, search, lvl, rangeParam, env, lucene, cols });
+  // Log Search 6.7 — "Log özeti" (yalnız tıkla; 6.3 ile ortak sunucu katmanı).
+  const summary = useServiceLogSummary({ service, env, from, to });
   const total = q.data?.total ?? 0;
 
   return (
@@ -255,7 +258,9 @@ export function CompactLogSearch({ service, range, from, to, env, onZoom, onZoom
         <Button variant="outline" size="sm" asChild>
           <Link to={href} title="Aynı arama, seviye, pencere ve kolonlarla Log Search">Logs'ta aç →</Link>
         </Button>
+        <ServiceLogSummaryButton ctl={summary} />
       </div>
+      <ServiceLogSummaryResult ctl={summary} service={service} onSearchPattern={q => applySearch(mergePatternQuery(search, q, false))} />
       <div className="cls-levels">
         <SegmentedControl<'all' | LogLevelBand> aria-label="Log seviyesi" size="sm" value={lvl}
           onChange={v => setParam('llvl', v === 'all' ? null : v)} options={lvlOptions} />
