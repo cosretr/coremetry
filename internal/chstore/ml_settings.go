@@ -266,7 +266,7 @@ func (c MLConfig) BaselineOn() bool { return c.Enabled && c.Baseline != nil && c
 // yetenekleri varsayılan AÇIK"): ML'e taşınan Davis özne yetenekleri.
 // Varsayılan blobda ve blobda HİÇ yazılmamış anahtarda açık; operatörün
 // kaydettiği değer (true/false) aynen korunur. Ana anahtar (Enabled) ayrı.
-var mlDefaultOnDetectors = map[string]bool{"op_latency": true, "dependency_error_rate": true}
+var mlDefaultOnDetectors = map[string]bool{"op_latency": true, "dependency_error_rate": true, "metric_kafka": true}
 
 // MLDetectorDefaultOn — SAF: dedektörün varsayılan durumu.
 func MLDetectorDefaultOn(name string) bool { return mlDefaultOnDetectors[name] }

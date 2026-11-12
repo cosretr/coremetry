@@ -218,6 +218,9 @@ func specFor(in CardInput) detSpec {
 		if lbl == "" {
 			lbl = in.Code
 		}
+		if t := partTopic(in.Part); t != "" { // v0.10.2064 (Davis S3): suçlu topic adıyla
+			lbl += " (topic " + t + ")"
+		}
 		return detSpec{label: "Metrik · " + strings.TrimPrefix(in.Detector, "metric_"), fact: lbl, what: "{svc} servisinde " + lbl + " {dirn}.",
 			past: lbl + " {dirn}", unit: unitMetric, measure: capFirst(lbl)}
 	}

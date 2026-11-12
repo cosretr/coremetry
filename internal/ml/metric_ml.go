@@ -29,6 +29,8 @@ type MetricML struct {
 	// her açık aile VM'den (önceki davranış). Kaynağı Thanos/none olan aile
 	// VM'e sorulmaz.
 	src *MetricSources
+	// kafkaSel — v0.10.2064 (Davis S3): consumer lag topic seçimi (30 dk; kafka_topic.go).
+	kafkaSel kafkaTopicSel
 }
 
 func NewMetricML() *MetricML { return &MetricML{daily: map[string]int{}} }
@@ -94,6 +96,37 @@ func (d *MetricML) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 	for _, pe := range metricExprs(cfg, svcLabel, cfg.BucketSec) {
 		if !familyOnVM(src, pe.family) {
 			continue
+		}
+		// v0.10.2064 (Davis S3): varsayılan consumer_lag ifadesi servis × topic
+		// (kafka_topic.go); topic etiketli seri yoksa aşağıdaki servis düzeyi ifade.
+		if pe.family == "metric_kafka" && pe.id == kafkaLagExprID && kafkaTopicDefault(cfg) {
+			tv, ok, skip, err := d.kafkaTopicSeries(ctx, deps, cfg, svcLabel, to, now)
+			if skip {
+				if len(waiting) == 0 || waiting[len(waiting)-1] != pe.family {
+					waiting = append(waiting, pe.family)
+				}
+				continue
+			}
+			if err != nil {
+				return nil, fmt.Errorf("vm %s/%s topic: %w", pe.family, pe.id, err)
+			}
+			if ok {
+				for svc, ts := range tv {
+					for t, v := range ts {
+						part := kafkaTopicPart(t)
+						dirOf[part] = pe.direction
+						k := chstore.MLSeriesKey(svc, part)
+						if series[k] == nil {
+							if len(series) >= metricSeriesCap {
+								continue
+							}
+							series[k] = map[int64]float64{}
+						}
+						series[k][last.Unix()] = v
+					}
+				}
+				continue
+			}
 		}
 		rows, skip, err := vmInstant(ctx, deps, "metric:"+pe.family, pe.expr, to, now)
 		if skip {

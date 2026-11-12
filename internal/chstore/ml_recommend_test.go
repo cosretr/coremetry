@@ -15,9 +15,10 @@ func chk(id, label string, checked, present bool) MLSourceCheck {
 
 func TestRecommendMLConfig(t *testing.T) {
 	cur := DefaultMLConfig()
-	cur.Detectors["log_volume"] = true  // log: dokunulmaz
-	cur.Detectors["metric_jvm"] = true  // verisi yok: kapanır
-	cur.Detectors["op_latency"] = false // v0.10.2059: varsayılan açık; kapalı kaydedilmiş eski blob
+	cur.Detectors["log_volume"] = true    // log: dokunulmaz
+	cur.Detectors["metric_jvm"] = true    // verisi yok: kapanır
+	cur.Detectors["op_latency"] = false   // v0.10.2059: varsayılan açık; kapalı kaydedilmiş eski blob
+	cur.Detectors["metric_kafka"] = false // v0.10.2064: aynı (Davis S3)
 	cur.Promotion["metric_kafka"] = MLPromotion{Enabled: true, MinHitRate: 0.9, MinSamples: 30}
 	cur.MaxServices = 2000
 	checks := []MLSourceCheck{

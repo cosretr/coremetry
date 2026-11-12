@@ -40,7 +40,7 @@ export const ML_TRACE_DETECTORS: { id: string; label: string; hint: string }[] =
 export const ML_METRIC_DETECTORS: { id: string; label: string; hint: string }[] = [
   { id: 'metric_jvm', label: 'JVM', hint: 'Heap, GC, thread (servis düzeyi; Thanos\'ta cluster başına)' },
   { id: 'metric_pool', label: 'Connection pool', hint: 'Havuz kullanımı, bekleme' },
-  { id: 'metric_kafka', label: 'Kafka', hint: 'Consumer lag, throttle' },
+  { id: 'metric_kafka', label: 'Kafka', hint: 'Consumer lag servis × topic (servis başına en çok 20 topic; 1.000 kayıt altı olay değil), throttle' },
   { id: 'metric_http_client', label: 'HTTP client', hint: 'Dış çağrı p95, 5xx oranı' },
   { id: 'metric_k8s', label: 'Kubernetes', hint: 'CPU, bellek, restart (pod → servis toplanır)' },
 ];

@@ -108,7 +108,7 @@ func rulesFor(signal, part string, cfg chstore.MLConfig) (seriesRule, bool) {
 			return seriesRule{detector: detOpErrorRate, upOnly: true, noRateFloor: true, minObserved: 0.01, trafficPart: tp}, true
 		}
 	case chstore.MLSignalMetric:
-		fam, id, _ := strings.Cut(part, "|")
+		fam, id, _ := splitThanosPart(part) // v0.10.2064: topic eki ("#topic") ifadeyi değiştirmez
 		for _, e := range cfg.MetricFamilies[fam] {
 			if e.ID == id {
 				return seriesRule{detector: fam, upOnly: e.Direction == "up", downOnly: e.Direction == "down", noRateFloor: true}, true

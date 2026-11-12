@@ -21,7 +21,8 @@ func TestPlanBaselineBackfill(t *testing.T) {
 	cfg.Enabled = true
 	cfg.Detectors[detLogVolume] = true
 	cfg.Detectors[detOpLatency] = true
-	cfg.Detectors["metric_jvm"] = true // 3 ifade
+	cfg.Detectors["metric_jvm"] = true    // 3 ifade
+	cfg.Detectors["metric_kafka"] = false // v0.10.2064: varsayılan açık (Davis S3)
 	cfg.BackfillIntervalMs = 2000
 	all := []string{"log", "trace", "metric"}
 	p := PlanBaselineBackfill(cfg, 56, all, true, true, 3, 1000)
@@ -203,6 +204,7 @@ func TestMetricBackfillSourceBuckets(t *testing.T) {
 	cfg := chstore.DefaultMLConfig()
 	cfg.Enabled = true
 	cfg.Detectors["metric_k8s"] = true
+	cfg.Detectors["metric_kafka"] = false // v0.10.2064: varsayılan açık (Davis S3)
 	cfg.MetricFamilies["metric_k8s"] = []chstore.MLMetricExpr{{ID: "cpu", Expr: "x", Direction: "up"}}
 	t0 := time.Date(2026, 11, 4, 10, 0, 0, 0, istanbul)
 	vm := &rangeVM{series: []chstore.SpanMetricSeries{{GroupKey: []string{`service_name="branch-teller"`},

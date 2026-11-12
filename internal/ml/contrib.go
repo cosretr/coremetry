@@ -104,6 +104,9 @@ func contribLabel(detector, code, vmPodLabel string) string {
 		return ""
 	}
 	if detector == "metric_kafka" {
+		if partTopic(code) != "" { // v0.10.2064: topic'li olayda suçlu zaten topic; servis düzeyi kırılım yanıltır
+			return ""
+		}
 		return "client_id"
 	}
 	if _, _, cluster := splitThanosPart(code); cluster != "" {

@@ -80,6 +80,7 @@ func TestDisabledSendsNoQuery(t *testing.T) {
 	if got := metricExprs(cfg, "service_name", 300); len(got) != 0 {
 		t.Fatalf("kapalı aileler sorgu planlamaz: %d", len(got))
 	}
+	cfg.Detectors["metric_kafka"] = false // v0.10.2064: varsayılan açık (Davis S3)
 	cfg.Enabled, cfg.Detectors["metric_jvm"] = true, true
 	for _, p := range metricExprs(cfg, "service_name", 300) {
 		if p.family != "metric_jvm" {

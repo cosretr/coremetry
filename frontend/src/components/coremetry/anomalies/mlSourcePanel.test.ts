@@ -28,6 +28,7 @@ describe('sourcePanelFor', () => {
     ['hata sayısı → Traces şeridi', ev('trace_error_count', 'trace', 'POST /orders'), 'traces'],
     ['bağımlılık → hedefin p95 serisi', ev('dependency_latency', 'trace', 'db|orders'), 'metric'],
     ['bağımlılık hata oranı → hedefin oran serisi (v0.10.2063)', ev('dependency_error_rate', 'trace', 'db|orders'), 'metric'],
+    ['Kafka lag topic olayı → Messaging lag paneli (v0.10.2064)', ev('metric_kafka', 'metric', 'metric_kafka|consumer_lag#invoices'), 'kafka-lag'],
     ['trace pod sapması → pod başına kaynak serisi (v0.10.2055)', ev('trace_pod_outlier', 'trace', 'p95'), 'metric'],
     ['trace pod sapması ölçüsüz → kayıtlı', ev('trace_pod_outlier', 'trace', ''), 'snapshot'],
     ['metrik olayı seri kimliksiz → kayıtlı', ev('metric_jvm', 'metric', ''), 'snapshot'],

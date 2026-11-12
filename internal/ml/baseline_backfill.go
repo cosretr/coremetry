@@ -114,6 +114,9 @@ func PlanBaselineBackfill(cfg chstore.MLConfig, days int, signals []string, esRe
 			}
 		case chstore.MLSignalMetric:
 			n := len(metricExprs(cfg, "service_name", cfg.BucketSec))
+			if n > 0 && cfg.DetectorOn("metric_kafka") && kafkaTopicDefault(cfg) {
+				n++ // v0.10.2064: consumer lag topic geçmişi
+			}
 			switch {
 			case n == 0:
 				ps.Skipped = "açık metrik ailesi yok"
@@ -523,6 +526,32 @@ func (s metricBackfillSource) fetch(ctx context.Context, from, to time.Time) ([]
 			return nil, fmt.Errorf("vm %s/%s: %w", pe.family, pe.id, err)
 		}
 		part := metricPart(pe.family, pe.id)
+		// v0.10.2064 (Davis S3): canlı tik consumer lag'i topic anahtarlı yazar
+		// (kafka_topic.go) → geçmişi de topic'li doldur (gün başına +1 sorgu;
+		// adım başına servis başına üst-K topic). Servis düzeyi seri aynen.
+		if pe.family == "metric_kafka" && pe.id == kafkaLagExprID && kafkaTopicDefault(s.cfg) {
+			trows, terr := s.r.query(ctx, "metric:"+pe.family, kafkaTopicBackfillExpr(svcLabel, s.cfg.VMTargetCardinality), from, to)
+			if terr != nil {
+				return nil, fmt.Errorf("vm %s/%s topic: %w", pe.family, pe.id, terr)
+			}
+			for _, r := range trows {
+				lb := groupKeyLabels(r.GroupKey)
+				svc, t := lb[svcLabel], lb[kafkaTopicLabel]
+				if svc == "" || t == "" {
+					continue
+				}
+				k := chstore.MLSeriesKey(svc, kafkaTopicPart(t))
+				if series[k] == nil {
+					if len(series) >= metricSeriesCap {
+						break
+					}
+					series[k] = map[int64]float64{}
+				}
+				for _, p := range pointsOf(r) {
+					series[k][p.Time/int64(time.Second)] = p.Value
+				}
+			}
+		}
 		for _, r := range rows {
 			svc := groupKeyLabels(r.GroupKey)[svcLabel]
 			if svc == "" {

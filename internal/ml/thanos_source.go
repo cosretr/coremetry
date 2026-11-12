@@ -164,6 +164,7 @@ func thanosMetricPart(family, exprID, cluster string) string {
 func splitThanosPart(part string) (family, exprID, cluster string) {
 	family, rest, _ := strings.Cut(part, "|")
 	exprID, cluster, _ = strings.Cut(rest, "@")
+	exprID, _, _ = strings.Cut(exprID, kafkaTopicSep) // v0.10.2064: "#<topic>" eki (partTopic) ifadeyi değiştirmez
 	return family, exprID, cluster
 }
 
