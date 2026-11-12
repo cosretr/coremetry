@@ -7,7 +7,7 @@ package mcptools
 
 import "github.com/cilcenk/coremetry/internal/chstore"
 
-// RunbookMatch — bir runbook eşleşmesi (FE lib/types.ts LogRunbookMatch).
+// RunbookMatch — bir runbook eşleşmesi (log satırı açıklamasının runbook eki).
 type RunbookMatch struct {
 	ID      string  `json:"id"`
 	Title   string  `json:"title"`

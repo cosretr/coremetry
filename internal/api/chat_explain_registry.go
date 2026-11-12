@@ -96,6 +96,10 @@ type explainBuilt struct {
 	// Followups — v0.10.1435: cevabın takip çipleri (metric_panel: genişlet /
 	// kıyasla / kırılım / aralığın trace-log linkleri); boşsa yok.
 	Followups []chatFollowup
+	// Appendix — v0.10.2014: model cevabından SONRA eklenen deterministik bölüm
+	// (log satırının runbook eşleşmeleri). Önbelleğe girmez: her turda kurucu
+	// yeniden hesaplar; boşsa hiçbir şey eklenmez.
+	Appendix string
 }
 
 // explainBlock — v0.10.1407: kurucunun tipli bloğu (blocks.Type* + gövde).
@@ -362,6 +366,10 @@ func (s *Server) chatExplainRegistryTurn(ctx context.Context, emit func(string, 
 		return true, false
 	}
 	text := trimExplainText(res)
+	if b.Appendix != "" { // v0.10.2014 — runbook eki: akışa son delta, cevaba aynı metin
+		emit("delta", map[string]string{"text": explainAppendixSep + b.Appendix})
+		text = joinExplainAppendix(text, b.Appendix)
+	}
 	links := append(append([]guidedAnswerLink(nil), b.Links...), s.answerRequestIDLinks(ctx, text, b.Service)...)
 	meta.Cached, meta.CachedAtMs = res.Cached, res.CachedAtMs
 	ans := map[string]any{

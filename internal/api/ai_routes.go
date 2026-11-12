@@ -133,7 +133,6 @@ func (s *Server) registerAIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST   /api/copilot/explain-log-spike", s.requireCopilot(s.copilotExplainLogSpike))       // v0.10.1284 — AI SRE Faz 1a: log artışını ne açıklıyor ✨
 	mux.HandleFunc("POST   /api/copilot/explain-log", s.requireCopilot(s.copilotExplainLog))                  // v0.10.1291 — CoSRE: tek log satırı ✨ (logstore üzerinden yeniden okur)
 	mux.HandleFunc("POST   /api/copilot/explain-logs", s.requireCopilot(s.copilotExplainLogs))                // Log Search 6.3 — "Bu logları açıkla" (desen özeti + seçili satırlar)
-	mux.HandleFunc("POST   /api/copilot/explain-log-runbook", s.requireCopilot(s.copilotExplainLogRunbook))   // Log Search 6.4 — satır + exception özeti + runbook (RAG'siz)
 	mux.HandleFunc("POST   /api/copilot/logs-nl-query", s.requireCopilot(s.copilotLogsNLQuery))               // Log Search 6.6 — cümle → KQL önerisi (çalıştırmaz)
 	mux.HandleFunc("POST   /api/copilot/explain-service-logs", s.requireCopilot(s.copilotExplainServiceLogs)) // Log Search 6.7 — servis log özeti (6.3 ile ortak katman)
 	mux.HandleFunc("POST   /api/copilot/runbook/{id}", s.requireCopilot(s.copilotRunbook))

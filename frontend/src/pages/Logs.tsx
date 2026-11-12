@@ -78,7 +78,6 @@ import { LogsAddFilterMenu, LogsShareMenu, LogsMoreMenu } from './logs/LogsActio
 import { isDraftDirty, bareTraceIdOf } from './logs/logsQuery';
 import { LogsTableToolbar } from './logs/LogsTableToolbar';
 import { useLogsExplain, LogsExplainButton, LogsExplainResult } from './logs/LogsExplain'; // Log Search 6.3
-import { LogRunbookSection } from '@/components/coremetry/logs/LogRunbookSection'; // Log Search 6.4
 import { LogsNLToggle, LogsNLQueryRow } from './logs/LogsNLQuery'; // Log Search 6.6
 import { applyNLToDraft } from '@/lib/logsNLQuery';
 import { parseLogsView, effectiveLogsView, writeLogsView, writeTraceView, readTraceViewTarget, logsListEnabled, type LogsView } from './logs/logsView';
@@ -1757,8 +1756,6 @@ function LogsInner() {
           )}
           expandedIds={expanded}
           onToggleExpand={toggleRow}
-          // Log Search 6.4 — "Runbook ile açıkla" (yalnız tıkla; span-event / Oracle satırında yok).
-          expandedSection={l => <LogRunbookSection key={`${l.timestamp}.${l.id}`} row={l} env={env} />}
           extraExpanded={l => (l.partial ? (
             <span className="ld-tbar-note" role="status">
               {fullDocs[l.id] === 'error'
@@ -1848,12 +1845,9 @@ function LogsInner() {
         // v0.10.1881 (dilim 3.2) — çevre loglar çekmecenin içinde (uç değişmez;
         // kapalı başlar, istek açılınca; ±5 → ±50 → ±200; pod / servis kapsamı).
         context={sheetRow && !sheetRow.origin ? (
-          <>
-            <LogRunbookSection key={`rb.${sheetRow.timestamp}.${sheetRow.id}`} row={sheetRow} env={env} />
-            <LogContextSection key={`${sheetRow.timestamp}.${sheetRow.id}`} pivot={sheetRow} env={env}
-              onOpenRow={openRow}
-              onOpenWindow={(fromNs, toNs, service) => navigate(logsHref({ window: { fromNs, toNs: toNs + 1_000_000 }, service }))} />
-          </>
+          <LogContextSection key={`${sheetRow.timestamp}.${sheetRow.id}`} pivot={sheetRow} env={env}
+            onOpenRow={openRow}
+            onOpenWindow={(fromNs, toNs, service) => navigate(logsHref({ window: { fromNs, toNs: toNs + 1_000_000 }, service }))} />
         ) : undefined} />
     </>
   );

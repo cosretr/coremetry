@@ -42,7 +42,6 @@ import { LogQueryInput } from './LogQueryInput';
 import { FieldSidebar } from './FieldSidebar';
 import { LogDetailSheet } from './LogDetailSheet';
 import { LogContextSection } from './LogContextSection';
-import { LogRunbookSection } from './LogRunbookSection';
 import { useServiceLogSummary, ServiceLogSummaryButton, ServiceLogSummaryResult } from './ServiceLogSummary';
 import { LogExceptionSection } from './StackBlock';
 import { TraceChip } from './TraceChip';
@@ -293,8 +292,7 @@ export function CompactLogSearch({ service, range, from, to, env, onZoom, onZoom
                 onOpen={tid => openTraceView(tid, l.timestamp)} />
             )}
             expandedIds={expanded}
-            onToggleExpand={toggleRow}
-            expandedSection={l => <LogRunbookSection key={`${l.timestamp}.${l.id}`} row={l} env={env} /> /* Log Search 6.4 */} />
+            onToggleExpand={toggleRow} />
           {showRows && (
             <Pager mode="cursor" count="skip" hasMore={!pagingDone} onMore={loadMore} loading={pagingBusy}
               loaded={logs.length} moreLabel="200 satır daha" />
@@ -311,11 +309,8 @@ export function CompactLogSearch({ service, range, from, to, env, onZoom, onZoom
         onOpenTrace={tid => openTraceView(tid, docRow?.timestamp)}
         exception={docRow?.exception ? <LogExceptionSection row={docRow} /> : undefined}
         context={docRow && !docRow.origin ? (
-          <>
-            <LogRunbookSection key={`rb.${docRow.id}`} row={docRow} env={env} />
-            <LogContextSection key={docRow.id} pivot={docRow} env={env} onOpenRow={openRow}
-              onOpenWindow={(f, t, svc) => navigate(logsHref({ window: { fromNs: f, toNs: t + 1_000_000 }, service: svc }))} />
-          </>
+          <LogContextSection key={docRow.id} pivot={docRow} env={env} onOpenRow={openRow}
+            onOpenWindow={(f, t, svc) => navigate(logsHref({ window: { fromNs: f, toNs: t + 1_000_000 }, service: svc }))} />
         ) : undefined} />
     </div>
   );

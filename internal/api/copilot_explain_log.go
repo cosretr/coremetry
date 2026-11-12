@@ -52,6 +52,11 @@ const (
 	logLineInputMax     = 10240
 	logLineReadBudget   = 5 * time.Second
 	logLineTraceBudget  = 2 * time.Second
+
+	// Runbook eki (v0.10.2014; eşleme 6.4'ten — mcptools.MatchRunbooks).
+	logRunbookMinScore    = 0.25
+	logRunbookAppendixMax = 2
+	logRunbookBudget      = 2 * time.Second
 )
 
 type logLineExplainBody struct {
@@ -264,8 +269,7 @@ const logLineNotFoundMsg = "log satırı yeniden okunamadı (saklama süresi dol
 
 // rereadLogLine — öznenin satırını logstore'dan yeniden okur (±1 sn, ≤20
 // satır; pod eşlenmemişse pod'suz bir kez daha) ve pod'u alan eşlemesinden
-// çözer. explain-log ile Log Search 6.4'ün explain-log-runbook'u ortak
-// kullanır (v0.10.1291 gövdesinden ayrıldı; davranış aynı).
+// çözer (v0.10.1291 gövdesinden ayrıldı; davranış aynı).
 func (s *Server) rereadLogLine(ctx context.Context, body logLineExplainBody) (*logstore.LogRecord, bool, string, error) {
 	if s.logs == nil {
 		return nil, false, "", errExplainLogsUnconfigured
@@ -354,7 +358,25 @@ func (s *Server) buildLogLineExplain(ctx context.Context, body logLineExplainBod
 	if line.TraceID != "" {
 		b.Links = []guidedAnswerLink{{Label: "Trace'i aç", Href: "/trace?id=" + url.QueryEscape(line.TraceID)}}
 	}
+	b.Appendix = s.logLineRunbookAppendix(ctx, line, in.Pattern)
 	return b, nil
+}
+
+// logLineRunbookAppendix — v0.10.2014: satırla eşleşen runbook'ların
+// deterministik eki (cevabın sonuna; model çağrısı yok, ES isteği yok —
+// runbook'lar ClickHouse'tan). Eşleşme yok / okunamadı → "".
+func (s *Server) logLineRunbookAppendix(ctx context.Context, line *logstore.LogRecord, pattern string) string {
+	if s.store == nil || line == nil {
+		return ""
+	}
+	rctx, cancel := context.WithTimeout(ctx, logRunbookBudget)
+	books, err := s.store.ListRunbooks(rctx)
+	cancel()
+	if err != nil {
+		return ""
+	}
+	ex := logstore.SummarizeException(line.Attributes, line.Body, line.Severity)
+	return renderRunbookAppendix(mcptools.MatchRunbooks(books, logRunbookQuery(line.Body, pattern, ex), logRunbookMinScore, logRunbookAppendixMax))
 }
 
 func (s *Server) copilotExplainLog(w http.ResponseWriter, r *http.Request) {
@@ -378,5 +400,56 @@ func (s *Server) copilotExplainLog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	r, xid := withExchange(r)
-	s.deliverExplain(w, r, xid, b.Extra, s.explainPrompt(r, b.System, b.User), b.Service, b.CacheKey)
+	s.deliverExplainAppendix(w, r, xid, b.Extra, s.explainPrompt(r, b.System, b.User), b.Service, b.CacheKey, b.Appendix)
+}
+
+// logRunbookQuery — SAF: runbook araması için sözcük dizisi. Önce en ayırt
+// edici olanlar (knowledgeTerms ilk 12 terimi alır): exception kısa adı,
+// neden, sınıf, desen adı, sonra gövdenin başı.
+func logRunbookQuery(body, pattern string, ex *logstore.ExceptionSummary) string {
+	var parts []string
+	short := func(t string) string {
+		if i := strings.LastIndexAny(t, ".:"); i >= 0 && i+1 < len(t) {
+			return t[i+1:]
+		}
+		return t
+	}
+	if ex != nil {
+		parts = append(parts, short(ex.Type))
+		if ex.Cause != "" {
+			parts = append(parts, short(ex.Cause))
+		}
+		if ex.Class != "" {
+			parts = append(parts, ex.Class)
+		}
+		parts = append(parts, oneLineSample(ex.Message, 160))
+	}
+	if pattern != "" {
+		parts = append(parts, pattern)
+	}
+	parts = append(parts, oneLineSample(body, 200))
+	return strings.Join(parts, " ")
+}
+
+// renderRunbookAppendix — SAF: cevabın sonuna eklenen "Runbook:" bölümü;
+// en çok logRunbookAppendixMax satır, her biri adı + uygulama bağlantısı
+// (markdown; sohbet kök-göreli yolu tıklanır çizer). Eşleşme yok → "".
+func renderRunbookAppendix(ms []mcptools.RunbookMatch) string {
+	var b strings.Builder
+	n := 0
+	for _, m := range ms {
+		if n >= logRunbookAppendixMax {
+			break
+		}
+		title := strings.TrimSpace(strings.NewReplacer("[", "(", "]", ")", "\n", " ", "\r", " ").Replace(m.Title))
+		if title == "" || m.Href == "" {
+			continue
+		}
+		if n == 0 {
+			b.WriteString("Runbook:")
+		}
+		fmt.Fprintf(&b, "\n- [%s](%s)", title, m.Href)
+		n++
+	}
+	return b.String()
 }

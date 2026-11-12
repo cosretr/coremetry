@@ -357,7 +357,6 @@ var explainStreamDeferred = map[string]string{
 	// Log Search Faz 6 — /logs cevap kartı (coremetry/logs/LogsAiAnswer):
 	// anlatım + sunucunun deterministik bağlantıları tek JSON.
 	"copilotExplainLogs":        "Logs cevap kartı — anlatım + bağlantılar tek JSON (Log Search 6.3)",
-	"copilotExplainLogRunbook":  "Logs cevap kartı — anlatım + runbook eşleşmeleri tek JSON (Log Search 6.4)",
 	"copilotLogsNLQuery":        "JSON kipi — akan token anlamsız (Log Search 6.6)",
 	"copilotExplainServiceLogs": "servis Logs sekmesi cevap kartı — anlatım + desen bağlantıları tek JSON (Log Search 6.7)",
 	"copilotCompareTraces":      "bağımsız küçük panel — Faz 1.5 takibi",
@@ -426,7 +425,7 @@ func TestExplainStreamHandlersUseDeliverExplain(t *testing.T) {
 			t.Errorf("handler %q pakette bulunamadı (yeniden adlandırıldı mı?)", h)
 			continue
 		}
-		if !strings.Contains(body, "s.deliverExplain(") {
+		if !strings.Contains(body, "s.deliverExplain(") && !strings.Contains(body, "s.deliverExplainAppendix(") {
 			t.Errorf("%s deliverExplain çağırmıyor — akan kip o uçta ÖLÜ", h)
 		}
 		// Eski çıkış yolu kalıntısı: iki çıkış = biri sessizce kazanır.

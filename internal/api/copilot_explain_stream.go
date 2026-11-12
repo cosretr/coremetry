@@ -130,6 +130,27 @@ func explainAnswerFrame(text, xid string, extra map[string]any) map[string]any {
 // servis edilir / oraya yazılır (explain_cache.go: anahtar prompt'un
 // tamamından türer, isabet etiketlenir, ?refresh=1 atlar).
 func (s *Server) deliverExplain(w http.ResponseWriter, r *http.Request, xid string, extra map[string]any, run explainRun, service, cacheKey string) {
+	s.deliverExplainAppendix(w, r, xid, extra, run, service, cacheKey, "")
+}
+
+// explainAppendixSep — model cevabı ile deterministik ek arasındaki ayraç.
+const explainAppendixSep = "\n\n"
+
+// joinExplainAppendix — SAF (v0.10.2014): görünen cevap = model metni + ek. Ek
+// boşsa metin aynen; akan kipte ek tek son delta (explainAppendixSep+ek)
+// olarak düşer, answer çerçevesi bu birleşik metni taşır.
+func joinExplainAppendix(text, appendix string) string {
+	if appendix == "" {
+		return text
+	}
+	return text + explainAppendixSep + appendix
+}
+
+// deliverExplainAppendix — deliverExplain + model cevabından SONRA eklenen
+// deterministik bölüm (v0.10.2014, log satırı runbook eki). Önbellek HAM model
+// çıktısını saklar; ek her istekte kurucudan gelir (runbook değişince eski
+// ek isabetle geri dönmez). Ek ek model çağrısı DEĞİL — ai_calls aynı.
+func (s *Server) deliverExplainAppendix(w http.ResponseWriter, r *http.Request, xid string, extra map[string]any, run explainRun, service, cacheKey, appendix string) {
 	em, canStream := blocks.NewEmitter(w, blocks.Options{})
 	// v0.10.35 — KİMLİK KÖPRÜSÜ TEK NOKTADAN. answerRequestIDLinks beş
 	// sohbet yüzeyinde kabloluydu (chat, drawer, guided, RAG) ama ✨ Explain
@@ -182,6 +203,7 @@ func (s *Server) deliverExplain(w http.ResponseWriter, r *http.Request, xid stri
 			return
 		}
 		s.explainCacheSet(r.Context(), cacheKey, out, xid)
+		out = joinExplainAppendix(out, appendix)
 		writeJSON(w, explainBody(out, xid, withLinks(out)))
 		return
 	}
@@ -202,6 +224,10 @@ func (s *Server) deliverExplain(w http.ResponseWriter, r *http.Request, xid stri
 		return
 	}
 	s.explainCacheSet(r.Context(), cacheKey, out, xid)
+	if appendix != "" {
+		em.Emit("delta", map[string]string{"text": explainAppendixSep + appendix})
+		out = joinExplainAppendix(out, appendix)
+	}
 	em.Emit("answer", explainAnswerFrame(out, xid, withLinks(out)))
 	em.Emit("done", map[string]bool{"ok": true})
 }
