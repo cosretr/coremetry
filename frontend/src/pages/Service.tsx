@@ -47,6 +47,7 @@ import type { Service, Problem, OperationSummary, OperationRoutesFor, SLORow, Ti
 import { QueryError } from '@/components/QueryError';
 import type { DataTableStateProps } from '@/components/ui/DataTable';
 import { PageShell } from '@/components/coremetry/PageShell';
+import { ServiceHealthcheckButton } from '@/components/coremetry/ServiceHealthcheck'; // v0.10.2039
 import { ServiceHttpMetricsTab } from './service/ServiceHttpMetricsTab';
 import { ServiceMessagingTab } from './service/ServiceMessagingTab'; // v0.10.1536
 import { withPivotCtx, pivotCtxFromSearch, type PivotDim } from '@/lib/pivotContext';
@@ -550,6 +551,10 @@ function ServiceDetailInner() {
                 title="Anomaly events for this service"
                 label="∿ Anomalies" />
             </ButtonGroup>
+            {/* v0.10.2039 — servis sağlık kontrolü: "Sağlık" grubunun sağında AYRI
+                düğme (gezinme değil, eylem: çekmecede salt-okunur kontrol turu
+                koşar; ?hc=1). İstek yalnız tıklayınca. */}
+            <ServiceHealthcheckButton service={svc} env={env} />
             <ButtonGroup attached aria-label="Traces">
               <DrillButton to="/traces" params={{ service: svc }} range={range} carry={SERVICE_PIVOT_CARRY} variant="subtle"
                 title="Raw traces filtered to this service"

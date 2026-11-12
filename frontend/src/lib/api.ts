@@ -3523,6 +3523,9 @@ export const api = {
   // v0.10.981 — servis GitOps sekmesi (service_gitops.go): iş yükleri + Argo uygulamaları + rollout'lar.
   serviceGitOps: (svc: string, signal?: AbortSignal) =>
     get<import('./types').ServiceGitOpsResponse>(`/api/services/${encodeURIComponent(svc)}/gitops`, signal),
+  // v0.10.2039 — servis sağlık kontrolü (service_healthcheck.go): yalnız kullanıcı tetikleyince koşar.
+  serviceHealthcheck: (svc: string, p: { env?: string; window?: string }, signal?: AbortSignal) =>
+    get<import('./types').HealthcheckResult>(`/api/services/${encodeURIComponent(svc)}/healthcheck?${qs(p)}`, signal),
   rolloutSettings: () => get<import('./types').RolloutSettingsResponse>('/api/settings/rollouts'),
   putRolloutSettings: (cfg: import('./types').RolloutSettings) =>
     request<import('./types').RolloutSettingsResponse>('/api/settings/rollouts', {

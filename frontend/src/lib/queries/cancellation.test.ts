@@ -38,6 +38,7 @@ const HEAVY: { file: string; hooks: string[] }[] = [
   { file: 'cases.ts', hooks: ['api.pendingCases('] }, // v0.10.1475 — onay bekleyen vakalar (sayfa ≤100 satır) panel kapanınca iptal
   { file: 'sreEval.ts', hooks: ['api.sreEvalRuns(', 'api.sreEvalRun(', 'api.sreEvalReview(', 'api.sreEvalCompare('] }, // v0.10.1301 — değerlendirme koşuları (≤50 satır + uzlaştırma) panel kapanınca iptal
   { file: 'copilot.ts', hooks: ['api.copilotStarters('] }, // v0.10.702 — çekmece kapanınca iptal
+  { file: 'healthcheck.ts', hooks: ['api.serviceHealthcheck('] }, // v0.10.2039 — ≤15 s Thanos/CH turu; panel kapanınca iptal
   { file: 'endpoints.ts', hooks: ['api.endpoints(', 'api.endpointDetail(', 'api.endpointSplit(', 'api.endpointDownstream(', 'api.operationCard('] },
   // v0.10.576 — /databases + /messaging'in paylaştığı iki okuma. Trend
   // sütunu db_summary_5m/msg tarafını tarar, çekmece yükü tek istekte

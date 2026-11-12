@@ -34,3 +34,5 @@ export type { SearchCommandProps } from './SearchCommand';
 export * from './logs';
 // v0.10.1836 — Metrics Explorer Faz 1 (meta bildirimi).
 export * from './metrics';
+// v0.10.2039 — servis sağlık kontrolü (servis sayfası, /runbooks, sohbet).
+export { ServiceHealthcheckButton, ServiceHealthcheckPanel, HealthcheckResultView, HC_STATE_LABEL, hcStateClass } from './ServiceHealthcheck';

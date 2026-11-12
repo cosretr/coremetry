@@ -232,6 +232,10 @@ export const keys = {
     detail: (p: import('../rolloutRow').RolloutIdParam) => ['rollouts', 'detail', p] as const,
     gitops: (svc: string) => ['rollouts', 'gitops', svc] as const, // v0.10.981 — servis GitOps sekmesi
   },
+  // v0.10.2039 — servis sağlık kontrolü; anahtar sunucu anahtarının girdileri (servis, env, pencere).
+  healthcheck: {
+    run: (svc: string, env: string, window: string) => ['healthcheck', svc, env, window] as const,
+  },
   // v0.10.131 — K8s entity katmanı (entities.ts). Her anahtar TÜM girdileri
   // taşır (cluster/tip/ns/arama/at/pencere) — sunucu anahtarının aynası.
   entities: {

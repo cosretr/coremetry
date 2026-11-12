@@ -12433,3 +12433,33 @@ export interface LoginSummary {
   topology?: LoginSummaryTopology;
   components?: LoginSummaryComponents;
 }
+
+// v0.10.2039 — servis sağlık kontrolü (Go: mcptools.HealthcheckResult /
+// HealthcheckRow; GET /api/services/{name}/healthcheck). Hüküm kurallardan;
+// 'unknown' = Ölçülemedi (asla İyi sayılmaz).
+export type HealthcheckState = 'ok' | 'warn' | 'crit' | 'unknown';
+
+export interface HealthcheckRow {
+  check: string;
+  title: string;
+  subject?: string;   // cluster / datasource
+  state: HealthcheckState;
+  seen: string;
+  link?: string;
+  linkLabel?: string;
+  evidence?: string;  // PromQL / SQL — kapalı ayrıntıda
+  short?: string;
+}
+
+export interface HealthcheckResult {
+  service: string;
+  env?: string;
+  window: string;
+  verdict: HealthcheckState;
+  sentence: string;
+  rows: HealthcheckRow[];
+  counts: { ok: number; warn: number; crit: number; unknown: number };
+  measuredAt: number; // unix ms
+  partial: boolean;
+  durationMs: number;
+}
