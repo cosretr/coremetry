@@ -22,7 +22,7 @@ import { serviceHref } from '@/lib/serviceHref';
 import { operationTracesHref, tracesPivotHref } from '@/lib/pivotHref';
 import { fmtClock } from '@/lib/utils';
 import type { MLEvent, MLSourceSeries, SpanMetricSeries } from '@/lib/types';
-import { highlightColors, panelWindow, peakInRange, sourcePanelFor, topContributors, type Contributors, type SourcePanel } from './mlSourcePanel';
+import { highlightColors, thanosSourceText, panelWindow, peakInRange, sourcePanelFor, topContributors, type Contributors, type SourcePanel } from './mlSourcePanel';
 
 const hm = (ns: number) => fmtClock(new Date(ns / 1e6)).slice(0, 5);
 const cssVar = (t: string) => getComputedStyle(document.documentElement).getPropertyValue(t);
@@ -209,7 +209,7 @@ function MetricSeries({ panel, win, lead, marks, fallback, onPeak, direction }: 
   const title = `${q?.label ?? panel.code}${thanos ? ` · ${panel.cluster}` : ''}`;
   const tail = data?.truncated ? ' · seri tavanı aşıldı' : '';
   const source = thanos
-    ? `Clusters katmanının pod kümesi · pod başına · ${stepTxt} adım · Thanos (${panel.cluster})${tail}`
+    ? `${thanosSourceText(q?.panel)} · pod başına · ${stepTxt} adım · Thanos (${panel.cluster})${tail}`
     : q?.by ? `dedektörün kaynağı · pod başına · ${stepTxt} adım · VictoriaMetrics${tail}`
       : `dedektörün ölçtüğü seri · ${stepTxt} adım · VictoriaMetrics`;
   const link = thanos

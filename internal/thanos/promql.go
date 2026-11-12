@@ -465,6 +465,12 @@ func nsDeployAvailFalseQuery(namespace string) string {
 // notu: query_range'te topk adım-başına ayrı değerlendirilir, set
 // kayması serileri kırar) — top-N seçimi Go'da.
 
+// DeployTrendQuery — v0.10.2060: deployTrendQuery'nin dışa açık adı (anomali
+// detay grafiği Pods sekmesinin CPU/Bellek paneliyle AYNI sorguyu çizer). Saf.
+func DeployTrendQuery(namespace, deploy, metric string, byPod bool) string {
+	return deployTrendQuery(namespace, deploy, metric, byPod)
+}
+
 func deployTrendQuery(namespace, deploy, metric string, byPod bool) string {
 	sel := fmt.Sprintf(`container!="",namespace="%s",pod=~"%s-.*"`,
 		escapeLabelValue(namespace), escapeLabelValue(regexp.QuoteMeta(deploy)))

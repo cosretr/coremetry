@@ -2,7 +2,7 @@
 // çevreler; suçlu seri adıyla. Fikstür nötr.
 import { describe, it, expect } from 'vitest';
 import type { SpanMetricSeries } from '@/lib/types';
-import { contributorLine, highlightColors, leadFromSnapshot, panelWindow, sourcePanelFor, topContributors } from './mlSourcePanel';
+import { contributorLine, highlightColors, thanosSourceText, leadFromSnapshot, panelWindow, sourcePanelFor, topContributors } from './mlSourcePanel';
 
 describe('contributorLine / leadFromSnapshot', () => {
   it('tek suçlu adıyla, diğerleri tek ifadeyle; ad kırpılmaz', () => {
@@ -51,6 +51,11 @@ describe('sourcePanelFor', () => {
     ['bozuk kanıt, Code yok → kayıtlı', { ...ev('trace_pod_outlier', 'trace', ''), evidence: '{' }, { kind: 'snapshot' }],
   ])('trace pod: %s', (_n, e, want) => {
     expect(sourcePanelFor(e)).toMatchObject(want);
+  });
+  it('v0.10.2060: Thanos kaynak satırı eşi olan Pods panelini söyler', () => {
+    expect(thanosSourceText('pods-resource')).toBe('Servis › Pods sekmesindeki panelin aynı sorgusu');
+    expect(thanosSourceText('pods')).toBe('Servis › Pods sekmesinin pod kümesi');
+    expect(thanosSourceText(undefined)).toContain('namespace bilinmiyor');
   });
   it('vurgu rengi yalnız sapan seride; vurgu yoksa boş', () => {
     const res = (t: string) => (t === '--err' ? 'red' : 'gray');

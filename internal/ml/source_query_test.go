@@ -35,7 +35,7 @@ func TestBuildSourceQuery(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			q, ok := BuildSourceQuery(cfg, c.det, c.code, "orders-batch", "")
+			q, ok := BuildSourceQuery(cfg, c.det, c.code, "orders-batch", "", PodScope{})
 			if ok != c.ok {
 				t.Fatalf("ok=%v, istenen %v (%+v)", ok, c.ok, q)
 			}
@@ -52,8 +52,56 @@ func TestBuildSourceQuery(t *testing.T) {
 			}
 		})
 	}
-	if _, ok := BuildSourceQuery(cfg, "metric_jvm", "metric_jvm|heap_used", " ", ""); ok {
+	if _, ok := BuildSourceQuery(cfg, "metric_jvm", "metric_jvm|heap_used", " ", "", PodScope{}); ok {
 		t.Fatal("servissiz olay ifade kurmamalı")
+	}
+}
+
+// v0.10.2060 — Thanos olayı Pods sekmesinin sorgusu / pod kümesiyle. Eski
+// belirti: JMX exporter'lı cluster'da JVM grafiği boş dönüp sessizce kayıtlı
+// görüntüye düşüyordu (yalnız Settings'in OTel adı soruluyordu) ve deployment
+// adı pod regex'ine girmiyordu.
+func TestBuildSourceQueryThanosPods(t *testing.T) {
+	cfg := chstore.MLConfig{MetricFamilies: chstore.DefaultMLMetricFamilies()}
+	sc := PodScope{Namespace: "shop", Deploy: "orders-deploy"}
+	cases := []struct {
+		name, code    string
+		scope         PodScope
+		panel         string
+		contains, not []string
+	}{
+		{"k8s CPU: Pods CPU paneliyle aynı sorgu", "metric_k8s|cpu@prod-east", sc, SourcePanelPodsResource,
+			[]string{`sum by (pod) (rate(container_cpu_usage_seconds_total{container!="",namespace="shop",pod=~"orders-deploy-.*"}[5m]))`}, nil},
+		{"k8s bellek: Pods bellek paneli", "metric_k8s|memory@prod-east", sc, SourcePanelPodsResource,
+			[]string{`sum by (pod) (container_memory_working_set_bytes{container!="",namespace="shop",pod=~"orders-deploy-.*"})`}, nil},
+		{"k8s restart: Pods pod kümesi, dedektör ifadesi", "metric_k8s|restarts@prod-east", sc, SourcePanelPods,
+			[]string{`kube_pod_container_status_restarts_total{`, `namespace="shop"`, `pod=~"orders-deploy-.*"`, "[120s]"}, nil},
+		{"JVM heap: Settings + JMX exporter + Micrometer or ile", "metric_jvm|heap_used@prod-east", sc, SourcePanelPods,
+			[]string{`jvm_memory_used_bytes{`, `jvm_memory_bytes_used{`, `area="heap"`, " or ", `avg by (pod)`}, nil},
+		{"JVM GC: üç adlandırma", "metric_jvm|gc_time@prod-east", sc, SourcePanelPods,
+			[]string{"jvm_gc_duration_seconds_sum", "jvm_gc_collection_seconds_sum", "jvm_gc_pause_seconds_sum"}, nil},
+		{"namespace yok: pod regex'i deployment adıyla", "metric_k8s|cpu@prod-east", PodScope{Deploy: "orders-deploy"}, "",
+			[]string{`pod=~"(orders-deploy|orders-batch)-.*"`}, []string{"namespace="}},
+		{"metadata yok: servis regex'i", "metric_k8s|memory@prod-east", PodScope{}, "",
+			[]string{`pod=~"(orders-batch)-.*"`}, nil},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			q, ok := BuildSourceQuery(cfg, c.code[:strings.Index(c.code, "|")], c.code, "orders-batch", "", c.scope)
+			if !ok || q.Cluster != "prod-east" || q.By != "pod" || q.Panel != c.panel {
+				t.Fatalf("ok=%v %+v", ok, q)
+			}
+			for _, s := range c.contains {
+				if !strings.Contains(q.Expr, s) {
+					t.Fatalf("%q yok:\n%s", s, q.Expr)
+				}
+			}
+			for _, s := range c.not {
+				if strings.Contains(q.Expr, s) {
+					t.Fatalf("%q olmamalı:\n%s", s, q.Expr)
+				}
+			}
+		})
 	}
 }
 

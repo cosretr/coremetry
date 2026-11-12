@@ -90,7 +90,18 @@ func (s *Server) getMLSourceSeries(w http.ResponseWriter, r *http.Request) {
 		if vmOK {
 			svcLabel = rd.MetricLabelMap().Normalized().Service
 		}
-		sq, ok := ml.BuildSourceQuery(s.store.GetMLConfig(ctx), det, code, svc, svcLabel)
+		// v0.10.2060 — Thanos olayı: Pods sekmesinin namespace + deployment'ı
+		// servis metadata'sından (tek anahtarlı okuma; yoksa pod regex'i).
+		var scope ml.PodScope
+		if strings.Contains(code, "@") {
+			if m, _ := s.store.GetServiceMetadata(ctx, svc); m != nil {
+				scope = ml.PodScope{Namespace: m.Namespace, Deploy: m.Deployment}
+				if scope.Namespace != "" && scope.Deploy == "" {
+					scope.Deploy = svc // Pods sekmesinin yedeği: deployment yoksa servis adı
+				}
+			}
+		}
+		sq, ok := ml.BuildSourceQuery(s.store.GetMLConfig(ctx), det, code, svc, svcLabel, scope)
 		if !ok {
 			return out, nil
 		}

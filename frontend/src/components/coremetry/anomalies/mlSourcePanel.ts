@@ -86,6 +86,13 @@ export function parseLogsLink(href?: string): URL | null {
   } catch { return null; }
 }
 
+/** SAF (v0.10.2060): Thanos grafiğinin kaynak satırı — eşi olan Pods paneli. */
+export function thanosSourceText(p?: string): string {
+  if (p === 'pods-resource') return 'Servis › Pods sekmesindeki panelin aynı sorgusu';
+  if (p === 'pods') return 'Servis › Pods sekmesinin pod kümesi';
+  return "servisin pod regex'i (namespace bilinmiyor)";
+}
+
 /** SAF: kartın Logs bağlantısı (/logs?service=&q=&severity=) → grafik süzgeci.
  *  Bağlantıyla grafik AYNI nüfusu sayar (tek kaynak: ml explain_links logsLink). */
 export function logsPanelFromHref(href?: string): Extract<SourcePanel, { kind: 'logs' }> | null {

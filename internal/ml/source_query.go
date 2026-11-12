@@ -8,9 +8,8 @@ package ml
 //
 //   VM metrik ailesi ("aile|ifade")       → ailenin ifadesi, {svc} = servis
 //     etiketi, her seçiciye servis="…" eklenir (tek seri: dedektörün ölçtüğü).
-//   Thanos ("aile|ifade@cluster")          → aynı ifade pod kırılımıyla, her
-//     seçiciye pod=~<servis pod regex'i> (Clusters katmanının pod kümesi);
-//     pod başına seri.
+//   Thanos ("aile|ifade@cluster")          → v0.10.2060: Pods sekmesinin
+//     sorgusu / pod kümesiyle, pod başına seri (thanosSourceQuery).
 //   dependency_latency ("aile|hedef")      → hedefin p95'i (ms); hedef etiketi
 //     dedektörün aday listesinden `or` ile (tek sorgu, ilk eşleşen etiket).
 //
@@ -19,6 +18,7 @@ package ml
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/cilcenk/coremetry/internal/anomaly"
@@ -38,11 +38,13 @@ type SourceQuery struct {
 	Label   string `json:"label"`
 	// By — seri kırılımının etiketi ("" = tek seri).
 	By string `json:"by,omitempty"`
+	// Panel — v0.10.2060: Thanos grafiğinin eşi olan Pods paneli (SourcePanel*); boş = dedektör ifadesi.
+	Panel string `json:"panel,omitempty"`
 }
 
 // BuildSourceQuery — SAF. ok=false: bu olay için ifade kurulamaz (bilinmeyen
 // aile/ifade, boş servis) — çağıran kayıtlı görüntüye düşer.
-func BuildSourceQuery(cfg chstore.MLConfig, detector, code, service, svcLabel string) (SourceQuery, bool) {
+func BuildSourceQuery(cfg chstore.MLConfig, detector, code, service, svcLabel string, scope PodScope) (SourceQuery, bool) {
 	if strings.TrimSpace(service) == "" {
 		return SourceQuery{}, false
 	}
@@ -67,11 +69,67 @@ func BuildSourceQuery(cfg chstore.MLConfig, detector, code, service, svcLabel st
 		return SourceQuery{}, false
 	}
 	if cluster != "" {
-		expr := thanos.WithRegexMatcher(renderExpr(e.Expr, "pod", SourceQueryWinSec), "pod", thanos.ServicePodRegex(service, ""))
-		return SourceQuery{Expr: expr, Cluster: cluster, Unit: e.Unit, Label: e.Label, By: "pod"}, true
+		return thanosSourceQuery(cfg, *e, fam, cluster, service, scope), true
 	}
 	expr := thanos.WithEqualMatcher(renderExpr(e.Expr, svcLabel, SourceQueryWinSec), svcLabel, service)
 	return SourceQuery{Expr: expr, Unit: e.Unit, Label: e.Label}, true
+}
+
+// PodScope — v0.10.2060: servisin pod kümesi, servis metadata'sından
+// (Pods sekmesinin kullandığı namespace + deployment). Boş alan = bilinmiyor.
+type PodScope struct{ Namespace, Deploy string }
+
+// Thanos detay grafiğinin hangi Pods paneliyle aynı olduğu (istemci kaynak satırı).
+const (
+	SourcePanelPodsResource = "pods-resource" // Pods sekmesi CPU / Bellek paneli: aynı sorgu
+	SourcePanelPods         = "pods"          // Pods sekmesinin pod kümesi (namespace + deployment)
+)
+
+// thanosSourceQuery — SAF (v0.10.2060). Thanos olayının detay grafiği,
+// servis sayfasının Pods sekmesinin gördüğü pod kümesiyle:
+//   - k8s CPU / bellek + namespace ve deployment biliniyor → Pods sekmesinin
+//     CPU / Bellek paneli sorgusunun AYNISI (thanos.DeployTrendQuery, pod başına);
+//   - diğer ifadeler → dedektörün ifadesi pod başına; JVM'de Settings ifadesi
+//     ve yerleşik varyantlar (JMX exporter, Micrometer) `or` ile: cluster hangi
+//     adlandırmayı taşıyorsa o döner (eski: yalnız Settings ifadesi → JMX
+//     exporter'lı cluster'da seri boş, grafik sessizce kayıtlı görüntüye
+//     düşüyordu);
+//   - pod seçici: namespace + "<deployment>-" (Pods sekmesi); namespace
+//     bilinmiyorsa servisin pod regex'i, deployment adı dahil (eski: deployment
+//     adı yoktu, servis adından farklı adlı pod'lar kaçıyordu).
+func thanosSourceQuery(cfg chstore.MLConfig, e chstore.MLMetricExpr, fam, cluster, service string, sc PodScope) SourceQuery {
+	q := SourceQuery{Cluster: cluster, Unit: e.Unit, Label: e.Label, By: "pod"}
+	scoped := sc.Namespace != "" && sc.Deploy != ""
+	if scoped && fam == "metric_k8s" && (e.ID == "cpu" || e.ID == "memory") {
+		m := "cpu"
+		if e.ID == "memory" {
+			m = "mem"
+		}
+		q.Expr, q.Panel = thanos.DeployTrendQuery(sc.Namespace, sc.Deploy, m, true), SourcePanelPodsResource
+		return q
+	}
+	seen := map[string]bool{}
+	var parts []string
+	for _, set := range familyVariantSets(cfg, fam) {
+		for _, x := range set {
+			if x.ID != e.ID || seen[x.Expr] {
+				continue
+			}
+			seen[x.Expr] = true
+			expr := renderExpr(x.Expr, "pod", SourceQueryWinSec)
+			if scoped {
+				expr = thanos.WithRegexMatcher(thanos.WithEqualMatcher(expr, "namespace", sc.Namespace), "pod", regexp.QuoteMeta(sc.Deploy)+"-.*")
+			} else {
+				expr = thanos.WithRegexMatcher(expr, "pod", thanos.ServicePodRegex(service, sc.Deploy))
+			}
+			parts = append(parts, expr)
+		}
+	}
+	q.Expr = strings.Join(parts, " or ")
+	if scoped {
+		q.Panel = SourcePanelPods
+	}
+	return q
 }
 
 // TracePodLabels — v0.10.2055: trace_pod_outlier'ın RED ailesinde keşfettiği
