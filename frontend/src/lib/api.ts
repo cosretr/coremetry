@@ -20,7 +20,7 @@ OracleLogsResponse, CopilotScopeNames, CosreRouteRED,
   SparklineBucket, OperationSummary,
   SystemStatus,
   Monitor, MonitorResult, MonitorRow,
-  Incident, IncidentEvent,
+  Incident,
   StatusPageConfig, StatusComponent, StatusSubscriber,
   RetentionSpec,
   AISettings, AISettingsInput, AIModelProfileInput, AIProfilesPayload, AIProfileTestResult, AISurfaceMap,
@@ -2601,13 +2601,6 @@ export const api = {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ exchangeId }),
     }),
-  // v0.9.1197 (Faz 5.4) — kayıtlı postmortem'i KB'ye indeksle. İçeriği
-  // sunucu incidents satırından okur; buradan yalnız kimlik gider.
-  ragIngestPostmortem: (incidentId: string) =>
-    request<{ docId: string; chunks: number }>('/api/rag/postmortem', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ incidentId }),
-    }),
   deleteRagDocument: (id: string) =>
     request<{ ok: boolean }>(`/api/rag/documents/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
@@ -2726,12 +2719,6 @@ export const api = {
   // özne kipiyle gitti; her ✨ artık CoSRE sohbetinin bir turu (copilotChat +
   // context.explainAsk). HTTP uçları sunucuda kalır (ortak kurucular, evalset,
   // make audit yüzeyi).
-  // v0.9.1197 (Faz 5.4) — incident kanıtından postmortem taslağı; taslak
-  // editöre düşer, kaydeden yine updateIncident. Bilinçli buffered (akış
-  // textarea imlecini bozar — copilot_explain_stream_test.go gerekçesi).
-  draftPostmortem: (id: string) =>
-    request<{ draft: string; exchangeId?: string }>(
-      `/api/copilot/draft-postmortem/${encodeURIComponent(id)}`, { method: 'POST' }),
   // v0.9.1130 (AI Faz 2.2) — gömülü insight kartı.
   //
   // GET, POST DEĞİL: uç yalnız OKUYOR (deterministik projeksiyon +
@@ -2929,24 +2916,9 @@ export const api = {
   statusPageDeleteSubscriber: (email: string) =>
     request<void>(`/api/status-page/subscribers?email=${encodeURIComponent(email)}`, { method: 'DELETE' }),
 
-  // Incident management
-  // v0.9.456 — dürüstlük zarfı: counts SQL'den (null = sayım
-  // alınamadı, sayfa-türevine düş), truncated = 200-pencere doldu.
-  listIncidents:    (params?: { status?: string; service?: string; severity?: string; limit?: number }) =>
-    get<{ items: Incident[]; counts: Record<string, number> | null; truncated: boolean } | null>(`/api/incidents?${qs(params ?? {})}`),
-  getIncident:      (id: string) => get<Incident>(`/api/incidents/${id}`),
-  createIncident:   (i: Partial<Incident>) =>
-    request<Incident>(`/api/incidents`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(i) }),
-  updateIncident:   (id: string, i: Partial<Incident>) =>
-    request<Incident>(`/api/incidents/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(i) }),
+  // v0.10.1826 Incidents emekli; arşiv sayfası silindi. Yalnız Inbox toplu ack kalır.
   ackIncident:      (id: string) =>
     request<Incident>(`/api/incidents/${id}/ack`, { method: 'POST' }),
-  resolveIncident:  (id: string) =>
-    request<Incident>(`/api/incidents/${id}/resolve`, { method: 'POST' }),
-  addIncidentNote:  (id: string, text: string) =>
-    request<void>(`/api/incidents/${id}/note`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) }),
-  incidentTimeline: (id: string) => get<IncidentEvent[] | null>(`/api/incidents/${id}/timeline`),
-  incidentProblems: (id: string) => get<string[] | null>(`/api/incidents/${id}/problems`),
 
   // Synthetic monitoring
   listMonitors:    ()              => get<MonitorRow[] | null>(`/api/monitors`),

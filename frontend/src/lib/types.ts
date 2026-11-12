@@ -132,15 +132,6 @@ export interface Incident {
   unresolvedProblems?: number;
 }
 
-export interface IncidentEvent {
-  incidentId: string;
-  time: number;
-  kind: 'created' | 'ack' | 'resolved' | 'note' | 'problem_attached' | 'problem_resolved';
-  actor?: string;
-  body?: string;
-  refId?: string;
-}
-
 // ── Runtime settings ─────────────────────────────────────────────────────────
 
 // Data-retention override per signal, expressed as "<n>h" or "<n>d".

@@ -13563,3 +13563,18 @@ eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
 - Veri: incident tabloları ve satırları aynen; arşiv sayfası, kademeli kapanış, elle uçlar sonraki dilimlerde.
 - Kalan (bilerek): ayar alanları `attachToIncident` / `stormAttachToIncident` / `singleGroupJoinIncident`
   artık etkisiz — Settings kontrolleriyle birlikte ayar dilimindeki silinecek.
+
+## 2026-11-13 — v0.10.2071 — Incidents ölü kod dilimi 2: incident sayfaları silindi, eski adresler Anomalies'e
+
+- Silinen: `pages/Incidents.tsx` (liste; v0.10.1828'den beri hiç çizilmiyordu — rota hep yönlendiriyordu),
+  `pages/Incident.tsx` (salt-okunur arşiv detay; yalnız eski bildirim / yer imi linkleri açıyordu),
+  yalnız bu sayfaların kullandığı `lib/queries/incidents.ts` + `keys.incidents` + iki olay geçersiz kılma
+  girdisi, `lib/incidentRootCause.ts`, `features/anomalies/incidentSummary.ts`, `INCIDENTS_ARCHIVE_BANNER`,
+  api.ts istemcileri (list/get/create/update/resolve/note/timeline/problems, postmortem taslağı, RAG
+  postmortem), route prefetch girdisi, sayfalara bağlı pin testleri.
+- Eski adresler: `/incidents*` ve `/incident?id=` koşulsuz `INCIDENTS_RETIRED_HOME` (/anomalies) —
+  boş 404 yok (eski e-posta linkleri dahil).
+- Kalan (bilerek): `api.ackIncident` (Inbox toplu ack; incident satırı sunucu inbox katlamasıyla birlikte
+  gider), kabuk bayrağı `features.incidents` tüketicileri, AI özne türü `incident` (geçmiş sohbet
+  kayıtlarını çizer), `pageContext` sayfa kimlikleri (Go aynası), sunucu uçları — sonraki dilimler.
+- Veri: incident tabloları aynen; arşivi gösteren yüzey kalmadı (yüzeyle birlikte kaldırıldı).

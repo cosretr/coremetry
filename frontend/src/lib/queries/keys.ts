@@ -143,18 +143,6 @@ export const keys = {
                    ['exceptions', 'samples', fingerprint, limit] as const,
   },
 
-  incidents: {
-    all:         ['incidents'] as const,
-    list:        (filter: { status?: string; service?: string; severity?: string; limit?: number }) =>
-                   ['incidents', 'list', filter] as const,
-    one:         (id: string) =>
-                   ['incidents', 'one', id] as const,
-    events:      (id: string) =>
-                   ['incidents', 'events', id] as const,
-    problems:    (id: string) =>
-                   ['incidents', 'problems', id] as const,
-  },
-
   admin: {
     systemStats: ['admin', 'system-stats'] as const,
     cardinality: ['admin', 'cardinality'] as const,

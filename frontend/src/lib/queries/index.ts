@@ -34,11 +34,6 @@ export {
   useStatusPageSubscribers, useDeleteStatusSubscriber,
 } from './admin';
 export {
-  useIncidents, useIncident, useIncidentEvents, useIncidentProblems,
-  useIncidentProblemDetails, INCIDENT_PROBLEM_DETAIL_CAP,
-  useCreateIncident, useUpdateIncident,
-} from './incidents';
-export {
   useAlertRules, useAlertRuleProblemCounts, useAlertRuleSeries, useAlertPreviewSeries,
   useCreateAlertRule, useUpdateAlertRule,
   useDeleteAlertRule, useEnableAlertRule, useDisableAlertRule,

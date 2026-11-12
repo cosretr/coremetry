@@ -224,16 +224,6 @@
       "count": 5
     }
   },
-  "src/pages/Incident.tsx": {
-    "ui/no-raw-element": {
-      "count": 2
-    }
-  },
-  "src/pages/Incidents.tsx": {
-    "ui/no-raw-element": {
-      "count": 1
-    }
-  },
   "src/pages/Messaging.tsx": {
     "ui/no-raw-element": {
       "count": 1

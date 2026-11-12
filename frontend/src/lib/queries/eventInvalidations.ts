@@ -24,7 +24,7 @@ export function eventInvalidations(kind: EventKind | string): QueryKey[] {
     // surface the last to know.
     case 'problem.open':
     case 'problem.resolve':
-      return [keys.problems.all, keys.anomalies.metrics, keys.incidents.all, keys.inbox.all];
+      return [keys.problems.all, keys.anomalies.metrics, keys.inbox.all];
     case 'anomaly.open':
     case 'anomaly.clear':
       return [keys.anomalies.all, keys.inbox.all];
@@ -51,7 +51,6 @@ export function catchupInvalidations(): QueryKey[] {
     keys.problems.all,
     keys.anomalies.all,
     keys.anomalies.metrics,
-    keys.incidents.all,
     keys.inbox.all,
     keys.rollouts.all, // v0.10.201
     keys.sre.all, // v0.10.1282

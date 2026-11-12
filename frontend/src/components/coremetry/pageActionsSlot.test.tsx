@@ -185,7 +185,6 @@ const primaries = (s: string) => (s.match(/variant="primary"/g) ?? []).length;
 const CONVERTED: Record<string, string> = {
   'pages/Users.tsx': '+ New user',
   'pages/Monitors.tsx': '+ New monitor',
-  'pages/Incidents.tsx': '+ Declare incident',
   'pages/Dashboards.tsx': '+ New dashboard',
   'pages/Slos.tsx': '+ New SLO',
   'pages/Alerts.tsx': '+ New alert rule',

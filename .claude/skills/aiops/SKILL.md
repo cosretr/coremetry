@@ -178,9 +178,9 @@ HER ŞEY (v0.10.1014 aynen). Sunucuda öncelik süzgeci (`applyInboxFacets`)
 tavandan ÖNCE, sonra `inboxSortAndCap` — en yeni P1 kırpılmaz; çip sayaçları
 süzgeçten önceki küme. "tüm öncelikler" tek tık. Açık `?prio=` / `?s_inbox=`
 ve kayıtlı görünümler kendi değerini taşır. Satır tıkı HER türde tam sayfa
-(çekmece v0.10.1081'te kalktı; incident → `/incident?id=`, eski `?item=`
-yönlendirilir); incident sayfasının manşeti birincil (en erken) bağlı
-problemin açıklaması (`features/anomalies/incidentSummary.ts`).
+(çekmece v0.10.1081'te kalktı; eski `?item=` yönlendirilir). Incident
+sayfaları (liste + arşiv detay) Incidents ölü kod dilimi 2'de silindi;
+`/incidents` ve `/incident?id=` Anomalies'e yönlenir.
 **Incident başına tek satır (v0.10.1084, operatör: "tekilleştir, Exceptions'taki
 format güzel"):** AÇIK (resolved/closed değil) incident'ın bağlı problem satırları
 gizlenir, incident satırı onların yerini tutar — açıklama birincil bağlı problemin

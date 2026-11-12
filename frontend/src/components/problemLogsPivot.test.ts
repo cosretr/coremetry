@@ -27,12 +27,4 @@ describe('Problem → Logs error pivot (C2)', () => {
     expect(panel).toContain('sample: PROBLEM_LOG_SAMPLE');
     expect(panel).not.toContain('refetchInterval');
   });
-  // v0.10.1081 — Inbox triyaj çekmecesi kalktı (operatör: "Drawer
-  // çıkmasın …"); incident tam sayfasının "Ne yapabilirim" kartı aynı iki
-  // log pivotunu (tüm loglar + ERROR+) aynı üreticiden kurar.
-  it('incident "Ne yapabilirim": Logs + Error logs', () => {
-    const src = read('../features/anomalies/incidentSummary.ts');
-    expect(src).toContain('logsHref({ window, service: subject })');
-    expect(src).toContain('logsHref({ window, service: subject, severity: 17 })');
-  });
 });

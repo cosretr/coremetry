@@ -209,8 +209,6 @@ const HANDROLLED_ALLOWLIST = new Set<string>([]);
 const CONVERTED = [
   'features/anomalies/ProblemDetail.tsx',
   'features/anomalies/AnomalyDetailDrawer.tsx',
-  // v0.10.1081 — InboxTriageDrawer silindi; incident pivotları serviceHref'ten.
-  'features/anomalies/incidentSummary.ts',
   'components/RootCausePanel.tsx',
   'components/RootCauseRibbon.tsx',
   'pages/Inbox.tsx',
@@ -244,7 +242,6 @@ const CONVERTED = [
   'features/anomalies/ProblemsSection.tsx',
   'features/anomalies/streams.tsx',
   'pages/Events.tsx',
-  'pages/Incident.tsx',
   // v0.9.967 — pencereyi PROP olarak alan / URL'de tutan siteler. İkisi
   // GÖRÜNÜR bir tuzak taşıyordu: ServiceNeighbors'ın `since`i ve Endpoints
   // dep şeridinin `window`u Go süre dizgisi ('10m'/'20m') ve bunlar

@@ -25,9 +25,7 @@ const SUBJECT_SURFACES = [
   'features/anomalies/streams.tsx',
   'pages/Inbox.tsx',
   'pages/Shift.tsx',
-  // v0.10.1081 — components/InboxTriageDrawer.tsx kalktı (çekmece yok). Incident
-  // sayfasının pivotları özneyi SubjectLink ile değil subjectKind kapısıyla
-  // süzer (features/anomalies/incidentSummary.ts, incidentSummary.test.ts).
+  // v0.10.1081 — components/InboxTriageDrawer.tsx kalktı (çekmece yok).
 ];
 
 // MUAFİYET — her biri GEREKÇELİ ve staleness-testli. Ortak ölçüt:

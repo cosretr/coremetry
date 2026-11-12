@@ -23,7 +23,9 @@ import { navHref } from './navHref';
 //
 //   1. `←` metin oku            — Service.tsx, SlowQueries.tsx, Pod.tsx
 //   2. "Back to …" sözcüğü      — DatabaseDetail.tsx, EndpointDetail.tsx
-//   3. `<ArrowLeft/>` ikonu     — Incident.tsx  (ilk taramada KAÇMIŞTI)
+//   3. `<ArrowLeft/>` ikonu     — Incident.tsx'teydi (ilk taramada KAÇMIŞTI;
+//                                 sayfa Incidents ölü kod dilimi 2'de silindi,
+//                                 şekil sentetik testte kalır)
 //   4. `›` kırıntı ayracı       — TriageCrumb.tsx (ayraç KARDEŞ span'de)
 //
 // Bu yüzden tarayıcı `<Link>…</Link>` gövdesini bütün olarak okur ve dört
@@ -143,6 +145,12 @@ describe('tarayıcı — yorumdaki eski hâl canlı site sayılmaz', () => {
     }
   });
 
+  it('<ArrowLeft/> ikonu da geri linki sayılır (canlı sitesi kalmadı)', () => {
+    const site = findBackLinks('x.tsx', '<Link to="/incidents"><ArrowLeft size={14} /> Incidents</Link>');
+    expect(site.map(s => s.marks)).toEqual([['icon']]);
+    expect(site.map(s => s.bare)).toEqual(['/incidents']);
+  });
+
   it('satır ORTASINDAKİ /* yorum başlatmaz — gerçek site literalin arkasına saklanamaz', () => {
     const sneaky = `const re = "/*"; <Link to="/services">← All services</Link>`;
     expect(findBackLinks('x.tsx', sneaky).map(s => s.bare)).toEqual(['/services']);
@@ -158,7 +166,8 @@ describe('kaynak taraması — detay sayfasının geri linki param-sız olamaz',
     // "0 ihlal" sonucu anlamsızdır. Dört işaretin her biri en az bir kez
     // görünmeli — biri kaybolduysa o yazılış sessizce muaf kalıyor demektir.
     expect(sites.length).toBeGreaterThanOrEqual(9);
-    for (const mark of ['arrow', 'wording', 'icon', 'crumb']) {
+    // 'icon' canlı kaynakta artık yok (tek sitesi Incident.tsx silindi) — sentetik testte.
+    for (const mark of ['arrow', 'wording', 'crumb']) {
       expect(sites.some(s => s.marks.includes(mark)), `"${mark}" yazılışı hiç bulunamadı`).toBe(true);
     }
   });

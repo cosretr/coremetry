@@ -50,7 +50,7 @@ const INTENTIONALLY_UNLISTED: Record<string, string> = {
   '/deploys': 'emekli rota, yönlendirme (→ /rollouts, v0.10.209)',
   '/errors': 'emekli rota, yönlendirme',
   '/exceptions': 'detay — /problems Exceptions sekmesinden açılır',
-  '/incident': 'detay — /incidents listesinden açılır',
+  '/incident': 'emekli rota, yönlendirme (→ /anomalies, Incidents ölü kod dilimi 2)',
   '/login': 'çerçeve — oturum açma',
   '/cosre': 'çerçeve — bağımsız CoSRE sohbet penceresi, yer imi/doğrudan adresle açılır (uygulama içinde aynı sohbet her sayfada çekmece; v0.10.1125)',
   '/pod': 'detay — /clusters ya da servis Pods sekmesinden açılır',

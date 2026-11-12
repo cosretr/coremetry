@@ -52,7 +52,6 @@ const CONVERTED: Array<[file: string, release: string, what: string]> = [
   ['features/anomalies/AnomaliesPage.tsx',   'v0.9.858', 'exception listesi BOŞ EKRAN'],
   ['features/anomalies/ProblemDetail.tsx',   'v0.9.858', 'occurrence + sample panelleri'],
   // ── v0.9.865 (tutarlılık denetimi MT1, mekanik) ──────────────────────────
-  ['pages/Incidents.tsx',                    'v0.9.865', 'açık olay varken "No incidents"'],
   ['pages/Runbooks.tsx',                     'v0.9.865', '?? [] → boş katalog'],
   ['pages/Runbook.tsx',                      'v0.9.865', 'Executions + Audit sekmeleri'],
   ['pages/Users.tsx',                        'v0.9.865', '"No users yet / create the first user"'],

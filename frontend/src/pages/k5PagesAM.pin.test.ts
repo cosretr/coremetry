@@ -25,49 +25,6 @@ const read = (rel: string) => stripComments(readFileSync(resolve(__dirname, rel)
 // k5Residue ile aynı literal desenler).
 const GREEN = /\bb-ok\b|var\(--ok\s*[,)]|--ok-bg|tone="success"|46,\s*160,\s*67|63,\s*185,\s*80/;
 
-describe('v0.10.929 — Incident / Incidents durum rozeti STATUS_TONE ile aynı', () => {
-  const detail = read('./Incident.tsx');
-  const list = read('./Incidents.tsx');
-
-  // v0.10.929 (K5) — yerel kopya kural (s === 'resolved' ? 'b-ok' : 'b-gray')
-  // kaldırıldı: iki sayfa sözlüğü hafif yaprak modülden (features/anomalies/
-  // statusTone) içe aktarır. Sözlüğün İÇERİĞİ yalnız statusPalette.pin'de
-  // çivilenir; burada yalnız bağlantı.
-  it('detay ve liste durum rozetini tek sözlükten basar', () => {
-    for (const src of [detail, list]) {
-      expect(src).toContain("import { TriageStatusBadge } from '@/features/anomalies/statusTone';");
-      expect(src).toContain('return <TriageStatusBadge s={s} label={label} />;');
-      expect(src).not.toContain("'resolved' ? 'b-ok'");
-    }
-  });
-
-  it('OPEN kırmızı / ACK amber el-yapımı ton geri gelmez; liste .status-pill-* kullanmaz', () => {
-    for (const src of [detail, list]) {
-      expect(src).not.toMatch(/=== 'open' \? '(b-err|outage)'/);
-      expect(src).not.toMatch(/=== 'acknowledged' \? '(b-warn|degraded)'/);
-    }
-    expect(list).not.toContain('status-pill');
-  });
-
-  it('başlık sayacı nötr: üç sayı da --text', () => {
-    expect(list).toContain("<b style={{ color: 'var(--text)' }}>{counts.open}</b> open");
-    expect(list).toContain("<b style={{ color: 'var(--text)' }}>{counts.acknowledged}</b> ack");
-    expect(list).toContain("<b style={{ color: 'var(--text)' }}>{counts.resolved}</b> resolved");
-  });
-
-  it('zaman çizelgesi: ack nötr, resolved / problem_resolved geçiş olarak yeşil kalır', () => {
-    expect(detail).toContain("case 'ack':              return { icon: <Bell size={16} />, token: '--text3' };");
-    expect(detail).toContain("case 'resolved':         return { icon: <Check size={16} />, token: '--ok' };");
-    expect(detail).toContain("case 'problem_resolved': return { icon: <Check size={16} />, token: '--ok' };");
-  });
-
-  // v0.10.929 (K5) — RESOLVED'ın yeşili artık sözlükten gelir; liste
-  // dosyasında elle yazılmış hiçbir yeşil kalmaz.
-  it('liste dosyasında elle yazılmış yeşil yok', () => {
-    expect(list).not.toMatch(GREEN);
-  });
-});
-
 describe('v0.10.929 — sağlıklı durum yeşil almaz (A–M sayfaları)', () => {
   // Bu dosyalarda hiçbir yeşil kalmamalı: hepsi durum/normal gösteriyordu.
   const noGreen = [

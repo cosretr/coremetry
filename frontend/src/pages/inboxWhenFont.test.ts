@@ -40,7 +40,6 @@ describe('tarih damgası sınıfı diğer listelerde (v0.10.739)', () => {
   const files: [string, number][] = [
     ['../features/anomalies/AnomaliesPage.tsx', 2],
     ['../features/anomalies/streams.tsx', 2],
-    ['Incidents.tsx', 1],
     ['explore/TracesResult.tsx', 1],
   ];
   for (const [f, n] of files) {

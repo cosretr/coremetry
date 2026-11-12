@@ -33,7 +33,6 @@ const importers: Record<string, () => Promise<unknown>> = {
   '/dashboards': () => import('@/pages/Dashboards'),
   '/explore':    () => import('@/pages/Explore'),
   '/inbox':      () => import('@/pages/Inbox'),
-  '/incidents':  () => import('@/pages/Incidents'),
   // v0.8.513 (perf raporu #16) — triage/alerting rotaları eksikti:
   // Problems/Anomalies/Alerts/SLOs/Runbooks'a İLK tıklama chunk RTT'si
   // ödüyordu. Specifier'lar App.tsx'in lazy()'leriyle birebir.

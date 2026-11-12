@@ -108,8 +108,6 @@ describe('v0.10.929 — durum sözlüğü hafif yaprak modülde', () => {
   // Elle kopyalanmış kurallar sözlükten kayıyordu (v0.10.929 incelemesi).
   const consumers = [
     '../../components/RootCausePanel.tsx',
-    '../../pages/Incident.tsx',
-    '../../pages/Incidents.tsx',
     '../../pages/Watchers.tsx',
   ];
   for (const f of consumers) {

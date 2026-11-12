@@ -8,7 +8,6 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { RouteSkeleton } from './components/ui/RouteSkeleton';
 import { PerfMeter } from './components/perf/PerfMeter';
 import { usePrefetchOnHover, prefetchRoute } from './lib/perf/routePrefetch';
-import { useIncidentsEnabled } from './components/AuthProvider';
 import { INCIDENTS_RETIRED_HOME } from './lib/incidentsRetired'; // v0.10.1828
 
 // All route components are code-split via React.lazy so the
@@ -58,8 +57,6 @@ const MessagingTopic    = lazy(() => import('./pages/MessagingTopic'));
 const Dashboards        = lazy(() => import('./pages/Dashboards'));
 const Dashboard         = lazy(() => import('./pages/Dashboard'));
 const Events            = lazy(() => import('./pages/Events'));
-const Incidents         = lazy(() => import('./pages/Incidents'));
-const Incident          = lazy(() => import('./pages/Incident'));
 // Problems page: assignable exception inbox at top, alert-rule
 // firings beneath. /exceptions is kept as a silent redirect so
 // older shared links don't 404. /anomalies is its own
@@ -122,13 +119,6 @@ function TopologyRedirect() {
 }
 // v0.10.1217 — emekli rotalar (/deploys, /exceptions, /errors) statik
 // Navigate'le sorgu dizesini atıyordu; paylaşılan link filtresiz açılıyordu.
-// v0.10.1828 — Incidents emekliyken liste Anomalies › Gruplar'a iner (eski
-// yer imleri ölmez); /incident?id= arşiv olarak açık kalır.
-function IncidentsRoute() {
-  const incidentsOn = useIncidentsEnabled();
-  if (!incidentsOn) return <Navigate to={INCIDENTS_RETIRED_HOME} replace />;
-  return <Incidents />;
-}
 function QueryRedirect({ to }: { to: string }) {
   const loc = useLocation();
   return <Navigate to={`${to}${loc.search}`} replace />;
@@ -217,8 +207,10 @@ export default function App() {
             <Route path="/messaging/topic" element={<MessagingTopic />} />
             <Route path="/dashboards"     element={<Dashboards />} />
             <Route path="/dashboard"      element={<Dashboard />} />
-            <Route path="/incidents"      element={<IncidentsRoute />} />
-            <Route path="/incident"       element={<Incident />} />
+            {/* Incidents emekli: liste ve arşiv detay sayfası silindi (Incidents ölü
+                kod dilimi 2); eski yer imleri / bildirim linkleri Anomalies'e iner. */}
+            <Route path="/incidents"      element={<Navigate to={INCIDENTS_RETIRED_HOME} replace />} />
+            <Route path="/incident"       element={<Navigate to={INCIDENTS_RETIRED_HOME} replace />} />
             <Route path="/inbox"          element={<Inbox />} />
             <Route path="/shift"          element={<Shift />} />
             <Route path="/problems"       element={<Problems />} />

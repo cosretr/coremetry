@@ -60,8 +60,9 @@ describe('Ask CoSRE etiketleri (v0.10.1338)', () => {
     expect(bad).toEqual([]);
   });
 
-  it('span / problem / incident / anomaly düğmeleri ai.askCosre kullanır', () => {
-    for (const kind of ['span', 'problem', 'incident']) {
+  // Incidents ölü kod dilimi 2: incident düğmesi arşiv sayfasıyla silindi.
+  it('span / problem / anomaly düğmeleri ai.askCosre kullanır', () => {
+    for (const kind of ['span', 'problem']) {
       const els = hits.filter(h => h.el.includes(`kind: '${kind}'`));
       expect(els.length, kind).toBeGreaterThan(0);
       for (const h of els) expect(h.el, `${kind} @ ${h.file}`).toContain("tr('ai.askCosre')");

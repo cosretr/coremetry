@@ -8,14 +8,13 @@ describe('eventInvalidations', () => {
   // v0.9.317 — inbox eklendi. Uzunluk pinleri BİLEREK korunuyor: bu
   // testin işi listenin BÜYÜMEDİĞİNİ garanti etmek, çünkü her ek anahtar
   // her olayda bir refetch daha demek. Sayı arttıysa gerekçesi olmalı.
-  it('problem olayları problems + anomaly-metrics + incidents + inbox geçersiz kılar', () => {
+  it('problem olayları problems + anomaly-metrics + inbox geçersiz kılar', () => {
     for (const kind of ['problem.open', 'problem.resolve'] as const) {
       const got = eventInvalidations(kind);
       expect(got).toContainEqual(keys.problems.all);
       expect(got).toContainEqual(keys.anomalies.metrics);
-      expect(got).toContainEqual(keys.incidents.all);
       expect(got).toContainEqual(keys.inbox.all);
-      expect(got).toHaveLength(4);
+      expect(got).toHaveLength(3); // incidents anahtarı Incidents ölü kod dilimi 2'de kalktı
     }
   });
   it('anomaly olayları anomalies.all + inbox', () => {
@@ -38,7 +37,6 @@ describe('eventInvalidations', () => {
     expect(c).toContainEqual(keys.problems.all);
     expect(c).toContainEqual(keys.anomalies.all);
     expect(c).toContainEqual(keys.anomalies.metrics);
-    expect(c).toContainEqual(keys.incidents.all);
   });
 });
 

@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { incidentsNavVisible, INCIDENTS_RETIRED_HOME, INCIDENTS_ARCHIVE_BANNER } from './incidentsRetired';
+import { incidentsNavVisible, INCIDENTS_RETIRED_HOME } from './incidentsRetired';
 import { localizePages } from './palette/pages';
 
 const read = (rel: string) => readFileSync(resolve(__dirname, rel), 'utf8');
@@ -17,7 +17,6 @@ describe('incidentsNavVisible', () => {
     expect(incidentsNavVisible('/incident', false)).toBe(true); // arşiv detay sayfası
     expect(incidentsNavVisible('/anomalies', false)).toBe(true);
     expect(INCIDENTS_RETIRED_HOME).toBe('/anomalies?tab=groups');
-    expect(INCIDENTS_ARCHIVE_BANNER).toBe("Incidents akışı emekli (arşiv). Yeni olaylar Anomalies'te.");
   });
 });
 
@@ -51,11 +50,13 @@ describe('kablolama', () => {
     const src = read('../components/GlobalShortcuts.tsx');
     expect(src).toContain('PAGES.filter(p => incidentsNavVisible(p.to, incidentsOn))');
   });
-  it('/incidents emekliyken Anomalies › Gruplar\'a yönlenir; /incident arşivi açık', () => {
+  // Incidents ölü kod dilimi 2: liste + arşiv detay sayfası silindi; iki eski
+  // adres de koşulsuz Anomalies'e iner (boş 404 yok).
+  it('/incidents ve /incident Anomalies\'e yönlenir; sayfa modülü yok', () => {
     const src = read('../App.tsx');
-    expect(src).toContain('<Route path="/incidents"      element={<IncidentsRoute />} />');
-    expect(src).toContain('if (!incidentsOn) return <Navigate to={INCIDENTS_RETIRED_HOME} replace />;');
-    expect(src).toContain('<Route path="/incident"       element={<Incident />} />');
+    expect(src).toContain('<Route path="/incidents"      element={<Navigate to={INCIDENTS_RETIRED_HOME} replace />} />');
+    expect(src).toContain('<Route path="/incident"       element={<Navigate to={INCIDENTS_RETIRED_HOME} replace />} />');
+    expect(src).not.toMatch(/import\('\.\/pages\/Incidents?'\)/);
   });
   // v0.10.2027 — Gruplar sekmesi (veri okumuyordu) kalktı; /anomalies tek sayfa
   // ve ?tab=groups aynı sayfayı açar (eski bağlantılar bozulmaz).
