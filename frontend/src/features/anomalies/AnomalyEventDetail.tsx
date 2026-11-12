@@ -37,7 +37,8 @@ import { evidenceSource } from '@/components/coremetry/anomalies/mlGroupDetail';
 import { AnomalyLogVolume, AnomalySample, BehaviorDetailsBox, SpikeFacts } from './anomalyDetailParts';
 import { hasLogPatternSeries, logPatternSeriesArgs, patternLogsPivot } from './logPatternSeries';
 import { LogPatternCountSection } from './LogPatternCountSection';
-import { LegacyLogChart } from '@/components/coremetry/anomalies/MLSourceChart';
+import { LegacyLogChart, ServiceRedChart } from '@/components/coremetry/anomalies/MLSourceChart';
+import { serviceRedAggFor } from '@/components/coremetry/anomalies/mlSourcePanel';
 
 // AnomalyEventDetail — anomali olayının TAM SAYFA detayı (v0.10.1032).
 //
@@ -204,6 +205,12 @@ export function AnomalyEventDetail({ event, isAdmin, onBack }: {
         <AnomalyLogVolume service={event.service} win={win} bare />
       </Sect>
     ) : null;
+  const svcRed = serviceRedAggFor(event.kind, details?.metric);
+  const seyir = chart ? (
+    <Sect title="Seyir" sub={chart.spec.operation ? 'operasyon · olay penceresi' : 'servis · olay penceresi'}>
+      <CosreChart spec={chart.spec} presentation={chartPresentation} />
+    </Sect>
+  ) : null;
   const sentence = anomalySummary(event, details);
   // Bitmiş (cleared) olayda bitiş = son gözlem (durum last_seen tazeliğinden
   // türer: chstore GetAnomalyEvent). v0.10.1049 — yinelenen olayda satırın
@@ -263,11 +270,13 @@ export function AnomalyEventDetail({ event, isAdmin, onBack }: {
                 pattern={patternSeries ? event.pattern : undefined} startedAt={event.startedAt} lastSeen={event.lastSeen}
                 open={event.status === 'active'} fallback={oldLogChart} />
             </div>
-          ) : oldLogChart ?? (chart ? (
-              <Sect title="Seyir" sub={chart.spec.operation ? 'operasyon · olay penceresi' : 'servis · olay penceresi'}>
-                <CosreChart spec={chart.spec} presentation={chartPresentation} />
-              </Sect>
-            ) : null)}
+          ) : svcRed && event.service ? (
+            // v0.10.2062 — servis düzeyi RED olayı: servis Overview panelinin serisi; boşsa eski Seyir.
+            <div style={{ marginBottom: 12 }}>
+              <ServiceRedChart service={event.service} agg={svcRed.agg} label={svcRed.label} startedAt={event.startedAt}
+                lastSeen={event.lastSeen} open={event.status === 'active'} fallback={seyir} />
+            </div>
+          ) : oldLogChart ?? seyir}
 
           <Sect title="Kanıt">
             <AnomalyEvidenceRows event={event} />

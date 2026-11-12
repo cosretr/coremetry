@@ -86,6 +86,23 @@ export function parseLogsLink(href?: string): URL | null {
   } catch { return null; }
 }
 
+/** v0.10.2062 — servis düzeyi RED olayının Overview serisi. */
+export type ServiceRedAgg = 'error_rate' | 'p99' | 'rate';
+
+/** SAF (v0.10.2062): eski servis düzeyi RED olayları (davranış değişimi: hata
+ *  oranı / p99 / istek hızı; takvim günü düşüşü: istek hızı) → servis
+ *  Overview panelinin serisi. Diğer türler null. */
+export function serviceRedAggFor(kind: string, metric?: string): { agg: ServiceRedAgg; label: string } | null {
+  if (kind === 'calendar_traffic_drop') return { agg: 'rate', label: 'istek hızı' };
+  if (kind !== 'behavior_change') return null;
+  switch (metric) {
+    case 'error_rate': return { agg: 'error_rate', label: 'hata oranı' };
+    case 'p99_ms': return { agg: 'p99', label: 'p99 yanıt süresi' };
+    case 'request_rate': return { agg: 'rate', label: 'istek hızı' };
+  }
+  return null;
+}
+
 /** SAF (v0.10.2061): canlı grafik yokken kayıtlı görüntünün üstündeki tek
  *  düz satır — neden canlı değil (sessiz düşüş yok). */
 export function liveGapLine(reason?: string): string {

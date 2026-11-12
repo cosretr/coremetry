@@ -21,8 +21,10 @@ import { api, isCanceled } from '@/lib/api';
 import { serviceHref } from '@/lib/serviceHref';
 import { operationTracesHref, tracesPivotHref } from '@/lib/pivotHref';
 import { fmtClock } from '@/lib/utils';
+import { entryLatencyDSL } from '@/lib/entrySpans';
+import { metricRedSeries, metricRedUnit } from '@/components/cosreChartSpec';
 import type { MLEvent, MLSourceSeries, SpanMetricSeries } from '@/lib/types';
-import { highlightColors, liveGapLine, thanosSourceText, panelWindow, peakInRange, sourcePanelFor, topContributors, type Contributors, type SourcePanel } from './mlSourcePanel';
+import { highlightColors, liveGapLine, type ServiceRedAgg, thanosSourceText, panelWindow, peakInRange, sourcePanelFor, topContributors, type Contributors, type SourcePanel } from './mlSourcePanel';
 
 const hm = (ns: number) => fmtClock(new Date(ns / 1e6)).slice(0, 5);
 const cssVar = (t: string) => getComputedStyle(document.documentElement).getPropertyValue(t);
@@ -264,4 +266,48 @@ export function LegacyLogChart({ service, search, pattern, startedAt, lastSeen, 
   const marks = open ? `Tespit ${hm(startedAt)} · sürüyor` : `Tespit ${hm(startedAt)} · Bitti ${hm(lastSeen)}`;
   if (!service) return <>{fallback}</>;
   return <LogsChart panel={panel} win={win} lead={lead} marks={marks} fallback={fallback} />;
+}
+
+/** v0.10.2062 — eski servis düzeyi RED olayı (davranış değişimi / takvim günü
+ *  düşüşü): servis Overview panelinin serisi, Overview'ın kaynak sırasıyla —
+ *  önce metrik (/metric-red, rateWindow 180, Overview'ın varsayılanı), metrik
+ *  yoksa giriş span'leri (server + consumer; Overview'ın span kipi). Olayı
+ *  çevreleyen pencerede bir kez çekilir (yoklama yok). En çok 2 istek; ikisi
+ *  de boşsa çağıranın eski grafiği (fallback), nedeni tek satırda. */
+export function ServiceRedChart({ service, agg, label, startedAt, lastSeen, open, fallback }: {
+  service: string; agg: ServiceRedAgg; label: string; startedAt: number; lastSeen: number; open: boolean; fallback: ReactNode;
+}) {
+  const [win] = useState(() => panelWindow(startedAt, lastSeen, open, Date.now() * 1e6));
+  const [data, setData] = useState<{ series: SpanMetricSeries[]; unit: string; metric: boolean } | null | undefined>(undefined);
+  useEffect(() => {
+    const ctl = new AbortController();
+    const run = async () => {
+      const resp = await api.serviceMetricRED(service, win.fromNs, win.toNs, 120, { rateWindow: 180 }).catch(() => null);
+      const ms = resp?.metricExists ? metricRedSeries(resp, agg) : [];
+      if (ms.some(s => (s.points ?? []).length)) return { series: ms, unit: metricRedUnit(resp, agg), metric: true };
+      const d = await api.spanMetricBatch({
+        from: win.fromNs, to: win.toNs, maxDataPoints: 120, rateWindow: 180, dsl: entryLatencyDSL(service),
+        aggs: [{ name: 'v', agg, ...(agg === 'p99' ? { field: 'duration_ms' } : {}) }],
+      }, ctl.signal);
+      return { series: d.series?.v ?? [], unit: metricRedUnit(null, agg), metric: false };
+    };
+    run().then(r => { if (!ctl.signal.aborted) setData(r); })
+      .catch((e: unknown) => { if (!isCanceled(e)) setData(null); });
+    return () => ctl.abort();
+  }, [service, agg, win]);
+  const regions = useMemo(() => [{ fromSec: Math.floor(startedAt / 1e9), toSec: Math.floor(lastSeen / 1e9), label: `tespit ${hm(startedAt)}`, color: 'var(--text3)', subtle: true }],
+    [startedAt, lastSeen]);
+  if (data === null) return <Gap>{fallback}</Gap>;
+  if (data && !data.series.some(s => (s.points ?? []).length)) return <Gap reason="olay penceresinde servisin RED serisi yok">{fallback}</Gap>;
+  const marks = open ? `Tespit ${hm(startedAt)} · sürüyor` : `Tespit ${hm(startedAt)} · Bitti ${hm(lastSeen)}`;
+  const range = { preset: 'custom' as const, fromMs: Math.floor(win.fromNs / 1e6), toMs: Math.ceil(win.toNs / 1e6) };
+  const source = data?.metric ? 'Servis Overview panelinin serisi · metrik (VictoriaMetrics)'
+    : "Servis Overview panelinin serisi · giriş span'leri (ClickHouse)";
+  const named = (data?.series ?? []).map(s => (s.groupKey.some(Boolean) ? s : { ...s, groupKey: [label] }));
+  return (
+    <Frame source={source} marks={marks} link={{ label: "Overview'da aç", href: serviceHref(service, { range }) }}>
+      <HttpChartPanel title={`${service} · ${label}`} series={named} unit={data?.unit ?? ''} stepSec={60} loading={data === undefined}
+        syncKey="ml-source" legendKey={`ml-source:svc-red:${agg}`} legendOpen={false} regions={regions} />
+    </Frame>
+  );
 }

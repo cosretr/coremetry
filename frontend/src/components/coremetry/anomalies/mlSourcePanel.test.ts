@@ -2,7 +2,7 @@
 // çevreler; suçlu seri adıyla. Fikstür nötr.
 import { describe, it, expect } from 'vitest';
 import type { SpanMetricSeries } from '@/lib/types';
-import { contributorLine, highlightColors, liveGapLine, thanosSourceText, leadFromSnapshot, panelWindow, sourcePanelFor, topContributors } from './mlSourcePanel';
+import { contributorLine, highlightColors, liveGapLine, serviceRedAggFor, thanosSourceText, leadFromSnapshot, panelWindow, sourcePanelFor, topContributors } from './mlSourcePanel';
 
 describe('contributorLine / leadFromSnapshot', () => {
   it('tek suçlu adıyla, diğerleri tek ifadeyle; ad kırpılmaz', () => {
@@ -51,6 +51,16 @@ describe('sourcePanelFor', () => {
     ['bozuk kanıt, Code yok → kayıtlı', { ...ev('trace_pod_outlier', 'trace', ''), evidence: '{' }, { kind: 'snapshot' }],
   ])('trace pod: %s', (_n, e, want) => {
     expect(sourcePanelFor(e)).toMatchObject(want);
+  });
+  it.each<[string, string | undefined, string | null]>([
+    ['behavior_change', 'error_rate', 'error_rate'],
+    ['behavior_change', 'p99_ms', 'p99'],
+    ['behavior_change', 'request_rate', 'rate'],
+    ['behavior_change', 'unknown', null],
+    ['calendar_traffic_drop', undefined, 'rate'],
+    ['trace_op_latency', undefined, null],
+  ])('v0.10.2062: %s/%s → Overview serisi %s', (kind, metric, want) => {
+    expect(serviceRedAggFor(kind, metric)?.agg ?? null).toBe(want);
   });
   it('v0.10.2061: canlı grafik yoksa nedeni tek satır; metrik olayı serisiz → neden yazılı', () => {
     expect(liveGapLine('olay penceresinde kaynakta seri yok')).toBe('Canlı grafik çizilemedi: olay penceresinde kaynakta seri yok. Aşağıdaki, olay anında kaydedilen 5 dakikalık görüntü.');
