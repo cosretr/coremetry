@@ -237,7 +237,20 @@ describe('AnomalyEventDetail — yalın varsayılan görünüm', () => {
   // v0.10.1060 (operatör: "artışın ne zaman başladığını göstermiyor.
   // Elastic'e gidip bakınca barlardan net görüyorum") — tek grafik desenin
   // KENDİ sayısı (bar), "Teknik ayrıntı"nın ÜSTÜNDE ve açık; servis log hacmi yok.
-  it('log_pattern: TEK grafik "Desen sayısı" barları, log hacmi / Seyir yok, desen özetin altında', async () => {
+  // v0.10.2036 — servisli log_pattern: TEK grafik canlı Logs histogramı (ML log
+  // olayıyla aynı uç, desen yüklemiyle); veri gelmezse eski desen sayısı barları.
+  it('v0.10.2036: servisli log_pattern canlı Logs histogramıyla, desen okuması yok', async () => {
+    const el = await mount('b2');
+    const chart = el.querySelector('[data-testid="ml-source-chart"]');
+    expect(chart).not.toBeNull();
+    expect(chart!.querySelector('[data-loghist]')).not.toBeNull();
+    expect(chart!.textContent).toContain("Logs'ta aç (bu kalıp)");
+    expect(el.querySelector('[data-pattern-panel]')).toBeNull();
+    expect(m.patternCalls).toBe(0);
+  });
+
+  it('log_pattern: Logs histogramı boşsa TEK grafik "Desen sayısı" barları, log hacmi / Seyir yok, desen özetin altında', async () => {
+    m.logSeries = [];
     const el = await mount('b2');
     expect(el.querySelector('.pd-summary__what')?.textContent).toBe('billing loglarında bu desen normalin 6 katına çıktı.');
     expect(el.querySelector('.pd-summary__detail')?.textContent).toBe('ORA-00060');
@@ -258,6 +271,7 @@ describe('AnomalyEventDetail — yalın varsayılan görünüm', () => {
 
   it('desen okuması düşerse: panel içinde hata, sayfanın geri kalanı ayakta', async () => {
     m.patternMode = 'fail';
+    m.logSeries = null;
     const el = await mount('b2');
     await settle(); // kancanın tek yeniden denemesi
     expect(el.querySelector('[data-pattern-panel]')?.getAttribute('data-error')).toBe('Desen sayısı okunamadı.');

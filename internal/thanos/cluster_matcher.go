@@ -617,3 +617,24 @@ func parseLineCol(p string) (int, int, bool) {
 	}
 	return l, c, true
 }
+
+// WithEqualMatcher — v0.10.2036: expr'deki her vektör seçicisine label="value"
+// ekler (withClusterMatcher'ın dışa açık adı; anomali detay grafiği servis
+// kapsamı için). Saf.
+func WithEqualMatcher(expr, label, value string) string {
+	return withClusterMatcher(expr, label, value)
+}
+
+// WithRegexMatcher — v0.10.2036: her vektör seçicisine label=~"re" ekler
+// (servisin pod regex'i). label boşsa expr aynen. Saf.
+func WithRegexMatcher(expr, label, re string) string {
+	if label == "" {
+		return expr
+	}
+	name := label
+	if !isLegacyLabelName(label) {
+		name = `"` + escapeMatcherValue(label) + `"`
+	}
+	out, _ := injectMatcher(expr, name+`=~"`+escapeMatcherValue(re)+`"`, false)
+	return out
+}

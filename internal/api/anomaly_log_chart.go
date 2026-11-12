@@ -3,7 +3,11 @@ package api
 // anomaly_log_chart.go — v0.10.2035 (anomali detayı: "grafik servis
 // sayfasının paneliyle"; son dilim LOG olayları).
 //
-//   GET /api/anomalies/log-chart?service=<svc>&search=<q>&severity=<n>&from=<ns>&to=<ns>
+//   GET /api/anomalies/log-chart?service=<svc>&search=<q>&severity=<n>[&pattern=<ad>]&from=<ns>&to=<ns>
+//
+// v0.10.2036 — eski anomaly_events log türleri de bu uçla: log_template_new
+// `search` (olayın LogQuery'si), log_pattern `pattern` (küratörlü desen adı;
+// /logs ile aynı yüklem, applyLogsPatternParam).
 //
 // ML log olayının detay grafiği, Logs sayfasının histogramıyla AYNI okuma
 // (logstore.Histogram, seviye bantlı) ve AYNI süzgeçle: istemci süzgeci
@@ -79,9 +83,9 @@ func snapAnomalyLogChartWindow(from, to, now time.Time) (f, t time.Time, bucketS
 
 // anomalyLogChartKey — SAF; her girdi anahtarda (v0.5.187). Arama metni FNV
 // ile (uzun şablon metni anahtarı şişirmesin; fnvStr ayırıcılı).
-func anomalyLogChartKey(svc, search string, sev uint8, from, to time.Time, bucketSec int) string {
-	return fmt.Sprintf("anomaly-log-chart:v1:%s:sev=%d:from=%d:to=%d:b=%d",
-		fnvStr(svc, search), sev, from.UnixNano(), to.UnixNano(), bucketSec)
+func anomalyLogChartKey(svc, search, pattern string, sev uint8, from, to time.Time, bucketSec int) string {
+	return fmt.Sprintf("anomaly-log-chart:v2:%s:sev=%d:from=%d:to=%d:b=%d",
+		fnvStr(svc, search, pattern), sev, from.UnixNano(), to.UnixNano(), bucketSec)
 }
 
 func (s *Server) getAnomalyLogChart(w http.ResponseWriter, r *http.Request) {
@@ -106,7 +110,10 @@ func (s *Server) getAnomalyLogChart(w http.ResponseWriter, r *http.Request) {
 	}
 	search := strings.TrimSpace(q.Get("search"))
 	f := logstore.Filter{Service: svc, Search: search, SeverityMin: uint8(sev), From: from, To: to}
-	key := anomalyLogChartKey(svc, search, uint8(sev), from, to, bucketSec)
+	if !applyLogsPatternParam(w, q, &f) {
+		return
+	}
+	key := anomalyLogChartKey(svc, search, strings.TrimSpace(q.Get("pattern")), uint8(sev), from, to, bucketSec)
 	s.serveCached(w, r, key, anomalyLogChartTTL, func(ctx context.Context) (any, error) {
 		// Rota etiketinin yerine yüzey adı: ES istek sayacı bu grafiği ayrı sayar.
 		tctx, cancel := context.WithTimeout(chstore.WithQueryTag(ctx, anomalyLogChartSurface), 30*time.Second)

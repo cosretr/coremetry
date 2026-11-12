@@ -22,15 +22,22 @@ const ev = (detector: string, signal: string, code = '') => ({ detector, signal,
 describe('sourcePanelFor', () => {
   it.each<[string, ReturnType<typeof ev>, string]>([
     ['Kafka lag → Messaging paneli', ev('metric_kafka', 'metric', 'metric_kafka|consumer_lag'), 'kafka-lag'],
-    ['Kafka lag Thanos cluster olayı → kayıtlı', ev('metric_kafka', 'metric', 'metric_kafka|consumer_lag@prod-east'), 'snapshot'],
-    ['Kafka throttle → kayıtlı (hazır panel yok)', ev('metric_kafka', 'metric', 'metric_kafka|fetch_throttle'), 'snapshot'],
+    ['Kafka lag Thanos cluster olayı → o cluster\'ın serisi', ev('metric_kafka', 'metric', 'metric_kafka|consumer_lag@prod-east'), 'metric'],
+    ['Kafka throttle → dedektörün serisi (VM)', ev('metric_kafka', 'metric', 'metric_kafka|fetch_throttle'), 'metric'],
     ['gecikme → Traces şeridi', ev('op_latency', 'trace', 'POST /orders'), 'traces'],
     ['hata sayısı → Traces şeridi', ev('trace_error_count', 'trace', 'POST /orders'), 'traces'],
-    ['bağımlılık → kayıtlı', ev('dependency_latency', 'trace', 'db|orders'), 'snapshot'],
+    ['bağımlılık → hedefin p95 serisi', ev('dependency_latency', 'trace', 'db|orders'), 'metric'],
+    ['trace pod sapması → kayıtlı', ev('trace_pod_outlier', 'trace', 'p95'), 'snapshot'],
+    ['metrik olayı seri kimliksiz → kayıtlı', ev('metric_jvm', 'metric', ''), 'snapshot'],
     ['log, Logs bağlantısı yok → kayıtlı', ev('error_rate', 'log'), 'snapshot'],
-    ['JVM → kayıtlı', ev('metric_jvm', 'metric', 'metric_jvm|heap_used'), 'snapshot'],
+    ['JVM → dedektörün serisi (VM)', ev('metric_jvm', 'metric', 'metric_jvm|heap_used'), 'metric'],
+    ['k8s Thanos → pod başına', ev('metric_k8s', 'metric', 'metric_k8s|memory@prod-east'), 'metric'],
   ])('%s', (_n, e, want) => {
     expect(sourcePanelFor(e).kind).toBe(want);
+  });
+  it('v0.10.2036: Thanos olayında cluster adı ayrılır, VM\'de boş', () => {
+    expect(sourcePanelFor(ev('metric_k8s', 'metric', 'metric_k8s|memory@prod-east'))).toMatchObject({ kind: 'metric', cluster: 'prod-east', code: 'metric_k8s|memory@prod-east' });
+    expect(sourcePanelFor(ev('metric_jvm', 'metric', 'metric_jvm|heap_used'))).toMatchObject({ kind: 'metric', cluster: '' });
   });
   it('gecikme olayı p99 + minMs eşiği; hata olayı hata çubukları önde; route ayrımı', () => {
     const lat = sourcePanelFor(ev('op_latency', 'trace', '/orders/{id}'), 1);

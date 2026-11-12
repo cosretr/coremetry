@@ -49,16 +49,17 @@ func TestSnapAnomalyLogChartWindow(t *testing.T) {
 func TestAnomalyLogChartKeyCarriesAllInputs(t *testing.T) {
 	a := time.Unix(1_800_000_000, 0)
 	b := a.Add(time.Hour)
-	base := anomalyLogChartKey("orders-batch", `"payment failed"`, 0, a, b, 60)
+	base := anomalyLogChartKey("orders-batch", `"payment failed"`, "", 0, a, b, 60)
 	diff := []string{
-		anomalyLogChartKey("orders-consumer", `"payment failed"`, 0, a, b, 60),
-		anomalyLogChartKey("orders-batch", `"payment retried"`, 0, a, b, 60),
-		anomalyLogChartKey("orders-batch", `"payment failed"`, 17, a, b, 60),
-		anomalyLogChartKey("orders-batch", `"payment failed"`, 0, a.Add(time.Minute), b, 60),
-		anomalyLogChartKey("orders-batch", `"payment failed"`, 0, a, b.Add(time.Minute), 60),
-		anomalyLogChartKey("orders-batch", `"payment failed"`, 0, a, b, 120),
+		anomalyLogChartKey("orders-consumer", `"payment failed"`, "", 0, a, b, 60),
+		anomalyLogChartKey("orders-batch", `"payment retried"`, "", 0, a, b, 60),
+		anomalyLogChartKey("orders-batch", `"payment failed"`, "", 17, a, b, 60),
+		anomalyLogChartKey("orders-batch", `"payment failed"`, "", 0, a.Add(time.Minute), b, 60),
+		anomalyLogChartKey("orders-batch", `"payment failed"`, "", 0, a, b.Add(time.Minute), 60),
+		anomalyLogChartKey("orders-batch", `"payment failed"`, "", 0, a, b, 120),
+		anomalyLogChartKey("orders-batch", `"payment failed"`, "Java exceptions", 0, a, b, 60),
 		// Ayırıcı: "a|b"+"c" ≠ "a"+"b|c".
-		anomalyLogChartKey("orders-batch\"payment", ` failed"`, 0, a, b, 60),
+		anomalyLogChartKey("orders-batch\"payment", ` failed"`, "", 0, a, b, 60),
 	}
 	for i, k := range diff {
 		if k == base {

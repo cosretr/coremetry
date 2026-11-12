@@ -33,9 +33,12 @@ describe('y ekseni oluğu ölçülür, sabit değil (v0.10.1102)', () => {
       expect(src).not.toMatch(/stroke: text3, size: (38|34)\b/);
     });
   }
-  it('TimeChart: ana eksen side 0 (üst şerit, yükseklik dalı), y2 side 1 (genişlik dalı)', () => {
+  // v0.10.2036 — varsayılan side 0 aynen; yalnız `yAxisLeft` verenlerde side 3
+  // (dikey, genişlik dalı) — anomali detayının dar grafiği.
+  it('TimeChart: ana eksen varsayılan side 0 (üst şerit, yükseklik dalı), yAxisLeft ile 3; y2 side 1 (genişlik dalı)', () => {
     const src = readFileSync(new URL('./TimeChart.tsx', import.meta.url), 'utf8');
-    expect(src).toContain("yAxis('y', 0, fmtLeftRef");
+    expect(src).toContain("yAxis('y', yAxisLeft ? 3 : 0, fmtLeftRef");
+    expect(src).toContain('yAxisLeft = false,');
     expect(src).toContain("yAxis('y2', 1, fmtRightRef");
   });
 });

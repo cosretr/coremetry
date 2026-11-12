@@ -36,6 +36,7 @@ import { evidenceSource } from '@/components/coremetry/anomalies/mlGroupDetail';
 import { AnomalyLogVolume, AnomalySample, BehaviorDetailsBox, SpikeFacts } from './anomalyDetailParts';
 import { hasLogPatternSeries, logPatternSeriesArgs, patternLogsPivot } from './logPatternSeries';
 import { LogPatternCountSection } from './LogPatternCountSection';
+import { LegacyLogChart } from '@/components/coremetry/anomalies/MLSourceChart';
 
 // AnomalyEventDetail — anomali olayının TAM SAYFA detayı (v0.10.1032).
 //
@@ -185,6 +186,13 @@ export function AnomalyEventDetail({ event, isAdmin, onBack }: {
   const sampleTrace = sampleTraceHref({ kind: event.kind, sample: event.sample });
   const isLog = isLogAnomalyKind(event.kind);
   const patternSeries = hasLogPatternSeries(event);
+  const liveLog = !!event.service && (patternSeries || (event.kind === 'log_template_new' && !!event.logQuery));
+  const oldLogChart = patternSeries ? <LogPatternCountSection event={event} />
+    : isLog && event.service ? (
+      <Sect title="Log hacmi" sub="servis · olay penceresi">
+        <AnomalyLogVolume service={event.service} win={win} bare />
+      </Sect>
+    ) : null;
   const sentence = anomalySummary(event, details);
   // Bitmiş (cleared) olayda bitiş = son gözlem (durum last_seen tazeliğinden
   // türer: chstore GetAnomalyEvent). v0.10.1049 — yinelenen olayda satırın
@@ -233,16 +241,19 @@ export function AnomalyEventDetail({ event, isAdmin, onBack }: {
       <div className="pd-cols pd-cols-15">
         <div style={{ minWidth: 0 }}>
           {/* TEK grafik: türün kendi sinyali (desen sayısı | log hacmi | seyir). */}
-          {patternSeries ? <LogPatternCountSection event={event} />
-            : isLog && event.service ? (
-              <Sect title="Log hacmi" sub="servis · olay penceresi">
-                <AnomalyLogVolume service={event.service} win={win} bare />
-              </Sect>
-            ) : chart ? (
+          {/* v0.10.2036 — servisli log_pattern / log_template_new: ML log olayıyla
+              AYNI canlı Logs histogramı (/api/anomalies/log-chart); veri yoksa eski grafik. */}
+          {liveLog ? (
+            <div style={{ marginBottom: 12 }}>
+              <LegacyLogChart service={event.service} search={event.kind === 'log_template_new' ? event.logQuery : undefined}
+                pattern={patternSeries ? event.pattern : undefined} startedAt={event.startedAt} lastSeen={event.lastSeen}
+                open={event.status === 'active'} fallback={oldLogChart} />
+            </div>
+          ) : oldLogChart ?? (chart ? (
               <Sect title="Seyir" sub={chart.spec.operation ? 'operasyon · olay penceresi' : 'servis · olay penceresi'}>
                 <CosreChart spec={chart.spec} presentation={chartPresentation} />
               </Sect>
-            ) : null}
+            ) : null)}
 
           <Sect title="Kanıt">
             <AnomalyEvidenceRows event={event} />

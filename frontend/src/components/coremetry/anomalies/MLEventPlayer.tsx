@@ -100,7 +100,7 @@ export function MLEventPlayer({ snap, play, autoPlay = false, above, series, com
             ? compactRegions(ch.regions, clockHM).map(r => ({ ...r, color: 'var(--text3)' }))
             : ch.regions.map(r => ({ ...r, color: r.label === 'anomali' ? 'var(--err)' : 'var(--warn)' }))}
           playhead={canPlay && cursorSec != null ? { cursorSec, fromSec: play?.from } : null}
-          hideLegend={!!override || compact} leftInteger={!!override}
+          hideLegend={!!override || compact} leftInteger={!!override} yAxisLeft={compact}
           series={override ?? [
             { key: 'v', label: snap.part || 'değer', data: ch.value, color: 'var(--accent)', type: 'line', width: 2 },
             { key: 'hi', label: ch.banded ? 'beklenen aralık üst' : 'alarm sınırı üst', data: ch.upper, color: 'var(--text3)', type: 'line', width: 1 },

@@ -120,6 +120,12 @@ interface Props {
   // tık (CorePanel onRegionClick emsali, aynı isabet: yalnız şerit satırı).
   // İsabet varsa pin işlenmez; verilmezse davranış bayt bayt eski.
   onRegionClick?: (region: ChartTimeRegion) => void;
+  // v0.10.2036 (ADDITIVE; operatör ekranı: anomali detayının dar grafiğinde
+  // y ekseni değerleri ÜSTTE yatay diziliyordu) — sol y eksenini uPlot'un sol
+  // şeridine (side 3, dikey; oluk genişliği ölçülür) koyar. Yalnız mount
+  // başına sabit verilir (leftInteger emsali, yapı imzasına girmez);
+  // verilmezse eksen bayt bayt eski (üst şerit).
+  yAxisLeft?: boolean;
 }
 
 // v0.9.75 (chart-consolidation Adım 0) — cssVar/yRange lib/chart/'a çıkarıldı
@@ -132,7 +138,7 @@ const MAX_BAR_PX = 18;
 export function TimeChart({
   times, series, height = 150, leftUnit = '', rightUnit = '',
   deployMarkers, thresholds, regions, onBrush, onZoomReset, syncKey, fmtLeft, fmtRight, fmtX, xRange, leftInteger = false,
-  legendCollapsed, hideLegend, barSize = 0.86, onSeriesPick, seriesPickable, playhead, onRegionClick,
+  legendCollapsed, hideLegend, barSize = 0.86, onSeriesPick, seriesPickable, playhead, onRegionClick, yAxisLeft = false,
 }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const ttRef = useRef<HTMLDivElement>(null);
@@ -297,7 +303,7 @@ export function TimeChart({
     // taşımak operatör kararı bekliyor). Orada oluk YÜKSEKLİKtir: punto
     // ölçülür, tabana kelepçelenir (32 px). Etiket GENİŞLİĞİ yalnız sağ (y2,
     // side 1) eksende ölçülür — sol kırpma sınıfı bu presette yalnız orada var.
-    const yAxis = (scale: string, side: 0 | 1, fmtRef: React.MutableRefObject<((v: number) => string) | undefined>, showGrid: boolean, unit: string, integer = false): uPlot.Axis => ({
+    const yAxis = (scale: string, side: 0 | 1 | 3, fmtRef: React.MutableRefObject<((v: number) => string) | undefined>, showGrid: boolean, unit: string, integer = false): uPlot.Axis => ({
       scale, side, stroke: text3, size: measuredAxisSize(axisFont), font: axisFont,
       grid: showGrid ? { stroke: gridc, width: 1, dash: [3, 4] } : { show: false },
       // v0.9.245 — kısa tick çentikleri. Etiketler eksene "yapışık" durduğu
@@ -328,7 +334,7 @@ export function TimeChart({
         values: (_u, sp) => (fmtXRef.current ? sp.map(fmtXRef.current) : fmtXTicks(sp)),
         space: fmtX ? 90 : 70,
       },
-      yAxis('y', 0, fmtLeftRef, true, leftUnit, leftInteger),
+      yAxis('y', yAxisLeft ? 3 : 0, fmtLeftRef, true, leftUnit, leftInteger),
     ];
     if (hasRight) axes.push(yAxis('y2', 1, fmtRightRef, false, rightUnit));
 

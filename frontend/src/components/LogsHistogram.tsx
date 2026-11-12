@@ -229,7 +229,7 @@ export function LogsHistogram({ range, filter, onRangeSelect, onZoomReset, onSer
     };
     // Gözlemcisiz çağrı imzası eskisiyle aynı (servis sekmesi / anomali çekmecesi).
     const req = source === 'anomaly' && filter.service && range.from && range.to
-      ? api.anomalyLogChart({ service: filter.service, search: params.search, severity: params.severity, from: range.from, to: range.to }, ctl.signal)
+      ? api.anomalyLogChart({ service: filter.service, search: params.search, pattern: params.pattern, severity: params.severity, from: range.from, to: range.to }, ctl.signal)
       : report ? api.logsTimeseries(params, ctl.signal, h => { header = h; }) : api.logsTimeseries(params, ctl.signal);
     req
       .then(d => {

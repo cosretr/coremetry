@@ -12241,6 +12241,9 @@ export interface MLQuality {
   feedbackOff: boolean; feedbackMinNegatives: number; feedbackZStep: number; feedbackMaxBoost: number;
 }
 /** Replay kaydı (v0.10.1752, ml_event_snapshots): JSON alanlar ham string. */
+/** v0.10.2036 — ml.SourceQuery + /api/ml/source-series yanıtı (metrik / bağımlılık olayının detay grafiği). */
+export interface MLSourceQuery { expr: string; cluster?: string; unit?: string; label: string; by?: string }
+export interface MLSourceSeries { query: MLSourceQuery; stepSec: number; series: SpanMetricSeries[]; truncated?: boolean }
 /** v0.10.2035 — logstore.LogSeries aynası (/api/anomalies/log-chart; seviye bandı başına bir seri). */
 export interface LogHistogramSeries { name: string; points: { t: number; v: number }[] }
 export interface MLSnapshot {

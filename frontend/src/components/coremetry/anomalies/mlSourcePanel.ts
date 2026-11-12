@@ -13,15 +13,19 @@
 //     bağlantısından: servis + q + severity; /api/anomalies/log-chart, TEK
 //     _search, ES sayacında `anomaly-detail-log-chart`); bağlantı yoksa kayıtlı
 //     görüntü
-//   diğer metrik aileleri, Thanos olayları, bağımlılık / pod → kayıtlı görüntü
-//     (hazır servis paneli henüz bağlanmadı)
+//   diğer metrik aileleri (JVM, havuz, HTTP client, k8s), Thanos olayları
+//     (cluster'lı; pod başına) ve bağımlılık gecikmesi → dedektörün KENDİ
+//     ifadesi, servis kapsamlı tek aralık sorgusu (v0.10.2036,
+//     /api/ml/source-series; VM ya da o cluster'ın Thanos'u)
+//   trace pod sapması, log dışı kalanlar → kayıtlı görüntü
 import type { MLEvent, MLSnapshot, SpanMetricSeries } from '@/lib/types';
 import type { StripStat } from '@/components/traces/stripStat';
 
 export type SourcePanel =
   | { kind: 'kafka-lag'; service: string }
   | { kind: 'traces'; service: string; operation: string; byRoute: boolean; stat: StripStat; errorsFirst: boolean; minMs?: number }
-  | { kind: 'logs'; service: string; search: string; severity: number; href: string }
+  | { kind: 'logs'; service: string; search: string; pattern?: string; severity: number; href: string }
+  | { kind: 'metric'; detector: string; service: string; code: string; cluster: string }
   | { kind: 'snapshot'; reason: string };
 
 const MIN = 60e9;
@@ -30,9 +34,13 @@ const MIN = 60e9;
 export function sourcePanelFor(e: Pick<MLEvent, 'detector' | 'signal' | 'code' | 'service'>, slowSec = 1, logsHref?: string): SourcePanel {
   const code = e.code ?? '';
   if (e.signal === 'log') return logsPanelFromHref(logsHref) ?? { kind: 'snapshot', reason: 'log olayı: Logs bağlantısı yok' };
-  if (e.detector === 'metric_kafka' && code.startsWith('metric_kafka|consumer_lag')) {
-    if (code.includes('@')) return { kind: 'snapshot', reason: 'Thanos cluster olayı: hazır panel yok' };
+  if (e.detector === 'metric_kafka' && code.startsWith('metric_kafka|consumer_lag') && !code.includes('@')) {
     return { kind: 'kafka-lag', service: e.service };
+  }
+  if ((e.signal === 'metric' && e.detector.startsWith('metric_')) || e.detector === 'dependency_latency') {
+    if (!code || !e.service) return { kind: 'snapshot', reason: 'seri kimliği yok' };
+    const at = code.indexOf('@');
+    return { kind: 'metric', detector: e.detector, service: e.service, code, cluster: at >= 0 ? code.slice(at + 1) : '' };
   }
   const route = (svc: string, op: string, o: Omit<Extract<SourcePanel, { kind: 'traces' }>, 'kind' | 'service' | 'operation' | 'byRoute'>) =>
     ({ kind: 'traces' as const, service: svc, operation: op, byRoute: op.startsWith('/'), ...o });

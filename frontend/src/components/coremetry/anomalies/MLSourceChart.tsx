@@ -5,7 +5,9 @@
 // Panel yoksa / veri gelmezse / hata olursa kayıtlı 5 dakikalık görüntü
 // (fallback) çizilir ve başlık bunu söyler. Sayfa açılışında en çok BİR
 // kaynak isteği (Kafka: tek PromQL range; Traces: tek spanMetricBatch;
-// Log (v0.10.2035): tek /api/anomalies/log-chart = tek ES _search).
+// Log (v0.10.2035): tek /api/anomalies/log-chart = tek ES _search; metrik /
+// bağımlılık (v0.10.2036): tek /api/ml/source-series = tek VM ya da Thanos
+// aralık sorgusu).
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { HttpChartPanel } from '@/pages/service/httpMetricsViz';
@@ -19,7 +21,7 @@ import { api, isCanceled } from '@/lib/api';
 import { serviceHref } from '@/lib/serviceHref';
 import { operationTracesHref, tracesPivotHref } from '@/lib/pivotHref';
 import { fmtClock } from '@/lib/utils';
-import type { MLEvent, SpanMetricSeries } from '@/lib/types';
+import type { MLEvent, MLSourceSeries, SpanMetricSeries } from '@/lib/types';
 import { panelWindow, sourcePanelFor, topContributors, type Contributors, type SourcePanel } from './mlSourcePanel';
 
 const hm = (ns: number) => fmtClock(new Date(ns / 1e6)).slice(0, 5);
@@ -60,6 +62,7 @@ export function MLSourceChart({ lead, open, fallback, onContributors, logsLink }
   const marks = open ? `Tespit ${hm(lead.startedAt)} · sürüyor` : `Tespit ${hm(lead.startedAt)} · Bitti ${hm(lead.lastSeen)}`;
   if (panel.kind === 'kafka-lag') return <KafkaLag panel={panel} win={win} lead={lead} marks={marks} fallback={fallback} onContributors={onContributors} />;
   if (panel.kind === 'traces') return <TracesStrip panel={panel} win={win} marks={marks} fallback={fallback} />;
+  if (panel.kind === 'metric') return <MetricSeries panel={panel} win={win} lead={lead} marks={marks} fallback={fallback} />;
   if (panel.kind === 'logs') return <LogsChart panel={panel} win={win} lead={lead} marks={marks} fallback={fallback} />;
   return <>{fallback}</>;
 }
@@ -143,7 +146,7 @@ function LogsChart({ panel, win, lead, marks, fallback }: {
   lead: SourceChartProps['lead']; marks: string; fallback: ReactNode;
 }) {
   const [state, setState] = useState<'loading' | 'ok' | 'fallback'>('loading');
-  const filter = useMemo(() => ({ service: panel.service, search: panel.search, severity: panel.severity, traceId: '', spanId: '' }), [panel]);
+  const filter = useMemo(() => ({ service: panel.service, search: panel.search, pattern: panel.pattern, severity: panel.severity, traceId: '', spanId: '' }), [panel]);
   const range = useMemo(() => ({ from: win.fromNs, to: win.toNs }), [win]);
   const regions = useMemo(() => [{ fromSec: Math.floor(lead.startedAt / 1e9), toSec: Math.floor(lead.lastSeen / 1e9), label: `tespit ${hm(lead.startedAt)}`, color: 'var(--text3)' }],
     [lead.startedAt, lead.lastSeen]);
@@ -151,12 +154,77 @@ function LogsChart({ panel, win, lead, marks, fallback }: {
     setState(s && s.some(x => x.total > 0) ? 'ok' : 'fallback');
   }, []);
   if (state === 'fallback') return <>{fallback}</>;
-  const href = logsHref({ service: panel.service, q: panel.search || undefined, severity: panel.severity || undefined, window: { fromNs: win.fromNs, toNs: win.toNs } });
-  const what = panel.search ? 'bu mesajı içeren loglar' : panel.severity > 0 ? 'hata logları' : 'tüm loglar';
+  const href = logsHref({ service: panel.service, q: panel.search || undefined, pattern: panel.pattern, severity: panel.severity || undefined, window: { fromNs: win.fromNs, toNs: win.toNs } });
+  const what = panel.pattern ? `${panel.pattern} deseni` : panel.search ? 'bu mesajı içeren loglar' : panel.severity > 0 ? 'hata logları' : 'tüm loglar';
   return (
     <Frame title={`${panel.service} · ${what}`} source="Logs sayfasındaki histogramın aynısı · seviyeye göre · 3 saate kadar 1 dakikalık kova"
-      marks={marks} link={{ label: panel.search ? "Logs'ta aç (bu kalıp)" : "Logs'ta aç", href }}>
+      marks={marks} link={{ label: panel.search || panel.pattern ? "Logs'ta aç (bu kalıp)" : "Logs'ta aç", href }}>
       <LogsHistogram source="anomaly" range={range} filter={filter} onSeries={onSeries} height={150} regions={regions} />
     </Frame>
   );
+}
+
+/** v0.10.2036 — metrik / bağımlılık olayı: dedektörün kendi ifadesi, servis
+ *  kapsamlı (VM) ya da servisin pod'ları (Thanos, pod başına); Messaging
+ *  paneliyle aynı bileşen. Hata ya da boş → kayıtlı görüntü. */
+function MetricSeries({ panel, win, lead, marks, fallback }: {
+  panel: Extract<SourcePanel, { kind: 'metric' }>; win: { fromNs: number; toNs: number };
+  lead: SourceChartProps['lead']; marks: string; fallback: ReactNode;
+}) {
+  const [data, setData] = useState<MLSourceSeries | null | undefined>(undefined);
+  useEffect(() => {
+    const ctl = new AbortController();
+    api.mlSourceSeries({ detector: panel.detector, service: panel.service, code: panel.code, from: win.fromNs, to: win.toNs }, ctl.signal)
+      .then(setData)
+      .catch((e: unknown) => { if (!isCanceled(e)) setData(null); });
+    return () => ctl.abort();
+  }, [panel, win]);
+  const regions = useMemo(() => [{ fromSec: Math.floor(lead.startedAt / 1e9), toSec: Math.floor(lead.lastSeen / 1e9), label: `tespit ${hm(lead.startedAt)}`, color: 'var(--text3)' }],
+    [lead.startedAt, lead.lastSeen]);
+  if (data === null || (data && !data.series.some(x => (x.points ?? []).length))) return <>{fallback}</>;
+  const q = data?.query;
+  const thanos = !!panel.cluster;
+  const range = { preset: 'custom' as const, fromMs: Math.floor(win.fromNs / 1e6), toMs: Math.ceil(win.toNs / 1e6) };
+  const step = data?.stepSec ?? 60;
+  const stepTxt = step < 60 ? `${step} sn` : `${Math.round(step / 60)} dk`;
+  const title = `${q?.label ?? panel.code}${thanos ? ` · ${panel.cluster}` : ''}`;
+  const source = thanos
+    ? `Clusters katmanının pod kümesi · pod başına · ${stepTxt} adım · Thanos (${panel.cluster})${data?.truncated ? ' · seri tavanı aşıldı' : ''}`
+    : `dedektörün ölçtüğü seri · ${stepTxt} adım · VictoriaMetrics`;
+  const link = thanos
+    ? { label: "Clusters'ta aç", href: serviceHref(panel.service, { tab: 'infra', range, params: { icluster: panel.cluster } }) }
+    : { label: 'Servis sayfasında aç', href: serviceHref(panel.service, { range }) };
+  return (
+    <Frame title={title} source={source} marks={marks} link={link}>
+      <HttpChartPanel title={title} series={data?.series ?? []} unit={chartUnit(q?.unit)} stepSec={step} loading={data === undefined}
+        syncKey="ml-source" legendKey={`ml-source:${panel.detector}`} legendOpen={thanos} regions={regions} />
+    </Frame>
+  );
+}
+
+/** SAF: dedektör birimi → grafik birimi. */
+function chartUnit(u?: string): string {
+  switch (u) {
+    case 'bytes': return 'bytes';
+    case 'ms': return 'ms';
+    case 's': return 's';
+    case 'core': return 'cores';
+    default: return u ?? '';
+  }
+}
+
+/** v0.10.2036 — eski anomaly_events log türlerinin (log_template_new: olayın
+ *  LogQuery'si; log_pattern: küratörlü desen adı) detay grafiği: ML log
+ *  olayıyla AYNI canlı Logs histogramı, aynı uç ve aynı korumalar. Servis
+ *  yoksa ya da veri gelmezse çağıranın eski grafiği (fallback). */
+export function LegacyLogChart({ service, search, pattern, startedAt, lastSeen, open, fallback }: {
+  service: string; search?: string; pattern?: string; startedAt: number; lastSeen: number; open: boolean; fallback: ReactNode;
+}) {
+  const panel = useMemo<Extract<SourcePanel, { kind: 'logs' }>>(
+    () => ({ kind: 'logs', service, search: search ?? '', pattern: pattern || undefined, severity: 0, href: '' }), [service, search, pattern]);
+  const [win] = useState(() => panelWindow(startedAt, lastSeen, open, Date.now() * 1e6));
+  const lead = useMemo(() => ({ detector: '', signal: 'log', service, startedAt, lastSeen }), [service, startedAt, lastSeen]);
+  const marks = open ? `Tespit ${hm(startedAt)} · sürüyor` : `Tespit ${hm(startedAt)} · Bitti ${hm(lastSeen)}`;
+  if (!service) return <>{fallback}</>;
+  return <LogsChart panel={panel} win={win} lead={lead} marks={marks} fallback={fallback} />;
 }
