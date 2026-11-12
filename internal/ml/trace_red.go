@@ -1,6 +1,7 @@
 package ml
 
-// trace_red.go — ML trace T1: servis × endpoint p95 (op_latency, yukarı),
+// trace_red.go — ML trace T1: servis × endpoint gecikme (op_latency, yukarı;
+// yavaş istek oranı + v0.10.2059 p95, tek olay),
 // hata oranı (op_error_rate, yukarı), trafik düşüşü (throughput_drop, aşağı;
 // tatilde aday değil). KAYNAK: VictoriaMetrics RED serileri (Collector'da
 // tail sampling var → örneklenmiş span sayımından oran/gecikme HESAPLANMAZ;
@@ -33,6 +34,11 @@ const (
 	detOpErrorRate    = "op_error_rate"
 	detThroughputDrop = "throughput_drop"
 	traceRouteCap     = 5000 // seri tavanı (5.000 servis×endpoint tahmini, audit §5)
+	// opP95FloorMs — v0.10.2059 (Davis S1): p95 ölçüsünün mutlak tabanı;
+	// altındaki yavaşlama (ör. 20→80 ms) olay değil.
+	opP95FloorMs = 100
+	// opP95Share — p95'in üstünde kalan istek payı (etkilenen tahmini).
+	opP95Share = 0.05
 )
 
 var (
@@ -102,6 +108,24 @@ func slowShareQuery(pin anomaly.REDFamilyPin, svc, route string, winSec int, slo
 // slowAffected — SAF: kovada etkilenen istek ≈ oran × istek/sn × kova sn.
 func slowAffected(ratio, ratePerSec float64, bucketSec int) float64 {
 	return ratio * ratePerSec * float64(bucketSec)
+}
+
+// opLatencyMeasure — SAF (v0.10.2059, Davis S1): op_latency'nin bu kovadaki
+// ölçüsü: "p95" | "slow" | "" (olay yok). Aynı endpoint için TEK olay; ikisi
+// de ateşlerse p95 (50→400 ms gibi saniye altı sıçramayı da gören ölçü).
+// p95 kapıları B2 gürültüsüne karşı (v0.10.1769: tek tük yavaş istek
+// "normalin 164×" açıyordu): p95 ≥ opP95FloorMs ve p95'in temsil ettiği
+// istek (%5 × istek/sn × kova) ≥ minAffectedRequests. Ek VM sorgusu yok:
+// p95 zaten tik başına sorgulanıyor (aile başına 4 sorgu, değişmedi).
+func opLatencyMeasure(slow Judgement, slowAff float64, p95 Judgement, ratePerSec float64, cfg chstore.MLConfig) string {
+	minAff := float64(cfg.MinAffectedRequests)
+	if p95.Fire && p95.Observed >= opP95FloorMs && slowAffected(opP95Share, ratePerSec, cfg.BucketSec) >= minAff {
+		return "p95"
+	}
+	if slow.Fire && slowAff >= minAff {
+		return "slow"
+	}
+	return ""
 }
 
 // isChronic — SAF: son 7 günde ≥ K epizot → kronik.
@@ -325,17 +349,28 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 			}
 		}
 		if cfg.DetectorOn(detOpLatency) {
-			// B2: p99/p95 yerine yavaş istek oranı + mutlak etkilenen istek eşiği;
-			// kronik desen (≥K epizot / 7 g) yeni olay değil tek kayıt.
+			// B2: yavaş istek oranı + mutlak etkilenen istek eşiği; v0.10.2059
+			// (Davis S1) yanında p95 — aynı olay kimliği, tek olay
+			// (opLatencyMeasure). Kronik desen (≥K epizot / 7 g) tek kayıt.
 			sk := chstore.MLSeriesKey(svc, tracePart(route, "slow"))
+			pk := chstore.MLSeriesKey(svc, tracePart(route, "p95"))
 			c2 := cfg
 			c2.MinBaselineRate = 0
 			j := judge(curOf(sk), base[sk], c2, true)
-			affected := slowAffected(j.Observed, series[k][last.Unix()], cfg.BucketSec)
-			if j.Fire && affected >= float64(cfg.MinAffectedRequests) && d.dayCap(detOpLatency, cfg, now) {
-				ev := d.event(detOpLatency, svc, route, j, last, cfg, class)
-				ev.Evidence = mergeEvidence(ev.Evidence, map[string]any{"measure": "slow_ratio", "slowSec": cfg.SlowRequestSec, "affected": math.Round(affected),
-					"p95Ms": series[chstore.MLSeriesKey(svc, tracePart(route, "p95"))][last.Unix()], "episodes7d": episodes[chstore.MLSeriesKey(svc, route)]})
+			rate := series[k][last.Unix()]
+			affected := slowAffected(j.Observed, rate, cfg.BucketSec)
+			jp := judge(curOf(pk), base[pk], c2, true)
+			if m := opLatencyMeasure(j, affected, jp, rate, cfg); m != "" && d.dayCap(detOpLatency, cfg, now) {
+				var ev chstore.MLEvent
+				if m == "p95" {
+					ev = d.event(detOpLatency, svc, route, jp, last, cfg, class)
+					ev.Evidence = mergeEvidence(ev.Evidence, map[string]any{"measure": "p95", "unit": "ms", "slowSec": cfg.SlowRequestSec,
+						"slowRatio": series[sk][last.Unix()], "episodes7d": episodes[chstore.MLSeriesKey(svc, route)]})
+				} else {
+					ev = d.event(detOpLatency, svc, route, j, last, cfg, class)
+					ev.Evidence = mergeEvidence(ev.Evidence, map[string]any{"measure": "slow_ratio", "slowSec": cfg.SlowRequestSec, "affected": math.Round(affected),
+						"p95Ms": series[pk][last.Unix()], "episodes7d": episodes[chstore.MLSeriesKey(svc, route)]})
+				}
 				if isChronic(episodes[chstore.MLSeriesKey(svc, route)], cfg.ChronicEpisodes) {
 					ev.ID, ev.Stage = chstore.MLEventID("chronic:"+detOpLatency, svc, route), chstore.MLStageChronic
 				}

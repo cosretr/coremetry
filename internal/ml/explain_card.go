@@ -202,6 +202,11 @@ var mlDetSpecs = map[string]detSpec{
 
 func specFor(in CardInput) detSpec {
 	if sp, ok := mlDetSpecs[in.Detector]; ok {
+		// v0.10.2059 (Davis S1): op_latency'nin p95 ölçüsü (part "route|p95").
+		if in.Detector == "op_latency" && strings.HasSuffix(in.Part, "|p95") {
+			sp.label, sp.fact, sp.what, sp.past, sp.unit, sp.measure = "Endpoint gecikmesi · p95", "{code} yanıt süresi (p95)",
+				"{svc} servisinin {code} endpoint'i yavaşladı.", "yanıt süresi arttı", unitMs, "Yanıt süresi (p95)"
+		}
 		if in.Detector == "trace_pod_outlier" && in.Code == "p95" {
 			sp.fact, sp.what, sp.unit, sp.measure = "{pod} pod'unda yanıt süresi", "{svc} servisinde {pod} pod'u diğerlerinden yavaş.", unitMs, "Bu pod'da yanıt süresi (p95)"
 		}

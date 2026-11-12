@@ -261,12 +261,22 @@ type MLBaselineSettings struct {
 // BaselineOn — SAF: ana anahtar VE baseline anahtarı.
 func (c MLConfig) BaselineOn() bool { return c.Enabled && c.Baseline != nil && c.Baseline.Enabled }
 
-// DefaultMLConfig — her şey kapalı, eşikler makul.
+// mlDefaultOnDetectors — v0.10.2059 (operatör 2026-11-12: "Davis
+// yetenekleri varsayılan AÇIK"): ML'e taşınan Davis özne yetenekleri.
+// Varsayılan blobda ve blobda HİÇ yazılmamış anahtarda açık; operatörün
+// kaydettiği değer (true/false) aynen korunur. Ana anahtar (Enabled) ayrı.
+var mlDefaultOnDetectors = map[string]bool{"op_latency": true}
+
+// MLDetectorDefaultOn — SAF: dedektörün varsayılan durumu.
+func MLDetectorDefaultOn(name string) bool { return mlDefaultOnDetectors[name] }
+
+// DefaultMLConfig — ana anahtar kapalı; dedektörler kapalı (Davis
+// yetenekleri hariç, mlDefaultOnDetectors); eşikler makul.
 func DefaultMLConfig() MLConfig {
 	d := map[string]bool{}
 	p := map[string]MLPromotion{}
 	for _, n := range MLDetectorNames {
-		d[n] = false
+		d[n] = MLDetectorDefaultOn(n)
 		p[n] = MLPromotion{Enabled: false, MinHitRate: 0.8, MinSamples: 20}
 	}
 	return MLConfig{Enabled: false, Detectors: d, Promotion: p,
@@ -350,7 +360,7 @@ func NormalizeMLConfig(c MLConfig) MLConfig {
 	for _, name := range MLDetectorNames {
 		known[name] = true
 		if _, ok := c.Detectors[name]; !ok {
-			c.Detectors[name] = false
+			c.Detectors[name] = MLDetectorDefaultOn(name)
 		}
 		p, ok := c.Promotion[name]
 		if !ok {

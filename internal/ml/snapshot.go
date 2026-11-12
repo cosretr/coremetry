@@ -33,6 +33,10 @@ func eventPart(ev chstore.MLEvent) string {
 		case detTracePodOutlier:
 			return "" // kesitsel karar: pod serisi tutulmaz
 		case detOpLatency:
+			// v0.10.2059 (Davis S1): ölçü kanıtta; eski olay = yavaş istek oranı.
+			if evStr(evidenceMap(ev.Evidence), "measure") == "p95" {
+				return tracePart(ev.Code, "p95")
+			}
 			return tracePart(ev.Code, "slow")
 		case detOpErrorRate:
 			return tracePart(ev.Code, "err_ratio")

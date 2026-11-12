@@ -26,7 +26,7 @@ export const ML_LOG_DETECTORS: { id: string; label: string; hint: string }[] = [
   { id: 'change_point', label: 'Kırılma noktası', hint: 'CUSUM; ±15 dk içinde rollout varsa eşlenir' },
 ];
 export const ML_TRACE_DETECTORS: { id: string; label: string; hint: string }[] = [
-  { id: 'op_latency', label: 'Endpoint gecikmesi', hint: 'Servis × endpoint p95/p99, mevsimsel, yukarı (rollup, ham span yok)' },
+  { id: 'op_latency', label: 'Endpoint gecikmesi', hint: 'Servis × endpoint: p95 (en az 100 ms) ve yavaş istek oranı, tek olay; mevsimsel, yukarı (VM RED)' },
   { id: 'op_error_rate', label: 'Endpoint hata oranı', hint: 'Servis × endpoint hata oranı, yukarı' },
   { id: 'throughput_drop', label: 'Trafik düşüşü', hint: 'Endpoint çağrı sayısı tabanın altına düştü' },
   { id: 'dependency_latency', label: 'Bağımlılık gecikmesi', hint: 'VM client histogramları: HTTP/DB/messaging hedefi bazında p95 (rollup yok — tail sampling)' },

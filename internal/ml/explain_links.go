@@ -169,7 +169,11 @@ func whereToLookOf(in CardInput, l cardLinks) []ExplainLink {
 			if slow <= 0 {
 				slow = 1
 			}
-			first = ExplainLink{Label: "Yavaş trace'ler", Href: tracesLink(in.Service, l.rangeParam, tracesOpts{route: l.route, minMs: slow * 1000})}
+			minMs := slow * 1000
+			if strings.HasSuffix(in.Part, "|p95") && in.Observed > 0 { // v0.10.2059: p95 olayı → p95'in üstündeki istekler
+				minMs = math.Round(in.Observed)
+			}
+			first = ExplainLink{Label: "Yavaş trace'ler", Href: tracesLink(in.Service, l.rangeParam, tracesOpts{route: l.route, minMs: minMs})}
 		case "op_error_rate", "trace_error_count":
 			first = ExplainLink{Label: "Hatalı trace'ler", Href: tracesLink(in.Service, l.rangeParam, tracesOpts{route: l.route, hasError: true})}
 		default:

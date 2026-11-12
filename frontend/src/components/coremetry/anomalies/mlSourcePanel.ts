@@ -67,7 +67,8 @@ export function sourcePanelFor(e: Pick<MLEvent, 'detector' | 'signal' | 'code' |
   const route = (svc: string, op: string, o: Omit<Extract<SourcePanel, { kind: 'traces' }>, 'kind' | 'service' | 'operation' | 'byRoute'>) =>
     ({ kind: 'traces' as const, service: svc, operation: op, byRoute: op.startsWith('/'), ...o });
   switch (e.detector) {
-    case 'op_latency': return code ? route(e.service, code, { stat: 'p99', errorsFirst: false, minMs: slowSec * 1000 }) : { kind: 'snapshot', reason: 'operasyon yok' };
+    // v0.10.2059 (Davis S1): p95 ölçülü olay → şeridin p95'i (eşik çizgisi yok).
+    case 'op_latency': return code ? route(e.service, code, str(evidenceObj(e.evidence).measure) === 'p95' ? { stat: 'p95', errorsFirst: false } : { stat: 'p99', errorsFirst: false, minMs: slowSec * 1000 }) : { kind: 'snapshot', reason: 'operasyon yok' };
     case 'trace_change_point': return code ? route(e.service, code, { stat: 'p95', errorsFirst: false }) : { kind: 'snapshot', reason: 'operasyon yok' };
     case 'op_error_rate': return code ? route(e.service, code, { stat: 'p50', errorsFirst: true }) : { kind: 'snapshot', reason: 'operasyon yok' };
     case 'throughput_drop': return code ? route(e.service, code, { stat: 'p50', errorsFirst: false }) : { kind: 'snapshot', reason: 'operasyon yok' };

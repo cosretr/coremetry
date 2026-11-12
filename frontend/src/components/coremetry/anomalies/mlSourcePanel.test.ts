@@ -63,6 +63,12 @@ describe('sourcePanelFor', () => {
     expect(lat).toMatchObject({ kind: 'traces', stat: 'p99', minMs: 1000, byRoute: true, errorsFirst: false });
     expect(sourcePanelFor(ev('trace_error_count', 'trace', 'POST /orders'))).toMatchObject({ errorsFirst: true, byRoute: false });
   });
+  it('v0.10.2059: p95 ölçülü gecikme olayı şeridin p95\'ini çizer, eşik çizgisi yok', () => {
+    const p95 = sourcePanelFor({ ...ev('op_latency', 'trace', '/orders/{id}'), evidence: '{"measure":"p95"}' }, 1);
+    expect(p95).toMatchObject({ kind: 'traces', stat: 'p95', byRoute: true });
+    expect(p95).not.toHaveProperty('minMs');
+    expect(sourcePanelFor({ ...ev('op_latency', 'trace', '/x'), evidence: 'bozuk' }, 1)).toMatchObject({ stat: 'p99', minMs: 1000 });
+  });
 });
 
 // v0.10.2035 — log olayı: Logs histogramı, süzgeç kartın Logs bağlantısından (aynı nüfus).

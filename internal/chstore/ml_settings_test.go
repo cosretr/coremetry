@@ -17,8 +17,9 @@ func TestMLConfigDefaultsOff(t *testing.T) {
 		t.Fatal("ana anahtar varsayılan kapalı")
 	}
 	for _, d := range MLDetectorNames {
-		if c.Detectors[d] {
-			t.Fatalf("%s: dedektör varsayılan kapalı", d)
+		// v0.10.2059: Davis yetenekleri (mlDefaultOnDetectors) varsayılan açık.
+		if c.Detectors[d] != MLDetectorDefaultOn(d) || DefaultMLConfig().Detectors[d] != MLDetectorDefaultOn(d) {
+			t.Fatalf("%s: dedektör varsayılanı %v olmalı", d, MLDetectorDefaultOn(d))
 		}
 		p, ok := c.Promotion[d]
 		if !ok || p.Enabled {
@@ -106,7 +107,7 @@ func TestMLPromotionGateReasonsAndQualityDefaults(t *testing.T) {
 	if g := c.PromotionGate("op_latency", sc, ""); g.OK || len(g.Reasons) != 1 {
 		t.Fatalf("takvimsiz kapı kapalı + tek gerekçe olmalı: %+v", g)
 	}
-	if g := DefaultMLConfig().PromotionGate("op_latency", MLDetectorScore{}, ""); len(g.Reasons) != 5 {
+	if g := DefaultMLConfig().PromotionGate("log_volume", MLDetectorScore{}, ""); len(g.Reasons) != 5 { // v0.10.2059: op_latency varsayılan açık
 		t.Fatalf("varsayılan: 5 gerekçe (ana, dedektör, terfi, örnek, takvim), got %+v", g)
 	}
 	n := NormalizeMLConfig(MLConfig{})
@@ -200,7 +201,8 @@ func TestMLBaselineSettingOffAndOutOfHash(t *testing.T) {
 // (66df3eb38772bb64 → 254767bc3f68c4a3); baseline anahtarının hash dışında
 // kaldığı yukarıdaki d/on karşılaştırmasıyla ayrıca çivili.
 // v0.10.2020: k8s cAdvisor ifadelerine container süzgeci → 60610b14fef39c95.
-const mlDefaultHash1813 = "60610b14fef39c95"
+// v0.10.2059: op_latency varsayılan açık (Davis S1) → 7bbfaa479ac1811c.
+const mlDefaultHash1813 = "7bbfaa479ac1811c"
 
 // v0.10.2020 — k8s ailesi: cAdvisor ifadeleri pod toplam satırını
 // (container="") ve duraklatma kabını (POD) süzer; KSM restart ifadesi
