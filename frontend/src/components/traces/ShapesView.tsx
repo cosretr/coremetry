@@ -152,12 +152,12 @@ export function ShapesView({ range, service }: { range: TimeRange; service?: str
                   // (rowProps'un row-selected'ıyla birleşik); talimat ipucu kalktı.
                   className={[rp.className, 'cv-row'].filter(Boolean).join(' ')}>
                   <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                    <div className="trl-durbar">
                       <SvcBadge name={r.service} />
                       {/* v0.10.1356 (R4) — birincil etiket gerçek bağlantı (satırın Tab durağı). */}
                       {r.exemplar
                         ? <Link to={traceHref(r.exemplar, { pageRange: range })} onClick={stopRowClick} className="cell-link cell-link--block" title={r.operation}>{r.operation || '—'}</Link>
-                        : <span title={r.operation} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.operation || '—'}</span>}
+                        : <span title={r.operation} className="trl-ellip">{r.operation || '—'}</span>}
                     </div>
                   </td>
                   <td className="num">{r.count.toLocaleString()}</td>
@@ -182,7 +182,7 @@ export function ShapesView({ range, service }: { range: TimeRange; service?: str
         </table>
       </div>
       {rows && shapes.length > 0 && (
-        <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text3)' }}>
+        <div className="trl-aggfoot">
           {shapes.length} shapes · sampled {rows.length} trace{rows.length === 1 ? '' : 's'} · click a row to open an exemplar
         </div>
       )}

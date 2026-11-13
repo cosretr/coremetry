@@ -69,7 +69,7 @@ export function SvcBadge({ name, to, title }: { name: string; to?: string; title
 export function DurationBar({ ms, err, max }: { ms: number; err: boolean; max: number }) {
   const pct = max > 0 ? Math.max(2, Math.min(100, (ms / max) * 100)) : 0;
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+    <div className="trl-durbar">
       {/* v0.10.922 (sade palet adım 1) — değer metni nötr: hata zaten çubuk rengi + ERROR rozetinde (tek olgu, tek işaret). */}
       {/* v0.10.1351 — operatör: "Traces sayfasında trace süresi bold olabilir." Ağırlık
           tablo standardının vurgu sınıfından (.cell-strong 600), hiza .trace-dur-val
@@ -77,7 +77,7 @@ export function DurationBar({ ms, err, max }: { ms: number; err: boolean; max: n
       <span className="mono cell-strong trace-dur-val" style={{ minWidth: 58, color: 'var(--text)' }}>
         {fmtDur(ms)}
       </span>
-      <span className="ov-minibar" style={{ maxWidth: 110, flex: 1 }}>
+      <span className="ov-minibar trl-minibar">
         <i style={{ width: `${pct}%`, background: durColor(ms, err) }} />
       </span>
     </div>
@@ -94,19 +94,7 @@ export function SpanKindChip({ kind }: { kind: string }) {
   const k = normKindLabel(kind);
   if (!k) return null;
   return (
-    <span
-      style={{
-        fontSize: 9.5,
-        fontWeight: 700,
-        letterSpacing: '0.4px',
-        textTransform: 'uppercase',
-        padding: '1px 5px',
-        borderRadius: 3,
-        background: 'var(--bg3)',
-        color: 'var(--text3)',
-        border: '1px solid var(--border)',
-        whiteSpace: 'nowrap',
-      }}>
+    <span className="trl-kind">
       {k}
     </span>
   );

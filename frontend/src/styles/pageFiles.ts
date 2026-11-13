@@ -8,7 +8,7 @@
 // Dilim-1 notu (plan §7.1): `.controls > button/input/select` yoğunluk
 // kurallarına (globals.css) `:where(:not([data-slot]))` eklemek, PageControls
 // içine ilk shadcn denetimini koyan dilimin işidir.
-export type Page = 'Settings' | 'RemoteCluster' | 'Logs' | 'Trace' | 'Traces' | 'Explore' | 'Metrics' | 'Shell';
+export type Page = 'Settings' | 'RemoteCluster' | 'Logs' | 'Trace' | 'Traces' | 'TracesCharts' | 'Explore' | 'Metrics' | 'Shell';
 
 export const PAGE_FILES: Record<Page, readonly string[]> = {
   Settings: ['pages/Settings.tsx', 'pages/settings/'],
@@ -22,7 +22,17 @@ export const PAGE_FILES: Record<Page, readonly string[]> = {
     'pages/Trace.tsx', 'pages/trace/', 'components/TraceWaterfall.tsx', 'components/SpanDetail.tsx',
     'components/SpanK8sSection.tsx', 'components/TracePeekDrawer.tsx', 'components/FlameGraph.tsx',
   ],
-  Traces: ['pages/Traces.tsx', 'pages/traces/', 'components/traces/'],
+  // Traces shadcn S6 (operatör 2026-11-13: grafik sarmalayıcıları "sıfır
+  // inline" kuralının DIŞINDA, ayrı grup) — components/traces/ dizin öneki
+  // yerine tek tek dosya; VolumeChart + LatencyScatter TracesCharts'ta.
+  Traces: [
+    'pages/Traces.tsx', 'pages/traces/',
+    'components/traces/OracleOperationChip.tsx', 'components/traces/ServiceTimeline.tsx',
+    'components/traces/ShapesView.tsx', 'components/traces/TraceHonesty.tsx',
+    'components/traces/TraceLogList.tsx', 'components/traces/TraceMeasures.tsx',
+    'components/traces/TraceMinimap.tsx', 'components/traces/shared.tsx',
+  ],
+  TracesCharts: ['components/traces/VolumeChart.tsx', 'components/traces/LatencyScatter.tsx'],
   Explore: ['pages/Explore.tsx', 'pages/explore/'], // v0.10.1867 — MetricsExplorer / LogsExplorer silindi
   Metrics: ['pages/Metrics.tsx', 'pages/metrics/', 'components/viz/TimeSeriesPanel.tsx'], // v0.10.1863 pages/metrics/ (Metrics Explorer)
   Shell: [

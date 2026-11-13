@@ -4699,6 +4699,12 @@ a.sec.trl-csv, a.sec.trl-csv:hover, a.sec.trl-csv:active { padding: 5px 10px; fo
 .trl-diag { margin-top: 10px; font-size: 11px; color: var(--text3); }
 .trl-diag.is-warn { color: var(--warn); }
 .trl-diag-plain { margin-top: 10px; font-size: 11px; }
+/* Traces shadcn S6 — components/traces/shared.tsx (DurationBar, SpanKindChip)
+   ve ShapesView'in statik satır içi stilleri; değerler birebir. */
+.trl-durbar { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ov-minibar.trl-minibar { max-width: 110px; flex: 1; }
+.trl-kind { font-size: 9.5px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; padding: 1px 5px; border-radius: 3px; background: var(--bg3); color: var(--text3); border: 1px solid var(--border); white-space: nowrap; }
+.trl-ellip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ══ DAR EKRAN KATMANI (v0.9.980) ══════════════════════════════════════
    Dar ekran denetimi DALGA 2. Bu katman dosyanın SONUNDA duruyor ve bu
