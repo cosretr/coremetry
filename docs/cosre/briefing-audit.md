@@ -289,3 +289,32 @@ Dilim 0–7 ve kalem 1–7 gemide (v0.10.1690 … v0.10.1719; `v0.10.1717` etike
 - **Dilim 7:** `briefing_ask` birleşimi `cosre_briefings` yalnız takım × env'in SON kartını tuttuğu için kart yenilenince (5 dk) `matched=0`; geçmiş birleşim için sinyalin kendisi (exchange_id = briefing ULID) kaynak.
 - **Ölçülmedi:** R9 worker maliyeti prod'da ölçülmedi (v0.10.1728 sayacı ölçümü mümkün kılar) (Q2 "2 dk'ya inilebilir" kararı ölçüme bağlı); 1716–1719 prod/minikube'da denenmedi.
 - Q10 satır geri bildirimi operatörce geri alındı (yapılmadı, açık değil).
+
+## Kapanış — ayar satırı (v0.10.2105) ve prod ölçümü
+
+Onay 4 (`roadmap-status.md`, 2026-11-13): özet login sayfasına taşınmaz, v2 karşılamasında
+kalır. Kod kısmı: Settings › CoSRE'de `CoSRE v2 sohbeti` satırının altında tek aç/kapa
+(`fe/pages/settings/CosreBriefingLine.tsx`). Varsayılan KAPALI; eşik/aralık alanı yok, PUT
+diğer alanları aynen taşır; audit `settings.cosre_briefing.update` (sunucuda zaten vardı).
+`cosre_v2` kapalıyken AÇMA devre dışı; üretici `cosre_v2`'ye bakmadığı için KAPATMA her zaman
+serbest. Yeni ölçüm yüzeyi eklenmedi; aşağıdaki yerler v0.10.1728 / v0.10.1878'den.
+
+Operatörün prod ölçüm adımları:
+
+1. Settings › CoSRE: `CoSRE v2 sohbeti` açık olsun, `Giriş özeti` kutusunu işaretle (saati not et).
+2. Bir tik bekle: ilk üretim ≤ ~60 s içinde (30 s taban tik + diğer podlarda ≤ 30 s ayar memo'su),
+   sonra her 5 dk. İki tik görmek için 6 dk bekle.
+3. Bak: worker lider podunun logunda `[briefing] tick teams=N vm=N ch=N es=N dur=Nms` (esas kaynak).
+   Ek olarak `GET /api/admin/system-stats` → `briefing.last` / `briefing.total` (süreç içi sayaç:
+   yalnız yanıtı veren pod lider worker ise dolu — tek pod `COREMETRY_MODE=all`'da doğru, ayrık
+   kipte sıfır görünür, log satırını kullan; 60 s önbellekli). ES: Admin → Elasticsearch, yüzey
+   `worker:cosre-briefing`. CH: `system.query_log` `log_comment = 'worker:cosre-briefing'`.
+   Model çağrısı: /ai atfında yüzey `cosre-briefing` (`llm_phrasing` açıkken).
+4. Kabul (R9 tavanı, takım × env başına): `ch ≤ 15·teams·envs` (+ tik başına birkaç sabit filo
+   okuması), `vm ≤ 6·teams·envs`, `es ≤ 6·teams` (3 sa pencere = 3 + 3 saatlik dilim, önbellek
+   isabeti sayılmaz); `dur` taban aralığın (300 000 ms) çok altında — öneri < 60 000 ms ve
+   `total.max_duration_ms` < 120 000 ms (bu süre eşiği audit'te yoktu, ölçümle teyit edilecek).
+   ES istek sayacında yüzeyin payı açılış öncesine göre beklenen tavanı aşmamalı.
+5. Geri dönüş: kutuyu kaldır. Bir sonraki tikte (≤ ~60 s) üretim durur, log satırı kesilir;
+   GET `/api/cosre/v2/briefing` `status: "disabled"` döner, yazılmış kartlar TTL (600 s) ile düşer.
+   Q2 "2 dk'ya inilebilir" kararı bu ölçüme bağlı (yenileme aralığı arayüzde yok, blob ile).
