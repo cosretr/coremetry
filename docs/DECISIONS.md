@@ -13802,3 +13802,13 @@ eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
   `system_settings.ml_force_on_v2` (v1'i koşmuş prod da alır). Yalnız açıkça `false` olan `dependency_latency` → `true`;
   ana anahtar ve diğer dedektörler korunur; system audit `settings.ml.migrate`. Sonradan kapatma kalıcı.
 - Boş blob / yeni kurulumda varsayılan açık (`mlDefaultOnDetectors`); ConfigHash pini güncellendi.
+
+## 2026-11-13 — v0.10.2092 — ML tek sinyal kolu CANLI (operatör kararı)
+
+- v0.10.2058'in yalnız gölge tek sinyal kolu (tek sinyalli grupta kötüleşme yönünde ≥ 600 sn, ≥ 2 × taban; taban 0 iken
+  sayım ≥ 20) artık gerçek Problem açar ve bildirir: AYNI canlı yol, `anomaly-auto:group:*` ailesi, servis başına tek açık
+  Problem, `ml.groupProblems` anahtarı, mevcut keep kalıbı (`anomaly-auto:group:*`), bildirim yalnız açılışta.
+- Öncelik değişmeden mevcut hesaptan: Value = Threshold = sinyal sayısı → `computePriority` P2; 4 sa açık critical → P1.
+- Cümle: "<svc>: tek güçlü sinyal (<sinyal>, başka sinyal teyit etmedi) — <ölçü> şimdi X, normalde Y; N dakikadır sürüyor."
+- ≥ 2 sinyal kararı bayt bayt aynı; `svc_*` olayları bu kolu tetiklemez (kendi gölge kapıları). Tik satırı canlıda
+  açılan tek-sinyal Problem sayısını yazar (`groupSingleOpened`). Bildirim hacmi ölçülmedi — prod'da izlenecek.

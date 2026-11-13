@@ -71,7 +71,9 @@ export function thanosTickText(t: MLThanosTick): string {
  *  kapanan sayısı (izleyici de görür); kapalıyken gölge sayacı. Boş = satır yok. */
 export function groupTickText(t: MLTickStatus): string {
   // v0.10.2058: tek sinyal kolu yalnız gölgede — her iki kipte ayrı sayaç
-  const single = (t.shadowSingleWouldOpen ? ` · tek sinyal: ${t.shadowSingleWouldOpen} Problem açardı (gölge)` : '') +
+  // v0.10.2092: tek sinyal kolu canlı — canlı kipte AÇILAN sayısı, kapalıyken "açardı".
+  const single = (t.groupLive ? (t.groupSingleOpened ? ` · tek sinyal: ${t.groupSingleOpened} Problem açtı` : '')
+    : (t.shadowSingleWouldOpen ? ` · tek sinyal: ${t.shadowSingleWouldOpen} Problem açardı` : '')) +
     // v0.10.2089: servis düzeyi gölge kapısı (svc_error_rate / svc_breadth) — Problem açılmaz.
     (t.shadowSvcWouldOpen ? ` · servis düzeyi: ${t.shadowSvcWouldOpen} Problem açardı (gölge${t.shadowSvcP1 ? `, ${t.shadowSvcP1} P1` : ''})` : '');
   if (t.groupLive) {
@@ -319,8 +321,8 @@ export function MLTab({ signal = '', onSignal }: { signal?: MLSignal; onSignal?:
               }
             }} />
           <p className="m-0 text-[length:var(--fs-sm)] text-muted-foreground">
-            Dedektörler anomali kaydeder. Tek dedektör Problem açmaz: aynı serviste en az 2 farklı sinyalde (trace, log, metrik)
-            anomali varsa anomali grubu Problem açar (Settings › Anomaly). Ayrıntı “Teknik detay”da.
+            Dedektörler anomali kaydeder. Aynı serviste en az 2 farklı sinyalde (trace, log, metrik) anomali varsa ya da tek bir
+            sinyal güçlü (tabanın en az iki misli) ve en az 10 dakika sürerse anomali grubu Problem açar (Settings › Anomaly). Ayrıntı “Teknik detay”da.
           </p>
           <details data-testid="ml-tech-details" className="rounded-md border border-border px-3 py-2">
             <summary className="cursor-pointer text-[length:var(--fs-sm)] font-semibold text-muted-foreground">Teknik detay</summary>

@@ -102,7 +102,7 @@ export function MLSubsection() {
         ML dedektörleri: log sinyali (Elasticsearch: hacim, hata oranı, şablon, nadir kod, pod, kırılma) ve
         trace sinyali (rollup: endpoint gecikmesi/hata/trafik, bağımlılık, exception, pod, kırılma). Olaylar
         /anomalies listesine düşer. Aynı serviste en az 2 farklı sinyal birlikte bozulursa grup Problem açar
-        (aşağıdaki anahtar); tek sinyal Problem üretmez. Ana anahtar kapalıyken ES&apos;e hiç sorgu atılmaz.
+        (aşağıdaki anahtar); tek sinyal yalnız güçlü (normalin en az 2 katı) ve en az 10 dakika sürerse Problem açar. Ana anahtar kapalıyken ES&apos;e hiç sorgu atılmaz.
       </p>
       {!cfg ? (
         flash ? <FlashBox kind={flash.kind}>{flash.text}</FlashBox> : <Spinner />
@@ -123,7 +123,7 @@ export function MLSubsection() {
           <CheckboxField className="mb-3" checked={cfg.groupProblems !== false} disabled={!cfg.enabled}
             onCheckedChange={v => setCfg({ ...cfg, groupProblems: v })}
             label="Anomali grubu Problem açar"
-            hint="Aynı serviste en az 2 farklı sinyalde (trace, log, metrik) anomali varsa grup bir Problem açar (P2) ve bildirim mevcut kanallardan gider. Tek sinyal anomali olarak kalır. Kapalı: yalnız kayıt (Problem açardı)." />
+            hint="Aynı serviste en az 2 farklı sinyalde (trace, log, metrik) anomali varsa ya da tek sinyal güçlü (normalin en az 2 katı) ve en az 10 dk sürerse grup bir Problem açar (P2) ve bildirim mevcut kanallardan gider. Kapalı: yalnız kayıt (Problem açardı)." />
 
           <p className={NOTE}>Anahtar dedektörü açar; dedektör anomali kaydeder, Problem açmaz.</p>
           {([['Log dedektörleri', ML_LOG_DETECTORS], ['Trace dedektörleri', ML_TRACE_DETECTORS], ['Metrik aileleri', ML_METRIC_DETECTORS]] as const).map(([title, list]) => (<div key={title}>

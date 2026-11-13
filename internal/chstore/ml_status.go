@@ -88,10 +88,12 @@ type MLTickStatus struct {
 	ShadowSvcP1        int64 `json:"shadowSvcP1,omitempty"`
 	// v0.10.2052 (D4) — canlı kip: anahtar açık mı (izleyici de görür) ve
 	// bu tikte açılan / tazelenen / kapanan grup Problem'i sayısı.
-	GroupLive      bool  `json:"groupLive,omitempty"`
-	GroupOpened    int64 `json:"groupOpened,omitempty"`
-	GroupRefreshed int64 `json:"groupRefreshed,omitempty"`
-	GroupResolved  int64 `json:"groupResolved,omitempty"`
+	GroupLive bool `json:"groupLive,omitempty"`
+	// GroupSingleOpened — v0.10.2092: bu tikte tek sinyal kolundan AÇILAN grup Problem'i.
+	GroupSingleOpened int64 `json:"groupSingleOpened,omitempty"`
+	GroupOpened       int64 `json:"groupOpened,omitempty"`
+	GroupRefreshed    int64 `json:"groupRefreshed,omitempty"`
+	GroupResolved     int64 `json:"groupResolved,omitempty"`
 	// v0.10.2019 — metrik ailesi başına otomatik seçilen kaynak (saatte bir
 	// tespit; ayar DEĞİL, Settings › ML'de salt-okunur) ve tikin Thanos ölçümü.
 	MetricSources map[string]MLMetricSource `json:"metricSources,omitempty"`

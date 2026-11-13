@@ -281,6 +281,9 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	if cfg.GroupProblemsOn() {
 		loc := OperatorLocation(sens)
 		desc := func(g decidedGroup) string {
+			if g.D.SingleWouldOpen { // v0.10.2092: tek sinyal kolu canlı
+				return singleProblemDescription(g, func(e chstore.MLEvent) CardInput { return SummaryInput(e, cfg, start, loc) })
+			}
 			return groupProblemDescription(g, func(e chstore.MLEvent) string { return ExplainSummary(SummaryInput(e, cfg, start, loc)) })
 		}
 		lc, lerr := r.liveGroupProblems(tctx, groups, r.leaderTicks > episodeCloseMisses, desc, start)
@@ -336,7 +339,7 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 		Partial: int64(partialN), Docs: global.docs.Load(), Steps: steps, Signals: signals, BatchCut: int64(batchCut),
 		Kinds: foldKindTicks(samples), ES: global.esQueries.Load() - esAtStart, VM: global.vmQueries.Load() - vmAtStart, CH: chQueries.Load(),
 		ShadowGroups: shadow.Groups, ShadowWouldOpen: shadow.WouldOpen, ShadowSingleWouldOpen: shadow.SingleWouldOpen, ContribQueries: int64(contribQ),
-		GroupLive: cfg.GroupProblemsOn(), GroupOpened: live.Opened, GroupRefreshed: live.Refreshed, GroupResolved: live.Resolved,
+		GroupLive: cfg.GroupProblemsOn(), GroupOpened: live.Opened, GroupRefreshed: live.Refreshed, GroupResolved: live.Resolved, GroupSingleOpened: live.SingleOpened,
 		LogSvcUnmatched: int64(logSvc.Unmatched), LogSvcViaPod: int64(logSvc.ViaPod), ShadowSvcWouldOpen: svcOpen, ShadowSvcP1: svcP1}
 	// v0.10.2019 — metrik aile kaynakları + Thanos ölçümü (MetricThanos)
 	for _, det := range r.detectors {

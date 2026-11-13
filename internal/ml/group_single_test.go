@@ -1,9 +1,10 @@
 package ml
 
-// v0.10.2058 — Davis tek-olay kolu, YALNIZ GÖLGE (docs/anomaly/davis-ml-gap.md
-// dilim 4): tek sinyalli grupta ≥ 600 sn süren, kötüleşme yönünde ≥ 2 kat
-// (taban 0: sayım ≥ 20) olay "tek sinyal: Problem açardı" alır; WouldOpen
-// false kalır (canlı yol Problem açmaz). ≥ 2 sinyal kararı bayt bayt aynı.
+// v0.10.2058 — Davis tek-olay kolu (docs/anomaly/davis-ml-gap.md dilim 4):
+// tek sinyalli grupta ≥ 600 sn süren, kötüleşme yönünde ≥ 2 kat (taban 0:
+// sayım ≥ 20) olay. v0.10.2092 (operatör kararı 2026-11-13): kol CANLI —
+// WouldOpen true, canlı yol aynı aile / tekilleştirmeyle Problem açar.
+// ≥ 2 sinyal kararı bayt bayt aynı. svc_* olayları bu kolu tetiklemez.
 // Servis adları SENTETİK.
 
 import (
@@ -44,6 +45,7 @@ func TestDecideGroupSingleSignalShadow(t *testing.T) {
 			return e
 		}(), true, "metric_kafka"},
 		{"kapanmış olay → hayır", closed(gateEv("a", detOpLatency, "orders-api", 0, 30, 100, 500)), false, ""},
+		{"servis hata oranı (svc_*) güçlü + uzun → hayır (kendi kapısı)", gateEv("a", detSvcErrorRate, "orders-api", 0, 30, 0.01, 0.2), false, ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -52,14 +54,15 @@ func TestDecideGroupSingleSignalShadow(t *testing.T) {
 				t.Fatalf("tek grup bekleniyordu: %d", len(gs))
 			}
 			d := DecideGroupPromotion(gs[0], []chstore.MLEvent{c.ev}, in, now)
-			if d.WouldOpen || d.Severity != "" || d.Priority != "" || d.Live {
-				t.Fatalf("tek sinyal canlı karar üretmemeli: %+v", d)
+			if d.SingleWouldOpen != c.want || d.WouldOpen != c.want || d.Live {
+				t.Fatalf("SingleWouldOpen=%v WouldOpen=%v, istenen %v (%s)", d.SingleWouldOpen, d.WouldOpen, c.want, d.Reason)
 			}
-			if d.SingleWouldOpen != c.want {
-				t.Fatalf("SingleWouldOpen=%v, istenen %v (%s)", d.SingleWouldOpen, c.want, d.Reason)
+			if c.want && (d.Severity != "critical" || d.Priority != "P2" || d.SingleEvent != "a" ||
+				!strings.HasPrefix(d.Reason, "açardı: tek güçlü sinyal") || !strings.Contains(d.Reason, c.wantWhy)) {
+				t.Fatalf("karar %+v; neden ~%q", d, c.wantWhy)
 			}
-			if c.want && (!strings.Contains(d.Reason, "tek sinyal: Problem açardı (gölge)") || !strings.Contains(d.Reason, c.wantWhy)) {
-				t.Fatalf("neden %q; istenen ~%q", d.Reason, c.wantWhy)
+			if !c.want && (d.Severity != "" || d.Priority != "") {
+				t.Fatalf("açmayan karar şiddet/öncelik taşımamalı: %+v", d)
 			}
 		})
 	}
@@ -95,16 +98,68 @@ func TestDecideGroupTwoSignalsLiveUnchanged(t *testing.T) {
 
 func jsonInt(v int64) string { b, _ := json.Marshal(v); return string(b) }
 
-// Canlı plan: "tek sinyal: açardı" kararı Problem AÇMAZ (bu sürümde gölge).
+// v0.10.2092 — canlı plan: tek sinyal kolu Problem AÇAR (aynı aile, servis
+// başına tek), zayıf / kısa / batch-yük / iyileşme / svc_* açmaz.
 func TestSingleSignalShadowNeverOpensLive(t *testing.T) {
 	now := gBase.Add(30 * time.Minute)
-	evs := []chstore.MLEvent{gateEv("a", detOpLatency, "orders-api", 0, 30, 100, 500)}
-	gs, c := decideGroups(evs, nil, 10*time.Minute, GroupGateInput{}, now)
-	if c.SingleWouldOpen != 1 || len(gs) != 1 || !gs[0].D.SingleWouldOpen {
-		t.Fatalf("ön koşul: tek sinyal gölge kararı bekleniyordu: %+v", c)
+	isBatch := func(s string) bool { return strings.HasSuffix(s, "-batch") }
+	down := func(e chstore.MLEvent) chstore.MLEvent { e.Direction = "down"; return e }
+	cases := []struct {
+		name string
+		ev   chstore.MLEvent
+		open bool
+	}{
+		{"güçlü + uzun tek sinyal → açar", gateEv("a", detOpLatency, "orders-api", 0, 30, 100, 500), true},
+		{"zayıf (1,5 kat) → açmaz", gateEv("a", detOpLatency, "orders-api", 0, 30, 100, 150), false},
+		{"kısa (300 sn) → açmaz", gateEv("a", detOpLatency, "orders-api", 25, 30, 100, 500), false},
+		{"batch servis, yalnız yük → açmaz", gateEv("a", detLogVolume, "billing-batch", 0, 30, 100, 900), false},
+		{"iyileşme yönü → açmaz", down(gateEv("a", detOpLatency, "orders-api", 0, 30, 500, 100)), false},
+		{"svc_error_rate (servis düzeyi gölge) → açmaz", gateEv("a", detSvcErrorRate, "orders-api", 0, 30, 0.01, 0.2), false},
 	}
-	plan := planGroupProblems(gs, nil, true, func(decidedGroup) string { return "x" })
-	if len(plan.Open) != 0 || len(plan.Refresh) != 0 {
-		t.Fatalf("tek sinyal canlıda Problem açtı/tazeledi: %+v", plan)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			gs, cnt := decideGroups([]chstore.MLEvent{c.ev}, nil, 10*time.Minute, GroupGateInput{IsBatch: isBatch}, now)
+			plan := planGroupProblems(gs, nil, true, func(decidedGroup) string { return "x" })
+			if (len(plan.Open) == 1) != c.open || len(plan.Refresh) != 0 {
+				t.Fatalf("open=%d istenen %v: %+v", len(plan.Open), c.open, plan)
+			}
+			if !c.open {
+				return
+			}
+			p := plan.Open[0]
+			if !strings.HasPrefix(p.RuleID, MLGroupRulePrefix) || p.Severity != "critical" || p.Value != 1 || p.Threshold != 1 || !plan.SingleOpen[p.ID] {
+				t.Fatalf("Problem satırı: %+v", p)
+			}
+			if cnt.SingleWouldOpen != 1 || cnt.WouldOpen != 0 {
+				t.Fatalf("sayaçlar %+v", cnt)
+			}
+			if pr, _ := chstore.PreviewProblemPriority(p, now.UnixNano(), chstore.DefaultProblemPriority()); pr != "P2" {
+				t.Fatalf("öncelik %s, istenen P2 (4 sa sonra staleCrit P1)", pr)
+			}
+		})
+	}
+	// servis başına tek Problem: açık grup Problem'i varsa tazelenir, yenisi açılmaz
+	gs, _ := decideGroups([]chstore.MLEvent{gateEv("b", detOpLatency, "orders-api", 0, 30, 100, 500)}, nil, 10*time.Minute, GroupGateInput{}, now)
+	open := []chstore.Problem{{ID: "anomaly-auto:group:x:orders-api", RuleID: "anomaly-auto:group:x", Service: "orders-api", Status: "open"}}
+	plan := planGroupProblems(gs, open, true, func(decidedGroup) string { return "x" })
+	if len(plan.Open) != 0 || len(plan.Refresh) != 1 {
+		t.Fatalf("servis başına tek Problem: %+v", plan)
+	}
+}
+
+// v0.10.2092 — Problem cümlesi: tek güçlü sinyal, adıyla, değer + normal.
+func TestSingleProblemDescription(t *testing.T) {
+	now := gBase.Add(30 * time.Minute)
+	e := gateEv("a", detOpErrorRate, "orders-api", 0, 30, 0.01, 0.05)
+	e.Code = "GET /orders"
+	gs, _ := decideGroups([]chstore.MLEvent{e}, nil, 10*time.Minute, GroupGateInput{}, now)
+	if len(gs) != 1 || !gs[0].D.SingleWouldOpen {
+		t.Fatalf("ön koşul: %+v", gs)
+	}
+	got := singleProblemDescription(gs[0], func(m chstore.MLEvent) CardInput { return SummaryInput(m, chstore.DefaultMLConfig(), now, time.UTC) })
+	for _, want := range []string{"orders-api: tek güçlü sinyal (trace, başka sinyal teyit etmedi)", "şimdi %5", "normalde %1", "dakikadır sürüyor"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("cümle %q, eksik %q", got, want)
+		}
 	}
 }

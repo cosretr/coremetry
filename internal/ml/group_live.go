@@ -124,6 +124,8 @@ type groupProblemPlan struct {
 	Resolve []chstore.Problem
 	// LiveGroup — grup kimliği → Problem kimliği (üye işareti "Problem açtı").
 	LiveGroup map[string]string
+	// SingleOpen — v0.10.2092: tek sinyal kolundan AÇILAN Problem kimlikleri (sayaç).
+	SingleOpen map[string]bool
 }
 
 // newGroupProblem — SAF: açılacak Problem satırı.
@@ -141,7 +143,7 @@ func newGroupProblem(g decidedGroup, desc string) chstore.Problem {
 // anlık görüntü (önek dışı satırlar yok sayılır); canResolve: kapanış izni
 // (lider sürekliliği). desc: grup → Problem cümlesi.
 func planGroupProblems(groups []decidedGroup, open []chstore.Problem, canResolve bool, desc func(decidedGroup) string) groupProblemPlan {
-	plan := groupProblemPlan{LiveGroup: map[string]string{}}
+	plan := groupProblemPlan{LiveGroup: map[string]string{}, SingleOpen: map[string]bool{}}
 	var own []chstore.Problem
 	for _, p := range open {
 		if strings.HasPrefix(p.RuleID, MLGroupRulePrefix) && p.Status != "resolved" {
@@ -184,6 +186,9 @@ func planGroupProblems(groups []decidedGroup, open []chstore.Problem, canResolve
 			continue
 		}
 		p := newGroupProblem(g, desc(g))
+		if g.D.SingleWouldOpen {
+			plan.SingleOpen[p.ID] = true
+		}
 		plan.Open = append(plan.Open, p)
 		bySvc[svc] = &plan.Open[len(plan.Open)-1]
 		touched[p.ID] = true
@@ -206,7 +211,7 @@ func planGroupProblems(groups []decidedGroup, open []chstore.Problem, canResolve
 }
 
 // liveCounts — tik sayaçları (MLTickStatus).
-type liveCounts struct{ Opened, Refreshed, Resolved int64 }
+type liveCounts struct{ Opened, Refreshed, Resolved, SingleOpened int64 }
 
 // liveGroupProblems — recorder tik adımı: açık anlık görüntüyü TEK kez
 // okur (OpenProblemsSnapshot, 5 sn memo), planı uygular, canlı kararları
@@ -242,6 +247,9 @@ func (r *Recorder) liveGroupProblems(ctx context.Context, groups []decidedGroup,
 			continue
 		}
 		c.Opened++
+		if plan.SingleOpen[p.ID] {
+			c.SingleOpened++
+		}
 		log.Printf("[ml] GROUP PROBLEM OPENED %s · %s · %s", p.Service, p.ID, p.Description)
 		if r.notifier != nil {
 			go r.notifier.SendProblemAlert(context.Background(), p)
@@ -275,4 +283,32 @@ func firstNonNil(a, b error) error {
 		return a
 	}
 	return b
+}
+
+// singleProblemDescription — SAF (v0.10.2092): tek sinyal kolunun Problem
+// cümlesi — düz Türkçe, tek güçlü sinyal olduğunu söyler, sinyali adıyla,
+// değeri ve normaliyle verir. card: üye → kart girdisi (liste özetiyle aynı
+// kaynak; birim / ölçü oradan).
+func singleProblemDescription(g decidedGroup, card func(chstore.MLEvent) CardInput) string {
+	var e chstore.MLEvent
+	for _, m := range g.Members {
+		if m.ID == g.D.SingleEvent {
+			e = m
+		}
+	}
+	if e.ID == "" {
+		return fmt.Sprintf("%s: tek sinyalde güçlü ve süren kötüleşme (%s).", g.G.Service, strings.ToLower(signalName(joinTR(g.D.Signals))))
+	}
+	in := card(e)
+	sp := specFor(in)
+	metricS := sp.unit == unitMetric && in.MetricUnit == "s"
+	f := newValueFmt(sp, in, in.Observed)
+	normal := "normalde hiç yok"
+	if in.Baseline > 0 {
+		normal = "normalde " + f.one(in.Baseline, metricS)
+	}
+	what := capFirst(fill(sp.fact, in))
+	mins := int(in.Now.Sub(in.StartedAt).Minutes())
+	return truncRunes(fmt.Sprintf("%s: tek güçlü sinyal (%s, başka sinyal teyit etmedi) — %s şimdi %s, %s; %d dakikadır sürüyor.",
+		g.G.Service, strings.ToLower(signalName(memberSignal(e))), what, f.one(in.Observed, metricS), normal, mins), 600)
 }

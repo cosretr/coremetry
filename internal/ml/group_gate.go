@@ -76,11 +76,15 @@ type GroupDecision struct {
 	// tazeledi; ProblemID o Problem (detay bağlantısı). Gölgede boş.
 	Live      bool   `json:"live,omitempty"`
 	ProblemID string `json:"problemId,omitempty"`
-	// SingleWouldOpen — v0.10.2058 (Davis tek-olay kolu, YALNIZ GÖLGE): tek
-	// sinyalli grubun güçlü + uzun süren kötüleşmesi "tek sinyal: Problem
-	// açardı". WouldOpen false kalır → canlı yol (group_live.go) bu kararla
-	// Problem AÇMAZ, bildirim gitmez. Canlıya alma ayrı operatör kararı.
+	// SingleWouldOpen — v0.10.2058 (Davis tek-olay kolu): tek sinyalli grubun
+	// güçlü + uzun süren kötüleşmesi. v0.10.2092 (operatör kararı
+	// 2026-11-13): CANLI — WouldOpen da true; canlı yol (group_live.go) AYNI
+	// aile / tekilleştirme / anahtarla Problem açar ve bildirir. Bu bayrak
+	// kararın tek-sinyal kolundan geldiğini işaretler (cümle + sayaç).
 	SingleWouldOpen bool `json:"singleWouldOpen,omitempty"`
+	// SingleEvent — v0.10.2092: tek sinyal kolunu tetikleyen en güçlü üye
+	// (Problem cümlesi onu adıyla, değeri ve normaliyle söyler).
+	SingleEvent string `json:"singleEvent,omitempty"`
 }
 
 // eventRatio — SAF: sapma oranı (≥ 1). Yukarı: gözlenen/taban; aşağı:
@@ -155,9 +159,15 @@ func DecideGroupPromotion(g MLGroup, members []chstore.MLEvent, in GroupGateInpu
 		d.Reason = "açmazdı: batch servisi, yalnız yük sinyali (batch kuralı)"
 	case len(sigs) < groupMinSignals:
 		d.Reason = fmt.Sprintf("açmazdı: tek sinyal (%s), başka sinyal teyit etmedi", strings.Join(d.Signals, ", "))
-		if why, ok := singleSignalShadow(members, inGroup, in, now); ok {
-			d.SingleWouldOpen = true
-			d.Reason += "; tek sinyal: Problem açardı (gölge) — " + why
+		if why, id, ok := singleSignalShadow(members, inGroup, in, now); ok {
+			// v0.10.2092 — tek sinyal kolu CANLI (operatör kararı 2026-11-13):
+			// ≥ 2 sinyal kolunun aynı şiddeti / önceliği (Value = Threshold =
+			// sinyal sayısı → computePriority P2; 4 sa açık critical → P1).
+			d.SingleWouldOpen, d.SingleEvent = true, id
+			d.WouldOpen = true
+			d.Severity = "critical"
+			d.Priority = "P2"
+			d.Reason = fmt.Sprintf("açardı: tek güçlü sinyal (%s) — %s", strings.Join(d.Signals, ", "), why)
 		}
 	default:
 		d.WouldOpen = true
@@ -210,8 +220,8 @@ func singleWorsening(e chstore.MLEvent) (worse, count bool) {
 // batch kuralından geçen bir üye ≥ 600 sn sürmüş, kötüleşme yönünde ve
 // tabanın ≥ 2 katıysa (taban 0: sayım ≥ 20) gölgede "açardı". En güçlü
 // üyenin cümlesi döner.
-func singleSignalShadow(members []chstore.MLEvent, inGroup map[string]bool, in GroupGateInput, now time.Time) (string, bool) {
-	best, bestR := "", 0.0
+func singleSignalShadow(members []chstore.MLEvent, inGroup map[string]bool, in GroupGateInput, now time.Time) (string, string, bool) {
+	best, bestID, bestR := "", "", 0.0
 	for _, e := range members {
 		if !inGroup[e.ID] || !groupMemberOpen(e, in.Open) || !batchKeep(e, in.IsBatch, in.LoadParts) {
 			continue
@@ -240,10 +250,10 @@ func singleSignalShadow(members []chstore.MLEvent, inGroup map[string]bool, in G
 			why = fmt.Sprintf("%s %d dk sürdü, normalin %.1f katı (kötüleşme)", e.Detector, int(dur.Minutes()), r)
 		}
 		if best == "" || r > bestR {
-			best, bestR = why, r
+			best, bestID, bestR = why, e.ID, r
 		}
 	}
-	return best, best != ""
+	return best, bestID, best != ""
 }
 
 // memberSignal — SAF: olayın sinyali (eski satırda dedektörden).
@@ -335,7 +345,7 @@ func decideGroups(kept, running []chstore.MLEvent, slack time.Duration, in Group
 		d := DecideGroupPromotion(g, mem, in, now)
 		out = append(out, decidedGroup{G: g, D: d, Members: mem})
 		c.Groups++
-		if d.WouldOpen {
+		if d.WouldOpen && !d.SingleWouldOpen { // v0.10.2092: tek sinyal kendi sayacında
 			c.WouldOpen++
 		}
 		if d.SingleWouldOpen {
