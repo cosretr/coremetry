@@ -64,6 +64,9 @@ describe('sourcePanelFor', () => {
   ])('v0.10.2062: %s/%s → Overview serisi %s', (kind, metric, want) => {
     expect(serviceRedAggFor(kind, metric)?.agg ?? null).toBe(want);
   });
+  it('v0.10.2077: servis hata oranı servis Overview hata oranı serisini çizer', () => {
+    expect(sourcePanelFor(ev('svc_error_rate', 'trace', ''))).toEqual({ kind: 'service-red', service: 'orders-consumer', agg: 'error_rate', label: 'hata oranı' });
+  });
   it('v0.10.2061: canlı grafik yoksa nedeni tek satır; metrik olayı serisiz → neden yazılı', () => {
     expect(liveGapLine('olay penceresinde kaynakta seri yok')).toBe('Canlı grafik çizilemedi: olay penceresinde kaynakta seri yok. Aşağıdaki, olay anında kaydedilen 5 dakikalık görüntü.');
     expect(liveGapLine(undefined)).toContain('kaynak okunamadı');

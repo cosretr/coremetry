@@ -72,6 +72,7 @@ export function MLSourceChart({ lead, open, fallback, onContributors, logsLink, 
   if (panel.kind === 'traces') return <TracesStrip panel={panel} win={win} marks={marks} fallback={fallback} />;
   if (panel.kind === 'metric') return <MetricSeries panel={panel} win={win} lead={lead} marks={marks} fallback={fallback} onPeak={onPeak} direction={direction} />;
   if (panel.kind === 'logs') return <LogsChart panel={panel} win={win} lead={lead} marks={marks} fallback={fallback} />;
+  if (panel.kind === 'service-red') return <ServiceRedChart service={panel.service} agg={panel.agg} label={panel.label} startedAt={lead.startedAt} lastSeen={lead.lastSeen} open={open} fallback={fallback} />;
   // v0.10.2061 — metrik olayında kayıtlı görüntüye düşüş nedeniyle söylenir.
   if (lead.signal === 'metric') return <Gap reason={panel.reason}>{fallback}</Gap>;
   return <>{fallback}</>;

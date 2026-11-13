@@ -174,7 +174,7 @@ func whereToLookOf(in CardInput, l cardLinks) []ExplainLink {
 				minMs = math.Round(in.Observed)
 			}
 			first = ExplainLink{Label: "Yavaş trace'ler", Href: tracesLink(in.Service, l.rangeParam, tracesOpts{route: l.route, minMs: minMs})}
-		case "op_error_rate", "trace_error_count", "dependency_error_rate":
+		case "op_error_rate", "trace_error_count", "dependency_error_rate", detSvcErrorRate:
 			first = ExplainLink{Label: "Hatalı trace'ler", Href: tracesLink(in.Service, l.rangeParam, tracesOpts{route: l.route, hasError: true})}
 		default:
 			first = ExplainLink{Label: "Trace'ler", Href: tracesLink(in.Service, l.rangeParam, tracesOpts{route: l.route})}

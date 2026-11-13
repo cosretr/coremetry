@@ -66,7 +66,8 @@ func NewTraceRED() *TraceRED {
 func (d *TraceRED) Name() string { return "trace_red" }
 
 func (d *TraceRED) Enabled(cfg chstore.MLConfig) bool {
-	return cfg.DetectorOn(detOpLatency) || cfg.DetectorOn(detOpErrorRate) || cfg.DetectorOn(detThroughputDrop)
+	return cfg.DetectorOn(detOpLatency) || cfg.DetectorOn(detOpErrorRate) || cfg.DetectorOn(detThroughputDrop) ||
+		cfg.DetectorOn(detSvcErrorRate) // v0.10.2077: servis hata oranı aynı count/err satırlarından
 }
 
 // ── saf parçalar ─────────────────────────────────────────────
@@ -223,7 +224,8 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 		series[k][t] = v
 	}
 	families := 0
-	for _, pin := range anomaly.REDFamilyPins() {
+	agg := newSvcAgg() // v0.10.2077: servis düzeyi count/err (ek sorgu yok)
+	for fi, pin := range anomaly.REDFamilyPins() {
 		fl := d.familyLabels(ctx, deps.VM, pin, from, to)
 		if !fl.ok {
 			continue
@@ -244,10 +246,16 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 			if err != nil {
 				return nil, fmt.Errorf("vm %s/%s: %w", pin.ID, x.measure, err)
 			}
+			if x.measure == "err" {
+				agg.errRan(fi)
+			}
 			for _, r := range rows {
 				lb := groupKeyLabels(r.GroupKey)
 				svc, route := lb[fl.svc], lb[fl.route]
 				v, ok := instantValue(r)
+				if ok {
+					agg.add(fi, svc, x.measure, last.Unix(), v) // route boş satır dahil (= sum by svc)
+				}
 				if svc == "" || route == "" || !ok {
 					continue
 				}
@@ -263,6 +271,9 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 	}
 	if families == 0 {
 		return nil, fmt.Errorf("VM'de RED ailesi/etiketi bulunamadı (servis, route, durum)")
+	}
+	if cfg.DetectorOn(detSvcErrorRate) {
+		agg.emit(series)
 	}
 	// hata ORANI serisi: err/count (count>0)
 	for k, byB := range series {
@@ -293,7 +304,8 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 	}
 	global.series.Add(int64(len(series)))
 	// dwell geçmişi CH'den (instant sorgu yalnız son kovayı verir)
-	if dwellFrom := last.Add(-time.Duration(cfg.DwellBuckets-1) * bucket); true {
+	// v0.10.2077: servis hata oranı 3 kova ister; geçmiş penceresi ikisinin büyüğü.
+	if dwellFrom := last.Add(-time.Duration(max(cfg.DwellBuckets, svcErrDwell)-1) * bucket); true {
 		if hist, herr := deps.Store.MLSeriesRecent(ctx, chstore.MLSignalTrace, nil, "", "", dwellFrom, cfg.BucketSec); herr == nil {
 			mergeHistory(series, hist, dwellFrom.Unix(), last.Unix())
 		}
@@ -327,6 +339,9 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 		}
 	}
 	var evs []chstore.MLEvent
+	if cfg.DetectorOn(detSvcErrorRate) {
+		evs = append(evs, d.svcErrorEvents(series, base, last, cfg, class, now)...)
+	}
 	for k := range series {
 		svc, part, _ := strings.Cut(k, "\x00")
 		route, m := splitTracePart(part)

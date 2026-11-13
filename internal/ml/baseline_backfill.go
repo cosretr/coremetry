@@ -439,7 +439,8 @@ func (s traceBackfillSource) fetch(ctx context.Context, from, to time.Time) ([]c
 		}
 		series[k][t] = v
 	}
-	for _, pin := range anomaly.REDFamilyPins() {
+	agg := newSvcAgg() // v0.10.2077: servis hata oranı tabanı (canlı tikle aynı dönüşüm)
+	for fi, pin := range anomaly.REDFamilyPins() {
 		family := "trace:" + pin.ID
 		names, _, err := s.r.vm.MetricLabelNamesIn(ctx, pin.Names+"_count", from, to)
 		if err != nil {
@@ -463,9 +464,17 @@ func (s traceBackfillSource) fetch(ctx context.Context, from, to time.Time) ([]c
 			if err != nil {
 				return nil, fmt.Errorf("vm %s/%s: %w", pin.ID, x.measure, err)
 			}
+			if x.measure == "err" {
+				agg.errRan(fi)
+			}
 			for _, r := range rows {
 				lb := groupKeyLabels(r.GroupKey)
 				svc, route := lb[fl.svc], lb[fl.route]
+				if svc != "" && s.cfg.DetectorOn(detSvcErrorRate) {
+					for _, p := range pointsOf(r) {
+						agg.add(fi, svc, x.measure, p.Time/int64(time.Second), p.Value)
+					}
+				}
 				if svc == "" || route == "" {
 					continue
 				}
@@ -500,6 +509,7 @@ func (s traceBackfillSource) fetch(ctx context.Context, from, to time.Time) ([]c
 			delete(series, k)
 		}
 	}
+	agg.emit(series)
 	return rowsFromSeries(chstore.MLSignalTrace, series, s.cfg.BucketSec), nil
 }
 

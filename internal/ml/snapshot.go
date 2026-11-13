@@ -44,6 +44,8 @@ func eventPart(ev chstore.MLEvent) string {
 			return tracePart(ev.Code, "err_ratio")
 		case detTraceErrorCount:
 			return tracePart(ev.Code, traceErrMeasure)
+		case detSvcErrorRate: // v0.10.2077: servis düzeyi seri
+			return tracePart(svcRoute, svcMeasureRatio)
 		default:
 			return tracePart(ev.Code, "count")
 		}

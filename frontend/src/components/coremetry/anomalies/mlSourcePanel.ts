@@ -29,6 +29,8 @@ export type SourcePanel =
   | { kind: 'logs'; service: string; search: string; pattern?: string; severity: number; href: string }
   /** highlight: vurgulanacak seri (sapan pod); family: RED ailesi (trace pod). */
   | { kind: 'metric'; detector: string; service: string; code: string; cluster: string; highlight?: string; family?: string }
+  /** v0.10.2077 — servis düzeyi ML olayı: servis Overview panelinin serisi (ServiceRedChart). */
+  | { kind: 'service-red'; service: string; agg: ServiceRedAgg; label: string }
   | { kind: 'snapshot'; reason: string };
 
 const MIN = 60e9;
@@ -56,6 +58,8 @@ export function sourcePanelFor(e: Pick<MLEvent, 'detector' | 'signal' | 'code' |
       highlight: e.pod || str(ev.pod) || undefined, family: str(ev.family) || undefined };
   }
   if (e.signal === 'log') return logsPanelFromHref(logsHref) ?? { kind: 'snapshot', reason: 'log olayı: Logs bağlantısı yok' };
+  // v0.10.2077 — servis hata oranı: Overview'ın hata oranı serisi (v0.10.2062 deseni).
+  if (e.detector === 'svc_error_rate') return e.service ? { kind: 'service-red', service: e.service, agg: 'error_rate', label: 'hata oranı' } : { kind: 'snapshot', reason: 'olay kaydında servis yok' };
   if (e.detector === 'metric_kafka' && code.startsWith('metric_kafka|consumer_lag') && !code.includes('@')) {
     return { kind: 'kafka-lag', service: e.service };
   }

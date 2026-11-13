@@ -13641,3 +13641,18 @@ eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
 - `log_volume` ARTIŞ olayı için kovada normalin üstüne en az 1000 satır şartı (`logVolumeMinExtraLines`, 5 dk'lık kovada ≈ 3 satır/sn). Kafka lag tabanının (v0.10.2041) log karşılığı: küçük sayılardaki sıçrama olay değil.
 - Düşüş yönü, hata oranı (`error_rate`) ve susma dedektörleri etkilenmez. Yeni ayar yok.
 - 1000 değeri prod verisiyle ölçülmedi; gürültü/kaçırma görülürse sabit değişir.
+
+## 2026-11-13 — v0.10.2077 — ML svc_error_rate: servis düzeyi hata oranı (spec-ml-service-level dilim 1)
+
+- Eski `anomaly:<svc>:error_rate` işinin ML karşılığı; bu dilimde YALNIZ `ml_events` (Problem / bildirim yok).
+- Kaynak yalnız VM RED (OTel sunucu histogramları, örneklenmemiş). Span / CH MV okunmaz (başarılı %5, hatalı %100
+  örnekleme → ~20× şişik). VM yoksa dedektör TraceRED ile birlikte susar.
+- Maliyet: EK VM SORGUSU YOK (spec 4 diyordu). TraceRED'in aile başına zaten attığı `sum by (svc, route)` count / err
+  satırları servis başına toplanır (route'suz satır dahil = `sum by (svc)`); aileler toplanmaz, kova başına servisin ilk
+  ailesi (HTTP → gRPC legacy → gRPC stable). ml_series'e servis başına 2 seri (`*|svc_count`, `*|svc_err_ratio`);
+  baseline geçmiş doldurma aynı dönüşümle.
+- Tetik (sabit, vida yok): oran ≥ 2 × mevsimsel taban medyanı, ≥ %1, taban trafiği ≥ 0,2 istek/sn, 3 kova (15 dk).
+  `-batch` muaf değil. Skor = max(z, CriticalZ): tetik oran kuralıdır; "değil" etiketleri eşiği yine yükseltir.
+- Doğrulama (spec açık noktası): VM RED aileleri yalnız SUNUCU istek metrikleri (`http.server.request.duration`,
+  `rpc.server.duration`, `rpc.server.call.duration`); consumer girişi yok → yalnız tüketici servis bu dedektörde kör.
+- Varsayılan açık; /anomalies cümlesi "normalde %X, şimdi %Y"; detay grafiği servis Overview hata oranı serisi.

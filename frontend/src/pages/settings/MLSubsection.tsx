@@ -33,6 +33,8 @@ export const ML_TRACE_DETECTORS: { id: string; label: string; hint: string }[] =
   { id: 'dependency_latency', label: 'Bağımlılık gecikmesi', hint: 'VM client histogramları: HTTP/DB/messaging hedefi bazında p95 (rollup yok — tail sampling)' },
   // v0.10.2063 — Davis S2: oran VM'den; CH özet tabloları örneklenmiş (başarılı %5) olduğu için kullanılmaz.
   { id: 'dependency_error_rate', label: 'Bağımlılık hata oranı', hint: 'VM DB/messaging client histogramları: çağıran × hedef hata oranı (error_type etiketi); etiket yoksa "ölçülemedi"' },
+  // v0.10.2077 — spec-ml-service-level dilim 1: eski "servis hata oranı" anomalisinin ML karşılığı; span'ler örneklendiği için yalnız VM.
+  { id: 'svc_error_rate', label: 'Servis hata oranı', hint: 'VM sunucu RED (HTTP/gRPC): servisin hata oranı normalin en az 2 katı, en az %1, 15 dk sürdü; trafik en az 0,2 istek/sn. Ek sorgu yok' },
   { id: 'trace_pod_outlier', label: 'Aykırı pod (trace)', hint: 'VM server RED, pod etiketi varsa: pod\'lar arasında hata oranı / p95 sapması' },
   { id: 'trace_change_point', label: 'Kırılma (trace)', hint: 'CUSUM + rollout eşleştirmesi' },
   // v0.10.2018 — T-err: hata span'leri örneklenmediği için sayı CH'de tam; oran DEĞİL.

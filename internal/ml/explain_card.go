@@ -190,6 +190,7 @@ var mlDetSpecs = map[string]detSpec{
 	"throughput_drop":       {label: "Trafik düşüşü", fact: "istek sayısı", what: "{svc} servisine gelen istek sayısı düştü.", past: "istek sayısı düştü", unit: unitCount, noun: "istek", additive: true},
 	"dependency_latency":    {label: "Bağımlılık gecikmesi (p95)", fact: "{code} çağrı süresi", what: "{svc} servisinin {code} çağrıları yavaşladı.", past: "{code} çağrıları yavaşladı", unit: unitMs, measure: "Çağrı süresi (p95)"},
 	"dependency_error_rate": {label: "Bağımlılık hata oranı (VM client, error_type)", fact: "{code} çağrılarında hata oranı", what: "{svc} servisinin {code} çağrılarında hata oranı arttı.", past: "{code} çağrılarında hata arttı", unit: unitRatio},
+	"svc_error_rate":        {label: "Servis hata oranı (VM RED, sunucu istekleri)", fact: "servis hata oranı", what: "{svc} servisinde hata alan isteklerin oranı arttı.", past: "servis hata oranı arttı", unit: unitRatio},
 	"trace_change_point":    {label: "Kırılma (trace, p95)", fact: "yanıt süresi (p95)", what: "{svc} servisinde yanıt süresi kalıcı olarak {dir}.", past: "yanıt süresi kalıcı olarak değişti", unit: unitMs, measure: "Yanıt süresi (p95)"},
 	"trace_error_count":     {label: "Operasyon hata sayısı (CH, örneklenmemiş hata span'leri)", fact: "{code} hata sayısı", what: "{svc} servisinin {code} operasyonunda hata sayısı arttı.", past: "hata sayısı arttı", unit: unitCount, noun: "hata", additive: true},
 	"trace_pod_outlier":     {label: "Aykırı pod (trace)", fact: "{pod} pod'unda hata payı", what: "{svc} servisinde {pod} pod'u diğerlerinden daha çok hata veriyor.", past: "bir pod diğerlerinden ayrıştı", unit: unitRatio},
@@ -468,6 +469,8 @@ func summaryOf(in CardInput, sp detSpec, open bool, end time.Time) string {
 		head = logVolumeHead(in) // v0.10.2044 — değer + normal (oran değil)
 	} else if in.Detector == detNewTemplate {
 		head = newTemplateHead(in) // v0.10.2069 — kalıp adıyla, değer + normal
+	} else if in.Detector == detSvcErrorRate {
+		head = svcErrHead(in, sp) // v0.10.2077 — "normalde X, şimdi Y"
 	} else {
 		head = fmt.Sprintf("%s: %s %s", in.Service, fill(sp.fact, in), RatioPhrase(in.Observed, in.Baseline, in.Direction, RatioLong, ratioRef(in)))
 	}
