@@ -44,7 +44,7 @@ import { MLTraceDots } from './MLTraceDots';
 import { MLLogPlayer } from './MLLogPlayer';
 import { MLSignalEvidence } from './MLSignalEvidence';
 import { groupStatusText, type MLGroupRow } from './mlGroupRows';
-import { evidenceSource, groupGateLine, groupProblemChip, headerOperation, latestGroupDecision } from './mlGroupDetail';
+import { evidenceSource, groupGateLine, groupProblemChip, headerOperation, latestGroupDecision, latestSvcShadow, svcGateLine } from './mlGroupDetail';
 import { MLSourceChart } from './MLSourceChart';
 import { contributorLine, leadFromSnapshot, parseLogsLink, type Contributors } from './mlSourcePanel';
 import { evidenceRows, evidenceSub } from './mlEvidenceRows';
@@ -165,6 +165,7 @@ export function MLReplayContent({ id, autoPlay = false, group = null }: { id: st
   const members = group?.members ?? [];
   const sample = snap ? replaySamples(snap).find(x => x.traceId) : undefined;
   const shadow = latestGroupDecision(members);
+  const svcShadow = latestSvcShadow(lead ? [...members, lead] : members); // v0.10.2089
   const problemChip = groupProblemChip(shadow);
   const chartLead = lead ?? (snap ? leadFromSnapshot(snap) : null);
   const contribLine = contributorLine(contrib, 'istemci');
@@ -239,6 +240,7 @@ export function MLReplayContent({ id, autoPlay = false, group = null }: { id: st
             { k: 'Dedektörler', v: (members.length ? [...new Set(members.map(m => m.detector))] : [h.detector]).map(d => ML_DETECTOR_TR[d] ?? d).join(', ') },
             ...(group ? [{ k: 'Grup aralığı', v: `${fmtTs(group.start)} – ${group.status === 'running' || group.status === 'watching' ? 'sürüyor' : fmtTs(group.end)}` }] : []),
             { k: 'Problem kapısı', v: groupGateLine(shadow) },
+            ...(svcShadow ? [{ k: 'Servis düzeyi kapı', v: svcGateLine(svcShadow) }] : []),
           ]} />
           <div className="rounded-md border border-border bg-card" data-testid="ml-card">
             <KeyValue items={[

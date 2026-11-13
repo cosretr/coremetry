@@ -198,6 +198,10 @@ func singleWorsening(e chstore.MLEvent) (worse, count bool) {
 	case "metric_kafka":
 		_, id, _ := splitThanosPart(e.Code)
 		return id == "consumer_lag", true
+	case detSvcErrorRate, detSvcBreadth:
+		// v0.10.2089: servis düzeyi olaylar kendi gölge kapısını izler
+		// (svc_shadow.go); tek sinyal kolu onları saymaz (çift sayım olmaz).
+		return false, false
 	}
 	return false, false
 }

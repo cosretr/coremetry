@@ -3,7 +3,7 @@
 // /anomalies/ml/:id grubun sayfasıdır. Saf yardımcılar: açılan olayın grubu,
 // kanıt satırının kaynak notu, başlık operasyonu. Grup üyeleri liste ucunun
 // (son 24 sa, aynı önbellek) satırlarından; ek sunucu okuması YOK.
-import type { MLEvent, MLGroupDecision } from '@/lib/types';
+import type { MLEvent, MLGroupDecision, MLSvcShadow } from '@/lib/types';
 import { parseObj } from '@/lib/mlReplay';
 import { groupRows, type MLGroupRow } from './mlGroupRows';
 
@@ -40,6 +40,17 @@ export function groupProblemChip(d: MLGroupDecision | undefined): { label: strin
   if (d.wouldOpen) return { label: 'Problem açardı (canlı kip kapalı)' };
   if (d.singleWouldOpen) return { label: 'Tek sinyal: Problem açardı (gölge)' };
   return null;
+}
+
+/** v0.10.2089 — SAF: üyelerin en son servis düzeyi gölge kararı (svc_error_rate / svc_breadth). */
+export function latestSvcShadow(members: Pick<MLEvent, 'svcShadow'>[]): MLSvcShadow | undefined {
+  return members.map(m => m.svcShadow).filter((d): d is MLSvcShadow => !!d).sort((x, y) => y.at - x.at)[0];
+}
+
+/** v0.10.2089 — SAF: servis düzeyi gölge kapı satırı (Problem AÇILMAZ; 14 günlük gölge). */
+export function svcGateLine(d: MLSvcShadow): string {
+  const verb = !d.wouldOpen ? 'açmazdı' : d.joinsRule ? 'grup Problem\'ine üye olurdu (gölge)' : 'Problem açardı (gölge)';
+  return `${verb}${d.priority ? ` · ${d.priority}` : ''} — ${d.reason}`;
 }
 
 /** v0.10.2053 (D4) — SAF: teknik ayrıntıdaki "Problem kapısı" satırı. */

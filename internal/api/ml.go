@@ -90,6 +90,8 @@ type mlEventRow struct {
 	// v0.10.2015 (D3) — grubun en son gölge terfi kararı ("açardı / açmazdı",
 	// kural, öncelik, neden); üyelerin kanıtından, ek okuma yok.
 	GroupShadow *ml.GroupDecision `json:"groupShadow,omitempty"`
+	// v0.10.2089 — servis düzeyi olayın (svc_*) gölge Problem kararı (kendi kanıtından).
+	SvcShadow *ml.SvcShadow `json:"svcShadow,omitempty"`
 }
 
 // groupShadows — SAF: okuma anı grubu → üyelerin kanıtındaki en son gölge karar.
@@ -129,6 +131,9 @@ func mlEventRows(items []chstore.MLEvent, cfg chstore.MLConfig, now time.Time, l
 		p = ml.ResolveProfile(p, e.Service, ex.IsBatch)
 		out[i] = mlEventRow{MLEvent: e, Summary: ml.ExplainSummary(ml.SummaryInput(e, cfg, now, loc)),
 			Spark: ml.BuildSpark(ex.Series[e.ID], e.StartedAt, e.LastSeen), Profile: p, ProfileLabel: ml.ProfileLabelTR(p)}
+		if d, ok := ml.SvcShadowOf(e.Evidence); ok {
+			out[i].SvcShadow = &d
+		}
 		if g := ex.Groups[e.ID]; g != nil {
 			out[i].GroupID, out[i].GroupSize, out[i].GroupDetectors = g.ID, len(g.Members), g.Detectors
 			out[i].GroupStart, out[i].GroupEnd, out[i].GroupSignals = g.Start, g.End, g.Signals

@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { keys } from './keys';
-import type { MLEvent, MLScorecard, MLBaselineBackfillView, MLServiceProfilePage } from '@/lib/types';
+import type { MLEvent, MLScorecard, MLBaselineBackfillView, MLServiceProfilePage, MLSvcShadowCompare } from '@/lib/types';
 
 export function useMLEvents(signal: '' | 'log' | 'trace' | 'metric' = '', enabled = true) {
   return useQuery<{ items: MLEvent[]; truncated: boolean }>({
@@ -45,5 +45,14 @@ export function useMLProfiles(p: { q: string; profile: string; offset: number; l
     queryKey: [...keys.anomalies.mlProfiles, p.q, p.profile, p.offset, p.limit],
     queryFn: async () => (await api.mlProfiles(p)) ?? { items: [], total: 0, offset: p.offset, limit: p.limit },
     staleTime: 30_000, placeholderData: prev => prev,
+  });
+}
+
+/** v0.10.2089 — servis düzeyi gölge karşılaştırması; yalnız bölüm açılınca (enabled), staleTime = sunucu TTL'i. */
+export function useMLSvcShadowCompare(enabled: boolean) {
+  return useQuery<MLSvcShadowCompare>({
+    queryKey: keys.anomalies.mlSvcShadow,
+    queryFn: async () => (await api.mlSvcShadowCompare()) ?? { days: 14, rows: [], counts: {}, truncated: false },
+    enabled, staleTime: 60_000,
   });
 }

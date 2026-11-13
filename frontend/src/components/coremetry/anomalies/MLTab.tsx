@@ -9,6 +9,7 @@ import { SegmentedControl } from '@/components/coremetry/SegmentedControl';
 import { useMLScorecard } from '@/lib/queries';
 import type { MLEvent, MLDetectorScore, MLBackfillProgress, MLTickStatus, MLSignalTick, MLScorecard, MLKindTick, MLBaselineStatus, MLThanosTick } from '@/lib/types';
 import { MLPeriodReplay } from './MLPeriodReplay';
+import { MLSvcShadowCompareSection } from './MLSvcShadowCompare';
 import { SIGNAL_KINDS } from '@/lib/signalKind';
 import { SignalKindBadge } from '@/components/coremetry/SignalKindBadge';
 
@@ -70,7 +71,9 @@ export function thanosTickText(t: MLThanosTick): string {
  *  kapanan sayısı (izleyici de görür); kapalıyken gölge sayacı. Boş = satır yok. */
 export function groupTickText(t: MLTickStatus): string {
   // v0.10.2058: tek sinyal kolu yalnız gölgede — her iki kipte ayrı sayaç
-  const single = t.shadowSingleWouldOpen ? ` · tek sinyal: ${t.shadowSingleWouldOpen} Problem açardı (gölge)` : '';
+  const single = (t.shadowSingleWouldOpen ? ` · tek sinyal: ${t.shadowSingleWouldOpen} Problem açardı (gölge)` : '') +
+    // v0.10.2089: servis düzeyi gölge kapısı (svc_error_rate / svc_breadth) — Problem açılmaz.
+    (t.shadowSvcWouldOpen ? ` · servis düzeyi: ${t.shadowSvcWouldOpen} Problem açardı (gölge${t.shadowSvcP1 ? `, ${t.shadowSvcP1} P1` : ''})` : '');
   if (t.groupLive) {
     const bits = [`${t.groupOpened ?? 0} açıldı`, `${t.groupRefreshed ?? 0} sürüyor`, `${t.groupResolved ?? 0} kapandı`];
     return `grup Problem'i (canlı): ${bits.join(', ')}${t.shadowGroups ? ` · ${t.shadowGroups} grup değerlendirildi` : ''}${single}`;
@@ -356,6 +359,7 @@ export function MLTab({ signal = '', onSignal }: { signal?: MLSignal; onSignal?:
                     default: return null;
                   }
                 }} />
+              <MLSvcShadowCompareSection />
             </div>
           </details>
         </>

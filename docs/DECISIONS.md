@@ -13781,3 +13781,17 @@ eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
   `resolveClearedAnomalyPromotions` ile "anomaly cleared" kapanır; o geçiş okunamazsa bayat süpürme kapatır.
 - Kayıtlı blobdaki `opLatency*` alanları okunmaz; Normalize yalnız bilinen alanları yazdığından sonraki kayıtta düşer.
 - DOKUNULMADI: `trace_op`, ML `op_latency`, `svc-slowdown`, `metric_anomaly`, Davis özneleri, Elastic ML.
+
+## 2026-11-13 — v0.10.2089 — ML servis düzeyi gölge kapısı + eski ↔ yeni karşılaştırma (spec-ml-service-level dilim 3)
+
+- `svc_error_rate` / `svc_breadth` için SAF gölge kararı (`ml/svc_shadow.go` `decideSvcShadow`): açık olay
+  `anomaly-auto:svc:<svc>` Problem'i AÇARDI; critical, Value = gözlenen, Threshold = taban (hata oranında taban 0 ise
+  %0,5), öncelik mevcut `computePriority`'den (`chstore.PreviewProblemPriority`; ≥ 2 kat → P1, değilse P2, 4 sa critical
+  → P1). Servis başına tek sahip (en erken olay), öncelik en yükseği; servisin grup Problem'i (canlı ya da açardı) varsa
+  "üye olurdu". Karar olay kanıtına `svcShadow`; Problem / bildirim YOK (canlı kip dilim 4, ayrı operatör kararı).
+- `svc_*` olayları tek-sinyal gölge kolunda (v0.10.2058) sayılmaz; grupta trace üyesidir, ≥ 2 sinyal kuralı aynen.
+- Yüzeyler: olay detayı "Teknik ayrıntı"da "Servis düzeyi kapı" satırı; ML tik satırında "servis düzeyi: N Problem
+  açardı (gölge, k P1)"; karşılaştırma tablosu Anomalies › ML › Teknik detay içinde (spec'in "mevcut ML karşılaştırma
+  raporu" kodda yok). Uç `GET /api/ml/svc-shadow-compare?days=1..14` (salt-okunur, 60 sn önbellek): problems'tan
+  `svc-slowdown:*` + `anomaly:*:error_rate` (started_at sınırlı, LIMIT 1000) ve ml_events'ten iki dedektör (LIMIT
+  2000/dedektör); eşleme servis + ±15 dk örtüşme: eşleşti / kaçırdı / fazladan / geç.

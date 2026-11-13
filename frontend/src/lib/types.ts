@@ -12171,7 +12171,21 @@ export interface MLEvent {
   groupStart?: number; groupEnd?: number; groupSignals?: string[];
   /** v0.10.2015 (D3) — grubun en son gölge terfi kararı (Problem AÇILMAZ; yalnız "açardı" kaydı). */
   groupShadow?: MLGroupDecision;
+  /** v0.10.2089 — servis düzeyi olayın (svc_error_rate / svc_breadth) gölge Problem kararı (ml.SvcShadow). */
+  svcShadow?: MLSvcShadow;
 }
+/** v0.10.2089 — internal/ml/svc_shadow.go SvcShadow aynası: anomaly-auto:svc:<svc> AÇARDI (gölge; Problem açılmaz). */
+export interface MLSvcShadow {
+  wouldOpen: boolean; owner?: boolean; rule: string; joinsRule?: string;
+  priority?: string; priorityReason?: string; value: number; threshold: number; reason: string; at: number;
+}
+/** v0.10.2089 — ml.SvcCompareRow aynası: eski servis düzeyi Problem ↔ yeni gölge kararı. diff: matched | missed | extra | late. */
+export interface MLSvcCompareRow {
+  service: string; oldRule?: string; oldStart?: number; oldPriority?: string;
+  newDetector?: string; newStart?: number; newPriority?: string; diff: 'matched' | 'missed' | 'extra' | 'late' | string;
+}
+/** v0.10.2089 — GET /api/ml/svc-shadow-compare (api/ml_svc_shadow.go svcShadowCompareResponse). */
+export interface MLSvcShadowCompare { days: number; rows: MLSvcCompareRow[]; counts: Record<string, number>; truncated: boolean }
 /** v0.10.2051 — /api/anomalies/unified satırı (internal/api/anomalies_unified.go
  *  unifiedAnomalyRow): ML grupları + eski dedektör olayları sunucuda birleşir.
  *  Liste kipinde yalnız lider (mlLead YA DA legacyLead; ML liderinde kanıt yok),
@@ -12330,6 +12344,8 @@ export interface MLTickStatus {
   shadowGroups?: number; shadowWouldOpen?: number;
   /** v0.10.2058: tek sinyal kolu (yalnız gölge) — "Tek sinyal: Problem açardı" sayısı. */
   shadowSingleWouldOpen?: number;
+  /** v0.10.2089: servis düzeyi gölge kapısı — "Problem açardı" servis sayısı + bunların P1 olanları. */
+  shadowSvcWouldOpen?: number; shadowSvcP1?: number;
   /** v0.10.2052 (D4): grup → Problem canlı mı; bu tikte açılan / tazelenen / kapanan grup Problem'i. */
   groupLive?: boolean; groupOpened?: number; groupRefreshed?: number; groupResolved?: number;
   /** v0.10.2037: suçlu seri kırılım sorgusu (yeni açılan / tepesi büyüyen metrik olayı). */
