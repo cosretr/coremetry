@@ -3301,6 +3301,8 @@ export interface EvalsetCatalog {
   toolset?: AIToolset;
   /** v0.10.1316 — kümedeki ajan kipi vaka sayısı (Go evalCatalog.AgentCases). */
   agentCases?: number;
+  /** v0.10.2110 — rubrik eşiği (Go evalrubric.Threshold); günlük koşu "eşik altı" rozeti. */
+  rubricThreshold?: number;
 }
 
 /** Koşunun yüzey başına özeti (koşu sürerken her vakadan sonra güncellenir). */
@@ -3358,6 +3360,8 @@ export interface EvalRunSummary {
   infra?: number;
   /** v0.10.2106 — ajan vakalarının sohbet yolu (eski koşu 'v1'). */
   path?: EvalRunPath;
+  /** v0.10.2110 — worker'ın günlük koşusu (started_by system:daily). */
+  daily?: boolean;
 }
 
 /** v0.10.2106 — evalset koşusunun sohbet yolu (ai_eval_runs.path). */

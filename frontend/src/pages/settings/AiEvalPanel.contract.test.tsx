@@ -395,3 +395,48 @@ describe('AiEvalPanel', () => {
     expect(api.aiEvalsetRun).not.toHaveBeenCalled();
   });
 });
+
+// v0.10.2110 (kalite döngüsü D5) — günlük koşu bölümü: düz cümle, eşik altı
+// rozeti ve trend; günlük koşu yokken boş değil, açıklayan cümle.
+describe('AiEvalPanel günlük koşu', () => {
+  const section = (el: HTMLElement) => el.querySelector('[data-evs-daily]')!;
+
+  it('günlük koşu yok → nasıl çalıştığını söyleyen cümle, rozet ve trend yok', async () => {
+    idle();
+    api.aiEvalsetCatalog.mockResolvedValue({ ...CATALOG, rubricThreshold: 0.8 });
+    const el = render(<AiEvalPanel />);
+    await tick();
+    const s = section(el);
+    expect(s.textContent).toContain('Henüz günlük koşu yok');
+    expect(s.querySelector('[data-slot=badge]')).toBeNull();
+    expect(s.querySelector('svg')).toBeNull();
+  });
+
+  it('son günlük koşu eşik altında → cümle + "Eşik altı" rozeti + trend', async () => {
+    idle();
+    api.aiEvalsetCatalog.mockResolvedValue({ ...CATALOG, rubricThreshold: 0.8 });
+    api.aiEvalsetRuns.mockResolvedValue({ runs: [
+      run('ev-d2', { daily: true, startedBy: 'system:daily', startedAt: '2026-11-14T02:15:00Z', pass: 20, fail: 9, rubricMean: 0.74 }),
+      run('ev-manual', { startedAt: '2026-11-13T12:00:00Z', rubricMean: 0.5 }),
+      run('ev-d1', { daily: true, startedBy: 'system:daily', startedAt: '2026-11-13T02:15:00Z', rubricMean: 0.86 }),
+    ] });
+    const el = render(<AiEvalPanel />);
+    await tick();
+    const s = section(el);
+    expect(s.textContent).toContain('20 / 29 vaka geçti, rubrik ortalaması 0,74, eşik 0,80 altında.');
+    expect(s.querySelector('[data-slot=badge]')?.textContent).toBe('Eşik altı');
+    expect(s.querySelector('svg')).not.toBeNull();
+    expect(el.textContent).toContain('son 2 bitmiş günlük koşu');
+  });
+
+  it('son günlük koşu eşiğin üstünde → rozet yok', async () => {
+    idle();
+    api.aiEvalsetCatalog.mockResolvedValue({ ...CATALOG, rubricThreshold: 0.8 });
+    api.aiEvalsetRuns.mockResolvedValue({ runs: [run('ev-d1', { daily: true, startedBy: 'system:daily', rubricMean: 0.86 })] });
+    const el = render(<AiEvalPanel />);
+    await tick();
+    const s = section(el);
+    expect(s.textContent).toContain('rubrik ortalaması 0,86 (eşik 0,80).');
+    expect(s.querySelector('[data-slot=badge]')).toBeNull();
+  });
+});

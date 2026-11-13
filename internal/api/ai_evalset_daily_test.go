@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cilcenk/coremetry/internal/ai/evalrubric"
 	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/copilot"
 	"github.com/cilcenk/coremetry/internal/cosrelearn"
@@ -158,5 +159,23 @@ func TestRunDailyEvalsetWorkerShutdownCancels(t *testing.T) {
 func TestRunDailyEvalsetBudgetIsThirtyMinutes(t *testing.T) {
 	if evalDailyBudget != 30*time.Minute {
 		t.Fatalf("günlük koşu tavanı %s, operatör kararı 30 dk", evalDailyBudget)
+	}
+}
+
+// TestEvalDailyPanelFields — v0.10.2110 (D5): panelin okuduğu iki alan.
+// Günlük işareti started_by'dan (cosrelearn sabiti), eşik evalrubric'ten —
+// FE ikisini de kopyalamaz.
+func TestEvalDailyPanelFields(t *testing.T) {
+	now := time.Now()
+	if !evalSummaryFromRow(chstore.EvalRun{StartedBy: cosrelearn.EvalsetDailyStartedBy}, now, false).Daily {
+		t.Fatal("system:daily satırı daily=false")
+	}
+	if evalSummaryFromRow(chstore.EvalRun{StartedBy: "admin@example.com"}, now, false).Daily {
+		t.Fatal("elle koşu daily=true")
+	}
+	h := newEvalHarness(t, false, evalTestCases())
+	cat, err := h.s.evalsetCatalog()
+	if err != nil || cat.RubricThreshold != evalrubric.Threshold || cat.RubricThreshold == 0 {
+		t.Fatalf("katalog eşiği %v (err %v), istenen %v", cat.RubricThreshold, err, evalrubric.Threshold)
 	}
 }

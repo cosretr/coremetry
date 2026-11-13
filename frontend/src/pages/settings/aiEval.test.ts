@@ -4,7 +4,7 @@ import {
   evalHref, expectLines, failingCases, fmtDurationMs, fmtRunTime, fmtSec1, fmtSigned2, fmtSignedInt,
   passDeltas, pickDefaultProfile, pickDefaultRunId, progressPct, progressText, routingHint, runElapsedMs,
   runStatusView, runToolsetView, selectionCaseCount, toggleSurface, toolsetLabel, withEvalParams,
-  agentMetaLine, caseBadgeLabel, fmtAvg1, fmtTokensK, tierLabel, trailRows,
+  agentMetaLine, caseBadgeLabel, dailyEvalView, fmtAvg1, fmtTokensK, tierLabel, trailRows,
 } from './aiEval';
 import type { EvalAgentTrail, EvalCaseResult, EvalCompare, EvalRunSummary, EvalsetCatalogSurface } from '@/lib/types';
 
@@ -351,5 +351,55 @@ describe('URL yardımcıları', () => {
   });
   it('sekmenin sahip olduğu parametreler (AiTab çıkışta siler)', () => {
     expect([...EVAL_URL_PARAMS]).toEqual(['run', 'case', 'cmp']);
+  });
+});
+
+// v0.10.2110 (kalite döngüsü D5) — günlük koşu özeti. Sessiz yanlışlar:
+// hiç puanlanmamış koşunun 0 ortalaması "eşik altı" sayılmaz; elle koşular
+// trende girmez; eşik bilinmiyorsa (eski sunucu) rozet yanmaz; trend
+// eskiden yeniye (liste yeniden eskiye gelse de).
+describe('dailyEvalView', () => {
+  const r = (id: string, over: Partial<EvalRunSummary> = {}): EvalRunSummary => ({
+    id, status: 'done', startedAt: '2026-11-14T02:15:00Z', updatedAt: '', finishedAt: '', startedBy: 'system:daily',
+    appVersion: '', promptVersion: '', model: '', profileId: '', surfaces: [], total: 10, done: 10, pass: 8, fail: 2,
+    skipped: 0, rubricMean: 0.85, error: '', bySurface: [], daily: true, ...over,
+  });
+
+  it('günlük koşu yok', () => {
+    const v = dailyEvalView([r('m', { daily: false })], 0.8);
+    expect(v.none).toBe(true);
+    expect(v.below).toBe(false);
+    expect(v.trend).toEqual([]);
+  });
+
+  it('trend eskiden yeniye, yalnız bitmiş + puanlanmış günlük koşular', () => {
+    const v = dailyEvalView([
+      r('d3', { startedAt: '2026-11-14T02:15:00Z', rubricMean: 0.7 }),
+      r('m', { daily: false, startedAt: '2026-11-13T12:00:00Z', rubricMean: 0.1 }),
+      r('d2', { startedAt: '2026-11-13T02:15:00Z', status: 'failed', rubricMean: 0.2 }),
+      r('d1', { startedAt: '2026-11-12T02:15:00Z', rubricMean: 0.9 }),
+      r('d0', { startedAt: '2026-11-11T02:15:00Z', pass: 0, fail: 0, skipped: 10, rubricMean: 0 }),
+    ], 0.8);
+    expect(v.trend).toEqual([0.9, 0.7]);
+    expect(v.last?.id).toBe('d3');
+    expect(v.below).toBe(true);
+  });
+
+  it('puanlanmamış son koşu eşik altı sayılmaz', () => {
+    const v = dailyEvalView([r('d', { pass: 0, fail: 0, skipped: 10, rubricMean: 0 })], 0.8);
+    expect(v.below).toBe(false);
+    expect(v.sentence).toContain('puanlanan vaka yok');
+  });
+
+  it('eşik tam sınırda alt sayılmaz; eşik yoksa rozet yok', () => {
+    expect(dailyEvalView([r('d', { rubricMean: 0.8 })], 0.8).below).toBe(false);
+    expect(dailyEvalView([r('d', { rubricMean: 0.1 })], undefined).below).toBe(false);
+  });
+
+  it('son günlük koşu başarısız/sürüyor → rozet yok, cümle durumu söyler', () => {
+    const f = dailyEvalView([r('d', { status: 'failed', error: 'koşu tavanı aşıldı (30 dk)', rubricMean: 0.1 })], 0.8);
+    expect(f.below).toBe(false);
+    expect(f.sentence).toContain('tamamlanmadı: koşu tavanı aşıldı (30 dk)');
+    expect(dailyEvalView([r('d', { status: 'running', done: 3 })], 0.8).sentence).toContain('sürüyor');
   });
 });

@@ -38,6 +38,7 @@ import (
 	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/copilot"
 	"github.com/cilcenk/coremetry/internal/copilot/evalset"
+	"github.com/cilcenk/coremetry/internal/cosrelearn"
 	"github.com/cilcenk/coremetry/internal/mcp"
 	"github.com/cilcenk/coremetry/internal/rca"
 )
@@ -809,6 +810,9 @@ type evalCatalog struct {
 	Surfaces []evalCatalogSurface `json:"surfaces"`
 	// AgentCases — v0.10.1316: kümedeki ajan kipi vaka sayısı.
 	AgentCases int `json:"agentCases"`
+	// RubricThreshold — v0.10.2110 (kalite döngüsü D5): evalrubric.Threshold;
+	// panelin "eşik altı" rozeti sabiti kopyalamasın.
+	RubricThreshold float64 `json:"rubricThreshold"`
 }
 
 type evalSurfaceSummary struct {
@@ -863,6 +867,9 @@ type evalRunSummary struct {
 	// Path — v0.10.2106 (kalite döngüsü D1): ajan vakalarının sohbet yolu
 	// (v1 | v2; eski koşu v1).
 	Path string `json:"path"`
+	// Daily — v0.10.2110 (kalite döngüsü D5): worker'ın günlük koşusu
+	// (started_by = cosrelearn.EvalsetDailyStartedBy); panel trendi bunlardan.
+	Daily bool `json:"daily"`
 }
 
 type evalCaseResult struct {
@@ -1141,8 +1148,9 @@ func evalSummaryFromRow(r chstore.EvalRun, now time.Time, ownedHere bool) evalRu
 		Total: int(r.Total), Done: int(r.Done), Pass: int(r.Pass), Fail: int(r.Fail), Skipped: int(r.Skipped),
 		RubricMean: r.RubricMean, Error: r.Error, BySurface: blob.BySurface,
 		Toolset: blob.Toolset, ToolsetPinned: blob.ToolsetPinned, // v0.10.1311
-		Infra: evalInfraTotal(blob.BySurface), // v0.10.1476
-		Path:  evalRunPath(r.Path),            // v0.10.2106
+		Infra: evalInfraTotal(blob.BySurface),                  // v0.10.1476
+		Path:  evalRunPath(r.Path),                             // v0.10.2106
+		Daily: r.StartedBy == cosrelearn.EvalsetDailyStartedBy, // v0.10.2110
 	}
 }
 
@@ -1392,7 +1400,8 @@ func (s *Server) evalsetCatalog() (evalCatalog, error) {
 	cat := evalCatalog{
 		Ready: s.copilotReady(), AppVersion: s.evalAppVersion(), PromptVersion: copilot.PromptVersion(),
 		DefaultProfileID: defaultPID, Toolset: s.evalRunToolset(cases, ""), Total: len(cases), Surfaces: []evalCatalogSurface{},
-		AgentCases: evalAgentCaseCount(cases), // v0.10.1316
+		AgentCases:      evalAgentCaseCount(cases), // v0.10.1316
+		RubricThreshold: evalrubric.Threshold,      // v0.10.2110
 	}
 	for _, sc := range evalSurfaceCounts(cases) {
 		id, label, provider, model, base := s.evalProfileFor(sc.Surface)

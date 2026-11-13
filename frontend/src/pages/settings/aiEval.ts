@@ -459,3 +459,65 @@ export function compareSummary(cmp: EvalCompare): string {
   if (onlyHead) parts.push(`yalnız seçilide ${onlyHead} vaka`);
   return parts.join(' · ');
 }
+
+/** v0.10.2110 (kalite döngüsü D5) — günlük koşu özeti. Kaynak koşu listesi
+ *  (son 20; elle koşular da orada) — yeni uç yok. */
+export interface DailyEvalView {
+  /** Listede günlük koşu yok. */
+  none: boolean;
+  /** En yeni günlük koşu (durumu ne olursa olsun). */
+  last: EvalRunSummary | null;
+  /** Bitmiş ve en az bir vakası puanlanmış günlük koşuların rubrik
+   *  ortalaması, eskiden yeniye (sparkline). */
+  trend: number[];
+  /** En yeni günlük koşu bitmiş, puanlanmış ve rubrik ortalaması eşiğin altında. */
+  below: boolean;
+  /** Önce düz cümle (detay sayfaları sade). */
+  sentence: string;
+}
+
+/** Puanlanan vaka var mı: rubrik ortalaması hiç puanlanmamışken 0 (tip
+ *  sözleşmesi) — o 0 "eşik altı" sayılmaz, trende girmez. */
+const scored = (r: EvalRunSummary): boolean => r.pass + r.fail > 0;
+
+/** v0.10.2110 — SAF: günlük koşuların görünümü. threshold yoksa (eski
+ *  sunucu) rozet hiç yanmaz. */
+export function dailyEvalView(runs: readonly EvalRunSummary[], threshold?: number): DailyEvalView {
+  const daily = runs.filter(r => r.daily).slice().sort((a, b) => Date.parse(a.startedAt) - Date.parse(b.startedAt));
+  const last = daily.length ? daily[daily.length - 1] : null;
+  const trend = daily.filter(r => r.status === 'done' && scored(r)).map(r => r.rubricMean);
+  if (!last) {
+    return {
+      none: true, last: null, trend, below: false,
+      sentence: 'Henüz günlük koşu yok. Worker her gün 02:00 UTC’den sonra gömülü vakaları bir kez koşar; '
+        + 'model profilleri yerel (self-hosted) işaretli değilse koşmaz.',
+    };
+  }
+  const when = fmtRunTime(last.startedAt);
+  const thr = typeof threshold === 'number' && Number.isFinite(threshold) ? threshold : null;
+  let below = false;
+  let sentence: string;
+  switch (last.status) {
+    case 'running':
+      sentence = `Günlük koşu sürüyor (başlangıç ${when}, ${last.done} / ${last.total} vaka).`;
+      break;
+    case 'done':
+      if (!scored(last)) {
+        sentence = `Son günlük koşu ${when}: puanlanan vaka yok (${last.skipped} vaka atlandı).`;
+        break;
+      }
+      below = thr !== null && last.rubricMean < thr;
+      sentence = `Son günlük koşu ${when}: ${last.pass} / ${last.total} vaka geçti, rubrik ortalaması ${fmtDec2(last.rubricMean)}`
+        + (thr === null ? '.' : below ? `, eşik ${fmtDec2(thr)} altında.` : ` (eşik ${fmtDec2(thr)}).`);
+      break;
+    case 'failed':
+      sentence = `Son günlük koşu ${when} tamamlanmadı${last.error ? `: ${last.error}` : '.'}`;
+      break;
+    case 'cancelled':
+      sentence = `Son günlük koşu ${when} durduruldu (${last.done} / ${last.total} vaka).`;
+      break;
+    default:
+      sentence = `Son günlük koşu ${when} yarım kaldı (${last.done} / ${last.total} vaka).`;
+  }
+  return { none: false, last, trend, below, sentence };
+}

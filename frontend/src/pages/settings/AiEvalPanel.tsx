@@ -33,11 +33,12 @@ import { KeyValue } from '@/components/coremetry/KeyValue';
 import { SectionHead } from '@/components/coremetry/SectionHead';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/coremetry/overlay';
 import { DataTable, type ColumnDef, type DataTableStateInput } from '@/components/coremetry/DataTable';
+import { Sparkline } from '@/components/Sparkline';
 import { useEvalsetCatalog, useEvalRuns, useEvalRun, useEvalCompare, useStartEvalRun, useCancelEvalRun } from '@/lib/queries';
 import type { AIToolset, EvalCaseResult, EvalCompare, EvalRunSummary, EvalSurfaceSummary } from '@/lib/types';
 import { FlashBox, humanize } from './shared';
 import {
-  activeRun, agentMetaLine, caseBadgeLabel, caseReason, compareCandidates, compareGroups, compareSummary, evalHref, expectLines, failingCases,
+  activeRun, agentMetaLine, dailyEvalView, caseBadgeLabel, caseReason, compareCandidates, compareGroups, compareSummary, evalHref, expectLines, failingCases,
   fmtAvg1, fmtDec2, fmtRunTime, fmtSec1, fmtSignedInt, fmtTokensK, isFinished, passDeltas, pickDefaultProfile, pickDefaultRunId,
   progressPct, progressText, routingHint, RUN_STATUS_VIEW, runStatusView, runToolsetView, selectionCaseCount, toggleSurface, toolsetLabel,
   trailRows, withEvalParams,
@@ -122,6 +123,8 @@ export function AiEvalPanel() {
   const surfaces = useMemo(() => catalog?.surfaces ?? [], [catalog]);
   const runs = useMemo(() => runsQ.data ?? [], [runsQ.data]);
   const active = activeRun(runs);
+  // v0.10.2110 (kalite döngüsü D5) — günlük koşu: düz cümle + trend + eşik altı rozeti.
+  const daily = useMemo(() => dailyEvalView(runs, catalog?.rubricThreshold), [runs, catalog?.rubricThreshold]);
 
   const runParam = searchParams.get('run');
   const caseParam = searchParams.get('case');
@@ -342,6 +345,25 @@ export function AiEvalPanel() {
         <div className="mt-2.5 border-t border-(--divider) pt-2 text-[length:var(--fs-xs)] text-(--text3)">
           <Link to="/ai?source=evalset">Bu koşuların çağrıları /ai'da, Kaynak: Değerlendirme</Link>
         </div>
+      </div>
+
+      {/* v0.10.2110 (kalite döngüsü D5) — günlük koşu özeti; vida yok. Önce düz
+          cümle, sonra rubrik trendi (yalnız ≥2 bitmiş günlük koşuda). */}
+      <SectionHead title="Günlük koşu" meta={daily.trend.length ? `son ${daily.trend.length} bitmiş günlük koşu` : undefined} />
+      <div data-evs-daily="" className="flex flex-wrap items-center gap-3 text-[length:var(--fs-sm)] leading-normal">
+        {runsQ.isPending ? <Spinner label="Koşular yükleniyor" />
+          : runsQ.isError ? <span className="text-(--text2)">Koşu listesi okunamadı — aşağıdaki tabloda yeniden dene.</span>
+          : (
+            <>
+              <span className="text-(--text2)">{daily.sentence}</span>
+              {daily.below && <StatusBadge status="warn" title="Son günlük koşunun rubrik ortalaması eşiğin altında">Eşik altı</StatusBadge>}
+              {daily.trend.length >= 2 && (
+                <Sparkline values={daily.trend} width={160} height={28} domainMax={1}
+                  threshold={catalog?.rubricThreshold} thresholdComparator="<"
+                  title="Rubrik ortalaması, günlük koşular (eskiden yeniye)" />
+              )}
+            </>
+          )}
       </div>
 
       <SectionHead title={`${runParam ? 'Seçili koşu' : 'Son koşu'} · yüzey özeti`}
