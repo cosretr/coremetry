@@ -11,7 +11,7 @@
 // uiStreamFixture.test.ts (paylaşılan testdata/cosre/*.sse) kırmızıya döner;
 // fixture yenilendiği commit'te bu dosya da güncellenir.
 
-import type { CosreApproval, CosreEndpointPick, CosreEndpointPickItem, CosreLinkCard, CosreScope, CosreScopeReason, CosreStop, CosreStopReason, CosreToolResult, CosreToolResultKind } from '@/lib/types';
+import type { CosreApproval, CosreEndpointPick, CosreEndpointPickItem, CosreLinkCard, CosreQuestion, CosreQuestionKind, CosreScope, CosreScopeReason, CosreStop, CosreStopReason, CosreToolResult, CosreToolResultKind } from '@/lib/types';
 
 export const PROTOCOL_VERSION = 'v1';
 export const PROTOCOL_HEADER = 'x-vercel-ai-ui-message-stream';
@@ -185,6 +185,28 @@ export function parseDataReset(p: UIStreamPart): DataResetPart | null {
   const textId = (d as { textId?: unknown }).textId;
   if (keys.length !== 1 || typeof textId !== 'string' || textId === '') return null;
   return { type: 'data-reset', data: { textId }, transient: true };
+}
+
+/** v0.10.2102 — data-question kind kapalı kümesi (Go uistream.QuestionKinds). */
+export const QUESTION_KINDS = ['source', 'doc_or_entity', 'trace_synth'] as const satisfies readonly CosreQuestionKind[];
+/** v0.10.2102 — seçenek tavanı (Go uistream.QuestionMaxOptions). */
+export const QUESTION_MAX_OPTIONS = 3;
+
+/** v0.10.2102 — data-question → CosreQuestion; bilinmeyen kind, boş metin,
+ *  0 ya da >3 seçenek, biçimsiz / yinelenen seçenek null (kart çizilmez; düz
+ *  metin soru balonda zaten var). */
+export function parseDataQuestion(p: { type: string; data?: unknown }): CosreQuestion | null {
+  if (p.type !== 'data-question' || !isRecord(p.data)) return null;
+  const { kind, text, options, allowFree } = p.data;
+  if (!(QUESTION_KINDS as readonly unknown[]).includes(kind) || typeof text !== 'string' || !text || !Array.isArray(options)) return null;
+  if (options.length === 0 || options.length > QUESTION_MAX_OPTIONS) return null;
+  const out: CosreQuestion['options'] = [];
+  for (const o of options) {
+    if (!isRecord(o) || typeof o.id !== 'string' || !o.id || typeof o.label !== 'string' || !o.label) return null;
+    if (out.some(x => x.id === o.id)) return null;
+    out.push({ id: o.id, label: o.label });
+  }
+  return { kind: kind as CosreQuestionKind, text, options: out, allowFree: allowFree === true };
 }
 
 /** v0.10.2101 — kart linkinin üst sınırı (api summaryCardMaxLinks). */

@@ -75,6 +75,7 @@ import { CosreTeamScopeChip, CosreWelcomeV2 } from './CosreWelcomeV2';
 import { useCosreTeamScope } from './useCosreTeamScope';
 import { withTeamPick, type TeamPickResend } from './teamPick';
 import { endpointInspectText, withEndpointInspect, withEndpointSummarize } from './endpointPick';
+import { withClarifyOption } from './question';
 import { briefingView } from './briefingView';
 import type { BriefingLineRef } from './BriefingFeed';
 import { Button } from '@/components/shadcn/button';
@@ -232,6 +233,13 @@ export function CosreChatV2({ defaultOpen = false, variant = 'sheet' }: CosreCha
       pinBottom();
       void regenerate({ body: { context } });
     },
+  };
+  // v0.10.2102 (D2) — soru kartı: seçeneğin etiketi yeni kullanıcı mesajı +
+  // context.clarifyOption (sunucu bekleyen soruya birebir eşler).
+  const answerQuestion = (o: { id: string; label: string }) => {
+    if (live.current.busy) return;
+    pinBottom();
+    send(o.label, undefined, b => withClarifyOption(b, o.id));
   };
   const sendRef = useRef(send);
   sendRef.current = send;
@@ -416,7 +424,7 @@ export function CosreChatV2({ defaultOpen = false, variant = 'sheet' }: CosreCha
             ) : (
               <MessageList messages={messages} visibleParts={visibleParts} status={status} error={error}
                 onAsk={askChip} onRetry={retry} onApproval={approve} teamPick={teamPick} endpointPick={endpointPick}
-                compactSteps={isPage || undefined} />
+                compactSteps={isPage || undefined} onQuestion={answerQuestion} />
             )}
           </div>
         </div>

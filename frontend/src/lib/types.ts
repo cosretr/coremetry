@@ -8725,6 +8725,18 @@ export interface CosreEndpointPick {
   items: CosreEndpointPickItem[];
 }
 
+/** v0.10.2102 — data-question kind kapalı kümesi (Go uistream.QuestionKinds). */
+export type CosreQuestionKind = 'source' | 'doc_or_entity' | 'trace_synth';
+
+/** v0.10.2102 — CoSRE v2 kapalı netleştirme sorusu (data-question; api chat_question.go).
+ *  text = akıştaki düz metin sorunun aynısı; options ≤3, id = sunucunun cevap sınıfı. */
+export interface CosreQuestion {
+  kind: CosreQuestionKind;
+  text: string;
+  options: { id: string; label: string }[];
+  allowFree: boolean;
+}
+
 /** v0.10.2101 — CoSRE v2 kısa özet + link kartı: data-links'in opsiyonel
  *  title/summary alanları (api chat_summary_card.go, deterministik; ≤3 iç link). */
 export interface CosreLinkCard {

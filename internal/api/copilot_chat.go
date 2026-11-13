@@ -198,6 +198,9 @@ type chatRequest struct {
 		// SkipEndpointPick (v0.10.1737, chat_endpoint_pick.go) — v2 "Endpoint
 		// seç" kartının "Hepsini özetle"si: kart atlanır, bugünkü servis özeti.
 		SkipEndpointPick bool `json:"skipEndpointPick,omitempty"`
+		// ClarifyOption (v0.10.2102, chat_question.go) — v2 soru kartının tıkı:
+		// bekleyen netleştirme sorusuna birebir eşlenir; yoksa metin yolu.
+		ClarifyOption string `json:"clarifyOption,omitempty"`
 	} `json:"context,omitempty"`
 	// Approvals — agent-core S5 (chat_approval_resume.go): v2 onay kartının
 	// cevabı; dolu istek onay bekleyen alışverişin DEVAMIDIR (kademeler atlanır,
@@ -485,7 +488,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// metni cevap olarak yorumlanır; özgün soru seçilen kaynakta yeniden koşar.
 	// Bekleyen soru yoksa / cevap tanınmazsa ctx ve mesajlar AYNEN.
 	if evm == nil && !apCont.on {
-		cr := s.chatClarifyReplyTier(ctx, emit, req.Messages, cst, chatLocationNamed(req.Context.Tz, req.Context.TzOffsetMin))
+		cr := s.chatClarifyReplyTier(ctx, emit, req.Messages, cst, chatLocationNamed(req.Context.Tz, req.Context.TzOffsetMin), req.Context.ClarifyOption)
 		ctx, req.Messages = cr.ctx, cr.msgs
 		if cr.handled {
 			switch cr.tier { // literal adlar: ai_surface_registry_test kayıtlı kademeyi denetler

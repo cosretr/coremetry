@@ -1,5 +1,7 @@
 package api
 
+import "context"
+
 // chat_question.go — v0.10.2100 (docs/cosre/experience-audit.md D1): kapalı
 // netleştirme sorusunun tel sözleşmesi. `question` olayı v2'de data-question
 // parçasına çevrilir (uistream translator), v1 yazıcısı düşürür
@@ -24,4 +26,56 @@ type questionPayload struct {
 	Text      string           `json:"text"`
 	Options   []questionOption `json:"options"`
 	AllowFree bool             `json:"allowFree"`
+}
+
+// clarifyQuestion — SAF (v0.10.2102, D2): bekleyen soru türünün kartı. text
+// bugünkü düz metin sorunun TA KENDİSİ (akışta da aynen kalır). Seçenek
+// kimliği = cevap sınıfı (clarifyReplyClass'ın döndürdüğü değer); etiket
+// serbest metin olarak yazılsa da aynı sınıfa düşer (test pinler).
+func clarifyQuestion(kind, text string) (questionPayload, bool) {
+	if text == "" {
+		return questionPayload{}, false
+	}
+	opts := clarifyQuestionOptions(kind)
+	if len(opts) == 0 {
+		return questionPayload{}, false
+	}
+	return questionPayload{Kind: kind, Text: text, Options: opts, AllowFree: true}, true
+}
+
+// clarifyQuestionOptions — SAF: türün kapalı cevap kümesi (≤ uistream.QuestionMaxOptions).
+func clarifyQuestionOptions(kind string) []questionOption {
+	switch kind {
+	case pendingKindSource:
+		return []questionOption{
+			{ID: sourceReplyTelemetry, Label: "Coremetry verisi"},
+			{ID: sourceReplyWiki, Label: "Wiki dokümanları"},
+		}
+	}
+	return nil
+}
+
+// clarifyOptionClass — SAF: kartın gönderdiği seçenek kimliği bekleyen sorunun
+// kümesindeyse o sınıf (birebir eşleme); değilse false → serbest metin yolu.
+func clarifyOptionClass(p *chatPendingAsk, option string) (string, bool) {
+	if p == nil || option == "" {
+		return "", false
+	}
+	for _, o := range clarifyQuestionOptions(p.Kind) {
+		if o.ID == option {
+			return o.ID, true
+		}
+	}
+	return "", false
+}
+
+// emitClarifyQuestion — v2 isteğinde kartı yayar (v1 yazıcısı zaten düşürür;
+// kapı ikinci emniyet). Düz metin soru bundan ÖNCE answer olarak gitmiş olmalı.
+func emitClarifyQuestion(ctx context.Context, emit func(string, any), kind, text string) {
+	if !cosreV2Marked(ctx) {
+		return
+	}
+	if q, ok := clarifyQuestion(kind, text); ok {
+		emit(chatQuestionEventKind, q)
+	}
 }

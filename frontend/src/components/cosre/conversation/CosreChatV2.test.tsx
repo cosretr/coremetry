@@ -539,6 +539,37 @@ describe('CosreChatV2 × v1 paylaşılan karşılama + composer (plan §10)', ()
     return c;
   });
 
+  // v0.10.2102 (D2) — soru kartı: data-question → ≤3 düğme; tık seçeneğin
+  // etiketini yeni turda clarifyOption ile gönderir; sonra kart pasif + seçili.
+  const QUESTION = JSON.stringify({ kind: 'source', text: 'Coremetry mi wiki mi?', allowFree: true, options: [
+    { id: 'telemetri', label: 'Coremetry verisi' }, { id: 'wiki', label: 'Wiki dokümanları' },
+  ] });
+  const withQuestion = () => cosreFixture('ui-stream-v1').replace(
+    `"id":"scope","type":"data-scope"}`, `"id":"scope","type":"data-scope"}\n\ndata: {"data":${QUESTION},"id":"question","type":"data-question"}`);
+
+  it('Soru kartı: tık → etiket yeni turda context.clarifyOption ile; eski kart pasif ve seçili', async () => {
+    v2Body = withQuestion();
+    await render({ defaultOpen: true }, '/');
+    await typeAndSend('servis sahipliği kimde');
+    const card = await vi.waitFor(() => {
+      const c = sheet()!.querySelector<HTMLElement>('[data-cosre-question]');
+      if (!c) throw new Error('kart yok');
+      return c;
+    });
+    expect(card.querySelectorAll('[data-question-option]')).toHaveLength(2);
+    v2Body = cosreFixture('ui-stream-v1').replace('01M62F9N000000000000000000', '01M62F9N000000000000000001');
+    await act(async () => { btnIn(card, '[data-question-option="wiki"]').click(); });
+    await vi.waitFor(() => expect(calls).toHaveLength(2));
+    expect(calls[1].body.context).toMatchObject({ clarifyOption: 'wiki' });
+    expect(JSON.stringify(calls[1].body.messages)).toContain('Wiki dokümanları');
+    await vi.waitFor(() => {
+      const old = sheet()!.querySelector<HTMLElement>('[data-question-option="wiki"]');
+      if (!old || !old.hasAttribute('disabled')) throw new Error('kart pasifleşmedi');
+      expect(old.getAttribute('aria-pressed')).toBe('true');
+    });
+    expect(sheet()!.querySelector('[data-question-option="telemetri"]')!.getAttribute('aria-pressed')).toBe('false');
+  });
+
   it('Endpoint seç: kart data-pick yükünden çizilir (4 satır, sütunlar, +N daha, yalnız sapan renkli)', async () => {
     const eps = vi.spyOn(api, 'endpoints');
     v2Body = withPick();

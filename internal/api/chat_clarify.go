@@ -226,6 +226,7 @@ func (s *Server) chatSourceAskTier(ctx context.Context, emit func(string, any), 
 	cst.setPending(&chatPendingAsk{Kind: pendingKindSource, Question: clipRunes(q, chatPendingQuestionMax), AskedAt: time.Now().UnixNano()})
 	chatExchangeFrom(ctx).noteRoute("source_ask")
 	emit("answer", map[string]any{"text": sourceAskTextTR, "sources": []any{}, "links": []guidedAnswerLink{}, "allowedLinks": []string{}})
+	emitClarifyQuestion(ctx, emit, pendingKindSource, sourceAskTextTR) // v0.10.2102 (D2) — yalnız v2 kartı
 	return true
 }
 
@@ -245,14 +246,23 @@ func withForcedChatSource(ctx context.Context, kind string) context.Context {
 
 // chatClarifyReplyTier — bekleyen soru varsa bu turun metnini cevap olarak
 // yorumlar. Bekleyen soru yoksa ctx / msgs aynen döner.
-func (s *Server) chatClarifyReplyTier(ctx context.Context, emit func(string, any), msgs []copilot.ChatMessage, cst *chatContextState, loc *time.Location) clarifyReply {
+//
+// v0.10.2102 (D2) — option: v2 soru kartının tıkı (context.clarifyOption);
+// bekleyen sorunun kümesindeyse BİREBİR o sınıf, değilse metin yolu aynen.
+func (s *Server) chatClarifyReplyTier(ctx context.Context, emit func(string, any), msgs []copilot.ChatMessage, cst *chatContextState, loc *time.Location, option string) clarifyReply {
 	out := clarifyReply{ctx: ctx, msgs: msgs}
 	p, ok := cst.takePending(time.Now())
 	if !ok {
 		return out
 	}
 	reply := lastUserText(msgs)
-	class := clarifyReplyClass(p, reply)
+	class, picked := "", false
+	if cosreV2Marked(ctx) { // v1'e yeni davranış yok: seçenek yalnız v2 ucunda okunur
+		class, picked = clarifyOptionClass(p, option)
+	}
+	if !picked {
+		class = clarifyReplyClass(p, reply)
+	}
 	args, _ := json.Marshal(map[string]string{"kind": p.Kind, "reply": class})
 	if class == clarifyReplyDropped {
 		// v0.10.1575 — düşen soru EKRANDA adım çizmez ("Nasıl cevapladım"da

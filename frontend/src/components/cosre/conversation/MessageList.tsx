@@ -21,6 +21,8 @@
 //     Reddet); yalnız son mesaj ve akış yokken cevaplanır.
 //   • v0.10.2101 (experience-audit D4): data-links title/summary taşıyorsa
 //     balonun altında SummaryLinkCard; o linkler balonda çip olarak çizilmez.
+//   • v0.10.2102 (D2): data-question → balonun altında QuestionCard; son, bitmiş
+//     cevapta etkin, sonraki turdan sonra pasif + seçilen işaretli.
 //   • Bilinmeyen parça çizilmez (çökmez).
 // Sunumsal: Chat örneği yok (katalog ve testler statik mesajla da çizer).
 import { useMemo } from 'react';
@@ -34,7 +36,7 @@ import { Button } from '@/components/shadcn/button';
 import { chatErrorText } from '@/components/ai/chatErrorText';
 import { toChatTurn, userTurn } from '@/lib/cosre/toChatTurn';
 import type { CosreUIMessage } from '@/lib/cosre/resetReducer';
-import type { ChatExplainAsk, ChatTurn, CosreApprovalAnswer, CosreEndpointPick } from '@/lib/types';
+import type { ChatExplainAsk, ChatTurn, CosreApprovalAnswer, CosreEndpointPick, CosreQuestion } from '@/lib/types';
 import { approvalAnswer, approvalViews } from '@/lib/cosre/approval';
 import { ApprovalCard } from './ApprovalCard';
 import { StepList, scopeChangeNotes, scopeOf, stepsView, stopBadges } from '../evidence';
@@ -43,6 +45,8 @@ import { showTeamPick } from './teamPick';
 import { EndpointPickCard } from './EndpointPickCard';
 import { pickOf, showEndpointPick } from './endpointPick';
 import { SummaryLinkCard } from './SummaryLinkCard';
+import { QuestionCard } from './QuestionCard';
+import { chosenOption, questionOf } from './question';
 import { bubbleTurnForCard, linkCardOf } from './linkCard';
 
 /** useChat durumu (ai ChatStatus ile aynı küme; tip importu katalogdan bağımsız). */
@@ -68,9 +72,11 @@ export interface MessageListProps {
   endpointPick?: { onInspect(pick: CosreEndpointPick, route: string): void; onSummarize(): void };
   /** v0.10.1787 — /cosre v2 tam sayfası: adımlar katlı tek satır (StepList compact). Sheet vermez. */
   compactSteps?: boolean;
+  /** v0.10.2102 — netleştirme sorusu kartının tıkı (son cevap, akış yokken). Yoksa kart pasif. */
+  onQuestion?: (option: CosreQuestion['options'][number]) => void;
 }
 
-export function MessageList({ messages, visibleParts, status, error, onAsk, onRetry, onApproval, teamPick, endpointPick, compactSteps }: MessageListProps) {
+export function MessageList({ messages, visibleParts, status, error, onAsk, onRetry, onApproval, teamPick, endpointPick, compactSteps, onQuestion }: MessageListProps) {
   const busy = status === 'submitted' || status === 'streaming';
   const last = messages.at(-1);
   const errText = status === 'error' && error ? error.message : undefined;
@@ -83,11 +89,13 @@ export function MessageList({ messages, visibleParts, status, error, onAsk, onRe
         if (m.role !== 'assistant') return null;
         const isLast = i === messages.length - 1;
         const prev = messages[i - 1];
+        const next = messages[i + 1];
         return <AssistantMessage key={m.id} m={m} visibleParts={visibleParts} live={isLast && busy} error={isLast ? errText : undefined}
           explainAsk={prev?.role === 'user' ? prev.metadata?.explainAsk : undefined} scopeNote={scopeNotes.get(m.id)}
           followups={isLast && status === 'ready' ? onAsk : undefined} onRetry={isLast && errText ? onRetry : undefined}
           onApproval={isLast && !busy ? onApproval : undefined} teamPick={isLast && !busy ? teamPick : undefined}
-          endpointPick={isLast && !busy ? endpointPick : undefined} compactSteps={compactSteps} />;
+          endpointPick={isLast && !busy ? endpointPick : undefined} compactSteps={compactSteps}
+          onQuestion={isLast && !busy ? onQuestion : undefined} nextUserText={next?.role === 'user' ? userTurn(next).text : undefined} />;
       })}
       {/* İlk parça gelmeden (yalnız soru gitti): v1 bekleyiş göstergesi. */}
       {busy && last?.role !== 'assistant' && (last?.metadata?.explainAsk
@@ -106,7 +114,7 @@ function UserMessage({ m }: { m: CosreUIMessage }) {
   return <ChatBubble turn={turn} />;
 }
 
-function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, explainAsk, onApproval, scopeNote, teamPick, endpointPick, compactSteps }: {
+function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, explainAsk, onApproval, scopeNote, teamPick, endpointPick, compactSteps, onQuestion, nextUserText }: {
   m: CosreUIMessage; visibleParts: (m: CosreUIMessage) => Part[]; live: boolean; error?: string;
   /** araç seti dilim 5 — kapsam değişimi notu (önceki cevaptan farklıysa). */
   scopeNote?: string;
@@ -120,10 +128,14 @@ function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, ex
   teamPick?: MessageListProps['teamPick'];
   endpointPick?: MessageListProps['endpointPick'];
   compactSteps?: boolean;
+  onQuestion?: MessageListProps['onQuestion'];
+  /** v0.10.2102 — sonraki kullanıcı mesajının metni (pasif soru kartının seçimi). */
+  nextUserText?: string;
 }) {
   const approvals = useMemo(() => approvalViews(m), [m]);
   const epPick = useMemo(() => pickOf(m.parts), [m.parts]); // v0.10.1737
   const linkCard = useMemo(() => linkCardOf(m.parts), [m.parts]); // v0.10.2101
+  const question = useMemo(() => questionOf(m.parts), [m.parts]); // v0.10.2102
   // araç seti dilim 5 (G4) — adım kartları cevabın ÜSTÜNDE (data-tool-result / data-stop).
   const steps = useMemo(() => stepsView(visibleParts(m)), [m, visibleParts]);
   // SDK akışta son mesajı her parçada yeni nesneyle değiştirir; bitmiş
@@ -151,6 +163,9 @@ function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, ex
         <ChatBubble turn={bubbleTurn} onRetry={onRetry} shownFollowups={showFu ? turn.followups : undefined} />
       </ChatBubbleSlotsContext.Provider>
       {showCard && linkCard && <SummaryLinkCard card={linkCard} />}
+      {question && !live && !turn.error && (
+        <QuestionCard question={question} onAnswer={onQuestion} chosen={chosenOption(question, nextUserText)} />
+      )}
       {approvals.map(v => (
         <ApprovalCard key={v.approval.toolCallId} view={v} disabled={!onApproval}
           onAnswer={onApproval ? ok => onApproval(approvalAnswer(v, ok)) : undefined} />
