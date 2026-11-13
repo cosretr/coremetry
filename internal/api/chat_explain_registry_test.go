@@ -108,7 +108,7 @@ func (xrStore) QuerySpanMetricMulti(context.Context, chstore.SpanMetricBatchFilt
 	s := []chstore.SpanMetricSeries{{GroupKey: []string{"GET /orders"}, Points: []chstore.SpanMetricPoint{{Value: 1}, {Value: 3}}}}
 	return map[string][]chstore.SpanMetricSeries{"rate": s, "error_rate": s, "p99": s}, 0, nil
 }
-func (xrStore) ListAnomalyEvents(context.Context, chstore.ListAnomalyEventsFilter) ([]chstore.AnomalyEvent, error) {
+func (xrStore) ListAnomalyFeed(context.Context, chstore.ListAnomalyEventsFilter) ([]chstore.AnomalyEvent, error) {
 	return []chstore.AnomalyEvent{{ID: xrAnomalyID, Kind: "log_pattern", Pattern: "connection reset", Service: "orders-api",
 		PeakRatio: 6.5, Status: "active", StartedAt: xrT0.UnixNano()}}, nil
 }

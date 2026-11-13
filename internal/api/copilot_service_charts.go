@@ -192,7 +192,7 @@ func (s *Server) buildServiceChartsInput(
 
 	// Anomaliler — pencerede BAŞLAYANLAR (FromNs/ToNs, v0.9.394 şeridiyle
 	// aynı sözleşme). Services STRICT IN: servissiz satır eşleşmez.
-	if evs, err := rd.ListAnomalyEvents(ctx, chstore.ListAnomalyEventsFilter{
+	if evs, err := rd.ListAnomalyFeed(ctx, chstore.ListAnomalyEventsFilter{ // v0.10.2081 — ML olayları da
 		Services: []string{service},
 		FromNs:   from.UnixNano(), ToNs: to.UnixNano(),
 		Limit: 5,

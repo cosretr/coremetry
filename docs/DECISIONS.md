@@ -13688,3 +13688,20 @@ eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
   susturma yok. Sayaçlar (activeTotal/clearedTotal) listeyle aynı kümeyi sayar. Anahtar `anomaly:events:v3`;
   ML kararı yazımı bu öneki de düşürür. Ek maliyet: istek başına bir ML okuması (LIMIT, max_execution_time 5),
   30 sn önbellek; ES çağrısı yok.
+
+## 2026-11-13 — v0.10.2081 — Anomali okuyucu taşıması 2: CoSRE, MCP, Copilot, Insight, zaman şeridi ML olaylarını da okur
+
+- Aynı erişici (`chstore.ListAnomalyFeed`, v0.10.2080): CoSRE Context Pack anomali adımı (özne + komşular),
+  MCP `list_anomalies` aracı + `coremetry://anomalies/recent` kaynağı (açıklama zaten "ML detectors" diyordu;
+  şema değişmedi, katalog altını değişmedi), Copilot vardiya özeti, servis grafik açıklaması, Problem Insight
+  kartı, zaman şeridi (annotation) anomalileri. ML satırı aynı şekil (kind `ml:<dedektör>`, oran = gözlenen /
+  taban); şeritte ML öğesinin hedefi ML olay sayfası (`event` + bağlantı; eski `/anomalies?event=` ML kimliğini
+  çözemez).
+- Ek maliyet: her okuma başına bir `ml_events FINAL` okuması (last_seen WHERE, LIMIT = çağıranın tavanı,
+  max_execution_time 5); yeni ES çağrısı yok. Önbellekli uçlar (Insight 30 sn, şerit 30 sn) aynı anahtarla.
+- (b) bilerek eski tabloda kalanlar: evaluator terfi / çözme / özne süpürmesi (`anomaly-auto:` yaşam döngüsü
+  eski satırın kimliğine bağlı; ML Problem'i grup yolundan), RCA çıpa + kanıt (`anomaly/rootcause_worker.go`,
+  `fusion.go` — hipotez anahtarı eski olay kimliği, ML Problem'i çıpa 2'den girer; paket `ml`'i içe alamaz),
+  dedektörlerin aktif-anahtar okumaları (`ListActiveAnomalyKeys`), kimlikle tekil okumalar (`GetAnomalyEvent`:
+  olay sayfası, kök neden, açıklama, Problem standardı), Cmd-K susturma paleti (eski susturmayı yazar; ML'de
+  susturma yok, karar var), sağlık kontrolü (zaten yalnız `ml_events`).

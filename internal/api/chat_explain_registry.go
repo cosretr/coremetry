@@ -172,7 +172,8 @@ type explainStore interface {
 	QuerySpanMetricMulti(ctx context.Context, f chstore.SpanMetricBatchFilter) (map[string][]chstore.SpanMetricSeries, int, error)
 	FindSimilarResolvedProblems(ctx context.Context, service, ruleID string, limit int) ([]chstore.Problem, error)
 	// v0.10.1407 — grafik kanıtı (buildServiceChartsInput).
-	ListAnomalyEvents(ctx context.Context, f chstore.ListAnomalyEventsFilter) ([]chstore.AnomalyEvent, error)
+	// v0.10.2081 — eski olaylar + ML olayları (chstore.ListAnomalyFeed).
+	ListAnomalyFeed(ctx context.Context, f chstore.ListAnomalyEventsFilter) ([]chstore.AnomalyEvent, error)
 	GetOperationSummaryCompared(ctx context.Context, service string, since time.Duration, from, to time.Time, normalized bool, env string) ([]chstore.OperationSummary, error)
 }
 

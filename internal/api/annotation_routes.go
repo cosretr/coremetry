@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -135,13 +136,10 @@ func (s *Server) getAnnotations(w http.ResponseWriter, r *http.Request) {
 			if service != "" {
 				f.Services = []string{service}
 			}
-			if evs, err := s.store.ListAnomalyEvents(ctx, f); err == nil {
+			// v0.10.2081 — ML olayları da (chstore.ListAnomalyFeed).
+			if evs, err := s.store.ListAnomalyFeed(ctx, f); err == nil {
 				for _, e := range evs {
-					its = append(its, AnnotationItem{
-						TS: e.StartedAt, Kind: "anomaly", Service: e.Service,
-						Title:      "◈ " + e.Kind + ": " + e.Pattern,
-						TargetType: "anomaly", TargetID: e.ID,
-					})
+					its = append(its, anomalyAnnotation(e))
 				}
 			}
 			results[2] = src{its}
@@ -185,4 +183,16 @@ func (s *Server) getAnnotations(w http.ResponseWriter, r *http.Request) {
 		}
 		return map[string]any{"items": items, "truncated": truncated}, nil
 	})
+}
+
+// anomalyAnnotation — SAF (v0.10.2081): anomali olayı → şerit öğesi. ML
+// olayı (kind "ml:<dedektör>") eski olay sayfasına çözülmez; hedefi ML olay
+// sayfası (event bağlantısı, FE AnnotationLane mevcut dalı).
+func anomalyAnnotation(e chstore.AnomalyEvent) AnnotationItem {
+	it := AnnotationItem{TS: e.StartedAt, Kind: "anomaly", Service: e.Service,
+		Title: "◈ " + e.Kind + ": " + e.Pattern, TargetType: "anomaly", TargetID: e.ID}
+	if chstore.IsMLAnomalyKind(e.Kind) {
+		it.TargetType, it.TargetID, it.Link = "event", "", "/anomalies/ml/"+url.PathEscape(e.ID)
+	}
+	return it
 }

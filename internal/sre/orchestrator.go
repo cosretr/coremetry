@@ -115,7 +115,7 @@ func readersFrom(d mcptools.Deps, n Narrator, c cache.Cache, now func() time.Tim
 	if st := d.Store; st != nil {
 		// v0.10.1494 — paket okuyucuları (hepsi okuma; MV-first ya da sınırlı).
 		r.redSpan = st.ServiceWindowRED
-		r.anomalies = st.ListAnomalyEvents
+		r.anomalies = st.ListAnomalyFeed // v0.10.2081 — ML olayları da (aynı satır şekli)
 		r.errorOps = st.TopErrorOperations
 		r.exceptions = st.GetExceptions
 		r.sensitivity = st.AnomalySensitivity

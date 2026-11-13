@@ -6,7 +6,9 @@ package sre
 // kenarlarından — topology_edges_5m, ≤5 servis düğümü).
 //
 // Okuma: anomaly_events (ListAnomalyEvents; Services STRICT IN, LIMIT'li, en
-// çok iki sorgu). Pencere: last_seen ≥ çıpa başı − 60 dk VE started_at < çıpa
+// çok iki sorgu). v0.10.2081 — chstore.ListAnomalyFeed: ML olayları da
+// (kind "ml:<dedektör>"; oran = gözlenen / taban), istek başına bir ek
+// ml_events okuması. Pencere: last_seen ≥ çıpa başı − 60 dk VE started_at < çıpa
 // sonu. Tabloda birleşik skor yok (behaviorScore kalıcı değil), sıra SAF
 // anomalyRank = tepe oranı × tazelik ağırlığı (çıpa sonuna göre). Not: satır
 // olayın BUGÜNKÜ durumudur (tepe sonraki gözlemleri de içerebilir) — tekrarda

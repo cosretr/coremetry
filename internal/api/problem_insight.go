@@ -174,7 +174,7 @@ func (s *Server) getProblemInsight(w http.ResponseWriter, r *http.Request) {
 		h, _ := s.store.GetHypothesis(ctx, "problem", prob.ID) // yoksa nil → hücre "—"
 		var events []chstore.AnomalyEvent
 		if prob.Service != "" {
-			events, _ = s.store.ListAnomalyEvents(ctx, chstore.ListAnomalyEventsFilter{
+			events, _ = s.store.ListAnomalyFeed(ctx, chstore.ListAnomalyEventsFilter{ // v0.10.2081 — ML olayları da
 				SinceNs: prob.StartedAt - int64(insightAnomalyLookback), Services: []string{prob.Service}, Limit: 100,
 			})
 		}

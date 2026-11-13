@@ -85,7 +85,7 @@ func (s *Server) guidedShiftSummaryBundle(ctx context.Context, emit func(string,
 	if service != "" {
 		svcFilter = []string{service}
 	}
-	evs, aerr := s.store.ListAnomalyEvents(ctx, chstore.ListAnomalyEventsFilter{
+	evs, aerr := s.store.ListAnomalyFeed(ctx, chstore.ListAnomalyEventsFilter{ // v0.10.2081 — ML olayları da
 		FromNs: from.UnixNano(), ToNs: to.UnixNano(), Limit: 50, Services: svcFilter,
 	})
 	atAnom := b.Len()

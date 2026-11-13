@@ -735,7 +735,8 @@ func registerResources(srv *mcp.Server, d Deps) {
 		MimeType:    "application/json",
 		Reader: func(ctx context.Context, _ string) (string, error) {
 			from, _ := rangeWindow(ctx, 3600)
-			rows, err := d.Store.ListAnomalyEvents(ctx, chstore.ListAnomalyEventsFilter{
+			// v0.10.2081 — ML olayları da (chstore.ListAnomalyFeed, kind "ml:<dedektör>").
+			rows, err := d.Store.ListAnomalyFeed(ctx, chstore.ListAnomalyEventsFilter{
 				SinceNs: from.UnixNano(),
 				Limit:   100,
 			})
@@ -1364,7 +1365,8 @@ func listAnomaliesTool(d Deps) mcp.Tool {
 			// eski yol filonun 4×'ini çekip Go'da süzüyordu (LIMIT'ten SONRA
 			// süzme sınıfı — boş sonuç "bu serviste yok" demek değildi).
 			es := resolveEnvMembers(ctx, d, a.Env)
-			rows, err := d.Store.ListAnomalyEvents(ctx, anomalyToolFilter(from.UnixNano(), lim, a.Service, es))
+			// v0.10.2081 — ML olayları da (chstore.ListAnomalyFeed; açıklama zaten "ML detectors" diyordu).
+			rows, err := d.Store.ListAnomalyFeed(ctx, anomalyToolFilter(from.UnixNano(), lim, a.Service, es))
 			if err != nil {
 				return nil, err
 			}
