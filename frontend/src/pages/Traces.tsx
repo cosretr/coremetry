@@ -1542,7 +1542,7 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
           ]} />
           {view === 'aggregate' && (
             <>
-              <span style={{ color: 'var(--text2)', fontSize: 12 }}>Group by:</span>
+              <span className="trl-groupby-l">Group by:</span>
               <select value={groupBy} onChange={e => setGroupBy(e.target.value as GroupBy)}>
                 {GROUP_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
@@ -1564,16 +1564,16 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
                   Post-aggregate (MV fast-path hızını korur); koşullar
                   AND'lenir, URL'de ?having= taşınır. */}
               {having.map((h, i) => (
-                <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                  <span style={{ color: 'var(--text3)', fontSize: 11, fontWeight: 700 }}>
+                <span key={i} className="trl-having">
+                  <span className="trl-having-l">
                     {i === 0 ? 'HAVING' : 'AND'}
                   </span>
-                  <select value={h.metric} style={{ fontSize: 12 }}
+                  <select value={h.metric} className="trl-fs12"
                     onChange={e => setHaving(p => p.map((x, j) =>
                       j === i ? { ...x, metric: e.target.value as HavingMetric } : x))}>
                     {HAVING_METRICS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
                   </select>
-                  <select value={h.op} style={{ fontSize: 12, width: 52 }}
+                  <select value={h.op} className="trl-fs12 trl-w52"
                     onChange={e => setHaving(p => p.map((x, j) =>
                       j === i ? { ...x, op: e.target.value as HavingOp } : x))}>
                     {HAVING_OPS.map(o => <option key={o} value={o}>{o}</option>)}
@@ -1581,7 +1581,7 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
                   <input type="number" value={Number.isFinite(h.value) ? h.value : 0}
                     onChange={e => setHaving(p => p.map((x, j) =>
                       j === i ? { ...x, value: Number(e.target.value) } : x))}
-                    style={{ width: 76, fontSize: 12 }} />
+                    className="trl-fs12 trl-w76" />
                   <Button variant="outline" size="xs" aria-label="Koşulu kaldır"
                     onClick={() => setHaving(p => p.filter((_, j) => j !== i))}>✕</Button>
                 </span>
@@ -1928,7 +1928,7 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
         {/* Aggregate view. v0.10.967 — tablo HER durumda; yükleniyor / hata /
             boş (anahtar önerisi düğmesiyle) tablonun içinde (aggState). */}
         {view === 'aggregate' && (
-          <div style={{ opacity: aggRefreshing ? 0.55 : 1, transition: 'opacity 120ms' }} aria-busy={aggRefreshing}>
+          <div className={aggRefreshing ? 'trl-busy is-busy' : 'trl-busy'} aria-busy={aggRefreshing}>
           <AggregateTable agg={agg ?? []} groupBy={groupBy} dt={aggDt} state={aggState}
             onDrill={(a) => {
               if (groupBy === 'service') { setFilter({ ...filter, service: a.groupKey }); setDraft({ ...draft, service: a.groupKey }); }
@@ -1964,7 +1964,7 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
 function renderTraceCell(id: string, t: TraceRow, visibleMax: number, k8s?: { clusters: EntityClusterInfo[]; range: TimeRange }, op = '', serviceScoped = false) {
   if (k8s && isTraceK8sCol(id)) {
     const v = t.extras?.[id] ?? '';
-    if (!v) return <span className="mono" style={{ color: 'var(--text3)' }}>—</span>;
+    if (!v) return <span className="mono trl-c3">—</span>;
     // v0.10.330 (operatör, prod): "pod ismi / cluster seçilebilir olmasına
     // gerek yok; çok satır olduğu için sayfada taşıyor". v0.10.143'ün
     // entity-sayfası çipi (a.sec: kutu + 5×14 px dolgu + 13 px) hücreyi
@@ -1996,7 +1996,7 @@ function renderTraceCell(id: string, t: TraceRow, visibleMax: number, k8s?: { cl
       // inline fontSize:11 was the only thing making these cells odd.
       // v0.10.1519 — http.status_code: durumsuz span (0 / boş) "—" + ipucu.
       const c = httpStatusCell(id, t.extras?.[id]);
-      return <span className="mono" style={{ color: c.missing ? 'var(--text3)' : 'var(--text2)' }} title={c.title}>{c.text}</span>;
+      return <span className={c.missing ? 'mono trl-c3' : 'mono trl-c2'} title={c.title}>{c.text}</span>;
     }
   }
 }
@@ -2039,7 +2039,7 @@ function AggregateTable({ agg, groupBy, dt, onDrill, state }: {
                   <td className="num">
                     {fmtNum(a.traceCount)}
                     {missingRaw > 0 && (
-                      <span className="badge b-warn" style={{ marginLeft: 6, fontSize: 10 }}
+                      <span className="badge b-warn trl-drill"
                         title={`${fmtNum(drillable)} of ${fmtNum(a.traceCount)} traces still have raw span data — older traces aged out of the raw retention window.`}>
                         {fmtNum(drillable)} drillable
                       </span>
@@ -2060,8 +2060,8 @@ function AggregateTable({ agg, groupBy, dt, onDrill, state }: {
       </div>
       {/* v0.10.967 — sayı satırı satırlardan türer: yalnız grup varken. */}
       {agg.length > 0 && (
-        <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text3)' }}>
-          {agg.length} groups · grouped by <b style={{ color: 'var(--accent2)' }}>{groupBy}</b> · sorted by <b>{dt.sort.id ?? 'count'}</b> {dt.sort.dir} · click a row to drill down
+        <div className="trl-aggfoot">
+          {agg.length} groups · grouped by <b className="trl-ca2">{groupBy}</b> · sorted by <b>{dt.sort.id ?? 'count'}</b> {dt.sort.dir} · click a row to drill down
         </div>
       )}
     </>
@@ -2117,7 +2117,7 @@ export default function TracesPage() {
 // aynı satırla basılır — iki hata tek dil.
 function serverErrorText(msg: string | null) {
   return msg
-    ? <p className="mono" style={{ fontSize: 12, color: 'var(--text2)', wordBreak: 'break-word', margin: '8px 0' }}>{msg}</p>
+    ? <p className="mono trl-errmsg">{msg}</p>
     : null;
 }
 
@@ -2169,7 +2169,7 @@ function TracesEmptyDetail({ service, search, range, onSwitchView, narrowedFromN
   const reason = tracesEmptyReason({ narrowed: !!narrowedFromNs, service, search, mvSpans, serviceSpans });
   return (
     <>
-      <div style={{ marginTop: 6, color: 'var(--text2)' }}>
+      <div className="trl-empty">
         {reason === 'narrowed' ? (
           <>
             {/* v0.10.307 — Operator-reported: "3 saat seçince no traces". Sorgu kaynak
@@ -2184,29 +2184,29 @@ function TracesEmptyDetail({ service, search, range, onSwitchView, narrowedFromN
           </>
         ) : reason === 'aged' ? (
           <>
-            <b style={{ color: 'var(--warn)' }}>{mvSpans!.toLocaleString()}</b> spans recorded for <code>{service}</code> in this window via the 5-min MV, but the raw spans table holds <b>none</b> for it here. The span data aged out past the raw-spans TTL (or never landed) while the MV still holds the rollup.{' '}
-            <Button variant="outline" size="xs" onClick={onSwitchView} style={{ marginLeft: 4 }}>Switch to Aggregate view →</Button>
+            <b className="trl-cwarn">{mvSpans!.toLocaleString()}</b> spans recorded for <code>{service}</code> in this window via the 5-min MV, but the raw spans table holds <b>none</b> for it here. The span data aged out past the raw-spans TTL (or never landed) while the MV still holds the rollup.{' '}
+            <Button variant="outline" size="xs" onClick={onSwitchView} className="trl-ml4">Switch to Aggregate view →</Button>
           </>
         ) : reason === 'unmeasured' ? (
           <>
-            <b style={{ color: 'var(--warn)' }}>{mvSpans!.toLocaleString()}</b> spans recorded for <code>{service}</code> in this window via the 5-min MV, but no raw spans match the search. The server could not measure whether raw spans for this service are still stored, so this is either the search predicate or data aged out past the raw-spans TTL.{' '}
-            <Button variant="outline" size="xs" onClick={onSwitchView} style={{ marginLeft: 4 }}>Switch to Aggregate view →</Button>
+            <b className="trl-cwarn">{mvSpans!.toLocaleString()}</b> spans recorded for <code>{service}</code> in this window via the 5-min MV, but no raw spans match the search. The server could not measure whether raw spans for this service are still stored, so this is either the search predicate or data aged out past the raw-spans TTL.{' '}
+            <Button variant="outline" size="xs" onClick={onSwitchView} className="trl-ml4">Switch to Aggregate view →</Button>
           </>
         ) : (
-          <>Try widening the time range, dropping the service or search filter, or turning off the "Root traces" chip. If even an unfiltered query is empty, check ingest health at <Link to="/system/stats" style={{ color: 'var(--accent2)' }}>system stats</Link>.</>
+          <>Try widening the time range, dropping the service or search filter, or turning off the "Root traces" chip. If even an unfiltered query is empty, check ingest health at <Link to="/system/stats" className="trl-ca2">system stats</Link>.</>
         )}
       </div>
       {identity?.traceId && (
-        <div style={{ marginTop: 10, fontSize: 11, color: 'var(--text3)' }}>
+        <div className="trl-diag">
           {/* v0.10.753 kimlik çıpası; v0.10.1423 — 32-hex terim artık `search`te. */}
           {traceIdIdentityText(identity, search, ns => tsLong(ns))}
         </div>
       )}
       {identity && !identity.traceId && (
-        <div style={{ marginTop: 10, fontSize: 11, color: 'var(--text3)' }}>
+        <div className="trl-diag">
           Kimlik araması: <span className="mono">{search}</span> şu anahtarlarda eşitlikle denendi — {identity.keys.join(', ') || '—'}:{' '}
           {identity.error
-            ? <span style={{ color: 'var(--err)' }}>hata: {identity.error}</span>
+            ? <span className="trl-cerr">hata: {identity.error}</span>
             : identity.hits > 0 ? `${identity.hits} trace (${identity.matchedKey})` : 'eşleşme yok; alt-dize araması da boş döndü'}.
           {(identity.skipped?.length ?? 0) > 0 && <> Derlenemeyen yazımlar: {identity.skipped!.join(', ')}.</>}
           {identity.anchorMs
@@ -2215,25 +2215,25 @@ function TracesEmptyDetail({ service, search, range, onSwitchView, narrowedFromN
         </div>
       )}
       {promotedDiag?.promotedKeys && (
-        <div style={{ marginTop: 10, fontSize: 11, color: 'var(--text3)' }}>
+        <div className="trl-diag">
           Terfi kolonu probu ({promotedDiag.promotedKeys.join(', ')}):{' '}
           {promotedDiag.promotedProbeError
-            ? <span style={{ color: 'var(--err)' }}>{promotedDiag.promotedProbeError}</span>
+            ? <span className="trl-cerr">{promotedDiag.promotedProbeError}</span>
             : (promotedDiag.promotedHosts ?? []).length === 0
               ? 'hiçbir host satır döndürmedi'
               : (promotedDiag.promotedHosts ?? []).map(h => `${h.host}: kolon ${h.col.toLocaleString()} / dizi ${h.arr.toLocaleString()}`).join(' · ')}
-          {promotedDiag.promotedFallbackError && <> · dizi yolu da başarısız: <span style={{ color: 'var(--err)' }}>{promotedDiag.promotedFallbackError}</span></>}
+          {promotedDiag.promotedFallbackError && <> · dizi yolu da başarısız: <span className="trl-cerr">{promotedDiag.promotedFallbackError}</span></>}
         </div>
       )}
       {matchingSpans !== undefined && (
-        <div style={{ marginTop: 10, fontSize: 11, color: matchingSpans > 0 ? 'var(--warn)' : 'var(--text3)' }}>
+        <div className={matchingSpans > 0 ? 'trl-diag is-warn' : 'trl-diag'}>
           {matchingSpans > 0
             ? <>Diagnostic: <b>{matchingCapped ? '≥ ' : ''}{matchingSpans.toLocaleString()}</b> spans in this window match the filter, yet the trace list came back empty — the backend logged the query plan (<span className="mono">[traces] EMPTY list</span>).</>
             : <>Diagnostic: nothing in this window matches search + filters (trace-level: a span matching the search and spans matching each chip, anywhere in the trace) — the data or the predicate, not the list query.</>}
         </div>
       )}
       {explainHref && (
-        <div style={{ marginTop: 10, fontSize: 11 }}>
+        <div className="trl-diag-plain">
           <a href={explainHref} target="_blank" rel="noreferrer" title="Aynı sorgunun teşhisi: seçilen yol, her ClickHouse adımı, süre, satır (yalnız admin)">
             Teşhis (explain) →
           </a>
