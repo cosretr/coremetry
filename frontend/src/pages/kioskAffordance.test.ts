@@ -11,10 +11,11 @@ const traces = readFileSync(resolve(__dirname, 'Traces.tsx'), 'utf8');
 const trace = readFileSync(resolve(__dirname, 'Trace.tsx'), 'utf8');
 
 describe('kiosk eylemleri (v0.10.676)', () => {
-  it('Traces satırı: traceHref(kiosk:true) + noopener, Link dışında IconButton', () => {
-    expect(traces).toContain('traceHref(t.traceId, { kiosk: true, pageRange: range })');
-    expect(traces).toContain("'_blank', 'noopener,noreferrer'");
-    expect(traces).toContain('className="row-kiosk"');
+  // v0.10.2116 (operatör kararı 2026-11-13) — iddia DEĞİŞTİ: trace LİSTESİNDEKİ
+  // satır-içi kiosk düğmesi kaldırıldı; kiosk girişi yalnız trace detayında.
+  it('Traces listesi: satır-içi kiosk girişi YOK', () => {
+    expect(traces).not.toContain('kiosk: true');
+    expect(traces).not.toContain('row-kiosk');
   });
   it('Trace detayı: traceHref(kiosk:true, span) + noopener', () => {
     expect(trace).toContain('traceHref(id, { kiosk: true, span: selectedId, pageRange: range })');

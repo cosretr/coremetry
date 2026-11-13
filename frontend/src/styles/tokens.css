@@ -188,16 +188,6 @@
   .cm-detail-sheet { background: var(--bg); border-color: var(--border); box-shadow: var(--shadow-pop); }
 }
 
-/* Traces shadcn S4 — satır-içi kiosk düğmesi artık shadcn Button: tabanındaki
-   `relative` yardımcısı (utilities katmanı) legacy `.row-kiosk { position:
-   absolute }` kuralını yenerdi ve düğme hücre akışına düşerdi. Konum aynı
-   katmanda geri sabitlenir; geri kalan (sağ/üst/opaklık) globals.css'te.
-   Seçici öznitelik (data-row-kiosk): utilities katmanında eski sınıf adı
-   kullanmak bundle-budget çakışma kapısına takılır. */
-@layer utilities {
-  [data-row-kiosk][data-slot="button"] { position: absolute; }
-}
-
 /* Traces shadcn S5 (onaylı mockup §2) — kolon süzgeci (ColumnFilterShell;
    /traces + /problems Exceptions). Tetik shadcn Button ama boyu eski
    ib-xs'in 20 px'i: başlık etiketine kalan alan ve kolon genişliği aynı.
@@ -205,7 +195,12 @@
    (--sp-4 / --sp-5), katman --z-popover, gölge --shadow-pop (mockup).
    Öznitelik seçici: eski sınıf adı burada çakışma kapısına takılır. */
 @layer utilities {
-  [data-tcf-btn][data-slot="button"] { width: 20px; height: 20px; font-size: 11px; }
+  /* v0.10.2116 — `button[...]`: TooltipTrigger / PopoverTrigger asChild
+     düğmeye kendi data-slot'unu geçirir (shadcn button.tsx data-slot="button"ı
+     {...props}'tan ÖNCE yazar); eski `[data-slot="button"]` koşulu hiç
+     eşleşmiyordu, huni 20 yerine 24 px kalıyordu. Özgüllük (0,1,1) icon-xs
+     boyutunu (0,1,0) yine yener; styles/triggerButtonSelectors.test.tsx. */
+  button[data-tcf-btn] { width: 20px; height: 20px; font-size: 11px; }
   [data-tcf-pop][data-slot="popover-content"] {
     width: 300px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); overflow: auto;
     padding: var(--sp-4) var(--sp-5); z-index: var(--z-popover); box-shadow: var(--shadow-pop);

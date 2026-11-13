@@ -168,12 +168,6 @@ const URL_SINK_ALLOWED: { file: string; why: string; pattern: RegExp }[] = [
       + 'KENDİ hesaplanmış uygulama yolu (getRowHref), API alanı değil.',
     pattern: new RegExp('window\\.' + 'open\\('),
   },
-  {
-    file: 'pages/Traces.tsx',
-    why: 'kiosk düğmesi: window.open(traceHref(...)) — yol traceHref ile kod '
-      + 'içinde kuruluyor (traceId yüzde-kodlu), API URL alanı değil.',
-    pattern: new RegExp('window\\.' + 'open\\(trace' + 'Href\\('),
-  },
 ];
 
 describe('v0.10.1315 — API-supplied URL fields reach href/window.open only through SafeHref/appLinkKind', () => {

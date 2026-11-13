@@ -254,25 +254,17 @@ describe('S0 — satır sözleşmesi (yalnız tıklanabilen yer tıklanabilir g�
     expect(m.prefetch).toEqual(['0'.repeat(31) + '1']);
   });
 
-  it('kiosk düğmesi YALNIZ Name hücresinde, link dışında; window.open(kiosk=1, _blank, noopener)', async () => {
+  // v0.10.2116 (operatör kararı 2026-11-13) — iddia DEĞİŞTİ: satır-içi kiosk
+  // düğmesi kaldırıldı (eski iddia: Name hücresinde tek ⧉, window.open(kiosk=1)).
+  // Kiosk girişi yalnız trace detayında (kioskAffordance.test.ts). Satırda hiçbir
+  // düğme yok: hücre içeriği yalnız Link.
+  it('satırda kiosk düğmesi YOK; Name hücresinde düğme yok', async () => {
     await mountTraces('/traces?range=1h');
     const tr = bodyRows()[0];
-    const kiosks = tr.querySelectorAll('button.row-kiosk');
-    expect(kiosks).toHaveLength(1);
+    expect(tr.querySelectorAll('button.row-kiosk, [data-row-kiosk]')).toHaveLength(0);
     const nameIdx = headIds().indexOf('operation');
-    expect(tr.querySelectorAll('td')[nameIdx].contains(kiosks[0])).toBe(true);
-    expect(kiosks[0].closest('a')).toBeNull();
-    expect(kiosks[0].getAttribute('aria-label')).toBe('Kiosk görünümünde aç (yeni pencere)');
-    const open = vi.fn();
-    vi.stubGlobal('open', open);
-    const before = window.location.pathname;
-    act(() => { (kiosks[0] as HTMLButtonElement).click(); });
-    expect(open).toHaveBeenCalledTimes(1);
-    const [url, target, feats] = open.mock.calls[0] as [string, string, string];
-    expect(url).toContain('kiosk=1');
-    expect(target).toBe('_blank');
-    expect(feats).toBe('noopener,noreferrer');
-    expect(window.location.pathname).toBe(before);
+    expect(tr.querySelectorAll('td')[nameIdx].querySelectorAll('button')).toHaveLength(0);
+    expect(tr.textContent).not.toContain('⧉');
   });
 
   it('klavye: j satırı seçer, Enter /trace\'e gider', async () => {
@@ -380,4 +372,6 @@ describe('S0 — DOM yapı kaydı (sabit fikstür, ilk 3 satır; sınıf adı YO
 });
 
 // S0'da ölçüldü (bu dosyanın ilk koşusu). Sıra headIds() ile aynı.
-const NODES_BASELINE: number[] = [2, 2, 5, 2, 2, 5, 2, 1];
+// v0.10.2116 — Name (operation) 5 → 2: satır-içi kiosk düğmesi (button + iki
+// glif span'ı) operatör kararıyla kaldırıldı — bilinçli sadeleşme.
+const NODES_BASELINE: number[] = [2, 2, 2, 2, 2, 5, 2, 1];

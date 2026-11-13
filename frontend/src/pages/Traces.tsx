@@ -1774,28 +1774,9 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
                           // zemini globals.css td.sticky-left (--bg1) kuralından gelir.
                           style={{ left: stickyL }}>
                           {ownLink ? cell : <Link to={href} state={{ from: loc.pathname + loc.search }} className={id === 'operation' ? 'row-link row-link--name' : 'row-link'}>{cell}</Link>}
-                          {/* v0.10.676 — kiosk modu: NAME hücresinde hover/odakta görünen
-                              ⧉ düğmesi, /trace?id=…&kiosk=1'i YENİ PENCEREDE açar (kromsuz
-                              şelale + loglar; kabuk dalı AppShell, sayfa TraceKiosk).
-                              noopener: pencereler bağımsız (sessionStorage/opener yok).
-                              Link'in DIŞINDA — <a> içinde <button> geçersiz HTML. */}
-                          {id === 'operation' && (
-                            // Traces shadcn S4 — ui/IconButton → shadcn Button + coremetry
-                            // Tooltip; glif kabuğu (btn-icon-glyph) aynı → hücre DOM'u aynı.
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button variant="ghost" size="icon-xs" className="row-kiosk" data-row-kiosk=""
-                                  aria-label="Kiosk görünümünde aç (yeni pencere)"
-                                  onClick={e => {
-                                    e.preventDefault(); e.stopPropagation();
-                                    window.open(traceHref(t.traceId, { kiosk: true, pageRange: range }), '_blank', 'noopener,noreferrer');
-                                  }}>
-                                  <span className="btn-icon-glyph" aria-hidden="true"><span aria-hidden="true">⧉</span></span>
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>Kiosk: kromsuz tam ekran şelale + loglar, yeni pencerede</TooltipContent>
-                            </Tooltip>
-                          )}
+                          {/* v0.10.2116 (operatör kararı 2026-11-13) — satır-içi kiosk ⧉
+                              düğmesi KALDIRILDI; kiosk girişi yalnız trace detayında
+                              (Trace.tsx kimlik menüsü). */}
                         </td>
                       );
                     })}
