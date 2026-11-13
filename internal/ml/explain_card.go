@@ -156,10 +156,12 @@ type CardInput struct {
 	Related                                                               []CardRelated
 	Impact                                                                *CardImpact
 	LowTraffic                                                            *CardLowTraffic
-	Contrib                                                               *Contrib // v0.10.2037 — suçlu seri (evidence.contrib)
-	MetricWindowed                                                        bool     // v0.10.2044 — aile ifadesi pencereli (rate/increase)
-	LogService                                                            string   // v0.10.2045 — log tarafındaki servis adı (katalog adından farklıysa)
-	LogQuery                                                              string   // v0.10.2069 — new_template: kalıbın /logs araması (logstore.PatternSearchQuery)
+	Contrib                                                               *Contrib    // v0.10.2037 — suçlu seri (evidence.contrib)
+	MetricWindowed                                                        bool        // v0.10.2044 — aile ifadesi pencereli (rate/increase)
+	LogService                                                            string      // v0.10.2045 — log tarafındaki servis adı (katalog adından farklıysa)
+	LogQuery                                                              string      // v0.10.2069 — new_template: kalıbın /logs araması (logstore.PatternSearchQuery)
+	BreadthOps                                                            []BreadthOp // v0.10.2086 — svc_breadth: yavaş operasyonlar (kanıt slowOps)
+	BreadthTotal                                                          int         // v0.10.2086 — svc_breadth: yavaş operasyon toplamı
 }
 
 // ── sözlük ───────────────────────────────────────────────────────────────
@@ -191,6 +193,7 @@ var mlDetSpecs = map[string]detSpec{
 	"dependency_latency":    {label: "Bağımlılık gecikmesi (p95)", fact: "{code} çağrı süresi", what: "{svc} servisinin {code} çağrıları yavaşladı.", past: "{code} çağrıları yavaşladı", unit: unitMs, measure: "Çağrı süresi (p95)"},
 	"dependency_error_rate": {label: "Bağımlılık hata oranı (VM client, error_type)", fact: "{code} çağrılarında hata oranı", what: "{svc} servisinin {code} çağrılarında hata oranı arttı.", past: "{code} çağrılarında hata arttı", unit: unitRatio},
 	"svc_error_rate":        {label: "Servis hata oranı (VM RED, sunucu istekleri)", fact: "servis hata oranı", what: "{svc} servisinde hata alan isteklerin oranı arttı.", past: "servis hata oranı arttı", unit: unitRatio},
+	"svc_breadth":           {label: "Yaygın yavaşlama (≥3 operasyon, p95 ≥ 1 sn ve ≥ 2 kat)", fact: "yavaşlayan işlem sayısı", what: "{svc} servisinde birden çok işlem birlikte yavaşladı.", past: "birden çok işlem yavaşladı", unit: unitMs, measure: "Yanıt süresi (p95, operasyonların medyanı)"},
 	"trace_change_point":    {label: "Kırılma (trace, p95)", fact: "yanıt süresi (p95)", what: "{svc} servisinde yanıt süresi kalıcı olarak {dir}.", past: "yanıt süresi kalıcı olarak değişti", unit: unitMs, measure: "Yanıt süresi (p95)"},
 	"trace_error_count":     {label: "Operasyon hata sayısı (CH, örneklenmemiş hata span'leri)", fact: "{code} hata sayısı", what: "{svc} servisinin {code} operasyonunda hata sayısı arttı.", past: "hata sayısı arttı", unit: unitCount, noun: "hata", additive: true},
 	"trace_pod_outlier":     {label: "Aykırı pod (trace)", fact: "{pod} pod'unda hata payı", what: "{svc} servisinde {pod} pod'u diğerlerinden daha çok hata veriyor.", past: "bir pod diğerlerinden ayrıştı", unit: unitRatio},
@@ -469,6 +472,8 @@ func summaryOf(in CardInput, sp detSpec, open bool, end time.Time) string {
 		head = logVolumeHead(in) // v0.10.2044 — değer + normal (oran değil)
 	} else if in.Detector == detNewTemplate {
 		head = newTemplateHead(in) // v0.10.2069 — kalıp adıyla, değer + normal
+	} else if in.Detector == detSvcBreadth {
+		head = breadthHead(in) // v0.10.2086 — operasyon adlarıyla, değer + normal
 	} else if in.Detector == detSvcErrorRate {
 		head = svcErrHead(in, sp) // v0.10.2077 — "normalde X, şimdi Y"
 	} else {

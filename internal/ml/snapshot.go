@@ -46,6 +46,8 @@ func eventPart(ev chstore.MLEvent) string {
 			return tracePart(ev.Code, traceErrMeasure)
 		case detSvcErrorRate: // v0.10.2077: servis düzeyi seri
 			return tracePart(svcRoute, svcMeasureRatio)
+		case detSvcBreadth:
+			return "" // v0.10.2086: türetilmiş, kendi serisi yok (canlı grafik servis Overview p99)
 		default:
 			return tracePart(ev.Code, "count")
 		}

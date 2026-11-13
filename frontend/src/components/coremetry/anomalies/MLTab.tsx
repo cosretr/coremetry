@@ -21,6 +21,7 @@ export const ML_DETECTOR_TR: Record<string, string> = {
   dependency_latency: 'Bağımlılık gecikmesi', trace_pod_outlier: 'Aykırı pod (trace)', trace_change_point: 'Kırılma (trace)', trace_error_count: 'Operasyon hata sayısı',
   dependency_error_rate: 'Bağımlılık hata oranı', // v0.10.2063 Davis S2
   svc_error_rate: 'Servis hata oranı', // v0.10.2077 (spec-ml-service-level dilim 1)
+  svc_breadth: 'Yaygın yavaşlama', // v0.10.2086 (dilim 2)
 };
 export type MLSignal = '' | 'log' | 'trace' | 'metric';
 /** SAF: ?signal= çözümü; bilinmeyen → hepsi. */
@@ -127,6 +128,7 @@ export function detectorGroup(d: string): string {
     case 'op_latency': case 'op_error_rate': case 'throughput_drop': case 'svc_error_rate': return 'trace_red';
     case 'dependency_latency': case 'dependency_error_rate': return 'dependency';
     case 'trace_error_count': return 'trace_errors'; // v0.10.2018
+    case 'svc_breadth': return 'svc_breadth'; // v0.10.2086: türetilmiş, kendi tik satırı
     default: return 'trace_pods';
   }
 }

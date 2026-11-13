@@ -13748,3 +13748,15 @@ eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
   kapalıysa bayat süpürme (`evaluator.go:1127`).
 - Prod: ML ana anahtarı açık, `new_template` varsayılan açık (`ml_settings.go` `mlDefaultOnDetectors`); kayıtlı ML
   blobunda açıkça false yazılmışsa yeni log kalıbı olayı hiç üretilmez — doğrulanmadı.
+
+## 2026-11-13 — v0.10.2086 — ML svc_breadth: yaygın yavaşlama (spec-ml-service-level dilim 2)
+
+- Eski `svc-slowdown:<svc>` işinin ML karşılığı; YALNIZ `ml_events` (Problem / bildirim yok).
+- Türetilmiş, YENİ SORGU YOK: tikin kalite süzgecinden geçmiş op_latency olaylarından. Kural (sabit): aynı serviste
+  ≥ 3 operasyon, her biri p95 ölçülü, p95 ≥ 1000 ms ve ≥ 2 × taban; ardışık 2 tik (10 dk); `-batch` servis dışarıda.
+  Yalnız p95 ölçülü olaylar sayılır (yavaş-istek-oranı olayının p95 tabanı yok). Spec'teki "servis trafiği ≥ 100 çağrı /
+  5 dk" kapısı UYGULANMADI (brief'te yok; op_latency'nin etkilenen istek kapısı zaten var).
+- Servis başına tek olay (kimlik servis), epizot / teyit / kalite süzgeci diğer olaylarla aynı. Taban = operasyon
+  tabanlarının medyanı, gözlenen = oran medyanı × taban. Sürdürme durumu süreç-içi (lider değişince 2 tik bekler).
+- Cümle yavaş operasyonları adıyla: "orders-api: 4 işlem birlikte yavaşladı (p95) — GET /a normalde 200 ms, şimdi 1,4 sn;
+  …; ve 1 işlem daha". Detay grafiği servis Overview p99 serisi. Varsayılan açık; tik durumunda kendi satırı.

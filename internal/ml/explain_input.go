@@ -90,6 +90,9 @@ func CardInputFromEvent(ev chstore.MLEvent, now time.Time, loc *time.Location) C
 		in.LogService = ls // v0.10.2045
 	}
 	in.LogQuery = evStr(m, "logQuery") // v0.10.2069: new_template (v0.10.2026 türeticisi)
+	if ev.Detector == detSvcBreadth {  // v0.10.2086
+		in.BreadthOps, in.BreadthTotal = breadthOpsOf(ev.Evidence)
+	}
 	if lt, ok := m["lowTraffic"].(map[string]any); ok {
 		n, _ := evNum(lt, "n")
 		k, _ := evNum(lt, "k")

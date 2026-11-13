@@ -54,6 +54,7 @@ var mlDetectorSources = map[string][]string{
 // dedektörler; öneri (VM kaynak ölçümü) bunlara dokunmaz, log dedektörleri gibi.
 var mlRecommendExempt = map[string]string{
 	"trace_error_count": "kaynak ClickHouse spanmetrics_1m (hata span'leri örneklenmez); VM ölçümü ilgisiz",
+	"svc_breadth":       "türetilmiş: op_latency olaylarından, kendi kaynak sorgusu yok", // v0.10.2086
 }
 
 // MLRecommendChange — önerinin bugünkü ayardan bir farkı. Key "enabled" (ana

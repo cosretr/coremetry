@@ -76,6 +76,9 @@ type Recorder struct {
 	// leaderTicks — art arda lider tik sayısı; grup Problem'i kapanışı
 	// yalnız > episodeCloseMisses sonra (yeni liderin boş koşu durumu).
 	leaderTicks int
+	// breadth — v0.10.2086: yaygın yavaşlamanın servis başına ardışık koşul
+	// durumu (svc_breadth.go; süreç-içi, lider değişince sıfır).
+	breadth map[string]breadthRun
 }
 
 // WithNotifier — v0.10.2052: grup Problem'i bildirimi için mevcut Problem
@@ -234,6 +237,20 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	all, logSvc := resolveLogServices(tctx, deps, all, start, 2*time.Duration(cfg.BucketSec)*time.Second)
 	steps["detectorsMs"] = time.Since(start).Milliseconds() - steps["labelsMs"]
 	kept, sup := qualityFilter(all, cfg, lb, r.runs, start)
+	// v0.10.2086 — yaygın yavaşlama: bu tikin op_latency olaylarından
+	// türetilir (sorgu yok); aynı kalite süzgecinden (epizot / teyit) geçer.
+	if cfg.DetectorOn(detSvcBreadth) {
+		bevs, next := breadthEvents(kept, isBatch, r.breadth, start, cfg)
+		r.breadth = next
+		st := chstore.MLSignalTick{Ran: true, Candidates: len(bevs), Services: distinctServices(bevs)}
+		bk, bsup := qualityFilter(bevs, cfg, lb, r.runs, start)
+		sup.Impact, sup.Feedback, sup.Regime = sup.Impact+bsup.Impact, sup.Feedback+bsup.Feedback, sup.Regime+bsup.Regime
+		kept = append(kept, bk...)
+		st.Written = len(bk)
+		signals[detSvcBreadth] = st
+	} else {
+		r.breadth = nil
+	}
 	w0 := time.Now()
 	global.observeSuppression(sup)
 	global.supBatch.Add(int64(batchCut))
