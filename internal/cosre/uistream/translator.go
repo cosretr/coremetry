@@ -225,7 +225,10 @@ func (t *Translator) closeText() []Part {
 
 // answerChannelKeys — cevabın ayrı parçaya giden alanları; geri kalan her
 // alan message-metadata'ya gider (düşmez).
-var answerChannelKeys = []string{"text", "sources", "links", "followups", "suggestions", "evidence"}
+//
+// v0.10.2101 (experience-audit D4) — linkCard {title, summary}: kısa özet
+// kartı; data-links'e opsiyonel alan olarak girer (yoksa parça bugünkü hâli).
+var answerChannelKeys = []string{"text", "sources", "links", "followups", "suggestions", "evidence", "linkCard"}
 
 func (t *Translator) answer(m map[string]any) []Part {
 	t.sawAnswerOrError = true
@@ -242,7 +245,14 @@ func (t *Translator) answer(m map[string]any) []Part {
 		out = append(out, sourcePart(s))
 	}
 	if links := asSlice(m["links"]); len(links) > 0 {
-		out = append(out, Part{"type": "data-links", "id": "links", "data": map[string]any{"links": m["links"]}})
+		data := map[string]any{"links": m["links"]}
+		card := toMap(m["linkCard"])
+		for _, k := range []string{"title", "summary"} {
+			if v, _ := card[k].(string); v != "" {
+				data[k] = v
+			}
+		}
+		out = append(out, Part{"type": "data-links", "id": "links", "data": data})
 	}
 	fu := map[string]any{}
 	for _, k := range []string{"followups", "suggestions"} {

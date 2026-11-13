@@ -28,6 +28,8 @@ export const COSRE_V2_STRINGS = {
   approvalExpired: 'Süresi doldu — yürütülmedi',
   approvalExpiresIn: 'Geçerlilik sonu',
   // v0.10.1725 — "Takımını seç" kartı (TeamPickCard).
+  /** v0.10.2101 — özet kartının link grubu (ekran okuyucu). */
+  linkCardLinks: 'İlgili sayfalar',
   teamPickTitle: 'Takımını seç',
   teamPickSubtitle: 'Seçimin hatırlanır, karşılama ekranındaki takımla aynıdır',
   teamPickSearch: 'Takım ara…',

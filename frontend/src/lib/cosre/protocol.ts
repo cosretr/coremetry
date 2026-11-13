@@ -11,7 +11,7 @@
 // uiStreamFixture.test.ts (paylaşılan testdata/cosre/*.sse) kırmızıya döner;
 // fixture yenilendiği commit'te bu dosya da güncellenir.
 
-import type { CosreApproval, CosreEndpointPick, CosreEndpointPickItem, CosreScope, CosreScopeReason, CosreStop, CosreStopReason, CosreToolResult, CosreToolResultKind } from '@/lib/types';
+import type { CosreApproval, CosreEndpointPick, CosreEndpointPickItem, CosreLinkCard, CosreScope, CosreScopeReason, CosreStop, CosreStopReason, CosreToolResult, CosreToolResultKind } from '@/lib/types';
 
 export const PROTOCOL_VERSION = 'v1';
 export const PROTOCOL_HEADER = 'x-vercel-ai-ui-message-stream';
@@ -185,6 +185,25 @@ export function parseDataReset(p: UIStreamPart): DataResetPart | null {
   const textId = (d as { textId?: unknown }).textId;
   if (keys.length !== 1 || typeof textId !== 'string' || textId === '') return null;
   return { type: 'data-reset', data: { textId }, transient: true };
+}
+
+/** v0.10.2101 — kart linkinin üst sınırı (api summaryCardMaxLinks). */
+export const LINK_CARD_MAX_LINKS = 3;
+
+/** v0.10.2101 — data-links → CosreLinkCard; title/summary yoksa (bugünkü
+ *  çip yükü), link iç yol değilse ya da biçimsizse null (çipler çizilir). */
+export function parseDataLinksCard(p: { type: string; data?: unknown }): CosreLinkCard | null {
+  if (p.type !== 'data-links' || !isRecord(p.data)) return null;
+  const { title, summary, links } = p.data;
+  if (typeof title !== 'string' || !title || typeof summary !== 'string' || !summary || !Array.isArray(links)) return null;
+  if (links.length === 0 || links.length > LINK_CARD_MAX_LINKS) return null;
+  const out: CosreLinkCard['links'] = [];
+  for (const l of links) {
+    if (!isRecord(l) || typeof l.label !== 'string' || !l.label || typeof l.href !== 'string') return null;
+    if (!l.href.startsWith('/') || l.href.startsWith('//') || l.href.startsWith('/\\')) return null;
+    out.push({ label: l.label, href: l.href });
+  }
+  return { title, summary, links: out };
 }
 
 /** v0.10.1737 — data-pick → CosreEndpointPick; bilinmeyen kind, boş servis,

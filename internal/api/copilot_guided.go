@@ -2268,11 +2268,12 @@ func (s *Server) runGuidedRoute(ctx context.Context, emit func(string, any), rou
 
 	var evidence, sources string
 	var err error
+	var facts guidedSummaryFacts // v0.10.2101 — özet kartı (chat_summary_card.go); yalnız 3 rota doldurur
 	switch route.Intent {
 	case guidedRootCause:
 		evidence, sources, err = s.guidedRootCauseBundle(ctx, emit, route.Service, route.Env, from, to, rangeS, hasLatencyAsk(normalizeGuidedMsg(question)))
 	case guidedProblems:
-		evidence, sources, err = s.guidedProblemsBundle(ctx, emit, route.Service, route.Env, to)
+		evidence, sources, facts, err = s.guidedProblemsBundle(ctx, emit, route.Service, route.Env, to)
 	case guidedServiceHealth:
 		// v0.9.184 — operasyon-scope yükseltmesi: soru belirli bir
 		// operasyonu adlandırıyorsa (ya da operatör bir operasyon
@@ -2292,7 +2293,7 @@ func (s *Server) runGuidedRoute(ctx context.Context, emit func(string, any), rou
 		if op != "" {
 			evidence, sources, err = s.guidedOperationHealthBundle(ctx, emit, route.Service, op, route.Env, from, to, rangeS)
 		} else {
-			evidence, sources, err = s.guidedServiceHealthBundle(ctx, emit, route.Service, route.Env, from, to, rangeS, route.Deep, loc)
+			evidence, sources, facts, err = s.guidedServiceHealthBundle(ctx, emit, route.Service, route.Env, from, to, rangeS, route.Deep, loc)
 		}
 	case guidedFamilyHealth:
 		evidence, sources, err = s.guidedFamilyHealthBundle(ctx, emit, route.Family, route.Env, from, to, rangeS)
@@ -2321,11 +2322,11 @@ func (s *Server) runGuidedRoute(ctx context.Context, emit func(string, any), rou
 	case guidedFanout: // v0.10.439 (D4)
 		evidence, sources, err = s.guidedFanoutBundle(ctx, emit, &route, from, to, rangeS)
 	case guidedMyServices:
-		evidence, sources, err = s.guidedMyTeamBundle(ctx, emit, "health", &route, from, to, rangeS)
+		evidence, sources, facts, err = s.guidedMyTeamBundle(ctx, emit, "health", &route, from, to, rangeS)
 	case guidedMyProblems:
-		evidence, sources, err = s.guidedMyTeamBundle(ctx, emit, "problems", &route, from, to, rangeS)
+		evidence, sources, _, err = s.guidedMyTeamBundle(ctx, emit, "problems", &route, from, to, rangeS)
 	case guidedMyExceptions:
-		evidence, sources, err = s.guidedMyTeamBundle(ctx, emit, "exceptions", &route, from, to, rangeS)
+		evidence, sources, _, err = s.guidedMyTeamBundle(ctx, emit, "exceptions", &route, from, to, rangeS)
 	case guidedTeamExceptions: // v0.10.1385
 		evidence, sources, err = s.guidedTeamExceptionsBundle(ctx, emit, &route, from, to)
 	case guidedServiceExceptions:
@@ -2335,13 +2336,13 @@ func (s *Server) runGuidedRoute(ctx context.Context, emit func(string, any), rou
 		evidence, sources, rows, err = s.guidedTopErrorServicesFleet(ctx, emit, from, to)
 		route.TeamServices = errorRankNames(rows)
 	case guidedMyTopErrors:
-		evidence, sources, err = s.guidedMyTeamBundle(ctx, emit, "top_errors", &route, from, to, rangeS)
+		evidence, sources, _, err = s.guidedMyTeamBundle(ctx, emit, "top_errors", &route, from, to, rangeS)
 	case guidedTeamTopErrors: // v0.10.1402
 		evidence, sources, err = s.guidedTeamTopErrorsBundle(ctx, emit, &route, from, to, rangeS)
 	case guidedTopErrorOps:
 		evidence, sources, err = s.guidedTopErrorOpsBundle(ctx, emit, route.Service, from, to)
 	case guidedTeamServices:
-		evidence, sources, err = s.guidedTeamServicesBundle(ctx, emit, &route, from, to, rangeS)
+		evidence, sources, _, err = s.guidedTeamServicesBundle(ctx, emit, &route, from, to, rangeS)
 	case guidedPodHealth:
 		evidence, sources, err = s.guidedPodHealthBundle(ctx, emit, route.Service, from, to)
 	case guidedMetricChart: // v0.10.1386 — tek VM range sorgusu + sohbet içi grafik
@@ -2465,11 +2466,15 @@ func (s *Server) runGuidedRoute(ctx context.Context, emit func(string, any), rou
 	// v0.10.1383 — yapısal takip adımları (guidedFollowups, copilot_followup.go):
 	// servis cevabında "Operasyonları göster / Exception'ları göster …", takım
 	// cevabında servis başına özet çipleri. suggestions aynen (eski istemci).
-	emit("answer", withGuidedFollowups(map[string]any{
+	ans := map[string]any{
 		"text": answer, "exchangeId": copilot.MetaFromContext(ctx).ExchangeID,
 		"suggestions": guidedSuggestions(route),
 		"links":       dedupLinksByHref(links),
-	}, guidedFollowups(route, chatUserTexts(msgs))))
+	}
+	if cosreV2Marked(ctx) { // v0.10.2101 (experience-audit D4) — özet kartı yalnız v2; v1 cevabı aynen
+		withSummaryCard(ans, route, facts)
+	}
+	emit("answer", withGuidedFollowups(ans, guidedFollowups(route, chatUserTexts(msgs))))
 	return true, true
 }
 
@@ -2882,12 +2887,12 @@ func guidedRootCauseNoProblemsTR(perr error) string {
 // sonunu (`to`) zaten taşıyor; bu paket taşımıyordu ve `time.Now()`
 // kullanıyordu, yani çıpalı bir pencerede "4 saattir açık" cümlesi
 // saatlerce kayıyordu.
-func (s *Server) guidedProblemsBundle(ctx context.Context, emit func(string, any), service, env string, asOf time.Time) (string, string, error) {
+func (s *Server) guidedProblemsBundle(ctx context.Context, emit func(string, any), service, env string, asOf time.Time) (string, string, guidedSummaryFacts, error) {
 	nProb := emitGuidedStep(emit, "list_problems", withEnvArg(`{"status":"open"}`, env))
 	probs, probTotal, err := s.guidedProblemsWithTotal(ctx, guidedProblemFilter(service, env, 50))
 	if err != nil {
 		emitGuidedStepResult(emit, nProb, "list_problems", "", err)
-		return "", "", err
+		return "", "", guidedSummaryFacts{}, err
 	}
 	if len(probs) == 0 && service == "" {
 		markFleetZeroMatch(ctx) // v0.10.1143 — wiki ipucu (chat_wiki_probe.go)
@@ -2905,7 +2910,8 @@ func (s *Server) guidedProblemsBundle(ctx context.Context, emit func(string, any
 		evidence += fmt.Sprintf("Not: problem kayıtları ortam boyutu taşımaz — %q filtresi servis üyeliğiyle uygulandı (bu ortamda koşan servislerin problemleri + global kurallar).\n", env)
 		src += fmt.Sprintf(", ortam: %s (servis kapsamlı)", env)
 	}
-	return evidence, src, nil
+	n, exact := summaryProblemCount(probTotal, len(probs))
+	return evidence, src, guidedSummaryFacts{Scope: service, ProblemsKnown: true, Problems: n, ProblemsExact: exact}, nil // v0.10.2101 — özet kartı (chat_summary_card.go)
 }
 
 // guidedEnvREDLineTR — SAF (v0.10.1274): servis-sağlık demetinin ortam RED
@@ -2938,7 +2944,7 @@ func guidedEnvREDLineTR(env string, rangeS int64, w chstore.ServiceSummary, foun
 // örneklemi). Adımı `service_health_sweep` çipi: step-result tarama JSON'u
 // (bileşik kanıt listesi → bölüm başına çip), blokları ev_block ile; kanıt
 // metnine "TARAMA:" bloğu; hüküm ikisinin KÖTÜSÜ (mergeSweepVerdict).
-func (s *Server) guidedServiceHealthBundle(ctx context.Context, emit func(string, any), service, env string, from, to time.Time, rangeS int64, deep bool, loc *time.Location) (string, string, error) {
+func (s *Server) guidedServiceHealthBundle(ctx context.Context, emit func(string, any), service, env string, from, to time.Time, rangeS int64, deep bool, loc *time.Location) (string, string, guidedSummaryFacts, error) {
 	// v0.10.1391 — servisin gelen HTTP RED'i VictoriaMetrics'ten (örneklenmemiş),
 	// tarama ile PARALEL; varsa span grafiklerinin YERİNE geçer
 	// (copilot_service_http_red.go). Goroutine emit etmez.
@@ -2956,6 +2962,8 @@ func (s *Server) guidedServiceHealthBundle(ctx context.Context, emit func(string
 		sweepCh <- sweepOut{res, err}
 	}()
 	var b strings.Builder
+	// v0.10.2101 — özet kartı (chat_summary_card.go); yalnız aşağıda zaten okunan değerler.
+	facts := guidedSummaryFacts{Scope: service}
 	s.guidedSLOStep(ctx, emit, &b, service) // v0.10.808 (V4) — oryantasyon SLO'yla başlar
 	nCtx := emitGuidedStep(emit, "service_context", `{"service":"`+service+`"}`)
 	cx := s.buildServiceContext(ctx, service, from, to)
@@ -2965,6 +2973,11 @@ func (s *Server) guidedServiceHealthBundle(ctx context.Context, emit func(string
 		// ama başlık sayıları artık ekrandaki ortamdan.
 		ew, found, eerr := mcptools.ReadServiceEnvRED(ctx, s.mcpDeps(), service, env, from, to)
 		b.WriteString(guidedEnvREDLineTR(env, rangeS, ew, found, eerr))
+		if eerr == nil && found && ew.SpanCount > 0 {
+			facts.REDKnown, facts.ErrorRatePct, facts.P99Ms = true, ew.ErrorRate, ew.P99Ms
+		}
+	} else if cx.curErr == nil && cx.Current.Spans > 0 {
+		facts.REDKnown, facts.ErrorRatePct, facts.P99Ms = true, cx.Current.ErrorRate, cx.Current.P99Ms
 	}
 	atSnap := b.Len()
 	b.WriteString(renderServiceSnapshot(cx))
@@ -2977,6 +2990,8 @@ func (s *Server) guidedServiceHealthBundle(ctx context.Context, emit func(string
 	if perr == nil {
 		probs = s.enrichProblemsForRead(ctx, probs) // v0.9.553 — deploy+öncelik, sırası sabit
 		probs = s.store.EnrichProblemsWithRootCause(ctx, probs)
+		facts.ProblemsKnown = true
+		facts.Problems, facts.ProblemsExact = summaryProblemCount(probTotal, len(probs))
 		atProb := b.Len()
 		if len(probs) == 0 {
 			b.WriteString("Açık problem yok.\n")
@@ -3054,6 +3069,7 @@ func (s *Server) guidedServiceHealthBundle(ctx context.Context, emit func(string
 	}
 	vl, vr, vn = mergeSweepVerdict(vl, vr, vn, sw.res, sweepOK)
 	verdict := renderServiceHealthVerdictTR(vl, vr, vn)
+	facts.Verdict = vl
 	nV := emitGuidedStep(emit, "health_verdict", `{"service":"`+service+`"}`)
 	emitGuidedStepResult(emit, nV, "health_verdict", verdict, nil)
 	body := b.String()
@@ -3086,7 +3102,7 @@ func (s *Server) guidedServiceHealthBundle(ctx context.Context, emit func(string
 	if env != "" {
 		src += fmt.Sprintf("; RED tüm ortamlar, problemler ortam: %s", env)
 	}
-	return b.String(), src, nil
+	return b.String(), src, facts, nil
 }
 
 // guidedOperationHealthBundle (v0.9.184) — the operasyon twin of the
@@ -3177,42 +3193,43 @@ func servicesForUserTeam(ta chstore.TeamAliases, mds map[string]chstore.ServiceM
 // bölünüp zamanla ayrışıyor.
 //
 // mode: "health" | "problems" | "exceptions"
-func (s *Server) guidedMyTeamBundle(ctx context.Context, emit func(string, any), mode string, route *guidedRoute, from, to time.Time, rangeS int64) (string, string, error) {
+func (s *Server) guidedMyTeamBundle(ctx context.Context, emit func(string, any), mode string, route *guidedRoute, from, to time.Time, rangeS int64) (string, string, guidedSummaryFacts, error) {
 	env := route.Env
 	meta := copilot.MetaFromContext(ctx)
 	if meta.UserID == "" {
 		// v0.9.1134 — eskiden burada ÇIKMAZ vardı ("yanıtlanamıyor").
 		// Artık takımı SORUYORUZ ve canlı takım listesini çip olarak
 		// sunuyoruz; operatör tıklayınca guidedTeamServices devralıyor.
-		return s.guidedAskTeamEvidence(ctx, route,
+		ev, src, aerr := s.guidedAskTeamEvidence(ctx, route,
 			"Oturum kimliği yok (auth kapalı ya da token kullanıcıya bağlı değil), bu yüzden kullanıcının takımını KENDİM okuyamıyorum.\n",
 			"Oturum kimliğini okuyamadığım için takımını bilemiyorum. ")
+		return ev, src, guidedSummaryFacts{}, aerr
 	}
 	nTeam := emitGuidedStep(emit, "resolve_user_team", "")
 	u, uerr := s.store.GetUserByID(ctx, meta.UserID)
 	if uerr != nil || u == nil {
 		err := fmt.Errorf("user lookup: %w", uerr)
 		emitGuidedStepResult(emit, nTeam, "resolve_user_team", "", err)
-		return "", "", err
+		return "", "", guidedSummaryFacts{}, err
 	}
 	if u.Team == "" {
 		ev, src, aerr := s.guidedAskTeamEvidence(ctx, route,
 			fmt.Sprintf("Kullanıcının (%s) hesabına takım atanmamış (admin Settings → Users → Team alanı bunu kalıcı çözer).\n", u.Email),
 			fmt.Sprintf("Hesabına (%s) takım atanmamış — admin Settings → Users → Team alanından atayabilir. ", u.Email))
 		emitGuidedStepResult(emit, nTeam, "resolve_user_team", ev, aerr)
-		return ev, src, aerr
+		return ev, src, guidedSummaryFacts{}, aerr
 	}
 	mds, merr := s.store.ListServiceMetadata(ctx)
 	if merr != nil {
 		emitGuidedStepResult(emit, nTeam, "resolve_user_team", "", merr)
-		return "", "", merr
+		return "", "", guidedSummaryFacts{}, merr
 	}
 	ta := s.teamAliasesCtx(ctx)
 	svcs := servicesForUserTeam(ta, mds, u.Team)
 	if len(svcs) == 0 {
 		ev := fmt.Sprintf("%q takımı hiçbir serviste ownerTeam/sreTeam olarak geçmiyor (Service Catalog). Kullanıcıya söyle: katalogda takım ataması yapılmalı.\n", u.Team)
 		emitGuidedStepResult(emit, nTeam, "resolve_user_team", ev, nil)
-		return ev, fmt.Sprintf("servis kataloğu (takım: %s)", u.Team), nil
+		return ev, fmt.Sprintf("servis kataloğu (takım: %s)", u.Team), guidedSummaryFacts{}, nil
 	}
 	trimmed := 0
 	if len(svcs) > maxTeamServices {
@@ -3253,7 +3270,7 @@ func (s *Server) guidedMyTeamBundle(ctx context.Context, emit func(string, any),
 		probs, probTotal, perr := s.guidedProblemsWithTotal(ctx, chstore.ProblemFilter{Status: "open", Services: svcs, Env: env, Limit: 50})
 		if perr != nil {
 			emitGuidedStepResult(emit, nProb, "list_problems", "", perr)
-			return "", "", perr
+			return "", "", guidedSummaryFacts{}, perr
 		}
 		probs = s.enrichProblemsForRead(ctx, probs) // v0.9.553 — deploy+öncelik, sırası sabit
 		emitGuidedStepResult(emit, nProb, "list_problems",
@@ -3270,19 +3287,19 @@ func (s *Server) guidedMyTeamBundle(ctx context.Context, emit func(string, any),
 		}
 		emitGuidedStepResult(emit, nRC, "root_cause_hypotheses", guidedStepSegment(&b, atProb), nil)
 		src := fmt.Sprintf("takım: %s (%d servis) — açık problemler + triage önceliği + kök-neden hipotezleri", u.Team, len(svcs)+trimmed)
-		return b.String(), src, nil
+		return b.String(), src, guidedSummaryFacts{}, nil
 	}
 	if mode == "top_errors" { // v0.10.1256
 		n := emitGuidedStep(emit, "top_error_services", fmt.Sprintf(`{"teamServices":%d}`, len(svcs)))
 		rows, terr := s.store.TopErrorServices(ctx, from, to, svcs, topErrorRows)
 		if terr != nil {
 			emitGuidedStepResult(emit, n, "top_error_services", "", terr)
-			return "", "", terr
+			return "", "", guidedSummaryFacts{}, terr
 		}
 		ev := renderTopErrorsTR("Takımın en hatalı servisleri", rows, rangeS, "servis")
 		emitGuidedStepResult(emit, n, "top_error_services", ev, nil)
 		route.TeamServices = errorRankNames(rows) // takip çipleri için sıralı
-		return header + ev, fmt.Sprintf("takım: %s — servis hata sıralaması (service_summary_5m)", u.Team), nil
+		return header + ev, fmt.Sprintf("takım: %s — servis hata sıralaması (service_summary_5m)", u.Team), guidedSummaryFacts{}, nil
 	}
 	if mode == "exceptions" {
 		// v0.9.650 (operatör: "Takımıma ait servislerin hataları
@@ -3294,7 +3311,7 @@ func (s *Server) guidedMyTeamBundle(ctx context.Context, emit func(string, any),
 		// gruplaması kaldırıldı (copilot_team_exceptions.go).
 		blk := s.teamExceptionsBlock(ctx, emit, route, teamExcInput{Team: route.Team, Services: svcs, Axis: teamExceptionsAxis(ta, mds, u.Team)}, from, to)
 		src := fmt.Sprintf("takım: %s (%d servis) — Exceptions kutusu (açık gruplar, en son görülen önce)", u.Team, len(svcs)+trimmed)
-		return header + blk, src, nil
+		return header + blk, src, guidedSummaryFacts{}, nil
 	}
 	// v0.10.1397 (operatör: "bir takım seçtim veya 'takımımın servisleri
 	// nasıl' dedim. Arkada chip'e basmadan otomatik o takımın servislerini
@@ -3304,11 +3321,11 @@ func (s *Server) guidedMyTeamBundle(ctx context.Context, emit func(string, any),
 	// Çözüm aynı katalog kuralı (mcptools.TeamServiceNames); route.Team
 	// yukarıda katalog yazımına çekildi. Eski aile-sağlık gövdesi (hata
 	// SAYISI sırası) iki takım cevabını ayrıştırıyordu.
-	evidence, src, err := s.guidedTeamServicesBundle(ctx, emit, route, from, to, rangeS)
+	evidence, src, facts, err := s.guidedTeamServicesBundle(ctx, emit, route, from, to, rangeS)
 	if err != nil {
-		return "", "", err
+		return "", "", guidedSummaryFacts{}, err
 	}
-	return header + evidence, fmt.Sprintf("takım: %s — %s", u.Team, src), nil
+	return header + evidence, fmt.Sprintf("takım: %s — %s", u.Team, src), facts, nil
 }
 
 // guidedTeamAskMax — "hangi takım?" turunda sunulan çip sayısı. 8, çip
@@ -3442,22 +3459,22 @@ func renderTeamServicesEvidenceTR(team string, rows []chstore.ServiceSummary, re
 // (servicesForUserTeam, alias farkındalıklı), RED tek MV okumasından
 // (GetServicesAggFilteredIn — servis başına fan-out YOK). Ayrışan tek şey
 // sıralama: operatör oranı istedi (sortServicesByErrorRate).
-func (s *Server) guidedTeamServicesBundle(ctx context.Context, emit func(string, any), route *guidedRoute, from, to time.Time, rangeS int64) (string, string, error) {
+func (s *Server) guidedTeamServicesBundle(ctx context.Context, emit func(string, any), route *guidedRoute, from, to time.Time, rangeS int64) (string, string, guidedSummaryFacts, error) {
 	team := route.Team
 	if team == "" {
-		return "", "", errors.New("team_services: takım adı boş")
+		return "", "", guidedSummaryFacts{}, errors.New("team_services: takım adı boş")
 	}
 	nResolve := emitGuidedStep(emit, "resolve_team_services", `{"team":`+jsonStr(team)+`}`)
 	svcs, trimmed, merr := mcptools.ReadTeamServiceNames(ctx, s.mcpDeps(), team)
 	if merr != nil {
 		emitGuidedStepResult(emit, nResolve, "resolve_team_services", "", merr)
-		return "", "", merr
+		return "", "", guidedSummaryFacts{}, merr
 	}
 	if len(svcs) == 0 {
 		ev := fmt.Sprintf("%q takımı hiçbir serviste ownerTeam/sreTeam olarak geçmiyor (Service Catalog). "+
 			"Kullanıcıya söyle: katalogda takım ataması yapılmalı ya da başka bir takım adı denemeli.\n", team)
 		emitGuidedStepResult(emit, nResolve, "resolve_team_services", ev, nil)
-		return ev, fmt.Sprintf("servis kataloğu (takım: %s)", team), nil
+		return ev, fmt.Sprintf("servis kataloğu (takım: %s)", team), guidedSummaryFacts{}, nil
 	}
 	// Çözümün kanıtı, RED okumasından ÖNCE: hangi servisler bu takım
 	// sayıldı? (v0.9.1229 — katalog eşleşmesi okumanın kendi çıktısı.)
@@ -3476,7 +3493,7 @@ func (s *Server) guidedTeamServicesBundle(ctx context.Context, emit func(string,
 	rows, err := mcptools.ReadTeamServicesRED(ctx, s.mcpDeps(), svcs, from, to)
 	if err != nil {
 		emitGuidedStepResult(emit, nRED, "team_services_red", "", err)
-		return "", "", err
+		return "", "", guidedSummaryFacts{}, err
 	}
 	// v0.9.651 emsali — çözülen liste rotaya yazılıyor; çipler ve derin
 	// linkler buradan besleniyor. SIRA hata oranına göre, yani
@@ -3524,7 +3541,7 @@ func (s *Server) guidedTeamServicesBundle(ctx context.Context, emit func(string,
 	}
 	src := fmt.Sprintf("takım: %s (%d servis) — servis RED'i tek MV okuması, hata oranına göre sıralı (son %s)",
 		team, len(svcs)+trimmed, fmtAgoTR(rangeS))
-	return b.String(), src, nil
+	return b.String(), src, teamSummaryFacts(team, rows, len(svcs)+trimmed), nil // v0.10.2101 — özet kartı
 }
 
 // jsonStr — step-event args'ında ad kaçışı. fmt %q strconv.Quote'tur ve

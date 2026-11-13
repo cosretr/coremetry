@@ -8725,6 +8725,14 @@ export interface CosreEndpointPick {
   items: CosreEndpointPickItem[];
 }
 
+/** v0.10.2101 — CoSRE v2 kısa özet + link kartı: data-links'in opsiyonel
+ *  title/summary alanları (api chat_summary_card.go, deterministik; ≤3 iç link). */
+export interface CosreLinkCard {
+  title: string;
+  summary: string;
+  links: ChatAnswerLink[];
+}
+
 /** GET /api/copilot/scope-names?kind=team — services[i] names[i]'nin servis sayısı (v0.10.1725). */
 export interface CopilotScopeNames {
   names: string[];

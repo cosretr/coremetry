@@ -19,6 +19,8 @@
 //     hata satırı + "↺ Yeniden dene" (regenerate), durdurma notu — hepsi v1'in.
 //   • agent-core S5: data-approval → balonun altında ApprovalCard (Onayla /
 //     Reddet); yalnız son mesaj ve akış yokken cevaplanır.
+//   • v0.10.2101 (experience-audit D4): data-links title/summary taşıyorsa
+//     balonun altında SummaryLinkCard; o linkler balonda çip olarak çizilmez.
 //   • Bilinmeyen parça çizilmez (çökmez).
 // Sunumsal: Chat örneği yok (katalog ve testler statik mesajla da çizer).
 import { useMemo } from 'react';
@@ -40,6 +42,8 @@ import { TeamPickCard } from './TeamPickCard';
 import { showTeamPick } from './teamPick';
 import { EndpointPickCard } from './EndpointPickCard';
 import { pickOf, showEndpointPick } from './endpointPick';
+import { SummaryLinkCard } from './SummaryLinkCard';
+import { bubbleTurnForCard, linkCardOf } from './linkCard';
 
 /** useChat durumu (ai ChatStatus ile aynı küme; tip importu katalogdan bağımsız). */
 export type CosreChatStatus = 'submitted' | 'streaming' | 'ready' | 'error';
@@ -119,11 +123,14 @@ function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, ex
 }) {
   const approvals = useMemo(() => approvalViews(m), [m]);
   const epPick = useMemo(() => pickOf(m.parts), [m.parts]); // v0.10.1737
+  const linkCard = useMemo(() => linkCardOf(m.parts), [m.parts]); // v0.10.2101
   // araç seti dilim 5 (G4) — adım kartları cevabın ÜSTÜNDE (data-tool-result / data-stop).
   const steps = useMemo(() => stepsView(visibleParts(m)), [m, visibleParts]);
   // SDK akışta son mesajı her parçada yeni nesneyle değiştirir; bitmiş
   // mesajlar kimliğini korur → ChatBubble (memo) yalnız akan balonu çizer.
   const turn = useMemo(() => toChatTurn(m, visibleParts(m), { pending: live, error, explainAsk }), [m, visibleParts, live, error, explainAsk]);
+  const showCard = !!linkCard && !live && !turn.error;
+  const bubbleTurn = useMemo(() => (showCard ? bubbleTurnForCard(turn, linkCard) : turn), [showCard, turn, linkCard]);
   const xid = live ? undefined : turn.exchangeId;
   const slots = useMemo<ChatBubbleSlots>(() => ({
     hideSteps: true,
@@ -141,8 +148,9 @@ function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, ex
       {scopeNote && <div className="cm-msg-note text-muted-foreground" data-cosre-scope-note="">{scopeNote}</div>}
       <StepList view={steps} live={live} exchangeId={xid} badges={badges} compact={compactSteps} />
       <ChatBubbleSlotsContext.Provider value={slots}>
-        <ChatBubble turn={turn} onRetry={onRetry} shownFollowups={showFu ? turn.followups : undefined} />
+        <ChatBubble turn={bubbleTurn} onRetry={onRetry} shownFollowups={showFu ? turn.followups : undefined} />
       </ChatBubbleSlotsContext.Provider>
+      {showCard && linkCard && <SummaryLinkCard card={linkCard} />}
       {approvals.map(v => (
         <ApprovalCard key={v.approval.toolCallId} view={v} disabled={!onApproval}
           onAnswer={onApproval ? ok => onApproval(approvalAnswer(v, ok)) : undefined} />

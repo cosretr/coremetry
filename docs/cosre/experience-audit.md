@@ -106,11 +106,11 @@ imzası (kart kararı `chat_team_scope_need.go`'da; içeriği okunmadı). `ChatB
 
 | D | Ne | Dosyalar | Test | Prod doğrulama | Onay |
 |---|---|---|---|---|---|
-| D1 | `question` olayı → `data-question`; `v2OnlyEventKinds`+=question; part.go yorumu | `uistream/translator.go`, `part.go`, `api/chat_stop_event.go` | `translator_test.go` satır içi JSON; `chat_sink_test.go` v1 düşürme; yeni altın `v2_question.sse` | yok (ölü yol) | gerekmez |
+| D1 (v0.10.2100) | `question` olayı → `data-question`; `v2OnlyEventKinds`+=question; part.go yorumu | `uistream/translator.go`, `part.go`, `api/chat_stop_event.go` | `translator_test.go` satır içi JSON; `chat_sink_test.go` v1 düşürme; yeni altın `v2_question.sse` | yok (ölü yol) | gerekmez |
 | D2 | `source` netleştirmesi `data-question` yayar; FE `QuestionCard` (`components/cosre/conversation/`, shadcn Button); `protocol.ts parseDataQuestion`; `toChatTurn` yok sayar; tık → mesaj + `context.clarifyOption`; sunucu birebir eşleme | `api/chat_question.go`, `chat_clarify.go`, `copilot_chat.go` (clarify-reply :487); FE `QuestionCard.tsx`, `protocol.ts`, `MessageList.tsx`, `CosreChatV2.tsx`, `types` | Go table-driven `chat_question_test.go` (3 tür × v1/v2); `chat_clarify_flow_test.go` option yolu; vitest `QuestionCard.test.tsx` + `CosreChatV2.test.tsx` gönderim; `chat_tier_order_test` değişmez | /cosre'de rotasız soru + wiki açık → kart; tıkla → doğru dal; serbest metin hâlâ çalışır | GEREKİR (2026-10-29 kararına dokunur) |
 | D3 | `doc_or_entity` + `trace_synth` (evet/hayır) soru kartı | `chat_clarify_entity.go`, `chat_clarify_synth.go`, `chat_question.go` | aynı tablolara satır; `chat_routing_regression_test.go:356-365` korunur | Oracle açıklaması sonrası "evet" tıkla → trace açıklaması | GEREKİR |
-| D4 | `guidedSummaryTR` + `data-links {title,summary}`; FE `SummaryLinkCard` (çip ↔ kart seçimi `title` varlığıyla); 3 rota | `api/chat_summary_card.go`, `copilot_guided.go:2468`, `uistream/translator.go:240`; FE `SummaryLinkCard.tsx`, `MessageList.tsx`, `toChatTurn.ts` (alan yok say) | Go table-driven (sayı yok → false, ≤3 link, dedup); translator JSON `omitempty` pini; mevcut `v2_loop.sse` değişmemeli; vitest kart/çip dallanması | "orders-api sağlığı" → kart tek cümle + ≤3 link; link hedefi doğru sayfa | GEREKİR (yeni görünür öğe) |
-| D5 | Kapanış: `ai_conversations_v2parts.go` yeni alan sanitasyonu; evalset v2 fixture'larına question/summary vakası; roadmap-status §2 satır 6/8 güncelle | `ai_conversations_v2parts.go`, `testdata/cosre/`, `docs/cosre/roadmap-status.md` | mevcut testler | konuşma geçmişi yeniden açılınca kart pasif ama görünür | gerekmez |
+| D4 (v0.10.2101) | `guidedSummaryTR` + `data-links {title,summary}`; FE `SummaryLinkCard` (çip ↔ kart seçimi `title` varlığıyla); 3 rota | `api/chat_summary_card.go`, `copilot_guided.go:2468`, `uistream/translator.go:240`; FE `SummaryLinkCard.tsx`, `MessageList.tsx`, `toChatTurn.ts` (alan yok say) | Go table-driven (sayı yok → false, ≤3 link, dedup); translator JSON `omitempty` pini; mevcut `v2_loop.sse` değişmemeli; vitest kart/çip dallanması | "orders-api sağlığı" → kart tek cümle + ≤3 link; link hedefi doğru sayfa | GEREKİR (yeni görünür öğe) |
+| D5 | Kapanış: kart kalıcılığı (D4 notu: arşiv mesajında links alanı YOK, yeniden açılan konuşmada kart da çipler gibi görünmez; karar gerekir); evalset v2 fixture'larına question/summary vakası; roadmap-status §2 satır 6/8 güncelle | `ai_conversations_v2parts.go`, `testdata/cosre/`, `docs/cosre/roadmap-status.md` | mevcut testler | konuşma geçmişi yeniden açılınca kart pasif ama görünür | gerekmez |
 
 D2 ve D4 bağımsız; D1→D2→D3 sıralı. Aynı anda tek dilim (kalıcı kural).
 
@@ -127,10 +127,13 @@ D2 ve D4 bağımsız; D1→D2→D3 sıralı. Aynı anda tek dilim (kalıcı kura
   yüzden soru metni düz cümle kalır, düğme ≤3, serbest metin korunur.
 - `Pending` TTL (10 dk) + araya giren tur: kart görünür ama sunucu bekleyen soruyu
   unutmuş olabilir → `clarifyOption` eşleşmez, bugünkü `dropped` yolu; ek metin önerilmez.
-- `data-links` alan ekleme: `ai_conversations_v2parts.go:66` sanitasyonu yeni alanları düşürüyor
-  olabilir (OKUNMADI); D5'te kontrol.
-- `guidedSummaryTR` için bundle alan adları (`copilot_guided.go` 2300-2440 bölgesi) okunmadı;
-  D4 başında ±80 satır okuma.
+- `data-links` alan ekleme (D4'te doğrulandı): `ai_conversations_v2parts.go` yalnız data-tool-result
+  ve data-stop'u arşivler; `aiChatMessage`'da links alanı yok — yeniden açılan konuşmada kart,
+  bugünkü link çipleri gibi görünmez. D4'te düzeltme yok; D5 notu.
+- `guidedSummaryTR` bundle alanları (D4'te doğrulandı): bundle'lar yapısal değil `(evidence,
+  sources string, err)` döndürüyordu; D4 kararı (a): üç bundle (+ my_services'in gövdesi
+  `guidedTeamServicesBundle`) zaten hesapladığı sayıları dışa aktarılmayan
+  `guidedSummaryFacts` olarak da döndürür; kanıt metni bayt bayt aynı.
 - `chat_team_scope_need.go` (`needsTeamScope`) içeriği okunmadı; S1 (b) seçilirse okunur.
 - `cosre_route_red.go` route-turn ile `trace_synth` etkileşimi okunmadı.
 - Hiçbir şey tarayıcı/prod'da denenmedi (netleştirme v0.10.1571 de denenmemiş).

@@ -116,6 +116,27 @@ func TestTranslateSequences(t *testing.T) {
 				`{"type":"finish-step"}`, `{"finishReason":"stop","type":"finish"}`},
 		},
 		{
+			// v0.10.2101 (experience-audit D4) — özet kartı: linkCard data-links'e
+			// title/summary olarak girer, message-metadata'ya SIZMAZ.
+			name: "answer linkCard → data-links title/summary",
+			evs: []ev{{"answer", map[string]any{"text": "a", "exchangeId": "x1",
+				"links":    []map[string]string{{"href": "/problems", "label": "Problemler"}},
+				"linkCard": map[string]string{"title": "Açık problemler", "summary": "3 açık problem var."}}}},
+			want: []string{pStart, pStartStep,
+				`{"id":"t1","type":"text-start"}`, `{"delta":"a","id":"t1","type":"text-delta"}`, `{"id":"t1","type":"text-end"}`,
+				`{"data":{"links":[{"href":"/problems","label":"Problemler"}],"summary":"3 açık problem var.","title":"Açık problemler"},"id":"links","type":"data-links"}`,
+				`{"messageMetadata":{"exchangeId":"x1"},"type":"message-metadata"}`},
+		},
+		{
+			// linkCard yoksa data-links bugünkü şekliyle (omitempty pini).
+			name: "answer without linkCard → data-links links only",
+			evs: []ev{{"answer", map[string]any{"text": "a",
+				"links": []map[string]string{{"href": "/problems", "label": "Problemler"}}}}},
+			want: []string{pStart, pStartStep,
+				`{"id":"t1","type":"text-start"}`, `{"delta":"a","id":"t1","type":"text-delta"}`, `{"id":"t1","type":"text-end"}`,
+				`{"data":{"links":[{"href":"/problems","label":"Problemler"}]},"id":"links","type":"data-links"}`},
+		},
+		{
 			// v0.10.2100 (experience-audit D1) — kapalı soru kartı tek parça, id sabit.
 			name: "question → data-question",
 			evs: []ev{{"question", map[string]any{"kind": "source", "text": "Hangisi?", "allowFree": true,
