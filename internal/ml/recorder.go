@@ -111,6 +111,11 @@ func (r *Recorder) run(ctx context.Context) {
 	r.store.LoadAnomalySensitivity(ctx)
 	go r.baselineLoop(ctx) // v0.10.1814: günlük baseline (kapalı gelir; lider + anahtar kapısı içeride)
 	for {
+		// v0.10.2074 — op_latency + metric_kafka kayıtlı ayarda bir kez açılır
+		// (işaretli göç; yalnız lider, başarıya dek her tur dener).
+		if r.leader.IsLeader() {
+			chstore.MigrateMLForceOnOnce(ctx, r.store)
+		}
 		cfg := r.store.GetMLConfig(ctx)
 		r.tick(ctx, cfg)
 		select {

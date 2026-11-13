@@ -13608,3 +13608,13 @@ eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
   ve kabuk bayrağı; `/api/incidents*` uçları (silinirse 410 yerine SPA-200 döner — operatör kararı ister);
   explain-incident / postmortem AI uçları; RAG postmortem (RAG söküm ayrı onay ister); AI SRE
   `GetProblemIncident` okuması (geçmiş bağları zaman çizelgesinde gösterir).
+
+## 2026-11-13 — v0.10.2074 — op_latency + metric_kafka kayıtlı ML ayarında bir kez açıldı (operatör kararı)
+
+- Sorun: v0.10.2059 / v0.10.2064 iki dedektörü yalnız boş blobda / hiç yazılmamış anahtarda varsayılan açık
+  yaptı; Ayarlar › ML'de bir kez kaydedilmiş prod blobu `false`'u açıkça taşıdığı için kapalı kaldılar.
+- Çözüm: işaretli tek seferlik göç (`chstore/ml_force_on_migrate.go`, işaret `system_settings.ml_force_on_v1`),
+  inbox keep-list göçleriyle aynı desen. Yalnız açıkça `false` olan `op_latency` / `metric_kafka` → `true`;
+  ana anahtar ve diğer alanlar bayt düzeyinde korunur; blob yoksa yazım yok. Değişince system audit
+  `settings.ml.migrate` (eski/yeni). ML kaydedicisinin lideri tik öncesi koşturur; hata = işaret yok, sonraki tur.
+- İşaret yazıldıktan sonra operatörün kapattığı dedektör kapalı kalır (yeniden açılmaz).
