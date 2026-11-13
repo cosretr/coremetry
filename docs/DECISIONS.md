@@ -13890,3 +13890,14 @@ eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
   `inboxMoreFiltersActive` boş değilse açık gelir ve "(N etkin)" der. Açık/kapalı URL'de değil.
 - Sayfa altı: Çözülenler (`status=all`), Yok sayılanlar (`status=ignored`) — mevcut süzgeçler korunur —
   ve Alarm kurallarını yönet (`/alerts`). Hiçbir URL paramı silinmedi; varsayılanlar değişmedi (S3 bekler).
+
+## 2026-11-14 — v0.10.2125 — Problems sadeleştirme S5: alt "Alert rules" tablosu kalktı (plan Ç5, operatör onaylı mockup)
+- `Inbox.tsx` artık `ProblemsSection` mount etmiyor; aynı alarm problemleri üst listede. `?problem=` detayı
+  (`AlertProblemHost`) aynen. ROOT CAUSE rozeti ve "Ne oldu?" yalnız detayda (satır başına ek çağrı yok).
+- "Take it" İlgilenen hücresinde: `AssigneeCell` kendi modülüne taşındı (`features/anomalies/AssigneeCell.tsx`,
+  düğme ui/ yerine shadcn), yalnız `kind=problem` satırında ve editor+ (PATCH /assignee sunucuda editor kapılı,
+  audit mevcut). Viewer ve diğer türler salt okunur hap.
+- `ProblemsSection` bileşeni mount'suz kaldı; dosya `AlertProblemHost`'u taşıdığı için silinmedi. Bileşenin ve
+  onu pinleyen koruyucu testlerin (navArbitration, rowLinkSites1414, a11y.rowSites, insightHosts, …) silinmesi
+  S10 temizliğine. `/api/problems` ve `/buckets` uçları kalır (AlertProblemHost, DatabaseProblemsSection).
+

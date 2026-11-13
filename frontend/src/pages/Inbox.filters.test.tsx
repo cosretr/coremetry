@@ -7,6 +7,8 @@
 // varsayılan-dışı bir değer etkinse bölüm AÇIK gelir; sayfa altı bağlantıları.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act } from 'react';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -161,5 +163,25 @@ describe('Problems süzgeçleri — S4 (v0.10.2124)', () => {
     expect(solved.searchParams.get('q')).toBe('timeout');
     expect(new URL(links[1].getAttribute('href')!, 'http://x').searchParams.get('status')).toBe('ignored');
     expect(links[2].getAttribute('href')).toBe('/alerts');
+  });
+});
+
+// v0.10.2125 (S5) — alt "Alert rules" tablosu kalktı; "Take it" İlgilenen
+// hücresinde, yalnız alarm probleminde (editor+; sunucu da editor kapılı).
+describe('Problems — S5 (v0.10.2125)', () => {
+  it('alarm probleminde Take it İlgilenen hücresinde; diğer türlerde yok', async () => {
+    const el = await mount('/inbox?prio=P1,P2,P3&kind=problem,exception,httperror,anomaly');
+    const rows = [...el.querySelectorAll<HTMLTableRowElement>('.page-body tbody tr')];
+    const row = (needle: string) => rows.find(r => r.textContent?.includes(needle))!;
+    const lastCell = (r: HTMLTableRowElement) => r.querySelectorAll('td')[r.querySelectorAll('td').length - 1];
+    expect(lastCell(row('payments-api')).textContent).toContain('Take it');
+    expect(lastCell(row('checkout')).textContent).not.toContain('Take it');
+    expect(lastCell(row('orders-api')).textContent).not.toContain('Take it');
+  });
+
+  it('sayfa ProblemsSection mount etmiyor (alt tablo yok)', () => {
+    const src = readFileSync(resolve(__dirname, 'Inbox.tsx'), 'utf8');
+    expect(src).not.toMatch(/<ProblemsSection\b/);
+    expect(src).not.toMatch(/import\s*\{[^}]*\bProblemsSection\b[^}]*\}/);
   });
 });

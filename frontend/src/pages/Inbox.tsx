@@ -34,7 +34,8 @@ import {
 // sayfasından buraya taşındı: alert kuralları triage kuyruğunun
 // parçası, exception kuyruğunun değil. Modül yolundan import (barrel
 // değil): barrel AnomaliesPage'i de /inbox chunk'ına sürüklerdi.
-import { ProblemsSection, AlertProblemHost } from '@/features/anomalies/ProblemsSection';
+import { AlertProblemHost } from '@/features/anomalies/ProblemsSection';
+import { AssigneeCell } from '@/features/anomalies/AssigneeCell'; // v0.10.2125 (S5) — Take it İlgilenen hücresinde
 // v0.10.922 (sade palet adım 1) — tek durum sözlüğü; ProblemDetail zaten bu
 // parçada (ProblemsSection → ProblemDetail), yeni chunk bağımlılığı yok.
 import { TriageStatusBadge } from '@/features/anomalies/ProblemDetail';
@@ -1395,9 +1396,19 @@ export default function InboxPage() {
                   </td>
                   <td>
                     <div className="ib-owner">
-                      {it.assignee
-                        ? <AssigneePill v={it.assignee} />
-                        : <span className="cell-faint">—</span>}
+                      {/* v0.10.2125 (S5) — alt "Alert rules" tablosunun "Take it"i
+                          buraya taşındı: alarm probleminde editor+ kendine alır /
+                          yeniden atar (PATCH /assignee, sunucu editor kapılı, audit
+                          var). Viewer ve diğer türler salt okunur. */}
+                      {it.kind === 'problem' && it.problem?.id && isAdmin
+                        ? <span onClick={stopRowClick}>
+                            <AssigneeCell problem={{ id: it.problem.id, assignee: it.assignee }}
+                              currentUserEmail={user?.email ?? ''}
+                              onChanged={() => { void qc.invalidateQueries({ queryKey: ['inbox'] }); }} />
+                          </span>
+                        : it.assignee
+                          ? <AssigneePill v={it.assignee} />
+                          : <span className="cell-faint">—</span>}
                       {/* v0.10.1529 (D1) — satır triyajı hover/focus'ta (pv-row). */}
                       <ProblemVerdictRow item={it} ctx={verdictCtx} />
                     </div>
@@ -1409,15 +1420,9 @@ export default function InboxPage() {
           </table>
         </div>
 
-        {/* ── Alert rules (firing thresholds + SLO burn) ───────────
-            v0.9.837 (operatör): bölüm Exceptions sayfasından buraya
-            taşındı. Yukarıdaki birleşik feed "insan gerektiren her
-            şey"; bu bölüm onun kural-tabanlı yarısının tam envanteri
-            (kendi durum/şiddet/öncelik/takım süzgeçleriyle).
-            ?service= süzgecini feed ile PAYLAŞIR. Kolon genişlikleri
-            hâlâ 'alert-rules' storageKey'inde — operatörün ayarladığı
-            genişlikler taşınmayla kaybolmasın. */}
-        <ProblemsSection serviceFilter={serviceFilter} navDisabled={!!(problemParam || anomalyParam)} />
+        {/* v0.10.2125 (S5) — alt "Alert rules" tablosu (v0.9.837) KALDIRILDI:
+            aynı alarm problemleri yukarıdaki listede. "Take it" İlgilenen
+            hücresinde; ROOT CAUSE rozeti ve "Ne oldu?" detayda (?problem=). */}
         {/* v0.10.2124 (S4) — sayfa altı bağlantıları (mockup): durum
             görünümleri mevcut süzgeçleri korur; kural yönetimi /alerts. */}
         <nav className="ib-foot" aria-label="Diğer görünümler">
