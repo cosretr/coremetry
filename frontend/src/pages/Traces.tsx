@@ -34,7 +34,8 @@ import { FilterGroupBuilder } from '@/components/FilterGroupBuilder';
 // v0.10.1951 — shadcn Traces dilimi 1 (karar g = B: tablo motoru değişmez): ui Button → shadcn Button.
 // Eşleme: primary→default, secondary→outline, ghost→ghost; ui sm/xs (24 px) → shadcn xs (24 px) — yoğunluk birebir.
 import { Button } from '@/components/shadcn/button';
-import { EnterHint, IconButton } from '@/components/ui'; // v0.10.676 — satır-içi kiosk düğmesi
+import { EnterHint } from '@/components/ui'; // EnterHint: filterBarSearch.pin çiviliyor (Traces shadcn S4'te kaldı)
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/coremetry/overlay'; // Traces shadcn S4 — ikon düğmesi ipucu
 import { SegmentedControl } from '@/components/coremetry/SegmentedControl'; // v0.10.1993 — Traces dilimi 2 (shadcn; API aynı)
 import { Chip } from '@/components/ui/Chip';
 import { Pager } from '@/components/Pager';
@@ -1384,11 +1385,17 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
           const vizToggle = (
             <>
               {/* v0.10.724 — katla/aç; şerit başlığının en solunda. */}
-              <IconButton size="sm" aria-label={stripCollapsed ? 'Grafiği aç' : 'Grafiği katla'}
-                aria-expanded={!stripCollapsed}
-                tooltip={stripCollapsed ? 'Grafiği göster' : 'Grafiği katla — yalnız istatistik şeridi kalır (tarayıcıda hatırlanır)'}
-                icon={<span aria-hidden="true">{stripCollapsed ? '▸' : '▾'}</span>}
-                onClick={toggleStrip} />
+              {/* Traces shadcn S4 — ui/IconButton → shadcn Button + coremetry Tooltip
+                  (tek tip focus-visible halkası); 24 px, glif kabuğu aynı. */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon-xs" aria-label={stripCollapsed ? 'Grafiği aç' : 'Grafiği katla'}
+                    aria-expanded={!stripCollapsed} onClick={toggleStrip}>
+                    <span className="btn-icon-glyph" aria-hidden="true"><span aria-hidden="true">{stripCollapsed ? '▸' : '▾'}</span></span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{stripCollapsed ? 'Grafiği göster' : 'Grafiği katla — yalnız istatistik şeridi kalır (tarayıcıda hatırlanır)'}</TooltipContent>
+              </Tooltip>
               <SegmentedControl aria-label="Grafik türü" value={viz} onChange={setViz} options={[
                 { value: 'volume', label: 'Volume' }, { value: 'latency', label: 'Latency' },
               ]} />
@@ -1773,14 +1780,21 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
                               noopener: pencereler bağımsız (sessionStorage/opener yok).
                               Link'in DIŞINDA — <a> içinde <button> geçersiz HTML. */}
                           {id === 'operation' && (
-                            <IconButton className="row-kiosk"
-                              aria-label="Kiosk görünümünde aç (yeni pencere)"
-                              tooltip="Kiosk: kromsuz tam ekran şelale + loglar, yeni pencerede"
-                              icon={<span aria-hidden="true">⧉</span>}
-                              onClick={e => {
-                                e.preventDefault(); e.stopPropagation();
-                                window.open(traceHref(t.traceId, { kiosk: true, pageRange: range }), '_blank', 'noopener,noreferrer');
-                              }} />
+                            // Traces shadcn S4 — ui/IconButton → shadcn Button + coremetry
+                            // Tooltip; glif kabuğu (btn-icon-glyph) aynı → hücre DOM'u aynı.
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button variant="ghost" size="icon-xs" className="row-kiosk" data-row-kiosk=""
+                                  aria-label="Kiosk görünümünde aç (yeni pencere)"
+                                  onClick={e => {
+                                    e.preventDefault(); e.stopPropagation();
+                                    window.open(traceHref(t.traceId, { kiosk: true, pageRange: range }), '_blank', 'noopener,noreferrer');
+                                  }}>
+                                  <span className="btn-icon-glyph" aria-hidden="true"><span aria-hidden="true">⧉</span></span>
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Kiosk: kromsuz tam ekran şelale + loglar, yeni pencerede</TooltipContent>
+                            </Tooltip>
                           )}
                         </td>
                       );

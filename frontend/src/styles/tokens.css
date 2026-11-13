@@ -188,6 +188,16 @@
   .cm-detail-sheet { background: var(--bg); border-color: var(--border); box-shadow: var(--shadow-pop); }
 }
 
+/* Traces shadcn S4 — satır-içi kiosk düğmesi artık shadcn Button: tabanındaki
+   `relative` yardımcısı (utilities katmanı) legacy `.row-kiosk { position:
+   absolute }` kuralını yenerdi ve düğme hücre akışına düşerdi. Konum aynı
+   katmanda geri sabitlenir; geri kalan (sağ/üst/opaklık) globals.css'te.
+   Seçici öznitelik (data-row-kiosk): utilities katmanında eski sınıf adı
+   kullanmak bundle-budget çakışma kapısına takılır. */
+@layer utilities {
+  [data-row-kiosk][data-slot="button"] { position: absolute; }
+}
+
 /* v0.10.1781 (operatör) — CoSRE başlığındaki "🕘 Geçmiş" / "Temizle" (shadcn
    Button, ghost) tarayıcının VARSAYILAN düğme kabuğuyla çiziliyordu: gri
    bevel, UA gölgesi, sistem yazı tipi. Neden: preflight yok (index.css) ve

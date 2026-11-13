@@ -1912,6 +1912,15 @@ td.row-detail tbody tr:has(> td > .row-link):hover > td { background: var(--bg3)
 .row-link:hover { text-decoration: none; }
 .row-link--name:hover { color: var(--accent2); text-decoration: underline; text-underline-offset: 3px; }
 .row-link:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+/* Traces shadcn S4 (onaylı mockup §3) — /traces listesinde fokus halkası
+   hücre başına değil SATIRIN tamamında: shadcn --ring rengi, 2px içe.
+   Her hücre yine kendi gerçek linki (orta tık / ⌘-tık aynı); yalnız
+   görünüm satıra taşınır. Seçici satırın data-table-id'si — başka tablo
+   etkilenmez. */
+tr[data-table-id="traces-list"] .row-link:focus-visible { outline: none; }
+tr[data-table-id="traces-list"]:has(.row-link:focus-visible) > td { box-shadow: inset 0 2px 0 var(--ring), inset 0 -2px 0 var(--ring); }
+tr[data-table-id="traces-list"]:has(.row-link:focus-visible) > td:first-child { box-shadow: inset 2px 2px 0 var(--ring), inset 0 -2px 0 var(--ring); }
+tr[data-table-id="traces-list"]:has(.row-link:focus-visible) > td:last-child { box-shadow: inset -2px 2px 0 var(--ring), inset 0 -2px 0 var(--ring); }
 
 /* v0.10.939 (tablo standardı T12) — tablonun İÇİNDEKİ durum satırı
    (DataTableState): tek <tr>, tek colSpan hücre; başlık yerinde kalır.
