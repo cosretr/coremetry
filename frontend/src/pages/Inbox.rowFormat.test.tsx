@@ -2,9 +2,9 @@
 //
 // Inbox.rowFormat — v0.10.1084 (operatör: "tekilleştir, Exceptions'taki format
 // güzel"). Problems kuyruğu satırı Exceptions listesinin biçiminde:
-//   • kolonlar (v0.10.1529, Problem standardı R2 — operatör "mockup + ikincil
-//     kolonlar"): Öncelik · Ne bozuk · Etki · Ne zamandan beri · Güven · Karar ·
-//     Occurrences · Last seen · Assignee (ayrı Source / Service kolonu yok);
+//   • kolonlar (v0.10.2121, Problems sadeleştirme S1 — operatör onaylı mockup):
+//     Öncelik · Ne bozuk · Servis · Ekip · Tür · Ne zamandan beri · İlgilenen
+//     (ayrı Source kolonu yok; oluşum sayısı başlığın alt satırında);
 //   • başlık hücresi ORTAK bileşen (TriageTitleCell): 1. satır kalın başlık
 //     (incident/problem → olayın cümlesi, exception → tip; mono + hata rengi)
 //     + satır içi durum çipi, 2. satır soluk ayrıntı (kaynak · incident adı /
@@ -111,7 +111,9 @@ describe('Problems satırı — Exceptions biçimi (v0.10.1084)', () => {
   it('kolonlar Exceptions listesinin düzeninde; ayrı Source kolonu yok', async () => {
     const el = await mount();
     const heads = [...table(el).querySelectorAll('thead th')].map(th => th.textContent?.trim() ?? '');
-    const labels = ['Öncelik', 'Ne bozuk', 'Etki', 'Ne zamandan beri', 'Güven', 'Karar', 'Occurrences', 'Last seen', 'Assignee'];
+    // v0.10.2121 (Problems sadeleştirme S1, operatör onaylı mockup) — Etki /
+    // Güven / Karar / Occurrences / Last seen kalktı; Servis · Ekip · Tür geldi.
+    const labels = ['Öncelik', 'Ne bozuk', 'Servis', 'Ekip', 'Tür', 'Ne zamandan beri', 'İlgilenen'];
     let at = -1;
     for (const l of labels) {
       // Sıralama oku başlığın başında ya da sonunda olabilir (sayısal kolon).
@@ -120,7 +122,9 @@ describe('Problems satırı — Exceptions biçimi (v0.10.1084)', () => {
       at = i;
     }
     expect(heads.some(h => h.includes('Source'))).toBe(false);
-    expect(heads.some(h => h === 'Service' || h.startsWith('Service'))).toBe(false);
+    for (const gone of ['Etki', 'Güven', 'Karar', 'Occurrences', 'Last seen']) {
+      expect(heads.some(h => h.includes(gone)), `${gone} listeden kalkmalı`).toBe(false);
+    }
   });
 
   it('katlanmış incident: kalın cümle + durum çipi, soluk kaynak · ad, "2 problem", gerekçe yok', async () => {
@@ -133,9 +137,10 @@ describe('Problems satırı — Exceptions biçimi (v0.10.1084)', () => {
     expect(head.querySelector('.dt-trunc')?.textContent).toBe(SENT);
     expect(head.textContent).toContain('open'); // durum çipi başlık satırında
     expect(titleCell.querySelector('.triage-sub')?.textContent).toBe('Incident · db:couchbase@orders — DB health · couchbase');
-    // v0.10.1529 — std'siz satırda özne başlık hücresinin bağlam satırında.
-    expect(titleCell.querySelector('.std-ctx')?.textContent).toContain('orders');
-    expect(cells[7].textContent).toBe('2 problem');
+    // v0.10.2121 — özne Servis kolonunda; katlanmış problem sayısı başlığın alt satırında.
+    expect(cells[3].textContent).toContain('orders');
+    expect(titleCell.querySelector('.std-ctx .ib-occ')?.textContent).toBe('2 problem');
+    expect(cells[5].textContent).toBe('Incident');
     expect(r.textContent).not.toContain('Declared incident');
     expect(r.textContent).not.toContain('kaynak önceliği korundu');
   });
@@ -150,7 +155,8 @@ describe('Problems satırı — Exceptions biçimi (v0.10.1084)', () => {
     const sub = cells[2].querySelector('.triage-sub')!;
     expect(sub.classList.contains('mono')).toBe(true);
     expect(sub.textContent).toBe('Read timed out');
-    expect(cells[7].textContent).toBe('42');
+    expect(cells[2].querySelector('.std-ctx .ib-occ')?.textContent).toBe('42 oluşum'); // v0.10.2121
+    expect(cells[5].textContent).toBe('Exception');
   });
 
   it('v0.10.1529 — std satırı: özne mono · manşet, kaynak çipi + kanıt, etki, ne zamandan beri, güven, Karar', async () => {
@@ -177,15 +183,34 @@ describe('Problems satırı — Exceptions biçimi (v0.10.1084)', () => {
     expect(cells[2].querySelector('.triage-sub .std-src')?.textContent).toBe('VM · örneklenmemiş');
     expect(cells[2].querySelector('.triage-sub')?.textContent).toContain('eşiğin üstünde');
     expect(cells[2].querySelector('.std-ctx')?.textContent).toContain('yakın deploy: v2.3.1');
-    expect(cells[3].querySelector('.std-impact__main')?.textContent).toBe('%0,7 hata · normal %0,05 (14×)');
-    expect(cells[3].querySelector('.std-impact__sub')?.textContent).toBe('~420 hatalı istek/dk');
-    expect(cells[4].textContent).toContain('beri');
-    expect(cells[4].textContent).toContain('5 sa 40 dk · sürüyor');
-    expect(cells[5].textContent).toBe('YÜKSEK');
-    // D1 — editor iki düğmeyi görür; satır hover/focus'ta görünür (pv-row).
-    const pv = cells[6].querySelector('.pv-row')!;
+    // v0.10.2121 (S1) — Etki ve Güven listeden kalktı (detayda); Servis · Ekip · Tür.
+    expect(r.querySelector('.std-impact')).toBeNull();
+    expect(cells[3].textContent).toContain('mobile-bff');
+    expect(cells[5].textContent).toBe('Alarm');
+    expect(cells[6].textContent).toContain('beri');
+    expect(cells[6].textContent).toContain('5 sa 40 dk · sürüyor');
+    // D1 — editor iki düğmeyi görür; satır hover/focus'ta görünür (pv-row) —
+    // v0.10.2121: Karar kolonu kalktı, triyaj İlgilenen hücresinde.
+    const pv = cells[7].querySelector('.pv-row')!;
     expect([...pv.querySelectorAll('button')].map(b => b.textContent)).toEqual(['Gerçek problem', 'Problem değil ▾']); // v0.10.1531 — gerekçe diyaloğu
     expect(pv.classList.contains('is-set')).toBe(false);
+  });
+
+  it('v0.10.2121 — Ekip: çok ekipli satır "N ekip" (liste title\'da), tek ekip çip, sahipsiz soluk', async () => {
+    m.items = [
+      { ...EXC, ownerTeam: 'team-a', teams: ['team-a', 'team-b', 'team-c'] },
+      { ...EXC, id: 'exception:fp2', title: 'java.lang.IllegalStateException', ownerTeam: 'team-a',
+        exception: { fingerprint: 'fp2', type: 'java.lang.IllegalStateException', message: 'm', occurrences: 7 } },
+      { ...EXC, id: 'exception:fp3', title: 'java.lang.NullPointerException',
+        exception: { fingerprint: 'fp3', type: 'java.lang.NullPointerException', message: 'm', occurrences: 7 } },
+    ] as InboxItem[];
+    const el = await mount();
+    const multi = rowOf(el, 'SocketTimeoutException').querySelectorAll('td')[4];
+    expect(multi.textContent).toBe('3 ekip');
+    expect(multi.querySelector('[title]')?.getAttribute('title')).toBe('team-a, team-b, team-c');
+    const single = rowOf(el, 'IllegalStateException').querySelectorAll('td')[4];
+    expect(single.querySelector('.btn-chip')?.textContent).toContain('team-a');
+    expect(rowOf(el, 'NullPointerException').querySelectorAll('td')[4].textContent).toBe('sahipsiz');
   });
 
   it('iki liste AYNI başlık bileşenini kullanır (ikinci tasarım yok)', () => {

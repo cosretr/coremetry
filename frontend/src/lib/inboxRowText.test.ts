@@ -2,7 +2,7 @@
 // format güzel"): Problems satırının başlık / etiket / Occurrences metni.
 import { describe, it, expect } from 'vitest';
 import type { InboxItem } from './types';
-import { rowSentence, inboxRowHeadline, inboxRowLabel, inboxOccurrencesLabel } from './inboxRowText';
+import { rowSentence, inboxRowHeadline, inboxRowLabel, inboxOccurrencesLabel, inboxKindLabel } from './inboxRowText';
 
 const base = {
   source: 's', priority: 'P1' as const, priorityReason: 'r', severity: 'critical', service: 'svc',
@@ -46,5 +46,14 @@ describe('inboxRowText', () => {
       anomaly: { id: 'a', kind: 'trace_op', pattern: 'POST /pay', peakRatio: 4, currentRatio: 2 } };
     expect(inboxRowHeadline(a)).toBe('trace_op · POST /pay');
     expect(inboxOccurrencesLabel(a)).toBeNull();
+  });
+});
+
+describe('inboxKindLabel (v0.10.2121, Tür kolonu)', () => {
+  it.each([
+    ['problem', 'Alarm'], ['exception', 'Exception'], ['httperror', 'HTTP hatası'],
+    ['anomaly', 'Anomali'], ['incident', 'Incident'], ['yeni', 'Kaynak X'],
+  ])('%s → %s', (kind, want) => {
+    expect(inboxKindLabel({ kind, source: 'Kaynak X' } as Pick<InboxItem, 'kind' | 'source'>)).toBe(want);
   });
 });

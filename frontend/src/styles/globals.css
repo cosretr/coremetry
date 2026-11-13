@@ -5290,6 +5290,11 @@ a.ins-val:hover { text-decoration: underline; }
    dokunulmadı). */
 .ib-when { font-size: var(--fs-md); }
 .ib-when__ago { color: var(--text3); margin-top: var(--sp-1); font-size: var(--fs-xs); }
+/* v0.10.2121 — Problems sadeleştirme S1: İlgilenen hücresi (atanan + hover
+   triyajı alt alta), çok ekipli satır sayısı, alt satırdaki oluşum sayısı. */
+.ib-owner { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-1); }
+.ib-team { color: var(--text2); white-space: nowrap; }
+.ib-occ { font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 /* ── Servis dikkat şeridi — v0.10.784 (components/ServiceAttentionStrip.tsx).
    Eski kırmızı callout'un sıkı hâli: başlık satırı 20px, satır 22px, kart

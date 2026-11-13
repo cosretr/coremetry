@@ -14,7 +14,7 @@ import { useInbox, useServicesMetadata } from '@/lib/queries';
 import { tsCompact, tsLong, fmtFixed, fmtAgoNs, rowClickHandlers } from '@/lib/utils';
 // v0.10.1084 — Exceptions listesiyle ortak başlık hücresi + satır metni (saf).
 import { TriageTitleCell } from '@/features/anomalies/TriageTitleCell';
-import { inboxRowHeadline, inboxRowLabel, inboxOccurrencesLabel } from '@/lib/inboxRowText';
+import { inboxRowHeadline, inboxRowLabel, inboxOccurrencesLabel, inboxKindLabel } from '@/lib/inboxRowText';
 import { teamOptionsCI } from '@/lib/teamOptions';
 import { derivedTeamTitle, parseSubjectLane } from '@/lib/problemSubject';
 import { decodeCsvSet, encodeCsvSet, readInboxTeam, INBOX_TEAM_PARAM, INBOX_CAT_PARAM, INBOX_CAT_ALL, INBOX_CAT_LABEL } from '@/lib/inboxUrl';
@@ -56,8 +56,7 @@ import { ProblemVerdictRow } from '@/components/ProblemVerdictActions';
 import { useVerdictRowContext } from '@/components/useVerdictRowContext'; // v0.10.1529 — satır Karar hücresi (D1); v0.10.1626 tek dizin
 import { NoiseReasonButton, type NoiseReasonChoice } from '@/components/NoiseReasonButton'; // v0.10.1531 — toplu triyaj
 import {
-  splitStdHeadline, stdSourceChip, stdSourceName, stdSamplingNote, stdImpactSecondary, stdSinceLine, stdDurationLine,
-  stdConfidenceTone, stdConfidenceRank, stdGateTitle, STD_CONFIDENCE_LABEL,
+  splitStdHeadline, stdSourceChip, stdSourceName, stdSamplingNote, stdSinceLine, stdDurationLine,
 } from '@/lib/problemStandardView'; // v0.10.1529 — Problem standardı R2
 import { verdictOf, countNoise, filterByVerdictView, parseVerdictView, inboxVerdictSubject, type VerdictView } from '@/lib/problemVerdict';
 import { rowPassesKindFacet } from '@/lib/inboxBuckets'; // v0.10.1803 — Oracle P1 problem kovasında
@@ -224,31 +223,22 @@ const PRIO_RANK: Record<string, number> = { P1: 3, P2: 2, P3: 1 };
 // sıralama kimliğini (`firstSeen`) devralır — v0.10.1081 varsayılan sıralaması
 // ve paylaşılan `s_inbox=firstSeen` linkleri aynen çalışır. Satırın std'si
 // yoksa (eski önbellek) hücreler v0.10.1084 biçimine düşer.
+// v0.10.2121 (Problems sadeleştirme S1, docs/frontend/problems-page-plan.md;
+// mockup operatör onaylı: "güzel, tüm problemler gözüksün") — Öncelik · Ne
+// bozuk · Servis · Ekip · Tür · Ne zamandan beri · İlgilenen. Etki / Güven /
+// Karar / Occurrences / Last seen listeden kalktı (ayrıntı detay sayfasında);
+// oluşum sayısı "Ne bozuk"un alt satırında, satır triyajı (D1) İlgilenen
+// hücresinde hover/focus'ta (tablo standardı: eylemler tek sağ sütunda).
+// "Ne zamandan beri" `firstSeen` sıralama kimliğini korur (s_inbox linkleri).
 const INBOX_COLS: DataTableColumn<InboxItem>[] = [
   { id: 'priority', label: 'Öncelik', sortValue: it => PRIO_RANK[it.priority] ?? 0, naturalDir: 'desc', width: 84, minWidth: 80, priority: 1 },
   // v0.9.648 — ESNEK kolon: başlık serbest metin ve en geniş olan.
   { id: 'detail',   label: 'Ne bozuk',  sortValue: it => it.std?.headline ?? inboxRowHeadline(it), naturalDir: 'asc', flex: true, minWidth: 260, priority: 1 },
-  { id: 'impact',   label: 'Etki', width: 230, minWidth: 170, priority: 1 },
+  { id: 'service',  label: 'Servis', sortValue: it => it.service, naturalDir: 'asc', width: 170, minWidth: 120, priority: 2 },
+  { id: 'team',     label: 'Ekip', width: 150, minWidth: 110, priority: 2 },
+  { id: 'kind',     label: 'Tür', width: 110, minWidth: 90, priority: 3 },
   { id: 'firstSeen', label: 'Ne zamandan beri', sortValue: it => it.startedAt, naturalDir: 'desc', width: 160, minWidth: 140, priority: 2 },
-  { id: 'confidence', label: 'Güven', sortValue: it => stdConfidenceRank(it.std), naturalDir: 'desc', width: 92, minWidth: 84, priority: 2 },
-  { id: 'verdict',  label: 'Karar', width: 236, minWidth: 220, priority: 2 },
-  // v0.9.331 — Occurrences is back. The operator insisted on keeping this
-  // column on /problems (v0.9.315: "ben occurences kolonu kalkmasını
-  // istemedim"); when the merged queue took over the Problems name in
-  // v0.9.323 the column did not come with it. On a triage list the number
-  // answers the question the row cannot: is this sustained, or did it fire
-  // once. v0.10.1084 — incident satırında bağlı (katlanmış) problem sayısı.
-  { id: 'occurrences', label: 'Occurrences',
-    sortValue: it => it.exception?.occurrences ?? it.incident?.problemCount ?? 0,
-    naturalDir: 'desc', numeric: true, width: 110, minWidth: 96, priority: 3 },
-  // v0.9.333 — First seen is its own column again (operator: "First seen ayrı
-  // kolon olabilir, öyleydi"). It was folded into the Last seen cell as a
-  // conditional "· ilk …" suffix, which meant it vanished whenever the two
-  // timestamps matched and could never be sorted on. "What started first" is
-  // the question that orders a cascade; "what fired last" is a different one.
-  // v0.10.736 — 13 px mono damga ("16.09.2026 11:00:15" ≈ 150 px) sığsın: 150/170 → 168/180.
-  { id: 'lastSeen', label: 'Last seen', sortValue: it => it.lastSeen,        naturalDir: 'desc', width: 136, minWidth: 136, priority: 4 },
-  { id: 'assignee', label: 'Assignee', sortValue: it => it.assignee ?? '',   naturalDir: 'asc', width: 150, minWidth: 110, priority: 4 },
+  { id: 'assignee', label: 'İlgilenen', sortValue: it => it.assignee ?? '', naturalDir: 'asc', width: 236, minWidth: 150, priority: 3 },
 ];
 
 // v0.10.740 — varsayılan occurrence tabanı (sunucu inboxDefaultMinOcc ile aynı).
@@ -667,7 +657,10 @@ export default function InboxPage() {
   // so re-ordering here would corrupt the order the cap was applied in.
   const inboxRows = filtered ?? [];
   const dt = useDataTable<InboxItem>({
-    storageKey: 'inbox',
+    // v0.10.2121 — 'inbox2': eski kolon genişlikleri yeni düzene taşınmasın;
+    // sıralama URL'i paylaşılan linkler için `s_inbox` kalır.
+    storageKey: 'inbox2',
+    sortUrlKey: 's_inbox',
     columns: INBOX_COLS,
     rows: inboxRows,
     // v0.10.1081 — varsayılan ilk görülme (en yeni önce); kişisel kayıt yok,
@@ -1325,17 +1318,8 @@ export default function InboxPage() {
                       );
                     })()}
                     <div className="std-ctx">
-                      {!it.std && (
-                        // std'siz satır: özne başlıkta yok → v0.10.1084'teki gibi link.
-                        ora && isSyntheticOracleService(it.service) ? (
-                          <span className="mono cell-faint" title="Trace → servis çözümü bu operasyon için servis bulamadı">{it.service}</span>
-                        ) : (
-                          <SubjectLink service={it.service} subjectKind={it.subjectKind}
-                            href={serviceHref(it.service, { range: inboxItemWindow(it) })}
-                            onClick={e => e.stopPropagation()}
-                            emptyFallback={<span style={{ color: 'var(--text3)' }}>(none)</span>} />
-                        )
-                      )}
+                      {/* v0.10.2121 — özne Servis, ekip Ekip kolonunda; oluşum sayısı burada. */}
+                      {occLine(it) && <span className="ib-occ">{occLine(it)}</span>}
                       {it.std?.context?.map(c => <span key={c}>{c}</span>)}
                       {/* v0.10.949 — aynı exception aynı anda N serviste. */}
                       {spread && (
@@ -1346,40 +1330,22 @@ export default function InboxPage() {
                           {spread.n} servis
                         </span>
                       )}
-                      {it.ownerTeam && (
-                        <Chip size="xs" active={ownerFilter === it.ownerTeam}
-                          onClick={e => {
-                            e.stopPropagation();
-                            setOwnerFilter(ownerFilter === it.ownerTeam ? '' : (it.ownerTeam ?? ''));
-                          }}
-                          title={teamChipTitle(it, ownerFilter === it.ownerTeam
-                            ? `Clear owner filter`
-                            : `Filter inbox to owner ${it.ownerTeam}`)}>
-                          <Users size={11} strokeWidth={1.75} /> {it.teamsVia ? '≈ ' : ''}{it.ownerTeam}
-                        </Chip>
-                      )}
-                      {it.sreTeam && (
-                        <Chip size="xs" active={sreFilter === it.sreTeam}
-                          onClick={e => {
-                            e.stopPropagation();
-                            setSreFilter(sreFilter === it.sreTeam ? '' : (it.sreTeam ?? ''));
-                          }}
-                          title={teamChipTitle(it, sreFilter === it.sreTeam
-                            ? `Clear SRE filter`
-                            : `Filter inbox to SRE ${it.sreTeam}`)}>
-                          <Shield size={11} strokeWidth={1.75} /> {it.teamsVia ? '≈ ' : ''}{it.sreTeam}
-                        </Chip>
-                      )}
                     </div>
                   </td>
                   <td>
-                    {it.std ? (
-                      <div className="std-impact" title={it.std.impact.primary.text}>
-                        <div className="std-impact__main">{it.std.impact.primary.text}</div>
-                        {stdImpactSecondary(it.std) && <div className="std-impact__sub">{stdImpactSecondary(it.std)}</div>}
-                      </div>
-                    ) : <span style={{ color: 'var(--text3)' }}>—</span>}
+                    {ora && isSyntheticOracleService(it.service) ? (
+                      <span className="mono cell-faint" title="Trace → servis çözümü bu operasyon için servis bulamadı">{it.service}</span>
+                    ) : (
+                      <SubjectLink service={it.service} subjectKind={it.subjectKind}
+                        href={serviceHref(it.service, { range: inboxItemWindow(it) })}
+                        onClick={e => e.stopPropagation()}
+                        emptyFallback={<span className="cell-faint">—</span>} />
+                    )}
                   </td>
+                  <td>
+                    <TeamCell it={it} active={teamFilter} onPick={setTeamFilter} />
+                  </td>
+                  <td>{inboxKindLabel(it)}</td>
                   {/* v0.10.736 — 13 px mono damga sınıfta (ib-when). v0.10.1529 —
                       "Ne zamandan beri": başlangıç + süre · sürüyor; tam damga title'da. */}
                   <td className="ib-when" title={it.startedAt ? tsLong(it.startedAt) : undefined}>
@@ -1396,32 +1362,13 @@ export default function InboxPage() {
                         : <span style={{ color: 'var(--text3)' }}>—</span>}
                   </td>
                   <td>
-                    {it.std
-                      ? <Badge tone={stdConfidenceTone(it.std.confidence.level)} title={stdGateTitle(it.std)}>
-                          {STD_CONFIDENCE_LABEL[it.std.confidence.level]}
-                        </Badge>
-                      : <span style={{ color: 'var(--text3)' }}>—</span>}
-                  </td>
-                  <td>
-                    {/* v0.10.1529 (D1) — satır triyajı hover/focus'ta (pv-row). */}
-                    <ProblemVerdictRow item={it} ctx={verdictCtx} />
-                  </td>
-                  <td className="num">
-                    {/* v0.10.1084 — incident satırında katlanmış (bağlı) problem sayısı. */}
-                    {inboxOccurrencesLabel(it) ?? <span style={{ color: 'var(--text3)' }}>—</span>}
-                  </td>
-                  <td className="mono ib-when" title={tsLong(it.lastSeen)}>
-                    {/* v0.9.333 — yaş ve ilk-görülme artık kendi kolonunda.
-                        v0.9.255'te ikisi bu hücreye sıkıştırılmıştı ve ilk
-                        görülme yalnız iki damga FARKLIYSA çiziliyordu: yani
-                        exception satırlarında çoğu zaman hiç görünmüyordu ve
-                        hiçbir zaman sıralanamıyordu. */}
-                    {tsCompact(it.lastSeen)}
-                  </td>
-                  <td>
-                    {it.assignee
-                      ? <AssigneePill v={it.assignee} />
-                      : <span style={{ color: 'var(--text3)' }}>—</span>}
+                    <div className="ib-owner">
+                      {it.assignee
+                        ? <AssigneePill v={it.assignee} />
+                        : <span className="cell-faint">—</span>}
+                      {/* v0.10.1529 (D1) — satır triyajı hover/focus'ta (pv-row). */}
+                      <ProblemVerdictRow item={it} ctx={verdictCtx} />
+                    </div>
                   </td>
                 </tr>
                 );
@@ -1496,6 +1443,33 @@ function StatusBadge({ s }: { s?: string }) {
 }
 
 // v0.10.922 (sade palet adım 1) — atanan kişi/takım üst veri: mavi değil nötr.
+// occLine — v0.10.2121: "Ne bozuk" alt satırındaki oluşum sayısı (exception →
+// "N oluşum", katlanmış incident → "N problem"); yoksa null.
+function occLine(it: InboxItem): string | null {
+  const l = inboxOccurrencesLabel(it);
+  if (!l) return null;
+  return it.exception ? `${l} oluşum` : l;
+}
+
+// TeamCell — v0.10.2121 "Ekip" kolonu (plan §4): tek ekip → ad (tık: ?team=
+// süzgeci, owner VEYA SRE); çok ekipli exception → "N ekip" (liste title'da);
+// eşleme yok → soluk "sahipsiz". Owner yoksa SRE.
+function TeamCell({ it, active, onPick }: { it: InboxItem; active: string; onPick: (v: string) => void }) {
+  if (it.teams && it.teams.length >= 2) {
+    return <span className="ib-team" title={it.teams.join(', ')}>{it.teams.length} ekip</span>;
+  }
+  const t = it.ownerTeam || it.sreTeam;
+  if (!t) return <span className="cell-faint">sahipsiz</span>;
+  const on = active === t;
+  return (
+    <Chip size="xs" active={on}
+      onClick={e => { e.stopPropagation(); onPick(on ? '' : t); }}
+      title={teamChipTitle(it, on ? 'Ekip süzgecini kaldır' : `Yalnız ${t} ekibinin problemleri`)}>
+      {it.ownerTeam ? <Users size={11} strokeWidth={1.75} /> : <Shield size={11} strokeWidth={1.75} />} {it.teamsVia ? '≈ ' : ''}{t}
+    </Chip>
+  );
+}
+
 function AssigneePill({ v }: { v: string }) {
   const isTeam = !v.includes('@');
   return (

@@ -13859,3 +13859,16 @@ eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
 - `ML_DETECTOR_TR.svc_volume_spike` = "Servis hacmi sıçradı"; `signalKind` trace. Liste/detay başlığı
   (`stripServicePrefix`) "<svc> servisi " önekini de kırpar → "Önceki 24 saatte N, son 24 saatte M span yazdı; K kat".
   Düz cümle sunucu kartından (v0.10.2118 `volumeSpikeHead`). Ayarlar → ML listesine GİRMEZ (ML motoru dedektörü değil).
+
+## 2026-11-13 — v0.10.2121 — Problems sadeleştirme S1: kolonlar (mockup operatör onaylı)
+- `/inbox` kolonları: Öncelik · Ne bozuk · Servis · Ekip · Tür · Ne zamandan beri · İlgilenen
+  (`docs/frontend/problems-page-plan.md` S1). Etki / Güven / Karar / Occurrences / Last seen listeden kalktı
+  (ayrıntı detay sayfasında); oluşum sayısı "Ne bozuk" alt satırında ("N oluşum", incident "N problem").
+- Servis = `SubjectLink` (DB / dış kaynak dahil; Oracle sentetik servis soluk); başlık hücresinin bağlam satırındaki
+  özne linki ve owner/SRE çipleri bu kolonlara taşındı. Ekip: tek ekip → çip (tık `?team=`, owner VEYA SRE; owner
+  yoksa SRE), çok ekipli exception → "N ekip" (sunucu `InboxItem.teams`, yalnız ≥ 2; yayılım ortakları katalogdan,
+  ek okuma yok), eşleme yok → soluk "sahipsiz". Tür: Alarm / Exception / HTTP hatası / Anomali / Incident.
+- Karar kolonu kalktı; satır triyajı (D1, hover/focus) İlgilenen hücresinde atanan kişinin altında (tablo standardı:
+  eylemler tek sağ sütunda) — plan "hover eylemleri kalır" diyor, yeri ajan kararı.
+- `storageKey` `inbox` → `inbox2` (eski genişlikler taşınmaz); sıralama URL'i `sortUrlKey: 's_inbox'` ile aynı kaldı.
+- Ölçülmedi: kolon genişlikleri ve sığma tarayıcıda görülmedi.

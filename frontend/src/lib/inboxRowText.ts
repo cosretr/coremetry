@@ -49,3 +49,14 @@ export function inboxOccurrencesLabel(it: InboxItem): string | null {
   if (it.kind === 'incident' && n > 0) return `${n} problem`;
   return null;
 }
+
+// v0.10.2121 (Problems sadeleştirme S1) — "Tür" kolonunun etiketi. Kaynak
+// türü (InboxItem.kind); bilinmeyen tür sunucunun insan okunur kaynağına
+// (`source`) düşer.
+const KIND_LABEL_TR: Record<string, string> = {
+  problem: 'Alarm', exception: 'Exception', httperror: 'HTTP hatası', anomaly: 'Anomali', incident: 'Incident',
+};
+
+export function inboxKindLabel(it: Pick<InboxItem, 'kind' | 'source'>): string {
+  return KIND_LABEL_TR[it.kind] ?? it.source;
+}

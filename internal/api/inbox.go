@@ -63,7 +63,12 @@ type InboxItem struct {
 	// koymasını sağlar — türetim veritabanı SİSTEMİ düzeyindedir, tekil
 	// örnek düzeyinde değil.
 	TeamsVia string `json:"teamsVia,omitempty"`
-	Status   string `json:"status"` // open | acknowledged | resolved (problems);
+	// Teams — v0.10.2121 (Problems sadeleştirme S1, "Ekip" kolonu): satırın
+	// FARKLI ekipleri, yalnız ≥ 2 ise (çok servisli exception: kendi servisi +
+	// yayılım ortakları; servis başına owner, yoksa SRE). Tek ekipte boş —
+	// OwnerTeam / SRETeam yeter. annotateInboxTeams (inbox_teams.go).
+	Teams  []string `json:"teams,omitempty"`
+	Status string   `json:"status"` // open | acknowledged | resolved (problems);
 	// open | regressed (exceptions); active | cleared (anomalies);
 	// muted (v0.10.1042 — aktif susturmalı anomali, yalnız "all" görünümü)
 	Clusters []string `json:"clusters,omitempty"`
@@ -939,6 +944,9 @@ func (s *Server) inboxView(q url.Values) (string, func(ctx context.Context) (any
 		// v0.10.949 — yayılım işaretleri tabandan ÖNCE, her kipte (UI satır
 		// rozeti). Tabanın istisnası işarete değil floorEx'e bakar.
 		annotateInboxSpread(items, sp)
+		if mdErr == nil {
+			annotateInboxTeams(items, mdMap) // v0.10.2121 — yayılım ortaklarının ekipleri
+		}
 		// Occurrence floor — last of the row-level narrows, so `hidden` is
 		// honest (see applyInboxMinOcc).
 		items, hiddenByMinOcc := applyInboxMinOcc(items, minOcc, floorEx)

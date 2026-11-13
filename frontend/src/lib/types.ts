@@ -2817,6 +2817,8 @@ export interface InboxItem {
   // zorunda (türetim veritabanı SİSTEMİ düzeyinde, tekil örnek
   // düzeyinde değil).
   teamsVia?: string;
+  /** v0.10.2121 — Go InboxItem.Teams: farklı ekipler, yalnız ≥ 2 ise (çok servisli exception). */
+  teams?: string[];
   status: string;
   clusters?: string[];
   // v0.9.255 — enrichment sonuçları. Backend bunları ZATEN hesaplıyordu

@@ -14,7 +14,9 @@ describe('Inbox tarih hücreleri (v0.10.736)', () => {
     // v0.10.1068 — hücre tam damgayı `title`da taşır (yılsız gösterim).
     // v0.10.1529 — "Ne zamandan beri" hücresi ib-when (metin satırı; damga yalnız
     // std'siz yedekte mono span); Last seen mono ib-when.
-    expect((page.match(/<td className="mono ib-when"[ >]/g) ?? []).length).toBe(1);
+    // v0.10.2121 (Problems sadeleştirme S1, operatör onaylı mockup) — Last seen
+    // kolonu listeden kalktı; yalnız "Ne zamandan beri" hücresi kaldı.
+    expect((page.match(/<td className="mono ib-when"[ >]/g) ?? []).length).toBe(0);
     expect((page.match(/<td className="ib-when"[ >]/g) ?? []).length).toBe(1);
     expect(page).not.toContain('<td className="mono" style={{ fontSize: 11 }}>');
     expect(page).toContain('<div className="ib-when__ago">');
@@ -29,8 +31,9 @@ describe('Inbox tarih hücreleri (v0.10.736)', () => {
   it('kolon genişlikleri 13 px damgayı sığdırır', () => {
     // v0.10.1529 — first seen "Ne zamandan beri" oldu (aynı sıralama kimliği, 160 px).
     expect(page).toContain("{ id: 'firstSeen', label: 'Ne zamandan beri', sortValue: it => it.startedAt, naturalDir: 'desc', width: 160, minWidth: 140, priority: 2 }");
-    expect(page).toContain("{ id: 'lastSeen', label: 'Last seen', sortValue: it => it.lastSeen,        naturalDir: 'desc', width: 136, minWidth: 136, priority: 4 }");
-    expect((page.match(/\{tsCompact\(it\.(startedAt|lastSeen)\)\}/g) ?? []).length).toBe(2);
+    // v0.10.2121 — Last seen kolonu kalktı (S1); tek damga hücresi.
+    expect(page).not.toContain("id: 'lastSeen'");
+    expect((page.match(/\{tsCompact\(it\.(startedAt|lastSeen)\)\}/g) ?? []).length).toBe(1);
   });
 });
 

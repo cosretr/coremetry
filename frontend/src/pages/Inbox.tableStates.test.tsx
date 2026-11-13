@@ -227,12 +227,15 @@ describe('Inbox varsayılan şerit — dış kaynak satırı (v0.10.1026)', () =
     const ext = rowOf(el, 'OP_TRANSFER elapsed above band');
     expect(ext, 'dış kaynak satırı varsayılan listede çizilmeli').toBeTruthy();
     expect(ext!.querySelector('a[href^="/service"]'), 'ext: öznesine servis linki kuruldu').toBeNull();
-    // v0.10.1529 — Service kolonu kalktı; std'siz satırda özne başlık hücresinin bağlam satırında.
-    const subjectCell = ext!.querySelectorAll('td')[2].querySelector('.std-ctx') as HTMLElement;
+    // v0.10.2121 (Problems sadeleştirme S1) — özne kendi "Servis" kolonunda,
+    // ekip "Ekip" kolonunda (v0.10.1529'da başlık hücresinin bağlam satırıydı).
+    const cells = ext!.querySelectorAll('td');
+    const subjectCell = cells[3] as HTMLElement;
     expect(subjectCell.textContent).toContain('EXT');
     expect(subjectCell.textContent).toContain('orders-db · OP_TRANSFER');
     expect(subjectCell.querySelector('[title*="servis sayfası linki yok"]')).not.toBeNull();
-    expect(subjectCell.querySelector('.btn-chip'), 'sahipsiz dış kaynağa takım çipi çizildi').toBeNull();
+    expect(cells[4].querySelector('.btn-chip'), 'sahipsiz dış kaynağa takım çipi çizildi').toBeNull();
+    expect(cells[4].textContent).toBe('sahipsiz');
 
     // Kontrol: aynı listedeki servis satırı linkini korur.
     const svc = rowOf(el, 'SocketTimeout a');
