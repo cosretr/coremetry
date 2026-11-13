@@ -1,6 +1,7 @@
 // anomalyRegions.test.ts — v0.10.162 sözleşmesi (anomalyRegions.ts başlığı).
 import { describe, it, expect } from 'vitest';
-import { windowAnomalies, anomalyRegions, silencedSet, isSilenced, silenceKey, ANOMALY_KIND_COLOR } from './anomalyRegions';
+import { windowAnomalies, anomalyRegions, silencedSet, isSilenced, silenceKey, ANOMALY_KIND_COLOR, anomalyKindLabel } from './anomalyRegions';
+import { isMLAnomaly, anomalyRowHref } from './anomalyHref';
 import type { AnomalyEvent, AnomalySilence } from '@/lib/types';
 
 const S = 1e9;
@@ -71,5 +72,20 @@ describe('anomalyRegions verdict', () => {
     expect(no).toMatchObject({ color: 'var(--text3)', label: 'değil' });
     const yes = anomalyRegions([{ ...base, verdict: 'anomaly' }], new Set(), 1_699_999_000e9, 1_700_001_000e9)[0];
     expect(yes.label).toBe('trace_op ×3.0');
+  });
+});
+
+// v0.10.2080 — ML olayı eski satır şeklinde (kind "ml:<dedektör>").
+describe('ML olay satırı', () => {
+  it('ml: önekli tür ML sayılır, eski türler değil', () => {
+    expect(isMLAnomaly({ kind: 'ml:new_template' })).toBe(true);
+    expect(isMLAnomaly({ kind: 'ml:' })).toBe(false);
+    expect(isMLAnomaly({ kind: 'log_template_new' })).toBe(false);
+  });
+  it('ayrıntı ML sayfası, etiket dedektör adı', () => {
+    expect(anomalyRowHref({ id: 'a/b', kind: 'ml:new_template' })).toBe('/anomalies/ml/a%2Fb');
+    expect(anomalyRowHref({ id: 'x', kind: 'trace_op' })).toBe('/anomalies/x');
+    expect(anomalyKindLabel('ml:new_template')).toBe('ML · new_template');
+    expect(anomalyKindLabel('log_template_new')).toBe('yeni log şablonu');
   });
 });

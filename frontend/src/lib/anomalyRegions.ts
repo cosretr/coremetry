@@ -21,7 +21,12 @@ import { SUBJECT_METRIC_TR, subjectMetricOf } from '@/lib/anomalySubjectMetric';
  *  yerine; operatörün aradığı ad). Diğer özne metrikleri bugünkü gibi "özne". */
 function regionKindLabel(e: Pick<AnomalyEvent, 'kind' | 'pattern'>): string {
   if (subjectMetricOf(e) === 'consumer_lag') return SUBJECT_METRIC_TR.consumer_lag.label;
-  return ANOMALY_KIND_TR[e.kind] ?? e.kind;
+  return anomalyKindLabel(e.kind);
+}
+
+/** Tür etiketi: eski türler sözlükten, ML olayı "ML · <dedektör>". */
+export function anomalyKindLabel(kind: AnomalyEvent['kind']): string {
+  return ANOMALY_KIND_TR[kind] ?? (kind.startsWith('ml:') ? `ML · ${kind.slice(3)}` : kind);
 }
 
 export const ANOMALY_KIND_COLOR: Record<AnomalyEvent['kind'], string> = {

@@ -110,6 +110,10 @@ type MLEventsFilter struct {
 	Detector string
 	Signal   string
 	Service  string
+	// Services — v0.10.2080 (anomali erişicisi ListAnomalyFeed): servis
+	// kümesi, STRICT IN (eski süzgeçle aynı anlam). nil = kısıt yok; boş
+	// küme çağıranda elenir (okuma yapılmaz).
+	Services []string
 	Stage    string
 	Limit    int
 }
@@ -142,6 +146,10 @@ func (s *Store) ListMLEvents(ctx context.Context, f MLEventsFilter) ([]MLEvent, 
 	if f.Service != "" {
 		where = append(where, "service = ?")
 		args = append(args, f.Service)
+	}
+	if len(f.Services) > 0 {
+		where = append(where, "service IN ?")
+		args = append(args, f.Services)
 	}
 	if f.Stage != "" {
 		where = append(where, "stage = ?")

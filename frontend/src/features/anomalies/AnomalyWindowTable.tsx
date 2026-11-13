@@ -10,7 +10,8 @@
 import { Badge, LinkButton } from '@/components/ui';
 import { useDataTable, DataTableHead, DataTableColgroup, type ColumnDef } from '@/components/ui/DataTable';
 import { fmtDateTime } from '@/lib/utils';
-import { ANOMALY_KIND_COLOR, ANOMALY_KIND_TR, silenceKey } from '@/lib/anomalyRegions';
+import { ANOMALY_KIND_COLOR, anomalyKindLabel, silenceKey } from '@/lib/anomalyRegions';
+import { isMLAnomaly } from '@/lib/anomalyHref';
 import { anomalyRatioLabel } from '@/lib/anomalyBaseline'; // v0.10.1792
 import { SnoozeButton } from './SnoozeButton';
 import type { AnomalyEvent, AnomalySilence } from '@/lib/types';
@@ -57,7 +58,7 @@ export function AnomalyWindowTable({ events, silences, canEdit, onOpen, onMute, 
               <tr key={e.id} style={silence ? { color: 'var(--text3)' } : undefined}>
                 <td>
                   <span aria-hidden="true" style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: silence ? 'var(--text3)' : (ANOMALY_KIND_COLOR[e.kind] ?? 'var(--warn)'), marginRight: 6, verticalAlign: 'middle' }} />
-                  {ANOMALY_KIND_TR[e.kind] ?? e.kind}
+                  {anomalyKindLabel(e.kind)}
                 </td>
                 <td className="mono" title={e.pattern}>{e.pattern}</td>
                 <td className="mono">{fmtDateTime(new Date(e.startedAt / 1e6))}</td>
@@ -73,13 +74,19 @@ export function AnomalyWindowTable({ events, silences, canEdit, onOpen, onMute, 
                   {!e.verdict && !silence && <span className="field-hint">—</span>}
                 </td>
                 <td className="col-actions">
-                  <LinkButton onClick={() => onOpen(e.id)} title="Anomali çekmecesini aç">→ detay</LinkButton>
+                  <LinkButton onClick={() => onOpen(e.id)} title={isMLAnomaly(e) ? 'ML olay sayfasını aç' : 'Anomali çekmecesini aç'}>→ detay</LinkButton>
                   {canEdit && e.verdict !== 'anomaly' && (
                     <span style={{ marginLeft: 8 }}>
                       <LinkButton onClick={() => onVerdict(e, 'anomaly')} title="Gerçek anomali: kararı kaydet (dedektör hassasiyeti için sinyal)">Anomali</LinkButton>
                     </span>
                   )}
-                  {canEdit && !silence && e.verdict !== 'not_anomaly' && (
+                  {/* v0.10.2080 — ML olayı: susturma yok, «Değil» yalnız ML kararı */}
+                  {canEdit && isMLAnomaly(e) && e.verdict !== 'not_anomaly' && (
+                    <span style={{ marginLeft: 8 }}>
+                      <LinkButton onClick={() => onVerdict(e, 'not_anomaly')} title="Bu bir anomali değil: ML kararını kaydet">Değil</LinkButton>
+                    </span>
+                  )}
+                  {canEdit && !isMLAnomaly(e) && !silence && e.verdict !== 'not_anomaly' && (
                     <span style={{ marginLeft: 8 }}>
                       <SnoozeButton label="Değil → sessize al" title="Bu bir anomali değil: kararı kaydet + parmak izini sustur" onMute={sec => onMute(e, sec)} />
                     </span>
@@ -97,7 +104,7 @@ export function AnomalyWindowTable({ events, silences, canEdit, onOpen, onMute, 
         </table>
       </div>
       <div className="pod-cap">
-        <code className="mono">GET /api/anomalies/events</code> (son 24 saat, en yeni 200{truncated ? ' — KESİLDİ, liste tam değil' : ''}) · servis süzgeci istemcide · bant = [başlangıç, son görülme] (endedAt yok) · güven puanı yok (tepe = peakRatio) · «Anomali»/«Değil» = karar (anomaly_verdicts, olay başına son karar), «Değil» ayrıca susturur (kanonik parmak izi; akış + terfi kapısı okur).
+        <code className="mono">GET /api/anomalies/events</code> (eski + ML olayları, son 24 saat, en yeni 200{truncated ? ' — KESİLDİ, liste tam değil' : ''}) · servis süzgeci istemcide · bant = [başlangıç, son görülme] (endedAt yok) · güven puanı yok (tepe = peakRatio) · «Anomali»/«Değil» = karar (anomaly_verdicts, olay başına son karar), «Değil» ayrıca susturur (kanonik parmak izi; akış + terfi kapısı okur).
       </div>
     </>
   );

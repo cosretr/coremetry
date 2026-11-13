@@ -9,7 +9,7 @@ import { httpEnvScopeNote, httpEnvScopeReady } from '@/lib/httpEnvScopeNote';
 import { HttpEnvScopeBand } from './httpMetricsViz';
 import { overviewWindowItems, overviewWindowKpi, overviewWindowOffsetSec, overviewWindowSec, windowDelta } from './overviewWindowKpi';
 import { encodeRange } from '@/lib/urlState';
-import { useId, useMemo } from 'react';
+import { useEffect, useId, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import type { Service, TimeRange, SpanMetricSeries, OperationSummary, AnomalyEvent } from '@/lib/types';
@@ -20,6 +20,7 @@ import { panelMaxDataPoints, stepForWidth } from '@/lib/chartStep';
 import { encodeFilters } from '@/lib/urlState';
 import { useServiceDeploys, useAnomalyEvents, useAnomalySilences, useCreateAnomalySilence, usePutAnomalyVerdict } from '@/lib/queries';
 import { windowAnomalies, anomalyRegions, silencedSet } from '@/lib/anomalyRegions';
+import { isMLAnomaly, mlEventHref } from '@/lib/anomalyHref';
 import { anomalyEventSilenceBody } from '@/lib/inboxDrawer';
 import { readBandsParam, writeBandsParam } from '@/lib/bandsParam';
 import { toast } from '@/lib/toast';
@@ -589,12 +590,21 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
     enabled: !!anomalyParam && anomaliesQ.data !== undefined && !inList,
     staleTime: 60_000,
   });
-  const drawerEvent = inList ?? (rescueQ.data ?? null);
-  const openAnomaly = (id: string | null) => setSearchParams(prev => {
-    const p = new URLSearchParams(prev);
-    if (id) p.set('anomaly', id); else p.delete('anomaly');
-    return p;
-  }, { replace: true });
+  // v0.10.2080 — ML olayı (kind "ml:<dedektör>") eski çekmeceye girmez: kendi
+  // tam sayfası (/anomalies/ml/<id>); ?anomaly=<ML kimliği> bağlantısı oraya döner.
+  const drawerEvent = inList && isMLAnomaly(inList) ? null : inList ?? (rescueQ.data ?? null);
+  useEffect(() => {
+    if (inList && isMLAnomaly(inList)) navigate(mlEventHref(inList.id), { replace: true });
+  }, [inList, navigate]);
+  const openAnomaly = (id: string | null) => {
+    const ev = id ? (anomaliesQ.data?.items ?? []).find(e => e.id === id) : undefined;
+    if (ev && isMLAnomaly(ev)) { navigate(mlEventHref(ev.id)); return; }
+    setSearchParams(prev => {
+      const p = new URLSearchParams(prev);
+      if (id) p.set('anomaly', id); else p.delete('anomaly');
+      return p;
+    }, { replace: true });
+  };
   const muteAnomaly = async (e: AnomalyEvent, durationSec: number) => {
     // v0.10.1042 — gövde ORTAK kurucudan (lib/inboxDrawer anomalyEventSilenceBody):
     // fingerprint = OLAY KİMLİĞİ, sunucu iyi biçimli kimliği olduğu gibi saklar

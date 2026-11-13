@@ -7025,7 +7025,9 @@ export interface AnomalyEvent {
   // bastırılan istek hızı düşüşü; Problem açılmadı, bildirim gitmedi.
   // v0.10.1792 — `subject_red`: özne tabanı (endpoint / db / queue, Davis F1.4);
   // iç sinyal, Problem'e terfi etmez.
-  kind: 'log_pattern' | 'trace_op' | 'trace_op_latency' | 'elastic_ml' | 'log_template_new' | 'behavior_change' | 'calendar_traffic_drop' | 'subject_red';
+  // v0.10.2080 — `ml:<dedektör>`: ML olayı aynı satır şeklinde (sunucu
+  // chstore.ListAnomalyFeed); kimlik ML olay kimliği (lib/anomalyRegions isMLAnomaly).
+  kind: 'log_pattern' | 'trace_op' | 'trace_op_latency' | 'elastic_ml' | 'log_template_new' | 'behavior_change' | 'calendar_traffic_drop' | 'subject_red' | `ml:${string}`;
   pattern: string;
   service: string;
   startedAt: number;     // unix ns — first observation of the CURRENT episode (v0.10.1045)

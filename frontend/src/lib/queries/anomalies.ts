@@ -204,7 +204,15 @@ export function useCreateAnomalySilence() {
 export function usePutAnomalyVerdict() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (v: { id: string } & Parameters<typeof api.putAnomalyVerdict>[1]) => api.putAnomalyVerdict(v.id, v),
+    // v0.10.2080 — ML olayı da eski satır şeklinde gelir (kind "ml:<dedektör>");
+    // kararı ML karar ucuna yazılır (anomaly_verdicts 'ml:' önekli kimlik).
+    mutationFn: async (v: { id: string } & Parameters<typeof api.putAnomalyVerdict>[1]) => {
+      if (v.kind.startsWith('ml:')) {
+        await api.putMlVerdict(v.id, { verdict: v.verdict, detector: v.kind.slice(3), service: v.service });
+        return;
+      }
+      await api.putAnomalyVerdict(v.id, v);
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: keys.anomalies.all });
     },

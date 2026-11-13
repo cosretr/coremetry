@@ -95,17 +95,9 @@ func LegacySignal(kind string) string {
 	return chstore.MLSignalMetric
 }
 
-// unifiedMemberOpen — SAF: TS memberOpen (kapalı damgası yok VE son görülme 4 kovadan taze).
-func unifiedMemberOpen(e chstore.MLEvent, nowNs int64) bool {
-	if e.Stage == chstore.MLStageClosed {
-		return false
-	}
-	w := int64(e.WindowSec)
-	if w <= 0 {
-		w = 300
-	}
-	return nowNs-e.LastSeen <= 4*w*int64(time.Second)
-}
+// unifiedMemberOpen — SAF: TS memberOpen; kural chstore.MLEventOpen'da
+// (v0.10.2080: eski okuyucuların erişicisi ListAnomalyFeed de onu okur).
+func unifiedMemberOpen(e chstore.MLEvent, nowNs int64) bool { return chstore.MLEventOpen(e, nowNs) }
 
 func unifiedLegacyStatus(e chstore.AnomalyEvent) string {
 	if e.Verdict == chstore.VerdictNotAnomaly {
@@ -331,19 +323,7 @@ func BuildUnified(in UnifiedInput) []UnifiedRow {
 // kayıttır. ML olayı listede yoksa (ML kapalı, katalog dışı, kesildi)
 // eski satır aynen görünür.
 func legacySupersededByML(ml []chstore.MLEvent) map[string]bool {
-	var out map[string]bool
-	for _, e := range ml {
-		if e.Detector != detNewTemplate {
-			continue
-		}
-		if id := evStr(evidenceMap(e.Evidence), "legacyId"); id != "" {
-			if out == nil {
-				out = map[string]bool{}
-			}
-			out[id] = true
-		}
-	}
-	return out
+	return chstore.MLSupersededLegacyIDs(ml) // v0.10.2080: tek gövde (ListAnomalyFeed de okur)
 }
 
 func combineUnifiedStatus(ss []string) string {

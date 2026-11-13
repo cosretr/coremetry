@@ -41,6 +41,7 @@ import { tracesPivotHref } from '@/lib/pivotHref';
 import { PageShell } from '@/components/coremetry/PageShell';
 import { useEntityEnabled, useEntity, useEntityServices, useEntityContainers, useAnomalyEvents, useAnomalySilences } from '@/lib/queries';
 import { windowAnomalies, anomalyRegions, silencedSet } from '@/lib/anomalyRegions';
+import { isMLAnomaly, mlEventHref } from '@/lib/anomalyHref';
 import { entityHref, entityLiveness } from '@/lib/entityHref';
 import { PodIdentityLine, type PodPivot } from '@/pages/pod/PodIdentityLine';
 import { PodKpiStrip, type RedState } from '@/pages/pod/PodKpiStrip';
@@ -263,8 +264,12 @@ function PodDetail() {
   // v0.10.180 — banda tık: anomali çekmecesi servis sayfasında (?anomaly=), pod'da çekmece yok.
   const navigate = useNavigate();
   const onRegionClick = useCallback((rg: ChartTimeRegion) => {
-    if (rg.id && service) navigate(serviceHref(service, { range, params: { anomaly: rg.id } }));
-  }, [navigate, service, range]);
+    if (!rg.id || !service) return;
+    // v0.10.2080 — ML olayı kendi tam sayfasına (eski çekmece ML kimliğini çözemez).
+    const ev = podWindowEvents.find(e => e.id === rg.id);
+    if (ev && isMLAnomaly(ev)) { navigate(mlEventHref(ev.id)); return; }
+    navigate(serviceHref(service, { range, params: { anomaly: rg.id } }));
+  }, [navigate, service, range, podWindowEvents]);
   const podAnomalyRegions = useMemo(() => {
     if (!bandsOn || podWindowEvents.length === 0) return undefined;
     return anomalyRegions(podWindowEvents, silencedSet(silencesQ.data), from, to);

@@ -38,7 +38,8 @@ func TestAnomalyVerdictRoutesOutsideAPIGo(t *testing.T) {
 	// kararı ekler. Zenginleştirme zinciri artık tek yerde
 	// (anomaly_event_get.go enrichAnomalyEvents) ve events ucu + tekil uç
 	// ikisi de onu çağırır (anomaly_event_get_test.go).
-	if !strings.Contains(funcBody(string(apiGo), "getAnomalyEvents"), "enrichAnomalyEvents(ctx, s.store, ") {
+	feedGo, _ := os.ReadFile("anomaly_feed_routes.go") // v0.10.2080 — gövde buraya taşındı
+	if !strings.Contains(funcBody(string(feedGo), "buildAnomalyEvents"), "enrichAnomalyEvents(ctx, s.store, ") {
 		t.Fatal("events ucu ortak zenginleştirme zincirini çağırmıyor — karar eklenmez")
 	}
 	chain, _ := os.ReadFile("anomaly_event_get.go")

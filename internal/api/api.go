@@ -9475,32 +9475,11 @@ func (s *Server) getAnomalyEvents(w http.ResponseWriter, r *http.Request) {
 	since := parseDuration(q.Get("since"), 24*time.Hour)
 	limit := parseInt(q.Get("limit"), 200)
 	// v0.9.465 (dürüstlük A9) — zarf {items, activeTotal, clearedTotal,
-	// truncated}: sayılar SQL'den, kırpma söylenir (anahtar v2).
-	key := fmt.Sprintf("anomaly:events:v2:since=%s:limit=%d", since, limit)
+	// truncated}. v0.10.2080 — ML olayları da (ListAnomalyFeed); gövde
+	// anomaly_feed_routes.go'da, anahtar v3.
+	key := fmt.Sprintf("anomaly:events:v3:since=%s:limit=%d", since, limit)
 	s.serveCached(w, r, key, 30*time.Second, func(ctx context.Context) (any, error) {
-		sinceNs := time.Now().Add(-since).UnixNano()
-		rows, err := s.store.ListAnomalyEvents(ctx, chstore.ListAnomalyEventsFilter{
-			SinceNs: sinceNs,
-			Limit:   limit,
-		})
-		if err != nil {
-			return nil, err
-		}
-		activeN, clearedN, cErr := s.store.CountAnomalyEventsByStatus(ctx, sinceNs, 0)
-		if cErr != nil {
-			// Soft-fail: sayım yoksa frontend sayfa-türevine düşer;
-			// dürüstlük şeridi sayfayı asla boşaltmaz.
-			activeN, clearedN = 0, 0
-		}
-		// v0.10.1032 — zenginleştirme zinciri (cluster → deploy → kök neden
-		// → karar) tekil okumayla ORTAK: anomaly_event_get.go.
-		rows = enrichAnomalyEvents(ctx, s.store, rows)
-		return map[string]any{
-			"items":        rows,
-			"activeTotal":  activeN,
-			"clearedTotal": clearedN,
-			"truncated":    len(rows) >= limit,
-		}, nil
+		return s.buildAnomalyEvents(ctx, time.Now().Add(-since).UnixNano(), limit)
 	})
 }
 

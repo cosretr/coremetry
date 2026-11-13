@@ -13672,3 +13672,19 @@ eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
   `type:'metric'` builder paneli `panelQuery.ts` `mxFromLegacyMetricPanel` ile açılır. MQE'nin
   `saved_views` kaydı yoktu. Çeviride düşenler (önceden de): seri rengi, log ölçek;
   model birimi yalnız formül satırına geçer.
+
+## 2026-11-13 — v0.10.2080 — Anomali okuyucu taşıması 1: servis/Pod şeridi ML olaylarını da gösterir
+
+- Operatör onayı 2026-11-13: eski `anomaly_events` okuyucuları ML olaylarını da görsün, sonra eski
+  `log_template_new` silinsin. Tek erişici `chstore.ListAnomalyFeed` (eski okuma + bir `ml_events FINAL`
+  okuması, aynı süzgeç; SQL'de uygulanamayan kısım Go'da). ML olayı aynı satır şekli: `AnomalyEvent`,
+  kind `ml:<dedektör>`, kimlik ML olay kimliği. Tekilleştirme kuralı TEK gövde `chstore.MLSupersededLegacyIDs`
+  (birleşik liste `ml.BuildUnified` de onu çağırır); açık kuralı TEK `chstore.MLEventOpen`. Emekli `ml:` kopya
+  satırı (v0.10.2067 öncesi) ML olayıyla aynı kimliği taşır, bir kez görünür. ML okuma hatası yüzeyi boşaltmaz
+  (yalnız eski satırlar). Oran sütunu = gözlenen / taban (ML z-skoru oran diye yazılmaz); tabansız olay (ör.
+  new_template) sayım olayı: oran 0, taban türü `none` ("taban yok"), eski log_template_new ile aynı yorum.
+- Bu dilim: `GET /api/anomalies/events` (servis Overview şeridi + bantlar, Pod bantları). ML satırı "→ detay" ile
+  `/anomalies/ml/<id>`'e gider (eski çekmece ML kimliğini çözemez), "Anomali"/"Değil" ML karar ucuna yazar,
+  susturma yok. Sayaçlar (activeTotal/clearedTotal) listeyle aynı kümeyi sayar. Anahtar `anomaly:events:v3`;
+  ML kararı yazımı bu öneki de düşürür. Ek maliyet: istek başına bir ML okuması (LIMIT, max_execution_time 5),
+  30 sn önbellek; ES çağrısı yok.

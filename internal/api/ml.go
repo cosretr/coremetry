@@ -361,7 +361,8 @@ func (s *Server) putMLVerdict(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.cacheInvalidatePrefix(r.Context(), "ml:")
-	s.cacheInvalidatePrefix(r.Context(), unifiedCachePrefix) // v0.10.2051 — birleşik liste ML durumunu taşır
+	s.cacheInvalidatePrefix(r.Context(), unifiedCachePrefix)     // v0.10.2051 — birleşik liste ML durumunu taşır
+	s.cacheInvalidatePrefix(r.Context(), anomalyFeedCachePrefix) // v0.10.2080 — olay zarfı ML satırı taşır
 	details, _ := json.Marshal(map[string]string{"verdict": body.Verdict, "detector": body.Detector, "service": body.Service, "note": v.Note})
 	s.audit(r, "ml.verdict", "ml_event", id, string(details))
 	writeJSON(w, v)
@@ -384,7 +385,8 @@ func (s *Server) putMLConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.cacheInvalidatePrefix(r.Context(), "ml:")
-	s.cacheInvalidatePrefix(r.Context(), unifiedCachePrefix) // v0.10.2051 — birleşik liste ML durumunu taşır
+	s.cacheInvalidatePrefix(r.Context(), unifiedCachePrefix)     // v0.10.2051 — birleşik liste ML durumunu taşır
+	s.cacheInvalidatePrefix(r.Context(), anomalyFeedCachePrefix) // v0.10.2080 — olay zarfı ML satırı taşır
 	// audit: kim (claim), ne zaman (audit damgası), eski/yeni değer.
 	details, _ := json.Marshal(map[string]any{"before": before, "after": c})
 	s.audit(r, "ml.config", "settings", "ml", string(details))

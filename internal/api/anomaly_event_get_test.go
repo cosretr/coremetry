@@ -107,9 +107,18 @@ func TestAnomalyEventReads_ShareTheEnrichmentChain(t *testing.T) {
 		t.Fatal(err)
 	}
 	call := regexp.MustCompile(`enrichAnomalyEvents\(ctx, s\.store, `)
-	list := mustBody(t, string(apiSrc), "getAnomalyEvents")
+	// v0.10.2080 — liste ucunun gövdesi anomaly_feed_routes.go'ya taşındı
+	// (buildAnomalyEvents); api.go yalnız ona devreder.
+	feedSrc, err := os.ReadFile("anomaly_feed_routes.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(mustBody(t, string(apiSrc), "getAnomalyEvents"), "s.buildAnomalyEvents(") {
+		t.Error("liste ucu (getAnomalyEvents) buildAnomalyEvents'e devretmiyor")
+	}
+	list := mustBody(t, string(feedSrc), "buildAnomalyEvents")
 	if !call.MatchString(list) {
-		t.Error("liste ucu (getAnomalyEvents) ortak zinciri çağırmıyor")
+		t.Error("liste ucu (buildAnomalyEvents) ortak zinciri çağırmıyor")
 	}
 	one := mustBody(t, string(getSrc), "getAnomalyEvent")
 	if !call.MatchString(one) {
