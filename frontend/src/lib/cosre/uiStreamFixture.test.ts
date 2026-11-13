@@ -13,7 +13,7 @@ import {
 import { parseUIStreamSSE } from './uiStreamFixture';
 
 const ROOT = resolve(__dirname, '../../../..');
-const FIXTURES = ['ui-stream-v1', 'ui-stream-v1-error', 'ui-stream-v1-closed', 'ui-stream-v1-reset', 'ui-stream-v1-reset2', 'ui-stream-v1-approval', 'ui-stream-v1-approval-resume', 'ui-stream-v1-stops', 'ui-stream-v1-scope'];
+const FIXTURES = ['ui-stream-v1', 'ui-stream-v1-error', 'ui-stream-v1-closed', 'ui-stream-v1-reset', 'ui-stream-v1-reset2', 'ui-stream-v1-approval', 'ui-stream-v1-approval-resume', 'ui-stream-v1-stops', 'ui-stream-v1-scope', 'ui-stream-v1-question', 'ui-stream-v1-linkcard'];
 const PART_TYPES = new Set<string>(UI_STREAM_PART_TYPES);
 const DATA_NAMES = new Set<string>(DATA_PART_NAMES);
 

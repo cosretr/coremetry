@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -75,5 +76,126 @@ func TestSanitizeChatMessagesV2PartsAssistantOnly(t *testing.T) {
 	}
 	if len(out[1].ToolResults) != 1 || out[1].Stop == nil || out[1].Stop.Reason != "stop" {
 		t.Errorf("asistan turu kaybetti: %+v", out[1])
+	}
+}
+
+// v0.10.2104 (experience-audit D5) — data-links (özet kartı + çipler) ve
+// data-question arşivi. Sözleşme: linkler kaydedildiği andaki hedefle döner
+// (yeniden hesaplanmaz); href kök-göreli ya da http(s); kart (title/summary)
+// yalnız ≤3 kök-göreli linkle kalır, değilse çipler kalır; soru kapalı
+// kümede, seçim yalnız seçeneklerden biriyse saklanır. Tavanlar blob'u korur.
+func TestSanitizeChatLinksPart(t *testing.T) {
+	rel := func(n int) []aiChatLinkItem {
+		out := make([]aiChatLinkItem, n)
+		for i := range out {
+			out[i] = aiChatLinkItem{Label: "L" + strconv.Itoa(i), Href: "/p/" + strconv.Itoa(i)}
+		}
+		return out
+	}
+	cases := []struct {
+		name string
+		in   *aiChatLinksPart
+		want *aiChatLinksPart
+	}{
+		{"nil", nil, nil},
+		{"boş", &aiChatLinksPart{}, nil},
+		{"kart", &aiChatLinksPart{Links: rel(2), Title: " orders-api ", Summary: "3 açık problem var."},
+			&aiChatLinksPart{Links: rel(2), Title: "orders-api", Summary: "3 açık problem var."}},
+		{"kart >3 link → çip", &aiChatLinksPart{Links: rel(4), Title: "t", Summary: "s"}, &aiChatLinksPart{Links: rel(4)}},
+		{"kart dış link → çip", &aiChatLinksPart{Links: []aiChatLinkItem{{Label: "w", Href: "https://wiki.example.test/a"}}, Title: "t", Summary: "s"},
+			&aiChatLinksPart{Links: []aiChatLinkItem{{Label: "w", Href: "https://wiki.example.test/a"}}}},
+		{"yarım kart → çip", &aiChatLinksPart{Links: rel(1), Title: "t"}, &aiChatLinksPart{Links: rel(1)}},
+		{"kötü href düşer", &aiChatLinksPart{Links: []aiChatLinkItem{{Label: "a", Href: "//evil.example"}, {Label: "b", Href: "javascript:x"},
+			{Label: "c", Href: "/\\x"}, {Label: "", Href: "/ok"}, {Label: "d", Href: "/ok"}}},
+			&aiChatLinksPart{Links: []aiChatLinkItem{{Label: "d", Href: "/ok"}}}},
+		{"hepsi kötü → nil", &aiChatLinksPart{Links: []aiChatLinkItem{{Label: "a", Href: "ftp://x"}}}, nil},
+		{"tavan 12", &aiChatLinksPart{Links: rel(20)}, &aiChatLinksPart{Links: rel(12)}},
+	}
+	for _, c := range cases {
+		if got := sanitizeChatLinksPart(c.in); !reflect.DeepEqual(got, c.want) {
+			t.Errorf("%s: got %+v want %+v", c.name, got, c.want)
+		}
+	}
+	long := &aiChatLinksPart{Links: []aiChatLinkItem{{Label: strings.Repeat("ş", 500), Href: "/" + strings.Repeat("a", 5000)}, {Label: "ok", Href: "/ok"}}}
+	if got := sanitizeChatLinksPart(long); got == nil || len(got.Links) != 1 || got.Links[0].Href != "/ok" {
+		t.Errorf("uzun href düşmeli: %+v", got)
+	}
+	big := &aiChatLinksPart{Links: rel(12), Title: strings.Repeat("t", 900), Summary: strings.Repeat("s", 2000)}
+	big.Links = big.Links[:3]
+	got := sanitizeChatLinksPart(big)
+	if got == nil || len([]rune(got.Title)) > aiChatLinkCardTitleMax || len([]rune(got.Summary)) > aiChatLinkCardSummaryMax {
+		t.Errorf("başlık/özet kırpılmalı: %+v", got)
+	}
+}
+
+func TestSanitizeChatQuestion(t *testing.T) {
+	q := func() *aiChatQuestion {
+		return &aiChatQuestion{Kind: "source", Text: "Hangisi?", AllowFree: true, Options: []questionOption{{ID: "telemetri", Label: "Coremetry verisi"}, {ID: "wiki", Label: "Wiki dokümanları"}}}
+	}
+	ok := q()
+	ok.Chosen = "wiki"
+	if got := sanitizeChatQuestion(ok); got == nil || got.Chosen != "wiki" || len(got.Options) != 2 || !got.AllowFree {
+		t.Fatalf("geçerli soru: %+v", got)
+	}
+	bad := q()
+	bad.Chosen = "yok"
+	if got := sanitizeChatQuestion(bad); got == nil || got.Chosen != "" {
+		t.Fatalf("seçenek dışı seçim düşmeli: %+v", got)
+	}
+	for name, mut := range map[string]func(*aiChatQuestion){
+		"kind":       func(x *aiChatQuestion) { x.Kind = "later" },
+		"metin":      func(x *aiChatQuestion) { x.Text = " " },
+		"seçeneksiz": func(x *aiChatQuestion) { x.Options = nil },
+		"4 seçenek": func(x *aiChatQuestion) {
+			x.Options = append(x.Options, questionOption{ID: "a", Label: "a"}, questionOption{ID: "b", Label: "b"})
+		},
+		"yinelenen":  func(x *aiChatQuestion) { x.Options[1].ID = x.Options[0].ID },
+		"boş etiket": func(x *aiChatQuestion) { x.Options[0].Label = "" },
+	} {
+		x := q()
+		mut(x)
+		if got := sanitizeChatQuestion(x); got != nil {
+			t.Errorf("%s: düşmeli, got %+v", name, got)
+		}
+	}
+	if sanitizeChatQuestion(nil) != nil {
+		t.Error("nil")
+	}
+	long := q()
+	long.Text = strings.Repeat("ç", 2000)
+	if got := sanitizeChatQuestion(long); got == nil || len([]rune(got.Text)) > chatPendingQuestionMax {
+		t.Errorf("metin kırpılmalı: %d", len([]rune(got.Text)))
+	}
+}
+
+func TestSanitizeChatMessagesD5AssistantOnly(t *testing.T) {
+	lp := &aiChatLinksPart{Links: []aiChatLinkItem{{Label: "a", Href: "/a"}}}
+	qq := &aiChatQuestion{Kind: "source", Text: "?", Options: []questionOption{{ID: "wiki", Label: "Wiki"}}}
+	out := sanitizeChatMessages([]aiChatMessage{
+		{Role: "user", Text: "soru", LinksPart: lp, Question: qq},
+		{Role: "assistant", Text: "cevap", LinksPart: lp, Question: qq},
+	})
+	if out[0].LinksPart != nil || out[0].Question != nil {
+		t.Error("kullanıcı turu link/soru taşıyor")
+	}
+	if out[1].LinksPart == nil || out[1].Question == nil {
+		t.Errorf("asistan turu kaybetti: %+v", out[1])
+	}
+}
+
+// Tel adları FE ChatMessage ile aynı (linksPart / question / chosen).
+func TestChatMessageD5WireNames(t *testing.T) {
+	raw := `{"role":"assistant","text":"x","linksPart":{"links":[{"label":"a","href":"/a"}],"title":"t","summary":"s"},` +
+		`"question":{"kind":"source","text":"?","options":[{"id":"wiki","label":"Wiki"}],"allowFree":true,"chosen":"wiki"}}`
+	var m aiChatMessage
+	if err := json.Unmarshal([]byte(raw), &m); err != nil {
+		t.Fatal(err)
+	}
+	out := sanitizeChatMessages([]aiChatMessage{m})
+	b, _ := json.Marshal(out[0])
+	for _, want := range []string{`"linksPart":{"links":[{"label":"a","href":"/a"}],"title":"t","summary":"s"}`, `"chosen":"wiki"`, `"allowFree":true`} {
+		if !strings.Contains(string(b), want) {
+			t.Errorf("%s yok: %s", want, b)
+		}
 	}
 }

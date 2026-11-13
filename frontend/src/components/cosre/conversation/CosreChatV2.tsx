@@ -154,7 +154,8 @@ export function CosreChatV2({ defaultOpen = false, variant = 'sheet' }: CosreCha
   // gönderim taşır (context.briefingId + briefingLine), sonra düşer.
   const briefingAsk = useRef<BriefingLineRef | null>(null);
   // v0.10.1737 — `decorate`: kart gönderimi bağlamı (ör. "Endpoint seç" İncele) son katman olarak ekler.
-  const send = (text: string, so?: ChatSendOpts, decorate?: (c: Record<string, unknown> | undefined) => Record<string, unknown> | undefined) => {
+  // v0.10.2104 (D5) — `meta`: kullanıcı turunun ek künyesi (soru kartı tıkının clarifyOption'ı).
+  const send = (text: string, so?: ChatSendOpts, decorate?: (c: Record<string, unknown> | undefined) => Record<string, unknown> | undefined, meta?: { clarifyOption?: string }) => {
     const c = live.current;
     const q = text.trim();
     if (!q) return;
@@ -167,6 +168,7 @@ export function CosreChatV2({ defaultOpen = false, variant = 'sheet' }: CosreCha
     const metadata = {
       ...(so?.explainAsk ? { explainAsk: withoutFresh(so.explainAsk) } : {}),
       ...(so?.window ? { window: so.window } : {}),
+      ...(meta?.clarifyOption ? { clarifyOption: meta.clarifyOption } : {}),
     };
     const go = () => c.sendMessage({ text: q, ...(Object.keys(metadata).length ? { metadata } : {}) }, context ? { body: { context } } : undefined);
     if (c.busy) void c.stop().then(go);
@@ -239,7 +241,7 @@ export function CosreChatV2({ defaultOpen = false, variant = 'sheet' }: CosreCha
   const answerQuestion = (o: { id: string; label: string }) => {
     if (live.current.busy) return;
     pinBottom();
-    send(o.label, undefined, b => withClarifyOption(b, o.id));
+    send(o.label, undefined, b => withClarifyOption(b, o.id), { clarifyOption: o.id });
   };
   const sendRef = useRef(send);
   sendRef.current = send;

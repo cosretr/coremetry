@@ -5,7 +5,9 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { PERSIST_MESSAGE_CAP, persistMessages, restoreTurns } from '@/components/ai/chatPersist';
-import { COSRE_PERSIST_CAP, STOPPED_NOTE, fromPersistMessages, hasCompletedExchange, messageText, toPersistMessages, toRequestMessages } from './cosrePersist';
+import { COSRE_PERSIST_CAP, STOPPED_NOTE, fromPersistMessages, hasCompletedExchange, messageText, questionChoice, toPersistMessages, toRequestMessages } from './cosrePersist';
+import { linkCardOf } from '@/components/cosre/conversation/linkCard';
+import { questionOf } from '@/components/cosre/conversation/question';
 import { toChatTurn } from './toChatTurn';
 import type { CosreUIMessage } from './resetReducer';
 
@@ -169,5 +171,49 @@ describe('data-tool-result + data-stop kalıcılığı (araç seti dilim 1)', ()
       { role: 'assistant', text: 'x', toolResults: [{ id: 'zz', data: tr as never }], stop: { ...stop, reason: 'bilinmeyen' as never } },
     ], 'c');
     expect(back[0].parts.map(p => p.type)).toEqual(['text']);
+  });
+});
+
+// v0.10.2104 (experience-audit D5) — link çipleri / özet kartı ve soru kartı
+// arşive girer, geri yüklenince aynı parçalar (kaydedilen hedefler) döner;
+// soru kartının seçimi tık kimliğinden, yoksa etiket metninden. v1
+// persistMessages / restoreTurns bu alanları bilmez (v1 değişmez).
+describe('D5: data-links + data-question arşivi', () => {
+  const LINKS = [{ label: 'Servis', href: '/services/orders-api' }, { label: 'Problemler', href: '/problems?service=orders-api' }];
+  const Q = { kind: 'source', text: 'Coremetry mi wiki mi?', allowFree: true, options: [
+    { id: 'telemetri', label: 'Coremetry verisi' }, { id: 'wiki', label: 'Wiki dokümanları' }] };
+  const card = asst('a1', [text('cevap'), { type: 'data-links', id: 'links', data: { links: LINKS, title: 'orders-api', summary: '3 açık problem var.' } }]);
+  const ask = asst('a2', [text(Q.text), { type: 'data-question', id: 'question', data: Q }]);
+
+  it('kart + çipler + soru seçimi (tık kimliği) gidip geri döner', () => {
+    const clicked: CosreUIMessage = { id: 'u3', role: 'user', parts: [text('başka yazı')], metadata: { clarifyOption: 'wiki' } };
+    const out = toPersistMessages([user('u1', 'q'), card, user('u2', 'q2'), ask, clicked]);
+    expect(out[1]).toMatchObject({ linksPart: { links: LINKS, title: 'orders-api', summary: '3 açık problem var.' } });
+    expect(out[3].question).toEqual({ ...Q, chosen: 'wiki' });
+    const back = fromPersistMessages(out, 'c1');
+    expect(linkCardOf(back[1].parts)).toEqual({ title: 'orders-api', summary: '3 açık problem var.', links: LINKS });
+    expect(toChatTurn(back[1], back[1].parts, {}).links).toEqual(LINKS);
+    const q = questionOf(back[3].parts);
+    expect(q?.chosen).toBe('wiki');
+    expect(questionChoice(q!, undefined)).toBe('wiki'); // arşiv değeri, metinden bağımsız
+  });
+
+  it('seçim yedeği: tık yoksa etiket metni; eşleşmezse seçimsiz', () => {
+    expect(toPersistMessages([user('u1', 'q'), ask, user('u2', 'Coremetry verisi')])[1].question?.chosen).toBe('telemetri');
+    expect(toPersistMessages([user('u1', 'q'), ask, user('u2', 'başka')])[1].question?.chosen).toBeUndefined();
+    expect(toPersistMessages([user('u1', 'q'), ask])[1].question?.chosen).toBeUndefined();
+  });
+
+  it('kartsız data-links yalnız çip olarak döner', () => {
+    const out = toPersistMessages([user('u1', 'q'), asst('a1', [text('c'), { type: 'data-links', id: 'links', data: { links: LINKS } }])]);
+    expect(out[1].linksPart).toEqual({ links: LINKS });
+    const back = fromPersistMessages(out, 'c1');
+    expect(linkCardOf(back[1].parts)).toBeNull();
+    expect(toChatTurn(back[1], back[1].parts, {}).links).toEqual(LINKS);
+  });
+
+  it('v1 kalıcılığı bu alanları bilmez', () => {
+    const turns = restoreTurns([{ role: 'assistant', text: 'c', linksPart: { links: LINKS }, question: { ...Q, kind: 'source' } }]);
+    expect(turns[0]).toEqual({ role: 'assistant', text: 'c' });
   });
 });

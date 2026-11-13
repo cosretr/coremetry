@@ -7931,6 +7931,12 @@ export interface ChatMessage {
   toolResults?: { id: string; data: CosreToolResult }[];
   /** CoSRE v2 araç seti dilim 1 — `data-stop` (yalnız asistan, yalnız v2). */
   stop?: CosreStop;
+  /** v0.10.2104 (experience-audit D5) — `data-links` (link çipleri + özet kartı);
+   *  kaydedildiği andaki hedefler, yeniden hesaplanmaz. Yalnız asistan, yalnız v2
+   *  (sunucu sanitize: internal/api/ai_conversations_v2parts.go). */
+  linksPart?: { links: ChatAnswerLink[]; title?: string; summary?: string };
+  /** v0.10.2104 (D5) — `data-question` + seçilen seçenek (chosen). Yalnız asistan, yalnız v2. */
+  question?: CosreQuestion;
 }
 
 /**
@@ -7966,6 +7972,9 @@ export interface CosreMessageMetadata {
    *  yeniden dene aynısını yollar, bekleyen cevap baştan açıklama turu çizilir. */
   explainAsk?: ChatExplainAsk;
   window?: ChatSendWindow;
+  /** v0.10.2104 (D5) — kullanıcı turu bir soru kartı tıkıysa seçeneğin kimliği
+   *  (context.clarifyOption ile aynı); soru kartının seçimi buradan kaydedilir. */
+  clarifyOption?: string;
 }
 
 /**
@@ -8735,6 +8744,8 @@ export interface CosreQuestion {
   text: string;
   options: { id: string; label: string }[];
   allowFree: boolean;
+  /** v0.10.2104 (D5) — arşivden: seçilen seçeneğin kimliği (pasif kartın işareti). */
+  chosen?: string;
 }
 
 /** v0.10.2101 — CoSRE v2 kısa özet + link kartı: data-links'in opsiyonel

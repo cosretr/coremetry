@@ -12,7 +12,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { QUESTION_KINDS, parseDataQuestion } from '@/lib/cosre/protocol';
 import type { CosreQuestion } from '@/lib/types';
 import { QuestionCard } from './QuestionCard';
-import { chosenOption, questionOf, withClarifyOption } from './question';
+import { questionOf, withClarifyOption } from './question';
 
 const Q: CosreQuestion = { kind: 'source', text: 'Coremetry mi wiki mi?', allowFree: true, options: [
   { id: 'telemetri', label: 'Coremetry verisi' }, { id: 'wiki', label: 'Wiki dokümanları' },
@@ -50,11 +50,6 @@ describe('question yardımcıları', () => {
   it('questionOf: son geçerli yük', () => {
     expect(questionOf([{ type: 'data-question', data: { ...Q } }, { type: 'data-question', data: {} }])).toEqual(Q);
     expect(questionOf([{ type: 'text' }])).toBeNull();
-  });
-  it('chosenOption: sonraki mesaj etiketse kimliği', () => {
-    expect(chosenOption(Q, ' Wiki dokümanları ')).toBe('wiki');
-    expect(chosenOption(Q, 'wikide ara')).toBeUndefined();
-    expect(chosenOption(Q, undefined)).toBeUndefined();
   });
   it('withClarifyOption: son katman', () => {
     expect(withClarifyOption({ conversation: 'c1', clarifyOption: 'x' }, 'wiki')).toEqual({ conversation: 'c1', clarifyOption: 'wiki' });

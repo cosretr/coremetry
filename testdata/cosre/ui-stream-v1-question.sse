@@ -1,0 +1,20 @@
+data: {"messageId":"01M62F9N000000000000000000","type":"start"}
+
+data: {"type":"start-step"}
+
+data: {"id":"t1","type":"text-start"}
+
+data: {"delta":"Bunu Coremetry verisinde mi arayayım (servis sağlığı, hatalar, trace'ler), yoksa wiki dokümanlarında mı?","id":"t1","type":"text-delta"}
+
+data: {"id":"t1","type":"text-end"}
+
+data: {"messageMetadata":{"allowedLinks":[]},"type":"message-metadata"}
+
+data: {"data":{"allowFree":true,"kind":"source","options":[{"id":"telemetri","label":"Coremetry verisi"},{"id":"wiki","label":"Wiki dokümanları"}],"text":"Bunu Coremetry verisinde mi arayayım (servis sağlığı, hatalar, trace'ler), yoksa wiki dokümanlarında mı?"},"id":"question","type":"data-question"}
+
+data: {"type":"finish-step"}
+
+data: {"finishReason":"stop","type":"finish"}
+
+data: [DONE]
+

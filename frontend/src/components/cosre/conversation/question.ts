@@ -4,7 +4,8 @@
 //   • Tık → seçeneğin ETİKETİ yeni kullanıcı mesajı + context.clarifyOption
 //     (sunucu bekleyen soruya birebir eşler; serbest metin yolu aynen).
 //   • Kart yalnız son, bitmiş cevapta etkin; sonraki turdan sonra PASİF ve
-//     görünür; seçilen, bir sonraki kullanıcı mesajının metniyle bulunur.
+//     görünür; seçim lib/cosre/cosrePersist questionChoice (arşiv → tık →
+//     metin, v0.10.2104 D5).
 import type { CosreQuestion } from '@/lib/types';
 import { parseDataQuestion } from '@/lib/cosre/protocol';
 
@@ -17,13 +18,6 @@ export function questionOf(parts: readonly Part[]): CosreQuestion | null {
     if (p.type === 'data-question') out = parseDataQuestion(p) ?? out;
   }
   return out;
-}
-
-/** Sonraki kullanıcı mesajı bir seçeneğin etiketiyse onun kimliği (pasif kartın işareti). */
-export function chosenOption(q: CosreQuestion, nextUserText: string | undefined): string | undefined {
-  const t = nextUserText?.trim();
-  if (!t) return undefined;
-  return q.options.find(o => o.label === t)?.id;
 }
 
 /** Kart tıkının bağlamı: son katman olarak clarifyOption. */

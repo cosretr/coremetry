@@ -1,0 +1,3 @@
+{"kind":"answer","payload":{"text":"Bunu Coremetry verisinde mi arayayım (servis sağlığı, hatalar, trace'ler), yoksa wiki dokümanlarında mı?","sources":[],"links":[],"allowedLinks":[]}}
+{"kind":"question","payload":{"kind":"source","text":"Bunu Coremetry verisinde mi arayayım (servis sağlığı, hatalar, trace'ler), yoksa wiki dokümanlarında mı?","options":[{"id":"telemetri","label":"Coremetry verisi"},{"id":"wiki","label":"Wiki dokümanları"}],"allowFree":true}}
+{"kind":"done","payload":{"ok":true}}

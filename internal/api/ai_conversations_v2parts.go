@@ -89,3 +89,108 @@ func sanitizeChatStop(in *aiChatStop) *aiChatStop {
 	}
 	return &aiChatStop{Reason: in.Reason, Calls: max(in.Calls, 0), Rounds: max(in.Rounds, 0), ElapsedMs: max(in.ElapsedMs, 0)}
 }
+
+// v0.10.2104 (docs/cosre/experience-audit.md D5) — data-links (özet kartı +
+// link çipleri) ve data-question arşivi; aynı blob, yeni şema YOK. Linkler
+// kaydedildiği andaki hedefle döner (yeniden hesaplanmaz). Yalnız v2 istemcisi
+// yazar; v1 persist / restore bu alanları bilmez (davranışı değişmez).
+
+// aiChatLinkItem — data-links.links[] öğesi.
+type aiChatLinkItem struct {
+	Label string `json:"label"`
+	Href  string `json:"href"`
+}
+
+// aiChatLinksPart — data-links{links, title?, summary?} (api chat_summary_card.go).
+type aiChatLinksPart struct {
+	Links   []aiChatLinkItem `json:"links"`
+	Title   string           `json:"title,omitempty"`
+	Summary string           `json:"summary,omitempty"`
+}
+
+// aiChatQuestion — data-question + istemcinin kaydettiği seçim (Chosen).
+type aiChatQuestion struct {
+	Kind      string           `json:"kind"`
+	Text      string           `json:"text"`
+	Options   []questionOption `json:"options"`
+	AllowFree bool             `json:"allowFree"`
+	Chosen    string           `json:"chosen,omitempty"`
+}
+
+const (
+	aiChatLinksMax           = 12
+	aiChatLinksMaxBytes      = 4 << 10
+	aiChatLinkLabelMax       = 120
+	aiChatLinkCardTitleMax   = 120
+	aiChatLinkCardSummaryMax = 400
+	aiChatQuestionOptIDMax   = 32
+	aiChatQuestionOptLblMax  = 80
+)
+
+// chatLinkHrefRel — SAF: kök-göreli iç yol mu (// ve /\ hariç).
+func chatLinkHrefRel(h string) bool {
+	return strings.HasPrefix(h, "/") && !strings.HasPrefix(h, "//") && !strings.HasPrefix(h, "/\\")
+}
+
+// sanitizeChatLinksPart — SAF: geçersiz link düşer (href kök-göreli ya da
+// http(s), ≤ aiChatEvidenceHrefMax; etiket dolu), ≤12 link / 4 KB. Kart
+// alanları yalnız 1–3 kök-göreli linkle kalır (FE parseDataLinksCard kuralı);
+// değilse çipler kalır. Link kalmazsa nil.
+func sanitizeChatLinksPart(in *aiChatLinksPart) *aiChatLinksPart {
+	if in == nil {
+		return nil
+	}
+	out := &aiChatLinksPart{}
+	total := 0
+	allRel := true
+	for _, l := range in.Links {
+		if len(out.Links) >= aiChatLinksMax {
+			break
+		}
+		label := clampChatRunes(l.Label, aiChatLinkLabelMax)
+		h := l.Href
+		rel := chatLinkHrefRel(h)
+		abs := strings.HasPrefix(h, "https://") || strings.HasPrefix(h, "http://")
+		if label == "" || len(h) > aiChatEvidenceHrefMax || (!rel && !abs) {
+			continue
+		}
+		if total += len(label) + len(h); total > aiChatLinksMaxBytes {
+			break
+		}
+		allRel = allRel && rel
+		out.Links = append(out.Links, aiChatLinkItem{Label: label, Href: h})
+	}
+	if len(out.Links) == 0 {
+		return nil
+	}
+	title := clampChatRunes(in.Title, aiChatLinkCardTitleMax)
+	summary := clampChatRunes(in.Summary, aiChatLinkCardSummaryMax)
+	if title != "" && summary != "" && allRel && len(out.Links) <= summaryCardMaxLinks {
+		out.Title, out.Summary = title, summary
+	}
+	return out
+}
+
+// sanitizeChatQuestion — SAF: kapalı kind, dolu metin (≤600 rune), 1–3 tekil
+// dolu seçenek; Chosen yalnız seçeneklerden biriyse. Geçersizse nil.
+func sanitizeChatQuestion(in *aiChatQuestion) *aiChatQuestion {
+	if in == nil || !slices.Contains(uistream.QuestionKinds, in.Kind) {
+		return nil
+	}
+	text := clampChatRunes(in.Text, chatPendingQuestionMax)
+	if text == "" || len(in.Options) == 0 || len(in.Options) > uistream.QuestionMaxOptions {
+		return nil
+	}
+	out := &aiChatQuestion{Kind: in.Kind, Text: text, AllowFree: in.AllowFree}
+	for _, o := range in.Options {
+		id, label := clampChatRunes(o.ID, aiChatQuestionOptIDMax), clampChatRunes(o.Label, aiChatQuestionOptLblMax)
+		if id == "" || label == "" || slices.ContainsFunc(out.Options, func(x questionOption) bool { return x.ID == id }) {
+			return nil
+		}
+		out.Options = append(out.Options, questionOption{ID: id, Label: label})
+		if id == in.Chosen {
+			out.Chosen = id
+		}
+	}
+	return out
+}

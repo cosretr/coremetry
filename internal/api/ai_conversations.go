@@ -118,6 +118,11 @@ type aiChatMessage struct {
 	// data-stop parçaları (yalnız asistan; sanitize ai_conversations_v2parts.go).
 	ToolResults []aiChatToolResult `json:"toolResults,omitempty"`
 	Stop        *aiChatStop        `json:"stop,omitempty"`
+	// LinksPart / Question — v0.10.2104 (experience-audit D5): data-links
+	// (özet kartı + link çipleri) ve data-question (seçimle). Yalnız asistan,
+	// yalnız v2; sanitize ai_conversations_v2parts.go.
+	LinksPart *aiChatLinksPart `json:"linksPart,omitempty"`
+	Question  *aiChatQuestion  `json:"question,omitempty"`
 }
 
 // sanitizeChatExplain — v0.10.1400: arşive girecek açıklama künyesi. Tür
@@ -326,12 +331,15 @@ func sanitizeChatMessages(in []aiChatMessage) []aiChatMessage {
 			m.ExchangeID = hex32Only(m.ExchangeID)        // v0.10.1444
 			m.ToolResults = sanitizeChatToolResults(m.ToolResults)
 			m.Stop = sanitizeChatStop(m.Stop)
+			m.LinksPart = sanitizeChatLinksPart(m.LinksPart) // v0.10.2104
+			m.Question = sanitizeChatQuestion(m.Question)
 		} else {
 			m.Evidence = nil
 			m.Explain = nil
 			m.ExchangeID = ""
 			m.CodeRead = false // v0.10.1465 — yalnız asistan turu
 			m.ToolResults, m.Stop = nil, nil
+			m.LinksPart, m.Question = nil, nil
 		}
 		// v0.10.1444 — bloklar yalnız sunucu kaynaklı (GET süsler).
 		m.Blocks, m.BlocksAt, m.BlocksDropped = nil, 0, nil

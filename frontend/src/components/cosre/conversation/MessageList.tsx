@@ -46,7 +46,8 @@ import { EndpointPickCard } from './EndpointPickCard';
 import { pickOf, showEndpointPick } from './endpointPick';
 import { SummaryLinkCard } from './SummaryLinkCard';
 import { QuestionCard } from './QuestionCard';
-import { chosenOption, questionOf } from './question';
+import { questionOf } from './question';
+import { questionChoice } from '@/lib/cosre/cosrePersist';
 import { bubbleTurnForCard, linkCardOf } from './linkCard';
 
 /** useChat durumu (ai ChatStatus ile aynı küme; tip importu katalogdan bağımsız). */
@@ -95,7 +96,7 @@ export function MessageList({ messages, visibleParts, status, error, onAsk, onRe
           followups={isLast && status === 'ready' ? onAsk : undefined} onRetry={isLast && errText ? onRetry : undefined}
           onApproval={isLast && !busy ? onApproval : undefined} teamPick={isLast && !busy ? teamPick : undefined}
           endpointPick={isLast && !busy ? endpointPick : undefined} compactSteps={compactSteps}
-          onQuestion={isLast && !busy ? onQuestion : undefined} nextUserText={next?.role === 'user' ? userTurn(next).text : undefined} />;
+          onQuestion={isLast && !busy ? onQuestion : undefined} next={next} />;
       })}
       {/* İlk parça gelmeden (yalnız soru gitti): v1 bekleyiş göstergesi. */}
       {busy && last?.role !== 'assistant' && (last?.metadata?.explainAsk
@@ -114,7 +115,7 @@ function UserMessage({ m }: { m: CosreUIMessage }) {
   return <ChatBubble turn={turn} />;
 }
 
-function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, explainAsk, onApproval, scopeNote, teamPick, endpointPick, compactSteps, onQuestion, nextUserText }: {
+function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, explainAsk, onApproval, scopeNote, teamPick, endpointPick, compactSteps, onQuestion, next }: {
   m: CosreUIMessage; visibleParts: (m: CosreUIMessage) => Part[]; live: boolean; error?: string;
   /** araç seti dilim 5 — kapsam değişimi notu (önceki cevaptan farklıysa). */
   scopeNote?: string;
@@ -129,8 +130,8 @@ function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, ex
   endpointPick?: MessageListProps['endpointPick'];
   compactSteps?: boolean;
   onQuestion?: MessageListProps['onQuestion'];
-  /** v0.10.2102 — sonraki kullanıcı mesajının metni (pasif soru kartının seçimi). */
-  nextUserText?: string;
+  /** v0.10.2102 — sonraki mesaj (pasif soru kartının seçimi; v0.10.2104 tık kimliği önce). */
+  next?: CosreUIMessage;
 }) {
   const approvals = useMemo(() => approvalViews(m), [m]);
   const epPick = useMemo(() => pickOf(m.parts), [m.parts]); // v0.10.1737
@@ -164,7 +165,7 @@ function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, ex
       </ChatBubbleSlotsContext.Provider>
       {showCard && linkCard && <SummaryLinkCard card={linkCard} />}
       {question && !live && !turn.error && (
-        <QuestionCard question={question} onAnswer={onQuestion} chosen={chosenOption(question, nextUserText)} />
+        <QuestionCard question={question} onAnswer={onQuestion} chosen={questionChoice(question, next)} />
       )}
       {approvals.map(v => (
         <ApprovalCard key={v.approval.toolCallId} view={v} disabled={!onApproval}

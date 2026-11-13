@@ -206,7 +206,9 @@ export function parseDataQuestion(p: { type: string; data?: unknown }): CosreQue
     if (out.some(x => x.id === o.id)) return null;
     out.push({ id: o.id, label: o.label });
   }
-  return { kind: kind as CosreQuestionKind, text, options: out, allowFree: allowFree === true };
+  const chosen = p.data.chosen; // v0.10.2104 (D5) — arşivden; seçenek dışıysa yok sayılır
+  return { kind: kind as CosreQuestionKind, text, options: out, allowFree: allowFree === true,
+    ...(typeof chosen === 'string' && out.some(x => x.id === chosen) ? { chosen } : {}) };
 }
 
 /** v0.10.2101 — kart linkinin üst sınırı (api summaryCardMaxLinks). */

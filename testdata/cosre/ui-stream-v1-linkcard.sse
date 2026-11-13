@@ -1,0 +1,28 @@
+data: {"messageId":"01M62F9N000000000000000000","type":"start"}
+
+data: {"type":"start-step"}
+
+data: {"dynamic":true,"toolCallId":"s1","toolName":"list_problems","type":"tool-input-start"}
+
+data: {"dynamic":true,"input":{"argsText":"{\"status\":\"open\"}"},"toolCallId":"s1","toolName":"list_problems","type":"tool-input-available"}
+
+data: {"dynamic":true,"output":{"evidence":"orders-api: 3 açık problem.","ok":true},"toolCallId":"s1","type":"tool-output-available"}
+
+data: {"data":{"kind":"text","ok":true,"tool":"list_problems"},"id":"s1","type":"data-tool-result"}
+
+data: {"id":"t1","type":"text-start"}
+
+data: {"delta":"orders-api için 3 açık problem var; en yenisi hata oranı artışı.","id":"t1","type":"text-delta"}
+
+data: {"id":"t1","type":"text-end"}
+
+data: {"data":{"links":[{"href":"/problems?service=orders-api","label":"Problemler"},{"href":"/services/orders-api","label":"Servis"}],"summary":"3 açık problem var.","title":"orders-api"},"id":"links","type":"data-links"}
+
+data: {"messageMetadata":{"exchangeId":"0123456789abcdef0123456789abcdef"},"type":"message-metadata"}
+
+data: {"type":"finish-step"}
+
+data: {"finishReason":"stop","type":"finish"}
+
+data: [DONE]
+

@@ -324,3 +324,26 @@ describe('MessageList × adım kartları (dilim 5)', () => {
     expect(list.querySelector('[data-cosre-stop="call_cap"]')?.textContent).toContain('çağrı tavanı · 2 çağrı · 1 tur');
   });
 });
+
+// v0.10.2104 (experience-audit D5) — paylaşılan fixture'lar gerçek SDK'dan:
+// özet kartı (data-links title/summary) ve soru kartı (data-question).
+describe('MessageList × D5 fixture (gerçek SDK)', () => {
+  it('ui-stream-v1-linkcard: kart başlık + tek cümle + 2 link; aynı linkler çip satırında yok', async () => {
+    const core = createCosreChat({ fetch: sseFetch(cosreFixture('ui-stream-v1-linkcard')).fetch });
+    await core.chat.sendMessage({ text: 'orders-api problemleri' });
+    const el = await draw(core);
+    const card = el.querySelector('[data-cosre-linkcard]');
+    expect(card?.textContent).toContain('orders-api');
+    expect(card?.textContent).toContain('3 açık problem var.');
+    expect([...card!.querySelectorAll('a')].map(a => a.getAttribute('href'))).toEqual(['/problems?service=orders-api', '/services/orders-api']);
+    expect(el.querySelector('.ai-links')).toBeNull();
+  });
+  it('ui-stream-v1-question: düz metin soru balonda, altında 2 düğmeli kart (pasif: onQuestion yok)', async () => {
+    const core = createCosreChat({ fetch: sseFetch(cosreFixture('ui-stream-v1-question')).fetch });
+    await core.chat.sendMessage({ text: 'servis sahipliği kimde' });
+    const el = await draw(core);
+    expect(el.querySelector('.cm-msg-ai')?.textContent).toContain('wiki dokümanlarında mı?');
+    const btns = [...el.querySelectorAll<HTMLButtonElement>('[data-cosre-question="source"] [data-question-option]')];
+    expect(btns.map(b => b.textContent)).toEqual(['Coremetry verisi', 'Wiki dokümanları']);
+  });
+});

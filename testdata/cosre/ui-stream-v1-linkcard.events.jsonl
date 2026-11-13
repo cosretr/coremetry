@@ -1,0 +1,4 @@
+{"kind":"step","payload":{"i":1,"tool":"list_problems","args":"{\"status\":\"open\"}"}}
+{"kind":"step-result","payload":{"i":1,"tool":"list_problems","ok":true,"evidence":"orders-api: 3 açık problem."}}
+{"kind":"answer","payload":{"text":"orders-api için 3 açık problem var; en yenisi hata oranı artışı.","exchangeId":"0123456789abcdef0123456789abcdef","links":[{"label":"Problemler","href":"/problems?service=orders-api"},{"label":"Servis","href":"/services/orders-api"}],"linkCard":{"title":"orders-api","summary":"3 açık problem var."}}}
+{"kind":"done","payload":{"ok":true}}

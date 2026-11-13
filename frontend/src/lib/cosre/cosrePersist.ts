@@ -8,8 +8,8 @@
 // istemci üretmez. ChatMessage'ta mesaj kimliği alanı yok (v1 şeması); tura
 // bağlanan kimlik metadata.turnId / exchangeId → ChatMessage.exchangeId
 // (v1 turnArchiveId sırası: turnId önce).
-import type { ChatMessage, ChatQueryEvidence, CosreStop, CosreToolResult } from '@/lib/types';
-import { parseDataStop, parseDataToolResult } from './protocol';
+import type { ChatAnswerLink, ChatMessage, ChatQueryEvidence, CosreQuestion, CosreStop, CosreToolResult } from '@/lib/types';
+import { parseDataQuestion, parseDataStop, parseDataToolResult } from './protocol';
 import type { CosreUIMessage } from './resetReducer';
 
 /** components/ai/chatPersist.ts PERSIST_MESSAGE_CAP ile eşit (test pinler). */
@@ -66,6 +66,44 @@ function v2PartsOf(m: CosreUIMessage): Pick<ChatMessage, 'toolResults' | 'stop'>
   return { ...(toolResults.length ? { toolResults } : {}), ...(stop ? { stop } : {}) };
 }
 
+/** v0.10.2104 (D5) — soru kartının seçimi: arşivdeki değer, yoksa sonraki
+ *  kullanıcı turunun clarifyOption'ı (kart tıkı), yoksa metni bir seçeneğin
+ *  etiketiyse o (yazarak cevap). */
+export function questionChoice(q: CosreQuestion, next: CosreUIMessage | undefined): string | undefined {
+  if (q.chosen) return q.chosen;
+  if (!next || next.role !== 'user') return undefined;
+  const id = next.metadata?.clarifyOption;
+  if (id && q.options.some(o => o.id === id)) return id;
+  const t = messageText(next).trim();
+  return q.options.find(o => o.label === t)?.id;
+}
+
+/** v0.10.2104 (D5) — data-links + data-question → arşiv alanları (son geçerli parça). */
+function linkQuestionOf(m: CosreUIMessage, next: CosreUIMessage | undefined): Pick<ChatMessage, 'linksPart' | 'question'> {
+  let linksPart: ChatMessage['linksPart'];
+  let question: CosreQuestion | null = null;
+  for (const p of m.parts) {
+    if (p.type === 'data-links') {
+      const d = (p.data ?? {}) as { links?: unknown; title?: unknown; summary?: unknown };
+      const links: ChatAnswerLink[] = (Array.isArray(d.links) ? d.links : []).flatMap(l => {
+        const r = (l ?? {}) as { label?: unknown; href?: unknown };
+        return typeof r.label === 'string' && r.label && typeof r.href === 'string' && r.href ? [{ label: r.label, href: r.href }] : [];
+      });
+      linksPart = links.length ? {
+        links, ...(typeof d.title === 'string' && d.title ? { title: d.title } : {}),
+        ...(typeof d.summary === 'string' && d.summary ? { summary: d.summary } : {}),
+      } : undefined;
+    } else if (p.type === 'data-question') {
+      question = parseDataQuestion(p) ?? question;
+    }
+  }
+  const chosen = question ? questionChoice(question, next) : undefined;
+  return {
+    ...(linksPart ? { linksPart } : {}),
+    ...(question ? { question: { ...question, ...(chosen ? { chosen } : {}) } } : {}),
+  };
+}
+
 /** Arşive yazılacak mesajlar: hatalı ve boş metinli düşer, son 40.
  *  v0.10.1664 (B6) — v1 persistMessages ile ALAN ALAN eşit: kanıt çipleri
  *  (data-evidence-summary → evidence), açıklama künyesi (metadata.explain),
@@ -73,6 +111,8 @@ function v2PartsOf(m: CosreUIMessage): Pick<ChatMessage, 'toolResults' | 'stop'>
  *  tur yeniden kayıtta kimliğini kaybetmez), kod kilidi. Bloklar ASLA
  *  istemciden gitmez (v1 kuralı; sunucu zarftan doldurur). */
 export function toPersistMessages(messages: CosreUIMessage[]): ChatMessage[] {
+  // v0.10.2104 (D5) — soru kartının seçimi bir SONRAKİ mesajdan (süzmeden önceki sıra).
+  const nextOf = new Map(messages.map((m, i) => [m, messages[i + 1]] as const));
   const keep = messages
     .filter(m => isChatRole(m.role) && !failed(m) && messageText(m).trim() !== '')
     .map<ChatMessage>(m => {
@@ -88,6 +128,7 @@ export function toPersistMessages(messages: CosreUIMessage[]): ChatMessage[] {
         ...(id ? { exchangeId: id } : {}),
         ...(hasCodeLock(m) ? { codeRead: true } : {}),
         ...v2PartsOf(m),
+        ...linkQuestionOf(m, nextOf.get(m)),
       };
     });
   return keep.length > COSRE_PERSIST_CAP ? keep.slice(-COSRE_PERSIST_CAP) : keep;
@@ -123,6 +164,10 @@ export function fromPersistMessages(messages: ChatMessage[] | undefined, convId:
       }
       const st = m.stop ? parseDataStop({ type: 'data-stop', data: m.stop }) : null;
       if (st) parts.push({ type: 'data-stop', id: 'stop', data: st });
+      // v0.10.2104 (D5) — link çipleri / özet kartı (kaydedilen hedefler) ve soru kartı (seçimle).
+      if (m.linksPart?.links.length) parts.push({ type: 'data-links', id: 'links', data: m.linksPart });
+      const q = m.question ? parseDataQuestion({ type: 'data-question', data: m.question }) : null;
+      if (q) parts.push({ type: 'data-question', id: 'question', data: q });
       const metadata: NonNullable<CosreUIMessage['metadata']> = {
         ...(m.exchangeId ? { archiveExchangeId: m.exchangeId } : {}),
         ...(m.explain ? { explain: m.explain } : {}),

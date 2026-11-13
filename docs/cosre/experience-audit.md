@@ -110,7 +110,7 @@ imzası (kart kararı `chat_team_scope_need.go`'da; içeriği okunmadı). `ChatB
 | D2 (v0.10.2102) | `source` netleştirmesi `data-question` yayar; FE `QuestionCard` (`components/cosre/conversation/`, shadcn Button); `protocol.ts parseDataQuestion`; `toChatTurn` yok sayar; tık → mesaj + `context.clarifyOption`; sunucu birebir eşleme | `api/chat_question.go`, `chat_clarify.go`, `copilot_chat.go` (clarify-reply :487); FE `QuestionCard.tsx`, `protocol.ts`, `MessageList.tsx`, `CosreChatV2.tsx`, `types` | Go table-driven `chat_question_test.go` (3 tür × v1/v2); `chat_clarify_flow_test.go` option yolu; vitest `QuestionCard.test.tsx` + `CosreChatV2.test.tsx` gönderim; `chat_tier_order_test` değişmez | /cosre'de rotasız soru + wiki açık → kart; tıkla → doğru dal; serbest metin hâlâ çalışır | GEREKİR (2026-10-29 kararına dokunur) |
 | D3 (v0.10.2103) | `doc_or_entity` + `trace_synth` (evet/hayır) soru kartı | `chat_clarify_entity.go`, `chat_clarify_synth.go`, `chat_question.go` | aynı tablolara satır; `chat_routing_regression_test.go:356-365` korunur | Oracle açıklaması sonrası "evet" tıkla → trace açıklaması | GEREKİR |
 | D4 (v0.10.2101) | `guidedSummaryTR` + `data-links {title,summary}`; FE `SummaryLinkCard` (çip ↔ kart seçimi `title` varlığıyla); 3 rota | `api/chat_summary_card.go`, `copilot_guided.go:2468`, `uistream/translator.go:240`; FE `SummaryLinkCard.tsx`, `MessageList.tsx`, `toChatTurn.ts` (alan yok say) | Go table-driven (sayı yok → false, ≤3 link, dedup); translator JSON `omitempty` pini; mevcut `v2_loop.sse` değişmemeli; vitest kart/çip dallanması | "orders-api sağlığı" → kart tek cümle + ≤3 link; link hedefi doğru sayfa | GEREKİR (yeni görünür öğe) |
-| D5 | Kapanış: kart kalıcılığı (D4 notu: arşiv mesajında links alanı YOK, yeniden açılan konuşmada kart da çipler gibi görünmez; karar gerekir); evalset v2 fixture'larına question/summary vakası; roadmap-status §2 satır 6/8 güncelle | `ai_conversations_v2parts.go`, `testdata/cosre/`, `docs/cosre/roadmap-status.md` | mevcut testler | konuşma geçmişi yeniden açılınca kart pasif ama görünür | gerekmez |
+| D5 (v0.10.2104) | Kapanış: kart kalıcılığı (D4 notu: arşiv mesajında links alanı YOK, yeniden açılan konuşmada kart da çipler gibi görünmez; karar gerekir); evalset v2 fixture'larına question/summary vakası; roadmap-status §2 satır 6/8 güncelle | `ai_conversations_v2parts.go`, `testdata/cosre/`, `docs/cosre/roadmap-status.md` | mevcut testler | konuşma geçmişi yeniden açılınca kart pasif ama görünür | gerekmez |
 
 D2 ve D4 bağımsız; D1→D2→D3 sıralı. Aynı anda tek dilim (kalıcı kural).
 
@@ -142,6 +142,12 @@ D2 ve D4 bağımsız; D1→D2→D3 sıralı. Aynı anda tek dilim (kalıcı kura
 D1–D5 gemide; `chat_tier_order_test` değişmedi; `v2_loop.sse` baytı değişmedi; v1 altın
 dosyaları değişmedi; operatör prod'da üç senaryoyu (kaynak sorusu tık, serbest metin, özet
 kartı linki) doğruladı; roadmap-status §2 satır 6 ve 8 "tamam".
+
+**Durum (2026-11-13, v0.10.2104):** D1–D5 gemide (2100–2104); `chat_tier_order_test`,
+`v2_loop.sse` ve v1 altınları değişmedi; roadmap-status §2 satır 6 ve 8 "tamam". AÇIK tek
+madde: operatörün prod'da üç senaryoyu doğrulaması. D5 arşivi: `saved_views` page='ai-chat'
+blobunun `messages[].linksPart` ve `messages[].question` (seçim `chosen`) alanları; yeni şema
+yok (`ai_conversations_v2parts.go`).
 
 ## 8. Operatöre sorular
 
