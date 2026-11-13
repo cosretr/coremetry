@@ -115,3 +115,24 @@ func TestLiveWindow(t *testing.T) {
 		t.Fatalf("%v %v", from, to)
 	}
 }
+
+// v0.10.2076 — log hacmi artışı mutlak tabanı: küçük sayılardaki sıçrama
+// (20 → 200 satır) olay değil; düşüş yönü etkilenmez.
+func TestLogVolumeImpactFloor(t *testing.T) {
+	cases := []struct {
+		name string
+		j    Judgement
+		want bool
+	}{
+		{"20 → 200: z yüksek ama etki küçük", Judgement{Fire: true, Direction: "up", Median: 20, Observed: 200}, false},
+		{"taban + 999", Judgement{Fire: true, Direction: "up", Median: 500, Observed: 1499}, false},
+		{"taban + 1000", Judgement{Fire: true, Direction: "up", Median: 500, Observed: 1500}, true},
+		{"büyük sıçrama", Judgement{Fire: true, Direction: "up", Median: 4000, Observed: 30000}, true},
+		{"düşüş etkilenmez", Judgement{Fire: true, Direction: "down", Median: 4000, Observed: 100}, true},
+	}
+	for _, c := range cases {
+		if got := logVolumeImpact(c.j); got != c.want {
+			t.Errorf("%s: %v, beklenen %v", c.name, got, c.want)
+		}
+	}
+}

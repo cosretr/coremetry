@@ -45,6 +45,18 @@ type LogRED struct {
 	dailyDay string
 }
 
+// logVolumeMinExtraLines — v0.10.2076 (operatör: küçük sayılardaki artış
+// sorun değil; Kafka lag tabanının log karşılığı): hacim ARTIŞI olayı için
+// kovada normalin üstüne binen satır sayısının mutlak tabanı. 5 dk'lık
+// kovada 1000 satır ≈ 3 satır/sn. Düşüş yönüne uygulanmaz (orada koruma
+// MinBaselineRate). Hata oranı ve susma dedektörleri etkilenmez.
+const logVolumeMinExtraLines = 1000
+
+// logVolumeImpact — SAF: hacim olayının mutlak etki kapısı.
+func logVolumeImpact(j Judgement) bool {
+	return j.Direction != "up" || j.Observed-j.Median >= logVolumeMinExtraLines
+}
+
 func NewLogRED() *LogRED { return &LogRED{daily: map[string]int{}} }
 
 func (d *LogRED) Name() string { return "log_red" }
@@ -387,7 +399,7 @@ func (d *LogRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, now 
 			}
 			if j.Silent && cfg.DetectorOn(detServiceSilent) && !off && d.dayCap(detServiceSilent, cfg, now) {
 				evs = append(evs, d.event(detServiceSilent, svc, part, j, last, cfg, class, ingestLagMs, nil))
-			} else if !j.Silent && cfg.DetectorOn(detLogVolume) && (j.Direction == "up" || !off) && d.dayCap(detLogVolume, cfg, now) {
+			} else if !j.Silent && cfg.DetectorOn(detLogVolume) && (j.Direction == "up" || !off) && logVolumeImpact(j) && d.dayCap(detLogVolume, cfg, now) {
 				evs = append(evs, d.event(detLogVolume, svc, part, j, last, cfg, class, ingestLagMs, nil))
 			}
 		case partError:

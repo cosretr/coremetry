@@ -13635,3 +13635,9 @@ eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
 - DOKUNULMADI: bildirim "Sustur" incident ack'i `/api/public/notify/ignore/{token}` üzerinden gider
   (bu rotalardan değil) ve çalışır; `cascadeResolveIncidents`, explain-incident / draft-postmortem,
   inbox katlama, `features.incidents`, `Incident` tipindeki JSON alanları; CH nesneleri ve veri.
+
+## 2026-11-13 — v0.10.2076 — ML log hacmi artışına mutlak taban (operatör: "go", öneri onayı)
+
+- `log_volume` ARTIŞ olayı için kovada normalin üstüne en az 1000 satır şartı (`logVolumeMinExtraLines`, 5 dk'lık kovada ≈ 3 satır/sn). Kafka lag tabanının (v0.10.2041) log karşılığı: küçük sayılardaki sıçrama olay değil.
+- Düşüş yönü, hata oranı (`error_rate`) ve susma dedektörleri etkilenmez. Yeni ayar yok.
+- 1000 değeri prod verisiyle ölçülmedi; gürültü/kaçırma görülürse sabit değişir.
