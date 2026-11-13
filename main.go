@@ -1771,7 +1771,12 @@ func main() {
 			}
 			return copilotSvc.Explain(copilot.WithMeta(jctx, copilot.CallMeta{Surface: "cosre-selfeval", UserID: "system"}), system, user)
 		}
-		go cosrelearn.StartQualityJob(ctx, store, lockImpl, time.Hour, judge, copilotSvc.ActiveModel, srv.WriteEvalsetCandidates)
+		// v0.10.2114 — hakem koruması: "cosre-selfeval" yüzeyinin çözülen profili
+		// yerel (self-hosted) işaretli değilse hakem çağrılmaz, gün atlanır.
+		judgeLocal := func(jctx context.Context) bool {
+			return copilotSvc.ProfileLocalOnly(copilot.WithMeta(jctx, copilot.CallMeta{Surface: "cosre-selfeval"}))
+		}
+		go cosrelearn.StartQualityJob(ctx, store, lockImpl, time.Hour, cosrelearn.LocalOnlyJudge(judge, judgeLocal), copilotSvc.ActiveModel, srv.WriteEvalsetCandidates)
 	}
 	srv.SetMCPClient(mcpCliSvc)
 	// v0.10.1282 — AI SRE drain: YALNIZ sre rolünde (all dahil). srv.MCPDeps()

@@ -110,3 +110,40 @@ func contains(s []string, x string) bool {
 	}
 	return false
 }
+
+// TestLocalOnlyJudge — v0.10.2114 (audit §8 soru 5): profil yerel değilse
+// hakem modeli ÇAĞRILMAZ, judge_error satırı yazılmaz, puanlama yine koşar.
+func TestLocalOnlyJudge(t *testing.T) {
+	day := time.Date(2026, 10, 14, 0, 0, 0, 0, time.UTC)
+	st := &fakeStore{rows: []chstore.CosreInteraction{turn("a", "c", 0, "q")},
+		ground: []chstore.CosreGroundingInput{{ExchangeID: "a", Answer: "x"}, {ExchangeID: "b", Answer: "y"}}}
+	calls := 0
+	raw := func(context.Context, string, string) (string, error) {
+		calls++
+		return `{"claims":[{"claim":"c","label":"grounded","fact":"1"}]}`, nil
+	}
+	local := false
+	judge := LocalOnlyJudge(raw, func(context.Context) bool { return local })
+	if _, _, err := RunQualityDayWithJudge(context.Background(), st, judge, "gemma", day); err != nil {
+		t.Fatal(err)
+	}
+	if calls != 0 || len(st.grounded) != 0 {
+		t.Fatalf("yerel olmayan profil: model %d kez çağrıldı, %d satır yazıldı", calls, len(st.grounded))
+	}
+	if len(st.answers) == 0 {
+		t.Fatal("hakem atlanınca puanlama da durdu")
+	}
+	local = true
+	if _, _, err := RunQualityDayWithJudge(context.Background(), st, judge, "gemma", day); err != nil {
+		t.Fatal(err)
+	}
+	if calls != 2 || len(st.grounded) != 2 {
+		t.Fatalf("yerel profil: %d çağrı, %d satır (istenen 2/2)", calls, len(st.grounded))
+	}
+	if LocalOnlyJudge(nil, nil) != nil {
+		t.Fatal("nil hakem nil kalmalı (hakemsiz koşu yolu)")
+	}
+	if _, err := LocalOnlyJudge(raw, nil)(context.Background(), "", ""); !errors.Is(err, ErrJudgeNotLocal) {
+		t.Fatalf("denetimsiz hakem çağrıldı: %v", err)
+	}
+}

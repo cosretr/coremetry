@@ -9,7 +9,9 @@ package cosrelearn
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -150,6 +152,12 @@ func RunGrounding(ctx context.Context, st GroundingStore, judge Judge, model str
 		if ctx.Err() != nil {
 			break
 		}
+		// v0.10.2114 — hakem koruması (LocalOnlyJudge): profil yerel değil →
+		// günün hakemi atlanır; judge_error satırı YAZILMAZ (model çağrılmadı).
+		if errors.Is(jerr, ErrJudgeNotLocal) {
+			log.Printf("[cosre-grounding] %s — gerekçe loglandı, hakem bu gün atlandı", jerr)
+			break
+		}
 		var claims []GroundingClaim
 		if jerr == nil {
 			claims, jerr = ParseGrounding(out)
@@ -166,5 +174,29 @@ func RunGrounding(ctx context.Context, st GroundingStore, judge Judge, model str
 		judged++
 		rows = append(rows, g)
 	}
+	if len(rows) == 0 {
+		return judged, ungrounded, nil
+	}
 	return judged, ungrounded, st.InsertCosreGrounding(ctx, rows)
+}
+
+// ErrJudgeNotLocal — v0.10.2114 (kalite döngüsü audit §8 soru 5, operatör
+// onayı): hakemin kullanacağı model profili "Yerel (self-hosted) model"
+// işaretli değil. Hakem cevap metnini ve araç çıktılarını (kod dahil) modele
+// taşır; kod içeren istek yalnız self-hosted modele gider.
+var ErrJudgeNotLocal = errors.New("hakem atlandı: model profili yerel (self-hosted) değil")
+
+// LocalOnlyJudge — v0.10.2114: local(ctx) false ise j ÇAĞRILMAZ, ErrJudgeNotLocal
+// döner. local, çağrının çözülen profilini copilot.LocalOnlyAllowed ile denetler
+// (D4 günlük koşusunun yerel-profil kuralıyla aynı ölçüt). j nil → nil.
+func LocalOnlyJudge(j Judge, local func(ctx context.Context) bool) Judge {
+	if j == nil {
+		return nil
+	}
+	return func(ctx context.Context, system, user string) (string, error) {
+		if local == nil || !local(ctx) {
+			return "", ErrJudgeNotLocal
+		}
+		return j(ctx, system, user)
+	}
 }
