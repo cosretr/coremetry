@@ -517,6 +517,7 @@ func runEvalAgentCase(ctx context.Context, agent evalAgentFn, c evalCase, toolse
 	out.Agent = &trail
 	in := evalRubricInput(c, o.Answer, out.Err, unknown, false)
 	in.ToolCallsValid = evalAgentToolCallsValid(st)
+	in.StreamContract, in.StreamContractNote = evalStreamContractInput(st.Parts, st.PartsDropped) // v0.10.2107 (D2)
 	out.Rubric = evalrubric.Score(in)
 	return out
 }

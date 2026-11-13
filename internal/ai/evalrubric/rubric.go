@@ -15,6 +15,8 @@
 //	language_tr       0/1   düz metin yüzeyde Türkçe (heuristik); JSON yüzeyde n/a
 //	length_ok         0/1   answer ≤ MaxChars (0 = n/a)
 //	tool_calls_valid  0/1   yalnız serbest döngü yüzeylerinde (nil = n/a)
+//	stream_contract   0/1   v0.10.2107 — v2 akış parçalarının sözleşmesi
+//	                        (kontrol api'de; nil = n/a, v1 koşusunda boyut YOK)
 //
 // n/a boyutlar ağırlıktan DÜŞER (yeniden normalize); böylece JSON yüzeyi
 // dil boyutundan ceza almaz. Eşik 0,8 (evaluator-optimizer deseni) — bu
@@ -59,15 +61,25 @@ type Input struct {
 	ExpectTurkish  bool  // düz metin yüzey: dil boyutu uygulanır
 	MaxChars       int   // 0 = n/a
 	ToolCallsValid *bool // nil = n/a
+	// StreamContract — v0.10.2107 (kalite döngüsü D2): v2 akış parçaları
+	// sözleşmeye uydu mu (kural api'de, sunucunun mevcut sanitizer'larıyla;
+	// bu paket kural taşımaz). nil = n/a: boyut Dims'e HİÇ eklenmez, v1
+	// Result'ı bayt bayt eskisi kalır. Note ilk ihlali taşır.
+	StreamContract     *bool
+	StreamContractNote string
 }
 
-// Ağırlıklar — toplam 1,0; n/a boyutlar düşünce yeniden normalize edilir.
+// Ağırlıklar — ilk beşi toplam 1,0; n/a boyutlar düşünce yeniden normalize
+// edilir. wStream (v0.10.2107, D2) bu beşin ÜSTÜNE eklenir: uygulanabilir
+// olduğunda toplam 1,10 olur ve finalize uygulanabilir ağırlıklara böler
+// (audit §3.2). Eşik değişmez.
 const (
 	wGrounded = 0.40
 	wAnswers  = 0.30
 	wLanguage = 0.10
 	wLength   = 0.10
 	wTools    = 0.10
+	wStream   = 0.10
 )
 
 // Score — deterministik rubrik. Err != nil → her uygulanabilir boyut 0
@@ -152,6 +164,17 @@ func Score(in Input) Result {
 		}
 	}
 	dims = append(dims, tc)
+
+	// stream_contract — v0.10.2107: yalnız v2 koşusunda (nil = boyut yok).
+	if in.StreamContract != nil {
+		sc := Dim{Name: "stream_contract", Max: 1, Weight: wStream}
+		if !failed && *in.StreamContract {
+			sc.Score = 1
+		} else if !failed {
+			sc.Note = in.StreamContractNote
+		}
+		dims = append(dims, sc)
+	}
 
 	return finalize(dims)
 }
