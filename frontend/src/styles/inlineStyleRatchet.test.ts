@@ -22,7 +22,7 @@ const CEILINGS: Record<Page, number> = {
   RemoteCluster: 0, // 2 dosya (Settings alt kümesi) — Faz 2 dilim 1 R7: 50 → 0, MIGRATED
   Logs: 61, // v0.10.1854 (dilim 2.3, LogPillEditor silindi + LogsFilterRow shadcn): 65 → 61; v0.10.1853 (Faz 2 dilim 2.2, LogFieldsPanel → coremetry/logs/FieldSidebar): 87 → 65; v0.10.1821 (Log Search Faz 1 dilim 1.5): 94 → 87 (KqlSearchInput → coremetry/logs/LogQueryInput, 0 stil)
   Trace: 150, // 17
-  Traces: 103, // 13
+  Traces: 103, // 13 — Traces shadcn S0 tabanı (2026-11-13, mandalın KENDİ sayımı): 103 = tavan; pages/Traces.tsx 62 + components/traces 41 (LatencyScatter 10, TraceLogList 6, ServiceTimeline 5, TraceHonesty 5, VolumeChart 5, shared 5, ShapesView 4, TraceMinimap 1) + pages/traces 0. Plandaki 105 test dosyalarını da sayan grep'ti; S3 bu sayıdan iner
   Explore: 132, // v0.10.1867 (eski Metrics/Logs panelleri silindi): 141 → 132
   Metrics: 38, // v0.10.1865 (Metrics Explorer 2.5, katalog → Keşif): 49 → 38; v0.10.1863 (2.3, editör anahtarı kalktı): 50 → 49
   Shell: 16, // 5 — etkileşim P2: 43 → 16 (⌘K cmdk)
