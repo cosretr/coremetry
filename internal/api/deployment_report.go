@@ -287,7 +287,8 @@ func (s *Server) buildDeploymentReport(ctx context.Context, sinceNs int64, owner
 	// last_seen), so we narrow further in Go by StartedAt + Service
 	// (v0.10.1049: anomaliesSinceDeploy — düzenli yinelenen olay listede
 	// kalır, PredatesDeploy ile "yinelenen" diye işaretlenir).
-	allAnomalies, err := s.store.ListAnomalyEvents(ctx, chstore.ListAnomalyEventsFilter{
+	// v0.10.2082 — ML olayları da (chstore.ListAnomalyFeed).
+	allAnomalies, err := s.store.ListAnomalyFeed(ctx, chstore.ListAnomalyEventsFilter{
 		SinceNs: sinceNs, Limit: 2000,
 	})
 	if err != nil {

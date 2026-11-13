@@ -744,7 +744,8 @@ func (s *Server) inboxView(q url.Values) (string, func(ctx context.Context) (any
 			// in SQL. Dropping cleared ones in Go after the LIMIT spent the
 			// whole scan budget on history: the fourth and last source still
 			// narrowing post-cap (problems + incidents got this in v0.9.322).
-			evs, err = s.store.ListAnomalyEvents(ctx, chstore.ListAnomalyEventsFilter{
+			// v0.10.2082 — ML olayları da (chstore.ListAnomalyFeed; aynı süzgeç, aynı satır).
+			evs, err = s.store.ListAnomalyFeed(ctx, chstore.ListAnomalyEventsFilter{
 				Limit: srcLimit, ActiveOnly: statusFilter == "open",
 				// v0.9.353 — nil = no constraint; empty = match nothing.
 				Services: teamServices,

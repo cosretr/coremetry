@@ -199,7 +199,7 @@ func (s *Server) buildRolloutDetail(ctx context.Context, row chstore.RolloutRow,
 		probsBySvc[p.Service] = append(probsBySvc[p.Service], p)
 	}
 	// Services SQL'de daraltır (filter-after-LIMIT sınıfı — v0.9.353 dersi).
-	allAnomalies, err := s.store.ListAnomalyEvents(ctx, chstore.ListAnomalyEventsFilter{SinceNs: sinceNs, Services: svcs, ActiveOnly: true, Limit: 2000})
+	allAnomalies, err := s.store.ListAnomalyFeed(ctx, chstore.ListAnomalyEventsFilter{SinceNs: sinceNs, Services: svcs, ActiveOnly: true, Limit: 2000}) // v0.10.2082 — ML olayları da
 	if err != nil {
 		return nil, err
 	}

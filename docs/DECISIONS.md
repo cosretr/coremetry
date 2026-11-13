@@ -13705,3 +13705,14 @@ eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
   dedektörlerin aktif-anahtar okumaları (`ListActiveAnomalyKeys`), kimlikle tekil okumalar (`GetAnomalyEvent`:
   olay sayfası, kök neden, açıklama, Problem standardı), Cmd-K susturma paleti (eski susturmayı yazar; ML'de
   susturma yok, karar var), sağlık kontrolü (zaten yalnız `ml_events`).
+
+## 2026-11-13 — v0.10.2082 — Anomali okuyucu taşıması 3: Problems kuyruğu, deploy raporu, rollout çekmecesi ML olaylarını da
+
+- Aynı erişici (`chstore.ListAnomalyFeed`): `/api/inbox` anomali kaynağı (aynı süzgeç: takım servisleri, açık
+  görünümde yalnız aktif, susturmalar LIMIT'ten önce), deploy raporu ve rollout çekmecesinin "deploy sonrası
+  anomaliler" satırları. ML satırı aynı satır (kind `ml:<dedektör>`); kuyrukta tıklayınca ML olay sayfası
+  (`anomalyRowHref`), Problem standardı ML satırında aile / kaynak / etiketi dedektörden alır, "Anomali detayını
+  aç" ML sayfasına gider. Görünüm önceliği değişmedi (exception dışı satır P3) → rozet (`/api/inbox/count` =
+  varsayılan P1 listesi) listeyle aynı kümeyi saymaya devam eder.
+- Ek maliyet: derleme başına bir `ml_events FINAL` okuması (LIMIT = kaynak tavanı, max_execution_time 5);
+  `/api/inbox` önbellekli (anahtar değişmedi); ES çağrısı yok.

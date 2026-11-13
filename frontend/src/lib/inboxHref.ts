@@ -9,6 +9,7 @@
 // gözüksün"), anomali satırları varsayılan dışarıda ("∿ Anomalies" düğmesi
 // zaten var). Sıra sunucunun sırası (P1 → P2 → P3, sonra son görülme).
 import type { InboxItem } from './types';
+import { anomalyRowHref } from './anomalyHref';
 
 export const isInboxExcFamily = (it: InboxItem): boolean =>
   (it.kind === 'exception' || it.kind === 'httperror') && !!it.exception;
@@ -57,7 +58,7 @@ export function inboxItemHref(it: InboxItem): string | null {
     return `/problems?exc=${encodeURIComponent(it.exception!.fingerprint)}`;
   }
   if (it.kind === 'anomaly' && it.anomaly) {
-    return anomalyDetailHref(it.anomaly.id);
+    return anomalyRowHref(it.anomaly); // v0.10.2082: ML satırı ML olay sayfasına
   }
   if (it.kind === 'incident' && it.incident) {
     return `/incident?id=${encodeURIComponent(it.incident.id)}`;
@@ -97,7 +98,7 @@ export function inboxRowOpen(it: InboxItem): InboxRowOpen {
   const href = inboxItemHref(it);
   if (isInboxExcFamily(it) && href) return { to: 'page', href };
   if (it.kind === 'problem' && it.problem?.id) return { to: 'detail', param: 'problem', id: it.problem.id };
-  if (it.kind === 'anomaly' && it.anomaly?.id) return { to: 'page', href: anomalyDetailHref(it.anomaly.id) }; // C1: tam sayfa
+  if (it.kind === 'anomaly' && it.anomaly?.id) return { to: 'page', href: anomalyRowHref(it.anomaly) }; // C1: tam sayfa (v0.10.2082: ML satırı ML sayfası)
   if (it.kind === 'incident' && it.incident?.id && href) return { to: 'page', href };
   return inboxItemIdTarget(it.id);
 }

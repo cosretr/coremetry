@@ -40,6 +40,13 @@ describe('inboxItemHref', () => {
     expect(inboxItemHref(anom('e/1 x'))).toBe('/anomalies/e%2F1%20x');
     expect(inboxItemHref(inc('i1'))).toBe('/incident?id=i1');
   });
+
+  // v0.10.2082 — ML olayı aynı satır şeklinde (kind "ml:<dedektör>"): ML olay sayfası.
+  it('ML satırı ML olay sayfasına', () => {
+    const ml = item({ id: 'anomaly:m1', kind: 'anomaly', anomaly: { id: 'm1', kind: 'ml:new_template', pattern: 'p', peakRatio: 0, currentRatio: 0 } });
+    expect(inboxItemHref(ml)).toBe('/anomalies/ml/m1');
+    expect(inboxRowOpen(ml)).toEqual({ to: 'page', href: '/anomalies/ml/m1' });
+  });
   it('returns null when the payload lacks the native id', () => {
     expect(inboxItemHref(item({ kind: 'problem' }))).toBeNull();
     expect(inboxItemHref(item({ kind: 'exception' }))).toBeNull();

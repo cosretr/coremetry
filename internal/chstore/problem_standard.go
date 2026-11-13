@@ -1015,7 +1015,17 @@ func StandardizeAnomalyEvent(e AnomalyEvent, f StdFacts) ProblemStandard {
 	now := f.now()
 	fam := StdFamilyRule
 	label := e.Kind
-	switch e.Kind {
+	// v0.10.2082 — ML olayı aynı satır şeklinde gelir (kind "ml:<dedektör>",
+	// ListAnomalyFeed): aile / etiket / kaynak dedektör adından, ayrıntı ML
+	// olay sayfası.
+	kind, isML := strings.CutPrefix(e.Kind, MLAnomalyKindPrefix)
+	if isML {
+		label = "ML " + kind
+		if kind == "new_template" {
+			fam = StdFamilyError
+		}
+	}
+	switch kind {
 	case "trace_op_latency":
 		fam, label = StdFamilyLatency, "operasyon yavaşladı"
 	case "trace_op":
@@ -1055,13 +1065,19 @@ func StandardizeAnomalyEvent(e AnomalyEvent, f StdFacts) ProblemStandard {
 	if e.StartedAt > 0 && end > e.StartedAt {
 		std.Since.DurationSec = (end - e.StartedAt) / int64(time.Second)
 	}
-	src := anomalyEventSource(e.Kind)
+	src := anomalyEventSource(kind)
+	if isML {
+		src = mlAnomalySource(kind)
+	}
 	std.Evidence = StdEvidence{Sentence: "Anomali olayı (henüz problem değil).", Source: src, Sampled: true}
 	gates := ComputeSignalGates(GateInput{Family: fam, Dwell: "unknown", Source: src,
 		RelationClaimed: f.RelationClaimed, RelationVerified: f.RelationVerified,
 		RecentDeploy: f.RecentDeploy, CalendarKind: f.CalendarKind, Batch: f.Batch})
 	std.Confidence = StdConfidence{Level: ConfidenceFromGates(gates, ConfidenceInput{Sampled: true, Ratio: e.PeakRatio, BigBreach: f.bigBreach()}), Gates: gates}
 	std.NextStep = StdNextStep{Text: "Anomali detayını aç", Href: "/inbox?anomaly=" + url.QueryEscape(e.ID)}
+	if isML {
+		std.NextStep.Href = "/anomalies/ml/" + url.PathEscape(e.ID)
+	}
 	std.Context = stdContext(f, e.EpisodeCount)
 	return std
 }
@@ -1075,6 +1091,21 @@ func anomalyEventSource(kind string) string {
 		return StdSourceLogs
 	}
 	return StdSourceSpan
+}
+
+// mlAnomalySource — SAF (v0.10.2082): ML dedektörünün kanıt kaynağı
+// (sinyal türü dedektör adından; MLTraceDetectorNames dışı log sayılır,
+// metric_ önekli VM metriği).
+func mlAnomalySource(detector string) string {
+	if strings.HasPrefix(detector, "metric_") {
+		return StdSourceVM
+	}
+	for _, n := range MLTraceDetectorNames {
+		if n == detector {
+			return StdSourceSpan
+		}
+	}
+	return StdSourceLogs
 }
 
 // StandardizeIncident — SAF: incident.
