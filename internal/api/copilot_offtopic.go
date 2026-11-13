@@ -22,6 +22,7 @@ package api
 import (
 	"encoding/json"
 	"net/url"
+	"regexp"
 	"strings"
 
 	"github.com/cilcenk/coremetry/internal/reqid"
@@ -34,13 +35,95 @@ const offTopicBoundaryTR = "Bu soru Coremetry'nin izlediği telemetriyle ilgili 
 // offTopicFirmTR — zararlı/uygunsuz istek: aynı sınır, daha kesin.
 const offTopicFirmTR = "Bu istek Coremetry'nin kapsamı dışında; bu konuda yardımcı olamam. Ben yalnız servislerin, trace'lerin, logların, metriklerin ve problemlerin sorularını cevaplarım."
 
-// offTopicHarmfulStems — küçük harf alt-dize; yalnız METNİN tonunu değiştirir
-// (firm), yönlendirmeyi değil. Çift kuralı: gizli-anahtar sözcüğü (şifre/parola/
-// wifi) + kırma fiili ("şifresini nasıl kırarım" — sözcükler bitişik değil).
+// offTopicHarmfulStems — küçük harf KÖK; yalnız METNİN tonunu değiştirir
+// (firm) ve genel-soru yolunu kapatır (chat_offtopic_general.go).
+//
+// v0.10.2113 (operatör: "hackathon nedir", "sızma testi nedir",
+// "silahsızlanma antlaşması", "şifremi çaldılar ne yapayım" ret alıyordu) —
+// eşleşme ALT-DİZE değil SÖZCÜK: kök bir jetonla (guidedTokens) eşleşir ya
+// jetonun tamamıysa ya da jeton = kök + yalnız ÇEKİM/kısa ek zinciri ise
+// (offTopicSuffixRE: "bombayı", "silahla", "hacklemek", "ddos'u" — kesme
+// işareti zaten jeton sınırı). Türetilmiş başka sözcük ("hackathon",
+// "silahsızlanma") eşleşmez: kalan kısım ek zincirine ayrışmaz. Çok sözcüklü
+// kök ("zararlı yazılım") ardışık jetonlarla. Liste içeriği DEĞİŞMEDİ.
+// Kararsız ekler (-cı "bombacı", -lı "silahlı") zincirde: mevcut ret korunur.
 var offTopicHarmfulStems = []string{
 	"hack", "sızma", "sizma", "exploit", "zararlı yazılım", "malware", "keylogger",
 	"ddos", "bomba", "silah", "intihar", "uyuşturucu",
 }
+
+// offTopicCompoundOK — v0.10.2113: kökün bir sonraki jetonla kurduğu ZARARSIZ
+// terim (yalnız kök jetonun TAMAMIYSA): "sızma testi" = penetrasyon testi
+// (savunma mesleği). Sonraki jeton bu öneklerden biriyle başlamalı.
+var offTopicCompoundOK = map[string][]string{
+	"sızma": {"test"},
+	"sizma": {"test"},
+}
+
+// offTopicSuffixRE — v0.10.2113: kökten sonra kalan kısmın ÇEKİM / kısa ek
+// zinciri olup olmadığı (çoğul, iyelik, hâl, -ki, -cı, -lı, ek-fiil, fiil
+// yapma -la/-le + mastar, zaman, kip, kişi). "-sız" (yokluk: silahsız,
+// silahsızlanma) BİLİNÇLİ YOK; tek harf "z" yok (aksi hâlde "sı"+"z" yoluyla
+// geri gelirdi); tek "s" yalnız EN SONDA. Zincir boş da olabilir (jeton = kök).
+var offTopicSuffixRE = regexp.MustCompile(`^(?:` +
+	`lar|ler|ları|leri|` +
+	`ım|im|um|üm|ın|in|un|ün|ı|i|u|ü|m|n|k|` +
+	`sı|si|su|sü|yı|yi|yu|yü|` +
+	`a|e|ya|ye|da|de|ta|te|dan|den|tan|ten|` +
+	`la|le|yla|yle|nın|nin|nun|nün|ki|` +
+	`cı|ci|cu|cü|çı|çi|çu|çü|lı|li|lu|lü|` +
+	`mız|miz|muz|müz|nız|niz|nuz|nüz|ız|iz|uz|üz|` +
+	`dır|dir|dur|dür|tır|tir|tur|tür|` +
+	`mak|mek|ma|me|r|ar|er|ır|ir|ur|ür|` +
+	`dı|di|du|dü|tı|ti|tu|tü|mış|miş|muş|müş|yor|` +
+	`acak|ecek|yacak|yecek|sa|se|ken|ebil|abil|yebil|yabil|` +
+	`ıl|il|ul|ül|en|an|yen|yan|` +
+	`ing|ed` + // İngilizce kök ("hacking", "hacked") — ret korunur
+	`)*s?$`) // sondaki İngilizce çoğul ("hacks", "exploits"); ortada tek "s" YOK (silahsız)
+
+// offTopicStemMatch — SAF: jeton kökü taşıyor mu (tam ya da kök + ek zinciri).
+func offTopicStemMatch(tok, stem string) bool {
+	if !strings.HasPrefix(tok, stem) {
+		return false
+	}
+	return offTopicSuffixRE.MatchString(tok[len(stem):])
+}
+
+// offTopicHarmfulStemHit — SAF: jetonlarda bir zararlı kök var mı.
+func offTopicHarmfulStemHit(toks []string) bool {
+	for _, stem := range offTopicHarmfulStems {
+		parts := strings.Fields(stem)
+		n := len(parts)
+		for i := 0; i+n <= len(toks); i++ {
+			ok := true
+			for j := 0; j < n-1; j++ { // çok sözcüklü kökte baştaki sözcükler TAM
+				if toks[i+j] != parts[j] {
+					ok = false
+					break
+				}
+			}
+			last := toks[i+n-1]
+			if !ok || !offTopicStemMatch(last, parts[n-1]) {
+				continue
+			}
+			if last == parts[n-1] && i+n < len(toks) && offTopicCompoundNext(parts[n-1], toks[i+n]) {
+				continue
+			}
+			return true
+		}
+	}
+	return false
+}
+
+func offTopicCompoundNext(stem, next string) bool {
+	for _, p := range offTopicCompoundOK[stem] {
+		if strings.HasPrefix(next, p) {
+			return true
+		}
+	}
+	return false
+}
+
 var offTopicSecretWords = []string{"şifre", "sifre", "parola", "password", "wifi"}
 
 // offTopicCrackStems — jeton ÖNEKİ ("kırarım", "çalınır", "cracklemek"); "çalış-"
@@ -49,12 +132,17 @@ var offTopicSecretWords = []string{"şifre", "sifre", "parola", "password", "wif
 var offTopicCrackStems = []string{"kır", "kir", "crack", "çal", "cal"}
 var offTopicCrackExcl = []string{"çalış", "calis", "calc", "kira", "kirl", "kirp"}
 
+// offTopicCrackPastRE — v0.10.2113: kırma/çalma fiilinin GEÇMİŞ zamanı
+// ("çaldılar", "kırdım", "çalındı", "kırıldı") olanı bildirir (mağdur:
+// "şifremi çaldılar ne yapayım"), nasıl yapılacağını sormaz → kırma sayılmaz.
+// Edilgen ek (-ıl/-ın) isteğe bağlı; ardından -dı/-tı ailesi.
+var offTopicCrackPastRE = regexp.MustCompile(`^(?:[ıiuü][ln])?[dt][ıiuü]`)
+
 // offTopicIsHarmful — SAF: normalize edilmiş mesaj.
 func offTopicIsHarmful(norm string) bool {
-	for _, s := range offTopicHarmfulStems {
-		if strings.Contains(norm, s) {
-			return true
-		}
+	toks := guidedTokens(norm)
+	if offTopicHarmfulStemHit(toks) {
+		return true
 	}
 	secret := false
 	for _, s := range offTopicSecretWords {
@@ -69,7 +157,7 @@ func offTopicIsHarmful(norm string) bool {
 	if strings.Contains(norm, "ele geçir") {
 		return true
 	}
-	for _, t := range guidedTokens(norm) {
+	for _, t := range toks {
 		excluded := false
 		for _, x := range offTopicCrackExcl {
 			if strings.HasPrefix(t, x) {
@@ -81,7 +169,7 @@ func offTopicIsHarmful(norm string) bool {
 			continue
 		}
 		for _, s := range offTopicCrackStems {
-			if strings.HasPrefix(t, s) {
+			if strings.HasPrefix(t, s) && !offTopicCrackPastRE.MatchString(t[len(s):]) {
 				return true
 			}
 		}
