@@ -3,8 +3,9 @@ package api
 // ai_evalset_agent_scope.go — CoSRE v2 araç seti dilim 2 (docs/cosre/tools-audit.md
 // §10 G8): ajan kipi vakası kullanıcı kapsamını ölçer.
 //
-// Vaka `userTeam` taşırsa koşucu v2 döngüsünü işaretler (withCosreV2Loop) ve
-// kapsam users tablosu okunmadan o fikstür takımından çözülür
+// Koşucu her ajan vakasını v2 döngüsünden koşar (v0.10.2106; önce yalnız
+// userTeam'li vaka). Vaka `userTeam` taşırsa kapsam users tablosu okunmadan
+// o fikstür takımından çözülür
 // (chatEvalMode.UserTeam). `expect.servicesInScope` true ise yürüyen HER
 // çağrının servis argümanları (services[] ve tekil service) çözülen kapsamın
 // alt kümesi olmalı; kapsam dışı ad = fail. Fikstür takımı bu kurulumun

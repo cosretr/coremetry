@@ -10,8 +10,9 @@ package api
 // harcadığı, eldeki kanıtla ne söylediği — ölçülmüyordu.
 //
 // Ajan kipi (`"mode":"agent"`, yalnız serbest döngü yüzeylerinde) vakayı
-// CANLI sohbet handler'ından geçirir (D1, süreç içi): copilotChat'e gerçek bir
-// POST /api/copilot/chat isteği kurulur, ctx'e chatEvalMode işareti konur
+// CANLI sohbet handler'ından geçirir (D1, süreç içi): sohbet gövdesine gerçek
+// bir POST isteği kurulur (v0.10.2106'dan beri CoSRE v2 yolu, bellek içi
+// part sink'i — ai_evalset_v2sink.go), ctx'e chatEvalMode işareti konur
 // (chat_eval_mode.go) ve SSE gövdesi atılır; sonuç Sink + tur/araç
 // kancalarından toplanır. Döngü öncesi kademeler (guided, wiki …) AÇIK
 // kalır (D2) — üretim neyse o ölçülür; kademe önemliyse vaka `expectTier`
@@ -48,6 +49,7 @@ import (
 	"github.com/cilcenk/coremetry/internal/auth"
 	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/copilot"
+	"github.com/cilcenk/coremetry/internal/cosre/uistream"
 	"github.com/cilcenk/coremetry/internal/mcp"
 	"github.com/cilcenk/coremetry/internal/mcptools"
 )
@@ -157,6 +159,10 @@ type evalAgentStats struct {
 	// döngüsünün çözdüğü kullanıcı kapsamı + yürüyen çağrıların servisleri.
 	Scope      *userScope
 	ScopeCalls []evalScopeCall
+	// Parts / PartsDropped — v0.10.2106 (kalite döngüsü D1): vakanın v2 UI
+	// Message Stream parçaları (ai_evalset_v2sink.go); tavanı aşan sayısı.
+	Parts        []uistream.Part
+	PartsDropped int
 }
 
 // CapSkipped — tavanı aşıp Executor'a hiç gitmeyen çağrı sayısı.
@@ -172,6 +178,7 @@ type evalAgentCollector struct {
 	st       evalAgentStats
 	toolText strings.Builder
 	out      *evalAgentOutcome
+	parts    *evalPartSink // v0.10.2106 — nil = parça toplanmadı
 }
 
 func (c *evalAgentCollector) onTurn(round int, turn copilot.ChatTurn, err error) {
@@ -230,6 +237,9 @@ func (c *evalAgentCollector) result() (evalAgentOutcome, evalAgentStats, bool) {
 	defer c.mu.Unlock()
 	st := c.st
 	st.ToolText = c.toolText.String()
+	if c.parts != nil {
+		st.Parts, st.PartsDropped = c.parts.snapshot()
+	}
 	if c.out == nil {
 		return evalAgentOutcome{}, st, false
 	}
@@ -404,8 +414,13 @@ func evalAgentRequest(c evalCase) chatRequest {
 	return req
 }
 
-// evalsetServerAgent — sunucu koşucusunun evalAgentFn'i: copilotChat süreç
-// içinde, koşuyu başlatanın kimliğiyle (rol süzgeci canlıdaki gibi).
+// evalsetServerAgent — sunucu koşucusunun evalAgentFn'i: sohbet gövdesi
+// (copilotChatWith) süreç içinde, koşuyu başlatanın kimliğiyle (rol süzgeci
+// canlıdaki gibi). v0.10.2106 (kalite döngüsü D1) — gövde CoSRE v2 yolundan
+// koşar: v2 işareti (withCosreV2Loop, cosreV2Chat'in aynısı) her vakada,
+// yazıcı bellek içi part sink'i (ai_evalset_v2sink.go). Koşu satırı
+// path=v2 (startAIEvalsetRun). Fikstür userTeam'i yalnız kapsamın KAYNAĞINI
+// seçer (chatEvalMode.UserTeam); v2 işareti artık ona bağlı değil.
 func (s *Server) evalsetServerAgent(job *evalJob) evalAgentFn {
 	var bindOnce sync.Once // v0.10.1476 — koşu başına bir bağlama hedefi
 	var bindTarget string
@@ -430,7 +445,7 @@ func (s *Server) evalsetServerAgent(job *evalJob) evalAgentFn {
 				c = evalBindCase(c, c.BindService, boundTo)
 			}
 		}
-		col := &evalAgentCollector{}
+		col := &evalAgentCollector{parts: newEvalPartSink()}
 		em := &chatEvalMode{
 			Surface: evalsetSurfacePrefix + c.Surface, ExchangeID: job.row.ID + "/" + c.ID, Toolset: toolset,
 			SkipIntent: evalAgentSkipIntent(c), // v0.10.1321
@@ -441,9 +456,7 @@ func (s *Server) evalsetServerAgent(job *evalJob) evalAgentFn {
 		cctx := copilot.WithRecordSurfacePrefix(ctx, evalsetSurfacePrefix)
 		cctx = auth.ContextWithClaims(cctx, &auth.Claims{UserID: job.userID, Email: job.userEmail, Role: job.userRole})
 		cctx = withChatEvalMode(cctx, em)
-		if c.UserTeam != "" {
-			cctx = withCosreV2Loop(cctx) // araç seti dilim 2 — kullanıcı kapsamı yalnız v2 döngüsünde
-		}
+		cctx = withCosreV2Loop(cctx) // v0.10.2106 — koşucu v2 yolunda (kapsam, v2 araçları, v2 alt kümesi)
 		cctx, cancel := context.WithTimeout(cctx, evalAgentCaseMax(s.copilot.ClientTimeout()))
 		defer cancel()
 		body, err := json.Marshal(evalAgentRequest(c))
@@ -455,7 +468,7 @@ func (s *Server) evalsetServerAgent(job *evalJob) evalAgentFn {
 			return evalAgentOutcome{}, evalAgentStats{}, err
 		}
 		w := newEvalDiscardResponse()
-		s.copilotChat(w, req)
+		s.copilotChatWith(w, req, evalV2SinkFactory(col.parts))
 		o, st, ok := col.result()
 		o.BoundTo = boundTo
 		if !ok {

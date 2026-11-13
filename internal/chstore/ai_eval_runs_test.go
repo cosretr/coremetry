@@ -40,9 +40,12 @@ func TestEvalRunsDDLShape(t *testing.T) {
 // INSERT kolon listesi ile argüman sayısı ve DDL kolonları hizalı olmalı —
 // kayma sessiz değil ama yalnız canlı CH'de patlardı.
 func TestEvalRunInsertArgsAlignWithColumns(t *testing.T) {
-	open := strings.Index(evalRunsInsertSQL, "(")
-	cols := strings.Split(strings.TrimSuffix(strings.TrimSpace(evalRunsInsertSQL[open+1:]), ")"), ",")
-	args := evalRunInsertArgs(EvalRun{ID: "ev-1"})
+	// v0.10.2106 — path ALTER ile gelir (CREATE'te yok): taban (probe
+	// false) liste DDL'e karşı, probe true'nun tek farkı ai_eval_runs_path_test'te.
+	ins := evalRunsInsertSQL(false)
+	open := strings.Index(ins, "(")
+	cols := strings.Split(strings.TrimSuffix(strings.TrimSpace(ins[open+1:]), ")"), ",")
+	args := evalRunInsertArgs(EvalRun{ID: "ev-1"}, false)
 	if len(cols) != len(args) {
 		t.Fatalf("INSERT %d kolon, %d argüman", len(cols), len(args))
 	}
@@ -54,17 +57,17 @@ func TestEvalRunInsertArgsAlignWithColumns(t *testing.T) {
 		}
 	}
 	// Seçim kolonları da DDL'de olmalı (+ cases nokta okumada).
-	for _, c := range strings.Split(evalRunsSelectCols, ",") {
+	for _, c := range strings.Split(evalRunsSelectCols(false), ",") {
 		c = strings.TrimSpace(c)
 		if !regexp.MustCompile(`(?m)^\s*` + regexp.QuoteMeta(c) + `\s`).MatchString(ddl) {
 			t.Errorf("SELECT kolonu %q DDL'de yok", c)
 		}
 	}
 	var r EvalRun
-	if got, want := len(evalRunScanDest(&r, false)), len(strings.Split(evalRunsSelectCols, ",")); got != want {
+	if got, want := len(evalRunScanDest(&r, false, false)), len(strings.Split(evalRunsSelectCols(false), ",")); got != want {
 		t.Fatalf("scan hedefi %d, kolon %d", got, want)
 	}
-	if got := len(evalRunScanDest(&r, true)); got != len(strings.Split(evalRunsSelectCols, ","))+1 {
+	if got := len(evalRunScanDest(&r, true, false)); got != len(strings.Split(evalRunsSelectCols(false), ","))+1 {
 		t.Fatalf("cases'li scan hedefi %d", got)
 	}
 }
@@ -92,7 +95,7 @@ func TestEvalRunTimeSentinelAndVersion(t *testing.T) {
 	if evalRunVersion(b) <= evalRunVersion(a) {
 		t.Fatal("version updated_at ile KESİN artmalı (son yazım FINAL'de kazanır)")
 	}
-	if args := evalRunInsertArgs(EvalRun{ID: "x"}); args[10] == nil {
+	if args := evalRunInsertArgs(EvalRun{ID: "x"}, false); args[10] == nil {
 		t.Fatal("nil surfaces boş diziye çevrilmeli")
 	}
 	var r EvalRun

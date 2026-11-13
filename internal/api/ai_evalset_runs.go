@@ -342,6 +342,7 @@ func (s *Server) startAIEvalsetRun(w http.ResponseWriter, r *http.Request) {
 		ID: newEvalRunID(now), StartedAt: now, UpdatedAt: now, Status: evalStatusRunning,
 		StartedBy: startedBy, AppVersion: s.evalAppVersion(), PromptVersion: copilot.PromptVersion(),
 		Model: model, ProfileID: pid, Surfaces: []string{},
+		Path: chstore.EvalRunPathV2, // v0.10.2106 — ajan vakaları v2 yolundan (evalsetServerAgent)
 	}
 	st := evalRunStoreFor(s)
 

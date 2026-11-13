@@ -147,7 +147,7 @@ func checkAgentFixture(t *testing.T, c evalCase, knownTools map[string]bool) {
 	}
 	for _, list := range [][]string{e.ExpectedTools, e.AnyOfTools, e.ForbiddenTools} {
 		for _, name := range list {
-			if !knownTools[name] && !(c.UserTeam != "" && evalV2CatalogNames()[name]) {
+			if !knownTools[name] && !evalV2CatalogNames()[name] { // v0.10.2106 — her ajan vakası v2 yolunda
 				t.Errorf("%s/%s: araç %q ne sohbet kataloğunda ne guided ön-yükleme çiplerinde", c.file, c.ID, name)
 			}
 		}
@@ -155,10 +155,9 @@ func checkAgentFixture(t *testing.T, c evalCase, knownTools map[string]bool) {
 	// v0.10.1476 — döngü sondası guided'ı atlar: beklenen araçlar SERBEST
 	// DÖNGÜ kataloğunda olmalı (guided-yalnız çip adını model seçemez).
 	if evalAgentLoopProbe(c) {
-		loop := evalLoopCatalogNames()
-		if c.UserTeam != "" {
-			loop = evalV2CatalogNames() // araç seti dilim 2 — vaka v2 döngüsünden koşar
-		}
+		// v0.10.2106 (kalite döngüsü D1) — koşucu her ajan vakasını v2
+		// döngüsünden koşar; döngü sondası aracı v2 kataloğunda olmalı.
+		loop := evalV2CatalogNames()
 		for _, list := range [][]string{e.ExpectedTools, e.AnyOfTools} {
 			for _, name := range list {
 				if !loop[name] {
@@ -167,15 +166,6 @@ func checkAgentFixture(t *testing.T, c evalCase, knownTools map[string]bool) {
 			}
 		}
 	}
-}
-
-// evalLoopCatalogNames — v0.10.1476: serbest döngünün (full) sohbet kataloğu.
-func evalLoopCatalogNames() map[string]bool {
-	out := map[string]bool{}
-	for _, tl := range mcptools.ChatToolListFor(mcptools.Deps{}, modelcaps.ToolsetFull) {
-		out[tl.Name] = true
-	}
-	return out
 }
 
 // evalV2CatalogNames — araç seti dilim 2: v2 döngüsünün (full) model kataloğu.

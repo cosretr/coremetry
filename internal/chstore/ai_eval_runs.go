@@ -22,11 +22,29 @@ package chstore
 //
 // Tablo yokluğu (küme kipinde ertelenen DDL, clickhouse-schema §9) okuma
 // tarafında HATA değil: liste boş, nokta okuma "yok" döner.
+//
+// v0.10.2106 (CoSRE kalite döngüsü D1, docs/cosre/quality-loop-audit.md
+// §3.1; operatör onayı 2026-11-13 soru 1) — `path` kolonu: koşunun ajan
+// vakalarını hangi sohbet yolu koştu ('v1' = copilotChat, 'v2' = CoSRE v2
+// UI Message Stream). Boot ALTER'ıyla gelir (store.go `alters`; CREATE
+// TABLE'a bilinçli EKLENMEDİ — anomaly_events.promotion emsali, kolon
+// sırası). İki-boot sözleşmesi: hasEvalRunsPathCol false iken INSERT ve
+// SELECT kolonu ANMAZ; okuma boş path'i 'v1' sayar (DEFAULT ile aynı
+// yorum). Bilinen sonuç: kolon inmeden yazılan v2 koşusu, kolon inince
+// DEFAULT 'v1' okunur — ertelenen DDL reprobe'u (ddl_defer.go) pencereyi
+// dakikalara indirir.
 
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
+)
+
+// Koşu yolu değerleri (ai_eval_runs.path; kapalı iki değer → LowCardinality).
+const (
+	EvalRunPathV1 = "v1"
+	EvalRunPathV2 = "v2"
 )
 
 // EvalRun — bir evalset koşusunun satırı. Summary/Cases opak JSON; Cases
@@ -52,20 +70,36 @@ type EvalRun struct {
 	Error         string
 	Summary       string // JSON — api'nin yüzey özeti
 	Cases         string // JSON — api'nin vaka sonuçları; ilerleme yazımında ""
+	// Path — v0.10.2106: ajan vakalarının sohbet yolu (EvalRunPathV1 |
+	// EvalRunPathV2). Kolon yokken (iki-boot) yazılmaz, 'v1' okunur.
+	Path string
 }
 
 // evalRunsListLimitMax — liste tavanı; panel 20 ister, fazlası crafted.
 const evalRunsListLimitMax = 50
 
-// evalRunsSelectCols — liste ve nokta okumanın ortak kolonları (cases HARİÇ;
-// nokta okuma sona ekler).
-const evalRunsSelectCols = `id, started_at, updated_at, finished_at, status, started_by,
+// evalRunsSelectCols — SAF: liste ve nokta okumanın ortak kolonları (cases
+// HARİÇ; nokta okuma sona ekler). path yalnız kolon varsa (v0.10.2106).
+func evalRunsSelectCols(path bool) string {
+	cols := `id, started_at, updated_at, finished_at, status, started_by,
 		app_version, prompt_version, model, profile_id, surfaces,
 		total, done, pass, fail, skipped, rubric_mean, error, summary`
+	if path {
+		cols += `, path`
+	}
+	return cols
+}
 
-const evalRunsInsertSQL = `INSERT INTO ai_eval_runs (id, started_at, updated_at, finished_at,
+// evalRunsInsertSQL — SAF: INSERT kolon listesi; path yalnız kolon varsa.
+func evalRunsInsertSQL(path bool) string {
+	cols := `id, started_at, updated_at, finished_at,
 		status, started_by, app_version, prompt_version, model, profile_id, surfaces,
-		total, done, pass, fail, skipped, rubric_mean, error, summary, cases, version)`
+		total, done, pass, fail, skipped, rubric_mean, error, summary, cases, version`
+	if path {
+		cols += `, path`
+	}
+	return `INSERT INTO ai_eval_runs (` + cols + `)`
+}
 
 // evalRunTimeArg — SAF: sıfır zaman → epoch (finished_at sentinel'i; Go'nun
 // sıfır zamanı 1. yıl, DateTime64 aralığı dışında). Nullable yok (C4).
@@ -94,18 +128,57 @@ func evalRunVersion(r EvalRun) uint64 {
 	return uint64(r.UpdatedAt.UnixNano())
 }
 
-// evalRunInsertArgs — SAF: evalRunsInsertSQL kolon sırasıyla argümanlar.
-func evalRunInsertArgs(r EvalRun) []any {
+// evalRunInsertArgs — SAF: evalRunsInsertSQL(path) kolon sırasıyla argümanlar.
+func evalRunInsertArgs(r EvalRun, path bool) []any {
 	surfaces := r.Surfaces
 	if surfaces == nil {
 		surfaces = []string{}
 	}
-	return []any{
+	args := []any{
 		r.ID, evalRunTimeArg(r.StartedAt), evalRunTimeArg(r.UpdatedAt), evalRunTimeArg(r.FinishedAt),
 		r.Status, r.StartedBy, r.AppVersion, r.PromptVersion, r.Model, r.ProfileID, surfaces,
 		r.Total, r.Done, r.Pass, r.Fail, r.Skipped, r.RubricMean, r.Error, r.Summary, r.Cases,
 		evalRunVersion(r),
 	}
+	if path {
+		args = append(args, evalRunPathArg(r.Path))
+	}
+	return args
+}
+
+// evalRunPathArg — SAF: boş yol → 'v1' (kolon DEFAULT'uyla aynı yorum).
+func evalRunPathArg(p string) string {
+	if p == "" {
+		return EvalRunPathV1
+	}
+	return p
+}
+
+// probeEvalRunsPathCol — ai_eval_runs.path var mı (v0.10.2106; system.columns
+// metadata, anomaly_events.promotion probe'unun şekli).
+func (s *Store) probeEvalRunsPathCol(ctx context.Context) (bool, error) {
+	var n uint64
+	err := s.conn.QueryRow(ctx,
+		`SELECT count() FROM system.columns
+		 WHERE database = currentDatabase() AND table = 'ai_eval_runs'
+		   AND name = 'path'
+		 SETTINGS max_execution_time = 5`).Scan(&n)
+	if err != nil {
+		return false, err
+	}
+	return n == 1, nil
+}
+
+// reprobeEvalRunsPathCol — ertelenen DDL sonrası yeniden deneme; bayrak
+// yalnız false → true döner, geçiş BİR KEZ loglanır. Dönüş: bayrağın son hâli.
+func (s *Store) reprobeEvalRunsPathCol(ctx context.Context) bool {
+	if s.hasEvalRunsPathCol.Load() {
+		return true
+	}
+	if ok, _ := s.probeEvalRunsPathCol(ctx); ok && s.hasEvalRunsPathCol.CompareAndSwap(false, true) {
+		log.Printf("[chstore] ai_eval_runs.path ertelenen DDL sonrası görüldü — koşu yolu yazımı ve okuması devrede (restart gerekmedi)")
+	}
+	return s.hasEvalRunsPathCol.Load()
 }
 
 // clampEvalRunsLimit — SAF: 1..evalRunsListLimitMax, varsayılan 20.
@@ -124,11 +197,12 @@ func (s *Store) SaveEvalRun(ctx context.Context, r EvalRun) error {
 	if r.ID == "" {
 		return fmt.Errorf("eval run: id boş")
 	}
-	batch, err := s.conn.PrepareBatch(ctx, evalRunsInsertSQL)
+	path := s.hasEvalRunsPathCol.Load() // v0.10.2106 — tek anlık görüntü (SQL == args)
+	batch, err := s.conn.PrepareBatch(ctx, evalRunsInsertSQL(path))
 	if err != nil {
 		return err
 	}
-	if err := batch.Append(evalRunInsertArgs(r)...); err != nil {
+	if err := batch.Append(evalRunInsertArgs(r, path)...); err != nil {
 		return err
 	}
 	return batch.Send()
@@ -138,7 +212,8 @@ func (s *Store) SaveEvalRun(ctx context.Context, r EvalRun) error {
 // koşu başına onlarca ilerleme sürümü var, yalnız sonuncusu sayılır. Tablo
 // yoksa boş liste.
 func (s *Store) ListEvalRuns(ctx context.Context, limit int) ([]EvalRun, error) {
-	rows, err := s.conn.Query(ctx, `SELECT `+evalRunsSelectCols+`
+	path := s.hasEvalRunsPathCol.Load()
+	rows, err := s.conn.Query(ctx, `SELECT `+evalRunsSelectCols(path)+`
 		FROM ai_eval_runs FINAL
 		ORDER BY started_at DESC
 		LIMIT ?
@@ -153,7 +228,7 @@ func (s *Store) ListEvalRuns(ctx context.Context, limit int) ([]EvalRun, error) 
 	out := []EvalRun{}
 	for rows.Next() {
 		var r EvalRun
-		if err := rows.Scan(evalRunScanDest(&r, false)...); err != nil {
+		if err := rows.Scan(evalRunScanDest(&r, false, path)...); err != nil {
 			return nil, err
 		}
 		normalizeEvalRun(&r)
@@ -167,7 +242,8 @@ func (s *Store) GetEvalRun(ctx context.Context, id string) (*EvalRun, error) {
 	if id == "" {
 		return nil, nil
 	}
-	rows, err := s.conn.Query(ctx, `SELECT `+evalRunsSelectCols+`, cases
+	path := s.hasEvalRunsPathCol.Load()
+	rows, err := s.conn.Query(ctx, `SELECT `+evalRunsSelectCols(path)+`, cases
 		FROM ai_eval_runs FINAL
 		WHERE id = ?
 		LIMIT 1
@@ -183,19 +259,22 @@ func (s *Store) GetEvalRun(ctx context.Context, id string) (*EvalRun, error) {
 		return nil, rows.Err()
 	}
 	var r EvalRun
-	if err := rows.Scan(evalRunScanDest(&r, true)...); err != nil {
+	if err := rows.Scan(evalRunScanDest(&r, true, path)...); err != nil {
 		return nil, err
 	}
 	normalizeEvalRun(&r)
 	return &r, nil
 }
 
-// evalRunScanDest — evalRunsSelectCols sırası (+ cases, withCases ise).
-func evalRunScanDest(r *EvalRun, withCases bool) []any {
+// evalRunScanDest — evalRunsSelectCols(path) sırası (+ cases, withCases ise).
+func evalRunScanDest(r *EvalRun, withCases, path bool) []any {
 	dest := []any{
 		&r.ID, &r.StartedAt, &r.UpdatedAt, &r.FinishedAt, &r.Status, &r.StartedBy,
 		&r.AppVersion, &r.PromptVersion, &r.Model, &r.ProfileID, &r.Surfaces,
 		&r.Total, &r.Done, &r.Pass, &r.Fail, &r.Skipped, &r.RubricMean, &r.Error, &r.Summary,
+	}
+	if path {
+		dest = append(dest, &r.Path)
 	}
 	if withCases {
 		dest = append(dest, &r.Cases)
@@ -203,7 +282,8 @@ func evalRunScanDest(r *EvalRun, withCases bool) []any {
 	return dest
 }
 
-// normalizeEvalRun — SAF: sentinel → sıfır zaman, UTC, nil dilim → boş.
+// normalizeEvalRun — SAF: sentinel → sıfır zaman, UTC, nil dilim → boş,
+// boş path → 'v1' (v0.10.2106).
 func normalizeEvalRun(r *EvalRun) {
 	r.StartedAt = evalRunTimeFromCol(r.StartedAt)
 	r.UpdatedAt = evalRunTimeFromCol(r.UpdatedAt)
@@ -211,4 +291,5 @@ func normalizeEvalRun(r *EvalRun) {
 	if r.Surfaces == nil {
 		r.Surfaces = []string{}
 	}
+	r.Path = evalRunPathArg(r.Path)
 }

@@ -3356,7 +3356,12 @@ export interface EvalRunSummary {
   toolsetPinned?: boolean;
   /** v0.10.1476 — altyapı hatasıyla atlanan vaka sayısı (skipped'in alt kümesi). */
   infra?: number;
+  /** v0.10.2106 — ajan vakalarının sohbet yolu (eski koşu 'v1'). */
+  path?: EvalRunPath;
 }
+
+/** v0.10.2106 — evalset koşusunun sohbet yolu (ai_eval_runs.path). */
+export type EvalRunPath = 'v1' | 'v2';
 
 /** Fikstürün `expect` nesnesi AYNEN (evalExpect JSON etiketleri). */
 export interface EvalExpect {
@@ -3468,6 +3473,8 @@ export interface EvalCompareSide {
   total: number;
   /** v0.10.1311 — koşunun araç seti ('' = döngü yüzeyi yok / eski koşu). */
   toolset?: AIToolset;
+  /** v0.10.2106 — ajan vakalarının sohbet yolu; farklı yollu iki koşu kıyaslanamaz. */
+  path?: EvalRunPath;
   /** v0.10.1316 — ajan vakalarının araç çağrısı / token ortalaması; null = ajan vakası yok. */
   toolCallsMean?: number | null;
   tokensMean?: number | null;

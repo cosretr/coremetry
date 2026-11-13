@@ -860,6 +860,9 @@ type evalRunSummary struct {
 	// Infra — v0.10.1476: altyapı hatasıyla atlanan vaka sayısı (Skipped'in
 	// alt kümesi; yüzey özetlerinin toplamı — CH kolonu yok).
 	Infra int `json:"infra"`
+	// Path — v0.10.2106 (kalite döngüsü D1): ajan vakalarının sohbet yolu
+	// (v1 | v2; eski koşu v1).
+	Path string `json:"path"`
 }
 
 type evalCaseResult struct {
@@ -901,6 +904,7 @@ type evalCompareSide struct {
 	Fail          int    `json:"fail"`
 	Total         int    `json:"total"`
 	Toolset       string `json:"toolset"` // v0.10.1311 — "" = döngü yüzeyi yok / eski koşu
+	Path          string `json:"path"`    // v0.10.2106 — v1 | v2
 	// v0.10.1316 — ajan vakalarının araç çağrısı / token ortalaması (nil = ajan vakası yok).
 	ToolCallsMean *float64 `json:"toolCallsMean"`
 	TokensMean    *float64 `json:"tokensMean"`
@@ -1138,7 +1142,16 @@ func evalSummaryFromRow(r chstore.EvalRun, now time.Time, ownedHere bool) evalRu
 		RubricMean: r.RubricMean, Error: r.Error, BySurface: blob.BySurface,
 		Toolset: blob.Toolset, ToolsetPinned: blob.ToolsetPinned, // v0.10.1311
 		Infra: evalInfraTotal(blob.BySurface), // v0.10.1476
+		Path:  evalRunPath(r.Path),            // v0.10.2106
 	}
+}
+
+// evalRunPath — SAF, v0.10.2106: boş yol (bellek satırı, eski koşu) → v1.
+func evalRunPath(p string) string {
+	if p == "" {
+		return chstore.EvalRunPathV1
+	}
+	return p
 }
 
 // evalInfraTotal — SAF, v0.10.1476: yüzey özetlerinden altyapı hatası toplamı.
@@ -1251,15 +1264,17 @@ func evalCompareRuns(base, head chstore.EvalRun) evalCompare {
 	rep := evalrubric.Diff(bRun, hRun)
 	side := func(r chstore.EvalRun, cases []evalCaseResult) evalCompareSide {
 		sd := evalCompareSide{ID: r.ID, StartedAt: evalTimeString(r.StartedAt), Model: r.Model, PromptVersion: r.PromptVersion,
-			AppVersion: r.AppVersion, Pass: int(r.Pass), Fail: int(r.Fail), Total: int(r.Total), Toolset: evalBlobFromRow(r).Toolset}
+			AppVersion: r.AppVersion, Pass: int(r.Pass), Fail: int(r.Fail), Total: int(r.Total), Toolset: evalBlobFromRow(r).Toolset,
+			Path: evalRunPath(r.Path)} // v0.10.2106
 		sd.ToolCallsMean, sd.TokensMean = evalAgentMeans(cases) // v0.10.1316
 		return sd
 	}
 	bSide, hSide := side(base, bCases), side(head, hCases)
 	note := evalCompareNote(rep.Note, evalBlobFromRow(base).Toolset, evalBlobFromRow(head).Toolset)
-	note = evalCompareAgentNote(note, bSide.ToolCallsMean, hSide.ToolCallsMean) // v0.10.1316
+	note = evalCompareAgentNote(note, bSide.ToolCallsMean, hSide.ToolCallsMean)       // v0.10.1316
+	comparable, note := evalComparePath(rep.Comparable, note, bSide.Path, hSide.Path) // v0.10.2106
 	cmp := evalCompare{
-		Comparable: rep.Comparable, Note: note, Base: bSide, Head: hSide,
+		Comparable: comparable, Note: note, Base: bSide, Head: hSide,
 		RubricMeanDelta: rep.MeanDelta,
 		NewlyFailing:    []evalCompareCase{}, NewlyPassing: []evalCompareCase{},
 		Regressed: []evalCompareDelta{}, Improved: []evalCompareDelta{},
@@ -1280,6 +1295,21 @@ func evalCompareRuns(base, head chstore.EvalRun) evalCompare {
 	cmp.OnlyInBase = append(cmp.OnlyInBase, rep.OnlyInBefore...)
 	cmp.OnlyInHead = append(cmp.OnlyInHead, rep.OnlyInAfter...)
 	return cmp
+}
+
+// evalComparePath — v0.10.2106 (kalite döngüsü D1, audit §3.1), SAF: iki
+// koşunun sohbet yolu farklıysa (v1 ↔ v2) kıyaslanamaz — model farkı
+// emsali (evalrubric.Diff): rapor yine döner, ama "gerileme" okuması yol
+// değişiminin (kapsam, araç kümesi, kademe) etkisini taşır. Not başa girer.
+func evalComparePath(comparable bool, note, basePath, headPath string) (bool, string) {
+	if basePath == headPath {
+		return comparable, note
+	}
+	add := fmt.Sprintf("Sohbet yolu farklı (%s → %s): koşular kıyaslanamaz, fark yol değişimini de taşır.", basePath, headPath)
+	if strings.TrimSpace(note) == "" {
+		return false, add
+	}
+	return false, add + " " + note
 }
 
 // evalCompareNote — v0.10.1311, SAF: iki koşunun araç seti farklıysa

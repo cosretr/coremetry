@@ -181,8 +181,11 @@ func (s *Store) reprobePromotedAttrs() {
 		// v0.10.1741 — users.directory: bayrak false kaldıkça UpsertUser dizin
 		// özniteliklerini düşürür (kullanıcı detayı kartları "—").
 		dirDone := s.reprobeUserDirectoryCol(ctx)
+		// v0.10.2106 — ai_eval_runs.path: bayrak false kaldıkça koşu yolu
+		// yazılmaz (kolon inince DEFAULT 'v1' okunur).
+		evalPathDone := s.reprobeEvalRunsPathCol(ctx)
 		cancel()
-		if attrsDone && episodeDone && snapDone && verifiedDone && subjectDone && promotionDone && dirDone {
+		if attrsDone && episodeDone && snapDone && verifiedDone && subjectDone && promotionDone && dirDone && evalPathDone {
 			return
 		}
 	}
@@ -206,5 +209,8 @@ func (s *Store) reprobePromotedAttrs() {
 	}
 	if !s.hasExResolveSnapCol.Load() {
 		log.Printf("[chstore] exception_groups.occurrences_at_resolve hâlâ doğrulanamadı — resolve anlık görüntüsü yazılmıyor (regressed P2'de kalır), sonraki boot yeniden deneyecek")
+	}
+	if !s.hasEvalRunsPathCol.Load() {
+		log.Printf("[chstore] ai_eval_runs.path hâlâ doğrulanamadı — koşu yolu yazılmıyor ('v1' okunur), sonraki boot yeniden deneyecek")
 	}
 }

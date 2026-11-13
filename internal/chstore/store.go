@@ -289,6 +289,11 @@ type Store struct {
 	// okuma/INSERT/taşıma kolonu ATLAR ('' okunur: gölge rozeti çizilmez).
 	hasAnomalyPromotionCol atomic.Bool
 
+	// hasEvalRunsPathCol — ai_eval_runs.path (v0.10.2106, CoSRE kalite
+	// döngüsü D1: koşu yolu v1 | v2) var mı. Aynı iki-boot sözleşmesi;
+	// false ⇒ INSERT/SELECT kolonu ATLAR, okuma 'v1' sayar.
+	hasEvalRunsPathCol atomic.Bool
+
 	// hasDBStmtHashCol records whether the spans table actually carries the
 	// `db_stmt_hash` column (v0.8.375, Stage-2 D1 — persistent DB-statement
 	// identity). Unlike op_group / series_fingerprint the column is
@@ -4297,6 +4302,15 @@ func (s *Store) migrate(ctx context.Context) error {
 		// TABLE'a bilinçli EKLENMEDİ (episode emsali). Probe
 		// hasAnomalyPromotionCol (iki-boot).
 		`ALTER TABLE anomaly_events ADD COLUMN IF NOT EXISTS promotion LowCardinality(String) DEFAULT ''`,
+		// v0.10.2106 — CoSRE kalite döngüsü D1 (docs/cosre/quality-loop-audit.md
+		// §3.1; operatör onayı 2026-11-13): evalset koşusunun ajan vakalarını
+		// koşan sohbet yolu ('v1' | 'v2'). KAPALI iki değerli küme →
+		// LowCardinality (C2-C3). DEFAULT 'v1' = bu sürümden önceki her koşu
+		// v1 yolundaydı (eski satır doğru okunur). ORDER BY / TTL'e girmez;
+		// CREATE TABLE'a bilinçli EKLENMEDİ (promotion emsali, kolon sırası).
+		// Düşük hacimli state tablosu: küme kipinde ON CLUSTER, Distributed
+		// sarmalayıcı yok. Probe hasEvalRunsPathCol (iki-boot).
+		`ALTER TABLE ai_eval_runs ADD COLUMN IF NOT EXISTS path LowCardinality(String) DEFAULT 'v1'`,
 		// v0.9.415 — P1 exception gruplarına proaktif kök-sebep özeti
 		// (ExceptionExplainer, problems ai_summary'nin exception ikizi).
 		`ALTER TABLE exception_groups ADD COLUMN IF NOT EXISTS ai_summary String DEFAULT ''`,
@@ -4783,6 +4797,13 @@ func (s *Store) migrate(ctx context.Context) error {
 	s.hasAnomalyPromotionCol.Store(prOK)
 	if !prOK {
 		log.Printf("[chstore] `promotion` column not present on anomaly_events (err=%v) — read/INSERT/carry omit it; promotion trace reads empty (no shadow badge) until the deferred-DDL re-probe or the next boot", prErr)
+	}
+
+	// ai_eval_runs.path probe'u (v0.10.2106) — aynı şekil.
+	epOK, epErr := s.probeEvalRunsPathCol(ctx)
+	s.hasEvalRunsPathCol.Store(epOK)
+	if !epOK {
+		log.Printf("[chstore] `path` column not present on ai_eval_runs (err=%v) — read/INSERT omit it; runs read as path v1 until the deferred-DDL re-probe or the next boot", epErr)
 	}
 
 	// exception_groups.occurrences_at_resolve probe'u (v0.10.1072) — bölüm

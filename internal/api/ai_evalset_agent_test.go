@@ -331,22 +331,23 @@ func TestEvalAgentCaseDeadline(t *testing.T) {
 }
 
 // TestEvalAgentToolsetOverrideReachesCatalogue — koşunun açık araç seti
-// modele giden KATALOĞU değiştirir (tek çağrılı yolda yalnız prompt'tu).
+// vakaya ve modele giden kataloğa iner. v0.10.2106 (kalite döngüsü D1):
+// koşucu v2 yolunda → model V2ToolList(araç seti) kataloğunu görür (v1-yalnız
+// search_traces / query_metric iki araç setinde de YOK, v2-yalnız
+// list_my_services VAR). v1'de full ↔ simple farkı bu iki addı; v2
+// kataloğunda iki araç setinin AD kümesi aynı (ölçüldü 2026-11-13).
 func TestEvalAgentToolsetOverrideReachesCatalogue(t *testing.T) {
-	for _, tc := range []struct {
-		toolset string
-		hidden  bool
-	}{{modelcaps.ToolsetSimple, true}, {modelcaps.ToolsetFull, false}} {
-		t.Run(tc.toolset, func(t *testing.T) {
+	for _, ts := range []string{modelcaps.ToolsetSimple, modelcaps.ToolsetFull} {
+		t.Run(ts, func(t *testing.T) {
 			h, llm, _ := newAgentEvalHarness(t, func(int, map[string]any) map[string]any { return answerMsg("tamam") },
 				[]evalCase{agentCase("a-ts", evalExpect{AnyOfTools: []string{"compare_periods"}})})
-			_, cases := runAgentEval(t, h, `{"toolset":"`+tc.toolset+`"}`)
-			if len(cases) != 1 || cases[0].Toolset != tc.toolset {
+			_, cases := runAgentEval(t, h, `{"toolset":"`+ts+`"}`)
+			if len(cases) != 1 || cases[0].Toolset != ts {
 				t.Fatalf("vaka araç seti: %+v", cases)
 			}
 			names := llmToolNames(llm.calls()[0])
-			if hasName(names, "search_traces") == tc.hidden || hasName(names, "query_metric") == tc.hidden {
-				t.Fatalf("%s kataloğu: %v", tc.toolset, names)
+			if hasName(names, "search_traces") || hasName(names, "query_metric") || !hasName(names, "list_my_services") {
+				t.Fatalf("%s kataloğu v2 değil: %v", ts, names)
 			}
 		})
 	}

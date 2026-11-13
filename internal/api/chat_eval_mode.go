@@ -71,8 +71,9 @@ type chatEvalMode struct {
 	// Sink — turun sonucu (recordChatExchange'in yerine). nil = sonuç atılır.
 	Sink func(evalAgentOutcome)
 	// UserTeam — CoSRE v2 araç seti dilim 2 (tools-audit §10 G8): vakanın
-	// fikstür users.team'i; doluysa koşucu v2 döngüsünü işaretler ve kullanıcı
-	// kapsamı users tablosu okunmadan bu takımdan çözülür. "" = üretim yolu.
+	// fikstür users.team'i; doluysa kullanıcı kapsamı users tablosu okunmadan
+	// bu takımdan çözülür. "" = üretim yolu (koşuyu başlatanın takımı).
+	// v0.10.2106 — v2 işareti artık buna bağlı değil (her ajan vakası v2).
 	UserTeam string
 	// OnScope — v2 döngüsünün çözdüğü kullanıcı kapsamı (puanlama: her çağrının
 	// services ⊆ kapsam). nil = bildirim yok.
