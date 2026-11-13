@@ -1,6 +1,10 @@
 # Traces listesi — shadcn geçiş planı (Faz 0, 2026-11-13)
 
-Durum: TASLAK. Operatör onayı bekliyor. Kod değişmedi.
+Durum: UYGULANDI (2026-11-13), S5 hariç. Operatör mockup'ı onayladı ("mockup onay").
+- S0 v0.10.2084 · S1 mockup (etiketsiz) · S2 v0.10.2088 · S3a v0.10.2090 · S3b v0.10.2093 · S4 v0.10.2095 · S6 v0.10.2096 · S7 bu kayıt.
+- S5 DURDU: Radix Popover'a geçişte mevcut `pages/traces/ColumnFilter.contract.test.tsx` (jsdom'da ResizeObserver yok) ve `features/anomalies/AnomaliesPage.colFilter.test.tsx` (`.ui-popover` seçicisi) değişmeden geçmiyor. Karar: bu iki test güncellensin mi?
+- Kalan: Traces.tsx'te 3 satır içi stil testle çivili; EnterHint (filterBarSearch.pin) ve Chip kaldı; Traces MIGRATED olmadı.
+- Şerit varsayılanı kodda p99: `frontend/src/components/traces/stripStat.ts:23` (513 p95 → 725 p50 → 1524 p99).
 Operatör (2026-11-13): "Traces tablosunu taşıyabiliriz, ama çok iyi olsun."
 Bağlam: DECISIONS:12046 (global shadcn), `docs/frontend/shadcn-phase1-plan.md`, tek tablo yığını kararı DECISIONS:13433-13445.
 Hedef: Kullanıcı yalnız görsel tutarlılığı fark eder. Davranışta, verinin yerinde ve hızda hiçbir şey değişmez.
