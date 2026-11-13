@@ -240,6 +240,7 @@ func (s *Server) chatDocOrEntityAskTier(ctx context.Context, emit func(string, a
 		Entity: kind, AskedAt: time.Now().UnixNano()})
 	chatExchangeFrom(ctx).noteRoute("doc_or_entity_ask")
 	emit("answer", map[string]any{"text": text, "sources": []any{}, "links": []guidedAnswerLink{}, "allowedLinks": []string{}})
+	emitClarifyQuestion(ctx, emit, pendingKindDocOrEntity, kind, text) // v0.10.2103 (D3) — yalnız v2 kartı
 	return true
 }
 

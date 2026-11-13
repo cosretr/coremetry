@@ -32,11 +32,14 @@ type questionPayload struct {
 // bugünkü düz metin sorunun TA KENDİSİ (akışta da aynen kalır). Seçenek
 // kimliği = cevap sınıfı (clarifyReplyClass'ın döndürdüğü değer); etiket
 // serbest metin olarak yazılsa da aynı sınıfa düşer (test pinler).
-func clarifyQuestion(kind, text string) (questionPayload, bool) {
+//
+// v0.10.2103 (D3) — entity: doc_or_entity sorusunun varlık türü (team |
+// service | "" = envanter sorusu); etiketler ve sıra cümleye göre.
+func clarifyQuestion(kind, entity, text string) (questionPayload, bool) {
 	if text == "" {
 		return questionPayload{}, false
 	}
-	opts := clarifyQuestionOptions(kind)
+	opts := clarifyQuestionOptions(kind, entity)
 	if len(opts) == 0 {
 		return questionPayload{}, false
 	}
@@ -44,13 +47,24 @@ func clarifyQuestion(kind, text string) (questionPayload, bool) {
 }
 
 // clarifyQuestionOptions — SAF: türün kapalı cevap kümesi (≤ uistream.QuestionMaxOptions).
-func clarifyQuestionOptions(kind string) []questionOption {
+func clarifyQuestionOptions(kind, entity string) []questionOption {
 	switch kind {
 	case pendingKindSource:
 		return []questionOption{
 			{ID: sourceReplyTelemetry, Label: "Coremetry verisi"},
 			{ID: sourceReplyWiki, Label: "Wiki dokümanları"},
 		}
+	case pendingKindDocOrEntity: // v0.10.2103 (D3) — docOrEntityAskTR / docsAskTR sırası
+		docs := questionOption{ID: entityReplyDocs, Label: "Yüklü dokümanlar"}
+		switch entity {
+		case bareEntityTeam:
+			return []questionOption{{ID: entityReplyEntity, Label: "Takımın servisleri"}, docs}
+		case bareEntityService:
+			return []questionOption{{ID: entityReplyEntity, Label: "Servisin durumu"}, docs}
+		}
+		return []questionOption{{ID: entityReplyDocs, Label: "Envanterden göster"}, {ID: entityReplyEntity, Label: "Canlı telemetri"}}
+	case pendingKindTraceSynth: // v0.10.2103 (D3) — evet / hayır
+		return []questionOption{{ID: synthReplyYes, Label: "Evet, incele"}, {ID: synthReplyNo, Label: "Hayır"}}
 	}
 	return nil
 }
@@ -61,7 +75,7 @@ func clarifyOptionClass(p *chatPendingAsk, option string) (string, bool) {
 	if p == nil || option == "" {
 		return "", false
 	}
-	for _, o := range clarifyQuestionOptions(p.Kind) {
+	for _, o := range clarifyQuestionOptions(p.Kind, p.Entity) {
 		if o.ID == option {
 			return o.ID, true
 		}
@@ -71,11 +85,11 @@ func clarifyOptionClass(p *chatPendingAsk, option string) (string, bool) {
 
 // emitClarifyQuestion — v2 isteğinde kartı yayar (v1 yazıcısı zaten düşürür;
 // kapı ikinci emniyet). Düz metin soru bundan ÖNCE answer olarak gitmiş olmalı.
-func emitClarifyQuestion(ctx context.Context, emit func(string, any), kind, text string) {
+func emitClarifyQuestion(ctx context.Context, emit func(string, any), kind, entity, text string) {
 	if !cosreV2Marked(ctx) {
 		return
 	}
-	if q, ok := clarifyQuestion(kind, text); ok {
+	if q, ok := clarifyQuestion(kind, entity, text); ok {
 		emit(chatQuestionEventKind, q)
 	}
 }

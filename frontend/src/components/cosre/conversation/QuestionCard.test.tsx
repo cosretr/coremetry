@@ -23,6 +23,10 @@ describe('parseDataQuestion', () => {
   it.each([
     [{ type: 'data-question', data: { ...Q } }, Q],
     [{ type: 'data-question', data: { ...Q, allowFree: 'yes' } }, { ...Q, allowFree: false }],
+    // v0.10.2103 (D3) — doc_or_entity + trace_synth aynı kart.
+    [{ type: 'data-question', data: { ...Q, kind: 'trace_synth', options: [{ id: 'yes', label: 'Evet, incele' }, { id: 'no', label: 'Hayır' }] } },
+      { ...Q, kind: 'trace_synth', options: [{ id: 'yes', label: 'Evet, incele' }, { id: 'no', label: 'Hayır' }] }],
+    [{ type: 'data-question', data: { ...Q, kind: 'doc_or_entity' } }, { ...Q, kind: 'doc_or_entity' }],
     [{ type: 'data-question', data: { ...Q, kind: 'later' } }, null],
     [{ type: 'data-question', data: { ...Q, text: '' } }, null],
     [{ type: 'data-question', data: { ...Q, options: [] } }, null],

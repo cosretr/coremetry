@@ -191,6 +191,46 @@ func TestOpExplainAppendsTraceAsk(t *testing.T) {
 	}
 }
 
+// v0.10.2103 (D3) — sentez sorusunun kartı: v2'de cevaptan SONRA question
+// (evet/hayır); v1'de çerçeve yok, cevap metni aynen.
+func TestOpExplainTraceAskQuestionCard(t *testing.T) {
+	prov := &opExplainProvider{deltas: []string{"**Hata ne demek** ORD-200."}}
+	s := newOpExplainServer(t, prov)
+	s.cache = newMemCache()
+	p, _ := opExplainFixture(t, nil)
+	p.Services = []string{"orders-api"}
+	p.Traces = []opTraceRow{{TraceID: synthTID, Service: "orders-api", Error: true}}
+	run := func(ctx context.Context) []opExplainEvent {
+		var evs []opExplainEvent
+		emit := withStepIDs(func(k string, v any) { evs = append(evs, opExplainEvent{k, v}) })
+		if h, ok := s.opExceptionExplainInChat(ctx, emit, p, time.UTC); !h || !ok {
+			t.Fatalf("handled=%v ok=%v", h, ok)
+		}
+		return evs
+	}
+	evs := run(withCosreV2Loop(synthCtx(&chatContextState{user: "u-synth"})))
+	last := evs[len(evs)-1]
+	if last.kind != chatQuestionEventKind || evs[len(evs)-2].kind != "answer" {
+		t.Fatalf("v2: answer'dan sonra question bekleniyordu: %s, %s", evs[len(evs)-2].kind, last.kind)
+	}
+	q := last.data.(questionPayload)
+	if q.Kind != pendingKindTraceSynth || q.Text != traceAskTextTR(synthTID) || len(q.Options) != 2 || q.Options[0].ID != synthReplyYes {
+		t.Fatalf("kart: %+v", q)
+	}
+	for _, e := range run(synthCtx(&chatContextState{user: "u-synth"})) {
+		if e.kind == chatQuestionEventKind {
+			t.Fatal("v1 bağlamında question yayıldı")
+		}
+	}
+	// Soru eklenmeyen turda (hatalı trace yok) kart da yok.
+	p.Traces = []opTraceRow{{TraceID: "ok-1"}}
+	for _, e := range run(withCosreV2Loop(synthCtx(&chatContextState{user: "u-synth"}))) {
+		if e.kind == chatQuestionEventKind {
+			t.Fatal("sorusuz cevaba kart eklendi")
+		}
+	}
+}
+
 func TestOpExplainNonOracleNoTraceAsk(t *testing.T) {
 	prov := &opExplainProvider{deltas: []string{"**Bulgu** IllegalStateException."}}
 	s := newOpExplainServer(t, prov)

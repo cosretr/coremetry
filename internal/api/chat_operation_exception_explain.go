@@ -321,9 +321,11 @@ func (s *Server) opExceptionExplainInChat(ctx context.Context, emit func(string,
 	// v0.10.1572 (chat_clarify_synth.go) — Oracle grubu + uygun hatalı trace →
 	// cevabın sonuna düz metin sentez sorusu; cevap sonraki turda yorumlanır.
 	// Bekleyen soru taşınamıyorsa (kullanıcısız / önbelleksiz) soru eklenmez.
+	askText := "" // v0.10.2103 (D3) — eklenen sentez sorusu (v2 kartı aynı metinle)
 	if chstore.IsOracleGroup(top.Fingerprint) && s.canRemember(chatContextFromCtx(ctx)) {
 		if tid := pickSynthesisTrace(p.screen, p.Services, p.Traces); tid != "" {
-			text += "\n\n" + traceAskTextTR(tid)
+			askText = traceAskTextTR(tid)
+			text += "\n\n" + askText
 			noteTraceSynthAsk(ctx, tid, top.Fingerprint, p.Operation)
 		}
 	}
@@ -340,6 +342,9 @@ func (s *Server) opExceptionExplainInChat(ctx context.Context, emit func(string,
 	links = append(links, s.answerRequestIDLinks(ctx, text, top.Service)...)
 	ans := withExplainCached(map[string]any{"text": text, "exchangeId": xid, "links": dedupLinksByHref(links)}, res)
 	emit("answer", withAnswerFollowups(ans, opExceptionExplainFollowups(others, p.followupFacts())))
+	if askText != "" {
+		emitClarifyQuestion(ctx, emit, pendingKindTraceSynth, "", askText) // yalnız v2 kartı
+	}
 	return true, true
 }
 

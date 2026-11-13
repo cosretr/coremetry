@@ -226,7 +226,7 @@ func (s *Server) chatSourceAskTier(ctx context.Context, emit func(string, any), 
 	cst.setPending(&chatPendingAsk{Kind: pendingKindSource, Question: clipRunes(q, chatPendingQuestionMax), AskedAt: time.Now().UnixNano()})
 	chatExchangeFrom(ctx).noteRoute("source_ask")
 	emit("answer", map[string]any{"text": sourceAskTextTR, "sources": []any{}, "links": []guidedAnswerLink{}, "allowedLinks": []string{}})
-	emitClarifyQuestion(ctx, emit, pendingKindSource, sourceAskTextTR) // v0.10.2102 (D2) — yalnız v2 kartı
+	emitClarifyQuestion(ctx, emit, pendingKindSource, "", sourceAskTextTR) // v0.10.2102 (D2) — yalnız v2 kartı
 	return true
 }
 

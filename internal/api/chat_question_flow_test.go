@@ -46,7 +46,7 @@ func (rg *clarifyRig) postV2(t *testing.T, option string, turns ...string) strin
 func TestClarifySourceQuestionCardV2(t *testing.T) {
 	rg := newClarifyRig(t, nil)
 	body := rg.postV2(t, "", clarifyQ)
-	q, _ := clarifyQuestion(pendingKindSource, sourceAskTextTR)
+	q, _ := clarifyQuestion(pendingKindSource, "", sourceAskTextTR)
 	qb, _ := json.Marshal(map[string]any{"data": q, "id": "question", "type": "data-question"})
 	var want map[string]any
 	_ = json.Unmarshal(qb, &want)
@@ -122,5 +122,43 @@ func TestClarifySourceOptionIgnoredOnV1(t *testing.T) {
 		"context":  map[string]any{"conversation": clarifyConv, "clarifyOption": sourceReplyWiki}})
 	if m := replyTool(lastRow(t, rg.rows())); m["reply"] != clarifyReplyDropped {
 		t.Fatalf("v1 seçeneği okumamalı: %v", m)
+	}
+}
+
+// v0.10.2103 (D3) — çıplak takım adı sorusunun kartı + seçenek yolu.
+func TestBareTeamQuestionCardV2(t *testing.T) {
+	rg := newEntityDocRig(t)
+	body := rg.postV2(t, "", entTeamAsk, entTeamQ, entTeam)
+	if !strings.Contains(body, `"type":"data-question"`) || !strings.Contains(body, `"kind":"doc_or_entity"`) ||
+		!strings.Contains(body, `"label":"Takımın servisleri"`) {
+		t.Fatalf("doc_or_entity kartı yok:\n%s", body)
+	}
+	if !strings.Contains(body, "yüklü dokümanlarda mı arayayım") {
+		t.Fatalf("düz metin soru akışta kalmalı:\n%s", body)
+	}
+}
+
+func TestBareTeamOptionDocs(t *testing.T) {
+	rg := newEntityDocRig(t)
+	rg.postV2(t, "", entTeamAsk, entTeamQ, entTeam)
+	ask := docOrEntityAskTR(bareEntityTeam, entTeam)
+	rg.postV2(t, entityReplyDocs, entTeamAsk, entTeamQ, entTeam, ask, "zzz")
+	r := lastRow(t, rg.rows())
+	if r.Tier != aisurface.TierDocRows {
+		t.Fatalf("seçenek docs → tier %q", r.Tier)
+	}
+	if m := replyTool(r); m["reply"] != entityReplyDocs {
+		t.Fatalf("clarify_reply: %v", m)
+	}
+}
+
+func TestBareTeamOptionEntity(t *testing.T) {
+	rg := newEntityDocRig(t)
+	rg.postV2(t, "", entTeamAsk, entTeamQ, entTeam)
+	ask := docOrEntityAskTR(bareEntityTeam, entTeam)
+	rg.postV2(t, entityReplyEntity, entTeamAsk, entTeamQ, entTeam, ask, "Takımın servisleri")
+	r := lastRow(t, rg.rows())
+	if r.Tier != aisurface.TierGuided || len(*rg.routes) == 0 || (*rg.routes)[len(*rg.routes)-1] != string(guidedTeamServices) {
+		t.Fatalf("seçenek entity → tier %q rotalar %v", r.Tier, *rg.routes)
 	}
 }
