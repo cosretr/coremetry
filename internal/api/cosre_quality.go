@@ -10,7 +10,8 @@ package api
 //                           her kullanıcı (sohbet edebilen sinyal üretir; 👍/👎
 //                           ucu emsal). Sinyal kullanıcı içeriği değil, telemetri:
 //                           audit satırı YAZILMAZ (her kopya tıkı audit_log'u
-//                           şişirirdi; ai_feedback emsali).
+//                           şişirirdi; ai_feedback emsali). v0.10.2115 —
+//                           kullanıcı başına 60/dk, aşımda 429 (cosre_signal_rate.go).
 //   GET  /api/ai/quality  — admin: haftanın en kötü 20 cevabı + en kötü tool'lar
 //                           (gece puanı, internal/cosrelearn).
 //
@@ -92,9 +93,19 @@ func (s *Server) postCosreSignal(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	email := ""
+	email, uid := "", ""
 	if c := auth.FromContext(r.Context()); c != nil {
-		email = c.Email
+		email, uid = c.Email, c.UserID
+	}
+	// v0.10.2115 — kullanıcı başına 60/dk (cosre_signal_rate.go); geçerli
+	// istek sayılır, taşma 429. Doğrulamadan SONRA: bozuk gövde kotayı yemez.
+	key := uid
+	if key == "" {
+		key = email
+	}
+	if ok, wait := cosreSignalRate.allow(key); !ok {
+		writeCosreSignalLimited(w, wait)
+		return
 	}
 	if err := s.store.InsertCosreSignal(r.Context(), chstore.CosreSignal{
 		ExchangeID: req.ExchangeID, Kind: req.Kind, Detail: req.Detail, UserEmail: email,

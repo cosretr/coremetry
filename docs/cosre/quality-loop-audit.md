@@ -104,7 +104,7 @@ D1-D3 gemide: koşucu v2, rubrik parçaları görür, gate'te adlı sözleşme a
 2 → günlük v2 koşusu açık, UTC gün kapanışı + 2 sa, acil fren anahtarıyla; 3 → K=5, `saved_views`,
 tek "Kabul"; 4 → adaylar CI kapısına girmez, repoya gömme elle; 5 → hakem guard'ı evet, ayrı sürüm;
 6 → sinyal ucu kullanıcı başına 60/dk, evet.
-Uygulama: soru 5 (hakem koruması) **gemide v0.10.2114** — `cosrelearn.LocalOnlyJudge`: `cosre-selfeval` yüzeyinin çözülen profili `copilot.LocalOnlyAllowed` değilse hakem modeli çağrılmaz, `judge_error` satırı yazılmaz, gerekçe günde bir loglanır (`[cosre-grounding] hakem atlandı: …`); puanlama hakemsiz sürer.
+Uygulama: soru 5 (hakem koruması) **gemide v0.10.2114** — `cosrelearn.LocalOnlyJudge`: `cosre-selfeval` yüzeyinin çözülen profili `copilot.LocalOnlyAllowed` değilse hakem modeli çağrılmaz, `judge_error` satırı yazılmaz, gerekçe günde bir loglanır (`[cosre-grounding] hakem atlandı: …`); puanlama hakemsiz sürer. Soru 6 (sinyal ucu hız sınırı) **gemide v0.10.2115** — `POST /api/ai/signal` kullanıcı başına dakikada 60 (pod-yerel sabit pencere, `chat_source_rate.go` emsali; küme-geneli Redis sayacı yok, N pod'da üst sınır N × 60), aşımda 429 + `Retry-After`; bozuk gövde kotayı yemez; istemci sinyali zaten ateşle-unut.
 
 1. D1'de koşu kaydına `path` kolonu (`ai_eval_runs`, varsayılan `'v1'`) eklenir; eski koşularla diff kapanır. Kabul mü? Öneri: kabul; alternatif (ayrı tablo) gereksiz.
 2. Günlük v2 koşusu (D4) prod self-hosted modele günde ~80 istek ekler, 30 dk tavan. Açılsın mı, hangi saatte? Öneri: kalite gününden hemen sonra (UTC gün kapanışı + 2 sa), acil fren anahtarı varsayılan açık.
