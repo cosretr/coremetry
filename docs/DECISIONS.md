@@ -13838,3 +13838,19 @@ eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
   `DBStmtDetail.distribution` tipi silindi. Veri ayrı uç değildi; detay ucunun (`GET /api/databases/statements/detail`)
   ek bir CH sorgusuydu (`GetDBStmtDistribution`, `chstore/dbstmt_dist.go`) — tek tüketicisi bu kart olduğundan
   alan ve sorgu da söküldü (detay yanıtı bir CH okuması hafifledi). MCP / CoSRE araçlarında çağıran yok (grep).
+
+## 2026-11-13 — v0.10.2118 — Servis hacmi sıçraması Problem değil anomali (operatör kararı)
+- Operatör: "Coremetry · servis hacmi sıçradı" Problem değil ANOMALİ; açılış bildirimi GÖNDERİLMEZ; koşul geçince
+  kendiliğinden kapanma aynı. Spec: `docs/plans/spec-anomaly-migration-volume-spike.md`.
+- Kural (24 sa / önceki 24 sa, taban 100k, yeni servis ≠ sıçrama, batch süzgeci, saatlik ölçüm) evaluator'da AYNEN;
+  çıktı `ml_events` satırı (`detector=svc_volume_spike`, signal trace, stage shadow, window_sec 3600 → 4 sa emniyet
+  kapanışı). Epizot: açılışta `MLEpisodeID`, taze ölçümde tazeleme (started_at + kimlik korunur), koşul geçince aynı
+  satır `stage=closed`; aile kapalıysa hepsi kapanır; ölçülemeyen tik yazmaz; açık küme CH'den tohumlanır.
+- Bildirim garantisi: yol notifier'a dokunmaz + ML grup kapısı (`groupExcluded`) bu dedektörü ≥ 2 sinyal VE tek
+  sinyal kolunda saymaz (pin `ml/group_gate_volume_pin_test.go`). ML motoruna taşıma bu işte YOK.
+- Geçiş: prod'daki açık `self-volume-spike:*` Problem'leri ilk ölçülü tikte mevcut kapatma yoluyla kapanır, açıklama
+  başına "Anomali tarafına taşındı" notu düşer (ana oturum kararı). Rozet: diğer ML anomalileri gibi sayılır.
+- Doğrulama: `mlFeedFilter` varsayılan 24 sa penceresi `last_seen` üzerinde (SQL `last_seen >= ?`); aktif epizot
+  saatlik tazelendiği için günlerce süren olay listeden düşmez — düzeltme gerekmedi. Kimlik uzayı ayrık
+  (`MLEventID` dedektör adını hash'e katar); ML lideri ml_events okumaz, `closeStale` yalnız kendi bellek-içi
+  koşularını kapatır.

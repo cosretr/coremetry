@@ -8,8 +8,8 @@ package evaluator
 //
 // Pinlenen sözleşme: süzgeç saatlik önbellekten SONRA ve her tikte uygulanır
 // (ayar değişikliği bir sonraki tikte etkili; önbellek bozulmaz); kural
-// kapsanmış (ok=true) döner ki reconcileSelfHealth açık batch satırını
-// normal kapatma dalıyla kapatsın; batch olmayan servis aynen.
+// kapsanmış (ok=true) döner ki açık batch epizodu normal kapatma dalıyla
+// kapansın (v0.10.2118: reconcileVolumeEvents); batch olmayan servis aynen.
 //
 // MUTASYON KANITI (çalıştırıldı, geri alındı): selfVolumeSpike'taki
 // dropBatchVolumeRows çağrısı kaldırılınca TestSelfVolumeSpikeBatchFilterAfterCache
@@ -23,8 +23,8 @@ import (
 	"github.com/cilcenk/coremetry/internal/chstore"
 )
 
-func volRow(svc string) selfProblem {
-	return volumeSpikeProblem(chstore.ServiceVolume{Service: svc, Cur: 1_200_000, Prev: 210_000}, chstore.DefaultSelfHealth())
+func volRow(svc string) chstore.ServiceVolume {
+	return chstore.ServiceVolume{Service: svc, Cur: 1_200_000, Prev: 210_000}
 }
 
 func TestDropBatchVolumeRows(t *testing.T) {
@@ -33,26 +33,17 @@ func TestDropBatchVolumeRows(t *testing.T) {
 	empty := []string{}
 	off.BatchServicePatterns = &empty
 
-	in := []selfProblem{volRow("orders-batch"), volRow("payments-api"), volRow("Nightly-BATCH-loader")}
-	// Başka bir self-* kuralı (Service boş) asla süzülmez.
-	in = append(in, selfProblem{id: selfIngestRuleID, ruleID: selfIngestRuleID})
+	in := []chstore.ServiceVolume{volRow("orders-batch"), volRow("payments-api"), volRow("Nightly-BATCH-loader")}
 
 	got := dropBatchVolumeRows(in, def)
-	ids := map[string]bool{}
-	for _, r := range got {
-		ids[r.id] = true
+	if len(got) != 1 || got[0].Service != "payments-api" {
+		t.Fatalf("batch süzgeci: %+v", got)
 	}
-	if ids[selfVolumeRuleID+":orders-batch"] || ids[selfVolumeRuleID+":Nightly-BATCH-loader"] {
-		t.Fatalf("batch servisin hacim satırı süzülmedi: %v", ids)
-	}
-	if !ids[selfVolumeRuleID+":payments-api"] || !ids[selfIngestRuleID] {
-		t.Fatalf("batch olmayan / başka kural satırı düştü: %v", ids)
-	}
-	if len(in) != 4 || in[0].service != "orders-batch" {
+	if len(in) != 3 || in[0].Service != "orders-batch" {
 		t.Fatal("girdi dilimi yerinde değiştirildi (önbellek bozulur)")
 	}
-	if got := dropBatchVolumeRows(in, off); len(got) != 4 {
-		t.Fatalf("kural kapalıyken %d/4 satır kaldı", len(got))
+	if got := dropBatchVolumeRows(in, off); len(got) != 3 {
+		t.Fatalf("kural kapalıyken %d/3 satır kaldı", len(got))
 	}
 }
 
@@ -62,7 +53,7 @@ func TestDropBatchVolumeRows(t *testing.T) {
 func TestSelfVolumeSpikeBatchFilterAfterCache(t *testing.T) {
 	store := &chstore.Store{}
 	e := &Evaluator{store: store}
-	e.volCache = []selfProblem{volRow("orders-batch"), volRow("payments-api")}
+	e.volCache = []chstore.ServiceVolume{volRow("orders-batch"), volRow("payments-api")}
 	e.volAt = time.Now() // taze ölçüm: bu tik önbellekten sunulur
 
 	// Ayar bu süreçte hiç doğrulanmadı → batch kuralı DEVRE DIŞI (varsayılan
@@ -77,7 +68,7 @@ func TestSelfVolumeSpikeBatchFilterAfterCache(t *testing.T) {
 	if !ok {
 		t.Fatal("kural kapsanmadı — açık batch satırı reconcile'da KAPANMAZ")
 	}
-	if len(got) != 1 || got[0].service != "payments-api" {
+	if len(got) != 1 || got[0].Service != "payments-api" {
 		t.Fatalf("varsayılan ayarda yalnız batch olmayan satır bekleniyordu: %+v", got)
 	}
 

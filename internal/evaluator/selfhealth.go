@@ -271,6 +271,7 @@ func (e *Evaluator) evaluateSelfHealth(ctx context.Context, snap *chstore.OpenPr
 		// operatör vidayı kapatır ama inbox'ta ölümsüz satırlar kalırdı
 		// (drainRetiredRuntimeProblems ile aynı gerekçe).
 		e.reconcileSelfHealth(ctx, snap, nil, selfHealthRules)
+		e.reconcileVolumeEvents(ctx, nil, cfg) // açık hacim anomalileri de kapanır
 		return
 	}
 
@@ -298,10 +299,13 @@ func (e *Evaluator) evaluateSelfHealth(ctx context.Context, snap *chstore.OpenPr
 	}
 	// v0.9.1294 — hacim sıçraması. Kendi ölçüm sıklığını (saatlik) içeride
 	// yönetir; her tikte son ölçümü döndürdüğü için yaşam döngüsü
-	// kardeşleriyle aynı hızda koşar.
-	if p, ok := e.selfVolumeSpike(ctx, cfg); ok {
+	// kardeşleriyle aynı hızda koşar. v0.10.2118 (operatör kararı
+	// 2026-11-13): çıktı Problem değil ANOMALİ (ml_events, bildirim yok) —
+	// want'a satır EKLENMEZ; covered işareti kalır ki prod'daki eski açık
+	// self-volume-spike:* Problem'leri ilk ölçülü tikte kapansın.
+	if spikes, ok := e.selfVolumeSpike(ctx, cfg); ok {
 		covered[selfVolumeRuleID] = true
-		want = append(want, p...)
+		e.reconcileVolumeEvents(ctx, spikes, cfg)
 	}
 
 	e.reconcileSelfHealth(ctx, snap, want, covered)
@@ -759,6 +763,9 @@ func (e *Evaluator) reconcileSelfHealth(ctx context.Context, snap *chstore.OpenP
 		}
 		resolved := *p
 		chstore.MarkResolved(&resolved, now)
+		if p.RuleID == selfVolumeRuleID {
+			resolved.Description = volumeMovedNote(resolved.Description)
+		}
 		if err := e.store.UpsertProblem(ctx, resolved); err != nil {
 			log.Printf("[evaluator] self-health problemi kapatılamadı %s: %v", p.ID, err)
 			continue

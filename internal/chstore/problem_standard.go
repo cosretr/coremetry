@@ -1100,10 +1100,8 @@ func mlAnomalySource(detector string) string {
 	if strings.HasPrefix(detector, "metric_") {
 		return StdSourceVM
 	}
-	for _, n := range MLTraceDetectorNames {
-		if n == detector {
-			return StdSourceSpan
-		}
+	if MLDetectorSignal(detector) == MLSignalTrace {
+		return StdSourceSpan
 	}
 	return StdSourceLogs
 }

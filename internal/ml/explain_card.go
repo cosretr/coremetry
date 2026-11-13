@@ -193,19 +193,21 @@ var mlDetSpecs = map[string]detSpec{
 	"dependency_latency":    {label: "Bağımlılık gecikmesi (p95)", fact: "{code} çağrı süresi", what: "{svc} servisinin {code} çağrıları yavaşladı.", past: "{code} çağrıları yavaşladı", unit: unitMs, measure: "Çağrı süresi (p95)"},
 	"dependency_error_rate": {label: "Bağımlılık hata oranı (VM client, error_type)", fact: "{code} çağrılarında hata oranı", what: "{svc} servisinin {code} çağrılarında hata oranı arttı.", past: "{code} çağrılarında hata arttı", unit: unitRatio},
 	"svc_error_rate":        {label: "Servis hata oranı (VM RED, sunucu istekleri)", fact: "servis hata oranı", what: "{svc} servisinde hata alan isteklerin oranı arttı.", past: "servis hata oranı arttı", unit: unitRatio},
-	"svc_breadth":           {label: "Yaygın yavaşlama (≥3 operasyon, p95 ≥ 1 sn ve ≥ 2 kat)", fact: "yavaşlayan işlem sayısı", what: "{svc} servisinde birden çok işlem birlikte yavaşladı.", past: "birden çok işlem yavaşladı", unit: unitMs, measure: "Yanıt süresi (p95, operasyonların medyanı)"},
-	"trace_change_point":    {label: "Kırılma (trace, p95)", fact: "yanıt süresi (p95)", what: "{svc} servisinde yanıt süresi kalıcı olarak {dir}.", past: "yanıt süresi kalıcı olarak değişti", unit: unitMs, measure: "Yanıt süresi (p95)"},
-	"trace_error_count":     {label: "Operasyon hata sayısı (CH, örneklenmemiş hata span'leri)", fact: "{code} hata sayısı", what: "{svc} servisinin {code} operasyonunda hata sayısı arttı.", past: "hata sayısı arttı", unit: unitCount, noun: "hata", additive: true},
-	"trace_pod_outlier":     {label: "Aykırı pod (trace)", fact: "{pod} pod'unda hata payı", what: "{svc} servisinde {pod} pod'u diğerlerinden daha çok hata veriyor.", past: "bir pod diğerlerinden ayrıştı", unit: unitRatio},
-	"log_volume":            {label: "Log hacmi", fact: "log hacmi", what: "{svc} servisinin log hacmi {dirn}.", past: "log hacmi değişti", unit: unitCount, noun: "log satırı", additive: true},
-	"error_rate":            {label: "Hata oranı (log)", fact: "hata logları", what: "{svc} servisinde hata logları arttı.", past: "hata logları arttı", unit: unitCount, noun: "hata satırı", additive: true},
-	"service_silent":        {label: "Servis sustu", fact: "log akışı", what: "{svc} servisi log üretmeyi kesti.", past: "log akışı durdu", unit: unitCount, noun: "log satırı", additive: true},
-	"template_spike":        {label: "Şablon artışı", fact: "bir log mesajı", what: "{svc} servisinde bir log mesajı arttı: \"{code}\".", past: "bir log mesajı arttı", unit: unitCount, noun: "satır", additive: true},
-	"rare_template":         {label: "Nadir şablon", fact: "yeni bir log mesajı", what: "{svc} servisinde daha önce görülmemiş bir log mesajı çıktı: \"{code}\".", past: "yeni bir log mesajı çıktı", unit: unitCount, noun: "satır", additive: true},
-	"new_template":          {label: "Yeni log kalıbı (ilk kez görüldü)", fact: "yeni bir log kalıbı", what: "{svc} servisinde ilk kez görülen bir log kalıbı çıktı: \"{code}\".", past: "yeni bir log kalıbı çıktı", unit: unitCount, noun: "satır", additive: true},
-	"rare_error_code":       {label: "Nadir hata kodu", fact: "{code} hata kodu", what: "{svc} servisinde yeni bir hata kodu görüldü: {code}.", past: "yeni bir hata kodu görüldü", unit: unitCount, noun: "satır", additive: true},
-	"pod_outlier":           {label: "Aykırı pod (log)", fact: "{pod} pod'unda hata payı", what: "{svc} servisinde {pod} pod'u diğerlerinden fazla hata logu üretiyor.", past: "bir pod diğerlerinden fazla hata üretti", unit: unitRatio},
-	"change_point":          {label: "Kırılma (log)", fact: "log seviyesi", what: "{svc} servisinin log seviyesi kalıcı olarak {dir}.", past: "log seviyesi kalıcı olarak değişti", unit: unitCount, noun: "satır"},
+	// v0.10.2118 — evaluator yazar (chstore.MLDetSvcVolumeSpike; MLDetectorNames'te yok).
+	chstore.MLDetSvcVolumeSpike: {label: "Servis hacmi sıçradı (24 sa / önceki 24 sa)", fact: "yazılan span sayısı", what: "{svc} servisinin yazdığı span sayısı bir günde sıçradı.", past: "span hacmi sıçradı", unit: unitCount, noun: "span"},
+	"svc_breadth":               {label: "Yaygın yavaşlama (≥3 operasyon, p95 ≥ 1 sn ve ≥ 2 kat)", fact: "yavaşlayan işlem sayısı", what: "{svc} servisinde birden çok işlem birlikte yavaşladı.", past: "birden çok işlem yavaşladı", unit: unitMs, measure: "Yanıt süresi (p95, operasyonların medyanı)"},
+	"trace_change_point":        {label: "Kırılma (trace, p95)", fact: "yanıt süresi (p95)", what: "{svc} servisinde yanıt süresi kalıcı olarak {dir}.", past: "yanıt süresi kalıcı olarak değişti", unit: unitMs, measure: "Yanıt süresi (p95)"},
+	"trace_error_count":         {label: "Operasyon hata sayısı (CH, örneklenmemiş hata span'leri)", fact: "{code} hata sayısı", what: "{svc} servisinin {code} operasyonunda hata sayısı arttı.", past: "hata sayısı arttı", unit: unitCount, noun: "hata", additive: true},
+	"trace_pod_outlier":         {label: "Aykırı pod (trace)", fact: "{pod} pod'unda hata payı", what: "{svc} servisinde {pod} pod'u diğerlerinden daha çok hata veriyor.", past: "bir pod diğerlerinden ayrıştı", unit: unitRatio},
+	"log_volume":                {label: "Log hacmi", fact: "log hacmi", what: "{svc} servisinin log hacmi {dirn}.", past: "log hacmi değişti", unit: unitCount, noun: "log satırı", additive: true},
+	"error_rate":                {label: "Hata oranı (log)", fact: "hata logları", what: "{svc} servisinde hata logları arttı.", past: "hata logları arttı", unit: unitCount, noun: "hata satırı", additive: true},
+	"service_silent":            {label: "Servis sustu", fact: "log akışı", what: "{svc} servisi log üretmeyi kesti.", past: "log akışı durdu", unit: unitCount, noun: "log satırı", additive: true},
+	"template_spike":            {label: "Şablon artışı", fact: "bir log mesajı", what: "{svc} servisinde bir log mesajı arttı: \"{code}\".", past: "bir log mesajı arttı", unit: unitCount, noun: "satır", additive: true},
+	"rare_template":             {label: "Nadir şablon", fact: "yeni bir log mesajı", what: "{svc} servisinde daha önce görülmemiş bir log mesajı çıktı: \"{code}\".", past: "yeni bir log mesajı çıktı", unit: unitCount, noun: "satır", additive: true},
+	"new_template":              {label: "Yeni log kalıbı (ilk kez görüldü)", fact: "yeni bir log kalıbı", what: "{svc} servisinde ilk kez görülen bir log kalıbı çıktı: \"{code}\".", past: "yeni bir log kalıbı çıktı", unit: unitCount, noun: "satır", additive: true},
+	"rare_error_code":           {label: "Nadir hata kodu", fact: "{code} hata kodu", what: "{svc} servisinde yeni bir hata kodu görüldü: {code}.", past: "yeni bir hata kodu görüldü", unit: unitCount, noun: "satır", additive: true},
+	"pod_outlier":               {label: "Aykırı pod (log)", fact: "{pod} pod'unda hata payı", what: "{svc} servisinde {pod} pod'u diğerlerinden fazla hata logu üretiyor.", past: "bir pod diğerlerinden fazla hata üretti", unit: unitRatio},
+	"change_point":              {label: "Kırılma (log)", fact: "log seviyesi", what: "{svc} servisinin log seviyesi kalıcı olarak {dir}.", past: "log seviyesi kalıcı olarak değişti", unit: unitCount, noun: "satır"},
 }
 
 func specFor(in CardInput) detSpec {
@@ -472,6 +474,8 @@ func summaryOf(in CardInput, sp detSpec, open bool, end time.Time) string {
 		head = logVolumeHead(in) // v0.10.2044 — değer + normal (oran değil)
 	} else if in.Detector == detNewTemplate {
 		head = newTemplateHead(in) // v0.10.2069 — kalıp adıyla, değer + normal
+	} else if in.Detector == chstore.MLDetSvcVolumeSpike {
+		head = volumeSpikeHead(in) // v0.10.2118 — iki ham sayı + kat
 	} else if in.Detector == detSvcBreadth {
 		head = breadthHead(in) // v0.10.2086 — operasyon adlarıyla, değer + normal
 	} else if in.Detector == detSvcErrorRate {
@@ -579,6 +583,8 @@ func howMuchOf(in CardInput, sp detSpec, end time.Time) string {
 	}
 	tail := " " + phraseSentence(in)
 	switch {
+	case in.Detector == chstore.MLDetSvcVolumeSpike:
+		return volumeSpikeHead(in) + "."
 	case strings.HasSuffix(in.Detector, "pod_outlier"):
 		what := "hata payı"
 		if sp.unit == unitMs {
@@ -626,6 +632,18 @@ func howMuchOf(in CardInput, sp detSpec, end time.Time) string {
 		subj = capFirst(fill(sp.fact, in))
 	}
 	return fmt.Sprintf("%s %s; %s.%s", subj, f.one(in.Observed, metricS), normal(), tail)
+}
+
+// volumeSpikeHead — SAF (v0.10.2118): hacim sıçramasının düz cümlesi.
+// Taban = önceki 24 sa, gözlenen = son 24 sa span sayısı (evaluator
+// kuralının iki ham sayısı); kat bir ondalık.
+func volumeSpikeHead(in CardInput) string {
+	k := ""
+	if in.Baseline > 0 {
+		k = "; " + trDec(in.Observed/in.Baseline, 1) + " kat"
+	}
+	return fmt.Sprintf("%s servisi önceki 24 saatte %s, son 24 saatte %s span yazdı%s",
+		in.Service, trInt(in.Baseline), trInt(in.Observed), k)
 }
 
 func whatOf(in CardInput, sp detSpec) string {

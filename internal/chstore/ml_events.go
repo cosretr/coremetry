@@ -31,6 +31,13 @@ const (
 	// MLUnifiedCap — v0.10.2051: /api/anomalies/unified okuma tavanı (liste
 	// sunucuda birleşip sayfalanır; tavana değen cevap truncated söyler).
 	MLUnifiedCap = 2000
+	// MLDetSvcVolumeSpike — v0.10.2118 (operatör kararı 2026-11-13): servis
+	// span hacmi sıçraması. YAZICISI ML motoru DEĞİL, evaluator
+	// (selfhealth_volume.go; 24 sa / önceki 24 sa kuralı). Bu yüzden
+	// MLDetectorNames'te YOK (ML ayarı / karne anahtarı değil); sinyali
+	// MLDetectorSignal'da trace. Grup kapısı bu dedektörü hiçbir kolda
+	// saymaz (ml/group_gate.go) — Problem ve bildirim üretmez.
+	MLDetSvcVolumeSpike = "svc_volume_spike"
 )
 
 // MLVerdictID — anomaly_verdicts.event_id anahtarı. Önek, eski

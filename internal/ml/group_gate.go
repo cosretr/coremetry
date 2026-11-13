@@ -135,7 +135,7 @@ func DecideGroupPromotion(g MLGroup, members []chstore.MLEvent, in GroupGateInpu
 	dets, sigs := map[string]bool{}, map[string]bool{}
 	peak, kept, cut, open := 1.0, 0, 0, 0
 	for _, e := range members {
-		if !inGroup[e.ID] {
+		if !inGroup[e.ID] || groupExcluded(e) {
 			continue
 		}
 		if groupMemberOpen(e, in.Open) {
@@ -187,6 +187,17 @@ var (
 	singleCountOnlyMin = float64(chstore.DefaultAnomalyPromotion().CountOnlyMinCount)
 )
 
+// groupExcluded — SAF (v0.10.2118): grup kapısının HİÇBİR kolunda
+// sayılmayan üye. svc_volume_spike (servis span hacmi sıçraması) operatör
+// kararıyla (2026-11-13) Problem değil ANOMALİ ve açılış bildirimi
+// GÖNDERİLMEZ: üye sayılsaydı başka bir sinyalle "≥ 2 farklı sinyal"
+// kolunu ya da tek-sinyal kolunu besleyip Problem + bildirimi arka
+// kapıdan geri getirirdi. Açık üye de sayılmaz (yalnız o kalmış grup
+// "bitti" kabul edilir). Pin: group_gate_volume_pin_test.go.
+func groupExcluded(e chstore.MLEvent) bool {
+	return e.Detector == chstore.MLDetSvcVolumeSpike
+}
+
 // singleWorsening — SAF: olay kötüleşme yönünde mi; count = değeri bir SAYI
 // mı (taban 0 iken sayım kolu yalnız sayılarda anlamlı). Davis emsali:
 // yalnız hata / gecikme / consumer lag ARTIŞI; yük (hacim, trafik düşüşü,
@@ -223,7 +234,7 @@ func singleWorsening(e chstore.MLEvent) (worse, count bool) {
 func singleSignalShadow(members []chstore.MLEvent, inGroup map[string]bool, in GroupGateInput, now time.Time) (string, string, bool) {
 	best, bestID, bestR := "", "", 0.0
 	for _, e := range members {
-		if !inGroup[e.ID] || !groupMemberOpen(e, in.Open) || !batchKeep(e, in.IsBatch, in.LoadParts) {
+		if !inGroup[e.ID] || groupExcluded(e) || !groupMemberOpen(e, in.Open) || !batchKeep(e, in.IsBatch, in.LoadParts) {
 			continue
 		}
 		worse, count := singleWorsening(e)

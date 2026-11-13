@@ -10,6 +10,12 @@
 // gerektirmez — iki sayı ve bir oran gerektirir, ve yanlış olma riski
 // modelin değil TABANIN meselesidir (aşağıya bak).
 //
+// v0.10.2118 (operatör kararı 2026-11-13): ÇIKTI Problem DEĞİL ANOMALİ —
+// ml_events satırı (detector=svc_volume_spike), bildirim YOK. Aşağıdaki
+// yaşam döngüsü aynı kaldı, yalnız hedef değişti (planVolumeEvents); (3)
+// maddesindeki şiddet/eskalasyon gerekçesi yalnız eski açık satırlar
+// kapanana dek geçerli.
+//
 // KURALIN YAŞAM DÖNGÜSÜ İCAT EDİLMEDİ: dört kardeşiyle birebir aynı hat
 // (leader-locked tik → deterministik id → tik başındaki OpenProblems
 // snapshot'ıyla dedup → UpsertProblem → açılışta notify → koşul geçince
@@ -33,8 +39,9 @@ package evaluator
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
 	"log"
+	"sort"
 	"strings"
 	"time"
 
@@ -136,10 +143,10 @@ func escalationExempt(ruleID string) bool {
 // YENİ dilim döner, girdiyi DEĞİŞTİRMEZ: girdi volCache'in kendisi; yerinde
 // süzme (rows[:0]) önbelleği bozar ve kural tekrar açıldığında (liste
 // boşaltılınca) batch satırı bir saat boyunca geri gelmezdi.
-func dropBatchVolumeRows(rows []selfProblem, sens chstore.AnomalySensitivityConfig) []selfProblem {
-	out := make([]selfProblem, 0, len(rows))
+func dropBatchVolumeRows(rows []chstore.ServiceVolume, sens chstore.AnomalySensitivityConfig) []chstore.ServiceVolume {
+	out := make([]chstore.ServiceVolume, 0, len(rows))
 	for _, r := range rows {
-		if r.ruleID == selfVolumeRuleID && sens.IsBatchService(r.service) {
+		if sens.IsBatchService(r.Service) {
 			continue
 		}
 		out = append(out, r)
@@ -149,31 +156,31 @@ func dropBatchVolumeRows(rows []selfProblem, sens chstore.AnomalySensitivityConf
 
 // ── Tik ─────────────────────────────────────────────────────────────────
 
-// selfVolumeSpike — evaluateSelfHealth geçişi.
+// selfVolumeSpike — evaluateSelfHealth geçişi: bu tikte sıçramış servisler.
 //
 // Dönen ikinci değer "bu kural bu tikte KAPSANDI mı": yalnız kapsanan
-// kuralların açık problemleri kapatılabilir (v0.9.984 fail-open dersi).
-// Ölçemediğimiz bir tikte hüküm vermiyoruz — ama son geçerli ölçümü
-// sunmaya devam ediyoruz, çünkü "ölçemedim" ne "temiz" ne de "sustu"
-// demektir.
+// tikte epizot kapatılabilir (v0.9.984 fail-open dersi). Ölçemediğimiz bir
+// tikte hüküm vermiyoruz — ama son geçerli ölçümü sunmaya devam ediyoruz,
+// çünkü "ölçemedim" ne "temiz" ne de "sustu" demektir.
 //
 // v0.10.1039 — batch süzgeci ÖNBELLEKTEN SONRA, her tikte: önbellek ham
 // ölçümü (saatlik) tutar, süzgeç atomic ayardan (CH okuması yok) tik
 // başına uygulanır. Böylece ayar değişikliği saatlik yenilemeyi beklemeden
 // bir sonraki tikte etkili olur; kural kapsandığı (ok=true) için açık batch
-// satırları reconcileSelfHealth'in normal kapatma dalıyla kapanır.
-func (e *Evaluator) selfVolumeSpike(ctx context.Context, cfg chstore.SelfHealthConfig) ([]selfProblem, bool) {
+// epizotları reconcileVolumeEvents'in normal kapatma dalıyla kapanır.
+func (e *Evaluator) selfVolumeSpike(ctx context.Context, cfg chstore.SelfHealthConfig) ([]chstore.ServiceVolume, bool) {
 	rows, ok := e.selfVolumeMeasured(ctx, cfg)
 	if !ok {
 		return nil, false
 	}
 	// ForDetectors: ayar bu süreçte hiç doğrulanmadıysa batch listesi boş →
-	// süzgeç yok (tahmini varsayılanla açık satır kapatılmaz).
+	// süzgeç yok (tahmini varsayılanla açık epizot kapatılmaz).
 	return dropBatchVolumeRows(rows, e.store.AnomalySensitivityForDetectors()), true
 }
 
-// selfVolumeMeasured — saatlik ölçüm + önbellek (v0.9.1294 gövdesi, aynen).
-func (e *Evaluator) selfVolumeMeasured(ctx context.Context, cfg chstore.SelfHealthConfig) ([]selfProblem, bool) {
+// selfVolumeMeasured — saatlik ölçüm + önbellek (v0.9.1294 gövdesi; v0.10.2118
+// önbellek ham sıçrama satırlarını tutar).
+func (e *Evaluator) selfVolumeMeasured(ctx context.Context, cfg chstore.SelfHealthConfig) ([]chstore.ServiceVolume, bool) {
 	e.volMu.Lock()
 	cached, scannedAt := e.volCache, e.volAt
 	e.volMu.Unlock()
@@ -193,12 +200,11 @@ func (e *Evaluator) selfVolumeMeasured(ctx context.Context, cfg chstore.SelfHeal
 		return cached, true
 	}
 
-	var out []selfProblem
+	var out []chstore.ServiceVolume
 	for _, r := range rows {
-		if !volumeSpikeDecision(r.Cur, r.Prev, cfg.VolumeSpikeMinSpans, cfg.VolumeSpikeFactor) {
-			continue
+		if volumeSpikeDecision(r.Cur, r.Prev, cfg.VolumeSpikeMinSpans, cfg.VolumeSpikeFactor) {
+			out = append(out, r)
 		}
-		out = append(out, volumeSpikeProblem(r, cfg))
 	}
 
 	e.volMu.Lock()
@@ -207,70 +213,171 @@ func (e *Evaluator) selfVolumeMeasured(ctx context.Context, cfg chstore.SelfHeal
 	return out, true
 }
 
-// volumeSpikeProblem — SAF problem tarifi (tablo testli).
+// ── v0.10.2118: çıktı Problem değil ANOMALİ (ml_events) ─────────────────
 //
-// Value/Threshold çifti KATSAYI taşıyor (5.7 / 4.0), ham sayım değil.
-// İki sebep: (a) kuralın ölçtüğü büyüklük katsayıdır — Threshold sütununa
-// `prev × factor` gibi türetilmiş bir sayı koymak operatöre hiçbir vidada
-// karşılığı olmayan bir eşik gösterirdi; (b) öncelik merdiveni oranı
-// Value/Threshold'dan türetiyor, yani katsayı çifti P3→P2 basamağını
-// doğrudan ve okunabilir biçimde sürüyor. Ham sayımlar gerekçenin içinde,
-// tam çözünürlükte.
+// Operatör kararı (2026-11-13): "servis hacmi sıçradı" Problem değil
+// anomali; açılış bildirimi GÖNDERİLMEZ; koşul geçince kendiliğinden
+// kapanma aynı. Kural (yukarıdaki saf çekirdek) DEĞİŞMEDİ, yalnız hedef:
+// Anomalies sayfası, Inbox kind=anomaly ve menü rozeti ml_events'i
+// ListAnomalyFeed üzerinden zaten okuyor. Bildirim garantisi iki kat:
+// (1) bu yol notifier'a hiç dokunmaz; (2) ML grup kapısı bu dedektörü
+// hiçbir kolda saymaz (ml/group_gate.go groupExcluded + pin testi).
 //
-// Service alanı DOLU — kardeş dört kuraldan ayrıldığı tek yer. Onlarda
-// özne Coremetry'nin kendisiydi ve sahte bir servis adı uydurmak kırık
-// bir bağlantı üretirdi; burada özne GERÇEK bir servis (span yazıyor,
-// yani katalogda var), dolayısıyla /problems satırı çalışan bir servis
-// bağlantısı ve takım sahipliği zenginleştirmesi kazanıyor.
-func volumeSpikeProblem(v chstore.ServiceVolume, cfg chstore.SelfHealthConfig) selfProblem {
+// Kimlik uzayı ML motorununkinden ayrık (MLEventID dedektör adını hash'e
+// katar); ML lideri ml_events'i okumaz, kapanışı (closeStale) yalnız kendi
+// bellek-içi koşularına uygular — iki yazıcı aynı satıra dokunmaz.
+
+// selfVolumeEventWindowSec — olayın window_sec'i = TARAMA kadansı (saat).
+// MLEventOpen "son görülme ≤ 4 × pencere" der: ölçüm dört saat üst üste
+// başarısızsa olay kendiliğinden "Bitti" görünür (emniyet kapanışı).
+const selfVolumeEventWindowSec = uint32(selfVolumeScanEvery / time.Second)
+
+// volumeEvidence — olay kanıtı (teknik ayrıntı; düz cümle kartta).
+type volumeEvidence struct {
+	Prev             uint64  `json:"prev"`
+	Cur              uint64  `json:"cur"`
+	Factor           float64 `json:"factor"`
+	Threshold        float64 `json:"threshold"`
+	MeasureWindowSec int64   `json:"measure_window_sec"`
+	MinSpans         uint64  `json:"min_spans"`
+}
+
+// volumeEventFor — SAF: bir sıçramanın ml_events satırı. start epizodun
+// başlangıcı (kimliğe girer), now son görülme.
+func volumeEventFor(v chstore.ServiceVolume, cfg chstore.SelfHealthConfig, start, now time.Time) chstore.MLEvent {
 	factor := 0.0
 	if v.Prev > 0 {
 		factor = float64(v.Cur) / float64(v.Prev)
 	}
-	return selfProblem{
-		id:       selfVolumeRuleID + ":" + v.Service,
-		ruleID:   selfVolumeRuleID,
-		ruleName: "Coremetry · servis hacmi sıçradı",
-		metric:   "self.volume_spike_factor",
-		service:  v.Service,
-		// DAİMA warning. Bu bir maliyet uyarısı: kimse gece kalkmasın,
-		// ama sabah listede dursun. critical yazmak P2 tabanı + 4 saatte
-		// P1 demekti (bkz. escalationExempt).
-		severity:    "warning",
-		value:       factor,
-		threshold:   cfg.VolumeSpikeFactor,
-		description: volumeSpikeReason(v, factor, cfg.VolumeSpikeFactor, int(selfVolumeWindow.Hours())),
+	ev, _ := json.Marshal(volumeEvidence{Prev: v.Prev, Cur: v.Cur, Factor: factor, Threshold: cfg.VolumeSpikeFactor,
+		MeasureWindowSec: int64(selfVolumeWindow / time.Second), MinSpans: cfg.VolumeSpikeMinSpans})
+	base := chstore.MLEventID(chstore.MLDetSvcVolumeSpike, v.Service, "")
+	return chstore.MLEvent{
+		ID:        chstore.MLEpisodeID(base, start),
+		Detector:  chstore.MLDetSvcVolumeSpike,
+		Signal:    chstore.MLSignalTrace,
+		Stage:     chstore.MLStageShadow,
+		Service:   v.Service,
+		StartedAt: start.UnixNano(),
+		LastSeen:  now.UnixNano(),
+		WindowSec: selfVolumeEventWindowSec,
+		Baseline:  float64(v.Prev),
+		Observed:  float64(v.Cur),
+		Score:     factor,
+		Direction: "up",
+		Evidence:  string(ev),
 	}
 }
 
-// volumeSpikeReason — SAF gerekçe (tablo testli).
-//
-// Operatörün ilk sorusu "ne kadar, neye göre" — cümle bu yüzden HAM İKİ
-// SAYIYI da yazar, yalnız katsayıyı değil: 5,7× tek başına 210 bin ile
-// 1,2 milyon arasındaki farkı söylemez ve müdahale kararı o farka bağlı.
-//
-// windowH parametre, sabit değil: değer+birim taşıyan her şablon her
-// birimiyle tablo-testli (v0.6.36 birim-karışımı dersi).
-func volumeSpikeReason(v chstore.ServiceVolume, factor, threshold float64, windowH int) string {
-	return fmt.Sprintf(
-		"%s son %d saatte %s span üretti (önceki %d saat: %s — %s; eşik %s). "+
-			"Bu bir kesinti değil MALİYET olayı: ingest yolu, disk ve kardinalite "+
-			"bu servise orantılı büyüyor. Sırayla: bozuk bir deploy mu (retry döngüsü, "+
-			"debug span'leri açık kalmış), yeni bir attribute mü eklendi (sınırsız değer = "+
-			"kardinalite patlaması), yoksa gerçek trafik mi arttı. "+
-			"Müdahale: /system/cardinality → top emitter'lar + attribute anahtarları.",
-		v.Service, windowH, fmtInt(v.Cur), windowH, fmtInt(v.Prev),
-		fmtFactor(factor), fmtFactor(threshold))
+// seedVolumeOpen — SAF: CH'deki satırlardan açık epizotlar (servis başına
+// en geç başlayan, MLEventOpen kuralıyla). Lider değişimi / yeniden
+// başlatma sonrası epizot aynı kimlikle sürer, yeniden açılmaz.
+func seedVolumeOpen(evs []chstore.MLEvent, now time.Time) map[string]chstore.MLEvent {
+	out := map[string]chstore.MLEvent{}
+	for _, e := range evs {
+		if e.Detector != chstore.MLDetSvcVolumeSpike || !chstore.MLEventOpen(e, now.UnixNano()) {
+			continue
+		}
+		if cur, ok := out[e.Service]; !ok || e.StartedAt > cur.StartedAt {
+			out[e.Service] = e
+		}
+	}
+	return out
 }
 
-// fmtFactor — katsayının okunur hâli. 5.7× ile 96146× aynı şablonla
-// yazılamaz: `%.1f` ikincisini "96146.0×" yapar (ondalık, o büyüklükte
-// gürültüdür), `%.0f` ilkini "6×" yapar (eşiğin 4 olduğu bir cümlede
-// yuvarlama kararın kendisini gizler). fmtDays ile aynı desen, aynı
-// gerekçe — ve aynı şekilde HER dalıyla tablo-testli.
-func fmtFactor(f float64) string {
-	if f < 10 {
-		return fmt.Sprintf("%.1f×", f)
+// planVolumeEvents — SAF yaşam döngüsü (eski reconcileSelfHealth'in
+// birebir karşılığı): sıçrayan servis açık değilse AÇILIR (start = now);
+// açıksa yalnız TAZE ölçümde (refresh) last_seen/observed/score tazelenir,
+// started_at korunur (RMT tam satır: tüm alanlar yeniden yazılır); açık
+// olup artık sıçramayan servis aynı satırla stage=closed, last_seen=now.
+// Çağıran yalnız KAPSANAN tikte çağırır (ölçülemeyen tik yazmaz).
+func planVolumeEvents(open map[string]chstore.MLEvent, spikes []chstore.ServiceVolume, cfg chstore.SelfHealthConfig, refresh bool, now time.Time) (writes []chstore.MLEvent, next map[string]chstore.MLEvent) {
+	next = make(map[string]chstore.MLEvent, len(spikes))
+	sorted := append([]chstore.ServiceVolume(nil), spikes...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Service < sorted[j].Service })
+	for _, v := range sorted {
+		if _, dup := next[v.Service]; dup {
+			continue
+		}
+		cur, ok := open[v.Service]
+		switch {
+		case !ok:
+			ev := volumeEventFor(v, cfg, now, now)
+			writes = append(writes, ev)
+			next[v.Service] = ev
+		case refresh:
+			ev := volumeEventFor(v, cfg, time.Unix(0, cur.StartedAt), now)
+			writes = append(writes, ev)
+			next[v.Service] = ev
+		default:
+			next[v.Service] = cur
+		}
 	}
-	return fmt.Sprintf("%.0f×", f)
+	closing := make([]string, 0)
+	for svc := range open {
+		if _, still := next[svc]; !still {
+			closing = append(closing, svc)
+		}
+	}
+	sort.Strings(closing)
+	for _, svc := range closing {
+		ev := open[svc]
+		ev.Stage = chstore.MLStageClosed
+		ev.LastSeen = now.UnixNano()
+		writes = append(writes, ev)
+	}
+	return writes, next
+}
+
+// reconcileVolumeEvents — planı yazar. Açık epizot kümesi bellekte (lider);
+// ilk çağrıda ve her TAZE ölçümde CH'den yeniden tohumlanır (lider değişimi
+// sonrası bayat bellek başka liderin kapattığı epizodu diriltmesin).
+// Tohum okunamazsa bu tik YAZMAZ: tekilleştirme güvencesi olmadan açmak
+// aynı sıçramaya ikinci epizot demek.
+func (e *Evaluator) reconcileVolumeEvents(ctx context.Context, spikes []chstore.ServiceVolume, cfg chstore.SelfHealthConfig) {
+	now := time.Now()
+	e.volMu.Lock()
+	measuredAt := e.volAt
+	e.volMu.Unlock()
+	refresh := measuredAt.After(e.volWroteAt)
+	if e.volOpen == nil || refresh {
+		evs, err := e.store.ListMLEvents(ctx, chstore.MLEventsFilter{Detector: chstore.MLDetSvcVolumeSpike,
+			Since: now.Add(-24 * time.Hour), Limit: chstore.MLUnifiedCap})
+		if err != nil {
+			log.Printf("[evaluator] hacim sıçraması epizotları okunamadı (bu tik yazılmaz): %v", err)
+			return
+		}
+		e.volOpen = seedVolumeOpen(evs, now)
+	}
+	writes, next := planVolumeEvents(e.volOpen, spikes, cfg, refresh, now)
+	for _, w := range writes {
+		if err := e.store.UpsertMLEvent(ctx, w); err != nil {
+			log.Printf("[evaluator] hacim sıçraması anomalisi yazılamadı %s: %v", w.Service, err)
+			if _, wasOpen := e.volOpen[w.Service]; !wasOpen {
+				delete(next, w.Service) // açılış yazılamadı: sonraki tik yeniden dener
+			}
+			continue
+		}
+		if w.Stage == chstore.MLStageClosed {
+			log.Printf("[evaluator] ANOMALY CLEARED (svc_volume_spike): %s", w.Service)
+		} else if _, wasOpen := e.volOpen[w.Service]; !wasOpen {
+			log.Printf("[evaluator] ANOMALY OPENED (svc_volume_spike): %s %.0f → %.0f span", w.Service, w.Baseline, w.Observed)
+		}
+	}
+	e.volOpen = next
+	if refresh {
+		e.volWroteAt = measuredAt
+	}
+}
+
+// volumeMovedNote — SAF (v0.10.2118 geçişi): eski "servis hacmi sıçradı"
+// Problem satırı kapanırken açıklamasına düşülen not. Tekrar uygulanırsa
+// çoğalmaz (kapanış satırı yeniden yazılabilir).
+const volumeMovedPrefix = "Anomali tarafına taşındı (v0.10.2118): servis hacmi sıçraması artık Problem değil, Anomalies listesinde görünür. "
+
+func volumeMovedNote(desc string) string {
+	if strings.HasPrefix(desc, volumeMovedPrefix) {
+		return desc
+	}
+	return volumeMovedPrefix + desc
 }

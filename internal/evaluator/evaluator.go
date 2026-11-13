@@ -105,8 +105,13 @@ type Evaluator struct {
 	// önbelleği sıfırlar ve bir sonraki tik gerçek bir ölçüm yapar
 	// (kaybı bir MV sorgusu, kazancı sıfır kalıcılık borcu).
 	volMu    sync.Mutex
-	volCache []selfProblem
+	volCache []chstore.ServiceVolume
 	volAt    time.Time
+	// volOpen / volWroteAt — v0.10.2118: açık hacim anomalisi epizotları
+	// (servis → ml_events satırı) ve son yazılan ölçümün damgası. Yalnız
+	// evaluator goroutine'i (lider) dokunur; CH'den tohumlanır.
+	volOpen    map[string]chstore.MLEvent
+	volWroteAt time.Time
 
 	// watcherFails — ardışık ölçüm hatası sayacı (v0.9.447): bozuk
 	// kaynaklı (silinmiş index, ES yetkisi) watch'ların açık problemi
