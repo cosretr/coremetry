@@ -83,7 +83,7 @@ kapsam dışı.
 
 ## 6. Bitti tanımı ve dilimler
 
-Bitti: [ ] K1 main'de, gate yeşil · [ ] operatör prod'da aşağıdaki 1–9'u geçti · [ ] bu belge ve
+Bitti: [x] K1 main'de, gate yeşil (v0.10.2099) · [ ] operatör prod'da aşağıdaki 1–9'u geçti · [ ] bu belge ve
 `roadmap-status.md` iş 5 satırı "bitti" · [ ] bayrak prod'da açık bırakılabilir ya da kapatılma
 nedeni yazılı.
 

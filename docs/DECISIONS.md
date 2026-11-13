@@ -12044,6 +12044,10 @@ CoSRE v2 frontend'i shadcn temel fazı (Faz 1) merge'ünden sonra `components/sh
 `components/ai-elements` üzerine kurulur. CoSRE Faz 1 (Go akış adaptörü) bağımsızdır,
 devam eder. Geçiş denetimi: `docs/frontend/shadcn-audit.md`. Operatör kararı.
 
+**Ek, 2026-11-13:** AI Elements KURULMAZ (operatör, `docs/cosre/roadmap-status.md` karar 2).
+v2 sohbeti `components/cosre` + paylaşılan balon/composer ile kalır; `components/ai-elements`
+dizini hiç oluşmadı. v0.10.2099 bundle bütçesi yasak listesinden adı düşürdü.
+
 **Süreç notu:** PR yok, main'e doğrudan sürüm. Brief'teki "PR açıklamasında önce/sonra
 ekran görüntüsü" kuralı yerine her sürüm `docs/frontend/migration-log.md`'ye kısa giriş
 yazar (sayfa, ne değişti, silinen atomlar). Ekran görüntüsü zorunlu değil; kapı `/design`

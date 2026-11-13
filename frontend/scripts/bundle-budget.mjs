@@ -50,9 +50,11 @@ const FORBIDDEN_SOURCES = [
   // @grafana/data'nın da bağımlılığı (tembel grafana); ilk yüke binerse
   // [0]–[3] değil bütçe yakalar.
   /node_modules\/(ai|@ai-sdk|swr|throttleit|use-stick-to-bottom)\//,
-  // v0.10.1647 (Faz 2b B1): v2 sohbet ağacı (components/cosre + ai-elements)
-  // yalnız kapının dinamik import()'u ile; kabuk statik import edemez.
-  /src\/components\/(cosre|ai-elements)\//,
+  // v0.10.1647 (Faz 2b B1): v2 sohbet ağacı (components/cosre) yalnız
+  // kapının dinamik import()'u ile; kabuk statik import edemez.
+  // v0.10.2099: ai-elements listeden çıktı (AI Elements kurulmaz, operatör
+  // 2026-11-13; dizin hiç oluşmadı).
+  /src\/components\/cosre\//,
 ];
 
 // İlk yükte AÇIKÇA İZİNLİ kaynaklar (v0.10.1619, R10; operatör 2026-10-30):

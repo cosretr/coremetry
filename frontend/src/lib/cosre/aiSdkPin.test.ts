@@ -124,13 +124,13 @@ describe('Faz 2b tembel pini', () => {
     const list = /const FORBIDDEN_SOURCES = \[([\s\S]*?)\n\];/.exec(s)![1].split('\n').filter(l => /^\s*\/[^/]/.test(l)).map(l => l.trim()); // yorum satırları değil, regex literal'leri
     expect(list[1]).toBe('/src\\/components\\/shadcn\\//,');
     expect(list[2]).toBe('/node_modules\\/(ai|@ai-sdk|swr|throttleit|use-stick-to-bottom)\\//,');
-    expect(list[3]).toBe('/src\\/components\\/(cosre|ai-elements)\\//,');
+    expect(list[3]).toBe('/src\\/components\\/cosre\\//,'); // v0.10.2099: ai-elements düştü
     const ai = /node_modules\/(ai|@ai-sdk|swr|throttleit|use-stick-to-bottom)\//;
     expect(ai.test('../node_modules/ai/dist/index.mjs')).toBe(true);
     expect(ai.test('../node_modules/@ai-sdk/react/dist/index.mjs')).toBe(true);
     expect(ai.test('../node_modules/swr/dist/index/index.mjs')).toBe(true);
     expect(ai.test('../node_modules/aria-hidden/dist/es2015/index.js')).toBe(false);
-    const tree = /src\/components\/(cosre|ai-elements)\//;
+    const tree = /src\/components\/cosre\//;
     expect(tree.test('../../src/components/cosre/conversation/CosreChatV2.tsx')).toBe(true);
     expect(tree.test('../../src/components/coremetry/overlay/Sheet.tsx')).toBe(false);
     // Rapor satırı + ai → grafana statik import kapısı.
