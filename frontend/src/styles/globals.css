@@ -1907,7 +1907,8 @@ td.row-detail tbody tr:has(> td > .row-link):hover > td { background: var(--bg3)
 /* Sanallaştırılmış tabloda (Traces) satır yüksekliği virtualizer sözleşmesi:
    TAM `--row-h`, yoğunluk/yazı boyutundan bağımsız — `.vt-scroll` token'ı
    rahat değere (ROW_H, rowHeight.ts) geri sabitler (v0.10.933, T6). */
-.vt-scroll tbody td.row-cell > .row-link { box-sizing: border-box; height: var(--row-h); line-height: 18px; padding: 9px 12px; }
+/* Traces shadcn S2 — dolgu token'dan: (36 − 18) / 2 = 9px dikey, --sp-6 = 12px yatay; değer aynı. */
+.vt-scroll tbody td.row-cell > .row-link { box-sizing: border-box; height: var(--row-h); line-height: 18px; padding: calc((var(--row-h) - 18px) / 2) var(--sp-6); }
 .row-link:hover { text-decoration: none; }
 .row-link--name:hover { color: var(--accent2); text-decoration: underline; text-underline-offset: 3px; }
 .row-link:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
@@ -2175,7 +2176,7 @@ a.dep-prob-mark:hover { text-decoration: none; }
 .s-fatal { color: var(--on-accent); background: var(--err-solid); font-weight: 700; padding: 0 4px; border-radius: var(--radius-xs); }
 
 /* Pagination */
-.pager { display: flex; gap: 8px; margin-top: 10px; align-items: center; color: var(--text2); font-size: 12px; }
+.pager { display: flex; gap: var(--sp-4); margin-top: var(--sp-5); align-items: center; color: var(--text2); font-size: var(--fs-sm); } /* Traces shadcn S2 — token, değer aynı (8 / 10 / 12px) */
 
 /* v0.9.645 — Pager sayfanın DİBİNE yapışabiliyor (opt-in).
    Operatör-bildirimli: "next butonu çok gözükmüyor, daha iyi bir yerde
@@ -2195,7 +2196,7 @@ a.dep-prob-mark:hover { text-decoration: none; }
    ALTINDA, yani bu bir masaüstü kusuru; telefon katmanı (36px) onu
    yalnız dar ekranda örtüyordu. `min-height` dolguyu bozmadan
    yalnız yukarı çekiyor. */
-.pager button { padding: 3px 8px; font-size: 12px; min-height: 26px; }
+.pager button { padding: 3px var(--sp-4); font-size: var(--fs-sm); min-height: 26px; }
 
 /* Waterfall */
 #wf-outer { background: var(--bg1); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; font-size: 12px; }
@@ -6283,7 +6284,7 @@ a.cell-link--block { display: block; overflow: hidden; text-overflow: ellipsis; 
 /* ── v0.10.1498 END ──────────────────────────────────────────────────── */
 
 /* ── v0.10.1511 — /traces header column filter (tcf-*, pages/traces/ColumnFilter.tsx) ── */
-.tcf-th { display: inline-flex; align-items: center; gap: var(--sp-1); max-width: calc(100% - 14px); vertical-align: middle; }
+.tcf-th { display: inline-flex; align-items: center; gap: var(--sp-1); max-width: calc(100% - var(--sp-6) - var(--sp-1)); vertical-align: middle; }
 .tcf-th-l { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .tcf-btn { flex: none; color: var(--text3); opacity: .55; }
 th:hover .tcf-btn, .tcf-btn:focus-visible, .tcf-btn[aria-expanded="true"] { opacity: 1; }
@@ -6292,7 +6293,7 @@ th:hover .tcf-btn, .tcf-btn:focus-visible, .tcf-btn[aria-expanded="true"] { opac
 .tcf-head { display: flex; align-items: center; gap: var(--sp-3); }
 .tcf-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text2); font-size: var(--fs-xs); }
 .tcf-list { display: flex; flex-direction: column; max-height: 280px; overflow: auto; margin: 0 calc(-1 * var(--sp-2)); }
-.tcf-row { display: flex; align-items: center; gap: var(--sp-2); padding: 2px var(--sp-2); border-radius: var(--radius-xs); }
+.tcf-row { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-1) var(--sp-2); border-radius: var(--radius-xs); }
 .tcf-row:hover { background: var(--accent-soft); }
 .tcf-row.is-excluded .tcf-v { text-decoration: line-through; color: var(--text3); }
 .tcf-row--check { cursor: pointer; padding: var(--sp-2); }
