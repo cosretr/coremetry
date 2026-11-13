@@ -1,4 +1,4 @@
-.PHONY: build build-ui build-go build-demo test test-race lint run dev-ui clean docker-up docker-up-demo docker-down docker-distributed-up docker-distributed-down minikube-up minikube-down audit evalset evalset-diff eval-anomaly
+.PHONY: build build-ui build-go build-demo test test-race lint run dev-ui clean docker-up docker-up-demo docker-down docker-distributed-up docker-distributed-down minikube-up minikube-down audit evalset evalset-diff evalset-check eval-anomaly
 
 # VERSION is auto-derived from `git describe` so local builds
 # show something like "v0.4.48-3-gabcdef" instead of literal
@@ -67,6 +67,13 @@ evalset:
 	@COREMETRY_EVAL_OUT=$(EVAL_OUT) go test -tags evalset ./internal/api/ -run TestEvalsetReplay -v -count=1
 evalset-diff:
 	@go run ./cmd/evalsetdiff -latest $(EVAL_OUT)
+
+# v0.10.2108 — CoSRE kalite döngüsü D3: MODELSİZ sözleşme kapısı (CI'da da
+# koşar; gate.sh `cosre-contracts` adımı). Girdi yalnız repo dosyaları:
+# evalset şema geçerliliği, ui-stream fikstürleri (altın + stream_contract),
+# rubrik birimleri. Model/ağ yok (internal/api/cosre_contracts_test.go pinler).
+evalset-check:
+	@scripts/cosre-contracts.sh check
 
 # v0.10.1793 — Davis F1.5 anomali eval kapısı (CI DIŞI). Etiketli vakaları
 # replay eder, aile başına FP / recall + FAZ 0.5 kıyas tablosu basar.

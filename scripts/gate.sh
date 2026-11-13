@@ -2,7 +2,7 @@
 # gate.sh — release kapı zinciri, token-tasarruflu çıktı (docs/claude/token-audit.md Faz 1 adım 1).
 #
 #   scripts/gate.sh fe   # tsc → eslint (yalnız error) → vitest → bundle:check
-#   scripts/gate.sh go   # go build → go vet → go test
+#   scripts/gate.sh go   # go build → go vet → cosre-contracts → go test (geri kalanı)
 #   scripts/gate.sh all  # fe && go (ilk kırmızıda durur, && zinciri gibi)
 #
 # Çıktı: adım başına tek özet satırı; kırmızıda başarısız komut adı + hata
@@ -43,7 +43,7 @@ f_bundle(){
 }
 f_gotest(){
   local okc; okc=$(grep -c '^ok' "$log" 2>/dev/null)
-  echo "go test: ${okc:-0} ok"
+  echo "$name: ${okc:-0} ok"
   if [ "$1" = fail ]; then grep -E '^(--- )?FAIL|^\s+\S+_test\.go:[0-9]+:|^panic:|\[build failed\]'; fi
 }
 
@@ -57,7 +57,10 @@ fe() {
 gocheck() {
   step "go build" f_plain  "$ROOT" go build ./... &&
   step "go vet"   f_plain  "$ROOT" go vet ./... &&
-  step "go test"  f_gotest "$ROOT" go test ./...
+  # v0.10.2108 — adlı modelsiz CoSRE sözleşme alt kümesi, sonra GERİ KALANI
+  # (check + rest = go test ./..., çift koşu yok; scripts/cosre-contracts.sh).
+  step "cosre-contracts" f_gotest "$ROOT" scripts/cosre-contracts.sh check &&
+  step "go test"  f_gotest "$ROOT" scripts/cosre-contracts.sh rest
 }
 
 case "${1:-all}" in

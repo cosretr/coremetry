@@ -106,8 +106,14 @@ jobs:
       # CLAUDE.md's release flow requires "go test ./... pre-tag", and every
       # bug-fix ships a regression test — but nothing ENFORCED it in CI, so a
       # forgotten local run could ship a regression undetected. This is the gate.
+      # v0.10.2108 — CoSRE kalite döngüsü D3: adlı MODELSİZ sözleşme kapısı
+      # (evalset şema, ui-stream altınları + stream_contract, rubrik). CI'da
+      # model yok; adım modele/ağa gitmez (cosre_contracts_test.go pinler).
+      # Sonraki adım GERİ KALANI koşar: check + rest = go test ./... (çift yok).
+      - name: cosre-contracts
+        run: make evalset-check
       - name: go test
-        run: go test ./...
+        run: scripts/cosre-contracts.sh rest
       # v0.10.626 — CLAUDE.md release akışının iki kapısı CI'da yoktu:
       # make audit (9 grep kontrolü, 🔴 = kırmızı) ve go mod tidy farkı.
       - name: make audit (repo kuralları)
