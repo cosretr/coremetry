@@ -128,7 +128,7 @@ export function stripServicePrefix(text: string, service: string): string {
   let t = text.trim();
   const svc = service.trim();
   if (svc) {
-    for (const pre of [`${svc}: `, `${svc} servisinin `, `${svc} servisi, `, `${svc} `]) {
+    for (const pre of [`${svc}: `, `${svc} servisinin `, `${svc} servisi, `, `${svc} servisi `, `${svc} `]) { // `servisi ` v0.10.2119 (hacim sıçraması)
       if (t.startsWith(pre)) { t = t.slice(pre.length); break; }
     }
   }

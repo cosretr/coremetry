@@ -13854,3 +13854,8 @@ eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
   saatlik tazelendiği için günlerce süren olay listeden düşmez — düzeltme gerekmedi. Kimlik uzayı ayrık
   (`MLEventID` dedektör adını hash'e katar); ML lideri ml_events okumaz, `closeStale` yalnız kendi bellek-içi
   koşularını kapatır.
+
+## 2026-11-13 — v0.10.2119 — Hacim sıçraması anomalisi: FE etiketi (spec dilim 2)
+- `ML_DETECTOR_TR.svc_volume_spike` = "Servis hacmi sıçradı"; `signalKind` trace. Liste/detay başlığı
+  (`stripServicePrefix`) "<svc> servisi " önekini de kırpar → "Önceki 24 saatte N, son 24 saatte M span yazdı; K kat".
+  Düz cümle sunucu kartından (v0.10.2118 `volumeSpikeHead`). Ayarlar → ML listesine GİRMEZ (ML motoru dedektörü değil).

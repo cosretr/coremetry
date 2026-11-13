@@ -2,7 +2,7 @@
 
 Tarih 2026-11-13 · operatör kararı: `self-volume-spike` Problem değil ANOMALİ; taşınınca açılış bildirimi GÖNDERİLMEZ; koşul geçince kendiliğinden kapanma aynı kalır. Kardeş dört self-health kuralı Problem olarak kalır.
 
-**Durum:** Dilim 1 GEMİDE v0.10.2118 (açık sorular ana oturumca cevaplandı: 1 evet not düşülür, 2 evet rozete girer, 3 bu işte YOK). Dilim 2 sırada.
+**Durum:** Dilim 1 GEMİDE v0.10.2118 (açık sorular ana oturumca cevaplandı: 1 evet not düşülür, 2 evet rozete girer, 3 bu işte YOK). Dilim 2 GEMİDE v0.10.2119 (FE etiketi + sinyal türü + liste başlığında "<svc> servisi " öneki kırpılır). Kaynak grafiği: hazır servis paneli yok → kayıtlı görüntü yolu (özel dal eklenmedi).
 
 ## What
 `internal/evaluator/selfhealth_volume.go` kuralı (24 sa / önceki 24 sa, `cur >= prev*factor`, taban 100k, yeni servis ≠ sıçrama, batch süzgeci) **aynen kalır**; yalnız çıktısı değişir: `UpsertProblem` + `SendProblemAlert` yerine `ml_events` satırı (`detector=svc_volume_spike`). Anomalies sayfası ve Inbox `kind=anomaly` bu tabloyu zaten okuduğu için satır ek iş olmadan "Anomali" olarak görünür. Açık Problem satırları ilk ölçülü tikte mevcut auto-resolve yoluyla kapanır.
