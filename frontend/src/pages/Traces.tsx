@@ -235,14 +235,10 @@ function sortAccessor(col: SortColumn): (r: TraceRow) => number | string {
 // süresiydi ve eşiksiz, HER ZAMAN amber'di (sapma değil, sabit boya). Değer
 // artık nötr --text; renk yalnız gerçek sapmada (hata > 0).
 function HeaderStat({ label, value, tone, title }: { label: string; value: string; tone?: 'err'; title?: string }) {
-  const color = tone === 'err' ? 'var(--err)' : 'var(--text)';
   return (
-    <div title={title} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', minWidth: 44 }}>
-      <span style={{
-        fontSize: 14, fontWeight: 700, color, lineHeight: 1.1,
-        fontVariantNumeric: 'tabular-nums', fontFamily: 'var(--font-mono)',
-      }}>{value}</span>
-      <span style={{ fontSize: 9, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{label}</span>
+    <div title={title} className="trl-hstat">
+      <span className={tone === 'err' ? 'trl-hstat-v is-err' : 'trl-hstat-v'}>{value}</span>
+      <span className="trl-hstat-l">{label}</span>
     </div>
   );
 }
@@ -1337,7 +1333,7 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
     <>
       <SavedViewsBar page="traces" variant="compact" size="sm" />
       <Button variant="outline" size="xs" onClick={reset}>Reset</Button>
-      <a className="sec"
+      <a className="sec trl-csv"
       href={`/api/traces/export.csv?${(() => {
         const { from, to } = exportRangeNs;
         const p = new URLSearchParams();
@@ -1357,8 +1353,7 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
         if (order) p.set('order', order);
         return p.toString();
       })()}`}
-      download title="Download up to 10k matching traces as CSV (postmortem / audit use)"
-      style={{ padding: '5px 10px', fontSize: 12, textDecoration: 'none', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--accent2)', background: 'var(--bg2)' }}>
+      download title="Download up to 10k matching traces as CSV (postmortem / audit use)">
         ⬇ CSV
       </a>
     </>
@@ -1428,14 +1423,13 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
             </>
           );
           return data === undefined ? (
-            <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, padding: 12, marginBottom: 8,
-              // v0.9.301 — the skeleton must match the real card, or the
-              // table jumps on every load. Tracks the persisted height.
-              height: stripCollapsed ? 40 : 182, // v0.10.486 — kompakt yükseklikle hizalı; v0.10.513 tek yükseklik; v0.10.724 katlı
-              display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+            // v0.9.301 — the skeleton must match the real card, or the
+            // table jumps on every load. Tracks the persisted height
+            // (.trl-strip--skel 182px; katlı 40px — v0.10.486/513/724).
+            <div className={stripCollapsed ? 'trl-strip trl-strip--skel is-collapsed' : 'trl-strip trl-strip--skel'}>
               <Spinner />
               {/* v0.10.1524 — ilk yüklemede de Saved ▾ / Reset / CSV ulaşılır. */}
-              <span style={{ position: 'absolute', top: 8, right: 12, display: 'inline-flex', alignItems: 'center', gap: 8 }}>{pageActions}</span>
+              <span className="trl-strip-actions">{pageActions}</span>
             </div>
           ) : viz === 'volume' ? (
             // slimmer + recedes — it's the brush/overview "tool", not the
@@ -1463,20 +1457,20 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
                 {pageActions}
               </>} />
           ) : (
-            <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, padding: 12, marginBottom: 10 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, padding: '0 2px', flexWrap: 'wrap' }}>
+            <div className="trl-strip trl-strip--lat">
+              <div className="trl-lat-head">
                 {vizToggle}
                 {/* v0.10.922 (sade palet adım 1) — lejant, LatencyScatter.tsx'in
                     nokta renkleriyle aynı ton (noktalar yarı saydam çizilir): ok
                     nötr (--text3), hata kırmızı. */}
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--text3)' }}>
-                  <span style={{ width: 8, height: 8, background: 'var(--text3)', borderRadius: 8 }} /> ok
-                  <span style={{ width: 8, height: 8, background: 'var(--err)', borderRadius: 8, marginLeft: 8 }} /> error
-                  <span style={{ marginLeft: 8 }}>· drag to brush · y = duration (log)</span>
+                <span className="trl-lat-legend">
+                  <span className="trl-dot" /> ok
+                  <span className="trl-dot is-err" /> error
+                  <span className="trl-ml8">· drag to brush · y = duration (log)</span>
                 </span>
-                <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
+                <span className="trl-lat-right">
                   {vizStats}
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>{pageActions}</span>
+                  <span className="trl-inline8">{pageActions}</span>
                 </span>
               </div>
               {!stripCollapsed && <LatencyScatter rows={displayRows} onOpen={openTrace} onBrush={applyBrush} onZoomReset={clearBrush} />}
@@ -1489,7 +1483,7 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
             `.controls` sırasındaydı; ikisi de "hangi trace'ler" sorusunu
             yanıtladığı için tek şeritte topluluyor (~43px kazanç). `.controls`
             zaten flex-wrap, dar ekranda ikinci satıra kırılır. */}
-        <PageControls sticky style={{ marginBottom: 8, alignItems: 'center' }}>
+        <PageControls sticky className="trl-controls">
               {/* v0.9.951 (E5/Ö31) — `/` kısayolunun AÇIK hedefi.
                   İşaretsizken GlobalShortcuts "ilk görünür metin
                   kutusu"na düşüyor ve bu sayfada o kutu DOM sırasında
@@ -1507,9 +1501,9 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
                 onPick={v => setDraft(d => ({ ...d, op: v, search: '' }))}
                 placeholder="Operation, or an id (function_id / trace ID)…" width={240} onEnter={() => apply()} />
               <input placeholder="Min ms" data-tour="traces-min-ms" value={draft.minMs}
-                onChange={e => setDraft({ ...draft, minMs: e.target.value })} type="number" style={{ width: 72 }} />
+                onChange={e => setDraft({ ...draft, minMs: e.target.value })} type="number" className="trl-ms" />
               <input placeholder="Max ms" value={draft.maxMs}
-                onChange={e => setDraft({ ...draft, maxMs: e.target.value })} type="number" style={{ width: 72 }} />
+                onChange={e => setDraft({ ...draft, maxMs: e.target.value })} type="number" className="trl-ms" />
               {/* v0.9.303 (operatör) — Errors only / Root traces artık
                   Search'ün SOLUNDA, kendi satırlarında değil. İkisi de
                   SUNUCU filtresi, yani tam olarak yanlarındaki alanlarla
@@ -1517,17 +1511,17 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
                   bir şeritte durmaları onları istemci-taraflı hızlı
                   kısayollarla aynı görsel dile sokuyordu ve bir satır
                   yüksekliği yiyordu. */}
-              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11.5, cursor: 'pointer', whiteSpace: 'nowrap' }}
+              <label className="trl-check"
                 title="Yalnız hatalı trace'ler. SUNUCU filtresi — seçili pencerenin tamamına uygulanır ve sorguyu yeniden çalıştırır.">
                 <input type="checkbox" checked={draft.hasError}
                   onChange={() => setDraft({ ...draft, hasError: !draft.hasError })} />
-                <span style={{ color: draft.hasError ? 'var(--err)' : 'var(--text2)' }}>Errors</span>
+                <span className={draft.hasError ? 'trl-check-l is-err' : 'trl-check-l'}>Errors</span>
               </label>
-              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11.5, cursor: 'pointer', whiteSpace: 'nowrap' }}
+              <label className="trl-check"
                 title={`Kök span'i depoya düşmüş trace'ler — yarım trace'leri gizler. SUNUCU filtresi. Kök tanımı: ${rootDefLabel} (Admin → ClickHouse → kök kapsaması).`}>
                 <input type="checkbox" checked={draft.rootOnly}
                   onChange={() => setDraft({ ...draft, rootOnly: !draft.rootOnly })} />
-                <span style={{ color: draft.rootOnly ? 'var(--accent2)' : 'var(--text2)' }}>Root</span>
+                <span className={draft.rootOnly ? 'trl-check-l is-on' : 'trl-check-l'}>Root</span>
               </label>
               {/* v0.10.1332 (operatör onaylı mockup) — Search md (üç barda tek
                   boy) + "Enter ↵" ipucu; son filtrenin (Errors / Root) hemen
@@ -1611,15 +1605,15 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
 
         {/* requireServices banner. */}
         {filter.requireServices.length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '8px 12px', marginBottom: 8, background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12 }}>
-            <span style={{ color: 'var(--text2)', fontWeight: 600 }}>Trace must include:</span>
+          <div className="trl-require">
+            <span className="trl-require-l">Trace must include:</span>
             {filter.requireServices.map((s) => (
               <Chip key={s} className="mono" removeLabel={`Remove ${s} from the required services`}
                 onRemove={() => setFilter({ ...filter, requireServices: filter.requireServices.filter(x => x !== s) })}>
                 {s}
               </Chip>
             ))}
-            <Button variant="outline" size="xs" onClick={() => setFilter({ ...filter, requireServices: [] })} style={{ marginLeft: 'auto' }}>
+            <Button variant="outline" size="xs" onClick={() => setFilter({ ...filter, requireServices: [] })} className="trl-push">
               Clear all
             </Button>
           </div>
@@ -1630,7 +1624,7 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
             flat→grouped seeds the group's top-level leaves from the current
             chips; grouped→flat flattens them back (OR / nested structure has no
             flat representation). v0.8.x. */}
-          <div className="row gap-2" style={{ alignItems: 'center', justifyContent: 'flex-end', marginBottom: -4 }}>
+          <div className="row gap-2 trl-flatten-row">
             {/* v0.10.659 (operatör: "Group and/or'a gerek yok, filtre zaten yapıyor")
                 — gruplu kurucuya GİRİŞ düğmesi kaldırıldı; tek satır filtre çubuğu
                 AND/OR'u alıyor. Gruplu kip yalnız URL/kayıtlı görünümden
@@ -1665,13 +1659,13 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
             sayı etiketleri eskisi gibi yalnız satır varken. */}
         {/* v0.10.1336 — data-tour="traces-table": rehberli tur adım 4 (ilk satır, yedek: tablo). */}
         {view === 'list' && (
-          <div data-tour="traces-table" style={{ opacity: refreshing ? 0.55 : 1, transition: 'opacity 120ms' }}
+          <div data-tour="traces-table" className={refreshing ? 'trl-busy is-busy' : 'trl-busy'}
             aria-busy={refreshing}>
             {/* v0.10.339 — Operator-reported: terfi kolonu uyuşmazlığı. Bu
                 satırlar dizi yolundan geldi (sunucu kolonun yalan söylediğini
                 ölçtü ve haritayı askıya aldı); host = onarım hedefi. */}
             {data && traces.length > 0 && data.emptyDiag?.promotedFallback && (
-              <div style={{ marginBottom: 6, padding: '6px 10px', fontSize: 11.5, border: '1px solid var(--border)', borderLeft: '3px solid var(--warn)', borderRadius: 6, background: 'var(--bg2)', color: 'var(--text2)' }}>
+              <div className="trl-promoted">
                 <b>Terfi kolonu uyuşmazlığı:</b> {(data.emptyDiag.promotedKeys ?? []).join(', ')} filtresi kolon yolunda 0 span buldu, dizi yolunda{' '}
                 {(data.emptyDiag.promotedHosts ?? []).map(h => `${h.host}: ${h.arr.toLocaleString()}`).join(' · ')}. Liste dizi yoluyla cevaplandı (doğru, yavaş); sunucu haritayı askıya aldı — ilgili replikada kolon şemasını / takılı mutasyonu kontrol et.
               </div>
@@ -1680,7 +1674,7 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
                 (ColumnManager) and removed by their chips. VirtualTable's shared
                 header auto-renders the sortable/resizable data columns, so the
                 add/remove affordances live here above the table. */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+            <div className="trl-coltools">
               <TracesColumnPicker order={colOrderIds} labelOf={id => COL_LABEL[id] ?? id}
                 onChange={applyColOrder}
                 onRemove={id => setExtraCols(extraCols.filter(x => x !== id))} />
@@ -1888,7 +1882,7 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
                     {' · '}sorted by <b>{sort}</b> {order}
                     {/* v0.10.124 — MV boşluğu: ham yoldan okundu, dürüstçe söyle. */}
                     {data?.mvGap && (
-                      <span style={{ marginLeft: 8, color: 'var(--warn, #b8860b)' }}
+                      <span className="trl-mvgap"
                         title="Bu pencerede özet tablo (trace_summary_5m) boş bir güne değiyor — liste ham span'lerden okundu (daha yavaş). Sistem → ClickHouse → tarihçe geri doldurma o günü doldurunca hızlı yola dönülür.">
                         · MV boşluğu: ham yol
                       </span>
@@ -1900,14 +1894,14 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
                         the operator picked and halved it. Loud, not a
                         footnote: these rows answer a DIFFERENT question. */}
                     {data?.narrowedFromNs ? (
-                      <span className="badge b-err" style={{ marginLeft: 6 }}
+                      <span className="badge b-err trl-ml6"
                         title={'This query ran out of memory or time over the range you selected, so the backend answered over a shorter, more recent window instead of failing.\nThe list below is NOT your full range — narrow the range or add a filter for an answer that covers it.'}>
                         ⚠ shortened to {tsLong(data.narrowedFromNs)} →
                       </span>
                     ) : null}
                     {/* v0.10.342 — kimlik-önce arama tuttu: liste o trace'ler. */}
                     {data?.identity?.hits ? (
-                      <span className="badge b-info" style={{ marginLeft: 6, textTransform: 'none', letterSpacing: 0 }}
+                      <span className="badge b-info trl-ident"
                         title={`Arama terimi kimlik olarak eşleşti: ${data.identity.matchedKey ?? '?'} = ${filter.search} · ${data.identity.hits.toLocaleString()} trace${data.identity.bounded ? ' (tavan)' : ''}. Denenen anahtarlar: ${data.identity.keys.join(', ')}`}>
                         kimlik: {data.identity.matchedKey ?? '?'}{data.identity.traceId ? '' : ` (${data.identity.hits.toLocaleString()})`}
                         {data.identity.anchorMs ? ` · kimlikteki zaman ${tsLong(data.identity.anchorMs * 1e6)} ±12 s` : ''}
@@ -1921,7 +1915,7 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
                            v0.10.812 — Errors'ta N artık EŞLEŞEN hatalı trace'ler üzerinde (aday = hatalı + çip). */
                         ? `For speed, the list is ranked within the newest ${data.rankedWithinRecent.toLocaleString()} matching traces${filter.service ? ' of the service' : ' in the window'} — narrow the range to reach older ones.`
                         : `For speed, ${sort} ranks the newest ${data.rankedWithinRecent.toLocaleString()} traces in the window — an older trace beyond that slice won't appear. Sort by time for the full window.`}
-                        style={{ marginLeft: 6, color: 'var(--text3)' }}>
+                        className="trl-ranked">
                         · ranked within newest {data.rankedWithinRecent.toLocaleString()}
                       </span>
                     ) : null}
