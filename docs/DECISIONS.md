@@ -13812,3 +13812,17 @@ eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
 - Cümle: "<svc>: tek güçlü sinyal (<sinyal>, başka sinyal teyit etmedi) — <ölçü> şimdi X, normalde Y; N dakikadır sürüyor."
 - ≥ 2 sinyal kararı bayt bayt aynı; `svc_*` olayları bu kolu tetiklemez (kendi gölge kapıları). Tik satırı canlıda
   açılan tek-sinyal Problem sayısını yazar (`groupSingleOpened`). Bildirim hacmi ölçülmedi — prod'da izlenecek.
+
+## 2026-11-13 — v0.10.2098 — Traces shadcn S5: kolon süzgeci Radix Popover'da (operatör onayı)
+
+- `ColumnFilterShell` (`pages/traces/ColumnFilter.tsx`; /traces başlık hunileri + /problems Exceptions) dondurulmuş
+  `ui/Popover` + `ui/IconButton`'dan `coremetry/overlay` Popover (Radix, body portalı) + shadcn Button + coremetry
+  Tooltip'e geçti. Görünür fark yalnız onaylı mockup'taki yüzey: köşe `--radius`, gölge `--shadow-pop`, zemin
+  shadcn `--popover`; tetik boyu (20 px), panel genişliği (300 px), iç boşluk, katman (`--z-popover`) eskisi.
+- Korunan davranış: gövde yalnız açıkken çağrılır (açılmadan fetch yok), değer araması sunucuda, Esc ve dışarı tık
+  kapatır, odak huniye döner, panel tıkı başlığa (sıralama) sızmaz, `collisionPadding` 8 ile ekranda kalır.
+- İki mevcut test operatör izniyle UYARLANDI, davranış iddiası değişmedi:
+  `ColumnFilter.contract.test.tsx` → yalnız `import '@/test/radixJsdom'` eklendi (jsdom'da ResizeObserver yok);
+  `AnomaliesPage.colFilter.test.tsx` → panel seçicisi `.ui-popover label` → `[data-tcf-pop] label` (iki satır).
+  S0 karakterizasyon testleri dokunulmadan geçer. Yeni `ColumnFilterShell.radix.test.tsx`: portal, Esc + odak
+  dönüşü, dışarı tık.

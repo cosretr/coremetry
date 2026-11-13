@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
-import { Popover } from '@/components/ui/Popover';
+import { Button as ShadcnButton } from '@/components/shadcn/button';
+import { Popover, PopoverContent, PopoverTrigger, Tooltip, TooltipContent, TooltipTrigger } from '@/components/coremetry/overlay';
 import { SearchField } from '@/components/ui/SearchField';
 import { Spinner } from '@/components/Spinner';
 import { IconFilter } from '@/components/icons';
@@ -71,8 +72,15 @@ export function ColumnFilter({ colId, label, status, scope, onAction, chipBlocke
 // Traces'in hunisi). ColumnFilter'ın tetik + popover + başlık/Temizle kabuğu,
 // gövdesiz: /traces gövdeleri yukarıda, /problems exception listesi kendi
 // süzgeç modelinin gövdelerini (servis seçici / arama / durum) bu kabuğa
-// verir. DOM ve sınıflar (tcf-*) v0.10.1511 ile aynı — etkin işaret
-// (`is-active`), Esc katmanı, başlığa tık sızdırmama dahil.
+// verir. Etkin işaret (`is-active`), Esc katmanı, başlığa tık sızdırmama.
+//
+// Traces shadcn S5 (onaylı mockup §2) — yüzey dondurulmuş ui/Popover'dan
+// coremetry/overlay Popover'a (Radix; köşe --radius, gölge --shadow-pop,
+// kenar --border); tetik shadcn Button + coremetry Tooltip (tek tip fokus
+// halkası). Sınıf adları (tcf-btn / tcf-panel / tcf-head) aynı. İçerik body
+// portalında ama React olayları yine ağaçta kabarır: panel tıkı başlığa
+// (sıralama) sızmasın diye stopPropagation yerinde. Gövde yalnız açıkken
+// çağrılır — açılmadan fetch yok sözü buradan.
 export function ColumnFilterShell({ label, active, summary, onClear, children }: {
   label: string;
   active: boolean;
@@ -82,40 +90,40 @@ export function ColumnFilterShell({ label, active, summary, onClear, children }:
 }) {
   const tr = useT();
   const [open, setOpen] = useState(false);
-  const btnRef = useRef<HTMLButtonElement>(null);
   const close = () => setOpen(false);
-  const tip = active
-    ? `${tr('traces.colFilter.filtered')}: ${summary}`
-    : `${tr('traces.colFilter.filterBy')} ${label}`;
+  const name = `${tr('traces.colFilter.filterBy')} ${label}`;
+  const tip = active ? `${tr('traces.colFilter.filtered')}: ${summary}` : name;
   return (
-    <>
-      <IconButton ref={btnRef} size="xs" variant="bare"
-        className={active ? 'tcf-btn is-active' : 'tcf-btn'}
-        aria-label={`${tr('traces.colFilter.filterBy')} ${label}`}
-        aria-haspopup="dialog" aria-expanded={open}
-        tooltip={tip}
-        icon={<IconFilter size={11} strokeWidth={active ? 2.4 : 1.7} />}
-        onClick={e => { e.stopPropagation(); setOpen(o => !o); }}
-        onKeyDown={e => { if (e.key !== 'Escape') e.stopPropagation(); }} />
-      <Popover anchorRef={btnRef} open={open} onClose={close} kind="dialog"
-        ariaLabel={`${tr('traces.colFilter.filterBy')} ${label}`} width={300}
-        placement={{ align: 'start' }}>
-        {/* The popover renders inside the <th>: clicks would sort, Shift+←/→
-            would resize (headKeyDown). Esc must still reach the layer. */}
+    <Popover open={open} onOpenChange={setOpen}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <PopoverTrigger asChild>
+            <ShadcnButton variant="ghost" size="icon-xs" data-tcf-btn=""
+              className={active ? 'tcf-btn is-active' : 'tcf-btn'}
+              aria-label={name}
+              onClick={e => e.stopPropagation()}
+              onKeyDown={e => { if (e.key !== 'Escape') e.stopPropagation(); }}>
+              <IconFilter size={11} strokeWidth={active ? 2.4 : 1.7} />
+            </ShadcnButton>
+          </PopoverTrigger>
+        </TooltipTrigger>
+        <TooltipContent>{tip}</TooltipContent>
+      </Tooltip>
+      <PopoverContent align="start" collisionPadding={8} data-tcf-pop="" aria-label={name} role="dialog">
         <div className="tcf-panel" onClick={e => e.stopPropagation()}
           onKeyDown={e => { if (e.key !== 'Escape') e.stopPropagation(); }}>
           <div className="tcf-head">
             <span className="tcf-title mono" title={label}>{label}</span>
             {active && (
-              <Button variant="ghost" size="xs" onClick={() => { onClear(); close(); }}>
+              <ShadcnButton variant="ghost" size="xs" onClick={() => { onClear(); close(); }}>
                 {tr('traces.colFilter.clear')}
-              </Button>
+              </ShadcnButton>
             )}
           </div>
           {open && children(close)}
         </div>
-      </Popover>
-    </>
+      </PopoverContent>
+    </Popover>
   );
 }
 

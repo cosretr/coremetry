@@ -11,6 +11,8 @@
 //     clear actions (the page applies them with applyColFilter).
 // Pattern: createRoot + act (the repo does not use @testing-library), fake timers.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+// Traces shadcn S5 — kabuk artık Radix Popover (Popper ResizeObserver ister); ortak jsdom polyfill'i.
+import '@/test/radixJsdom';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';

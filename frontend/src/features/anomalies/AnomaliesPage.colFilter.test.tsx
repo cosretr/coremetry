@@ -129,7 +129,7 @@ describe('Exceptions başlık hunisi (v0.10.2025)', () => {
   it('State hunisi tab yazar → istek state=acknowledged', async () => {
     const el = await render();
     await act(async () => { funnel(thOf(el, 'State')!).click(); });
-    const radio = [...document.querySelectorAll('.ui-popover label')].find(l => l.textContent?.includes('Acknowledged'))!
+    const radio = [...document.querySelectorAll('[data-tcf-pop] label')].find(l => l.textContent?.includes('Acknowledged'))!
       .querySelector('input') as HTMLInputElement;
     await act(async () => { radio.click(); });
     await settle();
@@ -142,7 +142,7 @@ describe('Exceptions başlık hunisi (v0.10.2025)', () => {
     await act(async () => { funnel(thOf(el, 'Service')!).click(); });
     await settle();
     expect(m.svcQueries.length).toBeGreaterThan(0);
-    const radio = [...document.querySelectorAll('.ui-popover label')].find(l => l.textContent === 'payments')!
+    const radio = [...document.querySelectorAll('[data-tcf-pop] label')].find(l => l.textContent === 'payments')!
       .querySelector('input') as HTMLInputElement;
     await act(async () => { radio.click(); });
     await settle();

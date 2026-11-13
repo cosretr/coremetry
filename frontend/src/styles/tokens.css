@@ -198,6 +198,21 @@
   [data-row-kiosk][data-slot="button"] { position: absolute; }
 }
 
+/* Traces shadcn S5 (onaylı mockup §2) — kolon süzgeci (ColumnFilterShell;
+   /traces + /problems Exceptions). Tetik shadcn Button ama boyu eski
+   ib-xs'in 20 px'i: başlık etiketine kalan alan ve kolon genişliği aynı.
+   Yüzey shadcn PopoverContent; genişlik 300 px ve iç boşluk eski panelin
+   (--sp-4 / --sp-5), katman --z-popover, gölge --shadow-pop (mockup).
+   Öznitelik seçici: eski sınıf adı burada çakışma kapısına takılır. */
+@layer utilities {
+  [data-tcf-btn][data-slot="button"] { width: 20px; height: 20px; font-size: 11px; }
+  [data-tcf-pop][data-slot="popover-content"] {
+    width: 300px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); overflow: auto;
+    padding: var(--sp-4) var(--sp-5); z-index: var(--z-popover); box-shadow: var(--shadow-pop);
+    font-size: var(--fs-sm); font-weight: 400; text-align: left; white-space: normal;
+  }
+}
+
 /* v0.10.1781 (operatör) — CoSRE başlığındaki "🕘 Geçmiş" / "Temizle" (shadcn
    Button, ghost) tarayıcının VARSAYILAN düğme kabuğuyla çiziliyordu: gri
    bevel, UA gölgesi, sistem yazı tipi. Neden: preflight yok (index.css) ve

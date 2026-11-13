@@ -106,7 +106,7 @@ const CEILINGS: Record<string, number> = {
   Menu: 13, // Faz 2 dilim 1 R15 (Argo CD): 14 → 13
   StatTile: 13,
   SafeHref: 12,
-  Popover: 9, // v0.10.1854 (Logs süzgeç satırı): 10 → 9; Faz 2 dilim 1 R15 (Argo CD): 11 → 10
+  Popover: 8, // Traces shadcn S5 (ColumnFilterShell → coremetry Popover): 9 → 8; v0.10.1854 (Logs süzgeç satırı): 10 → 9; Faz 2 dilim 1 R15 (Argo CD): 11 → 10
   SearchField: 10, // Faz 2 dilim 1 R12 (AI SRE + Knowledge): 11 → 10
   PanelTitle: 10,
   PriorityBadge: 8,

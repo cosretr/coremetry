@@ -6368,6 +6368,8 @@ a.cell-link--block { display: block; overflow: hidden; text-overflow: ellipsis; 
 .tcf-btn { flex: none; color: var(--text3); opacity: .55; }
 th:hover .tcf-btn, .tcf-btn:focus-visible, .tcf-btn[aria-expanded="true"] { opacity: 1; }
 .tcf-btn.is-active { color: var(--accent2); opacity: 1; }
+/* Traces shadcn S5 — tetik artık shadcn Button: eski ib-xs'in isabet alanı (--hit-min) aynen. */
+.tcf-btn[data-tcf-btn]::after { content: ''; position: absolute; inset: calc((100% - var(--hit-min)) / 2); }
 .tcf-panel { display: flex; flex-direction: column; gap: var(--sp-3); }
 .tcf-head { display: flex; align-items: center; gap: var(--sp-3); }
 .tcf-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text2); font-size: var(--fs-xs); }
