@@ -20,7 +20,6 @@ OracleLogsResponse, CopilotScopeNames, CosreRouteRED,
   SparklineBucket, OperationSummary,
   SystemStatus,
   Monitor, MonitorResult, MonitorRow,
-  Incident,
   StatusPageConfig, StatusComponent, StatusSubscriber,
   RetentionSpec,
   AISettings, AISettingsInput, AIModelProfileInput, AIProfilesPayload, AIProfileTestResult, AISurfaceMap,
@@ -2915,10 +2914,6 @@ export const api = {
   statusPageListSubscribers: () => get<StatusSubscriber[] | null>(`/api/status-page/subscribers`),
   statusPageDeleteSubscriber: (email: string) =>
     request<void>(`/api/status-page/subscribers?email=${encodeURIComponent(email)}`, { method: 'DELETE' }),
-
-  // v0.10.1826 Incidents emekli; arşiv sayfası silindi. Yalnız Inbox toplu ack kalır.
-  ackIncident:      (id: string) =>
-    request<Incident>(`/api/incidents/${id}/ack`, { method: 'POST' }),
 
   // Synthetic monitoring
   listMonitors:    ()              => get<MonitorRow[] | null>(`/api/monitors`),

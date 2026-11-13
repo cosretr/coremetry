@@ -5,8 +5,9 @@ package chstore
 //
 // Öncesi: eşleme yalnız Inbox'ın incidentToInbox'ında yaşıyordu; Incidents
 // listesi ve Incident detayı yalnız şiddet pili çiziyordu, P rozeti yoktu —
-// v0.10.364 dersi: "kural görünür değilse yoktur". Şimdi üç yüzey aynı saf
-// işlevi okur; gerekçe cümlesi her satırla gider (CLAUDE.md triage).
+// v0.10.364 dersi: "kural görünür değilse yoktur". Liste + detay
+// yüzeyleri Incidents emekliliğiyle silindi; okuyan yalnız Inbox
+// (incidentToInbox).
 //
 // Kural: ilan edilen şiddet → critical P1, warning P2, info P3. İnsan
 // kararıdır (eşikten yeniden türetilmez). Acknowledged incident ÜZERİNDE
@@ -29,14 +30,4 @@ func IncidentPriority(inc Incident) (prio, reason string) {
 		}
 	}
 	return prio, reason
-}
-
-// EnrichIncidentsWithPriority — okuma-anı zenginleştirme (liste + detay,
-// EnrichIncidentsWithRootCause ile aynı desen): Priority/PriorityReason
-// alanları DB'de yok, yalnız JSON'da.
-func EnrichIncidentsWithPriority(rows []Incident) []Incident {
-	for i := range rows {
-		rows[i].Priority, rows[i].PriorityReason = IncidentPriority(rows[i])
-	}
-	return rows
 }

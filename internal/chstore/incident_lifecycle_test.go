@@ -48,7 +48,6 @@ func TestIncidentLifecycleReachable(t *testing.T) {
 		want int
 	}{
 		{"incident.go", "s.AppendIncidentLifecycle(ctx, inc,", 0},    // otomatik açılış + şiddet yükselişi: Incidents ölü kod dilimi 1'de silindi
-		{"../api/api_incidents.go", "AppendIncidentLifecycle(", 2},   // manuel açılış + manuel çözüm
 		{"../evaluator/evaluator.go", "AppendIncidentLifecycle(", 1}, // otomatik kademeli çözüm
 		{"../../main.go", "SetIncidentLifecycleHook(notifier.IncidentLifecycle)", 1},
 	}
@@ -62,7 +61,7 @@ func TestIncidentLifecycleReachable(t *testing.T) {
 		}
 	}
 	// created/resolved olayı ham AppendIncidentEvent ile yazan kalmadı.
-	for _, path := range []string{"incident.go", "../api/api_incidents.go", "../evaluator/evaluator.go"} {
+	for _, path := range []string{"incident.go", "../evaluator/evaluator.go"} {
 		src, _ := os.ReadFile(path)
 		s := string(src)
 		for _, kind := range []string{`Kind: "created"`, `Kind:       "resolved"`, `Kind: "resolved"`, `Kind: "severity_raised"`} {

@@ -53,7 +53,6 @@ func TestIncidentWritersGoThroughDoors(t *testing.T) {
 	srcs := goSourcesOutsideChstore(t)
 	upsertAllowed := map[string]bool{
 		"../evaluator/evaluator.go": true, // kademeli kapanış (E4, sessiz)
-		"../api/api_incidents.go":   true, // elle güncelle / ack / çözüm (+ 410'lu ilan)
 		"../api/notify_actions.go":  true, // bildirim bağlantısından ack
 	}
 	for path, s := range srcs {

@@ -46,6 +46,11 @@ describe('kablolama', () => {
     expect(read('../pages/settings/AnomalyTab.tsx')).not.toContain('IncidentsLegacySection');
     expect(read('./api.ts')).not.toMatch(/putIncidentsSettings|getIncidentsSettings/);
   });
+  // Incidents ölü kod 5: /api/incidents* her metotta 410; istemci çağırmaz.
+  it('istemci /api/incidents çağırmaz', () => {
+    expect(read('./api.ts')).not.toContain('/api/incidents');
+    expect(read('../pages/Inbox.tsx')).not.toContain('ackIncident');
+  });
   it('"g i" kısayolu anahtara bağlı', () => {
     const src = read('../components/GlobalShortcuts.tsx');
     expect(src).toContain('PAGES.filter(p => incidentsNavVisible(p.to, incidentsOn))');

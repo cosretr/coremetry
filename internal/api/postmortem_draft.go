@@ -8,7 +8,8 @@ package api
 // hipotezleri, AI özetleri) tek kanıt paketine iner, model blameless
 // bir markdown taslak üretir ve taslak MEVCUT postmortem editörüne
 // (textarea) düşer. Model hiçbir şey KAYDETMEZ — operatör düzenler,
-// kaydeden yine v0.9.206'nın PUT /api/incidents/{id} yolu.
+// kaydeden v0.9.206'nın PUT /api/incidents/{id} yoluydu (v0.10.2075'ten
+// beri 410 — Incidents emekli; uç yalnız eski kayıtlar için taslak üretir).
 //
 // Kanıt toplarken yalnız incident zaten sahip olduğu okumalar
 // kullanılır (GetIncident + IncidentTimeline + IncidentProblems +

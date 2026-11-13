@@ -12,18 +12,14 @@ package chstore
 //     dilimi 1'de silindi) — Problem'ler aynen açılır ve bildirilir;
 //   - yaşam döngüsü kancası (incidentLifecycleNotifies) susar; açık eski
 //     incident'ların otomatik kademeli kapanışı sessizce sürer;
-//   - elle ilan (POST /api/incidents) 410. Veri silinmez.
+//   - /api/incidents* ve /api/settings/incidents her metotta 410
+//     (v0.10.2075, api/incidents_gone.go). Veri silinmez.
 //
 // Süreç-içi atomic yalnız testlerin eski akış dallarını sınaması için
 // kalır: üretim kodu SetIncidentsEnabled çağırmaz
 // (incidents_retire_test.go TestIncidentsSwitchNoProductionWriter).
 
 import "sync/atomic"
-
-// IncidentsSettings — GET /api/settings/incidents gövdesi; hep kapalı.
-type IncidentsSettings struct {
-	Enabled bool `json:"enabled"`
-}
 
 // incidentsEnabled — sıfır değeri false = emekli.
 var incidentsEnabled atomic.Bool

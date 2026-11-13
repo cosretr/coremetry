@@ -13618,3 +13618,20 @@ eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
   ana anahtar ve diğer alanlar bayt düzeyinde korunur; blob yoksa yazım yok. Değişince system audit
   `settings.ml.migrate` (eski/yeni). ML kaydedicisinin lideri tik öncesi koşturur; hata = işaret yok, sonraki tur.
 - İşaret yazıldıktan sonra operatörün kapattığı dedektör kapalı kalır (yeniden açılmaz).
+
+## 2026-11-13 — v0.10.2075 — Incidents ölü kod dilimi 5: /api/incidents* tek 410 işleyicisi
+
+- Operatör onayı 2026-11-13. Dokuz `/api/incidents*` rotası (yalnız POST 410'du; GET/PUT/ack/resolve/note
+  açıktı) ve `/api/settings/incidents` saplaması silindi; yerine `internal/api/incidents_gone.go`:
+  metotsuz `/api/incidents`, `/api/incidents/` ve `/api/settings/incidents` her metotta 410 +
+  `{"error": "Incidents emekli; Anomalies ve Problems sayfalarını kullanın"}`.
+- Neden tamamen silinmedi: kayıtsız `/api/*` yolu SPA catch-all'ına düşer, 200 + index.html döner.
+- Rol sınıfı korunur: okuma (GET/HEAD) oturumlu herkes, diğer metotlar editor+, ayar yolu admin;
+  kimliksiz istek önceki gibi 401. Hiçbir şey yazılmaz → audit yok.
+- Ölü çağıranlar: FE `api.ackIncident` + Inbox toplu onaydaki incident dalı (eski incident satırı artık
+  "atlanacak" sayılır). Ölü chstore okuyucuları: `CountIncidentsByStatus`, `EnrichIncidentsWithClusters`,
+  `EnrichIncidentsWithRootCause` (+ `pickIncidentRootCause`), `EnrichIncidentsWithPriority`,
+  `EnrichIncidentsWithProblemCounts` (+ `IncidentProblemCounts`), `IncidentsSettings` tipi.
+- DOKUNULMADI: bildirim "Sustur" incident ack'i `/api/public/notify/ignore/{token}` üzerinden gider
+  (bu rotalardan değil) ve çalışır; `cascadeResolveIncidents`, explain-incident / draft-postmortem,
+  inbox katlama, `features.incidents`, `Incident` tipindeki JSON alanları; CH nesneleri ve veri.

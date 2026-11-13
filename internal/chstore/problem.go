@@ -685,25 +685,6 @@ func (s *Store) EnrichProblemsWithClusters(ctx context.Context, problems []Probl
 	return problems
 }
 
-// EnrichIncidentsWithClusters mirrors EnrichProblemsWithClusters
-// for the Incidents list. Same single-batch lookup, same soft-
-// fail behaviour.
-func (s *Store) EnrichIncidentsWithClusters(ctx context.Context, incidents []Incident, since time.Duration) []Incident {
-	if len(incidents) == 0 {
-		return incidents
-	}
-	m, err := s.GetServiceClusterMap(ctx, since)
-	if err != nil {
-		return incidents
-	}
-	for i := range incidents {
-		if cs, ok := m[incidents[i].Service]; ok && len(cs) > 0 {
-			incidents[i].Clusters = cs
-		}
-	}
-	return incidents
-}
-
 // EnrichAnomaliesWithClusters mirrors the pair above for
 // AnomalyEvent. Same one-shot map lookup keyed by service.
 func (s *Store) EnrichAnomaliesWithClusters(ctx context.Context, events []AnomalyEvent, since time.Duration) []AnomalyEvent {
