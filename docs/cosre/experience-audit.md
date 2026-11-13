@@ -21,7 +21,7 @@ pinli; her yeni kademe bu testi günceller.
 | Niyet, deterministik | Regex/jeton yönlendirici `routeGuidedIntentExt`; sabitler `guidedIntent*` | `api/copilot_guided.go:1223`, `:61-192` |
 | Niyet, LLM | Tek katı-JSON çağrı; beyaz liste 26 niyet + `none`; güven eşiği YOK (sunucu doğrular); mod `off/on_no_loop/on` | `api/copilot_intent.go:46-82`, `:91`, `:381-382`, `:456-500` |
 | `anchored_ask` / `product_ask` | Kodda YOK (`internal/` grep boş); bellek notuyla uyumlu | — |
-| `off_topic` | LLM'siz sınır + `offTopicVeto` (servis/takım/telemetri sözcüğü varsa iptal) | `copilot_intent.go:433`, `chat_offtopic_general.go` |
+| `off_topic` | v0.10.1458'den beri modele gider (araçsız tek çağrı, v1+v2 ortak; anahtar `ai.generalQuestions.allow`, varsayılan açık). Sınır metni yalnız: zararlı liste (`offTopicIsHarmful`), anahtar kapalı, model hata/boş. `offTopicVeto` servis/takım/telemetri sözcüğü varsa off_topic'i iptal eder. Düzeltme 2026-11-13: önceki "LLM'siz sınır" ifadesi yanlıştı | `chat_offtopic_general.go:91`, `copilot_offtopic.go:53`, `copilot_intent.go:433` |
 | Guided cevap şekli | `delta` markdown + `emit("answer",{text,suggestions,links,followups})`; sonuna `"\n\nKaynak: "` eki | `copilot_guided.go:2442`, `:2468-2472` |
 | Servis/takım belirsizliği | `guidedAskService` + `ServiceOptions` / `teamAskOptions` (≤8) → yalnız `suggestions` METİN çipi | `copilot_guided.go:186`, `:263`, `:2568`, `:3320`, `:3338` |
 | Netleştirme | DÜZ METİN soru; durum Redis `ChatContext.Pending`, TTL 10 dk, `takePending` okur-siler; türler `source`, `trace_synth`, `doc_or_entity`; cevap `clarifyReplyClass`, tanınmazsa `dropped` | `api/chat_clarify.go:3-12`, `:37-40`, `:101`, `:228`, `:248`, `:301`; `chat_clarify_entity.go:56` |
