@@ -69,6 +69,10 @@ func (t *Translator) Translate(kind string, payload any) []Part {
 		// v0.10.1737 — seçici kart (api chat_endpoint_pick.go): {kind:"endpoint",
 		// service, env?, rangeS, total, capped?, items[]}; tek parça.
 		out = append(out, Part{"type": "data-pick", "id": "pick", "data": m})
+	case "question":
+		// v0.10.2100 (experience-audit D1) — kapalı netleştirme sorusu (api
+		// chat_question.go): {kind, text, options[{id,label}] ≤3, allowFree}; tek parça.
+		out = append(out, Part{"type": "data-question", "id": "question", "data": m})
 	case "code-lock":
 		out = append(out, Part{"type": "data-code-lock", "id": "code-lock", "data": m})
 	case "error":

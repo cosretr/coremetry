@@ -50,6 +50,8 @@ export const DATA_PART_NAMES = [
   'scope',
   // v0.10.1737 — v2 seçici kartı (kind=endpoint): "Endpoint seç".
   'pick',
+  // v0.10.2100 (experience-audit D1) — kapalı netleştirme sorusu; ayrıştırıcı + kart D2.
+  'question',
   ...BLOCK_TYPES.map(t => `block-${t}` as const),
 ] as const;
 

@@ -1,0 +1,12 @@
+data: {"messageId":"01M62F9N000000000000000000","type":"start"}
+
+data: {"type":"start-step"}
+
+data: {"data":{"allowFree":true,"kind":"source","options":[{"id":"telemetry","label":"Coremetry verisi"},{"id":"wiki","label":"Kurum wiki'si"}],"text":"Bunu Coremetry verisinden mi, kurum wiki'sinden mi cevaplayayım?"},"id":"question","type":"data-question"}
+
+data: {"type":"finish-step"}
+
+data: {"finishReason":"stop","type":"finish"}
+
+data: [DONE]
+

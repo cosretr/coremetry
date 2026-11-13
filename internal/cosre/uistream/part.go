@@ -16,7 +16,18 @@ var KnownKinds = map[string]bool{
 	"scope": true,
 	// v0.10.1737 — v2 seçici kartı (data-pick; kind=endpoint); v1 yazıcısı düşürür.
 	"pick": true,
+	// v0.10.2100 (experience-audit D1) — kapalı netleştirme sorusu
+	// (data-question); v1 yazıcısı düşürür, v1 bugünkü düz metni alır.
+	"question": true,
 }
+
+// QuestionKinds — data-question `kind` kapalı kümesi (api chat_question.go;
+// chat_clarify Pending türleriyle aynı adlar).
+var QuestionKinds = []string{"source", "doc_or_entity", "trace_synth"}
+
+// QuestionMaxOptions — data-question seçenek tavanı (kapalı küçük soru;
+// katalogdan çok öğeli seçim data-pick'tir).
+const QuestionMaxOptions = 3
 
 // StopReasons — data-stop `reason` kapalı kümesi (api chat_stop_event.go
 // üretir; protocol.ts STOP_REASONS ile eşit, test pinler).

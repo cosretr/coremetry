@@ -116,6 +116,16 @@ func TestTranslateSequences(t *testing.T) {
 				`{"type":"finish-step"}`, `{"finishReason":"stop","type":"finish"}`},
 		},
 		{
+			// v0.10.2100 (experience-audit D1) — kapalı soru kartı tek parça, id sabit.
+			name: "question → data-question",
+			evs: []ev{{"question", map[string]any{"kind": "source", "text": "Hangisi?", "allowFree": true,
+				"options": []map[string]string{{"id": "telemetry", "label": "Coremetry verisi"}}}},
+				{"done", map[string]bool{"ok": true}}},
+			want: []string{pStart, pStartStep,
+				`{"data":{"allowFree":true,"kind":"source","options":[{"id":"telemetry","label":"Coremetry verisi"}],"text":"Hangisi?"},"id":"question","type":"data-question"}`,
+				`{"type":"finish-step"}`, `{"finishReason":"stop","type":"finish"}`},
+		},
+		{
 			name: "deltas share one segment; reset retracts it; next delta opens a fresh one",
 			evs: []ev{
 				{"delta", map[string]string{"text": "ab"}},
@@ -338,7 +348,7 @@ func TestTranslateTypedPayload(t *testing.T) {
 // araç seti dilim 1 — bilinen her tür kendi parçasına çevrilir; yeni iki
 // parça (data-tool-result, data-stop) beklenen türden üretilir.
 func TestKnownKindsAreTranslatedNotWrapped(t *testing.T) {
-	want := map[string]string{"step-result": "data-tool-result", "stop": "data-stop", "scope": "data-scope"}
+	want := map[string]string{"step-result": "data-tool-result", "stop": "data-stop", "scope": "data-scope", "question": "data-question"}
 	for kind := range KnownKinds {
 		tr := NewTranslator()
 		parts := tr.Translate(kind, map[string]any{"i": 1, "reason": "stop"})
