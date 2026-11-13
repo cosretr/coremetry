@@ -23,6 +23,8 @@ export function DataTable<T>(props: DataTableProps<T>) {
     initialSort: sort?.initial,
     sortIds: sort?.ids,
     sortUrlKey: sort?.urlKey,
+    persistSort: !sort?.urlOnly,
+    sortUrlOmitInitial: !!sort?.urlOnly,
     serverSort: !!sort?.server,
     server: sort?.server,
     onSortChange: sort?.onChange,

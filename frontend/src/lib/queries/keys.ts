@@ -121,8 +121,8 @@ export const keys = {
     events:      ['anomalies', 'events'] as const,
     // v0.10.2051 — birleşik liste (bölüm × süzgeç × sayfa) ve olayın birleşik satırı.
     unifiedAll:  ['anomalies', 'unified'] as const,
-    unified:     (p: { section: string; signal: string; offset: number; limit: number }) =>
-      ['anomalies', 'unified', p.section, p.signal, p.offset, p.limit] as const,
+    unified:     (p: { section: string; signal: string; offset: number; limit: number; sort?: string; dir?: string }) =>
+      ['anomalies', 'unified', p.section, p.signal, p.offset, p.limit, p.sort ?? '', p.dir ?? ''] as const,
     unifiedRow:  (eventId: string) => ['anomalies', 'unified-row', eventId] as const,
     silences:    ['anomalies', 'silences'] as const,
     // v0.10.1032 — tekil olay (Problems kuyruğundaki tam sayfa anomali

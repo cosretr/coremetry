@@ -1688,9 +1688,11 @@ export const api = {
     get<{ items: import('./types').MLEvent[]; truncated: boolean }>(
       `/api/ml/events?since=${p.since ?? '24h'}&signal=${encodeURIComponent(p.signal ?? '')}&detector=${encodeURIComponent(p.detector ?? '')}&service=${encodeURIComponent(p.service ?? '')}&stage=${encodeURIComponent(p.stage ?? '')}`),
   // v0.10.2051 — /anomalies birleşik listesi (sunucuda birleşir + sayfalanır).
-  anomaliesUnified: (p: { section: 'open' | 'done'; signal?: string; offset: number; limit: number }, signal?: AbortSignal) =>
+  // v0.10.2083 — sort/dir: sunucu sırası (kolon kimliği; boş = bölüm varsayılanı).
+  anomaliesUnified: (p: { section: 'open' | 'done'; signal?: string; offset: number; limit: number; sort?: string; dir?: 'asc' | 'desc' }, signal?: AbortSignal) =>
     get<import('./types').UnifiedAnomaliesPage>(
-      `/api/anomalies/unified?section=${p.section}&signal=${encodeURIComponent(p.signal ?? '')}&offset=${p.offset}&limit=${p.limit}`, signal),
+      `/api/anomalies/unified?section=${p.section}&signal=${encodeURIComponent(p.signal ?? '')}&offset=${p.offset}&limit=${p.limit}`
+      + (p.sort ? `&sort=${encodeURIComponent(p.sort)}&dir=${p.dir ?? 'desc'}` : ''), signal),
   anomalyUnifiedRow: (eventId: string, signal?: AbortSignal) =>
     get<import('./types').UnifiedAnomaliesPage>(`/api/anomalies/unified?event=${encodeURIComponent(eventId)}`, signal),
   mlScorecard: () => get<import('./types').MLScorecard>(`/api/ml/scorecard`),

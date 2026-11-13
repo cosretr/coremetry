@@ -37,6 +37,11 @@ export interface DataTableSortOptions {
   /** Verilince sıralama sunucuda; satırlar olduğu gibi çizilir. */
   server?: ServerBinding;
   onChange?(s: SortState): void;
+  /** v0.10.2083 (ADDITIVE): sıranın TEK kaynağı URL — localStorage'a yazılmaz /
+   *  okunmaz, `initial`e eşit sıra URL'ye yazılmaz (parametresiz = initial,
+   *  geri/ileri dahil). Sayfa sunucu sorgusunu doğrudan URL'den türetir
+   *  (Rollouts deseni). Verilmezse bugünkü davranış birebir. */
+  urlOnly?: boolean;
 }
 
 export interface DataTableProps<T> {

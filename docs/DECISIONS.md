@@ -745,6 +745,14 @@ SLO kırpma, v0.10.931 çizilmeyen hata rengi).
 **Göç:** dilim 0 kapılar + hatalar, dilim 1 tek CSS sürümü, dilim 2 primitif, dilim 3 sayfa
 süpürmeleri, dilim 4 durumlar. `tableUnityRatchet` tabanları yalnız azalır.
 
+**Ek (2026-11-13, v0.10.2083 — /anomalies):** sunucu sayfalı tablo "yalnız boyutlanır"
+DEĞİL, "istemcide sıralanmaz" demektir. Sunucu sırayı tüm küme üzerinde sayfadan önce
+uygulayabiliyorsa başlık tıklaması kalır: `coremetry/DataTable` `sort={{ server, ids,
+urlKey, initial, urlOnly: true }}`. `urlOnly` (ADDITIVE) = `persistSort:false` +
+`sortUrlOmitInitial`: sıranın tek kaynağı URL, varsayılan yazılmaz, sayfa sorguyu URL'den
+türetir (Rollouts deseni); `server.onSort` o tablonun sayfasını başa alır. Sunucuda değeri
+olmayan (tarayıcıda kurulan metin) kolonda `sortValue` yok → başlık düz.
+
 
 ## 2026-09-26 — CoSRE değerlendirme paneli: donmuş vakalar Ayarlar'daki modelle sunucuda koşar (v0.10.940)
 

@@ -3,7 +3,7 @@ package api
 // anomalies_unified.go — v0.10.2051: /anomalies TEK listesi sunucuda
 // birleşir, sıralanır ve sayfalanır.
 //
-//   GET /api/anomalies/unified?section=open|done&signal=&offset=&limit=
+//   GET /api/anomalies/unified?section=open|done&signal=&offset=&limit=&sort=&dir=
 //   GET /api/anomalies/unified?event=<eski olay id>   — olayın birleşik satırı (üyeleriyle)
 //
 // Neden: v0.10.2027 birleştirmeyi tarayıcıda yapıyordu (unifiedRows.ts).
@@ -19,6 +19,11 @@ package api
 // söyler. Elasticsearch çağrısı YOK (yalnız CH: ml_events FINAL,
 // anomaly_events FINAL, kararlar). Rol kapısı yok (salt okuma; ML ucu gibi
 // her rol görür). serveCached 30 sn; anahtar tüm girdileri taşır.
+//
+// v0.10.2083 — sort/dir (operatör 2026-11-13: başlık sıralaması geri): beyaz
+// liste ml.UnifiedSortCols (started|service|signals|status), tanınmayan →
+// bölüm varsayılanı. Sıra birleşik satırların TAMAMINDA, sayfadan önce
+// (ml.SortUnified) — 2. sayfa aynı sıranın devamı, grup bölünmez.
 
 import (
 	"context"
@@ -57,6 +62,8 @@ type unifiedParams struct {
 	Offset  int
 	Limit   int
 	Event   string // eski olay kimliği; doluysa diğerleri varsayılana iner
+	Sort    string // ml.UnifiedSortCols üyesi; "" = bölüm varsayılanı
+	Dir     string // asc | desc; Sort boşken ""
 }
 
 // parseUnifiedParams — SAF: sınırlama anahtardan ÖNCE (crafted değer ayrı
@@ -80,6 +87,7 @@ func parseUnifiedParams(get func(string) string) unifiedParams {
 	if n := parseInt(get("offset"), 0); n > 0 {
 		p.Offset = min(n, unifiedOffsetMax)
 	}
+	p.Sort, p.Dir = ml.NormalizeUnifiedSort(p.Section, get("sort"), get("dir"))
 	return p
 }
 
@@ -93,8 +101,8 @@ const unifiedCachePrefix = "anomaly:unified:"
 func unifiedKey(p unifiedParams, tz string) string {
 	h := fnv.New64a()
 	_, _ = h.Write([]byte(p.Event))
-	return fmt.Sprintf(unifiedCachePrefix+"v1:sec=%s:sig=%s:off=%d:lim=%d:ev=%x:tz=%s",
-		p.Section, p.Signal, p.Offset, p.Limit, h.Sum64(), tz)
+	return fmt.Sprintf(unifiedCachePrefix+"v2:sec=%s:sig=%s:off=%d:lim=%d:sort=%s:dir=%s:ev=%x:tz=%s",
+		p.Section, p.Signal, p.Offset, p.Limit, p.Sort, p.Dir, h.Sum64(), tz)
 }
 
 // unifiedAnomalyRow — birleşik satır. Liste kipinde yalnız lider (mlLead YA
@@ -126,7 +134,8 @@ type unifiedAnomaliesResponse struct {
 	Row       *unifiedAnomalyRow  `json:"row,omitempty"`     // olay kipi
 }
 
-// pageUnified — SAF: süzgeç → bölüm → sıra → sayfa. Grup = satır, bölünmez.
+// pageUnified — SAF: süzgeç → bölüm → sıra (tüm bölüm, sayfadan ÖNCE) → sayfa.
+// Grup = satır, bölünmez.
 func pageUnified(rows []ml.UnifiedRow, p unifiedParams) (page []ml.UnifiedRow, total, openN, doneN int) {
 	var open, done []ml.UnifiedRow
 	for _, r := range rows {
@@ -141,11 +150,9 @@ func pageUnified(rows []ml.UnifiedRow, p unifiedParams) (page []ml.UnifiedRow, t
 	}
 	sel := open
 	if p.Section == "done" {
-		ml.SortUnifiedDone(done)
 		sel = done
-	} else {
-		ml.SortUnifiedOpen(open)
 	}
+	ml.SortUnified(sel, p.Section, p.Sort, p.Dir)
 	total = len(sel)
 	from := min(p.Offset, total)
 	to := min(from+p.Limit, total)
