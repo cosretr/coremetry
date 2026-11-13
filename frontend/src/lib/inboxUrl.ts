@@ -65,3 +65,36 @@ export const INBOX_CAT_ALL = ['AVAILABILITY', 'ERROR', 'SLOWDOWN', 'RESOURCE', '
 export const INBOX_CAT_LABEL: Record<(typeof INBOX_CAT_ALL)[number], string> = {
   AVAILABILITY: 'Availability', ERROR: 'Error', SLOWDOWN: 'Slowdown', RESOURCE: 'Resource', CUSTOM: 'Custom',
 };
+
+// v0.10.2124 (Problems sadeleştirme S4) — "Diğer süzgeçler" bölümündeki
+// süzgeçlerden VARSAYILAN-DIŞI olanlar. Bölüm kapalı gelir; bu liste boş
+// değilse açık gelir ve düğme sayıyı söyler (gizli süzgeç sessiz kalmaz).
+// Semantik sayfanın okuyucularıyla birebir: status (open varsayılan),
+// verdict (parseVerdictView: yalnız 'noise'), subject (parseSubjectLane:
+// db/external), cat (decodeCsvSet; tümü = varsayılan), since (sabit
+// basamaklar), owner/sre (boş = hepsi), minOcc (param VARSA varsayılan-dışı:
+// setMinOcc varsayılanda paramı siler).
+export const INBOX_SINCE_STEPS = ['30m', '1h', '2h', '24h', '7d'] as const;
+export function inboxMoreFiltersActive(sp: URLSearchParams): string[] {
+  const out: string[] = [];
+  const st = sp.get('status');
+  if (st === 'all' || st === 'ignored') out.push('status');
+  if (sp.get('verdict') === 'noise') out.push('verdict');
+  const subj = sp.get('subject');
+  if (subj === 'db' || subj === 'external') out.push('subject');
+  if (decodeCsvSet(sp.get(INBOX_CAT_PARAM), INBOX_CAT_ALL, INBOX_CAT_ALL).length < INBOX_CAT_ALL.length) out.push(INBOX_CAT_PARAM);
+  if ((INBOX_SINCE_STEPS as readonly string[]).includes(sp.get('since') ?? '')) out.push('since');
+  if (sp.get('owner')) out.push('owner');
+  if (sp.get('sre')) out.push('sre');
+  if (sp.get('minOcc') !== null) out.push('minOcc');
+  return out;
+}
+
+// v0.10.2124 (S4) — sayfa altı bağlantıları: mevcut görünümü (süzgeçler)
+// korur, yalnız `status`u yazar; açık detay paramlarını düşürür.
+export function inboxStatusHref(sp: URLSearchParams, status: 'all' | 'ignored'): string {
+  const p = new URLSearchParams(sp);
+  p.delete('problem'); p.delete('anomaly'); p.delete('item');
+  p.set('status', status);
+  return `/inbox?${p.toString()}`;
+}

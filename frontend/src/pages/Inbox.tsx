@@ -17,7 +17,9 @@ import { TriageTitleCell } from '@/features/anomalies/TriageTitleCell';
 import { inboxRowHeadline, inboxRowLabel, inboxOccurrencesLabel, inboxKindLabel, inboxCountSentence } from '@/lib/inboxRowText';
 import { teamOptionsCI } from '@/lib/teamOptions';
 import { derivedTeamTitle, parseSubjectLane } from '@/lib/problemSubject';
-import { decodeCsvSet, encodeCsvSet, readInboxTeam, INBOX_TEAM_PARAM, INBOX_CAT_PARAM, INBOX_CAT_ALL, INBOX_CAT_LABEL } from '@/lib/inboxUrl';
+import { decodeCsvSet, encodeCsvSet, readInboxTeam, INBOX_TEAM_PARAM, INBOX_CAT_PARAM, INBOX_CAT_ALL, INBOX_CAT_LABEL, inboxMoreFiltersActive, inboxStatusHref } from '@/lib/inboxUrl';
+import { MoreFilters } from '@/components/coremetry/MoreFilters';
+import { NativeSelect, NativeSelectOption } from '@/components/shadcn/native-select';
 import { useUrlEnv } from '@/lib/useUrlEnv';
 import { useDataTable, DataTableHead, DataTableColgroup, DataTableState, resolveInitialSort, type DataTableStateProps } from '@/components/ui/DataTable';
 import { FacetMultiSelect } from '@/components/ui/FacetMultiSelect';
@@ -865,6 +867,13 @@ export default function InboxPage() {
       sreOptions:   teamOptionsCI(mds.map(md => md.sreTeam)),
     };
   }, [catalogQ.data]);
+  // v0.10.2124 (S4) — Ekip seçenekleri: owner ∪ SRE (team paramı ikisini de
+  // eşler); seçili değer katalogda yoksa da listede.
+  const teamOptions = useMemo(() => {
+    const opts = teamOptionsCI([...ownerOptions, ...sreOptions]);
+    return teamFilter && !opts.includes(teamFilter) ? [teamFilter, ...opts] : opts;
+  }, [ownerOptions, sreOptions, teamFilter]);
+  const moreActive = inboxMoreFiltersActive(searchParams);
 
   return (
     <>
@@ -881,12 +890,6 @@ export default function InboxPage() {
           DOM'da iki `#content` bulunurdu (geçersiz HTML + `getElementById`
           gizli olanı döndürür). Stil `#content` ile birebir aynı. */}
       <div className="page-body" style={problemParam || anomalyParam ? { display: 'none' } : undefined}>
-        {/* v0.9.255 — kayıtlı görünümler. Backend `page`'i serbest string alıyor,
-            yani bu tek satır; birleşik triage yüzeyinin /problems'ın yerini
-            tutabilmesi için gereken paritenin en ucuz parçası.
-            #content'in İÇİNDE — Traces/Explore ile aynı yerleşim; dışarıda
-            konteyner padding'i almaz. */}
-        <SavedViewsBar page="inbox" />
         {/* v0.10.1081 — varsayılan metni sabitlerden türer (elle yazılmaz). */}
         <p style={{ color: 'var(--text2)', fontSize: 13, marginBottom: 14 }}>
           Everything needing a human — Problems (alert rules), open Exception
@@ -902,66 +905,18 @@ export default function InboxPage() {
             select via togglePrio/toggleKind. Team selects + service filter
             stay pushed right with margin-left:auto. */}
         <div className="facetbar">
-          {/* Status pivot — single-select. v0.9.356: 'ignored' "All" diye
-              etiketleniyordu (ternary yalnız 'open'ı ayırıyordu), yani
-              çubukta İKİ "All" vardı ve biri susturulmuş exception'ları
-              açıyordu. Operatörün "iki anlamı belirsiz All" gözlemi düpedüz
-              etiket hatasıydı. */}
-          <span className="facet-grp">
-            <span className="gl">Durum</span>
-            {STATUS_PIVOTS.map(s => (
-              <span key={s} onClick={() => setStatusFilter(s)}
-                className={`facet${statusFilter === s ? ' on' : ''}`}>
-                {s === 'open' ? 'Open / Active' : s === 'all' ? 'All' : 'Ignored'}
-              </span>
-            ))}
-          </span>
-
-          {/* v0.10.1015 (operatör: "hangisi gerçek problem hangisi değil zamanla
-              öğretelim") — öğretme görünümü. Tek-seçim, URL'de ?verdict=.
-              "Problem değil" işaretli imzalar varsayılanda gizlenir; sayısı
-              çipte hep görünür ve tek tıkla açılır (gizlenen şey saklanmaz). */}
-          <span className="facet-grp">
-            <span className="gl">Öğrenilen</span>
-            <span onClick={() => setVerdictView('triage')} className={`facet${verdictView === 'triage' ? ' on' : ''}`}
-              title="Problem değil olarak işaretlenenler dışındaki her şey">
-              Triage
-            </span>
-            <span onClick={() => setVerdictView('noise')} className={`facet${verdictView === 'noise' ? ' on' : ''}`}
-              title="Problem değil olarak işaretlediğin imzalar — satırı açıp işareti kaldırabilirsin">
-              Problem değil ({noiseCount})
-            </span>
-          </span>
-
-          {/* v0.9.1342 (operatör kararı) — ÖZNE şeridi. Durum pivotuyla
-              aynı dil: tek-seçim çip grubu, URL'de ?subject=.
-
-              Neden ayrı bir ŞERİT ve bir facet DEĞİL: bir facet seçimi
-              satırları aynı listede birleştirir ve db problemleri servis
-              problemleriyle öncelik sırasında YARIŞIRDI. Operatörün
-              istemediği tam olarak bu.
-
-              Sayı yalnız Veritabanları çipinde: o şerit TEK kaynaklı
-              (problems), yani sayı TAM. Servis şeridi dört kaynaklı ve
-              tek bir COUNT ile dürüstçe ifade edilemez — sunucu onu
-              iddia etmiyor, ekran da uydurmuyor.
-
-              v0.10.1026 — varsayılan (Servisler) şeridi dış kaynak
-              satırlarını da içeriyor; Dış kaynaklar çipi onların
-              daraltılmış görünümü. İkisi de title ile söyleniyor. */}
-          <span className="facet-grp">
-            <span className="gl">Özne</span>
-            {SUBJECT_LANES.map(l => (
-              <span key={l} onClick={() => setSubjectLane(l)}
-                title={SUBJECT_TITLE[l]}
-                className={`facet${subjectLane === l ? ' on' : ''}`}>
-                {SUBJECT_LABEL[l]}
-                {l === 'db' && dbLaneCount !== undefined && ` (${dbLaneCount})`}
-                {l === 'external' && externalLaneCount !== undefined && ` (${externalLaneCount})`}
-              </span>
-            ))}
-          </span>
-
+          {/* v0.10.2124 (S4) — Ekip önde: `team` (owner VEYA SRE, v0.9.1246 /
+              DECISIONS:12118 kararı değişmez). Eski çipin yerini alır: seçili
+              takım açılırda GÖRÜNÜR; katalogda olmayan takım (sohbet derin
+              linki) seçenek olarak eklenir, sessizce düşmez. */}
+          <NativeSelect size="sm" value={teamFilter}
+            onChange={e => setTeamFilter(e.target.value)}
+            aria-label="Ekip"
+            title="Takım süzgeci (?team=): servisin ownerTeam VEYA sreTeam'i bu takımsa satır kalır."
+            className="ib-team-select">
+            <NativeSelectOption value="">Ekip: hepsi</NativeSelectOption>
+            {teamOptions.map(o => <NativeSelectOption key={o} value={o}>{o}</NativeSelectOption>)}
+          </NativeSelect>
           {/* v0.9.357 (mockup C, operatör: "C daha uygun bizim kuruma") —
               çip grupları sayılı multi-select dropdown'lara döndü; Owner/SRE
               select'leriyle tek dil. v0.9.356'nın "sadece"/"tümü" jestleri
@@ -994,28 +949,6 @@ export default function InboxPage() {
               onToggle={k => toggleKind(k as InboxKind)}
               onSolo={k => soloKind(k as InboxKind)} onAll={allKind} />
           )}
-          {/* v0.10.706 — kategori (Davis sınıfı). Sayılar sayfadaki
-              satırlardan (sunucu sayımı yok; sözlük küçük, ucuz). */}
-          <FacetMultiSelect label="Kategori"
-            options={INBOX_CAT_ALL.map(c => ({
-              value: c, label: INBOX_CAT_LABEL[c], count: catCounts[c] ?? 0 }))}
-            selected={catSet as Set<string>}
-            onToggle={toggleCat} onSolo={soloCat} onAll={allCat} />
-
-          {/* v0.9.525 — first-seen penceresi. Küçük sabit küme → düz
-              <select> (frontend-design-system, eski frontend-conventions: ≤10 değer picker istemez). */}
-          <select
-            value={sinceFilter}
-            onChange={e => setParam('since', e.target.value || null)}
-            title="İlk görülme penceresi: yalnız bu pencerede ORTAYA ÇIKAN kayıtlar. Eski ama hâlâ açık kayıtlar 'any' seçiliyken görünür."
-            style={{
-              background: 'var(--field-bg)', color: 'var(--text)',
-              border: '1px solid var(--border)', borderRadius: 6,
-              fontSize: 12, padding: '4px 8px',
-            }}
-          >
-            {SINCE_OPTS.map(o => <option key={o.v} value={o.v}>{o.label}</option>)}
-          </select>
 
           {/* Env hint chip (v0.8.387) — non-interactive; the pick lives
               in the Topbar EnvPicker. Surfaces the service-scoped
@@ -1029,27 +962,6 @@ export default function InboxPage() {
           )}
 
           <span style={{ marginLeft: 'auto' }} />
-
-          {/* Team filters (v0.5.234). Distinct values come from
-              the current result set so an operator can stack
-              owner + SRE narrows without losing the option list.
-              Empty option = "all". Server-side filter (no client
-              re-fetch shaping) so the result count drops
-              accurately as the operator narrows. */}
-          <select value={ownerFilter}
-            onChange={e => setOwnerFilter(e.target.value)}
-            title="Filter by service.ownerTeam"
-            style={{ fontSize: 12, padding: '4px 8px', minWidth: 130 }}>
-            <option value="">Owner: all</option>
-            {ownerOptions.map(o => <option key={o} value={o}>{o}</option>)}
-          </select>
-          <select value={sreFilter}
-            onChange={e => setSreFilter(e.target.value)}
-            title="Filter by service.sreTeam"
-            style={{ fontSize: 12, padding: '4px 8px', minWidth: 130 }}>
-            <option value="">SRE: all</option>
-            {sreOptions.map(o => <option key={o} value={o}>{o}</option>)}
-          </select>
 
           {/* v0.9.251 — one box, matched SERVER-side across service +
               title + source. Title was the gap: with thousands of open
@@ -1071,11 +983,8 @@ export default function InboxPage() {
               service: {serviceFilter}
             </Chip>
           )}
-          {/* v0.9.1246 — takım süzgeci GÖRÜNÜR. Sohbetten gelen derin link
-              (/inbox?kind=exception&team=SY) sayfayı sessizce daraltmamalı:
-              görünmeyen bir filtre, kısa listeyi "kuyrukta bir şey yok" diye
-              okutur (v0.9.330'un prod dersi). Viewer da bu çipi görür —
-              rolü ne olursa olsun durumu GÖRÜR, silik panel değil. */}
+          {/* v0.9.1246 — takım süzgeci GÖRÜNÜR çip (× ile temizlenir); v0.10.2124'ten
+              beri Ekip açılırı da aynı paramı gösterir, çip derin linkte kalır. */}
           {teamFilter && (
             <Chip onRemove={() => setTeamFilter('')}
               removeLabel={`${teamFilter} takım filtresini kaldır`}
@@ -1084,6 +993,163 @@ export default function InboxPage() {
             </Chip>
           )}
         </div>
+
+        {/* v0.10.2124 (S4) — ikincil süzgeçler kapalı bölümde; varsayılan-dışı
+            bir değer etkinse açık gelir (inboxMoreFiltersActive). Hiçbir URL
+            paramı silinmedi: Durum, Öğrenilen, Özne, Kategori, First seen,
+            Owner/SRE, occurrence tabanı ve kayıtlı görünümler burada. */}
+        <MoreFilters activeCount={moreActive.length}>
+          {/* v0.9.255 — kayıtlı görünümler (yalnız queryString saklar);
+              v0.10.2124'ten beri bu bölümde. */}
+          <SavedViewsBar page="inbox" />
+          <div className="facetbar">
+            {/* Status pivot — single-select. v0.9.356: 'ignored' "All" diye
+                etiketleniyordu (ternary yalnız 'open'ı ayırıyordu), yani
+                çubukta İKİ "All" vardı ve biri susturulmuş exception'ları
+                açıyordu. Operatörün "iki anlamı belirsiz All" gözlemi düpedüz
+                etiket hatasıydı. */}
+            <span className="facet-grp">
+              <span className="gl">Durum</span>
+              {STATUS_PIVOTS.map(s => (
+                <span key={s} onClick={() => setStatusFilter(s)}
+                  className={`facet${statusFilter === s ? ' on' : ''}`}>
+                  {s === 'open' ? 'Open / Active' : s === 'all' ? 'All' : 'Ignored'}
+                </span>
+              ))}
+            </span>
+
+            {/* v0.10.1015 (operatör: "hangisi gerçek problem hangisi değil zamanla
+                öğretelim") — öğretme görünümü. Tek-seçim, URL'de ?verdict=.
+                "Problem değil" işaretli imzalar varsayılanda gizlenir; sayısı
+                çipte hep görünür ve tek tıkla açılır (gizlenen şey saklanmaz). */}
+            <span className="facet-grp">
+              <span className="gl">Öğrenilen</span>
+              <span onClick={() => setVerdictView('triage')} className={`facet${verdictView === 'triage' ? ' on' : ''}`}
+                title="Problem değil olarak işaretlenenler dışındaki her şey">
+                Triage
+              </span>
+              <span onClick={() => setVerdictView('noise')} className={`facet${verdictView === 'noise' ? ' on' : ''}`}
+                title="Problem değil olarak işaretlediğin imzalar — satırı açıp işareti kaldırabilirsin">
+                Problem değil ({noiseCount})
+              </span>
+            </span>
+
+            {/* v0.9.1342 (operatör kararı) — ÖZNE şeridi. Durum pivotuyla
+                aynı dil: tek-seçim çip grubu, URL'de ?subject=.
+
+                Neden ayrı bir ŞERİT ve bir facet DEĞİL: bir facet seçimi
+                satırları aynı listede birleştirir ve db problemleri servis
+                problemleriyle öncelik sırasında YARIŞIRDI. Operatörün
+                istemediği tam olarak bu.
+
+                Sayı yalnız Veritabanları çipinde: o şerit TEK kaynaklı
+                (problems), yani sayı TAM. Servis şeridi dört kaynaklı ve
+                tek bir COUNT ile dürüstçe ifade edilemez — sunucu onu
+                iddia etmiyor, ekran da uydurmuyor.
+
+                v0.10.1026 — varsayılan (Servisler) şeridi dış kaynak
+                satırlarını da içeriyor; Dış kaynaklar çipi onların
+                daraltılmış görünümü. İkisi de title ile söyleniyor. */}
+            <span className="facet-grp">
+              <span className="gl">Özne</span>
+              {SUBJECT_LANES.map(l => (
+                <span key={l} onClick={() => setSubjectLane(l)}
+                  title={SUBJECT_TITLE[l]}
+                  className={`facet${subjectLane === l ? ' on' : ''}`}>
+                  {SUBJECT_LABEL[l]}
+                  {l === 'db' && dbLaneCount !== undefined && ` (${dbLaneCount})`}
+                  {l === 'external' && externalLaneCount !== undefined && ` (${externalLaneCount})`}
+                </span>
+              ))}
+            </span>
+            {/* v0.10.706 — kategori (Davis sınıfı). Sayılar sayfadaki
+                satırlardan (sunucu sayımı yok; sözlük küçük, ucuz). */}
+            <FacetMultiSelect label="Kategori"
+              options={INBOX_CAT_ALL.map(c => ({
+                value: c, label: INBOX_CAT_LABEL[c], count: catCounts[c] ?? 0 }))}
+              selected={catSet as Set<string>}
+              onToggle={toggleCat} onSolo={soloCat} onAll={allCat} />
+
+            {/* v0.9.525 — first-seen penceresi. Küçük sabit küme → düz
+                <select> (frontend-design-system, eski frontend-conventions: ≤10 değer picker istemez). */}
+            <select
+              value={sinceFilter}
+              onChange={e => setParam('since', e.target.value || null)}
+              title="İlk görülme penceresi: yalnız bu pencerede ORTAYA ÇIKAN kayıtlar. Eski ama hâlâ açık kayıtlar 'any' seçiliyken görünür."
+              style={{
+                background: 'var(--field-bg)', color: 'var(--text)',
+                border: '1px solid var(--border)', borderRadius: 6,
+                fontSize: 12, padding: '4px 8px',
+              }}
+            >
+              {SINCE_OPTS.map(o => <option key={o.v} value={o.v}>{o.label}</option>)}
+            </select>
+            {/* Team filters (v0.5.234). Distinct values come from
+                the current result set so an operator can stack
+                owner + SRE narrows without losing the option list.
+                Empty option = "all". Server-side filter (no client
+                re-fetch shaping) so the result count drops
+                accurately as the operator narrows. */}
+            <select value={ownerFilter}
+              onChange={e => setOwnerFilter(e.target.value)}
+              title="Filter by service.ownerTeam"
+              style={{ fontSize: 12, padding: '4px 8px', minWidth: 130 }}>
+              <option value="">Owner: all</option>
+              {ownerOptions.map(o => <option key={o} value={o}>{o}</option>)}
+            </select>
+            <select value={sreFilter}
+              onChange={e => setSreFilter(e.target.value)}
+              title="Filter by service.sreTeam"
+              style={{ fontSize: 12, padding: '4px 8px', minWidth: 130 }}>
+              <option value="">SRE: all</option>
+              {sreOptions.map(o => <option key={o} value={o}>{o}</option>)}
+            </select>
+          </div>
+          {!inboxQ.isPending && !inboxQ.isError && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              fontSize: 11.5, color: 'var(--text3)', marginBottom: 8,
+            }}>
+              {minOcc > 0 && floorDefault ? (
+                // v0.10.949 — varsayılan kip: taban + çoklu-servis istisnası.
+                // Gizlenen = "tabanın altında, tek serviste"; istisnayla
+                // tutulanlar ayrıca sayılır (rastlantısal eşleşme görünür kalsın).
+                // Yayılım kapalıysa (spreadOff) düz taban dili: "Showing N+ groups · X hidden".
+                // v0.10.949 — regressed istisnası her iki dilde de (yayılımdan bağımsız).
+                <>
+                  <span title={spreadOff ? spreadOffFloorTitle(effFloor) : defaultFloorTitle(effFloor, spreadWin)}>
+                    Showing <b style={{ color: 'var(--text2)' }}>{effFloor}+</b> groups{spreadOff ? ' and regressed groups' : <>, regressed groups and groups (2+ occurrences) seen in ≥2 services at the same time{spreadWin ? ` (±${spreadWin} min)` : ''}</>}
+                    {floorLive && hiddenByMinOcc > 0 && <> · <b style={{ color: 'var(--text2)' }}>{hiddenByMinOcc}</b> {spreadOff ? 'hidden' : <>groups below {effFloor}, single service, hidden</>}</>}
+                    {!spreadOff && keptBySpread > 0 && <> · <b style={{ color: 'var(--text2)' }}>{keptBySpread}</b> multi-service groups shown although below {effFloor}</>}
+                    {keptRegressed > 0 && <> · <b style={{ color: 'var(--text2)' }}>{keptRegressed}</b> regressed groups shown although below {effFloor}</>}
+                  </span>
+                  <Button variant="ghost" size="sm" onClick={() => setMinOcc(0)}>show all</Button>
+                  <Button variant="ghost" size="sm" onClick={() => setMinOcc(10)}>10+</Button>
+                </>
+              ) : minOcc > 0 ? (
+                <>
+                  <span title="Bir kez düşen bir exception bu pencere hakkında bir olgudur, triage edilecek bir problem değil. Eşiğin altındakiler gizli — hepsini görmek için tıkla.">
+                    Showing groups with <b style={{ color: 'var(--text2)' }}>{minOcc}+</b> occurrences
+                    {hiddenByMinOcc > 0 && <> — <b style={{ color: 'var(--text2)' }}>{hiddenByMinOcc}</b> hidden</>}
+                  </span>
+                  <Button variant="ghost" size="sm" onClick={() => setMinOcc(0)}>show all</Button>
+                  {minOcc !== 10 && (
+                    <Button variant="ghost" size="sm" onClick={() => setMinOcc(10)}>10+</Button>
+                  )}
+                </>
+              ) : (
+                <>
+                  <span>Showing <b style={{ color: 'var(--text2)' }}>every</b> row, including one-off exceptions</span>
+                  <Button variant="ghost" size="sm" onClick={() => setMinOcc(DEFAULT_MIN_OCC)}>{DEFAULT_MIN_OCC}+ (varsayılan)</Button>
+                </>
+              )}
+              {/* v0.9.1332 — sürüklenmiş kolon genişliklerinin çıkmazı (operatör:
+                  "neden sayfa yatayda kayıyor"). v0.10.939 (tablo standardı S8):
+                  "Kolonları sıfırla" artık başlık satırının ⋯ menüsünde
+                  (DataTableHead), sayfa başına düğme yok. */}
+            </div>
+          )}
+        </MoreFilters>
 
         {/* v0.9.252 — bulk acknowledge. Appears only with a selection so
             the toolbar above stays quiet during normal triage.
@@ -1169,50 +1235,6 @@ export default function InboxPage() {
             chip'lerinde yaşıyor. */}
         {/* v0.10.2122 (S2) — üst sayım cümlesi: tek satır, akışta (yapışkan değil). */}
         {countSentence && <p className="ib-summary" data-testid="inbox-count-sentence">{countSentence}</p>}
-        {!inboxQ.isPending && !inboxQ.isError && (
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 8,
-            fontSize: 11.5, color: 'var(--text3)', marginBottom: 8,
-          }}>
-            {minOcc > 0 && floorDefault ? (
-              // v0.10.949 — varsayılan kip: taban + çoklu-servis istisnası.
-              // Gizlenen = "tabanın altında, tek serviste"; istisnayla
-              // tutulanlar ayrıca sayılır (rastlantısal eşleşme görünür kalsın).
-              // Yayılım kapalıysa (spreadOff) düz taban dili: "Showing N+ groups · X hidden".
-              // v0.10.949 — regressed istisnası her iki dilde de (yayılımdan bağımsız).
-              <>
-                <span title={spreadOff ? spreadOffFloorTitle(effFloor) : defaultFloorTitle(effFloor, spreadWin)}>
-                  Showing <b style={{ color: 'var(--text2)' }}>{effFloor}+</b> groups{spreadOff ? ' and regressed groups' : <>, regressed groups and groups (2+ occurrences) seen in ≥2 services at the same time{spreadWin ? ` (±${spreadWin} min)` : ''}</>}
-                  {floorLive && hiddenByMinOcc > 0 && <> · <b style={{ color: 'var(--text2)' }}>{hiddenByMinOcc}</b> {spreadOff ? 'hidden' : <>groups below {effFloor}, single service, hidden</>}</>}
-                  {!spreadOff && keptBySpread > 0 && <> · <b style={{ color: 'var(--text2)' }}>{keptBySpread}</b> multi-service groups shown although below {effFloor}</>}
-                  {keptRegressed > 0 && <> · <b style={{ color: 'var(--text2)' }}>{keptRegressed}</b> regressed groups shown although below {effFloor}</>}
-                </span>
-                <Button variant="ghost" size="sm" onClick={() => setMinOcc(0)}>show all</Button>
-                <Button variant="ghost" size="sm" onClick={() => setMinOcc(10)}>10+</Button>
-              </>
-            ) : minOcc > 0 ? (
-              <>
-                <span title="Bir kez düşen bir exception bu pencere hakkında bir olgudur, triage edilecek bir problem değil. Eşiğin altındakiler gizli — hepsini görmek için tıkla.">
-                  Showing groups with <b style={{ color: 'var(--text2)' }}>{minOcc}+</b> occurrences
-                  {hiddenByMinOcc > 0 && <> — <b style={{ color: 'var(--text2)' }}>{hiddenByMinOcc}</b> hidden</>}
-                </span>
-                <Button variant="ghost" size="sm" onClick={() => setMinOcc(0)}>show all</Button>
-                {minOcc !== 10 && (
-                  <Button variant="ghost" size="sm" onClick={() => setMinOcc(10)}>10+</Button>
-                )}
-              </>
-            ) : (
-              <>
-                <span>Showing <b style={{ color: 'var(--text2)' }}>every</b> row, including one-off exceptions</span>
-                <Button variant="ghost" size="sm" onClick={() => setMinOcc(DEFAULT_MIN_OCC)}>{DEFAULT_MIN_OCC}+ (varsayılan)</Button>
-              </>
-            )}
-            {/* v0.9.1332 — sürüklenmiş kolon genişliklerinin çıkmazı (operatör:
-                "neden sayfa yatayda kayıyor"). v0.10.939 (tablo standardı S8):
-                "Kolonları sıfırla" artık başlık satırının ⋯ menüsünde
-                (DataTableHead), sayfa başına düğme yok. */}
-          </div>
-        )}
         {scanCapped && (
           <div style={{ marginBottom: 8 }}>
             <span className="badge b-warn"
@@ -1396,6 +1418,15 @@ export default function InboxPage() {
             hâlâ 'alert-rules' storageKey'inde — operatörün ayarladığı
             genişlikler taşınmayla kaybolmasın. */}
         <ProblemsSection serviceFilter={serviceFilter} navDisabled={!!(problemParam || anomalyParam)} />
+        {/* v0.10.2124 (S4) — sayfa altı bağlantıları (mockup): durum
+            görünümleri mevcut süzgeçleri korur; kural yönetimi /alerts. */}
+        <nav className="ib-foot" aria-label="Diğer görünümler">
+          <Link to={inboxStatusHref(searchParams, 'all')}>Çözülenler</Link>
+          <span aria-hidden="true">·</span>
+          <Link to={inboxStatusHref(searchParams, 'ignored')}>Yok sayılanlar</Link>
+          <span aria-hidden="true">·</span>
+          <Link to="/alerts">Alarm kurallarını yönet</Link>
+        </nav>
       </div>
 
       {/* v0.10.1081 — yerinde triyaj çekmecesi (v0.8.292) KALDIRILDI; her

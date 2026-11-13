@@ -144,6 +144,11 @@ describe('Inbox kuyruğu — durumlar tablonun içinde (v0.10.967)', () => {
     const row = stateRow(el);
     expect(row?.dataset.dtState).toBe('no-match');
     expect(row?.textContent).toContain('öncelik / tür süzgecini genişlet');
+    // v0.10.2124 (S4, plan Ç2 a: taban "Diğer süzgeçler"de) — şerit kapalı
+    // bölümde; bölüm açılınca yerinde.
+    expect(el.textContent).not.toContain('groups below 5, single service, hidden');
+    const more = el.querySelector('[data-testid="more-filters"] [aria-expanded]') as HTMLElement;
+    await act(async () => { more.click(); });
     expect(el.textContent).toContain('groups below 5, single service, hidden');
   });
 

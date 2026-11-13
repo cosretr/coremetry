@@ -5297,6 +5297,10 @@ a.ins-val:hover { text-decoration: underline; }
 .ib-occ { font-variant-numeric: tabular-nums; white-space: nowrap; }
 /* v0.10.2122 — S2 üst sayım cümlesi (tek satır, akışta; şerit değil). */
 .ib-summary { margin: 0 0 var(--sp-3); font-size: var(--fs-sm); color: var(--text2); }
+/* v0.10.2124 (S4) — Ekip açılırı (önde) + sayfa altı bağlantıları. */
+.ib-team-select { min-width: 130px; }
+.ib-foot { display: flex; align-items: center; gap: var(--sp-3); margin: var(--sp-6) 0 var(--sp-3); font-size: var(--fs-sm); color: var(--text3); }
+.ib-foot a { color: var(--accent2); }
 
 /* ── Servis dikkat şeridi — v0.10.784 (components/ServiceAttentionStrip.tsx).
    Eski kırmızı callout'un sıkı hâli: başlık satırı 20px, satır 22px, kart

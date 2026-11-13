@@ -13881,3 +13881,12 @@ eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
   sunucu öncelik çiplerinden (öncelik süzgeci + tavandan önceki küme, seçili türler), "en eskisi" aynı kümeden
   yeni `oldestFirstSeen` alanıyla (istemci hesaplayamaz: liste 300'de kesilir).
 - Cache anahtarı `inbox:v11:` → `inbox:v12:` (plan "v10 → v11" diyordu; v11 v0.10.1827'de alınmıştı).
+
+## 2026-11-13 — v0.10.2124 — Problems sadeleştirme S4: süzgeçler (mockup operatör onaylı)
+- Önde Ekip (`team`, owner VEYA SRE — 1683 kararı aynen), Öncelik, Tür, arama. Ekip açılırı owner ∪ SRE
+  katalogundan; katalogda olmayan takım (derin link) seçenek olarak eklenir. v0.9.1246 `takım:` çipi kaldı.
+- "Diğer süzgeçler" (`components/coremetry/MoreFilters.tsx`, shadcn Collapsible): Durum, Öğrenilen, Özne,
+  Kategori, First seen, Owner/SRE, occurrence tabanı şeridi (Ç2 a), kayıtlı görünümler. Kapalı gelir;
+  `inboxMoreFiltersActive` boş değilse açık gelir ve "(N etkin)" der. Açık/kapalı URL'de değil.
+- Sayfa altı: Çözülenler (`status=all`), Yok sayılanlar (`status=ignored`) — mevcut süzgeçler korunur —
+  ve Alarm kurallarını yönet (`/alerts`). Hiçbir URL paramı silinmedi; varsayılanlar değişmedi (S3 bekler).

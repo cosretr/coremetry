@@ -129,3 +129,33 @@ describe('inbox kategori çipi', () => {
     expect(decodeCsvSet(null, INBOX_CAT_ALL, INBOX_CAT_ALL)).toHaveLength(5);
   });
 });
+
+// v0.10.2124 (S4) — "Diğer süzgeçler" açık gelme kuralı + sayfa altı linkleri.
+import { inboxMoreFiltersActive, inboxStatusHref } from './inboxUrl';
+describe('inboxMoreFiltersActive', () => {
+  const act = (q: string) => inboxMoreFiltersActive(new URLSearchParams(q));
+  it('varsayılanlar ve öndeki süzgeçler bölümü açmaz', () => {
+    for (const q of ['', 'status=open', 'verdict=triage', 'subject=service', 'since=bogus',
+      'prio=P1,P2,P3', 'kind=problem', 'team=SY', 'q=timeout', 'service=checkout',
+      `cat=${INBOX_CAT_ALL.join(',')}`]) {
+      expect(act(q), q).toEqual([]);
+    }
+  });
+  it('her ikincil süzgeç tek tek sayılır', () => {
+    const cases: Array<[string, string]> = [
+      ['status=all', 'status'], ['status=ignored', 'status'], ['verdict=noise', 'verdict'],
+      ['subject=db', 'subject'], ['subject=external', 'subject'], [`${INBOX_CAT_PARAM}=ERROR`, INBOX_CAT_PARAM],
+      ['since=30m', 'since'], ['since=7d', 'since'], ['owner=a', 'owner'], ['sre=b', 'sre'],
+      ['minOcc=0', 'minOcc'], ['minOcc=10', 'minOcc'],
+    ];
+    for (const [q, want] of cases) expect(act(q), q).toEqual([want]);
+  });
+  it('sayfa altı linki yalnız status yazar, detay paramını düşürür', () => {
+    const h = inboxStatusHref(new URLSearchParams('q=x&problem=p1&anomaly=a&item=i&status=open'), 'ignored');
+    const u = new URL(h, 'http://x');
+    expect(u.pathname).toBe('/inbox');
+    expect(u.searchParams.get('status')).toBe('ignored');
+    expect(u.searchParams.get('q')).toBe('x');
+    expect(u.searchParams.has('problem') || u.searchParams.has('anomaly') || u.searchParams.has('item')).toBe(false);
+  });
+});
