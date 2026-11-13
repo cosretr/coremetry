@@ -24,7 +24,7 @@ export const PAGE_FILES: Record<Page, readonly string[]> = {
   ],
   Traces: ['pages/Traces.tsx', 'pages/traces/', 'components/traces/'],
   Explore: ['pages/Explore.tsx', 'pages/explore/'], // v0.10.1867 — MetricsExplorer / LogsExplorer silindi
-  Metrics: ['pages/Metrics.tsx', 'pages/metrics/', 'components/viz/MetricQueryEditor.tsx', 'components/viz/TimeSeriesPanel.tsx'], // v0.10.1863 pages/metrics/ (Metrics Explorer)
+  Metrics: ['pages/Metrics.tsx', 'pages/metrics/', 'components/viz/TimeSeriesPanel.tsx'], // v0.10.1863 pages/metrics/ (Metrics Explorer)
   Shell: [
     'components/AppShell.tsx', 'components/Topbar.tsx', 'components/Sidebar.tsx',
     'components/CommandPalette.tsx', 'components/coremetry/CommandPalette/CommandPaletteBody.tsx',

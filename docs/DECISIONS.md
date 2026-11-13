@@ -13656,3 +13656,19 @@ eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
 - Doğrulama (spec açık noktası): VM RED aileleri yalnız SUNUCU istek metrikleri (`http.server.request.duration`,
   `rpc.server.duration`, `rpc.server.call.duration`); consumer girişi yok → yalnız tüketici servis bu dedektörde kör.
 - Varsayılan açık; /anomalies cümlesi "normalde %X, şimdi %Y"; detay grafiği servis Overview hata oranı serisi.
+
+## 2026-11-13 — v0.10.2079 — Metrics Explorer dilim 2.8: eski MQE silindi
+
+- Operatör prod OK'i 2026-11-13. `components/viz/MetricQueryEditor.tsx` (1352 satır) ve yalnız onun
+  kullandığı `GroupedMetricPicker.tsx`, `pages/metricsPromqlUrl.ts`, `lib/promqlToken.ts`,
+  `lib/chart/steppedInstrument.ts`, `lib/queries/promql.ts` (`usePromqlConsoleRange`) + testleri,
+  62 `.mqe-*` CSS kuralı, eslint bastırma girdileri silindi. Ölü kanıtı: MQE'nin üretim importçusu
+  sıfırdı (yalnız kendi testleri); diğer dosyaların tek importçusu MQE'ydi.
+- Kalanlar (canlı): `api.promqlQueryRange` (`pages/metrics/useMetricsRun.ts`), `viz/TimeSeriesPanel`,
+  `lib/metricFormula`, `MetricResultNotice`, `metricPanelAsk`, `Combobox`. Backend dokunulmadı:
+  MQE'ye özel rota yok (`/api/metrics/query` Explore, `/api/promql/query_range` Metrics Explorer).
+- Eski durum açılmaya devam eder: `?mq=`, `?editor=1&tab=promql|code|builder&promql=&src=&cluster=`
+  (CoSRE kanıt çipi) `lib/metricsExplorer/legacy.ts` ile `?mx=`'e çevrilir; MQE'nin panoya yazdığı
+  `type:'metric'` builder paneli `panelQuery.ts` `mxFromLegacyMetricPanel` ile açılır. MQE'nin
+  `saved_views` kaydı yoktu. Çeviride düşenler (önceden de): seri rengi, log ölçek;
+  model birimi yalnız formül satırına geçer.

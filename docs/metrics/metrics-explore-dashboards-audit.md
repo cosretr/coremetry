@@ -242,7 +242,7 @@ Tür: **[T]** = tasarım kararı içerir (ana oturum) · **[M]** = mekanik → `
 | 2.5 | T | Keşif sekmesi: katalog + etiket gezgini + kardinalite. Satır tıklaması Metrics Explorer'da açar. | Mockup görünüm 3; viewer salt okur. | **OK** (Explore v2 P5 aşılır) |
 | 2.6 | M | Explore metrik satırı ortak `QueryRow`'u kullanır. | Var olan Explore `?q=` linkleri aynı sonucu verir. | yok |
 | 2.7 | T | Explore'un eski `source=metrics\|logs` panelleri kalkar; `/metrics` ve `/logs`'a yönlenir. | `MetricsExplorer.tsx`, `LogsExplorer.tsx`, `ExploreViz.tsx` silinir. | **OK** |
-| 2.8 | M | MQE ve `.mqe-*` CSS silinir. | Operatör 2.3-2.5'e prod'da OK dedikten sonra. | yok |
+| 2.8 | M | MQE ve `.mqe-*` CSS silinir. | Operatör 2.3-2.5'e prod'da OK dedikten sonra. | **OK** 2026-11-13 (v0.10.2079) |
 
 ### Faz 3: Dashboards
 

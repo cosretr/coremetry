@@ -109,16 +109,6 @@
       "count": 2
     }
   },
-  "src/components/viz/GroupedMetricPicker.tsx": {
-    "ui/no-raw-element": {
-      "count": 1
-    }
-  },
-  "src/components/viz/MetricQueryEditor.tsx": {
-    "ui/no-raw-element": {
-      "count": 15
-    }
-  },
   "src/features/anomalies/AnomaliesPage.tsx": {
     "ui/no-raw-element": {
       "count": 4

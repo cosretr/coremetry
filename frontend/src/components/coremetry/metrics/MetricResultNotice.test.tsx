@@ -53,9 +53,8 @@ describe('MetricResultNotice', () => {
     expect(panel.match(/<MetricResultNotice meta=\{meta\.meta\} note=\{meta\.note\}/g)?.length).toBe(1);
     expect(panel.match(/<MetricResultNotice meta=\{promMeta\}/g)?.length).toBe(1);
     expect(panel).toMatch(/setMeta\(\{ meta: dataOverride!\.meta, note: dataOverride!\.note \}\)/);
-    const mqe = strip(readFileSync(resolve(__dirname, '../../viz/MetricQueryEditor.tsx'), 'utf8'));
-    expect(mqe).toMatch(/<MetricResultNotice meta=\{promqlRes\.data\?\.meta\}/);
-    expect(mqe).toMatch(/<MetricResultNotice key=\{q\.id\} meta=\{results\[qi\]\?\.data\?\.meta\}/);
-    expect(mqe).toMatch(/queryFn: \(\) => api\.metricQueryFull\(/);
+    // Dilim 2.8 — eski MetricQueryEditor silindi; /metrics sonucu ResultPanel'de.
+    const mx = strip(readFileSync(resolve(__dirname, '../../../pages/metrics/ResultPanel.tsx'), 'utf8'));
+    expect(mx).toMatch(/<MetricResultNotice key=\{`n-\$\{r\.item\.id\}`\} meta=/);
   });
 });

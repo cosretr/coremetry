@@ -1594,8 +1594,8 @@ button.btn-chip-label:hover { background: transparent; color: var(--accent2); }
 /* v0.9.978 (D1.7) — popover SAYFANIN ÜSTÜNDE yüzüyor, dolayısıyla
    yükseltilmiş yüzey tokeni alır. `--bg0` sayfa zemininin ta kendisi:
    redhat'te panel gri sayfanın üstünde gri kalıyordu, onu yalnız
-   kenarlık ayırıyordu. `.mqe-pop` (:2671) zaten `--bg1` kullanıyor —
-   iki popover, iki farklı token (denetim §2.6). */
+   kenarlık ayırıyordu. Eski `.mqe-pop` da `--bg1` kullanıyordu (denetim
+   §2.6; dilim 2.8'de silindi). */
 .fsel-panel { position: absolute; top: calc(100% + 4px); left: 0; z-index: var(--z-tooltip);
   background: var(--bg1); border: 1px solid var(--border-strong);
   border-radius: 7px; box-shadow: var(--shadow-pop); padding: 6px 0;
@@ -3523,8 +3523,6 @@ button.cosre-cap__row > .row { align-items: flex-start; min-width: 0; }
   padding: 2px 22px 2px 6px;
   font-family: var(--font-mono);
 }
-.mqe-chip-edit .cb-wrap { width: 112px; }
-.mqe-chip-edit .cb-wrap input { width: 100%; padding-right: 20px; }
 
 /* v0.8.383 — global env picker (Topbar, next to the range picker).
    Inherits the base input/select tokens; sized to match .trp-btn so
@@ -4001,64 +3999,22 @@ button.cosre-cap__row > .row { align-items: flex-start; min-width: 0; }
 .topo-lg-line.back { stroke-dasharray: 2 6; }
 .topo-lg-line.new { stroke: var(--accent2); stroke-dasharray: 12 4; }
 
-/* Metric query editor (v0.7.126) — Grafana-style ad-hoc builder. Tokens only. */
-.mqe { display: flex; flex-direction: column; gap: 10px; }
-.mqe-toolbar { display: flex; align-items: center; gap: 10px; }
-.mqe-spacer { flex: 1; }
-.mqe-topn { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text2); }
-.mqe-topn select { font-size: 12px; }
-.mqe-rows { display: flex; flex-direction: column; gap: 8px; }
-.mqe-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg1); }
 /* v0.10.926 — soluklaştırma ATAYA değil çocuklara: atadaki opaklık < 1
    Tooltip kutusunu (düğmenin kardeşi) yarı saydam çizer ve satırda yığın
    bağlamı kurup ipucunu sonraki satırın altına gömerdi. İpucu ya da açılır
    liste/menü BARINDIRAN çocuk o an soluklaşmaz: opaklıklı çocuk kendi yığın
    bağlamını kurar ve içindeki açılır panel sonraki kardeşin altında kalırdı.
    `.row-actions` kap olarak soluklaşır → içindeki devre dışı düğmenin .4'ü
-   eskisi gibi ÇARPILIR. Explore QueryRow aynı kural (.qr-off, eski 0.5). */
-.mqe-row.off > :not(.tip):not(:has(.tip, [role="listbox"], [role="menu"], .mqe-pop, .fq-pop)) { opacity: .55; }
-.qr-off > :not(.tip):not(:has(.tip, [role="listbox"], [role="menu"], .mqe-pop, .fq-pop)) { opacity: .5; }
+   eskisi gibi ÇARPILIR. (Eski `.mqe-row.off` MetricQueryEditor ile
+   silindi, dilim 2.8.) */
+.qr-off > :not(.tip):not(:has(.tip, [role="listbox"], [role="menu"], .fq-pop)) { opacity: .5; }
 /* Gizli seri satırları (Explore grup tablosu, grafik lejantı) aynı dersle:
    hücreler soluklaşır, ipucu barındıran hücre o an değil. */
 tr.gt-off > td:not(:has(.tip)) { opacity: .45; }
 tr.sl-off > td:not(:has(.tip)) { opacity: .4; }
-.mqe-id-letter { font-weight: 700; font-size: 12px; color: var(--accent2); font-family: var(--font-mono); }
-.mqe-eye { font-size: 11px; color: var(--text3); }
-.mqe-picker { position: relative; }
-.mqe-pickname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
-.mqe-unit { font-size: 10px; color: var(--text3); font-family: var(--font-mono); background: var(--bg3); padding: 1px 5px; border-radius: var(--radius-xs); }
-.mqe-caret { color: var(--text3); font-size: 10px; }
-.mqe-pop { position: absolute; top: calc(100% + 4px); left: 0; z-index: var(--z-nav); width: 320px; max-width: 92vw; background: var(--bg1); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-pop); padding: 8px; display: flex; flex-direction: column; gap: 8px; }
-.mqe-search { width: 100%; }
-.mqe-facets { display: flex; gap: 4px; flex-wrap: wrap; }
-.mqe-list { max-height: 280px; overflow-y: auto; display: flex; flex-direction: column; gap: 1px; }
-.mqe-hint { padding: 12px; font-size: 11.5px; color: var(--text3); text-align: center; }
-/* v0.10.927 — satır OptionRow (.opt-row); eski ham düğmenin UA
-   `line-height: normal` yoğunluğu korunur (ad + açıklama + birim). */
-.mqe-list .opt-row { line-height: normal; }
-.mqe-optname { flex: 1; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* v0.8.417 (DE2) — two-line picker options: name + catalogue description. */
-.mqe-optcol { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-.mqe-optcol .mqe-optname { flex: none; }
-.mqe-optdesc { font-size: 10.5px; color: var(--text3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mqe-sect { padding: 6px 8px 2px; font-size: 10px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; color: var(--text3); }
-.mqe-agg, .mqe-step { font-size: 12px; }
-.mqe-alias { width: 90px; font-size: 12px; }
-.mqe-filters { display: inline-flex; align-items: center; gap: 5px; flex-wrap: wrap; }
-.mqe-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 8px; border: 1px solid var(--border); border-radius: 14px; background: var(--bg2); font-size: 11px; }
-.mqe-chip-k { color: var(--text2); font-family: var(--font-mono); }
-.mqe-chip-op { color: var(--text3); }
-.mqe-chip-v { color: var(--accent2); font-family: var(--font-mono); }
-.mqe-chip-edit { gap: 5px; padding: 3px 6px; }
-.mqe-chip-edit select, .mqe-chip-edit input { font-size: 11px; }
-.mqe-chip-edit input { width: 96px; }
-.mqe-groupby { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
-.mqe-lbl { font-size: 11px; color: var(--text3); }
 /* `.row-actions` (v0.9.902, MB8) — was `.mqe-rowact`, renamed because it
-   is not a metric-editor thing: the two sibling query editors (Explore's
-   QueryRow and MetricQueryEditor) carry the SAME ⧉ / × row actions, and
-   only one of them had CSS. The other hand-rolled `all: unset`, so it had
-   no hover and no focus ring.
+   is not a metric-editor thing: query editors (Explore's QueryRow and,
+   until slice 2.8, MetricQueryEditor) carry the SAME ⧉ / × row actions.
 
    The button rules are gone entirely rather than generalised: ⧉ and × are
    glyph-only buttons with accessible names, which is exactly IconButton's
@@ -4076,32 +4032,6 @@ tr.sl-off > td:not(:has(.tip)) { opacity: .4; }
    sarmalayıcıya iner. */
 td > .cell-actions { display: flex; gap: var(--sp-3); align-items: center; }
 td > .cell-actions.end { justify-content: flex-end; }
-.mqe-code { display: flex; flex-direction: column; gap: 4px; }
-.mqe-code textarea { width: 100%; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.6; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--field-bg); color: var(--text); resize: vertical; }
-.mqe-code-foot { font-size: 11px; }
-.mqe-code-err { color: var(--err); font-size: 11.5px; }
-/* v0.9.782 — PromQL etiket gezgini: katlanabilir anahtar/değer sütunları.
-   Chip'ler ui/Chip (group-by chip'iyle tek dil; v0.10.924). */
-.mqe-lb { border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg1); }
-.mqe-lb-metric { font-family: var(--font-mono); font-size: 11px; color: var(--accent2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 320px; }
-.mqe-lb-body { display: flex; flex-direction: column; gap: 8px; padding: 2px 10px 10px; } /* v0.10.924 — üst çizgi DisclosureButton bölüm anatomisinden gelir; ikisi 2px'e yığılıyordu */
-.mqe-lb-pick { display: flex; align-items: center; gap: 6px; padding-top: 8px; }
-.mqe-lb-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; padding-top: 8px; }
-.mqe-lb-col { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.mqe-lb-colhead { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
-.mqe-lb-search { width: 96px; font-size: 11px; }
-.mqe-lb-chips { display: flex; flex-wrap: wrap; gap: 4px; max-height: 132px; overflow-y: auto; }
-.mqe-lb-hint { font-size: 10.5px; color: var(--text3); }
-.mqe-chart { padding: 12px; }
-.mqe-dash-opt { display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 3px 0; font-size: 13px; }
-/* step 2 — formula rows, per-query colour, panel options */
-.mqe-expr { flex: 1 1 320px; min-width: 220px; font-family: var(--font-mono); font-size: 12.5px; }
-.mqe-row.formula { background: color-mix(in oklab, var(--accent) 5%, var(--bg1)); }
-.mqe-row.formula .mqe-id-letter { color: var(--accent2); }
-.mqe-unitin { width: 56px; font-size: 12px; }
-.mqe-color { position: relative; display: inline-flex; align-items: center; }
-.mqe-color input[type=color] { width: 22px; height: 22px; padding: 0; border: 1px solid var(--border); border-radius: 5px; background: var(--bg2); cursor: pointer; opacity: .5; }
-.mqe-color.set input[type=color] { opacity: 1; }
 
 /* Tinted monospace log table (v0.7.130) — the prototype .logtbl treatment,
    applied to the shared LogTable so /logs AND the Service Logs tab both get it.
@@ -4742,7 +4672,6 @@ tr:hover .row-kiosk, .row-kiosk:focus-visible { opacity: 1; }
   /* D8 (v0.9.989) — paylaşılan eşit-kesir ızgaraları, `.ov-kpis`
      ailesiyle AYNI basamakta: 3+ kolon tablet bandında 2'ye düşüyor. */
   .grid-3, .grid-4, .grid-5 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .mqe-lb-cols { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* ── ≤640px: telefon ───────────────────────────────────────────────── */
@@ -4792,8 +4721,7 @@ tr:hover .row-kiosk, .row-kiosk:focus-visible { opacity: 1; }
      satır zaten yüksek, dolayısıyla büyüme görünmez.
      Dolgu DİKEY büyütüyor (yükseklik min-height'tan geliyor), yani
      yazı tipi ve yatay ölçüler değişmiyor. */
-  .team-edit .cb-wrap input,
-  .mqe-chip-edit .cb-wrap input { min-height: 36px; }
+  .team-edit .cb-wrap input { min-height: 36px; }
 
   /* D6.4 (v0.9.1001) — KATLANIR filtre barı.
      Sınıfların masaüstü kuralı YOK ve elemanları da yalnız dar ekranda

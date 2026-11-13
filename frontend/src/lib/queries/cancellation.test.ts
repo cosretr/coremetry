@@ -75,9 +75,6 @@ const HEAVY: { file: string; hooks: string[] }[] = [
   // v0.10.1064 — alarm metriği dizisi: MV ya da ham spans (≤6 sa) okuması; detay kapanınca kesilmeli.
   { file: 'alerts.ts', hooks: ['api.alertRuleSeries('] },
   { file: 'aiEval.ts', hooks: ['api.aiEvalsetCatalog(', 'api.aiEvalsetRuns(', 'api.aiEvalsetRun(', 'api.aiEvalsetCompare('] },
-  // v0.10.1306 — /metrics PromQL sekmesi Thanos yolu: konsol range sorgusu
-  // (önbelleksiz, audit'li); yeni yazım / pencere değişince kesilmeli.
-  { file: 'promql.ts', hooks: ['api.promqlQueryRange('] },
 ];
 
 // stripComments — kaynağı YORUMSUZ okur.

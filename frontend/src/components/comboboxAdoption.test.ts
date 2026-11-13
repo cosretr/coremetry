@@ -81,7 +81,6 @@ const CONVERTED = [
   // gerekçesiyle burada DURULMUŞTU; boşluk v0.9.1022'de kapandı
   // (autoFocus / disabled / onBlurCommit / onEscape).
   'pages/Users.tsx',
-  'components/viz/MetricQueryEditor.tsx',
   // v0.9.1024 — PICKER AİLESİ. Sunucu-taraflı arayanlar; `serverFiltered`
   // ile atomun istemci süzgeci kapalı.
   'components/ServicePicker.tsx',
@@ -163,9 +162,6 @@ describe('Combobox benimseme — sayfa kolu', () => {
     // onEscape: commit ETMEDEN çıkış. onBlurCommit: bu hücrenin
     // belgelenmiş davranışı "blur'da kaydet".
     'pages/Users.tsx': ['autoFocus', 'onEscape', 'onBlurCommit'],
-    // Çipin açık bir "Add" düğmesi var; blur'da EKLEMEK eski davranışı
-    // değiştirirdi — onBlurCommit bilerek YOK.
-    'components/viz/MetricQueryEditor.tsx': ['autoFocus', 'onEscape'],
   };
 
   it('satır içi düzenleyiciler odak + İPTAL yolunu taşıyor', () => {
@@ -178,12 +174,6 @@ describe('Combobox benimseme — sayfa kolu', () => {
           `${f}: satır içi düzenleyici ${p} taşımıyor`).toBe(true);
       }
     }
-  });
-
-  it('filtre çipi blur’da EKLEMİYOR — eski davranış korunuyor', () => {
-    const calls = comboboxCalls(read('components/viz/MetricQueryEditor.tsx'));
-    expect(calls.some(c => /\bonBlurCommit/.test(c)),
-      'çip blur’da filtre eklemeye başladı — datalist sürümü bunu yapmıyordu').toBe(false);
   });
 
   // ——— Sunucu-taraflı picker'lar ————————————————————————————

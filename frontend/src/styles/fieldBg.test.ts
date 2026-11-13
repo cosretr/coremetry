@@ -87,7 +87,6 @@ describe('alan kontrolleri --field-bg okuyor', () => {
     '.tb-search',     // topbar genel arama kutusu
     '.fsel-btn',      // FacetMultiSelect tetikleyicisi
     '.adv-query textarea', // Explore → Advanced DSL editörü
-    '.mqe-code textarea',  // metrik sorgu kod editörü
   ])('%s zemini var(--field-bg)', sel => {
     expect(backgroundOf(sel), `${sel}`).toBe('var(--field-bg)');
   });

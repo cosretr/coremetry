@@ -73,7 +73,6 @@ komutu koş; liste değişirse bu dosyayı güncelle. Kaynak: `docs/claude/token
 | `frontend/src/pages/Clusters.tsx` | 1367 | S |
 | `docs/ux-parity/00-inventory.md` | 1351 | D |
 | `frontend/src/features/anomalies/ProblemDetail.tsx` | 1347 | S |
-| `frontend/src/components/viz/MetricQueryEditor.tsx` | 1342 | S |
 | `internal/api/copilot_service_topology.go` | 1337 | S |
 | `frontend/src/pages/Endpoints.tsx` | 1336 | S |
 | `frontend/src/components/ai/ChatBubble.tsx` | 1335 | S |
