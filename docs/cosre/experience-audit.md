@@ -141,6 +141,11 @@ dosyaları değişmedi; operatör prod'da üç senaryoyu (kaynak sorusu tık, se
 kartı linki) doğruladı; roadmap-status §2 satır 6 ve 8 "tamam".
 
 ## 8. Operatöre sorular
+
+**Onay, 2026-11-13:** operatör belgeyi altı sorunun önerileriyle onayladı: 1 → (a); 2 → soru kartı
+kabul (beğenilmezse D2/D3 geri alınır); 3 → deterministik; 4 → üç rota, link tavanı 3; 5 → pasif
+görünür; 6 → sıra D1 → D4 → D2 → D3 → D5.
+
 1. Kapsam: (a) yalnız netleştirme soru kartı (D2–D3) + özet/link kartı (D4); (b) + guided
    takım/servis çiplerinin aynı karta taşınması; (c) + `anchored_ask`. Öneri: (a).
 2. 2026-10-29 "çip yok" kararı: soru kartı = düz cümle + ≤3 düğme, serbest metin yolu aynen
