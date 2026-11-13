@@ -13830,3 +13830,11 @@ eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
   `AnomaliesPage.colFilter.test.tsx` → panel seçicisi `.ui-popover label` → `[data-tcf-pop] label` (iki satır).
   S0 karakterizasyon testleri dokunulmadan geçer. Yeni `ColumnFilterShell.radix.test.tsx`: portal, Esc + odak
   dönüşü, dışarı tık.
+
+## 2026-11-13 — v0.10.2117 — Statement sayfasında "Süre dağılımı" kartı kaldırıldı (operatör kararı)
+- Operatör (prod ekran görüntüsü): "buradaki süre dağılımına da gerek yok". `/databases/statement` sayfasındaki
+  kart (v0.10.1972) silindi; KPI karoları, Trend üçlüsü, Callers ve Exemplar traces aynen.
+- Kart yalnız bu sayfadaydı (başka kullanıcı yok): `StmtDistribution.tsx`, `stmtDist.ts` (+ test), `.stmt-dist*` CSS,
+  `DBStmtDetail.distribution` tipi silindi. Veri ayrı uç değildi; detay ucunun (`GET /api/databases/statements/detail`)
+  ek bir CH sorgusuydu (`GetDBStmtDistribution`, `chstore/dbstmt_dist.go`) — tek tüketicisi bu kart olduğundan
+  alan ve sorgu da söküldü (detay yanıtı bir CH okuması hafifledi). MCP / CoSRE araçlarında çağıran yok (grep).

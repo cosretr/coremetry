@@ -198,7 +198,6 @@ func TestTelemetryReadConnCallSurface(t *testing.T) {
 		"db_errors.go":              true, // v0.10.1020 — db_caller_summary_5m + spans (hata kırılımı)
 		"external_seasonal.go":      true, // metric_points — dış seri mevsimsel dilim (Influx D6, v0.10.231)
 		"dbstmt_detail.go":          true, // db_statement_summary_5m / spans
-		"dbstmt_dist.go":            true, // db_statement_summary_5m / _1m (v0.10.1972)
 		"db_capacity.go":            true, // metric_points
 		"endpoints_detail.go":       true, // spans
 		// v0.9.839 — SAF telemetri: iki FROM'u da spans (rotanın giriş
@@ -408,7 +407,7 @@ func TestTelemetryReadConnPackageSurface(t *testing.T) {
 func TestTelemetryReadFilesTouchNoStateTables(t *testing.T) {
 	for _, f := range []string{
 		"summary.go", "repo.go", "topology.go", "dependencies.go", "problem_telemetry.go",
-		"deploys.go", "oracle.go", "profile.go", "spanmetric.go", "dbstmt_detail.go", "dbstmt_dist.go",
+		"deploys.go", "oracle.go", "profile.go", "spanmetric.go", "dbstmt_detail.go",
 		"db_capacity.go", "endpoints_detail.go", "business_dims.go",
 		"endpoints_callers.go", "repeats.go", "service_seen.go", "compare_periods.go",
 		"logs_sort.go",

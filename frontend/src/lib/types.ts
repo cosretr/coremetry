@@ -9781,8 +9781,6 @@ export interface DBStmtDetail {
   exemplars: { slowTraceId?: string; errorTraceId?: string } | null;
   /** v0.10.1960 — son 7 günün aynı saat dilimlerinden normal aralık; offsetSec = pencere başına (5 dk hizalı) göre. */
   baseline?: Array<{ offsetSec: number; p50Ms: number; p95Ms: number }>;
-  /** v0.10.1972 — yaklaşık süre dağılımı: [loMs, hiMs) kovaları (hiMs 0 = üst sınır yok), TDigest'ten. */
-  distribution?: Array<{ loMs: number; hiMs: number; count: number }>;
 }
 
 // Exemplar — single representative span looked up to bridge a

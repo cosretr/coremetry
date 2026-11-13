@@ -6492,21 +6492,6 @@ a.idchip__val:hover { color: var(--accent2); text-decoration: underline; }
    Boyut "Alarm oluştur" (Button size=sm) ile hizalı. */
 .stmt-pivots { display: inline-flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
 .stmt-pivots a.sec { font-size: 12px; padding: 3px 10px; white-space: nowrap; }
-/* v0.10.1972 — Statement süre dağılımı (StmtDistribution): log kovalar, karekök boy, medyan/p95 işareti. */
-.stmt-dist { margin: 4px 0 14px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg1); padding: 10px 12px; }
-.stmt-dist__head { font-size: 12px; font-weight: 700; color: var(--text2); margin-bottom: 8px; }
-.stmt-dist__sub { font-weight: 400; font-size: 10px; color: var(--text3); margin-left: 6px; }
-.stmt-dist__bars { position: relative; display: flex; align-items: flex-end; gap: 3px; height: 130px; border-bottom: 1px solid var(--divider); }
-.stmt-dist__col { flex: 1 1 0; min-width: 0; height: 100%; display: flex; align-items: flex-end; }
-.stmt-dist__bar { width: 100%; border-radius: 2px 2px 0 0; background: var(--accent); opacity: 0.7; }
-.stmt-dist__bar--slow { background: var(--warn); opacity: 0.9; }
-.stmt-dist__mark { position: absolute; top: 0; bottom: 0; border-left: 1.5px dashed var(--text2); pointer-events: none; }
-.stmt-dist__mark span { position: absolute; top: 0; left: 4px; font-size: 10px; color: var(--text2); white-space: nowrap; background: var(--bg1); padding: 0 2px; }
-.stmt-dist__mark--p95 { border-left-color: var(--warn); }
-.stmt-dist__mark--p95 span { top: 14px; color: var(--warn); }
-.stmt-dist__axis { display: flex; gap: 3px; margin-top: 3px; }
-.stmt-dist__axis span { flex: 1 1 0; min-width: 0; text-align: left; font-size: 10px; color: var(--text3); font-variant-numeric: tabular-nums; overflow: hidden; white-space: nowrap; }
-.stmt-dist__cap { margin-top: 6px; font-size: 11px; color: var(--text2); }
 .stmt-pivots a.sec.stmt-pivots__err { color: var(--err); }
 
 /* v0.10.1531 (Problem standardı R3) — "Problem değil ▾" gerekçe diyaloğu

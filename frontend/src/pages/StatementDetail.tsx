@@ -12,7 +12,6 @@ import { usePageZoomRange } from '@/lib/chart/usePageZoomRange';
 import { timeRangeToNs } from '@/lib/utils';
 import { useDBStmtDetail } from '@/lib/queries';
 import { decodeStmtParam } from '@/pages/slowqueries/stmtParam';
-import { StmtDistributionSection } from './slowqueries/StmtDistribution'; // v0.10.1972
 import {
   StmtText, StmtSummarySection, StmtTrendSection,
   StmtCallersSection, StmtExemplarsSection, StmtTracesPivotRow,
@@ -174,7 +173,6 @@ export default function StatementDetailPage() {
                 ?range='ini yazar (URL tek doğruluk kaynağı). */}
             <StmtTrendSection detail={detail} compare={compare}
               onZoom={handleZoom} onZoomReset={handleZoomReset} />
-            <StmtDistributionSection detail={detail} />
             <StmtCallersSection detail={detail} compare={compare} range={range} />
             <StmtExemplarsSection detail={detail} range={range} />
           </>

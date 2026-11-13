@@ -100,8 +100,6 @@ type dbStmtDetailPayload struct {
 	Exemplars     *dbStmtExemplars       `json:"exemplars"`
 	// v0.10.1960 — son 7 günün aynı saat dilimlerinden normal aralık (5 dk dilim, pencere başına göre).
 	Baseline []chstore.DBStmtBaselinePoint `json:"baseline,omitempty"`
-	// v0.10.1972 — yaklaşık süre dağılımı (TDigest, log ölçekli kovalar; özetle aynı ızgara).
-	Distribution []chstore.DBStmtDistBucket `json:"distribution,omitempty"`
 }
 
 // getDBStmtDetail serves GET /api/databases/statements/detail. Window
@@ -157,13 +155,6 @@ func (s *Server) getDBStmtDetail(w http.ResponseWriter, r *http.Request) {
 		// v0.10.1960 — normal aralık (yumuşak; hata → bant yok).
 		if bl, err := s.store.GetDBStmtBaseline(ctx, dq); err == nil {
 			out.Baseline = bl
-		}
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
-		// v0.10.1972 — süre dağılımı (yumuşak; hata → panel yok).
-		if dist, err := s.store.GetDBStmtDistribution(ctx, dq, tg); err == nil {
-			out.Distribution = dist
 		}
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
