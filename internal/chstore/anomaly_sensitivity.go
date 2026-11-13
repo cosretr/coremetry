@@ -128,17 +128,6 @@ type AnomalySensitivityConfig struct {
 	// "spike") açılması için ardışık pencere sayısı (aynı semantik, aynı
 	// aktif-olay muafiyeti). 1–6, varsayılan 2; 1 = tek pencere.
 	LogPatternDwellBuckets int `json:"logPatternDwellBuckets"`
-	// LogTemplateNew — v0.10.1061 (operatör onaylı, prod: "Bu log anomalileri
-	// de false pozitif geliyor"): Drain'in ilk kez gördüğü log biçimi
-	// (`log_template_new`, internal/anomaly/log_templates.go). OpLatency'nin
-	// birebir emsali: *bool, nil = KAPALI; bu sürümden ESKİ her blob KAPALI
-	// okunur. Kapalıyken recorder dedektörü HİÇ koşturmaz (aday + bilinen
-	// şablon okuması, upsert — hiçbiri). Templater (log_templates defteri,
-	// Logs "patterns" görünümü) bu anahtardan BAĞIMSIZ yazmaya devam eder.
-	// Açık olaylar yazılmadıkları için 10 dk aktif yaştan sonra düşer; terfi
-	// Problem'i "anomaly cleared" ile kapanır. `log_pattern` (seçilmiş desen
-	// sıçraması) bu anahtara BAĞLI DEĞİL — operatör doğru yakalama dedi.
-	LogTemplateNew *bool `json:"logTemplateNew,omitempty"`
 	// ServiceSlowdown — v0.10.1091 (operatör: "Dün söylediğim CRM sorunu yine
 	// oldu, bir sürü anomali geldi ama P1 problem gelmedi" → "Onay"): yaygın
 	// yavaşlama hızlı yolu (`svc-slowdown:<servis>`, evaluator). Tek kovada ≥ 3
@@ -249,12 +238,6 @@ func (c AnomalySensitivityConfig) TraceOpDwell() int {
 // LogPatternDwell — aralık dışı (eski blobun 0'ı dahil) → varsayılan 2.
 func (c AnomalySensitivityConfig) LogPatternDwell() int {
 	return clampRangeI(c.LogPatternDwellBuckets, logPatternDwellMin, logPatternDwellMax, logPatternDwellDefault)
-}
-
-// LogTemplateNewOn — v0.10.1061: log_template_new dedektörü koşsun mu? nil ⇒
-// KAPALI (OpLatencyOn gibi; gerekçe alanda). Yalnız açıkça true.
-func (c AnomalySensitivityConfig) LogTemplateNewOn() bool {
-	return c.LogTemplateNew != nil && *c.LogTemplateNew
 }
 
 // AnomalyBehaviorConfig — davranış motoru AŞAMA 1'in vidaları
@@ -608,7 +591,6 @@ func DefaultAnomalySensitivity() AnomalySensitivityConfig {
 		// v0.10.1586 — trace_op / log_pattern iki ardışık pencere (operatör onayı).
 		TraceOpDwellBuckets:    traceOpDwellDefault,
 		LogPatternDwellBuckets: logPatternDwellDefault,
-		LogTemplateNew:         boolPtr(false), // v0.10.1061 — operatör onaylı: varsayılan KAPALI
 		// v0.10.1091 — yaygın yavaşlama hızlı yolu, operatör onaylı: AÇIK.
 		ServiceSlowdown: DefaultServiceSlowdown(),
 		ErrorRamp:       DefaultErrorRamp(),
@@ -662,8 +644,6 @@ func NormalizeAnomalySensitivity(c AnomalySensitivityConfig) AnomalySensitivityC
 		// v0.10.1586 — kopyalanmazsa PUT'ta düşerdi; aralık dışı / eksik → 2.
 		TraceOpDwellBuckets:    c.TraceOpDwell(),
 		LogPatternDwellBuckets: c.LogPatternDwell(),
-		// v0.10.1061 — aynı gerekçe: kopyalanmazsa PUT'ta düşer. nil → false.
-		LogTemplateNew: boolPtr(c.LogTemplateNewOn()),
 		// v0.10.1091 — kopyalanmazsa PUT'ta düşerdi. Eksik bölüm (eski blob)
 		// sıfır değerdir → kelepçe varsayılanlara doldurur, bayrak nil → açık.
 		ServiceSlowdown: NormalizeServiceSlowdown(c.ServiceSlowdown),

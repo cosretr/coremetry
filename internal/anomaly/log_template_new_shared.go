@@ -10,8 +10,8 @@ package anomaly
 //      Jaccard, JSON `message`),
 //   3. filterNewTemplateNoise (v0.10.2028 ≥ 20 satır + batch servis hariç,
 //      v0.10.2029 batch'te çoğunluk ERROR+ kalıp).
-// Fark yalnız açma anahtarı: eski yol anomaly_sensitivity.logTemplateNew'e,
-// ML yolu kendi dedektör anahtarına bakar (çağıran kapıyı uygular).
+// v0.10.2085: eski kayıtçı yolu ve anomaly_sensitivity.logTemplateNew
+// anahtarı silindi; tek çağıran ML (kendi dedektör anahtarı, çağıranda).
 //
 // Okuma: CH log_templates defteri (templater puller'ın yazdığı), tik başına
 // en çok 2 sınırlı okuma (aday + aday varsa bilinen). Elasticsearch'e

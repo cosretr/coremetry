@@ -892,6 +892,9 @@ type ListAnomalyEventsFilter struct {
 	// CountActiveAnomalyEvents aynı yüklemi (anomalyExcludeIDsSQL) kullanır
 	// ki rozet ile liste aynı kümeyi saysın.
 	ExcludeIDs []string
+	// FeedMLDetector — v0.10.2085, yalnız ListAnomalyFeed: ML okumasını tek
+	// dedektöre daraltır ("" = tüm ML olayları). Eski tablo okumasını etkilemez.
+	FeedMLDetector string
 	// Kind (v0.10.1799, Davis FAZ 3) — yalnız bu olay türü, SQL'de (LIMIT
 	// türe düşsün: özne terfi süpürmesi subject_red satırlarını diğer
 	// türlerin bütçesinden ayrı okur). Boş = kısıt yok.

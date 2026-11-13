@@ -9,12 +9,17 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/cilcenk/coremetry/internal/chstore"
 )
 
+// v0.10.2085 — eski kayıtçı silindi; geçmiş log_template_new satırları (30 gün
+// TTL) bu kimlikle yazılmıştı. ML olayı aynı kimliği taşımaya devam etmeli ki
+// listede eski satır bir kez görünsün: biçim burada sabit.
 func TestLegacyEventIDMatchesRecorder(t *testing.T) {
 	a := LogTemplateAnomaly{TemplateID: "tpl-7", Template: "payment gateway rejected card <*>", Service: "orders-api"}
-	if got, want := a.LegacyEventID(), newTemplateEvent(a).ID; got != want || got == "" {
-		t.Fatalf("LegacyEventID %q ≠ kayıtçı kimliği %q", got, want)
+	if got, want := a.LegacyEventID(), chstore.FingerprintAnomaly("log_template_new", "tpl-7", "orders-api"); got != want || got == "" {
+		t.Fatalf("LegacyEventID %q ≠ eski kayıtçı kimliği %q", got, want)
 	}
 }
 
@@ -36,15 +41,12 @@ func TestNewLogTemplateFamiliesReusesDecision(t *testing.T) {
 	if gate < 0 || core < 0 || noise < 0 || !(gate < core && core < noise) {
 		t.Fatalf("ortak karar sırası bozuk: masker=%d çekirdek=%d gürültü=%d", gate, core, noise)
 	}
-	// Eski kayıtçı aynı gürültü süzgecini aynı girdilerle çağırıyor (çatal yok).
+	// v0.10.2085 — eski kayıtçı ve anahtarı silindi: tek çağıran ML.
 	rec, err := os.ReadFile("recorder.go")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(rec), "filterNewTemplateNoise(found, r.store.AnomalySensitivityForDetectors().IsBatchService, templater.TemplateLevel)") {
-		t.Fatal("eski kayıtçının gürültü süzgeci değişti — ML ortak girişini de güncelle")
-	}
-	if strings.Contains(body, "LogTemplateNewOn()") {
-		t.Fatal("ortak giriş eski anahtara bağlanmamalı (ML kendi anahtarına bakar)")
+	if strings.Contains(string(rec), "filterNewTemplateNoise(") || strings.Contains(string(rec), "NewLogTemplateFamilies(") {
+		t.Fatal("eski kayıtçı yeni log kalıbı olayı yazmamalı (ML new_template tek yazıcı)")
 	}
 }

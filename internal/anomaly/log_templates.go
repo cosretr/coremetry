@@ -84,41 +84,9 @@ const (
 	knownTemplatesLimit = 500
 )
 
-// DetectNewLogTemplates returns Drain templates whose first_seen
-// landed inside [now-window, now]. The templater puller writes
-// these rows; we just query them.
-//
-// Window guidance: the templater puller runs every 5min by
-// default (see templater/puller.go), so window=10min covers the
-// last two puller cycles — enough to absorb any clock drift
-// between puller + recorder. The anomaly_event dedupe collapses
-// repeated detections.
-//
-// v0.10.1030 — pencerede doğmak artık yetmez: aday, servisinin bilinen bir
-// şablonunun Drain-ailesindense (varyant) bastırılır; aynı tikte aile başına
-// tek aday çıkar (filterNewTemplateFamilies). Tik başına en çok İKİ okuma:
-// aday okuması + aday varsa TEK bilinen-şablon okuması. İkisi AYNI sinceNs
-// ile kurulur ve tam tümleyendir: aday = first_seen >= sinceNs, bilinen =
-// first_seen < sinceNs (ns kesin bind).
-//
-// v0.10.1061 — anahtar (anomaly_sensitivity.logTemplateNew, nil = KAPALI;
-// operatör onaylı: "Bu log anomalileri de false pozitif geliyor"). Kapı HER
-// G/Ç'den ÖNCE ve burada (v0.10.1056 DetectOpLatencyAnomalies emsali):
-// kapalıyken ne aday ne bilinen-şablon okuması, boş liste döner — hata
-// DEĞİL. Bu dedektör log_templates defterini yalnız OKUR; defteri templater
-// puller'ı yazar ve anahtardan bağımsız sürer (Logs "patterns" etkilenmez).
-func DetectNewLogTemplates(ctx context.Context, store *chstore.Store, window time.Duration) ([]LogTemplateAnomaly, error) {
-	if !store.AnomalySensitivityForDetectors().LogTemplateNewOn() {
-		return []LogTemplateAnomaly{}, nil
-	}
-	// v0.10.1829 — maske sürümü geçişinin sessiz penceresi (chstore/
-	// log_masker_version.go): etkilenen şablonlar yeni kimlikle doğarken
-	// "yeni şablon" seli olmasın. Kapı aday okumasından ÖNCE.
-	if quiet, err := maskerQuietGate(store.LogMaskerStateCached(ctx)); quiet {
-		return []LogTemplateAnomaly{}, err
-	}
-	return detectNewLogTemplates(ctx, store, window, time.Now())
-}
+// v0.10.2085 — eski kapılı giriş DetectNewLogTemplates (log_template_new
+// kayıtçısı) silindi; tek giriş NewLogTemplateFamilies
+// (log_template_new_shared.go, ML new_template). Çekirdek aşağıda aynen.
 
 // maskerQuietGate — v0.10.1829 SAF kapı: maske blobu okunamadıysa
 // FAIL-CLOSED (bu tik yeni-şablon olayı yok, hata kayıtçıya; v0.10.1030

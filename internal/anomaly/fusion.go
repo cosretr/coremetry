@@ -222,9 +222,15 @@ func gatherEvidenceInputs(ctx context.Context, store *chstore.Store, deployLookb
 	if snap, err := store.OpenProblemsSnapshot(ctx); err == nil {
 		in.openProblems = snap.Filter("open", "", 500)
 	}
-	if ev, err := store.ListAnomalyEvents(ctx, chstore.ListAnomalyEventsFilter{
-		SinceNs: time.Now().Add(-evidenceWindow).UnixNano(),
-		Limit:   500,
+	// v0.10.2085 — eski log_template_new kayıtçısı silindi; aynı karar ML
+	// new_template olayı olarak yazılır. Kanıt eşitliği için yalnız o
+	// dedektörün ML olayları eski satırlarla AYNI şekilde (sayım olayı,
+	// oran 0, taban yok) sinyal kümesine girer; diğer ML dedektörleri RCA
+	// girdisine bilerek alınmaz (skor kalibrasyonu ayrı iş).
+	if ev, err := store.ListAnomalyFeed(ctx, chstore.ListAnomalyEventsFilter{
+		SinceNs:        time.Now().Add(-evidenceWindow).UnixNano(),
+		Limit:          500,
+		FeedMLDetector: "new_template",
 	}); err == nil {
 		in.events = ev
 	}

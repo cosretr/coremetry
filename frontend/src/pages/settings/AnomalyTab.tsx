@@ -380,10 +380,8 @@ function SensitivitySection() {
       // v0.10.1056 — opLatency daima AÇIK boolean gider: kayıtlı blob ne
       // olduğunu söylesin, eski sunucu varsayılanına kalmasın. v0.10.1085 —
       // alan yoksa TRUE (varsayılan açık, sürdürme kuralıyla).
-      // v0.10.1061 — logTemplateNew aynı gerekçeyle (alan yoksa false).
       const saved = await api.putAnomalySensitivity({
         ...cfg, batchServicePatterns: sentPatterns, opLatency: cfg.opLatency !== false,
-        logTemplateNew: cfg.logTemplateNew === true,
         // v0.10.1091 — bölüm varsa bayrak AÇIK boolean gider (yok = açık).
         ...(cfg.serviceSlowdown
           ? { serviceSlowdown: { ...cfg.serviceSlowdown, enabled: cfg.serviceSlowdown.enabled !== false } }
@@ -605,19 +603,8 @@ function SensitivitySection() {
           <SubjectsSubsection value={cfg.subjects} timezone={cfg.seasonalTimezone}
             onChange={subjects => setCfg({ ...cfg, subjects })}
             onTimezoneChange={seasonalTimezone => setCfg({ ...cfg, seasonalTimezone })} />
-          {/* v0.10.1061 — log_template_new dedektörü: VARSAYILAN KAPALI (operatör
-              onaylı: "Bu log anomalileri de false pozitif geliyor"). Alan yoksa
-              kapalı okunur; kayıt açık boolean gönderir. log_pattern etkilenmez. */}
-          <div className={SEP}>
-            <CheckboxField aria-label="Yeni log deseni anomalileri"
-              checked={cfg.logTemplateNew === true}
-              onCheckedChange={v => setCfg({ ...cfg, logTemplateNew: v })}
-              label="Yeni log deseni anomalileri"
-              hint={<>
-                Kapalı (varsayılan): ilk kez görülen log desenleri anomali açmaz; log desen
-                sıçramaları etkilenmez.
-              </>} />
-          </div>
+          {/* v0.10.2085 — eski "Yeni log deseni anomalileri" kutusu silindi: aynı
+              karar ML'de (Settings › ML › "Yeni log kalıbı", new_template). */}
           {/* v0.10.1478 — RED serisi kaynağı (auto = VM örneklenmemiş, span = eski). */}
           {/* v0.10.1489 — alarm kurallarının kaynağı (alertSource) aynı bölümde. */}
           <REDSourceSubsection source={cfg.redSource} env={cfg.redSourceEnv} alertSource={cfg.alertSource}

@@ -13724,3 +13724,27 @@ eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
   varsayılan P1 listesi) listeyle aynı kümeyi saymaya devam eder.
 - Ek maliyet: derleme başına bir `ml_events FINAL` okuması (LIMIT = kaynak tavanı, max_execution_time 5);
   `/api/inbox` önbellekli (anahtar değişmedi); ES çağrısı yok.
+
+## 2026-11-13 — v0.10.2085 — Eski log_template_new dedektörü silindi (ML new_template tek yazıcı)
+
+- Operatör onayı 2026-11-13. Önkoşul: okuyucular 2080–2082'de ML olaylarını da okuyor. Silinen: kayıtçı adımı
+  (`recordNewLogTemplates`, `newTemplateEvent`), kapılı giriş `DetectNewLogTemplates`, `anomaly_sensitivity.logTemplateNew`
+  (alan, `LogTemplateNewOn`, varsayılan / Normalize satırları; kayıtlı alan okunmaz, Normalize bilinen alanları yazdığı
+  için bir sonraki kayıtta düşer — shim yok), yerleşik ekrandaki kendi anahtarı (`NativeOwnSwitches.logTemplateNew`),
+  Settings › Anomaly kutusu, yalnız bunları sınayan testler. KALAN (ML bağımlı): `NewLogTemplateFamilies`, çekirdek
+  `detectNewLogTemplates`, masker kapısı, gürültü süzgeci, `LegacyEventID` (biçim testte sabit), kanıt defteri
+  `log_template_evidence.go`.
+- Başka kimse eski satıra muhtaç değil: RCA kanıtı (`fusion.go`) aynı-servis / komşu sinyali olarak eski satırları
+  okuyordu → aynı erişiciden yalnız `new_template` ML olayları eklendi (`FeedMLDetector`; sayım olayı, oran 0, taban
+  yok — eski satırla aynı şekil; diğer ML dedektörleri RCA girdisine bilerek alınmadı). RCA çıpa 1 eski satırın
+  kendi hipotezini yazıyordu (satır yoksa çıpa yok). Evaluator terfisi bu türü hiç açmazdı: oran 0 <
+  `MinPeakRatio` (> 0, `anomaly_promotion.go:134`) → `evaluator.go:1589`; sayım kapısı yalnız trace_op/log_pattern
+  (`anomaly_promotion.go:207`).
+- Geçmiş: eski satırlar 30 gün TTL boyunca birleşik listede (`anomalies_unified.go:163`), `/anomalies/:id`'de ve
+  Logs bağlantısında (`anomaly_event_get.go:67` `withLogQueries`, kind log_template_new) görünür; `GET
+  /api/anomalies/log-chart` parametreyle çalışır (servis + arama), eski satır LogQuery'sinden, ML olayı kanıtındaki
+  `logQuery`'den — dokunulmadı. Açık kalmış eski terfi Problem'i (varsa): kaynak satır artık yazılmaz, 10 dk sonra
+  aktif değil → `resolveClearedAnomalyPromotions` (`evaluator.go:1659`, `:1683`) "anomaly cleared" ile kapatır; terfi
+  kapalıysa bayat süpürme (`evaluator.go:1127`).
+- Prod: ML ana anahtarı açık, `new_template` varsayılan açık (`ml_settings.go` `mlDefaultOnDetectors`); kayıtlı ML
+  blobunda açıkça false yazılmışsa yeni log kalıbı olayı hiç üretilmez — doğrulanmadı.

@@ -1,7 +1,8 @@
 package ml
 
 // new_template.go — v0.10.2069: ML log sinyalinin "ilk kez görüldü" kipi
-// (eski log_template_new'in ML karşılığı; eski dedektör silinmedi).
+// (eski log_template_new'in ML karşılığı; eski dedektör v0.10.2085'te
+// silindi, bu tek yazıcı).
 //
 // Karar ÇATALSIZ: anomaly.NewLogTemplateFamilies — eski kayıtçının aynı üç
 // adımı (MaskerVersion sessiz penceresi, v0.10.1030/2040 aile kararı,

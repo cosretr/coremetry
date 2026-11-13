@@ -10361,11 +10361,6 @@ export interface AnomalySensitivityConfig {
   // 1–6, yok/aralık dışı = 2 (sunucu kelepçeler). 1 = eski tek pencere.
   traceOpDwellBuckets?: number;
   logPatternDwellBuckets?: number;
-  // v0.10.1061 — log_template_new (Drain'in ilk kez gördüğü log biçimi)
-  // dedektörü; VARSAYILAN KAPALI (operatör onaylı: "Bu log anomalileri de
-  // false pozitif geliyor"). opLatency ile aynı sözleşme: okuma `=== true`,
-  // kayıt AÇIK boolean gönderir. log_pattern bu anahtara bağlı değil.
-  logTemplateNew?: boolean;
   // v0.10.1091 — yaygın yavaşlama hızlı yolu (`svc-slowdown:<servis>`, operatör
   // onaylı). Bölüm yoksa sunucu varsayılanlarla doldurur; enabled okuması
   // `!== false` (backend *bool, yok = AÇIK).
@@ -12238,7 +12233,7 @@ export interface ExplainCard {
 }
 export interface MLDetectorScore { detector: string; signal?: string; events: number; samples: number; hits: number; hitRate: number }
 /** Yerleşik dedektörler görünümü (v0.10.1766): own = anomaly_sensitivity içindeki eski anahtarlar. */
-export interface NativeOwnSwitches { opLatency: boolean; logTemplateNew: boolean }
+export interface NativeOwnSwitches { opLatency: boolean } // v0.10.2085: logTemplateNew silindi (ML new_template)
 export interface NativeDetectorsView { names: string[]; detectors: Record<string, boolean>; own?: NativeOwnSwitches }
 /** Kalite çerçevesi (v0.10.1751, üç sinyal ortak). *Off bool'ları ters adlı: eksik = açık. */
 export interface MLQuality {

@@ -206,6 +206,8 @@ func mlFeedFilter(f ListAnomalyEventsFilter, now time.Time) (MLEventsFilter, boo
 	mf := MLEventsFilter{Since: time.Unix(0, since), Limit: min(limit, MLUnifiedCap), Services: f.Services}
 	if IsMLAnomalyKind(f.Kind) {
 		mf.Detector = f.Kind[len(MLAnomalyKindPrefix):]
+	} else if f.FeedMLDetector != "" {
+		mf.Detector = f.FeedMLDetector
 	}
 	return mf, true
 }

@@ -474,8 +474,7 @@ func TestDetectNewLogTemplates_NoCandidateNoKnownRead(t *testing.T) {
 	}
 }
 
-// TestDetectNewLogTemplatesSourcePin — kaynak pini: dışa açık giriş saf
-// çekirdeğe gider, çekirdek aile süzgecini ÇAĞIRIR ve bilinen okumasının hata
+// TestDetectNewLogTemplatesSourcePin — kaynak pini: çekirdek aile süzgecini ÇAĞIRIR ve bilinen okumasının hata
 // dalı adayları değil nil döndürür. Süzgeç silinirse ya da hata dalı
 // "hepsini çıkar"a dönerse derleme/test sessiz kalırdı.
 func TestDetectNewLogTemplatesSourcePin(t *testing.T) {
@@ -484,15 +483,9 @@ func TestDetectNewLogTemplatesSourcePin(t *testing.T) {
 		t.Fatal(err)
 	}
 	body := string(src)
-	i := strings.Index(body, "func DetectNewLogTemplates(")
-	if i < 0 {
-		t.Fatal("DetectNewLogTemplates bulunamadı")
-	}
-	exported := body[i:]
-	exported = exported[:strings.Index(exported, "\n}\n")]
-	if !strings.Contains(exported, "return detectNewLogTemplates(ctx, store, window, time.Now())") {
-		t.Error("DetectNewLogTemplates saf çekirdeğe gitmiyor")
-	}
+	// v0.10.2085 — eski kapılı giriş (DetectNewLogTemplates) kayıtçıyla
+	// birlikte silindi; tek giriş NewLogTemplateFamilies (sırası
+	// log_template_new_shared_test.go'da pinli).
 	j := strings.Index(body, "func detectNewLogTemplates(")
 	if j < 0 {
 		t.Fatal("detectNewLogTemplates bulunamadı")
@@ -515,13 +508,5 @@ func TestDetectNewLogTemplatesSourcePin(t *testing.T) {
 	errBranch = errBranch[:strings.Index(errBranch, "\n\t}\n")]
 	if !strings.Contains(errBranch, "if err != nil {") || !strings.Contains(errBranch, "return nil, fmt.Errorf(") {
 		t.Error("bilinen okumasının hata dalı nil döndürmüyor (fail-closed değil)")
-	}
-	// Kayıtçı hâlâ bu dedektörü çağırıyor.
-	rec, err := os.ReadFile("recorder.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(rec), "DetectNewLogTemplates(ctx, r.store, 2*r.window)") {
-		t.Error("recorder DetectNewLogTemplates'i çağırmıyor")
 	}
 }

@@ -117,4 +117,8 @@ func TestMLFeedFilter(t *testing.T) {
 	if !ok || mf.Detector != "new_template" || len(mf.Services) != 1 || mf.Since.UnixNano() != fT-int64(time.Minute) || mf.Limit != MLUnifiedCap {
 		t.Fatalf("süzgeç: %+v", mf)
 	}
+	// v0.10.2085 — RCA kanıtı: eski satırlar + yalnız new_template ML olayları.
+	if mf, ok := mlFeedFilter(ListAnomalyEventsFilter{FeedMLDetector: "new_template"}, now); !ok || mf.Detector != "new_template" {
+		t.Fatalf("tek dedektör daraltması: %+v", mf)
+	}
 }

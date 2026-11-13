@@ -86,21 +86,21 @@ func TestMaskerQuietGate(t *testing.T) {
 	}
 }
 
-// Kapı ulaşılabilir: DetectNewLogTemplates'te anahtar kapısından SONRA,
-// çekirdekten (aday okuması) ÖNCE (feedback: test edilmiş ama ulaşılamaz).
+// Kapı ulaşılabilir: tek girişte (NewLogTemplateFamilies, v0.10.2085 — eski
+// kapılı giriş silindi) çekirdekten (aday okuması) ÖNCE (feedback: test
+// edilmiş ama ulaşılamaz).
 func TestDetectNewLogTemplates_MaskerGateOrder(t *testing.T) {
-	src, err := os.ReadFile("log_templates.go")
+	src, err := os.ReadFile("log_template_new_shared.go")
 	if err != nil {
 		t.Fatal(err)
 	}
 	body := string(src)
-	i := strings.Index(body, "func DetectNewLogTemplates(")
+	i := strings.Index(body, "func NewLogTemplateFamilies(")
 	body = body[i:]
 	body = body[:strings.Index(body, "\n}\n")]
-	sw := strings.Index(body, "LogTemplateNewOn()")
 	gate := strings.Index(body, "maskerQuietGate(store.LogMaskerStateCached(ctx))")
-	core := strings.Index(body, "return detectNewLogTemplates(")
-	if sw < 0 || gate < 0 || core < 0 || !(sw < gate && gate < core) {
-		t.Fatalf("gate order wrong: switch=%d masker=%d core=%d", sw, gate, core)
+	core := strings.Index(body, "detectNewLogTemplates(")
+	if gate < 0 || core < 0 || gate >= core {
+		t.Fatalf("gate order wrong: masker=%d core=%d", gate, core)
 	}
 }

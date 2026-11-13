@@ -14,8 +14,8 @@ package chstore
 // error_ramp, takvim düşüşü, kümeleme, heap bandı, Davis
 // özneleri ve davranış motoru; evaluator'da anomali terfi süpürmesi.
 // Kendi anahtarı olan dedektörler burada tekrar listelenmez: op_latency
-// (varsayılan AÇIK, v0.10.1085; yerel kapı dışında), log_template_new ve
-// heap bandı (varsayılan kapalı).
+// (varsayılan AÇIK, v0.10.1085; yerel kapı dışında) ve heap bandı
+// (varsayılan kapalı). log_template_new v0.10.2085'te silindi (ML new_template).
 //
 // Okuma her tikte (restart yok): blob 15 sn süreç-içi önbellekle okunur
 // (tik başına ≤1 CH nokta okuması). CH hatasında SON bilinen değer, hiç
@@ -146,20 +146,20 @@ func (s *Store) NativeDetectorOn(ctx context.Context, name string) bool {
 // üretti. Aynı ekranda anahtar + "hepsini kapat" için ortak görünüm.
 
 // NativeOwnSwitches — anomaly_sensitivity içindeki eski dedektör anahtarları.
+// v0.10.2085: log_template_new silindi (ML new_template), anahtarı da.
 type NativeOwnSwitches struct {
-	OpLatency      bool `json:"opLatency"`
-	LogTemplateNew bool `json:"logTemplateNew"`
+	OpLatency bool `json:"opLatency"`
 }
 
 // OwnSwitchesFrom — SAF.
 func OwnSwitchesFrom(c AnomalySensitivityConfig) NativeOwnSwitches {
-	return NativeOwnSwitches{OpLatency: c.OpLatencyOn(), LogTemplateNew: c.LogTemplateNewOn()}
+	return NativeOwnSwitches{OpLatency: c.OpLatencyOn()}
 }
 
-// ApplyOwnSwitches — SAF: yalnız bu iki alan yazılır, blobun kalanı korunur.
+// ApplyOwnSwitches — SAF: yalnız bu alan yazılır, blobun kalanı korunur.
 func ApplyOwnSwitches(c AnomalySensitivityConfig, own NativeOwnSwitches) AnomalySensitivityConfig {
-	o, l := own.OpLatency, own.LogTemplateNew
-	c.OpLatency, c.LogTemplateNew = &o, &l
+	o := own.OpLatency
+	c.OpLatency = &o
 	return c
 }
 

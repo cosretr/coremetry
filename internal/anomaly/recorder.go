@@ -8,7 +8,6 @@ import (
 	"github.com/cilcenk/coremetry/internal/cache"
 	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/logstore"
-	"github.com/cilcenk/coremetry/internal/templater"
 )
 
 // Recorder is the persistence side of the anomaly system. The
@@ -120,35 +119,10 @@ func (r *Recorder) tick(ctx context.Context) {
 			}
 		}
 
-		// ── New-template anomalies (v0.6.27) ────────────────────
-		// Drain templater publishes shapes it's never seen before;
-		// surface them as anomalies so operators get a feed of
-		// "what new log line shape just appeared" — complements the
-		// curated-regex detector (log_pattern) which only catches
-		// known failure shapes. Window is 2× the recorder window
-		// to absorb any drift between templater + recorder cadences.
-		//
-		// v0.10.1061 — varsayılan KAPALI (anomaly_sensitivity.logTemplateNew;
-		// operatör onaylı: "Bu log anomalileri de false pozitif geliyor").
-		// Anahtar tik başına atomic'ten (CH okuması yok); kapalıyken adım
-		// dedektörü HİÇ çağırmaz. Yukarıdaki log_pattern adımı anahtara bağlı
-		// DEĞİL; templater kendi döngüsünde yazmaya devam eder.
+		// v0.10.2085 — eski "yeni log şablonu" (log_template_new) adımı silindi;
+		// aynı karar ML new_template dedektöründe (ml/new_template.go,
+		// anomaly.NewLogTemplateFamilies).
 	}
-	recordNewLogTemplates(ctx, r.store.AnomalySensitivityForDetectors().LogTemplateNewOn(),
-		func(ctx context.Context) ([]LogTemplateAnomaly, error) {
-			found, err := DetectNewLogTemplates(ctx, r.store, 2*r.window)
-			if err != nil {
-				return found, err
-			}
-			// v0.10.2028 — gürültü tabanı (log_template_noise.go): ≥ 20 satır;
-			// batch servislerde yeni kalıp olayı yok. Defter etkilenmez.
-			kept, cut := filterNewTemplateNoise(found, r.store.AnomalySensitivityForDetectors().IsBatchService, templater.TemplateLevel)
-			if cut > 0 {
-				log.Printf("[anomaly-recorder] new log templates: %d below noise floor (min %d lines; batch services skipped), %d kept", cut, newTemplateEventMinLines, len(kept))
-			}
-			return kept, nil
-		},
-		r.store.UpsertAnomalyEvent)
 
 	// ── Trace-op anomalies ────────────────────────────────────
 	// v0.10.1586 — sürdürmeli yol (traceOpDwellBuckets, vars. 2; aktif olay muaf).
@@ -182,29 +156,6 @@ func (r *Recorder) tick(ctx context.Context) {
 			return DetectOpLatencyAnomalies(ctx, r.store, r.window)
 		},
 		r.store.UpsertAnomalyEvent)
-}
-
-// recordNewLogTemplates — recorder'ın yeni-log-şablonu adımı (v0.10.1061'te
-// tick'ten çıkarıldı ki anahtar sahte dedektör/upsert ile sınanabilsin;
-// recordOpLatency emsali). on=false → detect ÇAĞRILMAZ: log_templates aday /
-// bilinen okuması ve upsert yok; açık olaylar yazılmadıkları için aktif
-// yaştan sonra düşer. on=true → v0.10.1061 öncesi gövdenin aynısı.
-func recordNewLogTemplates(ctx context.Context, on bool,
-	detect func(context.Context) ([]LogTemplateAnomaly, error),
-	upsert func(context.Context, chstore.AnomalyEvent) error) {
-	if !on {
-		return
-	}
-	newTemplateHits, err := detect(ctx)
-	if err != nil {
-		log.Printf("[anomaly-recorder] new log templates: %v", err)
-	}
-	for _, a := range newTemplateHits {
-		ev := newTemplateEvent(a)
-		if err := upsert(ctx, ev); err != nil {
-			log.Printf("[anomaly-recorder] upsert new log template %s: %v", a.TemplateID, err)
-		}
-	}
 }
 
 // recordOpLatency — recorder'ın operasyon-gecikme adımı (v0.10.1056'te
@@ -322,25 +273,5 @@ func opLatencyEvent(a OpLatencyAnomaly, now time.Time) chstore.AnomalyEvent {
 		BaselineValue: a.BaseP99Ms,
 		BaselineKind:  recorderBaselineKind(a.Ratio),
 		SubjectKind:   chstore.AnomalySubjectService,
-	}
-}
-
-func newTemplateEvent(a LogTemplateAnomaly) chstore.AnomalyEvent {
-	return chstore.AnomalyEvent{
-		// Fingerprint on the stable template ID (Drain hash),
-		// NOT the rendered pattern text — the same template
-		// keeps the same row across recorder ticks.
-		ID:           chstore.FingerprintAnomaly("log_template_new", a.TemplateID, a.Service),
-		Kind:         "log_template_new",
-		Pattern:      a.Template,
-		Service:      a.Service,
-		StartedAt:    a.FirstSeenNs,
-		LastSeen:     a.LastSeenNs,
-		CurrentRatio: 0, // "first appearance" — no ratio over baseline
-		CurrentCount: a.TotalCount,
-		Sample:       a.Sample,
-		Direction:    chstore.AnomalyDirectionUp,
-		BaselineKind: chstore.AnomalyBaselineNone,
-		SubjectKind:  chstore.AnomalySubjectService,
 	}
 }

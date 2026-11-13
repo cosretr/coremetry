@@ -26,12 +26,11 @@ export const NATIVE_DETECTORS: { id: string; label: string; hint: string }[] = [
 
 export const OWN_DETECTORS: { id: keyof NativeOwnSwitches; label: string; hint: string }[] = [
   { id: 'opLatency', label: 'Operasyon gecikmesi (op_latency)', hint: 'anomaly_sensitivity anahtarı; "Operasyon gecikmesi" olaylarını üretir' },
-  { id: 'logTemplateNew', label: 'Yeni log şablonu (NEW LOG SHAPE)', hint: 'anomaly_sensitivity anahtarı; Drain yeni şablon olayı' },
 ];
 
 export function NativeDetectorsSubsection() {
   const [cfg, setCfg] = useState<Record<string, boolean> | null>(null);
-  const [own, setOwn] = useState<NativeOwnSwitches>({ opLatency: false, logTemplateNew: false });
+  const [own, setOwn] = useState<NativeOwnSwitches>({ opLatency: false });
   const [busy, setBusy] = useState(false);
   const [flash, setFlash] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
