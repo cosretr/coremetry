@@ -123,6 +123,9 @@ prod'da şu an açık mı bilinmiyor.
 
 ## 8. Operatöre sorular
 
+Cevaplar (2026-11-13): 1 → şimdi, ayrı sürüm; K1 `v0.10.2099` ile çıktı. 2 → evet, bayrak prod'da
+tüm kullanıcılara (viewer dahil) mesai içinde açılır; sorun olursa kapatılır. 3 → açık.
+
 1. K1 tek sürümle çıksın mı, yoksa adım 5 söküm sürümüne mi katılsın? Öneri: şimdi, ayrı sürüm.
 2. Doğrulama için bayrak prod'da tüm kullanıcılara mı açılsın (viewer dahil görür)? Öneri: evet,
    mesai içinde; sorun olursa kapat.
