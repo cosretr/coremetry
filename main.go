@@ -1764,6 +1764,12 @@ func main() {
 	if mode.api || mode.worker {
 		go srv.StartWikiSync(ctx, lockImpl)
 	}
+	// v0.10.2109 — CoSRE kalite döngüsü D4: günlük v2 evalset koşusu (UTC gün
+	// kapanışı + 2 sa, lider kilidi cosre-evalset-daily, 30 dk tavan, acil
+	// fren system_settings cosre_evalset_daily; profil yerel değilse koşmaz).
+	if mode.worker {
+		go cosrelearn.StartEvalsetDaily(ctx, store, lockImpl, srv.RunDailyEvalset)
+	}
 	srv.SetMCPClient(mcpCliSvc)
 	// v0.10.1282 — AI SRE drain: YALNIZ sre rolünde (all dahil). srv.MCPDeps()
 	// her Set*'ten (Thanos, Entity, Rollout, VMetrics, MCPClient) SONRA —
