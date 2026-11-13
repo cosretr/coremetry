@@ -5,6 +5,7 @@ package mcptools
 // "Ölçülemedi — datasource metriği bulunamadı", değer uydurulmaz.
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -115,11 +116,11 @@ func TestHCDatasources(t *testing.T) {
 			c.DS = []DatasourcePool{{Name: "ORDERS_DS", Pods: 1}}
 			return c
 		}, []string{HCUnknown}, "hesaplanamadı", ""},
-		{"iki datasource iki satır", func() ServicePodsCluster {
+		{"biri sapan, biri sağlıklı → sapan önce, sağlıklı toplu satırda", func() ServicePodsCluster {
 			c := base
 			c.DS = []DatasourcePool{{Name: "A_DS", Pods: 1, UtilPct: f(10)}, {Name: "B_XA", XA: true, Pods: 1, UtilPct: f(99)}}
 			return c
-		}, []string{HCOK, HCCrit}, "", ""},
+		}, []string{HCCrit, HCOK}, "%99", ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -141,7 +142,37 @@ func TestHCDatasources(t *testing.T) {
 		})
 	}
 	two := hcDatasources("orders-api", "cluster-a", cases[len(cases)-1].cl())
-	if two[0].Subject != "A_DS (cluster-a)" || two[1].Subject != "B_XA (cluster-a)" {
-		t.Fatalf("özne: %q %q", two[0].Subject, two[1].Subject)
+	if two[0].Subject != "B_XA (cluster-a)" || two[1].Subject != "sağlıklı olanlar (cluster-a)" || two[1].Seen != "diğer 1 havuz; A_DS doluluk %10" {
+		t.Fatalf("özne: %q %q (%s)", two[0].Subject, two[1].Subject, two[1].Seen)
+	}
+}
+
+// v0.10.2078 — operatör (prod ekranı): 10+ sağlıklı havuzun her biri ayrı
+// satırdı. Sağlıklılar TEK satır; pod adı ve formül yalnız sapan satırda.
+func TestHCDatasourcesHealthyCollapse(t *testing.T) {
+	f := func(v float64) *float64 { return &v }
+	cl := ServicePodsCluster{DSDiscoveryOK: true, DSNames: []string{"jboss_datasources_pool_in_use_count"}}
+	for i := 0; i < 11; i++ {
+		u := float64(i % 3)
+		if i == 4 {
+			u = 8
+		}
+		cl.DS = append(cl.DS, DatasourcePool{Name: fmt.Sprintf("DS_%02d", i), XA: true, Pods: 2, UtilPct: f(u), UtilPod: "orders-api-7c9d8f6b5d-x2kqz"})
+	}
+	rows := hcDatasources("orders-api", "cluster-a", cl)
+	if len(rows) != 1 || rows[0].State != HCOK || rows[0].Seen != "11 havuz; en dolu DS_04 %8" {
+		t.Fatalf("hepsi sağlıklı → tek satır: %+v", rows)
+	}
+	if strings.Contains(rows[0].Seen, "orders-api-") || strings.Contains(rows[0].Seen, "kullanılabilir") {
+		t.Fatalf("sağlıklı satırda pod adı / formül olmamalı: %q", rows[0].Seen)
+	}
+	cl.DS[2].UtilPct = f(96)
+	rows = hcDatasources("orders-api", "cluster-a", cl)
+	if len(rows) != 2 || rows[0].State != HCCrit || rows[0].Subject != "DS_02 (cluster-a)" ||
+		!strings.Contains(rows[0].Seen, "en kötü pod orders-api-7c9d8f6b5d-x2kqz") || rows[1].Seen != "diğer 10 havuz; en dolu DS_04 %8" {
+		t.Fatalf("biri sapan: %+v", rows)
+	}
+	if got := hcDSHealthySeen(3, false, "", -1); got != "3 havuz; bekleme / zaman aşımı yok" {
+		t.Fatalf("doluluk yokken: %q", got)
 	}
 }

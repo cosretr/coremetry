@@ -178,26 +178,60 @@ func hcDatasources(service, cluster string, cl ServicePodsCluster) []Healthcheck
 	case len(cl.DS) == 0:
 		return one(HCUnknown, "datasource metriği var ama data_source etiketli seri yok")
 	}
-	pools := cl.DS
-	var rows []HealthcheckRow
-	for i, pl := range pools {
-		if i >= hcDSMaxRows {
-			break
-		}
-		subject := pl.Name
+	// v0.10.2078 (operatör, prod ekranı: 10+ sağlıklı havuzun her biri ayrı
+	// satır, asıl kontroller altta kayboluyor): yalnız SAPAN havuz kendi
+	// satırını alır; sağlıklı havuzlar tek satırda toplanır.
+	withCluster := func(s string) string {
 		if cluster != "" {
-			subject += " (" + cluster + ")"
+			return s + " (" + cluster + ")"
 		}
-		row := hcDatasourceRow(hcBase(service, HCCheckDatasource, subject), pl)
+		return s
+	}
+	var rows []HealthcheckRow
+	okN, hidden := 0, 0
+	topName, topUtil := "", -1.0
+	for _, pl := range cl.DS {
+		row := hcDatasourceRow(hcBase(service, HCCheckDatasource, withCluster(pl.Name)), pl)
+		if row.State == HCOK {
+			okN++
+			if pl.UtilPct != nil && *pl.UtilPct > topUtil {
+				topName, topUtil = pl.Name, *pl.UtilPct
+			}
+			continue
+		}
+		if len(rows) >= hcDSMaxRows {
+			hidden++
+			continue
+		}
 		if row.Short != "" && cluster != "" {
 			row.Short += " (" + cluster + ")" // cümle çok-cluster'da hangi cluster'ı söyler
 		}
 		rows = append(rows, row)
 	}
-	if len(pools) > hcDSMaxRows {
-		rows[len(rows)-1].Seen += fmt.Sprintf(" · +%d datasource gösterilmedi", len(pools)-hcDSMaxRows)
+	if hidden > 0 {
+		rows[len(rows)-1].Seen += fmt.Sprintf(" · +%d datasource gösterilmedi", hidden)
+	}
+	if okN > 0 {
+		sum := hcBase(service, HCCheckDatasource, withCluster("sağlıklı olanlar"))
+		sum.State, sum.Seen = HCOK, hcDSHealthySeen(okN, len(rows)+hidden > 0, topName, topUtil)
+		rows = append(rows, sum)
 	}
 	return rows
+}
+
+// hcDSHealthySeen — SAF: toplu "sağlıklı havuzlar" satırının metni.
+func hcDSHealthySeen(n int, others bool, topName string, topUtil float64) string {
+	seen := fmt.Sprintf("%d havuz", n)
+	if others {
+		seen = fmt.Sprintf("diğer %d havuz", n)
+	}
+	if topName == "" {
+		return seen + "; bekleme / zaman aşımı yok"
+	}
+	if n == 1 {
+		return fmt.Sprintf("%s; %s doluluk %%%.0f", seen, topName, topUtil)
+	}
+	return fmt.Sprintf("%s; en dolu %s %%%.0f", seen, topName, topUtil)
 }
 
 func hcDatasourceRow(row HealthcheckRow, pl DatasourcePool) HealthcheckRow {
@@ -206,15 +240,14 @@ func hcDatasourceRow(row HealthcheckRow, pl DatasourcePool) HealthcheckRow {
 	short := ""
 	if pl.UtilPct != nil {
 		u := *pl.UtilPct
-		basis := "kullanımda"
+		p := fmt.Sprintf("doluluk %%%.0f", u)
 		if pl.UtilFromActv {
-			basis = "active"
+			p += " (active üzerinden)"
 		}
-		p := fmt.Sprintf("doluluk %%%.0f (%s/%s+kullanılabilir", u, basis, basis)
 		if pl.Pods > 1 {
 			p += ", en kötü pod " + pl.UtilPod
 		}
-		parts = append(parts, p+")")
+		parts = append(parts, p)
 		switch {
 		case u >= hcDSCritPct:
 			state, short = HCCrit, pl.Name+" havuzu dolu"
