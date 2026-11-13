@@ -48,6 +48,13 @@ afterEach(() => { act(() => { root?.unmount(); }); host?.remove(); root = null; 
 const trs = () => [...host!.querySelectorAll('tbody tr[data-row-idx]')] as HTMLElement[];
 
 describe('TraceLogTable (v0.10.1940)', () => {
+  // v0.10.2094 (operatör: "Cluster ile servis yer değiştirsin").
+  it('kolon sırası: Time · Service · Message · Cluster · Pod', async () => {
+    await mount([row(1)]);
+    const heads = [...host!.querySelectorAll('thead th')].map(th => (th.textContent ?? '').replace(/[↓↑⋯]/g, "").trim()).filter(Boolean);
+    expect(heads).toEqual(['Time', 'Service', 'Message', 'Cluster', 'Pod']);
+  });
+
   it('exception rozeti + üst satırda sayaç ve Görünüm düğmesi; açılışta log araması yok', async () => {
     await mount([OOM, row(2)]);
     expect(trs()[0].textContent).toContain('▲ OutOfMemoryError');

@@ -17,6 +17,11 @@ import { mergeBase, prefToView, viewToPref } from '@/lib/logsDisplayPrefs';
 import { LOGS_SAMPLE_DEFAULT } from '@/lib/logsSample';
 import type { LogRow, LogsDisplay } from '@/lib/types';
 
+// v0.10.2094 (operatör, prod trace log sekmesi: "Cluster ile servis yer
+// değiştirsin") — Time · Service · Message · Cluster · Pod. Yalnız trace log
+// sekmesi ve kiosk; /logs varsayılanı (DEFAULT_LOG_COLUMNS) değişmedi.
+export const TRACE_LOG_COLUMNS = ['service', 'message', 'cluster', 'pod'];
+
 export function TraceLogTable({ rows, state, head }: {
   /** Kronolojik satırlar (log + span event + Oracle). */
   rows: LogRow[];
@@ -42,7 +47,7 @@ export function TraceLogTable({ rows, state, head }: {
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', flex: 1, minWidth: 0 }}>{head}</div>
         <DisplayOptions value={display} onChange={setDisplay} />
       </div>
-      <LogTable logs={paged.rows} hideTraceColumn state={state} exceptions display={display} />
+      <LogTable logs={paged.rows} columns={TRACE_LOG_COLUMNS} hideTraceColumn state={state} exceptions display={display} />
       {rows.length > display.pageSize && (
         <Pager mode="offset" count="exact" total={rows.length} page={paged.page} pageSize={display.pageSize}
           hasMore={paged.page < paged.pages - 1} lastReachablePage={paged.pages - 1} onPage={setPage} />
