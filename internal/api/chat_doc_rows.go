@@ -86,7 +86,12 @@ func rowNeedles(question string) []rowNeedle {
 		}
 		w = strings.Trim(w, ".-_")
 		f := wiki.Fold(w)
-		if len([]rune(w)) < 3 || seen[f] {
+		// v0.10.2112 (operator-reported: "ekrana 10000 adet 1 yaz" → "envanterde
+		// 200 satırla eşleşiyor (10000)") — SALT RAKAM jeton aday değil: kimlik
+		// biçimi sayılıp hücrede alt-dize olarak her port / sayı / kimlik
+		// parçasıyla eşleşiyordu. Harf ya da ayraç taşıyan değer (srv10000,
+		// 10.0.0.5, 2.14.0) aynen aranır.
+		if len([]rune(w)) < 3 || seen[f] || isDigitsOnly(f) {
 			continue
 		}
 		ident := strings.ContainsAny(f, "0123456789-._")
@@ -121,6 +126,19 @@ func isMixedCaseIdent(w string) bool {
 		}
 	}
 	return letters >= 3 && lower && innerUpper
+}
+
+// isDigitsOnly — SAF (v0.10.2112): boş değil ve yalnız ASCII rakam.
+func isDigitsOnly(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func isAllCaps(w string) bool {
@@ -173,6 +191,11 @@ func matchDocRows(chunks []docRowChunk, question string, strict bool) ([]docRowM
 				fv := foldWords(cell.Val)
 				v := strings.TrimSpace(fv)
 				if len([]rune(v)) < 3 {
+					continue
+				}
+				// v0.10.2112 — salt rakam hücre ("10000") sorudaki sayıyla tek
+				// başına eşleşme kurmaz (rowNeedles'ın aynı kuralı).
+				if isDigitsOnly(v) {
 					continue
 				}
 				matched := ""
