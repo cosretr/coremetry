@@ -2,7 +2,7 @@
 // format güzel"): Problems satırının başlık / etiket / Occurrences metni.
 import { describe, it, expect } from 'vitest';
 import type { InboxItem } from './types';
-import { rowSentence, inboxRowHeadline, inboxRowLabel, inboxOccurrencesLabel, inboxKindLabel } from './inboxRowText';
+import { rowSentence, inboxRowHeadline, inboxRowLabel, inboxOccurrencesLabel, inboxKindLabel, inboxCountSentence, openForTR } from './inboxRowText';
 
 const base = {
   source: 's', priority: 'P1' as const, priorityReason: 'r', severity: 'critical', service: 'svc',
@@ -55,5 +55,31 @@ describe('inboxKindLabel (v0.10.2121, Tür kolonu)', () => {
     ['anomaly', 'Anomali'], ['incident', 'Incident'], ['yeni', 'Kaynak X'],
   ])('%s → %s', (kind, want) => {
     expect(inboxKindLabel({ kind, source: 'Kaynak X' } as Pick<InboxItem, 'kind' | 'source'>)).toBe(want);
+  });
+});
+
+describe('inboxCountSentence (v0.10.2122, S2 üst sayım cümlesi)', () => {
+  const now = 1_800_000_000e9;
+  const DAY = 86_400e9;
+  it('sayılar + en eski', () => {
+    expect(inboxCountSentence({ P1: 3, P2: 10, P3: 24, exception: 30 }, now - 4 * DAY - 3600e9, now))
+      .toBe('37 açık problem: 3 P1, 10 P2, 24 P3. En eskisi 4 gündür açık.');
+  });
+  it('en eski bilinmiyorsa yalnız sayılar', () => {
+    expect(inboxCountSentence({ P1: 1 }, 0, now)).toBe('1 açık problem: 1 P1, 0 P2, 0 P3.');
+    expect(inboxCountSentence({ P1: 1 }, undefined, now)).toBe('1 açık problem: 1 P1, 0 P2, 0 P3.');
+  });
+  it('boş küme ve sayısız yanıt', () => {
+    expect(inboxCountSentence({ P1: 0, P2: 0, P3: 0 }, now - DAY, now)).toBe('Açık problem yok.');
+    expect(inboxCountSentence(undefined, now - DAY, now)).toBeNull();
+  });
+  it('binlik ayıraç', () => {
+    expect(inboxCountSentence({ P1: 1000, P2: 234, P3: 0 }, 0, now)).toBe('1.234 açık problem: 1.000 P1, 234 P2, 0 P3.');
+  });
+  it.each([
+    [30e9, '1 dakikadır'], [59 * 60e9, '59 dakikadır'], [60 * 60e9, '1 saattir'],
+    [23 * 3600e9 + 59 * 60e9, '23 saattir'], [DAY, '1 gündür'], [10 * DAY + 5, '10 gündür'],
+  ])('openForTR(%d) → %s', (ns, want) => {
+    expect(openForTR(ns)).toBe(want);
   });
 });

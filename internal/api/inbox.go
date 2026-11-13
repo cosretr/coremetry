@@ -977,6 +977,10 @@ func (s *Server) inboxView(q url.Values) (string, func(ctx context.Context) (any
 		// client-side counts were derived from the capped page, so on prod
 		// "Exceptions 0" meant "no exceptions in the top 300 incidents".
 		counts := inboxFacetCounts(items)
+		// v0.10.2122 (S2) — üst sayım cümlesinin "en eskisi" — sayaçlarla AYNI
+		// küme (öncelik süzgecinden ve tavandan önce): istemci hesaplayamaz,
+		// liste tavanda kesiliyor.
+		oldestFirstSeen := inboxOldestFirstSeen(items)
 		// v0.9.354 — chips for kinds we did not fetch still show what EXISTS
 		// (the v0.9.330 contract); the numbers come from the COUNT queries
 		// above. Priority chips now cover the FETCHED kinds only — the
@@ -1039,6 +1043,8 @@ func (s *Server) inboxView(q url.Values) (string, func(ctx context.Context) (any
 			// Facet totals over the pre-facet, pre-cap set. The chips render
 			// from these, so they stay truthful about what is being excluded.
 			"counts": counts,
+			// v0.10.2122 — counts ile aynı kümenin en eski başlangıcı (unix ns; 0 = yok).
+			"oldestFirstSeen": oldestFirstSeen,
 			// v0.9.1342 — ŞERİT çipinin sayısı, `counts`tan AYRI alan.
 			// counts sözlüğü kind/prio anahtarlarıyla dolu; oraya "db"
 			// koymak iki farklı evreni tek haritada karıştırırdı ve
@@ -1131,7 +1137,8 @@ func inboxCountKeyFor(env string, incidentsOn bool) string {
 const inboxDefaultPageLimit = 300
 
 // inboxBadgeQuery — v0.10.1086: Problems sayfasının PARAMETRESİZ açılışta
-// gönderdiği istek (Inbox.tsx: status open, limit 300, sort firstSeen desc,
+// gönderdiği istek (Inbox.tsx: status open, limit 300, sort priority desc —
+// v0.10.2122 S2; önce firstSeen desc —
 // tüm türler, PRIO_DEFAULT ['P1'], servis şeridi, minOcc yok = varsayılan
 // taban + istisna, since/cat yok) + kenar çubuğunun env'i. Aynı parametreler
 // → inboxView'da aynı anahtar: rozet sayfanın önbellek girdisini paylaşır.
@@ -1139,7 +1146,7 @@ func inboxBadgeQuery(env string) url.Values {
 	q := url.Values{}
 	q.Set("status", "open")
 	q.Set("limit", strconv.Itoa(inboxDefaultPageLimit))
-	q.Set("sort", "firstSeen")
+	q.Set("sort", "priority") // v0.10.2122 — sayfa SORT_DEFAULT ile aynı (S2)
 	q.Set("dir", "desc")
 	// v0.10.1796 — sayfa varsayılanıyla aynı; v0.10.1827 — Incidents ana
 	// anahtarına göre (kapalıyken problem + anomaly).
@@ -1290,7 +1297,9 @@ func inboxListKey(status, service, search, ownerTeam, sreTeam, team, env string,
 	// :v11: — v0.10.1827 Incidents ana anahtarı satır kümesini (incident
 	// kaynağı + katlama) değiştirir; anahtar durumu çağıranda `:inc=` ekiyle
 	// anahtara girer, sürüm eski girdiyi yeni sözleşmeymiş gibi sunmasın.
-	return fmt.Sprintf("inbox:v11:status=%s:svc=%s:q=%s:owner=%s:sre=%s:team=%s:env=%s:limit=%d:sort=%s:dir=%s:minOcc=%d:kind=%s:prio=%s:subject=%s",
+	// :v12: — v0.10.2122 (Problems sadeleştirme S2) öncelik sırasının eşitlik
+	// kırıcısı en eski önce oldu ve gövdeye oldestFirstSeen eklendi (:v6: emsali).
+	return fmt.Sprintf("inbox:v12:status=%s:svc=%s:q=%s:owner=%s:sre=%s:team=%s:env=%s:limit=%d:sort=%s:dir=%s:minOcc=%d:kind=%s:prio=%s:subject=%s",
 		status, service, search, ownerTeam, sreTeam, chstore.NormTeamName(team), env, limit, sortID, sortDir, minOcc,
 		strings.Join(sortedCopyOf(kinds), "+"), strings.Join(sortedCopyOf(prios), "+"), subject)
 }
@@ -1729,6 +1738,12 @@ func sortInboxItems(items []InboxItem, id, dir string) {
 			ra, rb := priorityRank(a.Priority), priorityRank(b.Priority)
 			if ra != rb {
 				return ra < rb
+			}
+			// v0.10.2122 (Problems sadeleştirme S2, operatör onaylı mockup) —
+			// aynı öncelikte EN ESKİ önce: en uzun süredir açık olan problem
+			// listenin başında. Yön başlıkla ters dönmez (aşağıdaki tiebreak gibi).
+			if a.StartedAt != b.StartedAt && a.StartedAt > 0 && b.StartedAt > 0 {
+				return a.StartedAt < b.StartedAt
 			}
 		}
 		// Tiebreak — ALWAYS triage order, never reversed with dir. A page

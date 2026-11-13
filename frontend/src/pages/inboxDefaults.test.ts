@@ -46,8 +46,10 @@ describe('Problems varsayılan görünümü', () => {
     expect(arr('PRIO_ALL')).toEqual(['P1', 'P2', 'P3']);
   });
 
-  it('sıralama varsayılanı: ilk görülme, en yeni önce; kişisel kayıt okunmaz', () => {
-    expect(src).toContain("const SORT_DEFAULT = { id: 'firstSeen', dir: 'desc' as const };");
+  // v0.10.2122 (Problems sadeleştirme S2, operatör onaylı mockup) — ilk görülme
+  // yerine öncelik; aynı öncelikte en eski önce (sunucu eşitlik kırıcısı).
+  it('sıralama varsayılanı: öncelik (en eski önce sunucuda); kişisel kayıt okunmaz', () => {
+    expect(src).toContain("const SORT_DEFAULT = { id: 'priority', dir: 'desc' as const };");
     expect(src).toContain('initialSort: SORT_DEFAULT,');
     expect(src).toContain('persistSort: false,');
   });

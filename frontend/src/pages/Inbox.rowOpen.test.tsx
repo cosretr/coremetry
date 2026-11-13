@@ -290,31 +290,33 @@ describe('eski ?item= linki — tam sayfaya yönlendirme', () => {
   });
 });
 
-// v0.10.1081 — varsayılan görünüm yalnız P1, ilk görülmeye göre (en yeni önce);
-// açık URL parametreleri aynen geçerli.
+// v0.10.1081 — varsayılan görünüm yalnız P1; açık URL parametreleri aynen geçerli.
+// v0.10.2122 (Problems sadeleştirme S2, operatör onaylı mockup) — varsayılan
+// sıralama ilk görülme yerine ÖNCELİK (aynı öncelikte en eski önce, sunucuda).
 describe('Problems varsayılan isteği', () => {
   const last = () => m.calls[m.calls.length - 1];
-  it('parametresiz /inbox → prio=P1, sort=firstSeen, dir=desc', async () => {
+  it('parametresiz /inbox → prio=P1, sort=priority, dir=desc', async () => {
     await mount('/inbox');
     expect(last().prio).toBe('P1');
-    expect(last().sort).toBe('firstSeen');
+    expect(last().sort).toBe('priority');
     expect(last().dir).toBe('desc');
   });
   it('açık ?prio= ve ?s_inbox= aynen gider', async () => {
-    await mount('/inbox?prio=P1,P2,P3&s_inbox=priority.desc');
+    await mount('/inbox?prio=P1,P2,P3&s_inbox=firstSeen.desc');
     expect(last().prio).toBe('P1,P2,P3');
-    expect(last().sort).toBe('priority');
+    expect(last().sort).toBe('firstSeen');
     expect(last().dir).toBe('desc');
   });
   it('bayat sıralama kimliği varsayılana düşer', async () => {
     await mount('/inbox?s_inbox=bogus.asc');
-    expect(last().sort).toBe('firstSeen');
+    expect(last().sort).toBe('priority');
     expect(last().dir).toBe('desc');
   });
   it('kişisel (localStorage) sıralama parametresiz adresi EZMEZ', async () => {
     setItem(dtSortKey('inbox'), { id: 'lastSeen', dir: 'asc' });
+    setItem(dtSortKey('inbox2'), { id: 'lastSeen', dir: 'asc' });
     await mount('/inbox');
-    expect(last().sort).toBe('firstSeen');
+    expect(last().sort).toBe('priority');
   });
   it('"tüm öncelikler" tek tıkla P1,P2,P3 yazar', async () => {
     const el = await mount('/inbox');

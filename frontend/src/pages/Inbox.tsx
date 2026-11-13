@@ -14,7 +14,7 @@ import { useInbox, useServicesMetadata } from '@/lib/queries';
 import { tsCompact, tsLong, fmtFixed, fmtAgoNs, rowClickHandlers } from '@/lib/utils';
 // v0.10.1084 — Exceptions listesiyle ortak başlık hücresi + satır metni (saf).
 import { TriageTitleCell } from '@/features/anomalies/TriageTitleCell';
-import { inboxRowHeadline, inboxRowLabel, inboxOccurrencesLabel, inboxKindLabel } from '@/lib/inboxRowText';
+import { inboxRowHeadline, inboxRowLabel, inboxOccurrencesLabel, inboxKindLabel, inboxCountSentence } from '@/lib/inboxRowText';
 import { teamOptionsCI } from '@/lib/teamOptions';
 import { derivedTeamTitle, parseSubjectLane } from '@/lib/problemSubject';
 import { decodeCsvSet, encodeCsvSet, readInboxTeam, INBOX_TEAM_PARAM, INBOX_CAT_PARAM, INBOX_CAT_ALL, INBOX_CAT_LABEL } from '@/lib/inboxUrl';
@@ -99,7 +99,10 @@ const PRIO_DEFAULT = ['P1'] as const;
 // URL'de `s_inbox` (DataTable sözleşmesi); parametresiz adres bu varsayılanı
 // alır — kişisel localStorage sıralaması OKUNMAZ (persistSort:false), yoksa
 // "parametresiz link = varsayılan" sözü tarayıcıya göre değişirdi.
-const SORT_DEFAULT = { id: 'firstSeen', dir: 'desc' as const };
+// v0.10.2122 (Problems sadeleştirme S2, operatör onaylı mockup) — öncelik önce
+// (P1 üstte), aynı öncelikte EN ESKİ önce (sunucu eşitlik kırıcısı). v0.10.1081'in
+// "first seen'e göre sıralı" varsayılanının yerine; s_inbox=firstSeen linkleri aynen çalışır.
+const SORT_DEFAULT = { id: 'priority', dir: 'desc' as const };
 // Sunucunun tanıdığı sıralama kimlikleri (normalizeInboxSort ile birebir);
 // bayat bir `s_inbox` varsayılana düşer.
 // v0.10.1084 — 'source' kolonu kalktı (kaynak ikinci satırın başında); bayat
@@ -617,6 +620,11 @@ export default function InboxPage() {
   // reasonably concluded "the owner filter does not work". Stale data may be
   // shown; it may not masquerade as the answer.
   const showingStale = inboxQ.isPlaceholderData && inboxQ.isFetching;
+  // v0.10.2122 (S2) — üst sayım cümlesi; "şimdi" yanıt geldiğinde sabitlenir
+  // (render başına değişmez, yalnız metin — sorgu anahtarına girmez).
+  const countSentence = useMemo(() => (inboxQ.isPending || inboxQ.isError ? null
+    : inboxCountSentence(inboxQ.data?.counts, inboxQ.data?.oldestFirstSeen, inboxQ.dataUpdatedAt * 1e6)),
+  [inboxQ.isPending, inboxQ.isError, inboxQ.data, inboxQ.dataUpdatedAt]);
   // v0.9.487 (operatör kararı) — v0.9.328/330 "bakmadığın türler" ve v0.9.424
   // "öncelik filtresi dışında" şeritleri KALDIRILDI: "kafa karıştırıyor".
   // Görünürlük sözleşmesi chip sayılarına devrolur (facet chip'leri seçili
@@ -1159,6 +1167,8 @@ export default function InboxPage() {
         {/* v0.9.487 — "bakmadığın türlerde" + "öncelik filtresi dışında"
             şeritleri operatör kararıyla kaldırıldı; sayılar facet
             chip'lerinde yaşıyor. */}
+        {/* v0.10.2122 (S2) — üst sayım cümlesi: tek satır, akışta (yapışkan değil). */}
+        {countSentence && <p className="ib-summary" data-testid="inbox-count-sentence">{countSentence}</p>}
         {!inboxQ.isPending && !inboxQ.isError && (
           <div style={{
             display: 'flex', alignItems: 'center', gap: 8,

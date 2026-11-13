@@ -60,7 +60,8 @@ func TestInboxListKeyCarriesSubject(t *testing.T) {
 	// v0.10.1072 — :v9:: istisna listesi satır önceliklerini değiştirdi.
 	// v0.10.1084 — :v10:: incident katlaması satır kümesini değiştirdi.
 	// v0.10.1827 — :v11:: Incidents ana anahtarı satır kümesini değiştirdi.
-	if !strings.HasPrefix(svc, "inbox:v11:") {
+	// v0.10.2122 — :v12:: öncelik eşitlik kırıcısı en eski önce + oldestFirstSeen.
+	if !strings.HasPrefix(svc, "inbox:v12:") {
 		t.Errorf("anahtar sürümü ilerlememiş: %s", svc)
 	}
 }

@@ -2849,6 +2849,7 @@ export const api = {
       total: number; limit: number; truncated: boolean; scanCapped?: boolean;
       minOcc?: number; hiddenByMinOcc?: number;
       counts?: Record<string, number>;
+      oldestFirstSeen?: number; // v0.10.2122 — counts kümesinin en eski başlangıcı (ns)
       // v0.9.1342 — db şeridindeki toplam. `counts`tan AYRI alan: orası
       // kind/prio evreni, bu özne evreni.
       dbSubjectCount?: number;

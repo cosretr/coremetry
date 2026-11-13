@@ -38,6 +38,9 @@ export type InboxPage = {
   // istisnasız uygulandı; şerit "çoklu-servis" dilini düşürür. undefined
   // (eski gövde) = var.
   spreadAvailable?: boolean;
+  // v0.10.2122 (Problems sadeleştirme S2) — counts ile aynı kümenin en eski
+  // başlangıcı (unix ns; 0/yok = bilinmiyor). Üst sayım cümlesi okur.
+  oldestFirstSeen?: number;
   // v0.9.330 — facet totals computed server-side over the pre-facet, pre-cap
   // set. The chips MUST render from these: counting the returned page is what
   // made prod show "Exceptions 0" on a queue holding thousands of them.

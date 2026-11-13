@@ -5295,6 +5295,8 @@ a.ins-val:hover { text-decoration: underline; }
 .ib-owner { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-1); }
 .ib-team { color: var(--text2); white-space: nowrap; }
 .ib-occ { font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* v0.10.2122 — S2 üst sayım cümlesi (tek satır, akışta; şerit değil). */
+.ib-summary { margin: 0 0 var(--sp-3); font-size: var(--fs-sm); color: var(--text2); }
 
 /* ── Servis dikkat şeridi — v0.10.784 (components/ServiceAttentionStrip.tsx).
    Eski kırmızı callout'un sıkı hâli: başlık satırı 20px, satır 22px, kart

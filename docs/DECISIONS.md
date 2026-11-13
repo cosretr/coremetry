@@ -13872,3 +13872,12 @@ eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
   eylemler tek sağ sütunda) — plan "hover eylemleri kalır" diyor, yeri ajan kararı.
 - `storageKey` `inbox` → `inbox2` (eski genişlikler taşınmaz); sıralama URL'i `sortUrlKey: 's_inbox'` ile aynı kaldı.
 - Ölçülmedi: kolon genişlikleri ve sığma tarayıcıda görülmedi.
+
+## 2026-11-13 — v0.10.2122 — Problems sadeleştirme S2: sıralama + sayım cümlesi (mockup operatör onaylı)
+- Varsayılan sıra `priority desc` (v0.10.1081'in "first seen'e göre sıralı" varsayılanı yerine); sunucuda aynı
+  öncelikte EN ESKİ önce (`sortInboxItems` öncelik dalı; başlangıcı bilinmeyen satır eski sayılmaz). Açık
+  `s_inbox=firstSeen.desc` linkleri aynen çalışır. Öncelik varsayılanı hâlâ yalnız P1 (S3 prod ölçümü bekler).
+- Üstte TEK satır, akışta (yapışkan değil): "N açık problem: a P1, b P2, c P3. En eskisi X gündür açık." Sayılar
+  sunucu öncelik çiplerinden (öncelik süzgeci + tavandan önceki küme, seçili türler), "en eskisi" aynı kümeden
+  yeni `oldestFirstSeen` alanıyla (istemci hesaplayamaz: liste 300'de kesilir).
+- Cache anahtarı `inbox:v11:` → `inbox:v12:` (plan "v10 → v11" diyordu; v11 v0.10.1827'de alınmıştı).

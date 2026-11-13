@@ -193,7 +193,10 @@ Incident satırı süzgeçle elendiyse problem gizlenmez; anomali dokunulmaz; db
 incident çekmez (katlama yok). Rozet sayacı katlamaz. Satır biçimi Exceptions
 listesiyle ortak `TriageTitleCell` (kalın başlık + satır içi durum çipi, soluk
 ayrıntı; FE metni `lib/inboxRowText.ts`, Go ikizi `inboxHeadline` "detail"
-sıralamasında); Source kolonu yok. Cache anahtarı `inbox:v10:`.
+sıralamasında); Source kolonu yok. Cache anahtarı `inbox:v12:`.
+**v0.10.2121/2122 (Problems sadeleştirme S1/S2, onaylı mockup):** kolonlar Öncelik · Ne bozuk · Servis · Ekip ·
+Tür · Ne zamandan beri · İlgilenen; varsayılan sıra `priority desc`, aynı öncelikte EN ESKİ önce (sunucu eşitlik
+kırıcısı); üstte tek sayım cümlesi (`counts` + `oldestFirstSeen`). Öncelik varsayılanı hâlâ yalnız P1 (S3 prod ölçümü bekler).
 
 Kategori `problem_category.go:38-85` (önek → AVAILABILITY/ERROR/SLOWDOWN/
 RESOURCE/CUSTOM); `DisplayID` `P-<base36>` (:92).
@@ -352,7 +355,7 @@ v0.10.1072 — inbox istisna listesi taşıdığı için).
    silent yok (v0.10.2068'de silindi), disk ETA kapalı,
    yeni log deseni (`log_template_new`) kapalı, yerleşik alarm kuralları (`builtin-*`) kapalı,
    SLO burn Problem'i (`problem_priority.sloBurnProblems`) kapalı, Problems varsayılanı
-   yalnız P1 + ilk görülme, fresh deploy yok) YENİDEN AÇMA. Eski operasyon gecikmesi
+   yalnız P1 (v0.10.2122'den beri öncelik + en eski önce sırası), fresh deploy yok) YENİDEN AÇMA. Eski operasyon gecikmesi
    dedektörü (`trace_op_latency`) v0.10.2087'de SİLİNDİ (operatör kararı 2026-11-13; sunucu
    uçları ML `op_latency`; CONSUMER / INTERNAL p99 kaybı kabul) — geri getirmeyi önerme.
 4. Arka plan döngüsü mü? → lider kilidi + tik bütçesi + `OpenProblemsSnapshot`;

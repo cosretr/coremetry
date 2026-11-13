@@ -57,3 +57,16 @@ func annotateInboxTeams(items []InboxItem, md map[string]chstore.ServiceMetadata
 		}
 	}
 }
+
+// inboxOldestFirstSeen — SAF (v0.10.2122, Problems sadeleştirme S2): kümenin
+// en eski başlangıcı (unix ns); başlangıcı bilinmeyen satır sayılmaz, boş
+// küme 0.
+func inboxOldestFirstSeen(items []InboxItem) int64 {
+	var oldest int64
+	for _, it := range items {
+		if it.StartedAt > 0 && (oldest == 0 || it.StartedAt < oldest) {
+			oldest = it.StartedAt
+		}
+	}
+	return oldest
+}

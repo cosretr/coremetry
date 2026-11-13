@@ -213,6 +213,16 @@ describe('Problems satırı — Exceptions biçimi (v0.10.1084)', () => {
     expect(rowOf(el, 'NullPointerException').querySelectorAll('td')[4].textContent).toBe('sahipsiz');
   });
 
+  it('v0.10.2122 — üst sayım cümlesi tek satır, sunucu çip sayılarından; yapışkan değil', async () => {
+    const el = await mount();
+    const p = el.querySelector('[data-testid="inbox-count-sentence"]');
+    expect(p?.textContent).toBe('5 açık problem: 2 P1, 0 P2, 3 P3.');
+    const css = readFileSync(resolve(__dirname, '../styles/globals.css'), 'utf8');
+    const rule = css.match(/\.ib-summary \{[^}]*\}/)?.[0] ?? '';
+    expect(rule).not.toBe('');
+    expect(rule).not.toMatch(/sticky|fixed/);
+  });
+
   it('iki liste AYNI başlık bileşenini kullanır (ikinci tasarım yok)', () => {
     const read = (rel: string) => readFileSync(resolve(__dirname, rel), 'utf8');
     expect(read('./Inbox.tsx')).toContain('<TriageTitleCell');

@@ -175,7 +175,7 @@ func badgeSharesDefaultListKey(t *testing.T, kind string) {
 	t.Helper()
 	s := &Server{}
 	page := url.Values{
-		"status": {"open"}, "limit": {"300"}, "sort": {"firstSeen"}, "dir": {"desc"},
+		"status": {"open"}, "limit": {"300"}, "sort": {"priority"}, "dir": {"desc"}, // v0.10.2122 S2
 		"kind": {kind}, "prio": {"P1"}, "subject": {"service"},
 	}
 	pageKey, _ := s.inboxView(page)
@@ -189,7 +189,7 @@ func badgeSharesDefaultListKey(t *testing.T, kind string) {
 	if envPage != envBadge || envBadge == badgeKey {
 		t.Fatalf("env kapsamlı rozet sayfanın env anahtarını okumalı: %s vs %s", envPage, envBadge)
 	}
-	all := url.Values{"status": {"open"}, "limit": {"300"}, "sort": {"firstSeen"}, "dir": {"desc"}, "prio": {"P1,P2,P3"}}
+	all := url.Values{"status": {"open"}, "limit": {"300"}, "sort": {"priority"}, "dir": {"desc"}, "prio": {"P1,P2,P3"}}
 	if k, _ := s.inboxView(all); k == badgeKey {
 		t.Fatal("tüm öncelikler görünümü rozetle aynı anahtarı paylaşmamalı")
 	}
@@ -205,7 +205,7 @@ func TestInboxBadgeQueryMatchesPageDefaults(t *testing.T) {
 	src := string(b)
 	for _, want := range []string{
 		"const PRIO_DEFAULT = ['P1'] as const;",
-		"const SORT_DEFAULT = { id: 'firstSeen', dir: 'desc' as const };",
+		"const SORT_DEFAULT = { id: 'priority', dir: 'desc' as const };",                 // v0.10.2122 (S2, onaylı mockup)
 		"const KIND_DEFAULT: readonly InboxKind[] = ['problem', 'anomaly', 'incident'];", // v0.10.1796
 		"const KIND_DEFAULT_RETIRED: readonly InboxKind[] = ['problem', 'anomaly'];",     // v0.10.1827
 		"limit: 300,",
@@ -215,7 +215,7 @@ func TestInboxBadgeQueryMatchesPageDefaults(t *testing.T) {
 		}
 	}
 	q := inboxBadgeQuery("")
-	if q.Get("limit") != "300" || q.Get("prio") != "P1" || q.Get("sort") != "firstSeen" || q.Get("dir") != "desc" ||
+	if q.Get("limit") != "300" || q.Get("prio") != "P1" || q.Get("sort") != "priority" || q.Get("dir") != "desc" ||
 		q.Get("minOcc") != "" || q.Get("since") != "" || q.Get("cat") != "" {
 		t.Errorf("rozet sorgusu varsayılan görünümden sapıyor: %v", q)
 	}
