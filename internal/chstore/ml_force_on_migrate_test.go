@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -114,4 +115,32 @@ func TestMigrateMLForceOn(t *testing.T) {
 			t.Fatal("işaret yazılmamalı")
 		}
 	})
+}
+
+// v0.10.2091 — dependency_latency: yeni işaret (v1'i koşmuş kurulum da alır),
+// yalnız bu dedektör, sonraki kapatma kalıcı.
+func TestMigrateMLForceOnV2DependencyLatency(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 11, 13, 12, 0, 0, 0, time.UTC)
+	stored := []byte(`{"enabled":true,"detectors":{"op_latency":false,"metric_kafka":true,"dependency_latency":false,"log_volume":false}}`)
+	f := &migFakeStore{kv: map[string][]byte{mlSettingsKey: stored, mlForceOnMigrateKey: []byte(`{"version":"v0.10.2074"}`)}}
+	mlForceOnMigrated.Store(false)
+	MigrateMLForceOnOnce(ctx, f)
+	var cfg MLConfig
+	_ = json.Unmarshal(f.kv[mlSettingsKey], &cfg)
+	if !cfg.Detectors["dependency_latency"] || cfg.Detectors["op_latency"] || cfg.Detectors["log_volume"] || !cfg.Enabled {
+		t.Fatalf("yalnız dependency_latency açılmalı (v1 işareti varken op_latency kapalı kalır): %s", f.kv[mlSettingsKey])
+	}
+	if len(f.kv["ml_force_on_v2"]) == 0 || len(f.audits) != 1 || !strings.Contains(f.audits[0].Details, "dependency_latency") {
+		t.Fatalf("işaret / audit: %v %+v", f.kv["ml_force_on_v2"], f.audits)
+	}
+	// operatör kapatır → ikinci koşu dokunmaz
+	f.kv[mlSettingsKey] = stored
+	f.putKeys = nil
+	if out, err := MigrateMLForceOnV2(ctx, f, now); err != nil || out != "" || len(f.putKeys) != 0 {
+		t.Fatalf("işaret varken koşmamalı: %q %v %v", out, f.putKeys, err)
+	}
+	if d := DefaultMLConfig(); !d.Detectors["dependency_latency"] {
+		t.Fatal("boş blob / yeni kurulumda dependency_latency açık olmalı")
+	}
 }

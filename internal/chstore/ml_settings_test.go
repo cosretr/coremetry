@@ -191,7 +191,8 @@ func TestMLBaselineSettingOffAndOutOfHash(t *testing.T) {
 // 226ec2c6bb225cdf.
 // v0.10.2077: svc_error_rate (servis hata oranı, varsayılan açık) → ef4c8495b67d41e7.
 // v0.10.2086: svc_breadth (yaygın yavaşlama, varsayılan açık) → 2a9de505e323ff0e.
-const mlDefaultHash1813 = "2a9de505e323ff0e"
+// v0.10.2091: dependency_latency varsayılan açık (operatör kararı) → acf357a6c5728b7d.
+const mlDefaultHash1813 = "acf357a6c5728b7d"
 
 // v0.10.2020 — k8s ailesi: cAdvisor ifadeleri pod toplam satırını
 // (container="") ve duraklatma kabını (POD) süzer; KSM restart ifadesi

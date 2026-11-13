@@ -19,6 +19,9 @@ func TestRecommendMLConfig(t *testing.T) {
 	cur.Detectors["metric_jvm"] = true    // verisi yok: kapanır
 	cur.Detectors["op_latency"] = false   // v0.10.2059: varsayılan açık; kapalı kaydedilmiş eski blob
 	cur.Detectors["metric_kafka"] = false // v0.10.2064: aynı (Davis S3)
+	// v0.10.2091: dependency_latency varsayılan açık; kapalı kaydedilmiş blob
+	// (ölçülemeyen kaynakta öneri dokunmaz — aşağıdaki "zaten kapalıydı" kolu).
+	cur.Detectors["dependency_latency"] = false
 	cur.MaxServices = 2000
 	checks := []MLSourceCheck{
 		chk(MLSourceHTTPServer, "HTTP sunucu", true, true),

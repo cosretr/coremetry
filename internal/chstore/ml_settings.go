@@ -264,9 +264,10 @@ func (c MLConfig) BaselineOn() bool { return c.Enabled && c.Baseline != nil && c
 // Varsayılan blobda ve blobda HİÇ yazılmamış anahtarda açık; operatörün
 // kaydettiği değer (true/false) aynen korunur. Ana anahtar (Enabled) ayrı.
 var mlDefaultOnDetectors = map[string]bool{"op_latency": true, "dependency_error_rate": true, "metric_kafka": true,
-	"new_template":   true, // v0.10.2069: eski log_template_new taşıması (birleşik yetenek, varsayılan açık)
-	"svc_error_rate": true, // v0.10.2077: eski anomaly:*:error_rate işinin ML karşılığı (birleşik yetenek)
-	"svc_breadth":    true} // v0.10.2086: eski svc-slowdown işinin ML karşılığı (birleşik yetenek)
+	"dependency_latency": true, // v0.10.2091: operatör kararı 2026-11-13 (boş blob / yeni kurulum)
+	"new_template":       true, // v0.10.2069: eski log_template_new taşıması (birleşik yetenek, varsayılan açık)
+	"svc_error_rate":     true, // v0.10.2077: eski anomaly:*:error_rate işinin ML karşılığı (birleşik yetenek)
+	"svc_breadth":        true} // v0.10.2086: eski svc-slowdown işinin ML karşılığı (birleşik yetenek)
 
 // MLDetectorDefaultOn — SAF: dedektörün varsayılan durumu.
 func MLDetectorDefaultOn(name string) bool { return mlDefaultOnDetectors[name] }

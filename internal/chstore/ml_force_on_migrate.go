@@ -30,15 +30,30 @@ import (
 	"time"
 )
 
-const (
-	// mlForceOnMigrateKey — göçün system_settings işareti.
-	mlForceOnMigrateKey = "ml_force_on_v1"
-	// mlForceOnMigrateVersion — işaret + audit damgası.
-	mlForceOnMigrateVersion = "v0.10.2074"
+// mlForceOnStep — tek göç adımı: işaret, sürüm, açılan dedektörler, gerekçe.
+// Her adım KENDİ işaretiyle bir kez koşar; v1'i koşmuş kurulum v2'yi yine alır.
+type mlForceOnStep struct {
+	key, version string
+	names        []string
+	reason       string
+}
+
+var (
+	// v0.10.2074 — operatör kararı 2026-11-13.
+	mlForceOnV1 = mlForceOnStep{key: "ml_force_on_v1", version: "v0.10.2074", names: []string{"op_latency", "metric_kafka"},
+		reason: "operatör kararı 2026-11-13: op_latency ve metric_kafka bir kez açıldı (sonradan kapatılırsa kapalı kalır)"}
+	// v0.10.2091 — operatör kararı 2026-11-13 (prod ekranı "Bağımlılık
+	// gecikmesi: Kapalı"): dependency_latency bir kez açılır; YENİ işaret,
+	// v1'i koşmuş prod bu adımı ayrıca alır.
+	mlForceOnV2 = mlForceOnStep{key: "ml_force_on_v2", version: "v0.10.2091", names: []string{"dependency_latency"},
+		reason: "operatör kararı 2026-11-13: dependency_latency bir kez açıldı (sonradan kapatılırsa kapalı kalır)"}
 )
 
-// mlForceOnDetectors — göçün açtığı dedektörler (operatör kararı; başka yok).
-var mlForceOnDetectors = []string{"op_latency", "metric_kafka"}
+// mlForceOnMigrateKey / mlForceOnDetectors — v1 adımının adları (testler).
+var (
+	mlForceOnMigrateKey = mlForceOnV1.key
+	mlForceOnDetectors  = mlForceOnV1.names
+)
 
 // Göç sonuçları.
 const (
@@ -92,7 +107,16 @@ func planMLForceOn(raw []byte, names []string) (newRaw []byte, outcome string, f
 // yapmaz ("" döner). Okuma/yazma düşerse işaret YAZILMAZ ve hata döner —
 // çağıran sonraki turda yeniden dener. Audit yalnız blob değiştiyse.
 func MigrateMLForceOn(ctx context.Context, st inboxKeepMigrateStore, now time.Time) (string, error) {
-	marker, err := st.GetSetting(ctx, mlForceOnMigrateKey)
+	return migrateMLForceOnStep(ctx, st, now, mlForceOnV1)
+}
+
+// MigrateMLForceOnV2 — v0.10.2091 adımı (dependency_latency); aynı sözleşme, ayrı işaret.
+func MigrateMLForceOnV2(ctx context.Context, st inboxKeepMigrateStore, now time.Time) (string, error) {
+	return migrateMLForceOnStep(ctx, st, now, mlForceOnV2)
+}
+
+func migrateMLForceOnStep(ctx context.Context, st inboxKeepMigrateStore, now time.Time, step mlForceOnStep) (string, error) {
+	marker, err := st.GetSetting(ctx, step.key)
 	if err != nil {
 		// İşaret okunamadı — kör koşma: operatörün sonradan kapattığı
 		// dedektörü yeniden açmak, bir tur beklemekten pahalı.
@@ -105,7 +129,7 @@ func MigrateMLForceOn(ctx context.Context, st inboxKeepMigrateStore, now time.Ti
 	if err != nil {
 		return "", fmt.Errorf("read ml: %w", err)
 	}
-	newRaw, outcome, flipped, err := planMLForceOn(raw, mlForceOnDetectors)
+	newRaw, outcome, flipped, err := planMLForceOn(raw, step.names)
 	if err != nil {
 		return "", err
 	}
@@ -118,8 +142,7 @@ func MigrateMLForceOn(ctx context.Context, st inboxKeepMigrateStore, now time.Ti
 			from[n], to[n] = false, true
 		}
 		details, _ := json.Marshal(map[string]any{
-			"version": mlForceOnMigrateVersion, "from": from, "to": to,
-			"reason": "operatör kararı 2026-11-13: op_latency ve metric_kafka bir kez açıldı (sonradan kapatılırsa kapalı kalır)",
+			"version": step.version, "from": from, "to": to, "reason": step.reason,
 		})
 		if err := st.AppendAudit(ctx, AuditEntry{
 			Time: now.UnixNano(), ActorID: "system", ActorEmail: "system", ActorRole: "system",
@@ -129,12 +152,12 @@ func MigrateMLForceOn(ctx context.Context, st inboxKeepMigrateStore, now time.Ti
 			log.Printf("[ml] ayar göçü: audit: %v", err)
 		}
 	}
-	body, _ := json.Marshal(map[string]any{"version": mlForceOnMigrateVersion, "appliedAt": now.UnixNano(), "outcome": outcome, "flipped": flipped})
-	if err := st.PutSetting(ctx, mlForceOnMigrateKey, body); err != nil {
+	body, _ := json.Marshal(map[string]any{"version": step.version, "appliedAt": now.UnixNano(), "outcome": outcome, "flipped": flipped})
+	if err := st.PutSetting(ctx, step.key, body); err != nil {
 		return outcome, fmt.Errorf("write marker: %w", err)
 	}
 	if outcome == MLForceOnReplaced {
-		log.Printf("[ml] ayar göçü (%s): %v kayıtlı ayarda kapalıydı → açıldı (bir kez)", mlForceOnMigrateVersion, flipped)
+		log.Printf("[ml] ayar göçü (%s): %v kayıtlı ayarda kapalıydı → açıldı (bir kez)", step.version, flipped)
 	}
 	return outcome, nil
 }
@@ -147,8 +170,13 @@ func MigrateMLForceOnOnce(ctx context.Context, st inboxKeepMigrateStore) {
 	if mlForceOnMigrated.Load() || st == nil {
 		return
 	}
-	if _, err := MigrateMLForceOn(ctx, st, time.Now()); err != nil {
+	now := time.Now()
+	if _, err := MigrateMLForceOn(ctx, st, now); err != nil {
 		log.Printf("[ml] ayar göçü (sonraki turda yeniden): %v", err)
+		return
+	}
+	if _, err := MigrateMLForceOnV2(ctx, st, now); err != nil { // v0.10.2091
+		log.Printf("[ml] ayar göçü v2 (sonraki turda yeniden): %v", err)
 		return
 	}
 	mlForceOnMigrated.Store(true)

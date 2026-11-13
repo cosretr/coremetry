@@ -13795,3 +13795,10 @@ eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
   raporu" kodda yok). Uç `GET /api/ml/svc-shadow-compare?days=1..14` (salt-okunur, 60 sn önbellek): problems'tan
   `svc-slowdown:*` + `anomaly:*:error_rate` (started_at sınırlı, LIMIT 1000) ve ml_events'ten iki dedektör (LIMIT
   2000/dedektör); eşleme servis + ±15 dk örtüşme: eşleşti / kaçırdı / fazladan / geç.
+
+## 2026-11-13 — v0.10.2091 — dependency_latency kayıtlı ML ayarında bir kez açıldı (operatör kararı)
+
+- Prod ekranı "Bağımlılık gecikmesi: Kapalı"; operatör: zorla aç. v0.10.2074 göçüyle aynı mekanizma, YENİ işaret
+  `system_settings.ml_force_on_v2` (v1'i koşmuş prod da alır). Yalnız açıkça `false` olan `dependency_latency` → `true`;
+  ana anahtar ve diğer dedektörler korunur; system audit `settings.ml.migrate`. Sonradan kapatma kalıcı.
+- Boş blob / yeni kurulumda varsayılan açık (`mlDefaultOnDetectors`); ConfigHash pini güncellendi.
