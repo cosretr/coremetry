@@ -1072,17 +1072,9 @@ func main() {
 		log.Printf("[general-questions] load persisted settings: %v", err)
 	}
 	cfgRefresh.Add("ai-general-questions", store.LoadAIGeneralQuestions)
-	// CoSRE öğrenme Faz 2+4 — gece kalite puanı; önce örneklem self-hosted
-	// hakeme (yapılandırılmış AI profili; ai_calls'a "cosre-selfeval" düşer).
-	if mode.worker {
-		judge := func(jctx context.Context, system, user string) (string, error) {
-			if !copilotSvc.Active() {
-				return "", fmt.Errorf("AI yapılandırılmamış")
-			}
-			return copilotSvc.Explain(copilot.WithMeta(jctx, copilot.CallMeta{Surface: "cosre-selfeval", UserID: "system"}), system, user)
-		}
-		go cosrelearn.StartQualityJob(ctx, store, lockImpl, time.Hour, judge, copilotSvc.ActiveModel)
-	}
+	// CoSRE öğrenme Faz 2+4 gece kalite işi: v0.10.2111'den beri api.Server
+	// kurulduktan SONRA başlar (aşağıda, StartEvalsetDaily'nin yanında) —
+	// gün sonu kancası aday vakaları srv üzerinden yazar.
 	// v0.9.136 (scale-audit 2026-07-20) — RAG hydration + refresh were
 	// mis-nested INSIDE the copilot-error branch, so on the normal path
 	// (copilot loads fine) operator RAG config saved via the UI never
@@ -1769,6 +1761,17 @@ func main() {
 	// fren system_settings cosre_evalset_daily; profil yerel değilse koşmaz).
 	if mode.worker {
 		go cosrelearn.StartEvalsetDaily(ctx, store, lockImpl, srv.RunDailyEvalset)
+		// CoSRE öğrenme Faz 2+4 — gece kalite puanı; önce örneklem self-hosted
+		// hakeme (yapılandırılmış AI profili; ai_calls'a "cosre-selfeval" düşer).
+		// v0.10.2111 (kalite döngüsü D6) — gün puanlandıktan sonra en kötü 5
+		// cevap aday vaka olarak saved_views'a (srv.WriteEvalsetCandidates).
+		judge := func(jctx context.Context, system, user string) (string, error) {
+			if !copilotSvc.Active() {
+				return "", fmt.Errorf("AI yapılandırılmamış")
+			}
+			return copilotSvc.Explain(copilot.WithMeta(jctx, copilot.CallMeta{Surface: "cosre-selfeval", UserID: "system"}), system, user)
+		}
+		go cosrelearn.StartQualityJob(ctx, store, lockImpl, time.Hour, judge, copilotSvc.ActiveModel, srv.WriteEvalsetCandidates)
 	}
 	srv.SetMCPClient(mcpCliSvc)
 	// v0.10.1282 — AI SRE drain: YALNIZ sre rolünde (all dahil). srv.MCPDeps()

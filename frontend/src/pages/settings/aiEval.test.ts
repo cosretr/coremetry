@@ -4,7 +4,7 @@ import {
   evalHref, expectLines, failingCases, fmtDurationMs, fmtRunTime, fmtSec1, fmtSigned2, fmtSignedInt,
   passDeltas, pickDefaultProfile, pickDefaultRunId, progressPct, progressText, routingHint, runElapsedMs,
   runStatusView, runToolsetView, selectionCaseCount, toggleSurface, toolsetLabel, withEvalParams,
-  agentMetaLine, caseBadgeLabel, dailyEvalView, fmtAvg1, fmtTokensK, tierLabel, trailRows,
+  agentMetaLine, caseBadgeLabel, candidateSentence, dailyEvalView, fmtAvg1, fmtTokensK, tierLabel, trailRows,
 } from './aiEval';
 import type { EvalAgentTrail, EvalCaseResult, EvalCompare, EvalRunSummary, EvalsetCatalogSurface } from '@/lib/types';
 
@@ -401,5 +401,13 @@ describe('dailyEvalView', () => {
     expect(f.below).toBe(false);
     expect(f.sentence).toContain('tamamlanmadı: koşu tavanı aşıldı (30 dk)');
     expect(dailyEvalView([r('d', { status: 'running', done: 3 })], 0.8).sentence).toContain('sürüyor');
+  });
+});
+
+describe('candidateSentence', () => {
+  it('boşken yalnız nasıl çalıştığı; doluyken sayılar', () => {
+    expect(candidateSentence([], 14)).toContain('kabul edilmeyen 14 gün sonra');
+    expect(candidateSentence([], 14)).not.toContain('Şu an');
+    expect(candidateSentence([{ accepted: true }, { accepted: false }, { accepted: false }], 14)).toContain('Şu an 2 aday bekliyor, 1 kabul edilmiş.');
   });
 });

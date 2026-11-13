@@ -82,6 +82,7 @@ export * from './copilot'; // v0.10.702 — CoSRE veri çipleri
 export { useTraceRootDef, useSaveTraceRootDef } from './traceRootDef'; // v0.10.733 — kök tanımı
 export {
   aiEvalKeys, useEvalsetCatalog, useEvalRuns, useEvalRun, useEvalCompare, useStartEvalRun, useCancelEvalRun,
+  useEvalCandidates, useAcceptEvalCandidate, // v0.10.2111 — aday vakalar (kalite döngüsü D6)
 } from './aiEval'; // v0.10.940 — Settings › CoSRE › Değerlendirme (evalset paneli)
 export { useOracleFunctionCodes } from './oracleFunctionCodes'; // v0.10.1003 — fonksiyon kodu → Oracle operasyon adı sözlüğü
 export { useProblemVerdicts, useSetProblemVerdict, useSetProblemVerdictPolicy } from './problemVerdicts'; // v0.10.1015 — Problems sekmesinde öğretme

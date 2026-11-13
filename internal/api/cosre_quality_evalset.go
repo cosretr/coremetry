@@ -30,32 +30,7 @@ func qualityEvalsetCase(w chstore.CosreWorstAnswer, inter chstore.CosreInteracti
 	if q == "" {
 		return evalsetExportCase{}, false
 	}
-	tools := []string{}
-	seen := map[string]bool{}
-	for _, t := range inter.Tools {
-		if t.OK && !seen[t.Name] {
-			seen[t.Name] = true
-			tools = append(tools, t.Name)
-		}
-	}
-	facts, forbidden := []string{}, []string{}
-	if g != nil && g.Details != "" {
-		var claims []struct{ Label, Fact string }
-		if json.Unmarshal([]byte(g.Details), &claims) == nil {
-			for _, c := range claims {
-				f := strings.TrimSpace(c.Fact)
-				if f == "" {
-					continue
-				}
-				switch c.Label {
-				case "grounded":
-					facts = append(facts, f)
-				case "ungrounded":
-					forbidden = append(forbidden, f)
-				}
-			}
-		}
-	}
+	tools, facts, forbidden := qualityTurnEvidence(inter, g)
 	expect := map[string]any{"expectedTools": tools, "keyFacts": facts}
 	if len(forbidden) > 0 {
 		expect["mustNotContain"] = forbidden
@@ -77,6 +52,38 @@ func qualityEvalsetCase(w chstore.CosreWorstAnswer, inter chstore.CosreInteracti
 			PromptChars: uint32(len(q)), ResponseChars: uint32(len(answer)),
 		},
 	}, true
+}
+
+// qualityTurnEvidence — SAF: turda BAŞARIYLA yürüyen araçlar (tekil, sıra
+// korunur) + hakemin grounded / ungrounded bulduğu olgular. v0.10.2111 —
+// dışa aktarım ve aday vaka (ai_evalset_candidates.go) ortak okur.
+func qualityTurnEvidence(inter chstore.CosreInteraction, g *chstore.CosreGrounding) (tools, grounded, ungrounded []string) {
+	tools, grounded, ungrounded = []string{}, []string{}, []string{}
+	seen := map[string]bool{}
+	for _, t := range inter.Tools {
+		if t.OK && !seen[t.Name] {
+			seen[t.Name] = true
+			tools = append(tools, t.Name)
+		}
+	}
+	if g != nil && g.Details != "" {
+		var claims []struct{ Label, Fact string }
+		if json.Unmarshal([]byte(g.Details), &claims) == nil {
+			for _, c := range claims {
+				f := strings.TrimSpace(c.Fact)
+				if f == "" {
+					continue
+				}
+				switch c.Label {
+				case "grounded":
+					grounded = append(grounded, f)
+				case "ungrounded":
+					ungrounded = append(ungrounded, f)
+				}
+			}
+		}
+	}
+	return tools, grounded, ungrounded
 }
 
 func (s *Server) exportCosreQualityEvalset(w http.ResponseWriter, r *http.Request) {
@@ -107,7 +114,22 @@ func (s *Server) exportCosreQualityEvalset(w http.ResponseWriter, r *http.Reques
 		ExportedAt: to.UTC().Format(time.RFC3339), CoremetryVersion: s.version,
 		RangeS: int64(days) * 86400, Cases: []evalsetExportCase{},
 	}
+	// v0.10.2111 (D6) — kabul edilmiş aday vakalar dosyaya eklenir (ajan
+	// biçiminde); aynı tur en kötüler listesinde de varsa yalnız aday kalır.
+	accepted, aerr := s.acceptedEvalCandidates(r.Context())
+	if aerr != nil {
+		writeErr(w, aerr)
+		return
+	}
+	acceptedEx := map[string]bool{}
+	for _, c := range accepted {
+		acceptedEx[c.ExchangeID] = true
+		out.Cases = append(out.Cases, evalCandidateExportCase(c))
+	}
 	for _, x := range worst {
+		if acceptedEx[x.ExchangeID] {
+			continue
+		}
 		var gp *chstore.CosreGrounding
 		if g, ok := ground[x.ExchangeID]; ok {
 			gp = &g
@@ -128,5 +150,5 @@ func (s *Server) exportCosreQualityEvalset(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	s.audit(r, "ai.evalset.export", "ai_evalset", "cosre-quality",
-		fmt.Sprintf(`{"cases":%d,"dropped":%d,"days":%d}`, len(out.Cases), out.Dropped, days))
+		fmt.Sprintf(`{"cases":%d,"accepted":%d,"dropped":%d,"days":%d}`, len(out.Cases), len(accepted), out.Dropped, days))
 }

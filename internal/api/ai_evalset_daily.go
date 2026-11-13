@@ -93,10 +93,12 @@ func (s *Server) RunDailyEvalset(ctx context.Context) (bool, string, error) {
 	if s == nil || s.copilot == nil || !s.copilot.Active() {
 		return false, "AI yapılandırılmamış", nil
 	}
-	cases, err := evalsetCasesLoader()
+	embedded, err := evalsetCasesLoader()
 	if err != nil {
 		return false, "", fmt.Errorf("fikstür yüklenemedi: %w", err)
 	}
+	// v0.10.2111 (D6) — kabul edilmiş aday vakalar gömülü kümenin ardına.
+	cases := append(append([]evalCase{}, embedded...), s.evalDailyCandidateCases(ctx)...)
 	profiles, defaultID, surface := s.copilot.ProfilesSnapshot()
 	if bad := evalDailyNonLocalProfiles(profiles, defaultID, surface, evalPlanHasDeep(cases)); len(bad) > 0 {
 		return false, "yerel (self-hosted) işaretli olmayan profil: " + strings.Join(bad, ", "), nil

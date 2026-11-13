@@ -590,6 +590,9 @@ func scoreEvalAgentCase(c evalCase, o evalAgentOutcome, st evalAgentStats, fullT
 			fails = append(fails, fmt.Sprintf("missing any of tools: %v", c.Expect.AnyOfTools))
 		}
 	}
+	if c.Expect.RequireEvidence && len(okNames) == 0 { // v0.10.2111 (D6)
+		fails = append(fails, "no evidence: hiçbir araç başarıyla yürümedi")
+	}
 	for _, name := range c.Expect.ForbiddenTools {
 		if tried[name] {
 			fails = append(fails, "forbidden tool: "+name)

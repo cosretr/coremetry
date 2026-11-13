@@ -34,6 +34,7 @@ import { SectionHead } from '@/components/coremetry/SectionHead';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/coremetry/overlay';
 import { DataTable, type ColumnDef, type DataTableStateInput } from '@/components/coremetry/DataTable';
 import { Sparkline } from '@/components/Sparkline';
+import { AiEvalCandidates } from './AiEvalCandidates';
 import { useEvalsetCatalog, useEvalRuns, useEvalRun, useEvalCompare, useStartEvalRun, useCancelEvalRun } from '@/lib/queries';
 import type { AIToolset, EvalCaseResult, EvalCompare, EvalRunSummary, EvalSurfaceSummary } from '@/lib/types';
 import { FlashBox, humanize } from './shared';
@@ -411,6 +412,10 @@ export function AiEvalPanel() {
           : cmpQ.isError ? <QueryErrorInline text={humanize(cmpQ.error)} onRetry={() => { void cmpQ.refetch(); }} />
           : <Spinner label="Karşılaştırılıyor" />
       )}
+
+      {/* v0.10.2111 (kalite döngüsü D6) — aday vakalar; tek eylem Kabul. Sonda:
+          koşu tabloları sırası (ve kısayolları) değişmez. */}
+      <AiEvalCandidates />
 
       {/* R11 (D9, Q-IA9 kabul): ui/Drawer → coremetry Sheet, sağ kenar, sabit 680 px
           (sürükle-boyutla yok); bölümler SectionHead. Kapanış ?case='i siler. */}

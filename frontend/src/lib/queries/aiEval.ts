@@ -25,6 +25,7 @@ export const aiEvalKeys = {
   runs: () => [...EVAL_KEY, 'runs'] as const,
   run: (id: string) => [...EVAL_KEY, 'run', id] as const,
   compare: (base: string, head: string) => [...EVAL_KEY, 'compare', base, head] as const,
+  candidates: () => [...EVAL_KEY, 'candidates'] as const,
 };
 
 /** v0.10.940 — koşu sürerken yoklama aralığı (ev tabanı 10 s). */
@@ -109,5 +110,24 @@ export function useCancelEvalRun() {
       qc.invalidateQueries({ queryKey: aiEvalKeys.runs() });
       qc.invalidateQueries({ queryKey: aiEvalKeys.run(id) });
     },
+  });
+}
+
+/** v0.10.2111 (kalite döngüsü D6) — aday vakalar. Gecede bir değişir:
+ *  yoklama yok, 60 s taze. */
+export function useEvalCandidates() {
+  return useQuery({
+    queryKey: aiEvalKeys.candidates(),
+    queryFn: ({ signal }) => api.aiEvalsetCandidates(signal),
+    staleTime: 60_000,
+  });
+}
+
+/** v0.10.2111 — adayı KABUL et; her sonuçta liste tazelenir. */
+export function useAcceptEvalCandidate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.aiEvalsetAcceptCandidate(id),
+    onSettled: () => qc.invalidateQueries({ queryKey: aiEvalKeys.candidates() }),
   });
 }

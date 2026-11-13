@@ -52,7 +52,14 @@ var systemSavedViewPages = map[string]struct{}{
 	NotifyThreadPage: {},
 	// v0.10.1533 — P3 özet kuyruğu (Problem standardı R5); yalnız notify yazar.
 	NotifyDigestPage: {},
+	// v0.10.2111 — CoSRE evalset aday vakaları (kalite döngüsü D6); yalnız
+	// gece kalite işi (yazım) ve POST /api/ai/evalset/candidates/{id}/accept
+	// (admin, denetimli) yazar.
+	EvalsetCandidatePage: {},
 }
+
+// EvalsetCandidatePage — v0.10.2111: aday vaka satırlarının page değeri.
+const EvalsetCandidatePage = "cosre_evalset_candidate"
 
 // IsSystemSavedViewPage — SAF: page bir sistem sayfası mı (systemSavedViewPages).
 // Tam eşitlik: saklanan page değeriyle karşılaştırılır (okuyucular da tam

@@ -122,7 +122,7 @@ func checkAgentFixture(t *testing.T, c evalCase, knownTools map[string]bool) {
 	if c.BindService != "" && (!agent || !regexp.MustCompile(`\b`+regexp.QuoteMeta(c.BindService)+`\b`).MatchString(c.User)) {
 		t.Errorf("%s/%s: bindService %q yalnız ajan kipinde ve soruda geçmeli", c.file, c.ID, c.BindService)
 	}
-	agentOnly := len(e.AnyOfTools) > 0 || len(e.ForbiddenTools) > 0 || e.MaxToolCalls != nil || e.ExpectTier != "" || e.MaxTokens > 0
+	agentOnly := len(e.AnyOfTools) > 0 || len(e.ForbiddenTools) > 0 || e.MaxToolCalls != nil || e.ExpectTier != "" || e.MaxTokens > 0 || e.RequireEvidence
 	if agentOnly && !agent {
 		t.Errorf("%s/%s: anyOfTools / forbiddenTools / maxToolCalls / expectTier / maxTokens yalnız ajan kipinde", c.file, c.ID)
 	}
@@ -136,8 +136,8 @@ func checkAgentFixture(t *testing.T, c evalCase, knownTools map[string]bool) {
 	if !agent {
 		return
 	}
-	if len(e.ExpectedTools) == 0 && len(e.AnyOfTools) == 0 {
-		t.Errorf("%s/%s: ajan vakası en az bir araç beklentisi taşır (expectedTools | anyOfTools)", c.file, c.ID)
+	if len(e.ExpectedTools) == 0 && len(e.AnyOfTools) == 0 && !e.RequireEvidence { // v0.10.2111 — aday vakası
+		t.Errorf("%s/%s: ajan vakası en az bir araç beklentisi taşır (expectedTools | anyOfTools | requireEvidence)", c.file, c.ID)
 	}
 	if strings.TrimSpace(c.User) == "" || c.Prompt != "" {
 		t.Errorf("%s/%s: ajan vakası user taşır, prompt değil", c.file, c.ID)

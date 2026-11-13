@@ -88,6 +88,10 @@ type evalExpect struct {
 	// yürüyen her çağrının services[] / service argümanı kullanıcı kapsamının
 	// alt kümesi (tools-audit §10 G8; ai_evalset_agent_scope.go).
 	ServicesInScope bool `json:"servicesInScope,omitempty"`
+	// RequireEvidence — v0.10.2111 (kalite döngüsü D6; yalnız ajan kipi): en az
+	// bir araç BAŞARIYLA yürümeli (kanıt araması zorunlu). Aday vakaların
+	// veriden bağımsız beklentisi; adı ne olursa olsun bir araç yeter.
+	RequireEvidence bool `json:"requireEvidence,omitempty"`
 }
 
 type evalCase struct {

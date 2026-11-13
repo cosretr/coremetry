@@ -3364,6 +3364,34 @@ export interface EvalRunSummary {
   daily?: boolean;
 }
 
+/** v0.10.2111 (kalite döngüsü D6) — gece kalite işinin önerdiği aday vaka
+ *  (Go evalsetCandidate). Kabul edilmemiş aday `ttlDays` gün sonra listeden düşer. */
+export interface EvalsetCandidate {
+  id: string;
+  exchangeId: string;
+  /** Puanlanan gün (YYYY-MM-DD, UTC). */
+  day: string;
+  answeredAt: string;
+  question: string;
+  answer: string;
+  score: number;
+  signals: string[];
+  tier: string;
+  model: string;
+  anyOfTools: string[];
+  mustNotContain: string[];
+  createdAt: string;
+  accepted: boolean;
+  acceptedBy?: string;
+  acceptedAt?: string;
+}
+
+/** GET /api/ai/evalset/candidates */
+export interface EvalsetCandidateList {
+  candidates: EvalsetCandidate[];
+  ttlDays: number;
+}
+
 /** v0.10.2106 — evalset koşusunun sohbet yolu (ai_eval_runs.path). */
 export type EvalRunPath = 'v1' | 'v2';
 

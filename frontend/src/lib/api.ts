@@ -1389,6 +1389,13 @@ export const api = {
     request<{ ok: boolean }>(`/api/ai/evalset/runs/${encodeURIComponent(id)}/cancel`, { method: 'POST', timeoutMs: 15_000 }),
   aiEvalsetCompare: (base: string, head: string, signal?: AbortSignal) =>
     get<import('./types').EvalCompare>(`/api/ai/evalset/compare?${qs({ base, head })}`, signal),
+  // v0.10.2111 (kalite döngüsü D6) — aday vakalar: liste (admin) + tek eylem
+  // "Kabul" (admin, audit evalset.candidate.accept).
+  aiEvalsetCandidates: (signal?: AbortSignal) =>
+    get<import('./types').EvalsetCandidateList>(`/api/ai/evalset/candidates`, signal),
+  aiEvalsetAcceptCandidate: (id: string) =>
+    request<{ candidate: import('./types').EvalsetCandidate }>(
+      `/api/ai/evalset/candidates/${encodeURIComponent(id)}/accept`, { method: 'POST', timeoutMs: 15_000 }),
   aiRates: () =>
     get<Record<string, import('./types').AIRate>>(`/api/ai/rates`),
   // v0.10.411 — AI bütçesi: tavanlar + son 24 saat kullanımı.

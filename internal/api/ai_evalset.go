@@ -47,11 +47,16 @@ type evalsetProvenance struct {
 }
 
 type evalsetExportCase struct {
-	ID         string            `json:"id"`
-	Surface    string            `json:"surface"`
-	Why        string            `json:"why"`
-	Prompt     string            `json:"prompt"`
-	Response   string            `json:"response"`
+	ID       string `json:"id"`
+	Surface  string `json:"surface"`
+	Why      string `json:"why"`
+	Prompt   string `json:"prompt"`
+	Response string `json:"response"`
+	// User / Mode — v0.10.2111 (kalite döngüsü D6): kabul edilmiş aday vaka
+	// ajan kipindedir (mode "agent", soru user'da, prompt boş) — dosya repoya
+	// gömülünce fikstür doğrulamasından aynı şekliyle geçsin.
+	User       string            `json:"user,omitempty"`
+	Mode       string            `json:"mode,omitempty"`
 	Expect     map[string]any    `json:"expect"`
 	Provenance evalsetProvenance `json:"provenance"`
 }

@@ -115,7 +115,9 @@ func RunQualityDayWithJudge(ctx context.Context, st QualityStore, judge Judge, m
 // StartQualityJob — worker'da saatte bir, Redis lider kilidiyle; hazır ve
 // işlenmemiş günleri (koşu işareti yok) puanlar.
 // judge nil → Faz 4 hakemi atlanır (model yapılandırılmamış).
-func StartQualityJob(ctx context.Context, st QualityStore, lock cache.Lock, interval time.Duration, judge Judge, model func() string) {
+// afterDay — v0.10.2111 (kalite döngüsü D6): gün BAŞARIYLA puanlandıktan
+// sonra çağrılır (aday vakalar); nil = yok. Hatası günü yeniden koşturmaz.
+func StartQualityJob(ctx context.Context, st QualityStore, lock cache.Lock, interval time.Duration, judge Judge, model func() string, afterDay func(ctx context.Context, day time.Time) (int, error)) {
 	if interval <= 0 {
 		interval = time.Hour
 	}
@@ -146,6 +148,13 @@ func StartQualityJob(ctx context.Context, st QualityStore, lock cache.Lock, inte
 				return
 			}
 			log.Printf("[cosre-quality] %s: %d cevap, %d tool puanlandı", d.Format("2006-01-02"), a, t)
+			if afterDay != nil {
+				if n, err := afterDay(ctx, d); err != nil {
+					log.Printf("[cosre-evalset-candidates] %s: %v", d.Format("2006-01-02"), err)
+				} else if n > 0 {
+					log.Printf("[cosre-evalset-candidates] %s: %d aday vaka yazıldı", d.Format("2006-01-02"), n)
+				}
+			}
 		}
 	}
 	tick()

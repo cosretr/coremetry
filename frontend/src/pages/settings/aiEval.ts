@@ -521,3 +521,14 @@ export function dailyEvalView(runs: readonly EvalRunSummary[], threshold?: numbe
   }
   return { none: false, last, trend, below, sentence };
 }
+
+/** v0.10.2111 (kalite döngüsü D6) — SAF: aday vakalar bölümünün düz cümlesi. */
+export function candidateSentence(rows: readonly { accepted: boolean }[], ttlDays: number): string {
+  const accepted = rows.filter(r => r.accepted).length;
+  const pending = rows.length - accepted;
+  const base = `Gece kalite işi her gün en kötü 5 cevabı aday olarak önerir. Kabul edilen aday günlük koşuya `
+    + `(canlı CoSRE döngüsünden) ve «evalset indir» dosyasına girer; kabul edilmeyen ${ttlDays} gün sonra listeden düşer. `
+    + `Adaylar CI kapısına girmez.`;
+  if (rows.length === 0) return base;
+  return `${base} Şu an ${pending} aday bekliyor, ${accepted} kabul edilmiş.`;
+}
