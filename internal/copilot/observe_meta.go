@@ -26,57 +26,58 @@ import (
 // sabitler — systemChatRoundCap gibi kuyruk literali olanlar — dahil;
 // saf bileşimler parçalarıyla kapsanır).
 var promptVersionRegistry = map[string]string{
-	"systemTraceBody":            systemTraceBody,
-	"traceFollowUpAddendum":      traceFollowUpAddendum, // v0.10.948; v0.10.972 — aynı başlıklar
-	"systemSpan":                 systemSpan,
-	"systemProblem":              systemProblem,
-	"systemExceptionBody":        systemExceptionBody,   // v0.10.1370 — örnek trace logları; v0.10.1379 — HATA ZİNCİRİ kuralı
-	"systemOracleException":      systemOracleException, // v0.10.1100 — Oracle hata grubu; v0.10.1370 — örnek trace logları; v0.10.1379 — HATA ZİNCİRİ
-	"systemIncident":             systemIncident,
-	"systemAnomaly":              systemAnomaly,
-	"systemServiceHealth":        systemServiceHealth,
-	"systemRunbook":              systemRunbook,
-	"systemCompareTraces":        systemCompareTraces,
-	"systemDeployImpact":         systemDeployImpact,
-	"systemSLOBurn":              systemSLOBurn,
-	"systemServiceTags":          systemServiceTags,
-	"systemSlowQuery":            systemSlowQuery,
-	"systemNLToQuery":            systemNLToQuery,
-	"systemCHQueryOptimize":      systemCHQueryOptimize,
-	"systemRCAVerdict":           systemRCAVerdict,
-	"systemCodeAddendum":         systemCodeAddendum,
-	"systemServiceCharts":        systemServiceCharts,
-	"systemShiftSummary":         systemShiftSummary,
-	"systemAlertNoise":           systemAlertNoise,
-	"systemLogPatterns":          systemLogPatterns,
-	"systemLogSpike":             systemLogSpike,          // v0.10.1284 — AI SRE Faz 1a
-	"systemLogLine":              systemLogLine,           // v0.10.1291 — ✨ log satırı
-	"systemExplainLogs":          systemExplainLogs,       // Log Search 6.3 — "Bu logları açıkla"
-	"systemLogsNLQuery":          systemLogsNLQuery,       // Log Search 6.6 — doğal dilden log sorgusu
-	"systemServiceLogSummary":    systemServiceLogSummary, // Log Search 6.7 — servis log özeti
-	"systemSREInvestigation":     systemSREInvestigation,  // v0.10.1287 — AI SRE Faz 1b
-	"systemPostmortem":           systemPostmortem,
-	"systemRunbookUpdate":        systemRunbookUpdate,
-	"systemServiceReport":        systemServiceReport, // v0.10.1337 — guided servis raporu
-	"DataNotInstruction":         DataNotInstruction,
-	"systemGuidedChat":           systemGuidedChat,
-	"latencyEvidenceRule":        latencyEvidenceRule, // v0.10.1299 — guided / serbest döngü / AI SRE ortak kuralı
-	"systemDrawerChat":           systemDrawerChat,
-	"systemCaseCompare":          systemCaseCompare,
-	"systemBriefingHeadline":     systemBriefingHeadline, // v0.10.1699
-	"systemGroundingJudge":       systemGroundingJudge,
-	"systemRAGChat":              systemRAGChat,
-	"ChatAnswerStyle":            ChatAnswerStyle,       // v0.10.1137 — ortak sohbet cevap biçimi
-	"systemWikiChat":             systemWikiChat,        // v0.10.1124
-	"systemWikiFollowUp":         systemWikiFollowUp,    // v0.10.1134 — wiki takip sorusu
-	"ragChatCore":                ragChatCore,           // v0.10.1136 — RAG gövdesi (wiki eki bunun üstüne)
-	"systemRAGChatWiki":          systemRAGChatWiki,     // v0.10.1136 — RAG + wiki atıf eki
-	"systemWikiSelect":           systemWikiSelect,      // v0.10.1136 — iki aşamalı okuma: sayfa seçimi
-	"WikiNotInPageSentinel":      WikiNotInPageSentinel, // v0.10.1134 — takip "sayfada yok" işareti
-	"systemChat":                 systemChat,
-	"systemChatRoundCap":         systemChatRoundCap,
-	"systemChatRoundCapAddendum": systemChatRoundCapAddendum, // v0.10.806
-	"chatDegenRetryAddendum":     chatDegenRetryAddendum,     // v0.10.1324 — yineleme sonrası araçsız deneme
+	"systemTraceBody":             systemTraceBody,
+	"traceFollowUpAddendum":       traceFollowUpAddendum, // v0.10.948; v0.10.972 — aynı başlıklar
+	"systemSpan":                  systemSpan,
+	"systemProblem":               systemProblem,
+	"systemExceptionBody":         systemExceptionBody,   // v0.10.1370 — örnek trace logları; v0.10.1379 — HATA ZİNCİRİ kuralı
+	"systemOracleException":       systemOracleException, // v0.10.1100 — Oracle hata grubu; v0.10.1370 — örnek trace logları; v0.10.1379 — HATA ZİNCİRİ
+	"systemIncident":              systemIncident,
+	"systemAnomaly":               systemAnomaly,
+	"systemServiceHealth":         systemServiceHealth,
+	"systemRunbook":               systemRunbook,
+	"systemCompareTraces":         systemCompareTraces,
+	"systemDeployImpact":          systemDeployImpact,
+	"systemSLOBurn":               systemSLOBurn,
+	"systemServiceTags":           systemServiceTags,
+	"systemSlowQuery":             systemSlowQuery,
+	"systemNLToQuery":             systemNLToQuery,
+	"systemCHQueryOptimize":       systemCHQueryOptimize,
+	"systemRCAVerdict":            systemRCAVerdict,
+	"systemCodeAddendum":          systemCodeAddendum,
+	"systemServiceCharts":         systemServiceCharts,
+	"systemShiftSummary":          systemShiftSummary,
+	"systemAlertNoise":            systemAlertNoise,
+	"systemLogPatterns":           systemLogPatterns,
+	"systemLogSpike":              systemLogSpike,          // v0.10.1284 — AI SRE Faz 1a
+	"systemLogLine":               systemLogLine,           // v0.10.1291 — ✨ log satırı
+	"systemExplainLogs":           systemExplainLogs,       // Log Search 6.3 — "Bu logları açıkla"
+	"systemLogsNLQuery":           systemLogsNLQuery,       // Log Search 6.6 — doğal dilden log sorgusu
+	"systemServiceLogSummary":     systemServiceLogSummary, // Log Search 6.7 — servis log özeti
+	"systemSREInvestigation":      systemSREInvestigation,  // v0.10.1287 — AI SRE Faz 1b
+	"systemPostmortem":            systemPostmortem,
+	"systemRunbookUpdate":         systemRunbookUpdate,
+	"systemServiceReport":         systemServiceReport, // v0.10.1337 — guided servis raporu
+	"DataNotInstruction":          DataNotInstruction,
+	"systemGuidedChat":            systemGuidedChat,
+	"latencyEvidenceRule":         latencyEvidenceRule, // v0.10.1299 — guided / serbest döngü / AI SRE ortak kuralı
+	"systemDrawerChat":            systemDrawerChat,
+	"systemCaseCompare":           systemCaseCompare,
+	"systemBriefingHeadline":      systemBriefingHeadline, // v0.10.1699
+	"systemGroundingJudge":        systemGroundingJudge,
+	"systemRAGChat":               systemRAGChat,
+	"ChatAnswerStyle":             ChatAnswerStyle,       // v0.10.1137 — ortak sohbet cevap biçimi
+	"systemWikiChat":              systemWikiChat,        // v0.10.1124
+	"systemWikiFollowUp":          systemWikiFollowUp,    // v0.10.1134 — wiki takip sorusu
+	"ragChatCore":                 ragChatCore,           // v0.10.1136 — RAG gövdesi (wiki eki bunun üstüne)
+	"systemRAGChatWiki":           systemRAGChatWiki,     // v0.10.1136 — RAG + wiki atıf eki
+	"systemWikiSelect":            systemWikiSelect,      // v0.10.1136 — iki aşamalı okuma: sayfa seçimi
+	"WikiNotInPageSentinel":       WikiNotInPageSentinel, // v0.10.1134 — takip "sayfada yok" işareti
+	"systemChat":                  systemChat,
+	"systemChatRoundCap":          systemChatRoundCap,
+	"systemChatRoundCapAddendum":  systemChatRoundCapAddendum,  // v0.10.806
+	"chatDegenRetryAddendum":      chatDegenRetryAddendum,      // v0.10.1324 — yineleme sonrası araçsız deneme
+	"chatGeneralQuestionAddendum": chatGeneralQuestionAddendum, // v0.10.2123 — v2 döngüsü genel soru eki
 	// CoSRE v2 araç seti dilim 2 — kullanıcı kapsamı ekleri (yalnız v2 döngüsü).
 	"chatUserScopeAddendumTmpl":          chatUserScopeAddendumTmpl,
 	"chatUserScopeAskTeamAddendum":       chatUserScopeAskTeamAddendum,

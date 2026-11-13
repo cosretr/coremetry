@@ -1113,7 +1113,8 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 		need := needsTeamScope(tsc, lastUserText(req.Messages))
 		emit(chatScopeEventKind, scopeEventFor(us, need, req.Context.Unscoped)) // v0.10.1725 teamPick
 		v2p := &v2LoopPlan{Scope: us, Addendum: scopeAddendumFor(us, req.Messages, need, req.Context.Unscoped) +
-			s.briefingAskAddendum(ctx, us, req.Context.Env, req.Context.BriefingID, req.Context.BriefingLine),
+			s.briefingAskAddendum(ctx, us, req.Context.Env, req.Context.BriefingID, req.Context.BriefingLine) +
+			generalQuestionLoopAddendum(chstore.CurrentAIGeneralQuestions().Allow, lastUserText(req.Messages)), // v0.10.2123
 			Budget: narrowLoopBudget(chstore.CurrentAILoopBudget(), v2LoopCeilings(dm, exchangeMax))} // dilim 4
 		if rtPlan != nil { // v0.10.1738 — rota grafikleri (CosreChart source=route) + ek + çipler
 			for _, sp := range rtPlan.Specs {

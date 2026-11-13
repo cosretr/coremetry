@@ -214,7 +214,7 @@ func TestOffTopicAndPastedErrorSourceGates(t *testing.T) {
 		t.Fatal(err)
 	}
 	isrc := string(ib)
-	parse, veto := strings.Index(isrc, "parseIntentJSON(raw, svcNames"), strings.Index(isrc, "offTopicVeto(question")
+	parse, veto := strings.Index(isrc, "parseIntentJSON(raw, svcNames"), strings.Index(isrc, "offTopicVetoFor(question") // v0.10.2123 — yola göre veto
 	none := -1
 	if parse >= 0 {
 		if i := strings.Index(isrc[parse:], "if !matched {"); i >= 0 {

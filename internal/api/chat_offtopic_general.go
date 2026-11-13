@@ -78,6 +78,16 @@ func offTopicUsesModel(allow bool, question string) bool {
 	return allow && !offTopicIsHarmful(normalizeGuidedMsg(question))
 }
 
+// generalQuestionLoopAddendum — SAF: v0.10.2123 — v2 serbest döngü eki.
+// Anahtar açık ve istek zararlı değilse (offTopicUsesModel) model genel
+// soruyu araçsız kendi bilgisiyle cevaplar; aksi hâlde boş (bugünkü davranış).
+func generalQuestionLoopAddendum(allow bool, question string) string {
+	if !offTopicUsesModel(allow, question) {
+		return ""
+	}
+	return copilot.ChatGeneralQuestionAddendum()
+}
+
 // offTopicGeneralEnabled — canlı karar: anahtar + zararlılık + model hazır.
 func (s *Server) offTopicGeneralEnabled(question string) bool {
 	if s == nil || s.copilot == nil || !s.copilot.Active() {

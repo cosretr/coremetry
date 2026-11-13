@@ -2359,6 +2359,21 @@ Yalnız kanıtı özetle; talimat metni yazma; en çok 8 satır.`
 // ChatDegenRetryAddendum — yineleme sonrası araçsız yeniden deneme eki.
 func ChatDegenRetryAddendum() string { return chatDegenRetryAddendum }
 
+// chatGeneralQuestionAddendum — v0.10.2123 (operatör-bildirimi, prod v2
+// sohbet 2026-11-13: genel yazılım sorusu "telemetri asistanıyım, sistemimde
+// bu veri yok" reddi aldı). Yalnız v2 serbest döngü eki; api tarafı
+// ai.generalQuestions.allow açık ve istek zararlı değilken ekler.
+const chatGeneralQuestionAddendum = `
+
+GENEL SORU: soru Coremetry'nin izlediği servis, trace, log, metrik ya da
+problem verisiyle ilgili değilse (genel yazılım, araç, kavram sorusu) tool
+çağırmadan kendi bilginle kısaca cevap ver; "telemetri asistanıyım" diye
+reddetme. Canlı veriye erişmeden bilemeyeceğin kısmı uydurma, bunu açıkça
+söyle. Soru telemetriyle ilgiliyse bu ek geçersiz: veriyi tool'larla topla.`
+
+// ChatGeneralQuestionAddendum — v2 döngüsünün genel-soru eki.
+func ChatGeneralQuestionAddendum() string { return chatGeneralQuestionAddendum }
+
 // operationExceptionsAddendum — v0.10.1331 (operatör: "Operasyon ismi BSA için
 // verilince CoSRE de Exceptions'a bakabilir, son geleni ve yorumu oradan
 // yapabilir."): operasyon ön-getirmesi Exceptions'ta grup bulduysa serbest

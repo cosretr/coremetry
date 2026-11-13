@@ -430,9 +430,11 @@ func (s *Server) copilotChatIntent(ctx context.Context, emit func(string, any), 
 	// off_topic gerçek telemetri sorusunu reddederdi; yanlış veto eski cevap.
 	vetoNote := ""
 	if matched && route.Intent == guidedOffTopic {
-		if why, vetoed := offTopicVeto(question, svcNames, s.guidedEnvNames(ctx), s.guidedTeamNames(ctx)); vetoed {
+		if why, vetoed := offTopicVetoFor(question, svcNames, s.guidedEnvNames(ctx), s.guidedTeamNames(ctx), cosreV2Marked(ctx)); vetoed {
 			route, matched = guidedRoute{}, false
 			vetoNote = " · off_topic vetosu: " + why
+		} else if why != "" { // v0.10.2123 — yalnız v2: genel sözcük vetosu uygulanmadı
+			vetoNote = " · off_topic vetosu uygulanmadı (genel sözcük): " + why
 		}
 	}
 	if i > 0 {

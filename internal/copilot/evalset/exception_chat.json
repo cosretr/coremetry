@@ -69,6 +69,19 @@
         "maxAnswerRunes": 2500,
         "maxUnknownEntities": 0
       }
+    },
+    {
+      "id": "chat-out-of-scope-version",
+      "surface": "OffTopicGeneral",
+      "why": "v0.10.2123 operatör-bildirimi (prod v2 sohbet 2026-11-13): 'sürüm' sözcüğü geçen genel yazılım sorusu telemetri asistanı reddi aldı; genel soru modelin kendi bilgisiyle cevaplanır, ret cümlesi ve Coremetry adı uydurulmaz",
+      "note": "v0.10.2123: veriden bağımsız vaka; sunucu tarafı (v2'de genel-sözcük vetosu uygulanmaz → OffTopicGeneral yolu) offtopic_veto_v2_test.go'da. 'sistemimde' / 'telemetri' prod'daki ret cümlesinin parçaları.",
+      "user": "IntelliJ IDEA sürümleri ve kurulum seçenekleri neler?",
+      "expect": {
+        "mustContain": ["IntelliJ"],
+        "mustNotContain": ["telemetri", "coremetry", "sistemimde"],
+        "maxAnswerRunes": 2500,
+        "maxUnknownEntities": 0
+      }
     }
   ]
 }

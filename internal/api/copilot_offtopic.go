@@ -230,9 +230,28 @@ func offTopicVeto(question string, services, envs, teams []string) (why string, 
 		return "takım adı: " + team, true
 	}
 	if hasTelemetryVocab(msg, toks) {
-		return "telemetri sözcüğü", true
+		return offTopicVetoVocabWhy, true
 	}
 	return "", false
+}
+
+// offTopicVetoVocabWhy — vetonun yalnız genel sözlükten (ad/kimlik değil)
+// geldiğini söyleyen gerekçe.
+const offTopicVetoVocabWhy = "telemetri sözcüğü"
+
+// offTopicVetoFor — SAF: yola göre veto. v0.10.2123 (operatör-bildirimi,
+// prod v2 sohbet 2026-11-13: "IntelliJ IDEA sürümleri / kurulum seçenekleri"
+// telemetri asistanı reddi aldı): "sürüm" deploy sözcüğü sayıldığı için
+// veto sınıflandırıcının off_topic kararını iptal ediyor, soru araçsız
+// serbest döngüde reddediliyordu. v2'de vetonun TEK gerekçesi genel sözlükse
+// veto uygulanmaz (why dolu, vetoed=false → genel-soru yolu); servis/ortam/
+// takım adı ve kimlik vetoları iki yolda da aynen. v1 = offTopicVeto bayt bayt.
+func offTopicVetoFor(question string, services, envs, teams []string, v2 bool) (why string, vetoed bool) {
+	why, vetoed = offTopicVeto(question, services, envs, teams)
+	if vetoed && v2 && why == offTopicVetoVocabWhy {
+		return why, false
+	}
+	return why, vetoed
 }
 
 // offTopicGuideTopics — sınır cevabının altındaki yol tarifi çipleri (Ask
