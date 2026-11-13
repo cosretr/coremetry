@@ -377,11 +377,8 @@ function SensitivitySection() {
       // v0.10.1039 — boş metin `[]` gider (kural KAPALI); alan atlanmaz,
       // atlansa sunucu varsayılanı (-batch) geri getirirdi.
       const sentPatterns = parseBatchPatterns(batchText);
-      // v0.10.1056 — opLatency daima AÇIK boolean gider: kayıtlı blob ne
-      // olduğunu söylesin, eski sunucu varsayılanına kalmasın. v0.10.1085 —
-      // alan yoksa TRUE (varsayılan açık, sürdürme kuralıyla).
       const saved = await api.putAnomalySensitivity({
-        ...cfg, batchServicePatterns: sentPatterns, opLatency: cfg.opLatency !== false,
+        ...cfg, batchServicePatterns: sentPatterns,
         // v0.10.1091 — bölüm varsa bayrak AÇIK boolean gider (yok = açık).
         ...(cfg.serviceSlowdown
           ? { serviceSlowdown: { ...cfg.serviceSlowdown, enabled: cfg.serviceSlowdown.enabled !== false } }
@@ -529,42 +526,6 @@ function SensitivitySection() {
               ona ulaşmıyordu: üstteki "terfi ettir" kutucuğu BAŞKA bir
               hattı yönetiyor. Operatör onu kapatıp metrik dedektörünün
               incident açmaya devam ettiğini görüyordu. */}
-          {/* v0.10.1056 — trace_op_latency dedektörü anahtarı (operatör: "Trace op
-              latency false pozitif geliyor"). v0.10.1085 — varsayılan yeniden AÇIK,
-              yalnız sürdürme kuralıyla (operatör: "Önerini yapalım"): alan yoksa AÇIK
-              okunur (`!== false`); kayıt açık boolean + kova sayısı gönderir. */}
-          <div className={SEP}>
-            <CheckboxField aria-label="Operasyon gecikmesi anomalileri"
-              checked={cfg.opLatency !== false}
-              onCheckedChange={v => setCfg({ ...cfg, opLatency: v })}
-              label="Operasyon gecikmesi anomalileri"
-              hint={<>
-                Açık (varsayılan): bir operasyonun p99&apos;u iki ardışık kovada sürmeli; tek sıçrama
-                alarm açmaz. Her kovada en az 30 çağrı, en az 200 ms ve normalin en az 3 katı
-                gerekir. Servis düzeyindeki gecikme anomalileri etkilenmez.
-              </>} />
-            <div className="mt-2.5 ml-6">
-              <Num label="Operasyon gecikmesi: kaç ardışık 5-dakikalık kova" min={1} max={6} step={1}
-                aria-label="Operasyon gecikmesi ardışık kova"
-                disabled={cfg.opLatency === false}
-                value={cfg.opLatencyDwellBuckets ?? 2}
-                onChange={e => setCfg({ ...cfg, opLatencyDwellBuckets: Number(e.target.value) })}
-                hint={<>
-                  Sıçrama bu kadar ardışık tamamlanmış kovanın her birinde sürmeli. 1–6,
-                  varsayılan 2 ({(cfg.opLatencyDwellBuckets ?? 2) * 5} dakika). 1 = eski
-                  davranış: tek kovalık sıçrama da anomali açar.
-                </>} />
-              <Num label="Operasyon gecikmesi: en az etkilenen istek (kova başına)" min={1} max={1000} step={1}
-                aria-label="Operasyon gecikmesi en az etkilenen istek"
-                disabled={cfg.opLatency === false}
-                value={cfg.opLatencyMinAffected ?? 5}
-                onChange={e => setCfg({ ...cfg, opLatencyMinAffected: Number(e.target.value) })}
-                hint={<>
-                  p99 en yavaş %1&apos;i temsil eder; kovadaki çağrının %1&apos;i bu sayının altındaysa
-                  sıçrama tek tek isteklerdir, olay açılmaz. Varsayılan 5 (≈ en az 500 çağrı / 5 dk).
-                </>} />
-            </div>
-          </div>
           {/* v0.10.1586 — trace_op / log_pattern sürdürme (Davis paritesi FAZ 0.5 / C):
               olay ancak ardışık N pencerede eşiği geçerse açılır; aynı Kaydet. */}
           <div className={SEP}>

@@ -4,13 +4,14 @@ package chstore
 // cari kova(lar) p99'u ile 24 sa taban p99'unu TEK geçişte karşılaştıran MV
 // pivotu. v0.10.1091'te internal/anomaly/op_latency.go'dan buraya taşındı
 // (metin ve argümanlar BAYT BAYT aynı — anomaly paketinin golden testleri
-// pinler): iki tüketici var artık —
-//   - trace_op_latency (anomaly, recorder): tabanlar 30 çağrı / 200 ms / 3×,
-//     sürdürme penceresi, batch yük kapısı, aktif-olay muafiyeti;
-//   - yaygın yavaşlama (`svc-slowdown:`, evaluator): tabanlar 30 çağrı /
-//     5000 ms / 20×, tek kova, batch servisler iç WHERE'de düşer.
-// Kopyalamak yerine tabanlar ve iki ek koşul parametre oldu; yeni bir sorgu
-// biçimi yok.
+// pinler).
+//
+// v0.10.2087 — TEK tüketici: yaygın yavaşlama (`svc-slowdown:`, evaluator):
+// tabanlar 30 çağrı / 5000 ms / 20×, tek kova, batch servisler iç WHERE'de
+// düşer. İlk tüketici trace_op_latency (sürdürme penceresi, batch yük kapısı,
+// aktif-olay muafiyeti) operatör kararıyla silindi (2026-11-13); o dalların
+// parametreleri (Batch, Active, çoklu SlotStarts) sıfır değerde metni
+// değiştirmez ve op_p99_cached_test.go eşdeğerlik tablosunda pinli kalır.
 
 import (
 	"fmt"
@@ -18,9 +19,8 @@ import (
 	"time"
 )
 
-// OpPair — (servis, operasyon) çifti (trace_op_latency olayının kimliği,
-// FingerprintAnomaly(kind, operasyon, servis)). anomaly.opLatPair bunun takma
-// adıdır.
+// OpPair — (servis, operasyon) çifti (anomaly paketinde trace_op sürdürme
+// muafiyetinin de çift tipi — sustainExemptPairs).
 type OpPair struct{ Service, Operation string }
 
 // OpP99Floors — HAVING'in üç tabanı. Tipler bilinçli (int / float64): bind
@@ -31,7 +31,7 @@ type OpP99Floors struct {
 	MinP99Ms float64 // cur_p99 ≥ MinP99Ms (mutlak)
 }
 
-// OpP99BatchGate — trace_op_latency'nin v0.10.1046 batch yük kapısı. Cond boş
+// OpP99BatchGate — (silinen trace_op_latency'nin) v0.10.1046 batch yük kapısı. Cond boş
 // = kapı yok (metin kapısız biçimle birebir).
 type OpP99BatchGate struct {
 	Cond        string // BatchServiceSQL("service_name") koşulu

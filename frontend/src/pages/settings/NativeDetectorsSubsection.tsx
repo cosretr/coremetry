@@ -9,7 +9,6 @@ import { Button } from '@/components/shadcn/button';
 import { CheckboxField } from '@/components/coremetry/Field';
 import { ActionRow } from '@/components/coremetry/ActionRow';
 import { api } from '@/lib/api';
-import type { NativeOwnSwitches } from '@/lib/types';
 import { FlashBox, humanize } from './shared';
 
 export const NATIVE_DETECTORS: { id: string; label: string; hint: string }[] = [
@@ -24,26 +23,21 @@ export const NATIVE_DETECTORS: { id: string; label: string; hint: string }[] = [
   { id: 'runtime_pods', label: 'Runtime (pod + GC)', hint: 'Evaluator yerleşiği; runtime_vm aynı anahtar' },
 ];
 
-export const OWN_DETECTORS: { id: keyof NativeOwnSwitches; label: string; hint: string }[] = [
-  { id: 'opLatency', label: 'Operasyon gecikmesi (op_latency)', hint: 'anomaly_sensitivity anahtarı; "Operasyon gecikmesi" olaylarını üretir' },
-];
-
 export function NativeDetectorsSubsection() {
   const [cfg, setCfg] = useState<Record<string, boolean> | null>(null);
-  const [own, setOwn] = useState<NativeOwnSwitches>({ opLatency: false });
   const [busy, setBusy] = useState(false);
   const [flash, setFlash] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
   useEffect(() => {
-    api.getNativeDetectors().then(r => { setCfg(r.detectors); if (r.own) setOwn(r.own); }).catch(err => setFlash({ kind: 'err', text: humanize(err) }));
+    api.getNativeDetectors().then(r => { setCfg(r.detectors); }).catch(err => setFlash({ kind: 'err', text: humanize(err) }));
   }, []);
 
   const save = async () => {
     if (!cfg) return;
     setBusy(true); setFlash(null);
     try {
-      const r = await api.putNativeDetectors({ detectors: cfg, own });
-      setCfg(r.detectors); if (r.own) setOwn(r.own);
+      const r = await api.putNativeDetectors({ detectors: cfg });
+      setCfg(r.detectors);
       setFlash({ kind: 'ok', text: 'Kaydedildi — bir sonraki tikte geçerli, restart gerekmez.' });
     } catch (err) {
       setFlash({ kind: 'err', text: humanize(err) });
@@ -56,8 +50,8 @@ export function NativeDetectorsSubsection() {
     setBusy(true); setFlash(null);
     try {
       const r = await api.offAllNativeDetectors();
-      setCfg(r.detectors); if (r.own) setOwn(r.own);
-      setFlash({ kind: 'ok', text: 'Eski dedektörlerin hepsi kapatıldı (yerleşik + op_latency + yeni log şablonu). Alarm kuralları, exception akışı, Oracle/Influx, Elastic ML, SLO, heartbeat, self-health etkilenmedi.' });
+      setCfg(r.detectors);
+      setFlash({ kind: 'ok', text: 'Eski dedektörlerin hepsi kapatıldı. Alarm kuralları, exception akışı, Oracle/Influx, Elastic ML, SLO, heartbeat, self-health etkilenmedi.' });
     } catch (err) {
       setFlash({ kind: 'err', text: humanize(err) });
     } finally {
@@ -71,7 +65,6 @@ export function NativeDetectorsSubsection() {
       <p className="mb-[18px] text-[length:var(--fs-sm)] leading-[1.55] text-(--text2)">
         v0.10.1746 ile hepsi <b>kapalı</b> gelir; buradan tek tıkla açılır. Alarm kuralları, Influx/Oracle
         akışları, Elastic ML, exception akışı, SLO yanığı, heartbeat ve self-health bu listede değildir, hep açıktır.
-        op_latency ve yeni log şablonu anahtarları da burada (anomaly_sensitivity&apos;ye yazar).
       </p>
       {!cfg ? (
         flash ? <FlashBox kind={flash.kind}>{flash.text}</FlashBox> : <Spinner />
@@ -81,10 +74,6 @@ export function NativeDetectorsSubsection() {
             {NATIVE_DETECTORS.map(d => (
               <CheckboxField key={d.id} checked={cfg[d.id] === true} label={d.label} hint={d.hint}
                 onCheckedChange={v => setCfg({ ...cfg, [d.id]: v })} />
-            ))}
-            {OWN_DETECTORS.map(d => (
-              <CheckboxField key={d.id} checked={own[d.id]} label={d.label} hint={d.hint}
-                onCheckedChange={v => setOwn({ ...own, [d.id]: v })} />
             ))}
           </div>
           <div className="mt-[18px]">

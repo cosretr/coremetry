@@ -143,7 +143,7 @@ RuleID / incident `incident:<severity>`) uyan satır kaynak P1/P2'sini korur, ge
 yoksa liste korunur). **v0.10.1091:** varsayılana `svc-slowdown:*` (yaygın yavaşlama) eklendi; kayıtlı liste 1083 varsayılanına KÜME olarak eşitse aynı desenle ikinci tek seferlik göç (`MigrateInboxKeepDefaultsV3`, işaret `problem_priority_inbox_keep_v3`; tazeleyicide v2 → v3 sırayla, v2 düşerse v3 o tur koşmaz). **v0.10.1083:** varsayılana `anomaly:ext:*:ext:error_count` + `anomaly-cluster:ext:*` (Oracle hata
 serisi/kümesi) + `anomaly:ext-cap:*` (tavan özeti; `ext-down` DIŞARIDA) eklendi; kayıtlı liste ESKİ varsayılana küme olarak eşitse tek seferlik
 göç yeniye taşır (`MigrateInboxKeepDefaults`, ayar tazeleyicisinde okumadan önce, işaret
-`system_settings.problem_priority_inbox_keep_v2`, system audit), özelleştirilmişse dokunmaz ve bir kez loglar. Regressed P1 yükseltmesi regresyon başına bir kez bildirilir (v0.10.1078: `<fp>:regressed:p1:<epoch>`, `claimRegressed`); taban `<fp>:regressed` 90 günde bir, damgasız (kronik grup gürültüsü). Bilinçli DIŞARIDA: trace_op(_latency) / log_* / behavior_change /
+`system_settings.problem_priority_inbox_keep_v2`, system audit), özelleştirilmişse dokunmaz ve bir kez loglar. Regressed P1 yükseltmesi regresyon başına bir kez bildirilir (v0.10.1078: `<fp>:regressed:p1:<epoch>`, `claimRegressed`); taban `<fp>:regressed` 90 günde bir, damgasız (kronik grup gürültüsü). Bilinçli DIŞARIDA: trace_op (trace_op_latency v0.10.2087'de silindi) / log_* / behavior_change /
 `anomaly-auto:*` (grup alt ailesi hariç) / `slo:*` / yavaş ifade / self-health — listeye ekleme önerme.
 Facet sayaçlarından ÖNCE (`inbox_keep_priority_test.go` sırayı pinler). Kod
 `chstore/problem_priority_inbox.go` + `api/inbox_keep_priority.go`.
@@ -350,10 +350,9 @@ v0.10.1072 — inbox istisna listesi taşıdığı için).
    silent yok (v0.10.2068'de silindi), disk ETA kapalı,
    yeni log deseni (`log_template_new`) kapalı, yerleşik alarm kuralları (`builtin-*`) kapalı,
    SLO burn Problem'i (`problem_priority.sloBurnProblems`) kapalı, Problems varsayılanı
-   yalnız P1 + ilk görülme, fresh deploy yok) YENİDEN AÇMA. Operasyon gecikmesi
-   (`trace_op_latency`) bu listeden v0.10.1085'te ÇIKTI: operatör iki ardışık kova sürdürme
-   kuralıyla yeniden açılmasını onayladı ("Önerini yapalım") — varsayılanı açık; sürdürmesiz
-   tek-kova kararına geri dönme.
+   yalnız P1 + ilk görülme, fresh deploy yok) YENİDEN AÇMA. Eski operasyon gecikmesi
+   dedektörü (`trace_op_latency`) v0.10.2087'de SİLİNDİ (operatör kararı 2026-11-13; sunucu
+   uçları ML `op_latency`; CONSUMER / INTERNAL p99 kaybı kabul) — geri getirmeyi önerme.
 4. Arka plan döngüsü mü? → lider kilidi + tik bütçesi + `OpenProblemsSnapshot`;
    ölçüm seyrekse §5 tasarımı; kayan pencere simülasyon testi.
 5. Kanıt/skor mu? → `hypothesis_*_test.go` tablo, kalibrasyon, tek yazıcı.

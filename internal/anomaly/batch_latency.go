@@ -7,11 +7,9 @@
 //
 // KURAL — tek cümle: batch kalıbına giren bir serviste gecikme sapması,
 // AYNI ANDA ölçülen istek hacmi işin OLAĞAN ÇALIŞMA hacminin en az
-// batchLoadSurgeFactor katıyken yeni olay AÇMAZ. Tek sabit, üç karar noktası:
+// batchLoadSurgeFactor katıyken yeni olay AÇMAZ. Tek sabit, iki karar noktası
+// (v0.10.2087: üçüncüsü trace_op_latency dedektörüyle birlikte silindi):
 //
-//	trace_op_latency  (op_latency.go)  çiftin cari kova başına çağrısı ≥ 2 × taban
-//	                                   penceresinin AKTİF kova başına çağrısı
-//	                                   (batchLoadSurgeCounts; SQL HAVING + Go kemeri)
 //	metrik dedektörü  (verdict.go)     p99_ms dwell kovalarının HER BİRİNİN istek
 //	                                   hızı ≥ 2 × p99 tabanının KENDİ kovalarının
 //	                                   istek hızı medyanı (ardışık ya da mevsimsel
@@ -19,13 +17,10 @@
 //	davranış motoru   (behavior_scan)  p99_ms penceresinin HER diliminin hacmi ≥
 //	                                   2 × kendi haftanın-saati kovasının hacim medyanı
 //
-// YALNIZ AÇILIŞI KESER — "zaten aktif" olana kapı UYGULANMAZ, üç noktada da:
+// YALNIZ AÇILIŞI KESER — "zaten aktif" olana kapı UYGULANMAZ, iki noktada da:
 //
 //	metrik dedektörü  açık (open/acknowledged) anomaly:<svc>:p99_ms satırı varsa
 //	                  (hasOpen) kapı koşmaz: tazelenir, kapanır, küme kaynağı olur
-//	trace_op_latency  o (servis, operasyon) için trace_op_latency olayı son 15 dk
-//	                  içinde yazılmışsa (opLatActiveAge = 10 dk aktiflik + bir 5 dk
-//	                  kova) çift muaf — SQL'de NOT IN, Go'da küme
 //	davranış motoru   servisin behavior_change p99_ms olayı AKTİFSE (son yazım
 //	                  ≤ 10 dk; her taramada yeniden yazılır) aday kalır
 //
@@ -44,8 +39,7 @@ package anomaly
 import "math"
 
 // batchLoadSurgeFactor — "yük sıçraması" eşiği: cari hacim olağan çalışma
-// hacminin EN AZ bu katı. Tek sabit, üç karar noktası; tamsayı (trace_op_latency
-// kolu onu SQL'le birebir aynı tamsayı aritmetiğinde kullanır).
+// hacminin EN AZ bu katı. Tek sabit, iki karar noktası.
 const batchLoadSurgeFactor = 2
 
 // batchLatencyMetric — kuralın dokunduğu TEK servis metriği. Liste değil
@@ -63,22 +57,6 @@ func batchLoadSurge(cur, base float64) bool {
 		return false
 	}
 	return cur >= batchLoadSurgeFactor*base
-}
-
-// batchLoadSurgeCounts — batchLoadSurge'ün TAMSAYI ikizi (trace_op_latency):
-// cari pencerenin kova başına çağrısı ≥ 2 × taban penceresinin AKTİF kova
-// başına çağrısı mı? Bölmesiz çapraz çarpım:
-//
-//	curCalls × baseBuckets ≥ 2 × baseCalls × curBuckets
-//
-// Tamsayı olması bilinçli: SQL ikizi (opLatencyQuery HAVING) aynı UInt64
-// aritmetiğini yapar → Go ile SQL eşikte bile birebir aynı karar verir.
-// Taban bilinmiyorsa (aktif kova 0, çağrı 0) ya da cari kova sayısı 0 → false.
-func batchLoadSurgeCounts(curCalls, curBuckets, baseCalls, baseBuckets uint64) bool {
-	if baseBuckets == 0 || baseCalls == 0 || curBuckets == 0 {
-		return false
-	}
-	return curCalls*baseBuckets >= batchLoadSurgeFactor*baseCalls*curBuckets
 }
 
 // batchRatesUnderLoad — dwell penceresinin HER kovasının istek hızı, taban

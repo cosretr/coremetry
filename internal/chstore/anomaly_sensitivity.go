@@ -83,40 +83,10 @@ type AnomalySensitivityConfig struct {
 	// kuralı KAPATTI. Normalize somutlaştırır (nil → varsayılan liste), boş
 	// liste `[]` olarak yazılır, `null` olarak DEĞİL.
 	BatchServicePatterns *[]string `json:"batchServicePatterns,omitempty"`
-	// OpLatency — v0.10.1056 (operatör, prod: "Trace op latency false pozitif
-	// geliyor, gerek yok gelmelerine bence."): operasyon bazında p99 sıçraması
-	// dedektörü (`trace_op_latency`, internal/anomaly/op_latency.go). BİLİNÇLİ
-	// varsayılan davranış değişikliği, operatör kararı: *bool, nil = KAPALI
-	// (eski serviceSilent v0.10.543 ve self_health.diskEta v0.10.1031 emsali). Bu
-	// sürümden ESKİ her blob alanı taşımaz ve KAPALI okunur. Neden gürültü:
-	// tek 5 dk kovanın p99'u 24 sa p99'una karşı — düşük gecikmeli bir
-	// operasyonda TEK yavaş çağrı ×3'ü kendi başına geçer, dwell yok.
-	// Kapalıyken recorder dedektörü HİÇ koşturmaz (MV sorgusu, v0.10.1046
-	// batch kapısının aktif-olay okuması, upsert — hiçbiri). Açık kalan
-	// olaylar yazılmadıkları için 10 dk aktif yaştan sonra düşer; terfi
-	// Problem'i "anomaly cleared" ile kapanır. Açmak için Settings → Anomaly.
-	//
-	// v0.10.1085 — 1056'nın varsayılanı KISMEN geri alındı (operatör, sürdürme
-	// kuralı önerisine: "Önerini yapalım"): nil = AÇIK, ama YALNIZ
-	// OpLatencyDwellBuckets ile birlikte — çift ancak ardışık N tamamlanmış
-	// kovanın HER BİRİNDE ihlal ederse olay açılır; tek kovalık sıçrama açmaz.
-	// Açıkça false kapalı kalır. 1056 Normalize'ı nil'i false'a
-	// somutlaştırdığı için o dönemin kayıtlı false'u "varsayılan" sayılır ve
-	// tek seferlik göçle nil'e çekilir (anomaly_sensitivity_oplatency_migrate.go).
-	OpLatency *bool `json:"opLatency,omitempty"`
-	// OpLatencyDwellBuckets — v0.10.1085: trace_op_latency olayının açılması
-	// için ihlalin sürmesi gereken ARDIŞIK tamamlanmış 5 dk kova sayısı
-	// (her kova: ≥ 30 çağrı, p99 ≥ 200 ms, p99 ≥ 3 × taban). Varsayılan 2,
-	// aralık 1–6; 1 = v0.10.1085 öncesi tek-kova davranışı. 0 / aralık dışı
-	// (bu sürümden ESKİ blob alanı taşımaz) → varsayılan. omitempty YOK:
-	// Normalize her zaman 1–6 yazar, alanın varlığı göçün "bu blob yeni
-	// sürümde kaydedildi" işaretidir.
-	OpLatencyDwellBuckets int `json:"opLatencyDwellBuckets"`
-	// OpLatencyMinAffected — v0.10.1776 (operatör, prod: işlem adedi düşük
-	// operasyonda tek yavaş istek p99'u 3× yapıp 234 kez olay açtı): p99 en
-	// iyi ihtimalle isteklerin %1'ini temsil eder; kovada calls/100 < bu
-	// sayı ise olay AÇILMAZ. 1..1000, varsayılan 5 (≈ ≥500 çağrı/kova).
-	OpLatencyMinAffected int `json:"opLatencyMinAffected"`
+	// v0.10.2087 — opLatency / opLatencyDwellBuckets / opLatencyMinAffected
+	// alanları trace_op_latency dedektörüyle birlikte SİLİNDİ (operatör kararı
+	// 2026-11-13). Kayıtlı bloblarda kalan alanlar okunmaz; bir sonraki
+	// kayıtta Normalize onları yazmaz.
 	// TraceOpDwellBuckets — v0.10.1586 (Davis paritesi FAZ 0.5 / C, operatör
 	// onayı 2026-10-29): trace_op olayının (error_spike VE new_error) AÇILMASI
 	// için ardışık tamamlanmış kova sayısı; her önceki kova aynı tabanları
@@ -192,35 +162,8 @@ func (c AnomalySensitivityConfig) TemporalRankingOn() bool {
 	return normalizeTemporalRanking(c.TemporalRanking) == TemporalRankingModeOn
 }
 
-// OpLatencyOn — trace_op_latency dedektörü koşsun mu? v0.10.1085: nil ⇒ AÇIK
-// (1056'da kapalıydı; sürdürme kuralıyla birlikte geri açıldı — gerekçe
-// alanda). Yalnız açıkça false kapatır.
-func (c AnomalySensitivityConfig) OpLatencyOn() bool {
-	return c.OpLatency == nil || *c.OpLatency
-}
-
-// trace_op_latency sürdürme penceresi (v0.10.1085). Üst sınır 6 = 30 dk:
+// trace_op / log_pattern sürdürme penceresi (v0.10.1586). Üst sınır 6 = 30 dk:
 // ötesinde tepe çoktan "anomaly cleared" olmuş olur, vida "hiç açma"ya döner.
-const (
-	opLatencyDwellMin     = 1
-	opLatencyDwellMax     = 6
-	opLatencyDwellDefault = 2
-	opLatencyAffectedDef  = 5
-)
-
-// OpLatencyAffected — nil-güvenli: aralık dışı / eksik → 5.
-func (c AnomalySensitivityConfig) OpLatencyAffected() int {
-	return clampRangeI(c.OpLatencyMinAffected, 1, 1000, opLatencyAffectedDef)
-}
-
-// OpLatencyDwell — nil-güvenli okuma: aralık dışı (eski blobun 0'ı dahil) →
-// varsayılan 2.
-func (c AnomalySensitivityConfig) OpLatencyDwell() int {
-	return clampRangeI(c.OpLatencyDwellBuckets, opLatencyDwellMin, opLatencyDwellMax, opLatencyDwellDefault)
-}
-
-// trace_op / log_pattern sürdürme penceresi (v0.10.1586) — opLatency ile aynı
-// aralık ve gerekçe.
 const (
 	traceOpDwellMin        = 1
 	traceOpDwellMax        = 6
@@ -321,8 +264,8 @@ type AnomalyBehaviorConfig struct {
 	// dalı AYNI kapıdan geçer, yön fark etmez (tabanın altına inen bir
 	// değer de olay değildir). Vaka: medyanı 4 ms olan bir servisin 118 ms
 	// p99'u "28×" diye geldi; oran büyük ama 118 ms kimsenin sorunu değil.
-	// 200 ms = op-latency dedektörünün opLatencyMinP99Ms'i (aynı sayı,
-	// aynı gerekçe); %1 = ani-sapma error_rate AbsFloor'u. request_rate'te
+	// 200 ms = silinen op-latency dedektörünün mutlak tabanıydı (aynı
+	// gerekçe); %1 = ani-sapma error_rate AbsFloor'u. request_rate'te
 	// taban YOK: orada düşüşün kendisi sinyal.
 	//
 	// 0 meşru DEĞİL (bölümün kelepçe duruşu): bu sürümden ESKİ blob alanı
@@ -582,12 +525,6 @@ func DefaultAnomalySensitivity() AnomalySensitivityConfig {
 		// v0.10.1039 — BİLİNÇLİ varsayılan davranış değişikliği: operatörün
 		// adını verdiği `-batch` kalıbı kutudan açık gelir.
 		BatchServicePatterns: batchPatternsPtr(DefaultBatchServicePatterns()),
-		// v0.10.1085 — operatör onaylı ("Önerini yapalım"): AÇIK, yalnız iki
-		// ardışık kova sürdürme kuralıyla (1056'nın kapalı varsayılanı kısmen
-		// geri alındı).
-		OpLatency:             boolPtr(true),
-		OpLatencyDwellBuckets: opLatencyDwellDefault,
-		OpLatencyMinAffected:  opLatencyAffectedDef,
 		// v0.10.1586 — trace_op / log_pattern iki ardışık pencere (operatör onayı).
 		TraceOpDwellBuckets:    traceOpDwellDefault,
 		LogPatternDwellBuckets: logPatternDwellDefault,
@@ -633,14 +570,6 @@ func NormalizeAnomalySensitivity(c AnomalySensitivityConfig) AnomalySensitivityC
 		// kuralı varsayılana döndürürdü. SOMUTLAŞTIRIR: nil → varsayılan
 		// liste; boş liste boş kalır (kural kapalı) ve `[]` yazılır.
 		BatchServicePatterns: batchPatternsPtr(c.BatchServicePatternList()),
-		// v0.10.1056 — kopyalanmazsa PUT'ta düşer ve operatörün açtığı
-		// dedektör bir sonraki kayıtta sessizce kapanırdı. SOMUTLAŞTIRIR
-		// true/false aynen; v0.10.1085'ten beri nil → true.
-		OpLatency: boolPtr(c.OpLatencyOn()),
-		// v0.10.1085 — sürdürme kova sayısı; kopyalanmazsa PUT'ta düşerdi.
-		// Aralık dışı / eksik → 2.
-		OpLatencyDwellBuckets: c.OpLatencyDwell(),
-		OpLatencyMinAffected:  c.OpLatencyAffected(),
 		// v0.10.1586 — kopyalanmazsa PUT'ta düşerdi; aralık dışı / eksik → 2.
 		TraceOpDwellBuckets:    c.TraceOpDwell(),
 		LogPatternDwellBuckets: c.LogPatternDwell(),
@@ -790,7 +719,7 @@ func (s *Store) AnomalySensitivityConfirmed() bool {
 
 // AnomalySensitivityForDetectors — v0.10.1039: batch kuralını tüketen karar
 // noktalarının (metrik dedektörü + davranış motoru, trace_op,
-// trace_op_latency — v0.10.1046, self-volume-spike) tik okuması. Ayar
+// self-volume-spike) tik okuması. Ayar
 // henüz DOĞRULANMADIYSA batch listesi BOŞ döner = kural devre dışı =
 // v0.10.1039 öncesi davranış.
 //
@@ -802,17 +731,10 @@ func (s *Store) AnomalySensitivityConfirmed() bool {
 // bildirimle geri açılır. Süzgeçsiz kalmanın bedeli en kötü ihtimalle
 // doğrulanana dek bugünkü gürültü. Diğer eşikler (z, taban, davranış)
 // yayınlanan değerden aynen gelir.
-//
-// v0.10.1085 — doğrulanmamış ayarda trace_op_latency de KAPALI okunur. 1056'dan
-// beri "henüz okunamadı → yayınlanan varsayılan (kapalı)" güvencesi vardı;
-// varsayılan AÇIK'a dönünce o güvence yalnız buradan sürer: operatörün açıkça
-// kapattığı dedektör, boot okuması düştü diye birkaç tik olay yazmasın.
-// Bedeli doğrulanana dek olay yok (açık olaylar 10 dk aktif yaşta kalır).
 func (s *Store) AnomalySensitivityForDetectors() AnomalySensitivityConfig {
 	c := s.AnomalySensitivity()
 	if !s.AnomalySensitivityConfirmed() {
 		c.BatchServicePatterns = batchPatternsPtr(nil)
-		c.OpLatency = boolPtr(false)
 	}
 	return c
 }

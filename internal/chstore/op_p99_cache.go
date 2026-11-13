@@ -11,7 +11,8 @@ package chstore
 // (2 sa) kullanılmamış giriş SIFIRLANIR, daha kısa aradaki taban OpBaselineMaxLag
 // sınırında zaten geçerli.
 //
-// PAYLAŞIM — iki kapsam (op_latency, svc_slowdown) TEK girişi paylaşır; anahtar
+// PAYLAŞIM — kapsamlar TEK girişi paylaşır (v0.10.2087'den beri canlıda tek
+// kapsam svc_slowdown; op_latency kapsamı dedektörüyle silindi); anahtar
 // yalnız tabanın değerini değiştiren girdiler: pencere uzunluğu + çağrı tabanı
 // (HAVING). Dışlama (svc-slowdown'un batch servisleri) tabanda UYGULANMAZ:
 // dışlama servis bazlı satır süzgeci, bir çiftin taban değerini değiştirmez;
@@ -57,9 +58,8 @@ import (
 )
 
 // Pivot kapsamları — çağıran kimliği (metrik etiketi + pencere sonu kaydı;
-// kardinalite sabit).
+// kardinalite sabit). v0.10.2087: op_latency kapsamı dedektörüyle silindi.
 const (
-	OpPivotScopeOpLatency   = "op_latency"
 	OpPivotScopeSvcSlowdown = "svc_slowdown"
 )
 
@@ -322,7 +322,7 @@ func (c *opPivotCache) refresh(scope string, key opBaselineKey, end time.Time, i
 
 // ── Store bağlantısı ─────────────────────────────────────────────────────────
 
-// OpP99Pivot — operasyon p99 pivotu (trace_op_latency ve yaygın yavaşlama):
+// OpP99Pivot — operasyon p99 pivotu (yaygın yavaşlama):
 // tabanı önbellekli yol, gerekirse eski tek geçiş (opPivotCache.pivot). Çıktı
 // eski sorgunun satırlarıyla birebir (taban gecikmesi hariç — op_p99_cached.go).
 func (s *Store) OpP99Pivot(ctx context.Context, scope string, sp OpP99PivotSpec) ([]OpP99Row, error) {

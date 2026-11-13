@@ -28,29 +28,16 @@ func (s *Server) registerNativeDetectorRoutes(mux *http.ServeMux) {
 }
 
 func (s *Server) nativeView(ctx context.Context) map[string]any {
-	return map[string]any{"names": chstore.NativeDetectorNames, "detectors": s.store.GetNativeDetectors(ctx).Detectors,
-		"own": chstore.OwnSwitchesFrom(s.store.AnomalySensitivity())}
+	return map[string]any{"names": chstore.NativeDetectorNames, "detectors": s.store.GetNativeDetectors(ctx).Detectors}
 }
 
 func (s *Server) getNativeDetectors(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.nativeView(r.Context()))
 }
 
-// saveOwnSwitches — anomaly_sensitivity'nin yalnız iki alanı (snapshot + merge; audit).
-func (s *Server) saveOwnSwitches(r *http.Request, own chstore.NativeOwnSwitches) error {
-	before := s.store.AnomalySensitivity()
-	after := chstore.ApplyOwnSwitches(before, own)
-	if err := s.store.SaveAnomalySensitivity(r.Context(), after); err != nil {
-		return err
-	}
-	details, _ := json.Marshal(map[string]any{"before": chstore.OwnSwitchesFrom(before), "after": own})
-	s.audit(r, "native_detectors.own", "settings", "anomaly_sensitivity", string(details))
-	return nil
-}
-
 // postNativeDetectorsOffAll — A3: tek tıkla eski dedektörlerin hepsi kapalı.
 func (s *Server) postNativeDetectorsOffAll(w http.ResponseWriter, r *http.Request) {
-	nat, _ := chstore.AllNativeOff(s.store.AnomalySensitivity())
+	nat := chstore.AllNativeOff()
 	before := s.store.GetNativeDetectors(r.Context())
 	if err := s.store.SaveNativeDetectors(r.Context(), nat); err != nil {
 		writeErr(w, err)
@@ -58,10 +45,6 @@ func (s *Server) postNativeDetectorsOffAll(w http.ResponseWriter, r *http.Reques
 	}
 	details, _ := json.Marshal(map[string]any{"before": before.Detectors, "after": nat.Detectors})
 	s.audit(r, "native_detectors.off_all", "settings", "native_detectors", string(details))
-	if err := s.saveOwnSwitches(r, chstore.NativeOwnSwitches{}); err != nil {
-		writeErr(w, err)
-		return
-	}
 	s.cacheInvalidatePrefix(r.Context(), "anomaly:")
 	writeJSON(w, s.nativeView(r.Context()))
 }
@@ -79,7 +62,6 @@ func (s *Server) traceOpHits(ctx context.Context, window time.Duration) ([]anoma
 func (s *Server) putNativeDetectors(w http.ResponseWriter, r *http.Request) {
 	var c struct {
 		chstore.NativeDetectorsConfig
-		Own *chstore.NativeOwnSwitches `json:"own,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&c); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "geçersiz JSON: "+err.Error())
@@ -94,12 +76,6 @@ func (s *Server) putNativeDetectors(w http.ResponseWriter, r *http.Request) {
 	}
 	details, _ := json.Marshal(map[string]any{"before": before.Detectors, "after": c.Detectors})
 	s.audit(r, "native_detectors.config", "settings", "native_detectors", string(details))
-	if c.Own != nil {
-		if err := s.saveOwnSwitches(r, *c.Own); err != nil {
-			writeErr(w, err)
-			return
-		}
-	}
 	s.cacheInvalidatePrefix(ctx, "anomaly:")
 	writeJSON(w, s.nativeView(ctx))
 }

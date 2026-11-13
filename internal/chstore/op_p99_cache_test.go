@@ -231,7 +231,7 @@ func TestOpPivotCacheShared(t *testing.T) {
 	}
 	// op_latency'nin ilk cari kovası (now − 10 dk) E'den önce → "ahead": eski yol +
 	// tazeleme, yeni E iki kapsamın en erkeni.
-	c.pivot(ctx, OpPivotScopeOpLatency, op, f.io())
+	c.pivot(ctx, opPivotScopeDwell2, op, f.io())
 	if f.legacyN != 2 || len(f.spawned) != 1 {
 		t.Fatalf("ahead: legacy=%d spawn=%d", f.legacyN, len(f.spawned))
 	}
@@ -243,7 +243,7 @@ func TestOpPivotCacheShared(t *testing.T) {
 	for m := 0; m < 55; m += 5 {
 		f.now = pfNow.Add(time.Duration(m) * time.Minute)
 		c.pivot(ctx, OpPivotScopeSvcSlowdown, pfSvcSpecAt(f.now), f.io())
-		c.pivot(ctx, OpPivotScopeOpLatency, pfSpecAt(f.now), f.io())
+		c.pivot(ctx, opPivotScopeDwell2, pfSpecAt(f.now), f.io())
 	}
 	if f.legacyN != 2 || len(f.spawned) != 0 || len(c.entries) != 1 {
 		t.Fatalf("paylaşım: legacy=%d spawn=%d entries=%d", f.legacyN, len(f.spawned), len(c.entries))
@@ -256,7 +256,7 @@ func TestOpPivotCacheShared(t *testing.T) {
 	if got, want := f.baseArgs[2][1], pfSpecAt(pfNow.Add(50 * time.Minute)).SlotStarts[1]; got != want {
 		t.Fatalf("saatlik tazeleme sonu %v, beklenen op_latency'nin son ilk cari kovası %v", got, want)
 	}
-	c.pivot(ctx, OpPivotScopeOpLatency, pfSpecAt(f.now), f.io())
+	c.pivot(ctx, opPivotScopeDwell2, pfSpecAt(f.now), f.io())
 	if f.legacyN != 2 || len(f.spawned) != 0 {
 		t.Fatalf("tazelemeden sonra iki kapsam da önbellekli: legacy=%d spawn=%d", f.legacyN, len(f.spawned))
 	}
@@ -324,3 +324,7 @@ func TestOpBaselineDecide(t *testing.T) {
 		t.Fatalf("pencere sonu %v", got)
 	}
 }
+
+// opPivotScopeDwell2 — ikinci (sürdürme pencereli) kapsam; v0.10.2087'de
+// silinen op_latency kapsamının yerine, çok kapsamlı paylaşımı sınamak için.
+const opPivotScopeDwell2 = "test_dwell2"

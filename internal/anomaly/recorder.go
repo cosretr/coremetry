@@ -138,46 +138,11 @@ func (r *Recorder) tick(ctx context.Context) {
 			}
 		}
 
-		// ── Operasyon-gecikme anomalileri (v0.9.1064, Faz 2.3 / G5) ──────
-		// trace_ops yalnız hata sayar; bu dedektör p99 sıçramasını yakalar
-		// ("hangi endpoint yavaşladı" bugüne dek cevapsızdı). Ratio = p99
-		// oranı; CurrentCount = cari çağrı hacmi (terfi kapılarının hacim
-		// sezgisiyle uyumlu); Sample = en yavaş cari span'in trace'i.
-		//
-		// v0.10.1056 — anahtar (anomaly_sensitivity.opLatency; operatör: "Trace op
-		// latency false pozitif geliyor, gerek yok gelmelerine bence.").
-		// Anahtar tik başına atomic'ten (CH okuması yok); kapalıyken adım dedektörü
-		// HİÇ çağırmaz. v0.10.1085 — varsayılan yeniden AÇIK, ama yalnız sürdürme
-		// kuralıyla (ardışık opLatencyDwellBuckets kova, vars. 2 — dedektörde);
-		// olay şekli değişmedi.
-	}
-	recordOpLatency(ctx, r.store.AnomalySensitivityForDetectors().OpLatencyOn(), now,
-		func(ctx context.Context) ([]OpLatencyAnomaly, error) {
-			return DetectOpLatencyAnomalies(ctx, r.store, r.window)
-		},
-		r.store.UpsertAnomalyEvent)
-}
-
-// recordOpLatency — recorder'ın operasyon-gecikme adımı (v0.10.1056'te
-// tick'ten çıkarıldı ki anahtar sahte dedektör/upsert ile sınanabilsin).
-// on=false → detect ÇAĞRILMAZ: MV sorgusu, v0.10.1046 batch kapısının
-// aktif-olay okuması ve upsert yok; açık olaylar yazılmadıkları için aktif
-// yaştan sonra düşer. on=true → v0.10.1056 öncesi gövdenin aynısı.
-func recordOpLatency(ctx context.Context, on bool, now time.Time,
-	detect func(context.Context) ([]OpLatencyAnomaly, error),
-	upsert func(context.Context, chstore.AnomalyEvent) error) {
-	if !on {
-		return
-	}
-	latHits, err := detect(ctx)
-	if err != nil {
-		log.Printf("[anomaly-recorder] op latency: %v", err)
-	}
-	for _, a := range latHits {
-		ev := opLatencyEvent(a, now)
-		if err := upsert(ctx, ev); err != nil {
-			log.Printf("[anomaly-recorder] upsert op-latency %s/%s: %v", a.Service, a.Operation, err)
-		}
+		// v0.10.2087 — operasyon gecikmesi (trace_op_latency) dedektörü
+		// SİLİNDİ (operatör kararı 2026-11-13): sunucu uçları ML op_latency
+		// (örneklenmemiş VM histogramları) ile kapsanır; CONSUMER / INTERNAL
+		// p99 sıçraması bilinçli olarak kaybedildi. Eski olaylar geçmişte
+		// görünmeye devam eder; terfi Problem'leri "anomaly cleared" ile kapanır.
 	}
 }
 
@@ -206,7 +171,7 @@ func logPatternActiveSet(ctx context.Context, store *chstore.Store, dwell int) m
 
 // ── Olay kurucuları (v0.10.1792, Davis F1.4) ─────────────────────────────
 //
-// Recorder'ın dört yazımı SAF kuruculardan geçer ki yön / taban kolonları
+// Recorder'ın üç yazımı SAF kuruculardan geçer ki yön / taban kolonları
 // her yolda pinlenebilsin (recorder_events_test.go). Bu dedektörler yalnız
 // ARTIŞ yakalar (direction up). Taban ardışık penceredir (consecutive);
 // oran yazılamayan (ilk görülme, taban 0'a yuvarlanan) olay "none"
@@ -253,24 +218,6 @@ func traceOpEvent(a TraceOpAnomaly, now time.Time) chstore.AnomalyEvent {
 		Sample:        a.SampleTraceID,
 		Direction:     chstore.AnomalyDirectionUp,
 		BaselineValue: float64(a.BaselineErrors),
-		BaselineKind:  recorderBaselineKind(a.Ratio),
-		SubjectKind:   chstore.AnomalySubjectService,
-	}
-}
-
-func opLatencyEvent(a OpLatencyAnomaly, now time.Time) chstore.AnomalyEvent {
-	return chstore.AnomalyEvent{
-		ID:            chstore.FingerprintAnomaly(opLatencyKind, a.Operation, a.Service),
-		Kind:          opLatencyKind,
-		Pattern:       a.Operation,
-		Service:       a.Service,
-		StartedAt:     now.UnixNano(),
-		LastSeen:      a.LastSeenNs,
-		CurrentRatio:  a.Ratio,
-		CurrentCount:  a.CurCalls,
-		Sample:        a.SampleTraceID,
-		Direction:     chstore.AnomalyDirectionUp,
-		BaselineValue: a.BaseP99Ms,
 		BaselineKind:  recorderBaselineKind(a.Ratio),
 		SubjectKind:   chstore.AnomalySubjectService,
 	}

@@ -10346,16 +10346,8 @@ export interface AnomalySensitivityConfig {
   // Bu |z|'nin üstü critical. Dedektör YALNIZ critical verdict'te
   // Problem açtığı için (v0.9.193) bu fiilen açılma eşiğidir.
   criticalZ: number;
-  // v0.10.1056 — trace_op_latency (operasyon bazında p99 sıçraması) dedektörü
-  // (operatör: "Trace op latency false pozitif geliyor"). v0.10.1085 —
-  // VARSAYILAN AÇIK, yalnız sürdürme kuralıyla (operatör: "Önerini yapalım").
-  // Backend *bool, yok = AÇIK: okuma `!== false`, kayıt AÇIK boolean gönderir.
-  opLatency?: boolean;
-  // v0.10.1085 — trace_op_latency için ihlalin sürmesi gereken ardışık
-  // tamamlanmış 5 dk kova sayısı; 1–6, yok/aralık dışı = 2 (sunucu
-  // kelepçeler). 1 = eski tek-kova davranışı.
-  opLatencyDwellBuckets?: number;
-  opLatencyMinAffected?: number; // v0.10.1776
+  // v0.10.2087 — opLatency / opLatencyDwellBuckets / opLatencyMinAffected
+  // trace_op_latency dedektörüyle birlikte silindi (operatör kararı 2026-11-13).
   // v0.10.1586 — trace_op (operasyon hata sıçraması / yeni hata) ve
   // log_pattern olaylarının açılması için ardışık 5 dk pencere sayısı;
   // 1–6, yok/aralık dışı = 2 (sunucu kelepçeler). 1 = eski tek pencere.
@@ -12233,8 +12225,8 @@ export interface ExplainCard {
 }
 export interface MLDetectorScore { detector: string; signal?: string; events: number; samples: number; hits: number; hitRate: number }
 /** Yerleşik dedektörler görünümü (v0.10.1766): own = anomaly_sensitivity içindeki eski anahtarlar. */
-export interface NativeOwnSwitches { opLatency: boolean } // v0.10.2085: logTemplateNew silindi (ML new_template)
-export interface NativeDetectorsView { names: string[]; detectors: Record<string, boolean>; own?: NativeOwnSwitches }
+// v0.10.2087: kendi-anahtar görünümü (own) silindi — son üye op_latency de gitti.
+export interface NativeDetectorsView { names: string[]; detectors: Record<string, boolean> }
 /** Kalite çerçevesi (v0.10.1751, üç sinyal ortak). *Off bool'ları ters adlı: eksik = açık. */
 export interface MLQuality {
   impactMinRel: number; impactMinAbs: number; hygieneOff: boolean; regimeHours: number; confirmWindowMin: number;

@@ -34,11 +34,10 @@ import (
 // system_settings into the Store. Get zaten soft-fail'dir (CH hatası →
 // varsayılanlar), yani boot bir ayar okumasına bağlanmıyor.
 func (s *Server) LoadAnomalySensitivity(ctx context.Context) {
-	// v0.10.1085 — tek seferlik operasyon gecikmesi göçü (1056 dönemi kayıtlı
-	// false → nil = açık), okumadan ÖNCE: aynı tur yeni değeri yayınlar.
-	// İşaretli; başarana dek her 30 sn'lik turda yeniden dener.
+	// Tek seferlik göçler okumadan ÖNCE: aynı tur yeni değeri yayınlar.
+	// İşaretli; başarana dek her 30 sn'lik turda yeniden dener. (v0.10.1085
+	// opLatency göçü v0.10.2087'de dedektörle birlikte silindi.)
 	if s.store != nil {
-		chstore.MigrateOpLatencyDefaultOnce(ctx, s.store)
 		// v0.10.1585 — minBaselineRate 0 (eski varsayılan) → metrik başına taban.
 		chstore.MigrateMinRateDefaultOnce(ctx, s.store)
 	}

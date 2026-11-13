@@ -8,7 +8,7 @@ package chstore
 // evaluator sonucu kova değişene dek bellekten sunar):
 //
 //  1. Operasyon pivotu — operation_summary_5m, chstore.OpP99PivotQuery
-//     (trace_op_latency'nin AYNI tek geçişi; kopya yok): cari kova p99'u vs aynı
+//     (silinen trace_op_latency ile paylaşılan tek geçiş): cari kova p99'u vs aynı
 //     operasyonun önceki 24 sa'inin (cari kova hariç) HAVUZLANMIŞ p95'i
 //     (BaseP95 — dünkü kısa bir olay taban p99'unu şişirip bugünkünü
 //     susturmasın), HAVING'de kuralın tabanları (çağrı, mutlak p99, kat) + YAVAŞ

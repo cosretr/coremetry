@@ -20,7 +20,7 @@ package chstore
 // İşaret `system_settings[anomaly_sensitivity_minrate_v2]`: varken bir daha
 // koşmaz (göçten sonra 0'a çeken operatörün değeri kalır). Blobun diğer
 // alanları ve metrik nesnelerinin diğer anahtarları AYNEN korunur
-// (json.RawMessage haritası; opLatency göçü emsali). Çok-pod yarışı zararsız.
+// (json.RawMessage haritası; v0.10.1085 opLatency göçü emsali — o göç v0.10.2087'de silindi). Çok-pod yarışı zararsız.
 
 import (
 	"context"
@@ -153,7 +153,7 @@ func MigrateMinRateDefault(ctx context.Context, st inboxKeepMigrateStore, now ti
 		}
 		log.Printf("[settings] anomaly_sensitivity: minBaselineRate 0 → taban (%v)", changed)
 	}
-	body, _ := json.Marshal(opLatencyMigrateMarker{Version: minRateMigrateVersion, AppliedAt: now.UnixNano(), Outcome: outcome})
+	body, _ := json.Marshal(minRateMigrateMarker{Version: minRateMigrateVersion, AppliedAt: now.UnixNano(), Outcome: outcome})
 	if err := st.PutSetting(ctx, minRateMigrateKey, body); err != nil {
 		return outcome, fmt.Errorf("write marker: %w", err)
 	}
@@ -173,4 +173,12 @@ func MigrateMinRateDefaultOnce(ctx context.Context, st inboxKeepMigrateStore) {
 		return
 	}
 	minRateMigrated.Store(true)
+}
+
+// minRateMigrateMarker — göçün system_settings işareti (v0.10.2087'de silinen
+// opLatency göçünün işaret şekliyle birebir; kayıtlı işaretler aynı JSON).
+type minRateMigrateMarker struct {
+	Version   string `json:"version"`
+	AppliedAt int64  `json:"appliedAt"`
+	Outcome   string `json:"outcome"`
 }

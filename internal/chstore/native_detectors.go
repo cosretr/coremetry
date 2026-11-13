@@ -13,9 +13,9 @@ package chstore
 // Aynı kapının arkasında KALANLAR (metric_anomaly kapalıyken koşmaz):
 // error_ramp, takvim düşüşü, kümeleme, heap bandı, Davis
 // özneleri ve davranış motoru; evaluator'da anomali terfi süpürmesi.
-// Kendi anahtarı olan dedektörler burada tekrar listelenmez: op_latency
-// (varsayılan AÇIK, v0.10.1085; yerel kapı dışında) ve heap bandı
-// (varsayılan kapalı). log_template_new v0.10.2085'te silindi (ML new_template).
+// Kendi anahtarı olan dedektörler burada tekrar listelenmez: heap bandı
+// (varsayılan kapalı). log_template_new v0.10.2085'te, op_latency v0.10.2087'de
+// silindi.
 //
 // Okuma her tikte (restart yok): blob 15 sn süreç-içi önbellekle okunur
 // (tik başına ≤1 CH nokta okuması). CH hatasında SON bilinen değer, hiç
@@ -141,31 +141,12 @@ func (s *Store) NativeDetectorOn(ctx context.Context, name string) bool {
 }
 
 // ── Kendi bölümünden yönetilen eski dedektörler (v0.10.1766, A3) ──────────
-// Prod gözlemi 01.11.2026: yerleşik liste kapatıldığı hâlde op_latency ve
-// log_template_new (anomaly_sensitivity anahtarları) açık kaldı, yeni olay
-// üretti. Aynı ekranda anahtar + "hepsini kapat" için ortak görünüm.
-
-// NativeOwnSwitches — anomaly_sensitivity içindeki eski dedektör anahtarları.
-// v0.10.2085: log_template_new silindi (ML new_template), anahtarı da.
-type NativeOwnSwitches struct {
-	OpLatency bool `json:"opLatency"`
-}
-
-// OwnSwitchesFrom — SAF.
-func OwnSwitchesFrom(c AnomalySensitivityConfig) NativeOwnSwitches {
-	return NativeOwnSwitches{OpLatency: c.OpLatencyOn()}
-}
-
-// ApplyOwnSwitches — SAF: yalnız bu alan yazılır, blobun kalanı korunur.
-func ApplyOwnSwitches(c AnomalySensitivityConfig, own NativeOwnSwitches) AnomalySensitivityConfig {
-	o := own.OpLatency
-	c.OpLatency = &o
-	return c
-}
+// v0.10.2087: kalan son üye op_latency de silindi (log_template_new v0.10.2085) —
+// kendi-anahtar görünümü (NativeOwnSwitches) kaldırıldı.
 
 // AllNativeOff — SAF: "eski dedektörlerin hepsini kapat" (kalanlar: alarm
 // kuralları, exception akışı, Oracle/Influx, Elastic ML, slo_burn, heartbeat,
 // self-health — bu listede değiller).
-func AllNativeOff(c AnomalySensitivityConfig) (NativeDetectorsConfig, AnomalySensitivityConfig) {
-	return DefaultNativeDetectors(), ApplyOwnSwitches(c, NativeOwnSwitches{})
+func AllNativeOff() NativeDetectorsConfig {
+	return DefaultNativeDetectors()
 }

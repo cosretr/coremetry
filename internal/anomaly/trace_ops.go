@@ -637,8 +637,8 @@ func traceOpQuery(curStart, baseStart, alignedNow time.Time, windowRatio float64
 
 const traceOpBucketLen = 5 * time.Minute
 
-// traceOpWindows — SAF (v0.10.1586): tespitin zaman sınırları, op_latency
-// opLatencyWindows'un ikizi. slotStarts[i] = en yeni (i+1). kovanın başı,
+// traceOpWindows — SAF (v0.10.1586): tespitin zaman sınırları (v0.10.2087'de
+// silinen opLatencyWindows'un ikiziydi). slotStarts[i] = en yeni (i+1). kovanın başı,
 // hepsi TAMAMLANMIŞ; taban sürdürme penceresinin TAMAMINDAN önce biter
 // (sıçrayan kovalar kendi tabanını şişirmez). windowRatio = kova / taban boyu
 // (taban boyu bugünkü kural: 24 sa ya da 12 × kova). dwell = 1 → bugünkü
@@ -795,8 +795,9 @@ func DetectTraceOpAnomalies(ctx context.Context, store *chstore.Store, window ti
 // anomaly_sensitivity.traceOpDwellBuckets (vars. 2) ardışık kova; recorder 1
 // dk'da bir 5 dk pencereye bakar ve tek kovalık sıçrama 5 tik yeniden
 // yazılıp terfinin MinSustained'ini geçiyordu (FP sınıfı d_single_window).
-// dwell ≥ 2'de sorgudan ÖNCE tek sınırlı aktif-olay okuması (op_latency'nin
-// aynı ListActiveAnomalyKeys + tavanları): o çiftler sürdürmeden muaf.
+// dwell ≥ 2'de sorgudan ÖNCE tek sınırlı aktif-olay okuması
+// (ListActiveAnomalyKeys + batch_latency_active.go tavanları): o çiftler
+// sürdürmeden muaf.
 // Okuma hatası → muafiyet YOK (aktif çift de iki kova ister — sessiz yön),
 // geçişte bir kez log.
 func DetectTraceOpAnomaliesSustained(ctx context.Context, store *chstore.Store, window time.Duration) ([]TraceOpAnomaly, error) {
@@ -809,7 +810,7 @@ func DetectTraceOpAnomaliesSustained(ctx context.Context, store *chstore.Store, 
 			"[anomaly-recorder] trace ops: aktif olay okunamadı (%v) — sürdürme muafiyeti bu okuma düzelene dek UYGULANMIYOR", err)
 		capped, _ := batchLatCapKeys(keys)
 		capped, _ = opLatCapExemptBytes(capped)
-		for _, p := range opLatSustainExempt(dwell, capped, err) {
+		for _, p := range sustainExemptPairs(dwell, capped, err) {
 			active = append(active, traceOpPair(p))
 		}
 	}

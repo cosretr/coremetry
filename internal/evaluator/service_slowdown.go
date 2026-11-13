@@ -57,8 +57,8 @@ package evaluator
 // hiçbir şey açılmaz/kapanmaz (bayat süpürme olay ortasında P1'i kapatmasın).
 // Kural kapalı → açık satırlar "rule disabled" gerekçesiyle kapanır.
 //
-// Operasyon anomalileri (trace_op_latency) BAĞIMSIZ çalışmaya devam eder —
-// bastırılmaz; bu kural onların üstüne servis düzeyinde tek P1 ekler.
+// Operasyon düzeyi gecikme ML op_latency'dedir (eski trace_op_latency
+// v0.10.2087'de silindi); bu kural servis düzeyinde tek P1 ekler.
 
 import (
 	"context"

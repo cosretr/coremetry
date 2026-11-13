@@ -42,22 +42,7 @@ fikstür satırı (`log_patterns_es_prefix_test.go`, çözümleyici taklidi); `*
 *bool nil = kapalı — operatör onaylı: "Bu log anomalileri de false pozitif geliyor"; kapı
 `DetectNewLogTemplates` başında + recorder adımı `recordNewLogTemplates`; templater / `log_templates`
 defteri sürer, açık olaylar 10 dk sonra düşer — yeniden önerme),
-trace_op (`trace_ops.go:171`), trace_op_latency (`op_latency.go`, recorder'dan; batch
-yük kapısı v0.10.1046; v0.10.1056'da kapatıldı — "Trace op latency false pozitif geliyor": tek
-kovalık sıçrama (30 çağrılık kovada tek 4 sn'lik istek = "168×") olay açıyordu. **v0.10.1085
-varsayılan AÇIK, YALNIZ sürdürme kuralıyla** (operatör: "Önerini yapalım"): çift ancak ardışık
-`anomaly_sensitivity.opLatencyDwellBuckets` (vars. 2, 1–6; 1 = eski tek kova) tamamlanmış kovanın
-HER BİRİNDE ≥30 çağrı + p99 ≥200 ms + ≥3× taban ise olay; tek MV pivotu kova numarasıyla
-(`multiIf … AS slot`, GROUP BY slot, önceki kova başına `p99_<i>`/`calls_<i>`, HAVING'de), saf
-`classifyOpLatency(rows, dwell, gate)`; batch kapısı yalnız her kova yük altındaysa susturur.
-`opLatency` *bool nil = açık, açıkça false kapalı, doğrulanmamış ayarda kapalı
-(`AnomalySensitivityForDetectors`); 1056 döneminin somutlaştırılmış false'u tek seferlik göçle
-nil'e (`anomaly_sensitivity_oplatency_migrate.go`, işaret `anomaly_sensitivity_oplatency_v2`,
-yalnız `opLatencyDwellBuckets` alanı yoksa). Kapı dedektörün başında, her G/Ç'den önce + recorder
-adımı `recordOpLatency`. Sürdürme yalnız AÇILIŞA: aktif olayı olan çift (aynı 1046 aktif-olay okuması, dwell ≥ 2'de
-servis daraltmasız; satırda `Active`, SQL'de önceki kova koşullarına `OR (service_name, name) IN`) en yeni kova tek
-başına ihlal ettikçe tazelenir, en yeni kova temizse yazım durur ve olağan aktif yaşla düşer. Sürdürmeyi kaldırıp tek kovaya DÖNME — gürültü geri gelir; susturma
-gerekiyorsa vida dwell'dir), davranış motoru (`behavior.go` `evalBehaviorWindow`,
+trace_op (`trace_ops.go:171`), trace_op_latency (**SİLİNDİ v0.10.2087**, operatör kararı 2026-11-13: sunucu uçları ML `op_latency` (örneklenmemiş VM histogramı) ile kapsanır; CONSUMER / INTERNAL p99 sıçraması bilinçli kaybedildi; eski satırlar /anomalies + detayda görünür, terfi Problem'i "anomaly cleared" ile kapanır — yeniden önerme), davranış motoru (`behavior.go` `evalBehaviorWindow`,
 kind=`behavior_change`, LLM dedektör DEĞİL hüküm katmanı — deterministik
 kapılardan geçer, alert AÇAMAZ; batch p99 yük kapısı `behaviorFleetCandidates`; v0.10.1070
 operatör onaylı "Bu da mesela false pozitif": mutlak taban `behavior.minP99Ms` 200 /
@@ -135,8 +120,9 @@ sorgusu / 15 s, CH prefetch'iyle paralel. Geri alma `alertSource=span`.
 
 **Yük altında gecikme (v0.10.1046, operatör: "Batch servislerde yük altındaki gecikme
 artışı da anomali sayılmasın"):** hacim işin OLAĞAN ÇALIŞMA hacminin ≥ 2 katıyken gecikme
-artışı YENİ olay açmaz. Tek sabit `batchLoadSurgeFactor = 2`; kollar `batchLoadSurge`
-(ondalık, medyan) ve `batchLoadSurgeCounts` (tamsayı) — `batch_latency.go`; taban
+artışı YENİ olay açmaz. **v0.10.2087: `trace_op_latency` kolu dedektörle silindi — aşağıdaki
+trace_op_latency cümleleri tarihçedir; canlı kollar metrik + davranış.** Tek sabit `batchLoadSurgeFactor = 2`;
+kol `batchLoadSurge` (ondalık, medyan; tamsayı ikizi `batchLoadSurgeCounts` silindi) — `batch_latency.go`; taban
 bilinmiyorsa SUSTURMA YOK. `trace_op_latency`: `cur_calls × base_buckets ≥ 2 × base_calls ×
 cur_buckets` (v0.10.1085: sürdürme penceresinin HER kovası için, AND), `base_buckets` = taban penceresinin AKTİF kovaları (`uniqExact(time_bucket)`,
 aynı geçiş; 24 sa ortalaması seyrek işin HER koşusunu sıçrama yapardı) — SQL HAVING

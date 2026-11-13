@@ -13760,3 +13760,24 @@ eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
   tabanlarının medyanı, gözlenen = oran medyanı × taban. Sürdürme durumu süreç-içi (lider değişince 2 tik bekler).
 - Cümle yavaş operasyonları adıyla: "orders-api: 4 işlem birlikte yavaşladı (p95) — GET /a normalde 200 ms, şimdi 1,4 sn;
   …; ve 1 işlem daha". Detay grafiği servis Overview p99 serisi. Varsayılan açık; tik durumunda kendi satırı.
+
+## 2026-11-13 — v0.10.2087 — Eski trace_op_latency dedektörü silindi (operatör kararı, kayıp kabul)
+
+- Silinen: `internal/anomaly/op_latency.go` (`DetectOpLatencyAnomalies`, `classifyOpLatency`, batch/sürdürme
+  planı), recorder adımı `recordOpLatency` + `opLatencyEvent`, `anomaly_sensitivity.opLatency` /
+  `opLatencyDwellBuckets` / `opLatencyMinAffected` + v0.10.1085 göçü, Settings › Anomaly kutusu + iki sayı,
+  testleri. Yerleşik dedektörler ekranının kendi-anahtar görünümü (`NativeOwnSwitches`, API `own` alanı,
+  `native_detectors.own` audit'i) tümüyle kalktı — son üyesi buydu (log_template_new v0.10.2085). "Hepsini kapat"
+  artık yalnız yerleşik listeyi kapatır, anomaly_sensitivity'ye yazmaz. `operation_summary_5m` ve pivot
+  (`OpP99PivotQuery` / `OpP99Pivot`) KALIR — yaygın yavaşlama (`svc-slowdown:`) kullanıyor.
+- Neden: sunucu uçları ML `op_latency` ile daha iyi kapsanıyor (v0.10.2059: örneklenmemiş VM histogramı,
+  p95 ≥ 100 ms + etkilenen istek kapısı). Eski dedektör p99'u %5 örneklenmiş span'lerden hesaplıyordu
+  (kova başına ≥ 500 örneklenmiş çağrı); örneklenmiş span'den gecikme hesaplamak yasak (operatör 2026-10-31).
+- BİLİNÇLİ KAYIP (operatör kabul etti): CONSUMER ve INTERNAL span'lerin operasyon düzeyi p99 sıçraması artık
+  hiçbir dedektörde yok (prod VM'de mesajlaşma süre metriği yok). Kafka tüketici sağlığı lag dedektöründe.
+- Geçmiş: eski `trace_op_latency` satırları /anomalies birleşik listede ve detay sayfasında aynen görünür
+  (FE etiketleri, `StandardizeAnomalyEvent`, kök neden örnek trace seçimi kalır). Açık terfi Problem'i
+  (`anomaly-auto:<fp>`) yeni olay yazılmadığından olay aktif yaşı (10 dk) dolunca
+  `resolveClearedAnomalyPromotions` ile "anomaly cleared" kapanır; o geçiş okunamazsa bayat süpürme kapatır.
+- Kayıtlı blobdaki `opLatency*` alanları okunmaz; Normalize yalnız bilinen alanları yazdığından sonraki kayıtta düşer.
+- DOKUNULMADI: `trace_op`, ML `op_latency`, `svc-slowdown`, `metric_anomaly`, Davis özneleri, Elastic ML.
