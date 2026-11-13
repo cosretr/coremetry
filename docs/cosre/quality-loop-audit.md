@@ -88,6 +88,12 @@ Gece işi en kötü K cevabı (bugün `exportCosreQualityEvalset` mantığı) ad
 D1-D3 gemide: koşucu v2, rubrik parçaları görür, gate'te adlı sözleşme adımı, `make evalset-check` modelsiz. D4-D6 operatör onayıyla. Roadmap §2 satır 9 "kısmen" → "gemide (hakem kapı değil, günlük)".
 
 ## 8. Operatöre sorular
+
+**Onay, 2026-11-13:** operatör belgeyi altı sorunun önerileriyle onayladı: 1 → `path` kolonu kabul;
+2 → günlük v2 koşusu açık, UTC gün kapanışı + 2 sa, acil fren anahtarıyla; 3 → K=5, `saved_views`,
+tek "Kabul"; 4 → adaylar CI kapısına girmez, repoya gömme elle; 5 → hakem guard'ı evet, ayrı sürüm;
+6 → sinyal ucu kullanıcı başına 60/dk, evet.
+
 1. D1'de koşu kaydına `path` kolonu (`ai_eval_runs`, varsayılan `'v1'`) eklenir; eski koşularla diff kapanır. Kabul mü? Öneri: kabul; alternatif (ayrı tablo) gereksiz.
 2. Günlük v2 koşusu (D4) prod self-hosted modele günde ~80 istek ekler, 30 dk tavan. Açılsın mı, hangi saatte? Öneri: kalite gününden hemen sonra (UTC gün kapanışı + 2 sa), acil fren anahtarı varsayılan açık.
 3. Aday vakalar `saved_views(page='cosre_evalset_candidate')` kalıbıyla, gecede en kötü K=5, "Kabul" tek düğme (D6). K ve kabul akışı uygun mu? Öneri: K=5, kabul edilen aday repoya gömme olmadan günlük koşuya girer; repo gömme ayrı karar.
