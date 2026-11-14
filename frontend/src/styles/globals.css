@@ -5169,6 +5169,37 @@ a.sec.trl-csv, a.sec.trl-csv:hover, a.sec.trl-csv:active { padding: 5px 10px; fo
    sorguları kutusu. */
 .cl-promql { display: grid; gap: var(--sp-5); }
 .cl-promql__label { font-size: var(--fs-xs); color: var(--text2); margin-bottom: 3px; }
+/* Clusters S4 (v0.10.2169, plan §0 D1) — liste görünümü: filo cümlesi + kart.
+   Kart yüzeyi `.card` / `.card-link`; burada yalnız iç düzen. Başlık ayracı
+   ui/Card'ınkiyle aynı (--divider, --fs-md / 600). Durum düz sözcük: sağlıklı
+   nötr (K5), kritik alarm --err, yanıt vermiyor --warn. */
+.cl-fleet { margin: 0 0 var(--sp-6); font-size: var(--fs-md); color: var(--text2); }
+.cl-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+.cl-card { min-width: 0; }
+.cl-card--crit { border-color: color-mix(in srgb, var(--err) 45%, var(--border)); }
+.cl-card__head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-4); margin-bottom: var(--sp-5); padding-bottom: var(--sp-4); border-bottom: 1px solid var(--divider); font-size: var(--fs-md); font-weight: 600; }
+.cl-card__name { font-family: var(--font-mono); }
+.cl-card__tags { display: flex; align-items: center; gap: var(--sp-3); }
+.cl-status { font-size: var(--fs-xs); font-weight: 400; color: var(--text3); white-space: nowrap; }
+.cl-status--crit { font-weight: 600; color: var(--err); }
+.cl-status--down { font-weight: 600; color: var(--warn); }
+.cl-card__body { display: grid; gap: var(--sp-5); }
+.cl-kpis { gap: var(--sp-3); }
+.cl-kpi__label { font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: .06em; color: var(--text3); }
+.mono.cl-kpi__val { font-size: 15px; font-weight: 700; }
+.mono.cl-kpi__val--alert { color: var(--err); }
+.cl-usage { display: grid; gap: var(--sp-3); }
+.cl-usage__row { display: grid; gap: var(--sp-2); font-size: var(--fs-xs); }
+.cl-usage__text { display: flex; justify-content: space-between; gap: var(--sp-4); color: var(--text3); }
+.cl-usage__val { color: var(--text2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cl-usage__val--warn { font-weight: 600; color: var(--warn); }
+.cl-usage__val--err { font-weight: 600; color: var(--err); }
+.cl-card__note { margin: 0 0 var(--sp-4); font-size: var(--fs-sm); color: var(--text2); }
+.cl-card__action { font-size: var(--fs-sm); }
+/* Overview'da kartlar arası boşluk (eski satır içi marginTop: 14). */
+.cl-section { margin-top: 14px; }
+/* Namespace satırındaki trend düğmesi (shadcn ghost): simge bağlantı renginde. */
+.cl-trend-btn { color: var(--accent2); }
 .cl-promql__q { margin: 0; padding: 7px 9px; border: 1px solid var(--border); border-radius: var(--radius-xs); background: var(--bg2); font-size: var(--fs-xs); white-space: pre-wrap; word-break: break-all; color: var(--text2); }
 
 /* ── Copilot araç-çağrısı paneli — v0.10.161 (etüt seçenek A «Adım listesi»).

@@ -23,7 +23,13 @@ describe('Clusters — sade palet adım 1', () => {
   });
   it('healthy/reachable kelimeleri --text3 metin olarak kalır', () => {
     expect(src).toContain(`<span style={{ fontSize: 11, color: 'var(--text3)' }}>reachable</span>`);
-    expect(src.match(/color: 'var\(--text3\)' \}\}>healthy<\/span>/g)?.length).toBe(2);
+    // Clusters S4 — liste kartının "healthy" rozeti düz sözcük "sağlıklı" oldu
+    // (D1); kalan tek "healthy" Namespaces tablosunun Health hücresi.
+    expect(src.match(/color: 'var\(--text3\)' \}\}>healthy<\/span>/g)?.length).toBe(1);
+    // Liste: sağlıklı NÖTR sınıf (renk değiştiricisi yok); renk yalnız sapmada.
+    expect(src).toContain('{state === \'healthy\' && <span className="cl-status">sağlıklı</span>}');
+    expect(src).toContain('<span className="cl-status cl-status--crit">');
+    expect(src).toContain('<span className="cl-status cl-status--down">yanıt vermiyor</span>');
   });
   it('sapma renkleri korunur (unreachable/failing b-err, >85 --err)', () => {
     expect(src).toContain('<span className="badge b-err">unreachable</span>');

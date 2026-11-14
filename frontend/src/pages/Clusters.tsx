@@ -22,7 +22,10 @@ import { clusterSearch } from '@/pages/clusters/clusterSearch'; // v0.10.928 (Y1
 import { MultiLineChart } from '@/components/MultiLineChart';
 import { Topbar } from '@/components/Topbar';
 import { Spinner, Empty } from '@/components/Spinner';
-import { Card, CardLink, Drawer, DrawerSection, IconButton, LinkButton } from '@/components/ui';
+import { Drawer, DrawerSection } from '@/components/ui';
+import { Button } from '@/components/shadcn/button';
+import { ClusterCard } from '@/pages/clusters/ClusterCard';
+import { clusterState, fleetSentence, cpuUsageText, memUsageText, usageTone } from '@/pages/clusters/fleetSummary';
 import { api } from '@/lib/api';
 import { useClusters } from '@/lib/queries';
 import { timeRangeToNs, fmtBytes, fmtNum, rowClickHandlers } from '@/lib/utils';
@@ -610,116 +613,113 @@ export default function ClustersPage() {
           </Empty>
         )}
 
-        {/* ── Genel görünüm: alert banner + cluster kartları ──── */}
-        {!isDetail && sources.length > 0 && (() => {
-          // v0.9.33 (F5) — fleet toplam firing-alert (banner).
-          const fleetAlerts = summaryQs.reduce((n, q) =>
-            n + (q?.data ? (q.data.alertsCritical ?? 0) + (q.data.alertsWarning ?? 0) : 0), 0);
-          return (
-            <>
-              {fleetAlerts > 0 && (
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14,
-                  padding: '12px 16px', borderRadius: 6,
-                  border: '1px solid color-mix(in srgb, var(--err) 40%, transparent)',
-                  background: 'color-mix(in srgb, var(--err) 7%, transparent)',
-                }}>
-                  <span className="pulse-dot" style={{ width: 9, height: 9, background: 'var(--err)', flexShrink: 0 }} />
-                  <span style={{ fontWeight: 600, fontSize: 13 }}>
-                    {fmtNum(fleetAlerts)} alert{fleetAlerts === 1 ? '' : 's'} firing across the fleet
-                  </span>
-                  <span style={{ fontSize: 12, color: 'var(--text3)' }}>— open a cluster to triage</span>
-                </div>
-              )}
-              <div style={{
-                display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 14,
-              }}>
-                {sources.map((name, i) => {
-                  const q = summaryQs[i];
-                  const sum: ClusterSummary | undefined = q?.data;
-                  const unreachable = q?.isError ?? false;
-                  const seen = observed.size === 0 || observed.has(name);
-                  const alerts = sum ? (sum.alertsCritical ?? 0) + (sum.alertsWarning ?? 0) : 0;
-                  const cpuP = sum ? safePct(sum.cpuUsedCores, sum.cpuCapacityCores) : null;
-                  const memP = sum ? safePct(sum.memUsedBytes, sum.memCapacityBytes) : null;
-                  // Status: unreachable > degraded (crit alert) > healthy.
-                  // v0.10.922 (sade palet adım 1) — K5: sağlıklı durum
-                  // NÖTR; yeşil rozet yok, kelime --text3 metin olarak kalır.
-                  const statusBadge = unreachable
-                    ? <span className="badge b-err">unreachable</span>
-                    : (sum?.alertsCritical ?? 0) > 0
-                      ? <span className="badge b-warn">degraded</span>
-                      : <span style={{ fontSize: 11, color: 'var(--text3)' }}>healthy</span>;
+        {/* ── Genel görünüm: filo cümlesi + cluster kartları ────
+            Clusters S4 (v0.10.2169, plan §0 D1, mockup "Clusters · liste"):
+            v0.9.33'ün alarm şeridi KALKTI, yerine kart durumlarından
+            kurulan tek düz cümle (fleetSummary.ts). Kart düzeni aynı
+            (3 sayı + 2 çubuk + durum sözcüğü); çubuğun yanında yüzde
+            yerine "kullanılan / kapasite · %". Durum kuralı eski rozetle
+            aynı: yanıt vermiyor > kritik alarm > sağlıklı. v0.10.922 K5
+            korunur: sağlıklı nötr metin, renk yalnız sapmada. */}
+        {!isDetail && sources.length > 0 && (
+          <>
+            <p className="cl-fleet" role="status">{fleetSentence(summaryQs.map(clusterState))}</p>
+            <div className="cl-cards">
+              {sources.map((name, i) => {
+                const q = summaryQs[i];
+                const sum: ClusterSummary | undefined = q?.data;
+                const state = clusterState(q);
+                const inTelemetry = observed.has(name);
+                const nameEl = <span className="cluster-name">{name}</span>;
+                // v0.10.928 (Y1) — kartı açmak gerçek link: Tab+Enter, ⌘/orta tık
+                // yeni sekme; `replace` eski geçmiş davranışı.
+                const detail = { search: clusterSearch(params, name) };
+                if (state === 'unreachable') {
+                  // D1 — yanıt vermeyen cluster: düz cümle + bağlantı ayarı. Kart
+                  // tıklanabilir DEĞİL (içinde iki ayrı bağlantı var): ad detaya,
+                  // eylem Settings → Remote clusters'a gider. "Span'ler geliyor"
+                  // yalnız ad son 24 saatin telemetrisinde görüldüyse söylenir.
                   return (
-                    // v0.10.928 (Y1) — tek tıklanabilir kart gerçek link: Tab+Enter,
-                    // ⌘/orta tık yeni sekme; `replace` eski geçmiş davranışı.
-                    <CardLink key={name}
-                      to={{ search: clusterSearch(params, name) }}
-                      replace
-                      header={
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
-                          <span className="cluster-name" style={{ fontFamily: 'var(--font-mono)' }}>{name}</span>
-                          <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                            {!unreachable && !seen && (
-                              <span className="badge b-gray" title="Name not seen in the last 24h of telemetry — the service pivot will not match">not in telemetry</span>
-                            )}
-                            {statusBadge}
-                          </span>
-                        </span>
-                      }>
-                      {q?.isPending && <Spinner />}
-                      {unreachable && (
-                        <div style={{ fontSize: 12, color: 'var(--text3)' }}
-                          title={q?.error instanceof Error ? q.error.message : undefined}>
-                          Thanos Querier unreachable — check the token/route in Settings.
-                        </div>
-                      )}
-                      {sum && (
-                        <div style={{ display: 'grid', gap: 10 }}>
-                          <div className="grid-3" style={{ display: 'grid', gap: 6 }}>
-                            {([['Nodes', sum.nodes], ['Pods', sum.pods], ['Alerts', alerts]] as const).map(([label, v]) => (
-                              <div key={label}>
-                                <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--text3)' }}>{label}</div>
-                                <div className="mono" style={{ fontSize: 15, fontWeight: 700,
-                                  color: label === 'Alerts' && (v ?? 0) > 0 ? 'var(--err)' : undefined }}>
-                                  {v != null ? fmtNum(v) : '—'}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                          {(cpuP != null || memP != null) && (
-                            <div style={{ display: 'grid', gap: 6 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11 }}>
-                                <span style={{ width: 34, color: 'var(--text3)' }}>CPU</span>
-                                <MiniBar pct={cpuP} />
-                                <span className="mono" style={{ width: 34, textAlign: 'right', color: 'var(--text3)' }}>
-                                  {cpuP != null ? `${Math.round(cpuP)}%` : '—'}</span>
-                              </div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11 }}>
-                                <span style={{ width: 34, color: 'var(--text3)' }}>Mem</span>
-                                <MiniBar pct={memP} />
-                                <span className="mono" style={{ width: 34, textAlign: 'right', color: 'var(--text3)' }}>
-                                  {memP != null ? `${Math.round(memP)}%` : '—'}</span>
+                    <div key={name} className="card cl-card">
+                      <div className="cl-card__head">
+                        <Link className="cl-card__name" to={detail} replace>{nameEl}</Link>
+                        <span className="cl-status cl-status--down">yanıt vermiyor</span>
+                      </div>
+                      <p className="cl-card__note" title={q?.error instanceof Error ? q.error.message : undefined}>
+                        Cluster metriklerine ulaşılamıyor.
+                        {inTelemetry && <span title="Ad son 24 saatin telemetrisinde görüldü"> Span'ler gelmeye devam ediyor.</span>}
+                      </p>
+                      <Link className="cl-card__action" to="/settings/clusters">Bağlantı ayarını aç</Link>
+                    </div>
+                  );
+                }
+                const alerts = sum ? (sum.alertsCritical ?? 0) + (sum.alertsWarning ?? 0) : 0;
+                const cpuP = sum ? safePct(sum.cpuUsedCores, sum.cpuCapacityCores) : null;
+                const memP = sum ? safePct(sum.memUsedBytes, sum.memCapacityBytes) : null;
+                const usage = sum ? ([
+                  ['CPU', cpuUsageText(sum.cpuUsedCores, sum.cpuCapacityCores), cpuP],
+                  ['Memory', memUsageText(sum.memUsedBytes, sum.memCapacityBytes), memP],
+                ] as const).filter(([, text]) => text != null) : [];
+                return (
+                  <Link key={name} to={detail} replace
+                    className={state === 'critical' ? 'card card-link cl-card cl-card--crit' : 'card card-link cl-card'}>
+                    <div className="cl-card__head">
+                      <span className="cl-card__name">{nameEl}</span>
+                      <span className="cl-card__tags">
+                        {observed.size > 0 && !inTelemetry && (
+                          <span className="badge b-gray" title="Name not seen in the last 24h of telemetry — the service pivot will not match">not in telemetry</span>
+                        )}
+                        {state === 'critical' && (
+                          <span className="cl-status cl-status--crit">{fmtNum(sum?.alertsCritical ?? 0)} kritik alarm</span>
+                        )}
+                        {state === 'healthy' && <span className="cl-status">sağlıklı</span>}
+                      </span>
+                    </div>
+                    {state === 'pending' && <Spinner />}
+                    {sum && (
+                      <div className="cl-card__body">
+                        <div className="grid-3 cl-kpis">
+                          {([['Nodes', sum.nodes], ['Pods', sum.pods], ['Alerts', alerts]] as const).map(([label, v]) => (
+                            <div key={label}>
+                              <div className="cl-kpi__label">{label}</div>
+                              <div className={label === 'Alerts' && (v ?? 0) > 0 ? 'mono cl-kpi__val cl-kpi__val--alert' : 'mono cl-kpi__val'}>
+                                {v != null ? fmtNum(v) : '—'}
                               </div>
                             </div>
-                          )}
+                          ))}
                         </div>
-                      )}
-                    </CardLink>
-                  );
-                })}
-              </div>
-            </>
-          );
-        })()}
+                        {usage.length > 0 && (
+                          <div className="cl-usage">
+                            {usage.map(([label, text, pct]) => {
+                              const tone = usageTone(pct);
+                              return (
+                                <div key={label} className="cl-usage__row">
+                                  <div className="cl-usage__text">
+                                    <span>{label}</span>
+                                    <span className={tone === 'err' ? 'cl-usage__val cl-usage__val--err' : tone === 'warn' ? 'cl-usage__val cl-usage__val--warn' : 'cl-usage__val'}>{text}</span>
+                                  </div>
+                                  <MiniBar pct={pct} />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          </>
+        )}
 
         {/* ── Detay: geri → Nodes → Pods ───────────────────────── */}
         {isDetail && (
           <>
             <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
-              <LinkButton onClick={backToOverview} style={{ fontSize: 12 }}>
+              <Button variant="link" size="xs" onClick={backToOverview}>
                 ← All clusters
-              </LinkButton>
+              </Button>
               <span className="cluster-name" style={{ fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 600 }}>
                 {clusterParam}
               </span>
@@ -906,13 +906,13 @@ export default function ClustersPage() {
                               <DataTableCell dt={nsdt} col="trend" row={r}>
                                 {/* v0.9.5 — trend drawer'ı; satırın filtre
                                     davranışına karışmaz (stopPropagation). */}
-                                <IconButton
-                                  variant="bare" size="xs" className="ib-accent"
+                                <Button
+                                  variant="ghost" size="icon-xs" className="cl-trend-btn"
                                   onClick={e => { e.stopPropagation(); openNsDrawer(r); }}
                                   aria-label={`Open per-pod trend charts for namespace ${r.namespace}`}
-                                  // v0.10.926 — Tooltip; ata <tr> title'ı sızmaz (boş title).
-                                  tooltip="Per-pod trend charts for this namespace"
-                                  icon={<ChartSpline size={14} strokeWidth={1.75} />} />
+                                  title="Bu namespace'in pod başına trend grafikleri">
+                                  <ChartSpline size={14} strokeWidth={1.75} aria-hidden="true" />
+                                </Button>
                               </DataTableCell>
                             </tr>
                           );
@@ -1022,7 +1022,7 @@ export default function ClustersPage() {
                     display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
                     gap: 14,
                   }}>
-                    <Card header="CPU used (cores)">
+                    <ClusterCard header="CPU used (cores)">
                       <div className="mono" style={kpiVal}>
                         {d?.cpuUsedCores ? fmtCores(d.cpuUsedCores) : '—'}
                       </div>
@@ -1033,8 +1033,8 @@ export default function ClustersPage() {
                         ].filter(Boolean).join(' · ')}
                       </div>
                       <CapacityEtaLine f={d?.cpuForecast} />
-                    </Card>
-                    <Card header="Memory used">
+                    </ClusterCard>
+                    <ClusterCard header="Memory used">
                       <div className="mono" style={kpiVal}>
                         {d?.memUsedBytes ? fmtBytes(d.memUsedBytes) : '—'}
                       </div>
@@ -1043,9 +1043,9 @@ export default function ClustersPage() {
                           : d?.pods ? `${fmtNum(d.pods)} pods` : ''}
                       </div>
                       <CapacityEtaLine f={d?.memForecast} />
-                    </Card>
+                    </ClusterCard>
                     {phaseTotal > 0 && (
-                      <Card header="Running pods">
+                      <ClusterCard header="Running pods">
                         {/* v0.10.922 (sade palet adım 1) — K5: çalışan pod
                             sayısı normal durum; hep-yeşil KPI NÖTR. */}
                         <div className="mono" style={kpiVal}>
@@ -1054,7 +1054,7 @@ export default function ClustersPage() {
                         <div style={kpiSub}>
                           {`${fmtNum(d?.podsPending ?? 0)} pending · ${fmtNum(d?.podsFailed ?? 0)} failed`}
                         </div>
-                      </Card>
+                      </ClusterCard>
                     )}
                     {/* v0.9.44 — 0'ın sınırı title'da: ALERTS
                         serisi yalnız firing/pending alarm varken var
@@ -1063,7 +1063,7 @@ export default function ClustersPage() {
                         v0.10.922 (sade palet adım 1) — K5: 0 alarm
                         NÖTR (yeşil değil); yalnız crit/warn renkli. */}
                     {showAlerts && (
-                      <Card header="Active alerts"
+                      <ClusterCard header="Active alerts"
                         title="Counts firing/pending ALERTS series from Prometheus. 0 also appears when the cluster has no alerting rules configured — the ALERTS metric cannot distinguish the two.">
                         <div className="mono" style={{
                           ...kpiVal,
@@ -1074,23 +1074,23 @@ export default function ClustersPage() {
                         <div style={kpiSub}>
                           {`${fmtNum(alertCrit)} critical · ${fmtNum(alertWarn)} warning`}
                         </div>
-                      </Card>
+                      </ClusterCard>
                     )}
                     {/* v0.9.10 — net kartları yalnız veri VARSA (alan
                         yokluğu yanlış sıfır okutmaz — probe duruşu). */}
                     {(d?.netInBps ?? 0) > 0 && (
-                      <Card header="Net in">
+                      <ClusterCard header="Net in">
                         <div className="mono" style={kpiVal}>
                           {fmtBps(d!.netInBps!)}
                         </div>
-                      </Card>
+                      </ClusterCard>
                     )}
                     {(d?.netOutBps ?? 0) > 0 && (
-                      <Card header="Net out">
+                      <ClusterCard header="Net out">
                         <div className="mono" style={kpiVal}>
                           {fmtBps(d!.netOutBps!)}
                         </div>
-                      </Card>
+                      </ClusterCard>
                     )}
                   </div>
                   );
@@ -1111,7 +1111,7 @@ export default function ClustersPage() {
                   return (
                     <div style={{ display: 'grid', gridTemplateColumns: hasGauges && hasDonut ? '2fr 1fr' : '1fr', gap: 14, marginTop: 14 }}>
                       {hasGauges && (
-                        <Card header="Utilization">
+                        <ClusterCard header="Utilization">
                           <div style={{ display: 'flex', justifyContent: 'space-around', flexWrap: 'wrap', gap: 16, paddingTop: 6 }}>
                             <Gauge pct={cpuP} label="CPU" sub="utilized" />
                             <Gauge pct={memP} label="Memory" sub="utilized" />
@@ -1121,14 +1121,14 @@ export default function ClustersPage() {
                             <Gauge pct={healthP} label="Pod health" sub="running"
                               color={healthP != null && healthP > 95 ? 'var(--text3)' : 'var(--warn)'} />
                           </div>
-                        </Card>
+                        </ClusterCard>
                       )}
                       {hasDonut && (
-                        <Card header="Pod phase">
+                        <ClusterCard header="Pod phase">
                           <div style={{ paddingTop: 6 }}>
                             <PhaseDonut running={d.podsRunning ?? 0} pending={d.podsPending ?? 0} failed={d.podsFailed ?? 0} />
                           </div>
-                        </Card>
+                        </ClusterCard>
                       )}
                     </div>
                   );
@@ -1160,7 +1160,7 @@ export default function ClustersPage() {
                 {/* v0.9.10 — throughput grafiği: yalnız seri geldiyse
                     (node_network erişilemezse bölüm hiç görünmez). */}
                 {section === 'overview' && (netTrendQ.data?.trend?.length ?? 0) > 0 && (
-                  <Card header={`Network throughput${clampSuffix(netClamped)}`} style={{ marginTop: 14 }}>
+                  <ClusterCard header={`Network throughput${clampSuffix(netClamped)}`} className="cl-section">
                     {/* Madde 4 sweep — eksen/tooltip byte birimi (değerler
                         Bps; seri etiketleri "(B/s)" taşır) + drag-zoom
                         global range'e, çift-tık geri-yığınına. */}
@@ -1169,14 +1169,14 @@ export default function ClustersPage() {
                       unit="bytes" onZoom={chartZoom} onZoomReset={chartZoomReset}
                       syncKey="clusters" xRange={trendXRange} zeroBase
                       height={200} />
-                  </Card>
+                  </ClusterCard>
                 )}
                 {/* v0.9.32 (F2) — node utilization heatmap (Overview);
                     aynı clusterNodes verisi, seri yoksa gizli. */}
                 {section === 'overview' && nodeRows.length > 0 && (
-                  <Card header={`Node utilization (${nodeRows.length})`} style={{ marginTop: 14 }}>
+                  <ClusterCard header={`Node utilization (${nodeRows.length})`} className="cl-section">
                     <NodeHeatmap nodes={nodeRows} />
-                  </Card>
+                  </ClusterCard>
                 )}
                 {/* v0.9.574 — "Prometheus / Thanos queries" kartı KALDIRILDI
                     (operatör: "gerek yok"). Kopyala-yapıştır PromQL örnekleri
@@ -1299,7 +1299,7 @@ function AlertsPanel({ alerts, criticalOnly, onToggle }: {
 }) {
   const shown = criticalOnly ? alerts.filter(a => a.severity === 'critical') : alerts;
   return (
-    <Card header={
+    <ClusterCard header={
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
         <span>Firing alerts <span className="badge b-err" style={{ marginLeft: 4 }}>{alerts.length}</span></span>
         <label style={{ fontSize: 11, color: 'var(--text3)', display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer', fontWeight: 400 }}>
@@ -1331,7 +1331,7 @@ function AlertsPanel({ alerts, criticalOnly, onToggle }: {
           <div style={{ fontSize: 12, color: 'var(--text3)', padding: 6 }}>No critical alerts.</div>
         )}
       </div>
-    </Card>
+    </ClusterCard>
   );
 }
 

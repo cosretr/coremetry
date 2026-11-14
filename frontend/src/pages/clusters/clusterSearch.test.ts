@@ -33,13 +33,22 @@ describe('clusterSearch', () => {
 
 // Kaynak pini: tek tıklanabilir kart gerçek bir link — div onClick'e
 // ya da elle cursor'a geri dönmesin.
-describe('Clusters — cluster kartı CardLink', () => {
+// Clusters S4 (v0.10.2169) — dondurulmuş ui/CardLink yerine aynı işaretleme
+// elle: `<Link className="card card-link …">`; hedef, replace ve "gerçek link"
+// sözleşmesi aynı.
+describe('Clusters — cluster kartı gerçek link', () => {
   const src = readFileSync(resolve(__dirname, '../Clusters.tsx'), 'utf8');
-  it('kart CardLink + clusterSearch + replace', () => {
-    expect(src).toMatch(/<CardLink key=\{name\}\s+to=\{\{ search: clusterSearch\(params, name\) \}\}\s+replace/);
+  it('kart <Link> + .card-link + clusterSearch + replace', () => {
+    expect(src).toContain('const detail = { search: clusterSearch(params, name) };');
+    expect(src).toMatch(/<Link key=\{name\} to=\{detail\} replace\s+className=\{state === 'critical' \? 'card card-link cl-card cl-card--crit' : 'card card-link cl-card'\}>/);
   });
   it('eski div onClick yolu yok', () => {
-    expect(src).not.toMatch(/<Card key=\{name\}[\s\S]{0,40}onClick/);
+    expect(src).not.toMatch(/<(Card|div) key=\{name\}[\s\S]{0,80}onClick/);
     expect(src).not.toContain('openCluster');
+  });
+  it('yanıt vermeyen kart tıklanabilir görünmez; içindeki iki bağlantı gerçek link', () => {
+    expect(src).toContain('<div key={name} className="card cl-card">');
+    expect(src).toContain('<Link className="cl-card__name" to={detail} replace>{nameEl}</Link>');
+    expect(src).toContain('<Link className="cl-card__action" to="/settings/clusters">Bağlantı ayarını aç</Link>');
   });
 });
