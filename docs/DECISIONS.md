@@ -14014,3 +14014,14 @@ eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
   pencerede MV/rollup'tan, ham span okumaları (trace örnekleri, Oracle eşlemesi, kırılım, endpoint exception) en çok son 24 sa;
   özet bunu söyler. Çekmece endpoint kanıtı ve v1 bayt bayt aynı.
 - Doğrulanmadı: canlı model anlatımı, prod; istem boyutu ölçülmedi (kanıt döngü tohumuyla aynı metin + deploy).
+
+## 2026-11-14 — v0.10.2138 — CoSRE router boşlukları D5: devam sorusunun öznesi (yalnız v2)
+- `ChatContext` iki alan: `Trace` (32-hex; trace_by_id rotası, trace ✨ açıklama turu, trace sentez sorusu) ve `Operation`
+  (ön-getirme hedefi, ≤200 rune). Aynı Redis anahtarı / 24 sa TTL; yalnız v2 yazar, v1 JSON'u bayt bayt aynı.
+- Devralma kuralı: önceki tur var + ekranda o türde özne yok + kısa devam ipucu (`v2SubjectCue`); açık ifade > sohbet bağlamı >
+  ekran sırası korunur (ekran öznesi varsa bağlam okunmaz). Servis router'a `ctxService` olarak girer (filo sözcüğünde girmez);
+  trace yalnız zamirle ya da son rota trace iken trace içi soruyla; operasyon yalnız operasyon zamiriyle.
+- "nereden/kimden çağrılıyor" → çağıranlar (`service_topology`); "kaç kez çağrıldı" değişmez.
+- "Hayır. …" uzun cümlesi bekleyen netleştirmeyi tüketmiyor (doğrulandı, testle pinli); kayıp özne trace idi.
+- Doğrulanmadı: canlı model, prod.
+

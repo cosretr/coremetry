@@ -47,6 +47,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"strings"
 	"sync"
@@ -84,6 +85,10 @@ type routingRow struct {
 	ansSuffix    string   // v0.10.1485 — cevap bu sonekle bitmeli (genel cevap: kapsam notu en altta)
 	generalShape bool     // v0.10.1485 — genel cevap sözleşmesi (assertOffTopicGeneralShape)
 	v2           bool     // v0.10.2135 — istek v2 sohbetinden (cosreV2Marked); false = v1 yolu
+	// v0.10.2138 — devam sorusu: önceki kullanıcı turları (eskiden yeniye) ve
+	// konuşmanın Redis sohbet bağlamı (copilot:ctx:u-route:conv-routing).
+	prior   []string
+	chatCtx *ChatContext
 }
 
 // routingRig — satırın sahte dünyası.
@@ -398,6 +403,44 @@ var routingRegressionRows = []routingRow{
 		q: rrSvc + " son 1 haftada neden uzuyor", v2: true, wantTier: aisurface.TierGuided, wantRoute: string(guidedRootCause)},
 	{release: "komşu v0.10.2136", name: "v1 'nedenini inceler misin' → service_report (v1 bayt bayt)",
 		q: rrSvc + " nedenini inceler misin", wantTier: aisurface.TierGuided, wantRoute: string(guidedServiceReport)},
+
+	// v0.10.2138 — router boşlukları D5 (audit C, H): devam sorusu önceki turun
+	// öznesini (sohbet bağlamı servis / trace) devralır; yalnız v2.
+	{release: "v0.10.2138", name: "v2 devam 'neden gecikmiş olabilir?' → root_cause (bağlam servisi)",
+		q: "neden gecikmiş olabilir?", v2: true, prior: []string{rrSvc + " sağlığı nasıl?"}, chatCtx: &ChatContext{Service: rrSvc},
+		wantTier: aisurface.TierGuided, wantRoute: string(guidedRootCause)},
+	{release: "v0.10.2138", name: "v2 devam 'bu tracete client correlation id nedir' → trace_by_id (bağlam trace'i)",
+		q: "bu tracete client correlation id nedir", v2: true, prior: []string{tfTrace + " trace'ini açıkla"}, chatCtx: &ChatContext{Trace: tfTrace},
+		wantTier: aisurface.TierGuided, wantRoute: string(guidedTraceByID)},
+	{release: "v0.10.2138", name: "v2 devam 'hangi iç işlemde zaman harcanıyor' (son rota trace) → trace_by_id",
+		q: "hangi iç işlemde zaman harcanıyor", v2: true, prior: []string{tfTrace + " trace'ini açıkla"},
+		chatCtx:  &ChatContext{Trace: tfTrace, LastIntent: string(guidedTraceByID)},
+		wantTier: aisurface.TierGuided, wantRoute: string(guidedTraceByID)},
+	{release: "v0.10.2138", name: "v2 'Hayır. bu trace altında db çağrılarını listele' (bekleyen sentez sorusu düşer) → trace_by_id",
+		q: "Hayır. bu trace altında giden db çağrılarını listele", v2: true, prior: []string{"OP_NAME_REST neden hata veriyor?"},
+		chatCtx:  &ChatContext{Trace: tfTrace, Pending: &chatPendingAsk{Kind: pendingKindTraceSynth, TraceID: tfTrace, AskedAt: time.Now().UnixNano()}},
+		wantTier: aisurface.TierGuided, wantRoute: string(guidedTraceByID)},
+	{release: "komşu v0.10.2138", name: "v1 devam 'neden gecikmiş olabilir?' bağlam servisini devralmaz (v1 bayt bayt)",
+		q: "neden gecikmiş olabilir?", prior: []string{rrSvc + " sağlığı nasıl?"}, chatCtx: &ChatContext{Service: rrSvc},
+		wantTier: aisurface.TierIntent, wantRoute: ""},
+	{release: "komşu v0.10.2138", name: "v1 'bu tracete …' bağlam trace'ini devralmaz (v1 bayt bayt)",
+		q: "bu tracete client correlation id nedir", prior: []string{tfTrace + " trace'ini açıkla"}, chatCtx: &ChatContext{Trace: tfTrace},
+		wantTier: aisurface.TierIntent, wantRoute: ""},
+	{release: "komşu v0.10.2138", name: "v2 'peki bu servis öncesinde nereden çağrılıyor?' → service_topology (çağıranlar)",
+		q: "peki bu servis öncesinde nereden çağrılıyor?", v2: true, prior: []string{rrSvc + " sağlığı nasıl?"}, chatCtx: &ChatContext{Service: rrSvc},
+		wantTier: aisurface.TierGuided, wantRoute: string(guidedServiceTopology)},
+	{release: "komşu v0.10.2138", name: "v2 önceki tur yoksa devralma yok → ask_service",
+		q: "neden gecikmiş olabilir?", v2: true, chatCtx: &ChatContext{Service: rrSvc},
+		wantTier: aisurface.TierGuided, wantRoute: string(guidedAskService)},
+	{release: "komşu v0.10.2138", name: "v2 filo sözcüğü bağlam servisini devralmaz → ask_service",
+		q: "tüm servislerde neden gecikme var?", v2: true, prior: []string{rrSvc + " sağlığı nasıl?"}, chatCtx: &ChatContext{Service: rrSvc},
+		wantTier: aisurface.TierGuided, wantRoute: string(guidedAskService)},
+	{release: "komşu v0.10.2138", name: "v2 'peki bu ne demek?' (öznesiz) eski yolunda → intent",
+		q: "peki bu ne demek?", v2: true, prior: []string{rrSvc + " sağlığı nasıl?"}, chatCtx: &ChatContext{Service: rrSvc},
+		wantTier: aisurface.TierIntent, wantRoute: ""},
+	{release: "komşu v0.10.2138", name: "v2 açık servis bağlamı ezer: 'billing-api neden gecikmiş olabilir?' → root_cause",
+		q: "billing-api neden gecikmiş olabilir?", v2: true, prior: []string{rrSvc + " sağlığı nasıl?"}, chatCtx: &ChatContext{Service: rrSvc},
+		wantTier: aisurface.TierGuided, wantRoute: string(guidedRootCause)},
 }
 
 // withRoutingDocTeam — v0.10.1576: wiki kurulu + takım kataloğunda
@@ -471,7 +514,15 @@ func TestRoutingRegression(t *testing.T) {
 			for k, v := range rig.cache {
 				mc.m[k] = v
 			}
-			body := map[string]any{"messages": []map[string]any{{"role": "user", "text": row.q}}}
+			if row.chatCtx != nil {
+				b, _ := json.Marshal(row.chatCtx)
+				mc.m[chatContextKey("u-route", rrConv)] = b
+			}
+			var msgs []map[string]any
+			for _, p := range row.prior {
+				msgs = append(msgs, map[string]any{"role": "user", "text": p}, map[string]any{"role": "assistant", "text": "tamam"})
+			}
+			body := map[string]any{"messages": append(msgs, map[string]any{"role": "user", "text": row.q})}
 			ctx := map[string]any{"conversation": rrConv}
 			for k, v := range row.ctx {
 				ctx[k] = v

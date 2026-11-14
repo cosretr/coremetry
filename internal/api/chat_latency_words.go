@@ -73,6 +73,9 @@ func v2RouterQuestion(question string, v2 bool) string {
 	if tokenHasPrefix(toks, latencyGrowthStems...) || hasDurationRisePhrase(toks) || hasLongRunPhrase(toks) {
 		add = append(add, "yavaşlama")
 	}
+	if hasCallerAsk(toks) { // v0.10.2138 — D5 (audit C): "nereden çağrılıyor" = çağıranlar (upstream topoloji)
+		add = append(add, "çağıran")
+	}
 	if len(add) == 0 {
 		return question
 	}
@@ -122,4 +125,18 @@ func drillWindowS(rangeS int64, v2 bool) int64 {
 		return guidedDrillMaxRangeS
 	}
 	return rangeS
+}
+
+// passiveCallStems — "çağrılıyor / çağrıldı / çağrılmış / çağrılır" (edilgen).
+// "çağrı" DEĞİL: "çağrı sayısı" istek sinyalidir.
+var passiveCallStems = []string{"çağrılıyo", "cagriliyo", "çağrıld", "cagrild", "çağrılmı", "cagrilmi", "çağrılır", "cagrilir"}
+
+// hasCallerAsk — SAF (v0.10.2138, D5): edilgen çağrı fiili + kaynak soran
+// sözcük ("nereden / kimden / kim / hangi") → çağıranlar sorusu. "kaç kez
+// çağrıldı" (sayı) tutmaz.
+func hasCallerAsk(toks []string) bool {
+	if !tokenHasPrefix(toks, passiveCallStems...) {
+		return false
+	}
+	return tokenHasPrefix(toks, "nereden", "nerden", "kimden", "hangi") || anyToken(toks, "kim", "kimler")
 }

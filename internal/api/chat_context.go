@@ -61,6 +61,12 @@ type ChatContext struct {
 	// CodeSticky gibi çalışma kümesi DEĞİLDİR (Empty / çip / önsöz görmez);
 	// sonraki tur onu okur ve siler, 10 dk'dan eskisi yok sayılır.
 	Pending *chatPendingAsk `json:"pending,omitempty"`
+	// Trace / Operation — v0.10.2138 (router boşlukları D5, YALNIZ v2 yazar;
+	// chat_context_subject.go): önceki turun trace'i (32-hex) ve operasyon /
+	// endpoint hedefi. Devam sorusu ("bu trace'te", "bu operasyon") ekranda
+	// özne yoksa bunları devralır. v1'de hiç yazılmaz → JSON bayt bayt eski.
+	Trace     string `json:"trace,omitempty"`
+	Operation string `json:"operation,omitempty"`
 }
 
 func (c ChatContext) Empty() bool {
@@ -323,7 +329,7 @@ func clearContextFields(c ChatContext, fields []string) (ChatContext, error) {
 // chatContextPreambleTR — serbest döngü prompt önsözü (ekran bağlamının
 // ikizi; Ek A ACTIVE_CONTEXT). Boşsa boş dize.
 func chatContextPreambleTR(c ChatContext) string {
-	if c.Empty() {
+	if c.Empty() && c.Trace == "" && c.Operation == "" { // v0.10.2138 — v2 özne alanları (v1'de hep boş)
 		return ""
 	}
 	var b strings.Builder
@@ -342,6 +348,12 @@ func chatContextPreambleTR(c ChatContext) string {
 	}
 	if c.Pod != "" {
 		fmt.Fprintf(&b, "- pod: %s\n", c.Pod)
+	}
+	if c.Operation != "" { // v0.10.2138 — yalnız v2 yazar
+		fmt.Fprintf(&b, "- operasyon: %s\n", c.Operation)
+	}
+	if c.Trace != "" { // v0.10.2138 — yalnız v2 yazar
+		fmt.Fprintf(&b, "- trace: %s\n", c.Trace)
 	}
 	if c.RangeS > 0 {
 		fmt.Fprintf(&b, "- zaman aralığı: %s (range_s=%d)\n", fmtRangeTR(c.RangeS), c.RangeS)
@@ -463,5 +475,8 @@ func (s *Server) noteChatContextRoute(ctx context.Context, route guidedRoute, ra
 	}
 	if next, changed := contextPatchFromRoute(st.ctx, route, rangeS, explicitRange); changed {
 		st.ctx, st.dirty = next, true
+	}
+	if cosreV2Marked(ctx) { // v0.10.2138 — özne (trace) yalnız v2 (chat_context_subject.go)
+		st.noteContextSubject(v2SubjectPatch(st.ctx, route))
 	}
 }

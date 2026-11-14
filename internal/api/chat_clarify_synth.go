@@ -254,6 +254,11 @@ func noteTraceSynthAsk(ctx context.Context, tid, fp, op string) {
 	chatContextFromCtx(ctx).setPending(&chatPendingAsk{Kind: pendingKindTraceSynth, TraceID: tid, Fingerprint: fp,
 		Operation: clipRunes(op, chatPendingQuestionMax), AskedAt: time.Now().UnixNano()})
 	chatExchangeFrom(ctx).noteRoute("trace_ask")
+	if cosreV2Marked(ctx) { // v0.10.2138 — "Hayır. bu trace altında …" devamı bu trace'i bulur (chat_context_subject.go)
+		if st := chatContextFromCtx(ctx); st != nil {
+			st.noteContextSubject(withContextTrace(st.ctx, tid))
+		}
+	}
 }
 
 // chatTraceSynthesisAnswer — olumlu cevabın sentezi. Grup girdisi kurulamazsa

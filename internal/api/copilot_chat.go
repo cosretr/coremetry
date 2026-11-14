@@ -436,6 +436,9 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// önbellek anahtarıyla. Niyet AÇIK olduğu için her metin eşlemesinden
 	// (kapsam, hafıza, wiki, operasyon, guided) ÖNCE. Geçersiz niyet → düşer.
 	if req.Context.ExplainAsk != nil {
+		if req.Context.ExplainAsk.Kind == explainAskTrace && cosreV2Marked(ctx) { // v0.10.2138 — D5: devam sorusu bu trace'i bulur (chat_context_subject.go)
+			cst.noteContextSubject(withContextTrace(cst.ctx, req.Context.ExplainAsk.ID))
+		}
 		if handled, xok := s.chatExplainTurn(ctx, emit, req.Context.ExplainAsk, chatLocationNamed(req.Context.Tz, req.Context.TzOffsetMin)); handled {
 			cspan.tier("explain", xok)
 			emit("done", map[string]bool{"ok": xok})
@@ -594,6 +597,9 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	ctx = armOutboundSlot(ctx, req.Context.Service, req.Context.Env, int64(req.Context.RangeS), anchorTo)     // v0.10.1454 — giden çağrı yuvası (copilot_outbound_call.go)
 	opRangeS := v2OpPrefetchRangeS(lastUserText(req.Messages), int64(req.Context.RangeS), cosreV2Marked(ctx)) // v0.10.2137 — v2: sorunun penceresi (chat_operation_why.go)
 	opPre, opHandled := s.chatOperationPrefetch(ctx, emit, req.Messages, opRangeS, anchorTo)
+	if opPre != nil && cosreV2Marked(ctx) { // v0.10.2138 — D5: "bu operasyon" devamı bu hedefi bulur (chat_context_subject.go)
+		cst.noteContextSubject(withContextOperation(cst.ctx, opPre.Operation, opPre.Services))
+	}
 	if opHandled {
 		cspan.tier("operation", true)
 		emit("done", map[string]bool{"ok": true})

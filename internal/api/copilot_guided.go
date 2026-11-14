@@ -1941,15 +1941,29 @@ func (s *Server) copilotChatGuided(ctx context.Context, emit func(string, any), 
 	if hit := outboundSlotFrom(ctx).get(); hit != nil {
 		return s.guidedOutboundRoute(ctx, emit, *hit, question, norm, msgs, explain, ctxService, ctxOperation, anchorTo, chatLocationNamed(tzName, tzOffsetMin))
 	}
-	v2 := cosreV2Marked(ctx) // v0.10.2136 — router boşlukları D3 yardımcıları yalnız v2 (chat_latency_words.go)
+	v2 := cosreV2Marked(ctx)                            // v0.10.2136 — router boşlukları D3 yardımcıları yalnız v2 (chat_latency_words.go)
+	v2Cue := v2 && len(prior) > 0 && v2SubjectCue(norm) // v0.10.2138 — D5 devam ipucu (chat_context_subject.go)
 	if !hasGuidedSignal(norm) && !followCue && !mayNameTeam(norm) && !absShape && !findCue && !peerCue && !affirm && !pasted &&
-		!(v2 && hasLatencyGrowthSignal(norm)) {
+		!(v2 && hasLatencyGrowthSignal(norm)) && !v2Cue {
 		return false, false // zero-cost fast path: no catalogue read
 	}
 	svcNames, envNames := s.guidedServiceNames(ctx), s.guidedEnvNames(ctx)
 	teamNames := s.guidedTeamNames(ctx)
 	routerQ := v2RouterQuestion(question, v2) // v0.10.2136 — v2: gecikme büyümesi sözcüğüne kanonik karşılık eklenir; v1 aynen
-	route := routeGuidedIntentExt(routerQ, svcNames, envNames, teamNames, ctxService, s.oracleOpsEnabled(), s.guidedOutboundHosts(ctx, norm))
+	// v0.10.2138 — D5: v2 devam sorusu ekranda özne yoksa önceki turun servisini /
+	// operasyonunu devralır (chat_context_subject.go); v1'de routerSvc = ekran servisi.
+	routerSvc := ctxService
+	if st := chatContextFromCtx(ctx); st != nil && v2Cue {
+		if inh := v2InheritService(v2, len(prior) > 0, ctxService, st.ctx.Service, extractServiceEntity(norm, svcNames, envNames), norm); inh != "" {
+			routerSvc = inh
+			emitGuidedContextStep(emit, "bağlam: "+inh+" (önceki turdan)")
+		}
+		if op := v2InheritOperation(v2, len(prior) > 0, ctxOperation, st.ctx.Operation, norm); op != "" {
+			ctxOperation = op
+			emitGuidedContextStep(emit, "bağlam: operasyon "+op+" (önceki turdan)")
+		}
+	}
+	route := routeGuidedIntentExt(routerQ, svcNames, envNames, teamNames, routerSvc, s.oracleOpsEnabled(), s.guidedOutboundHosts(ctx, norm))
 	route = promoteProblemsRootCause(route, norm, v2) // v0.10.2135 — yalnız v2 (chat_problems_root_cause.go)
 	route = v2WhyOverReport(route, norm, v2)          // v0.10.2136 — karar 5: neden > rapor, yalnız v2
 	// v0.10.479 (F4-2, G10) — TAKİP MUTASYONU: "son 1 saate genişlet" / "sadece
@@ -2015,6 +2029,11 @@ func (s *Server) copilotChatGuided(ctx context.Context, emit func(string, any), 
 	} else if route.Intent == guidedNone && inheritTrace && tokenHasPrefix(guidedTokens(norm), "trace") {
 		route = guidedRoute{Intent: guidedTraceByID, TraceID: ctxTrace}
 		emitGuidedContextStep(emit, "bağlam: ekrandaki trace ("+ctxTrace+")")
+	} else if st := chatContextFromCtx(ctx); st != nil { // v0.10.2138 — D5: ekranda trace yoksa önceki turun trace'i (yalnız v2)
+		if tid, ok := v2InheritTrace(v2, len(prior) > 0, inheritTrace, explain, st.ctx.Trace, st.ctx.LastIntent, norm); ok {
+			route = guidedRoute{Intent: guidedTraceByID, TraceID: tid}
+			emitGuidedContextStep(emit, "bağlam: önceki turun trace'i ("+tid+")")
+		}
 	}
 	// v0.9.529 — soru AÇIK bir pencere taşımıyorsa ekrandaki aralığı
 	// kullan. Sabit 30dk, operatör 6 saatlik pencereye bakarken "hata
