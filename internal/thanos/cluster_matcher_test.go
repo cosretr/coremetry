@@ -114,6 +114,13 @@ func promqlTemplateTable() map[string]string {
 		"haproxyTrendQuery/latency": haproxyTrendQuery("ns", "latency"),
 		"jmxDiscoveryQuery":         jmxDiscoveryQuery("ns", "dep"),
 		"jmxTrendQuery":             jmxTrendQuery("ns", "dep", "jvm_memory_used_bytes", true, "pod-1"),
+		// v0.10.2168 (Clusters S3) — node kapasite ailesi.
+		"nodeCapacityQuery":    nodeCapacityQuery(),
+		"nodePodCapacityQuery": nodePodCapacityQuery(),
+		"nodeAllocatableQuery": nodeAllocatableQuery(),
+		"nodeRequestsQuery":    nodeRequestsQuery(),
+		"nodeLimitsQuery":      nodeLimitsQuery(),
+		"nodeConditionQuery":   nodeConditionQuery(),
 	}
 }
 

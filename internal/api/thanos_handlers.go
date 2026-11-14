@@ -687,7 +687,12 @@ func (s *Server) getClusterSummary(w http.ResponseWriter, r *http.Request) {
 }
 
 // getClusterNodes — GET /api/clusters/nodes?cluster=<name>. Anlık
-// node CPU/memory (v0.8.583, dar kapsam — kapasite/health yok).
+// node CPU/memory (v0.8.583). v0.10.2168 (Clusters S3): satır ayrıca
+// kapasite / ayrılabilir / istek-limit toplamı / Ready + baskı koşulu /
+// kube_node_info sürüm etiketleri taşır — hepsi best-effort (alan yoksa
+// boş). Bu blok thanos.NodeMetrics'in SONUNDA, kendi 3 sn tavanıyla
+// koşar (internal/thanos/node_capacity.go): aşağıdaki 10 sn ctx'i aşamaz,
+// mevcut alanları geciktiremez.
 // getClusterPods'un birebir paraleli; digest'e namespaceFilter
 // GİRMEZ (node sorgularını etkilemiyor) → sade URL digest'i, yani
 // clusterCfgDigest yerine yalnız URL hash'lenir.

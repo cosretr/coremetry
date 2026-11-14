@@ -1266,6 +1266,30 @@ type NodeRow struct {
 	// Node başına çalışan pod sayısı (best-effort; nil = ölçülemedi, 0 ≠
 	// bilinmiyor). nodePodCountQuery, yoksa nodePodInfoCountQuery.
 	Pods *int `json:"pods,omitempty"`
+
+	// v0.10.2168 (Clusters S3) — kapasite ailesi; hepsi best-effort, 0 / boş
+	// = bilinmiyor (node_capacity.go). Kapasite KSM'den, yoksa node_exporter
+	// yedeği (çekirdek sayısı, MemTotal). CPUPct / MemPct'in paydası
+	// DEĞİŞMEDİ (node_exporter) — bu alanlar yalnız "kaçın kaçı" gösterimi.
+	CPUCapacityCores    float64 `json:"cpuCapacityCores,omitempty"`
+	MemCapacityBytes    float64 `json:"memCapacityBytes,omitempty"`
+	PodCapacity         int     `json:"podCapacity,omitempty"`
+	CPUAllocatableCores float64 `json:"cpuAllocatableCores,omitempty"`
+	MemAllocatableBytes float64 `json:"memAllocatableBytes,omitempty"`
+	// Node'a zamanlanmış pod'ların istek / limit toplamı.
+	CPURequestCores float64 `json:"cpuRequestCores,omitempty"`
+	MemRequestBytes float64 `json:"memRequestBytes,omitempty"`
+	CPULimitCores   float64 `json:"cpuLimitCores,omitempty"`
+	MemLimitBytes   float64 `json:"memLimitBytes,omitempty"`
+	// Ready koşulu: "true" | "false" | "unknown"; boş = KSM koşul serisi yok.
+	Ready string `json:"ready,omitempty"`
+	// Etkin baskı koşulları (MemoryPressure / DiskPressure / PIDPressure), sıralı.
+	Pressure []string `json:"pressure,omitempty"`
+	// kube_node_info etiketleri (zaten çekilen sorgudan, ek sorgu yok).
+	KubeletVersion   string `json:"kubeletVersion,omitempty"`
+	OSImage          string `json:"osImage,omitempty"`
+	KernelVersion    string `json:"kernelVersion,omitempty"`
+	ContainerRuntime string `json:"containerRuntime,omitempty"`
 }
 
 // instanceHost — "10.0.1.5:9100" → "10.0.1.5" (kube_node_info
@@ -1290,6 +1314,9 @@ func instanceHost(inst string) string {
 // NodeMetrics — PodMetrics'in node-scope aynası: 3 zorunlu sorgu
 // (cpu used, mem total, mem avail) + 2 best-effort (çekirdek
 // sayısı, kube_node_info ad güzelleştirmesi). Sabit 5 sorgu/cluster.
+// Sonradan eklenen best-effort'lar (ağ ×2, rol, pod sayısı 1–2) ve
+// v0.10.2168'in kapasite ailesiyle (6 sorgu, nodeExtras) bugün 15–16;
+// hepsi SIRALI ve node sayısından bağımsız.
 func (s *Service) NodeMetrics(ctx context.Context, c ClusterConfig) ([]NodeRow, error) {
 	type acc struct{ cpuUsed, memTotal, memAvail, cores, netIn, netOut float64 }
 	byInst := map[string]*acc{}
@@ -1349,11 +1376,19 @@ func (s *Service) NodeMetrics(ctx context.Context, c ClusterConfig) ([]NodeRow, 
 	}
 	// Best-effort: internal_ip → node adı.
 	names := map[string]string{}
+	// v0.10.2168 — aynı serinin sürüm etiketleri (node adı anahtarlı, ek sorgu yok).
+	infoByNode := map[string]nodeInfoLabels{}
 	if series, err := s.doQuery(ctx, c, "/api/v1/query",
 		url.Values{"query": {nodeInfoQuery}}); err == nil {
 		for _, ser := range series {
 			if ip, node := ser.Metric["internal_ip"], ser.Metric["node"]; ip != "" && node != "" {
 				names[ip] = node
+			}
+			if node := ser.Metric["node"]; node != "" {
+				infoByNode[node] = nodeInfoLabels{
+					kubelet: ser.Metric["kubelet_version"], osImage: ser.Metric["os_image"],
+					kernel: ser.Metric["kernel_version"], runtime: ser.Metric["container_runtime_version"],
+				}
 			}
 		}
 	}
@@ -1372,6 +1407,10 @@ func (s *Service) NodeMetrics(ctx context.Context, c ClusterConfig) ([]NodeRow, 
 
 	// Best-effort: node başına pod sayısı (node adı anahtarlı).
 	podsByNode := s.nodePodCounts(ctx, c)
+
+	// v0.10.2168 (Clusters S3) — kapasite ailesi: EN SON ve kendi süre
+	// tavanıyla (node_capacity.go); yukarıdaki alanları geciktiremez.
+	extras := s.nodeExtras(ctx, c)
 
 	out := make([]NodeRow, 0, len(byInst))
 	for inst, a := range byInst {
@@ -1397,6 +1436,7 @@ func (s *Service) NodeMetrics(ctx context.Context, c ClusterConfig) ([]NodeRow, 
 		if n, ok := podsByNode[name]; ok {
 			row.Pods = &n
 		}
+		applyNodeExtra(&row, extras[name], infoByNode[name], a.cores, a.memTotal)
 		out = append(out, row)
 	}
 	return out, nil

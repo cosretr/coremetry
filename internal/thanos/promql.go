@@ -204,6 +204,62 @@ func nodePodInfoCountQuery(nsFilter string) string {
 	return fmt.Sprintf(`count by (node) (kube_pod_info{node!=""%s})`, nsMatcher(nsFilter))
 }
 
+// ── node kapasite ailesi (v0.10.2168, Clusters S3) ──────────────
+//
+// Node başına kapasite / ayrılabilir / istek-limit toplamı / koşul; hepsi
+// kube-state-metrics, anahtar KSM `node` etiketi. BEST-EFFORT (aile yoksa
+// alan boş). Tüketici ve bütçe gerekçesi node_capacity.go'da.
+//
+// Namespace kalkanı UYGULANMAZ: bunlar node TOPLAMI (summary kapasite
+// sorgularıyla aynı duruş — nsFilter pod listesini daraltır, node toplamını
+// değil); süzülmüş istek toplamı "ayrılabilirin yüzde kaçı verildi"
+// sorusunu yanlış cevaplardı.
+//
+// Seri sayısı: cpu|memory çiftli sorgular node başına 2 seri → node
+// tablosunun 500 tavanında (podListLimit) 1000 = maxSeriesParsed. pods
+// kapasitesi bu yüzden AYRI sorgu (üçlü tek sorgu 334. node'da kırpılırdı).
+// topk kalkanı yok: karışık birimli (çekirdek / bayt) vektörde topk yalnız
+// bayt serilerini bırakırdı.
+
+// nodeCapacityQuery — kapasite (cpu çekirdek, memory bayt). `max`: node'un
+// tek kapasite serisi var; çift scrape toplamı ikiye katlamasın.
+func nodeCapacityQuery() string {
+	return `max by (node, resource) (kube_node_status_capacity{resource=~"cpu|memory"})`
+}
+
+// nodePodCapacityQuery — node'un taşıyabileceği pod sayısı (kubelet maxPods).
+func nodePodCapacityQuery() string {
+	return `max by (node) (kube_node_status_capacity{resource="pods"})`
+}
+
+// nodeAllocatableQuery — ayrılabilir (kapasite − sistem/kubelet ayrımı):
+// zamanlayıcının gördüğü tavan.
+func nodeAllocatableQuery() string {
+	return `max by (node, resource) (kube_node_status_allocatable{resource=~"cpu|memory"})`
+}
+
+// nodeRequestsQuery / nodeLimitsQuery — node'a zamanlanmış pod'ların istek /
+// limit TOPLAMI. `node!=""`: zamanlanmamış (Pending) pod'un serisi node
+// taşımaz. Pod listesindeki istek/limit sorgularıyla (podRequestQuery) aynı
+// metrik; yalnız gruplama node.
+func nodeRequestsQuery() string {
+	return `sum by (node, resource) (kube_pod_container_resource_requests{resource=~"cpu|memory",node!=""})`
+}
+
+func nodeLimitsQuery() string {
+	return `sum by (node, resource) (kube_pod_container_resource_limits{resource=~"cpu|memory",node!=""})`
+}
+
+// nodeConditionQuery — Ready'nin geçerli durumu (true | false | unknown) +
+// yalnız ETKİN baskı koşulları. `== 1` KSM'nin 0 değerli kardeş serilerini
+// eler (NodeReadyQuery gerekçesi); baskıda status="true" süzgeci sağlıklı
+// node'ların "baskı yok" serilerini hiç getirmez → sonuç ≈ node sayısı.
+func nodeConditionQuery() string {
+	return `max by (node, condition, status) (` +
+		`kube_node_status_condition{condition="Ready"} == 1` +
+		` or kube_node_status_condition{condition=~"MemoryPressure|DiskPressure|PIDPressure",status="true"} == 1)`
+}
+
 // ── cluster-summary queries (v0.8.586, redesign audit §3.1) ─────
 //
 // Genel görünüm kartları için SKALER cevaplı sorgular — topk'li tam
