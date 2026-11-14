@@ -12,8 +12,9 @@ describe('servis sekmesi pivotları', () => {
   it('OperationsTable iki traces linki + operasyon kartı eylemi env+cluster taşır', () => {
     expect(read('OperationsTable.tsx').match(/pctx, \{ carry: \['env', 'cluster'\] \}\)/g)?.length).toBe(3);
   });
-  it('ServicePodsTable traces linkleri env taşır', () => {
-    expect(read('ServicePodsTable.tsx').match(/pctx, \{ carry: \['env'\] \}\)/g)?.length).toBe(2);
+  // v0.10.2145 (S6) — grup başlığı (ikinci traces linki) kalktı; satır eylemi kaldı.
+  it('ServicePodsTable traces linki env taşır', () => {
+    expect(read('ServicePodsTable.tsx').match(/pctx, \{ carry: \['env'\] \}\)/g)?.length).toBe(1);
   });
   it('Overview metrics linki aralığı hep taşır', () => {
     expect(read('Overview.tsx')).toContain('`&range=${encodeURIComponent(r || encodeRange(range))}`');

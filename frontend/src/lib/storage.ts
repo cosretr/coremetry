@@ -70,6 +70,8 @@ export const STORAGE_KEYS = {
   svcClustersAllCols:  'svc.clusters.allcols',
   // v0.10.2142 (servis sekmeleri S4) — Details Database tablosunda "Tüm kolonlar".
   svcDbAllCols:        'svc.db.allcols',
+  // v0.10.2145 (servis sekmeleri S6) — Infrastructure "Nerede çalışıyor" + pod tablosunda "Tüm kolonlar".
+  svcInfraAllCols:     'svc.infra.allcols',
   svcChartsCompare:    'svc.charts.compare',
   // v0.10.577 — Trace Detail Logs sekmesi: gRPC per-message span event'leri
   // (SENT/RECEIVED) varsayılan olarak GİZLİ. Tercih küresel, trace başına

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mergePods, workloadOf, parsePodSource, parsePodView, filterBySource, groupByCluster, groupTotals } from './podsMerge';
+import { mergePods, workloadOf } from './podsMerge';
 import type { ClusterPodRow, ServicePodRow } from '@/lib/types';
 
 // v0.10.720 — Pods dilimi: entity ∪ Thanos birleştirme saf çekirdeği.
@@ -38,35 +38,11 @@ describe('mergePods', () => {
   });
 });
 
-describe('workloadOf / parsers / filter', () => {
+// v0.10.2145 (S6) — ?psrc / ?pview kodekleri, kaynak süzgeci ve cluster
+// gruplaması kalktı (operatör onaylı mockup 2026-11-13): tek görünüm.
+describe('workloadOf', () => {
   it('ns: öneki workload değil', () => {
     expect(workloadOf('ns:c/shop')).toBeNull();
     expect(workloadOf(undefined)).toBeNull();
-  });
-  it('psrc/pview codec varsayılanları: hepsi, cluster', () => {
-    expect(parsePodSource(null)).toBe('all'); expect(parsePodSource('thanos')).toBe('thanos'); expect(parsePodSource('x')).toBe('all');
-    expect(parsePodView(null)).toBe('cluster'); expect(parsePodView('flat')).toBe('flat');
-  });
-  it('kaynak süzgeci: both her ikisinde de görünür', () => {
-    const rows = mergePods([ent({ pod: 'a', clusterId: 'c-eu' }), ent({ pod: 'e' })], [th({ pod: 'a' }), th({ pod: 't' })], nameOf);
-    expect(filterBySource(rows, 'entity').map(r => r.pod).sort()).toEqual(['a', 'e']);
-    expect(filterBySource(rows, 'thanos').map(r => r.pod).sort()).toEqual(['a', 't']);
-    expect(filterBySource(rows, 'all')).toHaveLength(3);
-  });
-});
-
-describe('groupByCluster / groupTotals', () => {
-  it('grup sırası ilk görülme; ara toplamlar dürüst (restart kısmi, err% yalnız span olan satırlardan)', () => {
-    const rows = mergePods(
-      [ent({ pod: 'a', clusterId: 'c-eu', spans: 100, errors: 5 }), ent({ pod: 'u1', cluster: 'prod-us', spans: 50, errors: 0 })],
-      [th({ pod: 'a', phase: 'Running', restarts: 2 }), th({ pod: 'b', phase: 'Failed', restartsUnknown: true }), th({ pod: 'u1', cluster: 'prod-us', phase: 'Running' })],
-      nameOf,
-    );
-    // prod-us satırı entity'de ham cluster adı ile; Thanos u1 aynı adı taşır → both
-    const groups = groupByCluster(rows);
-    expect(groups.map(g => g.cluster)).toEqual(['prod-eu', 'prod-us']);
-    const eu = groups[0].totals;
-    expect(eu).toMatchObject({ pods: 2, phaseKnown: true, running: 1, failing: 1, restarts: 2, restartsPartial: true, spans: 100, errPct: 5 });
-    expect(groupTotals([]).errPct).toBeNull();
   });
 });

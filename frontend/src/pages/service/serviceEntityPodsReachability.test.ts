@@ -19,13 +19,17 @@ const strip = (s: string) => s.replace(/^\s*\/\/.*$/gm, '').replace(/\{\/\*[\s\S
 
 describe('Pods tek tablo — entity erişilebilirliği (v0.10.145 → 149 → 720 → 972)', () => {
   // v0.10.1206 — Pods sekmesi kalktı: envanter Infrastructure'da seçili cluster
-  // satırının altında + Thanos dışı (yalnız span'lerin gördüğü) pod'lar altta.
-  it('Infra tab mounts the pod inventory inline per cluster + entity-only remainder', () => {
+  // satırının altında. v0.10.2145 (S6) — Thanos dışı (yalnız span'lerin
+  // gördüğü) pod'lar artık alttaki ayrı liste değil: cluster'ları AYNI tabloda
+  // satır (whereRows birleşik kümeden), pod'ları o satırın altında.
+  it('Infra tab mounts the pod inventory inline per cluster; entity-only clusters are rows of the same table', () => {
     const src = strip(read('ServiceInfraTab.tsx'));
     expect(src).not.toContain('<ServicePodsTable');
     expect(src).not.toContain('<ServiceEntityPods');
     expect(src).toContain('<ServicePodInventory service={service} range={range} cluster={r.cluster} />');
-    expect(src).toContain('excludeClusters={clusterRows.map(c => c.cluster)}');
+    expect(src).toContain('return mergePods(entityEnabled ? (entityQ.data?.pods ?? []) : [], rows, nameOf);');
+    expect(src).toContain('whereRows(clusterRows, merged, podErrors)');
+    expect(src).not.toContain('excludeClusters');
     expect(src).not.toMatch(/tab: 'pods'/);
   });
   it("Pods tab: entity hook Thanos'tan bağımsız, birleşik küme, boş durum yalnız birleşik küme boşken", () => {
@@ -33,8 +37,8 @@ describe('Pods tek tablo — entity erişilebilirliği (v0.10.145 → 149 → 72
     const tbl = strip(read('ServicePodsTable.tsx'));
     expect(src).toContain("useEntityServicePods(service, '', win, entityEnabled)");
     expect(src).toContain('mergePods(entityEnabled ? (entityQ.data?.pods ?? []) : [], th.rows, nameOf)');
-    // dt birleşik (ve kaynak süzgeçli) kümeden kurulur; tablonun satırları o.
-    expect(src).toContain('const r = filterBySource(merged, source);');
+    // dt birleşik kümenin o cluster'a düşen satırlarından kurulur (S6: kaynak süzgeci yok).
+    expect(src).toContain('const rows = useMemo(() => merged.filter(p => p.cluster === cluster), [merged, cluster]);');
     expect(src).toMatch(/useDataTable<MergedPodRow>\(\{\s*storageKey: 'service-pods-v2', columns: POD_COLS, rows,/);
     // Boş durum tablonun içinde, eski "No pods matched" kutusunun yerine.
     expect(src).toContain("message: 'Eşleşen pod yok'");
@@ -53,14 +57,13 @@ describe('Pods tek tablo — entity erişilebilirliği (v0.10.145 → 149 → 72
     expect(src).not.toContain('ServiceClusterPods');
     expect(src).not.toContain("position: 'sticky'");
   });
-  it('tablo: yapışık Pod sütunu, kaynak rozeti, ?jpod tüketimi, grup başlığı eylemleri', () => {
+  it('tablo: yapışık Pod sütunu, kaynak rozeti, ?jpod tüketimi, satır eylemleri', () => {
     const tab = read('ServicePodInventory.tsx');
     const tbl = read('ServicePodsTable.tsx');
     expect(tab).toContain('stickyLeft: true');
     expect(tab).toContain("storageKey: 'service-pods-v2'");
     expect(tbl).toContain("next.delete('jpod')");
     expect(tbl).toContain('className="badge b-gray" title={src.title}');
-    expect(tbl).toContain('Infra →');
     expect(tbl).toContain('/pod →');
   });
 });

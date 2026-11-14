@@ -66,7 +66,9 @@ describe('/service sade palet — K5 artıkları (v0.10.929)', () => {
   });
 
   it('normal durum rozetleri nötr: pod fazı, heap bandı, INFO seviyesi', () => {
-    expect(read('ServicePodsTable.tsx')).toContain("t.phaseKnown && t.failing > 0 ? 'b-err' : 'b-gray'");
+    // v0.10.2145 (S6) — pod tablosunun grup başlığı kalktı; cluster durumu artık
+    // "Nerede çalışıyor" tablosunun Durum hücresi: sağlıklı hâl tonsuz düz metin.
+    expect(read('ServiceInfraTab.tsx')).toContain("className={st.tone === 'gray' ? undefined : `cell-${st.tone}`}");
     expect(HEAP_STATUS.ok.tone).toBe('b-gray');
     // v0.10.1900 — Logs sekmesi kompakt Log Search'e taşındı: seviye seçimi
     // SegmentedControl (renksiz metin + sayı); hiçbir seviye rozet tonu yok.

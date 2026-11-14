@@ -16,8 +16,6 @@ import type { ClusterPodRow, ServicePodRow } from '@/lib/types';
 // "—" (entity katmanı görmedi), 0 değil.
 
 export type PodSource = 'entity' | 'thanos' | 'both';
-export type PodSourceFilter = 'all' | 'entity' | 'thanos';
-export type PodView = 'flat' | 'cluster';
 
 export interface PodWorkload { id: string; clusterId: string; namespace: string; kind: string; name: string }
 
@@ -105,61 +103,4 @@ export function mergePods(
     });
   }
   return [...map.values()];
-}
-
-export function parsePodSource(v: string | null | undefined): PodSourceFilter {
-  return v === 'entity' || v === 'thanos' ? v : 'all';
-}
-/** Varsayılan cluster'a göre grupla (mockup); `flat` düz liste. */
-export function parsePodView(v: string | null | undefined): PodView {
-  return v === 'flat' ? 'flat' : 'cluster';
-}
-
-export function filterBySource(rows: MergedPodRow[], f: PodSourceFilter): MergedPodRow[] {
-  if (f === 'all') return rows;
-  return rows.filter(r => r.source === 'both' || r.source === f);
-}
-
-export interface PodGroupTotals {
-  pods: number;
-  phaseKnown: boolean;
-  running: number;
-  failing: number;
-  restarts: number | null;
-  restartsPartial: boolean;
-  cpuCores: number;
-  memBytes: number;
-  spans: number;
-  errPct: number | null;
-}
-
-export function groupTotals(rows: MergedPodRow[]): PodGroupTotals {
-  const t: PodGroupTotals = { pods: rows.length, phaseKnown: false, running: 0, failing: 0, restarts: null, restartsPartial: false, cpuCores: 0, memBytes: 0, spans: 0, errPct: null };
-  let errs = 0, anySpans = false;
-  for (const r of rows) {
-    if (r.statusKnown && r.phase) {
-      t.phaseKnown = true;
-      if (r.phase === 'Running') t.running++;
-      else if (r.phase !== 'Succeeded') t.failing++;
-    }
-    if (r.restartsUnknown) t.restartsPartial = true;
-    else t.restarts = (t.restarts ?? 0) + (r.restarts ?? 0);
-    t.cpuCores += r.cpuCores ?? 0;
-    t.memBytes += r.memBytes ?? 0;
-    if (r.spans != null) { anySpans = true; t.spans += r.spans; errs += r.errors ?? 0; }
-  }
-  t.errPct = anySpans && t.spans > 0 ? (100 * errs) / t.spans : null;
-  return t;
-}
-
-export interface PodGroup { cluster: string; rows: MergedPodRow[]; totals: PodGroupTotals }
-
-/** Sıralı satırları cluster'a göre gruplar (grup sırası = ilk görülme, grup içi sıra korunur). */
-export function groupByCluster(rows: MergedPodRow[]): PodGroup[] {
-  const m = new Map<string, MergedPodRow[]>();
-  for (const r of rows) {
-    const arr = m.get(r.cluster);
-    if (arr) arr.push(r); else m.set(r.cluster, [r]);
-  }
-  return [...m.entries()].map(([cluster, rs]) => ({ cluster, rows: rs, totals: groupTotals(rs) }));
 }

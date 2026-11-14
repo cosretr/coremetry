@@ -1,18 +1,17 @@
 import { usePivotCtx, withPivotCtx } from '@/lib/pivotContext';
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { DataTableHead, DataTableColgroup, DataTableState, type DataTable, type DataTableStateProps } from '@/components/ui/DataTable';
 import { Badge } from '@/components/ui/Badge';
-import { DisclosureButton } from '@/components/ui';
 import { PodJmxInline } from './PodJmxInline';
 import { rowActivation } from '@/lib/a11y';
-import { fmtCores, fmtBps, podPhaseBadge, restartColor, restartToneClass } from '@/pages/clusters/thresholds';
+import { fmtCores, fmtBps, podPhaseBadge, restartToneClass } from '@/pages/clusters/thresholds';
 import { fmtBytes, fmtNum, fmtDateTime } from '@/lib/utils';
 import { termReasonTone } from '@/lib/podTerm';
 import { entityHref, entityLiveness } from '@/lib/entityHref';
 import { logsHref } from '@/lib/logsUrl';
 import { podDetailPath } from './podDetailPath';
-import { groupByCluster, type MergedPodRow, type PodView } from './podsMerge';
+import type { MergedPodRow } from './podsMerge';
 import type { TimeRange } from '@/lib/types';
 
 // ServicePodsTable — v0.10.720 (servis sekmeleri etüdü, Pods dilimi; mockup
@@ -31,8 +30,13 @@ import type { TimeRange } from '@/lib/types';
 // paramlar korunur). Pod envanterde yoksa param yine temizlenir.
 //
 // Sıralama/genişlik TEK dt (üstte; "Kolonları sıfırla" tablo başlığının ⋯
-// menüsünde, v0.10.939); gruplu kipte her grup aynı sıralamayı izler.
-// Satır > 100: content-visibility.
+// menüsünde, v0.10.939). Satır > 100: content-visibility.
+//
+// v0.10.2145 (servis sekmeleri S6, mockup operatör onayı 2026-11-13): tablo
+// yalnız Infrastructure'ın seçili cluster satırının altında yaşar — "cluster'a
+// göre grupla" kipi ve grup başlığı kalktı (grup artık üst tablonun satırı).
+// Hücreler kolon kimliğiyle çizilir: Kaynak / Cluster / Node / Workload / Net
+// varsayılan gizli, "Tüm kolonlar" ile gelir (columnModel, çağıranda).
 
 function ms(v?: number): string {
   if (v === undefined || v <= 0) return '—';
@@ -45,9 +49,8 @@ const SRC_LABEL: Record<MergedPodRow['source'], { text: string; title: string }>
   thanos: { text: 'T', title: 'Yalnız Thanos envanteri; bu pencerede span görülmedi' },
 };
 
-export function ServicePodsTable({ dt, view, service, range, effNs, effDeploy, cFrom, cTo, rangeParam, state }: {
+export function ServicePodsTable({ dt, service, range, effNs, effDeploy, cFrom, cTo, rangeParam, state }: {
   dt: DataTable<MergedPodRow>;
-  view: PodView;
   service: string;
   range: TimeRange;
   effNs: string;
@@ -67,7 +70,6 @@ export function ServicePodsTable({ dt, view, service, range, effNs, effDeploy, c
 }) {
   const pctx = usePivotCtx();
   const [params, setParams] = useSearchParams();
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [openKey, setOpenKey] = useState<string | null>(null);
   const colCount = dt.visibleColumns.length;
 
@@ -82,7 +84,6 @@ export function ServicePodsTable({ dt, view, service, range, effNs, effDeploy, c
     const r = dt.sortedRows.find(x => x.pod === jpod);
     if (r) {
       if (r.thanos) setOpenKey(r.key);
-      setCollapsed(s => ({ ...s, [r.cluster]: false }));
       setTimeout(() => {
         document.getElementById(`pod-row-${jpod}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }, 80);
@@ -94,9 +95,6 @@ export function ServicePodsTable({ dt, view, service, range, effNs, effDeploy, c
     }, { replace: true });
   }, [params, dt.sortedRows, setParams]);
 
-  const groups = useMemo(
-    () => (view === 'cluster' ? groupByCluster(dt.sortedRows) : [{ cluster: '', rows: dt.sortedRows, totals: null }]),
-    [view, dt.sortedRows]);
   const many = dt.sortedRows.length > 100;
 
   const podHref = (r: MergedPodRow) => podDetailPath({
@@ -108,12 +106,87 @@ export function ServicePodsTable({ dt, view, service, range, effNs, effDeploy, c
     `/traces?service=${encodeURIComponent(service)}&filters=${encodeURIComponent(podFilters(r))}` +
     `${r.entity?.cluster ? `&cluster=${encodeURIComponent(r.entity.cluster)}` : ''}${rangeParam ? `&range=${encodeURIComponent(rangeParam)}` : ''}`,
     pctx, { carry: ['env'] });
-  const clusterTracesHref = (c: string) => withPivotCtx(
-    `/traces?service=${encodeURIComponent(service)}&cluster=${encodeURIComponent(c)}${rangeParam ? `&range=${encodeURIComponent(rangeParam)}` : ''}`,
-    pctx, { carry: ['env'] });
-  const infraHref = (c: string) => {
-    const n = new URLSearchParams(params); n.set('tab', 'infra'); n.set('icluster', c); n.delete('jpod');
-    return `/service?${n.toString()}`;
+  const cell = (r: MergedPodRow, id: string, open: boolean, expandable: boolean): ReactNode => {
+    switch (id) {
+      case 'pod': {
+        const live = r.entity?.entity ? entityLiveness(r.entity.entity) : null;
+        return (
+          <td key={id} className="mono sticky-left"
+            title={`${r.cluster} / ${r.namespace || '?'} / ${r.pod}`}
+            // v0.10.1210 (operatör: "üzerine basınca açılsın") — hücrenin boşluğu
+            // ve ok da satırı açar; yalnız pod adı bağlantısı pod sayfasına gider.
+            onClick={e => { if ((e.target as HTMLElement).closest('a')) e.stopPropagation(); }}>
+            {/* v0.10.943 — satır title'ı (T7) kalktı; açılır satırın açıklaması işarete, durumu aria-expanded'a taşındı (§3.10). */}
+            {expandable && <span className="pods-caret" aria-hidden="true"
+              title={open ? 'Metrikleri gizle' : 'Metrikleri göster'}>{open ? '▾' : '▸'}</span>}
+            <Link to={podHref(r)} className="row-link">{r.pod}</Link>
+            {live === 'gone' && <Badge tone="danger" className="pods-live" title={`Artık mevcut değil · son görülme ${fmtDateTime(new Date(r.entity!.entity!.lastSeen))}`}>gone</Badge>}
+            {live === 'stale' && <Badge tone="warning" className="pods-live" title="Son senkronda görülmedi">stale</Badge>}
+          </td>
+        );
+      }
+      case 'status': return (
+        <td key={id}>{r.statusKnown && r.phase
+          ? <span className={`badge ${podPhaseBadge(r.phase)}`}>{r.phase}</span>
+          : <span className="field-hint" title="Thanos'ta bu pod için seri yok (ölü ya da KSM dışı) — durum bilinmiyor">durum bilinmiyor</span>}</td>
+      );
+      // v0.10.973 — tablo standardı T5/T9: ton satır içi renk yerine sınıf
+      // (restartColor ile aynı eşik ve token; bilinmeyen = soluk).
+      case 'restarts': return (
+        <td key={id} className={`num ${r.restartsUnknown ? 'cell-faint' : restartToneClass(r.restarts ?? 0)}`}
+          title={r.restartsUnknown ? 'Restart serisi yok (KSM eksik ya da seri tavanı) — 0 değil, bilinmiyor.' : undefined}>
+          {r.restartsUnknown ? '—' : fmtNum(r.restarts ?? 0)}
+          {r.lastTermReason && (
+            <span className={`badge b-${termReasonTone(r.lastTermReason)} pods-term`}
+              title={`${r.lastTermReason} · Son sonlanma sebebi (kube-state-metrics)`}>
+              {r.lastTermReason}</span>
+          )}
+        </td>
+      );
+      case 'src': {
+        const src = SRC_LABEL[r.source];
+        return <td key={id}><span className="badge b-gray" title={src.title}>{src.text}</span></td>;
+      }
+      case 'cluster': return (
+        <td key={id} className="mono" onClick={e => e.stopPropagation()}>
+          <Link to={entityHref({ type: 'cluster', id: r.cluster, name: r.cluster, clusterId: r.clusterId ?? r.cluster }, { range })} title="Cluster detayı">{r.cluster}</Link>
+        </td>
+      );
+      case 'node': return (
+        <td key={id} className="mono" onClick={e => e.stopPropagation()}>
+          {r.node && r.clusterId
+            ? <Link to={entityHref({ type: 'node', id: `node:${r.clusterId}/${r.node}`, name: r.node, clusterId: r.clusterId }, { range })} className="sec">{r.node}</Link>
+            : (r.node ?? '—')}
+        </td>
+      );
+      case 'workload': return (
+        <td key={id} className="mono" onClick={e => e.stopPropagation()}>
+          {r.workload
+            ? <Link to={entityHref({ type: 'workload', id: r.workload.id, name: r.workload.name, namespace: r.workload.namespace, clusterId: r.workload.clusterId }, { range })} className="sec" title={`${r.workload.kind}/${r.workload.name}`}>{r.workload.name}</Link>
+            : <span className="field-hint">{r.entity?.entity?.parentId?.startsWith('ns:') ? '(no workload)' : '—'}</span>}
+        </td>
+      );
+      case 'cpu': return <td key={id} className="num">{r.cpuCores != null ? fmtCores(r.cpuCores) : '—'}</td>;
+      case 'mem': return <td key={id} className="num">{r.memBytes != null ? fmtBytes(r.memBytes) : '—'}</td>;
+      case 'net': return (
+        <td key={id} className="num">{(r.netInBps ?? 0) > 0 || (r.netOutBps ?? 0) > 0
+          ? `${fmtBps(r.netInBps ?? 0)} / ${fmtBps(r.netOutBps ?? 0)}` : '—'}</td>
+      );
+      case 'spans': return <td key={id} className="num" title={r.spans == null ? 'Bu pencerede span görülmedi (entity katmanı)' : undefined}>{r.spans == null ? '—' : fmtNum(r.spans)}</td>;
+      case 'err': {
+        const errPct = r.spans ? (100 * (r.errors ?? 0)) / r.spans : null;
+        return <td key={id} className={`num ${errPct != null && errPct >= 5 ? 'cell-err' : ''}`}>{errPct == null ? '—' : errPct.toFixed(1)}</td>;
+      }
+      case 'p95': return <td key={id} className="num">{ms(r.p95Ms)}</td>;
+      case 'act': return (
+        <td key={id} className="pods-act" onClick={e => e.stopPropagation()}>
+          {r.spans != null && <Link to={tracesHref(r)} className="accent">Traces</Link>}
+          <Link to={logsHref({ window: rangeParam ?? range, service, filters: podFilters(r) })} className="accent">Logs</Link>
+          <Link to={podHref(r)} className="accent" title="Pod detay sayfası">/pod →</Link>
+        </td>
+      );
+      default: return <td key={id} />;
+    }
   };
 
   return (
@@ -123,123 +196,27 @@ export function ServicePodsTable({ dt, view, service, range, effNs, effDeploy, c
         <DataTableHead dt={dt} />
         <tbody>
           {dt.sortedRows.length === 0 && <DataTableState dt={dt} {...(state ?? { kind: 'empty' })} />}
-          {groups.map(g => {
-            const isCol = !!g.cluster && !!collapsed[g.cluster];
-            const t = g.totals;
+          {dt.sortedRows.map(r => {
+            const open = openKey === r.key;
+            const expandable = !!r.thanos;
+            const onRow = expandable ? () => setOpenKey(open ? null : r.key) : () => { window.location.assign(podHref(r)); };
             return (
-              <Fragment key={g.cluster || '·'}>
-                {g.cluster && t && (
-                  <tr className="pods-group" id={`pods-group-${g.cluster}`}>
-                    <td colSpan={colCount}>
-                      <div className="pods-group__row">
-                        {/* v0.10.924 — buton bütünlüğü Faz 2: elle caret → DisclosureButton
-                            (aynı ▸/▾ çifti + aria-expanded atomdan). */}
-                        <DisclosureButton expanded={!isCol}
-                          aria-label={isCol ? `${g.cluster} grubunu aç` : `${g.cluster} grubunu kapat`}
-                          onClick={() => setCollapsed(s => ({ ...s, [g.cluster]: !s[g.cluster] }))} />
-                        <Link to={entityHref({ type: 'cluster', id: g.cluster, name: g.cluster, clusterId: g.cluster }, { range })}
-                          className="mono pods-group__name" title="Cluster detayı">{g.cluster}</Link>
-                        {/* v0.10.929 (K5) — 'N / N running' normal faz: nötr; yalnız failing kırmızı. */}
-                        <span className={`badge ${t.phaseKnown && t.failing > 0 ? 'b-err' : 'b-gray'}`}>
-                          {t.phaseKnown ? `${t.running} / ${t.pods} running` : `${t.pods} pod`}
-                        </span>
-                        <span className="pods-group__stats">
-                          <span style={{ color: restartColor(t.restarts ?? 0) }}
-                            title={t.restartsPartial ? 'Bazı pod\'ların restart serisi yok — toplam alt sınırdır.' : 'Toplam restart'}>
-                            ↻ {t.restarts == null ? '—' : fmtNum(t.restarts)}{t.restartsPartial && t.restarts != null ? '+' : ''}
-                          </span>
-                          <span>CPU <b className="mono">{fmtCores(t.cpuCores)}</b></span>
-                          <span>Mem <b className="mono">{fmtBytes(t.memBytes)}</b></span>
-                          <span title="Bu pencerede span (entity katmanı)">Spans <b className="mono">{fmtNum(t.spans)}</b></span>
-                          {t.errPct != null && <span>Err <b className="mono" style={t.errPct >= 5 ? { color: 'var(--err)' } : undefined}>{t.errPct.toFixed(1)}%</b></span>}
-                        </span>
-                        <span className="pods-group__act">
-                          <Link to={clusterTracesHref(g.cluster)} className="accent">Traces →</Link>
-                          <Link to={infraHref(g.cluster)} className="accent" title="Infrastructure sekmesi, bu cluster kapsamında">Infra →</Link>
-                        </span>
-                      </div>
+              <Fragment key={r.key}>
+                <tr id={`pod-row-${r.pod}`} {...rowActivation(onRow)}
+                  aria-expanded={expandable ? open : undefined}
+                  className={many ? 'cv-row' : undefined}>
+                  {dt.visibleColumns.map(col => cell(r, col.id, open, expandable))}
+                </tr>
+                {open && r.thanos && (
+                  <tr>
+                    {/* v0.10.973 — kenardan kenara (dolgusuz) JMX paneli; row-detail dolgulu ve --bg2. */}
+                    <td colSpan={colCount} className="pods-jmx">
+                      {/* ns = pod'un KENDİ namespace'i; çok-namespace serviste effNs yanlış olurdu. */}
+                      <PodJmxInline cluster={r.cluster} ns={r.namespace || effNs} deploy={effDeploy}
+                        pod={r.pod} cFrom={cFrom} cTo={cTo} onFull={() => { window.location.assign(podHref(r)); }} />
                     </td>
                   </tr>
                 )}
-                {!isCol && g.rows.map(r => {
-                  const open = openKey === r.key;
-                  const expandable = !!r.thanos;
-                  const live = r.entity?.entity ? entityLiveness(r.entity.entity) : null;
-                  const errPct = r.spans ? (100 * (r.errors ?? 0)) / r.spans : null;
-                  const src = SRC_LABEL[r.source];
-                  const onRow = expandable ? () => setOpenKey(open ? null : r.key) : () => { window.location.assign(podHref(r)); };
-                  return (
-                    <Fragment key={r.key}>
-                      <tr id={`pod-row-${r.pod}`} {...rowActivation(onRow)}
-                        aria-expanded={expandable ? open : undefined}
-                        className={many ? 'cv-row' : undefined}>
-                        <td className="mono sticky-left"
-                          title={`${r.cluster} / ${r.namespace || '?'} / ${r.pod}`}
-                          // v0.10.1210 (operatör: "üzerine basınca açılsın") — hücrenin boşluğu
-                          // ve ok da satırı açar; yalnız pod adı bağlantısı pod sayfasına gider.
-                          onClick={e => { if ((e.target as HTMLElement).closest('a')) e.stopPropagation(); }}>
-                          {/* v0.10.943 — satır title'ı (T7) kalktı; açılır satırın açıklaması işarete, durumu aria-expanded'a taşındı (§3.10). */}
-                          {expandable && <span className="pods-caret" aria-hidden="true"
-                            title={open ? 'Metrikleri gizle' : 'Metrikleri göster'}>{open ? '▾' : '▸'}</span>}
-                          <Link to={podHref(r)} className="row-link">{r.pod}</Link>
-                          {live === 'gone' && <Badge tone="danger" style={{ marginLeft: 6 }} title={`Artık mevcut değil · son görülme ${fmtDateTime(new Date(r.entity!.entity!.lastSeen))}`}>gone</Badge>}
-                          {live === 'stale' && <Badge tone="warning" style={{ marginLeft: 6 }} title="Son senkronda görülmedi">stale</Badge>}
-                        </td>
-                        <td>{r.statusKnown && r.phase
-                          ? <span className={`badge ${podPhaseBadge(r.phase)}`}>{r.phase}</span>
-                          : <span className="field-hint" title="Thanos'ta bu pod için seri yok (ölü ya da KSM dışı) — durum bilinmiyor">—</span>}</td>
-                        {/* v0.10.973 — tablo standardı T5/T9: ton satır içi renk yerine sınıf
-                            (restartColor ile aynı eşik ve token; bilinmeyen = soluk). */}
-                        <td className={`num ${r.restartsUnknown ? 'cell-faint' : restartToneClass(r.restarts ?? 0)}`}
-                          title={r.restartsUnknown ? 'Restart serisi yok (KSM eksik ya da seri tavanı) — 0 değil, bilinmiyor.' : undefined}>
-                          {r.restartsUnknown ? '—' : fmtNum(r.restarts ?? 0)}
-                          {r.lastTermReason && (
-                            <span className={`badge b-${termReasonTone(r.lastTermReason)} pods-term`}
-                              title={`${r.lastTermReason} · Son sonlanma sebebi (kube-state-metrics)`}>
-                              {r.lastTermReason}</span>
-                          )}
-                        </td>
-                        <td><span className="badge b-gray" title={src.title}>{src.text}</span></td>
-                        <td className="mono" onClick={e => e.stopPropagation()}>
-                          <Link to={entityHref({ type: 'cluster', id: r.cluster, name: r.cluster, clusterId: r.clusterId ?? r.cluster }, { range })} title="Cluster detayı">{r.cluster}</Link>
-                        </td>
-                        <td className="mono" onClick={e => e.stopPropagation()}>
-                          {r.node && r.clusterId
-                            ? <Link to={entityHref({ type: 'node', id: `node:${r.clusterId}/${r.node}`, name: r.node, clusterId: r.clusterId }, { range })} className="sec">{r.node}</Link>
-                            : (r.node ?? '—')}
-                        </td>
-                        <td className="mono" onClick={e => e.stopPropagation()}>
-                          {r.workload
-                            ? <Link to={entityHref({ type: 'workload', id: r.workload.id, name: r.workload.name, namespace: r.workload.namespace, clusterId: r.workload.clusterId }, { range })} className="sec" title={`${r.workload.kind}/${r.workload.name}`}>{r.workload.name}</Link>
-                            : <span className="field-hint">{r.entity?.entity?.parentId?.startsWith('ns:') ? '(no workload)' : '—'}</span>}
-                        </td>
-                        <td className="num">{r.cpuCores != null ? fmtCores(r.cpuCores) : '—'}</td>
-                        <td className="num">{r.memBytes != null ? fmtBytes(r.memBytes) : '—'}</td>
-                        <td className="num">{(r.netInBps ?? 0) > 0 || (r.netOutBps ?? 0) > 0
-                          ? `${fmtBps(r.netInBps ?? 0)} / ${fmtBps(r.netOutBps ?? 0)}` : '—'}</td>
-                        <td className="num" title={r.spans == null ? 'Bu pencerede span görülmedi (entity katmanı)' : undefined}>{r.spans == null ? '—' : fmtNum(r.spans)}</td>
-                        <td className={`num ${errPct != null && errPct >= 5 ? 'cell-err' : ''}`}>{errPct == null ? '—' : errPct.toFixed(1)}</td>
-                        <td className="num">{ms(r.p95Ms)}</td>
-                        <td onClick={e => e.stopPropagation()}>
-                          {r.spans != null && <Link to={tracesHref(r)} className="accent" style={{ fontSize: 11, padding: '2px 6px' }}>Traces</Link>}
-                          <Link to={logsHref({ window: rangeParam ?? range, service, filters: podFilters(r) })} className="accent" style={{ fontSize: 11, padding: '2px 6px' }}>Logs</Link>
-                          <Link to={podHref(r)} className="accent" style={{ fontSize: 11, padding: '2px 6px' }} title="Pod detay sayfası">/pod →</Link>
-                        </td>
-                      </tr>
-                      {open && r.thanos && (
-                        <tr>
-                          {/* v0.10.973 — satır içi stil bilinçli: kenardan kenara (dolgusuz, --bg)
-                              JMX paneli için sınıf yok; row-detail dolgulu ve --bg2. */}
-                          <td colSpan={colCount} style={{ padding: 0, background: 'var(--bg)' }}>
-                            {/* ns = pod'un KENDİ namespace'i; çok-namespace serviste effNs yanlış olurdu. */}
-                            <PodJmxInline cluster={r.cluster} ns={r.namespace || effNs} deploy={effDeploy}
-                              pod={r.pod} cFrom={cFrom} cTo={cTo} onFull={() => { window.location.assign(podHref(r)); }} />
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
-                  );
-                })}
               </Fragment>
             );
           })}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { podTotals, summarizeInfraClusters, pctOfLimit, clusterStatus, mergeClusterSeries, limitThreshold } from './infraClusters';
+import { podTotals, summarizeInfraClusters, pctOfLimit, clusterStatus, mergeClusterSeries, limitThreshold, whereRows, whereNote, whereStatus } from './infraClusters';
 import type { ClusterPodRow } from '@/lib/types';
 
 // v0.10.718 — Infrastructure dilim 1: cluster tablosu + KPI toplamları saf
@@ -76,5 +76,66 @@ describe('mergeClusterSeries / limitThreshold', () => {
     expect(limitThreshold(null, String)).toEqual([]);
     expect(limitThreshold(0, String)).toEqual([]);
     expect(limitThreshold(12, n => `${n} cores`)).toEqual([{ value: 12, label: 'limit 12 cores', severity: 'warn' }]);
+  });
+});
+
+// v0.10.2145 (servis sekmeleri S6) — "Nerede çalışıyor" tek tablo satırları.
+describe('whereRows / whereNote / whereStatus', () => {
+  const thanos = summarizeInfraClusters(
+    [pod({ pod: 'a', cluster: 'cluster-a', phase: 'Running', restarts: 2 }), pod({ pod: 'b', cluster: 'cluster-b', phase: 'Running', restarts: 0 })],
+    ['cluster-a', 'cluster-b'],
+  );
+  const merged = [
+    { cluster: 'cluster-a', source: 'both' as const },
+    { cluster: 'cluster-b', source: 'thanos' as const },
+    { cluster: 'cluster-c', source: 'entity' as const },
+    { cluster: 'cluster-c', source: 'entity' as const },
+    { cluster: 'cluster-d', source: 'entity' as const },
+  ];
+
+  it('Thanos satırları önce ve aynen; kaynak iki tarafın birleşiminden', () => {
+    const rows = whereRows(thanos, merged, []);
+    expect(rows.map(r => [r.cluster, r.kind, r.source, r.pods])).toEqual([
+      ['cluster-a', 'thanos', 'both', 1],
+      ['cluster-b', 'thanos', 'thanos', 1],
+      ['cluster-c', 'entityOnly', 'entity', 2],
+      ['cluster-d', 'entityOnly', 'entity', 1],
+    ]);
+    expect(rows.every(r => !r.stale)).toBe(true);
+  });
+
+  it('yanıt vermeyen cluster: satırı yoksa eklenir, span pod\'u varsa sayısıyla, Thanos satırı varsa bayat işaretlenir', () => {
+    const rows = whereRows(thanos, merged, ['cluster-b', 'cluster-d', 'cluster-z']);
+    const by = Object.fromEntries(rows.map(r => [r.cluster, r]));
+    expect(by['cluster-b']).toMatchObject({ kind: 'thanos', stale: true });
+    expect(by['cluster-d']).toMatchObject({ kind: 'unreachable', pods: 1, source: 'entity' });
+    expect(by['cluster-z']).toMatchObject({ kind: 'unreachable', pods: 0, source: 'thanos' });
+    expect(rows).toHaveLength(5);
+  });
+
+  it('boş girdi: satır yok', () => {
+    expect(whereRows([], [], [])).toEqual([]);
+  });
+
+  it('cümle: Thanos satırında boş; Thanos dışı satır hâli yazıyla söyler', () => {
+    const rows = whereRows(thanos, merged, ['cluster-d', 'cluster-z']);
+    const by = Object.fromEntries(rows.map(r => [r.cluster, r]));
+    expect(whereNote(by['cluster-a'])).toBe('');
+    expect(whereNote(by['cluster-c'])).toBe("2 pod (span'lerden) · Thanos'ta görünmüyor — kaynak ve durum bilinmiyor");
+    expect(whereNote(by['cluster-d'])).toBe("1 pod (span'lerden) · durum alınamıyor — cluster sorguya yanıt vermedi");
+    expect(whereNote(by['cluster-z'])).toBe('durum alınamıyor — cluster sorguya yanıt vermedi');
+  });
+
+  it('cümle Thanos taraması bitmeden "görünmüyor" DEMEZ; tanımsız / okunamadı ayrı söylenir', () => {
+    const c = whereRows([], [{ cluster: 'cluster-c', source: 'entity' }], [])[0];
+    expect(whereNote(c, 'scanning')).toBe("1 pod (span'lerden) · Thanos taranıyor");
+    expect(whereNote(c, 'none')).toBe("1 pod (span'lerden) · Thanos cluster'ı tanımlı değil — kaynak ve durum bilinmiyor");
+    expect(whereNote(c, 'error')).toBe("1 pod (span'lerden) · Thanos kaynakları okunamadı — kaynak ve durum bilinmiyor");
+  });
+
+  it('durum: restart sayısı aynı hücrede; bayat satır en az uyarı tonunda', () => {
+    expect(whereStatus(thanos[0])).toEqual({ text: 'all running · 2 restart', tone: 'gray' });
+    expect(whereStatus(thanos[1])).toEqual({ text: 'all running', tone: 'gray' });
+    expect(whereStatus({ ...thanos[1], stale: true })).toEqual({ text: 'all running · son okuma başarısız', tone: 'warn' });
   });
 });

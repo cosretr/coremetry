@@ -3824,6 +3824,15 @@ a.dbq-act { display: inline-flex; align-items: center; gap: var(--sp-2); font-si
 .infra-attn__title { font-size: var(--fs-xs); font-weight: 600; color: var(--text2); margin-bottom: var(--sp-2); }
 .infra-attn__list { margin: 0; padding: 0; list-style: none; font-size: var(--fs-sm); }
 .infra-attn__list li { padding: var(--sp-1) 0; }
+/* v0.10.2145 (servis sekmeleri S6) — "Nerede çalışıyor": Thanos dışı satırın düz
+   cümlesi + sayfa altındaki "Kaynak" satırının gövdesi. */
+tbody td.infra-where-note { color: var(--text2); }
+.infra-where .cluster-name { font-weight: 600; }
+.infra-where-run { margin-right: var(--sp-3); }
+.infra-where-diag { margin: var(--sp-3) 0 0; font-size: var(--fs-xs); color: var(--text3); }
+.infra-where-bar { margin-bottom: var(--sp-7); }
+.infra-src { margin: 0 0 var(--sp-6); padding-left: var(--sp-7); font-size: var(--fs-sm); color: var(--text2); }
+.infra-src li { padding: var(--sp-1) 0; }
 /* v0.9.408 — Explain kanıt kutusu: kök-neden soruşturulacak span'ler
    waterfall'da çerçeveyle kutulanır (kritik-yol şeridinin ÜSTÜNE
    binebilir; ikisi farklı soruya cevap verir).
@@ -5318,12 +5327,11 @@ a.ins-val:hover { text-decoration: underline; }
 
 /* v0.10.720 — Pods tek tablo: cluster grup başlık satırı (ara toplam +
    eylemler), satır açma oku, sonlanma sebebi rozeti. Token merdiveni. */
-.pods-group td { background: var(--bg2); padding: var(--sp-3) var(--sp-4); }
-.pods-group__row { display: flex; align-items: center; gap: var(--sp-4); font-size: var(--fs-xs); color: var(--text3); flex-wrap: wrap; }
-.pods-group__name { font-weight: 600; font-size: var(--fs-sm); color: var(--text); }
-.pods-group__stats { display: inline-flex; gap: var(--sp-5); align-items: center; }
-.pods-group__stats b { color: var(--text); font-weight: 600; }
-.pods-group__act { margin-left: auto; display: inline-flex; gap: var(--sp-4); }
+/* v0.10.2145 (servis sekmeleri S6) — grup başlığı (.pods-group*) kalktı; pod
+   tablosunun satır içi stilleri sınıfa. */
+.pods-live { margin-left: var(--sp-3); }
+tbody td.pods-act a { font-size: var(--fs-xs); padding: 2px 6px; }
+tbody td.pods-jmx { padding: 0; background: var(--bg); }
 .pods-caret { color: var(--text3); margin-right: var(--sp-2); cursor: pointer; }
 .pods-term { margin-left: var(--sp-2); font-size: var(--fs-2xs); vertical-align: middle; max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; }
 

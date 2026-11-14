@@ -32,7 +32,7 @@ const ROW: MergedPodRow = {
 function Harness({ rows, state }: { rows: MergedPodRow[]; state?: PodsState }) {
   const dt = useDataTable<MergedPodRow>({ storageKey: 'test-service-pods-state', columns: COLS, rows });
   return (
-    <ServicePodsTable dt={dt} view="flat" service="orders" range={{ preset: '1h' }}
+    <ServicePodsTable dt={dt} service="orders" range={{ preset: '1h' }}
       effNs="ns1" effDeploy="orders" cFrom={0} cTo={1} rangeParam={null} state={state} />
   );
 }

@@ -1,30 +1,25 @@
 // @vitest-environment jsdom
-// ServiceInfraTab.tableStates — v0.10.967 (tablo standardı T12, dilim 5, P-1).
+// ServiceInfraTab.tableStates — v0.10.967 (tablo standardı T12, dilim 5, P-1);
+// v0.10.2145 (servis sekmeleri S6, docs/frontend/service-tabs-plan.md; mockup
+// operatör onayı 2026-11-13) yeniden yazıldı.
 //
-// NE ÇİVİLİYOR: Infrastructure sekmesinin pod envanteri durumları Clusters
-// tablosunun İÇİNDE, bölüm başlığı ve sütunlar durur:
-//   • pod'lar beklenirken iskelet satırı (eskiden sekme bütünüyle Spinner);
-//   • eşleşme yoksa "Eşleşen pod yok" + tanı cümlesi ve (entity açıkken)
-//     Pods sekmesi BAĞLANTISI aynı hücrede (P-1 `detail`) — bağlantı silinmez,
-//     tablonun dışına da park edilmez;
-//   • cluster'lar yanıt vermediyse "boş" DEĞİL hata satırı (eskiden "No pods
-//     matched … nothing matched" diyordu);
-//   • satırlar varken yenileme düşerse satırlar durur ama hata başlıktaki
-//     "N cluster yanıt vermedi" rozetinde görünür (sessiz bayat satır yok);
-//   • "No Thanos clusters configured" kapısı tablonun dışında kalır.
-//
-// v0.10.967 (review G5-1): kısmi hatada (bir cluster yanıt verip eşleşme
-// bulamadı, diğeri düştü) hata satırı eski kutunun tanı + çare cümlesini
-// korur; sayı YALNIZ yanıt veren cluster'lar. Hepsi düştüyse cümle yok.
-// v0.10.967 (review G5-2): Thanos kaynak listesi okunamadıysa "No Thanos
-// clusters configured" (yapılandırma eksik) DENMEZ; önbellekteki liste
-// duruyorsa satırlar kalır, hata başlık rozetinde.
+// NE ÇİVİLİYOR: Infrastructure'ın "Nerede çalışıyor" tablosu TEK tablodur:
+//   • Thanos'un pod gördüğü cluster satırı sayılarıyla (5 kolon varsayılan;
+//     Namespace / Restart / Kaynak / Eylemler "Tüm kolonlar" ile);
+//   • yalnız span'lerin gördüğü cluster AYNI tabloda satır, boş hücre yerine
+//     düz cümle ("Thanos'ta görünmüyor"); eski alttaki ikinci pod listesi yok;
+//   • yanıt vermeyen cluster kendi satırı ("durum alınamıyor"), tıklanmaz;
+//     önbellekten duran satırda Durum "son okuma başarısız" der;
+//   • yükleniyor / boş durumu tablonun İÇİNDE, başlık durur;
+//   • başlık rozetleri kalktı: söyledikleri sayfa altındaki kapalı "Kaynak"
+//     satırında; okuma hatası o satırın KAPALI cümlesinde de adıyla görünür;
+//   • "No Thanos clusters configured" kapısı yalnız gösterecek satır yokken.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { ClusterPodRow } from '@/lib/types';
+import type { ClusterPodRow, ServicePodRow } from '@/lib/types';
 
 const m = vi.hoisted(() => ({
   clusters: ['c1'] as string[],
@@ -33,6 +28,7 @@ const m = vi.hoisted(() => ({
   holdPods: false,
   entity: false,
   failSources: false,
+  entityPods: [] as unknown[],
 }));
 vi.mock('@/lib/api', async (importOriginal) => {
   const mod = await importOriginal<Record<string, unknown>>();
@@ -54,6 +50,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
       clusterDeployments: async (cluster: string, namespace: string) => ({ cluster, namespace, deployments: [], count: 0 }),
       clusters: async () => ({ clusters: [] }),
       entityClusters: async () => (m.entity ? { clusters: [] } : { disabled: true }),
+      servicePods: async () => ({ service: 'orders', pods: m.entityPods }),
       clusterDeployTrend: async () => ({ series: [] }),
       clusterHaproxyTrend: async () => ({ series: [] }),
     },
@@ -63,13 +60,19 @@ vi.mock('./ServiceKafkaClientsPanel', () => ({ ServiceKafkaClientsPanel: () => n
 // v0.10.1206 — runtime bölümü (uPlot, modül yüklemede matchMedia) bu testin konusu değil.
 vi.mock('./ServiceRuntimeSection', () => ({ ServiceRuntimeSection: () => null }));
 vi.mock('@/pages/clusters/MetricArea', () => ({ MetricArea: () => null }));
+// Pod envanteri (satır altı) kendi testinde; burada yalnız hangi cluster için açıldığı.
+vi.mock('./ServicePodInventory', () => ({ ServicePodInventory: ({ cluster }: { cluster: string }) => <div data-testid="inv">{cluster}</div> }));
 
 import { ServiceInfraTab } from './ServiceInfraTab';
-import { DATA_TABLE_STATE_TEXT } from '@/components/ui/DataTable';
+import { infraSourceSummary } from './InfraSourceNote';
 
 // `service` = zenginleştirme eşleşmesi (podMatchesService'in ilk yolu).
 const pod = (cluster: string, name: string): ClusterPodRow => ({
   cluster, namespace: 'ns1', pod: name, cpuCores: 0.5, memBytes: 1024, service: 'orders',
+});
+const entityPod = (cluster: string, name: string): ServicePodRow => ({
+  cluster, namespace: 'ns1', pod: name, service: 'orders', spans: 10, errors: 0, avgMs: 5,
+  firstSeen: '2026-09-27T00:00:00Z', lastSeen: '2026-09-27T00:05:00Z',
 });
 const wait = () => act(async () => { await new Promise(r => setTimeout(r, 30)); });
 // Sorgu zinciri (metadata → kaynaklar → cluster başına pod) birkaç turda
@@ -81,7 +84,7 @@ async function settle(el: HTMLElement) {
 let host: HTMLDivElement | null = null;
 let root: Root | null = null;
 let qc: QueryClient;
-async function mount(): Promise<HTMLElement> {
+async function mount(url = '/service?name=orders&tab=infra'): Promise<HTMLElement> {
   host = document.createElement('div');
   document.body.appendChild(host);
   qc = new QueryClient({ defaultOptions: { queries: { retry: false, retryDelay: 0 } } });
@@ -89,7 +92,7 @@ async function mount(): Promise<HTMLElement> {
     root = createRoot(host!);
     root.render(
       <QueryClientProvider client={qc}>
-        <MemoryRouter initialEntries={['/service?name=orders&tab=infra']}>
+        <MemoryRouter initialEntries={[url]}>
           <ServiceInfraTab service="orders" range={{ preset: '1h' }} />
         </MemoryRouter>
       </QueryClientProvider>,
@@ -103,12 +106,16 @@ async function mount(): Promise<HTMLElement> {
 const table = (el: HTMLElement) => el.querySelector('table') as HTMLTableElement | null;
 const stateRow = (el: HTMLElement) => el.querySelector('tbody tr[data-dt-state]') as HTMLElement | null;
 const dataRows = (el: HTMLElement) => el.querySelectorAll('tbody tr:not([data-dt-state])').length;
+const heads = (el: HTMLElement) => [...el.querySelectorAll('thead th')].map(th => (th.textContent ?? '').replace(/[↕▼▲⋯]/g, '').trim()).filter(Boolean);
+const rowOf = (el: HTMLElement, cluster: string) =>
+  [...el.querySelectorAll('tbody tr')].find(tr => tr.querySelector('.cluster-name')?.textContent === cluster) as HTMLElement | undefined;
+const sourceNote = (el: HTMLElement) => el.querySelector('#infra-source') as HTMLElement | null;
 // v0.10.2144 (S5, mockup operatör onayı 2026-11-13) — KPI karoları kalktı; yerinde üst cümle bloğu.
 const statGrid = (el: HTMLElement) => el.querySelector('.infra-sum');
 
 beforeEach(() => {
   m.clusters = ['c1']; m.pods = []; m.failPods = new Set(); m.holdPods = false; m.entity = false;
-  m.failSources = false;
+  m.failSources = false; m.entityPods = [];
   try { localStorage.clear(); } catch { /* jsdom */ }
 });
 afterEach(() => {
@@ -118,11 +125,11 @@ afterEach(() => {
   host = null; root = null;
 });
 
-describe('ServiceInfraTab — pod envanteri durumları Clusters tablosunun içinde (v0.10.967)', () => {
-  it('pod\'lar beklenirken: başlık + sütunlar durur, tek loading satırı; KPI şeridi yok', async () => {
+describe('ServiceInfraTab — "Nerede çalışıyor" tek tablo (S6)', () => {
+  it('pod\'lar beklenirken: başlık + sütunlar durur, tek loading satırı; üst cümle yok', async () => {
     m.holdPods = true;
     const el = await mount();
-    expect(el.textContent).toContain('Clusters');
+    expect(el.textContent).toContain('Nerede çalışıyor');
     expect(table(el)?.querySelector('thead')).not.toBeNull();
     expect(stateRow(el)?.dataset.dtState).toBe('loading');
     expect(el.querySelectorAll('tbody tr').length).toBe(1);
@@ -131,88 +138,122 @@ describe('ServiceInfraTab — pod envanteri durumları Clusters tablosunun için
     expect(statGrid(el)).toBeNull();
   });
 
-  it('eşleşme yok: "empty" satırı tanı cümlesiyle; entity kapalıyken bağlantı yok', async () => {
+  it('eşleşme yok: "empty" satırı tanı + çare cümlesiyle', async () => {
     const el = await mount();
     const row = stateRow(el);
     expect(row?.dataset.dtState).toBe('empty');
     expect(row?.textContent).toContain('Eşleşen pod yok');
     expect(row?.textContent).toContain('pod adı kalıbı');
     expect(row?.textContent).toContain('(orders)-.*');
-    // Tanı + çare cümlesi eskisiyle aynı: cluster sayısı ve adlandırma önerisi.
     expect(row?.textContent).toContain("1 Thanos cluster'ında");
     expect(row?.textContent).toContain('adlandırmasına uyduğunu');
     expect(row?.querySelector('a')).toBeNull();
-    // colSpan = görünür kolon sayısı (8).
-    expect(row?.querySelector('td')?.getAttribute('colspan')).toBe('8');
+    // colSpan = görünür kolon sayısı (varsayılan 5).
+    expect(row?.querySelector('td')?.getAttribute('colspan')).toBe('5');
     expect(statGrid(el)).toBeNull();
-    // Eski kutu gitti.
-    expect(el.textContent).not.toContain('No pods matched');
   });
 
-  it('eşleşme yok + entity açık: entity pod bağlantısı AYNI hücrede (P-1 detail; v0.10.1206 sayfa-içi)', async () => {
+  it('varsayılan 5 kolon; başlık rozetleri ve kaynak rozeti yok', async () => {
+    m.pods = [pod('c1', 'orders-5d9f7c6b8-abcde')];
+    const el = await mount();
+    expect(heads(el)).toEqual(['Cluster', 'Pod', 'CPU (cores)', 'Bellek', 'Durum']);
+    const head = el.querySelector('#infra-clusters')!;
+    expect(head.querySelector('.badge')).toBeNull();
+    expect(head.textContent).not.toContain('Thanos · kube-state');
+    expect(dataRows(el)).toBe(1);
+    expect(stateRow(el)).toBeNull();
+    expect(statGrid(el)).not.toBeNull();
+  });
+
+  it('"Tüm kolonlar": Namespace / Restart / Kaynak / Eylemler gelir', async () => {
+    m.pods = [pod('c1', 'orders-5d9f7c6b8-abcde')];
+    const el = await mount();
+    const btn = [...el.querySelectorAll('button')].find(b => b.textContent === 'Tüm kolonlar')!;
+    expect(btn.getAttribute('aria-pressed')).toBe('false');
+    await act(async () => { btn.click(); });
+    // Eylemler kolonunun başlığı yalnız ⋯ (kind: 'actions').
+    expect(heads(el)).toEqual(['Cluster', 'Pod', 'CPU (cores)', 'Bellek', 'Durum', 'Namespace', 'Restart', 'Kaynak']);
+    expect(el.querySelectorAll('thead th').length).toBe(9);
+    expect(rowOf(el, 'c1')?.querySelector('.badge.b-gray')?.textContent).toBe('T');
+  });
+
+  it('restart sayısı Durum hücresinde (Restart kolonu varsayılanda gizli)', async () => {
+    m.pods = [{ ...pod('c1', 'orders-5d9f7c6b8-abcde'), phase: 'Running', restarts: 3 }];
+    const el = await mount();
+    expect(rowOf(el, 'c1')?.textContent).toContain('all running · 3 restart');
+  });
+
+  it('satır tıkı pod\'ları satırın altında açar (?icluster), ikinci tık kapatır', async () => {
+    m.pods = [pod('c1', 'orders-5d9f7c6b8-abcde')];
+    const el = await mount();
+    expect(el.querySelector('[data-testid="inv"]')).toBeNull();
+    await act(async () => { rowOf(el, 'c1')!.click(); });
+    expect(el.querySelector('[data-testid="inv"]')?.textContent).toBe('c1');
+    expect(rowOf(el, 'c1')?.getAttribute('aria-pressed')).toBe('true');
+    await act(async () => { rowOf(el, 'c1')!.click(); });
+    expect(el.querySelector('[data-testid="inv"]')).toBeNull();
+  });
+
+  it('eski linkteki ?psrc / ?pview yok sayılır; ?icluster çalışır', async () => {
+    m.pods = [pod('c1', 'orders-5d9f7c6b8-abcde')];
+    const el = await mount('/service?name=orders&tab=infra&psrc=entity&pview=flat&icluster=c1');
+    expect(dataRows(el)).toBe(2); // cluster satırı + açık envanter satırı
+    expect(el.querySelector('[data-testid="inv"]')?.textContent).toBe('c1');
+  });
+
+  it('yalnız span\'lerin gördüğü cluster AYNI tabloda satır: düz cümle, boş hücre yok, açılır', async () => {
     m.entity = true;
+    m.pods = [pod('c1', 'orders-5d9f7c6b8-abcde')];
+    m.entityPods = [entityPod('c9', 'orders-7f9-aaa'), entityPod('c9', 'orders-7f9-bbb')];
     const el = await mount();
-    const row = stateRow(el)!;
-    expect(row.dataset.dtState).toBe('empty');
-    const link = row.querySelector('a');
-    expect(link?.textContent).toBe('tablonun altında');
-    expect(link?.getAttribute('href')).toBe('#pods-sec');
-    // Bağlantı durum hücresinin içinde, tablonun dışında değil.
-    expect(row.querySelectorAll('td').length).toBe(1);
-    expect(row.querySelector('[data-dt-state-detail]')?.contains(link!)).toBe(true);
+    const row = rowOf(el, 'c9')!;
+    expect(row.querySelectorAll('td').length).toBe(2);
+    expect(row.querySelectorAll('td')[1].getAttribute('colspan')).toBe('4');
+    expect(row.textContent).toContain("2 pod (span'lerden) · Thanos'ta görünmüyor — kaynak ve durum bilinmiyor");
+    // Alttaki ikinci pod listesi yok.
+    expect(el.querySelector('#pods-sec')).toBeNull();
+    expect(el.textContent).not.toContain("Diğer cluster'larda");
+    await act(async () => { row.click(); });
+    expect(el.querySelector('[data-testid="inv"]')?.textContent).toBe('c9');
   });
 
-  it('cluster yanıt vermedi + satır yok: "boş" DEĞİL hata satırı (Pods bağlantısı korunur)', async () => {
-    m.failPods = new Set(['c1']);
+  it('Thanos eşleşmedi ama span\'ler pod görüyor: satır var, tanı cümlesi tablonun altında', async () => {
     m.entity = true;
+    m.entityPods = [entityPod('c9', 'orders-7f9-aaa')];
     const el = await mount();
-    const row = stateRow(el)!;
-    expect(row.dataset.dtState).toBe('error');
-    expect(row.textContent).toContain("Pod envanteri okunamadı: c1 cluster'ı sorguya yanıt vermedi");
-    expect(row.textContent).not.toContain(DATA_TABLE_STATE_TEXT.empty);
-    expect(row.textContent).not.toContain('Eşleşen pod yok');
-    expect(row.querySelector('a')?.textContent).toBe('tablonun altında');
-    expect(el.textContent).toContain('1 cluster yanıt vermedi');
-    // Hiçbir cluster yanıt vermedi → arama koşmadı; "denendi · adlandırmayı
-    // kontrol et" cümlesi burada yanlış olurdu (G5-1).
-    expect(row.textContent).not.toContain('adlandırmasına uyduğunu');
-    expect(row.textContent).not.toContain('pod adı kalıbı');
+    expect(stateRow(el)).toBeNull();
+    expect(rowOf(el, 'c9')).toBeDefined();
+    expect(el.textContent).toContain("Thanos'ta eşleşen pod yok.");
+    expect(el.textContent).toContain("yanıt veren 1 Thanos cluster'ında");
+    expect(statGrid(el)).toBeNull();
   });
 
-  it('hepsi düştü + entity kapalı: detail yuvası basılmaz (boş fragment yok)', async () => {
+  it('yanıt vermeyen cluster kendi satırı: "durum alınamıyor", tıklanmaz; "boş" denmez', async () => {
     m.failPods = new Set(['c1']);
     const el = await mount();
-    const row = stateRow(el)!;
-    expect(row.dataset.dtState).toBe('error');
-    expect(row.querySelector('[data-dt-state-detail]')).toBeNull();
+    expect(stateRow(el)).toBeNull();
+    const row = rowOf(el, 'c1')!;
+    expect(row.textContent).toContain('durum alınamıyor — cluster sorguya yanıt vermedi');
+    expect(row.getAttribute('role')).toBeNull();
+    expect(row.querySelector('.pods-caret')).toBeNull();
+    expect(el.textContent).not.toContain('Eşleşen pod yok');
+    // Hiçbir cluster yanıt vermedi → arama koşmadı; "denendi" cümlesi yanlış olurdu (G5-1).
+    expect(el.textContent).not.toContain('adlandırmasına uyduğunu');
+    // Kapalı "Kaynak" satırı hatayı adıyla söyler.
+    expect(sourceNote(el)?.textContent).toContain('1 cluster yanıt vermedi');
   });
 
-  it('kısmi hata (c1 yanıt verdi eşleşme yok, c2 düştü): hata satırı tanı + çare cümlesini korur (G5-1)', async () => {
+  it('kısmi hata (c1 yanıt verdi eşleşme yok, c2 düştü): c2 satır, tanı yalnız yanıt verenleri sayar (G5-1)', async () => {
     m.clusters = ['c1', 'c2'];
-    // Eşleşmeyen pod: ne enrichment servisi ne iş yükü adı "orders".
     m.pods = [{ ...pod('c1', 'unrelated-5d9f7c6b8-abcde'), service: 'billing' }];
     m.failPods = new Set(['c2']);
     const el = await mount();
-    const row = stateRow(el)!;
-    expect(row.dataset.dtState).toBe('error');
-    expect(row.textContent).toContain("c2 cluster'ı sorguya yanıt vermedi");
-    expect(row.textContent).toContain('pod adı kalıbı');
-    expect(row.textContent).toContain('adlandırmasına uyduğunu');
-    // Sayı yalnız yanıt veren cluster'lar (1), eşleşen kaynak sayısı (2) değil.
-    expect(row.textContent).toContain("yanıt veren 1 Thanos cluster'ında");
-    expect(row.textContent).not.toContain('2 Thanos cluster');
-    expect(row.textContent).not.toContain('Eşleşen pod yok');
-    // Tek hücre: cümle durum satırının içinde.
-    expect(row.querySelectorAll('td').length).toBe(1);
-    expect(dataRows(el)).toBe(0);
-  });
-
-  it('satırlar varken: durum satırı yok, KPI şeridi var', async () => {
-    m.pods = [pod('c1', 'orders-5d9f7c6b8-abcde')];
-    const el = await mount();
-    expect(stateRow(el)).toBeNull();
+    expect(rowOf(el, 'c2')?.textContent).toContain('durum alınamıyor');
+    expect(rowOf(el, 'c1')).toBeUndefined();
     expect(dataRows(el)).toBe(1);
-    expect(statGrid(el)).not.toBeNull();
+    expect(el.textContent).toContain("yanıt veren 1 Thanos cluster'ında");
+    expect(el.textContent).toContain('adlandırmasına uyduğunu');
+    expect(el.textContent).not.toContain('2 Thanos cluster');
   });
 
   // v0.10.2144 (S5) — dört KPI karosu yerine düz cümle + kaynak cümlesi;
@@ -233,7 +274,6 @@ describe('ServiceInfraTab — pod envanteri durumları Clusters tablosunun için
     const el = await mount();
     const attn = el.querySelector('.infra-attn')!;
     expect(attn.textContent).toContain('Dikkat isteyenler');
-    expect(attn.textContent).toContain('orders-5d9f7c6b8-zzzzz');
     expect(attn.textContent).toContain('3 kez yeniden başladı');
     expect(attn.querySelectorAll('li').length).toBe(1);
     const open = [...attn.querySelectorAll('button')].find(b => b.textContent?.includes("pod'ları aç"))!;
@@ -241,12 +281,25 @@ describe('ServiceInfraTab — pod envanteri durumları Clusters tablosunun için
     expect(el.querySelector('tbody tr[aria-pressed="true"]')).not.toBeNull();
   });
 
-  it('bayat satır + yenileme düştü: satırlar durur, hata başlık rozetinde görünür', async () => {
+  it('Thanos\'ta görünmeyen pod Dikkat\'te: "pod\'ları aç" o cluster satırını açar (eski "aşağıda" bağlantısı yok)', async () => {
+    m.entity = true;
+    m.pods = [pod('c1', 'orders-5d9f7c6b8-abcde')];
+    m.entityPods = [entityPod('c9', 'orders-7f9-aaa')];
+    const el = await mount();
+    const attn = el.querySelector('.infra-attn')!;
+    expect(attn.textContent).toContain("span'lerde görünüyor, Thanos'ta yok");
+    expect(attn.querySelector('a[href="#pods-sec"]')).toBeNull();
+    const open = [...attn.querySelectorAll('button')].find(b => b.textContent?.includes("pod'ları aç"))!;
+    await act(async () => { open.click(); });
+    expect(el.querySelector('[data-testid="inv"]')?.textContent).toBe('c9');
+  });
+
+  it('bayat satır + yenileme düştü: satır durur, Durum "son okuma başarısız" der', async () => {
     m.clusters = ['c1', 'c2'];
     m.pods = [pod('c1', 'orders-5d9f7c6b8-abcde'), pod('c2', 'orders-5d9f7c6b8-fghij')];
     const el = await mount();
     expect(dataRows(el)).toBe(2);
-    expect(el.textContent).not.toContain('cluster yanıt vermedi');
+    expect(el.textContent).not.toContain('son okuma başarısız');
     m.failPods = new Set(['c2']);
     await act(async () => {
       await qc.refetchQueries({ queryKey: ['cluster-pods'] });
@@ -254,7 +307,9 @@ describe('ServiceInfraTab — pod envanteri durumları Clusters tablosunun için
     });
     expect(stateRow(el)).toBeNull();
     expect(dataRows(el)).toBe(2);
-    expect(el.textContent).toContain('1 cluster yanıt vermedi');
+    expect(rowOf(el, 'c2')?.textContent).toContain('son okuma başarısız');
+    expect(rowOf(el, 'c1')?.textContent).not.toContain('son okuma başarısız');
+    expect(statGrid(el)?.textContent).toContain("1 cluster'dan durum alınamıyor");
   });
 
   it('"No Thanos clusters configured" kapısı tablonun DIŞINDA kalır', async () => {
@@ -263,6 +318,15 @@ describe('ServiceInfraTab — pod envanteri durumları Clusters tablosunun için
     expect(el.textContent).toContain('No Thanos clusters configured');
     expect(el.textContent).not.toContain('Thanos kaynakları okunamadı');
     expect(table(el)).toBeNull();
+  });
+
+  it('Thanos tanımlı değil ama span\'ler pod görüyor: kutu yerine tablo, satır bunu söyler', async () => {
+    m.clusters = [];
+    m.entity = true;
+    m.entityPods = [entityPod('c9', 'orders-7f9-aaa')];
+    const el = await mount();
+    expect(el.textContent).not.toContain('No Thanos clusters configured');
+    expect(rowOf(el, 'c9')?.textContent).toContain("1 pod (span'lerden) · Thanos cluster'ı tanımlı değil — kaynak ve durum bilinmiyor");
   });
 
   it('kaynak listesi okunamadı: "yapılandırılmamış" DEĞİL okuma hatası (G5-2)', async () => {
@@ -275,7 +339,7 @@ describe('ServiceInfraTab — pod envanteri durumları Clusters tablosunun için
     expect(table(el)).toBeNull();
   });
 
-  it('kaynak listesi yenilemesi düştü, önbellekte cluster var: satırlar durur, hata rozette (G5-2)', async () => {
+  it('kaynak listesi yenilemesi düştü, önbellekte cluster var: satırlar durur, hata kapalı "Kaynak" satırında (G5-2)', async () => {
     m.pods = [pod('c1', 'orders-5d9f7c6b8-abcde')];
     const el = await mount();
     expect(dataRows(el)).toBe(1);
@@ -287,7 +351,35 @@ describe('ServiceInfraTab — pod envanteri durumları Clusters tablosunun için
     });
     expect(stateRow(el)).toBeNull();
     expect(dataRows(el)).toBe(1);
-    expect(el.textContent).toContain('Thanos kaynaklarına erişilemedi');
+    expect(sourceNote(el)?.textContent).toContain('Thanos kaynaklarına erişilemedi');
     expect(el.textContent).not.toContain('Thanos kaynakları okunamadı');
+  });
+
+  it('"Kaynak" satırı sayfanın altında kapalı; açınca eşleşme kuralı ve kaynak sayıları', async () => {
+    m.entity = true;
+    m.pods = [pod('c1', 'orders-5d9f7c6b8-abcde')];
+    m.entityPods = [entityPod('c9', 'orders-7f9-aaa')];
+    const el = await mount();
+    const note = sourceNote(el)!;
+    expect(note.textContent).toContain('Kaynak');
+    expect(el.querySelector('.infra-src')).toBeNull();
+    await act(async () => { note.querySelector('button')!.click(); });
+    const body = el.querySelector('.infra-src')!;
+    expect(body.textContent).toContain('pod adı: (orders)-.*');
+    expect(body.textContent).toContain('1 / 1 cluster tarandı.');
+    expect(body.textContent).toContain("1 yalnız span'lerde (E)");
+    expect(body.textContent).toContain("1 yalnız Thanos'ta (T)");
+  });
+});
+
+describe('infraSourceSummary — kapalı satır okuma hatasını gizlemez', () => {
+  const none = { unmapped: [], statusNotes: [], truncated: [], unreachable: [], sourcesError: '', entityError: '' };
+  it('sorun yok: düz açıklama', () => {
+    expect(infraSourceSummary(none)).toContain('ayrıntı için aç');
+    expect(infraSourceSummary(none)).not.toContain('yanıt vermedi');
+  });
+  it('sorunlar adıyla', () => {
+    expect(infraSourceSummary({ ...none, unreachable: ['a', 'b'], truncated: ['c'], entityError: 'x', unmapped: ['u'] }))
+      .toBe('2 cluster yanıt vermedi · entity katmanı okunamadı · Thanos kısmi (1 cluster) · 1 eşlenmemiş cluster değeri — ayrıntı için aç.');
   });
 });
