@@ -4684,13 +4684,15 @@ tr:hover .pv-row, tr:focus-within .pv-row, .pv-row.is-set, .pv-row:focus-within 
    kesinleşmeden sökülmedi. */
 .row-cell { position: relative; }
 /* v0.10.697 — Operations tablosu tek geniş trend grafiği (TrendSpark):
-   çubuk = çağrı (turuncu, yarı saydam), kırmızı pay = hata, çizgi = p99. */
+   çubuk = çağrı (turuncu, yarı saydam), kırmızı pay = hata, çizgi = p99.
+   v0.10.2153 (operatör: "süre çizgisi yeşil, OpenTelemetry mavisi olabilir") —
+   p99 çizgisi ve son nokta --otel-blue (eskiden --teal). */
 .trend-spark { position: relative; display: inline-block; vertical-align: middle; }
 .trend-spark svg { display: block; overflow: visible; }
 .trend-spark .ts-bar { fill: var(--orange); opacity: .45; }
 .trend-spark .ts-err { fill: var(--err); }
-.trend-spark .ts-p99 { fill: none; stroke: var(--teal); stroke-width: 1.5; stroke-linejoin: round; }
-.trend-spark .ts-cur { fill: var(--teal); }
+.trend-spark .ts-p99 { fill: none; stroke: var(--otel-blue); stroke-width: 1.5; stroke-linejoin: round; }
+.trend-spark .ts-cur { fill: var(--otel-blue); }
 .trend-spark g.is-hover .ts-bar { opacity: .8; }
 /* v0.10.1059 (operatör: "üzerine gelince bir şey çıkıyor ama anlaşılmıyor") —
    eski .trend-spark__tt hücrenin İÇİNDE absolute çiziliyordu ve

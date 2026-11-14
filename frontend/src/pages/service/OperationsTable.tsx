@@ -64,7 +64,7 @@ const TREND_W = 160; // v0.10.697 — tek geniş trend grafiği
 const TREND_C = {
   calls:  'var(--orange)',
   errors: 'var(--err)',
-  p99:    'var(--teal)',
+  p99:    'var(--otel-blue)', // v0.10.2153 — TrendSpark SERIES_C ile aynı
 } as const;
 
 
@@ -78,7 +78,10 @@ const OP_COLS: DataTableColumn<OperationRow>[] = [
   // v0.10.1179 (operatör, prod: "operation isminden sonra çok büyük boşluk") —
   // artan genişliği Operation DEĞİL Trend emer (grafik kolona yayılır, aşağıda
   // trendW); Operation sabit genişlikte, uzun ad kırpılır (title tam ad).
-  { id: 'name',      label: 'Operation', sortValue: r => opText(r),         naturalDir: 'asc', width: 420, minWidth: 220 },
+  // v0.10.2153 (operatör: "trend kolonu çok yer kaplıyor, daha dar olabilir") — karar
+  // tersine döndü: Trend sabit 220 px, artan genişliği yine Operation emer (uzun adlar
+  // kırpılmadan görünür). Trend elle genişletilirse grafik kolona yayılmayı sürdürür.
+  { id: 'name',      label: 'Operation', sortValue: r => opText(r),         naturalDir: 'asc', width: 420, minWidth: 220, flex: true },
   // v0.9.347 — Trend hücresi ÜÇE bölündü (calls · errors · p99).
   //
   // Operatör: "doğrudan sparkline olarak göstersek ve üzerine tıklayınca
@@ -92,14 +95,15 @@ const OP_COLS: DataTableColumn<OperationRow>[] = [
   // v0.9.498 — 190px üç sparkline'a yetmiyordu (3×80 + boşluk ≈ 250) ve
   // hangisinin hangi metrik olduğunu söyleyen hiçbir şey yoktu. Genişlik
   // gerçek içeriğe çekildi, her mini grafiğe renk lekesi + etiket eklendi.
-  { id: 'trend',     label: 'Trend',     flex: true, minWidth: 200 },
+  { id: 'trend',     label: 'Trend',     width: 220, minWidth: 160 },
   { id: 'impact',    label: 'Impact',    sortValue: r => impactOf(r),       numeric: true,      width: 130 },
   // v0.10.1179 — süre kolonları "1234.5ms" ve başlık + sıralama oku sığsın diye genişledi (kırpılıyordu).
   { id: 'spanCount', label: 'Calls',     sortValue: r => r.spanCount,       numeric: true,      width: 104 },
-  { id: 'errorRate', label: 'Err %',     sortValue: r => r.errorRate,       numeric: true,      width: 92 },
+  // v0.10.2153 (operatör: "avg ile err% yer değiştirsin") — Avg önce, Err % sonra.
   { id: 'avg',       label: 'Avg',       sortValue: r => r.avgDurationMs,   numeric: true,      width: 100 },
+  { id: 'errorRate', label: 'Err %',     sortValue: r => r.errorRate,       numeric: true,      width: 92 },
   { id: 'p50',       label: 'P50',       numeric: true,                     width: 100 },
-  { id: 'p95',       label: 'P95',       numeric: true,                     width: 100 },
+  // v0.10.2153 (operatör: "p95 gerek yok") — P95 kolonu kalktı; sıra Operation · Trend · Impact · Calls · Avg · Err % · P50 · P99.
   { id: 'p99',       label: 'P99',       sortValue: r => r.p99DurationMs,   numeric: true,      width: 100 },
   // v0.9.69 — Apdex kolonu operatör isteğiyle kalktı (klasik düzen
   // korunur, yalnız bu kolon eksik); skor detay modalında yaşamaya
@@ -421,8 +425,7 @@ export function OperationsTable({ service, rows, range, preset, onWiden, normali
           v0.7.54 — header is now the shared <DataTableHead> (sortable
           + per-column resize); fixed layout via the <colgroup> +
           dt.tableProps (table.dt). Body cell order tracks OP_COLS:
-          Operation · Trend · Impact · Calls · Err% · Avg · P50 · P95 ·
-          P99 · Apdex. */}
+          Operation · Trend · Impact · Calls · Avg · Err% · P50 · P99. */}
       <div className="table-wrap" ref={wrapRef}>
         <table {...dt.tableProps}>
           <DataTableColgroup dt={dt} />
@@ -489,13 +492,12 @@ export function OperationsTable({ service, rows, range, preset, onWiden, normali
                   {fmtImpact(rows.reduce((n, r) => n + impactOf(r), 0))}
                 </td>
                 <td className="num">{fmtNum(agg.spans)}</td>
+                <td className="num">{agg.avgMs.toFixed(1)}ms</td>
                 <td className="num">
                   <span className={`badge b-${agg.errorRate > 5 ? 'err' : agg.errorRate > 0 ? 'warn' : 'gray'}`}>
                     {agg.errorRate.toFixed(2)}%
                   </span>
                 </td>
-                <td className="num">{agg.avgMs.toFixed(1)}ms</td>
-                <td className="num cell-faint">—</td>
                 <td className="num cell-faint">—</td>
                 <td className="num">{agg.p99Ms.toFixed(1)}ms</td>
               </tr>
@@ -629,14 +631,13 @@ export function OperationsTable({ service, rows, range, preset, onWiden, normali
                                max={Math.max(...rows.map(impactOf))} />
                   </td>
                   <td className="num">{fmtNum(op.spanCount)}</td>
+                  <td className="num">{op.avgDurationMs.toFixed(1)}ms</td>
                   <td className="num">
                     <span className={`badge b-${errCls}`}>
                       {op.errorRate.toFixed(2)}%
                     </span>
                   </td>
-                  <td className="num">{op.avgDurationMs.toFixed(1)}ms</td>
                   <td className="num">{op.p50DurationMs.toFixed(1)}ms</td>
-                  <td className="num">{op.p95DurationMs.toFixed(1)}ms</td>
                   <td className="num">{op.p99DurationMs.toFixed(1)}ms</td>
                 </tr>
               );

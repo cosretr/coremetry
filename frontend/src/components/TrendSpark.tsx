@@ -19,7 +19,8 @@ import { SparkReadout } from './SparkReadout';
 // (portal, grafik ipucu şablonu .ov-tt): kovanın SAATİ (fromMs/toMs
 // verilince; "kova 16/30" değil) + calls · errors · p99 + isteğe bağlı
 // soluk `hint` satırı. Yalnız fare: dokunmatikte dokunuş tıklamadır.
-const SERIES_C = { calls: 'var(--orange)', errors: 'var(--err)', p99: 'var(--teal)' } as const;
+// v0.10.2153 — p99 çizgisi OpenTelemetry mavisi (--otel-blue); çizim renkleri globals.css .trend-spark.
+export const SERIES_C = { calls: 'var(--orange)', errors: 'var(--err)', p99: 'var(--otel-blue)' } as const;
 
 export function TrendSpark({ calls, errors, p99, width = 160, height = 30, className, fromMs, toMs, hint }: {
   calls: number[];
