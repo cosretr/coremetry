@@ -1,3 +1,4 @@
+import { useScreenWakeLock } from '@/lib/screenWakeLock';
 import { loginStatusLine } from './statusLine'; // v0.10.1994
 import { BH_TOTAL, createEggDetector, pickQuote, QUOTE_SHOW_MS, type SreQuote } from '@/lib/loginTopology/eggs'; // v0.10.1977
 import { useEscLayer } from '@/lib/escLayer';
@@ -164,6 +165,8 @@ export default function LoginPage() {
   const realTopo = topoData && topoData.nodes.length > 0 ? topoData : null;
   const source: GraphSource = realTopo ? 'real' : (!sumOn || !summary.isPending) ? 'synthetic' : 'pending';
   const bd = backdropMode({ setting: brand.loginTopology, wide, highContrast, reducedMotion: reduced, source });
+  // v0.10.2151 — galaksi çizilirken (pano kullanımı) ekran uyanık kalır; sınırları lib/screenWakeLock.
+  useScreenWakeLock(bd.kind === 'canvas');
   const synth = useMemo(() => syntheticGraph(), []);
   const backdropGraph = realTopo ?? synth;
   // v0.10.1928 — galaksinin dönüş/akış temposu: toplam throughput (son / 24 sa tepe).
