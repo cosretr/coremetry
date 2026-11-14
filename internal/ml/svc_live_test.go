@@ -4,8 +4,9 @@ package ml
 // dilim 4, operatör kararı 2026-11-14 "Yenileri canlıya al"): servis düzeyi
 // ML kararı gerçek Problem açar. Saf dikişler: svcPromote (Value/Threshold →
 // computePriority ≥ 2× P1, altı P2), ownerDedupe (servis başına tek ML
-// Problem'i; sahiplik ilk açanda, öncelik yalnız yükselir), kapanış, eski
-// kural ikizi notu, düz cümle. Servis adları SENTETİK.
+// Problem'i; sahiplik ilk açanda, öncelik yalnız yükselir), kapanış, düz
+// cümle. v0.10.2155: eski kural ikizi notu kalktı, yerine aileler arası
+// sahiplik (TestOwnerDedupeAcrossFamilies). Servis adları SENTETİK.
 
 import (
 	"strings"
@@ -154,12 +155,12 @@ func TestSvcProblemInputs(t *testing.T) {
 	if _, ok := ds["v1"]; ok {
 		t.Fatal("hacim sıçraması servis düzeyi karar almaz (Problem açmaz)")
 	}
-	in := svcProblemInputs(kept, ds, func(string) string { return " NOT" })
+	in := svcProblemInputs(kept, ds)
 	if len(in) != 1 {
 		t.Fatalf("girdi: %+v", in)
 	}
 	x := in[0]
-	want := "orders-batch servisinde hata oranı %3,4, olağanı %1. orders-batch servisinde 4 operasyon birden yavaşladı (p95 olağanın 3 katı). NOT"
+	want := "orders-batch servisinde hata oranı %3,4, olağanı %1. orders-batch servisinde 4 operasyon birden yavaşladı (p95 olağanın 3 katı)."
 	if x.Desc != want {
 		t.Errorf("cümle:\n%q\n%q", x.Desc, want)
 	}
@@ -169,17 +170,108 @@ func TestSvcProblemInputs(t *testing.T) {
 	}
 }
 
-func TestLegacyTwinNote(t *testing.T) {
-	open := []chstore.Problem{
-		{RuleID: "svc-slowdown:orders-api", Service: "orders-api", Status: "open"},
-		{RuleID: "anomaly:orders-api:error_rate", Service: "orders-api", Status: "acknowledged"},
-		{RuleID: "anomaly:orders-api:p99_ms", Service: "orders-api", Status: "open"},
-		{RuleID: "svc-slowdown:payments-api", Service: "payments-api", Status: "resolved"},
-	}
-	if n := legacyTwinNote("orders-api", open); !strings.Contains(n, "anomaly:orders-api:error_rate, svc-slowdown:orders-api") || !strings.Contains(n, "çift kaydı") {
-		t.Errorf("not: %q", n)
-	}
-	if n := legacyTwinNote("payments-api", open); n != "" {
-		t.Errorf("kapanmış eski kural not üretmez: %q", n)
-	}
+// TestOwnerDedupeAcrossFamilies — v0.10.2155 (Davis tarzı tek Problem D1):
+// sahiplik ML ailesinin dışına taşındı. Eski aile sahipse ML kararı üyedir
+// (yeni Problem / bildirim yok, olaya sahibin kimliği damgalanır); sahibin
+// satırı yalnız öncelik yükseliyorsa yazılır; ML ikizi "merged into" ile
+// kapanır; alarm / yalnız-üye satır sahip sayılmaz; susturulmuş ML kuralı
+// üye olmaz.
+func TestOwnerDedupeAcrossFamilies(t *testing.T) {
+	now := time.Date(2026, 11, 14, 9, 30, 0, 0, time.UTC)
+	pol := chstore.OwnerPolicy{Keep: chstore.DefaultInboxKeepSourcePriority(), Priority: chstore.DefaultProblemPriority(), NowNs: now.UnixNano()}
+	started := now.Add(-10 * time.Minute).UnixNano()
+	slow := chstore.Problem{ID: "svc-slowdown:orders-api", RuleID: "svc-slowdown:orders-api", RuleName: "Yaygın yavaşlama", Severity: "critical",
+		Service: "orders-api", Metric: "p99_ms", Comparator: ">=", Value: 9000, Threshold: 300, Status: "acknowledged", Assignee: "ops@acme.example",
+		Description: "yavaşlama cümlesi", StartedAt: started}
+	errRate := chstore.Problem{ID: "a1", RuleID: "anomaly:orders-api:error_rate", RuleName: "Anomaly · Error rate", Severity: "warning",
+		Service: "orders-api", Metric: "error_rate", Comparator: ">", Value: 3, Threshold: 2, Status: "open", Description: "hata cümlesi", StartedAt: started}
+	in := svcIn("orders-api", 0.03, 0.01, "e1")
+	in.StartedAt = now.Add(-2 * time.Minute).UnixNano()
+	grp := liveGroup("orders-api", "ev1", "log", "trace")
+	grp.G.Start = in.StartedAt
+
+	t.Run("svc-slowdown sahip + ML svc gelir → üye; P1 sahibi yeniden yazılmaz", func(t *testing.T) {
+		p := planMLProblemsWith(nil, []svcProblemIn{in}, []chstore.Problem{slow}, true, descStub, pol)
+		if len(p.Open)+len(p.Refresh)+len(p.Resolve) != 0 || p.LiveSvc["e1"] != slow.ID {
+			t.Fatalf("plan: %+v", p)
+		}
+	})
+	t.Run("svc-slowdown sahip + ML grubu gelir → üye; açmayacak zayıf grup üye olmaz", func(t *testing.T) {
+		weak := liveGroup("orders-api", "ev2", "trace")
+		p := planMLProblemsWith([]decidedGroup{grp, weak}, nil, []chstore.Problem{slow}, true, descStub, pol)
+		if len(p.Open)+len(p.Refresh)+len(p.Resolve) != 0 || p.LiveGroup[grp.G.ID] != slow.ID {
+			t.Fatalf("plan: %+v", p)
+		}
+		if _, ok := p.LiveGroup[weak.G.ID]; ok {
+			t.Error("tek başına Problem açmayacak grup eski sahibe üye olmamalı")
+		}
+	})
+	t.Run("uyarı error_rate sahip + ML svc (3×, critical) gelir → sahip P1'e yükselir, kimliği / cümlesi kalır", func(t *testing.T) {
+		p := planMLProblemsWith(nil, []svcProblemIn{in}, []chstore.Problem{errRate}, true, descStub, pol)
+		if len(p.Open) != 0 || len(p.Refresh) != 1 || len(p.Raised) != 1 || p.LiveSvc["e1"] != errRate.ID {
+			t.Fatalf("plan: %+v", p)
+		}
+		r := p.Refresh[0]
+		if r.ID != "a1" || r.RuleID != errRate.RuleID || r.Description != "hata cümlesi" || r.Severity != "critical" || r.Value != 0.03 || r.Threshold != 0.01 || r.Metric != "error_rate" || r.Comparator != ">=" {
+			t.Errorf("yükseltilmiş sahip: %+v", r)
+		}
+		if !chstore.EscalatedToP1(errRate, r, pol) {
+			t.Error("P1 yükselişi bekleniyor")
+		}
+		// ikinci tik: sahip zaten yükseltilmiş → yazım yok
+		if p2 := planMLProblemsWith(nil, []svcProblemIn{in}, []chstore.Problem{r}, true, descStub, pol); len(p2.Refresh) != 0 || len(p2.Raised) != 0 {
+			t.Errorf("yükseltme bir kez: %+v", p2)
+		}
+	})
+	t.Run("ML ikizi (genç) + eski sahip → ikiz 'merged into' ile kapanır, atanan boşsa taşınır", func(t *testing.T) {
+		twin := newSvcProblem(in)
+		twin.Assignee = "payments"
+		owner := slow
+		owner.Assignee = ""
+		p := planMLProblemsWith(nil, []svcProblemIn{in}, []chstore.Problem{owner, twin}, true, descStub, pol)
+		if len(p.Open) != 0 || len(p.Resolve) != 1 || len(p.Merged) != 1 || p.LiveSvc["e1"] != slow.ID {
+			t.Fatalf("plan: %+v", p)
+		}
+		if c := p.Resolve[0]; c.ID != twin.ID || !strings.HasSuffix(c.Description, chstore.MergedIntoNote(slow.ID)) || strings.Contains(c.Description, svcResolveReason) {
+			t.Errorf("ikiz kapanışı: %+v", c)
+		}
+		if len(p.Refresh) != 1 || p.Refresh[0].ID != slow.ID || p.Refresh[0].Assignee != "payments" || p.Refresh[0].Status != "acknowledged" {
+			t.Errorf("sahip atananı devralmalı: %+v", p.Refresh)
+		}
+		if q := planMLProblemsWith(nil, []svcProblemIn{in}, []chstore.Problem{owner, twin}, false, descStub, pol); len(q.Resolve) != 0 {
+			t.Errorf("lider sürekliliği yokken ikiz kapanmaz: %+v", q)
+		}
+	})
+	t.Run("ML sahip (eski) + genç svc-slowdown satırı → ML sahip kalır, kendi yolu", func(t *testing.T) {
+		mlOwner := newSvcProblem(in)
+		mlOwner.StartedAt = now.Add(-30 * time.Minute).UnixNano()
+		p := planMLProblemsWith(nil, []svcProblemIn{in}, []chstore.Problem{mlOwner, slow}, true, descStub, pol)
+		if len(p.Open) != 0 || len(p.Resolve) != 0 || len(p.Refresh) != 1 || p.Refresh[0].ID != mlOwner.ID || p.LiveSvc["e1"] != mlOwner.ID {
+			t.Fatalf("plan: %+v", p)
+		}
+	})
+	t.Run("alarm kuralı / yalnız-üye p99 satırı sahip değil → ML kendi Problem'ini açar", func(t *testing.T) {
+		alarm := chstore.Problem{ID: "r1", RuleID: "rule-7f3a", Severity: "critical", Service: "orders-api", Status: "open", StartedAt: started}
+		p99 := chstore.Problem{ID: "a2", RuleID: "anomaly:orders-api:p99_ms", Severity: "warning", Service: "orders-api", Status: "open", StartedAt: started}
+		p := planMLProblemsWith(nil, []svcProblemIn{in}, []chstore.Problem{alarm, p99}, true, descStub, pol)
+		if len(p.Open) != 1 || !chstore.IsMLSvcProblem(p.Open[0].RuleID) || len(p.Resolve) != 0 {
+			t.Fatalf("plan: %+v", p)
+		}
+	})
+	t.Run("ML kuralı 'problem değil' imzalı → üye olmaz, kendi satırını açar", func(t *testing.T) {
+		q := pol
+		q.Noise = map[string]struct{}{chstore.RuleProblemVerdictSignature(MLSvcRulePrefix+"orders-api", "orders-api"): {}}
+		p := planMLProblemsWith(nil, []svcProblemIn{in}, []chstore.Problem{slow}, true, descStub, q)
+		if len(p.Open) != 1 || p.LiveSvc["e1"] != p.Open[0].ID {
+			t.Fatalf("plan: %+v", p)
+		}
+	})
+	t.Run("eski sahip 'problem değil' imzalı → sahip sayılmaz", func(t *testing.T) {
+		q := pol
+		q.Noise = map[string]struct{}{chstore.RuleProblemVerdictSignature(slow.RuleID, slow.Service): {}}
+		p := planMLProblemsWith(nil, []svcProblemIn{in}, []chstore.Problem{slow}, true, descStub, q)
+		if len(p.Open) != 1 || len(p.Refresh) != 0 {
+			t.Fatalf("plan: %+v", p)
+		}
+	})
 }

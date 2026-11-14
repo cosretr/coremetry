@@ -226,31 +226,11 @@ func mlProblemRatio(v, th float64) float64 {
 	return v / th
 }
 
-// legacyTwinNote — SAF: aynı serviste eski kural (svc-slowdown /
-// anomaly:<svc>:error_rate) AÇIKSA açıklama eki; yoksa "". Eski dedektörler
-// emekli edilene dek (spec Karar 5 madde 5) aynı olay iki Problem
-// açabilir — operatör kabul etti; not çift kaydı görünür kılar.
-func legacyTwinNote(svc string, open []chstore.Problem) string {
-	var rules []string
-	for _, p := range open {
-		if p.Service != svc || p.Status == "resolved" {
-			continue
-		}
-		if strings.HasPrefix(p.RuleID, "svc-slowdown:") || (strings.HasPrefix(p.RuleID, "anomaly:") && strings.HasSuffix(p.RuleID, ":error_rate")) {
-			rules = append(rules, p.RuleID)
-		}
-	}
-	if len(rules) == 0 {
-		return ""
-	}
-	sort.Strings(rules)
-	return " Not: aynı servis için eski kural da açık (" + strings.Join(rules, ", ") + ") — aynı olayın çift kaydı olabilir."
-}
-
 // svcProblemInputs — SAF: bu tikin servis düzeyi kararları → servis başına
-// canlı girdi (servis sıralı). Yalnız açık (karar verilmiş) olaylar;
-// note: servis → açıklama eki (eski kural ikizi).
-func svcProblemInputs(kept []chstore.MLEvent, ds map[string]SvcShadow, note func(string) string) []svcProblemIn {
+// canlı girdi (servis sıralı). Yalnız açık (karar verilmiş) olaylar.
+// v0.10.2155: eski kural ikizi notu kalktı — aynı serviste eski bir sahip
+// açıksa ML kararı ona üye olur (group_live.go), çift satır açılmaz.
+func svcProblemInputs(kept []chstore.MLEvent, ds map[string]SvcShadow) []svcProblemIn {
 	bySvc := map[string][]chstore.MLEvent{}
 	for _, e := range kept {
 		if d, ok := ds[e.ID]; ok && d.WouldOpen {
@@ -280,11 +260,7 @@ func svcProblemInputs(kept []chstore.MLEvent, ds map[string]SvcShadow, note func
 			parts = append(parts, svcEventSentence(e))
 			in.Events = append(in.Events, e.ID)
 		}
-		desc := strings.Join(parts, " ")
-		if note != nil {
-			desc += note(svc)
-		}
-		in.Desc = truncRunes(desc, 600)
+		in.Desc = truncRunes(strings.Join(parts, " "), 600)
 		out = append(out, in)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Service < out[j].Service })

@@ -131,6 +131,11 @@ type groupProblemPlan struct {
 	LiveSvc map[string]string
 	// SvcOpen — v0.10.2130: servis düzeyi kararla AÇILAN Problem kimlikleri (sayaç).
 	SvcOpen map[string]bool
+	// Raised — v0.10.2155: bu tikte ML üyesinin önceliğini yükselttiği (ya da
+	// ikizinin atananını devraldığı) YABANCI sahip kimlikleri; satırları Refresh'te.
+	Raised []string
+	// Merged — v0.10.2155: yabancı sahibe katılıp kapanan ML ikizleri (Resolve'da).
+	Merged []string
 }
 
 // newGroupProblem — SAF: açılacak Problem satırı.
@@ -149,11 +154,17 @@ func planGroupProblems(groups []decidedGroup, open []chstore.Problem, canResolve
 	return planMLProblems(groups, nil, open, canResolve, desc)
 }
 
-// planMLProblems — SAF: grup + servis düzeyi kararlar + açık ML Problem'leri
+// planMLProblems — planMLProblemsWith'in sıfır politikalı hali (statik
+// aileler, susturma yok); testlerin v0.10.2130 imzası.
+func planMLProblems(groups []decidedGroup, svcs []svcProblemIn, open []chstore.Problem, canResolve bool, desc func(decidedGroup) string) groupProblemPlan {
+	return planMLProblemsWith(groups, svcs, open, canResolve, desc, chstore.OwnerPolicy{})
+}
+
+// planMLProblemsWith — SAF: grup + servis düzeyi kararlar + açık Problem'ler
 // → eylemler. groups: bu tikte karar verilen gruplar (decideGroups sırası);
 // svcs: servis düzeyi canlı girdiler (svcProblemInputs); open: açık anlık
-// görüntü (ML ailesi dışı satırlar yok sayılır); canResolve: kapanış izni
-// (lider sürekliliği). desc: grup → Problem cümlesi.
+// görüntü (TÜM aileler — sahip çözümü için; kapanış yalnız ML ailesine);
+// canResolve: kapanış izni (lider sürekliliği). desc: grup → Problem cümlesi.
 //
 // v0.10.2130 (spec Karar 4) — SERVİS BAŞINA TEK AÇIK ML PROBLEM'İ:
 // `anomaly-auto:group:*` ve `anomaly-auto:svc:*` aynı anahtarı (servis)
@@ -163,11 +174,34 @@ func planGroupProblems(groups []decidedGroup, open []chstore.Problem, canResolve
 // güncellenir (öncelik yalnız yükselir; grubun sayım satırı oran 1). Sahip
 // svc ise açıklama her tik güncel cümle. Kapanış: servisin ne bitmemiş
 // grubu ne açık svc olayı kalınca (mevcut 3 tik lider sürekliliği kuralı).
-func planMLProblems(groups []decidedGroup, svcs []svcProblemIn, open []chstore.Problem, canResolve bool, desc func(decidedGroup) string) groupProblemPlan {
+//
+// v0.10.2155 (Davis tarzı tek Problem D1) — sahip artık ML ailesiyle sınırlı
+// değil: servisin sahibi chstore.ServiceOwnerOf (en eski açık, sahip
+// olabilen satır — svc-slowdown / anomaly:<svc>:error_rate dahil). Sahip
+// ESKİ bir aileyse ML kararı ona ÜYE olur: yeni Problem ve bildirim yok,
+// olay kanıtına o Problem'in kimliği damgalanır (LiveGroup / LiveSvc).
+//   - yalnız "açardı" kararı (WouldOpen) üye olur: tek başına Problem
+//     açmayacak zayıf bir grup eski sahibin kapanışını geciktirmez;
+//   - sahibin satırı YALNIZ öncelik yükseliyorsa yazılır (chstore.RaiseOwner:
+//     şiddet + ölçü birlikte); değişmeyen yabancı satır yeniden yazılmaz
+//     (iki süreçli tam-satır yazım yarışı en aza iner);
+//   - servisin ML satırı da açıksa (ikiz) o satır tazelenmez ve "merged into
+//     <sahip>" ile kapanır, atananı sahip boşsa taşınır;
+//   - ML kuralı "problem değil" imzalıysa üye OLMAZ: bugünkü gibi kendi
+//     satırında kalır / kendi satırını açar.
+func planMLProblemsWith(groups []decidedGroup, svcs []svcProblemIn, open []chstore.Problem, canResolve bool, desc func(decidedGroup) string, pol chstore.OwnerPolicy) groupProblemPlan {
 	plan := groupProblemPlan{LiveGroup: map[string]string{}, SingleOpen: map[string]bool{}, LiveSvc: map[string]string{}, SvcOpen: map[string]bool{}}
 	var own []chstore.Problem
-	for _, p := range open {
-		if chstore.IsMLLiveProblem(p.RuleID) && p.Status != "resolved" {
+	var ptrs []*chstore.Problem
+	byID := map[string]chstore.Problem{}
+	for i := range open {
+		p := open[i]
+		if p.Status == "resolved" {
+			continue
+		}
+		ptrs = append(ptrs, &open[i])
+		byID[p.ID] = p
+		if chstore.IsMLLiveProblem(p.RuleID) {
 			own = append(own, p)
 		}
 	}
@@ -177,16 +211,44 @@ func planMLProblems(groups []decidedGroup, svcs []svcProblemIn, open []chstore.P
 		}
 		return own[i].ID < own[j].ID
 	})
-	bySvc := map[string]string{} // servis → sahip Problem kimliği
-	byID := map[string]chstore.Problem{}
+	mlRow := map[string]string{} // servis → servisin en eski ML satırı
 	for _, p := range own {
-		if _, ok := bySvc[p.Service]; !ok {
-			bySvc[p.Service] = p.ID
+		if _, ok := mlRow[p.Service]; !ok {
+			mlRow[p.Service] = p.ID
 		}
-		byID[p.ID] = p
+	}
+	owners := map[string]*chstore.Problem{} // servis → sahip (nil = yok); tik içi bellek
+	ownerOf := func(svc string) *chstore.Problem {
+		o, ok := owners[svc]
+		if !ok {
+			o = chstore.ServiceOwnerOf(ptrs, svc, pol)
+			owners[svc] = o
+		}
+		return o
+	}
+	opened := map[string]string{} // bu tikte açılan: servis → Problem kimliği
+	// target — kararın bağlanacağı açık satır: ML ailesinden sahip (bugünkü
+	// yol), yabancı sahip (üyelik; kural susturulmamışsa) ya da servisin ML
+	// satırı. ok=false → açık satır yok.
+	target := func(svc, ruleID string) (id string, foreign, ok bool) {
+		if id, ok := opened[svc]; ok {
+			return id, false, true
+		}
+		if o := ownerOf(svc); o != nil {
+			if chstore.IsMLLiveProblem(o.RuleID) {
+				return o.ID, false, true
+			}
+			if pol.MemberRule(ruleID, svc) {
+				return o.ID, true, true
+			}
+		}
+		if id, ok := mlRow[svc]; ok {
+			return id, false, true
+		}
+		return "", false, false
 	}
 	openIdx, refreshIdx := map[string]int{}, map[string]int{}
-	// row — bu tikte dokunulan satır (yoksa açık satırdan tazeleme kopyası).
+	// row — bu tikte dokunulan ML satırı (yoksa açık satırdan tazeleme kopyası).
 	row := func(id string) *chstore.Problem {
 		if i, ok := openIdx[id]; ok {
 			return &plan.Open[i]
@@ -198,12 +260,30 @@ func planMLProblems(groups []decidedGroup, svcs []svcProblemIn, open []chstore.P
 		refreshIdx[id] = len(plan.Refresh) - 1
 		return &plan.Refresh[len(plan.Refresh)-1]
 	}
+	foreign := map[string]chstore.Problem{} // yabancı sahip → yükseltilmiş kopya (yalnız değiştiyse)
+	raise := func(ownerID string, member chstore.Problem) {
+		cur, ok := foreign[ownerID]
+		if !ok {
+			cur = byID[ownerID]
+		}
+		if next, changed := chstore.RaiseOwner(cur, member, pol); changed {
+			foreign[ownerID] = next
+		}
+	}
 	for _, g := range groups {
 		if g.D.Finished {
 			continue
 		}
 		svc := g.G.Service
-		if id, ok := bySvc[svc]; ok {
+		id, isForeign, ok := target(svc, g.D.RuleID)
+		if ok && isForeign {
+			if g.D.WouldOpen {
+				plan.LiveGroup[g.G.ID] = id
+				raise(id, newGroupProblem(g, desc(g)))
+			}
+			continue
+		}
+		if ok {
 			plan.LiveGroup[g.G.ID] = id
 			_, fresh := openIdx[id]
 			_, done := refreshIdx[id]
@@ -229,19 +309,22 @@ func planMLProblems(groups []decidedGroup, svcs []svcProblemIn, open []chstore.P
 		}
 		plan.Open = append(plan.Open, p)
 		openIdx[p.ID] = len(plan.Open) - 1
-		bySvc[svc] = p.ID
+		opened[svc] = p.ID
 		plan.LiveGroup[g.G.ID] = p.ID
 	}
 	for _, in := range svcs {
-		id, ok := bySvc[in.Service]
-		if !ok {
+		id, isForeign, ok := target(in.Service, MLSvcRulePrefix+in.Service)
+		switch {
+		case !ok:
 			p := newSvcProblem(in)
 			plan.Open = append(plan.Open, p)
 			openIdx[p.ID] = len(plan.Open) - 1
 			plan.SvcOpen[p.ID] = true
-			bySvc[in.Service] = p.ID
+			opened[in.Service] = p.ID
 			id = p.ID
-		} else {
+		case isForeign:
+			raise(id, newSvcProblem(in))
+		default:
 			q := row(id)
 			if mlProblemRatio(in.Value, in.Threshold) > mlProblemRatio(q.Value, q.Threshold) {
 				q.Value, q.Threshold, q.Metric = in.Value, in.Threshold, in.Metric
@@ -254,22 +337,45 @@ func planMLProblems(groups []decidedGroup, svcs []svcProblemIn, open []chstore.P
 			plan.LiveSvc[ev] = id
 		}
 	}
-	if !canResolve {
-		return plan
+	if canResolve {
+		for _, p := range own {
+			if _, ok := refreshIdx[p.ID]; ok {
+				continue
+			}
+			// İkiz: servisin yabancı bir sahibi var ve bu ML satırı ona
+			// katılabilir → "merged into", atanan sahip boşsa taşınır.
+			if o := ownerOf(p.Service); o != nil && o.ID != p.ID && !chstore.IsMLLiveProblem(o.RuleID) && pol.MemberRule(p.RuleID, p.Service) {
+				cur, ok := foreign[o.ID]
+				if !ok {
+					cur = *o
+				}
+				next, changed, closed := chstore.MergeInto(cur, p, pol)
+				if changed {
+					foreign[o.ID] = next
+				}
+				plan.Resolve = append(plan.Resolve, closed)
+				plan.Merged = append(plan.Merged, closed.ID)
+				continue
+			}
+			q := p
+			reason := groupResolveReason
+			if chstore.IsMLSvcProblem(q.RuleID) {
+				reason = svcResolveReason
+			}
+			if !strings.Contains(q.Description, reason) {
+				q.Description += reason
+			}
+			plan.Resolve = append(plan.Resolve, q)
+		}
 	}
-	for _, p := range own {
-		if _, ok := refreshIdx[p.ID]; ok {
-			continue
-		}
-		q := p
-		reason := groupResolveReason
-		if chstore.IsMLSvcProblem(q.RuleID) {
-			reason = svcResolveReason
-		}
-		if !strings.Contains(q.Description, reason) {
-			q.Description += reason
-		}
-		plan.Resolve = append(plan.Resolve, q)
+	ids := make([]string, 0, len(foreign))
+	for id := range foreign {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		plan.Refresh = append(plan.Refresh, foreign[id])
+		plan.Raised = append(plan.Raised, id)
 	}
 	return plan
 }
@@ -287,26 +393,33 @@ type liveCounts struct{ Opened, Refreshed, Resolved, SingleOpened, SvcOpened int
 //
 // v0.10.2130: servis düzeyi kararlar (svcDec; nil = yok) aynı plana girer;
 // başarılı yazımın kararlarına Live + ProblemID işlenir (markLiveSvc).
-// Aynı servisin eski kuralı (svc-slowdown / anomaly:<svc>:error_rate) açıksa
-// svc Problem cümlesine çift kayıt notu eklenir — aynı anlık görüntüden.
+//
+// v0.10.2155 (Davis tarzı tek Problem D1): plan TÜM açık satırları görür —
+// servisin sahibi eski bir aileyse (svc-slowdown / anomaly:<svc>:error_rate)
+// ML kararı ona üye olur (planMLProblemsWith). Eski "çift kayıt" notu
+// (legacyTwinNote) kalktı: çift satır artık açılmıyor.
 func (r *Recorder) liveGroupProblems(ctx context.Context, groups []decidedGroup, kept []chstore.MLEvent, svcDec map[string]SvcShadow, canResolve bool, desc func(decidedGroup) string, now time.Time) (liveCounts, error) {
 	var c liveCounts
 	snap, err := r.store.OpenProblemsSnapshot(ctx)
 	if err != nil {
 		return c, fmt.Errorf("ml group problems: open snapshot: %w", err)
 	}
-	var open, all []chstore.Problem
+	var all []chstore.Problem
 	for _, p := range snap.All() {
-		if p == nil {
-			continue
-		}
-		all = append(all, *p)
-		if chstore.IsMLLiveProblem(p.RuleID) {
-			open = append(open, *p)
+		if p != nil {
+			all = append(all, *p)
 		}
 	}
-	svcs := svcProblemInputs(kept, svcDec, func(svc string) string { return legacyTwinNote(svc, all) })
-	plan := planMLProblems(groups, svcs, open, canResolve, desc)
+	all, pol := r.ownerPolicy(ctx, all, now)
+	svcs := svcProblemInputs(kept, svcDec)
+	plan := planMLProblemsWith(groups, svcs, all, canResolve, desc, pol)
+	raised, merged := map[string]bool{}, map[string]bool{}
+	for _, id := range plan.Raised {
+		raised[id] = true
+	}
+	for _, id := range plan.Merged {
+		merged[id] = true
+	}
 	failed := map[string]bool{}
 	var firstErr error
 	for _, p := range plan.Refresh {
@@ -316,6 +429,9 @@ func (r *Recorder) liveGroupProblems(ctx context.Context, groups []decidedGroup,
 			continue
 		}
 		c.Refreshed++
+		if raised[p.ID] {
+			log.Printf("[ml] PROBLEM RAISED BY MEMBER %s · %s · %s (ML üyesi sahibin önceliğini / atananını güncelledi)", p.Service, p.ID, p.Severity)
+		}
 	}
 	for _, p := range plan.Open {
 		if err := r.store.UpsertProblem(ctx, p); err != nil {
@@ -342,11 +458,52 @@ func (r *Recorder) liveGroupProblems(ctx context.Context, groups []decidedGroup,
 			continue
 		}
 		c.Resolved++
+		if merged[p.ID] {
+			log.Printf("[ml] PROBLEM MERGED %s · %s → servisin sahibi (ikiz satır kapandı)", p.Service, p.ID)
+			continue
+		}
 		log.Printf("[ml] ML PROBLEM RESOLVED %s · %s", p.Service, p.ID)
 	}
 	markLiveGroups(groups, plan.LiveGroup, failed)
 	markLiveSvc(svcDec, plan.LiveSvc, failed)
 	return c, firstErr
+}
+
+// ownerPolicy — v0.10.2155: tikin birleşme politikası. Yabancı (ML dışı)
+// birleşen satır yoksa ek okuma yok. "Problem değil" imzaları okunamazsa
+// plan yalnız ML ailesini görür (v0.10.2130 davranışı): susturulmuş bir
+// satırın altına ML Problem'i gizlemek, bir tik çift satırdan kötüdür.
+func (r *Recorder) ownerPolicy(ctx context.Context, all []chstore.Problem, now time.Time) ([]chstore.Problem, chstore.OwnerPolicy) {
+	prio := chstore.CurrentProblemPriority()
+	pol := chstore.OwnerPolicy{Keep: prio.InboxKeepSourcePriorityList(), Priority: prio, NowNs: now.UnixNano()}
+	foreign := false
+	for _, p := range all {
+		if !chstore.IsMLLiveProblem(p.RuleID) && chstore.MemberEligibleRule(p.RuleID) {
+			foreign = true
+			break
+		}
+	}
+	if !foreign {
+		return all, pol
+	}
+	list, err := r.store.ListProblemVerdicts(ctx)
+	if err != nil {
+		log.Printf("[ml] group problems: \"problem değil\" kararları okunamadı (bu tik yalnız ML ailesi): %v", err)
+		return mlFamilyOnly(all), pol
+	}
+	pol.Noise = chstore.NoiseVerdictSignatures(list)
+	return all, pol
+}
+
+// mlFamilyOnly — SAF: yalnız ML ailesinin satırları.
+func mlFamilyOnly(all []chstore.Problem) []chstore.Problem {
+	out := all[:0:0]
+	for _, p := range all {
+		if chstore.IsMLLiveProblem(p.RuleID) {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // markLiveGroups — SAF: yazımı başarılı Problem'in grubunun kararına
