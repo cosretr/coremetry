@@ -383,6 +383,21 @@ var routingRegressionRows = []routingRow{
 		q: "Açık problemlerin kök nedeni?", wantTier: aisurface.TierGuided, wantRoute: string(guidedProblems)},
 	{release: "komşu v0.10.2135", name: "v2 'açık problemler neler?' (neden yok) → problems",
 		q: "açık problemler neler?", v2: true, wantTier: aisurface.TierGuided, wantRoute: string(guidedProblems)},
+
+	// v0.10.2136 — router boşlukları D3 (audit E): gecikme büyümesi sözcükleri
+	// ve karar 5 (neden > rapor) yalnız v2; v1 komşuları eski yolda.
+	{release: "v0.10.2136", name: "v2 'uzun süren işlemleri listele' → slow_traces",
+		q: rrSvc + " altında uzun süren işlemleri listele", v2: true, wantTier: aisurface.TierGuided, wantRoute: string(guidedSlowTraces)},
+	{release: "v0.10.2136", name: "v2 başka sinyalsiz uzun cümle 'cevaplar uzuyor' (yalnız sinyal kapısı) → service_health",
+		q: rrSvc + " tarafında öğleden sonradan beri cevaplar biraz uzuyor gibi görünüyor ne dersin", v2: true, wantTier: aisurface.TierGuided, wantRoute: string(guidedServiceHealth)},
+	{release: "v0.10.2136", name: "v2 uzun cümle 'uzun süren işlemleri listeler misin' → slow_traces",
+		q: rrSvc + " servisinde öğleden sonra uzun süren işlemleri bana listeler misin", v2: true, wantTier: aisurface.TierGuided, wantRoute: string(guidedSlowTraces)},
+	{release: "v0.10.2136", name: "v2 'cevap süreleri arttı mı' → service_health",
+		q: rrSvc + " cevap süreleri arttı mı", v2: true, wantTier: aisurface.TierGuided, wantRoute: string(guidedServiceHealth)},
+	{release: "v0.10.2136", name: "v2 'son 1 haftada neden uzuyor' → root_cause",
+		q: rrSvc + " son 1 haftada neden uzuyor", v2: true, wantTier: aisurface.TierGuided, wantRoute: string(guidedRootCause)},
+	{release: "komşu v0.10.2136", name: "v1 'nedenini inceler misin' → service_report (v1 bayt bayt)",
+		q: rrSvc + " nedenini inceler misin", wantTier: aisurface.TierGuided, wantRoute: string(guidedServiceReport)},
 }
 
 // withRoutingDocTeam — v0.10.1576: wiki kurulu + takım kataloğunda

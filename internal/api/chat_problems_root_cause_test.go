@@ -114,7 +114,8 @@ func TestProblemsRootCauseWiring(t *testing.T) {
 	}
 	src := stripGoCommentsAPI(string(b))
 	for _, want := range []string{
-		"route = promoteProblemsRootCause(route, norm, cosreV2Marked(ctx))",
+		"route = promoteProblemsRootCause(route, norm, v2)",
+		"v2 := cosreV2Marked(ctx)",
 		"if route.ProblemsRootCause {",
 		"evidence, sources, facts, err = s.guidedProblemsRootCauseBundle(ctx, emit, &route, to)",
 		"chatExchangeFrom(ctx).noteRoute(guidedRouteLabel(route))",

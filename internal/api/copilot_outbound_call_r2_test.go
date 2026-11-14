@@ -563,7 +563,7 @@ func TestOutboundR2SourcePins(t *testing.T) {
 		t.Error("trace ID / yapıştırılan PromQL giden çağrıdan önce kalmalı")
 	}
 	gb := g[strings.Index(g, "func (s *Server) copilotChatGuided("):]
-	if !strings.Contains(gb, "routeGuidedIntentExt(question, svcNames, envNames, teamNames, ctxService, s.oracleOpsEnabled(), s.guidedOutboundHosts(ctx, norm))") {
+	if !strings.Contains(gb, "routeGuidedIntentExt(routerQ, svcNames, envNames, teamNames, ctxService, s.oracleOpsEnabled(), s.guidedOutboundHosts(ctx, norm))") {
 		t.Error("guided kademesi canlı dış host kataloğunu geçirmeli")
 	}
 	pre := read("chat_operation_prefetch.go")

@@ -240,7 +240,7 @@ func TestOffTopicAndPastedErrorSourceGates(t *testing.T) {
 	if tok < 0 || pasted < 0 || span < 0 || !(tok < pasted && pasted < span) {
 		t.Fatalf("routePastedError FindToken ile extractSpanID arasında değil: tok=%d pasted=%d span=%d", tok, pasted, span)
 	}
-	if !strings.Contains(gsrc, "&& !affirm && !pasted {") {
+	if !strings.Contains(gsrc, "&& !affirm && !pasted &&") { // v0.10.2136 — ardından v2 gecikme sözcüğü terimi
 		t.Error("sıfır-maliyet kapısı yapıştırılan hata şeklini geçirmiyor")
 	}
 	// Yapıştırılan log damgaları (iki tarih) rotayı window_compare'e çevirmez.

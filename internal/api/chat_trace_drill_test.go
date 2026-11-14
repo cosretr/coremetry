@@ -471,7 +471,7 @@ func TestTraceDrillWiring(t *testing.T) {
 		t.Error("yavaş-trace demeti kırılımı aynı listeden kurmalı")
 	}
 	rc := fn("guidedRootCauseBundle")
-	for _, w := range []string{"rootCauseWantsTraceDrill(cx.Current, cx.Baseline, cx.curErr, slowAsk)", "s.slowTraceDrill(ctx, emit, service, env, from, to)", `" + en yavaş trace kritik yolu + o trace'lerin logları"`} {
+	for _, w := range []string{"rootCauseWantsTraceDrill(cx.Current, cx.Baseline, cx.curErr, slowAsk)", "s.slowTraceDrill(ctx, emit, service, env, drillFrom, to)", `" + en yavaş trace kritik yolu + o trace'lerin logları"`} {
 		if !strings.Contains(rc, w) {
 			t.Errorf("kök-neden demeti %q taşımalı", w)
 		}

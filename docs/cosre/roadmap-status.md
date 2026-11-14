@@ -212,7 +212,7 @@ Sorular (2026-11-13 cevaplandı; kararlar en üstte "Onay" bölümünde):
 ## Router boşlukları programı (2026-11-14)
 
 Belge `docs/cosre/router-gaps-audit.md` (onay 2026-11-14, kararlar §8 öneriler). Dilim durumu
-belgenin başındaki "Durum" tablosunda. D1 ölçüm v0.10.2134, D2 A1 çipi v0.10.2135.
+belgenin başındaki "Durum" tablosunda. D1 ölçüm v0.10.2134, D2 A1 çipi v0.10.2135, D3 E sözcükleri v0.10.2136 (F durdu, operatör kararı bekliyor).
 
 ## 8. Sonraya
 

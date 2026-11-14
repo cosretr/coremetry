@@ -1936,13 +1936,17 @@ func (s *Server) copilotChatGuided(ctx context.Context, emit func(string, any), 
 	if hit := outboundSlotFrom(ctx).get(); hit != nil {
 		return s.guidedOutboundRoute(ctx, emit, *hit, question, norm, msgs, explain, ctxService, ctxOperation, anchorTo, chatLocationNamed(tzName, tzOffsetMin))
 	}
-	if !hasGuidedSignal(norm) && !followCue && !mayNameTeam(norm) && !absShape && !findCue && !peerCue && !affirm && !pasted {
+	v2 := cosreV2Marked(ctx) // v0.10.2136 — router boşlukları D3 yardımcıları yalnız v2 (chat_latency_words.go)
+	if !hasGuidedSignal(norm) && !followCue && !mayNameTeam(norm) && !absShape && !findCue && !peerCue && !affirm && !pasted &&
+		!(v2 && hasLatencyGrowthSignal(norm)) {
 		return false, false // zero-cost fast path: no catalogue read
 	}
 	svcNames, envNames := s.guidedServiceNames(ctx), s.guidedEnvNames(ctx)
 	teamNames := s.guidedTeamNames(ctx)
-	route := routeGuidedIntentExt(question, svcNames, envNames, teamNames, ctxService, s.oracleOpsEnabled(), s.guidedOutboundHosts(ctx, norm))
-	route = promoteProblemsRootCause(route, norm, cosreV2Marked(ctx)) // v0.10.2135 — yalnız v2 (chat_problems_root_cause.go)
+	routerQ := v2RouterQuestion(question, v2) // v0.10.2136 — v2: gecikme büyümesi sözcüğüne kanonik karşılık eklenir; v1 aynen
+	route := routeGuidedIntentExt(routerQ, svcNames, envNames, teamNames, ctxService, s.oracleOpsEnabled(), s.guidedOutboundHosts(ctx, norm))
+	route = promoteProblemsRootCause(route, norm, v2) // v0.10.2135 — yalnız v2 (chat_problems_root_cause.go)
+	route = v2WhyOverReport(route, norm, v2)          // v0.10.2136 — karar 5: neden > rapor, yalnız v2
 	// v0.10.479 (F4-2, G10) — TAKİP MUTASYONU: "son 1 saate genişlet" / "sadece
 	// hatalı olanlar" / "bunun pod'larını göster" / "aynı filtreyle loglara bak"
 	// → aktif bağlamın son rotası klonlanır, alan değişir, aynı dispatch; router'ın
@@ -2025,6 +2029,9 @@ func (s *Server) copilotChatGuided(ctx context.Context, emit func(string, any), 
 		}
 	}
 	rangeS, explicitRange := guidedRangeSExplicit(norm)
+	if wr, ok := v2WeekRange(route, norm, explicitRange, v2); ok { // v0.10.2136 — karar 3: "hafta" = 7 gün (servis RED, MV)
+		rangeS, explicitRange = wr, true
+	}
 	if !explicitRange && ctxRangeS > 0 {
 		rangeS = snapRangeS(ctxRangeS)
 	}
@@ -2277,7 +2284,9 @@ func (s *Server) runGuidedRoute(ctx context.Context, emit func(string, any), rou
 	var facts guidedSummaryFacts // v0.10.2101 — özet kartı (chat_summary_card.go); yalnız 3 rota doldurur
 	switch route.Intent {
 	case guidedRootCause:
-		evidence, sources, err = s.guidedRootCauseBundle(ctx, emit, route.Service, route.Env, from, to, rangeS, hasLatencyAsk(normalizeGuidedMsg(question)))
+		qn := normalizeGuidedMsg(question)
+		evidence, sources, err = s.guidedRootCauseBundle(ctx, emit, route.Service, route.Env, from, to, rangeS,
+			hasLatencyAsk(qn) || (cosreV2Marked(ctx) && hasLatencyGrowthSignal(qn))) // v0.10.2136 — v2 gecikme büyümesi sözcükleri
 	case guidedProblems:
 		if route.ProblemsRootCause { // v0.10.2135 — v2 "açık problemlerin kök nedeni" (chat_problems_root_cause.go)
 			evidence, sources, facts, err = s.guidedProblemsRootCauseBundle(ctx, emit, &route, to)
@@ -2855,7 +2864,14 @@ func (s *Server) guidedRootCauseBundle(ctx context.Context, emit func(string, an
 	// yavaşlık/timeout soruyorsa (chat_trace_drill.go).
 	drilled := false
 	if rootCauseWantsTraceDrill(cx.Current, cx.Baseline, cx.curErr, slowAsk) {
-		if _, drill, terr := s.slowTraceDrill(ctx, emit, service, env, from, to); terr != nil {
+		// v0.10.2136 — karar 3: v2'de kırılım (ham span) en çok son 24 sa; RED yukarıda tam pencere.
+		drillS := drillWindowS(rangeS, cosreV2Marked(ctx))
+		drillFrom := from
+		if drillS < rangeS {
+			drillFrom = to.Add(-time.Duration(drillS) * time.Second)
+			fmt.Fprintf(&b, "\nNot: en yavaş trace kırılımı yalnız son %s (RED penceresi son %s).\n", fmtAgoTR(drillS), fmtAgoTR(rangeS))
+		}
+		if _, drill, terr := s.slowTraceDrill(ctx, emit, service, env, drillFrom, to); terr != nil {
 			fmt.Fprintf(&b, "\nEn yavaş trace'ler OKUNAMADI (%s) — kritik yol bilinmiyor; hedef UYDURMA.\n", sourcestate.Classify(terr))
 		} else if drill != "" {
 			b.WriteString("\n" + drill)

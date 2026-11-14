@@ -378,6 +378,36 @@
           "svc-c"
         ]
       }
+    },
+    {
+      "id": "intent-slow-traces-long-running",
+      "surface": "IntentClassify",
+      "why": "v0.10.2136 (router boşlukları E): 'uzun süren' yavaş trace listesi demek; v2 router slow_traces'a götürür",
+      "user": "svc-a altında uzun süren işlemleri listele",
+      "expect": {
+        "intent": "slow_traces",
+        "intentService": "svc-a",
+        "knownEntities": [
+          "svc-a",
+          "svc-b",
+          "svc-c"
+        ]
+      }
+    },
+    {
+      "id": "intent-root-cause-latency-growth",
+      "surface": "IntentClassify",
+      "why": "v0.10.2136 (router boşlukları E): 'uzuyor' + neden = gecikme büyümesinin kök nedeni",
+      "user": "svc-a cevap süreleri neden uzuyor?",
+      "expect": {
+        "intent": "root_cause",
+        "intentService": "svc-a",
+        "knownEntities": [
+          "svc-a",
+          "svc-b",
+          "svc-c"
+        ]
+      }
     }
   ]
 }

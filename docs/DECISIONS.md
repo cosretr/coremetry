@@ -13987,3 +13987,18 @@ eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
   …"), model düşüremez.
 - Servisli soru (ekran servisi dahil) `root_cause`ta kalır. Çip metni drawerChat.ts'ten okunup pinlenir.
 - Doğrulanmadı: prod'daki 6 boşluğun hangi kademede kaçtığı (v1 harness'ında çip `problems`'a gidiyor); canlı model.
+
+## 2026-11-14 — v0.10.2136 — CoSRE router boşlukları D3: yavaşlama kök sözcükleri, neden > rapor, "hafta" (yalnız v2)
+- Tek liste `hasLatencyGrowthSignal` (chat_latency_words.go): "uzun" + sür- fiili, "uzam/uzuyor/uzad", "süre…" + "art…",
+  "gecik". Bilerek dışarıda: "uza" (uzak), "sürü" (sürüm), tek başına "süre"/"uzun"/"artış".
+- Router değişmedi: v2'de router'a giden metne mevcut sözlüğün kanonik karşılığı EKLENİR ("en uzun" → yavaş trace listesi,
+  "yavaşlama" → sağlık / gecikme); anlatıma operatörün metni gider. Sinyal kapısı ve kök-neden demetinin slowAsk'ı aynı
+  listeyi okur. v1'de hiçbiri çağrılmaz (router girdisi bayt bayt aynı).
+- Karar 5: neden sinyali + servis raporu → root_cause (servissiz netleştirmede sorulan niyet de).
+- Karar 3: "hafta/week" yalnız service_health / root_cause rotasında 7 gün; açık gün/saat penceresi, "geçen/önceki hafta"
+  ve diğer rotalar (yavaş trace listesi dahil) dokunulmaz. RED mevcut yoldan (service_summary_5m MV, VM HTTP RED; tarama
+  kendi tavanında) — ekranda 7 gün seçili iken zaten koşan yol, yeni sorgu şekli yok. v2'de kök-neden demetinin yavaş
+  trace kırılımı (ham span) en çok son 24 sa; kanıta not düşülür.
+- F (katalog dışı OP adı → "bulunamadı, en yakın"; iş kodu → guided business_code) UYGULANMADI: guided tarafında rota /
+  demet yok, karşılığı olmayan karar. Operatöre seçenek olarak sunuldu.
+- Doğrulanmadı: canlı model, prod; v2'de servisli "nedenini inceler misin" endpoint kartına gidebilir (kart kademesi önce).
