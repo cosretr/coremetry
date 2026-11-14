@@ -5,7 +5,7 @@
 import { describe, it, expect } from 'vitest';
 import { mulberry32, seedOfIds } from './prng';
 import { syntheticGraph, SYNTHETIC_SEED } from './synthetic';
-import { shouldDraw, FRAME_MIN_MS, backdropMode, thinGraph, MAX_DRAW_NODES } from './frame';
+import { shouldDraw, loopNeeded, FRAME_MIN_MS, backdropMode, thinGraph, MAX_DRAW_NODES } from './frame';
 import type { LoginSummaryEdge, LoginSummaryNode } from '@/lib/types';
 
 const NODES: LoginSummaryNode[] = [
@@ -108,5 +108,18 @@ describe('seyreltme (thinGraph)', () => {
     const minKeptSvc = Math.min(...t.nodes.filter(n => n.tier === 'svc').map(n => n.weight));
     const maxDroppedSvc = Math.max(...g.nodes.filter(n => n.tier === 'svc' && !kept.has(n.id)).map(n => n.weight));
     expect(minKeptSvc).toBeGreaterThanOrEqual(maxDroppedSvc);
+  });
+});
+
+describe('loopNeeded (v0.10.2150 — hareketsiz kipte tık)', () => {
+  it('hareketli kipte döngü hep yaşar', () => {
+    expect(loopNeeded(true, 0, false)).toBe(true);
+  });
+  it('hareketsiz kipte kendiliğinden döngü yok', () => {
+    expect(loopNeeded(false, 0, false)).toBe(false);
+  });
+  it('hareketsiz kipte uçan yıldız ya da halka varken döngü yaşar, bitince durur', () => {
+    expect(loopNeeded(false, 3, false)).toBe(true);
+    expect(loopNeeded(false, 0, true)).toBe(true);
   });
 });

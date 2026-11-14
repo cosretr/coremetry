@@ -21,12 +21,14 @@
 // kuyruk --teal İÇİ BOŞ halka; ikisi de adıyla (veritabanı adı / konu), her ad bir kez. Parıltı gücü zeminin koyuluğuna göre (koyu temada güçlü).
 // Performans: 30 fps tavanı, DPR ≤ 2, `document.hidden`'da rAF durur,
 // `prefers-reduced-motion`'da kendiliğinden hareket yok (sürükleme çalışır).
+// v0.10.2150 — o kipte TIK da çalışır: yıldız uçarken geçici kare döngüsü koşar,
+// bitince durur (uzak masaüstü oturumları animasyonu kapalı bildirir; tık ölüydü).
 // Galaksi ilk gelen grafikle BİR KEZ kurulur. Dekoratif: aria-hidden; olay alır
 // (sürükleme) — kart ve üst çubuk üstte olduğundan yalnız kart DIŞINDA.
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { chartMonoFont, resolveVar } from '@/lib/chart/resolveVar';
 import { useThemeTick } from '@/lib/useThemeTick';
-import { MAX_LABELS, shouldDraw, thinGraph } from '@/lib/loginTopology/frame';
+import { MAX_LABELS, loopNeeded, shouldDraw, thinGraph } from '@/lib/loginTopology/frame';
 import {
   buildGalaxy, depthOf, edgeVisible, flowPos, isDarkColor, placeLabels, type Box, type LabelCand, nodeAlpha, nodeRadius, pickBackendLabels, pickLabelSet, project, spinRate,
   TILT0, TILT_MAX, TILT_MIN, wantsLabel, type Galaxy, type Pt, type View,
@@ -349,12 +351,13 @@ export default function TopologyBackdrop({ graph, animated, pace = 0.6, avoidRef
         orbit, gone,
       }));
     };
-    const paintStill = () => paint(0, true);
+    // Durağan karede de saat işler: uçan yıldız / patlama / halka tSec'e bakar (parıltı ve akış `still` ile sabit).
+    const paintStill = () => paint((performance.now() - t0) / 1000, true);
     const tick = (now: number) => {
       raf = 0;
       if (document.hidden) return; // görünür olunca visibilitychange yeniden başlatır
       const dt = Math.min(0.1, (now - prev) / 1000); prev = now;
-      if (!dragging) {
+      if (!dragging && animated) {
         st.angle += st.vel * dt; st.tilt += st.tiltVel * dt;
         const fr = Math.pow(0.12, dt); st.vel *= fr; st.tiltVel *= fr; // bırakınca yavaşça durur
         st.angle += spinRate(paceRef.current) * dt; // dönüş hızı = throughput temposu
@@ -364,10 +367,13 @@ export default function TopologyBackdrop({ graph, animated, pace = 0.6, avoidRef
       // yıldız uçarken kare atlanmaz (akıcı uçuş); aksi kare bütçesi aynen
       if (bangT0 >= 0 && (now - t0) / 1000 - bangT0 > BH_TOTAL) bangT0 = -1;
       if (orbit && orbitProgress(orbit.t0, (now - t0) / 1000) === null) orbit = null;
-      if (sparks.length || bangT0 >= 0 || orbit || shouldDraw(now, last)) { last = now; paint((now - t0) / 1000, false); }
-      raf = requestAnimationFrame(tick);
+      if (sparks.length || bangT0 >= 0 || orbit || shouldDraw(now, last)) { last = now; paint((now - t0) / 1000, !animated); }
+      // Hareketsiz kipte döngü yalnız tıkla başlayan hareket sürerken yaşar; bitince son temiz kare.
+      if (loopNeeded(animated, sparks.length, orbit !== null)) raf = requestAnimationFrame(tick);
+      else paintStill();
     };
-    const start = () => { if (animated && !raf && !document.hidden) { prev = performance.now(); raf = requestAnimationFrame(tick); } };
+    const kick = () => { if (!raf && !document.hidden) { prev = performance.now(); raf = requestAnimationFrame(tick); } };
+    const start = () => { if (loopNeeded(animated, sparks.length, orbit !== null)) kick(); };
     const onVis = () => { if (document.hidden) { if (raf) cancelAnimationFrame(raf); raf = 0; } else start(); };
 
     // ── sürükleme: bütün galaksi BİRLİKTE döner (yatay) ve eğilir (dikey) ──
@@ -416,7 +422,7 @@ export default function TopologyBackdrop({ graph, animated, pace = 0.6, avoidRef
       dragging = false;
       // Kısa ve yerinde basış = tık: üzerindeki noktadan bağlı noktalara yıldız (hızlı tık → daha çok).
       const p = local(e), now = performance.now();
-      const hit = animated && now - downT < 350 && Math.hypot(p.x - downX, p.y - downY) < 6 ? hitAt(p) : -1; // dokunmatikte hover yok
+      const hit = now - downT < 350 && Math.hypot(p.x - downX, p.y - downY) < 6 ? hitAt(p) : -1; // dokunmatikte hover yok
       if (hit >= 0) {
         st.vel = 0; st.tiltVel = 0; // tık galaksiyi savurmasın
         clicks.push(now); while (clicks.length > 20) clicks.shift();
@@ -433,6 +439,7 @@ export default function TopologyBackdrop({ graph, animated, pace = 0.6, avoidRef
           const targets = sparkTargets(galaxy, hit);
           if (targets.length) sparks = pruneSparks([...sparks, ...spawnSparks(hit, targets, nowSec, burstSize(clicks, now))], nowSec);
         }
+        start(); // hareketsiz kipte: yıldız uçarken geçici döngü
       }
       canvas.releasePointerCapture?.(e.pointerId);
       canvas.style.cursor = 'grab';
