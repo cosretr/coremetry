@@ -174,11 +174,6 @@
       "count": 10
     }
   },
-  "src/pages/Clusters.tsx": {
-    "ui/no-raw-element": {
-      "count": 3
-    }
-  },
   "src/pages/Dashboard.tsx": {
     "ui/no-raw-element": {
       "count": 3
@@ -330,11 +325,6 @@
     }
   },
   "src/pages/alerts/ThresholdField.tsx": {
-    "ui/no-raw-element": {
-      "count": 1
-    }
-  },
-  "src/pages/clusters/NamespaceCombobox.tsx": {
     "ui/no-raw-element": {
       "count": 1
     }

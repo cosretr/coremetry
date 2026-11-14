@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { TabStrip } from '@/components/ui/TabStrip'; // v0.10.457 (D5 dilim B)
 import { rowActivation, stopRowClick } from '@/lib/a11y'; // v0.10.455 (dış denetim D3 dilim 3); v0.10.1414 pod satırı linki
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { useQuery, useQueries } from '@tanstack/react-query';
@@ -22,8 +21,13 @@ import { clusterSearch } from '@/pages/clusters/clusterSearch'; // v0.10.928 (Y1
 import { MultiLineChart } from '@/components/MultiLineChart';
 import { Topbar } from '@/components/Topbar';
 import { Spinner, Empty } from '@/components/Spinner';
-import { Drawer, DrawerSection } from '@/components/ui';
 import { Button } from '@/components/shadcn/button';
+import { Tabs, TabsList, TabsTrigger } from '@/components/shadcn/tabs';
+import { NativeSelect, NativeSelectOption } from '@/components/shadcn/native-select';
+import { FilterBar, type FilterChip } from '@/components/coremetry/FilterBar';
+import { DetailSheet, SheetSection, useSheetParam } from '@/components/coremetry/DetailSheet';
+import { CheckboxField } from '@/components/coremetry/Field';
+import { FIELD_SURFACE } from '@/components/coremetry/Field/fieldSurface';
 import { ClusterCard } from '@/pages/clusters/ClusterCard';
 import { clusterState, fleetSentence, cpuUsageText, memUsageText, usageTone } from '@/pages/clusters/fleetSummary';
 import { api } from '@/lib/api';
@@ -189,17 +193,13 @@ export default function ClustersPage() {
   // ?ns=<cluster>|<namespace> — namespace trend drawer'ı (v0.9.5).
   // ?namespace= FİLTRESİNDEN bağımsız param: filtre ve drawer
   // birbirini engellemez (audit kısıtı).
-  const nsDrawerParam = params.get('ns');
-  const openNsDrawer = (r: ClusterNamespaceRow) => setParams(prev => {
-    const next = new URLSearchParams(prev);
-    next.set('ns', `${r.cluster}|${r.namespace}`);
-    return next;
-  }, { replace: true });
-  const closeNsDrawer = () => setParams(prev => {
-    const next = new URLSearchParams(prev);
-    next.delete('ns');
-    return next;
-  }, { replace: true });
+  // Clusters S5 (v0.10.2170) — çekmece coremetry/DetailSheet, açıklık
+  // useSheetParam ile (sayfanın öteki çekmeceleriyle aynı sözleşme): açılış
+  // geçmişe girer (Geri çekmeceyi kapatır), kapanış replace; yabancı
+  // parametre korunur. Eskiden ikisi de replace idi.
+  const [nsDrawerParam, setNsDrawerParam] = useSheetParam('ns');
+  const openNsDrawer = (r: ClusterNamespaceRow) => setNsDrawerParam(`${r.cluster}|${r.namespace}`);
+  const closeNsDrawer = () => setNsDrawerParam(null);
 
   // v0.9.151 — pod'a tıklama artık cramped drawer yerine TAM /pod detay
   // sayfasına gider (H.Polat önerisi). r.service (eşleşen Coremetry servisi,
@@ -426,7 +426,11 @@ export default function ClustersPage() {
     return next;
   }, { replace: true });
   const qLower = q.trim().toLowerCase();
-  const qRef = useRef<HTMLInputElement>(null);
+  // Arama kutusu FilterBar'ın içinde (ref almaz): "eşleşme yok → süzgeci
+  // temizle" odağı kutuya döndürebilsin diye kutu sarmalayıcıdan bulunur.
+  const filterBarRef = useRef<HTMLDivElement>(null);
+  const qRef = useRef<HTMLInputElement | null>(null);
+  useEffect(() => { qRef.current = filterBarRef.current?.querySelector('input') ?? null; });
 
   const nsFilter = params.get('namespace') ?? '';
   const clearNs = () => setParams(prev => {
@@ -443,6 +447,22 @@ export default function ClustersPage() {
     const next = new URLSearchParams(prev);
     next.delete('deployment');
     return next;
+  }, { replace: true });
+  // Clusters S5 — etkin süzgeçler FilterBar çipi olarak (kategori, durum
+  // değil: nötr çip). Çip kaldırılınca o süzgecin kendi temizleme kuralı
+  // koşar (namespace gidince deployment da gider), tek URL yazımında.
+  const filterChips = useMemo<FilterChip[]>(() => [
+    ...(nsFilter ? [{ key: 'namespace', op: '=' as const, value: nsFilter }] : []),
+    ...(depFilter ? [{ key: 'workload', op: '=' as const, value: depFilter }] : []),
+    ...(svcFilter ? [{ key: 'service', op: '=' as const, value: svcFilter }] : []),
+  ], [nsFilter, depFilter, svcFilter]);
+  const onFilterChips = (next: FilterChip[]) => setParams(prev => {
+    const kept = new Set(next.map(c => c.key));
+    const p = new URLSearchParams(prev);
+    if (!kept.has('namespace')) { p.delete('namespace'); p.delete('deployment'); }
+    if (!kept.has('workload')) p.delete('deployment');
+    if (!kept.has('service')) p.delete('service');
+    return p;
   }, { replace: true });
   const depQ = useQuery({
     queryKey: ['cluster-deployments', clusterParam, nsFilter],
@@ -716,70 +736,53 @@ export default function ClustersPage() {
         {/* ── Detay: geri → Nodes → Pods ───────────────────────── */}
         {isDetail && (
           <>
-            <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div className="cl-detail-head">
               <Button variant="link" size="xs" onClick={backToOverview}>
                 ← All clusters
               </Button>
-              <span className="cluster-name" style={{ fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 600 }}>
-                {clusterParam}
-              </span>
+              <span className="cl-detail-name"><span className="cluster-name">{clusterParam}</span></span>
+              {/* v0.10.922 (sade palet adım 1) — K5: erişilebilir = normal
+                  durum, NÖTR metin (yeşil rozet yok). */}
               {detailSummaryQ.isError
                 ? <span className="badge b-err">unreachable</span>
                 : (observed.size > 0 && !observed.has(clusterParam))
                   ? <span className="badge b-warn" title="Name not seen in the last 24h of telemetry — the service pivot will not match">not in telemetry</span>
-                  : <span style={{ fontSize: 11, color: 'var(--text3)' }}>reachable</span>}
-              {/* v0.10.922 (sade palet adım 1) — K5: erişilebilir = normal
-                  durum, NÖTR metin (yeşil rozet yok). Süzgeç çipleri
-                  kategori, durum değil → b-gray (davranış aynı). */}
-              {nsFilter && (
-                <span className="badge b-gray" style={{ cursor: 'pointer' }}
-                  onClick={clearNs}
-                  title="Namespace filter (service-page pivot) — click to clear">
-                  namespace: {nsFilter} ✕
-                </span>
-              )}
-              {depFilter && (
-                <span className="badge b-gray" style={{ cursor: 'pointer' }}
-                  onClick={clearDep}
-                  title="Workload filter — click to clear">
-                  workload: {depFilter} ✕
-                </span>
-              )}
-              {svcFilter && (
-                <span className="badge b-gray" style={{ cursor: 'pointer' }}
-                  onClick={clearSvc}
-                  title="Service filter (service-page pivot) — click to clear">
-                  service: {svcFilter} ✕
-                </span>
-              )}
-              <input ref={qRef} value={q}
-                onChange={e => setQ(e.target.value)}
-                placeholder="Filter by name…"
-                title="Filters nodes, namespaces and pods by name substring"
-                style={{ marginLeft: 'auto', width: 220, padding: '4px 10px', fontSize: 12,
-                         background: 'var(--field-bg)', color: 'var(--text)',
-                         border: '1px solid var(--border)', borderRadius: 4 }} />
+                  : <span className="cl-status">reachable</span>}
+            </div>
+
+            {/* Clusters S5 (v0.10.2170) — süzgeç satırı coremetry/FilterBar:
+                ad araması (?q=) + etkin süzgeç çipleri (namespace / workload /
+                service; çipteki ✕ o süzgeci kaldırır). Eskiden başlık
+                satırındaki ham <input> ve tıklanınca silinen rozetlerdi;
+                davranış ve URL sözleşmesi aynı. */}
+            <div ref={filterBarRef} className="cl-filter-row">
+              <FilterBar chips={filterChips} onChange={onFilterChips}
+                query={{ value: q, onChange: setQ, placeholder: 'Filter by name…' }} />
             </div>
 
             {/* v0.9.8 — sekme şeridi (OpenShift konsolu tarzı). Sayaçlar
-                yalnız veri yüklendiyse — sayaç için önden fetch YOK. */}
-            <TabStrip ariaLabel="Cluster bölümleri" value={section} onChange={k => setSection(k)} style={{ marginBottom: 12 }} tabs={[
-              { key: 'overview', label: 'Overview' },
-              { key: 'nodes', label: `Nodes${section === 'nodes' && nodeRows.length > 0 ? ` (${nodeRows.length})` : ''}` },
-              { key: 'namespaces', label: `Namespaces${section === 'namespaces' && nsRows.length > 0 ? ` (${nsRows.length})` : ''}` },
-              { key: 'pods', label: `Pods${section === 'pods' && rows.length > 0 ? ` (${rows.length})` : ''}` },
-            ]}>
+                yalnız veri yüklendiyse — sayaç için önden fetch YOK.
+                Clusters S5 — ui/TabStrip → shadcn Tabs (çizgi varyantı);
+                içerik sekmeye göre aşağıda koşullu çizilir (TabsContent yok,
+                Messaging emsali): sekme başına fetch kapısı aynı kalır. */}
+            <div className="cl-tabs-row">
+              <Tabs value={section} onValueChange={k => setSection(k)}>
+                <TabsList variant="line" aria-label="Cluster bölümleri">
+                  <TabsTrigger value="overview">Overview</TabsTrigger>
+                  <TabsTrigger value="nodes">{`Nodes${section === 'nodes' && nodeRows.length > 0 ? ` (${nodeRows.length})` : ''}`}</TabsTrigger>
+                  <TabsTrigger value="namespaces">{`Namespaces${section === 'namespaces' && nsRows.length > 0 ? ` (${nsRows.length})` : ''}`}</TabsTrigger>
+                  <TabsTrigger value="pods">{`Pods${section === 'pods' && rows.length > 0 ? ` (${rows.length})` : ''}`}</TabsTrigger>
+                </TabsList>
+              </Tabs>
               {/* v0.9.34 (F3) — namespace typeahead, sağ hizalı. Seçim
                   ?namespace= yazıp Namespaces (deployments) görünümüne
                   geçer; native select DEĞİL. */}
-              <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <NamespaceCombobox
-                  namespaces={(nsQs[0]?.data?.namespaces ?? []).map(r => r.namespace)}
-                  value={nsFilter}
-                  onPick={ns => setSection('namespaces', p => { p.set('namespace', ns); p.delete('deployment'); })}
-                  onClear={() => setSection('namespaces', p => { p.delete('namespace'); p.delete('deployment'); })} />
-              </div>
-            </TabStrip>
+              <NamespaceCombobox
+                namespaces={(nsQs[0]?.data?.namespaces ?? []).map(r => r.namespace)}
+                value={nsFilter}
+                onPick={ns => setSection('namespaces', p => { p.set('namespace', ns); p.delete('deployment'); })}
+                onClear={() => setSection('namespaces', p => { p.delete('namespace'); p.delete('deployment'); })} />
+            </div>
 
             {detailUnreachable ? (
               <Empty icon="✗" title={`${clusterParam} is unreachable`}>
@@ -1235,24 +1238,22 @@ function NamespaceDrawer({ cluster, namespace, range, onClose, onZoom, onZoomRes
     return timeRangeToNs(range);
   }, [range, tw]);
 
+  // Clusters S5 (v0.10.2170) — ui/Drawer → coremetry/DetailSheet (Radix odak
+  // yönetimi + ortak Esc yığını); ham <select> → shadcn NativeSelect. İçerik,
+  // ?ns / ?tw sözleşmesi ve "yalnız açılınca fetch" aynı.
   return (
-    <Drawer onClose={onClose} header={
-      <>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 600 }}>
-          {namespace}
-        </span>
-        <span className="badge b-gray" title="cluster">{cluster}</span>
-      </>
-    }>
-      <DrawerSection title="Per-pod trend (per minute)">
-        <div style={{ marginBottom: 8 }}>
-          <select value={tw} onChange={e => setTw(e.target.value)}
-            style={{ fontSize: 11 }}
-            title="Trend window — independent of the page range">
+    <DetailSheet open onOpenChange={o => { if (!o) onClose(); }}
+      title={<span className="mono">{namespace}</span>}
+      badges={<span className="badge b-gray" title="cluster">{cluster}</span>}>
+      <SheetSection title="Per-pod trend (per minute)">
+        <div className="cl-sheet-tools">
+          <NativeSelect size="sm" className={FIELD_SURFACE} value={tw} onChange={e => setTw(e.target.value)}
+            aria-label="Trend penceresi"
+            title="Trend penceresi — sayfa aralığından bağımsız">
             {TREND_WINDOWS.map(w => (
-              <option key={w.key} value={w.key}>{w.label}</option>
+              <NativeSelectOption key={w.key} value={w.key}>{w.label}</NativeSelectOption>
             ))}
-          </select>
+          </NativeSelect>
         </div>
         {/* Madde 4 sweep — drawer'da zoom sayfa range'ine yazar; ?tw= yerel
             penceresi zoom'un görünmesini engellemesin diye '' (Page range)'e
@@ -1266,8 +1267,8 @@ function NamespaceDrawer({ cluster, namespace, range, onClose, onZoom, onZoomRes
           fromNs={from} toNs={to}
           onZoom={onZoom ? (f, t) => onZoom(f, t, { clearTw: true }) : undefined}
           onZoomReset={onZoomReset ? () => { if (tw) { setTw(''); return; } onZoomReset(); } : undefined} />
-      </DrawerSection>
-    </Drawer>
+      </SheetSection>
+    </DetailSheet>
   );
 }
 
@@ -1300,12 +1301,10 @@ function AlertsPanel({ alerts, criticalOnly, onToggle }: {
   const shown = criticalOnly ? alerts.filter(a => a.severity === 'critical') : alerts;
   return (
     <ClusterCard header={
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-        <span>Firing alerts <span className="badge b-err" style={{ marginLeft: 4 }}>{alerts.length}</span></span>
-        <label style={{ fontSize: 11, color: 'var(--text3)', display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer', fontWeight: 400 }}>
-          <input type="checkbox" checked={criticalOnly} onChange={e => onToggle(e.target.checked)} />
-          critical only
-        </label>
+      <div className="cl-alerts-head">
+        <span>Firing alerts <span className="badge b-err cl-alerts-count">{alerts.length}</span></span>
+        {/* Clusters S5 — ham onay kutusu → coremetry CheckboxField (shadcn). */}
+        <CheckboxField label="critical only" checked={criticalOnly} onCheckedChange={onToggle} />
       </div>
     }>
       <div style={{ display: 'grid', gap: 2, maxHeight: 320, overflowY: 'auto' }}>

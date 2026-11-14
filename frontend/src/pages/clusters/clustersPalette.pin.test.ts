@@ -19,10 +19,14 @@ describe('Clusters — sade palet adım 1', () => {
   it('kategoriler nötr: b-info yok, rol ve süzgeç çipleri b-gray', () => {
     expect(src).not.toMatch(/\bb-info\b/);
     expect(src).toContain('<span className="badge b-gray">{r.role}</span>');
-    expect(src.match(/className="badge b-gray" style=\{\{ cursor: 'pointer' \}\}/g)?.length).toBe(3);
+    // Clusters S5 — süzgeç çipleri coremetry/FilterBar çipi (nötr, ✕ ile
+    // kaldırılır); tıklanınca silinen b-gray rozetleri kalktı.
+    expect(src).toContain('<FilterBar chips={filterChips}');
+    expect(src).not.toMatch(/className="badge b-gray" style=\{\{ cursor: 'pointer' \}\}/);
   });
   it('healthy/reachable kelimeleri --text3 metin olarak kalır', () => {
-    expect(src).toContain(`<span style={{ fontSize: 11, color: 'var(--text3)' }}>reachable</span>`);
+    // Clusters S5 — satır içi --text3 metni nötr .cl-status sınıfına taşındı.
+    expect(src).toContain('<span className="cl-status">reachable</span>');
     // Clusters S4 — liste kartının "healthy" rozeti düz sözcük "sağlıklı" oldu
     // (D1); kalan tek "healthy" Namespaces tablosunun Health hücresi.
     expect(src.match(/color: 'var\(--text3\)' \}\}>healthy<\/span>/g)?.length).toBe(1);

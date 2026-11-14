@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { IconButton } from '@/components/ui';
+import { Input } from '@/components/shadcn/input';
+import { Button } from '@/components/shadcn/button';
+import { FIELD_SURFACE } from '@/components/coremetry/Field/fieldSurface';
 
 // NamespaceCombobox — namespace typeahead (v0.9.34, design handoff
 // "Namespace typeahead"). Native <select> DEĞİL (yüzlerce seçenek):
@@ -37,64 +39,49 @@ export function NamespaceCombobox({ namespaces, value, onPick, onClear }: {
 
   const pick = (ns: string) => { onPick(ns); setOpen(false); setQuery(''); };
 
+  // Clusters S5 (v0.10.2170, plan §0 D4) — shadcn giydirmesi: ham <input>
+  // → shadcn Input, ui/IconButton → shadcn Button, satır içi stil + JS hover
+  // → .cl-ns sınıfları. Davranış (odakta açılır, N of M, ~80 render tavanı,
+  // All namespaces, ✕) aynı.
+  // D4 İSTİSNASI (picker kuralı): liste lazy/sunucu aramalı DEĞİL, eager —
+  // gerekçe: seçenekler cluster'ın tam namespace kümesi, Namespaces sorgusuyla
+  // zaten çekilmiş (ek fetch yok) ve ≤ birkaç yüz; istemci süzgeci yeter.
   return (
-    <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
-      <input
+    <div ref={ref} className="cl-ns">
+      <Input
+        className={`cl-ns__input ${FIELD_SURFACE}`}
         value={open ? query : value}
         onFocus={() => setOpen(true)}
         onChange={e => { setQuery(e.target.value); if (!open) setOpen(true); }}
-        placeholder={value || 'Filter namespaces…'}
-        style={{
-          width: 220, padding: '4px 10px', fontSize: 12,
-          background: 'var(--field-bg)', color: 'var(--text)',
-          border: '1px solid var(--border)', borderRadius: 4,
-        }} />
-      {/* v0.10.924 — buton bütünlüğü Faz 2: `all: unset` ✕ → IconButton bare
-          (odak halkası geri geliyor). Eski satır-içi `position: absolute`
-          `all: unset`ten ÖNCE yazıldığı için hiç uygulanmıyordu — ✕ girdinin
-          yanında akıyordu; o yerleşim korunur. */}
+        aria-label="Filter namespaces"
+        placeholder={value || 'Filter namespaces…'} />
+      {/* v0.10.924 — ✕ girdinin yanında akar (eski yerleşim korunur). */}
       {value && !open && (
-        <IconButton variant="bare" size="xs" icon="✕" onClick={onClear}
-          aria-label="Clear namespace" tooltip="Clear namespace" />
+        <Button variant="ghost" size="icon-xs" onClick={onClear}
+          aria-label="Clear namespace" title="Clear namespace">✕</Button>
       )}
       {open && (
-        <div style={{
-          position: 'absolute', left: 0, top: 'calc(100% + 4px)', zIndex: 'var(--z-dropdown)',
-          minWidth: 240, maxWidth: 320,
-          background: 'var(--bg2)', border: '1px solid var(--border)',
-          borderRadius: 6, boxShadow: '0 8px 24px rgba(0,0,0,0.30)', padding: 6,
-        }}>
-          <div style={{
-            fontSize: 10, color: 'var(--text3)', padding: '2px 8px 6px',
-            textTransform: 'uppercase', letterSpacing: '.06em',
-          }}>
+        <div className="cl-ns__pop">
+          <div className="cl-ns__head">
             {filtered.length} of {namespaces.length} namespaces
           </div>
-          <div style={{ maxHeight: 300, overflowY: 'auto' }}>
-            <div onClick={() => { onClear(); setOpen(false); setQuery(''); }}
-              style={{ padding: '5px 8px', fontSize: 12, cursor: 'pointer', color: 'var(--accent2)', borderRadius: 3 }}
-              onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg3)')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+          <div className="cl-ns__list">
+            <div className="cl-ns__opt cl-ns__opt--all" onClick={() => { onClear(); setOpen(false); setQuery(''); }}>
               All namespaces
             </div>
             {shown.map(n => (
-              <div key={n} onClick={() => pick(n)} className="mono"
-                style={{
-                  padding: '5px 8px', cursor: 'pointer', borderRadius: 3,
-                  background: n === value ? 'var(--bg3)' : undefined,
-                }}
-                onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg3)')}
-                onMouseLeave={e => (e.currentTarget.style.background = n === value ? 'var(--bg3)' : 'transparent')}>
+              <div key={n} onClick={() => pick(n)}
+                className={`mono cl-ns__opt${n === value ? ' is-sel' : ''}`}>
                 {n}
               </div>
             ))}
             {overflow > 0 && (
-              <div style={{ padding: '6px 8px', fontSize: 11, color: 'var(--text3)', fontStyle: 'italic' }}>
+              <div className="cl-ns__note">
                 +{overflow} more — refine search
               </div>
             )}
             {filtered.length === 0 && (
-              <div style={{ padding: 8, fontSize: 11, color: 'var(--text3)', fontStyle: 'italic' }}>
+              <div className="cl-ns__note">
                 No namespace matches “{query}”.
               </div>
             )}

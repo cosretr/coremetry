@@ -5201,6 +5201,28 @@ a.sec.trl-csv, a.sec.trl-csv:hover, a.sec.trl-csv:active { padding: 5px 10px; fo
 /* Namespace satırındaki trend düğmesi (shadcn ghost): simge bağlantı renginde. */
 .cl-trend-btn { color: var(--accent2); }
 .cl-promql__q { margin: 0; padding: 7px 9px; border: 1px solid var(--border); border-radius: var(--radius-xs); background: var(--bg2); font-size: var(--fs-xs); white-space: pre-wrap; word-break: break-all; color: var(--text2); }
+/* Clusters S5 (v0.10.2170) — detay başlığı, FilterBar satırı, shadcn Tabs
+   satırı (sağda namespace seçici), namespace trend çekmecesi araç satırı,
+   alarm kartı başlığı. Değerler eski satır içi stillerden. */
+.cl-detail-head { display: flex; align-items: center; gap: var(--sp-5); margin-bottom: var(--sp-6); }
+.cl-detail-name { font-family: var(--font-mono); font-size: 14px; font-weight: 600; }
+.cl-filter-row { margin-bottom: var(--sp-6); }
+.cl-tabs-row { display: flex; align-items: center; gap: var(--sp-4); margin-bottom: var(--sp-6); }
+.cl-tabs-row > .cl-ns { margin-left: auto; }
+.cl-sheet-tools { margin-bottom: var(--sp-4); }
+.cl-alerts-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-4); }
+.badge.cl-alerts-count { margin-left: var(--sp-2); }
+/* NamespaceCombobox (plan §0 D4: eager liste, shadcn giydirmesi). Açılır
+   kutu içeriğe açılır (left: 0, ColumnManager v0.8.76 dersi). */
+.cl-ns { position: relative; display: inline-flex; align-items: center; gap: var(--sp-2); }
+.cl-ns__input { width: 220px; height: 28px; padding: 4px 10px; font-size: var(--fs-sm); }
+.cl-ns__pop { position: absolute; left: 0; top: calc(100% + 4px); z-index: var(--z-dropdown); min-width: 240px; max-width: 320px; padding: var(--sp-3); background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-sm); box-shadow: var(--shadow-pop); }
+.cl-ns__head { padding: 2px 8px 6px; font-size: var(--fs-2xs); color: var(--text3); text-transform: uppercase; letter-spacing: .06em; }
+.cl-ns__list { max-height: 300px; overflow-y: auto; }
+.cl-ns__opt { padding: 5px 8px; font-size: var(--fs-sm); cursor: pointer; border-radius: 3px; }
+.cl-ns__opt:hover, .cl-ns__opt.is-sel { background: var(--bg3); }
+.cl-ns__opt--all { color: var(--accent2); }
+.cl-ns__note { padding: 6px 8px; font-size: var(--fs-xs); color: var(--text3); font-style: italic; }
 
 /* ── Copilot araç-çağrısı paneli — v0.10.161 (etüt seçenek A «Adım listesi»).
    Çipler kapalı hâl; DisclosureButton özet satırı + balon içi tablo. ── */
