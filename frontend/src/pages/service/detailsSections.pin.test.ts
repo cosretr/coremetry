@@ -29,3 +29,27 @@ describe('Details bölüm başlıkları (v0.10.715)', () => {
     expect(ep).toContain("scopeCluster ? 'combined' : parseEndpointsMode(");
   });
 });
+
+// S0 karakterizasyon (docs/frontend/service-tabs-plan.md §5): bölüm
+// kimlikleri (dtl-*) ve #deploys çapası derin link / CoSRE product_guide
+// hedefidir — S1/S2 (kapalı satır, ToC kalkar) sonrasında da yaşar; sıra
+// v0.10.151 operatör kararı (Clusters + Database en üstte). Clusters ve
+// Database açık kalır (DBQueriesPanel defaultOpen).
+describe('Details bölüm kimlikleri ve sırası (S0)', () => {
+  const all = svc + ep + metrics;
+  it('dtl-* kimlikleri ve #deploys çapası var', () => {
+    for (const id of ['dtl-props', 'dtl-clusters', 'dtl-db', 'dtl-endpoints', 'dtl-perf', 'dtl-metrics', 'dtl-latency', 'dtl-runtime', 'deploys']) {
+      expect(all).toMatch(new RegExp(`id="${id}"`));
+    }
+  });
+  it('sıra: Props → Clusters → Database → Endpoints → Performance → Latency → Runtime', () => {
+    const at = (s: string) => svc.indexOf(s);
+    const order = ['id="dtl-props"', 'id="dtl-clusters"', 'id="dtl-db"', '<DetailsEndpointsSection', 'id="dtl-perf"', 'id="dtl-latency"', 'id="dtl-runtime"', 'id="deploys"'];
+    for (const s of order) expect(at(s), s).toBeGreaterThan(-1);
+    for (let i = 1; i < order.length; i++) expect(at(order[i]), order[i]).toBeGreaterThan(at(order[i - 1]));
+  });
+  it('Clusters ve Database açık: kapanır satıra alınmaz', () => {
+    expect(svc).toContain('<ServiceClusterBreakdown service={svc} range={range} />');
+    expect(svc).toMatch(/<DBQueriesPanel[\s\S]*?defaultOpen \/>/);
+  });
+});
