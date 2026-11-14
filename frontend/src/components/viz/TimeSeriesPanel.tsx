@@ -93,6 +93,18 @@ export interface TSThreshold {
 
 export type TSMode = 'line' | 'area' | 'bars' | 'stacked';
 
+// v0.10.2146 (servis sekmeleri S7, docs/frontend/service-tabs-plan.md §4) —
+// zarf: çizilen çizgilerin ARKASINDA, `lo` ile `hi` arası dolgulu alan (çok
+// serili grafiğin yayılımı; hesap lib/chart/seriesEnvelope). Kenarlar çizgi
+// olarak görünmez, lejanta / tooltip'e / odak-yakınlığına girmez; y ekseni
+// onları kapsar. Anomali bantlarıyla (`?bands`) ilgisi yok.
+export interface TSEnvelope {
+  lo: TSSeries;
+  hi: TSSeries;
+  /** CSS rengi (değişken olabilir); varsayılan --text3. Dolgu saydam basılır. */
+  fill?: string;
+}
+
 interface TimeSeriesPanelProps {
   series: TSSeries[];
   deploys?: number[];          // unix ns — dashed vline + ▼ flag per deploy
@@ -145,6 +157,8 @@ interface TimeSeriesPanelProps {
   // (eksik bucket'lar köprülenir, kopukluk kalkar). Metrik "gerçek değer"
   // disiplini için VARSAYILAN kapalı; yalnız çağıran (RuntimeCharts) açar.
   smooth?: boolean;
+  // v0.10.2146 (S7) — ADDİTİF: verilmezse çıktı bugünküyle birebir aynı.
+  envelope?: TSEnvelope;
 }
 
 // v0.9.75 (chart-consolidation Adım 0) — resolveColor lib/chart/
@@ -155,6 +169,13 @@ interface TimeSeriesPanelProps {
 // through unchanged (uPlot still strokes/fills, just opaque-ish — acceptable).
 function withAlpha(hex: string, aa: string): string {
   return /^#[0-9a-fA-F]{6}$/.test(hex) ? hex + aa : hex;
+}
+
+// envelopeFill — zarf dolgusu: token çözülür, hex ise ~%13 alfa eklenir.
+// Varsayılan --text3 (nötr gri); token çözülemezse yedek :root'taki gerçek değer.
+export function envelopeFill(fill?: string): string {
+  const c = resolveColor(fill ?? 'var(--text3)');
+  return withAlpha(c.startsWith('var(') ? '#a6a6ae' : c, '22');
 }
 
 // toHex (breach-band tint yardımcısı) Grafana-parite M3'te kalktı — threshold
@@ -175,7 +196,7 @@ interface LegendRow {
 
 export function TimeSeriesPanel({
   series, deploys, events, thresholds, regions, height, mode = 'line', logScale, syncKey, onZoom, onZoomReset, hideLegend, smooth,
-  zoomWindow, hiddenLabels, focusedLabel, onCursorTime, onExemplarClick, xRange,
+  zoomWindow, hiddenLabels, focusedLabel, onCursorTime, onExemplarClick, xRange, envelope,
 }: TimeSeriesPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   // Live per-series visibility, kept in a ref so legend clicks don't rebuild
@@ -249,8 +270,12 @@ export function TimeSeriesPanel({
   // Downsample each series to ≤2000 points BEFORE uPlot (gap-aware), then
   // re-align onto a union x grid. Memoised on series identity so we don't
   // re-decimate on unrelated renders (parents MUST memoise the series array).
+  // v0.10.2146 (S7) — zarf kenarları veri matrisinin SONUNA eklenir (uPlot
+  // dizinleri: n+1 = lo, n+2 = hi). `series` ile dizinlenen her yer (lejant,
+  // tooltip, görünürlük, exemplar) bu yüzden değişmeden kalır.
+  const plotted = useMemo(() => (envelope ? [...series, envelope.lo, envelope.hi] : series), [series, envelope]);
   const prepared = useMemo(() => {
-    const perSeries = series.map(s => {
+    const perSeries = plotted.map(s => {
       const xs = s.points.map(p => p.time / 1e9);
       const ys = s.points.map(p => p.value);
       const ds = downsampleXY(xs, ys, MAX_POINTS);
@@ -265,7 +290,7 @@ export function TimeSeriesPanel({
       return times.map(t => byT.get(t) ?? null);
     });
     return { times, ySeries };
-  }, [series]);
+  }, [plotted]);
 
   // Per-series stats for the legend, over raw (pre-downsample) values.
   const legendRows = useMemo<LegendRow[]>(() => series.map((s, i) => {
@@ -323,6 +348,7 @@ export function TimeSeriesPanel({
     hasExemplars: series.some(s => (s.exemplars?.length ?? 0) > 0),
     pointsTier: prepared.times.length <= 100 ? 2 : prepared.times.length <= 300 ? 1 : 0,
     renderable: series.length > 0 && prepared.times.length > 0,
+    envelope: envelope ? (envelope.fill ?? 'default') : undefined,
   });
 
   // buildOptions — renkleri REBUILD ANINDA çöz (motor tema flip'te yeniden
@@ -341,6 +367,8 @@ export function TimeSeriesPanel({
     const bg1 = css.getPropertyValue('--bg1').trim() || '#0d1117';  // exemplar ◆ halo
 
     const stacked = mode === 'stacked';
+    // Zarf yalnız çizgi/alan kipinde (istifli ve sütunda anlamı yok).
+    const envEdges = !!envelope && !stacked && mode !== 'bars';
     const { times } = bundleRef.current;
 
     const colors = series.map(s => resolveColor(colorOf(s)));
@@ -413,11 +441,24 @@ export function TimeSeriesPanel({
           }
           return base;
         }),
+        // v0.10.2146 (S7) — zarf kenarları: görünmez çizgi (yalnız aralarındaki
+        // dolgu basılır), nokta yok. Yol çizgilerle aynı (pürüzsüzse spline).
+        ...(envEdges ? [envelope!.lo, envelope!.hi].map((s): uPlot.Series => ({
+          label: s.label,
+          stroke: 'transparent',
+          width: 0,
+          scale: 'y',
+          show: true,
+          points: { show: false },
+          ...(smooth && uPlot.paths.spline ? { paths: uPlot.paths.spline(), spanGaps: true } : {}),
+        })) : []),
       ],
       // Stacked bands: fill between cumulative line k and k-1 (1-based).
       bands: stacked
         ? series.slice(1).map((_s, k) => ({ series: [k + 2, k + 1] as [number, number], fill: withAlpha(colors[k + 1], '47') }))
-        : undefined,
+        : envEdges
+          ? [{ series: [series.length + 2, series.length + 1] as [number, number], fill: envelopeFill(envelope!.fill) }]
+          : undefined,
       axes: [
         {
           stroke: text3,
@@ -444,11 +485,18 @@ export function TimeSeriesPanel({
         } satisfies uPlot.Axis] : []),
       ] as uPlot.Axis[],
       cursor: {
-        x: true, y: true, focus: { prox: 15 },
+        x: true, y: true,
+        // S7 — zarf kenarı (dizin > seri sayısı) odak-yakınlığına girmez: kenara
+        // yaklaşmak çizgileri soldurmasın. Zarf yokken uPlot varsayılanının aynısı.
+        focus: envEdges
+          ? { prox: 15, dist: (_u: uPlot, si: number, _di: number, valPos: number, curPos: number) => (si > series.length ? Infinity : valPos - curPos) }
+          : { prox: 15 },
         // v0.9.128 (operatör: "line'ların noktası hareket etmiyor") — imleçle
         // çizgi üstünde kayan belirgin hover noktası (OverviewChart/RPS emsali
         // size:7). Default cursor.points belirsizdi; açıkça göster.
-        points: { show: true, size: 6 },
+        points: envEdges
+          ? { show: true, size: (_u: uPlot, si: number) => (si > series.length ? 0 : 6) }
+          : { show: true, size: 6 },
         // v0.9.84 (madde 4) — line/area modda hover en yakın DOLU örneğe
         // snap'ler (±2 bucket); bars/stacked kendi hizasında kalır.
         ...(mode === 'line' || mode === 'area' ? {
@@ -840,7 +888,8 @@ export function TimeSeriesPanel({
     const refit = (key: string, idxs: number[]) => {
       let dmin = Infinity, dmax = -Infinity;
       for (const si of idxs) {
-        if (!visibleRef.current[si - 1]) continue;
+        // Zarf kenarı (si > seri sayısı) her zaman görünür; görünürlük dizisi yalnız çizgileri tutar.
+        if (si <= series.length && !visibleRef.current[si - 1]) continue;
         const col = data[si] as (number | null)[] | undefined;
         if (!col) continue;
         for (const v of col) {
@@ -857,6 +906,7 @@ export function TimeSeriesPanel({
     const leftIdxs: number[] = [];
     const rightIdxs: number[] = [];
     series.forEach((s, i) => (s.axis === 'right' ? rightIdxs : leftIdxs).push(i + 1));
+    if (envelope && mode !== 'stacked' && mode !== 'bars') leftIdxs.push(series.length + 1, series.length + 2);
     refit('y', leftIdxs);
     if (hasRight) refit('yr', rightIdxs);
   };
