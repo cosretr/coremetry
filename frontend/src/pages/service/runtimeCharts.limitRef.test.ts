@@ -50,3 +50,16 @@ describe('RuntimeCharts heap görünümü (S9)', () => {
     expect(src).not.toMatch(/localStorage|STORAGE_KEYS/);
   });
 });
+
+// v0.10.2149 (S10) — non-heap düzse cümle; yalnız JVM non-heap kartı aday,
+// düzlük ham + kesilmemiş kümeden ve okumalar oturunca söylenir.
+describe('RuntimeCharts non-heap düzlük (S10)', () => {
+  it('aday yalnız JVM non-heap; okumalar oturmadan "düz" denmez', () => {
+    expect(src).toContain("const isFlatCandidate = (family: string | null, card: CardSpec) => family === 'jvm' && card.key === 'nonheap';");
+    expect(src).toContain("isFlatCandidate(family, card) && status === 'ready' ? flatSummary(flatInput) : null;");
+  });
+  it('cümle yalnız varsayılan görünümde; nonheap / lines grafiği açar', () => {
+    expect(src).toContain('flat && !view.lines && !view.nonheap ? (');
+  });
+});
+

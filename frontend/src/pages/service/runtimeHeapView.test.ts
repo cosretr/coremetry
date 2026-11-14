@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { parseRtView, rtViewParam, toPercentOfLimit, podPercentLines, heapSummary, HEAP_TOP, HEAP_GREY_MAX, type HeapPodLine, type HeapPoint } from './runtimeHeapView';
+import {
+  parseRtView, rtViewParam, toPercentOfLimit, podPercentLines, heapSummary, HEAP_TOP, HEAP_GREY_MAX,
+  relativeSpread, flatSummary, FLAT_THRESHOLD, type HeapPodLine, type HeapPoint,
+} from './runtimeHeapView';
 
 // v0.10.2148 (servis sekmeleri S9; plan K12, seçenek B) — JVM heap kartının
 // varsayılan görünümü: her pod ince gri, en yüksek üç renkli, % sınır.
@@ -116,5 +119,41 @@ describe('heapSummary', () => {
     // En düşük ortalamalı 7 pod düştü.
     expect(s.lines.some(l => l.label === 'pod-0')).toBe(false);
     expect(s.top[0]).toBe(`pod-${many.length - 1}`);
+  });
+});
+
+// v0.10.2149 (servis sekmeleri S10) — "düz" seri: (max − min) / ortanca < %10.
+describe('relativeSpread / flatSummary', () => {
+  it('göreli oynaklık: (max − min) / ortanca; değer yoksa ya da ortanca 0 ise null', () => {
+    expect(relativeSpread(pts([100, 100, 100]))).toBe(0);
+    expect(relativeSpread(pts([95, 100, 105]))).toBeCloseTo(0.1);
+    expect(relativeSpread(pts([null, 100, null, 150]))).toBeCloseTo(50 / 125);
+    expect(relativeSpread(pts([null, null]))).toBeNull();
+    expect(relativeSpread(pts([0, 0]))).toBeNull();
+  });
+
+  it('eşik sabit %10 ve KESİN küçük: tam %10 oynayan seri düz sayılmaz', () => {
+    expect(FLAT_THRESHOLD).toBe(0.10);
+    expect(flatSummary([pod('a', [96, 100, 104])])).toEqual({ pods: 1, min: 96, max: 104 });
+    expect(flatSummary([pod('a', [95, 100, 105])])).toBeNull();
+  });
+
+  it('hepsi düzse özet: pod sayısı + tüm pod\'ların değer aralığı', () => {
+    expect(flatSummary([pod('a', [100, 101, 102]), pod('b', [200, 201, 199])])).toEqual({ pods: 2, min: 100, max: 201 });
+  });
+
+  it('tek pod bile oynuyorsa düz değil (sızıntı gizlenmez)', () => {
+    expect(flatSummary([pod('a', [100, 100, 100]), pod('b', [100, 130, 170])])).toBeNull();
+  });
+
+  it('değersiz seri sayılmaz; hiç değer yoksa düz denmez; ölçülemeyen seri (ortanca 0) düz sayılmaz', () => {
+    expect(flatSummary([pod('boş', [null]), pod('a', [100, 100])])).toEqual({ pods: 1, min: 100, max: 100 });
+    expect(flatSummary([])).toBeNull();
+    expect(flatSummary([pod('boş', [null])])).toBeNull();
+    expect(flatSummary([pod('sıfır', [0, 0])])).toBeNull();
+  });
+
+  it('tek noktalı seri düz (oynaklık 0)', () => {
+    expect(flatSummary([pod('a', [42])])).toEqual({ pods: 1, min: 42, max: 42 });
   });
 });

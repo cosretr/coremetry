@@ -13,7 +13,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
-const m = vi.hoisted(() => ({ pods: 4, limit: true, panels: [] as Record<string, unknown>[], queries: [] as string[] }));
+const m = vi.hoisted(() => ({ pods: 4, limit: true, panels: [] as Record<string, unknown>[], queries: [] as string[], nonheap: 'flat' as 'flat' | 'moving' }));
 const MB = 1024 * 1024;
 vi.mock('@/lib/api', async (importOriginal) => {
   const mod = await importOriginal<Record<string, unknown>>();
@@ -38,6 +38,13 @@ vi.mock('@/lib/api', async (importOriginal) => {
           // Toplam okuma: 3 export × havuzların toplamı = 3 × (i+1) × 10 MB.
           const k = q.agg === 'sum' ? 3 : 1;
           return Array.from({ length: m.pods }, (_, i) => ({ groupKey: [`pod-${i + 1}`, '', '', ''], points: two(k * (i + 1) * 10 * MB) }));
+        }
+        if (q.name === 'jvm.memory.used') {
+          // Non-heap: iki pod; "moving" iken ikincisi pencere boyunca büyür (sızıntı).
+          return [
+            { groupKey: ['pod-1', '', '', ''], points: two(100 * MB) },
+            { groupKey: ['pod-2', '', '', ''], points: m.nonheap === 'flat' ? two(120 * MB) : [{ time: 1e9, value: 100 * MB }, { time: 2e9, value: 180 * MB }] },
+          ];
         }
         return [{ groupKey: ['pod-1', '', '', ''], points: two(5) }];
       },
@@ -85,7 +92,7 @@ async function mount(url: string): Promise<HTMLElement> {
 const lastPanels = (el: HTMLElement) => m.panels.slice(-el.querySelectorAll('[data-testid="tsp"]').length);
 const heapPanel = (el: HTMLElement) => lastPanels(el)[0] as { series: Line[]; mode: string };
 
-beforeEach(() => { m.pods = 4; m.limit = true; });
+beforeEach(() => { m.pods = 4; m.limit = true; m.nonheap = 'flat'; });
 afterEach(() => {
   act(() => { root?.unmount(); });
   qc?.clear();
@@ -163,5 +170,60 @@ describe('RuntimeCharts JVM heap görünümü (S9)', () => {
     const b = await mount('/service?name=orders&tab=infra&rtview=lines');
     const lines = lastPanels(b).slice(-2).map(p => JSON.stringify([(p.series as Line[]).map(s => s.label), p.mode]));
     expect(lines).toEqual(defaults);
+  });
+});
+
+// v0.10.2149 (servis sekmeleri S10) — JVM non-heap kartı düzse grafik yerine cümle.
+describe('RuntimeCharts JVM non-heap düz → cümle (S10)', () => {
+  const titles = (el: HTMLElement) => [...el.querySelectorAll('.card h3')].map(h => h.textContent);
+  const flatCard = (el: HTMLElement) => el.querySelector('[data-testid="rt-flat-card"]');
+
+  it('düz: grafik yerine tek cümle (pod sayısı + aralık) ve "Grafiği göster"', async () => {
+    const el = await mount('/service?name=orders&tab=infra');
+    const card = flatCard(el)!;
+    expect(card.querySelector('h3')?.textContent).toBe('JVM non-heap (by pod) (MB)');
+    expect(card.querySelector('[data-testid="tsp"]')).toBeNull();
+    expect(card.textContent).toContain('Düz: 2 pod, 100–120 MB aralığında');
+    expect(card.textContent).toContain("hiçbir pod %10'dan fazla oynamadı");
+    const a = [...card.querySelectorAll('a')].find(x => x.textContent === 'Grafiği göster')!;
+    expect(a.getAttribute('href')).toBe('/service?name=orders&tab=infra&rtview=nonheap');
+    // Kart sırası değişmez; diğer üç kart grafik.
+    expect(titles(el)[1]).toBe('JVM non-heap (by pod) (MB)');
+    expect(el.querySelectorAll('[data-testid="tsp"]').length).toBe(3);
+  });
+
+  it('tek pod bile oynuyorsa grafik çizilir, cümle yok (sızıntı gizlenmez)', async () => {
+    m.nonheap = 'moving';
+    const el = await mount('/service?name=orders&tab=infra');
+    expect(flatCard(el)).toBeNull();
+    expect(el.querySelectorAll('[data-testid="tsp"]').length).toBe(4);
+    expect(el.textContent).not.toContain('Grafiği göster');
+    expect(el.textContent).not.toContain('Grafiği gizle');
+  });
+
+  it('?rtview=nonheap: düz olsa da grafik + "Grafiği gizle"; heap özet görünümde kalır', async () => {
+    const el = await mount('/service?name=orders&tab=infra&rtview=nonheap');
+    expect(flatCard(el)).toBeNull();
+    expect(el.querySelectorAll('[data-testid="tsp"]').length).toBe(4);
+    const hide = [...el.querySelectorAll('a')].find(x => x.textContent === 'Grafiği gizle')!;
+    expect(hide.getAttribute('href')).toBe('/service?name=orders&tab=infra');
+    expect(el.textContent).toContain('JVM heap — sınırın yüzdesi (pod başına)');
+  });
+
+  it('?rtview=lines: eski görünümün tamamı — non-heap grafiği de açık, cümle yok', async () => {
+    const el = await mount('/service?name=orders&tab=infra&rtview=lines');
+    expect(flatCard(el)).toBeNull();
+    expect(el.querySelectorAll('[data-testid="tsp"]').length).toBe(4);
+    expect(el.textContent).not.toContain('Grafiği gizle');
+  });
+
+  it('"Grafiği göster" tıkı URL\'yi yazar ve grafiği açar', async () => {
+    const el = await mount('/service?name=orders&tab=infra');
+    const a = [...el.querySelectorAll('a')].find(x => x.textContent === 'Grafiği göster')!;
+    await act(async () => { a.click(); });
+    await act(async () => { await new Promise(r => setTimeout(r, 10)); });
+    expect(el.querySelector('[data-testid="loc"]')?.textContent).toBe('?name=orders&tab=infra&rtview=nonheap');
+    expect(flatCard(el)).toBeNull();
+    expect(el.querySelectorAll('[data-testid="tsp"]').length).toBe(4);
   });
 });

@@ -9,7 +9,7 @@ import { TimeSeriesPanel, type TSSeries } from '@/components/viz/TimeSeriesPanel
 import type { FilterExpr, SpanMetricSeries } from '@/lib/types';
 import { podLineLabel, podClusterOf, withClusterPrefix } from './runtimePodLabel';
 import { smoothPoints } from './runtimeSmooth';
-import { heapSummary, podPercentLines, parseRtView, rtViewParam, type HeapKeyedLine, type HeapPodLine, type HeapSummary, type RtView } from './runtimeHeapView';
+import { heapSummary, podPercentLines, flatSummary, parseRtView, rtViewParam, type FlatSummary, type HeapKeyedLine, type HeapPodLine, type HeapSummary, type RtView } from './runtimeHeapView';
 
 // RuntimeCharts (v0.9.87, operatör talebi) — Service Overview'da dil
 // ailesine göre JVM / .NET / Go heap+GC runtime grafikleri.
@@ -178,6 +178,14 @@ const HEAP_SUMMARY_LINES: LineSpec[] = [
   { metric: 'jvm.memory.limit', label: 'limit', color: 'var(--err)', filters: HEAP, groupBy: POD_GROUP, fanout: true, labelOf: podLineLabel, agg: 'sum', role: 'pctLimit' },
 ];
 
+// v0.10.2149 (servis sekmeleri S10) — JVM non-heap kartı pencere boyunca DÜZSE
+// (her pod (max − min) / ortanca < %10; runtimeHeapView.flatSummary, eşik sabit)
+// grafik yerine tek cümle: düz bir çizgi yığını bilgi taşımaz, yer kaplar.
+// Oynayan tek bir pod bile grafiği geri getirir (Metaspace sızıntısı gizlenmez).
+// "Grafiği göster" `?rtview=nonheap`; `?rtview=lines` de grafiği açar.
+const isFlatCandidate = (family: string | null, card: CardSpec) => family === 'jvm' && card.key === 'nonheap';
+const fmtMB = (v: number) => (v >= 10 ? v.toFixed(0) : v.toFixed(1));
+
 /** `?rtview` bağlantısı: yabancı parametreler korunur, varsayılanda parametre silinir. */
 function rtViewSearch(params: URLSearchParams, next: RtView): string {
   const p = new URLSearchParams(params);
@@ -271,6 +279,8 @@ export function RuntimeCharts({ service, from, to, onZoom, onZoomReset, hideHead
       const absPods: HeapPodLine[] = [];
       const pctUsed: HeapKeyedLine[] = [];
       const pctLimit: HeapKeyedLine[] = [];
+      // S10 — düzlük ölçüsü HAM (yumuşatılmamış) ve kesilmemiş kümeden.
+      const flatInput: HeapPodLine[] = [];
       specs.forEach(({ card: c, line }, qi) => {
         if (c.key !== card.key) return;
         const data = (queries[qi]?.data ?? []) as SpanMetricSeries[];
@@ -303,6 +313,11 @@ export function RuntimeCharts({ service, from, to, onZoom, onZoomReset, hideHead
               else absPods.push(keyed);
             }
             return;
+          }
+          if (isFlatCandidate(family, card)) {
+            for (const s of data) {
+              flatInput.push({ label: s.groupKey.join('/'), points: s.points.map(p => ({ time: p.time, value: p.value == null ? null : p.value * scale })) });
+            }
           }
           data.slice(0, FANOUT_MAX).forEach(s => {
             const base = line.labelOf
@@ -341,7 +356,9 @@ export function RuntimeCharts({ service, from, to, onZoom, onZoomReset, hideHead
         cardQs.some(x => x.q.isError) ? 'error'
         : cardQs.some(x => x.q.isPending) ? 'loading'
         : 'ready';
-      return { card, series: tsSeries, status, podTotal, capped, clusterCount: cardClusters.size, summary };
+      // Düzlük yalnız okumalar oturunca söylenir (yarım veriyle "düz" denmez).
+      const flat: FlatSummary | null = isFlatCandidate(family, card) && status === 'ready' ? flatSummary(flatInput) : null;
+      return { card, series: tsSeries, status, podTotal, capped, clusterCount: cardClusters.size, summary, flat };
     });
     return { byCard, anyData };
   }, [family, cards, specs, queries, service, view]);
@@ -369,7 +386,19 @@ export function RuntimeCharts({ service, from, to, onZoom, onZoomReset, hideHead
           3-across dar kalıyordu (operatör raporu). Ortak syncKey: bir karta
           hover TÜM kartlarda crosshair çizer (heap spike ↔ GC pause korele). */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {built.byCard.map(({ card, series, status, podTotal, capped, clusterCount, summary }) => (
+        {built.byCard.map(({ card, series, status, podTotal, capped, clusterCount, summary, flat }) => (
+          flat && !view.lines && !view.nonheap ? (
+            <div key={card.key} className="card" data-testid="rt-flat-card">
+              <div className="ov-card-h"><h3>{card.title}{card.unit ? ` (${card.unit.trim()})` : ''}</h3></div>
+              <div className="ov-card-b rt-flat">
+                <span>
+                  Düz: {flat.pods} pod, {flat.min === flat.max ? fmtMB(flat.min) : `${fmtMB(flat.min)}–${fmtMB(flat.max)}`}{card.unit} aralığında;
+                  bu pencerede hiçbir pod %10&#39;dan fazla oynamadı.
+                </span>
+                <Link replace to={{ search: rtViewSearch(params, { ...view, nonheap: true }) }}>Grafiği göster</Link>
+              </div>
+            </div>
+          ) : (
           <div key={card.key} className="card">
             <div className="ov-card-h">
               <h3>{summary?.percent ? 'JVM heap — sınırın yüzdesi (pod başına)' : `${card.title}${card.unit ? ` (${card.unit.trim()})` : ''}`}</h3>
@@ -395,6 +424,11 @@ export function RuntimeCharts({ service, from, to, onZoom, onZoomReset, hideHead
               {/* v0.9.532 — cluster sayısı: çok-cluster'lı serviste not,
                   kesme olmasa da görünür (operatör "hangi cluster belli
                   değil" — cevabın yarısı bu sayı, yarısı seri önekleri). */}
+              {flat && view.nonheap && !view.lines && (
+                <span className="rt-view-note">
+                  <Link replace to={{ search: rtViewSearch(params, { ...view, nonheap: false }) }}>Grafiği gizle</Link>
+                </span>
+              )}
               {!summary && (capped || clusterCount > 1) && (
                 <span style={{ fontSize: 11, color: 'var(--text3)' }}>
                   {capped ? `${FANOUT_MAX} / ${podTotal} pod gösteriliyor` : `${podTotal} pod`}
@@ -427,6 +461,7 @@ export function RuntimeCharts({ service, from, to, onZoom, onZoomReset, hideHead
               )}
             </div>
           </div>
+          )
         ))}
       </div>
     </>
