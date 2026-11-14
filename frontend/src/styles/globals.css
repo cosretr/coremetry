@@ -3798,6 +3798,19 @@ button.cosre-cap__row > .row { align-items: flex-start; min-width: 0; }
 .sec-head .badge { text-transform: none; letter-spacing: 0; }
 .sec-head .sec-head__meta { text-transform: none; letter-spacing: 0; font-weight: 400; font-size: 11px; color: var(--text3); }
 .sec-head .sec-head__actions { display: inline-flex; gap: 6px; text-transform: none; letter-spacing: 0; font-weight: 400; }
+/* v0.10.2142 (servis sekmeleri S4) — DBQueriesPanel: satır içi stiller sınıfa
+   (motor çipi, açılan satırın detayı, pivot bağlantıları, süre payı). */
+.dbq-chip { font-size: var(--fs-xs); padding: 1px 6px; background: var(--bg3); border-radius: var(--radius-xs); font-family: var(--font-mono); }
+a.dbq-chip { color: var(--accent2); text-decoration: none; }
+tbody td.dbq-detail { background: var(--bg2); padding: var(--sp-6) var(--sp-7); }
+.dbq-detail__label { font-size: var(--fs-xs); color: var(--text3); margin-bottom: var(--sp-2); }
+.dbq-detail__stats { margin-top: var(--sp-4); display: flex; flex-wrap: wrap; align-items: center; gap: 14px; font-size: var(--fs-xs); color: var(--text2); }
+.dbq-detail__links { display: inline-flex; gap: var(--sp-3); margin-left: auto; }
+.dbq-stat { display: inline-flex; gap: var(--sp-3); align-items: baseline; }
+.dbq-stat__k { color: var(--text3); }
+.dbq-stat__v { font-family: var(--font-mono); color: var(--text); }
+.dbq-share { color: var(--text3); margin-left: var(--sp-3); }
+a.dbq-act { display: inline-flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-xs); padding: 2px 8px; border: 1px solid var(--border); border-radius: var(--radius-xs); color: var(--text); text-decoration: none; }
 /* v0.9.408 — Explain kanıt kutusu: kök-neden soruşturulacak span'ler
    waterfall'da çerçeveyle kutulanır (kritik-yol şeridinin ÜSTÜNE
    binebilir; ikisi farklı soruya cevap verir).

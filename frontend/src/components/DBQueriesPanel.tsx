@@ -1,7 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { rowActivation } from '@/lib/a11y'; // v0.10.451 (dış denetim D3 kalan)
 import { Link } from 'react-router-dom';
-import { DisclosureButton } from '@/components/ui';
+import { CollapsedSection } from '@/components/coremetry/CollapsedSection';
+import { TableViewBar } from '@/components/coremetry/TableViewBar';
+import { foldNormalRows } from '@/lib/normalFold';
+import { sharePct } from '@/lib/dbQueryShare';
+import { getRaw, setRaw, STORAGE_KEYS } from '@/lib/storage';
+import type { ColumnModel } from '@/lib/columnModel';
 import { SqlCode } from '@/components/coremetry/SqlCode';
 import {
   useDataTable, DataTableColgroup, DataTableHead, DataTableCell, DataTableState,
@@ -37,16 +42,21 @@ import { databasesFilterHref } from '@/pages/databases/databaseParam';
 // sorting for free. The trailing Traces-drill column is layout-only
 // (no sortValue → not clickable, still resizable).
 type DBRow = DBQueryStat & { cluster?: string }; // v0.10.717 — cluster başına kipte damga
+// v0.10.2142 (servis sekmeleri S4, mockup operatör onayı 2026-11-13) —
+// varsayılan görünüm 6 kolon: Sorgu, Veritabanı, Çağrı, Toplam süre (+ pay),
+// p99, Hata. Ort. / p95 / En uzun ve iki pivot kolonu SİLİNMEDİ: "Tüm
+// kolonlar" ile gelir; pivotlar (Detay, Trace'ler) ayrıca satır açılınca
+// detayda her zaman durur.
 const DBQ_COLS: ColumnDef<DBRow>[] = [
-  { id: 'statement',  label: 'Statement', sortValue: r => r.statement,      naturalDir: 'asc', flex: true, minWidth: 160 },
-  { id: 'dbSystem',   label: 'DB',        sortValue: r => r.dbSystem || '', naturalDir: 'asc', width: 90 },
-  { id: 'count',      label: '×N',     sortValue: r => r.count,      numeric: true, width: 80 },
-  { id: 'totalMs',    label: 'Total',  sortValue: r => r.totalMs,    numeric: true, width: 90 },
-  { id: 'avgMs',      label: 'Avg',    sortValue: r => r.avgMs,      numeric: true, width: 80 },
-  { id: 'p95Ms',      label: 'P95',    sortValue: r => r.p95Ms,      numeric: true, width: 80 },
-  { id: 'p99Ms',      label: 'P99',    sortValue: r => r.p99Ms,      numeric: true, width: 80 },
-  { id: 'maxMs',      label: 'Max',    sortValue: r => r.maxMs,      numeric: true, width: 80 },
-  { id: 'errorCount', label: 'Errors', sortValue: r => r.errorCount, numeric: true, width: 110 },
+  { id: 'statement',  label: 'Sorgu',      sortValue: r => r.statement,      naturalDir: 'asc', flex: true, minWidth: 160 },
+  { id: 'dbSystem',   label: 'Veritabanı', sortValue: r => r.dbSystem || '', naturalDir: 'asc', width: 100 },
+  { id: 'count',      label: 'Çağrı',      sortValue: r => r.count,      numeric: true, width: 80 },
+  { id: 'totalMs',    label: 'Toplam süre', sortValue: r => r.totalMs,   numeric: true, width: 130 },
+  { id: 'avgMs',      label: 'Ort.',       sortValue: r => r.avgMs,      numeric: true, width: 80 },
+  { id: 'p95Ms',      label: 'p95',        sortValue: r => r.p95Ms,      numeric: true, width: 80 },
+  { id: 'p99Ms',      label: 'p99',        sortValue: r => r.p99Ms,      numeric: true, width: 80 },
+  { id: 'maxMs',      label: 'En uzun',    sortValue: r => r.maxMs,      numeric: true, width: 80 },
+  { id: 'errorCount', label: 'Hata',       sortValue: r => r.errorCount, numeric: true, width: 110 },
   // Two layout-only drill columns (no sortValue → not sortable, still
   // resizable). Order matters: "Detail" is the deeper answer and sits
   // closest to the numbers it explains; "Traces" stays rightmost where
@@ -54,8 +64,11 @@ const DBQ_COLS: ColumnDef<DBRow>[] = [
   { id: 'detail',     label: '',       width: 84 },
   { id: 'traces',     label: '',       width: 90 },
 ];
+const DBQ_DEFAULT_HIDDEN = ['avgMs', 'p95Ms', 'maxMs', 'detail', 'traces'];
 // v0.10.717 — cluster başına kipte araya giren sütun (Statement'tan sonra).
 const DBQ_CLUSTER_COL: ColumnDef<DBRow> = { id: 'cluster', label: 'Cluster', sortValue: r => r.cluster ?? '', width: 120 };
+const errPctOf = (r: DBRow) => (r.count > 0 ? (r.errorCount / r.count) * 100 : 0);
+const DBQ_FOLD_METRICS = [errPctOf, (r: DBRow) => r.p99Ms];
 
 // Kaç normalleştirilmiş statement gösterilir. Sunucu ağırlığa göre sıralı
 // döndürüyor, yani kırpılan kuyruk EN HAFİF olanlar — ama bu, kırpmanın
@@ -132,12 +145,27 @@ export function DBQueriesPanel({ service, from, to, defaultOpen = false, cluster
       : perCluster.some(q => q.isError) && merged.length === 0 ? null : merged)
     : data;
   const cols = useMemo(() => (byCluster ? [DBQ_COLS[0], DBQ_CLUSTER_COL, ...DBQ_COLS.slice(1)] : DBQ_COLS), [byCluster]);
+  const [allCols, setAllColsState] = useState(() => getRaw(STORAGE_KEYS.svcDbAllCols) === '1');
+  const setAllCols = (v: boolean) => { setAllColsState(v); setRaw(STORAGE_KEYS.svcDbAllCols, v ? '1' : '0'); };
+  const columnModel = useMemo(() => {
+    const value: ColumnModel | null = allCols ? null
+      : { v: 1, order: cols.map(c => c.id), hidden: DBQ_DEFAULT_HIDDEN, sig: 'db-queries-panel-6' };
+    return { value };
+  }, [allCols, cols]);
   const dt = useDataTable<DBRow>({
     storageKey: 'db-queries-panel',
     columns: cols,
     rows: view ?? [],
     initialSort: { id: 'totalMs', dir: 'desc' },
+    columnModel,
   });
+  // "N daha, hepsi normal" (lib/normalFold): ilk 5 + sapanlar; katlama oturumluk.
+  const [showAllRows, setShowAllRowsState] = useState(false);
+  const setShowAllRows = (v: boolean) => { setShowAllRowsState(v); setExpandedIdx(null); };
+  const fold = useMemo(() => foldNormalRows(dt.sortedRows, DBQ_FOLD_METRICS), [dt.sortedRows]);
+  const rows = showAllRows ? dt.sortedRows : fold.shown;
+  // Pay paydası: listelenen (en ağır ≤100) ifadelerin toplam süresi — istemcide.
+  const sumMs = useMemo(() => (view ?? []).reduce((a, r) => a + r.totalMs, 0), [view]);
 
   // The panel's own window, as the `range=` token every cross-page link
   // needs. Computed from PROPS (not now()) — the v0.5.184 render trap is
@@ -155,200 +183,148 @@ export function DBQueriesPanel({ service, from, to, defaultOpen = false, cluster
       message: `Bu pencerede veritabanı ifadesi yok — ${service} servisinden gelen hiçbir span db.statement taşımıyor. DB enstrümantasyonu güvenlik için ifadeleri siliyorsa bu beklenen bir durum.`,
     };
 
-  return (
-    <div style={{
-      background: 'var(--bg1)', border: '1px solid var(--border)',
-      borderRadius: 8, marginBottom: 14,
-    }}>
-      <DisclosureButton anatomy="section" expanded={open} onClick={() => setOpen(o => !o)}>
-        <span style={{ fontSize: 12, color: 'var(--text2)', fontWeight: 600 }}>
-          DB queries by <span style={{ color: 'var(--text)' }}>{service}</span>
-        </span>
-        {open && view && view.length > 0 && (
-          <span style={{ fontSize: 11, color: 'var(--text3)' }}>
-            {view.length} normalised statement{view.length === 1 ? '' : 's'}
-          </span>
-        )}
-        {/* v0.9.349 — sınır varsa görünür olacak. Yalnız GERÇEKTEN kırpıldıysa
-            çıkıyor: tam 100 statement'ı olan bir servis uyarı görmüyor. */}
-        {open && capped && (
-          <span className="badge b-warn"
-            title={`En ağır ${DBQ_LIMIT} statement gösteriliyor — bu serviste daha fazlası var. Sıralama sunucuda, yani kırpılan kuyruk en hafif olanlar.`}>
-            ⚠ ilk {DBQ_LIMIT}
-          </span>
-        )}
-        <span style={{ flex: 1 }} />
-        {!open && (
-          <span style={{ fontSize: 11, color: 'var(--text3)', fontStyle: 'italic' }}>
-            click to expand
-          </span>
-        )}
-      </DisclosureButton>
+  const links = (r: DBRow) => {
+    // v0.9.963 (G1-b) — null when the row carries no stmtHash (pre-D1 cache
+    // entry); a dash then, not a link that opens an empty drawer.
+    const detailHref = stmtDetailHref({ hash: r.stmtHash, system: r.dbSystem }, { fromNs: from, toNs: to });
+    return {
+      // v0.9.963 (UX denetimi G1-b) — statement detail drill: per-service
+      // callers, 5m trend, vs-prior compare, exemplar traces.
+      detail: detailHref ? (
+        <Link to={detailHref} className="dbq-act"
+              title="Open this statement class in the fleet statement-detail drawer — per-service callers, 5m trend, vs-prior compare, exemplar traces.">
+          Detail →
+        </Link>
+      ) : (
+        <span className="cell-faint" title="No statement identity on this row — the response predates the statement-hash column.">—</span>
+      ),
+      // Traces drill — /traces filtered by service + db.statement LIKE the
+      // normalised form ("?" → "%": every literal variant of the query class).
+      traces: (
+        <Link to={tracesURL(service, r, { fromNs: from, toNs: to, cluster: cluster || undefined })} className="dbq-act"
+              title={`Open /traces filtered to ${service} + this query class`}>
+          Traces →
+        </Link>
+      ),
+    };
+  };
+  // Hücreler kolon kimliğiyle (dt.visibleColumns — columnModel sonrası küme).
+  const cell = (r: DBRow, id: string): ReactNode => {
+    const errPct = errPctOf(r);
+    switch (id) {
+      // v0.10.943 (tablo standardı dilim 3) — kırpma ve 12px tablo tabanından.
+      case 'statement': return <td key={id} className="mono" title={r.statement}>{r.statement}</td>;
+      case 'cluster': return (
+        <td key={id} className="mono" onClick={e => e.stopPropagation()}>
+          {r.cluster
+            ? <Link to={entityHref({ type: 'cluster', id: r.cluster, name: r.cluster, clusterId: r.cluster }, { range })} title="Cluster detayı">{r.cluster}</Link>
+            : '—'}
+        </td>
+      );
+      // v0.9.964 (UX denetimi Ö9 / G2) — the engine chip is the bridge OUT of
+      // the service into the database catalogue, narrowed only as far as the
+      // row honestly goes (databasesFilterHref drops the folded db.name).
+      case 'dbSystem': return (
+        <td key={id} onClick={e => e.stopPropagation()}>
+          {r.dbSystem ? (
+            <Link to={databasesFilterHref(r, { range: dbRange })} className="dbq-chip"
+                  title={`Open the database catalogue filtered to ${r.dbSystem}${r.dbName && r.dbName !== 'default' && r.dbNameCount <= 1 ? ` · ${r.dbName}` : ''}`}>
+              {r.dbSystem}
+            </Link>
+          ) : <span className="dbq-chip">—</span>}
+        </td>
+      );
+      case 'count': return <DataTableCell key={id} dt={dt} col="count" row={r} value={fmtNum(r.count)} />;
+      case 'totalMs': {
+        const pct = sharePct(r.totalMs, sumMs);
+        return (
+          <td key={id} className="num">
+            {fmtMs(r.totalMs)}
+            {pct != null && <span className="dbq-share" title="Listelenen ifadelerin toplam süresindeki pay">%{pct.toFixed(pct >= 10 ? 0 : 1)}</span>}
+          </td>
+        );
+      }
+      case 'avgMs': return <DataTableCell key={id} dt={dt} col="avgMs" row={r} value={fmtMs(r.avgMs)} />;
+      case 'p95Ms': return <DataTableCell key={id} dt={dt} col="p95Ms" row={r} value={fmtMs(r.p95Ms)} />;
+      case 'p99Ms': return <DataTableCell key={id} dt={dt} col="p99Ms" row={r} value={fmtMs(r.p99Ms)} />;
+      case 'maxMs': return <DataTableCell key={id} dt={dt} col="maxMs" row={r} value={fmtMs(r.maxMs)} />;
+      case 'errorCount': {
+        const errCls = errPct > 5 ? 'b-err' : errPct > 0 ? 'b-warn' : 'b-gray'; // v0.10.929 (K5) — ulaşılmaz dal da yeşil değil
+        return (
+          <td key={id} className="num">
+            {r.errorCount > 0
+              ? <span className={`badge ${errCls}`}>{r.errorCount} ({errPct.toFixed(1)}%)</span>
+              : <span className="cell-faint">0</span>}
+          </td>
+        );
+      }
+      case 'detail': return <td key={id} onClick={e => e.stopPropagation()}>{links(r).detail}</td>;
+      case 'traces': return <td key={id} onClick={e => e.stopPropagation()}>{links(r).traces}</td>;
+      default: return <td key={id} />;
+    }
+  };
 
-      {open && (
-        <div style={{ padding: 14, paddingTop: 10 }}>
-          <div className="table-wrap">
-            <table {...dt.tableProps}>
-              <DataTableColgroup dt={dt} />
-              <DataTableHead dt={dt} />
-              <tbody>
-                {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...tableState} /> : dt.sortedRows.map((r, i) => {
-                  const expanded = expandedIdx === i;
-                  const errPct = r.count > 0 ? (r.errorCount / r.count) * 100 : 0;
-                  const errCls = errPct > 5 ? 'b-err' : errPct > 0 ? 'b-warn' : 'b-gray'; // v0.10.929 (K5) — ulaşılmaz dal da yeşil değil
-                  // v0.9.963 (G1-b) — null when the row carries no
-                  // stmtHash (pre-D1 cache entry); the cell then renders a
-                  // dash rather than a link that opens an empty drawer.
-                  const detailHref = stmtDetailHref(
-                    { hash: r.stmtHash, system: r.dbSystem },
-                    { fromNs: from, toNs: to },
-                  );
-                  return (
-                    <Row key={i}>
-                      <tr {...rowActivation(() => setExpandedIdx(e => e === i ? null : i))}
-                          className={dt.sortedRows.length > 100 ? 'cv-row' : undefined}>
-                        {/* v0.10.943 (tablo standardı dilim 3) — maxWidth sabit
-                            düzende etkisizdi (genişlik colgroup'ta); kırpma ve
-                            12px tablo tabanından. Sayılar `num` (S2). */}
-                        <td className="mono" title={r.statement}>
-                          {r.statement}
-                        </td>
-                        {byCluster && (
-                          <td className="mono" onClick={e => e.stopPropagation()}>
-                            {r.cluster
-                              ? <Link to={entityHref({ type: 'cluster', id: r.cluster, name: r.cluster, clusterId: r.cluster }, { range })} title="Cluster detayı">{r.cluster}</Link>
-                              : '—'}
-                          </td>
-                        )}
-                        {/* v0.9.964 (UX denetimi Ö9 / G2) — the engine
-                            chip is the bridge OUT of the service into the
-                            database catalogue. There was no link at all
-                            from a service to /databases: "which instances
-                            of this engine does my service actually talk
-                            to" meant sidebar → /databases → re-find it by
-                            eye. Narrowed only as far as the row honestly
-                            goes (databasesFilterHref drops the folded /
-                            sentinel db.name). */}
-                        <td onClick={e => e.stopPropagation()}>
-                          {r.dbSystem ? (
-                            <Link to={databasesFilterHref(r, { range: dbRange })}
-                                  title={`Open the database catalogue filtered to ${r.dbSystem}${r.dbName && r.dbName !== 'default' && r.dbNameCount <= 1 ? ` · ${r.dbName}` : ''}`}
-                                  style={{
-                                    fontSize: 11, padding: '1px 6px',
-                                    background: 'var(--bg3)', borderRadius: 3,
-                                    fontFamily: 'var(--font-mono)',
-                                    color: 'var(--accent2)', textDecoration: 'none',
-                                  }}>
-                              {r.dbSystem}
-                            </Link>
-                          ) : (
-                            <span style={{
-                              fontSize: 11, padding: '1px 6px',
-                              background: 'var(--bg3)', borderRadius: 3,
-                              fontFamily: 'var(--font-mono)',
-                            }}>—</span>
-                          )}
-                        </td>
-                        <DataTableCell dt={dt} col="count" row={r} value={fmtNum(r.count)} />
-                        <DataTableCell dt={dt} col="totalMs" row={r} value={fmtMs(r.totalMs)} />
-                        <DataTableCell dt={dt} col="avgMs" row={r} value={fmtMs(r.avgMs)} />
-                        <DataTableCell dt={dt} col="p95Ms" row={r} value={fmtMs(r.p95Ms)} />
-                        <DataTableCell dt={dt} col="p99Ms" row={r} value={fmtMs(r.p99Ms)} />
-                        <DataTableCell dt={dt} col="maxMs" row={r} value={fmtMs(r.maxMs)} />
-                        <td className="num">
-                          {r.errorCount > 0
-                            ? <span className={`badge ${errCls}`}>{r.errorCount} ({errPct.toFixed(1)}%)</span>
-                            : <span style={{ color: 'var(--text3)' }}>0</span>}
-                        </td>
-                        {/* v0.9.963 (UX denetimi G1-b) — statement detail
-                            drill. The panel could reach /traces and
-                            nothing else: "who else runs this statement,
-                            and is it worse than last window?" lived only
-                            behind a row click on the FLEET catalog, so
-                            from your own service you had to recognise
-                            your SQL by eye in a cross-service list to get
-                            one page further. */}
-                        <td onClick={e => e.stopPropagation()}>
-                          {detailHref ? (
-                            <Link to={detailHref}
-                                  className="sec"
-                                  title="Open this statement class in the fleet statement-detail drawer — per-service callers, 5m trend, vs-prior compare, exemplar traces."
-                                  style={{
-                                    display: 'inline-flex', alignItems: 'center', gap: 4,
-                                    fontSize: 11, padding: '2px 8px',
-                                    border: '1px solid var(--border)',
-                                    borderRadius: 4,
-                                    color: 'var(--text)', textDecoration: 'none',
-                                    fontFamily: 'inherit',
-                                  }}>
-                              Detail →
-                            </Link>
-                          ) : (
-                            <span style={{ fontSize: 11, color: 'var(--text3)' }}
-                                  title="No statement identity on this row — the response predates the statement-hash column.">—</span>
-                          )}
-                        </td>
-                        {/* Traces drill — link to /traces filtered by
-                            service + db.statement LIKE the normalised
-                            form. The normalised statement's "?"
-                            placeholders are converted to SQL LIKE "%"
-                            wildcards so all literal variants of the
-                            same query class show up in one search. */}
-                        <td onClick={e => e.stopPropagation()}>
-                          <Link to={tracesURL(service, r, { fromNs: from, toNs: to, cluster: cluster || undefined })}
-                                className="sec"
-                                title={`Open /traces filtered to ${service} + this query class`}
-                                style={{
-                                  display: 'inline-flex', alignItems: 'center', gap: 4,
-                                  fontSize: 11, padding: '2px 8px',
-                                  border: '1px solid var(--border)',
-                                  borderRadius: 4,
-                                  color: 'var(--text)', textDecoration: 'none',
-                                  fontFamily: 'inherit',
-                                }}>
-                            Traces →
-                          </Link>
-                        </td>
-                      </tr>
-                      {expanded && (
-                        <tr>
-                          {/* Spans every column — derived, not a literal:
-                              the previous hardcoded 10 would have gone
-                              stale the moment a column was added.
-                              v0.10.943 — `row-detail` DEĞİL: zemin bg0 ve üst
-                              çizgi yok (sınıf bg2 + çizgi çizer, görünür fark). */}
-                          <td colSpan={cols.length}
-                              style={{ background: 'var(--bg0)', padding: '12px 16px' }}>
-                            <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 4 }}>
-                              Sample statement (with real literals)
-                            </div>
-                            {/* v0.10.1859 — renkli SQL + kopyala (coremetry/SqlCode) */}
-                            <SqlCode sql={r.sampleStatement} dense />
-                            <div style={{
-                              marginTop: 8, display: 'flex', gap: 14,
-                              fontSize: 11, color: 'var(--text2)',
-                              flexWrap: 'wrap',
-                            }}>
-                              <Stat label="executions" value={fmtNum(r.count)} />
-                              <Stat label="total"     value={fmtMs(r.totalMs)} />
-                              <Stat label="avg"       value={fmtMs(r.avgMs)} />
-                              <Stat label="p95"       value={fmtMs(r.p95Ms)} />
-                              <Stat label="p99"       value={fmtMs(r.p99Ms)} />
-                              <Stat label="max"       value={fmtMs(r.maxMs)} />
-                              <Stat label="errors"    value={`${r.errorCount} (${errPct.toFixed(2)}%)`} />
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </Row>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-    </div>
+  // v0.10.2142 (S4) — DisclosureButton + çerçeveli kart yerine S1 bileşiği
+  // (CollapsedSection); kaynak rozeti başlıktan tablonun altına indi.
+  // v0.10.717 — panel ham spans okur (db_statement_summary_5m yalnız
+  // /slow-queries + alarm).
+  const source = cluster || byCluster ? 'spans · db.statement (cluster kapsamı)' : 'spans · db.statement';
+  return (
+    <CollapsedSection title="Sorgular" open={open} onOpenChange={setOpen}
+      summary="Servisin en çok süre harcadığı veritabanı sorguları."
+      meta={view && view.length > 0 ? `${view.length} ifade` : undefined}
+      badges={capped && (
+        // v0.9.349 — sınır varsa görünür olacak. Yalnız GERÇEKTEN kırpıldıysa
+        // çıkıyor: tam 100 statement'ı olan bir servis uyarı görmüyor.
+        <span className="badge b-warn"
+          title={`En ağır ${DBQ_LIMIT} statement gösteriliyor — bu serviste daha fazlası var. Sıralama sunucuda, yani kırpılan kuyruk en hafif olanlar.`}>
+          ilk {DBQ_LIMIT}
+        </span>
+      )}>
+      <div className="table-wrap">
+        <table {...dt.tableProps}>
+          <DataTableColgroup dt={dt} />
+          <DataTableHead dt={dt} />
+          <tbody>
+            {rows.length === 0 ? <DataTableState dt={dt} {...tableState} /> : rows.map((r, i) => {
+              const expanded = expandedIdx === i;
+              return (
+                <Row key={i}>
+                  <tr {...rowActivation(() => setExpandedIdx(e => e === i ? null : i))}
+                      className={rows.length > 100 ? 'cv-row' : undefined}>
+                    {dt.visibleColumns.map(col => cell(r, col.id))}
+                  </tr>
+                  {expanded && (
+                    <tr>
+                      {/* Spans every VISIBLE column — derived, not a literal.
+                          v0.10.2142 — zemin bg2 (--bg0 yalnız sayfa zemini,
+                          bgZeroIsPageOnly); üst çizgi yok. */}
+                      <td colSpan={dt.visibleColumns.length} className="dbq-detail">
+                        <div className="dbq-detail__label">Sample statement (with real literals)</div>
+                        {/* v0.10.1859 — renkli SQL + kopyala (coremetry/SqlCode) */}
+                        <SqlCode sql={r.sampleStatement} dense />
+                        <div className="dbq-detail__stats">
+                          <Stat label="executions" value={fmtNum(r.count)} />
+                          <Stat label="total"     value={fmtMs(r.totalMs)} />
+                          <Stat label="avg"       value={fmtMs(r.avgMs)} />
+                          <Stat label="p95"       value={fmtMs(r.p95Ms)} />
+                          <Stat label="p99"       value={fmtMs(r.p99Ms)} />
+                          <Stat label="max"       value={fmtMs(r.maxMs)} />
+                          <Stat label="errors"    value={`${r.errorCount} (${errPctOf(r).toFixed(2)}%)`} />
+                          <span className="dbq-detail__links">{links(r).detail}{links(r).traces}</span>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </Row>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <TableViewBar foldable={fold.hidden} expanded={showAllRows} onExpandedChange={setShowAllRows}
+        allColumns={allCols} onAllColumnsChange={setAllCols} source={source} />
+    </CollapsedSection>
   );
 }
 
@@ -361,9 +337,9 @@ function Row({ children }: { children: React.ReactNode }) {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <span style={{ display: 'inline-flex', gap: 6, alignItems: 'baseline' }}>
-      <span style={{ color: 'var(--text3)' }}>{label}</span>
-      <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text)' }}>{value}</span>
+    <span className="dbq-stat">
+      <span className="dbq-stat__k">{label}</span>
+      <span className="dbq-stat__v">{value}</span>
     </span>
   );
 }

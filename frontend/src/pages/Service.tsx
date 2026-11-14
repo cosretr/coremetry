@@ -692,7 +692,7 @@ function ServiceDetailInner() {
                     yalnız DB sorgularına indi, başlık "Database" oldu. */}
                 {/* v0.10.717 — kaynak rozeti düzeltildi: panel ham spans okur
                     (db_statement_summary_5m yalnız /slow-queries + alarm). */}
-                <SectionHead id="dtl-db" title="Database" source={scopeCluster || dbByCluster ? 'spans · db.statement (cluster kapsamı)' : 'spans · db.statement'}
+                <SectionHead id="dtl-db" title="Database"
                   badges={<>
                     {opScope && <span className="badge b-gray">tüm servis</span>}
                     {scopeCluster && <span className="badge b-info mono">cluster: {scopeCluster}</span>}
