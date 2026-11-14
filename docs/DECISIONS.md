@@ -13932,3 +13932,9 @@ eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
 - Kutu adları DEĞİŞMEDİ: anomali detayı v0.10.2027'den beri ML grup sayfasıyla tek dil ("Kanıt", "Kök neden",
   "Ne yapabilirim", "Teknik ayrıntı"); alarmın S7 adlarına çekmek ya o kararı bozar ya kapsam dışı ML sayfasına
   dokunur. Operatör kararı bekler.
+
+## 2026-11-14 — v0.10.2129 — Problems sadeleştirme S9: exception detayına üst veri satırı (operatör kararı 2026-11-13: klasik kalır)
+- `ProblemDetail` (exception): şeridin altına alarm/anomali detayıyla aynı `DetailMeta` — Servis · Ekip · SRE · Tür
+  ("Exception", Oracle grubunda "Exception · <marka etiketi>") · Ne zamandır (`exceptionOpenForLine`, tablo testli) ·
+  İlgilenen (grubun atananı, boşsa "kimse"). Klasik düzen (tip + mesaj, standart kartlar, servis/ekip çipleri,
+  sıklık grafiği, stack, eylemler) değişmedi; servis/ekip bilgisi bilerek iki kez görünür (çipler klasik düzenin parçası).

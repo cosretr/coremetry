@@ -9,7 +9,7 @@ import { describe, it, expect } from 'vitest';
 import type { AnomalyEvent, BehaviorChangeDetails, Problem } from '@/lib/types';
 import {
   alertProblemSummary, anomalyRecurrence, anomalySummary, anomalyWhenLine, behaviorMetricLabel, detailWhenLine, fmtRatio,
-  genericAnomalySentence, priorDeployText, problemWhenLine, promotedRecurrence, recurrenceClause, recurrenceTitle,
+  exceptionOpenForLine, genericAnomalySentence, priorDeployText, problemWhenLine, promotedRecurrence, recurrenceClause, recurrenceTitle,
 } from './detailSummary';
 
 type Ev = Pick<AnomalyEvent, 'kind' | 'service' | 'pattern' | 'peakRatio'> & Partial<Pick<AnomalyEvent, 'currentCount' | 'startedAt'>>;
@@ -364,5 +364,23 @@ describe('priorDeploy — bastırılan deploy nötr metinde kalır', () => {
     expect(problemWhenLine({ ruleId: PROMOTED, startedAt: 100e9, status: 'open', episodeCount: 1, priorDeploy: prior }, end, fmt, clock)).toBe(before);
     expect(problemWhenLine({ ruleId: 'builtin:error_rate', startedAt: 100e9, status: 'open', episodeCount: 8, priorDeploy: prior }, end, fmt, clock)).toBe(before);
     expect(anomalyWhenLine({ startedAt: 100e9, lastSeen: end, status: 'active', episodeCount: 1, priorDeploy: prior }, fmt, clock)).toBe(before);
+  });
+});
+
+// v0.10.2129 (Problems S9) — exception üst veri "Ne zamandır": her durum.
+describe('exceptionOpenForLine', () => {
+  const ts = (ns: number) => `T${ns / 1e9}`;
+  const now = 10 * 86_400e9;
+  it.each([
+    ['new, 3 gün', { state: 'new', firstSeen: now - 3 * 86_400e9 }, '3 gündür açık · ilk T604800'],
+    ['acknowledged, 5 saat', { state: 'acknowledged', firstSeen: now - 5 * 3600e9 }, '5 saattir açık · ilk T846000'],
+    ['regressed, 30 sn → en az 1 dk', { state: 'regressed', firstSeen: now - 30e9 }, '1 dakikadır açık · ilk T863970'],
+    ['resolved, damgalı', { state: 'resolved', firstSeen: 1e9, resolvedAt: 2e9 }, 'çözüldü · T2'],
+    ['resolved, damgasız', { state: 'resolved', firstSeen: 1e9 }, 'çözüldü'],
+    ['ignored', { state: 'ignored', firstSeen: 1e9 }, 'yok sayıldı'],
+    ['ilk görülme gelecekte (saat kayması)', { state: 'new', firstSeen: now + 1e9 }, `ilk T${(now + 1e9) / 1e9}`],
+    ['ilk görülme yok', { state: 'new', firstSeen: 0 }, 'ilk —'],
+  ] as const)('%s', (_n, g, want) => {
+    expect(exceptionOpenForLine(g as Parameters<typeof exceptionOpenForLine>[0], now, ts)).toBe(want);
   });
 });

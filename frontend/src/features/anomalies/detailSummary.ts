@@ -8,7 +8,8 @@
 // ekranda asla "NaN", "0 katına" ya da boş parantez basılmaz (tablo testi:
 // detailSummary.test.ts, her tür + her eksik-alan düşüşü + yukarı/aşağı yön).
 
-import type { AnomalyEvent, BehaviorChangeDetails, PriorDeploy, Problem } from '@/lib/types';
+import type { AnomalyEvent, BehaviorChangeDetails, ExceptionGroup, PriorDeploy, Problem } from '@/lib/types';
+import { openForTR } from '@/lib/inboxRowText';
 import { fmtFixed, fmtNum, tsMinute } from '@/lib/utils';
 import { subjectLabel, isAnomalyDetectorRule, PROMOTED_ANOMALY_RULE_PREFIX } from '@/lib/problemSubject';
 import { fmtDurationNs } from './problemTime';
@@ -318,4 +319,20 @@ export function anomalyWhenLine(
   }, fmtTs, fmtClock);
   const clause = recurrenceClause(anomalyRecurrence(e), fmtTs, e.priorDeploy);
   return clause ? `${base} · ${clause}` : base;
+}
+
+// exceptionOpenForLine — v0.10.2129 (Problems sadeleştirme S9): exception
+// detayının üst veri satırındaki "Ne zamandır". Açık durumlar (new /
+// acknowledged / regressed) ilk görülmeden bu yana "N gündür açık"; çözülmüş
+// ve yok sayılmış grup bunu söyler (çözülme damgası varsa onunla). Süre dili
+// Problems listesinin sayım cümlesiyle aynı (openForTR).
+export function exceptionOpenForLine(
+  g: Pick<ExceptionGroup, 'state' | 'firstSeen' | 'resolvedAt'>,
+  nowNs: number,
+  fmtTs: (ns: number) => string = tsMinute,
+): string {
+  if (g.state === 'resolved') return g.resolvedAt ? `çözüldü · ${fmtTs(g.resolvedAt)}` : 'çözüldü';
+  if (g.state === 'ignored') return 'yok sayıldı';
+  if (!(g.firstSeen > 0) || nowNs <= g.firstSeen) return `ilk ${g.firstSeen > 0 ? fmtTs(g.firstSeen) : '—'}`;
+  return `${openForTR(nowNs - g.firstSeen)} açık · ilk ${fmtTs(g.firstSeen)}`;
 }

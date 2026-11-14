@@ -56,7 +56,7 @@ import { ExceptionSampleRow } from './ExceptionSampleRow'; // v0.10.1104
 import { SubjectLink } from '../../components/SubjectLink';
 import { subjectKind, derivedTeamTitle, isAnomalyProblem, isAnomalyDetectorRule } from '../../lib/problemSubject';
 import { Sect, SignalLink, DeployBox, DetailTitle, DetailMeta, type DetailMetaItem } from './detailSections'; // v0.10.1032; başlık/üst veri v0.10.2126
-import { alertProblemSummary, problemWhenLine } from './detailSummary';
+import { alertProblemSummary, exceptionOpenForLine, problemWhenLine } from './detailSummary';
 import { alertWhatText, alertWhoText, alertCause } from './alertDetailBoxes'; // v0.10.2127 (S7) // v0.10.1032; problemWhenLine v0.10.1054
 import { AlertMetricChartSection } from './AlertMetricChartSection'; // v0.10.1064
 import { PromotedLogPatternCount, PromotedPatternLogsLink } from './PromotedPatternSection'; // v0.10.1106
@@ -342,6 +342,30 @@ function AlertProblemMeta({ problem, window: win, endNs }: {
   return <DetailMeta items={items} />;
 }
 
+// ExceptionMeta — v0.10.2129 (S9). Ekip katalogdan (TeamChips ile aynı
+// sorgu); servisi çözülemeyen sentetik Oracle grubunda servis linki ve ekip
+// yok. İlgilenen = grubun atananı (boşsa "kimse").
+function ExceptionMeta({ group, state, oraLabel }: {
+  group: ExceptionGroup; state: ExceptionGroupState; oraLabel?: string;
+}) {
+  const synthetic = !!oraLabel && isSyntheticOracleService(group.service);
+  const { ug, sy } = useServiceTeams(synthetic ? '' : group.service);
+  const items: DetailMetaItem[] = [];
+  if (group.service) {
+    items.push({ k: 'Servis', v: synthetic
+      ? <span className="mono">{group.service}</span>
+      : <Link to={serviceHref(group.service, { range: { fromNs: group.firstSeen, toNs: group.lastSeen } })} className="mono">{group.service}</Link> });
+  }
+  if (ug) items.push({ k: 'Ekip', v: <TeamLink team={ug} derived={false} /> });
+  if (sy && sy !== ug) items.push({ k: ug ? 'SRE' : 'Ekip', v: <TeamLink team={sy} derived={false} /> });
+  items.push({ k: 'Tür', v: oraLabel ? `Exception · ${oraLabel}` : 'Exception' });
+  items.push({ k: 'Ne zamandır', v: exceptionOpenForLine({ state, firstSeen: group.firstSeen, resolvedAt: group.resolvedAt }, Date.now() * 1e6) });
+  items.push({ k: 'İlgilenen', v: group.assignee
+    ? <span className="mono">{group.assignee}</span>
+    : <span className="pd-meta__none">kimse</span> });
+  return <DetailMeta items={items} />;
+}
+
 export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
   group: ExceptionGroup;
   isAdmin: boolean;
@@ -582,6 +606,13 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
             loading={acting === 'new'} disabled={acting !== null}>Reopen</Button>
         )}
       </div>
+
+      {/* v0.10.2129 (Problems sadeleştirme S9; operatör kararı 2026-11-13:
+          exception detayı KLASİK kalır) — yalnız üstüne alarm/anomali
+          detayıyla aynı tek satır üst veri (Servis · Ekip · SRE · Tür · Ne
+          zamandır · İlgilenen). Altındaki klasik düzen (tip + mesaj, standart
+          kartlar, servis/ekip çipleri, sıklık grafiği, stack) dokunulmadı. */}
+      <ExceptionMeta group={group} state={state} oraLabel={ora ? oraLabel : undefined} />
 
       {/* Exception header (no card) */}
       <div className="mono" style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--err)', marginBottom: 4, wordBreak: 'break-all' }}>
