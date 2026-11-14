@@ -9,9 +9,8 @@ package api
 //
 // Üçü de admin: okuma backend'i değişimi kurulumdaki HER operatörün
 // Metrics sayfasında gördüğü sayıların KAYNAĞINI değiştiriyor, ve kayıtlı
-// token operatörün tüm VM'ini okuyor. GET'i de admin tutuyoruz (kıyas:
-// /api/settings/failure-slo'nun GET'i rolsüzdür çünkü o bir grafik
-// referans ÇİZGİSİ; bu ise yapılandırma + hasToken).
+// token operatörün tüm VM'ini okuyor. GET'i de admin tutuyoruz: bu uç
+// yapılandırma + hasToken döndürür.
 //
 // Kaynak ROZETİNİN bu uçlara ihtiyacı YOK: /api/metrics/names cevabı
 // `source` alanını kendisi taşıyor. Aksi halde viewer rozeti hiç

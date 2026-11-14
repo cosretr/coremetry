@@ -14053,3 +14053,12 @@ eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
 - Backend'e dokunulmadı (sıfır Go değişikliği). FE çağıranı kalmayan uçlar operatör kararına bırakıldı: `GET` / `PUT /api/settings/failure-slo` (`internal/api/failure_slo.go`; blob yalnız bu bölümün hata-oranı eşik çizgisini besliyordu) ve `POST /api/copilot/explain-charts` (`internal/api/copilot_service_charts.go`; HTTP çağıranı v0.10.1407'den beri yok, sohbet turu yolu `explain-charts:chat` yaşıyor ama uygulama içi düğmesi bu bölümdeydi).
 - CoSRE ürün kılavuzu (`internal/mcptools/product_guide.go`) bu bölüme link vermiyordu (servis linkleri Overview / Operations / Topology / Infrastructure); değişiklik gerekmedi.
 - Doğrulanmadı: tarayıcıda görünüm (Details sırası, `?op=` şeridi metni), prod.
+
+
+## 2026-11-14 — v0.10.2161 — Çağıranı kalmayan failure-SLO uçları silindi (operatör onayı)
+- v0.10.2154 notunda operatör kararına bırakılan iki uç kalktı: `GET` / `PUT /api/settings/failure-slo`. Ön yüz çağıranı Details "Performance" bölümüyle birlikte gitmişti (`api.putFailureSLO` ölü kod olarak v0.10.1426'da silinmişti).
+- Silinen: `internal/api/failure_slo.go` (`getFailureSLO` / `putFailureSLO`), `internal/chstore/failure_slo.go` (`FailureSLOConfig`, `DefaultFailureSLO`, `NormalizeFailureSLO`, `FailureSLOOverrideServices`, `GetFailureSLO`, `SaveFailureSLO`) ve testi; `api.go`'daki iki kayıt satırı + yorumu. `api.go` 10189 → 10183, taban `.claude/baselines/api_go_lines` aynı commit'te indi.
+- Ölü olduğunun kanıtı (grep, depo geneli): `failure_slo` anahtarını okuyan başka Go kodu yok — alarm / SLO değerlendirici, MCP aracı, CoSRE aracı, eval seti ve helm şablonu bu blobu ya da ucu anmıyor (kalan anışlar: bu dosya, tarihsel `docs/plans/cross-page-context-2026-08-23.md` ve ön yüzdeki `deadCode1426` silinenler listesi). Blob yalnız silinen bölümün hata-oranı eşik ÇİZGİSİNİ besliyordu; hiçbir alarm ya da problem kararı ona bağlı değildi.
+- Geriye dönük uyum katmanı yok: yönlendirme, 410 ya da boş cevap dönen kalıntı eklenmedi; iki desen mux'ta artık kayıtlı değil. Kayıtlı `system_settings` satırı (`failure_slo`) yerinde kalır ve okunmaz; göç ya da silme sorgusu yazılmadı.
+- Bilerek kalan: `POST /api/copilot/explain-charts` (sohbet turu ikizi `explain-charts:chat` ve eval seti aynı kurucuları kullanıyor). Availability SLO'ları (`/api/slos`) etkilenmedi.
+- Doğrulanmadı: prod (kayıtlı blob var mı bilinmiyor; varsa etkisiz).

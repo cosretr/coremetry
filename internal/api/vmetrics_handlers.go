@@ -9,9 +9,7 @@ package api
 // it the store every metric surface reads from.
 //
 // Admin-only, all three. A read backend swap changes what every operator
-// on the install sees on the Metrics page; editor is not enough. (Compare
-// /api/settings/failure-slo, v0.9.1036, whose GET is ungated because it
-// is a reference LINE on a chart, not a routing decision.)
+// on the install sees on the Metrics page; editor is not enough.
 
 import (
 	"encoding/json"
