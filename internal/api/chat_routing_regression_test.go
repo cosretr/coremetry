@@ -404,6 +404,55 @@ var routingRegressionRows = []routingRow{
 	{release: "komşu v0.10.2136", name: "v1 'nedenini inceler misin' → service_report (v1 bayt bayt)",
 		q: rrSvc + " nedenini inceler misin", wantTier: aisurface.TierGuided, wantRoute: string(guidedServiceReport)},
 
+	// v0.10.2140 — router boşlukları D7 (audit I, J, K): yol sorusu router'da
+	// how_to (adımlar + link çipi, sayfa açılmaz); nöbet çizelgesi "yok";
+	// "<anahtar> no <değer>" trace araması, 24 saati aşan pencere link çipi.
+	// Yalnız v2. Cevap şekli (open yok, link) — chat_howto_route_test.go.
+	{release: "v0.10.2140", name: "v2 'trace detaile hangi menüden gideceğim' → how_to (trace detayı)",
+		q: "trace detaile hangi menüden gideceğim", v2: true, wantTier: aisurface.TierGuided, wantRoute: string(guidedHowTo),
+		noLLM: true, ansHas: []string{"NASIL: Trace detayına gitmek"}},
+	{release: "v0.10.2140", name: "v2 'tablo insertlerini hangi adımda görebilirim' → how_to (veritabanı çağrıları)",
+		q: "tablo insertlerini hangi adımda görebilirim", v2: true, wantTier: aisurface.TierGuided, wantRoute: string(guidedHowTo),
+		noLLM: true, ansHas: []string{"NASIL: Veritabanı çağrılarını"}},
+	{release: "v0.10.2140", name: "v2 'trace id'yi nereye yazacağım' → how_to (trace detayı)",
+		q: "trace id'yi nereye yazacağım", v2: true, wantTier: aisurface.TierGuided, wantRoute: string(guidedHowTo),
+		noLLM: true, ansHas: []string{"NASIL: Trace detayına gitmek"}},
+	{release: "v0.10.2140", name: "v2 'öznitelikle trace nasıl ararım' → how_to (öznitelikle arama)",
+		q: "öznitelikle trace nasıl ararım", v2: true, wantTier: aisurface.TierGuided, wantRoute: string(guidedHowTo),
+		noLLM: true, ansHas: []string{"özniteliğe göre aramak"}},
+	{release: "v0.10.2140", name: "v2 '<servis> hata oranı nereden görürüm' → how_to (sağlık özeti değil)",
+		q: rrSvc + " hata oranı nereden görürüm", v2: true, wantTier: aisurface.TierGuided, wantRoute: string(guidedHowTo),
+		noLLM: true, ansHas: []string{"NASIL: "}},
+	{release: "v0.10.2140", name: "v2 '<servis> hangi menüden bakılır' → how_to (endpoint kartı değil)",
+		q: rrSvc + " hangi menüden bakılır", v2: true, wantTier: aisurface.TierGuided, wantRoute: string(guidedHowTo), noLLM: true},
+	{release: "v0.10.2140", name: "v2 'trace detay sayfasını açar mısın' → how_to (servis sormaz, sayfa açmaz)",
+		q: "trace detay sayfasını açar mısın", v2: true, wantTier: aisurface.TierGuided, wantRoute: string(guidedHowTo),
+		noLLM: true, ansHas: []string{"NASIL: Trace detayına gitmek"}},
+	{release: "v0.10.2140", name: "v2 nöbet çizelgesi → not_available (dürüst 'yok', model yok)",
+		q: "16 kasım haftası nöbetçileri kim", v2: true, wantTier: aisurface.TierGuided, wantRoute: guidedNotAvailableRoute,
+		noLLM: true, ansPrefix: "Nöbet çizelgesi Coremetry'de yok"},
+	{release: "v0.10.2140", name: "v2 'siparis no <değer> … 7 eylülden 15 eylüle' → trace_search_link (aranmaz)",
+		q: "siparis no 73066 için 7 eylülden 15 eylüle kadar trace ara", v2: true, wantTier: aisurface.TierGuided, wantRoute: guidedTraceSearchLinkRoute,
+		noLLM: true},
+	{release: "v0.10.2140", name: "v2 'siparis no <değer> olan trace'leri bul' → trace_search (sohbette)",
+		q: "siparis no 73066 olan trace'leri bul", v2: true, wantTier: aisurface.TierGuided, wantRoute: string(guidedTraceSearch)},
+	{release: "komşu v0.10.2140", name: "v2 '<servis> nereden çağrılıyor' topolojide kalır (yol sorusu değil)",
+		q: rrSvc + " nereden çağrılıyor", v2: true, wantTier: aisurface.TierGuided, wantRoute: string(guidedServiceTopology)},
+	{release: "komşu v0.10.2140", name: "v2 'hata nereden geliyor' problems'ta kalır",
+		q: "hata nereden geliyor", v2: true, wantTier: aisurface.TierGuided, wantRoute: string(guidedProblems)},
+	{release: "komşu v0.10.2140", name: "v2 'gece nöbetinde ne oldu' vardiya özetinde kalır",
+		q: "gece nöbetinde ne oldu", v2: true, wantTier: aisurface.TierGuided, wantRoute: string(guidedShiftSummary)},
+	{release: "komşu v0.10.2140", name: "v2 '<servis> service detail sayfasını açar mısın' open_page'de kalır",
+		q: rrSvc + " service detail sayfasını açar mısın", v2: true, wantTier: aisurface.TierGuided, wantRoute: string(guidedOpenPage)},
+	{release: "komşu v0.10.2140", name: "v1 'trace detaile hangi menüden gideceğim' eski yolunda → intent",
+		q: "trace detaile hangi menüden gideceğim", wantTier: aisurface.TierIntent, wantRoute: ""},
+	{release: "komşu v0.10.2140", name: "v1 nöbet çizelgesi eski yolunda → intent",
+		q: "16 kasım haftası nöbetçileri kim", wantTier: aisurface.TierIntent, wantRoute: ""},
+	{release: "komşu v0.10.2140", name: "v1 'siparis no … 7 eylülden 15 eylüle' eski yolunda → intent",
+		q: "siparis no 73066 için 7 eylülden 15 eylüle kadar trace ara", wantTier: aisurface.TierIntent, wantRoute: ""},
+	{release: "komşu v0.10.2140", name: "v1 '<servis> hata oranı nereden görürüm' eski yolunda → service_health",
+		q: rrSvc + " hata oranı nereden görürüm", wantTier: aisurface.TierGuided, wantRoute: string(guidedServiceHealth)},
+
 	// v0.10.2139 — router boşlukları D6 (audit D, G): çıplak varlık + çitli /
 	// döküm yapıştırma; yalnız v2. Yazım hatalı adın en yakın servis kartı
 	// demette (guidedEntityScanAnswer, store ister) — TestV2EntityNearAsk.
@@ -489,7 +538,8 @@ func withRoutingWiki(t *testing.T, _ *routingRig) {
 // routingPassThrough — dikişin demeti koşturduğu rotalar (store'suz çalışanlar).
 // v0.10.1486 — service_exceptions da: okuyucu dikişi (serviceExcReadFn) sahte,
 // anlatım sahte modelden; sunucu eki (örnek trace tablosu) cevapta görünür.
-var routingPassThrough = map[guidedIntent]bool{guidedOutboundCall: true, guidedOffTopic: true, guidedServiceExceptions: true}
+// v0.10.2140 — how_to da: cevap tablodan, LLM'siz ve store'suz (copilot_howto.go).
+var routingPassThrough = map[guidedIntent]bool{guidedOutboundCall: true, guidedOffTopic: true, guidedServiceExceptions: true, guidedHowTo: true}
 
 func TestRoutingRegression(t *testing.T) {
 	for _, row := range routingRegressionRows {

@@ -54,6 +54,12 @@ func guidedRouteLabel(r guidedRoute) string {
 	if r.Intent == guidedRootCause && r.opWhy != nil { // v0.10.2137 (chat_operation_why.go)
 		return guidedOperationRootCauseRoute
 	}
+	if r.Intent == guidedHowTo && r.NotAvailable != "" { // v0.10.2140 (chat_howto_route.go)
+		return guidedNotAvailableRoute
+	}
+	if r.Intent == guidedTraceSearch && r.LinkOnly != nil {
+		return guidedTraceSearchLinkRoute
+	}
 	return string(r.Intent)
 }
 

@@ -14035,3 +14035,12 @@ eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
   → log_field ilk tanımlayıcı. Yeni ES sorgusu yok: mevcut log_field demeti.
 - "svc-a trace detail" kapsam dışı (niyet belirsiz). Doğrulanmadı: canlı model, prod, tarayıcıda kart.
 
+
+## 2026-11-14 — v0.10.2140 — CoSRE router boşlukları D7: yol tarifi router'da, nöbet "yok", uzun aralıklı arama link (yalnız v2)
+- how_to artık router'dan da gelir (önce yalnız sınıflandırıcı): "hangi menüden", "hangi adımda/sayfada … görebilirim", "nereye yazacağım", "nereden/nasıl" + birinci tekil / yeterlilik fiili (`hasHowToNavShape`). "nereden çağrılıyor", "hata nereden geliyor", "nerede görülüyor" veri sorusu kalır.
+- Rota none / find_entity ise şekil yeter; veri rotasında (service_health, log_errors, slow_traces, problems, db_health, deploy_impact, pod_health) kılavuzda konu varsa how_to kazanır; diğer rotalar değişmez. Yol sorusu endpoint kartını da atlar.
+- Kılavuza v2-yalnız üç konu: `trace_detail`, `db_spans`, `attr_search` (`productGuideV2`); v1 tablosu, `GuideFor` ve MCP `product_guide` aracı görmez. Servissiz "trace detay sayfasını açar mısın" servis sormaz, yol tarif eder. Cevap adımlar + link çipi, `open` yok (v0.10.809).
+- Karar 1 (K): nöbet çizelgesi → modelsiz "Coremetry'de yok"; link ve çip yok; /ai rota etiketi `not_available`. "gece nöbetinde ne oldu" vardiya özetinde kalır.
+- Karar 2 (J): "<anahtar> no <değer> … trace ara/bul" → mevcut `trace_search` demeti (değer = arama metni). Sorudaki pencere 24 saati aşıyorsa ("7 eylülden 15 eylüle", "7-15 eylül", "son 7 gün") arama KOŞMAZ; aynı değer + aralıkla `/traces` link çipi, etiket `trace_search_link`. Yeni niyet yok (rota bayrakları `NotAvailable`, `LinkOnly`).
+- Yapılmadı: ekran servisi varken "trace detay sayfasını açar mısın" yine servis sayfasını açar (open_page); "svc-a trace detail" (D6'dan devir) sınıflandırıcıda.
+- Doğrulanmadı: canlı model, prod, tarayıcı.

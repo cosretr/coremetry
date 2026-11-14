@@ -302,6 +302,9 @@ func (s *Server) endpointPickPlan(ctx context.Context, msgs []copilot.ChatMessag
 	if q == "" || pick.Skip || !endpointPickCue(q) {
 		return q, pick, false
 	}
+	if v2HowToGate(normalizeGuidedMsg(q)) { // v0.10.2140 — D7: yol sorusu ("hangi menüden bakılır") kart değil how_to
+		return q, pick, false
+	}
 	pc, ok := resolveEndpointPick(q, pick, s.guidedServiceNames(ctx), s.guidedEnvNames(ctx))
 	return q, pc, ok
 }

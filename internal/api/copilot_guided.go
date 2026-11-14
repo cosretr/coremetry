@@ -338,6 +338,12 @@ type guidedRoute struct {
 	// problems (linkler, çipler, özet kartı aynı); demet hipotez çerçevesi ekler,
 	// /ai rota etiketi problems_root_cause (chat_problems_root_cause.go).
 	ProblemsRootCause bool `json:",omitempty"`
+	// v0.10.2140 (router boşlukları D7, yalnız v2; chat_howto_route.go):
+	// NotAvailable — how_to rotasında "bu veri Coremetry'de yok" cevabı
+	// ("oncall" = nöbet çizelgesi). LinkOnly — trace_search rotasında pencere
+	// 24 saati aşıyor: arama KOŞMAZ, süzülmüş Traces link çipi verilir.
+	NotAvailable string         `json:"-"`
+	LinkOnly     *traceLinkOnly `json:"-"`
 	// opWhy — v0.10.2137 (router boşlukları D4, yalnız v2): operasyon / endpoint
 	// ön-getirme paketi; doluysa root_cause demeti servis demeti yerine paketi
 	// anlatır (chat_operation_why.go). JSON'a girmez (LastRoute klonu servis
@@ -1952,7 +1958,7 @@ func (s *Server) copilotChatGuided(ctx context.Context, emit func(string, any), 
 	}
 	pasted = pasted || fenced || paramsDump
 	if !hasGuidedSignal(norm) && !followCue && !mayNameTeam(norm) && !absShape && !findCue && !peerCue && !affirm && !pasted &&
-		!(v2 && hasLatencyGrowthSignal(norm)) && !v2Cue {
+		!(v2 && hasLatencyGrowthSignal(norm)) && !v2Cue && !(v2 && v2HowToGate(norm)) {
 		return false, false // zero-cost fast path: no catalogue read
 	}
 	svcNames, envNames := s.guidedServiceNames(ctx), s.guidedEnvNames(ctx)
@@ -1981,6 +1987,15 @@ func (s *Server) copilotChatGuided(ctx context.Context, emit func(string, any), 
 	if v2 && (route.Intent == guidedNone || route.Intent == guidedFindEntity) { // v0.10.2139 — D6: "# svc-a-prod" → servis sağlığı
 		if bs, be, ok := v2BareServiceEnv(question, svcNames, envNames); ok {
 			route = guidedRoute{Intent: guidedServiceHealth, Service: bs, Env: be}
+		}
+	}
+	// v0.10.2140 — D7 (chat_howto_route.go): yol sorusu → how_to; nöbet
+	// çizelgesi → "yok"; "<anahtar> no <değer>" → trace_search (24 saati aşan
+	// pencere link çipi). Sorudaki tarih bu rotalarda pencere mutasyonu değil.
+	if hr, changed := v2HowToRoute(route, question, norm, extractServiceFullName(norm, svcNames), v2, time.Now(), chatLocationNamed(tzName, tzOffsetMin)); changed {
+		route = hr
+		if route.NotAvailable != "" || route.LinkOnly != nil {
+			absShape = false
 		}
 	}
 	// v0.10.479 (F4-2, G10) — TAKİP MUTASYONU: "son 1 saate genişlet" / "sadece
@@ -2297,8 +2312,11 @@ func (s *Server) runGuidedRoute(ctx context.Context, emit func(string, any), rou
 	if route.Intent == guidedOffTopic { // v0.10.819 — LLM'siz kibar sınır + yol tarifi; v0.10.1458 — anahtar açıksa kısa genel cevap (chat_offtopic_general.go)
 		return s.guidedOffTopicDispatch(ctx, emit, msgs, question, ctxService)
 	}
+	if handled, ok := s.guidedD7DirectAnswer(emit, route); handled { // v0.10.2140 — D7: nöbet "yok" / link-yalnız arama
+		return handled, ok
+	}
 	if route.Intent == guidedHowTo { // v0.10.809 — LLM'siz yol tarifi
-		return s.guidedHowToAnswer(emit, route, question, ctxService)
+		return s.guidedHowToAnswerFor(emit, route, question, ctxService, cosreV2Marked(ctx)) // v0.10.2140 — v2 ek konular
 	}
 	if route.Intent == guidedServiceHealthcheck { // v0.10.2048 — LLM'siz sağlık kontrolü (copilot_service_healthcheck.go)
 		return s.guidedHealthcheckAnswer(ctx, emit, route, ctxService)

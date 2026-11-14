@@ -250,6 +250,80 @@ var productGuide = []GuideTopic{
 // GuideTopics — salt-okunur kopya (sıra sabit).
 func GuideTopics() []GuideTopic { return append([]GuideTopic(nil), productGuide...) }
 
+// productGuideV2 — v0.10.2140 (CoSRE router boşlukları D7): YALNIZ v2 sohbet
+// yol tarifinin ek konuları (GuideForV2 / GuideTopicsV2). v1 yolu, MCP aracı
+// ve productGuide tablosu bunları görmez → bayt bayt eski. Tablo sırası:
+// eşitlikte v1 konuları önce (productGuide ++ productGuideV2).
+var productGuideV2 = []GuideTopic{
+	{
+		ID: "trace_detail", Title: "Trace detayına gitmek", Ask: "Trace detayına nasıl giderim?",
+		Keywords: []string{"trace", "trace detay", "trace detail", "trace sayfa", "trace id'yi", "nereye yaz", "şelale", "waterfall", "span detay", "span detail"},
+		Steps: []string{
+			"Traces sayfasında listeden bir trace satırına tıkla: trace detay sayfası (şelale, span'ler, loglar) açılır.",
+			"Trace id'n varsa Traces sayfasındaki operasyon kutusuna (\"Operation, or an id\") 32 haneli id'yi yaz ve Enter'a bas — doğrudan o trace açılır.",
+			"Bana {trace} yapıştırırsan trace'i açıklarım; detay sayfasının bağlantısını da veririm.",
+		},
+		Links: func(_, traceID string) []GuideLink {
+			out := []GuideLink{{Label: "Trace'ler", Href: "/traces"}}
+			if traceID != "" {
+				out = append(out, GuideLink{Label: "Trace", Href: "/trace?id=" + url.QueryEscape(traceID)})
+			}
+			return out
+		},
+		Related: []string{"trace_logs", "attr_search"},
+	},
+	{
+		ID: "db_spans", Title: "Veritabanı çağrılarını (SQL, tablo insert) görmek", Ask: "Veritabanı sorgularını nereden görürüm?",
+		Keywords: []string{"insert", "tablo insert", "sql", "veritaban", "veritabanı sorgu", "database", "db çağrı", "db sorgu", "db span", "statement"},
+		Steps: []string{
+			"Veritabanları (Databases) sayfası DB sistemlerini ve en pahalı SQL ifadelerini listeler; bir satırdan ifadenin detayına gidersin.",
+			"Yavaş sorgular sayfası ifadeleri süreye göre sıralar; INSERT / UPDATE gibi ifadeler metniyle görünür.",
+			"Tek bir isteğin DB adımları için trace detayındaki şelalede DB span'lerine bak (db.statement).",
+		},
+		Links: func(_, _ string) []GuideLink {
+			return []GuideLink{{Label: "Veritabanları", Href: "/databases"}, {Label: "Yavaş sorgular", Href: "/databases/slow-queries"}}
+		},
+		Related: []string{"trace_detail", "slow_traces"},
+	},
+	{
+		ID: "attr_search", Title: "Trace'leri bir değere / özniteliğe göre aramak", Ask: "Bir değerle (ör. sipariş no) trace nasıl ararım?",
+		Keywords: []string{"öznitelik", "attribute", "değere göre", "değerle", "numarasıyla", " no ", "trace ara", "trace nasıl ara", "trace'leri ara", "trace'lerde ara"},
+		Steps: []string{
+			"Traces sayfasında operasyon kutusuna değeri yaz (function_id gibi kimlikler de olur) ve Enter'a bas; liste o değeri taşıyan trace'lerle süzülür.",
+			"Belirli bir alana göre süzmek için \"+ Add filter\" ile alan / operatör / değer ekle.",
+			"Aralığı sağ üstteki zaman seçiciden ayarla; sohbette en çok son 24 saat aranır, daha uzun aralık için Traces sayfasını kullan.",
+			"Bana \"içinde 12345 geçen trace'ler\" diyebilirsin.",
+		},
+		Links: func(_, _ string) []GuideLink {
+			return []GuideLink{{Label: "Trace'ler", Href: "/traces"}}
+		},
+		Related: []string{"trace_detail", "error_traces"},
+	},
+}
+
+// GuideTopicsV2 — v2 sohbet yol tarifinin konuları (v1 ++ v2-yalnız).
+func GuideTopicsV2() []GuideTopic {
+	return append(append([]GuideTopic(nil), productGuide...), productGuideV2...)
+}
+
+// IsGuideTopicV2Only — SAF: konu yalnız v2 tablosunda mı.
+func IsGuideTopicV2Only(id string) bool {
+	for _, t := range productGuideV2 {
+		if t.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+// GuideIndexV2TR — v2 konu dizini (v1 ++ v2-yalnız).
+func GuideIndexV2TR() string { return guideIndexTR(GuideTopicsV2()) }
+
+// GuideForV2 — SAF: GuideFor'un v2 ikizi (ek konular dahil).
+func GuideForV2(topicID, question, service, traceID string) (GuideAnswer, bool) {
+	return guideFrom(GuideTopicsV2(), topicID, question, service, traceID)
+}
+
 // problemsGuideLinks — SAF (v0.10.1828): "problems" konusunun bağlantıları;
 // son bağlantı Anomalies (Incidents emekli).
 func problemsGuideLinks(svc, _ string) []GuideLink {
@@ -275,6 +349,11 @@ func guideTopicByID(id string) (GuideTopic, bool) {
 // (eşitlikte tablo sırası); hiç eşleşme yoksa nil. Küçük harf alt-dize eşleşmesi
 // (Türkçe ekler: "trace'lerine" → "trace" eşleşir).
 func MatchGuideTopics(question string) []GuideTopic {
+	return matchGuideTopicsIn(productGuide, question)
+}
+
+// matchGuideTopicsIn — SAF: MatchGuideTopics'in gövdesi (tablo parametreli).
+func matchGuideTopicsIn(table []GuideTopic, question string) []GuideTopic {
 	q := strings.ToLower(strings.TrimSpace(question))
 	if q == "" {
 		return nil
@@ -285,7 +364,7 @@ func MatchGuideTopics(question string) []GuideTopic {
 		order int
 	}
 	var hits []scored
-	for i, t := range productGuide {
+	for i, t := range table {
 		n := 0
 		for _, k := range t.Keywords {
 			if strings.Contains(q, k) {
@@ -324,11 +403,22 @@ type GuideAnswer struct {
 // GuideFor — SAF: topicID doluysa o konu, yoksa soruya en iyi eşleşme;
 // yer tutucular doldurulur. Bulunamazsa ok=false.
 func GuideFor(topicID, question, service, traceID string) (GuideAnswer, bool) {
+	return guideFrom(productGuide, topicID, question, service, traceID)
+}
+
+// guideFrom — SAF: GuideFor'un gövdesi (tablo parametreli; v2 ek konuları).
+func guideFrom(table []GuideTopic, topicID, question, service, traceID string) (GuideAnswer, bool) {
 	var t GuideTopic
 	var ok bool
 	if topicID != "" {
-		t, ok = guideTopicByID(strings.ToLower(strings.TrimSpace(topicID)))
-	} else if m := MatchGuideTopics(question); len(m) > 0 {
+		id := strings.ToLower(strings.TrimSpace(topicID))
+		for _, x := range table {
+			if x.ID == id {
+				t, ok = x, true
+				break
+			}
+		}
+	} else if m := matchGuideTopicsIn(table, question); len(m) > 0 {
 		t, ok = m[0], true
 	}
 	if !ok {
@@ -369,10 +459,12 @@ func RenderGuideTR(a GuideAnswer) string {
 }
 
 // GuideIndexTR — konu bulunamayınca liste (çipler Ask metinleridir).
-func GuideIndexTR() string {
+func GuideIndexTR() string { return guideIndexTR(productGuide) }
+
+func guideIndexTR(table []GuideTopic) string {
 	var b strings.Builder
 	b.WriteString("Hangi konuda yol tarif edeyim?\n")
-	for _, t := range productGuide {
+	for _, t := range table {
 		fmt.Fprintf(&b, "- %s\n", t.Ask)
 	}
 	return b.String()

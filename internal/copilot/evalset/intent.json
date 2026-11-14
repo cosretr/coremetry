@@ -452,6 +452,48 @@
           "svc-c"
         ]
       }
+    },
+    {
+      "id": "intent-how-to-trace-detail-menu",
+      "surface": "IntentClassify",
+      "why": "v0.10.2140 (router boşlukları D7): 'hangi menüden' yol tarifi — how_to; trace_by_id / find_entity DEĞİL",
+      "user": "trace detaile hangi menüden gideceğim",
+      "expect": {
+        "intent": "how_to",
+        "knownEntities": [
+          "svc-a",
+          "svc-b",
+          "svc-c"
+        ]
+      }
+    },
+    {
+      "id": "intent-how-to-db-inserts-step",
+      "surface": "IntentClassify",
+      "why": "v0.10.2140 (router boşlukları D7): 'hangi adımda görebilirim' yol tarifi — how_to; db_health DEĞİL",
+      "user": "tablo insertlerini hangi adımda görebilirim",
+      "expect": {
+        "intent": "how_to",
+        "knownEntities": [
+          "svc-a",
+          "svc-b",
+          "svc-c"
+        ]
+      }
+    },
+    {
+      "id": "intent-off-topic-oncall-roster",
+      "surface": "IntentClassify",
+      "why": "v0.10.2140 (router boşlukları K): nöbet çizelgesi Coremetry verisi değil — off_topic; shift_summary DEĞİL",
+      "user": "16 kasım haftası nöbetçileri kim",
+      "expect": {
+        "intent": "off_topic",
+        "knownEntities": [
+          "svc-a",
+          "svc-b",
+          "svc-c"
+        ]
+      }
     }
   ]
 }
