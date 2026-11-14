@@ -718,6 +718,12 @@ func (e *Evaluator) evaluateAll(ctx context.Context) int {
 		e.promoteStrongAnomalies(ctx)
 	}
 
+	// v0.10.2157 (Davis tarzı tek Problem D3) — ikiz göçü, tikin SON pası:
+	// aynı serviste sahip + ona katılabilecek başka açık satır varsa gençler
+	// "merged into" ile kapanır ve üyeye döner (problem_merge.go). Sonda:
+	// bu tikin bütün açılışlarını görsün.
+	e.mergeServiceTwins(chstore.WithQueryTag(ctx, "worker:evaluator:problem-merge"))
+
 	return evaluated
 }
 
@@ -1148,6 +1154,9 @@ func (e *Evaluator) sweepStaleProblems(ctx context.Context) {
 	// v0.10.2052 (D4) — ML grup Problem'inin yaşam döngüsü ML tikinde
 	// (seyrek); kendi eşiğini aşmadıkça süpürülmez (chstore.SplitMLGroupStale).
 	stale = e.dropLiveMLGroupProblems(ctx, stale)
+	// v0.10.2157 (D3) — canlı üyesi olan SAHİP süpürülmez (problem_merge.go):
+	// sahibin kendi dedektörü susmuş olsa da Problem üyeleriyle yaşar.
+	stale = e.dropLiveOwners(ctx, stale)
 	// v0.10.592 — poller'ın sahiplendiği Problem'ler (ext-down / ext-cap)
 	// süpürülmez: yaşam döngüleri poll anında touch/resolve ile yönetiliyor;
 	// poll aralığı 3×interval'ı aşan kaynakta süpürme onları "source silent"

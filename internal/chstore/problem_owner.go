@@ -128,6 +128,26 @@ func (pol OwnerPolicy) OwnerRule(ruleID, service string) bool {
 	return ok
 }
 
+// RaiseRule — SAF: (kural, servis) üye olarak sahibin önceliğini
+// yükseltebilir mi. Ölçüt, operatörün o ailenin kaynak önceliğini inbox'ta
+// KORUYUP korumadığıdır (etkin istisna listesi): korunan ailenin önceliği
+// birleşince de görünür kalmalı, P3'e indirilen aile sahibi P1 yapmamalı.
+// Varsayılan listede bu, sahip olabilen ailelerle aynıdır; operatör
+// yalnız-üye bir aileyi (ör. anomaly:*:p99_ms) listeye eklediyse o da
+// yükseltir (v0.10.2157 — aksi halde korunan önceliği sahibin altında
+// gizlenirdi). Liste bilinmiyorsa (nil) yalnız statik sahip aileleri.
+func (pol OwnerPolicy) RaiseRule(ruleID, service string) bool {
+	class := ProblemMergeClass(ruleID)
+	if service == "" || class == MergeSeparate || pol.muted(ruleID, service) {
+		return false
+	}
+	if pol.Keep == nil {
+		return class == MergeOwner
+	}
+	_, ok := MatchInboxKeepSourcePriority(pol.Keep, ruleID)
+	return ok
+}
+
 // MemberRule — SAF: (kural, servis) açık bir sahibe ÜYE olabilir mi.
 func (pol OwnerPolicy) MemberRule(ruleID, service string) bool {
 	return service != "" && ProblemMergeClass(ruleID) != MergeSeparate && !pol.muted(ruleID, service)
@@ -212,11 +232,11 @@ func (pol OwnerPolicy) prio(p Problem) string {
 	return s
 }
 
-// RaiseOwner — SAF: üye sahibi yükseltir mi. Yalnız sahip olabilen (ve
-// istisna listesindeki) aile, yalnız TEK BAŞINA önceliği sahibinkinden
+// RaiseOwner — SAF: üye sahibi yükseltir mi. Yalnız kaynak önceliği inbox'ta
+// korunan aile (RaiseRule), yalnız TEK BAŞINA önceliği sahibinkinden
 // yüksekse: şiddet + ölçü birlikte üyeninki olur. ok=false → satır aynen.
 func RaiseOwner(owner, member Problem, pol OwnerPolicy) (Problem, bool) {
-	if !pol.OwnerRule(member.RuleID, member.Service) {
+	if !pol.RaiseRule(member.RuleID, member.Service) {
 		return owner, false
 	}
 	if mergePrioRank[pol.prio(member)] <= mergePrioRank[pol.prio(owner)] {

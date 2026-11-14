@@ -32,6 +32,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cilcenk/coremetry/internal/anomaly"
 	"github.com/cilcenk/coremetry/internal/chstore"
 )
 
@@ -451,7 +452,21 @@ func (r *Recorder) liveGroupProblems(ctx context.Context, groups []decidedGroup,
 			go r.notifier.SendProblemAlert(context.Background(), p)
 		}
 	}
-	for _, p := range plan.Resolve {
+	// v0.10.2157 (D3) — kapanış = üyeden ayrılma: ML sinyali biten Problem'in
+	// canlı üyesi (eski dedektörün üye olayı) varsa satır açık kalır ve aynen
+	// tazelenir; ML her tik yeniden dener, son üye de bitince kapanır.
+	closeNow, held := splitHeldResolves(plan.Resolve, merged, func(p chstore.Problem) bool { return r.holdResolve(ctx, p, now) })
+	for _, p := range held {
+		if o := snap.ByID(p.ID); o != nil {
+			if err := r.store.UpsertProblem(ctx, *o); err != nil {
+				firstErr = firstNonNil(firstErr, err)
+				continue
+			}
+			c.Refreshed++
+		}
+		log.Printf("[ml] ML PROBLEM HELD OPEN %s · %s — ML sinyali bitti, canlı üyesi var", p.Service, p.ID)
+	}
+	for _, p := range closeNow {
 		chstore.MarkResolved(&p, now.UnixNano())
 		if err := r.store.UpsertProblem(ctx, p); err != nil {
 			firstErr = firstNonNil(firstErr, err)
@@ -467,6 +482,31 @@ func (r *Recorder) liveGroupProblems(ctx context.Context, groups []decidedGroup,
 	markLiveGroups(groups, plan.LiveGroup, failed)
 	markLiveSvc(svcDec, plan.LiveSvc, failed)
 	return c, firstErr
+}
+
+// splitHeldResolves — SAF (v0.10.2157): kapanış adaylarını "şimdi kapat" ve
+// "canlı üyesi var, açık tut" diye ayırır. Yabancı sahibe katılıp kapanan
+// ikiz (merged) asla tutulmaz. Sıra korunur.
+func splitHeldResolves(resolve []chstore.Problem, merged map[string]bool, live func(chstore.Problem) bool) (closeNow, held []chstore.Problem) {
+	for _, p := range resolve {
+		if !merged[p.ID] && live(p) {
+			held = append(held, p)
+			continue
+		}
+		closeNow = append(closeNow, p)
+	}
+	return closeNow, held
+}
+
+// holdResolve — ML Problem'inin canlı (eski dedektör) üyesi var mı; okuma
+// hatası = bilinmiyor → tut (kör kapanış, bir tik gecikmeden kötü).
+func (r *Recorder) holdResolve(ctx context.Context, p chstore.Problem, now time.Time) bool {
+	live, err := anomaly.HasLiveMembers(ctx, r.store, p, now)
+	if err != nil {
+		log.Printf("[ml] group problems: canlı üyeler okunamadı %s (bu tik kapatılmıyor): %v", p.ID, err)
+		return true
+	}
+	return live
 }
 
 // ownerPolicy — v0.10.2155: tikin birleşme politikası. Yabancı (ML dışı)

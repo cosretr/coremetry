@@ -612,6 +612,19 @@ func (e *Evaluator) applySvcSlow(ctx context.Context, act svcSlowActions, mem *a
 	}
 	for _, q := range act.Resolve {
 		member := mem.IsMember(q)
+		// v0.10.2157 (D3) — kapanış = üyeden ayrılma: kuralın kendi sinyali
+		// bitti ama satırın canlı üyesi (ML olayı / başka eski dedektör) varsa
+		// Problem açık kalır, satır aynen tazelenir. Kural her ClearBuckets
+		// kovada yeniden dener; son üye de bitince bugünkü gibi kapanır.
+		if !member && mem.HoldResolve(ctx, q) {
+			if cur := mem.OpenRow(q.RuleID, q.Service); cur != nil {
+				if err := mem.Write(ctx, *cur); err != nil {
+					log.Printf("[evaluator] svc-slowdown hold %s: %v", q.ID, err)
+				}
+			}
+			log.Printf("[evaluator] PROBLEM HELD OPEN (svc.slowdown): %s — kendi sinyali bitti, canlı üyesi var", q.ID)
+			continue
+		}
 		if err := mem.Write(ctx, q); err != nil {
 			log.Printf("[evaluator] svc-slowdown resolve %s: %v", q.ID, err)
 			continue

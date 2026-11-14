@@ -1031,6 +1031,17 @@ func (d *Detector) applyOutcome(ctx context.Context, service, metric string, oc 
 		// kapısı çözülmeye uygulanmaz), ama "recovered" DEĞİL "source
 		// silent" gerekçesiyle. (Ayrı service_silent problemi v0.10.2068'de
 		// dedektörüyle birlikte kalktı; operatör kararı v0.10.543.)
+		// v0.10.2157 (D3) — kapanış = üyeden ayrılma: bu dedektörün sinyali
+		// düzeldi ama satır bir SAHİP ve canlı üyesi var (ML olayı / başka
+		// eski dedektör) → Problem açık kalır, satır aynen tazelenir (touch).
+		// Her tik yeniden sorulur; son üye de bitince aşağıdaki yoldan kapanır.
+		if !mem.IsMember(*open) && mem.HoldResolve(ctx, *open) {
+			if err := mem.Write(ctx, *open); err != nil {
+				log.Printf("[anomaly] hold %s: %v", ruleID, err)
+			}
+			log.Printf("[anomaly] HELD OPEN %s · %s — kendi sinyali bitti, canlı üyesi var", service, metric)
+			return
+		}
 		latestHasData := oc.LatestHasData
 		reason := "recovered"
 		if !latestHasData {

@@ -282,3 +282,35 @@ func TestOwnerDedupeAcrossFamilies(t *testing.T) {
 		}
 	})
 }
+
+// TestSplitHeldResolves — v0.10.2157 (Davis tarzı tek Problem D3): ML
+// sinyali biten Problem, canlı üyesi (eski dedektörün üye olayı) kaldıkça
+// kapanmaz; yabancı sahibe katılıp kapanan ikiz asla tutulmaz.
+func TestSplitHeldResolves(t *testing.T) {
+	a := newSvcProblem(svcIn("orders-api", 0.03, 0.01, "e0"))
+	b := newSvcProblem(svcIn("payments-api", 0.03, 0.01, "e1"))
+	twin := newSvcProblem(svcIn("search-api", 0.03, 0.01, "e2"))
+	asked := map[string]bool{}
+	live := func(p chstore.Problem) bool {
+		asked[p.ID] = true
+		return p.Service != "payments-api" // orders + search'ün canlı üyesi var
+	}
+	closeNow, held := splitHeldResolves([]chstore.Problem{a, b, twin}, map[string]bool{twin.ID: true}, live)
+	if len(held) != 1 || held[0].ID != a.ID {
+		t.Fatalf("canlı üyesi olan ML Problem'i tutulmalı: %+v", held)
+	}
+	if len(closeNow) != 2 || closeNow[0].ID != b.ID || closeNow[1].ID != twin.ID {
+		t.Fatalf("üyesiz Problem ve birleşen ikiz kapanmalı (sıra korunur): %+v", closeNow)
+	}
+	if asked[twin.ID] {
+		t.Error("birleşen ikiz için üye okuması yapılmamalı")
+	}
+	// yaşam döngüsü: plan kapanış adayı üretir, üye bitince aday kapanır
+	p := planMLProblems(nil, nil, []chstore.Problem{a}, true, descStub)
+	if c, h := splitHeldResolves(p.Resolve, nil, func(chstore.Problem) bool { return true }); len(c) != 0 || len(h) != 1 {
+		t.Fatalf("üye canlıyken: kapat=%d tut=%d", len(c), len(h))
+	}
+	if c, h := splitHeldResolves(p.Resolve, nil, func(chstore.Problem) bool { return false }); len(c) != 1 || len(h) != 0 || !strings.HasSuffix(c[0].Description, svcResolveReason) {
+		t.Fatalf("üye bitince bugünkü gerekçeyle kapanır: %+v", c)
+	}
+}

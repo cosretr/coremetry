@@ -290,3 +290,41 @@ func (m *Members) Write(ctx context.Context, p chstore.Problem) error {
 	}
 	return nil
 }
+
+// MemberLister — canlı üye okumasının depo yüzeyi (*chstore.Store karşılar).
+type MemberLister interface {
+	ListMLEvents(ctx context.Context, f chstore.MLEventsFilter) ([]chstore.MLEvent, error)
+}
+
+// HasLiveMembers — v0.10.2157 (D3): sahibin CANLI üyesi var mı. Üye = bu
+// Problem'e bağlı açık olay: eski dedektörün üye olayı ya da ML'in canlı
+// damgalı olayı (chstore.LiveMemberEvents; sahip ML ailesindense yalnız üye
+// dedektörleri). Tek nokta okuması (servis, son 1 sa) — yalnız bir sahip
+// KAPANMAK üzereyken ya da bayat listesindeyken çağrılır, tik başına değil.
+func HasLiveMembers(ctx context.Context, st MemberLister, owner chstore.Problem, now time.Time) (bool, error) {
+	if owner.ID == "" || owner.Service == "" {
+		return false, nil
+	}
+	evs, err := st.ListMLEvents(ctx, chstore.MLEventsFilter{Service: owner.Service, Since: now.Add(-memberLookback), Limit: memberReadCap, Members: true})
+	if err != nil {
+		return false, err
+	}
+	return len(chstore.LiveMemberEvents(evs, owner, now.UnixNano())) > 0, nil
+}
+
+// HoldResolve — v0.10.2157 (D3): dedektör GERÇEK sahip satırını kapatmak
+// üzere (kendi sinyali bitti). Canlı üyesi varsa satır açık kalır: eski
+// ailenin kendi kapanışı artık "üyeden ayrılma"dır, Problem son üye de
+// bitince kapanır. Yalnız sahip olabilen aileler sorulur; okuma hatası =
+// bilinmiyor → tut (kör kapanış, bir tik gecikmeden kötü).
+func (m *Members) HoldResolve(ctx context.Context, owner chstore.Problem) bool {
+	if m.IsMember(owner) || !chstore.OwnerEligibleRule(owner.RuleID) {
+		return false
+	}
+	live, err := HasLiveMembers(ctx, m.store, owner, m.now)
+	if err != nil {
+		log.Printf("[problem-member] %s: canlı üyeler okunamadı %s (bu tik kapatılmıyor): %v", m.detector, owner.ID, err)
+		return true
+	}
+	return live
+}

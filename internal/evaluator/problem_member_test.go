@@ -9,6 +9,7 @@ package evaluator
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -20,9 +21,13 @@ type fakeMemberStore struct {
 	problems []chstore.Problem
 	events   map[string]chstore.MLEvent
 	verdicts []chstore.ProblemVerdict
+	failID   string // bu kimliğin Problem yazımı hata döner
 }
 
 func (f *fakeMemberStore) UpsertProblem(_ context.Context, p chstore.Problem) error {
+	if f.failID != "" && p.ID == f.failID {
+		return errors.New("insert failed")
+	}
 	f.problems = append(f.problems, p)
 	return nil
 }

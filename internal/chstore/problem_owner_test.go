@@ -237,6 +237,24 @@ func TestRaiseOwner(t *testing.T) {
 			}
 		}
 	})
+	t.Run("operatör yalnız-üye aileyi istisna listesine eklediyse o da yükseltir (önceliği gizlenmez)", func(t *testing.T) {
+		p := pol
+		p.Keep = append(DefaultInboxKeepSourcePriority(), "anomaly:*:p99_ms")
+		owner := *ownerRow("anomaly:orders-api:error_rate", "orders-api", "warning", 3, 2, fresh)
+		member := *ownerRow("anomaly:orders-api:p99_ms", "orders-api", "critical", 9000, 300, fresh)
+		got, ok := RaiseOwner(owner, member, p)
+		if !ok || got.Severity != "critical" || got.Value != 9000 || !EscalatedToP1(owner, got, p) {
+			t.Fatalf("listeye alınan ailenin P1'i sahibe taşınmalı: %v %+v", ok, got)
+		}
+		if p.OwnerRule(member.RuleID, member.Service) {
+			t.Fatal("listeye alınmak yalnız-üye aileyi sahip yapmaz")
+		}
+		// liste bilinmiyorsa (nil) yalnız statik sahip aileleri yükseltir
+		p.Keep = nil
+		if _, ok := RaiseOwner(owner, member, p); ok {
+			t.Fatal("liste bilinmezken yalnız-üye aile yükseltmemeli")
+		}
+	})
 	t.Run("inbox istisna listesinde olmayan aile yükseltmez", func(t *testing.T) {
 		p := pol
 		p.Keep = []string{InboxKeepErrorRateAnomaly}
