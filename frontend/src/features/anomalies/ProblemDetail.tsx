@@ -5,11 +5,12 @@ import { Link } from 'react-router-dom';
 import { rolloutEvidenceHref } from '@/lib/rolloutRow';
 import { mlGroupProblemHref } from '@/lib/anomalyHref';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Users } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useAuth } from '@/components/AuthProvider'; // v0.10.2126 — "Ben ilgileniyorum" kimliği
 import { ProblemCoSRESection } from './ProblemCoSRESection';
 import { IncidentCaseCard } from './IncidentCaseCard';
-import { keys, useServicesMetadata } from '@/lib/queries';
+import { keys, useServicesMetadata, useProblemStandard } from '@/lib/queries';
 import { fmtFixed, fmtNum } from '@/lib/utils';
 import { Spinner, Empty } from '@/components/Spinner';
 import { AIExplainButton } from '@/components/ai/AIExplainButton';
@@ -54,7 +55,7 @@ import { operationTracesHref } from '@/lib/pivotHref';
 import { ExceptionSampleRow } from './ExceptionSampleRow'; // v0.10.1104
 import { SubjectLink } from '../../components/SubjectLink';
 import { subjectKind, derivedTeamTitle, isAnomalyProblem, isAnomalyDetectorRule } from '../../lib/problemSubject';
-import { Sect, SignalLink, DeployBox, DetailSummary } from './detailSections'; // v0.10.1032
+import { Sect, SignalLink, DeployBox, DetailTitle, DetailMeta, type DetailMetaItem } from './detailSections'; // v0.10.1032; başlık/üst veri v0.10.2126
 import { alertProblemSummary, problemWhenLine } from './detailSummary'; // v0.10.1032; problemWhenLine v0.10.1054
 import { AlertMetricChartSection } from './AlertMetricChartSection'; // v0.10.1064
 import { PromotedLogPatternCount, PromotedPatternLogsLink } from './PromotedPatternSection'; // v0.10.1106
@@ -298,6 +299,46 @@ function ProblemTeamChips({ problem }: { problem: Problem }) {
       )}
     </>
   );
+}
+
+// TeamLink — v0.10.2126 (S6): ekip adı Problems listesinin `team=` süzgecine
+// pivot (owner VEYA sre, DECISIONS:12118); türetilmiş ekip ≈ ile işaretli.
+function TeamLink({ team, derived, title }: { team: string; derived: boolean; title?: string }) {
+  return (
+    <Link to={`/inbox?team=${encodeURIComponent(team)}`} className="mono" title={title}>
+      {derived ? '≈ ' : ''}{team}
+    </Link>
+  );
+}
+
+// AlertProblemMeta — v0.10.2126 (Problems sadeleştirme S6). Başlığın altındaki
+// tek satır: Servis · Ekip (owner; SRE farklıysa ayrı öğe) · Tür · Ne zamandır
+// · İlgilenen. Ekip kaynağı ProblemTeamChips'inkiyle aynı (problemin kendi
+// alanı önce, katalog yedek). Değer yoksa öğe çizilmez; İlgilenen boşsa
+// "kimse" der (soluk).
+function AlertProblemMeta({ problem, window: win, endNs }: {
+  problem: Problem; window: { fromNs: number; toNs: number }; endNs: number;
+}) {
+  const fallback = useServiceTeams(problem.service);
+  const via = problem.teamsVia || '';
+  const owner = problem.ownerTeam || (via ? '' : fallback.ug) || '';
+  const sre = problem.sreTeam || (via ? '' : fallback.sy) || '';
+  const teamTitle = via ? derivedTeamTitle(via, problem.service) : undefined;
+  const items: DetailMetaItem[] = [];
+  if (problem.service) {
+    items.push({ k: 'Servis', v: (
+      <SubjectLink service={problem.service} subjectKind={problem.kind}
+        href={serviceHref(problem.service, { range: win })} className="mono" />
+    ) });
+  }
+  if (owner) items.push({ k: 'Ekip', v: <TeamLink team={owner} derived={!!via} title={teamTitle} /> });
+  if (sre && sre !== owner) items.push({ k: owner ? 'SRE' : 'Ekip', v: <TeamLink team={sre} derived={!!via} title={teamTitle} /> });
+  items.push({ k: 'Tür', v: isAnomalyProblem(problem.ruleId) ? 'Anomali' : 'Alarm' });
+  items.push({ k: 'Ne zamandır', v: <span className="pd-meta__when">{problemWhenLine(problem, endNs)}</span> });
+  items.push({ k: 'İlgilenen', v: problem.assignee
+    ? <span className="mono">{problem.assignee}</span>
+    : <span className="pd-meta__none">kimse</span> });
+  return <DetailMeta items={items} />;
 }
 
 export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
@@ -784,12 +825,19 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
 // ProblemTriage — v0.10.1032 (operatör: "Anomali ve alert rule'lara girdiğimde
 // drawer çıkıyor. Exception gibi detay gözükmüyor."). Alarm kuralı satırı artık
 // çekmece yerine bu tam sayfayı açıyor; çekmecenin triyaj eylemleri buraya
-// taşındı ki hiçbir yetenek kaybolmasın: Assign… (api.setProblemAssignee,
-// prompt, boş = atamayı kaldır — çekmece ve Problems satırındaki AssigneeCell ile
-// aynı) ve öğretme düğmeleri. Acknowledge üst şeritte kalır. Yazan düğmeler
-// editor/admin'e; viewer atananı ve kararı SALT OKUNUR görür (değişmez #7).
-// v0.10.1032 (inceleme: "Triyaj bloğu çok büyük") — kutu ve paragraf YOK:
-// özetin altında TEK satır, "Atanan <çip> [Assign…] · Gerçek problem mi? …".
+// taşındı ki hiçbir yetenek kaybolmasın. Yazan düğmeler editor/admin'e; viewer
+// atananı ve kararı SALT OKUNUR görür (değişmez #7).
+// v0.10.1032 (inceleme: "Triyaj bloğu çok büyük") — kutu ve paragraf YOK.
+//
+// v0.10.2126 (Problems sadeleştirme S6; operatör kararı 2026-11-13) — eylemler
+// "Ben ilgileniyorum" · "Problem değil". "Ben ilgileniyorum" = onayla (açıksa
+// POST /acknowledge) + kendine ata (PATCH /assignee kendi kimliğinle); üst
+// şeritteki ayrı "Acknowledge" kalktı (bunu kapsıyor). Alarm probleminde
+// "Çözüldü" YOK: yaşam döngüsü kural motorunda. Sunucu kapısı değişmedi: iki
+// uç da bugün editor+ (auth.RequireAnyRole(editorRoles)), ikisi de audit yazar
+// (problem.acknowledge, problem.assign). Başkasına atama "Başkasına ata…"
+// (prompt; boş = atamayı kaldır) bugünkü kapısıyla kalır. Atanan kişi artık
+// üst veri satırında (İlgilenen), burada tekrar basılmaz.
 function ProblemTriage({ problem, isAdmin, onBack, onChanged }: {
   problem: Problem;
   isAdmin: boolean;
@@ -797,48 +845,64 @@ function ProblemTriage({ problem, isAdmin, onBack, onChanged }: {
   onChanged: () => void;
 }) {
   const qc = useQueryClient();
-  const [busy, setBusy] = useState(false);
+  const { user } = useAuth();
+  const [busy, setBusy] = useState<'claim' | 'assign' | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const assignee = problem.assignee ?? '';
-  const onAssign = async () => {
-    const v = window.prompt('Assignee (email or team name; empty = unassign):', assignee);
-    if (v === null) return;
-    const next = v.trim();
-    if (next === assignee) return;
-    setBusy(true); setErr(null);
+  const me = claimIdentity(user);
+  const claimed = !!me && assignee === me && problem.status !== 'open';
+  const canClaim = isAdmin && !!me && problem.status !== 'resolved' && !claimed;
+  const run = async (kind: 'claim' | 'assign', fn: () => Promise<unknown>) => {
+    setBusy(kind); setErr(null);
     try {
-      await api.setProblemAssignee(problem.id, next);
+      await fn();
       onChanged();
-      // Kuyruğun Assignee kolonu da tazelensin (satır listede durmaya devam ediyor).
-      void qc.invalidateQueries({ queryKey: ['inbox'] });
+      // Kuyruğun İlgilenen kolonu ve sayaç da tazelensin.
+      void qc.invalidateQueries({ queryKey: keys.inbox.all });
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
+  };
+  const onClaim = () => run('claim', async () => {
+    if (problem.status === 'open') await api.acknowledgeProblems([problem.id]);
+    if (assignee !== me) await api.setProblemAssignee(problem.id, me);
+  });
+  const onAssign = () => {
+    const v = window.prompt('Kime atansın? (e-posta ya da ekip adı; boş = atamayı kaldır)', assignee);
+    if (v === null) return;
+    const next = v.trim();
+    if (next === assignee) return;
+    void run('assign', () => api.setProblemAssignee(problem.id, next));
   };
   return (
     <div className="pd-triage" role="group" aria-label="Triyaj">
-      <span className="pd-triage__k">Atanan</span>
-      {assignee
-        ? (
-          // v0.10.922 (sade palet adım 1) — atanan üst veri: nötr (Inbox AssigneePill ile aynı).
-          <span className="badge b-gray">
-            {!assignee.includes('@') && <Users size={11} strokeWidth={1.75} />}{assignee}
-          </span>
-        )
-        : <span className="pd-triage__k">—</span>}
-      {isAdmin && (
-        <Button variant="secondary" size="sm" loading={busy} onClick={() => { void onAssign(); }}>
-          Assign…
+      {canClaim && (
+        <Button variant="primary" size="sm" loading={busy === 'claim'} disabled={busy !== null}
+          onClick={() => { void onClaim(); }}>
+          Ben ilgileniyorum
         </Button>
       )}
-      {err && <span role="alert" className="field-error">Atama yazılamadı — {err}</span>}
+      {claimed && <span className="pd-triage__k">Sende</span>}
+      {isAdmin && (
+        <Button variant="secondary" size="sm" loading={busy === 'assign'} disabled={busy !== null}
+          onClick={onAssign}>
+          Başkasına ata…
+        </Button>
+      )}
+      {err && <span role="alert" className="field-error">Yazılamadı — {err}</span>}
       <span className="pd-triage__sep" aria-hidden="true">·</span>
       <ProblemVerdictActions subject={problemVerdictSubject(problem)} compact
         onDone={next => { if (next === 'noise') onBack(); }} />
     </div>
   );
+}
+
+/** "Ben ilgileniyorum"un yazdığı kimlik: e-posta, yoksa kullanıcı adı (Inbox
+ *  AssigneeCell e-posta yazar; e-postasız LDAP hesabı da üstlenebilsin). */
+function claimIdentity(user: { email?: string; username?: string } | null | undefined): string {
+  return (user?.email || user?.username || '').trim();
 }
 
 // ── Firing alert-problem detail (ex-TriageDrawer, now full page) ────────────
@@ -851,29 +915,13 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
 }) {
   useEscBack(onBack);
   const tr = useT(); // v0.10.1338 — "Ask CoSRE" etiketi
-  const qc = useQueryClient();
-  const [acking, setAcking] = useState(false);
   // v0.10.1055 (operatör: "Okdir") — terfi ("anomaly-auto:") ve küme
   // ("anomaly-cluster:") Problem'leri de ANOMALY rozeti taşır; tek yüklem.
   const isAnomaly = isAnomalyProblem(problem.ruleId);
   const mlGroupHref = mlGroupProblemHref(problem.ruleId); // v0.10.2053 (D4)
   const endNs = problem.resolvedAt || Date.now() * 1e6;
-
-  const ack = async () => {
-    setAcking(true);
-    try {
-      await api.acknowledgeProblems([problem.id]);
-      onChanged();
-      // v0.10.1032 (inceleme) — satır tıkı artık bu sayfayı açtığı için
-      // Acknowledge'ın ANA yolu burası: kuyruk (ve sayaç) da tazelensin,
-      // yoksa onaylanan satır bir yoklama turu boyunca kuyrukta kalır.
-      void qc.invalidateQueries({ queryKey: keys.inbox.all });
-    } catch (err) {
-      alert(err instanceof Error ? err.message : String(err));
-    } finally {
-      setAcking(false);
-    }
-  };
+  // v0.10.2126 (S6) — başlık cümlesi; ProblemStandardHeader ile AYNI anahtar.
+  const std = useProblemStandard(`problem:${problem.id}`).data;
 
   // v0.9.860 (UX denetimi K1) — problem penceresi, servis/pod pivotları için
   // (logs/traces linkleriyle AYNI sınırlar; ns cinsinden).
@@ -942,13 +990,11 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
         <Button variant="secondary" onClick={onBack} leftIcon={<ArrowLeft size={14} strokeWidth={1.75} />}>
           Problems
         </Button>
-        {/* v0.10.922 (sade palet adım 1) — CRITICAL + OPEN + P1 üçü de
-            kırmızıydı: aynı aciliyet üç kez. Renk yalnız ÖNCELİKTE (paylaşılan
-            PriorityBadge atomu, elle kopyası kalktı); şiddet nötr kelime,
-            durum tek ton sözlüğünden (TriageStatusBadge). */}
+        {/* v0.10.922 (sade palet adım 1) — şiddet nötr kelime, durum tek ton
+            sözlüğünden (TriageStatusBadge). v0.10.2126 (S6) — öncelik
+            şeritten BAŞLIĞA taşındı ("P1 · düz cümle"); iki kez basılmaz. */}
         <span className="badge b-gray">{problem.severity.toUpperCase()}</span>
         <ProblemStatusBadge status={problem.status} />
-        {problem.priority && <PriorityBadge p={problem.priority} reason={problem.priorityReason} />}
         {/* v0.10.1032 (inceleme) — görüntü kimliği (P-xxxxx) çekmecede vardı;
             satır tıkı çekmeceyi atlayınca kayboluyordu. Tıkla-kopyala, palete
             yazınca bu problem açılır. */}
@@ -960,32 +1006,29 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
           </span>
         )}
         <span className="badge b-gray mono">{problem.id.slice(0, 12)}</span>
-        {/* v0.10.1032 — "Started … · süre · ongoing" buradan özetin "ne
-            zaman" satırına taşındı (aynı bilgi iki kez basılmasın). */}
         <span className="spacer" />
         <ShareButton copiedLabel="Copied" />
-        {isAdmin && problem.status === 'open' && (
-          <Button variant="secondary" size="sm" onClick={() => { void ack(); }} loading={acking}>
-            Acknowledge
-          </Button>
-        )}
       </div>
 
-      {/* v0.10.1032 (operatör: "Anlaşılır olsun. Çok detay verince daha
-          anlaşılır olmuyor — alert ve anomaliler de.") — şeridin altındaki İLK
-          şey tek cümlelik özet + "ne zaman" satırı (./detailSummary, tablo
-          testli); hemen altında Triyaj. Hiçbir bölüm silinmedi: ikincil
-          olanlar (zaman çizelgesi, bildirim, runbook, açıklama) kapalı gelir. */}
-      {/* v0.10.1054 — terfi Problem'i yineleniyorsa "ne zaman" satırına
-          anomaliyle aynı tek ek (problemWhenLine); diğer her Problem'de metin
-          bayt bayt aynı. Yeni bölüm yok. */}
-      {/* v0.10.1529 (Problem standardı R2) — standart başlık (manşet + Etki ·
-          Ne zamandan beri · Güven · Kaynak + neden/bağlam/sonraki adım); yüklenene
-          ya da bulunamayana dek önceki tek cümlelik özet (fallback). */}
-      <ProblemStandardHeader stdRef={`problem:${problem.id}`}
-        fallback={<DetailSummary sentence={alertProblemSummary(problem)}
-          when={problemWhenLine(problem, endNs)} />} />
+      {/* v0.10.2126 (Problems sadeleştirme S6; mockup onayı 2026-11-13) —
+          şeridin altındaki İLK şey "P1 · düz cümle" başlığı, altında tek satır
+          üst veri (Servis · Ekip · Tür · Ne zamandır · İlgilenen), sonra iki
+          eylem. Cümle Problems listesinin "Ne bozuk" hücresiyle AYNI sunucu
+          standardından (GET /api/problem-standard, aynı sorgu anahtarı — ek
+          istek yok); yüklenene ya da bulunamayana dek deterministik
+          alertProblemSummary. LLM yok. Eski "ne zaman" satırı (v0.10.1054
+          yineleme eki dahil) bayt bayt "Ne zamandır" öğesinde. */}
+      <DetailTitle prefix={problem.priority
+        ? <PriorityBadge p={problem.priority} reason={problem.priorityReason} />
+        : undefined}>
+        {std?.headline || alertProblemSummary(problem)}
+      </DetailTitle>
+      <AlertProblemMeta problem={problem} window={probWindow} endNs={endNs} />
       <ProblemTriage problem={problem} isAdmin={isAdmin} onBack={onBack} onChanged={onChanged} />
+      {/* v0.10.1529 (Problem standardı R2) — standart kartlar (Etki · Ne
+          zamandan beri · Güven · Kaynak + neden/bağlam/sonraki adım). Başlık
+          yukarıda çizildiği için burada başlıksız (showTitle=false). */}
+      <ProblemStandardHeader stdRef={`problem:${problem.id}`} showTitle={false} />
 
       {/* v0.10.562 — deterministik insight şeridi (şüpheli · ilk anomali ·
           rollout · daha önce); ilk ekranın üstünde, sormadan dolar. */}

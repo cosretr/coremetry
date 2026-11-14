@@ -14,6 +14,14 @@
 //     MOUNT EDİLMEZ — bildirim geçmişi ve runbook koşuları sayfa açılışında
 //     çekilmez, bölüm açılınca çekilir; hiçbir bölüm silinmedi;
 //   • Assign… çekmeceyle aynı (prompt, boş = atamayı kaldır); viewer salt okunur.
+//
+// v0.10.2126 (Problems sadeleştirme S6; operatör kararı 2026-11-13) — DEĞİŞEN
+// iddialar: tek cümlelik özet bloğu (.pd-summary) yerine "P1 · düz cümle"
+// başlığı (.pd-title) + tek satır üst veri (.pd-meta: Servis · Ekip · Tür · Ne
+// zamandır · İlgilenen); "ne zaman" metni bayt bayt Ne zamandır öğesinde.
+// Üst şeritteki Acknowledge kalktı → "Ben ilgileniyorum" (onayla + kendine
+// ata); Assign… → "Başkasına ata…" (aynı prompt davranışı). Atanan kişi
+// triyaj satırında değil üst veride.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -27,7 +35,7 @@ const m = vi.hoisted(() => {
     addListener: () => {}, removeListener: () => {},
     addEventListener: () => {}, removeEventListener: () => {}, dispatchEvent: () => false,
   })) as unknown as typeof window.matchMedia;
-  return { role: 'editor', notifyMounts: 0, runbookMounts: 0, assigned: [] as unknown[][] };
+  return { role: 'editor', notifyMounts: 0, runbookMounts: 0, assigned: [] as unknown[][], acked: [] as unknown[][] };
 });
 vi.mock('@/lib/api', () => {
   const stub: Record<string, (...a: unknown[]) => Promise<unknown>> = {
@@ -35,7 +43,7 @@ vi.mock('@/lib/api', () => {
     problemVerdicts: async () => ({ verdicts: [] }),
     servicesMetadata: async () => ({}),
     setProblemAssignee: async (...a: unknown[]) => { m.assigned.push(a); return {}; },
-    acknowledgeProblems: async () => ({}),
+    acknowledgeProblems: async (...a: unknown[]) => { m.acked.push(a); return {}; },
   };
   return {
     api: new Proxy({}, { get: (_t, k: string) => stub[k] ?? (() => Promise.resolve(null)) }),
@@ -106,7 +114,7 @@ const button = (el: HTMLElement, text: string) =>
   [...el.querySelectorAll<HTMLButtonElement>('button')].find(b => b.textContent?.includes(text));
 
 beforeEach(() => {
-  m.role = 'editor'; m.notifyMounts = 0; m.runbookMounts = 0; m.assigned = [];
+  m.role = 'editor'; m.notifyMounts = 0; m.runbookMounts = 0; m.assigned = []; m.acked = [];
   onBack.mockReset(); onChanged.mockReset();
 });
 afterEach(() => {
@@ -117,16 +125,18 @@ afterEach(() => {
 });
 
 describe('AlertProblemDetail — özet önce, ikincil bölümler kapalı (v0.10.1032)', () => {
-  it('özet + ne zaman satırı şeridin hemen altında; TEK satırlık triyaj onun altında, iki kolonun ÜSTÜNDE', async () => {
+  it('başlık + üst veri şeridin hemen altında; TEK satırlık triyaj onun altında, iki kolonun ÜSTÜNDE', async () => {
     const el = await mount();
-    const summary = el.querySelector('.pd-summary')!;
-    expect(summary.querySelector('.pd-summary__what')?.textContent)
+    const title = el.querySelector('.pd-title')!;
+    expect(title.querySelector('.pd-title__text')?.textContent)
       .toBe('High error rate — checkout: error_rate değeri 12.40, eşik 5.00.');
-    expect(summary.querySelector('.pd-summary__when')?.textContent).toMatch(/başladı · 15m · sürüyor$/);
+    const meta = el.querySelector('.pd-meta')!;
+    expect(meta.querySelector('.pd-meta__when')?.textContent).toMatch(/başladı · 15m · sürüyor$/);
     const bar = el.querySelector('.rb-bar')!;
-    expect(bar.nextElementSibling).toBe(summary);
+    expect(bar.nextElementSibling).toBe(title);
+    expect(title.nextElementSibling).toBe(meta);
     const triage = el.querySelector<HTMLElement>('.pd-triage')!;
-    expect(summary.nextElementSibling).toBe(triage);
+    expect(meta.nextElementSibling).toBe(triage);
     expect(el.querySelector('.pd-cols')!.contains(triage)).toBe(false);
     // Kutulu bir "Triyaj" bölümü ve uzun paragraf YOK (inceleme: "çok büyük").
     expect(sect(el, 'Triyaj')).toBeUndefined();
@@ -139,7 +149,7 @@ describe('AlertProblemDetail — özet önce, ikincil bölümler kapalı (v0.10.
   it('çözülmüş problemde ne zaman satırı BİTİŞİ söyler', async () => {
     const started = Date.UTC(2026, 9, 2, 6, 0) * 1e6;
     const el = await mount(prob({ status: 'resolved', startedAt: started, resolvedAt: started + 90 * 60e9 }));
-    expect(el.querySelector('.pd-summary__when')?.textContent).toMatch(/başladı · 1\.5h · \d{2}:\d{2} bitti$/);
+    expect(el.querySelector('.pd-meta__when')?.textContent).toMatch(/başladı · 1\.5h · \d{2}:\d{2} bitti$/);
   });
 
   it('kural adı ekranın üstünde İKİ KEZ basılmaz (özet zaten onunla başlıyor)', async () => {
@@ -147,7 +157,7 @@ describe('AlertProblemDetail — özet önce, ikincil bölümler kapalı (v0.10.
     expect(sect(el, 'Root cause analysis')!.textContent).not.toContain('High error rate');
     const anomaly = await (async () => { act(() => { root!.unmount(); }); host?.remove(); return mount(prob({ ruleId: 'anomaly:error_rate' })); })();
     expect(sect(anomaly, 'Root cause analysis')!.textContent).toContain('ANOMALY');
-    expect(anomaly.querySelector('.pd-summary__what')?.textContent).toContain('olağan değer 5.00');
+    expect(anomaly.querySelector('.pd-title__text')?.textContent).toContain('olağan değer 5.00');
   });
 
   it('görüntü kimliği (P-xxxxx) şeritte, tıkla-kopyala', async () => {
@@ -213,7 +223,7 @@ describe('AlertProblemDetail — terfi Problem\'i yinelenen (v0.10.1054)', () =>
       startedAt: started, status: 'resolved', resolvedAt: started + 20 * 60e9,
       episodeCount: 3, firstStartedAt: started - 2 * 86_400e9,
     }));
-    const when = el.querySelector('.pd-summary__when')?.textContent ?? '';
+    const when = el.querySelector('.pd-meta__when')?.textContent ?? '';
     expect(when).toMatch(/başladı · 20m · \d{2}:\d{2} bitti · yinelenen · bu 3\. kez · ilk kez \d{2}\.\d{2}\.\d{4} \d{2}:\d{2}$/);
     expect(sect(el, 'Root cause analysis')!.textContent).not.toContain('Deploy correlation');
     // Yeni bölüm yok: başlıklar bugünkülerle aynı küme.
@@ -233,7 +243,7 @@ describe('AlertProblemDetail — terfi Problem\'i yinelenen (v0.10.1054)', () =>
   };
   it('(b) warning, ölçüm yok: deploy kutusu yok; ne zaman ekinde ve zaman çizelgesinde NÖTR deploy', async () => {
     const el = await mount(ep8({ severity: 'warning', priorDeploy: PRIOR }));
-    expect(el.querySelector('.pd-summary__when')?.textContent)
+    expect(el.querySelector('.pd-meta__when')?.textContent)
       .toMatch(/sürüyor · yinelenen · bu 8\. kez · ilk kez \S+ \S+ · deploy v2\.0\.0 10 dk önce \(öncesinde de görülüyordu\)$/);
     expect(sect(el, 'Root cause analysis')!.textContent).not.toContain('Deploy correlation');
     const lis = await timelineLis(el);
@@ -245,7 +255,7 @@ describe('AlertProblemDetail — terfi Problem\'i yinelenen (v0.10.1054)', () =>
   it('(a) critical, ölçülen gerileme: sunucu deploy\'u yeniden olası neden yapar → deploy kutusu + warn satırı, nötr satır yok', async () => {
     const el = await mount(ep8({ recentDeploy: { version: 'v2.0.0', timeUnixNs: 1, ageSeconds: 600 } }));
     expect(sect(el, 'Root cause analysis')!.textContent).toContain('Deploy correlation');
-    expect(el.querySelector('.pd-summary__when')?.textContent).not.toContain('deploy v2.0.0');
+    expect(el.querySelector('.pd-meta__when')?.textContent).not.toContain('deploy v2.0.0');
     const lis = await timelineLis(el);
     expect(lis).toHaveLength(1);
     expect(lis[0].className).toBe('warn');
@@ -257,7 +267,7 @@ describe('AlertProblemDetail — terfi Problem\'i yinelenen (v0.10.1054)', () =>
       ruleId: 'anomaly-auto:0123456789abcdef', episodeCount: 2, firstStartedAt: Date.now() * 1e6 - 75 * 60e9,
       recentDeploy: { version: 'v2.0.0', timeUnixNs: Date.now() * 1e6 - 25 * 60e9, ageSeconds: 600 },
     }));
-    expect(el.querySelector('.pd-summary__when')?.textContent).toMatch(/sürüyor · yinelenen · bu 2\. kez · ilk kez /);
+    expect(el.querySelector('.pd-meta__when')?.textContent).toMatch(/sürüyor · yinelenen · bu 2\. kez · ilk kez /);
     expect(sect(el, 'Root cause analysis')!.textContent).toContain('Deploy correlation');
   });
   it('alarm kuralı: alan gelse bile ne zaman satırı bugünkü gibi, deploy kutusu yerinde', async () => {
@@ -265,7 +275,7 @@ describe('AlertProblemDetail — terfi Problem\'i yinelenen (v0.10.1054)', () =>
       episodeCount: 3, firstStartedAt: 1,
       recentDeploy: { version: 'v2.0.0', timeUnixNs: Date.now() * 1e6 - 25 * 60e9, ageSeconds: 600 },
     }));
-    const when = el.querySelector('.pd-summary__when')?.textContent ?? '';
+    const when = el.querySelector('.pd-meta__when')?.textContent ?? '';
     expect(when).toMatch(/başladı · 15m · sürüyor$/);
     expect(when).not.toContain('yinelenen');
     expect(sect(el, 'Root cause analysis')!.textContent).toContain('Deploy correlation');
@@ -274,24 +284,25 @@ describe('AlertProblemDetail — terfi Problem\'i yinelenen (v0.10.1054)', () =>
 
 describe('AlertProblemDetail — Triyaj (tek satır)', () => {
   const row = (el: HTMLElement) => el.querySelector<HTMLElement>('.pd-triage')!;
-  it('atanan görünür; Assign… prompt\'u ile atar (boş = kaldır), kuyruğu tazeler', async () => {
+  const metaOf = (el: HTMLElement, k: string) => el.querySelector<HTMLElement>(`.pd-meta [data-meta="${k}"] dd`);
+  it('atanan üst veride görünür; "Başkasına ata…" prompt\'u ile atar (boş = kaldır), kuyruğu tazeler', async () => {
     const el = await mount();
-    expect(row(el).textContent).toContain('payments-team');
+    expect(metaOf(el, 'İlgilenen')?.textContent).toBe('payments-team');
     const prompt = vi.spyOn(window, 'prompt').mockReturnValue('  ops@corp.example  ');
-    await act(async () => { button(row(el), 'Assign…')!.click(); });
+    await act(async () => { button(row(el), 'Başkasına ata…')!.click(); });
     await settle();
     expect(prompt).toHaveBeenCalled();
     expect(m.assigned).toEqual([['p1', 'ops@corp.example']]);
     expect(onChanged).toHaveBeenCalled();
     prompt.mockReturnValue('');
-    await act(async () => { button(row(el), 'Assign…')!.click(); });
+    await act(async () => { button(row(el), 'Başkasına ata…')!.click(); });
     await settle();
     expect(m.assigned[1]).toEqual(['p1', '']);
   });
   it('iptal (null) hiçbir şey yazmaz', async () => {
     const el = await mount();
     vi.spyOn(window, 'prompt').mockReturnValue(null);
-    await act(async () => { button(row(el), 'Assign…')!.click(); });
+    await act(async () => { button(row(el), 'Başkasına ata…')!.click(); });
     expect(m.assigned).toEqual([]);
   });
   it('öğretme düğmeleri aynı satırda', async () => {
@@ -300,22 +311,64 @@ describe('AlertProblemDetail — Triyaj (tek satır)', () => {
     expect(button(row(el), 'Gerçek problem')).toBeTruthy();
     expect(button(row(el), 'Problem değil')).toBeTruthy();
   });
-  it('Acknowledge kuyruğu da tazeler (ana onay yolu artık burası)', async () => {
+  it('"Ben ilgileniyorum" = onayla + kendine ata; kuyruğu tazeler; ayrı Acknowledge yok', async () => {
     const el = await mount();
+    expect(button(el, 'Acknowledge')).toBeUndefined();
     const inv = vi.spyOn(qc, 'invalidateQueries');
-    await act(async () => { button(el, 'Acknowledge')!.click(); });
+    await act(async () => { button(row(el), 'Ben ilgileniyorum')!.click(); });
     await settle();
+    expect(m.acked).toEqual([[['p1']]]);
+    expect(m.assigned).toEqual([['p1', 'op@x']]);
     expect(onChanged).toHaveBeenCalled();
     expect(inv.mock.calls.some(c => JSON.stringify(c[0]?.queryKey) === JSON.stringify(['inbox']))).toBe(true);
+  });
+  it('onaylanmış ve zaten bende: düğme yok, "Sende"; çözülmüşte düğme yok', async () => {
+    const mine = await mount(prob({ status: 'acknowledged', assignee: 'op@x' }));
+    expect(button(row(mine), 'Ben ilgileniyorum')).toBeUndefined();
+    expect(row(mine).textContent).toContain('Sende');
+    act(() => { root!.unmount(); }); host?.remove();
+    const done = await mount(prob({ status: 'resolved', resolvedAt: Date.now() * 1e6 }));
+    expect(button(row(done), 'Ben ilgileniyorum')).toBeUndefined();
+  });
+  it('açık ve zaten bende: yalnız onaylar, atamayı yeniden yazmaz', async () => {
+    const el = await mount(prob({ assignee: 'op@x' }));
+    await act(async () => { button(row(el), 'Ben ilgileniyorum')!.click(); });
+    await settle();
+    expect(m.acked).toEqual([[['p1']]]);
+    expect(m.assigned).toEqual([]);
   });
   it('viewer: atananı ve kararı görür, düğme görmez', async () => {
     m.role = 'viewer';
     const el = await mount();
-    expect(row(el).textContent).toContain('payments-team');
+    expect(metaOf(el, 'İlgilenen')?.textContent).toBe('payments-team');
     expect(row(el).textContent).toContain('işaretlenmedi');
-    expect(button(row(el), 'Assign…')).toBeUndefined();
+    expect(button(row(el), 'Başkasına ata…')).toBeUndefined();
+    expect(button(row(el), 'Ben ilgileniyorum')).toBeUndefined();
     expect(button(row(el), 'Problem değil')).toBeUndefined();
     expect(button(el, 'Acknowledge')).toBeUndefined();
+  });
+});
+
+describe('AlertProblemDetail — başlık ve üst veri (v0.10.2126, S6)', () => {
+  const metaOf = (el: HTMLElement, k: string) => el.querySelector<HTMLElement>(`.pd-meta [data-meta="${k}"] dd`);
+  it('öncelik başlıkta, şeritte değil', async () => {
+    const el = await mount(prob({ priority: 'P1' }));
+    expect(el.querySelector('.pd-title .badge')?.textContent).toBe('P1');
+    expect([...el.querySelectorAll('.rb-bar .badge')].some(b => b.textContent === 'P1')).toBe(false);
+  });
+  it('Servis · Ekip · SRE · Tür · Ne zamandır · İlgilenen; ekip Problems süzgecine gider', async () => {
+    const el = await mount(prob({ ownerTeam: 'payments', sreTeam: 'sre-core' }));
+    const keysShown = [...el.querySelectorAll('.pd-meta dt')].map(d => d.textContent);
+    expect(keysShown).toEqual(['Servis', 'Ekip', 'SRE', 'Tür', 'Ne zamandır', 'İlgilenen']);
+    expect(metaOf(el, 'Servis')?.textContent).toBe('checkout');
+    expect(metaOf(el, 'Ekip')?.querySelector('a')?.getAttribute('href')).toBe('/inbox?team=payments');
+    expect(metaOf(el, 'Tür')?.textContent).toBe('Alarm');
+  });
+  it('ekip yoksa öğe yok; anomali türü; atanmamışsa "kimse"', async () => {
+    const el = await mount(prob({ ruleId: 'anomaly:checkout:p99_ms', assignee: undefined }));
+    expect(metaOf(el, 'Ekip')).toBeNull();
+    expect(metaOf(el, 'Tür')?.textContent).toBe('Anomali');
+    expect(metaOf(el, 'İlgilenen')?.textContent).toBe('kimse');
   });
 });
 
@@ -331,7 +384,7 @@ describe('AlertProblemDetail — terfi / küme Problem\'inde ANOMALY rozeti (v0.
   ])('%s: rozet var, Description yerinde ve açılınca metni taşır', async (_n, ruleId, desc) => {
     const el = await mount(prob({ ruleId, ruleName: 'Anomaly · nightly-job', metric: 'anomaly_ratio', value: 5, threshold: 3, description: desc }));
     expect(sect(el, 'Root cause analysis')!.textContent).toContain('ANOMALY');
-    expect(el.querySelector('.pd-summary__what')?.textContent).toContain('eşik 3.00');
+    expect(el.querySelector('.pd-title__text')?.textContent).toContain('eşik 3.00');
     const d = sect(el, 'Description');
     expect(d, 'Description silinmemeli').toBeTruthy();
     act(() => { toggleOf(d!)!.click(); });

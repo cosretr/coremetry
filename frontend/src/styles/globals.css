@@ -4299,6 +4299,19 @@ thead th:hover .th-remove, .th-remove:focus-visible { opacity: 1; }
 /* v0.10.1062 — "Ne yapabilirim" kartındaki kısa not satırı ("En çok: …",
    "servis adı yok"). */
 .pd-pivot-note { font-size: 12px; color: var(--text3); overflow-wrap: anywhere; }
+/* v0.10.2126 (Problems S6) — detay başlığı (öncelik · tek düz cümle) ve tek
+   satırlık üst veri (Servis · Ekip · Tür · Ne zamandır · İlgilenen). Şerit
+   değil, yapışkan değil; dar ekranda sarar. */
+.pd-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--sp-3); margin: var(--sp-4) 0 var(--sp-2); font-size: 15px; font-weight: 600; line-height: 1.4; color: var(--text); min-width: 0; }
+.pd-title__prefix { flex: none; }
+.pd-title__sep { color: var(--text3); font-weight: 400; }
+.pd-title__text { min-width: 0; overflow-wrap: anywhere; }
+.pd-meta { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-6); margin: 0 0 var(--sp-6); font-size: 12px; min-width: 0; }
+.pd-meta__item { display: inline-flex; align-items: baseline; gap: var(--sp-2); min-width: 0; }
+.pd-meta__item > dt { color: var(--text3); }
+.pd-meta__item > dd { margin: 0; color: var(--text2); min-width: 0; overflow-wrap: anywhere; }
+.pd-meta__none { color: var(--text3); }
+.pd-meta__when { white-space: normal; }
 /* v0.10.1113 — "Başlangıçta doğan log şablonları": ≤5 satırlık sabit liste
    (tablo değil). Şablon tek satır mono + ellipsis (tam metin title'da); altında
    servis · göreli zaman · örnek sayısı · pivot, dar ekranda sarar. */

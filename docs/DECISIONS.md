@@ -13901,3 +13901,12 @@ eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
   onu pinleyen koruyucu testlerin (navArbitration, rowLinkSites1414, a11y.rowSites, insightHosts, …) silinmesi
   S10 temizliğine. `/api/problems` ve `/buckets` uçları kalır (AlertProblemHost, DatabaseProblemsSection).
 
+## 2026-11-14 — v0.10.2126 — Problems sadeleştirme S6: alarm detayı başlık + eylemler (operatör kararı 2026-11-13)
+- `AlertProblemDetail` üstü: "P1 · düz cümle" başlığı (`DetailTitle`; cümle `GET /api/problem-standard` manşeti,
+  yoksa deterministik `alertProblemSummary`), tek satır üst veri (`DetailMeta`: Servis · Ekip · SRE (farklıysa) ·
+  Tür · Ne zamandır · İlgilenen). Eski "ne zaman" satırı bayt bayt "Ne zamandır"da. Öncelik şeritten başlığa.
+- Eylemler: "Ben ilgileniyorum" = açıksa `POST /acknowledge` + kendine `PATCH /assignee` (e-posta, yoksa kullanıcı
+  adı); "Başkasına ata…" (prompt); Gerçek problem / Problem değil. Ayrı Acknowledge kalktı. Alarmda "Çözüldü" yok.
+- Sunucu kapısı DEĞİŞMEDİ: iki uç da bugün editor+ ve audit yazıyor (`problem.acknowledge`, `problem.assign`).
+  Plan "Assign admin-only" varsaymıştı; `isAdmin` prop'u fiilen editor+. Editör başkasına da atayabiliyor —
+  "başkasına atama admin" kısıtı uygulanmadı (yetki daraltma = ayrı operatör kararı).

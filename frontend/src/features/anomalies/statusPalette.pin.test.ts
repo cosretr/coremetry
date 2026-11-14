@@ -137,7 +137,9 @@ describe('v0.10.922 — bir olgu = bir sinyal (renk yalnız öncelikte)', () => 
   it('Problem detay şeridi: şiddet nötr, öncelik paylaşılan atomdan', () => {
     const d = code(detail);
     expect(d).toContain('<span className="badge b-gray">{problem.severity.toUpperCase()}</span>');
-    expect(d).toContain('{problem.priority && <PriorityBadge p={problem.priority} reason={problem.priorityReason} />}');
+    // v0.10.2126 (Problems S6) — öncelik şeritten başlığa ("P1 · düz cümle")
+    // taşındı; hâlâ paylaşılan atomdan.
+    expect(d).toContain('? <PriorityBadge p={problem.priority} reason={problem.priorityReason} />');
     expect(d).not.toContain('sevCls');
   });
 

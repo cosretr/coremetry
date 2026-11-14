@@ -107,3 +107,37 @@ export function DeployBox({ version, ageSeconds, before = 'this problem opened' 
     </div>
   );
 }
+
+// DetailTitle / DetailMeta — v0.10.2126 (Problems sadeleştirme S6; operatör
+// mockup onayı 2026-11-13). Detay sayfasının en üstü: öncelik + TEK düz cümle
+// (başlık), altında tek satır üst veri "Servis · Ekip · Tür · Ne zamandır ·
+// İlgilenen". Kutu yok, şerit yok, yapışkan değil; değer yoksa öğe çizilmez
+// (uydurma "—" yerine yokluk), İlgilenen hariç: kimse yoksa bunu söyler.
+export function DetailTitle({ prefix, children }: { prefix?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <h1 className="pd-title" data-testid="pd-title">
+      {prefix && <><span className="pd-title__prefix">{prefix}</span><span className="pd-title__sep" aria-hidden="true">·</span></>}
+      <span className="pd-title__text">{children}</span>
+    </h1>
+  );
+}
+
+export interface DetailMetaItem {
+  /** Görünen anahtar ("Servis", "Ekip", …); aynı zamanda React anahtarı. */
+  k: string;
+  v: React.ReactNode;
+  title?: string;
+}
+
+export function DetailMeta({ items }: { items: DetailMetaItem[] }) {
+  return (
+    <dl className="pd-meta" data-testid="pd-meta">
+      {items.map(it => (
+        <div key={it.k} className="pd-meta__item" title={it.title} data-meta={it.k}>
+          <dt>{it.k}</dt>
+          <dd>{it.v}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
