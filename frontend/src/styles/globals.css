@@ -1240,10 +1240,6 @@ button.sec.is-overlay, .btn-icon.ib-sec.is-overlay { background: var(--bg1); box
 /* Bound to the ARIA state, not to a second class: the divider and the
    announced state can never disagree. */
 .btn-disclose.dsc-section[aria-expanded="true"] { border-bottom-color: var(--divider); } /* v0.10.928 (Y2) — ServiceNeighbors ikiziyle birlikte */
-/* `dsc-caps` — the uppercase section label used above in-page charts
-   ("LATENCY DISTRIBUTION"). A caller modifier rather than a third
-   anatomy: it changes typography only, not layout. */
-.btn-disclose.dsc-caps { font-weight: 700; text-transform: uppercase; letter-spacing: .4px; }
 
 /* v0.10.927 — OptionRow: seçim listesi satırı (ui/OptionRow.tsx). Tam
    genişlik, sola yaslı, çocuklar doğrudan düğmede (sütun düzeni çağıranın
@@ -3844,6 +3840,23 @@ tbody td.infra-where-note { color: var(--text2); }
 .rt-flat { display: flex; gap: var(--sp-4); align-items: baseline; flex-wrap: wrap; padding-top: var(--sp-5); padding-bottom: var(--sp-5); font-size: var(--fs-sm); color: var(--text2); }
 .infra-src { margin: 0 0 var(--sp-6); padding-left: var(--sp-7); font-size: var(--fs-sm); color: var(--text2); }
 .infra-src li { padding: var(--sp-1) 0; }
+/* v0.10.2162 (servis sekmeleri S11) — S0–S10'un dokunduğu dosyalarda kalan
+   statik satır içi stiller sınıfa; görünüm aynı. `.ov-card-b.rt-card-b` çift
+   sınıflı: satır içi stil hem aşağıdaki `.ov-card-b { padding }` kuralını hem
+   yoğunluk kiplerini (`[data-density] .ov-card-b`) eziyordu, tek sınıf ezemez. */
+.rt-head { margin-top: 18px; margin-bottom: var(--sp-4); }
+.rt-head__title { font-size: var(--fs-md); font-weight: 700; color: var(--text); }
+.rt-head__sub { font-size: var(--fs-sm); color: var(--text2); }
+.rt-cards { display: flex; flex-direction: column; gap: var(--sp-6); }
+.rt-pod-note { font-size: var(--fs-xs); color: var(--text3); }
+.ov-card-b.rt-card-b { padding-top: var(--sp-5); padding-bottom: var(--sp-5); }
+.rt-slot { height: 240px; display: grid; place-items: center; }
+.rt-slot--err { color: var(--err); font-size: var(--fs-sm); }
+.rt-slot--empty { color: var(--text3); font-size: var(--fs-sm); }
+.heap-wrap { margin-top: var(--sp-4); }
+.heap-meta { display: flex; gap: var(--sp-3); align-items: center; font-size: var(--fs-xs); color: var(--text3); }
+.heap-line { margin-top: var(--sp-3); }
+.infra-charts { gap: 14px; }
 /* v0.9.408 — Explain kanıt kutusu: kök-neden soruşturulacak span'ler
    waterfall'da çerçeveyle kutulanır (kritik-yol şeridinin ÜSTÜNE
    binebilir; ikisi farklı soruya cevap verir).
@@ -5331,12 +5344,10 @@ a.ins-val:hover { text-decoration: underline; }
 .kc-scope { font-size: var(--fs-2xs); color: var(--warn); margin-bottom: var(--sp-2); }
 
 /* v0.10.718 — Infrastructure dilim 1: KPI StatTile ızgarası (Kafka şeridiyle
-   aynı atom) ve tile alt satırı (limit oranı, "en çok restart"). Tıklanabilir
-   tile v0.10.927'den beri `StatTile onClick` (`.stat-tile-btn`); alt satır
-   span → `display: block` aşağıda. Token merdiveni, ham sayı yok. */
+   aynı atom). Tıklanabilir tile v0.10.927'den beri `StatTile onClick`
+   (`.stat-tile-btn`). Token merdiveni, ham sayı yok. v0.10.2162 (S11) — tile
+   alt satırı `.stat-sub` silindi: tek kullanıcısı Infra KPI karolarıydı (S5). */
 .stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--sp-4); margin-bottom: var(--sp-4); }
-.stat-sub { display: block; font-size: var(--fs-2xs); font-weight: 400; color: var(--text3); margin-top: var(--sp-1); font-family: inherit; }
-.stat-sub .mono { font-size: inherit; }
 
 /* v0.10.720 — Pods tek tablo: cluster grup başlık satırı (ara toplam +
    eylemler), satır açma oku, sonlanma sebebi rozeti. Token merdiveni. */

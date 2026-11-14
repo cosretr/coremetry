@@ -14062,3 +14062,11 @@ eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
 - Geriye dönük uyum katmanı yok: yönlendirme, 410 ya da boş cevap dönen kalıntı eklenmedi; iki desen mux'ta artık kayıtlı değil. Kayıtlı `system_settings` satırı (`failure_slo`) yerinde kalır ve okunmaz; göç ya da silme sorgusu yazılmadı.
 - Bilerek kalan: `POST /api/copilot/explain-charts` (sohbet turu ikizi `explain-charts:chat` ve eval seti aynı kurucuları kullanıyor). Availability SLO'ları (`/api/slos`) etkilenmedi.
 - Doğrulanmadı: prod (kayıtlı blob var mı bilinmiyor; varsa etkisiz).
+
+
+## 2026-11-14 — v0.10.2162 — Servis sekmeleri S11: temizlik (program kapanışı)
+- Servis sayfası Details / Infrastructure sadeleştirme programı (S0–S11, v0.10.2131 → v0.10.2162) kapandı; dilim kararları `docs/frontend/service-tabs-plan.md` §5'te, burada yinelenmedi.
+- S11: S0–S10'un dokunduğu dosyalarda kalan 17 statik `style={{` sınıfa taşındı (`RuntimeCharts.tsx` 9, `HeapBaselineCard.tsx` 6, `ServiceInfraTab.tsx` 2); kurallar `globals.css`'te S9 / S10 bloğunun yanında. `pages/service` Tailwind kaynak listesinde olmadığı için yardımcı sınıf değil, `globals.css` sınıfı. Kart gövdesi dolgusu `.ov-card-b.rt-card-b` (çift sınıf): satır içi stil `.ov-card-b` ve yoğunluk kiplerini eziyordu, aynı sonucu tek sınıf veremez.
+- Ölü CSS silindi (sınıf adı `src/` altında hiçbir `.ts` / `.tsx`'te geçmiyor): `.btn-disclose.dsc-caps`, `.stat-sub` (+ `.stat-sub .mono`). Kullanılmayan export çıkmadı. `inlineStyleRatchet` TOTAL'ına dokunulmadı (servis sayfası göç listesinde değil; ölçülen 3715, tavan 3881).
+- Görünüm ve davranış değişikliği amaçlanmadı. Bulundu, DÜZELTİLMEDİ (görünümü değiştirir → operatör kararı): `.heap-near-b` / `.rt-flat` üst-alt dolgusu ve `.heap-near-foot` alt boşluğu dosyada sonra gelen `.ov-card-b { padding: 16px }` ve `.kc-line { margin-bottom }` kurallarına yeniliyor; S9 "sınıra en yakın" ve S10 "Düz" kartları 10px yerine 16px dolguyla çiziliyor.
+- Doğrulanmadı: tarayıcıda görünüm (piksel karşılaştırması yapılmadı), prod.

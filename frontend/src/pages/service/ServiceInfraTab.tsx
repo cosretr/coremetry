@@ -511,7 +511,7 @@ export function ServiceInfraTab({ service, range, onZoom, onZoomReset }: {
                 )}
               </>}
               actions={<a href="#runtime-sec" title="Pod başına kırılım sayfanın altında (Runtime)">Pod başına ↓</a>} />
-            <div className="grid-2" style={{ display: 'grid', gap: 14 }}>
+            <div className="grid-2 infra-charts">
               <div ref={cpuChartRef} style={flashStyle('cpu')}>
                 <ChartSlot q={aggCpu}>
                   <MetricArea title={`CPU (cores) · ${scopeLabel}${clampSuffix(clamped)}`}
@@ -548,7 +548,7 @@ export function ServiceInfraTab({ service, range, onZoom, onZoomReset }: {
                 title="Kaynak: OpenShift router'ının (HAProxy) backend metrikleri, Thanos üzerinden. Namespace kapsamlı — servisin route'u değil, namespace'in tüm route'ları.">
                 ns: {effNs} · {scopeLabel}
               </span>} />
-            <div className="grid-3" style={{ display: 'grid', gap: 14 }}>
+            <div className="grid-3 infra-charts">
               <ChartSlot q={agg2xx}>
                 <MetricArea title={`HTTP 2xx (req/s)${clampSuffix(clamped)}`}
                   subtitle="haproxy_backend_http_responses_total{code=2xx} · by route"

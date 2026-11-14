@@ -226,7 +226,7 @@ function HeapBaselineLines({ service, from, to, onZoom, onZoomReset }: HeapCardP
   // v0.10.954 — tablo standardı T12: tablo (başlığıyla) TEK yerde; hata
   // kartı da aynı tabloyu çizer, durum satırı gövdede.
   const renderTable = (body: ReactNode) => (
-    <div className="table-wrap" style={{ marginTop: 8 }}>
+    <div className="table-wrap heap-wrap">
       <table {...dt.tableProps}>
         <DataTableColgroup dt={dt} />
         <DataTableHead dt={dt} />
@@ -242,7 +242,7 @@ function HeapBaselineLines({ service, from, to, onZoom, onZoomReset }: HeapCardP
     return (
       <div className="card" data-testid="heap-baseline-error">
         <div className="ov-card-h"><h3>{HEAP_TITLE}</h3></div>
-        <div className="ov-card-b" style={{ paddingTop: 10, paddingBottom: 10 }}>
+        <div className="ov-card-b rt-card-b">
           {renderTable(
             <DataTableState dt={dt} kind="error"
               message={`heap bandı okunamadı: ${q.error instanceof Error ? q.error.message : String(q.error)}`} />,
@@ -259,7 +259,7 @@ function HeapBaselineLines({ service, from, to, onZoom, onZoomReset }: HeapCardP
     <div className="card" data-testid="heap-baseline-card">
       <div className="ov-card-h">
         <h3>{HEAP_TITLE}</h3>
-        <span style={{ fontSize: 11, color: 'var(--text3)', display: 'flex', gap: 6, alignItems: 'center' }}>
+        <span className="heap-meta">
           <span className="badge b-gray" title={`kaynak: ${sourceName}`}>{data.source}</span>
           {focused && <span className="badge b-gray" title={`odaklı pod: ${focused.pod}`}>{bandTxt}</span>}
           {pods.length > LINES_MAX && <span>{LINES_MAX} / {pods.length} pod çizildi</span>}
@@ -269,7 +269,7 @@ function HeapBaselineLines({ service, from, to, onZoom, onZoomReset }: HeapCardP
           <VerdictBadge data={data} />
         </span>
       </div>
-      <div className="ov-card-b" style={{ paddingTop: 10, paddingBottom: 10 }}>
+      <div className="ov-card-b rt-card-b">
         <TimeSeriesPanel
           series={series}
           thresholds={thresholds}
@@ -281,7 +281,7 @@ function HeapBaselineLines({ service, from, to, onZoom, onZoomReset }: HeapCardP
           onZoomReset={onZoomReset}
         />
         {focused && (
-          <div className="kc-line" style={{ marginTop: 6 }}>
+          <div className="kc-line heap-line">
             en kötü pod: <span className="mono">{data.worst || '—'}</span>
             {' · '}odak: <span className="mono">{focused.pod}</span> · {fmtPct(focused.band.current)}
             {focused.band.status !== 'no_baseline' && <> · z {focused.band.z.toFixed(1)} · bant {fmtPct(focused.band.lower)}–{fmtPct(focused.band.upper)}</>}
@@ -307,7 +307,7 @@ function HeapBaselineLines({ service, from, to, onZoom, onZoomReset }: HeapCardP
             );
           }),
         )}
-        <div className="kc-line" style={{ marginTop: 6 }}>
+        <div className="kc-line heap-line">
           Bant = bu pod'un son {data.historyHours} saatteki GC-sonrası heap doluluğu
           (jvm.memory.used_after_last_gc / jvm.memory.limit), {Math.round(data.bucketSec / 60)}-dk kova, kaynak: {sourceName}.
           Bu kart problem açmaz.{' '}

@@ -372,11 +372,11 @@ export function RuntimeCharts({ service, from, to, onZoom, onZoomReset, hideHead
 
   return (
     <>
-      {!hideHeader && <div style={{ marginTop: 18, marginBottom: 8 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>
+      {!hideHeader && <div className="rt-head">
+        <div className="rt-head__title">
           Runtime — {FAMILY_TITLE[family]}
         </div>
-        <div style={{ fontSize: 12, color: 'var(--text2)' }}>
+        <div className="rt-head__sub">
           {family === 'jvm' && <>Auto-instrumentation <code>jvm.*</code> metrics per pod (heap · GC · threads). Lejantta bir pod'a tıkla = izole.</>}
           {family === 'dotnet' && <>Runtime instrumentation <code>process.runtime.dotnet.*</code> metrics per pod.</>}
           {family === 'go' && <>Go runtime <code>process.runtime.go.*</code> metrics.</>}
@@ -385,7 +385,7 @@ export function RuntimeCharts({ service, from, to, onZoom, onZoomReset, hideHead
       {/* Full-width istifli kartlar — 30+ pod çizgisi + lejand tablosu için
           3-across dar kalıyordu (operatör raporu). Ortak syncKey: bir karta
           hover TÜM kartlarda crosshair çizer (heap spike ↔ GC pause korele). */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div className="rt-cards">
         {built.byCard.map(({ card, series, status, podTotal, capped, clusterCount, summary, flat }) => (
           flat && !view.lines && !view.nonheap ? (
             <div key={card.key} className="card" data-testid="rt-flat-card">
@@ -430,21 +430,21 @@ export function RuntimeCharts({ service, from, to, onZoom, onZoomReset, hideHead
                 </span>
               )}
               {!summary && (capped || clusterCount > 1) && (
-                <span style={{ fontSize: 11, color: 'var(--text3)' }}>
+                <span className="rt-pod-note">
                   {capped ? `${FANOUT_MAX} / ${podTotal} pod gösteriliyor` : `${podTotal} pod`}
                   {clusterCount > 1 ? ` · ${clusterCount} cluster` : ''}
                 </span>
               )}
             </div>
-            <div className="ov-card-b" style={{ paddingTop: 10, paddingBottom: 10 }}>
+            <div className="ov-card-b rt-card-b">
               {status === 'loading' && series.length === 0 ? (
-                <div style={{ height: 240, display: 'grid', placeItems: 'center' }}><Spinner /></div>
+                <div className="rt-slot"><Spinner /></div>
               ) : status === 'error' && series.length === 0 ? (
-                <div style={{ height: 240, display: 'grid', placeItems: 'center', color: 'var(--err)', fontSize: 12 }}>
+                <div className="rt-slot rt-slot--err">
                   Failed to load metrics
                 </div>
               ) : series.length === 0 ? (
-                <div style={{ height: 240, display: 'grid', placeItems: 'center', color: 'var(--text3)', fontSize: 12 }}>
+                <div className="rt-slot rt-slot--empty">
                   No data in this window
                 </div>
               ) : (
