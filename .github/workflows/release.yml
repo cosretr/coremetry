@@ -46,10 +46,63 @@ jobs:
           go test ./...
       - name: make audit
         run: make audit
+  # CI hızlandırma — imaj derlemesi artık kapıyı BEKLEMEZ, onunla aynı anda
+  # koşar (eskiden kapı 6 dk + derleme 8 dk art ardaydı). Kırmızı main'den
+  # sürüm etiketi çıkmaması kuralı (v0.10.626) korunur: bu iş imajı yalnız
+  # `build-<sha>` hazırlık etiketiyle iter; sürüm etiketlerini (vX, latest…)
+  # aşağıdaki `docker` işi kapı yeşilse aynı digest'e saniyeler içinde bağlar.
+  # GHA katman önbelleği kaldırıldı: dışa aktarımı her koşuda ~170 sn tutuyor,
+  # karşılığında npm ci katmanı bile isabet etmiyordu (COPY . . her sürümde
+  # go derlemesini zaten geçersiz kılar).
+  docker-build:
+    name: Build Docker image
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+      - name: Login to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Image labels
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+      # amd64 only by default — building arm64 via QEMU on the free
+      # ubuntu-latest runner takes 15–20 min per release. OpenShift
+      # clusters are overwhelmingly x86, so this covers ~95% of users.
+      # If you need arm64 (Apple Silicon dev, AWS Graviton), set
+      # vars.BUILD_PLATFORMS=linux/amd64,linux/arm64 in repo settings.
+      #
+      # v0.9.340 — stamp the release tag INTO the image: without build-args
+      # the Go ldflag, /app/VERSION and the frontend bundle constant were all
+      # "dev" on official releases (operator: login screen showed no version
+      # in prod). GITHUB_REF_NAME is the tag incl. the leading "v", so the
+      # displayed string matches the git tag exactly.
+      - name: Build + push (staging tag)
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: ${{ vars.BUILD_PLATFORMS || 'linux/amd64' }}
+          push: true
+          build-args: |
+            VERSION=${{ github.ref_name }}
+            VITE_APP_VERSION=${{ github.ref_name }}
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:build-${{ github.sha }}
+          labels: ${{ steps.meta.outputs.labels }}
+
   docker:
     name: Build + push Docker image
     runs-on: ubuntu-latest
-    needs: [gate]
+    needs: [gate, docker-build]
     # continue-on-error: a failed Docker push (typically a
     # GHCR write_package permission_denied when the orphan
     # package from a prior repo deletion blocks the new
@@ -59,8 +112,6 @@ jobs:
     # once the package linkage is fixed.
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v7
-      - uses: docker/setup-qemu-action@v4
       - uses: docker/setup-buildx-action@v4
       - name: Login to GHCR
         uses: docker/login-action@v4
@@ -83,40 +134,17 @@ jobs:
             # spelling too; both now work.
             type=ref,event=tag
             type=raw,value=latest,enable={{is_default_branch}}
-      # amd64 only by default — building arm64 via QEMU on the free
-      # ubuntu-latest runner takes 15–20 min per release. OpenShift
-      # clusters are overwhelmingly x86, so this covers ~95% of users.
-      # If you need arm64 (Apple Silicon dev, AWS Graviton), set
-      # vars.BUILD_PLATFORMS=linux/amd64,linux/arm64 in repo settings.
-      # v0.9.340 — stamp the release tag INTO the image.
-      #
-      # This step passed no build-args at all, so every published image took
-      # the Dockerfile defaults: ARG VERSION=dev and ARG VITE_APP_VERSION=dev.
-      # That means the Go binary's ldflag, the /app/VERSION file the Dockerfile
-      # writes from the same ARG, and the frontend bundle constant were ALL
-      # "dev" on every official release. The chart got the real number (the
-      # sed step below rewrites appVersion), so the mismatch was invisible from
-      # the outside — Helm said 0.9.x while the running binary said dev.
-      #
-      # Operator-reported symptom: the login screen shows a version locally
-      # (local builds pass --build-arg) but not in prod.
-      #
-      # GITHUB_REF_NAME is the tag, e.g. v0.9.340. Passed with the leading "v"
-      # so the displayed string matches the git tag exactly, which is what an
-      # operator compares against.
-      - name: Build + push
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          platforms: ${{ vars.BUILD_PLATFORMS || 'linux/amd64' }}
-          push: true
-          build-args: |
-            VERSION=${{ github.ref_name }}
-            VITE_APP_VERSION=${{ github.ref_name }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - name: Sürüm etiketlerini derlenen imaja bağla
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          DIGEST: ${{ needs.docker-build.outputs.digest }}
+        run: |
+          test -n "$DIGEST"
+          args=()
+          while read -r t; do
+            [ -n "$t" ] && args+=(-t "$t")
+          done <<< "$TAGS"
+          docker buildx imagetools create "${args[@]}" "${REGISTRY}/${IMAGE_NAME}@${DIGEST}"
 
   helm:
     name: Package + publish Helm chart (OCI)

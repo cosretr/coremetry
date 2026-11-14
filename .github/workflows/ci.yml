@@ -13,8 +13,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  frontend:
-    name: Frontend (typecheck + build)
+  # v0.10.2145 sonrası — CI hızlandırma. Eski tek `frontend` işi ~10,5 dk
+  # sürüyordu (vitest tek başına 469 sn; 1301 dosya) ve backend/lint/security
+  # onu bekliyordu → koşu ~17,5 dk. Şimdi: derleme ve testler ayrı işlerde,
+  # vitest 4 parçaya bölünür, Go işleri de aynı anda başlar (aşağıda stub embed).
+  # `frontend` adı zorunlu durum kontrolü (ruleset) olduğu için toplayıcı iş
+  # olarak kalır: derleme ya da herhangi bir test parçası kırmızıysa o da kırmızı.
+  frontend-build:
+    name: Frontend build (typecheck + eslint + bundle)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -29,41 +35,56 @@ jobs:
       - name: Type check
         working-directory: frontend
         run: npx tsc --noEmit
-      # ADVISORY (v0.7.49): ESLint over the existing ~108-finding baseline
-      # (incl. real react-hooks/rules-of-hooks violations queued as bug-fixes).
-      # Non-blocking until triaged; drop the `|| echo` to make it a gate.
-      # v0.10.626 — ESLint artık GERÇEK kapı (denetim §4.4 #2): 0 hata, uyarılar
-      # geçer (238 uyarı tabanı ayrı ratchet işi). `|| echo` advisory'si kalktı.
+      # v0.10.626 — ESLint GERÇEK kapı (denetim §4.4 #2): 0 hata, uyarılar
+      # geçer (uyarı tabanı ayrı ratchet işi).
       - name: ESLint
         working-directory: frontend
         run: npx eslint src
-      # First frontend test gate (v0.7.25). Vitest over the pure lib/ helpers
-      # that carry incident history (unit formatters, timeRangeToNs now()-trap,
-      # escapeHTML XSS, dashboard-var expansion). Runs before the build so a
-      # broken helper fails fast.
-      - name: Unit tests (vitest)
-        working-directory: frontend
-        run: npx vitest run
       - name: Build (Vite SPA)
         working-directory: frontend
         run: npx vite build
       # v0.10.1609 — shadcn Faz 1 R2 (plan §1.3): ilk yük (index.html
       # script + modulepreload) JS gz ≤ 347 KB ve sourcemap'lerinde
-      # Radix/cmdk/sonner/components/shadcn kaynağı yok. backend/lint/
-      # security işleri `needs: frontend` → kırmızı bütçe etiket yolunu keser.
+      # Radix/cmdk/sonner/components/shadcn kaynağı yok.
       - name: Bundle budget (initial ≤ 347 KB gz, no Radix in entry)
         working-directory: frontend
         run: node scripts/bundle-budget.mjs
-      - name: Upload built UI for the Go job
-        uses: actions/upload-artifact@v7
+
+  frontend-test:
+    name: Frontend tests (${{ matrix.shard }}/4)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          name: frontend-dist
-          path: frontend/dist
-          retention-days: 1
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install
+        working-directory: frontend
+        run: npm ci || npm install
+      - name: Unit tests (vitest, shard ${{ matrix.shard }}/4)
+        working-directory: frontend
+        run: npx vitest run --shard=${{ matrix.shard }}/4
+
+  frontend:
+    name: Frontend (typecheck + build)
+    needs: [frontend-build, frontend-test]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Derleme ve tüm test parçaları yeşil mi
+        run: |
+          echo "build=${{ needs.frontend-build.result }} tests=${{ needs.frontend-test.result }}"
+          test "${{ needs.frontend-build.result }}" = "success"
+          test "${{ needs.frontend-test.result }}" = "success"
 
   backend:
     name: Backend (vet + build + test)
-    needs: frontend
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -78,13 +99,14 @@ jobs:
           # keeps the security gate scanning the stdlib we actually ship.
           check-latest: true
           cache: true
-      # main.go uses //go:embed all:frontend/dist, so the Go build
-      # needs the Vite-rendered SPA from the frontend job.
-      - name: Pull built UI
-        uses: actions/download-artifact@v8
-        with:
-          name: frontend-dist
-          path: frontend/dist
+      # main.go uses //go:embed all:frontend/dist → dizin boş olamaz. Go işleri
+      # SPA içeriğine bakmaz (testler gömülü FS'i okumaz), bu yüzden CodeQL'deki
+      # gibi tek dosyalık stub yeter ve iş frontend'i beklemeden başlar. Gerçek
+      # SPA ile CGO_ENABLED=0 derleme release.yml kapısında ve Dockerfile'da.
+      - name: Stub embed (frontend/dist)
+        run: |
+          mkdir -p frontend/dist
+          echo '<!doctype html><title>ci-stub</title>' > frontend/dist/index.html
       - name: go vet
         run: go vet ./...
       - name: go build
@@ -166,7 +188,6 @@ jobs:
 
   lint:
     name: Lint (golangci-lint)
-    needs: frontend
     runs-on: ubuntu-latest
     # HARD GATE since v0.10.639: the standard-set baseline was triaged to
     # zero in v0.10.634-638 (SA4000 determinism idiom, unused, errcheck
@@ -186,12 +207,11 @@ jobs:
           # keeps the security gate scanning the stdlib we actually ship.
           check-latest: true
           cache: true
-      # golangci-lint compiles the package graph → needs the //go:embed SPA.
-      - name: Pull built UI
-        uses: actions/download-artifact@v8
-        with:
-          name: frontend-dist
-          path: frontend/dist
+      # golangci-lint compiles the package graph → //go:embed dizini boş olamaz (stub).
+      - name: Stub embed (frontend/dist)
+        run: |
+          mkdir -p frontend/dist
+          echo '<!doctype html><title>ci-stub</title>' > frontend/dist/index.html
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
@@ -204,7 +224,6 @@ jobs:
 
   security:
     name: Security (vuln + dep scan)
-    needs: frontend
     runs-on: ubuntu-latest
     # HARD GATE (v0.8.554) — the v0.7.34 advisory period is over: the
     # baseline was cleaned in v0.8.552 (npm: 0 critical/high) and v0.8.553
@@ -230,13 +249,11 @@ jobs:
           check-latest: true
           cache: true
       # main.go embeds frontend/dist (//go:embed) — govulncheck type-checks +
-      # builds the package graph, so it needs the rendered SPA like the backend
-      # job does. Pull the artifact instead of rebuilding the frontend here.
-      - name: Pull built UI
-        uses: actions/download-artifact@v8
-        with:
-          name: frontend-dist
-          path: frontend/dist
+      # builds the package graph; boş olmayan dizin yeter (stub).
+      - name: Stub embed (frontend/dist)
+        run: |
+          mkdir -p frontend/dist
+          echo '<!doctype html><title>ci-stub</title>' > frontend/dist/index.html
       # govulncheck only flags vulnerabilities in code paths actually REACHED
       # (call-graph analysis), so false positives are rare — which is what
       # makes it safe as a blocking gate.
