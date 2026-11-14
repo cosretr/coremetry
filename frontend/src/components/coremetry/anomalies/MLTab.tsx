@@ -75,8 +75,9 @@ export function groupTickText(t: MLTickStatus): string {
   // v0.10.2092: tek sinyal kolu canlı — canlı kipte AÇILAN sayısı, kapalıyken "açardı".
   const single = (t.groupLive ? (t.groupSingleOpened ? ` · tek sinyal: ${t.groupSingleOpened} Problem açtı` : '')
     : (t.shadowSingleWouldOpen ? ` · tek sinyal: ${t.shadowSingleWouldOpen} Problem açardı` : '')) +
-    // v0.10.2089: servis düzeyi gölge kapısı (svc_error_rate / svc_breadth) — Problem açılmaz.
-    (t.shadowSvcWouldOpen ? ` · servis düzeyi: ${t.shadowSvcWouldOpen} Problem açardı (gölge${t.shadowSvcP1 ? `, ${t.shadowSvcP1} P1` : ''})` : '');
+    // v0.10.2089: servis düzeyi kapı (svc_error_rate / svc_breadth). v0.10.2130: canlı kipte AÇILAN sayısı.
+    (t.groupLive ? (t.svcOpened ? ` · servis düzeyi: ${t.svcOpened} Problem açtı` : '')
+      : (t.shadowSvcWouldOpen ? ` · servis düzeyi: ${t.shadowSvcWouldOpen} Problem açardı (gölge${t.shadowSvcP1 ? `, ${t.shadowSvcP1} P1` : ''})` : ''));
   if (t.groupLive) {
     const bits = [`${t.groupOpened ?? 0} açıldı`, `${t.groupRefreshed ?? 0} sürüyor`, `${t.groupResolved ?? 0} kapandı`];
     return `grup Problem'i (canlı): ${bits.join(', ')}${t.shadowGroups ? ` · ${t.shadowGroups} grup değerlendirildi` : ''}${single}`;

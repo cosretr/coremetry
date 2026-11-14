@@ -254,6 +254,13 @@ func (c MLConfig) GroupProblemsOn() bool {
 // grubun ilk üyesinin olay kimliği → detay bağlantısı /anomalies/ml/<id>.
 const MLGroupRulePrefix = PromotedAnomalyRulePrefix + "group:"
 
+// MLSvcRulePrefix — v0.10.2130 (spec-ml-service-level dilim 4, operatör
+// kararı 2026-11-14 "Yenileri canlıya al"): servis düzeyi ML Problem'i
+// (`anomaly-auto:svc:<servis>`; svc_error_rate / svc_breadth). Grup
+// Problem'iyle AYNI tekilleştirme anahtarını (servis) paylaşır; yaşam
+// döngüsünün sahibi yine ML kaydedicisi (ml/group_live.go).
+const MLSvcRulePrefix = PromotedAnomalyRulePrefix + "svc:"
+
 // MLBaselineSettings — günlük baseline işi ayarı (system_settings `ml.baseline`).
 type MLBaselineSettings struct {
 	Enabled bool `json:"enabled"`

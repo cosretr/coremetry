@@ -46,6 +46,10 @@ func TestForceNonExceptionP3WithAllowlist(t *testing.T) {
 			"P2", "kaynak önceliği korundu (anomali grubu: birden çok sinyal)"},
 		{"ML anomali grubu 4 sa sonra P1 kalır", prob("anomaly-auto:group:ev-1", "critical", "P1"), def,
 			"P1", "(anomali grubu: birden çok sinyal)"},
+		// v0.10.2130 — ML servis düzeyi (hata oranı / yaygın yavaşlama) P1'i
+		// korunur (spec-ml-service-level dilim 4, operatör kararı 2026-11-14).
+		{"ML servis düzeyi P1 kalır", prob("anomaly-auto:svc:orders-api", "critical", "P1"), def,
+			"P1", "kaynak önceliği korundu (ML servis düzeyi anomali)"},
 		{"ML özne terfisi P3'e", prob("anomaly-auto:subject:orders-api", "critical", "P2"), def,
 			"P3", "tür kuralı"},
 		// v0.10.1083 — operatör: "Oracle hataları da problemse hâlâ düşmüyor".

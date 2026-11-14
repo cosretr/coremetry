@@ -1188,7 +1188,7 @@ func (e *Evaluator) sweepStaleProblems(ctx context.Context) {
 func (e *Evaluator) dropLiveMLGroupProblems(ctx context.Context, stale []chstore.Problem) []chstore.Problem {
 	has := false
 	for _, p := range stale {
-		if chstore.IsMLGroupProblem(p.RuleID) {
+		if chstore.IsMLLiveProblem(p.RuleID) {
 			has = true
 			break
 		}
@@ -1715,7 +1715,9 @@ func (e *Evaluator) resolveClearedAnomalyPromotions(ctx context.Context, muted m
 func promotedResolveReason(ruleID string, active, muted, activeGroups map[string]bool) (string, bool) {
 	// v0.10.2052 (D4) — ML grup Problem'i anomaly_events'te parmak izi
 	// taşımaz; yaşam döngüsü ML kaydedicisinde (internal/ml/group_live.go).
-	if chstore.IsMLGroupProblem(ruleID) {
+	// v0.10.2130 — servis düzeyi ML Problem'i (anomaly-auto:svc:) de; muafiyet
+	// olmasa "svc:<servis>" parmak izi sanılıp ilk geçişte kapanırdı.
+	if chstore.IsMLLiveProblem(ruleID) {
 		return "", false
 	}
 	if strings.HasPrefix(ruleID, promoteSubjectRulePrefix) {

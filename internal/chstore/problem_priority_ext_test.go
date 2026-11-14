@@ -74,9 +74,14 @@ func TestDefaultInboxKeep_IncludesExternalErrorSeries(t *testing.T) {
 	if !reflect.DeepEqual(d1091, append(append([]string{}, d1083...), InboxKeepSvcSlowdown)) {
 		t.Errorf("1091 varsayılanı = 1083 varsayılanı + svc-slowdown:* olmalı: %v", d1091)
 	}
-	// v0.10.2056 — güncel varsayılan 1091'in üstüne yalnız ML grubu ekler.
-	if !reflect.DeepEqual(def, append(append([]string{}, d1091...), InboxKeepMLGroup)) {
-		t.Errorf("güncel varsayılan = 1091 varsayılanı + anomaly-auto:group:* olmalı: %v", def)
+	// v0.10.2056 — 2056 varsayılanı 1091'in üstüne yalnız ML grubu ekler.
+	d2056 := inboxKeepDefault2056()
+	if !reflect.DeepEqual(d2056, append(append([]string{}, d1091...), InboxKeepMLGroup)) {
+		t.Errorf("2056 varsayılanı = 1091 varsayılanı + anomaly-auto:group:* olmalı: %v", d2056)
+	}
+	// v0.10.2130 — güncel varsayılan 2056'nın üstüne yalnız ML servis düzeyi ekler.
+	if !reflect.DeepEqual(def, append(append([]string{}, d2056...), InboxKeepMLSvc)) {
+		t.Errorf("güncel varsayılan = 2056 varsayılanı + anomaly-auto:svc:* olmalı: %v", def)
 	}
 }
 

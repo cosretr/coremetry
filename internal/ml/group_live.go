@@ -119,13 +119,18 @@ func containsStr(xs []string, x string) bool {
 
 // groupProblemPlan — bir tikin Problem eylemleri.
 type groupProblemPlan struct {
-	Open    []chstore.Problem // yeni: incident bağlama + bildirim
+	Open    []chstore.Problem // yeni: bildirim
 	Refresh []chstore.Problem // tam satır, operatör alanları taşınmış
 	Resolve []chstore.Problem
 	// LiveGroup — grup kimliği → Problem kimliği (üye işareti "Problem açtı").
 	LiveGroup map[string]string
 	// SingleOpen — v0.10.2092: tek sinyal kolundan AÇILAN Problem kimlikleri (sayaç).
 	SingleOpen map[string]bool
+	// LiveSvc — v0.10.2130: servis düzeyi olay kimliği → bağlandığı Problem
+	// (kendi `anomaly-auto:svc:` satırı ya da servisin grup Problem'i).
+	LiveSvc map[string]string
+	// SvcOpen — v0.10.2130: servis düzeyi kararla AÇILAN Problem kimlikleri (sayaç).
+	SvcOpen map[string]bool
 }
 
 // newGroupProblem — SAF: açılacak Problem satırı.
@@ -138,15 +143,31 @@ func newGroupProblem(g decidedGroup, desc string) chstore.Problem {
 	}
 }
 
-// planGroupProblems — SAF: kararlar + açık grup Problem'leri → eylemler.
-// groups: bu tikte karar verilen gruplar (decideGroups sırası); open: açık
-// anlık görüntü (önek dışı satırlar yok sayılır); canResolve: kapanış izni
-// (lider sürekliliği). desc: grup → Problem cümlesi.
+// planGroupProblems — SAF: yalnız grup kararları (servis düzeyi girdi yok);
+// planMLProblems'in v0.10.2052 imzası.
 func planGroupProblems(groups []decidedGroup, open []chstore.Problem, canResolve bool, desc func(decidedGroup) string) groupProblemPlan {
-	plan := groupProblemPlan{LiveGroup: map[string]string{}, SingleOpen: map[string]bool{}}
+	return planMLProblems(groups, nil, open, canResolve, desc)
+}
+
+// planMLProblems — SAF: grup + servis düzeyi kararlar + açık ML Problem'leri
+// → eylemler. groups: bu tikte karar verilen gruplar (decideGroups sırası);
+// svcs: servis düzeyi canlı girdiler (svcProblemInputs); open: açık anlık
+// görüntü (ML ailesi dışı satırlar yok sayılır); canResolve: kapanış izni
+// (lider sürekliliği). desc: grup → Problem cümlesi.
+//
+// v0.10.2130 (spec Karar 4) — SERVİS BAŞINA TEK AÇIK ML PROBLEM'İ:
+// `anomaly-auto:group:*` ve `anomaly-auto:svc:*` aynı anahtarı (servis)
+// paylaşır. Önce açan sahiptir; sonra gelen üye olur (yeni Problem yok),
+// satır tam taşınır. Aynı tikte grup önce işlenir (gölge kararıyla aynı:
+// grup varsa svc üye). Value/Threshold yalnız DAHA YÜKSEK oranla
+// güncellenir (öncelik yalnız yükselir; grubun sayım satırı oran 1). Sahip
+// svc ise açıklama her tik güncel cümle. Kapanış: servisin ne bitmemiş
+// grubu ne açık svc olayı kalınca (mevcut 3 tik lider sürekliliği kuralı).
+func planMLProblems(groups []decidedGroup, svcs []svcProblemIn, open []chstore.Problem, canResolve bool, desc func(decidedGroup) string) groupProblemPlan {
+	plan := groupProblemPlan{LiveGroup: map[string]string{}, SingleOpen: map[string]bool{}, LiveSvc: map[string]string{}, SvcOpen: map[string]bool{}}
 	var own []chstore.Problem
 	for _, p := range open {
-		if strings.HasPrefix(p.RuleID, MLGroupRulePrefix) && p.Status != "resolved" {
+		if chstore.IsMLLiveProblem(p.RuleID) && p.Status != "resolved" {
 			own = append(own, p)
 		}
 	}
@@ -156,30 +177,47 @@ func planGroupProblems(groups []decidedGroup, open []chstore.Problem, canResolve
 		}
 		return own[i].ID < own[j].ID
 	})
-	bySvc := map[string]*chstore.Problem{}
-	for i := range own {
-		if bySvc[own[i].Service] == nil {
-			bySvc[own[i].Service] = &own[i]
+	bySvc := map[string]string{} // servis → sahip Problem kimliği
+	byID := map[string]chstore.Problem{}
+	for _, p := range own {
+		if _, ok := bySvc[p.Service]; !ok {
+			bySvc[p.Service] = p.ID
 		}
+		byID[p.ID] = p
 	}
-	touched := map[string]bool{} // Problem kimliği → bu tik tazelendi/açıldı
+	openIdx, refreshIdx := map[string]int{}, map[string]int{}
+	// row — bu tikte dokunulan satır (yoksa açık satırdan tazeleme kopyası).
+	row := func(id string) *chstore.Problem {
+		if i, ok := openIdx[id]; ok {
+			return &plan.Open[i]
+		}
+		if i, ok := refreshIdx[id]; ok {
+			return &plan.Refresh[i]
+		}
+		plan.Refresh = append(plan.Refresh, byID[id]) // tam satır: Status (ack), Assignee, Pod, AISummary … taşınır
+		refreshIdx[id] = len(plan.Refresh) - 1
+		return &plan.Refresh[len(plan.Refresh)-1]
+	}
 	for _, g := range groups {
 		if g.D.Finished {
 			continue
 		}
 		svc := g.G.Service
-		if p := bySvc[svc]; p != nil {
-			plan.LiveGroup[g.G.ID] = p.ID
-			if touched[p.ID] {
+		if id, ok := bySvc[svc]; ok {
+			plan.LiveGroup[g.G.ID] = id
+			_, fresh := openIdx[id]
+			_, done := refreshIdx[id]
+			if fresh || done {
 				continue
 			}
-			touched[p.ID] = true
-			q := *p // tam satır: Status (ack), Assignee, Pod, AISummary … taşınır
-			if g.D.WouldOpen {
-				n := float64(len(g.D.Signals))
-				q.Value, q.Threshold, q.Description = n, n, desc(g)
+			q := row(id)
+			if g.D.WouldOpen && chstore.IsMLGroupProblem(q.RuleID) {
+				q.Description = desc(g)
+				if mlProblemRatio(q.Value, q.Threshold) <= 1 { // svc'nin yükselttiği oran korunur
+					n := float64(len(g.D.Signals))
+					q.Value, q.Threshold, q.Metric = n, n, groupProblemMetric
+				}
 			}
-			plan.Refresh = append(plan.Refresh, q)
 			continue
 		}
 		if !g.D.WouldOpen {
@@ -190,46 +228,85 @@ func planGroupProblems(groups []decidedGroup, open []chstore.Problem, canResolve
 			plan.SingleOpen[p.ID] = true
 		}
 		plan.Open = append(plan.Open, p)
-		bySvc[svc] = &plan.Open[len(plan.Open)-1]
-		touched[p.ID] = true
+		openIdx[p.ID] = len(plan.Open) - 1
+		bySvc[svc] = p.ID
 		plan.LiveGroup[g.G.ID] = p.ID
+	}
+	for _, in := range svcs {
+		id, ok := bySvc[in.Service]
+		if !ok {
+			p := newSvcProblem(in)
+			plan.Open = append(plan.Open, p)
+			openIdx[p.ID] = len(plan.Open) - 1
+			plan.SvcOpen[p.ID] = true
+			bySvc[in.Service] = p.ID
+			id = p.ID
+		} else {
+			q := row(id)
+			if mlProblemRatio(in.Value, in.Threshold) > mlProblemRatio(q.Value, q.Threshold) {
+				q.Value, q.Threshold, q.Metric = in.Value, in.Threshold, in.Metric
+			}
+			if chstore.IsMLSvcProblem(q.RuleID) {
+				q.Description = in.Desc
+			}
+		}
+		for _, ev := range in.Events {
+			plan.LiveSvc[ev] = id
+		}
 	}
 	if !canResolve {
 		return plan
 	}
 	for _, p := range own {
-		if touched[p.ID] {
+		if _, ok := refreshIdx[p.ID]; ok {
 			continue
 		}
 		q := p
-		if !strings.Contains(q.Description, groupResolveReason) {
-			q.Description += groupResolveReason
+		reason := groupResolveReason
+		if chstore.IsMLSvcProblem(q.RuleID) {
+			reason = svcResolveReason
+		}
+		if !strings.Contains(q.Description, reason) {
+			q.Description += reason
 		}
 		plan.Resolve = append(plan.Resolve, q)
 	}
 	return plan
 }
 
+// svcResolveReason — v0.10.2130: servis düzeyi Problem'in kapanış gerekçesi.
+const svcResolveReason = " · kendiliğinden kapandı: servis anomalisi bitti"
+
 // liveCounts — tik sayaçları (MLTickStatus).
-type liveCounts struct{ Opened, Refreshed, Resolved, SingleOpened int64 }
+type liveCounts struct{ Opened, Refreshed, Resolved, SingleOpened, SvcOpened int64 }
 
 // liveGroupProblems — recorder tik adımı: açık anlık görüntüyü TEK kez
 // okur (OpenProblemsSnapshot, 5 sn memo), planı uygular, canlı kararları
 // gruplara işler. Anlık görüntü okunamazsa HİÇBİR ŞEY yapılmaz (yinelenen
 // Problem ya da kör kapanış, kaçırılmış bir tikten kötü).
-func (r *Recorder) liveGroupProblems(ctx context.Context, groups []decidedGroup, canResolve bool, desc func(decidedGroup) string, now time.Time) (liveCounts, error) {
+//
+// v0.10.2130: servis düzeyi kararlar (svcDec; nil = yok) aynı plana girer;
+// başarılı yazımın kararlarına Live + ProblemID işlenir (markLiveSvc).
+// Aynı servisin eski kuralı (svc-slowdown / anomaly:<svc>:error_rate) açıksa
+// svc Problem cümlesine çift kayıt notu eklenir — aynı anlık görüntüden.
+func (r *Recorder) liveGroupProblems(ctx context.Context, groups []decidedGroup, kept []chstore.MLEvent, svcDec map[string]SvcShadow, canResolve bool, desc func(decidedGroup) string, now time.Time) (liveCounts, error) {
 	var c liveCounts
 	snap, err := r.store.OpenProblemsSnapshot(ctx)
 	if err != nil {
 		return c, fmt.Errorf("ml group problems: open snapshot: %w", err)
 	}
-	var open []chstore.Problem
+	var open, all []chstore.Problem
 	for _, p := range snap.All() {
-		if p != nil && strings.HasPrefix(p.RuleID, MLGroupRulePrefix) {
+		if p == nil {
+			continue
+		}
+		all = append(all, *p)
+		if chstore.IsMLLiveProblem(p.RuleID) {
 			open = append(open, *p)
 		}
 	}
-	plan := planGroupProblems(groups, open, canResolve, desc)
+	svcs := svcProblemInputs(kept, svcDec, func(svc string) string { return legacyTwinNote(svc, all) })
+	plan := planMLProblems(groups, svcs, open, canResolve, desc)
 	failed := map[string]bool{}
 	var firstErr error
 	for _, p := range plan.Refresh {
@@ -250,7 +327,10 @@ func (r *Recorder) liveGroupProblems(ctx context.Context, groups []decidedGroup,
 		if plan.SingleOpen[p.ID] {
 			c.SingleOpened++
 		}
-		log.Printf("[ml] GROUP PROBLEM OPENED %s · %s · %s", p.Service, p.ID, p.Description)
+		if plan.SvcOpen[p.ID] {
+			c.SvcOpened++
+		}
+		log.Printf("[ml] ML PROBLEM OPENED %s · %s · %s", p.Service, p.ID, p.Description)
 		if r.notifier != nil {
 			go r.notifier.SendProblemAlert(context.Background(), p)
 		}
@@ -262,9 +342,10 @@ func (r *Recorder) liveGroupProblems(ctx context.Context, groups []decidedGroup,
 			continue
 		}
 		c.Resolved++
-		log.Printf("[ml] GROUP PROBLEM RESOLVED (anomali grubu bitti) %s · %s", p.Service, p.ID)
+		log.Printf("[ml] ML PROBLEM RESOLVED %s · %s", p.Service, p.ID)
 	}
 	markLiveGroups(groups, plan.LiveGroup, failed)
+	markLiveSvc(svcDec, plan.LiveSvc, failed)
 	return c, firstErr
 }
 

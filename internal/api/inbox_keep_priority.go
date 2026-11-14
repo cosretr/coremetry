@@ -88,6 +88,8 @@ func inboxKeepLabel(pattern, severity string) string {
 		return "yaygın yavaşlama"
 	case chstore.InboxKeepMLGroup: // v0.10.2056
 		return "anomali grubu: birden çok sinyal"
+	case chstore.InboxKeepMLSvc: // v0.10.2130
+		return "ML servis düzeyi anomali"
 	}
 	return "istisna listesi: " + pattern
 }

@@ -138,7 +138,7 @@ exception/httperror dışı satırlar inbox'ta P3 — YALNIZ dar istisna listesi
 (`problem_priority.inboxKeepSourcePriority`, glob `*`, tam eşleşme; kimlik Problem
 RuleID / incident `incident:<severity>`) uyan satır kaynak P1/P2'sini korur, gerekçe
 "kaynak önceliği korundu (…)". Varsayılan `anomaly:*:error_rate`, `builtin-*`, `svc-slowdown:*` (v0.10.1091),
-`db-health:*`, `incident:critical`, `anomaly:ext:*:ext:error_count`, `anomaly-cluster:ext:*`, `anomaly:ext-cap:*`, `anomaly-auto:group:*` (v0.10.2056, ML grup Problem'i; v4 göçü `problem_priority_inbox_keep_v4`, 1091 varsayılanından); nil = varsayılan, `[]` = saf v0.9.487; geniş kalıp
+`db-health:*`, `incident:critical`, `anomaly:ext:*:ext:error_count`, `anomaly-cluster:ext:*`, `anomaly:ext-cap:*`, `anomaly-auto:group:*` (v0.10.2056, ML grup Problem'i; v4 göçü `problem_priority_inbox_keep_v4`, 1091 varsayılanından), `anomaly-auto:svc:*` (v0.10.2130, ML servis düzeyi; v5 göçü `problem_priority_inbox_keep_v5`, 2056 varsayılanından); nil = varsayılan, `[]` = saf v0.9.487; geniş kalıp
 400 (literal önek + ≥3 literal; `*:*` red); PUT kayıtlı değerin üstüne çözülür (alan
 yoksa liste korunur). **v0.10.1091:** varsayılana `svc-slowdown:*` (yaygın yavaşlama) eklendi; kayıtlı liste 1083 varsayılanına KÜME olarak eşitse aynı desenle ikinci tek seferlik göç (`MigrateInboxKeepDefaultsV3`, işaret `problem_priority_inbox_keep_v3`; tazeleyicide v2 → v3 sırayla, v2 düşerse v3 o tur koşmaz). **v0.10.1083:** varsayılana `anomaly:ext:*:ext:error_count` + `anomaly-cluster:ext:*` (Oracle hata
 serisi/kümesi) + `anomaly:ext-cap:*` (tavan özeti; `ext-down` DIŞARIDA) eklendi; kayıtlı liste ESKİ varsayılana küme olarak eşitse tek seferlik

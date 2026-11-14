@@ -13938,3 +13938,25 @@ eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
   ("Exception", Oracle grubunda "Exception · <marka etiketi>") · Ne zamandır (`exceptionOpenForLine`, tablo testli) ·
   İlgilenen (grubun atananı, boşsa "kimse"). Klasik düzen (tip + mesaj, standart kartlar, servis/ekip çipleri,
   sıklık grafiği, stack, eylemler) değişmedi; servis/ekip bilgisi bilerek iki kez görünür (çipler klasik düzenin parçası).
+
+## 2026-11-14 — v0.10.2130 — ML servis düzeyi Problem'i canlı (spec-ml-service-level dilim 4)
+- Operatör kararı 2026-11-14: "Yenileri canlıya al" — 14 günlük gölge süresi BEKLENMEDİ. `decideSvcShadow` kararı
+  (svc_error_rate / svc_breadth) gerçek Problem açar: `anomaly-auto:svc:<svc>`, critical, Value = gözlenen, Threshold =
+  mevsimsel taban (hata oranında taban 0 → %0,5) → `computePriority` mevcut yoldan (≥ 2× P1, altı P2; 4 sa P1).
+- Tekilleştirme (Karar 4): grup + svc TEK planda (`ml/group_live.go` `planMLProblems`), anahtar servis; önce açan sahip,
+  sonra gelen üye (satır tam taşınır); Value/Threshold yalnız daha yüksek oranla güncellenir (grubun sayım satırı oran 1,
+  svc'nin yükselttiğini geri indirmez). Aynı tikte grup önce (gölge kararıyla aynı). Kapanış: servisin ne bitmemiş grubu
+  ne açık svc olayı kalınca, lider > 3 tik kuralı; gerekçe "servis anomalisi bitti".
+- Bildirim yalnız açılışta, tür `anomaly` (önek `anomaly-auto:`). Anahtar mevcut `ml.groupProblems` (`GroupProblemsOn`);
+  ML ana anahtarı / dedektör anahtarları kapalıysa davranış değişmez; yeni vida/şema yok.
+- Evaluator süpürmeleri: `chstore.IsMLLiveProblem` (grup ∪ svc) — bayat süpürme ve `promotedResolveReason` muaf; muafiyet
+  olmasa "svc:<servis>" parmak izi sanılıp ilk geçişte kapanırdı.
+- Inbox: varsayılan keep listesine `anomaly-auto:svc:*` (gerekçe "ML servis düzeyi anomali"); kayıtlı liste 2056
+  varsayılanına KÜME olarak eşitse tek seferlik v5 göçü (`problem_priority_inbox_keep_v5`), sıra v2 → v5.
+- Eski dedektörler (`native_detectors.service_slowdown`, `metric_anomaly` error_rate/ramp) DOKUNULMADI (emeklilik madde 5
+  ayrı onay). Aynı serviste eski kural açıksa svc Problem cümlesine "eski kural da açık … çift kaydı olabilir" notu
+  (aynı anlık görüntüden, ek okuma yok). `svc_volume_spike` Problem açmaz (svc kapısına girmez, `groupExcluded` aynen).
+- Detay: başlık düz cümle (`MLPromotedHeadline`, RuleName "ML · servis anomalisi"): "X servisinde hata oranı %Y,
+  olağanı %Z." / "X servisinde N operasyon birden yavaşladı (p95 olağanın K katı)."
+- Doğrulanmadı: prod / tarayıcı; eski↔yeni karşılaştırma raporu (2089) sürer.
+

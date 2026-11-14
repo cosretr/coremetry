@@ -46,7 +46,7 @@ func TestDecideSvcShadow(t *testing.T) {
 		{"iki svc olayı aynı servis → tek sahip (en erken), öncelik en yükseği", []chstore.MLEvent{
 			svcEv("b1", detSvcBreadth, "orders-api", 5, 1000, 1500), svcEv("e1", detSvcErrorRate, "orders-api", 0, 0.01, 0.05)}, nil,
 			func(t *testing.T, d map[string]SvcShadow) {
-				if !d["e1"].Owner || d["b1"].Owner || d["b1"].Priority != "P1" || !strings.Contains(d["b1"].Reason, "üye olurdu") {
+				if !d["e1"].Owner || d["b1"].Owner || d["b1"].Priority != "P1" || !strings.Contains(d["b1"].Reason, "üye") {
 					t.Fatalf("%+v", d)
 				}
 				if n, p1 := svcShadowCounts(d); n != 1 || p1 != 1 {

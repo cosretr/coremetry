@@ -56,6 +56,12 @@ const (
 	// YALNIZ grup alt ailesi — tekil terfi (`anomaly-auto:<id>`) ve özne
 	// (`anomaly-auto:subject:…`) DIŞARIDA kalır.
 	InboxKeepMLGroup = MLGroupRulePrefix + "*"
+	// InboxKeepMLSvc — v0.10.2130 (spec-ml-service-level dilim 4, operatör
+	// kararı 2026-11-14): servis düzeyi ML Problem'i (`anomaly-auto:svc:<svc>`;
+	// hata oranı / yaygın yavaşlama). Kaynağı critical + ≥ 2× taban → P1;
+	// eski `svc-slowdown:*` / `anomaly:*:error_rate` P1'inin halefi — inbox'ta
+	// P3'e çivilenirse varlık sebebi kaybolur.
+	InboxKeepMLSvc = MLSvcRulePrefix + "*"
 )
 
 // DefaultInboxKeepSourcePriority — alan YOKKEN geçerli liste. BİLİNÇLİ
@@ -74,7 +80,17 @@ const (
 // v0.10.2056 — ML anomali grubu (`anomaly-auto:group:*`) eklendi (operatör
 // onaylı 2026-11-12); 1091 varsayılanında kayıtlı liste v4 göçüyle taşınır.
 // `anomaly-auto:*` geri kalanı yukarıdaki gerekçeyle hâlâ DIŞARIDA.
+//
+// v0.10.2130 — servis düzeyi ML Problem'i (`anomaly-auto:svc:*`) eklendi
+// (operatör kararı 2026-11-14); 2056 varsayılanında kayıtlı liste v5 göçüyle
+// taşınır.
 func DefaultInboxKeepSourcePriority() []string {
+	return append(inboxKeepDefault2056(), InboxKeepMLSvc)
+}
+
+// inboxKeepDefault2056 — v0.10.2056'nın varsayılanı (v5 göçünün "önceki
+// varsayılan" tanımı; DEĞİŞTİRME — kayıtlı listeyi bununla kıyaslıyoruz).
+func inboxKeepDefault2056() []string {
 	return append(inboxKeepDefault1091(), InboxKeepMLGroup)
 }
 

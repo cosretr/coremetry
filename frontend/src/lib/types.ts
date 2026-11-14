@@ -12244,10 +12244,12 @@ export interface MLEvent {
   /** v0.10.2089 — servis düzeyi olayın (svc_error_rate / svc_breadth) gölge Problem kararı (ml.SvcShadow). */
   svcShadow?: MLSvcShadow;
 }
-/** v0.10.2089 — internal/ml/svc_shadow.go SvcShadow aynası: anomaly-auto:svc:<svc> AÇARDI (gölge; Problem açılmaz). */
+/** v0.10.2089 — internal/ml/svc_shadow.go SvcShadow aynası: anomaly-auto:svc:<svc> kapı kararı.
+ *  v0.10.2130: canlı — live + problemId dolu ise Problem açıldı / tazelendi (grup sahipliğinde grup Problem'i). */
 export interface MLSvcShadow {
   wouldOpen: boolean; owner?: boolean; rule: string; joinsRule?: string;
   priority?: string; priorityReason?: string; value: number; threshold: number; reason: string; at: number;
+  live?: boolean; problemId?: string;
 }
 /** v0.10.2089 — ml.SvcCompareRow aynası: eski servis düzeyi Problem ↔ yeni gölge kararı. diff: matched | missed | extra | late. */
 export interface MLSvcCompareRow {
@@ -12416,6 +12418,8 @@ export interface MLTickStatus {
   shadowSingleWouldOpen?: number;
   /** v0.10.2089: servis düzeyi gölge kapısı — "Problem açardı" servis sayısı + bunların P1 olanları. */
   shadowSvcWouldOpen?: number; shadowSvcP1?: number;
+  /** v0.10.2130 — bu tikte servis düzeyi kararla AÇILAN ML Problem'i (groupOpened bunları da sayar). */
+  svcOpened?: number;
   /** v0.10.2052 (D4): grup → Problem canlı mı; bu tikte açılan / tazelenen / kapanan grup Problem'i. */
   groupLive?: boolean; groupOpened?: number; groupRefreshed?: number; groupResolved?: number;
   /** v0.10.2092: bu tikte tek sinyal kolundan AÇILAN grup Problem'i. */

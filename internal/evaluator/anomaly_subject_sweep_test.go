@@ -143,6 +143,10 @@ func TestPromotedResolveReason(t *testing.T) {
 		// ML tikinde yeniden açılır, her açılış bildirim olurdu.
 		{chstore.MLGroupRulePrefix + "ev1", nil, "", false},
 		{chstore.MLGroupRulePrefix + "ev1", map[string]bool{}, "", false},
+		// v0.10.2130 — servis düzeyi ML Problem'i de ML kaydedicisinin;
+		// "svc:<servis>" parmak izi sanılıp ilk geçişte kapanmamalı.
+		{chstore.MLSvcRulePrefix + "orders-api", nil, "", false},
+		{chstore.MLSvcRulePrefix + "orders-api", map[string]bool{}, "", false},
 	}
 	for _, c := range cases {
 		r, ok := promotedResolveReason(c.rule, active, muted, c.groups)

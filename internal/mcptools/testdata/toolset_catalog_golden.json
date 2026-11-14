@@ -398,7 +398,7 @@
   },
   "conditional/v2": {
     "count": 77,
-    "sha256": "06671530742f6f072e4e71d35dae0cf3b37c8d1a3760a390b220c7c86cd05301",
+    "sha256": "b7ea5ec72e0ebaf02e96f236305b22aec40051524e3b5e77fabf732da58c92b2",
     "names": [
       "list_services",
       "list_teams",
@@ -858,7 +858,7 @@
   },
   "zero/v2": {
     "count": 72,
-    "sha256": "6ca395d2b178be9ddf09e86b7c6a0aab76cc3770ded254baae37d6d6cf60145d",
+    "sha256": "35310f3f3d277af79adfa6fbc3b214582c236627e2c97d66927b2ca0aa5f2c94",
     "names": [
       "list_services",
       "list_teams",

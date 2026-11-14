@@ -34,6 +34,8 @@ func TestMatchInboxKeepSourcePriority(t *testing.T) {
 		{"ML anomali grubu korunur (v0.10.2056)", def, "anomaly-auto:group:ev-1", InboxKeepMLGroup},
 		{"ML özne terfisi korunmaz", def, "anomaly-auto:subject:orders-api", ""},
 		{"grup öneki tam: 'groupx' korunmaz", def, "anomaly-auto:groupx:ev-1", ""},
+		{"ML servis düzeyi korunur (v0.10.2130)", def, "anomaly-auto:svc:orders-api", InboxKeepMLSvc},
+		{"servis öneki tam: 'svcx' korunmaz", def, "anomaly-auto:svcx:orders-api", ""},
 		{"SLO burn korunmaz", def, "slo:checkout-avail:critical", ""},
 		{"self-health korunmaz", def, "self-volume-spike", ""},
 		{"boş kimlik hiçbir şeye uymaz", def, "", ""},

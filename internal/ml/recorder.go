@@ -277,6 +277,11 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	// yazdığı için damgalı hal koşuya da geri verilir.
 	groups, shadow := decideGroups(kept, r.runs.events(), GroupSlack(cfg),
 		GroupGateInput{IsBatch: isBatch, LoadParts: loadParts, Open: r.runs.openIDs(kept)}, start)
+	// v0.10.2089 — servis düzeyi kapı (spec dilim 3): karar kanıta, sayaç
+	// tik durumuna. v0.10.2130 (dilim 4, operatör kararı 2026-11-14) — aynı
+	// karar canlı yola girer: grup kararlarıyla TEK planda, servis başına tek
+	// ML Problem'i (anahtar kapalıyken yalnız gölge kaydı).
+	svcDec := decideSvcShadow(kept, r.runs.openIDs(kept), groups, chstore.CurrentProblemPriority(), start)
 	var live liveCounts
 	if cfg.GroupProblemsOn() {
 		loc := OperatorLocation(sens)
@@ -286,7 +291,7 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 			}
 			return groupProblemDescription(g, func(e chstore.MLEvent) string { return ExplainSummary(SummaryInput(e, cfg, start, loc)) })
 		}
-		lc, lerr := r.liveGroupProblems(tctx, groups, r.leaderTicks > episodeCloseMisses, desc, start)
+		lc, lerr := r.liveGroupProblems(tctx, groups, kept, svcDec, r.leaderTicks > episodeCloseMisses, desc, start)
 		live = lc
 		if lerr != nil {
 			log.Printf("[ml] group problems: %v", lerr)
@@ -296,9 +301,6 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 		}
 	}
 	stampGroupDecisions(kept, groups)
-	// v0.10.2089 — servis düzeyi gölge kapısı (spec dilim 3): karar kanıta,
-	// sayaç tik durumuna. Problem AÇILMAZ, bildirim GİTMEZ.
-	svcDec := decideSvcShadow(kept, r.runs.openIDs(kept), groups, chstore.CurrentProblemPriority(), start)
 	stampSvcShadow(kept, svcDec)
 	svcOpen, svcP1 := svcShadowCounts(svcDec)
 	for _, ev := range kept {
@@ -339,7 +341,7 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 		Partial: int64(partialN), Docs: global.docs.Load(), Steps: steps, Signals: signals, BatchCut: int64(batchCut),
 		Kinds: foldKindTicks(samples), ES: global.esQueries.Load() - esAtStart, VM: global.vmQueries.Load() - vmAtStart, CH: chQueries.Load(),
 		ShadowGroups: shadow.Groups, ShadowWouldOpen: shadow.WouldOpen, ShadowSingleWouldOpen: shadow.SingleWouldOpen, ContribQueries: int64(contribQ),
-		GroupLive: cfg.GroupProblemsOn(), GroupOpened: live.Opened, GroupRefreshed: live.Refreshed, GroupResolved: live.Resolved, GroupSingleOpened: live.SingleOpened,
+		GroupLive: cfg.GroupProblemsOn(), GroupOpened: live.Opened, GroupRefreshed: live.Refreshed, GroupResolved: live.Resolved, GroupSingleOpened: live.SingleOpened, SvcOpened: live.SvcOpened,
 		LogSvcUnmatched: int64(logSvc.Unmatched), LogSvcViaPod: int64(logSvc.ViaPod), ShadowSvcWouldOpen: svcOpen, ShadowSvcP1: svcP1}
 	// v0.10.2019 — metrik aile kaynakları + Thanos ölçümü (MetricThanos)
 	for _, det := range r.detectors {

@@ -44,6 +44,19 @@ func TestSplitMLGroupStale(t *testing.T) {
 	if IsMLGroupProblem(MLGroupRulePrefix) || IsMLGroupProblem("anomaly-auto:subject:x") {
 		t.Error("boş kuyruk / başka aile grup Problem'i değil")
 	}
+	// v0.10.2130 — servis düzeyi ML Problem'i de ML kaydedicisinin: bayat
+	// süpürmeden aynı kuralla muaf (ML eşiğini aşınca süpürülür).
+	s1 := Problem{ID: "anomaly-auto:svc:orders-api", RuleID: "anomaly-auto:svc:orders-api"}
+	sweep, exempt = SplitMLGroupStale([]Problem{s1, rule}, map[string]bool{})
+	if len(sweep) != 1 || sweep[0].ID != "r" || len(exempt) != 1 || exempt[0].ID != s1.ID {
+		t.Fatalf("svc: sweep=%v exempt=%v", sweep, exempt)
+	}
+	if sweep, _ = SplitMLGroupStale([]Problem{s1}, map[string]bool{s1.ID: true}); len(sweep) != 1 {
+		t.Fatalf("svc ML eşiğini aşınca süpürülür: %v", sweep)
+	}
+	if IsMLSvcProblem(MLSvcRulePrefix) || IsMLSvcProblem("anomaly-auto:svcx") || !IsMLLiveProblem(MLSvcRulePrefix+"a") || !IsMLLiveProblem(MLGroupRulePrefix+"e") || IsMLLiveProblem("svc-slowdown:a") {
+		t.Error("IsMLSvcProblem / IsMLLiveProblem yüklemleri")
+	}
 }
 
 func TestMLGroupProblemsSwitch(t *testing.T) {

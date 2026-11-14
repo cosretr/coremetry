@@ -46,9 +46,11 @@ export function latestSvcShadow(members: Pick<MLEvent, 'svcShadow'>[]): MLSvcSha
   return members.map(m => m.svcShadow).filter((d): d is MLSvcShadow => !!d).sort((x, y) => y.at - x.at)[0];
 }
 
-/** v0.10.2089 — SAF: servis düzeyi gölge kapı satırı (Problem AÇILMAZ; 14 günlük gölge). */
+/** v0.10.2089 — SAF: servis düzeyi kapı satırı. v0.10.2130: canlı — Problem'e
+ *  bağlandıysa "Problem açtı" (ya da servisin ML Problem'ine üye); kapalıyken gölge. */
 export function svcGateLine(d: MLSvcShadow): string {
-  const verb = !d.wouldOpen ? 'açmazdı' : d.joinsRule ? 'grup Problem\'ine üye olurdu (gölge)' : 'Problem açardı (gölge)';
+  const verb = d.live ? (d.problemId && d.problemId !== d.rule ? 'servisin ML Problem\'ine üye' : 'Problem açtı')
+    : !d.wouldOpen ? 'açmazdı' : d.joinsRule ? 'grup Problem\'ine üye olurdu (gölge)' : 'Problem açardı (gölge)';
   return `${verb}${d.priority ? ` · ${d.priority}` : ''} — ${d.reason}`;
 }
 

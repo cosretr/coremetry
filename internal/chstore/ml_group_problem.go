@@ -26,13 +26,24 @@ func IsMLGroupProblem(ruleID string) bool {
 	return len(ruleID) > len(MLGroupRulePrefix) && ruleID[:len(MLGroupRulePrefix)] == MLGroupRulePrefix
 }
 
+// IsMLSvcProblem — SAF (v0.10.2130): kural kimliği servis düzeyi ML
+// Problem'i mi (`anomaly-auto:svc:<servis>`).
+func IsMLSvcProblem(ruleID string) bool {
+	return len(ruleID) > len(MLSvcRulePrefix) && ruleID[:len(MLSvcRulePrefix)] == MLSvcRulePrefix
+}
+
+// IsMLLiveProblem — SAF (v0.10.2130): yaşam döngüsü ML kaydedicisinde olan
+// Problem (grup VEYA servis düzeyi). Evaluator süpürmeleri (bayat +
+// terfi kapanışı) bu yüklemle muaf tutar — tek karar noktası.
+func IsMLLiveProblem(ruleID string) bool { return IsMLGroupProblem(ruleID) || IsMLSvcProblem(ruleID) }
+
 // SplitMLGroupStale — SAF: bayat listesinden ML grup Problem'lerini ayırır.
 // veryStale: ML eşiğini (MLGroupStaleAfter) de aşmış kimlikler; nil =
 // bilinmiyor → hiçbir grup Problem'i süpürülmez (kör kapanış, bir tik
 // gecikmeden kötü). Grup dışı satırlar sırasıyla aynen döner.
 func SplitMLGroupStale(stale []Problem, veryStale map[string]bool) (sweep, exempt []Problem) {
 	for _, p := range stale {
-		if IsMLGroupProblem(p.RuleID) && !veryStale[p.ID] {
+		if IsMLLiveProblem(p.RuleID) && !veryStale[p.ID] {
 			exempt = append(exempt, p)
 			continue
 		}
