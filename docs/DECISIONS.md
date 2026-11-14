@@ -14097,3 +14097,10 @@ eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
 - Operatör kararı bekler: `GET /api/problems/buckets` ve `GET /api/blast-radius` artık ön yüz çağıransız (sunucuda kaldı).
 - Doğrulanmadı: tarayıcıda görünüm, prod.
 
+
+## 2026-11-14 — v0.10.2171 — Çağıranı kalmayan problems/buckets ve blast-radius uçları silindi
+
+Operatör onayı (v0.10.2170 "Operatör kararı bekler" maddesi). Ön yüz çağıranları S10'da gitmişti; sunucu uçları da gitti, shim yok.
+- `GET /api/problems/buckets` (`listProblemBuckets`, api.go) ve onu koruyan `TestProblemBucketsAgreeWithTheList` silindi. `ListProblems`, takım/küme çözümlemesi, `intersectServices` paylaşımlı, kaldı. api.go 10183 → 10081 (baseline düştü).
+- `GET /api/blast-radius` (`blast_radius_routes.go` + testi) silindi. `chstore.GetBlastRadiusBatch` CoSRE (`internal/sre`) kullandığı için kaldı; tekil `/api/services/{name}/blast-radius` ve MCP `get_blast_radius` dokunulmadı.
+- Paylaşılan saf özet `blastRadiusSetDigest` Kafka etiket anahtarında da kullanılıyordu → `sortedSetDigest` adıyla `messaging_kafka_tab.go`'ya taşındı (testi `messaging_kafka_tab_test.go`'da); anahtar biçimi aynı.

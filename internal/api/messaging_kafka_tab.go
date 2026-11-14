@@ -37,6 +37,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
 	"log"
 	"net/http"
 	"sort"
@@ -440,13 +441,24 @@ type kafkaLabelValuesReq struct {
 	Topic, ClientID string
 }
 
+// sortedSetDigest — sıralı küme FNV-64a (cache anahtarı; uzunluk değil
+// içerik, v0.5.187). Ayraç 0 baytı: "ab" ≠ "a"+"b". SAF; testli.
+func sortedSetDigest(sorted []string) string {
+	h := fnv.New64a()
+	for _, s := range sorted {
+		h.Write([]byte(s))
+		h.Write([]byte{0})
+	}
+	return fmt.Sprintf("%x", h.Sum64())
+}
+
 // kafkaLabelValuesKey — SAF; regresyon testi tüm girdileri pinler (v0.5.187).
 // v3 (v0.10.1102): sayfa anahtarları + TÜRETİLMİŞ taraf kümelerinin sıralı
 // FNV özeti (uzunluk değil içerik) + karşı süzgeç.
 func kafkaLabelValuesKey(src string, p kafkaLabelValuesReq, sc kafkaServiceScope) string {
 	return fmt.Sprintf("kafka-label-values:v3:src=%s:sys=%q:clu=%q:dest=%q:env=%q:label=%s:q=%q:lim=%d:p=%s:c=%s:ft=%q:fc=%q:%s",
 		src, p.Page.System, p.Page.Cluster, p.Page.Destination, p.Page.Env, p.Label, p.Q, p.Limit,
-		blastRadiusSetDigest(sortedCopyOf(sc.Producers)), blastRadiusSetDigest(sortedCopyOf(sc.Consumers)),
+		sortedSetDigest(sortedCopyOf(sc.Producers)), sortedSetDigest(sortedCopyOf(sc.Consumers)),
 		p.Topic, p.ClientID, cacheBucket(p.Page.From, p.Page.To))
 }
 

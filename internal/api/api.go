@@ -855,7 +855,6 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	// mu yoksa "evaluator ölü" mü olduğunu görmek her rolün hakkı.
 	// Admin'e kilitlemek, viewer'ı tam da bu ayrımdan mahrum bırakırdı.
 	mux.HandleFunc("GET    /api/problems/evaluator", s.getEvaluatorHealth)
-	mux.HandleFunc("GET    /api/problems/buckets", s.listProblemBuckets)
 	// v0.9.825 — bildirim derin linkinin tekil okuma ucu. Liste "en yeni
 	// 200" penceresiydi; çözülmüş bir problem oradan düşünce e-postadaki
 	// bağlantı "not found" diyordu (gerekçe: problem_by_id.go).
@@ -8545,107 +8544,6 @@ func (s *Server) countProblemsByRule(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// listProblemBuckets — chip-label backing endpoint. Returns the
-// per-severity and per-priority breakdown for a given status/service
-// scope, IGNORING the severity and priority chip selections so the
-// operator can see "P3 (12)" before clicking the P3 chip back on
-// (v0.5.479 — restores the chip-count UX that v0.5.448 broke when
-// priority filtering moved server-side). Limit is generous (2000)
-// because the problems table is state-shaped and stays small even
-// at scale; an install with 2000+ open problems has bigger issues
-// than a UI count.
-func (s *Server) listProblemBuckets(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
-	f := chstore.ProblemFilter{
-		Status: q.Get("status"), Service: q.Get("service"),
-		// v0.8.387 — same service-scoped env narrowing as the list +
-		// count endpoints (ProblemFilter.Env resolves it in SQL), so
-		// chip counts can't disagree with the rows under an env pick.
-		Env:   strings.TrimSpace(q.Get("env")),
-		Limit: 2000,
-	}
-	// v0.9.474 (dürüstlük A16) — team/cluster da chip'lere iner: liste bu
-	// daraltmaları SQL servis setine çeviriyordu, chip'ler görmüyordu —
-	// "mirrors every OTHER filter" iddiası team/cluster altında yanlıştı
-	// (takım seçili operatörde P1 chip'i tüm filoyu sayıyordu). Aynı
-	// çözümleme listeyle bire bir; çözümleme hatası daraltmayı KAPALI
-	// bırakır (liste ile aynı fail-open duruşu).
-	ownerTeam := strings.TrimSpace(q.Get("ownerTeam"))
-	sreTeam := strings.TrimSpace(q.Get("sreTeam"))
-	clusterFilter := strings.TrimSpace(q.Get("cluster"))
-	key := fmt.Sprintf("problems-buckets:v2:status=%s:svc=%s:env=%s:owner=%s:sre=%s:cluster=%s",
-		f.Status, f.Service, f.Env, ownerTeam, sreTeam, clusterFilter)
-	s.serveCached(w, r, key, 5*time.Second, func(ctx context.Context) (any, error) {
-		if ownerTeam != "" || sreTeam != "" {
-			if mds, err := s.store.ListServiceMetadata(ctx); err == nil {
-				f.Services = servicesForTeam(s.teamAliasesCtx(ctx), mds, ownerTeam, sreTeam)
-				// v0.9.1345 — listedeki kardeşiyle AYNI istisna: db
-				// özneleri servis-adı listesinde olamaz, sahiplikleri
-				// türetiliyor, o yüzden SQL daraltmasından geçip
-				// aşağıdaki kesin eşleştirmeye ulaşmalılar. Bayrak
-				// olmadan chip'ler db problemlerini SAYMAZ ama liste
-				// GÖSTERİR — v0.9.474'ün kapattığı "chip ile satır
-				// ıraksıyor" kusurunun aynısı, db tarafında.
-				f.ServicesAllowDBSubjects = true
-			}
-		}
-		if clusterFilter != "" {
-			if cm, err := s.store.GetServiceClusterMap(ctx, time.Hour); err == nil {
-				inCluster := make([]string, 0, 32)
-				for svc, cs := range cm {
-					for _, c := range cs {
-						if c == clusterFilter {
-							inCluster = append(inCluster, svc)
-							break
-						}
-					}
-				}
-				f.Services = intersectServices(f.Services, inCluster)
-			}
-		}
-		probs, err := s.store.ListProblems(ctx, f)
-		if err != nil {
-			return nil, err
-		}
-		// v0.9.1345 — SQL daraltması db öznelerini GEVŞETİYOR (yukarıdaki
-		// bayrak), yani kesin eşleştirme burada yapılmak ZORUNDA. Listenin
-		// ikinci geçişiyle birebir aynı: zenginleştir, sonra
-		// matchesTeamFilter. Aksi hâlde chip'ler BAŞKA takımların db
-		// problemlerini de sayardı.
-		if ownerTeam != "" || sreTeam != "" {
-			probs = s.store.EnrichProblemsWithTeams(ctx, probs)
-			ta := s.teamAliasesCtx(ctx)
-			keep := probs[:0]
-			for _, p := range probs {
-				if matchesTeamFilter(ta, p.OwnerTeam, p.SRETeam, ownerTeam, sreTeam) {
-					keep = append(keep, p)
-				}
-			}
-			probs = keep
-		}
-		// Priority depends on RecentDeploy (fresh-deploy bump), so
-		// the deploys enrich must run before the priority enrich.
-		// Runbooks/clusters enrichment skipped — buckets don't need
-		// either, and skipping the CH round-trips keeps this cheap.
-		probs = s.enrichProblemsForRead(ctx, probs) // v0.9.553 — deploy+öncelik, sırası sabit
-		sev := map[string]int{"critical": 0, "warning": 0, "info": 0}
-		prio := map[string]int{"P1": 0, "P2": 0, "P3": 0}
-		for _, p := range probs {
-			sev[p.Severity]++
-			bucket := p.Priority
-			if bucket == "" {
-				bucket = "P3"
-			}
-			prio[bucket]++
-		}
-		return map[string]any{
-			"severity": sev,
-			"priority": prio,
-			"total":    len(probs),
-		}, nil
-	})
-}
-
 func (s *Server) listProblems(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	// Priority — comma-separated P1/P2/P3 subset. Filtered post-enrich
@@ -8962,7 +8860,7 @@ func (s *Server) acknowledgeProblems(w http.ResponseWriter, r *http.Request) {
 	s.audit(r, "problem.acknowledge", "problem", "", string(details))
 	// v0.8.350 (HA 🟡9) — cross-pod read-your-writes: evict every
 	// problems-derived cache namespace (the "problems" prefix covers
-	// problems: / problems-count: / problems-buckets:) on ALL replicas —
+	// problems: / problems-count:) on ALL replicas —
 	// L2 DelPrefix + own L1 + "prefix:" pub/sub broadcast — so an ack on
 	// pod A is visible through pod B's next read instead of after the
 	// 5s TTL × SWR stale window (~15s of a "still open" ghost).

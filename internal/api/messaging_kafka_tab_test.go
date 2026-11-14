@@ -544,3 +544,12 @@ func TestGetKafkaLabelValuesRejectsUnknownLabel(t *testing.T) {
 		t.Fatalf("code=%d body=%s", rr.Code, rr.Body.String())
 	}
 }
+
+func TestSortedSetDigest(t *testing.T) {
+	if sortedSetDigest([]string{"a", "b"}) == sortedSetDigest([]string{"a", "c"}) {
+		t.Error("aynı uzunlukta farklı küme aynı özet (v0.5.187 sınıfı)")
+	}
+	if sortedSetDigest([]string{"ab"}) == sortedSetDigest([]string{"a", "b"}) {
+		t.Error("ayraç: ab ≠ a+b")
+	}
+}
