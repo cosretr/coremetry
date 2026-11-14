@@ -23,7 +23,7 @@ func TestHysteresisNoneTouchesOpenRow(t *testing.T) {
 	iHas := strings.Index(body, "hasOpen := open != nil")
 	iNone := strings.Index(body, `if oc.Action == "skip" || oc.Action == "none" {`)
 	iTouch := strings.Index(body, `if oc.Action == "none" && hasOpen {`)
-	iUpsert := strings.Index(body[iTouch:], "d.store.UpsertProblem(ctx, *open)")
+	iUpsert := strings.Index(body[iTouch:], "mem.Write(ctx, *open)") // v0.10.2156: gerçek satır UpsertProblem, üyelik üye olayı
 	if iHas < 0 || iNone < 0 || iTouch < 0 || iHas > iNone || iTouch < iNone || iUpsert < 0 || iUpsert > 200 {
 		t.Fatalf("histerezis touch sözleşmesi bozuldu: hasOpen=%d none=%d touch=%d upsert=%d", iHas, iNone, iTouch, iUpsert)
 	}
@@ -79,7 +79,7 @@ func TestScanSendsBandRowsToApply(t *testing.T) {
 		t.Error("faz 1 \"none\"u çıplak eliyor — histerezis touch'ı yine ölü kod olur")
 	}
 	iMerged := strings.Index(body, "if hasEx && merged[ex.ID] {")
-	iApply := strings.Index(body, "d.applyOutcome(ctx, pa.service, pa.metric, pa.oc, snap, sens)")
+	iApply := strings.Index(body, "d.applyOutcome(ctx, pa.service, pa.metric, pa.oc, sens, mem)")
 	if iMerged < 0 || iApply < 0 || iMerged > iApply {
 		t.Errorf("merged satır kontrolü applyOutcome'dan ÖNCE olmalı (merged=%d apply=%d)", iMerged, iApply)
 	}

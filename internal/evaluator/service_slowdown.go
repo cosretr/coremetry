@@ -71,6 +71,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cilcenk/coremetry/internal/anomaly"
 	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/tzdefault"
 )
@@ -562,19 +563,24 @@ func (e *Evaluator) evaluateServiceSlowdown(ctx context.Context) {
 		log.Printf("[evaluator] svc-slowdown: açık problem anlık görüntüsü alınamadı, tik atlanıyor: %v", err)
 		return
 	}
-	open := svcSlowOpenRows(snap.All())
+	now := time.Now()
+	// v0.10.2156 (Davis tarzı tek Problem D2) — servisin açık bir sahibi
+	// varken bu kural satır açmaz, ona ÜYE olur; üyelik kurala KENDİ AÇIK
+	// SATIRI gibi görünür (sanal satır): tazeleme / histerezis / kapanış
+	// aynen çalışır, yazımlar üye olayına gider (anomaly.Members).
+	mem := e.members(ctx, snap, anomaly.MemberDetSvcSlowdown, now)
+	open := append(svcSlowOpenRows(snap.All()), mem.Rows()...)
 	// Keep-last-good: blob 30 sn'de bir tazelenir, okuma hatası son değeri
 	// korur. Bu süreçte HİÇ doğrulanmadıysa yayınlanan değer tahmindir (kural
 	// kapalıysa açık satırları kapatır, batch listesi boştur) → karar yok.
 	if !e.store.AnomalySensitivityConfirmed() {
-		e.applySvcSlow(ctx, keepAll(open))
+		e.applySvcSlow(ctx, keepAll(open), mem)
 		return
 	}
 	sens := e.store.AnomalySensitivityForDetectors()
 	cfg := sens.ServiceSlowdown
-	now := time.Now()
 	if !cfg.On() {
-		e.applySvcSlow(ctx, svcSlowActions{Resolve: svcSlowDisabledResolutions(open, now.UnixNano())})
+		e.applySvcSlow(ctx, svcSlowActions{Resolve: svcSlowDisabledResolutions(open, now.UnixNano())}, mem)
 		return
 	}
 	// İki okumanın TOPLAM bütçesi ~10 s (inceleme C); okuma yoksa bağlam boşta.
@@ -591,27 +597,40 @@ func (e *Evaluator) evaluateServiceSlowdown(ctx context.Context) {
 	if err != nil && !errors.Is(err, errSvcSlowGaveUp) {
 		log.Printf("[evaluator] svc-slowdown read: %v — açık problemler tazelendi, karar yok", err)
 	}
-	e.applySvcSlow(ctx, act)
+	e.applySvcSlow(ctx, act, mem)
 }
 
-// applySvcSlow — tikin yazımları: tazele / kapat / aç (+ incident + bildirim).
-func (e *Evaluator) applySvcSlow(ctx context.Context, act svcSlowActions) {
+// applySvcSlow — tikin yazımları: tazele / kapat / aç (+ bildirim).
+// v0.10.2156: yazımlar anomaly.Members üzerinden — sanal satır (üyelik) üye
+// olayına gider, yeni açılış açık bir sahip varsa ona katılır (satır ve
+// bildirim yok); gerçek satırlar bugünkü yoldan.
+func (e *Evaluator) applySvcSlow(ctx context.Context, act svcSlowActions, mem *anomaly.Members) {
 	for _, q := range append(act.Keep, act.Refresh...) {
-		if err := e.store.UpsertProblem(ctx, q); err != nil {
+		if err := mem.Write(ctx, q); err != nil {
 			log.Printf("[evaluator] svc-slowdown refresh %s: %v", q.ID, err)
 		}
 	}
 	for _, q := range act.Resolve {
-		if err := e.store.UpsertProblem(ctx, q); err != nil {
+		member := mem.IsMember(q)
+		if err := mem.Write(ctx, q); err != nil {
 			log.Printf("[evaluator] svc-slowdown resolve %s: %v", q.ID, err)
+			continue
+		}
+		if member {
+			log.Printf("[evaluator] PROBLEM MEMBER LEFT (svc.slowdown): %s", q.ID)
 			continue
 		}
 		e.countResolved()
 		log.Printf("[evaluator] PROBLEM RESOLVED (svc.slowdown): %s", q.ID)
 	}
 	for _, p := range act.Open {
-		if err := e.store.UpsertProblem(ctx, p); err != nil {
+		owner, err := mem.Open(ctx, p)
+		if err != nil {
 			log.Printf("[evaluator] svc-slowdown open %s: %v", p.ID, err)
+			continue
+		}
+		if owner != "" {
+			log.Printf("[evaluator] PROBLEM JOINED (svc.slowdown): %s → %s (açık sahibe üye; yeni satır / bildirim yok)", p.ID, owner)
 			continue
 		}
 		e.countOpened()

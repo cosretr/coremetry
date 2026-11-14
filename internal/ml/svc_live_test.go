@@ -189,6 +189,13 @@ func TestOwnerDedupeAcrossFamilies(t *testing.T) {
 	in.StartedAt = now.Add(-2 * time.Minute).UnixNano()
 	grp := liveGroup("orders-api", "ev1", "log", "trace")
 	grp.G.Start = in.StartedAt
+	// Pin (v0.10.2156): ML satırları ">=" karşılaştırıcı taşır. Metrik anomalisi
+	// dedektörü, sahibi olduğu satırın ölçüsünün bir üyeden geldiğini buna
+	// bakarak anlar (anomaly.ownAnomalyMeasure: kendi ölçüsü ">" / "<");
+	// "error_rate" adı iki ailede aynı olduğu için tek ayırt edici budur.
+	if newSvcProblem(in).Comparator != ">=" || newGroupProblem(grp, "x").Comparator != ">=" {
+		t.Fatal("ML Problem satırı \">=\" karşılaştırıcı taşımalı (anomaly.ownAnomalyMeasure buna dayanır)")
+	}
 
 	t.Run("svc-slowdown sahip + ML svc gelir → üye; P1 sahibi yeniden yazılmaz", func(t *testing.T) {
 		p := planMLProblemsWith(nil, []svcProblemIn{in}, []chstore.Problem{slow}, true, descStub, pol)

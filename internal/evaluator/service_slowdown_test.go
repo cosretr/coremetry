@@ -500,9 +500,9 @@ func TestSvcSlowWiring(t *testing.T) {
 	}
 	s := string(b)
 	for _, frag := range []string{
-		"if !e.store.AnomalySensitivityConfirmed() {\n\t\te.applySvcSlow(ctx, keepAll(open))\n\t\treturn",
+		"if !e.store.AnomalySensitivityConfirmed() {\n\t\te.applySvcSlow(ctx, keepAll(open), mem)\n\t\treturn",
 		"rctx, cancel := context.WithTimeout(ctx, chstore.SvcSlowReadTimeout)",
-		"if !cfg.On() {\n\t\te.applySvcSlow(ctx, svcSlowActions{Resolve: svcSlowDisabledResolutions(open, now.UnixNano())})",
+		"if !cfg.On() {\n\t\te.applySvcSlow(ctx, svcSlowActions{Resolve: svcSlowDisabledResolutions(open, now.UnixNano())}, mem)",
 		"go e.notifier.SendProblemAlert(context.Background(), p)",
 	} {
 		if !strings.Contains(s, frag) {

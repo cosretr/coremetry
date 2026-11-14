@@ -151,7 +151,7 @@ func TestApplyOutcomeCalendarWiring(t *testing.T) {
 	i := strings.Index(src, "func (d *Detector) applyOutcome(")
 	body := src[i : i+strings.Index(src[i:], "\n}\n")]
 	sup := strings.Index(body, "calendarSuppressesDropPromotion(kind, metric, oc.Direction)")
-	ins := strings.Index(body, "if err := d.store.UpsertProblem(ctx, p); err != nil")
+	ins := strings.Index(body, "owner, err := mem.Open(ctx, p)") // v0.10.2156: açılış Members üzerinden (satır ya da üyelik)
 	if sup < 0 || ins < 0 || sup > ins || !strings.Contains(body[:ins], "if !hasOpen {") || !strings.Contains(body[sup:ins], "UpsertAnomalyEvent(ctx, calendarDropEvent(") {
 		t.Fatal("takvim bastırması yeni Problem'den ÖNCE ve yalnız açık Problem yokken olmalı")
 	}

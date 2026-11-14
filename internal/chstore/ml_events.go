@@ -123,19 +123,17 @@ type MLEventsFilter struct {
 	Services []string
 	Stage    string
 	Limit    int
+	// Members — v0.10.2156 (Davis tarzı tek Problem D2): üye dedektörlerinin
+	// (svc_slowdown / metric_anomaly / anomaly_promotion) olayları da okunsun.
+	// Varsayılan false: bu satırlar bir Problem'in üyelik kaydıdır, anomali
+	// yüzeylerinde (liste, akış, sağlık kontrolü) görünmez. Yalnız Problem
+	// olay çizelgesi ve üyelik okumaları true geçer.
+	Members bool
 }
 
-// ListMLEvents — son olaylar (FINAL), last_seen DESC; kararlar eklenir.
-func (s *Store) ListMLEvents(ctx context.Context, f MLEventsFilter) ([]MLEvent, error) {
-	if f.Limit <= 0 {
-		f.Limit = MLListCap
-	}
-	if f.Limit > MLUnifiedCap {
-		f.Limit = MLUnifiedCap
-	}
-	if f.Since.IsZero() {
-		f.Since = time.Now().Add(-24 * time.Hour)
-	}
+// mlEventsWhere — SAF: ListMLEvents süzgeci → WHERE gövdesi + argümanlar
+// (Limit hariç). Üye dedektörleri Members=false iken dışlanır.
+func mlEventsWhere(f MLEventsFilter) (string, []any) {
 	where := []string{"last_seen >= ?"}
 	args := []any{chDateTime64Arg(f.Since)}
 	if f.ID != "" {
@@ -162,6 +160,24 @@ func (s *Store) ListMLEvents(ctx context.Context, f MLEventsFilter) ([]MLEvent, 
 		where = append(where, "stage = ?")
 		args = append(args, f.Stage)
 	}
+	if !f.Members {
+		where = append(where, "detector NOT IN ("+mlMemberDetectorsSQL()+")")
+	}
+	return strings.Join(where, " AND "), args
+}
+
+// ListMLEvents — son olaylar (FINAL), last_seen DESC; kararlar eklenir.
+func (s *Store) ListMLEvents(ctx context.Context, f MLEventsFilter) ([]MLEvent, error) {
+	if f.Limit <= 0 {
+		f.Limit = MLListCap
+	}
+	if f.Limit > MLUnifiedCap {
+		f.Limit = MLUnifiedCap
+	}
+	if f.Since.IsZero() {
+		f.Since = time.Now().Add(-24 * time.Hour)
+	}
+	where, args := mlEventsWhere(f)
 	args = append(args, f.Limit)
 	rows, err := s.conn.Query(ctx, fmt.Sprintf(`
 		SELECT id, detector, signal, stage, service, level, pod, code, started_at, last_seen,
@@ -170,7 +186,7 @@ func (s *Store) ListMLEvents(ctx context.Context, f MLEventsFilter) ([]MLEvent, 
 		WHERE %s
 		ORDER BY last_seen DESC
 		LIMIT ?
-		SETTINGS max_execution_time = 5`, strings.Join(where, " AND ")), args...)
+		SETTINGS max_execution_time = 5`, where), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -209,7 +225,7 @@ func (s *Store) ListMLEvents(ctx context.Context, f MLEventsFilter) ([]MLEvent, 
 const mlGroupRowsSQL = `
 		SELECT id, detector, signal, stage, service, started_at, last_seen, baseline, observed, score, direction
 		FROM ml_events FINAL
-		WHERE last_seen >= ? AND service IN ?
+		WHERE last_seen >= ? AND service IN ? AND detector NOT IN ('svc_slowdown','metric_anomaly','anomaly_promotion')
 		ORDER BY last_seen DESC
 		LIMIT ?
 		SETTINGS max_execution_time = 5`
@@ -314,16 +330,20 @@ func MLSignalScores(rows []MLDetectorScore) []MLDetectorScore {
 	return out
 }
 
+// mlScorecardEventsSQL — karne olay okuması. Üye dedektörleri (v0.10.2156)
+// karneye girmez: ML dedektörü değiller, kararları da yok.
+const mlScorecardEventsSQL = `
+		SELECT id, detector FROM ml_events FINAL
+		WHERE last_seen >= ? AND detector NOT IN ('svc_slowdown','metric_anomaly','anomaly_promotion')
+		LIMIT 5000
+		SETTINGS max_execution_time = 5`
+
 // MLScorecard — son `since`'den beri dedektör başına olay / karar /
 // isabet. İki ayrı okuma (JOIN/alt sorgu yok: audit 5/5b, dağıtık-güvenli),
 // birleştirme Go'da (MLScorecardFromRows). Olay tavanı 5000 (30 g × gün
 // tavanı), karar okuması 'ml:' önekiyle sınırlı.
 func (s *Store) MLScorecard(ctx context.Context, since time.Time) ([]MLDetectorScore, error) {
-	rows, err := s.conn.Query(ctx, `
-		SELECT id, detector FROM ml_events FINAL
-		WHERE last_seen >= ?
-		LIMIT 5000
-		SETTINGS max_execution_time = 5`, chDateTime64Arg(since))
+	rows, err := s.conn.Query(ctx, mlScorecardEventsSQL, chDateTime64Arg(since))
 	if err != nil {
 		return nil, err
 	}

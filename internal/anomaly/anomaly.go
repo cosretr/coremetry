@@ -659,6 +659,12 @@ func (d *Detector) scan(ctx context.Context) {
 	if err != nil {
 		log.Printf("[anomaly] open-problems snapshot: %v — bu tik açık problem YOK sayılıyor", err)
 	}
+	// v0.10.2156 (Davis tarzı tek Problem D2) — servisin açık bir sahibi varken
+	// metrik anomalisi satır açmaz, ona ÜYE olur (problem_member.go). Üyelik
+	// bu taramaya KENDİ AÇIK SATIRI gibi görünür (sanal satır): hasOpen,
+	// histerezis touch'ı ve çözülme kararı aynen çalışır; yazımlar üye olayına
+	// gider. Tik başına tek ek okuma (üye olayları, ml_events).
+	mem := LoadMembers(ctx, d.store, snap, MemberDetMetricAnomaly, now)
 
 	// v0.9.1069 (F1.6-R2) — İKİ FAZ: önce TÜM kararlar toplanır, sonra
 	// uygulanır. Davranış birebir (kararlar zaten tek snapshot'tan ve
@@ -686,7 +692,7 @@ func (d *Detector) scan(ctx context.Context) {
 			seasonal := seriesFor(seasonalByMetric[m], svc)
 			rates := seriesFor(ratesByMetric[m], svc)
 			ruleID := "anomaly:" + svc + ":" + m
-			existing := snap.ByKey(ruleID, svc)
+			existing := mem.OpenRow(ruleID, svc) // gerçek satır ya da üyelik (sanal satır)
 			hasOpen := existing != nil && existing.ID != ""
 			// VM bu servisi biliyor ama bu tik karar veremiyor (vmStrictMetric):
 			// örneklenmiş span'e DÜŞÜLMEZ; açık satır yalnız tazelenir (bayat
@@ -733,7 +739,7 @@ func (d *Detector) scan(ctx context.Context) {
 		if pa.oc.Severity == "critical" || sourceSeverity[pa.service] == "" {
 			sourceSeverity[pa.service] = pa.oc.Severity
 		}
-		if ex := snap.ByKey("anomaly:"+pa.service+":"+pa.metric, pa.service); ex == nil || ex.ID == "" {
+		if ex := mem.OpenRow("anomaly:"+pa.service+":"+pa.metric, pa.service); ex == nil || ex.ID == "" {
 			freshOpens = append(freshOpens, openCandidate{Service: pa.service, Metric: pa.metric, Outcome: pa.oc})
 		}
 	}
@@ -749,6 +755,14 @@ func (d *Detector) scan(ctx context.Context) {
 		trackedSet[m] = true
 	}
 	joined := recentOpenCandidates(snap.All(), time.Now(), clusterJoinWindow, resolving, trackedSet)
+	// v0.10.2156 — bir sahibe ÜYE olan anomaliler de (aynı pencere kuralıyla)
+	// küme adayıdır: satırları olsaydı bugün aday olurlardı, küme tespiti
+	// değişmesin. Kümeye "katılacak" satırları yoktur (Existing nil): üyelik
+	// sahibinde sürer, küme ayrı satır olarak açılır (Faz 1'de dokunulmaz).
+	for _, c := range recentOpenCandidates(mem.Rows(), time.Now(), clusterJoinWindow, resolving, trackedSet) {
+		c.Existing = nil
+		joined = append(joined, c)
+	}
 	for _, c := range joined {
 		openSvc[c.Service] = true
 		if c.Outcome.Severity == "critical" || sourceSeverity[c.Service] == "" {
@@ -770,7 +784,7 @@ func (d *Detector) scan(ctx context.Context) {
 	// Kaynak-sinyal yaşam döngüsü: kaynağı toparlanmış kümeler kapanır.
 	d.resolveStaleClusters(ctx, snap, openSvc)
 	for _, pa := range pending {
-		ex := snap.ByKey("anomaly:"+pa.service+":"+pa.metric, pa.service)
+		ex := mem.OpenRow("anomaly:"+pa.service+":"+pa.metric, pa.service)
 		hasEx := ex != nil && ex.ID != ""
 		// v0.10.699 — bu tik kümeye KATILAN satıra dokunma: tazeleme onu
 		// tam-satır replace ile status=open'a geri yazar, çözüm de zaten
@@ -784,7 +798,7 @@ func (d *Detector) scan(ctx context.Context) {
 		if pa.oc.Action == "open" && suppressed[pa.service] && !hasEx {
 			continue
 		}
-		d.applyOutcome(ctx, pa.service, pa.metric, pa.oc, snap, sens)
+		d.applyOutcome(ctx, pa.service, pa.metric, pa.oc, sens, mem)
 	}
 	// v0.9.936 — DAVRANIŞ MOTORU, aynı tikin sonunda.
 	//
@@ -892,10 +906,15 @@ func batchSeries(
 // applyOutcome — bir kararın YAN ETKİLERİ (v0.9.1069, F1.6-R2:
 // checkOne'ın kalanı). Karar scan'in 1. fazında evaluateAnomaly'den
 // gelir; burada Upsert/notify/incident/log uygulanır.
-func (d *Detector) applyOutcome(ctx context.Context, service, metric string, oc anomalyOutcome, openSnap *chstore.OpenProblems, cfg chstore.AnomalySensitivityConfig) {
+//
+// v0.10.2156 (Davis tarzı tek Problem D2) — yazımlar mem (Members) üzerinden:
+// satır bir ÜYELİKSE (sanal satır) tazeleme / touch / çözülme üye olayına
+// gider, Problem yazılmaz; YENİ açılış açık bir sahip varsa ona katılır
+// (satır ve bildirim yok). Gerçek satırlar bugünkü yoldan.
+func (d *Detector) applyOutcome(ctx context.Context, service, metric string, oc anomalyOutcome, cfg chstore.AnomalySensitivityConfig, mem *Members) {
 	ruleID := "anomaly:" + service + ":" + metric
 	// v0.9.691 — tik başına TEK snapshot'tan arama (bkz. scan()).
-	open := openSnap.ByKey(ruleID, service)
+	open := mem.OpenRow(ruleID, service)
 	hasOpen := open != nil && open.ID != ""
 	if oc.Action == "skip" || oc.Action == "none" {
 		// v0.10.889 — HİSTEREZİS BANDINDA TOUCH. "none" = açık problem var, z
@@ -908,7 +927,7 @@ func (d *Detector) applyOutcome(ctx context.Context, service, metric string, oc 
 		// da: snapshot satırı OLDUĞU GİBİ yeniden yazılır (tam satır — Status/
 		// Assignee/Pod/AISummary satırın kendisinde), yalnız updated_at tazelenir.
 		if oc.Action == "none" && hasOpen {
-			if err := d.store.UpsertProblem(ctx, *open); err != nil {
+			if err := mem.Write(ctx, *open); err != nil {
 				log.Printf("[anomaly] touch %s: %v", ruleID, err)
 			}
 		}
@@ -939,15 +958,21 @@ func (d *Detector) applyOutcome(ctx context.Context, service, metric string, oc 
 			}
 		}
 		if hasOpen {
-			open.Value = current
-			// v0.9.978 — yön her tazelemede YENİDEN yazılır. evalWindow
-			// pencerenin TAMAMI aynı yönde olduğunda açık tutuyor, yani
-			// yön gerçekten değişebilir (uzun süre açık kalan bir problem
-			// sıçramadan çöküşe geçebilir). Eski satırların yönü de bu
-			// dalda dolduğu için düzeltme geçmişe de iniyor.
-			open.Comparator = anomalyComparator(oc.Direction)
+			// v0.10.2156 — satırın ölçüsü bir ÜYEDEN geliyorsa (sahibin önceliğini
+			// yükselten daha güçlü sinyal, chstore.RaiseOwner) Value / Comparator'a
+			// dokunulmaz: yalnız Value'yu ezmek üyenin eşiğiyle karışık, anlamsız
+			// bir oran bırakırdı ve öncelik olay ortasında düşerdi.
+			if ownAnomalyMeasure(*open, metric) {
+				open.Value = current
+				// v0.9.978 — yön her tazelemede YENİDEN yazılır. evalWindow
+				// pencerenin TAMAMI aynı yönde olduğunda açık tutuyor, yani
+				// yön gerçekten değişebilir (uzun süre açık kalan bir problem
+				// sıçramadan çöküşe geçebilir). Eski satırların yönü de bu
+				// dalda dolduğu için düzeltme geçmişe de iniyor.
+				open.Comparator = anomalyComparator(oc.Direction)
+			}
 			open.Description = desc
-			if err := d.store.UpsertProblem(ctx, *open); err != nil {
+			if err := mem.Write(ctx, *open); err != nil {
 				log.Printf("[anomaly] refresh %s: %v", ruleID, err)
 			}
 			return
@@ -974,8 +999,14 @@ func (d *Detector) applyOutcome(ctx context.Context, service, metric string, oc 
 			Description: desc,
 			StartedAt:   time.Now().UnixNano(),
 		}
-		if err := d.store.UpsertProblem(ctx, p); err != nil {
+		owner, err := mem.Open(ctx, p)
+		if err != nil {
 			log.Printf("[anomaly] open %s: %v", ruleID, err)
+			return
+		}
+		if owner != "" {
+			// Açık sahibe üye oldu: yeni satır ve bildirim yok.
+			log.Printf("[anomaly] JOINED %s · %s = %.2f%s → %s (açık sahibe üye)", service, metric, current, unitOf(metric), owner)
 			return
 		}
 		log.Printf("[anomaly] OPENED %s · %s = %.2f%s (med=%.2f mad=%.2f z=%.1f)",
@@ -1007,13 +1038,31 @@ func (d *Detector) applyOutcome(ctx context.Context, service, metric string, oc 
 			open.Description = strings.TrimRight(open.Description, " ") +
 				" Resolved on signal loss, not recovery — the service stopped emitting spans."
 		}
+		member := mem.IsMember(*open)
 		chstore.MarkResolved(open, time.Now().UnixNano())
-		if err := d.store.UpsertProblem(ctx, *open); err != nil {
+		if err := mem.Write(ctx, *open); err != nil {
 			log.Printf("[anomaly] resolve %s: %v", ruleID, err)
+			return
+		}
+		if member {
+			log.Printf("[anomaly] MEMBER LEFT %s · %s (%s, z=%.1f)", service, metric, reason, z)
 			return
 		}
 		log.Printf("[anomaly] RESOLVED %s · %s (%s, z=%.1f)", service, metric, reason, z)
 	}
+}
+
+// ownAnomalyMeasure — SAF (v0.10.2156): açık satırın ölçüsü bu dedektörün
+// KENDİ ölçüsü mü. Dedektör metriği kendi adıyla ve ">" / "<" (ya da eski
+// satırda boş) karşılaştırıcıyla yazar; bir üyenin yükselttiği ölçü başka
+// metrik ya da ">=" taşır (yaygın yavaşlama p99_ms / ">=", ML ">=" — pin:
+// ml TestOwnerDedupeAcrossFamilies).
+func ownAnomalyMeasure(open chstore.Problem, metric string) bool {
+	switch strings.TrimSpace(open.Comparator) {
+	case "", ">", "<":
+		return open.Metric == metric
+	}
+	return false
 }
 
 // trimTrailingSilent — baseline diliminin KUYRUĞUNDAKİ veri-yok

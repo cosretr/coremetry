@@ -63,8 +63,8 @@ func TestPromoteStrongAnomaliesRunsSubjectSweep(t *testing.T) {
 	if j := strings.Index(body[1:], "\nfunc "); j > 0 {
 		body = body[:j+1]
 	}
-	sw := strings.Index(body, "activeGroups := e.promoteSubjectAnomalies(ctx, cfg, muted, now)")
-	rs := strings.Index(body, "e.resolveClearedAnomalyPromotions(ctx, muted, activeGroups)")
+	sw := strings.Index(body, "activeGroups := e.promoteSubjectAnomalies(ctx, cfg, muted, now, members)")
+	rs := strings.Index(body, "e.resolveClearedAnomalyPromotions(ctx, muted, activeGroups, members)")
 	if sw < 0 || rs < 0 || sw > rs {
 		t.Errorf("özne süpürmesi çağrılmıyor ya da çözülmeden sonra (sw=%d rs=%d)", sw, rs)
 	}

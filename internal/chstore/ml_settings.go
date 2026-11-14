@@ -43,6 +43,9 @@ func MLDetectorSignal(detector string) string {
 	if detector == MLDetSvcVolumeSpike {
 		return MLSignalTrace // v0.10.2118: evaluator yazar, ML motoru değil (listeye girmez)
 	}
+	if detector == MLDetMemberSvcSlowdown || detector == MLDetMemberMetricAnomaly {
+		return MLSignalTrace // v0.10.2156: üye olayı (span RED kaynaklı eski dedektörler)
+	}
 	for _, n := range MLTraceDetectorNames {
 		if n == detector {
 			return MLSignalTrace

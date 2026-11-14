@@ -1423,6 +1423,19 @@ func (e *Evaluator) promoteStrongAnomalies(ctx context.Context) {
 	// ByKey nil → "yeni" kabul (eski `open, _ :=` dalı), bir kez loglanır.
 	lazy := e.store.LazyOpenSnapshot()
 	snapWarned := false
+	// v0.10.2156 (Davis tarzı tek Problem D2) — terfi Problem'i yalnız-üye
+	// ailedir: servisin açık bir sahibi varsa satır açmaz, ona üye olur.
+	// Üyelik bu süpürmeye KENDİ AÇIK SATIRI gibi görünür (sanal satır) —
+	// tazeleme / kapanış kararları aynen, yazımlar üye olayına. Görünüm de
+	// tembel: aktif olay yoksa ne anlık görüntü ne üye okuması.
+	var mem *anomaly.Members
+	members := func() *anomaly.Members {
+		if mem == nil {
+			snap, _ := lazy.Get(ctx)
+			mem = e.members(ctx, snap, anomaly.MemberDetPromotion, now)
+		}
+		return mem
+	}
 	for _, ev := range events {
 		// v0.10.1800 (Davis FAZ 3) — özne olayları (subject_red) bu genel
 		// döngüye HİÇ girmez: açılış da tazeleme de promoteSubjectAnomalies'te
@@ -1438,12 +1451,12 @@ func (e *Evaluator) promoteStrongAnomalies(ctx context.Context) {
 		var open *chstore.Problem
 		step := anomalyPromotionStep(ev.Status == "active", muted[ev.ID], promotionGate(ev, cfg, now),
 			func() bool {
-				snap, snapErr := lazy.Get(ctx) // v0.10.158 — ilk ihtiyaçta bir kez
+				_, snapErr := lazy.Get(ctx) // v0.10.158 — ilk ihtiyaçta bir kez
 				if snapErr != nil && !snapWarned {
 					log.Printf("[evaluator] anomaly promotion: open snapshot: %v", snapErr)
 					snapWarned = true
 				}
-				open = snap.ByKey(ruleID, ev.Service) // v0.10.156 — süpürme-yerel snapshot, kopya
+				open = members().OpenRow(ruleID, ev.Service) // gerçek satır ya da üyelik (sanal satır), kopya
 				return open != nil
 			})
 		switch step {
@@ -1502,12 +1515,26 @@ func (e *Evaluator) promoteStrongAnomalies(ctx context.Context) {
 		// yazıp ack'i geri açıyor, boş Assignee/Pod alanları da mevcut
 		// değerleri siliyordu (ReplacingMergeTree bütün-satır sözleşmesi).
 		carryProblemOperatorState(&p, open)
-		if err := e.store.UpsertProblem(ctx, p); err != nil {
+		// v0.10.2156 — yeni satır açık bir sahibe ÜYE olabilir (owner dolu:
+		// satır yazılmadı, bildirim yok); tazeleme gerçek satıra ya da üye olayına.
+		owner := ""
+		var err error
+		if isNew {
+			owner, err = members().Open(ctx, p)
+		} else {
+			err = members().Write(ctx, p)
+		}
+		if err != nil {
 			log.Printf("[evaluator] anomaly promote %s/%s: %v",
 				ev.Service, ev.ID, err)
 			continue
 		}
 		if isNew {
+			if owner != "" {
+				log.Printf("[evaluator] PROBLEM JOINED (anomaly promotion): %s · %s → %s (açık sahibe üye; yeni satır / bildirim yok)",
+					ev.Service, ev.Pattern, owner)
+				continue
+			}
 			log.Printf("[evaluator] AUTO-PROMOTED anomaly %s · %s · ratio %.1fx → %s",
 				ev.Service, ev.Pattern, ev.PeakRatio, sev)
 			if e.notifier != nil {
@@ -1516,8 +1543,8 @@ func (e *Evaluator) promoteStrongAnomalies(ctx context.Context) {
 		}
 	}
 	// v0.10.1799 (Davis FAZ 3) — özne olayları ayrı süpürme (kip ayardan).
-	activeGroups := e.promoteSubjectAnomalies(ctx, cfg, muted, now)
-	e.resolveClearedAnomalyPromotions(ctx, muted, activeGroups)
+	activeGroups := e.promoteSubjectAnomalies(ctx, cfg, muted, now, members)
+	e.resolveClearedAnomalyPromotions(ctx, muted, activeGroups, members)
 }
 
 // promotionStep — terfi süpürmesinin olay başına sonucu.
@@ -1661,7 +1688,10 @@ func carryProblemOperatorState(p *chstore.Problem, open *chstore.Problem) {
 // (promoteSubjectAnomalies). `anomaly-auto:subject:` Problem'i bu kümede
 // yoksa "anomaly cleared" ile kapanır; nil = bilinmiyor (kip off / okuma
 // hatası) → bu Problem'lere dokunulmaz (bayat süpürme kapatır).
-func (e *Evaluator) resolveClearedAnomalyPromotions(ctx context.Context, muted map[string]bool, activeGroups map[string]bool) {
+//
+// v0.10.2156 — üyelikler (sanal satır) aynı kuraldan geçer: olay temizlenince
+// ya da susturulunca üye AYRILIR (üye olayı kapanır; Problem yazılmaz).
+func (e *Evaluator) resolveClearedAnomalyPromotions(ctx context.Context, muted map[string]bool, activeGroups map[string]bool, members func() *anomaly.Members) {
 	events, err := e.store.ListAnomalyEvents(ctx, chstore.ListAnomalyEventsFilter{
 		ActiveOnly: true,
 		SinceNs:    time.Now().Add(-1 * time.Hour).UnixNano(),
@@ -1701,6 +1731,21 @@ func (e *Evaluator) resolveClearedAnomalyPromotions(ctx context.Context, muted m
 	}
 	if resolved > 0 {
 		log.Printf("[evaluator] anomaly resolve pass: closed %d promoted problem(s)", resolved)
+	}
+	mem := members()
+	for _, p := range mem.Rows() {
+		reason, ok := promotedResolveReason(p.RuleID, active, muted, activeGroups)
+		if !ok {
+			continue
+		}
+		q := *p
+		chstore.MarkResolved(&q, time.Now().UnixNano())
+		q.Description = appendResolveSuffix(q.Description, reason)
+		if err := mem.Write(ctx, q); err != nil {
+			log.Printf("[evaluator] anomaly resolve pass: üye %s: %v", q.ID, err)
+			continue
+		}
+		log.Printf("[evaluator] PROBLEM MEMBER LEFT (%s): %s · %s", reason, q.Service, q.RuleName)
 	}
 }
 

@@ -22,6 +22,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/cilcenk/coremetry/internal/anomaly"
 	"github.com/cilcenk/coremetry/internal/chstore"
 )
 
@@ -83,7 +84,12 @@ func subjectLiveMarks(opening []chstore.AnomalyEvent) []chstore.AnomalyEvent {
 // aktif endpoint adaylarının rule_id kümesi (çözülme geçişi için); nil =
 // bilinmiyor (kip off ya da okuma hatası) → çözülme geçişi özne grup
 // Problem'lerine dokunmaz (bayat süpürme kapatır).
-func (e *Evaluator) promoteSubjectAnomalies(ctx context.Context, pcfg chstore.AnomalyPromotionConfig, muted map[string]bool, now time.Time) map[string]bool {
+//
+// v0.10.2156 (Davis tarzı tek Problem D2) — members: terfi süpürmesinin
+// üyelik görünümü (tembel). Özne Problem'i yalnız-üye ailedir: servisin açık
+// bir sahibi varsa satır açmaz, ona üye olur (inbox istisna listesinde
+// olmadığı için sahip olamaz — chstore/problem_owner.go).
+func (e *Evaluator) promoteSubjectAnomalies(ctx context.Context, pcfg chstore.AnomalyPromotionConfig, muted map[string]bool, now time.Time, members func() *anomaly.Members) map[string]bool {
 	scfg := e.store.AnomalySensitivity().Subjects
 	if scfg.PromotionMode != chstore.SubjectPromotionShadow && scfg.PromotionMode != chstore.SubjectPromotionLive {
 		return nil
@@ -104,7 +110,7 @@ func (e *Evaluator) promoteSubjectAnomalies(ctx context.Context, pcfg chstore.An
 	gate := func(ev chstore.AnomalyEvent) bool { return subjectPromotionGate(ev, scfg, pcfg, now) }
 	activeGroups := activeSubjectGroupRules(events, muted)
 	if scfg.PromotionMode == chstore.SubjectPromotionLive {
-		e.promoteSubjectsLive(ctx, events, muted, gate, scfg, pcfg, now)
+		e.promoteSubjectsLive(ctx, events, muted, gate, scfg, pcfg, now, members)
 		return activeGroups
 	}
 	cands := groupSubjectEvents(events, muted, gate)
@@ -122,7 +128,7 @@ func (e *Evaluator) promoteSubjectAnomalies(ctx context.Context, pcfg chstore.An
 
 // promoteSubjectsLive — canlı kip: aday başına aç / tazele (v0.10.1800).
 func (e *Evaluator) promoteSubjectsLive(ctx context.Context, events []chstore.AnomalyEvent, muted map[string]bool,
-	gate func(chstore.AnomalyEvent) bool, scfg chstore.AnomalySubjectsConfig, pcfg chstore.AnomalyPromotionConfig, now time.Time) {
+	gate func(chstore.AnomalyEvent) bool, scfg chstore.AnomalySubjectsConfig, pcfg chstore.AnomalyPromotionConfig, now time.Time, members func() *anomaly.Members) {
 	esc := e.escalationCfg(ctx)
 	lazy := e.store.LazyOpenSnapshot()
 	snapWarned := false
@@ -131,12 +137,12 @@ func (e *Evaluator) promoteSubjectsLive(ctx context.Context, events []chstore.An
 	for _, c := range subjectLiveCandidates(events, muted, gate) {
 		var open *chstore.Problem
 		step := anomalyPromotionStep(true, false, len(c.Opening) > 0, func() bool {
-			snap, snapErr := lazy.Get(ctx)
+			_, snapErr := lazy.Get(ctx)
 			if snapErr != nil && !snapWarned {
 				log.Printf("[evaluator] özne terfisi: açık Problem anlık görüntüsü: %v", snapErr)
 				snapWarned = true
 			}
-			open = snap.ByKey(c.RuleID, c.Key.Service)
+			open = members().OpenRow(c.RuleID, c.Key.Service) // gerçek satır ya da üyelik (sanal satır)
 			return open != nil
 		})
 		if step != promoteCreate && step != promoteRefresh {
@@ -144,15 +150,26 @@ func (e *Evaluator) promoteSubjectsLive(ctx context.Context, events []chstore.An
 		}
 		p := subjectGroupProblem(c, open, scfg, pcfg, now)
 		p.Severity = effectiveSeverity(p.Severity, now.Sub(time.Unix(0, p.StartedAt)), esc)
-		if err := e.store.UpsertProblem(ctx, p); err != nil {
+		owner := ""
+		var err error
+		if step == promoteCreate {
+			owner, err = members().Open(ctx, p) // açık sahip varsa üye olur (satır / bildirim yok)
+		} else {
+			err = members().Write(ctx, p)
+		}
+		if err != nil {
 			log.Printf("[evaluator] özne terfisi %s: %v", c.RuleID, err)
 			continue
 		}
 		if step != promoteCreate {
 			continue // tazeleme: yeni rota listeye girer, bildirim YOK
 		}
-		opened++
 		marks = append(marks, subjectLiveMarks(c.Opening)...)
+		if owner != "" {
+			log.Printf("[evaluator] ÖZNE TERFİSİ ÜYE: %s → %s (açık sahibe üye; yeni satır / bildirim yok)", p.RuleName, owner)
+			continue
+		}
+		opened++
 		log.Printf("[evaluator] ÖZNE TERFİSİ: %s → %s", p.RuleName, p.Severity)
 		if e.notifier != nil {
 			go e.notifier.SendProblemAlert(context.Background(), p)
