@@ -386,6 +386,9 @@ func (s *Server) guidedEntityScanAnswer(ctx context.Context, emit func(string, a
 		return false, false
 	}
 	cands, _, err := mcptools.ResolveEntityText(ctx, s.mcpDeps(), q, "", "")
+	if err == nil && len(cands) == 0 && s.v2EntityNearAsk(ctx, emit, q) { // v0.10.2139 — D6: yazım hatalı çıplak ad (yalnız v2; chat_bare_entity.go)
+		return true, true
+	}
 	if err != nil || len(cands) == 0 {
 		return false, false
 	}
@@ -412,6 +415,8 @@ func (s *Server) guidedEntityScanAnswer(ctx context.Context, emit func(string, a
 		return s.guidedNamespaceServicesAnswer(ctx, emit, guidedRoute{Intent: guidedNamespaceServices, FindQuery: cands[0].Name, Env: route.Env}, from, to, rangeS)
 	}
 	markDisambiguation(ctx) // v0.10.1126 — wiki kurtarması (chat_disambig_rescue.go)
-	emit("answer", map[string]any{"text": renderEntityCandidates(q, cands), "suggestions": entityCandidateChips(cands)})
+	text, chips := renderEntityCandidates(q, cands), entityCandidateChips(cands)
+	emit("answer", map[string]any{"text": text, "suggestions": chips})
+	v2EntityCandidatesCard(ctx, emit, text, chips) // v0.10.2139 — D6: ilk ≤3 aday kartı (yalnız v2)
 	return true, true
 }

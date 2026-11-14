@@ -404,6 +404,22 @@ var routingRegressionRows = []routingRow{
 	{release: "komşu v0.10.2136", name: "v1 'nedenini inceler misin' → service_report (v1 bayt bayt)",
 		q: rrSvc + " nedenini inceler misin", wantTier: aisurface.TierGuided, wantRoute: string(guidedServiceReport)},
 
+	// v0.10.2139 — router boşlukları D6 (audit D, G): çıplak varlık + çitli /
+	// döküm yapıştırma; yalnız v2. Yazım hatalı adın en yakın servis kartı
+	// demette (guidedEntityScanAnswer, store ister) — TestV2EntityNearAsk.
+	{release: "v0.10.2139", name: "v2 '# orders-api-prod' → service_health (# + ortam eki)",
+		q: "# orders-api-prod", v2: true, wantTier: aisurface.TierGuided, wantRoute: string(guidedServiceHealth)},
+	{release: "komşu v0.10.2139", name: "v1 '# orders-api-prod' eski yolunda → find_entity",
+		q: "# orders-api-prod", wantTier: aisurface.TierGuided, wantRoute: string(guidedFindEntity)},
+	{release: "v0.10.2139", name: "v2 yazım hatalı tek ad 'ordrs-api' → find_entity (kart demette)",
+		q: "ordrs-api", v2: true, wantTier: aisurface.TierGuided, wantRoute: string(guidedFindEntity)},
+	{release: "v0.10.2139", name: "v2 tek satır çitli 'Caused by' (FQCN'siz) → log_field",
+		q: "``` Caused by: DisconnectException: connection reset by peer", v2: true, wantTier: aisurface.TierGuided, wantRoute: string(guidedLogField)},
+	{release: "v0.10.2139", name: "v2 '```textX Params: {…}' parametre dökümü → log_field",
+		q: "```textNativeShellDispatch Params: {\"id\": 12, \"name\": \"x\"}", v2: true, wantTier: aisurface.TierGuided, wantRoute: string(guidedLogField)},
+	{release: "komşu v0.10.2139", name: "v1 parametre dökümü eski yolunda → intent",
+		q: "```textNativeShellDispatch Params: {\"id\": 12, \"name\": \"x\"}", wantTier: aisurface.TierIntent, wantRoute: ""},
+
 	// v0.10.2138 — router boşlukları D5 (audit C, H): devam sorusu önceki turun
 	// öznesini (sohbet bağlamı servis / trace) devralır; yalnız v2.
 	{release: "v0.10.2138", name: "v2 devam 'neden gecikmiş olabilir?' → root_cause (bağlam servisi)",

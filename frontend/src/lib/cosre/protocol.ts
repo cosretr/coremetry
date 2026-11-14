@@ -188,7 +188,7 @@ export function parseDataReset(p: UIStreamPart): DataResetPart | null {
 }
 
 /** v0.10.2102 — data-question kind kapalı kümesi (Go uistream.QuestionKinds). */
-export const QUESTION_KINDS = ['source', 'doc_or_entity', 'trace_synth'] as const satisfies readonly CosreQuestionKind[];
+export const QUESTION_KINDS = ['source', 'doc_or_entity', 'trace_synth', 'entity_pick'] as const satisfies readonly CosreQuestionKind[];
 /** v0.10.2102 — seçenek tavanı (Go uistream.QuestionMaxOptions). */
 export const QUESTION_MAX_OPTIONS = 3;
 

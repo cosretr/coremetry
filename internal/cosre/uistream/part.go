@@ -22,8 +22,9 @@ var KnownKinds = map[string]bool{
 }
 
 // QuestionKinds — data-question `kind` kapalı kümesi (api chat_question.go;
-// chat_clarify Pending türleriyle aynı adlar).
-var QuestionKinds = []string{"source", "doc_or_entity", "trace_synth"}
+// ilk üçü chat_clarify Pending türleriyle aynı adlar; entity_pick bekleyen
+// soru yazmaz — seçenek etiketi kendi başına yönlenen servis adıdır).
+var QuestionKinds = []string{"source", "doc_or_entity", "trace_synth", "entity_pick"} // v0.10.2139 entity_pick (api chat_bare_entity.go)
 
 // QuestionMaxOptions — data-question seçenek tavanı (kapalı küçük soru;
 // katalogdan çok öğeli seçim data-pick'tir).

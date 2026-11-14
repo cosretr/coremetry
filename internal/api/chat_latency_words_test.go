@@ -152,7 +152,7 @@ func TestV2LatencyWiring(t *testing.T) {
 	src := stripGoCommentsAPI(string(b))
 	for _, want := range []string{
 		"!(v2 && hasLatencyGrowthSignal(norm))",
-		"routerQ := v2RouterQuestion(question, v2)",
+		"routerQ := v2RouterQuestion(pastedQ, v2)", // v0.10.2139 — pastedQ v1'de question (chat_bare_entity.go)
 		"route = v2WhyOverReport(route, norm, v2)",
 		"if wr, ok := v2WeekRange(route, norm, explicitRange, v2); ok {",
 		"hasLatencyAsk(qn) || (cosreV2Marked(ctx) && hasLatencyGrowthSignal(qn))",

@@ -51,7 +51,7 @@ func TestQuestionEventIsV2Only(t *testing.T) {
 }
 
 func TestQuestionKindsClosedSet(t *testing.T) {
-	want := []string{"source", "doc_or_entity", "trace_synth"}
+	want := []string{"source", "doc_or_entity", "trace_synth", "entity_pick"} // v0.10.2139 — entity_pick (chat_bare_entity.go)
 	if strings.Join(uistream.QuestionKinds, ",") != strings.Join(want, ",") {
 		t.Fatalf("QuestionKinds %v, beklenen %v", uistream.QuestionKinds, want)
 	}

@@ -1943,13 +1943,21 @@ func (s *Server) copilotChatGuided(ctx context.Context, emit func(string, any), 
 	}
 	v2 := cosreV2Marked(ctx)                            // v0.10.2136 — router boşlukları D3 yardımcıları yalnız v2 (chat_latency_words.go)
 	v2Cue := v2 && len(prior) > 0 && v2SubjectCue(norm) // v0.10.2138 — D5 devam ipucu (chat_context_subject.go)
+	// v0.10.2139 — D6 (chat_bare_entity.go): v2'de çitli yapıştırma soyulup
+	// şekil dedektörüne, JSON parametre dökümü zayıf şekil olarak girer.
+	pastedQ, fenced := v2PastedQuestion(question, v2)
+	paramsRoute, paramsDump := guidedRoute{}, false
+	if v2 {
+		paramsRoute, paramsDump = v2PastedParamsRoute(stripPasteFences(question), nil)
+	}
+	pasted = pasted || fenced || paramsDump
 	if !hasGuidedSignal(norm) && !followCue && !mayNameTeam(norm) && !absShape && !findCue && !peerCue && !affirm && !pasted &&
 		!(v2 && hasLatencyGrowthSignal(norm)) && !v2Cue {
 		return false, false // zero-cost fast path: no catalogue read
 	}
 	svcNames, envNames := s.guidedServiceNames(ctx), s.guidedEnvNames(ctx)
 	teamNames := s.guidedTeamNames(ctx)
-	routerQ := v2RouterQuestion(question, v2) // v0.10.2136 — v2: gecikme büyümesi sözcüğüne kanonik karşılık eklenir; v1 aynen
+	routerQ := v2RouterQuestion(pastedQ, v2) // v0.10.2136 — v2: gecikme büyümesi sözcüğüne kanonik karşılık eklenir; v1 aynen (pastedQ v1'de question)
 	// v0.10.2138 — D5: v2 devam sorusu ekranda özne yoksa önceki turun servisini /
 	// operasyonunu devralır (chat_context_subject.go); v1'de routerSvc = ekran servisi.
 	routerSvc := ctxService
@@ -1964,8 +1972,17 @@ func (s *Server) copilotChatGuided(ctx context.Context, emit func(string, any), 
 		}
 	}
 	route := routeGuidedIntentExt(routerQ, svcNames, envNames, teamNames, routerSvc, s.oracleOpsEnabled(), s.guidedOutboundHosts(ctx, norm))
-	route = promoteProblemsRootCause(route, norm, v2) // v0.10.2135 — yalnız v2 (chat_problems_root_cause.go)
-	route = v2WhyOverReport(route, norm, v2)          // v0.10.2136 — karar 5: neden > rapor, yalnız v2
+	route = promoteProblemsRootCause(route, norm, v2)   // v0.10.2135 — yalnız v2 (chat_problems_root_cause.go)
+	route = v2WhyOverReport(route, norm, v2)            // v0.10.2136 — karar 5: neden > rapor, yalnız v2
+	if v2 && route.Intent == guidedNone && paramsDump { // v0.10.2139 — D6: "<Ad> Params: {…}" dökümü → log_field
+		paramsRoute.Service = extractServiceFullName(norm, svcNames)
+		route = paramsRoute
+	}
+	if v2 && (route.Intent == guidedNone || route.Intent == guidedFindEntity) { // v0.10.2139 — D6: "# svc-a-prod" → servis sağlığı
+		if bs, be, ok := v2BareServiceEnv(question, svcNames, envNames); ok {
+			route = guidedRoute{Intent: guidedServiceHealth, Service: bs, Env: be}
+		}
+	}
 	// v0.10.479 (F4-2, G10) — TAKİP MUTASYONU: "son 1 saate genişlet" / "sadece
 	// hatalı olanlar" / "bunun pod'larını göster" / "aynı filtreyle loglara bak"
 	// → aktif bağlamın son rotası klonlanır, alan değişir, aynı dispatch; router'ın

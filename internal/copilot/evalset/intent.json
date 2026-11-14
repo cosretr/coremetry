@@ -423,6 +423,35 @@
           "svc-c"
         ]
       }
+    },
+    {
+      "id": "intent-service-health-hash-env-suffix",
+      "surface": "IntentClassify",
+      "why": "v0.10.2139 (router boşlukları D6): '# <servis>-<ortam>' çıplak varlık = o servisin sağlığı",
+      "user": "# svc-a-prod",
+      "expect": {
+        "intent": "service_health",
+        "intentService": "svc-a",
+        "knownEntities": [
+          "svc-a",
+          "svc-b",
+          "svc-c"
+        ]
+      }
+    },
+    {
+      "id": "intent-log-field-fenced-caused-by",
+      "surface": "IntentClassify",
+      "why": "v0.10.2139 (router boşlukları G): çitle başlayan yapıştırılmış hata gövdesi log araması",
+      "user": "``` Caused by: com.acme.db.DisconnectException: connection reset by peer",
+      "expect": {
+        "intent": "log_field",
+        "knownEntities": [
+          "svc-a",
+          "svc-b",
+          "svc-c"
+        ]
+      }
     }
   ]
 }

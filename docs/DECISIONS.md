@@ -14025,3 +14025,13 @@ eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
 - "Hayır. …" uzun cümlesi bekleyen netleştirmeyi tüketmiyor (doğrulandı, testle pinli); kayıp özne trace idi.
 - Doğrulanmadı: canlı model, prod.
 
+## 2026-11-14 — v0.10.2139 — CoSRE router boşlukları D6: çıplak varlık + çitli yapıştırma (yalnız v2)
+- "# <servis>-<ortam>" (tek jeton, canlı ortam eki) → service_health + Env; canlı servis adı ekle bitiyorsa ad aynen.
+- Yazım hatalı çıplak ad: tarama adaysızsa NearNames ≤3 → düz metin soru + `data-question` kind `entity_pick` (kapalı küme bir
+  tür büyüdü; Go uistream + FE QUESTION_KINDS birlikte, QuestionCard.test kaynak eşitliğini pinler). Bekleyen soru yazılmaz:
+  seçenek etiketi servis adıdır, tık yeni mesaj olarak find_entity'de tek servise çözülür (clarifyOption yok sayılır). Salt sayı
+  eşleşme kurmaz (v0.10.2112 dersi).
+- Yapıştırma: satır başı kod çiti şekil dedektöründen önce soyulur; "<Ad> Params: {" JSON dökümü zayıf şekil (router none iken)
+  → log_field ilk tanımlayıcı. Yeni ES sorgusu yok: mevcut log_field demeti.
+- "svc-a trace detail" kapsam dışı (niyet belirsiz). Doğrulanmadı: canlı model, prod, tarayıcıda kart.
+

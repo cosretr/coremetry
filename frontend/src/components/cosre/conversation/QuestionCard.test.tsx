@@ -27,6 +27,9 @@ describe('parseDataQuestion', () => {
     [{ type: 'data-question', data: { ...Q, kind: 'trace_synth', options: [{ id: 'yes', label: 'Evet, incele' }, { id: 'no', label: 'Hayır' }] } },
       { ...Q, kind: 'trace_synth', options: [{ id: 'yes', label: 'Evet, incele' }, { id: 'no', label: 'Hayır' }] }],
     [{ type: 'data-question', data: { ...Q, kind: 'doc_or_entity' } }, { ...Q, kind: 'doc_or_entity' }],
+    // v0.10.2139 (router boşlukları D6) — yazım hatalı çıplak ad: en yakın ≤3 servis.
+    [{ type: 'data-question', data: { ...Q, kind: 'entity_pick', options: [opt('svc-a'), opt('svc-b')] } },
+      { ...Q, kind: 'entity_pick', options: [opt('svc-a'), opt('svc-b')] }],
     [{ type: 'data-question', data: { ...Q, kind: 'later' } }, null],
     [{ type: 'data-question', data: { ...Q, text: '' } }, null],
     [{ type: 'data-question', data: { ...Q, options: [] } }, null],
