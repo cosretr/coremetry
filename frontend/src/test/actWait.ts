@@ -7,13 +7,17 @@
 // bekler. Bu yardımcı her turda act kapsamını kapatır (React kuyruğu
 // boşalır), koşulu denetler, koşul gerçekleşene dek bekler. Tavan aşılırsa
 // koşulun ADIYLA düşer — sessiz zaman aşımı değil.
+//
+// v0.10.2164 — tavan `performance.now()` ile ölçülür, `Date.now()` ile değil:
+// `vi.useFakeTimers({ toFake: ['Date'] })` + `setSystemTime` kullanan bir
+// testte (QuoteOfDay) Date donuktur ve tavan hiç dolmazdı.
 import { act } from 'react';
 
 export async function settleUntil(cond: () => boolean, label: string, timeoutMs = 4000): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
+  const deadline = performance.now() + timeoutMs;
   for (;;) {
     await act(async () => { await new Promise(r => setTimeout(r, 10)); });
     if (cond()) return;
-    if (Date.now() > deadline) throw new Error(`settleUntil: ${label} ${timeoutMs} ms içinde gerçekleşmedi`);
+    if (performance.now() > deadline) throw new Error(`settleUntil: ${label} ${timeoutMs} ms içinde gerçekleşmedi`);
   }
 }

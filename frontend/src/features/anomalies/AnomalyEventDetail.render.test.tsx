@@ -25,6 +25,8 @@ import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider, keepPreviousData } from '@tanstack/react-query';
 import type { AnomalyEvent } from '@/lib/types';
+import { settleUntil } from '@/test/actWait';
+import { keys } from '@/lib/queries/keys';
 
 const m = vi.hoisted(() => {
   window.matchMedia = ((q: string) => ({
@@ -540,9 +542,21 @@ describe('AnomalyEventDetail — terfi izi rozeti', () => {
 });
 
 // v0.10.2128 (Problems sadeleştirme S8) — alarm detayıyla aynı üst veri satırı.
+//
+// v0.10.2164 — kararsızlık (v0.10.2154 CI: `expected ['Servis','Tür'] to
+// deeply equal ['Servis','Ekip','SRE','Tür']`). Ekip İKİNCİ, sıralı okumadan
+// gelir: önce olay okunur (`useAnomalyEventByID`), gövde ancak o çözülünce
+// mount olur ve `AnomalyMeta` katalog okumasını (`useServicesMetadata`) O
+// ZAMAN başlatır; katalog gelene kadar satır doğru olarak Servis · Tür çizer.
+// `mount()` ise render'dan sonra sabit 30 ms uyur — CPU doygunken iki sorgu
+// turu + iki render 30 ms'ye sığmıyor ve test ara durumu ölçüyordu. Ürün
+// yarışı değil (kademeli boyama). Testler artık KOŞULA bekler: olumlu test
+// Ekip öğesi görünene kadar; olumsuz test katalog okuması BİTENE kadar
+// (bitmeden "ekip yok" her zaman doğru çıkan boş bir iddiaydı).
 describe('AnomalyEventDetail — üst veri satırı (v0.10.2128, S8)', () => {
   it('Servis · Ekip · SRE · Tür; ekip Problems süzgecine gider; özetten önce', async () => {
     const el = await mount('a1');
+    await settleUntil(() => el.querySelector('.pd-meta [data-meta="Ekip"]') !== null, 'üst veri satırında Ekip öğesi');
     const meta = el.querySelector('.pd-meta')!;
     expect([...meta.querySelectorAll('dt')].map(d => d.textContent)).toEqual(['Servis', 'Ekip', 'SRE', 'Tür']);
     expect(meta.querySelector('[data-meta="Ekip"] a')?.getAttribute('href')).toBe('/inbox?team=payments');
@@ -552,6 +566,11 @@ describe('AnomalyEventDetail — üst veri satırı (v0.10.2128, S8)', () => {
   it('katalogda olmayan servis: ekip öğesi yok', async () => {
     m.events.b2 = ev({ id: 'b2', service: 'billing' });
     const el = await mount('b2');
+    await settleUntil(
+      () => qc.getQueryState(keys.services.metadata)?.status === 'success'
+        && el.querySelector('.pd-meta [data-meta="Servis"]') !== null,
+      'servis kataloğu okundu ve üst veri satırı çizildi',
+    );
     expect(el.querySelector('.pd-meta [data-meta="Ekip"]')).toBeNull();
     expect(el.querySelector('.pd-meta [data-meta="Servis"] dd')?.textContent).toBe('billing');
   });

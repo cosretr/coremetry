@@ -9,6 +9,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { AuthConfigResponse } from '@/lib/api';
 import type { LoginSummary } from '@/lib/types';
+import { settleUntil } from '@/test/actWait';
 
 const m = vi.hoisted(() => ({
   cfg: null as unknown,
@@ -309,12 +310,22 @@ function stubWide(wide: boolean, reduced = false) {
   }));
 }
 const settle = async () => { await wait(); await wait(); };
+// v0.10.2164 — kararsızlık (yük altında `expected '' to contain '1,214M'`): özet
+// sütunu `lazy(() => import('./LoginSummary'))`, Suspense yedeği boş metinli
+// iskelet <aside>; topoloji canvas'ı ve günün sözü de dinamik import. Chunk'ın
+// ilk (soğuk) yüklemesi CPU doygunken `settle`'ın 60 ms'sini aşıyordu ve test
+// iskeleti ölçüyordu. Ürün yarışı değil (iskelet doğru davranış). Lazy içeriğe
+// bağlı OLUMLU iddialar `settle`'dan SONRA koşula da bekler (üst sınırlı,
+// aşılırsa koşulun adıyla düşer); olumsuz iddialar eskisi gibi `settle` sonrası.
+const asideHas = (h: HTMLElement, text: string) =>
+  settleUntil(() => (h.querySelector('aside')?.textContent ?? '').includes(text), `özet sütununda "${text}"`);
 
 describe('Login — özet sütunu', () => {
   it('geniş ekran + hazır özet: iki sütun, KPI + aktivite + bileşen satırı', async () => {
     stubWide(true);
     m.summary = READY;
     const h = await mount(); await settle();
+    await asideHas(h, '1,214M');
     const aside = h.querySelector('aside');
     expect(aside).not.toBeNull();
     expect(aside!.textContent).toContain('1,214M');
@@ -364,6 +375,7 @@ describe('Login — özet sütunu', () => {
     stubWide(true);
     m.summary = { enabled: true, ready: true, spans_today: 5_000_000 };
     const h = await mount(); await settle();
+    await asideHas(h, '5.0M');
     const aside = h.querySelector('aside')!;
     expect(aside.textContent).toContain('5.0M');
     expect(aside.textContent).not.toContain('Last 24 hours');
@@ -375,6 +387,7 @@ describe('Login — özet sütunu', () => {
     stubWide(true);
     m.summary = { ...READY, topology: { window_s: 900, named: true, nodes: [], edges: [] } };
     const h = await mount(); await settle();
+    await asideHas(h, 'Coremetry bugün');
     const aside = h.querySelector('aside')!;
     expect(aside.textContent).toContain('Coremetry bugün');
     expect(aside.textContent).toContain('Toplam span (bugün)');
@@ -394,6 +407,7 @@ const TOPO: NonNullable<LoginSummary['topology']> = {
   edges: [{ from: 'a1', to: 'b1', weight: 0.9 }, { from: 'b1', to: 'c1', weight: 0.4 }, { from: 'c1', to: 'd1', weight: 0.2 }],
 };
 const canvasQ = (h: HTMLElement) => h.querySelector('[data-testid="login-topology"]');
+const canvasShown = (h: HTMLElement) => settleUntil(() => canvasQ(h) !== null, 'topoloji canvas çizildi');
 
 describe('Login — topoloji arka planı', () => {
   let raf: ReturnType<typeof vi.fn>;
@@ -420,6 +434,7 @@ describe('Login — topoloji arka planı', () => {
     stubWide(true);
     m.summary = { ...READY, topology: TOPO };
     const h = await mount(); await settle();
+    await canvasShown(h);
     expect(canvasQ(h)).not.toBeNull();
     expect(canvasQ(h)!.getAttribute('aria-hidden')).toBe('true');
     // v0.10.1917 — sürükleme: canvas olay alır; perde ve üst çubuğun boş alanı olayı geçirir.
@@ -453,6 +468,7 @@ describe('Login — topoloji arka planı', () => {
     stubWide(true);
     m.summaryFail = true;
     const h = await mount(); await settle();
+    await canvasShown(h);
     expect(canvasQ(h)).not.toBeNull();
     expect(h.textContent).not.toContain('Live topology');
   });
@@ -464,6 +480,7 @@ describe('Login — topoloji arka planı', () => {
     m.brand = { loginSummary: 'off' };
     m.summary = { enabled: false, ready: true, topology: TOPO };
     const h = await mount(); await settle();
+    await canvasShown(h);
     expect(m.summaryCalls).toBe(1);
     expect(canvasQ(h)).not.toBeNull();
     expect(h.querySelector('aside')).toBeNull();
@@ -482,6 +499,7 @@ describe('Login — topoloji arka planı', () => {
     stubWide(true);
     m.summary = READY;
     const h = await mount(); await settle();
+    await canvasShown(h);
     expect(canvasQ(h)).not.toBeNull();
     expect(h.textContent).not.toContain('Live topology');
   });
@@ -498,6 +516,7 @@ describe('Login — topoloji arka planı', () => {
     stubWide(true, true);
     m.summary = { ...READY, topology: TOPO };
     const h = await mount(); await settle();
+    await canvasShown(h);
     expect(canvasQ(h)).not.toBeNull();
     expect(raf).not.toHaveBeenCalled();
   });
@@ -507,6 +526,7 @@ describe('Login — topoloji arka planı', () => {
     Object.defineProperty(document, 'hidden', { configurable: true, value: true });
     m.summary = { ...READY, topology: TOPO };
     const h = await mount(); await settle();
+    await canvasShown(h);
     expect(canvasQ(h)).not.toBeNull();
     expect(raf).not.toHaveBeenCalled();
   });
@@ -530,6 +550,7 @@ describe('Login — günün sözü', () => {
   it('loginQuote=on → söz formun altında çizilir', async () => {
     m.brand = { loginQuote: 'on' };
     const h = await mount(); await settle();
+    await settleUntil(() => h.querySelector('figure') !== null, 'günün sözü çizildi (figure)');
     const fig = h.querySelector('figure');
     expect(fig).not.toBeNull();
     expect(fig!.querySelector('blockquote')!.textContent!.length).toBeGreaterThan(4);
