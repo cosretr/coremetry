@@ -41,3 +41,26 @@ func recordSurface(ctx context.Context, surface string) string {
 	}
 	return p + surface
 }
+
+// RecordAs — v0.10.2134 (router boşlukları D1): ctx'in KAYIT etiketini
+// surface yapar, çözülmüş profili ise sabitler. Neden sabitleme: profil
+// yönlendirmesi CallMeta.Surface'i okur (profiles.go) — etiketi değiştirip
+// profili sabitlemeseydik satır, çağrıyı yapan modelin değil yeni etiketin
+// (haritada yok → varsayılan) modelini yazardı. Çağrı yolu değişmez; yalnız
+// RecordUsage'a giden ctx için kullanılır. Boş surface ctx'i aynen döndürür.
+func (s *Service) RecordAs(ctx context.Context, surface string) context.Context {
+	if ctx == nil || surface == "" {
+		return ctx
+	}
+	if s != nil && profileFromContext(ctx) == "" {
+		s.mu.RLock()
+		id := s.resolveProfileLocked(ctx).cfg.ID
+		s.mu.RUnlock()
+		if id != "" {
+			ctx = WithProfile(ctx, id)
+		}
+	}
+	m := MetaFromContext(ctx)
+	m.Surface = surface
+	return WithMeta(ctx, m)
+}

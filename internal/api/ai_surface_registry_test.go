@@ -87,6 +87,7 @@ var surfaceArgCalls = map[string]int{
 	"copilotExplainSurface":     1,
 	"copilotExplainJSONSurface": 1,
 	"wikiBudget":                2,
+	"RecordAs":                  1, // v0.10.2134 — copilot.Service.RecordAs(ctx, etiket)
 }
 
 func collectSurfaceSites(t *testing.T, fset *token.FileSet, paths []string) []surfaceSite {

@@ -13960,3 +13960,18 @@ eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
   olağanı %Z." / "X servisinde N operasyon birden yavaşladı (p95 olağanın K katı)."
 - Doğrulanmadı: prod / tarayıcı; eski↔yeni karşılaştırma raporu (2089) sürer.
 
+## 2026-11-14 — v0.10.2134 — CoSRE router boşlukları D1: ölçüm (davranış değişmez)
+- Belge `docs/cosre/router-gaps-audit.md` (Faz 0 audit, operatör onayı 2026-11-14 "önerin"). Prod /ai › Router
+  boşlukları 7 günde 54 soru; ~%20'si ölçüm artefaktı.
+- Ön-getirmeyle tohumlanan serbest döngü (operasyon / endpoint ön-getirmesi `opPre`, v2 rota planı `rtPlan`) ai_calls
+  satırını `chat-prefetch` etiketiyle yazar (`aisurface.ChatPrefetch`, RouterGap=false, Eval Chat). Yalnız KAYIT
+  etiketi değişir: profil yönlendirmesi CallMeta.Surface'i okuduğu için `copilot.Service.RecordAs` çözülmüş profili
+  sabitler (satır gerçekte çağrılan modeli yazar). Cevap, istem, model aynı; v1 ve v2'de aynı ölçüm (cevap baytı değil).
+  Karar: `rtPlan` da tohum sayıldı (audit yalnız ön-getirmeyi anıyor; rota turu da veriyle tohumlanmış bilinçli kademe).
+- Router-gaps: satır türü `kind` (loop = `chat`, general = `chat-intent-none` → genel cevap); aynı soru iki türde ayrı
+  satır. Toplamlar penceredeki gerçek sayı (ikinci sınırlı sorgu, en çok 2 satır); eskiden ilk 50 grubun toplamı.
+  Cache anahtarı `ai:router-gaps:v2`. UI "Tür" kolonu + "N soru genel cevaba gitti" cümlesi.
+- Yanlış-yönlendirme raporu: ardışık iki AÇIKLAMA turu farklı soru metniyle (istemci şablonu "Bu trace'i açıkla ·
+  <id>") yeniden sorma sayılmaz; aynı metin ve istemci beyanı (retry/regenerate/edit) sayılmaya devam eder.
+- Beklenen etki: tablo bir gecede düşer (ön-getirme satırları çıkar); "Açıklama turu" şüpheli sayısı düşer.
+  Doğrulanmadı: prod sayıları.

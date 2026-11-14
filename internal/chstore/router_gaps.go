@@ -32,7 +32,29 @@ type RouterGap struct {
 	// bir soru ile ekibin tamamının sorduğu soru aynı öncelikte
 	// değildir; sayı tek başına bunu ayırt edemez.
 	Users uint64 `json:"users"`
+	// Kind — v0.10.2134 (router boşlukları D1): "loop" = serbest döngü
+	// (surface chat), "general" = sınıflandırıcı none → genel cevap
+	// (chat-intent-none). Aynı soru iki türde ayrı satırdır.
+	Kind string `json:"kind"`
 }
+
+// Router boşluk türleri (RouterGap.Kind).
+const (
+	RouterGapKindLoop    = "loop"
+	RouterGapKindGeneral = "general"
+)
+
+// RouterGapTotals — v0.10.2134: penceredeki GERÇEK toplamlar (ilk 50 grubun
+// toplamı değil; v0.9.549'dan beri totalFallbacks yalnız listelenen grupları
+// topluyordu).
+type RouterGapTotals struct {
+	Loop    uint64 `json:"loop"`
+	General uint64 `json:"general"`
+}
+
+// routerGapKindExpr — SAF: yüzeyden tür; none işareti "general", gerisi
+// (RouterGapLabels'ın kalan üyesi: chat) "loop". Tek bind: ChatIntentNone.
+const routerGapKindExpr = `if(surface = ?, 'general', 'loop')`
 
 // RouterGaps — guided router'ın yakalayamadığı sorular, sıklığa göre.
 //
@@ -42,15 +64,23 @@ type RouterGap struct {
 // v0.10.172 — 'chat-intent-none': niyet sınıflandırıcısı none dediği sorular
 // (on_no_loop kipinde serbest döngü koşmaz, 'chat' satırı yazılmaz — rapor
 // kör kalmasın; copilot_intent.go).
-func (s *Store) RouterGaps(ctx context.Context, since time.Duration, limit int) ([]RouterGap, error) {
+// v0.10.2134 — satırlar türüyle (loop / general) ve gerçek toplamlarla döner;
+// ön-getirmeyle tohumlanan döngü 'chat-prefetch' yazar, burada yok.
+func (s *Store) RouterGaps(ctx context.Context, since time.Duration, limit int) ([]RouterGap, RouterGapTotals, error) {
+	var totals RouterGapTotals
 	if since <= 0 {
 		since = 7 * 24 * time.Hour
 	}
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
+	// v0.10.1153 — liste yüzey kaydından (chat, chat-intent-none): elle
+	// yazılmış IN listesi yeni yüzeyleri görmüyordu.
+	labels, sinceArg := aisurface.RouterGapLabels(), chDateTime64Arg(time.Now().Add(-since))
+	// liste: soru × tür grupları (bind: none, labels, since, limit).
 	rows, err := s.conn.Query(ctx, `
 		SELECT prompt_sample                        AS q,
+		       `+routerGapKindExpr+`             AS kind,
 		       count()                              AS n,
 		       toUnixTimestamp64Nano(max(created_at)) AS last_at,
 		       uniqExact(user_id)                   AS users
@@ -58,24 +88,55 @@ func (s *Store) RouterGaps(ctx context.Context, since time.Duration, limit int) 
 		WHERE surface IN (?)
 		  AND created_at >= ?
 		  AND prompt_sample != ''
-		GROUP BY q
+		GROUP BY q, kind
 		ORDER BY n DESC, last_at DESC
 		LIMIT ?
-		SETTINGS max_execution_time = 10`,
-		// v0.10.1153 — liste yüzey kaydından (chat, chat-intent-none): elle
-		// yazılmış IN listesi yeni yüzeyleri görmüyordu.
-		aisurface.RouterGapLabels(), chDateTime64Arg(time.Now().Add(-since)), limit)
+		SETTINGS max_execution_time = 10`, aisurface.ChatIntentNone, labels, sinceArg, limit)
 	if err != nil {
-		return nil, err
+		return nil, totals, err
 	}
 	defer rows.Close()
 	out := make([]RouterGap, 0, limit)
 	for rows.Next() {
 		var g RouterGap
-		if err := rows.Scan(&g.Question, &g.Count, &g.LastAt, &g.Users); err != nil {
+		if err := rows.Scan(&g.Question, &g.Kind, &g.Count, &g.LastAt, &g.Users); err != nil {
 			continue
 		}
 		out = append(out, g)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, totals, err
+	}
+	trows, err := s.conn.Query(ctx, `
+		SELECT `+routerGapKindExpr+` AS kind, count() AS n
+		FROM ai_calls
+		WHERE surface IN (?)
+		  AND created_at >= ?
+		  AND prompt_sample != ''
+		GROUP BY kind
+		LIMIT 10
+		SETTINGS max_execution_time = 10`, aisurface.ChatIntentNone, labels, sinceArg)
+	if err != nil {
+		return nil, totals, err
+	}
+	defer trows.Close()
+	for trows.Next() {
+		var kind string
+		var n uint64
+		if err := trows.Scan(&kind, &n); err != nil {
+			continue
+		}
+		addRouterGapTotal(&totals, kind, n)
+	}
+	return out, totals, trows.Err()
+}
+
+// addRouterGapTotal — SAF: tür satırını toplamlara yazar.
+func addRouterGapTotal(t *RouterGapTotals, kind string, n uint64) {
+	switch kind {
+	case RouterGapKindGeneral:
+		t.General += n
+	default:
+		t.Loop += n
+	}
 }

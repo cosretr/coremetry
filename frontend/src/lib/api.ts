@@ -1341,10 +1341,7 @@ export const api = {
   // v0.9.549 — guided router'ın yakalayamadığı sorular (serbest tool
   // döngüsüne düşenler). days sabit basamak: cache anahtarına giriyor.
   aiRouterGaps: (days: 1 | 7 | 30 = 7) =>
-    get<{
-      gaps: Array<{ question: string; count: number; lastAt: number; users: number }>;
-      days: number; totalFallbacks: number; generatedAt: number;
-    }>(`/api/ai/router-gaps?days=${days}`),
+    get<import('./types').RouterGapsView>(`/api/ai/router-gaps?days=${days}`),
   // v0.9.594 — RCA hakem motorunun kalitesi. Kardeşleri transport
   // sağlığını ölçüyor; bu, cevabın kendisine bakan tek uç.
   // Pencere from/to ile geçer — kardeş aiStats/aiSeries ile AYNI

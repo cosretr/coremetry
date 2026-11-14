@@ -9166,6 +9166,25 @@ export interface RoutingReport {
   generatedAt: number;
 }
 
+// v0.10.2134 (router boşlukları D1) — GET /api/ai/router-gaps. kind: loop =
+// serbest döngü, general = sınıflandırıcı none → genel cevap. Toplamlar
+// penceredeki gerçek sayılar (liste en çok 50 grup). Go: chstore.RouterGap.
+export type RouterGapKind = 'loop' | 'general';
+export interface RouterGap {
+  question: string;
+  count: number;
+  lastAt: number;
+  users: number;
+  kind: RouterGapKind;
+}
+export interface RouterGapsView {
+  gaps: RouterGap[];
+  days: number;
+  totalFallbacks: number;
+  totalGeneral: number;
+  generatedAt: number;
+}
+
 // CoSRE öğrenme Faz 1 — istemcinin deneme beyanı (chat context.attempt;
 // internal/api/chat_exchange.go normalizeChatAttempt). Yeni soru = yok.
 export type ChatAttempt = 'retry' | 'regenerate' | 'edit';

@@ -209,6 +209,11 @@ Sorular (2026-11-13 cevaplandı; kararlar en üstte "Onay" bölümünde):
 4. Giriş özeti login sayfasına mı, v2 karşılamasında mı? → karşılamada; ayar satırı + prod ölçümü.
 5. LLM hakem olduğu gibi kalsın mı? → gece işinde kalır, kapı değil; kapı deterministik rubrikle.
 
+## Router boşlukları programı (2026-11-14)
+
+Belge `docs/cosre/router-gaps-audit.md` (onay 2026-11-14, kararlar §8 öneriler). Dilim durumu
+belgenin başındaki "Durum" tablosunda. D1 ölçüm v0.10.2134.
+
 ## 8. Sonraya
 
 (boş — yeni fikirler buraya eklenir, uygulanmaz)

@@ -494,19 +494,19 @@ func (s *Server) aiRouterGaps(w http.ResponseWriter, r *http.Request) {
 	case "30":
 		days = 30
 	}
-	key := fmt.Sprintf("ai:router-gaps:v1:d=%d", days)
+	// v2 — v0.10.2134: cevap şekli değişti (kind + gerçek toplamlar).
+	key := fmt.Sprintf("ai:router-gaps:v2:d=%d", days)
 	s.serveCached(w, r, key, 5*time.Minute, func(ctx context.Context) (any, error) {
-		gaps, err := s.store.RouterGaps(ctx, time.Duration(days)*24*time.Hour, 50)
+		gaps, totals, err := s.store.RouterGaps(ctx, time.Duration(days)*24*time.Hour, 50)
 		if err != nil {
 			return nil, err
 		}
-		var total uint64
-		for _, g := range gaps {
-			total += g.Count
-		}
+		// v0.10.2134 (router boşlukları D1) — toplamlar penceredeki GERÇEK
+		// sayılar (eskiden yalnız listelenen ilk 50 grubun toplamı);
+		// totalFallbacks = serbest döngü, totalGeneral = none → genel cevap.
 		return map[string]any{
-			"gaps": gaps, "days": days, "totalFallbacks": total,
-			"generatedAt": time.Now().UnixNano(),
+			"gaps": gaps, "days": days, "totalFallbacks": totals.Loop,
+			"totalGeneral": totals.General, "generatedAt": time.Now().UnixNano(),
 		}, nil
 	})
 }

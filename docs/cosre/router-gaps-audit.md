@@ -1,0 +1,119 @@
+# CoSRE "Router boşlukları" — Faz 0 audit (2026-11-14)
+
+Kaynak: prod `/ai` › Router boşlukları (7 gün, 54 soru) + "Şüpheli yönlendirmeler" (598 turdan 224, %37). Sorular nötrleştirildi (svc-a, /app/x/y, OP_NAME_REST). Kod okunmadı denen yerler "doğrulanmadı" ile işaretli; cümle izleri elle yapıldı, test koşulmadı. Yollar `internal/api/` altında, aksi yazılmadıkça.
+
+## Durum (uygulama)
+
+Operatör onayı 2026-11-14 ("önerin"): §8 kararları 1–5 öneriler gibi. Dilim durumu:
+
+| Dilim | Sürüm | Durum |
+|---|---|---|
+| D1 ölçüm | v0.10.2134 | gemide — `chat-prefetch` yüzeyi (ön-getirme + v2 rota planı tohumlu döngü, RouterGap değil, profil sabit); router-gaps satırı `kind` loop/general + gerçek toplamlar (`totalFallbacks`, `totalGeneral`); açıklama turunda şablon-soru reask muafiyeti (farklı metin; aynı metin ve istemci beyanı sayılır) |
+| D2 A1 çipi | — | sırada |
+| D3 E/F sözcükler | — | sırada |
+
+## 0. Özet karar
+
+- Tablonun ~%20'si ölçüm artefaktı: operasyon/endpoint ön-getirmesiyle tohumlanan döngü `chat` yüzeyi yazar ve "boşluk" sayılır (A2, M); konu dışı genel cevap `chat-intent-none` yazar (B). "Açıklama turu 189/454" ise büyük olasılıkla `reask` Jaccard gürültüsü.
+- Gerçek boşlukların kökü üç şey: (1) "uzama / uzun süren / uzuyor / süre artışı / hafta" hiçbir sinyal listesinde yok (E); (2) bağlam taşıma yalnız servis+pencere, trace/operasyon taşınmaz ve "bu servis/bu trace" zamiri çözülmez (C, H); (3) çıplak tek sözcük ve kod çiti (```) ile başlayan hata gövdesi deterministik kademeden kaçıyor (D, G).
+- Öneri: 6 dilim, hepsi deterministik (LLM niyet listesine yeni sınıf yok). Tahmin: 54'ün 36–40'ı kapanır ya da doğru etikete taşınır.
+
+## 1. Yönlendirme zinciri bugün (kanıt)
+
+Sıra `copilot_chat.go` (handler ~320-780): `applyCodeSticky` :419 → `chatExplainTurn` (explainAsk, tier explain) :438 → scope :455 → memory :478 → bekleyen netleştirme cevabı `chatClarifyReplyTier` :490 → wiki/doküman kademeleri :509-588 → **operasyon/endpoint ön-getirme `chatOperationPrefetch` :595** (eşleşirse guided/RAG/intent ATLANIR :646/:689, sonuç döngüye sentetik tool çifti olarak tohumlanır `chat_operation_prefetch.go:296`) → `opExceptionExplainInChat` :608 → yalnız v2: `planRouteTurn` :629 + `chatEndpointPickTier` :640 → **guided `copilotChatGuided` :649** → trace takip kapısı :688 → source-ask :695 → drawer :703 → RAG :714 → **LLM niyet `copilotChatIntent` :731** → serbest döngü :782 (`chatMaxToolRounds=5` :63).
+
+- Pin: `chat_tier_order_test.go:53-58` guided > drawer > RAG > döngü; intent kademesi sırada pinli değil (:189 yalnız takip bloğu içinde).
+- Deterministik router `routeGuidedIntentExt(raw, services, envs, teams, ctxService, oracleOps, extHosts)` `copilot_guided.go:1223-1688`; niyet sabitleri :62-191. Sinyaller regex değil, token-önek listeleri (`guidedTokens` :430, `tokenHasPrefix` :447). Hızlı yol kapısı `hasGuidedSignal` :623 — false ise guided hiç çalışmaz (:1934).
+- Özne tanıma: servis `extractServiceEntity` :872 (canlı katalog `ListServiceNames` 2000, Redis 60 sn :2485); route `endpointPathRe` `endpoint_traces.go:77`; `POST /yol` `endpointMention` `chat_endpoint_prefetch.go:162`; BÜYÜK_HARF_ALT_ÇİZGİ: `opTokens` `chat_operation_prefetch.go:63` → `store.CatalogCandidates(…,60)` :624 (sunucu araması, exact → EqualFold → fuzzy :114). `opCodeShapeRe` :54 yalnız Exceptions kapısı. Guided içinde operasyon yalnız servis çözüldükten sonra `resolveGuidedOperation` :3682.
+- Pencere: `guidedRangeRe` :1760 gün/saat/dakika; **"hafta" yok**; tavan [300, 86400] :1831. Mutlak tarih `abs_window.go:31-35`; `\b` ASCII → "eylülden" bozuk. Ön-getirme sorudaki pencereyi OKUMAZ (`req.Context.RangeS`, varsayılan 3600 `chat_operation_prefetch.go:698`).
+- LLM niyet `copilot_intent.go:46-82` 26 niyet + none; mod `off|on|on_no_loop`, boş → `on_no_loop` (`copilot/copilot.go:1308`). none → `chat-intent-none` satırı :455 + araçsız `general_answer` :470. off_topic → `offTopicVetoFor` :433 (`copilot_offtopic.go:249`) → `guidedOffTopicDispatch` `chat_offtopic_general.go:101`.
+- Netleştirme: düz metin + Redis `Pending` (`chat_clarify.go:55`, TTL 10 dk); v2 `data-question` `chat_question.go:38-95` (kind source/doc_or_entity/trace_synth, ≤3 seçenek `uistream/part.go:30`); `data-pick` endpoint `chat_endpoint_pick.go:118` (görünür 4, havuz 200).
+- how_to: yalnız sınıflandırıcı `how_to` dediğinde (`copilot_intent.go:64` → `runGuidedRoute` :2246); router'da üreten dal yok. `guidedHowToAnswer` `copilot_howto.go:18` LLM'siz; konu eşleşmesi `mcptools/product_guide.go:277` `strings.Contains`; 12 konu, trace detay sayfası konusu YOK.
+- Bağlam `ChatContext` `chat_context.go:34`: Cluster/Namespace/Workload/Service/Pod/RangeS/Filters/LastIntent/LastRoute/Pending — **trace id ve operasyon alanı yok**. Redis `copilot:ctx:<user>:<conv>` 24 sa. Devralma: `copilotChatGuided` :2013 ekran servisi boşsa `st.ctx.Service`; `isFollowUpCue` `copilot_followup.go:69` yalnız <80 rune ve "peki/aynı/tekrar/onun/bunun/onu/bunu" öneki (yalnız "bu" bilinçli dışlanmış :64-68); ekran trace'i `hasDemonstrativeTrace` :1997. Önceki turun trace/operasyonu hiçbir yerde taşınmaz.
+- Yapıştırılan hata `copilot_pasted_error.go:66` şekil dedektörü (`(?m)^\s*Caused by:\s`, Java frame, Traceback…) → `guidedLogField` :177. Router sırası PromQL → hata → span (:1262-1275). Kod çiti (```) özel aranmıyor.
+- "Router boşlukları": `GET /api/ai/router-gaps` (`ai_routes.go:81`, admin) → `chstore/router_gaps.go:45` tablo `ai_calls`, `surface IN RouterGapLabels()` = `chat` (serbest döngü) + `chat-intent-none` (`aisurface.go:122,127`), GROUP BY prompt_sample LIMIT 50; `totalFallbacks` yalnız ilk 50 grubun toplamı (`ai_observability.go:503`). Guided `chat-guided` sayılmaz. **Ön-getirme ile tohumlanan döngü de `chat` yazar → boşluk sayılır.**
+- "Şüpheli": `ai_routing_report.go` tablo `cosre_interactions`; puan ≥2 (:59, :262); ağırlık error 3, empty 3, rag/loop_no_evidence 3, router_miss 2, reask 2, no_evidence 1, aborted 1 (:76). `router_miss` yalnız loop/rag/intent kademesi (:183). Etiketler `frontend/src/pages/ai/exchangeView.ts:9-24`.
+
+## 2. Sınıf başına teşhis (A–M)
+
+| Sınıf | Adet | Neden oturmuyor (kanıt) | Çözüm türü |
+|---|---|---|---|
+| A1 çip "Açık problemlerin kök nedeni?" | 6×5 | `drawerChat.ts:148-150` statik FOLLOWUPS, düz mesaj gider (`followupSend.ts:6-11`). Router: `hasProblemSignal` :511 + `hasWhySignal` :672 tutar; `root_cause` servis şart (:1628), servissiz → ya `ask_service` (:1514) ya `problems` (:1655) — hangisi, doğrulanmadı; prod'da 6 kez boşluğa düştüğü kesin. Çip adı hipotez vaat ediyor, hiçbir rota filo-geneli hipotez vermiyor. | (iii) hafif: `problems_root_cause` rotası = açık problemler + `root_cause_hypotheses` özeti, tek anlatım; çip metnine birebir pin testi |
+| A2 hazır istem "Ne oluyor…endpointine bak" | 3 | `drawerChat.ts:68-73` `endpointAskQuestion`; backend `endpointChipShape` `chat_endpoint_prefetch.go:206` TANIYOR → ön-getirme → döngü tohumlanır → `chat` yüzeyi → boşluk SAYILIR. Yönlendirme değil ölçüm hatası; ayrıca pencere ekrandan (:698) | (vii) yönlendirme; ölçüm: yüzey `chat-prefetch`, RouterGap dışı |
+| B konu dışı "Intellij Idea nın user setup versiyonu var mıydı" | 4×2 | Bkz. §3. Sözcük vetosu tutmuyor; sınıflandırıcı off_topic/none → genel cevap. `chat-intent-none` yazılırsa tabloda görünür — bu beklenen davranış | (vii) + ölçüm: none+genel cevap ayrı satır; evalset vakası |
+| C devam soruları | 6 | "peki bu servis öncesinde nereden çağrılıyor" → cue tutar (peki) ama "çağrılıyor" niyet değil; "neden gecikmiş olabilir?" cue yok, servis `st.ctx.Service` ile gelebilir ama trace yoksa `root_cause` servis ister; "hangi iç işlemde", "aradaki boş zamanlar" trace öznesi ister, ChatContext trace taşımaz | (ii) ChatContext'e `Trace`, `Operation`; `isFollowUpCue` "bu servis/bu trace/bu operasyon/bu endpoint" zamirleri; "nereden çağrılıyor/çağıran" → upstream topoloji (mevcut `topology_edges_5m`; rota var mı doğrulanmadı :1300-1341) |
+| D çıplak varlık | 6 | "svcname" (yazım hatalı tek sözcük): `hasGuidedSignal` false → guided atlanır (:1934) → sınıflandırıcı none. `serviceCandidates` (`near_names.go:29`) fuzzy adayları var ama kapıya ulaşmıyor. "# svc-a-prod": `#` + ortam eki. "svc-a trace detail": trace öneki → sinyal var, niyet yok | (iv) tek/iki token mesaj → `find_entity`/`ask_service` (≤3 aday, v2 `data-question` doc_or_entity biçimi mevcut `chat_clarify_entity.go:217`) |
+| E yavaşlama "neden" | 10 | Kök sözcükler eksik: `hasSlowTraceSignal` :458 "en yavaş/en uzun" cümle ister ("uzun süren" tutmaz); sağlık kökleri :544 "uzama/uzuyor/süre artışı" yok; `hasLatencyAsk` `chat_trace_drill.go:612` da yok → trace drill açılmaz. "hafta" ayrıştırılmaz. "OP_NAME servisinde" operasyon katalogda yoksa HİÇBİRİ. Route'lu sorular ön-getirmeye düşer (doğru) ama döngü tohumu + pencere ekrandan. `service_report` why'dan önce (:1626<:1628) → "nedenini inceler misin" rapor olur, kök neden değil | (i) kök ekleme + "hafta"=7g; (iii) ön-getirme + why/latency → `guidedRootCauseBundle` benzeri tek anlatım (bkz. §4) |
+| F hata "neden" | 3 | Katalogda varsa `opErrorWhyAsk` (`chat_operation_exception_explain.go:163`) doğru çalışır; yoksa `case hasErrorSignal` :1673 → filo `problems` (yanlış özne). "kod DEP1080": `opCodeShapeRe` alt çizgi ister → tutmaz; `business_code` aracı yalnız döngüde | (i) katalog dışı OP token → `ask_service` biçimli "operasyon bulunamadı, en yakın: …"; iş kodu `[A-Z]{2,5}\d{3,5}` → Exceptions/`business_code` guided |
+| G yapıştırılan gövde | 2 | "``` Caused by: …" tek satırda çit + metin → `^\s*Caused by:` tutmaz (satır ``` ile başlıyor). "```textNativeShellDispatch Params: {…}" JSON param dökümü, hiçbir şekil değil | (i) şekil dedektöründen önce çitleri soy; "Params: {" / JSON dökümü zayıf şekil → ilk tanımlayıcıyla `log_field` |
+| H trace bağlamı | 5 | "bu tracete" yalnız EKRAN trace'i (:1992-2003); önceki turun trace'i yok. "Hayır. bu trace altında … listele": `takePending` trace_synth cevabı olarak tüketilir, kalan cümle düşer (doğrulanmadı). "DB … sonra boşluk nerde": kritik yol drill var (`slowTraceDrill` :810), boşluk/idle analizi yok | (ii) ChatContext.Trace; pending cevap + devam cümlesi ayrıştırma; "saga/boşluk" (vii) şimdilik |
+| I yol tarifi | 4 | how_to yalnız sınıflandırıcıdan; "hangi menüden/nereden/hangi adımda/nereye yazacağım" deterministik şekil yok (`hasHowToShape` :521 yalnız kurulum/nasıl-ebilir). "trace detail" konusu yok → en yakın `error_traces` yanlış. "service detail sayfasını açar mısın" → `open_page` :1606 tutmalı; boşluğa düşmesi servis çözülememesi olabilir (doğrulanmadı) | (v) router'da how_to dalı + konular `trace_detail`, `db_spans` ("tablo insertleri"), link çipi (809 kuralı, `open` yok) |
+| J öznitelik + tarih | 1 | `extractEndpointRequest` :123 "eylülden" tokenını yol sanır; "mbb no 73066" slot değil; "7 eylülden 15 eylüle" `\b` yüzünden okunmaz, okunsa iki pencere → `window_compare` :260; 8 gün > 24 sa tavan | (iv)+(i): `absDateTRRe` ek toleransı; "<anahtar> no <değer>" → `find_attribute_by_value`+`search_traces`; pencere operatör kararı (§8) |
+| K nöbet çizelgesi | 1 | `shift_summary` Coremetry vardiya özeti, nöbet listesi değil; veri yok | (vi) dürüst "bu veri Coremetry'de yok" + operatör sorusu |
+| L iki servis karşılaştırma | 1 | `family_health` :1457 ≥2 servis + sağlık/hata/kıyas sözcüğü ister; "endpoint" sözcüğü servis anıldığı için `extractEndpointRequest` false (:110) | (i) ≥2 servis + endpoint → `family_health` operasyon kırılımlı; düşük adet, Faz 2 |
+| M "svc-a /app/x/y/z" | 1 | A2 ile aynı: ön-getirme tutar, döngü tohumu → `chat` yüzeyi | ölçüm düzeltmesi (A2) |
+
+## 3. B sınıfı: v0.10.2123 bu cümleyi düzeltiyor mu?
+
+- Cümle tokenları (`normalizeGuidedMsg` ToLower :420): intellij, idea, nın, user, setup, versiyonu, var, mıydı.
+- `offTopicVeto` `copilot_offtopic.go:200-236` sırası: hex id → reqid → servis adı/aday → aile → ortam → takım → `hasTelemetryVocab` :184-194. Sözcük listesinde "versiyon" YOK; `hasDeploySignal` :478 yalnız deploy/rollout/sürüm/release. "setup" yalnız `hasHowToShape` :522'de, veto listesinde değil. Hiçbir sözcük tutmaz.
+- 2123 = `offTopicVetoFor` :249-255: v2'de yalnız sözcük gerekçeli veto kaldırıldı. Bu cümle sözcük vetosuna zaten takılmıyordu → **2123 bu cümleyi değiştirmiyor; cümle 2123 öncesinde de sözcük vetosu yemiyordu.** Testler (`offtopic_veto_v2_test.go:29-32`) "IntelliJ IDEA versiyonları neler?" akrabasını kapsar, bu cümleyi birebir değil.
+- Kalan iki açıklama: (a) sınıflandırıcı `none` → `general_answer` + "telemetriyle eşleşmedi" notu (:470) → `chat-intent-none` yazılır → tabloda görünür; cevap gelmiş olabilir, tablo yine sayar. (b) `extractServiceEntity`/`serviceCandidates` prod kataloğunda "user"/"idea"/"setup" öneki bir servise takıldıysa servis-adı vetosu v2'de de uygulanır — 2123 bunu kapsamaz; prod kataloğu bilinmiyor, **doğrulanmadı**. 4 kez × 2 kullanıcı = yeniden sorulmuş; (b) olasılığı ciddi. Doğrulama: /ai adım panelinde "off_topic vetosu: …" notu (`copilot_intent.go:435`).
+
+## 4. E ve F: kanıt toplayıcıya bağlama
+
+- Operatör tercihi: klasik kanıt toplayıcı + "Kodu da incele"; yön varsayılmaz. Klasik toplayıcı (`chatExplainTurn` `chat_explain_turn.go:50`, `explain_service_health.go:29`) yalnız yapısal `explainAsk` ile çalışır; serbest soruya bağlı değil. Serbest sorunun en yakın karşılığı `guidedRootCauseBundle` `copilot_guided.go:2744-2871`: SLO, açık problemler + hipotezler, RED+baseline, BubbleUp (rota/pod/sürüm), deploy geçmişi, log desenleri, en yavaş 1-2 trace kritik yolu (`slowTraceDrill`). Deploy/bağımlılık/yavaş trace burada var, servis-explain'de yok.
+- Bağlama: (1) kök sözcükler → `hasWhySignal` + `hasLatencyAsk`'e "uzama, uzun sür, uzuyor, süre art, yavaşla, gecik" (tek liste, iki yerden çağrılsın); (2) `service_report` ile `root_cause` sırası: why sinyali varsa `root_cause` önce (davranış değişikliği — operatöre sor, §8); (3) özne operasyon/route ise: ön-getirme bugün döngüye tohumluyor; bunun yerine why/latency sinyali varken `guidedOperationHealthBundle` :2294 + slow trace drill + deploy ile TEK anlatım (`chat-guided` yüzeyi). Yön varsaymama: anlatım istemi "A ile B farklı" iddiasında yönü veriden okur, kullanıcı cümlesinden değil.
+- OP_NAME tanıma: bugün yalnız katalog eşleşmesiyle (`CatalogCandidates`, sunucu araması — picker kuralına uygun). Katalogda yoksa sessizce düşüyor; "X servisinde" kalıbında X katalog operasyonuysa servis değil operasyon muamelesi görmeli (ön-getirme zaten yapıyor; boşluk kataloğa düşmeyen adlarda). Route `/app/x/y` ve `POST /yol` tanınıyor (`endpointMention`), eksik yalnız pencere + anlatım.
+
+## 5. Öncelik (adet × kullanıcı × maliyet)
+
+| Sıra | Değişiklik | Kapatır (tahmin) |
+|---|---|---|
+| 1 | Ölçüm: ön-getirme döngüsü `chat-prefetch` yüzeyi (RouterGap dışı); explain kademesi `reask` muaf; none+genel cevap ayrı satır | A2 3 + M 1 + B 4 = 8 doğru etikete; şüpheli oranı %37 → tahmin %10-15 |
+| 2 | A1 çipi → `problems_root_cause` | 6 |
+| 3 | E/F kök sözcükler + "hafta" + why>report sırası + ön-getirme+why → tek anlatım | 10-13 |
+| 4 | Bağlam: ChatContext Trace/Operation + "bu X" zamirleri | C 6 + H 3 = 8-9 |
+| 5 | D çıplak varlık → ask/find_entity; G çit soyma | 6 + 2 = 8 |
+| 6 | I how_to deterministik şekil + 2 konu | 4 |
+
+Toplam 36-40 / 54. Kalan: J, K, L, H'nin saga/boşluk soruları (operatör kararı ya da Faz 2).
+
+## 6. Ölçüm ve evalset
+
+- Deterministik router vakaları `chat_routing_regression_test.go`'ya (LLM yok); sınıflandırıcı vakaları `internal/copilot/evalset/intent.json` (`{"schema":"coremetry.evalset/1","cases":[{"id","surface":"IntentClassify","why","user","expect":{"intent","intentService","knownEntities":[…]}}]}`, `evalset_fixture_test.go:44` pinler). Niyet beklentisi veriden bağımsız; adlar nötr (svc-a, com.acme).
+- Önerilen vakalar (user → expect.intent):
+  - A1 "Açık problemlerin kök nedeni?" → problems_root_cause (router pin)
+  - B "Intellij Idea nın user setup versiyonu var mıydı" → off_topic, knownEntities [svc-a, user-api] (katalogda "user" öneki servis varken bile)
+  - C "peki bu servis öncesinde nereden çağrılıyor?" (ctx.Service=svc-a) → service_callers/topology; "neden gecikmiş olabilir?" (ctx.Service) → root_cause svc-a
+  - D "svca" (katalog svc-a) → find_entity/ask_service; "# svc-a-prod" → service_health svc-a
+  - E "svc-a altında uzun süren işlemleri listele" → slow_traces svc-a; "OP_NAME servisi nerede uzuyor?" (katalog op) → operation prefetch; "POST /app/x/y son 1 haftadaki süre artışı neden olabilir" → endpoint root_cause, rangeS 604800
+  - F "OP_NAME_REST operasyonu neden hata veriyor?" → op exception explain; "kod DEP1080 için tekrar kontrol" → business_code
+  - G "``` Caused by: com.acme.db.DisconnectException: …" → log_field
+  - H "client correlation id nedir bu tracete" (ctx.Trace dolu, ekran boş) → trace_by_id
+  - I "trace detaile hangi menüden gideceğim" → how_to trace_detail; "service detail sayfasını açar mısın" (ctx.Service) → open_page
+  - K "16 kasım haftası nöbetçileri" → off_topic/not_available
+- Sayaç okuma düzeltme sonrası: tablo yalnız gerçek `chat` döngüsü + `chat-intent-none`; ayrı satır "Genel soru (konu dışı)". Hedef: 7 günde <20 soru ve ilk 50 grup toplamı yerine gerçek toplam (`totalFallbacks` düzelt).
+- "Açıklama turu 189/454": explain `router_miss` almaz (:183); şüpheli olmak için error/empty/reask gerekir. Soru metni şablon ("Bu trace'i açıkla · <id>", `chat_explain_turn.go:15-17`) → iki farklı trace'in kelime Jaccard'ı 3/5=0.6 ≥ 0.5 (`cosrelearn/signals.go:315`), 10 dk içinde → `reask` 2 puan → şüpheli. **Ölçüm gürültüsü, yüksek olasılık**; canlı doğrulama: /ai'de explain satırlarının "Nedenler" sütunu çoğunlukla "hemen yeniden soruldu" ise kesinleşir. error/empty payı ayrıca bakılmalı.
+
+## 7. Dilim planı (her biri ayrı v0.10.X, tek commit geri alınır; yalnız v2 yolu, ortak yolda `cosreV2Marked`)
+
+| Dilim | Dosyalar | Test | Risk |
+|---|---|---|---|
+| D1 ölçüm | `aisurface/aisurface.go` yeni `chat-prefetch` (RouterGap=false), `chat_operation_prefetch.go` yüzey etiketi, `ai_routing_report.go` explain reask muafiyeti, `chstore/router_gaps.go` + `ai_observability.go` genel-soru satırı ve gerçek toplam, `AIObservability.tsx` | yüzey testi + routing report tablo testi | sayaçlar bir gecede değişir; DECISIONS notu |
+| D2 A1 çipi | `copilot_guided.go` yeni rota (sabit + switch dalı, servissiz problem+why), bundle: açık problemler + `root_cause_hypotheses`; `drawerChat.ts` değişmez | `chat_routing_regression_test.go` çip metni birebir | router switch sırası; `TestGuidedIsNotACatchAll` korunur |
+| D3 E/F sözcükler | `copilot_guided.go` kök listeleri (tek yardımcı), `chat_trace_drill.go:612`, `guidedRangeRe` hafta (7g MV okumaları; slow-trace drill 24 sa'da kalır), why>report sırası `cosreV2Marked` kapılı | regresyon vakaları E1–E9 | yanlış pozitif "süre" (geniş kök) — "süre art/uzun sür" iki tokenlı |
+| D4 ön-getirme+why → tek anlatım | `chat_operation_prefetch.go` / `chat_endpoint_prefetch.go`: why/latency sinyali varsa döngü tohumu yerine guided bundle + narration (`chat-guided`), v2 kapılı; sorudaki pencere ön-getirmeye | regresyon + pin: v1 yolu bayt bayt | LLM istem boyutu; ölç (tek çağrı, araçsız) |
+| D5 bağlam | `chat_context.go` Trace/Operation alanları + `contextPatchFromRoute`; `copilot_followup.go:69` zamir listesi; `hasDemonstrativeTrace` ctx fallback | Redis sahte + takip testleri | yanlış özne devralma: yalnız <80 rune + zamir; TTL aynı |
+| D6 çıplak varlık + çit | `copilot_guided.go:1934` fast path: 1-2 token mesaj → `find_entity`/`ask_service` (v2 `data-question`); `copilot_pasted_error.go` çit soyma + "Params: {" zayıf şekil | regresyon D1–D3, G1–G2 | "svc-a" tek token → doğrudan sağlık mı soru mu: ask |
+| D7 how_to | `copilot_guided.go` how_to şekli ("hangi menüden/nereden/hangi adımda"), `product_guide.go` trace_detail, db_spans | regresyon I1–I3; `open` yazılmadığı pin | konu eşleşmesi `Contains` zayıf; Türkçe ek |
+
+Kurallar: RAG'a dokunulmaz; yeni ES sorgusu yok (D3 hafta penceresi yalnız CH MV / VM); `api.go` büyümez (rota yok); LLM niyet listesi değişmez; PII yok.
+
+## 8. Operatöre sorular (≤5, öneriyle)
+
+1. K: Nöbet çizelgesi kaynağı (takvim/wiki) bağlansın mı? Öneri: hayır; dürüst "Coremetry'de yok" + how_to çipi yok.
+2. J: Tarih aralıklı öznitelik araması ("mbb no 73066, 7–15 Eylül") trace araması mı olmalı? 8 gün > 24 sa tavan, CH/ES maliyeti. Öneri: 24 sa içinde sohbette ara; dışında Traces sayfasına filtreli link çipi.
+3. E: "hafta" penceresi 86400 tavanını aşar. Öneri: servis/operasyon RED 7 güne MV'den açılsın, yavaş trace drill 24 sa'da kalsın.
+4. A1: Çip "kök nedeni" diyor ama filo geneli hipotez yok. Öneri: çip kalsın, rota = açık problemler + varsa hipotez özeti; alternatif çipi "Açık problemler neler?" yapmak.
+5. E: "Nedenini inceler misin" bugün `service_report`; why varken `root_cause`'a çevrilsin mi (davranış değişikliği)? Öneri: evet, yalnız v2.

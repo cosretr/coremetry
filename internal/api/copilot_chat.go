@@ -1753,7 +1753,9 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	cspan.finish(totalIn, totalOut, totalCached, lastErr) // v0.10.425 — span ve satır aynı toplamlar
 	// v0.10.1050 — read_source_code okunduysa örneğe maskeli "[kod: …]" özetleri
 	// eklenir (explain yolunun sözleşmesi); okunmadıysa bayt bayt eski örnek.
-	s.copilot.RecordUsage(copilot.WithCallID(ctx, loopCallID), chatT0, totalIn, totalOut, totalCached, status, errMsg, chatPromptSample(lastUserText(req.Messages), codeReads), finalText)
+	// v0.10.2134 (router boşlukları D1) — ön-getirme / rota planı tohumlu döngü
+	// "chat-prefetch" yazar (boşluk sayılmaz); profil sabit, yalnız etiket.
+	s.copilot.RecordUsage(copilot.WithCallID(s.loopRecordCtx(ctx, opPre != nil || rtPlan != nil), loopCallID), chatT0, totalIn, totalOut, totalCached, status, errMsg, chatPromptSample(lastUserText(req.Messages), codeReads), finalText)
 
 	if exitReason == stopNone {
 		exitReason = stopRoundCap // savunma: döngü break'siz yalnız turlar bitince biter

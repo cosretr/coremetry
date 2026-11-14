@@ -51,3 +51,34 @@ func TestRecordSurfacePrefix(t *testing.T) {
 		}
 	}
 }
+
+// v0.10.2134 (router boşlukları D1) — RecordAs yalnız KAYIT etiketini değiştirir:
+// profil, çağrının gerçekte çözüldüğü profil olarak sabitlenir (etiket haritada
+// yok → varsayılana düşüp satıra yanlış modeli yazmasın); ctx'te zaten
+// sabitlenmiş profil ezilmez; boş etiket ctx'i aynen döndürür.
+func TestRecordAsPinsResolvedProfile(t *testing.T) {
+	s := New("openai", "kd", "default-model")
+	s.SetProfiles([]ModelProfile{
+		{ID: "big", Provider: ProviderOpenAI, BaseURL: "http://big/v1", APIKey: "kb", Model: "big-model"},
+		{ID: "loop", Provider: ProviderOpenAI, BaseURL: "http://loop/v1", APIKey: "kl", Model: "loop-model"},
+	}, "big", map[string]string{"chat": "loop"})
+	bg := WithMeta(context.Background(), CallMeta{Surface: "chat", ExchangeID: "x1"})
+
+	got := s.RecordAs(bg, "chat-prefetch")
+	if m := MetaFromContext(got); m.Surface != "chat-prefetch" || m.ExchangeID != "x1" {
+		t.Errorf("meta = %+v", m)
+	}
+	if id := s.profileID(got); id != "loop" {
+		t.Errorf("profil %q, want loop (döngünün profili sabitlenmeli)", id)
+	}
+	if id := s.profileID(s.RecordAs(WithProfile(bg, "big"), "chat-prefetch")); id != "big" {
+		t.Errorf("ctx profili ezildi: %q", id)
+	}
+	if s.RecordAs(bg, "") != bg {
+		t.Error("boş etiket ctx'i değiştirmemeli")
+	}
+	var nilSvc *Service
+	if m := MetaFromContext(nilSvc.RecordAs(bg, "chat-prefetch")); m.Surface != "chat-prefetch" {
+		t.Errorf("nil servis etiket: %q", m.Surface)
+	}
+}

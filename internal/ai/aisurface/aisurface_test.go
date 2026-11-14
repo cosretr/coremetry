@@ -84,6 +84,10 @@ func TestRegistryDerivedLists(t *testing.T) {
 	if got := RouterGapLabels(); len(got) != 2 || got[0] != Chat || got[1] != ChatIntentNone {
 		t.Errorf("RouterGapLabels = %v", got)
 	}
+	// v0.10.2134 — ön-getirmeyle tohumlanan döngü: aynı istem ailesi, boşluk değil.
+	if sp, ok := Lookup(ChatPrefetch); !ok || sp.RouterGap || sp.Eval != "Chat" || sp.Role != RoleAnswer {
+		t.Errorf("chat-prefetch kaydı = %+v ok=%v", sp, ok)
+	}
 	// v0.10.1289 — kural önerisi (chat-rule) da KB adayı olamaz.
 	// v0.10.1458 — konu dışı genel cevap (chat-offtopic-general) da kanıtsız.
 	if got := NoKBLabels(); len(got) != 3 || got[0] != ChatGeneral || got[1] != ChatOffTopicGeneral || got[2] != ChatRule {

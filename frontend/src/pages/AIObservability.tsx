@@ -12,7 +12,7 @@ import { SREEvalPanel } from './ai/SREEvalPanel'; // v0.10.1301 — AI SRE Faz 5
 import { PendingCasesPanel } from './ai/PendingCasesPanel'; // v0.10.1475 — eval'in onaylı vaka girdisi
 import { useUrlRange } from '@/lib/useUrlRange';
 import { rcaPctText, rcaEngineTone, rcaSatisfactionText, rcaBucketLabel, rcaBucketSatisfaction, rcaCalibrationNote } from './ai/rcaQualityView';
-import type { RCAVerdictQuality, AIBudgetStatus, NegativeFeedbackCall } from '@/lib/types';
+import type { RCAVerdictQuality, AIBudgetStatus, NegativeFeedbackCall, RouterGap, RouterGapKind, RouterGapsView } from '@/lib/types';
 import { budgetVerdict, budgetCls } from './ai/aiBudgetView';
 import { timeRangeToNs, tsLong, fmtNum } from '@/lib/utils';
 import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef, type DataTableStateProps } from '@/components/ui/DataTable';
@@ -575,9 +575,13 @@ function RCAQualityPanel({ range }: { range: TimeRange }) {
 // useDataTable. initialSort yok — satırlar sunucunun sıklık sırasında kalır.
 // Soru kimlik kolonu: 11.5px düştü, ton almadı; tam soru satırın değil
 // hücrenin title'ında (T7). Damga mono kalır (S2).
-type RouterGap = Awaited<ReturnType<typeof api.aiRouterGaps>>['gaps'][number];
+// v0.10.2134 (router boşlukları D1) — "Tür" kolonu: serbest döngü ile genel
+// cevap (sınıflandırıcı none) ayrı satır; ön-getirmeyle tohumlanan döngü
+// (chat-prefetch) listede yok. Toplamlar gerçek sayı (eskiden ilk 50 grup).
+const GAP_KIND_LABEL: Record<RouterGapKind, string> = { loop: 'Serbest döngü', general: 'Genel soru' };
 const GAP_COLS: ColumnDef<RouterGap>[] = [
   { id: 'question', label: 'Soru',      sortValue: g => g.question, naturalDir: 'asc', flex: true, mono: true },
+  { id: 'kind',     label: 'Tür',       sortValue: g => g.kind, naturalDir: 'asc', width: 120, tone: () => 'faint' },
   { id: 'count',    label: 'Kez',       sortValue: g => g.count, numeric: true, width: 80 },
   { id: 'users',    label: 'Kullanıcı', sortValue: g => g.users, numeric: true, width: 100, tone: () => 'faint' },
   { id: 'last',     label: 'Son',       sortValue: g => g.lastAt, width: 165, tone: () => 'faint' },
@@ -585,7 +589,7 @@ const GAP_COLS: ColumnDef<RouterGap>[] = [
 
 function RouterGapsPanel() {
   const [days, setDays] = useState<1 | 7 | 30>(7);
-  const [data, setData] = useState<Awaited<ReturnType<typeof api.aiRouterGaps>> | null | undefined>(undefined);
+  const [data, setData] = useState<RouterGapsView | null | undefined>(undefined);
   useEffect(() => {
     let cancelled = false;
     setData(undefined);
@@ -617,9 +621,10 @@ function RouterGapsPanel() {
         {data && data.gaps.length > 0 && (
           <div style={{ fontSize: 11.5, color: 'var(--text2)', marginBottom: 8 }}>
             Toplam <b>{data.totalFallbacks.toLocaleString()}</b> soru serbest döngüye
-            düştü. Sık tekrarlayanlar yeni bir guided intent adayıdır: deterministik
-            prefetch + tek anlatım çağrısı, N turluk tool döngüsünden hem ucuz hem
-            tutarlı olur.
+            düştü, <b>{data.totalGeneral.toLocaleString()}</b> soru genel cevaba gitti
+            (sınıflandırıcı «none»). Sık tekrarlayanlar yeni bir guided intent adayıdır:
+            deterministik prefetch + tek anlatım çağrısı, N turluk tool döngüsünden hem
+            ucuz hem tutarlı olur.
           </div>
         )}
         <div className="table-wrap">
@@ -628,8 +633,9 @@ function RouterGapsPanel() {
             <DataTableHead dt={gapDt} />
             <tbody>
               {gapDt.sortedRows.length === 0 ? <DataTableState dt={gapDt} {...gapState} /> : gapDt.sortedRows.map(g => (
-                <tr key={g.question}>
+                <tr key={`${g.kind}:${g.question}`}>
                   <DataTableCell dt={gapDt} col="question" row={g} value={g.question} />
+                  <DataTableCell dt={gapDt} col="kind" row={g} value={GAP_KIND_LABEL[g.kind] ?? g.kind} />
                   <DataTableCell dt={gapDt} col="count" row={g} value={g.count.toLocaleString()} />
                   <DataTableCell dt={gapDt} col="users" row={g} value={g.users} />
                   <DataTableCell dt={gapDt} col="last" row={g} value={tsLong(g.lastAt)} className="mono" />

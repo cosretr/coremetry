@@ -221,12 +221,26 @@ func routingReaskFlags(turns []chstore.RoutingTurn) map[string]bool {
 			if gap < 0 {
 				gap = next.CreatedAt.Sub(prev.CreatedAt)
 			}
+			if explainTemplatePair(prev, next) {
+				continue // v0.10.2134 — şablon açıklama sorusu, başka özne: yeniden sorma değil
+			}
 			if gap <= routingReaskWindow && cosrelearn.QuestionSimilarity(prev.Question, next.Question) >= cosrelearn.RephraseSimilarity {
 				out[prev.ExchangeID] = true
 			}
 		}
 	}
 	return out
+}
+
+// explainTemplatePair — SAF, v0.10.2134 (router boşlukları D1): iki ardışık
+// AÇIKLAMA turu (kademe explain) farklı soru metniyle. Açıklama sorusu
+// istemcinin şablonudur ("Bu trace'i açıkla · <id>", chat_explain_turn.go);
+// iki farklı trace'in kelime Jaccard'ı ~0.6 ≥ eşik → beyansız yeniden sorma
+// sanılıyordu (/ai "Açıklama turu 189/454"). Aynı metin (aynı özne) ve
+// istemci beyanı (retry/regenerate/edit) yeniden sorma sayılmaya devam eder.
+func explainTemplatePair(prev, next chstore.RoutingTurn) bool {
+	return prev.Tier == aisurface.TierExplain && next.Tier == aisurface.TierExplain &&
+		strings.TrimSpace(prev.Question) != strings.TrimSpace(next.Question)
 }
 
 // routingScore — SAF: nedenlerin ağırlık toplamı.

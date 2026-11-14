@@ -259,7 +259,7 @@ func TestCHSmokeReads(t *testing.T) {
 			return err
 		}},
 		{"RouterGaps", func() error {
-			_, err := st.RouterGaps(ctx, 7*24*time.Hour, 10)
+			_, _, err := st.RouterGaps(ctx, 7*24*time.Hour, 10)
 			return err
 		}},
 		// v0.9.595 — iki yeni okuma da AYNI sınıftan risk taşıyor:

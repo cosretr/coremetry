@@ -19,6 +19,7 @@ import (
 	"github.com/cilcenk/coremetry/internal/ai/aisurface"
 	"github.com/cilcenk/coremetry/internal/auth"
 	"github.com/cilcenk/coremetry/internal/chstore"
+	"github.com/cilcenk/coremetry/internal/cosrelearn"
 )
 
 var rrT0 = time.Date(2026, 10, 20, 9, 0, 0, 0, time.UTC)
@@ -196,4 +197,40 @@ func TestRoutingReportDaysAndGate(t *testing.T) {
 			t.Errorf("%s: kod %d, beklenen %d (%s)", role, w.Code, want, w.Body.String())
 		}
 	}
+}
+
+// v0.10.2134 (router boşlukları D1) — açıklama turları istemci şablonudur
+// ("Bu trace'i açıkla · <id>"): iki farklı trace art arda açıklanınca kelime
+// benzerliği eşiği geçer ve tur "hemen yeniden soruldu" sayılıyordu (/ai
+// "Açıklama turu 189/454"). Farklı özne muaf; aynı metin ve istemci beyanı
+// (retry) sayılmaya devam eder; açıklama olmayan kademe etkilenmez.
+func TestRoutingReaskExplainTemplateExempt(t *testing.T) {
+	q1 := "Bu trace'i açıkla · 5b8efff7a1c2d3e4"
+	q2 := "Bu trace'i açıkla · 9c0d11aa22bb33cc"
+	if !routingSimilarForTest(q1, q2) {
+		t.Fatal("ön koşul: şablon soruları benzerlik eşiğini geçmeli (muafiyet olmadan reask sayılırdı)")
+	}
+	at := func(id, conv, tier, q string, d time.Duration, attempt string) chstore.RoutingTurn {
+		r := rrTurn(id, tier, "", q)
+		r.ConversationID, r.CreatedAt, r.Attempt = conv, rrT0.Add(d), attempt
+		return r
+	}
+	turns := []chstore.RoutingTurn{
+		at("e1", "E", aisurface.TierExplain, q1, 0, ""),
+		at("e2", "E", aisurface.TierExplain, q2, time.Minute, ""),   // farklı trace → muaf
+		at("e3", "E", aisurface.TierExplain, q2, 2*time.Minute, ""), // aynı metin → e2 yeniden soruldu
+		at("f1", "F", aisurface.TierExplain, q1, 0, ""),
+		at("f2", "F", aisurface.TierExplain, q2, time.Minute, "retry"), // beyan → f1 sayılır
+		at("g1", "G", aisurface.TierGuided, q1, 0, ""),
+		at("g2", "G", aisurface.TierGuided, q2, time.Minute, ""), // açıklama değil → eski kural
+	}
+	got := routingReaskFlags(turns)
+	want := map[string]bool{"e2": true, "f1": true, "g1": true}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("yeniden sorma %v, want %v", got, want)
+	}
+}
+
+func routingSimilarForTest(a, b string) bool {
+	return cosrelearn.QuestionSimilarity(a, b) >= cosrelearn.RephraseSimilarity
 }

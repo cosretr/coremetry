@@ -23,6 +23,11 @@ import "strings"
 const (
 	// Chat — serbest araç döngüsü; alışveriş başına tek satır (RecordUsage).
 	Chat = "chat"
+	// ChatPrefetch — v0.10.2134 (router boşlukları D1): operasyon / endpoint
+	// ön-getirmesiyle (ya da v2 rota planıyla) TOHUMLANAN serbest döngü.
+	// Döngünün kendisi aynı (profil "chat"inki sabitlenir), yalnız kayıt
+	// etiketi ayrı: router bu soruyu yakaladı, boşluk sayılmaz.
+	ChatPrefetch = "chat-prefetch"
 	// ChatGuided — guided anlatım (deterministik prefetch + tek anlatım).
 	ChatGuided = "chat-guided"
 	// ChatDrawer — çekmece anlatımı ve exception takibinin kod döngüsü.
@@ -120,6 +125,9 @@ type Spec struct {
 // api kaynak testi kayıtsız etiketi reddeder.
 var registry = []Spec{
 	{Label: Chat, Role: RoleAnswer, Eval: "Chat", RouterGap: true},
+	// v0.10.2134 — ön-getirmeyle tohumlanan döngü: aynı istem (Eval Chat),
+	// RouterGap DEĞİL (docs/cosre/router-gaps-audit.md A2/M).
+	{Label: ChatPrefetch, Role: RoleAnswer, Eval: "Chat"},
 	{Label: ChatGuided, Role: RoleAnswer, Eval: "Chat"},
 	{Label: ChatDrawer, Role: RoleAnswer, Eval: "Chat"},
 	{Label: ChatGeneral, Role: RoleAnswer, Eval: "GeneralChat", NoKB: true},
