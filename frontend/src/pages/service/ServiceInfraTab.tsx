@@ -538,7 +538,9 @@ export function ServiceInfraTab({ service, range, onZoom, onZoomReset }: {
             gözünden. Seri adı = route; 2xx trafiğin kendisi, yokluğu da
             sinyal (operatör onaylı üçlü: 2xx + 5xx + gecikme).
             v0.10.718 — üç grafik üç sütun; başlık atomu; hata yerinde.
-            v0.10.719 — kapsam tümü → cluster başına ("cluster · route"). */}
+            v0.10.719 — kapsam tümü → cluster başına ("cluster · route").
+            v0.10.2147 (S8) — 3'ten çok route'ta çizgi yığını yerine zarf + ortanca +
+            adıyla en yüksek route (MetricArea `envelope`); 3 ve altı eski çizgiler. */}
         {hasThanos && (haproxyAny || haproxyErr) && (
           <>
             <SectionHead id="infra-haproxy" title="Router / HAProxy" source="Thanos · router haproxy_backend_*"
@@ -550,19 +552,19 @@ export function ServiceInfraTab({ service, range, onZoom, onZoomReset }: {
               <ChartSlot q={agg2xx}>
                 <MetricArea title={`HTTP 2xx (req/s)${clampSuffix(clamped)}`}
                   subtitle="haproxy_backend_http_responses_total{code=2xx} · by route"
-                  series={hap2xx} seriesName="2xx"
+                  series={hap2xx} seriesName="2xx" envelope
                   onZoom={onZoom} onZoomReset={onZoomReset} syncKey={`infra:${service}`} />
               </ChartSlot>
               <ChartSlot q={agg5xx}>
                 <MetricArea title={`HTTP 5xx (req/s)${clampSuffix(clamped)}`}
                   subtitle="haproxy_backend_http_responses_total{code=5xx} · by route"
-                  series={hap5xx} seriesName="5xx"
+                  series={hap5xx} seriesName="5xx" envelope
                   onZoom={onZoom} onZoomReset={onZoomReset} syncKey={`infra:${service}`} />
               </ChartSlot>
               <ChartSlot q={aggLat}>
                 <MetricArea title={`Backend gecikme (ms)${clampSuffix(clamped)}`}
                   subtitle="haproxy_backend_http_average_response_latency_milliseconds · by route"
-                  series={hapLat} seriesName="latency" unit="ms"
+                  series={hapLat} seriesName="latency" unit="ms" envelope
                   onZoom={onZoom} onZoomReset={onZoomReset} syncKey={`infra:${service}`} />
               </ChartSlot>
             </div>

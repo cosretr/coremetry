@@ -3831,6 +3831,10 @@ tbody td.infra-where-note { color: var(--text2); }
 .infra-where-run { margin-right: var(--sp-3); }
 .infra-where-diag { margin: var(--sp-3) 0 0; font-size: var(--fs-xs); color: var(--text3); }
 .infra-where-bar { margin-bottom: var(--sp-7); }
+/* v0.10.2147 (servis sekmeleri S8) — zarf kipindeki MetricArea'nın alt notu
+   (kaç seri, gri alan ne, hangi seri en yüksek). */
+.metric-env-note { margin: var(--sp-2) 0 0; font-size: var(--fs-xs); color: var(--text3); }
+.metric-env-wait { display: grid; place-items: center; }
 .infra-src { margin: 0 0 var(--sp-6); padding-left: var(--sp-7); font-size: var(--fs-sm); color: var(--text2); }
 .infra-src li { padding: var(--sp-1) 0; }
 /* v0.9.408 — Explain kanıt kutusu: kök-neden soruşturulacak span'ler

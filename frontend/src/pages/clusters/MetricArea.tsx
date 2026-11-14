@@ -1,16 +1,25 @@
+import { lazy, Suspense } from 'react';
 import { Card, SegmentedControl } from '@/components/ui';
+import { Spinner } from '@/components/Spinner';
 import { MultiLineChart } from '@/components/MultiLineChart';
 import { namedSeriesToSeries } from '@/pages/clusters/trendSeries';
+import { metricEnvelope } from '@/pages/clusters/metricEnvelope';
 import type { XPin } from '@/lib/chart/xRange';
 import type { Threshold } from '@/lib/chart/thresholdLines';
 import type { ClusterNamedSeries } from '@/lib/types';
+
+// v0.10.2147 (S8) — zarf kipinin çizimi (viz/TimeSeriesPanel, uPlot'u doğrudan
+// yükler) YALNIZ kip devreye girince indirilir: MetricArea'yı kullanan diğer
+// sayfaların parçasına uPlot girmez (MultiLineChart'ın CorePanel'i de tembel).
+const EnvelopePanel = lazy(() =>
+  import('@/components/viz/TimeSeriesPanel').then(m => ({ default: m.TimeSeriesPanel })));
 
 // MetricArea — başlık + Total/By-X segmented toggle + area chart kartı
 // (v0.9.49, design handoff §3+§8 ortak bileşeni). Clusters Overview'un
 // CPU/Mem kartlarından çıkarıldı (v0.9.35 ResToggleHeader'ın genel
 // hali): Servis → Infrastructure sekmesi aynı kartı "By pod"
 // etiketiyle kullanır. Seri yoksa null döner — görünmez-düşer.
-export function MetricArea({ title, subtitle, byLabel, totalLabel = 'Total', by, onToggle, series, seriesName, unit, height = 180, maxSeries, totalSeries, onZoom, onZoomReset, syncKey, labelTrimPrefix, xRange, thresholds, zeroBase }: {
+export function MetricArea({ title, subtitle, byLabel, totalLabel = 'Total', by, onToggle, series, seriesName, unit, height = 180, maxSeries, totalSeries, onZoom, onZoomReset, syncKey, labelTrimPrefix, xRange, thresholds, zeroBase, envelope }: {
   title: string;
   // v0.9.383 (redesign D7) — insanileştirilmiş başlığın altında ham
   // metrik adı (monospace, soluk) — bilgi kaybı yasak.
@@ -59,8 +68,16 @@ export function MetricArea({ title, subtitle, byLabel, totalLabel = 'Total', by,
   // zeroBase). Mutlak miktar kartları (Clusters CPU/Memory) verir; %0,2'lik
   // değişim tam boy sıçrama gibi çizilmez. Verilmezse veri-fit (bugünkü).
   zeroBase?: boolean;
+  // v0.10.2147 (servis sekmeleri S8, mockup operatör onayı 2026-11-13) —
+  // AÇIKÇA istenirse ve seri sayısı 3'ü aşıyorsa çizgi yığını yerine zarf (en
+  // düşük–en yüksek aralığı) + ortanca + adıyla en yüksek seri (metricEnvelope;
+  // çizim viz/TimeSeriesPanel). 3 ve altı seride ya da verilmezse eski çizgiler.
+  // Yalnız eşiksiz, tek birimli paneller verir (Router / HAProxy üçlüsü).
+  envelope?: boolean;
 }) {
   if (!series || series.length === 0) return null;
+  const converted = namedSeriesToSeries(series, seriesName, labelTrimPrefix);
+  const env = envelope ? metricEnvelope(converted, unit) : null;
   return (
     <Card header={
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
@@ -85,7 +102,20 @@ export function MetricArea({ title, subtitle, byLabel, totalLabel = 'Total', by,
         )}
       </div>
     }>
-      <MultiLineChart series={namedSeriesToSeries(series, seriesName, labelTrimPrefix)} height={height} unit={unit} maxSeries={maxSeries} onZoom={onZoom} onZoomReset={onZoomReset} syncKey={syncKey} xRange={xRange} thresholds={thresholds} zeroBase={zeroBase} />
+      {env ? (
+        <>
+          {/* Saniye eksenli motor: imleç senkronu ham anahtarla (CorePanel'in '-ms' ad alanına karışmaz). */}
+          <Suspense fallback={<div className="metric-env-wait" style={{ height }}><Spinner /></div>}>
+            <EnvelopePanel series={env.lines} envelope={env.envelope} height={height} mode="line"
+              syncKey={syncKey} onZoom={onZoom} onZoomReset={onZoomReset} xRange={xRange} />
+          </Suspense>
+          <p className="metric-env-note">
+            {env.n} seri · gri alan en düşük–en yüksek aralığı · çizgiler ortanca ve en yüksek (<span className="mono">{env.top}</span>)
+          </p>
+        </>
+      ) : (
+      <MultiLineChart series={converted} height={height} unit={unit} maxSeries={maxSeries} onZoom={onZoom} onZoomReset={onZoomReset} syncKey={syncKey} xRange={xRange} thresholds={thresholds} zeroBase={zeroBase} />
+      )}
     </Card>
   );
 }
