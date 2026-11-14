@@ -1461,6 +1461,27 @@ type httpKey struct {
 }
 type dbKey struct{ service, system, op string }
 
+// httpPointAttrs is the ONE datapoint identity for both HTTP RED metrics
+// (http.server.requests counter + http.server.duration histogram).
+//
+// v0.10.2160 — the histogram used to carry only method + route although its
+// aggregate was already keyed by status, so (a) the success and failure
+// points of one route went out with IDENTICAL attributes — colliding delta
+// series — and (b) Coremetry's metric mode, which derives error rate from
+// the duration histogram's _count split by status code, had nothing to split
+// on and showed an empty error rate with demo data.
+//
+// Cardinality: status is a literal at every RecordHTTP call site (the
+// success code plus that route's one failure code), so the series count is
+// bounded by routes x 2 — the same set the counter has always emitted.
+func httpPointAttrs(k httpKey) []*commonpb.KeyValue {
+	return []*commonpb.KeyValue{
+		kvStr("http.method", k.method),
+		kvStr("http.route", k.route),
+		kvIntKV("http.status_code", int64(k.status)),
+	}
+}
+
 type metricsState struct {
 	mu sync.Mutex
 	// HTTP RED: requests, errors, duration histograms keyed by (service, method, route, status)
@@ -1572,12 +1593,8 @@ func (m *metricsState) flush(startNs, nowNs uint64) []*metricspb.ResourceMetrics
 	for k, count := range m.httpRequests {
 		httpReqByService[k.service] = append(httpReqByService[k.service], &metricspb.NumberDataPoint{
 			StartTimeUnixNano: startNs, TimeUnixNano: nowNs,
-			Value: &metricspb.NumberDataPoint_AsInt{AsInt: int64(m.cumRequests[k])},
-			Attributes: []*commonpb.KeyValue{
-				kvStr("http.method", k.method),
-				kvStr("http.route", k.route),
-				kvIntKV("http.status_code", int64(k.status)),
-			},
+			Value:      &metricspb.NumberDataPoint_AsInt{AsInt: int64(m.cumRequests[k])},
+			Attributes: httpPointAttrs(k),
 		})
 		_ = count
 	}
@@ -1589,10 +1606,7 @@ func (m *metricsState) flush(startNs, nowNs uint64) []*metricspb.ResourceMetrics
 			Count: h.count, Sum: &sum, Min: &mn, Max: &mx,
 			BucketCounts:   h.bucketsOrZero(),
 			ExplicitBounds: latencyBounds,
-			Attributes: []*commonpb.KeyValue{
-				kvStr("http.method", k.method),
-				kvStr("http.route", k.route),
-			},
+			Attributes:     httpPointAttrs(k),
 		})
 	}
 	for svc, dps := range httpReqByService {
