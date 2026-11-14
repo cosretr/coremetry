@@ -55,6 +55,7 @@ vi.mock('@/lib/api', () => {
     },
     problemVerdicts: async () => ({ verdicts: [], policy: { muteNotifications: false } }),
     createAnomalySilence: async (body: unknown) => { m.silences.push(body); return {}; },
+    servicesMetadata: async () => ({ checkout: { ownerTeam: 'payments', sreTeam: 'sre-core' } }),
     anomalyLogPatternSeries: async () => {
       m.patternCalls++;
       if (m.patternMode === 'fail') throw new Error('HTTP 502: log backend slow');
@@ -538,3 +539,20 @@ describe('AnomalyEventDetail — terfi izi rozeti', () => {
   });
 });
 
+// v0.10.2128 (Problems sadeleştirme S8) — alarm detayıyla aynı üst veri satırı.
+describe('AnomalyEventDetail — üst veri satırı (v0.10.2128, S8)', () => {
+  it('Servis · Ekip · SRE · Tür; ekip Problems süzgecine gider; özetten önce', async () => {
+    const el = await mount('a1');
+    const meta = el.querySelector('.pd-meta')!;
+    expect([...meta.querySelectorAll('dt')].map(d => d.textContent)).toEqual(['Servis', 'Ekip', 'SRE', 'Tür']);
+    expect(meta.querySelector('[data-meta="Ekip"] a')?.getAttribute('href')).toBe('/inbox?team=payments');
+    expect(meta.querySelector('[data-meta="Tür"] dd')?.textContent).toBe('Anomali');
+    expect(meta.nextElementSibling).toBe(el.querySelector('.pd-summary'));
+  });
+  it('katalogda olmayan servis: ekip öğesi yok', async () => {
+    m.events.b2 = ev({ id: 'b2', service: 'billing' });
+    const el = await mount('b2');
+    expect(el.querySelector('.pd-meta [data-meta="Ekip"]')).toBeNull();
+    expect(el.querySelector('.pd-meta [data-meta="Servis"] dd')?.textContent).toBe('billing');
+  });
+});

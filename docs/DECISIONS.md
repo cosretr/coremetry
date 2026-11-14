@@ -13922,3 +13922,13 @@ eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
   çizelgesi, Blast radius, Correlated signals, Log kanıtı, Bildirim, Runbook, Description. Silinen bölüm yok.
   Yan etki: sayfa açılışı `/rootcause/core` + `/bubbleup` okumasını artık yapmaz (Teknik kanıt açılınca).
 - Örnek trace bağlantısı kutuya girmedi: kimlik yalnız `/rootcause/core`'da; yerine hatalı/yavaş trace listesi.
+
+## 2026-11-14 — v0.10.2128 — Problems sadeleştirme S8 (kısmi): anomali detayı üst veri + hacim sıçraması grafiği
+- `AnomalyEventDetail`: başlık satırının altına alarm detayıyla aynı `DetailMeta` (Servis · Ekip · SRE · Tür);
+  ekip `service_metadata` katalogundan (alarm detayının yedek kaynağıyla aynı sorgu anahtarı).
+- ML olayı `svc_volume_spike` (v0.10.2118): evaluator anlık görüntü yazmıyor, `sourcePanelFor` kayıtlı görüntüye
+  düşüyor ve grafik alanı "Bu olay için grafik kaydı yok" diyordu (kod okumasıyla doğrulandı; prod'da bakılmadı).
+  Artık servis Overview'ın istek hızı serisi (`service-red`, `rate`) — mevcut `ServiceRedChart` / mevcut uç.
+- Kutu adları DEĞİŞMEDİ: anomali detayı v0.10.2027'den beri ML grup sayfasıyla tek dil ("Kanıt", "Kök neden",
+  "Ne yapabilirim", "Teknik ayrıntı"); alarmın S7 adlarına çekmek ya o kararı bozar ya kapsam dışı ML sayfasına
+  dokunur. Operatör kararı bekler.

@@ -62,6 +62,11 @@ export function sourcePanelFor(e: Pick<MLEvent, 'detector' | 'signal' | 'code' |
   // v0.10.2086 — yaygın yavaşlama: Overview'ın p99 serisi (yavaş işlemler cümlede adıyla).
   if (e.detector === 'svc_breadth') return e.service ? { kind: 'service-red', service: e.service, agg: 'p99', label: 'p99 yanıt süresi' } : { kind: 'snapshot', reason: 'olay kaydında servis yok' };
   if (e.detector === 'svc_error_rate') return e.service ? { kind: 'service-red', service: e.service, agg: 'error_rate', label: 'hata oranı' } : { kind: 'snapshot', reason: 'olay kaydında servis yok' };
+  // v0.10.2128 (Problems S8) — hacim sıçraması (evaluator yazar, anlık görüntü
+  // YOK): kayıtlı görüntüye düşünce grafik alanı "grafik kaydı yok" diyordu.
+  // Servis Overview'ın istek hızı serisi (aynı ServiceRedChart, aynı uç; yeni
+  // sorgu yolu yok).
+  if (e.detector === 'svc_volume_spike') return e.service ? { kind: 'service-red', service: e.service, agg: 'rate', label: 'istek hızı' } : { kind: 'snapshot', reason: 'olay kaydında servis yok' };
   if (e.detector === 'metric_kafka' && code.startsWith('metric_kafka|consumer_lag') && !code.includes('@')) {
     return { kind: 'kafka-lag', service: e.service };
   }

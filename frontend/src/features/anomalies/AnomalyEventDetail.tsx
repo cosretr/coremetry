@@ -15,14 +15,16 @@ import { CosreChart } from '@/components/CosreChart';
 import { ProblemVerdictActions } from '@/components/ProblemVerdictActions';
 import { ProblemStandardHeader } from './ProblemStandardHeader'; // v0.10.1529
 import { api } from '@/lib/api';
-import { keys, useAnomalyEventByID, useLogPatternSeries, useUnifiedAnomalyRow } from '@/lib/queries';
+import { keys, useAnomalyEventByID, useLogPatternSeries, useServicesMetadata, useUnifiedAnomalyRow } from '@/lib/queries';
+import { Link } from 'react-router-dom';
+import { serviceHref } from '@/lib/serviceHref';
 import { useEscLayer } from '@/lib/escLayer';
 import { DEFAULT_DURATIONS } from '@/lib/actions';
 import { anomalyEventSilenceBody } from '@/lib/inboxDrawer';
 import { anomalyVerdictSubject } from '@/lib/problemVerdict';
 import { tsLong } from '@/lib/utils';
 import type { AnomalyEvent } from '@/lib/types';
-import { Sect, SignalLink, DeployBox, DetailSummary } from './detailSections';
+import { Sect, SignalLink, DeployBox, DetailSummary, DetailMeta, type DetailMetaItem } from './detailSections';
 import { anomalySummary, anomalyWhenLine } from './detailSummary';
 import {
   ANOMALY_CHART_EMPTY, ANOMALY_KIND_PLAIN, anomalyChart, anomalyChartWindow, anomalySignalHrefs,
@@ -248,6 +250,10 @@ export function AnomalyEventDetail({ event, isAdmin, onBack }: {
         {isTraceAnomalyKind(event.kind) && event.pattern && <span className="mono" style={{ color: 'var(--text3)' }}>· {event.pattern}</span>}
         <Badge tone={event.status === 'active' ? 'neutral' : 'success'}>{legacyStatusText(event, Date.now() * 1e6)}</Badge>
       </div>
+      {/* v0.10.2128 (Problems sadeleştirme S8) — alarm detayıyla aynı tek
+          satır üst veri: Servis · Ekip · SRE (farklıysa) · Tür. Ne zaman
+          aşağıdaki özetin ikinci satırında (iki kez basılmaz). */}
+      <AnomalyMeta service={event.service} win={win} />
       {/* Tek düz cümle: standart başlık (sunucu); yüklenene ya da bulunamayana
           dek olayın özeti + ne zaman satırı. Log türünde desen kimliği altında. */}
       {/* v0.10.2038 — mockup düzeni: başlık + rozet + TEK cümle. Standart
@@ -332,6 +338,22 @@ export function AnomalyEventDetail({ event, isAdmin, onBack }: {
       </div>
     </PageShell>
   );
+}
+
+// AnomalyMeta — v0.10.2128 (S8). Ekip katalogdan (service_metadata; alarm
+// detayının yedek kaynağıyla AYNI sorgu anahtarı, 60 sn önbellek). Değer
+// yoksa öğe çizilmez; servissiz olayda yalnız Tür.
+function AnomalyMeta({ service, win }: { service: string; win: { fromNs: number; toNs: number } }) {
+  const meta = useServicesMetadata().data?.[service];
+  const owner = meta?.ownerTeam || '';
+  const sre = meta?.sreTeam || '';
+  const team = (t: string) => <Link to={`/inbox?team=${encodeURIComponent(t)}`} className="mono">{t}</Link>;
+  const items: DetailMetaItem[] = [];
+  if (service) items.push({ k: 'Servis', v: <Link to={serviceHref(service, { range: win })} className="mono">{service}</Link> });
+  if (owner) items.push({ k: 'Ekip', v: team(owner) });
+  if (sre && sre !== owner) items.push({ k: owner ? 'SRE' : 'Ekip', v: team(sre) });
+  items.push({ k: 'Tür', v: 'Anomali' });
+  return <DetailMeta items={items} />;
 }
 
 // AnomalyEvidenceRows — v0.10.2027: kanıt satırları (sinyal çipi + bir cümle +

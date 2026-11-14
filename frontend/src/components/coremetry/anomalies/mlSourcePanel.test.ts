@@ -69,6 +69,9 @@ describe('sourcePanelFor', () => {
   });
   it('v0.10.2086: yaygın yavaşlama servis Overview p99 serisini çizer', () => {
     expect(sourcePanelFor(ev('svc_breadth', 'trace', ''))).toEqual({ kind: 'service-red', service: 'orders-consumer', agg: 'p99', label: 'p99 yanıt süresi' });
+    // v0.10.2128 (S8) — hacim sıçraması anlık görüntü yazmaz: istek hızı serisi, kayıtlı görüntü değil.
+    expect(sourcePanelFor(ev('svc_volume_spike', 'trace', ''))).toEqual({ kind: 'service-red', service: 'orders-consumer', agg: 'rate', label: 'istek hızı' });
+    expect(sourcePanelFor({ ...ev('svc_volume_spike', 'trace', ''), service: '' }).kind).toBe('snapshot');
   });
   it('v0.10.2061: canlı grafik yoksa nedeni tek satır; metrik olayı serisiz → neden yazılı', () => {
     expect(liveGapLine('olay penceresinde kaynakta seri yok')).toBe('Canlı grafik çizilemedi: olay penceresinde kaynakta seri yok. Aşağıdaki, olay anında kaydedilen 5 dakikalık görüntü.');
