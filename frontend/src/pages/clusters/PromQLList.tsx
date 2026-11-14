@@ -4,16 +4,11 @@
 // Değerler çağıran tarafta promQuote ile kaçışlanır — display-only.
 export function PromQLList({ queries }: { queries: [string, string][] }) {
   return (
-    <div style={{ display: 'grid', gap: 10 }}>
+    <div className="cl-promql">
       {queries.map(([label, q]) => (
         <div key={label}>
-          <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 3 }}>{label}</div>
-          <pre style={{
-            margin: 0, padding: '7px 9px', borderRadius: 4,
-            background: 'var(--bg0)', border: '1px solid var(--border)',
-            fontSize: 11,
-            whiteSpace: 'pre-wrap', wordBreak: 'break-all', color: 'var(--text2)',
-          }}>{q}</pre>
+          <div className="cl-promql__label">{label}</div>
+          <pre className="cl-promql__q">{q}</pre>
         </div>
       ))}
     </div>

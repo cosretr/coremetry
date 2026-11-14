@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import { MiniBar } from './MiniBar';
 import type { ClusterNodeRow } from '@/lib/types';
 
@@ -6,13 +7,14 @@ import type { ClusterNodeRow } from '@/lib/types';
 // Her tile: role-dot (master --purple, worker --teal; role yoksa
 // nötr — B4'te doldurulacak) + node adı (mono 11) + CPU/Mem
 // mini-bar. clusterNodes verisini (mevcut) tüketir.
+// Clusters S2 — statik stil `.cl-heat*` sınıflarında (globals.css); rol
+// noktasının rengi hesaplanan değer.
+const dotFill = (color: string): CSSProperties => ({ background: color });
+
 export function NodeHeatmap({ nodes }: { nodes: ClusterNodeRow[] }) {
   if (nodes.length === 0) return null;
   return (
-    <div style={{
-      display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
-      gap: 8,
-    }}>
+    <div className="cl-heat">
       {nodes.map(n => {
         const roleColor = n.role === 'master' || n.role === 'control-plane'
           ? 'var(--purple)'
@@ -20,26 +22,19 @@ export function NodeHeatmap({ nodes }: { nodes: ClusterNodeRow[] }) {
             ? 'var(--teal)'
             : 'var(--text3)';
         return (
-          <div key={n.node} style={{
-            border: '1px solid var(--border)', borderRadius: 6,
-            padding: '8px 10px', background: 'var(--bg1)',
-            display: 'grid', gap: 6,
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ width: 6, height: 6, borderRadius: 2, background: roleColor, flexShrink: 0 }}
+          <div key={n.node} className="cl-heat__tile">
+            <div className="cl-heat__head">
+              <span className="cl-heat__dot" style={dotFill(roleColor)}
                 title={n.role || 'node'} />
-              <span style={{
-                fontFamily: 'var(--font-mono)', fontSize: 11,
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              }} title={n.node}>{n.node}</span>
+              <span className="cl-heat__name" title={n.node}>{n.node}</span>
             </div>
-            <div style={{ display: 'grid', gap: 4 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: 'var(--text3)' }}>
-                <span style={{ width: 26 }}>CPU</span>
+            <div className="cl-heat__bars">
+              <div className="cl-heat__bar">
+                <span>CPU</span>
                 <MiniBar pct={n.cpuPct ?? null} />
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: 'var(--text3)' }}>
-                <span style={{ width: 26 }}>Mem</span>
+              <div className="cl-heat__bar">
+                <span>Mem</span>
                 <MiniBar pct={n.memPct ?? null} />
               </div>
             </div>

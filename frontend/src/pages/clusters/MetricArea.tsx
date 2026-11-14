@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, type CSSProperties } from 'react';
 import { Card, SegmentedControl } from '@/components/ui';
 import { Spinner } from '@/components/Spinner';
 import { MultiLineChart } from '@/components/MultiLineChart';
@@ -13,6 +13,10 @@ import type { ClusterNamedSeries } from '@/lib/types';
 // sayfaların parçasına uPlot girmez (MultiLineChart'ın CorePanel'i de tembel).
 const EnvelopePanel = lazy(() =>
   import('@/components/viz/TimeSeriesPanel').then(m => ({ default: m.TimeSeriesPanel })));
+
+// Clusters S2 — başlık satırının statik stili `.cl-area-*` sınıflarında
+// (globals.css); bekleme kutusunun yüksekliği `height`tan hesaplanır.
+const waitBox = (height: number): CSSProperties => ({ height });
 
 // MetricArea — başlık + Total/By-X segmented toggle + area chart kartı
 // (v0.9.49, design handoff §3+§8 ortak bileşeni). Clusters Overview'un
@@ -80,14 +84,14 @@ export function MetricArea({ title, subtitle, byLabel, totalLabel = 'Total', by,
   const env = envelope ? metricEnvelope(converted, unit) : null;
   return (
     <Card header={
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+      <div className="cl-area-head">
         <span>
           {title}
           {subtitle && (
-            <span className="mono" style={{ display: 'block', fontSize: 9.5, fontWeight: 400, color: 'var(--text3)' }}>{subtitle}</span>
+            <span className="mono cl-area-sub">{subtitle}</span>
           )}
           {totalSeries != null && series.length < totalSeries && (
-            <span className="badge b-warn" style={{ marginLeft: 8 }}
+            <span className="badge b-warn cl-area-cut"
               title={`Sunucu ortalaması en yüksek ${series.length} pod'u döndürdü (${totalSeries} pod'dan). Pencere sonunda sıçrayan ama ortalaması düşük bir pod bu kesimin dışında kalabilir — tek pod'a bakmak için satırdan pod seçin.`}>
               {series.length} / {totalSeries} pod
             </span>
@@ -105,7 +109,7 @@ export function MetricArea({ title, subtitle, byLabel, totalLabel = 'Total', by,
       {env ? (
         <>
           {/* Saniye eksenli motor: imleç senkronu ham anahtarla (CorePanel'in '-ms' ad alanına karışmaz). */}
-          <Suspense fallback={<div className="metric-env-wait" style={{ height }}><Spinner /></div>}>
+          <Suspense fallback={<div className="metric-env-wait" style={waitBox(height)}><Spinner /></div>}>
             <EnvelopePanel series={env.lines} envelope={env.envelope} height={height} mode="line"
               syncKey={syncKey} onZoom={onZoom} onZoomReset={onZoomReset} xRange={xRange} />
           </Suspense>

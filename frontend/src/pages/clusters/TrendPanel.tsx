@@ -113,7 +113,7 @@ export function ThanosTrendPanel({ cluster, namespace, pod, row, fromNs, toNs, o
   if (q.isPending) return <Spinner />;
   if (q.isError) return <Empty icon="✗" title="Failed to load trend" />;
   if (cpuSeries.length === 0 && memSeries.length === 0) {
-    return <div style={{ fontSize: 12, color: 'var(--text3)' }}>No samples in this window.</div>;
+    return <div className="cl-trend__empty">No samples in this window.</div>;
   }
 
   const syncKey = `thanos-trend-${cluster}-${namespace}-${pod ?? ''}`;
@@ -122,22 +122,22 @@ export function ThanosTrendPanel({ cluster, namespace, pod, row, fromNs, toNs, o
   // (ServiceCharts v0.9.725 paritesi; ns→unix sec).
   const xRange = { from: fromNs / 1e9, to: toNs / 1e9 };
   return (
-    <div style={{ display: 'grid', gap: 12 }}>
+    <div className="cl-trend">
       {!single && totalPods > shownPods && (
-        <div style={{ fontSize: 11, color: 'var(--text3)' }}>
+        <div className="cl-trend__note">
           Top {shownPods} of {totalPods} pods by average CPU.
         </div>
       )}
       {/* Madde 4 sweep — unit'ler eksen/tooltip'e iner: Memory ham 1e9
           rakamları yerine "1.2 GB" okur (fmtSmart 'bytes'); CPU "cores". */}
       <div>
-        <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 4 }}>CPU (cores)</div>
+        <div className="cl-trend__title">CPU (cores)</div>
         <MultiLineChart series={cpuSeries} height={180} syncKey={syncKey} unit="cores"
           deploys={deployMarkers} onZoom={onZoom} onZoomReset={onZoomReset} xRange={xRange}
           thresholds={single ? limitThresholds(row?.cpuLimitCores, row?.cpuRequestCores, 'cores') : undefined} />
       </div>
       <div>
-        <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 4 }}>Memory (bytes)</div>
+        <div className="cl-trend__title">Memory (bytes)</div>
         <MultiLineChart series={memSeries} height={180} syncKey={syncKey} unit="bytes"
           deploys={deployMarkers} onZoom={onZoom} onZoomReset={onZoomReset} xRange={xRange}
           thresholds={single ? limitThresholds(row?.memLimitBytes, row?.memRequestBytes, 'bytes') : undefined} />

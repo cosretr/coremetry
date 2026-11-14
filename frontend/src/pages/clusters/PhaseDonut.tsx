@@ -3,6 +3,12 @@
 // stroke 13, yuvarlak uçlar + küçük boşluklar, merkez = toplam.
 // Toplam 0 → "—" (veri yok). Yaylar SVG dasharray ile; -90°'den
 // saat yönünde dizilir.
+// Clusters S2 — statik stil `.cl-donut*` / `.cl-dial*` sınıflarında
+// (globals.css); `size` kutusu ve dilim rengi hesaplanan değer.
+import type { CSSProperties } from 'react';
+
+const squareBox = (size: number): CSSProperties => ({ width: size, height: size });
+const swatch = (color: string): CSSProperties => ({ background: color });
 
 const SEGMENTS = [
   { key: 'running', label: 'Running', color: 'var(--text3)' }, // v0.10.922 (K5) — normal faz nötr
@@ -35,35 +41,31 @@ export function PhaseDonut({ running, pending, failed, size = 130, stroke = 13 }
   });
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-      <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
-        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}
-          style={{ transform: 'rotate(-90deg)' }}>
+    <div className="cl-donut">
+      <div className="cl-dial cl-donut__dial" style={squareBox(size)}>
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
           <circle cx={size / 2} cy={size / 2} r={r} fill="none"
             stroke="var(--border)" strokeWidth={stroke} />
           {total > 0 && arcs.filter(a => a.show).map(a => (
             <circle key={a.seg.key} cx={size / 2} cy={size / 2} r={r} fill="none"
               stroke={a.seg.color} strokeWidth={stroke} strokeLinecap="round"
               strokeDasharray={a.dash} strokeDashoffset={a.offset}
-              style={{ transition: 'stroke-dasharray .6s ease' }} />
+              className="cl-dial__arc--array" />
           ))}
         </svg>
-        <div style={{
-          position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
-          alignItems: 'center', justifyContent: 'center',
-        }}>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 22, fontWeight: 700 }}>
+        <div className="cl-dial__center cl-dial__center--stack">
+          <span className="cl-donut__total">
             {total > 0 ? total : '—'}
           </span>
-          <span style={{ fontSize: 10, color: 'var(--text3)' }}>pods</span>
+          <span className="cl-donut__unit">pods</span>
         </div>
       </div>
-      <div style={{ display: 'grid', gap: 5 }}>
+      <div className="cl-donut__legend">
         {SEGMENTS.map(seg => (
-          <div key={seg.key} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12 }}>
-            <span style={{ width: 9, height: 9, borderRadius: 2, background: seg.color, flexShrink: 0 }} />
-            <span style={{ color: 'var(--text2)', minWidth: 58 }}>{seg.label}</span>
-            <span className="mono" style={{ fontWeight: 600 }}>{counts[seg.key]}</span>
+          <div key={seg.key} className="cl-donut__row">
+            <span className="cl-donut__swatch" style={swatch(seg.color)} />
+            <span className="cl-donut__name">{seg.label}</span>
+            <span className="mono cl-donut__n">{counts[seg.key]}</span>
           </div>
         ))}
       </div>

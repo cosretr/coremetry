@@ -5110,6 +5110,67 @@ a.sec.trl-csv, a.sec.trl-csv:hover, a.sec.trl-csv:active { padding: 5px 10px; fo
 .pod-ek-body { padding: 10px 14px 12px; }
 .pod-ek-prom { max-width: 720px; }
 
+/* ── /clusters çizimleri — Clusters S2 (v0.10.2167; plan
+   docs/frontend/clusters-shadcn-plan.md §5). pages/clusters/* bileşenlerinin
+   statik stili satır içinden buraya taşındı; görünüm aynı. Hesaplanan
+   değerler (kutu ölçüsü, doluluk yüzdesi, dilim / rol rengi) bileşende stil
+   nesnesi olarak kalır. Gauge, PhaseDonut, NodeHeatmap, MiniBar Clusters
+   sayfasının; PodRing, MetricArea, TrendPanel, PromQLList ayrıca Service ›
+   Infrastructure ve /pod sayfasının çizimi. ── */
+/* Halka kadranı (Gauge, PhaseDonut): -90° döndürülmüş svg + ortalanmış değer. */
+.cl-dial { position: relative; }
+.cl-dial > svg { transform: rotate(-90deg); }
+.cl-dial__arc--offset { transition: stroke-dashoffset .6s ease; }
+.cl-dial__arc--array { transition: stroke-dasharray .6s ease; }
+.cl-dial__center { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+.cl-dial__center--stack { flex-direction: column; }
+.cl-gauge { display: flex; flex-direction: column; align-items: center; gap: var(--sp-3); }
+.cl-gauge__val { font-family: var(--font-mono); font-size: 24px; font-weight: 700; }
+.cl-gauge__label { font-size: var(--fs-sm); font-weight: 600; color: var(--text2); }
+.cl-gauge__sub { font-size: var(--fs-2xs); color: var(--text3); }
+.cl-donut { display: flex; align-items: center; gap: var(--sp-7); }
+.cl-donut__dial { flex-shrink: 0; }
+.cl-donut__total { font-family: var(--font-mono); font-size: 22px; font-weight: 700; }
+.cl-donut__unit { font-size: var(--fs-2xs); color: var(--text3); }
+.cl-donut__legend { display: grid; gap: 5px; }
+.cl-donut__row { display: flex; align-items: center; gap: 7px; font-size: var(--fs-sm); }
+.cl-donut__swatch { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+.cl-donut__name { color: var(--text2); min-width: 58px; }
+.cl-donut__n { font-weight: 600; }
+/* İnce kullanım çubuğu (MiniBar): iz --border, dolgu rengi eşikten (pctColor). */
+.cl-bar { border-radius: 3px; background: var(--border); overflow: hidden; }
+.cl-bar__fill { height: 100%; border-radius: 3px; transition: width .4s ease; }
+/* Node ısı ızgarası (NodeHeatmap). */
+.cl-heat { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--sp-4); }
+.cl-heat__tile { display: grid; gap: var(--sp-3); padding: var(--sp-4) var(--sp-5); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg1); }
+.cl-heat__head { display: flex; align-items: center; gap: var(--sp-3); }
+.cl-heat__dot { width: 6px; height: 6px; border-radius: 2px; flex-shrink: 0; }
+.cl-heat__name { font-family: var(--font-mono); font-size: var(--fs-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cl-heat__bars { display: grid; gap: var(--sp-2); }
+.cl-heat__bar { display: flex; align-items: center; gap: var(--sp-3); font-size: var(--fs-2xs); color: var(--text3); }
+.cl-heat__bar > span { width: 26px; }
+/* Pod sayısı halkası (PodRing): satır / karo boyu, kök <span>. */
+.cl-podring { position: relative; display: inline-flex; flex-shrink: 0; vertical-align: middle; }
+.cl-podring > svg { transform: rotate(-90deg); }
+.cl-podring__label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-weight: 700; line-height: 1; color: var(--text); }
+/* MetricArea kart başlığı: başlık + ham metrik adı + kesme rozeti | kırılım seçici. */
+.cl-area-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-4); }
+.mono.cl-area-sub { display: block; font-size: 9.5px; font-weight: 400; color: var(--text3); }
+.badge.cl-area-cut { margin-left: var(--sp-4); }
+/* Thanos trend paneli (TrendPanel): CPU ve Memory alt alta. */
+.cl-trend { display: grid; gap: var(--sp-6); }
+.cl-trend__title { font-size: var(--fs-xs); color: var(--text2); margin-bottom: var(--sp-2); }
+.cl-trend__note { font-size: var(--fs-xs); color: var(--text3); }
+.cl-trend__empty { font-size: var(--fs-sm); color: var(--text3); }
+/* PromQL etiket + sorgu listesi (PromQLList). Sorgu kutusunun zemini satır
+   içindeyken --bg0 idi (sayfa zemini tokeni bir yüzeyde: bgZeroIsPageOnly
+   kapısı satır içini göremiyordu); sınıfa taşınırken --bg2 oldu (v0.10.2142
+   açılan satır emsali). Dilimin tek görünen farkı: /pod › Ek › Prometheus
+   sorguları kutusu. */
+.cl-promql { display: grid; gap: var(--sp-5); }
+.cl-promql__label { font-size: var(--fs-xs); color: var(--text2); margin-bottom: 3px; }
+.cl-promql__q { margin: 0; padding: 7px 9px; border: 1px solid var(--border); border-radius: var(--radius-xs); background: var(--bg2); font-size: var(--fs-xs); white-space: pre-wrap; word-break: break-all; color: var(--text2); }
+
 /* ── Copilot araç-çağrısı paneli — v0.10.161 (etüt seçenek A «Adım listesi»).
    Çipler kapalı hâl; DisclosureButton özet satırı + balon içi tablo. ── */
 .cm-steps { margin-top: 6px; white-space: normal; }

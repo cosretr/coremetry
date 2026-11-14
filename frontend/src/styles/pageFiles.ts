@@ -8,7 +8,7 @@
 // Dilim-1 notu (plan §7.1): `.controls > button/input/select` yoğunluk
 // kurallarına (globals.css) `:where(:not([data-slot]))` eklemek, PageControls
 // içine ilk shadcn denetimini koyan dilimin işidir.
-export type Page = 'Settings' | 'RemoteCluster' | 'Logs' | 'Trace' | 'Traces' | 'TracesCharts' | 'Explore' | 'Metrics' | 'Shell';
+export type Page = 'Settings' | 'RemoteCluster' | 'Logs' | 'Trace' | 'Traces' | 'TracesCharts' | 'Explore' | 'Metrics' | 'Shell' | 'Clusters';
 
 export const PAGE_FILES: Record<Page, readonly string[]> = {
   Settings: ['pages/Settings.tsx', 'pages/settings/'],
@@ -40,6 +40,10 @@ export const PAGE_FILES: Record<Page, readonly string[]> = {
     'components/CommandPalette.tsx', 'components/coremetry/CommandPalette/CommandPaletteBody.tsx',
     'components/TimeRangePicker.tsx',
   ],
+  // Clusters S2 (plan docs/frontend/clusters-shadcn-plan.md §5) — sayfa + çizim
+  // modülleri. pages/clusters/ Service › Infrastructure ve /pod ile ortak
+  // çizimleri de taşır (PodRing, MetricArea, TrendPanel, PromQLList).
+  Clusters: ['pages/Clusters.tsx', 'pages/clusters/'],
 };
 
 /** `rel` (src/'ye göre, `/` ayraçlı) bu sayfaya mı ait? */

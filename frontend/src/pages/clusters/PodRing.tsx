@@ -5,7 +5,14 @@
 // halka boş iz olarak kalır — "hepsi sağlıklı" iddia edilmez.
 // Kök öğe <span>: StatTile düğmesinin içine de girer (düğmeye div konamaz).
 
+import type { CSSProperties } from 'react';
 import { podRingSegments, podRingLabel } from './podRingSegments';
+
+// Clusters S2 — statik stil `.cl-podring*` sınıflarında (globals.css);
+// `size`tan hesaplanan ölçü ve yazı boyu stil nesnesi.
+const squareBox = (size: number): CSSProperties => ({ width: size, height: size });
+const labelSize = (size: number, chars: number): CSSProperties =>
+  ({ fontSize: Math.round(size * (chars <= 2 ? 0.38 : 0.3)) });
 
 export function PodRing({ total, running, failing, phaseKnown, size = 30 }: {
   total: number;
@@ -23,8 +30,8 @@ export function PodRing({ total, running, failing, phaseKnown, size = 30 }: {
   const offsets = segs.map((_, i) => segs.slice(0, i).reduce((a, s) => a + (s.n / total) * circ, 0));
   return (
     <span role="img" aria-label={tip} title={tip}
-      style={{ position: 'relative', display: 'inline-flex', width: size, height: size, flexShrink: 0, verticalAlign: 'middle' }}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: 'rotate(-90deg)' }} aria-hidden="true">
+      className="cl-podring" style={squareBox(size)}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--border)" strokeWidth={stroke} />
         {segs.map((s, i) => {
           const len = (s.n / total) * circ;
@@ -34,10 +41,7 @@ export function PodRing({ total, running, failing, phaseKnown, size = 30 }: {
           );
         })}
       </svg>
-      <span className="mono" style={{
-        position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: Math.round(size * (label.length <= 2 ? 0.38 : 0.3)), fontWeight: 700, lineHeight: 1, color: 'var(--text)',
-      }}>{label}</span>
+      <span className="mono cl-podring__label" style={labelSize(size, label.length)}>{label}</span>
     </span>
   );
 }
