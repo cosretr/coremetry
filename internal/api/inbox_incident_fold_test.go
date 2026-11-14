@@ -193,6 +193,8 @@ func TestInboxProblemSentence(t *testing.T) {
 		"x veritabanında … · resolved: system excluded (db-health)":                     "x veritabanında …",
 		"  düz cümle  ": "düz cümle",
 		"":              "",
+		// v0.10.2163 — başka bir Problem'e katılıp kapanan satır (servis başına tek Problem)
+		"orders-api servisinde hata oranı %3,4, olağanı %1. · merged into svc-slowdown:orders-api": "orders-api servisinde hata oranı %3,4, olağanı %1.",
 	} {
 		if got := inboxProblemSentence(in); got != want {
 			t.Errorf("%q → %q, want %q", in, got, want)
@@ -235,5 +237,14 @@ func TestFoldRunsAfterViewPriorityBeforeCounts(t *testing.T) {
 	}
 	if strings.Count(src, "s.foldInboxIncidents(ctx, items)") != 1 {
 		t.Error("katlama derleme başına bir kez")
+	}
+}
+
+// v0.10.2163 — "merged into" eki tek tanımdan (chstore.MergedIntoNote); satır
+// cümlesi onu kırpar. Ek değişirse bu pin kırılır (FE ikizi lib/inboxRowText.ts).
+func TestMergedIntoSuffixTrimmed(t *testing.T) {
+	desc := "cümle." + chstore.MergedIntoNote("svc-slowdown:orders-api")
+	if got := inboxProblemSentence(desc); got != "cümle." {
+		t.Fatalf("birleşme eki kırpılmalı: %q", got)
 	}
 }

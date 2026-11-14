@@ -1437,6 +1437,9 @@ export const api = {
   // v0.10.707 — etkilenen varlıklar (çağıranlar ∪ pod'lar ∪ cluster'lar), 60 s cache; aç-üzerine-getir.
   problemAffected: (id: string, signal?: AbortSignal) =>
     get<import('./types').ProblemAffectedResponse>(`/api/problems/${encodeURIComponent(id)}/affected`, signal),
+  // v0.10.2163 — Problem'e birleşen olaylar (servis başına tek Problem), 15 s cache; aç-üzerine-getir.
+  problemEvents: (id: string, signal?: AbortSignal) =>
+    get<import('./types').ProblemEventsResponse>(`/api/problems/${encodeURIComponent(id)}/events`, signal),
   // v0.10.1106 — terfi Problem'inin kaynak olay özeti (desen sayısı grafiği), 30 s cache.
   problemSourceEvent: (id: string, signal?: AbortSignal) =>
     get<import('./types').ProblemSourceEventResponse>(`/api/problems/${encodeURIComponent(id)}/source-event`, signal),

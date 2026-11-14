@@ -28,6 +28,31 @@ func TestProblemViewBounds(t *testing.T) {
 	}
 }
 
+// v0.10.2163 (Davis tarzı tek Problem D4) — birleşen olaylar: sayı yalnız
+// üyesi olan Problem'de; "N dedektör aynı olayı gördü" cümlesi ≥ 2 dedektörde
+// açıklamaya eklenir; üyesiz Problem'in görünümü bugünkü gibi.
+func TestProblemViewEventCount(t *testing.T) {
+	base := chstore.Problem{ID: "p1", RuleID: "svc-slowdown:orders-api", Service: "orders-api", Status: "open", Description: "orders-api servisinde yaygın yavaşlama."}
+	v := problemView(base)
+	if _, ok := v["eventCount"]; ok || v["description"] != base.Description {
+		t.Fatalf("üyesiz Problem: sayı / cümle yok: %+v", v)
+	}
+	merged := base
+	merged.EventCount, merged.EventDetectors = 4, 3
+	v = problemView(merged)
+	if v["eventCount"] != 4 || v["description"] != base.Description+" 3 dedektör aynı olayı gördü." {
+		t.Fatalf("birleşmiş Problem: %+v", v)
+	}
+	single := base
+	single.EventCount, single.EventDetectors = 2, 1
+	if v = problemView(single); v["eventCount"] != 2 || v["description"] != base.Description {
+		t.Fatalf("tek dedektörde cümle yok: %+v", v)
+	}
+	if problemEventNote(base) != "" || problemEventNote(merged) != "3 dedektör aynı olayı gördü." {
+		t.Fatal("not cümlesi")
+	}
+}
+
 func TestEvidenceSectionContract(t *testing.T) {
 	de := &chstore.DeepEvidence{}
 	for i := 0; i < 15; i++ {

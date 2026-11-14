@@ -14,6 +14,7 @@ describe('inboxRowText', () => {
   it('rowSentence: yaşam döngüsü eki kırpılır', () => {
     expect(rowSentence(`${SENT} · auto-resolved: source silent`)).toBe(SENT);
     expect(rowSentence(`${SENT} · resolved: system excluded (db-health)`)).toBe(SENT);
+    expect(rowSentence(`${SENT} · merged into svc-slowdown:orders-api`)).toBe(SENT); // v0.10.2163
     expect(rowSentence(undefined)).toBe('');
   });
 
@@ -36,6 +37,11 @@ describe('inboxRowText', () => {
     expect(inboxRowHeadline(p)).toBe(SENT);
     expect(inboxRowLabel(p)).toBe('DB health · couchbase');
     expect(inboxOccurrencesLabel(p)).toBeNull();
+    // v0.10.2163 — birleşen olaylar: N ≥ 2'de "N olay", tek olayda / sayı yokken rozet yok
+    expect(inboxOccurrencesLabel({ ...p, eventCount: 3 })).toBe('3 olay');
+    expect(inboxOccurrencesLabel({ ...p, eventCount: 2 })).toBe('2 olay');
+    expect(inboxOccurrencesLabel({ ...p, eventCount: 1 })).toBeNull();
+    expect(inboxOccurrencesLabel({ ...p, eventCount: 0 })).toBeNull();
     const e: InboxItem = { ...base, id: 'exception:f', kind: 'exception', title: 'java.net.SocketTimeoutException', description: '',
       exception: { fingerprint: 'f', type: 'java.net.SocketTimeoutException', message: 'Read timed out', occurrences: 1234 } };
     expect(inboxRowHeadline(e)).toBe('java.net.SocketTimeoutException');

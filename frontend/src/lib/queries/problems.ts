@@ -238,6 +238,18 @@ export function useProblemAffected(id: string, enabled = true) {
   });
 }
 
+// v0.10.2163 (Davis tarzı tek Problem D4) — Problem'e birleşen olayların
+// çizelgesi; yalnız detay açıkken (enabled), staleTime = sunucu TTL (15 s).
+// Yoklama yok: değişim problems anahtar ailesinin SSE geçersiz kılmasıyla gelir.
+export function useProblemEvents(id: string, enabled = true) {
+  return useQuery({
+    queryKey: keys.problems.events(id),
+    queryFn: ({ signal }) => api.problemEvents(id, signal),
+    enabled: enabled && !!id,
+    staleTime: 15_000,
+  });
+}
+
 // v0.10.1282 — AI SRE araştırması (Problem detayı açıkken). staleTime = sunucu
 // TTL (10 s). Yoklama YALNIZ iş kuyrukta / koşarken, 10 s (RQ gizli sekmede
 // durur); bitmiş kayıt yoklanmaz — değişim SSE 'sre.investigation' ile gelir.

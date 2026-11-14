@@ -92,6 +92,7 @@ func (s *Server) getProblemByID(w http.ResponseWriter, r *http.Request) {
 		probs = s.store.EnrichProblemsWithTeams(ctx, probs)
 		probs = s.store.EnrichProblemsWithClusters(ctx, probs, time.Hour)
 		probs = s.enrichProblemsForRead(ctx, probs)
+		probs = s.store.EnrichProblemsWithEventCounts(ctx, probs) // v0.10.2163 — liste ile aynı sayı
 		probs = s.store.EnrichProblemsWithRootCause(ctx, probs)
 		return probs[0], nil
 	})

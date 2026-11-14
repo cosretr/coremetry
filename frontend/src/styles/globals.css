@@ -4376,6 +4376,12 @@ thead th:hover .th-remove, .th-remove:focus-visible { opacity: 1; }
 .pd-rule > dd { margin: 0; color: var(--text2); overflow-wrap: anywhere; }
 .pd-tl-tag { margin-left: var(--sp-3); }
 .pd-tl-ts { margin-left: var(--sp-4); color: var(--text3); }
+/* v0.10.2163 (Davis tarzı tek Problem D4) — Problem'e birleşen olayların kısa
+   çizelgesi ("Ne oluyor" altı) ve Teknik kanıttaki tam listesi. Sessiz satır:
+   renk yalnız biten olayda soluklaşır. */
+.pd-events { list-style: none; margin: var(--sp-3) 0 0; padding: 0; font-size: 12px; line-height: 1.6; color: var(--text2); }
+.pd-events__item { overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.pd-events__item--done, .pd-events__more, .pd-events__raw { color: var(--text3); }
 /* v0.10.1113 — "Başlangıçta doğan log şablonları": ≤5 satırlık sabit liste
    (tablo değil). Şablon tek satır mono + ellipsis (tam metin title'da); altında
    servis · göreli zaman · örnek sayısı · pivot, dar ekranda sarar. */

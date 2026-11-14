@@ -298,6 +298,14 @@ type Problem struct {
 	// buradan okur. Diğer her Problem'de boş — tel bugünkü gibi.
 	EpisodeCount   uint32 `json:"episodeCount,omitempty"`
 	FirstStartedAt int64  `json:"firstStartedAt,omitempty"`
+	// EventCount / EventDetectors — v0.10.2163 (Davis tarzı tek Problem D4),
+	// SAKLANMAZ: bu Problem'e bağlı olay (üye) sayısı ve farklı dedektör
+	// sayısı. Yalnız üyesi olan açık sahip Problem'de dolar
+	// (EnrichProblemsWithEventCounts, problem_events.go); diğer her satırda 0
+	// — tel bugünkü gibi. Liste "· N olay" rozetini, MCP "N dedektör aynı
+	// olayı gördü" cümlesini buradan kurar.
+	EventCount     int `json:"eventCount,omitempty"`
+	EventDetectors int `json:"eventDetectors,omitempty"`
 	// PredatesDeploy — v0.10.1054, SAKLANMAZ: AnomalyEvent.PredatesDeploy'un
 	// ikizi. Yalnız deploy raporu / rollout çekmecesinin "deploy sonrası
 	// problemler" satırında, o deploy'a göre AnomalyPredatesDeploy true ise

@@ -12,19 +12,11 @@ import { MLPeriodReplay } from './MLPeriodReplay';
 import { MLSvcShadowCompareSection } from './MLSvcShadowCompare';
 import { SIGNAL_KINDS } from '@/lib/signalKind';
 import { SignalKindBadge } from '@/components/coremetry/SignalKindBadge';
+import { ML_DETECTOR_TR } from '@/lib/mlDetectorLabels';
 
-export const ML_DETECTOR_TR: Record<string, string> = {
-  log_volume: 'Log hacmi', error_rate: 'Hata oranı', service_silent: 'Servis sustu',
-  template_spike: 'Şablon spike', rare_template: 'Nadir şablon', new_template: 'Yeni log kalıbı', rare_error_code: 'Nadir hata kodu',
-  pod_outlier: 'Aykırı pod', change_point: 'Kırılma',
-  op_latency: 'Endpoint gecikmesi', op_error_rate: 'Endpoint hata oranı', throughput_drop: 'Trafik düşüşü',
-  metric_jvm: 'JVM', metric_pool: 'Connection pool', metric_kafka: 'Kafka', metric_http_client: 'HTTP client', metric_k8s: 'Kubernetes',
-  dependency_latency: 'Bağımlılık gecikmesi', trace_pod_outlier: 'Aykırı pod (trace)', trace_change_point: 'Kırılma (trace)', trace_error_count: 'Operasyon hata sayısı',
-  dependency_error_rate: 'Bağımlılık hata oranı', // v0.10.2063 Davis S2
-  svc_error_rate: 'Servis hata oranı', // v0.10.2077 (spec-ml-service-level dilim 1)
-  svc_breadth: 'Yaygın yavaşlama', // v0.10.2086 (dilim 2)
-  svc_volume_spike: 'Servis hacmi sıçradı', // v0.10.2119 — evaluator yazar (24 sa / önceki 24 sa span sayısı)
-};
+// v0.10.2163 — harita lib/mlDetectorLabels.ts'te (Problem olay çizelgesi de okur;
+// bu ağır modülü Problems parçasına çekmesin). Buradan yeniden dışa açılır.
+export { ML_DETECTOR_TR };
 export type MLSignal = '' | 'log' | 'trace' | 'metric';
 /** SAF: ?signal= çözümü; bilinmeyen → hepsi. */
 export function resolveMLSignal(raw: string | null): MLSignal {

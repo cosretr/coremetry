@@ -9,12 +9,15 @@
 //   etiket          başlık cümleyse kural / incident adı ikinci satırın başında
 //                   kalır (ne olduğu kaybolmasın); aynıysa tekrar etmez.
 //   Occurrences     exception → oluşum; açık incident → bağlı problem sayısı
-//                   ("2 problem", sunucu katlaması); diğerleri "—".
+//                   ("2 problem", sunucu katlaması); birleşmiş problem →
+//                   olay sayısı ("3 olay", v0.10.2163); diğerleri "—".
 import type { InboxItem } from './types';
 import { isInboxExcFamily } from './inboxHref';
 
 // Açıklamaya eklenen yaşam döngüsü ekleri (olayın cümlesi değil).
-const LIFECYCLE_SUFFIXES = [' · auto-resolved:', ' · resolved:'];
+// v0.10.2163 — ' · merged into ': başka bir Problem'e katılıp kapanan satır
+// (servis başına tek Problem; sunucu ikizi inboxResolveSuffixes).
+const LIFECYCLE_SUFFIXES = [' · auto-resolved:', ' · resolved:', ' · merged into '];
 
 /** Açıklamanın tek cümlesi: yaşam döngüsü eki kırpılmış, kırpılmış boşluk. */
 export function rowSentence(desc: string | undefined): string {
@@ -42,11 +45,17 @@ export function inboxRowLabel(it: InboxItem): string | null {
   return title && title !== head ? title : null;
 }
 
+/** "N olay" rozetinin tabanı: tek olay birleşme değildir. */
+export const EVENT_COUNT_MIN = 2;
+
 /** Occurrences hücresi: sayı metni ya da null ("—"). */
 export function inboxOccurrencesLabel(it: InboxItem): string | null {
   if (it.exception) return it.exception.occurrences.toLocaleString();
   const n = it.incident?.problemCount ?? 0;
   if (it.kind === 'incident' && n > 0) return `${n} problem`;
+  // v0.10.2163 (Davis tarzı tek Problem D4) — bu Problem'e birleşen olaylar
+  // (aynı servisin başka dedektörleri); tek olayda rozet yok.
+  if (it.kind === 'problem' && (it.eventCount ?? 0) >= EVENT_COUNT_MIN) return `${it.eventCount} olay`;
   return null;
 }
 

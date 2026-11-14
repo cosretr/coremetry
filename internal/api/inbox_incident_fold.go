@@ -45,7 +45,11 @@ func inboxIncidentFolds(status string) bool {
 // inboxResolveSuffixes — problem açıklamasına eklenen yaşam döngüsü ekleri
 // (FE incidentSummary.ts problemSentence ikizi + db-health kapanış ekleri);
 // olayın cümlesi değil, kırpılır.
-var inboxResolveSuffixes = []string{" · auto-resolved:", " · resolved:"}
+//
+// v0.10.2163 — " · merged into": başka bir Problem'e katılıp kapanan satırın
+// eki (servis başına tek Problem göçü, chstore.MergedIntoNote; küme katılımı
+// da aynı eki yazar).
+var inboxResolveSuffixes = []string{" · auto-resolved:", " · resolved:", " · merged into "}
 
 // inboxProblemSentence — SAF: problemin tek cümlesi (kapanış eki kırpılmış).
 func inboxProblemSentence(desc string) string {

@@ -2861,6 +2861,10 @@ export interface InboxItem {
    *  problemlerin satırları sunucuda bu satıra katlanır (inbox_incident_fold.go).
    *  Yok = bilinmiyor / bağlı problem yok. */
   incident?: { id: string; severity: string; status: string; problemCount?: number };
+  /** v0.10.2163 (Davis tarzı tek Problem D4) — bu Problem'e birleşen olay
+   *  sayısı (Go api.InboxItem.EventCount; sahibin kendi sinyali dahil). Yalnız
+   *  kind=problem ve üyesi varsa; satır "N olay"ı N ≥ 2'de gösterir. */
+  eventCount?: number;
   /** v0.10.1529 (Problem standardı R2) — satırın standart biçimi
    *  (Go chstore.ProblemStandard). Yok = hesaplanmadı; satır eski hücreye düşer. */
   std?: ProblemStandard;
@@ -5646,6 +5650,10 @@ export interface Problem {
   pod?: string;
   status: string;       // open | resolved
   description: string;
+  // v0.10.2163 (Davis tarzı tek Problem D4) — okuma-anı: bu Problem'e
+  // birleşen olay ve farklı dedektör sayısı (yalnız üyesi olan açık sahipte).
+  eventCount?: number;
+  eventDetectors?: number;
   // Triage assignee (v0.5.209). Two shapes:
   //   • team name auto-set on open from service_metadata.ownerTeam
   //   • email of an operator after manual claim
@@ -11498,6 +11506,33 @@ export interface AffectedEntity {
   hasOpenProblem?: boolean;
   count?: number;
 }
+// v0.10.2163 (Davis tarzı tek Problem D4) — GET /api/problems/{id}/events.
+// Go: internal/api/problem_events.go problemEventRow. Servis başına tek
+// Problem'e katılan sinyaller, zaman sırasıyla; üyesi olmayan Problem'de
+// items boş.
+export interface ProblemEvent {
+  /** ml_events dedektörü; eski aileler: svc_slowdown | metric_anomaly | anomaly_promotion. */
+  detector: string;
+  /** Üyenin kendi kuralı (eski dedektör); ML olayında yok. */
+  ruleId?: string;
+  /** ML olayının kimliği (/anomalies/ml/<id>); üye olayında ve sahip satırında yok. */
+  eventId?: string;
+  startedAt: number; // unix ns
+  lastSeen: number;  // unix ns
+  observed: number;
+  baseline: number;
+  direction: string; // up | down
+  live: boolean;
+  /** Sahibin KENDİ sinyali (Problem'i açan dedektör). */
+  own?: boolean;
+}
+export interface ProblemEventsResponse {
+  problemId: string;
+  items: ProblemEvent[];
+  total: number;
+  detectors: number;
+}
+
 export interface ProblemAffectedResponse {
   problemId: string;
   displayId: string;

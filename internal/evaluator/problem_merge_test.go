@@ -182,3 +182,12 @@ func TestApplySvcSlowHoldsOwnerWithLiveMembers(t *testing.T) {
 		}
 	})
 }
+
+// v0.10.2163 — chstore.ProblemMeasureIsOwn yaygın yavaşlamanın kendi ölçüsünü
+// metrik adından tanır; ad bu paketin sabitidir (iki paket ayrışmasın).
+func TestSvcSlowMetricPinnedForOwnMeasure(t *testing.T) {
+	p := svcSlowProblem(svcSlowVerdict{Service: "orders-api", ID: chstore.SvcSlowdownRuleID("orders-api"), Value: 9000, Threshold: 300}, time.UTC)
+	if svcSlowMetric != "p99_ms" || !chstore.ProblemMeasureIsOwn(p) || chstore.ProblemOwnDetector(p) != chstore.MLDetMemberSvcSlowdown {
+		t.Fatalf("yaygın yavaşlama satırı kendi ölçüsü olarak tanınmalı: %+v", p)
+	}
+}

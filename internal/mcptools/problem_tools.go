@@ -84,7 +84,24 @@ func problemView(p chstore.Problem) map[string]any {
 	if p.RecentDeploy != nil {
 		out["recentDeploy"] = p.RecentDeploy
 	}
+	// v0.10.2163 (Davis tarzı tek Problem D4) — bu Problem'e birleşen olaylar:
+	// sayı + açıklamaya düz cümle (aynı olayı kaç dedektör gördü).
+	if p.EventCount > 0 {
+		out["eventCount"] = p.EventCount
+		if note := problemEventNote(p); note != "" {
+			out["description"] = truncateRunes(p.Description, problemDescriptionMax) + " " + note
+		}
+	}
 	return out
+}
+
+// problemEventNote — SAF: "3 dedektör aynı olayı gördü." (≥ 2 dedektörde;
+// tek dedektörde cümle yok).
+func problemEventNote(p chstore.Problem) string {
+	if p.EventDetectors < 2 {
+		return ""
+	}
+	return fmt.Sprintf("%d dedektör aynı olayı gördü.", p.EventDetectors)
 }
 
 // resolveProblemRef — "P-xxxxx" görünen kimliği iç kimliğe çevirir; başka
@@ -143,6 +160,10 @@ func getProblemTool(d Deps) mcp.Tool {
 			}
 			if p == nil || p.ID == "" {
 				return map[string]any{"problemId": a.ProblemID, "found": false, "note": "No problem with this id — it may have been purged, or the id came from another install."}, nil
+			}
+			// v0.10.2163 — birleşen olay sayısı (açık sahip Problem'de; tek hafif okuma).
+			if enriched := d.Store.EnrichProblemsWithEventCounts(ctx, []chstore.Problem{*p}); len(enriched) == 1 {
+				*p = enriched[0]
 			}
 			out := problemView(*p)
 			out["found"] = true

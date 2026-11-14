@@ -75,6 +75,7 @@ export const keys = {
     // v0.10.874 — ProblemsSection kova çipleri ağaca girdi: ack/resolve invalidation'ı ulaşsın.
     buckets:     (f: { status?: string; service?: string; env?: string; ownerTeam?: string; sreTeam?: string; cluster?: string }) => ['problems', 'buckets', f] as const,
     affected:    (id: string) => ['problems', 'affected', id] as const, // v0.10.707
+    events:      (id: string) => ['problems', 'events', id] as const, // v0.10.2163 — birleşen olaylar
     sourceEvent: (id: string) => ['problems', 'source-event', id] as const, // v0.10.1106
     logTemplates: (id: string) => ['problems', 'log-templates', id] as const, // v0.10.1113
     // v0.10.1282 — AI SRE araştırma kaydı; SSE 'sre.investigation' tüm dalı düşürür.

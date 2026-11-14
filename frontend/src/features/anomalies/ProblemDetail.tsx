@@ -36,6 +36,7 @@ import { useAlertRuleSeries } from '@/lib/queries'; // v0.10.1091
 import { representativeStack, frameLinksRef } from './stackSource'; // v0.10.1048
 import { ExternalEvidencePanel } from './ExternalEvidencePanel';
 import { ProblemInsightStrip } from './ProblemInsightStrip'; // v0.10.562
+import { ProblemEventTimeline, ProblemEventEvidence } from './ProblemEventTimeline'; // v0.10.2163 — birleşen olaylar
 import type { ExceptionGroup, ExceptionGroupState, Problem, ProblemStandard, RolloutEvidence } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
 import { DataTableState, type DataTableStateStaticProps } from '@/components/ui/DataTable'; // v0.10.977 (T12, P-2)
@@ -1013,6 +1014,9 @@ function AlertDetailBoxes({ problem, std, window: win, dbHealthLinks, svcSlowLin
     <>
       <Sect title="Ne oluyor">
         <p className="pd-box-text" data-testid="box-what">{alertWhatText(problem, std)}</p>
+        {/* v0.10.2163 (Davis tarzı tek Problem D4) — bu Problem'e birleşen
+            olayların kısa çizelgesi (≤5 satır); üyesi yoksa hiçbir şey çizmez. */}
+        <ProblemEventTimeline problemId={problem.id} />
       </Sect>
       {who && (
         <Sect title="Kimi etkiliyor">
@@ -1213,6 +1217,8 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
         {/* v0.10.562 — deterministik insight şeridi (şüpheli · ilk anomali · rollout). */}
         <ProblemInsightStrip problemId={problem.id} />
         <ProblemCoSRESection problemId={problem.id} />
+        {/* v0.10.2163 — birleşen olayların tam listesi + ham değerler (üyesi yoksa bölüm yok). */}
+        <ProblemEventEvidence problemId={problem.id} />
         <Sect title="Kural">
           <dl className="pd-rule">
             <dt>Ad</dt><dd>{problem.ruleName || '—'}</dd>

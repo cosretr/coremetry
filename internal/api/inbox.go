@@ -78,6 +78,11 @@ type InboxItem struct {
 	// problem satırının görüntü kimliği (yalnız kind=problem).
 	Category  string `json:"category,omitempty"`
 	DisplayID string `json:"displayId,omitempty"`
+	// EventCount — v0.10.2163 (Davis tarzı tek Problem D4): bu Problem'e
+	// birleşen olay sayısı (chstore.Problem.EventCount; sahibin kendi sinyali
+	// dahil). Yalnız kind=problem ve yalnız üyesi varsa dolu; satır "N olay"
+	// rozetini N ≥ 2'de gösterir.
+	EventCount int `json:"eventCount,omitempty"`
 
 	// v0.9.255 — enrichment results the inbox was already PAYING for and
 	// then dropping. listInbox runs EnrichProblemsWithRunbooks /
@@ -526,6 +531,10 @@ func (s *Server) inboxView(q url.Values) (string, func(ctx context.Context) (any
 		probs = s.store.EnrichProblemsWithRunbooks(ctx, probs)
 		probs = s.store.EnrichProblemsWithClusters(ctx, probs, time.Hour)
 		probs = s.enrichProblemsForRead(ctx, probs) // v0.9.553 — deploy+öncelik, sırası sabit
+		// v0.10.2163 (Davis tarzı tek Problem D4) — "· N olay": açık sahip
+		// Problem'lerin üye sayısı, sayfa başına TEK hafif okuma (aday yoksa
+		// okuma yok; hata = sayısız devam).
+		probs = s.store.EnrichProblemsWithEventCounts(ctx, probs)
 		for _, p := range probs {
 			// v0.8.287 — drop resolved Problems from the open inbox. pickStatus
 			// fetched every status (see its comment), so the narrow happens here.
@@ -2119,6 +2128,7 @@ func problemToInbox(p chstore.Problem) InboxItem {
 		// v0.9.530 — aynı sınıf: ListProblems bunu zaten SELECT ediyordu.
 		AISummary:   inboxTruncate(p.AISummary, inboxAISummaryMax),
 		AISummaryAt: p.AISummaryAt,
+		EventCount:  p.EventCount, // v0.10.2163 — birleşen olay sayısı (0 = birleşme yok)
 		Problem: &InboxProblemRef{
 			ID: p.ID, RuleID: p.RuleID, Metric: p.Metric,
 			Value: p.Value, Threshold: p.Threshold,
