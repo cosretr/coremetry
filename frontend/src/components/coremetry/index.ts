@@ -27,6 +27,8 @@ export type { SectionHeadProps } from './SectionHead';
 // v0.10.2132 — servis sekmeleri S1: aç/kapa bölüm (kapalıyken gövde monte edilmez).
 export { CollapsedSection } from './CollapsedSection';
 export type { CollapsedSectionProps } from './CollapsedSection';
+export { TableViewBar } from './TableViewBar'; // v0.10.2141 (servis sekmeleri S3)
+export type { TableViewBarProps } from './TableViewBar';
 export { ActionRow } from './ActionRow';
 export type { ActionRowProps } from './ActionRow';
 // Faz 2 dilim 1 R6 (G8): radiogroup anlamlı toggle-group sarmalayıcısı.

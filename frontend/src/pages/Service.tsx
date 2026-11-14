@@ -681,7 +681,7 @@ function ServiceDetailInner() {
                     oluyor?" ve "hangi sorgu?"; Performance/Latency aşağı indi.
                     Per-cluster breakdown Runtime & rollouts'tan buraya taşındı
                     (kendi çapası dtl-clusters). */}
-                <SectionHead id="dtl-clusters" title="Clusters" source="service_env_summary_5m · cluster (kapsam dışı: spans)"
+                <SectionHead id="dtl-clusters" title="Clusters"
                   badges={opScope && <span className="badge b-gray">tüm servis</span>} />
                 <div className="ov-mb">
                   <LazyMount minHeight={140}>

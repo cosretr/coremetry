@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Sparkline } from '@/components/Sparkline'; // v0.10.883
 import { useQuery } from '@tanstack/react-query';
@@ -7,6 +7,11 @@ import { fmtNum, timeRangeToNs } from '@/lib/utils';
 import { useDataTable, DataTableHead, DataTableColgroup, DataTableState } from '@/components/ui/DataTable';
 import type { DataTableColumn } from '@/lib/dataTable';
 import { serviceHref } from '@/lib/serviceHref';
+import { TableViewBar } from '@/components/coremetry/TableViewBar';
+import { foldNormalRows } from '@/lib/normalFold';
+import { getRaw, setRaw, STORAGE_KEYS } from '@/lib/storage';
+import type { ColumnModel } from '@/lib/columnModel';
+import type { ServiceClusterStat } from '@/lib/types';
 
 // ServiceClusterBreakdown — sortable RED stats per cluster the
 // service emitted spans from. Renders silently when there's
@@ -16,16 +21,23 @@ import { serviceHref } from '@/lib/serviceHref';
 // desc so the heaviest cluster lands at top — usually what an
 // operator triaging "is this service slow?" wants first.
 // Split out of the Service.tsx monolith (v0.8.252 refactor) verbatim.
-const CLUSTER_COLS: DataTableColumn<import('@/lib/types').ServiceClusterStat>[] = [
+// v0.10.2141 (servis sekmeleri S3, mockup operatör onayı 2026-11-13) —
+// varsayılan görünüm 5 kolon: Cluster, Çağrı, Hata, p99, Pod (Pod yalnız
+// Thanos kaynağı varken). Trend / Ort. / p50 / p95 SİLİNMEDİ: "Tüm kolonlar"
+// ile gelir (columnModel.hidden; tercih tarayıcı başına).
+const CLUSTER_COLS: DataTableColumn<ServiceClusterStat>[] = [
   { id: 'cluster', label: 'Cluster', sortValue: r => r.cluster,       naturalDir: 'asc', width: 220 },
-  { id: 'calls',   label: 'Calls',   sortValue: r => r.spanCount,     numeric: true,     width: 110 },
+  { id: 'calls',   label: 'Çağrı',   sortValue: r => r.spanCount,     numeric: true,     width: 110 },
   { id: 'trend',   label: 'Trend',   width: 130 }, // v0.10.883 — çağrı serisi (MV yolu)
-  { id: 'errRate', label: 'Err %',   sortValue: r => r.errorRate,     numeric: true,     width: 90 },
-  { id: 'avg',     label: 'Avg',     sortValue: r => r.avgDurationMs, numeric: true,     width: 90 },
-  { id: 'p50',     label: 'P50',     sortValue: r => r.p50DurationMs ?? -1, numeric: true, width: 80 }, // v0.10.883
-  { id: 'p95',     label: 'P95',     sortValue: r => r.p95DurationMs ?? -1, numeric: true, width: 80 },
-  { id: 'p99',     label: 'P99',     sortValue: r => r.p99DurationMs, numeric: true,     width: 90 },
+  { id: 'errRate', label: 'Hata',    sortValue: r => r.errorRate,     numeric: true,     width: 90 },
+  { id: 'avg',     label: 'Ort.',    sortValue: r => r.avgDurationMs, numeric: true,     width: 90 },
+  { id: 'p50',     label: 'p50',     sortValue: r => r.p50DurationMs ?? -1, numeric: true, width: 80 }, // v0.10.883
+  { id: 'p95',     label: 'p95',     sortValue: r => r.p95DurationMs ?? -1, numeric: true, width: 80 },
+  { id: 'p99',     label: 'p99',     sortValue: r => r.p99DurationMs, numeric: true,     width: 90 },
 ];
+const PODS_COL: DataTableColumn<ServiceClusterStat> = { id: 'pods', label: 'Pod', width: 70 };
+const CLUSTER_DEFAULT_HIDDEN = ['trend', 'avg', 'p50', 'p95'];
+const FOLD_METRICS = [(r: ServiceClusterStat) => r.errorRate, (r: ServiceClusterStat) => r.p99DurationMs];
 
 export function ServiceClusterBreakdown({ service, range }: {
   service: string;
@@ -58,22 +70,30 @@ export function ServiceClusterBreakdown({ service, range }: {
   // v0.9.56 — ns/deploy artık pivotta kullanılmıyor (hedef Infrastructure
   // sekmesi, eşleşmeyi kendi zinciri yapar); metaQ yalnız hasPivot için.
   const hasPivot = thanosSet.size > 0;
-  const cols = useMemo(
-    () => hasPivot
-      ? [...CLUSTER_COLS, { id: 'pods', label: 'Pods', width: 70 } as DataTableColumn<import('@/lib/types').ServiceClusterStat>]
-      : CLUSTER_COLS,
-    [hasPivot]);
+  const cols = useMemo(() => hasPivot ? [...CLUSTER_COLS, PODS_COL] : CLUSTER_COLS, [hasPivot]);
+  const [allCols, setAllColsState] = useState(() => getRaw(STORAGE_KEYS.svcClustersAllCols) === '1');
+  const setAllCols = (v: boolean) => { setAllColsState(v); setRaw(STORAGE_KEYS.svcClustersAllCols, v ? '1' : '0'); };
+  const columnModel = useMemo(() => {
+    const value: ColumnModel | null = allCols ? null
+      : { v: 1, order: cols.map(c => c.id), hidden: CLUSTER_DEFAULT_HIDDEN, sig: 'service-clusters-5' };
+    return { value };
+  }, [allCols, cols]);
+  // "N daha, hepsi normal": katlama oturumluk (sayfa yenilenince yine kısa liste).
+  const [expanded, setExpanded] = useState(false);
 
   // v0.8.116 — adopt the shared sortable + resizable primitive. This panel
   // previously hand-rolled sort via ClusterTh/ClusterSortKey — the exact
   // anti-pattern CLAUDE.md's "never hand-roll sort/resize" constraint names.
   // Hook is unconditional + above the <2-cluster early return.
-  const dt = useDataTable<import('@/lib/types').ServiceClusterStat>({
+  const dt = useDataTable<ServiceClusterStat>({
     storageKey: 'service-clusters',
     columns: cols,
     rows: clusters,
     initialSort: { id: 'calls', dir: 'desc' },
+    columnModel,
   });
+  const fold = useMemo(() => foldNormalRows(dt.sortedRows, FOLD_METRICS), [dt.sortedRows]);
+  const rows = expanded ? dt.sortedRows : fold.shown;
 
   // v0.9.363 — hata artık sessizce "panel yok"a katlanmıyor: çok-cluster'lı
   // bir serviste sorgu 500'lediğinde panelin YOK OLMASI operatöre "tek
@@ -93,94 +113,87 @@ export function ServiceClusterBreakdown({ service, range }: {
   // Loading state stays quiet for the same reason.
   if (showRows && clusters.length < 2) return null;
 
+  // Hücreler kolon kimliğiyle: gizlenen kolonun hücresi de çizilmez
+  // (dt.visibleColumns — columnModel sonrası küme).
+  const cell = (c: ServiceClusterStat, id: string): ReactNode => {
+    switch (id) {
+      case 'cluster': return (
+        <td key={id}>
+          <Link to={`/services?cluster=${encodeURIComponent(c.cluster)}`} className="mono cluster-name"
+                title={`Filter /services to cluster ${c.cluster}`}>
+            {c.cluster}
+          </Link>
+        </td>
+      );
+      case 'calls': return <td key={id} className="num">{fmtNum(c.spanCount)}</td>;
+      case 'trend': return (
+        <td key={id}>{c.series && c.series.length > 1
+          ? <Sparkline values={c.series} width={120} height={18} title="çağrı / kova (service_env_summary_5m)" />
+          : <span className="cell-faint" title="seri yalnız MV yolunda">—</span>}</td>
+      );
+      case 'errRate': {
+        const errCls = c.errorRate > 5 ? 'err' : c.errorRate > 0 ? 'warn' : 'gray'; // v0.10.929 (K5)
+        return <td key={id} className="num"><span className={`badge b-${errCls}`}>{c.errorRate.toFixed(2)}%</span></td>;
+      }
+      case 'avg': return <td key={id} className="num">{c.avgDurationMs.toFixed(1)}ms</td>;
+      case 'p50': return <td key={id} className="num">{c.p50DurationMs != null ? `${c.p50DurationMs.toFixed(1)}ms` : '—'}</td>;
+      case 'p95': return <td key={id} className="num">{c.p95DurationMs != null ? `${c.p95DurationMs.toFixed(1)}ms` : '—'}</td>;
+      case 'p99': return <td key={id} className="num">{c.p99DurationMs.toFixed(1)}ms</td>;
+      case 'pods': return (
+        <td key={id}>
+          {thanosSet.has(c.cluster) ? (
+            // v0.9.56 — hedef Infrastructure sekmesi (ad-tabanlı yedek zincir,
+            // ?icluster= çipi hazır gelir). v0.9.965 — pencere de taşınır:
+            // fırçalanmış pencerede "pods →" incelenen olayı kadrajda tutar.
+            <Link to={serviceHref(service, { range, tab: 'infra', params: { icluster: c.cluster } })}
+              title={`Pod CPU/memory — ${c.cluster} (Infrastructure tab)`}>
+              pods →
+            </Link>
+          ) : (
+            <span className="cell-faint" title="This cluster is not defined under Settings → Remote clusters">—</span>
+          )}
+        </td>
+      );
+      default: return <td key={id} />;
+    }
+  };
+
+  // v0.9.142 (operatör: "breakdown 7-8 cluster'da takılı") — bu panel RED'i
+  // TRACE'lerden hesaplar, yani yalnız trace'i Coremetry'ye ULAŞAN cluster'ları
+  // gösterebilir; metrik-yalnızca (Thanos) cluster'lar Infrastructure
+  // sekmesinde çıkar. v0.10.2141 (S3, plan K4): açıklama ve kaynak rozeti
+  // başlıktan tablonun altındaki "kaynak" satırına indi — kaybolmadı.
+  // v0.10.883 — kaynak dürüstlüğü: MV pencereyi kapsamıyorsa ham spans
+  // (p50/p95/seri yok); v0.10.929 (K5) — bu geri düşüş GERÇEK sapma → amber.
+  const source = showRows && (
+    <>
+      trace'ler · yalnız trace'i gelen {clusters.length} cluster (yalnız metriği gelenler Infrastructure sekmesinde) ·{' '}
+      {q.data?.source && (
+        <span className={`badge ${q.data.source === 'mv' ? 'b-gray' : 'b-warn'}`}
+          title={q.data.source === 'mv' ? 'service_env_summary_5m' : 'MV bu pencereyi kapsamıyor — ham spans; p50/p95 ve seri yok'}>
+          {q.data.source === 'mv' ? 'MV' : 'spans'}
+        </span>
+      )}
+    </>
+  );
+
   return (
-    <div style={{ marginBottom: 14 }}>
-      {/* v0.9.142 (operatör: "breakdown 7-8 cluster'da takılı") — bu panel
-          RED'i TRACE'lerden hesaplar (FROM spans), yani yalnız trace'i
-          Coremetry'ye ULAŞAN cluster'ları gösterebilir; metrik-yalnızca
-          (Thanos) cluster'lar Infrastructure sekmesinde çıkar. Başlık +
-          tooltip bunu açık eder ki "eksik cluster" yanılgısı olmasın. */}
-      <div style={{
-        fontSize: 11, fontWeight: 700, marginBottom: 6, color: 'var(--text2)',
-        textTransform: 'uppercase', letterSpacing: 0.4,
-      }}
-        title={'RED per cluster is computed from traces — only clusters whose ' +
-          'traces reach Coremetry appear here. A service running in more clusters ' +
-          '(metrics/JMX only) shows those under the Infrastructure tab.'}>
-        Per-cluster breakdown {showRows && <span style={{
-          fontWeight: 400, color: 'var(--text3)', textTransform: 'none',
-        }}>· {clusters.length} cluster{clusters.length === 1 ? '' : 's'} with traces</span>}
-        {/* v0.10.883 — kaynak dürüstlüğü: MV pencereyi kapsamıyorsa ham spans (p50/p95/seri yok).
-            v0.10.929 (K5) — 'MV' normal yol → nötr; 'spans' geri düşüşü GERÇEK
-            sapma (p50/p95/seri yok) → amber — Overview'ın "kapsam: tüm span'ler"
-            geri düşüşüyle aynı dil. */}
-        {showRows && q.data?.source && (
-          <span className={`badge ${q.data.source === 'mv' ? 'b-gray' : 'b-warn'}`} style={{ marginLeft: 8, fontWeight: 400, textTransform: 'none' }}
-            title={q.data.source === 'mv' ? 'service_env_summary_5m' : 'MV bu pencereyi kapsamıyor — ham spans; p50/p95 ve seri yok'}>
-            {q.data.source === 'mv' ? 'MV' : 'spans'}
-          </span>
-        )}
-      </div>
+    <>
       <div className="table-wrap">
         <table {...dt.tableProps}>
           <DataTableColgroup dt={dt} />
           <DataTableHead dt={dt} />
           <tbody>
-            {!showRows ? <DataTableState dt={dt} kind="error" /> : dt.sortedRows.map(c => {
-              const errCls = c.errorRate > 5 ? 'err' : c.errorRate > 0 ? 'warn' : 'gray'; // v0.10.929 (K5)
-              return (
-                <tr key={c.cluster}>
-                  <td>
-                    <Link to={`/services?cluster=${encodeURIComponent(c.cluster)}`} className="mono cluster-name"
-                          title={`Filter /services to cluster ${c.cluster}`}>
-                      {c.cluster}
-                    </Link>
-                  </td>
-                  <td className="num">{fmtNum(c.spanCount)}</td>
-                  <td>{c.series && c.series.length > 1
-                    ? <Sparkline values={c.series} width={120} height={18} title="çağrı / kova (service_env_summary_5m)" />
-                    : <span className="cell-faint" title="seri yalnız MV yolunda">—</span>}</td>
-                  <td className="num">
-                    <span className={`badge b-${errCls}`}>{c.errorRate.toFixed(2)}%</span>
-                  </td>
-                  <td className="num">{c.avgDurationMs.toFixed(1)}ms</td>
-                  <td className="num">{c.p50DurationMs != null ? `${c.p50DurationMs.toFixed(1)}ms` : '—'}</td>
-                  <td className="num">{c.p95DurationMs != null ? `${c.p95DurationMs.toFixed(1)}ms` : '—'}</td>
-                  <td className="num">{c.p99DurationMs.toFixed(1)}ms</td>
-                  {hasPivot && (
-                    <td>
-                      {thanosSet.has(c.cluster) ? (
-                        // v0.9.56 — hedef artık Infrastructure sekmesi:
-                        // /clusters pivotu metadata ns'ine bağımlıydı (ns
-                        // türetilmemişse filtre boş kalıyordu — operatör
-                        // raporu); sekme ad-tabanlı yedek zincirle her
-                        // durumda eşleştirir, ?icluster= çipi hazır gelir.
-                        <Link
-                          // v0.9.965 — pencere de taşınıyor. Bu link
-                          // range'i DÜŞÜRÜYORDU: özel (fırçalanmış) bir
-                          // pencerede küme kırılımını inceleyen operatör
-                          // "pods →" dediğinde Infrastructure sekmesi
-                          // sticky "şimdi" penceresiyle açılıyor, incelenen
-                          // olay kadraj dışında kalıyordu.
-                          to={serviceHref(service, {
-                            range, tab: 'infra', params: { icluster: c.cluster },
-                          })}
-                          style={{ fontSize: 11, color: 'var(--accent2)' }}
-                          title={`Pod CPU/memory — ${c.cluster} (Infrastructure tab)`}>
-                          pods →
-                        </Link>
-                      ) : (
-                        <span style={{ fontSize: 11, color: 'var(--text3)' }}
-                          title="This cluster is not defined under Settings → Remote clusters">—</span>
-                      )}
-                    </td>
-                  )}
-                </tr>
-              );
-            })}
+            {!showRows ? <DataTableState dt={dt} kind="error" /> : rows.map(c => (
+              <tr key={c.cluster}>{dt.visibleColumns.map(col => cell(c, col.id))}</tr>
+            ))}
           </tbody>
         </table>
       </div>
-    </div>
+      {showRows && (
+        <TableViewBar foldable={fold.hidden} expanded={expanded} onExpandedChange={setExpanded}
+          allColumns={allCols} onAllColumnsChange={setAllCols} source={source} />
+      )}
+    </>
   );
 }

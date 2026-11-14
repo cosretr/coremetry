@@ -65,6 +65,9 @@ export const STORAGE_KEYS = {
   // v0.10.2132 — Details'in açık bölümleri (JSON kimlik dizisi; tarayıcı başına,
   // servisten bağımsız). Eski `svc.heatmap.collapsed` bunun yerine geçti, okunmaz.
   svcDetailsOpen:      'svc.details.open',
+  // v0.10.2141 (servis sekmeleri S3) — Details Clusters tablosunda "Tüm kolonlar"
+  // (tarayıcı başına, servisten bağımsız; '1' = açık).
+  svcClustersAllCols:  'svc.clusters.allcols',
   svcChartsCompare:    'svc.charts.compare',
   // v0.10.577 — Trace Detail Logs sekmesi: gRPC per-message span event'leri
   // (SENT/RECEIVED) varsayılan olarak GİZLİ. Tercih küresel, trace başına
