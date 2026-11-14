@@ -1,13 +1,14 @@
 // Pod.annotationLane.test.ts — v0.10.312 (chart-layer audit Dilim 2.1):
-// annotation şeridi /pod'da RED yığınının ALTINDA ve Service.tsx ile aynı
-// sözleşmeyle (ns pencere + sayfa zoom yığını) monte. Kaynak pini: şerit
-// kaldırılır ya da Overview linkinin üstüne kayarsa kırmızı.
+// annotation şeridi /pod'da RED yığınının ALTINDA, ns pencere + sayfa zoom
+// yığını sözleşmesiyle monte. Kaynak pini: şerit kaldırılır ya da Overview
+// linkinin üstüne kayarsa kırmızı. v0.10.2154 — şeridin Service.tsx'teki
+// montajı Details'in Performance bölümüyle birlikte kalktı (operatör); /pod
+// tek montaj.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const src = readFileSync(resolve(__dirname, 'Pod.tsx'), 'utf8');
-const svc = readFileSync(resolve(__dirname, 'Service.tsx'), 'utf8');
 
 describe('Pod annotation şeridi', () => {
   it('RED yığınının altında, ns pencere + handleZoom ile monte', () => {
@@ -18,9 +19,7 @@ describe('Pod annotation şeridi', () => {
     expect(i).toBeLessThan(src.indexOf('Bu pod bir Coremetry servisine eşlenmedi'));
     expect(src.split('<ServiceAnnotationLane ').length - 1).toBe(1);
   });
-  it('Service.tsx ile aynı sözleşme: onZoomTo sayfa zoom yığınına gider', () => {
-    expect(svc).toContain('<ServiceAnnotationLane service={svc} fromNs={rangeNs.from} toNs={rangeNs.to}');
-    expect(svc).toMatch(/<ServiceAnnotationLane[^>]*\n?[^>]*onZoomTo=\{handleZoom\}/);
+  it('onZoomTo sayfa zoom yığınına gider', () => {
     expect(src).toContain('usePageZoomRange(DEFAULT_RANGE_PRESET)'); // v0.10.787 — genel varsayılan sabitten
   });
 });

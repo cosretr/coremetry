@@ -40,7 +40,7 @@ OracleLogsResponse, CopilotScopeNames, CosreRouteRED,
   FilterExpr,
   ESQueryError, ESRequestStats, ESLogstoreSnapshot, ESLogstoreInput,
   OtlpExemplar, TraceLinks, TraceCountResponse, TraceErrorHistogramResponse, CorrelationLinkSettings,
-  ExceptionTriageConfig, ProblemPriorityConfig, FailureSLOConfig, MetricExclusions, AnomalyTrackedConfig,
+  ExceptionTriageConfig, ProblemPriorityConfig, MetricExclusions, AnomalyTrackedConfig,
   InsightKind, InsightResponse, InsightSignal, InsightLink, InsightChartSpec,
   AnomalyPromotionConfig, AnomalySensitivityConfig, AnomalyREDSourceStats, TailPoint, LogPatternsResult, LogTemplate, TraceFacet, TraceFacetsResponse, DBSlowQueryConfig, StatementSearchRow,
   CopilotStartersResponse, LoginSummary,
@@ -1638,10 +1638,6 @@ export const api = {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(c),
     }),
-  // v0.9.1036 — hata-oranı (%) SLO eşiği. GET rol KAPISIZ (kimlikli
-  // herkes): bu bir grafik çizgisi, viewer da görür. PUT admin.
-  getFailureSLO: () =>
-    get<FailureSLOConfig>(`/api/settings/failure-slo`),
   // v0.9.797 — metrik route dışlamaları. Admin; PUT desenleri sunucuda
   // regexp.Compile ile doğrular (bozuk desen 400) ve dropAtIngest'li
   // kuralların Pipeline ikizlerini senkronlar.

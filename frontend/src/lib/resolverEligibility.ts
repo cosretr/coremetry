@@ -1,9 +1,14 @@
 // lib/resolverEligibility.ts — GRAN-D (v0.8.249): the spanmetrics-resolver
-// eligibility contract, extracted from pages/explore/model.ts so non-Explore
-// surfaces (ServiceCharts' RED family) can gate on it without importing one
-// page's builder model from another page/component — the layering concern
-// recorded with the 2026-06-15 doorway-resolver decision. model.ts re-exports
-// these verbatim; Explore behaviour is unchanged.
+// eligibility constants, extracted from pages/explore/model.ts so non-Explore
+// surfaces can share them without importing one page's builder model from
+// another page/component — the layering concern recorded with the 2026-06-15
+// doorway-resolver decision. model.ts re-exports these verbatim; Explore
+// behaviour is unchanged.
+//
+// v0.10.2154 — the one non-Explore surface (ServiceCharts' RED family, the
+// Service › Details "Performance" section) was removed by the operator; its
+// isResolverEligible gate + serviceRedDescriptors builder went with it. The
+// constants stay: Explore's exemplarDescriptor reads them.
 //
 // The resolver (/api/metrics/resolve, chstore/metricresolve.go) serves a
 // MetricQuery off the spanmetrics 1s/10s/1m rollup tiers — far finer than the
@@ -11,8 +16,6 @@
 // filters and group-bys on the five rollup dimensions, a rollup-served agg,
 // and duration as the only measured field. Anything else must ride the raw
 // spanMetric path.
-
-import { metricQuery, type MetricQuery } from './metricQuery';
 
 // Mirror of chstore tierDimColumn's accepted keys (both OTel and column
 // spellings). A filter or split on anything else can't ride the tiers.
@@ -31,53 +34,3 @@ export const EXEMPLAR_AGGS = new Set([
   'count', 'rate', 'per_min', 'errors', 'error_rate', 'apdex', 'avg', 'sum', 'p50', 'p90', 'p95', 'p99',
   'band', // v0.8.411 - percentile band; resolver-only (no legacy twin)
 ]);
-
-// The spanmetrics names the rollup tiers materialise. Unknown metrics fail
-// eligible-checks CLOSED (→ caller's legacy path), never open.
-const TIER_METRICS = new Set(['calls_total', 'duration_milliseconds_bucket']);
-
-// isResolverEligible — would the resolver's planner accept this descriptor?
-// Complements model.ts exemplarDescriptor (which builds a descriptor FROM a
-// BuilderQuery, applying the same rules); this checks an already-built
-// MetricQuery, for surfaces that carry descriptors natively (doorway panels).
-export function isResolverEligible(mq: MetricQuery): boolean {
-  if (mq.source !== 'spanmetrics') return false;
-  if (!TIER_METRICS.has(mq.metric)) return false;
-  if (!EXEMPLAR_AGGS.has(mq.agg)) return false;
-  for (const k of Object.keys(mq.filters ?? {})) if (!TIER_DIM_KEYS.has(k)) return false;
-  for (const k of mq.groupBy ?? []) if (!TIER_DIM_KEYS.has(k)) return false;
-  return true;
-}
-
-// serviceRedDescriptors — the service-detail RED triple (throughput / error
-// rate / p99 latency, split by operation) as resolver descriptors. These are
-// the SAME objects ServiceCharts hands its doorway ⋮ menus, and since GRAN-D
-// also what it fetches: service.name is a tier dim, 'name' is a tier dim,
-// and all three aggs are rollup-served — eligible by construction (pinned by
-// resolverEligibility.test.ts so a descriptor edit can't silently knock the
-// charts back onto the 5m path).
-// v0.8.414 (Tempo-parity T2) — optional operation scope: with an
-// operation picked the split collapses (one operation = one series
-// set) and the latency panel upgrades from a single p99 line to the
-// full percentile BAND (agg=band, v0.8.410) — the Grafana/Tempo RED
-// duration panel. name is a tier dim, band is rollup-served, so the
-// scoped descriptors stay eligible by construction.
-export function serviceRedDescriptors(service: string, operation?: string): {
-  rps: MetricQuery; err: MetricQuery; p99: MetricQuery;
-} {
-  const filters: Record<string, string> = { 'service.name': service };
-  let groupBy: string[] = ['name'];
-  if (operation) {
-    filters['name'] = operation;
-    groupBy = [];
-  }
-  return {
-    rps: metricQuery({ metric: 'calls_total', agg: 'rate', unit: 'rps', filters, groupBy }),
-    err: metricQuery({ metric: 'calls_total', agg: 'error_rate', unit: '%', filters, groupBy }),
-    p99: metricQuery({
-      metric: 'duration_milliseconds_bucket',
-      agg: operation ? 'band' : 'p99',
-      unit: 'ms', filters, groupBy,
-    }),
-  };
-}

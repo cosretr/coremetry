@@ -4,7 +4,7 @@
 // sadeleştirme planı docs/frontend/service-tabs-plan.md §5 S0, operatör onayı
 // 2026-11-13).
 //
-// NE ÇİVİLİYOR: Details'in beş "sonradan kapanacak" bölümünün bileşeni MONTE
+// NE ÇİVİLİYOR: Details'in dört "sonradan kapanacak" bölümünün bileşeni MONTE
 // EDİLİNCE hangi uçları çağırdığı (sahte olan yalnız AĞ katmanı). S1 bu
 // bölümleri kapalı satıra alır; kapalıyken bileşen hiç monte edilmez, açılınca
 // burada çivilenen okumaları yapar — bu dosya o sözleşmenin "açık" yarısıdır
@@ -12,8 +12,9 @@
 //   • Endpoints → /api/endpoints (birleşik kip, kapsam yok);
 //   • Metrikler → katalog (/api/metrics/names) + panel × metrik sorgusu;
 //   • Gecikme dağılımı → /api/spans/heatmap + cluster listesi;
-//   • Dağıtımlar → 7 günlük rollout okuması + copilot yapılandırma probu;
-//   • Performance → RED okuması (spanMetricBatch ya da resolveMetric yolu).
+//   • Dağıtımlar → 7 günlük rollout okuması + copilot yapılandırma probu.
+// v0.10.2154 (operatör) — beşinci bölüm Performance (ServiceCharts, RED
+// okuması) Details'ten kalktı; pini de onunla düştü.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -53,7 +54,6 @@ import { DetailsEndpointsSection } from './service/DetailsEndpointsSection';
 import { DetailsMetricsSection } from './service/DetailsMetricsSection';
 import { ServiceLatencyHeatmap } from './service/ServiceLatencyHeatmap';
 import { DeployHistoryPanel } from '@/components/DeployHistoryPanel';
-import { ServiceCharts } from '@/components/ServiceCharts';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 class NoopResizeObserver { observe() {} unobserve() {} disconnect() {} }
@@ -112,9 +112,5 @@ describe('Details bölümleri — monte edilince okuduğu uçlar (S0)', () => {
     await mount(<DeployHistoryPanel service="orders-api" cluster="" range={range} />);
     expect(m.calls).toContain('serviceRollouts');
     expect(m.calls).toContain('copilotConfig');
-  });
-  it('Performance: RED okuması', async () => {
-    await mount(<ServiceCharts service="orders-api" range={range} windowNs={rangeNs} problems={[]} rootOnly env="" />);
-    expect(m.calls.some(c => c === 'spanMetricBatch' || c === 'resolveMetric')).toBe(true);
   });
 });

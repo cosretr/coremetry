@@ -126,7 +126,7 @@ export function ServiceLatencyHeatmap({ service, range, operation = '', rootOnly
         display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6,
       }}>
         {operation && (
-          <span title="Scoped to the operation picked in the RED charts above (?op=)."
+          <span title="Adresteki ?op= operasyon kapsamına daraltıldı."
             style={{
               fontSize: 11, color: 'var(--text2)',
               fontFamily: 'var(--font-mono)',

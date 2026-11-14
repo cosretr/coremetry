@@ -48,7 +48,8 @@ const CONVERTED: Array<[file: string, release: string, what: string]> = [
   ['pages/Traces.tsx',                       'v0.9.858', 'aggregate: BOŞ EKRAN (spinner yok, mesaj yok)'],
   ['pages/Service.tsx',                      'v0.9.858', 'sayfanın sessizce soyulması'],
   ['pages/settings/ChannelsTab.tsx',         'v0.9.858', '"No channels yet"'],
-  ['components/ServiceCharts.tsx',           'v0.9.858', 'RED grafikleri boş çiziliyordu ("trafik yok")'],
+  // v0.10.2154 — components/ServiceCharts.tsx girdisi düştü: dosya silindi
+  // (Details'in Performance bölümü operatör kararıyla kalktı; yüzey yok oldu).
   ['features/anomalies/AnomaliesPage.tsx',   'v0.9.858', 'exception listesi BOŞ EKRAN'],
   ['features/anomalies/ProblemDetail.tsx',   'v0.9.858', 'occurrence + sample panelleri'],
   // ── v0.9.865 (tutarlılık denetimi MT1, mekanik) ──────────────────────────

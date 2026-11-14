@@ -178,8 +178,8 @@ export function DetailsMetricsSection({ service, rangeNs, onZoom, onZoomReset }:
                 // uPlot.sync imleci karşı grafiğe DEĞER olarak taşır, yani
                 // karışık grup crosshair'i 1000× yanlış yere koyar. Bu panel
                 // ham `service:X` kullanıyordu: aynı sekmedeki Performance
-                // (ServiceCharts → MLC → `service:X-ms`) panelleriyle
-                // crosshair HİÇ senkronlanmıyordu. v0.9.844'ten sonra da
+                // (ServiceCharts → MLC → `service:X-ms`; v0.10.2154'te
+                // kalktı) panelleriyle crosshair HİÇ senkronlanmıyordu. v0.9.844'ten sonra da
                 // ŞART: sökülen eski MLC gövdesiydi, saniye-eksenli
                 // kardeşler (Pod sayfası karışık motor) yaşıyor.
                 syncKey={msSyncKey(`service:${service}`)}

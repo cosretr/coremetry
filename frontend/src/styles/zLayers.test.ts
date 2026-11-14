@@ -229,7 +229,9 @@ describe('MK2 — yüzey ikili sıraları (kaynak-seviyesi matris)', () => {
   });
 
   it('Toast her modalın ÜSTÜNDE', () => {
-    above(['components/ServiceCharts.tsx', 'aria-live'],
+    // v0.10.2154 — toast temsilcisi coremetry/Toaster (ServiceCharts'ın yerel
+    // "exemplar yok" tostu, bileşenle birlikte silindi).
+    above(['components/coremetry/Toaster.tsx', 'const TOKENS'],
       // v0.10.2004 — PanelEditor modal değil (sayfa içi bölünmüş görünüm);
       // z-modal temsilcisi CorePanel'in tam ekran kaplaması.
       ['components/chart/CorePanel.tsx', 'position: \'fixed\', inset: 12']);
@@ -237,7 +239,7 @@ describe('MK2 — yüzey ikili sıraları (kaynak-seviyesi matris)', () => {
 
   it('DEV ölçer (debug) toast\'ın bile ÜSTÜNDE', () => {
     above(['components/perf/PerfMeter.tsx', 'position:'],
-      ['components/ServiceCharts.tsx', 'aria-live']);
+      ['components/coremetry/Toaster.tsx', 'const TOKENS']);
   });
 
   it('İç içe modal: ZoomChannelPicker, ChannelModal\'ın ÜSTÜNDE', () => {

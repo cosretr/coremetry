@@ -6,7 +6,7 @@
 //     güncel/istenen replika. KSM emekli pod SAYMAZ (podsRemoved = 0):
 //     pod-churn metnini KSM satırına basmak "0 pods replaced" yalanını
 //     söylerdi.
-// DeployHistoryPanel ve ServiceCharts işaretleri buradan okur. Saf;
+// DeployHistoryPanel buradan okur. Saf;
 // serviceRolloutLabel.test.ts pinler.
 import type { Rollout } from './types';
 import { statusLabel } from './rolloutRow';
@@ -17,23 +17,6 @@ export function isKsmRollout(r: Pick<Rollout, 'source'>): boolean {
 
 function ksmWorkload(r: Pick<Rollout, 'workloadKind' | 'workload'>): string {
   return `${r.workloadKind || 'Deployment'} ${r.workload || '?'}`;
-}
-
-function versionSuffix(r: Pick<Rollout, 'versionBefore' | 'versionAfter'>): string {
-  return r.versionAfter ? ` · ${r.versionBefore || '?'}→${r.versionAfter}` : '';
-}
-
-/** Grafik işaretinin kısa etiketi. */
-export function rolloutMarkerLabel(r: Rollout): string {
-  return isKsmRollout(r) ? `↻ ${r.workload || 'rollout'}` : `↻ ${r.podsRemoved}p`;
-}
-
-/** Grafik işaretinin açıklaması (hover). */
-export function rolloutMarkerDescription(r: Rollout): string {
-  if (isKsmRollout(r)) {
-    return `rollout · ${ksmWorkload(r)} · ${statusLabel(r.status ?? '')} · ${r.updatedReplicas ?? 0}/${r.specReplicas ?? 0} replika (KSM)` + versionSuffix(r);
-  }
-  return `rollout · ${r.podsRemoved} pod${r.podsRemoved === 1 ? '' : 's'} replaced (+${r.podsAdded})` + versionSuffix(r);
 }
 
 /** DeployHistoryPanel satır başlığı. */

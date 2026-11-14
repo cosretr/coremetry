@@ -59,6 +59,8 @@ Sıra: `thanosBody` (Clusters tablosu :316-415 → 4 KPI karosu :421-455 → Kay
 | K14 | `bandsParam.ts:1` v0.10.170: anomali bantları VARSAYILAN KAPALI (`?bands=1`) | "Aralık bandı" | Ad çakışması, kavram farklı | Yeni şeye "zarf" (envelope) de; `?bands` ile ilişkilendirilmez |
 | K15 | memory: "Ayarda vida değil varsayılan", "Detay sayfaları sade" | Uyumlu | — | Aç/kapa durumu tek localStorage anahtarı, ayar sayfası yok |
 
+> **Not, 2026-11-14 (v0.10.2154) — K1 kapandı, bölüm yok.** Operatör Details'teki Performance bölümünü tümüyle kaldırdı ("RPS by operation, Error rate by operation ve Latency by operation … gerek yok artık"). `components/ServiceCharts.tsx`, `#dtl-perf` çapası, `?perfmode=` kipi ve bölümün özet cümlesi (§3 Performance satırı) silindi; kapanır bölüm sayısı beşten dörde indi (Endpoints, Metrikler, Latency, Runtime & rollouts). Bu belgede Performance / `ServiceCharts` geçen satırlar (§1 sıra + tablo, K1, §3, S1) tarihsel kayıttır. Kayıt: `docs/DECISIONS.md` 2026-11-14 v0.10.2154.
+
 ## 3. Kapalı bölümlerin tek cümle özetleri — veri nereden
 
 Kural: **kapalı bölüm kendi verisini AÇILANA KADAR çekmez** (`enabled: open` / `useEffect` erken dönüş; `ServiceLatencyHeatmap.tsx:112` emsal). Özet cümlesi yalnız **zaten sayfada olan** veriden türetilir; yoksa sayısız statik cümle. Yeni CH/ES/VM sorgusu YOK.

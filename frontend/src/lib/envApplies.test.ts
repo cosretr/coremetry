@@ -74,7 +74,7 @@ const APPLIES = new Set([
   'pages/Logs.tsx',
   // v0.9.1041 (env(a)) — the Service detail page moved out of the
   // link-only bucket: env now narrows the RED tiles + 3 RED charts +
-  // Operations table + ServiceCharts + latency heatmap (span AND
+  // Operations table + latency heatmap (span AND
   // metric paths). The grafik+karo ikili-hâl lock lives below.
   'pages/Service.tsx',
   'pages/Services.tsx',
@@ -190,12 +190,11 @@ describe('envApplies — §4.3 (b) dürüstlük sözleşmesi', () => {
     const read = (rel: string) => readFileSync(join(SRC, rel), 'utf8');
     const service = read('pages/Service.tsx');
     const overview = read('pages/service/Overview.tsx');
-    const charts = read('components/ServiceCharts.tsx');
 
     // Service.tsx env'i çocuklara ve bundle'a GEÇİRİR.
     expect(service, 'Service <Topbar envApplies/> vermeli').toMatch(/envApplies/);
     expect(service, 'ServiceOverview env almalı').toMatch(/<ServiceOverview[\s\S]*?env=\{env\}/);
-    expect(service, 'ServiceCharts env almalı').toMatch(/<ServiceCharts[\s\S]*?env=\{env\}/);
+    expect(service, 'Latency heatmap env almalı').toMatch(/<ServiceLatencyHeatmap[\s\S]*?env=\{env\}/);
     expect(service, 'serviceBundle env almalı').toContain('env: env || undefined');
 
     // Overview: SPAN yolu (envDSL) VE METRİK yolu (serviceMetricThroughput +
@@ -203,9 +202,6 @@ describe('envApplies — §4.3 (b) dürüstlük sözleşmesi', () => {
     expect(overview, 'Overview span DSL env taşımalı (envDSL)').toContain('envDSL(env)');
     expect(overview, 'Overview metrik throughput env almalı').toMatch(/serviceMetricThroughput\([\s\S]*?env: env \|\| undefined/);
     expect(overview, 'Overview metrik Response time env taşımalı').toContain("k: 'deployment.environment'");
-
-    // ServiceCharts (Details/Performance grafikleri) — DSL env taşır.
-    expect(charts, 'ServiceCharts DSL env taşımalı (envDSL)').toContain('envDSL(env)');
   });
 
   it('Topbar varsayılanı opt-in — işaretlenmemiş sayfa "uygulanmıyor" der', () => {

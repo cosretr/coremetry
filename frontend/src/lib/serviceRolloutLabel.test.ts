@@ -1,6 +1,6 @@
 // serviceRolloutLabel.test.ts — v0.10.984 sözleşmesi (serviceRolloutLabel.ts başlığı).
 import { describe, it, expect } from 'vitest';
-import { rolloutMarkerLabel, rolloutMarkerDescription, rolloutHeadline, rolloutCounts, rolloutExplainVersion, isKsmRollout, rolloutRowKey } from './serviceRolloutLabel';
+import { rolloutHeadline, rolloutCounts, rolloutExplainVersion, isKsmRollout, rolloutRowKey } from './serviceRolloutLabel';
 import type { Rollout } from './types';
 
 const churn: Rollout = { timeUnixNs: 1, kind: 'deploy', podsAdded: 3, podsRemoved: 3, activePods: 3, versionBefore: '1.0', versionAfter: '1.1' };
@@ -12,8 +12,6 @@ const ksm: Rollout = {
 describe('serviceRolloutLabel', () => {
   it('pod-churn satırı bugünkü metinler (v1 değişmez)', () => {
     expect(isKsmRollout(churn)).toBe(false);
-    expect(rolloutMarkerLabel(churn)).toBe('↻ 3p');
-    expect(rolloutMarkerDescription(churn)).toBe('rollout · 3 pods replaced (+3) · 1.0→1.1');
     expect(rolloutHeadline(churn)).toBe('↻ 3 pods replaced');
     expect(rolloutHeadline({ ...churn, podsRemoved: 1 })).toBe('↻ 1 pod replaced');
     expect(rolloutCounts(churn)).toEqual({ text: '+3/−3', title: '3 new · 3 retired · 3 now active' });
@@ -23,12 +21,10 @@ describe('serviceRolloutLabel', () => {
   // v0.10.1421 — durum rozet sözlüğünden (İngilizce).
   it('KSM satırı: iş yükü + durum + replika; "0 pods replaced" basılmaz', () => {
     expect(isKsmRollout(ksm)).toBe(true);
-    expect(rolloutMarkerLabel(ksm)).toBe('↻ pg');
-    expect(rolloutMarkerDescription(ksm)).toBe('rollout · StatefulSet pg · In progress · 2/3 replika (KSM) · 1.1→1.2');
     expect(rolloutHeadline(ksm)).toBe('↻ StatefulSet pg · In progress');
     expect(rolloutCounts(ksm).text).toBe('2/3');
     expect(rolloutCounts(ksm).title).toContain('1 hazır');
-    for (const s of [rolloutMarkerDescription(ksm), rolloutHeadline(ksm), rolloutCounts(ksm).text]) expect(s).not.toMatch(/replaced|−0/);
+    for (const s of [rolloutHeadline(ksm), rolloutCounts(ksm).text]) expect(s).not.toMatch(/replaced|−0/);
     expect(rolloutExplainVersion({ ...ksm, versionAfter: '' })).toBe('rollout (StatefulSet pg)');
     expect(rolloutHeadline({ ...ksm, workloadKind: undefined, workload: undefined })).toBe('↻ Deployment ? · In progress');
   });

@@ -18,7 +18,7 @@ export { useMLEvents, useMLScorecard, useMLBaselineBackfill, backfillActive, use
 export {
   useServices, useServiceMap,
   useServiceInfra, useServiceNeighbors, useServiceRuntime,
-  useAllServiceRuntimes, useServiceDeploys, useServiceRollouts,
+  useAllServiceRuntimes, useServiceDeploys,
   useServicesMetadata, useServiceBacktrace, useClusters,
   useServiceOperationRoutes,
 } from './services';
@@ -52,7 +52,7 @@ export {
   useCreateMonitor, useUpdateMonitor, useDeleteMonitor,
 } from './monitors';
 export {
-  useSLOs, useCreateSLO, useDeleteSLO, useFailureSLO,
+  useSLOs, useCreateSLO, useDeleteSLO,
 } from './slos';
 export { useEventStream } from './eventStream';
 export { useExemplar, useExemplarFetcher } from './spans';

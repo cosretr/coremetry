@@ -31,7 +31,7 @@ export interface DeployMarker {
   label: string;        // service.version or whatever the caller wants
   // v0.9.844 — ÇİZİLMİYOR. v1 gövdesinin tooltip'i bunu deploy satırının
   // yanında gösteriyordu; CorePanel'in bölge etiketi yalnız `label` taşır.
-  // Alan duruyor çünkü çağıranlar (ServiceCharts / Clusters) marker'ı zaten
+  // Alan duruyor çünkü çağıranlar (Clusters TrendPanel) marker'ı zaten
   // bu şekilde kuruyor — kaldırmak çizime hiçbir şey katmadan üç dosyayı
   // dolaşmak olurdu. CorePanel bölge tooltip'i kazanırsa hazır.
   description?: string;

@@ -225,7 +225,7 @@ export function RuntimeCharts({ service, from, to, onZoom, onZoomReset, hideHead
 
   // Madde 4 sweep — deploy ▼ marker'ları runtime panellerine: "heap spike
   // deploy'dan mı?" bir bakışta okunsun. AYNI (service, from, to) anahtarı
-  // ServiceCharts'ın useServiceDeploys'uyla RQ-dedupe olur — ek istek yok.
+  // Overview'un useServiceDeploys'uyla RQ-dedupe olur — ek istek yok.
   // TSP `deploys` bare unix-ns bekler; memo, taze dizi kimliğinin rebuild
   // tetiklemesini önler.
   const deploysQ = useServiceDeploys(service, from, to);

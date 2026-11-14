@@ -24,7 +24,6 @@ import { useServiceOperationRoutes } from '@/lib/queries';
 import { ServiceClusterBreakdown } from './service/ServiceClusterBreakdown';
 import { ServiceLatencyHeatmap } from './service/ServiceLatencyHeatmap';
 import { Spinner, Empty } from '@/components/Spinner';
-import { ServiceCharts } from '@/components/ServiceCharts';
 import { LazyMount } from '@/components/LazyMount';
 import { ServiceCatalogPill } from '@/components/ServiceCatalogPill';
 import { ServiceAttentionStrip } from '@/components/ServiceAttentionStrip';
@@ -34,13 +33,12 @@ import { DetailsPropsStrip } from './service/DetailsPropsStrip';
 import { DetailsEndpointsSection, useEndpointsHeadParts } from './service/DetailsEndpointsSection'; // v0.10.715
 import { CollapsedSection } from '@/components/coremetry/CollapsedSection'; // v0.10.2132 (S1)
 import { DetailsDeploysSummary } from './service/DetailsDeploysSummary';
-import { ENDPOINTS_SUMMARY, perfSummary, latencySummary, metricsSummary, parseOpenSections, serializeOpenSections, sectionForHash, type CollapsibleSection } from './service/detailsSummaries';
+import { ENDPOINTS_SUMMARY, latencySummary, metricsSummary, parseOpenSections, serializeOpenSections, sectionForHash, type CollapsibleSection } from './service/detailsSummaries';
 import { getRaw, setRaw, STORAGE_KEYS } from '@/lib/storage';
 import { SectionHead } from '@/components/coremetry/SectionHead'; // v0.10.715
 import { ClusterModeToggle } from '@/components/ClusterModeToggle'; // v0.10.717
 import { DetailsMetricsSection, useDetailsMetricPanels } from './service/DetailsMetricsSection';
 import { panelMaxDataPoints } from '@/lib/chartStep';
-import { ServiceAnnotationLane } from '@/components/charts/ServiceAnnotationLane';
 import { api } from '@/lib/api';
 import { timeRangeToNs } from '@/lib/utils';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -84,15 +82,14 @@ function ServiceDetailInner() {
   const tr = useT(); // v0.10.1525 — "All statements" / "Tüm sorgular"
   const [searchParams, setSearchParams] = useSearchParams();
   // v0.10.717 (multi-cluster ilkesi) — Topbar Cluster kapsamı ve Details
-  // bölüm kipleri (?dbmode= / ?perfmode= = cluster). Kapsam seçiliyken kip
-  // gizlenir (tek cluster'da kırılım anlamsız). replace:true, yabancı
-  // parametreler korunur.
+  // Database bölüm kipi (?dbmode=cluster). Kapsam seçiliyken kip gizlenir
+  // (tek cluster'da kırılım anlamsız). replace:true, yabancı parametreler
+  // korunur. v0.10.2154 — Performance bölümü, kendi kipiyle birlikte kalktı.
   const scopeCluster = searchParams.get('cluster') ?? '';
   const dbByCluster = searchParams.get('dbmode') === 'cluster';
-  const perfByCluster = searchParams.get('perfmode') === 'cluster';
-  const setModeParam = (key: 'dbmode' | 'perfmode', on: boolean) => setSearchParams(prev => {
+  const setDbByCluster = (on: boolean) => setSearchParams(prev => {
     const next = new URLSearchParams(prev);
-    if (on) next.set(key, 'cluster'); else next.delete(key);
+    if (on) next.set('dbmode', 'cluster'); else next.delete('dbmode');
     return next;
   }, { replace: true });
   const navigate = useNavigate();
@@ -111,7 +108,7 @@ function ServiceDetailInner() {
   const { range, setRange, handleZoom, handleZoomReset } = usePageZoomRange(DEFAULT_RANGE_PRESET);
   // v0.9.1041 (env(a)) — env is now APPLIED, not just forwarded to the
   // Endpoints drill: it narrows the bundle (KPI + operations), the Overview
-  // span+metric RED (tiles + charts), ServiceCharts and the latency heatmap
+  // span+metric RED (tiles + charts) and the latency heatmap
   // to one deploy_env, so <Topbar envApplies/> is honest. The Endpoints
   // drill still forwards it too (the v0.9.306/307 "a pivot must ask the
   // same question" lesson; DrillButton builds a fresh URL).
@@ -203,7 +200,7 @@ function ServiceDetailInner() {
   // AFTER the initial paint (bundle fetch + tab gate). The
   // ?tab=details&#deploys link from /deploys depends on this.
   // v0.10.2132 (S1) — çapa KAPALI bir bölümü hedefliyorsa (#deploys,
-  // #dtl-perf …) önce bölüm açılır (bu oturumluk; kalıcı tercihe yazılmaz),
+  // #dtl-latency …) önce bölüm açılır (bu oturumluk; kalıcı tercihe yazılmaz),
   // iki kare sonra kaydırılır (açılan gövde DOM'a insin). Sayfa içi
   // `<a href="#deploys">` tıkı hashchange ile aynı yoldan geçer.
   const [hashSection, setHashSection] = useState<CollapsibleSection | null>(null);
@@ -223,7 +220,8 @@ function ServiceDetailInner() {
     window.addEventListener('hashchange', go);
     return () => window.removeEventListener('hashchange', go);
   }, [loading, tab]);
-  // v0.10.2132 (S1, plan §7/1 ana oturum kararı) — Details'in beş bölümü
+  // v0.10.2132 (S1, plan §7/1 ana oturum kararı) — Details'in kapanır
+  // bölümleri (v0.10.2154'ten beri dört: Performance kalktı)
   // varsayılan KAPALI; açılan bölüm sonraki ziyarette açık kalır (tek
   // localStorage anahtarı, tarayıcı başına, servisten bağımsız; lib/storage
   // okuma/yazmayı try/catch'le sarar).
@@ -260,13 +258,16 @@ function ServiceDetailInner() {
   const hasMetricPanels = metricPanels.length > 0;
 
   // v0.8.415 (Tempo-parity T3) — operation scope lives in the URL
-  // (?op=) so the RED charts AND the latency heatmap ride one
+  // (?op=) so the latency heatmap and CoSRE's page context ride one
   // selection, and a copied link / refresh reproduces the exact
   // scoped view (house rule: URL is the source of truth). '' = all.
+  // v0.10.2154 — the Performance section (and its operation picker, the
+  // only in-app writer of ?op=) is gone; the param is still honoured when
+  // present and the scope chip below clears it.
   const opScope = searchParams.get('op') ?? '';
-  const setOpScope = (next: string) => setSearchParams(prev => {
+  const clearOpScope = () => setSearchParams(prev => {
     const p = new URLSearchParams(prev);
-    if (next) p.set('op', next); else p.delete('op');
+    p.delete('op');
     return p;
   }, { replace: true });
   // NO svc-change wipe of ?op= (v0.8.423). Every cross-service link in
@@ -292,13 +293,13 @@ function ServiceDetailInner() {
     // cached 60s with SWR. At billion-span scale: 4 network
     // round trips + 4 serial CH cold-cache costs collapse
     // into 1 round trip and 1 parallel CH window. Heatmap /
-    // RED charts / cluster breakdown stay separate; they
-    // own their own time-window semantics (compare period,
-    // lazy mount) the bundle can't bake in without coupling.
+    // cluster breakdown stay separate; they own their own
+    // time-window semantics (lazy mount) the bundle can't
+    // bake in without coupling.
     //
     // Bundle's deploys slot is hand-seeded into the React
     // Query cache under the deploys-forService key, so the
-    // ServiceCharts component's useServiceDeploys hook
+    // Overview / RuntimeCharts useServiceDeploys hook
     // resolves instantly (cache HIT) instead of firing its
     // own /api/services/.../deploys round trip below the
     // fold. Same window the bundle is for.
@@ -604,10 +605,10 @@ function ServiceDetailInner() {
             {/* v0.5.293 — Operator-reported: tabs go immediately
                 under the KPI / problems header so the
                 Operations table is the FIRST body element on
-                the page. DeployHistoryPanel + ServiceCharts
-                moved into Details (they remain the headline
-                summary view but no longer outrank the
-                per-endpoint table). Tab persists in the URL
+                the page. DeployHistoryPanel moved into Details
+                (no longer outranks the per-endpoint table;
+                the by-operation RED charts that moved with it
+                were removed in v0.10.2154). Tab persists in the URL
                 so a saved link / refresh lands on the same
                 sub-view. */}
             {/* v0.10.1023 — rozet Raw tablonun gösterdiği satır sayısı
@@ -633,9 +634,10 @@ function ServiceDetailInner() {
             {tab === 'http' && <ServiceHttpMetricsTab service={svc} range={range} env={env} cluster={scopeCluster} />}
             {tab === 'messaging' && <ServiceMessagingTab service={svc} range={range} />}
             {/* v0.9.63 — v0.9.62'nin sekme-tepesi RED üçlüsü OPERATÖR
-                KARARIYLA geri alındı ("gereksiz olmuş"): grafikler
-                Details'te (Performance) yaşar, Operations sekmesi
-                tabloya odaklı kalır. Yeniden ekleme. */}
+                KARARIYLA geri alındı ("gereksiz olmuş"); Operations sekmesi
+                tabloya odaklı kalır. v0.10.2154 — aynı üçlünün Details'teki
+                evi (Performance bölümü) de operatör kararıyla kalktı.
+                Yeniden ekleme. */}
             {tab === 'operations' && (
               <OperationsTable service={svc} rows={displayedOps} range={range}
                 preset={range.preset}
@@ -652,7 +654,7 @@ function ServiceDetailInner() {
                     grid'i ÖLDÜ: v0.9.141/348 kaldırmalarından beri üç bölümde
                     de sağ sütun boştu (sayfanın yarısı ölü piksel). Heatmap/
                     DB/Runtime tam genişlikte. v0.10.2133 (S2, mockup onaylı
-                    2026-11-13): sağdaki yapışkan ToC rayı KALKTI — beş bölüm
+                    2026-11-13): sağdaki yapışkan ToC rayı KALKTI — bölümler
                     kapalı satır olunca sayfa kısa; dtl-* kimlikleri derin
                     link / CoSRE hedefi olarak kalır. LazyMount değişmedi.
                     ?op= kapsam şeridi hangi bölümün daraldığını İŞARETLER —
@@ -662,7 +664,7 @@ function ServiceDetailInner() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 0 8px', fontSize: 12 }}>
                     <span className="badge b-info mono" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                       op: {opScope}
-                      <span onClick={() => setOpScope('')} style={{ cursor: 'pointer' }} title="Operasyon kapsamını kaldır">✕</span>
+                      <span onClick={clearOpScope} style={{ cursor: 'pointer' }} title="Operasyon kapsamını kaldır">✕</span>
                     </span>
                     {/* v0.9.784 — beyan sayfa SIRASINI izler ve KOŞULLU
                         bölümü ancak kuruluysa anar. Metrikler yalnız
@@ -670,7 +672,6 @@ function ServiceDetailInner() {
                         operasyon boyutu yok) → kapsam DIŞI. */}
                     <span style={{ fontSize: 11, color: 'var(--text3)' }}>
                       kapsam: <span style={{ opacity: .65 }}>Clusters ✗ · Database ✗ · </span>
-                      Performance ✓ ·{' '}
                       {hasMetricPanels && <span style={{ opacity: .65 }}>Metrikler ✗ · </span>}
                       Latency ✓ · <span style={{ opacity: .65 }}>Runtime ✗</span>
                     </span>
@@ -678,7 +679,7 @@ function ServiceDetailInner() {
                 )}
                 {/* v0.10.151 (operatör): Clusters ve Database EN ÜSTTE —
                     çok-cluster'lı prod'da ilk soru "hangi cluster'da ne
-                    oluyor?" ve "hangi sorgu?"; Performance/Latency aşağı indi.
+                    oluyor?" ve "hangi sorgu?"; Latency aşağı indi.
                     Per-cluster breakdown Runtime & rollouts'tan buraya taşındı
                     (kendi çapası dtl-clusters). */}
                 <SectionHead id="dtl-clusters" title="Clusters"
@@ -696,7 +697,7 @@ function ServiceDetailInner() {
                   badges={<>
                     {opScope && <span className="badge b-gray">tüm servis</span>}
                     {scopeCluster && <span className="badge b-info mono">cluster: {scopeCluster}</span>}
-                    {!scopeCluster && <ClusterModeToggle value={dbByCluster} onChange={v => setModeParam('dbmode', v)} label="DB ifadeleri kırılımı" />}
+                    {!scopeCluster && <ClusterModeToggle value={dbByCluster} onChange={setDbByCluster} label="DB ifadeleri kırılımı" />}
                   </>}
                   actions={<Link to="/databases/slow-queries">{tr('stmt.allStatements')} →</Link>} />
                 <div className="ov-mb">
@@ -712,42 +713,16 @@ function ServiceDetailInner() {
                 </div>
                 {/* v0.10.715 (etüt dilim 1) — Endpoints bölümü: bugüne dek yalnız
                     Overview'daydı; cluster boyutlu (mockup şerh 4).
-                    v0.10.2132 (S1, mockup onaylı 2026-11-13) — aşağıdaki beş
-                    bölüm varsayılan KAPALI satır: gövde (ve okumaları) yalnız
+                    v0.10.2132 (S1, mockup onaylı 2026-11-13) — aşağıdaki
+                    bölümler varsayılan KAPALI satır: gövde (ve okumaları) yalnız
                     açılınca; özet yalnız sayfada zaten yüklü veriden;
-                    kaynak rozeti açıkken bölüm altındaki "kaynak" satırında. */}
+                    kaynak rozeti açıkken bölüm altındaki "kaynak" satırında.
+                    v0.10.2154 (operatör) — Performance bölümü (operasyon
+                    başına RPS / hata oranı / p99 grafikleri) kalktı. */}
                 <CollapsedSection id="dtl-endpoints" title="Endpoints" summary={ENDPOINTS_SUMMARY}
                   source={endpointsHead.source} badges={endpointsHead.badges} meta={endpointsHead.meta} actions={endpointsHead.actions}
                   open={sectionOpen('dtl-endpoints')} onOpenChange={setSectionOpen('dtl-endpoints')}>
                   <DetailsEndpointsSection service={svc} range={range} rangeNs={rangeNs} env={env} />
-                </CollapsedSection>
-                <CollapsedSection id="dtl-perf" title="Performance" summary={perfSummary(info, rangeNs.to - rangeNs.from)}
-                  source={scopeCluster || perfByCluster ? "giriş span'leri (cluster: ham yol)" : "giriş span'leri"}
-                  badges={<>
-                    {opScope && <span className="badge b-info">op kapsamı</span>}
-                    {scopeCluster && <span className="badge b-info mono">cluster: {scopeCluster}</span>}
-                    {!scopeCluster && <ClusterModeToggle value={perfByCluster} onChange={v => setModeParam('perfmode', v)} label="RED serileri kırılımı" />}
-                  </>}
-                  open={sectionOpen('dtl-perf')} onOpenChange={setSectionOpen('dtl-perf')}>
-                {/* v0.9.348 — rootOnly: bu paneller servisin KENDİ giriş
-                    noktalarını çiziyor artık, dışarı yaptığı çağrıları değil.
-                    Filtresiz hâlde api-gateway'in grafiği
-                    account-service/ListAccounts gibi GİDEN çağrıları kendi
-                    yüküymüş gibi gösteriyordu (ölçüm: 22 seri, yalnız 14'ü
-                    bu servisin ucu). Overview'a AÇILMADI — orada operatörün
-                    kendi "giriş / tüm span'ler" ayrımı var. */}
-                <ServiceCharts service={svc} range={range} windowNs={rangeNs}
-                  opScope={opScope} onOpScopeChange={setOpScope}
-                  problems={problems} rootOnly env={env}
-                  cluster={scopeCluster} byCluster={perfByCluster && !scopeCluster}
-                  onZoom={handleZoom} onZoomReset={handleZoomReset} />
-                {/* v0.9.395 (Faz C-2 Ş2, mockup 52b05851 onaylı) — annotation
-                    şeridi PİLOT: üç RED paneli aynı x-eksenini paylaştığı
-                    için yığının altında TEK şerit hepsine hizmet eder.
-                    Sayfa başına tek fetch; tık = ±15dk zoom (yığın+çift-tık
-                    geri aynı yol). Problem x-bölgeleri chart İÇİNDE kalır. */}
-                <ServiceAnnotationLane service={svc} fromNs={rangeNs.from} toNs={rangeNs.to}
-                  onZoomTo={handleZoom} />
                 </CollapsedSection>
                 {/* v0.9.784 — OTLP metrik satırı. Details'te bugüne dek
                     metric_points türevli TEK panel yoktu; panel seti

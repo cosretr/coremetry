@@ -88,8 +88,12 @@ export type ChartScope = typeof CHART_SCOPES[number];
 
 const CHART_SCOPE_SET = new Set<string>(CHART_SCOPES);
 
-// Kapsam etiketleri ServiceCharts'ın kart başlıklarıyla aynı sözcükler:
-// çekmecedeki çip, operatörün az önce tıkladığı kartın adını göstermeli.
+// Kapsam etiketleri ServiceCharts'ın kart başlıklarıyla aynı sözcüklerdi:
+// çekmecedeki çip, operatörün az önce tıkladığı kartın adını gösteriyordu.
+// v0.10.2154 — o kartlar (Service › Details › Performance) operatör kararıyla
+// kalktı; uygulamada `charts` öznesi üreten düğme kalmadı. Özne + kodek +
+// etiketler DURUYOR: paylaşılmış `?ai=charts:…` linkleri ve kayıtlı sohbet
+// turları (ChartsSignalsCard) hâlâ bu yoldan çizilir; sunucu ucu da yerinde.
 export function chartScopeLabel(s: ChartScope): string {
   switch (s) {
     case 'rps': return 'RPS by operation';

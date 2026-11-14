@@ -89,21 +89,11 @@ export function useServiceDeploys(svc: string, from: number, to: number) {
   });
 }
 
-// useServiceRollouts (v0.8.x) — pod-churn rollout events for the
-// chart deploy-marker overlay + the "Recent rollouts" panel. Same
-// cache posture as useServiceDeploys.
-export function useServiceRollouts(svc: string, from: number, to: number) {
-  return useQuery({
-    queryKey: ['service-rollouts', svc, from, to],
-    queryFn: () => api.serviceRollouts(svc, { from, to }),
-    enabled: !!svc && !!from && !!to,
-    staleTime: 30_000,
-  });
-}
-
 // useServiceRollouts7d — v0.9.360. The Details tab used to fetch the SAME
 // rollouts endpoint three times per open: ServiceCharts (page window, deploy
-// markers — stays as-is), DetailsPropsStrip (page window, private key) and
+// markers — removed with the Performance section in v0.10.2154, together
+// with its page-window useServiceRollouts hook), DetailsPropsStrip (page
+// window, private key) and
 // DeployHistoryPanel (raw effect, 7-day window minted from Date.now() on
 // every mount, so its ns-exact key never repeated). The strip and the panel
 // now share THIS one 7-day read: one request, one React Query entry.

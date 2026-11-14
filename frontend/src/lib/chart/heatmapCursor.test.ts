@@ -97,7 +97,9 @@ describe('kablolama (v0.9.948)', () => {
   });
 
   it('kardeş uPlot panelleri YAYIN yapıyor — yarım kablo yok', () => {
-    for (const rel of ['pages/service/DetailsMetricsSection.tsx', 'components/ServiceCharts.tsx']) {
+    // v0.10.2154 — ServiceCharts (Details Performance bölümü) kalktı; yayıncı
+    // Metrikler bölümü.
+    for (const rel of ['pages/service/DetailsMetricsSection.tsx']) {
       const src = readFileSync(join(SRC, rel), 'utf8');
       expect(src, `${rel} yayın yapmıyor — abone sessiz kalır`).toMatch(/onCursorTime=\{publishCursor\}/);
     }

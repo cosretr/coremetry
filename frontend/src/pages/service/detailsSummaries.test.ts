@@ -1,19 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { perfSummary, latencySummary, metricsSummary, deploysSummary, parseOpenSections, serializeOpenSections, sectionForHash, ENDPOINTS_SUMMARY, msTR } from './detailsSummaries';
+import { latencySummary, metricsSummary, deploysSummary, parseOpenSections, serializeOpenSections, sectionForHash, ENDPOINTS_SUMMARY, msTR } from './detailsSummaries';
 
 // v0.10.2132 (servis sekmeleri S1, plan §3) — kapalı bölüm özetleri yalnız
 // sayfada yüklü veriden; veri yoksa sabit cümle. Aç/kapa hafızası tek anahtar.
-const kpi = { spanCount: 45_000, errorRate: 0.42, p99DurationMs: 850, avgDurationMs: 120 };
-const hour = 3600e9;
+const kpi = { spanCount: 45_000, p99DurationMs: 850, avgDurationMs: 120 };
 
 describe('detailsSummaries', () => {
-  it('Performance: hız / hata / p99; veri yoksa sabit', () => {
-    expect(perfSummary(kpi, hour)).toBe('Bu pencerede 12,5/sn, %0,4 hata, p99 850 ms.');
-    expect(perfSummary({ ...kpi, spanCount: 360_000, errorRate: 0, p99DurationMs: 1400 }, hour)).toBe('Bu pencerede 100/sn, %0 hata, p99 1,4 sn.');
-    expect(perfSummary(null, hour)).toBe('İstek hızı, hata oranı ve p99 grafikleri.');
-    expect(perfSummary({ ...kpi, spanCount: 0 }, hour)).toBe('İstek hızı, hata oranı ve p99 grafikleri.');
-    expect(perfSummary(kpi, 0)).toBe('İstek hızı, hata oranı ve p99 grafikleri.');
-  });
   it('Gecikme: ortalama + p99 (p50 sayfada yok); veri yoksa sabit', () => {
     expect(latencySummary(kpi)).toBe('Ortalama 120 ms, p99 850 ms; dağılım grafiği kapalı.');
     expect(latencySummary(undefined)).toBe('Span süresi dağılımı (heatmap).');
@@ -41,9 +33,15 @@ describe('detailsSummaries', () => {
     expect([...parseOpenSections(null)]).toEqual([]);
     expect([...parseOpenSections('{bozuk')]).toEqual([]);
     expect([...parseOpenSections('{"a":1}')]).toEqual([]);
-    const s = parseOpenSections('["dtl-runtime","x","dtl-perf"]');
-    expect([...s].sort()).toEqual(['dtl-perf', 'dtl-runtime']);
-    expect(serializeOpenSections(s)).toBe('["dtl-perf","dtl-runtime"]');
+    const s = parseOpenSections('["dtl-runtime","x","dtl-latency"]');
+    expect([...s].sort()).toEqual(['dtl-latency', 'dtl-runtime']);
+    expect(serializeOpenSections(s)).toBe('["dtl-latency","dtl-runtime"]');
+  });
+  // v0.10.2154 (operatör) — Performance bölümü kalktı: saklı listede kalan
+  // 'dtl-perf' bilinmeyen kimlik gibi düşer, çapası hiçbir bölümü açmaz.
+  it('kalkan Performance bölümü: saklı kimlik düşer, çapa bölüm açmaz', () => {
+    expect([...parseOpenSections('["dtl-perf","dtl-runtime"]')]).toEqual(['dtl-runtime']);
+    expect(sectionForHash('#dtl-perf')).toBeNull();
   });
   it('çapa → bölüm: #deploys Dağıtımlar, açık bölüm çapaları değil', () => {
     expect(sectionForHash('#deploys')).toBe('dtl-runtime');

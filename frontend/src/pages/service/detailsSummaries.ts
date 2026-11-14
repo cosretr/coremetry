@@ -9,10 +9,9 @@
 import type { Rollout, Service } from '@/lib/types';
 import { agoTR } from '@/lib/utils';
 
-type Kpi = Pick<Service, 'spanCount' | 'errorRate' | 'p99DurationMs' | 'avgDurationMs'> | null | undefined;
+type Kpi = Pick<Service, 'spanCount' | 'p99DurationMs' | 'avgDurationMs'> | null | undefined;
 
 export const ENDPOINTS_SUMMARY = "HTTP route'ları: çağrı payı, hata oranı, p50 / p99.";
-const PERF_STATIC = 'İstek hızı, hata oranı ve p99 grafikleri.';
 const LATENCY_STATIC = 'Span süresi dağılımı (heatmap).';
 const METRICS_STATIC = 'Servisin OTLP metrik panelleri.';
 const DEPLOYS_STATIC = "Son 7 günün rollout'ları ve sürümleri.";
@@ -28,13 +27,6 @@ function trNum(v: number, digits = 1): string {
 export function msTR(ms: number): string {
   if (!Number.isFinite(ms)) return '—';
   return ms >= 1000 ? `${trNum(ms / 1000, 1)} sn` : `${Math.round(ms)} ms`;
-}
-
-/** SAF: Performance satırı — "Bu pencerede 12,5/sn, %0,4 hata, p99 850 ms." */
-export function perfSummary(info: Kpi, windowNs: number): string {
-  if (!info || !(windowNs > 0) || !(info.spanCount > 0)) return PERF_STATIC;
-  const rate = info.spanCount / (windowNs / 1e9);
-  return `Bu pencerede ${trNum(rate, rate >= 100 ? 0 : 1)}/sn, %${trNum(info.errorRate, 1) || '0'} hata, p99 ${msTR(info.p99DurationMs)}.`;
 }
 
 /** SAF: Gecikme dağılımı satırı. */
@@ -63,8 +55,10 @@ export function deploysSummary(rollouts: ReadonlyArray<Pick<Rollout, 'timeUnixNs
 // bağımsız. Okuma/yazma çağıranda try/catch'li `lib/storage` üstünden;
 // burada yalnız SAF çözüm.
 
-/** Kapanabilir bölümlerin kimlikleri (= başlık satırının id'si). */
-export const COLLAPSIBLE_SECTIONS = ['dtl-endpoints', 'dtl-perf', 'dtl-metrics', 'dtl-latency', 'dtl-runtime'] as const;
+/** Kapanabilir bölümlerin kimlikleri (= başlık satırının id'si).
+ *  v0.10.2154 — 'dtl-perf' (Performance) bölümüyle birlikte kalktı; saklı
+ *  listede kalan eski kimlik parseOpenSections'ta bilinmeyen diye düşer. */
+export const COLLAPSIBLE_SECTIONS = ['dtl-endpoints', 'dtl-metrics', 'dtl-latency', 'dtl-runtime'] as const;
 export type CollapsibleSection = typeof COLLAPSIBLE_SECTIONS[number];
 
 /** SAF: saklı ham değer → açık bölüm kümesi (bozuk / bilinmeyen kimlik yok sayılır). */

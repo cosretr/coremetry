@@ -1,35 +1,21 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { clusterDSL } from './entrySpans';
 
-// v0.10.717 — multi-cluster ilkesi, Details dilim 2: DSL conjunct'ı,
-// ServiceCharts kapsam/kip kablolaması, Service.tsx kip parametreleri,
-// DB paneli cluster daraltması + entity linki, rollout satırında cluster.
+// v0.10.717 — multi-cluster ilkesi, Details dilim 2: Service.tsx kip
+// parametresi, DB paneli cluster daraltması + entity linki, rollout satırında
+// cluster. v0.10.2154 (operatör) — Performance bölümü kalktı: ServiceCharts
+// kablolaması, clusterDSL conjunct'ı ve Performance kipi bu pinle birlikte
+// düştü (tek tüketicileri o bölümdü).
 const read = (p: string) => readFileSync(resolve(__dirname, '..', p), 'utf8');
 
-describe('clusterDSL', () => {
-  it('boş → boş; dolu → AND cluster = "…" (tırnak kaçışlı)', () => {
-    expect(clusterDSL('')).toBe('');
-    expect(clusterDSL('prod-eu')).toBe(' AND cluster = "prod-eu"');
-    expect(clusterDSL('a"b')).toBe(' AND cluster = "a\\"b"');
-  });
-});
-
 describe('Details dilim 2 kablolama', () => {
-  it('ServiceCharts: clusterDSL + groupBy cluster + resolver dışı + deps', () => {
-    const src = read('components/ServiceCharts.tsx');
-    expect(src).toContain('dsl += clusterDSL(cluster);');
-    expect(src).toContain("byCluster ? (opScope ? ['cluster'] : ['name', 'cluster'])");
-    expect(src).toContain('!rootOnly && !env && !cluster && !byCluster');
-    expect(src).toContain('rootOnly, env, cluster, byCluster],');
-  });
-  it("Service.tsx: kapsam Topbar'dan, kipler URL'de (replace), üç bölüm kablolu", () => {
+  it("Service.tsx: kapsam Topbar'dan, DB kipi URL'de (replace), iki bölüm kablolu", () => {
     const src = read('pages/Service.tsx');
     expect(src).toContain("const scopeCluster = searchParams.get('cluster') ?? ''");
     expect(src).toContain("searchParams.get('dbmode') === 'cluster'");
-    expect(src).toContain("searchParams.get('perfmode') === 'cluster'");
-    expect(src).toContain('cluster={scopeCluster} byCluster={perfByCluster && !scopeCluster}');
+    expect(src).toContain("if (on) next.set('dbmode', 'cluster'); else next.delete('dbmode');");
+    expect(src).not.toContain('perfmode'); // v0.10.2154 — Performance kipi bölümle birlikte kalktı
     expect(src).toContain('byCluster={dbByCluster && !scopeCluster}');
     expect(src).toContain('<DeployHistoryPanel service={svc} cluster={scopeCluster} range={range}');
     // Kaynak rozeti dürüst: panel ham spans okur, MV değil.

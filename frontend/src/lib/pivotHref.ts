@@ -439,33 +439,6 @@ export function repeatsExploreHref(p: {
   return `/explore?${q.toString()}`;
 }
 
-// bucketTracesHref — v0.10.313 (chart-layer audit Dilim 2.4): RED
-// panelindeki bir kovaya tık → o kovanın trace LİSTESİ. v0.9.789'dan beri
-// tık tek bir temsilci exemplar açıyordu (TracePeekDrawer); bu link onun
-// yanında yaşar — "kovadaki tümü". kind=error → hasError + zaman sırası;
-// kind=slow → süre sırası (en yavaş üstte; eşik yok, çünkü kovanın "yavaş"
-// tanımı exemplar ucunda p99'a göre, listede operatör kendisi görür).
-// Operasyon kapsamı varsa exact `name =` filtresi (operationTracesHref ile
-// aynı sözleşme; substring search DEĞİL, v0.8.488). rootOnly:false —
-// hatalı span'ler çoğunlukla çocuk (v0.8.585).
-export function bucketTracesHref(p: {
-  service: string;
-  kind: 'slow' | 'error';
-  fromNs: number;
-  toNs: number;
-  operation?: string;
-}): string {
-  return tracesPivotHref({
-    window: { fromNs: p.fromNs, toNs: p.toNs },
-    service: p.service,
-    hasError: p.kind === 'error',
-    sort: p.kind === 'slow' ? 'duration' : 'time',
-    filters: p.operation ? encodeFilters([{ k: 'name', op: '=', v: [p.operation] }]) : undefined,
-    view: 'list',
-    rootOnly: false,
-  });
-}
-
 // attrTracesHref — v0.10.1555 (operatör: "Custom attribute'lara göre filtreleme
 // yapabilmeli kullanıcılar"). Span detayındaki bir attribute satırından
 // /traces'e: `key = value` (ya da `!=`, hariç tut) süzgeci, resource

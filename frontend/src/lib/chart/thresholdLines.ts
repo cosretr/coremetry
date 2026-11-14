@@ -1,7 +1,7 @@
 // thresholdLines.ts — v0.10.314 (chart-layer audit Dilim 2.2): yatay eşik
 // çizgilerinin TEK kapısı. İki kaynak, tek çıktı (ChartThreshold):
 //   • severity eşikleri (SLO hedefi, alarm eşiği, pod limit/request —
-//     TrendPanel `limitThresholds`, failureSlo) → warn/err token'ı;
+//     TrendPanel `limitThresholds`) → warn/err token'ı;
 //   • dashboard bant eşikleri (PanelEditor ThresholdEditor'ün green/amber/red
 //     basamakları; stat/gauge zaten boyuyor) → amber = warn, red = err çizgi;
 //     green TABAN banttır, çizgi basılmaz (0 değerinde anlamsız çizgi olurdu).
@@ -12,7 +12,7 @@ import type { PanelThresholdBand } from '@/lib/types';
 
 // Threshold — horizontal line at a y-value, optionally coloured by
 // severity. v0.9.x'ten beri MultiLineChart'ta yaşıyordu; oradan tip olarak
-// yeniden dışa aktarılır (failureSlo / trendSeries importları kırılmaz).
+// yeniden dışa aktarılır (trendSeries importları kırılmaz).
 export interface Threshold {
   value: number;
   label?: string;            // e.g. "SLO 500ms"

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 // v0.10.715 — Details dilim 1 kaynak pini: altı bölüm başlığı SectionHead
@@ -10,12 +10,13 @@ const metrics = readFileSync(resolve(__dirname, 'DetailsMetricsSection.tsx'), 'u
 
 describe('Details bölüm başlıkları (v0.10.715; v0.10.2132 S1)', () => {
   // v0.10.2132 (S1, servis sekmeleri planı, mockup operatör onayı 2026-11-13):
-  // Clusters + Database açık başlık (SectionHead, v0.10.151); diğer beş bölüm
+  // Clusters + Database açık başlık (SectionHead, v0.10.151); diğer bölümler
   // CollapsedSection (varsayılan kapalı satır). Endpoints başlığı gövdeden
   // Service.tsx'e taşındı (kip hook'u useEndpointsMode gövdeyle ortak).
+  // v0.10.2154 (operatör) — Performance (dtl-perf) kalktı; dört kapanır bölüm.
   it('Service.tsx: açık bölümler SectionHead, kapananlar CollapsedSection; ham dtl-sech kalmadı', () => {
     for (const id of ['dtl-clusters', 'dtl-db']) expect(svc).toContain(`<SectionHead id="${id}"`);
-    for (const id of ['dtl-endpoints', 'dtl-perf', 'dtl-metrics', 'dtl-latency', 'dtl-runtime']) {
+    for (const id of ['dtl-endpoints', 'dtl-metrics', 'dtl-latency', 'dtl-runtime']) {
       expect(svc).toContain(`<CollapsedSection id="${id}"`);
     }
     expect(svc).not.toContain('className="dtl-sech"');
@@ -50,13 +51,13 @@ describe('Details bölüm başlıkları (v0.10.715; v0.10.2132 S1)', () => {
 describe('Details bölüm kimlikleri ve sırası (S0)', () => {
   const all = svc + ep + metrics;
   it('dtl-* kimlikleri ve #deploys çapası var', () => {
-    for (const id of ['dtl-props', 'dtl-clusters', 'dtl-db', 'dtl-endpoints', 'dtl-perf', 'dtl-metrics', 'dtl-latency', 'dtl-runtime', 'deploys']) {
+    for (const id of ['dtl-props', 'dtl-clusters', 'dtl-db', 'dtl-endpoints', 'dtl-metrics', 'dtl-latency', 'dtl-runtime', 'deploys']) {
       expect(all).toMatch(new RegExp(`id="${id}"`));
     }
   });
-  it('sıra: Props → Clusters → Database → Endpoints → Performance → Latency → Runtime', () => {
+  it('sıra: Props → Clusters → Database → Endpoints → Latency → Runtime', () => {
     const at = (s: string) => svc.indexOf(s);
-    const order = ['id="dtl-props"', 'id="dtl-clusters"', 'id="dtl-db"', '<DetailsEndpointsSection', 'id="dtl-perf"', 'id="dtl-latency"', 'id="dtl-runtime"', 'id="deploys"'];
+    const order = ['id="dtl-props"', 'id="dtl-clusters"', 'id="dtl-db"', '<DetailsEndpointsSection', 'id="dtl-latency"', 'id="dtl-runtime"', 'id="deploys"'];
     for (const s of order) expect(at(s), s).toBeGreaterThan(-1);
     for (let i = 1; i < order.length; i++) expect(at(order[i]), order[i]).toBeGreaterThan(at(order[i - 1]));
   });
@@ -80,5 +81,17 @@ describe('Details S2: ToC yok, Properties düz', () => {
     expect(props).not.toContain('style=');
     expect(props).toContain('href="#deploys"');
     expect(svc).toContain('<div id="dtl-props"><DetailsPropsStrip service={svc} range={range} /></div>');
+  });
+});
+
+// v0.10.2154 (operatör, 2026-11-14: "RPS by operation, Error rate by operation
+// ve Latency by operation … gerek yok artık") — Details'in Performance bölümü
+// ve onu çizen ServiceCharts bileşeni kalktı; ?perfmode= kipi de onunla.
+describe('Details: Performance bölümü yok (v0.10.2154)', () => {
+  it('bölüm, bileşen ve kip parametresi geri gelmedi', () => {
+    expect(svc).not.toContain('dtl-perf');
+    expect(svc).not.toContain('ServiceCharts');
+    expect(svc).not.toContain('perfmode');
+    expect(existsSync(resolve(__dirname, '../../components/ServiceCharts.tsx'))).toBe(false);
   });
 });
